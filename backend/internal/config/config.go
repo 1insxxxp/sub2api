@@ -26,9 +26,14 @@ const (
 	UsageRecordOverflowPolicySync   = "sync"
 )
 
-// DefaultCSPPolicy is the default Content-Security-Policy with nonce support
-// __CSP_NONCE__ will be replaced with actual nonce at request time by the SecurityHeaders middleware
-const DefaultCSPPolicy = "default-src 'self'; script-src 'self' __CSP_NONCE__ https://challenges.cloudflare.com https://static.cloudflareinsights.com https://*.stripe.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: https:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' https:; frame-src https://challenges.cloudflare.com https://*.stripe.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
+// DefaultCSPPolicy is the default Content-Security-Policy with nonce support.
+// __CSP_NONCE__ will be replaced with the actual nonce at request time by the
+// SecurityHeaders middleware.
+//
+// Stripe resources are allowed by default because the frontend bundle can load
+// Stripe.js during app bootstrap when payment components are code-split into a
+// shared vendor chunk.
+const DefaultCSPPolicy = "default-src 'self'; script-src 'self' __CSP_NONCE__ https://js.stripe.com https://*.stripe.com https://challenges.cloudflare.com https://static.cloudflareinsights.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: https:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' https:; frame-src https://js.stripe.com https://hooks.stripe.com https://*.stripe.com https://challenges.cloudflare.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
 
 // UMQ（用户消息队列）模式常量
 const (

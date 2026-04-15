@@ -508,7 +508,7 @@ func (s *AccountUsageService) getOpenAIUsage(ctx context.Context, account *Accou
 		usage.SevenDay = progress
 	}
 
-	if shouldRefreshOpenAICodexSnapshot(account, usage, now) && s.shouldProbeOpenAICodexSnapshot(account.ID, now) {
+	if shouldRefreshOpenAICodexSnapshot(account, usage, now, true) && s.shouldProbeOpenAICodexSnapshot(account.ID, now) {
 		if updates, resetAt, err := s.probeOpenAICodexSnapshot(ctx, account); err == nil && (len(updates) > 0 || resetAt != nil) {
 			mergeAccountExtra(account, updates)
 			if resetAt != nil {
@@ -547,7 +547,7 @@ func (s *AccountUsageService) getOpenAIUsage(ctx context.Context, account *Accou
 	return usage, nil
 }
 
-func shouldRefreshOpenAICodexSnapshot(account *Account, usage *UsageInfo, now time.Time) bool {
+func shouldRefreshOpenAICodexSnapshot(account *Account, usage *UsageInfo, now time.Time, forceProbe bool) bool {
 	if account == nil {
 		return false
 	}
@@ -560,11 +560,21 @@ func shouldRefreshOpenAICodexSnapshot(account *Account, usage *UsageInfo, now ti
 	if account.IsRateLimited() {
 		return true
 	}
+	if forceProbe {
+		return isOpenAICodexSnapshotProbeStale(account, now)
+	}
 	return isOpenAICodexSnapshotStale(account, now)
 }
 
 func isOpenAICodexSnapshotStale(account *Account, now time.Time) bool {
 	if account == nil || !account.IsOpenAIOAuth() || !account.IsOpenAIResponsesWebSocketV2Enabled() {
+		return false
+	}
+	return isOpenAICodexSnapshotProbeStale(account, now)
+}
+
+func isOpenAICodexSnapshotProbeStale(account *Account, now time.Time) bool {
+	if account == nil || !account.IsOpenAIOAuth() {
 		return false
 	}
 	if account.Extra == nil {

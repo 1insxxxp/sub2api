@@ -41,15 +41,15 @@ func TestShouldRefreshOpenAICodexSnapshot(t *testing.T) {
 		SevenDay: &UsageProgress{Utilization: 0},
 	}
 
-	if !shouldRefreshOpenAICodexSnapshot(&Account{RateLimitResetAt: &rateLimitedUntil}, usage, now) {
+	if !shouldRefreshOpenAICodexSnapshot(&Account{RateLimitResetAt: &rateLimitedUntil}, usage, now, false) {
 		t.Fatal("expected rate-limited account to force codex snapshot refresh")
 	}
 
-	if shouldRefreshOpenAICodexSnapshot(&Account{}, usage, now) {
+	if shouldRefreshOpenAICodexSnapshot(&Account{}, usage, now, false) {
 		t.Fatal("expected complete non-rate-limited usage to skip codex snapshot refresh")
 	}
 
-	if !shouldRefreshOpenAICodexSnapshot(&Account{}, &UsageInfo{FiveHour: nil, SevenDay: &UsageProgress{}}, now) {
+	if !shouldRefreshOpenAICodexSnapshot(&Account{}, &UsageInfo{FiveHour: nil, SevenDay: &UsageProgress{}}, now, false) {
 		t.Fatal("expected missing 5h snapshot to require refresh")
 	}
 
@@ -61,8 +61,30 @@ func TestShouldRefreshOpenAICodexSnapshot(t *testing.T) {
 			"openai_oauth_responses_websockets_v2_enabled": true,
 			"codex_usage_updated_at":                       staleAt,
 		},
-	}, usage, now) {
+	}, usage, now, false) {
 		t.Fatal("expected stale ws snapshot to trigger refresh")
+	}
+
+	if shouldRefreshOpenAICodexSnapshot(&Account{
+		Platform: PlatformOpenAI,
+		Type:     AccountTypeOAuth,
+		Extra: map[string]any{
+			"openai_oauth_responses_websockets_v2_enabled": false,
+			"codex_usage_updated_at":                       staleAt,
+		},
+	}, usage, now, false) {
+		t.Fatal("expected stale non-v2 snapshot to skip passive refresh")
+	}
+
+	if !shouldRefreshOpenAICodexSnapshot(&Account{
+		Platform: PlatformOpenAI,
+		Type:     AccountTypeOAuth,
+		Extra: map[string]any{
+			"openai_oauth_responses_websockets_v2_enabled": false,
+			"codex_usage_updated_at":                       staleAt,
+		},
+	}, usage, now, true) {
+		t.Fatal("expected active refresh to probe stale snapshot even when ws v2 is disabled")
 	}
 }
 

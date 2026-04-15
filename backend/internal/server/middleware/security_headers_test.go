@@ -332,6 +332,11 @@ func TestEnhanceCSPPolicy(t *testing.T) {
 	})
 }
 
+func TestDefaultCSPPolicyAllowsStripeResources(t *testing.T) {
+	assert.Contains(t, config.DefaultCSPPolicy, "https://js.stripe.com")
+	assert.Contains(t, config.DefaultCSPPolicy, "https://hooks.stripe.com")
+}
+
 func TestAddToDirective(t *testing.T) {
 	t.Run("adds_to_existing_directive", func(t *testing.T) {
 		policy := "script-src 'self'; style-src 'self'"

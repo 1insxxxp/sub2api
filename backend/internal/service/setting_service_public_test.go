@@ -77,3 +77,13 @@ func TestSettingService_GetPublicSettings_ExposesTablePreferences(t *testing.T) 
 	require.Equal(t, 50, settings.TableDefaultPageSize)
 	require.Equal(t, []int{20, 50, 100}, settings.TablePageSizeOptions)
 }
+
+func TestSettingService_GetPublicSettings_DefaultBranding(t *testing.T) {
+	repo := &settingPublicRepoStub{values: map[string]string{}}
+	svc := NewSettingService(repo, &config.Config{})
+
+	settings, err := svc.GetPublicSettings(context.Background())
+	require.NoError(t, err)
+	require.Equal(t, "Passion", settings.SiteName)
+	require.Equal(t, "Subscription to API Conversion Platform", settings.SiteSubtitle)
+}
