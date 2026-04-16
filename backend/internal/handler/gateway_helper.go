@@ -336,6 +336,9 @@ func (h *ConcurrencyHelper) waitForSlotWithPingTimeout(c *gin.Context, slotType 
 	for {
 		select {
 		case <-ctx.Done():
+			if ctx.Err() == context.Canceled {
+				return nil, ctx.Err()
+			}
 			return nil, &ConcurrencyError{
 				SlotType:  slotType,
 				IsTimeout: true,

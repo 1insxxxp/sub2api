@@ -2,6 +2,7 @@ package handler
 
 import (
 	"bytes"
+	"context"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -42,4 +43,33 @@ func TestRequestBodyLimitTooLarge(t *testing.T) {
 
 	require.Equal(t, http.StatusRequestEntityTooLarge, recorder.Code)
 	require.Contains(t, recorder.Body.String(), buildBodyTooLargeMessage(limit))
+}
+
+type timeoutReadError struct{}
+
+func (timeoutReadError) Error() string   { return "read timeout" }
+func (timeoutReadError) Timeout() bool   { return true }
+func (timeoutReadError) Temporary() bool { return false }
+
+func TestClassifyRequestBodyReadError(t *testing.T) {
+	t.Run("context canceled", func(t *testing.T) {
+		status, errType, message := classifyRequestBodyReadError(context.Canceled)
+		require.Equal(t, http.StatusBadRequest, status)
+		require.Equal(t, "invalid_request_error", errType)
+		require.Equal(t, "Client canceled request while sending request body", message)
+	})
+
+	t.Run("unexpected eof", func(t *testing.T) {
+		status, errType, message := classifyRequestBodyReadError(io.ErrUnexpectedEOF)
+		require.Equal(t, http.StatusBadRequest, status)
+		require.Equal(t, "invalid_request_error", errType)
+		require.Equal(t, "Request body stream interrupted", message)
+	})
+
+	t.Run("read timeout", func(t *testing.T) {
+		status, errType, message := classifyRequestBodyReadError(timeoutReadError{})
+		require.Equal(t, http.StatusRequestTimeout, status)
+		require.Equal(t, "invalid_request_error", errType)
+		require.Equal(t, "Request body read timed out", message)
+	})
 }

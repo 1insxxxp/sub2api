@@ -294,6 +294,27 @@ func TestWaitForSlotWithPingTimeout_AcquireError(t *testing.T) {
 	require.Contains(t, err.Error(), "redis unavailable")
 }
 
+func TestWaitForSlotWithPingTimeout_ContextCanceledReturnsContextCanceled(t *testing.T) {
+	cache := &helperConcurrencyCacheStub{
+		userSeq: []bool{false, false, false},
+	}
+	concurrency := service.NewConcurrencyService(cache)
+	helper := NewConcurrencyHelper(concurrency, SSEPingFormatNone, 5*time.Millisecond)
+	c, _ := newHelperTestContext(http.MethodPost, "/v1/messages")
+	ctx, cancel := context.WithCancel(c.Request.Context())
+	c.Request = c.Request.WithContext(ctx)
+	streamStarted := false
+
+	go func() {
+		time.Sleep(20 * time.Millisecond)
+		cancel()
+	}()
+
+	release, err := helper.waitForSlotWithPingTimeout(c, "user", 1, 1, 200*time.Millisecond, false, &streamStarted, true)
+	require.Nil(t, release)
+	require.ErrorIs(t, err, context.Canceled)
+}
+
 func TestAcquireAccountSlotWithWaitTimeout_ImmediateAttemptBeforeBackoff(t *testing.T) {
 	cache := &helperConcurrencyCacheStub{
 		accountSeq: []bool{false},

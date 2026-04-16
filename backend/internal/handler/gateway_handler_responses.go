@@ -50,7 +50,8 @@ func (h *GatewayHandler) Responses(c *gin.Context) {
 			h.responsesErrorResponse(c, http.StatusRequestEntityTooLarge, "invalid_request_error", buildBodyTooLargeMessage(maxErr.Limit))
 			return
 		}
-		h.responsesErrorResponse(c, http.StatusBadRequest, "invalid_request_error", "Failed to read request body")
+		status, errType, message := classifyRequestBodyReadError(err)
+		h.responsesErrorResponse(c, status, errType, message)
 		return
 	}
 

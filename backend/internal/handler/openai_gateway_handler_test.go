@@ -112,6 +112,22 @@ func TestOpenAIHandleStreamingAwareError_NonStreaming(t *testing.T) {
 	assert.Equal(t, "test error", errorObj["message"])
 }
 
+func TestOpenAIHandleConcurrencyError_ContextCanceledDoesNotWriteResponse(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	req := httptest.NewRequest(http.MethodPost, "/v1/messages", nil)
+	ctx, cancel := context.WithCancel(req.Context())
+	cancel()
+	c.Request = req.WithContext(ctx)
+
+	h := &OpenAIGatewayHandler{}
+	h.handleConcurrencyError(c, context.Canceled, "user", false)
+
+	require.False(t, c.Writer.Written())
+	require.Equal(t, "", w.Body.String())
+}
+
 func TestReadRequestBodyWithPrealloc(t *testing.T) {
 	payload := `{"model":"gpt-5","input":"hello"}`
 	req := httptest.NewRequest(http.MethodPost, "/v1/responses", strings.NewReader(payload))
