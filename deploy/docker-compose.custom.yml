@@ -1,0 +1,20 @@
+# =============================================================================
+# Sub2API Docker Compose Override - Custom Fork Build
+# =============================================================================
+# Use this file together with docker-compose.local.yml when you want Docker
+# to build the image from the current repository instead of pulling the
+# official weishaw/sub2api image.
+#
+# Example:
+#   docker compose -f docker-compose.local.yml -f docker-compose.custom.yml up -d --build
+# =============================================================================
+
+services:
+  sub2api:
+    image: ${SUB2API_IMAGE_NAME:-sub2api-custom}:${SUB2API_IMAGE_TAG:-custom-prod}
+    build:
+      context: ..
+      dockerfile: Dockerfile
+      args:
+        VERSION: ${SUB2API_BUILD_VERSION:-custom-prod}
+        COMMIT: ${SUB2API_BUILD_COMMIT:-custom-prod}
