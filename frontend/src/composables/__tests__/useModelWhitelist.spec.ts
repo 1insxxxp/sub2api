@@ -16,7 +16,6 @@ describe('useModelWhitelist', () => {
 
     expect(models).toContain('gpt-5.4')
     expect(models).toContain('gpt-5.4-mini')
-    expect(models).toContain('gpt-5.4-nano')
     expect(models).toContain('gpt-5.4-2026-03-05')
     expect(models).toContain('gpt-4o-audio-preview')
     expect(models).toContain('gpt-4o-realtime-preview')
@@ -28,11 +27,23 @@ describe('useModelWhitelist', () => {
     expect(models).not.toContain('chatgpt-4o-latest')
   })
 
+  it('does not expose removed ChatGPT Codex login models', () => {
+    const models = getModelsByPlatform('openai')
+
+    expect(models).not.toContain('gpt-5')
+    expect(models).not.toContain('gpt-5.1')
+    expect(models).not.toContain('gpt-5.1-codex')
+    expect(models).not.toContain('gpt-5.1-codex-max')
+    expect(models).not.toContain('gpt-5.1-codex-mini')
+    expect(models).not.toContain('gpt-5.2-codex')
+  })
+
   it('keeps supported Anthropic IDs and removes retired direct models', () => {
     const models = getModelsByPlatform('claude')
 
     expect(models).toContain('claude-sonnet-4-6')
     expect(models).toContain('claude-opus-4-6')
+    expect(models).toContain('claude-opus-4-7')
     expect(models).toContain('claude-haiku-4-5-20251001')
     expect(models).toContain('claude-3-haiku-20240307')
 
@@ -74,6 +85,7 @@ describe('useModelWhitelist', () => {
 
     expect(sources).toContain('claude-sonnet-4-6')
     expect(sources).toContain('claude-opus-4-6')
+    expect(sources).toContain('claude-opus-4-7')
     expect(sources).toContain('claude-haiku-4-5-20251001')
     expect(sources).not.toContain('claude-3-5-haiku-20241022')
   })
@@ -87,12 +99,11 @@ describe('useModelWhitelist', () => {
   })
 
   it('keeps exact GPT-5.4 variants in whitelist mode', () => {
-    const mapping = buildModelMappingObject('whitelist', ['gpt-5.4-2026-03-05', 'gpt-5.4-mini', 'gpt-5.4-nano'], [])
+    const mapping = buildModelMappingObject('whitelist', ['gpt-5.4-2026-03-05', 'gpt-5.4-mini'], [])
 
     expect(mapping).toEqual({
       'gpt-5.4-2026-03-05': 'gpt-5.4-2026-03-05',
-      'gpt-5.4-mini': 'gpt-5.4-mini',
-      'gpt-5.4-nano': 'gpt-5.4-nano'
+      'gpt-5.4-mini': 'gpt-5.4-mini'
     })
   })
 })
