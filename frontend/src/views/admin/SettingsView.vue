@@ -2972,8 +2972,11 @@ const form = reactive<SettingsForm>({
   totp_enabled: false,
   totp_encryption_key_configured: false,
   default_balance: 0,
+  affiliate_rebate_rate: 20,
   default_concurrency: 1,
   default_subscriptions: [],
+  force_email_on_third_party_signup: false,
+  default_user_rpm_limit: 0,
   site_name: 'Passion',
   site_logo: '',
   site_subtitle: 'Subscription to API Conversion Platform',
@@ -3008,6 +3011,13 @@ const form = reactive<SettingsForm>({
   linuxdo_connect_client_secret: '',
   linuxdo_connect_client_secret_configured: false,
   linuxdo_connect_redirect_url: '',
+  wechat_connect_enabled: false,
+  wechat_connect_app_id: '',
+  wechat_connect_app_secret_configured: false,
+  wechat_connect_mode: 'open',
+  wechat_connect_scopes: 'snsapi_login',
+  wechat_connect_redirect_url: '',
+  wechat_connect_frontend_redirect_url: '/auth/wechat/callback',
   // Generic OIDC OAuth 登录
   oidc_connect_enabled: false,
   oidc_connect_provider_name: 'OIDC',
@@ -3060,7 +3070,11 @@ const form = reactive<SettingsForm>({
   balance_low_notify_threshold: 0,
   balance_low_notify_recharge_url: '',
   account_quota_notify_enabled: false,
-  account_quota_notify_emails: [] as NotifyEmailEntry[]
+  account_quota_notify_emails: [] as NotifyEmailEntry[],
+  // Channel visibility and monitoring switches
+  channel_monitor_enabled: true,
+  channel_monitor_default_interval_seconds: 60,
+  available_channels_enabled: false
 })
 
 // Proxies for web search emulation ProxySelector
