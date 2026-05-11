@@ -19,6 +19,7 @@ describe('useModelWhitelist', () => {
     expect(models).toContain('gpt-5.4-2026-03-05')
     expect(models).toContain('gpt-4o-audio-preview')
     expect(models).toContain('gpt-4o-realtime-preview')
+    expect(models).toContain('codex-auto-review')
 
     expect(models).not.toContain('gpt-4-turbo-preview')
     expect(models).not.toContain('gpt-4.5-preview')
