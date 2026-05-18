@@ -18,6 +18,7 @@ ARG PNPM_VERSION=10.28.2
 # Stage 1: Frontend Builder
 # -----------------------------------------------------------------------------
 FROM ${NODE_IMAGE} AS frontend-builder
+ARG PNPM_VERSION
 
 WORKDIR /app/frontend
 
