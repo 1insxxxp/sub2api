@@ -21,7 +21,7 @@
         </div>
       </div>
 
-      <!-- Right: Announcements + Docs + Language + Subscriptions + Balance + User Dropdown -->
+      <!-- Right: Announcements + Docs + Language + Subscriptions + Balance + Token Estimate + User Dropdown -->
       <div class="flex items-center gap-3">
         <!-- Announcement Bell -->
         <AnnouncementBell v-if="user" />
@@ -64,6 +64,33 @@
           </svg>
           <span class="text-sm font-semibold text-primary-700 dark:text-primary-300">
             ${{ user.balance?.toFixed(2) || '0.00' }}
+          </span>
+        </div>
+
+        <!-- Available Token Estimate -->
+        <div
+          v-if="user"
+          :title="availableTokensTooltip"
+          class="hidden items-center gap-2 rounded-xl bg-emerald-50 px-3 py-1.5 dark:bg-emerald-900/20 lg:flex"
+        >
+          <svg
+            class="h-4 w-4 text-emerald-600 dark:text-emerald-400"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+            stroke-width="1.5"
+          >
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              d="M3.75 13.5l10.5-11.25L12 10.5h8.25L9.75 21.75 12 13.5H3.75z"
+            />
+          </svg>
+          <span class="text-xs font-medium text-emerald-600 dark:text-emerald-300">
+            {{ t('common.availableTokensShort') }}
+          </span>
+          <span class="text-sm font-semibold text-emerald-700 dark:text-emerald-200">
+            {{ availableTokensLabel }} Token
           </span>
         </div>
 
@@ -112,6 +139,12 @@
                 </div>
                 <div class="text-sm font-semibold text-primary-600 dark:text-primary-400">
                   ${{ user.balance?.toFixed(2) || '0.00' }}
+                </div>
+                <div class="mt-2 text-xs text-gray-500 dark:text-dark-400">
+                  {{ t('common.availableTokens') }}
+                </div>
+                <div class="text-sm font-semibold text-emerald-600 dark:text-emerald-400" :title="availableTokensTooltip">
+                  {{ availableTokensLabel }} Token
                 </div>
               </div>
 
@@ -222,6 +255,7 @@ import LocaleSwitcher from '@/components/common/LocaleSwitcher.vue'
 import SubscriptionProgressMini from '@/components/common/SubscriptionProgressMini.vue'
 import AnnouncementBell from '@/components/common/AnnouncementBell.vue'
 import Icon from '@/components/icons/Icon.vue'
+import { estimateAvailableTokens, formatAvailableTokens } from '@/utils/tokenBalance'
 
 const router = useRouter()
 const route = useRoute()
@@ -237,6 +271,9 @@ const dropdownRef = ref<HTMLElement | null>(null)
 const contactInfo = computed(() => appStore.contactInfo)
 const docUrl = computed(() => appStore.docUrl)
 const avatarUrl = computed(() => user.value?.avatar_url?.trim() || '')
+const availableTokens = computed(() => estimateAvailableTokens(user.value?.balance))
+const availableTokensLabel = computed(() => formatAvailableTokens(availableTokens.value))
+const availableTokensTooltip = computed(() => t('common.availableTokensEstimateHint'))
 
 // 只在标准模式的管理员下显示新手引导按钮
 const showOnboardingButton = computed(() => {
