@@ -185,7 +185,7 @@ const displayGroupStats = computed(() => {
   if (!props.groupStats?.length) return []
 
   const metricKey = props.metric === 'actual_cost' ? 'actual_cost' : 'total_tokens'
-  return [...props.groupStats].sort((a, b) => b[metricKey] - a[metricKey])
+  return [...props.groupStats].sort((a, b) => safeNumber(b[metricKey]) - safeNumber(a[metricKey]))
 })
 
 const chartData = computed(() => {
@@ -227,6 +227,7 @@ const doughnutOptions = computed(() => ({
 }))
 
 const formatTokens = (value: number): string => {
+  value = safeNumber(value)
   if (value >= 1_000_000_000) {
     return `${(value / 1_000_000_000).toFixed(2)}B`
   } else if (value >= 1_000_000) {
@@ -238,10 +239,12 @@ const formatTokens = (value: number): string => {
 }
 
 const formatNumber = (value: number): string => {
+  value = safeNumber(value)
   return value.toLocaleString()
 }
 
 const formatCost = (value: number): string => {
+  value = safeNumber(value)
   if (value >= 1000) {
     return (value / 1000).toFixed(2) + 'K'
   } else if (value >= 1) {
@@ -250,5 +253,9 @@ const formatCost = (value: number): string => {
     return value.toFixed(3)
   }
   return value.toFixed(4)
+}
+
+const safeNumber = (value: number | null | undefined): number => {
+  return typeof value === 'number' && Number.isFinite(value) ? value : 0
 }
 </script>
