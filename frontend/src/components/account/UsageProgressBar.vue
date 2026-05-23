@@ -60,7 +60,7 @@ import { computed, ref, watch } from 'vue'
 import { useIntervalFn } from '@vueuse/core'
 import { useI18n } from 'vue-i18n'
 import type { WindowStats } from '@/types'
-import { formatCompactNumber } from '@/utils/format'
+import { formatCompactNumber, formatTokenCount } from '@/utils/format'
 
 const props = defineProps<{
   label: string
@@ -180,7 +180,7 @@ const formatRequests = computed(() => {
 
 const formatTokens = computed(() => {
   if (!props.windowStats) return ''
-  return formatCompactNumber(props.windowStats.tokens)
+  return formatTokenCount(props.windowStats.tokens)
 })
 
 const formatAccountCost = computed(() => {

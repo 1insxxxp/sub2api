@@ -41,6 +41,7 @@
 import { useI18n } from 'vue-i18n'
 import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
 import type { UserBreakdownItem } from '@/types'
+import { formatTokenCount } from '@/utils/format'
 
 const { t } = useI18n()
 
@@ -50,10 +51,7 @@ defineProps<{
 }>()
 
 const formatTokens = (value: number): string => {
-  if (value >= 1_000_000_000) return `${(value / 1_000_000_000).toFixed(2)}B`
-  if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(2)}M`
-  if (value >= 1_000) return `${(value / 1_000).toFixed(2)}K`
-  return value.toLocaleString()
+  return formatTokenCount(value)
 }
 
 const formatCost = (value: number): string => {

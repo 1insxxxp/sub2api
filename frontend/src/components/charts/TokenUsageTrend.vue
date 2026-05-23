@@ -35,6 +35,7 @@ import {
 import { Line } from 'vue-chartjs'
 import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
 import type { TrendDataPoint } from '@/types'
+import { formatTokenCount } from '@/utils/format'
 
 ChartJS.register(
   CategoryScale,
@@ -205,14 +206,7 @@ const lineOptions = computed(() => ({
 }))
 
 const formatTokens = (value: number): string => {
-  if (value >= 1_000_000_000) {
-    return `${(value / 1_000_000_000).toFixed(2)}B`
-  } else if (value >= 1_000_000) {
-    return `${(value / 1_000_000).toFixed(2)}M`
-  } else if (value >= 1_000) {
-    return `${(value / 1_000).toFixed(2)}K`
-  }
-  return value.toLocaleString()
+  return formatTokenCount(value)
 }
 
 const formatCost = (value: number): string => {

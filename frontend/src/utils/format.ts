@@ -243,10 +243,20 @@ export function formatCostFixed(amount: number, fractionDigits: number = 4): str
  * @param tokens token 数量
  * @returns 格式化后的字符串，如 "950", "1.2K", "3.5M"
  */
+const trimFixed = (value: number, fractionDigits: number): string =>
+  value.toFixed(fractionDigits).replace(/\.0+$/, '').replace(/(\.\d*?)0+$/, '$1')
+
+export function formatTokenCount(tokens: number | null | undefined): string {
+  const value = typeof tokens === 'number' && Number.isFinite(tokens) ? tokens : 0
+  const abs = Math.abs(value)
+
+  if (abs >= 100_000_000) return `${trimFixed(value / 100_000_000, 2)}亿`
+  if (abs >= 10_000) return `${trimFixed(value / 10_000, 2)}万`
+  return value.toLocaleString()
+}
+
 export function formatTokensK(tokens: number): string {
-  if (tokens >= 1_000_000) return `${(tokens / 1_000_000).toFixed(1)}M`
-  if (tokens >= 1000) return `${(tokens / 1000).toFixed(1)}K`
-  return tokens.toString()
+  return formatTokenCount(tokens)
 }
 
 /**

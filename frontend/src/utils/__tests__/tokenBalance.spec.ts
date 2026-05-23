@@ -20,9 +20,9 @@ describe('tokenBalance', () => {
   })
 
   it('formats available token counts compactly', () => {
-    expect(formatAvailableTokens(1_034_000_000)).toBe('1.03B')
-    expect(formatAvailableTokens(12_500_000)).toBe('12.5M')
-    expect(formatAvailableTokens(1_200)).toBe('1.2K')
+    expect(formatAvailableTokens(1_034_000_000)).toBe('10.34亿')
+    expect(formatAvailableTokens(12_500_000)).toBe('1250万')
+    expect(formatAvailableTokens(12_345)).toBe('1.23万')
     expect(formatAvailableTokens(999)).toBe('999')
     expect(formatAvailableTokens(null)).toBe('-')
   })

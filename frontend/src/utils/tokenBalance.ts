@@ -1,11 +1,9 @@
+import { formatTokenCount } from './format'
+
 export const TOKENS_PER_USD_ESTIMATE = 1_000_000
 
 function isFiniteNumber(value: unknown): value is number {
   return typeof value === 'number' && Number.isFinite(value)
-}
-
-function trimTrailingZero(value: string): string {
-  return value.replace(/\.0$/, '')
 }
 
 export function estimateAvailableTokens(
@@ -25,14 +23,5 @@ export function formatAvailableTokens(tokens: number | null | undefined): string
   }
 
   const safeTokens = Math.max(0, Math.floor(tokens))
-  if (safeTokens >= 1_000_000_000) {
-    return `${trimTrailingZero((safeTokens / 1_000_000_000).toFixed(2))}B`
-  }
-  if (safeTokens >= 1_000_000) {
-    return `${trimTrailingZero((safeTokens / 1_000_000).toFixed(1))}M`
-  }
-  if (safeTokens >= 1_000) {
-    return `${trimTrailingZero((safeTokens / 1_000).toFixed(1))}K`
-  }
-  return safeTokens.toString()
+  return formatTokenCount(safeTokens)
 }
