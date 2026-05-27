@@ -21,6 +21,7 @@ FROM ${NODE_IMAGE} AS frontend-builder
 ARG PNPM_VERSION
 
 WORKDIR /app/frontend
+ENV NODE_OPTIONS=--max-old-space-size=1536
 
 # Install a pinned pnpm version so Docker builds are not affected by
 # backwards-incompatible behavior changes in the latest pnpm release.
