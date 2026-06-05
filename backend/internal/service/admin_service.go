@@ -129,7 +129,7 @@ type CreateUserInput struct {
 	Password      string
 	Username      string
 	Notes         string
-	Balance       float64
+	Balance       *float64
 	Concurrency   int
 	RPMLimit      int
 	AllowedGroups []int64
@@ -230,7 +230,7 @@ type CreateGroupInput struct {
 
 type UpdateGroupInput struct {
 	Name             string
-	Description      string
+	Description      *string
 	Platform         string
 	RateMultiplier   *float64 // 使用指针以支持设置为0
 	IsExclusive      *bool
@@ -680,12 +680,19 @@ func (s *adminServiceImpl) GetUserIncludeDeleted(ctx context.Context, id int64) 
 }
 
 func (s *adminServiceImpl) CreateUser(ctx context.Context, input *CreateUserInput) (*User, error) {
+	balance := 0.0
+	if input.Balance != nil {
+		balance = *input.Balance
+	} else if s.settingService != nil {
+		balance = s.settingService.GetDefaultBalance(ctx)
+	}
+
 	user := &User{
 		Email:         input.Email,
 		Username:      input.Username,
 		Notes:         input.Notes,
 		Role:          RoleUser, // Always create as regular user, never admin
-		Balance:       input.Balance,
+		Balance:       balance,
 		Concurrency:   input.Concurrency,
 		RPMLimit:      input.RPMLimit,
 		Status:        StatusActive,
@@ -1917,8 +1924,8 @@ func (s *adminServiceImpl) UpdateGroup(ctx context.Context, id int64, input *Upd
 	if input.Name != "" {
 		group.Name = input.Name
 	}
-	if input.Description != "" {
-		group.Description = input.Description
+	if input.Description != nil {
+		group.Description = *input.Description
 	}
 	if input.Platform != "" {
 		group.Platform = input.Platform
