@@ -16,6 +16,121 @@ export interface DefaultSubscriptionSetting {
   validity_days: number;
 }
 
+export interface CheckinRewardTier {
+  amount: number;
+  probability: number;
+  sort_order: number;
+}
+
+export interface CheckinStreakRule {
+  day: number;
+  bonus_amount: number;
+}
+
+export interface CheckinRewardConfig {
+  enabled: boolean;
+  tiers: CheckinRewardTier[];
+  streak_enabled: boolean;
+  streak_rules: CheckinStreakRule[];
+}
+
+export function createDefaultCheckinRewardConfig(): CheckinRewardConfig {
+  return {
+    enabled: false,
+    tiers: [
+      { amount: 1, probability: 30, sort_order: 1 },
+      { amount: 2, probability: 23, sort_order: 2 },
+      { amount: 3, probability: 15, sort_order: 3 },
+      { amount: 4, probability: 12, sort_order: 4 },
+      { amount: 4.5, probability: 10, sort_order: 5 },
+      { amount: 5, probability: 7, sort_order: 6 },
+      { amount: 10, probability: 3, sort_order: 7 },
+    ],
+    streak_enabled: true,
+    streak_rules: [
+      { day: 7, bonus_amount: 10 },
+      { day: 15, bonus_amount: 15 },
+      { day: 30, bonus_amount: 20 },
+      { day: 60, bonus_amount: 30 },
+      { day: 120, bonus_amount: 50 },
+    ],
+  };
+}
+
+function cleanPositiveNumber(value: unknown): number | null {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+}
+
+function cleanPositiveInteger(value: unknown): number | null {
+  const parsed = Math.floor(Number(value));
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+}
+
+export function normalizeCheckinRewardConfig(
+  input?: Partial<CheckinRewardConfig> | null,
+): CheckinRewardConfig {
+  const defaults = createDefaultCheckinRewardConfig();
+  const rawTiers = Array.isArray(input?.tiers) ? input.tiers : null;
+  const tiers =
+    rawTiers
+      ?.map((tier, index) => {
+        const amount = cleanPositiveNumber(tier?.amount);
+        const probability = cleanPositiveNumber(tier?.probability);
+        if (amount === null || probability === null) return null;
+        return {
+          amount,
+          probability,
+          sort_order:
+            cleanPositiveInteger(tier?.sort_order) ?? index + 1,
+        };
+      })
+      .filter((tier): tier is CheckinRewardTier => tier !== null)
+      .sort((a, b) => a.sort_order - b.sort_order) ?? defaults.tiers;
+  const rawStreakRules = Array.isArray(input?.streak_rules)
+    ? input.streak_rules
+    : null;
+  const streakRules =
+    rawStreakRules
+      ?.map((rule) => {
+        const day = cleanPositiveInteger(rule?.day);
+        const bonusAmount = cleanPositiveNumber(rule?.bonus_amount);
+        if (day === null || bonusAmount === null) return null;
+        return { day, bonus_amount: bonusAmount };
+      })
+      .filter((rule): rule is CheckinStreakRule => rule !== null)
+      .sort((a, b) => a.day - b.day) ?? defaults.streak_rules;
+
+  return {
+    enabled:
+      typeof input?.enabled === "boolean"
+        ? input.enabled
+        : rawTiers !== null && tiers.length > 0,
+    tiers,
+    streak_enabled:
+      typeof input?.streak_enabled === "boolean"
+        ? input.streak_enabled
+        : defaults.streak_enabled,
+    streak_rules: streakRules,
+  };
+}
+
+export function sanitizeCheckinRewardConfig(
+  input?: CheckinRewardConfig | null,
+): CheckinRewardConfig {
+  const normalized = normalizeCheckinRewardConfig(input);
+  return {
+    enabled: Boolean(input?.enabled),
+    tiers: normalized.tiers.map((tier, index) => ({
+      amount: tier.amount,
+      probability: tier.probability,
+      sort_order: index + 1,
+    })),
+    streak_enabled: Boolean(input?.streak_enabled),
+    streak_rules: normalized.streak_rules,
+  };
+}
+
 // ── 平台限额类型 ──────────────────────────────────────────────────
 export type PlatformType = "anthropic" | "openai" | "gemini" | "antigravity"
 export type QuotaWindowType = "daily" | "weekly" | "monthly"
@@ -388,6 +503,7 @@ export interface SystemSettings {
   default_concurrency: number;
   default_user_rpm_limit: number;
   default_subscriptions: DefaultSubscriptionSetting[];
+  checkin_reward_config: CheckinRewardConfig;
   auth_source_default_email_balance?: number;
   auth_source_default_email_concurrency?: number;
   auth_source_default_email_subscriptions?: DefaultSubscriptionSetting[];
@@ -647,6 +763,7 @@ export interface UpdateSettingsRequest {
   default_concurrency?: number;
   default_user_rpm_limit?: number;
   default_subscriptions?: DefaultSubscriptionSetting[];
+  checkin_reward_config?: CheckinRewardConfig;
   auth_source_default_email_balance?: number;
   auth_source_default_email_concurrency?: number;
   auth_source_default_email_subscriptions?: DefaultSubscriptionSetting[];

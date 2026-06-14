@@ -22,6 +22,9 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/usagelog"
 	"github.com/Wei-Shaw/sub2api/ent/user"
 	"github.com/Wei-Shaw/sub2api/ent/userattributevalue"
+	"github.com/Wei-Shaw/sub2api/ent/usercheckin"
+	"github.com/Wei-Shaw/sub2api/ent/usercheckinblacklist"
+	"github.com/Wei-Shaw/sub2api/ent/usercheckinstatussnapshot"
 	"github.com/Wei-Shaw/sub2api/ent/userplatformquota"
 	"github.com/Wei-Shaw/sub2api/ent/usersubscription"
 )
@@ -533,6 +536,51 @@ func (_c *UserCreate) AddPlatformQuotas(v ...*UserPlatformQuota) *UserCreate {
 		ids[i] = v[i].ID
 	}
 	return _c.AddPlatformQuotaIDs(ids...)
+}
+
+// AddCheckinIDs adds the "checkins" edge to the UserCheckin entity by IDs.
+func (_c *UserCreate) AddCheckinIDs(ids ...int64) *UserCreate {
+	_c.mutation.AddCheckinIDs(ids...)
+	return _c
+}
+
+// AddCheckins adds the "checkins" edges to the UserCheckin entity.
+func (_c *UserCreate) AddCheckins(v ...*UserCheckin) *UserCreate {
+	ids := make([]int64, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _c.AddCheckinIDs(ids...)
+}
+
+// AddCheckinStatusSnapshotIDs adds the "checkin_status_snapshots" edge to the UserCheckinStatusSnapshot entity by IDs.
+func (_c *UserCreate) AddCheckinStatusSnapshotIDs(ids ...int64) *UserCreate {
+	_c.mutation.AddCheckinStatusSnapshotIDs(ids...)
+	return _c
+}
+
+// AddCheckinStatusSnapshots adds the "checkin_status_snapshots" edges to the UserCheckinStatusSnapshot entity.
+func (_c *UserCreate) AddCheckinStatusSnapshots(v ...*UserCheckinStatusSnapshot) *UserCreate {
+	ids := make([]int64, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _c.AddCheckinStatusSnapshotIDs(ids...)
+}
+
+// AddCheckinBlacklistEntryIDs adds the "checkin_blacklist_entries" edge to the UserCheckinBlacklist entity by IDs.
+func (_c *UserCreate) AddCheckinBlacklistEntryIDs(ids ...int64) *UserCreate {
+	_c.mutation.AddCheckinBlacklistEntryIDs(ids...)
+	return _c
+}
+
+// AddCheckinBlacklistEntries adds the "checkin_blacklist_entries" edges to the UserCheckinBlacklist entity.
+func (_c *UserCreate) AddCheckinBlacklistEntries(v ...*UserCheckinBlacklist) *UserCreate {
+	ids := make([]int64, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _c.AddCheckinBlacklistEntryIDs(ids...)
 }
 
 // Mutation returns the UserMutation object of the builder.
@@ -1048,6 +1096,54 @@ func (_c *UserCreate) createSpec() (*User, *sqlgraph.CreateSpec) {
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(userplatformquota.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges = append(_spec.Edges, edge)
+	}
+	if nodes := _c.mutation.CheckinsIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   user.CheckinsTable,
+			Columns: []string{user.CheckinsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(usercheckin.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges = append(_spec.Edges, edge)
+	}
+	if nodes := _c.mutation.CheckinStatusSnapshotsIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   user.CheckinStatusSnapshotsTable,
+			Columns: []string{user.CheckinStatusSnapshotsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(usercheckinstatussnapshot.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges = append(_spec.Edges, edge)
+	}
+	if nodes := _c.mutation.CheckinBlacklistEntriesIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   user.CheckinBlacklistEntriesTable,
+			Columns: []string{user.CheckinBlacklistEntriesColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(usercheckinblacklist.FieldID, field.TypeInt64),
 			},
 		}
 		for _, k := range nodes {

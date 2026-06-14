@@ -159,6 +159,37 @@ func TestSettingHandler_GetSettings_InjectsAuthSourceDefaults(t *testing.T) {
 	require.Len(t, subscriptions, 1)
 }
 
+func TestSettingHandler_GetSettings_IncludesCheckinRewardConfig(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	repo := &settingHandlerRepoStub{
+		values: map[string]string{
+			service.SettingKeyRegistrationEnabled: "true",
+			service.SettingKeyPromoCodeEnabled:    "true",
+			service.SettingKeyCheckinRewardConfig: `{"enabled":true,"tiers":[{"amount":1,"probability":100,"sort_order":1}],"streak_enabled":true,"streak_rules":[{"day":7,"bonus_amount":10}]}`,
+		},
+	}
+	svc := service.NewSettingService(repo, &config.Config{Default: config.DefaultConfig{UserConcurrency: 5}})
+	handler := NewSettingHandler(svc, nil, nil, nil, nil, nil, nil)
+
+	rec := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(rec)
+	c.Request = httptest.NewRequest(http.MethodGet, "/api/v1/admin/settings", nil)
+
+	handler.GetSettings(c)
+
+	require.Equal(t, http.StatusOK, rec.Code)
+	var resp response.Response
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+	data, ok := resp.Data.(map[string]any)
+	require.True(t, ok)
+	configData, ok := data["checkin_reward_config"].(map[string]any)
+	require.True(t, ok)
+	require.Equal(t, true, configData["enabled"])
+	require.Equal(t, true, configData["streak_enabled"])
+	require.Len(t, configData["tiers"], 1)
+	require.Len(t, configData["streak_rules"], 1)
+}
+
 func TestSettingHandler_UpdateSettings_PreservesOmittedAuthSourceDefaults(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	repo := &settingHandlerRepoStub{
@@ -204,6 +235,86 @@ func TestSettingHandler_UpdateSettings_PreservesOmittedAuthSourceDefaults(t *tes
 	require.Equal(t, 12.75, data["auth_source_default_email_balance"])
 	require.Equal(t, float64(8), data["auth_source_default_email_concurrency"])
 	require.Equal(t, true, data["force_email_on_third_party_signup"])
+}
+
+func TestSettingHandler_UpdateSettings_PersistsCheckinRewardConfig(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	repo := &settingHandlerRepoStub{
+		values: map[string]string{
+			service.SettingKeyRegistrationEnabled: "true",
+			service.SettingKeyPromoCodeEnabled:    "true",
+		},
+	}
+	svc := service.NewSettingService(repo, &config.Config{Default: config.DefaultConfig{UserConcurrency: 5}})
+	handler := NewSettingHandler(svc, nil, nil, nil, nil, nil, nil)
+
+	body := map[string]any{
+		"registration_enabled": true,
+		"promo_code_enabled":   true,
+		"checkin_reward_config": map[string]any{
+			"enabled": true,
+			"tiers": []map[string]any{
+				{"amount": 1, "probability": 100, "sort_order": 1},
+			},
+			"streak_enabled": true,
+			"streak_rules": []map[string]any{
+				{"day": 7, "bonus_amount": 10},
+			},
+		},
+	}
+	rawBody, err := json.Marshal(body)
+	require.NoError(t, err)
+
+	rec := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(rec)
+	c.Request = httptest.NewRequest(http.MethodPut, "/api/v1/admin/settings", bytes.NewReader(rawBody))
+	c.Request.Header.Set("Content-Type", "application/json")
+
+	handler.UpdateSettings(c)
+
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+	var got service.CheckinRewardConfig
+	require.NoError(t, json.Unmarshal([]byte(repo.values[service.SettingKeyCheckinRewardConfig]), &got))
+	require.NotNil(t, got.Enabled)
+	require.True(t, *got.Enabled)
+	require.Equal(t, []service.CheckinRewardTier{{Amount: 1, Probability: 100, SortOrder: 1}}, got.Tiers)
+	require.True(t, got.StreakEnabled)
+	require.Equal(t, []service.CheckinStreakRule{{Day: 7, BonusAmount: 10}}, got.StreakRules)
+}
+
+func TestSettingHandler_UpdateSettings_PreservesOmittedCheckinRewardConfig(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	existing := `{"enabled":true,"tiers":[{"amount":2,"probability":100,"sort_order":1}],"streak_enabled":true,"streak_rules":[{"day":7,"bonus_amount":10}]}`
+	repo := &settingHandlerRepoStub{
+		values: map[string]string{
+			service.SettingKeyRegistrationEnabled: "false",
+			service.SettingKeyPromoCodeEnabled:    "true",
+			service.SettingKeyCheckinRewardConfig: existing,
+		},
+	}
+	svc := service.NewSettingService(repo, &config.Config{Default: config.DefaultConfig{UserConcurrency: 5}})
+	handler := NewSettingHandler(svc, nil, nil, nil, nil, nil, nil)
+
+	body := map[string]any{
+		"registration_enabled": true,
+		"promo_code_enabled":   true,
+	}
+	rawBody, err := json.Marshal(body)
+	require.NoError(t, err)
+
+	rec := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(rec)
+	c.Request = httptest.NewRequest(http.MethodPut, "/api/v1/admin/settings", bytes.NewReader(rawBody))
+	c.Request.Header.Set("Content-Type", "application/json")
+
+	handler.UpdateSettings(c)
+
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+	var got service.CheckinRewardConfig
+	require.NoError(t, json.Unmarshal([]byte(repo.values[service.SettingKeyCheckinRewardConfig]), &got))
+	require.NotNil(t, got.Enabled)
+	require.True(t, *got.Enabled)
+	require.Equal(t, []service.CheckinRewardTier{{Amount: 2, Probability: 100, SortOrder: 1}}, got.Tiers)
 }
 
 func TestSettingHandler_UpdateSettings_PersistsPaymentVisibleMethodsAndAdvancedScheduler(t *testing.T) {

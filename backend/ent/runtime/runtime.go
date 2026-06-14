@@ -39,6 +39,9 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/userallowedgroup"
 	"github.com/Wei-Shaw/sub2api/ent/userattributedefinition"
 	"github.com/Wei-Shaw/sub2api/ent/userattributevalue"
+	"github.com/Wei-Shaw/sub2api/ent/usercheckin"
+	"github.com/Wei-Shaw/sub2api/ent/usercheckinblacklist"
+	"github.com/Wei-Shaw/sub2api/ent/usercheckinstatussnapshot"
 	"github.com/Wei-Shaw/sub2api/ent/userplatformquota"
 	"github.com/Wei-Shaw/sub2api/ent/usersubscription"
 	"github.com/Wei-Shaw/sub2api/internal/domain"
@@ -2012,6 +2015,114 @@ func init() {
 	userattributevalueDescValue := userattributevalueFields[2].Descriptor()
 	// userattributevalue.DefaultValue holds the default value on creation for the value field.
 	userattributevalue.DefaultValue = userattributevalueDescValue.Default.(string)
+	usercheckinFields := schema.UserCheckin{}.Fields()
+	_ = usercheckinFields
+	// usercheckinDescCheckinDate is the schema descriptor for checkin_date field.
+	usercheckinDescCheckinDate := usercheckinFields[1].Descriptor()
+	// usercheckin.CheckinDateValidator is a validator for the "checkin_date" field. It is called by the builders before save.
+	usercheckin.CheckinDateValidator = func() func(string) error {
+		validators := usercheckinDescCheckinDate.Validators
+		fns := [...]func(string) error{
+			validators[0].(func(string) error),
+			validators[1].(func(string) error),
+		}
+		return func(checkin_date string) error {
+			for _, fn := range fns {
+				if err := fn(checkin_date); err != nil {
+					return err
+				}
+			}
+			return nil
+		}
+	}()
+	// usercheckinDescRewardAmount is the schema descriptor for reward_amount field.
+	usercheckinDescRewardAmount := usercheckinFields[2].Descriptor()
+	// usercheckin.DefaultRewardAmount holds the default value on creation for the reward_amount field.
+	usercheckin.DefaultRewardAmount = usercheckinDescRewardAmount.Default.(float64)
+	// usercheckinDescBalanceBefore is the schema descriptor for balance_before field.
+	usercheckinDescBalanceBefore := usercheckinFields[3].Descriptor()
+	// usercheckin.DefaultBalanceBefore holds the default value on creation for the balance_before field.
+	usercheckin.DefaultBalanceBefore = usercheckinDescBalanceBefore.Default.(float64)
+	// usercheckinDescBalanceAfter is the schema descriptor for balance_after field.
+	usercheckinDescBalanceAfter := usercheckinFields[4].Descriptor()
+	// usercheckin.DefaultBalanceAfter holds the default value on creation for the balance_after field.
+	usercheckin.DefaultBalanceAfter = usercheckinDescBalanceAfter.Default.(float64)
+	// usercheckinDescCreatedAt is the schema descriptor for created_at field.
+	usercheckinDescCreatedAt := usercheckinFields[5].Descriptor()
+	// usercheckin.DefaultCreatedAt holds the default value on creation for the created_at field.
+	usercheckin.DefaultCreatedAt = usercheckinDescCreatedAt.Default.(func() time.Time)
+	// usercheckinDescStreakDay is the schema descriptor for streak_day field.
+	usercheckinDescStreakDay := usercheckinFields[6].Descriptor()
+	// usercheckin.DefaultStreakDay holds the default value on creation for the streak_day field.
+	usercheckin.DefaultStreakDay = usercheckinDescStreakDay.Default.(int)
+	// usercheckinDescBaseRewardAmount is the schema descriptor for base_reward_amount field.
+	usercheckinDescBaseRewardAmount := usercheckinFields[7].Descriptor()
+	// usercheckin.DefaultBaseRewardAmount holds the default value on creation for the base_reward_amount field.
+	usercheckin.DefaultBaseRewardAmount = usercheckinDescBaseRewardAmount.Default.(float64)
+	// usercheckinDescBonusRewardAmount is the schema descriptor for bonus_reward_amount field.
+	usercheckinDescBonusRewardAmount := usercheckinFields[8].Descriptor()
+	// usercheckin.DefaultBonusRewardAmount holds the default value on creation for the bonus_reward_amount field.
+	usercheckin.DefaultBonusRewardAmount = usercheckinDescBonusRewardAmount.Default.(float64)
+	// usercheckinDescTotalRewardAmount is the schema descriptor for total_reward_amount field.
+	usercheckinDescTotalRewardAmount := usercheckinFields[9].Descriptor()
+	// usercheckin.DefaultTotalRewardAmount holds the default value on creation for the total_reward_amount field.
+	usercheckin.DefaultTotalRewardAmount = usercheckinDescTotalRewardAmount.Default.(float64)
+	usercheckinblacklistMixin := schema.UserCheckinBlacklist{}.Mixin()
+	usercheckinblacklistMixinFields0 := usercheckinblacklistMixin[0].Fields()
+	_ = usercheckinblacklistMixinFields0
+	usercheckinblacklistFields := schema.UserCheckinBlacklist{}.Fields()
+	_ = usercheckinblacklistFields
+	// usercheckinblacklistDescCreatedAt is the schema descriptor for created_at field.
+	usercheckinblacklistDescCreatedAt := usercheckinblacklistMixinFields0[0].Descriptor()
+	// usercheckinblacklist.DefaultCreatedAt holds the default value on creation for the created_at field.
+	usercheckinblacklist.DefaultCreatedAt = usercheckinblacklistDescCreatedAt.Default.(func() time.Time)
+	// usercheckinblacklistDescUpdatedAt is the schema descriptor for updated_at field.
+	usercheckinblacklistDescUpdatedAt := usercheckinblacklistMixinFields0[1].Descriptor()
+	// usercheckinblacklist.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	usercheckinblacklist.DefaultUpdatedAt = usercheckinblacklistDescUpdatedAt.Default.(func() time.Time)
+	// usercheckinblacklist.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
+	usercheckinblacklist.UpdateDefaultUpdatedAt = usercheckinblacklistDescUpdatedAt.UpdateDefault.(func() time.Time)
+	usercheckinstatussnapshotMixin := schema.UserCheckinStatusSnapshot{}.Mixin()
+	usercheckinstatussnapshotMixinFields0 := usercheckinstatussnapshotMixin[0].Fields()
+	_ = usercheckinstatussnapshotMixinFields0
+	usercheckinstatussnapshotFields := schema.UserCheckinStatusSnapshot{}.Fields()
+	_ = usercheckinstatussnapshotFields
+	// usercheckinstatussnapshotDescCreatedAt is the schema descriptor for created_at field.
+	usercheckinstatussnapshotDescCreatedAt := usercheckinstatussnapshotMixinFields0[0].Descriptor()
+	// usercheckinstatussnapshot.DefaultCreatedAt holds the default value on creation for the created_at field.
+	usercheckinstatussnapshot.DefaultCreatedAt = usercheckinstatussnapshotDescCreatedAt.Default.(func() time.Time)
+	// usercheckinstatussnapshotDescUpdatedAt is the schema descriptor for updated_at field.
+	usercheckinstatussnapshotDescUpdatedAt := usercheckinstatussnapshotMixinFields0[1].Descriptor()
+	// usercheckinstatussnapshot.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	usercheckinstatussnapshot.DefaultUpdatedAt = usercheckinstatussnapshotDescUpdatedAt.Default.(func() time.Time)
+	// usercheckinstatussnapshot.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
+	usercheckinstatussnapshot.UpdateDefaultUpdatedAt = usercheckinstatussnapshotDescUpdatedAt.UpdateDefault.(func() time.Time)
+	// usercheckinstatussnapshotDescCurrentStreak is the schema descriptor for current_streak field.
+	usercheckinstatussnapshotDescCurrentStreak := usercheckinstatussnapshotFields[1].Descriptor()
+	// usercheckinstatussnapshot.DefaultCurrentStreak holds the default value on creation for the current_streak field.
+	usercheckinstatussnapshot.DefaultCurrentStreak = usercheckinstatussnapshotDescCurrentStreak.Default.(int)
+	// usercheckinstatussnapshotDescLastCheckinDate is the schema descriptor for last_checkin_date field.
+	usercheckinstatussnapshotDescLastCheckinDate := usercheckinstatussnapshotFields[2].Descriptor()
+	// usercheckinstatussnapshot.LastCheckinDateValidator is a validator for the "last_checkin_date" field. It is called by the builders before save.
+	usercheckinstatussnapshot.LastCheckinDateValidator = func() func(string) error {
+		validators := usercheckinstatussnapshotDescLastCheckinDate.Validators
+		fns := [...]func(string) error{
+			validators[0].(func(string) error),
+			validators[1].(func(string) error),
+		}
+		return func(last_checkin_date string) error {
+			for _, fn := range fns {
+				if err := fn(last_checkin_date); err != nil {
+					return err
+				}
+			}
+			return nil
+		}
+	}()
+	// usercheckinstatussnapshotDescLifetimeCheckinDays is the schema descriptor for lifetime_checkin_days field.
+	usercheckinstatussnapshotDescLifetimeCheckinDays := usercheckinstatussnapshotFields[3].Descriptor()
+	// usercheckinstatussnapshot.DefaultLifetimeCheckinDays holds the default value on creation for the lifetime_checkin_days field.
+	usercheckinstatussnapshot.DefaultLifetimeCheckinDays = usercheckinstatussnapshotDescLifetimeCheckinDays.Default.(int)
 	userplatformquotaMixin := schema.UserPlatformQuota{}.Mixin()
 	userplatformquotaMixinHooks1 := userplatformquotaMixin[1].Hooks()
 	userplatformquota.Hooks[0] = userplatformquotaMixinHooks1[0]

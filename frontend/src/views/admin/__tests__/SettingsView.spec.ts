@@ -171,6 +171,23 @@ vi.mock("vue-i18n", async () => {
     "admin.settings.defaults.defaultPlatformQuotas": "默认平台限额（注册时分配）",
     "admin.settings.defaults.defaultPlatformQuotasHint": "新用户注册时自动写入平台限额记录；已有用户不受影响。留空 = 该平台该窗口不限制。",
     "admin.settings.defaults.platformQuotaNotice": "月限额为 30 天滚动窗口，非自然月",
+    "admin.settings.checkin.title": "签到奖励",
+    "admin.settings.checkin.description": "配置用户每日签到的随机奖励和连续签到奖励。",
+    "admin.settings.checkin.enabledLabel": "启用签到",
+    "admin.settings.checkin.enabledHint": "开启后，用户可在仪表盘每日签到领取余额奖励。",
+    "admin.settings.checkin.rewardTiers": "随机奖励档位",
+    "admin.settings.checkin.rewardTiersHint": "概率为权重值，后端按所有有效档位的权重随机抽取。",
+    "admin.settings.checkin.amount": "奖励余额",
+    "admin.settings.checkin.probability": "概率权重",
+    "admin.settings.checkin.streakEnabledLabel": "启用连续签到奖励",
+    "admin.settings.checkin.streakRules": "连续签到规则",
+    "admin.settings.checkin.streakRulesHint": "用户达到指定连续天数时追加奖励。",
+    "admin.settings.checkin.day": "连续天数",
+    "admin.settings.checkin.bonusAmount": "追加余额",
+    "admin.settings.checkin.addTier": "添加档位",
+    "admin.settings.checkin.addStreakRule": "添加规则",
+    "admin.settings.checkin.emptyTiers": "暂无奖励档位。",
+    "admin.settings.checkin.emptyStreakRules": "暂无连续签到规则。",
     "admin.settings.authSourceDefaults.platformQuotasOverride": "平台限额覆盖",
     "admin.settings.authSourceDefaults.platformQuotasOverrideHint": "留空的字段继承「系统默认平台限额」；填 0 表示禁止该窗口使用。",
   };
@@ -419,6 +436,12 @@ const baseSettingsResponse = {
     openai:      { daily: null, weekly: 12.5, monthly: null },
     gemini:      { daily: null, weekly: null, monthly: 200 },
     antigravity: { daily: null, weekly: null, monthly: null },
+  },
+  checkin_reward_config: {
+    enabled: false,
+    tiers: [{ amount: 1, probability: 30, sort_order: 1 }],
+    streak_enabled: true,
+    streak_rules: [{ day: 7, bonus_amount: 10 }],
   },
 };
 
@@ -753,6 +776,111 @@ describe("admin SettingsView payment visible method controls", () => {
     expect(paymentHelpImageUpload).toBeDefined();
     expect(paymentHelpImageUpload?.attributes("data-upload-label")).toBe("上传图片");
     expect(paymentHelpImageUpload?.attributes("data-remove-label")).toBe("移除");
+  });
+});
+
+describe("admin SettingsView checkin reward config", () => {
+  beforeEach(() => {
+    getSettings.mockReset();
+    updateSettings.mockReset();
+    getWebSearchEmulationConfig.mockReset();
+    updateWebSearchEmulationConfig.mockReset();
+    getAdminApiKey.mockReset();
+    getOverloadCooldownSettings.mockReset();
+    getRateLimit429CooldownSettings.mockReset();
+    updateRateLimit429CooldownSettings.mockReset();
+    getStreamTimeoutSettings.mockReset();
+    getRectifierSettings.mockReset();
+    getBetaPolicySettings.mockReset();
+    getGroups.mockReset();
+    listProxies.mockReset();
+    getProviders.mockReset();
+    updateProvider.mockReset();
+    createProvider.mockReset();
+    deleteProvider.mockReset();
+    fetchPublicSettings.mockReset();
+    adminSettingsFetch.mockReset();
+    showError.mockReset();
+    showSuccess.mockReset();
+    localeRef.value = "zh-CN";
+
+    getSettings.mockResolvedValue({ ...baseSettingsResponse });
+    updateSettings.mockImplementation(async (payload) => ({
+      ...baseSettingsResponse,
+      ...payload,
+    }));
+    getWebSearchEmulationConfig.mockResolvedValue({ enabled: false, providers: [] });
+    updateWebSearchEmulationConfig.mockResolvedValue({ enabled: false, providers: [] });
+    getAdminApiKey.mockResolvedValue({ exists: false, masked_key: "" });
+    getOverloadCooldownSettings.mockResolvedValue({});
+    getRateLimit429CooldownSettings.mockResolvedValue({});
+    updateRateLimit429CooldownSettings.mockResolvedValue({});
+    getStreamTimeoutSettings.mockResolvedValue({});
+    getRectifierSettings.mockResolvedValue({});
+    getBetaPolicySettings.mockResolvedValue({});
+    getGroups.mockResolvedValue([]);
+    listProxies.mockResolvedValue({ items: [] });
+    getProviders.mockResolvedValue({ data: [] });
+  });
+
+  it("在 Users tab 渲染后端返回的签到奖励配置", async () => {
+    getSettings.mockResolvedValueOnce({
+      ...baseSettingsResponse,
+      checkin_reward_config: {
+        enabled: true,
+        tiers: [
+          { amount: 2, probability: 23, sort_order: 1 },
+          { amount: 5, probability: 7, sort_order: 2 },
+        ],
+        streak_enabled: true,
+        streak_rules: [
+          { day: 7, bonus_amount: 10 },
+          { day: 30, bonus_amount: 20 },
+        ],
+      },
+    });
+
+    const wrapper = mountView();
+    await flushPromises();
+    await openUsersTab(wrapper);
+
+    expect(wrapper.find('[data-testid="checkin-settings-card"]').exists()).toBe(true);
+    expect((wrapper.find('[data-testid="checkin-enabled-toggle"]').element as HTMLInputElement).checked).toBe(true);
+    expect((wrapper.find('[data-testid="checkin-tier-amount-0"]').element as HTMLInputElement).value).toBe("2");
+    expect((wrapper.find('[data-testid="checkin-tier-probability-1"]').element as HTMLInputElement).value).toBe("7");
+    expect((wrapper.find('[data-testid="checkin-streak-day-1"]').element as HTMLInputElement).value).toBe("30");
+  });
+
+  it("保存时提交清洗后的 checkin_reward_config", async () => {
+    getSettings.mockResolvedValueOnce({
+      ...baseSettingsResponse,
+      checkin_reward_config: {
+        enabled: true,
+        tiers: [{ amount: 4.5, probability: 10, sort_order: 1 }],
+        streak_enabled: true,
+        streak_rules: [{ day: 15, bonus_amount: 15 }],
+      },
+    });
+
+    const wrapper = mountView();
+    await flushPromises();
+    await openUsersTab(wrapper);
+
+    await wrapper.find('[data-testid="checkin-tier-amount-0"]').setValue("5");
+    await wrapper.find('[data-testid="checkin-tier-probability-0"]').setValue("9");
+    await wrapper.find('[data-testid="checkin-streak-bonus-0"]').setValue("18");
+    await wrapper.find("form").trigger("submit.prevent");
+    await flushPromises();
+
+    expect(updateSettings).toHaveBeenCalled();
+    const payload = updateSettings.mock.calls.at(-1)![0] as Record<string, unknown>;
+    expect(payload).toHaveProperty("checkin_reward_config");
+    expect(payload["checkin_reward_config"]).toEqual({
+      enabled: true,
+      tiers: [{ amount: 5, probability: 9, sort_order: 1 }],
+      streak_enabled: true,
+      streak_rules: [{ day: 15, bonus_amount: 18 }],
+    });
   });
 });
 

@@ -97,11 +97,17 @@ type UserEdges struct {
 	PendingAuthSessions []*PendingAuthSession `json:"pending_auth_sessions,omitempty"`
 	// PlatformQuotas holds the value of the platform_quotas edge.
 	PlatformQuotas []*UserPlatformQuota `json:"platform_quotas,omitempty"`
+	// Checkins holds the value of the checkins edge.
+	Checkins []*UserCheckin `json:"checkins,omitempty"`
+	// CheckinStatusSnapshots holds the value of the checkin_status_snapshots edge.
+	CheckinStatusSnapshots []*UserCheckinStatusSnapshot `json:"checkin_status_snapshots,omitempty"`
+	// CheckinBlacklistEntries holds the value of the checkin_blacklist_entries edge.
+	CheckinBlacklistEntries []*UserCheckinBlacklist `json:"checkin_blacklist_entries,omitempty"`
 	// UserAllowedGroups holds the value of the user_allowed_groups edge.
 	UserAllowedGroups []*UserAllowedGroup `json:"user_allowed_groups,omitempty"`
 	// loadedTypes holds the information for reporting if a
 	// type was loaded (or requested) in eager-loading or not.
-	loadedTypes [14]bool
+	loadedTypes [17]bool
 }
 
 // APIKeysOrErr returns the APIKeys value or an error if the edge
@@ -221,10 +227,37 @@ func (e UserEdges) PlatformQuotasOrErr() ([]*UserPlatformQuota, error) {
 	return nil, &NotLoadedError{edge: "platform_quotas"}
 }
 
+// CheckinsOrErr returns the Checkins value or an error if the edge
+// was not loaded in eager-loading.
+func (e UserEdges) CheckinsOrErr() ([]*UserCheckin, error) {
+	if e.loadedTypes[13] {
+		return e.Checkins, nil
+	}
+	return nil, &NotLoadedError{edge: "checkins"}
+}
+
+// CheckinStatusSnapshotsOrErr returns the CheckinStatusSnapshots value or an error if the edge
+// was not loaded in eager-loading.
+func (e UserEdges) CheckinStatusSnapshotsOrErr() ([]*UserCheckinStatusSnapshot, error) {
+	if e.loadedTypes[14] {
+		return e.CheckinStatusSnapshots, nil
+	}
+	return nil, &NotLoadedError{edge: "checkin_status_snapshots"}
+}
+
+// CheckinBlacklistEntriesOrErr returns the CheckinBlacklistEntries value or an error if the edge
+// was not loaded in eager-loading.
+func (e UserEdges) CheckinBlacklistEntriesOrErr() ([]*UserCheckinBlacklist, error) {
+	if e.loadedTypes[15] {
+		return e.CheckinBlacklistEntries, nil
+	}
+	return nil, &NotLoadedError{edge: "checkin_blacklist_entries"}
+}
+
 // UserAllowedGroupsOrErr returns the UserAllowedGroups value or an error if the edge
 // was not loaded in eager-loading.
 func (e UserEdges) UserAllowedGroupsOrErr() ([]*UserAllowedGroup, error) {
-	if e.loadedTypes[13] {
+	if e.loadedTypes[16] {
 		return e.UserAllowedGroups, nil
 	}
 	return nil, &NotLoadedError{edge: "user_allowed_groups"}
@@ -486,6 +519,21 @@ func (_m *User) QueryPendingAuthSessions() *PendingAuthSessionQuery {
 // QueryPlatformQuotas queries the "platform_quotas" edge of the User entity.
 func (_m *User) QueryPlatformQuotas() *UserPlatformQuotaQuery {
 	return NewUserClient(_m.config).QueryPlatformQuotas(_m)
+}
+
+// QueryCheckins queries the "checkins" edge of the User entity.
+func (_m *User) QueryCheckins() *UserCheckinQuery {
+	return NewUserClient(_m.config).QueryCheckins(_m)
+}
+
+// QueryCheckinStatusSnapshots queries the "checkin_status_snapshots" edge of the User entity.
+func (_m *User) QueryCheckinStatusSnapshots() *UserCheckinStatusSnapshotQuery {
+	return NewUserClient(_m.config).QueryCheckinStatusSnapshots(_m)
+}
+
+// QueryCheckinBlacklistEntries queries the "checkin_blacklist_entries" edge of the User entity.
+func (_m *User) QueryCheckinBlacklistEntries() *UserCheckinBlacklistQuery {
+	return NewUserClient(_m.config).QueryCheckinBlacklistEntries(_m)
 }
 
 // QueryUserAllowedGroups queries the "user_allowed_groups" edge of the User entity.

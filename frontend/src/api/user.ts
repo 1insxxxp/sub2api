@@ -17,6 +17,8 @@ import type {
   UserAffiliateDetail,
   AffiliateTransferResponse,
   PlatformQuotasResponse,
+  UserCheckinStatus,
+  UserCheckinResult,
 } from '@/types'
 
 /**
@@ -194,6 +196,16 @@ export async function getMyPlatformQuotas(): Promise<PlatformQuotasResponse> {
   return data
 }
 
+export async function getCheckinStatus(): Promise<UserCheckinStatus> {
+  const { data } = await apiClient.get<UserCheckinStatus>('/user/checkin/status')
+  return data
+}
+
+export async function checkin(): Promise<UserCheckinResult> {
+  const { data } = await apiClient.post<UserCheckinResult>('/user/checkin')
+  return data
+}
+
 export const userAPI = {
   getProfile,
   updateProfile,
@@ -210,6 +222,8 @@ export const userAPI = {
   getAffiliateDetail,
   transferAffiliateQuota,
   getMyPlatformQuotas,
+  getCheckinStatus,
+  checkin,
 }
 
 export default userAPI

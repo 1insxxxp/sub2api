@@ -250,6 +250,25 @@ export interface CurrentUserResponse extends User {
   run_mode?: 'standard' | 'simple'
 }
 
+export interface UserCheckinStatus {
+  enabled: boolean
+  user_id?: number
+  checkin_date?: string
+  checked_in_today: boolean
+  current_streak?: number
+  last_checkin_date?: string
+  lifetime_checkin_days?: number
+  base_reward_amount?: number
+  bonus_reward_amount?: number
+  total_reward_amount?: number
+  balance_before?: number
+  balance_after?: number
+  blacklisted?: boolean
+  message?: string
+}
+
+export type UserCheckinResult = UserCheckinStatus
+
 // ==================== Subscription Types ====================
 
 export interface Subscription {

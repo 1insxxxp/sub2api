@@ -48,6 +48,9 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/userallowedgroup"
 	"github.com/Wei-Shaw/sub2api/ent/userattributedefinition"
 	"github.com/Wei-Shaw/sub2api/ent/userattributevalue"
+	"github.com/Wei-Shaw/sub2api/ent/usercheckin"
+	"github.com/Wei-Shaw/sub2api/ent/usercheckinblacklist"
+	"github.com/Wei-Shaw/sub2api/ent/usercheckinstatussnapshot"
 	"github.com/Wei-Shaw/sub2api/ent/userplatformquota"
 	"github.com/Wei-Shaw/sub2api/ent/usersubscription"
 
@@ -125,6 +128,12 @@ type Client struct {
 	UserAttributeDefinition *UserAttributeDefinitionClient
 	// UserAttributeValue is the client for interacting with the UserAttributeValue builders.
 	UserAttributeValue *UserAttributeValueClient
+	// UserCheckin is the client for interacting with the UserCheckin builders.
+	UserCheckin *UserCheckinClient
+	// UserCheckinBlacklist is the client for interacting with the UserCheckinBlacklist builders.
+	UserCheckinBlacklist *UserCheckinBlacklistClient
+	// UserCheckinStatusSnapshot is the client for interacting with the UserCheckinStatusSnapshot builders.
+	UserCheckinStatusSnapshot *UserCheckinStatusSnapshotClient
 	// UserPlatformQuota is the client for interacting with the UserPlatformQuota builders.
 	UserPlatformQuota *UserPlatformQuotaClient
 	// UserSubscription is the client for interacting with the UserSubscription builders.
@@ -173,6 +182,9 @@ func (c *Client) init() {
 	c.UserAllowedGroup = NewUserAllowedGroupClient(c.config)
 	c.UserAttributeDefinition = NewUserAttributeDefinitionClient(c.config)
 	c.UserAttributeValue = NewUserAttributeValueClient(c.config)
+	c.UserCheckin = NewUserCheckinClient(c.config)
+	c.UserCheckinBlacklist = NewUserCheckinBlacklistClient(c.config)
+	c.UserCheckinStatusSnapshot = NewUserCheckinStatusSnapshotClient(c.config)
 	c.UserPlatformQuota = NewUserPlatformQuotaClient(c.config)
 	c.UserSubscription = NewUserSubscriptionClient(c.config)
 }
@@ -300,6 +312,9 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 		UserAllowedGroup:              NewUserAllowedGroupClient(cfg),
 		UserAttributeDefinition:       NewUserAttributeDefinitionClient(cfg),
 		UserAttributeValue:            NewUserAttributeValueClient(cfg),
+		UserCheckin:                   NewUserCheckinClient(cfg),
+		UserCheckinBlacklist:          NewUserCheckinBlacklistClient(cfg),
+		UserCheckinStatusSnapshot:     NewUserCheckinStatusSnapshotClient(cfg),
 		UserPlatformQuota:             NewUserPlatformQuotaClient(cfg),
 		UserSubscription:              NewUserSubscriptionClient(cfg),
 	}, nil
@@ -354,6 +369,9 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 		UserAllowedGroup:              NewUserAllowedGroupClient(cfg),
 		UserAttributeDefinition:       NewUserAttributeDefinitionClient(cfg),
 		UserAttributeValue:            NewUserAttributeValueClient(cfg),
+		UserCheckin:                   NewUserCheckinClient(cfg),
+		UserCheckinBlacklist:          NewUserCheckinBlacklistClient(cfg),
+		UserCheckinStatusSnapshot:     NewUserCheckinStatusSnapshotClient(cfg),
 		UserPlatformQuota:             NewUserPlatformQuotaClient(cfg),
 		UserSubscription:              NewUserSubscriptionClient(cfg),
 	}, nil
@@ -394,6 +412,7 @@ func (c *Client) Use(hooks ...Hook) {
 		c.PromoCodeUsage, c.Proxy, c.RedeemCode, c.SecuritySecret, c.Setting,
 		c.SubscriptionPlan, c.TLSFingerprintProfile, c.UsageCleanupTask, c.UsageLog,
 		c.User, c.UserAllowedGroup, c.UserAttributeDefinition, c.UserAttributeValue,
+		c.UserCheckin, c.UserCheckinBlacklist, c.UserCheckinStatusSnapshot,
 		c.UserPlatformQuota, c.UserSubscription,
 	} {
 		n.Use(hooks...)
@@ -413,6 +432,7 @@ func (c *Client) Intercept(interceptors ...Interceptor) {
 		c.PromoCodeUsage, c.Proxy, c.RedeemCode, c.SecuritySecret, c.Setting,
 		c.SubscriptionPlan, c.TLSFingerprintProfile, c.UsageCleanupTask, c.UsageLog,
 		c.User, c.UserAllowedGroup, c.UserAttributeDefinition, c.UserAttributeValue,
+		c.UserCheckin, c.UserCheckinBlacklist, c.UserCheckinStatusSnapshot,
 		c.UserPlatformQuota, c.UserSubscription,
 	} {
 		n.Intercept(interceptors...)
@@ -488,6 +508,12 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.UserAttributeDefinition.mutate(ctx, m)
 	case *UserAttributeValueMutation:
 		return c.UserAttributeValue.mutate(ctx, m)
+	case *UserCheckinMutation:
+		return c.UserCheckin.mutate(ctx, m)
+	case *UserCheckinBlacklistMutation:
+		return c.UserCheckinBlacklist.mutate(ctx, m)
+	case *UserCheckinStatusSnapshotMutation:
+		return c.UserCheckinStatusSnapshot.mutate(ctx, m)
 	case *UserPlatformQuotaMutation:
 		return c.UserPlatformQuota.mutate(ctx, m)
 	case *UserSubscriptionMutation:
@@ -5381,6 +5407,54 @@ func (c *UserClient) QueryPlatformQuotas(_m *User) *UserPlatformQuotaQuery {
 	return query
 }
 
+// QueryCheckins queries the checkins edge of a User.
+func (c *UserClient) QueryCheckins(_m *User) *UserCheckinQuery {
+	query := (&UserCheckinClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(user.Table, user.FieldID, id),
+			sqlgraph.To(usercheckin.Table, usercheckin.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, user.CheckinsTable, user.CheckinsColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryCheckinStatusSnapshots queries the checkin_status_snapshots edge of a User.
+func (c *UserClient) QueryCheckinStatusSnapshots(_m *User) *UserCheckinStatusSnapshotQuery {
+	query := (&UserCheckinStatusSnapshotClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(user.Table, user.FieldID, id),
+			sqlgraph.To(usercheckinstatussnapshot.Table, usercheckinstatussnapshot.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, user.CheckinStatusSnapshotsTable, user.CheckinStatusSnapshotsColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryCheckinBlacklistEntries queries the checkin_blacklist_entries edge of a User.
+func (c *UserClient) QueryCheckinBlacklistEntries(_m *User) *UserCheckinBlacklistQuery {
+	query := (&UserCheckinBlacklistClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(user.Table, user.FieldID, id),
+			sqlgraph.To(usercheckinblacklist.Table, usercheckinblacklist.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, user.CheckinBlacklistEntriesTable, user.CheckinBlacklistEntriesColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
 // QueryUserAllowedGroups queries the user_allowed_groups edge of a User.
 func (c *UserClient) QueryUserAllowedGroups(_m *User) *UserAllowedGroupQuery {
 	query := (&UserAllowedGroupClient{config: c.config}).Query()
@@ -5856,6 +5930,453 @@ func (c *UserAttributeValueClient) mutate(ctx context.Context, m *UserAttributeV
 	}
 }
 
+// UserCheckinClient is a client for the UserCheckin schema.
+type UserCheckinClient struct {
+	config
+}
+
+// NewUserCheckinClient returns a client for the UserCheckin from the given config.
+func NewUserCheckinClient(c config) *UserCheckinClient {
+	return &UserCheckinClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `usercheckin.Hooks(f(g(h())))`.
+func (c *UserCheckinClient) Use(hooks ...Hook) {
+	c.hooks.UserCheckin = append(c.hooks.UserCheckin, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `usercheckin.Intercept(f(g(h())))`.
+func (c *UserCheckinClient) Intercept(interceptors ...Interceptor) {
+	c.inters.UserCheckin = append(c.inters.UserCheckin, interceptors...)
+}
+
+// Create returns a builder for creating a UserCheckin entity.
+func (c *UserCheckinClient) Create() *UserCheckinCreate {
+	mutation := newUserCheckinMutation(c.config, OpCreate)
+	return &UserCheckinCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of UserCheckin entities.
+func (c *UserCheckinClient) CreateBulk(builders ...*UserCheckinCreate) *UserCheckinCreateBulk {
+	return &UserCheckinCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *UserCheckinClient) MapCreateBulk(slice any, setFunc func(*UserCheckinCreate, int)) *UserCheckinCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &UserCheckinCreateBulk{err: fmt.Errorf("calling to UserCheckinClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*UserCheckinCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &UserCheckinCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for UserCheckin.
+func (c *UserCheckinClient) Update() *UserCheckinUpdate {
+	mutation := newUserCheckinMutation(c.config, OpUpdate)
+	return &UserCheckinUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *UserCheckinClient) UpdateOne(_m *UserCheckin) *UserCheckinUpdateOne {
+	mutation := newUserCheckinMutation(c.config, OpUpdateOne, withUserCheckin(_m))
+	return &UserCheckinUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *UserCheckinClient) UpdateOneID(id int64) *UserCheckinUpdateOne {
+	mutation := newUserCheckinMutation(c.config, OpUpdateOne, withUserCheckinID(id))
+	return &UserCheckinUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for UserCheckin.
+func (c *UserCheckinClient) Delete() *UserCheckinDelete {
+	mutation := newUserCheckinMutation(c.config, OpDelete)
+	return &UserCheckinDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *UserCheckinClient) DeleteOne(_m *UserCheckin) *UserCheckinDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *UserCheckinClient) DeleteOneID(id int64) *UserCheckinDeleteOne {
+	builder := c.Delete().Where(usercheckin.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &UserCheckinDeleteOne{builder}
+}
+
+// Query returns a query builder for UserCheckin.
+func (c *UserCheckinClient) Query() *UserCheckinQuery {
+	return &UserCheckinQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeUserCheckin},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a UserCheckin entity by its id.
+func (c *UserCheckinClient) Get(ctx context.Context, id int64) (*UserCheckin, error) {
+	return c.Query().Where(usercheckin.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *UserCheckinClient) GetX(ctx context.Context, id int64) *UserCheckin {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// QueryUser queries the user edge of a UserCheckin.
+func (c *UserCheckinClient) QueryUser(_m *UserCheckin) *UserQuery {
+	query := (&UserClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(usercheckin.Table, usercheckin.FieldID, id),
+			sqlgraph.To(user.Table, user.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, usercheckin.UserTable, usercheckin.UserColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// Hooks returns the client hooks.
+func (c *UserCheckinClient) Hooks() []Hook {
+	return c.hooks.UserCheckin
+}
+
+// Interceptors returns the client interceptors.
+func (c *UserCheckinClient) Interceptors() []Interceptor {
+	return c.inters.UserCheckin
+}
+
+func (c *UserCheckinClient) mutate(ctx context.Context, m *UserCheckinMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&UserCheckinCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&UserCheckinUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&UserCheckinUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&UserCheckinDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown UserCheckin mutation op: %q", m.Op())
+	}
+}
+
+// UserCheckinBlacklistClient is a client for the UserCheckinBlacklist schema.
+type UserCheckinBlacklistClient struct {
+	config
+}
+
+// NewUserCheckinBlacklistClient returns a client for the UserCheckinBlacklist from the given config.
+func NewUserCheckinBlacklistClient(c config) *UserCheckinBlacklistClient {
+	return &UserCheckinBlacklistClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `usercheckinblacklist.Hooks(f(g(h())))`.
+func (c *UserCheckinBlacklistClient) Use(hooks ...Hook) {
+	c.hooks.UserCheckinBlacklist = append(c.hooks.UserCheckinBlacklist, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `usercheckinblacklist.Intercept(f(g(h())))`.
+func (c *UserCheckinBlacklistClient) Intercept(interceptors ...Interceptor) {
+	c.inters.UserCheckinBlacklist = append(c.inters.UserCheckinBlacklist, interceptors...)
+}
+
+// Create returns a builder for creating a UserCheckinBlacklist entity.
+func (c *UserCheckinBlacklistClient) Create() *UserCheckinBlacklistCreate {
+	mutation := newUserCheckinBlacklistMutation(c.config, OpCreate)
+	return &UserCheckinBlacklistCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of UserCheckinBlacklist entities.
+func (c *UserCheckinBlacklistClient) CreateBulk(builders ...*UserCheckinBlacklistCreate) *UserCheckinBlacklistCreateBulk {
+	return &UserCheckinBlacklistCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *UserCheckinBlacklistClient) MapCreateBulk(slice any, setFunc func(*UserCheckinBlacklistCreate, int)) *UserCheckinBlacklistCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &UserCheckinBlacklistCreateBulk{err: fmt.Errorf("calling to UserCheckinBlacklistClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*UserCheckinBlacklistCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &UserCheckinBlacklistCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for UserCheckinBlacklist.
+func (c *UserCheckinBlacklistClient) Update() *UserCheckinBlacklistUpdate {
+	mutation := newUserCheckinBlacklistMutation(c.config, OpUpdate)
+	return &UserCheckinBlacklistUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *UserCheckinBlacklistClient) UpdateOne(_m *UserCheckinBlacklist) *UserCheckinBlacklistUpdateOne {
+	mutation := newUserCheckinBlacklistMutation(c.config, OpUpdateOne, withUserCheckinBlacklist(_m))
+	return &UserCheckinBlacklistUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *UserCheckinBlacklistClient) UpdateOneID(id int64) *UserCheckinBlacklistUpdateOne {
+	mutation := newUserCheckinBlacklistMutation(c.config, OpUpdateOne, withUserCheckinBlacklistID(id))
+	return &UserCheckinBlacklistUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for UserCheckinBlacklist.
+func (c *UserCheckinBlacklistClient) Delete() *UserCheckinBlacklistDelete {
+	mutation := newUserCheckinBlacklistMutation(c.config, OpDelete)
+	return &UserCheckinBlacklistDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *UserCheckinBlacklistClient) DeleteOne(_m *UserCheckinBlacklist) *UserCheckinBlacklistDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *UserCheckinBlacklistClient) DeleteOneID(id int64) *UserCheckinBlacklistDeleteOne {
+	builder := c.Delete().Where(usercheckinblacklist.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &UserCheckinBlacklistDeleteOne{builder}
+}
+
+// Query returns a query builder for UserCheckinBlacklist.
+func (c *UserCheckinBlacklistClient) Query() *UserCheckinBlacklistQuery {
+	return &UserCheckinBlacklistQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeUserCheckinBlacklist},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a UserCheckinBlacklist entity by its id.
+func (c *UserCheckinBlacklistClient) Get(ctx context.Context, id int64) (*UserCheckinBlacklist, error) {
+	return c.Query().Where(usercheckinblacklist.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *UserCheckinBlacklistClient) GetX(ctx context.Context, id int64) *UserCheckinBlacklist {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// QueryUser queries the user edge of a UserCheckinBlacklist.
+func (c *UserCheckinBlacklistClient) QueryUser(_m *UserCheckinBlacklist) *UserQuery {
+	query := (&UserClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(usercheckinblacklist.Table, usercheckinblacklist.FieldID, id),
+			sqlgraph.To(user.Table, user.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, usercheckinblacklist.UserTable, usercheckinblacklist.UserColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// Hooks returns the client hooks.
+func (c *UserCheckinBlacklistClient) Hooks() []Hook {
+	return c.hooks.UserCheckinBlacklist
+}
+
+// Interceptors returns the client interceptors.
+func (c *UserCheckinBlacklistClient) Interceptors() []Interceptor {
+	return c.inters.UserCheckinBlacklist
+}
+
+func (c *UserCheckinBlacklistClient) mutate(ctx context.Context, m *UserCheckinBlacklistMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&UserCheckinBlacklistCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&UserCheckinBlacklistUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&UserCheckinBlacklistUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&UserCheckinBlacklistDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown UserCheckinBlacklist mutation op: %q", m.Op())
+	}
+}
+
+// UserCheckinStatusSnapshotClient is a client for the UserCheckinStatusSnapshot schema.
+type UserCheckinStatusSnapshotClient struct {
+	config
+}
+
+// NewUserCheckinStatusSnapshotClient returns a client for the UserCheckinStatusSnapshot from the given config.
+func NewUserCheckinStatusSnapshotClient(c config) *UserCheckinStatusSnapshotClient {
+	return &UserCheckinStatusSnapshotClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `usercheckinstatussnapshot.Hooks(f(g(h())))`.
+func (c *UserCheckinStatusSnapshotClient) Use(hooks ...Hook) {
+	c.hooks.UserCheckinStatusSnapshot = append(c.hooks.UserCheckinStatusSnapshot, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `usercheckinstatussnapshot.Intercept(f(g(h())))`.
+func (c *UserCheckinStatusSnapshotClient) Intercept(interceptors ...Interceptor) {
+	c.inters.UserCheckinStatusSnapshot = append(c.inters.UserCheckinStatusSnapshot, interceptors...)
+}
+
+// Create returns a builder for creating a UserCheckinStatusSnapshot entity.
+func (c *UserCheckinStatusSnapshotClient) Create() *UserCheckinStatusSnapshotCreate {
+	mutation := newUserCheckinStatusSnapshotMutation(c.config, OpCreate)
+	return &UserCheckinStatusSnapshotCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of UserCheckinStatusSnapshot entities.
+func (c *UserCheckinStatusSnapshotClient) CreateBulk(builders ...*UserCheckinStatusSnapshotCreate) *UserCheckinStatusSnapshotCreateBulk {
+	return &UserCheckinStatusSnapshotCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *UserCheckinStatusSnapshotClient) MapCreateBulk(slice any, setFunc func(*UserCheckinStatusSnapshotCreate, int)) *UserCheckinStatusSnapshotCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &UserCheckinStatusSnapshotCreateBulk{err: fmt.Errorf("calling to UserCheckinStatusSnapshotClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*UserCheckinStatusSnapshotCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &UserCheckinStatusSnapshotCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for UserCheckinStatusSnapshot.
+func (c *UserCheckinStatusSnapshotClient) Update() *UserCheckinStatusSnapshotUpdate {
+	mutation := newUserCheckinStatusSnapshotMutation(c.config, OpUpdate)
+	return &UserCheckinStatusSnapshotUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *UserCheckinStatusSnapshotClient) UpdateOne(_m *UserCheckinStatusSnapshot) *UserCheckinStatusSnapshotUpdateOne {
+	mutation := newUserCheckinStatusSnapshotMutation(c.config, OpUpdateOne, withUserCheckinStatusSnapshot(_m))
+	return &UserCheckinStatusSnapshotUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *UserCheckinStatusSnapshotClient) UpdateOneID(id int64) *UserCheckinStatusSnapshotUpdateOne {
+	mutation := newUserCheckinStatusSnapshotMutation(c.config, OpUpdateOne, withUserCheckinStatusSnapshotID(id))
+	return &UserCheckinStatusSnapshotUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for UserCheckinStatusSnapshot.
+func (c *UserCheckinStatusSnapshotClient) Delete() *UserCheckinStatusSnapshotDelete {
+	mutation := newUserCheckinStatusSnapshotMutation(c.config, OpDelete)
+	return &UserCheckinStatusSnapshotDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *UserCheckinStatusSnapshotClient) DeleteOne(_m *UserCheckinStatusSnapshot) *UserCheckinStatusSnapshotDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *UserCheckinStatusSnapshotClient) DeleteOneID(id int64) *UserCheckinStatusSnapshotDeleteOne {
+	builder := c.Delete().Where(usercheckinstatussnapshot.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &UserCheckinStatusSnapshotDeleteOne{builder}
+}
+
+// Query returns a query builder for UserCheckinStatusSnapshot.
+func (c *UserCheckinStatusSnapshotClient) Query() *UserCheckinStatusSnapshotQuery {
+	return &UserCheckinStatusSnapshotQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeUserCheckinStatusSnapshot},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a UserCheckinStatusSnapshot entity by its id.
+func (c *UserCheckinStatusSnapshotClient) Get(ctx context.Context, id int64) (*UserCheckinStatusSnapshot, error) {
+	return c.Query().Where(usercheckinstatussnapshot.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *UserCheckinStatusSnapshotClient) GetX(ctx context.Context, id int64) *UserCheckinStatusSnapshot {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// QueryUser queries the user edge of a UserCheckinStatusSnapshot.
+func (c *UserCheckinStatusSnapshotClient) QueryUser(_m *UserCheckinStatusSnapshot) *UserQuery {
+	query := (&UserClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(usercheckinstatussnapshot.Table, usercheckinstatussnapshot.FieldID, id),
+			sqlgraph.To(user.Table, user.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, usercheckinstatussnapshot.UserTable, usercheckinstatussnapshot.UserColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// Hooks returns the client hooks.
+func (c *UserCheckinStatusSnapshotClient) Hooks() []Hook {
+	return c.hooks.UserCheckinStatusSnapshot
+}
+
+// Interceptors returns the client interceptors.
+func (c *UserCheckinStatusSnapshotClient) Interceptors() []Interceptor {
+	return c.inters.UserCheckinStatusSnapshot
+}
+
+func (c *UserCheckinStatusSnapshotClient) mutate(ctx context.Context, m *UserCheckinStatusSnapshotMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&UserCheckinStatusSnapshotCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&UserCheckinStatusSnapshotUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&UserCheckinStatusSnapshotUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&UserCheckinStatusSnapshotDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown UserCheckinStatusSnapshot mutation op: %q", m.Op())
+	}
+}
+
 // UserPlatformQuotaClient is a client for the UserPlatformQuota schema.
 type UserPlatformQuotaClient struct {
 	config
@@ -6216,8 +6737,8 @@ type (
 		PaymentOrder, PaymentProviderInstance, PendingAuthSession, PromoCode,
 		PromoCodeUsage, Proxy, RedeemCode, SecuritySecret, Setting, SubscriptionPlan,
 		TLSFingerprintProfile, UsageCleanupTask, UsageLog, User, UserAllowedGroup,
-		UserAttributeDefinition, UserAttributeValue, UserPlatformQuota,
-		UserSubscription []ent.Hook
+		UserAttributeDefinition, UserAttributeValue, UserCheckin, UserCheckinBlacklist,
+		UserCheckinStatusSnapshot, UserPlatformQuota, UserSubscription []ent.Hook
 	}
 	inters struct {
 		APIKey, Account, AccountGroup, Announcement, AnnouncementRead, AuthIdentity,
@@ -6227,7 +6748,8 @@ type (
 		PaymentOrder, PaymentProviderInstance, PendingAuthSession, PromoCode,
 		PromoCodeUsage, Proxy, RedeemCode, SecuritySecret, Setting, SubscriptionPlan,
 		TLSFingerprintProfile, UsageCleanupTask, UsageLog, User, UserAllowedGroup,
-		UserAttributeDefinition, UserAttributeValue, UserPlatformQuota,
+		UserAttributeDefinition, UserAttributeValue, UserCheckin, UserCheckinBlacklist,
+		UserCheckinStatusSnapshot, UserPlatformQuota,
 		UserSubscription []ent.Interceptor
 	}
 )

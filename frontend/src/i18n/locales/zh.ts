@@ -696,7 +696,23 @@ export default {
     viewUsage: '查看使用记录',
     checkDetailedLogs: '查看详细的使用日志',
     redeemCode: '兑换码',
-    addBalanceWithCode: '使用兑换码充值'
+    addBalanceWithCode: '使用兑换码充值',
+    checkin: {
+      title: '每日签到',
+      hint: '领取今日余额奖励',
+      doneHint: '今日奖励已到账',
+      done: '已签到',
+      currentStreak: '连续签到',
+      lifetimeDays: '累计签到',
+      streak: '{days} 天',
+      lifetime: '{days} 天',
+      reward: '本次获得 ${amount}',
+      submit: '立即签到',
+      submitting: '签到中...',
+      checked: '今日已签到',
+      loadFailed: '签到状态加载失败',
+      failed: '签到失败，请稍后重试'
+    }
   },
 
   // Groups (shared)
@@ -5843,6 +5859,25 @@ export default {
         weekly:      '周限额 (USD)',
         monthly:     '月限额 (USD, 30天滚动)',
         placeholder: '不限',
+      },
+      checkin: {
+        title: '签到奖励',
+        description: '配置用户每日签到的随机余额奖励和连续签到奖励。',
+        enabledLabel: '启用签到',
+        enabledHint: '开启后，用户可在仪表盘每日签到领取余额奖励。',
+        rewardTiers: '随机奖励档位',
+        rewardTiersHint: '概率为权重值，后端按所有有效档位的权重随机抽取。',
+        amount: '奖励余额',
+        probability: '概率权重',
+        streakEnabledLabel: '启用连续签到奖励',
+        streakRules: '连续签到规则',
+        streakRulesHint: '用户达到指定连续天数时追加奖励。',
+        day: '连续天数',
+        bonusAmount: '追加余额',
+        addTier: '添加档位',
+        addStreakRule: '添加规则',
+        emptyTiers: '暂无奖励档位。',
+        emptyStreakRules: '暂无连续签到规则。'
       },
       claudeCode: {
         title: 'Claude Code 设置',

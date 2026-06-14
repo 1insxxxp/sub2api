@@ -3330,6 +3330,210 @@
             </div>
           </div>
 
+          <div class="card" data-testid="checkin-settings-card">
+            <div
+              class="border-b border-gray-100 px-6 py-4 dark:border-dark-700"
+            >
+              <h2 class="text-lg font-semibold text-gray-900 dark:text-white">
+                {{ t("admin.settings.checkin.title") }}
+              </h2>
+              <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                {{ t("admin.settings.checkin.description") }}
+              </p>
+            </div>
+            <div class="space-y-6 p-6">
+              <div
+                class="flex items-center justify-between gap-4 rounded border border-gray-200 px-4 py-3 dark:border-dark-700"
+              >
+                <div>
+                  <label class="font-medium text-gray-900 dark:text-white">
+                    {{ t("admin.settings.checkin.enabledLabel") }}
+                  </label>
+                  <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                    {{ t("admin.settings.checkin.enabledHint") }}
+                  </p>
+                </div>
+                <Toggle
+                  v-model="form.checkin_reward_config.enabled"
+                  data-testid="checkin-enabled-toggle"
+                />
+              </div>
+
+              <div class="space-y-3">
+                <div class="flex items-center justify-between gap-4">
+                  <div>
+                    <h3 class="font-medium text-gray-900 dark:text-white">
+                      {{ t("admin.settings.checkin.rewardTiers") }}
+                    </h3>
+                    <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                      {{ t("admin.settings.checkin.rewardTiersHint") }}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    class="btn btn-secondary btn-sm"
+                    @click="addCheckinRewardTier"
+                  >
+                    {{ t("admin.settings.checkin.addTier") }}
+                  </button>
+                </div>
+
+                <div
+                  v-if="form.checkin_reward_config.tiers.length === 0"
+                  class="rounded border border-dashed border-gray-300 px-4 py-3 text-sm text-gray-500 dark:border-dark-600 dark:text-gray-400"
+                >
+                  {{ t("admin.settings.checkin.emptyTiers") }}
+                </div>
+
+                <div v-else class="space-y-3">
+                  <div
+                    v-for="(tier, index) in form.checkin_reward_config.tiers"
+                    :key="`checkin-tier-${index}`"
+                    class="grid grid-cols-1 gap-3 rounded border border-gray-200 p-3 md:grid-cols-[1fr_1fr_auto] dark:border-dark-600"
+                  >
+                    <div>
+                      <label
+                        class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400"
+                      >
+                        {{ t("admin.settings.checkin.amount") }}
+                      </label>
+                      <input
+                        v-model.number="tier.amount"
+                        :data-testid="`checkin-tier-amount-${index}`"
+                        type="number"
+                        min="0.01"
+                        step="0.01"
+                        class="input h-[42px]"
+                      />
+                    </div>
+                    <div>
+                      <label
+                        class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400"
+                      >
+                        {{ t("admin.settings.checkin.probability") }}
+                      </label>
+                      <input
+                        v-model.number="tier.probability"
+                        :data-testid="`checkin-tier-probability-${index}`"
+                        type="number"
+                        min="0.01"
+                        step="0.01"
+                        class="input h-[42px]"
+                      />
+                    </div>
+                    <div class="flex items-end">
+                      <button
+                        type="button"
+                        class="btn btn-secondary w-full text-red-600 hover:text-red-700 dark:text-red-400"
+                        :data-testid="`checkin-tier-remove-${index}`"
+                        @click="removeCheckinRewardTier(index)"
+                      >
+                        {{ t("common.delete") }}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div
+                class="flex items-center justify-between gap-4 rounded border border-gray-200 px-4 py-3 dark:border-dark-700"
+              >
+                <div>
+                  <label class="font-medium text-gray-900 dark:text-white">
+                    {{ t("admin.settings.checkin.streakEnabledLabel") }}
+                  </label>
+                  <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                    {{ t("admin.settings.checkin.streakRulesHint") }}
+                  </p>
+                </div>
+                <Toggle
+                  v-model="form.checkin_reward_config.streak_enabled"
+                  data-testid="checkin-streak-enabled-toggle"
+                />
+              </div>
+
+              <div
+                v-if="form.checkin_reward_config.streak_enabled"
+                class="space-y-3"
+              >
+                <div class="flex items-center justify-between gap-4">
+                  <div>
+                    <h3 class="font-medium text-gray-900 dark:text-white">
+                      {{ t("admin.settings.checkin.streakRules") }}
+                    </h3>
+                    <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                      {{ t("admin.settings.checkin.streakRulesHint") }}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    class="btn btn-secondary btn-sm"
+                    @click="addCheckinStreakRule"
+                  >
+                    {{ t("admin.settings.checkin.addStreakRule") }}
+                  </button>
+                </div>
+
+                <div
+                  v-if="form.checkin_reward_config.streak_rules.length === 0"
+                  class="rounded border border-dashed border-gray-300 px-4 py-3 text-sm text-gray-500 dark:border-dark-600 dark:text-gray-400"
+                >
+                  {{ t("admin.settings.checkin.emptyStreakRules") }}
+                </div>
+
+                <div v-else class="space-y-3">
+                  <div
+                    v-for="(rule, index) in form.checkin_reward_config
+                      .streak_rules"
+                    :key="`checkin-streak-${index}`"
+                    class="grid grid-cols-1 gap-3 rounded border border-gray-200 p-3 md:grid-cols-[1fr_1fr_auto] dark:border-dark-600"
+                  >
+                    <div>
+                      <label
+                        class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400"
+                      >
+                        {{ t("admin.settings.checkin.day") }}
+                      </label>
+                      <input
+                        v-model.number="rule.day"
+                        :data-testid="`checkin-streak-day-${index}`"
+                        type="number"
+                        min="1"
+                        step="1"
+                        class="input h-[42px]"
+                      />
+                    </div>
+                    <div>
+                      <label
+                        class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400"
+                      >
+                        {{ t("admin.settings.checkin.bonusAmount") }}
+                      </label>
+                      <input
+                        v-model.number="rule.bonus_amount"
+                        :data-testid="`checkin-streak-bonus-${index}`"
+                        type="number"
+                        min="0.01"
+                        step="0.01"
+                        class="input h-[42px]"
+                      />
+                    </div>
+                    <div class="flex items-end">
+                      <button
+                        type="button"
+                        class="btn btn-secondary w-full text-red-600 hover:text-red-700 dark:text-red-400"
+                        :data-testid="`checkin-streak-remove-${index}`"
+                        @click="removeCheckinStreakRule(index)"
+                      >
+                        {{ t("common.delete") }}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
           <div class="card">
             <div
               class="border-b border-gray-100 px-6 py-4 dark:border-dark-700"
@@ -6699,7 +6903,10 @@ import { adminAPI } from "@/api";
 import {
   appendAuthSourceDefaultsToUpdateRequest,
   buildAuthSourceDefaultsState,
+  createDefaultCheckinRewardConfig,
+  normalizeCheckinRewardConfig,
   normalizePlatformQuotasMap,
+  sanitizeCheckinRewardConfig,
   sanitizePlatformQuotasMap,
   defaultWeChatConnectScopesForMode,
   deriveWeChatConnectStoredMode,
@@ -6713,6 +6920,7 @@ import type {
   UpdateSettingsRequest,
   DefaultSubscriptionSetting,
   DefaultPlatformQuotasMap,
+  CheckinRewardConfig,
   OpenAIFastPolicyRule,
   WeChatConnectMode,
   WebSearchEmulationConfig,
@@ -7009,6 +7217,7 @@ type SettingsForm = Omit<
   openai_advanced_scheduler_enabled: boolean;
   // 系统全局平台限额 map；form 内始终归一化为全 4 平台对象（模板非空绑定依赖此不变量）
   default_platform_quotas: DefaultPlatformQuotasMap;
+  checkin_reward_config: CheckinRewardConfig;
 };
 
 const form = reactive<SettingsForm>({
@@ -7026,6 +7235,7 @@ const form = reactive<SettingsForm>({
   login_agreement_documents: defaultLoginAgreementDocuments(),
   default_balance: 0,
   default_platform_quotas: normalizePlatformQuotasMap() as DefaultPlatformQuotasMap,
+  checkin_reward_config: createDefaultCheckinRewardConfig(),
   affiliate_rebate_rate: 20,
   affiliate_rebate_freeze_hours: 0,
   affiliate_rebate_duration_days: 0,
@@ -7838,6 +8048,9 @@ async function loadSettings() {
         : defaultLoginAgreementDocuments();
     Object.assign(authSourceDefaults, buildAuthSourceDefaultsState(settings));
     form.default_platform_quotas = normalizePlatformQuotasMap(settings.default_platform_quotas);
+    form.checkin_reward_config = normalizeCheckinRewardConfig(
+      settings.checkin_reward_config,
+    );
     form.backend_mode_enabled = settings.backend_mode_enabled;
     form.default_subscriptions = normalizeDefaultSubscriptionSettings(
       settings.default_subscriptions,
@@ -7978,6 +8191,40 @@ function addDefaultSubscription() {
 
 function removeDefaultSubscription(index: number) {
   form.default_subscriptions.splice(index, 1);
+}
+
+function normalizeCheckinTierSortOrders() {
+  form.checkin_reward_config.tiers.forEach((tier, index) => {
+    tier.sort_order = index + 1;
+  });
+}
+
+function addCheckinRewardTier() {
+  form.checkin_reward_config.tiers.push({
+    amount: 1,
+    probability: 1,
+    sort_order: form.checkin_reward_config.tiers.length + 1,
+  });
+}
+
+function removeCheckinRewardTier(index: number) {
+  form.checkin_reward_config.tiers.splice(index, 1);
+  normalizeCheckinTierSortOrders();
+}
+
+function addCheckinStreakRule() {
+  const maxDay = form.checkin_reward_config.streak_rules.reduce(
+    (current, rule) => Math.max(current, Number(rule.day) || 0),
+    0,
+  );
+  form.checkin_reward_config.streak_rules.push({
+    day: maxDay + 7,
+    bonus_amount: 10,
+  });
+}
+
+function removeCheckinStreakRule(index: number) {
+  form.checkin_reward_config.streak_rules.splice(index, 1);
 }
 
 function addAuthSourceDefaultSubscription(source: AuthSourceType) {
@@ -8178,6 +8425,9 @@ async function saveSettings() {
       affiliate_rebate_per_invitee_cap: Math.max(0, Number(form.affiliate_rebate_per_invitee_cap) || 0),
       default_concurrency: form.default_concurrency,
       default_subscriptions: normalizedDefaultSubscriptions,
+      checkin_reward_config: sanitizeCheckinRewardConfig(
+        form.checkin_reward_config,
+      ),
       force_email_on_third_party_signup: form.force_email_on_third_party_signup,
       default_user_rpm_limit: form.default_user_rpm_limit,
       site_name: form.site_name,
@@ -8405,6 +8655,9 @@ async function saveSettings() {
     }
     Object.assign(authSourceDefaults, buildAuthSourceDefaultsState(updated));
     form.default_platform_quotas = normalizePlatformQuotasMap(updated.default_platform_quotas);
+    form.checkin_reward_config = normalizeCheckinRewardConfig(
+      updated.checkin_reward_config,
+    );
     registrationEmailSuffixWhitelistTags.value =
       normalizeRegistrationEmailSuffixDomains(
         updated.registration_email_suffix_whitelist,

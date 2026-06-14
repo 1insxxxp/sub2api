@@ -1639,6 +1639,75 @@ func HasPlatformQuotasWith(preds ...predicate.UserPlatformQuota) predicate.User 
 	})
 }
 
+// HasCheckins applies the HasEdge predicate on the "checkins" edge.
+func HasCheckins() predicate.User {
+	return predicate.User(func(s *sql.Selector) {
+		step := sqlgraph.NewStep(
+			sqlgraph.From(Table, FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, CheckinsTable, CheckinsColumn),
+		)
+		sqlgraph.HasNeighbors(s, step)
+	})
+}
+
+// HasCheckinsWith applies the HasEdge predicate on the "checkins" edge with a given conditions (other predicates).
+func HasCheckinsWith(preds ...predicate.UserCheckin) predicate.User {
+	return predicate.User(func(s *sql.Selector) {
+		step := newCheckinsStep()
+		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
+			for _, p := range preds {
+				p(s)
+			}
+		})
+	})
+}
+
+// HasCheckinStatusSnapshots applies the HasEdge predicate on the "checkin_status_snapshots" edge.
+func HasCheckinStatusSnapshots() predicate.User {
+	return predicate.User(func(s *sql.Selector) {
+		step := sqlgraph.NewStep(
+			sqlgraph.From(Table, FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, CheckinStatusSnapshotsTable, CheckinStatusSnapshotsColumn),
+		)
+		sqlgraph.HasNeighbors(s, step)
+	})
+}
+
+// HasCheckinStatusSnapshotsWith applies the HasEdge predicate on the "checkin_status_snapshots" edge with a given conditions (other predicates).
+func HasCheckinStatusSnapshotsWith(preds ...predicate.UserCheckinStatusSnapshot) predicate.User {
+	return predicate.User(func(s *sql.Selector) {
+		step := newCheckinStatusSnapshotsStep()
+		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
+			for _, p := range preds {
+				p(s)
+			}
+		})
+	})
+}
+
+// HasCheckinBlacklistEntries applies the HasEdge predicate on the "checkin_blacklist_entries" edge.
+func HasCheckinBlacklistEntries() predicate.User {
+	return predicate.User(func(s *sql.Selector) {
+		step := sqlgraph.NewStep(
+			sqlgraph.From(Table, FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, CheckinBlacklistEntriesTable, CheckinBlacklistEntriesColumn),
+		)
+		sqlgraph.HasNeighbors(s, step)
+	})
+}
+
+// HasCheckinBlacklistEntriesWith applies the HasEdge predicate on the "checkin_blacklist_entries" edge with a given conditions (other predicates).
+func HasCheckinBlacklistEntriesWith(preds ...predicate.UserCheckinBlacklist) predicate.User {
+	return predicate.User(func(s *sql.Selector) {
+		step := newCheckinBlacklistEntriesStep()
+		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
+			for _, p := range preds {
+				p(s)
+			}
+		})
+	})
+}
+
 // HasUserAllowedGroups applies the HasEdge predicate on the "user_allowed_groups" edge.
 func HasUserAllowedGroups() predicate.User {
 	return predicate.User(func(s *sql.Selector) {

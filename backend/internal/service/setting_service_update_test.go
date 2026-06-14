@@ -349,3 +349,75 @@ func TestSettingService_UpdateSettings_RejectsInvalidPaymentVisibleMethodSource(
 	require.Equal(t, "INVALID_PAYMENT_VISIBLE_METHOD_SOURCE", infraerrors.Reason(err))
 	require.Nil(t, repo.updates)
 }
+
+func TestSettingService_ParseSettings_CheckinRewardConfig(t *testing.T) {
+	svc := NewSettingService(&settingUpdateRepoStub{}, &config.Config{})
+
+	got := svc.parseSettings(map[string]string{
+		SettingKeyCheckinRewardConfig: `{"enabled":true,"tiers":[{"amount":2,"probability":20,"sort_order":2},{"amount":1,"probability":80,"sort_order":1}],"streak_enabled":true,"streak_rules":[{"day":7,"bonus_amount":10}]}`,
+	})
+
+	require.NotNil(t, got.CheckinRewardConfig.Enabled)
+	require.True(t, *got.CheckinRewardConfig.Enabled)
+	require.Equal(t, []CheckinRewardTier{
+		{Amount: 1, Probability: 80, SortOrder: 1},
+		{Amount: 2, Probability: 20, SortOrder: 2},
+	}, got.CheckinRewardConfig.Tiers)
+	require.True(t, got.CheckinRewardConfig.StreakEnabled)
+	require.Equal(t, []CheckinStreakRule{{Day: 7, BonusAmount: 10}}, got.CheckinRewardConfig.StreakRules)
+}
+
+func TestSettingService_ParseSettings_CheckinRewardConfigDefaultsDisabled(t *testing.T) {
+	svc := NewSettingService(&settingUpdateRepoStub{}, &config.Config{})
+
+	got := svc.parseSettings(map[string]string{})
+
+	require.NotNil(t, got.CheckinRewardConfig.Enabled)
+	require.False(t, *got.CheckinRewardConfig.Enabled)
+	require.NotEmpty(t, got.CheckinRewardConfig.Tiers)
+	require.NotEmpty(t, got.CheckinRewardConfig.StreakRules)
+}
+
+func TestSettingService_UpdateSettings_CheckinRewardConfig(t *testing.T) {
+	repo := &settingUpdateRepoStub{}
+	svc := NewSettingService(repo, &config.Config{})
+
+	err := svc.UpdateSettings(context.Background(), &SystemSettings{
+		CheckinRewardConfig: CheckinRewardConfig{
+			Enabled: testPtrBool(true),
+			Tiers: []CheckinRewardTier{
+				{Amount: 1, Probability: 80, SortOrder: 1},
+				{Amount: 5, Probability: 20, SortOrder: 2},
+			},
+			StreakEnabled: true,
+			StreakRules: []CheckinStreakRule{
+				{Day: 7, BonusAmount: 10},
+			},
+		},
+	})
+	require.NoError(t, err)
+
+	var got CheckinRewardConfig
+	require.NoError(t, json.Unmarshal([]byte(repo.updates[SettingKeyCheckinRewardConfig]), &got))
+	require.NotNil(t, got.Enabled)
+	require.True(t, *got.Enabled)
+	require.Equal(t, []CheckinRewardTier{
+		{Amount: 1, Probability: 80, SortOrder: 1},
+		{Amount: 5, Probability: 20, SortOrder: 2},
+	}, got.Tiers)
+	require.True(t, got.StreakEnabled)
+	require.Equal(t, []CheckinStreakRule{{Day: 7, BonusAmount: 10}}, got.StreakRules)
+}
+
+func TestSettingService_UpdateSettings_CheckinRewardConfigRejectsEnabledWithoutTiers(t *testing.T) {
+	repo := &settingUpdateRepoStub{}
+	svc := NewSettingService(repo, &config.Config{})
+
+	err := svc.UpdateSettings(context.Background(), &SystemSettings{
+		CheckinRewardConfig: CheckinRewardConfig{Enabled: testPtrBool(true)},
+	})
+
+	require.Error(t, err)
+	require.Equal(t, "INVALID_CHECKIN_REWARD_CONFIG", infraerrors.Reason(err))
+	require.Nil(t, repo.updates)
+}

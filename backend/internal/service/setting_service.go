@@ -1614,6 +1614,11 @@ func (s *SettingService) buildSystemSettingsUpdates(ctx context.Context, setting
 	if err := s.validateDefaultSubscriptionGroups(ctx, settings.DefaultSubscriptions); err != nil {
 		return nil, err
 	}
+	checkinRewardConfig, err := normalizeCheckinRewardConfigForSettings(settings.CheckinRewardConfig)
+	if err != nil {
+		return nil, err
+	}
+	settings.CheckinRewardConfig = checkinRewardConfig
 	normalizedWhitelist, err := NormalizeRegistrationEmailSuffixWhitelist(settings.RegistrationEmailSuffixWhitelist)
 	if err != nil {
 		return nil, infraerrors.BadRequest("INVALID_REGISTRATION_EMAIL_SUFFIX_WHITELIST", err.Error())
@@ -1860,6 +1865,11 @@ func (s *SettingService) buildSystemSettingsUpdates(ctx context.Context, setting
 		return nil, fmt.Errorf("marshal default subscriptions: %w", err)
 	}
 	updates[SettingKeyDefaultSubscriptions] = string(defaultSubsJSON)
+	checkinRewardConfigJSON, err := json.Marshal(settings.CheckinRewardConfig)
+	if err != nil {
+		return nil, fmt.Errorf("marshal check-in reward config: %w", err)
+	}
+	updates[SettingKeyCheckinRewardConfig] = string(checkinRewardConfigJSON)
 
 	// Model fallback configuration
 	updates[SettingKeyEnableModelFallback] = strconv.FormatBool(settings.EnableModelFallback)
@@ -1943,6 +1953,77 @@ func (s *SettingService) buildSystemSettingsUpdates(ctx context.Context, setting
 	updates[SettingKeyAllowUserViewErrorRequests] = strconv.FormatBool(settings.AllowUserViewErrorRequests)
 
 	return updates, nil
+}
+
+func normalizeCheckinRewardConfigForSettings(config CheckinRewardConfig) (CheckinRewardConfig, error) {
+	config = cloneCheckinRewardConfig(config)
+	if config.Enabled == nil {
+		enabled := false
+		config.Enabled = &enabled
+	}
+	config.normalize()
+	if config.isEnabled() && len(config.Tiers) == 0 {
+		return CheckinRewardConfig{}, infraerrors.BadRequest("INVALID_CHECKIN_REWARD_CONFIG", "enabled check-in requires at least one reward tier")
+	}
+	return config, nil
+}
+
+func parseCheckinRewardConfigSetting(raw string) CheckinRewardConfig {
+	config := defaultCheckinRewardConfig()
+	if strings.TrimSpace(raw) == "" {
+		return config
+	}
+	var parsed CheckinRewardConfig
+	if err := json.Unmarshal([]byte(raw), &parsed); err != nil {
+		slog.Warn("[Setting] parseSettings: unmarshal checkin_reward_config failed", "error", err)
+		return config
+	}
+	parsed.normalize()
+	if parsed.Enabled == nil {
+		enabled := len(parsed.Tiers) > 0
+		parsed.Enabled = &enabled
+	}
+	if parsed.Tiers == nil {
+		parsed.Tiers = []CheckinRewardTier{}
+	}
+	if parsed.StreakRules == nil {
+		parsed.StreakRules = []CheckinStreakRule{}
+	}
+	return parsed
+}
+
+func defaultCheckinRewardConfig() CheckinRewardConfig {
+	enabled := false
+	return CheckinRewardConfig{
+		Enabled: &enabled,
+		Tiers: []CheckinRewardTier{
+			{Amount: 1, Probability: 30, SortOrder: 1},
+			{Amount: 2, Probability: 23, SortOrder: 2},
+			{Amount: 3, Probability: 15, SortOrder: 3},
+			{Amount: 4, Probability: 12, SortOrder: 4},
+			{Amount: 4.5, Probability: 10, SortOrder: 5},
+			{Amount: 5, Probability: 7, SortOrder: 6},
+			{Amount: 10, Probability: 3, SortOrder: 7},
+		},
+		StreakEnabled: true,
+		StreakRules: []CheckinStreakRule{
+			{Day: 7, BonusAmount: 10},
+			{Day: 15, BonusAmount: 15},
+			{Day: 30, BonusAmount: 20},
+			{Day: 60, BonusAmount: 30},
+			{Day: 120, BonusAmount: 50},
+		},
+	}
+}
+
+func cloneCheckinRewardConfig(config CheckinRewardConfig) CheckinRewardConfig {
+	if config.Enabled != nil {
+		enabled := *config.Enabled
+		config.Enabled = &enabled
+	}
+	config.Tiers = append([]CheckinRewardTier(nil), config.Tiers...)
+	config.StreakRules = append([]CheckinStreakRule(nil), config.StreakRules...)
+	return config
 }
 
 // validateDefaultPlatformQuotaMap 校验 platform quota map 的合法性：
@@ -2676,6 +2757,10 @@ func (s *SettingService) InitializeDefaultSettings(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	checkinRewardConfigDefault, err := json.Marshal(defaultCheckinRewardConfig())
+	if err != nil {
+		return fmt.Errorf("marshal default check-in reward config: %w", err)
+	}
 
 	// 初始化默认设置
 	defaults := map[string]string{
@@ -2752,6 +2837,7 @@ func (s *SettingService) InitializeDefaultSettings(ctx context.Context) error {
 		SettingKeyAffiliateRebatePerInviteeCap:              strconv.FormatFloat(AffiliateRebatePerInviteeCapDefault, 'f', 2, 64),
 		SettingKeyDefaultUserRPMLimit:                       "0",
 		SettingKeyDefaultSubscriptions:                      "[]",
+		SettingKeyCheckinRewardConfig:                       string(checkinRewardConfigDefault),
 		SettingKeyAuthSourceDefaultEmailBalance:             "0",
 		SettingKeyAuthSourceDefaultEmailConcurrency:         "5",
 		SettingKeyAuthSourceDefaultEmailSubscriptions:       "[]",
@@ -2941,6 +3027,7 @@ func (s *SettingService) parseSettings(settings map[string]string) *SystemSettin
 		result.AffiliateRebatePerInviteeCap = perInviteeCap
 	}
 	result.DefaultSubscriptions = parseDefaultSubscriptions(settings[SettingKeyDefaultSubscriptions])
+	result.CheckinRewardConfig = parseCheckinRewardConfigSetting(settings[SettingKeyCheckinRewardConfig])
 
 	// 敏感信息直接返回，方便测试连接时使用
 	result.SMTPPassword = settings[SettingKeySMTPPassword]

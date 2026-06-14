@@ -152,6 +152,7 @@ type SystemSettings struct {
 	AffiliateRebatePerInviteeCap float64
 	DefaultUserRPMLimit          int
 	DefaultSubscriptions         []DefaultSubscriptionSetting
+	CheckinRewardConfig          CheckinRewardConfig
 
 	// Model fallback configuration
 	EnableModelFallback      bool   `json:"enable_model_fallback"`

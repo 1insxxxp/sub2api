@@ -697,7 +697,23 @@ export default {
     viewUsage: 'View Usage',
     checkDetailedLogs: 'Check detailed usage logs',
     redeemCode: 'Redeem Code',
-    addBalanceWithCode: 'Add balance with a code'
+    addBalanceWithCode: 'Add balance with a code',
+    checkin: {
+      title: 'Daily Check-in',
+      hint: 'Claim today\'s balance reward',
+      doneHint: 'Today\'s reward has landed',
+      done: 'Checked in',
+      currentStreak: 'Current streak',
+      lifetimeDays: 'Lifetime days',
+      streak: '{days} days',
+      lifetime: '{days} days',
+      reward: 'Reward +${amount}',
+      submit: 'Check in',
+      submitting: 'Checking in...',
+      checked: 'Checked in today',
+      loadFailed: 'Failed to load check-in status',
+      failed: 'Check-in failed. Please try again later'
+    }
   },
 
   // Groups (shared)
@@ -5687,6 +5703,25 @@ export default {
         weekly:      'Weekly (USD)',
         monthly:     'Monthly (USD, 30d rolling)',
         placeholder: 'Unlimited',
+      },
+      checkin: {
+        title: 'Check-in Rewards',
+        description: 'Configure daily random balance rewards and streak bonuses.',
+        enabledLabel: 'Enable Check-in',
+        enabledHint: 'When enabled, users can check in from the dashboard once per day for a balance reward.',
+        rewardTiers: 'Random Reward Tiers',
+        rewardTiersHint: 'Probability is a weight. The backend draws from all valid tiers by weight.',
+        amount: 'Reward Balance',
+        probability: 'Probability Weight',
+        streakEnabledLabel: 'Enable Streak Bonuses',
+        streakRules: 'Streak Bonus Rules',
+        streakRulesHint: 'Grant an extra reward when users reach the specified streak length.',
+        day: 'Streak Days',
+        bonusAmount: 'Bonus Balance',
+        addTier: 'Add Tier',
+        addStreakRule: 'Add Rule',
+        emptyTiers: 'No reward tiers configured.',
+        emptyStreakRules: 'No streak rules configured.'
       },
       claudeCode: {
         title: 'Claude Code Settings',
