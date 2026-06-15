@@ -127,6 +127,9 @@ describe('HomeView default homepage', () => {
     expect(wrapper.find('.home-routing-panel').exists()).toBe(true)
     expect(wrapper.findAll('.home-status-pulse').length).toBeGreaterThan(0)
     expect(wrapper.findAll('.home-motion-card').length).toBeGreaterThanOrEqual(6)
+    expect(wrapper.findAll('.home-section-reveal').length).toBeGreaterThanOrEqual(6)
+    expect(wrapper.find('.home-code-panel.home-scroll-reveal').exists()).toBe(true)
+    expect(wrapper.find('.home-cta-panel.home-scroll-reveal').exists()).toBe(true)
   })
 
   it('keeps configured custom home content as a full-page override', async () => {

@@ -226,13 +226,13 @@
 
         <section id="features" class="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8 lg:py-24">
           <div class="max-w-3xl">
-            <p class="text-sm font-semibold text-primary-700 dark:text-primary-300">
+            <p class="home-section-reveal home-section-reveal-1 text-sm font-semibold text-primary-700 dark:text-primary-300">
               {{ t('home.sections.capabilitiesEyebrow') }}
             </p>
-            <h2 class="mt-3 text-3xl font-semibold text-gray-950 dark:text-white sm:text-4xl">
+            <h2 class="home-section-reveal home-section-reveal-2 mt-3 text-3xl font-semibold text-gray-950 dark:text-white sm:text-4xl">
               {{ t('home.sections.capabilitiesTitle') }}
             </h2>
-            <p class="mt-4 text-base leading-8 text-gray-600 dark:text-dark-300">
+            <p class="home-section-reveal home-section-reveal-3 mt-4 text-base leading-8 text-gray-600 dark:text-dark-300">
               {{ t('home.sections.capabilitiesSubtitle') }}
             </p>
           </div>
@@ -259,9 +259,9 @@
         <section id="integration" class="bg-gray-950 text-white dark:bg-black">
           <div class="mx-auto grid max-w-7xl gap-8 px-4 py-16 sm:px-6 lg:grid-cols-[0.95fr,1.05fr] lg:px-8 lg:py-24">
             <div class="min-w-0">
-              <p class="text-sm font-semibold text-emerald-300">{{ t('home.integration.eyebrow') }}</p>
-              <h2 class="mt-3 text-3xl font-semibold sm:text-4xl">{{ t('home.integration.title') }}</h2>
-              <p class="mt-4 text-base leading-8 text-slate-300">{{ t('home.integration.subtitle') }}</p>
+              <p class="home-section-reveal home-section-reveal-1 text-sm font-semibold text-emerald-300">{{ t('home.integration.eyebrow') }}</p>
+              <h2 class="home-section-reveal home-section-reveal-2 mt-3 text-3xl font-semibold sm:text-4xl">{{ t('home.integration.title') }}</h2>
+              <p class="home-section-reveal home-section-reveal-3 mt-4 text-base leading-8 text-slate-300">{{ t('home.integration.subtitle') }}</p>
               <div class="mt-8 grid gap-3">
                 <div
                   v-for="(point, index) in integrationPoints"
@@ -299,13 +299,13 @@ const completion = await client.chat.completions.create({
 
         <section id="workflow" class="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8 lg:py-24">
           <div class="mx-auto max-w-3xl text-center">
-            <p class="text-sm font-semibold text-primary-700 dark:text-primary-300">
+            <p class="home-section-reveal home-section-reveal-1 text-sm font-semibold text-primary-700 dark:text-primary-300">
               {{ t('home.workflow.eyebrow') }}
             </p>
-            <h2 class="mt-3 text-3xl font-semibold text-gray-950 dark:text-white sm:text-4xl">
+            <h2 class="home-section-reveal home-section-reveal-2 mt-3 text-3xl font-semibold text-gray-950 dark:text-white sm:text-4xl">
               {{ t('home.workflow.title') }}
             </h2>
-            <p class="mt-4 text-base leading-8 text-gray-600 dark:text-dark-300">
+            <p class="home-section-reveal home-section-reveal-3 mt-4 text-base leading-8 text-gray-600 dark:text-dark-300">
               {{ t('home.workflow.subtitle') }}
             </p>
           </div>
@@ -330,8 +330,8 @@ const completion = await client.chat.completions.create({
           <div
             class="home-cta-panel home-scroll-reveal rounded-lg border border-gray-200 bg-gray-950 px-5 py-8 text-center text-white shadow-xl shadow-gray-950/10 dark:border-dark-700 sm:px-8 lg:px-12"
           >
-            <h2 class="text-2xl font-semibold sm:text-3xl">{{ t('home.cta.title') }}</h2>
-            <p class="mx-auto mt-3 max-w-2xl text-sm leading-7 text-slate-300">
+            <h2 class="home-section-reveal home-section-reveal-1 text-2xl font-semibold sm:text-3xl">{{ t('home.cta.title') }}</h2>
+            <p class="home-section-reveal home-section-reveal-2 mx-auto mt-3 max-w-2xl text-sm leading-7 text-slate-300">
               {{ t('home.footer.tagline') }}
             </p>
             <div class="mt-6 flex flex-col justify-center gap-3 sm:flex-row">
@@ -587,9 +587,10 @@ onMounted(() => {
 
 <style scoped>
 .home-motion-root {
-  --motion-distance: 18px;
-  --motion-duration: 720ms;
+  --motion-distance: 16px;
+  --motion-duration: 760ms;
   --motion-ease: cubic-bezier(0.16, 1, 0.3, 1);
+  --motion-section-distance: 14px;
 }
 
 .home-grid-bg {
@@ -660,12 +661,12 @@ onMounted(() => {
     115deg,
     transparent 0%,
     transparent 34%,
-    rgba(255, 255, 255, 0.12) 46%,
+    rgba(255, 255, 255, 0.1) 46%,
     transparent 58%,
     transparent 100%
   );
   transform: translateX(-120%);
-  animation: home-sheen 6.5s ease-in-out infinite;
+  animation: home-sheen 7.2s ease-in-out infinite;
 }
 
 .home-code-panel {
@@ -700,15 +701,38 @@ onMounted(() => {
 }
 
 .home-scroll-reveal {
-  animation: home-rise-in 680ms var(--motion-ease) both;
-  animation-delay: calc(80ms + (var(--motion-index) * 45ms));
+  animation: home-rise-in 720ms var(--motion-ease) both;
+  animation-delay: calc(60ms + (var(--motion-index) * 42ms));
   animation-timeline: view();
-  animation-range: entry 8% cover 24%;
+  animation-range: entry 9% cover 26%;
+}
+
+.home-section-reveal {
+  animation: home-section-rise 720ms var(--motion-ease) both;
+  animation-timeline: view();
+  animation-range: entry 10% cover 28%;
+}
+
+.home-section-reveal-1 {
+  animation-delay: 0ms;
+}
+
+.home-section-reveal-2 {
+  animation-delay: 55ms;
+}
+
+.home-section-reveal-3 {
+  animation-delay: 110ms;
 }
 
 .home-cta-panel {
   position: relative;
   overflow: hidden;
+}
+
+.home-cta-panel.home-scroll-reveal {
+  animation-duration: 820ms;
+  animation-range: entry 12% cover 34%;
 }
 
 .home-cta-panel::before {
@@ -729,6 +753,18 @@ onMounted(() => {
   from {
     opacity: 0;
     transform: translateY(var(--motion-distance));
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes home-section-rise {
+  from {
+    opacity: 0;
+    transform: translateY(var(--motion-section-distance));
   }
 
   to {
@@ -782,6 +818,18 @@ onMounted(() => {
 
   to {
     background-position: 48px 48px;
+  }
+}
+
+@media (max-width: 640px) {
+  .home-motion-root {
+    --motion-distance: 12px;
+    --motion-section-distance: 10px;
+  }
+
+  .home-scroll-reveal,
+  .home-section-reveal {
+    animation-delay: 40ms;
   }
 }
 
