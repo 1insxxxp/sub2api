@@ -32,6 +32,7 @@ import adminPaymentAPI from './payment'
 import affiliatesAPI from './affiliates'
 import riskControlAPI from './riskControl'
 import adminComplianceAPI from './compliance'
+import checkinsAPI from './checkins'
 
 /**
  * Unified admin API object for convenient access
@@ -65,7 +66,8 @@ export const adminAPI = {
   payment: adminPaymentAPI,
   affiliates: affiliatesAPI,
   riskControl: riskControlAPI,
-  compliance: adminComplianceAPI
+  compliance: adminComplianceAPI,
+  checkins: checkinsAPI
 }
 
 export {
@@ -97,7 +99,8 @@ export {
   adminPaymentAPI,
   affiliatesAPI,
   riskControlAPI,
-  adminComplianceAPI
+  adminComplianceAPI,
+  checkinsAPI
 }
 
 export default adminAPI
@@ -108,3 +111,12 @@ export type { ErrorPassthroughRule, CreateRuleRequest, UpdateRuleRequest } from 
 export type { BackupAgentHealth, DataManagementConfig } from './dataManagement'
 export type { TLSFingerprintProfile, CreateProfileRequest, UpdateProfileRequest } from './tlsFingerprintProfile'
 export type { ContentModerationConfig, ContentModerationLog, ModerationMode } from './riskControl'
+export type {
+  AdminCheckinConfig,
+  AdminCheckinStats,
+  AdminCheckinRecord,
+  AdminCheckinBlacklistEntry,
+  AddCheckinBlacklistRequest,
+  CheckinRewardTier,
+  CheckinStreakRule
+} from './checkins'

@@ -21,7 +21,7 @@
         </div>
       </div>
 
-      <!-- Right: Announcements + Docs + Language + Subscriptions + Balance + Token Estimate + User Dropdown -->
+      <!-- Right: Announcements + Docs + Language + Subscriptions + Balance + User Dropdown -->
       <div class="flex items-center gap-3">
         <!-- Announcement Bell -->
         <AnnouncementBell v-if="user" />
@@ -67,31 +67,143 @@
           </span>
         </div>
 
-        <!-- Available Token Estimate -->
+        <!-- Daily Check-in -->
         <div
-          v-if="user"
-          :title="availableTokensTooltip"
-          class="hidden items-center gap-2 rounded-xl bg-emerald-50 px-3 py-1.5 dark:bg-emerald-900/20 lg:flex"
+          v-if="showCheckinButton"
+          class="group/checkin relative hidden sm:inline-flex"
         >
-          <svg
-            class="h-4 w-4 text-emerald-600 dark:text-emerald-400"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-            stroke-width="1.5"
+          <button
+            type="button"
+            data-test="daily-checkin-button"
+            :disabled="checkinButtonDisabled"
+            :title="checkinButtonTitle"
+            class="inline-flex items-center gap-1.5 rounded-xl border border-amber-200 bg-amber-50 px-3 py-1.5 text-sm font-semibold text-amber-700 transition-colors hover:bg-amber-100 disabled:cursor-not-allowed disabled:border-gray-200 disabled:bg-gray-100 disabled:text-gray-400 dark:border-amber-500/30 dark:bg-amber-900/20 dark:text-amber-200 dark:hover:bg-amber-900/30 dark:disabled:border-dark-700 dark:disabled:bg-dark-800 dark:disabled:text-dark-400"
+            @click="handleCheckin"
           >
-            <path
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              d="M3.75 13.5l10.5-11.25L12 10.5h8.25L9.75 21.75 12 13.5H3.75z"
+            <Icon
+              :name="checkinStatus?.checked_in ? 'check' : 'gift'"
+              size="sm"
+              :class="checkinSubmitting ? 'animate-pulse' : ''"
             />
-          </svg>
-          <span class="text-xs font-medium text-emerald-600 dark:text-emerald-300">
-            {{ t('common.availableTokensShort') }}
-          </span>
-          <span class="text-sm font-semibold text-emerald-700 dark:text-emerald-200">
-            {{ availableTokensLabel }} Token
-          </span>
+            <span>{{ checkinButtonLabel }}</span>
+          </button>
+
+          <div
+            class="pointer-events-none absolute right-0 top-full z-50 mt-3 w-[25rem] max-w-[calc(100vw-2rem)] translate-y-1 rounded-2xl border border-emerald-100 bg-white p-4 text-left opacity-0 shadow-[0_24px_70px_-32px_rgba(15,118,110,0.45)] ring-1 ring-emerald-50 transition-all duration-150 group-hover/checkin:pointer-events-auto group-hover/checkin:translate-y-0 group-hover/checkin:opacity-100 group-focus-within/checkin:pointer-events-auto group-focus-within/checkin:translate-y-0 group-focus-within/checkin:opacity-100 dark:border-dark-700 dark:bg-dark-800 dark:ring-dark-700"
+            data-test="daily-checkin-popover"
+          >
+            <div class="flex items-start justify-between gap-3">
+              <div>
+                <h3 class="text-sm font-semibold text-gray-900 dark:text-white">
+                  {{ t('checkin.cardTitle') }}
+                </h3>
+                <p class="mt-1 text-xs text-gray-500 dark:text-dark-400">
+                  {{ checkinStatus?.checked_in ? t('checkin.cardCheckedHint') : t('checkin.cardHint') }}
+                </p>
+              </div>
+              <span
+                v-if="checkinStatus?.checked_in && displayRewardAmount > 0"
+                class="rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-200"
+              >
+                +{{ formatUsd(displayRewardAmount) }}
+              </span>
+            </div>
+
+            <div class="mt-4 grid grid-cols-2 gap-3">
+              <div class="rounded-xl bg-gray-50 p-3 dark:bg-dark-700">
+                <p class="text-xs text-gray-500 dark:text-dark-400">{{ t('checkin.currentStreak') }}</p>
+                <p class="mt-1 text-lg font-semibold text-gray-900 dark:text-white">
+                  {{ t('checkin.days', { count: checkinStatus?.current_streak || 0 }) }}
+                </p>
+              </div>
+              <div class="rounded-xl bg-gray-50 p-3 dark:bg-dark-700">
+                <p class="text-xs text-gray-500 dark:text-dark-400">{{ t('checkin.lifetimeDays') }}</p>
+                <p class="mt-1 text-lg font-semibold text-gray-900 dark:text-white">
+                  {{ t('checkin.days', { count: checkinStatus?.lifetime_checkin_days || 0 }) }}
+                </p>
+              </div>
+            </div>
+
+            <div class="mt-3 rounded-xl border border-gray-100 bg-gray-50 p-3 dark:border-dark-700 dark:bg-dark-700">
+              <div class="flex items-start justify-between gap-3">
+                <div>
+                  <p class="text-xs font-semibold text-gray-700 dark:text-gray-200">
+                    {{ t('checkin.eligibilityTitle') }}
+                  </p>
+                  <p class="mt-1 text-xs text-gray-500 dark:text-dark-400">
+                    {{ eligibilityMessage }}
+                  </p>
+                </div>
+                <span
+                  class="shrink-0 rounded-full px-2.5 py-1 text-[11px] font-semibold"
+                  :class="checkinStatus?.eligible === false
+                    ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-200'
+                    : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-200'"
+                >
+                  {{ checkinStatus?.eligible === false ? t('checkin.eligibilityPendingBadge') : t('checkin.eligibilityReadyBadge') }}
+                </span>
+              </div>
+              <div v-if="checkinMinSpend > 0" class="mt-3 h-1.5 overflow-hidden rounded-full bg-white dark:bg-dark-800">
+                <div
+                  class="h-full rounded-full bg-emerald-500 transition-all"
+                  :style="{ width: `${eligibilityProgressPercent}%` }"
+                />
+              </div>
+            </div>
+
+            <div class="mt-4">
+              <p class="text-xs font-semibold text-gray-700 dark:text-gray-200">
+                {{ t('checkin.rewardBreakdown') }}
+              </p>
+            </div>
+
+            <div class="mt-2 grid grid-cols-2 gap-2">
+              <div class="rounded-xl border border-emerald-100 bg-emerald-50 p-3 dark:border-emerald-500/20 dark:bg-emerald-900/20">
+                <p class="text-[11px] font-semibold uppercase tracking-wide text-emerald-700 dark:text-emerald-200">
+                  {{ t('checkin.baseReward') }}
+                </p>
+                <p class="mt-1 text-sm font-bold text-emerald-800 dark:text-emerald-100">
+                  {{ baseRewardLabel }}
+                </p>
+              </div>
+              <div class="rounded-xl border border-amber-100 bg-amber-50 p-3 dark:border-amber-500/20 dark:bg-amber-900/20">
+                <p class="text-[11px] font-semibold uppercase tracking-wide text-amber-700 dark:text-amber-200">
+                  {{ t('checkin.streakBonus') }}
+                </p>
+                <p class="mt-1 text-sm font-bold text-amber-800 dark:text-amber-100">
+                  {{ streakBonusLabel }}
+                </p>
+              </div>
+            </div>
+
+            <div class="mt-3 rounded-xl border border-amber-100 bg-amber-50 px-3 py-2 text-xs text-amber-700 dark:border-amber-500/30 dark:bg-amber-900/20 dark:text-amber-200">
+              <p class="font-semibold">{{ t('checkin.streakBonusTitle') }}</p>
+              <p class="mt-1">
+                {{ nextStreakBonusMessage }}
+              </p>
+            </div>
+
+            <div v-if="recentCheckinRecords.length > 0" class="mt-4 space-y-2">
+              <p class="text-xs font-medium text-gray-500 dark:text-dark-400">
+                {{ t('checkin.recentRecords') }}
+              </p>
+              <div
+                v-for="record in recentCheckinRecords"
+                :key="record.id"
+                class="flex items-center justify-between rounded-xl bg-gray-50 px-3 py-2 text-xs dark:bg-dark-700"
+              >
+                <div>
+                  <p class="font-semibold text-gray-800 dark:text-gray-100">{{ record.checkin_date }}</p>
+                  <p class="text-gray-500 dark:text-dark-400">
+                    {{ t('checkin.streakDay', { day: record.streak_day || 1 }) }}
+                  </p>
+                </div>
+                <span class="font-semibold text-emerald-600 dark:text-emerald-300">
+                  +{{ formatUsd(record.reward_amount || record.total_reward_amount || 0) }}
+                </span>
+              </div>
+            </div>
+          </div>
         </div>
 
         <!-- User Dropdown -->
@@ -139,12 +251,6 @@
                 </div>
                 <div class="text-sm font-semibold text-primary-600 dark:text-primary-400">
                   ${{ user.balance?.toFixed(2) || '0.00' }}
-                </div>
-                <div class="mt-2 text-xs text-gray-500 dark:text-dark-400">
-                  {{ t('common.availableTokens') }}
-                </div>
-                <div class="text-sm font-semibold text-emerald-600 dark:text-emerald-400" :title="availableTokensTooltip">
-                  {{ availableTokensLabel }} Token
                 </div>
               </div>
 
@@ -246,16 +352,17 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useAppStore, useAuthStore, useOnboardingStore } from '@/stores'
 import { useAdminSettingsStore } from '@/stores/adminSettings'
+import { getCheckinStatus, submitCheckin, type CheckinStatus } from '@/api/checkin'
 import LocaleSwitcher from '@/components/common/LocaleSwitcher.vue'
 import SubscriptionProgressMini from '@/components/common/SubscriptionProgressMini.vue'
 import AnnouncementBell from '@/components/common/AnnouncementBell.vue'
 import Icon from '@/components/icons/Icon.vue'
-import { estimateAvailableTokens, formatAvailableTokens } from '@/utils/tokenBalance'
+import { extractApiErrorMessage } from '@/utils/apiError'
 
 const router = useRouter()
 const route = useRoute()
@@ -271,11 +378,115 @@ const dropdownRef = ref<HTMLElement | null>(null)
 const contactInfo = computed(() => appStore.contactInfo)
 const docUrl = computed(() => appStore.docUrl)
 const avatarUrl = computed(() => user.value?.avatar_url?.trim() || '')
-const availableTokens = computed(() => estimateAvailableTokens(user.value?.balance))
-const availableTokensLabel = computed(() => formatAvailableTokens(availableTokens.value))
-const availableTokensTooltip = computed(() => t('common.availableTokensEstimateHint'))
+const checkinStatus = ref<CheckinStatus | null>(null)
+const checkinLoading = ref(false)
+const checkinSubmitting = ref(false)
+let checkinStatusRequest = 0
 
-// 只在标准模式的管理员下显示新手引导按钮
+const showCheckinButton = computed(() => {
+  return Boolean(
+    user.value &&
+    checkinStatus.value &&
+    checkinStatus.value.enabled &&
+    !checkinStatus.value.blacklisted
+  )
+})
+
+const checkinButtonDisabled = computed(() => {
+  return (
+    checkinLoading.value ||
+    checkinSubmitting.value ||
+    checkinStatus.value?.checked_in === true ||
+    checkinStatus.value?.eligible === false
+  )
+})
+
+const checkinButtonLabel = computed(() => {
+  if (checkinSubmitting.value || checkinLoading.value) return t('checkin.loading')
+  if (checkinStatus.value?.checked_in) return t('checkin.checked')
+  if (checkinStatus.value?.eligible === false) return t('checkin.unavailable')
+  return t('checkin.action')
+})
+
+const checkinButtonTitle = computed(() => {
+  const status = checkinStatus.value
+  if (!status) return checkinButtonLabel.value
+  if (status.eligible === false && status.ineligible_reason === 'insufficient_spend') {
+    return t('checkin.insufficientSpend', {
+      min: formatUsd(status.min_total_usage_usd),
+      current: formatUsd(status.total_usage_usd),
+    })
+  }
+  return checkinButtonLabel.value
+})
+
+const displayRewardAmount = computed(() => {
+  const status = checkinStatus.value
+  return Number(status?.total_reward_amount ?? status?.reward_amount ?? 0)
+})
+
+const checkinMinSpend = computed(() => {
+  return Math.max(0, Number(checkinStatus.value?.min_total_usage_usd ?? 0))
+})
+
+const checkinCurrentSpend = computed(() => {
+  return Math.max(0, Number(checkinStatus.value?.total_usage_usd ?? 0))
+})
+
+const eligibilityProgressPercent = computed(() => {
+  if (checkinMinSpend.value <= 0) return 100
+  return Math.min(100, Math.max(0, (checkinCurrentSpend.value / checkinMinSpend.value) * 100))
+})
+
+const eligibilityMessage = computed(() => {
+  const min = formatUsd(checkinMinSpend.value)
+  const current = formatUsd(checkinCurrentSpend.value)
+  if (checkinMinSpend.value <= 0) {
+    return t('checkin.eligibilityNoThreshold')
+  }
+  if (checkinStatus.value?.eligible === false) {
+    return t('checkin.eligibilityPending', { min, current })
+  }
+  return t('checkin.eligibilitySatisfied', { min, current })
+})
+
+const baseRewardLabel = computed(() => {
+  const status = checkinStatus.value
+  const amount = Number(status?.base_reward_amount ?? status?.reward_amount ?? 0)
+  if (!status?.checked_in || amount <= 0) {
+    return t('checkin.randomReward')
+  }
+  return formatUsd(amount)
+})
+
+const streakBonusLabel = computed(() => {
+  const status = checkinStatus.value
+  const amount = Number(status?.bonus_reward_amount ?? 0)
+  if (!status?.checked_in) {
+    return t('checkin.streakBonusWhenReached')
+  }
+  if (amount <= 0) {
+    return t('checkin.noStreakBonusToday')
+  }
+  return formatUsd(amount)
+})
+
+const nextStreakBonusMessage = computed(() => {
+  const rule = checkinStatus.value?.next_streak_rule
+  if (!rule) {
+    return t('checkin.noUpcomingStreakBonus')
+  }
+  return t('checkin.nextStreakBonus', {
+    day: rule.day,
+    amount: formatUsd(rule.bonus_amount),
+  })
+})
+
+const recentCheckinRecords = computed(() => {
+  return checkinStatus.value?.recent_records?.slice(0, 3) ?? []
+})
+
+// Only show the onboarding replay button for admins in standard mode.
 const showOnboardingButton = computed(() => {
   return !authStore.isSimpleMode && user.value?.role === 'admin'
 })
@@ -300,7 +511,7 @@ const displayName = computed(() => {
 })
 
 const pageTitle = computed(() => {
-  // For custom pages, use the menu item's label instead of generic "自定义页面"
+  // For custom pages, use the menu item's label instead of generic "鑷畾涔夐〉闈?
   if (route.name === 'CustomPage') {
     const id = route.params.id as string
     const publicItems = appStore.cachedPublicSettings?.custom_menu_items ?? []
@@ -351,6 +562,58 @@ function handleReplayGuide() {
   onboardingStore.replay()
 }
 
+async function loadCheckinStatus() {
+  if (!user.value) {
+    checkinStatus.value = null
+    return
+  }
+
+  const requestId = ++checkinStatusRequest
+  checkinLoading.value = true
+  try {
+    const status = await getCheckinStatus()
+    if (requestId === checkinStatusRequest) {
+      checkinStatus.value = status
+    }
+  } catch (error) {
+    if (requestId === checkinStatusRequest) {
+      checkinStatus.value = null
+    }
+    console.error('Failed to load check-in status:', error)
+  } finally {
+    if (requestId === checkinStatusRequest) {
+      checkinLoading.value = false
+    }
+  }
+}
+
+async function handleCheckin() {
+  if (!user.value || checkinButtonDisabled.value) return
+
+  checkinSubmitting.value = true
+  try {
+    const result = await submitCheckin()
+    checkinStatus.value = result
+    if (authStore.user && Number.isFinite(result.balance_after)) {
+      authStore.user = {
+        ...authStore.user,
+        balance: result.balance_after
+      }
+    }
+    appStore.showSuccess(t('checkin.success', { amount: (result.reward_amount ?? 0).toFixed(2) }))
+    await authStore.refreshUser()
+  } catch (error) {
+    appStore.showError(extractApiErrorMessage(error, t('checkin.failed')))
+  } finally {
+    checkinSubmitting.value = false
+  }
+}
+
+function formatUsd(value: number | null | undefined): string {
+  const amount = Number.isFinite(value) ? Number(value) : 0
+  return `$${amount.toFixed(2)}`
+}
+
 function handleClickOutside(event: MouseEvent) {
   if (dropdownRef.value && !dropdownRef.value.contains(event.target as Node)) {
     closeDropdown()
@@ -364,6 +627,18 @@ onMounted(() => {
 onBeforeUnmount(() => {
   document.removeEventListener('click', handleClickOutside)
 })
+
+watch(
+  () => user.value?.id,
+  (id) => {
+    checkinStatus.value = null
+    checkinStatusRequest += 1
+    if (id) {
+      void loadCheckinStatus()
+    }
+  },
+  { immediate: true }
+)
 </script>
 
 <style scoped>

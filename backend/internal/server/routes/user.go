@@ -34,6 +34,12 @@ func RegisterUserRoutes(
 			user.GET("/api-keys/:id/usage/daily", h.Usage.GetMyAPIKeyDailyUsage)
 			user.GET("/platform-quotas", h.User.GetMyPlatformQuotas)
 
+			checkin := user.Group("/checkin")
+			{
+				checkin.GET("/status", h.Checkin.GetStatus)
+				checkin.POST("", h.Checkin.Checkin)
+			}
+
 			// 通知邮箱管理
 			notifyEmail := user.Group("/notify-email")
 			{

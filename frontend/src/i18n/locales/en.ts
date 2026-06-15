@@ -10,6 +10,109 @@ export default {
     login: 'Login',
     getStarted: 'Get Started',
     goToDashboard: 'Go to Dashboard',
+    nav: {
+      features: 'Features',
+      integration: 'Integration',
+      workflow: 'Workflow'
+    },
+    hero: {
+      eyebrow: 'AI API gateway for production teams',
+      title: 'A unified gateway for reliable multi-model API access',
+      subtitle:
+        'Route OpenAI-compatible requests across multiple providers with wallet billing, monitoring, and risk controls built in.',
+      primaryCta: 'Start using',
+      dashboardCta: 'Enter dashboard',
+      secondaryCta: 'Read docs',
+      statusBadge: 'Gateway online',
+      panelTitle: 'Live routing console',
+      panelSubtitle: 'One request, routed through the healthiest available channel.',
+      routeLabel: 'Route',
+      billingLabel: 'Wallet billing',
+      latencyLabel: 'Latency',
+      successLabel: 'Success',
+      channels: {
+        openai: 'OpenAI-compatible',
+        gemini: 'Gemini pool',
+        anthropic: 'Claude pool',
+        grok: 'Grok route'
+      }
+    },
+    trust: {
+      multiModel: {
+        title: 'Multi-model access',
+        desc: 'Use one gateway for mainstream model providers.'
+      },
+      routing: {
+        title: 'Smart routing',
+        desc: 'Automatically balance traffic across healthy channels.'
+      },
+      billing: {
+        title: 'Real-time billing',
+        desc: 'Track balance and cost as requests are processed.'
+      },
+      monitoring: {
+        title: 'Monitoring and risk control',
+        desc: 'Watch channel health and reduce abnormal usage.'
+      }
+    },
+    sections: {
+      capabilitiesEyebrow: 'Gateway operations',
+      capabilitiesTitle: 'Everything needed to operate an API gateway',
+      capabilitiesSubtitle:
+        'From user keys to account pools, the platform keeps traffic, billing, and operations in one place.'
+    },
+    capabilities: {
+      unifiedApi: {
+        title: 'Unified API access',
+        desc: 'Keep OpenAI-compatible clients and connect through a single Base URL.'
+      },
+      accountPool: {
+        title: 'Account pool management',
+        desc: 'Organize upstream accounts and distribute traffic with failover.'
+      },
+      monitoring: {
+        title: 'Channel health monitoring',
+        desc: 'See availability, latency, and failures before they affect users.'
+      },
+      wallet: {
+        title: 'Wallet billing',
+        desc: 'Charge by balance, record usage, and keep spending visible.'
+      },
+      keys: {
+        title: 'Users and API keys',
+        desc: 'Issue keys, control access, and separate usage by account.'
+      },
+      risk: {
+        title: 'Risk control center',
+        desc: 'Add guardrails for abnormal traffic, abuse, and unsafe usage.'
+      }
+    },
+    integration: {
+      eyebrow: 'Developer integration',
+      title: 'OpenAI-compatible by design',
+      subtitle:
+        'Keep your SDK and request format. Change the gateway address, attach your platform key, and monitor usage from the console.',
+      replaceBaseUrl: 'Replace Base URL',
+      useApiKey: 'Use your platform API key',
+      monitorCost: 'Monitor requests and cost'
+    },
+    workflow: {
+      eyebrow: 'Quick start',
+      title: 'Launch in three steps',
+      subtitle: 'A simple flow for teams that want to start routing traffic without rebuilding clients.',
+      step1: {
+        title: 'Create an account',
+        desc: 'Register or log in and enter the console.'
+      },
+      step2: {
+        title: 'Prepare access',
+        desc: 'Create an API key and make sure wallet balance is ready.'
+      },
+      step3: {
+        title: 'Switch the endpoint',
+        desc: 'Replace the Base URL and send requests through the gateway.'
+      }
+    },
     // User-focused value proposition
     heroSubtitle: 'One Key, All AI Models',
     heroDescription: 'No need to manage multiple subscriptions. Access Claude, GPT, Gemini and more with a single API key',
@@ -102,10 +205,12 @@ export default {
     // CTA section
     cta: {
       title: 'Ready to Get Started?',
+      subtitle: 'Ready to route production traffic?',
       description: 'Sign up now and get free trial credits to experience seamless AI access',
       button: 'Sign Up Free'
     },
     footer: {
+      tagline: 'Reliable AI API gateway for teams and developers.',
       allRightsReserved: 'All rights reserved.'
     }
   },
@@ -296,9 +401,6 @@ export default {
     total: 'Total',
     balance: 'Balance',
     available: 'Available',
-    availableTokens: 'Available Tokens',
-    availableTokensShort: 'Avail',
-    availableTokensEstimateHint: 'Estimated from balance at $1 / 1M tokens. Actual usage depends on model and input/output pricing.',
     copiedToClipboard: 'Copied to clipboard',
     copied: 'Copied',
     copyFailed: 'Failed to copy',
@@ -398,6 +500,7 @@ export default {
     redeemCodes: 'Redeem Codes',
     ops: 'Ops',
     promoCodes: 'Promo Codes',
+    checkins: 'Check-ins',
     settings: 'Settings',
     myAccount: 'My Account',
     lightMode: 'Light Mode',
@@ -1154,6 +1257,40 @@ export default {
     }
   },
 
+  checkin: {
+    action: 'Check in',
+    checked: 'Checked',
+    unavailable: 'Unavailable',
+    loading: 'Working...',
+    success: 'Checked in successfully, earned ${amount}',
+    failed: 'Check-in failed',
+    insufficientSpend: 'Check-in requires {min} cumulative spend. Current: {current}',
+    cardTitle: 'Daily Check-in',
+    cardHint: 'Check in today to claim a random balance reward.',
+    cardCheckedHint: 'You have claimed today\'s reward.',
+    currentStreak: 'Current streak',
+    lifetimeDays: 'Total check-ins',
+    days: '{count} days',
+    nextMilestone: 'Day {day}: extra reward {amount}',
+    recentRecords: 'Recent records',
+    streakDay: 'Day {day}',
+    eligibilityTitle: 'Check-in eligibility',
+    eligibilityReadyBadge: 'Ready',
+    eligibilityPendingBadge: 'Locked',
+    eligibilityNoThreshold: 'No cumulative spend requirement is currently set. You can check in once per day.',
+    eligibilitySatisfied: 'Cumulative spend reached {min}; current {current}.',
+    eligibilityPending: 'Check-in unlocks at {min} cumulative spend; current {current}.',
+    rewardBreakdown: 'Reward breakdown',
+    baseReward: 'Base reward',
+    randomReward: 'Random',
+    streakBonus: 'Streak bonus',
+    streakBonusWhenReached: 'When reached',
+    noStreakBonusToday: 'No streak bonus today',
+    streakBonusTitle: 'Streak bonus rules',
+    nextStreakBonus: 'Streak day {day} earns an extra {amount}.',
+    noUpcomingStreakBonus: 'No upcoming streak bonus is configured.'
+  },
+
   // Redeem
   redeem: {
     title: 'Redeem Code',
@@ -1183,6 +1320,7 @@ export default {
     balanceAddedAffiliate: 'Balance Added (Affiliate Transfer)',
     balanceAddedAdmin: 'Balance Added (Admin)',
     balanceDeductedAdmin: 'Balance Deducted (Admin)',
+    checkinReward: 'Daily Check-in Reward',
     concurrencyAddedRedeem: 'Concurrency Added (Redeem)',
     concurrencyAddedAdmin: 'Concurrency Added (Admin)',
     concurrencyReducedAdmin: 'Concurrency Reduced (Admin)',
@@ -1427,6 +1565,90 @@ export default {
 
   // Admin
   admin: {
+    checkins: {
+      title: 'Check-in Management',
+      description: 'Review daily check-in rewards, records, and blacklist',
+      overviewTitle: 'Check-in Operations',
+      configTitle: 'Check-in Rules',
+      configDescription: 'Control the check-in entry and require cumulative user spend before rewards can be claimed.',
+      enabledStatus: 'Enabled',
+      disabledStatus: 'Disabled',
+      baseRules: 'Base Rules',
+      baseRulesHint: 'Control whether users can see and use the check-in entry.',
+      minSpendHint: 'Calculated from lifetime spend, not today-only spend.',
+      rewardStrategy: 'Reward Strategy',
+      streakMilestones: 'Streak Milestones',
+      tierCount: '{count} tiers',
+      ruleCount: '{count} rules',
+      enabled: 'Check-in Switch',
+      minTotalUsageUsd: 'Minimum cumulative spend in USD',
+      configSaved: 'Check-in rules saved',
+      failedToLoadConfig: 'Failed to load check-in rules',
+      failedToSaveConfig: 'Failed to save check-in rules',
+      invalidMinTotalUsageUsd: 'Minimum cumulative spend cannot be below 0',
+      rewardRules: 'Reward Rules',
+      rewardRulesHint: 'Configure random USD reward tiers and their probabilities.',
+      rewardAmountUsd: 'Reward Amount (USD)',
+      probabilityPercent: 'Probability (%)',
+      addTier: 'Add Tier',
+      probabilityTotal: 'Probability total: {total}%',
+      averageReward: 'Estimated average reward: {amount}',
+      streakRules: 'Streak Bonuses',
+      streakRulesHint: 'Grant an extra reward when users reach a streak milestone.',
+      streakEnabled: 'Enable streak bonuses',
+      addStreakRule: 'Add Rule',
+      streakDay: 'Streak Days',
+      streakBonusUsd: 'Bonus Reward (USD)',
+      emptyStreakRules: 'No streak bonus rules configured.',
+      rewardTierRequired: 'Add at least one reward tier',
+      invalidProbabilityTotal: 'Reward probabilities must add up to exactly 100%',
+      invalidRewardTier: 'Reward amounts and probabilities must be greater than 0',
+      duplicateRewardAmount: 'Reward amounts must be unique',
+      invalidStreakRule: 'Streak days and bonus amounts must be greater than 0',
+      duplicateStreakDay: 'Streak days must be unique',
+      streakDayValue: 'Day {day}',
+      todayCount: 'Today',
+      sevenDayCount: '7 Days',
+      thirtyDayCount: '30 Days',
+      activeBlacklist: 'Active Blacklist',
+      recordsTitle: 'Check-in Records',
+      recordsHint: 'Review user check-in details, streak days, and reward breakdown.',
+      recordsSearchPlaceholder: 'Search email or username',
+      blacklistTitle: 'Check-in Blacklist',
+      blacklistHint: 'Blacklisted users cannot see the button or claim rewards.',
+      addBlacklistHint: 'Search for a user, then add a restriction note if needed.',
+      blacklistSearchPlaceholder: 'Search blacklist users',
+      addBlacklist: 'Add Blacklist Entry',
+      searchUser: 'Search User',
+      userSearchPlaceholder: 'Email or username',
+      userSearchRequired: 'Enter an email or username',
+      selectUserRequired: 'Select a user first',
+      reason: 'Note',
+      reasonPlaceholder: 'Optional restriction note',
+      addToBlacklist: 'Add to Blacklist',
+      removeBlacklist: 'Remove',
+      blacklistAdded: 'Added to check-in blacklist',
+      blacklistRemoved: 'Removed from check-in blacklist',
+      failedToLoadStats: 'Failed to load check-in stats',
+      failedToLoadRecords: 'Failed to load check-in records',
+      failedToLoadBlacklist: 'Failed to load blacklist',
+      failedToSearchUsers: 'Failed to search users',
+      failedToAddBlacklist: 'Failed to add blacklist entry',
+      failedToRemoveBlacklist: 'Failed to remove blacklist entry',
+      userId: 'User #{id}',
+      columns: {
+        user: 'User',
+        checkinDate: 'Date',
+        streakDay: 'Streak',
+        reward: 'Reward',
+        rewardDetail: 'Reward Detail',
+        balanceBefore: 'Balance Before',
+        balanceAfter: 'Balance After',
+        reason: 'Note',
+        createdAt: 'Created At',
+        actions: 'Actions'
+      }
+    },
     // Dashboard
     dashboard: {
       title: 'Admin Dashboard',
@@ -1991,6 +2213,7 @@ export default {
       typeBalance: 'Balance (Redeem)',
       typeAffiliateBalance: 'Balance (Affiliate Transfer)',
       typeAdminBalance: 'Balance (Admin)',
+      typeCheckinReward: 'Check-in Reward',
       typeConcurrency: 'Concurrency (Redeem)',
       typeAdminConcurrency: 'Concurrency (Admin)',
       typeSubscription: 'Subscription',
@@ -7155,5 +7378,4 @@ export default {
       },
     },
   },
-
 }

@@ -92,6 +92,7 @@ const (
 const (
 	AdjustmentTypeAdminBalance     = domain.AdjustmentTypeAdminBalance     // 管理员调整余额
 	AdjustmentTypeAdminConcurrency = domain.AdjustmentTypeAdminConcurrency // 管理员调整并发数
+	AdjustmentTypeCheckinReward    = domain.AdjustmentTypeCheckinReward    // Daily check-in balance reward
 )
 
 // Group subscription type constants
@@ -360,6 +361,23 @@ const (
 	// user-facing aggregate view. When false: user endpoint returns an empty list and the
 	// sidebar entry is hidden. Defaults to false (opt-in feature).
 	SettingKeyAvailableChannelsEnabled = "available_channels_enabled"
+
+	// =========================
+	// Daily Check-in
+	// =========================
+
+	// SettingKeyCheckinEnabled controls whether daily check-in is globally available.
+	// Defaults to true when unset to preserve existing behavior.
+	SettingKeyCheckinEnabled = "checkin_enabled"
+
+	// SettingKeyCheckinMinTotalUsageUSD requires users to have at least this much
+	// cumulative billed usage in USD before they can claim daily check-in rewards.
+	// Defaults to 0 when unset.
+	SettingKeyCheckinMinTotalUsageUSD = "checkin_min_total_usage_usd"
+
+	// SettingKeyCheckinRewardConfig stores JSON config for random reward tiers and
+	// streak bonus rules.
+	SettingKeyCheckinRewardConfig = "checkin_reward_config"
 
 	// =========================
 	// Overload Cooldown (529)

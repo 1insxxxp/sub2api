@@ -10,6 +10,109 @@ export default {
     login: '登录',
     getStarted: '立即开始',
     goToDashboard: '进入控制台',
+    nav: {
+      features: '产品能力',
+      integration: '接入方式',
+      workflow: '使用流程'
+    },
+    hero: {
+      eyebrow: '面向生产团队的 AI API 网关',
+      title: '稳定接入多模型 API 的统一网关',
+      subtitle:
+        '用 OpenAI 兼容格式统一接入多家模型服务，内置多渠道调度、钱包计费、状态监控和风控能力。',
+      primaryCta: '开始使用',
+      dashboardCta: '进入控制台',
+      secondaryCta: '查看文档',
+      statusBadge: '网关运行中',
+      panelTitle: '实时路由控制台',
+      panelSubtitle: '一次请求，自动路由到当前更健康的可用渠道。',
+      routeLabel: '路由',
+      billingLabel: '钱包计费',
+      latencyLabel: '延迟',
+      successLabel: '成功率',
+      channels: {
+        openai: 'OpenAI 兼容',
+        gemini: 'Gemini 池',
+        anthropic: 'Claude 池',
+        grok: 'Grok 路由'
+      }
+    },
+    trust: {
+      multiModel: {
+        title: '多模型接入',
+        desc: '一个网关统一接入主流模型服务。'
+      },
+      routing: {
+        title: '智能渠道调度',
+        desc: '自动在健康渠道之间分配请求。'
+      },
+      billing: {
+        title: '实时余额计费',
+        desc: '请求处理时同步记录余额和成本。'
+      },
+      monitoring: {
+        title: '监控与风控',
+        desc: '观察渠道健康，降低异常使用风险。'
+      }
+    },
+    sections: {
+      capabilitiesEyebrow: '网关运营能力',
+      capabilitiesTitle: '运营 API 网关所需的核心能力',
+      capabilitiesSubtitle:
+        '从用户密钥到账号池，从请求监控到钱包计费，把流量、成本和运营集中到一个控制台。'
+    },
+    capabilities: {
+      unifiedApi: {
+        title: '统一 API 接入',
+        desc: '保留 OpenAI 兼容客户端，只需切换一个 Base URL。'
+      },
+      accountPool: {
+        title: '账号池管理',
+        desc: '统一组织上游账号，并支持请求分配和故障切换。'
+      },
+      monitoring: {
+        title: '渠道健康监控',
+        desc: '在影响用户前查看可用性、延迟和失败情况。'
+      },
+      wallet: {
+        title: '钱包余额计费',
+        desc: '按余额扣费，记录使用明细，让成本清晰可见。'
+      },
+      keys: {
+        title: '用户与 API Key',
+        desc: '发放密钥、控制访问，并按账号拆分用量。'
+      },
+      risk: {
+        title: '风控中心',
+        desc: '为异常流量、滥用行为和高风险调用增加保护。'
+      }
+    },
+    integration: {
+      eyebrow: '开发者接入',
+      title: '按 OpenAI 兼容格式设计',
+      subtitle:
+        '保留现有 SDK 和请求格式，替换网关地址，带上平台 API Key，即可在控制台观察用量和成本。',
+      replaceBaseUrl: '替换 Base URL',
+      useApiKey: '使用平台 API Key',
+      monitorCost: '监控请求和成本'
+    },
+    workflow: {
+      eyebrow: '快速开始',
+      title: '三步开始接入',
+      subtitle: '适合希望快速迁移流量、又不想重写客户端的团队。',
+      step1: {
+        title: '创建账号',
+        desc: '注册或登录后进入控制台。'
+      },
+      step2: {
+        title: '准备访问权限',
+        desc: '创建 API Key，并确认钱包余额可用。'
+      },
+      step3: {
+        title: '切换请求入口',
+        desc: '替换 Base URL，让请求通过统一网关转发。'
+      }
+    },
     // 新增：面向用户的价值主张
     heroSubtitle: '一个密钥，畅用多个 AI 模型',
     heroDescription: '无需管理多个订阅账号，一站式接入 Claude、GPT、Gemini 等主流 AI 服务',
@@ -102,10 +205,12 @@ export default {
     // CTA 区块
     cta: {
       title: '准备好开始了吗？',
+      subtitle: '准备好承载生产流量了吗？',
       description: '注册即可获得免费试用额度，体验一站式 AI 服务',
       button: '免费注册'
     },
     footer: {
+      tagline: '为团队和开发者打造的稳定 AI API 网关。',
       allRightsReserved: '保留所有权利。'
     }
   },
@@ -296,9 +401,6 @@ export default {
     total: '总计',
     balance: '余额',
     available: '可用',
-    availableTokens: '可用 Token',
-    availableTokensShort: '可用',
-    availableTokensEstimateHint: '按余额以 $1 / 1M Token 估算；实际消耗取决于模型和输入/输出价格。',
     copiedToClipboard: '已复制到剪贴板',
     copied: '已复制',
     copyFailed: '复制失败',
@@ -398,6 +500,7 @@ export default {
     redeemCodes: '兑换码',
     ops: '运维监控',
     promoCodes: '优惠码',
+    checkins: '签到管理',
     settings: '系统设置',
     myAccount: '我的账户',
     lightMode: '浅色模式',
@@ -1158,6 +1261,40 @@ export default {
     }
   },
 
+  checkin: {
+    action: '签到',
+    checked: '已签到',
+    unavailable: '暂不可签',
+    loading: '处理中...',
+    success: '签到成功，获得 ${amount}',
+    failed: '签到失败',
+    insufficientSpend: '累计消费满 {min} 可签到，当前 {current}',
+    cardTitle: '每日签到',
+    cardHint: '今日可签到领取随机余额奖励。',
+    cardCheckedHint: '今日奖励已领取。',
+    currentStreak: '当前连签',
+    lifetimeDays: '累计签到',
+    days: '{count} 天',
+    nextMilestone: '第 {day} 天：额外奖励 {amount}',
+    recentRecords: '最近记录',
+    streakDay: '第 {day} 天',
+    eligibilityTitle: '签到资格',
+    eligibilityReadyBadge: '已达标',
+    eligibilityPendingBadge: '未达标',
+    eligibilityNoThreshold: '当前无需累计消费门槛，每天可签到一次。',
+    eligibilitySatisfied: '累计消费达到 {min} 可签到，当前 {current}。',
+    eligibilityPending: '累计消费达到 {min} 后可签到，当前 {current}。',
+    rewardBreakdown: '奖励构成',
+    baseReward: '基础奖励',
+    randomReward: '随机发放',
+    streakBonus: '连签加成',
+    streakBonusWhenReached: '达成连签后发放',
+    noStreakBonusToday: '今日未触发',
+    streakBonusTitle: '连续签到奖励',
+    nextStreakBonus: '连续签到第 {day} 天可额外获得 {amount}。',
+    noUpcomingStreakBonus: '暂无下一档连续签到奖励。'
+  },
+
   // Redeem
   redeem: {
     title: '兑换码',
@@ -1187,6 +1324,7 @@ export default {
     balanceAddedAffiliate: '余额充值（返利转入）',
     balanceAddedAdmin: '余额充值（管理员）',
     balanceDeductedAdmin: '余额扣除（管理员）',
+    checkinReward: '每日签到奖励',
     concurrencyAddedRedeem: '并发增加（兑换）',
     concurrencyAddedAdmin: '并发增加（管理员）',
     concurrencyReducedAdmin: '并发减少（管理员）',
@@ -1431,6 +1569,90 @@ export default {
 
   // Admin
   admin: {
+    checkins: {
+      title: '签到管理',
+      description: '查看每日签到奖励、签到记录和黑名单',
+      overviewTitle: '签到运营概览',
+      configTitle: '签到规则',
+      configDescription: '控制签到入口，并要求用户累计消费达标后才可领取奖励。',
+      enabledStatus: '已开启',
+      disabledStatus: '已关闭',
+      baseRules: '基础规则',
+      baseRulesHint: '控制用户是否能看到并使用签到入口。',
+      minSpendHint: '按用户历史总消费计算，不是当天消费。',
+      rewardStrategy: '奖励策略',
+      streakMilestones: '连签里程碑',
+      tierCount: '{count} 个档位',
+      ruleCount: '{count} 条规则',
+      enabled: '签到开关',
+      minTotalUsageUsd: '累计消费满多少 USD 可签到',
+      configSaved: '签到规则已保存',
+      failedToLoadConfig: '加载签到规则失败',
+      failedToSaveConfig: '保存签到规则失败',
+      invalidMinTotalUsageUsd: '最低累计消费不能小于 0',
+      rewardRules: '奖励规则',
+      rewardRulesHint: '配置全局签到奖励档位和对应概率。',
+      rewardAmountUsd: '奖励金额（USD）',
+      probabilityPercent: '概率（%）',
+      addTier: '新增档位',
+      probabilityTotal: '概率合计：{total}%',
+      averageReward: '预计平均奖励：{amount}',
+      streakRules: '连续签到奖励',
+      streakRulesHint: '用户达到指定连续天数时追加奖励。',
+      streakEnabled: '启用连续签到奖励',
+      addStreakRule: '新增规则',
+      streakDay: '连续天数',
+      streakBonusUsd: '额外奖励（USD）',
+      emptyStreakRules: '暂无连续签到奖励规则。',
+      rewardTierRequired: '至少需要一个奖励档位',
+      invalidProbabilityTotal: '奖励概率合计必须等于 100%',
+      invalidRewardTier: '奖励金额和概率必须大于 0',
+      duplicateRewardAmount: '奖励金额不能重复',
+      invalidStreakRule: '连续天数和额外奖励必须大于 0',
+      duplicateStreakDay: '连续天数不能重复',
+      streakDayValue: '第 {day} 天',
+      todayCount: '今日签到',
+      sevenDayCount: '7 天签到',
+      thirtyDayCount: '30 天签到',
+      activeBlacklist: '有效黑名单',
+      recordsTitle: '签到记录',
+      recordsHint: '查看用户签到明细、连签天数和奖励构成。',
+      recordsSearchPlaceholder: '搜索邮箱或用户名',
+      blacklistTitle: '签到黑名单',
+      blacklistHint: '黑名单用户不可见签到按钮，也无法领取奖励。',
+      addBlacklistHint: '搜索用户后加入黑名单，可填写限制原因。',
+      blacklistSearchPlaceholder: '搜索黑名单用户',
+      addBlacklist: '添加黑名单',
+      searchUser: '搜索用户',
+      userSearchPlaceholder: '邮箱或用户名',
+      userSearchRequired: '请输入邮箱或用户名',
+      selectUserRequired: '请先选择用户',
+      reason: '备注',
+      reasonPlaceholder: '可填写限制原因',
+      addToBlacklist: '加入黑名单',
+      removeBlacklist: '解除',
+      blacklistAdded: '已加入签到黑名单',
+      blacklistRemoved: '已解除签到黑名单',
+      failedToLoadStats: '加载签到统计失败',
+      failedToLoadRecords: '加载签到记录失败',
+      failedToLoadBlacklist: '加载黑名单失败',
+      failedToSearchUsers: '搜索用户失败',
+      failedToAddBlacklist: '加入黑名单失败',
+      failedToRemoveBlacklist: '解除黑名单失败',
+      userId: '用户 #{id}',
+      columns: {
+        user: '用户',
+        checkinDate: '签到日期',
+        streakDay: '连签',
+        reward: '奖励',
+        rewardDetail: '奖励明细',
+        balanceBefore: '签到前余额',
+        balanceAfter: '签到后余额',
+        reason: '备注',
+        createdAt: '创建时间',
+        actions: '操作'
+      }
+    },
     // Dashboard
     dashboard: {
       title: '管理控制台',
@@ -2048,6 +2270,7 @@ export default {
       typeBalance: '余额（兑换码）',
       typeAffiliateBalance: '余额（返利转入）',
       typeAdminBalance: '余额（管理员调整）',
+      typeCheckinReward: '签到奖励',
       typeConcurrency: '并发（兑换码）',
       typeAdminConcurrency: '并发（管理员调整）',
       typeSubscription: '订阅',
@@ -7334,5 +7557,4 @@ export default {
       },
     },
   },
-
 }

@@ -557,7 +557,7 @@ describe('AccountUsageCell', () => {
 		await flushPromises()
 
 		expect(wrapper.text()).toContain('1.0M req')
-		expect(wrapper.text()).toContain('1.0B')
+		expect(wrapper.text()).toContain('10亿')
 		expect(wrapper.text()).toContain('A $12.35')
 		expect(wrapper.text()).toContain('U $6.79')
 

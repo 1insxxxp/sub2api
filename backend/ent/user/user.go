@@ -87,6 +87,10 @@ const (
 	EdgePendingAuthSessions = "pending_auth_sessions"
 	// EdgePlatformQuotas holds the string denoting the platform_quotas edge name in mutations.
 	EdgePlatformQuotas = "platform_quotas"
+	// EdgeCheckins holds the string denoting the checkins edge name in mutations.
+	EdgeCheckins = "checkins"
+	// EdgeCheckinBlacklistEntries holds the string denoting the checkin_blacklist_entries edge name in mutations.
+	EdgeCheckinBlacklistEntries = "checkin_blacklist_entries"
 	// EdgeUserAllowedGroups holds the string denoting the user_allowed_groups edge name in mutations.
 	EdgeUserAllowedGroups = "user_allowed_groups"
 	// Table holds the table name of the user in the database.
@@ -180,6 +184,20 @@ const (
 	PlatformQuotasInverseTable = "user_platform_quotas"
 	// PlatformQuotasColumn is the table column denoting the platform_quotas relation/edge.
 	PlatformQuotasColumn = "user_id"
+	// CheckinsTable is the table that holds the checkins relation/edge.
+	CheckinsTable = "user_checkins"
+	// CheckinsInverseTable is the table name for the UserCheckin entity.
+	// It exists in this package in order to avoid circular dependency with the "usercheckin" package.
+	CheckinsInverseTable = "user_checkins"
+	// CheckinsColumn is the table column denoting the checkins relation/edge.
+	CheckinsColumn = "user_id"
+	// CheckinBlacklistEntriesTable is the table that holds the checkin_blacklist_entries relation/edge.
+	CheckinBlacklistEntriesTable = "user_checkin_blacklist"
+	// CheckinBlacklistEntriesInverseTable is the table name for the UserCheckinBlacklist entity.
+	// It exists in this package in order to avoid circular dependency with the "usercheckinblacklist" package.
+	CheckinBlacklistEntriesInverseTable = "user_checkin_blacklist"
+	// CheckinBlacklistEntriesColumn is the table column denoting the checkin_blacklist_entries relation/edge.
+	CheckinBlacklistEntriesColumn = "user_id"
 	// UserAllowedGroupsTable is the table that holds the user_allowed_groups relation/edge.
 	UserAllowedGroupsTable = "user_allowed_groups"
 	// UserAllowedGroupsInverseTable is the table name for the UserAllowedGroup entity.
@@ -592,6 +610,34 @@ func ByPlatformQuotas(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
 	}
 }
 
+// ByCheckinsCount orders the results by checkins count.
+func ByCheckinsCount(opts ...sql.OrderTermOption) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborsCount(s, newCheckinsStep(), opts...)
+	}
+}
+
+// ByCheckins orders the results by checkins terms.
+func ByCheckins(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborTerms(s, newCheckinsStep(), append([]sql.OrderTerm{term}, terms...)...)
+	}
+}
+
+// ByCheckinBlacklistEntriesCount orders the results by checkin_blacklist_entries count.
+func ByCheckinBlacklistEntriesCount(opts ...sql.OrderTermOption) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborsCount(s, newCheckinBlacklistEntriesStep(), opts...)
+	}
+}
+
+// ByCheckinBlacklistEntries orders the results by checkin_blacklist_entries terms.
+func ByCheckinBlacklistEntries(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborTerms(s, newCheckinBlacklistEntriesStep(), append([]sql.OrderTerm{term}, terms...)...)
+	}
+}
+
 // ByUserAllowedGroupsCount orders the results by user_allowed_groups count.
 func ByUserAllowedGroupsCount(opts ...sql.OrderTermOption) OrderOption {
 	return func(s *sql.Selector) {
@@ -694,6 +740,20 @@ func newPlatformQuotasStep() *sqlgraph.Step {
 		sqlgraph.From(Table, FieldID),
 		sqlgraph.To(PlatformQuotasInverseTable, FieldID),
 		sqlgraph.Edge(sqlgraph.O2M, false, PlatformQuotasTable, PlatformQuotasColumn),
+	)
+}
+func newCheckinsStep() *sqlgraph.Step {
+	return sqlgraph.NewStep(
+		sqlgraph.From(Table, FieldID),
+		sqlgraph.To(CheckinsInverseTable, FieldID),
+		sqlgraph.Edge(sqlgraph.O2M, false, CheckinsTable, CheckinsColumn),
+	)
+}
+func newCheckinBlacklistEntriesStep() *sqlgraph.Step {
+	return sqlgraph.NewStep(
+		sqlgraph.From(Table, FieldID),
+		sqlgraph.To(CheckinBlacklistEntriesInverseTable, FieldID),
+		sqlgraph.Edge(sqlgraph.O2M, false, CheckinBlacklistEntriesTable, CheckinBlacklistEntriesColumn),
 	)
 }
 func newUserAllowedGroupsStep() *sqlgraph.Step {

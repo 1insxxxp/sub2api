@@ -1636,6 +1636,96 @@ var (
 			},
 		},
 	}
+	// UserCheckinsColumns holds the columns for the "user_checkins" table.
+	UserCheckinsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt64, Increment: true},
+		{Name: "checkin_date", Type: field.TypeString, Size: 10},
+		{Name: "reward_amount", Type: field.TypeFloat64, Default: 0, SchemaType: map[string]string{"postgres": "decimal(20,8)"}},
+		{Name: "balance_before", Type: field.TypeFloat64, Default: 0, SchemaType: map[string]string{"postgres": "decimal(20,8)"}},
+		{Name: "balance_after", Type: field.TypeFloat64, Default: 0, SchemaType: map[string]string{"postgres": "decimal(20,8)"}},
+		{Name: "created_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
+		{Name: "streak_day", Type: field.TypeInt, Default: 1},
+		{Name: "base_reward_amount", Type: field.TypeFloat64, Default: 0, SchemaType: map[string]string{"postgres": "decimal(20,8)"}},
+		{Name: "bonus_reward_amount", Type: field.TypeFloat64, Default: 0, SchemaType: map[string]string{"postgres": "decimal(20,8)"}},
+		{Name: "total_reward_amount", Type: field.TypeFloat64, Default: 0, SchemaType: map[string]string{"postgres": "decimal(20,8)"}},
+		{Name: "user_id", Type: field.TypeInt64},
+	}
+	// UserCheckinsTable holds the schema information for the "user_checkins" table.
+	UserCheckinsTable = &schema.Table{
+		Name:       "user_checkins",
+		Columns:    UserCheckinsColumns,
+		PrimaryKey: []*schema.Column{UserCheckinsColumns[0]},
+		ForeignKeys: []*schema.ForeignKey{
+			{
+				Symbol:     "user_checkins_users_checkins",
+				Columns:    []*schema.Column{UserCheckinsColumns[10]},
+				RefColumns: []*schema.Column{UsersColumns[0]},
+				OnDelete:   schema.NoAction,
+			},
+		},
+		Indexes: []*schema.Index{
+			{
+				Name:    "usercheckin_user_id_checkin_date",
+				Unique:  true,
+				Columns: []*schema.Column{UserCheckinsColumns[10], UserCheckinsColumns[1]},
+			},
+			{
+				Name:    "usercheckin_checkin_date",
+				Unique:  false,
+				Columns: []*schema.Column{UserCheckinsColumns[1]},
+			},
+			{
+				Name:    "usercheckin_user_id",
+				Unique:  false,
+				Columns: []*schema.Column{UserCheckinsColumns[10]},
+			},
+		},
+	}
+	// UserCheckinBlacklistColumns holds the columns for the "user_checkin_blacklist" table.
+	UserCheckinBlacklistColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt64, Increment: true},
+		{Name: "created_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
+		{Name: "updated_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
+		{Name: "reason", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "text"}},
+		{Name: "created_by", Type: field.TypeInt64, Nullable: true},
+		{Name: "removed_by", Type: field.TypeInt64, Nullable: true},
+		{Name: "removed_at", Type: field.TypeTime, Nullable: true, SchemaType: map[string]string{"postgres": "timestamptz"}},
+		{Name: "user_id", Type: field.TypeInt64},
+	}
+	// UserCheckinBlacklistTable holds the schema information for the "user_checkin_blacklist" table.
+	UserCheckinBlacklistTable = &schema.Table{
+		Name:       "user_checkin_blacklist",
+		Columns:    UserCheckinBlacklistColumns,
+		PrimaryKey: []*schema.Column{UserCheckinBlacklistColumns[0]},
+		ForeignKeys: []*schema.ForeignKey{
+			{
+				Symbol:     "user_checkin_blacklist_users_checkin_blacklist_entries",
+				Columns:    []*schema.Column{UserCheckinBlacklistColumns[7]},
+				RefColumns: []*schema.Column{UsersColumns[0]},
+				OnDelete:   schema.NoAction,
+			},
+		},
+		Indexes: []*schema.Index{
+			{
+				Name:    "uq_user_checkin_blacklist_active_user",
+				Unique:  true,
+				Columns: []*schema.Column{UserCheckinBlacklistColumns[7]},
+				Annotation: &entsql.IndexAnnotation{
+					Where: "removed_at IS NULL",
+				},
+			},
+			{
+				Name:    "idx_user_checkin_blacklist_user_id",
+				Unique:  false,
+				Columns: []*schema.Column{UserCheckinBlacklistColumns[7]},
+			},
+			{
+				Name:    "idx_user_checkin_blacklist_removed_at",
+				Unique:  false,
+				Columns: []*schema.Column{UserCheckinBlacklistColumns[6]},
+			},
+		},
+	}
 	// UserPlatformQuotasColumns holds the columns for the "user_platform_quotas" table.
 	UserPlatformQuotasColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeInt64, Increment: true},
@@ -1807,6 +1897,8 @@ var (
 		UserAllowedGroupsTable,
 		UserAttributeDefinitionsTable,
 		UserAttributeValuesTable,
+		UserCheckinsTable,
+		UserCheckinBlacklistTable,
 		UserPlatformQuotasTable,
 		UserSubscriptionsTable,
 	}
@@ -1941,6 +2033,14 @@ func init() {
 	UserAttributeValuesTable.ForeignKeys[1].RefTable = UserAttributeDefinitionsTable
 	UserAttributeValuesTable.Annotation = &entsql.Annotation{
 		Table: "user_attribute_values",
+	}
+	UserCheckinsTable.ForeignKeys[0].RefTable = UsersTable
+	UserCheckinsTable.Annotation = &entsql.Annotation{
+		Table: "user_checkins",
+	}
+	UserCheckinBlacklistTable.ForeignKeys[0].RefTable = UsersTable
+	UserCheckinBlacklistTable.Annotation = &entsql.Annotation{
+		Table: "user_checkin_blacklist",
 	}
 	UserPlatformQuotasTable.ForeignKeys[0].RefTable = UsersTable
 	UserPlatformQuotasTable.Annotation = &entsql.Annotation{
