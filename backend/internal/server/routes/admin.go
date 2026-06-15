@@ -112,6 +112,8 @@ func RegisterAdminRoutes(
 func registerCheckinRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 	checkins := admin.Group("/checkins")
 	{
+		checkins.GET("/config", h.Admin.Checkin.GetConfig)
+		checkins.PUT("/config", h.Admin.Checkin.UpdateConfig)
 		checkins.GET("/stats", h.Admin.Checkin.GetStats)
 		checkins.GET("/records", h.Admin.Checkin.ListRecords)
 		checkins.GET("/blacklist", h.Admin.Checkin.ListBlacklist)

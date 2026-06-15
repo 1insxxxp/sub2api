@@ -112,8 +112,11 @@ export type { BackupAgentHealth, DataManagementConfig } from './dataManagement'
 export type { TLSFingerprintProfile, CreateProfileRequest, UpdateProfileRequest } from './tlsFingerprintProfile'
 export type { ContentModerationConfig, ContentModerationLog, ModerationMode } from './riskControl'
 export type {
+  AdminCheckinConfig,
   AdminCheckinStats,
   AdminCheckinRecord,
   AdminCheckinBlacklistEntry,
-  AddCheckinBlacklistRequest
+  AddCheckinBlacklistRequest,
+  CheckinRewardTier,
+  CheckinStreakRule
 } from './checkins'

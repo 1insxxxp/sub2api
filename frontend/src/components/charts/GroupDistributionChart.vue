@@ -115,7 +115,7 @@ import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
 import UserBreakdownSubTable from './UserBreakdownSubTable.vue'
 import type { GroupStat, UserBreakdownItem } from '@/types'
 import { getUserBreakdown } from '@/api/admin/dashboard'
-import { formatTokenCount } from '@/utils/format'
+import { formatCompactNumber, formatTokenCount } from '@/utils/format'
 
 ChartJS.register(ArcElement, Tooltip, Legend)
 
@@ -219,7 +219,7 @@ const doughnutOptions = computed(() => ({
           const percentage = total > 0 ? ((value / total) * 100).toFixed(1) : '0.0'
           const formattedValue = props.metric === 'actual_cost'
             ? `$${formatCost(value)}`
-            : formatTokens(value)
+            : formatTooltipTokens(value)
           return `${context.label}: ${formattedValue} (${percentage}%)`
         }
       }
@@ -230,6 +230,11 @@ const doughnutOptions = computed(() => ({
 const formatTokens = (value: number): string => {
   value = safeNumber(value)
   return formatTokenCount(value)
+}
+
+const formatTooltipTokens = (value: number): string => {
+  value = safeNumber(value)
+  return value >= 1000 ? `${(value / 1000).toFixed(2)}K` : formatCompactNumber(value)
 }
 
 const formatNumber = (value: number): string => {

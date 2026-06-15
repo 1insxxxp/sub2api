@@ -16,12 +16,43 @@ export interface AdminCheckinStats {
   current_checkin_day: string
 }
 
+export interface AdminCheckinConfig {
+  enabled: boolean
+  min_total_usage_usd: number
+  tiers: CheckinRewardTier[]
+  streak_enabled: boolean
+  streak_rules: CheckinStreakRule[]
+  probability_total: number
+  preview: CheckinRewardPreview
+}
+
+export interface CheckinRewardTier {
+  amount: number
+  probability: number
+  sort_order: number
+}
+
+export interface CheckinStreakRule {
+  day: number
+  bonus_amount: number
+}
+
+export interface CheckinRewardPreview {
+  min_reward: number
+  max_reward: number
+  average_reward: number
+}
+
 export interface AdminCheckinRecord {
   id: number
   user_id: number
   user_email?: string
   username?: string
   checkin_date: string
+  streak_day: number
+  base_reward_amount: number
+  bonus_reward_amount: number
+  total_reward_amount: number
   reward_amount: number
   balance_before: number
   balance_after: number
@@ -59,6 +90,18 @@ export interface AddCheckinBlacklistRequest {
 
 export async function getStats(): Promise<AdminCheckinStats> {
   const { data } = await apiClient.get<AdminCheckinStats>('/admin/checkins/stats')
+  return data
+}
+
+export async function getConfig(): Promise<AdminCheckinConfig> {
+  const { data } = await apiClient.get<AdminCheckinConfig>('/admin/checkins/config')
+  return data
+}
+
+export async function updateConfig(
+  request: AdminCheckinConfig
+): Promise<AdminCheckinConfig> {
+  const { data } = await apiClient.put<AdminCheckinConfig>('/admin/checkins/config', request)
   return data
 }
 
@@ -112,6 +155,8 @@ export async function removeBlacklist(userId: number): Promise<{ message: string
 }
 
 export const checkinsAPI = {
+  getConfig,
+  updateConfig,
   getStats,
   listRecords,
   listBlacklist,

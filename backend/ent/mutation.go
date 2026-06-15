@@ -43863,23 +43863,31 @@ func (m *UserAttributeValueMutation) ResetEdge(name string) error {
 // UserCheckinMutation represents an operation that mutates the UserCheckin nodes in the graph.
 type UserCheckinMutation struct {
 	config
-	op                Op
-	typ               string
-	id                *int64
-	checkin_date      *string
-	reward_amount     *float64
-	addreward_amount  *float64
-	balance_before    *float64
-	addbalance_before *float64
-	balance_after     *float64
-	addbalance_after  *float64
-	created_at        *time.Time
-	clearedFields     map[string]struct{}
-	user              *int64
-	cleareduser       bool
-	done              bool
-	oldValue          func(context.Context) (*UserCheckin, error)
-	predicates        []predicate.UserCheckin
+	op                     Op
+	typ                    string
+	id                     *int64
+	checkin_date           *string
+	reward_amount          *float64
+	addreward_amount       *float64
+	balance_before         *float64
+	addbalance_before      *float64
+	balance_after          *float64
+	addbalance_after       *float64
+	created_at             *time.Time
+	streak_day             *int
+	addstreak_day          *int
+	base_reward_amount     *float64
+	addbase_reward_amount  *float64
+	bonus_reward_amount    *float64
+	addbonus_reward_amount *float64
+	total_reward_amount    *float64
+	addtotal_reward_amount *float64
+	clearedFields          map[string]struct{}
+	user                   *int64
+	cleareduser            bool
+	done                   bool
+	oldValue               func(context.Context) (*UserCheckin, error)
+	predicates             []predicate.UserCheckin
 }
 
 var _ ent.Mutation = (*UserCheckinMutation)(nil)
@@ -44256,6 +44264,230 @@ func (m *UserCheckinMutation) ResetCreatedAt() {
 	m.created_at = nil
 }
 
+// SetStreakDay sets the "streak_day" field.
+func (m *UserCheckinMutation) SetStreakDay(i int) {
+	m.streak_day = &i
+	m.addstreak_day = nil
+}
+
+// StreakDay returns the value of the "streak_day" field in the mutation.
+func (m *UserCheckinMutation) StreakDay() (r int, exists bool) {
+	v := m.streak_day
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldStreakDay returns the old "streak_day" field's value of the UserCheckin entity.
+// If the UserCheckin object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *UserCheckinMutation) OldStreakDay(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldStreakDay is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldStreakDay requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldStreakDay: %w", err)
+	}
+	return oldValue.StreakDay, nil
+}
+
+// AddStreakDay adds i to the "streak_day" field.
+func (m *UserCheckinMutation) AddStreakDay(i int) {
+	if m.addstreak_day != nil {
+		*m.addstreak_day += i
+	} else {
+		m.addstreak_day = &i
+	}
+}
+
+// AddedStreakDay returns the value that was added to the "streak_day" field in this mutation.
+func (m *UserCheckinMutation) AddedStreakDay() (r int, exists bool) {
+	v := m.addstreak_day
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetStreakDay resets all changes to the "streak_day" field.
+func (m *UserCheckinMutation) ResetStreakDay() {
+	m.streak_day = nil
+	m.addstreak_day = nil
+}
+
+// SetBaseRewardAmount sets the "base_reward_amount" field.
+func (m *UserCheckinMutation) SetBaseRewardAmount(f float64) {
+	m.base_reward_amount = &f
+	m.addbase_reward_amount = nil
+}
+
+// BaseRewardAmount returns the value of the "base_reward_amount" field in the mutation.
+func (m *UserCheckinMutation) BaseRewardAmount() (r float64, exists bool) {
+	v := m.base_reward_amount
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldBaseRewardAmount returns the old "base_reward_amount" field's value of the UserCheckin entity.
+// If the UserCheckin object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *UserCheckinMutation) OldBaseRewardAmount(ctx context.Context) (v float64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldBaseRewardAmount is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldBaseRewardAmount requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldBaseRewardAmount: %w", err)
+	}
+	return oldValue.BaseRewardAmount, nil
+}
+
+// AddBaseRewardAmount adds f to the "base_reward_amount" field.
+func (m *UserCheckinMutation) AddBaseRewardAmount(f float64) {
+	if m.addbase_reward_amount != nil {
+		*m.addbase_reward_amount += f
+	} else {
+		m.addbase_reward_amount = &f
+	}
+}
+
+// AddedBaseRewardAmount returns the value that was added to the "base_reward_amount" field in this mutation.
+func (m *UserCheckinMutation) AddedBaseRewardAmount() (r float64, exists bool) {
+	v := m.addbase_reward_amount
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetBaseRewardAmount resets all changes to the "base_reward_amount" field.
+func (m *UserCheckinMutation) ResetBaseRewardAmount() {
+	m.base_reward_amount = nil
+	m.addbase_reward_amount = nil
+}
+
+// SetBonusRewardAmount sets the "bonus_reward_amount" field.
+func (m *UserCheckinMutation) SetBonusRewardAmount(f float64) {
+	m.bonus_reward_amount = &f
+	m.addbonus_reward_amount = nil
+}
+
+// BonusRewardAmount returns the value of the "bonus_reward_amount" field in the mutation.
+func (m *UserCheckinMutation) BonusRewardAmount() (r float64, exists bool) {
+	v := m.bonus_reward_amount
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldBonusRewardAmount returns the old "bonus_reward_amount" field's value of the UserCheckin entity.
+// If the UserCheckin object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *UserCheckinMutation) OldBonusRewardAmount(ctx context.Context) (v float64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldBonusRewardAmount is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldBonusRewardAmount requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldBonusRewardAmount: %w", err)
+	}
+	return oldValue.BonusRewardAmount, nil
+}
+
+// AddBonusRewardAmount adds f to the "bonus_reward_amount" field.
+func (m *UserCheckinMutation) AddBonusRewardAmount(f float64) {
+	if m.addbonus_reward_amount != nil {
+		*m.addbonus_reward_amount += f
+	} else {
+		m.addbonus_reward_amount = &f
+	}
+}
+
+// AddedBonusRewardAmount returns the value that was added to the "bonus_reward_amount" field in this mutation.
+func (m *UserCheckinMutation) AddedBonusRewardAmount() (r float64, exists bool) {
+	v := m.addbonus_reward_amount
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetBonusRewardAmount resets all changes to the "bonus_reward_amount" field.
+func (m *UserCheckinMutation) ResetBonusRewardAmount() {
+	m.bonus_reward_amount = nil
+	m.addbonus_reward_amount = nil
+}
+
+// SetTotalRewardAmount sets the "total_reward_amount" field.
+func (m *UserCheckinMutation) SetTotalRewardAmount(f float64) {
+	m.total_reward_amount = &f
+	m.addtotal_reward_amount = nil
+}
+
+// TotalRewardAmount returns the value of the "total_reward_amount" field in the mutation.
+func (m *UserCheckinMutation) TotalRewardAmount() (r float64, exists bool) {
+	v := m.total_reward_amount
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldTotalRewardAmount returns the old "total_reward_amount" field's value of the UserCheckin entity.
+// If the UserCheckin object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *UserCheckinMutation) OldTotalRewardAmount(ctx context.Context) (v float64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldTotalRewardAmount is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldTotalRewardAmount requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldTotalRewardAmount: %w", err)
+	}
+	return oldValue.TotalRewardAmount, nil
+}
+
+// AddTotalRewardAmount adds f to the "total_reward_amount" field.
+func (m *UserCheckinMutation) AddTotalRewardAmount(f float64) {
+	if m.addtotal_reward_amount != nil {
+		*m.addtotal_reward_amount += f
+	} else {
+		m.addtotal_reward_amount = &f
+	}
+}
+
+// AddedTotalRewardAmount returns the value that was added to the "total_reward_amount" field in this mutation.
+func (m *UserCheckinMutation) AddedTotalRewardAmount() (r float64, exists bool) {
+	v := m.addtotal_reward_amount
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetTotalRewardAmount resets all changes to the "total_reward_amount" field.
+func (m *UserCheckinMutation) ResetTotalRewardAmount() {
+	m.total_reward_amount = nil
+	m.addtotal_reward_amount = nil
+}
+
 // ClearUser clears the "user" edge to the User entity.
 func (m *UserCheckinMutation) ClearUser() {
 	m.cleareduser = true
@@ -44317,7 +44549,7 @@ func (m *UserCheckinMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *UserCheckinMutation) Fields() []string {
-	fields := make([]string, 0, 6)
+	fields := make([]string, 0, 10)
 	if m.user != nil {
 		fields = append(fields, usercheckin.FieldUserID)
 	}
@@ -44335,6 +44567,18 @@ func (m *UserCheckinMutation) Fields() []string {
 	}
 	if m.created_at != nil {
 		fields = append(fields, usercheckin.FieldCreatedAt)
+	}
+	if m.streak_day != nil {
+		fields = append(fields, usercheckin.FieldStreakDay)
+	}
+	if m.base_reward_amount != nil {
+		fields = append(fields, usercheckin.FieldBaseRewardAmount)
+	}
+	if m.bonus_reward_amount != nil {
+		fields = append(fields, usercheckin.FieldBonusRewardAmount)
+	}
+	if m.total_reward_amount != nil {
+		fields = append(fields, usercheckin.FieldTotalRewardAmount)
 	}
 	return fields
 }
@@ -44356,6 +44600,14 @@ func (m *UserCheckinMutation) Field(name string) (ent.Value, bool) {
 		return m.BalanceAfter()
 	case usercheckin.FieldCreatedAt:
 		return m.CreatedAt()
+	case usercheckin.FieldStreakDay:
+		return m.StreakDay()
+	case usercheckin.FieldBaseRewardAmount:
+		return m.BaseRewardAmount()
+	case usercheckin.FieldBonusRewardAmount:
+		return m.BonusRewardAmount()
+	case usercheckin.FieldTotalRewardAmount:
+		return m.TotalRewardAmount()
 	}
 	return nil, false
 }
@@ -44377,6 +44629,14 @@ func (m *UserCheckinMutation) OldField(ctx context.Context, name string) (ent.Va
 		return m.OldBalanceAfter(ctx)
 	case usercheckin.FieldCreatedAt:
 		return m.OldCreatedAt(ctx)
+	case usercheckin.FieldStreakDay:
+		return m.OldStreakDay(ctx)
+	case usercheckin.FieldBaseRewardAmount:
+		return m.OldBaseRewardAmount(ctx)
+	case usercheckin.FieldBonusRewardAmount:
+		return m.OldBonusRewardAmount(ctx)
+	case usercheckin.FieldTotalRewardAmount:
+		return m.OldTotalRewardAmount(ctx)
 	}
 	return nil, fmt.Errorf("unknown UserCheckin field %s", name)
 }
@@ -44428,6 +44688,34 @@ func (m *UserCheckinMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetCreatedAt(v)
 		return nil
+	case usercheckin.FieldStreakDay:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetStreakDay(v)
+		return nil
+	case usercheckin.FieldBaseRewardAmount:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetBaseRewardAmount(v)
+		return nil
+	case usercheckin.FieldBonusRewardAmount:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetBonusRewardAmount(v)
+		return nil
+	case usercheckin.FieldTotalRewardAmount:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetTotalRewardAmount(v)
+		return nil
 	}
 	return fmt.Errorf("unknown UserCheckin field %s", name)
 }
@@ -44445,6 +44733,18 @@ func (m *UserCheckinMutation) AddedFields() []string {
 	if m.addbalance_after != nil {
 		fields = append(fields, usercheckin.FieldBalanceAfter)
 	}
+	if m.addstreak_day != nil {
+		fields = append(fields, usercheckin.FieldStreakDay)
+	}
+	if m.addbase_reward_amount != nil {
+		fields = append(fields, usercheckin.FieldBaseRewardAmount)
+	}
+	if m.addbonus_reward_amount != nil {
+		fields = append(fields, usercheckin.FieldBonusRewardAmount)
+	}
+	if m.addtotal_reward_amount != nil {
+		fields = append(fields, usercheckin.FieldTotalRewardAmount)
+	}
 	return fields
 }
 
@@ -44459,6 +44759,14 @@ func (m *UserCheckinMutation) AddedField(name string) (ent.Value, bool) {
 		return m.AddedBalanceBefore()
 	case usercheckin.FieldBalanceAfter:
 		return m.AddedBalanceAfter()
+	case usercheckin.FieldStreakDay:
+		return m.AddedStreakDay()
+	case usercheckin.FieldBaseRewardAmount:
+		return m.AddedBaseRewardAmount()
+	case usercheckin.FieldBonusRewardAmount:
+		return m.AddedBonusRewardAmount()
+	case usercheckin.FieldTotalRewardAmount:
+		return m.AddedTotalRewardAmount()
 	}
 	return nil, false
 }
@@ -44488,6 +44796,34 @@ func (m *UserCheckinMutation) AddField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.AddBalanceAfter(v)
+		return nil
+	case usercheckin.FieldStreakDay:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddStreakDay(v)
+		return nil
+	case usercheckin.FieldBaseRewardAmount:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddBaseRewardAmount(v)
+		return nil
+	case usercheckin.FieldBonusRewardAmount:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddBonusRewardAmount(v)
+		return nil
+	case usercheckin.FieldTotalRewardAmount:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddTotalRewardAmount(v)
 		return nil
 	}
 	return fmt.Errorf("unknown UserCheckin numeric field %s", name)
@@ -44533,6 +44869,18 @@ func (m *UserCheckinMutation) ResetField(name string) error {
 		return nil
 	case usercheckin.FieldCreatedAt:
 		m.ResetCreatedAt()
+		return nil
+	case usercheckin.FieldStreakDay:
+		m.ResetStreakDay()
+		return nil
+	case usercheckin.FieldBaseRewardAmount:
+		m.ResetBaseRewardAmount()
+		return nil
+	case usercheckin.FieldBonusRewardAmount:
+		m.ResetBonusRewardAmount()
+		return nil
+	case usercheckin.FieldTotalRewardAmount:
+		m.ResetTotalRewardAmount()
 		return nil
 	}
 	return fmt.Errorf("unknown UserCheckin field %s", name)

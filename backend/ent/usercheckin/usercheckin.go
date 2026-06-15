@@ -26,6 +26,14 @@ const (
 	FieldBalanceAfter = "balance_after"
 	// FieldCreatedAt holds the string denoting the created_at field in the database.
 	FieldCreatedAt = "created_at"
+	// FieldStreakDay holds the string denoting the streak_day field in the database.
+	FieldStreakDay = "streak_day"
+	// FieldBaseRewardAmount holds the string denoting the base_reward_amount field in the database.
+	FieldBaseRewardAmount = "base_reward_amount"
+	// FieldBonusRewardAmount holds the string denoting the bonus_reward_amount field in the database.
+	FieldBonusRewardAmount = "bonus_reward_amount"
+	// FieldTotalRewardAmount holds the string denoting the total_reward_amount field in the database.
+	FieldTotalRewardAmount = "total_reward_amount"
 	// EdgeUser holds the string denoting the user edge name in mutations.
 	EdgeUser = "user"
 	// Table holds the table name of the usercheckin in the database.
@@ -48,6 +56,10 @@ var Columns = []string{
 	FieldBalanceBefore,
 	FieldBalanceAfter,
 	FieldCreatedAt,
+	FieldStreakDay,
+	FieldBaseRewardAmount,
+	FieldBonusRewardAmount,
+	FieldTotalRewardAmount,
 }
 
 // ValidColumn reports if the column name is valid (part of the table columns).
@@ -71,6 +83,14 @@ var (
 	DefaultBalanceAfter float64
 	// DefaultCreatedAt holds the default value on creation for the "created_at" field.
 	DefaultCreatedAt func() time.Time
+	// DefaultStreakDay holds the default value on creation for the "streak_day" field.
+	DefaultStreakDay int
+	// DefaultBaseRewardAmount holds the default value on creation for the "base_reward_amount" field.
+	DefaultBaseRewardAmount float64
+	// DefaultBonusRewardAmount holds the default value on creation for the "bonus_reward_amount" field.
+	DefaultBonusRewardAmount float64
+	// DefaultTotalRewardAmount holds the default value on creation for the "total_reward_amount" field.
+	DefaultTotalRewardAmount float64
 )
 
 // OrderOption defines the ordering options for the UserCheckin queries.
@@ -109,6 +129,26 @@ func ByBalanceAfter(opts ...sql.OrderTermOption) OrderOption {
 // ByCreatedAt orders the results by the created_at field.
 func ByCreatedAt(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldCreatedAt, opts...).ToFunc()
+}
+
+// ByStreakDay orders the results by the streak_day field.
+func ByStreakDay(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldStreakDay, opts...).ToFunc()
+}
+
+// ByBaseRewardAmount orders the results by the base_reward_amount field.
+func ByBaseRewardAmount(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldBaseRewardAmount, opts...).ToFunc()
+}
+
+// ByBonusRewardAmount orders the results by the bonus_reward_amount field.
+func ByBonusRewardAmount(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldBonusRewardAmount, opts...).ToFunc()
+}
+
+// ByTotalRewardAmount orders the results by the total_reward_amount field.
+func ByTotalRewardAmount(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldTotalRewardAmount, opts...).ToFunc()
 }
 
 // ByUserField orders the results by user field.

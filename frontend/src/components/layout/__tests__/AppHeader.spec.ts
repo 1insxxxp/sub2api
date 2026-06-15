@@ -82,8 +82,15 @@ vi.mock('vue-i18n', async () => {
     'checkin.loading': '加载中',
     'checkin.success': '签到成功，获得 $3.00',
     'checkin.failed': '签到失败',
-    'common.availableTokensEstimateHint': 'available token hint',
-    'common.availableTokensShort': '可用',
+    'checkin.eligibilityTitle': 'Check-in eligibility',
+    'checkin.eligibilitySatisfied': 'Cumulative spend reached {min}; current {current}',
+    'checkin.eligibilityPending': 'Check-in unlocks at {min} cumulative spend; current {current}',
+    'checkin.rewardBreakdown': 'Reward breakdown',
+    'checkin.baseReward': 'Base reward',
+    'checkin.streakBonus': 'Streak bonus',
+    'checkin.noStreakBonusToday': 'No streak bonus today',
+    'checkin.streakBonusTitle': 'Streak bonus rules',
+    'checkin.nextStreakBonus': 'Streak day {day} earns an extra {amount}',
     'dashboard.title': 'Dashboard',
     'dashboard.welcomeMessage': 'Welcome'
   }
@@ -94,7 +101,8 @@ vi.mock('vue-i18n', async () => {
         if (key === 'checkin.success') {
           return `签到成功，获得 $${Number(params?.amount ?? 0).toFixed(2)}`
         }
-        return messages[key] ?? key
+        const template = messages[key] ?? key
+        return template.replace(/\{(\w+)\}/g, (_, name: string) => String(params?.[name] ?? ''))
       }
     })
   }
@@ -120,9 +128,10 @@ const mountHeader = async () => {
 }
 
 describe('AppHeader available token estimate', () => {
-  it('uses the full Token unit instead of the ambiguous TOK abbreviation', () => {
-    expect(componentSource).toContain('{{ availableTokensLabel }} Token')
-    expect(componentSource).not.toContain('{{ availableTokensLabel }} TOK')
+  it('does not render or import the temporary available token estimate', () => {
+    expect(componentSource).not.toContain('availableTokensLabel')
+    expect(componentSource).not.toContain('availableTokensTooltip')
+    expect(componentSource).not.toContain('@/utils/tokenBalance')
   })
 })
 
@@ -194,5 +203,39 @@ describe('AppHeader daily check-in entry', () => {
     expect(showSuccess).toHaveBeenCalledWith('签到成功，获得 $3.00')
     expect(wrapper.get('[data-test="daily-checkin-button"]').text()).toContain('已签到')
     expect(wrapper.text()).toContain('$13.00')
+  })
+
+  it('explains eligibility and streak rewards in the hover panel', async () => {
+    getCheckinStatus.mockResolvedValue({
+      enabled: true,
+      eligible: true,
+      checked_in: true,
+      blacklisted: false,
+      checkin_date: '2026-06-15',
+      reward_amount: 2,
+      base_reward_amount: 2,
+      bonus_reward_amount: 0,
+      total_reward_amount: 2,
+      current_streak: 1,
+      lifetime_checkin_days: 1,
+      min_total_usage_usd: 10,
+      total_usage_usd: 18.5,
+      next_streak_rule: {
+        day: 7,
+        bonus_amount: 10
+      },
+      recent_records: []
+    })
+
+    const wrapper = await mountHeader()
+    const text = wrapper.text()
+
+    expect(text).toContain('Check-in eligibility')
+    expect(text).toContain('Cumulative spend reached $10.00; current $18.50')
+    expect(text).toContain('Reward breakdown')
+    expect(text).toContain('Base reward')
+    expect(text).toContain('No streak bonus today')
+    expect(text).toContain('Streak bonus rules')
+    expect(text).toContain('Streak day 7 earns an extra $10.00')
   })
 })

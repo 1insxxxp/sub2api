@@ -91,6 +91,62 @@ func (_c *UserCheckinCreate) SetNillableCreatedAt(v *time.Time) *UserCheckinCrea
 	return _c
 }
 
+// SetStreakDay sets the "streak_day" field.
+func (_c *UserCheckinCreate) SetStreakDay(v int) *UserCheckinCreate {
+	_c.mutation.SetStreakDay(v)
+	return _c
+}
+
+// SetNillableStreakDay sets the "streak_day" field if the given value is not nil.
+func (_c *UserCheckinCreate) SetNillableStreakDay(v *int) *UserCheckinCreate {
+	if v != nil {
+		_c.SetStreakDay(*v)
+	}
+	return _c
+}
+
+// SetBaseRewardAmount sets the "base_reward_amount" field.
+func (_c *UserCheckinCreate) SetBaseRewardAmount(v float64) *UserCheckinCreate {
+	_c.mutation.SetBaseRewardAmount(v)
+	return _c
+}
+
+// SetNillableBaseRewardAmount sets the "base_reward_amount" field if the given value is not nil.
+func (_c *UserCheckinCreate) SetNillableBaseRewardAmount(v *float64) *UserCheckinCreate {
+	if v != nil {
+		_c.SetBaseRewardAmount(*v)
+	}
+	return _c
+}
+
+// SetBonusRewardAmount sets the "bonus_reward_amount" field.
+func (_c *UserCheckinCreate) SetBonusRewardAmount(v float64) *UserCheckinCreate {
+	_c.mutation.SetBonusRewardAmount(v)
+	return _c
+}
+
+// SetNillableBonusRewardAmount sets the "bonus_reward_amount" field if the given value is not nil.
+func (_c *UserCheckinCreate) SetNillableBonusRewardAmount(v *float64) *UserCheckinCreate {
+	if v != nil {
+		_c.SetBonusRewardAmount(*v)
+	}
+	return _c
+}
+
+// SetTotalRewardAmount sets the "total_reward_amount" field.
+func (_c *UserCheckinCreate) SetTotalRewardAmount(v float64) *UserCheckinCreate {
+	_c.mutation.SetTotalRewardAmount(v)
+	return _c
+}
+
+// SetNillableTotalRewardAmount sets the "total_reward_amount" field if the given value is not nil.
+func (_c *UserCheckinCreate) SetNillableTotalRewardAmount(v *float64) *UserCheckinCreate {
+	if v != nil {
+		_c.SetTotalRewardAmount(*v)
+	}
+	return _c
+}
+
 // SetUser sets the "user" edge to the User entity.
 func (_c *UserCheckinCreate) SetUser(v *User) *UserCheckinCreate {
 	return _c.SetUserID(v.ID)
@@ -147,6 +203,22 @@ func (_c *UserCheckinCreate) defaults() {
 		v := usercheckin.DefaultCreatedAt()
 		_c.mutation.SetCreatedAt(v)
 	}
+	if _, ok := _c.mutation.StreakDay(); !ok {
+		v := usercheckin.DefaultStreakDay
+		_c.mutation.SetStreakDay(v)
+	}
+	if _, ok := _c.mutation.BaseRewardAmount(); !ok {
+		v := usercheckin.DefaultBaseRewardAmount
+		_c.mutation.SetBaseRewardAmount(v)
+	}
+	if _, ok := _c.mutation.BonusRewardAmount(); !ok {
+		v := usercheckin.DefaultBonusRewardAmount
+		_c.mutation.SetBonusRewardAmount(v)
+	}
+	if _, ok := _c.mutation.TotalRewardAmount(); !ok {
+		v := usercheckin.DefaultTotalRewardAmount
+		_c.mutation.SetTotalRewardAmount(v)
+	}
 }
 
 // check runs all checks and user-defined validators on the builder.
@@ -173,6 +245,18 @@ func (_c *UserCheckinCreate) check() error {
 	}
 	if _, ok := _c.mutation.CreatedAt(); !ok {
 		return &ValidationError{Name: "created_at", err: errors.New(`ent: missing required field "UserCheckin.created_at"`)}
+	}
+	if _, ok := _c.mutation.StreakDay(); !ok {
+		return &ValidationError{Name: "streak_day", err: errors.New(`ent: missing required field "UserCheckin.streak_day"`)}
+	}
+	if _, ok := _c.mutation.BaseRewardAmount(); !ok {
+		return &ValidationError{Name: "base_reward_amount", err: errors.New(`ent: missing required field "UserCheckin.base_reward_amount"`)}
+	}
+	if _, ok := _c.mutation.BonusRewardAmount(); !ok {
+		return &ValidationError{Name: "bonus_reward_amount", err: errors.New(`ent: missing required field "UserCheckin.bonus_reward_amount"`)}
+	}
+	if _, ok := _c.mutation.TotalRewardAmount(); !ok {
+		return &ValidationError{Name: "total_reward_amount", err: errors.New(`ent: missing required field "UserCheckin.total_reward_amount"`)}
 	}
 	if len(_c.mutation.UserIDs()) == 0 {
 		return &ValidationError{Name: "user", err: errors.New(`ent: missing required edge "UserCheckin.user"`)}
@@ -223,6 +307,22 @@ func (_c *UserCheckinCreate) createSpec() (*UserCheckin, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.CreatedAt(); ok {
 		_spec.SetField(usercheckin.FieldCreatedAt, field.TypeTime, value)
 		_node.CreatedAt = value
+	}
+	if value, ok := _c.mutation.StreakDay(); ok {
+		_spec.SetField(usercheckin.FieldStreakDay, field.TypeInt, value)
+		_node.StreakDay = value
+	}
+	if value, ok := _c.mutation.BaseRewardAmount(); ok {
+		_spec.SetField(usercheckin.FieldBaseRewardAmount, field.TypeFloat64, value)
+		_node.BaseRewardAmount = value
+	}
+	if value, ok := _c.mutation.BonusRewardAmount(); ok {
+		_spec.SetField(usercheckin.FieldBonusRewardAmount, field.TypeFloat64, value)
+		_node.BonusRewardAmount = value
+	}
+	if value, ok := _c.mutation.TotalRewardAmount(); ok {
+		_spec.SetField(usercheckin.FieldTotalRewardAmount, field.TypeFloat64, value)
+		_node.TotalRewardAmount = value
 	}
 	if nodes := _c.mutation.UserIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{
@@ -371,6 +471,78 @@ func (u *UserCheckinUpsert) AddBalanceAfter(v float64) *UserCheckinUpsert {
 	return u
 }
 
+// SetStreakDay sets the "streak_day" field.
+func (u *UserCheckinUpsert) SetStreakDay(v int) *UserCheckinUpsert {
+	u.Set(usercheckin.FieldStreakDay, v)
+	return u
+}
+
+// UpdateStreakDay sets the "streak_day" field to the value that was provided on create.
+func (u *UserCheckinUpsert) UpdateStreakDay() *UserCheckinUpsert {
+	u.SetExcluded(usercheckin.FieldStreakDay)
+	return u
+}
+
+// AddStreakDay adds v to the "streak_day" field.
+func (u *UserCheckinUpsert) AddStreakDay(v int) *UserCheckinUpsert {
+	u.Add(usercheckin.FieldStreakDay, v)
+	return u
+}
+
+// SetBaseRewardAmount sets the "base_reward_amount" field.
+func (u *UserCheckinUpsert) SetBaseRewardAmount(v float64) *UserCheckinUpsert {
+	u.Set(usercheckin.FieldBaseRewardAmount, v)
+	return u
+}
+
+// UpdateBaseRewardAmount sets the "base_reward_amount" field to the value that was provided on create.
+func (u *UserCheckinUpsert) UpdateBaseRewardAmount() *UserCheckinUpsert {
+	u.SetExcluded(usercheckin.FieldBaseRewardAmount)
+	return u
+}
+
+// AddBaseRewardAmount adds v to the "base_reward_amount" field.
+func (u *UserCheckinUpsert) AddBaseRewardAmount(v float64) *UserCheckinUpsert {
+	u.Add(usercheckin.FieldBaseRewardAmount, v)
+	return u
+}
+
+// SetBonusRewardAmount sets the "bonus_reward_amount" field.
+func (u *UserCheckinUpsert) SetBonusRewardAmount(v float64) *UserCheckinUpsert {
+	u.Set(usercheckin.FieldBonusRewardAmount, v)
+	return u
+}
+
+// UpdateBonusRewardAmount sets the "bonus_reward_amount" field to the value that was provided on create.
+func (u *UserCheckinUpsert) UpdateBonusRewardAmount() *UserCheckinUpsert {
+	u.SetExcluded(usercheckin.FieldBonusRewardAmount)
+	return u
+}
+
+// AddBonusRewardAmount adds v to the "bonus_reward_amount" field.
+func (u *UserCheckinUpsert) AddBonusRewardAmount(v float64) *UserCheckinUpsert {
+	u.Add(usercheckin.FieldBonusRewardAmount, v)
+	return u
+}
+
+// SetTotalRewardAmount sets the "total_reward_amount" field.
+func (u *UserCheckinUpsert) SetTotalRewardAmount(v float64) *UserCheckinUpsert {
+	u.Set(usercheckin.FieldTotalRewardAmount, v)
+	return u
+}
+
+// UpdateTotalRewardAmount sets the "total_reward_amount" field to the value that was provided on create.
+func (u *UserCheckinUpsert) UpdateTotalRewardAmount() *UserCheckinUpsert {
+	u.SetExcluded(usercheckin.FieldTotalRewardAmount)
+	return u
+}
+
+// AddTotalRewardAmount adds v to the "total_reward_amount" field.
+func (u *UserCheckinUpsert) AddTotalRewardAmount(v float64) *UserCheckinUpsert {
+	u.Add(usercheckin.FieldTotalRewardAmount, v)
+	return u
+}
+
 // UpdateNewValues updates the mutable fields using the new values that were set on create.
 // Using this option is equivalent to using:
 //
@@ -504,6 +676,90 @@ func (u *UserCheckinUpsertOne) AddBalanceAfter(v float64) *UserCheckinUpsertOne 
 func (u *UserCheckinUpsertOne) UpdateBalanceAfter() *UserCheckinUpsertOne {
 	return u.Update(func(s *UserCheckinUpsert) {
 		s.UpdateBalanceAfter()
+	})
+}
+
+// SetStreakDay sets the "streak_day" field.
+func (u *UserCheckinUpsertOne) SetStreakDay(v int) *UserCheckinUpsertOne {
+	return u.Update(func(s *UserCheckinUpsert) {
+		s.SetStreakDay(v)
+	})
+}
+
+// AddStreakDay adds v to the "streak_day" field.
+func (u *UserCheckinUpsertOne) AddStreakDay(v int) *UserCheckinUpsertOne {
+	return u.Update(func(s *UserCheckinUpsert) {
+		s.AddStreakDay(v)
+	})
+}
+
+// UpdateStreakDay sets the "streak_day" field to the value that was provided on create.
+func (u *UserCheckinUpsertOne) UpdateStreakDay() *UserCheckinUpsertOne {
+	return u.Update(func(s *UserCheckinUpsert) {
+		s.UpdateStreakDay()
+	})
+}
+
+// SetBaseRewardAmount sets the "base_reward_amount" field.
+func (u *UserCheckinUpsertOne) SetBaseRewardAmount(v float64) *UserCheckinUpsertOne {
+	return u.Update(func(s *UserCheckinUpsert) {
+		s.SetBaseRewardAmount(v)
+	})
+}
+
+// AddBaseRewardAmount adds v to the "base_reward_amount" field.
+func (u *UserCheckinUpsertOne) AddBaseRewardAmount(v float64) *UserCheckinUpsertOne {
+	return u.Update(func(s *UserCheckinUpsert) {
+		s.AddBaseRewardAmount(v)
+	})
+}
+
+// UpdateBaseRewardAmount sets the "base_reward_amount" field to the value that was provided on create.
+func (u *UserCheckinUpsertOne) UpdateBaseRewardAmount() *UserCheckinUpsertOne {
+	return u.Update(func(s *UserCheckinUpsert) {
+		s.UpdateBaseRewardAmount()
+	})
+}
+
+// SetBonusRewardAmount sets the "bonus_reward_amount" field.
+func (u *UserCheckinUpsertOne) SetBonusRewardAmount(v float64) *UserCheckinUpsertOne {
+	return u.Update(func(s *UserCheckinUpsert) {
+		s.SetBonusRewardAmount(v)
+	})
+}
+
+// AddBonusRewardAmount adds v to the "bonus_reward_amount" field.
+func (u *UserCheckinUpsertOne) AddBonusRewardAmount(v float64) *UserCheckinUpsertOne {
+	return u.Update(func(s *UserCheckinUpsert) {
+		s.AddBonusRewardAmount(v)
+	})
+}
+
+// UpdateBonusRewardAmount sets the "bonus_reward_amount" field to the value that was provided on create.
+func (u *UserCheckinUpsertOne) UpdateBonusRewardAmount() *UserCheckinUpsertOne {
+	return u.Update(func(s *UserCheckinUpsert) {
+		s.UpdateBonusRewardAmount()
+	})
+}
+
+// SetTotalRewardAmount sets the "total_reward_amount" field.
+func (u *UserCheckinUpsertOne) SetTotalRewardAmount(v float64) *UserCheckinUpsertOne {
+	return u.Update(func(s *UserCheckinUpsert) {
+		s.SetTotalRewardAmount(v)
+	})
+}
+
+// AddTotalRewardAmount adds v to the "total_reward_amount" field.
+func (u *UserCheckinUpsertOne) AddTotalRewardAmount(v float64) *UserCheckinUpsertOne {
+	return u.Update(func(s *UserCheckinUpsert) {
+		s.AddTotalRewardAmount(v)
+	})
+}
+
+// UpdateTotalRewardAmount sets the "total_reward_amount" field to the value that was provided on create.
+func (u *UserCheckinUpsertOne) UpdateTotalRewardAmount() *UserCheckinUpsertOne {
+	return u.Update(func(s *UserCheckinUpsert) {
+		s.UpdateTotalRewardAmount()
 	})
 }
 
@@ -806,6 +1062,90 @@ func (u *UserCheckinUpsertBulk) AddBalanceAfter(v float64) *UserCheckinUpsertBul
 func (u *UserCheckinUpsertBulk) UpdateBalanceAfter() *UserCheckinUpsertBulk {
 	return u.Update(func(s *UserCheckinUpsert) {
 		s.UpdateBalanceAfter()
+	})
+}
+
+// SetStreakDay sets the "streak_day" field.
+func (u *UserCheckinUpsertBulk) SetStreakDay(v int) *UserCheckinUpsertBulk {
+	return u.Update(func(s *UserCheckinUpsert) {
+		s.SetStreakDay(v)
+	})
+}
+
+// AddStreakDay adds v to the "streak_day" field.
+func (u *UserCheckinUpsertBulk) AddStreakDay(v int) *UserCheckinUpsertBulk {
+	return u.Update(func(s *UserCheckinUpsert) {
+		s.AddStreakDay(v)
+	})
+}
+
+// UpdateStreakDay sets the "streak_day" field to the value that was provided on create.
+func (u *UserCheckinUpsertBulk) UpdateStreakDay() *UserCheckinUpsertBulk {
+	return u.Update(func(s *UserCheckinUpsert) {
+		s.UpdateStreakDay()
+	})
+}
+
+// SetBaseRewardAmount sets the "base_reward_amount" field.
+func (u *UserCheckinUpsertBulk) SetBaseRewardAmount(v float64) *UserCheckinUpsertBulk {
+	return u.Update(func(s *UserCheckinUpsert) {
+		s.SetBaseRewardAmount(v)
+	})
+}
+
+// AddBaseRewardAmount adds v to the "base_reward_amount" field.
+func (u *UserCheckinUpsertBulk) AddBaseRewardAmount(v float64) *UserCheckinUpsertBulk {
+	return u.Update(func(s *UserCheckinUpsert) {
+		s.AddBaseRewardAmount(v)
+	})
+}
+
+// UpdateBaseRewardAmount sets the "base_reward_amount" field to the value that was provided on create.
+func (u *UserCheckinUpsertBulk) UpdateBaseRewardAmount() *UserCheckinUpsertBulk {
+	return u.Update(func(s *UserCheckinUpsert) {
+		s.UpdateBaseRewardAmount()
+	})
+}
+
+// SetBonusRewardAmount sets the "bonus_reward_amount" field.
+func (u *UserCheckinUpsertBulk) SetBonusRewardAmount(v float64) *UserCheckinUpsertBulk {
+	return u.Update(func(s *UserCheckinUpsert) {
+		s.SetBonusRewardAmount(v)
+	})
+}
+
+// AddBonusRewardAmount adds v to the "bonus_reward_amount" field.
+func (u *UserCheckinUpsertBulk) AddBonusRewardAmount(v float64) *UserCheckinUpsertBulk {
+	return u.Update(func(s *UserCheckinUpsert) {
+		s.AddBonusRewardAmount(v)
+	})
+}
+
+// UpdateBonusRewardAmount sets the "bonus_reward_amount" field to the value that was provided on create.
+func (u *UserCheckinUpsertBulk) UpdateBonusRewardAmount() *UserCheckinUpsertBulk {
+	return u.Update(func(s *UserCheckinUpsert) {
+		s.UpdateBonusRewardAmount()
+	})
+}
+
+// SetTotalRewardAmount sets the "total_reward_amount" field.
+func (u *UserCheckinUpsertBulk) SetTotalRewardAmount(v float64) *UserCheckinUpsertBulk {
+	return u.Update(func(s *UserCheckinUpsert) {
+		s.SetTotalRewardAmount(v)
+	})
+}
+
+// AddTotalRewardAmount adds v to the "total_reward_amount" field.
+func (u *UserCheckinUpsertBulk) AddTotalRewardAmount(v float64) *UserCheckinUpsertBulk {
+	return u.Update(func(s *UserCheckinUpsert) {
+		s.AddTotalRewardAmount(v)
+	})
+}
+
+// UpdateTotalRewardAmount sets the "total_reward_amount" field to the value that was provided on create.
+func (u *UserCheckinUpsertBulk) UpdateTotalRewardAmount() *UserCheckinUpsertBulk {
+	return u.Update(func(s *UserCheckinUpsert) {
+		s.UpdateTotalRewardAmount()
 	})
 }
 

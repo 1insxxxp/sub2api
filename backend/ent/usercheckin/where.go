@@ -85,6 +85,26 @@ func CreatedAt(v time.Time) predicate.UserCheckin {
 	return predicate.UserCheckin(sql.FieldEQ(FieldCreatedAt, v))
 }
 
+// StreakDay applies equality check predicate on the "streak_day" field. It's identical to StreakDayEQ.
+func StreakDay(v int) predicate.UserCheckin {
+	return predicate.UserCheckin(sql.FieldEQ(FieldStreakDay, v))
+}
+
+// BaseRewardAmount applies equality check predicate on the "base_reward_amount" field. It's identical to BaseRewardAmountEQ.
+func BaseRewardAmount(v float64) predicate.UserCheckin {
+	return predicate.UserCheckin(sql.FieldEQ(FieldBaseRewardAmount, v))
+}
+
+// BonusRewardAmount applies equality check predicate on the "bonus_reward_amount" field. It's identical to BonusRewardAmountEQ.
+func BonusRewardAmount(v float64) predicate.UserCheckin {
+	return predicate.UserCheckin(sql.FieldEQ(FieldBonusRewardAmount, v))
+}
+
+// TotalRewardAmount applies equality check predicate on the "total_reward_amount" field. It's identical to TotalRewardAmountEQ.
+func TotalRewardAmount(v float64) predicate.UserCheckin {
+	return predicate.UserCheckin(sql.FieldEQ(FieldTotalRewardAmount, v))
+}
+
 // UserIDEQ applies the EQ predicate on the "user_id" field.
 func UserIDEQ(v int64) predicate.UserCheckin {
 	return predicate.UserCheckin(sql.FieldEQ(FieldUserID, v))
@@ -328,6 +348,166 @@ func CreatedAtLT(v time.Time) predicate.UserCheckin {
 // CreatedAtLTE applies the LTE predicate on the "created_at" field.
 func CreatedAtLTE(v time.Time) predicate.UserCheckin {
 	return predicate.UserCheckin(sql.FieldLTE(FieldCreatedAt, v))
+}
+
+// StreakDayEQ applies the EQ predicate on the "streak_day" field.
+func StreakDayEQ(v int) predicate.UserCheckin {
+	return predicate.UserCheckin(sql.FieldEQ(FieldStreakDay, v))
+}
+
+// StreakDayNEQ applies the NEQ predicate on the "streak_day" field.
+func StreakDayNEQ(v int) predicate.UserCheckin {
+	return predicate.UserCheckin(sql.FieldNEQ(FieldStreakDay, v))
+}
+
+// StreakDayIn applies the In predicate on the "streak_day" field.
+func StreakDayIn(vs ...int) predicate.UserCheckin {
+	return predicate.UserCheckin(sql.FieldIn(FieldStreakDay, vs...))
+}
+
+// StreakDayNotIn applies the NotIn predicate on the "streak_day" field.
+func StreakDayNotIn(vs ...int) predicate.UserCheckin {
+	return predicate.UserCheckin(sql.FieldNotIn(FieldStreakDay, vs...))
+}
+
+// StreakDayGT applies the GT predicate on the "streak_day" field.
+func StreakDayGT(v int) predicate.UserCheckin {
+	return predicate.UserCheckin(sql.FieldGT(FieldStreakDay, v))
+}
+
+// StreakDayGTE applies the GTE predicate on the "streak_day" field.
+func StreakDayGTE(v int) predicate.UserCheckin {
+	return predicate.UserCheckin(sql.FieldGTE(FieldStreakDay, v))
+}
+
+// StreakDayLT applies the LT predicate on the "streak_day" field.
+func StreakDayLT(v int) predicate.UserCheckin {
+	return predicate.UserCheckin(sql.FieldLT(FieldStreakDay, v))
+}
+
+// StreakDayLTE applies the LTE predicate on the "streak_day" field.
+func StreakDayLTE(v int) predicate.UserCheckin {
+	return predicate.UserCheckin(sql.FieldLTE(FieldStreakDay, v))
+}
+
+// BaseRewardAmountEQ applies the EQ predicate on the "base_reward_amount" field.
+func BaseRewardAmountEQ(v float64) predicate.UserCheckin {
+	return predicate.UserCheckin(sql.FieldEQ(FieldBaseRewardAmount, v))
+}
+
+// BaseRewardAmountNEQ applies the NEQ predicate on the "base_reward_amount" field.
+func BaseRewardAmountNEQ(v float64) predicate.UserCheckin {
+	return predicate.UserCheckin(sql.FieldNEQ(FieldBaseRewardAmount, v))
+}
+
+// BaseRewardAmountIn applies the In predicate on the "base_reward_amount" field.
+func BaseRewardAmountIn(vs ...float64) predicate.UserCheckin {
+	return predicate.UserCheckin(sql.FieldIn(FieldBaseRewardAmount, vs...))
+}
+
+// BaseRewardAmountNotIn applies the NotIn predicate on the "base_reward_amount" field.
+func BaseRewardAmountNotIn(vs ...float64) predicate.UserCheckin {
+	return predicate.UserCheckin(sql.FieldNotIn(FieldBaseRewardAmount, vs...))
+}
+
+// BaseRewardAmountGT applies the GT predicate on the "base_reward_amount" field.
+func BaseRewardAmountGT(v float64) predicate.UserCheckin {
+	return predicate.UserCheckin(sql.FieldGT(FieldBaseRewardAmount, v))
+}
+
+// BaseRewardAmountGTE applies the GTE predicate on the "base_reward_amount" field.
+func BaseRewardAmountGTE(v float64) predicate.UserCheckin {
+	return predicate.UserCheckin(sql.FieldGTE(FieldBaseRewardAmount, v))
+}
+
+// BaseRewardAmountLT applies the LT predicate on the "base_reward_amount" field.
+func BaseRewardAmountLT(v float64) predicate.UserCheckin {
+	return predicate.UserCheckin(sql.FieldLT(FieldBaseRewardAmount, v))
+}
+
+// BaseRewardAmountLTE applies the LTE predicate on the "base_reward_amount" field.
+func BaseRewardAmountLTE(v float64) predicate.UserCheckin {
+	return predicate.UserCheckin(sql.FieldLTE(FieldBaseRewardAmount, v))
+}
+
+// BonusRewardAmountEQ applies the EQ predicate on the "bonus_reward_amount" field.
+func BonusRewardAmountEQ(v float64) predicate.UserCheckin {
+	return predicate.UserCheckin(sql.FieldEQ(FieldBonusRewardAmount, v))
+}
+
+// BonusRewardAmountNEQ applies the NEQ predicate on the "bonus_reward_amount" field.
+func BonusRewardAmountNEQ(v float64) predicate.UserCheckin {
+	return predicate.UserCheckin(sql.FieldNEQ(FieldBonusRewardAmount, v))
+}
+
+// BonusRewardAmountIn applies the In predicate on the "bonus_reward_amount" field.
+func BonusRewardAmountIn(vs ...float64) predicate.UserCheckin {
+	return predicate.UserCheckin(sql.FieldIn(FieldBonusRewardAmount, vs...))
+}
+
+// BonusRewardAmountNotIn applies the NotIn predicate on the "bonus_reward_amount" field.
+func BonusRewardAmountNotIn(vs ...float64) predicate.UserCheckin {
+	return predicate.UserCheckin(sql.FieldNotIn(FieldBonusRewardAmount, vs...))
+}
+
+// BonusRewardAmountGT applies the GT predicate on the "bonus_reward_amount" field.
+func BonusRewardAmountGT(v float64) predicate.UserCheckin {
+	return predicate.UserCheckin(sql.FieldGT(FieldBonusRewardAmount, v))
+}
+
+// BonusRewardAmountGTE applies the GTE predicate on the "bonus_reward_amount" field.
+func BonusRewardAmountGTE(v float64) predicate.UserCheckin {
+	return predicate.UserCheckin(sql.FieldGTE(FieldBonusRewardAmount, v))
+}
+
+// BonusRewardAmountLT applies the LT predicate on the "bonus_reward_amount" field.
+func BonusRewardAmountLT(v float64) predicate.UserCheckin {
+	return predicate.UserCheckin(sql.FieldLT(FieldBonusRewardAmount, v))
+}
+
+// BonusRewardAmountLTE applies the LTE predicate on the "bonus_reward_amount" field.
+func BonusRewardAmountLTE(v float64) predicate.UserCheckin {
+	return predicate.UserCheckin(sql.FieldLTE(FieldBonusRewardAmount, v))
+}
+
+// TotalRewardAmountEQ applies the EQ predicate on the "total_reward_amount" field.
+func TotalRewardAmountEQ(v float64) predicate.UserCheckin {
+	return predicate.UserCheckin(sql.FieldEQ(FieldTotalRewardAmount, v))
+}
+
+// TotalRewardAmountNEQ applies the NEQ predicate on the "total_reward_amount" field.
+func TotalRewardAmountNEQ(v float64) predicate.UserCheckin {
+	return predicate.UserCheckin(sql.FieldNEQ(FieldTotalRewardAmount, v))
+}
+
+// TotalRewardAmountIn applies the In predicate on the "total_reward_amount" field.
+func TotalRewardAmountIn(vs ...float64) predicate.UserCheckin {
+	return predicate.UserCheckin(sql.FieldIn(FieldTotalRewardAmount, vs...))
+}
+
+// TotalRewardAmountNotIn applies the NotIn predicate on the "total_reward_amount" field.
+func TotalRewardAmountNotIn(vs ...float64) predicate.UserCheckin {
+	return predicate.UserCheckin(sql.FieldNotIn(FieldTotalRewardAmount, vs...))
+}
+
+// TotalRewardAmountGT applies the GT predicate on the "total_reward_amount" field.
+func TotalRewardAmountGT(v float64) predicate.UserCheckin {
+	return predicate.UserCheckin(sql.FieldGT(FieldTotalRewardAmount, v))
+}
+
+// TotalRewardAmountGTE applies the GTE predicate on the "total_reward_amount" field.
+func TotalRewardAmountGTE(v float64) predicate.UserCheckin {
+	return predicate.UserCheckin(sql.FieldGTE(FieldTotalRewardAmount, v))
+}
+
+// TotalRewardAmountLT applies the LT predicate on the "total_reward_amount" field.
+func TotalRewardAmountLT(v float64) predicate.UserCheckin {
+	return predicate.UserCheckin(sql.FieldLT(FieldTotalRewardAmount, v))
+}
+
+// TotalRewardAmountLTE applies the LTE predicate on the "total_reward_amount" field.
+func TotalRewardAmountLTE(v float64) predicate.UserCheckin {
+	return predicate.UserCheckin(sql.FieldLTE(FieldTotalRewardAmount, v))
 }
 
 // HasUser applies the HasEdge predicate on the "user" edge.

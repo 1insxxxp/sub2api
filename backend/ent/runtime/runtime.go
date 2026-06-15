@@ -2050,6 +2050,22 @@ func init() {
 	usercheckinDescCreatedAt := usercheckinFields[5].Descriptor()
 	// usercheckin.DefaultCreatedAt holds the default value on creation for the created_at field.
 	usercheckin.DefaultCreatedAt = usercheckinDescCreatedAt.Default.(func() time.Time)
+	// usercheckinDescStreakDay is the schema descriptor for streak_day field.
+	usercheckinDescStreakDay := usercheckinFields[6].Descriptor()
+	// usercheckin.DefaultStreakDay holds the default value on creation for the streak_day field.
+	usercheckin.DefaultStreakDay = usercheckinDescStreakDay.Default.(int)
+	// usercheckinDescBaseRewardAmount is the schema descriptor for base_reward_amount field.
+	usercheckinDescBaseRewardAmount := usercheckinFields[7].Descriptor()
+	// usercheckin.DefaultBaseRewardAmount holds the default value on creation for the base_reward_amount field.
+	usercheckin.DefaultBaseRewardAmount = usercheckinDescBaseRewardAmount.Default.(float64)
+	// usercheckinDescBonusRewardAmount is the schema descriptor for bonus_reward_amount field.
+	usercheckinDescBonusRewardAmount := usercheckinFields[8].Descriptor()
+	// usercheckin.DefaultBonusRewardAmount holds the default value on creation for the bonus_reward_amount field.
+	usercheckin.DefaultBonusRewardAmount = usercheckinDescBonusRewardAmount.Default.(float64)
+	// usercheckinDescTotalRewardAmount is the schema descriptor for total_reward_amount field.
+	usercheckinDescTotalRewardAmount := usercheckinFields[9].Descriptor()
+	// usercheckin.DefaultTotalRewardAmount holds the default value on creation for the total_reward_amount field.
+	usercheckin.DefaultTotalRewardAmount = usercheckinDescTotalRewardAmount.Default.(float64)
 	usercheckinblacklistMixin := schema.UserCheckinBlacklist{}.Mixin()
 	usercheckinblacklistMixinFields0 := usercheckinblacklistMixin[0].Fields()
 	_ = usercheckinblacklistMixinFields0

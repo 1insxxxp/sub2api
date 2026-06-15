@@ -119,6 +119,90 @@ func (_u *UserCheckinUpdate) AddBalanceAfter(v float64) *UserCheckinUpdate {
 	return _u
 }
 
+// SetStreakDay sets the "streak_day" field.
+func (_u *UserCheckinUpdate) SetStreakDay(v int) *UserCheckinUpdate {
+	_u.mutation.ResetStreakDay()
+	_u.mutation.SetStreakDay(v)
+	return _u
+}
+
+// SetNillableStreakDay sets the "streak_day" field if the given value is not nil.
+func (_u *UserCheckinUpdate) SetNillableStreakDay(v *int) *UserCheckinUpdate {
+	if v != nil {
+		_u.SetStreakDay(*v)
+	}
+	return _u
+}
+
+// AddStreakDay adds value to the "streak_day" field.
+func (_u *UserCheckinUpdate) AddStreakDay(v int) *UserCheckinUpdate {
+	_u.mutation.AddStreakDay(v)
+	return _u
+}
+
+// SetBaseRewardAmount sets the "base_reward_amount" field.
+func (_u *UserCheckinUpdate) SetBaseRewardAmount(v float64) *UserCheckinUpdate {
+	_u.mutation.ResetBaseRewardAmount()
+	_u.mutation.SetBaseRewardAmount(v)
+	return _u
+}
+
+// SetNillableBaseRewardAmount sets the "base_reward_amount" field if the given value is not nil.
+func (_u *UserCheckinUpdate) SetNillableBaseRewardAmount(v *float64) *UserCheckinUpdate {
+	if v != nil {
+		_u.SetBaseRewardAmount(*v)
+	}
+	return _u
+}
+
+// AddBaseRewardAmount adds value to the "base_reward_amount" field.
+func (_u *UserCheckinUpdate) AddBaseRewardAmount(v float64) *UserCheckinUpdate {
+	_u.mutation.AddBaseRewardAmount(v)
+	return _u
+}
+
+// SetBonusRewardAmount sets the "bonus_reward_amount" field.
+func (_u *UserCheckinUpdate) SetBonusRewardAmount(v float64) *UserCheckinUpdate {
+	_u.mutation.ResetBonusRewardAmount()
+	_u.mutation.SetBonusRewardAmount(v)
+	return _u
+}
+
+// SetNillableBonusRewardAmount sets the "bonus_reward_amount" field if the given value is not nil.
+func (_u *UserCheckinUpdate) SetNillableBonusRewardAmount(v *float64) *UserCheckinUpdate {
+	if v != nil {
+		_u.SetBonusRewardAmount(*v)
+	}
+	return _u
+}
+
+// AddBonusRewardAmount adds value to the "bonus_reward_amount" field.
+func (_u *UserCheckinUpdate) AddBonusRewardAmount(v float64) *UserCheckinUpdate {
+	_u.mutation.AddBonusRewardAmount(v)
+	return _u
+}
+
+// SetTotalRewardAmount sets the "total_reward_amount" field.
+func (_u *UserCheckinUpdate) SetTotalRewardAmount(v float64) *UserCheckinUpdate {
+	_u.mutation.ResetTotalRewardAmount()
+	_u.mutation.SetTotalRewardAmount(v)
+	return _u
+}
+
+// SetNillableTotalRewardAmount sets the "total_reward_amount" field if the given value is not nil.
+func (_u *UserCheckinUpdate) SetNillableTotalRewardAmount(v *float64) *UserCheckinUpdate {
+	if v != nil {
+		_u.SetTotalRewardAmount(*v)
+	}
+	return _u
+}
+
+// AddTotalRewardAmount adds value to the "total_reward_amount" field.
+func (_u *UserCheckinUpdate) AddTotalRewardAmount(v float64) *UserCheckinUpdate {
+	_u.mutation.AddTotalRewardAmount(v)
+	return _u
+}
+
 // SetUser sets the "user" edge to the User entity.
 func (_u *UserCheckinUpdate) SetUser(v *User) *UserCheckinUpdate {
 	return _u.SetUserID(v.ID)
@@ -207,6 +291,30 @@ func (_u *UserCheckinUpdate) sqlSave(ctx context.Context) (_node int, err error)
 	}
 	if value, ok := _u.mutation.AddedBalanceAfter(); ok {
 		_spec.AddField(usercheckin.FieldBalanceAfter, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.StreakDay(); ok {
+		_spec.SetField(usercheckin.FieldStreakDay, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.AddedStreakDay(); ok {
+		_spec.AddField(usercheckin.FieldStreakDay, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.BaseRewardAmount(); ok {
+		_spec.SetField(usercheckin.FieldBaseRewardAmount, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.AddedBaseRewardAmount(); ok {
+		_spec.AddField(usercheckin.FieldBaseRewardAmount, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.BonusRewardAmount(); ok {
+		_spec.SetField(usercheckin.FieldBonusRewardAmount, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.AddedBonusRewardAmount(); ok {
+		_spec.AddField(usercheckin.FieldBonusRewardAmount, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.TotalRewardAmount(); ok {
+		_spec.SetField(usercheckin.FieldTotalRewardAmount, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.AddedTotalRewardAmount(); ok {
+		_spec.AddField(usercheckin.FieldTotalRewardAmount, field.TypeFloat64, value)
 	}
 	if _u.mutation.UserCleared() {
 		edge := &sqlgraph.EdgeSpec{
@@ -348,6 +456,90 @@ func (_u *UserCheckinUpdateOne) AddBalanceAfter(v float64) *UserCheckinUpdateOne
 	return _u
 }
 
+// SetStreakDay sets the "streak_day" field.
+func (_u *UserCheckinUpdateOne) SetStreakDay(v int) *UserCheckinUpdateOne {
+	_u.mutation.ResetStreakDay()
+	_u.mutation.SetStreakDay(v)
+	return _u
+}
+
+// SetNillableStreakDay sets the "streak_day" field if the given value is not nil.
+func (_u *UserCheckinUpdateOne) SetNillableStreakDay(v *int) *UserCheckinUpdateOne {
+	if v != nil {
+		_u.SetStreakDay(*v)
+	}
+	return _u
+}
+
+// AddStreakDay adds value to the "streak_day" field.
+func (_u *UserCheckinUpdateOne) AddStreakDay(v int) *UserCheckinUpdateOne {
+	_u.mutation.AddStreakDay(v)
+	return _u
+}
+
+// SetBaseRewardAmount sets the "base_reward_amount" field.
+func (_u *UserCheckinUpdateOne) SetBaseRewardAmount(v float64) *UserCheckinUpdateOne {
+	_u.mutation.ResetBaseRewardAmount()
+	_u.mutation.SetBaseRewardAmount(v)
+	return _u
+}
+
+// SetNillableBaseRewardAmount sets the "base_reward_amount" field if the given value is not nil.
+func (_u *UserCheckinUpdateOne) SetNillableBaseRewardAmount(v *float64) *UserCheckinUpdateOne {
+	if v != nil {
+		_u.SetBaseRewardAmount(*v)
+	}
+	return _u
+}
+
+// AddBaseRewardAmount adds value to the "base_reward_amount" field.
+func (_u *UserCheckinUpdateOne) AddBaseRewardAmount(v float64) *UserCheckinUpdateOne {
+	_u.mutation.AddBaseRewardAmount(v)
+	return _u
+}
+
+// SetBonusRewardAmount sets the "bonus_reward_amount" field.
+func (_u *UserCheckinUpdateOne) SetBonusRewardAmount(v float64) *UserCheckinUpdateOne {
+	_u.mutation.ResetBonusRewardAmount()
+	_u.mutation.SetBonusRewardAmount(v)
+	return _u
+}
+
+// SetNillableBonusRewardAmount sets the "bonus_reward_amount" field if the given value is not nil.
+func (_u *UserCheckinUpdateOne) SetNillableBonusRewardAmount(v *float64) *UserCheckinUpdateOne {
+	if v != nil {
+		_u.SetBonusRewardAmount(*v)
+	}
+	return _u
+}
+
+// AddBonusRewardAmount adds value to the "bonus_reward_amount" field.
+func (_u *UserCheckinUpdateOne) AddBonusRewardAmount(v float64) *UserCheckinUpdateOne {
+	_u.mutation.AddBonusRewardAmount(v)
+	return _u
+}
+
+// SetTotalRewardAmount sets the "total_reward_amount" field.
+func (_u *UserCheckinUpdateOne) SetTotalRewardAmount(v float64) *UserCheckinUpdateOne {
+	_u.mutation.ResetTotalRewardAmount()
+	_u.mutation.SetTotalRewardAmount(v)
+	return _u
+}
+
+// SetNillableTotalRewardAmount sets the "total_reward_amount" field if the given value is not nil.
+func (_u *UserCheckinUpdateOne) SetNillableTotalRewardAmount(v *float64) *UserCheckinUpdateOne {
+	if v != nil {
+		_u.SetTotalRewardAmount(*v)
+	}
+	return _u
+}
+
+// AddTotalRewardAmount adds value to the "total_reward_amount" field.
+func (_u *UserCheckinUpdateOne) AddTotalRewardAmount(v float64) *UserCheckinUpdateOne {
+	_u.mutation.AddTotalRewardAmount(v)
+	return _u
+}
+
 // SetUser sets the "user" edge to the User entity.
 func (_u *UserCheckinUpdateOne) SetUser(v *User) *UserCheckinUpdateOne {
 	return _u.SetUserID(v.ID)
@@ -466,6 +658,30 @@ func (_u *UserCheckinUpdateOne) sqlSave(ctx context.Context) (_node *UserCheckin
 	}
 	if value, ok := _u.mutation.AddedBalanceAfter(); ok {
 		_spec.AddField(usercheckin.FieldBalanceAfter, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.StreakDay(); ok {
+		_spec.SetField(usercheckin.FieldStreakDay, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.AddedStreakDay(); ok {
+		_spec.AddField(usercheckin.FieldStreakDay, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.BaseRewardAmount(); ok {
+		_spec.SetField(usercheckin.FieldBaseRewardAmount, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.AddedBaseRewardAmount(); ok {
+		_spec.AddField(usercheckin.FieldBaseRewardAmount, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.BonusRewardAmount(); ok {
+		_spec.SetField(usercheckin.FieldBonusRewardAmount, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.AddedBonusRewardAmount(); ok {
+		_spec.AddField(usercheckin.FieldBonusRewardAmount, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.TotalRewardAmount(); ok {
+		_spec.SetField(usercheckin.FieldTotalRewardAmount, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.AddedTotalRewardAmount(); ok {
+		_spec.AddField(usercheckin.FieldTotalRewardAmount, field.TypeFloat64, value)
 	}
 	if _u.mutation.UserCleared() {
 		edge := &sqlgraph.EdgeSpec{

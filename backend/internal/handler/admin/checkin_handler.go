@@ -29,6 +29,43 @@ func (h *CheckinHandler) GetStats(c *gin.Context) {
 	response.Success(c, stats)
 }
 
+func (h *CheckinHandler) GetConfig(c *gin.Context) {
+	cfg, err := h.checkinService.GetConfig(c.Request.Context())
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	response.Success(c, cfg)
+}
+
+type UpdateCheckinConfigRequest struct {
+	Enabled          bool                        `json:"enabled"`
+	MinTotalUsageUSD float64                     `json:"min_total_usage_usd" binding:"gte=0"`
+	Tiers            []service.CheckinRewardTier `json:"tiers"`
+	StreakEnabled    bool                        `json:"streak_enabled"`
+	StreakRules      []service.CheckinStreakRule `json:"streak_rules"`
+}
+
+func (h *CheckinHandler) UpdateConfig(c *gin.Context) {
+	var req UpdateCheckinConfigRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.BadRequest(c, "Invalid request: "+err.Error())
+		return
+	}
+	cfg, err := h.checkinService.UpdateConfig(c.Request.Context(), service.CheckinConfig{
+		Enabled:          req.Enabled,
+		MinTotalUsageUSD: req.MinTotalUsageUSD,
+		Tiers:            req.Tiers,
+		StreakEnabled:    req.StreakEnabled,
+		StreakRules:      req.StreakRules,
+	})
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	response.Success(c, cfg)
+}
+
 func (h *CheckinHandler) ListRecords(c *gin.Context) {
 	page, pageSize := response.ParsePagination(c)
 	var userID int64

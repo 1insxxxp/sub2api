@@ -30,6 +30,14 @@ type UserCheckin struct {
 	BalanceAfter float64 `json:"balance_after,omitempty"`
 	// CreatedAt holds the value of the "created_at" field.
 	CreatedAt time.Time `json:"created_at,omitempty"`
+	// StreakDay holds the value of the "streak_day" field.
+	StreakDay int `json:"streak_day,omitempty"`
+	// BaseRewardAmount holds the value of the "base_reward_amount" field.
+	BaseRewardAmount float64 `json:"base_reward_amount,omitempty"`
+	// BonusRewardAmount holds the value of the "bonus_reward_amount" field.
+	BonusRewardAmount float64 `json:"bonus_reward_amount,omitempty"`
+	// TotalRewardAmount holds the value of the "total_reward_amount" field.
+	TotalRewardAmount float64 `json:"total_reward_amount,omitempty"`
 	// Edges holds the relations/edges for other nodes in the graph.
 	// The values are being populated by the UserCheckinQuery when eager-loading is set.
 	Edges        UserCheckinEdges `json:"edges"`
@@ -61,9 +69,9 @@ func (*UserCheckin) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case usercheckin.FieldRewardAmount, usercheckin.FieldBalanceBefore, usercheckin.FieldBalanceAfter:
+		case usercheckin.FieldRewardAmount, usercheckin.FieldBalanceBefore, usercheckin.FieldBalanceAfter, usercheckin.FieldBaseRewardAmount, usercheckin.FieldBonusRewardAmount, usercheckin.FieldTotalRewardAmount:
 			values[i] = new(sql.NullFloat64)
-		case usercheckin.FieldID, usercheckin.FieldUserID:
+		case usercheckin.FieldID, usercheckin.FieldUserID, usercheckin.FieldStreakDay:
 			values[i] = new(sql.NullInt64)
 		case usercheckin.FieldCheckinDate:
 			values[i] = new(sql.NullString)
@@ -126,6 +134,30 @@ func (_m *UserCheckin) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				_m.CreatedAt = value.Time
 			}
+		case usercheckin.FieldStreakDay:
+			if value, ok := values[i].(*sql.NullInt64); !ok {
+				return fmt.Errorf("unexpected type %T for field streak_day", values[i])
+			} else if value.Valid {
+				_m.StreakDay = int(value.Int64)
+			}
+		case usercheckin.FieldBaseRewardAmount:
+			if value, ok := values[i].(*sql.NullFloat64); !ok {
+				return fmt.Errorf("unexpected type %T for field base_reward_amount", values[i])
+			} else if value.Valid {
+				_m.BaseRewardAmount = value.Float64
+			}
+		case usercheckin.FieldBonusRewardAmount:
+			if value, ok := values[i].(*sql.NullFloat64); !ok {
+				return fmt.Errorf("unexpected type %T for field bonus_reward_amount", values[i])
+			} else if value.Valid {
+				_m.BonusRewardAmount = value.Float64
+			}
+		case usercheckin.FieldTotalRewardAmount:
+			if value, ok := values[i].(*sql.NullFloat64); !ok {
+				return fmt.Errorf("unexpected type %T for field total_reward_amount", values[i])
+			} else if value.Valid {
+				_m.TotalRewardAmount = value.Float64
+			}
 		default:
 			_m.selectValues.Set(columns[i], values[i])
 		}
@@ -184,6 +216,18 @@ func (_m *UserCheckin) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("created_at=")
 	builder.WriteString(_m.CreatedAt.Format(time.ANSIC))
+	builder.WriteString(", ")
+	builder.WriteString("streak_day=")
+	builder.WriteString(fmt.Sprintf("%v", _m.StreakDay))
+	builder.WriteString(", ")
+	builder.WriteString("base_reward_amount=")
+	builder.WriteString(fmt.Sprintf("%v", _m.BaseRewardAmount))
+	builder.WriteString(", ")
+	builder.WriteString("bonus_reward_amount=")
+	builder.WriteString(fmt.Sprintf("%v", _m.BonusRewardAmount))
+	builder.WriteString(", ")
+	builder.WriteString("total_reward_amount=")
+	builder.WriteString(fmt.Sprintf("%v", _m.TotalRewardAmount))
 	builder.WriteByte(')')
 	return builder.String()
 }
