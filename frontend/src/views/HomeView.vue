@@ -21,7 +21,7 @@
         class="home-grid-bg pointer-events-none absolute inset-0 bg-[linear-gradient(rgba(15,23,42,0.04)_1px,transparent_1px),linear-gradient(90deg,rgba(15,23,42,0.04)_1px,transparent_1px)] bg-[size:48px_48px] dark:bg-[linear-gradient(rgba(148,163,184,0.08)_1px,transparent_1px),linear-gradient(90deg,rgba(148,163,184,0.08)_1px,transparent_1px)]"
       ></div>
       <div
-        class="pointer-events-none absolute inset-x-0 top-0 h-[34rem] bg-[linear-gradient(180deg,rgba(240,253,250,0.9),rgba(255,255,255,0))] dark:bg-[linear-gradient(180deg,rgba(8,47,73,0.35),rgba(2,6,23,0))]"
+        class="pointer-events-none absolute inset-x-0 top-0 h-[34rem] bg-[linear-gradient(180deg,rgba(239,246,255,0.92),rgba(255,255,255,0))] dark:bg-[linear-gradient(180deg,rgba(30,41,59,0.48),rgba(2,6,23,0))]"
       ></div>
 
       <header class="relative z-20 border-b border-gray-200/70 bg-white/85 backdrop-blur-xl dark:border-dark-800/70 dark:bg-dark-950/80">
@@ -102,9 +102,9 @@
         <section class="mx-auto grid max-w-7xl items-center gap-10 px-4 pb-14 pt-12 sm:px-6 sm:pb-20 sm:pt-16 lg:grid-cols-[minmax(0,1fr),minmax(420px,0.9fr)] lg:gap-14 lg:px-8 lg:pb-24 lg:pt-24">
           <div class="min-w-0">
             <div
-              class="home-reveal home-reveal-1 mb-5 inline-flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-sm font-semibold text-emerald-800 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-200"
+              class="home-reveal home-reveal-1 mb-5 inline-flex items-center gap-2 rounded-lg border border-primary-200 bg-primary-50 px-3 py-1.5 text-sm font-semibold text-primary-800 dark:border-primary-500/30 dark:bg-primary-500/10 dark:text-primary-200"
             >
-              <span class="home-status-pulse h-2 w-2 rounded-full bg-emerald-500"></span>
+              <span class="home-status-pulse h-2 w-2 rounded-full bg-cyan-500"></span>
               {{ t('home.hero.eyebrow') }}
             </div>
 
@@ -145,8 +145,8 @@
           >
             <div class="flex items-start justify-between gap-4 border-b border-white/10 pb-4">
               <div class="min-w-0">
-                <div class="mb-2 inline-flex items-center gap-2 rounded-lg bg-emerald-400/10 px-2.5 py-1 text-xs font-semibold text-emerald-200">
-                  <span class="home-status-pulse h-1.5 w-1.5 rounded-full bg-emerald-400"></span>
+                <div class="mb-2 inline-flex items-center gap-2 rounded-lg bg-primary-400/10 px-2.5 py-1 text-xs font-semibold text-primary-100">
+                  <span class="home-status-pulse h-1.5 w-1.5 rounded-full bg-cyan-300"></span>
                   {{ t('home.hero.statusBadge') }}
                 </div>
                 <h2 id="routing-panel-title" class="text-lg font-semibold">
@@ -156,7 +156,7 @@
                   {{ t('home.hero.panelSubtitle') }}
                 </p>
               </div>
-              <Icon name="server" size="lg" class="shrink-0 text-emerald-300" />
+              <Icon name="server" size="lg" class="shrink-0 text-cyan-300" />
             </div>
 
             <div class="grid gap-3 py-4 sm:grid-cols-2">
@@ -259,7 +259,7 @@
         <section id="integration" class="bg-gray-950 text-white dark:bg-black">
           <div class="mx-auto grid max-w-7xl gap-8 px-4 py-16 sm:px-6 lg:grid-cols-[0.95fr,1.05fr] lg:px-8 lg:py-24">
             <div class="min-w-0">
-              <p class="home-section-reveal home-section-reveal-1 text-sm font-semibold text-emerald-300">{{ t('home.integration.eyebrow') }}</p>
+              <p class="home-section-reveal home-section-reveal-1 text-sm font-semibold text-cyan-300">{{ t('home.integration.eyebrow') }}</p>
               <h2 class="home-section-reveal home-section-reveal-2 mt-3 text-3xl font-semibold sm:text-4xl">{{ t('home.integration.title') }}</h2>
               <p class="home-section-reveal home-section-reveal-3 mt-4 text-base leading-8 text-slate-300">{{ t('home.integration.subtitle') }}</p>
               <div class="mt-8 grid gap-3">
@@ -269,7 +269,7 @@
                   class="home-motion-card home-scroll-reveal flex items-center gap-3 rounded-lg border border-white/10 bg-white/[0.04] px-4 py-3 text-sm font-semibold text-slate-100"
                   :style="{ '--motion-index': index }"
                 >
-                  <Icon name="check" size="sm" class="text-emerald-300" />
+                  <Icon name="check" size="sm" class="text-cyan-300" />
                   <span>{{ point }}</span>
                 </div>
               </div>
@@ -328,7 +328,7 @@ const completion = await client.chat.completions.create({
 
         <section class="mx-auto max-w-7xl px-4 pb-16 sm:px-6 lg:px-8 lg:pb-24">
           <div
-            class="home-cta-panel home-scroll-reveal rounded-lg border border-gray-200 bg-gray-950 px-5 py-8 text-center text-white shadow-xl shadow-gray-950/10 dark:border-dark-700 sm:px-8 lg:px-12"
+            class="home-cta-panel home-scroll-reveal rounded-lg border border-gray-200 bg-slate-950 px-5 py-8 text-center text-white shadow-xl shadow-gray-950/10 dark:border-primary-500/20 sm:px-8 lg:px-12"
           >
             <h2 class="home-section-reveal home-section-reveal-1 text-2xl font-semibold sm:text-3xl">{{ t('home.cta.title') }}</h2>
             <p class="home-section-reveal home-section-reveal-2 mx-auto mt-3 max-w-2xl text-sm leading-7 text-slate-300">
@@ -429,7 +429,7 @@ const trustItems = computed(() => [
     title: t('home.trust.routing.title'),
     desc: t('home.trust.routing.desc'),
     icon: 'swap' as const,
-    iconClass: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-200',
+    iconClass: 'bg-primary-50 text-primary-700 dark:bg-primary-500/10 dark:text-primary-200',
   },
   {
     title: t('home.trust.billing.title'),
@@ -462,7 +462,7 @@ const capabilityItems = computed(() => [
     title: t('home.capabilities.monitoring.title'),
     desc: t('home.capabilities.monitoring.desc'),
     icon: 'chart' as const,
-    iconClass: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-200',
+    iconClass: 'bg-cyan-50 text-cyan-700 dark:bg-cyan-500/10 dark:text-cyan-200',
   },
   {
     title: t('home.capabilities.wallet.title'),
@@ -515,7 +515,7 @@ const requestRows = computed(() => [
   {
     label: t('home.hero.routeLabel'),
     value: 'gpt-4.1-mini -> openai-compatible-03',
-    valueClass: 'text-emerald-200',
+    valueClass: 'text-cyan-200',
   },
   {
     label: t('home.hero.billingLabel'),
@@ -650,8 +650,9 @@ onMounted(() => {
   z-index: -1;
   content: '';
   background:
-    radial-gradient(circle at 12% 20%, rgba(34, 211, 238, 0.18), transparent 28%),
-    radial-gradient(circle at 88% 0%, rgba(16, 185, 129, 0.18), transparent 26%);
+    radial-gradient(circle at 12% 20%, rgba(59, 130, 246, 0.24), transparent 30%),
+    radial-gradient(circle at 88% 0%, rgba(139, 92, 246, 0.2), transparent 28%),
+    radial-gradient(circle at 55% 92%, rgba(6, 182, 212, 0.14), transparent 30%);
   opacity: 0.9;
 }
 
@@ -750,8 +751,9 @@ onMounted(() => {
   inset: 0;
   content: '';
   background:
-    linear-gradient(135deg, rgba(20, 184, 166, 0.22), transparent 32%),
-    linear-gradient(315deg, rgba(59, 130, 246, 0.2), transparent 36%);
+    linear-gradient(135deg, rgba(59, 130, 246, 0.24), transparent 32%),
+    linear-gradient(315deg, rgba(139, 92, 246, 0.2), transparent 36%),
+    radial-gradient(circle at 50% 0%, rgba(6, 182, 212, 0.16), transparent 42%);
   opacity: 0.75;
 }
 
