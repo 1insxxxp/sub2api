@@ -143,6 +143,14 @@ describe('HomeView default homepage', () => {
     expect(source).toContain('calc(90ms + (var(--motion-index) * 68ms))')
   })
 
+  it('keeps the final CTA panel crisp while it scrolls into view', () => {
+    const source = readFileSync('src/views/HomeView.vue', 'utf-8')
+
+    expect(source).toContain('.home-cta-panel.home-scroll-reveal')
+    expect(source).toContain('animation-name: home-panel-rise')
+    expect(source).toContain('@keyframes home-panel-rise')
+  })
+
   it('keeps configured custom home content as a full-page override', async () => {
     appStoreState.cachedPublicSettings = {
       site_name: 'PassionAPI',

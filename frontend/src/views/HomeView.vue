@@ -735,6 +735,7 @@ onMounted(() => {
 }
 
 .home-cta-panel.home-scroll-reveal {
+  animation-name: home-panel-rise;
   animation-duration: 980ms;
   animation-range: entry 5% cover 42%;
 }
@@ -782,6 +783,18 @@ onMounted(() => {
   to {
     opacity: 1;
     filter: blur(0);
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes home-panel-rise {
+  from {
+    opacity: 0;
+    transform: translateY(var(--motion-distance)) scale(var(--motion-scale));
+  }
+
+  to {
+    opacity: 1;
     transform: translateY(0) scale(1);
   }
 }
