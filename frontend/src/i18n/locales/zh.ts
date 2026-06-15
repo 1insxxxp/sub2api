@@ -10,6 +10,109 @@ export default {
     login: '登录',
     getStarted: '立即开始',
     goToDashboard: '进入控制台',
+    nav: {
+      features: '产品能力',
+      integration: '接入方式',
+      workflow: '使用流程'
+    },
+    hero: {
+      eyebrow: '面向生产团队的 AI API 网关',
+      title: '稳定接入多模型 API 的统一网关',
+      subtitle:
+        '用 OpenAI 兼容格式统一接入多家模型服务，内置多渠道调度、钱包计费、状态监控和风控能力。',
+      primaryCta: '开始使用',
+      dashboardCta: '进入控制台',
+      secondaryCta: '查看文档',
+      statusBadge: '网关运行中',
+      panelTitle: '实时路由控制台',
+      panelSubtitle: '一次请求，自动路由到当前更健康的可用渠道。',
+      routeLabel: '路由',
+      billingLabel: '钱包计费',
+      latencyLabel: '延迟',
+      successLabel: '成功率',
+      channels: {
+        openai: 'OpenAI 兼容',
+        gemini: 'Gemini 池',
+        anthropic: 'Claude 池',
+        grok: 'Grok 路由'
+      }
+    },
+    trust: {
+      multiModel: {
+        title: '多模型接入',
+        desc: '一个网关统一接入主流模型服务。'
+      },
+      routing: {
+        title: '智能渠道调度',
+        desc: '自动在健康渠道之间分配请求。'
+      },
+      billing: {
+        title: '实时余额计费',
+        desc: '请求处理时同步记录余额和成本。'
+      },
+      monitoring: {
+        title: '监控与风控',
+        desc: '观察渠道健康，降低异常使用风险。'
+      }
+    },
+    sections: {
+      capabilitiesEyebrow: '网关运营能力',
+      capabilitiesTitle: '运营 API 网关所需的核心能力',
+      capabilitiesSubtitle:
+        '从用户密钥到账号池，从请求监控到钱包计费，把流量、成本和运营集中到一个控制台。'
+    },
+    capabilities: {
+      unifiedApi: {
+        title: '统一 API 接入',
+        desc: '保留 OpenAI 兼容客户端，只需切换一个 Base URL。'
+      },
+      accountPool: {
+        title: '账号池管理',
+        desc: '统一组织上游账号，并支持请求分配和故障切换。'
+      },
+      monitoring: {
+        title: '渠道健康监控',
+        desc: '在影响用户前查看可用性、延迟和失败情况。'
+      },
+      wallet: {
+        title: '钱包余额计费',
+        desc: '按余额扣费，记录使用明细，让成本清晰可见。'
+      },
+      keys: {
+        title: '用户与 API Key',
+        desc: '发放密钥、控制访问，并按账号拆分用量。'
+      },
+      risk: {
+        title: '风控中心',
+        desc: '为异常流量、滥用行为和高风险调用增加保护。'
+      }
+    },
+    integration: {
+      eyebrow: '开发者接入',
+      title: '按 OpenAI 兼容格式设计',
+      subtitle:
+        '保留现有 SDK 和请求格式，替换网关地址，带上平台 API Key，即可在控制台观察用量和成本。',
+      replaceBaseUrl: '替换 Base URL',
+      useApiKey: '使用平台 API Key',
+      monitorCost: '监控请求和成本'
+    },
+    workflow: {
+      eyebrow: '快速开始',
+      title: '三步开始接入',
+      subtitle: '适合希望快速迁移流量、又不想重写客户端的团队。',
+      step1: {
+        title: '创建账号',
+        desc: '注册或登录后进入控制台。'
+      },
+      step2: {
+        title: '准备访问权限',
+        desc: '创建 API Key，并确认钱包余额可用。'
+      },
+      step3: {
+        title: '切换请求入口',
+        desc: '替换 Base URL，让请求通过统一网关转发。'
+      }
+    },
     // 新增：面向用户的价值主张
     heroSubtitle: '一个密钥，畅用多个 AI 模型',
     heroDescription: '无需管理多个订阅账号，一站式接入 Claude、GPT、Gemini 等主流 AI 服务',
@@ -102,10 +205,12 @@ export default {
     // CTA 区块
     cta: {
       title: '准备好开始了吗？',
+      subtitle: '准备好承载生产流量了吗？',
       description: '注册即可获得免费试用额度，体验一站式 AI 服务',
       button: '免费注册'
     },
     footer: {
+      tagline: '为团队和开发者打造的稳定 AI API 网关。',
       allRightsReserved: '保留所有权利。'
     }
   },

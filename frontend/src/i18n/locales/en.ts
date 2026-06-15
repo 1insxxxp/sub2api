@@ -10,6 +10,109 @@ export default {
     login: 'Login',
     getStarted: 'Get Started',
     goToDashboard: 'Go to Dashboard',
+    nav: {
+      features: 'Features',
+      integration: 'Integration',
+      workflow: 'Workflow'
+    },
+    hero: {
+      eyebrow: 'AI API gateway for production teams',
+      title: 'A unified gateway for reliable multi-model API access',
+      subtitle:
+        'Route OpenAI-compatible requests across multiple providers with wallet billing, monitoring, and risk controls built in.',
+      primaryCta: 'Start using',
+      dashboardCta: 'Enter dashboard',
+      secondaryCta: 'Read docs',
+      statusBadge: 'Gateway online',
+      panelTitle: 'Live routing console',
+      panelSubtitle: 'One request, routed through the healthiest available channel.',
+      routeLabel: 'Route',
+      billingLabel: 'Wallet billing',
+      latencyLabel: 'Latency',
+      successLabel: 'Success',
+      channels: {
+        openai: 'OpenAI-compatible',
+        gemini: 'Gemini pool',
+        anthropic: 'Claude pool',
+        grok: 'Grok route'
+      }
+    },
+    trust: {
+      multiModel: {
+        title: 'Multi-model access',
+        desc: 'Use one gateway for mainstream model providers.'
+      },
+      routing: {
+        title: 'Smart routing',
+        desc: 'Automatically balance traffic across healthy channels.'
+      },
+      billing: {
+        title: 'Real-time billing',
+        desc: 'Track balance and cost as requests are processed.'
+      },
+      monitoring: {
+        title: 'Monitoring and risk control',
+        desc: 'Watch channel health and reduce abnormal usage.'
+      }
+    },
+    sections: {
+      capabilitiesEyebrow: 'Gateway operations',
+      capabilitiesTitle: 'Everything needed to operate an API gateway',
+      capabilitiesSubtitle:
+        'From user keys to account pools, the platform keeps traffic, billing, and operations in one place.'
+    },
+    capabilities: {
+      unifiedApi: {
+        title: 'Unified API access',
+        desc: 'Keep OpenAI-compatible clients and connect through a single Base URL.'
+      },
+      accountPool: {
+        title: 'Account pool management',
+        desc: 'Organize upstream accounts and distribute traffic with failover.'
+      },
+      monitoring: {
+        title: 'Channel health monitoring',
+        desc: 'See availability, latency, and failures before they affect users.'
+      },
+      wallet: {
+        title: 'Wallet billing',
+        desc: 'Charge by balance, record usage, and keep spending visible.'
+      },
+      keys: {
+        title: 'Users and API keys',
+        desc: 'Issue keys, control access, and separate usage by account.'
+      },
+      risk: {
+        title: 'Risk control center',
+        desc: 'Add guardrails for abnormal traffic, abuse, and unsafe usage.'
+      }
+    },
+    integration: {
+      eyebrow: 'Developer integration',
+      title: 'OpenAI-compatible by design',
+      subtitle:
+        'Keep your SDK and request format. Change the gateway address, attach your platform key, and monitor usage from the console.',
+      replaceBaseUrl: 'Replace Base URL',
+      useApiKey: 'Use your platform API key',
+      monitorCost: 'Monitor requests and cost'
+    },
+    workflow: {
+      eyebrow: 'Quick start',
+      title: 'Launch in three steps',
+      subtitle: 'A simple flow for teams that want to start routing traffic without rebuilding clients.',
+      step1: {
+        title: 'Create an account',
+        desc: 'Register or log in and enter the console.'
+      },
+      step2: {
+        title: 'Prepare access',
+        desc: 'Create an API key and make sure wallet balance is ready.'
+      },
+      step3: {
+        title: 'Switch the endpoint',
+        desc: 'Replace the Base URL and send requests through the gateway.'
+      }
+    },
     // User-focused value proposition
     heroSubtitle: 'One Key, All AI Models',
     heroDescription: 'No need to manage multiple subscriptions. Access Claude, GPT, Gemini and more with a single API key',
@@ -102,10 +205,12 @@ export default {
     // CTA section
     cta: {
       title: 'Ready to Get Started?',
+      subtitle: 'Ready to route production traffic?',
       description: 'Sign up now and get free trial credits to experience seamless AI access',
       button: 'Sign Up Free'
     },
     footer: {
+      tagline: 'Reliable AI API gateway for teams and developers.',
       allRightsReserved: 'All rights reserved.'
     }
   },
