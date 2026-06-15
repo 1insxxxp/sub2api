@@ -405,6 +405,30 @@ func (f UserAttributeValueFunc) Mutate(ctx context.Context, m ent.Mutation) (ent
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.UserAttributeValueMutation", m)
 }
 
+// The UserCheckinFunc type is an adapter to allow the use of ordinary
+// function as UserCheckin mutator.
+type UserCheckinFunc func(context.Context, *ent.UserCheckinMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f UserCheckinFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.UserCheckinMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.UserCheckinMutation", m)
+}
+
+// The UserCheckinBlacklistFunc type is an adapter to allow the use of ordinary
+// function as UserCheckinBlacklist mutator.
+type UserCheckinBlacklistFunc func(context.Context, *ent.UserCheckinBlacklistMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f UserCheckinBlacklistFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.UserCheckinBlacklistMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.UserCheckinBlacklistMutation", m)
+}
+
 // The UserPlatformQuotaFunc type is an adapter to allow the use of ordinary
 // function as UserPlatformQuota mutator.
 type UserPlatformQuotaFunc func(context.Context, *ent.UserPlatformQuotaMutation) (ent.Value, error)

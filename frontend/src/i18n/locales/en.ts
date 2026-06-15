@@ -398,6 +398,7 @@ export default {
     redeemCodes: 'Redeem Codes',
     ops: 'Ops',
     promoCodes: 'Promo Codes',
+    checkins: 'Check-ins',
     settings: 'Settings',
     myAccount: 'My Account',
     lightMode: 'Light Mode',
@@ -1154,6 +1155,14 @@ export default {
     }
   },
 
+  checkin: {
+    action: 'Check in',
+    checked: 'Checked',
+    loading: 'Working...',
+    success: 'Checked in successfully, earned ${amount}',
+    failed: 'Check-in failed'
+  },
+
   // Redeem
   redeem: {
     title: 'Redeem Code',
@@ -1427,6 +1436,44 @@ export default {
 
   // Admin
   admin: {
+    checkins: {
+      title: 'Check-in Management',
+      description: 'Review daily check-in rewards, records, and blacklist',
+      todayCount: 'Today',
+      sevenDayCount: '7 Days',
+      thirtyDayCount: '30 Days',
+      activeBlacklist: 'Active Blacklist',
+      recordsSearchPlaceholder: 'Search email or username',
+      blacklistSearchPlaceholder: 'Search blacklist users',
+      addBlacklist: 'Add Blacklist Entry',
+      searchUser: 'Search User',
+      userSearchPlaceholder: 'Email or username',
+      userSearchRequired: 'Enter an email or username',
+      selectUserRequired: 'Select a user first',
+      reason: 'Note',
+      reasonPlaceholder: 'Optional restriction note',
+      addToBlacklist: 'Add to Blacklist',
+      removeBlacklist: 'Remove',
+      blacklistAdded: 'Added to check-in blacklist',
+      blacklistRemoved: 'Removed from check-in blacklist',
+      failedToLoadStats: 'Failed to load check-in stats',
+      failedToLoadRecords: 'Failed to load check-in records',
+      failedToLoadBlacklist: 'Failed to load blacklist',
+      failedToSearchUsers: 'Failed to search users',
+      failedToAddBlacklist: 'Failed to add blacklist entry',
+      failedToRemoveBlacklist: 'Failed to remove blacklist entry',
+      userId: 'User #{id}',
+      columns: {
+        user: 'User',
+        checkinDate: 'Date',
+        reward: 'Reward',
+        balanceBefore: 'Balance Before',
+        balanceAfter: 'Balance After',
+        reason: 'Note',
+        createdAt: 'Created At',
+        actions: 'Actions'
+      }
+    },
     // Dashboard
     dashboard: {
       title: 'Admin Dashboard',

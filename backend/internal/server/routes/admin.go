@@ -103,6 +103,20 @@ func RegisterAdminRoutes(
 
 		// 邀请返利（专属用户管理）
 		registerAffiliateRoutes(admin, h)
+
+		// Daily check-in management
+		registerCheckinRoutes(admin, h)
+	}
+}
+
+func registerCheckinRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
+	checkins := admin.Group("/checkins")
+	{
+		checkins.GET("/stats", h.Admin.Checkin.GetStats)
+		checkins.GET("/records", h.Admin.Checkin.ListRecords)
+		checkins.GET("/blacklist", h.Admin.Checkin.ListBlacklist)
+		checkins.POST("/blacklist", h.Admin.Checkin.AddBlacklist)
+		checkins.DELETE("/blacklist/:user_id", h.Admin.Checkin.RemoveBlacklist)
 	}
 }
 

@@ -538,6 +538,18 @@ const routes: RouteRecordRaw[] = [
     }
   },
   {
+    path: '/admin/checkins',
+    name: 'AdminCheckins',
+    component: () => import('@/views/admin/CheckinsView.vue'),
+    meta: {
+      requiresAuth: true,
+      requiresAdmin: true,
+      title: 'Check-in Management',
+      titleKey: 'admin.checkins.title',
+      descriptionKey: 'admin.checkins.description'
+    }
+  },
+  {
     path: '/admin/settings',
     name: 'AdminSettings',
     component: () => import('@/views/admin/SettingsView.vue'),

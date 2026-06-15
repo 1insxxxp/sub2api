@@ -26,6 +26,8 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/user"
 	"github.com/Wei-Shaw/sub2api/ent/userallowedgroup"
 	"github.com/Wei-Shaw/sub2api/ent/userattributevalue"
+	"github.com/Wei-Shaw/sub2api/ent/usercheckin"
+	"github.com/Wei-Shaw/sub2api/ent/usercheckinblacklist"
 	"github.com/Wei-Shaw/sub2api/ent/userplatformquota"
 	"github.com/Wei-Shaw/sub2api/ent/usersubscription"
 )
@@ -33,25 +35,27 @@ import (
 // UserQuery is the builder for querying User entities.
 type UserQuery struct {
 	config
-	ctx                       *QueryContext
-	order                     []user.OrderOption
-	inters                    []Interceptor
-	predicates                []predicate.User
-	withAPIKeys               *APIKeyQuery
-	withRedeemCodes           *RedeemCodeQuery
-	withSubscriptions         *UserSubscriptionQuery
-	withAssignedSubscriptions *UserSubscriptionQuery
-	withAnnouncementReads     *AnnouncementReadQuery
-	withAllowedGroups         *GroupQuery
-	withUsageLogs             *UsageLogQuery
-	withAttributeValues       *UserAttributeValueQuery
-	withPromoCodeUsages       *PromoCodeUsageQuery
-	withPaymentOrders         *PaymentOrderQuery
-	withAuthIdentities        *AuthIdentityQuery
-	withPendingAuthSessions   *PendingAuthSessionQuery
-	withPlatformQuotas        *UserPlatformQuotaQuery
-	withUserAllowedGroups     *UserAllowedGroupQuery
-	modifiers                 []func(*sql.Selector)
+	ctx                         *QueryContext
+	order                       []user.OrderOption
+	inters                      []Interceptor
+	predicates                  []predicate.User
+	withAPIKeys                 *APIKeyQuery
+	withRedeemCodes             *RedeemCodeQuery
+	withSubscriptions           *UserSubscriptionQuery
+	withAssignedSubscriptions   *UserSubscriptionQuery
+	withAnnouncementReads       *AnnouncementReadQuery
+	withAllowedGroups           *GroupQuery
+	withUsageLogs               *UsageLogQuery
+	withAttributeValues         *UserAttributeValueQuery
+	withPromoCodeUsages         *PromoCodeUsageQuery
+	withPaymentOrders           *PaymentOrderQuery
+	withAuthIdentities          *AuthIdentityQuery
+	withPendingAuthSessions     *PendingAuthSessionQuery
+	withPlatformQuotas          *UserPlatformQuotaQuery
+	withCheckins                *UserCheckinQuery
+	withCheckinBlacklistEntries *UserCheckinBlacklistQuery
+	withUserAllowedGroups       *UserAllowedGroupQuery
+	modifiers                   []func(*sql.Selector)
 	// intermediate query (i.e. traversal path).
 	sql  *sql.Selector
 	path func(context.Context) (*sql.Selector, error)
@@ -374,6 +378,50 @@ func (_q *UserQuery) QueryPlatformQuotas() *UserPlatformQuotaQuery {
 	return query
 }
 
+// QueryCheckins chains the current query on the "checkins" edge.
+func (_q *UserQuery) QueryCheckins() *UserCheckinQuery {
+	query := (&UserCheckinClient{config: _q.config}).Query()
+	query.path = func(ctx context.Context) (fromU *sql.Selector, err error) {
+		if err := _q.prepareQuery(ctx); err != nil {
+			return nil, err
+		}
+		selector := _q.sqlQuery(ctx)
+		if err := selector.Err(); err != nil {
+			return nil, err
+		}
+		step := sqlgraph.NewStep(
+			sqlgraph.From(user.Table, user.FieldID, selector),
+			sqlgraph.To(usercheckin.Table, usercheckin.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, user.CheckinsTable, user.CheckinsColumn),
+		)
+		fromU = sqlgraph.SetNeighbors(_q.driver.Dialect(), step)
+		return fromU, nil
+	}
+	return query
+}
+
+// QueryCheckinBlacklistEntries chains the current query on the "checkin_blacklist_entries" edge.
+func (_q *UserQuery) QueryCheckinBlacklistEntries() *UserCheckinBlacklistQuery {
+	query := (&UserCheckinBlacklistClient{config: _q.config}).Query()
+	query.path = func(ctx context.Context) (fromU *sql.Selector, err error) {
+		if err := _q.prepareQuery(ctx); err != nil {
+			return nil, err
+		}
+		selector := _q.sqlQuery(ctx)
+		if err := selector.Err(); err != nil {
+			return nil, err
+		}
+		step := sqlgraph.NewStep(
+			sqlgraph.From(user.Table, user.FieldID, selector),
+			sqlgraph.To(usercheckinblacklist.Table, usercheckinblacklist.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, user.CheckinBlacklistEntriesTable, user.CheckinBlacklistEntriesColumn),
+		)
+		fromU = sqlgraph.SetNeighbors(_q.driver.Dialect(), step)
+		return fromU, nil
+	}
+	return query
+}
+
 // QueryUserAllowedGroups chains the current query on the "user_allowed_groups" edge.
 func (_q *UserQuery) QueryUserAllowedGroups() *UserAllowedGroupQuery {
 	query := (&UserAllowedGroupClient{config: _q.config}).Query()
@@ -583,25 +631,27 @@ func (_q *UserQuery) Clone() *UserQuery {
 		return nil
 	}
 	return &UserQuery{
-		config:                    _q.config,
-		ctx:                       _q.ctx.Clone(),
-		order:                     append([]user.OrderOption{}, _q.order...),
-		inters:                    append([]Interceptor{}, _q.inters...),
-		predicates:                append([]predicate.User{}, _q.predicates...),
-		withAPIKeys:               _q.withAPIKeys.Clone(),
-		withRedeemCodes:           _q.withRedeemCodes.Clone(),
-		withSubscriptions:         _q.withSubscriptions.Clone(),
-		withAssignedSubscriptions: _q.withAssignedSubscriptions.Clone(),
-		withAnnouncementReads:     _q.withAnnouncementReads.Clone(),
-		withAllowedGroups:         _q.withAllowedGroups.Clone(),
-		withUsageLogs:             _q.withUsageLogs.Clone(),
-		withAttributeValues:       _q.withAttributeValues.Clone(),
-		withPromoCodeUsages:       _q.withPromoCodeUsages.Clone(),
-		withPaymentOrders:         _q.withPaymentOrders.Clone(),
-		withAuthIdentities:        _q.withAuthIdentities.Clone(),
-		withPendingAuthSessions:   _q.withPendingAuthSessions.Clone(),
-		withPlatformQuotas:        _q.withPlatformQuotas.Clone(),
-		withUserAllowedGroups:     _q.withUserAllowedGroups.Clone(),
+		config:                      _q.config,
+		ctx:                         _q.ctx.Clone(),
+		order:                       append([]user.OrderOption{}, _q.order...),
+		inters:                      append([]Interceptor{}, _q.inters...),
+		predicates:                  append([]predicate.User{}, _q.predicates...),
+		withAPIKeys:                 _q.withAPIKeys.Clone(),
+		withRedeemCodes:             _q.withRedeemCodes.Clone(),
+		withSubscriptions:           _q.withSubscriptions.Clone(),
+		withAssignedSubscriptions:   _q.withAssignedSubscriptions.Clone(),
+		withAnnouncementReads:       _q.withAnnouncementReads.Clone(),
+		withAllowedGroups:           _q.withAllowedGroups.Clone(),
+		withUsageLogs:               _q.withUsageLogs.Clone(),
+		withAttributeValues:         _q.withAttributeValues.Clone(),
+		withPromoCodeUsages:         _q.withPromoCodeUsages.Clone(),
+		withPaymentOrders:           _q.withPaymentOrders.Clone(),
+		withAuthIdentities:          _q.withAuthIdentities.Clone(),
+		withPendingAuthSessions:     _q.withPendingAuthSessions.Clone(),
+		withPlatformQuotas:          _q.withPlatformQuotas.Clone(),
+		withCheckins:                _q.withCheckins.Clone(),
+		withCheckinBlacklistEntries: _q.withCheckinBlacklistEntries.Clone(),
+		withUserAllowedGroups:       _q.withUserAllowedGroups.Clone(),
 		// clone intermediate query.
 		sql:  _q.sql.Clone(),
 		path: _q.path,
@@ -751,6 +801,28 @@ func (_q *UserQuery) WithPlatformQuotas(opts ...func(*UserPlatformQuotaQuery)) *
 	return _q
 }
 
+// WithCheckins tells the query-builder to eager-load the nodes that are connected to
+// the "checkins" edge. The optional arguments are used to configure the query builder of the edge.
+func (_q *UserQuery) WithCheckins(opts ...func(*UserCheckinQuery)) *UserQuery {
+	query := (&UserCheckinClient{config: _q.config}).Query()
+	for _, opt := range opts {
+		opt(query)
+	}
+	_q.withCheckins = query
+	return _q
+}
+
+// WithCheckinBlacklistEntries tells the query-builder to eager-load the nodes that are connected to
+// the "checkin_blacklist_entries" edge. The optional arguments are used to configure the query builder of the edge.
+func (_q *UserQuery) WithCheckinBlacklistEntries(opts ...func(*UserCheckinBlacklistQuery)) *UserQuery {
+	query := (&UserCheckinBlacklistClient{config: _q.config}).Query()
+	for _, opt := range opts {
+		opt(query)
+	}
+	_q.withCheckinBlacklistEntries = query
+	return _q
+}
+
 // WithUserAllowedGroups tells the query-builder to eager-load the nodes that are connected to
 // the "user_allowed_groups" edge. The optional arguments are used to configure the query builder of the edge.
 func (_q *UserQuery) WithUserAllowedGroups(opts ...func(*UserAllowedGroupQuery)) *UserQuery {
@@ -840,7 +912,7 @@ func (_q *UserQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*User, e
 	var (
 		nodes       = []*User{}
 		_spec       = _q.querySpec()
-		loadedTypes = [14]bool{
+		loadedTypes = [16]bool{
 			_q.withAPIKeys != nil,
 			_q.withRedeemCodes != nil,
 			_q.withSubscriptions != nil,
@@ -854,6 +926,8 @@ func (_q *UserQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*User, e
 			_q.withAuthIdentities != nil,
 			_q.withPendingAuthSessions != nil,
 			_q.withPlatformQuotas != nil,
+			_q.withCheckins != nil,
+			_q.withCheckinBlacklistEntries != nil,
 			_q.withUserAllowedGroups != nil,
 		}
 	)
@@ -970,6 +1044,22 @@ func (_q *UserQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*User, e
 		if err := _q.loadPlatformQuotas(ctx, query, nodes,
 			func(n *User) { n.Edges.PlatformQuotas = []*UserPlatformQuota{} },
 			func(n *User, e *UserPlatformQuota) { n.Edges.PlatformQuotas = append(n.Edges.PlatformQuotas, e) }); err != nil {
+			return nil, err
+		}
+	}
+	if query := _q.withCheckins; query != nil {
+		if err := _q.loadCheckins(ctx, query, nodes,
+			func(n *User) { n.Edges.Checkins = []*UserCheckin{} },
+			func(n *User, e *UserCheckin) { n.Edges.Checkins = append(n.Edges.Checkins, e) }); err != nil {
+			return nil, err
+		}
+	}
+	if query := _q.withCheckinBlacklistEntries; query != nil {
+		if err := _q.loadCheckinBlacklistEntries(ctx, query, nodes,
+			func(n *User) { n.Edges.CheckinBlacklistEntries = []*UserCheckinBlacklist{} },
+			func(n *User, e *UserCheckinBlacklist) {
+				n.Edges.CheckinBlacklistEntries = append(n.Edges.CheckinBlacklistEntries, e)
+			}); err != nil {
 			return nil, err
 		}
 	}
@@ -1398,6 +1488,66 @@ func (_q *UserQuery) loadPlatformQuotas(ctx context.Context, query *UserPlatform
 	}
 	query.Where(predicate.UserPlatformQuota(func(s *sql.Selector) {
 		s.Where(sql.InValues(s.C(user.PlatformQuotasColumn), fks...))
+	}))
+	neighbors, err := query.All(ctx)
+	if err != nil {
+		return err
+	}
+	for _, n := range neighbors {
+		fk := n.UserID
+		node, ok := nodeids[fk]
+		if !ok {
+			return fmt.Errorf(`unexpected referenced foreign-key "user_id" returned %v for node %v`, fk, n.ID)
+		}
+		assign(node, n)
+	}
+	return nil
+}
+func (_q *UserQuery) loadCheckins(ctx context.Context, query *UserCheckinQuery, nodes []*User, init func(*User), assign func(*User, *UserCheckin)) error {
+	fks := make([]driver.Value, 0, len(nodes))
+	nodeids := make(map[int64]*User)
+	for i := range nodes {
+		fks = append(fks, nodes[i].ID)
+		nodeids[nodes[i].ID] = nodes[i]
+		if init != nil {
+			init(nodes[i])
+		}
+	}
+	if len(query.ctx.Fields) > 0 {
+		query.ctx.AppendFieldOnce(usercheckin.FieldUserID)
+	}
+	query.Where(predicate.UserCheckin(func(s *sql.Selector) {
+		s.Where(sql.InValues(s.C(user.CheckinsColumn), fks...))
+	}))
+	neighbors, err := query.All(ctx)
+	if err != nil {
+		return err
+	}
+	for _, n := range neighbors {
+		fk := n.UserID
+		node, ok := nodeids[fk]
+		if !ok {
+			return fmt.Errorf(`unexpected referenced foreign-key "user_id" returned %v for node %v`, fk, n.ID)
+		}
+		assign(node, n)
+	}
+	return nil
+}
+func (_q *UserQuery) loadCheckinBlacklistEntries(ctx context.Context, query *UserCheckinBlacklistQuery, nodes []*User, init func(*User), assign func(*User, *UserCheckinBlacklist)) error {
+	fks := make([]driver.Value, 0, len(nodes))
+	nodeids := make(map[int64]*User)
+	for i := range nodes {
+		fks = append(fks, nodes[i].ID)
+		nodeids[nodes[i].ID] = nodes[i]
+		if init != nil {
+			init(nodes[i])
+		}
+	}
+	if len(query.ctx.Fields) > 0 {
+		query.ctx.AppendFieldOnce(usercheckinblacklist.FieldUserID)
+	}
+	query.Where(predicate.UserCheckinBlacklist(func(s *sql.Selector) {
+		s.Where(sql.InValues(s.C(user.CheckinBlacklistEntriesColumn), fks...))
 	}))
 	neighbors, err := query.All(ctx)
 	if err != nil {

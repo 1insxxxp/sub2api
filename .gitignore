@@ -135,6 +135,9 @@ docs/*
 !docs/legal/*.md
 .serena/
 .codex/
+.codex-card-migration/
+.codex-passionapi-root/
+tmp-vendor-misc.js
 frontend/coverage/
 aicodex
 output/

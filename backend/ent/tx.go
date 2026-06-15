@@ -80,6 +80,10 @@ type Tx struct {
 	UserAttributeDefinition *UserAttributeDefinitionClient
 	// UserAttributeValue is the client for interacting with the UserAttributeValue builders.
 	UserAttributeValue *UserAttributeValueClient
+	// UserCheckin is the client for interacting with the UserCheckin builders.
+	UserCheckin *UserCheckinClient
+	// UserCheckinBlacklist is the client for interacting with the UserCheckinBlacklist builders.
+	UserCheckinBlacklist *UserCheckinBlacklistClient
 	// UserPlatformQuota is the client for interacting with the UserPlatformQuota builders.
 	UserPlatformQuota *UserPlatformQuotaClient
 	// UserSubscription is the client for interacting with the UserSubscription builders.
@@ -248,6 +252,8 @@ func (tx *Tx) init() {
 	tx.UserAllowedGroup = NewUserAllowedGroupClient(tx.config)
 	tx.UserAttributeDefinition = NewUserAttributeDefinitionClient(tx.config)
 	tx.UserAttributeValue = NewUserAttributeValueClient(tx.config)
+	tx.UserCheckin = NewUserCheckinClient(tx.config)
+	tx.UserCheckinBlacklist = NewUserCheckinBlacklistClient(tx.config)
 	tx.UserPlatformQuota = NewUserPlatformQuotaClient(tx.config)
 	tx.UserSubscription = NewUserSubscriptionClient(tx.config)
 }

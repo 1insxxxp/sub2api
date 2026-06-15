@@ -398,6 +398,7 @@ export default {
     redeemCodes: '兑换码',
     ops: '运维监控',
     promoCodes: '优惠码',
+    checkins: '签到管理',
     settings: '系统设置',
     myAccount: '我的账户',
     lightMode: '浅色模式',
@@ -1158,6 +1159,14 @@ export default {
     }
   },
 
+  checkin: {
+    action: '签到',
+    checked: '已签到',
+    loading: '处理中...',
+    success: '签到成功，获得 ${amount}',
+    failed: '签到失败'
+  },
+
   // Redeem
   redeem: {
     title: '兑换码',
@@ -1431,6 +1440,44 @@ export default {
 
   // Admin
   admin: {
+    checkins: {
+      title: '签到管理',
+      description: '查看每日签到奖励、签到记录和黑名单',
+      todayCount: '今日签到',
+      sevenDayCount: '7 天签到',
+      thirtyDayCount: '30 天签到',
+      activeBlacklist: '有效黑名单',
+      recordsSearchPlaceholder: '搜索邮箱或用户名',
+      blacklistSearchPlaceholder: '搜索黑名单用户',
+      addBlacklist: '添加黑名单',
+      searchUser: '搜索用户',
+      userSearchPlaceholder: '邮箱或用户名',
+      userSearchRequired: '请输入邮箱或用户名',
+      selectUserRequired: '请先选择用户',
+      reason: '备注',
+      reasonPlaceholder: '可填写限制原因',
+      addToBlacklist: '加入黑名单',
+      removeBlacklist: '解除',
+      blacklistAdded: '已加入签到黑名单',
+      blacklistRemoved: '已解除签到黑名单',
+      failedToLoadStats: '加载签到统计失败',
+      failedToLoadRecords: '加载签到记录失败',
+      failedToLoadBlacklist: '加载黑名单失败',
+      failedToSearchUsers: '搜索用户失败',
+      failedToAddBlacklist: '加入黑名单失败',
+      failedToRemoveBlacklist: '解除黑名单失败',
+      userId: '用户 #{id}',
+      columns: {
+        user: '用户',
+        checkinDate: '签到日期',
+        reward: '奖励',
+        balanceBefore: '签到前余额',
+        balanceAfter: '签到后余额',
+        reason: '备注',
+        createdAt: '创建时间',
+        actions: '操作'
+      }
+    },
     // Dashboard
     dashboard: {
       title: '管理控制台',

@@ -67,6 +67,24 @@
           </span>
         </div>
 
+        <!-- Daily Check-in -->
+        <button
+          v-if="showCheckinButton"
+          type="button"
+          data-test="daily-checkin-button"
+          :disabled="checkinButtonDisabled"
+          :title="checkinButtonLabel"
+          class="hidden items-center gap-1.5 rounded-xl border border-amber-200 bg-amber-50 px-3 py-1.5 text-sm font-semibold text-amber-700 transition-colors hover:bg-amber-100 disabled:cursor-not-allowed disabled:border-gray-200 disabled:bg-gray-100 disabled:text-gray-400 dark:border-amber-500/30 dark:bg-amber-900/20 dark:text-amber-200 dark:hover:bg-amber-900/30 dark:disabled:border-dark-700 dark:disabled:bg-dark-800 dark:disabled:text-dark-400 sm:inline-flex"
+          @click="handleCheckin"
+        >
+          <Icon
+            :name="checkinStatus?.checked_in ? 'check' : 'gift'"
+            size="sm"
+            :class="checkinSubmitting ? 'animate-pulse' : ''"
+          />
+          <span>{{ checkinButtonLabel }}</span>
+        </button>
+
         <!-- Available Token Estimate -->
         <div
           v-if="user"
@@ -246,16 +264,18 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useAppStore, useAuthStore, useOnboardingStore } from '@/stores'
 import { useAdminSettingsStore } from '@/stores/adminSettings'
+import { getCheckinStatus, submitCheckin, type CheckinStatus } from '@/api/checkin'
 import LocaleSwitcher from '@/components/common/LocaleSwitcher.vue'
 import SubscriptionProgressMini from '@/components/common/SubscriptionProgressMini.vue'
 import AnnouncementBell from '@/components/common/AnnouncementBell.vue'
 import Icon from '@/components/icons/Icon.vue'
 import { estimateAvailableTokens, formatAvailableTokens } from '@/utils/tokenBalance'
+import { extractApiErrorMessage } from '@/utils/apiError'
 
 const router = useRouter()
 const route = useRoute()
@@ -274,6 +294,29 @@ const avatarUrl = computed(() => user.value?.avatar_url?.trim() || '')
 const availableTokens = computed(() => estimateAvailableTokens(user.value?.balance))
 const availableTokensLabel = computed(() => formatAvailableTokens(availableTokens.value))
 const availableTokensTooltip = computed(() => t('common.availableTokensEstimateHint'))
+const checkinStatus = ref<CheckinStatus | null>(null)
+const checkinLoading = ref(false)
+const checkinSubmitting = ref(false)
+let checkinStatusRequest = 0
+
+const showCheckinButton = computed(() => {
+  return Boolean(
+    user.value &&
+    checkinStatus.value &&
+    checkinStatus.value.enabled &&
+    !checkinStatus.value.blacklisted
+  )
+})
+
+const checkinButtonDisabled = computed(() => {
+  return checkinLoading.value || checkinSubmitting.value || checkinStatus.value?.checked_in === true
+})
+
+const checkinButtonLabel = computed(() => {
+  if (checkinSubmitting.value || checkinLoading.value) return t('checkin.loading')
+  if (checkinStatus.value?.checked_in) return t('checkin.checked')
+  return t('checkin.action')
+})
 
 // 只在标准模式的管理员下显示新手引导按钮
 const showOnboardingButton = computed(() => {
@@ -351,6 +394,53 @@ function handleReplayGuide() {
   onboardingStore.replay()
 }
 
+async function loadCheckinStatus() {
+  if (!user.value) {
+    checkinStatus.value = null
+    return
+  }
+
+  const requestId = ++checkinStatusRequest
+  checkinLoading.value = true
+  try {
+    const status = await getCheckinStatus()
+    if (requestId === checkinStatusRequest) {
+      checkinStatus.value = status
+    }
+  } catch (error) {
+    if (requestId === checkinStatusRequest) {
+      checkinStatus.value = null
+    }
+    console.error('Failed to load check-in status:', error)
+  } finally {
+    if (requestId === checkinStatusRequest) {
+      checkinLoading.value = false
+    }
+  }
+}
+
+async function handleCheckin() {
+  if (!user.value || checkinButtonDisabled.value) return
+
+  checkinSubmitting.value = true
+  try {
+    const result = await submitCheckin()
+    checkinStatus.value = result
+    if (authStore.user && Number.isFinite(result.balance_after)) {
+      authStore.user = {
+        ...authStore.user,
+        balance: result.balance_after
+      }
+    }
+    appStore.showSuccess(t('checkin.success', { amount: (result.reward_amount ?? 0).toFixed(2) }))
+    await authStore.refreshUser()
+  } catch (error) {
+    appStore.showError(extractApiErrorMessage(error, t('checkin.failed')))
+  } finally {
+    checkinSubmitting.value = false
+  }
+}
+
 function handleClickOutside(event: MouseEvent) {
   if (dropdownRef.value && !dropdownRef.value.contains(event.target as Node)) {
     closeDropdown()
@@ -364,6 +454,18 @@ onMounted(() => {
 onBeforeUnmount(() => {
   document.removeEventListener('click', handleClickOutside)
 })
+
+watch(
+  () => user.value?.id,
+  (id) => {
+    checkinStatus.value = null
+    checkinStatusRequest += 1
+    if (id) {
+      void loadCheckinStatus()
+    }
+  },
+  { immediate: true }
+)
 </script>
 
 <style scoped>
