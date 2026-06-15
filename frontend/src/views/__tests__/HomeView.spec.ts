@@ -120,6 +120,15 @@ describe('HomeView default homepage', () => {
     expect(wrapper.text()).toContain('Ready to route production traffic?')
   })
 
+  it('renders motion hooks for the default homepage experience', async () => {
+    const wrapper = await mountHome()
+
+    expect(wrapper.find('.home-motion-root').exists()).toBe(true)
+    expect(wrapper.find('.home-routing-panel').exists()).toBe(true)
+    expect(wrapper.findAll('.home-status-pulse').length).toBeGreaterThan(0)
+    expect(wrapper.findAll('.home-motion-card').length).toBeGreaterThanOrEqual(6)
+  })
+
   it('keeps configured custom home content as a full-page override', async () => {
     appStoreState.cachedPublicSettings = {
       site_name: 'PassionAPI',
@@ -133,5 +142,6 @@ describe('HomeView default homepage', () => {
 
     expect(wrapper.html()).toContain('Custom landing page')
     expect(wrapper.text()).not.toContain('A unified gateway for reliable multi-model API access')
+    expect(wrapper.find('.home-motion-root').exists()).toBe(false)
   })
 })

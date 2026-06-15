@@ -14,11 +14,11 @@
   <!-- Default Home Page -->
   <div
     v-else
-    class="min-h-screen overflow-x-hidden bg-white text-gray-950 dark:bg-dark-950 dark:text-white"
+    class="home-motion-root min-h-screen overflow-x-hidden bg-white text-gray-950 dark:bg-dark-950 dark:text-white"
   >
     <div class="relative">
       <div
-        class="pointer-events-none absolute inset-0 bg-[linear-gradient(rgba(15,23,42,0.04)_1px,transparent_1px),linear-gradient(90deg,rgba(15,23,42,0.04)_1px,transparent_1px)] bg-[size:48px_48px] dark:bg-[linear-gradient(rgba(148,163,184,0.08)_1px,transparent_1px),linear-gradient(90deg,rgba(148,163,184,0.08)_1px,transparent_1px)]"
+        class="home-grid-bg pointer-events-none absolute inset-0 bg-[linear-gradient(rgba(15,23,42,0.04)_1px,transparent_1px),linear-gradient(90deg,rgba(15,23,42,0.04)_1px,transparent_1px)] bg-[size:48px_48px] dark:bg-[linear-gradient(rgba(148,163,184,0.08)_1px,transparent_1px),linear-gradient(90deg,rgba(148,163,184,0.08)_1px,transparent_1px)]"
       ></div>
       <div
         class="pointer-events-none absolute inset-x-0 top-0 h-[34rem] bg-[linear-gradient(180deg,rgba(240,253,250,0.9),rgba(255,255,255,0))] dark:bg-[linear-gradient(180deg,rgba(8,47,73,0.35),rgba(2,6,23,0))]"
@@ -102,26 +102,26 @@
         <section class="mx-auto grid max-w-7xl items-center gap-10 px-4 pb-14 pt-12 sm:px-6 sm:pb-20 sm:pt-16 lg:grid-cols-[minmax(0,1fr),minmax(420px,0.9fr)] lg:gap-14 lg:px-8 lg:pb-24 lg:pt-24">
           <div class="min-w-0">
             <div
-              class="mb-5 inline-flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-sm font-semibold text-emerald-800 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-200"
+              class="home-reveal home-reveal-1 mb-5 inline-flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-sm font-semibold text-emerald-800 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-200"
             >
-              <span class="h-2 w-2 rounded-full bg-emerald-500"></span>
+              <span class="home-status-pulse h-2 w-2 rounded-full bg-emerald-500"></span>
               {{ t('home.hero.eyebrow') }}
             </div>
 
             <h1
-              class="max-w-3xl break-words text-4xl font-semibold leading-[1.08] text-gray-950 dark:text-white sm:text-5xl lg:text-6xl"
+              class="home-reveal home-reveal-2 max-w-3xl break-words text-4xl font-semibold leading-[1.08] text-gray-950 dark:text-white sm:text-5xl lg:text-6xl"
             >
               {{ t('home.hero.title') }}
             </h1>
 
-            <p class="mt-6 max-w-2xl text-base leading-8 text-gray-600 dark:text-dark-300 sm:text-lg">
+            <p class="home-reveal home-reveal-3 mt-6 max-w-2xl text-base leading-8 text-gray-600 dark:text-dark-300 sm:text-lg">
               {{ t('home.hero.subtitle') }}
             </p>
 
-            <div class="mt-8 flex flex-col gap-3 sm:flex-row">
+            <div class="home-reveal home-reveal-4 mt-8 flex flex-col gap-3 sm:flex-row">
               <router-link
                 :to="isAuthenticated ? dashboardPath : '/login'"
-                class="inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-primary-600 px-5 text-sm font-semibold text-white shadow-sm shadow-primary-600/20 transition-colors hover:bg-primary-700"
+                class="home-action-button inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-primary-600 px-5 text-sm font-semibold text-white shadow-sm shadow-primary-600/20 transition-colors hover:bg-primary-700"
               >
                 {{ isAuthenticated ? t('home.hero.dashboardCta') : t('home.hero.primaryCta') }}
                 <Icon name="arrowRight" size="sm" />
@@ -131,7 +131,7 @@
                 :href="docUrl"
                 target="_blank"
                 rel="noopener noreferrer"
-                class="inline-flex h-11 items-center justify-center gap-2 rounded-lg border border-gray-200 bg-white px-5 text-sm font-semibold text-gray-800 transition-colors hover:border-gray-300 hover:bg-gray-50 dark:border-dark-700 dark:bg-dark-900 dark:text-gray-100 dark:hover:border-dark-600 dark:hover:bg-dark-800"
+                class="home-action-button inline-flex h-11 items-center justify-center gap-2 rounded-lg border border-gray-200 bg-white px-5 text-sm font-semibold text-gray-800 transition-colors hover:border-gray-300 hover:bg-gray-50 dark:border-dark-700 dark:bg-dark-900 dark:text-gray-100 dark:hover:border-dark-600 dark:hover:bg-dark-800"
               >
                 <Icon name="book" size="sm" />
                 {{ t('home.hero.secondaryCta') }}
@@ -140,13 +140,13 @@
           </div>
 
           <section
-            class="relative min-w-0 rounded-lg border border-gray-900 bg-gray-950 p-4 text-white shadow-2xl shadow-gray-950/20 dark:border-dark-700"
+            class="home-reveal home-reveal-panel home-routing-panel relative min-w-0 rounded-lg border border-gray-900 bg-gray-950 p-4 text-white shadow-2xl shadow-gray-950/20 dark:border-dark-700"
             aria-labelledby="routing-panel-title"
           >
             <div class="flex items-start justify-between gap-4 border-b border-white/10 pb-4">
               <div class="min-w-0">
                 <div class="mb-2 inline-flex items-center gap-2 rounded-lg bg-emerald-400/10 px-2.5 py-1 text-xs font-semibold text-emerald-200">
-                  <span class="h-1.5 w-1.5 rounded-full bg-emerald-400"></span>
+                  <span class="home-status-pulse h-1.5 w-1.5 rounded-full bg-emerald-400"></span>
                   {{ t('home.hero.statusBadge') }}
                 </div>
                 <h2 id="routing-panel-title" class="text-lg font-semibold">
@@ -161,14 +161,15 @@
 
             <div class="grid gap-3 py-4 sm:grid-cols-2">
               <div
-                v-for="channel in channelRows"
+                v-for="(channel, index) in channelRows"
                 :key="channel.name"
-                class="rounded-lg border border-white/10 bg-white/[0.04] p-3"
+                class="home-motion-card home-channel-card rounded-lg border border-white/10 bg-white/[0.04] p-3"
+                :style="{ '--motion-index': index }"
               >
                 <div class="flex items-center justify-between gap-3">
                   <span class="min-w-0 truncate text-sm font-semibold">{{ channel.name }}</span>
                   <span
-                    class="h-2 w-2 shrink-0 rounded-full"
+                    class="home-status-pulse h-2 w-2 shrink-0 rounded-full"
                     :class="channel.active ? 'bg-emerald-400' : 'bg-amber-300'"
                   ></span>
                 </div>
@@ -181,9 +182,10 @@
 
             <div class="space-y-2 border-t border-white/10 pt-4">
               <div
-                v-for="row in requestRows"
+                v-for="(row, index) in requestRows"
                 :key="row.label"
-                class="flex items-center justify-between gap-4 rounded-lg bg-white/[0.04] px-3 py-2 text-sm"
+                class="home-motion-card flex items-center justify-between gap-4 rounded-lg bg-white/[0.04] px-3 py-2 text-sm"
+                :style="{ '--motion-index': index + 4 }"
               >
                 <span class="text-slate-400">{{ row.label }}</span>
                 <span class="min-w-0 truncate font-semibold" :class="row.valueClass">
@@ -193,7 +195,7 @@
             </div>
 
             <pre
-              class="mt-4 overflow-x-auto rounded-lg border border-white/10 bg-black/35 p-4 text-xs leading-6 text-slate-300"
+              class="home-code-panel mt-4 overflow-x-auto rounded-lg border border-white/10 bg-black/35 p-4 text-xs leading-6 text-slate-300"
             ><code>curl {{ apiBaseUrl }}/v1/chat/completions \
   -H "Authorization: Bearer sk-..." \
   -d '{ "model": "gpt-4.1-mini" }'</code></pre>
@@ -203,9 +205,10 @@
         <section class="border-y border-gray-200 bg-gray-50/80 dark:border-dark-800 dark:bg-dark-900/50">
           <div class="mx-auto grid max-w-7xl gap-4 px-4 py-6 sm:grid-cols-2 sm:px-6 lg:grid-cols-4 lg:px-8">
             <div
-              v-for="item in trustItems"
+              v-for="(item, index) in trustItems"
               :key="item.title"
-              class="flex min-w-0 gap-3 rounded-lg border border-gray-200 bg-white p-4 dark:border-dark-700 dark:bg-dark-900"
+              class="home-motion-card home-scroll-reveal flex min-w-0 gap-3 rounded-lg border border-gray-200 bg-white p-4 dark:border-dark-700 dark:bg-dark-900"
+              :style="{ '--motion-index': index }"
             >
               <div
                 class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg"
@@ -236,9 +239,10 @@
 
           <div class="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             <article
-              v-for="item in capabilityItems"
+              v-for="(item, index) in capabilityItems"
               :key="item.title"
-              class="rounded-lg border border-gray-200 bg-white p-5 shadow-sm transition-colors hover:border-gray-300 dark:border-dark-700 dark:bg-dark-900 dark:hover:border-dark-600"
+              class="home-motion-card home-scroll-reveal rounded-lg border border-gray-200 bg-white p-5 shadow-sm transition-colors hover:border-gray-300 dark:border-dark-700 dark:bg-dark-900 dark:hover:border-dark-600"
+              :style="{ '--motion-index': index }"
             >
               <div
                 class="mb-4 flex h-10 w-10 items-center justify-center rounded-lg"
@@ -260,9 +264,10 @@
               <p class="mt-4 text-base leading-8 text-slate-300">{{ t('home.integration.subtitle') }}</p>
               <div class="mt-8 grid gap-3">
                 <div
-                  v-for="point in integrationPoints"
+                  v-for="(point, index) in integrationPoints"
                   :key="point"
-                  class="flex items-center gap-3 rounded-lg border border-white/10 bg-white/[0.04] px-4 py-3 text-sm font-semibold text-slate-100"
+                  class="home-motion-card home-scroll-reveal flex items-center gap-3 rounded-lg border border-white/10 bg-white/[0.04] px-4 py-3 text-sm font-semibold text-slate-100"
+                  :style="{ '--motion-index': index }"
                 >
                   <Icon name="check" size="sm" class="text-emerald-300" />
                   <span>{{ point }}</span>
@@ -270,7 +275,7 @@
               </div>
             </div>
 
-            <div class="min-w-0 rounded-lg border border-white/10 bg-white/[0.04] p-4 shadow-xl">
+            <div class="home-code-panel home-scroll-reveal min-w-0 rounded-lg border border-white/10 bg-white/[0.04] p-4 shadow-xl">
               <div class="mb-4 flex items-center gap-2 border-b border-white/10 pb-3">
                 <span class="h-3 w-3 rounded-full bg-red-400"></span>
                 <span class="h-3 w-3 rounded-full bg-amber-300"></span>
@@ -307,9 +312,10 @@ const completion = await client.chat.completions.create({
 
           <div class="mt-10 grid gap-4 md:grid-cols-3">
             <article
-              v-for="step in workflowSteps"
+              v-for="(step, index) in workflowSteps"
               :key="step.title"
-              class="rounded-lg border border-gray-200 bg-white p-5 shadow-sm dark:border-dark-700 dark:bg-dark-900"
+              class="home-motion-card home-scroll-reveal rounded-lg border border-gray-200 bg-white p-5 shadow-sm dark:border-dark-700 dark:bg-dark-900"
+              :style="{ '--motion-index': index }"
             >
               <div class="mb-5 flex h-9 w-9 items-center justify-center rounded-lg bg-gray-950 text-sm font-semibold text-white dark:bg-white dark:text-gray-950">
                 {{ step.number }}
@@ -322,7 +328,7 @@ const completion = await client.chat.completions.create({
 
         <section class="mx-auto max-w-7xl px-4 pb-16 sm:px-6 lg:px-8 lg:pb-24">
           <div
-            class="rounded-lg border border-gray-200 bg-gray-950 px-5 py-8 text-center text-white shadow-xl shadow-gray-950/10 dark:border-dark-700 sm:px-8 lg:px-12"
+            class="home-cta-panel home-scroll-reveal rounded-lg border border-gray-200 bg-gray-950 px-5 py-8 text-center text-white shadow-xl shadow-gray-950/10 dark:border-dark-700 sm:px-8 lg:px-12"
           >
             <h2 class="text-2xl font-semibold sm:text-3xl">{{ t('home.cta.title') }}</h2>
             <p class="mx-auto mt-3 max-w-2xl text-sm leading-7 text-slate-300">
@@ -578,3 +584,221 @@ onMounted(() => {
   }
 })
 </script>
+
+<style scoped>
+.home-motion-root {
+  --motion-distance: 18px;
+  --motion-duration: 720ms;
+  --motion-ease: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.home-grid-bg {
+  animation: home-grid-drift 22s linear infinite;
+}
+
+.home-reveal {
+  animation: home-rise-in var(--motion-duration) var(--motion-ease) both;
+}
+
+.home-reveal-1 {
+  animation-delay: 80ms;
+}
+
+.home-reveal-2 {
+  animation-delay: 160ms;
+}
+
+.home-reveal-3 {
+  animation-delay: 240ms;
+}
+
+.home-reveal-4 {
+  animation-delay: 320ms;
+}
+
+.home-reveal-panel {
+  animation-delay: 260ms;
+}
+
+.home-action-button {
+  transform: translateZ(0);
+  transition:
+    transform 180ms ease,
+    box-shadow 180ms ease,
+    background-color 180ms ease,
+    border-color 180ms ease,
+    color 180ms ease;
+}
+
+.home-action-button:hover {
+  transform: translateY(-2px);
+}
+
+.home-routing-panel {
+  overflow: hidden;
+  isolation: isolate;
+}
+
+.home-routing-panel::before {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  content: '';
+  background:
+    radial-gradient(circle at 12% 20%, rgba(34, 211, 238, 0.18), transparent 28%),
+    radial-gradient(circle at 88% 0%, rgba(16, 185, 129, 0.18), transparent 26%);
+  opacity: 0.9;
+}
+
+.home-routing-panel::after,
+.home-code-panel::after {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  content: '';
+  background: linear-gradient(
+    115deg,
+    transparent 0%,
+    transparent 34%,
+    rgba(255, 255, 255, 0.12) 46%,
+    transparent 58%,
+    transparent 100%
+  );
+  transform: translateX(-120%);
+  animation: home-sheen 6.5s ease-in-out infinite;
+}
+
+.home-code-panel {
+  position: relative;
+  overflow: hidden;
+}
+
+.home-motion-card {
+  --motion-index: 0;
+  transform: translateZ(0);
+  transition:
+    transform 190ms ease,
+    border-color 190ms ease,
+    box-shadow 190ms ease,
+    background-color 190ms ease;
+}
+
+.home-motion-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 14px 34px rgba(15, 23, 42, 0.12);
+}
+
+.home-channel-card {
+  animation: home-soft-pop 560ms var(--motion-ease) both;
+  animation-delay: calc(360ms + (var(--motion-index) * 70ms));
+}
+
+.home-status-pulse {
+  position: relative;
+  box-shadow: 0 0 0 rgba(52, 211, 153, 0.35);
+  animation: home-status-pulse 2.2s ease-out infinite;
+}
+
+.home-scroll-reveal {
+  animation: home-rise-in 680ms var(--motion-ease) both;
+  animation-delay: calc(80ms + (var(--motion-index) * 45ms));
+  animation-timeline: view();
+  animation-range: entry 8% cover 24%;
+}
+
+.home-cta-panel {
+  position: relative;
+  overflow: hidden;
+}
+
+.home-cta-panel::before {
+  position: absolute;
+  inset: 0;
+  content: '';
+  background:
+    linear-gradient(135deg, rgba(20, 184, 166, 0.22), transparent 32%),
+    linear-gradient(315deg, rgba(59, 130, 246, 0.2), transparent 36%);
+  opacity: 0.75;
+}
+
+.home-cta-panel > * {
+  position: relative;
+}
+
+@keyframes home-rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(var(--motion-distance));
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes home-soft-pop {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.985);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes home-status-pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(52, 211, 153, 0.36);
+  }
+
+  70% {
+    box-shadow: 0 0 0 8px rgba(52, 211, 153, 0);
+  }
+
+  100% {
+    box-shadow: 0 0 0 0 rgba(52, 211, 153, 0);
+  }
+}
+
+@keyframes home-sheen {
+  0%,
+  58% {
+    transform: translateX(-120%);
+  }
+
+  82%,
+  100% {
+    transform: translateX(120%);
+  }
+}
+
+@keyframes home-grid-drift {
+  from {
+    background-position: 0 0;
+  }
+
+  to {
+    background-position: 48px 48px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .home-motion-root *,
+  .home-motion-root *::before,
+  .home-motion-root *::after {
+    scroll-behavior: auto !important;
+    transition-duration: 1ms !important;
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+    animation-delay: 0ms !important;
+  }
+
+  .home-action-button:hover,
+  .home-motion-card:hover {
+    transform: none;
+  }
+}
+</style>
