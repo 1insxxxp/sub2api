@@ -587,10 +587,14 @@ onMounted(() => {
 
 <style scoped>
 .home-motion-root {
-  --motion-distance: 16px;
-  --motion-duration: 760ms;
+  --motion-distance: 30px;
+  --motion-duration: 860ms;
   --motion-ease: cubic-bezier(0.16, 1, 0.3, 1);
-  --motion-section-distance: 14px;
+  --motion-section-distance: 24px;
+  --motion-scale: 0.985;
+  --motion-section-scale: 0.99;
+  --motion-blur: 6px;
+  --motion-section-blur: 4px;
 }
 
 .home-grid-bg {
@@ -701,16 +705,16 @@ onMounted(() => {
 }
 
 .home-scroll-reveal {
-  animation: home-rise-in 720ms var(--motion-ease) both;
-  animation-delay: calc(60ms + (var(--motion-index) * 42ms));
+  animation: home-rise-in 860ms var(--motion-ease) both;
+  animation-delay: calc(90ms + (var(--motion-index) * 68ms));
   animation-timeline: view();
-  animation-range: entry 9% cover 26%;
+  animation-range: entry 4% cover 36%;
 }
 
 .home-section-reveal {
-  animation: home-section-rise 720ms var(--motion-ease) both;
+  animation: home-section-rise 820ms var(--motion-ease) both;
   animation-timeline: view();
-  animation-range: entry 10% cover 28%;
+  animation-range: entry 6% cover 34%;
 }
 
 .home-section-reveal-1 {
@@ -718,11 +722,11 @@ onMounted(() => {
 }
 
 .home-section-reveal-2 {
-  animation-delay: 55ms;
+  animation-delay: 90ms;
 }
 
 .home-section-reveal-3 {
-  animation-delay: 110ms;
+  animation-delay: 170ms;
 }
 
 .home-cta-panel {
@@ -731,8 +735,13 @@ onMounted(() => {
 }
 
 .home-cta-panel.home-scroll-reveal {
-  animation-duration: 820ms;
-  animation-range: entry 12% cover 34%;
+  animation-duration: 980ms;
+  animation-range: entry 5% cover 42%;
+}
+
+.home-code-panel.home-scroll-reveal {
+  animation-duration: 960ms;
+  animation-range: entry 5% cover 40%;
 }
 
 .home-cta-panel::before {
@@ -752,24 +761,28 @@ onMounted(() => {
 @keyframes home-rise-in {
   from {
     opacity: 0;
-    transform: translateY(var(--motion-distance));
+    filter: blur(var(--motion-blur));
+    transform: translateY(var(--motion-distance)) scale(var(--motion-scale));
   }
 
   to {
     opacity: 1;
-    transform: translateY(0);
+    filter: blur(0);
+    transform: translateY(0) scale(1);
   }
 }
 
 @keyframes home-section-rise {
   from {
     opacity: 0;
-    transform: translateY(var(--motion-section-distance));
+    filter: blur(var(--motion-section-blur));
+    transform: translateY(var(--motion-section-distance)) scale(var(--motion-section-scale));
   }
 
   to {
     opacity: 1;
-    transform: translateY(0);
+    filter: blur(0);
+    transform: translateY(0) scale(1);
   }
 }
 
@@ -823,13 +836,15 @@ onMounted(() => {
 
 @media (max-width: 640px) {
   .home-motion-root {
-    --motion-distance: 12px;
-    --motion-section-distance: 10px;
+    --motion-distance: 20px;
+    --motion-section-distance: 16px;
+    --motion-blur: 3px;
+    --motion-section-blur: 2px;
   }
 
   .home-scroll-reveal,
   .home-section-reveal {
-    animation-delay: 40ms;
+    animation-delay: 60ms;
   }
 }
 

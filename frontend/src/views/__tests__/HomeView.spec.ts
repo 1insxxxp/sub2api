@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs'
 import { flushPromises, mount } from '@vue/test-utils'
 import { reactive } from 'vue'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -130,6 +131,16 @@ describe('HomeView default homepage', () => {
     expect(wrapper.findAll('.home-section-reveal').length).toBeGreaterThanOrEqual(6)
     expect(wrapper.find('.home-code-panel.home-scroll-reveal').exists()).toBe(true)
     expect(wrapper.find('.home-cta-panel.home-scroll-reveal').exists()).toBe(true)
+  })
+
+  it('keeps scroll motion perceptible enough for the default homepage', () => {
+    const source = readFileSync('src/views/HomeView.vue', 'utf-8')
+
+    expect(source).toContain('--motion-distance: 30px')
+    expect(source).toContain('--motion-section-distance: 24px')
+    expect(source).toContain('--motion-scale: 0.985')
+    expect(source).toContain('--motion-blur: 6px')
+    expect(source).toContain('calc(90ms + (var(--motion-index) * 68ms))')
   })
 
   it('keeps configured custom home content as a full-page override', async () => {
