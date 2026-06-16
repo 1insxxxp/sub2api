@@ -151,17 +151,18 @@ describe('HomeView default homepage', () => {
     expect(source).toContain('@keyframes home-panel-rise')
   })
 
-  it('uses the blue-violet technology palette as the primary theme', () => {
+  it('uses the blue-slate-cyan technology palette as the primary theme', () => {
     const source = readFileSync('tailwind.config.js', 'utf-8')
 
-    expect(source).toContain('主色调 - Electric Blue/Violet 科技蓝紫系')
+    expect(source).toContain('主色调 - Electric Blue + Slate/Cyan 科技蓝灰系')
     expect(source).toContain("500: '#3b82f6'")
     expect(source).toContain("600: '#2563eb'")
     expect(source).toContain("700: '#1d4ed8'")
     expect(source).toContain("'gradient-primary': 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)'")
     expect(source).toContain('rgba(59, 130, 246')
-    expect(source).toContain('rgba(139, 92, 246')
+    expect(source).toContain('rgba(14, 116, 144')
     expect(source).toContain('rgba(6, 182, 212')
+    expect(source).not.toContain('rgba(139, 92, 246')
     expect(source).not.toContain('#14b8a6')
     expect(source).not.toContain('rgba(20, 184, 166')
   })
@@ -175,7 +176,8 @@ describe('HomeView default homepage', () => {
     expect(source).toContain('dark:border-primary-500/30 dark:bg-primary-500/10')
     expect(source).toContain('text-cyan-300')
     expect(source).toContain('rgba(59, 130, 246, 0.24)')
-    expect(source).toContain('rgba(139, 92, 246, 0.2)')
+    expect(source).toContain('rgba(14, 116, 144, 0.18)')
+    expect(source).not.toContain('rgba(139, 92, 246')
     expect(source).not.toContain('rgba(20, 184, 166, 0.22)')
   })
 

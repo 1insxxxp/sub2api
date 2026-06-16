@@ -651,7 +651,7 @@ onMounted(() => {
   content: '';
   background:
     radial-gradient(circle at 12% 20%, rgba(59, 130, 246, 0.24), transparent 30%),
-    radial-gradient(circle at 88% 0%, rgba(139, 92, 246, 0.2), transparent 28%),
+    radial-gradient(circle at 88% 0%, rgba(14, 116, 144, 0.18), transparent 28%),
     radial-gradient(circle at 55% 92%, rgba(6, 182, 212, 0.14), transparent 30%);
   opacity: 0.9;
 }
@@ -752,7 +752,7 @@ onMounted(() => {
   content: '';
   background:
     linear-gradient(135deg, rgba(59, 130, 246, 0.24), transparent 32%),
-    linear-gradient(315deg, rgba(139, 92, 246, 0.2), transparent 36%),
+    linear-gradient(315deg, rgba(14, 116, 144, 0.18), transparent 36%),
     radial-gradient(circle at 50% 0%, rgba(6, 182, 212, 0.16), transparent 42%);
   opacity: 0.75;
 }

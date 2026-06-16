@@ -1,8 +1,8 @@
 <template>
   <AppLayout>
     <div class="space-y-6">
-      <section class="overflow-hidden rounded-lg border border-emerald-100 bg-white shadow-sm dark:border-dark-700 dark:bg-dark-800">
-        <div class="border-b border-emerald-100 bg-emerald-50/70 px-5 py-4 dark:border-dark-700 dark:bg-dark-900/30">
+      <section class="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm dark:border-dark-700 dark:bg-dark-800">
+        <div class="border-b border-slate-100 bg-slate-50/80 px-5 py-4 dark:border-dark-700 dark:bg-dark-900/30">
           <div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
             <div class="min-w-0">
               <div class="flex flex-wrap items-center gap-2">
@@ -76,7 +76,7 @@
         <div class="rounded-lg border border-gray-200 bg-white shadow-sm dark:border-dark-700 dark:bg-dark-800">
           <div class="border-b border-gray-100 px-5 py-4 dark:border-dark-700">
             <div class="flex items-center gap-3">
-              <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600 dark:bg-emerald-900/20 dark:text-emerald-300">
+              <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-primary-50 text-primary-600 dark:bg-primary-900/20 dark:text-primary-300">
                 <Icon name="shield" size="sm" />
               </div>
               <div>
@@ -93,7 +93,7 @@
           <div class="space-y-5 p-5">
             <label
               class="flex cursor-pointer items-center justify-between gap-4 rounded-lg border px-4 py-3 transition-colors"
-              :class="configForm.enabled ? 'border-emerald-200 bg-emerald-50/70 dark:border-emerald-500/30 dark:bg-emerald-900/10' : 'border-gray-200 bg-gray-50 dark:border-dark-700 dark:bg-dark-700/40'"
+              :class="configForm.enabled ? 'border-primary-200 bg-primary-50/70 dark:border-primary-500/30 dark:bg-primary-900/10' : 'border-gray-200 bg-gray-50 dark:border-dark-700 dark:bg-dark-700/40'"
             >
               <span>
                 <span class="block text-sm font-semibold text-gray-900 dark:text-white">
@@ -106,7 +106,7 @@
               <input
                 v-model="configForm.enabled"
                 type="checkbox"
-                class="h-5 w-5 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500"
+                class="h-5 w-5 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
               />
             </label>
 
@@ -238,7 +238,7 @@
                     <input
                       v-model="configForm.streak_enabled"
                       type="checkbox"
-                      class="h-4 w-4 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500"
+                      class="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
                     />
                     {{ t('admin.checkins.streakEnabled') }}
                   </label>
@@ -346,7 +346,7 @@
             </div>
           </template>
           <template #cell-reward_amount="{ value }">
-            <span class="font-semibold text-emerald-600 dark:text-emerald-400">
+            <span class="font-semibold text-amber-600 dark:text-amber-400">
               +{{ formatUsd(value) }}
             </span>
           </template>
@@ -637,7 +637,7 @@ const statsCards = computed(() => [
     value: stats.value?.today_count ?? 0,
     meta: formatUsd(stats.value?.today_reward_total ?? 0),
     icon: 'calendar' as const,
-    iconClass: 'bg-emerald-50 text-emerald-600 dark:bg-emerald-900/20 dark:text-emerald-300',
+    iconClass: 'bg-primary-50 text-primary-600 dark:bg-primary-900/20 dark:text-primary-300',
   },
   {
     key: 'seven',
