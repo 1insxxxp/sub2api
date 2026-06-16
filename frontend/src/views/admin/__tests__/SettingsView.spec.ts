@@ -303,6 +303,8 @@ const baseSettingsResponse = {
   default_subscriptions: [],
   site_name: "Sub2API",
   site_logo: "",
+  site_logo_light: "",
+  site_logo_dark: "",
   site_subtitle: "",
   api_base_url: "",
   contact_info: "",
@@ -437,6 +439,26 @@ function mountView() {
         GroupOptionItem: true,
         ProxySelector: true,
         ImageUpload: ImageUploadStub,
+        BackupSettings: true,
+      },
+    },
+  });
+}
+
+function mountViewWithRealImageUpload() {
+  return mount(SettingsView, {
+    global: {
+      stubs: {
+        AppLayout: AppLayoutStub,
+        Select: SelectStub,
+        Toggle: ToggleStub,
+        Icon: true,
+        ConfirmDialog: true,
+        PaymentProviderList: true,
+        PaymentProviderDialog: true,
+        GroupBadge: true,
+        GroupOptionItem: true,
+        ProxySelector: true,
         BackupSettings: true,
       },
     },
@@ -600,6 +622,53 @@ describe("admin SettingsView payment visible method controls", () => {
     expect(payload).not.toHaveProperty("payment_visible_method_wxpay_source");
     expect(payload).not.toHaveProperty("payment_visible_method_alipay_enabled");
     expect(payload).not.toHaveProperty("payment_visible_method_wxpay_enabled");
+  });
+
+  it("submits theme-specific site logo settings", async () => {
+    getSettings.mockResolvedValueOnce({
+      ...baseSettingsResponse,
+      site_logo: "/logo-default.svg",
+      site_logo_light: "/logo-light.svg",
+      site_logo_dark: "/logo-dark.svg",
+    });
+
+    const wrapper = mountView();
+
+    await flushPromises();
+    await wrapper.find("form").trigger("submit.prevent");
+    await flushPromises();
+
+    expect(updateSettings).toHaveBeenCalledTimes(1);
+    expect(updateSettings).toHaveBeenCalledWith(
+      expect.objectContaining({
+        site_logo: "/logo-default.svg",
+        site_logo_light: "/logo-light.svg",
+        site_logo_dark: "/logo-dark.svg",
+      }),
+    );
+  });
+
+  it("renders previews for configured theme-specific site logos", async () => {
+    const defaultLogo = "data:image/png;base64,ZGVmYXVsdC1sb2dv";
+    const lightLogo = "data:image/png;base64,bGlnaHQtbG9nbw==";
+    const darkLogo = "data:image/png;base64,ZGFyay1sb2dv";
+    getSettings.mockResolvedValueOnce({
+      ...baseSettingsResponse,
+      site_logo: defaultLogo,
+      site_logo_light: lightLogo,
+      site_logo_dark: darkLogo,
+    });
+
+    const wrapper = mountViewWithRealImageUpload();
+
+    await flushPromises();
+
+    const imageSources = wrapper
+      .findAll("img")
+      .map((node) => node.attributes("src"));
+    expect(imageSources).toContain(defaultLogo);
+    expect(imageSources).toContain(lightLogo);
+    expect(imageSources).toContain(darkLogo);
   });
 
   it("submits Anthropic cache TTL injection gateway setting", async () => {

@@ -423,7 +423,7 @@ const appStore = useAppStore()
 // ==================== Site Settings (same as HomeView) ====================
 
 const siteName = computed(() => appStore.cachedPublicSettings?.site_name || appStore.siteName || 'Passion')
-const siteLogo = computed(() => appStore.cachedPublicSettings?.site_logo || appStore.siteLogo || '')
+const siteLogo = computed(() => appStore.effectiveSiteLogo)
 const docUrl = computed(() => appStore.cachedPublicSettings?.doc_url || appStore.docUrl || '')
 
 // ==================== Theme (same as HomeView) ====================
@@ -432,8 +432,7 @@ const isDark = ref(document.documentElement.classList.contains('dark'))
 
 function toggleTheme() {
   isDark.value = !isDark.value
-  document.documentElement.classList.toggle('dark', isDark.value)
-  localStorage.setItem('theme', isDark.value ? 'dark' : 'light')
+  appStore.setTheme(isDark.value)
 }
 
 const currentYear = computed(() => new Date().getFullYear())
@@ -899,10 +898,12 @@ async function queryKey() {
 
 function initTheme() {
   const savedTheme = localStorage.getItem('theme')
-  if (savedTheme === 'dark' || (!savedTheme && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
-    isDark.value = true
-    document.documentElement.classList.add('dark')
-  }
+  const shouldUseDark =
+    savedTheme === 'dark' ||
+    (!savedTheme && window.matchMedia('(prefers-color-scheme: dark)').matches)
+  document.documentElement.classList.toggle('dark', shouldUseDark)
+  isDark.value = shouldUseDark
+  appStore.syncThemeFromDocument()
 }
 
 function formatResetTime(resetAt: string | null | undefined): string {

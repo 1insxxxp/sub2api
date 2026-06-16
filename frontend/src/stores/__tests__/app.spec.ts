@@ -257,6 +257,8 @@ describe('useAppStore', () => {
       windowAny.__APP_CONFIG__ = {
         site_name: 'TestSite',
         site_logo: '/logo.png',
+        site_logo_light: '/logo-light.svg',
+        site_logo_dark: '/logo-dark.svg',
         version: '1.0.0',
         contact_info: 'test@test.com',
         api_base_url: 'https://api.test.com',
@@ -269,8 +271,39 @@ describe('useAppStore', () => {
       expect(result).toBe(true)
       expect(store.siteName).toBe('TestSite')
       expect(store.siteLogo).toBe('/logo.png')
+      expect(store.siteLogoLight).toBe('/logo-light.svg')
+      expect(store.siteLogoDark).toBe('/logo-dark.svg')
       expect(store.siteVersion).toBe('1.0.0')
       expect(store.publicSettingsLoaded).toBe(true)
+    })
+
+    it('selects theme-specific logos and falls back to the default logo', () => {
+      const windowAny = window as any
+      windowAny.__APP_CONFIG__ = {
+        site_name: 'TestSite',
+        site_logo: '/logo-default.svg',
+        site_logo_light: '/logo-light.svg',
+        site_logo_dark: '/logo-dark.svg',
+      }
+
+      const store = useAppStore()
+      store.initFromInjectedConfig()
+
+      store.setTheme(false)
+      expect(store.effectiveSiteLogo).toBe('/logo-light.svg')
+
+      store.setTheme(true)
+      expect(store.effectiveSiteLogo).toBe('/logo-dark.svg')
+
+      windowAny.__APP_CONFIG__ = {
+        site_name: 'FallbackSite',
+        site_logo: '/logo-default.svg',
+        site_logo_light: '',
+        site_logo_dark: '',
+      }
+      store.initFromInjectedConfig()
+      store.setTheme(true)
+      expect(store.effectiveSiteLogo).toBe('/logo-default.svg')
     })
 
     it('无注入配置时返回 false', () => {
@@ -307,6 +340,8 @@ describe('useAppStore', () => {
         turnstile_site_key: '',
         site_name: 'Updated Site',
         site_logo: '',
+        site_logo_light: '',
+        site_logo_dark: '',
         site_subtitle: '',
         api_base_url: '',
         contact_info: '',

@@ -114,10 +114,16 @@ const documentId = computed(() => String(route.params.documentId || ''))
 const isAdminComplianceDocument = computed(() => documentId.value === 'admin-compliance')
 const documents = computed(() => settings.value?.login_agreement_documents ?? [])
 const siteName = computed(() => settings.value?.site_name || 'Sub2API')
-const siteLogo = computed(() => sanitizeUrl(settings.value?.site_logo || '', {
-  allowRelative: true,
-  allowDataUrl: true,
-}))
+const isDarkTheme = computed(() => document.documentElement.classList.contains('dark'))
+const siteLogo = computed(() => {
+  const logo = (isDarkTheme.value ? settings.value?.site_logo_dark : settings.value?.site_logo_light)
+    || settings.value?.site_logo
+    || ''
+  return sanitizeUrl(logo, {
+    allowRelative: true,
+    allowDataUrl: true,
+  })
+})
 const updatedAt = computed(() =>
   isAdminComplianceDocument.value ? '' : settings.value?.login_agreement_updated_at || ''
 )

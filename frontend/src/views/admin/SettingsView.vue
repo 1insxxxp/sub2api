@@ -1,6 +1,6 @@
 <template>
   <AppLayout>
-    <div class="mx-auto max-w-6xl space-y-6">
+    <div class="settings-admin-page mx-auto max-w-6xl space-y-6">
       <!-- Loading State -->
       <div v-if="loading" class="flex items-center justify-center py-12">
         <div
@@ -4732,19 +4732,57 @@
 
               <!-- Site Logo Upload -->
               <div>
-                <label
-                  class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300"
-                >
-                  {{ t("admin.settings.site.siteLogo") }}
-                </label>
-                <ImageUpload
-                  v-model="form.site_logo"
-                  mode="image"
-                  :upload-label="t('admin.settings.site.uploadImage')"
-                  :remove-label="t('admin.settings.site.remove')"
-                  :hint="t('admin.settings.site.logoHint')"
-                  :max-size="300 * 1024"
-                />
+                <div class="mb-3">
+                  <label
+                    class="block text-sm font-medium text-gray-700 dark:text-gray-300"
+                  >
+                    {{ t("admin.settings.site.siteLogo") }}
+                  </label>
+                  <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                    {{ t("admin.settings.site.themeLogoHint") }}
+                  </p>
+                </div>
+                <div class="grid gap-4 md:grid-cols-3">
+                  <div class="rounded-lg border border-gray-200 bg-gray-50 p-3 dark:border-dark-700 dark:bg-dark-800/60">
+                    <p class="mb-2 text-xs font-semibold text-gray-700 dark:text-gray-200">
+                      {{ t("admin.settings.site.defaultLogo") }}
+                    </p>
+                    <ImageUpload
+                      v-model="form.site_logo"
+                      mode="image"
+                      :upload-label="t('admin.settings.site.uploadImage')"
+                      :remove-label="t('admin.settings.site.remove')"
+                      :hint="t('admin.settings.site.defaultLogoHint')"
+                      :max-size="300 * 1024"
+                    />
+                  </div>
+                  <div class="rounded-lg border border-blue-200 bg-blue-50/60 p-3 dark:border-blue-500/20 dark:bg-blue-500/10">
+                    <p class="mb-2 text-xs font-semibold text-blue-700 dark:text-blue-200">
+                      {{ t("admin.settings.site.lightLogo") }}
+                    </p>
+                    <ImageUpload
+                      v-model="form.site_logo_light"
+                      mode="image"
+                      :upload-label="t('admin.settings.site.uploadImage')"
+                      :remove-label="t('admin.settings.site.remove')"
+                      :hint="t('admin.settings.site.lightLogoHint')"
+                      :max-size="300 * 1024"
+                    />
+                  </div>
+                  <div class="rounded-lg border border-slate-300 bg-slate-100 p-3 dark:border-slate-600 dark:bg-slate-900/70">
+                    <p class="mb-2 text-xs font-semibold text-slate-700 dark:text-slate-200">
+                      {{ t("admin.settings.site.darkLogo") }}
+                    </p>
+                    <ImageUpload
+                      v-model="form.site_logo_dark"
+                      mode="image"
+                      :upload-label="t('admin.settings.site.uploadImage')"
+                      :remove-label="t('admin.settings.site.remove')"
+                      :hint="t('admin.settings.site.darkLogoHint')"
+                      :max-size="300 * 1024"
+                    />
+                  </div>
+                </div>
               </div>
 
               <!-- Home Content -->
@@ -7036,6 +7074,8 @@ const form = reactive<SettingsForm>({
   default_user_rpm_limit: 0,
   site_name: "Passion",
   site_logo: "",
+  site_logo_light: "",
+  site_logo_dark: "",
   site_subtitle: "Subscription to API Conversion Platform",
   api_base_url: "",
   contact_info: "",
@@ -8182,6 +8222,8 @@ async function saveSettings() {
       default_user_rpm_limit: form.default_user_rpm_limit,
       site_name: form.site_name,
       site_logo: form.site_logo,
+      site_logo_light: form.site_logo_light,
+      site_logo_dark: form.site_logo_dark,
       site_subtitle: form.site_subtitle,
       api_base_url: form.api_base_url,
       contact_info: form.contact_info,
@@ -9757,6 +9799,39 @@ watch(
 .settings-tab-label {
   @apply min-w-0 overflow-hidden text-ellipsis whitespace-nowrap leading-none;
 }
+
+.settings-admin-page :deep(.card) {
+  position: relative;
+  overflow: hidden;
+  border-radius: 1.25rem;
+  border-color: rgba(191, 219, 254, 0.4);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.985), rgba(248, 250, 252, 0.96)),
+    rgba(255, 255, 255, 0.96);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.9) inset,
+    0 18px 42px rgba(15, 23, 42, 0.055);
+}
+
+.settings-admin-page :deep(.card)::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 1px;
+  background: linear-gradient(90deg, rgba(37, 99, 235, 0.9), rgba(59, 130, 246, 0.42), rgba(34, 211, 238, 0.34));
+  pointer-events: none;
+}
+
+.settings-admin-page :deep(.card > .border-b) {
+  border-bottom-color: rgba(191, 219, 254, 0.24);
+  background:
+    linear-gradient(180deg, rgba(248, 250, 252, 0.78), rgba(248, 250, 252, 0.32)),
+    transparent;
+}
+
+.settings-admin-page :deep(.card .rounded-lg.border) {
+  border-radius: 1rem;
+}
 </style>
 
 <style>
@@ -9779,5 +9854,22 @@ watch(
   box-shadow:
     0 12px 26px rgb(0 0 0 / 0.22),
     0 1px 0 rgb(255 255 255 / 0.08) inset;
+}
+
+.dark .settings-admin-page .card {
+  border-color: rgba(96, 165, 250, 0.18);
+  background:
+    linear-gradient(180deg, rgba(15, 23, 42, 0.97), rgba(15, 23, 42, 0.93)),
+    rgba(15, 23, 42, 0.95);
+  box-shadow:
+    0 1px 0 rgb(255 255 255 / 0.05) inset,
+    0 22px 48px rgb(0 0 0 / 0.24);
+}
+
+.dark .settings-admin-page .card > .border-b {
+  border-bottom-color: rgba(96, 165, 250, 0.14);
+  background:
+    linear-gradient(180deg, rgba(30, 41, 59, 0.44), rgba(15, 23, 42, 0.12)),
+    transparent;
 }
 </style>

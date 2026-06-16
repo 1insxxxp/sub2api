@@ -11,16 +11,20 @@
         @click.self="handleClose"
       >
         <!-- Modal panel -->
-        <div ref="dialogRef" :class="['modal-content', widthClasses]" @click.stop>
+        <div
+          ref="dialogRef"
+          :class="['modal-content', 'brand-floating-panel', 'admin-dialog-panel', widthClasses]"
+          @click.stop
+        >
           <!-- Header -->
-          <div class="modal-header">
+          <div class="modal-header brand-floating-header admin-dialog-header">
             <h3 :id="dialogId" class="modal-title">
               {{ title }}
             </h3>
             <button
               v-if="showCloseButton"
               @click="emit('close')"
-              class="-mr-2 rounded-xl p-2 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600 dark:text-dark-500 dark:hover:bg-dark-700 dark:hover:text-dark-300"
+              class="brand-floating-close -mr-2 h-10 w-10 rounded-xl p-0 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600 dark:text-dark-500 dark:hover:bg-dark-700 dark:hover:text-dark-300"
               aria-label="Close modal"
             >
               <Icon name="x" size="md" />
@@ -28,12 +32,12 @@
           </div>
 
           <!-- Body -->
-          <div class="modal-body">
+          <div class="modal-body admin-dialog-body">
             <slot></slot>
           </div>
 
           <!-- Footer -->
-          <div v-if="$slots.footer" class="modal-footer">
+          <div v-if="$slots.footer" class="modal-footer admin-dialog-footer">
             <slot name="footer"></slot>
           </div>
         </div>

@@ -87,6 +87,23 @@ func TestSettingService_GetPublicSettings_DefaultBranding(t *testing.T) {
 	require.Equal(t, "Subscription to API Conversion Platform", settings.SiteSubtitle)
 }
 
+func TestSettingService_GetPublicSettings_ExposesThemeLogos(t *testing.T) {
+	repo := &settingPublicRepoStub{
+		values: map[string]string{
+			"site_logo":       "/logo-default.svg",
+			"site_logo_light": "/logo-light.svg",
+			"site_logo_dark":  "/logo-dark.svg",
+		},
+	}
+	svc := NewSettingService(repo, &config.Config{})
+
+	settings, err := svc.GetPublicSettings(context.Background())
+	require.NoError(t, err)
+	require.Equal(t, "/logo-default.svg", settings.SiteLogo)
+	require.Equal(t, "/logo-light.svg", settings.SiteLogoLight)
+	require.Equal(t, "/logo-dark.svg", settings.SiteLogoDark)
+}
+
 func TestSettingService_GetPublicSettings_ExposesForceEmailOnThirdPartySignup(t *testing.T) {
 	repo := &settingPublicRepoStub{
 		values: map[string]string{

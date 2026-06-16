@@ -27,11 +27,16 @@ export const useAppStore = defineStore('app', () => {
   const publicSettingsLoading = ref<boolean>(false)
   const siteName = ref<string>('Passion')
   const siteLogo = ref<string>('')
+  const siteLogoLight = ref<string>('')
+  const siteLogoDark = ref<string>('')
   const siteVersion = ref<string>('')
   const contactInfo = ref<string>('')
   const apiBaseUrl = ref<string>('')
   const docUrl = ref<string>('')
   const cachedPublicSettings = ref<PublicSettings | null>(null)
+  const isDarkTheme = ref<boolean>(
+    typeof document !== 'undefined' && document.documentElement.classList.contains('dark')
+  )
 
   // Version cache state
   const versionLoaded = ref<boolean>(false)
@@ -49,6 +54,12 @@ export const useAppStore = defineStore('app', () => {
 
   const hasActiveToasts = computed(() => toasts.value.length > 0)
   const backendModeEnabled = computed(() => cachedPublicSettings.value?.backend_mode_enabled ?? false)
+  const effectiveSiteLogo = computed(() => {
+    const lightLogo = cachedPublicSettings.value?.site_logo_light || siteLogoLight.value
+    const darkLogo = cachedPublicSettings.value?.site_logo_dark || siteLogoDark.value
+    const fallbackLogo = cachedPublicSettings.value?.site_logo || siteLogo.value
+    return (isDarkTheme.value ? darkLogo : lightLogo) || fallbackLogo || ''
+  })
 
   const loadingCount = ref<number>(0)
 
@@ -232,6 +243,21 @@ export const useAppStore = defineStore('app', () => {
     toasts.value = []
   }
 
+  function syncThemeFromDocument(): void {
+    if (typeof document === 'undefined') return
+    isDarkTheme.value = document.documentElement.classList.contains('dark')
+  }
+
+  function setTheme(isDark: boolean): void {
+    isDarkTheme.value = isDark
+    if (typeof document !== 'undefined') {
+      document.documentElement.classList.toggle('dark', isDark)
+    }
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem('theme', isDark ? 'dark' : 'light')
+    }
+  }
+
   // ==================== Version Management ====================
 
   /**
@@ -294,6 +320,8 @@ export const useAppStore = defineStore('app', () => {
     cachedPublicSettings.value = config
     siteName.value = config.site_name || 'Passion'
     siteLogo.value = config.site_logo || ''
+    siteLogoLight.value = config.site_logo_light || ''
+    siteLogoDark.value = config.site_logo_dark || ''
     siteVersion.value = config.version || ''
     contactInfo.value = config.contact_info || ''
     apiBaseUrl.value = config.api_base_url || ''
@@ -329,6 +357,8 @@ export const useAppStore = defineStore('app', () => {
         turnstile_site_key: '',
         site_name: siteName.value,
         site_logo: siteLogo.value,
+        site_logo_light: siteLogoLight.value,
+        site_logo_dark: siteLogoDark.value,
         site_subtitle: '',
         api_base_url: apiBaseUrl.value,
         contact_info: contactInfo.value,
@@ -416,11 +446,14 @@ export const useAppStore = defineStore('app', () => {
     publicSettingsLoaded,
     siteName,
     siteLogo,
+    siteLogoLight,
+    siteLogoDark,
     siteVersion,
     contactInfo,
     apiBaseUrl,
     docUrl,
     cachedPublicSettings,
+    isDarkTheme,
 
     // Version state
     versionLoaded,
@@ -434,6 +467,7 @@ export const useAppStore = defineStore('app', () => {
     // Computed
     hasActiveToasts,
     backendModeEnabled,
+    effectiveSiteLogo,
 
     // Actions
     toggleSidebar,
@@ -451,6 +485,8 @@ export const useAppStore = defineStore('app', () => {
     withLoading,
     withLoadingAndError,
     reset,
+    syncThemeFromDocument,
+    setTheme,
 
     // Version actions
     fetchVersion,

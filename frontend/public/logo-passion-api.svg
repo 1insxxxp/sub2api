@@ -1,0 +1,84 @@
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="116" y1="88" x2="884" y2="940" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#172554"/>
+      <stop offset="0.46" stop-color="#0F172A"/>
+      <stop offset="1" stop-color="#020617"/>
+    </linearGradient>
+    <radialGradient id="ambient" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(512 384) rotate(90) scale(540 500)">
+      <stop stop-color="#2563EB" stop-opacity="0.36"/>
+      <stop offset="0.48" stop-color="#06B6D4" stop-opacity="0.14"/>
+      <stop offset="1" stop-color="#020617" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="mark" x1="288" y1="256" x2="798" y2="746" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#67E8F9"/>
+      <stop offset="0.38" stop-color="#3B82F6"/>
+      <stop offset="0.72" stop-color="#2563EB"/>
+      <stop offset="1" stop-color="#06B6D4"/>
+    </linearGradient>
+    <linearGradient id="route" x1="410" y1="636" x2="660" y2="388" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#A5F3FC"/>
+      <stop offset="0.52" stop-color="#93C5FD"/>
+      <stop offset="1" stop-color="#60A5FA"/>
+    </linearGradient>
+    <filter id="markShadow" x="132" y="132" width="760" height="760" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feDropShadow dx="0" dy="34" stdDeviation="34" flood-color="#000000" flood-opacity="0.42"/>
+      <feDropShadow dx="0" dy="0" stdDeviation="18" flood-color="#2563EB" flood-opacity="0.28"/>
+    </filter>
+    <filter id="nodeGlow" x="246" y="300" width="560" height="500" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feDropShadow dx="0" dy="0" stdDeviation="18" flood-color="#67E8F9" flood-opacity="0.48"/>
+    </filter>
+    <clipPath id="clip">
+      <rect x="24" y="24" width="976" height="976" rx="210"/>
+    </clipPath>
+  </defs>
+
+  <g clip-path="url(#clip)">
+    <rect x="24" y="24" width="976" height="976" rx="210" fill="url(#bg)"/>
+    <rect x="24" y="24" width="976" height="976" rx="210" fill="url(#ambient)"/>
+
+    <path d="M176 256H848M176 512H848M176 768H848M256 176V848M512 176V848M768 176V848" stroke="#93C5FD" stroke-opacity="0.052" stroke-width="2"/>
+    <path d="M104 608C236 542 360 518 494 532C626 546 736 512 914 396" stroke="#67E8F9" stroke-opacity="0.12" stroke-width="5" stroke-linecap="round"/>
+    <path d="M118 746C250 676 370 654 498 674C642 696 760 646 906 542" stroke="#2563EB" stroke-opacity="0.15" stroke-width="5" stroke-linecap="round"/>
+
+    <g filter="url(#markShadow)">
+      <path
+        d="M324 736V288H588C720 288 800 366 800 484C800 604 716 674 586 674H464"
+        stroke="url(#mark)"
+        stroke-width="112"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      />
+      <path
+        d="M410 632L656 386"
+        stroke="#020617"
+        stroke-opacity="0.62"
+        stroke-width="78"
+        stroke-linecap="round"
+      />
+      <path
+        d="M410 632L656 386"
+        stroke="url(#route)"
+        stroke-width="50"
+        stroke-linecap="round"
+      />
+      <path
+        d="M344 308H584C652 308 708 330 744 368"
+        stroke="#ECFEFF"
+        stroke-opacity="0.16"
+        stroke-width="22"
+        stroke-linecap="round"
+      />
+    </g>
+
+    <g filter="url(#nodeGlow)">
+      <circle cx="324" cy="736" r="31" fill="#67E8F9"/>
+      <circle cx="410" cy="632" r="23" fill="#A5F3FC"/>
+      <circle cx="656" cy="386" r="23" fill="#60A5FA"/>
+      <circle cx="800" cy="484" r="25" fill="#06B6D4"/>
+    </g>
+
+    <rect x="28" y="28" width="968" height="968" rx="206" stroke="#BFDBFE" stroke-opacity="0.14" stroke-width="8"/>
+    <rect x="48" y="48" width="928" height="928" rx="188" stroke="#06B6D4" stroke-opacity="0.16" stroke-width="2"/>
+  </g>
+</svg>

@@ -238,4 +238,25 @@ describe('AppHeader daily check-in entry', () => {
     expect(text).toContain('Streak bonus rules')
     expect(text).toContain('Streak day 7 earns an extra $10.00')
   })
+
+  it('renders the eligibility progress bar based on cumulative spend and caps at 100%', async () => {
+    getCheckinStatus.mockResolvedValue({
+      enabled: true,
+      eligible: true,
+      checked_in: false,
+      blacklisted: false,
+      checkin_date: '2026-06-16',
+      reward_amount: null,
+      current_streak: 0,
+      lifetime_checkin_days: 0,
+      min_total_usage_usd: 50,
+      total_usage_usd: 73.77,
+      recent_records: []
+    })
+
+    const wrapper = await mountHeader()
+    const progress = wrapper.get('[data-test="daily-checkin-eligibility-progress"]')
+
+    expect(progress.attributes('style')).toContain('width: 100%')
+  })
 })

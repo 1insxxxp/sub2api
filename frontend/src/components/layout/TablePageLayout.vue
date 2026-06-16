@@ -1,20 +1,20 @@
 <template>
-  <div class="table-page-layout" :class="{ 'mobile-mode': isMobile }">
-    <div v-if="$slots.actions" class="layout-section-fixed">
+  <div class="table-page-layout admin-workspace" :class="{ 'mobile-mode': isMobile }">
+    <div v-if="$slots.actions" class="layout-section-fixed admin-toolbar-surface">
       <slot name="actions" />
     </div>
 
-    <div v-if="$slots.filters" class="layout-section-fixed">
+    <div v-if="$slots.filters" class="layout-section-fixed admin-toolbar-surface">
       <slot name="filters" />
     </div>
 
     <div class="layout-section-scrollable">
-      <div class="card table-scroll-container">
+      <div class="card table-scroll-container admin-table-stage">
         <slot name="table" />
       </div>
     </div>
 
-    <div v-if="$slots.pagination" class="layout-section-fixed">
+    <div v-if="$slots.pagination" class="layout-section-fixed admin-pagination-surface">
       <slot name="pagination" />
     </div>
   </div>

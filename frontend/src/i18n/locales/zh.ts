@@ -16,20 +16,27 @@ export default {
       workflow: '使用流程'
     },
     hero: {
-      eyebrow: '面向生产团队的 AI API 网关',
-      title: '稳定接入多模型 API 的统一网关',
+      eyebrow: 'PASSION API GATEWAY',
+      title: 'Passion API 一站式 API 中转服务',
+      titleLead: 'Passion API',
+      titleAccent: '一站式 API 中转服务',
       subtitle:
-        '用 OpenAI 兼容格式统一接入多家模型服务，内置多渠道调度、钱包计费、状态监控和风控能力。',
+        '保留 OpenAI 兼容调用方式，把账号池、渠道路由、余额计费和风控监控放在同一套控制台里。开发侧只改 Base URL，运营侧能看见每一次请求。',
       primaryCta: '开始使用',
       dashboardCta: '进入控制台',
       secondaryCta: '查看文档',
-      statusBadge: '网关运行中',
-      panelTitle: '实时路由控制台',
-      panelSubtitle: '一次请求，自动路由到当前更健康的可用渠道。',
+      statusBadge: '实时在线',
+      panelTitle: '路由与计费看板',
+      panelSubtitle: '请求进入网关后，按渠道状态、模型和余额规则选择可用线路。',
       routeLabel: '路由',
       billingLabel: '钱包计费',
       latencyLabel: '延迟',
       successLabel: '成功率',
+      proof: {
+        compatible: 'OpenAI 兼容调用',
+        routing: '账号池与故障切换',
+        billing: '余额计费与用量追踪'
+      },
       channels: {
         openai: 'OpenAI 兼容',
         gemini: 'Gemini 池',
@@ -39,78 +46,78 @@ export default {
     },
     trust: {
       multiModel: {
-        title: '多模型接入',
-        desc: '一个网关统一接入主流模型服务。'
+        title: '统一模型入口',
+        desc: '主流模型服务走同一套请求入口。'
       },
       routing: {
-        title: '智能渠道调度',
-        desc: '自动在健康渠道之间分配请求。'
+        title: '渠道自动切换',
+        desc: '异常、限速或余额不足时及时避让。'
       },
       billing: {
-        title: '实时余额计费',
-        desc: '请求处理时同步记录余额和成本。'
+        title: '余额实时扣费',
+        desc: '每次调用都能对应到明细和成本。'
       },
       monitoring: {
-        title: '监控与风控',
-        desc: '观察渠道健康，降低异常使用风险。'
+        title: '监控和风控',
+        desc: '把渠道健康和异常流量放到前台。'
       }
     },
     sections: {
-      capabilitiesEyebrow: '网关运营能力',
-      capabilitiesTitle: '运营 API 网关所需的核心能力',
+      capabilitiesEyebrow: '日常运营',
+      capabilitiesTitle: '账号、路由、计费都在一个工作台',
       capabilitiesSubtitle:
-        '从用户密钥到账号池，从请求监控到钱包计费，把流量、成本和运营集中到一个控制台。'
+        '面向实际运营流程整理功能，不把复杂度丢给开发者：谁在调用、走哪条线路、花了多少钱，都能在控制台里追踪。'
     },
     capabilities: {
       unifiedApi: {
-        title: '统一 API 接入',
-        desc: '保留 OpenAI 兼容客户端，只需切换一个 Base URL。'
+        title: '兼容现有客户端',
+        desc: 'SDK 和请求结构不变，迁移时主要切换 Base URL。'
       },
       accountPool: {
-        title: '账号池管理',
-        desc: '统一组织上游账号，并支持请求分配和故障切换。'
+        title: '上游账号池',
+        desc: '按渠道组织账号，支持分配、限额和故障切换。'
       },
       monitoring: {
-        title: '渠道健康监控',
-        desc: '在影响用户前查看可用性、延迟和失败情况。'
+        title: '渠道状态可见',
+        desc: '可用性、延迟、失败率先被看见，再决定是否调整路由。'
       },
       wallet: {
-        title: '钱包余额计费',
-        desc: '按余额扣费，记录使用明细，让成本清晰可见。'
+        title: '钱包和明细',
+        desc: '按余额扣费，保留用户、模型、金额对应关系。'
       },
       keys: {
-        title: '用户与 API Key',
-        desc: '发放密钥、控制访问，并按账号拆分用量。'
+        title: '用户 API Key',
+        desc: '发放密钥、控制访问，并按用户拆分调用记录。'
       },
       risk: {
         title: '风控中心',
-        desc: '为异常流量、滥用行为和高风险调用增加保护。'
+        desc: '对异常注册、异常调用和高风险流量增加拦截点。'
       }
     },
     integration: {
       eyebrow: '开发者接入',
-      title: '按 OpenAI 兼容格式设计',
+      title: '不用重写客户端，只换入口地址',
       subtitle:
-        '保留现有 SDK 和请求格式，替换网关地址，带上平台 API Key，即可在控制台观察用量和成本。',
+        '保留现有 SDK、模型参数和请求格式。把 Base URL 指向网关，再使用平台 API Key，即可把调用、成本和渠道状态纳入统一管理。',
       replaceBaseUrl: '替换 Base URL',
       useApiKey: '使用平台 API Key',
-      monitorCost: '监控请求和成本'
+      monitorCost: '查看调用、余额和渠道状态'
     },
     workflow: {
-      eyebrow: '快速开始',
-      title: '三步开始接入',
-      subtitle: '适合希望快速迁移流量、又不想重写客户端的团队。',
+      eyebrow: '接入路径',
+      title: '先跑通调用，再逐步打开运营能力',
+      subtitle: '适合把现有 OpenAI 兼容请求迁移进网关：先验证请求，再补齐余额、风控和渠道监控。',
       step1: {
-        title: '创建账号',
-        desc: '注册或登录后进入控制台。'
+        title: '创建账号和密钥',
+        desc: '进入控制台后创建 API Key，用于应用侧请求。'
       },
       step2: {
-        title: '准备访问权限',
-        desc: '创建 API Key，并确认钱包余额可用。'
+        title: '配置可用渠道',
+        desc: '准备上游账号，确认模型、余额和路由规则可用。'
       },
       step3: {
-        title: '切换请求入口',
-        desc: '替换 Base URL，让请求通过统一网关转发。'
+        title: '切换 Base URL',
+        desc: '让请求经过网关转发，并在控制台查看调用结果。'
       }
     },
     // 新增：面向用户的价值主张
@@ -205,7 +212,7 @@ export default {
     // CTA 区块
     cta: {
       title: '准备好开始了吗？',
-      subtitle: '准备好承载生产流量了吗？',
+      subtitle: '先把一条业务请求接进来，再逐步打开计费、路由和风控能力。',
       description: '注册即可获得免费试用额度，体验一站式 AI 服务',
       button: '免费注册'
     },
@@ -6186,6 +6193,13 @@ export default {
         uploadImage: '上传图片',
         remove: '移除',
         logoHint: 'PNG、JPG 或 SVG 格式，最大 300KB。建议：80x80px 正方形图片。',
+        themeLogoHint: '可分别上传浅色和深色模式 Logo。主题专属 Logo 为空时，会自动使用默认 Logo。',
+        defaultLogo: '默认 Logo',
+        defaultLogoHint: '作为兜底 Logo 使用，兼容旧版设置。',
+        lightLogo: '浅色模式 Logo',
+        lightLogoHint: '建议使用深色文字或彩色图标，适合白色背景。',
+        darkLogo: '深色模式 Logo',
+        darkLogoHint: '建议使用浅色文字或高亮图标，适合深色背景。',
         logoSizeError: '图片大小超过 300KB 限制（{size}KB）',
         logoTypeError: '请选择图片文件',
         logoReadError: '读取图片文件失败',

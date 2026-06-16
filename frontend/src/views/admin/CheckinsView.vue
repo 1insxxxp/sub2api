@@ -1,7 +1,7 @@
 <template>
   <AppLayout>
-    <div class="space-y-6">
-      <section class="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm dark:border-dark-700 dark:bg-dark-800">
+    <div class="checkins-admin-page space-y-6">
+      <section class="card checkins-overview-panel overflow-hidden rounded-2xl">
         <div class="border-b border-slate-100 bg-slate-50/80 px-5 py-4 dark:border-dark-700 dark:bg-dark-900/30">
           <div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
             <div class="min-w-0">
@@ -10,7 +10,7 @@
                   {{ t('admin.checkins.overviewTitle') }}
                 </h2>
                 <span
-                  class="inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold"
+                  class="checkins-status-pill inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold"
                   :class="configForm.enabled ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-200' : 'bg-gray-100 text-gray-500 dark:bg-dark-700 dark:text-dark-300'"
                 >
                   {{ configForm.enabled ? t('admin.checkins.enabledStatus') : t('admin.checkins.disabledStatus') }}
@@ -20,7 +20,7 @@
                 {{ t('admin.checkins.configDescription') }}
               </p>
             </div>
-            <div class="flex flex-wrap items-center gap-2">
+            <div class="checkins-overview-actions flex flex-wrap items-center gap-2">
               <button
                 type="button"
                 class="btn btn-secondary inline-flex items-center gap-2"
@@ -47,7 +47,7 @@
         <div
           v-for="item in statsCards"
           :key="item.key"
-            class="rounded-lg border border-gray-100 bg-white p-4 shadow-sm dark:border-dark-700 dark:bg-dark-800"
+            class="checkins-stat-card"
         >
           <div class="flex items-start justify-between gap-3">
             <div>
@@ -73,7 +73,7 @@
       </section>
 
       <section class="grid gap-6 xl:grid-cols-[minmax(280px,360px),1fr]">
-        <div class="rounded-lg border border-gray-200 bg-white shadow-sm dark:border-dark-700 dark:bg-dark-800">
+        <div class="card checkins-editor-card">
           <div class="border-b border-gray-100 px-5 py-4 dark:border-dark-700">
             <div class="flex items-center gap-3">
               <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-primary-50 text-primary-600 dark:bg-primary-900/20 dark:text-primary-300">
@@ -127,7 +127,7 @@
               </p>
             </div>
 
-            <div class="rounded-lg bg-gray-50 px-4 py-3 dark:bg-dark-700/60">
+            <div class="checkins-summary-strip rounded-lg bg-gray-50 px-4 py-3 dark:bg-dark-700/60">
               <div class="flex items-center justify-between gap-3 text-sm">
                 <span class="text-gray-500 dark:text-dark-400">{{ t('admin.checkins.rewardRules') }}</span>
                 <span class="font-semibold text-gray-900 dark:text-white">
@@ -144,7 +144,7 @@
           </div>
         </div>
 
-        <div class="rounded-lg border border-gray-200 bg-white shadow-sm dark:border-dark-700 dark:bg-dark-800">
+        <div class="card checkins-editor-card">
           <div class="border-b border-gray-100 px-5 py-4 dark:border-dark-700">
             <div class="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
               <div>
@@ -190,7 +190,7 @@
                 </button>
               </div>
 
-              <div class="overflow-hidden rounded-lg border border-gray-100 dark:border-dark-700">
+              <div class="checkins-grid-panel overflow-hidden rounded-lg border border-gray-100 dark:border-dark-700">
                 <div class="grid grid-cols-[minmax(92px,1fr),minmax(92px,1fr),minmax(76px,96px)] gap-3 bg-gray-50 px-3 py-2 text-xs font-semibold text-gray-500 dark:bg-dark-700/60 dark:text-dark-300">
                   <span>{{ t('admin.checkins.rewardAmountUsd') }}</span>
                   <span>{{ t('admin.checkins.probabilityPercent') }}</span>
@@ -253,7 +253,7 @@
                 <div
                   v-for="(rule, index) in configForm.streak_rules"
                   :key="`streak-rule-${index}`"
-                  class="rounded-lg border border-amber-100 bg-amber-50/40 p-3 dark:border-amber-500/20 dark:bg-amber-900/10"
+                  class="checkins-streak-card rounded-lg border border-amber-100 bg-amber-50/40 p-3 dark:border-amber-500/20 dark:bg-amber-900/10"
                 >
                   <div class="mb-3 flex items-center justify-between gap-2">
                     <span class="inline-flex items-center rounded-full bg-white px-2.5 py-1 text-xs font-semibold text-amber-700 shadow-sm dark:bg-dark-800 dark:text-amber-200">
@@ -288,7 +288,7 @@
       </div>
       </section>
 
-      <section class="card rounded-lg border border-gray-200 bg-white dark:border-dark-700 dark:bg-dark-800">
+      <section class="card checkins-table-card rounded-2xl">
         <div class="border-b border-gray-100 p-4 dark:border-dark-700">
           <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <div>
@@ -385,7 +385,7 @@
       </section>
 
       <section class="grid gap-6 xl:grid-cols-[minmax(320px,420px),1fr]">
-        <div class="card rounded-lg border border-gray-200 bg-white p-4 dark:border-dark-700 dark:bg-dark-800">
+        <div class="card checkins-blacklist-form rounded-2xl p-4">
           <div class="mb-4">
             <h2 class="text-base font-semibold text-gray-900 dark:text-white">
               {{ t('admin.checkins.addBlacklist') }}
@@ -445,7 +445,7 @@
 
             <div
               v-if="selectedBlacklistUser"
-              class="rounded-lg bg-gray-50 px-3 py-2 text-sm text-gray-700 dark:bg-dark-700 dark:text-gray-200"
+              class="checkins-selected-user rounded-lg bg-gray-50 px-3 py-2 text-sm text-gray-700 dark:bg-dark-700 dark:text-gray-200"
             >
               {{ selectedBlacklistUser.email }}
             </div>
@@ -473,7 +473,7 @@
           </div>
         </div>
 
-        <div class="card rounded-lg border border-gray-200 bg-white dark:border-dark-700 dark:bg-dark-800">
+        <div class="card checkins-table-card rounded-2xl">
           <div class="border-b border-gray-100 p-4 dark:border-dark-700">
             <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
               <div>
@@ -1008,3 +1008,140 @@ onUnmounted(() => {
   clearTimeout(blacklistSearchTimeout)
 })
 </script>
+
+<style>
+/* Check-ins admin surface polish */
+.checkins-admin-page {
+  position: relative;
+}
+
+.checkins-overview-panel,
+.checkins-editor-card,
+.checkins-table-card,
+.checkins-blacklist-form {
+  position: relative;
+  overflow: hidden;
+}
+
+.checkins-overview-panel::before,
+.checkins-editor-card::before,
+.checkins-table-card::before,
+.checkins-blacklist-form::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 1px;
+  background: linear-gradient(90deg, rgba(37, 99, 235, 0.9), rgba(59, 130, 246, 0.45), rgba(34, 211, 238, 0.4));
+  pointer-events: none;
+}
+
+.checkins-status-pill {
+  box-shadow:
+    0 8px 18px rgba(15, 23, 42, 0.08),
+    0 1px 0 rgba(255, 255, 255, 0.72) inset;
+}
+
+.checkins-stat-card {
+  position: relative;
+  height: 100%;
+  overflow: hidden;
+  border-radius: 1rem;
+  border: 1px solid rgba(191, 219, 254, 0.42);
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.96), rgba(248, 250, 252, 0.9)),
+    rgba(255, 255, 255, 0.94);
+  padding: 1rem;
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.82) inset,
+    0 18px 38px rgba(15, 23, 42, 0.055);
+}
+
+.checkins-stat-card::after {
+  content: "";
+  position: absolute;
+  inset: 0 auto auto 0;
+  width: 4.75rem;
+  height: 4.75rem;
+  border-radius: 9999px;
+  background: radial-gradient(circle, rgba(59, 130, 246, 0.15), transparent 70%);
+  transform: translate(-24%, -24%);
+  pointer-events: none;
+}
+
+.checkins-summary-strip {
+  border: 1px solid rgba(226, 232, 240, 0.84);
+  background:
+    linear-gradient(135deg, rgba(248, 250, 252, 0.98), rgba(241, 245, 249, 0.92)),
+    rgba(248, 250, 252, 0.94);
+}
+
+.checkins-grid-panel {
+  border-color: rgba(203, 213, 225, 0.8);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.74) inset;
+}
+
+.checkins-streak-card {
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.7) inset,
+    0 12px 28px rgba(245, 158, 11, 0.08);
+}
+
+.checkins-selected-user {
+  border: 1px solid rgba(147, 197, 253, 0.42);
+  background:
+    linear-gradient(135deg, rgba(239, 246, 255, 0.94), rgba(248, 250, 252, 0.92)),
+    rgba(239, 246, 255, 0.86);
+}
+
+@media (max-width: 1023px) {
+  .checkins-overview-actions {
+    width: 100%;
+    justify-content: flex-end;
+  }
+}
+
+.dark .checkins-status-pill {
+  box-shadow:
+    0 10px 24px rgba(0, 0, 0, 0.2),
+    0 1px 0 rgba(255, 255, 255, 0.05) inset;
+}
+
+.dark .checkins-stat-card {
+  border-color: rgba(96, 165, 250, 0.18);
+  background:
+    linear-gradient(135deg, rgba(15, 23, 42, 0.96), rgba(15, 23, 42, 0.92)),
+    rgba(15, 23, 42, 0.94);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.05) inset,
+    0 22px 44px rgba(0, 0, 0, 0.22);
+}
+
+.dark .checkins-stat-card::after {
+  background: radial-gradient(circle, rgba(56, 189, 248, 0.13), transparent 70%);
+}
+
+.dark .checkins-summary-strip {
+  border-color: rgba(51, 65, 85, 0.92);
+  background:
+    linear-gradient(135deg, rgba(30, 41, 59, 0.94), rgba(15, 23, 42, 0.92)),
+    rgba(15, 23, 42, 0.88);
+}
+
+.dark .checkins-grid-panel {
+  border-color: rgba(51, 65, 85, 0.92);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.04) inset;
+}
+
+.dark .checkins-streak-card {
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.04) inset,
+    0 18px 36px rgba(0, 0, 0, 0.18);
+}
+
+.dark .checkins-selected-user {
+  border-color: rgba(96, 165, 250, 0.2);
+  background:
+    linear-gradient(135deg, rgba(30, 41, 59, 0.9), rgba(15, 23, 42, 0.88)),
+    rgba(15, 23, 42, 0.86);
+}
+</style>

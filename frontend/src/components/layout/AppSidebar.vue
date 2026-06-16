@@ -9,8 +9,10 @@
     <!-- Logo/Brand -->
     <div class="sidebar-header" :class="{ 'sidebar-header-collapsed': sidebarCollapsed }">
       <!-- Custom Logo or Default Logo -->
-      <div class="sidebar-logo flex h-9 w-9 items-center justify-center overflow-hidden rounded-lg bg-primary-50 shadow-sm shadow-primary-900/10 ring-1 ring-primary-100 dark:bg-primary-500/10 dark:ring-primary-500/20">
+      <div class="sidebar-logo flex h-9 w-9 items-center justify-center overflow-hidden rounded-lg bg-[linear-gradient(135deg,#2563eb,#3b82f6,#06b6d4)] p-0.5 shadow-[0_10px_26px_rgba(37,99,235,0.14)] ring-1 ring-blue-300/50">
+        <div class="flex h-full w-full items-center justify-center overflow-hidden rounded-[0.42rem] bg-white/95 dark:bg-dark-950/90">
         <img v-if="settingsLoaded" :src="siteLogo || '/logo.png'" alt="Logo" class="h-full w-full object-contain" />
+        </div>
       </div>
       <div class="sidebar-brand" :class="{ 'sidebar-brand-collapsed': sidebarCollapsed }" :aria-hidden="sidebarCollapsed ? 'true' : 'false'">
         <span class="sidebar-brand-title text-base font-bold text-slate-950 dark:text-white">
@@ -140,7 +142,7 @@
     </nav>
 
     <!-- Bottom Section -->
-    <div class="mt-auto border-t border-slate-100 bg-slate-50/60 p-3 dark:border-dark-800 dark:bg-dark-900/50">
+    <div class="mt-auto border-t border-blue-200/70 bg-[linear-gradient(180deg,rgba(239,246,255,0.72),rgba(255,255,255,0.98))] p-3 dark:border-blue-400/15 dark:bg-[linear-gradient(180deg,rgba(30,64,175,0.18),rgba(2,6,23,0.88))]">
       <!-- Theme Toggle -->
       <button
         @click="toggleTheme"
@@ -243,7 +245,7 @@ const expandedGroups = ref<Set<string>>(new Set())
 
 // Site settings from appStore (cached, no flicker)
 const siteName = computed(() => appStore.siteName)
-const siteLogo = computed(() => appStore.siteLogo)
+const siteLogo = computed(() => appStore.effectiveSiteLogo)
 const siteVersion = computed(() => appStore.siteVersion)
 const settingsLoaded = computed(() => appStore.publicSettingsLoaded)
 
@@ -794,8 +796,7 @@ function toggleSidebar() {
 
 function toggleTheme() {
   isDark.value = !isDark.value
-  document.documentElement.classList.toggle('dark', isDark.value)
-  localStorage.setItem('theme', isDark.value ? 'dark' : 'light')
+  appStore.setTheme(isDark.value)
 }
 
 function closeMobile() {
@@ -867,13 +868,12 @@ function handleGroupClick(item: NavItem) {
 
 // Initialize theme
 const savedTheme = localStorage.getItem('theme')
-if (
+const shouldUseDark =
   savedTheme === 'dark' ||
   (!savedTheme && window.matchMedia('(prefers-color-scheme: dark)').matches)
-) {
-  isDark.value = true
-  document.documentElement.classList.add('dark')
-}
+document.documentElement.classList.toggle('dark', shouldUseDark)
+isDark.value = shouldUseDark
+appStore.syncThemeFromDocument()
 
 // Fetch admin settings (for feature-gated nav items like Ops).
 watch(

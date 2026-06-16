@@ -69,13 +69,16 @@ export default {
         'glass-sm': '0 4px 16px rgba(0, 0, 0, 0.06)',
         glow: '0 0 20px rgba(59, 130, 246, 0.25)',
         'glow-lg': '0 0 40px rgba(14, 116, 144, 0.28)',
+        brand: '0 12px 30px rgba(37, 99, 235, 0.28)',
+        'brand-soft': '0 10px 26px rgba(37, 99, 235, 0.14)',
         card: '0 1px 3px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.06)',
-        'card-hover': '0 10px 40px rgba(0, 0, 0, 0.08)',
+        'card-hover': '0 16px 42px rgba(15, 23, 42, 0.1)',
         'inner-glow': 'inset 0 1px 0 rgba(255, 255, 255, 0.1)'
       },
       backgroundImage: {
         'gradient-radial': 'radial-gradient(var(--tw-gradient-stops))',
         'gradient-primary': 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)',
+        'gradient-brand': 'linear-gradient(135deg, #2563eb 0%, #3b82f6 54%, #06b6d4 100%)',
         'gradient-dark': 'linear-gradient(135deg, #1e293b 0%, #0f172a 100%)',
         'gradient-glass':
           'linear-gradient(135deg, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0.05) 100%)',

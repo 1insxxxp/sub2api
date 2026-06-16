@@ -161,4 +161,47 @@ describe('admin UsersView', () => {
       expect.any(Object)
     )
   })
+
+  it('uses the shared dropdown shell for filter settings', async () => {
+    const wrapper = mount(UsersView, {
+      global: {
+        stubs: {
+          AppLayout: { template: '<div><slot /></div>' },
+          TablePageLayout: {
+            template: '<div><slot name="filters" /><slot name="table" /><slot name="pagination" /></div>'
+          },
+          DataTable: DataTableStub,
+          Pagination: true,
+          ConfirmDialog: true,
+          EmptyState: true,
+          GroupBadge: true,
+          Select: true,
+          UserAttributesConfigModal: true,
+          UserConcurrencyCell: true,
+          UserCreateModal: true,
+          UserEditModal: true,
+          UserApiKeysModal: true,
+          UserAllowedGroupsModal: true,
+          UserBalanceModal: true,
+          UserBalanceHistoryModal: true,
+          GroupReplaceModal: true,
+          Icon: true,
+          Teleport: true
+        }
+      }
+    })
+
+    await flushPromises()
+
+    const filterButton = wrapper.findAll('button').find((candidate) => candidate.attributes('title') === 'admin.users.filterSettings')
+    if (!filterButton) {
+      throw new Error('filter settings button not found')
+    }
+
+    await filterButton.trigger('click')
+    await flushPromises()
+
+    const dropdown = wrapper.find('.dropdown')
+    expect(dropdown.exists()).toBe(true)
+  })
 })

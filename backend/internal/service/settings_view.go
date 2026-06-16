@@ -129,6 +129,8 @@ type SystemSettings struct {
 
 	SiteName                    string
 	SiteLogo                    string
+	SiteLogoLight               string
+	SiteLogoDark                string
 	SiteSubtitle                string
 	APIBaseURL                  string
 	ContactInfo                 string
@@ -251,6 +253,8 @@ type PublicSettings struct {
 	TurnstileSiteKey                 string
 	SiteName                         string
 	SiteLogo                         string
+	SiteLogoLight                    string
+	SiteLogoDark                     string
 	SiteSubtitle                     string
 	APIBaseURL                       string
 	ContactInfo                      string

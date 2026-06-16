@@ -16,20 +16,27 @@ export default {
       workflow: 'Workflow'
     },
     hero: {
-      eyebrow: 'AI API gateway for production teams',
-      title: 'A unified gateway for reliable multi-model API access',
+      eyebrow: 'PASSION API GATEWAY',
+      title: 'Passion API one-stop API relay service',
+      titleLead: 'Passion API',
+      titleAccent: 'One-stop API relay service',
       subtitle:
-        'Route OpenAI-compatible requests across multiple providers with wallet billing, monitoring, and risk controls built in.',
+        'Keep OpenAI-compatible calls while managing account pools, routing, wallet billing, monitoring, and risk controls from one console. Developers change the Base URL; operators see every request.',
       primaryCta: 'Start using',
       dashboardCta: 'Enter dashboard',
       secondaryCta: 'Read docs',
-      statusBadge: 'Gateway online',
-      panelTitle: 'Live routing console',
-      panelSubtitle: 'One request, routed through the healthiest available channel.',
+      statusBadge: 'Live now',
+      panelTitle: 'Routing and billing board',
+      panelSubtitle: 'Requests enter the gateway and are matched to available channels by health, model, and balance rules.',
       routeLabel: 'Route',
       billingLabel: 'Wallet billing',
       latencyLabel: 'Latency',
       successLabel: 'Success',
+      proof: {
+        compatible: 'OpenAI-compatible calls',
+        routing: 'Account pools and failover',
+        billing: 'Wallet billing and usage traces'
+      },
       channels: {
         openai: 'OpenAI-compatible',
         gemini: 'Gemini pool',
@@ -39,78 +46,78 @@ export default {
     },
     trust: {
       multiModel: {
-        title: 'Multi-model access',
-        desc: 'Use one gateway for mainstream model providers.'
+        title: 'Unified model entry',
+        desc: 'Route mainstream model providers through one entry point.'
       },
       routing: {
-        title: 'Smart routing',
-        desc: 'Automatically balance traffic across healthy channels.'
+        title: 'Channel failover',
+        desc: 'Avoid channels with errors, limits, or balance issues.'
       },
       billing: {
-        title: 'Real-time billing',
-        desc: 'Track balance and cost as requests are processed.'
+        title: 'Live wallet billing',
+        desc: 'Connect every call to a usage line and cost.'
       },
       monitoring: {
-        title: 'Monitoring and risk control',
-        desc: 'Watch channel health and reduce abnormal usage.'
+        title: 'Monitoring and controls',
+        desc: 'Bring channel health and abnormal traffic into view.'
       }
     },
     sections: {
-      capabilitiesEyebrow: 'Gateway operations',
-      capabilitiesTitle: 'Everything needed to operate an API gateway',
+      capabilitiesEyebrow: 'Daily operations',
+      capabilitiesTitle: 'Accounts, routing, and billing in one workspace',
       capabilitiesSubtitle:
-        'From user keys to account pools, the platform keeps traffic, billing, and operations in one place.'
+        'The product follows real operating work: who is calling, which route was used, how much it cost, and where intervention is needed.'
     },
     capabilities: {
       unifiedApi: {
-        title: 'Unified API access',
-        desc: 'Keep OpenAI-compatible clients and connect through a single Base URL.'
+        title: 'Keep existing clients',
+        desc: 'SDKs and request shapes stay the same; migration mainly changes the Base URL.'
       },
       accountPool: {
-        title: 'Account pool management',
-        desc: 'Organize upstream accounts and distribute traffic with failover.'
+        title: 'Upstream account pools',
+        desc: 'Group provider accounts with allocation, quotas, and failover.'
       },
       monitoring: {
-        title: 'Channel health monitoring',
-        desc: 'See availability, latency, and failures before they affect users.'
+        title: 'Visible channel health',
+        desc: 'Watch availability, latency, and failures before tuning routes.'
       },
       wallet: {
-        title: 'Wallet billing',
-        desc: 'Charge by balance, record usage, and keep spending visible.'
+        title: 'Wallet and ledgers',
+        desc: 'Bill from balance and keep user, model, and amount tied together.'
       },
       keys: {
-        title: 'Users and API keys',
-        desc: 'Issue keys, control access, and separate usage by account.'
+        title: 'User API keys',
+        desc: 'Issue keys, control access, and separate request logs by user.'
       },
       risk: {
         title: 'Risk control center',
-        desc: 'Add guardrails for abnormal traffic, abuse, and unsafe usage.'
+        desc: 'Add checkpoints for suspicious signups, abnormal traffic, and risky calls.'
       }
     },
     integration: {
       eyebrow: 'Developer integration',
-      title: 'OpenAI-compatible by design',
+      title: 'No client rewrite, just change the endpoint',
       subtitle:
-        'Keep your SDK and request format. Change the gateway address, attach your platform key, and monitor usage from the console.',
+        'Keep your SDKs, model parameters, and request format. Point the Base URL to the gateway, use a platform API key, and manage requests, cost, and channel state together.',
       replaceBaseUrl: 'Replace Base URL',
       useApiKey: 'Use your platform API key',
-      monitorCost: 'Monitor requests and cost'
+      monitorCost: 'Watch calls, balance, and channel state'
     },
     workflow: {
-      eyebrow: 'Quick start',
-      title: 'Launch in three steps',
-      subtitle: 'A simple flow for teams that want to start routing traffic without rebuilding clients.',
+      eyebrow: 'Integration path',
+      title: 'Verify calls first, then turn on operations',
+      subtitle: 'Move OpenAI-compatible traffic into the gateway, validate the request path, then add wallet billing, risk controls, and channel monitoring.',
       step1: {
-        title: 'Create an account',
-        desc: 'Register or log in and enter the console.'
+        title: 'Create account and key',
+        desc: 'Enter the console and create an API key for your application.'
       },
       step2: {
-        title: 'Prepare access',
-        desc: 'Create an API key and make sure wallet balance is ready.'
+        title: 'Configure channels',
+        desc: 'Prepare upstream accounts and confirm models, balance, and routing rules.'
       },
       step3: {
-        title: 'Switch the endpoint',
-        desc: 'Replace the Base URL and send requests through the gateway.'
+        title: 'Switch the Base URL',
+        desc: 'Send traffic through the gateway and inspect results in the console.'
       }
     },
     // User-focused value proposition
@@ -205,7 +212,7 @@ export default {
     // CTA section
     cta: {
       title: 'Ready to Get Started?',
-      subtitle: 'Ready to route production traffic?',
+      subtitle: 'Start with one business request, then turn on billing, routing, and risk controls as you grow.',
       description: 'Sign up now and get free trial credits to experience seamless AI access',
       button: 'Sign Up Free'
     },
@@ -426,6 +433,7 @@ export default {
     },
     view: 'View',
     settings: 'Settings',
+    locale: 'Language',
     chooseFile: 'Choose File',
     copy: 'Copy',
     notAvailable: 'N/A',
@@ -6033,6 +6041,13 @@ export default {
         uploadImage: 'Upload Image',
         remove: 'Remove',
         logoHint: 'PNG, JPG, or SVG. Max 300KB. Recommended: 80x80px square image.',
+        themeLogoHint: 'Upload separate logos for light and dark mode. Theme-specific logos fall back to the default logo when empty.',
+        defaultLogo: 'Default Logo',
+        defaultLogoHint: 'Fallback logo for compatibility with existing settings.',
+        lightLogo: 'Light Mode Logo',
+        lightLogoHint: 'Use dark text or colored marks for light backgrounds.',
+        darkLogo: 'Dark Mode Logo',
+        darkLogoHint: 'Use light text or bright marks for dark backgrounds.',
         logoSizeError: 'Image size exceeds 300KB limit ({size}KB)',
         logoTypeError: 'Please select an image file',
         logoReadError: 'Failed to read the image file',

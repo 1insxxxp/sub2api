@@ -121,8 +121,8 @@ function handleUpload(event: Event) {
 
   const reader = new FileReader()
   if (props.mode === 'svg') {
-    reader.onload = (e) => {
-      const text = e.target?.result as string
+    reader.onload = () => {
+      const text = reader.result as string
       if (text) emit('update:modelValue', text.trim())
     }
     reader.readAsText(file)
@@ -132,8 +132,8 @@ function handleUpload(event: Event) {
       input.value = ''
       return
     }
-    reader.onload = (e) => {
-      emit('update:modelValue', e.target?.result as string)
+    reader.onload = () => {
+      emit('update:modelValue', reader.result as string)
     }
     reader.readAsDataURL(file)
   }

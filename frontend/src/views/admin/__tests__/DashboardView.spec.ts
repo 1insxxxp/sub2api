@@ -140,4 +140,26 @@ describe('admin DashboardView', () => {
       granularity: 'hour'
     }))
   })
+
+  it('renders branded metric cards and a toolbar surface for dashboard controls', async () => {
+    const wrapper = mount(DashboardView, {
+      global: {
+        stubs: {
+          AppLayout: { template: '<div><slot /></div>' },
+          LoadingSpinner: true,
+          Icon: true,
+          DateRangePicker: true,
+          Select: true,
+          ModelDistributionChart: true,
+          TokenUsageTrend: true,
+          Line: true
+        }
+      }
+    })
+
+    await flushPromises()
+
+    expect(wrapper.findAll('.stat-card')).toHaveLength(8)
+    expect(wrapper.findAll('.admin-toolbar-surface').length).toBeGreaterThan(0)
+  })
 })

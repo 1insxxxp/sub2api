@@ -25,6 +25,7 @@ async function bootstrap() {
   // Initialize settings from injected config BEFORE mounting (prevents flash)
   // This must happen after pinia is installed but before router and i18n
   const appStore = useAppStore()
+  appStore.syncThemeFromDocument()
   appStore.initFromInjectedConfig()
 
   // Set document title immediately after config is loaded

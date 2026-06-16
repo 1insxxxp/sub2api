@@ -2,7 +2,7 @@
   <AppLayout>
     <TablePageLayout>
       <template #filters>
-        <div class="flex flex-col justify-between gap-4 lg:flex-row lg:items-start">
+        <div class="admin-toolbar-surface flex flex-col justify-between gap-4 lg:flex-row lg:items-start">
           <!-- Left: Search + Filters -->
           <div class="flex flex-1 flex-wrap items-center gap-3">
             <div class="relative w-full sm:w-64">
@@ -147,7 +147,7 @@
     >
       <div class="channel-dialog-body">
         <!-- Tab Bar -->
-        <div class="flex items-center border-b border-gray-200 dark:border-dark-700 flex-shrink-0 -mx-4 sm:-mx-6 px-4 sm:px-6 -mt-3 sm:-mt-4">
+        <div class="channel-tab-strip flex items-center flex-shrink-0 -mx-4 sm:-mx-6 px-4 sm:px-6 -mt-3 sm:-mt-4">
           <!-- Basic Settings Tab -->
           <button
             type="button"
@@ -174,7 +174,7 @@
         <!-- Tab Content -->
         <form id="channel-form" @submit.prevent="handleSubmit" class="flex-1 overflow-y-auto pt-4">
           <!-- Basic Settings Tab -->
-          <div v-show="activeTab === 'basic'" class="space-y-5">
+          <div v-show="activeTab === 'basic'" class="admin-form-group space-y-5">
             <!-- Name -->
             <div>
               <label class="input-label">{{ t('admin.channels.form.name', 'Name') }} <span class="text-red-500">*</span></label>
@@ -229,7 +229,7 @@
             </div>
 
             <!-- Platform Management -->
-            <div class="space-y-3">
+            <div class="admin-form-group space-y-3">
               <label class="input-label mb-0">{{ t('admin.channels.form.platformConfig', '平台配置') }}</label>
               <div class="flex flex-wrap gap-2">
                 <label
@@ -253,7 +253,7 @@
             </div>
 
             <!-- Apply Pricing to Account Stats (toggle only in basic settings) -->
-            <div class="border-t border-gray-200 pt-4 dark:border-dark-700">
+            <div class="admin-form-group border-t border-gray-200 pt-4 dark:border-dark-700">
               <div class="flex items-center justify-between">
                 <div>
                   <label class="text-sm font-medium text-gray-700 dark:text-gray-300">
@@ -276,7 +276,7 @@
             v-for="(section, sIdx) in form.platforms"
             :key="'tab-' + section.platform"
             v-show="section.enabled && activeTab === section.platform"
-            class="space-y-4"
+            class="admin-form-group space-y-4"
           >
             <!-- Groups -->
             <div>
@@ -1618,12 +1618,26 @@ onUnmounted(() => {
   min-height: 400px;
 }
 
+.channel-tab-strip {
+  border-bottom: 1px solid rgba(191, 219, 254, 0.7);
+  background:
+    linear-gradient(180deg, rgba(239, 246, 255, 0.78), rgba(255, 255, 255, 0.96)),
+    rgba(255, 255, 255, 0.92);
+}
+
+:global(.dark) .channel-tab-strip {
+  border-bottom-color: rgba(96, 165, 250, 0.14);
+  background:
+    linear-gradient(180deg, rgba(30, 64, 175, 0.14), rgba(2, 6, 23, 0.92)),
+    rgba(15, 23, 42, 0.88);
+}
+
 .channel-tab {
-  @apply flex items-center gap-1.5 px-3 py-2.5 text-sm font-medium border-b-2 transition-colors whitespace-nowrap;
+  @apply flex items-center gap-1.5 px-3 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap;
 }
 
 .channel-tab-active {
-  @apply border-primary-600 text-primary-600 dark:border-primary-400 dark:text-primary-400;
+  @apply border-primary-600 text-primary-600 dark:border-primary-400 dark:text-primary-300;
 }
 
 .channel-tab-inactive {

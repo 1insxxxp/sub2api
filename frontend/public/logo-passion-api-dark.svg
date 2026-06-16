@@ -1,0 +1,55 @@
+<svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="passion-api-dark-mark" x1="124" y1="92" x2="390" y2="420" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#67E8F9"/>
+      <stop offset="0.36" stop-color="#60A5FA"/>
+      <stop offset="0.72" stop-color="#3B82F6"/>
+      <stop offset="1" stop-color="#06B6D4"/>
+    </linearGradient>
+    <linearGradient id="passion-api-dark-route" x1="165" y1="350" x2="354" y2="162" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#CFFAFE"/>
+      <stop offset="0.48" stop-color="#93C5FD"/>
+      <stop offset="1" stop-color="#67E8F9"/>
+    </linearGradient>
+    <filter id="passion-api-dark-shadow" x="40" y="42" width="432" height="442" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feDropShadow dx="0" dy="20" stdDeviation="22" flood-color="#000000" flood-opacity="0.34"/>
+      <feDropShadow dx="0" dy="0" stdDeviation="18" flood-color="#06B6D4" flood-opacity="0.28"/>
+    </filter>
+  </defs>
+
+  <g filter="url(#passion-api-dark-shadow)">
+    <path
+      d="M139 389V123H284C366 123 418 172 418 244C418 318 365 364 284 364H212"
+      stroke="#020617"
+      stroke-opacity="0.78"
+      stroke-width="94"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+    />
+    <path
+      d="M139 389V123H284C366 123 418 172 418 244C418 318 365 364 284 364H212"
+      stroke="url(#passion-api-dark-mark)"
+      stroke-width="72"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+    />
+    <path
+      d="M175 340L346 170"
+      stroke="#020617"
+      stroke-opacity="0.82"
+      stroke-width="58"
+      stroke-linecap="round"
+    />
+    <path
+      d="M175 340L346 170"
+      stroke="url(#passion-api-dark-route)"
+      stroke-width="36"
+      stroke-linecap="round"
+    />
+  </g>
+
+  <circle cx="139" cy="389" r="20" fill="#67E8F9"/>
+  <circle cx="175" cy="340" r="16" fill="#CFFAFE"/>
+  <circle cx="346" cy="170" r="16" fill="#93C5FD"/>
+  <circle cx="418" cy="244" r="18" fill="#06B6D4"/>
+</svg>

@@ -8,15 +8,20 @@ const appStoreState = reactive({
   cachedPublicSettings: null as null | {
     site_name?: string
     site_logo?: string
+    site_logo_light?: string
+    site_logo_dark?: string
     site_subtitle?: string
     doc_url?: string
     home_content?: string
   },
   siteName: 'PassionAPI',
   siteLogo: '',
+  effectiveSiteLogo: '',
   docUrl: 'https://docs.example.com',
   publicSettingsLoaded: true,
   fetchPublicSettings: vi.fn(),
+  syncThemeFromDocument: vi.fn(),
+  setTheme: vi.fn(),
 })
 
 const authStoreState = reactive({
@@ -34,18 +39,22 @@ vi.mock('@/stores', () => ({
 vi.mock('vue-i18n', async () => {
   const actual = await vi.importActual<typeof import('vue-i18n')>('vue-i18n')
   const messages: Record<string, string> = {
-    'home.hero.title': 'A unified gateway for reliable multi-model API access',
-    'home.hero.subtitle':
-      'Route OpenAI-compatible requests across multiple providers with wallet billing, monitoring, and risk controls.',
+    'home.hero.titleLead': 'Passion API',
+    'home.hero.titleAccent': 'One-stop API relay service',
+    'home.hero.eyebrow': 'PASSION API GATEWAY',
+    'home.hero.proof.compatible': 'OpenAI-compatible calls',
+    'home.hero.proof.routing': 'Account pools and failover',
+    'home.hero.proof.billing': 'Wallet billing and usage traces',
     'home.hero.primaryCta': 'Start using',
     'home.hero.secondaryCta': 'Read docs',
-    'home.hero.statusBadge': 'Gateway online',
-    'home.hero.panelTitle': 'Live routing console',
+    'home.hero.statusBadge': 'Live now',
+    'home.hero.panelTitle': 'Routing and billing board',
     'home.trust.multiModel.title': 'Multi-model access',
-    'home.sections.capabilitiesTitle': 'Everything needed to operate an API gateway',
-    'home.integration.title': 'OpenAI-compatible by design',
-    'home.workflow.title': 'Launch in three steps',
-    'home.cta.title': 'Ready to route production traffic?',
+    'home.sections.capabilitiesTitle': 'Accounts, routing, and billing in one workspace',
+    'home.integration.title': 'No client rewrite, just change the endpoint',
+    'home.workflow.title': 'Verify calls first, then turn on operations',
+    'home.cta.title': 'Ready to Get Started?',
+    'home.cta.subtitle': 'Start with one business request, then turn on billing, routing, and risk controls as you grow.',
     'home.footer.tagline': 'Reliable AI API gateway for teams and developers.',
     'home.login': 'Login',
     'home.docs': 'Docs',
@@ -89,9 +98,12 @@ describe('HomeView default homepage', () => {
     appStoreState.cachedPublicSettings = null
     appStoreState.siteName = 'PassionAPI'
     appStoreState.siteLogo = ''
+    appStoreState.effectiveSiteLogo = ''
     appStoreState.docUrl = 'https://docs.example.com'
     appStoreState.publicSettingsLoaded = true
     appStoreState.fetchPublicSettings.mockReset()
+    appStoreState.syncThemeFromDocument.mockReset()
+    appStoreState.setTheme.mockReset()
 
     authStoreState.isAuthenticated = false
     authStoreState.isAdmin = false
@@ -113,20 +125,34 @@ describe('HomeView default homepage', () => {
   it('renders the redesigned acquisition homepage copy', async () => {
     const wrapper = await mountHome()
 
-    expect(wrapper.text()).toContain('A unified gateway for reliable multi-model API access')
-    expect(wrapper.text()).toContain('Live routing console')
-    expect(wrapper.text()).toContain('Everything needed to operate an API gateway')
-    expect(wrapper.text()).toContain('OpenAI-compatible by design')
-    expect(wrapper.text()).toContain('Launch in three steps')
-    expect(wrapper.text()).toContain('Ready to route production traffic?')
+    expect(wrapper.text()).toContain('Passion API')
+    expect(wrapper.text()).toContain('One-stop API relay service')
+    expect(wrapper.text()).toContain('PASSION API GATEWAY')
+    expect(wrapper.text()).toContain('OpenAI-compatible calls')
+    expect(wrapper.text()).not.toContain('Keep OpenAI-compatible calls while managing account pools')
+    expect(wrapper.text()).toContain('Routing and billing board')
+    expect(wrapper.text()).toContain('Accounts, routing, and billing in one workspace')
+    expect(wrapper.text()).toContain('No client rewrite, just change the endpoint')
+    expect(wrapper.text()).toContain('Verify calls first, then turn on operations')
+    expect(wrapper.text()).toContain('Start with one business request')
   })
 
   it('renders motion hooks for the default homepage experience', async () => {
     const wrapper = await mountHome()
 
     expect(wrapper.find('.home-motion-root').exists()).toBe(true)
+    expect(wrapper.find('.home-site-header').classes()).toContain('fixed')
+    expect(wrapper.find('.home-site-header-spacer').exists()).toBe(true)
+    expect(wrapper.find('.home-hero-overline').exists()).toBe(true)
+    expect(wrapper.findAll('.home-proof-chip')).toHaveLength(3)
+    expect(wrapper.findAll('.home-proof-icon')).toHaveLength(3)
     expect(wrapper.find('.home-routing-panel').exists()).toBe(true)
+    expect(wrapper.find('.home-panel-icon').exists()).toBe(true)
+    expect(wrapper.findAll('.home-channel-icon').length).toBeGreaterThanOrEqual(4)
+    expect(wrapper.findAll('.home-metric-icon').length).toBeGreaterThanOrEqual(4)
+    expect(wrapper.findAll('.home-metric-row').length).toBeGreaterThanOrEqual(4)
     expect(wrapper.findAll('.home-status-pulse').length).toBeGreaterThan(0)
+    expect(wrapper.findAll('.home-status-dot').length).toBeGreaterThanOrEqual(5)
     expect(wrapper.findAll('.home-motion-card').length).toBeGreaterThanOrEqual(6)
     expect(wrapper.findAll('.home-section-reveal').length).toBeGreaterThanOrEqual(6)
     expect(wrapper.find('.home-code-panel.home-scroll-reveal').exists()).toBe(true)
@@ -170,15 +196,32 @@ describe('HomeView default homepage', () => {
   it('adapts homepage brand accents for both light and dark themes', () => {
     const source = readFileSync('src/views/HomeView.vue', 'utf-8')
 
-    expect(source).toContain('rgba(239,246,255,0.92)')
-    expect(source).toContain('rgba(30,41,59,0.48)')
-    expect(source).toContain('border-primary-200 bg-primary-50')
-    expect(source).toContain('dark:border-primary-500/30 dark:bg-primary-500/10')
+    expect(source).toContain('rgba(219,234,254,0.92)')
+    expect(source).toContain('rgba(30,64,175,0.26)')
+    expect(source).toContain('home-hero-overline')
+    expect(source).toContain('home-proof-chip')
+    expect(source).toContain('home-panel-icon')
+    expect(source).toContain('home-metric-row')
+    expect(source).toContain('--status-pulse-color')
+    expect(source).toContain('bg-[linear-gradient(90deg,#2563eb,#06b6d4)]')
     expect(source).toContain('text-cyan-300')
     expect(source).toContain('rgba(59, 130, 246, 0.24)')
     expect(source).toContain('rgba(14, 116, 144, 0.18)')
     expect(source).not.toContain('rgba(139, 92, 246')
     expect(source).not.toContain('rgba(20, 184, 166, 0.22)')
+  })
+
+  it('keeps the reinforced brand theme hooks for sharper UI surfaces', () => {
+    const source = readFileSync('src/style.css', 'utf-8')
+
+    expect(source).toContain('.brand-surface')
+    expect(source).toContain('.brand-rail')
+    expect(source).toContain('.theme-crisp')
+    expect(source).toContain('.home-site-header-scrolled')
+    expect(source).toContain('rgba(255, 255, 255, 0.78)')
+    expect(source).toContain('rgba(2, 6, 23, 0.72)')
+    expect(source).toContain('0 12px 30px rgba(37, 99, 235, 0.28)')
+    expect(source).toContain('linear-gradient(90deg, var(--brand-600), var(--brand-500), var(--brand-cyan))')
   })
 
   it('keeps configured custom home content as a full-page override', async () => {
@@ -193,7 +236,7 @@ describe('HomeView default homepage', () => {
     const wrapper = await mountHome()
 
     expect(wrapper.html()).toContain('Custom landing page')
-    expect(wrapper.text()).not.toContain('A unified gateway for reliable multi-model API access')
+    expect(wrapper.text()).not.toContain('One-stop API relay service')
     expect(wrapper.find('.home-motion-root').exists()).toBe(false)
   })
 })
