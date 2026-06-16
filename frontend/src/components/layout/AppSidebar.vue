@@ -9,11 +9,11 @@
     <!-- Logo/Brand -->
     <div class="sidebar-header" :class="{ 'sidebar-header-collapsed': sidebarCollapsed }">
       <!-- Custom Logo or Default Logo -->
-      <div class="sidebar-logo flex h-9 w-9 items-center justify-center overflow-hidden rounded-xl shadow-glow">
+      <div class="sidebar-logo flex h-9 w-9 items-center justify-center overflow-hidden rounded-lg bg-primary-50 shadow-sm shadow-primary-900/10 ring-1 ring-primary-100 dark:bg-primary-500/10 dark:ring-primary-500/20">
         <img v-if="settingsLoaded" :src="siteLogo || '/logo.png'" alt="Logo" class="h-full w-full object-contain" />
       </div>
       <div class="sidebar-brand" :class="{ 'sidebar-brand-collapsed': sidebarCollapsed }" :aria-hidden="sidebarCollapsed ? 'true' : 'false'">
-        <span class="sidebar-brand-title text-lg font-bold text-gray-900 dark:text-white">
+        <span class="sidebar-brand-title text-base font-bold text-slate-950 dark:text-white">
           {{ siteName }}
         </span>
         <!-- Version Badge -->
@@ -54,7 +54,7 @@
                 </span>
               </button>
               <!-- Children -->
-              <div v-if="!sidebarCollapsed && isGroupExpanded(item)" class="mb-1 ml-4 border-l border-gray-200 pl-2 dark:border-dark-600">
+              <div v-if="!sidebarCollapsed && isGroupExpanded(item)" class="mb-1 ml-4 border-l border-slate-200 pl-2 dark:border-dark-700">
                 <router-link
                   v-for="child in item.children"
                   :key="child.path"
@@ -140,7 +140,7 @@
     </nav>
 
     <!-- Bottom Section -->
-    <div class="mt-auto border-t border-gray-100 p-3 dark:border-dark-800">
+    <div class="mt-auto border-t border-slate-100 bg-slate-50/60 p-3 dark:border-dark-800 dark:bg-dark-900/50">
       <!-- Theme Toggle -->
       <button
         @click="toggleTheme"
@@ -173,7 +173,7 @@
   <transition name="fade">
     <div
       v-if="mobileOpen"
-      class="fixed inset-0 z-30 bg-black/50 lg:hidden"
+      class="fixed inset-0 z-30 bg-slate-950/55 backdrop-blur-sm lg:hidden"
       @click="closeMobile"
     ></div>
   </transition>

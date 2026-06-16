@@ -1,6 +1,6 @@
 <template>
-  <header class="glass sticky top-0 z-30 border-b border-gray-200/50 dark:border-dark-700/50">
-    <div class="flex h-16 items-center justify-between px-4 md:px-6">
+  <header class="sticky top-0 z-30 border-b border-slate-200/80 bg-white/85 shadow-sm shadow-slate-950/[0.02] backdrop-blur-xl dark:border-dark-800/80 dark:bg-dark-950/80">
+    <div class="flex h-16 items-center justify-between gap-3 px-4 md:px-6">
       <!-- Left: Mobile Menu Toggle + Page Title -->
       <div class="flex items-center gap-4">
         <button
@@ -11,18 +11,18 @@
           <Icon name="menu" size="md" />
         </button>
 
-        <div class="hidden lg:block">
-          <h1 class="text-lg font-semibold text-gray-900 dark:text-white">
+        <div class="hidden min-w-0 lg:block">
+          <h1 class="truncate text-base font-bold text-slate-950 dark:text-white">
             {{ pageTitle }}
           </h1>
-          <p v-if="pageDescription" class="text-xs text-gray-500 dark:text-dark-400">
+          <p v-if="pageDescription" class="mt-0.5 max-w-xl truncate text-xs text-slate-500 dark:text-dark-400">
             {{ pageDescription }}
           </p>
         </div>
       </div>
 
       <!-- Right: Announcements + Docs + Language + Subscriptions + Balance + User Dropdown -->
-      <div class="flex items-center gap-3">
+      <div class="flex min-w-0 items-center gap-2 md:gap-3">
         <!-- Announcement Bell -->
         <AnnouncementBell v-if="user" />
 
@@ -32,7 +32,7 @@
           :href="docUrl"
           target="_blank"
           rel="noopener noreferrer"
-          class="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-sm font-medium text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-900 dark:text-dark-400 dark:hover:bg-dark-800 dark:hover:text-white"
+          class="hidden items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-sm font-semibold text-slate-600 transition-colors hover:bg-slate-100 hover:text-slate-950 dark:text-dark-400 dark:hover:bg-dark-800 dark:hover:text-white sm:flex"
         >
           <Icon name="book" size="sm" />
           <span class="hidden sm:inline">{{ t('nav.docs') }}</span>
@@ -47,7 +47,7 @@
         <!-- Balance Display -->
         <div
           v-if="user"
-          class="hidden items-center gap-2 rounded-xl bg-primary-50 px-3 py-1.5 dark:bg-primary-900/20 sm:flex"
+          class="hidden items-center gap-2 rounded-lg border border-primary-100 bg-primary-50/80 px-3 py-1.5 shadow-sm shadow-primary-900/5 dark:border-primary-500/20 dark:bg-primary-500/10 sm:flex"
         >
           <svg
             class="h-4 w-4 text-primary-600 dark:text-primary-400"
@@ -77,7 +77,7 @@
             data-test="daily-checkin-button"
             :disabled="checkinButtonDisabled"
             :title="checkinButtonTitle"
-            class="inline-flex items-center gap-1.5 rounded-xl border border-amber-200 bg-amber-50 px-3 py-1.5 text-sm font-semibold text-amber-700 transition-colors hover:bg-amber-100 disabled:cursor-not-allowed disabled:border-gray-200 disabled:bg-gray-100 disabled:text-gray-400 dark:border-amber-500/30 dark:bg-amber-900/20 dark:text-amber-200 dark:hover:bg-amber-900/30 dark:disabled:border-dark-700 dark:disabled:bg-dark-800 dark:disabled:text-dark-400"
+            class="inline-flex items-center gap-1.5 rounded-lg border border-amber-200 bg-amber-50 px-3 py-1.5 text-sm font-semibold text-amber-700 shadow-sm shadow-amber-900/5 transition-colors hover:bg-amber-100 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400 dark:border-amber-500/30 dark:bg-amber-900/20 dark:text-amber-200 dark:hover:bg-amber-900/30 dark:disabled:border-dark-700 dark:disabled:bg-dark-800 dark:disabled:text-dark-400"
             @click="handleCheckin"
           >
             <Icon
@@ -89,7 +89,7 @@
           </button>
 
           <div
-            class="pointer-events-none absolute right-0 top-full z-50 mt-3 w-[25rem] max-w-[calc(100vw-2rem)] translate-y-1 rounded-2xl border border-emerald-100 bg-white p-4 text-left opacity-0 shadow-[0_24px_70px_-32px_rgba(15,118,110,0.45)] ring-1 ring-emerald-50 transition-all duration-150 group-hover/checkin:pointer-events-auto group-hover/checkin:translate-y-0 group-hover/checkin:opacity-100 group-focus-within/checkin:pointer-events-auto group-focus-within/checkin:translate-y-0 group-focus-within/checkin:opacity-100 dark:border-dark-700 dark:bg-dark-800 dark:ring-dark-700"
+            class="pointer-events-none absolute right-0 top-full z-50 mt-3 w-[25rem] max-w-[calc(100vw-2rem)] translate-y-1 rounded-lg border border-slate-200 bg-white p-4 text-left opacity-0 shadow-[0_24px_70px_-32px_rgba(15,23,42,0.35)] ring-1 ring-slate-100 transition-all duration-150 group-hover/checkin:pointer-events-auto group-hover/checkin:translate-y-0 group-hover/checkin:opacity-100 group-focus-within/checkin:pointer-events-auto group-focus-within/checkin:translate-y-0 group-focus-within/checkin:opacity-100 dark:border-dark-700 dark:bg-dark-900 dark:ring-dark-700"
             data-test="daily-checkin-popover"
           >
             <div class="flex items-start justify-between gap-3">
@@ -210,10 +210,10 @@
         <div v-if="user" class="relative" ref="dropdownRef">
           <button
             @click="toggleDropdown"
-            class="flex items-center gap-2 rounded-xl p-1.5 transition-colors hover:bg-gray-100 dark:hover:bg-dark-800"
+            class="flex items-center gap-2 rounded-lg p-1.5 transition-colors hover:bg-slate-100 dark:hover:bg-dark-800"
             aria-label="User Menu"
           >
-            <div class="flex h-8 w-8 items-center justify-center overflow-hidden rounded-xl bg-gradient-to-br from-primary-500 to-primary-600 text-sm font-medium text-white shadow-sm">
+            <div class="flex h-8 w-8 items-center justify-center overflow-hidden rounded-lg bg-gradient-to-br from-primary-500 to-primary-700 text-sm font-semibold text-white shadow-sm shadow-primary-900/20">
               <img
                 v-if="avatarUrl"
                 :src="avatarUrl"
@@ -223,7 +223,7 @@
               <span v-else>{{ userInitials }}</span>
             </div>
             <div class="hidden text-left md:block">
-              <div class="text-sm font-medium text-gray-900 dark:text-white">
+              <div class="max-w-28 truncate text-sm font-semibold text-slate-950 dark:text-white">
                 {{ displayName }}
               </div>
               <div class="text-xs capitalize text-gray-500 dark:text-dark-400">
