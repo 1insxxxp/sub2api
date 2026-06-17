@@ -1,31 +1,31 @@
 <template>
   <Teleport to="body">
     <div
-      class="pointer-events-none fixed right-4 top-4 z-[9999] space-y-3"
+      class="pointer-events-none fixed right-3 top-3 z-[9999] space-y-2 sm:right-4 sm:top-4"
       aria-live="polite"
       aria-atomic="true"
     >
       <TransitionGroup
-        enter-active-class="transition ease-out duration-300"
-        enter-from-class="opacity-0 translate-x-full"
+        enter-active-class="transition ease-out duration-200"
+        enter-from-class="opacity-0 translate-x-4 scale-[0.98]"
         enter-to-class="opacity-100 translate-x-0"
-        leave-active-class="transition ease-in duration-200"
+        leave-active-class="transition ease-in duration-150"
         leave-from-class="opacity-100 translate-x-0"
-        leave-to-class="opacity-0 translate-x-full"
+        leave-to-class="opacity-0 translate-x-4 scale-[0.98]"
       >
         <div
           v-for="toast in toasts"
           :key="toast.id"
           :class="[
-            'brand-floating-panel pointer-events-auto min-w-[320px] max-w-[min(30rem,calc(100vw-2rem))] overflow-hidden',
+            'toast-panel pointer-events-auto relative min-w-[280px] max-w-[min(24rem,calc(100vw-1.5rem))] overflow-hidden rounded-xl border border-slate-200 bg-white/95 shadow-lg shadow-slate-950/10 ring-1 ring-slate-950/5 backdrop-blur-sm dark:border-white/10 dark:bg-slate-950/95 dark:shadow-black/25 dark:ring-white/10',
             getToneClass(toast.type)
           ]"
         >
-          <div class="relative p-4">
-            <div class="flex items-start gap-3">
+          <div class="toast-body relative px-3 py-2.5">
+            <div class="flex items-start gap-2.5">
               <!-- Icon -->
-              <div :class="['toast-icon-shell mt-0.5 flex-shrink-0', getIconShellClass(toast.type)]">
-                <Icon :name="getToastIconName(toast.type)" size="md" class="text-current" aria-hidden="true" />
+              <div :class="['toast-icon-shell mt-0.5 flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-lg border', getIconShellClass(toast.type)]">
+                <Icon :name="getToastIconName(toast.type)" size="sm" class="text-current" aria-hidden="true" />
               </div>
 
               <!-- Content -->
@@ -35,7 +35,7 @@
                 </p>
                 <p
                   :class="[
-                    'text-sm leading-relaxed',
+                    'text-[13px] leading-5',
                     toast.title
                       ? 'mt-1 text-slate-600 dark:text-slate-300'
                       : 'text-slate-900 dark:text-slate-100'
@@ -48,7 +48,7 @@
               <!-- Close button -->
               <button
                 @click="removeToast(toast.id)"
-                class="brand-floating-close -m-1 h-9 w-9 flex-shrink-0 rounded-xl p-0"
+                class="toast-close -mr-1 flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-lg text-slate-400 transition-colors duration-150 hover:bg-slate-100 hover:text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:text-slate-500 dark:hover:bg-white/[0.06] dark:hover:text-slate-200"
                 aria-label="Close notification"
               >
                 <Icon name="x" size="sm" />
@@ -57,7 +57,7 @@
           </div>
 
           <!-- Progress bar -->
-          <div v-if="toast.duration" class="toast-progress-track">
+          <div v-if="toast.duration" class="toast-progress-track h-0.5">
             <div
               :class="['h-full toast-progress', getProgressBarColor(toast.type)]"
               :style="{ animationDuration: `${toast.duration}ms` }"
@@ -114,9 +114,9 @@ const getToneClass = (type: string): string => {
 
 const getProgressBarColor = (type: string): string => {
   const colors: Record<string, string> = {
-    success: 'bg-green-500',
-    error: 'bg-red-500',
-    warning: 'bg-yellow-500',
+    success: 'bg-emerald-500',
+    error: 'bg-rose-500',
+    warning: 'bg-amber-500',
     info: 'bg-blue-500'
   }
   return colors[type] || colors.info
@@ -129,23 +129,15 @@ const removeToast = (id: string) => {
 
 <style scoped>
 .toast-icon-shell {
-  display: inline-flex;
-  height: 2.5rem;
-  width: 2.5rem;
-  align-items: center;
-  justify-content: center;
-  border-radius: 0.95rem;
-  border-width: 1px;
-  box-shadow: 0 10px 24px rgba(37, 99, 235, 0.08);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
 }
 
 .toast-progress-track {
-  height: 4px;
-  background: rgba(148, 163, 184, 0.14);
+  background: rgba(148, 163, 184, 0.16);
 }
 
-.dark .toast-progress-track {
-  background: rgba(51, 65, 85, 0.46);
+:global(.dark) .toast-progress-track {
+  background: rgba(255, 255, 255, 0.08);
 }
 
 .toast-success::after,
@@ -155,23 +147,23 @@ const removeToast = (id: string) => {
   content: '';
   position: absolute;
   inset: 0 auto 0 0;
-  width: 4px;
+  width: 2px;
 }
 
 .toast-success::after {
-  background: linear-gradient(180deg, #10b981, #34d399);
+  background: #10b981;
 }
 
 .toast-error::after {
-  background: linear-gradient(180deg, #f43f5e, #fb7185);
+  background: #f43f5e;
 }
 
 .toast-warning::after {
-  background: linear-gradient(180deg, #f59e0b, #fbbf24);
+  background: #f59e0b;
 }
 
 .toast-info::after {
-  background: linear-gradient(180deg, #2563eb, #06b6d4);
+  background: #2563eb;
 }
 
 .toast-progress {
