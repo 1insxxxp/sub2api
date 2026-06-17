@@ -46,6 +46,7 @@ vi.mock('vue-i18n', async () => {
     'home.hero.proof.routing': 'Account pools and failover',
     'home.hero.proof.billing': 'Wallet billing and usage traces',
     'home.hero.primaryCta': 'Start using',
+    'home.hero.dashboardCta': 'Enter dashboard',
     'home.hero.secondaryCta': 'Read docs',
     'home.hero.statusBadge': 'Live now',
     'home.hero.panelTitle': 'Routing and billing board',
@@ -157,6 +158,36 @@ describe('HomeView default homepage', () => {
     expect(wrapper.findAll('.home-section-reveal').length).toBeGreaterThanOrEqual(6)
     expect(wrapper.find('.home-code-panel.home-scroll-reveal').exists()).toBe(true)
     expect(wrapper.find('.home-cta-panel.home-scroll-reveal').exists()).toBe(true)
+  })
+
+  it('uses a cohesive glass navigation shell for the homepage header', async () => {
+    const wrapper = await mountHome()
+
+    expect(wrapper.find('.home-nav-shell').exists()).toBe(true)
+    expect(wrapper.find('.home-brand-link').exists()).toBe(true)
+    expect(wrapper.find('.home-brand-mark').exists()).toBe(true)
+    expect(wrapper.find('.home-nav-rail').exists()).toBe(true)
+    expect(wrapper.findAll('.home-nav-link')).toHaveLength(3)
+    expect(wrapper.find('.home-header-actions').exists()).toBe(true)
+    expect(wrapper.find('.home-icon-control').exists()).toBe(true)
+    expect(wrapper.find('.home-dashboard-cta').exists()).toBe(true)
+
+    const source = readFileSync('src/views/HomeView.vue', 'utf-8')
+    expect(source).toContain('home-nav-shell')
+    expect(source).toContain('home-header-actions')
+    expect(source).toContain('home-dashboard-cta')
+    expect(source).toContain('h-11')
+  })
+
+  it('does not prepend the authenticated user initial to the header dashboard CTA', async () => {
+    authStoreState.isAuthenticated = true
+    authStoreState.user = { email: 'admin@example.com' }
+
+    const wrapper = await mountHome()
+    const dashboardLinks = wrapper.findAll('a[href="/dashboard"]')
+
+    expect(dashboardLinks.length).toBeGreaterThan(0)
+    expect(dashboardLinks[0].text()).toBe('Enter dashboard')
   })
 
   it('keeps scroll motion perceptible enough for the default homepage', () => {

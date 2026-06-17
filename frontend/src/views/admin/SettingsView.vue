@@ -10,28 +10,6 @@
 
       <!-- Settings Form -->
       <form v-else @submit.prevent="saveSettings" class="space-y-6" novalidate>
-        <section class="admin-page-hero" data-test="admin-page-hero">
-          <div class="admin-page-hero-grid">
-            <div class="min-w-0">
-              <span class="admin-page-kicker">{{ t('admin.settings.title') }}</span>
-              <h2 class="admin-page-title">{{ t('admin.settings.title') }}</h2>
-              <p class="admin-page-description">
-                {{ t('admin.settings.description') }}
-              </p>
-              <div class="admin-page-meta">
-                <span class="admin-page-meta-chip">
-                  <span>{{ t('admin.settings.title') }}</span>
-                  <strong>{{ t(`admin.settings.tabs.${activeTab}`) }}</strong>
-                </span>
-                <span class="admin-page-meta-chip">
-                  <span>{{ t('common.save') }}</span>
-                  <strong>{{ settingsTabs.length }}</strong>
-                </span>
-              </div>
-            </div>
-          </div>
-        </section>
-
         <!-- Tab Navigation -->
         <div class="settings-tabs-shell admin-toolbar-surface">
           <nav

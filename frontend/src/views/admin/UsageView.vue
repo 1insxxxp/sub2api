@@ -1,33 +1,6 @@
 <template>
   <AppLayout>
     <div class="space-y-6">
-      <section class="admin-page-hero" data-test="admin-page-hero">
-        <div class="admin-page-hero-grid">
-          <div class="min-w-0">
-            <span class="admin-page-kicker">
-              <Icon name="chartBar" size="xs" />
-              {{ t('nav.usage') }}
-            </span>
-            <h1 class="admin-page-title">{{ t('admin.usage.title') }}</h1>
-            <p class="admin-page-description">{{ t('admin.usage.description') }}</p>
-            <div class="admin-page-meta">
-              <span class="admin-page-meta-chip">
-                <span>{{ t('admin.dashboard.timeRange') }}</span>
-                <strong>{{ startDate }} - {{ endDate }}</strong>
-              </span>
-              <span class="admin-page-meta-chip">
-                <span>{{ t('admin.dashboard.granularity') }}</span>
-                <strong>{{ granularity }}</strong>
-              </span>
-              <span class="admin-page-meta-chip">
-                <span>{{ t('common.total') }}</span>
-                <strong>{{ pagination.total }}</strong>
-              </span>
-            </div>
-          </div>
-        </div>
-      </section>
-
       <UsageStatsCards :stats="usageStats" />
       <!-- Charts Section -->
       <div class="space-y-4">

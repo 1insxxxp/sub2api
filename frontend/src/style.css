@@ -263,15 +263,50 @@
   }
 
   .home-site-header {
-    background: rgba(255, 255, 255, 0.54);
+    background: linear-gradient(180deg, rgba(239, 246, 255, 0.78), rgba(239, 246, 255, 0.34));
     box-shadow: none;
     border-color: transparent;
   }
 
   .home-site-header-scrolled {
+    background: rgba(255, 255, 255, 0.82);
+    border-color: rgba(147, 197, 253, 0.28);
+    box-shadow: 0 18px 42px rgba(15, 23, 42, 0.08);
+  }
+
+  .home-nav-shell {
+    border: 1px solid rgba(255, 255, 255, 0.78);
+    border-radius: 1.5rem;
+    background:
+      linear-gradient(135deg, rgba(255, 255, 255, 0.78), rgba(239, 246, 255, 0.6)),
+      rgba(255, 255, 255, 0.58);
+    box-shadow:
+      0 1px 0 rgba(255, 255, 255, 0.95) inset,
+      0 22px 50px rgba(15, 23, 42, 0.08),
+      0 10px 24px rgba(37, 99, 235, 0.07);
+    backdrop-filter: blur(22px);
+  }
+
+  .home-nav-rail {
+    border: 1px solid rgba(191, 219, 254, 0.62);
+    border-radius: 1rem;
+    background: rgba(255, 255, 255, 0.4);
+    box-shadow: 0 1px 0 rgba(255, 255, 255, 0.78) inset;
+  }
+
+  .home-locale-switcher > button {
+    min-height: 2.75rem;
+    border-radius: 0.75rem;
+    border-color: rgba(191, 219, 254, 0.82);
     background: rgba(255, 255, 255, 0.78);
-    border-color: rgba(147, 197, 253, 0.45);
-    box-shadow: 0 12px 30px rgba(15, 23, 42, 0.08);
+    box-shadow:
+      0 1px 0 rgba(255, 255, 255, 0.9) inset,
+      0 8px 20px rgba(15, 23, 42, 0.05);
+  }
+
+  .home-header-actions a,
+  .home-header-actions button {
+    min-height: 2.75rem;
   }
 
   .app-header-shell {
@@ -281,7 +316,7 @@
 
   html.dark .home-site-header,
   .dark .home-site-header {
-    background: rgba(2, 6, 23, 0.52) !important;
+    background: linear-gradient(180deg, rgba(15, 23, 42, 0.68), rgba(2, 6, 23, 0.3)) !important;
     border-color: transparent !important;
     box-shadow: none;
   }
@@ -291,6 +326,45 @@
     background: rgba(2, 6, 23, 0.72) !important;
     border-color: rgba(96, 165, 250, 0.2) !important;
     box-shadow: 0 14px 34px rgba(0, 0, 0, 0.28);
+  }
+
+  html.dark .home-nav-shell,
+  .dark .home-nav-shell {
+    border-color: rgba(148, 163, 184, 0.18);
+    background:
+      linear-gradient(135deg, rgba(15, 23, 42, 0.82), rgba(2, 6, 23, 0.66)),
+      rgba(2, 6, 23, 0.6);
+    box-shadow:
+      0 1px 0 rgba(255, 255, 255, 0.08) inset,
+      0 24px 54px rgba(0, 0, 0, 0.28),
+      0 10px 28px rgba(37, 99, 235, 0.12);
+  }
+
+  html.dark .home-nav-rail,
+  .dark .home-nav-rail {
+    border-color: rgba(148, 163, 184, 0.14);
+    background: rgba(255, 255, 255, 0.035);
+    box-shadow: 0 1px 0 rgba(255, 255, 255, 0.05) inset;
+  }
+
+  html.dark .home-locale-switcher > button,
+  .dark .home-locale-switcher > button {
+    border-color: rgba(148, 163, 184, 0.16);
+    background: rgba(255, 255, 255, 0.05);
+    box-shadow:
+      0 1px 0 rgba(255, 255, 255, 0.06) inset,
+      0 10px 22px rgba(0, 0, 0, 0.18);
+  }
+
+  @media (max-width: 640px) {
+    .home-site-header {
+      padding-left: 0.5rem;
+      padding-right: 0.5rem;
+    }
+
+    .home-nav-shell {
+      border-radius: 1.25rem;
+    }
   }
 
   html.dark .app-header-shell,
@@ -767,60 +841,6 @@
     @apply relative;
   }
 
-  .admin-page-hero {
-    @apply relative overflow-hidden rounded-[1.75rem] border px-5 py-5 sm:px-6 sm:py-6 lg:px-7;
-    border-color: rgba(191, 219, 254, 0.78);
-    background:
-      radial-gradient(circle at top left, rgba(59, 130, 246, 0.14), transparent 32%),
-      radial-gradient(circle at top right, rgba(6, 182, 212, 0.1), transparent 28%),
-      linear-gradient(135deg, rgba(255, 255, 255, 0.98), rgba(248, 250, 252, 0.96));
-    box-shadow:
-      0 1px 0 rgba(255, 255, 255, 0.92) inset,
-      0 22px 48px rgba(15, 23, 42, 0.06);
-  }
-
-  .admin-page-hero::before {
-    content: '';
-    @apply pointer-events-none absolute inset-x-0 top-0 h-px;
-    background: linear-gradient(90deg, rgba(37, 99, 235, 0.9), rgba(59, 130, 246, 0.34), rgba(6, 182, 212, 0.24));
-  }
-
-  .dark .admin-page-hero {
-    border-color: rgba(96, 165, 250, 0.2);
-    background:
-      radial-gradient(circle at top left, rgba(37, 99, 235, 0.2), transparent 32%),
-      radial-gradient(circle at top right, rgba(6, 182, 212, 0.12), transparent 28%),
-      linear-gradient(135deg, rgba(15, 23, 42, 0.97), rgba(15, 23, 42, 0.92));
-    box-shadow:
-      0 1px 0 rgba(255, 255, 255, 0.05) inset,
-      0 26px 54px rgba(0, 0, 0, 0.24);
-  }
-
-  .admin-page-hero-grid {
-    @apply flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between;
-  }
-
-  .admin-page-kicker {
-    @apply inline-flex items-center gap-2 rounded-full px-3 py-1 text-[11px] font-semibold uppercase text-blue-700 dark:text-blue-200;
-    letter-spacing: 0.08em;
-    background: rgba(219, 234, 254, 0.72);
-    box-shadow: 0 1px 0 rgba(255, 255, 255, 0.85) inset;
-  }
-
-  .dark .admin-page-kicker {
-    background: rgba(30, 64, 175, 0.26);
-    box-shadow: 0 1px 0 rgba(255, 255, 255, 0.06) inset;
-  }
-
-  .admin-page-title {
-    @apply mt-3 text-2xl font-semibold tracking-normal text-slate-950 dark:text-white sm:text-[1.9rem];
-    line-height: 1.08;
-  }
-
-  .admin-page-description {
-    @apply mt-2 max-w-3xl text-sm leading-6 text-slate-600 dark:text-slate-300;
-  }
-
   .admin-page-meta {
     @apply mt-4 flex flex-wrap items-center gap-2.5;
   }
@@ -845,14 +865,6 @@
   .admin-page-meta-chip strong {
     @apply font-semibold text-slate-950 dark:text-white;
     font-variant-numeric: tabular-nums;
-  }
-
-  .admin-page-actions {
-    @apply flex flex-wrap items-center gap-2 sm:justify-end;
-  }
-
-  .admin-page-actions > * {
-    @apply shrink-0;
   }
 
   .admin-toolbar-surface {

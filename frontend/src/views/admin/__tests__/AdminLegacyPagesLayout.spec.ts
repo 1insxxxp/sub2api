@@ -46,12 +46,11 @@ const sharedAdminComponentFiles = [
 ] as const
 
 describe('admin legacy page layout unification', () => {
-  it.each(pageFiles)('%s uses the shared admin hero and toolbar structure', (fileName) => {
+  it.each(pageFiles)('%s removes the redundant page hero and keeps the toolbar structure', (fileName) => {
     const source = readFileSync(resolve(currentDir, `../${fileName}`), 'utf8')
 
-    expect(source).toContain('data-test="admin-page-hero"')
-    expect(source).toContain('admin-page-hero')
-    expect(source).toContain('admin-page-meta-chip')
+    expect(source).not.toContain('data-test="admin-page-hero"')
+    expect(source).not.toContain('admin-page-hero')
     expect(source).toContain('admin-toolbar')
     expect(source).toContain('admin-toolbar-group')
   })

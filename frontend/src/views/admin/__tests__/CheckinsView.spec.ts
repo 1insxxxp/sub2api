@@ -198,7 +198,7 @@ describe('Admin CheckinsView', () => {
     expect(showSuccess).toHaveBeenCalledWith('admin.checkins.blacklistAdded')
   })
 
-  it('renders a shared admin hero and structured admin surfaces', async () => {
+  it('renders structured admin surfaces without the redundant page hero', async () => {
     const wrapper = mount(CheckinsView, {
       global: {
         stubs: {
@@ -212,9 +212,10 @@ describe('Admin CheckinsView', () => {
 
     await flushPromises()
 
-    expect(wrapper.find('[data-test="admin-page-hero"]').exists()).toBe(true)
-    expect(wrapper.find('[data-test="admin-page-hero"]').classes()).toContain('admin-page-hero')
-    expect(wrapper.find('.checkins-overview-panel')?.classes()).toContain('admin-page-hero')
+    expect(wrapper.find('[data-test="admin-page-hero"]').exists()).toBe(false)
+    expect(wrapper.find('.admin-page-hero').exists()).toBe(false)
+    expect(wrapper.find('[data-test="checkins-action-toolbar"]').classes()).toContain('admin-toolbar-surface')
+    expect(wrapper.findAll('.checkins-stat-card').length).toBeGreaterThan(0)
     expect(wrapper.findAll('.admin-toolbar-surface').length).toBeGreaterThan(0)
     expect(wrapper.findAll('.admin-panel-header').length).toBeGreaterThan(0)
   })

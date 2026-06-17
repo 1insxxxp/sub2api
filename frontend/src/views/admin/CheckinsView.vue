@@ -1,42 +1,26 @@
 <template>
   <AppLayout>
     <div class="checkins-admin-page space-y-6">
-      <section
-        data-test="admin-page-hero"
-        class="checkins-overview-panel admin-page-hero"
-      >
-        <div class="admin-page-hero-grid">
-          <div class="min-w-0">
-            <div class="flex flex-wrap items-center gap-2">
-              <span class="admin-page-kicker">{{ t('admin.checkins.overviewTitle') }}</span>
-              <span
-                class="checkins-status-pill inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold"
-                :class="configForm.enabled ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-200' : 'bg-gray-100 text-gray-500 dark:bg-dark-700 dark:text-dark-300'"
-              >
-                {{ configForm.enabled ? t('admin.checkins.enabledStatus') : t('admin.checkins.disabledStatus') }}
-              </span>
-            </div>
-            <h2 class="admin-page-title">{{ t('admin.checkins.overviewTitle') }}</h2>
-            <p class="admin-page-description">
-              {{ t('admin.checkins.configDescription') }}
-            </p>
-            <div class="admin-page-meta">
-              <span class="admin-page-meta-chip">
-                <span>{{ t('admin.checkins.enabled') }}</span>
-                <strong>{{ configForm.enabled ? t('admin.checkins.enabledStatus') : t('admin.checkins.disabledStatus') }}</strong>
-              </span>
-              <span class="admin-page-meta-chip">
-                <span>{{ t('admin.checkins.activeBlacklist') }}</span>
-                <strong>{{ stats?.active_blacklist_count ?? 0 }}</strong>
-              </span>
-              <span class="admin-page-meta-chip">
-                <span>{{ t('admin.checkins.rewardRules') }}</span>
-                <strong>{{ t('admin.checkins.tierCount', { count: configForm.tiers.length }) }}</strong>
-              </span>
-            </div>
+      <div class="admin-toolbar-surface" data-test="checkins-action-toolbar">
+        <div class="admin-toolbar">
+          <div class="admin-toolbar-group flex-1">
+            <span
+              class="checkins-status-pill inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold"
+              :class="configForm.enabled ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-200' : 'bg-gray-100 text-gray-500 dark:bg-dark-700 dark:text-dark-300'"
+            >
+              {{ configForm.enabled ? t('admin.checkins.enabledStatus') : t('admin.checkins.disabledStatus') }}
+            </span>
+            <span class="admin-page-meta-chip">
+              <span>{{ t('admin.checkins.activeBlacklist') }}</span>
+              <strong>{{ stats?.active_blacklist_count ?? 0 }}</strong>
+            </span>
+            <span class="admin-page-meta-chip">
+              <span>{{ t('admin.checkins.rewardRules') }}</span>
+              <strong>{{ t('admin.checkins.tierCount', { count: configForm.tiers.length }) }}</strong>
+            </span>
           </div>
 
-          <div class="admin-page-actions checkins-overview-actions">
+          <div class="admin-toolbar-group w-full justify-end lg:w-auto lg:flex-none">
             <button
               type="button"
               class="btn btn-secondary inline-flex items-center gap-2"
@@ -57,35 +41,35 @@
             </button>
           </div>
         </div>
+      </div>
 
-        <div class="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          <div
-            v-for="item in statsCards"
-            :key="item.key"
-            class="checkins-stat-card"
-          >
-            <div class="flex items-start justify-between gap-3">
-              <div>
-                <p class="text-xs font-medium text-gray-500 dark:text-dark-400">
-                  {{ item.label }}
-                </p>
-                <p class="mt-2 text-2xl font-semibold text-gray-900 dark:text-white">
-                  {{ item.value }}
-                </p>
-                <p class="mt-1 text-xs text-gray-500 dark:text-dark-400">
-                  {{ item.meta }}
-                </p>
-              </div>
-              <div
-                class="flex h-9 w-9 items-center justify-center rounded-lg"
-                :class="item.iconClass"
-              >
-                <Icon :name="item.icon" size="sm" />
-              </div>
+      <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <div
+          v-for="item in statsCards"
+          :key="item.key"
+          class="checkins-stat-card"
+        >
+          <div class="flex items-start justify-between gap-3">
+            <div>
+              <p class="text-xs font-medium text-gray-500 dark:text-dark-400">
+                {{ item.label }}
+              </p>
+              <p class="mt-2 text-2xl font-semibold text-gray-900 dark:text-white">
+                {{ item.value }}
+              </p>
+              <p class="mt-1 text-xs text-gray-500 dark:text-dark-400">
+                {{ item.meta }}
+              </p>
+            </div>
+            <div
+              class="flex h-9 w-9 items-center justify-center rounded-lg"
+              :class="item.iconClass"
+            >
+              <Icon :name="item.icon" size="sm" />
             </div>
           </div>
         </div>
-      </section>
+      </div>
 
       <section class="grid gap-6 xl:grid-cols-[minmax(280px,360px),1fr]">
         <div class="admin-surface checkins-editor-card">
@@ -1044,7 +1028,6 @@ onUnmounted(() => {
   position: relative;
 }
 
-.checkins-overview-panel,
 .checkins-editor-card,
 .checkins-table-card,
 .checkins-blacklist-form {
@@ -1052,7 +1035,6 @@ onUnmounted(() => {
   overflow: hidden;
 }
 
-.checkins-overview-panel::before,
 .checkins-editor-card::before,
 .checkins-table-card::before,
 .checkins-blacklist-form::before {
@@ -1120,13 +1102,6 @@ onUnmounted(() => {
   background:
     linear-gradient(135deg, rgba(239, 246, 255, 0.94), rgba(248, 250, 252, 0.92)),
     rgba(239, 246, 255, 0.86);
-}
-
-@media (max-width: 1023px) {
-  .checkins-overview-actions {
-    width: 100%;
-    justify-content: flex-end;
-  }
 }
 
 .dark .checkins-status-pill {

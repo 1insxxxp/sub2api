@@ -152,7 +152,7 @@ describe('admin UsageView distribution metric toggles', () => {
     vi.useRealTimers()
   })
 
-  it('renders shared admin shell surfaces around the usage workspace', async () => {
+  it('renders shared admin shell surfaces around the usage workspace without the redundant page hero', async () => {
     const wrapper = mount(UsageView, {
       global: {
         stubs: {
@@ -180,7 +180,8 @@ describe('admin UsageView distribution metric toggles', () => {
     vi.advanceTimersByTime(120)
     await flushPromises()
 
-    expect(wrapper.get('[data-test="admin-page-hero"]').classes()).toContain('admin-page-hero')
+    expect(wrapper.find('[data-test="admin-page-hero"]').exists()).toBe(false)
+    expect(wrapper.find('.admin-page-hero').exists()).toBe(false)
     expect(wrapper.get('[data-test="usage-chart-toolbar"]').classes()).toContain('admin-toolbar-surface')
     expect(wrapper.get('[data-test="usage-tabs-surface"]').classes()).toContain('admin-surface')
   })

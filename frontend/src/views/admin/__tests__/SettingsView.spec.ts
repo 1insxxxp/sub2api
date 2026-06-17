@@ -193,12 +193,12 @@ vi.mock("vue-i18n", async () => {
 });
 
 describe("admin SettingsView unified shell", () => {
-  it("renders the admin page hero and elevated tabs shell", async () => {
+  it("renders the elevated tabs shell without the redundant page hero", async () => {
     const wrapper = mountView();
     await flushPromises();
 
-    expect(wrapper.find('[data-test="admin-page-hero"]').exists()).toBe(true);
-    expect(wrapper.find('[data-test="admin-page-hero"]').classes()).toContain("admin-page-hero");
+    expect(wrapper.find('[data-test="admin-page-hero"]').exists()).toBe(false);
+    expect(wrapper.find(".admin-page-hero").exists()).toBe(false);
     expect(wrapper.find(".settings-tabs-shell").classes()).toContain("admin-toolbar-surface");
   });
 

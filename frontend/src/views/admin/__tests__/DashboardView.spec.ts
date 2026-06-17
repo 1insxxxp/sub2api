@@ -141,7 +141,7 @@ describe('admin DashboardView', () => {
     }))
   })
 
-  it('renders branded metric cards and a toolbar surface for dashboard controls', async () => {
+  it('renders branded metric cards and dashboard controls without the redundant page hero', async () => {
     const wrapper = mount(DashboardView, {
       global: {
         stubs: {
@@ -162,8 +162,8 @@ describe('admin DashboardView', () => {
     expect(wrapper.findAll('.stat-card')).toHaveLength(8)
     expect(wrapper.findAll('.admin-toolbar-surface').length).toBeGreaterThan(0)
     expect(wrapper.find('.admin-toolbar').exists()).toBe(true)
-    expect(wrapper.find('[data-test="admin-page-hero"]').exists()).toBe(true)
-    expect(wrapper.find('[data-test="admin-page-hero"]').classes()).toContain('admin-page-hero')
+    expect(wrapper.find('[data-test="admin-page-hero"]').exists()).toBe(false)
+    expect(wrapper.find('.admin-page-hero').exists()).toBe(false)
     expect(wrapper.find('[data-test="dashboard-user-trend-surface"]').classes()).toContain('admin-surface')
     expect(wrapper.find('[data-test="dashboard-user-trend-header"]').classes()).toContain('admin-panel-header')
   })

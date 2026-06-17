@@ -6,27 +6,19 @@
       </div>
 
       <template v-else>
-        <section class="admin-page-hero" data-test="admin-page-hero">
-          <div class="admin-page-hero-grid">
-            <div class="min-w-0">
-              <span class="admin-page-kicker">
-                <Icon name="shield" size="xs" />
-                {{ t('nav.riskControl') }}
+        <div class="admin-toolbar-surface" data-test="risk-control-action-toolbar">
+          <div class="admin-toolbar">
+            <div class="admin-toolbar-group flex-1">
+              <span class="admin-page-meta-chip">
+                {{ t('admin.riskControl.overview.status') }}
+                <strong>{{ configForm.enabled ? t('admin.riskControl.overview.enabled') : t('admin.riskControl.overview.disabled') }}</strong>
               </span>
-              <h1 class="admin-page-title">{{ t('admin.riskControl.title') }}</h1>
-              <p class="admin-page-description">{{ t('admin.riskControl.description') }}</p>
-              <div class="admin-page-meta">
-                <span class="admin-page-meta-chip">
-                  {{ t('admin.riskControl.overview.status') }}
-                  <strong>{{ configForm.enabled ? t('admin.riskControl.overview.enabled') : t('admin.riskControl.overview.disabled') }}</strong>
-                </span>
-                <span class="admin-page-meta-chip">
-                  {{ t('admin.riskControl.mode') }}
-                  <strong>{{ modeLabel(status?.mode ?? configForm.mode) }}</strong>
-                </span>
-              </div>
+              <span class="admin-page-meta-chip">
+                {{ t('admin.riskControl.mode') }}
+                <strong>{{ modeLabel(status?.mode ?? configForm.mode) }}</strong>
+              </span>
             </div>
-            <div class="admin-page-actions">
+            <div class="admin-toolbar-group w-full justify-end lg:w-auto lg:flex-none">
               <button type="button" class="btn btn-secondary inline-flex items-center gap-2" :disabled="statusLoading" @click="loadStatus(false)">
                 <Icon name="refresh" size="sm" :class="statusLoading ? 'animate-spin' : ''" />
                 {{ t('admin.riskControl.refreshStatus') }}
@@ -37,7 +29,7 @@
               </button>
             </div>
           </div>
-        </section>
+        </div>
 
         <div class="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
           <div

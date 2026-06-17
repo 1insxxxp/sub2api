@@ -211,7 +211,7 @@ describe('admin UsersView', () => {
     expect(dropdown.exists()).toBe(true)
   })
 
-  it('renders the unified admin page hero for the users workspace', async () => {
+  it('renders the users workspace without the redundant page hero', async () => {
     const wrapper = mount(UsersView, {
       global: {
         stubs: {
@@ -242,8 +242,8 @@ describe('admin UsersView', () => {
 
     await flushPromises()
 
-    expect(wrapper.find('[data-test="admin-page-hero"]').exists()).toBe(true)
-    expect(wrapper.find('[data-test="admin-page-hero"]').classes()).toContain('admin-page-hero')
+    expect(wrapper.find('[data-test="admin-page-hero"]').exists()).toBe(false)
+    expect(wrapper.find('.admin-page-hero').exists()).toBe(false)
     expect(wrapper.get('[data-test="filters-shell"]').find('.admin-toolbar').exists()).toBe(true)
   })
 

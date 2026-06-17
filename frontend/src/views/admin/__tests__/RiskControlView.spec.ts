@@ -212,7 +212,7 @@ describe('admin RiskControlView', () => {
     }))
   })
 
-  it('uses shared admin surfaces for the risk control workspace', async () => {
+  it('uses shared admin surfaces for the risk control workspace without the redundant page hero', async () => {
     const wrapper = mount(RiskControlView, {
       global: {
         stubs: {
@@ -229,7 +229,9 @@ describe('admin RiskControlView', () => {
 
     await flushPromises()
 
-    expect(wrapper.get('[data-test="admin-page-hero"]').classes()).toContain('admin-page-hero')
+    expect(wrapper.find('[data-test="admin-page-hero"]').exists()).toBe(false)
+    expect(wrapper.find('.admin-page-hero').exists()).toBe(false)
+    expect(wrapper.get('[data-test="risk-control-action-toolbar"]').classes()).toContain('admin-toolbar-surface')
     expect(wrapper.get('[data-test="pre-block-sync-card"]').classes()).toContain('admin-surface')
     expect(wrapper.get('[data-test="pre-block-api-key-load-card"]').classes()).toContain('admin-surface')
     expect(wrapper.get('[data-test="pre-block-sync-card"] .admin-panel-header').exists()).toBe(true)

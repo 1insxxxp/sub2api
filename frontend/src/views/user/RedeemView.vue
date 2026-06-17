@@ -1,35 +1,51 @@
 <template>
   <AppLayout>
-    <div class="mx-auto max-w-2xl space-y-6">
+    <div class="redeem-shell mx-auto w-full max-w-4xl space-y-5 sm:space-y-6">
       <!-- Current Balance Card -->
-      <div class="card overflow-hidden">
-        <div class="bg-gradient-to-br from-primary-500 to-primary-600 px-6 py-8 text-center">
-          <div
-            class="mb-4 inline-flex h-16 w-16 items-center justify-center rounded-2xl bg-white/20 backdrop-blur-sm"
-          >
-            <Icon name="creditCard" size="xl" class="text-white" />
+      <section class="redeem-balance-card">
+        <div class="redeem-balance-orbit"></div>
+        <div class="relative z-10 flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
+          <div class="min-w-0">
+            <div class="redeem-balance-icon">
+              <Icon name="creditCard" size="xl" class="text-white" />
+            </div>
+            <p class="redeem-eyebrow">{{ t('redeem.currentBalance') }}</p>
+            <p class="redeem-balance-value">
+              ${{ user?.balance?.toFixed(2) || '0.00' }}
+            </p>
           </div>
-          <p class="text-sm font-medium text-primary-100">{{ t('redeem.currentBalance') }}</p>
-          <p class="mt-2 text-4xl font-bold text-white">
-            ${{ user?.balance?.toFixed(2) || '0.00' }}
-          </p>
-          <p class="mt-2 text-sm text-primary-100">
-            {{ t('redeem.concurrency') }}: {{ user?.concurrency || 0 }} {{ t('redeem.requests') }}
-          </p>
+          <div class="redeem-balance-chip">
+            <span>{{ t('redeem.concurrency') }}</span>
+            <strong>{{ user?.concurrency || 0 }}</strong>
+            <small>{{ t('redeem.requests') }}</small>
+          </div>
         </div>
-      </div>
+      </section>
 
       <!-- Redeem Form -->
-      <div class="card">
-        <div class="p-6">
-          <form @submit.prevent="handleRedeem" class="space-y-5">
+      <section class="brand-surface redeem-code-panel">
+        <div class="p-5 sm:p-6">
+          <form @submit.prevent="handleRedeem" class="redeem-form">
+            <div class="redeem-panel-header">
+              <div class="brand-floating-icon redeem-panel-icon">
+                <Icon name="gift" size="md" />
+              </div>
+              <div class="min-w-0">
+                <h2 class="text-base font-semibold text-slate-950 dark:text-white">
+                  {{ t('redeem.redeemCodeLabel') }}
+                </h2>
+                <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                  {{ t('redeem.redeemCodeHint') }}
+                </p>
+              </div>
+            </div>
             <div>
-              <label for="code" class="input-label">
+              <label for="code" class="sr-only">
                 {{ t('redeem.redeemCodeLabel') }}
               </label>
-              <div class="relative mt-1">
-                <div class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-4">
-                  <Icon name="gift" size="md" class="text-gray-400 dark:text-dark-500" />
+              <div class="redeem-input-wrap">
+                <div class="redeem-input-icon">
+                  <Icon name="gift" size="md" />
                 </div>
                 <input
                   id="code"
@@ -38,18 +54,15 @@
                   required
                   :placeholder="t('redeem.redeemCodePlaceholder')"
                   :disabled="submitting"
-                  class="input py-3 pl-12 text-lg"
+                  class="redeem-input"
                 />
               </div>
-              <p class="input-hint">
-                {{ t('redeem.redeemCodeHint') }}
-              </p>
             </div>
 
             <button
               type="submit"
               :disabled="!redeemCode || submitting"
-              class="btn btn-primary w-full py-3"
+              class="btn btn-primary redeem-submit w-full"
             >
               <svg
                 v-if="submitting"
@@ -76,13 +89,13 @@
             </button>
           </form>
         </div>
-      </div>
+      </section>
 
       <!-- Success Message -->
       <transition name="fade">
         <div
           v-if="redeemResult"
-          class="card border-emerald-200 bg-emerald-50 dark:border-emerald-800/50 dark:bg-emerald-900/20"
+          class="brand-surface redeem-feedback-panel redeem-feedback-success"
         >
           <div class="p-6">
             <div class="flex items-start gap-4">
@@ -136,7 +149,7 @@
       <transition name="fade">
         <div
           v-if="errorMessage"
-          class="card border-red-200 bg-red-50 dark:border-red-800/50 dark:bg-red-900/20"
+          class="brand-surface redeem-feedback-panel redeem-feedback-error"
         >
           <div class="p-6">
             <div class="flex items-start gap-4">
@@ -163,14 +176,10 @@
       </transition>
 
       <!-- Information Card -->
-      <div
-        class="card border-primary-200 bg-primary-50 dark:border-primary-800/50 dark:bg-primary-900/20"
-      >
-        <div class="p-6">
+      <section class="brand-surface brand-rail redeem-info-panel">
+        <div class="p-5 pl-7 sm:p-6 sm:pl-8">
           <div class="flex items-start gap-4">
-            <div
-              class="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-primary-100 dark:bg-primary-900/30"
-            >
+            <div class="redeem-info-icon">
               <Icon name="infoCircle" size="md" class="text-primary-600 dark:text-primary-400" />
             </div>
             <div class="flex-1">
@@ -196,11 +205,11 @@
             </div>
           </div>
         </div>
-      </div>
+      </section>
 
       <!-- Recent Activity -->
-      <div class="card">
-        <div class="border-b border-gray-100 px-6 py-4 dark:border-dark-700">
+      <section class="brand-surface redeem-history-panel">
+        <div class="redeem-history-header">
           <h2 class="text-lg font-semibold text-gray-900 dark:text-white">
             {{ t('redeem.recentActivity') }}
           </h2>
@@ -230,7 +239,7 @@
             <div
               v-for="item in history"
               :key="item.id"
-              class="flex items-center justify-between rounded-xl bg-gray-50 p-4 dark:bg-dark-800"
+              class="brand-floating-card redeem-history-row"
             >
               <div class="flex items-center gap-4">
                 <div
@@ -336,7 +345,7 @@
             </p>
           </div>
         </div>
-      </div>
+      </section>
     </div>
   </AppLayout>
 </template>
@@ -490,6 +499,285 @@ onMounted(async () => {
 </script>
 
 <style scoped>
+.redeem-shell {
+  padding-bottom: 2rem;
+}
+
+.redeem-balance-card {
+  position: relative;
+  overflow: hidden;
+  border-radius: 1.5rem;
+  padding: 1.5rem;
+  color: white;
+  background:
+    radial-gradient(circle at 14% 8%, rgba(255, 255, 255, 0.24), transparent 28%),
+    radial-gradient(circle at 90% 0%, rgba(6, 182, 212, 0.42), transparent 32%),
+    linear-gradient(135deg, var(--brand-700), var(--brand-500) 54%, var(--brand-cyan));
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.32) inset,
+    0 24px 58px rgba(37, 99, 235, 0.24);
+}
+
+.redeem-balance-card::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    linear-gradient(115deg, rgba(255, 255, 255, 0.18), transparent 32%),
+    linear-gradient(180deg, transparent, rgba(15, 23, 42, 0.12));
+}
+
+.redeem-balance-orbit {
+  position: absolute;
+  right: -5rem;
+  top: -5.5rem;
+  width: 15rem;
+  height: 15rem;
+  border-radius: 9999px;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.redeem-balance-icon {
+  display: inline-flex;
+  height: 4.25rem;
+  width: 4.25rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: 1.25rem;
+  background: rgba(255, 255, 255, 0.18);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.32) inset;
+  backdrop-filter: blur(12px);
+}
+
+.redeem-eyebrow {
+  margin-top: 1.25rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.78);
+}
+
+.redeem-balance-value {
+  margin-top: 0.35rem;
+  font-size: clamp(2.35rem, 5vw, 4rem);
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.redeem-balance-chip {
+  display: inline-flex;
+  width: fit-content;
+  align-items: baseline;
+  gap: 0.45rem;
+  border-radius: 9999px;
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  padding: 0.7rem 0.9rem;
+  background: rgba(255, 255, 255, 0.13);
+  color: rgba(255, 255, 255, 0.78);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.2) inset;
+  backdrop-filter: blur(14px);
+}
+
+.redeem-balance-chip strong {
+  color: white;
+  font-size: 1.25rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.redeem-balance-chip small {
+  font-size: 0.75rem;
+}
+
+.redeem-code-panel,
+.redeem-info-panel,
+.redeem-history-panel,
+.redeem-feedback-panel {
+  border-radius: 1.25rem;
+}
+
+.redeem-form {
+  display: grid;
+  gap: 1.25rem;
+}
+
+.redeem-panel-header {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.redeem-panel-icon {
+  height: 2.75rem;
+  width: 2.75rem;
+  flex-shrink: 0;
+}
+
+.redeem-input-wrap {
+  position: relative;
+}
+
+.redeem-input-icon {
+  pointer-events: none;
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  top: 0;
+  display: flex;
+  align-items: center;
+  padding-left: 1rem;
+  color: var(--brand-500);
+}
+
+.redeem-input {
+  width: 100%;
+  border-radius: 1rem;
+  border: 1px solid rgba(191, 219, 254, 0.88);
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.96), rgba(239, 246, 255, 0.74)),
+    white;
+  padding: 0.95rem 1rem 0.95rem 3rem;
+  font-size: 1rem;
+  font-weight: 600;
+  color: rgb(15, 23, 42);
+  outline: none;
+  transition:
+    border-color 180ms ease,
+    box-shadow 180ms ease,
+    background-color 180ms ease;
+}
+
+.redeem-input::placeholder {
+  color: rgb(148, 163, 184);
+  font-weight: 500;
+}
+
+.redeem-input:focus {
+  border-color: rgba(var(--brand-rgb), 0.58);
+  box-shadow:
+    0 0 0 3px rgba(var(--brand-rgb), 0.12),
+    0 14px 34px rgba(37, 99, 235, 0.1);
+}
+
+.redeem-input:disabled {
+  cursor: not-allowed;
+  opacity: 0.72;
+}
+
+.redeem-submit {
+  min-height: 3.15rem;
+  border-radius: 1rem;
+}
+
+.redeem-info-icon {
+  display: flex;
+  height: 2.75rem;
+  width: 2.75rem;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  border-radius: 1rem;
+  border: 1px solid rgba(191, 219, 254, 0.74);
+  background: rgba(239, 246, 255, 0.86);
+}
+
+.redeem-history-header {
+  border-bottom: 1px solid rgba(191, 219, 254, 0.48);
+  padding: 1rem 1.5rem;
+  background: linear-gradient(135deg, rgba(239, 246, 255, 0.72), rgba(236, 254, 255, 0.5));
+}
+
+.redeem-history-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  transition:
+    border-color 180ms ease,
+    transform 180ms ease,
+    box-shadow 180ms ease;
+}
+
+.redeem-history-row:hover {
+  transform: translateY(-1px);
+  border-color: rgba(var(--brand-rgb), 0.34);
+  box-shadow: 0 12px 28px rgba(37, 99, 235, 0.08);
+}
+
+.redeem-feedback-success {
+  border-color: rgba(16, 185, 129, 0.3);
+  background:
+    radial-gradient(circle at 0% 0%, rgba(16, 185, 129, 0.1), transparent 34%),
+    linear-gradient(180deg, rgba(240, 253, 244, 0.98), rgba(255, 255, 255, 0.96));
+}
+
+.redeem-feedback-error {
+  border-color: rgba(239, 68, 68, 0.28);
+  background:
+    radial-gradient(circle at 0% 0%, rgba(239, 68, 68, 0.1), transparent 34%),
+    linear-gradient(180deg, rgba(254, 242, 242, 0.98), rgba(255, 255, 255, 0.96));
+}
+
+.dark .redeem-input {
+  border-color: rgba(96, 165, 250, 0.22);
+  background:
+    linear-gradient(135deg, rgba(15, 23, 42, 0.94), rgba(8, 13, 28, 0.9)),
+    rgba(15, 23, 42, 0.86);
+  color: white;
+}
+
+.dark .redeem-input::placeholder {
+  color: rgb(100, 116, 139);
+}
+
+.dark .redeem-info-icon {
+  border-color: rgba(96, 165, 250, 0.18);
+  background: rgba(37, 99, 235, 0.16);
+}
+
+.dark .redeem-history-header {
+  border-color: rgba(96, 165, 250, 0.16);
+  background: linear-gradient(135deg, rgba(30, 64, 175, 0.16), rgba(8, 145, 178, 0.08));
+}
+
+.dark .redeem-feedback-success {
+  border-color: rgba(52, 211, 153, 0.24);
+  background:
+    radial-gradient(circle at 0% 0%, rgba(16, 185, 129, 0.16), transparent 34%),
+    linear-gradient(180deg, rgba(6, 78, 59, 0.2), rgba(2, 6, 23, 0.9));
+}
+
+.dark .redeem-feedback-error {
+  border-color: rgba(248, 113, 113, 0.24);
+  background:
+    radial-gradient(circle at 0% 0%, rgba(239, 68, 68, 0.16), transparent 34%),
+    linear-gradient(180deg, rgba(127, 29, 29, 0.2), rgba(2, 6, 23, 0.9));
+}
+
+@media (max-width: 640px) {
+  .redeem-balance-card {
+    border-radius: 1.25rem;
+    padding: 1.25rem;
+  }
+
+  .redeem-history-row {
+    align-items: flex-start;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .redeem-history-row,
+  .redeem-input {
+    transition: none;
+  }
+
+  .redeem-history-row:hover {
+    transform: none;
+  }
+}
+
 .fade-enter-active,
 .fade-leave-active {
   transition: all 0.3s ease;

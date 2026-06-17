@@ -11,10 +11,9 @@ const groupsViewSource = readFileSync(
 );
 
 describe("admin GroupsView layout", () => {
-  it("uses the shared admin page hero and toolbar structure", () => {
-    expect(groupsViewSource).toContain('data-test="admin-page-hero"');
-    expect(groupsViewSource).toContain("admin-page-hero");
-    expect(groupsViewSource).toContain("admin-page-meta-chip");
+  it("removes the redundant page hero and keeps the toolbar structure", () => {
+    expect(groupsViewSource).not.toContain('data-test="admin-page-hero"');
+    expect(groupsViewSource).not.toContain("admin-page-hero");
     expect(groupsViewSource).toContain("admin-toolbar");
     expect(groupsViewSource).toContain("admin-toolbar-group");
   });

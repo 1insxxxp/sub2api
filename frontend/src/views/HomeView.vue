@@ -25,15 +25,15 @@
       ></div>
 
       <header
-        class="home-site-header fixed inset-x-0 top-0 z-30 border-b border-transparent backdrop-blur-xl transition-all duration-300"
+        class="home-site-header fixed inset-x-0 top-0 z-30 border-b border-transparent px-3 py-3 backdrop-blur-xl transition-all duration-300 sm:px-4"
         :class="{ 'home-site-header-scrolled': isHeaderScrolled }"
       >
-        <nav class="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
-          <router-link to="/" class="flex min-w-0 items-center gap-3">
+        <nav class="home-nav-shell mx-auto flex h-16 max-w-7xl items-center justify-between gap-3 px-3 sm:px-4 lg:px-5">
+          <router-link to="/" class="home-brand-link group flex min-w-0 items-center gap-3 rounded-xl px-1.5 py-1 transition-colors duration-200 hover:bg-blue-50/70 dark:hover:bg-white/[0.04]">
             <span
-              class="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-[linear-gradient(135deg,#2563eb,#3b82f6,#06b6d4)] p-0.5 shadow-[0_10px_26px_rgba(37,99,235,0.14)]"
+              class="home-brand-mark flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-[linear-gradient(135deg,#2563eb,#3b82f6,#06b6d4)] p-0.5 shadow-[0_14px_30px_rgba(37,99,235,0.18)] ring-1 ring-blue-300/40 transition-transform duration-200 group-hover:scale-[1.03] dark:ring-cyan-300/20"
             >
-              <span class="flex h-full w-full items-center justify-center overflow-hidden rounded-[0.42rem] bg-white/95 dark:bg-dark-950/90">
+              <span class="flex h-full w-full items-center justify-center overflow-hidden rounded-[0.62rem] bg-white/95 dark:bg-dark-950/90">
                 <img
                   :src="siteLogo || '/logo.png'"
                   :alt="siteName"
@@ -41,17 +41,17 @@
                 />
               </span>
             </span>
-            <span class="min-w-0 truncate text-sm font-semibold text-gray-950 dark:text-white">
+            <span class="min-w-0 truncate text-base font-semibold text-slate-950 dark:text-white">
               {{ siteName }}
             </span>
           </router-link>
 
-          <div class="hidden items-center gap-6 lg:flex">
+          <div class="home-nav-rail hidden items-center gap-1.5 lg:flex">
             <a
               v-for="item in navItems"
               :key="item.href"
               :href="item.href"
-              class="text-sm font-medium text-gray-600 transition-colors hover:text-gray-950 dark:text-dark-300 dark:hover:text-white"
+              class="home-nav-link rounded-xl px-4 py-2 text-sm font-semibold text-slate-600 transition-all duration-200 hover:-translate-y-0.5 hover:bg-white/80 hover:text-blue-700 hover:shadow-sm hover:shadow-blue-950/5 dark:text-slate-300 dark:hover:bg-white/[0.07] dark:hover:text-blue-100"
             >
               {{ item.label }}
             </a>
@@ -60,21 +60,21 @@
               :href="docUrl"
               target="_blank"
               rel="noopener noreferrer"
-              class="text-sm font-medium text-gray-600 transition-colors hover:text-gray-950 dark:text-dark-300 dark:hover:text-white"
+              class="home-nav-doc-link rounded-xl px-4 py-2 text-sm font-semibold text-slate-600 transition-all duration-200 hover:-translate-y-0.5 hover:bg-white/80 hover:text-blue-700 hover:shadow-sm hover:shadow-blue-950/5 dark:text-slate-300 dark:hover:bg-white/[0.07] dark:hover:text-blue-100"
             >
               {{ t('home.docs') }}
             </a>
           </div>
 
-          <div class="flex items-center gap-2 sm:gap-3">
-            <LocaleSwitcher />
+          <div class="home-header-actions flex items-center gap-2 rounded-2xl border border-white/70 bg-white/42 p-1 shadow-[0_12px_30px_rgba(15,23,42,0.06)] ring-1 ring-blue-100/60 backdrop-blur-xl dark:border-white/10 dark:bg-white/[0.045] dark:shadow-black/20 dark:ring-white/10 sm:gap-2">
+            <LocaleSwitcher class="home-locale-switcher" />
 
             <a
               v-if="docUrl"
               :href="docUrl"
               target="_blank"
               rel="noopener noreferrer"
-              class="hidden rounded-lg border border-gray-200 bg-white p-2 text-gray-600 transition-colors hover:border-gray-300 hover:text-gray-950 dark:border-dark-700 dark:bg-dark-900 dark:text-dark-300 dark:hover:border-dark-600 dark:hover:text-white sm:inline-flex lg:hidden"
+              class="home-icon-control hidden h-11 w-11 items-center justify-center rounded-xl border border-blue-100/80 bg-white/78 text-slate-600 shadow-sm shadow-blue-950/5 ring-1 ring-white/80 transition-all duration-200 hover:-translate-y-0.5 hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700 dark:border-white/10 dark:bg-white/[0.05] dark:text-slate-300 dark:ring-white/5 dark:hover:border-blue-400/25 dark:hover:bg-blue-500/10 dark:hover:text-blue-200 sm:inline-flex lg:hidden"
               :title="t('home.viewDocs')"
             >
               <Icon name="book" size="sm" />
@@ -82,7 +82,7 @@
 
             <button
               type="button"
-              class="rounded-lg border border-gray-200 bg-white p-2 text-gray-600 transition-colors hover:border-gray-300 hover:text-gray-950 dark:border-dark-700 dark:bg-dark-900 dark:text-dark-300 dark:hover:border-dark-600 dark:hover:text-white"
+              class="home-icon-control flex h-11 w-11 items-center justify-center rounded-xl border border-blue-100/80 bg-white/78 text-slate-600 shadow-sm shadow-blue-950/5 ring-1 ring-white/80 transition-all duration-200 hover:-translate-y-0.5 hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700 dark:border-white/10 dark:bg-white/[0.05] dark:text-slate-300 dark:ring-white/5 dark:hover:border-blue-400/25 dark:hover:bg-blue-500/10 dark:hover:text-blue-200"
               :title="isDark ? t('home.switchToLight') : t('home.switchToDark')"
               @click="toggleTheme"
             >
@@ -92,9 +92,8 @@
 
             <router-link
               :to="isAuthenticated ? dashboardPath : '/login'"
-              class="inline-flex h-9 items-center justify-center gap-2 rounded-lg bg-[linear-gradient(90deg,#2563eb,#3b82f6,#06b6d4)] px-3 text-sm font-semibold text-white shadow-[0_10px_26px_rgba(37,99,235,0.14)] transition-all hover:-translate-y-0.5 hover:shadow-[0_12px_30px_rgba(37,99,235,0.28)] dark:text-white sm:px-4"
+              class="home-dashboard-cta inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-[linear-gradient(90deg,#2563eb,#3b82f6,#06b6d4)] px-4 text-sm font-semibold text-white shadow-[0_14px_28px_rgba(37,99,235,0.22)] ring-1 ring-white/25 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_16px_34px_rgba(37,99,235,0.34)] dark:text-white sm:px-5"
             >
-              <span v-if="isAuthenticated && userInitial" class="hidden sm:inline">{{ userInitial }}</span>
               <span>
                 {{ isAuthenticated ? t('home.hero.dashboardCta') : t('home.login') }}
               </span>
@@ -102,7 +101,7 @@
           </div>
         </nav>
       </header>
-      <div class="home-site-header-spacer h-16" aria-hidden="true"></div>
+      <div class="home-site-header-spacer h-[5.5rem]" aria-hidden="true"></div>
 
       <main class="relative z-10">
         <section class="mx-auto grid max-w-7xl items-center gap-10 px-4 pb-14 pt-12 sm:px-6 sm:pb-20 sm:pt-16 lg:grid-cols-[minmax(0,1fr),minmax(420px,0.9fr)] lg:gap-14 lg:px-8 lg:pb-24 lg:pt-24">
@@ -442,11 +441,6 @@ const isHeaderScrolled = ref(false)
 const isAuthenticated = computed(() => authStore.isAuthenticated)
 const isAdmin = computed(() => authStore.isAdmin)
 const dashboardPath = computed(() => (isAdmin.value ? '/admin/dashboard' : '/dashboard'))
-const userInitial = computed(() => {
-  const user = authStore.user
-  if (!user?.email) return ''
-  return user.email.charAt(0).toUpperCase()
-})
 
 const currentYear = computed(() => new Date().getFullYear())
 

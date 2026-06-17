@@ -7,38 +7,6 @@
       </div>
 
       <template v-else-if="stats">
-        <section class="admin-page-hero" data-test="admin-page-hero">
-          <div class="admin-page-hero-grid">
-            <div class="min-w-0">
-              <span class="admin-page-kicker">{{ t('admin.dashboard.title') }}</span>
-              <h2 class="admin-page-title">{{ t('admin.dashboard.title') }}</h2>
-              <p class="admin-page-description">
-                {{ t('admin.dashboard.description') }}
-              </p>
-              <div class="admin-page-meta">
-                <span class="admin-page-meta-chip">
-                  <span>{{ t('admin.dashboard.timeRange') }}</span>
-                  <strong>{{ startDate }} - {{ endDate }}</strong>
-                </span>
-                <span class="admin-page-meta-chip">
-                  <span>{{ t('admin.dashboard.granularity') }}</span>
-                  <strong>{{ granularity }}</strong>
-                </span>
-                <span class="admin-page-meta-chip">
-                  <span>{{ t('admin.dashboard.activeUsers') }}</span>
-                  <strong>{{ stats.active_users }}</strong>
-                </span>
-              </div>
-            </div>
-
-            <div class="admin-page-actions">
-              <button @click="loadDashboardStats" :disabled="chartsLoading" class="btn btn-secondary">
-                {{ t('common.refresh') }}
-              </button>
-            </div>
-          </div>
-        </section>
-
         <!-- Row 1: Core Stats -->
         <div class="grid grid-cols-2 gap-4 lg:grid-cols-4">
           <!-- Total API Keys -->

@@ -1,33 +1,6 @@
 <template>
   <AppLayout>
     <div class="space-y-6">
-      <section class="admin-page-hero" data-test="admin-page-hero">
-        <div class="admin-page-hero-grid">
-          <div class="min-w-0">
-            <span class="admin-page-kicker">
-              <Icon name="bell" size="xs" />
-              {{ t('nav.announcements') }}
-            </span>
-            <h1 class="admin-page-title">{{ t('admin.announcements.title') }}</h1>
-            <p class="admin-page-description">{{ t('admin.announcements.description') }}</p>
-            <div class="admin-page-meta">
-              <span class="admin-page-meta-chip">
-                <span>{{ t('common.total') }}</span>
-                <strong>{{ pagination.total }}</strong>
-              </span>
-              <span class="admin-page-meta-chip">
-                <span>{{ t('pagination.perPage') }}</span>
-                <strong>{{ pagination.page_size }}</strong>
-              </span>
-              <span class="admin-page-meta-chip">
-                <span>{{ t('common.status') }}</span>
-                <strong>{{ loading ? t('common.loading') : t('common.active') }}</strong>
-              </span>
-            </div>
-          </div>
-        </div>
-      </section>
-
       <TablePageLayout>
       <template #filters>
         <div class="admin-toolbar">
