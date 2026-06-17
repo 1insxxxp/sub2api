@@ -17,7 +17,7 @@
           v-for="toast in toasts"
           :key="toast.id"
           :class="[
-            'toast-panel pointer-events-auto relative min-w-[280px] max-w-[min(24rem,calc(100vw-1.5rem))] overflow-hidden rounded-xl border border-slate-200 bg-white/95 shadow-lg shadow-slate-950/10 ring-1 ring-slate-950/5 backdrop-blur-sm dark:border-white/10 dark:bg-slate-950/95 dark:shadow-black/25 dark:ring-white/10',
+            'toast-panel admin-toast-panel pointer-events-auto relative min-w-[280px] max-w-[min(24rem,calc(100vw-1.5rem))] overflow-hidden rounded-xl border border-slate-200 bg-white/95 shadow-lg shadow-slate-950/10 ring-1 ring-slate-950/5 backdrop-blur-sm dark:border-white/10 dark:bg-slate-950/95 dark:shadow-black/25 dark:ring-white/10',
             getToneClass(toast.type)
           ]"
         >

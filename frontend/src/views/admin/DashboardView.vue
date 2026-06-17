@@ -7,6 +7,38 @@
       </div>
 
       <template v-else-if="stats">
+        <section class="admin-page-hero" data-test="admin-page-hero">
+          <div class="admin-page-hero-grid">
+            <div class="min-w-0">
+              <span class="admin-page-kicker">{{ t('admin.dashboard.title') }}</span>
+              <h2 class="admin-page-title">{{ t('admin.dashboard.title') }}</h2>
+              <p class="admin-page-description">
+                {{ t('admin.dashboard.description') }}
+              </p>
+              <div class="admin-page-meta">
+                <span class="admin-page-meta-chip">
+                  <span>{{ t('admin.dashboard.timeRange') }}</span>
+                  <strong>{{ startDate }} - {{ endDate }}</strong>
+                </span>
+                <span class="admin-page-meta-chip">
+                  <span>{{ t('admin.dashboard.granularity') }}</span>
+                  <strong>{{ granularity }}</strong>
+                </span>
+                <span class="admin-page-meta-chip">
+                  <span>{{ t('admin.dashboard.activeUsers') }}</span>
+                  <strong>{{ stats.active_users }}</strong>
+                </span>
+              </div>
+            </div>
+
+            <div class="admin-page-actions">
+              <button @click="loadDashboardStats" :disabled="chartsLoading" class="btn btn-secondary">
+                {{ t('common.refresh') }}
+              </button>
+            </div>
+          </div>
+        </section>
+
         <!-- Row 1: Core Stats -->
         <div class="grid grid-cols-2 gap-4 lg:grid-cols-4">
           <!-- Total API Keys -->
@@ -204,8 +236,8 @@
         <div class="space-y-6">
           <!-- Date Range Filter -->
           <div class="admin-toolbar-surface">
-            <div class="flex flex-wrap items-center gap-4">
-              <div class="flex items-center gap-2">
+            <div class="admin-toolbar">
+              <div class="admin-toolbar-group">
                 <span class="text-sm font-medium text-gray-700 dark:text-gray-300"
                   >{{ t('admin.dashboard.timeRange') }}:</span
                 >
@@ -218,7 +250,7 @@
               <button @click="loadDashboardStats" :disabled="chartsLoading" class="btn btn-secondary">
                 {{ t('common.refresh') }}
               </button>
-              <div class="ml-auto flex items-center gap-2">
+              <div class="admin-toolbar-group justify-end lg:ml-auto">
                 <span class="text-sm font-medium text-gray-700 dark:text-gray-300"
                   >{{ t('admin.dashboard.granularity') }}:</span
                 >
@@ -253,11 +285,23 @@
           </div>
 
           <!-- User Usage Trend (Full Width) -->
-          <div class="card p-4">
-            <h3 class="mb-4 text-sm font-semibold text-gray-900 dark:text-white">
-              {{ t('admin.dashboard.recentUsage') }} (Top 12)
-            </h3>
-            <div class="h-64">
+          <div data-test="dashboard-user-trend-surface" class="admin-surface overflow-hidden">
+            <div data-test="dashboard-user-trend-header" class="admin-panel-header">
+              <div>
+                <h3 class="text-sm font-semibold text-gray-900 dark:text-white">
+                  {{ t('admin.dashboard.recentUsage') }} (Top 12)
+                </h3>
+                <p class="text-sm text-gray-500 dark:text-gray-400">
+                  {{ startDate }} - {{ endDate }}
+                </p>
+              </div>
+              <div class="badge badge-primary">
+                <span>{{ t('admin.dashboard.granularity') }}</span>
+                <strong class="font-semibold text-slate-950 dark:text-white">{{ granularity }}</strong>
+              </div>
+            </div>
+            <div class="p-4 sm:p-5">
+              <div class="h-64">
               <div v-if="userTrendLoading" class="flex h-full items-center justify-center">
                 <LoadingSpinner size="md" />
               </div>
@@ -269,6 +313,7 @@
                 {{ t('admin.dashboard.noDataAvailable') }}
               </div>
             </div>
+          </div>
           </div>
         </div>
       </template>

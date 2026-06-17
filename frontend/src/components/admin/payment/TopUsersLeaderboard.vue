@@ -1,5 +1,5 @@
 <template>
-  <div class="card p-4">
+  <div class="admin-surface p-4">
     <h3 class="mb-4 text-sm font-semibold text-gray-900 dark:text-white">
       {{ t('payment.admin.topUsers') }}
     </h3>
@@ -13,7 +13,7 @@
       <div
         v-for="(user, idx) in users"
         :key="user.user_id"
-        class="flex items-center justify-between rounded-lg px-3 py-2 hover:bg-gray-50 dark:hover:bg-dark-700"
+        class="admin-list-row flex items-center justify-between rounded-lg px-3 py-2"
       >
         <div class="flex items-center gap-3">
           <span

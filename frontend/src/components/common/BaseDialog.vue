@@ -3,7 +3,7 @@
     <Transition name="modal">
       <div
         v-if="show"
-        class="modal-overlay"
+        class="modal-overlay brand-overlay"
         :style="zIndexStyle"
         :aria-labelledby="dialogId"
         role="dialog"
@@ -13,7 +13,7 @@
         <!-- Modal panel -->
         <div
           ref="dialogRef"
-          :class="['modal-content', 'brand-floating-panel', 'admin-dialog-panel', widthClasses]"
+          :class="['modal-content', 'brand-floating-panel', 'admin-surface', 'admin-dialog-panel', widthClasses]"
           @click.stop
         >
           <!-- Header -->

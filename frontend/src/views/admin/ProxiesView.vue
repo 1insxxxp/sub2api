@@ -1,43 +1,73 @@
 <template>
   <AppLayout>
-    <TablePageLayout>
-      <template #filters>
-        <div class="flex flex-wrap items-center gap-3">
-          <!-- Left: Search + Filters -->
-          <div class="relative w-full sm:w-64">
-            <Icon
-              name="search"
-              size="md"
-              class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 dark:text-gray-500"
-            />
-            <input
-              v-model="searchQuery"
-              type="text"
-              :placeholder="t('admin.proxies.searchProxies')"
-              class="input pl-10"
-              @input="handleSearch"
-            />
+    <div class="space-y-6">
+      <section class="admin-page-hero" data-test="admin-page-hero">
+        <div class="admin-page-hero-grid">
+          <div class="min-w-0">
+            <span class="admin-page-kicker">
+              <Icon name="globe" size="xs" />
+              {{ t('nav.proxies') }}
+            </span>
+            <h1 class="admin-page-title">{{ t('admin.proxies.title') }}</h1>
+            <p class="admin-page-description">{{ t('admin.proxies.description') }}</p>
+            <div class="admin-page-meta">
+              <span class="admin-page-meta-chip">
+                <span>{{ t('common.total') }}</span>
+                <strong>{{ pagination.total }}</strong>
+              </span>
+              <span class="admin-page-meta-chip">
+                <span>{{ t('pagination.perPage') }}</span>
+                <strong>{{ pagination.page_size }}</strong>
+              </span>
+              <span class="admin-page-meta-chip">
+                <span>{{ t('common.status') }}</span>
+                <strong>{{ loading ? t('common.loading') : t('common.active') }}</strong>
+              </span>
+            </div>
           </div>
+        </div>
+      </section>
 
-          <div class="w-full sm:w-40">
-            <Select
-              v-model="filters.protocol"
-              :options="protocolOptions"
-              :placeholder="t('admin.proxies.allProtocols')"
-              @change="loadProxies"
-            />
-          </div>
-          <div class="w-full sm:w-36">
-            <Select
-              v-model="filters.status"
-              :options="statusOptions"
-              :placeholder="t('admin.proxies.allStatus')"
-              @change="loadProxies"
-            />
+      <TablePageLayout>
+      <template #filters>
+        <div class="admin-toolbar">
+          <!-- Left: Search + Filters -->
+          <div class="admin-toolbar-group flex-1">
+            <div class="relative w-full sm:w-64">
+              <Icon
+                name="search"
+                size="md"
+                class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 dark:text-gray-500"
+              />
+              <input
+                v-model="searchQuery"
+                type="text"
+                :placeholder="t('admin.proxies.searchProxies')"
+                class="input pl-10"
+                @input="handleSearch"
+              />
+            </div>
+
+            <div class="w-full sm:w-40">
+              <Select
+                v-model="filters.protocol"
+                :options="protocolOptions"
+                :placeholder="t('admin.proxies.allProtocols')"
+                @change="loadProxies"
+              />
+            </div>
+            <div class="w-full sm:w-36">
+              <Select
+                v-model="filters.status"
+                :options="statusOptions"
+                :placeholder="t('admin.proxies.allStatus')"
+                @change="loadProxies"
+              />
+            </div>
           </div>
 
           <!-- Right: All action buttons -->
-          <div class="flex flex-1 flex-wrap items-center justify-end gap-2">
+          <div class="admin-toolbar-group w-full justify-end lg:w-auto lg:flex-none">
             <button
               @click="loadProxies"
               :disabled="loading"
@@ -148,12 +178,12 @@
                 <!-- 右键展开格式选择菜单 -->
                 <div
                   v-if="copyMenuProxyId === row.id"
-                  class="absolute left-0 top-full z-50 mt-1 w-auto min-w-[180px] rounded-lg border border-gray-200 bg-white py-1 shadow-lg dark:border-dark-500 dark:bg-dark-700"
+                  class="admin-action-menu absolute left-0 top-full z-50 mt-1 w-auto min-w-[180px]"
                 >
                   <button
                     v-for="fmt in getCopyFormats(row)"
                     :key="fmt.label"
-                    class="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs hover:bg-gray-100 dark:hover:bg-dark-600"
+                    class="admin-action-menu-item py-1.5 text-xs"
                     @click.stop="copyFormat(fmt.value)"
                   >
                     <span class="truncate font-mono text-gray-600 dark:text-gray-300">{{ fmt.label }}</span>
@@ -202,14 +232,14 @@
             <button
               v-if="(value || 0) > 0"
               type="button"
-              class="inline-flex items-center rounded bg-gray-100 px-2 py-0.5 text-xs font-medium text-primary-700 hover:bg-gray-200 dark:bg-dark-600 dark:text-primary-300 dark:hover:bg-dark-500"
+              class="inline-flex items-center rounded-full border border-primary-100 bg-primary-50/80 px-2.5 py-0.5 text-xs font-medium text-primary-700 transition-colors hover:border-primary-200 hover:bg-primary-100 dark:border-primary-500/15 dark:bg-primary-500/10 dark:text-primary-200 dark:hover:bg-primary-500/15"
               @click="openAccountsModal(row)"
             >
               {{ t('admin.groups.accountsCount', { count: value || 0 }) }}
             </button>
             <span
               v-else
-              class="inline-flex items-center rounded bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-800 dark:bg-dark-600 dark:text-gray-300"
+              class="inline-flex items-center rounded-full border border-slate-200/80 bg-slate-50/80 px-2.5 py-0.5 text-xs font-medium text-slate-600 dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-300"
             >
               {{ t('admin.groups.accountsCount', { count: 0 }) }}
             </span>
@@ -272,7 +302,7 @@
               <button
                 @click="handleTestConnection(row)"
                 :disabled="testingProxyIds.has(row.id)"
-                class="flex flex-col items-center gap-0.5 rounded-lg p-1.5 text-gray-500 transition-colors hover:bg-emerald-50 hover:text-emerald-600 disabled:cursor-not-allowed disabled:opacity-50 dark:hover:bg-emerald-900/20 dark:hover:text-emerald-400"
+                class="admin-inline-action admin-inline-action-success disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <svg
                   v-if="testingProxyIds.has(row.id)"
@@ -300,7 +330,7 @@
               <button
                 @click="handleQualityCheck(row)"
                 :disabled="qualityCheckingProxyIds.has(row.id)"
-                class="flex flex-col items-center gap-0.5 rounded-lg p-1.5 text-gray-500 transition-colors hover:bg-blue-50 hover:text-blue-600 disabled:cursor-not-allowed disabled:opacity-50 dark:hover:bg-blue-900/20 dark:hover:text-blue-400"
+                class="admin-inline-action disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <svg
                   v-if="qualityCheckingProxyIds.has(row.id)"
@@ -327,14 +357,14 @@
               </button>
               <button
                 @click="handleEdit(row)"
-                class="flex flex-col items-center gap-0.5 rounded-lg p-1.5 text-gray-500 transition-colors hover:bg-gray-100 hover:text-primary-600 dark:hover:bg-dark-700 dark:hover:text-primary-400"
+                class="admin-inline-action"
               >
                 <Icon name="edit" size="sm" />
                 <span class="text-xs">{{ t('common.edit') }}</span>
               </button>
               <button
                 @click="handleDelete(row)"
-                class="flex flex-col items-center gap-0.5 rounded-lg p-1.5 text-gray-500 transition-colors hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-900/20 dark:hover:text-red-400"
+                class="admin-inline-action admin-inline-action-danger"
               >
                 <Icon name="trash" size="sm" />
                 <span class="text-xs">{{ t('common.delete') }}</span>
@@ -364,7 +394,8 @@
           @update:pageSize="handlePageSizeChange"
         />
       </template>
-    </TablePageLayout>
+      </TablePageLayout>
+    </div>
 
     <!-- Create Proxy Modal -->
     <BaseDialog
@@ -547,7 +578,7 @@
         </div>
 
         <!-- Parse Result -->
-        <div v-if="batchParseResult.total > 0" class="rounded-lg bg-gray-50 p-4 dark:bg-dark-700">
+        <div v-if="batchParseResult.total > 0" class="admin-form-section !space-y-0 !p-4">
             <div class="flex items-center gap-4 text-sm">
               <div class="flex items-center gap-1.5">
               <Icon name="checkCircle" size="sm" :stroke-width="2" class="text-primary-500" />
@@ -847,7 +878,7 @@
       @close="closeQualityReportDialog"
     >
       <div v-if="qualityReport" class="space-y-4">
-        <div class="rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-dark-600 dark:bg-dark-700">
+        <div class="admin-form-section !space-y-0 !p-4">
           <div class="flex items-center justify-between gap-4">
             <div>
               <div class="text-sm text-gray-500 dark:text-gray-400">
@@ -877,9 +908,9 @@
           </div>
         </div>
 
-        <div class="max-h-80 overflow-auto rounded-lg border border-gray-200 dark:border-dark-600">
+        <div class="admin-list-surface max-h-80 overflow-auto !rounded-xl">
           <table class="min-w-full divide-y divide-gray-200 text-sm dark:divide-dark-700">
-            <thead class="bg-gray-50 text-xs uppercase text-gray-500 dark:bg-dark-800 dark:text-dark-400">
+            <thead class="bg-primary-50/70 text-xs uppercase text-gray-500 dark:bg-primary-500/10 dark:text-dark-300">
               <tr>
                 <th class="px-3 py-2 text-left">{{ t('admin.proxies.qualityTableTarget') }}</th>
                 <th class="px-3 py-2 text-left">{{ t('admin.proxies.qualityTableStatus') }}</th>
@@ -888,7 +919,7 @@
                 <th class="px-3 py-2 text-left">{{ t('admin.proxies.qualityTableMessage') }}</th>
               </tr>
             </thead>
-            <tbody class="divide-y divide-gray-200 bg-white dark:divide-dark-700 dark:bg-dark-900">
+            <tbody class="divide-y divide-gray-100 dark:divide-dark-700">
               <tr v-for="item in qualityReport.items" :key="item.target">
                 <td class="px-3 py-2 text-gray-900 dark:text-white">{{ qualityTargetLabel(item.target) }}</td>
                 <td class="px-3 py-2">

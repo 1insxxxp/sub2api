@@ -1,9 +1,9 @@
 <template>
-  <div class="card p-6">
+  <div class="admin-surface px-4 py-4 sm:px-5 sm:py-5">
     <!-- Toolbar: left filters (multi-line) + right actions -->
-    <div class="flex flex-wrap items-end justify-between gap-4">
+    <div class="admin-toolbar items-end">
       <!-- Left: filters (allowed to wrap to multiple rows) -->
-      <div class="flex flex-1 flex-wrap items-end gap-4">
+      <div class="admin-toolbar-group flex-1 items-end gap-4">
         <!-- User Search -->
         <div ref="userSearchRef" class="usage-filter-dropdown relative w-full sm:w-auto sm:min-w-[240px]">
           <label class="input-label">{{ t('admin.usage.userFilter') }}</label>
@@ -19,21 +19,21 @@
             v-if="filters.user_id"
             type="button"
             @click="clearUser"
-            class="absolute right-2 top-9 text-gray-400"
+            class="absolute right-2 top-8 flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 transition-colors hover:bg-primary-50 hover:text-primary-600 dark:hover:bg-primary-500/10 dark:hover:text-primary-200"
             aria-label="Clear user filter"
           >
             ✕
           </button>
           <div
             v-if="showUserDropdown && (userResults.length > 0 || userKeyword)"
-            class="absolute z-50 mt-1 max-h-60 w-full overflow-auto rounded-lg border bg-white shadow-lg dark:bg-gray-800"
+            class="admin-action-menu absolute z-50 mt-1 max-h-60 w-full overflow-y-auto"
           >
             <button
               v-for="u in userResults"
               :key="u.id"
               type="button"
               @click="selectUser(u)"
-              class="w-full px-4 py-2 text-left hover:bg-gray-100 dark:hover:bg-gray-700"
+              class="admin-action-menu-item justify-between"
             >
               <span>{{ u.email }}<span v-if="u.deleted" class="ml-1 text-xs text-gray-400">（{{ t('admin.usage.userDeletedBadge') }}）</span></span>
               <span class="ml-2 text-xs text-gray-400">#{{ u.id }}</span>
@@ -56,21 +56,21 @@
             v-if="filters.api_key_id"
             type="button"
             @click="onClearApiKey"
-            class="absolute right-2 top-9 text-gray-400"
+            class="absolute right-2 top-8 flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 transition-colors hover:bg-primary-50 hover:text-primary-600 dark:hover:bg-primary-500/10 dark:hover:text-primary-200"
             aria-label="Clear API key filter"
           >
             ✕
           </button>
           <div
             v-if="showApiKeyDropdown && apiKeyResults.length > 0"
-            class="absolute z-50 mt-1 max-h-60 w-full overflow-auto rounded-lg border bg-white shadow-lg dark:bg-gray-800"
+            class="admin-action-menu absolute z-50 mt-1 max-h-60 w-full overflow-y-auto"
           >
             <button
               v-for="k in apiKeyResults"
               :key="k.id"
               type="button"
               @click="selectApiKey(k)"
-              class="w-full px-4 py-2 text-left hover:bg-gray-100 dark:hover:bg-gray-700"
+              class="admin-action-menu-item justify-between"
             >
               <span class="truncate">{{ k.name || `#${k.id}` }}</span>
               <span class="ml-2 text-xs text-gray-400">#{{ k.id }}</span>
@@ -99,21 +99,21 @@
             v-if="filters.account_id"
             type="button"
             @click="clearAccount"
-            class="absolute right-2 top-9 text-gray-400"
+            class="absolute right-2 top-8 flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 transition-colors hover:bg-primary-50 hover:text-primary-600 dark:hover:bg-primary-500/10 dark:hover:text-primary-200"
             aria-label="Clear account filter"
           >
             ✕
           </button>
           <div
             v-if="showAccountDropdown && (accountResults.length > 0 || accountKeyword)"
-            class="absolute z-50 mt-1 max-h-60 w-full overflow-auto rounded-lg border bg-white shadow-lg dark:bg-gray-800"
+            class="admin-action-menu absolute z-50 mt-1 max-h-60 w-full overflow-y-auto"
           >
             <button
               v-for="a in accountResults"
               :key="a.id"
               type="button"
               @click="selectAccount(a)"
-              class="w-full px-4 py-2 text-left hover:bg-gray-100 dark:hover:bg-gray-700"
+              class="admin-action-menu-item justify-between"
             >
               <span class="truncate">{{ a.name }}</span>
               <span class="ml-2 text-xs text-gray-400">#{{ a.id }}</span>
@@ -148,7 +148,7 @@
       </div>
 
       <!-- Right: actions -->
-      <div v-if="showActions" class="flex w-full flex-wrap items-center justify-end gap-3 sm:w-auto">
+      <div v-if="showActions" class="admin-toolbar-group w-full justify-end sm:w-auto">
         <button type="button" @click="$emit('refresh')" class="btn btn-secondary">
           {{ t('common.refresh') }}
         </button>

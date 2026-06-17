@@ -49,5 +49,6 @@ describe('DataTable', () => {
     expect(wrapper.get('thead').classes()).toContain('admin-data-table-head')
     expect(wrapper.get('tbody').classes()).toContain('admin-data-table-body')
     expect(wrapper.get('td').classes()).toContain('admin-empty-cell')
+    expect(wrapper.find('.admin-empty-state').exists()).toBe(true)
   })
 })

@@ -2,7 +2,7 @@
   <BaseDialog :show="show" :title="t('admin.groups.rateMultipliersTitle')" width="wide" @close="handleClose">
     <div v-if="group" class="space-y-4">
       <!-- 分组信息 -->
-      <div class="flex flex-wrap items-center gap-3 rounded-lg bg-gray-50 px-4 py-2.5 text-sm dark:bg-dark-700">
+      <div class="brand-floating-card flex flex-wrap items-center gap-3 text-sm">
         <span class="inline-flex items-center gap-1.5" :class="platformColorClass">
           <PlatformIcon :platform="group.platform" size="sm" />
           {{ t('admin.groups.platforms.' + group.platform) }}
@@ -16,9 +16,9 @@
       </div>
 
       <!-- 操作区 -->
-      <div class="rounded-lg border border-gray-200 p-3 dark:border-dark-600">
+      <div class="admin-form-section">
         <!-- 添加用户 -->
-        <h4 class="mb-2 text-sm font-medium text-gray-700 dark:text-gray-300">
+        <h4 class="text-sm font-semibold text-slate-800 dark:text-slate-100">
           {{ t('admin.groups.addUserRate') }}
         </h4>
         <div class="flex items-end gap-2">
@@ -34,13 +34,13 @@
             />
             <div
               v-if="showDropdown && searchResults.length > 0"
-              class="absolute left-0 right-0 top-full z-10 mt-1 max-h-48 overflow-y-auto rounded-lg border border-gray-200 bg-white shadow-lg dark:border-dark-500 dark:bg-dark-700"
+              class="admin-action-menu absolute left-0 right-0 top-full z-10 mt-1 max-h-48 overflow-y-auto"
             >
               <button
                 v-for="user in searchResults"
                 :key="user.id"
                 type="button"
-                class="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm hover:bg-gray-50 dark:hover:bg-dark-600"
+                class="admin-action-menu-item"
                 @click="selectUser(user)"
               >
                 <span class="text-gray-400">#{{ user.id }}</span>
@@ -81,7 +81,7 @@
               step="0.1"
               min="0"
               autocomplete="off"
-              class="hide-spinner w-20 rounded border border-gray-200 bg-white px-2 py-1 text-center text-sm transition-colors focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500/20 dark:border-dark-500 dark:bg-dark-700 dark:focus:border-primary-500"
+              class="hide-spinner input w-20 text-center text-sm"
               placeholder="0.5"
             />
             <button
@@ -96,7 +96,7 @@
           <div class="ml-auto">
             <button
               type="button"
-              class="rounded-lg border border-red-200 bg-red-50 px-3 py-1.5 text-sm font-medium text-red-600 transition-colors hover:bg-red-100 dark:border-red-800 dark:bg-red-900/20 dark:text-red-400 dark:hover:bg-red-900/40"
+              class="btn btn-danger btn-sm"
               @click="clearAllLocal"
             >
               {{ t('admin.groups.clearAll') }}
@@ -119,17 +119,17 @@
           {{ t('admin.groups.rateMultipliers') }} ({{ localEntries.length }})
         </h4>
 
-        <div v-if="localEntries.length === 0" class="py-6 text-center text-sm text-gray-400 dark:text-gray-500">
+        <div v-if="localEntries.length === 0" class="admin-empty-state py-6 text-sm text-gray-500 dark:text-gray-400">
           {{ t('admin.groups.noRateMultipliers') }}
         </div>
 
         <div v-else>
           <!-- 表格 -->
-          <div class="overflow-hidden rounded-lg border border-gray-200 dark:border-dark-600">
+          <div class="admin-surface overflow-hidden p-0">
             <div class="max-h-[420px] overflow-y-auto">
               <table class="w-full text-sm">
                 <thead class="sticky top-0 z-[1]">
-                  <tr class="border-b border-gray-200 bg-gray-50 dark:border-dark-600 dark:bg-dark-700">
+                  <tr class="border-b border-blue-100/70 bg-blue-50/50 dark:border-blue-400/10 dark:bg-blue-500/10">
                     <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400">{{ t('admin.groups.columns.userEmail') }}</th>
                     <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400">ID</th>
                     <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400">{{ t('admin.groups.columns.userName') }}</th>
@@ -144,7 +144,7 @@
                   <tr
                     v-for="entry in paginatedLocalEntries"
                     :key="entry.user_id"
-                    class="hover:bg-gray-50 dark:hover:bg-dark-700/50"
+                    class="transition-colors hover:bg-primary-50/40 dark:hover:bg-primary-500/5"
                   >
                     <td class="px-3 py-2 text-gray-600 dark:text-gray-400">{{ entry.user_email }}</td>
                     <td class="whitespace-nowrap px-3 py-2 text-gray-400 dark:text-gray-500">{{ entry.user_id }}</td>
@@ -170,7 +170,7 @@
                         autocomplete="off"
                         :value="entry.rate_multiplier ?? ''"
                         :placeholder="String(props.group?.rate_multiplier ?? 1)"
-                        class="hide-spinner w-20 rounded border border-gray-200 bg-white px-2 py-1 text-center text-sm font-medium transition-colors focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500/20 dark:border-dark-500 dark:bg-dark-700 dark:focus:border-primary-500"
+                        class="hide-spinner input w-20 text-center text-sm font-medium"
                         @change="updateLocalRate(entry.user_id, ($event.target as HTMLInputElement).value)"
                       />
                     </td>

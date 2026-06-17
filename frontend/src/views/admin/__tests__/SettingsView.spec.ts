@@ -1,8 +1,15 @@
+import { readFileSync } from "node:fs";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { defineComponent, h } from "vue";
 import { flushPromises, mount } from "@vue/test-utils";
 
 import SettingsView from "../SettingsView.vue";
+
+const currentDir = dirname(fileURLToPath(import.meta.url));
+const settingsViewSource = readFileSync(resolve(currentDir, "../SettingsView.vue"), "utf8");
 
 const {
   getSettings,
@@ -106,6 +113,7 @@ vi.mock("@/composables/useClipboard", () => ({
 
 vi.mock("@/utils/apiError", () => ({
   extractApiErrorMessage: () => "error",
+  extractI18nErrorMessage: () => "error",
 }));
 
 vi.mock("vue-i18n", async () => {
@@ -182,6 +190,42 @@ vi.mock("vue-i18n", async () => {
       locale: localeRef,
     }),
   };
+});
+
+describe("admin SettingsView unified shell", () => {
+  it("renders the admin page hero and elevated tabs shell", async () => {
+    const wrapper = mountView();
+    await flushPromises();
+
+    expect(wrapper.find('[data-test="admin-page-hero"]').exists()).toBe(true);
+    expect(wrapper.find('[data-test="admin-page-hero"]').classes()).toContain("admin-page-hero");
+    expect(wrapper.find(".settings-tabs-shell").classes()).toContain("admin-toolbar-surface");
+  });
+
+  it("renders shared admin info blocks inside the settings workspace", async () => {
+    const wrapper = mountView();
+    await flushPromises();
+
+    expect(wrapper.find('[data-test="settings-admin-api-warning"]').classes()).toContain("admin-form-section");
+  });
+
+  it("uses shared brand floating surfaces for hand-written settings dialogs", () => {
+    expect(settingsViewSource).toContain("wsTestDialogOpen");
+    expect(settingsViewSource).toContain("affiliateModal.open");
+    expect(settingsViewSource).toContain("affiliateBatchModal.open");
+    expect(settingsViewSource).toContain("brand-overlay");
+    expect(settingsViewSource).toContain("brand-floating-panel");
+    expect(settingsViewSource).toContain("brand-floating-header");
+    expect(settingsViewSource).not.toContain("bg-black/50");
+    expect(settingsViewSource).not.toContain("rounded-xl bg-white");
+    expect(settingsViewSource).not.toContain("rounded-lg bg-white");
+  });
+
+  it("keeps settings workspace snippets on shared admin surface utilities", () => {
+    expect(settingsViewSource).not.toMatch(/rounded-lg border border-gray-200 bg-gray-50/);
+    expect(settingsViewSource).not.toMatch(/rounded-lg border border-gray-200 bg-white/);
+    expect(settingsViewSource).not.toMatch(/hover:bg-gray-100/);
+  });
 });
 
 const AppLayoutStub = { template: "<div><slot /></div>" };

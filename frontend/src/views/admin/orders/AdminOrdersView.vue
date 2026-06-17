@@ -22,7 +22,7 @@
       <OrderTable :orders="orders" :loading="ordersLoading" show-user>
         <template #actions="{ row }">
           <div class="flex items-center gap-1">
-            <button @click="showOrderDetail(row)" class="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-dark-600">
+            <button @click="showOrderDetail(row)" class="admin-inline-action !min-h-8 !min-w-0 !flex-row !gap-1 !rounded-lg !px-2 !py-1">
               <Icon name="eye" size="sm" />
               {{ t('common.view') }}
             </button>
@@ -94,7 +94,7 @@
         <div v-if="orderAuditLogs.length > 0" class="border-t border-gray-200 pt-4 dark:border-dark-600">
           <p class="mb-2 text-xs font-medium text-gray-500 dark:text-gray-400">{{ t('payment.admin.auditLogs') }}</p>
           <div class="max-h-48 space-y-2 overflow-y-auto">
-            <div v-for="log in orderAuditLogs" :key="log.id" class="rounded-lg border border-gray-100 bg-gray-50 p-2.5 dark:border-dark-600 dark:bg-dark-800">
+            <div v-for="log in orderAuditLogs" :key="log.id" class="admin-form-section !space-y-1 !p-2.5">
               <div class="flex items-center justify-between">
                 <span class="text-xs font-medium text-gray-700 dark:text-gray-300">{{ log.action }}</span>
                 <span class="text-xs text-gray-400">{{ formatDateTime(log.created_at) }}</span>

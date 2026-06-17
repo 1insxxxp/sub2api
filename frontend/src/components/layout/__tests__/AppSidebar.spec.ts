@@ -30,3 +30,12 @@ describe('AppSidebar header styles', () => {
     expect(sidebarBrandBlockMatch?.[0]).not.toContain('overflow: hidden;')
   })
 })
+
+describe('AppSidebar shared shell structure', () => {
+  it('keeps the sidebar frame hooks used by the unified admin shell', () => {
+    expect(componentSource).toContain('class="sidebar-nav scrollbar-hide sidebar-nav-shell"')
+    expect(componentSource).toContain('class="sidebar-footer-shell')
+    expect(styleSource).toContain('.sidebar-nav-shell')
+    expect(styleSource).toContain('.sidebar-footer-shell')
+  })
+})

@@ -23,7 +23,7 @@
       <!-- Add Plan Form -->
       <div
         v-if="showAddForm"
-        class="rounded-xl border border-primary-200 bg-primary-50/50 p-4 dark:border-primary-800 dark:bg-primary-900/20"
+        class="admin-form-section"
       >
         <div class="mb-3 text-sm font-medium text-gray-700 dark:text-gray-300">
           {{ t('admin.scheduledTests.addPlan') }}
@@ -111,7 +111,7 @@
         <div class="mt-3 flex justify-end gap-2">
           <button
             @click="showAddForm = false; resetNewPlan()"
-            class="rounded-lg bg-gray-100 px-3 py-1.5 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-200 dark:bg-dark-600 dark:text-gray-300 dark:hover:bg-dark-500"
+            class="btn btn-secondary btn-sm"
           >
             {{ t('common.cancel') }}
           </button>
@@ -135,7 +135,7 @@
       <!-- Empty State -->
       <div
         v-else-if="plans.length === 0"
-        class="rounded-xl border border-dashed border-gray-300 py-10 text-center dark:border-dark-600"
+        class="admin-empty-state py-10"
       >
         <Icon name="calendar" size="lg" class="mx-auto mb-2 text-gray-400" :stroke-width="1.5" />
         <p class="text-sm text-gray-500 dark:text-gray-400">
@@ -148,7 +148,7 @@
         <div
           v-for="plan in plans"
           :key="plan.id"
-          class="rounded-xl border border-gray-200 bg-white transition-all dark:border-dark-600 dark:bg-dark-800"
+          class="brand-floating-card transition-all"
         >
           <!-- Plan Header -->
           <div
@@ -232,7 +232,7 @@
           <!-- Edit Form -->
           <div
             v-if="editingPlanId === plan.id"
-            class="border-t border-blue-100 bg-blue-50/50 px-4 py-3 dark:border-blue-900 dark:bg-blue-900/10"
+            class="border-t border-primary-100/70 bg-primary-50/60 px-4 py-3 dark:border-primary-500/15 dark:bg-primary-500/10"
             @click.stop
           >
             <div class="mb-2 text-xs font-medium text-gray-600 dark:text-gray-400">
@@ -321,7 +321,7 @@
             <div class="mt-3 flex justify-end gap-2">
               <button
                 @click="cancelEdit"
-                class="rounded-lg bg-gray-100 px-3 py-1.5 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-200 dark:bg-dark-600 dark:text-gray-300 dark:hover:bg-dark-500"
+                class="btn btn-secondary btn-sm"
               >
                 {{ t('common.cancel') }}
               </button>
@@ -364,7 +364,7 @@
               <div
                 v-for="result in results"
                 :key="result.id"
-                class="rounded-lg border border-gray-100 bg-gray-50 p-3 dark:border-dark-700 dark:bg-dark-900"
+                class="brand-floating-card p-3"
               >
                 <div class="flex items-center justify-between">
                   <div class="flex items-center gap-2">
@@ -438,7 +438,7 @@
                   </div>
                   <pre
                     v-if="expandedResultIds.has(result.id)"
-                    class="mt-1 max-h-32 overflow-auto whitespace-pre-wrap rounded bg-gray-100 p-2 text-xs text-gray-700 dark:bg-dark-800 dark:text-gray-300"
+                    class="admin-form-section mt-1 max-h-32 overflow-auto whitespace-pre-wrap !space-y-0 !rounded-xl !p-2 text-xs text-gray-700 dark:text-gray-300"
                   >{{ result.response_text }}</pre>
                 </div>
               </div>

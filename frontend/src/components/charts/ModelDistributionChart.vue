@@ -9,34 +9,34 @@
       <div class="flex flex-wrap items-center justify-end gap-2">
         <div
           v-if="showSourceToggle"
-          class="inline-flex rounded-lg border border-gray-200 bg-gray-50 p-0.5 dark:border-gray-700 dark:bg-dark-800"
+          class="inline-flex rounded-2xl border border-primary-200/80 bg-white/80 p-1 shadow-sm shadow-primary-500/5 dark:border-primary-500/20 dark:bg-white/5"
         >
           <button
             type="button"
-            class="rounded-md px-2.5 py-1 text-xs font-medium transition-colors"
+            class="rounded-xl px-2.5 py-1 text-xs font-semibold transition-all"
             :class="source === 'requested'
-              ? 'bg-white text-gray-900 shadow-sm dark:bg-dark-700 dark:text-white'
-              : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200'"
+              ? 'bg-primary-500 text-white shadow-sm shadow-primary-500/20'
+              : 'text-gray-500 hover:bg-primary-50 hover:text-primary-700 dark:text-gray-400 dark:hover:bg-primary-500/10 dark:hover:text-primary-200'"
             @click="emit('update:source', 'requested')"
           >
             {{ t('usage.requestedModel') }}
           </button>
           <button
             type="button"
-            class="rounded-md px-2.5 py-1 text-xs font-medium transition-colors"
+            class="rounded-xl px-2.5 py-1 text-xs font-semibold transition-all"
             :class="source === 'upstream'
-              ? 'bg-white text-gray-900 shadow-sm dark:bg-dark-700 dark:text-white'
-              : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200'"
+              ? 'bg-primary-500 text-white shadow-sm shadow-primary-500/20'
+              : 'text-gray-500 hover:bg-primary-50 hover:text-primary-700 dark:text-gray-400 dark:hover:bg-primary-500/10 dark:hover:text-primary-200'"
             @click="emit('update:source', 'upstream')"
           >
             {{ t('usage.upstreamModel') }}
           </button>
           <button
             type="button"
-            class="rounded-md px-2.5 py-1 text-xs font-medium transition-colors"
+            class="rounded-xl px-2.5 py-1 text-xs font-semibold transition-all"
             :class="source === 'mapping'
-              ? 'bg-white text-gray-900 shadow-sm dark:bg-dark-700 dark:text-white'
-              : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200'"
+              ? 'bg-primary-500 text-white shadow-sm shadow-primary-500/20'
+              : 'text-gray-500 hover:bg-primary-50 hover:text-primary-700 dark:text-gray-400 dark:hover:bg-primary-500/10 dark:hover:text-primary-200'"
             @click="emit('update:source', 'mapping')"
           >
             {{ t('usage.mapping') }}
@@ -44,37 +44,40 @@
         </div>
         <div
           v-if="showMetricToggle"
-          class="inline-flex rounded-lg border border-gray-200 bg-gray-50 p-0.5 dark:border-gray-700 dark:bg-dark-800"
+          class="inline-flex rounded-2xl border border-primary-200/80 bg-white/80 p-1 shadow-sm shadow-primary-500/5 dark:border-primary-500/20 dark:bg-white/5"
         >
           <button
             type="button"
-            class="rounded-md px-2.5 py-1 text-xs font-medium transition-colors"
+            class="rounded-xl px-2.5 py-1 text-xs font-semibold transition-all"
             :class="metric === 'tokens'
-              ? 'bg-white text-gray-900 shadow-sm dark:bg-dark-700 dark:text-white'
-              : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200'"
+              ? 'bg-primary-500 text-white shadow-sm shadow-primary-500/20'
+              : 'text-gray-500 hover:bg-primary-50 hover:text-primary-700 dark:text-gray-400 dark:hover:bg-primary-500/10 dark:hover:text-primary-200'"
             @click="emit('update:metric', 'tokens')"
           >
             {{ t('admin.dashboard.metricTokens') }}
           </button>
           <button
             type="button"
-            class="rounded-md px-2.5 py-1 text-xs font-medium transition-colors"
+            class="rounded-xl px-2.5 py-1 text-xs font-semibold transition-all"
             :class="metric === 'actual_cost'
-              ? 'bg-white text-gray-900 shadow-sm dark:bg-dark-700 dark:text-white'
-              : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200'"
+              ? 'bg-primary-500 text-white shadow-sm shadow-primary-500/20'
+              : 'text-gray-500 hover:bg-primary-50 hover:text-primary-700 dark:text-gray-400 dark:hover:bg-primary-500/10 dark:hover:text-primary-200'"
             @click="emit('update:metric', 'actual_cost')"
           >
             {{ t('admin.dashboard.metricActualCost') }}
           </button>
         </div>
-        <div v-if="enableRankingView" class="inline-flex rounded-lg bg-gray-100 p-1 dark:bg-dark-800">
+        <div
+          v-if="enableRankingView"
+          class="inline-flex rounded-2xl border border-primary-200/80 bg-white/80 p-1 shadow-sm shadow-primary-500/5 dark:border-primary-500/20 dark:bg-white/5"
+        >
           <button
             type="button"
-            class="rounded-md px-2.5 py-1 text-xs font-medium transition-colors"
+            class="rounded-xl px-2.5 py-1 text-xs font-semibold transition-all"
             :class="
               activeView === 'model_distribution'
-                ? 'bg-white text-gray-900 shadow-sm dark:bg-dark-700 dark:text-white'
-                : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200'
+                ? 'bg-primary-500 text-white shadow-sm shadow-primary-500/20'
+                : 'text-gray-500 hover:bg-primary-50 hover:text-primary-700 dark:text-gray-400 dark:hover:bg-primary-500/10 dark:hover:text-primary-200'
             "
             @click="activeView = 'model_distribution'"
           >
@@ -82,11 +85,11 @@
           </button>
           <button
             type="button"
-            class="rounded-md px-2.5 py-1 text-xs font-medium transition-colors"
+            class="rounded-xl px-2.5 py-1 text-xs font-semibold transition-all"
             :class="
               activeView === 'spending_ranking'
-                ? 'bg-white text-gray-900 shadow-sm dark:bg-dark-700 dark:text-white'
-                : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200'
+                ? 'bg-primary-500 text-white shadow-sm shadow-primary-500/20'
+                : 'text-gray-500 hover:bg-primary-50 hover:text-primary-700 dark:text-gray-400 dark:hover:bg-primary-500/10 dark:hover:text-primary-200'
             "
             @click="activeView = 'spending_ranking'"
           >

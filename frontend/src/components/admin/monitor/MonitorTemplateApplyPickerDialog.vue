@@ -4,15 +4,15 @@
     :title="t('admin.channelMonitor.template.applyPickerTitle', { name: templateName })"
     @close="$emit('close')"
   >
-    <p class="mb-3 text-sm text-gray-600 dark:text-gray-400">
+    <p class="admin-form-section mb-3 text-sm text-gray-600 dark:text-gray-400">
       {{ t('admin.channelMonitor.template.applyPickerHint') }}
     </p>
 
-    <div v-if="loading" class="py-6 text-center text-sm text-gray-400">
+    <div v-if="loading" class="admin-empty-state py-6 text-sm text-gray-400">
       {{ t('common.loading') }}
     </div>
 
-    <div v-else-if="monitors.length === 0" class="py-6 text-center text-sm text-gray-400">
+    <div v-else-if="monitors.length === 0" class="admin-empty-state py-6 text-sm text-gray-400">
       {{ t('admin.channelMonitor.template.applyPickerEmpty') }}
     </div>
 
@@ -41,11 +41,11 @@
         </span>
       </div>
 
-      <ul class="max-h-80 divide-y divide-gray-100 overflow-y-auto rounded-lg border border-gray-200 dark:divide-dark-700 dark:border-dark-700">
+      <ul class="admin-list-surface max-h-80 divide-y divide-gray-100 overflow-y-auto dark:divide-dark-700">
         <li
           v-for="m in monitors"
           :key="m.id"
-          class="flex cursor-pointer items-center gap-3 px-3 py-2 hover:bg-gray-50 dark:hover:bg-dark-800"
+          class="admin-list-row flex cursor-pointer items-center gap-3 px-3 py-2"
           @click="toggle(m.id)"
         >
           <input
@@ -59,7 +59,7 @@
           <span v-if="m.provider === 'openai'" class="text-xs text-gray-400">{{ m.api_mode }}</span>
           <span
             v-if="!m.enabled"
-            class="ml-auto rounded bg-gray-100 px-1.5 py-0.5 text-xs text-gray-500 dark:bg-dark-700 dark:text-gray-400"
+            class="ml-auto rounded-full border border-slate-200 bg-slate-50/80 px-2 py-0.5 text-xs font-medium text-slate-600 dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-300"
           >
             {{ t('admin.channelMonitor.onlyDisabled').replace(/^仅|^Only /, '') }}
           </span>

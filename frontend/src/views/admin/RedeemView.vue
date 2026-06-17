@@ -1,33 +1,68 @@
 <template>
   <AppLayout>
-    <TablePageLayout>
+    <div class="space-y-6">
+      <section class="admin-page-hero" data-test="admin-page-hero">
+        <div class="admin-page-hero-grid">
+          <div class="min-w-0">
+            <span class="admin-page-kicker">
+              <Icon name="gift" size="xs" />
+              {{ t('nav.redeemCodes') }}
+            </span>
+            <h1 class="admin-page-title">{{ t('admin.redeem.title') }}</h1>
+            <p class="admin-page-description">{{ t('admin.redeem.description') }}</p>
+            <div class="admin-page-meta">
+              <span class="admin-page-meta-chip">
+                <span>{{ t('common.total') }}</span>
+                <strong>{{ pagination.total }}</strong>
+              </span>
+              <span class="admin-page-meta-chip">
+                <span>{{ t('pagination.perPage') }}</span>
+                <strong>{{ pagination.page_size }}</strong>
+              </span>
+              <span class="admin-page-meta-chip">
+                <span>{{ t('common.status') }}</span>
+                <strong>{{ loading ? t('common.loading') : t('common.active') }}</strong>
+              </span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <TablePageLayout>
       <template #filters>
-        <div class="flex flex-wrap items-center gap-3">
+        <div class="admin-toolbar">
           <!-- Left: Search + Filters -->
-          <div class="flex-1 sm:max-w-64">
-            <input
-              v-model="searchQuery"
-              type="text"
-              :placeholder="t('admin.redeem.searchCodes')"
-              class="input"
-              @input="handleSearch"
+          <div class="admin-toolbar-group flex-1">
+            <div class="relative w-full sm:w-64">
+              <Icon
+                name="search"
+                size="md"
+                class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 dark:text-gray-500"
+              />
+              <input
+                v-model="searchQuery"
+                type="text"
+                :placeholder="t('admin.redeem.searchCodes')"
+                class="input pl-10"
+                @input="handleSearch"
+              />
+            </div>
+            <Select
+              v-model="filters.type"
+              :options="filterTypeOptions"
+              class="w-36"
+              @change="loadCodes"
+            />
+            <Select
+              v-model="filters.status"
+              :options="filterStatusOptions"
+              class="w-36"
+              @change="loadCodes"
             />
           </div>
-          <Select
-            v-model="filters.type"
-            :options="filterTypeOptions"
-            class="w-36"
-            @change="loadCodes"
-          />
-          <Select
-            v-model="filters.status"
-            :options="filterStatusOptions"
-            class="w-36"
-            @change="loadCodes"
-          />
 
           <!-- Right: Action buttons -->
-          <div class="flex flex-1 flex-wrap items-center justify-end gap-2">
+          <div class="admin-toolbar-group w-full justify-end lg:w-auto lg:flex-none">
             <button
               @click="loadCodes"
               :disabled="loading"
@@ -246,7 +281,8 @@
           </button>
         </div>
       </template>
-    </TablePageLayout>
+      </TablePageLayout>
+    </div>
 
     <!-- Delete Confirmation Dialog -->
     <ConfirmDialog
@@ -274,15 +310,27 @@
 
     <!-- Generate Codes Dialog -->
     <Teleport to="body">
-      <div v-if="showGenerateDialog" class="fixed inset-0 z-50 flex items-center justify-center">
-        <div class="fixed inset-0 bg-black/50" @click="showGenerateDialog = false"></div>
+      <div v-if="showGenerateDialog" class="brand-overlay z-50 flex items-start justify-center overflow-y-auto p-4 pt-[7vh]">
         <div
-          class="relative z-10 w-full max-w-md rounded-xl bg-white p-6 shadow-xl dark:bg-dark-800"
+          class="brand-floating-panel w-full max-w-md"
         >
-          <h2 class="mb-4 text-lg font-semibold text-gray-900 dark:text-white">
-            {{ t('admin.redeem.generateCodesTitle') }}
-          </h2>
-          <form @submit.prevent="handleGenerateCodes" class="space-y-4">
+          <div class="brand-floating-header flex items-start justify-between gap-4">
+            <div class="flex min-w-0 items-start gap-3">
+              <div class="brand-floating-icon h-11 w-11 rounded-2xl">
+                <Icon name="gift" size="md" />
+              </div>
+              <div class="min-w-0">
+                <span class="brand-floating-chip">{{ t('admin.redeem.title') }}</span>
+                <h2 class="mt-3 text-lg font-semibold text-slate-950 dark:text-white">
+                  {{ t('admin.redeem.generateCodesTitle') }}
+                </h2>
+              </div>
+            </div>
+            <button type="button" class="brand-floating-close flex-shrink-0" @click="showGenerateDialog = false" :aria-label="t('common.close')">
+              <Icon name="x" size="md" :stroke-width="2" />
+            </button>
+          </div>
+          <form @submit.prevent="handleGenerateCodes" class="max-h-[calc(85vh-9rem)] space-y-4 overflow-y-auto px-6 py-5">
             <div>
               <label class="input-label">{{ t('admin.redeem.codeType') }}</label>
               <Select v-model="generateForm.type" :options="typeOptions" />
@@ -365,10 +413,10 @@
                   type="button"
                   @click="generateForm.expiry_option = option.value"
                   :class="[
-                    'rounded-lg border px-3 py-2 text-sm transition-colors',
+                    'admin-choice-card px-3 py-2 text-sm',
                     generateForm.expiry_option === option.value
-                      ? 'border-primary-500 bg-primary-50 text-primary-700 dark:border-primary-400 dark:bg-primary-900/20 dark:text-primary-300'
-                      : 'border-gray-200 text-gray-700 hover:bg-gray-50 dark:border-dark-600 dark:text-gray-300 dark:hover:bg-dark-700'
+                      ? 'admin-choice-card-active'
+                      : ''
                   ]"
                 >
                   {{ option.label }}
@@ -396,7 +444,7 @@
                 class="input"
               />
             </div>
-            <div class="flex justify-end gap-3 pt-2">
+            <div class="flex justify-end gap-3 border-t border-blue-100/70 pt-4 dark:border-blue-500/10">
               <button type="button" @click="showGenerateDialog = false" class="btn btn-secondary">
                 {{ t('common.cancel') }}
               </button>
@@ -413,20 +461,29 @@
     <Teleport to="body">
       <div
         v-if="showBatchUpdateDialog"
-        class="fixed inset-0 z-50 flex items-center justify-center p-4"
+        class="brand-overlay z-50 flex items-start justify-center overflow-y-auto p-4 pt-[7vh]"
       >
-        <div class="fixed inset-0 bg-black/50" @click="closeBatchUpdateDialog"></div>
         <div
-          class="relative z-10 w-full max-w-lg rounded-xl bg-white p-6 shadow-xl dark:bg-dark-800"
+          class="brand-floating-panel w-full max-w-lg"
         >
-          <h2 class="mb-1 text-lg font-semibold text-gray-900 dark:text-white">
-            {{ t('admin.redeem.batchUpdateTitle') }}
-          </h2>
-          <p class="mb-4 text-sm text-gray-500 dark:text-gray-400">
-            {{ t('admin.redeem.selectedCount', { count: selectedCount }) }}
-          </p>
+          <div class="brand-floating-header flex items-start justify-between gap-4">
+            <div class="flex min-w-0 items-start gap-3">
+              <div class="brand-floating-icon h-11 w-11 rounded-2xl">
+                <Icon name="edit" size="md" />
+              </div>
+              <div class="min-w-0">
+                <span class="brand-floating-chip">{{ t('admin.redeem.selectedCount', { count: selectedCount }) }}</span>
+                <h2 class="mt-3 text-lg font-semibold text-slate-950 dark:text-white">
+                  {{ t('admin.redeem.batchUpdateTitle') }}
+                </h2>
+              </div>
+            </div>
+            <button type="button" class="brand-floating-close flex-shrink-0" @click="closeBatchUpdateDialog" :aria-label="t('common.close')">
+              <Icon name="x" size="md" :stroke-width="2" />
+            </button>
+          </div>
 
-          <form data-test="batch-update-form" class="space-y-4" @submit.prevent="handleBatchUpdate">
+          <form data-test="batch-update-form" class="max-h-[calc(85vh-9rem)] space-y-4 overflow-y-auto px-6 py-5" @submit.prevent="handleBatchUpdate">
             <div class="space-y-2">
               <label class="flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-300">
                 <input
@@ -502,7 +559,7 @@
               />
             </div>
 
-            <div class="flex justify-end gap-3 pt-2">
+            <div class="flex justify-end gap-3 border-t border-blue-100/70 pt-4 dark:border-blue-500/10">
               <button type="button" @click="closeBatchUpdateDialog" class="btn btn-secondary">
                 {{ t('common.cancel') }}
               </button>
@@ -522,30 +579,17 @@
 
     <!-- Generated Codes Result Dialog -->
     <Teleport to="body">
-      <div v-if="showResultDialog" class="fixed inset-0 z-50 flex items-center justify-center p-4">
-        <div class="fixed inset-0 bg-black/50" @click="closeResultDialog"></div>
-        <div class="relative z-10 w-full max-w-lg rounded-xl bg-white shadow-xl dark:bg-dark-800">
+      <div v-if="showResultDialog" class="brand-overlay z-50 flex items-start justify-center overflow-y-auto p-4 pt-[7vh]">
+        <div class="brand-floating-panel w-full max-w-lg">
           <!-- Header -->
           <div
-            class="flex items-center justify-between border-b border-gray-200 px-5 py-4 dark:border-dark-600"
+            class="brand-floating-header flex items-center justify-between gap-4"
           >
             <div class="flex items-center gap-3">
               <div
-                class="flex h-10 w-10 items-center justify-center rounded-full bg-green-100 dark:bg-green-900/30"
+                class="brand-floating-icon h-11 w-11 rounded-2xl"
               >
-                <svg
-                  class="h-5 w-5 text-green-600 dark:text-green-400"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    stroke-width="2"
-                    d="M5 13l4 4L19 7"
-                  />
-                </svg>
+                <Icon name="check" size="md" :stroke-width="2" />
               </div>
               <div>
                 <h2 class="text-base font-semibold text-gray-900 dark:text-white">
@@ -558,7 +602,8 @@
             </div>
             <button
               @click="closeResultDialog"
-              class="rounded-lg p-1.5 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-dark-700 dark:hover:text-gray-300"
+              class="brand-floating-close flex-shrink-0"
+              :aria-label="t('common.close')"
             >
               <Icon name="x" size="md" :stroke-width="2" />
             </button>
@@ -570,13 +615,13 @@
                 readonly
                 :value="generatedCodesText"
                 :style="{ height: textareaHeight }"
-                class="w-full resize-none rounded-lg border border-gray-200 bg-gray-50 p-3 font-mono text-sm text-gray-800 focus:outline-none dark:border-dark-600 dark:bg-dark-700 dark:text-gray-200"
+                class="admin-form-section w-full resize-none !space-y-0 !p-3 font-mono text-sm text-gray-800 focus:outline-none dark:text-gray-200"
               ></textarea>
             </div>
           </div>
           <!-- Footer -->
           <div
-            class="flex justify-end gap-2 rounded-b-xl border-t border-gray-200 bg-gray-50 px-5 py-4 dark:border-dark-600 dark:bg-dark-700/50"
+            class="flex justify-end gap-2 border-t border-blue-100/70 px-5 py-4 dark:border-blue-500/10"
           >
             <button
               @click="copyGeneratedCodes"

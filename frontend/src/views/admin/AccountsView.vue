@@ -1,22 +1,53 @@
 <template>
   <AppLayout>
-    <TablePageLayout>
+    <div class="space-y-6">
+      <section class="admin-page-hero" data-test="admin-page-hero">
+        <div class="admin-page-hero-grid">
+          <div class="min-w-0">
+            <span class="admin-page-kicker">
+              <Icon name="users" size="xs" />
+              {{ t('nav.accounts') }}
+            </span>
+            <h1 class="admin-page-title">{{ t('admin.accounts.title') }}</h1>
+            <p class="admin-page-description">{{ t('admin.accounts.description') }}</p>
+            <div class="admin-page-meta">
+              <span class="admin-page-meta-chip">
+                <span>{{ t('common.total') }}</span>
+                <strong>{{ pagination.total }}</strong>
+              </span>
+              <span class="admin-page-meta-chip">
+                <span>{{ t('pagination.perPage') }}</span>
+                <strong>{{ pagination.page_size }}</strong>
+              </span>
+              <span class="admin-page-meta-chip">
+                <span>{{ t('common.status') }}</span>
+                <strong>{{ loading ? t('common.loading') : t('common.active') }}</strong>
+              </span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <TablePageLayout>
       <template #filters>
-        <div class="flex flex-wrap-reverse items-start justify-between gap-3">
-          <AccountTableFilters
-            v-model:searchQuery="params.search"
-            :filters="params"
-            :groups="groups"
-            @update:filters="(newFilters) => Object.assign(params, newFilters)"
-            @change="debouncedReload"
-            @update:searchQuery="debouncedReload"
-          />
-          <AccountTableActions
-            :loading="loading"
-            @refresh="handleManualRefresh"
-            @create="showCreate = true"
-          >
-            <template #after>
+        <div class="admin-toolbar">
+          <div class="admin-toolbar-group flex-1">
+            <AccountTableFilters
+              v-model:searchQuery="params.search"
+              :filters="params"
+              :groups="groups"
+              @update:filters="(newFilters) => Object.assign(params, newFilters)"
+              @change="debouncedReload"
+              @update:searchQuery="debouncedReload"
+            />
+          </div>
+          <div class="admin-toolbar-group w-full justify-end lg:w-auto lg:flex-none">
+            <AccountTableActions
+              :loading="loading"
+              @refresh="handleManualRefresh"
+              @create="showCreate = true"
+            >
+              <template #after>
               <!-- Auto Refresh Dropdown -->
               <div class="relative" ref="autoRefreshDropdownRef">
                 <button
@@ -38,27 +69,25 @@
                 </button>
                 <div
                   v-if="showAutoRefreshDropdown"
-                  class="absolute right-0 z-50 mt-2 w-56 origin-top-right rounded-lg border border-gray-200 bg-white shadow-lg dark:border-gray-700 dark:bg-gray-800"
+                  class="admin-action-menu absolute right-0 z-50 mt-2 w-56 origin-top-right"
                 >
-                  <div class="p-2">
                     <button
                       @click="setAutoRefreshEnabled(!autoRefreshEnabled)"
-                      class="flex w-full items-center justify-between rounded-md px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-700"
+                      class="admin-action-menu-item justify-between"
                     >
                       <span>{{ t('admin.accounts.enableAutoRefresh') }}</span>
                       <Icon v-if="autoRefreshEnabled" name="check" size="sm" class="text-primary-500" />
                     </button>
-                    <div class="my-1 border-t border-gray-100 dark:border-gray-700"></div>
+                    <div class="admin-action-menu-divider"></div>
                     <button
                       v-for="sec in autoRefreshIntervals"
                       :key="sec"
                       @click="setAutoRefreshInterval(sec)"
-                      class="flex w-full items-center justify-between rounded-md px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-700"
+                      class="admin-action-menu-item justify-between"
                     >
                       <span>{{ autoRefreshIntervalLabel(sec) }}</span>
                       <Icon v-if="autoRefreshIntervalSeconds === sec" name="check" size="sm" class="text-primary-500" />
                     </button>
-                  </div>
                 </div>
               </div>
 
@@ -78,11 +107,11 @@
                 </button>
                 <div
                   v-if="showAccountToolsDropdown"
-                  class="absolute right-0 z-50 mt-2 w-[min(20rem,calc(100vw-2rem))] origin-top-right overflow-hidden rounded-lg border border-gray-200 bg-white shadow-xl dark:border-gray-700 dark:bg-gray-800"
+                  class="admin-action-menu absolute right-0 z-50 mt-2 w-[min(20rem,calc(100vw-2rem))] origin-top-right"
                 >
-                  <div class="max-h-[70vh] overflow-y-auto p-2">
+                  <div class="max-h-[70vh] overflow-y-auto">
                     <div class="px-2 py-2">
-                      <div class="text-xs font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">
+                      <div class="text-xs font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">
                         {{ t('admin.accounts.dataActions') }}
                       </div>
                     </div>
@@ -113,9 +142,9 @@
                       </span>
                     </button>
 
-                    <div class="my-2 border-t border-gray-100 dark:border-gray-700"></div>
+                    <div class="admin-action-menu-divider"></div>
                     <div class="px-2 py-2">
-                      <div class="text-xs font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">
+                      <div class="text-xs font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">
                         {{ t('admin.accounts.toolActions') }}
                       </div>
                     </div>
@@ -132,13 +161,13 @@
                       <span class="flex-1 text-left">{{ t('admin.tlsFingerprintProfiles.title') }}</span>
                     </button>
 
-                    <div class="my-2 border-t border-gray-100 dark:border-gray-700"></div>
+                    <div class="admin-action-menu-divider"></div>
                     <div class="px-2 py-2">
                       <div class="flex items-center justify-between gap-3">
-                        <span class="text-xs font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">
+                        <span class="text-xs font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">
                           {{ t('admin.accounts.viewColumns') }}
                         </span>
-                        <Icon name="grid" size="sm" class="text-gray-400" />
+                        <Icon name="grid" size="sm" class="text-slate-400" />
                       </div>
                     </div>
                     <div class="grid grid-cols-1 gap-1">
@@ -146,7 +175,7 @@
                         v-for="col in toggleableColumns"
                         :key="col.key"
                         @click="toggleColumn(col.key)"
-                        class="flex w-full items-center justify-between rounded-md px-3 py-2 text-sm text-gray-700 transition-colors hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-700"
+                        class="admin-action-menu-item justify-between"
                       >
                         <span class="truncate">{{ col.label }}</span>
                         <Icon v-if="isColumnVisible(col.key)" name="check" size="sm" class="text-primary-500" />
@@ -155,8 +184,9 @@
                   </div>
                 </div>
               </div>
-            </template>
-          </AccountTableActions>
+              </template>
+            </AccountTableActions>
+          </div>
         </div>
         <div
           v-if="hasPendingListSync"
@@ -307,7 +337,7 @@
                 <span class="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200" :title="t('admin.accounts.fallbackActiveTip', { origin: row.proxy_fallback_origin_name })">
                   {{ t('admin.accounts.fallbackActive') }}
                 </span>
-                <button class="text-xs px-1.5 py-0.5 rounded border border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700" @click="onRevertFallback(row)">{{ t('admin.accounts.revertProxy') }}</button>
+              <button class="btn btn-secondary btn-xs" @click="onRevertFallback(row)">{{ t('admin.accounts.revertProxy') }}</button>
               </div>
             </div>
           </template>
@@ -346,15 +376,15 @@
           </template>
           <template #cell-actions="{ row }">
             <div class="flex items-center gap-1">
-              <button @click="handleEdit(row)" class="flex flex-col items-center gap-0.5 rounded-lg p-1.5 text-gray-500 transition-colors hover:bg-gray-100 hover:text-primary-600 dark:hover:bg-dark-700 dark:hover:text-primary-400">
+              <button @click="handleEdit(row)" class="admin-inline-action">
                 <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0115.75 21H5.25A2.25 2.25 0 013 18.75V8.25A2.25 2.25 0 015.25 6H10" /></svg>
                 <span class="text-xs">{{ t('common.edit') }}</span>
               </button>
-              <button @click="handleDelete(row)" class="flex flex-col items-center gap-0.5 rounded-lg p-1.5 text-gray-500 transition-colors hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-900/20 dark:hover:text-red-400">
+              <button @click="handleDelete(row)" class="admin-inline-action admin-inline-action-danger">
                 <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" /></svg>
                 <span class="text-xs">{{ t('common.delete') }}</span>
               </button>
-              <button @click="openMenu(row, $event)" class="flex flex-col items-center gap-0.5 rounded-lg p-1.5 text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-900 dark:hover:bg-dark-700 dark:hover:text-white">
+              <button @click="openMenu(row, $event)" class="admin-inline-action">
                 <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M6.75 12a.75.75 0 11-1.5 0 .75.75 0 011.5 0zM12.75 12a.75.75 0 11-1.5 0 .75.75 0 011.5 0zM18.75 12a.75.75 0 11-1.5 0 .75.75 0 011.5 0z" /></svg>
                 <span class="text-xs">{{ t('common.more') }}</span>
               </button>
@@ -364,7 +394,8 @@
         </div>
       </template>
       <template #pagination><Pagination v-if="pagination.total > 0" :page="pagination.page" :total="pagination.total" :page-size="pagination.page_size" @update:page="handlePageChange" @update:pageSize="handlePageSizeChange" /></template>
-    </TablePageLayout>
+      </TablePageLayout>
+    </div>
     <CreateAccountModal :show="showCreate" :proxies="proxies" :groups="groups" @close="showCreate = false" @created="reload" />
     <EditAccountModal :show="showEdit" :account="edAcc" :proxies="proxies" :groups="groups" @close="showEdit = false" @updated="handleAccountUpdated" />
     <ReAuthAccountModal :show="showReAuth" :account="reAuthAcc" @close="closeReAuthModal" @reauthorized="handleAccountUpdated" />
@@ -1718,10 +1749,12 @@ onUnmounted(() => {
 
 <style scoped>
 .account-tools-menu-item {
-  @apply flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm text-gray-700 transition-colors hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-700;
+  @apply flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left text-sm font-medium;
+  @apply text-slate-700 transition-all duration-150 dark:text-slate-200;
+  @apply hover:bg-primary-50/80 hover:text-primary-800 dark:hover:bg-primary-500/10 dark:hover:text-primary-100;
 }
 
 .account-tools-menu-icon {
-  @apply inline-flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-md;
+  @apply inline-flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-xl;
 }
 </style>

@@ -135,6 +135,28 @@ describe('AppHeader available token estimate', () => {
   })
 })
 
+describe('AppHeader shared admin shell', () => {
+  beforeEach(() => {
+    getCheckinStatus.mockReset()
+    getCheckinStatus.mockResolvedValue({
+      enabled: false,
+      checked_in: false,
+      blacklisted: false,
+      checkin_date: '2026-06-17',
+      reward_amount: null
+    })
+  })
+
+  it('renders the unified header toolbar chrome and balance pill hook', async () => {
+    const wrapper = await mountHeader()
+
+    expect(wrapper.get('header').classes()).toContain('app-header-shell')
+    expect(wrapper.get('.app-header-toolbar').exists()).toBe(true)
+    expect(wrapper.get('.app-header-actions').exists()).toBe(true)
+    expect(wrapper.get('[data-test="header-balance-pill"]').exists()).toBe(true)
+  })
+})
+
 describe('AppHeader daily check-in entry', () => {
   beforeEach(() => {
     getCheckinStatus.mockReset()

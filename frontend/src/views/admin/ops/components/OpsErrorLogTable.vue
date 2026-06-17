@@ -97,7 +97,7 @@
 
               <!-- Platform -->
               <td class="whitespace-nowrap px-4 py-2">
-                <span class="inline-flex items-center rounded bg-gray-100 px-1.5 py-0.5 text-[10px] font-bold uppercase text-gray-600 dark:bg-dark-700 dark:text-gray-300">
+                <span class="inline-flex items-center rounded-full border border-primary-100 bg-primary-50/80 px-2 py-0.5 text-[10px] font-bold uppercase text-primary-700 dark:border-primary-500/15 dark:bg-primary-500/10 dark:text-primary-200">
                   {{ log.platform || '-' }}
                 </span>
               </td>
@@ -188,7 +188,7 @@
                   </span>
                   <span
                     v-if="log.request_type != null && log.request_type > 0"
-                    class="rounded bg-gray-100 px-1.5 py-0.5 text-[10px] font-bold text-gray-600 dark:bg-dark-700 dark:text-gray-300"
+                    class="rounded-full border border-slate-200 bg-slate-50/80 px-2 py-0.5 text-[10px] font-bold text-slate-600 dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-300"
                   >
                     {{ formatRequestType(log.request_type) }}
                   </span>

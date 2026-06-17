@@ -2,9 +2,9 @@
   <AppLayout>
     <TablePageLayout>
       <template #filters>
-        <div class="admin-toolbar-surface flex flex-col justify-between gap-4 lg:flex-row lg:items-start">
+        <div class="admin-toolbar">
           <!-- Left: Search + Filters -->
-          <div class="flex flex-1 flex-wrap items-center gap-3">
+          <div class="admin-toolbar-group flex-1">
             <div class="relative w-full sm:w-64">
               <Icon
                 name="search"
@@ -30,7 +30,7 @@
           </div>
 
           <!-- Right: Actions -->
-          <div class="flex w-full flex-shrink-0 flex-wrap items-center justify-end gap-3 lg:w-auto">
+          <div class="admin-toolbar-group w-full justify-end lg:w-auto lg:flex-none">
             <button
               @click="loadChannels"
               :disabled="loading"
@@ -74,7 +74,7 @@
 
           <template #cell-group_count="{ row }">
             <span
-              class="inline-flex items-center rounded bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-800 dark:bg-dark-600 dark:text-gray-300"
+              class="inline-flex items-center rounded-full border border-primary-100 bg-primary-50/80 px-2.5 py-0.5 text-xs font-medium text-primary-700 dark:border-primary-500/15 dark:bg-primary-500/10 dark:text-primary-200"
             >
               {{ (row.group_ids || []).length }}
               {{ t('admin.channels.groupsUnit', 'groups') }}
@@ -83,7 +83,7 @@
 
           <template #cell-pricing_count="{ row }">
             <span
-              class="inline-flex items-center rounded bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-800 dark:bg-dark-600 dark:text-gray-300"
+              class="inline-flex items-center rounded-full border border-primary-100 bg-primary-50/80 px-2.5 py-0.5 text-xs font-medium text-primary-700 dark:border-primary-500/15 dark:bg-primary-500/10 dark:text-primary-200"
             >
               {{ (row.model_pricing || []).length }}
               {{ t('admin.channels.pricingUnit', 'pricing rules') }}
@@ -100,14 +100,14 @@
             <div class="flex items-center gap-1">
               <button
                 @click="openEditDialog(row)"
-                class="flex flex-col items-center gap-0.5 rounded-lg p-1.5 text-gray-500 transition-colors hover:bg-gray-100 hover:text-primary-600 dark:hover:bg-dark-700 dark:hover:text-primary-400"
+                class="admin-inline-action"
               >
                 <Icon name="edit" size="sm" />
                 <span class="text-xs">{{ t('common.edit', 'Edit') }}</span>
               </button>
               <button
                 @click="handleDelete(row)"
-                class="flex flex-col items-center gap-0.5 rounded-lg p-1.5 text-gray-500 transition-colors hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-900/20 dark:hover:text-red-400"
+                class="admin-inline-action admin-inline-action-danger"
               >
                 <Icon name="trash" size="sm" />
                 <span class="text-xs">{{ t('common.delete', 'Delete') }}</span>
@@ -235,10 +235,10 @@
                 <label
                   v-for="p in platformOrder"
                   :key="p"
-                  class="inline-flex cursor-pointer items-center gap-1.5 rounded-md border px-3 py-1.5 text-sm transition-colors"
+                  class="admin-choice-card inline-flex cursor-pointer items-center gap-1.5 text-sm"
                   :class="activePlatforms.includes(p)
-                    ? 'bg-primary-50 border-primary-300 dark:bg-primary-900/20 dark:border-primary-700'
-                    : 'border-gray-200 hover:bg-gray-50 dark:border-dark-600 dark:hover:bg-dark-700'"
+                    ? 'admin-choice-card-active'
+                    : ''"
                 >
                   <input
                     type="checkbox"
@@ -286,7 +286,7 @@
                   ({{ t('admin.channels.form.selectedCount', { count: section.group_ids.length }, `已选 ${section.group_ids.length} 个`) }})
                 </span>
               </label>
-              <div class="max-h-40 overflow-auto rounded-lg border border-gray-200 bg-gray-50 p-2 dark:border-dark-600 dark:bg-dark-900">
+              <div class="admin-form-section max-h-40 overflow-auto !space-y-0 !p-2">
                 <div v-if="groupsLoading" class="py-2 text-center text-xs text-gray-500">
                   {{ t('common.loading', 'Loading...') }}
                 </div>
@@ -297,9 +297,9 @@
                   <label
                     v-for="group in getGroupsForPlatform(section.platform)"
                     :key="group.id"
-                    class="inline-flex cursor-pointer items-center gap-1.5 rounded-md border border-gray-200 px-2 py-1 text-xs transition-colors hover:bg-gray-50 dark:border-dark-600 dark:hover:bg-dark-700"
+                    class="admin-choice-card inline-flex cursor-pointer items-center gap-1.5 !px-2 !py-1 text-xs"
                     :class="[
-                      section.group_ids.includes(group.id) ? 'bg-primary-50 border-primary-300 dark:bg-primary-900/20 dark:border-primary-700' : '',
+                      section.group_ids.includes(group.id) ? 'admin-choice-card-active' : '',
                       isGroupInOtherChannel(group.id, section.platform) ? 'opacity-40' : ''
                     ]"
                   >
@@ -479,7 +479,7 @@
               <div
                 v-for="(rule, ruleIndex) in section.account_stats_pricing_rules"
                 :key="ruleIndex"
-                class="space-y-3 rounded-lg border border-gray-200 p-4 dark:border-dark-600"
+                class="admin-form-section space-y-3 !p-4"
               >
                 <div class="flex items-center justify-between">
                   <input
@@ -498,10 +498,10 @@
                     <label
                       v-for="gid in section.group_ids"
                       :key="gid"
-                      class="inline-flex cursor-pointer items-center gap-1 rounded-md border px-2 py-1 text-xs transition-colors"
+                      class="admin-choice-card inline-flex cursor-pointer items-center gap-1 !px-2 !py-1 text-xs"
                       :class="rule.group_ids.includes(gid)
-                        ? 'border-primary-300 bg-primary-50 dark:border-primary-700 dark:bg-primary-900/20'
-                        : 'border-gray-200 hover:bg-gray-50 dark:border-dark-600 dark:hover:bg-dark-700'"
+                        ? 'admin-choice-card-active'
+                        : ''"
                     >
                       <input type="checkbox" :checked="rule.group_ids.includes(gid)" class="h-3 w-3 rounded border-gray-300 text-primary-600 focus:ring-primary-500" @change="rule.group_ids.includes(gid) ? rule.group_ids.splice(rule.group_ids.indexOf(gid), 1) : rule.group_ids.push(gid)" />
                       <span :class="['font-medium', platformTextClass(section.platform)]">{{ getGroupNameById(gid) }}</span>
@@ -540,14 +540,14 @@
                     <!-- Search results dropdown -->
                     <div
                       v-if="showRuleAccountDropdown[`${section.platform}-${ruleIndex}`] && (ruleAccountSearchResults[`${section.platform}-${ruleIndex}`]?.length ?? 0) > 0"
-                      class="absolute z-50 mt-1 max-h-48 w-full overflow-auto rounded-lg border bg-white shadow-lg dark:border-dark-600 dark:bg-dark-800"
+                      class="admin-surface absolute z-50 mt-1 max-h-48 w-full overflow-auto !rounded-xl p-1"
                     >
                       <button
                         v-for="account in ruleAccountSearchResults[`${section.platform}-${ruleIndex}`]"
                         :key="account.id"
                         type="button"
                         @click="selectRuleAccount(rule, account, section.platform, ruleIndex)"
-                        class="w-full px-3 py-2 text-left text-sm hover:bg-gray-100 dark:hover:bg-dark-700"
+                        class="admin-action-menu-item admin-list-row"
                         :class="{ 'opacity-50': rule.account_ids.includes(account.id) }"
                         :disabled="rule.account_ids.includes(account.id)"
                       >

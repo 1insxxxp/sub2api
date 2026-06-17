@@ -165,7 +165,7 @@
             </div>
 
             <div
-              class="rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-dark-700 dark:bg-dark-800/60"
+              class="admin-form-section !space-y-3 p-4"
             >
               <div class="text-sm font-medium text-gray-900 dark:text-white">
                 {{ t("admin.settings.emailTemplates.placeholders") }}
@@ -178,7 +178,7 @@
                   v-for="placeholder in placeholderList"
                   :key="placeholder"
                   type="button"
-                  class="rounded-full border border-gray-200 bg-white px-3 py-1 font-mono text-xs text-gray-700 transition-colors hover:border-primary-300 hover:text-primary-600 dark:border-dark-600 dark:bg-dark-700 dark:text-gray-200 dark:hover:border-primary-500 dark:hover:text-primary-300"
+                  class="admin-choice-card rounded-full px-3 py-1 font-mono text-xs"
                   @click="copyPlaceholder(placeholder)"
                 >
                   {{ placeholder }}
@@ -189,7 +189,7 @@
 
           <div class="space-y-4">
             <div
-              class="rounded-lg border border-gray-200 bg-white dark:border-dark-700 dark:bg-dark-800"
+              class="admin-surface overflow-hidden"
             >
               <div
                 class="flex items-center justify-between border-b border-gray-100 px-4 py-3 dark:border-dark-700"
@@ -209,9 +209,9 @@
                   {{ t("admin.settings.emailTemplates.customized") }}
                 </span>
               </div>
-              <div class="bg-gray-100 p-3 dark:bg-dark-900">
+              <div class="border-t border-blue-100/60 bg-blue-50/40 p-3 dark:border-blue-500/10 dark:bg-dark-950/40">
                 <iframe
-                  class="h-[36rem] w-full rounded-md border border-gray-200 bg-white dark:border-dark-700"
+                  class="admin-form-section h-[36rem] w-full !space-y-0 !rounded-xl !p-0"
                   sandbox=""
                   :srcdoc="previewHtml"
                   :title="t('admin.settings.emailTemplates.livePreview')"

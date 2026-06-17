@@ -152,6 +152,39 @@ describe('admin UsageView distribution metric toggles', () => {
     vi.useRealTimers()
   })
 
+  it('renders shared admin shell surfaces around the usage workspace', async () => {
+    const wrapper = mount(UsageView, {
+      global: {
+        stubs: {
+          AppLayout: AppLayoutStub,
+          UsageStatsCards: true,
+          UsageFilters: UsageFiltersStub,
+          UsageTable: true,
+          UsageExportProgress: true,
+          UsageCleanupDialog: true,
+          UserBalanceHistoryModal: true,
+          Pagination: true,
+          Select: true,
+          DateRangePicker: true,
+          Icon: true,
+          TokenUsageTrend: true,
+          ModelDistributionChart: true,
+          GroupDistributionChart: true,
+          EndpointDistributionChart: true,
+          OpsErrorLogTable: true,
+          OpsErrorDetailModal: true,
+        },
+      },
+    })
+
+    vi.advanceTimersByTime(120)
+    await flushPromises()
+
+    expect(wrapper.get('[data-test="admin-page-hero"]').classes()).toContain('admin-page-hero')
+    expect(wrapper.get('[data-test="usage-chart-toolbar"]').classes()).toContain('admin-toolbar-surface')
+    expect(wrapper.get('[data-test="usage-tabs-surface"]').classes()).toContain('admin-surface')
+  })
+
   it('keeps previous model stats visible during refresh until new data arrives', async () => {
     // 首次加载返回 A
     getModelStats.mockResolvedValueOnce({ models: [{ model: 'A', total_tokens: 10 }] })

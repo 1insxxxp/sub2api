@@ -1,8 +1,8 @@
 <template>
-  <header class="app-header-shell theme-crisp sticky top-0 z-30 border-b border-blue-200/70 shadow-sm shadow-blue-950/[0.04] backdrop-blur-xl dark:border-blue-400/15">
-    <div class="flex h-16 items-center justify-between gap-3 px-4 md:px-6">
+  <header class="app-header-shell theme-crisp sticky top-0 z-30">
+    <div class="app-header-toolbar">
       <!-- Left: Mobile Menu Toggle + Page Title -->
-      <div class="flex items-center gap-4">
+      <div class="app-header-title-group">
         <button
           @click="toggleMobileSidebar"
           class="btn-ghost btn-icon lg:hidden"
@@ -22,7 +22,7 @@
       </div>
 
       <!-- Right: Announcements + Docs + Language + Subscriptions + Balance + User Dropdown -->
-      <div class="flex min-w-0 items-center gap-2 md:gap-3">
+      <div class="app-header-actions">
         <!-- Announcement Bell -->
         <AnnouncementBell v-if="user" />
 
@@ -47,7 +47,8 @@
         <!-- Balance Display -->
         <div
           v-if="user"
-          class="hidden items-center gap-2 rounded-lg border border-blue-200/80 bg-[linear-gradient(90deg,#eff6ff,#ecfeff)] px-3 py-1.5 shadow-sm shadow-blue-600/10 ring-1 ring-white/70 dark:border-blue-400/25 dark:bg-[linear-gradient(90deg,rgba(37,99,235,0.16),rgba(6,182,212,0.1))] dark:ring-white/5 sm:flex"
+          data-test="header-balance-pill"
+          class="app-header-balance-pill hidden sm:flex"
         >
           <svg
             class="h-4 w-4 text-blue-600 dark:text-blue-300"
@@ -225,7 +226,7 @@
         </div>
 
         <!-- User Dropdown -->
-        <div v-if="user" class="relative" ref="dropdownRef">
+        <div v-if="user" class="relative shrink-0" ref="dropdownRef">
           <button
             @click="toggleDropdown"
             class="group flex items-center gap-2 rounded-xl border border-transparent p-1.5 transition-all duration-200 hover:border-blue-200/70 hover:bg-blue-50/80 hover:shadow-sm hover:shadow-blue-600/10 focus:outline-none focus:ring-2 focus:ring-blue-500/25 dark:hover:border-blue-400/20 dark:hover:bg-blue-500/10"

@@ -1,8 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
+import { readFileSync } from 'node:fs'
+import { dirname, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
 
 import type { AdminUser } from '@/types'
 import UsersView from '../UsersView.vue'
+
+const currentDir = dirname(fileURLToPath(import.meta.url))
+const usersViewSource = readFileSync(resolve(currentDir, '../UsersView.vue'), 'utf8')
 
 const {
   listUsers,
@@ -118,7 +124,7 @@ describe('admin UsersView', () => {
         stubs: {
           AppLayout: { template: '<div><slot /></div>' },
           TablePageLayout: {
-            template: '<div><slot name="filters" /><slot name="table" /><slot name="pagination" /></div>'
+            template: '<div><div data-test="filters-shell" class="admin-toolbar-surface"><slot name="filters" /></div><slot name="table" /><slot name="pagination" /></div>'
           },
           DataTable: DataTableStub,
           Pagination: true,
@@ -168,7 +174,7 @@ describe('admin UsersView', () => {
         stubs: {
           AppLayout: { template: '<div><slot /></div>' },
           TablePageLayout: {
-            template: '<div><slot name="filters" /><slot name="table" /><slot name="pagination" /></div>'
+            template: '<div><div data-test="filters-shell" class="admin-toolbar-surface"><slot name="filters" /></div><slot name="table" /><slot name="pagination" /></div>'
           },
           DataTable: DataTableStub,
           Pagination: true,
@@ -203,5 +209,46 @@ describe('admin UsersView', () => {
 
     const dropdown = wrapper.find('.dropdown')
     expect(dropdown.exists()).toBe(true)
+  })
+
+  it('renders the unified admin page hero for the users workspace', async () => {
+    const wrapper = mount(UsersView, {
+      global: {
+        stubs: {
+          AppLayout: { template: '<div><slot /></div>' },
+          TablePageLayout: {
+            template: '<div><div data-test="filters-shell" class="admin-toolbar-surface"><slot name="filters" /></div><slot name="table" /><slot name="pagination" /></div>'
+          },
+          DataTable: DataTableStub,
+          Pagination: true,
+          ConfirmDialog: true,
+          EmptyState: true,
+          GroupBadge: true,
+          Select: true,
+          UserAttributesConfigModal: true,
+          UserConcurrencyCell: true,
+          UserCreateModal: true,
+          UserEditModal: true,
+          UserApiKeysModal: true,
+          UserAllowedGroupsModal: true,
+          UserBalanceModal: true,
+          UserBalanceHistoryModal: true,
+          GroupReplaceModal: true,
+          Icon: true,
+          Teleport: true
+        }
+      }
+    })
+
+    await flushPromises()
+
+    expect(wrapper.find('[data-test="admin-page-hero"]').exists()).toBe(true)
+    expect(wrapper.find('[data-test="admin-page-hero"]').classes()).toContain('admin-page-hero')
+    expect(wrapper.get('[data-test="filters-shell"]').find('.admin-toolbar').exists()).toBe(true)
+  })
+
+  it('keeps usage sort controls on shared admin inline actions', () => {
+    expect(usersViewSource).toContain('admin-inline-action')
+    expect(usersViewSource).not.toContain('hover:bg-gray-200 dark:hover:bg-dark-700')
   })
 })

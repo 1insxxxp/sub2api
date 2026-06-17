@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { readFileSync } from 'node:fs'
 import { defineComponent, h } from 'vue'
 import { flushPromises, mount } from '@vue/test-utils'
 import type { DOMWrapper, VueWrapper } from '@vue/test-utils'
@@ -139,6 +140,7 @@ const runtimeStatus = () => ({
 })
 
 const AppLayoutStub = { template: '<div><slot /></div>' }
+const viewSource = readFileSync('src/views/admin/RiskControlView.vue', 'utf8')
 const BaseDialogStub = defineComponent({
   props: {
     show: {
@@ -208,6 +210,45 @@ describe('admin RiskControlView', () => {
       api_key_masks: [],
       api_key_statuses: [],
     }))
+  })
+
+  it('uses shared admin surfaces for the risk control workspace', async () => {
+    const wrapper = mount(RiskControlView, {
+      global: {
+        stubs: {
+          AppLayout: AppLayoutStub,
+          BaseDialog: BaseDialogStub,
+          Icon: true,
+          Select: true,
+          Toggle: true,
+          Pagination: true,
+          ModelWhitelistSelector: ModelWhitelistSelectorStub,
+        },
+      },
+    })
+
+    await flushPromises()
+
+    expect(wrapper.get('[data-test="admin-page-hero"]').classes()).toContain('admin-page-hero')
+    expect(wrapper.get('[data-test="pre-block-sync-card"]').classes()).toContain('admin-surface')
+    expect(wrapper.get('[data-test="pre-block-api-key-load-card"]').classes()).toContain('admin-surface')
+    expect(wrapper.get('[data-test="pre-block-sync-card"] .admin-panel-header').exists()).toBe(true)
+    expect(wrapper.get('[data-test="pre-block-api-key-load-card"] .admin-panel-header').exists()).toBe(true)
+    expect(wrapper.get('[data-test="risk-records-surface"]').classes()).toContain('admin-surface')
+    expect(wrapper.get('[data-test="risk-records-header"]').classes()).toContain('admin-panel-header')
+
+    const markup = wrapper.html()
+    expect(markup).not.toMatch(/rounded-lg bg-gray-50/)
+    expect(markup).not.toMatch(/hover:bg-gray-100/)
+    expect(markup).not.toMatch(/border-gray-100 bg-gray-50/)
+    expect(markup).not.toMatch(/border-dashed border-gray-200 bg-white/)
+  })
+
+  it('keeps the risk control workspace free of legacy gray panel utilities', () => {
+    expect(viewSource).not.toMatch(/rounded-lg bg-gray-50/)
+    expect(viewSource).not.toMatch(/hover:bg-gray-100/)
+    expect(viewSource).not.toMatch(/border-gray-100 bg-gray-50/)
+    expect(viewSource).not.toMatch(/border-dashed border-gray-200 bg-white/)
   })
 
   it('saves the selected model filter mode and models', async () => {
@@ -393,8 +434,8 @@ describe('admin RiskControlView', () => {
     ]))
     expect(syncCard.element.parentElement).toBe(runtimeCards.element)
     expect(apiKeyLoadCard.element.parentElement).toBe(runtimeCards.element)
-    expect(syncCard.classes()).toContain('card')
-    expect(apiKeyLoadCard.classes()).toContain('card')
+    expect(syncCard.classes()).toContain('admin-surface')
+    expect(apiKeyLoadCard.classes()).toContain('admin-surface')
     expect(syncCard.get('h2').text()).toBe('admin.riskControl.preBlockSyncStatus')
     expect(syncCard.text()).toContain('admin.riskControl.preBlockSyncHint')
     expect(apiKeyLoadCard.get('h2').text()).toBe('admin.riskControl.preBlockAPIKeyLoad')

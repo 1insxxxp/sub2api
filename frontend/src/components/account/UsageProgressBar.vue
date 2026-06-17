@@ -6,18 +6,18 @@
       class="mb-0.5 flex items-center"
     >
       <div class="flex items-center gap-1.5 text-[9px] text-gray-500 dark:text-gray-400">
-        <span class="rounded bg-gray-100 px-1.5 py-0.5 dark:bg-gray-800">
+        <span class="rounded-full border border-primary-100 bg-primary-50/80 px-1.5 py-0.5 font-medium text-primary-700 dark:border-primary-500/15 dark:bg-primary-500/10 dark:text-primary-200">
           {{ formatRequests }} req
         </span>
-        <span class="rounded bg-gray-100 px-1.5 py-0.5 dark:bg-gray-800">
+        <span class="rounded-full border border-primary-100 bg-primary-50/80 px-1.5 py-0.5 font-medium text-primary-700 dark:border-primary-500/15 dark:bg-primary-500/10 dark:text-primary-200">
           {{ formatTokens }}
         </span>
-        <span class="rounded bg-gray-100 px-1.5 py-0.5 dark:bg-gray-800" :title="t('usage.accountBilled')">
+        <span class="rounded-full border border-primary-100 bg-primary-50/80 px-1.5 py-0.5 font-medium text-primary-700 dark:border-primary-500/15 dark:bg-primary-500/10 dark:text-primary-200" :title="t('usage.accountBilled')">
           A ${{ formatAccountCost }}
         </span>
         <span
           v-if="windowStats?.user_cost != null"
-          class="rounded bg-gray-100 px-1.5 py-0.5 dark:bg-gray-800"
+          class="rounded-full border border-primary-100 bg-primary-50/80 px-1.5 py-0.5 font-medium text-primary-700 dark:border-primary-500/15 dark:bg-primary-500/10 dark:text-primary-200"
           :title="t('usage.userBilled')"
         >
           U ${{ formatUserCost }}

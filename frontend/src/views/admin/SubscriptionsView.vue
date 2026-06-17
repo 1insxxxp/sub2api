@@ -1,11 +1,39 @@
 <template>
   <AppLayout>
-    <TablePageLayout>
+    <div class="space-y-6">
+      <section class="admin-page-hero" data-test="admin-page-hero">
+        <div class="admin-page-hero-grid">
+          <div class="min-w-0">
+            <span class="admin-page-kicker">
+              <Icon name="calendar" size="xs" />
+              {{ t('nav.subscriptions') }}
+            </span>
+            <h1 class="admin-page-title">{{ t('admin.subscriptions.title') }}</h1>
+            <p class="admin-page-description">{{ t('admin.subscriptions.description') }}</p>
+            <div class="admin-page-meta">
+              <span class="admin-page-meta-chip">
+                <span>{{ t('common.total') }}</span>
+                <strong>{{ pagination.total }}</strong>
+              </span>
+              <span class="admin-page-meta-chip">
+                <span>{{ t('pagination.perPage') }}</span>
+                <strong>{{ pagination.page_size }}</strong>
+              </span>
+              <span class="admin-page-meta-chip">
+                <span>{{ t('common.status') }}</span>
+                <strong>{{ loading ? t('common.loading') : t('common.active') }}</strong>
+              </span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <TablePageLayout>
       <template #filters>
         <!-- Top Toolbar: Left (search + filters) / Right (actions) -->
-        <div class="flex flex-wrap items-start justify-between gap-4">
+        <div class="admin-toolbar">
           <!-- Left: Fuzzy user search + filters (wrap to multiple lines) -->
-          <div class="flex flex-1 flex-wrap items-center gap-3">
+          <div class="admin-toolbar-group flex-1">
             <!-- User Search -->
             <div
               class="relative w-full sm:w-64"
@@ -37,7 +65,7 @@
               <!-- User Dropdown -->
               <div
                 v-if="showFilterUserDropdown && (filterUserResults.length > 0 || filterUserKeyword)"
-                class="absolute z-50 mt-1 max-h-60 w-full overflow-auto rounded-lg border border-gray-200 bg-white shadow-lg dark:border-gray-700 dark:bg-gray-800"
+                class="admin-action-menu absolute z-50 mt-1 max-h-60 w-full overflow-auto"
               >
                 <div
                   v-if="filterUserLoading"
@@ -56,7 +84,7 @@
                   :key="user.id"
                   type="button"
                   @click="selectFilterUser(user)"
-                  class="w-full px-4 py-2 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-700"
+                  class="admin-action-menu-item"
                 >
                   <span class="font-medium text-gray-900 dark:text-white">{{ user.email }}</span>
                   <span class="ml-2 text-gray-500 dark:text-gray-400">#{{ user.id }}</span>
@@ -92,7 +120,7 @@
           </div>
 
           <!-- Right: Actions -->
-          <div class="ml-auto flex flex-wrap items-center justify-end gap-3">
+          <div class="admin-toolbar-group w-full justify-end lg:w-auto lg:flex-none">
             <button
               @click="loadSubscriptions"
               :disabled="loading"
@@ -116,7 +144,7 @@
               <!-- Dropdown menu -->
               <div
                 v-if="showColumnDropdown"
-                class="absolute right-0 z-50 mt-2 w-48 origin-top-right rounded-lg border border-gray-200 bg-white shadow-lg dark:border-gray-700 dark:bg-gray-800"
+                class="admin-action-menu absolute right-0 z-50 mt-2 w-48 origin-top-right"
               >
                 <div class="p-2">
                   <!-- User column mode selection -->
@@ -126,14 +154,14 @@
                     </div>
                     <button
                       @click="setUserColumnMode('email')"
-                      class="flex w-full items-center justify-between rounded-md px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-700"
+                      class="admin-action-menu-item justify-between"
                     >
                       <span>{{ t('admin.users.columns.email') }}</span>
                       <Icon v-if="userColumnMode === 'email'" name="check" size="sm" class="text-primary-500" />
                     </button>
                     <button
                       @click="setUserColumnMode('username')"
-                      class="flex w-full items-center justify-between rounded-md px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-700"
+                      class="admin-action-menu-item justify-between"
                     >
                       <span>{{ t('admin.users.columns.username') }}</span>
                       <Icon v-if="userColumnMode === 'username'" name="check" size="sm" class="text-primary-500" />
@@ -144,7 +172,7 @@
                     v-for="col in toggleableColumns"
                     :key="col.key"
                     @click="toggleColumn(col.key)"
-                    class="flex w-full items-center justify-between rounded-md px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-700"
+                    class="admin-action-menu-item justify-between"
                   >
                     <span>{{ col.label }}</span>
                     <Icon v-if="isColumnVisible(col.key)" name="check" size="sm" class="text-primary-500" />
@@ -382,7 +410,7 @@
               <button
                 v-if="row.status === 'active' || row.status === 'expired'"
                 @click="handleExtend(row)"
-                class="flex flex-col items-center gap-0.5 rounded-lg p-1.5 text-gray-500 transition-colors hover:bg-blue-50 hover:text-blue-600 dark:hover:bg-blue-900/20 dark:hover:text-blue-400"
+                class="admin-inline-action"
               >
                 <Icon name="calendar" size="sm" />
                 <span class="text-xs">{{ t('admin.subscriptions.adjust') }}</span>
@@ -391,7 +419,7 @@
                 v-if="row.status === 'active'"
                 @click="handleResetQuota(row)"
                 :disabled="resettingQuota && resettingSubscription?.id === row.id"
-                class="flex flex-col items-center gap-0.5 rounded-lg p-1.5 text-gray-500 transition-colors hover:bg-orange-50 hover:text-orange-600 dark:hover:bg-orange-900/20 dark:hover:text-orange-400 disabled:cursor-not-allowed disabled:opacity-50"
+                class="admin-inline-action admin-inline-action-warning disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <Icon name="refresh" size="sm" />
                 <span class="text-xs">{{ t('admin.subscriptions.resetQuota') }}</span>
@@ -399,7 +427,7 @@
               <button
                 v-if="row.status === 'active'"
                 @click="handleRevoke(row)"
-                class="flex flex-col items-center gap-0.5 rounded-lg p-1.5 text-gray-500 transition-colors hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-900/20 dark:hover:text-red-400"
+                class="admin-inline-action admin-inline-action-danger"
               >
                 <Icon name="ban" size="sm" />
                 <span class="text-xs">{{ t('admin.subscriptions.revoke') }}</span>
@@ -429,7 +457,8 @@
         @update:pageSize="handlePageSizeChange"
       />
       </template>
-    </TablePageLayout>
+      </TablePageLayout>
+    </div>
 
     <!-- Assign Subscription Modal -->
     <BaseDialog
@@ -465,7 +494,7 @@
             <!-- User Dropdown -->
             <div
               v-if="showUserDropdown && (userSearchResults.length > 0 || userSearchKeyword)"
-              class="absolute z-50 mt-1 max-h-60 w-full overflow-auto rounded-lg border border-gray-200 bg-white shadow-lg dark:border-gray-700 dark:bg-gray-800"
+              class="admin-action-menu absolute z-50 mt-1 max-h-60 w-full overflow-auto"
             >
               <div
                 v-if="userSearchLoading"
@@ -484,7 +513,7 @@
                 :key="user.id"
                 type="button"
                 @click="selectUser(user)"
-                class="w-full px-4 py-2 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-700"
+                class="admin-action-menu-item"
               >
                 <span class="font-medium text-gray-900 dark:text-white">{{ user.email }}</span>
                 <span class="ml-2 text-gray-500 dark:text-gray-400">#{{ user.id }}</span>
@@ -578,7 +607,7 @@
         @submit.prevent="handleExtendSubscription"
         class="space-y-5"
       >
-        <div class="rounded-lg bg-gray-50 p-4 dark:bg-dark-700">
+        <div class="admin-form-section !space-y-0 p-4">
           <p class="text-sm text-gray-600 dark:text-gray-400">
             {{ t('admin.subscriptions.adjustingFor') }}
             <span class="font-medium text-gray-900 dark:text-white">{{
@@ -658,77 +687,87 @@
     <!-- Subscription Guide Modal -->
     <teleport to="body">
       <transition name="modal">
-        <div v-if="showGuideModal" class="fixed inset-0 z-50 flex items-center justify-center p-4" @mousedown.self="showGuideModal = false">
-          <div class="fixed inset-0 bg-black/50" @click="showGuideModal = false"></div>
-          <div class="relative max-h-[85vh] w-full max-w-2xl overflow-y-auto rounded-xl bg-white p-6 shadow-2xl dark:bg-dark-800">
-            <button type="button" class="absolute right-4 top-4 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200" @click="showGuideModal = false">
-              <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
-            </button>
-
-            <h2 class="mb-4 text-lg font-bold text-gray-900 dark:text-white">{{ t('admin.subscriptions.guide.title') }}</h2>
-            <p class="mb-5 text-sm text-gray-500 dark:text-gray-400">{{ t('admin.subscriptions.guide.subtitle') }}</p>
-
-            <!-- Step 1 -->
-            <div class="mb-5">
-              <h3 class="mb-2 flex items-center gap-2 text-sm font-semibold text-gray-900 dark:text-white">
-                <span class="flex h-6 w-6 items-center justify-center rounded-full bg-primary-100 text-xs font-bold text-primary-700 dark:bg-primary-900/40 dark:text-primary-300">1</span>
-                {{ t('admin.subscriptions.guide.step1.title') }}
-              </h3>
-              <ol class="ml-8 list-decimal space-y-1 text-sm text-gray-600 dark:text-gray-300">
-                <li>{{ t('admin.subscriptions.guide.step1.line1') }}</li>
-                <li>{{ t('admin.subscriptions.guide.step1.line2') }}</li>
-                <li>{{ t('admin.subscriptions.guide.step1.line3') }}</li>
-              </ol>
-              <div class="ml-8 mt-2">
-                <router-link
-                  to="/admin/groups"
-                  @click="showGuideModal = false"
-                  class="inline-flex items-center gap-1 text-sm font-medium text-primary-600 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300"
-                >
-                  {{ t('admin.subscriptions.guide.step1.link') }}
-                  <Icon name="arrowRight" size="xs" />
-                </router-link>
+        <div v-if="showGuideModal" class="brand-overlay z-50 flex items-start justify-center overflow-y-auto p-4 pt-[7vh]" @mousedown.self="showGuideModal = false">
+          <div class="brand-floating-panel w-full max-w-2xl">
+            <div class="brand-floating-header flex items-start justify-between gap-4">
+              <div class="flex min-w-0 items-start gap-3">
+                <div class="brand-floating-icon h-11 w-11 rounded-2xl">
+                  <Icon name="book" size="md" />
+                </div>
+                <div class="min-w-0">
+                  <span class="brand-floating-chip">{{ t('admin.subscriptions.manageSubscription') }}</span>
+                  <h2 class="mt-3 text-lg font-semibold text-slate-950 dark:text-white">{{ t('admin.subscriptions.guide.title') }}</h2>
+                  <p class="mt-1 text-sm leading-6 text-slate-500 dark:text-slate-400">{{ t('admin.subscriptions.guide.subtitle') }}</p>
+                </div>
               </div>
+              <button type="button" class="brand-floating-close flex-shrink-0" @click="showGuideModal = false" :aria-label="t('common.close')">
+                <Icon name="x" size="md" :stroke-width="2" />
+              </button>
             </div>
 
-            <!-- Step 2 -->
-            <div class="mb-5">
-              <h3 class="mb-2 flex items-center gap-2 text-sm font-semibold text-gray-900 dark:text-white">
-                <span class="flex h-6 w-6 items-center justify-center rounded-full bg-primary-100 text-xs font-bold text-primary-700 dark:bg-primary-900/40 dark:text-primary-300">2</span>
-                {{ t('admin.subscriptions.guide.step2.title') }}
-              </h3>
-              <ol class="ml-8 list-decimal space-y-1 text-sm text-gray-600 dark:text-gray-300">
-                <li>{{ t('admin.subscriptions.guide.step2.line1') }}</li>
-                <li>{{ t('admin.subscriptions.guide.step2.line2') }}</li>
-                <li>{{ t('admin.subscriptions.guide.step2.line3') }}</li>
-              </ol>
-            </div>
-
-            <!-- Step 3 -->
-            <div class="mb-5">
-              <h3 class="mb-2 flex items-center gap-2 text-sm font-semibold text-gray-900 dark:text-white">
-                <span class="flex h-6 w-6 items-center justify-center rounded-full bg-primary-100 text-xs font-bold text-primary-700 dark:bg-primary-900/40 dark:text-primary-300">3</span>
-                {{ t('admin.subscriptions.guide.step3.title') }}
-              </h3>
-              <div class="ml-8 overflow-hidden rounded-lg border border-gray-200 dark:border-dark-600">
-                <table class="w-full text-sm">
-                  <tbody>
-                    <tr v-for="(row, i) in guideActionRows" :key="i" class="border-b border-gray-100 dark:border-dark-700 last:border-0">
-                      <td class="whitespace-nowrap bg-gray-50 px-3 py-2 font-medium text-gray-700 dark:bg-dark-700 dark:text-gray-300">{{ row.action }}</td>
-                      <td class="px-3 py-2 text-gray-600 dark:text-gray-400">{{ row.desc }}</td>
-                    </tr>
-                  </tbody>
-                </table>
+            <div class="max-h-[calc(85vh-9rem)] overflow-y-auto px-6 py-5">
+              <!-- Step 1 -->
+              <div class="mb-5">
+                <h3 class="mb-2 flex items-center gap-2 text-sm font-semibold text-gray-900 dark:text-white">
+                  <span class="flex h-6 w-6 items-center justify-center rounded-full bg-primary-100 text-xs font-bold text-primary-700 dark:bg-primary-900/40 dark:text-primary-300">1</span>
+                  {{ t('admin.subscriptions.guide.step1.title') }}
+                </h3>
+                <ol class="ml-8 list-decimal space-y-1 text-sm text-gray-600 dark:text-gray-300">
+                  <li>{{ t('admin.subscriptions.guide.step1.line1') }}</li>
+                  <li>{{ t('admin.subscriptions.guide.step1.line2') }}</li>
+                  <li>{{ t('admin.subscriptions.guide.step1.line3') }}</li>
+                </ol>
+                <div class="ml-8 mt-2">
+                  <router-link
+                    to="/admin/groups"
+                    @click="showGuideModal = false"
+                    class="inline-flex items-center gap-1 text-sm font-medium text-primary-600 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300"
+                  >
+                    {{ t('admin.subscriptions.guide.step1.link') }}
+                    <Icon name="arrowRight" size="xs" />
+                  </router-link>
+                </div>
               </div>
-            </div>
 
-            <!-- Tip -->
-            <div class="rounded-lg bg-blue-50 p-3 text-xs text-blue-700 dark:bg-blue-900/20 dark:text-blue-300">
-              {{ t('admin.subscriptions.guide.tip') }}
-            </div>
+              <!-- Step 2 -->
+              <div class="mb-5">
+                <h3 class="mb-2 flex items-center gap-2 text-sm font-semibold text-gray-900 dark:text-white">
+                  <span class="flex h-6 w-6 items-center justify-center rounded-full bg-primary-100 text-xs font-bold text-primary-700 dark:bg-primary-900/40 dark:text-primary-300">2</span>
+                  {{ t('admin.subscriptions.guide.step2.title') }}
+                </h3>
+                <ol class="ml-8 list-decimal space-y-1 text-sm text-gray-600 dark:text-gray-300">
+                  <li>{{ t('admin.subscriptions.guide.step2.line1') }}</li>
+                  <li>{{ t('admin.subscriptions.guide.step2.line2') }}</li>
+                  <li>{{ t('admin.subscriptions.guide.step2.line3') }}</li>
+                </ol>
+              </div>
 
-            <div class="mt-4 text-right">
-              <button type="button" class="btn btn-primary btn-sm" @click="showGuideModal = false">{{ t('common.close') }}</button>
+              <!-- Step 3 -->
+              <div class="mb-5">
+                <h3 class="mb-2 flex items-center gap-2 text-sm font-semibold text-gray-900 dark:text-white">
+                  <span class="flex h-6 w-6 items-center justify-center rounded-full bg-primary-100 text-xs font-bold text-primary-700 dark:bg-primary-900/40 dark:text-primary-300">3</span>
+                  {{ t('admin.subscriptions.guide.step3.title') }}
+                </h3>
+                <div class="admin-list-surface ml-8 !rounded-xl">
+                  <table class="w-full text-sm">
+                    <tbody>
+                      <tr v-for="(row, i) in guideActionRows" :key="i" class="border-b border-gray-100 dark:border-dark-700 last:border-0">
+                        <td class="whitespace-nowrap bg-primary-50/70 px-3 py-2 font-medium text-primary-700 dark:bg-primary-500/10 dark:text-primary-200">{{ row.action }}</td>
+                        <td class="px-3 py-2 text-gray-600 dark:text-gray-400">{{ row.desc }}</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              <!-- Tip -->
+              <div class="rounded-lg bg-blue-50 p-3 text-xs text-blue-700 dark:bg-blue-900/20 dark:text-blue-300">
+                {{ t('admin.subscriptions.guide.tip') }}
+              </div>
+
+              <div class="mt-5 flex justify-end border-t border-blue-100/70 pt-4 dark:border-blue-500/10">
+                <button type="button" class="btn btn-primary btn-sm" @click="showGuideModal = false">{{ t('common.close') }}</button>
+              </div>
             </div>
           </div>
         </div>

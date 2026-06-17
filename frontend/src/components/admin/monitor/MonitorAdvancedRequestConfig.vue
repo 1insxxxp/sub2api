@@ -1,5 +1,5 @@
 <template>
-  <div class="space-y-4">
+  <div class="admin-form-section">
     <!-- Headers key-value rows -->
     <div>
       <label class="input-label">{{ t('admin.channelMonitor.advanced.headers') }}</label>
@@ -27,7 +27,7 @@
           />
           <button
             type="button"
-            class="flex-none rounded p-1 text-gray-400 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-500/10 dark:hover:text-red-400"
+            class="admin-inline-action admin-inline-action-danger flex-none"
             :title="t('common.delete')"
             @click="removeRow(i)"
           >
@@ -38,7 +38,7 @@
         </div>
         <button
           type="button"
-          class="inline-flex items-center gap-1 rounded border border-dashed border-gray-300 px-2 py-1 text-xs text-gray-500 hover:border-primary-400 hover:text-primary-600 dark:border-dark-600 dark:text-gray-400 dark:hover:border-primary-500 dark:hover:text-primary-400"
+          class="admin-choice-card inline-flex items-center gap-1 border-dashed px-2 py-1 text-xs"
           @click="addRow"
         >
           <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -61,7 +61,7 @@
           v-for="opt in bodyModeOptions"
           :key="opt.value"
           type="button"
-          class="rounded-lg border-2 px-3 py-2 text-sm font-medium transition-colors"
+          class="admin-choice-card text-center"
           :class="bodyModeButtonClass(opt.value)"
           @click="updateBodyMode(opt.value)"
         >
@@ -282,9 +282,9 @@ const bodyModeOptions = computed<{ value: BodyOverrideMode; label: string }[]>((
 function bodyModeButtonClass(mode: BodyOverrideMode): string {
   const active = props.bodyOverrideMode === mode
   if (active) {
-    return 'border-primary-500 bg-primary-50 text-primary-700 dark:bg-primary-500/15 dark:text-primary-300 dark:border-primary-400'
+    return 'admin-choice-card-active'
   }
-  return 'border-gray-200 bg-white text-gray-600 hover:border-primary-300 dark:border-dark-700 dark:bg-dark-800 dark:text-gray-400'
+  return ''
 }
 
 const bodyModeHint = computed(() => {

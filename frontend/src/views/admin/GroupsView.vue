@@ -1,12 +1,38 @@
 <template>
   <AppLayout>
-    <TablePageLayout>
-      <template #filters>
-        <div
-          class="flex flex-col justify-between gap-4 lg:flex-row lg:items-start"
-        >
+    <div class="space-y-6">
+      <section class="admin-page-hero" data-test="admin-page-hero">
+        <div class="admin-page-hero-grid">
+          <div class="min-w-0">
+            <span class="admin-page-kicker">
+              <Icon name="grid" size="xs" />
+              {{ t("nav.groups") }}
+            </span>
+            <h1 class="admin-page-title">{{ t("admin.groups.title") }}</h1>
+            <p class="admin-page-description">{{ t("admin.groups.description") }}</p>
+            <div class="admin-page-meta">
+              <span class="admin-page-meta-chip">
+                <span>{{ t("common.total") }}</span>
+                <strong>{{ pagination.total }}</strong>
+              </span>
+              <span class="admin-page-meta-chip">
+                <span>{{ t("pagination.perPage") }}</span>
+                <strong>{{ pagination.page_size }}</strong>
+              </span>
+              <span class="admin-page-meta-chip">
+                <span>{{ t("common.status") }}</span>
+                <strong>{{ loading ? t("common.loading") : t("common.active") }}</strong>
+              </span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <TablePageLayout>
+        <template #filters>
+        <div class="admin-toolbar">
           <!-- Left: fuzzy search + filters (can wrap to multiple lines) -->
-          <div class="flex flex-1 flex-wrap items-center gap-3">
+          <div class="admin-toolbar-group flex-1">
             <div class="relative w-full sm:w-64">
               <Icon
                 name="search"
@@ -45,9 +71,7 @@
           </div>
 
           <!-- Right: actions -->
-          <div
-            class="flex w-full flex-shrink-0 flex-wrap items-center justify-end gap-3 lg:w-auto"
-          >
+          <div class="admin-toolbar-group w-full justify-end lg:w-auto lg:flex-none">
             <button
               @click="loadGroups"
               :disabled="loading"
@@ -204,7 +228,7 @@
                   >{{ row.active_account_count || 0 }}</span
                 >
                 <span
-                  class="ml-1 inline-flex items-center rounded bg-gray-100 px-1.5 py-0.5 font-medium text-gray-800 dark:bg-dark-600 dark:text-gray-300"
+                  class="ml-1 inline-flex items-center rounded-full border border-primary-100 bg-primary-50/80 px-2 py-0.5 font-medium text-primary-700 dark:border-primary-500/15 dark:bg-primary-500/10 dark:text-primary-200"
                   >{{ t("admin.groups.accountsUnit") }}</span
                 >
               </div>
@@ -217,7 +241,7 @@
                   >{{ row.rate_limited_account_count }}</span
                 >
                 <span
-                  class="ml-1 inline-flex items-center rounded bg-gray-100 px-1.5 py-0.5 font-medium text-gray-800 dark:bg-dark-600 dark:text-gray-300"
+                  class="ml-1 inline-flex items-center rounded-full border border-primary-100 bg-primary-50/80 px-2 py-0.5 font-medium text-primary-700 dark:border-primary-500/15 dark:bg-primary-500/10 dark:text-primary-200"
                   >{{ t("admin.groups.accountsUnit") }}</span
                 >
               </div>
@@ -230,7 +254,7 @@
                   >{{ row.account_count || 0 }}</span
                 >
                 <span
-                  class="ml-1 inline-flex items-center rounded bg-gray-100 px-1.5 py-0.5 font-medium text-gray-800 dark:bg-dark-600 dark:text-gray-300"
+                  class="ml-1 inline-flex items-center rounded-full border border-primary-100 bg-primary-50/80 px-2 py-0.5 font-medium text-primary-700 dark:border-primary-500/15 dark:bg-primary-500/10 dark:text-primary-200"
                   >{{ t("admin.groups.accountsUnit") }}</span
                 >
               </div>
@@ -291,14 +315,14 @@
             <div class="flex items-center gap-1">
               <button
                 @click="handleEdit(row)"
-                class="flex flex-col items-center gap-0.5 rounded-lg p-1.5 text-gray-500 transition-colors hover:bg-gray-100 hover:text-primary-600 dark:hover:bg-dark-700 dark:hover:text-primary-400"
+                class="admin-inline-action"
               >
                 <Icon name="edit" size="sm" />
                 <span class="text-xs">{{ t("common.edit") }}</span>
               </button>
               <button
                 @click="handleRateMultipliers(row)"
-                class="flex flex-col items-center gap-0.5 rounded-lg p-1.5 text-gray-500 transition-colors hover:bg-gray-100 hover:text-primary-600 dark:hover:bg-dark-700 dark:hover:text-primary-400"
+                class="admin-inline-action"
               >
                 <Icon name="dollar" size="sm" />
                 <span class="text-xs">{{
@@ -307,7 +331,7 @@
               </button>
               <button
                 @click="handleRPMOverrides(row)"
-                class="flex flex-col items-center gap-0.5 rounded-lg p-1.5 text-gray-500 transition-colors hover:bg-gray-100 hover:text-orange-600 dark:hover:bg-dark-700 dark:hover:text-orange-400"
+                class="admin-inline-action admin-inline-action-warning"
               >
                 <Icon name="bolt" size="sm" />
                 <span class="text-xs">{{
@@ -316,7 +340,7 @@
               </button>
               <button
                 @click="handleDelete(row)"
-                class="flex flex-col items-center gap-0.5 rounded-lg p-1.5 text-gray-500 transition-colors hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-900/20 dark:hover:text-red-400"
+                class="admin-inline-action admin-inline-action-danger"
               >
                 <Icon name="trash" size="sm" />
                 <span class="text-xs">{{ t("common.delete") }}</span>
@@ -345,7 +369,8 @@
           @update:pageSize="handlePageSizeChange"
         />
       </template>
-    </TablePageLayout>
+      </TablePageLayout>
+    </div>
 
     <!-- Create Group Modal -->
     <BaseDialog
@@ -676,11 +701,11 @@
           </div>
           <div
             v-if="createModelsListState.enabled"
-            class="overflow-hidden rounded-lg border border-gray-200 bg-gray-50/50 dark:border-dark-600 dark:bg-dark-800/40"
+            class="admin-list-surface"
           >
             <div
               v-if="!createModelsListLoading && createModelsListState.items.length > 0"
-              class="flex items-center justify-between gap-2 border-b border-gray-200 bg-gray-50 px-3 py-2 text-xs dark:border-dark-600 dark:bg-dark-800"
+              class="admin-panel-header !flex-row !items-center !px-3 !py-2 text-xs"
             >
               <span class="text-gray-500 dark:text-gray-400">
                 已选 {{ createModelsListSelectedCount }} /
@@ -696,7 +721,7 @@
                 </button>
                 <button
                   type="button"
-                  class="rounded px-2 py-1 font-medium text-gray-600 transition-colors hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-dark-700"
+                  class="rounded px-2 py-1 font-medium text-slate-600 transition-colors hover:bg-primary-50 hover:text-primary-700 dark:text-slate-300 dark:hover:bg-primary-500/10 dark:hover:text-primary-200"
                   @click="invertModelsListSelection(createModelsListState)"
                 >
                   反选
@@ -718,7 +743,7 @@
               <div
                 v-for="(item, index) in createModelsListState.items"
                 :key="item.id"
-                class="flex items-center gap-2 rounded border border-gray-200 bg-white px-3 py-2 dark:border-dark-600 dark:bg-dark-800"
+                class="admin-list-row flex items-center gap-2 rounded-xl px-3 py-2"
               >
                 <input
                   v-model="item.selected"
@@ -731,7 +756,7 @@
                 <button
                   type="button"
                   :disabled="index === 0"
-                  class="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-700 disabled:opacity-40 dark:hover:bg-dark-600 dark:hover:text-gray-200"
+                  class="rounded p-1 text-slate-400 transition-colors hover:bg-primary-50 hover:text-primary-700 disabled:opacity-40 dark:hover:bg-primary-500/10 dark:hover:text-primary-200"
                   @click="moveCreateModelsListItem(index, index - 1)"
                 >
                   <Icon name="arrowUp" size="sm" />
@@ -739,7 +764,7 @@
                 <button
                   type="button"
                   :disabled="index === createModelsListState.items.length - 1"
-                  class="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-700 disabled:opacity-40 dark:hover:bg-dark-600 dark:hover:text-gray-200"
+                  class="rounded p-1 text-slate-400 transition-colors hover:bg-primary-50 hover:text-primary-700 disabled:opacity-40 dark:hover:bg-primary-500/10 dark:hover:text-primary-200"
                   @click="moveCreateModelsListItem(index, index + 1)"
                 >
                   <Icon name="arrowDown" size="sm" />
@@ -838,7 +863,7 @@
           <p class="mt-3 text-xs text-gray-500 dark:text-gray-400">
             {{ t("admin.groups.imagePricing.modeHint") }}
           </p>
-          <div class="mt-2 rounded-lg bg-gray-50 p-3 text-xs text-gray-700 dark:bg-gray-800 dark:text-gray-300">
+          <div class="admin-form-section mt-2 !space-y-2 !p-3 text-xs text-gray-700 dark:text-gray-300">
             <div class="mb-1 font-medium">
               {{ t("admin.groups.imagePricing.finalPricePreview") }}
             </div>
@@ -1103,10 +1128,10 @@
 
           <div v-if="createForm.allow_messages_dispatch" class="mt-3">
             <div
-              class="relative overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm dark:border-dark-600 dark:bg-dark-800"
+              class="admin-surface overflow-hidden"
             >
               <div
-                class="border-b border-gray-100 bg-gray-50/80 px-4 py-3 dark:border-dark-700 dark:bg-dark-700/50"
+                class="admin-panel-header !px-4 !py-3"
               >
                 <div class="flex items-center gap-2">
                   <div class="h-2 w-2 rounded-full bg-blue-500"></div>
@@ -1167,10 +1192,10 @@
             </div>
 
             <div
-              class="mt-5 relative overflow-hidden rounded-xl border border-primary-200 bg-white shadow-sm dark:border-primary-900/50 dark:bg-dark-800"
+              class="admin-surface mt-5 overflow-hidden"
             >
               <div
-                class="border-b border-primary-100 bg-primary-50/80 px-4 py-3 dark:border-primary-900/40 dark:bg-primary-900/20"
+                class="admin-panel-header !px-4 !py-3"
               >
                 <div class="flex items-start justify-between gap-3">
                   <div>
@@ -1192,10 +1217,10 @@
                 </div>
               </div>
 
-              <div class="p-4 bg-gray-50/30 dark:bg-dark-800/30">
+              <div class="p-4">
                 <div
                   v-if="createForm.exact_model_mappings.length === 0"
-                  class="flex items-center justify-between gap-3 rounded-xl border-2 border-dashed border-primary-200 bg-white px-5 py-4 text-sm text-primary-700 transition-colors hover:border-primary-300 dark:border-primary-900/40 dark:bg-dark-800 dark:text-primary-300 dark:hover:border-primary-800"
+                  class="admin-empty-state !flex-row !justify-between !gap-3 !px-5 !py-4 text-sm text-primary-700 dark:text-primary-300"
                 >
                   <span>{{
                     t("admin.groups.openaiMessages.noExactMappings")
@@ -1214,7 +1239,7 @@
                   <div
                     v-for="row in createForm.exact_model_mappings"
                     :key="getCreateMessagesDispatchRowKey(row)"
-                    class="group relative rounded-xl border border-gray-200 bg-white p-4 shadow-sm transition-all hover:border-primary-300 hover:shadow-md dark:border-dark-600 dark:bg-dark-700 dark:hover:border-primary-700"
+                    class="admin-form-section group relative !space-y-0 p-4"
                   >
                     <div class="flex items-center gap-4">
                       <div
@@ -1232,7 +1257,7 @@
                                 'admin.groups.openaiMessages.claudeModelPlaceholder',
                               )
                             "
-                            class="input bg-gray-50 focus:bg-white dark:bg-dark-800 dark:focus:bg-dark-900"
+                            class="input"
                           />
                         </div>
                         <div
@@ -1256,7 +1281,7 @@
                                 'admin.groups.openaiMessages.targetModelPlaceholder',
                               )
                             "
-                            class="input bg-gray-50 focus:bg-white dark:bg-dark-800 dark:focus:bg-dark-900"
+                            class="input"
                           />
                         </div>
                       </div>
@@ -1276,7 +1301,7 @@
                   <button
                     type="button"
                     @click="addCreateMessagesDispatchMapping"
-                    class="flex w-full items-center justify-center gap-2 rounded-xl border-2 border-dashed border-gray-300 bg-white py-3 text-sm font-medium text-gray-500 transition-all hover:border-primary-300 hover:bg-primary-50/50 hover:text-primary-600 dark:border-dark-600 dark:bg-dark-800 dark:text-gray-400 dark:hover:border-primary-800 dark:hover:bg-primary-900/20 dark:hover:text-primary-400"
+                    class="admin-form-section flex w-full items-center justify-center gap-2 !space-y-0 border-dashed py-3 text-sm font-medium text-gray-600 transition-all hover:border-primary-300 hover:bg-primary-50/50 hover:text-primary-700 dark:text-gray-300 dark:hover:border-primary-500/40 dark:hover:bg-primary-500/10 dark:hover:text-primary-200"
                   >
                     <Icon name="plus" size="sm" />
                     {{ t("admin.groups.openaiMessages.addExactMapping") }}
@@ -1536,7 +1561,7 @@
                           accountSearchResults[getCreateRuleSearchKey(rule)]
                             ?.length > 0
                         "
-                        class="absolute z-50 mt-1 max-h-48 w-full overflow-auto rounded-lg border bg-white shadow-lg dark:border-dark-600 dark:bg-dark-800"
+                        class="admin-action-menu absolute z-50 mt-1 max-h-48 w-full overflow-auto"
                       >
                         <button
                           v-for="account in accountSearchResults[
@@ -1545,7 +1570,7 @@
                           :key="account.id"
                           type="button"
                           @click="selectAccount(rule, account)"
-                          class="w-full px-3 py-2 text-left text-sm hover:bg-gray-100 dark:hover:bg-dark-700"
+                          class="admin-action-menu-item"
                           :class="{
                             'opacity-50': rule.accounts.some(
                               (a) => a.id === account.id,
@@ -1964,11 +1989,11 @@
           </div>
           <div
             v-if="editModelsListState.enabled"
-            class="overflow-hidden rounded-lg border border-gray-200 bg-gray-50/50 dark:border-dark-600 dark:bg-dark-800/40"
+            class="admin-list-surface"
           >
             <div
               v-if="!editModelsListLoading && editModelsListState.items.length > 0"
-              class="flex items-center justify-between gap-2 border-b border-gray-200 bg-gray-50 px-3 py-2 text-xs dark:border-dark-600 dark:bg-dark-800"
+              class="admin-panel-header !flex-row !items-center !px-3 !py-2 text-xs"
             >
               <span class="text-gray-500 dark:text-gray-400">
                 已选 {{ editModelsListSelectedCount }} /
@@ -1984,7 +2009,7 @@
                 </button>
                 <button
                   type="button"
-                  class="rounded px-2 py-1 font-medium text-gray-600 transition-colors hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-dark-700"
+                  class="rounded px-2 py-1 font-medium text-slate-600 transition-colors hover:bg-primary-50 hover:text-primary-700 dark:text-slate-300 dark:hover:bg-primary-500/10 dark:hover:text-primary-200"
                   @click="invertModelsListSelection(editModelsListState)"
                 >
                   反选
@@ -2006,7 +2031,7 @@
               <div
                 v-for="(item, index) in editModelsListState.items"
                 :key="item.id"
-                class="flex items-center gap-2 rounded border border-gray-200 bg-white px-3 py-2 dark:border-dark-600 dark:bg-dark-800"
+                class="admin-list-row flex items-center gap-2 rounded-xl px-3 py-2"
               >
                 <input
                   v-model="item.selected"
@@ -2019,7 +2044,7 @@
                 <button
                   type="button"
                   :disabled="index === 0"
-                  class="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-700 disabled:opacity-40 dark:hover:bg-dark-600 dark:hover:text-gray-200"
+                  class="rounded p-1 text-slate-400 transition-colors hover:bg-primary-50 hover:text-primary-700 disabled:opacity-40 dark:hover:bg-primary-500/10 dark:hover:text-primary-200"
                   @click="moveEditModelsListItem(index, index - 1)"
                 >
                   <Icon name="arrowUp" size="sm" />
@@ -2027,7 +2052,7 @@
                 <button
                   type="button"
                   :disabled="index === editModelsListState.items.length - 1"
-                  class="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-700 disabled:opacity-40 dark:hover:bg-dark-600 dark:hover:text-gray-200"
+                  class="rounded p-1 text-slate-400 transition-colors hover:bg-primary-50 hover:text-primary-700 disabled:opacity-40 dark:hover:bg-primary-500/10 dark:hover:text-primary-200"
                   @click="moveEditModelsListItem(index, index + 1)"
                 >
                   <Icon name="arrowDown" size="sm" />
@@ -2126,7 +2151,7 @@
           <p class="mt-3 text-xs text-gray-500 dark:text-gray-400">
             {{ t("admin.groups.imagePricing.modeHint") }}
           </p>
-          <div class="mt-2 rounded-lg bg-gray-50 p-3 text-xs text-gray-700 dark:bg-gray-800 dark:text-gray-300">
+          <div class="admin-form-section mt-2 !space-y-2 !p-3 text-xs text-gray-700 dark:text-gray-300">
             <div class="mb-1 font-medium">
               {{ t("admin.groups.imagePricing.finalPricePreview") }}
             </div>
@@ -2387,10 +2412,10 @@
 
           <div v-if="editForm.allow_messages_dispatch" class="mt-3">
             <div
-              class="relative overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm dark:border-dark-600 dark:bg-dark-800"
+              class="admin-surface overflow-hidden"
             >
               <div
-                class="border-b border-gray-100 bg-gray-50/80 px-4 py-3 dark:border-dark-700 dark:bg-dark-700/50"
+                class="admin-panel-header !px-4 !py-3"
               >
                 <div class="flex items-center gap-2">
                   <div class="h-2 w-2 rounded-full bg-blue-500"></div>
@@ -2451,10 +2476,10 @@
             </div>
 
             <div
-              class="mt-5 relative overflow-hidden rounded-xl border border-primary-200 bg-white shadow-sm dark:border-primary-900/50 dark:bg-dark-800"
+              class="admin-surface mt-5 overflow-hidden"
             >
               <div
-                class="border-b border-primary-100 bg-primary-50/80 px-4 py-3 dark:border-primary-900/40 dark:bg-primary-900/20"
+                class="admin-panel-header !px-4 !py-3"
               >
                 <div class="flex items-start justify-between gap-3">
                   <div>
@@ -2476,10 +2501,10 @@
                 </div>
               </div>
 
-              <div class="p-4 bg-gray-50/30 dark:bg-dark-800/30">
+              <div class="p-4">
                 <div
                   v-if="editForm.exact_model_mappings.length === 0"
-                  class="flex items-center justify-between gap-3 rounded-xl border-2 border-dashed border-primary-200 bg-white px-5 py-4 text-sm text-primary-700 transition-colors hover:border-primary-300 dark:border-primary-900/40 dark:bg-dark-800 dark:text-primary-300 dark:hover:border-primary-800"
+                  class="admin-empty-state !flex-row !justify-between !gap-3 !px-5 !py-4 text-sm text-primary-700 dark:text-primary-300"
                 >
                   <span>{{
                     t("admin.groups.openaiMessages.noExactMappings")
@@ -2498,7 +2523,7 @@
                   <div
                     v-for="row in editForm.exact_model_mappings"
                     :key="getEditMessagesDispatchRowKey(row)"
-                    class="group relative rounded-xl border border-gray-200 bg-white p-4 shadow-sm transition-all hover:border-primary-300 hover:shadow-md dark:border-dark-600 dark:bg-dark-700 dark:hover:border-primary-700"
+                    class="admin-form-section group relative !space-y-0 p-4"
                   >
                     <div class="flex items-center gap-4">
                       <div
@@ -2516,7 +2541,7 @@
                                 'admin.groups.openaiMessages.claudeModelPlaceholder',
                               )
                             "
-                            class="input bg-gray-50 focus:bg-white dark:bg-dark-800 dark:focus:bg-dark-900"
+                            class="input"
                           />
                         </div>
                         <div
@@ -2540,7 +2565,7 @@
                                 'admin.groups.openaiMessages.targetModelPlaceholder',
                               )
                             "
-                            class="input bg-gray-50 focus:bg-white dark:bg-dark-800 dark:focus:bg-dark-900"
+                            class="input"
                           />
                         </div>
                       </div>
@@ -2560,7 +2585,7 @@
                   <button
                     type="button"
                     @click="addEditMessagesDispatchMapping"
-                    class="flex w-full items-center justify-center gap-2 rounded-xl border-2 border-dashed border-gray-300 bg-white py-3 text-sm font-medium text-gray-500 transition-all hover:border-primary-300 hover:bg-primary-50/50 hover:text-primary-600 dark:border-dark-600 dark:bg-dark-800 dark:text-gray-400 dark:hover:border-primary-800 dark:hover:bg-primary-900/20 dark:hover:text-primary-400"
+                    class="admin-form-section flex w-full items-center justify-center gap-2 !space-y-0 border-dashed py-3 text-sm font-medium text-gray-600 transition-all hover:border-primary-300 hover:bg-primary-50/50 hover:text-primary-700 dark:text-gray-300 dark:hover:border-primary-500/40 dark:hover:bg-primary-500/10 dark:hover:text-primary-200"
                   >
                     <Icon name="plus" size="sm" />
                     {{ t("admin.groups.openaiMessages.addExactMapping") }}
@@ -2819,7 +2844,7 @@
                           accountSearchResults[getEditRuleSearchKey(rule)]
                             ?.length > 0
                         "
-                        class="absolute z-50 mt-1 max-h-48 w-full overflow-auto rounded-lg border bg-white shadow-lg dark:border-dark-600 dark:bg-dark-800"
+                        class="admin-action-menu absolute z-50 mt-1 max-h-48 w-full overflow-auto"
                       >
                         <button
                           v-for="account in accountSearchResults[
@@ -2828,7 +2853,7 @@
                           :key="account.id"
                           type="button"
                           @click="selectAccount(rule, account, true)"
-                          class="w-full px-3 py-2 text-left text-sm hover:bg-gray-100 dark:hover:bg-dark-700"
+                          class="admin-action-menu-item"
                           :class="{
                             'opacity-50': rule.accounts.some(
                               (a) => a.id === account.id,
@@ -2947,7 +2972,7 @@
           <div
             v-for="group in sortableGroups"
             :key="group.id"
-            class="flex cursor-grab items-center gap-3 rounded-lg border border-gray-200 bg-white p-3 transition-shadow hover:shadow-md active:cursor-grabbing dark:border-dark-600 dark:bg-dark-700"
+            class="admin-list-row flex cursor-grab items-center gap-3 rounded-xl border border-blue-100/70 bg-white/80 p-3 transition-shadow hover:shadow-md active:cursor-grabbing dark:border-blue-400/15 dark:bg-dark-800/70"
           >
             <div class="text-gray-400">
               <Icon name="menu" size="md" />

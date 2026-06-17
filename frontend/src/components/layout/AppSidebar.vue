@@ -9,7 +9,7 @@
     <!-- Logo/Brand -->
     <div class="sidebar-header" :class="{ 'sidebar-header-collapsed': sidebarCollapsed }">
       <!-- Custom Logo or Default Logo -->
-      <div class="sidebar-logo flex h-9 w-9 items-center justify-center overflow-hidden rounded-lg bg-[linear-gradient(135deg,#2563eb,#3b82f6,#06b6d4)] p-0.5 shadow-[0_10px_26px_rgba(37,99,235,0.14)] ring-1 ring-blue-300/50">
+      <div class="sidebar-logo flex h-9 w-9 items-center justify-center overflow-hidden rounded-xl bg-[linear-gradient(135deg,#2563eb,#3b82f6,#06b6d4)] p-0.5 shadow-[0_10px_26px_rgba(37,99,235,0.14)] ring-1 ring-blue-300/50">
         <div class="flex h-full w-full items-center justify-center overflow-hidden rounded-[0.42rem] bg-white/95 dark:bg-dark-950/90">
         <img v-if="settingsLoaded" :src="siteLogo || '/logo.png'" alt="Logo" class="h-full w-full object-contain" />
         </div>
@@ -24,7 +24,7 @@
     </div>
 
     <!-- Navigation -->
-    <nav class="sidebar-nav scrollbar-hide">
+    <nav class="sidebar-nav scrollbar-hide sidebar-nav-shell">
       <!-- Admin View: Admin menu first, then personal menu -->
       <template v-if="isAdmin">
         <!-- Admin Section -->
@@ -56,7 +56,7 @@
                 </span>
               </button>
               <!-- Children -->
-              <div v-if="!sidebarCollapsed && isGroupExpanded(item)" class="mb-1 ml-4 border-l border-slate-200 pl-2 dark:border-dark-700">
+              <div v-if="!sidebarCollapsed && isGroupExpanded(item)" class="sidebar-subnav-group mb-1 ml-4 pl-2">
                 <router-link
                   v-for="child in item.children"
                   :key="child.path"
@@ -142,7 +142,7 @@
     </nav>
 
     <!-- Bottom Section -->
-    <div class="mt-auto border-t border-blue-200/70 bg-[linear-gradient(180deg,rgba(239,246,255,0.72),rgba(255,255,255,0.98))] p-3 dark:border-blue-400/15 dark:bg-[linear-gradient(180deg,rgba(30,64,175,0.18),rgba(2,6,23,0.88))]">
+    <div class="sidebar-footer-shell mt-auto">
       <!-- Theme Toggle -->
       <button
         @click="toggleTheme"
@@ -929,6 +929,14 @@ onMounted(() => {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.sidebar-subnav-group {
+  border-left: 1px solid rgba(191, 219, 254, 0.72);
+}
+
+.dark .sidebar-subnav-group {
+  border-left-color: rgba(96, 165, 250, 0.16);
 }
 
 .sidebar-link-collapsed {

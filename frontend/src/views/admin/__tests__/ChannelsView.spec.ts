@@ -2,8 +2,13 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { defineComponent } from 'vue'
 import { flushPromises, mount } from '@vue/test-utils'
 import type { DOMWrapper } from '@vue/test-utils'
+import { readFileSync } from 'node:fs'
+import { dirname, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
 
 import ChannelsView from '../ChannelsView.vue'
+
+const currentDir = dirname(fileURLToPath(import.meta.url))
 
 const {
   listChannels,
@@ -88,9 +93,9 @@ const AppLayoutStub = {
 const TablePageLayoutStub = {
   template: `
     <div data-test="table-page-layout">
-      <div data-test="toolbar"><slot name="filters" /></div>
-      <div data-test="table-shell"><slot name="table" /></div>
-      <div data-test="pagination-shell"><slot name="pagination" /></div>
+      <div data-test="toolbar" class="admin-toolbar-surface"><slot name="filters" /></div>
+      <div data-test="table-shell" class="admin-table-stage"><slot name="table" /></div>
+      <div data-test="pagination-shell" class="admin-pagination-surface"><slot name="pagination" /></div>
     </div>
   `,
 }
@@ -272,11 +277,24 @@ describe('admin ChannelsView', () => {
     await flushPromises()
 
     const toolbar = wrapper.get('[data-test="toolbar"]')
-    expect(toolbar.find('.admin-toolbar-surface').exists()).toBe(true)
+    expect(toolbar.classes()).toContain('admin-toolbar-surface')
+    expect(toolbar.find('.admin-toolbar').exists()).toBe(true)
 
     await findButtonByText(toolbar, 'Create Channel').trigger('click')
     await flushPromises()
 
     expect(wrapper.find('.channel-tab').exists()).toBe(true)
+  })
+
+  it('keeps channel dialog choice lists on the shared admin surface system', () => {
+    const source = readFileSync(resolve(currentDir, '../ChannelsView.vue'), 'utf8')
+
+    expect(source).toContain('admin-form-section')
+    expect(source).toContain('admin-choice-card')
+    expect(source).toContain('admin-list-row')
+
+    expect(source).not.toContain('border-gray-200 hover:bg-gray-50 dark:border-dark-600 dark:hover:bg-dark-700')
+    expect(source).not.toContain('rounded-lg border border-gray-200 bg-gray-50')
+    expect(source).not.toContain('bg-white shadow-lg')
   })
 })

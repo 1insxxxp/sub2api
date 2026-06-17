@@ -9,7 +9,7 @@
       <div
         v-for="r in results"
         :key="r.model"
-        class="flex items-center justify-between rounded-lg border border-gray-200 px-3 py-2 text-sm dark:border-dark-600"
+        class="admin-list-row admin-form-section flex items-center justify-between gap-3 space-y-0 px-3 py-2 text-sm"
       >
         <div class="flex flex-col">
           <span class="font-medium text-gray-900 dark:text-white">{{ r.model }}</span>

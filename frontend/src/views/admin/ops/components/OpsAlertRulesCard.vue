@@ -387,7 +387,7 @@ function cancelDelete() {
 </script>
 
 <template>
-  <div class="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-gray-900/5 dark:bg-dark-800 dark:ring-dark-700">
+  <div class="admin-surface p-6">
     <div class="mb-4 flex items-start justify-between gap-4">
       <div>
         <h3 class="text-sm font-bold text-gray-900 dark:text-white">{{ t('admin.ops.alertRules.title') }}</h3>
@@ -399,7 +399,7 @@ function cancelDelete() {
           {{ t('admin.ops.alertRules.create') }}
         </button>
         <button
-          class="flex items-center gap-1.5 rounded-lg bg-gray-100 px-3 py-1.5 text-xs font-bold text-gray-700 transition-colors hover:bg-gray-200 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-dark-700 dark:text-gray-300 dark:hover:bg-dark-600"
+          class="admin-inline-action !min-h-9 !min-w-0 !flex-row !gap-1.5 !rounded-lg !px-3 !py-1.5 !font-bold disabled:cursor-not-allowed disabled:opacity-50"
           :disabled="loading"
           @click="load"
         >
@@ -415,11 +415,11 @@ function cancelDelete() {
       {{ t('admin.ops.alertRules.loading') }}
     </div>
 
-    <div v-else-if="sortedRules.length === 0" class="rounded-xl border border-dashed border-gray-200 p-8 text-center text-sm text-gray-500 dark:border-dark-700 dark:text-gray-400">
+    <div v-else-if="sortedRules.length === 0" class="admin-empty-state border-dashed p-8 text-sm text-gray-500 dark:text-gray-400">
       {{ t('admin.ops.alertRules.empty') }}
     </div>
 
-    <div v-else class="max-h-[520px] overflow-hidden rounded-xl border border-gray-200 dark:border-dark-700">
+    <div v-else class="admin-list-surface max-h-[520px]">
       <div class="max-h-[520px] overflow-y-auto">
         <table class="min-w-full divide-y divide-gray-200 dark:divide-dark-700">
           <thead class="sticky top-0 z-10 bg-gray-50 dark:bg-dark-900">
@@ -442,7 +442,7 @@ function cancelDelete() {
             </tr>
           </thead>
           <tbody class="divide-y divide-gray-200 bg-white dark:divide-dark-700 dark:bg-dark-800">
-            <tr v-for="row in sortedRules" :key="row.id" class="hover:bg-gray-50 dark:hover:bg-dark-700/50">
+            <tr v-for="row in sortedRules" :key="row.id" class="admin-list-row">
               <td class="px-4 py-3">
                 <div class="text-xs font-bold text-gray-900 dark:text-white">{{ row.name }}</div>
                 <div v-if="row.description" class="mt-0.5 line-clamp-2 text-[11px] text-gray-500 dark:text-gray-400">
@@ -562,12 +562,12 @@ function cancelDelete() {
             <input v-model.number="draft!.cooldown_minutes" class="input" type="number" min="0" max="1440" />
           </div>
 
-          <div class="flex items-center justify-between rounded-xl bg-gray-50 px-4 py-3 dark:bg-dark-800/50 md:col-span-2">
+          <div class="admin-form-section flex items-center justify-between !space-y-0 !p-4 md:col-span-2">
             <span class="text-xs font-bold text-gray-700 dark:text-gray-200">{{ t('admin.ops.alertRules.form.enabled') }}</span>
             <input v-model="draft!.enabled" type="checkbox" class="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500" />
           </div>
 
-          <div class="flex items-center justify-between rounded-xl bg-gray-50 px-4 py-3 dark:bg-dark-800/50 md:col-span-2">
+          <div class="admin-form-section flex items-center justify-between !space-y-0 !p-4 md:col-span-2">
             <span class="text-xs font-bold text-gray-700 dark:text-gray-200">{{ t('admin.ops.alertRules.form.notifyEmail') }}</span>
             <input v-model="draft!.notify_email" type="checkbox" class="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500" />
           </div>

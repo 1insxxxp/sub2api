@@ -4,13 +4,13 @@
     <div class="relative mb-3">
       <div
         @click="toggleDropdown"
-        class="cursor-pointer rounded-lg border border-gray-300 bg-white px-3 py-2 dark:border-dark-500 dark:bg-dark-700"
+        class="cursor-pointer rounded-2xl border border-primary-200/80 bg-white/80 px-3 py-2 shadow-sm shadow-primary-500/5 transition-colors hover:border-primary-300 hover:bg-primary-50/30 dark:border-primary-500/20 dark:bg-white/5 dark:hover:bg-primary-500/10"
       >
         <div class="grid grid-cols-2 gap-1.5">
           <span
             v-for="model in modelValue"
             :key="model"
-            class="inline-flex items-center justify-between gap-1 rounded bg-gray-100 px-2 py-1 text-xs text-gray-700 dark:bg-dark-600 dark:text-gray-300"
+            class="inline-flex items-center justify-between gap-1 rounded-full border border-primary-100 bg-primary-50/80 px-2 py-1 text-xs font-medium text-primary-700 dark:border-primary-500/15 dark:bg-primary-500/10 dark:text-primary-200"
           >
             <span class="flex items-center gap-1 truncate">
               <ModelIcon :model="model" size="14px" />
@@ -19,7 +19,7 @@
             <button
               type="button"
               @click.stop="removeModel(model)"
-              class="shrink-0 rounded-full hover:bg-gray-200 dark:hover:bg-dark-500"
+              class="shrink-0 rounded-full p-0.5 transition-colors hover:bg-primary-100 dark:hover:bg-primary-500/20"
             >
               <Icon name="x" size="xs" class="h-3.5 w-3.5" :stroke-width="2" />
             </button>
@@ -35,9 +35,9 @@
       <!-- Dropdown List -->
       <div
         v-if="showDropdown"
-        class="absolute left-0 right-0 top-full z-50 mt-1 rounded-lg border border-gray-200 bg-white shadow-lg dark:border-dark-600 dark:bg-dark-700"
+        class="absolute left-0 right-0 top-full z-50 mt-1 overflow-hidden rounded-2xl border border-primary-200/80 bg-white shadow-xl shadow-primary-500/10 dark:border-primary-500/20 dark:bg-dark-900"
       >
-        <div class="sticky top-0 border-b border-gray-200 bg-white p-2 dark:border-dark-600 dark:bg-dark-700">
+        <div class="sticky top-0 border-b border-primary-100 bg-white/95 p-2 dark:border-primary-500/15 dark:bg-dark-900/95">
           <input
             v-model="searchQuery"
             type="text"
@@ -52,7 +52,7 @@
             :key="model.value"
             type="button"
             @click="toggleModel(model.value)"
-            class="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-gray-100 dark:hover:bg-dark-600"
+            class="flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition-colors hover:bg-primary-50/80 dark:hover:bg-primary-500/10"
           >
             <span
               :class="[
@@ -81,7 +81,7 @@
       <button
         type="button"
         @click="fillRelated"
-        class="rounded-lg border border-blue-200 px-3 py-1.5 text-sm text-blue-600 hover:bg-blue-50 dark:border-blue-800 dark:text-blue-400 dark:hover:bg-blue-900/30"
+        class="rounded-full border border-primary-200/80 bg-primary-50/70 px-3 py-1.5 text-sm font-medium text-primary-700 transition-colors hover:border-primary-300 hover:bg-primary-100 dark:border-primary-500/20 dark:bg-primary-500/10 dark:text-primary-200 dark:hover:bg-primary-500/15"
       >
         {{ t('admin.accounts.fillRelatedModels') }}
       </button>
@@ -90,14 +90,14 @@
         type="button"
         @click="syncUpstreamModels"
         :disabled="isSyncingUpstream"
-        class="rounded-lg border border-emerald-200 px-3 py-1.5 text-sm text-emerald-600 hover:bg-emerald-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-emerald-800 dark:text-emerald-400 dark:hover:bg-emerald-900/30"
+        class="rounded-full border border-emerald-200 bg-emerald-50/70 px-3 py-1.5 text-sm font-medium text-emerald-700 transition-colors hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-60 dark:border-emerald-500/20 dark:bg-emerald-500/10 dark:text-emerald-200 dark:hover:bg-emerald-500/15"
       >
         {{ isSyncingUpstream ? t('admin.accounts.syncUpstreamModelsLoading') : t('admin.accounts.syncUpstreamModels') }}
       </button>
       <button
         type="button"
         @click="clearAll"
-        class="rounded-lg border border-red-200 px-3 py-1.5 text-sm text-red-600 hover:bg-red-50 dark:border-red-800 dark:text-red-400 dark:hover:bg-red-900/30"
+        class="rounded-full border border-rose-200 bg-rose-50/70 px-3 py-1.5 text-sm font-medium text-rose-700 transition-colors hover:bg-rose-100 dark:border-rose-500/20 dark:bg-rose-500/10 dark:text-rose-200 dark:hover:bg-rose-500/15"
       >
         {{ t('admin.accounts.clearAllModels') }}
       </button>

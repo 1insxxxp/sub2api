@@ -9,7 +9,7 @@
       <!-- Refund Request Info -->
       <div
         v-if="order?.refund_requested_at || order?.refund_request_reason"
-        class="rounded-lg border border-violet-200 bg-violet-50 p-3 dark:border-violet-800 dark:bg-violet-900/20"
+        class="admin-form-section border-violet-200 bg-violet-50 p-3 dark:border-violet-800 dark:bg-violet-900/20"
       >
         <div class="flex items-center gap-2 text-sm font-medium text-violet-700 dark:text-violet-300">
           <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -28,7 +28,7 @@
       </div>
 
       <!-- Order Info -->
-      <div class="rounded-lg bg-gray-50 p-3 dark:bg-dark-700">
+      <div class="admin-form-section !space-y-0 p-3">
         <div class="flex justify-between text-sm">
           <span class="text-gray-500 dark:text-gray-400">{{ t('payment.orders.orderId') }}</span>
           <span class="font-mono text-gray-900 dark:text-white">#{{ order?.id }}</span>
@@ -64,11 +64,11 @@
 
         <!-- User Balance Info (when deduct_balance is checked) -->
         <div v-if="form.deduct_balance && userBalance != null" class="mt-3 grid grid-cols-2 gap-3">
-          <div class="rounded-lg bg-gray-50 p-3 text-sm dark:bg-dark-700">
+          <div class="admin-form-section !space-y-0 p-3 text-sm">
             <div class="text-gray-500 dark:text-gray-400">{{ t('payment.admin.userBalance') }}</div>
             <div class="mt-1 font-semibold text-gray-900 dark:text-white">${{ userBalance.toFixed(2) }}</div>
           </div>
-          <div class="rounded-lg bg-gray-50 p-3 text-sm dark:bg-dark-700">
+          <div class="admin-form-section !space-y-0 p-3 text-sm">
             <div class="text-gray-500 dark:text-gray-400">{{ t('payment.admin.orderAmount') }}</div>
             <div class="mt-1 font-semibold text-gray-900 dark:text-white">{{ order?.order_type === 'balance' ? '$' : '¥' }}{{ order?.amount?.toFixed(2) }}</div>
           </div>

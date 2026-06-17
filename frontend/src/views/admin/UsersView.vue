@@ -1,11 +1,38 @@
 <template>
   <AppLayout>
-    <TablePageLayout>
+    <div class="space-y-6">
+      <section class="admin-page-hero" data-test="admin-page-hero">
+        <div class="admin-page-hero-grid">
+          <div class="min-w-0">
+            <span class="admin-page-kicker">{{ t('admin.users.title') }}</span>
+            <h2 class="admin-page-title">{{ t('admin.users.title') }}</h2>
+            <p class="admin-page-description">
+              {{ t('admin.users.description') }}
+            </p>
+            <div class="admin-page-meta">
+              <span class="admin-page-meta-chip">
+                <span>{{ t('common.total') }}</span>
+                <strong>{{ pagination.total }}</strong>
+              </span>
+              <span class="admin-page-meta-chip">
+                <span>{{ t('pagination.perPage') }}</span>
+                <strong>{{ pagination.page_size }}</strong>
+              </span>
+              <span class="admin-page-meta-chip">
+                <span>{{ t('common.status') }}</span>
+                <strong>{{ loading ? t('common.loading') : t('common.active') }}</strong>
+              </span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <TablePageLayout>
       <!-- Single Row: Search, Filters, and Actions -->
       <template #filters>
-        <div class="flex flex-wrap items-center gap-3">
+        <div class="admin-toolbar">
           <!-- Left: Search + Active Filters -->
-          <div class="flex flex-1 flex-wrap items-center gap-3">
+          <div class="admin-toolbar-group flex-1">
             <!-- Search Box -->
             <div class="relative w-full md:w-64">
               <Icon
@@ -124,7 +151,7 @@
           </div>
 
           <!-- Right: Actions and Settings -->
-          <div class="flex flex-wrap items-center justify-end gap-2">
+          <div class="admin-toolbar-group justify-end">
             <!-- Mobile: Secondary buttons (icon only) -->
             <div class="flex items-center gap-2 md:contents">
               <!-- Refresh Button -->
@@ -340,20 +367,22 @@
                 <!-- 点击展开分组操作菜单 -->
                 <div
                   v-if="expandedGroupUserId === row.id"
-                  class="absolute left-0 top-full z-50 mt-1.5 min-w-[160px] overflow-hidden rounded-lg border border-gray-200 bg-white py-1 text-xs shadow-xl dark:border-dark-600 dark:bg-dark-700"
+                  class="admin-action-menu absolute left-0 top-full z-50 mt-1.5 min-w-[160px] text-xs"
                 >
-                  <div class="border-b border-gray-100 px-3 py-1.5 text-[10px] font-medium uppercase tracking-wider text-gray-400 dark:border-dark-600 dark:text-dark-400">
+                  <div class="px-3 py-1.5 text-[10px] font-medium uppercase tracking-wider text-slate-400 dark:text-slate-500">
                     {{ t('admin.users.clickToReplace') }}
                   </div>
-                  <div
+                  <div class="admin-action-menu-divider"></div>
+                  <button
                     v-for="g in getUserGroups(row).exclusive"
                     :key="g.id"
-                    class="flex cursor-pointer items-center gap-2 px-3 py-2 text-gray-700 transition-colors hover:bg-primary-50 hover:text-primary-600 dark:text-dark-200 dark:hover:bg-primary-900/30 dark:hover:text-primary-400"
+                    type="button"
+                    class="admin-action-menu-item text-xs"
                     @click.stop="openGroupReplace(row, g)"
                   >
                     <Icon name="swap" size="xs" class="h-3.5 w-3.5 flex-shrink-0 opacity-50" />
                     <span class="flex-1">{{ g.name }}</span>
-                  </div>
+                  </button>
                 </div>
               </span>
               <!-- 公开分组行 -->
@@ -455,7 +484,7 @@
               <div class="usage-sort-trigger relative">
                 <button
                   type="button"
-                  class="flex items-center gap-1 rounded px-1 py-0.5 transition-colors hover:bg-gray-200 dark:hover:bg-dark-700"
+                  class="admin-inline-action !min-h-7 !min-w-0 !flex-row !gap-1 !rounded-lg !px-1.5 !py-0.5"
                   :class="usageSort && usageSort.key === usageKey
                     ? 'text-primary-600 dark:text-primary-400'
                     : 'text-gray-400 dark:text-dark-500'"
@@ -486,16 +515,16 @@
                 <!-- 弹出菜单：今日 / 近30天，点击进行三态循环切换。 -->
                 <div
                   v-if="openUsageSortMenu === usageKey"
-                  class="absolute right-0 top-full z-50 mt-1 min-w-[120px] rounded-lg border border-gray-200 bg-white py-1 shadow-lg dark:border-dark-600 dark:bg-dark-800"
+                  class="admin-action-menu absolute right-0 top-full z-50 mt-1 min-w-[120px]"
                 >
                   <button
                     v-for="metric in (['today', 'total'] as const)"
                     :key="metric"
                     type="button"
-                    class="flex w-full items-center justify-between gap-3 px-3 py-1.5 text-left text-xs normal-case tracking-normal hover:bg-gray-100 dark:hover:bg-dark-700"
+                    class="admin-action-menu-item justify-between gap-3 py-1.5 text-xs normal-case tracking-normal"
                     :class="isUsageSortActive(usageKey, metric)
-                      ? 'font-medium text-primary-600 dark:text-primary-400'
-                      : 'text-gray-700 dark:text-gray-300'"
+                      ? 'admin-action-menu-item-active font-medium'
+                      : ''"
                     @click.stop="toggleUsageSort(usageKey, metric)"
                   >
                     <span>{{ metric === 'today' ? t('admin.users.today') : t('admin.users.total') }}</span>
@@ -587,7 +616,7 @@
               <!-- Edit Button -->
               <button
                 @click="handleEdit(row)"
-                class="flex flex-col items-center gap-0.5 rounded-lg p-1.5 text-gray-500 transition-colors hover:bg-gray-100 hover:text-primary-600 dark:hover:bg-dark-700 dark:hover:text-primary-400"
+                class="admin-inline-action"
               >
                 <Icon name="edit" size="sm" />
                 <span class="text-xs">{{ t('common.edit') }}</span>
@@ -598,10 +627,10 @@
                 v-if="row.role !== 'admin'"
                 @click="handleToggleStatus(row)"
                 :class="[
-                  'flex flex-col items-center gap-0.5 rounded-lg p-1.5 text-gray-500 transition-colors',
+                  'admin-inline-action',
                   row.status === 'active'
-                    ? 'hover:bg-orange-50 hover:text-orange-600 dark:hover:bg-orange-900/20 dark:hover:text-orange-400'
-                    : 'hover:bg-green-50 hover:text-green-600 dark:hover:bg-green-900/20 dark:hover:text-green-400'
+                    ? 'admin-inline-action-warning'
+                    : 'admin-inline-action-success'
                 ]"
               >
                 <Icon v-if="row.status === 'active'" name="ban" size="sm" />
@@ -612,8 +641,8 @@
               <!-- More Actions Menu Trigger -->
               <button
                 @click="openActionMenu(row, $event)"
-                class="action-menu-trigger flex flex-col items-center gap-0.5 rounded-lg p-1.5 text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-900 dark:hover:bg-dark-700 dark:hover:text-white"
-                :class="{ 'bg-gray-100 text-gray-900 dark:bg-dark-700 dark:text-white': activeMenuId === row.id }"
+                class="action-menu-trigger admin-inline-action"
+                :class="{ 'admin-inline-action-active': activeMenuId === row.id }"
               >
                 <Icon name="more" size="sm" />
                 <span class="text-xs">{{ t('common.more') }}</span>
@@ -649,16 +678,16 @@
     <Teleport to="body">
       <div
         v-if="activeMenuId !== null && menuPosition"
-        class="action-menu-content fixed z-[9999] w-48 overflow-hidden rounded-xl bg-white shadow-lg ring-1 ring-black/5 dark:bg-dark-800 dark:ring-white/10"
+        class="action-menu-content admin-action-menu fixed z-[9999] w-48"
         :style="{ top: menuPosition.top + 'px', left: menuPosition.left + 'px' }"
       >
-        <div class="py-1">
+        <div class="space-y-0.5">
           <template v-for="user in users" :key="user.id">
             <template v-if="user.id === activeMenuId">
               <!-- View API Keys -->
               <button
                 @click="handleViewApiKeys(user); closeActionMenu()"
-                class="flex w-full items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-dark-700"
+                class="admin-action-menu-item"
               >
                 <Icon name="key" size="sm" class="text-gray-400" :stroke-width="2" />
                 {{ t('admin.users.apiKeys') }}
@@ -667,18 +696,18 @@
               <!-- Allowed Groups -->
               <button
                 @click="handleAllowedGroups(user); closeActionMenu()"
-                class="flex w-full items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-dark-700"
+                class="admin-action-menu-item"
               >
                 <Icon name="users" size="sm" class="text-gray-400" :stroke-width="2" />
                 {{ t('admin.users.groups') }}
               </button>
 
-              <div class="my-1 border-t border-gray-100 dark:border-dark-700"></div>
+              <div class="admin-action-menu-divider"></div>
 
               <!-- Deposit -->
               <button
                 @click="handleDeposit(user); closeActionMenu()"
-                class="flex w-full items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-dark-700"
+                class="admin-action-menu-item"
               >
                 <Icon name="plus" size="sm" class="text-primary-500" :stroke-width="2" />
                 {{ t('admin.users.deposit') }}
@@ -687,7 +716,7 @@
               <!-- Withdraw -->
               <button
                 @click="handleWithdraw(user); closeActionMenu()"
-                class="flex w-full items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-dark-700"
+                class="admin-action-menu-item"
               >
                 <svg class="h-4 w-4 text-amber-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 12H4" />
@@ -698,7 +727,7 @@
               <!-- Platform Quotas -->
               <button
                 @click="handlePlatformQuota(user); closeActionMenu()"
-                class="flex w-full items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-dark-700"
+                class="admin-action-menu-item"
               >
                 <Icon name="chartBar" size="sm" class="text-gray-400" :stroke-width="2" />
                 {{ t('admin.users.platformQuota.menuItem') }}
@@ -707,19 +736,19 @@
               <!-- Balance History -->
               <button
                 @click="handleBalanceHistory(user); closeActionMenu()"
-                class="flex w-full items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-dark-700"
+                class="admin-action-menu-item"
               >
                 <Icon name="dollar" size="sm" class="text-gray-400" :stroke-width="2" />
                 {{ t('admin.users.balanceHistory') }}
               </button>
 
-              <div class="my-1 border-t border-gray-100 dark:border-dark-700"></div>
+              <div class="admin-action-menu-divider"></div>
 
               <!-- Delete (not for admin) -->
               <button
                 v-if="user.role !== 'admin'"
                 @click="handleDelete(user); closeActionMenu()"
-                class="flex w-full items-center gap-2 px-4 py-2 text-sm text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/20"
+                class="admin-action-menu-item admin-action-menu-item-danger"
               >
                 <Icon name="trash" size="sm" :stroke-width="2" />
                 {{ t('common.delete') }}
@@ -729,6 +758,7 @@
         </div>
       </div>
     </Teleport>
+    </div>
 
     <ConfirmDialog :show="showDeleteDialog" :title="t('admin.users.deleteUser')" :message="t('admin.users.deleteConfirm', { email: deletingUser?.email })" :danger="true" @confirm="confirmDelete" @cancel="showDeleteDialog = false" />
     <UserCreateModal :show="showCreateModal" @close="showCreateModal = false" @success="loadUsers" />

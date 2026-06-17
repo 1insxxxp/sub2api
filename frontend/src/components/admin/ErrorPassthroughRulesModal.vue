@@ -22,8 +22,8 @@
         <Icon name="refresh" size="lg" class="animate-spin text-gray-400" />
       </div>
 
-      <div v-else-if="rules.length === 0" class="py-8 text-center">
-        <div class="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-gray-100 dark:bg-dark-700">
+      <div v-else-if="rules.length === 0" class="admin-empty-state py-8">
+        <div class="mx-auto mb-1 flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-50 text-blue-500 dark:bg-blue-500/10">
           <Icon name="shield" size="lg" class="text-gray-400" />
         </div>
         <h4 class="mb-1 text-sm font-medium text-gray-900 dark:text-white">
@@ -34,9 +34,9 @@
         </p>
       </div>
 
-      <div v-else class="max-h-96 overflow-auto rounded-lg border border-gray-200 dark:border-dark-600">
+      <div v-else class="admin-surface max-h-96 overflow-auto p-0">
         <table class="min-w-full divide-y divide-gray-200 dark:divide-dark-700">
-          <thead class="sticky top-0 bg-gray-50 dark:bg-dark-700">
+          <thead class="sticky top-0 bg-blue-50/60 dark:bg-blue-500/10">
             <tr>
               <th class="px-3 py-2 text-left text-xs font-medium uppercase text-gray-500 dark:text-gray-400">
                 {{ t('admin.errorPassthrough.columns.priority') }}
@@ -61,10 +61,10 @@
               </th>
             </tr>
           </thead>
-          <tbody class="divide-y divide-gray-200 bg-white dark:divide-dark-700 dark:bg-dark-800">
-            <tr v-for="rule in rules" :key="rule.id" class="hover:bg-gray-50 dark:hover:bg-dark-700">
+          <tbody class="divide-y divide-blue-100/60 dark:divide-blue-400/10">
+            <tr v-for="rule in rules" :key="rule.id" class="transition-colors hover:bg-primary-50/40 dark:hover:bg-primary-500/5">
               <td class="whitespace-nowrap px-3 py-2">
-                <span class="inline-flex h-5 w-5 items-center justify-center rounded bg-gray-100 text-xs font-medium text-gray-700 dark:bg-dark-600 dark:text-gray-300">
+                <span class="inline-flex h-5 min-w-5 items-center justify-center rounded-full border border-primary-100 bg-primary-50/80 px-1 text-xs font-medium text-primary-700 dark:border-primary-500/15 dark:bg-primary-500/10 dark:text-primary-200">
                   {{ rule.priority }}
                 </span>
               </td>
@@ -251,8 +251,8 @@
         </div>
 
         <!-- Match Conditions -->
-        <div class="rounded-lg border border-gray-200 p-3 dark:border-dark-600">
-          <h4 class="mb-2 text-sm font-medium text-gray-900 dark:text-white">
+        <div class="admin-form-section">
+          <h4 class="text-sm font-semibold text-slate-900 dark:text-white">
             {{ t('admin.errorPassthrough.form.matchConditions') }}
           </h4>
 
@@ -323,8 +323,8 @@
         </div>
 
         <!-- Response Behavior -->
-        <div class="rounded-lg border border-gray-200 p-3 dark:border-dark-600">
-          <h4 class="mb-2 text-sm font-medium text-gray-900 dark:text-white">
+        <div class="admin-form-section">
+          <h4 class="text-sm font-semibold text-slate-900 dark:text-white">
             {{ t('admin.errorPassthrough.form.responseBehavior') }}
           </h4>
 

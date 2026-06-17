@@ -1,80 +1,95 @@
 <template>
   <AppLayout>
     <div class="checkins-admin-page space-y-6">
-      <section class="card checkins-overview-panel overflow-hidden rounded-2xl">
-        <div class="border-b border-slate-100 bg-slate-50/80 px-5 py-4 dark:border-dark-700 dark:bg-dark-900/30">
-          <div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-            <div class="min-w-0">
-              <div class="flex flex-wrap items-center gap-2">
-                <h2 class="text-lg font-semibold text-gray-900 dark:text-white">
-                  {{ t('admin.checkins.overviewTitle') }}
-                </h2>
-                <span
-                  class="checkins-status-pill inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold"
-                  :class="configForm.enabled ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-200' : 'bg-gray-100 text-gray-500 dark:bg-dark-700 dark:text-dark-300'"
-                >
-                  {{ configForm.enabled ? t('admin.checkins.enabledStatus') : t('admin.checkins.disabledStatus') }}
-                </span>
-              </div>
-              <p class="mt-1 text-sm text-gray-600 dark:text-dark-300">
-                {{ t('admin.checkins.configDescription') }}
-              </p>
-            </div>
-            <div class="checkins-overview-actions flex flex-wrap items-center gap-2">
-              <button
-                type="button"
-                class="btn btn-secondary inline-flex items-center gap-2"
-                :disabled="configLoading || statsLoading || recordsLoading || blacklistLoading"
-                @click="refreshAll"
+      <section
+        data-test="admin-page-hero"
+        class="checkins-overview-panel admin-page-hero"
+      >
+        <div class="admin-page-hero-grid">
+          <div class="min-w-0">
+            <div class="flex flex-wrap items-center gap-2">
+              <span class="admin-page-kicker">{{ t('admin.checkins.overviewTitle') }}</span>
+              <span
+                class="checkins-status-pill inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold"
+                :class="configForm.enabled ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-200' : 'bg-gray-100 text-gray-500 dark:bg-dark-700 dark:text-dark-300'"
               >
-                <Icon name="refresh" size="sm" :class="(configLoading || statsLoading || recordsLoading || blacklistLoading) ? 'animate-spin' : ''" />
-                {{ t('common.refresh') }}
-              </button>
-              <button
-                type="button"
-                class="btn btn-primary inline-flex items-center gap-2"
-                :disabled="configSaving || configLoading"
-                @click="handleSaveConfig"
-              >
-                <Icon name="check" size="sm" />
-                {{ configSaving ? t('common.saving') : t('common.save') }}
-              </button>
+                {{ configForm.enabled ? t('admin.checkins.enabledStatus') : t('admin.checkins.disabledStatus') }}
+              </span>
             </div>
+            <h2 class="admin-page-title">{{ t('admin.checkins.overviewTitle') }}</h2>
+            <p class="admin-page-description">
+              {{ t('admin.checkins.configDescription') }}
+            </p>
+            <div class="admin-page-meta">
+              <span class="admin-page-meta-chip">
+                <span>{{ t('admin.checkins.enabled') }}</span>
+                <strong>{{ configForm.enabled ? t('admin.checkins.enabledStatus') : t('admin.checkins.disabledStatus') }}</strong>
+              </span>
+              <span class="admin-page-meta-chip">
+                <span>{{ t('admin.checkins.activeBlacklist') }}</span>
+                <strong>{{ stats?.active_blacklist_count ?? 0 }}</strong>
+              </span>
+              <span class="admin-page-meta-chip">
+                <span>{{ t('admin.checkins.rewardRules') }}</span>
+                <strong>{{ t('admin.checkins.tierCount', { count: configForm.tiers.length }) }}</strong>
+              </span>
+            </div>
+          </div>
+
+          <div class="admin-page-actions checkins-overview-actions">
+            <button
+              type="button"
+              class="btn btn-secondary inline-flex items-center gap-2"
+              :disabled="configLoading || statsLoading || recordsLoading || blacklistLoading"
+              @click="refreshAll"
+            >
+              <Icon name="refresh" size="sm" :class="(configLoading || statsLoading || recordsLoading || blacklistLoading) ? 'animate-spin' : ''" />
+              {{ t('common.refresh') }}
+            </button>
+            <button
+              type="button"
+              class="btn btn-primary inline-flex items-center gap-2"
+              :disabled="configSaving || configLoading"
+              @click="handleSaveConfig"
+            >
+              <Icon name="check" size="sm" />
+              {{ configSaving ? t('common.saving') : t('common.save') }}
+            </button>
           </div>
         </div>
 
-        <div class="grid gap-4 p-5 sm:grid-cols-2 xl:grid-cols-4">
-        <div
-          v-for="item in statsCards"
-          :key="item.key"
+        <div class="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <div
+            v-for="item in statsCards"
+            :key="item.key"
             class="checkins-stat-card"
-        >
-          <div class="flex items-start justify-between gap-3">
-            <div>
+          >
+            <div class="flex items-start justify-between gap-3">
+              <div>
                 <p class="text-xs font-medium text-gray-500 dark:text-dark-400">
-                {{ item.label }}
-              </p>
-              <p class="mt-2 text-2xl font-semibold text-gray-900 dark:text-white">
-                {{ item.value }}
-              </p>
-              <p class="mt-1 text-xs text-gray-500 dark:text-dark-400">
-                {{ item.meta }}
-              </p>
-            </div>
-            <div
-              class="flex h-9 w-9 items-center justify-center rounded-lg"
-              :class="item.iconClass"
-            >
-              <Icon :name="item.icon" size="sm" />
+                  {{ item.label }}
+                </p>
+                <p class="mt-2 text-2xl font-semibold text-gray-900 dark:text-white">
+                  {{ item.value }}
+                </p>
+                <p class="mt-1 text-xs text-gray-500 dark:text-dark-400">
+                  {{ item.meta }}
+                </p>
+              </div>
+              <div
+                class="flex h-9 w-9 items-center justify-center rounded-lg"
+                :class="item.iconClass"
+              >
+                <Icon :name="item.icon" size="sm" />
+              </div>
             </div>
           </div>
-        </div>
         </div>
       </section>
 
       <section class="grid gap-6 xl:grid-cols-[minmax(280px,360px),1fr]">
-        <div class="card checkins-editor-card">
-          <div class="border-b border-gray-100 px-5 py-4 dark:border-dark-700">
+        <div class="admin-surface checkins-editor-card">
+          <div class="admin-panel-header">
             <div class="flex items-center gap-3">
               <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-primary-50 text-primary-600 dark:bg-primary-900/20 dark:text-primary-300">
                 <Icon name="shield" size="sm" />
@@ -92,8 +107,8 @@
 
           <div class="space-y-5 p-5">
             <label
-              class="flex cursor-pointer items-center justify-between gap-4 rounded-lg border px-4 py-3 transition-colors"
-              :class="configForm.enabled ? 'border-primary-200 bg-primary-50/70 dark:border-primary-500/30 dark:bg-primary-900/10' : 'border-gray-200 bg-gray-50 dark:border-dark-700 dark:bg-dark-700/40'"
+              class="admin-form-section flex cursor-pointer items-center justify-between gap-4 !space-y-0 px-4 py-3 transition-colors"
+              :class="configForm.enabled ? 'border-primary-200 bg-primary-50/70 dark:border-primary-500/30 dark:bg-primary-900/10' : ''"
             >
               <span>
                 <span class="block text-sm font-semibold text-gray-900 dark:text-white">
@@ -127,7 +142,7 @@
               </p>
             </div>
 
-            <div class="checkins-summary-strip rounded-lg bg-gray-50 px-4 py-3 dark:bg-dark-700/60">
+            <div class="checkins-summary-strip admin-form-section !space-y-0 px-4 py-3">
               <div class="flex items-center justify-between gap-3 text-sm">
                 <span class="text-gray-500 dark:text-dark-400">{{ t('admin.checkins.rewardRules') }}</span>
                 <span class="font-semibold text-gray-900 dark:text-white">
@@ -144,8 +159,8 @@
           </div>
         </div>
 
-        <div class="card checkins-editor-card">
-          <div class="border-b border-gray-100 px-5 py-4 dark:border-dark-700">
+        <div class="admin-surface checkins-editor-card">
+          <div class="admin-panel-header">
             <div class="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
               <div>
                 <div class="flex items-center gap-3">
@@ -279,51 +294,58 @@
                     </div>
                   </div>
                 </div>
-                <p v-if="configForm.streak_rules.length === 0" class="rounded-lg bg-gray-50 p-4 text-sm text-gray-500 dark:bg-dark-700/50 dark:text-dark-400">
+                <p v-if="configForm.streak_rules.length === 0" class="admin-form-section !space-y-0 p-4 text-sm text-gray-500 dark:text-dark-400">
                   {{ t('admin.checkins.emptyStreakRules') }}
                 </p>
               </div>
             </section>
           </div>
-      </div>
+        </div>
       </section>
 
-      <section class="card checkins-table-card rounded-2xl">
-        <div class="border-b border-gray-100 p-4 dark:border-dark-700">
-          <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-            <div>
-              <h3 class="text-base font-semibold text-gray-900 dark:text-white">
-                {{ t('admin.checkins.recordsTitle') }}
-              </h3>
-              <p class="mt-1 text-sm text-gray-500 dark:text-dark-400">
-                {{ t('admin.checkins.recordsHint') }}
-              </p>
-            </div>
-            <div class="flex flex-wrap items-center gap-3">
-              <div class="min-w-56 flex-1 lg:w-72 lg:flex-none">
+      <section class="admin-surface checkins-table-card rounded-2xl">
+        <div class="admin-panel-header">
+          <div>
+            <h3 class="text-base font-semibold text-gray-900 dark:text-white">
+              {{ t('admin.checkins.recordsTitle') }}
+            </h3>
+            <p class="mt-1 text-sm text-gray-500 dark:text-dark-400">
+              {{ t('admin.checkins.recordsHint') }}
+            </p>
+          </div>
+        </div>
+
+        <div class="px-4 pb-4 pt-4 sm:px-5">
+          <div class="admin-toolbar-surface">
+            <div class="admin-toolbar">
+              <div class="admin-toolbar-group flex-1">
+                <div class="min-w-56 flex-1 lg:w-72 lg:flex-none">
+                  <input
+                    v-model="recordFilters.search"
+                    type="text"
+                    class="input"
+                    :placeholder="t('admin.checkins.recordsSearchPlaceholder')"
+                    @input="handleRecordSearch"
+                  />
+                </div>
                 <input
-                  v-model="recordFilters.search"
-                  type="text"
-                  class="input"
-                  :placeholder="t('admin.checkins.recordsSearchPlaceholder')"
-                  @input="handleRecordSearch"
+                  v-model="recordFilters.date"
+                  type="date"
+                  class="input w-44"
+                  @change="reloadRecordsFromFirstPage"
                 />
               </div>
-              <input
-                v-model="recordFilters.date"
-                type="date"
-                class="input w-44"
-                @change="reloadRecordsFromFirstPage"
-              />
-              <button
-                type="button"
-                class="btn btn-secondary"
-                :disabled="recordsLoading"
-                :title="t('common.refresh')"
-                @click="loadRecords"
-              >
-                <Icon name="refresh" size="md" :class="recordsLoading ? 'animate-spin' : ''" />
-              </button>
+              <div class="admin-toolbar-group lg:ml-auto">
+                <button
+                  type="button"
+                  class="btn btn-secondary"
+                  :disabled="recordsLoading"
+                  :title="t('common.refresh')"
+                  @click="loadRecords"
+                >
+                  <Icon name="refresh" size="md" :class="recordsLoading ? 'animate-spin' : ''" />
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -385,7 +407,7 @@
       </section>
 
       <section class="grid gap-6 xl:grid-cols-[minmax(320px,420px),1fr]">
-        <div class="card checkins-blacklist-form rounded-2xl p-4">
+        <div class="admin-surface checkins-blacklist-form rounded-2xl p-4">
           <div class="mb-4">
             <h2 class="text-base font-semibold text-gray-900 dark:text-white">
               {{ t('admin.checkins.addBlacklist') }}
@@ -421,14 +443,14 @@
 
             <div
               v-if="userCandidates.length > 0"
-              class="max-h-56 overflow-y-auto rounded-lg border border-gray-200 dark:border-dark-700"
+              class="admin-list-surface max-h-56 overflow-y-auto"
             >
               <button
                 v-for="candidate in userCandidates"
                 :key="candidate.id"
                 type="button"
                 :data-test="`select-blacklist-user-${candidate.id}`"
-                class="flex w-full items-center justify-between gap-3 border-b border-gray-100 px-3 py-2 text-left transition-colors last:border-b-0 hover:bg-gray-50 dark:border-dark-700 dark:hover:bg-dark-700"
+                class="admin-list-row flex w-full items-center justify-between gap-3 border-b border-gray-100 px-3 py-2 text-left last:border-b-0 dark:border-dark-700"
                 @click="selectBlacklistUser(candidate)"
               >
                 <span class="min-w-0">
@@ -445,7 +467,7 @@
 
             <div
               v-if="selectedBlacklistUser"
-              class="checkins-selected-user rounded-lg bg-gray-50 px-3 py-2 text-sm text-gray-700 dark:bg-dark-700 dark:text-gray-200"
+              class="checkins-selected-user admin-form-section !space-y-0 px-3 py-2 text-sm text-gray-700 dark:text-gray-200"
             >
               {{ selectedBlacklistUser.email }}
             </div>
@@ -473,36 +495,43 @@
           </div>
         </div>
 
-        <div class="card checkins-table-card rounded-2xl">
-          <div class="border-b border-gray-100 p-4 dark:border-dark-700">
-            <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-              <div>
-                <h3 class="text-base font-semibold text-gray-900 dark:text-white">
-                  {{ t('admin.checkins.blacklistTitle') }}
-                </h3>
-                <p class="mt-1 text-sm text-gray-500 dark:text-dark-400">
-                  {{ t('admin.checkins.blacklistHint') }}
-                </p>
-              </div>
-              <div class="flex flex-wrap items-center gap-3">
-                <div class="min-w-56 flex-1 lg:w-72 lg:flex-none">
-                  <input
-                    v-model="blacklistFilters.search"
-                    type="text"
-                    class="input"
-                    :placeholder="t('admin.checkins.blacklistSearchPlaceholder')"
-                    @input="handleBlacklistSearch"
-                  />
+        <div class="admin-surface checkins-table-card rounded-2xl">
+          <div class="admin-panel-header">
+            <div>
+              <h3 class="text-base font-semibold text-gray-900 dark:text-white">
+                {{ t('admin.checkins.blacklistTitle') }}
+              </h3>
+              <p class="mt-1 text-sm text-gray-500 dark:text-dark-400">
+                {{ t('admin.checkins.blacklistHint') }}
+              </p>
+            </div>
+          </div>
+
+          <div class="px-4 pb-4 pt-4 sm:px-5">
+            <div class="admin-toolbar-surface">
+              <div class="admin-toolbar">
+                <div class="admin-toolbar-group flex-1">
+                  <div class="min-w-56 flex-1 lg:w-72 lg:flex-none">
+                    <input
+                      v-model="blacklistFilters.search"
+                      type="text"
+                      class="input"
+                      :placeholder="t('admin.checkins.blacklistSearchPlaceholder')"
+                      @input="handleBlacklistSearch"
+                    />
+                  </div>
                 </div>
-                <button
-                  type="button"
-                  class="btn btn-secondary"
-                  :disabled="blacklistLoading"
-                  :title="t('common.refresh')"
-                  @click="loadBlacklist"
-                >
-                  <Icon name="refresh" size="md" :class="blacklistLoading ? 'animate-spin' : ''" />
-                </button>
+                <div class="admin-toolbar-group lg:ml-auto">
+                  <button
+                    type="button"
+                    class="btn btn-secondary"
+                    :disabled="blacklistLoading"
+                    :title="t('common.refresh')"
+                    @click="loadBlacklist"
+                  >
+                    <Icon name="refresh" size="md" :class="blacklistLoading ? 'animate-spin' : ''" />
+                  </button>
+                </div>
               </div>
             </div>
           </div>

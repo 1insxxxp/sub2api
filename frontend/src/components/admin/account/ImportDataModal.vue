@@ -7,11 +7,11 @@
     @close="handleClose"
   >
     <form id="import-data-form" class="space-y-4" @submit.prevent="handleImport">
-      <div class="text-sm text-gray-600 dark:text-dark-300">
+      <div class="brand-floating-card text-sm leading-6 text-slate-600 dark:text-slate-300">
         {{ t('admin.accounts.dataImportHint') }}
       </div>
       <div
-        class="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-600 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-400"
+        class="admin-warning-zone px-4 py-3 text-xs leading-5 text-amber-700 dark:text-amber-200"
       >
         {{ t('admin.accounts.dataImportWarning') }}
       </div>
@@ -19,13 +19,13 @@
       <div>
         <label class="input-label">{{ t('admin.accounts.dataImportFile') }}</label>
         <div
-          class="flex items-center justify-between gap-3 rounded-lg border border-dashed border-gray-300 bg-gray-50 px-4 py-3 dark:border-dark-600 dark:bg-dark-800"
+          class="admin-form-section flex items-center justify-between gap-3 border-dashed px-4 py-3 sm:px-4 sm:py-3"
         >
           <div class="min-w-0">
-            <div class="truncate text-sm text-gray-700 dark:text-dark-200">
+            <div class="truncate text-sm font-medium text-slate-800 dark:text-slate-100">
               {{ fileName || t('admin.accounts.dataImportSelectFile') }}
             </div>
-            <div class="text-xs text-gray-500 dark:text-dark-400">JSON (.json)</div>
+            <div class="text-xs text-slate-500 dark:text-slate-400">JSON (.json)</div>
           </div>
           <button type="button" class="btn btn-secondary shrink-0" @click="openFilePicker">
             {{ t('common.chooseFile') }}
@@ -42,12 +42,12 @@
 
       <div
         v-if="result"
-        class="space-y-2 rounded-xl border border-gray-200 p-4 dark:border-dark-700"
+        class="brand-floating-card space-y-2 p-4"
       >
-        <div class="text-sm font-medium text-gray-900 dark:text-white">
+        <div class="text-sm font-semibold text-slate-950 dark:text-white">
           {{ t('admin.accounts.dataImportResult') }}
         </div>
-        <div class="text-sm text-gray-700 dark:text-dark-300">
+        <div class="text-sm text-slate-700 dark:text-slate-300">
           {{ t('admin.accounts.dataImportResultSummary', result) }}
         </div>
 
@@ -56,7 +56,7 @@
             {{ t('admin.accounts.dataImportErrors') }}
           </div>
           <div
-            class="mt-2 max-h-48 overflow-auto rounded-lg bg-gray-50 p-3 font-mono text-xs dark:bg-dark-800"
+            class="mt-2 max-h-48 overflow-auto rounded-xl border border-rose-100/80 bg-rose-50/60 p-3 font-mono text-xs text-rose-700 dark:border-rose-400/15 dark:bg-rose-500/10 dark:text-rose-200"
           >
             <div v-for="(item, idx) in errorItems" :key="idx" class="whitespace-pre-wrap">
               {{ item.kind }} {{ item.name || item.proxy_key || '-' }} — {{ item.message }}

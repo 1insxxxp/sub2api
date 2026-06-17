@@ -1,7 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { readFileSync } from 'node:fs'
+import { dirname, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { flushPromises, mount } from '@vue/test-utils'
 
 import CheckinsView from '../CheckinsView.vue'
+
+const currentDir = dirname(fileURLToPath(import.meta.url))
+const checkinsViewPath = resolve(currentDir, '../CheckinsView.vue')
 
 const {
   getStats,
@@ -190,5 +196,38 @@ describe('Admin CheckinsView', () => {
 
     expect(addBlacklist).toHaveBeenCalledWith({ user_id: 99, reason: 'abuse' })
     expect(showSuccess).toHaveBeenCalledWith('admin.checkins.blacklistAdded')
+  })
+
+  it('renders a shared admin hero and structured admin surfaces', async () => {
+    const wrapper = mount(CheckinsView, {
+      global: {
+        stubs: {
+          AppLayout: { template: '<div><slot /></div>' },
+          DataTable: DataTableStub,
+          Pagination: true,
+          Icon: true,
+        },
+      },
+    })
+
+    await flushPromises()
+
+    expect(wrapper.find('[data-test="admin-page-hero"]').exists()).toBe(true)
+    expect(wrapper.find('[data-test="admin-page-hero"]').classes()).toContain('admin-page-hero')
+    expect(wrapper.find('.checkins-overview-panel')?.classes()).toContain('admin-page-hero')
+    expect(wrapper.findAll('.admin-toolbar-surface').length).toBeGreaterThan(0)
+    expect(wrapper.findAll('.admin-panel-header').length).toBeGreaterThan(0)
+  })
+
+  it('keeps check-in settings panels and picker rows on shared admin styles', () => {
+    const source = readFileSync(checkinsViewPath, 'utf8')
+
+    expect(source).toContain('admin-form-section')
+    expect(source).toContain('admin-list-surface')
+    expect(source).toContain('admin-list-row')
+
+    expect(source).not.toContain('rounded-lg bg-gray-50')
+    expect(source).not.toContain('hover:bg-gray-50 dark:border-dark-700 dark:hover:bg-dark-700')
+    expect(source).not.toContain('border-gray-200 bg-gray-50')
   })
 })

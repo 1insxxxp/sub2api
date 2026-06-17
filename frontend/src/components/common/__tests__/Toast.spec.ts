@@ -34,6 +34,7 @@ describe('Toast', () => {
     const toast = wrapper.get('.toast-panel')
     expect(toast.classes()).toContain('min-w-[280px]')
     expect(toast.classes()).toContain('rounded-xl')
+    expect(toast.classes()).toContain('admin-toast-panel')
     expect(toast.classes()).not.toContain('brand-floating-panel')
     expect(toast.classes()).not.toContain('rounded-[28px]')
 

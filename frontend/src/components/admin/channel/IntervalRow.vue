@@ -1,6 +1,6 @@
 <template>
-  <div class="flex items-start gap-2 rounded border p-2"
-       :class="isEmpty ? 'border-red-400 bg-red-50 dark:border-red-500 dark:bg-red-950/20' : 'border-gray-200 bg-white dark:border-dark-500 dark:bg-dark-700'">
+  <div class="admin-choice-card flex items-start gap-2 p-2"
+       :class="isEmpty ? 'border-red-400 bg-red-50 text-red-700 dark:border-red-500 dark:bg-red-950/20 dark:text-red-200' : ''">
     <!-- Token mode: context range + prices ($/MTok) -->
     <template v-if="mode === 'token'">
       <div class="w-20">
