@@ -1,6 +1,6 @@
 <template>
   <AppLayout>
-    <div class="space-y-6">
+    <div class="accounts-admin-page w-full min-w-0 space-y-6">
       <TablePageLayout>
       <template #filters>
         <div class="admin-toolbar">
@@ -186,7 +186,7 @@
           @select-page="selectPage"
           @toggle-schedulable="handleBulkToggleSchedulable"
         />
-        <div ref="accountTableRef" class="flex min-h-0 flex-1 flex-col overflow-hidden">
+        <div ref="accountTableRef" class="flex min-h-0 w-full min-w-0 flex-1 flex-col overflow-hidden">
         <DataTable
           ref="dataTableRef"
           :columns="cols"
@@ -527,10 +527,50 @@ const HIDDEN_COLUMNS_KEY = 'account-hidden-columns'
 
 // Sorting settings
 const ACCOUNT_SORT_STORAGE_KEY = 'account-table-sort'
+const ACCOUNT_FILTERS_STORAGE_KEY = 'account-list-filters'
 type AccountSortOrder = 'asc' | 'desc'
 type AccountSortState = {
   sort_by: string
   sort_order: AccountSortOrder
+}
+type AccountFilterState = {
+  platform: string
+  type: string
+  status: string
+  privacy_mode: string
+  group: string
+  search: string
+}
+const ACCOUNT_FILTER_DEFAULTS: AccountFilterState = {
+  platform: '',
+  type: '',
+  status: '',
+  privacy_mode: '',
+  group: '',
+  search: ''
+}
+const normalizeAccountFilterValue = (value: unknown) => {
+  if (typeof value === 'string') return value
+  if (value == null) return ''
+  return String(value)
+}
+const loadSavedAccountFilters = (): AccountFilterState => {
+  try {
+    const raw = localStorage.getItem(ACCOUNT_FILTERS_STORAGE_KEY)
+    if (!raw) return { ...ACCOUNT_FILTER_DEFAULTS }
+    const parsed = JSON.parse(raw) as Partial<AccountFilterState>
+    return {
+      platform: normalizeAccountFilterValue(parsed.platform),
+      type: normalizeAccountFilterValue(parsed.type),
+      status: normalizeAccountFilterValue(parsed.status),
+      privacy_mode: normalizeAccountFilterValue(parsed.privacy_mode),
+      group: normalizeAccountFilterValue(parsed.group),
+      search: normalizeAccountFilterValue(parsed.search)
+    }
+  } catch (e) {
+    console.error('Failed to load saved account filters:', e)
+    return { ...ACCOUNT_FILTER_DEFAULTS }
+  }
 }
 const ACCOUNT_SORTABLE_KEYS = new Set([
   'id',
@@ -560,6 +600,7 @@ const loadInitialAccountSortState = (): AccountSortState => {
   }
 }
 const sortState = reactive<AccountSortState>(loadInitialAccountSortState())
+const savedAccountFilters = loadSavedAccountFilters()
 
 // Auto refresh settings
 const showAutoRefreshDropdown = ref(false)
@@ -754,16 +795,43 @@ const {
 } = useTableLoader<Account, any>({
   fetchFn: adminAPI.accounts.list,
   initialParams: {
-    platform: '',
-    type: '',
-    status: '',
-    privacy_mode: '',
-    group: '',
-    search: '',
+    ...savedAccountFilters,
     sort_by: sortState.sort_by,
     sort_order: sortState.sort_order
   }
 })
+
+const buildAccountFiltersSnapshot = (): AccountFilterState => ({
+  platform: normalizeAccountFilterValue(params.platform),
+  type: normalizeAccountFilterValue(params.type),
+  status: normalizeAccountFilterValue(params.status),
+  privacy_mode: normalizeAccountFilterValue(params.privacy_mode),
+  group: normalizeAccountFilterValue(params.group),
+  search: normalizeAccountFilterValue(params.search)
+})
+
+const saveAccountFiltersToStorage = () => {
+  try {
+    localStorage.setItem(ACCOUNT_FILTERS_STORAGE_KEY, JSON.stringify(buildAccountFiltersSnapshot()))
+  } catch (e) {
+    console.error('Failed to save account filters:', e)
+  }
+}
+
+watch(
+  () => [
+    params.platform,
+    params.type,
+    params.status,
+    params.privacy_mode,
+    params.group,
+    params.search
+  ],
+  () => {
+    saveAccountFiltersToStorage()
+  },
+  { flush: 'sync' }
+)
 
 const {
   selectedIds: selIds,
