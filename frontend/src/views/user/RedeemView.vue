@@ -4,20 +4,29 @@
       <!-- Current Balance Card -->
       <section class="redeem-balance-card">
         <div class="redeem-balance-orbit"></div>
-        <div class="relative z-10 flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
-          <div class="min-w-0">
+        <div class="redeem-balance-content">
+          <div class="redeem-balance-main">
             <div class="redeem-balance-icon">
-              <Icon name="creditCard" size="xl" class="text-white" />
+              <Icon name="creditCard" size="lg" class="text-white" />
             </div>
-            <p class="redeem-eyebrow">{{ t('redeem.currentBalance') }}</p>
-            <p class="redeem-balance-value">
-              ${{ user?.balance?.toFixed(2) || '0.00' }}
-            </p>
+            <div class="min-w-0">
+              <p class="redeem-eyebrow">{{ t('redeem.currentBalance') }}</p>
+              <p class="redeem-balance-value">
+                ${{ user?.balance?.toFixed(2) || '0.00' }}
+              </p>
+            </div>
           </div>
-          <div class="redeem-balance-chip">
-            <span>{{ t('redeem.concurrency') }}</span>
-            <strong>{{ user?.concurrency || 0 }}</strong>
-            <small>{{ t('redeem.requests') }}</small>
+          <div class="redeem-concurrency-metric">
+            <div class="redeem-concurrency-icon">
+              <Icon name="bolt" size="md" class="text-white" />
+            </div>
+            <div class="min-w-0">
+              <p class="redeem-concurrency-label">{{ t('redeem.concurrency') }}</p>
+              <div class="redeem-concurrency-row">
+                <strong class="redeem-concurrency-value">{{ user?.concurrency || 0 }}</strong>
+                <span class="redeem-concurrency-unit">{{ t('redeem.requests') }}</span>
+              </div>
+            </div>
           </div>
         </div>
       </section>
@@ -239,23 +248,24 @@
             <div
               v-for="item in history"
               :key="item.id"
-              class="brand-floating-card redeem-history-row"
+              class="redeem-history-row"
             >
-              <div class="flex items-center gap-4">
-                <div
-                  :class="[
-                    'flex h-10 w-10 items-center justify-center rounded-xl',
-                    isBalanceType(item.type)
-                      ? item.value >= 0
-                        ? 'bg-emerald-100 dark:bg-emerald-900/30'
-                        : 'bg-red-100 dark:bg-red-900/30'
-                      : isSubscriptionType(item.type)
-                        ? 'bg-purple-100 dark:bg-purple-900/30'
-                        : item.value >= 0
-                          ? 'bg-blue-100 dark:bg-blue-900/30'
-                          : 'bg-orange-100 dark:bg-orange-900/30'
-                  ]"
-                >
+              <div class="redeem-history-card">
+                <div class="flex items-center gap-4">
+                  <div
+                    :class="[
+                      'flex h-10 w-10 items-center justify-center rounded-xl',
+                      isBalanceType(item.type)
+                        ? item.value >= 0
+                          ? 'bg-emerald-100 dark:bg-emerald-900/30'
+                          : 'bg-red-100 dark:bg-red-900/30'
+                        : isSubscriptionType(item.type)
+                          ? 'bg-purple-100 dark:bg-purple-900/30'
+                          : item.value >= 0
+                            ? 'bg-blue-100 dark:bg-blue-900/30'
+                            : 'bg-orange-100 dark:bg-orange-900/30'
+                    ]"
+                  >
                   <!-- 余额类型图标 -->
                   <Icon
                     v-if="isBalanceType(item.type)"
@@ -285,50 +295,51 @@
                         : 'text-orange-600 dark:text-orange-400'
                     "
                   />
+                  </div>
+                  <div>
+                    <p class="text-sm font-medium text-gray-900 dark:text-white">
+                      {{ getHistoryItemTitle(item) }}
+                    </p>
+                    <p class="text-xs text-gray-500 dark:text-dark-400">
+                      {{ formatDateTime(item.used_at) }}
+                    </p>
+                  </div>
                 </div>
-                <div>
-                  <p class="text-sm font-medium text-gray-900 dark:text-white">
-                    {{ getHistoryItemTitle(item) }}
+                <div class="text-right">
+                  <p
+                    :class="[
+                      'text-sm font-semibold',
+                      isBalanceType(item.type)
+                        ? item.value >= 0
+                          ? 'text-emerald-600 dark:text-emerald-400'
+                          : 'text-red-600 dark:text-red-400'
+                        : isSubscriptionType(item.type)
+                          ? 'text-purple-600 dark:text-purple-400'
+                          : item.value >= 0
+                            ? 'text-blue-600 dark:text-blue-400'
+                            : 'text-orange-600 dark:text-orange-400'
+                    ]"
+                  >
+                    {{ formatHistoryValue(item) }}
                   </p>
-                  <p class="text-xs text-gray-500 dark:text-dark-400">
-                    {{ formatDateTime(item.used_at) }}
+                  <p
+                    v-if="!isAdminAdjustment(item.type)"
+                    class="font-mono text-xs text-gray-400 dark:text-dark-500"
+                  >
+                    {{ item.code.slice(0, 8) }}...
+                  </p>
+                  <p v-else class="text-xs text-gray-400 dark:text-dark-500">
+                    {{ t('redeem.adminAdjustment') }}
+                  </p>
+                  <!-- Display notes for admin adjustments -->
+                  <p
+                    v-if="item.notes"
+                    class="mt-1 text-xs text-gray-500 dark:text-dark-400 italic max-w-[200px] truncate"
+                    :title="item.notes"
+                  >
+                    {{ item.notes }}
                   </p>
                 </div>
-              </div>
-              <div class="text-right">
-                <p
-                  :class="[
-                    'text-sm font-semibold',
-                    isBalanceType(item.type)
-                      ? item.value >= 0
-                        ? 'text-emerald-600 dark:text-emerald-400'
-                        : 'text-red-600 dark:text-red-400'
-                      : isSubscriptionType(item.type)
-                        ? 'text-purple-600 dark:text-purple-400'
-                        : item.value >= 0
-                          ? 'text-blue-600 dark:text-blue-400'
-                          : 'text-orange-600 dark:text-orange-400'
-                  ]"
-                >
-                  {{ formatHistoryValue(item) }}
-                </p>
-                <p
-                  v-if="!isAdminAdjustment(item.type)"
-                  class="font-mono text-xs text-gray-400 dark:text-dark-500"
-                >
-                  {{ item.code.slice(0, 8) }}...
-                </p>
-                <p v-else class="text-xs text-gray-400 dark:text-dark-500">
-                  {{ t('redeem.adminAdjustment') }}
-                </p>
-                <!-- Display notes for admin adjustments -->
-                <p
-                  v-if="item.notes"
-                  class="mt-1 text-xs text-gray-500 dark:text-dark-400 italic max-w-[200px] truncate"
-                  :title="item.notes"
-                >
-                  {{ item.notes }}
-                </p>
               </div>
             </div>
           </div>
@@ -507,11 +518,12 @@ onMounted(async () => {
   position: relative;
   overflow: hidden;
   border-radius: 1.5rem;
-  padding: 1.5rem;
+  padding: 1.65rem 1.75rem;
   color: white;
   background:
     radial-gradient(circle at 14% 8%, rgba(255, 255, 255, 0.24), transparent 28%),
     radial-gradient(circle at 90% 0%, rgba(6, 182, 212, 0.42), transparent 32%),
+    radial-gradient(circle at 72% 86%, rgba(255, 255, 255, 0.13), transparent 26%),
     linear-gradient(135deg, var(--brand-700), var(--brand-500) 54%, var(--brand-cyan));
   box-shadow:
     0 1px 0 rgba(255, 255, 255, 0.32) inset,
@@ -524,7 +536,8 @@ onMounted(async () => {
   inset: 0;
   pointer-events: none;
   background:
-    linear-gradient(115deg, rgba(255, 255, 255, 0.18), transparent 32%),
+    linear-gradient(115deg, rgba(255, 255, 255, 0.2), transparent 34%),
+    linear-gradient(90deg, transparent 64%, rgba(255, 255, 255, 0.09)),
     linear-gradient(180deg, transparent, rgba(15, 23, 42, 0.12));
 }
 
@@ -539,56 +552,131 @@ onMounted(async () => {
   background: rgba(255, 255, 255, 0.08);
 }
 
+.redeem-balance-content {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 2rem;
+  min-height: 8.35rem;
+}
+
+.redeem-balance-main {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 1.35rem;
+}
+
 .redeem-balance-icon {
+  position: relative;
   display: inline-flex;
-  height: 4.25rem;
-  width: 4.25rem;
+  height: 4.65rem;
+  width: 4.65rem;
+  flex-shrink: 0;
   align-items: center;
   justify-content: center;
-  border-radius: 1.25rem;
-  background: rgba(255, 255, 255, 0.18);
-  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.32) inset;
+  border-radius: 1.35rem;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.17);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.26) inset,
+    0 16px 34px rgba(15, 23, 42, 0.12);
   backdrop-filter: blur(12px);
 }
 
 .redeem-eyebrow {
-  margin-top: 1.25rem;
+  position: relative;
   font-size: 0.875rem;
-  font-weight: 600;
-  color: rgba(255, 255, 255, 0.78);
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.8);
 }
 
 .redeem-balance-value {
+  position: relative;
   margin-top: 0.35rem;
-  font-size: clamp(2.35rem, 5vw, 4rem);
+  font-size: clamp(2.7rem, 5.8vw, 4.45rem);
   font-weight: 800;
-  line-height: 1;
+  line-height: 0.95;
   letter-spacing: 0;
   font-variant-numeric: tabular-nums;
+  text-shadow: 0 16px 34px rgba(15, 23, 42, 0.12);
 }
 
-.redeem-balance-chip {
-  display: inline-flex;
-  width: fit-content;
+.redeem-concurrency-metric {
+  position: relative;
+  display: flex;
+  min-width: 11.5rem;
+  align-items: center;
+  gap: 0.85rem;
+  padding-left: 1.9rem;
+  color: rgba(255, 255, 255, 0.82);
+}
+
+.redeem-concurrency-metric::before {
+  content: '';
+  position: absolute;
+  bottom: 0.15rem;
+  left: 0;
+  top: 0.15rem;
+  width: 1px;
+  background: linear-gradient(
+    180deg,
+    transparent,
+    rgba(255, 255, 255, 0.34),
+    transparent
+  );
+}
+
+.redeem-concurrency-icon {
+  position: relative;
+  display: flex;
+  height: 3rem;
+  width: 3rem;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  border-radius: 1rem;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.16);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.24) inset,
+    0 14px 28px rgba(15, 23, 42, 0.1);
+  backdrop-filter: blur(10px);
+}
+
+.redeem-concurrency-label,
+.redeem-concurrency-row {
+  position: relative;
+  z-index: 1;
+}
+
+.redeem-concurrency-label {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.72);
+}
+
+.redeem-concurrency-row {
+  margin-top: 0.18rem;
+  display: flex;
   align-items: baseline;
   gap: 0.45rem;
-  border-radius: 9999px;
-  border: 1px solid rgba(255, 255, 255, 0.24);
-  padding: 0.7rem 0.9rem;
-  background: rgba(255, 255, 255, 0.13);
-  color: rgba(255, 255, 255, 0.78);
-  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.2) inset;
-  backdrop-filter: blur(14px);
 }
 
-.redeem-balance-chip strong {
+.redeem-concurrency-value {
   color: white;
-  font-size: 1.25rem;
+  font-size: 2.25rem;
+  font-weight: 800;
+  line-height: 1;
   font-variant-numeric: tabular-nums;
 }
 
-.redeem-balance-chip small {
-  font-size: 0.75rem;
+.redeem-concurrency-unit {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.72);
 }
 
 .redeem-code-panel,
@@ -690,20 +778,62 @@ onMounted(async () => {
 }
 
 .redeem-history-row {
+  display: block;
+  border: 0 !important;
+  outline: 0;
+  outline-offset: 0;
+  background: transparent;
+  box-shadow: none !important;
+}
+
+.redeem-history-row:hover,
+.redeem-history-row:focus,
+.redeem-history-row:focus-within,
+.redeem-history-row:focus-visible,
+.redeem-history-row:active {
+  border: 0 !important;
+  outline: 0 !important;
+  box-shadow: none !important;
+}
+
+.redeem-history-card {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
+  border: 1px solid rgba(191, 219, 254, 0.88);
+  border-radius: 1rem;
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.96), rgba(248, 250, 252, 0.88)),
+    white;
+  padding: 0.75rem 1rem;
+  outline: 0;
+  box-shadow:
+    0 10px 24px rgba(37, 99, 235, 0.04),
+    0 1px 0 rgba(255, 255, 255, 0.9) inset;
   transition:
+    background-color 180ms ease,
+    background 180ms ease,
     border-color 180ms ease,
     transform 180ms ease,
     box-shadow 180ms ease;
 }
 
-.redeem-history-row:hover {
+.redeem-history-row:hover .redeem-history-card,
+.redeem-history-row:focus-within .redeem-history-card,
+.redeem-history-card:hover,
+.redeem-history-card:focus-within,
+.redeem-history-card:active {
   transform: translateY(-1px);
-  border-color: rgba(var(--brand-rgb), 0.34);
-  box-shadow: 0 12px 28px rgba(37, 99, 235, 0.08);
+  border-color: rgba(var(--brand-rgb), 0.52);
+  outline: 0;
+  background:
+    linear-gradient(135deg, rgba(var(--brand-rgb), 0.06), rgba(var(--brand-cyan-rgb), 0.16)),
+    rgba(255, 255, 255, 0.96);
+  box-shadow:
+    inset 0 0 0 1px rgba(var(--brand-rgb), 0.32),
+    0 0 0 3px rgba(var(--brand-cyan-rgb), 0.16),
+    0 12px 28px rgba(37, 99, 235, 0.1);
 }
 
 .redeem-feedback-success {
@@ -742,6 +872,36 @@ onMounted(async () => {
   background: linear-gradient(135deg, rgba(30, 64, 175, 0.16), rgba(8, 145, 178, 0.08));
 }
 
+.dark .redeem-history-row {
+  background: transparent;
+  box-shadow: none !important;
+}
+
+.dark .redeem-history-card {
+  border-color: rgba(96, 165, 250, 0.22);
+  background:
+    linear-gradient(135deg, rgba(15, 23, 42, 0.9), rgba(8, 13, 28, 0.84)),
+    rgba(15, 23, 42, 0.86);
+  box-shadow:
+    0 12px 28px rgba(0, 0, 0, 0.16),
+    0 1px 0 rgba(255, 255, 255, 0.04) inset;
+}
+
+.dark .redeem-history-row:hover .redeem-history-card,
+.dark .redeem-history-row:focus-within .redeem-history-card,
+.dark .redeem-history-card:hover,
+.dark .redeem-history-card:focus-within,
+.dark .redeem-history-card:active {
+  border-color: rgba(96, 165, 250, 0.5);
+  background:
+    linear-gradient(135deg, rgba(var(--brand-rgb), 0.2), rgba(var(--brand-cyan-rgb), 0.12)),
+    rgba(15, 23, 42, 0.82);
+  box-shadow:
+    inset 0 0 0 1px rgba(96, 165, 250, 0.34),
+    0 0 0 3px rgba(6, 182, 212, 0.12),
+    0 14px 30px rgba(0, 0, 0, 0.22);
+}
+
 .dark .redeem-feedback-success {
   border-color: rgba(52, 211, 153, 0.24);
   background:
@@ -759,21 +919,67 @@ onMounted(async () => {
 @media (max-width: 640px) {
   .redeem-balance-card {
     border-radius: 1.25rem;
-    padding: 1.25rem;
+    padding: 1.35rem;
+  }
+
+  .redeem-balance-content {
+    grid-template-columns: 1fr;
+    gap: 1.35rem;
+    min-height: 0;
+  }
+
+  .redeem-balance-main {
+    align-items: flex-start;
+    gap: 1rem;
+  }
+
+  .redeem-balance-icon {
+    height: 3.75rem;
+    width: 3.75rem;
+    border-radius: 1.1rem;
+  }
+
+  .redeem-concurrency-metric {
+    width: 100%;
+    min-width: 0;
+    padding-left: 0;
+    padding-top: 1rem;
+  }
+
+  .redeem-concurrency-metric::before {
+    bottom: auto;
+    right: 0;
+    top: 0;
+    width: auto;
+    height: 1px;
+    background: linear-gradient(
+      90deg,
+      rgba(255, 255, 255, 0.42),
+      rgba(255, 255, 255, 0.08),
+      transparent
+    );
   }
 
   .redeem-history-row {
     align-items: flex-start;
   }
+
+  .redeem-history-card {
+    align-items: flex-start;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .redeem-history-row,
+  .redeem-history-card,
   .redeem-input {
     transition: none;
   }
 
-  .redeem-history-row:hover {
+  .redeem-history-row:hover .redeem-history-card,
+  .redeem-history-row:focus-within .redeem-history-card,
+  .redeem-history-card:hover,
+  .redeem-history-card:focus-within,
+  .redeem-history-card:active {
     transform: none;
   }
 }
