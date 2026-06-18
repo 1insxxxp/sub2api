@@ -120,6 +120,9 @@ const mountHeader = async () => {
           props: ['to'],
           template: '<a><slot /></a>'
         }
+      },
+      mocks: {
+        $t: (key: string) => key
       }
     }
   })
@@ -280,5 +283,47 @@ describe('AppHeader daily check-in entry', () => {
     const progress = wrapper.get('[data-test="daily-checkin-eligibility-progress"]')
 
     expect(progress.attributes('style')).toContain('width: 100%')
+  })
+})
+
+describe('AppHeader user menu', () => {
+  beforeEach(() => {
+    getCheckinStatus.mockReset()
+    getCheckinStatus.mockResolvedValue({
+      enabled: false,
+      checked_in: false,
+      blacklisted: false,
+      checkin_date: '2026-06-17',
+      reward_amount: null
+    })
+    authStore.user = {
+      id: 12,
+      username: 'alice',
+      email: 'alice@example.com',
+      role: 'admin',
+      balance: 10,
+      avatar_url: ''
+    }
+  })
+
+  it('renders a compact narrow account menu', async () => {
+    const wrapper = await mountHeader()
+
+    await wrapper.get('[aria-label="User Menu"]').trigger('click')
+    await flushPromises()
+
+    const menu = wrapper.get('[role="menu"]')
+    expect(menu.classes()).toContain('w-64')
+    expect(menu.classes()).not.toContain('w-[22rem]')
+
+    const avatar = wrapper.get('.profile-menu-avatar')
+    expect(avatar.classes()).toContain('h-9')
+    expect(avatar.classes()).toContain('w-9')
+    expect(avatar.classes()).not.toContain('h-11')
+
+    expect(componentSource).toContain('min-height: 36px')
+    expect(componentSource).toContain('border-radius: 10px')
+    expect(componentSource).not.toContain('min-height: 44px')
+    expect(componentSource).not.toContain('border-radius: 20px;')
   })
 })

@@ -160,7 +160,7 @@ describe('HomeView default homepage', () => {
     expect(wrapper.find('.home-cta-panel.home-scroll-reveal').exists()).toBe(true)
   })
 
-  it('uses a cohesive glass navigation shell for the homepage header', async () => {
+  it('uses a simplified single-layer header for the homepage navigation', async () => {
     const wrapper = await mountHome()
 
     expect(wrapper.find('.home-nav-shell').exists()).toBe(true)
@@ -173,10 +173,15 @@ describe('HomeView default homepage', () => {
     expect(wrapper.find('.home-dashboard-cta').exists()).toBe(true)
 
     const source = readFileSync('src/views/HomeView.vue', 'utf-8')
+    expect(source).toContain('home-header-flat')
+    expect(source).toContain('home-trust-strip')
+    expect(source).toContain('home-trust-item')
+    expect(source).toContain('dark:bg-slate-950/50')
     expect(source).toContain('home-nav-shell')
     expect(source).toContain('home-header-actions')
     expect(source).toContain('home-dashboard-cta')
-    expect(source).toContain('h-11')
+    expect(source).toContain('h-10')
+    expect(source).not.toContain('rounded-2xl border border-white/70 bg-white/42')
   })
 
   it('does not prepend the authenticated user initial to the header dashboard CTA', async () => {

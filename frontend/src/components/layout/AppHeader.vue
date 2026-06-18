@@ -263,12 +263,12 @@
           <transition name="dropdown">
             <div
               v-if="dropdownOpen"
-              class="dropdown profile-menu right-0 mt-3 w-[22rem] max-w-[calc(100vw-1.5rem)]"
+              class="dropdown profile-menu right-0 mt-2 w-64 max-w-[calc(100vw-1rem)]"
               role="menu"
             >
               <!-- User Info -->
               <div class="profile-menu-identity">
-                <div class="flex h-11 w-11 items-center justify-center overflow-hidden rounded-2xl bg-[linear-gradient(135deg,#2563eb,#3b82f6,#06b6d4)] text-base font-bold text-white shadow-md shadow-blue-600/25 ring-1 ring-white/70 dark:ring-white/10">
+                <div class="profile-menu-avatar flex h-9 w-9 items-center justify-center overflow-hidden rounded-xl bg-[linear-gradient(135deg,#2563eb,#3b82f6,#06b6d4)] text-sm font-bold text-white shadow-sm shadow-blue-600/20 ring-1 ring-white/70 dark:ring-white/10">
                   <img
                     v-if="avatarUrl"
                     :src="avatarUrl"
@@ -278,21 +278,16 @@
                   <span v-else>{{ userInitials }}</span>
                 </div>
                 <div class="min-w-0 flex-1">
-                  <div class="flex items-center gap-2">
-                    <div class="truncate text-base font-semibold text-slate-950 dark:text-white">
-                      {{ displayName }}
-                    </div>
-                    <span class="rounded-full border border-blue-200/80 bg-white/70 px-2 py-0.5 text-[11px] font-semibold capitalize text-blue-700 shadow-sm shadow-blue-600/5 dark:border-blue-400/20 dark:bg-blue-500/10 dark:text-blue-200">
-                      {{ user.role }}
-                    </span>
+                  <div class="truncate text-sm font-semibold text-slate-950 dark:text-white">
+                    {{ displayName }}
                   </div>
-                  <div class="mt-0.5 truncate text-sm text-slate-500 dark:text-slate-400">{{ user.email }}</div>
+                  <div class="mt-0.5 truncate text-xs text-slate-500 dark:text-slate-400">{{ user.email }}</div>
                 </div>
               </div>
 
               <!-- Balance (mobile only) -->
               <div class="profile-menu-section sm:hidden">
-                <div class="rounded-2xl border border-blue-100/80 bg-blue-50/75 px-3 py-2.5 dark:border-blue-400/15 dark:bg-blue-500/10">
+                <div class="rounded-lg border border-blue-100/80 bg-blue-50/70 px-2.5 py-2 dark:border-blue-400/15 dark:bg-blue-500/10">
                   <div class="text-xs font-medium text-slate-500 dark:text-slate-400">
                     {{ t('common.balance') }}
                   </div>
@@ -688,46 +683,40 @@ watch(
 <style scoped>
 .profile-menu {
   overflow: hidden;
-  border-radius: 20px;
+  border-radius: 12px;
   padding: 0;
-  border-color: rgba(147, 197, 253, 0.44);
-  background:
-    radial-gradient(circle at 18% 0%, rgba(59, 130, 246, 0.11), transparent 34%),
-    radial-gradient(circle at 94% 16%, rgba(6, 182, 212, 0.09), transparent 30%),
-    rgba(255, 255, 255, 0.985);
+  border-color: rgba(226, 232, 240, 0.96);
+  background: rgba(255, 255, 255, 0.97);
   box-shadow:
-    0 24px 70px rgba(15, 23, 42, 0.18),
-    0 1px 0 rgba(255, 255, 255, 0.9) inset;
-  backdrop-filter: blur(20px);
+    0 10px 28px rgba(15, 23, 42, 0.12),
+    0 1px 0 rgba(255, 255, 255, 0.86) inset;
+  backdrop-filter: blur(12px);
 }
 
-.dark .profile-menu {
-  border-color: rgba(96, 165, 250, 0.24);
-  background:
-    radial-gradient(circle at 18% 0%, rgba(37, 99, 235, 0.22), transparent 34%),
-    radial-gradient(circle at 94% 16%, rgba(6, 182, 212, 0.13), transparent 30%),
-    rgba(8, 13, 28, 0.985);
+:global(html.dark .profile-menu) {
+  border-color: rgba(255, 255, 255, 0.1);
+  background: rgba(2, 6, 23, 0.96);
   box-shadow:
-    0 26px 76px rgba(0, 0, 0, 0.42),
+    0 14px 34px rgba(0, 0, 0, 0.34),
     0 1px 0 rgba(255, 255, 255, 0.06) inset;
 }
 
 .profile-menu-identity {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 16px;
-  border-bottom: 1px solid rgba(147, 197, 253, 0.34);
-  background: linear-gradient(135deg, rgba(239, 246, 255, 0.78), rgba(236, 254, 255, 0.72));
+  gap: 10px;
+  padding: 12px;
+  border-bottom: 1px solid rgba(226, 232, 240, 0.82);
+  background: rgba(248, 250, 252, 0.72);
 }
 
-.dark .profile-menu-identity {
-  border-bottom-color: rgba(96, 165, 250, 0.18);
-  background: linear-gradient(135deg, rgba(37, 99, 235, 0.14), rgba(6, 182, 212, 0.08));
+:global(html.dark .profile-menu-identity) {
+  border-bottom-color: rgba(255, 255, 255, 0.08);
+  background: rgba(15, 23, 42, 0.72);
 }
 
 .profile-menu-section {
-  padding: 8px;
+  padding: 6px;
   border-top: 1px solid rgba(226, 232, 240, 0.82);
 }
 
@@ -735,78 +724,73 @@ watch(
   border-top: 0;
 }
 
-.dark .profile-menu-section {
+:global(html.dark .profile-menu-section) {
   border-top-color: rgba(255, 255, 255, 0.08);
 }
 
 .profile-menu-item {
   display: flex;
-  min-height: 44px;
+  min-height: 36px;
   width: 100%;
   align-items: center;
-  gap: 10px;
-  border-radius: 14px;
-  padding: 9px 10px;
+  gap: 9px;
+  border-radius: 10px;
+  padding: 7px 8px;
   color: rgb(51 65 85);
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 600;
   line-height: 1.25;
   transition:
     background-color 160ms ease,
-    color 160ms ease,
-    transform 160ms ease,
-    box-shadow 160ms ease;
+    color 160ms ease;
 }
 
 .profile-menu-item:hover,
 .profile-menu-item:focus-visible {
   color: rgb(29 78 216);
   background: rgba(37, 99, 235, 0.08);
-  box-shadow: 0 10px 24px rgba(37, 99, 235, 0.08);
   outline: none;
-  transform: translateX(2px);
 }
 
-.dark .profile-menu-item {
+:global(html.dark .profile-menu-item) {
   color: rgb(203 213 225);
 }
 
-.dark .profile-menu-item:hover,
-.dark .profile-menu-item:focus-visible {
+:global(html.dark .profile-menu-item:hover),
+:global(html.dark .profile-menu-item:focus-visible) {
   color: rgb(191 219 254);
   background: rgba(59, 130, 246, 0.12);
-  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.18);
 }
 
 .profile-menu-icon {
   display: inline-flex;
-  height: 30px;
-  width: 30px;
+  height: 24px;
+  width: 24px;
   flex: none;
   align-items: center;
   justify-content: center;
-  border-radius: 12px;
+  border-radius: 8px;
   color: rgb(37 99 235);
-  background: rgba(37, 99, 235, 0.09);
+  background: rgba(37, 99, 235, 0.08);
   box-shadow: 0 1px 0 rgba(255, 255, 255, 0.8) inset;
 }
 
-.dark .profile-menu-icon {
+:global(html.dark .profile-menu-icon) {
   color: rgb(147 197 253);
   background: rgba(59, 130, 246, 0.14);
   box-shadow: 0 1px 0 rgba(255, 255, 255, 0.06) inset;
 }
 
 .profile-menu-contact-card {
-  border-radius: 16px;
+  border-radius: 10px;
   border: 1px solid rgba(203, 213, 225, 0.86);
   background: rgba(248, 250, 252, 0.9);
-  padding: 10px 12px;
+  padding: 8px 9px;
   color: rgb(100 116 139);
   font-size: 12px;
 }
 
-.dark .profile-menu-contact-card {
+:global(html.dark .profile-menu-contact-card) {
   border-color: rgba(255, 255, 255, 0.1);
   background: rgba(255, 255, 255, 0.045);
   color: rgb(148 163 184);
@@ -826,7 +810,7 @@ watch(
   font-weight: 600;
 }
 
-.dark .profile-menu-contact-value {
+:global(html.dark .profile-menu-contact-value) {
   color: rgb(226 232 240);
 }
 
@@ -838,15 +822,14 @@ watch(
 .profile-menu-item-danger:focus-visible {
   color: rgb(185 28 28);
   background: rgba(239, 68, 68, 0.09);
-  box-shadow: 0 10px 24px rgba(239, 68, 68, 0.10);
 }
 
-.dark .profile-menu-item-danger {
+:global(html.dark .profile-menu-item-danger) {
   color: rgb(248 113 113);
 }
 
-.dark .profile-menu-item-danger:hover,
-.dark .profile-menu-item-danger:focus-visible {
+:global(html.dark .profile-menu-item-danger:hover),
+:global(html.dark .profile-menu-item-danger:focus-visible) {
   color: rgb(252 165 165);
   background: rgba(239, 68, 68, 0.12);
 }
@@ -856,7 +839,7 @@ watch(
   background: rgba(239, 68, 68, 0.10);
 }
 
-.dark .profile-menu-icon-danger {
+:global(html.dark .profile-menu-icon-danger) {
   color: rgb(248 113 113);
   background: rgba(239, 68, 68, 0.14);
 }
@@ -865,15 +848,13 @@ watch(
 .dropdown-leave-active {
   transition:
     opacity 180ms ease,
-    transform 180ms ease,
-    filter 180ms ease;
+    transform 180ms ease;
 }
 
 .dropdown-enter-from,
 .dropdown-leave-to {
   opacity: 0;
-  filter: blur(4px);
-  transform: scale(0.96) translateY(-6px);
+  transform: scale(0.98) translateY(-4px);
 }
 
 .checkin-progress-track {

@@ -202,6 +202,12 @@ describe("admin SettingsView unified shell", () => {
     expect(wrapper.find(".settings-tabs-shell").classes()).toContain("admin-toolbar-surface");
   });
 
+  it("keeps the settings tab bar compact and aligned with the blue-cyan theme", () => {
+    expect(settingsViewSource).toContain("flex h-9 min-w-[6.45rem]");
+    expect(settingsViewSource).toContain("linear-gradient(90deg, #2563eb, #06b6d4)");
+    expect(settingsViewSource).not.toContain("background: linear-gradient(90deg, #3b82f6, #8b5cf6);");
+  });
+
   it("renders shared admin info blocks inside the settings workspace", async () => {
     const wrapper = mountView();
     await flushPromises();

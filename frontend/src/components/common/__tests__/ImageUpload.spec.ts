@@ -1,5 +1,5 @@
 import { mount } from '@vue/test-utils'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
 import ImageUpload from '@/components/common/ImageUpload.vue'
 
 const originalFileReader = globalThis.FileReader
