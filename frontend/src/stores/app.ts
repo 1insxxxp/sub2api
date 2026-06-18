@@ -5,7 +5,7 @@
 
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import type { Toast, ToastType, PublicSettings } from '@/types'
+import type { Toast, ToastType, PublicSettings, InjectedPublicSettings } from '@/types'
 import { i18n } from '@/i18n'
 import {
   checkUpdates as checkUpdatesAPI,
@@ -25,6 +25,7 @@ export const useAppStore = defineStore('app', () => {
   // Public settings cache state
   const publicSettingsLoaded = ref<boolean>(false)
   const publicSettingsLoading = ref<boolean>(false)
+  const publicSettingsPartial = ref<boolean>(false)
   const siteName = ref<string>('Passion')
   const siteLogo = ref<string>('')
   const siteLogoLight = ref<string>('')
@@ -313,20 +314,25 @@ export const useAppStore = defineStore('app', () => {
   /**
    * Apply settings to store state (internal helper to avoid code duplication)
    */
-  function applySettings(config: PublicSettings): void {
+  function applySettings(config: InjectedPublicSettings): void {
+    const { __partial, ...publicConfig } = config
     if (typeof window !== 'undefined') {
-      window.__APP_CONFIG__ = { ...config }
+      window.__APP_CONFIG__ = {
+        ...publicConfig,
+        ...(__partial ? { __partial: true } : {})
+      } as InjectedPublicSettings
     }
-    cachedPublicSettings.value = config
-    siteName.value = config.site_name || 'Passion'
-    siteLogo.value = config.site_logo || ''
-    siteLogoLight.value = config.site_logo_light || ''
-    siteLogoDark.value = config.site_logo_dark || ''
-    siteVersion.value = config.version || ''
-    contactInfo.value = config.contact_info || ''
-    apiBaseUrl.value = config.api_base_url || ''
-    docUrl.value = config.doc_url || ''
+    cachedPublicSettings.value = publicConfig as PublicSettings
+    siteName.value = publicConfig.site_name || 'Passion'
+    siteLogo.value = publicConfig.site_logo || ''
+    siteLogoLight.value = publicConfig.site_logo_light || ''
+    siteLogoDark.value = publicConfig.site_logo_dark || ''
+    siteVersion.value = publicConfig.version || ''
+    contactInfo.value = publicConfig.contact_info || ''
+    apiBaseUrl.value = publicConfig.api_base_url || ''
+    docUrl.value = publicConfig.doc_url || ''
     publicSettingsLoaded.value = true
+    publicSettingsPartial.value = __partial === true
   }
 
   /**
@@ -337,11 +343,13 @@ export const useAppStore = defineStore('app', () => {
     // Check for injected config from server (eliminates flash)
     if (!publicSettingsLoaded.value && !force && window.__APP_CONFIG__) {
       applySettings(window.__APP_CONFIG__)
-      return window.__APP_CONFIG__
+      if (!publicSettingsPartial.value) {
+        return cachedPublicSettings.value ? { ...cachedPublicSettings.value } : null
+      }
     }
 
     // Return cached data if available and not forcing refresh
-    if (publicSettingsLoaded.value && !force) {
+    if (publicSettingsLoaded.value && !force && !publicSettingsPartial.value) {
       if (cachedPublicSettings.value) {
         return { ...cachedPublicSettings.value }
       }
@@ -417,6 +425,7 @@ export const useAppStore = defineStore('app', () => {
    */
   function clearPublicSettingsCache(): void {
     publicSettingsLoaded.value = false
+    publicSettingsPartial.value = false
     cachedPublicSettings.value = null
   }
 

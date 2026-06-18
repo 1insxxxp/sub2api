@@ -1213,6 +1213,7 @@ func (s *SettingService) SetVersion(version string) {
 // A unit test diffs this struct's JSON keys against dto.PublicSettings to catch
 // drift automatically (see setting_service_injection_test.go).
 type PublicSettingsInjectionPayload struct {
+	Partial                          bool                     `json:"__partial,omitempty"`
 	RegistrationEnabled              bool                     `json:"registration_enabled"`
 	EmailVerifyEnabled               bool                     `json:"email_verify_enabled"`
 	RegistrationEmailSuffixWhitelist []string                 `json:"registration_email_suffix_whitelist"`
@@ -1272,6 +1273,19 @@ type PublicSettingsInjectionPayload struct {
 	AllowUserViewErrorRequests           bool `json:"allow_user_view_error_requests"`
 }
 
+const publicSettingsInlineAssetMaxBytes = 8 * 1024
+
+func deferLargeInjectedDataURL(value string) (string, bool) {
+	trimmed := strings.TrimSpace(value)
+	if len(trimmed) <= publicSettingsInlineAssetMaxBytes {
+		return value, false
+	}
+	if !strings.HasPrefix(strings.ToLower(trimmed), "data:") {
+		return value, false
+	}
+	return "", true
+}
+
 // GetPublicSettingsForInjection returns public settings in a format suitable for HTML injection.
 // This implements the web.PublicSettingsProvider interface.
 func (s *SettingService) GetPublicSettingsForInjection(ctx context.Context) (any, error) {
@@ -1280,7 +1294,12 @@ func (s *SettingService) GetPublicSettingsForInjection(ctx context.Context) (any
 		return nil, err
 	}
 
+	siteLogo, siteLogoDeferred := deferLargeInjectedDataURL(settings.SiteLogo)
+	siteLogoLight, siteLogoLightDeferred := deferLargeInjectedDataURL(settings.SiteLogoLight)
+	siteLogoDark, siteLogoDarkDeferred := deferLargeInjectedDataURL(settings.SiteLogoDark)
+
 	return &PublicSettingsInjectionPayload{
+		Partial:                          siteLogoDeferred || siteLogoLightDeferred || siteLogoDarkDeferred,
 		RegistrationEnabled:              settings.RegistrationEnabled,
 		EmailVerifyEnabled:               settings.EmailVerifyEnabled,
 		RegistrationEmailSuffixWhitelist: settings.RegistrationEmailSuffixWhitelist,
@@ -1296,9 +1315,9 @@ func (s *SettingService) GetPublicSettingsForInjection(ctx context.Context) (any
 		TurnstileEnabled:                 settings.TurnstileEnabled,
 		TurnstileSiteKey:                 settings.TurnstileSiteKey,
 		SiteName:                         settings.SiteName,
-		SiteLogo:                         settings.SiteLogo,
-		SiteLogoLight:                    settings.SiteLogoLight,
-		SiteLogoDark:                     settings.SiteLogoDark,
+		SiteLogo:                         siteLogo,
+		SiteLogoLight:                    siteLogoLight,
+		SiteLogoDark:                     siteLogoDark,
 		SiteSubtitle:                     settings.SiteSubtitle,
 		APIBaseURL:                       settings.APIBaseURL,
 		ContactInfo:                      settings.ContactInfo,

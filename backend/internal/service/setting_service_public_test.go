@@ -4,6 +4,7 @@ package service
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
@@ -102,6 +103,29 @@ func TestSettingService_GetPublicSettings_ExposesThemeLogos(t *testing.T) {
 	require.Equal(t, "/logo-default.svg", settings.SiteLogo)
 	require.Equal(t, "/logo-light.svg", settings.SiteLogoLight)
 	require.Equal(t, "/logo-dark.svg", settings.SiteLogoDark)
+}
+
+func TestSettingService_GetPublicSettingsForInjection_DefersLargeDataURLLogos(t *testing.T) {
+	largeLogo := "data:image/png;base64," + strings.Repeat("a", 20*1024)
+	repo := &settingPublicRepoStub{
+		values: map[string]string{
+			SettingKeySiteLogo:      largeLogo,
+			SettingKeySiteLogoLight: "/logo-light.svg",
+		},
+	}
+	svc := NewSettingService(repo, &config.Config{})
+
+	payloadAny, err := svc.GetPublicSettingsForInjection(context.Background())
+	require.NoError(t, err)
+	payload, ok := payloadAny.(*PublicSettingsInjectionPayload)
+	require.True(t, ok)
+	require.Empty(t, payload.SiteLogo)
+	require.Equal(t, "/logo-light.svg", payload.SiteLogoLight)
+	require.True(t, payload.Partial)
+
+	settings, err := svc.GetPublicSettings(context.Background())
+	require.NoError(t, err)
+	require.Equal(t, largeLogo, settings.SiteLogo)
 }
 
 func TestSettingService_GetPublicSettings_ExposesForceEmailOnThirdPartySignup(t *testing.T) {

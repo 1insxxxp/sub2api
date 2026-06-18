@@ -367,5 +367,59 @@ describe('useAppStore', () => {
       expect(localStorage.getItem('table-page-size')).toBeNull()
       expect(localStorage.getItem('table-page-size-source')).toBeNull()
     })
+
+    it('部分注入配置会先初始化首屏再补拉完整公开设置', async () => {
+      vi.mocked(getPublicSettings).mockReset()
+      const windowAny = window as any
+      windowAny.__APP_CONFIG__ = {
+        __partial: true,
+        site_name: 'Partial Site',
+        site_logo: '',
+        site_logo_light: '',
+        site_logo_dark: '',
+        version: 'partial'
+      }
+      vi.mocked(getPublicSettings).mockResolvedValue({
+        registration_enabled: false,
+        email_verify_enabled: false,
+        registration_email_suffix_whitelist: [],
+        promo_code_enabled: true,
+        password_reset_enabled: false,
+        invitation_code_enabled: false,
+        turnstile_enabled: false,
+        turnstile_site_key: '',
+        site_name: 'Full Site',
+        site_logo: '/full-logo.png',
+        site_logo_light: '/full-logo-light.svg',
+        site_logo_dark: '/full-logo-dark.svg',
+        site_subtitle: '',
+        api_base_url: '',
+        contact_info: '',
+        doc_url: '',
+        home_content: '',
+        hide_ccs_import_button: false,
+        purchase_subscription_enabled: false,
+        purchase_subscription_url: '',
+        table_default_page_size: 20,
+        table_page_size_options: [10, 20, 50, 100],
+        custom_menu_items: [],
+        custom_endpoints: [],
+        linuxdo_oauth_enabled: false,
+        backend_mode_enabled: false,
+        version: 'full'
+      })
+
+      const store = useAppStore()
+      expect(store.initFromInjectedConfig()).toBe(true)
+      expect(store.siteName).toBe('Partial Site')
+      expect(store.siteLogo).toBe('')
+
+      await store.fetchPublicSettings()
+
+      expect(getPublicSettings).toHaveBeenCalledTimes(1)
+      expect(store.siteName).toBe('Full Site')
+      expect(store.siteLogo).toBe('/full-logo.png')
+      expect(windowAny.__APP_CONFIG__.__partial).toBeUndefined()
+    })
   })
 })

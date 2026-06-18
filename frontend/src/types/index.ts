@@ -240,6 +240,10 @@ export interface PublicSettings {
   allow_user_view_error_requests?: boolean
 }
 
+export type InjectedPublicSettings = PublicSettings & {
+  __partial?: boolean
+}
+
 export interface AuthResponse {
   access_token: string
   refresh_token?: string  // New: Refresh Token for token renewal
