@@ -42,7 +42,7 @@ onUnmounted(() => {
 <style scoped>
 .table-page-layout {
   @apply flex flex-col gap-5;
-  height: calc(100vh - 64px - 4rem);
+  height: calc(100vh - 64px - var(--app-content-padding-total-y, 4rem));
 }
 
 .layout-section-fixed {

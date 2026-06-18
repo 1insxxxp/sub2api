@@ -208,6 +208,12 @@ describe("admin SettingsView unified shell", () => {
     expect(settingsViewSource).not.toContain("background: linear-gradient(90deg, #3b82f6, #8b5cf6);");
   });
 
+  it("lets the settings module width follow the shared workspace", () => {
+    expect(settingsViewSource).toContain("settings-admin-page w-full min-w-0");
+    expect(settingsViewSource).not.toContain("settings-admin-page mx-auto");
+    expect(settingsViewSource).not.toContain("max-w-6xl");
+  });
+
   it("renders shared admin info blocks inside the settings workspace", async () => {
     const wrapper = mountView();
     await flushPromises();

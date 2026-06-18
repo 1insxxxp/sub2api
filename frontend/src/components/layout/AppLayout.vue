@@ -9,14 +9,14 @@
 
     <!-- Main Content Area -->
     <div
-      class="app-shell-main relative min-h-screen transition-all duration-300 ease-out"
+      class="app-shell-main relative min-h-screen min-w-0 transition-all duration-300 ease-out"
       :class="{ 'app-shell-main-collapsed': sidebarCollapsed }"
     >
       <!-- Header -->
       <AppHeader />
 
       <!-- Main Content -->
-      <main class="app-shell-content mx-auto w-full max-w-[1600px] p-4 md:p-6 lg:p-8">
+      <main class="app-shell-content">
         <slot />
       </main>
     </div>
@@ -55,10 +55,23 @@ defineExpose({ replayTour })
 <style scoped>
 .app-shell-main {
   margin-left: 0;
+  min-width: 0;
 }
 
 .app-shell-content {
+  --app-content-padding-y: clamp(1rem, 0.7rem + 0.8vw, 2rem);
+  --app-content-padding-x: clamp(0.875rem, 0.55rem + 1.05vw, 2rem);
+  --app-content-padding-total-y: calc(
+    var(--app-content-padding-y) + var(--app-content-padding-y)
+  );
+
+  box-sizing: border-box;
   position: relative;
+  width: 100%;
+  max-width: none;
+  min-width: 0;
+  padding: var(--app-content-padding-y) var(--app-content-padding-x);
+  transition: padding 200ms ease;
 }
 
 @media (min-width: 1024px) {
