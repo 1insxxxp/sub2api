@@ -652,10 +652,11 @@ watch(
     } else {
       stats.value = null
     }
-  }
+  },
+  { immediate: true }
 )
 
-const loadStats = async () => {
+async function loadStats() {
   if (!props.account) return
 
   loading.value = true

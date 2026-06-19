@@ -59,7 +59,7 @@ function createStreamResponse(lines: string[]) {
   } as Response
 }
 
-function mountModal() {
+function mountModal(props: Record<string, unknown> = {}) {
   return mount(AccountTestModal, {
     props: {
       show: false,
@@ -69,7 +69,8 @@ function mountModal() {
         platform: 'gemini',
         type: 'apikey',
         status: 'active'
-      }
+      },
+      ...props
     } as any,
     global: {
       stubs: {
@@ -114,6 +115,13 @@ describe('AccountTestModal', () => {
 
   afterEach(() => {
     vi.restoreAllMocks()
+  })
+
+  it('loads available models when mounted already open', async () => {
+    mountModal({ show: true })
+    await flushPromises()
+
+    expect(getAvailableModels).toHaveBeenCalledWith(42)
   })
 
   it('gemini 图片模型测试会携带提示词并渲染图片预览', async () => {

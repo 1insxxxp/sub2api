@@ -284,7 +284,7 @@ const canExchangeCode = computed(() => {
 // Watchers
 watch(
   () => props.show,
-  (newVal) => {
+  (newVal, oldVal) => {
     if (newVal && props.account) {
       // Initialize addMethod based on current account type (Claude only)
       if (
@@ -302,10 +302,11 @@ watch(
               ? 'ai_studio'
               : 'code_assist'
       }
-    } else {
+    } else if (oldVal) {
       resetState()
     }
-  }
+  },
+  { immediate: true }
 )
 
 // Methods

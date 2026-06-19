@@ -46,4 +46,24 @@ describe('AccountsView performance boundaries', () => {
       expect(source).toMatch(new RegExp(`<${tag}\\s+v-if="${condition}"`))
     }
   })
+
+  it('initializes show-driven lazy dialogs on first mount', () => {
+    const dialogFiles = [
+      '../../../components/account/CreateAccountModal.vue',
+      '../../../components/account/SyncFromCrsModal.vue',
+      '../../../components/account/TempUnschedStatusModal.vue',
+      '../../../components/admin/account/ImportDataModal.vue',
+      '../../../components/admin/account/ReAuthAccountModal.vue',
+      '../../../components/admin/account/AccountTestModal.vue',
+      '../../../components/admin/account/AccountStatsModal.vue',
+      '../../../components/admin/account/ScheduledTestsPanel.vue',
+      '../../../components/admin/ErrorPassthroughRulesModal.vue',
+      '../../../components/admin/TLSFingerprintProfilesModal.vue'
+    ]
+
+    for (const file of dialogFiles) {
+      const source = readFileSync(resolve(__dirname, file), 'utf8')
+      expect(source, file).toMatch(/props\.show[\s\S]*\{\s*immediate:\s*true\s*\}/)
+    }
+  })
 })
