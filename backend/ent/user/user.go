@@ -45,6 +45,14 @@ const (
 	FieldTotpEnabledAt = "totp_enabled_at"
 	// FieldSignupSource holds the string denoting the signup_source field in the database.
 	FieldSignupSource = "signup_source"
+	// FieldRegistrationIP holds the string denoting the registration_ip field in the database.
+	FieldRegistrationIP = "registration_ip"
+	// FieldRegistrationUserAgent holds the string denoting the registration_user_agent field in the database.
+	FieldRegistrationUserAgent = "registration_user_agent"
+	// FieldLastLoginIP holds the string denoting the last_login_ip field in the database.
+	FieldLastLoginIP = "last_login_ip"
+	// FieldLastLoginUserAgent holds the string denoting the last_login_user_agent field in the database.
+	FieldLastLoginUserAgent = "last_login_user_agent"
 	// FieldLastLoginAt holds the string denoting the last_login_at field in the database.
 	FieldLastLoginAt = "last_login_at"
 	// FieldLastActiveAt holds the string denoting the last_active_at field in the database.
@@ -225,6 +233,10 @@ var Columns = []string{
 	FieldTotpEnabled,
 	FieldTotpEnabledAt,
 	FieldSignupSource,
+	FieldRegistrationIP,
+	FieldRegistrationUserAgent,
+	FieldLastLoginIP,
+	FieldLastLoginUserAgent,
 	FieldLastLoginAt,
 	FieldLastActiveAt,
 	FieldBalanceNotifyEnabled,
@@ -293,6 +305,18 @@ var (
 	DefaultSignupSource string
 	// SignupSourceValidator is a validator for the "signup_source" field. It is called by the builders before save.
 	SignupSourceValidator func(string) error
+	// DefaultRegistrationIP holds the default value on creation for the "registration_ip" field.
+	DefaultRegistrationIP string
+	// RegistrationIPValidator is a validator for the "registration_ip" field. It is called by the builders before save.
+	RegistrationIPValidator func(string) error
+	// DefaultRegistrationUserAgent holds the default value on creation for the "registration_user_agent" field.
+	DefaultRegistrationUserAgent string
+	// DefaultLastLoginIP holds the default value on creation for the "last_login_ip" field.
+	DefaultLastLoginIP string
+	// LastLoginIPValidator is a validator for the "last_login_ip" field. It is called by the builders before save.
+	LastLoginIPValidator func(string) error
+	// DefaultLastLoginUserAgent holds the default value on creation for the "last_login_user_agent" field.
+	DefaultLastLoginUserAgent string
 	// DefaultBalanceNotifyEnabled holds the default value on creation for the "balance_notify_enabled" field.
 	DefaultBalanceNotifyEnabled bool
 	// DefaultBalanceNotifyThresholdType holds the default value on creation for the "balance_notify_threshold_type" field.
@@ -386,6 +410,26 @@ func ByTotpEnabledAt(opts ...sql.OrderTermOption) OrderOption {
 // BySignupSource orders the results by the signup_source field.
 func BySignupSource(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldSignupSource, opts...).ToFunc()
+}
+
+// ByRegistrationIP orders the results by the registration_ip field.
+func ByRegistrationIP(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldRegistrationIP, opts...).ToFunc()
+}
+
+// ByRegistrationUserAgent orders the results by the registration_user_agent field.
+func ByRegistrationUserAgent(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldRegistrationUserAgent, opts...).ToFunc()
+}
+
+// ByLastLoginIP orders the results by the last_login_ip field.
+func ByLastLoginIP(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldLastLoginIP, opts...).ToFunc()
+}
+
+// ByLastLoginUserAgent orders the results by the last_login_user_agent field.
+func ByLastLoginUserAgent(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldLastLoginUserAgent, opts...).ToFunc()
 }
 
 // ByLastLoginAt orders the results by the last_login_at field.

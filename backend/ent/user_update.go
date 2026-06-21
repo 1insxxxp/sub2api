@@ -262,6 +262,62 @@ func (_u *UserUpdate) SetNillableSignupSource(v *string) *UserUpdate {
 	return _u
 }
 
+// SetRegistrationIP sets the "registration_ip" field.
+func (_u *UserUpdate) SetRegistrationIP(v string) *UserUpdate {
+	_u.mutation.SetRegistrationIP(v)
+	return _u
+}
+
+// SetNillableRegistrationIP sets the "registration_ip" field if the given value is not nil.
+func (_u *UserUpdate) SetNillableRegistrationIP(v *string) *UserUpdate {
+	if v != nil {
+		_u.SetRegistrationIP(*v)
+	}
+	return _u
+}
+
+// SetRegistrationUserAgent sets the "registration_user_agent" field.
+func (_u *UserUpdate) SetRegistrationUserAgent(v string) *UserUpdate {
+	_u.mutation.SetRegistrationUserAgent(v)
+	return _u
+}
+
+// SetNillableRegistrationUserAgent sets the "registration_user_agent" field if the given value is not nil.
+func (_u *UserUpdate) SetNillableRegistrationUserAgent(v *string) *UserUpdate {
+	if v != nil {
+		_u.SetRegistrationUserAgent(*v)
+	}
+	return _u
+}
+
+// SetLastLoginIP sets the "last_login_ip" field.
+func (_u *UserUpdate) SetLastLoginIP(v string) *UserUpdate {
+	_u.mutation.SetLastLoginIP(v)
+	return _u
+}
+
+// SetNillableLastLoginIP sets the "last_login_ip" field if the given value is not nil.
+func (_u *UserUpdate) SetNillableLastLoginIP(v *string) *UserUpdate {
+	if v != nil {
+		_u.SetLastLoginIP(*v)
+	}
+	return _u
+}
+
+// SetLastLoginUserAgent sets the "last_login_user_agent" field.
+func (_u *UserUpdate) SetLastLoginUserAgent(v string) *UserUpdate {
+	_u.mutation.SetLastLoginUserAgent(v)
+	return _u
+}
+
+// SetNillableLastLoginUserAgent sets the "last_login_user_agent" field if the given value is not nil.
+func (_u *UserUpdate) SetNillableLastLoginUserAgent(v *string) *UserUpdate {
+	if v != nil {
+		_u.SetLastLoginUserAgent(*v)
+	}
+	return _u
+}
+
 // SetLastLoginAt sets the "last_login_at" field.
 func (_u *UserUpdate) SetLastLoginAt(v time.Time) *UserUpdate {
 	_u.mutation.SetLastLoginAt(v)
@@ -1032,6 +1088,16 @@ func (_u *UserUpdate) check() error {
 			return &ValidationError{Name: "signup_source", err: fmt.Errorf(`ent: validator failed for field "User.signup_source": %w`, err)}
 		}
 	}
+	if v, ok := _u.mutation.RegistrationIP(); ok {
+		if err := user.RegistrationIPValidator(v); err != nil {
+			return &ValidationError{Name: "registration_ip", err: fmt.Errorf(`ent: validator failed for field "User.registration_ip": %w`, err)}
+		}
+	}
+	if v, ok := _u.mutation.LastLoginIP(); ok {
+		if err := user.LastLoginIPValidator(v); err != nil {
+			return &ValidationError{Name: "last_login_ip", err: fmt.Errorf(`ent: validator failed for field "User.last_login_ip": %w`, err)}
+		}
+	}
 	return nil
 }
 
@@ -1103,6 +1169,18 @@ func (_u *UserUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if value, ok := _u.mutation.SignupSource(); ok {
 		_spec.SetField(user.FieldSignupSource, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.RegistrationIP(); ok {
+		_spec.SetField(user.FieldRegistrationIP, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.RegistrationUserAgent(); ok {
+		_spec.SetField(user.FieldRegistrationUserAgent, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.LastLoginIP(); ok {
+		_spec.SetField(user.FieldLastLoginIP, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.LastLoginUserAgent(); ok {
+		_spec.SetField(user.FieldLastLoginUserAgent, field.TypeString, value)
 	}
 	if value, ok := _u.mutation.LastLoginAt(); ok {
 		_spec.SetField(user.FieldLastLoginAt, field.TypeTime, value)
@@ -2073,6 +2151,62 @@ func (_u *UserUpdateOne) SetNillableSignupSource(v *string) *UserUpdateOne {
 	return _u
 }
 
+// SetRegistrationIP sets the "registration_ip" field.
+func (_u *UserUpdateOne) SetRegistrationIP(v string) *UserUpdateOne {
+	_u.mutation.SetRegistrationIP(v)
+	return _u
+}
+
+// SetNillableRegistrationIP sets the "registration_ip" field if the given value is not nil.
+func (_u *UserUpdateOne) SetNillableRegistrationIP(v *string) *UserUpdateOne {
+	if v != nil {
+		_u.SetRegistrationIP(*v)
+	}
+	return _u
+}
+
+// SetRegistrationUserAgent sets the "registration_user_agent" field.
+func (_u *UserUpdateOne) SetRegistrationUserAgent(v string) *UserUpdateOne {
+	_u.mutation.SetRegistrationUserAgent(v)
+	return _u
+}
+
+// SetNillableRegistrationUserAgent sets the "registration_user_agent" field if the given value is not nil.
+func (_u *UserUpdateOne) SetNillableRegistrationUserAgent(v *string) *UserUpdateOne {
+	if v != nil {
+		_u.SetRegistrationUserAgent(*v)
+	}
+	return _u
+}
+
+// SetLastLoginIP sets the "last_login_ip" field.
+func (_u *UserUpdateOne) SetLastLoginIP(v string) *UserUpdateOne {
+	_u.mutation.SetLastLoginIP(v)
+	return _u
+}
+
+// SetNillableLastLoginIP sets the "last_login_ip" field if the given value is not nil.
+func (_u *UserUpdateOne) SetNillableLastLoginIP(v *string) *UserUpdateOne {
+	if v != nil {
+		_u.SetLastLoginIP(*v)
+	}
+	return _u
+}
+
+// SetLastLoginUserAgent sets the "last_login_user_agent" field.
+func (_u *UserUpdateOne) SetLastLoginUserAgent(v string) *UserUpdateOne {
+	_u.mutation.SetLastLoginUserAgent(v)
+	return _u
+}
+
+// SetNillableLastLoginUserAgent sets the "last_login_user_agent" field if the given value is not nil.
+func (_u *UserUpdateOne) SetNillableLastLoginUserAgent(v *string) *UserUpdateOne {
+	if v != nil {
+		_u.SetLastLoginUserAgent(*v)
+	}
+	return _u
+}
+
 // SetLastLoginAt sets the "last_login_at" field.
 func (_u *UserUpdateOne) SetLastLoginAt(v time.Time) *UserUpdateOne {
 	_u.mutation.SetLastLoginAt(v)
@@ -2856,6 +2990,16 @@ func (_u *UserUpdateOne) check() error {
 			return &ValidationError{Name: "signup_source", err: fmt.Errorf(`ent: validator failed for field "User.signup_source": %w`, err)}
 		}
 	}
+	if v, ok := _u.mutation.RegistrationIP(); ok {
+		if err := user.RegistrationIPValidator(v); err != nil {
+			return &ValidationError{Name: "registration_ip", err: fmt.Errorf(`ent: validator failed for field "User.registration_ip": %w`, err)}
+		}
+	}
+	if v, ok := _u.mutation.LastLoginIP(); ok {
+		if err := user.LastLoginIPValidator(v); err != nil {
+			return &ValidationError{Name: "last_login_ip", err: fmt.Errorf(`ent: validator failed for field "User.last_login_ip": %w`, err)}
+		}
+	}
 	return nil
 }
 
@@ -2944,6 +3088,18 @@ func (_u *UserUpdateOne) sqlSave(ctx context.Context) (_node *User, err error) {
 	}
 	if value, ok := _u.mutation.SignupSource(); ok {
 		_spec.SetField(user.FieldSignupSource, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.RegistrationIP(); ok {
+		_spec.SetField(user.FieldRegistrationIP, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.RegistrationUserAgent(); ok {
+		_spec.SetField(user.FieldRegistrationUserAgent, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.LastLoginIP(); ok {
+		_spec.SetField(user.FieldLastLoginIP, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.LastLoginUserAgent(); ok {
+		_spec.SetField(user.FieldLastLoginUserAgent, field.TypeString, value)
 	}
 	if value, ok := _u.mutation.LastLoginAt(); ok {
 		_spec.SetField(user.FieldLastLoginAt, field.TypeTime, value)

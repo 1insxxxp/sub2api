@@ -130,6 +130,26 @@ func SignupSource(v string) predicate.User {
 	return predicate.User(sql.FieldEQ(FieldSignupSource, v))
 }
 
+// RegistrationIP applies equality check predicate on the "registration_ip" field. It's identical to RegistrationIPEQ.
+func RegistrationIP(v string) predicate.User {
+	return predicate.User(sql.FieldEQ(FieldRegistrationIP, v))
+}
+
+// RegistrationUserAgent applies equality check predicate on the "registration_user_agent" field. It's identical to RegistrationUserAgentEQ.
+func RegistrationUserAgent(v string) predicate.User {
+	return predicate.User(sql.FieldEQ(FieldRegistrationUserAgent, v))
+}
+
+// LastLoginIP applies equality check predicate on the "last_login_ip" field. It's identical to LastLoginIPEQ.
+func LastLoginIP(v string) predicate.User {
+	return predicate.User(sql.FieldEQ(FieldLastLoginIP, v))
+}
+
+// LastLoginUserAgent applies equality check predicate on the "last_login_user_agent" field. It's identical to LastLoginUserAgentEQ.
+func LastLoginUserAgent(v string) predicate.User {
+	return predicate.User(sql.FieldEQ(FieldLastLoginUserAgent, v))
+}
+
 // LastLoginAt applies equality check predicate on the "last_login_at" field. It's identical to LastLoginAtEQ.
 func LastLoginAt(v time.Time) predicate.User {
 	return predicate.User(sql.FieldEQ(FieldLastLoginAt, v))
@@ -968,6 +988,266 @@ func SignupSourceEqualFold(v string) predicate.User {
 // SignupSourceContainsFold applies the ContainsFold predicate on the "signup_source" field.
 func SignupSourceContainsFold(v string) predicate.User {
 	return predicate.User(sql.FieldContainsFold(FieldSignupSource, v))
+}
+
+// RegistrationIPEQ applies the EQ predicate on the "registration_ip" field.
+func RegistrationIPEQ(v string) predicate.User {
+	return predicate.User(sql.FieldEQ(FieldRegistrationIP, v))
+}
+
+// RegistrationIPNEQ applies the NEQ predicate on the "registration_ip" field.
+func RegistrationIPNEQ(v string) predicate.User {
+	return predicate.User(sql.FieldNEQ(FieldRegistrationIP, v))
+}
+
+// RegistrationIPIn applies the In predicate on the "registration_ip" field.
+func RegistrationIPIn(vs ...string) predicate.User {
+	return predicate.User(sql.FieldIn(FieldRegistrationIP, vs...))
+}
+
+// RegistrationIPNotIn applies the NotIn predicate on the "registration_ip" field.
+func RegistrationIPNotIn(vs ...string) predicate.User {
+	return predicate.User(sql.FieldNotIn(FieldRegistrationIP, vs...))
+}
+
+// RegistrationIPGT applies the GT predicate on the "registration_ip" field.
+func RegistrationIPGT(v string) predicate.User {
+	return predicate.User(sql.FieldGT(FieldRegistrationIP, v))
+}
+
+// RegistrationIPGTE applies the GTE predicate on the "registration_ip" field.
+func RegistrationIPGTE(v string) predicate.User {
+	return predicate.User(sql.FieldGTE(FieldRegistrationIP, v))
+}
+
+// RegistrationIPLT applies the LT predicate on the "registration_ip" field.
+func RegistrationIPLT(v string) predicate.User {
+	return predicate.User(sql.FieldLT(FieldRegistrationIP, v))
+}
+
+// RegistrationIPLTE applies the LTE predicate on the "registration_ip" field.
+func RegistrationIPLTE(v string) predicate.User {
+	return predicate.User(sql.FieldLTE(FieldRegistrationIP, v))
+}
+
+// RegistrationIPContains applies the Contains predicate on the "registration_ip" field.
+func RegistrationIPContains(v string) predicate.User {
+	return predicate.User(sql.FieldContains(FieldRegistrationIP, v))
+}
+
+// RegistrationIPHasPrefix applies the HasPrefix predicate on the "registration_ip" field.
+func RegistrationIPHasPrefix(v string) predicate.User {
+	return predicate.User(sql.FieldHasPrefix(FieldRegistrationIP, v))
+}
+
+// RegistrationIPHasSuffix applies the HasSuffix predicate on the "registration_ip" field.
+func RegistrationIPHasSuffix(v string) predicate.User {
+	return predicate.User(sql.FieldHasSuffix(FieldRegistrationIP, v))
+}
+
+// RegistrationIPEqualFold applies the EqualFold predicate on the "registration_ip" field.
+func RegistrationIPEqualFold(v string) predicate.User {
+	return predicate.User(sql.FieldEqualFold(FieldRegistrationIP, v))
+}
+
+// RegistrationIPContainsFold applies the ContainsFold predicate on the "registration_ip" field.
+func RegistrationIPContainsFold(v string) predicate.User {
+	return predicate.User(sql.FieldContainsFold(FieldRegistrationIP, v))
+}
+
+// RegistrationUserAgentEQ applies the EQ predicate on the "registration_user_agent" field.
+func RegistrationUserAgentEQ(v string) predicate.User {
+	return predicate.User(sql.FieldEQ(FieldRegistrationUserAgent, v))
+}
+
+// RegistrationUserAgentNEQ applies the NEQ predicate on the "registration_user_agent" field.
+func RegistrationUserAgentNEQ(v string) predicate.User {
+	return predicate.User(sql.FieldNEQ(FieldRegistrationUserAgent, v))
+}
+
+// RegistrationUserAgentIn applies the In predicate on the "registration_user_agent" field.
+func RegistrationUserAgentIn(vs ...string) predicate.User {
+	return predicate.User(sql.FieldIn(FieldRegistrationUserAgent, vs...))
+}
+
+// RegistrationUserAgentNotIn applies the NotIn predicate on the "registration_user_agent" field.
+func RegistrationUserAgentNotIn(vs ...string) predicate.User {
+	return predicate.User(sql.FieldNotIn(FieldRegistrationUserAgent, vs...))
+}
+
+// RegistrationUserAgentGT applies the GT predicate on the "registration_user_agent" field.
+func RegistrationUserAgentGT(v string) predicate.User {
+	return predicate.User(sql.FieldGT(FieldRegistrationUserAgent, v))
+}
+
+// RegistrationUserAgentGTE applies the GTE predicate on the "registration_user_agent" field.
+func RegistrationUserAgentGTE(v string) predicate.User {
+	return predicate.User(sql.FieldGTE(FieldRegistrationUserAgent, v))
+}
+
+// RegistrationUserAgentLT applies the LT predicate on the "registration_user_agent" field.
+func RegistrationUserAgentLT(v string) predicate.User {
+	return predicate.User(sql.FieldLT(FieldRegistrationUserAgent, v))
+}
+
+// RegistrationUserAgentLTE applies the LTE predicate on the "registration_user_agent" field.
+func RegistrationUserAgentLTE(v string) predicate.User {
+	return predicate.User(sql.FieldLTE(FieldRegistrationUserAgent, v))
+}
+
+// RegistrationUserAgentContains applies the Contains predicate on the "registration_user_agent" field.
+func RegistrationUserAgentContains(v string) predicate.User {
+	return predicate.User(sql.FieldContains(FieldRegistrationUserAgent, v))
+}
+
+// RegistrationUserAgentHasPrefix applies the HasPrefix predicate on the "registration_user_agent" field.
+func RegistrationUserAgentHasPrefix(v string) predicate.User {
+	return predicate.User(sql.FieldHasPrefix(FieldRegistrationUserAgent, v))
+}
+
+// RegistrationUserAgentHasSuffix applies the HasSuffix predicate on the "registration_user_agent" field.
+func RegistrationUserAgentHasSuffix(v string) predicate.User {
+	return predicate.User(sql.FieldHasSuffix(FieldRegistrationUserAgent, v))
+}
+
+// RegistrationUserAgentEqualFold applies the EqualFold predicate on the "registration_user_agent" field.
+func RegistrationUserAgentEqualFold(v string) predicate.User {
+	return predicate.User(sql.FieldEqualFold(FieldRegistrationUserAgent, v))
+}
+
+// RegistrationUserAgentContainsFold applies the ContainsFold predicate on the "registration_user_agent" field.
+func RegistrationUserAgentContainsFold(v string) predicate.User {
+	return predicate.User(sql.FieldContainsFold(FieldRegistrationUserAgent, v))
+}
+
+// LastLoginIPEQ applies the EQ predicate on the "last_login_ip" field.
+func LastLoginIPEQ(v string) predicate.User {
+	return predicate.User(sql.FieldEQ(FieldLastLoginIP, v))
+}
+
+// LastLoginIPNEQ applies the NEQ predicate on the "last_login_ip" field.
+func LastLoginIPNEQ(v string) predicate.User {
+	return predicate.User(sql.FieldNEQ(FieldLastLoginIP, v))
+}
+
+// LastLoginIPIn applies the In predicate on the "last_login_ip" field.
+func LastLoginIPIn(vs ...string) predicate.User {
+	return predicate.User(sql.FieldIn(FieldLastLoginIP, vs...))
+}
+
+// LastLoginIPNotIn applies the NotIn predicate on the "last_login_ip" field.
+func LastLoginIPNotIn(vs ...string) predicate.User {
+	return predicate.User(sql.FieldNotIn(FieldLastLoginIP, vs...))
+}
+
+// LastLoginIPGT applies the GT predicate on the "last_login_ip" field.
+func LastLoginIPGT(v string) predicate.User {
+	return predicate.User(sql.FieldGT(FieldLastLoginIP, v))
+}
+
+// LastLoginIPGTE applies the GTE predicate on the "last_login_ip" field.
+func LastLoginIPGTE(v string) predicate.User {
+	return predicate.User(sql.FieldGTE(FieldLastLoginIP, v))
+}
+
+// LastLoginIPLT applies the LT predicate on the "last_login_ip" field.
+func LastLoginIPLT(v string) predicate.User {
+	return predicate.User(sql.FieldLT(FieldLastLoginIP, v))
+}
+
+// LastLoginIPLTE applies the LTE predicate on the "last_login_ip" field.
+func LastLoginIPLTE(v string) predicate.User {
+	return predicate.User(sql.FieldLTE(FieldLastLoginIP, v))
+}
+
+// LastLoginIPContains applies the Contains predicate on the "last_login_ip" field.
+func LastLoginIPContains(v string) predicate.User {
+	return predicate.User(sql.FieldContains(FieldLastLoginIP, v))
+}
+
+// LastLoginIPHasPrefix applies the HasPrefix predicate on the "last_login_ip" field.
+func LastLoginIPHasPrefix(v string) predicate.User {
+	return predicate.User(sql.FieldHasPrefix(FieldLastLoginIP, v))
+}
+
+// LastLoginIPHasSuffix applies the HasSuffix predicate on the "last_login_ip" field.
+func LastLoginIPHasSuffix(v string) predicate.User {
+	return predicate.User(sql.FieldHasSuffix(FieldLastLoginIP, v))
+}
+
+// LastLoginIPEqualFold applies the EqualFold predicate on the "last_login_ip" field.
+func LastLoginIPEqualFold(v string) predicate.User {
+	return predicate.User(sql.FieldEqualFold(FieldLastLoginIP, v))
+}
+
+// LastLoginIPContainsFold applies the ContainsFold predicate on the "last_login_ip" field.
+func LastLoginIPContainsFold(v string) predicate.User {
+	return predicate.User(sql.FieldContainsFold(FieldLastLoginIP, v))
+}
+
+// LastLoginUserAgentEQ applies the EQ predicate on the "last_login_user_agent" field.
+func LastLoginUserAgentEQ(v string) predicate.User {
+	return predicate.User(sql.FieldEQ(FieldLastLoginUserAgent, v))
+}
+
+// LastLoginUserAgentNEQ applies the NEQ predicate on the "last_login_user_agent" field.
+func LastLoginUserAgentNEQ(v string) predicate.User {
+	return predicate.User(sql.FieldNEQ(FieldLastLoginUserAgent, v))
+}
+
+// LastLoginUserAgentIn applies the In predicate on the "last_login_user_agent" field.
+func LastLoginUserAgentIn(vs ...string) predicate.User {
+	return predicate.User(sql.FieldIn(FieldLastLoginUserAgent, vs...))
+}
+
+// LastLoginUserAgentNotIn applies the NotIn predicate on the "last_login_user_agent" field.
+func LastLoginUserAgentNotIn(vs ...string) predicate.User {
+	return predicate.User(sql.FieldNotIn(FieldLastLoginUserAgent, vs...))
+}
+
+// LastLoginUserAgentGT applies the GT predicate on the "last_login_user_agent" field.
+func LastLoginUserAgentGT(v string) predicate.User {
+	return predicate.User(sql.FieldGT(FieldLastLoginUserAgent, v))
+}
+
+// LastLoginUserAgentGTE applies the GTE predicate on the "last_login_user_agent" field.
+func LastLoginUserAgentGTE(v string) predicate.User {
+	return predicate.User(sql.FieldGTE(FieldLastLoginUserAgent, v))
+}
+
+// LastLoginUserAgentLT applies the LT predicate on the "last_login_user_agent" field.
+func LastLoginUserAgentLT(v string) predicate.User {
+	return predicate.User(sql.FieldLT(FieldLastLoginUserAgent, v))
+}
+
+// LastLoginUserAgentLTE applies the LTE predicate on the "last_login_user_agent" field.
+func LastLoginUserAgentLTE(v string) predicate.User {
+	return predicate.User(sql.FieldLTE(FieldLastLoginUserAgent, v))
+}
+
+// LastLoginUserAgentContains applies the Contains predicate on the "last_login_user_agent" field.
+func LastLoginUserAgentContains(v string) predicate.User {
+	return predicate.User(sql.FieldContains(FieldLastLoginUserAgent, v))
+}
+
+// LastLoginUserAgentHasPrefix applies the HasPrefix predicate on the "last_login_user_agent" field.
+func LastLoginUserAgentHasPrefix(v string) predicate.User {
+	return predicate.User(sql.FieldHasPrefix(FieldLastLoginUserAgent, v))
+}
+
+// LastLoginUserAgentHasSuffix applies the HasSuffix predicate on the "last_login_user_agent" field.
+func LastLoginUserAgentHasSuffix(v string) predicate.User {
+	return predicate.User(sql.FieldHasSuffix(FieldLastLoginUserAgent, v))
+}
+
+// LastLoginUserAgentEqualFold applies the EqualFold predicate on the "last_login_user_agent" field.
+func LastLoginUserAgentEqualFold(v string) predicate.User {
+	return predicate.User(sql.FieldEqualFold(FieldLastLoginUserAgent, v))
+}
+
+// LastLoginUserAgentContainsFold applies the ContainsFold predicate on the "last_login_user_agent" field.
+func LastLoginUserAgentContainsFold(v string) predicate.User {
+	return predicate.User(sql.FieldContainsFold(FieldLastLoginUserAgent, v))
 }
 
 // LastLoginAtEQ applies the EQ predicate on the "last_login_at" field.

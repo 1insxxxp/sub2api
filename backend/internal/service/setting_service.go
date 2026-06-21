@@ -20,6 +20,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/internal/config"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/antigravity"
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/ip"
 	"github.com/imroc/req/v3"
 	"golang.org/x/sync/singleflight"
 )
@@ -64,6 +65,11 @@ type SettingRepository interface {
 	SetMultiple(ctx context.Context, settings map[string]string) error
 	GetAll(ctx context.Context) (map[string]string, error)
 	Delete(ctx context.Context, key string) error
+}
+
+type AuthIPBlacklistSettings struct {
+	Enabled bool     `json:"enabled"`
+	Rules   []string `json:"rules"`
 }
 
 // cachedVersionBounds 缓存 Claude Code 版本号上下限（进程内缓存，60s TTL）
@@ -2315,6 +2321,78 @@ func (s *SettingService) IsRegistrationEnabled(ctx context.Context) bool {
 	return value == "true"
 }
 
+func (s *SettingService) GetAuthIPBlacklistSettings(ctx context.Context) (*AuthIPBlacklistSettings, error) {
+	if s == nil || s.settingRepo == nil {
+		return &AuthIPBlacklistSettings{}, nil
+	}
+	values, err := s.settingRepo.GetMultiple(ctx, []string{
+		SettingKeyAuthIPBlacklistEnabled,
+		SettingKeyAuthIPBlacklistRules,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("get auth IP blacklist settings: %w", err)
+	}
+	return &AuthIPBlacklistSettings{
+		Enabled: strings.EqualFold(strings.TrimSpace(values[SettingKeyAuthIPBlacklistEnabled]), "true"),
+		Rules:   NormalizeIPRules(values[SettingKeyAuthIPBlacklistRules]),
+	}, nil
+}
+
+func (s *SettingService) SetAuthIPBlacklistSettings(ctx context.Context, settings *AuthIPBlacklistSettings) error {
+	if s == nil || s.settingRepo == nil {
+		return ErrSettingNotFound
+	}
+	if settings == nil {
+		settings = &AuthIPBlacklistSettings{}
+	}
+	rules := NormalizeIPRulesFromSlice(settings.Rules)
+	data, err := json.Marshal(rules)
+	if err != nil {
+		return fmt.Errorf("marshal auth IP blacklist rules: %w", err)
+	}
+	return s.settingRepo.SetMultiple(ctx, map[string]string{
+		SettingKeyAuthIPBlacklistEnabled: strconv.FormatBool(settings.Enabled),
+		SettingKeyAuthIPBlacklistRules:   string(data),
+	})
+}
+
+func (s *SettingService) IsAuthIPBlocked(ctx context.Context, clientIP string) (bool, error) {
+	settings, err := s.GetAuthIPBlacklistSettings(ctx)
+	if err != nil {
+		return false, err
+	}
+	if settings == nil || !settings.Enabled || len(settings.Rules) == 0 {
+		return false, nil
+	}
+	allowed, _ := ip.CheckIPRestriction(clientIP, nil, settings.Rules)
+	return !allowed, nil
+}
+
+func NormalizeIPRules(raw string) []string {
+	var rules []string
+	if err := json.Unmarshal([]byte(strings.TrimSpace(raw)), &rules); err != nil {
+		return nil
+	}
+	return NormalizeIPRulesFromSlice(rules)
+}
+
+func NormalizeIPRulesFromSlice(rules []string) []string {
+	seen := make(map[string]struct{}, len(rules))
+	normalized := make([]string, 0, len(rules))
+	for _, rule := range rules {
+		rule = strings.TrimSpace(rule)
+		if rule == "" || !ip.ValidateIPPattern(rule) {
+			continue
+		}
+		if _, ok := seen[rule]; ok {
+			continue
+		}
+		seen[rule] = struct{}{}
+		normalized = append(normalized, rule)
+	}
+	return normalized
+}
+
 // IsBackendModeEnabled checks if backend mode is enabled
 // Uses in-process atomic.Value cache with 60s TTL, zero-lock hot path
 func (s *SettingService) IsBackendModeEnabled(ctx context.Context) bool {
@@ -2832,6 +2910,8 @@ func (s *SettingService) InitializeDefaultSettings(ctx context.Context) error {
 		SettingKeyEmailVerifyEnabled:                        "false",
 		SettingKeyRegistrationEmailSuffixWhitelist:          "[]",
 		SettingKeyPromoCodeEnabled:                          "true", // 默认启用优惠码功能
+		SettingKeyAuthIPBlacklistEnabled:                    "false",
+		SettingKeyAuthIPBlacklistRules:                      "[]",
 		SettingKeyLoginAgreementEnabled:                     "false",
 		SettingKeyLoginAgreementMode:                        defaultLoginAgreementMode,
 		SettingKeyLoginAgreementUpdatedAt:                   defaultLoginAgreementDate,

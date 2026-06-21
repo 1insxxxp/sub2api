@@ -465,6 +465,9 @@ func registerSettingsRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 		adminSettings.GET("/admin-api-key", h.Admin.Setting.GetAdminAPIKey)
 		adminSettings.POST("/admin-api-key/regenerate", h.Admin.Setting.RegenerateAdminAPIKey)
 		adminSettings.DELETE("/admin-api-key", h.Admin.Setting.DeleteAdminAPIKey)
+		// 认证入口全局 IP 黑名单
+		adminSettings.GET("/auth-ip-blacklist", h.Admin.Setting.GetAuthIPBlacklistSettings)
+		adminSettings.PUT("/auth-ip-blacklist", h.Admin.Setting.UpdateAuthIPBlacklistSettings)
 		// 529过载冷却配置
 		adminSettings.GET("/overload-cooldown", h.Admin.Setting.GetOverloadCooldownSettings)
 		adminSettings.PUT("/overload-cooldown", h.Admin.Setting.UpdateOverloadCooldownSettings)

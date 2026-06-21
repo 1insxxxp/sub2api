@@ -84,6 +84,18 @@ func (User) Fields() []ent.Field {
 				}
 			}).
 			Default("email"),
+		field.String("registration_ip").
+			MaxLen(64).
+			Default(""),
+		field.String("registration_user_agent").
+			SchemaType(map[string]string{dialect.Postgres: "text"}).
+			Default(""),
+		field.String("last_login_ip").
+			MaxLen(64).
+			Default(""),
+		field.String("last_login_user_agent").
+			SchemaType(map[string]string{dialect.Postgres: "text"}).
+			Default(""),
 		field.Time("last_login_at").
 			Optional().
 			Nillable().

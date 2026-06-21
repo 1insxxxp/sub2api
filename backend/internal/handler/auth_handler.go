@@ -156,12 +156,41 @@ func (h *AuthHandler) isBackendModeEnabled(ctx context.Context) bool {
 	return h.settingSvc.IsBackendModeEnabled(ctx)
 }
 
+func (h *AuthHandler) ensureAuthIPAllowed(c *gin.Context) error {
+	if h == nil || h.settingSvc == nil || c == nil {
+		return nil
+	}
+	blocked, err := h.settingSvc.IsAuthIPBlocked(c.Request.Context(), ip.GetClientIP(c))
+	if err != nil {
+		slog.Warn("failed to check auth IP blacklist", "error", err)
+		return service.ErrServiceUnavailable
+	}
+	if blocked {
+		return service.ErrAuthIPBlocked
+	}
+	return nil
+}
+
+func authSourceMetadataFromContext(c *gin.Context) service.AuthSourceMetadata {
+	if c == nil {
+		return service.AuthSourceMetadata{}
+	}
+	return service.AuthSourceMetadata{
+		IP:        ip.GetClientIP(c),
+		UserAgent: c.GetHeader("User-Agent"),
+	}
+}
+
 // Register handles user registration
 // POST /api/v1/auth/register
 func (h *AuthHandler) Register(c *gin.Context) {
 	var req RegisterRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		response.BadRequest(c, "Invalid request: "+err.Error())
+		return
+	}
+	if err := h.ensureAuthIPAllowed(c); err != nil {
+		response.ErrorFrom(c, err)
 		return
 	}
 
@@ -171,7 +200,7 @@ func (h *AuthHandler) Register(c *gin.Context) {
 		return
 	}
 
-	_, user, err := h.authService.RegisterWithVerification(
+	_, user, err := h.authService.RegisterWithVerificationAndMetadata(
 		c.Request.Context(),
 		req.Email,
 		req.Password,
@@ -179,6 +208,7 @@ func (h *AuthHandler) Register(c *gin.Context) {
 		req.PromoCode,
 		req.InvitationCode,
 		req.AffCode,
+		authSourceMetadataFromContext(c),
 	)
 	if err != nil {
 		response.ErrorFrom(c, err)
@@ -194,6 +224,10 @@ func (h *AuthHandler) SendVerifyCode(c *gin.Context) {
 	var req SendVerifyCodeRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		response.BadRequest(c, "Invalid request: "+err.Error())
+		return
+	}
+	if err := h.ensureAuthIPAllowed(c); err != nil {
+		response.ErrorFrom(c, err)
 		return
 	}
 
@@ -221,6 +255,10 @@ func (h *AuthHandler) Login(c *gin.Context) {
 	var req LoginRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		response.BadRequest(c, "Invalid request: "+err.Error())
+		return
+	}
+	if err := h.ensureAuthIPAllowed(c); err != nil {
+		response.ErrorFrom(c, err)
 		return
 	}
 
@@ -259,7 +297,7 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		return
 	}
 
-	h.authService.RecordSuccessfulLogin(c.Request.Context(), user.ID)
+	h.authService.RecordSuccessfulLoginWithMetadata(c.Request.Context(), user.ID, authSourceMetadataFromContext(c))
 
 	h.respondWithTokenPair(c, user)
 }

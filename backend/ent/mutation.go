@@ -38699,6 +38699,10 @@ type UserMutation struct {
 	totp_enabled                     *bool
 	totp_enabled_at                  *time.Time
 	signup_source                    *string
+	registration_ip                  *string
+	registration_user_agent          *string
+	last_login_ip                    *string
+	last_login_user_agent            *string
 	last_login_at                    *time.Time
 	last_active_at                   *time.Time
 	balance_notify_enabled           *bool
@@ -39476,6 +39480,150 @@ func (m *UserMutation) OldSignupSource(ctx context.Context) (v string, err error
 // ResetSignupSource resets all changes to the "signup_source" field.
 func (m *UserMutation) ResetSignupSource() {
 	m.signup_source = nil
+}
+
+// SetRegistrationIP sets the "registration_ip" field.
+func (m *UserMutation) SetRegistrationIP(s string) {
+	m.registration_ip = &s
+}
+
+// RegistrationIP returns the value of the "registration_ip" field in the mutation.
+func (m *UserMutation) RegistrationIP() (r string, exists bool) {
+	v := m.registration_ip
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldRegistrationIP returns the old "registration_ip" field's value of the User entity.
+// If the User object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *UserMutation) OldRegistrationIP(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldRegistrationIP is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldRegistrationIP requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldRegistrationIP: %w", err)
+	}
+	return oldValue.RegistrationIP, nil
+}
+
+// ResetRegistrationIP resets all changes to the "registration_ip" field.
+func (m *UserMutation) ResetRegistrationIP() {
+	m.registration_ip = nil
+}
+
+// SetRegistrationUserAgent sets the "registration_user_agent" field.
+func (m *UserMutation) SetRegistrationUserAgent(s string) {
+	m.registration_user_agent = &s
+}
+
+// RegistrationUserAgent returns the value of the "registration_user_agent" field in the mutation.
+func (m *UserMutation) RegistrationUserAgent() (r string, exists bool) {
+	v := m.registration_user_agent
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldRegistrationUserAgent returns the old "registration_user_agent" field's value of the User entity.
+// If the User object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *UserMutation) OldRegistrationUserAgent(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldRegistrationUserAgent is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldRegistrationUserAgent requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldRegistrationUserAgent: %w", err)
+	}
+	return oldValue.RegistrationUserAgent, nil
+}
+
+// ResetRegistrationUserAgent resets all changes to the "registration_user_agent" field.
+func (m *UserMutation) ResetRegistrationUserAgent() {
+	m.registration_user_agent = nil
+}
+
+// SetLastLoginIP sets the "last_login_ip" field.
+func (m *UserMutation) SetLastLoginIP(s string) {
+	m.last_login_ip = &s
+}
+
+// LastLoginIP returns the value of the "last_login_ip" field in the mutation.
+func (m *UserMutation) LastLoginIP() (r string, exists bool) {
+	v := m.last_login_ip
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldLastLoginIP returns the old "last_login_ip" field's value of the User entity.
+// If the User object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *UserMutation) OldLastLoginIP(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldLastLoginIP is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldLastLoginIP requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldLastLoginIP: %w", err)
+	}
+	return oldValue.LastLoginIP, nil
+}
+
+// ResetLastLoginIP resets all changes to the "last_login_ip" field.
+func (m *UserMutation) ResetLastLoginIP() {
+	m.last_login_ip = nil
+}
+
+// SetLastLoginUserAgent sets the "last_login_user_agent" field.
+func (m *UserMutation) SetLastLoginUserAgent(s string) {
+	m.last_login_user_agent = &s
+}
+
+// LastLoginUserAgent returns the value of the "last_login_user_agent" field in the mutation.
+func (m *UserMutation) LastLoginUserAgent() (r string, exists bool) {
+	v := m.last_login_user_agent
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldLastLoginUserAgent returns the old "last_login_user_agent" field's value of the User entity.
+// If the User object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *UserMutation) OldLastLoginUserAgent(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldLastLoginUserAgent is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldLastLoginUserAgent requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldLastLoginUserAgent: %w", err)
+	}
+	return oldValue.LastLoginUserAgent, nil
+}
+
+// ResetLastLoginUserAgent resets all changes to the "last_login_user_agent" field.
+func (m *UserMutation) ResetLastLoginUserAgent() {
+	m.last_login_user_agent = nil
 }
 
 // SetLastLoginAt sets the "last_login_at" field.
@@ -40710,7 +40858,7 @@ func (m *UserMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *UserMutation) Fields() []string {
-	fields := make([]string, 0, 23)
+	fields := make([]string, 0, 27)
 	if m.created_at != nil {
 		fields = append(fields, user.FieldCreatedAt)
 	}
@@ -40755,6 +40903,18 @@ func (m *UserMutation) Fields() []string {
 	}
 	if m.signup_source != nil {
 		fields = append(fields, user.FieldSignupSource)
+	}
+	if m.registration_ip != nil {
+		fields = append(fields, user.FieldRegistrationIP)
+	}
+	if m.registration_user_agent != nil {
+		fields = append(fields, user.FieldRegistrationUserAgent)
+	}
+	if m.last_login_ip != nil {
+		fields = append(fields, user.FieldLastLoginIP)
+	}
+	if m.last_login_user_agent != nil {
+		fields = append(fields, user.FieldLastLoginUserAgent)
 	}
 	if m.last_login_at != nil {
 		fields = append(fields, user.FieldLastLoginAt)
@@ -40818,6 +40978,14 @@ func (m *UserMutation) Field(name string) (ent.Value, bool) {
 		return m.TotpEnabledAt()
 	case user.FieldSignupSource:
 		return m.SignupSource()
+	case user.FieldRegistrationIP:
+		return m.RegistrationIP()
+	case user.FieldRegistrationUserAgent:
+		return m.RegistrationUserAgent()
+	case user.FieldLastLoginIP:
+		return m.LastLoginIP()
+	case user.FieldLastLoginUserAgent:
+		return m.LastLoginUserAgent()
 	case user.FieldLastLoginAt:
 		return m.LastLoginAt()
 	case user.FieldLastActiveAt:
@@ -40873,6 +41041,14 @@ func (m *UserMutation) OldField(ctx context.Context, name string) (ent.Value, er
 		return m.OldTotpEnabledAt(ctx)
 	case user.FieldSignupSource:
 		return m.OldSignupSource(ctx)
+	case user.FieldRegistrationIP:
+		return m.OldRegistrationIP(ctx)
+	case user.FieldRegistrationUserAgent:
+		return m.OldRegistrationUserAgent(ctx)
+	case user.FieldLastLoginIP:
+		return m.OldLastLoginIP(ctx)
+	case user.FieldLastLoginUserAgent:
+		return m.OldLastLoginUserAgent(ctx)
 	case user.FieldLastLoginAt:
 		return m.OldLastLoginAt(ctx)
 	case user.FieldLastActiveAt:
@@ -41002,6 +41178,34 @@ func (m *UserMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetSignupSource(v)
+		return nil
+	case user.FieldRegistrationIP:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetRegistrationIP(v)
+		return nil
+	case user.FieldRegistrationUserAgent:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetRegistrationUserAgent(v)
+		return nil
+	case user.FieldLastLoginIP:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetLastLoginIP(v)
+		return nil
+	case user.FieldLastLoginUserAgent:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetLastLoginUserAgent(v)
 		return nil
 	case user.FieldLastLoginAt:
 		v, ok := value.(time.Time)
@@ -41254,6 +41458,18 @@ func (m *UserMutation) ResetField(name string) error {
 		return nil
 	case user.FieldSignupSource:
 		m.ResetSignupSource()
+		return nil
+	case user.FieldRegistrationIP:
+		m.ResetRegistrationIP()
+		return nil
+	case user.FieldRegistrationUserAgent:
+		m.ResetRegistrationUserAgent()
+		return nil
+	case user.FieldLastLoginIP:
+		m.ResetLastLoginIP()
+		return nil
+	case user.FieldLastLoginUserAgent:
+		m.ResetLastLoginUserAgent()
 		return nil
 	case user.FieldLastLoginAt:
 		m.ResetLastLoginAt()

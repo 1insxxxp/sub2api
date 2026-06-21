@@ -43,13 +43,24 @@ var (
 	ErrInvitationCodeRequired  = infraerrors.BadRequest("INVITATION_CODE_REQUIRED", "invitation code is required")
 	ErrInvitationCodeInvalid   = infraerrors.BadRequest("INVITATION_CODE_INVALID", "invalid or used invitation code")
 	ErrOAuthInvitationRequired = infraerrors.Forbidden("OAUTH_INVITATION_REQUIRED", "invitation code required to complete oauth registration")
+	ErrAuthIPBlocked           = infraerrors.Forbidden("AUTH_IP_BLOCKED", "access denied")
 )
 
 // maxTokenLength 限制 token 大小，避免超长 header 触发解析时的异常内存分配。
 const maxTokenLength = 8192
+const maxAuthSourceUserAgentLength = 1024
 
 // refreshTokenPrefix is the prefix for refresh tokens to distinguish them from access tokens.
 const refreshTokenPrefix = "rt_"
+
+type AuthSourceMetadata struct {
+	IP        string
+	UserAgent string
+}
+
+func (m AuthSourceMetadata) Empty() bool {
+	return strings.TrimSpace(m.IP) == "" && strings.TrimSpace(m.UserAgent) == ""
+}
 
 // JWTClaims JWT载荷数据
 type JWTClaims struct {
@@ -135,6 +146,11 @@ func (s *AuthService) Register(ctx context.Context, email, password string) (str
 
 // RegisterWithVerification 用户注册（支持邮件验证、优惠码、邀请码和邀请返利码），返回token和用户。
 func (s *AuthService) RegisterWithVerification(ctx context.Context, email, password, verifyCode, promoCode, invitationCode, affiliateCode string) (string, *User, error) {
+	return s.RegisterWithVerificationAndMetadata(ctx, email, password, verifyCode, promoCode, invitationCode, affiliateCode, AuthSourceMetadata{})
+}
+
+// RegisterWithVerificationAndMetadata 用户注册（支持邮件验证、优惠码、邀请码和邀请返利码），并记录注册来源。
+func (s *AuthService) RegisterWithVerificationAndMetadata(ctx context.Context, email, password, verifyCode, promoCode, invitationCode, affiliateCode string, metadata AuthSourceMetadata) (string, *User, error) {
 	// 检查是否开放注册（默认关闭：settingService 未配置时不允许注册）
 	if s.settingService == nil || !s.settingService.IsRegistrationEnabled(ctx) {
 		return "", nil, ErrRegDisabled
@@ -219,6 +235,7 @@ func (s *AuthService) RegisterWithVerification(ctx context.Context, email, passw
 		RPMLimit:     defaultRPMLimit,
 		Status:       StatusActive,
 	}
+	applyRegistrationMetadata(user, metadata)
 
 	if err := s.userRepo.Create(ctx, user); err != nil {
 		// 优先检查邮箱冲突错误（竞态条件下可能发生）
@@ -465,6 +482,15 @@ func (s *AuthService) Login(ctx context.Context, email, password string) (string
 		return "", nil, fmt.Errorf("generate token: %w", err)
 	}
 
+	return token, user, nil
+}
+
+func (s *AuthService) LoginWithMetadata(ctx context.Context, email, password string, metadata AuthSourceMetadata) (string, *User, error) {
+	token, user, err := s.Login(ctx, email, password)
+	if err != nil {
+		return "", nil, err
+	}
+	s.updateUserLoginMetadata(ctx, user, metadata)
 	return token, user, nil
 }
 
@@ -932,6 +958,43 @@ func (s *AuthService) touchUserLogin(ctx context.Context, userID int64) {
 		Exec(ctx); err != nil {
 		logger.LegacyPrintf("service.auth", "[Auth] Failed to touch login timestamps: user_id=%d err=%v", userID, err)
 	}
+}
+
+func (s *AuthService) updateUserLoginMetadata(ctx context.Context, user *User, metadata AuthSourceMetadata) {
+	if s == nil || s.userRepo == nil || user == nil || user.ID <= 0 {
+		return
+	}
+	now := time.Now().UTC()
+	user.LastLoginAt = &now
+	user.LastLoginIP = sanitizeAuthSourceIP(metadata.IP)
+	user.LastLoginUserAgent = sanitizeAuthSourceUserAgent(metadata.UserAgent)
+	if err := s.userRepo.Update(ctx, user); err != nil {
+		logger.LegacyPrintf("service.auth", "[Auth] Failed to update login source metadata: user_id=%d err=%v", user.ID, err)
+	}
+}
+
+func applyRegistrationMetadata(user *User, metadata AuthSourceMetadata) {
+	if user == nil {
+		return
+	}
+	user.RegistrationIP = sanitizeAuthSourceIP(metadata.IP)
+	user.RegistrationUserAgent = sanitizeAuthSourceUserAgent(metadata.UserAgent)
+}
+
+func sanitizeAuthSourceIP(value string) string {
+	value = strings.TrimSpace(value)
+	if len(value) > 64 {
+		return value[:64]
+	}
+	return value
+}
+
+func sanitizeAuthSourceUserAgent(value string) string {
+	value = strings.TrimSpace(value)
+	if len(value) > maxAuthSourceUserAgentLength {
+		return value[:maxAuthSourceUserAgentLength]
+	}
+	return value
 }
 
 func (s *AuthService) backfillEmailIdentityOnSuccessfulLogin(ctx context.Context, user *User) {

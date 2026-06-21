@@ -92,6 +92,10 @@ func (r *userRepository) Create(ctx context.Context, userIn *service.User) error
 		SetConcurrency(userIn.Concurrency).
 		SetStatus(userIn.Status).
 		SetSignupSource(userSignupSourceOrDefault(userIn.SignupSource)).
+		SetRegistrationIP(strings.TrimSpace(userIn.RegistrationIP)).
+		SetRegistrationUserAgent(strings.TrimSpace(userIn.RegistrationUserAgent)).
+		SetLastLoginIP(strings.TrimSpace(userIn.LastLoginIP)).
+		SetLastLoginUserAgent(strings.TrimSpace(userIn.LastLoginUserAgent)).
 		SetNillableLastLoginAt(userIn.LastLoginAt).
 		SetNillableLastActiveAt(userIn.LastActiveAt).
 		SetRpmLimit(userIn.RPMLimit).
@@ -242,6 +246,18 @@ func (r *userRepository) Update(ctx context.Context, userIn *service.User) error
 		SetRpmLimit(userIn.RPMLimit)
 	if userIn.SignupSource != "" {
 		updateOp = updateOp.SetSignupSource(userIn.SignupSource)
+	}
+	if registrationIP := strings.TrimSpace(userIn.RegistrationIP); registrationIP != "" {
+		updateOp = updateOp.SetRegistrationIP(registrationIP)
+	}
+	if registrationUA := strings.TrimSpace(userIn.RegistrationUserAgent); registrationUA != "" {
+		updateOp = updateOp.SetRegistrationUserAgent(registrationUA)
+	}
+	if lastLoginIP := strings.TrimSpace(userIn.LastLoginIP); lastLoginIP != "" {
+		updateOp = updateOp.SetLastLoginIP(lastLoginIP)
+	}
+	if lastLoginUA := strings.TrimSpace(userIn.LastLoginUserAgent); lastLoginUA != "" {
+		updateOp = updateOp.SetLastLoginUserAgent(lastLoginUA)
 	}
 	if userIn.LastLoginAt != nil {
 		updateOp = updateOp.SetLastLoginAt(*userIn.LastLoginAt)
@@ -990,6 +1006,10 @@ func applyUserEntityToService(dst *service.User, src *dbent.User) {
 	}
 	dst.ID = src.ID
 	dst.SignupSource = src.SignupSource
+	dst.RegistrationIP = src.RegistrationIP
+	dst.RegistrationUserAgent = src.RegistrationUserAgent
+	dst.LastLoginIP = src.LastLoginIP
+	dst.LastLoginUserAgent = src.LastLoginUserAgent
 	dst.LastLoginAt = src.LastLoginAt
 	dst.LastActiveAt = src.LastActiveAt
 	dst.CreatedAt = src.CreatedAt
