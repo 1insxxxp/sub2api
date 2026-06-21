@@ -23,8 +23,13 @@ func newAuthIPBlacklistSettingsHandler(values map[string]string) (*SettingHandle
 func TestSettingHandlerGetAuthIPBlacklistSettings(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	handler, _ := newAuthIPBlacklistSettingsHandler(map[string]string{
-		service.SettingKeyAuthIPBlacklistEnabled: "true",
-		service.SettingKeyAuthIPBlacklistRules:   `["45.207.193.151","bad-rule","202.8.9.0/24"]`,
+		service.SettingKeyAuthIPBlacklistEnabled:               "true",
+		service.SettingKeyAuthIPBlacklistRules:                 `["45.207.193.151","bad-rule","202.8.9.0/24"]`,
+		service.SettingKeyAuthIPAutoBlockEnabled:               "true",
+		service.SettingKeyAuthIPAutoBlockWindowMinutes:         "10",
+		service.SettingKeyAuthIPAutoBlockRegisterThreshold:     "5",
+		service.SettingKeyAuthIPAutoBlockVerifyCodeThreshold:   "12",
+		service.SettingKeyAuthIPAutoBlockLoginFailureThreshold: "30",
 	})
 
 	rec := httptest.NewRecorder()
@@ -39,13 +44,19 @@ func TestSettingHandlerGetAuthIPBlacklistSettings(t *testing.T) {
 	data := resp.Data.(map[string]any)
 	require.Equal(t, true, data["enabled"])
 	require.Equal(t, []any{"45.207.193.151", "202.8.9.0/24"}, data["rules"])
+	autoBlock := data["auto_block"].(map[string]any)
+	require.Equal(t, true, autoBlock["enabled"])
+	require.Equal(t, float64(10), autoBlock["window_minutes"])
+	require.Equal(t, float64(5), autoBlock["register_threshold"])
+	require.Equal(t, float64(12), autoBlock["verify_code_threshold"])
+	require.Equal(t, float64(30), autoBlock["login_failure_threshold"])
 }
 
 func TestSettingHandlerUpdateAuthIPBlacklistSettings(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	handler, repo := newAuthIPBlacklistSettingsHandler(map[string]string{})
 
-	body := []byte(`{"enabled":true,"rules":["45.207.193.151","bad-rule","202.8.9.0/24","45.207.193.151"]}`)
+	body := []byte(`{"enabled":true,"rules":["45.207.193.151","bad-rule","202.8.9.0/24","45.207.193.151"],"auto_block":{"enabled":true,"window_minutes":15,"register_threshold":4,"verify_code_threshold":10,"login_failure_threshold":20}}`)
 	rec := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(rec)
 	c.Request = httptest.NewRequest(http.MethodPut, "/api/v1/admin/settings/auth-ip-blacklist", bytes.NewReader(body))
@@ -56,4 +67,9 @@ func TestSettingHandlerUpdateAuthIPBlacklistSettings(t *testing.T) {
 	require.Equal(t, http.StatusOK, rec.Code)
 	require.Equal(t, "true", repo.lastUpdates[service.SettingKeyAuthIPBlacklistEnabled])
 	require.JSONEq(t, `["45.207.193.151","202.8.9.0/24"]`, repo.lastUpdates[service.SettingKeyAuthIPBlacklistRules])
+	require.Equal(t, "true", repo.lastUpdates[service.SettingKeyAuthIPAutoBlockEnabled])
+	require.Equal(t, "15", repo.lastUpdates[service.SettingKeyAuthIPAutoBlockWindowMinutes])
+	require.Equal(t, "4", repo.lastUpdates[service.SettingKeyAuthIPAutoBlockRegisterThreshold])
+	require.Equal(t, "10", repo.lastUpdates[service.SettingKeyAuthIPAutoBlockVerifyCodeThreshold])
+	require.Equal(t, "20", repo.lastUpdates[service.SettingKeyAuthIPAutoBlockLoginFailureThreshold])
 }

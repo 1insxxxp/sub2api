@@ -22,6 +22,9 @@ func RegisterAuthRoutes(
 ) {
 	// 创建速率限制器
 	rateLimiter := middleware.NewRateLimiter(redisClient)
+	if h != nil && h.Auth != nil {
+		h.Auth.SetAuthIPAbuseGuard(service.NewAuthIPAbuseGuard(redisClient, settingService))
+	}
 
 	// 公开接口
 	auth := v1.Group("/auth")

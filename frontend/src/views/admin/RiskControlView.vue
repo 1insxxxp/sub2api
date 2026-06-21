@@ -61,6 +61,110 @@
           </div>
         </div>
 
+        <div data-test="auth-ip-guard-card" class="admin-surface overflow-hidden">
+          <div class="admin-panel-header">
+            <div>
+              <h2 class="text-lg font-semibold text-gray-900 dark:text-white">{{ t('admin.riskControl.authIPTitle') }}</h2>
+              <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">{{ t('admin.riskControl.authIPHint') }}</p>
+            </div>
+            <span class="admin-page-meta-chip w-fit text-xs">
+              {{ t('admin.riskControl.authIPRuleCount', { count: authIPSettings.rules.length }) }}
+            </span>
+          </div>
+
+          <div class="grid grid-cols-1 gap-5 p-6 xl:grid-cols-[minmax(0,1fr)_minmax(360px,460px)]">
+            <div class="space-y-4">
+              <div class="grid grid-cols-1 gap-3 md:grid-cols-2">
+                <div class="admin-form-section flex items-center justify-between gap-4">
+                  <div>
+                    <p class="text-sm font-medium text-gray-900 dark:text-white">{{ t('admin.riskControl.authIPBlacklistEnabled') }}</p>
+                    <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">{{ t('admin.riskControl.authIPBlacklistEnabledHint') }}</p>
+                  </div>
+                  <Toggle v-model="authIPSettings.enabled" />
+                </div>
+                <div class="admin-form-section flex items-center justify-between gap-4">
+                  <div>
+                    <p class="text-sm font-medium text-gray-900 dark:text-white">{{ t('admin.riskControl.authIPAutoBlockEnabled') }}</p>
+                    <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">{{ t('admin.riskControl.authIPAutoBlockEnabledHint') }}</p>
+                  </div>
+                  <Toggle v-model="authIPSettings.auto_block.enabled" />
+                </div>
+              </div>
+
+              <div class="admin-form-section">
+                <div class="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <p class="text-sm font-semibold text-gray-900 dark:text-white">{{ t('admin.riskControl.authIPRules') }}</p>
+                    <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">{{ t('admin.riskControl.authIPRulesHint') }}</p>
+                  </div>
+                  <div class="flex min-w-0 gap-2">
+                    <input
+                      v-model.trim="authIPRuleDraft"
+                      type="text"
+                      class="input h-9 min-w-0 font-mono text-xs"
+                      :placeholder="t('admin.riskControl.authIPRulePlaceholder')"
+                      @keydown.enter.prevent="addAuthIPRule"
+                    />
+                    <button type="button" class="btn btn-secondary h-9 shrink-0 px-3" @click="addAuthIPRule">
+                      {{ t('admin.riskControl.authIPAddRule') }}
+                    </button>
+                  </div>
+                </div>
+
+                <div v-if="authIPSettings.rules.length > 0" class="flex max-h-36 flex-wrap gap-2 overflow-y-auto pr-1">
+                  <span
+                    v-for="rule in authIPSettings.rules"
+                    :key="rule"
+                    class="inline-flex items-center gap-2 rounded-lg border border-blue-100 bg-white px-2.5 py-1.5 font-mono text-xs text-gray-700 shadow-sm dark:border-blue-500/10 dark:bg-white/[0.04] dark:text-gray-200"
+                  >
+                    {{ rule }}
+                    <button
+                      type="button"
+                      class="rounded-full p-0.5 text-gray-400 transition-colors hover:bg-red-50 hover:text-red-500 dark:hover:bg-red-500/10"
+                      :title="t('admin.riskControl.authIPRemoveRule')"
+                      @click="removeAuthIPRule(rule)"
+                    >
+                      <Icon name="x" size="xs" />
+                    </button>
+                  </span>
+                </div>
+                <p v-else class="admin-empty-state py-6 text-sm text-gray-500 dark:text-gray-400">
+                  {{ t('admin.riskControl.authIPNoRules') }}
+                </p>
+              </div>
+            </div>
+
+            <div class="admin-form-section">
+              <p class="text-sm font-semibold text-gray-900 dark:text-white">{{ t('admin.riskControl.authIPAutoBlockEnabled') }}</p>
+              <div class="mt-4 grid grid-cols-2 gap-3">
+                <label class="space-y-1">
+                  <span class="input-label mb-0">{{ t('admin.riskControl.authIPAutoWindow') }}</span>
+                  <input v-model.number="authIPSettings.auto_block.window_minutes" type="number" min="1" max="1440" class="input" />
+                </label>
+                <label class="space-y-1">
+                  <span class="input-label mb-0">{{ t('admin.riskControl.authIPRegisterThreshold') }}</span>
+                  <input v-model.number="authIPSettings.auto_block.register_threshold" type="number" min="1" max="1000" class="input" />
+                </label>
+                <label class="space-y-1">
+                  <span class="input-label mb-0">{{ t('admin.riskControl.authIPVerifyCodeThreshold') }}</span>
+                  <input v-model.number="authIPSettings.auto_block.verify_code_threshold" type="number" min="1" max="1000" class="input" />
+                </label>
+                <label class="space-y-1">
+                  <span class="input-label mb-0">{{ t('admin.riskControl.authIPLoginFailureThreshold') }}</span>
+                  <input v-model.number="authIPSettings.auto_block.login_failure_threshold" type="number" min="1" max="1000" class="input" />
+                </label>
+              </div>
+              <div class="mt-4 flex justify-end">
+                <button type="button" class="btn btn-primary inline-flex items-center gap-2" :disabled="authIPSaving || authIPLoading" @click="saveAuthIPSettings">
+                  <Icon v-if="authIPSaving" name="refresh" size="sm" class="animate-spin" />
+                  <Icon v-else name="check" size="sm" />
+                  {{ authIPSaving ? t('common.saving') : t('common.save') }}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
         <div
           v-if="showPreBlockRuntimeCard"
           data-test="pre-block-runtime-cards"
@@ -1138,6 +1242,7 @@ import type {
   ModerationMode,
   UpdateContentModerationConfig,
 } from '@/api/admin/riskControl'
+import type { AuthIPBlacklistSettings } from '@/api/admin/settings'
 import type { AdminGroup, SelectOption } from '@/types'
 import { useAppStore } from '@/stores/app'
 import { extractApiErrorMessage } from '@/utils/apiError'
@@ -1214,6 +1319,9 @@ const moderationTestPrompt = ref('')
 const moderationTestImages = ref<string[]>([])
 const moderationTestResult = ref<ContentModerationTestAuditResult | null>(null)
 const inputDetailRow = ref<ContentModerationLog | null>(null)
+const authIPLoading = ref(false)
+const authIPSaving = ref(false)
+const authIPRuleDraft = ref('')
 let statusTimer: number | null = null
 
 const configForm = reactive({
@@ -1252,6 +1360,18 @@ const configForm = reactive({
   keyword_blocking_mode: 'keyword_and_api' as KeywordBlockingMode,
   model_filter_type: 'all' as ContentModerationModelFilterType,
   model_filter_models: [] as string[],
+})
+
+const authIPSettings = reactive<AuthIPBlacklistSettings>({
+  enabled: false,
+  rules: [],
+  auto_block: {
+    enabled: false,
+    window_minutes: 10,
+    register_threshold: 5,
+    verify_code_threshold: 12,
+    login_failure_threshold: 30,
+  },
 })
 
 const pagination = reactive({
@@ -1732,15 +1852,86 @@ function applyConfig(config: ContentModerationConfig) {
   configForm.model_filter_models = modelFilter.models
 }
 
+function clampAuthIPSetting(value: unknown, fallback: number, min: number, max: number): number {
+  const parsed = Number(value)
+  if (!Number.isFinite(parsed)) return fallback
+  return Math.min(max, Math.max(min, Math.floor(parsed)))
+}
+
+function uniqueAuthIPRules(rules: unknown): string[] {
+  const rawRules = Array.isArray(rules) ? rules : []
+  return Array.from(
+    new Set(
+      rawRules
+        .map((rule) => String(rule).trim())
+        .filter(Boolean)
+    )
+  )
+}
+
+function applyAuthIPSettings(settings?: Partial<AuthIPBlacklistSettings> | null) {
+  authIPSettings.enabled = settings?.enabled === true
+  authIPSettings.rules = uniqueAuthIPRules(settings?.rules)
+  authIPSettings.auto_block.enabled = settings?.auto_block?.enabled === true
+  authIPSettings.auto_block.window_minutes = clampAuthIPSetting(settings?.auto_block?.window_minutes, 10, 1, 1440)
+  authIPSettings.auto_block.register_threshold = clampAuthIPSetting(settings?.auto_block?.register_threshold, 5, 1, 1000)
+  authIPSettings.auto_block.verify_code_threshold = clampAuthIPSetting(settings?.auto_block?.verify_code_threshold, 12, 1, 1000)
+  authIPSettings.auto_block.login_failure_threshold = clampAuthIPSetting(settings?.auto_block?.login_failure_threshold, 30, 1, 1000)
+}
+
+function buildAuthIPPayload(): AuthIPBlacklistSettings {
+  return {
+    enabled: authIPSettings.enabled,
+    rules: uniqueAuthIPRules(authIPSettings.rules),
+    auto_block: {
+      enabled: authIPSettings.auto_block.enabled,
+      window_minutes: clampAuthIPSetting(authIPSettings.auto_block.window_minutes, 10, 1, 1440),
+      register_threshold: clampAuthIPSetting(authIPSettings.auto_block.register_threshold, 5, 1, 1000),
+      verify_code_threshold: clampAuthIPSetting(authIPSettings.auto_block.verify_code_threshold, 12, 1, 1000),
+      login_failure_threshold: clampAuthIPSetting(authIPSettings.auto_block.login_failure_threshold, 30, 1, 1000),
+    },
+  }
+}
+
+function addAuthIPRule() {
+  const additions = authIPRuleDraft.value
+    .split(/[\s,，]+/)
+    .map((rule) => rule.trim())
+    .filter(Boolean)
+  if (additions.length === 0) return
+  authIPSettings.rules = uniqueAuthIPRules([...authIPSettings.rules, ...additions])
+  authIPRuleDraft.value = ''
+}
+
+function removeAuthIPRule(rule: string) {
+  authIPSettings.rules = authIPSettings.rules.filter((item) => item !== rule)
+}
+
+async function saveAuthIPSettings() {
+  authIPSaving.value = true
+  try {
+    const updated = await adminAPI.settings.updateAuthIPBlacklistSettings(buildAuthIPPayload())
+    applyAuthIPSettings(updated)
+    appStore.showSuccess(t('admin.riskControl.authIPSaved'))
+  } catch (err: unknown) {
+    appStore.showError(extractApiErrorMessage(err, t('admin.riskControl.authIPSaveFailed')))
+  } finally {
+    authIPSaving.value = false
+  }
+}
+
 async function loadAll() {
   loading.value = true
+  authIPLoading.value = true
   try {
-    const [config, groupItems, runtimeStatus] = await Promise.all([
+    const [config, groupItems, runtimeStatus, authIPConfig] = await Promise.all([
       adminAPI.riskControl.getConfig(),
       adminAPI.groups.getAll(),
       adminAPI.riskControl.getStatus(),
+      adminAPI.settings.getAuthIPBlacklistSettings(),
     ])
     applyConfig(config)
+    applyAuthIPSettings(authIPConfig)
     groups.value = groupItems
     status.value = runtimeStatus
     if (Array.isArray(runtimeStatus.api_key_statuses)) {
@@ -1752,6 +1943,7 @@ async function loadAll() {
     appStore.showError(extractApiErrorMessage(err, t('admin.riskControl.loadFailed')))
   } finally {
     loading.value = false
+    authIPLoading.value = false
   }
 }
 

@@ -68,8 +68,17 @@ type SettingRepository interface {
 }
 
 type AuthIPBlacklistSettings struct {
-	Enabled bool     `json:"enabled"`
-	Rules   []string `json:"rules"`
+	Enabled   bool                    `json:"enabled"`
+	Rules     []string                `json:"rules"`
+	AutoBlock AuthIPAutoBlockSettings `json:"auto_block"`
+}
+
+type AuthIPAutoBlockSettings struct {
+	Enabled               bool `json:"enabled"`
+	WindowMinutes         int  `json:"window_minutes"`
+	RegisterThreshold     int  `json:"register_threshold"`
+	VerifyCodeThreshold   int  `json:"verify_code_threshold"`
+	LoginFailureThreshold int  `json:"login_failure_threshold"`
 }
 
 // cachedVersionBounds 缓存 Claude Code 版本号上下限（进程内缓存，60s TTL）
@@ -2328,13 +2337,19 @@ func (s *SettingService) GetAuthIPBlacklistSettings(ctx context.Context) (*AuthI
 	values, err := s.settingRepo.GetMultiple(ctx, []string{
 		SettingKeyAuthIPBlacklistEnabled,
 		SettingKeyAuthIPBlacklistRules,
+		SettingKeyAuthIPAutoBlockEnabled,
+		SettingKeyAuthIPAutoBlockWindowMinutes,
+		SettingKeyAuthIPAutoBlockRegisterThreshold,
+		SettingKeyAuthIPAutoBlockVerifyCodeThreshold,
+		SettingKeyAuthIPAutoBlockLoginFailureThreshold,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("get auth IP blacklist settings: %w", err)
 	}
 	return &AuthIPBlacklistSettings{
-		Enabled: strings.EqualFold(strings.TrimSpace(values[SettingKeyAuthIPBlacklistEnabled]), "true"),
-		Rules:   NormalizeIPRules(values[SettingKeyAuthIPBlacklistRules]),
+		Enabled:   strings.EqualFold(strings.TrimSpace(values[SettingKeyAuthIPBlacklistEnabled]), "true"),
+		Rules:     NormalizeIPRules(values[SettingKeyAuthIPBlacklistRules]),
+		AutoBlock: authIPAutoBlockSettingsFromValues(values),
 	}, nil
 }
 
@@ -2353,7 +2368,64 @@ func (s *SettingService) SetAuthIPBlacklistSettings(ctx context.Context, setting
 	return s.settingRepo.SetMultiple(ctx, map[string]string{
 		SettingKeyAuthIPBlacklistEnabled: strconv.FormatBool(settings.Enabled),
 		SettingKeyAuthIPBlacklistRules:   string(data),
+		SettingKeyAuthIPAutoBlockEnabled: strconv.FormatBool(settings.AutoBlock.Enabled),
+		SettingKeyAuthIPAutoBlockWindowMinutes: strconv.Itoa(normalizeAuthIPAutoBlockInt(
+			settings.AutoBlock.WindowMinutes,
+			defaultAuthIPAutoBlockWindowMinutes,
+			1,
+			1440,
+		)),
+		SettingKeyAuthIPAutoBlockRegisterThreshold: strconv.Itoa(normalizeAuthIPAutoBlockInt(
+			settings.AutoBlock.RegisterThreshold,
+			defaultAuthIPAutoBlockRegisterThreshold,
+			1,
+			1000,
+		)),
+		SettingKeyAuthIPAutoBlockVerifyCodeThreshold: strconv.Itoa(normalizeAuthIPAutoBlockInt(
+			settings.AutoBlock.VerifyCodeThreshold,
+			defaultAuthIPAutoBlockVerifyCodeThreshold,
+			1,
+			1000,
+		)),
+		SettingKeyAuthIPAutoBlockLoginFailureThreshold: strconv.Itoa(normalizeAuthIPAutoBlockInt(
+			settings.AutoBlock.LoginFailureThreshold,
+			defaultAuthIPAutoBlockLoginFailureThreshold,
+			1,
+			1000,
+		)),
 	})
+}
+
+func (s *SettingService) GetAuthIPAutoBlockSettings(ctx context.Context) (*AuthIPAutoBlockSettings, error) {
+	settings, err := s.GetAuthIPBlacklistSettings(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if settings == nil {
+		return &AuthIPAutoBlockSettings{}, nil
+	}
+	return &settings.AutoBlock, nil
+}
+
+func (s *SettingService) AddAuthIPBlacklistRule(ctx context.Context, rule string) error {
+	if s == nil || s.settingRepo == nil {
+		return ErrSettingNotFound
+	}
+	rule = strings.TrimSpace(rule)
+	if rule == "" || !ip.ValidateIPPattern(rule) {
+		return nil
+	}
+	settings, err := s.GetAuthIPBlacklistSettings(ctx)
+	if err != nil {
+		return err
+	}
+	if settings == nil {
+		settings = &AuthIPBlacklistSettings{}
+	}
+	settings.Enabled = true
+	settings.Rules = append(settings.Rules, rule)
+	settings.Rules = NormalizeIPRulesFromSlice(settings.Rules)
+	return s.SetAuthIPBlacklistSettings(ctx, settings)
 }
 
 func (s *SettingService) IsAuthIPBlocked(ctx context.Context, clientIP string) (bool, error) {
@@ -2366,6 +2438,61 @@ func (s *SettingService) IsAuthIPBlocked(ctx context.Context, clientIP string) (
 	}
 	allowed, _ := ip.CheckIPRestriction(clientIP, nil, settings.Rules)
 	return !allowed, nil
+}
+
+const (
+	defaultAuthIPAutoBlockWindowMinutes         = 10
+	defaultAuthIPAutoBlockRegisterThreshold     = 5
+	defaultAuthIPAutoBlockVerifyCodeThreshold   = 12
+	defaultAuthIPAutoBlockLoginFailureThreshold = 30
+)
+
+func authIPAutoBlockSettingsFromValues(values map[string]string) AuthIPAutoBlockSettings {
+	return AuthIPAutoBlockSettings{
+		Enabled: strings.EqualFold(strings.TrimSpace(values[SettingKeyAuthIPAutoBlockEnabled]), "true"),
+		WindowMinutes: normalizeAuthIPAutoBlockIntFromRaw(
+			values[SettingKeyAuthIPAutoBlockWindowMinutes],
+			defaultAuthIPAutoBlockWindowMinutes,
+			1,
+			1440,
+		),
+		RegisterThreshold: normalizeAuthIPAutoBlockIntFromRaw(
+			values[SettingKeyAuthIPAutoBlockRegisterThreshold],
+			defaultAuthIPAutoBlockRegisterThreshold,
+			1,
+			1000,
+		),
+		VerifyCodeThreshold: normalizeAuthIPAutoBlockIntFromRaw(
+			values[SettingKeyAuthIPAutoBlockVerifyCodeThreshold],
+			defaultAuthIPAutoBlockVerifyCodeThreshold,
+			1,
+			1000,
+		),
+		LoginFailureThreshold: normalizeAuthIPAutoBlockIntFromRaw(
+			values[SettingKeyAuthIPAutoBlockLoginFailureThreshold],
+			defaultAuthIPAutoBlockLoginFailureThreshold,
+			1,
+			1000,
+		),
+	}
+}
+
+func normalizeAuthIPAutoBlockIntFromRaw(raw string, fallback, min, max int) int {
+	parsed, err := strconv.Atoi(strings.TrimSpace(raw))
+	if err != nil {
+		return fallback
+	}
+	return normalizeAuthIPAutoBlockInt(parsed, fallback, min, max)
+}
+
+func normalizeAuthIPAutoBlockInt(value, fallback, min, max int) int {
+	if value < min {
+		return fallback
+	}
+	if value > max {
+		return max
+	}
+	return value
 }
 
 func NormalizeIPRules(raw string) []string {
@@ -2912,6 +3039,11 @@ func (s *SettingService) InitializeDefaultSettings(ctx context.Context) error {
 		SettingKeyPromoCodeEnabled:                          "true", // 默认启用优惠码功能
 		SettingKeyAuthIPBlacklistEnabled:                    "false",
 		SettingKeyAuthIPBlacklistRules:                      "[]",
+		SettingKeyAuthIPAutoBlockEnabled:                    "false",
+		SettingKeyAuthIPAutoBlockWindowMinutes:              strconv.Itoa(defaultAuthIPAutoBlockWindowMinutes),
+		SettingKeyAuthIPAutoBlockRegisterThreshold:          strconv.Itoa(defaultAuthIPAutoBlockRegisterThreshold),
+		SettingKeyAuthIPAutoBlockVerifyCodeThreshold:        strconv.Itoa(defaultAuthIPAutoBlockVerifyCodeThreshold),
+		SettingKeyAuthIPAutoBlockLoginFailureThreshold:      strconv.Itoa(defaultAuthIPAutoBlockLoginFailureThreshold),
 		SettingKeyLoginAgreementEnabled:                     "false",
 		SettingKeyLoginAgreementMode:                        defaultLoginAgreementMode,
 		SettingKeyLoginAgreementUpdatedAt:                   defaultLoginAgreementDate,

@@ -2,6 +2,7 @@ package handler
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"strings"
 	"sync"
@@ -23,6 +24,7 @@ type AuthHandler struct {
 	authService          *service.AuthService
 	userService          *service.UserService
 	settingSvc           *service.SettingService
+	authIPAbuseGuard     *service.AuthIPAbuseGuard
 	promoService         *service.PromoService
 	redeemService        *service.RedeemService
 	totpService          *service.TotpService
@@ -30,6 +32,13 @@ type AuthHandler struct {
 
 	dingTalkClientInstance *DingTalkClient
 	dingTalkClientMu       sync.Mutex
+}
+
+func (h *AuthHandler) SetAuthIPAbuseGuard(guard *service.AuthIPAbuseGuard) {
+	if h == nil {
+		return
+	}
+	h.authIPAbuseGuard = guard
 }
 
 // NewAuthHandler creates a new AuthHandler
@@ -181,6 +190,26 @@ func authSourceMetadataFromContext(c *gin.Context) service.AuthSourceMetadata {
 	}
 }
 
+func (h *AuthHandler) recordAuthIPAbuse(c *gin.Context, event service.AuthIPAbuseEvent) {
+	if h == nil || h.authIPAbuseGuard == nil || c == nil {
+		return
+	}
+	decision, err := h.authIPAbuseGuard.Record(c.Request.Context(), event, ip.GetClientIP(c))
+	if err != nil {
+		slog.Warn("failed to record auth IP abuse signal", "event", event, "error", err)
+		return
+	}
+	if decision != nil && decision.Blocked {
+		slog.Warn(
+			"auth IP auto blocked",
+			"event", decision.Event,
+			"ip", decision.IP,
+			"count", decision.Count,
+			"threshold", decision.Threshold,
+		)
+	}
+}
+
 // Register handles user registration
 // POST /api/v1/auth/register
 func (h *AuthHandler) Register(c *gin.Context) {
@@ -215,6 +244,7 @@ func (h *AuthHandler) Register(c *gin.Context) {
 		return
 	}
 
+	h.recordAuthIPAbuse(c, service.AuthIPAbuseEventRegisterSuccess)
 	h.respondWithTokenPair(c, user)
 }
 
@@ -243,6 +273,7 @@ func (h *AuthHandler) SendVerifyCode(c *gin.Context) {
 		return
 	}
 
+	h.recordAuthIPAbuse(c, service.AuthIPAbuseEventVerifyCodeSent)
 	response.Success(c, SendVerifyCodeResponse{
 		Message:   "Verification code sent successfully",
 		Countdown: result.Countdown,
@@ -270,6 +301,9 @@ func (h *AuthHandler) Login(c *gin.Context) {
 
 	token, user, err := h.authService.Login(c.Request.Context(), req.Email, req.Password)
 	if err != nil {
+		if errors.Is(err, service.ErrInvalidCredentials) {
+			h.recordAuthIPAbuse(c, service.AuthIPAbuseEventLoginFailure)
+		}
 		response.ErrorFrom(c, err)
 		return
 	}
@@ -323,6 +357,10 @@ func (h *AuthHandler) Login2FA(c *gin.Context) {
 		response.BadRequest(c, "Invalid request: "+err.Error())
 		return
 	}
+	if err := h.ensureAuthIPAllowed(c); err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
 
 	slog.Debug("login_2fa_request",
 		"temp_token_len", len(req.TempToken),
@@ -351,6 +389,7 @@ func (h *AuthHandler) Login2FA(c *gin.Context) {
 		slog.Debug("login_2fa_verify_failed",
 			"user_id", session.UserID,
 			"error", err)
+		h.recordAuthIPAbuse(c, service.AuthIPAbuseEventLoginFailure)
 		response.ErrorFrom(c, err)
 		return
 	}
@@ -419,7 +458,7 @@ func (h *AuthHandler) Login2FA(c *gin.Context) {
 		secureCookie := isRequestHTTPS(c)
 		clearOAuthPendingSessionCookie(c, secureCookie)
 		clearOAuthPendingBrowserCookie(c, secureCookie)
-		h.authService.RecordSuccessfulLogin(c.Request.Context(), user.ID)
+		h.authService.RecordSuccessfulLoginWithMetadata(c.Request.Context(), user.ID, authSourceMetadataFromContext(c))
 
 		user, err = h.userService.GetByID(c.Request.Context(), session.UserID)
 		if err != nil {
@@ -432,7 +471,7 @@ func (h *AuthHandler) Login2FA(c *gin.Context) {
 	_ = h.totpService.DeleteLoginSession(c.Request.Context(), req.TempToken)
 
 	if session.PendingOAuthBind == nil {
-		h.authService.RecordSuccessfulLogin(c.Request.Context(), user.ID)
+		h.authService.RecordSuccessfulLoginWithMetadata(c.Request.Context(), user.ID, authSourceMetadataFromContext(c))
 	}
 
 	h.respondWithTokenPair(c, user)

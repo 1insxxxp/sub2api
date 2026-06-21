@@ -13,6 +13,8 @@ const {
   getStatus,
   listLogs,
   getGroups,
+  getAuthIPBlacklistSettings,
+  updateAuthIPBlacklistSettings,
   showError,
   showSuccess,
 } = vi.hoisted(() => ({
@@ -21,6 +23,8 @@ const {
   getStatus: vi.fn(),
   listLogs: vi.fn(),
   getGroups: vi.fn(),
+  getAuthIPBlacklistSettings: vi.fn(),
+  updateAuthIPBlacklistSettings: vi.fn(),
   showError: vi.fn(),
   showSuccess: vi.fn(),
 }))
@@ -39,6 +43,10 @@ vi.mock('@/api/admin', () => ({
     },
     groups: {
       getAll: getGroups,
+    },
+    settings: {
+      getAuthIPBlacklistSettings,
+      updateAuthIPBlacklistSettings,
     },
   },
 }))
@@ -193,6 +201,8 @@ describe('admin RiskControlView', () => {
     getStatus.mockReset()
     listLogs.mockReset()
     getGroups.mockReset()
+    getAuthIPBlacklistSettings.mockReset()
+    updateAuthIPBlacklistSettings.mockReset()
     showError.mockReset()
     showSuccess.mockReset()
 
@@ -200,6 +210,18 @@ describe('admin RiskControlView', () => {
     getStatus.mockResolvedValue(runtimeStatus())
     listLogs.mockResolvedValue({ items: [], total: 0, page: 1, page_size: 20, pages: 1 })
     getGroups.mockResolvedValue([])
+    getAuthIPBlacklistSettings.mockResolvedValue({
+      enabled: true,
+      rules: ['45.207.193.151'],
+      auto_block: {
+        enabled: true,
+        window_minutes: 10,
+        register_threshold: 5,
+        verify_code_threshold: 12,
+        login_failure_threshold: 30,
+      },
+    })
+    updateAuthIPBlacklistSettings.mockImplementation(async (payload: any) => payload)
     updateConfig.mockImplementation(async (payload: UpdateContentModerationConfig) => ({
       ...baseConfig(),
       ...payload,
@@ -232,6 +254,7 @@ describe('admin RiskControlView', () => {
     expect(wrapper.find('[data-test="admin-page-hero"]').exists()).toBe(false)
     expect(wrapper.find('.admin-page-hero').exists()).toBe(false)
     expect(wrapper.get('[data-test="risk-control-action-toolbar"]').classes()).toContain('admin-toolbar-surface')
+    expect(wrapper.get('[data-test="auth-ip-guard-card"]').classes()).toContain('admin-surface')
     expect(wrapper.get('[data-test="pre-block-sync-card"]').classes()).toContain('admin-surface')
     expect(wrapper.get('[data-test="pre-block-api-key-load-card"]').classes()).toContain('admin-surface')
     expect(wrapper.get('[data-test="pre-block-sync-card"] .admin-panel-header').exists()).toBe(true)

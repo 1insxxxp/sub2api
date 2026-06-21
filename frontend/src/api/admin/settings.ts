@@ -1359,6 +1359,37 @@ export async function resetWebSearchUsage(payload: {
   );
 }
 
+export interface AuthIPAutoBlockSettings {
+  enabled: boolean;
+  window_minutes: number;
+  register_threshold: number;
+  verify_code_threshold: number;
+  login_failure_threshold: number;
+}
+
+export interface AuthIPBlacklistSettings {
+  enabled: boolean;
+  rules: string[];
+  auto_block: AuthIPAutoBlockSettings;
+}
+
+export async function getAuthIPBlacklistSettings(): Promise<AuthIPBlacklistSettings> {
+  const { data } = await apiClient.get<AuthIPBlacklistSettings>(
+    "/admin/settings/auth-ip-blacklist",
+  );
+  return data;
+}
+
+export async function updateAuthIPBlacklistSettings(
+  settings: AuthIPBlacklistSettings,
+): Promise<AuthIPBlacklistSettings> {
+  const { data } = await apiClient.put<AuthIPBlacklistSettings>(
+    "/admin/settings/auth-ip-blacklist",
+    settings,
+  );
+  return data;
+}
+
 export const settingsAPI = {
   getSettings,
   updateSettings,
@@ -1386,6 +1417,8 @@ export const settingsAPI = {
   updateWebSearchEmulationConfig,
   testWebSearchEmulation,
   resetWebSearchUsage,
+  getAuthIPBlacklistSettings,
+  updateAuthIPBlacklistSettings,
 };
 
 export default settingsAPI;

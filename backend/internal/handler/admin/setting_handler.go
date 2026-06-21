@@ -681,8 +681,9 @@ type UpdateSettingsRequest struct {
 }
 
 type AuthIPBlacklistSettingsRequest struct {
-	Enabled bool     `json:"enabled"`
-	Rules   []string `json:"rules"`
+	Enabled   bool                            `json:"enabled"`
+	Rules     []string                        `json:"rules"`
+	AutoBlock service.AuthIPAutoBlockSettings `json:"auto_block"`
 }
 
 // UpdateSettings 更新系统设置
@@ -3102,8 +3103,9 @@ func (h *SettingHandler) UpdateAuthIPBlacklistSettings(c *gin.Context) {
 	}
 
 	if err := h.settingService.SetAuthIPBlacklistSettings(c.Request.Context(), &service.AuthIPBlacklistSettings{
-		Enabled: req.Enabled,
-		Rules:   req.Rules,
+		Enabled:   req.Enabled,
+		Rules:     req.Rules,
+		AutoBlock: req.AutoBlock,
 	}); err != nil {
 		response.ErrorFrom(c, err)
 		return
