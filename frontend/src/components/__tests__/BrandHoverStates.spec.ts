@@ -34,4 +34,14 @@ describe('brand hover states', () => {
       }
     }
   })
+
+  it('uses high-contrast themed text selection colors', () => {
+    const source = readFileSync(resolve(root, 'style.css'), 'utf8')
+
+    expect(source).toContain('--brand-selection-bg: rgba(37, 99, 235, 0.84)')
+    expect(source).toContain('--brand-selection-text: #ffffff')
+    expect(source).toContain('--brand-selection-bg: rgba(96, 165, 250, 0.62)')
+    expect(source).toContain('background-color: var(--brand-selection-bg)')
+    expect(source).not.toContain('background-color: rgba(var(--brand-rgb), 0.18)')
+  })
 })

@@ -21,6 +21,13 @@
     --brand-border-strong: rgba(37, 99, 235, 0.34);
     --brand-shadow-soft: 0 10px 26px rgba(37, 99, 235, 0.14);
     --brand-shadow-lift: 0 18px 44px rgba(37, 99, 235, 0.18);
+    --brand-selection-bg: rgba(37, 99, 235, 0.84);
+    --brand-selection-text: #ffffff;
+  }
+
+  .dark {
+    --brand-selection-bg: rgba(96, 165, 250, 0.62);
+    --brand-selection-text: #ffffff;
   }
 
   * {
@@ -80,8 +87,9 @@
 
   /* 选中文本样式 */
   ::selection {
-    background-color: rgba(var(--brand-rgb), 0.18);
-    color: var(--brand-900);
+    background-color: var(--brand-selection-bg);
+    color: var(--brand-selection-text);
+    text-shadow: none;
   }
 
 
