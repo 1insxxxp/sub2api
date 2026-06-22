@@ -488,6 +488,10 @@ func registerSettingsRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 		adminSettings.PUT("/web-search-emulation", h.Admin.Setting.UpdateWebSearchEmulationConfig)
 		adminSettings.POST("/web-search-emulation/test", h.Admin.Setting.TestWebSearchEmulation)
 		adminSettings.POST("/web-search-emulation/reset-usage", h.Admin.Setting.ResetWebSearchUsage)
+		// AI Image Studio
+		adminSettings.GET("/image-studio", h.Admin.Setting.GetImageStudioConfig)
+		adminSettings.PUT("/image-studio", h.Admin.Setting.UpdateImageStudioConfig)
+		adminSettings.POST("/image-studio/storage/test", h.Admin.Setting.TestImageStudioStorage)
 	}
 }
 

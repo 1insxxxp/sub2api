@@ -9,8 +9,11 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
+	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
 	"github.com/Wei-Shaw/sub2api/internal/handler/dto"
@@ -3551,6 +3554,103 @@ func (h *SettingHandler) TestWebSearchEmulation(c *gin.Context) {
 		return
 	}
 	response.Success(c, result)
+}
+
+type imageStudioSettingsResponse struct {
+	*service.ImageStudioSettings
+	StorageStatus service.ImageStudioStorageStatus `json:"storage_status"`
+}
+
+func newImageStudioSettingsResponse(cfg *service.ImageStudioSettings) imageStudioSettingsResponse {
+	return imageStudioSettingsResponse{
+		ImageStudioSettings: cfg,
+		StorageStatus:       service.ImageStudioStorageStatusForConfig(cfg),
+	}
+}
+
+// GetImageStudioConfig returns AI Image Studio settings.
+// GET /api/v1/admin/settings/image-studio
+func (h *SettingHandler) GetImageStudioConfig(c *gin.Context) {
+	cfg, err := h.settingService.GetImageStudioConfig(c.Request.Context())
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	response.Success(c, newImageStudioSettingsResponse(cfg))
+}
+
+// UpdateImageStudioConfig updates AI Image Studio settings.
+// PUT /api/v1/admin/settings/image-studio
+func (h *SettingHandler) UpdateImageStudioConfig(c *gin.Context) {
+	var cfg service.ImageStudioSettings
+	if err := c.ShouldBindJSON(&cfg); err != nil {
+		response.BadRequest(c, "Invalid request: "+err.Error())
+		return
+	}
+
+	if err := h.settingService.SaveImageStudioConfig(c.Request.Context(), &cfg); err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+
+	updated, err := h.settingService.GetImageStudioConfig(c.Request.Context())
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	response.Success(c, newImageStudioSettingsResponse(updated))
+}
+
+// TestImageStudioStorage probes the configured image storage.
+// POST /api/v1/admin/settings/image-studio/storage/test
+func (h *SettingHandler) TestImageStudioStorage(c *gin.Context) {
+	cfg, err := h.settingService.GetImageStudioConfig(c.Request.Context())
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+
+	status := service.ImageStudioStorageStatusForConfig(cfg)
+	if cfg.StorageDriver != service.ImageStorageDriverLocal {
+		response.Success(c, status)
+		return
+	}
+
+	rootDir := strings.TrimSpace(cfg.LocalRootDir)
+	if rootDir == "" {
+		rootDir = filepath.Join(os.TempDir(), "sub2api-image-studio")
+	}
+	storage, err := service.NewLocalImageStorage(service.LocalImageStorageConfig{
+		RootDir:       rootDir,
+		PublicBaseURL: cfg.LocalPublicBaseURL,
+	})
+	if err != nil {
+		status.Status = "failed"
+		status.Configured = false
+		status.Message = err.Error()
+		response.Success(c, status)
+		return
+	}
+
+	objectKey := fmt.Sprintf("health/image-studio-%d.txt", time.Now().UnixNano())
+	if _, err := storage.Put(c.Request.Context(), objectKey, "text/plain", []byte("ok")); err != nil {
+		status.Status = "failed"
+		status.Configured = false
+		status.Message = err.Error()
+		response.Success(c, status)
+		return
+	}
+	if err := storage.Delete(c.Request.Context(), objectKey); err != nil {
+		status.Status = "failed"
+		status.Configured = false
+		status.Message = err.Error()
+		response.Success(c, status)
+		return
+	}
+
+	status.Status = "ok"
+	status.Configured = true
+	response.Success(c, status)
 }
 
 // ensureDingTalkSyncAttributes 在保存 settings 后，按 admin 配置的 (attr key, attr name)

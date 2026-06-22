@@ -1359,6 +1359,60 @@ export async function resetWebSearchUsage(payload: {
   );
 }
 
+// --- AI Image Studio Settings ---
+
+export interface ImageStudioAspectRatio {
+  ratio: string;
+  size: string;
+  billing_tier: string;
+}
+
+export interface ImageStudioStorageStatus {
+  driver: "local" | "r2" | string;
+  status: "ok" | "untested" | "misconfigured" | "failed" | string;
+  configured: boolean;
+  message?: string;
+}
+
+export interface ImageStudioSettings {
+  enabled: boolean;
+  allowed_models: string[];
+  default_model: string;
+  storage_driver: "local" | "r2" | string;
+  local_root_dir?: string;
+  local_public_base_url?: string;
+  r2_public_base_url?: string;
+  retention_days: number;
+  max_images_per_user: number;
+  max_reference_image_mb: number;
+  aspect_ratios: ImageStudioAspectRatio[];
+  storage_status?: ImageStudioStorageStatus;
+}
+
+export async function getImageStudioSettings(): Promise<ImageStudioSettings> {
+  const { data } = await apiClient.get<ImageStudioSettings>(
+    "/admin/settings/image-studio",
+  );
+  return data;
+}
+
+export async function updateImageStudioSettings(
+  settings: ImageStudioSettings,
+): Promise<ImageStudioSettings> {
+  const { data } = await apiClient.put<ImageStudioSettings>(
+    "/admin/settings/image-studio",
+    settings,
+  );
+  return data;
+}
+
+export async function testImageStudioStorage(): Promise<ImageStudioStorageStatus> {
+  const { data } = await apiClient.post<ImageStudioStorageStatus>(
+    "/admin/settings/image-studio/storage/test",
+  );
+  return data;
+}
+
 export interface AuthIPAutoBlockSettings {
   enabled: boolean;
   window_minutes: number;
@@ -1417,6 +1471,9 @@ export const settingsAPI = {
   updateWebSearchEmulationConfig,
   testWebSearchEmulation,
   resetWebSearchUsage,
+  getImageStudioSettings,
+  updateImageStudioSettings,
+  testImageStudioStorage,
   getAuthIPBlacklistSettings,
   updateAuthIPBlacklistSettings,
 };
