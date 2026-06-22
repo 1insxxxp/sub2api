@@ -553,6 +553,8 @@ var ProviderSet = wire.NewSet(
 	NewAccountUsageService,
 	NewAccountTestService,
 	ProvideSettingService,
+	NewImageStudioService,
+	wire.Bind(new(ImageStudioConfigReader), new(*SettingService)),
 	NewDataManagementService,
 	ProvideBackupService,
 	ProvideOpsSystemLogSink,

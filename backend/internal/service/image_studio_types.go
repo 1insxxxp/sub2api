@@ -3,6 +3,7 @@ package service
 import (
 	"fmt"
 	"strings"
+	"time"
 )
 
 const (
@@ -20,7 +21,7 @@ type ImageStudioConfig struct {
 	Enabled             bool                     `json:"enabled"`
 	AllowedModels       []string                 `json:"allowed_models"`
 	DefaultModel        string                   `json:"default_model"`
-	AspectRatios       []ImageStudioAspectRatio `json:"aspect_ratios"`
+	AspectRatios        []ImageStudioAspectRatio `json:"aspect_ratios"`
 	MaxReferenceImageMB int                      `json:"max_reference_image_mb"`
 	RetentionDays       int                      `json:"retention_days"`
 	MaxImagesPerUser    int                      `json:"max_images_per_user"`
@@ -41,19 +42,25 @@ type ImageStudioEditInput struct {
 }
 
 type ImageStudioImageRecord struct {
-	ID               int64   `json:"id"`
-	UserID           int64   `json:"user_id"`
-	Mode             string  `json:"mode"`
-	Model            string  `json:"model"`
-	Prompt           string  `json:"prompt"`
-	AspectRatio      string  `json:"aspect_ratio"`
-	Size             string  `json:"size"`
-	ImageURL         string  `json:"image_url"`
-	StorageDriver    string  `json:"storage_driver"`
-	StorageObjectKey string  `json:"storage_object_key"`
-	MimeType         string  `json:"mime_type"`
-	Bytes            int64   `json:"bytes"`
-	Cost             float64 `json:"cost"`
+	ID               int64      `json:"id"`
+	UserID           int64      `json:"user_id"`
+	Mode             string     `json:"mode"`
+	Model            string     `json:"model"`
+	Prompt           string     `json:"prompt"`
+	AspectRatio      string     `json:"aspect_ratio"`
+	Size             string     `json:"size"`
+	ImageURL         string     `json:"image_url"`
+	StorageDriver    string     `json:"storage_driver"`
+	StorageObjectKey string     `json:"storage_object_key"`
+	MimeType         string     `json:"mime_type"`
+	Bytes            int64      `json:"bytes"`
+	Cost             float64    `json:"cost"`
+	UsageLogID       *int64     `json:"usage_log_id,omitempty"`
+	SourceImageCount int        `json:"source_image_count"`
+	ExpiresAt        *time.Time `json:"expires_at,omitempty"`
+	DeletedAt        *time.Time `json:"deleted_at,omitempty"`
+	CreatedAt        time.Time  `json:"created_at"`
+	UpdatedAt        time.Time  `json:"updated_at"`
 }
 
 type ImageStudioPricePreview struct {
