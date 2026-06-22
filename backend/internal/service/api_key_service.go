@@ -439,6 +439,59 @@ func (s *APIKeyService) List(ctx context.Context, userID int64, params paginatio
 	return keys, pagination, nil
 }
 
+func (s *APIKeyService) GetDefaultImageStudioAPIKey(ctx context.Context, userID int64) (*APIKey, error) {
+	if s == nil || s.apiKeyRepo == nil {
+		return nil, ErrAPIKeyNotFound
+	}
+	keys, _, err := s.apiKeyRepo.ListByUserID(ctx, userID, pagination.PaginationParams{Page: 1, PageSize: 20}, APIKeyListFilters{Status: StatusAPIKeyActive})
+	if err != nil {
+		return nil, fmt.Errorf("list image studio api keys: %w", err)
+	}
+	for i := range keys {
+		key := keys[i]
+		if key.Status != StatusAPIKeyActive {
+			continue
+		}
+		return s.prepareImageStudioAPIKey(&key, userID), nil
+	}
+	return nil, ErrAPIKeyNotFound
+}
+
+func (s *APIKeyService) GetImageStudioAPIKeyForGroup(ctx context.Context, userID int64, groupID int64) (*APIKey, error) {
+	if s == nil || s.apiKeyRepo == nil || groupID <= 0 {
+		return nil, ErrAPIKeyNotFound
+	}
+	keys, _, err := s.apiKeyRepo.ListByUserID(ctx, userID, pagination.PaginationParams{Page: 1, PageSize: 20}, APIKeyListFilters{
+		Status:  StatusAPIKeyActive,
+		GroupID: &groupID,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("list image studio api keys: %w", err)
+	}
+	for i := range keys {
+		key := keys[i]
+		if key.Status != StatusAPIKeyActive || key.GroupID == nil || *key.GroupID != groupID {
+			continue
+		}
+		return s.prepareImageStudioAPIKey(&key, userID), nil
+	}
+	return nil, ErrAPIKeyNotFound
+}
+
+func (s *APIKeyService) prepareImageStudioAPIKey(key *APIKey, userID int64) *APIKey {
+	if key == nil {
+		return nil
+	}
+	if key.User == nil {
+		key.User = &User{ID: userID}
+	}
+	if key.UserID == 0 {
+		key.UserID = userID
+	}
+	s.compileAPIKeyIPRules(key)
+	return key
+}
+
 func (s *APIKeyService) VerifyOwnership(ctx context.Context, userID int64, apiKeyIDs []int64) ([]int64, error) {
 	if len(apiKeyIDs) == 0 {
 		return []int64{}, nil

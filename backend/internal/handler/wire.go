@@ -97,6 +97,10 @@ func ProvideAdminSettingHandler(settingService *service.SettingService, emailSer
 	return h
 }
 
+func ProvideImageStudioHandler(imageStudioService *service.ImageStudioService) *ImageStudioHandler {
+	return NewImageStudioHandler(imageStudioService)
+}
+
 // ProvideHandlers creates the Handlers struct
 func ProvideHandlers(
 	authHandler *AuthHandler,
@@ -116,6 +120,7 @@ func ProvideHandlers(
 	paymentWebhookHandler *PaymentWebhookHandler,
 	availableChannelHandler *AvailableChannelHandler,
 	checkinHandler *CheckinHandler,
+	imageStudioHandler *ImageStudioHandler,
 	_ *service.IdempotencyCoordinator,
 	_ *service.IdempotencyCleanupService,
 ) *Handlers {
@@ -137,6 +142,7 @@ func ProvideHandlers(
 		PaymentWebhook:   paymentWebhookHandler,
 		AvailableChannel: availableChannelHandler,
 		Checkin:          checkinHandler,
+		ImageStudio:      imageStudioHandler,
 	}
 }
 
@@ -159,6 +165,7 @@ var ProviderSet = wire.NewSet(
 	NewPaymentWebhookHandler,
 	NewAvailableChannelHandler,
 	NewCheckinHandler,
+	ProvideImageStudioHandler,
 
 	// Admin handlers
 	admin.NewDashboardHandler,

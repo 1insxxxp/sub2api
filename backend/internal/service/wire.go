@@ -511,6 +511,18 @@ func ProvideAPIKeyService(
 	return svc
 }
 
+func ProvideImageStudioService(
+	repo UserImageRepository,
+	configReader ImageStudioConfigReader,
+	groupResolver ImageStudioGroupResolver,
+	executor *ImageStudioGatewayExecutor,
+) *ImageStudioService {
+	svc := NewImageStudioService(repo, configReader)
+	svc.SetGroupResolver(groupResolver)
+	svc.SetExecutor(executor)
+	return svc
+}
+
 // ProviderSet is the Wire provider set for all services
 var ProviderSet = wire.NewSet(
 	// Core services
@@ -553,8 +565,13 @@ var ProviderSet = wire.NewSet(
 	NewAccountUsageService,
 	NewAccountTestService,
 	ProvideSettingService,
-	NewImageStudioService,
+	ProvideImageStudioService,
+	NewImageStudioGatewayExecutor,
 	wire.Bind(new(ImageStudioConfigReader), new(*SettingService)),
+	wire.Bind(new(ImageStudioGroupResolver), new(*APIKeyService)),
+	wire.Bind(new(ImageStudioAPIKeyProvider), new(*APIKeyService)),
+	wire.Bind(new(ImageStudioBillingChecker), new(*BillingCacheService)),
+	wire.Bind(new(ImageStudioGateway), new(*OpenAIGatewayService)),
 	NewDataManagementService,
 	ProvideBackupService,
 	ProvideOpsSystemLogSink,

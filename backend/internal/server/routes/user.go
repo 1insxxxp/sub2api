@@ -40,6 +40,16 @@ func RegisterUserRoutes(
 				checkin.POST("", h.Checkin.Checkin)
 			}
 
+			images := user.Group("/images")
+			{
+				images.GET("/config", h.ImageStudio.GetConfig)
+				images.GET("/options", h.ImageStudio.GetOptions)
+				images.POST("/generate", h.ImageStudio.Generate)
+				images.POST("/edit", h.ImageStudio.Edit)
+				images.GET("", h.ImageStudio.List)
+				images.DELETE("/:id", h.ImageStudio.Delete)
+			}
+
 			// 通知邮箱管理
 			notifyEmail := user.Group("/notify-email")
 			{
