@@ -50,6 +50,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/userattributevalue"
 	"github.com/Wei-Shaw/sub2api/ent/usercheckin"
 	"github.com/Wei-Shaw/sub2api/ent/usercheckinblacklist"
+	"github.com/Wei-Shaw/sub2api/ent/userimage"
 	"github.com/Wei-Shaw/sub2api/ent/userplatformquota"
 	"github.com/Wei-Shaw/sub2api/ent/usersubscription"
 
@@ -131,6 +132,8 @@ type Client struct {
 	UserCheckin *UserCheckinClient
 	// UserCheckinBlacklist is the client for interacting with the UserCheckinBlacklist builders.
 	UserCheckinBlacklist *UserCheckinBlacklistClient
+	// UserImage is the client for interacting with the UserImage builders.
+	UserImage *UserImageClient
 	// UserPlatformQuota is the client for interacting with the UserPlatformQuota builders.
 	UserPlatformQuota *UserPlatformQuotaClient
 	// UserSubscription is the client for interacting with the UserSubscription builders.
@@ -181,6 +184,7 @@ func (c *Client) init() {
 	c.UserAttributeValue = NewUserAttributeValueClient(c.config)
 	c.UserCheckin = NewUserCheckinClient(c.config)
 	c.UserCheckinBlacklist = NewUserCheckinBlacklistClient(c.config)
+	c.UserImage = NewUserImageClient(c.config)
 	c.UserPlatformQuota = NewUserPlatformQuotaClient(c.config)
 	c.UserSubscription = NewUserSubscriptionClient(c.config)
 }
@@ -310,6 +314,7 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 		UserAttributeValue:            NewUserAttributeValueClient(cfg),
 		UserCheckin:                   NewUserCheckinClient(cfg),
 		UserCheckinBlacklist:          NewUserCheckinBlacklistClient(cfg),
+		UserImage:                     NewUserImageClient(cfg),
 		UserPlatformQuota:             NewUserPlatformQuotaClient(cfg),
 		UserSubscription:              NewUserSubscriptionClient(cfg),
 	}, nil
@@ -366,6 +371,7 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 		UserAttributeValue:            NewUserAttributeValueClient(cfg),
 		UserCheckin:                   NewUserCheckinClient(cfg),
 		UserCheckinBlacklist:          NewUserCheckinBlacklistClient(cfg),
+		UserImage:                     NewUserImageClient(cfg),
 		UserPlatformQuota:             NewUserPlatformQuotaClient(cfg),
 		UserSubscription:              NewUserSubscriptionClient(cfg),
 	}, nil
@@ -406,7 +412,8 @@ func (c *Client) Use(hooks ...Hook) {
 		c.PromoCodeUsage, c.Proxy, c.RedeemCode, c.SecuritySecret, c.Setting,
 		c.SubscriptionPlan, c.TLSFingerprintProfile, c.UsageCleanupTask, c.UsageLog,
 		c.User, c.UserAllowedGroup, c.UserAttributeDefinition, c.UserAttributeValue,
-		c.UserCheckin, c.UserCheckinBlacklist, c.UserPlatformQuota, c.UserSubscription,
+		c.UserCheckin, c.UserCheckinBlacklist, c.UserImage, c.UserPlatformQuota,
+		c.UserSubscription,
 	} {
 		n.Use(hooks...)
 	}
@@ -425,7 +432,8 @@ func (c *Client) Intercept(interceptors ...Interceptor) {
 		c.PromoCodeUsage, c.Proxy, c.RedeemCode, c.SecuritySecret, c.Setting,
 		c.SubscriptionPlan, c.TLSFingerprintProfile, c.UsageCleanupTask, c.UsageLog,
 		c.User, c.UserAllowedGroup, c.UserAttributeDefinition, c.UserAttributeValue,
-		c.UserCheckin, c.UserCheckinBlacklist, c.UserPlatformQuota, c.UserSubscription,
+		c.UserCheckin, c.UserCheckinBlacklist, c.UserImage, c.UserPlatformQuota,
+		c.UserSubscription,
 	} {
 		n.Intercept(interceptors...)
 	}
@@ -504,6 +512,8 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.UserCheckin.mutate(ctx, m)
 	case *UserCheckinBlacklistMutation:
 		return c.UserCheckinBlacklist.mutate(ctx, m)
+	case *UserImageMutation:
+		return c.UserImage.mutate(ctx, m)
 	case *UserPlatformQuotaMutation:
 		return c.UserPlatformQuota.mutate(ctx, m)
 	case *UserSubscriptionMutation:
@@ -5429,6 +5439,22 @@ func (c *UserClient) QueryCheckinBlacklistEntries(_m *User) *UserCheckinBlacklis
 	return query
 }
 
+// QueryUserImages queries the user_images edge of a User.
+func (c *UserClient) QueryUserImages(_m *User) *UserImageQuery {
+	query := (&UserImageClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(user.Table, user.FieldID, id),
+			sqlgraph.To(userimage.Table, userimage.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, user.UserImagesTable, user.UserImagesColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
 // QueryUserAllowedGroups queries the user_allowed_groups edge of a User.
 func (c *UserClient) QueryUserAllowedGroups(_m *User) *UserAllowedGroupQuery {
 	query := (&UserAllowedGroupClient{config: c.config}).Query()
@@ -6202,6 +6228,155 @@ func (c *UserCheckinBlacklistClient) mutate(ctx context.Context, m *UserCheckinB
 	}
 }
 
+// UserImageClient is a client for the UserImage schema.
+type UserImageClient struct {
+	config
+}
+
+// NewUserImageClient returns a client for the UserImage from the given config.
+func NewUserImageClient(c config) *UserImageClient {
+	return &UserImageClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `userimage.Hooks(f(g(h())))`.
+func (c *UserImageClient) Use(hooks ...Hook) {
+	c.hooks.UserImage = append(c.hooks.UserImage, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `userimage.Intercept(f(g(h())))`.
+func (c *UserImageClient) Intercept(interceptors ...Interceptor) {
+	c.inters.UserImage = append(c.inters.UserImage, interceptors...)
+}
+
+// Create returns a builder for creating a UserImage entity.
+func (c *UserImageClient) Create() *UserImageCreate {
+	mutation := newUserImageMutation(c.config, OpCreate)
+	return &UserImageCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of UserImage entities.
+func (c *UserImageClient) CreateBulk(builders ...*UserImageCreate) *UserImageCreateBulk {
+	return &UserImageCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *UserImageClient) MapCreateBulk(slice any, setFunc func(*UserImageCreate, int)) *UserImageCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &UserImageCreateBulk{err: fmt.Errorf("calling to UserImageClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*UserImageCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &UserImageCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for UserImage.
+func (c *UserImageClient) Update() *UserImageUpdate {
+	mutation := newUserImageMutation(c.config, OpUpdate)
+	return &UserImageUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *UserImageClient) UpdateOne(_m *UserImage) *UserImageUpdateOne {
+	mutation := newUserImageMutation(c.config, OpUpdateOne, withUserImage(_m))
+	return &UserImageUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *UserImageClient) UpdateOneID(id int64) *UserImageUpdateOne {
+	mutation := newUserImageMutation(c.config, OpUpdateOne, withUserImageID(id))
+	return &UserImageUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for UserImage.
+func (c *UserImageClient) Delete() *UserImageDelete {
+	mutation := newUserImageMutation(c.config, OpDelete)
+	return &UserImageDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *UserImageClient) DeleteOne(_m *UserImage) *UserImageDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *UserImageClient) DeleteOneID(id int64) *UserImageDeleteOne {
+	builder := c.Delete().Where(userimage.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &UserImageDeleteOne{builder}
+}
+
+// Query returns a query builder for UserImage.
+func (c *UserImageClient) Query() *UserImageQuery {
+	return &UserImageQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeUserImage},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a UserImage entity by its id.
+func (c *UserImageClient) Get(ctx context.Context, id int64) (*UserImage, error) {
+	return c.Query().Where(userimage.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *UserImageClient) GetX(ctx context.Context, id int64) *UserImage {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// QueryUser queries the user edge of a UserImage.
+func (c *UserImageClient) QueryUser(_m *UserImage) *UserQuery {
+	query := (&UserClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(userimage.Table, userimage.FieldID, id),
+			sqlgraph.To(user.Table, user.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, userimage.UserTable, userimage.UserColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// Hooks returns the client hooks.
+func (c *UserImageClient) Hooks() []Hook {
+	return c.hooks.UserImage
+}
+
+// Interceptors returns the client interceptors.
+func (c *UserImageClient) Interceptors() []Interceptor {
+	return c.inters.UserImage
+}
+
+func (c *UserImageClient) mutate(ctx context.Context, m *UserImageMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&UserImageCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&UserImageUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&UserImageUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&UserImageDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown UserImage mutation op: %q", m.Op())
+	}
+}
+
 // UserPlatformQuotaClient is a client for the UserPlatformQuota schema.
 type UserPlatformQuotaClient struct {
 	config
@@ -6563,7 +6738,7 @@ type (
 		PromoCodeUsage, Proxy, RedeemCode, SecuritySecret, Setting, SubscriptionPlan,
 		TLSFingerprintProfile, UsageCleanupTask, UsageLog, User, UserAllowedGroup,
 		UserAttributeDefinition, UserAttributeValue, UserCheckin, UserCheckinBlacklist,
-		UserPlatformQuota, UserSubscription []ent.Hook
+		UserImage, UserPlatformQuota, UserSubscription []ent.Hook
 	}
 	inters struct {
 		APIKey, Account, AccountGroup, Announcement, AnnouncementRead, AuthIdentity,
@@ -6574,7 +6749,7 @@ type (
 		PromoCodeUsage, Proxy, RedeemCode, SecuritySecret, Setting, SubscriptionPlan,
 		TLSFingerprintProfile, UsageCleanupTask, UsageLog, User, UserAllowedGroup,
 		UserAttributeDefinition, UserAttributeValue, UserCheckin, UserCheckinBlacklist,
-		UserPlatformQuota, UserSubscription []ent.Interceptor
+		UserImage, UserPlatformQuota, UserSubscription []ent.Interceptor
 	}
 )
 

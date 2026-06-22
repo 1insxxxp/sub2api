@@ -25,6 +25,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/userattributevalue"
 	"github.com/Wei-Shaw/sub2api/ent/usercheckin"
 	"github.com/Wei-Shaw/sub2api/ent/usercheckinblacklist"
+	"github.com/Wei-Shaw/sub2api/ent/userimage"
 	"github.com/Wei-Shaw/sub2api/ent/userplatformquota"
 	"github.com/Wei-Shaw/sub2api/ent/usersubscription"
 )
@@ -694,6 +695,21 @@ func (_u *UserUpdate) AddCheckinBlacklistEntries(v ...*UserCheckinBlacklist) *Us
 	return _u.AddCheckinBlacklistEntryIDs(ids...)
 }
 
+// AddUserImageIDs adds the "user_images" edge to the UserImage entity by IDs.
+func (_u *UserUpdate) AddUserImageIDs(ids ...int64) *UserUpdate {
+	_u.mutation.AddUserImageIDs(ids...)
+	return _u
+}
+
+// AddUserImages adds the "user_images" edges to the UserImage entity.
+func (_u *UserUpdate) AddUserImages(v ...*UserImage) *UserUpdate {
+	ids := make([]int64, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.AddUserImageIDs(ids...)
+}
+
 // Mutation returns the UserMutation object of the builder.
 func (_u *UserUpdate) Mutation() *UserMutation {
 	return _u.mutation
@@ -1012,6 +1028,27 @@ func (_u *UserUpdate) RemoveCheckinBlacklistEntries(v ...*UserCheckinBlacklist) 
 		ids[i] = v[i].ID
 	}
 	return _u.RemoveCheckinBlacklistEntryIDs(ids...)
+}
+
+// ClearUserImages clears all "user_images" edges to the UserImage entity.
+func (_u *UserUpdate) ClearUserImages() *UserUpdate {
+	_u.mutation.ClearUserImages()
+	return _u
+}
+
+// RemoveUserImageIDs removes the "user_images" edge to UserImage entities by IDs.
+func (_u *UserUpdate) RemoveUserImageIDs(ids ...int64) *UserUpdate {
+	_u.mutation.RemoveUserImageIDs(ids...)
+	return _u
+}
+
+// RemoveUserImages removes "user_images" edges to UserImage entities.
+func (_u *UserUpdate) RemoveUserImages(v ...*UserImage) *UserUpdate {
+	ids := make([]int64, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.RemoveUserImageIDs(ids...)
 }
 
 // Save executes the query and returns the number of nodes affected by the update operation.
@@ -1911,6 +1948,51 @@ func (_u *UserUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 		}
 		_spec.Edges.Add = append(_spec.Edges.Add, edge)
 	}
+	if _u.mutation.UserImagesCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   user.UserImagesTable,
+			Columns: []string{user.UserImagesColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(userimage.FieldID, field.TypeInt64),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.RemovedUserImagesIDs(); len(nodes) > 0 && !_u.mutation.UserImagesCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   user.UserImagesTable,
+			Columns: []string{user.UserImagesColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(userimage.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.UserImagesIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   user.UserImagesTable,
+			Columns: []string{user.UserImagesColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(userimage.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
 	if _node, err = sqlgraph.UpdateNodes(ctx, _u.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
 			err = &NotFoundError{user.Label}
@@ -2583,6 +2665,21 @@ func (_u *UserUpdateOne) AddCheckinBlacklistEntries(v ...*UserCheckinBlacklist) 
 	return _u.AddCheckinBlacklistEntryIDs(ids...)
 }
 
+// AddUserImageIDs adds the "user_images" edge to the UserImage entity by IDs.
+func (_u *UserUpdateOne) AddUserImageIDs(ids ...int64) *UserUpdateOne {
+	_u.mutation.AddUserImageIDs(ids...)
+	return _u
+}
+
+// AddUserImages adds the "user_images" edges to the UserImage entity.
+func (_u *UserUpdateOne) AddUserImages(v ...*UserImage) *UserUpdateOne {
+	ids := make([]int64, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.AddUserImageIDs(ids...)
+}
+
 // Mutation returns the UserMutation object of the builder.
 func (_u *UserUpdateOne) Mutation() *UserMutation {
 	return _u.mutation
@@ -2901,6 +2998,27 @@ func (_u *UserUpdateOne) RemoveCheckinBlacklistEntries(v ...*UserCheckinBlacklis
 		ids[i] = v[i].ID
 	}
 	return _u.RemoveCheckinBlacklistEntryIDs(ids...)
+}
+
+// ClearUserImages clears all "user_images" edges to the UserImage entity.
+func (_u *UserUpdateOne) ClearUserImages() *UserUpdateOne {
+	_u.mutation.ClearUserImages()
+	return _u
+}
+
+// RemoveUserImageIDs removes the "user_images" edge to UserImage entities by IDs.
+func (_u *UserUpdateOne) RemoveUserImageIDs(ids ...int64) *UserUpdateOne {
+	_u.mutation.RemoveUserImageIDs(ids...)
+	return _u
+}
+
+// RemoveUserImages removes "user_images" edges to UserImage entities.
+func (_u *UserUpdateOne) RemoveUserImages(v ...*UserImage) *UserUpdateOne {
+	ids := make([]int64, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.RemoveUserImageIDs(ids...)
 }
 
 // Where appends a list predicates to the UserUpdate builder.
@@ -3823,6 +3941,51 @@ func (_u *UserUpdateOne) sqlSave(ctx context.Context) (_node *User, err error) {
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(usercheckinblacklist.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
+	if _u.mutation.UserImagesCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   user.UserImagesTable,
+			Columns: []string{user.UserImagesColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(userimage.FieldID, field.TypeInt64),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.RemovedUserImagesIDs(); len(nodes) > 0 && !_u.mutation.UserImagesCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   user.UserImagesTable,
+			Columns: []string{user.UserImagesColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(userimage.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.UserImagesIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   user.UserImagesTable,
+			Columns: []string{user.UserImagesColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(userimage.FieldID, field.TypeInt64),
 			},
 		}
 		for _, k := range nodes {

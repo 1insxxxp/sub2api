@@ -99,6 +99,8 @@ const (
 	EdgeCheckins = "checkins"
 	// EdgeCheckinBlacklistEntries holds the string denoting the checkin_blacklist_entries edge name in mutations.
 	EdgeCheckinBlacklistEntries = "checkin_blacklist_entries"
+	// EdgeUserImages holds the string denoting the user_images edge name in mutations.
+	EdgeUserImages = "user_images"
 	// EdgeUserAllowedGroups holds the string denoting the user_allowed_groups edge name in mutations.
 	EdgeUserAllowedGroups = "user_allowed_groups"
 	// Table holds the table name of the user in the database.
@@ -206,6 +208,13 @@ const (
 	CheckinBlacklistEntriesInverseTable = "user_checkin_blacklist"
 	// CheckinBlacklistEntriesColumn is the table column denoting the checkin_blacklist_entries relation/edge.
 	CheckinBlacklistEntriesColumn = "user_id"
+	// UserImagesTable is the table that holds the user_images relation/edge.
+	UserImagesTable = "user_images"
+	// UserImagesInverseTable is the table name for the UserImage entity.
+	// It exists in this package in order to avoid circular dependency with the "userimage" package.
+	UserImagesInverseTable = "user_images"
+	// UserImagesColumn is the table column denoting the user_images relation/edge.
+	UserImagesColumn = "user_id"
 	// UserAllowedGroupsTable is the table that holds the user_allowed_groups relation/edge.
 	UserAllowedGroupsTable = "user_allowed_groups"
 	// UserAllowedGroupsInverseTable is the table name for the UserAllowedGroup entity.
@@ -682,6 +691,20 @@ func ByCheckinBlacklistEntries(term sql.OrderTerm, terms ...sql.OrderTerm) Order
 	}
 }
 
+// ByUserImagesCount orders the results by user_images count.
+func ByUserImagesCount(opts ...sql.OrderTermOption) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborsCount(s, newUserImagesStep(), opts...)
+	}
+}
+
+// ByUserImages orders the results by user_images terms.
+func ByUserImages(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborTerms(s, newUserImagesStep(), append([]sql.OrderTerm{term}, terms...)...)
+	}
+}
+
 // ByUserAllowedGroupsCount orders the results by user_allowed_groups count.
 func ByUserAllowedGroupsCount(opts ...sql.OrderTermOption) OrderOption {
 	return func(s *sql.Selector) {
@@ -798,6 +821,13 @@ func newCheckinBlacklistEntriesStep() *sqlgraph.Step {
 		sqlgraph.From(Table, FieldID),
 		sqlgraph.To(CheckinBlacklistEntriesInverseTable, FieldID),
 		sqlgraph.Edge(sqlgraph.O2M, false, CheckinBlacklistEntriesTable, CheckinBlacklistEntriesColumn),
+	)
+}
+func newUserImagesStep() *sqlgraph.Step {
+	return sqlgraph.NewStep(
+		sqlgraph.From(Table, FieldID),
+		sqlgraph.To(UserImagesInverseTable, FieldID),
+		sqlgraph.Edge(sqlgraph.O2M, false, UserImagesTable, UserImagesColumn),
 	)
 }
 func newUserAllowedGroupsStep() *sqlgraph.Step {

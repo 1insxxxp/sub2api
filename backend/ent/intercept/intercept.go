@@ -44,6 +44,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/userattributevalue"
 	"github.com/Wei-Shaw/sub2api/ent/usercheckin"
 	"github.com/Wei-Shaw/sub2api/ent/usercheckinblacklist"
+	"github.com/Wei-Shaw/sub2api/ent/userimage"
 	"github.com/Wei-Shaw/sub2api/ent/userplatformquota"
 	"github.com/Wei-Shaw/sub2api/ent/usersubscription"
 )
@@ -1049,6 +1050,33 @@ func (f TraverseUserCheckinBlacklist) Traverse(ctx context.Context, q ent.Query)
 	return fmt.Errorf("unexpected query type %T. expect *ent.UserCheckinBlacklistQuery", q)
 }
 
+// The UserImageFunc type is an adapter to allow the use of ordinary function as a Querier.
+type UserImageFunc func(context.Context, *ent.UserImageQuery) (ent.Value, error)
+
+// Query calls f(ctx, q).
+func (f UserImageFunc) Query(ctx context.Context, q ent.Query) (ent.Value, error) {
+	if q, ok := q.(*ent.UserImageQuery); ok {
+		return f(ctx, q)
+	}
+	return nil, fmt.Errorf("unexpected query type %T. expect *ent.UserImageQuery", q)
+}
+
+// The TraverseUserImage type is an adapter to allow the use of ordinary function as Traverser.
+type TraverseUserImage func(context.Context, *ent.UserImageQuery) error
+
+// Intercept is a dummy implementation of Intercept that returns the next Querier in the pipeline.
+func (f TraverseUserImage) Intercept(next ent.Querier) ent.Querier {
+	return next
+}
+
+// Traverse calls f(ctx, q).
+func (f TraverseUserImage) Traverse(ctx context.Context, q ent.Query) error {
+	if q, ok := q.(*ent.UserImageQuery); ok {
+		return f(ctx, q)
+	}
+	return fmt.Errorf("unexpected query type %T. expect *ent.UserImageQuery", q)
+}
+
 // The UserPlatformQuotaFunc type is an adapter to allow the use of ordinary function as a Querier.
 type UserPlatformQuotaFunc func(context.Context, *ent.UserPlatformQuotaQuery) (ent.Value, error)
 
@@ -1176,6 +1204,8 @@ func NewQuery(q ent.Query) (Query, error) {
 		return &query[*ent.UserCheckinQuery, predicate.UserCheckin, usercheckin.OrderOption]{typ: ent.TypeUserCheckin, tq: q}, nil
 	case *ent.UserCheckinBlacklistQuery:
 		return &query[*ent.UserCheckinBlacklistQuery, predicate.UserCheckinBlacklist, usercheckinblacklist.OrderOption]{typ: ent.TypeUserCheckinBlacklist, tq: q}, nil
+	case *ent.UserImageQuery:
+		return &query[*ent.UserImageQuery, predicate.UserImage, userimage.OrderOption]{typ: ent.TypeUserImage, tq: q}, nil
 	case *ent.UserPlatformQuotaQuery:
 		return &query[*ent.UserPlatformQuotaQuery, predicate.UserPlatformQuota, userplatformquota.OrderOption]{typ: ent.TypeUserPlatformQuota, tq: q}, nil
 	case *ent.UserSubscriptionQuery:

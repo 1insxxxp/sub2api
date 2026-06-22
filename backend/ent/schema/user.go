@@ -146,6 +146,7 @@ func (User) Edges() []ent.Edge {
 		edge.To("platform_quotas", UserPlatformQuota.Type),
 		edge.To("checkins", UserCheckin.Type),
 		edge.To("checkin_blacklist_entries", UserCheckinBlacklist.Type),
+		edge.To("user_images", UserImage.Type),
 	}
 }
 

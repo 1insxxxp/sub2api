@@ -41,6 +41,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/userattributevalue"
 	"github.com/Wei-Shaw/sub2api/ent/usercheckin"
 	"github.com/Wei-Shaw/sub2api/ent/usercheckinblacklist"
+	"github.com/Wei-Shaw/sub2api/ent/userimage"
 	"github.com/Wei-Shaw/sub2api/ent/userplatformquota"
 	"github.com/Wei-Shaw/sub2api/ent/usersubscription"
 	"github.com/Wei-Shaw/sub2api/internal/domain"
@@ -2107,6 +2108,150 @@ func init() {
 	usercheckinblacklist.DefaultUpdatedAt = usercheckinblacklistDescUpdatedAt.Default.(func() time.Time)
 	// usercheckinblacklist.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
 	usercheckinblacklist.UpdateDefaultUpdatedAt = usercheckinblacklistDescUpdatedAt.UpdateDefault.(func() time.Time)
+	userimageFields := schema.UserImage{}.Fields()
+	_ = userimageFields
+	// userimageDescMode is the schema descriptor for mode field.
+	userimageDescMode := userimageFields[1].Descriptor()
+	// userimage.ModeValidator is a validator for the "mode" field. It is called by the builders before save.
+	userimage.ModeValidator = func() func(string) error {
+		validators := userimageDescMode.Validators
+		fns := [...]func(string) error{
+			validators[0].(func(string) error),
+			validators[1].(func(string) error),
+		}
+		return func(mode string) error {
+			for _, fn := range fns {
+				if err := fn(mode); err != nil {
+					return err
+				}
+			}
+			return nil
+		}
+	}()
+	// userimageDescModel is the schema descriptor for model field.
+	userimageDescModel := userimageFields[2].Descriptor()
+	// userimage.ModelValidator is a validator for the "model" field. It is called by the builders before save.
+	userimage.ModelValidator = func() func(string) error {
+		validators := userimageDescModel.Validators
+		fns := [...]func(string) error{
+			validators[0].(func(string) error),
+			validators[1].(func(string) error),
+		}
+		return func(model string) error {
+			for _, fn := range fns {
+				if err := fn(model); err != nil {
+					return err
+				}
+			}
+			return nil
+		}
+	}()
+	// userimageDescAspectRatio is the schema descriptor for aspect_ratio field.
+	userimageDescAspectRatio := userimageFields[4].Descriptor()
+	// userimage.AspectRatioValidator is a validator for the "aspect_ratio" field. It is called by the builders before save.
+	userimage.AspectRatioValidator = func() func(string) error {
+		validators := userimageDescAspectRatio.Validators
+		fns := [...]func(string) error{
+			validators[0].(func(string) error),
+			validators[1].(func(string) error),
+		}
+		return func(aspect_ratio string) error {
+			for _, fn := range fns {
+				if err := fn(aspect_ratio); err != nil {
+					return err
+				}
+			}
+			return nil
+		}
+	}()
+	// userimageDescSize is the schema descriptor for size field.
+	userimageDescSize := userimageFields[5].Descriptor()
+	// userimage.SizeValidator is a validator for the "size" field. It is called by the builders before save.
+	userimage.SizeValidator = func() func(string) error {
+		validators := userimageDescSize.Validators
+		fns := [...]func(string) error{
+			validators[0].(func(string) error),
+			validators[1].(func(string) error),
+		}
+		return func(size string) error {
+			for _, fn := range fns {
+				if err := fn(size); err != nil {
+					return err
+				}
+			}
+			return nil
+		}
+	}()
+	// userimageDescImageURL is the schema descriptor for image_url field.
+	userimageDescImageURL := userimageFields[6].Descriptor()
+	// userimage.ImageURLValidator is a validator for the "image_url" field. It is called by the builders before save.
+	userimage.ImageURLValidator = func() func(string) error {
+		validators := userimageDescImageURL.Validators
+		fns := [...]func(string) error{
+			validators[0].(func(string) error),
+			validators[1].(func(string) error),
+		}
+		return func(image_url string) error {
+			for _, fn := range fns {
+				if err := fn(image_url); err != nil {
+					return err
+				}
+			}
+			return nil
+		}
+	}()
+	// userimageDescStorageDriver is the schema descriptor for storage_driver field.
+	userimageDescStorageDriver := userimageFields[7].Descriptor()
+	// userimage.DefaultStorageDriver holds the default value on creation for the storage_driver field.
+	userimage.DefaultStorageDriver = userimageDescStorageDriver.Default.(string)
+	// userimage.StorageDriverValidator is a validator for the "storage_driver" field. It is called by the builders before save.
+	userimage.StorageDriverValidator = userimageDescStorageDriver.Validators[0].(func(string) error)
+	// userimageDescStorageObjectKey is the schema descriptor for storage_object_key field.
+	userimageDescStorageObjectKey := userimageFields[8].Descriptor()
+	// userimage.StorageObjectKeyValidator is a validator for the "storage_object_key" field. It is called by the builders before save.
+	userimage.StorageObjectKeyValidator = func() func(string) error {
+		validators := userimageDescStorageObjectKey.Validators
+		fns := [...]func(string) error{
+			validators[0].(func(string) error),
+			validators[1].(func(string) error),
+		}
+		return func(storage_object_key string) error {
+			for _, fn := range fns {
+				if err := fn(storage_object_key); err != nil {
+					return err
+				}
+			}
+			return nil
+		}
+	}()
+	// userimageDescMimeType is the schema descriptor for mime_type field.
+	userimageDescMimeType := userimageFields[9].Descriptor()
+	// userimage.DefaultMimeType holds the default value on creation for the mime_type field.
+	userimage.DefaultMimeType = userimageDescMimeType.Default.(string)
+	// userimage.MimeTypeValidator is a validator for the "mime_type" field. It is called by the builders before save.
+	userimage.MimeTypeValidator = userimageDescMimeType.Validators[0].(func(string) error)
+	// userimageDescBytes is the schema descriptor for bytes field.
+	userimageDescBytes := userimageFields[10].Descriptor()
+	// userimage.DefaultBytes holds the default value on creation for the bytes field.
+	userimage.DefaultBytes = userimageDescBytes.Default.(int64)
+	// userimageDescCost is the schema descriptor for cost field.
+	userimageDescCost := userimageFields[11].Descriptor()
+	// userimage.DefaultCost holds the default value on creation for the cost field.
+	userimage.DefaultCost = userimageDescCost.Default.(float64)
+	// userimageDescSourceImageCount is the schema descriptor for source_image_count field.
+	userimageDescSourceImageCount := userimageFields[13].Descriptor()
+	// userimage.DefaultSourceImageCount holds the default value on creation for the source_image_count field.
+	userimage.DefaultSourceImageCount = userimageDescSourceImageCount.Default.(int)
+	// userimageDescCreatedAt is the schema descriptor for created_at field.
+	userimageDescCreatedAt := userimageFields[16].Descriptor()
+	// userimage.DefaultCreatedAt holds the default value on creation for the created_at field.
+	userimage.DefaultCreatedAt = userimageDescCreatedAt.Default.(func() time.Time)
+	// userimageDescUpdatedAt is the schema descriptor for updated_at field.
+	userimageDescUpdatedAt := userimageFields[17].Descriptor()
+	// userimage.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	userimage.DefaultUpdatedAt = userimageDescUpdatedAt.Default.(func() time.Time)
+	// userimage.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
+	userimage.UpdateDefaultUpdatedAt = userimageDescUpdatedAt.UpdateDefault.(func() time.Time)
 	userplatformquotaMixin := schema.UserPlatformQuota{}.Mixin()
 	userplatformquotaMixinHooks1 := userplatformquotaMixin[1].Hooks()
 	userplatformquota.Hooks[0] = userplatformquotaMixinHooks1[0]

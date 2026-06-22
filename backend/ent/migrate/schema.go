@@ -1731,6 +1731,64 @@ var (
 			},
 		},
 	}
+	// UserImagesColumns holds the columns for the "user_images" table.
+	UserImagesColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt64, Increment: true},
+		{Name: "mode", Type: field.TypeString, Size: 32},
+		{Name: "model", Type: field.TypeString, Size: 128},
+		{Name: "prompt", Type: field.TypeString, Nullable: true, Size: 2147483647},
+		{Name: "aspect_ratio", Type: field.TypeString, Size: 16},
+		{Name: "size", Type: field.TypeString, Size: 32},
+		{Name: "image_url", Type: field.TypeString, Size: 2048},
+		{Name: "storage_driver", Type: field.TypeString, Size: 32, Default: "local"},
+		{Name: "storage_object_key", Type: field.TypeString, Size: 1024},
+		{Name: "mime_type", Type: field.TypeString, Size: 128, Default: "image/png"},
+		{Name: "bytes", Type: field.TypeInt64, Default: 0},
+		{Name: "cost", Type: field.TypeFloat64, Default: 0, SchemaType: map[string]string{"postgres": "decimal(20,8)"}},
+		{Name: "usage_log_id", Type: field.TypeInt64, Nullable: true},
+		{Name: "source_image_count", Type: field.TypeInt, Default: 0},
+		{Name: "expires_at", Type: field.TypeTime, Nullable: true, SchemaType: map[string]string{"postgres": "timestamptz"}},
+		{Name: "deleted_at", Type: field.TypeTime, Nullable: true, SchemaType: map[string]string{"postgres": "timestamptz"}},
+		{Name: "created_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
+		{Name: "updated_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
+		{Name: "user_id", Type: field.TypeInt64},
+	}
+	// UserImagesTable holds the schema information for the "user_images" table.
+	UserImagesTable = &schema.Table{
+		Name:       "user_images",
+		Columns:    UserImagesColumns,
+		PrimaryKey: []*schema.Column{UserImagesColumns[0]},
+		ForeignKeys: []*schema.ForeignKey{
+			{
+				Symbol:     "user_images_users_user_images",
+				Columns:    []*schema.Column{UserImagesColumns[18]},
+				RefColumns: []*schema.Column{UsersColumns[0]},
+				OnDelete:   schema.NoAction,
+			},
+		},
+		Indexes: []*schema.Index{
+			{
+				Name:    "userimage_user_id_created_at",
+				Unique:  false,
+				Columns: []*schema.Column{UserImagesColumns[18], UserImagesColumns[16]},
+			},
+			{
+				Name:    "userimage_deleted_at",
+				Unique:  false,
+				Columns: []*schema.Column{UserImagesColumns[15]},
+			},
+			{
+				Name:    "userimage_expires_at",
+				Unique:  false,
+				Columns: []*schema.Column{UserImagesColumns[14]},
+			},
+			{
+				Name:    "userimage_storage_object_key",
+				Unique:  false,
+				Columns: []*schema.Column{UserImagesColumns[8]},
+			},
+		},
+	}
 	// UserPlatformQuotasColumns holds the columns for the "user_platform_quotas" table.
 	UserPlatformQuotasColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeInt64, Increment: true},
@@ -1904,6 +1962,7 @@ var (
 		UserAttributeValuesTable,
 		UserCheckinsTable,
 		UserCheckinBlacklistTable,
+		UserImagesTable,
 		UserPlatformQuotasTable,
 		UserSubscriptionsTable,
 	}
@@ -2046,6 +2105,10 @@ func init() {
 	UserCheckinBlacklistTable.ForeignKeys[0].RefTable = UsersTable
 	UserCheckinBlacklistTable.Annotation = &entsql.Annotation{
 		Table: "user_checkin_blacklist",
+	}
+	UserImagesTable.ForeignKeys[0].RefTable = UsersTable
+	UserImagesTable.Annotation = &entsql.Annotation{
+		Table: "user_images",
 	}
 	UserPlatformQuotasTable.ForeignKeys[0].RefTable = UsersTable
 	UserPlatformQuotasTable.Annotation = &entsql.Annotation{

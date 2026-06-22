@@ -109,11 +109,13 @@ type UserEdges struct {
 	Checkins []*UserCheckin `json:"checkins,omitempty"`
 	// CheckinBlacklistEntries holds the value of the checkin_blacklist_entries edge.
 	CheckinBlacklistEntries []*UserCheckinBlacklist `json:"checkin_blacklist_entries,omitempty"`
+	// UserImages holds the value of the user_images edge.
+	UserImages []*UserImage `json:"user_images,omitempty"`
 	// UserAllowedGroups holds the value of the user_allowed_groups edge.
 	UserAllowedGroups []*UserAllowedGroup `json:"user_allowed_groups,omitempty"`
 	// loadedTypes holds the information for reporting if a
 	// type was loaded (or requested) in eager-loading or not.
-	loadedTypes [16]bool
+	loadedTypes [17]bool
 }
 
 // APIKeysOrErr returns the APIKeys value or an error if the edge
@@ -251,10 +253,19 @@ func (e UserEdges) CheckinBlacklistEntriesOrErr() ([]*UserCheckinBlacklist, erro
 	return nil, &NotLoadedError{edge: "checkin_blacklist_entries"}
 }
 
+// UserImagesOrErr returns the UserImages value or an error if the edge
+// was not loaded in eager-loading.
+func (e UserEdges) UserImagesOrErr() ([]*UserImage, error) {
+	if e.loadedTypes[15] {
+		return e.UserImages, nil
+	}
+	return nil, &NotLoadedError{edge: "user_images"}
+}
+
 // UserAllowedGroupsOrErr returns the UserAllowedGroups value or an error if the edge
 // was not loaded in eager-loading.
 func (e UserEdges) UserAllowedGroupsOrErr() ([]*UserAllowedGroup, error) {
-	if e.loadedTypes[15] {
+	if e.loadedTypes[16] {
 		return e.UserAllowedGroups, nil
 	}
 	return nil, &NotLoadedError{edge: "user_allowed_groups"}
@@ -550,6 +561,11 @@ func (_m *User) QueryCheckins() *UserCheckinQuery {
 // QueryCheckinBlacklistEntries queries the "checkin_blacklist_entries" edge of the User entity.
 func (_m *User) QueryCheckinBlacklistEntries() *UserCheckinBlacklistQuery {
 	return NewUserClient(_m.config).QueryCheckinBlacklistEntries(_m)
+}
+
+// QueryUserImages queries the "user_images" edge of the User entity.
+func (_m *User) QueryUserImages() *UserImageQuery {
+	return NewUserClient(_m.config).QueryUserImages(_m)
 }
 
 // QueryUserAllowedGroups queries the "user_allowed_groups" edge of the User entity.

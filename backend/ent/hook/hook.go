@@ -429,6 +429,18 @@ func (f UserCheckinBlacklistFunc) Mutate(ctx context.Context, m ent.Mutation) (e
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.UserCheckinBlacklistMutation", m)
 }
 
+// The UserImageFunc type is an adapter to allow the use of ordinary
+// function as UserImage mutator.
+type UserImageFunc func(context.Context, *ent.UserImageMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f UserImageFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.UserImageMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.UserImageMutation", m)
+}
+
 // The UserPlatformQuotaFunc type is an adapter to allow the use of ordinary
 // function as UserPlatformQuota mutator.
 type UserPlatformQuotaFunc func(context.Context, *ent.UserPlatformQuotaMutation) (ent.Value, error)

@@ -24,6 +24,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/userattributevalue"
 	"github.com/Wei-Shaw/sub2api/ent/usercheckin"
 	"github.com/Wei-Shaw/sub2api/ent/usercheckinblacklist"
+	"github.com/Wei-Shaw/sub2api/ent/userimage"
 	"github.com/Wei-Shaw/sub2api/ent/userplatformquota"
 	"github.com/Wei-Shaw/sub2api/ent/usersubscription"
 )
@@ -621,6 +622,21 @@ func (_c *UserCreate) AddCheckinBlacklistEntries(v ...*UserCheckinBlacklist) *Us
 		ids[i] = v[i].ID
 	}
 	return _c.AddCheckinBlacklistEntryIDs(ids...)
+}
+
+// AddUserImageIDs adds the "user_images" edge to the UserImage entity by IDs.
+func (_c *UserCreate) AddUserImageIDs(ids ...int64) *UserCreate {
+	_c.mutation.AddUserImageIDs(ids...)
+	return _c
+}
+
+// AddUserImages adds the "user_images" edges to the UserImage entity.
+func (_c *UserCreate) AddUserImages(v ...*UserImage) *UserCreate {
+	ids := make([]int64, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _c.AddUserImageIDs(ids...)
 }
 
 // Mutation returns the UserMutation object of the builder.
@@ -1222,6 +1238,22 @@ func (_c *UserCreate) createSpec() (*User, *sqlgraph.CreateSpec) {
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(usercheckinblacklist.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges = append(_spec.Edges, edge)
+	}
+	if nodes := _c.mutation.UserImagesIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   user.UserImagesTable,
+			Columns: []string{user.UserImagesColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(userimage.FieldID, field.TypeInt64),
 			},
 		}
 		for _, k := range nodes {
