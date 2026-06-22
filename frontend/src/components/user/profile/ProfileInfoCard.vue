@@ -1,96 +1,120 @@
 <template>
-  <div class="space-y-6">
+  <div class="profile-info-stack space-y-5 sm:space-y-6">
     <section
       data-testid="profile-overview-hero"
-      class="card overflow-hidden border border-primary-100/80 bg-gradient-to-br from-primary-50 via-white to-amber-50/70 dark:border-primary-900/40 dark:from-primary-950/40 dark:via-dark-900 dark:to-dark-950"
+      class="brand-surface profile-overview-card"
     >
-      <div class="px-6 py-6 md:px-8">
-        <div class="flex flex-col gap-6 lg:flex-row lg:items-start">
+      <div class="profile-overview-beam"></div>
+      <div class="relative z-10 p-5 sm:p-6 lg:p-7">
+        <div class="flex flex-col gap-6 lg:flex-row lg:items-stretch">
           <div
-            class="flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-[1.75rem] bg-gradient-to-br from-primary-500 to-primary-600 text-2xl font-bold text-white shadow-lg shadow-primary-500/20"
+            class="profile-avatar-plate"
           >
-            <img
-              v-if="avatarUrl"
-              :src="avatarUrl"
-              :alt="displayName"
-              class="h-full w-full object-cover"
-            >
-            <span v-else>{{ avatarInitial }}</span>
+            <div class="profile-avatar-frame">
+              <img
+                v-if="avatarUrl"
+                :src="avatarUrl"
+                :alt="displayName"
+                class="h-full w-full object-cover"
+              >
+              <DefaultUserAvatar v-else size="xl" />
+            </div>
+            <div class="profile-avatar-caption">
+              <span>{{ user?.role === 'admin' ? t('profile.administrator') : t('profile.user') }}</span>
+            </div>
           </div>
 
           <div class="min-w-0 flex-1 space-y-5">
             <div class="space-y-3">
-              <div class="flex flex-wrap items-center gap-2">
-                <h2 class="truncate text-2xl font-semibold text-gray-900 dark:text-white">
+              <div class="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                <div class="min-w-0 space-y-2">
+                  <h2 class="truncate text-2xl font-semibold text-slate-950 sm:text-3xl dark:text-white">
                   {{ displayName }}
-                </h2>
-                <span :class="['badge', user?.role === 'admin' ? 'badge-primary' : 'badge-gray']">
-                  {{ user?.role === 'admin' ? t('profile.administrator') : t('profile.user') }}
-                </span>
-                <span
-                  :class="['badge', user?.status === 'active' ? 'badge-success' : 'badge-danger']"
-                >
-                  {{
-                    user?.status === 'active'
-                      ? t('common.active')
-                      : t('common.disabled')
-                  }}
-                </span>
-              </div>
+                  </h2>
+                  <p class="truncate text-sm font-medium text-slate-600 dark:text-slate-300">
+                    {{ primaryEmailDisplay || '-' }}
+                  </p>
+                </div>
 
-              <div class="space-y-1">
-                <p class="truncate text-sm text-gray-600 dark:text-gray-300">
-                  {{ primaryEmailDisplay }}
-                </p>
-                <div
-                  v-if="sourceHints.length"
-                  class="flex flex-wrap gap-2 text-xs text-gray-500 dark:text-gray-400"
-                >
+                <div class="flex shrink-0 flex-wrap gap-2">
+                  <span :class="['badge', user?.role === 'admin' ? 'badge-primary' : 'badge-gray']">
+                    {{ user?.role === 'admin' ? t('profile.administrator') : t('profile.user') }}
+                  </span>
                   <span
-                    v-for="hint in sourceHints"
-                    :key="hint.key"
-                    class="inline-flex items-center gap-1 rounded-full bg-white/80 px-3 py-1 ring-1 ring-primary-100 dark:bg-dark-900/70 dark:ring-primary-900/40"
+                    :class="['badge', user?.status === 'active' ? 'badge-success' : 'badge-danger']"
                   >
-                    <Icon name="link" size="sm" />
-                    {{ hint.text }}
+                    {{
+                      user?.status === 'active'
+                        ? t('common.active')
+                        : t('common.disabled')
+                    }}
                   </span>
                 </div>
+              </div>
+
+              <div
+                v-if="sourceHints.length"
+                class="flex flex-wrap gap-2 text-xs text-slate-500 dark:text-slate-400"
+              >
+                <span
+                  v-for="hint in sourceHints"
+                  :key="hint.key"
+                  class="brand-floating-chip profile-source-chip"
+                >
+                  <Icon name="link" size="sm" />
+                  {{ hint.text }}
+                </span>
               </div>
             </div>
 
             <div class="grid gap-3 sm:grid-cols-3">
               <div
                 data-testid="profile-overview-metric-balance"
-                class="rounded-2xl bg-white/85 px-4 py-3 shadow-sm ring-1 ring-white/70 dark:bg-dark-900/60 dark:ring-dark-700"
+                class="brand-floating-card profile-metric-card"
               >
-                <p class="text-xs font-medium uppercase tracking-[0.16em] text-gray-400 dark:text-gray-500">
-                  {{ t('profile.accountBalance') }}
-                </p>
-                <p class="mt-1 text-lg font-semibold text-gray-900 dark:text-white">
-                  {{ formatCurrency(user?.balance || 0) }}
-                </p>
+                <div class="profile-metric-icon">
+                  <Icon name="dollar" size="sm" />
+                </div>
+                <div class="min-w-0">
+                  <p class="profile-metric-label">
+                    {{ t('profile.accountBalance') }}
+                  </p>
+                  <p class="profile-metric-value">
+                    {{ formatCurrency(user?.balance || 0) }}
+                  </p>
+                </div>
               </div>
               <div
                 data-testid="profile-overview-metric-concurrency"
-                class="rounded-2xl bg-white/85 px-4 py-3 shadow-sm ring-1 ring-white/70 dark:bg-dark-900/60 dark:ring-dark-700"
+                class="brand-floating-card profile-metric-card"
               >
-                <p class="text-xs font-medium uppercase tracking-[0.16em] text-gray-400 dark:text-gray-500">
-                  {{ t('profile.concurrencyLimit') }}
-                </p>
-                <p class="mt-1 text-lg font-semibold text-gray-900 dark:text-white">
-                  {{ user?.concurrency || 0 }}
-                </p>
+                <div class="profile-metric-icon">
+                  <Icon name="bolt" size="sm" />
+                </div>
+                <div class="min-w-0">
+                  <p class="profile-metric-label">
+                    {{ t('profile.concurrencyLimit') }}
+                  </p>
+                  <p class="profile-metric-value">
+                    {{ user?.concurrency || 0 }}
+                  </p>
+                </div>
               </div>
               <div
                 data-testid="profile-overview-metric-member-since"
-                class="rounded-2xl bg-white/85 px-4 py-3 shadow-sm ring-1 ring-white/70 dark:bg-dark-900/60 dark:ring-dark-700"
+                class="brand-floating-card profile-metric-card"
               >
-                <p class="text-xs font-medium uppercase tracking-[0.16em] text-gray-400 dark:text-gray-500">
-                  {{ t('profile.memberSince') }}
-                </p>
-                <p class="mt-1 text-lg font-semibold text-gray-900 dark:text-white">
-                  {{ memberSinceLabel }}
-                </p>
+                <div class="profile-metric-icon">
+                  <Icon name="calendar" size="sm" />
+                </div>
+                <div class="min-w-0">
+                  <p class="profile-metric-label">
+                    {{ t('profile.memberSince') }}
+                  </p>
+                  <p class="profile-metric-value">
+                    {{ memberSinceLabel }}
+                  </p>
+                </div>
               </div>
             </div>
           </div>
@@ -98,32 +122,40 @@
       </div>
     </section>
 
-    <div class="space-y-6">
+    <div
+      :class="[
+        'profile-info-layout grid gap-5 sm:gap-6',
+        sourceHints.length ? 'xl:grid-cols-[minmax(0,1fr)_minmax(280px,0.38fr)]' : ''
+      ]"
+    >
       <div data-testid="profile-main-column" class="space-y-6">
         <section
           data-testid="profile-basics-panel"
-          class="card border border-gray-100 bg-white/90 p-6 dark:border-dark-700 dark:bg-dark-900/50"
+          class="brand-surface profile-panel"
         >
-          <div class="mb-5 flex items-start justify-between gap-4">
-            <div>
-              <h3 class="text-lg font-semibold text-gray-900 dark:text-white">
+          <div class="profile-panel-header">
+            <div class="brand-floating-icon profile-panel-icon">
+              <Icon name="user" size="md" />
+            </div>
+            <div class="min-w-0">
+              <h3 class="text-base font-semibold text-slate-950 dark:text-white">
                 {{ t('profile.basicsTitle') }}
               </h3>
-              <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+              <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">
                 {{ t('profile.basicsDescription') }}
               </p>
             </div>
           </div>
 
-          <div class="grid gap-6 sm:grid-cols-1 md:grid-cols-2">
-            <div class="rounded-3xl border border-gray-100 bg-gray-50/80 p-5 dark:border-dark-700 dark:bg-dark-900/30">
+          <div class="grid gap-4 p-5 sm:p-6 md:grid-cols-2">
+            <div class="brand-floating-card profile-embedded-card">
               <ProfileAvatarCard
                 :user="user"
                 embedded
               />
             </div>
 
-            <div class="rounded-3xl border border-gray-100 bg-gray-50/80 p-5 dark:border-dark-700 dark:bg-dark-900/30">
+            <div class="brand-floating-card profile-embedded-card">
               <ProfileEditForm
                 :initial-username="user?.username || ''"
                 embedded
@@ -134,43 +166,57 @@
 
         <section
           data-testid="profile-auth-bindings-panel"
-          class="card border border-gray-100 bg-white/90 p-6 dark:border-dark-700 dark:bg-dark-900/50"
+          class="brand-surface profile-panel profile-bindings-panel"
         >
-          <ProfileIdentityBindingsSection
-            :user="user"
-            :linuxdo-enabled="linuxdoEnabled"
-            :dingtalk-enabled="dingtalkEnabled"
-            :oidc-enabled="oidcEnabled"
-            :oidc-provider-name="oidcProviderName"
-            :wechat-enabled="wechatEnabled"
-            :wechat-open-enabled="wechatOpenEnabled"
-            :wechat-mp-enabled="wechatMpEnabled"
-            embedded
-            compact
-          />
+          <div class="p-5 sm:p-6">
+            <ProfileIdentityBindingsSection
+              :user="user"
+              :linuxdo-enabled="linuxdoEnabled"
+              :dingtalk-enabled="dingtalkEnabled"
+              :oidc-enabled="oidcEnabled"
+              :oidc-provider-name="oidcProviderName"
+              :wechat-enabled="wechatEnabled"
+              :wechat-open-enabled="wechatOpenEnabled"
+              :wechat-mp-enabled="wechatMpEnabled"
+              embedded
+              compact
+            />
+          </div>
         </section>
       </div>
 
-      <div data-testid="profile-side-column" class="space-y-6">
+      <div
+        data-testid="profile-side-column"
+        :class="sourceHints.length ? 'space-y-5 sm:space-y-6' : 'hidden'"
+      >
         <section
           v-if="sourceHints.length"
-          class="card border border-gray-100 bg-white/90 p-6 dark:border-dark-700 dark:bg-dark-900/50"
+          class="brand-surface brand-rail profile-source-panel"
         >
-          <h3 class="text-lg font-semibold text-gray-900 dark:text-white">
-            {{ t('profile.linkedProfileSources') }}
-          </h3>
-          <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
-            {{ t('profile.linkedProfileSourcesDescription') }}
-          </p>
+          <div class="p-5 pl-7 sm:p-6 sm:pl-8">
+            <div class="flex items-start gap-4">
+              <div class="profile-source-icon">
+                <Icon name="sync" size="md" />
+              </div>
+              <div class="min-w-0 flex-1">
+                <h3 class="text-base font-semibold text-slate-950 dark:text-white">
+                  {{ t('profile.linkedProfileSources') }}
+                </h3>
+                <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                  {{ t('profile.linkedProfileSourcesDescription') }}
+                </p>
+              </div>
+            </div>
 
-          <div class="mt-5 grid gap-3">
-            <div
-              v-for="hint in sourceHints"
-              :key="hint.key"
-              class="flex items-start gap-3 rounded-2xl border border-gray-100 bg-gray-50/80 px-4 py-3 text-sm text-gray-600 dark:border-dark-700 dark:bg-dark-900/30 dark:text-gray-300"
-            >
-              <Icon name="link" size="sm" class="mt-0.5 text-gray-400 dark:text-gray-500" />
-              <span>{{ hint.text }}</span>
+            <div class="mt-5 grid gap-3">
+              <div
+                v-for="hint in sourceHints"
+                :key="hint.key"
+                class="brand-floating-card profile-source-row"
+              >
+                <Icon name="link" size="sm" class="mt-0.5 shrink-0 text-primary-500 dark:text-primary-300" />
+                <span>{{ hint.text }}</span>
+              </div>
             </div>
           </div>
         </section>
@@ -182,6 +228,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
+import DefaultUserAvatar from '@/components/common/DefaultUserAvatar.vue'
 import Icon from '@/components/icons/Icon.vue'
 import ProfileAvatarCard from '@/components/user/profile/ProfileAvatarCard.vue'
 import ProfileEditForm from '@/components/user/profile/ProfileEditForm.vue'
@@ -244,7 +291,6 @@ const primaryEmailDisplay = computed(() => {
   }
   return email
 })
-const avatarInitial = computed(() => displayName.value.charAt(0).toUpperCase() || 'U')
 const memberSinceLabel = computed(() => {
   const raw = props.user?.created_at?.trim()
   if (!raw) {
@@ -379,3 +425,235 @@ const sourceHints = computed(() => {
   return hints
 })
 </script>
+
+<style scoped>
+.profile-overview-card,
+.profile-panel,
+.profile-source-panel {
+  border-radius: 1.25rem;
+}
+
+.profile-overview-card {
+  min-height: 13rem;
+}
+
+.profile-overview-beam {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(circle at 0% 0%, rgba(var(--brand-rgb), 0.14), transparent 34%),
+    radial-gradient(circle at 100% 0%, rgba(var(--brand-cyan-rgb), 0.14), transparent 32%),
+    linear-gradient(135deg, rgba(239, 246, 255, 0.72), transparent 46%);
+}
+
+.profile-avatar-plate {
+  display: flex;
+  min-width: 7.5rem;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  border-radius: 1.25rem;
+  border: 1px solid rgba(191, 219, 254, 0.74);
+  background:
+    radial-gradient(circle at 20% 0%, rgba(255, 255, 255, 0.9), transparent 42%),
+    linear-gradient(135deg, rgba(239, 246, 255, 0.92), rgba(236, 254, 255, 0.78));
+  padding: 1rem;
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.9) inset;
+}
+
+.profile-avatar-frame {
+  display: flex;
+  height: 5rem;
+  width: 5rem;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  border-radius: 1.35rem;
+  background: linear-gradient(135deg, var(--brand-700), var(--brand-500), var(--brand-cyan));
+  color: white;
+  font-size: 1.75rem;
+  font-weight: 800;
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.34) inset,
+    0 18px 36px rgba(37, 99, 235, 0.2);
+}
+
+.profile-avatar-caption {
+  border-radius: 9999px;
+  border: 1px solid rgba(191, 219, 254, 0.9);
+  background: rgba(255, 255, 255, 0.76);
+  padding: 0.3rem 0.65rem;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--brand-700);
+}
+
+.profile-source-chip {
+  max-width: 100%;
+}
+
+.profile-metric-card {
+  display: flex;
+  min-height: 5rem;
+  align-items: center;
+  gap: 0.8rem;
+}
+
+.profile-metric-icon {
+  display: flex;
+  height: 2.35rem;
+  width: 2.35rem;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.9rem;
+  border: 1px solid rgba(191, 219, 254, 0.78);
+  background: rgba(239, 246, 255, 0.86);
+  color: var(--brand-600);
+}
+
+.profile-metric-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: rgb(100, 116, 139);
+}
+
+.profile-metric-value {
+  margin-top: 0.2rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 1.05rem;
+  font-weight: 800;
+  color: rgb(15, 23, 42);
+  font-variant-numeric: tabular-nums;
+}
+
+.profile-panel {
+  overflow: hidden;
+}
+
+.profile-panel-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 1rem;
+  border-bottom: 1px solid rgba(191, 219, 254, 0.5);
+  padding: 1.25rem 1.25rem 1rem;
+  background: linear-gradient(135deg, rgba(239, 246, 255, 0.66), rgba(236, 254, 255, 0.42));
+}
+
+.profile-panel-icon {
+  height: 2.75rem;
+  width: 2.75rem;
+  flex-shrink: 0;
+}
+
+.profile-embedded-card {
+  padding: 1.15rem;
+}
+
+.profile-source-icon {
+  display: flex;
+  height: 2.65rem;
+  width: 2.65rem;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  border-radius: 1rem;
+  border: 1px solid rgba(191, 219, 254, 0.74);
+  background: rgba(239, 246, 255, 0.84);
+  color: var(--brand-600);
+}
+
+.profile-source-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  color: rgb(71, 85, 105);
+  font-size: 0.875rem;
+  line-height: 1.5;
+}
+
+.dark .profile-overview-beam {
+  background:
+    radial-gradient(circle at 0% 0%, rgba(59, 130, 246, 0.18), transparent 34%),
+    radial-gradient(circle at 100% 0%, rgba(6, 182, 212, 0.14), transparent 32%),
+    linear-gradient(135deg, rgba(30, 64, 175, 0.14), transparent 46%);
+}
+
+.dark .profile-avatar-plate {
+  border-color: rgba(96, 165, 250, 0.2);
+  background:
+    radial-gradient(circle at 20% 0%, rgba(96, 165, 250, 0.16), transparent 42%),
+    linear-gradient(135deg, rgba(15, 23, 42, 0.86), rgba(8, 13, 28, 0.72));
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.04) inset;
+}
+
+.dark .profile-avatar-caption {
+  border-color: rgba(96, 165, 250, 0.22);
+  background: rgba(15, 23, 42, 0.76);
+  color: rgb(191, 219, 254);
+}
+
+.dark .profile-metric-icon,
+.dark .profile-source-icon {
+  border-color: rgba(96, 165, 250, 0.18);
+  background: rgba(37, 99, 235, 0.15);
+  color: rgb(147, 197, 253);
+}
+
+.dark .profile-metric-label {
+  color: rgb(148, 163, 184);
+}
+
+.dark .profile-metric-value {
+  color: white;
+}
+
+.dark .profile-panel-header {
+  border-color: rgba(96, 165, 250, 0.16);
+  background: linear-gradient(135deg, rgba(30, 64, 175, 0.16), rgba(8, 145, 178, 0.08));
+}
+
+.dark .profile-source-row {
+  color: rgb(203, 213, 225);
+}
+
+@media (max-width: 640px) {
+  .profile-overview-card,
+  .profile-panel,
+  .profile-source-panel {
+    border-radius: 1rem;
+  }
+
+  .profile-avatar-plate {
+    min-width: 0;
+    flex-direction: row;
+    justify-content: flex-start;
+  }
+
+  .profile-avatar-frame {
+    height: 4.25rem;
+    width: 4.25rem;
+    border-radius: 1.1rem;
+    font-size: 1.45rem;
+  }
+
+  .profile-metric-card {
+    min-height: 4.4rem;
+  }
+
+  .profile-panel-header {
+    padding: 1rem;
+  }
+
+  .profile-embedded-card {
+    padding: 1rem;
+  }
+}
+</style>

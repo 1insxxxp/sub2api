@@ -283,9 +283,7 @@ const currentUser = computed(() => localUser.value ?? props.user)
 const compact = computed(() => props.compact)
 const rowClass = computed(() =>
   props.embedded
-    ? compact.value
-      ? 'rounded-2xl border border-gray-100 bg-white p-4 shadow-sm dark:border-dark-700 dark:bg-dark-900/40'
-      : 'rounded-2xl border border-gray-100 bg-gray-50/70 p-4 dark:border-dark-700 dark:bg-dark-900/30'
+    ? 'brand-floating-card profile-binding-row'
     : 'px-6 py-5'
 )
 const emailBound = computed(() => getBindingStatus('email'))
@@ -658,3 +656,29 @@ async function bindEmail(): Promise<void> {
   }
 }
 </script>
+
+<style scoped>
+.profile-binding-row {
+  padding: 1rem;
+  transition:
+    border-color 180ms ease,
+    box-shadow 180ms ease,
+    transform 180ms ease;
+}
+
+.profile-binding-row:hover {
+  border-color: rgba(var(--brand-rgb), 0.34);
+  box-shadow: 0 12px 28px rgba(37, 99, 235, 0.08);
+  transform: translateY(-1px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .profile-binding-row {
+    transition: none;
+  }
+
+  .profile-binding-row:hover {
+    transform: none;
+  }
+}
+</style>

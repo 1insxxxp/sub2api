@@ -1,12 +1,17 @@
 <template>
-  <div class="card">
-    <div class="border-b border-gray-100 px-6 py-4 dark:border-dark-700">
-      <h2 class="text-lg font-medium text-gray-900 dark:text-white">
-        {{ t('profile.balanceNotify.title') }}
-      </h2>
-      <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
-        {{ t('profile.balanceNotify.description') }}
-      </p>
+  <div class="brand-surface profile-notify-card">
+    <div class="profile-notify-header">
+      <div class="brand-floating-icon profile-notify-icon">
+        <Icon name="bell" size="md" />
+      </div>
+      <div class="min-w-0">
+        <h2 class="text-base font-semibold text-slate-950 dark:text-white">
+          {{ t('profile.balanceNotify.title') }}
+        </h2>
+        <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">
+          {{ t('profile.balanceNotify.description') }}
+        </p>
+      </div>
     </div>
     <div class="px-6 py-6 space-y-6">
       <!-- Enable toggle -->
@@ -53,7 +58,7 @@
           <!-- Saved email entries -->
           <div v-if="emailEntries.length > 0" class="space-y-2 mb-3">
             <div v-for="(entry, idx) in emailEntries" :key="idx"
-              class="flex items-center justify-between px-3 py-2 bg-gray-50 dark:bg-dark-700 rounded-lg">
+              class="brand-floating-card profile-notify-row">
               <div class="flex items-center gap-2 min-w-0 flex-1">
                 <label class="relative inline-flex items-center cursor-pointer shrink-0">
                   <input type="checkbox" :checked="!entry.disabled" @change="handleEmailToggle(entry)" class="sr-only peer" />
@@ -101,7 +106,7 @@
           <!-- Pending (unverified) emails in verification flow -->
           <div v-if="pendingEmails.length > 0" class="space-y-2 mb-3">
             <div v-for="(pe, idx) in pendingEmails" :key="pe.email"
-              class="flex items-center gap-2 px-3 py-2 bg-yellow-50 dark:bg-yellow-900/10 rounded-lg border border-yellow-200 dark:border-yellow-800">
+              class="profile-notify-pending-row">
               <span class="flex-1 text-sm text-gray-700 dark:text-gray-300">{{ pe.email }}</span>
               <div v-if="!pe.codeSent" class="flex items-center gap-1">
                 <button @click="sendCodeFor(idx)" :disabled="pe.sending" class="text-xs text-primary-600 hover:text-primary-700">
@@ -159,6 +164,7 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
+import Icon from '@/components/icons/Icon.vue'
 import { useAuthStore } from '@/stores/auth'
 import { useAppStore } from '@/stores/app'
 import { userAPI } from '@/api'
@@ -372,3 +378,68 @@ async function verifySavedEmail(email: string) {
   }
 }
 </script>
+
+<style scoped>
+.profile-notify-card {
+  overflow: hidden;
+  border-radius: 1.25rem;
+}
+
+.profile-notify-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 1rem;
+  border-bottom: 1px solid rgba(191, 219, 254, 0.5);
+  padding: 1.25rem 1.25rem 1rem;
+  background: linear-gradient(135deg, rgba(239, 246, 255, 0.66), rgba(236, 254, 255, 0.42));
+}
+
+.profile-notify-icon {
+  height: 2.75rem;
+  width: 2.75rem;
+  flex-shrink: 0;
+}
+
+.profile-notify-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.profile-notify-pending-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  border-radius: 1rem;
+  border: 1px solid rgba(245, 158, 11, 0.24);
+  background: rgba(255, 251, 235, 0.8);
+  padding: 0.75rem;
+}
+
+.dark .profile-notify-header {
+  border-color: rgba(96, 165, 250, 0.16);
+  background: linear-gradient(135deg, rgba(30, 64, 175, 0.16), rgba(8, 145, 178, 0.08));
+}
+
+.dark .profile-notify-pending-row {
+  border-color: rgba(245, 158, 11, 0.22);
+  background: rgba(120, 53, 15, 0.16);
+}
+
+@media (max-width: 640px) {
+  .profile-notify-card {
+    border-radius: 1rem;
+  }
+
+  .profile-notify-header {
+    padding: 1rem;
+  }
+
+  .profile-notify-row,
+  .profile-notify-pending-row {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}
+</style>

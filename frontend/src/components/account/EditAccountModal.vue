@@ -221,7 +221,7 @@
             <button
               type="button"
               @click="addModelMapping"
-              class="mb-3 w-full rounded-lg border-2 border-dashed border-gray-300 px-4 py-2 text-gray-600 transition-colors hover:border-gray-400 hover:text-gray-700 dark:border-dark-500 dark:text-gray-400 dark:hover:border-dark-400 dark:hover:text-gray-300"
+              class="mb-3 w-full rounded-lg border-2 border-dashed border-primary-200 px-4 py-2 text-primary-700 transition-colors hover:border-primary-400 hover:bg-primary-50/60 hover:text-primary-800 dark:border-primary-500/25 dark:text-primary-200 dark:hover:border-primary-400/60 dark:hover:bg-primary-500/10 dark:hover:text-primary-100"
             >
               <svg
                 class="mr-1 inline h-4 w-4"
@@ -534,7 +534,7 @@
             <button
               type="button"
               @click="addModelMapping"
-              class="mb-3 w-full rounded-lg border-2 border-dashed border-gray-300 px-4 py-2 text-gray-600 transition-colors hover:border-gray-400 hover:text-gray-700 dark:border-dark-500 dark:text-gray-400 dark:hover:border-dark-400 dark:hover:text-gray-300"
+              class="mb-3 w-full rounded-lg border-2 border-dashed border-primary-200 px-4 py-2 text-primary-700 transition-colors hover:border-primary-400 hover:bg-primary-50/60 hover:text-primary-800 dark:border-primary-500/25 dark:text-primary-200 dark:hover:border-primary-400/60 dark:hover:bg-primary-500/10 dark:hover:text-primary-100"
             >
               + {{ t('admin.accounts.addMapping') }}
             </button>
@@ -760,7 +760,7 @@
             <button
               type="button"
               @click="addModelMapping"
-              class="mb-3 w-full rounded-lg border-2 border-dashed border-gray-300 px-4 py-2 text-gray-600 transition-colors hover:border-gray-400 hover:text-gray-700 dark:border-dark-500 dark:text-gray-400 dark:hover:border-dark-400 dark:hover:text-gray-300"
+              class="mb-3 w-full rounded-lg border-2 border-dashed border-primary-200 px-4 py-2 text-primary-700 transition-colors hover:border-primary-400 hover:bg-primary-50/60 hover:text-primary-800 dark:border-primary-500/25 dark:text-primary-200 dark:hover:border-primary-400/60 dark:hover:bg-primary-500/10 dark:hover:text-primary-100"
             >
               <svg
                 class="mr-1 inline h-4 w-4"
@@ -1079,7 +1079,7 @@
           <button
             type="button"
             @click="addAntigravityModelMapping"
-            class="mb-3 w-full rounded-lg border-2 border-dashed border-gray-300 px-4 py-2 text-gray-600 transition-colors hover:border-gray-400 hover:text-gray-700 dark:border-dark-500 dark:text-gray-400 dark:hover:border-dark-400 dark:hover:text-gray-300"
+            class="mb-3 w-full rounded-lg border-2 border-dashed border-primary-200 px-4 py-2 text-primary-700 transition-colors hover:border-primary-400 hover:bg-primary-50/60 hover:text-primary-800 dark:border-primary-500/25 dark:text-primary-200 dark:hover:border-primary-400/60 dark:hover:bg-primary-500/10 dark:hover:text-primary-100"
           >
             <svg class="mr-1 inline h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
@@ -1234,7 +1234,7 @@
           <button
             type="button"
             @click="addTempUnschedRule()"
-            class="w-full rounded-lg border-2 border-dashed border-gray-300 px-4 py-2 text-sm text-gray-600 transition-colors hover:border-gray-400 hover:text-gray-700 dark:border-dark-500 dark:text-gray-400 dark:hover:border-dark-400 dark:hover:text-gray-300"
+            class="w-full rounded-lg border-2 border-dashed border-primary-200 px-4 py-2 text-sm text-primary-700 transition-colors hover:border-primary-400 hover:bg-primary-50/60 hover:text-primary-800 dark:border-primary-500/25 dark:text-primary-200 dark:hover:border-primary-400/60 dark:hover:bg-primary-500/10 dark:hover:text-primary-100"
           >
             <svg
               class="mr-1 inline h-4 w-4"
@@ -1392,7 +1392,7 @@
                   'group flex min-h-[68px] items-start gap-2 rounded-md border px-3 py-2 text-left transition-all',
                   codexImageGenerationBridgeMode === option.value
                     ? 'border-sky-300 bg-sky-50 text-sky-900 shadow-sm ring-1 ring-sky-200 dark:border-sky-700 dark:bg-sky-900/25 dark:text-sky-100 dark:ring-sky-800'
-                    : 'border-transparent bg-transparent text-slate-600 hover:border-gray-200 hover:bg-gray-50 dark:text-slate-300 dark:hover:border-dark-500 dark:hover:bg-dark-700'
+                    : 'border-transparent bg-transparent text-slate-600 hover:border-primary-200 hover:bg-primary-50/60 hover:text-primary-700 dark:text-slate-300 dark:hover:border-primary-500/30 dark:hover:bg-primary-500/10 dark:hover:text-primary-200'
                 ]"
               >
                 <span
@@ -1400,7 +1400,7 @@
                     'mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border transition-colors',
                     codexImageGenerationBridgeMode === option.value
                       ? 'border-sky-500 bg-sky-500 text-white'
-                      : 'border-gray-300 text-transparent group-hover:border-gray-400 dark:border-dark-500'
+                      : 'border-gray-300 text-transparent group-hover:border-primary-400 dark:border-dark-500 dark:group-hover:border-primary-400/60'
                   ]"
                 >
                   <Icon name="check" size="xs" :stroke-width="2" />

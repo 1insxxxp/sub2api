@@ -175,6 +175,25 @@ describe('ProfileAvatarCard', () => {
     expect(wrapper.find('[data-testid="profile-avatar-input"]').exists()).toBe(false)
   })
 
+  it('uses the shared default avatar while no custom avatar is selected', () => {
+    authStoreState.user = createUser({ username: 'xiapeng8618', avatar_url: null })
+
+    const wrapper = mount(ProfileAvatarCard, {
+      props: {
+        user: authStoreState.user,
+        embedded: true
+      },
+      global: {
+        stubs: {
+          Icon: true
+        }
+      }
+    })
+
+    expect(wrapper.get('[data-testid="default-user-avatar"]').exists()).toBe(true)
+    expect(wrapper.text()).not.toContain('X')
+  })
+
   it('compresses an uploaded image that exceeds the 20KB target before saving', async () => {
     installAvatarCompressionMocks()
     const updatedUser = createUser({ avatar_url: 'data:image/webp;base64,Y29tcHJlc3NlZC1hdmF0YXI=' })

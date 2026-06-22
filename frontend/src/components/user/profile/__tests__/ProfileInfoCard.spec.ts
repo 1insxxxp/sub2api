@@ -184,14 +184,33 @@ describe('ProfileInfoCard', () => {
       }
     })
 
-    expect(wrapper.get('[data-testid="profile-overview-hero"]').text()).toContain('alice@example.com')
+    const overviewHero = wrapper.get('[data-testid="profile-overview-hero"]')
+    expect(overviewHero.classes()).toContain('profile-overview-card')
+    expect(overviewHero.classes()).toContain('brand-surface')
+    expect(overviewHero.text()).toContain('alice@example.com')
     expect(wrapper.get('[data-testid="profile-overview-metric-balance"]').text()).toContain('Account Balance')
     expect(wrapper.get('[data-testid="profile-overview-metric-concurrency"]').text()).toContain('Concurrency Limit')
     expect(wrapper.get('[data-testid="profile-overview-metric-member-since"]').text()).toContain('Member Since')
     expect(wrapper.find('[data-testid="profile-info-summary-grid"]').exists()).toBe(false)
     expect(wrapper.get('[data-testid="profile-main-column"]').exists()).toBe(true)
     expect(wrapper.get('[data-testid="profile-side-column"]').exists()).toBe(true)
-    expect(wrapper.get('[data-testid="profile-basics-panel"]').exists()).toBe(true)
-    expect(wrapper.get('[data-testid="profile-auth-bindings-panel"]').exists()).toBe(true)
+    expect(wrapper.get('[data-testid="profile-basics-panel"]').classes()).toContain('brand-surface')
+    expect(wrapper.get('[data-testid="profile-auth-bindings-panel"]').classes()).toContain('brand-surface')
+  })
+
+  it('uses the shared default avatar instead of an initial when no avatar is uploaded', () => {
+    const wrapper = mount(ProfileInfoCard, {
+      props: {
+        user: createUser({ username: 'xiapeng8618', avatar_url: null })
+      },
+      global: {
+        stubs: {
+          Icon: true
+        }
+      }
+    })
+
+    expect(wrapper.get('[data-testid="default-user-avatar"]').exists()).toBe(true)
+    expect(wrapper.get('[data-testid="profile-overview-hero"]').text()).not.toContain('X')
   })
 })

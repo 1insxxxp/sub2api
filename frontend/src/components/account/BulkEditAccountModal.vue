@@ -310,7 +310,7 @@
 
               <button
                 type="button"
-                class="mb-3 w-full rounded-lg border-2 border-dashed border-gray-300 px-4 py-2 text-gray-600 transition-colors hover:border-gray-400 hover:text-gray-700 dark:border-dark-500 dark:text-gray-400 dark:hover:border-dark-400 dark:hover:text-gray-300"
+                class="mb-3 w-full rounded-lg border-2 border-dashed border-primary-200 px-4 py-2 text-primary-700 transition-colors hover:border-primary-400 hover:bg-primary-50/60 hover:text-primary-800 dark:border-primary-500/25 dark:text-primary-200 dark:hover:border-primary-400/60 dark:hover:bg-primary-500/10 dark:hover:text-primary-100"
                 @click="addModelMapping"
               >
                 <svg
@@ -918,7 +918,7 @@
           </div>
           <button
             type="button"
-            class="mb-3 w-full rounded-lg border-2 border-dashed border-gray-300 px-4 py-2 text-gray-600 transition-colors hover:border-gray-400 hover:text-gray-700 dark:border-dark-500 dark:text-gray-400 dark:hover:border-dark-400 dark:hover:text-gray-300"
+            class="mb-3 w-full rounded-lg border-2 border-dashed border-primary-200 px-4 py-2 text-primary-700 transition-colors hover:border-primary-400 hover:bg-primary-50/60 hover:text-primary-800 dark:border-primary-500/25 dark:text-primary-200 dark:hover:border-primary-400/60 dark:hover:bg-primary-500/10 dark:hover:text-primary-100"
             data-testid="bulk-edit-openai-compact-model-mapping-add"
             @click="addOpenAICompactModelMapping"
           >

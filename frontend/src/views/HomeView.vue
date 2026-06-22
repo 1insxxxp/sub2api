@@ -28,8 +28,8 @@
         class="home-site-header home-header-flat fixed inset-x-0 top-0 z-30 border-b border-transparent px-3 py-2 backdrop-blur-xl transition-all duration-300 sm:px-4"
         :class="{ 'home-site-header-scrolled': isHeaderScrolled }"
       >
-        <nav class="home-nav-shell mx-auto flex h-14 max-w-7xl items-center justify-between gap-3 px-1 sm:px-2 lg:px-3">
-          <router-link to="/" class="home-brand-link group flex min-w-0 items-center gap-2.5 rounded-lg px-1 py-1 transition-colors duration-200 hover:bg-blue-50/60 dark:hover:bg-white/[0.04]">
+        <nav class="home-nav-shell home-nav-unified mx-auto flex h-16 max-w-7xl items-center justify-between gap-3 px-3 sm:px-4 lg:px-5">
+          <router-link to="/" class="home-brand-link group flex min-w-0 items-center gap-3 px-1.5 py-1 transition-colors duration-200">
             <span
               class="home-brand-mark flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-[linear-gradient(135deg,#2563eb,#3b82f6,#06b6d4)] p-0.5 shadow-[0_8px_18px_rgba(37,99,235,0.16)] ring-1 ring-blue-300/35 transition-transform duration-200 group-hover:scale-[1.03] dark:ring-cyan-300/20"
             >
@@ -41,7 +41,7 @@
                 />
               </span>
             </span>
-            <span class="min-w-0 truncate text-base font-semibold text-slate-950 dark:text-white">
+            <span class="home-brand-name min-w-0 truncate text-base font-semibold text-slate-950 dark:text-white">
               {{ siteName }}
             </span>
           </router-link>
@@ -51,7 +51,7 @@
               v-for="item in navItems"
               :key="item.href"
               :href="item.href"
-              class="home-nav-link rounded-lg px-3.5 py-2 text-[13px] font-semibold text-slate-600 transition-all duration-200 hover:bg-blue-50/80 hover:text-blue-700 dark:text-slate-300 dark:hover:bg-white/[0.06] dark:hover:text-blue-100"
+              class="home-nav-link px-3.5 py-2 text-sm font-semibold text-slate-600 transition-all duration-200 hover:text-blue-700 dark:text-slate-300 dark:hover:text-blue-100"
             >
               {{ item.label }}
             </a>
@@ -60,7 +60,7 @@
               :href="docUrl"
               target="_blank"
               rel="noopener noreferrer"
-              class="home-nav-doc-link rounded-lg px-3.5 py-2 text-[13px] font-semibold text-slate-600 transition-all duration-200 hover:bg-blue-50/80 hover:text-blue-700 dark:text-slate-300 dark:hover:bg-white/[0.06] dark:hover:text-blue-100"
+              class="home-nav-doc-link px-3.5 py-2 text-sm font-semibold text-slate-600 transition-all duration-200 hover:text-blue-700 dark:text-slate-300 dark:hover:text-blue-100"
             >
               {{ t('home.docs') }}
             </a>
@@ -74,7 +74,7 @@
               :href="docUrl"
               target="_blank"
               rel="noopener noreferrer"
-              class="home-icon-control hidden h-10 w-10 items-center justify-center rounded-lg border border-blue-100/75 bg-white/70 text-slate-600 transition-all duration-200 hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700 dark:border-white/10 dark:bg-white/[0.05] dark:text-slate-300 dark:hover:border-blue-400/25 dark:hover:bg-blue-500/10 dark:hover:text-blue-200 sm:inline-flex lg:hidden"
+              class="home-icon-control hidden h-11 w-11 items-center justify-center rounded-xl text-slate-600 transition-all duration-200 hover:text-blue-700 dark:text-slate-300 dark:hover:text-blue-100 sm:inline-flex lg:hidden"
               :title="t('home.viewDocs')"
             >
               <Icon name="book" size="sm" />
@@ -82,7 +82,7 @@
 
             <button
               type="button"
-              class="home-icon-control flex h-10 w-10 items-center justify-center rounded-lg border border-blue-100/75 bg-white/70 text-slate-600 transition-all duration-200 hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700 dark:border-white/10 dark:bg-white/[0.05] dark:text-slate-300 dark:hover:border-blue-400/25 dark:hover:bg-blue-500/10 dark:hover:text-blue-200"
+              class="home-icon-control flex h-11 w-11 items-center justify-center rounded-xl text-slate-600 transition-all duration-200 hover:text-blue-700 dark:text-slate-300 dark:hover:text-blue-100"
               :title="isDark ? t('home.switchToLight') : t('home.switchToDark')"
               @click="toggleTheme"
             >
@@ -92,7 +92,7 @@
 
             <router-link
               :to="isAuthenticated ? dashboardPath : '/login'"
-              class="home-dashboard-cta inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-[linear-gradient(90deg,#2563eb,#3b82f6,#06b6d4)] px-4 text-sm font-semibold text-white shadow-[0_10px_22px_rgba(37,99,235,0.2)] ring-1 ring-white/20 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_12px_28px_rgba(37,99,235,0.28)] dark:text-white sm:px-5"
+              class="home-dashboard-cta inline-flex h-11 shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-xl bg-[linear-gradient(90deg,#2563eb,#3b82f6,#06b6d4)] px-3 text-sm font-semibold text-white shadow-[0_14px_28px_rgba(37,99,235,0.22)] ring-1 ring-white/25 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_16px_34px_rgba(37,99,235,0.34)] dark:text-white sm:px-5"
             >
               <span>
                 {{ isAuthenticated ? t('home.hero.dashboardCta') : t('home.login') }}
@@ -150,7 +150,7 @@
                 :href="docUrl"
                 target="_blank"
                 rel="noopener noreferrer"
-                class="home-action-button inline-flex h-11 items-center justify-center gap-2 rounded-lg border border-gray-200 bg-white px-5 text-sm font-semibold text-gray-800 transition-colors hover:border-gray-300 hover:bg-gray-50 dark:border-dark-700 dark:bg-dark-900 dark:text-gray-100 dark:hover:border-dark-600 dark:hover:bg-dark-800"
+                class="home-action-button inline-flex h-11 items-center justify-center gap-2 rounded-lg border border-gray-200 bg-white px-5 text-sm font-semibold text-gray-800 transition-colors hover:border-primary-300 hover:bg-primary-50/60 dark:border-dark-700 dark:bg-dark-900 dark:text-gray-100 dark:hover:border-primary-500/40 dark:hover:bg-primary-500/10"
               >
                 <Icon name="book" size="sm" />
                 {{ t('home.hero.secondaryCta') }}

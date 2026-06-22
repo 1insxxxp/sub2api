@@ -104,7 +104,7 @@
               class="text-xs px-3 py-1.5 rounded-lg border transition-all"
               :class="currentRange === range.key
                 ? 'bg-primary-500 text-white border-primary-500'
-                : 'border-gray-200 bg-white text-gray-700 dark:border-dark-700 dark:bg-dark-900 dark:text-dark-200 hover:border-primary-300 dark:hover:border-dark-600'"
+                : 'border-gray-200 bg-white text-gray-700 dark:border-dark-700 dark:bg-dark-900 dark:text-dark-200 hover:border-primary-300 dark:hover:border-primary-500/40'"
             >{{ range.label }}</button>
             <div v-if="currentRange === 'custom'" class="flex items-center gap-2 ml-1">
               <input

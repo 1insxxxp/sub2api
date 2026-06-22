@@ -1061,7 +1061,9 @@ func (s *OpenAIGatewayService) handleOpenAIImagesOAuthNonStreamingResponse(
 		return OpenAIUsage{}, 0, nil, err
 	}
 	responseheaders.WriteFilteredHeaders(c.Writer.Header(), resp.Header, s.responseHeaderFilter)
-	c.Data(resp.StatusCode, "application/json; charset=utf-8", responseBody)
+	if err := writeOpenAIImagesDataResponse(c, resp.StatusCode, "application/json; charset=utf-8", responseBody); err != nil {
+		return OpenAIUsage{}, 0, nil, err
+	}
 	return usage, len(results), openAIResponsesImageResultSizes(results), nil
 }
 

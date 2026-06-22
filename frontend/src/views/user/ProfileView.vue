@@ -2,7 +2,7 @@
   <AppLayout>
     <div
       data-testid="profile-shell"
-      class="mx-auto max-w-[950px] space-y-6"
+      class="profile-account-shell mx-auto w-full max-w-6xl space-y-5 sm:space-y-6"
     >
       <ProfileInfoCard
         :user="user"
@@ -15,38 +15,88 @@
         :wechat-mp-enabled="wechatOAuthMPEnabled"
       />
 
-      <div
-        v-if="contactInfo"
-        class="card border-primary-200 bg-primary-50 p-6 dark:bg-primary-900/20"
-      >
-        <div class="flex items-center gap-4">
-          <div class="rounded-xl bg-primary-100 p-3 text-primary-600">
-            <Icon name="chat" size="lg" />
-          </div>
-          <div>
-            <h3 class="font-semibold text-primary-800 dark:text-primary-200">
-              {{ t('common.contactSupport') }}
-            </h3>
-            <p class="text-sm font-medium">{{ contactInfo }}</p>
-          </div>
+      <div class="profile-account-grid grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(320px,0.68fr)] sm:gap-6">
+        <div class="min-w-0 space-y-5 sm:space-y-6">
+          <ProfilePasswordForm />
+        </div>
+
+        <div class="min-w-0 space-y-5 sm:space-y-6">
+          <ProfileBalanceNotifyCard
+            v-if="user && balanceLowNotifyEnabled"
+            :enabled="user.balance_notify_enabled ?? true"
+            :threshold="user.balance_notify_threshold"
+            :extra-emails="user.balance_notify_extra_emails ?? []"
+            :system-default-threshold="systemDefaultThreshold"
+            :user-email="user.email"
+          />
+
+          <ProfileTotpCard />
+
+          <section
+            v-if="contactInfo"
+            class="brand-surface brand-rail profile-contact-card"
+          >
+            <div class="flex items-start gap-4 p-5 pl-7 sm:p-6 sm:pl-8">
+              <div class="brand-floating-icon profile-contact-icon">
+                <Icon name="chat" size="lg" />
+              </div>
+              <div class="min-w-0 flex-1">
+                <h3 class="text-base font-semibold text-slate-950 dark:text-white">
+                  {{ t('common.contactSupport') }}
+                </h3>
+                <p class="mt-1 break-words text-sm font-medium text-slate-600 dark:text-slate-300">
+                  {{ contactInfo }}
+                </p>
+              </div>
+            </div>
+          </section>
         </div>
       </div>
-
-      <ProfilePasswordForm />
-
-      <ProfileBalanceNotifyCard
-        v-if="user && balanceLowNotifyEnabled"
-        :enabled="user.balance_notify_enabled ?? true"
-        :threshold="user.balance_notify_threshold"
-        :extra-emails="user.balance_notify_extra_emails ?? []"
-        :system-default-threshold="systemDefaultThreshold"
-        :user-email="user.email"
-      />
-
-      <ProfileTotpCard />
     </div>
   </AppLayout>
 </template>
+
+<style scoped>
+.profile-account-shell {
+  padding-bottom: 2rem;
+}
+
+.profile-account-grid {
+  align-items: start;
+}
+
+.profile-contact-card {
+  border-radius: 1.25rem;
+}
+
+.profile-contact-icon {
+  height: 2.75rem;
+  width: 2.75rem;
+  flex-shrink: 0;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .profile-account-shell > * {
+    animation: profile-section-in 260ms ease-out both;
+  }
+
+  .profile-account-shell > *:nth-child(2) {
+    animation-delay: 60ms;
+  }
+}
+
+@keyframes profile-section-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+</style>
 
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'

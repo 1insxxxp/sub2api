@@ -11,7 +11,8 @@
       <!-- Settings Form -->
       <form v-else @submit.prevent="saveSettings" class="space-y-6" novalidate>
         <!-- Tab Navigation -->
-        <div class="settings-tabs-shell admin-toolbar-surface">
+        <div class="settings-tabs-shell settings-tabs-brand-shell admin-toolbar-surface">
+          <div class="settings-tabs-brand-glow" aria-hidden="true"></div>
           <nav
             class="settings-tabs-scroll"
             role="tablist"
@@ -10426,15 +10427,32 @@ watch(
 
 /* ============ 系统设置 Tab 导航 ============ */
 .settings-tabs-shell {
-  @apply sticky z-20 -mx-1 rounded-[18px] border border-blue-100/70 bg-white/80 p-1 backdrop-blur-xl;
+  @apply sticky z-20 -mx-1 overflow-hidden rounded-2xl border p-1.5 backdrop-blur-xl;
   top: 4.75rem;
+}
+
+.settings-tabs-brand-shell {
+  border-color: rgba(var(--brand-rgb), 0.18);
+  background:
+    radial-gradient(circle at 7% 0%, rgba(var(--brand-rgb), 0.12), transparent 36%),
+    radial-gradient(circle at 94% 0%, rgba(var(--brand-cyan-rgb), 0.14), transparent 34%),
+    linear-gradient(135deg, rgba(255, 255, 255, 0.94), rgba(239, 246, 255, 0.82));
   box-shadow:
-    0 8px 22px rgb(15 23 42 / 0.055),
-    0 1px 0 rgb(255 255 255 / 0.86) inset;
+    0 18px 42px rgba(37, 99, 235, 0.12),
+    0 1px 0 rgba(255, 255, 255, 0.92) inset;
+}
+
+.settings-tabs-brand-glow {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    linear-gradient(90deg, rgba(var(--brand-rgb), 0.1), transparent 22%, transparent 78%, rgba(var(--brand-cyan-rgb), 0.1)),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.64), transparent 48%);
 }
 
 .settings-tabs-scroll {
-  @apply overflow-x-auto;
+  @apply relative z-10 overflow-x-auto;
   -ms-overflow-style: none;
   scrollbar-width: none;
 }
@@ -10444,11 +10462,11 @@ watch(
 }
 
 .settings-tabs {
-  @apply flex min-w-max items-center gap-0.5;
+  @apply flex min-w-max items-center gap-1.5;
 }
 
 .settings-tab {
-  @apply relative isolate flex h-9 min-w-[6.45rem] shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-[14px] border border-transparent px-3 text-[13px] font-medium text-slate-500 outline-none transition-colors duration-200 ease-out dark:text-slate-300;
+  @apply relative isolate flex h-11 min-w-[6.75rem] shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-xl border border-transparent px-3 text-sm font-semibold text-slate-600 outline-none transition-all duration-200 ease-out dark:text-slate-300;
 }
 
 @media (min-width: 768px) {
@@ -10466,9 +10484,11 @@ watch(
 }
 
 .settings-tab::before {
-  @apply absolute inset-0 -z-10 rounded-[14px] opacity-0 transition-opacity duration-200;
+  @apply absolute inset-0 -z-10 rounded-xl opacity-0 transition-opacity duration-200;
   content: "";
-  background: linear-gradient(180deg, rgb(248 250 252 / 0.9), rgb(241 245 249 / 0.72));
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.78), rgba(219, 234, 254, 0.5)),
+    rgba(var(--brand-rgb), 0.045);
 }
 
 .settings-tab:hover::before,
@@ -10481,11 +10501,14 @@ watch(
 }
 
 .settings-tab-active {
-  @apply border-blue-200/70 text-blue-700 dark:border-cyan-400/20 dark:text-cyan-100;
-  background: linear-gradient(180deg, rgb(239 246 255 / 0.96), rgb(224 242 254 / 0.76));
+  border-color: rgba(255, 255, 255, 0.72);
+  color: var(--brand-700);
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.98), rgba(236, 254, 255, 0.9)),
+    rgba(var(--brand-rgb), 0.08);
   box-shadow:
-    0 5px 14px rgb(37 99 235 / 0.10),
-    0 1px 0 rgb(255 255 255 / 0.88) inset;
+    0 12px 26px rgba(37, 99, 235, 0.14),
+    0 1px 0 rgba(255, 255, 255, 0.96) inset;
 }
 
 .settings-tab-active::before {
@@ -10494,26 +10517,31 @@ watch(
 
 .settings-tab-active::after {
   position: absolute;
-  right: 0.95rem;
-  bottom: 0.2rem;
-  left: 0.95rem;
+  right: 0.75rem;
+  bottom: 0.28rem;
+  left: 0.75rem;
   height: 2px;
   border-radius: 9999px;
   content: "";
-  background: linear-gradient(90deg, #2563eb, #06b6d4);
+  background: linear-gradient(90deg, var(--brand-600), var(--brand-500), var(--brand-cyan));
+  box-shadow: 0 0 12px rgba(var(--brand-cyan-rgb), 0.34);
 }
 
 .settings-tab-icon {
-  @apply flex h-6 w-6 shrink-0 items-center justify-center rounded-lg text-slate-400 transition-colors duration-200 dark:text-slate-400;
+  @apply flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-slate-500 transition-all duration-200 dark:text-slate-400;
 }
 
 .settings-tab:hover .settings-tab-icon,
 .settings-tab:focus-visible .settings-tab-icon {
-  @apply text-blue-600 dark:text-cyan-200;
+  color: var(--brand-600);
 }
 
 .settings-tab-active .settings-tab-icon {
-  @apply bg-white/70 text-blue-600 shadow-sm shadow-blue-700/5 dark:bg-cyan-400/10 dark:text-cyan-200;
+  color: var(--brand-600);
+  background:
+    linear-gradient(135deg, rgba(var(--brand-rgb), 0.12), rgba(var(--brand-cyan-rgb), 0.12)),
+    rgba(255, 255, 255, 0.68);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.8) inset;
 }
 
 .settings-tab-label {
@@ -10559,22 +10587,46 @@ watch(
    because Vue's scoped-CSS compiler was dropping the `:global(.dark) ...`
    rules in the production build, leaving inactive tabs unreadable on dark. */
 .dark .settings-tabs-shell {
-  border-color: rgb(34 211 238 / 0.14);
-  background: rgb(15 23 42 / 0.76);
+  border-color: rgba(96, 165, 250, 0.22);
+  background:
+    radial-gradient(circle at 8% 0%, rgba(37, 99, 235, 0.24), transparent 34%),
+    radial-gradient(circle at 92% 0%, rgba(6, 182, 212, 0.2), transparent 36%),
+    linear-gradient(135deg, rgba(15, 23, 42, 0.92), rgba(8, 13, 28, 0.88));
   box-shadow:
-    0 10px 26px rgb(0 0 0 / 0.24),
-    0 1px 0 rgb(255 255 255 / 0.06) inset;
+    0 18px 44px rgba(0, 0, 0, 0.28),
+    0 1px 0 rgba(255, 255, 255, 0.08) inset;
 }
 
 .dark .settings-tab::before {
-  background: linear-gradient(180deg, rgb(30 41 59 / 0.84), rgb(15 23 42 / 0.7));
+  background:
+    linear-gradient(135deg, rgba(30, 64, 175, 0.22), rgba(8, 145, 178, 0.14)),
+    rgba(255, 255, 255, 0.04);
+}
+
+.dark .settings-tab:hover .settings-tab-icon,
+.dark .settings-tab:focus-visible .settings-tab-icon {
+  color: rgb(125, 211, 252);
 }
 
 .dark .settings-tab-active {
-  background: linear-gradient(180deg, rgb(30 58 138 / 0.48), rgb(8 145 178 / 0.24));
+  border-color: rgba(125, 211, 252, 0.24);
+  color: rgb(219, 234, 254);
+  background:
+    linear-gradient(135deg, rgba(37, 99, 235, 0.28), rgba(8, 145, 178, 0.18)),
+    rgba(15, 23, 42, 0.82);
+}
+
+.dark .settings-tab-active {
   box-shadow:
-    0 8px 20px rgb(0 0 0 / 0.2),
-    0 1px 0 rgb(255 255 255 / 0.08) inset;
+    0 12px 28px rgba(0, 0, 0, 0.26),
+    0 1px 0 rgba(255, 255, 255, 0.08) inset;
+}
+
+.dark .settings-tab-active .settings-tab-icon {
+  color: rgb(125, 211, 252);
+  background:
+    linear-gradient(135deg, rgba(37, 99, 235, 0.22), rgba(6, 182, 212, 0.14)),
+    rgba(255, 255, 255, 0.06);
 }
 
 .dark .settings-admin-page .card {

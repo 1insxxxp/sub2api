@@ -25,7 +25,7 @@
           :alt="displayName"
           class="h-full w-full object-cover"
         >
-        <span v-else>{{ avatarInitial }}</span>
+        <DefaultUserAvatar v-else :size="props.embedded ? 'lg' : '2xl'" />
       </div>
 
       <div :class="props.embedded ? 'space-y-3' : 'min-w-0 flex-1 space-y-4'">
@@ -82,6 +82,7 @@
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { userAPI } from '@/api'
+import DefaultUserAvatar from '@/components/common/DefaultUserAvatar.vue'
 import { useAppStore } from '@/stores/app'
 import { useAuthStore } from '@/stores/auth'
 import type { User } from '@/types'
@@ -105,7 +106,6 @@ const avatarDraft = ref('')
 const avatarSaving = ref(false)
 
 const displayName = computed(() => props.user?.username?.trim() || props.user?.email?.trim() || t('profile.user'))
-const avatarInitial = computed(() => displayName.value.charAt(0).toUpperCase() || 'U')
 const avatarPreviewUrl = computed(() => avatarDraft.value.trim() || props.user?.avatar_url?.trim() || '')
 
 watch(

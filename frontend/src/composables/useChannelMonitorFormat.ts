@@ -97,8 +97,8 @@ export function useChannelMonitorFormat() {
           : 'hover:border-sky-300 hover:text-sky-700 dark:hover:border-sky-500/50'
       default:
         return active
-          ? 'admin-choice-card-active border-slate-400 text-slate-700 dark:border-slate-500 dark:text-slate-200'
-          : 'hover:border-slate-300 dark:hover:border-slate-500'
+          ? 'admin-choice-card-active border-primary-500 text-primary-700 dark:border-primary-400 dark:text-primary-300'
+          : 'hover:border-primary-300 hover:text-primary-700 dark:hover:border-primary-500/50 dark:hover:text-primary-200'
     }
   }
 

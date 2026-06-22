@@ -73,7 +73,7 @@ describe('ProfileView', () => {
     })
   })
 
-  it('renders the simplified single-column profile shell without separate stat cards', async () => {
+  it('renders the themed account-center profile shell without separate stat cards', async () => {
     const wrapper = mount(ProfileView, {
       global: {
         stubs: {
@@ -91,9 +91,11 @@ describe('ProfileView', () => {
     await flushPromises()
 
     expect(wrapper.findAll('.stat-card')).toHaveLength(0)
-    expect(wrapper.get('[data-testid="profile-shell"]').exists()).toBe(true)
-    expect(wrapper.get('[data-testid="profile-shell"]').html()).toContain('profile-info-card')
-    expect(wrapper.get('[data-testid="profile-shell"]').html()).toContain('profile-password-form')
-    expect(wrapper.get('[data-testid="profile-shell"]').html()).toContain('profile-totp-card')
+    const shell = wrapper.get('[data-testid="profile-shell"]')
+    expect(shell.classes()).toContain('profile-account-shell')
+    expect(shell.classes()).toContain('max-w-6xl')
+    expect(shell.html()).toContain('profile-info-card')
+    expect(shell.html()).toContain('profile-password-form')
+    expect(shell.html()).toContain('profile-totp-card')
   })
 })

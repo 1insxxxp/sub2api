@@ -158,6 +158,32 @@ describe('AppHeader shared admin shell', () => {
     expect(wrapper.get('.app-header-actions').exists()).toBe(true)
     expect(wrapper.get('[data-test="header-balance-pill"]').exists()).toBe(true)
   })
+
+  it('uses the shared default avatar in the header when no custom avatar exists', async () => {
+    authStore.user = {
+      id: 12,
+      username: 'xiapeng8618',
+      email: 'xiapeng8618@example.com',
+      role: 'user',
+      balance: 0,
+      avatar_url: ''
+    }
+
+    const wrapper = await mountHeader()
+
+    expect(wrapper.get('[data-test="header-user-avatar"]').find('[data-testid="default-user-avatar"]').exists()).toBe(true)
+    expect(wrapper.get('[data-test="header-user-avatar"]').text()).not.toContain('XI')
+  })
+
+  it('keeps the user dropdown compact on desktop', async () => {
+    const wrapper = await mountHeader()
+
+    await wrapper.get('button[aria-label="User Menu"]').trigger('click')
+
+    const menu = wrapper.get('.profile-menu')
+    expect(menu.classes()).toContain('w-[19rem]')
+    expect(menu.classes()).not.toContain('w-[22rem]')
+  })
 })
 
 describe('AppHeader daily check-in entry', () => {
@@ -313,7 +339,7 @@ describe('AppHeader user menu', () => {
     await flushPromises()
 
     const menu = wrapper.get('[role="menu"]')
-    expect(menu.classes()).toContain('w-64')
+    expect(menu.classes()).toContain('w-[19rem]')
     expect(menu.classes()).not.toContain('w-[22rem]')
 
     const avatar = wrapper.get('.profile-menu-avatar')

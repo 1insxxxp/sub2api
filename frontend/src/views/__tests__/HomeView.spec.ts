@@ -160,7 +160,7 @@ describe('HomeView default homepage', () => {
     expect(wrapper.find('.home-cta-panel.home-scroll-reveal').exists()).toBe(true)
   })
 
-  it('uses a simplified single-layer header for the homepage navigation', async () => {
+  it('uses a transparent navigation shell for the homepage header', async () => {
     const wrapper = await mountHome()
 
     expect(wrapper.find('.home-nav-shell').exists()).toBe(true)
@@ -173,15 +173,28 @@ describe('HomeView default homepage', () => {
     expect(wrapper.find('.home-dashboard-cta').exists()).toBe(true)
 
     const source = readFileSync('src/views/HomeView.vue', 'utf-8')
+    const styleSource = readFileSync('src/style.css', 'utf-8')
     expect(source).toContain('home-header-flat')
     expect(source).toContain('home-trust-strip')
     expect(source).toContain('home-trust-item')
     expect(source).toContain('dark:bg-slate-950/50')
-    expect(source).toContain('home-nav-shell')
+    expect(source).toContain('home-nav-shell home-nav-unified')
     expect(source).toContain('home-header-actions')
     expect(source).toContain('home-dashboard-cta')
-    expect(source).toContain('h-10')
-    expect(source).not.toContain('rounded-2xl border border-white/70 bg-white/42')
+    expect(source).not.toContain('home-header-actions flex items-center gap-2 rounded-2xl border')
+    expect(source).not.toContain('home-brand-link group flex min-w-0 items-center gap-3 rounded-xl')
+    expect(source).not.toContain('hover:bg-blue-50/70')
+    expect(source).toContain('home-dashboard-cta inline-flex h-11 shrink-0')
+    expect(source).toContain('whitespace-nowrap')
+    expect(source).toContain('h-11')
+    expect(styleSource).toContain('.home-nav-shell')
+    expect(styleSource).toContain('background: transparent;')
+    expect(styleSource).toContain('box-shadow: none;')
+    expect(styleSource).toContain('backdrop-filter: none;')
+    expect(styleSource).toContain('.home-nav-unified::before')
+    expect(styleSource).toContain('content: none;')
+    expect(styleSource).not.toContain('0 22px 50px rgba(15, 23, 42, 0.08)')
+    expect(styleSource).not.toContain('rgba(255, 255, 255, 0.58)')
   })
 
   it('does not prepend the authenticated user initial to the header dashboard CTA', async () => {

@@ -234,14 +234,17 @@
             aria-haspopup="menu"
             :aria-expanded="dropdownOpen"
           >
-            <div class="flex h-8 w-8 items-center justify-center overflow-hidden rounded-xl bg-[linear-gradient(135deg,#2563eb,#3b82f6,#06b6d4)] text-sm font-semibold text-white shadow-sm shadow-blue-600/25 ring-1 ring-blue-300/40">
+            <div
+              data-test="header-user-avatar"
+              class="flex h-8 w-8 items-center justify-center overflow-hidden rounded-xl bg-[linear-gradient(135deg,#2563eb,#3b82f6,#06b6d4)] text-sm font-semibold text-white shadow-sm shadow-blue-600/25 ring-1 ring-blue-300/40"
+            >
               <img
                 v-if="avatarUrl"
                 :src="avatarUrl"
                 :alt="displayName"
                 class="h-full w-full object-cover"
               >
-              <span v-else>{{ userInitials }}</span>
+              <DefaultUserAvatar v-else size="sm" />
             </div>
             <div class="hidden text-left md:block">
               <div class="max-w-28 truncate text-sm font-semibold text-slate-950 dark:text-white">
@@ -263,7 +266,7 @@
           <transition name="dropdown">
             <div
               v-if="dropdownOpen"
-              class="dropdown profile-menu right-0 mt-2 w-64 max-w-[calc(100vw-1rem)]"
+              class="dropdown profile-menu right-0 mt-3 w-[19rem] max-w-[calc(100vw-1.5rem)]"
               role="menu"
             >
               <!-- User Info -->
@@ -275,7 +278,7 @@
                     :alt="displayName"
                     class="h-full w-full object-cover"
                   >
-                  <span v-else>{{ userInitials }}</span>
+                  <DefaultUserAvatar v-else size="md" />
                 </div>
                 <div class="min-w-0 flex-1">
                   <div class="truncate text-sm font-semibold text-slate-950 dark:text-white">
@@ -400,6 +403,7 @@ import { getCheckinStatus, submitCheckin, type CheckinStatus } from '@/api/check
 import LocaleSwitcher from '@/components/common/LocaleSwitcher.vue'
 import SubscriptionProgressMini from '@/components/common/SubscriptionProgressMini.vue'
 import AnnouncementBell from '@/components/common/AnnouncementBell.vue'
+import DefaultUserAvatar from '@/components/common/DefaultUserAvatar.vue'
 import Icon from '@/components/icons/Icon.vue'
 import { extractApiErrorMessage } from '@/utils/apiError'
 
@@ -528,20 +532,6 @@ const recentCheckinRecords = computed(() => {
 // Only show the onboarding replay button for admins in standard mode.
 const showOnboardingButton = computed(() => {
   return !authStore.isSimpleMode && user.value?.role === 'admin'
-})
-
-const userInitials = computed(() => {
-  if (!user.value) return ''
-  // Prefer username, fallback to email
-  if (user.value.username) {
-    return user.value.username.substring(0, 2).toUpperCase()
-  }
-  if (user.value.email) {
-    // Get the part before @ and take first 2 chars
-    const localPart = user.value.email.split('@')[0]
-    return localPart.substring(0, 2).toUpperCase()
-  }
-  return ''
 })
 
 const displayName = computed(() => {

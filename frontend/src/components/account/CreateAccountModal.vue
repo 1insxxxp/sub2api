@@ -959,7 +959,7 @@
           <button
             type="button"
             @click="addAntigravityModelMapping"
-            class="mb-3 w-full rounded-lg border-2 border-dashed border-gray-300 px-4 py-2 text-gray-600 transition-colors hover:border-gray-400 hover:text-gray-700 dark:border-dark-500 dark:text-gray-400 dark:hover:border-dark-400 dark:hover:text-gray-300"
+            class="mb-3 w-full rounded-lg border-2 border-dashed border-primary-200 px-4 py-2 text-primary-700 transition-colors hover:border-primary-400 hover:bg-primary-50/60 hover:text-primary-800 dark:border-primary-500/25 dark:text-primary-200 dark:hover:border-primary-400/60 dark:hover:bg-primary-500/10 dark:hover:text-primary-100"
           >
             <svg class="mr-1 inline h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
@@ -1206,7 +1206,7 @@
             <button
               type="button"
               @click="addModelMapping"
-              class="mb-3 w-full rounded-lg border-2 border-dashed border-gray-300 px-4 py-2 text-gray-600 transition-colors hover:border-gray-400 hover:text-gray-700 dark:border-dark-500 dark:text-gray-400 dark:hover:border-dark-400 dark:hover:text-gray-300"
+              class="mb-3 w-full rounded-lg border-2 border-dashed border-primary-200 px-4 py-2 text-primary-700 transition-colors hover:border-primary-400 hover:bg-primary-50/60 hover:text-primary-800 dark:border-primary-500/25 dark:text-primary-200 dark:hover:border-primary-400/60 dark:hover:bg-primary-500/10 dark:hover:text-primary-100"
             >
               <svg
                 class="mr-1 inline h-4 w-4"
@@ -1881,7 +1881,7 @@
             <button
               type="button"
               @click="addModelMapping"
-              class="mb-3 w-full rounded-lg border-2 border-dashed border-gray-300 px-4 py-2 text-gray-600 transition-colors hover:border-gray-400 hover:text-gray-700 dark:border-dark-500 dark:text-gray-400 dark:hover:border-dark-400 dark:hover:text-gray-300"
+              class="mb-3 w-full rounded-lg border-2 border-dashed border-primary-200 px-4 py-2 text-primary-700 transition-colors hover:border-primary-400 hover:bg-primary-50/60 hover:text-primary-800 dark:border-primary-500/25 dark:text-primary-200 dark:hover:border-primary-400/60 dark:hover:bg-primary-500/10 dark:hover:text-primary-100"
             >
               + {{ t('admin.accounts.addMapping') }}
             </button>
@@ -2035,7 +2035,7 @@
           <button
             type="button"
             @click="addTempUnschedRule()"
-            class="w-full rounded-lg border-2 border-dashed border-gray-300 px-4 py-2 text-sm text-gray-600 transition-colors hover:border-gray-400 hover:text-gray-700 dark:border-dark-500 dark:text-gray-400 dark:hover:border-dark-400 dark:hover:text-gray-300"
+            class="w-full rounded-lg border-2 border-dashed border-primary-200 px-4 py-2 text-sm text-primary-700 transition-colors hover:border-primary-400 hover:bg-primary-50/60 hover:text-primary-800 dark:border-primary-500/25 dark:text-primary-200 dark:hover:border-primary-400/60 dark:hover:bg-primary-500/10 dark:hover:text-primary-100"
           >
             <svg
               class="mr-1 inline h-4 w-4"

@@ -329,7 +329,7 @@ onUnmounted(() => {
   @apply text-gray-700 dark:text-gray-300;
   @apply transition-all duration-200;
   @apply focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/30;
-  @apply hover:border-gray-300 dark:hover:border-dark-500;
+  @apply hover:border-primary-300 dark:hover:border-primary-500/40;
   @apply cursor-pointer;
 }
 

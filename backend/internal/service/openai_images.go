@@ -650,7 +650,6 @@ func (s *OpenAIGatewayService) forwardOpenAIImagesAPIKey(
 	defer func() { _ = resp.Body.Close() }()
 
 	var usage OpenAIUsage
-	imageCount := parsed.N
 	var firstTokenMs *int
 	if parsed.Stream && isEventStreamResponse(resp.Header) {
 		streamUsage, streamCount, streamSizes, ttft, err := s.handleOpenAIImagesStreamingResponse(resp, c, startTime)
@@ -674,7 +673,7 @@ func (s *OpenAIGatewayService) forwardOpenAIImagesAPIKey(
 			return nil, err
 		}
 		usage = streamUsage
-		imageCount = streamCount
+		imageCount := streamCount
 		imageOutputSizes := streamSizes
 		firstTokenMs = ttft
 		return &OpenAIForwardResult{
@@ -697,9 +696,7 @@ func (s *OpenAIGatewayService) forwardOpenAIImagesAPIKey(
 			return nil, err
 		}
 		usage = nonStreamUsage
-		if nonStreamCount > 0 {
-			imageCount = nonStreamCount
-		}
+		imageCount := nonStreamCount
 		return &OpenAIForwardResult{
 			RequestID:        resp.Header.Get("x-request-id"),
 			Usage:            usage,
@@ -865,10 +862,28 @@ func (s *OpenAIGatewayService) handleOpenAIImagesNonStreamingResponse(resp *http
 			contentType = upstreamType
 		}
 	}
-	c.Data(resp.StatusCode, contentType, body)
+	if err := writeOpenAIImagesDataResponse(c, resp.StatusCode, contentType, body); err != nil {
+		return OpenAIUsage{}, 0, nil, err
+	}
 
 	usage, _ := extractOpenAIUsageFromJSONBytes(body)
 	return usage, extractOpenAIImageCountFromJSONBytes(body), collectOpenAIResponseImageOutputSizesFromJSONBytes(body), nil
+}
+
+func writeOpenAIImagesDataResponse(c *gin.Context, statusCode int, contentType string, body []byte) error {
+	if c == nil {
+		return fmt.Errorf("missing response context")
+	}
+	errorsBefore := len(c.Errors)
+	c.Data(statusCode, contentType, body)
+	if len(c.Errors) <= errorsBefore {
+		return nil
+	}
+	lastErr := c.Errors[len(c.Errors)-1]
+	if lastErr == nil || lastErr.Err == nil {
+		return fmt.Errorf("downstream response write failed")
+	}
+	return fmt.Errorf("downstream response write failed: %w", lastErr.Err)
 }
 
 func (s *OpenAIGatewayService) handleOpenAIImagesStreamingResponse(
