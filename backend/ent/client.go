@@ -51,6 +51,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/usercheckin"
 	"github.com/Wei-Shaw/sub2api/ent/usercheckinblacklist"
 	"github.com/Wei-Shaw/sub2api/ent/userimage"
+	"github.com/Wei-Shaw/sub2api/ent/userimagetask"
 	"github.com/Wei-Shaw/sub2api/ent/userplatformquota"
 	"github.com/Wei-Shaw/sub2api/ent/usersubscription"
 
@@ -134,6 +135,8 @@ type Client struct {
 	UserCheckinBlacklist *UserCheckinBlacklistClient
 	// UserImage is the client for interacting with the UserImage builders.
 	UserImage *UserImageClient
+	// UserImageTask is the client for interacting with the UserImageTask builders.
+	UserImageTask *UserImageTaskClient
 	// UserPlatformQuota is the client for interacting with the UserPlatformQuota builders.
 	UserPlatformQuota *UserPlatformQuotaClient
 	// UserSubscription is the client for interacting with the UserSubscription builders.
@@ -185,6 +188,7 @@ func (c *Client) init() {
 	c.UserCheckin = NewUserCheckinClient(c.config)
 	c.UserCheckinBlacklist = NewUserCheckinBlacklistClient(c.config)
 	c.UserImage = NewUserImageClient(c.config)
+	c.UserImageTask = NewUserImageTaskClient(c.config)
 	c.UserPlatformQuota = NewUserPlatformQuotaClient(c.config)
 	c.UserSubscription = NewUserSubscriptionClient(c.config)
 }
@@ -315,6 +319,7 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 		UserCheckin:                   NewUserCheckinClient(cfg),
 		UserCheckinBlacklist:          NewUserCheckinBlacklistClient(cfg),
 		UserImage:                     NewUserImageClient(cfg),
+		UserImageTask:                 NewUserImageTaskClient(cfg),
 		UserPlatformQuota:             NewUserPlatformQuotaClient(cfg),
 		UserSubscription:              NewUserSubscriptionClient(cfg),
 	}, nil
@@ -372,6 +377,7 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 		UserCheckin:                   NewUserCheckinClient(cfg),
 		UserCheckinBlacklist:          NewUserCheckinBlacklistClient(cfg),
 		UserImage:                     NewUserImageClient(cfg),
+		UserImageTask:                 NewUserImageTaskClient(cfg),
 		UserPlatformQuota:             NewUserPlatformQuotaClient(cfg),
 		UserSubscription:              NewUserSubscriptionClient(cfg),
 	}, nil
@@ -412,8 +418,8 @@ func (c *Client) Use(hooks ...Hook) {
 		c.PromoCodeUsage, c.Proxy, c.RedeemCode, c.SecuritySecret, c.Setting,
 		c.SubscriptionPlan, c.TLSFingerprintProfile, c.UsageCleanupTask, c.UsageLog,
 		c.User, c.UserAllowedGroup, c.UserAttributeDefinition, c.UserAttributeValue,
-		c.UserCheckin, c.UserCheckinBlacklist, c.UserImage, c.UserPlatformQuota,
-		c.UserSubscription,
+		c.UserCheckin, c.UserCheckinBlacklist, c.UserImage, c.UserImageTask,
+		c.UserPlatformQuota, c.UserSubscription,
 	} {
 		n.Use(hooks...)
 	}
@@ -432,8 +438,8 @@ func (c *Client) Intercept(interceptors ...Interceptor) {
 		c.PromoCodeUsage, c.Proxy, c.RedeemCode, c.SecuritySecret, c.Setting,
 		c.SubscriptionPlan, c.TLSFingerprintProfile, c.UsageCleanupTask, c.UsageLog,
 		c.User, c.UserAllowedGroup, c.UserAttributeDefinition, c.UserAttributeValue,
-		c.UserCheckin, c.UserCheckinBlacklist, c.UserImage, c.UserPlatformQuota,
-		c.UserSubscription,
+		c.UserCheckin, c.UserCheckinBlacklist, c.UserImage, c.UserImageTask,
+		c.UserPlatformQuota, c.UserSubscription,
 	} {
 		n.Intercept(interceptors...)
 	}
@@ -514,6 +520,8 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.UserCheckinBlacklist.mutate(ctx, m)
 	case *UserImageMutation:
 		return c.UserImage.mutate(ctx, m)
+	case *UserImageTaskMutation:
+		return c.UserImageTask.mutate(ctx, m)
 	case *UserPlatformQuotaMutation:
 		return c.UserPlatformQuota.mutate(ctx, m)
 	case *UserSubscriptionMutation:
@@ -5455,6 +5463,22 @@ func (c *UserClient) QueryUserImages(_m *User) *UserImageQuery {
 	return query
 }
 
+// QueryUserImageTasks queries the user_image_tasks edge of a User.
+func (c *UserClient) QueryUserImageTasks(_m *User) *UserImageTaskQuery {
+	query := (&UserImageTaskClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(user.Table, user.FieldID, id),
+			sqlgraph.To(userimagetask.Table, userimagetask.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, user.UserImageTasksTable, user.UserImageTasksColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
 // QueryUserAllowedGroups queries the user_allowed_groups edge of a User.
 func (c *UserClient) QueryUserAllowedGroups(_m *User) *UserAllowedGroupQuery {
 	query := (&UserAllowedGroupClient{config: c.config}).Query()
@@ -6352,6 +6376,22 @@ func (c *UserImageClient) QueryUser(_m *UserImage) *UserQuery {
 	return query
 }
 
+// QueryTasks queries the tasks edge of a UserImage.
+func (c *UserImageClient) QueryTasks(_m *UserImage) *UserImageTaskQuery {
+	query := (&UserImageTaskClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(userimage.Table, userimage.FieldID, id),
+			sqlgraph.To(userimagetask.Table, userimagetask.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, userimage.TasksTable, userimage.TasksColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
 // Hooks returns the client hooks.
 func (c *UserImageClient) Hooks() []Hook {
 	return c.hooks.UserImage
@@ -6374,6 +6414,171 @@ func (c *UserImageClient) mutate(ctx context.Context, m *UserImageMutation) (Val
 		return (&UserImageDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
 	default:
 		return nil, fmt.Errorf("ent: unknown UserImage mutation op: %q", m.Op())
+	}
+}
+
+// UserImageTaskClient is a client for the UserImageTask schema.
+type UserImageTaskClient struct {
+	config
+}
+
+// NewUserImageTaskClient returns a client for the UserImageTask from the given config.
+func NewUserImageTaskClient(c config) *UserImageTaskClient {
+	return &UserImageTaskClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `userimagetask.Hooks(f(g(h())))`.
+func (c *UserImageTaskClient) Use(hooks ...Hook) {
+	c.hooks.UserImageTask = append(c.hooks.UserImageTask, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `userimagetask.Intercept(f(g(h())))`.
+func (c *UserImageTaskClient) Intercept(interceptors ...Interceptor) {
+	c.inters.UserImageTask = append(c.inters.UserImageTask, interceptors...)
+}
+
+// Create returns a builder for creating a UserImageTask entity.
+func (c *UserImageTaskClient) Create() *UserImageTaskCreate {
+	mutation := newUserImageTaskMutation(c.config, OpCreate)
+	return &UserImageTaskCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of UserImageTask entities.
+func (c *UserImageTaskClient) CreateBulk(builders ...*UserImageTaskCreate) *UserImageTaskCreateBulk {
+	return &UserImageTaskCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *UserImageTaskClient) MapCreateBulk(slice any, setFunc func(*UserImageTaskCreate, int)) *UserImageTaskCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &UserImageTaskCreateBulk{err: fmt.Errorf("calling to UserImageTaskClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*UserImageTaskCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &UserImageTaskCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for UserImageTask.
+func (c *UserImageTaskClient) Update() *UserImageTaskUpdate {
+	mutation := newUserImageTaskMutation(c.config, OpUpdate)
+	return &UserImageTaskUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *UserImageTaskClient) UpdateOne(_m *UserImageTask) *UserImageTaskUpdateOne {
+	mutation := newUserImageTaskMutation(c.config, OpUpdateOne, withUserImageTask(_m))
+	return &UserImageTaskUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *UserImageTaskClient) UpdateOneID(id int64) *UserImageTaskUpdateOne {
+	mutation := newUserImageTaskMutation(c.config, OpUpdateOne, withUserImageTaskID(id))
+	return &UserImageTaskUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for UserImageTask.
+func (c *UserImageTaskClient) Delete() *UserImageTaskDelete {
+	mutation := newUserImageTaskMutation(c.config, OpDelete)
+	return &UserImageTaskDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *UserImageTaskClient) DeleteOne(_m *UserImageTask) *UserImageTaskDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *UserImageTaskClient) DeleteOneID(id int64) *UserImageTaskDeleteOne {
+	builder := c.Delete().Where(userimagetask.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &UserImageTaskDeleteOne{builder}
+}
+
+// Query returns a query builder for UserImageTask.
+func (c *UserImageTaskClient) Query() *UserImageTaskQuery {
+	return &UserImageTaskQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeUserImageTask},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a UserImageTask entity by its id.
+func (c *UserImageTaskClient) Get(ctx context.Context, id int64) (*UserImageTask, error) {
+	return c.Query().Where(userimagetask.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *UserImageTaskClient) GetX(ctx context.Context, id int64) *UserImageTask {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// QueryUser queries the user edge of a UserImageTask.
+func (c *UserImageTaskClient) QueryUser(_m *UserImageTask) *UserQuery {
+	query := (&UserClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(userimagetask.Table, userimagetask.FieldID, id),
+			sqlgraph.To(user.Table, user.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, userimagetask.UserTable, userimagetask.UserColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryImage queries the image edge of a UserImageTask.
+func (c *UserImageTaskClient) QueryImage(_m *UserImageTask) *UserImageQuery {
+	query := (&UserImageClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(userimagetask.Table, userimagetask.FieldID, id),
+			sqlgraph.To(userimage.Table, userimage.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, userimagetask.ImageTable, userimagetask.ImageColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// Hooks returns the client hooks.
+func (c *UserImageTaskClient) Hooks() []Hook {
+	return c.hooks.UserImageTask
+}
+
+// Interceptors returns the client interceptors.
+func (c *UserImageTaskClient) Interceptors() []Interceptor {
+	return c.inters.UserImageTask
+}
+
+func (c *UserImageTaskClient) mutate(ctx context.Context, m *UserImageTaskMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&UserImageTaskCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&UserImageTaskUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&UserImageTaskUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&UserImageTaskDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown UserImageTask mutation op: %q", m.Op())
 	}
 }
 
@@ -6738,7 +6943,7 @@ type (
 		PromoCodeUsage, Proxy, RedeemCode, SecuritySecret, Setting, SubscriptionPlan,
 		TLSFingerprintProfile, UsageCleanupTask, UsageLog, User, UserAllowedGroup,
 		UserAttributeDefinition, UserAttributeValue, UserCheckin, UserCheckinBlacklist,
-		UserImage, UserPlatformQuota, UserSubscription []ent.Hook
+		UserImage, UserImageTask, UserPlatformQuota, UserSubscription []ent.Hook
 	}
 	inters struct {
 		APIKey, Account, AccountGroup, Announcement, AnnouncementRead, AuthIdentity,
@@ -6749,7 +6954,7 @@ type (
 		PromoCodeUsage, Proxy, RedeemCode, SecuritySecret, Setting, SubscriptionPlan,
 		TLSFingerprintProfile, UsageCleanupTask, UsageLog, User, UserAllowedGroup,
 		UserAttributeDefinition, UserAttributeValue, UserCheckin, UserCheckinBlacklist,
-		UserImage, UserPlatformQuota, UserSubscription []ent.Interceptor
+		UserImage, UserImageTask, UserPlatformQuota, UserSubscription []ent.Interceptor
 	}
 )
 

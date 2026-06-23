@@ -82,6 +82,33 @@ export interface ImageStudioImage {
   updated_at: string
 }
 
+export type ImageStudioTaskStatus = 'queued' | 'running' | 'succeeded' | 'failed'
+
+export interface ImageStudioTask {
+  id: number
+  user_id: number
+  api_key_id?: number | null
+  group_id?: number | null
+  image_id?: number | null
+  image?: ImageStudioImage | null
+  mode: ImageStudioMode | string
+  status: ImageStudioTaskStatus | string
+  model: string
+  prompt: string
+  aspect_ratio: string
+  quality: string
+  size: string
+  estimated_cost: number
+  source_image_count: number
+  reference_object_keys?: string[]
+  error_reason?: string
+  error_message?: string
+  started_at?: string | null
+  completed_at?: string | null
+  created_at: string
+  updated_at: string
+}
+
 export interface ImageStudioGeneratePayload {
   api_key_id?: number | null
   group_id?: number | null
@@ -89,6 +116,10 @@ export interface ImageStudioGeneratePayload {
   prompt: string
   aspect_ratio: string
   quality?: string
+}
+
+export interface ImageStudioTaskPayload extends ImageStudioGeneratePayload {
+  mode: ImageStudioMode
 }
 
 export interface ImageStudioEditPayload extends ImageStudioGeneratePayload {
@@ -113,6 +144,25 @@ export async function getOptions(): Promise<ImageStudioOptions> {
 export async function generate(payload: ImageStudioGeneratePayload): Promise<ImageStudioImage> {
   const { data } = await apiClient.post<ImageStudioImage>('/user/images/generate', payload, {
     timeout: IMAGE_STUDIO_REQUEST_TIMEOUT_MS,
+  })
+  return data
+}
+
+export async function createTask(payload: ImageStudioTaskPayload): Promise<ImageStudioTask> {
+  const { data } = await apiClient.post<ImageStudioTask>('/user/images/tasks', payload)
+  return data
+}
+
+export async function getTask(id: number): Promise<ImageStudioTask> {
+  const { data } = await apiClient.get<ImageStudioTask>(`/user/images/tasks/${id}`)
+  return data
+}
+
+export async function listTasks(
+  params: ImageStudioListParams = {},
+): Promise<PaginatedResponse<ImageStudioTask>> {
+  const { data } = await apiClient.get<PaginatedResponse<ImageStudioTask>>('/user/images/tasks', {
+    params,
   })
   return data
 }
@@ -160,6 +210,9 @@ export const imageStudioAPI = {
   getConfig,
   getOptions,
   generate,
+  createTask,
+  getTask,
+  listTasks,
   edit,
   list,
   delete: deleteImage,

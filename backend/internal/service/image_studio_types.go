@@ -13,6 +13,13 @@ const (
 	ImageStudioModeEdit       = "edit"
 )
 
+const (
+	ImageStudioTaskStatusQueued    = "queued"
+	ImageStudioTaskStatusRunning   = "running"
+	ImageStudioTaskStatusSucceeded = "succeeded"
+	ImageStudioTaskStatusFailed    = "failed"
+)
+
 type ImageStudioAspectRatio struct {
 	Ratio       string `json:"ratio"`
 	Size        string `json:"size"`
@@ -135,6 +142,36 @@ type ImageStudioImageRecord struct {
 	UpdatedAt        time.Time  `json:"updated_at"`
 }
 
+type ImageStudioTask struct {
+	ID                  int64                   `json:"id"`
+	UserID              int64                   `json:"user_id"`
+	APIKeyID            *int64                  `json:"api_key_id,omitempty"`
+	GroupID             *int64                  `json:"group_id,omitempty"`
+	ImageID             *int64                  `json:"image_id,omitempty"`
+	Image               *ImageStudioImageRecord `json:"image,omitempty"`
+	Mode                string                  `json:"mode"`
+	Status              string                  `json:"status"`
+	Model               string                  `json:"model"`
+	Prompt              string                  `json:"prompt"`
+	AspectRatio         string                  `json:"aspect_ratio"`
+	Quality             string                  `json:"quality"`
+	Size                string                  `json:"size"`
+	EstimatedCost       float64                 `json:"estimated_cost"`
+	SourceImageCount    int                     `json:"source_image_count"`
+	ReferenceObjectKeys []string                `json:"reference_object_keys,omitempty"`
+	ErrorReason         string                  `json:"error_reason,omitempty"`
+	ErrorMessage        string                  `json:"error_message,omitempty"`
+	StartedAt           *time.Time              `json:"started_at,omitempty"`
+	CompletedAt         *time.Time              `json:"completed_at,omitempty"`
+	CreatedAt           time.Time               `json:"created_at"`
+	UpdatedAt           time.Time               `json:"updated_at"`
+}
+
+type ImageStudioTaskCreateInput struct {
+	Generate *ImageStudioGenerateInput
+	Edit     *ImageStudioEditInput
+}
+
 type ImageStudioLocalFile struct {
 	Name        string
 	ContentType string
@@ -249,4 +286,30 @@ func NormalizeImageStudioPrompt(prompt string) (string, error) {
 		return "", fmt.Errorf("image prompt is required")
 	}
 	return normalized, nil
+}
+
+func ImageStudioPromptWithAspectRatioGuidance(prompt string, aspectRatio string) string {
+	normalizedPrompt := strings.TrimSpace(prompt)
+	normalizedRatio := strings.TrimSpace(aspectRatio)
+	if normalizedPrompt == "" || normalizedRatio == "" {
+		return normalizedPrompt
+	}
+	return normalizedPrompt + "\n\n" + imageStudioAspectRatioGuidance(normalizedRatio)
+}
+
+func imageStudioAspectRatioGuidance(aspectRatio string) string {
+	switch strings.TrimSpace(aspectRatio) {
+	case "1:1":
+		return "请严格生成 1:1 正方形构图，最终画布比例必须为 1:1。"
+	case "16:9":
+		return "请严格生成 16:9 横版构图，最终画布比例必须为 16:9。"
+	case "9:16":
+		return "请严格生成 9:16 竖版构图，最终画布比例必须为 9:16。"
+	case "4:3":
+		return "请严格生成 4:3 横版构图，最终画布比例必须为 4:3。"
+	case "3:4":
+		return "请严格生成 3:4 竖版构图，最终画布比例必须为 3:4。"
+	default:
+		return fmt.Sprintf("请严格按照 %s 的画布比例生成图片。", strings.TrimSpace(aspectRatio))
+	}
 }

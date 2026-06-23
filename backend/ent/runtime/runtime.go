@@ -42,6 +42,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/usercheckin"
 	"github.com/Wei-Shaw/sub2api/ent/usercheckinblacklist"
 	"github.com/Wei-Shaw/sub2api/ent/userimage"
+	"github.com/Wei-Shaw/sub2api/ent/userimagetask"
 	"github.com/Wei-Shaw/sub2api/ent/userplatformquota"
 	"github.com/Wei-Shaw/sub2api/ent/usersubscription"
 	"github.com/Wei-Shaw/sub2api/internal/domain"
@@ -2252,6 +2253,138 @@ func init() {
 	userimage.DefaultUpdatedAt = userimageDescUpdatedAt.Default.(func() time.Time)
 	// userimage.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
 	userimage.UpdateDefaultUpdatedAt = userimageDescUpdatedAt.UpdateDefault.(func() time.Time)
+	userimagetaskFields := schema.UserImageTask{}.Fields()
+	_ = userimagetaskFields
+	// userimagetaskDescMode is the schema descriptor for mode field.
+	userimagetaskDescMode := userimagetaskFields[4].Descriptor()
+	// userimagetask.ModeValidator is a validator for the "mode" field. It is called by the builders before save.
+	userimagetask.ModeValidator = func() func(string) error {
+		validators := userimagetaskDescMode.Validators
+		fns := [...]func(string) error{
+			validators[0].(func(string) error),
+			validators[1].(func(string) error),
+		}
+		return func(mode string) error {
+			for _, fn := range fns {
+				if err := fn(mode); err != nil {
+					return err
+				}
+			}
+			return nil
+		}
+	}()
+	// userimagetaskDescStatus is the schema descriptor for status field.
+	userimagetaskDescStatus := userimagetaskFields[5].Descriptor()
+	// userimagetask.StatusValidator is a validator for the "status" field. It is called by the builders before save.
+	userimagetask.StatusValidator = func() func(string) error {
+		validators := userimagetaskDescStatus.Validators
+		fns := [...]func(string) error{
+			validators[0].(func(string) error),
+			validators[1].(func(string) error),
+		}
+		return func(status string) error {
+			for _, fn := range fns {
+				if err := fn(status); err != nil {
+					return err
+				}
+			}
+			return nil
+		}
+	}()
+	// userimagetaskDescModel is the schema descriptor for model field.
+	userimagetaskDescModel := userimagetaskFields[6].Descriptor()
+	// userimagetask.ModelValidator is a validator for the "model" field. It is called by the builders before save.
+	userimagetask.ModelValidator = func() func(string) error {
+		validators := userimagetaskDescModel.Validators
+		fns := [...]func(string) error{
+			validators[0].(func(string) error),
+			validators[1].(func(string) error),
+		}
+		return func(model string) error {
+			for _, fn := range fns {
+				if err := fn(model); err != nil {
+					return err
+				}
+			}
+			return nil
+		}
+	}()
+	// userimagetaskDescAspectRatio is the schema descriptor for aspect_ratio field.
+	userimagetaskDescAspectRatio := userimagetaskFields[8].Descriptor()
+	// userimagetask.AspectRatioValidator is a validator for the "aspect_ratio" field. It is called by the builders before save.
+	userimagetask.AspectRatioValidator = func() func(string) error {
+		validators := userimagetaskDescAspectRatio.Validators
+		fns := [...]func(string) error{
+			validators[0].(func(string) error),
+			validators[1].(func(string) error),
+		}
+		return func(aspect_ratio string) error {
+			for _, fn := range fns {
+				if err := fn(aspect_ratio); err != nil {
+					return err
+				}
+			}
+			return nil
+		}
+	}()
+	// userimagetaskDescQuality is the schema descriptor for quality field.
+	userimagetaskDescQuality := userimagetaskFields[9].Descriptor()
+	// userimagetask.QualityValidator is a validator for the "quality" field. It is called by the builders before save.
+	userimagetask.QualityValidator = func() func(string) error {
+		validators := userimagetaskDescQuality.Validators
+		fns := [...]func(string) error{
+			validators[0].(func(string) error),
+			validators[1].(func(string) error),
+		}
+		return func(quality string) error {
+			for _, fn := range fns {
+				if err := fn(quality); err != nil {
+					return err
+				}
+			}
+			return nil
+		}
+	}()
+	// userimagetaskDescSize is the schema descriptor for size field.
+	userimagetaskDescSize := userimagetaskFields[10].Descriptor()
+	// userimagetask.SizeValidator is a validator for the "size" field. It is called by the builders before save.
+	userimagetask.SizeValidator = func() func(string) error {
+		validators := userimagetaskDescSize.Validators
+		fns := [...]func(string) error{
+			validators[0].(func(string) error),
+			validators[1].(func(string) error),
+		}
+		return func(size string) error {
+			for _, fn := range fns {
+				if err := fn(size); err != nil {
+					return err
+				}
+			}
+			return nil
+		}
+	}()
+	// userimagetaskDescEstimatedCost is the schema descriptor for estimated_cost field.
+	userimagetaskDescEstimatedCost := userimagetaskFields[11].Descriptor()
+	// userimagetask.DefaultEstimatedCost holds the default value on creation for the estimated_cost field.
+	userimagetask.DefaultEstimatedCost = userimagetaskDescEstimatedCost.Default.(float64)
+	// userimagetaskDescSourceImageCount is the schema descriptor for source_image_count field.
+	userimagetaskDescSourceImageCount := userimagetaskFields[12].Descriptor()
+	// userimagetask.DefaultSourceImageCount holds the default value on creation for the source_image_count field.
+	userimagetask.DefaultSourceImageCount = userimagetaskDescSourceImageCount.Default.(int)
+	// userimagetaskDescErrorReason is the schema descriptor for error_reason field.
+	userimagetaskDescErrorReason := userimagetaskFields[14].Descriptor()
+	// userimagetask.ErrorReasonValidator is a validator for the "error_reason" field. It is called by the builders before save.
+	userimagetask.ErrorReasonValidator = userimagetaskDescErrorReason.Validators[0].(func(string) error)
+	// userimagetaskDescCreatedAt is the schema descriptor for created_at field.
+	userimagetaskDescCreatedAt := userimagetaskFields[18].Descriptor()
+	// userimagetask.DefaultCreatedAt holds the default value on creation for the created_at field.
+	userimagetask.DefaultCreatedAt = userimagetaskDescCreatedAt.Default.(func() time.Time)
+	// userimagetaskDescUpdatedAt is the schema descriptor for updated_at field.
+	userimagetaskDescUpdatedAt := userimagetaskFields[19].Descriptor()
+	// userimagetask.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	userimagetask.DefaultUpdatedAt = userimagetaskDescUpdatedAt.Default.(func() time.Time)
+	// userimagetask.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
+	userimagetask.UpdateDefaultUpdatedAt = userimagetaskDescUpdatedAt.UpdateDefault.(func() time.Time)
 	userplatformquotaMixin := schema.UserPlatformQuota{}.Mixin()
 	userplatformquotaMixinHooks1 := userplatformquotaMixin[1].Hooks()
 	userplatformquota.Hooks[0] = userplatformquotaMixinHooks1[0]

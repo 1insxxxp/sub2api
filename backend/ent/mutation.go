@@ -49,6 +49,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/usercheckin"
 	"github.com/Wei-Shaw/sub2api/ent/usercheckinblacklist"
 	"github.com/Wei-Shaw/sub2api/ent/userimage"
+	"github.com/Wei-Shaw/sub2api/ent/userimagetask"
 	"github.com/Wei-Shaw/sub2api/ent/userplatformquota"
 	"github.com/Wei-Shaw/sub2api/ent/usersubscription"
 	"github.com/Wei-Shaw/sub2api/internal/domain"
@@ -99,6 +100,7 @@ const (
 	TypeUserCheckin                   = "UserCheckin"
 	TypeUserCheckinBlacklist          = "UserCheckinBlacklist"
 	TypeUserImage                     = "UserImage"
+	TypeUserImageTask                 = "UserImageTask"
 	TypeUserPlatformQuota             = "UserPlatformQuota"
 	TypeUserSubscription              = "UserSubscription"
 )
@@ -38765,6 +38767,9 @@ type UserMutation struct {
 	user_images                      map[int64]struct{}
 	removeduser_images               map[int64]struct{}
 	cleareduser_images               bool
+	user_image_tasks                 map[int64]struct{}
+	removeduser_image_tasks          map[int64]struct{}
+	cleareduser_image_tasks          bool
 	done                             bool
 	oldValue                         func(context.Context) (*User, error)
 	predicates                       []predicate.User
@@ -40883,6 +40888,60 @@ func (m *UserMutation) ResetUserImages() {
 	m.removeduser_images = nil
 }
 
+// AddUserImageTaskIDs adds the "user_image_tasks" edge to the UserImageTask entity by ids.
+func (m *UserMutation) AddUserImageTaskIDs(ids ...int64) {
+	if m.user_image_tasks == nil {
+		m.user_image_tasks = make(map[int64]struct{})
+	}
+	for i := range ids {
+		m.user_image_tasks[ids[i]] = struct{}{}
+	}
+}
+
+// ClearUserImageTasks clears the "user_image_tasks" edge to the UserImageTask entity.
+func (m *UserMutation) ClearUserImageTasks() {
+	m.cleareduser_image_tasks = true
+}
+
+// UserImageTasksCleared reports if the "user_image_tasks" edge to the UserImageTask entity was cleared.
+func (m *UserMutation) UserImageTasksCleared() bool {
+	return m.cleareduser_image_tasks
+}
+
+// RemoveUserImageTaskIDs removes the "user_image_tasks" edge to the UserImageTask entity by IDs.
+func (m *UserMutation) RemoveUserImageTaskIDs(ids ...int64) {
+	if m.removeduser_image_tasks == nil {
+		m.removeduser_image_tasks = make(map[int64]struct{})
+	}
+	for i := range ids {
+		delete(m.user_image_tasks, ids[i])
+		m.removeduser_image_tasks[ids[i]] = struct{}{}
+	}
+}
+
+// RemovedUserImageTasks returns the removed IDs of the "user_image_tasks" edge to the UserImageTask entity.
+func (m *UserMutation) RemovedUserImageTasksIDs() (ids []int64) {
+	for id := range m.removeduser_image_tasks {
+		ids = append(ids, id)
+	}
+	return
+}
+
+// UserImageTasksIDs returns the "user_image_tasks" edge IDs in the mutation.
+func (m *UserMutation) UserImageTasksIDs() (ids []int64) {
+	for id := range m.user_image_tasks {
+		ids = append(ids, id)
+	}
+	return
+}
+
+// ResetUserImageTasks resets all changes to the "user_image_tasks" edge.
+func (m *UserMutation) ResetUserImageTasks() {
+	m.user_image_tasks = nil
+	m.cleareduser_image_tasks = false
+	m.removeduser_image_tasks = nil
+}
+
 // Where appends a list predicates to the UserMutation builder.
 func (m *UserMutation) Where(ps ...predicate.User) {
 	m.predicates = append(m.predicates, ps...)
@@ -41560,7 +41619,7 @@ func (m *UserMutation) ResetField(name string) error {
 
 // AddedEdges returns all edge names that were set/added in this mutation.
 func (m *UserMutation) AddedEdges() []string {
-	edges := make([]string, 0, 16)
+	edges := make([]string, 0, 17)
 	if m.api_keys != nil {
 		edges = append(edges, user.EdgeAPIKeys)
 	}
@@ -41608,6 +41667,9 @@ func (m *UserMutation) AddedEdges() []string {
 	}
 	if m.user_images != nil {
 		edges = append(edges, user.EdgeUserImages)
+	}
+	if m.user_image_tasks != nil {
+		edges = append(edges, user.EdgeUserImageTasks)
 	}
 	return edges
 }
@@ -41712,13 +41774,19 @@ func (m *UserMutation) AddedIDs(name string) []ent.Value {
 			ids = append(ids, id)
 		}
 		return ids
+	case user.EdgeUserImageTasks:
+		ids := make([]ent.Value, 0, len(m.user_image_tasks))
+		for id := range m.user_image_tasks {
+			ids = append(ids, id)
+		}
+		return ids
 	}
 	return nil
 }
 
 // RemovedEdges returns all edge names that were removed in this mutation.
 func (m *UserMutation) RemovedEdges() []string {
-	edges := make([]string, 0, 16)
+	edges := make([]string, 0, 17)
 	if m.removedapi_keys != nil {
 		edges = append(edges, user.EdgeAPIKeys)
 	}
@@ -41766,6 +41834,9 @@ func (m *UserMutation) RemovedEdges() []string {
 	}
 	if m.removeduser_images != nil {
 		edges = append(edges, user.EdgeUserImages)
+	}
+	if m.removeduser_image_tasks != nil {
+		edges = append(edges, user.EdgeUserImageTasks)
 	}
 	return edges
 }
@@ -41870,13 +41941,19 @@ func (m *UserMutation) RemovedIDs(name string) []ent.Value {
 			ids = append(ids, id)
 		}
 		return ids
+	case user.EdgeUserImageTasks:
+		ids := make([]ent.Value, 0, len(m.removeduser_image_tasks))
+		for id := range m.removeduser_image_tasks {
+			ids = append(ids, id)
+		}
+		return ids
 	}
 	return nil
 }
 
 // ClearedEdges returns all edge names that were cleared in this mutation.
 func (m *UserMutation) ClearedEdges() []string {
-	edges := make([]string, 0, 16)
+	edges := make([]string, 0, 17)
 	if m.clearedapi_keys {
 		edges = append(edges, user.EdgeAPIKeys)
 	}
@@ -41925,6 +42002,9 @@ func (m *UserMutation) ClearedEdges() []string {
 	if m.cleareduser_images {
 		edges = append(edges, user.EdgeUserImages)
 	}
+	if m.cleareduser_image_tasks {
+		edges = append(edges, user.EdgeUserImageTasks)
+	}
 	return edges
 }
 
@@ -41964,6 +42044,8 @@ func (m *UserMutation) EdgeCleared(name string) bool {
 		return m.clearedcheckin_blacklist_entries
 	case user.EdgeUserImages:
 		return m.cleareduser_images
+	case user.EdgeUserImageTasks:
+		return m.cleareduser_image_tasks
 	}
 	return false
 }
@@ -42027,6 +42109,9 @@ func (m *UserMutation) ResetEdge(name string) error {
 		return nil
 	case user.EdgeUserImages:
 		m.ResetUserImages()
+		return nil
+	case user.EdgeUserImageTasks:
+		m.ResetUserImageTasks()
 		return nil
 	}
 	return fmt.Errorf("unknown User edge %s", name)
@@ -46232,6 +46317,9 @@ type UserImageMutation struct {
 	clearedFields         map[string]struct{}
 	user                  *int64
 	cleareduser           bool
+	tasks                 map[int64]struct{}
+	removedtasks          map[int64]struct{}
+	clearedtasks          bool
 	done                  bool
 	oldValue              func(context.Context) (*UserImage, error)
 	predicates            []predicate.UserImage
@@ -47143,6 +47231,60 @@ func (m *UserImageMutation) ResetUser() {
 	m.cleareduser = false
 }
 
+// AddTaskIDs adds the "tasks" edge to the UserImageTask entity by ids.
+func (m *UserImageMutation) AddTaskIDs(ids ...int64) {
+	if m.tasks == nil {
+		m.tasks = make(map[int64]struct{})
+	}
+	for i := range ids {
+		m.tasks[ids[i]] = struct{}{}
+	}
+}
+
+// ClearTasks clears the "tasks" edge to the UserImageTask entity.
+func (m *UserImageMutation) ClearTasks() {
+	m.clearedtasks = true
+}
+
+// TasksCleared reports if the "tasks" edge to the UserImageTask entity was cleared.
+func (m *UserImageMutation) TasksCleared() bool {
+	return m.clearedtasks
+}
+
+// RemoveTaskIDs removes the "tasks" edge to the UserImageTask entity by IDs.
+func (m *UserImageMutation) RemoveTaskIDs(ids ...int64) {
+	if m.removedtasks == nil {
+		m.removedtasks = make(map[int64]struct{})
+	}
+	for i := range ids {
+		delete(m.tasks, ids[i])
+		m.removedtasks[ids[i]] = struct{}{}
+	}
+}
+
+// RemovedTasks returns the removed IDs of the "tasks" edge to the UserImageTask entity.
+func (m *UserImageMutation) RemovedTasksIDs() (ids []int64) {
+	for id := range m.removedtasks {
+		ids = append(ids, id)
+	}
+	return
+}
+
+// TasksIDs returns the "tasks" edge IDs in the mutation.
+func (m *UserImageMutation) TasksIDs() (ids []int64) {
+	for id := range m.tasks {
+		ids = append(ids, id)
+	}
+	return
+}
+
+// ResetTasks resets all changes to the "tasks" edge.
+func (m *UserImageMutation) ResetTasks() {
+	m.tasks = nil
+	m.clearedtasks = false
+	m.removedtasks = nil
+}
+
 // Where appends a list predicates to the UserImageMutation builder.
 func (m *UserImageMutation) Where(ps ...predicate.UserImage) {
 	m.predicates = append(m.predicates, ps...)
@@ -47643,9 +47785,12 @@ func (m *UserImageMutation) ResetField(name string) error {
 
 // AddedEdges returns all edge names that were set/added in this mutation.
 func (m *UserImageMutation) AddedEdges() []string {
-	edges := make([]string, 0, 1)
+	edges := make([]string, 0, 2)
 	if m.user != nil {
 		edges = append(edges, userimage.EdgeUser)
+	}
+	if m.tasks != nil {
+		edges = append(edges, userimage.EdgeTasks)
 	}
 	return edges
 }
@@ -47658,27 +47803,47 @@ func (m *UserImageMutation) AddedIDs(name string) []ent.Value {
 		if id := m.user; id != nil {
 			return []ent.Value{*id}
 		}
+	case userimage.EdgeTasks:
+		ids := make([]ent.Value, 0, len(m.tasks))
+		for id := range m.tasks {
+			ids = append(ids, id)
+		}
+		return ids
 	}
 	return nil
 }
 
 // RemovedEdges returns all edge names that were removed in this mutation.
 func (m *UserImageMutation) RemovedEdges() []string {
-	edges := make([]string, 0, 1)
+	edges := make([]string, 0, 2)
+	if m.removedtasks != nil {
+		edges = append(edges, userimage.EdgeTasks)
+	}
 	return edges
 }
 
 // RemovedIDs returns all IDs (to other nodes) that were removed for the edge with
 // the given name in this mutation.
 func (m *UserImageMutation) RemovedIDs(name string) []ent.Value {
+	switch name {
+	case userimage.EdgeTasks:
+		ids := make([]ent.Value, 0, len(m.removedtasks))
+		for id := range m.removedtasks {
+			ids = append(ids, id)
+		}
+		return ids
+	}
 	return nil
 }
 
 // ClearedEdges returns all edge names that were cleared in this mutation.
 func (m *UserImageMutation) ClearedEdges() []string {
-	edges := make([]string, 0, 1)
+	edges := make([]string, 0, 2)
 	if m.cleareduser {
 		edges = append(edges, userimage.EdgeUser)
+	}
+	if m.clearedtasks {
+		edges = append(edges, userimage.EdgeTasks)
 	}
 	return edges
 }
@@ -47689,6 +47854,8 @@ func (m *UserImageMutation) EdgeCleared(name string) bool {
 	switch name {
 	case userimage.EdgeUser:
 		return m.cleareduser
+	case userimage.EdgeTasks:
+		return m.clearedtasks
 	}
 	return false
 }
@@ -47711,8 +47878,1774 @@ func (m *UserImageMutation) ResetEdge(name string) error {
 	case userimage.EdgeUser:
 		m.ResetUser()
 		return nil
+	case userimage.EdgeTasks:
+		m.ResetTasks()
+		return nil
 	}
 	return fmt.Errorf("unknown UserImage edge %s", name)
+}
+
+// UserImageTaskMutation represents an operation that mutates the UserImageTask nodes in the graph.
+type UserImageTaskMutation struct {
+	config
+	op                    Op
+	typ                   string
+	id                    *int64
+	api_key_id            *int64
+	addapi_key_id         *int64
+	group_id              *int64
+	addgroup_id           *int64
+	mode                  *string
+	status                *string
+	model                 *string
+	prompt                *string
+	aspect_ratio          *string
+	quality               *string
+	size                  *string
+	estimated_cost        *float64
+	addestimated_cost     *float64
+	source_image_count    *int
+	addsource_image_count *int
+	reference_object_keys *string
+	error_reason          *string
+	error_message         *string
+	started_at            *time.Time
+	completed_at          *time.Time
+	created_at            *time.Time
+	updated_at            *time.Time
+	clearedFields         map[string]struct{}
+	user                  *int64
+	cleareduser           bool
+	image                 *int64
+	clearedimage          bool
+	done                  bool
+	oldValue              func(context.Context) (*UserImageTask, error)
+	predicates            []predicate.UserImageTask
+}
+
+var _ ent.Mutation = (*UserImageTaskMutation)(nil)
+
+// userimagetaskOption allows management of the mutation configuration using functional options.
+type userimagetaskOption func(*UserImageTaskMutation)
+
+// newUserImageTaskMutation creates new mutation for the UserImageTask entity.
+func newUserImageTaskMutation(c config, op Op, opts ...userimagetaskOption) *UserImageTaskMutation {
+	m := &UserImageTaskMutation{
+		config:        c,
+		op:            op,
+		typ:           TypeUserImageTask,
+		clearedFields: make(map[string]struct{}),
+	}
+	for _, opt := range opts {
+		opt(m)
+	}
+	return m
+}
+
+// withUserImageTaskID sets the ID field of the mutation.
+func withUserImageTaskID(id int64) userimagetaskOption {
+	return func(m *UserImageTaskMutation) {
+		var (
+			err   error
+			once  sync.Once
+			value *UserImageTask
+		)
+		m.oldValue = func(ctx context.Context) (*UserImageTask, error) {
+			once.Do(func() {
+				if m.done {
+					err = errors.New("querying old values post mutation is not allowed")
+				} else {
+					value, err = m.Client().UserImageTask.Get(ctx, id)
+				}
+			})
+			return value, err
+		}
+		m.id = &id
+	}
+}
+
+// withUserImageTask sets the old UserImageTask of the mutation.
+func withUserImageTask(node *UserImageTask) userimagetaskOption {
+	return func(m *UserImageTaskMutation) {
+		m.oldValue = func(context.Context) (*UserImageTask, error) {
+			return node, nil
+		}
+		m.id = &node.ID
+	}
+}
+
+// Client returns a new `ent.Client` from the mutation. If the mutation was
+// executed in a transaction (ent.Tx), a transactional client is returned.
+func (m UserImageTaskMutation) Client() *Client {
+	client := &Client{config: m.config}
+	client.init()
+	return client
+}
+
+// Tx returns an `ent.Tx` for mutations that were executed in transactions;
+// it returns an error otherwise.
+func (m UserImageTaskMutation) Tx() (*Tx, error) {
+	if _, ok := m.driver.(*txDriver); !ok {
+		return nil, errors.New("ent: mutation is not running in a transaction")
+	}
+	tx := &Tx{config: m.config}
+	tx.init()
+	return tx, nil
+}
+
+// ID returns the ID value in the mutation. Note that the ID is only available
+// if it was provided to the builder or after it was returned from the database.
+func (m *UserImageTaskMutation) ID() (id int64, exists bool) {
+	if m.id == nil {
+		return
+	}
+	return *m.id, true
+}
+
+// IDs queries the database and returns the entity ids that match the mutation's predicate.
+// That means, if the mutation is applied within a transaction with an isolation level such
+// as sql.LevelSerializable, the returned ids match the ids of the rows that will be updated
+// or updated by the mutation.
+func (m *UserImageTaskMutation) IDs(ctx context.Context) ([]int64, error) {
+	switch {
+	case m.op.Is(OpUpdateOne | OpDeleteOne):
+		id, exists := m.ID()
+		if exists {
+			return []int64{id}, nil
+		}
+		fallthrough
+	case m.op.Is(OpUpdate | OpDelete):
+		return m.Client().UserImageTask.Query().Where(m.predicates...).IDs(ctx)
+	default:
+		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
+	}
+}
+
+// SetUserID sets the "user_id" field.
+func (m *UserImageTaskMutation) SetUserID(i int64) {
+	m.user = &i
+}
+
+// UserID returns the value of the "user_id" field in the mutation.
+func (m *UserImageTaskMutation) UserID() (r int64, exists bool) {
+	v := m.user
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUserID returns the old "user_id" field's value of the UserImageTask entity.
+// If the UserImageTask object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *UserImageTaskMutation) OldUserID(ctx context.Context) (v int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUserID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUserID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUserID: %w", err)
+	}
+	return oldValue.UserID, nil
+}
+
+// ResetUserID resets all changes to the "user_id" field.
+func (m *UserImageTaskMutation) ResetUserID() {
+	m.user = nil
+}
+
+// SetAPIKeyID sets the "api_key_id" field.
+func (m *UserImageTaskMutation) SetAPIKeyID(i int64) {
+	m.api_key_id = &i
+	m.addapi_key_id = nil
+}
+
+// APIKeyID returns the value of the "api_key_id" field in the mutation.
+func (m *UserImageTaskMutation) APIKeyID() (r int64, exists bool) {
+	v := m.api_key_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldAPIKeyID returns the old "api_key_id" field's value of the UserImageTask entity.
+// If the UserImageTask object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *UserImageTaskMutation) OldAPIKeyID(ctx context.Context) (v *int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldAPIKeyID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldAPIKeyID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldAPIKeyID: %w", err)
+	}
+	return oldValue.APIKeyID, nil
+}
+
+// AddAPIKeyID adds i to the "api_key_id" field.
+func (m *UserImageTaskMutation) AddAPIKeyID(i int64) {
+	if m.addapi_key_id != nil {
+		*m.addapi_key_id += i
+	} else {
+		m.addapi_key_id = &i
+	}
+}
+
+// AddedAPIKeyID returns the value that was added to the "api_key_id" field in this mutation.
+func (m *UserImageTaskMutation) AddedAPIKeyID() (r int64, exists bool) {
+	v := m.addapi_key_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ClearAPIKeyID clears the value of the "api_key_id" field.
+func (m *UserImageTaskMutation) ClearAPIKeyID() {
+	m.api_key_id = nil
+	m.addapi_key_id = nil
+	m.clearedFields[userimagetask.FieldAPIKeyID] = struct{}{}
+}
+
+// APIKeyIDCleared returns if the "api_key_id" field was cleared in this mutation.
+func (m *UserImageTaskMutation) APIKeyIDCleared() bool {
+	_, ok := m.clearedFields[userimagetask.FieldAPIKeyID]
+	return ok
+}
+
+// ResetAPIKeyID resets all changes to the "api_key_id" field.
+func (m *UserImageTaskMutation) ResetAPIKeyID() {
+	m.api_key_id = nil
+	m.addapi_key_id = nil
+	delete(m.clearedFields, userimagetask.FieldAPIKeyID)
+}
+
+// SetGroupID sets the "group_id" field.
+func (m *UserImageTaskMutation) SetGroupID(i int64) {
+	m.group_id = &i
+	m.addgroup_id = nil
+}
+
+// GroupID returns the value of the "group_id" field in the mutation.
+func (m *UserImageTaskMutation) GroupID() (r int64, exists bool) {
+	v := m.group_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldGroupID returns the old "group_id" field's value of the UserImageTask entity.
+// If the UserImageTask object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *UserImageTaskMutation) OldGroupID(ctx context.Context) (v *int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldGroupID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldGroupID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldGroupID: %w", err)
+	}
+	return oldValue.GroupID, nil
+}
+
+// AddGroupID adds i to the "group_id" field.
+func (m *UserImageTaskMutation) AddGroupID(i int64) {
+	if m.addgroup_id != nil {
+		*m.addgroup_id += i
+	} else {
+		m.addgroup_id = &i
+	}
+}
+
+// AddedGroupID returns the value that was added to the "group_id" field in this mutation.
+func (m *UserImageTaskMutation) AddedGroupID() (r int64, exists bool) {
+	v := m.addgroup_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ClearGroupID clears the value of the "group_id" field.
+func (m *UserImageTaskMutation) ClearGroupID() {
+	m.group_id = nil
+	m.addgroup_id = nil
+	m.clearedFields[userimagetask.FieldGroupID] = struct{}{}
+}
+
+// GroupIDCleared returns if the "group_id" field was cleared in this mutation.
+func (m *UserImageTaskMutation) GroupIDCleared() bool {
+	_, ok := m.clearedFields[userimagetask.FieldGroupID]
+	return ok
+}
+
+// ResetGroupID resets all changes to the "group_id" field.
+func (m *UserImageTaskMutation) ResetGroupID() {
+	m.group_id = nil
+	m.addgroup_id = nil
+	delete(m.clearedFields, userimagetask.FieldGroupID)
+}
+
+// SetImageID sets the "image_id" field.
+func (m *UserImageTaskMutation) SetImageID(i int64) {
+	m.image = &i
+}
+
+// ImageID returns the value of the "image_id" field in the mutation.
+func (m *UserImageTaskMutation) ImageID() (r int64, exists bool) {
+	v := m.image
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldImageID returns the old "image_id" field's value of the UserImageTask entity.
+// If the UserImageTask object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *UserImageTaskMutation) OldImageID(ctx context.Context) (v *int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldImageID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldImageID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldImageID: %w", err)
+	}
+	return oldValue.ImageID, nil
+}
+
+// ClearImageID clears the value of the "image_id" field.
+func (m *UserImageTaskMutation) ClearImageID() {
+	m.image = nil
+	m.clearedFields[userimagetask.FieldImageID] = struct{}{}
+}
+
+// ImageIDCleared returns if the "image_id" field was cleared in this mutation.
+func (m *UserImageTaskMutation) ImageIDCleared() bool {
+	_, ok := m.clearedFields[userimagetask.FieldImageID]
+	return ok
+}
+
+// ResetImageID resets all changes to the "image_id" field.
+func (m *UserImageTaskMutation) ResetImageID() {
+	m.image = nil
+	delete(m.clearedFields, userimagetask.FieldImageID)
+}
+
+// SetMode sets the "mode" field.
+func (m *UserImageTaskMutation) SetMode(s string) {
+	m.mode = &s
+}
+
+// Mode returns the value of the "mode" field in the mutation.
+func (m *UserImageTaskMutation) Mode() (r string, exists bool) {
+	v := m.mode
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldMode returns the old "mode" field's value of the UserImageTask entity.
+// If the UserImageTask object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *UserImageTaskMutation) OldMode(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldMode is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldMode requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldMode: %w", err)
+	}
+	return oldValue.Mode, nil
+}
+
+// ResetMode resets all changes to the "mode" field.
+func (m *UserImageTaskMutation) ResetMode() {
+	m.mode = nil
+}
+
+// SetStatus sets the "status" field.
+func (m *UserImageTaskMutation) SetStatus(s string) {
+	m.status = &s
+}
+
+// Status returns the value of the "status" field in the mutation.
+func (m *UserImageTaskMutation) Status() (r string, exists bool) {
+	v := m.status
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldStatus returns the old "status" field's value of the UserImageTask entity.
+// If the UserImageTask object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *UserImageTaskMutation) OldStatus(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldStatus is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldStatus requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldStatus: %w", err)
+	}
+	return oldValue.Status, nil
+}
+
+// ResetStatus resets all changes to the "status" field.
+func (m *UserImageTaskMutation) ResetStatus() {
+	m.status = nil
+}
+
+// SetModel sets the "model" field.
+func (m *UserImageTaskMutation) SetModel(s string) {
+	m.model = &s
+}
+
+// Model returns the value of the "model" field in the mutation.
+func (m *UserImageTaskMutation) Model() (r string, exists bool) {
+	v := m.model
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldModel returns the old "model" field's value of the UserImageTask entity.
+// If the UserImageTask object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *UserImageTaskMutation) OldModel(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldModel is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldModel requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldModel: %w", err)
+	}
+	return oldValue.Model, nil
+}
+
+// ResetModel resets all changes to the "model" field.
+func (m *UserImageTaskMutation) ResetModel() {
+	m.model = nil
+}
+
+// SetPrompt sets the "prompt" field.
+func (m *UserImageTaskMutation) SetPrompt(s string) {
+	m.prompt = &s
+}
+
+// Prompt returns the value of the "prompt" field in the mutation.
+func (m *UserImageTaskMutation) Prompt() (r string, exists bool) {
+	v := m.prompt
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldPrompt returns the old "prompt" field's value of the UserImageTask entity.
+// If the UserImageTask object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *UserImageTaskMutation) OldPrompt(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldPrompt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldPrompt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldPrompt: %w", err)
+	}
+	return oldValue.Prompt, nil
+}
+
+// ClearPrompt clears the value of the "prompt" field.
+func (m *UserImageTaskMutation) ClearPrompt() {
+	m.prompt = nil
+	m.clearedFields[userimagetask.FieldPrompt] = struct{}{}
+}
+
+// PromptCleared returns if the "prompt" field was cleared in this mutation.
+func (m *UserImageTaskMutation) PromptCleared() bool {
+	_, ok := m.clearedFields[userimagetask.FieldPrompt]
+	return ok
+}
+
+// ResetPrompt resets all changes to the "prompt" field.
+func (m *UserImageTaskMutation) ResetPrompt() {
+	m.prompt = nil
+	delete(m.clearedFields, userimagetask.FieldPrompt)
+}
+
+// SetAspectRatio sets the "aspect_ratio" field.
+func (m *UserImageTaskMutation) SetAspectRatio(s string) {
+	m.aspect_ratio = &s
+}
+
+// AspectRatio returns the value of the "aspect_ratio" field in the mutation.
+func (m *UserImageTaskMutation) AspectRatio() (r string, exists bool) {
+	v := m.aspect_ratio
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldAspectRatio returns the old "aspect_ratio" field's value of the UserImageTask entity.
+// If the UserImageTask object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *UserImageTaskMutation) OldAspectRatio(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldAspectRatio is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldAspectRatio requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldAspectRatio: %w", err)
+	}
+	return oldValue.AspectRatio, nil
+}
+
+// ResetAspectRatio resets all changes to the "aspect_ratio" field.
+func (m *UserImageTaskMutation) ResetAspectRatio() {
+	m.aspect_ratio = nil
+}
+
+// SetQuality sets the "quality" field.
+func (m *UserImageTaskMutation) SetQuality(s string) {
+	m.quality = &s
+}
+
+// Quality returns the value of the "quality" field in the mutation.
+func (m *UserImageTaskMutation) Quality() (r string, exists bool) {
+	v := m.quality
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldQuality returns the old "quality" field's value of the UserImageTask entity.
+// If the UserImageTask object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *UserImageTaskMutation) OldQuality(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldQuality is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldQuality requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldQuality: %w", err)
+	}
+	return oldValue.Quality, nil
+}
+
+// ResetQuality resets all changes to the "quality" field.
+func (m *UserImageTaskMutation) ResetQuality() {
+	m.quality = nil
+}
+
+// SetSize sets the "size" field.
+func (m *UserImageTaskMutation) SetSize(s string) {
+	m.size = &s
+}
+
+// Size returns the value of the "size" field in the mutation.
+func (m *UserImageTaskMutation) Size() (r string, exists bool) {
+	v := m.size
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldSize returns the old "size" field's value of the UserImageTask entity.
+// If the UserImageTask object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *UserImageTaskMutation) OldSize(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldSize is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldSize requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldSize: %w", err)
+	}
+	return oldValue.Size, nil
+}
+
+// ResetSize resets all changes to the "size" field.
+func (m *UserImageTaskMutation) ResetSize() {
+	m.size = nil
+}
+
+// SetEstimatedCost sets the "estimated_cost" field.
+func (m *UserImageTaskMutation) SetEstimatedCost(f float64) {
+	m.estimated_cost = &f
+	m.addestimated_cost = nil
+}
+
+// EstimatedCost returns the value of the "estimated_cost" field in the mutation.
+func (m *UserImageTaskMutation) EstimatedCost() (r float64, exists bool) {
+	v := m.estimated_cost
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldEstimatedCost returns the old "estimated_cost" field's value of the UserImageTask entity.
+// If the UserImageTask object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *UserImageTaskMutation) OldEstimatedCost(ctx context.Context) (v float64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldEstimatedCost is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldEstimatedCost requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldEstimatedCost: %w", err)
+	}
+	return oldValue.EstimatedCost, nil
+}
+
+// AddEstimatedCost adds f to the "estimated_cost" field.
+func (m *UserImageTaskMutation) AddEstimatedCost(f float64) {
+	if m.addestimated_cost != nil {
+		*m.addestimated_cost += f
+	} else {
+		m.addestimated_cost = &f
+	}
+}
+
+// AddedEstimatedCost returns the value that was added to the "estimated_cost" field in this mutation.
+func (m *UserImageTaskMutation) AddedEstimatedCost() (r float64, exists bool) {
+	v := m.addestimated_cost
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetEstimatedCost resets all changes to the "estimated_cost" field.
+func (m *UserImageTaskMutation) ResetEstimatedCost() {
+	m.estimated_cost = nil
+	m.addestimated_cost = nil
+}
+
+// SetSourceImageCount sets the "source_image_count" field.
+func (m *UserImageTaskMutation) SetSourceImageCount(i int) {
+	m.source_image_count = &i
+	m.addsource_image_count = nil
+}
+
+// SourceImageCount returns the value of the "source_image_count" field in the mutation.
+func (m *UserImageTaskMutation) SourceImageCount() (r int, exists bool) {
+	v := m.source_image_count
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldSourceImageCount returns the old "source_image_count" field's value of the UserImageTask entity.
+// If the UserImageTask object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *UserImageTaskMutation) OldSourceImageCount(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldSourceImageCount is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldSourceImageCount requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldSourceImageCount: %w", err)
+	}
+	return oldValue.SourceImageCount, nil
+}
+
+// AddSourceImageCount adds i to the "source_image_count" field.
+func (m *UserImageTaskMutation) AddSourceImageCount(i int) {
+	if m.addsource_image_count != nil {
+		*m.addsource_image_count += i
+	} else {
+		m.addsource_image_count = &i
+	}
+}
+
+// AddedSourceImageCount returns the value that was added to the "source_image_count" field in this mutation.
+func (m *UserImageTaskMutation) AddedSourceImageCount() (r int, exists bool) {
+	v := m.addsource_image_count
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetSourceImageCount resets all changes to the "source_image_count" field.
+func (m *UserImageTaskMutation) ResetSourceImageCount() {
+	m.source_image_count = nil
+	m.addsource_image_count = nil
+}
+
+// SetReferenceObjectKeys sets the "reference_object_keys" field.
+func (m *UserImageTaskMutation) SetReferenceObjectKeys(s string) {
+	m.reference_object_keys = &s
+}
+
+// ReferenceObjectKeys returns the value of the "reference_object_keys" field in the mutation.
+func (m *UserImageTaskMutation) ReferenceObjectKeys() (r string, exists bool) {
+	v := m.reference_object_keys
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldReferenceObjectKeys returns the old "reference_object_keys" field's value of the UserImageTask entity.
+// If the UserImageTask object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *UserImageTaskMutation) OldReferenceObjectKeys(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldReferenceObjectKeys is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldReferenceObjectKeys requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldReferenceObjectKeys: %w", err)
+	}
+	return oldValue.ReferenceObjectKeys, nil
+}
+
+// ClearReferenceObjectKeys clears the value of the "reference_object_keys" field.
+func (m *UserImageTaskMutation) ClearReferenceObjectKeys() {
+	m.reference_object_keys = nil
+	m.clearedFields[userimagetask.FieldReferenceObjectKeys] = struct{}{}
+}
+
+// ReferenceObjectKeysCleared returns if the "reference_object_keys" field was cleared in this mutation.
+func (m *UserImageTaskMutation) ReferenceObjectKeysCleared() bool {
+	_, ok := m.clearedFields[userimagetask.FieldReferenceObjectKeys]
+	return ok
+}
+
+// ResetReferenceObjectKeys resets all changes to the "reference_object_keys" field.
+func (m *UserImageTaskMutation) ResetReferenceObjectKeys() {
+	m.reference_object_keys = nil
+	delete(m.clearedFields, userimagetask.FieldReferenceObjectKeys)
+}
+
+// SetErrorReason sets the "error_reason" field.
+func (m *UserImageTaskMutation) SetErrorReason(s string) {
+	m.error_reason = &s
+}
+
+// ErrorReason returns the value of the "error_reason" field in the mutation.
+func (m *UserImageTaskMutation) ErrorReason() (r string, exists bool) {
+	v := m.error_reason
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldErrorReason returns the old "error_reason" field's value of the UserImageTask entity.
+// If the UserImageTask object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *UserImageTaskMutation) OldErrorReason(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldErrorReason is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldErrorReason requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldErrorReason: %w", err)
+	}
+	return oldValue.ErrorReason, nil
+}
+
+// ClearErrorReason clears the value of the "error_reason" field.
+func (m *UserImageTaskMutation) ClearErrorReason() {
+	m.error_reason = nil
+	m.clearedFields[userimagetask.FieldErrorReason] = struct{}{}
+}
+
+// ErrorReasonCleared returns if the "error_reason" field was cleared in this mutation.
+func (m *UserImageTaskMutation) ErrorReasonCleared() bool {
+	_, ok := m.clearedFields[userimagetask.FieldErrorReason]
+	return ok
+}
+
+// ResetErrorReason resets all changes to the "error_reason" field.
+func (m *UserImageTaskMutation) ResetErrorReason() {
+	m.error_reason = nil
+	delete(m.clearedFields, userimagetask.FieldErrorReason)
+}
+
+// SetErrorMessage sets the "error_message" field.
+func (m *UserImageTaskMutation) SetErrorMessage(s string) {
+	m.error_message = &s
+}
+
+// ErrorMessage returns the value of the "error_message" field in the mutation.
+func (m *UserImageTaskMutation) ErrorMessage() (r string, exists bool) {
+	v := m.error_message
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldErrorMessage returns the old "error_message" field's value of the UserImageTask entity.
+// If the UserImageTask object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *UserImageTaskMutation) OldErrorMessage(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldErrorMessage is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldErrorMessage requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldErrorMessage: %w", err)
+	}
+	return oldValue.ErrorMessage, nil
+}
+
+// ClearErrorMessage clears the value of the "error_message" field.
+func (m *UserImageTaskMutation) ClearErrorMessage() {
+	m.error_message = nil
+	m.clearedFields[userimagetask.FieldErrorMessage] = struct{}{}
+}
+
+// ErrorMessageCleared returns if the "error_message" field was cleared in this mutation.
+func (m *UserImageTaskMutation) ErrorMessageCleared() bool {
+	_, ok := m.clearedFields[userimagetask.FieldErrorMessage]
+	return ok
+}
+
+// ResetErrorMessage resets all changes to the "error_message" field.
+func (m *UserImageTaskMutation) ResetErrorMessage() {
+	m.error_message = nil
+	delete(m.clearedFields, userimagetask.FieldErrorMessage)
+}
+
+// SetStartedAt sets the "started_at" field.
+func (m *UserImageTaskMutation) SetStartedAt(t time.Time) {
+	m.started_at = &t
+}
+
+// StartedAt returns the value of the "started_at" field in the mutation.
+func (m *UserImageTaskMutation) StartedAt() (r time.Time, exists bool) {
+	v := m.started_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldStartedAt returns the old "started_at" field's value of the UserImageTask entity.
+// If the UserImageTask object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *UserImageTaskMutation) OldStartedAt(ctx context.Context) (v *time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldStartedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldStartedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldStartedAt: %w", err)
+	}
+	return oldValue.StartedAt, nil
+}
+
+// ClearStartedAt clears the value of the "started_at" field.
+func (m *UserImageTaskMutation) ClearStartedAt() {
+	m.started_at = nil
+	m.clearedFields[userimagetask.FieldStartedAt] = struct{}{}
+}
+
+// StartedAtCleared returns if the "started_at" field was cleared in this mutation.
+func (m *UserImageTaskMutation) StartedAtCleared() bool {
+	_, ok := m.clearedFields[userimagetask.FieldStartedAt]
+	return ok
+}
+
+// ResetStartedAt resets all changes to the "started_at" field.
+func (m *UserImageTaskMutation) ResetStartedAt() {
+	m.started_at = nil
+	delete(m.clearedFields, userimagetask.FieldStartedAt)
+}
+
+// SetCompletedAt sets the "completed_at" field.
+func (m *UserImageTaskMutation) SetCompletedAt(t time.Time) {
+	m.completed_at = &t
+}
+
+// CompletedAt returns the value of the "completed_at" field in the mutation.
+func (m *UserImageTaskMutation) CompletedAt() (r time.Time, exists bool) {
+	v := m.completed_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCompletedAt returns the old "completed_at" field's value of the UserImageTask entity.
+// If the UserImageTask object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *UserImageTaskMutation) OldCompletedAt(ctx context.Context) (v *time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCompletedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCompletedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCompletedAt: %w", err)
+	}
+	return oldValue.CompletedAt, nil
+}
+
+// ClearCompletedAt clears the value of the "completed_at" field.
+func (m *UserImageTaskMutation) ClearCompletedAt() {
+	m.completed_at = nil
+	m.clearedFields[userimagetask.FieldCompletedAt] = struct{}{}
+}
+
+// CompletedAtCleared returns if the "completed_at" field was cleared in this mutation.
+func (m *UserImageTaskMutation) CompletedAtCleared() bool {
+	_, ok := m.clearedFields[userimagetask.FieldCompletedAt]
+	return ok
+}
+
+// ResetCompletedAt resets all changes to the "completed_at" field.
+func (m *UserImageTaskMutation) ResetCompletedAt() {
+	m.completed_at = nil
+	delete(m.clearedFields, userimagetask.FieldCompletedAt)
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (m *UserImageTaskMutation) SetCreatedAt(t time.Time) {
+	m.created_at = &t
+}
+
+// CreatedAt returns the value of the "created_at" field in the mutation.
+func (m *UserImageTaskMutation) CreatedAt() (r time.Time, exists bool) {
+	v := m.created_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCreatedAt returns the old "created_at" field's value of the UserImageTask entity.
+// If the UserImageTask object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *UserImageTaskMutation) OldCreatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCreatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCreatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCreatedAt: %w", err)
+	}
+	return oldValue.CreatedAt, nil
+}
+
+// ResetCreatedAt resets all changes to the "created_at" field.
+func (m *UserImageTaskMutation) ResetCreatedAt() {
+	m.created_at = nil
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (m *UserImageTaskMutation) SetUpdatedAt(t time.Time) {
+	m.updated_at = &t
+}
+
+// UpdatedAt returns the value of the "updated_at" field in the mutation.
+func (m *UserImageTaskMutation) UpdatedAt() (r time.Time, exists bool) {
+	v := m.updated_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUpdatedAt returns the old "updated_at" field's value of the UserImageTask entity.
+// If the UserImageTask object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *UserImageTaskMutation) OldUpdatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUpdatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUpdatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUpdatedAt: %w", err)
+	}
+	return oldValue.UpdatedAt, nil
+}
+
+// ResetUpdatedAt resets all changes to the "updated_at" field.
+func (m *UserImageTaskMutation) ResetUpdatedAt() {
+	m.updated_at = nil
+}
+
+// ClearUser clears the "user" edge to the User entity.
+func (m *UserImageTaskMutation) ClearUser() {
+	m.cleareduser = true
+	m.clearedFields[userimagetask.FieldUserID] = struct{}{}
+}
+
+// UserCleared reports if the "user" edge to the User entity was cleared.
+func (m *UserImageTaskMutation) UserCleared() bool {
+	return m.cleareduser
+}
+
+// UserIDs returns the "user" edge IDs in the mutation.
+// Note that IDs always returns len(IDs) <= 1 for unique edges, and you should use
+// UserID instead. It exists only for internal usage by the builders.
+func (m *UserImageTaskMutation) UserIDs() (ids []int64) {
+	if id := m.user; id != nil {
+		ids = append(ids, *id)
+	}
+	return
+}
+
+// ResetUser resets all changes to the "user" edge.
+func (m *UserImageTaskMutation) ResetUser() {
+	m.user = nil
+	m.cleareduser = false
+}
+
+// ClearImage clears the "image" edge to the UserImage entity.
+func (m *UserImageTaskMutation) ClearImage() {
+	m.clearedimage = true
+	m.clearedFields[userimagetask.FieldImageID] = struct{}{}
+}
+
+// ImageCleared reports if the "image" edge to the UserImage entity was cleared.
+func (m *UserImageTaskMutation) ImageCleared() bool {
+	return m.ImageIDCleared() || m.clearedimage
+}
+
+// ImageIDs returns the "image" edge IDs in the mutation.
+// Note that IDs always returns len(IDs) <= 1 for unique edges, and you should use
+// ImageID instead. It exists only for internal usage by the builders.
+func (m *UserImageTaskMutation) ImageIDs() (ids []int64) {
+	if id := m.image; id != nil {
+		ids = append(ids, *id)
+	}
+	return
+}
+
+// ResetImage resets all changes to the "image" edge.
+func (m *UserImageTaskMutation) ResetImage() {
+	m.image = nil
+	m.clearedimage = false
+}
+
+// Where appends a list predicates to the UserImageTaskMutation builder.
+func (m *UserImageTaskMutation) Where(ps ...predicate.UserImageTask) {
+	m.predicates = append(m.predicates, ps...)
+}
+
+// WhereP appends storage-level predicates to the UserImageTaskMutation builder. Using this method,
+// users can use type-assertion to append predicates that do not depend on any generated package.
+func (m *UserImageTaskMutation) WhereP(ps ...func(*sql.Selector)) {
+	p := make([]predicate.UserImageTask, len(ps))
+	for i := range ps {
+		p[i] = ps[i]
+	}
+	m.Where(p...)
+}
+
+// Op returns the operation name.
+func (m *UserImageTaskMutation) Op() Op {
+	return m.op
+}
+
+// SetOp allows setting the mutation operation.
+func (m *UserImageTaskMutation) SetOp(op Op) {
+	m.op = op
+}
+
+// Type returns the node type of this mutation (UserImageTask).
+func (m *UserImageTaskMutation) Type() string {
+	return m.typ
+}
+
+// Fields returns all fields that were changed during this mutation. Note that in
+// order to get all numeric fields that were incremented/decremented, call
+// AddedFields().
+func (m *UserImageTaskMutation) Fields() []string {
+	fields := make([]string, 0, 20)
+	if m.user != nil {
+		fields = append(fields, userimagetask.FieldUserID)
+	}
+	if m.api_key_id != nil {
+		fields = append(fields, userimagetask.FieldAPIKeyID)
+	}
+	if m.group_id != nil {
+		fields = append(fields, userimagetask.FieldGroupID)
+	}
+	if m.image != nil {
+		fields = append(fields, userimagetask.FieldImageID)
+	}
+	if m.mode != nil {
+		fields = append(fields, userimagetask.FieldMode)
+	}
+	if m.status != nil {
+		fields = append(fields, userimagetask.FieldStatus)
+	}
+	if m.model != nil {
+		fields = append(fields, userimagetask.FieldModel)
+	}
+	if m.prompt != nil {
+		fields = append(fields, userimagetask.FieldPrompt)
+	}
+	if m.aspect_ratio != nil {
+		fields = append(fields, userimagetask.FieldAspectRatio)
+	}
+	if m.quality != nil {
+		fields = append(fields, userimagetask.FieldQuality)
+	}
+	if m.size != nil {
+		fields = append(fields, userimagetask.FieldSize)
+	}
+	if m.estimated_cost != nil {
+		fields = append(fields, userimagetask.FieldEstimatedCost)
+	}
+	if m.source_image_count != nil {
+		fields = append(fields, userimagetask.FieldSourceImageCount)
+	}
+	if m.reference_object_keys != nil {
+		fields = append(fields, userimagetask.FieldReferenceObjectKeys)
+	}
+	if m.error_reason != nil {
+		fields = append(fields, userimagetask.FieldErrorReason)
+	}
+	if m.error_message != nil {
+		fields = append(fields, userimagetask.FieldErrorMessage)
+	}
+	if m.started_at != nil {
+		fields = append(fields, userimagetask.FieldStartedAt)
+	}
+	if m.completed_at != nil {
+		fields = append(fields, userimagetask.FieldCompletedAt)
+	}
+	if m.created_at != nil {
+		fields = append(fields, userimagetask.FieldCreatedAt)
+	}
+	if m.updated_at != nil {
+		fields = append(fields, userimagetask.FieldUpdatedAt)
+	}
+	return fields
+}
+
+// Field returns the value of a field with the given name. The second boolean
+// return value indicates that this field was not set, or was not defined in the
+// schema.
+func (m *UserImageTaskMutation) Field(name string) (ent.Value, bool) {
+	switch name {
+	case userimagetask.FieldUserID:
+		return m.UserID()
+	case userimagetask.FieldAPIKeyID:
+		return m.APIKeyID()
+	case userimagetask.FieldGroupID:
+		return m.GroupID()
+	case userimagetask.FieldImageID:
+		return m.ImageID()
+	case userimagetask.FieldMode:
+		return m.Mode()
+	case userimagetask.FieldStatus:
+		return m.Status()
+	case userimagetask.FieldModel:
+		return m.Model()
+	case userimagetask.FieldPrompt:
+		return m.Prompt()
+	case userimagetask.FieldAspectRatio:
+		return m.AspectRatio()
+	case userimagetask.FieldQuality:
+		return m.Quality()
+	case userimagetask.FieldSize:
+		return m.Size()
+	case userimagetask.FieldEstimatedCost:
+		return m.EstimatedCost()
+	case userimagetask.FieldSourceImageCount:
+		return m.SourceImageCount()
+	case userimagetask.FieldReferenceObjectKeys:
+		return m.ReferenceObjectKeys()
+	case userimagetask.FieldErrorReason:
+		return m.ErrorReason()
+	case userimagetask.FieldErrorMessage:
+		return m.ErrorMessage()
+	case userimagetask.FieldStartedAt:
+		return m.StartedAt()
+	case userimagetask.FieldCompletedAt:
+		return m.CompletedAt()
+	case userimagetask.FieldCreatedAt:
+		return m.CreatedAt()
+	case userimagetask.FieldUpdatedAt:
+		return m.UpdatedAt()
+	}
+	return nil, false
+}
+
+// OldField returns the old value of the field from the database. An error is
+// returned if the mutation operation is not UpdateOne, or the query to the
+// database failed.
+func (m *UserImageTaskMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
+	switch name {
+	case userimagetask.FieldUserID:
+		return m.OldUserID(ctx)
+	case userimagetask.FieldAPIKeyID:
+		return m.OldAPIKeyID(ctx)
+	case userimagetask.FieldGroupID:
+		return m.OldGroupID(ctx)
+	case userimagetask.FieldImageID:
+		return m.OldImageID(ctx)
+	case userimagetask.FieldMode:
+		return m.OldMode(ctx)
+	case userimagetask.FieldStatus:
+		return m.OldStatus(ctx)
+	case userimagetask.FieldModel:
+		return m.OldModel(ctx)
+	case userimagetask.FieldPrompt:
+		return m.OldPrompt(ctx)
+	case userimagetask.FieldAspectRatio:
+		return m.OldAspectRatio(ctx)
+	case userimagetask.FieldQuality:
+		return m.OldQuality(ctx)
+	case userimagetask.FieldSize:
+		return m.OldSize(ctx)
+	case userimagetask.FieldEstimatedCost:
+		return m.OldEstimatedCost(ctx)
+	case userimagetask.FieldSourceImageCount:
+		return m.OldSourceImageCount(ctx)
+	case userimagetask.FieldReferenceObjectKeys:
+		return m.OldReferenceObjectKeys(ctx)
+	case userimagetask.FieldErrorReason:
+		return m.OldErrorReason(ctx)
+	case userimagetask.FieldErrorMessage:
+		return m.OldErrorMessage(ctx)
+	case userimagetask.FieldStartedAt:
+		return m.OldStartedAt(ctx)
+	case userimagetask.FieldCompletedAt:
+		return m.OldCompletedAt(ctx)
+	case userimagetask.FieldCreatedAt:
+		return m.OldCreatedAt(ctx)
+	case userimagetask.FieldUpdatedAt:
+		return m.OldUpdatedAt(ctx)
+	}
+	return nil, fmt.Errorf("unknown UserImageTask field %s", name)
+}
+
+// SetField sets the value of a field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *UserImageTaskMutation) SetField(name string, value ent.Value) error {
+	switch name {
+	case userimagetask.FieldUserID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUserID(v)
+		return nil
+	case userimagetask.FieldAPIKeyID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetAPIKeyID(v)
+		return nil
+	case userimagetask.FieldGroupID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetGroupID(v)
+		return nil
+	case userimagetask.FieldImageID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetImageID(v)
+		return nil
+	case userimagetask.FieldMode:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetMode(v)
+		return nil
+	case userimagetask.FieldStatus:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetStatus(v)
+		return nil
+	case userimagetask.FieldModel:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetModel(v)
+		return nil
+	case userimagetask.FieldPrompt:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetPrompt(v)
+		return nil
+	case userimagetask.FieldAspectRatio:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetAspectRatio(v)
+		return nil
+	case userimagetask.FieldQuality:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetQuality(v)
+		return nil
+	case userimagetask.FieldSize:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetSize(v)
+		return nil
+	case userimagetask.FieldEstimatedCost:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetEstimatedCost(v)
+		return nil
+	case userimagetask.FieldSourceImageCount:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetSourceImageCount(v)
+		return nil
+	case userimagetask.FieldReferenceObjectKeys:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetReferenceObjectKeys(v)
+		return nil
+	case userimagetask.FieldErrorReason:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetErrorReason(v)
+		return nil
+	case userimagetask.FieldErrorMessage:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetErrorMessage(v)
+		return nil
+	case userimagetask.FieldStartedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetStartedAt(v)
+		return nil
+	case userimagetask.FieldCompletedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCompletedAt(v)
+		return nil
+	case userimagetask.FieldCreatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCreatedAt(v)
+		return nil
+	case userimagetask.FieldUpdatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUpdatedAt(v)
+		return nil
+	}
+	return fmt.Errorf("unknown UserImageTask field %s", name)
+}
+
+// AddedFields returns all numeric fields that were incremented/decremented during
+// this mutation.
+func (m *UserImageTaskMutation) AddedFields() []string {
+	var fields []string
+	if m.addapi_key_id != nil {
+		fields = append(fields, userimagetask.FieldAPIKeyID)
+	}
+	if m.addgroup_id != nil {
+		fields = append(fields, userimagetask.FieldGroupID)
+	}
+	if m.addestimated_cost != nil {
+		fields = append(fields, userimagetask.FieldEstimatedCost)
+	}
+	if m.addsource_image_count != nil {
+		fields = append(fields, userimagetask.FieldSourceImageCount)
+	}
+	return fields
+}
+
+// AddedField returns the numeric value that was incremented/decremented on a field
+// with the given name. The second boolean return value indicates that this field
+// was not set, or was not defined in the schema.
+func (m *UserImageTaskMutation) AddedField(name string) (ent.Value, bool) {
+	switch name {
+	case userimagetask.FieldAPIKeyID:
+		return m.AddedAPIKeyID()
+	case userimagetask.FieldGroupID:
+		return m.AddedGroupID()
+	case userimagetask.FieldEstimatedCost:
+		return m.AddedEstimatedCost()
+	case userimagetask.FieldSourceImageCount:
+		return m.AddedSourceImageCount()
+	}
+	return nil, false
+}
+
+// AddField adds the value to the field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *UserImageTaskMutation) AddField(name string, value ent.Value) error {
+	switch name {
+	case userimagetask.FieldAPIKeyID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddAPIKeyID(v)
+		return nil
+	case userimagetask.FieldGroupID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddGroupID(v)
+		return nil
+	case userimagetask.FieldEstimatedCost:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddEstimatedCost(v)
+		return nil
+	case userimagetask.FieldSourceImageCount:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddSourceImageCount(v)
+		return nil
+	}
+	return fmt.Errorf("unknown UserImageTask numeric field %s", name)
+}
+
+// ClearedFields returns all nullable fields that were cleared during this
+// mutation.
+func (m *UserImageTaskMutation) ClearedFields() []string {
+	var fields []string
+	if m.FieldCleared(userimagetask.FieldAPIKeyID) {
+		fields = append(fields, userimagetask.FieldAPIKeyID)
+	}
+	if m.FieldCleared(userimagetask.FieldGroupID) {
+		fields = append(fields, userimagetask.FieldGroupID)
+	}
+	if m.FieldCleared(userimagetask.FieldImageID) {
+		fields = append(fields, userimagetask.FieldImageID)
+	}
+	if m.FieldCleared(userimagetask.FieldPrompt) {
+		fields = append(fields, userimagetask.FieldPrompt)
+	}
+	if m.FieldCleared(userimagetask.FieldReferenceObjectKeys) {
+		fields = append(fields, userimagetask.FieldReferenceObjectKeys)
+	}
+	if m.FieldCleared(userimagetask.FieldErrorReason) {
+		fields = append(fields, userimagetask.FieldErrorReason)
+	}
+	if m.FieldCleared(userimagetask.FieldErrorMessage) {
+		fields = append(fields, userimagetask.FieldErrorMessage)
+	}
+	if m.FieldCleared(userimagetask.FieldStartedAt) {
+		fields = append(fields, userimagetask.FieldStartedAt)
+	}
+	if m.FieldCleared(userimagetask.FieldCompletedAt) {
+		fields = append(fields, userimagetask.FieldCompletedAt)
+	}
+	return fields
+}
+
+// FieldCleared returns a boolean indicating if a field with the given name was
+// cleared in this mutation.
+func (m *UserImageTaskMutation) FieldCleared(name string) bool {
+	_, ok := m.clearedFields[name]
+	return ok
+}
+
+// ClearField clears the value of the field with the given name. It returns an
+// error if the field is not defined in the schema.
+func (m *UserImageTaskMutation) ClearField(name string) error {
+	switch name {
+	case userimagetask.FieldAPIKeyID:
+		m.ClearAPIKeyID()
+		return nil
+	case userimagetask.FieldGroupID:
+		m.ClearGroupID()
+		return nil
+	case userimagetask.FieldImageID:
+		m.ClearImageID()
+		return nil
+	case userimagetask.FieldPrompt:
+		m.ClearPrompt()
+		return nil
+	case userimagetask.FieldReferenceObjectKeys:
+		m.ClearReferenceObjectKeys()
+		return nil
+	case userimagetask.FieldErrorReason:
+		m.ClearErrorReason()
+		return nil
+	case userimagetask.FieldErrorMessage:
+		m.ClearErrorMessage()
+		return nil
+	case userimagetask.FieldStartedAt:
+		m.ClearStartedAt()
+		return nil
+	case userimagetask.FieldCompletedAt:
+		m.ClearCompletedAt()
+		return nil
+	}
+	return fmt.Errorf("unknown UserImageTask nullable field %s", name)
+}
+
+// ResetField resets all changes in the mutation for the field with the given name.
+// It returns an error if the field is not defined in the schema.
+func (m *UserImageTaskMutation) ResetField(name string) error {
+	switch name {
+	case userimagetask.FieldUserID:
+		m.ResetUserID()
+		return nil
+	case userimagetask.FieldAPIKeyID:
+		m.ResetAPIKeyID()
+		return nil
+	case userimagetask.FieldGroupID:
+		m.ResetGroupID()
+		return nil
+	case userimagetask.FieldImageID:
+		m.ResetImageID()
+		return nil
+	case userimagetask.FieldMode:
+		m.ResetMode()
+		return nil
+	case userimagetask.FieldStatus:
+		m.ResetStatus()
+		return nil
+	case userimagetask.FieldModel:
+		m.ResetModel()
+		return nil
+	case userimagetask.FieldPrompt:
+		m.ResetPrompt()
+		return nil
+	case userimagetask.FieldAspectRatio:
+		m.ResetAspectRatio()
+		return nil
+	case userimagetask.FieldQuality:
+		m.ResetQuality()
+		return nil
+	case userimagetask.FieldSize:
+		m.ResetSize()
+		return nil
+	case userimagetask.FieldEstimatedCost:
+		m.ResetEstimatedCost()
+		return nil
+	case userimagetask.FieldSourceImageCount:
+		m.ResetSourceImageCount()
+		return nil
+	case userimagetask.FieldReferenceObjectKeys:
+		m.ResetReferenceObjectKeys()
+		return nil
+	case userimagetask.FieldErrorReason:
+		m.ResetErrorReason()
+		return nil
+	case userimagetask.FieldErrorMessage:
+		m.ResetErrorMessage()
+		return nil
+	case userimagetask.FieldStartedAt:
+		m.ResetStartedAt()
+		return nil
+	case userimagetask.FieldCompletedAt:
+		m.ResetCompletedAt()
+		return nil
+	case userimagetask.FieldCreatedAt:
+		m.ResetCreatedAt()
+		return nil
+	case userimagetask.FieldUpdatedAt:
+		m.ResetUpdatedAt()
+		return nil
+	}
+	return fmt.Errorf("unknown UserImageTask field %s", name)
+}
+
+// AddedEdges returns all edge names that were set/added in this mutation.
+func (m *UserImageTaskMutation) AddedEdges() []string {
+	edges := make([]string, 0, 2)
+	if m.user != nil {
+		edges = append(edges, userimagetask.EdgeUser)
+	}
+	if m.image != nil {
+		edges = append(edges, userimagetask.EdgeImage)
+	}
+	return edges
+}
+
+// AddedIDs returns all IDs (to other nodes) that were added for the given edge
+// name in this mutation.
+func (m *UserImageTaskMutation) AddedIDs(name string) []ent.Value {
+	switch name {
+	case userimagetask.EdgeUser:
+		if id := m.user; id != nil {
+			return []ent.Value{*id}
+		}
+	case userimagetask.EdgeImage:
+		if id := m.image; id != nil {
+			return []ent.Value{*id}
+		}
+	}
+	return nil
+}
+
+// RemovedEdges returns all edge names that were removed in this mutation.
+func (m *UserImageTaskMutation) RemovedEdges() []string {
+	edges := make([]string, 0, 2)
+	return edges
+}
+
+// RemovedIDs returns all IDs (to other nodes) that were removed for the edge with
+// the given name in this mutation.
+func (m *UserImageTaskMutation) RemovedIDs(name string) []ent.Value {
+	return nil
+}
+
+// ClearedEdges returns all edge names that were cleared in this mutation.
+func (m *UserImageTaskMutation) ClearedEdges() []string {
+	edges := make([]string, 0, 2)
+	if m.cleareduser {
+		edges = append(edges, userimagetask.EdgeUser)
+	}
+	if m.clearedimage {
+		edges = append(edges, userimagetask.EdgeImage)
+	}
+	return edges
+}
+
+// EdgeCleared returns a boolean which indicates if the edge with the given name
+// was cleared in this mutation.
+func (m *UserImageTaskMutation) EdgeCleared(name string) bool {
+	switch name {
+	case userimagetask.EdgeUser:
+		return m.cleareduser
+	case userimagetask.EdgeImage:
+		return m.clearedimage
+	}
+	return false
+}
+
+// ClearEdge clears the value of the edge with the given name. It returns an error
+// if that edge is not defined in the schema.
+func (m *UserImageTaskMutation) ClearEdge(name string) error {
+	switch name {
+	case userimagetask.EdgeUser:
+		m.ClearUser()
+		return nil
+	case userimagetask.EdgeImage:
+		m.ClearImage()
+		return nil
+	}
+	return fmt.Errorf("unknown UserImageTask unique edge %s", name)
+}
+
+// ResetEdge resets all changes to the edge with the given name in this mutation.
+// It returns an error if the edge is not defined in the schema.
+func (m *UserImageTaskMutation) ResetEdge(name string) error {
+	switch name {
+	case userimagetask.EdgeUser:
+		m.ResetUser()
+		return nil
+	case userimagetask.EdgeImage:
+		m.ResetImage()
+		return nil
+	}
+	return fmt.Errorf("unknown UserImageTask edge %s", name)
 }
 
 // UserPlatformQuotaMutation represents an operation that mutates the UserPlatformQuota nodes in the graph.

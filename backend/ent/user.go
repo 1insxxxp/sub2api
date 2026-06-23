@@ -111,11 +111,13 @@ type UserEdges struct {
 	CheckinBlacklistEntries []*UserCheckinBlacklist `json:"checkin_blacklist_entries,omitempty"`
 	// UserImages holds the value of the user_images edge.
 	UserImages []*UserImage `json:"user_images,omitempty"`
+	// UserImageTasks holds the value of the user_image_tasks edge.
+	UserImageTasks []*UserImageTask `json:"user_image_tasks,omitempty"`
 	// UserAllowedGroups holds the value of the user_allowed_groups edge.
 	UserAllowedGroups []*UserAllowedGroup `json:"user_allowed_groups,omitempty"`
 	// loadedTypes holds the information for reporting if a
 	// type was loaded (or requested) in eager-loading or not.
-	loadedTypes [17]bool
+	loadedTypes [18]bool
 }
 
 // APIKeysOrErr returns the APIKeys value or an error if the edge
@@ -262,10 +264,19 @@ func (e UserEdges) UserImagesOrErr() ([]*UserImage, error) {
 	return nil, &NotLoadedError{edge: "user_images"}
 }
 
+// UserImageTasksOrErr returns the UserImageTasks value or an error if the edge
+// was not loaded in eager-loading.
+func (e UserEdges) UserImageTasksOrErr() ([]*UserImageTask, error) {
+	if e.loadedTypes[16] {
+		return e.UserImageTasks, nil
+	}
+	return nil, &NotLoadedError{edge: "user_image_tasks"}
+}
+
 // UserAllowedGroupsOrErr returns the UserAllowedGroups value or an error if the edge
 // was not loaded in eager-loading.
 func (e UserEdges) UserAllowedGroupsOrErr() ([]*UserAllowedGroup, error) {
-	if e.loadedTypes[16] {
+	if e.loadedTypes[17] {
 		return e.UserAllowedGroups, nil
 	}
 	return nil, &NotLoadedError{edge: "user_allowed_groups"}
@@ -566,6 +577,11 @@ func (_m *User) QueryCheckinBlacklistEntries() *UserCheckinBlacklistQuery {
 // QueryUserImages queries the "user_images" edge of the User entity.
 func (_m *User) QueryUserImages() *UserImageQuery {
 	return NewUserClient(_m.config).QueryUserImages(_m)
+}
+
+// QueryUserImageTasks queries the "user_image_tasks" edge of the User entity.
+func (_m *User) QueryUserImageTasks() *UserImageTaskQuery {
+	return NewUserClient(_m.config).QueryUserImageTasks(_m)
 }
 
 // QueryUserAllowedGroups queries the "user_allowed_groups" edge of the User entity.

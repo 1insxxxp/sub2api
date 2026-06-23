@@ -49,6 +49,9 @@ func RegisterUserRoutes(
 			{
 				images.GET("/config", h.ImageStudio.GetConfig)
 				images.GET("/options", h.ImageStudio.GetOptions)
+				images.POST("/tasks", h.ImageStudio.CreateTask)
+				images.GET("/tasks", h.ImageStudio.ListTasks)
+				images.GET("/tasks/:id", h.ImageStudio.GetTask)
 				images.POST("/generate", h.ImageStudio.Generate)
 				images.POST("/edit", h.ImageStudio.Edit)
 				images.GET("", h.ImageStudio.List)

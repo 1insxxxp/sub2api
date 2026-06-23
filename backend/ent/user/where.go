@@ -1988,6 +1988,29 @@ func HasUserImagesWith(preds ...predicate.UserImage) predicate.User {
 	})
 }
 
+// HasUserImageTasks applies the HasEdge predicate on the "user_image_tasks" edge.
+func HasUserImageTasks() predicate.User {
+	return predicate.User(func(s *sql.Selector) {
+		step := sqlgraph.NewStep(
+			sqlgraph.From(Table, FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, UserImageTasksTable, UserImageTasksColumn),
+		)
+		sqlgraph.HasNeighbors(s, step)
+	})
+}
+
+// HasUserImageTasksWith applies the HasEdge predicate on the "user_image_tasks" edge with a given conditions (other predicates).
+func HasUserImageTasksWith(preds ...predicate.UserImageTask) predicate.User {
+	return predicate.User(func(s *sql.Selector) {
+		step := newUserImageTasksStep()
+		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
+			for _, p := range preds {
+				p(s)
+			}
+		})
+	})
+}
+
 // HasUserAllowedGroups applies the HasEdge predicate on the "user_allowed_groups" edge.
 func HasUserAllowedGroups() predicate.User {
 	return predicate.User(func(s *sql.Selector) {

@@ -25,6 +25,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/usercheckin"
 	"github.com/Wei-Shaw/sub2api/ent/usercheckinblacklist"
 	"github.com/Wei-Shaw/sub2api/ent/userimage"
+	"github.com/Wei-Shaw/sub2api/ent/userimagetask"
 	"github.com/Wei-Shaw/sub2api/ent/userplatformquota"
 	"github.com/Wei-Shaw/sub2api/ent/usersubscription"
 )
@@ -637,6 +638,21 @@ func (_c *UserCreate) AddUserImages(v ...*UserImage) *UserCreate {
 		ids[i] = v[i].ID
 	}
 	return _c.AddUserImageIDs(ids...)
+}
+
+// AddUserImageTaskIDs adds the "user_image_tasks" edge to the UserImageTask entity by IDs.
+func (_c *UserCreate) AddUserImageTaskIDs(ids ...int64) *UserCreate {
+	_c.mutation.AddUserImageTaskIDs(ids...)
+	return _c
+}
+
+// AddUserImageTasks adds the "user_image_tasks" edges to the UserImageTask entity.
+func (_c *UserCreate) AddUserImageTasks(v ...*UserImageTask) *UserCreate {
+	ids := make([]int64, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _c.AddUserImageTaskIDs(ids...)
 }
 
 // Mutation returns the UserMutation object of the builder.
@@ -1254,6 +1270,22 @@ func (_c *UserCreate) createSpec() (*User, *sqlgraph.CreateSpec) {
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(userimage.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges = append(_spec.Edges, edge)
+	}
+	if nodes := _c.mutation.UserImageTasksIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   user.UserImageTasksTable,
+			Columns: []string{user.UserImageTasksColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(userimagetask.FieldID, field.TypeInt64),
 			},
 		}
 		for _, k := range nodes {

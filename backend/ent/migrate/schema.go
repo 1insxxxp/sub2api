@@ -1789,6 +1789,67 @@ var (
 			},
 		},
 	}
+	// UserImageTasksColumns holds the columns for the "user_image_tasks" table.
+	UserImageTasksColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt64, Increment: true},
+		{Name: "api_key_id", Type: field.TypeInt64, Nullable: true},
+		{Name: "group_id", Type: field.TypeInt64, Nullable: true},
+		{Name: "mode", Type: field.TypeString, Size: 32},
+		{Name: "status", Type: field.TypeString, Size: 32},
+		{Name: "model", Type: field.TypeString, Size: 128},
+		{Name: "prompt", Type: field.TypeString, Nullable: true, Size: 2147483647},
+		{Name: "aspect_ratio", Type: field.TypeString, Size: 16},
+		{Name: "quality", Type: field.TypeString, Size: 32},
+		{Name: "size", Type: field.TypeString, Size: 32},
+		{Name: "estimated_cost", Type: field.TypeFloat64, Default: 0, SchemaType: map[string]string{"postgres": "decimal(20,8)"}},
+		{Name: "source_image_count", Type: field.TypeInt, Default: 0},
+		{Name: "reference_object_keys", Type: field.TypeString, Nullable: true, Size: 2147483647},
+		{Name: "error_reason", Type: field.TypeString, Nullable: true, Size: 128},
+		{Name: "error_message", Type: field.TypeString, Nullable: true, Size: 2147483647},
+		{Name: "started_at", Type: field.TypeTime, Nullable: true, SchemaType: map[string]string{"postgres": "timestamptz"}},
+		{Name: "completed_at", Type: field.TypeTime, Nullable: true, SchemaType: map[string]string{"postgres": "timestamptz"}},
+		{Name: "created_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
+		{Name: "updated_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
+		{Name: "user_id", Type: field.TypeInt64},
+		{Name: "image_id", Type: field.TypeInt64, Nullable: true},
+	}
+	// UserImageTasksTable holds the schema information for the "user_image_tasks" table.
+	UserImageTasksTable = &schema.Table{
+		Name:       "user_image_tasks",
+		Columns:    UserImageTasksColumns,
+		PrimaryKey: []*schema.Column{UserImageTasksColumns[0]},
+		ForeignKeys: []*schema.ForeignKey{
+			{
+				Symbol:     "user_image_tasks_users_user_image_tasks",
+				Columns:    []*schema.Column{UserImageTasksColumns[19]},
+				RefColumns: []*schema.Column{UsersColumns[0]},
+				OnDelete:   schema.NoAction,
+			},
+			{
+				Symbol:     "user_image_tasks_user_images_tasks",
+				Columns:    []*schema.Column{UserImageTasksColumns[20]},
+				RefColumns: []*schema.Column{UserImagesColumns[0]},
+				OnDelete:   schema.SetNull,
+			},
+		},
+		Indexes: []*schema.Index{
+			{
+				Name:    "userimagetask_user_id_created_at",
+				Unique:  false,
+				Columns: []*schema.Column{UserImageTasksColumns[19], UserImageTasksColumns[17]},
+			},
+			{
+				Name:    "userimagetask_status_created_at",
+				Unique:  false,
+				Columns: []*schema.Column{UserImageTasksColumns[4], UserImageTasksColumns[17]},
+			},
+			{
+				Name:    "userimagetask_image_id",
+				Unique:  false,
+				Columns: []*schema.Column{UserImageTasksColumns[20]},
+			},
+		},
+	}
 	// UserPlatformQuotasColumns holds the columns for the "user_platform_quotas" table.
 	UserPlatformQuotasColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeInt64, Increment: true},
@@ -1963,6 +2024,7 @@ var (
 		UserCheckinsTable,
 		UserCheckinBlacklistTable,
 		UserImagesTable,
+		UserImageTasksTable,
 		UserPlatformQuotasTable,
 		UserSubscriptionsTable,
 	}
@@ -2109,6 +2171,11 @@ func init() {
 	UserImagesTable.ForeignKeys[0].RefTable = UsersTable
 	UserImagesTable.Annotation = &entsql.Annotation{
 		Table: "user_images",
+	}
+	UserImageTasksTable.ForeignKeys[0].RefTable = UsersTable
+	UserImageTasksTable.ForeignKeys[1].RefTable = UserImagesTable
+	UserImageTasksTable.Annotation = &entsql.Annotation{
+		Table: "user_image_tasks",
 	}
 	UserPlatformQuotasTable.ForeignKeys[0].RefTable = UsersTable
 	UserPlatformQuotasTable.Annotation = &entsql.Annotation{

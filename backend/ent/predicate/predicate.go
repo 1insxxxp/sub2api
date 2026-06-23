@@ -114,6 +114,9 @@ type UserCheckinBlacklist func(*sql.Selector)
 // UserImage is the predicate function for userimage builders.
 type UserImage func(*sql.Selector)
 
+// UserImageTask is the predicate function for userimagetask builders.
+type UserImageTask func(*sql.Selector)
+
 // UserPlatformQuota is the predicate function for userplatformquota builders.
 type UserPlatformQuota func(*sql.Selector)
 

@@ -14,6 +14,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/predicate"
 	"github.com/Wei-Shaw/sub2api/ent/user"
 	"github.com/Wei-Shaw/sub2api/ent/userimage"
+	"github.com/Wei-Shaw/sub2api/ent/userimagetask"
 )
 
 // UserImageUpdate is the builder for updating UserImage entities.
@@ -316,6 +317,21 @@ func (_u *UserImageUpdate) SetUser(v *User) *UserImageUpdate {
 	return _u.SetUserID(v.ID)
 }
 
+// AddTaskIDs adds the "tasks" edge to the UserImageTask entity by IDs.
+func (_u *UserImageUpdate) AddTaskIDs(ids ...int64) *UserImageUpdate {
+	_u.mutation.AddTaskIDs(ids...)
+	return _u
+}
+
+// AddTasks adds the "tasks" edges to the UserImageTask entity.
+func (_u *UserImageUpdate) AddTasks(v ...*UserImageTask) *UserImageUpdate {
+	ids := make([]int64, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.AddTaskIDs(ids...)
+}
+
 // Mutation returns the UserImageMutation object of the builder.
 func (_u *UserImageUpdate) Mutation() *UserImageMutation {
 	return _u.mutation
@@ -325,6 +341,27 @@ func (_u *UserImageUpdate) Mutation() *UserImageMutation {
 func (_u *UserImageUpdate) ClearUser() *UserImageUpdate {
 	_u.mutation.ClearUser()
 	return _u
+}
+
+// ClearTasks clears all "tasks" edges to the UserImageTask entity.
+func (_u *UserImageUpdate) ClearTasks() *UserImageUpdate {
+	_u.mutation.ClearTasks()
+	return _u
+}
+
+// RemoveTaskIDs removes the "tasks" edge to UserImageTask entities by IDs.
+func (_u *UserImageUpdate) RemoveTaskIDs(ids ...int64) *UserImageUpdate {
+	_u.mutation.RemoveTaskIDs(ids...)
+	return _u
+}
+
+// RemoveTasks removes "tasks" edges to UserImageTask entities.
+func (_u *UserImageUpdate) RemoveTasks(v ...*UserImageTask) *UserImageUpdate {
+	ids := make([]int64, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.RemoveTaskIDs(ids...)
 }
 
 // Save executes the query and returns the number of nodes affected by the update operation.
@@ -517,6 +554,51 @@ func (_u *UserImageUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(user.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
+	if _u.mutation.TasksCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   userimage.TasksTable,
+			Columns: []string{userimage.TasksColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(userimagetask.FieldID, field.TypeInt64),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.RemovedTasksIDs(); len(nodes) > 0 && !_u.mutation.TasksCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   userimage.TasksTable,
+			Columns: []string{userimage.TasksColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(userimagetask.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.TasksIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   userimage.TasksTable,
+			Columns: []string{userimage.TasksColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(userimagetask.FieldID, field.TypeInt64),
 			},
 		}
 		for _, k := range nodes {
@@ -831,6 +913,21 @@ func (_u *UserImageUpdateOne) SetUser(v *User) *UserImageUpdateOne {
 	return _u.SetUserID(v.ID)
 }
 
+// AddTaskIDs adds the "tasks" edge to the UserImageTask entity by IDs.
+func (_u *UserImageUpdateOne) AddTaskIDs(ids ...int64) *UserImageUpdateOne {
+	_u.mutation.AddTaskIDs(ids...)
+	return _u
+}
+
+// AddTasks adds the "tasks" edges to the UserImageTask entity.
+func (_u *UserImageUpdateOne) AddTasks(v ...*UserImageTask) *UserImageUpdateOne {
+	ids := make([]int64, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.AddTaskIDs(ids...)
+}
+
 // Mutation returns the UserImageMutation object of the builder.
 func (_u *UserImageUpdateOne) Mutation() *UserImageMutation {
 	return _u.mutation
@@ -840,6 +937,27 @@ func (_u *UserImageUpdateOne) Mutation() *UserImageMutation {
 func (_u *UserImageUpdateOne) ClearUser() *UserImageUpdateOne {
 	_u.mutation.ClearUser()
 	return _u
+}
+
+// ClearTasks clears all "tasks" edges to the UserImageTask entity.
+func (_u *UserImageUpdateOne) ClearTasks() *UserImageUpdateOne {
+	_u.mutation.ClearTasks()
+	return _u
+}
+
+// RemoveTaskIDs removes the "tasks" edge to UserImageTask entities by IDs.
+func (_u *UserImageUpdateOne) RemoveTaskIDs(ids ...int64) *UserImageUpdateOne {
+	_u.mutation.RemoveTaskIDs(ids...)
+	return _u
+}
+
+// RemoveTasks removes "tasks" edges to UserImageTask entities.
+func (_u *UserImageUpdateOne) RemoveTasks(v ...*UserImageTask) *UserImageUpdateOne {
+	ids := make([]int64, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.RemoveTaskIDs(ids...)
 }
 
 // Where appends a list predicates to the UserImageUpdate builder.
@@ -1062,6 +1180,51 @@ func (_u *UserImageUpdateOne) sqlSave(ctx context.Context) (_node *UserImage, er
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(user.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
+	if _u.mutation.TasksCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   userimage.TasksTable,
+			Columns: []string{userimage.TasksColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(userimagetask.FieldID, field.TypeInt64),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.RemovedTasksIDs(); len(nodes) > 0 && !_u.mutation.TasksCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   userimage.TasksTable,
+			Columns: []string{userimage.TasksColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(userimagetask.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.TasksIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   userimage.TasksTable,
+			Columns: []string{userimage.TasksColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(userimagetask.FieldID, field.TypeInt64),
 			},
 		}
 		for _, k := range nodes {

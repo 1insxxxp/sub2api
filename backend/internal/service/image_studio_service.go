@@ -4,10 +4,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"mime"
+	"net"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
@@ -15,11 +18,17 @@ import (
 )
 
 var (
-	ErrImageStudioDisabled        = infraerrors.Forbidden("IMAGE_STUDIO_DISABLED", "image studio is disabled")
-	ErrUserImageNotFound          = infraerrors.NotFound("USER_IMAGE_NOT_FOUND", "image record not found")
-	ErrImageStudioFileNotFound    = infraerrors.NotFound("IMAGE_FILE_NOT_FOUND", "image file not found")
-	ErrImageStudioExecutorMissing = infraerrors.ServiceUnavailable("IMAGE_STUDIO_EXECUTOR_MISSING", "image studio executor is not configured")
-	ErrImageStudioStorageMissing  = infraerrors.ServiceUnavailable("IMAGE_STUDIO_STORAGE_MISSING", "image studio storage is not configured")
+	ErrImageStudioDisabled              = infraerrors.Forbidden("IMAGE_STUDIO_DISABLED", "image studio is disabled")
+	ErrUserImageNotFound                = infraerrors.NotFound("USER_IMAGE_NOT_FOUND", "image record not found")
+	ErrImageStudioFileNotFound          = infraerrors.NotFound("IMAGE_FILE_NOT_FOUND", "image file not found")
+	ErrImageStudioExecutorMissing       = infraerrors.ServiceUnavailable("IMAGE_STUDIO_EXECUTOR_MISSING", "image studio executor is not configured")
+	ErrImageStudioStorageMissing        = infraerrors.ServiceUnavailable("IMAGE_STUDIO_STORAGE_MISSING", "image studio storage is not configured")
+	ErrImageStudioTaskNotFound          = infraerrors.NotFound("IMAGE_STUDIO_TASK_NOT_FOUND", "image task not found")
+	ErrImageStudioTaskRepoMissing       = infraerrors.ServiceUnavailable("IMAGE_STUDIO_TASK_REPO_MISSING", "image studio task repository is not configured")
+	ErrImageProviderTimeoutOrDisconnect = infraerrors.GatewayTimeout(
+		"IMAGE_PROVIDER_TIMEOUT_OR_DISCONNECT",
+		"image provider timed out or disconnected before returning an image; this request was not charged",
+	)
 )
 
 type ImageStudioConfigReader interface {
@@ -40,6 +49,15 @@ type UserImageRepository interface {
 	ListExpired(ctx context.Context, now time.Time, limit int) ([]ImageStudioImageRecord, error)
 }
 
+type UserImageTaskRepository interface {
+	Create(ctx context.Context, task *ImageStudioTask) error
+	GetByID(ctx context.Context, userID int64, taskID int64) (*ImageStudioTask, error)
+	ListByUser(ctx context.Context, userID int64, params pagination.PaginationParams) ([]ImageStudioTask, *pagination.PaginationResult, error)
+	MarkRunning(ctx context.Context, taskID int64, startedAt time.Time) (bool, error)
+	MarkSucceeded(ctx context.Context, taskID int64, image *ImageStudioImageRecord, quality string, estimatedCost float64, completedAt time.Time) (*ImageStudioTask, error)
+	MarkFailed(ctx context.Context, taskID int64, reason string, message string, completedAt time.Time) (*ImageStudioTask, error)
+}
+
 type ImageStudioExecutor interface {
 	Generate(ctx context.Context, input ImageStudioGenerateInput) (*ImageStudioExecutionResult, error)
 	Edit(ctx context.Context, input ImageStudioEditInput) (*ImageStudioExecutionResult, error)
@@ -49,16 +67,22 @@ type ImageStudioStorageFactory func(ctx context.Context, cfg *ImageStudioSetting
 
 type ImageStudioService struct {
 	repo           UserImageRepository
+	taskRepo       UserImageTaskRepository
 	configReader   ImageStudioConfigReader
 	groupResolver  ImageStudioGroupResolver
 	executor       ImageStudioExecutor
 	storageFactory ImageStudioStorageFactory
+	taskQueue      chan int64
+	workersStarted atomic.Bool
+	now            func() time.Time
 }
 
 func NewImageStudioService(repo UserImageRepository, configReader ImageStudioConfigReader) *ImageStudioService {
 	return &ImageStudioService{
 		repo:         repo,
 		configReader: configReader,
+		taskQueue:    make(chan int64, 128),
+		now:          time.Now,
 	}
 }
 
@@ -68,6 +92,10 @@ func (s *ImageStudioService) SetExecutor(executor ImageStudioExecutor) {
 
 func (s *ImageStudioService) SetGroupResolver(resolver ImageStudioGroupResolver) {
 	s.groupResolver = resolver
+}
+
+func (s *ImageStudioService) SetTaskRepository(repo UserImageTaskRepository) {
+	s.taskRepo = repo
 }
 
 func (s *ImageStudioService) SetStorageFactory(factory ImageStudioStorageFactory) {
@@ -117,6 +145,69 @@ func (s *ImageStudioService) GetOptions(ctx context.Context, userID int64) (*Ima
 	return options, nil
 }
 
+func (s *ImageStudioService) CreateTask(ctx context.Context, input ImageStudioTaskCreateInput) (*ImageStudioTask, error) {
+	if s.taskRepo == nil {
+		return nil, ErrImageStudioTaskRepoMissing
+	}
+	var task *ImageStudioTask
+	if input.Generate != nil {
+		cfg, normalized, err := s.prepareGenerateInput(ctx, *input.Generate)
+		if err != nil {
+			return nil, err
+		}
+		task = s.taskFromGenerateInput(cfg, normalized)
+	} else if input.Edit != nil {
+		cfg, normalized, err := s.prepareEditInput(ctx, *input.Edit)
+		if err != nil {
+			return nil, err
+		}
+		task = s.taskFromEditInput(cfg, normalized)
+	} else {
+		return nil, infraerrors.BadRequest("INVALID_IMAGE_TASK", "image task payload is required")
+	}
+	if err := s.taskRepo.Create(ctx, task); err != nil {
+		return nil, fmt.Errorf("create image task: %w", err)
+	}
+	s.enqueueTask(task.ID)
+	return task, nil
+}
+
+func (s *ImageStudioService) GetTask(ctx context.Context, userID int64, taskID int64) (*ImageStudioTask, error) {
+	if s.taskRepo == nil {
+		return nil, ErrImageStudioTaskRepoMissing
+	}
+	if userID <= 0 || taskID <= 0 {
+		return nil, infraerrors.BadRequest("INVALID_IMAGE_TASK", "invalid image task id")
+	}
+	return s.taskRepo.GetByID(ctx, userID, taskID)
+}
+
+func (s *ImageStudioService) ListTasks(ctx context.Context, userID int64, params pagination.PaginationParams) ([]ImageStudioTask, *pagination.PaginationResult, error) {
+	if s.taskRepo == nil {
+		return nil, nil, ErrImageStudioTaskRepoMissing
+	}
+	if userID <= 0 {
+		return nil, nil, infraerrors.BadRequest("INVALID_IMAGE_STUDIO_USER", "user id is required")
+	}
+	return s.taskRepo.ListByUser(ctx, userID, params)
+}
+
+func (s *ImageStudioService) StartTaskWorkers(workerCount int) {
+	if workerCount <= 0 {
+		workerCount = 2
+	}
+	if !s.workersStarted.CompareAndSwap(false, true) {
+		return
+	}
+	for i := 0; i < workerCount; i++ {
+		go func() {
+			for taskID := range s.taskQueue {
+				s.processTask(context.Background(), taskID)
+			}
+		}()
+	}
+}
+
 func (s *ImageStudioService) List(ctx context.Context, userID int64, params pagination.PaginationParams) ([]ImageStudioImageRecord, *pagination.PaginationResult, error) {
 	if err := s.ensureEnabled(ctx); err != nil {
 		return nil, nil, err
@@ -136,9 +227,11 @@ func (s *ImageStudioService) Generate(ctx context.Context, input ImageStudioGene
 	if s.executor == nil {
 		return nil, ErrImageStudioExecutorMissing
 	}
-	result, err := s.executor.Generate(ctx, normalized)
+	executionInput := normalized
+	executionInput.Prompt = ImageStudioPromptWithAspectRatioGuidance(normalized.Prompt, normalized.AspectRatio)
+	result, err := s.executor.Generate(ctx, executionInput)
 	if err != nil {
-		return nil, fmt.Errorf("generate image: %w", err)
+		return nil, imageStudioExecutionError("generate image", err)
 	}
 	return s.storeExecutionResult(ctx, cfg, ImageStudioModeGeneration, normalized.UserID, normalized.Model, normalized.Prompt, normalized.AspectRatio, normalized.Size, result)
 }
@@ -151,9 +244,11 @@ func (s *ImageStudioService) Edit(ctx context.Context, input ImageStudioEditInpu
 	if s.executor == nil {
 		return nil, ErrImageStudioExecutorMissing
 	}
-	result, err := s.executor.Edit(ctx, normalized)
+	executionInput := normalized
+	executionInput.Prompt = ImageStudioPromptWithAspectRatioGuidance(normalized.Prompt, normalized.AspectRatio)
+	result, err := s.executor.Edit(ctx, executionInput)
 	if err != nil {
-		return nil, fmt.Errorf("edit image: %w", err)
+		return nil, imageStudioExecutionError("edit image", err)
 	}
 	return s.storeExecutionResult(ctx, cfg, ImageStudioModeEdit, normalized.UserID, normalized.Model, normalized.Prompt, normalized.AspectRatio, normalized.Size, result)
 }
@@ -673,6 +768,171 @@ func imageStudioPublicConfig(cfg *ImageStudioSettings) *ImageStudioConfig {
 	}
 }
 
+func (s *ImageStudioService) taskFromGenerateInput(_ *ImageStudioSettings, input ImageStudioGenerateInput) *ImageStudioTask {
+	now := s.now()
+	return &ImageStudioTask{
+		UserID:        input.UserID,
+		APIKeyID:      input.APIKeyID,
+		GroupID:       input.GroupID,
+		Mode:          ImageStudioModeGeneration,
+		Status:        ImageStudioTaskStatusQueued,
+		Model:         strings.TrimSpace(input.Model),
+		Prompt:        strings.TrimSpace(input.Prompt),
+		AspectRatio:   strings.TrimSpace(input.AspectRatio),
+		Quality:       strings.TrimSpace(input.Quality),
+		Size:          strings.TrimSpace(input.Size),
+		EstimatedCost: estimateImageStudioCost(nil, input.BillingTier),
+		CreatedAt:     now,
+		UpdatedAt:     now,
+	}
+}
+
+func (s *ImageStudioService) taskFromEditInput(_ *ImageStudioSettings, input ImageStudioEditInput) *ImageStudioTask {
+	now := s.now()
+	return &ImageStudioTask{
+		UserID:           input.UserID,
+		APIKeyID:         input.APIKeyID,
+		GroupID:          input.GroupID,
+		Mode:             ImageStudioModeEdit,
+		Status:           ImageStudioTaskStatusQueued,
+		Model:            strings.TrimSpace(input.Model),
+		Prompt:           strings.TrimSpace(input.Prompt),
+		AspectRatio:      strings.TrimSpace(input.AspectRatio),
+		Quality:          strings.TrimSpace(input.Quality),
+		Size:             strings.TrimSpace(input.Size),
+		EstimatedCost:    estimateImageStudioCost(nil, input.BillingTier),
+		SourceImageCount: len(input.ReferenceImages),
+		CreatedAt:        now,
+		UpdatedAt:        now,
+	}
+}
+
+func (s *ImageStudioService) enqueueTask(taskID int64) {
+	if taskID <= 0 {
+		return
+	}
+	if !s.workersStarted.Load() {
+		go s.processTask(context.Background(), taskID)
+		return
+	}
+	select {
+	case s.taskQueue <- taskID:
+	default:
+		go s.processTask(context.Background(), taskID)
+	}
+}
+
+func (s *ImageStudioService) processTask(ctx context.Context, taskID int64) {
+	if s.taskRepo == nil || taskID <= 0 {
+		return
+	}
+	startedAt := s.now()
+	claimed, err := s.taskRepo.MarkRunning(ctx, taskID, startedAt)
+	if err != nil || !claimed {
+		return
+	}
+	task, err := s.taskRepo.GetByID(ctx, 0, taskID)
+	if err != nil {
+		return
+	}
+
+	var image *ImageStudioImageRecord
+	finalQuality := task.Quality
+	finalEstimatedCost := task.EstimatedCost
+	switch task.Mode {
+	case ImageStudioModeGeneration:
+		input := ImageStudioGenerateInput{
+			UserID:      task.UserID,
+			APIKeyID:    task.APIKeyID,
+			GroupID:     task.GroupID,
+			Model:       task.Model,
+			Prompt:      task.Prompt,
+			AspectRatio: task.AspectRatio,
+			Quality:     task.Quality,
+			Size:        task.Size,
+		}
+		image, finalQuality, finalEstimatedCost, err = s.generateTaskWithRecovery(ctx, input, task.EstimatedCost)
+	default:
+		err = infraerrors.BadRequest("IMAGE_TASK_MODE_UNSUPPORTED", "image edit tasks are not available yet")
+	}
+
+	completedAt := s.now()
+	if err != nil {
+		_, _ = s.taskRepo.MarkFailed(ctx, taskID, infraerrors.Reason(err), infraerrors.Message(err), completedAt)
+		return
+	}
+	_, _ = s.taskRepo.MarkSucceeded(ctx, taskID, image, finalQuality, finalEstimatedCost, completedAt)
+}
+
+func (s *ImageStudioService) generateTaskWithRecovery(ctx context.Context, input ImageStudioGenerateInput, initialEstimatedCost float64) (*ImageStudioImageRecord, string, float64, error) {
+	attempts := imageStudioGenerationRecoveryAttempts(input)
+	if len(attempts) == 0 {
+		attempts = []ImageStudioGenerateInput{input}
+	}
+	var lastErr error
+	for _, attempt := range attempts {
+		image, err := s.Generate(ctx, attempt)
+		if err == nil {
+			return image, attempt.Quality, imageStudioEstimatedCostForAttempt(attempt, initialEstimatedCost), nil
+		}
+		lastErr = err
+		if !imageStudioProviderTimedOutOrDisconnected(err) {
+			break
+		}
+	}
+	return nil, input.Quality, initialEstimatedCost, lastErr
+}
+
+func imageStudioGenerationRecoveryAttempts(input ImageStudioGenerateInput) []ImageStudioGenerateInput {
+	base := normalizeImageStudioTaskAttempt(input)
+	attempts := []ImageStudioGenerateInput{base}
+	if NormalizeImageStudioQuality(base.Quality) == ImageBillingSize4K {
+		attempts = append(attempts, base)
+		for _, quality := range []string{ImageBillingSize2K, ImageBillingSize1K} {
+			downgraded, ok := imageStudioTaskAttemptWithQuality(base, quality)
+			if ok {
+				attempts = append(attempts, downgraded)
+			}
+		}
+		return attempts
+	}
+	attempts = append(attempts, base)
+	return attempts
+}
+
+func normalizeImageStudioTaskAttempt(input ImageStudioGenerateInput) ImageStudioGenerateInput {
+	out := input
+	quality := NormalizeImageStudioQuality(out.Quality)
+	size, billingTier, err := ResolveImageStudioRenderSpec(out.AspectRatio, quality)
+	if err != nil {
+		return out
+	}
+	out.Quality = firstNonEmptyTrimmed(quality, billingTier)
+	out.Size = size
+	out.BillingTier = billingTier
+	return out
+}
+
+func imageStudioTaskAttemptWithQuality(input ImageStudioGenerateInput, quality string) (ImageStudioGenerateInput, bool) {
+	size, billingTier, err := ResolveImageStudioRenderSpec(input.AspectRatio, quality)
+	if err != nil {
+		return ImageStudioGenerateInput{}, false
+	}
+	out := input
+	out.Quality = billingTier
+	out.Size = size
+	out.BillingTier = billingTier
+	return out, true
+}
+
+func imageStudioEstimatedCostForAttempt(input ImageStudioGenerateInput, fallback float64) float64 {
+	cost := estimateImageStudioCost(nil, input.BillingTier)
+	if cost > 0 {
+		return cost
+	}
+	return fallback
+}
+
 func firstNonEmptyTrimmed(values ...string) string {
 	for _, value := range values {
 		if trimmed := strings.TrimSpace(value); trimmed != "" {
@@ -680,4 +940,44 @@ func firstNonEmptyTrimmed(values ...string) string {
 		}
 	}
 	return ""
+}
+
+func imageStudioExecutionError(operation string, err error) error {
+	if err == nil {
+		return nil
+	}
+	if imageStudioProviderTimedOutOrDisconnected(err) {
+		return fmt.Errorf("%s: %w", operation, ErrImageProviderTimeoutOrDisconnect.WithCause(err))
+	}
+	return fmt.Errorf("%s: %w", operation, err)
+}
+
+func imageStudioProviderTimedOutOrDisconnected(err error) bool {
+	if err == nil {
+		return false
+	}
+	if errors.Is(err, context.DeadlineExceeded) || errors.Is(err, io.ErrUnexpectedEOF) || errors.Is(err, io.EOF) {
+		return true
+	}
+	var netErr net.Error
+	if errors.As(err, &netErr) && netErr.Timeout() {
+		return true
+	}
+	message := strings.ToLower(err.Error())
+	for _, marker := range []string{
+		"unexpected eof",
+		"connection reset",
+		"connection refused",
+		"connection aborted",
+		"server closed idle connection",
+		"use of closed network connection",
+		"timeout awaiting response headers",
+		"client.timeout exceeded",
+		"i/o timeout",
+	} {
+		if strings.Contains(message, marker) {
+			return true
+		}
+	}
+	return false
 }

@@ -513,13 +513,16 @@ func ProvideAPIKeyService(
 
 func ProvideImageStudioService(
 	repo UserImageRepository,
+	taskRepo UserImageTaskRepository,
 	configReader ImageStudioConfigReader,
 	groupResolver ImageStudioGroupResolver,
 	executor *ImageStudioGatewayExecutor,
 ) *ImageStudioService {
 	svc := NewImageStudioService(repo, configReader)
+	svc.SetTaskRepository(taskRepo)
 	svc.SetGroupResolver(groupResolver)
 	svc.SetExecutor(executor)
+	svc.StartTaskWorkers(2)
 	return svc
 }
 

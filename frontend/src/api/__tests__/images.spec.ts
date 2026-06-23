@@ -60,6 +60,32 @@ describe('image studio user api', () => {
     )
   })
 
+  it('creates and polls image generation tasks', async () => {
+    await imageStudioAPI.createTask({
+      mode: 'generation',
+      group_id: 9,
+      model: 'gpt-image-2',
+      prompt: 'A neon blue API gateway',
+      aspect_ratio: '16:9',
+      quality: '4K',
+    })
+    await imageStudioAPI.getTask(22)
+    await imageStudioAPI.listTasks({ page: 1, page_size: 5 })
+
+    expect(post).toHaveBeenCalledWith('/user/images/tasks', {
+      mode: 'generation',
+      group_id: 9,
+      model: 'gpt-image-2',
+      prompt: 'A neon blue API gateway',
+      aspect_ratio: '16:9',
+      quality: '4K',
+    })
+    expect(get).toHaveBeenCalledWith('/user/images/tasks/22')
+    expect(get).toHaveBeenCalledWith('/user/images/tasks', {
+      params: { page: 1, page_size: 5 },
+    })
+  })
+
   it('sends edit payloads as multipart form data', async () => {
     const file = new File(['fake'], 'reference.png', { type: 'image/png' })
 

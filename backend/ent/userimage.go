@@ -64,9 +64,11 @@ type UserImage struct {
 type UserImageEdges struct {
 	// User holds the value of the user edge.
 	User *User `json:"user,omitempty"`
+	// Tasks holds the value of the tasks edge.
+	Tasks []*UserImageTask `json:"tasks,omitempty"`
 	// loadedTypes holds the information for reporting if a
 	// type was loaded (or requested) in eager-loading or not.
-	loadedTypes [1]bool
+	loadedTypes [2]bool
 }
 
 // UserOrErr returns the User value or an error if the edge
@@ -78,6 +80,15 @@ func (e UserImageEdges) UserOrErr() (*User, error) {
 		return nil, &NotFoundError{label: user.Label}
 	}
 	return nil, &NotLoadedError{edge: "user"}
+}
+
+// TasksOrErr returns the Tasks value or an error if the edge
+// was not loaded in eager-loading.
+func (e UserImageEdges) TasksOrErr() ([]*UserImageTask, error) {
+	if e.loadedTypes[1] {
+		return e.Tasks, nil
+	}
+	return nil, &NotLoadedError{edge: "tasks"}
 }
 
 // scanValues returns the types for scanning values from sql.Rows.
@@ -242,6 +253,11 @@ func (_m *UserImage) Value(name string) (ent.Value, error) {
 // QueryUser queries the "user" edge of the UserImage entity.
 func (_m *UserImage) QueryUser() *UserQuery {
 	return NewUserImageClient(_m.config).QueryUser(_m)
+}
+
+// QueryTasks queries the "tasks" edge of the UserImage entity.
+func (_m *UserImage) QueryTasks() *UserImageTaskQuery {
+	return NewUserImageClient(_m.config).QueryTasks(_m)
 }
 
 // Update returns a builder for updating this UserImage.

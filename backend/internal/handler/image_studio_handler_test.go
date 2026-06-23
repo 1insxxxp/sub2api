@@ -26,6 +26,11 @@ type imageStudioHandlerServiceStub struct {
 	generateInput service.ImageStudioGenerateInput
 	editInput     service.ImageStudioEditInput
 	record        *service.ImageStudioImageRecord
+	taskInput     service.ImageStudioTaskCreateInput
+	task          *service.ImageStudioTask
+	taskUserID    int64
+	taskID        int64
+	taskItems     []service.ImageStudioTask
 
 	listUserID int64
 	listItems  []service.ImageStudioImageRecord
@@ -72,6 +77,41 @@ func (s *imageStudioHandlerServiceStub) Generate(ctx context.Context, input serv
 		return s.record, nil
 	}
 	return &service.ImageStudioImageRecord{ID: 9, UserID: input.UserID, ImageURL: "https://assets.example.com/one.png"}, nil
+}
+
+func (s *imageStudioHandlerServiceStub) CreateTask(ctx context.Context, input service.ImageStudioTaskCreateInput) (*service.ImageStudioTask, error) {
+	s.taskInput = input
+	if s.task != nil {
+		return s.task, nil
+	}
+	if input.Generate != nil {
+		return &service.ImageStudioTask{
+			ID:          22,
+			UserID:      input.Generate.UserID,
+			Mode:        service.ImageStudioModeGeneration,
+			Status:      service.ImageStudioTaskStatusQueued,
+			Model:       input.Generate.Model,
+			Prompt:      input.Generate.Prompt,
+			AspectRatio: input.Generate.AspectRatio,
+			Quality:     input.Generate.Quality,
+		}, nil
+	}
+	return &service.ImageStudioTask{ID: 22, Status: service.ImageStudioTaskStatusQueued}, nil
+}
+
+func (s *imageStudioHandlerServiceStub) GetTask(ctx context.Context, userID int64, taskID int64) (*service.ImageStudioTask, error) {
+	s.taskUserID = userID
+	s.taskID = taskID
+	if s.task != nil {
+		return s.task, nil
+	}
+	return &service.ImageStudioTask{ID: taskID, UserID: userID, Status: service.ImageStudioTaskStatusSucceeded}, nil
+}
+
+func (s *imageStudioHandlerServiceStub) ListTasks(ctx context.Context, userID int64, params pagination.PaginationParams) ([]service.ImageStudioTask, *pagination.PaginationResult, error) {
+	s.taskUserID = userID
+	page := &pagination.PaginationResult{Total: int64(len(s.taskItems)), Page: params.Page, PageSize: params.Limit(), Pages: 1}
+	return s.taskItems, page, nil
 }
 
 func (s *imageStudioHandlerServiceStub) Edit(ctx context.Context, input service.ImageStudioEditInput) (*service.ImageStudioImageRecord, error) {
@@ -169,6 +209,55 @@ func TestImageStudioHandlerGenerateUsesAuthenticatedUser(t *testing.T) {
 	require.Equal(t, "blue portal", svc.generateInput.Prompt)
 	require.Equal(t, "16:9", svc.generateInput.AspectRatio)
 	require.Equal(t, "4K", svc.generateInput.Quality)
+}
+
+func TestImageStudioHandlerCreateAndGetTask(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	svc := &imageStudioHandlerServiceStub{}
+	h := NewImageStudioHandler(svc)
+	body := bytes.NewBufferString(`{"mode":"generation","api_key_id":15,"group_id":9,"model":"gpt-image-2","prompt":"blue portal","aspect_ratio":"16:9","quality":"4K"}`)
+	c, rec := newImageStudioHandlerTestContext(http.MethodPost, "/api/v1/user/images/tasks", body)
+	c.Request.Header.Set("Content-Type", "application/json")
+
+	h.CreateTask(c)
+
+	require.Equal(t, http.StatusAccepted, rec.Code)
+	require.NotNil(t, svc.taskInput.Generate)
+	require.Equal(t, int64(42), svc.taskInput.Generate.UserID)
+	require.NotNil(t, svc.taskInput.Generate.APIKeyID)
+	require.Equal(t, int64(15), *svc.taskInput.Generate.APIKeyID)
+	require.NotNil(t, svc.taskInput.Generate.GroupID)
+	require.Equal(t, int64(9), *svc.taskInput.Generate.GroupID)
+	require.Equal(t, "gpt-image-2", svc.taskInput.Generate.Model)
+	require.Equal(t, "blue portal", svc.taskInput.Generate.Prompt)
+	require.Equal(t, "16:9", svc.taskInput.Generate.AspectRatio)
+	require.Equal(t, "4K", svc.taskInput.Generate.Quality)
+
+	getCtx, getRec := newImageStudioHandlerTestContext(http.MethodGet, "/api/v1/user/images/tasks/22", nil)
+	getCtx.Params = gin.Params{{Key: "id", Value: "22"}}
+	h.GetTask(getCtx)
+
+	require.Equal(t, http.StatusOK, getRec.Code)
+	require.Equal(t, int64(42), svc.taskUserID)
+	require.Equal(t, int64(22), svc.taskID)
+}
+
+func TestImageStudioHandlerListTasks(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	svc := &imageStudioHandlerServiceStub{
+		taskItems: []service.ImageStudioTask{{ID: 22, UserID: 42, Status: service.ImageStudioTaskStatusRunning}},
+	}
+	h := NewImageStudioHandler(svc)
+	c, rec := newImageStudioHandlerTestContext(http.MethodGet, "/api/v1/user/images/tasks?page=1&page_size=5", nil)
+
+	h.ListTasks(c)
+
+	require.Equal(t, http.StatusOK, rec.Code)
+	require.Equal(t, int64(42), svc.taskUserID)
+	var envelope map[string]any
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &envelope))
+	data := envelope["data"].(map[string]any)
+	require.Len(t, data["items"].([]any), 1)
 }
 
 func TestImageStudioHandlerEditForwardsGroupAndQuality(t *testing.T) {

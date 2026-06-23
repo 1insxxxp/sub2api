@@ -19,6 +19,9 @@ import (
 type ImageStudioService interface {
 	GetConfig(ctx context.Context) (*service.ImageStudioConfig, error)
 	GetOptions(ctx context.Context, userID int64) (*service.ImageStudioOptions, error)
+	CreateTask(ctx context.Context, input service.ImageStudioTaskCreateInput) (*service.ImageStudioTask, error)
+	GetTask(ctx context.Context, userID int64, taskID int64) (*service.ImageStudioTask, error)
+	ListTasks(ctx context.Context, userID int64, params pagination.PaginationParams) ([]service.ImageStudioTask, *pagination.PaginationResult, error)
 	Generate(ctx context.Context, input service.ImageStudioGenerateInput) (*service.ImageStudioImageRecord, error)
 	Edit(ctx context.Context, input service.ImageStudioEditInput) (*service.ImageStudioImageRecord, error)
 	List(ctx context.Context, userID int64, params pagination.PaginationParams) ([]service.ImageStudioImageRecord, *pagination.PaginationResult, error)
@@ -94,6 +97,99 @@ func (h *ImageStudioHandler) Generate(c *gin.Context) {
 		return
 	}
 	response.Success(c, record)
+}
+
+type imageStudioTaskRequest struct {
+	Mode        string `json:"mode"`
+	APIKeyID    *int64 `json:"api_key_id"`
+	GroupID     *int64 `json:"group_id"`
+	Model       string `json:"model"`
+	Prompt      string `json:"prompt" binding:"required"`
+	AspectRatio string `json:"aspect_ratio"`
+	Quality     string `json:"quality"`
+}
+
+func (h *ImageStudioHandler) CreateTask(c *gin.Context) {
+	subject, ok := middleware2.GetAuthSubjectFromContext(c)
+	if !ok {
+		response.Unauthorized(c, "User not authenticated")
+		return
+	}
+	var req imageStudioTaskRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.BadRequest(c, "Invalid request: "+err.Error())
+		return
+	}
+	mode := strings.TrimSpace(req.Mode)
+	if mode == "" {
+		mode = service.ImageStudioModeGeneration
+	}
+	input := service.ImageStudioTaskCreateInput{}
+	switch mode {
+	case service.ImageStudioModeGeneration:
+		input.Generate = &service.ImageStudioGenerateInput{
+			UserID:      subject.UserID,
+			APIKeyID:    req.APIKeyID,
+			GroupID:     req.GroupID,
+			Model:       req.Model,
+			Prompt:      req.Prompt,
+			AspectRatio: req.AspectRatio,
+			Quality:     req.Quality,
+			UserAgent:   c.GetHeader("User-Agent"),
+			IPAddress:   c.ClientIP(),
+		}
+	case service.ImageStudioModeEdit:
+		response.BadRequest(c, "Image edit tasks are not available yet")
+		return
+	default:
+		response.BadRequest(c, "Invalid image task mode")
+		return
+	}
+	task, err := h.imageStudioService.CreateTask(c.Request.Context(), input)
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	response.Accepted(c, task)
+}
+
+func (h *ImageStudioHandler) GetTask(c *gin.Context) {
+	subject, ok := middleware2.GetAuthSubjectFromContext(c)
+	if !ok {
+		response.Unauthorized(c, "User not authenticated")
+		return
+	}
+	id, err := strconv.ParseInt(strings.TrimSpace(c.Param("id")), 10, 64)
+	if err != nil || id <= 0 {
+		response.BadRequest(c, "Invalid image task id")
+		return
+	}
+	task, err := h.imageStudioService.GetTask(c.Request.Context(), subject.UserID, id)
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	response.Success(c, task)
+}
+
+func (h *ImageStudioHandler) ListTasks(c *gin.Context) {
+	subject, ok := middleware2.GetAuthSubjectFromContext(c)
+	if !ok {
+		response.Unauthorized(c, "User not authenticated")
+		return
+	}
+	page, pageSize := response.ParsePagination(c)
+	items, pageResult, err := h.imageStudioService.ListTasks(c.Request.Context(), subject.UserID, pagination.PaginationParams{Page: page, PageSize: pageSize})
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	response.PaginatedWithResult(c, items, &response.PaginationResult{
+		Total:    pageResult.Total,
+		Page:     pageResult.Page,
+		PageSize: pageResult.PageSize,
+		Pages:    pageResult.Pages,
+	})
 }
 
 func (h *ImageStudioHandler) Edit(c *gin.Context) {

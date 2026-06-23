@@ -101,6 +101,8 @@ const (
 	EdgeCheckinBlacklistEntries = "checkin_blacklist_entries"
 	// EdgeUserImages holds the string denoting the user_images edge name in mutations.
 	EdgeUserImages = "user_images"
+	// EdgeUserImageTasks holds the string denoting the user_image_tasks edge name in mutations.
+	EdgeUserImageTasks = "user_image_tasks"
 	// EdgeUserAllowedGroups holds the string denoting the user_allowed_groups edge name in mutations.
 	EdgeUserAllowedGroups = "user_allowed_groups"
 	// Table holds the table name of the user in the database.
@@ -215,6 +217,13 @@ const (
 	UserImagesInverseTable = "user_images"
 	// UserImagesColumn is the table column denoting the user_images relation/edge.
 	UserImagesColumn = "user_id"
+	// UserImageTasksTable is the table that holds the user_image_tasks relation/edge.
+	UserImageTasksTable = "user_image_tasks"
+	// UserImageTasksInverseTable is the table name for the UserImageTask entity.
+	// It exists in this package in order to avoid circular dependency with the "userimagetask" package.
+	UserImageTasksInverseTable = "user_image_tasks"
+	// UserImageTasksColumn is the table column denoting the user_image_tasks relation/edge.
+	UserImageTasksColumn = "user_id"
 	// UserAllowedGroupsTable is the table that holds the user_allowed_groups relation/edge.
 	UserAllowedGroupsTable = "user_allowed_groups"
 	// UserAllowedGroupsInverseTable is the table name for the UserAllowedGroup entity.
@@ -705,6 +714,20 @@ func ByUserImages(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
 	}
 }
 
+// ByUserImageTasksCount orders the results by user_image_tasks count.
+func ByUserImageTasksCount(opts ...sql.OrderTermOption) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborsCount(s, newUserImageTasksStep(), opts...)
+	}
+}
+
+// ByUserImageTasks orders the results by user_image_tasks terms.
+func ByUserImageTasks(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborTerms(s, newUserImageTasksStep(), append([]sql.OrderTerm{term}, terms...)...)
+	}
+}
+
 // ByUserAllowedGroupsCount orders the results by user_allowed_groups count.
 func ByUserAllowedGroupsCount(opts ...sql.OrderTermOption) OrderOption {
 	return func(s *sql.Selector) {
@@ -828,6 +851,13 @@ func newUserImagesStep() *sqlgraph.Step {
 		sqlgraph.From(Table, FieldID),
 		sqlgraph.To(UserImagesInverseTable, FieldID),
 		sqlgraph.Edge(sqlgraph.O2M, false, UserImagesTable, UserImagesColumn),
+	)
+}
+func newUserImageTasksStep() *sqlgraph.Step {
+	return sqlgraph.NewStep(
+		sqlgraph.From(Table, FieldID),
+		sqlgraph.To(UserImageTasksInverseTable, FieldID),
+		sqlgraph.Edge(sqlgraph.O2M, false, UserImageTasksTable, UserImageTasksColumn),
 	)
 }
 func newUserAllowedGroupsStep() *sqlgraph.Step {

@@ -39,6 +39,32 @@ func TestUserImageSchema(t *testing.T) {
 	)
 	requireHasIndex(t, userImage, "user_id", "created_at")
 	requireHasIndex(t, userImage, "deleted_at")
+
+	userImageTask := requireSchema(t, schemas, "UserImageTask")
+	requireSchemaFields(t, userImageTask,
+		"user_id",
+		"api_key_id",
+		"group_id",
+		"image_id",
+		"mode",
+		"status",
+		"model",
+		"prompt",
+		"aspect_ratio",
+		"quality",
+		"size",
+		"estimated_cost",
+		"source_image_count",
+		"reference_object_keys",
+		"error_reason",
+		"error_message",
+		"started_at",
+		"completed_at",
+		"created_at",
+		"updated_at",
+	)
+	requireHasIndex(t, userImageTask, "user_id", "created_at")
+	requireHasIndex(t, userImageTask, "status", "created_at")
 }
 
 func requireHasIndex(t *testing.T, schema *load.Schema, fields ...string) {

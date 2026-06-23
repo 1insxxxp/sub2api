@@ -5,9 +5,12 @@ package service
 import (
 	"context"
 	"errors"
+	"io"
+	"net/http"
 	"testing"
 	"time"
 
+	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/pagination"
 	"github.com/stretchr/testify/require"
 )
@@ -45,6 +48,99 @@ type imageStudioRepoStub struct {
 	deleteOldestLimit  int
 	deleteOldestItems  []ImageStudioImageRecord
 	deleteOldestErr    error
+}
+
+type imageStudioTaskRepoStub struct {
+	nextID int64
+	tasks  map[int64]ImageStudioTask
+}
+
+func (s *imageStudioTaskRepoStub) ensure() {
+	if s.tasks == nil {
+		s.tasks = make(map[int64]ImageStudioTask)
+	}
+}
+
+func (s *imageStudioTaskRepoStub) Create(ctx context.Context, task *ImageStudioTask) error {
+	s.ensure()
+	s.nextID++
+	task.ID = s.nextID
+	if task.CreatedAt.IsZero() {
+		task.CreatedAt = time.Now()
+	}
+	if task.UpdatedAt.IsZero() {
+		task.UpdatedAt = task.CreatedAt
+	}
+	s.tasks[task.ID] = *task
+	return nil
+}
+
+func (s *imageStudioTaskRepoStub) GetByID(ctx context.Context, userID int64, taskID int64) (*ImageStudioTask, error) {
+	s.ensure()
+	task, ok := s.tasks[taskID]
+	if !ok || (userID > 0 && task.UserID != userID) {
+		return nil, ErrImageStudioTaskNotFound
+	}
+	return &task, nil
+}
+
+func (s *imageStudioTaskRepoStub) ListByUser(ctx context.Context, userID int64, params pagination.PaginationParams) ([]ImageStudioTask, *pagination.PaginationResult, error) {
+	s.ensure()
+	var out []ImageStudioTask
+	for _, task := range s.tasks {
+		if task.UserID == userID {
+			out = append(out, task)
+		}
+	}
+	return out, &pagination.PaginationResult{Total: int64(len(out)), Page: params.Page, PageSize: params.Limit(), Pages: 1}, nil
+}
+
+func (s *imageStudioTaskRepoStub) MarkRunning(ctx context.Context, taskID int64, startedAt time.Time) (bool, error) {
+	s.ensure()
+	task := s.tasks[taskID]
+	if task.ID == 0 || task.Status != ImageStudioTaskStatusQueued {
+		return false, nil
+	}
+	task.Status = ImageStudioTaskStatusRunning
+	task.StartedAt = &startedAt
+	task.UpdatedAt = startedAt
+	s.tasks[taskID] = task
+	return true, nil
+}
+
+func (s *imageStudioTaskRepoStub) MarkSucceeded(ctx context.Context, taskID int64, image *ImageStudioImageRecord, quality string, estimatedCost float64, completedAt time.Time) (*ImageStudioTask, error) {
+	s.ensure()
+	task := s.tasks[taskID]
+	task.Status = ImageStudioTaskStatusSucceeded
+	task.CompletedAt = &completedAt
+	task.UpdatedAt = completedAt
+	if quality != "" {
+		task.Quality = quality
+	}
+	if estimatedCost >= 0 {
+		task.EstimatedCost = estimatedCost
+	}
+	if image != nil {
+		task.ImageID = &image.ID
+		task.Image = image
+		if image.Size != "" {
+			task.Size = image.Size
+		}
+	}
+	s.tasks[taskID] = task
+	return &task, nil
+}
+
+func (s *imageStudioTaskRepoStub) MarkFailed(ctx context.Context, taskID int64, reason string, message string, completedAt time.Time) (*ImageStudioTask, error) {
+	s.ensure()
+	task := s.tasks[taskID]
+	task.Status = ImageStudioTaskStatusFailed
+	task.ErrorReason = reason
+	task.ErrorMessage = message
+	task.CompletedAt = &completedAt
+	task.UpdatedAt = completedAt
+	s.tasks[taskID] = task
+	return &task, nil
 }
 
 func (s *imageStudioRepoStub) Create(ctx context.Context, record *ImageStudioImageRecord) error {
@@ -101,14 +197,30 @@ func (s *imageStudioRepoStub) ListExpired(ctx context.Context, now time.Time, li
 }
 
 type imageStudioExecutorStub struct {
-	generateInput *ImageStudioGenerateInput
-	editInput     *ImageStudioEditInput
-	result        *ImageStudioExecutionResult
-	err           error
+	generateInput  *ImageStudioGenerateInput
+	generateInputs []ImageStudioGenerateInput
+	editInput      *ImageStudioEditInput
+	result         *ImageStudioExecutionResult
+	err            error
+	results        []*ImageStudioExecutionResult
+	errs           []error
 }
 
 func (s *imageStudioExecutorStub) Generate(ctx context.Context, input ImageStudioGenerateInput) (*ImageStudioExecutionResult, error) {
 	s.generateInput = &input
+	s.generateInputs = append(s.generateInputs, input)
+	if len(s.errs) > 0 {
+		err := s.errs[0]
+		s.errs = s.errs[1:]
+		if err != nil {
+			return nil, err
+		}
+	}
+	if len(s.results) > 0 {
+		result := s.results[0]
+		s.results = s.results[1:]
+		return result, nil
+	}
 	if s.err != nil {
 		return nil, s.err
 	}
@@ -364,6 +476,126 @@ func TestImageStudioServiceGenerateStoresExecutionResult(t *testing.T) {
 	require.NotNil(t, record.ExpiresAt)
 }
 
+func TestImageStudioServiceCreateGenerationTaskCompletesAsync(t *testing.T) {
+	settings := defaultImageStudioSettings()
+	settings.Enabled = true
+	settings.AllowedModels = []string{"gpt-image-1"}
+	settings.DefaultModel = "gpt-image-1"
+	executor := &imageStudioExecutorStub{
+		result: &ImageStudioExecutionResult{
+			ImageBytes: []byte("png-bytes"),
+			MimeType:   "image/png",
+			Cost:       0.02,
+		},
+	}
+	storage := &imageStudioStorageStub{publicURL: "https://assets.example.com/task.png"}
+	repo := &imageStudioRepoStub{}
+	taskRepo := &imageStudioTaskRepoStub{}
+	svc := NewImageStudioService(repo, &imageStudioConfigReaderStub{cfg: settings})
+	svc.SetExecutor(executor)
+	svc.SetTaskRepository(taskRepo)
+	svc.SetStorageFactory(func(ctx context.Context, cfg *ImageStudioSettings) (ImageStorage, error) {
+		return storage, nil
+	})
+
+	task, err := svc.CreateTask(context.Background(), ImageStudioTaskCreateInput{
+		Generate: &ImageStudioGenerateInput{
+			UserID:      7,
+			Model:       "gpt-image-1",
+			Prompt:      "blue API portal",
+			AspectRatio: "1:1",
+			Quality:     ImageBillingSize1K,
+		},
+	})
+	require.NoError(t, err)
+	require.Equal(t, ImageStudioTaskStatusQueued, task.Status)
+	require.Equal(t, ImageStudioModeGeneration, task.Mode)
+
+	require.Eventually(t, func() bool {
+		loaded, loadErr := svc.GetTask(context.Background(), 7, task.ID)
+		return loadErr == nil &&
+			loaded.Status == ImageStudioTaskStatusSucceeded &&
+			loaded.ImageID != nil &&
+			loaded.Image != nil &&
+			loaded.Image.ImageURL == "https://assets.example.com/task.png"
+	}, time.Second, 10*time.Millisecond)
+	require.Len(t, repo.createdRecords, 1)
+}
+
+func TestImageStudioServiceGenerationTaskRetriesAndDowngrades4KTimeouts(t *testing.T) {
+	settings := defaultImageStudioSettings()
+	settings.Enabled = true
+	settings.AllowedModels = []string{"gpt-image-2"}
+	settings.DefaultModel = "gpt-image-2"
+	executor := &imageStudioExecutorStub{
+		errs: []error{
+			io.ErrUnexpectedEOF,
+			io.ErrUnexpectedEOF,
+			io.ErrUnexpectedEOF,
+			nil,
+		},
+		result: &ImageStudioExecutionResult{
+			ImageBytes: []byte("png-bytes"),
+			MimeType:   "image/png",
+			Cost:       0.03,
+		},
+	}
+	storage := &imageStudioStorageStub{publicURL: "https://assets.example.com/task.png"}
+	repo := &imageStudioRepoStub{}
+	taskRepo := &imageStudioTaskRepoStub{}
+	svc := NewImageStudioService(repo, &imageStudioConfigReaderStub{cfg: settings})
+	svc.SetExecutor(executor)
+	svc.SetTaskRepository(taskRepo)
+	svc.SetStorageFactory(func(ctx context.Context, cfg *ImageStudioSettings) (ImageStorage, error) {
+		return storage, nil
+	})
+
+	task, err := svc.CreateTask(context.Background(), ImageStudioTaskCreateInput{
+		Generate: &ImageStudioGenerateInput{
+			UserID:      7,
+			Model:       "gpt-image-2",
+			Prompt:      "blue API portal",
+			AspectRatio: "16:9",
+			Quality:     ImageBillingSize4K,
+		},
+	})
+	require.NoError(t, err)
+
+	require.Eventually(t, func() bool {
+		loaded, loadErr := svc.GetTask(context.Background(), 7, task.ID)
+		return loadErr == nil &&
+			loaded.Status == ImageStudioTaskStatusSucceeded &&
+			loaded.Image != nil &&
+			loaded.Quality == ImageBillingSize1K &&
+			loaded.Size == "1024x576"
+	}, time.Second, 10*time.Millisecond)
+	require.Len(t, executor.generateInputs, 4)
+	require.Equal(t, []string{
+		ImageBillingSize4K,
+		ImageBillingSize4K,
+		ImageBillingSize2K,
+		ImageBillingSize1K,
+	}, []string{
+		executor.generateInputs[0].Quality,
+		executor.generateInputs[1].Quality,
+		executor.generateInputs[2].Quality,
+		executor.generateInputs[3].Quality,
+	})
+	require.Equal(t, []string{
+		"3840x2160",
+		"3840x2160",
+		"2048x1152",
+		"1024x576",
+	}, []string{
+		executor.generateInputs[0].Size,
+		executor.generateInputs[1].Size,
+		executor.generateInputs[2].Size,
+		executor.generateInputs[3].Size,
+	})
+	require.Len(t, repo.createdRecords, 1)
+	require.Equal(t, "1024x576", repo.createdRecords[0].Size)
+}
+
 func TestImageStudioServiceGenerateUsesSelectedGroupQualityAndRatio(t *testing.T) {
 	settings := defaultImageStudioSettings()
 	settings.Enabled = true
@@ -406,6 +638,44 @@ func TestImageStudioServiceGenerateUsesSelectedGroupQualityAndRatio(t *testing.T
 	require.Equal(t, ImageBillingSize4K, executor.generateInput.Quality)
 	require.Equal(t, "3840x2160", executor.generateInput.Size)
 	require.Equal(t, ImageBillingSize4K, executor.generateInput.BillingTier)
+}
+
+func TestImageStudioServiceGenerateAugmentsPromptWithAspectRatioForUpstreamOnly(t *testing.T) {
+	settings := defaultImageStudioSettings()
+	settings.Enabled = true
+	settings.AllowedModels = []string{"gpt-image-2"}
+	settings.DefaultModel = "gpt-image-2"
+	repo := &imageStudioRepoStub{}
+	executor := &imageStudioExecutorStub{
+		result: &ImageStudioExecutionResult{
+			ImageBytes: []byte("png-bytes"),
+			MimeType:   "image/png",
+		},
+	}
+	storage := &imageStudioStorageStub{publicURL: "https://assets.example.com/out.png"}
+	svc := NewImageStudioService(repo, &imageStudioConfigReaderStub{cfg: settings})
+	svc.SetExecutor(executor)
+	svc.SetStorageFactory(func(ctx context.Context, cfg *ImageStudioSettings) (ImageStorage, error) {
+		return storage, nil
+	})
+
+	record, err := svc.Generate(context.Background(), ImageStudioGenerateInput{
+		UserID:      7,
+		Model:       "gpt-image-2",
+		Prompt:      "生成一张海边风景图",
+		AspectRatio: "9:16",
+		Quality:     ImageBillingSize1K,
+	})
+
+	require.NoError(t, err)
+	require.NotNil(t, record)
+	require.NotNil(t, executor.generateInput)
+	require.Equal(t, "生成一张海边风景图", repo.createdRecords[0].Prompt)
+	require.Contains(t, executor.generateInput.Prompt, "生成一张海边风景图")
+	require.Contains(t, executor.generateInput.Prompt, "9:16")
+	require.Contains(t, executor.generateInput.Prompt, "竖版")
+	require.Contains(t, executor.generateInput.Prompt, "画布比例")
+	require.NotEqual(t, repo.createdRecords[0].Prompt, executor.generateInput.Prompt)
 }
 
 func TestImageStudioServiceGenerateAllowsGPTImage2FromSelectedImageGroup(t *testing.T) {
@@ -525,6 +795,30 @@ func TestImageStudioServiceGenerateDoesNotStoreOnExecutorFailure(t *testing.T) {
 		AspectRatio: "1:1",
 	})
 	require.Error(t, err)
+	require.Empty(t, repo.createdRecords)
+}
+
+func TestImageStudioServiceGenerateClassifiesUpstreamDisconnect(t *testing.T) {
+	settings := defaultImageStudioSettings()
+	settings.Enabled = true
+	settings.AllowedModels = []string{"gpt-image-1"}
+	settings.DefaultModel = "gpt-image-1"
+	repo := &imageStudioRepoStub{}
+	executor := &imageStudioExecutorStub{err: io.ErrUnexpectedEOF}
+	svc := NewImageStudioService(repo, &imageStudioConfigReaderStub{cfg: settings})
+	svc.SetExecutor(executor)
+
+	_, err := svc.Generate(context.Background(), ImageStudioGenerateInput{
+		UserID:      7,
+		Model:       "gpt-image-1",
+		Prompt:      "blue API portal",
+		AspectRatio: "1:1",
+	})
+
+	require.Error(t, err)
+	require.Equal(t, http.StatusGatewayTimeout, infraerrors.Code(err))
+	require.Equal(t, "IMAGE_PROVIDER_TIMEOUT_OR_DISCONNECT", infraerrors.Reason(err))
+	require.Contains(t, infraerrors.Message(err), "not charged")
 	require.Empty(t, repo.createdRecords)
 }
 

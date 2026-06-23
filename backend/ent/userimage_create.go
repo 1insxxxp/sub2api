@@ -13,6 +13,7 @@ import (
 	"entgo.io/ent/schema/field"
 	"github.com/Wei-Shaw/sub2api/ent/user"
 	"github.com/Wei-Shaw/sub2api/ent/userimage"
+	"github.com/Wei-Shaw/sub2api/ent/userimagetask"
 )
 
 // UserImageCreate is the builder for creating a UserImage entity.
@@ -222,6 +223,21 @@ func (_c *UserImageCreate) SetNillableUpdatedAt(v *time.Time) *UserImageCreate {
 // SetUser sets the "user" edge to the User entity.
 func (_c *UserImageCreate) SetUser(v *User) *UserImageCreate {
 	return _c.SetUserID(v.ID)
+}
+
+// AddTaskIDs adds the "tasks" edge to the UserImageTask entity by IDs.
+func (_c *UserImageCreate) AddTaskIDs(ids ...int64) *UserImageCreate {
+	_c.mutation.AddTaskIDs(ids...)
+	return _c
+}
+
+// AddTasks adds the "tasks" edges to the UserImageTask entity.
+func (_c *UserImageCreate) AddTasks(v ...*UserImageTask) *UserImageCreate {
+	ids := make([]int64, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _c.AddTaskIDs(ids...)
 }
 
 // Mutation returns the UserImageMutation object of the builder.
@@ -486,6 +502,22 @@ func (_c *UserImageCreate) createSpec() (*UserImage, *sqlgraph.CreateSpec) {
 			edge.Target.Nodes = append(edge.Target.Nodes, k)
 		}
 		_node.UserID = nodes[0]
+		_spec.Edges = append(_spec.Edges, edge)
+	}
+	if nodes := _c.mutation.TasksIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   userimage.TasksTable,
+			Columns: []string{userimage.TasksColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(userimagetask.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
 		_spec.Edges = append(_spec.Edges, edge)
 	}
 	return _node, _spec
