@@ -71,9 +71,51 @@ func TestAPIKeyServiceGetImageStudioAPIKeyForGroupReturnsNotFoundWithoutBoundAct
 	require.ErrorIs(t, err, ErrAPIKeyNotFound)
 }
 
+func TestAPIKeyServiceGetImageStudioAPIKeyByIDSelectsOwnedActiveKey(t *testing.T) {
+	groupID := int64(9)
+	repo := &imageStudioAPIKeyRepoStub{
+		keys: []APIKey{
+			{ID: 3, UserID: 7, Status: StatusAPIKeyActive, GroupID: &groupID, User: &User{ID: 7}, Group: &Group{ID: groupID}},
+		},
+	}
+	svc := NewAPIKeyService(repo, nil, nil, nil, nil, nil, nil)
+
+	key, err := svc.GetImageStudioAPIKeyByID(context.Background(), 7, 3)
+
+	require.NoError(t, err)
+	require.NotNil(t, key)
+	require.Equal(t, int64(3), key.ID)
+	require.NotNil(t, key.GroupID)
+	require.Equal(t, groupID, *key.GroupID)
+}
+
+func TestAPIKeyServiceGetImageStudioAPIKeyByIDRejectsOtherUsersKey(t *testing.T) {
+	groupID := int64(9)
+	repo := &imageStudioAPIKeyRepoStub{
+		keys: []APIKey{
+			{ID: 3, UserID: 8, Status: StatusAPIKeyActive, GroupID: &groupID, User: &User{ID: 8}, Group: &Group{ID: groupID}},
+		},
+	}
+	svc := NewAPIKeyService(repo, nil, nil, nil, nil, nil, nil)
+
+	_, err := svc.GetImageStudioAPIKeyByID(context.Background(), 7, 3)
+
+	require.ErrorIs(t, err, ErrAPIKeyNotFound)
+}
+
 type imageStudioAPIKeyRepoStub struct {
 	APIKeyRepository
 	keys []APIKey
+}
+
+func (s *imageStudioAPIKeyRepoStub) GetByID(ctx context.Context, id int64) (*APIKey, error) {
+	for i := range s.keys {
+		if s.keys[i].ID == id {
+			key := s.keys[i]
+			return &key, nil
+		}
+	}
+	return nil, ErrAPIKeyNotFound
 }
 
 func (s *imageStudioAPIKeyRepoStub) ListByUserID(ctx context.Context, userID int64, params pagination.PaginationParams, filters APIKeyListFilters) ([]APIKey, *pagination.PaginationResult, error) {

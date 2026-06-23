@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"io"
 	"strings"
 	"time"
 )
@@ -69,6 +70,7 @@ type ImageStudioPricePreviewItem struct {
 
 type ImageStudioGenerateInput struct {
 	UserID      int64  `json:"user_id"`
+	APIKeyID    *int64 `json:"api_key_id,omitempty"`
 	GroupID     *int64 `json:"group_id,omitempty"`
 	Model       string `json:"model"`
 	Prompt      string `json:"prompt"`
@@ -82,6 +84,7 @@ type ImageStudioGenerateInput struct {
 
 type ImageStudioEditInput struct {
 	UserID          int64                       `json:"user_id"`
+	APIKeyID        *int64                      `json:"api_key_id,omitempty"`
 	GroupID         *int64                      `json:"group_id,omitempty"`
 	Model           string                      `json:"model"`
 	Prompt          string                      `json:"prompt"`
@@ -130,6 +133,15 @@ type ImageStudioImageRecord struct {
 	DeletedAt        *time.Time `json:"deleted_at,omitempty"`
 	CreatedAt        time.Time  `json:"created_at"`
 	UpdatedAt        time.Time  `json:"updated_at"`
+}
+
+type ImageStudioLocalFile struct {
+	Name        string
+	ContentType string
+	ModTime     time.Time
+	Size        int64
+	Reader      io.ReadSeeker
+	Close       func() error
 }
 
 type ImageStudioPricePreview struct {

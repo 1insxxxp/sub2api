@@ -47,13 +47,17 @@ describe('image studio user api', () => {
       quality: '4K',
     })
 
-    expect(post).toHaveBeenCalledWith('/user/images/generate', {
-      group_id: 9,
-      model: 'gpt-image-1',
-      prompt: 'A neon blue API gateway',
-      aspect_ratio: '16:9',
-      quality: '4K',
-    })
+    expect(post).toHaveBeenCalledWith(
+      '/user/images/generate',
+      {
+        group_id: 9,
+        model: 'gpt-image-1',
+        prompt: 'A neon blue API gateway',
+        aspect_ratio: '16:9',
+        quality: '4K',
+      },
+      { timeout: 300000 },
+    )
   })
 
   it('sends edit payloads as multipart form data', async () => {
@@ -80,6 +84,7 @@ describe('image studio user api', () => {
     expect(formData.getAll('image')).toEqual([file])
     expect(config).toEqual({
       headers: { 'Content-Type': 'multipart/form-data' },
+      timeout: 300000,
     })
   })
 

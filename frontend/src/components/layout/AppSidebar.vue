@@ -186,6 +186,7 @@ import { computed, h, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useAdminSettingsStore, useAppStore, useAuthStore, useOnboardingStore } from '@/stores'
+import { imageStudioAPI } from '@/api'
 import VersionBadge from '@/components/common/VersionBadge.vue'
 import { sanitizeSvg } from '@/utils/sanitize'
 import { FeatureFlags, makeSidebarFlag } from '@/utils/featureFlags'
@@ -248,6 +249,8 @@ const siteName = computed(() => appStore.siteName)
 const siteLogo = computed(() => appStore.effectiveSiteLogo)
 const siteVersion = computed(() => appStore.siteVersion)
 const settingsLoaded = computed(() => appStore.publicSettingsLoaded)
+const imageStudioEnabled = ref(false)
+let imageStudioFlagRequestID = 0
 
 // SVG Icon Components
 const DashboardIcon = {
@@ -668,6 +671,7 @@ const flagPayment = makeSidebarFlag(FeatureFlags.payment)
 const flagAvailableChannels = makeSidebarFlag(FeatureFlags.availableChannels)
 const flagAffiliate = makeSidebarFlag(FeatureFlags.affiliate)
 const flagRiskControl = makeSidebarFlag(FeatureFlags.riskControl)
+const flagImageStudio = () => imageStudioEnabled.value
 const flagOpsMonitoring = () => adminSettingsStore.opsMonitoringEnabled
 const flagAdminPayment = () => adminSettingsStore.paymentEnabled
 
@@ -686,7 +690,7 @@ function buildSelfNavItems(withDashboard: boolean): NavItem[] {
     { path: '/usage', label: t('nav.usage'), icon: ChartIcon, hideInSimpleMode: true },
     { path: '/available-channels', label: t('nav.availableChannels'), icon: ChannelIcon, hideInSimpleMode: true, featureFlag: flagAvailableChannels },
     { path: '/monitor', label: t('nav.channelStatus'), icon: SignalIcon, featureFlag: flagChannelMonitor },
-    { path: '/images', label: t('nav.imageStudio'), icon: SparklesIcon, hideInSimpleMode: true },
+    { path: '/images', label: t('nav.imageStudio'), icon: SparklesIcon, hideInSimpleMode: true, featureFlag: flagImageStudio },
     { path: '/subscriptions', label: t('nav.mySubscriptions'), icon: CreditCardIcon, hideInSimpleMode: true },
     { path: '/purchase', label: t('nav.buySubscription'), icon: RechargeSubscriptionIcon, hideInSimpleMode: true, featureFlag: flagPayment },
     { path: '/orders', label: t('nav.myOrders'), icon: OrderListIcon, hideInSimpleMode: true, featureFlag: flagPayment },
@@ -882,6 +886,25 @@ function handleGroupClick(item: NavItem) {
   }
 }
 
+async function refreshImageStudioFlag() {
+  const requestID = ++imageStudioFlagRequestID
+  if (!authStore.isAuthenticated) {
+    imageStudioEnabled.value = false
+    return
+  }
+
+  try {
+    const cfg = await imageStudioAPI.getConfig()
+    if (requestID === imageStudioFlagRequestID) {
+      imageStudioEnabled.value = cfg.enabled === true
+    }
+  } catch {
+    if (requestID === imageStudioFlagRequestID) {
+      imageStudioEnabled.value = false
+    }
+  }
+}
+
 // Initialize theme
 const savedTheme = localStorage.getItem('theme')
 const shouldUseDark =
@@ -898,6 +921,14 @@ watch(
     if (v) {
       adminSettingsStore.fetch()
     }
+  },
+  { immediate: true }
+)
+
+watch(
+  () => authStore.isAuthenticated,
+  () => {
+    void refreshImageStudioFlag()
   },
   { immediate: true }
 )

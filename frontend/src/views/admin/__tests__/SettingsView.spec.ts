@@ -220,6 +220,8 @@ describe("admin SettingsView unified shell", () => {
     expect(settingsViewSource).toContain("settings-tabs-brand-glow");
     expect(settingsViewSource).toContain("settings-tab-active");
     expect(settingsViewSource).toContain("var(--brand-cyan)");
+    expect(settingsViewSource).toMatch(/\.settings-tabs-brand-shell\s*\{[\s\S]*?border-color: transparent;/);
+    expect(settingsViewSource).toMatch(/\.dark \.settings-tabs-shell\s*\{[\s\S]*?border-color: transparent;/);
     expect(settingsViewSource).not.toContain("background: linear-gradient(90deg, #3b82f6, #8b5cf6)");
   });
 

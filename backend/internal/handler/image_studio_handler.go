@@ -23,6 +23,7 @@ type ImageStudioService interface {
 	Edit(ctx context.Context, input service.ImageStudioEditInput) (*service.ImageStudioImageRecord, error)
 	List(ctx context.Context, userID int64, params pagination.PaginationParams) ([]service.ImageStudioImageRecord, *pagination.PaginationResult, error)
 	Delete(ctx context.Context, userID int64, imageID int64) error
+	OpenLocalFile(ctx context.Context, objectKey string) (*service.ImageStudioLocalFile, error)
 }
 
 // ImageStudioHandler handles authenticated user image generation workspace APIs.
@@ -58,6 +59,7 @@ func (h *ImageStudioHandler) GetOptions(c *gin.Context) {
 }
 
 type imageStudioGenerateRequest struct {
+	APIKeyID    *int64 `json:"api_key_id"`
 	GroupID     *int64 `json:"group_id"`
 	Model       string `json:"model"`
 	Prompt      string `json:"prompt" binding:"required"`
@@ -78,6 +80,7 @@ func (h *ImageStudioHandler) Generate(c *gin.Context) {
 	}
 	record, err := h.imageStudioService.Generate(c.Request.Context(), service.ImageStudioGenerateInput{
 		UserID:      subject.UserID,
+		APIKeyID:    req.APIKeyID,
 		GroupID:     req.GroupID,
 		Model:       req.Model,
 		Prompt:      req.Prompt,
@@ -113,8 +116,14 @@ func (h *ImageStudioHandler) Edit(c *gin.Context) {
 		response.BadRequest(c, "Invalid group_id")
 		return
 	}
+	apiKeyID, err := parseOptionalImageStudioInt64(c.PostForm("api_key_id"))
+	if err != nil {
+		response.BadRequest(c, "Invalid api_key_id")
+		return
+	}
 	record, err := h.imageStudioService.Edit(c.Request.Context(), service.ImageStudioEditInput{
 		UserID:          subject.UserID,
+		APIKeyID:        apiKeyID,
 		GroupID:         groupID,
 		Model:           c.PostForm("model"),
 		Prompt:          c.PostForm("prompt"),
@@ -167,6 +176,23 @@ func (h *ImageStudioHandler) Delete(c *gin.Context) {
 		return
 	}
 	response.Success(c, gin.H{"deleted": true})
+}
+
+func (h *ImageStudioHandler) ServeFile(c *gin.Context) {
+	objectKey := strings.TrimLeft(strings.TrimSpace(c.Param("objectKey")), "/")
+	file, err := h.imageStudioService.OpenLocalFile(c.Request.Context(), objectKey)
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	if file.Close != nil {
+		defer file.Close()
+	}
+	if file.ContentType != "" {
+		c.Header("Content-Type", file.ContentType)
+	}
+	c.Header("Cache-Control", "public, max-age=31536000, immutable")
+	http.ServeContent(c.Writer, c.Request, file.Name, file.ModTime, file.Reader)
 }
 
 func imageStudioReferenceImagesFromMultipart(form *multipart.Form) ([]service.ImageStudioReferenceImage, error) {

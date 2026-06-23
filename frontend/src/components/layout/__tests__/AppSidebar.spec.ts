@@ -39,3 +39,12 @@ describe('AppSidebar shared shell structure', () => {
     expect(styleSource).toContain('.sidebar-footer-shell')
   })
 })
+
+describe('AppSidebar feature flags', () => {
+  it('hides the image studio entry behind the backend image studio switch', () => {
+    expect(componentSource).toContain("const flagImageStudio")
+    expect(componentSource).toMatch(
+      /\{ path: '\/images', label: t\('nav\.imageStudio'\), icon: SparklesIcon, hideInSimpleMode: true, featureFlag: flagImageStudio \}/,
+    )
+  })
+})

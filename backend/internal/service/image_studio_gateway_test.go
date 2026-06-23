@@ -20,9 +20,11 @@ import (
 
 type imageStudioAPIKeyProviderStub struct {
 	apiKey       *APIKey
+	keysByID     map[int64]*APIKey
 	keysByGroup  map[int64]*APIKey
 	err          error
 	defaultCalls int
+	keyCalls     []int64
 	groupCalls   []int64
 }
 
@@ -30,6 +32,17 @@ func (s *imageStudioAPIKeyProviderStub) GetDefaultImageStudioAPIKey(ctx context.
 	s.defaultCalls++
 	if s.err != nil {
 		return nil, s.err
+	}
+	return s.apiKey, nil
+}
+
+func (s *imageStudioAPIKeyProviderStub) GetImageStudioAPIKeyByID(ctx context.Context, userID int64, apiKeyID int64) (*APIKey, error) {
+	s.keyCalls = append(s.keyCalls, apiKeyID)
+	if s.err != nil {
+		return nil, s.err
+	}
+	if s.keysByID != nil {
+		return s.keysByID[apiKeyID], nil
 	}
 	return s.apiKey, nil
 }
@@ -240,6 +253,50 @@ func TestImageStudioGatewayExecutorGenerateUsesSelectedGroupAPIKeyAndScheduler(t
 	require.Equal(t, selectedGroupID, *gateway.usageInput.APIKey.GroupID)
 }
 
+func TestImageStudioGatewayExecutorGeneratePrefersSelectedAPIKeyID(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	selectedKeyID := int64(45)
+	selectedGroupID := int64(9)
+	legacyGroupID := int64(12)
+	apiKey := &APIKey{
+		ID:      selectedKeyID,
+		UserID:  7,
+		Status:  StatusAPIKeyActive,
+		GroupID: &selectedGroupID,
+		User:    &User{ID: 7, Balance: 10},
+		Group:   &Group{ID: selectedGroupID, AllowImageGeneration: true},
+	}
+	keyProvider := &imageStudioAPIKeyProviderStub{
+		keysByID: map[int64]*APIKey{selectedKeyID: apiKey},
+	}
+	gateway := &imageStudioGatewayStub{}
+	executor := NewImageStudioGatewayExecutor(
+		keyProvider,
+		&imageStudioBillingCheckerStub{},
+		nil,
+		gateway,
+	)
+
+	result, err := executor.Generate(context.Background(), ImageStudioGenerateInput{
+		UserID:      7,
+		APIKeyID:    &selectedKeyID,
+		GroupID:     &legacyGroupID,
+		Model:       "gpt-image-2",
+		Prompt:      "draw it",
+		AspectRatio: "16:9",
+		Size:        "3840x2160",
+		BillingTier: ImageBillingSize4K,
+	})
+
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	require.Equal(t, 0, keyProvider.defaultCalls)
+	require.Equal(t, []int64{selectedKeyID}, keyProvider.keyCalls)
+	require.Empty(t, keyProvider.groupCalls)
+	require.NotNil(t, gateway.mappingGroupID)
+	require.Equal(t, selectedGroupID, *gateway.mappingGroupID)
+}
+
 func TestImageStudioGatewayExecutorEditBuildsMultipartRequest(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	apiKey := &APIKey{
@@ -277,6 +334,7 @@ func TestImageStudioGatewayExecutorEditBuildsMultipartRequest(t *testing.T) {
 
 	reader := multipartReaderFromRecordedBody(t, gateway.parseBody, gateway.parseContentType)
 	parts := map[string]string{}
+	contentTypes := map[string]string{}
 	for {
 		part, err := reader.NextPart()
 		if err == io.EOF {
@@ -286,12 +344,14 @@ func TestImageStudioGatewayExecutorEditBuildsMultipartRequest(t *testing.T) {
 		body, err := io.ReadAll(part)
 		require.NoError(t, err)
 		parts[part.FormName()] = string(body)
+		contentTypes[part.FormName()] = part.Header.Get("Content-Type")
 	}
 	require.Equal(t, "gpt-image-1", parts["model"])
 	require.Equal(t, "edit it", parts["prompt"])
 	require.Equal(t, "1024x1024", parts["size"])
 	require.Equal(t, "b64_json", parts["response_format"])
 	require.Equal(t, "source", parts["image"])
+	require.Equal(t, "image/png", contentTypes["image"])
 }
 
 func TestImageStudioGatewayExecutorRejectsGroupWithoutImagePermission(t *testing.T) {

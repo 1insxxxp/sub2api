@@ -10,6 +10,7 @@ import (
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
+	"net/textproto"
 	"strings"
 
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
@@ -19,6 +20,7 @@ import (
 
 type ImageStudioAPIKeyProvider interface {
 	GetDefaultImageStudioAPIKey(ctx context.Context, userID int64) (*APIKey, error)
+	GetImageStudioAPIKeyByID(ctx context.Context, userID int64, apiKeyID int64) (*APIKey, error)
 	GetImageStudioAPIKeyForGroup(ctx context.Context, userID int64, groupID int64) (*APIKey, error)
 }
 
@@ -62,6 +64,7 @@ func (e *ImageStudioGatewayExecutor) Generate(ctx context.Context, input ImageSt
 	}
 	return e.execute(ctx, imageStudioGatewayExecutionInput{
 		UserID:           input.UserID,
+		APIKeyID:         input.APIKeyID,
 		GroupID:          input.GroupID,
 		Model:            input.Model,
 		Size:             input.Size,
@@ -82,6 +85,7 @@ func (e *ImageStudioGatewayExecutor) Edit(ctx context.Context, input ImageStudio
 	}
 	return e.execute(ctx, imageStudioGatewayExecutionInput{
 		UserID:           input.UserID,
+		APIKeyID:         input.APIKeyID,
 		GroupID:          input.GroupID,
 		Model:            input.Model,
 		Size:             input.Size,
@@ -97,6 +101,7 @@ func (e *ImageStudioGatewayExecutor) Edit(ctx context.Context, input ImageStudio
 
 type imageStudioGatewayExecutionInput struct {
 	UserID           int64
+	APIKeyID         *int64
 	GroupID          *int64
 	Model            string
 	Size             string
@@ -113,7 +118,7 @@ func (e *ImageStudioGatewayExecutor) execute(ctx context.Context, input imageStu
 	if e == nil || e.apiKeys == nil || e.gateway == nil {
 		return nil, infraerrors.ServiceUnavailable("IMAGE_STUDIO_GATEWAY_NOT_CONFIGURED", "image studio gateway is not configured")
 	}
-	apiKey, err := e.resolveAPIKey(ctx, input.UserID, input.GroupID)
+	apiKey, err := e.resolveAPIKey(ctx, input.UserID, input.APIKeyID, input.GroupID)
 	if err != nil {
 		return nil, fmt.Errorf("get image studio api key: %w", err)
 	}
@@ -200,7 +205,10 @@ func (e *ImageStudioGatewayExecutor) execute(ctx context.Context, input imageStu
 	}, nil
 }
 
-func (e *ImageStudioGatewayExecutor) resolveAPIKey(ctx context.Context, userID int64, groupID *int64) (*APIKey, error) {
+func (e *ImageStudioGatewayExecutor) resolveAPIKey(ctx context.Context, userID int64, apiKeyID *int64, groupID *int64) (*APIKey, error) {
+	if apiKeyID != nil && *apiKeyID > 0 {
+		return e.apiKeys.GetImageStudioAPIKeyByID(ctx, userID, *apiKeyID)
+	}
 	if groupID != nil && *groupID > 0 {
 		return e.apiKeys.GetImageStudioAPIKeyForGroup(ctx, userID, *groupID)
 	}
@@ -259,7 +267,7 @@ func buildImageStudioEditBody(input ImageStudioEditInput) ([]byte, string, error
 		if i > 0 {
 			fieldName = fmt.Sprintf("image[%d]", i)
 		}
-		part, err := writer.CreateFormFile(fieldName, firstNonEmptyTrimmed(image.FileName, "reference.png"))
+		part, err := createImageStudioEditFilePart(writer, fieldName, image)
 		if err != nil {
 			return nil, "", fmt.Errorf("create image edit part: %w", err)
 		}
@@ -271,6 +279,28 @@ func buildImageStudioEditBody(input ImageStudioEditInput) ([]byte, string, error
 		return nil, "", fmt.Errorf("finalize image edit body: %w", err)
 	}
 	return buffer.Bytes(), writer.FormDataContentType(), nil
+}
+
+func createImageStudioEditFilePart(writer *multipart.Writer, fieldName string, image ImageStudioReferenceImage) (io.Writer, error) {
+	contentType := strings.TrimSpace(image.ContentType)
+	if contentType == "" && len(image.Data) > 0 {
+		contentType = http.DetectContentType(image.Data)
+	}
+	if mediaType, _, ok := strings.Cut(contentType, ";"); ok {
+		contentType = strings.TrimSpace(mediaType)
+	}
+	if contentType == "" {
+		contentType = "application/octet-stream"
+	}
+	if !strings.HasPrefix(strings.ToLower(contentType), "image/") && len(image.Data) > 0 {
+		if detected := http.DetectContentType(image.Data); strings.HasPrefix(strings.ToLower(detected), "image/") {
+			contentType = detected
+		}
+	}
+	header := make(textproto.MIMEHeader)
+	header.Set("Content-Disposition", multipart.FileContentDisposition(fieldName, firstNonEmptyTrimmed(image.FileName, "reference.png")))
+	header.Set("Content-Type", contentType)
+	return writer.CreatePart(header)
 }
 
 func ensureImageStudioAPIKeyContext(apiKey *APIKey, userID int64) {

@@ -478,6 +478,20 @@ func (s *APIKeyService) GetImageStudioAPIKeyForGroup(ctx context.Context, userID
 	return nil, ErrAPIKeyNotFound
 }
 
+func (s *APIKeyService) GetImageStudioAPIKeyByID(ctx context.Context, userID int64, apiKeyID int64) (*APIKey, error) {
+	if s == nil || s.apiKeyRepo == nil || userID <= 0 || apiKeyID <= 0 {
+		return nil, ErrAPIKeyNotFound
+	}
+	key, err := s.apiKeyRepo.GetByID(ctx, apiKeyID)
+	if err != nil {
+		return nil, fmt.Errorf("get image studio api key: %w", err)
+	}
+	if key == nil || key.UserID != userID || key.Status != StatusAPIKeyActive {
+		return nil, ErrAPIKeyNotFound
+	}
+	return s.prepareImageStudioAPIKey(key, userID), nil
+}
+
 func (s *APIKeyService) prepareImageStudioAPIKey(key *APIKey, userID int64) *APIKey {
 	if key == nil {
 		return nil

@@ -243,6 +243,38 @@ func TestImageStudioServiceGetOptionsReturnsSelectableGroupsModelsQualitiesAndPr
 	})
 }
 
+func TestImageStudioServiceGetOptionsUsesOnlyGroupCustomImageModelsWhenEnabled(t *testing.T) {
+	settings := defaultImageStudioSettings()
+	settings.Enabled = true
+	settings.AllowedModels = []string{"gpt-image-2"}
+	settings.DefaultModel = "gpt-image-2"
+
+	svc := NewImageStudioService(&imageStudioRepoStub{}, &imageStudioConfigReaderStub{cfg: settings})
+	svc.SetGroupResolver(&imageStudioGroupResolverStub{groups: []Group{
+		{
+			ID:                   2,
+			Name:                 "Image Pro",
+			Platform:             PlatformOpenAI,
+			Status:               StatusActive,
+			AllowImageGeneration: true,
+			ModelsListConfig: GroupModelsListConfig{
+				Enabled: true,
+				Models:  []string{"gpt-image-1"},
+			},
+		},
+	}})
+
+	options, err := svc.GetOptions(context.Background(), 7)
+
+	require.NoError(t, err)
+	require.Len(t, options.Groups, 1)
+	require.Equal(t, []ImageStudioModelOption{{
+		Model:        "gpt-image-1",
+		Label:        "gpt-image-1",
+		Capabilities: []string{ImageStudioModeGeneration, ImageStudioModeEdit},
+	}}, options.Groups[0].Models)
+}
+
 func TestImageStudioServiceRejectsListWhenDisabled(t *testing.T) {
 	settings := defaultImageStudioSettings()
 	settings.Enabled = false

@@ -1,6 +1,8 @@
 import { apiClient } from './client'
 import type { PaginatedResponse } from '@/types'
 
+const IMAGE_STUDIO_REQUEST_TIMEOUT_MS = 300000
+
 export type ImageStudioMode = 'generation' | 'edit'
 
 export interface ImageStudioAspectRatio {
@@ -81,6 +83,7 @@ export interface ImageStudioImage {
 }
 
 export interface ImageStudioGeneratePayload {
+  api_key_id?: number | null
   group_id?: number | null
   model: string
   prompt: string
@@ -108,12 +111,17 @@ export async function getOptions(): Promise<ImageStudioOptions> {
 }
 
 export async function generate(payload: ImageStudioGeneratePayload): Promise<ImageStudioImage> {
-  const { data } = await apiClient.post<ImageStudioImage>('/user/images/generate', payload)
+  const { data } = await apiClient.post<ImageStudioImage>('/user/images/generate', payload, {
+    timeout: IMAGE_STUDIO_REQUEST_TIMEOUT_MS,
+  })
   return data
 }
 
 export async function edit(payload: ImageStudioEditPayload): Promise<ImageStudioImage> {
   const formData = new FormData()
+  if (payload.api_key_id != null) {
+    formData.append('api_key_id', String(payload.api_key_id))
+  }
   if (payload.group_id != null) {
     formData.append('group_id', String(payload.group_id))
   }
@@ -129,6 +137,7 @@ export async function edit(payload: ImageStudioEditPayload): Promise<ImageStudio
 
   const { data } = await apiClient.post<ImageStudioImage>('/user/images/edit', formData, {
     headers: { 'Content-Type': 'multipart/form-data' },
+    timeout: IMAGE_STUDIO_REQUEST_TIMEOUT_MS,
   })
   return data
 }

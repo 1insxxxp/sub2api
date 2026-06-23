@@ -10442,7 +10442,7 @@ watch(
 }
 
 .settings-tabs-brand-shell {
-  border-color: rgba(var(--brand-rgb), 0.18);
+  border-color: transparent;
   background:
     radial-gradient(circle at 7% 0%, rgba(var(--brand-rgb), 0.12), transparent 36%),
     radial-gradient(circle at 94% 0%, rgba(var(--brand-cyan-rgb), 0.14), transparent 34%),
@@ -10597,7 +10597,7 @@ watch(
    because Vue's scoped-CSS compiler was dropping the `:global(.dark) ...`
    rules in the production build, leaving inactive tabs unreadable on dark. */
 .dark .settings-tabs-shell {
-  border-color: rgba(96, 165, 250, 0.22);
+  border-color: transparent;
   background:
     radial-gradient(circle at 8% 0%, rgba(37, 99, 235, 0.24), transparent 34%),
     radial-gradient(circle at 92% 0%, rgba(6, 182, 212, 0.2), transparent 36%),

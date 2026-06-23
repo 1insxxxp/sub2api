@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"io"
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
@@ -32,6 +33,9 @@ type imageStudioHandlerServiceStub struct {
 
 	deleteUserID int64
 	deleteID     int64
+
+	localFileObjectKey string
+	localFile          *service.ImageStudioLocalFile
 }
 
 func (s *imageStudioHandlerServiceStub) GetConfig(ctx context.Context) (*service.ImageStudioConfig, error) {
@@ -93,6 +97,11 @@ func (s *imageStudioHandlerServiceStub) Delete(ctx context.Context, userID int64
 	return nil
 }
 
+func (s *imageStudioHandlerServiceStub) OpenLocalFile(ctx context.Context, objectKey string) (*service.ImageStudioLocalFile, error) {
+	s.localFileObjectKey = objectKey
+	return s.localFile, nil
+}
+
 func TestImageStudioHandlerGetConfig(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	svc := &imageStudioHandlerServiceStub{
@@ -144,7 +153,7 @@ func TestImageStudioHandlerGenerateUsesAuthenticatedUser(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	svc := &imageStudioHandlerServiceStub{}
 	h := NewImageStudioHandler(svc)
-	body := bytes.NewBufferString(`{"group_id":9,"model":"gpt-image-2","prompt":"blue portal","aspect_ratio":"16:9","quality":"4K"}`)
+	body := bytes.NewBufferString(`{"api_key_id":15,"group_id":9,"model":"gpt-image-2","prompt":"blue portal","aspect_ratio":"16:9","quality":"4K"}`)
 	c, rec := newImageStudioHandlerTestContext(http.MethodPost, "/api/v1/user/images/generate", body)
 	c.Request.Header.Set("Content-Type", "application/json")
 
@@ -152,6 +161,8 @@ func TestImageStudioHandlerGenerateUsesAuthenticatedUser(t *testing.T) {
 
 	require.Equal(t, http.StatusOK, rec.Code)
 	require.Equal(t, int64(42), svc.generateInput.UserID)
+	require.NotNil(t, svc.generateInput.APIKeyID)
+	require.Equal(t, int64(15), *svc.generateInput.APIKeyID)
 	require.NotNil(t, svc.generateInput.GroupID)
 	require.Equal(t, int64(9), *svc.generateInput.GroupID)
 	require.Equal(t, "gpt-image-2", svc.generateInput.Model)
@@ -167,6 +178,7 @@ func TestImageStudioHandlerEditForwardsGroupAndQuality(t *testing.T) {
 
 	var body bytes.Buffer
 	writer := multipart.NewWriter(&body)
+	require.NoError(t, writer.WriteField("api_key_id", "15"))
 	require.NoError(t, writer.WriteField("group_id", "9"))
 	require.NoError(t, writer.WriteField("model", "gpt-image-2"))
 	require.NoError(t, writer.WriteField("prompt", "make it cleaner"))
@@ -185,6 +197,8 @@ func TestImageStudioHandlerEditForwardsGroupAndQuality(t *testing.T) {
 
 	require.Equal(t, http.StatusOK, rec.Code)
 	require.Equal(t, int64(42), svc.editInput.UserID)
+	require.NotNil(t, svc.editInput.APIKeyID)
+	require.Equal(t, int64(15), *svc.editInput.APIKeyID)
 	require.NotNil(t, svc.editInput.GroupID)
 	require.Equal(t, int64(9), *svc.editInput.GroupID)
 	require.Equal(t, "gpt-image-2", svc.editInput.Model)
@@ -213,6 +227,31 @@ func TestImageStudioHandlerListAndDelete(t *testing.T) {
 	require.Equal(t, http.StatusOK, deleteRec.Code)
 	require.Equal(t, int64(42), svc.deleteUserID)
 	require.Equal(t, int64(1), svc.deleteID)
+}
+
+func TestImageStudioHandlerServeFileStreamsLocalImage(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	svc := &imageStudioHandlerServiceStub{
+		localFile: &service.ImageStudioLocalFile{
+			Name:        "example.png",
+			ContentType: "image/png",
+			ModTime:     time.Date(2026, 6, 22, 10, 0, 0, 0, time.UTC),
+			Reader:      bytes.NewReader([]byte("png-bytes")),
+			Close:       func() error { return nil },
+		},
+	}
+	h := NewImageStudioHandler(svc)
+	c, rec := newImageStudioHandlerTestContext(http.MethodGet, "/api/v1/user/images/files/images/user-42/2026/06/example.png", nil)
+	c.Params = gin.Params{{Key: "objectKey", Value: "/images/user-42/2026/06/example.png"}}
+
+	h.ServeFile(c)
+
+	require.Equal(t, http.StatusOK, rec.Code)
+	require.Equal(t, "images/user-42/2026/06/example.png", svc.localFileObjectKey)
+	require.Equal(t, "image/png", rec.Header().Get("Content-Type"))
+	body, err := io.ReadAll(rec.Body)
+	require.NoError(t, err)
+	require.Equal(t, []byte("png-bytes"), body)
 }
 
 func newImageStudioHandlerTestContext(method, target string, body *bytes.Buffer) (*gin.Context, *httptest.ResponseRecorder) {

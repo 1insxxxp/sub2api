@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"mime"
 	"os"
@@ -16,6 +17,7 @@ import (
 var (
 	ErrImageStudioDisabled        = infraerrors.Forbidden("IMAGE_STUDIO_DISABLED", "image studio is disabled")
 	ErrUserImageNotFound          = infraerrors.NotFound("USER_IMAGE_NOT_FOUND", "image record not found")
+	ErrImageStudioFileNotFound    = infraerrors.NotFound("IMAGE_FILE_NOT_FOUND", "image file not found")
 	ErrImageStudioExecutorMissing = infraerrors.ServiceUnavailable("IMAGE_STUDIO_EXECUTOR_MISSING", "image studio executor is not configured")
 	ErrImageStudioStorageMissing  = infraerrors.ServiceUnavailable("IMAGE_STUDIO_STORAGE_MISSING", "image studio storage is not configured")
 )
@@ -164,6 +166,62 @@ func (s *ImageStudioService) Delete(ctx context.Context, userID int64, imageID i
 		return fmt.Errorf("delete user image: %w", err)
 	}
 	return nil
+}
+
+func (s *ImageStudioService) OpenLocalFile(ctx context.Context, objectKey string) (*ImageStudioLocalFile, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	cfg, err := s.loadSettings(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if !cfg.Enabled {
+		return nil, ErrImageStudioDisabled
+	}
+	if cfg.StorageDriver != ImageStorageDriverLocal {
+		return nil, ErrImageStudioFileNotFound
+	}
+	objectKey = strings.TrimLeft(strings.TrimSpace(objectKey), "/")
+	if err := validateImageStorageObjectKey(objectKey); err != nil {
+		return nil, ErrImageStudioFileNotFound
+	}
+	storage, err := NewLocalImageStorage(LocalImageStorageConfig{RootDir: localImageStorageRootDir(cfg)})
+	if err != nil {
+		return nil, fmt.Errorf("open local image storage: %w", err)
+	}
+	target, err := storage.resolvePath(objectKey)
+	if err != nil {
+		return nil, ErrImageStudioFileNotFound
+	}
+	file, err := os.Open(target)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return nil, ErrImageStudioFileNotFound
+		}
+		return nil, fmt.Errorf("open image file: %w", err)
+	}
+	stat, err := file.Stat()
+	if err != nil {
+		_ = file.Close()
+		return nil, fmt.Errorf("stat image file: %w", err)
+	}
+	if stat.IsDir() {
+		_ = file.Close()
+		return nil, ErrImageStudioFileNotFound
+	}
+	contentType := mime.TypeByExtension(filepath.Ext(objectKey))
+	if contentType == "" {
+		contentType = "application/octet-stream"
+	}
+	return &ImageStudioLocalFile{
+		Name:        filepath.Base(objectKey),
+		ContentType: contentType,
+		ModTime:     stat.ModTime(),
+		Size:        stat.Size(),
+		Reader:      file,
+		Close:       file.Close,
+	}, nil
 }
 
 func (s *ImageStudioService) prepareGenerateInput(ctx context.Context, input ImageStudioGenerateInput) (*ImageStudioSettings, ImageStudioGenerateInput, error) {
@@ -355,6 +413,7 @@ func imageStudioModelsForGroup(group *Group, cfg *ImageStudioSettings) []string 
 				models = append(models, model)
 			}
 		}
+		return dedupeImageStudioModels(models)
 	}
 	if len(models) == 0 && cfg != nil {
 		models = append(models, cfg.AllowedModels...)
@@ -551,10 +610,7 @@ func defaultImageStudioStorageFactory(ctx context.Context, cfg *ImageStudioSetti
 	cfg, _ = normalizeImageStudioSettings(cfg)
 	switch cfg.StorageDriver {
 	case ImageStorageDriverLocal:
-		rootDir := strings.TrimSpace(cfg.LocalRootDir)
-		if rootDir == "" {
-			rootDir = filepath.Join(os.TempDir(), "sub2api-image-studio")
-		}
+		rootDir := localImageStorageRootDir(cfg)
 		publicBaseURL := strings.TrimSpace(cfg.LocalPublicBaseURL)
 		if publicBaseURL == "" {
 			publicBaseURL = "/api/v1/user/images/files"
@@ -565,6 +621,15 @@ func defaultImageStudioStorageFactory(ctx context.Context, cfg *ImageStudioSetti
 	default:
 		return nil, ErrImageStudioStorageMissing
 	}
+}
+
+func localImageStorageRootDir(cfg *ImageStudioSettings) string {
+	if cfg != nil {
+		if rootDir := strings.TrimSpace(cfg.LocalRootDir); rootDir != "" {
+			return rootDir
+		}
+	}
+	return filepath.Join(os.TempDir(), "sub2api-image-studio")
 }
 
 func (s *ImageStudioService) ensureEnabled(ctx context.Context) error {

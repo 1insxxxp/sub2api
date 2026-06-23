@@ -15,6 +15,11 @@ func RegisterUserRoutes(
 	jwtAuth middleware.JWTAuthMiddleware,
 	settingService *service.SettingService,
 ) {
+	publicImages := v1.Group("/user/images")
+	{
+		publicImages.GET("/files/*objectKey", h.ImageStudio.ServeFile)
+	}
+
 	authenticated := v1.Group("")
 	authenticated.Use(gin.HandlerFunc(jwtAuth))
 	authenticated.Use(middleware.BackendModeUserGuard(settingService))
