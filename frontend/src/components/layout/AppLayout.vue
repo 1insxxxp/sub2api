@@ -9,8 +9,11 @@
 
     <!-- Main Content Area -->
     <div
-      class="app-shell-main relative min-h-screen min-w-0 transition-all duration-300 ease-out"
-      :class="{ 'app-shell-main-collapsed': sidebarCollapsed }"
+      class="app-shell-main relative min-h-screen min-w-0"
+      :class="{
+        'app-shell-main-collapsed': sidebarCollapsed,
+        'app-shell-main-image-studio': route.path === '/images',
+      }"
     >
       <!-- Header -->
       <AppHeader />
@@ -26,6 +29,7 @@
 <script setup lang="ts">
 import '@/styles/onboarding.css'
 import { computed, onMounted } from 'vue'
+import { useRoute } from 'vue-router'
 import { useAppStore } from '@/stores'
 import { useAuthStore } from '@/stores/auth'
 import { useOnboardingTour } from '@/composables/useOnboardingTour'
@@ -35,6 +39,7 @@ import AppHeader from './AppHeader.vue'
 
 const appStore = useAppStore()
 const authStore = useAuthStore()
+const route = useRoute()
 const sidebarCollapsed = computed(() => appStore.sidebarCollapsed)
 const isAdmin = computed(() => authStore.user?.role === 'admin')
 
@@ -56,6 +61,11 @@ defineExpose({ replayTour })
 .app-shell-main {
   margin-left: 0;
   min-width: 0;
+  transition: margin-left 240ms ease-out;
+}
+
+.app-shell-main-image-studio {
+  transition: none;
 }
 
 .app-shell-content {
@@ -81,6 +91,12 @@ defineExpose({ replayTour })
 
   .app-shell-main-collapsed {
     margin-left: 72px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app-shell-main {
+    transition: none;
   }
 }
 </style>

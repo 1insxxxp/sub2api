@@ -18,4 +18,13 @@ describe('AppLayout workspace sizing', () => {
     expect(componentSource).not.toContain('max-w-[1600px]')
     expect(componentSource).not.toContain('mx-auto w-full max-w')
   })
+
+  it('does not animate every main-shell property during sidebar toggles', () => {
+    const mainShellClassMatch = componentSource.match(/class="app-shell-main[^"]*"/)
+    expect(mainShellClassMatch?.[0]).not.toContain('transition-all')
+    expect(componentSource).toContain('transition: margin-left 240ms ease-out;')
+    expect(componentSource).toContain("'app-shell-main-image-studio': route.path === '/images'")
+    expect(componentSource).toContain('.app-shell-main-image-studio')
+    expect(componentSource).toContain('transition: none;')
+  })
 })
