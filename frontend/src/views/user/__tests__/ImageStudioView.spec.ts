@@ -929,6 +929,237 @@ describe('ImageStudioView', () => {
     expect(refreshUser).toHaveBeenCalled()
   })
 
+  it('resumes every unfinished generation task after a page reload', async () => {
+    vi.useFakeTimers()
+    listTasks.mockResolvedValueOnce({
+      items: [
+        {
+          id: 42,
+          mode: 'generation',
+          status: 'running',
+          api_key_id: 15,
+          group_id: 9,
+          model: 'gpt-image-2',
+          prompt: 'restored batch station',
+          aspect_ratio: '16:9',
+          quality: '2K',
+          size: '2048x1152',
+          estimated_cost: 0.07,
+          source_image_count: 0,
+          created_at: '2026-06-22T00:00:01Z',
+          updated_at: '2026-06-22T00:00:01Z',
+        },
+        {
+          id: 41,
+          mode: 'generation',
+          status: 'queued',
+          api_key_id: 15,
+          group_id: 9,
+          model: 'gpt-image-2',
+          prompt: 'restored batch station',
+          aspect_ratio: '16:9',
+          quality: '2K',
+          size: '2048x1152',
+          estimated_cost: 0.07,
+          source_image_count: 0,
+          created_at: '2026-06-22T00:00:00Z',
+          updated_at: '2026-06-22T00:00:00Z',
+        },
+      ],
+      total: 2,
+      page: 1,
+      page_size: 5,
+      pages: 1,
+    })
+    getTask
+      .mockResolvedValueOnce({
+        id: 42,
+        mode: 'generation',
+        status: 'succeeded',
+        model: 'gpt-image-2',
+        prompt: 'restored batch station',
+        aspect_ratio: '16:9',
+        quality: '2K',
+        size: '2048x1152',
+        estimated_cost: 0.07,
+        source_image_count: 0,
+        image: {
+          id: 42,
+          mode: 'generation',
+          model: 'gpt-image-2',
+          prompt: 'restored batch station',
+          aspect_ratio: '16:9',
+          size: '2048x1152',
+          image_url: 'https://assets.example.com/restored-batch-2.png',
+          cost: 0.07,
+          bytes: 100,
+          source_image_count: 0,
+          created_at: '2026-06-22T00:00:01Z',
+          updated_at: '2026-06-22T00:00:01Z',
+        },
+        created_at: '2026-06-22T00:00:01Z',
+        updated_at: '2026-06-22T00:00:01Z',
+      })
+      .mockResolvedValueOnce({
+        id: 41,
+        mode: 'generation',
+        status: 'succeeded',
+        model: 'gpt-image-2',
+        prompt: 'restored batch station',
+        aspect_ratio: '16:9',
+        quality: '2K',
+        size: '2048x1152',
+        estimated_cost: 0.07,
+        source_image_count: 0,
+        image: {
+          id: 41,
+          mode: 'generation',
+          model: 'gpt-image-2',
+          prompt: 'restored batch station',
+          aspect_ratio: '16:9',
+          size: '2048x1152',
+          image_url: 'https://assets.example.com/restored-batch-1.png',
+          cost: 0.07,
+          bytes: 100,
+          source_image_count: 0,
+          created_at: '2026-06-22T00:00:00Z',
+          updated_at: '2026-06-22T00:00:00Z',
+        },
+        created_at: '2026-06-22T00:00:00Z',
+        updated_at: '2026-06-22T00:00:00Z',
+      })
+
+    const wrapper = mount(ImageStudioView, {
+      global: {
+        stubs: {
+          AppLayout: { template: '<div><slot /></div>' },
+          Icon: true,
+        },
+      },
+    })
+
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('imageStudio.taskBatchRunningHint')
+
+    await vi.advanceTimersByTimeAsync(1300)
+    await flushPromises()
+
+    expect(getTask).toHaveBeenCalledWith(42)
+    expect(getTask).toHaveBeenCalledWith(41)
+    const resultGrid = wrapper.get('[data-testid="image-studio-current-result-grid"]')
+    expect(resultGrid.find('img[src="https://assets.example.com/restored-batch-2.png"]').exists()).toBe(true)
+    expect(resultGrid.find('img[src="https://assets.example.com/restored-batch-1.png"]').exists()).toBe(true)
+    expect(resultGrid.text()).toContain('imageStudio.batchSummaryComplete')
+  })
+
+  it('shows recovered batch images on the canvas as soon as one task finishes', async () => {
+    vi.useFakeTimers()
+    listTasks.mockResolvedValueOnce({
+      items: [
+        {
+          id: 52,
+          mode: 'generation',
+          status: 'running',
+          api_key_id: 15,
+          group_id: 9,
+          model: 'gpt-image-2',
+          prompt: 'partial restored batch',
+          aspect_ratio: '16:9',
+          quality: '2K',
+          size: '2048x1152',
+          estimated_cost: 0.07,
+          source_image_count: 0,
+          created_at: '2026-06-22T00:00:01Z',
+          updated_at: '2026-06-22T00:00:01Z',
+        },
+        {
+          id: 51,
+          mode: 'generation',
+          status: 'running',
+          api_key_id: 15,
+          group_id: 9,
+          model: 'gpt-image-2',
+          prompt: 'partial restored batch',
+          aspect_ratio: '16:9',
+          quality: '2K',
+          size: '2048x1152',
+          estimated_cost: 0.07,
+          source_image_count: 0,
+          created_at: '2026-06-22T00:00:00Z',
+          updated_at: '2026-06-22T00:00:00Z',
+        },
+      ],
+      total: 2,
+      page: 1,
+      page_size: 5,
+      pages: 1,
+    })
+    getTask.mockImplementation(async (taskID: number) => {
+      if (taskID === 52) {
+        return {
+          id: 52,
+          mode: 'generation',
+          status: 'succeeded',
+          model: 'gpt-image-2',
+          prompt: 'partial restored batch',
+          aspect_ratio: '16:9',
+          quality: '2K',
+          size: '2048x1152',
+          estimated_cost: 0.07,
+          source_image_count: 0,
+          image: {
+            id: 52,
+            mode: 'generation',
+            model: 'gpt-image-2',
+            prompt: 'partial restored batch',
+            aspect_ratio: '16:9',
+            size: '2048x1152',
+            image_url: 'https://assets.example.com/restored-partial.png',
+            cost: 0.07,
+            bytes: 100,
+            source_image_count: 0,
+            created_at: '2026-06-22T00:00:01Z',
+            updated_at: '2026-06-22T00:00:01Z',
+          },
+          created_at: '2026-06-22T00:00:01Z',
+          updated_at: '2026-06-22T00:00:01Z',
+        }
+      }
+      return {
+        id: 51,
+        mode: 'generation',
+        status: 'running',
+        model: 'gpt-image-2',
+        prompt: 'partial restored batch',
+        aspect_ratio: '16:9',
+        quality: '2K',
+        size: '2048x1152',
+        estimated_cost: 0.07,
+        source_image_count: 0,
+        created_at: '2026-06-22T00:00:00Z',
+        updated_at: '2026-06-22T00:00:02Z',
+      }
+    })
+
+    const wrapper = mount(ImageStudioView, {
+      global: {
+        stubs: {
+          AppLayout: { template: '<div><slot /></div>' },
+          Icon: true,
+        },
+      },
+    })
+
+    await flushPromises()
+    await vi.advanceTimersByTimeAsync(1300)
+    await flushPromises()
+
+    const frame = wrapper.get('.image-studio-preview-frame')
+    expect(frame.find('img[src="https://assets.example.com/restored-partial.png"]').exists()).toBe(true)
+    expect(frame.text()).not.toContain('imageStudio.generatingTitle')
+  })
+
   it('uses a compact adaptive layout without hero or balance summary cards', async () => {
     const wrapper = mount(ImageStudioView, {
       global: {
@@ -966,6 +1197,11 @@ describe('ImageStudioView', () => {
     expect(wrapper.find('.image-studio-action-bar').exists()).toBe(true)
     expect(wrapper.find('.image-studio-stage-panel').exists()).toBe(true)
     expect(wrapper.find('.image-studio-gallery-rail').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="image-studio-gallery-retention"]').exists()).toBe(true)
+    expect(wrapper.get('[data-testid="image-studio-gallery-retention"]').attributes('title')).toContain('imageStudio.galleryRetentionPolicy')
+    expect(wrapper.get('[data-testid="image-studio-gallery-retention"]').text()).toContain('imageStudio.galleryRetentionMax')
+    expect(wrapper.get('[data-testid="image-studio-gallery-retention"]').text()).toContain('imageStudio.galleryRetentionDays')
+    expect(wrapper.findAll('.image-studio-gallery-retention-token')).toHaveLength(2)
     expect(wrapper.find('.image-studio-settings-panel').exists()).toBe(false)
     expect(wrapper.find('.image-studio-choice-picker').exists()).toBe(true)
     expect(wrapper.find('.image-studio-quality-picker').exists()).toBe(true)
@@ -1219,18 +1455,23 @@ describe('ImageStudioView', () => {
         /\.image-studio-stage-panel \.image-studio-preview-open:hover img,\s*\.image-studio-stage-panel \.image-studio-preview-open:focus-visible img\s*\{([^}]*)\}/,
       )?.[1] ?? ''
     const galleryRule = cssRulesFor('.image-studio-gallery').find((rule) => rule.includes('height: 100%')) ?? ''
+    const galleryRailRule = cssRulesFor('.image-studio-gallery-rail')[0] ?? ''
     const galleryRailHeaderRule = cssRulesFor('.image-studio-gallery-rail .image-studio-panel-header')[0] ?? ''
+    const galleryRailHeaderContentRule = cssRulesFor('.image-studio-gallery-rail .image-studio-panel-header > div')[0] ?? ''
+    const galleryRailRetentionRule = cssRulesFor('.image-studio-gallery-retention')[0] ?? ''
+    const galleryRailRetentionIconRule = cssRulesFor('.image-studio-gallery-retention svg')[0] ?? ''
     const galleryRailTitleRule = cssRulesFor('.image-studio-gallery-rail .image-studio-panel-header h2')[0] ?? ''
     const galleryRailLabelRule = cssRulesFor('.image-studio-gallery-rail .image-studio-section-label')[0] ?? ''
     const galleryRailCountRule = cssRulesFor('.image-studio-gallery-rail .image-studio-gallery-count')[0] ?? ''
+    const galleryRailEmptyRule = cssRulesFor('.image-studio-gallery-rail .image-studio-empty-gallery')[0] ?? ''
+    const galleryRailEmptyIconRule = cssRulesFor('.image-studio-gallery-rail .image-studio-empty-gallery svg')[0] ?? ''
+    const galleryRailEmptyTitleRule = cssRulesFor('.image-studio-gallery-rail .image-studio-empty-gallery strong')[0] ?? ''
+    const galleryRailEmptyHintRule = cssRulesFor('.image-studio-gallery-rail .image-studio-empty-gallery span')[0] ?? ''
     const galleryRailThumbRule = cssRulesFor('.image-studio-gallery-rail .image-studio-image-thumb')[0] ?? ''
     const galleryRailThumbImageRule = cssRulesFor('.image-studio-gallery-rail .image-studio-image-thumb img')[0] ?? ''
     const galleryRailCardRule = cssRulesFor('.image-studio-gallery-rail .image-studio-image-card')[0] ?? ''
-    const galleryRailOverlayRule = cssRulesFor('.image-studio-gallery-rail .image-studio-image-card-body')[0] ?? ''
-    const galleryRailOverlayHoverRule =
-      vueSource().match(
-        /\.image-studio-gallery-rail \.image-studio-image-card:hover \.image-studio-image-card-body,\s*\.image-studio-gallery-rail \.image-studio-image-card:focus-within \.image-studio-image-card-body\s*\{([^}]*)\}/,
-      )?.[1] ?? ''
+    const galleryRailBodyHiddenRule =
+      cssRulesFor('.image-studio-gallery-rail .image-studio-image-card-body').find((rule) => rule.includes('display: none')) ?? ''
     const galleryRailPreviewLabelRule =
       cssRulesFor('.image-studio-gallery-rail .image-studio-image-thumb > span')[0] ?? ''
     const galleryRailPreviewHoverRule =
@@ -1244,7 +1485,7 @@ describe('ImageStudioView', () => {
     expect(shellRule).toMatch(/overflow:\s*hidden/)
     expect(workbenchRule).toMatch(/align-items:\s*stretch/)
     expect(workbenchRule).toMatch(
-      /grid-template-columns:\s*minmax\(19rem,\s*0\.58fr\) minmax\(42rem,\s*1\.82fr\) minmax\(7rem,\s*0\.22fr\)/,
+      /grid-template-columns:\s*minmax\(19rem,\s*0\.58fr\) minmax\(42rem,\s*1\.74fr\) minmax\(8\.5rem,\s*0\.3fr\)/,
     )
     expect(workspaceRule).toMatch(/height:\s*100%/)
     expect(workspaceRule).toMatch(/grid-template-rows:\s*auto minmax\(0,\s*1fr\) auto/)
@@ -1271,33 +1512,50 @@ describe('ImageStudioView', () => {
     expect(galleryRule).toMatch(/height:\s*100%/)
     expect(galleryRule).toMatch(/padding:\s*clamp\(0\.55rem,\s*0\.72vw,\s*0\.7rem\)/)
     expect(galleryRule).not.toMatch(/max-height:\s*clamp\(11rem,\s*22dvh,\s*15rem\)/)
+    expect(galleryRailRule).toMatch(/gap:\s*0\.58rem/)
+    expect(galleryRailRule).toMatch(/padding:\s*clamp\(0\.62rem,\s*0\.76vw,\s*0\.78rem\)/)
     expect(galleryRailHeaderRule).toMatch(/display:\s*grid/)
     expect(galleryRailHeaderRule).toMatch(/grid-template-columns:\s*minmax\(0,\s*1fr\) auto/)
-    expect(galleryRailHeaderRule).toMatch(/gap:\s*0\.14rem 0\.28rem/)
-    expect(galleryRailTitleRule).toMatch(/grid-column:\s*1 \/ -1/)
+    expect(galleryRailHeaderRule).toMatch(/align-items:\s*start/)
+    expect(galleryRailHeaderRule).toMatch(/gap:\s*0\.16rem 0\.36rem/)
+    expect(galleryRailHeaderContentRule).toMatch(/display:\s*grid/)
+    expect(galleryRailHeaderContentRule).toMatch(/gap:\s*0\.18rem/)
+    expect(galleryRailRetentionRule).toMatch(/display:\s*flex/)
+    expect(galleryRailRetentionRule).toMatch(/flex-wrap:\s*wrap/)
+    expect(galleryRailRetentionRule).not.toMatch(/overflow:\s*hidden/)
+    expect(galleryRailRetentionRule).not.toMatch(/text-overflow:\s*ellipsis/)
+    expect(galleryRailRetentionIconRule).toMatch(/flex:\s*0 0 auto/)
+    expect(galleryRailTitleRule).not.toMatch(/grid-column:\s*1 \/ -1/)
     expect(galleryRailTitleRule).toMatch(/white-space:\s*nowrap/)
     expect(galleryRailTitleRule).toMatch(/text-overflow:\s*ellipsis/)
     expect(galleryRailLabelRule).toMatch(/white-space:\s*nowrap/)
     expect(galleryRailCountRule).toMatch(/white-space:\s*nowrap/)
-    expect(galleryRailCountRule).toMatch(/grid-column:\s*2/)
+    expect(galleryRailCountRule).not.toMatch(/grid-column:\s*2/)
+    expect(galleryRailEmptyRule).toMatch(/height:\s*100%/)
+    expect(galleryRailEmptyRule).toMatch(/align-content:\s*center/)
+    expect(galleryRailEmptyRule).toMatch(/grid-auto-rows:\s*max-content/)
+    expect(galleryRailEmptyRule).toMatch(/padding:\s*0\.9rem 0\.62rem/)
+    expect(galleryRailEmptyIconRule).toMatch(/width:\s*2\.15rem/)
+    expect(galleryRailEmptyIconRule).toMatch(/border-radius:\s*0\.68rem/)
+    expect(galleryRailEmptyTitleRule).toMatch(/max-width:\s*7rem/)
+    expect(galleryRailEmptyHintRule).toMatch(/display:\s*-webkit-box/)
+    expect(galleryRailEmptyHintRule).toMatch(/-webkit-line-clamp:\s*3/)
     expect(galleryRailCardRule).not.toMatch(/height:\s*100%/)
+    expect(galleryRailCardRule).toMatch(/aspect-ratio:\s*16 \/ 10/)
     expect(galleryRailCardRule).toMatch(/background:\s*transparent/)
     expect(galleryRailCardRule).toMatch(/box-shadow:\s*none/)
-    expect(galleryRailThumbRule).toMatch(/height:\s*auto/)
-    expect(galleryRailThumbRule).toMatch(/aspect-ratio:\s*16 \/ 9/)
+    expect(galleryRailThumbRule).toMatch(/height:\s*100%/)
+    expect(galleryRailThumbRule).toMatch(/aspect-ratio:\s*inherit/)
+    expect(galleryRailThumbRule).toMatch(/overflow:\s*hidden/)
     expect(galleryRailThumbRule).toMatch(/isolation:\s*isolate/)
     expect(galleryRailThumbImageRule).toMatch(/position:\s*absolute/)
     expect(galleryRailThumbImageRule).toMatch(/inset:\s*0/)
     expect(galleryRailThumbImageRule).toMatch(/width:\s*100%/)
     expect(galleryRailThumbImageRule).toMatch(/height:\s*100%/)
     expect(galleryRailThumbImageRule).toMatch(/aspect-ratio:\s*auto/)
-    expect(galleryRailOverlayRule).toMatch(/position:\s*absolute/)
-    expect(galleryRailOverlayRule).toMatch(/inset:\s*auto 0 0/)
-    expect(galleryRailOverlayRule).toMatch(/background:\s*linear-gradient/)
-    expect(galleryRailOverlayRule).toMatch(/opacity:\s*0/)
-    expect(galleryRailOverlayRule).toMatch(/pointer-events:\s*none/)
-    expect(galleryRailOverlayHoverRule).toMatch(/opacity:\s*1/)
-    expect(galleryRailOverlayHoverRule).toMatch(/pointer-events:\s*auto/)
+    expect(galleryRailThumbImageRule).toMatch(/object-fit:\s*cover/)
+    expect(galleryRailThumbImageRule).toMatch(/object-position:\s*center/)
+    expect(galleryRailBodyHiddenRule).toMatch(/display:\s*none/)
     expect(galleryRailPreviewLabelRule).toMatch(/top:\s*50%/)
     expect(galleryRailPreviewLabelRule).toMatch(/left:\s*50%/)
     expect(galleryRailPreviewLabelRule).toMatch(/max-width:\s*calc\(100% - 1rem\)/)
@@ -1305,6 +1563,8 @@ describe('ImageStudioView', () => {
     expect(galleryRailPreviewLabelRule).toMatch(/transform:\s*translate\(-50%,\s*-50%\) scale\(0\.96\)/)
     expect(galleryRailPreviewHoverRule).toMatch(/transform:\s*translate\(-50%,\s*-50%\) scale\(1\)/)
     expect(galleryGridRule).toMatch(/grid-template-columns:\s*1fr/)
+    expect(galleryGridRule).toMatch(/align-content:\s*start/)
+    expect(galleryGridRule).toMatch(/grid-auto-rows:\s*max-content/)
     expect(galleryGridRule).toMatch(/gap:\s*0\.42rem/)
     expect(galleryGridRule).toMatch(/overflow-y:\s*auto/)
     expect(galleryGridRule).not.toMatch(/grid-auto-flow:\s*column/)
@@ -1461,6 +1721,22 @@ describe('ImageStudioView', () => {
     await flushPromises()
 
     expect(wrapper.find('[data-testid="image-studio-image-preview-dialog"]').exists()).toBe(false)
+  })
+
+  it('keeps preview actions reachable when the prompt is long', () => {
+    const dialogRule = cssRulesFor('.image-studio-preview-dialog')[0] ?? ''
+    const detailsRule = cssRulesFor('.image-studio-preview-details')[0] ?? ''
+    const promptRule = cssRulesFor('.image-studio-preview-details strong')[0] ?? ''
+    const actionsRule = cssRulesFor('.image-studio-preview-actions')[0] ?? ''
+
+    expect(dialogRule).toMatch(/grid-template-rows:\s*auto minmax\(0,\s*1fr\) auto auto/)
+    expect(detailsRule).toMatch(/min-height:\s*0/)
+    expect(detailsRule).toMatch(/max-height:\s*clamp\(6\.5rem,\s*18vh,\s*11rem\)/)
+    expect(detailsRule).toMatch(/overflow-y:\s*auto/)
+    expect(detailsRule).toMatch(/overscroll-behavior:\s*contain/)
+    expect(promptRule).toMatch(/overflow-wrap:\s*anywhere/)
+    expect(actionsRule).toMatch(/position:\s*relative/)
+    expect(actionsRule).toMatch(/z-index:\s*1/)
   })
 
   it('uses a themed confirmation dialog before deleting a generated image', async () => {

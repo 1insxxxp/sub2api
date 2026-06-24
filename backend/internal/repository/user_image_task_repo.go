@@ -111,6 +111,22 @@ func (r *userImageTaskRepository) ListByUser(ctx context.Context, userID int64, 
 	return userImageTaskEntitiesToService(rows), paginationResultFromTotal(int64(total), params), nil
 }
 
+func (r *userImageTaskRepository) ListPending(ctx context.Context, limit int) ([]service.ImageStudioTask, error) {
+	if limit <= 0 {
+		limit = 100
+	}
+	client := clientFromContext(ctx, r.client)
+	rows, err := client.UserImageTask.Query().
+		Where(userimagetask.StatusEQ(service.ImageStudioTaskStatusQueued)).
+		Order(dbent.Asc(userimagetask.FieldCreatedAt), dbent.Asc(userimagetask.FieldID)).
+		Limit(limit).
+		All(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return userImageTaskEntitiesToService(rows), nil
+}
+
 func (r *userImageTaskRepository) MarkRunning(ctx context.Context, taskID int64, startedAt time.Time) (bool, error) {
 	client := clientFromContext(ctx, r.client)
 	affected, err := client.UserImageTask.Update().

@@ -109,6 +109,21 @@ func (s *imageStudioTaskRepoStub) ListByUser(ctx context.Context, userID int64, 
 	return out, &pagination.PaginationResult{Total: int64(len(out)), Page: params.Page, PageSize: params.Limit(), Pages: 1}, nil
 }
 
+func (s *imageStudioTaskRepoStub) ListPending(ctx context.Context, limit int) ([]ImageStudioTask, error) {
+	s.ensure()
+	var out []ImageStudioTask
+	for _, task := range s.tasks {
+		if task.Status != ImageStudioTaskStatusQueued {
+			continue
+		}
+		out = append(out, task)
+		if limit > 0 && len(out) >= limit {
+			break
+		}
+	}
+	return out, nil
+}
+
 func (s *imageStudioTaskRepoStub) MarkRunning(ctx context.Context, taskID int64, startedAt time.Time) (bool, error) {
 	s.ensure()
 	task := s.tasks[taskID]
@@ -792,6 +807,83 @@ func TestImageStudioServiceMarksStaleRunningTasksInterruptedOnStartup(t *testing
 	require.Equal(t, "IMAGE_TASK_INTERRUPTED_BY_RESTART", taskRepo.tasks[1].ErrorReason)
 	require.Equal(t, ImageStudioTaskStatusRunning, taskRepo.tasks[2].Status)
 	require.Equal(t, ImageStudioTaskStatusQueued, taskRepo.tasks[3].Status)
+}
+
+func TestImageStudioServiceRequeuesPendingGenerationTasksOnStartup(t *testing.T) {
+	settings := defaultImageStudioSettings()
+	settings.Enabled = true
+	settings.AllowedModels = []string{"gpt-image-1"}
+	settings.DefaultModel = "gpt-image-1"
+	now := time.Date(2026, 6, 24, 17, 0, 0, 0, time.UTC)
+	taskRepo := &imageStudioTaskRepoStub{
+		tasks: map[int64]ImageStudioTask{
+			1: {
+				ID:          1,
+				UserID:      7,
+				Mode:        ImageStudioModeGeneration,
+				Status:      ImageStudioTaskStatusQueued,
+				Model:       "gpt-image-1",
+				Prompt:      "queued image after restart",
+				AspectRatio: "1:1",
+				Quality:     ImageBillingSize1K,
+				Size:        "1024x1024",
+				CreatedAt:   now,
+				UpdatedAt:   now,
+			},
+			2: {
+				ID:          2,
+				UserID:      7,
+				Mode:        ImageStudioModeGeneration,
+				Status:      ImageStudioTaskStatusQueued,
+				Model:       "gpt-image-1",
+				Prompt:      "second queued image after restart",
+				AspectRatio: "1:1",
+				Quality:     ImageBillingSize1K,
+				Size:        "1024x1024",
+				CreatedAt:   now.Add(time.Second),
+				UpdatedAt:   now.Add(time.Second),
+			},
+			3: {
+				ID:          3,
+				UserID:      7,
+				Mode:        ImageStudioModeGeneration,
+				Status:      ImageStudioTaskStatusSucceeded,
+				Model:       "gpt-image-1",
+				Prompt:      "done image",
+				AspectRatio: "1:1",
+				Quality:     ImageBillingSize1K,
+				Size:        "1024x1024",
+				CreatedAt:   now.Add(2 * time.Second),
+				UpdatedAt:   now.Add(2 * time.Second),
+			},
+		},
+	}
+	executor := &imageStudioExecutorStub{
+		results: []*ImageStudioExecutionResult{
+			{ImageBytes: []byte("first"), MimeType: "image/png", Cost: 0.03},
+			{ImageBytes: []byte("second"), MimeType: "image/png", Cost: 0.03},
+		},
+	}
+	repo := &imageStudioRepoStub{}
+	svc := NewImageStudioService(repo, &imageStudioConfigReaderStub{cfg: settings})
+	svc.SetTaskRepository(taskRepo)
+	svc.SetExecutor(executor)
+	svc.SetStorageFactory(func(ctx context.Context, cfg *ImageStudioSettings) (ImageStorage, error) {
+		return &imageStudioStorageStub{}, nil
+	})
+	svc.StartTaskWorkers(2)
+
+	requeued, err := svc.RequeuePendingTasks(context.Background(), 10)
+
+	require.NoError(t, err)
+	require.Equal(t, 2, requeued)
+	require.Eventually(t, func() bool {
+		return taskRepo.tasks[1].Status == ImageStudioTaskStatusSucceeded &&
+			taskRepo.tasks[2].Status == ImageStudioTaskStatusSucceeded &&
+			len(repo.createdRecords) == 2 &&
+			len(executor.generateInputs) == 2
+	}, time.Second, 10*time.Millisecond)
+	require.Equal(t, ImageStudioTaskStatusSucceeded, taskRepo.tasks[3].Status)
 }
 
 func TestImageStudioServiceGenerateUsesSelectedGroupQualityAndRatio(t *testing.T) {

@@ -528,6 +528,11 @@ func ProvideImageStudioService(
 		logger.LegacyPrintf("service.image_studio", "[ImageStudio] marked %d interrupted running tasks after startup", affected)
 	}
 	svc.StartTaskWorkers(2)
+	if requeued, err := svc.RequeuePendingTasks(context.Background(), 100); err != nil {
+		logger.LegacyPrintf("service.image_studio", "[ImageStudio] failed to requeue pending tasks after startup: %v", err)
+	} else if requeued > 0 {
+		logger.LegacyPrintf("service.image_studio", "[ImageStudio] requeued %d pending tasks after startup", requeued)
+	}
 	svc.StartExpiredImageCleanup(time.Hour, 100)
 	return svc
 }

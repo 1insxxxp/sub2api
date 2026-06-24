@@ -62,6 +62,7 @@ type UserImageTaskRepository interface {
 	Create(ctx context.Context, task *ImageStudioTask) error
 	GetByID(ctx context.Context, userID int64, taskID int64) (*ImageStudioTask, error)
 	ListByUser(ctx context.Context, userID int64, params pagination.PaginationParams) ([]ImageStudioTask, *pagination.PaginationResult, error)
+	ListPending(ctx context.Context, limit int) ([]ImageStudioTask, error)
 	MarkRunning(ctx context.Context, taskID int64, startedAt time.Time) (bool, error)
 	MarkSucceeded(ctx context.Context, taskID int64, image *ImageStudioImageRecord, quality string, estimatedCost float64, completedAt time.Time) (*ImageStudioTask, error)
 	MarkFailed(ctx context.Context, taskID int64, reason string, message string, completedAt time.Time) (*ImageStudioTask, error)
@@ -201,6 +202,28 @@ func (s *ImageStudioService) ListTasks(ctx context.Context, userID int64, params
 		return nil, nil, infraerrors.BadRequest("INVALID_IMAGE_STUDIO_USER", "user id is required")
 	}
 	return s.taskRepo.ListByUser(ctx, userID, params)
+}
+
+func (s *ImageStudioService) RequeuePendingTasks(ctx context.Context, limit int) (int, error) {
+	if s.taskRepo == nil {
+		return 0, ErrImageStudioTaskRepoMissing
+	}
+	if limit <= 0 {
+		limit = 100
+	}
+	tasks, err := s.taskRepo.ListPending(ctx, limit)
+	if err != nil {
+		return 0, err
+	}
+	requeued := 0
+	for _, task := range tasks {
+		if task.ID <= 0 || task.Status != ImageStudioTaskStatusQueued || task.Mode != ImageStudioModeGeneration {
+			continue
+		}
+		s.enqueueTask(task.ID)
+		requeued++
+	}
+	return requeued, nil
 }
 
 func (s *ImageStudioService) StartTaskWorkers(workerCount int) {

@@ -375,7 +375,7 @@
             </div>
 
             <div class="image-studio-preview-frame">
-              <div v-if="submitting" class="image-studio-generating-state">
+              <div v-if="submitting && currentResultImages.length === 0 && !currentImage" class="image-studio-generating-state">
                 <div class="image-studio-loader"></div>
                 <strong>{{ t('imageStudio.generatingTitle') }}</strong>
                 <span>{{ activeTaskHint }}</span>
@@ -517,6 +517,20 @@
             <div>
               <p class="image-studio-section-label">{{ t('imageStudio.galleryPanel') }}</p>
               <h2>{{ t('imageStudio.recentImages') }}</h2>
+              <p
+                v-if="config"
+                class="image-studio-gallery-retention"
+                data-testid="image-studio-gallery-retention"
+                :title="t('imageStudio.galleryRetentionPolicy', { count: config.max_images_per_user, days: config.retention_days })"
+              >
+                <Icon name="clock" size="xs" />
+                <span class="image-studio-gallery-retention-token">
+                  {{ t('imageStudio.galleryRetentionMax', { count: config.max_images_per_user }) }}
+                </span>
+                <span class="image-studio-gallery-retention-token">
+                  {{ t('imageStudio.galleryRetentionDays', { days: config.retention_days }) }}
+                </span>
+              </p>
             </div>
             <span class="image-studio-gallery-count">
               {{ t('imageStudio.galleryCount', { count: images.length }) }}
@@ -756,7 +770,8 @@ const selectPlacement = ref<Record<ImageStudioSelectMenu, ImageStudioSelectPlace
   model: 'down',
 })
 const activeTask = ref<ImageStudioTask | null>(null)
-const taskPollTimer = ref<number | null>(null)
+const activeTasks = ref<ImageStudioTask[]>([])
+const taskPollTimers = new Set<number>()
 const previewImage = ref<ImageStudioImage | null>(null)
 const pendingDeleteImage = ref<ImageStudioImage | null>(null)
 const deletingImage = ref(false)
@@ -876,10 +891,15 @@ const failureDescription = computed(() => {
   return generationFailure.value.message || t('imageStudio.failureGenericDescription')
 })
 const activeTaskHint = computed(() => {
-  if (!activeTask.value) return t('imageStudio.generatingHint')
-  if (activeTask.value.status === 'queued') return t('imageStudio.taskQueuedHint')
-  if (activeTask.value.status === 'running') {
-    if (activeTask.value.quality === '4K') {
+  const unfinishedTasks = activeTasks.value.filter(isUnfinishedGenerationTask)
+  if (unfinishedTasks.length > 1) {
+    return t('imageStudio.taskBatchRunningHint', { count: unfinishedTasks.length })
+  }
+  const task = unfinishedTasks[0] ?? activeTask.value
+  if (!task) return t('imageStudio.generatingHint')
+  if (task.status === 'queued') return t('imageStudio.taskQueuedHint')
+  if (task.status === 'running') {
+    if (task.quality === '4K') {
       return t('imageStudio.taskRunningHighQualityHint')
     }
     return t('imageStudio.taskRunningHint')
@@ -999,7 +1019,7 @@ async function loadInitialData() {
     quality.value = qualityOptions.value[0]?.quality ?? '1K'
     aspectRatio.value = cfg.aspect_ratios[0]?.ratio || '1:1'
     await loadHistory()
-    await resumeLatestUnfinishedGenerationTask()
+    await resumeUnfinishedGenerationTasks()
   } catch (error) {
     loadError.value = extractApiErrorMessage(error, t('imageStudio.loadFailed'))
   } finally {
@@ -1027,7 +1047,7 @@ async function handleSubmit() {
   if (!canSubmit.value) return
   submitting.value = true
   stopTaskPolling()
-  activeTask.value = null
+  resetActiveTasks()
   generationFailure.value = null
   try {
     const normalizedPrompt = prompt.value.trim()
@@ -1050,6 +1070,13 @@ async function handleSubmit() {
           : await createAndPollGenerationTask(payload)
       applyGeneratedImage(created)
       return created
+    }, (created, failed) => {
+      if (created.length > 0) {
+        setCurrentResult(created, {
+          requested: outputCount.value,
+          failed,
+        })
+      }
     })
 
     if (batch.created.length > 0) {
@@ -1086,37 +1113,46 @@ async function handleSubmit() {
 async function runImageBatch(
   count: ImageStudioOutputCount,
   worker: () => Promise<ImageStudioImage>,
+  onProgress?: (created: ImageStudioImage[], failed: number) => void,
 ): Promise<{ created: ImageStudioImage[]; errors: unknown[] }> {
-  const created: ImageStudioImage[] = []
+  const createdByIndex: Array<ImageStudioImage | null> = Array.from({ length: count }, () => null)
   const errors: unknown[] = []
   let next = 0
   const concurrency = Math.min(2, count)
+  const compactCreated = () => createdByIndex.filter((item): item is ImageStudioImage => item != null)
+  const publishProgress = () => onProgress?.(compactCreated(), errors.length)
   async function runWorker() {
     while (next < count) {
+      const index = next
       next += 1
       try {
-        created.push(await worker())
+        createdByIndex[index] = await worker()
+        publishProgress()
       } catch (error) {
         errors.push(error)
+        publishProgress()
       }
     }
   }
   await Promise.all(Array.from({ length: concurrency }, runWorker))
-  return { created, errors }
+  return { created: compactCreated(), errors }
 }
 
-async function resumeLatestUnfinishedGenerationTask() {
+async function resumeUnfinishedGenerationTasks() {
   if (submitting.value || !canUse.value) return
   try {
     const response = await imageStudioAPI.listTasks({ page: 1, page_size: 5 })
-    const task = (response.items ?? []).find(isUnfinishedGenerationTask)
-    if (!task) return
+    const tasks = (response.items ?? []).filter(isUnfinishedGenerationTask).slice(0, 4)
+    const task = tasks[0]
+    if (!task || tasks.length === 0) return
 
     restoreTaskFormState(task)
+    outputCount.value = normalizeOutputCount(tasks.length)
     generationFailure.value = null
+    activeTasks.value = tasks
     activeTask.value = task
     submitting.value = true
-    void finishRecoveredGenerationTask(task.id)
+    void finishRecoveredGenerationTasks(tasks)
   } catch {
     // Task recovery is opportunistic; config/history load should stay usable if it fails.
   }
@@ -1149,22 +1185,55 @@ function restoreTaskFormState(task: ImageStudioTask) {
   }
 }
 
-async function finishRecoveredGenerationTask(taskID: number) {
-  try {
-    const created = await waitForImageTask(taskID)
-    applyGeneratedImage(created)
-    setCurrentResult([created])
-    await Promise.resolve(authStore.refreshUser()).catch(() => undefined)
-    appStore.showSuccess(t('imageStudio.generateSuccess'))
-  } catch (error) {
-    const message = extractApiErrorMessage(error, t('imageStudio.generateFailed'))
-    generationFailure.value = {
-      message,
-      reason: extractApiErrorCode(error),
+async function finishRecoveredGenerationTasks(tasks: ImageStudioTask[]) {
+  const createdByIndex: Array<ImageStudioImage | null> = Array.from({ length: tasks.length }, () => null)
+  const errors: unknown[] = []
+  const compactCreated = () => createdByIndex.filter((item): item is ImageStudioImage => item != null)
+  const publishProgress = () => {
+    const created = compactCreated()
+    if (created.length > 0) {
+      setCurrentResult(created, {
+        requested: tasks.length,
+        failed: errors.length,
+      })
     }
-    appStore.showError(message)
+  }
+  try {
+    await Promise.all(tasks.map(async (task, index) => {
+      try {
+        const created = await waitForImageTask(task.id)
+        createdByIndex[index] = created
+        applyGeneratedImage(created)
+        publishProgress()
+      } catch (error) {
+        errors.push(error)
+        publishProgress()
+      }
+    }))
+
+    const created = compactCreated()
+    if (created.length > 0) {
+      setCurrentResult(created, {
+        requested: tasks.length,
+        failed: errors.length,
+      })
+      await Promise.resolve(authStore.refreshUser()).catch(() => undefined)
+      appStore.showSuccess(t('imageStudio.generateSuccess'))
+    }
+    if (errors.length > 0) {
+      const error = errors[0]
+      const message = extractApiErrorMessage(error, t('imageStudio.generateFailed'))
+      if (created.length === 0) {
+        generationFailure.value = {
+          message,
+          reason: extractApiErrorCode(error),
+        }
+      }
+      appStore.showError(message)
+    }
   } finally {
     submitting.value = false
+    resetActiveTasks()
   }
 }
 
@@ -1210,7 +1279,7 @@ async function createAndPollGenerationTask(payload: {
     mode: 'generation',
     ...payload,
   })
-  activeTask.value = task
+  updateActiveTask(task)
   return await waitForImageTask(task.id)
 }
 
@@ -1220,14 +1289,16 @@ async function waitForImageTask(taskID: number): Promise<ImageStudioImage> {
   while (Date.now() < deadline) {
     await sleep(delay)
     const task = await imageStudioAPI.getTask(taskID)
-    activeTask.value = task
+    updateActiveTask(task)
     if (task.status === 'succeeded') {
+      removeActiveTask(taskID)
       if (task.image) {
         return task.image
       }
       throw new Error(t('imageStudio.taskMissingImage'))
     }
     if (task.status === 'failed') {
+      removeActiveTask(taskID)
       throw {
         reason: task.error_reason,
         message: task.error_message || t('imageStudio.generateFailed'),
@@ -1243,18 +1314,52 @@ async function waitForImageTask(taskID: number): Promise<ImageStudioImage> {
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => {
-    taskPollTimer.value = window.setTimeout(() => {
-      taskPollTimer.value = null
+    const timer = window.setTimeout(() => {
+      taskPollTimers.delete(timer)
       resolve()
     }, ms)
+    taskPollTimers.add(timer)
   })
 }
 
 function stopTaskPolling() {
-  if (taskPollTimer.value != null) {
-    window.clearTimeout(taskPollTimer.value)
-    taskPollTimer.value = null
+  for (const timer of taskPollTimers) {
+    window.clearTimeout(timer)
   }
+  taskPollTimers.clear()
+}
+
+function resetActiveTasks() {
+  activeTask.value = null
+  activeTasks.value = []
+}
+
+function updateActiveTask(task: ImageStudioTask) {
+  activeTask.value = task
+  if (!isUnfinishedGenerationTask(task)) {
+    removeActiveTask(task.id)
+    return
+  }
+  const index = activeTasks.value.findIndex((item) => item.id === task.id)
+  if (index >= 0) {
+    activeTasks.value = activeTasks.value.map((item) => (item.id === task.id ? task : item))
+    return
+  }
+  activeTasks.value = [...activeTasks.value, task]
+}
+
+function removeActiveTask(taskID: number) {
+  activeTasks.value = activeTasks.value.filter((item) => item.id !== taskID)
+  if (activeTask.value?.id === taskID) {
+    activeTask.value = activeTasks.value[0] ?? null
+  }
+}
+
+function normalizeOutputCount(count: number): ImageStudioOutputCount {
+  if (count >= 4) return 4
+  if (count >= 3) return 3
+  if (count >= 2) return 2
+  return 1
 }
 
 async function retryGeneration() {
@@ -1611,6 +1716,9 @@ onBeforeUnmount(() => {
   --studio-radius: 1rem;
   --studio-radius-sm: 0.72rem;
   --studio-shadow: 0 14px 32px rgba(15, 23, 42, 0.055);
+  --studio-scroll-thumb: rgba(100, 116, 139, 0.28);
+  --studio-scroll-thumb-hover: rgba(var(--brand-rgb), 0.42);
+  --studio-scroll-track: transparent;
 }
 
 .image-studio-grid {
@@ -1623,7 +1731,7 @@ onBeforeUnmount(() => {
   height: 100%;
   min-height: 0;
   align-items: stretch;
-  grid-template-columns: minmax(19rem, 0.58fr) minmax(42rem, 1.82fr) minmax(7rem, 0.22fr);
+  grid-template-columns: minmax(19rem, 0.58fr) minmax(42rem, 1.74fr) minmax(8.5rem, 0.3fr);
 }
 
 .image-studio-control-console {
@@ -1653,8 +1761,33 @@ onBeforeUnmount(() => {
   grid-template-rows: auto minmax(0, 1fr) auto;
   overflow: hidden;
   overscroll-behavior: contain;
-  scrollbar-color: rgba(var(--brand-rgb), 0.32) transparent;
+}
+
+:where(.image-studio-command-surface, .image-studio-gallery-grid, .image-studio-gallery-loading, .image-studio-preview-details) {
+  scrollbar-color: var(--studio-scroll-thumb) var(--studio-scroll-track);
   scrollbar-width: thin;
+}
+
+:where(.image-studio-command-surface, .image-studio-gallery-grid, .image-studio-gallery-loading, .image-studio-preview-details)::-webkit-scrollbar {
+  width: 0.38rem;
+  height: 0.38rem;
+}
+
+:where(.image-studio-command-surface, .image-studio-gallery-grid, .image-studio-gallery-loading, .image-studio-preview-details)::-webkit-scrollbar-track {
+  background: var(--studio-scroll-track);
+}
+
+:where(.image-studio-command-surface, .image-studio-gallery-grid, .image-studio-gallery-loading, .image-studio-preview-details)::-webkit-scrollbar-thumb {
+  min-height: 2.5rem;
+  border: 0.12rem solid transparent;
+  border-radius: 999px;
+  background-color: var(--studio-scroll-thumb);
+  background-clip: padding-box;
+}
+
+:where(.image-studio-command-surface, .image-studio-gallery-grid, .image-studio-gallery-loading, .image-studio-preview-details):hover::-webkit-scrollbar-thumb,
+:where(.image-studio-command-surface, .image-studio-gallery-grid, .image-studio-gallery-loading, .image-studio-preview-details):focus-within::-webkit-scrollbar-thumb {
+  background-color: var(--studio-scroll-thumb-hover);
 }
 
 .image-studio-preview-panel {
@@ -1682,6 +1815,14 @@ onBeforeUnmount(() => {
   min-height: 0;
   grid-template-rows: auto minmax(0, 1fr);
   padding: clamp(0.55rem, 0.72vw, 0.7rem);
+}
+
+.image-studio-gallery-rail {
+  gap: 0.58rem;
+  padding: clamp(0.62rem, 0.76vw, 0.78rem);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(248, 250, 252, 0.86)),
+    var(--studio-surface);
 }
 
 .image-studio-panel-header {
@@ -1857,9 +1998,7 @@ onBeforeUnmount(() => {
   overflow-x: hidden;
   overflow-y: auto;
   overscroll-behavior: contain;
-  padding-right: 0.12rem;
-  scrollbar-color: rgba(var(--brand-rgb), 0.32) transparent;
-  scrollbar-width: thin;
+  padding-right: 0.28rem;
 }
 
 .image-studio-prompt-section,
@@ -2016,6 +2155,30 @@ onBeforeUnmount(() => {
   box-shadow:
     0 16px 36px rgba(15, 23, 42, 0.13),
     0 0 0 1px rgba(255, 255, 255, 0.72) inset;
+  scrollbar-color: var(--studio-scroll-thumb) var(--studio-scroll-track);
+  scrollbar-width: thin;
+}
+
+.image-studio-select-menu::-webkit-scrollbar {
+  width: 0.38rem;
+  height: 0.38rem;
+}
+
+.image-studio-select-menu::-webkit-scrollbar-track {
+  background: var(--studio-scroll-track);
+}
+
+.image-studio-select-menu::-webkit-scrollbar-thumb {
+  min-height: 2.5rem;
+  border: 0.12rem solid transparent;
+  border-radius: 999px;
+  background-color: var(--studio-scroll-thumb);
+  background-clip: padding-box;
+}
+
+.image-studio-select-menu:hover::-webkit-scrollbar-thumb,
+.image-studio-select-menu:focus-within::-webkit-scrollbar-thumb {
+  background-color: var(--studio-scroll-thumb-hover);
 }
 
 .image-studio-select.is-drop-up .image-studio-select-menu {
@@ -2960,39 +3123,44 @@ onBeforeUnmount(() => {
 }
 
 .image-studio-gallery-count {
+  display: inline-flex;
+  min-height: 1.35rem;
+  align-items: center;
+  justify-content: center;
   border-radius: 9999px;
-  background: rgba(var(--brand-rgb), 0.055);
+  border: 1px solid rgba(var(--brand-rgb), 0.12);
+  background: rgba(var(--brand-rgb), 0.065);
   color: var(--brand-700);
   padding: 0.25rem 0.48rem;
   font-size: 0.7rem;
   font-weight: 800;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.62);
 }
 
 .image-studio-gallery-rail .image-studio-panel-header {
   min-width: 0;
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 0.14rem 0.28rem;
-  padding-bottom: 0.5rem;
+  align-items: start;
+  gap: 0.16rem 0.36rem;
+  padding: 0 0.05rem 0.58rem;
 }
 
 .image-studio-gallery-rail .image-studio-panel-header > div {
   min-width: 0;
-  display: contents;
+  display: grid;
+  gap: 0.18rem;
 }
 
 .image-studio-gallery-rail .image-studio-panel-header h2 {
-  grid-column: 1 / -1;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 0.88rem;
+  font-size: 0.92rem;
   line-height: 1.2;
 }
 
 .image-studio-gallery-rail .image-studio-section-label {
-  grid-column: 1;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -3001,17 +3169,84 @@ onBeforeUnmount(() => {
 }
 
 .image-studio-gallery-rail .image-studio-gallery-count {
-  grid-column: 2;
   white-space: nowrap;
-  padding: 0.2rem 0.34rem;
-  font-size: 0.64rem;
+  padding: 0.18rem 0.42rem;
+  font-size: 0.65rem;
   line-height: 1;
 }
 
+.image-studio-gallery-retention {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.18rem 0.28rem;
+  color: rgb(71, 85, 105);
+  padding-top: 0.12rem;
+  font-size: 0.68rem;
+  font-weight: 760;
+  line-height: 1.2;
+}
+
+.image-studio-gallery-retention svg {
+  flex: 0 0 auto;
+  color: var(--brand-700);
+}
+
+.image-studio-gallery-retention-token {
+  white-space: nowrap;
+}
+
+.image-studio-gallery-rail .image-studio-empty-gallery {
+  height: 100%;
+  min-height: 12rem;
+  align-content: center;
+  justify-items: center;
+  grid-auto-rows: max-content;
+  gap: 0.5rem;
+  padding: 0.9rem 0.62rem;
+  border-color: rgba(148, 163, 184, 0.4);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.78), rgba(241, 245, 249, 0.58)),
+    rgba(248, 250, 252, 0.64);
+}
+
+.image-studio-gallery-rail .image-studio-empty-gallery svg {
+  width: 2.15rem;
+  height: 2.15rem;
+  padding: 0.48rem;
+  border-radius: 0.68rem;
+  background: rgba(var(--brand-rgb), 0.08);
+  color: var(--brand-700);
+  box-shadow:
+    inset 0 0 0 1px rgba(var(--brand-rgb), 0.12),
+    0 8px 18px rgba(37, 99, 235, 0.08);
+}
+
+.image-studio-gallery-rail .image-studio-empty-gallery strong {
+  max-width: 7rem;
+  font-size: 0.82rem;
+  line-height: 1.35;
+}
+
+.image-studio-gallery-rail .image-studio-empty-gallery span {
+  display: -webkit-box;
+  max-width: 7.4rem;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  color: rgb(100, 116, 139);
+  font-size: 0.72rem;
+  line-height: 1.48;
+}
+
 .image-studio-gallery-rail .image-studio-image-thumb {
+  position: relative;
   display: block;
-  height: auto;
-  aspect-ratio: 16 / 9;
+  width: 100%;
+  height: 100%;
+  aspect-ratio: inherit;
+  overflow: hidden;
   isolation: isolate;
 }
 
@@ -3021,6 +3256,8 @@ onBeforeUnmount(() => {
   width: 100%;
   height: 100%;
   aspect-ratio: auto;
+  object-fit: cover;
+  object-position: center;
 }
 
 .image-studio-gallery-rail .image-studio-image-thumb > span {
@@ -3041,6 +3278,7 @@ onBeforeUnmount(() => {
 }
 
 .image-studio-gallery-rail .image-studio-image-card {
+  aspect-ratio: 16 / 10;
   border-color: rgba(203, 213, 225, 0.5);
   background: transparent;
   box-shadow: none;
@@ -3052,13 +3290,13 @@ onBeforeUnmount(() => {
   display: grid;
   min-height: 0;
   grid-template-columns: 1fr;
+  align-content: start;
+  grid-auto-rows: max-content;
   gap: 0.42rem;
   overflow-x: hidden;
   overflow-y: auto;
-  padding: 0.04rem 0.05rem 0.3rem;
+  padding: 0.04rem 0.18rem 0.3rem 0.05rem;
   scroll-snap-type: y proximity;
-  scrollbar-color: rgba(var(--brand-rgb), 0.32) transparent;
-  scrollbar-width: thin;
 }
 
 .image-studio-gallery-loading div {
@@ -3220,6 +3458,10 @@ onBeforeUnmount(() => {
   box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.14);
 }
 
+.image-studio-gallery-rail .image-studio-image-card-body {
+  display: none;
+}
+
 .image-studio-fade-enter-active,
 .image-studio-fade-leave-active {
   transition:
@@ -3252,6 +3494,7 @@ onBeforeUnmount(() => {
   display: grid;
   width: min(100%, 74rem);
   max-height: min(92vh, 58rem);
+  grid-template-rows: auto minmax(0, 1fr) auto auto;
   overflow: hidden;
   border: 1px solid rgba(219, 234, 254, 0.34);
   border-radius: 1.2rem;
@@ -3330,9 +3573,14 @@ onBeforeUnmount(() => {
 
 .image-studio-preview-details {
   display: grid;
+  min-height: 0;
+  max-height: clamp(6.5rem, 18vh, 11rem);
   gap: 0.7rem;
+  overflow-y: auto;
+  overscroll-behavior: contain;
   border-top: 1px solid rgba(203, 213, 225, 0.56);
   padding: 0.9rem 1rem;
+  scrollbar-gutter: stable;
 }
 
 .image-studio-preview-details > div:first-child {
@@ -3350,6 +3598,7 @@ onBeforeUnmount(() => {
   color: var(--studio-text);
   font-size: 0.9rem;
   line-height: 1.55;
+  overflow-wrap: anywhere;
 }
 
 .image-studio-preview-meta-grid {
@@ -3366,6 +3615,8 @@ onBeforeUnmount(() => {
 }
 
 .image-studio-preview-actions {
+  position: relative;
+  z-index: 1;
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 0.55rem;
@@ -3595,6 +3846,8 @@ onBeforeUnmount(() => {
   --studio-text: rgb(248, 250, 252);
   --studio-muted: rgb(148, 163, 184);
   --studio-subtle: rgb(203, 213, 225);
+  --studio-scroll-thumb: rgba(148, 163, 184, 0.24);
+  --studio-scroll-thumb-hover: rgba(96, 165, 250, 0.48);
   border-color: var(--studio-border);
   background:
     linear-gradient(180deg, rgba(15, 23, 42, 0.94), rgba(2, 6, 23, 0.9)),
@@ -3635,6 +3888,47 @@ onBeforeUnmount(() => {
   border-color: var(--studio-border-soft);
   background: rgba(15, 23, 42, 0.78);
   color: white;
+}
+
+.dark .image-studio-gallery-rail {
+  background:
+    linear-gradient(180deg, rgba(15, 23, 42, 0.96), rgba(2, 6, 23, 0.9)),
+    var(--studio-surface);
+}
+
+.dark .image-studio-gallery-count {
+  border-color: rgba(96, 165, 250, 0.2);
+  background: rgba(96, 165, 250, 0.14);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+.dark .image-studio-gallery-retention {
+  border-color: rgba(96, 165, 250, 0.18);
+  background: rgba(30, 41, 59, 0.58);
+  color: rgb(203, 213, 225);
+}
+
+.dark .image-studio-gallery-retention svg {
+  color: rgb(147, 197, 253);
+}
+
+.dark .image-studio-gallery-rail .image-studio-empty-gallery {
+  border-color: rgba(96, 165, 250, 0.22);
+  background:
+    linear-gradient(180deg, rgba(15, 23, 42, 0.7), rgba(2, 6, 23, 0.58)),
+    rgba(15, 23, 42, 0.54);
+}
+
+.dark .image-studio-gallery-rail .image-studio-empty-gallery svg {
+  background: rgba(96, 165, 250, 0.14);
+  color: rgb(147, 197, 253);
+  box-shadow:
+    inset 0 0 0 1px rgba(96, 165, 250, 0.18),
+    0 10px 22px rgba(0, 0, 0, 0.2);
+}
+
+.dark .image-studio-gallery-rail .image-studio-empty-gallery span {
+  color: rgb(148, 163, 184);
 }
 
 .dark .image-studio-select-trigger {
