@@ -35,6 +35,8 @@ func (r *userImageTaskRepository) Create(ctx context.Context, task *service.Imag
 		SetPrompt(task.Prompt).
 		SetAspectRatio(task.AspectRatio).
 		SetQuality(task.Quality).
+		SetOutputFormat(task.OutputFormat).
+		SetBackground(task.Background).
 		SetSize(task.Size).
 		SetEstimatedCost(task.EstimatedCost).
 		SetSourceImageCount(task.SourceImageCount).
@@ -197,6 +199,8 @@ func userImageTaskEntityToService(row *dbent.UserImageTask) *service.ImageStudio
 		Model:            row.Model,
 		AspectRatio:      row.AspectRatio,
 		Quality:          row.Quality,
+		OutputFormat:     row.OutputFormat,
+		Background:       row.Background,
 		Size:             row.Size,
 		EstimatedCost:    row.EstimatedCost,
 		SourceImageCount: row.SourceImageCount,
@@ -240,6 +244,8 @@ func userImageRecordToEnt(record *service.ImageStudioImageRecord) *dbent.UserIma
 		StorageDriver:    record.StorageDriver,
 		StorageObjectKey: record.StorageObjectKey,
 		MimeType:         record.MimeType,
+		OutputFormat:     record.OutputFormat,
+		Background:       record.Background,
 		Bytes:            record.Bytes,
 		Cost:             record.Cost,
 		UsageLogID:       record.UsageLogID,

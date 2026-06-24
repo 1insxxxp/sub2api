@@ -53,6 +53,12 @@ func (UserImage) Fields() []ent.Field {
 		field.String("mime_type").
 			MaxLen(128).
 			Default("image/png"),
+		field.String("output_format").
+			MaxLen(16).
+			Default("png"),
+		field.String("background").
+			MaxLen(24).
+			Default("auto"),
 		field.Int64("bytes").
 			Default(0),
 		field.Float("cost").

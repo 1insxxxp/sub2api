@@ -176,6 +176,34 @@ func (_u *UserImageUpdate) SetNillableMimeType(v *string) *UserImageUpdate {
 	return _u
 }
 
+// SetOutputFormat sets the "output_format" field.
+func (_u *UserImageUpdate) SetOutputFormat(v string) *UserImageUpdate {
+	_u.mutation.SetOutputFormat(v)
+	return _u
+}
+
+// SetNillableOutputFormat sets the "output_format" field if the given value is not nil.
+func (_u *UserImageUpdate) SetNillableOutputFormat(v *string) *UserImageUpdate {
+	if v != nil {
+		_u.SetOutputFormat(*v)
+	}
+	return _u
+}
+
+// SetBackground sets the "background" field.
+func (_u *UserImageUpdate) SetBackground(v string) *UserImageUpdate {
+	_u.mutation.SetBackground(v)
+	return _u
+}
+
+// SetNillableBackground sets the "background" field if the given value is not nil.
+func (_u *UserImageUpdate) SetNillableBackground(v *string) *UserImageUpdate {
+	if v != nil {
+		_u.SetBackground(*v)
+	}
+	return _u
+}
+
 // SetBytes sets the "bytes" field.
 func (_u *UserImageUpdate) SetBytes(v int64) *UserImageUpdate {
 	_u.mutation.ResetBytes()
@@ -442,6 +470,16 @@ func (_u *UserImageUpdate) check() error {
 			return &ValidationError{Name: "mime_type", err: fmt.Errorf(`ent: validator failed for field "UserImage.mime_type": %w`, err)}
 		}
 	}
+	if v, ok := _u.mutation.OutputFormat(); ok {
+		if err := userimage.OutputFormatValidator(v); err != nil {
+			return &ValidationError{Name: "output_format", err: fmt.Errorf(`ent: validator failed for field "UserImage.output_format": %w`, err)}
+		}
+	}
+	if v, ok := _u.mutation.Background(); ok {
+		if err := userimage.BackgroundValidator(v); err != nil {
+			return &ValidationError{Name: "background", err: fmt.Errorf(`ent: validator failed for field "UserImage.background": %w`, err)}
+		}
+	}
 	if _u.mutation.UserCleared() && len(_u.mutation.UserIDs()) > 0 {
 		return errors.New(`ent: clearing a required unique edge "UserImage.user"`)
 	}
@@ -489,6 +527,12 @@ func (_u *UserImageUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if value, ok := _u.mutation.MimeType(); ok {
 		_spec.SetField(userimage.FieldMimeType, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.OutputFormat(); ok {
+		_spec.SetField(userimage.FieldOutputFormat, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.Background(); ok {
+		_spec.SetField(userimage.FieldBackground, field.TypeString, value)
 	}
 	if value, ok := _u.mutation.Bytes(); ok {
 		_spec.SetField(userimage.FieldBytes, field.TypeInt64, value)
@@ -772,6 +816,34 @@ func (_u *UserImageUpdateOne) SetNillableMimeType(v *string) *UserImageUpdateOne
 	return _u
 }
 
+// SetOutputFormat sets the "output_format" field.
+func (_u *UserImageUpdateOne) SetOutputFormat(v string) *UserImageUpdateOne {
+	_u.mutation.SetOutputFormat(v)
+	return _u
+}
+
+// SetNillableOutputFormat sets the "output_format" field if the given value is not nil.
+func (_u *UserImageUpdateOne) SetNillableOutputFormat(v *string) *UserImageUpdateOne {
+	if v != nil {
+		_u.SetOutputFormat(*v)
+	}
+	return _u
+}
+
+// SetBackground sets the "background" field.
+func (_u *UserImageUpdateOne) SetBackground(v string) *UserImageUpdateOne {
+	_u.mutation.SetBackground(v)
+	return _u
+}
+
+// SetNillableBackground sets the "background" field if the given value is not nil.
+func (_u *UserImageUpdateOne) SetNillableBackground(v *string) *UserImageUpdateOne {
+	if v != nil {
+		_u.SetBackground(*v)
+	}
+	return _u
+}
+
 // SetBytes sets the "bytes" field.
 func (_u *UserImageUpdateOne) SetBytes(v int64) *UserImageUpdateOne {
 	_u.mutation.ResetBytes()
@@ -1051,6 +1123,16 @@ func (_u *UserImageUpdateOne) check() error {
 			return &ValidationError{Name: "mime_type", err: fmt.Errorf(`ent: validator failed for field "UserImage.mime_type": %w`, err)}
 		}
 	}
+	if v, ok := _u.mutation.OutputFormat(); ok {
+		if err := userimage.OutputFormatValidator(v); err != nil {
+			return &ValidationError{Name: "output_format", err: fmt.Errorf(`ent: validator failed for field "UserImage.output_format": %w`, err)}
+		}
+	}
+	if v, ok := _u.mutation.Background(); ok {
+		if err := userimage.BackgroundValidator(v); err != nil {
+			return &ValidationError{Name: "background", err: fmt.Errorf(`ent: validator failed for field "UserImage.background": %w`, err)}
+		}
+	}
 	if _u.mutation.UserCleared() && len(_u.mutation.UserIDs()) > 0 {
 		return errors.New(`ent: clearing a required unique edge "UserImage.user"`)
 	}
@@ -1115,6 +1197,12 @@ func (_u *UserImageUpdateOne) sqlSave(ctx context.Context) (_node *UserImage, er
 	}
 	if value, ok := _u.mutation.MimeType(); ok {
 		_spec.SetField(userimage.FieldMimeType, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.OutputFormat(); ok {
+		_spec.SetField(userimage.FieldOutputFormat, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.Background(); ok {
+		_spec.SetField(userimage.FieldBackground, field.TypeString, value)
 	}
 	if value, ok := _u.mutation.Bytes(); ok {
 		_spec.SetField(userimage.FieldBytes, field.TypeInt64, value)

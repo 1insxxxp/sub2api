@@ -46302,6 +46302,8 @@ type UserImageMutation struct {
 	storage_driver        *string
 	storage_object_key    *string
 	mime_type             *string
+	output_format         *string
+	background            *string
 	bytes                 *int64
 	addbytes              *int64
 	cost                  *float64
@@ -46794,6 +46796,78 @@ func (m *UserImageMutation) OldMimeType(ctx context.Context) (v string, err erro
 // ResetMimeType resets all changes to the "mime_type" field.
 func (m *UserImageMutation) ResetMimeType() {
 	m.mime_type = nil
+}
+
+// SetOutputFormat sets the "output_format" field.
+func (m *UserImageMutation) SetOutputFormat(s string) {
+	m.output_format = &s
+}
+
+// OutputFormat returns the value of the "output_format" field in the mutation.
+func (m *UserImageMutation) OutputFormat() (r string, exists bool) {
+	v := m.output_format
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldOutputFormat returns the old "output_format" field's value of the UserImage entity.
+// If the UserImage object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *UserImageMutation) OldOutputFormat(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldOutputFormat is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldOutputFormat requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldOutputFormat: %w", err)
+	}
+	return oldValue.OutputFormat, nil
+}
+
+// ResetOutputFormat resets all changes to the "output_format" field.
+func (m *UserImageMutation) ResetOutputFormat() {
+	m.output_format = nil
+}
+
+// SetBackground sets the "background" field.
+func (m *UserImageMutation) SetBackground(s string) {
+	m.background = &s
+}
+
+// Background returns the value of the "background" field in the mutation.
+func (m *UserImageMutation) Background() (r string, exists bool) {
+	v := m.background
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldBackground returns the old "background" field's value of the UserImage entity.
+// If the UserImage object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *UserImageMutation) OldBackground(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldBackground is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldBackground requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldBackground: %w", err)
+	}
+	return oldValue.Background, nil
+}
+
+// ResetBackground resets all changes to the "background" field.
+func (m *UserImageMutation) ResetBackground() {
+	m.background = nil
 }
 
 // SetBytes sets the "bytes" field.
@@ -47319,7 +47393,7 @@ func (m *UserImageMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *UserImageMutation) Fields() []string {
-	fields := make([]string, 0, 18)
+	fields := make([]string, 0, 20)
 	if m.user != nil {
 		fields = append(fields, userimage.FieldUserID)
 	}
@@ -47349,6 +47423,12 @@ func (m *UserImageMutation) Fields() []string {
 	}
 	if m.mime_type != nil {
 		fields = append(fields, userimage.FieldMimeType)
+	}
+	if m.output_format != nil {
+		fields = append(fields, userimage.FieldOutputFormat)
+	}
+	if m.background != nil {
+		fields = append(fields, userimage.FieldBackground)
 	}
 	if m.bytes != nil {
 		fields = append(fields, userimage.FieldBytes)
@@ -47402,6 +47482,10 @@ func (m *UserImageMutation) Field(name string) (ent.Value, bool) {
 		return m.StorageObjectKey()
 	case userimage.FieldMimeType:
 		return m.MimeType()
+	case userimage.FieldOutputFormat:
+		return m.OutputFormat()
+	case userimage.FieldBackground:
+		return m.Background()
 	case userimage.FieldBytes:
 		return m.Bytes()
 	case userimage.FieldCost:
@@ -47447,6 +47531,10 @@ func (m *UserImageMutation) OldField(ctx context.Context, name string) (ent.Valu
 		return m.OldStorageObjectKey(ctx)
 	case userimage.FieldMimeType:
 		return m.OldMimeType(ctx)
+	case userimage.FieldOutputFormat:
+		return m.OldOutputFormat(ctx)
+	case userimage.FieldBackground:
+		return m.OldBackground(ctx)
 	case userimage.FieldBytes:
 		return m.OldBytes(ctx)
 	case userimage.FieldCost:
@@ -47541,6 +47629,20 @@ func (m *UserImageMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetMimeType(v)
+		return nil
+	case userimage.FieldOutputFormat:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetOutputFormat(v)
+		return nil
+	case userimage.FieldBackground:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetBackground(v)
 		return nil
 	case userimage.FieldBytes:
 		v, ok := value.(int64)
@@ -47755,6 +47857,12 @@ func (m *UserImageMutation) ResetField(name string) error {
 	case userimage.FieldMimeType:
 		m.ResetMimeType()
 		return nil
+	case userimage.FieldOutputFormat:
+		m.ResetOutputFormat()
+		return nil
+	case userimage.FieldBackground:
+		m.ResetBackground()
+		return nil
 	case userimage.FieldBytes:
 		m.ResetBytes()
 		return nil
@@ -47901,6 +48009,8 @@ type UserImageTaskMutation struct {
 	prompt                *string
 	aspect_ratio          *string
 	quality               *string
+	output_format         *string
+	background            *string
 	size                  *string
 	estimated_cost        *float64
 	addestimated_cost     *float64
@@ -48475,6 +48585,78 @@ func (m *UserImageTaskMutation) ResetQuality() {
 	m.quality = nil
 }
 
+// SetOutputFormat sets the "output_format" field.
+func (m *UserImageTaskMutation) SetOutputFormat(s string) {
+	m.output_format = &s
+}
+
+// OutputFormat returns the value of the "output_format" field in the mutation.
+func (m *UserImageTaskMutation) OutputFormat() (r string, exists bool) {
+	v := m.output_format
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldOutputFormat returns the old "output_format" field's value of the UserImageTask entity.
+// If the UserImageTask object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *UserImageTaskMutation) OldOutputFormat(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldOutputFormat is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldOutputFormat requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldOutputFormat: %w", err)
+	}
+	return oldValue.OutputFormat, nil
+}
+
+// ResetOutputFormat resets all changes to the "output_format" field.
+func (m *UserImageTaskMutation) ResetOutputFormat() {
+	m.output_format = nil
+}
+
+// SetBackground sets the "background" field.
+func (m *UserImageTaskMutation) SetBackground(s string) {
+	m.background = &s
+}
+
+// Background returns the value of the "background" field in the mutation.
+func (m *UserImageTaskMutation) Background() (r string, exists bool) {
+	v := m.background
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldBackground returns the old "background" field's value of the UserImageTask entity.
+// If the UserImageTask object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *UserImageTaskMutation) OldBackground(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldBackground is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldBackground requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldBackground: %w", err)
+	}
+	return oldValue.Background, nil
+}
+
+// ResetBackground resets all changes to the "background" field.
+func (m *UserImageTaskMutation) ResetBackground() {
+	m.background = nil
+}
+
 // SetSize sets the "size" field.
 func (m *UserImageTaskMutation) SetSize(s string) {
 	m.size = &s
@@ -49028,7 +49210,7 @@ func (m *UserImageTaskMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *UserImageTaskMutation) Fields() []string {
-	fields := make([]string, 0, 20)
+	fields := make([]string, 0, 22)
 	if m.user != nil {
 		fields = append(fields, userimagetask.FieldUserID)
 	}
@@ -49058,6 +49240,12 @@ func (m *UserImageTaskMutation) Fields() []string {
 	}
 	if m.quality != nil {
 		fields = append(fields, userimagetask.FieldQuality)
+	}
+	if m.output_format != nil {
+		fields = append(fields, userimagetask.FieldOutputFormat)
+	}
+	if m.background != nil {
+		fields = append(fields, userimagetask.FieldBackground)
 	}
 	if m.size != nil {
 		fields = append(fields, userimagetask.FieldSize)
@@ -49117,6 +49305,10 @@ func (m *UserImageTaskMutation) Field(name string) (ent.Value, bool) {
 		return m.AspectRatio()
 	case userimagetask.FieldQuality:
 		return m.Quality()
+	case userimagetask.FieldOutputFormat:
+		return m.OutputFormat()
+	case userimagetask.FieldBackground:
+		return m.Background()
 	case userimagetask.FieldSize:
 		return m.Size()
 	case userimagetask.FieldEstimatedCost:
@@ -49166,6 +49358,10 @@ func (m *UserImageTaskMutation) OldField(ctx context.Context, name string) (ent.
 		return m.OldAspectRatio(ctx)
 	case userimagetask.FieldQuality:
 		return m.OldQuality(ctx)
+	case userimagetask.FieldOutputFormat:
+		return m.OldOutputFormat(ctx)
+	case userimagetask.FieldBackground:
+		return m.OldBackground(ctx)
 	case userimagetask.FieldSize:
 		return m.OldSize(ctx)
 	case userimagetask.FieldEstimatedCost:
@@ -49264,6 +49460,20 @@ func (m *UserImageTaskMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetQuality(v)
+		return nil
+	case userimagetask.FieldOutputFormat:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetOutputFormat(v)
+		return nil
+	case userimagetask.FieldBackground:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetBackground(v)
 		return nil
 	case userimagetask.FieldSize:
 		v, ok := value.(string)
@@ -49521,6 +49731,12 @@ func (m *UserImageTaskMutation) ResetField(name string) error {
 		return nil
 	case userimagetask.FieldQuality:
 		m.ResetQuality()
+		return nil
+	case userimagetask.FieldOutputFormat:
+		m.ResetOutputFormat()
+		return nil
+	case userimagetask.FieldBackground:
+		m.ResetBackground()
 		return nil
 	case userimagetask.FieldSize:
 		m.ResetSize()

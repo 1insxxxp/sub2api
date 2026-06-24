@@ -2231,24 +2231,36 @@ func init() {
 	userimage.DefaultMimeType = userimageDescMimeType.Default.(string)
 	// userimage.MimeTypeValidator is a validator for the "mime_type" field. It is called by the builders before save.
 	userimage.MimeTypeValidator = userimageDescMimeType.Validators[0].(func(string) error)
+	// userimageDescOutputFormat is the schema descriptor for output_format field.
+	userimageDescOutputFormat := userimageFields[10].Descriptor()
+	// userimage.DefaultOutputFormat holds the default value on creation for the output_format field.
+	userimage.DefaultOutputFormat = userimageDescOutputFormat.Default.(string)
+	// userimage.OutputFormatValidator is a validator for the "output_format" field. It is called by the builders before save.
+	userimage.OutputFormatValidator = userimageDescOutputFormat.Validators[0].(func(string) error)
+	// userimageDescBackground is the schema descriptor for background field.
+	userimageDescBackground := userimageFields[11].Descriptor()
+	// userimage.DefaultBackground holds the default value on creation for the background field.
+	userimage.DefaultBackground = userimageDescBackground.Default.(string)
+	// userimage.BackgroundValidator is a validator for the "background" field. It is called by the builders before save.
+	userimage.BackgroundValidator = userimageDescBackground.Validators[0].(func(string) error)
 	// userimageDescBytes is the schema descriptor for bytes field.
-	userimageDescBytes := userimageFields[10].Descriptor()
+	userimageDescBytes := userimageFields[12].Descriptor()
 	// userimage.DefaultBytes holds the default value on creation for the bytes field.
 	userimage.DefaultBytes = userimageDescBytes.Default.(int64)
 	// userimageDescCost is the schema descriptor for cost field.
-	userimageDescCost := userimageFields[11].Descriptor()
+	userimageDescCost := userimageFields[13].Descriptor()
 	// userimage.DefaultCost holds the default value on creation for the cost field.
 	userimage.DefaultCost = userimageDescCost.Default.(float64)
 	// userimageDescSourceImageCount is the schema descriptor for source_image_count field.
-	userimageDescSourceImageCount := userimageFields[13].Descriptor()
+	userimageDescSourceImageCount := userimageFields[15].Descriptor()
 	// userimage.DefaultSourceImageCount holds the default value on creation for the source_image_count field.
 	userimage.DefaultSourceImageCount = userimageDescSourceImageCount.Default.(int)
 	// userimageDescCreatedAt is the schema descriptor for created_at field.
-	userimageDescCreatedAt := userimageFields[16].Descriptor()
+	userimageDescCreatedAt := userimageFields[18].Descriptor()
 	// userimage.DefaultCreatedAt holds the default value on creation for the created_at field.
 	userimage.DefaultCreatedAt = userimageDescCreatedAt.Default.(func() time.Time)
 	// userimageDescUpdatedAt is the schema descriptor for updated_at field.
-	userimageDescUpdatedAt := userimageFields[17].Descriptor()
+	userimageDescUpdatedAt := userimageFields[19].Descriptor()
 	// userimage.DefaultUpdatedAt holds the default value on creation for the updated_at field.
 	userimage.DefaultUpdatedAt = userimageDescUpdatedAt.Default.(func() time.Time)
 	// userimage.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
@@ -2345,8 +2357,20 @@ func init() {
 			return nil
 		}
 	}()
+	// userimagetaskDescOutputFormat is the schema descriptor for output_format field.
+	userimagetaskDescOutputFormat := userimagetaskFields[10].Descriptor()
+	// userimagetask.DefaultOutputFormat holds the default value on creation for the output_format field.
+	userimagetask.DefaultOutputFormat = userimagetaskDescOutputFormat.Default.(string)
+	// userimagetask.OutputFormatValidator is a validator for the "output_format" field. It is called by the builders before save.
+	userimagetask.OutputFormatValidator = userimagetaskDescOutputFormat.Validators[0].(func(string) error)
+	// userimagetaskDescBackground is the schema descriptor for background field.
+	userimagetaskDescBackground := userimagetaskFields[11].Descriptor()
+	// userimagetask.DefaultBackground holds the default value on creation for the background field.
+	userimagetask.DefaultBackground = userimagetaskDescBackground.Default.(string)
+	// userimagetask.BackgroundValidator is a validator for the "background" field. It is called by the builders before save.
+	userimagetask.BackgroundValidator = userimagetaskDescBackground.Validators[0].(func(string) error)
 	// userimagetaskDescSize is the schema descriptor for size field.
-	userimagetaskDescSize := userimagetaskFields[10].Descriptor()
+	userimagetaskDescSize := userimagetaskFields[12].Descriptor()
 	// userimagetask.SizeValidator is a validator for the "size" field. It is called by the builders before save.
 	userimagetask.SizeValidator = func() func(string) error {
 		validators := userimagetaskDescSize.Validators
@@ -2364,23 +2388,23 @@ func init() {
 		}
 	}()
 	// userimagetaskDescEstimatedCost is the schema descriptor for estimated_cost field.
-	userimagetaskDescEstimatedCost := userimagetaskFields[11].Descriptor()
+	userimagetaskDescEstimatedCost := userimagetaskFields[13].Descriptor()
 	// userimagetask.DefaultEstimatedCost holds the default value on creation for the estimated_cost field.
 	userimagetask.DefaultEstimatedCost = userimagetaskDescEstimatedCost.Default.(float64)
 	// userimagetaskDescSourceImageCount is the schema descriptor for source_image_count field.
-	userimagetaskDescSourceImageCount := userimagetaskFields[12].Descriptor()
+	userimagetaskDescSourceImageCount := userimagetaskFields[14].Descriptor()
 	// userimagetask.DefaultSourceImageCount holds the default value on creation for the source_image_count field.
 	userimagetask.DefaultSourceImageCount = userimagetaskDescSourceImageCount.Default.(int)
 	// userimagetaskDescErrorReason is the schema descriptor for error_reason field.
-	userimagetaskDescErrorReason := userimagetaskFields[14].Descriptor()
+	userimagetaskDescErrorReason := userimagetaskFields[16].Descriptor()
 	// userimagetask.ErrorReasonValidator is a validator for the "error_reason" field. It is called by the builders before save.
 	userimagetask.ErrorReasonValidator = userimagetaskDescErrorReason.Validators[0].(func(string) error)
 	// userimagetaskDescCreatedAt is the schema descriptor for created_at field.
-	userimagetaskDescCreatedAt := userimagetaskFields[18].Descriptor()
+	userimagetaskDescCreatedAt := userimagetaskFields[20].Descriptor()
 	// userimagetask.DefaultCreatedAt holds the default value on creation for the created_at field.
 	userimagetask.DefaultCreatedAt = userimagetaskDescCreatedAt.Default.(func() time.Time)
 	// userimagetaskDescUpdatedAt is the schema descriptor for updated_at field.
-	userimagetaskDescUpdatedAt := userimagetaskFields[19].Descriptor()
+	userimagetaskDescUpdatedAt := userimagetaskFields[21].Descriptor()
 	// userimagetask.DefaultUpdatedAt holds the default value on creation for the updated_at field.
 	userimagetask.DefaultUpdatedAt = userimagetaskDescUpdatedAt.Default.(func() time.Time)
 	// userimagetask.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.

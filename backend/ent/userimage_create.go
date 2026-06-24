@@ -108,6 +108,34 @@ func (_c *UserImageCreate) SetNillableMimeType(v *string) *UserImageCreate {
 	return _c
 }
 
+// SetOutputFormat sets the "output_format" field.
+func (_c *UserImageCreate) SetOutputFormat(v string) *UserImageCreate {
+	_c.mutation.SetOutputFormat(v)
+	return _c
+}
+
+// SetNillableOutputFormat sets the "output_format" field if the given value is not nil.
+func (_c *UserImageCreate) SetNillableOutputFormat(v *string) *UserImageCreate {
+	if v != nil {
+		_c.SetOutputFormat(*v)
+	}
+	return _c
+}
+
+// SetBackground sets the "background" field.
+func (_c *UserImageCreate) SetBackground(v string) *UserImageCreate {
+	_c.mutation.SetBackground(v)
+	return _c
+}
+
+// SetNillableBackground sets the "background" field if the given value is not nil.
+func (_c *UserImageCreate) SetNillableBackground(v *string) *UserImageCreate {
+	if v != nil {
+		_c.SetBackground(*v)
+	}
+	return _c
+}
+
 // SetBytes sets the "bytes" field.
 func (_c *UserImageCreate) SetBytes(v int64) *UserImageCreate {
 	_c.mutation.SetBytes(v)
@@ -283,6 +311,14 @@ func (_c *UserImageCreate) defaults() {
 		v := userimage.DefaultMimeType
 		_c.mutation.SetMimeType(v)
 	}
+	if _, ok := _c.mutation.OutputFormat(); !ok {
+		v := userimage.DefaultOutputFormat
+		_c.mutation.SetOutputFormat(v)
+	}
+	if _, ok := _c.mutation.Background(); !ok {
+		v := userimage.DefaultBackground
+		_c.mutation.SetBackground(v)
+	}
 	if _, ok := _c.mutation.Bytes(); !ok {
 		v := userimage.DefaultBytes
 		_c.mutation.SetBytes(v)
@@ -374,6 +410,22 @@ func (_c *UserImageCreate) check() error {
 			return &ValidationError{Name: "mime_type", err: fmt.Errorf(`ent: validator failed for field "UserImage.mime_type": %w`, err)}
 		}
 	}
+	if _, ok := _c.mutation.OutputFormat(); !ok {
+		return &ValidationError{Name: "output_format", err: errors.New(`ent: missing required field "UserImage.output_format"`)}
+	}
+	if v, ok := _c.mutation.OutputFormat(); ok {
+		if err := userimage.OutputFormatValidator(v); err != nil {
+			return &ValidationError{Name: "output_format", err: fmt.Errorf(`ent: validator failed for field "UserImage.output_format": %w`, err)}
+		}
+	}
+	if _, ok := _c.mutation.Background(); !ok {
+		return &ValidationError{Name: "background", err: errors.New(`ent: missing required field "UserImage.background"`)}
+	}
+	if v, ok := _c.mutation.Background(); ok {
+		if err := userimage.BackgroundValidator(v); err != nil {
+			return &ValidationError{Name: "background", err: fmt.Errorf(`ent: validator failed for field "UserImage.background": %w`, err)}
+		}
+	}
 	if _, ok := _c.mutation.Bytes(); !ok {
 		return &ValidationError{Name: "bytes", err: errors.New(`ent: missing required field "UserImage.bytes"`)}
 	}
@@ -454,6 +506,14 @@ func (_c *UserImageCreate) createSpec() (*UserImage, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.MimeType(); ok {
 		_spec.SetField(userimage.FieldMimeType, field.TypeString, value)
 		_node.MimeType = value
+	}
+	if value, ok := _c.mutation.OutputFormat(); ok {
+		_spec.SetField(userimage.FieldOutputFormat, field.TypeString, value)
+		_node.OutputFormat = value
+	}
+	if value, ok := _c.mutation.Background(); ok {
+		_spec.SetField(userimage.FieldBackground, field.TypeString, value)
+		_node.Background = value
 	}
 	if value, ok := _c.mutation.Bytes(); ok {
 		_spec.SetField(userimage.FieldBytes, field.TypeInt64, value)
@@ -695,6 +755,30 @@ func (u *UserImageUpsert) SetMimeType(v string) *UserImageUpsert {
 // UpdateMimeType sets the "mime_type" field to the value that was provided on create.
 func (u *UserImageUpsert) UpdateMimeType() *UserImageUpsert {
 	u.SetExcluded(userimage.FieldMimeType)
+	return u
+}
+
+// SetOutputFormat sets the "output_format" field.
+func (u *UserImageUpsert) SetOutputFormat(v string) *UserImageUpsert {
+	u.Set(userimage.FieldOutputFormat, v)
+	return u
+}
+
+// UpdateOutputFormat sets the "output_format" field to the value that was provided on create.
+func (u *UserImageUpsert) UpdateOutputFormat() *UserImageUpsert {
+	u.SetExcluded(userimage.FieldOutputFormat)
+	return u
+}
+
+// SetBackground sets the "background" field.
+func (u *UserImageUpsert) SetBackground(v string) *UserImageUpsert {
+	u.Set(userimage.FieldBackground, v)
+	return u
+}
+
+// UpdateBackground sets the "background" field to the value that was provided on create.
+func (u *UserImageUpsert) UpdateBackground() *UserImageUpsert {
+	u.SetExcluded(userimage.FieldBackground)
 	return u
 }
 
@@ -1013,6 +1097,34 @@ func (u *UserImageUpsertOne) SetMimeType(v string) *UserImageUpsertOne {
 func (u *UserImageUpsertOne) UpdateMimeType() *UserImageUpsertOne {
 	return u.Update(func(s *UserImageUpsert) {
 		s.UpdateMimeType()
+	})
+}
+
+// SetOutputFormat sets the "output_format" field.
+func (u *UserImageUpsertOne) SetOutputFormat(v string) *UserImageUpsertOne {
+	return u.Update(func(s *UserImageUpsert) {
+		s.SetOutputFormat(v)
+	})
+}
+
+// UpdateOutputFormat sets the "output_format" field to the value that was provided on create.
+func (u *UserImageUpsertOne) UpdateOutputFormat() *UserImageUpsertOne {
+	return u.Update(func(s *UserImageUpsert) {
+		s.UpdateOutputFormat()
+	})
+}
+
+// SetBackground sets the "background" field.
+func (u *UserImageUpsertOne) SetBackground(v string) *UserImageUpsertOne {
+	return u.Update(func(s *UserImageUpsert) {
+		s.SetBackground(v)
+	})
+}
+
+// UpdateBackground sets the "background" field to the value that was provided on create.
+func (u *UserImageUpsertOne) UpdateBackground() *UserImageUpsertOne {
+	return u.Update(func(s *UserImageUpsert) {
+		s.UpdateBackground()
 	})
 }
 
@@ -1518,6 +1630,34 @@ func (u *UserImageUpsertBulk) SetMimeType(v string) *UserImageUpsertBulk {
 func (u *UserImageUpsertBulk) UpdateMimeType() *UserImageUpsertBulk {
 	return u.Update(func(s *UserImageUpsert) {
 		s.UpdateMimeType()
+	})
+}
+
+// SetOutputFormat sets the "output_format" field.
+func (u *UserImageUpsertBulk) SetOutputFormat(v string) *UserImageUpsertBulk {
+	return u.Update(func(s *UserImageUpsert) {
+		s.SetOutputFormat(v)
+	})
+}
+
+// UpdateOutputFormat sets the "output_format" field to the value that was provided on create.
+func (u *UserImageUpsertBulk) UpdateOutputFormat() *UserImageUpsertBulk {
+	return u.Update(func(s *UserImageUpsert) {
+		s.UpdateOutputFormat()
+	})
+}
+
+// SetBackground sets the "background" field.
+func (u *UserImageUpsertBulk) SetBackground(v string) *UserImageUpsertBulk {
+	return u.Update(func(s *UserImageUpsert) {
+		s.SetBackground(v)
+	})
+}
+
+// UpdateBackground sets the "background" field to the value that was provided on create.
+func (u *UserImageUpsertBulk) UpdateBackground() *UserImageUpsertBulk {
+	return u.Update(func(s *UserImageUpsert) {
+		s.UpdateBackground()
 	})
 }
 

@@ -179,14 +179,16 @@ func TestImageStudioGatewayExecutorGenerateBuildsOpenAIRequestAndDefersUsage(t *
 	)
 
 	result, err := executor.Generate(context.Background(), ImageStudioGenerateInput{
-		UserID:      7,
-		Model:       "gpt-image-1",
-		Prompt:      "draw it",
-		AspectRatio: "16:9",
-		Size:        "1536x864",
-		BillingTier: ImageBillingSize2K,
-		UserAgent:   "studio-test",
-		IPAddress:   "127.0.0.1",
+		UserID:       7,
+		Model:        "gpt-image-1",
+		Prompt:       "draw it",
+		AspectRatio:  "16:9",
+		Size:         "1536x864",
+		BillingTier:  ImageBillingSize2K,
+		OutputFormat: "webp",
+		Background:   "transparent",
+		UserAgent:    "studio-test",
+		IPAddress:    "127.0.0.1",
 	})
 	require.NoError(t, err)
 	require.Equal(t, []byte("image-bytes"), result.ImageBytes)
@@ -199,6 +201,8 @@ func TestImageStudioGatewayExecutorGenerateBuildsOpenAIRequestAndDefersUsage(t *
 	require.Equal(t, "draw it", gjson.GetBytes(gateway.parseBody, "prompt").String())
 	require.Equal(t, "1536x864", gjson.GetBytes(gateway.parseBody, "size").String())
 	require.Equal(t, "b64_json", gjson.GetBytes(gateway.parseBody, "response_format").String())
+	require.Equal(t, "webp", gjson.GetBytes(gateway.parseBody, "output_format").String())
+	require.Equal(t, "transparent", gjson.GetBytes(gateway.parseBody, "background").String())
 	require.Equal(t, int64(1), gjson.GetBytes(gateway.parseBody, "n").Int())
 
 	require.NoError(t, result.CommitUsage(context.Background()))
@@ -315,12 +319,14 @@ func TestImageStudioGatewayExecutorEditBuildsMultipartRequest(t *testing.T) {
 	)
 
 	result, err := executor.Edit(context.Background(), ImageStudioEditInput{
-		UserID:      7,
-		Model:       "gpt-image-1",
-		Prompt:      "edit it",
-		AspectRatio: "1:1",
-		Size:        "1024x1024",
-		BillingTier: ImageBillingSize1K,
+		UserID:       7,
+		Model:        "gpt-image-1",
+		Prompt:       "edit it",
+		AspectRatio:  "1:1",
+		Size:         "1024x1024",
+		BillingTier:  ImageBillingSize1K,
+		OutputFormat: "jpeg",
+		Background:   "opaque",
 		ReferenceImages: []ImageStudioReferenceImage{{
 			FileName:    "source.png",
 			ContentType: "image/png",
@@ -350,8 +356,20 @@ func TestImageStudioGatewayExecutorEditBuildsMultipartRequest(t *testing.T) {
 	require.Equal(t, "edit it", parts["prompt"])
 	require.Equal(t, "1024x1024", parts["size"])
 	require.Equal(t, "b64_json", parts["response_format"])
+	require.Equal(t, "jpeg", parts["output_format"])
+	require.Equal(t, "opaque", parts["background"])
 	require.Equal(t, "source", parts["image"])
 	require.Equal(t, "image/png", contentTypes["image"])
+}
+
+func TestExtractImageStudioBytesUsesOutputFormatForInlineBase64(t *testing.T) {
+	body := []byte(`{"created":1710000001,"output_format":"webp","data":[{"b64_json":"aW1hZ2UtYnl0ZXM="}]}`)
+
+	decoded, mimeType, err := extractImageStudioBytesFromGatewayBody(body)
+
+	require.NoError(t, err)
+	require.Equal(t, []byte("image-bytes"), decoded)
+	require.Equal(t, "image/webp", mimeType)
 }
 
 func TestImageStudioGatewayExecutorRejectsGroupWithoutImagePermission(t *testing.T) {

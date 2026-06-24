@@ -76,17 +76,19 @@ type ImageStudioPricePreviewItem struct {
 }
 
 type ImageStudioGenerateInput struct {
-	UserID      int64  `json:"user_id"`
-	APIKeyID    *int64 `json:"api_key_id,omitempty"`
-	GroupID     *int64 `json:"group_id,omitempty"`
-	Model       string `json:"model"`
-	Prompt      string `json:"prompt"`
-	AspectRatio string `json:"aspect_ratio"`
-	Quality     string `json:"quality,omitempty"`
-	Size        string `json:"size,omitempty"`
-	BillingTier string `json:"billing_tier,omitempty"`
-	UserAgent   string `json:"-"`
-	IPAddress   string `json:"-"`
+	UserID       int64  `json:"user_id"`
+	APIKeyID     *int64 `json:"api_key_id,omitempty"`
+	GroupID      *int64 `json:"group_id,omitempty"`
+	Model        string `json:"model"`
+	Prompt       string `json:"prompt"`
+	AspectRatio  string `json:"aspect_ratio"`
+	Quality      string `json:"quality,omitempty"`
+	OutputFormat string `json:"output_format,omitempty"`
+	Background   string `json:"background,omitempty"`
+	Size         string `json:"size,omitempty"`
+	BillingTier  string `json:"billing_tier,omitempty"`
+	UserAgent    string `json:"-"`
+	IPAddress    string `json:"-"`
 }
 
 type ImageStudioEditInput struct {
@@ -97,6 +99,8 @@ type ImageStudioEditInput struct {
 	Prompt          string                      `json:"prompt"`
 	AspectRatio     string                      `json:"aspect_ratio"`
 	Quality         string                      `json:"quality,omitempty"`
+	OutputFormat    string                      `json:"output_format,omitempty"`
+	Background      string                      `json:"background,omitempty"`
 	Size            string                      `json:"size,omitempty"`
 	BillingTier     string                      `json:"billing_tier,omitempty"`
 	ReferenceImages []ImageStudioReferenceImage `json:"-"`
@@ -113,6 +117,8 @@ type ImageStudioReferenceImage struct {
 type ImageStudioExecutionResult struct {
 	ImageBytes       []byte                      `json:"-"`
 	MimeType         string                      `json:"mime_type"`
+	OutputFormat     string                      `json:"output_format"`
+	Background       string                      `json:"background"`
 	Cost             float64                     `json:"cost"`
 	UsageLogID       *int64                      `json:"usage_log_id,omitempty"`
 	RequestID        string                      `json:"request_id,omitempty"`
@@ -132,6 +138,8 @@ type ImageStudioImageRecord struct {
 	StorageDriver    string     `json:"storage_driver"`
 	StorageObjectKey string     `json:"storage_object_key"`
 	MimeType         string     `json:"mime_type"`
+	OutputFormat     string     `json:"output_format"`
+	Background       string     `json:"background"`
 	Bytes            int64      `json:"bytes"`
 	Cost             float64    `json:"cost"`
 	UsageLogID       *int64     `json:"usage_log_id,omitempty"`
@@ -155,6 +163,8 @@ type ImageStudioTask struct {
 	Prompt              string                  `json:"prompt"`
 	AspectRatio         string                  `json:"aspect_ratio"`
 	Quality             string                  `json:"quality"`
+	OutputFormat        string                  `json:"output_format"`
+	Background          string                  `json:"background"`
 	Size                string                  `json:"size"`
 	EstimatedCost       float64                 `json:"estimated_cost"`
 	SourceImageCount    int                     `json:"source_image_count"`
@@ -264,6 +274,83 @@ func NormalizeImageStudioQuality(quality string) string {
 		return normalized
 	default:
 		return normalized
+	}
+}
+
+func NormalizeImageStudioOutputFormat(format string) string {
+	normalized := strings.ToLower(strings.TrimSpace(format))
+	switch normalized {
+	case "", "auto":
+		return "png"
+	case "jpg":
+		return "jpeg"
+	case "png", "jpeg", "webp":
+		return normalized
+	default:
+		return normalized
+	}
+}
+
+func NormalizeImageStudioBackground(background string) string {
+	normalized := strings.ToLower(strings.TrimSpace(background))
+	switch normalized {
+	case "", "auto":
+		return "auto"
+	case "opaque", "transparent":
+		return normalized
+	default:
+		return normalized
+	}
+}
+
+func ValidateImageStudioOutputOptions(outputFormat string, background string) error {
+	format := NormalizeImageStudioOutputFormat(outputFormat)
+	switch format {
+	case "png", "jpeg", "webp":
+	default:
+		return fmt.Errorf("unsupported image output format: %s", outputFormat)
+	}
+	normalizedBackground := NormalizeImageStudioBackground(background)
+	switch normalizedBackground {
+	case "auto", "opaque", "transparent":
+	default:
+		return fmt.Errorf("unsupported image background: %s", background)
+	}
+	if format == "jpeg" && normalizedBackground == "transparent" {
+		return fmt.Errorf("transparent background is not supported for jpeg output")
+	}
+	return nil
+}
+
+func ValidateImageStudioOutputOptionsForModel(model string, outputFormat string, background string) error {
+	if err := ValidateImageStudioOutputOptions(outputFormat, background); err != nil {
+		return err
+	}
+	if NormalizeImageStudioBackground(background) == "transparent" && !ImageStudioModelSupportsTransparentBackground(model) {
+		return fmt.Errorf("transparent background is not supported for %s", strings.TrimSpace(model))
+	}
+	return nil
+}
+
+func ImageStudioModelSupportsTransparentBackground(model string) bool {
+	switch strings.ToLower(strings.TrimSpace(model)) {
+	case "gpt-image-2":
+		return false
+	default:
+		return true
+	}
+}
+
+func imageStudioOutputFormatFromMIMEType(mimeType string) string {
+	switch strings.ToLower(strings.TrimSpace(mimeType)) {
+	case "image/jpeg", "image/jpg":
+		return "jpeg"
+	case "image/webp":
+		return "webp"
+	case "image/png":
+		return "png"
+	default:
+		return "png"
 	}
 }
 

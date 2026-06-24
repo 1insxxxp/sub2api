@@ -208,6 +208,34 @@ func (_u *UserImageTaskUpdate) SetNillableQuality(v *string) *UserImageTaskUpdat
 	return _u
 }
 
+// SetOutputFormat sets the "output_format" field.
+func (_u *UserImageTaskUpdate) SetOutputFormat(v string) *UserImageTaskUpdate {
+	_u.mutation.SetOutputFormat(v)
+	return _u
+}
+
+// SetNillableOutputFormat sets the "output_format" field if the given value is not nil.
+func (_u *UserImageTaskUpdate) SetNillableOutputFormat(v *string) *UserImageTaskUpdate {
+	if v != nil {
+		_u.SetOutputFormat(*v)
+	}
+	return _u
+}
+
+// SetBackground sets the "background" field.
+func (_u *UserImageTaskUpdate) SetBackground(v string) *UserImageTaskUpdate {
+	_u.mutation.SetBackground(v)
+	return _u
+}
+
+// SetNillableBackground sets the "background" field if the given value is not nil.
+func (_u *UserImageTaskUpdate) SetNillableBackground(v *string) *UserImageTaskUpdate {
+	if v != nil {
+		_u.SetBackground(*v)
+	}
+	return _u
+}
+
 // SetSize sets the "size" field.
 func (_u *UserImageTaskUpdate) SetSize(v string) *UserImageTaskUpdate {
 	_u.mutation.SetSize(v)
@@ -460,6 +488,16 @@ func (_u *UserImageTaskUpdate) check() error {
 			return &ValidationError{Name: "quality", err: fmt.Errorf(`ent: validator failed for field "UserImageTask.quality": %w`, err)}
 		}
 	}
+	if v, ok := _u.mutation.OutputFormat(); ok {
+		if err := userimagetask.OutputFormatValidator(v); err != nil {
+			return &ValidationError{Name: "output_format", err: fmt.Errorf(`ent: validator failed for field "UserImageTask.output_format": %w`, err)}
+		}
+	}
+	if v, ok := _u.mutation.Background(); ok {
+		if err := userimagetask.BackgroundValidator(v); err != nil {
+			return &ValidationError{Name: "background", err: fmt.Errorf(`ent: validator failed for field "UserImageTask.background": %w`, err)}
+		}
+	}
 	if v, ok := _u.mutation.Size(); ok {
 		if err := userimagetask.SizeValidator(v); err != nil {
 			return &ValidationError{Name: "size", err: fmt.Errorf(`ent: validator failed for field "UserImageTask.size": %w`, err)}
@@ -526,6 +564,12 @@ func (_u *UserImageTaskUpdate) sqlSave(ctx context.Context) (_node int, err erro
 	}
 	if value, ok := _u.mutation.Quality(); ok {
 		_spec.SetField(userimagetask.FieldQuality, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.OutputFormat(); ok {
+		_spec.SetField(userimagetask.FieldOutputFormat, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.Background(); ok {
+		_spec.SetField(userimagetask.FieldBackground, field.TypeString, value)
 	}
 	if value, ok := _u.mutation.Size(); ok {
 		_spec.SetField(userimagetask.FieldSize, field.TypeString, value)
@@ -831,6 +875,34 @@ func (_u *UserImageTaskUpdateOne) SetNillableQuality(v *string) *UserImageTaskUp
 	return _u
 }
 
+// SetOutputFormat sets the "output_format" field.
+func (_u *UserImageTaskUpdateOne) SetOutputFormat(v string) *UserImageTaskUpdateOne {
+	_u.mutation.SetOutputFormat(v)
+	return _u
+}
+
+// SetNillableOutputFormat sets the "output_format" field if the given value is not nil.
+func (_u *UserImageTaskUpdateOne) SetNillableOutputFormat(v *string) *UserImageTaskUpdateOne {
+	if v != nil {
+		_u.SetOutputFormat(*v)
+	}
+	return _u
+}
+
+// SetBackground sets the "background" field.
+func (_u *UserImageTaskUpdateOne) SetBackground(v string) *UserImageTaskUpdateOne {
+	_u.mutation.SetBackground(v)
+	return _u
+}
+
+// SetNillableBackground sets the "background" field if the given value is not nil.
+func (_u *UserImageTaskUpdateOne) SetNillableBackground(v *string) *UserImageTaskUpdateOne {
+	if v != nil {
+		_u.SetBackground(*v)
+	}
+	return _u
+}
+
 // SetSize sets the "size" field.
 func (_u *UserImageTaskUpdateOne) SetSize(v string) *UserImageTaskUpdateOne {
 	_u.mutation.SetSize(v)
@@ -1096,6 +1168,16 @@ func (_u *UserImageTaskUpdateOne) check() error {
 			return &ValidationError{Name: "quality", err: fmt.Errorf(`ent: validator failed for field "UserImageTask.quality": %w`, err)}
 		}
 	}
+	if v, ok := _u.mutation.OutputFormat(); ok {
+		if err := userimagetask.OutputFormatValidator(v); err != nil {
+			return &ValidationError{Name: "output_format", err: fmt.Errorf(`ent: validator failed for field "UserImageTask.output_format": %w`, err)}
+		}
+	}
+	if v, ok := _u.mutation.Background(); ok {
+		if err := userimagetask.BackgroundValidator(v); err != nil {
+			return &ValidationError{Name: "background", err: fmt.Errorf(`ent: validator failed for field "UserImageTask.background": %w`, err)}
+		}
+	}
 	if v, ok := _u.mutation.Size(); ok {
 		if err := userimagetask.SizeValidator(v); err != nil {
 			return &ValidationError{Name: "size", err: fmt.Errorf(`ent: validator failed for field "UserImageTask.size": %w`, err)}
@@ -1179,6 +1261,12 @@ func (_u *UserImageTaskUpdateOne) sqlSave(ctx context.Context) (_node *UserImage
 	}
 	if value, ok := _u.mutation.Quality(); ok {
 		_spec.SetField(userimagetask.FieldQuality, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.OutputFormat(); ok {
+		_spec.SetField(userimagetask.FieldOutputFormat, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.Background(); ok {
+		_spec.SetField(userimagetask.FieldBackground, field.TypeString, value)
 	}
 	if value, ok := _u.mutation.Size(); ok {
 		_spec.SetField(userimagetask.FieldSize, field.TypeString, value)

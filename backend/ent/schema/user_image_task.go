@@ -61,6 +61,12 @@ func (UserImageTask) Fields() []ent.Field {
 		field.String("quality").
 			MaxLen(32).
 			NotEmpty(),
+		field.String("output_format").
+			MaxLen(16).
+			Default("png"),
+		field.String("background").
+			MaxLen(24).
+			Default("auto"),
 		field.String("size").
 			MaxLen(32).
 			NotEmpty(),

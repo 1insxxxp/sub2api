@@ -1,0 +1,11 @@
+ALTER TABLE user_images
+    ADD COLUMN IF NOT EXISTS output_format VARCHAR(16) NOT NULL DEFAULT 'png';
+
+ALTER TABLE user_images
+    ADD COLUMN IF NOT EXISTS background VARCHAR(24) NOT NULL DEFAULT 'auto';
+
+ALTER TABLE user_image_tasks
+    ADD COLUMN IF NOT EXISTS output_format VARCHAR(16) NOT NULL DEFAULT 'png';
+
+ALTER TABLE user_image_tasks
+    ADD COLUMN IF NOT EXISTS background VARCHAR(24) NOT NULL DEFAULT 'auto';

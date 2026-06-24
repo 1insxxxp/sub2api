@@ -34,6 +34,8 @@ func (r *userImageRepository) Create(ctx context.Context, record *service.ImageS
 		SetStorageDriver(record.StorageDriver).
 		SetStorageObjectKey(record.StorageObjectKey).
 		SetMimeType(record.MimeType).
+		SetOutputFormat(record.OutputFormat).
+		SetBackground(record.Background).
 		SetBytes(record.Bytes).
 		SetCost(record.Cost).
 		SetSourceImageCount(record.SourceImageCount).
@@ -198,6 +200,8 @@ func userImageEntityToService(row *dbent.UserImage) *service.ImageStudioImageRec
 		StorageDriver:    row.StorageDriver,
 		StorageObjectKey: row.StorageObjectKey,
 		MimeType:         row.MimeType,
+		OutputFormat:     row.OutputFormat,
+		Background:       row.Background,
 		Bytes:            row.Bytes,
 		Cost:             row.Cost,
 		UsageLogID:       row.UsageLogID,

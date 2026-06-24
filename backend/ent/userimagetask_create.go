@@ -116,6 +116,34 @@ func (_c *UserImageTaskCreate) SetQuality(v string) *UserImageTaskCreate {
 	return _c
 }
 
+// SetOutputFormat sets the "output_format" field.
+func (_c *UserImageTaskCreate) SetOutputFormat(v string) *UserImageTaskCreate {
+	_c.mutation.SetOutputFormat(v)
+	return _c
+}
+
+// SetNillableOutputFormat sets the "output_format" field if the given value is not nil.
+func (_c *UserImageTaskCreate) SetNillableOutputFormat(v *string) *UserImageTaskCreate {
+	if v != nil {
+		_c.SetOutputFormat(*v)
+	}
+	return _c
+}
+
+// SetBackground sets the "background" field.
+func (_c *UserImageTaskCreate) SetBackground(v string) *UserImageTaskCreate {
+	_c.mutation.SetBackground(v)
+	return _c
+}
+
+// SetNillableBackground sets the "background" field if the given value is not nil.
+func (_c *UserImageTaskCreate) SetNillableBackground(v *string) *UserImageTaskCreate {
+	if v != nil {
+		_c.SetBackground(*v)
+	}
+	return _c
+}
+
 // SetSize sets the "size" field.
 func (_c *UserImageTaskCreate) SetSize(v string) *UserImageTaskCreate {
 	_c.mutation.SetSize(v)
@@ -293,6 +321,14 @@ func (_c *UserImageTaskCreate) ExecX(ctx context.Context) {
 
 // defaults sets the default values of the builder before save.
 func (_c *UserImageTaskCreate) defaults() {
+	if _, ok := _c.mutation.OutputFormat(); !ok {
+		v := userimagetask.DefaultOutputFormat
+		_c.mutation.SetOutputFormat(v)
+	}
+	if _, ok := _c.mutation.Background(); !ok {
+		v := userimagetask.DefaultBackground
+		_c.mutation.SetBackground(v)
+	}
 	if _, ok := _c.mutation.EstimatedCost(); !ok {
 		v := userimagetask.DefaultEstimatedCost
 		_c.mutation.SetEstimatedCost(v)
@@ -354,6 +390,22 @@ func (_c *UserImageTaskCreate) check() error {
 	if v, ok := _c.mutation.Quality(); ok {
 		if err := userimagetask.QualityValidator(v); err != nil {
 			return &ValidationError{Name: "quality", err: fmt.Errorf(`ent: validator failed for field "UserImageTask.quality": %w`, err)}
+		}
+	}
+	if _, ok := _c.mutation.OutputFormat(); !ok {
+		return &ValidationError{Name: "output_format", err: errors.New(`ent: missing required field "UserImageTask.output_format"`)}
+	}
+	if v, ok := _c.mutation.OutputFormat(); ok {
+		if err := userimagetask.OutputFormatValidator(v); err != nil {
+			return &ValidationError{Name: "output_format", err: fmt.Errorf(`ent: validator failed for field "UserImageTask.output_format": %w`, err)}
+		}
+	}
+	if _, ok := _c.mutation.Background(); !ok {
+		return &ValidationError{Name: "background", err: errors.New(`ent: missing required field "UserImageTask.background"`)}
+	}
+	if v, ok := _c.mutation.Background(); ok {
+		if err := userimagetask.BackgroundValidator(v); err != nil {
+			return &ValidationError{Name: "background", err: fmt.Errorf(`ent: validator failed for field "UserImageTask.background": %w`, err)}
 		}
 	}
 	if _, ok := _c.mutation.Size(); !ok {
@@ -442,6 +494,14 @@ func (_c *UserImageTaskCreate) createSpec() (*UserImageTask, *sqlgraph.CreateSpe
 	if value, ok := _c.mutation.Quality(); ok {
 		_spec.SetField(userimagetask.FieldQuality, field.TypeString, value)
 		_node.Quality = value
+	}
+	if value, ok := _c.mutation.OutputFormat(); ok {
+		_spec.SetField(userimagetask.FieldOutputFormat, field.TypeString, value)
+		_node.OutputFormat = value
+	}
+	if value, ok := _c.mutation.Background(); ok {
+		_spec.SetField(userimagetask.FieldBackground, field.TypeString, value)
+		_node.Background = value
 	}
 	if value, ok := _c.mutation.Size(); ok {
 		_spec.SetField(userimagetask.FieldSize, field.TypeString, value)
@@ -722,6 +782,30 @@ func (u *UserImageTaskUpsert) SetQuality(v string) *UserImageTaskUpsert {
 // UpdateQuality sets the "quality" field to the value that was provided on create.
 func (u *UserImageTaskUpsert) UpdateQuality() *UserImageTaskUpsert {
 	u.SetExcluded(userimagetask.FieldQuality)
+	return u
+}
+
+// SetOutputFormat sets the "output_format" field.
+func (u *UserImageTaskUpsert) SetOutputFormat(v string) *UserImageTaskUpsert {
+	u.Set(userimagetask.FieldOutputFormat, v)
+	return u
+}
+
+// UpdateOutputFormat sets the "output_format" field to the value that was provided on create.
+func (u *UserImageTaskUpsert) UpdateOutputFormat() *UserImageTaskUpsert {
+	u.SetExcluded(userimagetask.FieldOutputFormat)
+	return u
+}
+
+// SetBackground sets the "background" field.
+func (u *UserImageTaskUpsert) SetBackground(v string) *UserImageTaskUpsert {
+	u.Set(userimagetask.FieldBackground, v)
+	return u
+}
+
+// UpdateBackground sets the "background" field to the value that was provided on create.
+func (u *UserImageTaskUpsert) UpdateBackground() *UserImageTaskUpsert {
+	u.SetExcluded(userimagetask.FieldBackground)
 	return u
 }
 
@@ -1099,6 +1183,34 @@ func (u *UserImageTaskUpsertOne) SetQuality(v string) *UserImageTaskUpsertOne {
 func (u *UserImageTaskUpsertOne) UpdateQuality() *UserImageTaskUpsertOne {
 	return u.Update(func(s *UserImageTaskUpsert) {
 		s.UpdateQuality()
+	})
+}
+
+// SetOutputFormat sets the "output_format" field.
+func (u *UserImageTaskUpsertOne) SetOutputFormat(v string) *UserImageTaskUpsertOne {
+	return u.Update(func(s *UserImageTaskUpsert) {
+		s.SetOutputFormat(v)
+	})
+}
+
+// UpdateOutputFormat sets the "output_format" field to the value that was provided on create.
+func (u *UserImageTaskUpsertOne) UpdateOutputFormat() *UserImageTaskUpsertOne {
+	return u.Update(func(s *UserImageTaskUpsert) {
+		s.UpdateOutputFormat()
+	})
+}
+
+// SetBackground sets the "background" field.
+func (u *UserImageTaskUpsertOne) SetBackground(v string) *UserImageTaskUpsertOne {
+	return u.Update(func(s *UserImageTaskUpsert) {
+		s.SetBackground(v)
+	})
+}
+
+// UpdateBackground sets the "background" field to the value that was provided on create.
+func (u *UserImageTaskUpsertOne) UpdateBackground() *UserImageTaskUpsertOne {
+	return u.Update(func(s *UserImageTaskUpsert) {
+		s.UpdateBackground()
 	})
 }
 
@@ -1667,6 +1779,34 @@ func (u *UserImageTaskUpsertBulk) SetQuality(v string) *UserImageTaskUpsertBulk 
 func (u *UserImageTaskUpsertBulk) UpdateQuality() *UserImageTaskUpsertBulk {
 	return u.Update(func(s *UserImageTaskUpsert) {
 		s.UpdateQuality()
+	})
+}
+
+// SetOutputFormat sets the "output_format" field.
+func (u *UserImageTaskUpsertBulk) SetOutputFormat(v string) *UserImageTaskUpsertBulk {
+	return u.Update(func(s *UserImageTaskUpsert) {
+		s.SetOutputFormat(v)
+	})
+}
+
+// UpdateOutputFormat sets the "output_format" field to the value that was provided on create.
+func (u *UserImageTaskUpsertBulk) UpdateOutputFormat() *UserImageTaskUpsertBulk {
+	return u.Update(func(s *UserImageTaskUpsert) {
+		s.UpdateOutputFormat()
+	})
+}
+
+// SetBackground sets the "background" field.
+func (u *UserImageTaskUpsertBulk) SetBackground(v string) *UserImageTaskUpsertBulk {
+	return u.Update(func(s *UserImageTaskUpsert) {
+		s.SetBackground(v)
+	})
+}
+
+// UpdateBackground sets the "background" field to the value that was provided on create.
+func (u *UserImageTaskUpsertBulk) UpdateBackground() *UserImageTaskUpsertBulk {
+	return u.Update(func(s *UserImageTaskUpsert) {
+		s.UpdateBackground()
 	})
 }
 

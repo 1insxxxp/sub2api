@@ -39,6 +39,10 @@ type UserImageTask struct {
 	AspectRatio string `json:"aspect_ratio,omitempty"`
 	// Quality holds the value of the "quality" field.
 	Quality string `json:"quality,omitempty"`
+	// OutputFormat holds the value of the "output_format" field.
+	OutputFormat string `json:"output_format,omitempty"`
+	// Background holds the value of the "background" field.
+	Background string `json:"background,omitempty"`
 	// Size holds the value of the "size" field.
 	Size string `json:"size,omitempty"`
 	// EstimatedCost holds the value of the "estimated_cost" field.
@@ -107,7 +111,7 @@ func (*UserImageTask) scanValues(columns []string) ([]any, error) {
 			values[i] = new(sql.NullFloat64)
 		case userimagetask.FieldID, userimagetask.FieldUserID, userimagetask.FieldAPIKeyID, userimagetask.FieldGroupID, userimagetask.FieldImageID, userimagetask.FieldSourceImageCount:
 			values[i] = new(sql.NullInt64)
-		case userimagetask.FieldMode, userimagetask.FieldStatus, userimagetask.FieldModel, userimagetask.FieldPrompt, userimagetask.FieldAspectRatio, userimagetask.FieldQuality, userimagetask.FieldSize, userimagetask.FieldReferenceObjectKeys, userimagetask.FieldErrorReason, userimagetask.FieldErrorMessage:
+		case userimagetask.FieldMode, userimagetask.FieldStatus, userimagetask.FieldModel, userimagetask.FieldPrompt, userimagetask.FieldAspectRatio, userimagetask.FieldQuality, userimagetask.FieldOutputFormat, userimagetask.FieldBackground, userimagetask.FieldSize, userimagetask.FieldReferenceObjectKeys, userimagetask.FieldErrorReason, userimagetask.FieldErrorMessage:
 			values[i] = new(sql.NullString)
 		case userimagetask.FieldStartedAt, userimagetask.FieldCompletedAt, userimagetask.FieldCreatedAt, userimagetask.FieldUpdatedAt:
 			values[i] = new(sql.NullTime)
@@ -195,6 +199,18 @@ func (_m *UserImageTask) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field quality", values[i])
 			} else if value.Valid {
 				_m.Quality = value.String
+			}
+		case userimagetask.FieldOutputFormat:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field output_format", values[i])
+			} else if value.Valid {
+				_m.OutputFormat = value.String
+			}
+		case userimagetask.FieldBackground:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field background", values[i])
+			} else if value.Valid {
+				_m.Background = value.String
 			}
 		case userimagetask.FieldSize:
 			if value, ok := values[i].(*sql.NullString); !ok {
@@ -344,6 +360,12 @@ func (_m *UserImageTask) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("quality=")
 	builder.WriteString(_m.Quality)
+	builder.WriteString(", ")
+	builder.WriteString("output_format=")
+	builder.WriteString(_m.OutputFormat)
+	builder.WriteString(", ")
+	builder.WriteString("background=")
+	builder.WriteString(_m.Background)
 	builder.WriteString(", ")
 	builder.WriteString("size=")
 	builder.WriteString(_m.Size)

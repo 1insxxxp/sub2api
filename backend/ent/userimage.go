@@ -38,6 +38,10 @@ type UserImage struct {
 	StorageObjectKey string `json:"storage_object_key,omitempty"`
 	// MimeType holds the value of the "mime_type" field.
 	MimeType string `json:"mime_type,omitempty"`
+	// OutputFormat holds the value of the "output_format" field.
+	OutputFormat string `json:"output_format,omitempty"`
+	// Background holds the value of the "background" field.
+	Background string `json:"background,omitempty"`
 	// Bytes holds the value of the "bytes" field.
 	Bytes int64 `json:"bytes,omitempty"`
 	// Cost holds the value of the "cost" field.
@@ -100,7 +104,7 @@ func (*UserImage) scanValues(columns []string) ([]any, error) {
 			values[i] = new(sql.NullFloat64)
 		case userimage.FieldID, userimage.FieldUserID, userimage.FieldBytes, userimage.FieldUsageLogID, userimage.FieldSourceImageCount:
 			values[i] = new(sql.NullInt64)
-		case userimage.FieldMode, userimage.FieldModel, userimage.FieldPrompt, userimage.FieldAspectRatio, userimage.FieldSize, userimage.FieldImageURL, userimage.FieldStorageDriver, userimage.FieldStorageObjectKey, userimage.FieldMimeType:
+		case userimage.FieldMode, userimage.FieldModel, userimage.FieldPrompt, userimage.FieldAspectRatio, userimage.FieldSize, userimage.FieldImageURL, userimage.FieldStorageDriver, userimage.FieldStorageObjectKey, userimage.FieldMimeType, userimage.FieldOutputFormat, userimage.FieldBackground:
 			values[i] = new(sql.NullString)
 		case userimage.FieldExpiresAt, userimage.FieldDeletedAt, userimage.FieldCreatedAt, userimage.FieldUpdatedAt:
 			values[i] = new(sql.NullTime)
@@ -185,6 +189,18 @@ func (_m *UserImage) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field mime_type", values[i])
 			} else if value.Valid {
 				_m.MimeType = value.String
+			}
+		case userimage.FieldOutputFormat:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field output_format", values[i])
+			} else if value.Valid {
+				_m.OutputFormat = value.String
+			}
+		case userimage.FieldBackground:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field background", values[i])
+			} else if value.Valid {
+				_m.Background = value.String
 			}
 		case userimage.FieldBytes:
 			if value, ok := values[i].(*sql.NullInt64); !ok {
@@ -314,6 +330,12 @@ func (_m *UserImage) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("mime_type=")
 	builder.WriteString(_m.MimeType)
+	builder.WriteString(", ")
+	builder.WriteString("output_format=")
+	builder.WriteString(_m.OutputFormat)
+	builder.WriteString(", ")
+	builder.WriteString("background=")
+	builder.WriteString(_m.Background)
 	builder.WriteString(", ")
 	builder.WriteString("bytes=")
 	builder.WriteString(fmt.Sprintf("%v", _m.Bytes))

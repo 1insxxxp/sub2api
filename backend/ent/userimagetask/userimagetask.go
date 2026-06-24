@@ -34,6 +34,10 @@ const (
 	FieldAspectRatio = "aspect_ratio"
 	// FieldQuality holds the string denoting the quality field in the database.
 	FieldQuality = "quality"
+	// FieldOutputFormat holds the string denoting the output_format field in the database.
+	FieldOutputFormat = "output_format"
+	// FieldBackground holds the string denoting the background field in the database.
+	FieldBackground = "background"
 	// FieldSize holds the string denoting the size field in the database.
 	FieldSize = "size"
 	// FieldEstimatedCost holds the string denoting the estimated_cost field in the database.
@@ -89,6 +93,8 @@ var Columns = []string{
 	FieldPrompt,
 	FieldAspectRatio,
 	FieldQuality,
+	FieldOutputFormat,
+	FieldBackground,
 	FieldSize,
 	FieldEstimatedCost,
 	FieldSourceImageCount,
@@ -122,6 +128,14 @@ var (
 	AspectRatioValidator func(string) error
 	// QualityValidator is a validator for the "quality" field. It is called by the builders before save.
 	QualityValidator func(string) error
+	// DefaultOutputFormat holds the default value on creation for the "output_format" field.
+	DefaultOutputFormat string
+	// OutputFormatValidator is a validator for the "output_format" field. It is called by the builders before save.
+	OutputFormatValidator func(string) error
+	// DefaultBackground holds the default value on creation for the "background" field.
+	DefaultBackground string
+	// BackgroundValidator is a validator for the "background" field. It is called by the builders before save.
+	BackgroundValidator func(string) error
 	// SizeValidator is a validator for the "size" field. It is called by the builders before save.
 	SizeValidator func(string) error
 	// DefaultEstimatedCost holds the default value on creation for the "estimated_cost" field.
@@ -194,6 +208,16 @@ func ByAspectRatio(opts ...sql.OrderTermOption) OrderOption {
 // ByQuality orders the results by the quality field.
 func ByQuality(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldQuality, opts...).ToFunc()
+}
+
+// ByOutputFormat orders the results by the output_format field.
+func ByOutputFormat(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldOutputFormat, opts...).ToFunc()
+}
+
+// ByBackground orders the results by the background field.
+func ByBackground(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldBackground, opts...).ToFunc()
 }
 
 // BySize orders the results by the size field.

@@ -69,6 +69,8 @@ func (e *ImageStudioGatewayExecutor) Generate(ctx context.Context, input ImageSt
 		Model:            input.Model,
 		Size:             input.Size,
 		BillingTier:      input.BillingTier,
+		OutputFormat:     input.OutputFormat,
+		Background:       input.Background,
 		UserAgent:        input.UserAgent,
 		IPAddress:        input.IPAddress,
 		Endpoint:         openAIImagesGenerationsEndpoint,
@@ -90,6 +92,8 @@ func (e *ImageStudioGatewayExecutor) Edit(ctx context.Context, input ImageStudio
 		Model:            input.Model,
 		Size:             input.Size,
 		BillingTier:      input.BillingTier,
+		OutputFormat:     input.OutputFormat,
+		Background:       input.Background,
 		UserAgent:        input.UserAgent,
 		IPAddress:        input.IPAddress,
 		Endpoint:         openAIImagesEditsEndpoint,
@@ -106,6 +110,8 @@ type imageStudioGatewayExecutionInput struct {
 	Model            string
 	Size             string
 	BillingTier      string
+	OutputFormat     string
+	Background       string
 	UserAgent        string
 	IPAddress        string
 	Endpoint         string
@@ -179,6 +185,7 @@ func (e *ImageStudioGatewayExecutor) execute(ctx context.Context, input imageStu
 	if err != nil {
 		return nil, err
 	}
+	outputFormat, background := extractImageStudioOutputMetadataFromGatewayBody(recorder.Body.Bytes())
 	usageInput := &OpenAIRecordUsageInput{
 		Result:             result,
 		APIKey:             apiKey,
@@ -196,6 +203,8 @@ func (e *ImageStudioGatewayExecutor) execute(ctx context.Context, input imageStu
 	return &ImageStudioExecutionResult{
 		ImageBytes:       imageBytes,
 		MimeType:         mimeType,
+		OutputFormat:     firstNonEmptyTrimmed(outputFormat, input.OutputFormat),
+		Background:       firstNonEmptyTrimmed(background, input.Background),
 		Cost:             estimateImageStudioGatewayCost(apiKey, result),
 		RequestID:        result.RequestID,
 		SourceImageCount: input.SourceImageCount,
@@ -245,6 +254,12 @@ func buildImageStudioGenerateBody(input ImageStudioGenerateInput) ([]byte, error
 		"n":               1,
 		"response_format": "b64_json",
 	}
+	if outputFormat := strings.TrimSpace(input.OutputFormat); outputFormat != "" {
+		body["output_format"] = outputFormat
+	}
+	if background := strings.TrimSpace(input.Background); background != "" {
+		body["background"] = background
+	}
 	return json.Marshal(body)
 }
 
@@ -256,6 +271,12 @@ func buildImageStudioEditBody(input ImageStudioEditInput) ([]byte, string, error
 		"prompt":          strings.TrimSpace(input.Prompt),
 		"size":            strings.TrimSpace(input.Size),
 		"response_format": "b64_json",
+	}
+	if outputFormat := strings.TrimSpace(input.OutputFormat); outputFormat != "" {
+		fields["output_format"] = outputFormat
+	}
+	if background := strings.TrimSpace(input.Background); background != "" {
+		fields["background"] = background
 	}
 	for key, value := range fields {
 		if err := writer.WriteField(key, value); err != nil {
@@ -337,7 +358,8 @@ func extractImageStudioBytesFromGatewayBody(body []byte) ([]byte, string, error)
 		if err != nil {
 			return nil, "", err
 		}
-		return decoded, "image/png", nil
+		outputFormat, _ := extractImageStudioOutputMetadataFromGatewayBody(body)
+		return decoded, openAIImageOutputMIMEType(outputFormat), nil
 	}
 	for _, item := range collectOpenAIImageInlineAssets(body, "") {
 		if decoded, ok, err := decodeImageStudioBase64(item.B64JSON); ok || err != nil {
@@ -355,6 +377,18 @@ func extractImageStudioBytesFromGatewayBody(body []byte) ([]byte, string, error)
 		}
 	}
 	return nil, "", infraerrors.ServiceUnavailable("IMAGE_GENERATION_EMPTY_RESULT", "image provider returned no inline image")
+}
+
+func extractImageStudioOutputMetadataFromGatewayBody(body []byte) (string, string) {
+	outputFormat := strings.TrimSpace(gjson.GetBytes(body, "output_format").String())
+	background := strings.TrimSpace(gjson.GetBytes(body, "background").String())
+	if outputFormat == "" {
+		outputFormat = strings.TrimSpace(gjson.GetBytes(body, "data.0.output_format").String())
+	}
+	if background == "" {
+		background = strings.TrimSpace(gjson.GetBytes(body, "data.0.background").String())
+	}
+	return outputFormat, background
 }
 
 func decodeImageStudioDataURL(raw string) ([]byte, string, error) {

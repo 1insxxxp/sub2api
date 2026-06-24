@@ -49,3 +49,9 @@ func TestNormalizeImageStudioPrompt(t *testing.T) {
 	_, err = NormalizeImageStudioPrompt("   ")
 	require.Error(t, err)
 }
+
+func TestValidateImageStudioOutputOptionsForModelRejectsGPTImage2Transparent(t *testing.T) {
+	err := ValidateImageStudioOutputOptionsForModel("gpt-image-2", "png", "transparent")
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "transparent background is not supported for gpt-image-2")
+}

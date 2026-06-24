@@ -62,12 +62,14 @@ func (h *ImageStudioHandler) GetOptions(c *gin.Context) {
 }
 
 type imageStudioGenerateRequest struct {
-	APIKeyID    *int64 `json:"api_key_id"`
-	GroupID     *int64 `json:"group_id"`
-	Model       string `json:"model"`
-	Prompt      string `json:"prompt" binding:"required"`
-	AspectRatio string `json:"aspect_ratio"`
-	Quality     string `json:"quality"`
+	APIKeyID     *int64 `json:"api_key_id"`
+	GroupID      *int64 `json:"group_id"`
+	Model        string `json:"model"`
+	Prompt       string `json:"prompt" binding:"required"`
+	AspectRatio  string `json:"aspect_ratio"`
+	Quality      string `json:"quality"`
+	OutputFormat string `json:"output_format"`
+	Background   string `json:"background"`
 }
 
 func (h *ImageStudioHandler) Generate(c *gin.Context) {
@@ -82,15 +84,17 @@ func (h *ImageStudioHandler) Generate(c *gin.Context) {
 		return
 	}
 	record, err := h.imageStudioService.Generate(c.Request.Context(), service.ImageStudioGenerateInput{
-		UserID:      subject.UserID,
-		APIKeyID:    req.APIKeyID,
-		GroupID:     req.GroupID,
-		Model:       req.Model,
-		Prompt:      req.Prompt,
-		AspectRatio: req.AspectRatio,
-		Quality:     req.Quality,
-		UserAgent:   c.GetHeader("User-Agent"),
-		IPAddress:   c.ClientIP(),
+		UserID:       subject.UserID,
+		APIKeyID:     req.APIKeyID,
+		GroupID:      req.GroupID,
+		Model:        req.Model,
+		Prompt:       req.Prompt,
+		AspectRatio:  req.AspectRatio,
+		Quality:      req.Quality,
+		OutputFormat: req.OutputFormat,
+		Background:   req.Background,
+		UserAgent:    c.GetHeader("User-Agent"),
+		IPAddress:    c.ClientIP(),
 	})
 	if err != nil {
 		response.ErrorFrom(c, err)
@@ -100,13 +104,15 @@ func (h *ImageStudioHandler) Generate(c *gin.Context) {
 }
 
 type imageStudioTaskRequest struct {
-	Mode        string `json:"mode"`
-	APIKeyID    *int64 `json:"api_key_id"`
-	GroupID     *int64 `json:"group_id"`
-	Model       string `json:"model"`
-	Prompt      string `json:"prompt" binding:"required"`
-	AspectRatio string `json:"aspect_ratio"`
-	Quality     string `json:"quality"`
+	Mode         string `json:"mode"`
+	APIKeyID     *int64 `json:"api_key_id"`
+	GroupID      *int64 `json:"group_id"`
+	Model        string `json:"model"`
+	Prompt       string `json:"prompt" binding:"required"`
+	AspectRatio  string `json:"aspect_ratio"`
+	Quality      string `json:"quality"`
+	OutputFormat string `json:"output_format"`
+	Background   string `json:"background"`
 }
 
 func (h *ImageStudioHandler) CreateTask(c *gin.Context) {
@@ -128,15 +134,17 @@ func (h *ImageStudioHandler) CreateTask(c *gin.Context) {
 	switch mode {
 	case service.ImageStudioModeGeneration:
 		input.Generate = &service.ImageStudioGenerateInput{
-			UserID:      subject.UserID,
-			APIKeyID:    req.APIKeyID,
-			GroupID:     req.GroupID,
-			Model:       req.Model,
-			Prompt:      req.Prompt,
-			AspectRatio: req.AspectRatio,
-			Quality:     req.Quality,
-			UserAgent:   c.GetHeader("User-Agent"),
-			IPAddress:   c.ClientIP(),
+			UserID:       subject.UserID,
+			APIKeyID:     req.APIKeyID,
+			GroupID:      req.GroupID,
+			Model:        req.Model,
+			Prompt:       req.Prompt,
+			AspectRatio:  req.AspectRatio,
+			Quality:      req.Quality,
+			OutputFormat: req.OutputFormat,
+			Background:   req.Background,
+			UserAgent:    c.GetHeader("User-Agent"),
+			IPAddress:    c.ClientIP(),
 		}
 	case service.ImageStudioModeEdit:
 		response.BadRequest(c, "Image edit tasks are not available yet")
@@ -225,6 +233,8 @@ func (h *ImageStudioHandler) Edit(c *gin.Context) {
 		Prompt:          c.PostForm("prompt"),
 		AspectRatio:     c.PostForm("aspect_ratio"),
 		Quality:         c.PostForm("quality"),
+		OutputFormat:    c.PostForm("output_format"),
+		Background:      c.PostForm("background"),
 		ReferenceImages: images,
 		UserAgent:       c.GetHeader("User-Agent"),
 		IPAddress:       c.ClientIP(),

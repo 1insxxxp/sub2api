@@ -34,6 +34,10 @@ const (
 	FieldStorageObjectKey = "storage_object_key"
 	// FieldMimeType holds the string denoting the mime_type field in the database.
 	FieldMimeType = "mime_type"
+	// FieldOutputFormat holds the string denoting the output_format field in the database.
+	FieldOutputFormat = "output_format"
+	// FieldBackground holds the string denoting the background field in the database.
+	FieldBackground = "background"
 	// FieldBytes holds the string denoting the bytes field in the database.
 	FieldBytes = "bytes"
 	// FieldCost holds the string denoting the cost field in the database.
@@ -85,6 +89,8 @@ var Columns = []string{
 	FieldStorageDriver,
 	FieldStorageObjectKey,
 	FieldMimeType,
+	FieldOutputFormat,
+	FieldBackground,
 	FieldBytes,
 	FieldCost,
 	FieldUsageLogID,
@@ -126,6 +132,14 @@ var (
 	DefaultMimeType string
 	// MimeTypeValidator is a validator for the "mime_type" field. It is called by the builders before save.
 	MimeTypeValidator func(string) error
+	// DefaultOutputFormat holds the default value on creation for the "output_format" field.
+	DefaultOutputFormat string
+	// OutputFormatValidator is a validator for the "output_format" field. It is called by the builders before save.
+	OutputFormatValidator func(string) error
+	// DefaultBackground holds the default value on creation for the "background" field.
+	DefaultBackground string
+	// BackgroundValidator is a validator for the "background" field. It is called by the builders before save.
+	BackgroundValidator func(string) error
 	// DefaultBytes holds the default value on creation for the "bytes" field.
 	DefaultBytes int64
 	// DefaultCost holds the default value on creation for the "cost" field.
@@ -196,6 +210,16 @@ func ByStorageObjectKey(opts ...sql.OrderTermOption) OrderOption {
 // ByMimeType orders the results by the mime_type field.
 func ByMimeType(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldMimeType, opts...).ToFunc()
+}
+
+// ByOutputFormat orders the results by the output_format field.
+func ByOutputFormat(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldOutputFormat, opts...).ToFunc()
+}
+
+// ByBackground orders the results by the background field.
+func ByBackground(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldBackground, opts...).ToFunc()
 }
 
 // ByBytes orders the results by the bytes field.

@@ -193,7 +193,7 @@ func TestImageStudioHandlerGenerateUsesAuthenticatedUser(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	svc := &imageStudioHandlerServiceStub{}
 	h := NewImageStudioHandler(svc)
-	body := bytes.NewBufferString(`{"api_key_id":15,"group_id":9,"model":"gpt-image-2","prompt":"blue portal","aspect_ratio":"16:9","quality":"4K"}`)
+	body := bytes.NewBufferString(`{"api_key_id":15,"group_id":9,"model":"gpt-image-2","prompt":"blue portal","aspect_ratio":"16:9","quality":"4K","output_format":"webp","background":"transparent"}`)
 	c, rec := newImageStudioHandlerTestContext(http.MethodPost, "/api/v1/user/images/generate", body)
 	c.Request.Header.Set("Content-Type", "application/json")
 
@@ -209,13 +209,15 @@ func TestImageStudioHandlerGenerateUsesAuthenticatedUser(t *testing.T) {
 	require.Equal(t, "blue portal", svc.generateInput.Prompt)
 	require.Equal(t, "16:9", svc.generateInput.AspectRatio)
 	require.Equal(t, "4K", svc.generateInput.Quality)
+	require.Equal(t, "webp", svc.generateInput.OutputFormat)
+	require.Equal(t, "transparent", svc.generateInput.Background)
 }
 
 func TestImageStudioHandlerCreateAndGetTask(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	svc := &imageStudioHandlerServiceStub{}
 	h := NewImageStudioHandler(svc)
-	body := bytes.NewBufferString(`{"mode":"generation","api_key_id":15,"group_id":9,"model":"gpt-image-2","prompt":"blue portal","aspect_ratio":"16:9","quality":"4K"}`)
+	body := bytes.NewBufferString(`{"mode":"generation","api_key_id":15,"group_id":9,"model":"gpt-image-2","prompt":"blue portal","aspect_ratio":"16:9","quality":"4K","output_format":"png","background":"opaque"}`)
 	c, rec := newImageStudioHandlerTestContext(http.MethodPost, "/api/v1/user/images/tasks", body)
 	c.Request.Header.Set("Content-Type", "application/json")
 
@@ -232,6 +234,8 @@ func TestImageStudioHandlerCreateAndGetTask(t *testing.T) {
 	require.Equal(t, "blue portal", svc.taskInput.Generate.Prompt)
 	require.Equal(t, "16:9", svc.taskInput.Generate.AspectRatio)
 	require.Equal(t, "4K", svc.taskInput.Generate.Quality)
+	require.Equal(t, "png", svc.taskInput.Generate.OutputFormat)
+	require.Equal(t, "opaque", svc.taskInput.Generate.Background)
 
 	getCtx, getRec := newImageStudioHandlerTestContext(http.MethodGet, "/api/v1/user/images/tasks/22", nil)
 	getCtx.Params = gin.Params{{Key: "id", Value: "22"}}

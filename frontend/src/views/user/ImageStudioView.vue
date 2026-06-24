@@ -59,6 +59,10 @@
 
           <div class="image-studio-command-surface">
             <section class="image-studio-prompt-section">
+              <div class="image-studio-step-heading">
+                <span>00</span>
+                <strong>{{ t('imageStudio.stepPrompt') }}</strong>
+              </div>
               <label class="image-studio-field image-studio-prompt-field">
                 <span>{{ t('imageStudio.promptLabel') }}</span>
                 <textarea
@@ -72,102 +76,111 @@
             </section>
 
             <section class="image-studio-control-dock">
-              <div class="image-studio-foundation-row">
-                <div class="image-studio-field image-studio-select-field">
-                  <span>{{ t('imageStudio.apiKey') }}</span>
-                  <div
-                    class="image-studio-select"
-                    :class="{ 'is-open': openSelect === 'apiKey', 'is-disabled': submitting || !canUse }"
-                    @click.stop
-                  >
-                    <button
-                      type="button"
-                      class="image-studio-select-trigger"
-                      data-testid="image-studio-api-key-select"
-                      :disabled="submitting || !canUse"
-                      aria-haspopup="listbox"
-                      :aria-expanded="openSelect === 'apiKey'"
-                      @click="toggleSelect('apiKey')"
-                      @keydown.escape.stop="closeSelectMenus"
-                    >
-                      <span class="image-studio-select-value">{{ selectedAPIKeyLabel }}</span>
-                      <Icon name="chevronDown" size="sm" />
-                    </button>
-                    <transition name="image-studio-select-pop">
-                      <div
-                        v-if="openSelect === 'apiKey'"
-                        class="image-studio-select-menu"
-                        data-testid="image-studio-api-key-menu"
-                        role="listbox"
-                      >
-                        <button
-                          v-for="item in availableAPIKeys"
-                          :key="item.id"
-                          type="button"
-                          class="image-studio-select-option"
-                          :class="{ 'is-selected': item.id === selectedAPIKeyID }"
-                          role="option"
-                          :aria-selected="item.id === selectedAPIKeyID"
-                          @click="chooseAPIKey(item.id)"
-                        >
-                          <span>{{ apiKeyOptionLabel(item) }}</span>
-                          <small>{{ apiKeyOptionMeta(item) }}</small>
-                          <Icon v-if="item.id === selectedAPIKeyID" name="check" size="sm" />
-                        </button>
-                      </div>
-                    </transition>
+              <transition name="image-studio-fade">
+                <div v-if="mode === 'edit'" class="image-studio-upload-panel">
+                  <div class="image-studio-step-heading">
+                    <span>01</span>
+                    <strong>{{ t('imageStudio.stepReference') }}</strong>
                   </div>
-                  <small>{{ selectedAPIKeyMeta }}</small>
-                </div>
+                  <input
+                    ref="fileInput"
+                    class="sr-only"
+                    type="file"
+                    accept="image/*"
+                    multiple
+                    @change="handleFileInput"
+                  />
+                  <button
+                    type="button"
+                    class="image-studio-dropzone"
+                    :class="{ 'is-dragging': dragging }"
+                    :disabled="submitting || !canUse"
+                    @click="fileInput?.click()"
+                    @dragenter.prevent="dragging = true"
+                    @dragover.prevent="dragging = true"
+                    @dragleave.prevent="dragging = false"
+                    @drop.prevent="handleDrop"
+                    @paste="handlePaste"
+                  >
+                    <Icon name="upload" size="lg" />
+                    <span>{{ t('imageStudio.uploadTitle') }}</span>
+                    <small>{{ t('imageStudio.uploadHint', { mb: maxReferenceImageMB }) }}</small>
+                  </button>
 
-                <div class="image-studio-field image-studio-select-field">
-                  <span>{{ t('imageStudio.model') }}</span>
-                  <div
-                    class="image-studio-select"
-                    :class="{ 'is-open': openSelect === 'model', 'is-disabled': submitting || !canUse }"
-                    @click.stop
-                  >
-                    <button
-                      type="button"
-                      class="image-studio-select-trigger"
-                      data-testid="image-studio-model-select"
-                      :disabled="submitting || !canUse"
-                      aria-haspopup="listbox"
-                      :aria-expanded="openSelect === 'model'"
-                      @click="toggleSelect('model')"
-                      @keydown.escape.stop="closeSelectMenus"
-                    >
-                      <span class="image-studio-select-value">{{ selectedModelLabel || t('imageStudio.model') }}</span>
-                      <Icon name="chevronDown" size="sm" />
-                    </button>
-                    <transition name="image-studio-select-pop">
-                      <div
-                        v-if="openSelect === 'model'"
-                        class="image-studio-select-menu"
-                        data-testid="image-studio-model-menu"
-                        role="listbox"
-                      >
-                        <button
-                          v-for="item in modelOptions"
-                          :key="item.model"
-                          type="button"
-                          class="image-studio-select-option"
-                          :class="{ 'is-selected': item.model === model }"
-                          role="option"
-                          :aria-selected="item.model === model"
-                          @click="chooseModelOption(item.model)"
-                        >
-                          <span>{{ item.label || item.model }}</span>
-                          <Icon v-if="item.model === model" name="check" size="sm" />
-                        </button>
-                      </div>
-                    </transition>
+                  <div v-if="referenceFiles.length" class="image-studio-reference-list">
+                    <div v-for="file in referenceFiles" :key="file.name + file.size" class="image-studio-reference-item">
+                      <img
+                        class="image-studio-reference-thumb"
+                        data-testid="image-studio-reference-preview"
+                        :src="referencePreviewURL(file)"
+                        alt=""
+                      />
+                      <small>{{ formatBytes(file.size) }}</small>
+                      <button type="button" :aria-label="t('imageStudio.removeReference')" @click="removeReference(file)">
+                        <Icon name="x" size="sm" />
+                      </button>
+                    </div>
                   </div>
-                  <small>{{ selectedGroup?.platform || '-' }}</small>
                 </div>
-              </div>
+              </transition>
 
               <div class="image-studio-output-row">
+                <div class="image-studio-step-heading image-studio-step-heading-full">
+                  <span>{{ mode === 'edit' ? '02' : '01' }}</span>
+                  <strong>{{ t('imageStudio.stepOutput') }}</strong>
+                </div>
+                <div class="image-studio-field image-studio-choice-section">
+                  <span>{{ t('imageStudio.outputCount') }}</span>
+                  <div class="image-studio-choice-picker image-studio-count-picker">
+                    <button
+                      v-for="item in outputCountOptions"
+                      :key="item"
+                      type="button"
+                      :data-testid="`image-studio-output-count-${item}`"
+                      :class="{ active: outputCount === item }"
+                      :disabled="submitting || !canUse"
+                      @click="chooseOutputCount(item)"
+                    >
+                      <strong>{{ item }}</strong>
+                      <small>×{{ item }}</small>
+                    </button>
+                  </div>
+                </div>
+
+                <div class="image-studio-field image-studio-choice-section">
+                  <span>{{ t('imageStudio.outputFormat') }}</span>
+                  <div class="image-studio-choice-picker image-studio-format-picker">
+                    <button
+                      v-for="item in outputFormatOptions"
+                      :key="item.value"
+                      type="button"
+                      :data-testid="`image-studio-output-format-${item.value}`"
+                      :class="{ active: outputFormat === item.value }"
+                      :disabled="submitting || !canUse"
+                      @click="chooseOutputFormat(item.value)"
+                    >
+                      <strong>{{ item.label }}</strong>
+                    </button>
+                  </div>
+                </div>
+
+                <div class="image-studio-field image-studio-choice-section">
+                  <span>{{ t('imageStudio.outputBackground') }}</span>
+                  <div class="image-studio-choice-picker image-studio-background-picker">
+                    <button
+                      v-for="item in outputBackgroundOptions"
+                      :key="item.value"
+                      type="button"
+                      :data-testid="`image-studio-output-background-${item.value}`"
+                      :class="{ active: outputBackground === item.value }"
+                      :disabled="submitting || !canUse || isOutputBackgroundDisabled(item.value)"
+                      @click="chooseOutputBackground(item.value)"
+                    >
+                      <strong>{{ t(item.labelKey) }}</strong>
+                    </button>
+                  </div>
+                </div>
+
                 <div class="image-studio-field image-studio-choice-section">
                   <span>{{ t('imageStudio.quality') }}</span>
                   <div class="image-studio-choice-picker image-studio-quality-picker">
@@ -206,71 +219,141 @@
                 </div>
               </div>
 
-              <transition name="image-studio-fade">
-                <div v-if="mode === 'edit'" class="image-studio-upload-panel">
-                  <input
-                    ref="fileInput"
-                    class="sr-only"
-                    type="file"
-                    accept="image/*"
-                    multiple
-                    @change="handleFileInput"
-                  />
-                  <button
-                    type="button"
-                    class="image-studio-dropzone"
-                    :class="{ 'is-dragging': dragging }"
-                    :disabled="submitting || !canUse"
-                    @click="fileInput?.click()"
-                    @dragenter.prevent="dragging = true"
-                    @dragover.prevent="dragging = true"
-                    @dragleave.prevent="dragging = false"
-                    @drop.prevent="handleDrop"
-                    @paste="handlePaste"
-                  >
-                    <Icon name="upload" size="lg" />
-                    <span>{{ t('imageStudio.uploadTitle') }}</span>
-                    <small>{{ t('imageStudio.uploadHint', { mb: maxReferenceImageMB }) }}</small>
-                  </button>
-
-                  <div v-if="referenceFiles.length" class="image-studio-reference-list">
-                    <div v-for="file in referenceFiles" :key="file.name + file.size" class="image-studio-reference-item">
-                      <span>{{ file.name }}</span>
-                      <small>{{ formatBytes(file.size) }}</small>
-                      <button type="button" :aria-label="t('imageStudio.removeReference')" @click="removeReference(file)">
-                        <Icon name="x" size="sm" />
-                      </button>
-                    </div>
-                  </div>
+              <div class="image-studio-foundation-row">
+                <div class="image-studio-step-heading image-studio-step-heading-full">
+                  <span>{{ mode === 'edit' ? '03' : '02' }}</span>
+                  <strong>{{ t('imageStudio.stepConnection') }}</strong>
                 </div>
-              </transition>
-            </section>
+                <div class="image-studio-field image-studio-select-field">
+                  <span>{{ t('imageStudio.apiKey') }}</span>
+                  <div
+                    class="image-studio-select"
+                    data-testid="image-studio-api-key-select-root"
+                    :class="{
+                      'is-open': openSelect === 'apiKey',
+                      'is-disabled': submitting || !canUse,
+                      'is-drop-up': selectPlacement.apiKey === 'up',
+                    }"
+                    @click.stop
+                  >
+                    <button
+                      type="button"
+                      class="image-studio-select-trigger"
+                      data-testid="image-studio-api-key-select"
+                      :disabled="submitting || !canUse"
+                      aria-haspopup="listbox"
+                      :aria-expanded="openSelect === 'apiKey'"
+                      @click="toggleSelect('apiKey', $event)"
+                      @keydown.escape.stop="closeSelectMenus"
+                    >
+                      <span class="image-studio-select-value">{{ selectedAPIKeyLabel }}</span>
+                      <Icon name="chevronDown" size="sm" />
+                    </button>
+                    <transition name="image-studio-select-pop">
+                      <div
+                        v-if="openSelect === 'apiKey'"
+                        class="image-studio-select-menu"
+                        data-testid="image-studio-api-key-menu"
+                        role="listbox"
+                      >
+                        <button
+                          v-for="item in availableAPIKeys"
+                          :key="item.id"
+                          type="button"
+                          class="image-studio-select-option"
+                          :class="{ 'is-selected': item.id === selectedAPIKeyID }"
+                          role="option"
+                          :aria-selected="item.id === selectedAPIKeyID"
+                          @click="chooseAPIKey(item.id)"
+                        >
+                          <span>{{ apiKeyOptionLabel(item) }}</span>
+                          <small>{{ apiKeyOptionMeta(item) }}</small>
+                          <Icon v-if="item.id === selectedAPIKeyID" name="check" size="sm" />
+                        </button>
+                      </div>
+                    </transition>
+                  </div>
+                  <small>{{ selectedAPIKeyMeta }}</small>
+                </div>
 
-            <section class="image-studio-action-bar">
-              <div class="image-studio-cost-preview">
-                <span>{{ t('imageStudio.estimatedCost') }}</span>
-                <strong>{{ estimatedCostLabel }}</strong>
-                <small>{{ selectedPreviewMeta }}</small>
+                <div class="image-studio-field image-studio-select-field">
+                  <span>{{ t('imageStudio.model') }}</span>
+                  <div
+                    class="image-studio-select"
+                    data-testid="image-studio-model-select-root"
+                    :class="{
+                      'is-open': openSelect === 'model',
+                      'is-disabled': submitting || !canUse,
+                      'is-drop-up': selectPlacement.model === 'up',
+                    }"
+                    @click.stop
+                  >
+                    <button
+                      type="button"
+                      class="image-studio-select-trigger"
+                      data-testid="image-studio-model-select"
+                      :disabled="submitting || !canUse"
+                      aria-haspopup="listbox"
+                      :aria-expanded="openSelect === 'model'"
+                      @click="toggleSelect('model', $event)"
+                      @keydown.escape.stop="closeSelectMenus"
+                    >
+                      <span class="image-studio-select-value">{{ selectedModelLabel || t('imageStudio.model') }}</span>
+                      <Icon name="chevronDown" size="sm" />
+                    </button>
+                    <transition name="image-studio-select-pop">
+                      <div
+                        v-if="openSelect === 'model'"
+                        class="image-studio-select-menu"
+                        data-testid="image-studio-model-menu"
+                        role="listbox"
+                      >
+                        <button
+                          v-for="item in modelOptions"
+                          :key="item.model"
+                          type="button"
+                          class="image-studio-select-option"
+                          :class="{ 'is-selected': item.model === model }"
+                          role="option"
+                          :aria-selected="item.model === model"
+                          @click="chooseModelOption(item.model)"
+                        >
+                          <span>{{ item.label || item.model }}</span>
+                          <Icon v-if="item.model === model" name="check" size="sm" />
+                        </button>
+                      </div>
+                    </transition>
+                  </div>
+                  <small>{{ selectedGroup?.platform || '-' }}</small>
+                </div>
               </div>
-              <button
-                data-testid="image-studio-generate-button"
-                type="submit"
-                class="btn btn-primary image-studio-submit-button"
-                :disabled="!canSubmit"
-              >
-                <svg v-if="submitting" class="h-5 w-5 animate-spin" fill="none" viewBox="0 0 24 24">
-                  <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
-                  <path
-                    class="opacity-75"
-                    fill="currentColor"
-                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                  />
-                </svg>
-                <Icon v-else name="sparkles" size="md" />
-                {{ submitting ? t('imageStudio.generating') : submitLabel }}
-              </button>
             </section>
           </div>
+
+          <section class="image-studio-action-bar">
+            <div class="image-studio-cost-preview">
+              <span>{{ t('imageStudio.estimatedCost') }}</span>
+              <strong>{{ estimatedCostLabel }}</strong>
+              <small>{{ selectedPreviewMeta }}</small>
+            </div>
+            <button
+              data-testid="image-studio-generate-button"
+              type="submit"
+              class="btn btn-primary image-studio-submit-button"
+              :disabled="!canSubmit"
+            >
+              <svg v-if="submitting" class="h-5 w-5 animate-spin" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
+                <path
+                  class="opacity-75"
+                  fill="currentColor"
+                  d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                />
+              </svg>
+              <Icon v-else name="sparkles" size="md" />
+              {{ submitting ? t('imageStudio.generating') : submitLabel }}
+            </button>
+          </section>
           </form>
         </div>
 
@@ -394,28 +477,6 @@
                     {{ t('imageStudio.previewImage') }}
                   </span>
                 </button>
-                <div class="image-studio-image-card-body">
-                  <div>
-                    <strong>{{ item.model }}</strong>
-                    <span>{{ item.aspect_ratio }} / {{ item.size }}</span>
-                  </div>
-                  <p>{{ item.prompt }}</p>
-                  <div class="image-studio-image-card-actions">
-                    <button type="button" @click="copyImageURL(item)">
-                      <Icon name="copy" size="sm" />
-                    </button>
-                    <button type="button" @click="downloadImage(item)">
-                      <Icon name="download" size="sm" />
-                    </button>
-                    <button
-                      type="button"
-                      :data-testid="`image-studio-delete-trigger-${item.id}`"
-                      @click="requestDeleteImage(item)"
-                    >
-                      <Icon name="trash" size="sm" />
-                    </button>
-                  </div>
-                </div>
               </article>
             </div>
             <div v-else class="image-studio-empty-gallery">
@@ -480,6 +541,15 @@
             <button type="button" data-testid="image-studio-preview-reference" @click="usePreviewAsReference">
               <Icon name="edit" size="sm" />
               {{ t('imageStudio.useAsReference') }}
+            </button>
+            <button
+              type="button"
+              class="image-studio-preview-delete-action"
+              data-testid="image-studio-preview-delete"
+              @click="requestDeletePreviewImage"
+            >
+              <Icon name="trash" size="sm" />
+              {{ t('imageStudio.deleteAction') }}
             </button>
           </div>
         </div>
@@ -549,6 +619,7 @@ import {
   type ImageStudioAspectRatio,
   type ImageStudioConfig,
   type ImageStudioGroupOption,
+  type ImageStudioGeneratePayload,
   type ImageStudioImage,
   type ImageStudioMode,
   type ImageStudioModelOption,
@@ -578,7 +649,14 @@ const selectedAPIKeyID = ref<number | null>(null)
 const model = ref('')
 const aspectRatio = ref('1:1')
 const quality = ref('1K')
+type ImageStudioOutputCount = 1 | 2 | 3 | 4
+type ImageStudioOutputFormat = 'png' | 'jpeg' | 'webp'
+type ImageStudioBackground = 'auto' | 'opaque' | 'transparent'
+const outputCount = ref<ImageStudioOutputCount>(1)
+const outputFormat = ref<ImageStudioOutputFormat>('png')
+const outputBackground = ref<ImageStudioBackground>('auto')
 const referenceFiles = ref<File[]>([])
+const referencePreviewUrls = new Map<File, string>()
 const loadingConfig = ref(false)
 const loadingHistory = ref(false)
 const submitting = ref(false)
@@ -587,7 +665,12 @@ const loadError = ref('')
 const fileInput = ref<HTMLInputElement | null>(null)
 const totalImages = ref(0)
 type ImageStudioSelectMenu = 'apiKey' | 'model'
+type ImageStudioSelectPlacement = 'down' | 'up'
 const openSelect = ref<ImageStudioSelectMenu | null>(null)
+const selectPlacement = ref<Record<ImageStudioSelectMenu, ImageStudioSelectPlacement>>({
+  apiKey: 'down',
+  model: 'down',
+})
 const activeTask = ref<ImageStudioTask | null>(null)
 const taskPollTimer = ref<number | null>(null)
 const previewImage = ref<ImageStudioImage | null>(null)
@@ -597,6 +680,17 @@ const generationFailure = ref<{
   message: string
   reason?: string
 } | null>(null)
+const outputCountOptions = [1, 2, 3, 4] as const
+const outputFormatOptions: Array<{ value: ImageStudioOutputFormat; label: string }> = [
+  { value: 'png', label: 'PNG' },
+  { value: 'jpeg', label: 'JPEG' },
+  { value: 'webp', label: 'WebP' },
+]
+const outputBackgroundOptions: Array<{ value: ImageStudioBackground; labelKey: string }> = [
+  { value: 'auto', labelKey: 'imageStudio.backgroundAuto' },
+  { value: 'opaque', labelKey: 'imageStudio.backgroundOpaque' },
+  { value: 'transparent', labelKey: 'imageStudio.backgroundTransparent' },
+]
 
 const groupOptions = computed<ImageStudioGroupOption[]>(() => options.value?.groups ?? [])
 const imageGroupIDs = computed(() => new Set(groupOptions.value.map((item) => item.id)))
@@ -673,9 +767,10 @@ const canSubmit = computed(() => {
 const submitLabel = computed(() =>
   mode.value === 'edit' ? t('imageStudio.editButton') : t('imageStudio.generateButton'),
 )
+const selectedUnitCost = computed(() => selectedPricePreview.value?.estimated_cost ?? selectedQuality.value?.estimated_cost)
 const estimatedCostLabel = computed(() => {
-  const cost = selectedPricePreview.value?.estimated_cost ?? selectedQuality.value?.estimated_cost
-  return typeof cost === 'number' ? formatCurrency(cost) : '-'
+  const cost = selectedUnitCost.value
+  return typeof cost === 'number' ? formatCurrency(cost * outputCount.value) : '-'
 })
 const selectedPreviewMeta = computed(() => {
   const size = selectedPricePreview.value?.size ?? selectedRatio.value?.size ?? '-'
@@ -685,9 +780,9 @@ const selectedPreviewMeta = computed(() => {
     selectedRatio.value?.billing_tier ??
     '-'
   if (tier === '4K') {
-    return `${size} / ${tier} · ${t('imageStudio.quality4KInlineHint')}`
+    return `${size} / ${tier} ×${outputCount.value} · ${t('imageStudio.quality4KInlineHint')}`
   }
-  return `${size} / ${tier}`
+  return `${size} / ${tier} ×${outputCount.value}`
 })
 const failureDescription = computed(() => {
   if (!generationFailure.value) return ''
@@ -737,12 +832,36 @@ watch(selectedAPIKeyID, () => {
   quality.value = qualityOptions.value[0]?.quality ?? '1K'
 })
 
-function toggleSelect(menu: ImageStudioSelectMenu) {
-  openSelect.value = openSelect.value === menu ? null : menu
+watch([outputFormat, model], () => {
+  if (isOutputBackgroundDisabled('transparent') && outputBackground.value === 'transparent') {
+    outputBackground.value = 'auto'
+  }
+}, { immediate: true })
+
+function toggleSelect(menu: ImageStudioSelectMenu, event?: MouseEvent) {
+  if (openSelect.value === menu) {
+    openSelect.value = null
+    return
+  }
+  selectPlacement.value = {
+    ...selectPlacement.value,
+    [menu]: resolveSelectPlacement(event?.currentTarget),
+  }
+  openSelect.value = menu
 }
 
 function closeSelectMenus() {
   openSelect.value = null
+}
+
+function resolveSelectPlacement(target: EventTarget | null | undefined): ImageStudioSelectPlacement {
+  if (!(target instanceof HTMLElement)) return 'down'
+  const rect = target.getBoundingClientRect()
+  const viewportHeight = window.innerHeight || document.documentElement.clientHeight
+  const preferredMenuHeight = 240
+  const availableBelow = viewportHeight - rect.bottom
+  const availableAbove = rect.top
+  return availableBelow < preferredMenuHeight && availableAbove > availableBelow ? 'up' : 'down'
 }
 
 function chooseAPIKey(apiKeyID: number) {
@@ -812,18 +931,35 @@ async function handleSubmit() {
       prompt: normalizedPrompt,
       aspect_ratio: aspectRatio.value,
       quality: quality.value,
+      ...selectedOutputPayload(),
     }
-    const created =
-      mode.value === 'edit'
-        ? await imageStudioAPI.edit({
-            ...payload,
-            images: referenceFiles.value,
-          })
-        : await createAndPollGenerationTask(payload)
+    const batch = await runImageBatch(outputCount.value, async () => {
+      const created =
+        mode.value === 'edit'
+          ? await imageStudioAPI.edit({
+              ...payload,
+              images: referenceFiles.value,
+            })
+          : await createAndPollGenerationTask(payload)
+      applyGeneratedImage(created)
+      return created
+    })
 
-    applyGeneratedImage(created)
-    await authStore.refreshUser().catch(() => undefined)
-    appStore.showSuccess(t('imageStudio.generateSuccess'))
+    if (batch.created.length > 0) {
+      await authStore.refreshUser().catch(() => undefined)
+      appStore.showSuccess(t('imageStudio.generateSuccess'))
+    }
+    if (batch.errors.length > 0) {
+      const error = batch.errors[0]
+      const message = extractApiErrorMessage(error, t('imageStudio.generateFailed'))
+      if (batch.created.length === 0) {
+        generationFailure.value = {
+          message,
+          reason: extractApiErrorCode(error),
+        }
+      }
+      appStore.showError(message)
+    }
   } catch (error) {
     const message = extractApiErrorMessage(error, t('imageStudio.generateFailed'))
     generationFailure.value = {
@@ -834,6 +970,28 @@ async function handleSubmit() {
   } finally {
     submitting.value = false
   }
+}
+
+async function runImageBatch(
+  count: ImageStudioOutputCount,
+  worker: () => Promise<ImageStudioImage>,
+): Promise<{ created: ImageStudioImage[]; errors: unknown[] }> {
+  const created: ImageStudioImage[] = []
+  const errors: unknown[] = []
+  let next = 0
+  const concurrency = Math.min(2, count)
+  async function runWorker() {
+    while (next < count) {
+      next += 1
+      try {
+        created.push(await worker())
+      } catch (error) {
+        errors.push(error)
+      }
+    }
+  }
+  await Promise.all(Array.from({ length: concurrency }, runWorker))
+  return { created, errors }
 }
 
 async function resumeLatestUnfinishedGenerationTask() {
@@ -872,6 +1030,12 @@ function restoreTaskFormState(task: ImageStudioTask) {
   if (qualityOptions.value.some((item) => item.quality === task.quality)) {
     quality.value = task.quality
   }
+  if (isImageStudioOutputFormat(task.output_format)) {
+    outputFormat.value = task.output_format
+  }
+  if (isImageStudioBackground(task.background)) {
+    outputBackground.value = task.background
+  }
 }
 
 async function finishRecoveredGenerationTask(taskID: number) {
@@ -908,6 +1072,8 @@ async function createAndPollGenerationTask(payload: {
   prompt: string
   aspect_ratio: string
   quality: string
+  output_format?: string
+  background?: string
 }): Promise<ImageStudioImage> {
   const task = await imageStudioAPI.createTask({
     mode: 'generation',
@@ -977,7 +1143,9 @@ function addReferenceFiles(files: File[]) {
   if (rejected > 0) {
     appStore.showError(t('imageStudio.referenceRejected', { count: rejected, mb: maxReferenceImageMB.value }))
   }
-  referenceFiles.value = [...referenceFiles.value, ...accepted].slice(0, 4)
+  const nextFiles = [...referenceFiles.value, ...accepted].slice(0, 4)
+  pruneReferencePreviewURLs(nextFiles)
+  referenceFiles.value = nextFiles
 }
 
 function handleFileInput(event: Event) {
@@ -1000,6 +1168,32 @@ function handlePaste(event: ClipboardEvent) {
 
 function removeReference(file: File) {
   referenceFiles.value = referenceFiles.value.filter((item) => item !== file)
+  revokeReferencePreviewURL(file)
+}
+
+function referencePreviewURL(file: File): string {
+  const existing = referencePreviewUrls.get(file)
+  if (existing) return existing
+  if (typeof URL.createObjectURL !== 'function') return ''
+  const url = URL.createObjectURL(file)
+  referencePreviewUrls.set(file, url)
+  return url
+}
+
+function revokeReferencePreviewURL(file: File) {
+  const url = referencePreviewUrls.get(file)
+  if (!url) return
+  URL.revokeObjectURL(url)
+  referencePreviewUrls.delete(file)
+}
+
+function pruneReferencePreviewURLs(nextFiles: File[]) {
+  const nextSet = new Set(nextFiles)
+  for (const file of Array.from(referencePreviewUrls.keys())) {
+    if (!nextSet.has(file)) {
+      revokeReferencePreviewURL(file)
+    }
+  }
 }
 
 function defaultAPIKeyID(selectableOptions: ImageStudioOptions, keys: ApiKey[]): number | null {
@@ -1035,6 +1229,48 @@ function ratioPreviewLabel(item: ImageStudioAspectRatio): string {
   return `${size} / ${tier}`
 }
 
+function chooseOutputCount(count: number) {
+  if (count === 1 || count === 2 || count === 3 || count === 4) {
+    outputCount.value = count
+  }
+}
+
+function chooseOutputFormat(format: ImageStudioOutputFormat) {
+  outputFormat.value = format
+}
+
+function chooseOutputBackground(background: ImageStudioBackground) {
+  if (isOutputBackgroundDisabled(background)) return
+  outputBackground.value = background
+}
+
+function isOutputBackgroundDisabled(background: ImageStudioBackground) {
+  return background === 'transparent' && (outputFormat.value === 'jpeg' || !supportsTransparentBackground(model.value))
+}
+
+function selectedOutputPayload(): Pick<ImageStudioGeneratePayload, 'output_format' | 'background'> {
+  const payload: Pick<ImageStudioGeneratePayload, 'output_format' | 'background'> = {}
+  if (outputFormat.value !== 'png') {
+    payload.output_format = outputFormat.value
+  }
+  if (outputBackground.value !== 'auto') {
+    payload.background = outputBackground.value
+  }
+  return payload
+}
+
+function isImageStudioOutputFormat(value: unknown): value is ImageStudioOutputFormat {
+  return value === 'png' || value === 'jpeg' || value === 'webp'
+}
+
+function isImageStudioBackground(value: unknown): value is ImageStudioBackground {
+  return value === 'auto' || value === 'opaque' || value === 'transparent'
+}
+
+function supportsTransparentBackground(candidateModel: string) {
+  return candidateModel.trim().toLowerCase() !== 'gpt-image-2'
+}
+
 function apiKeyOptionLabel(key: ApiKey): string {
   return key.name?.trim() || `#${key.id}`
 }
@@ -1057,7 +1293,7 @@ async function copyImageURL(image: ImageStudioImage) {
 function downloadImage(image: ImageStudioImage) {
   const anchor = document.createElement('a')
   anchor.href = image.image_url
-  anchor.download = `passion-api-image-${image.id}.png`
+  anchor.download = `passion-api-image-${image.id}${imageFileExtension(image, image.mime_type || '')}`
   anchor.rel = 'noopener'
   document.body.appendChild(anchor)
   anchor.click()
@@ -1069,7 +1305,9 @@ async function useAsReference(image: ImageStudioImage) {
   prompt.value = image.prompt
   try {
     const file = await imageToReferenceFile(image)
-    referenceFiles.value = [file, ...referenceFiles.value.filter((item) => item.name !== file.name)].slice(0, 4)
+    const nextFiles = [file, ...referenceFiles.value.filter((item) => item.name !== file.name)].slice(0, 4)
+    pruneReferencePreviewURLs(nextFiles)
+    referenceFiles.value = nextFiles
     appStore.showSuccess(t('imageStudio.referenceModeHint'))
   } catch (error) {
     appStore.showError(extractApiErrorMessage(error, t('imageStudio.referenceLoadFailed')))
@@ -1081,6 +1319,13 @@ async function usePreviewAsReference() {
   const image = previewImage.value
   closeImagePreview()
   await useAsReference(image)
+}
+
+function requestDeletePreviewImage() {
+  if (!previewImage.value) return
+  const image = previewImage.value
+  closeImagePreview()
+  requestDeleteImage(image)
 }
 
 function openImagePreview(image: ImageStudioImage) {
@@ -1172,6 +1417,7 @@ onBeforeUnmount(() => {
   document.removeEventListener('click', closeSelectMenus)
   document.removeEventListener('keydown', handlePreviewKeydown)
   stopTaskPolling()
+  pruneReferencePreviewURLs([])
 })
 </script>
 
@@ -1180,7 +1426,11 @@ onBeforeUnmount(() => {
   display: grid;
   max-width: min(100%, 118rem);
   gap: clamp(0.9rem, 1.35vw, 1.25rem);
-  padding-bottom: 2rem;
+  height: var(--studio-viewport-height);
+  min-height: 0;
+  overflow: hidden;
+  padding-bottom: 0;
+  --studio-viewport-height: calc(100dvh - 4rem - var(--app-content-padding-total-y, 2rem));
   --studio-surface: rgba(255, 255, 255, 0.88);
   --studio-surface-soft: rgba(248, 250, 252, 0.82);
   --studio-border: rgba(148, 163, 184, 0.24);
@@ -1195,17 +1445,22 @@ onBeforeUnmount(() => {
 
 .image-studio-grid {
   display: grid;
-  grid-template-columns: clamp(21rem, 26vw, 27rem) minmax(0, 1fr);
   gap: clamp(1rem, 1.6vw, 1.45rem);
-  align-items: start;
+  min-height: 0;
+}
+
+.image-studio-workbench {
+  height: 100%;
+  min-height: 0;
+  align-items: stretch;
+  grid-template-columns: minmax(18.5rem, 0.56fr) minmax(38rem, 1.44fr);
 }
 
 .image-studio-control-console {
-  position: sticky;
   z-index: 3;
-  top: 1rem;
+  height: 100%;
   min-width: 0;
-  max-height: calc(100dvh - 2rem);
+  min-height: 0;
 }
 
 .image-studio-workspace,
@@ -1222,15 +1477,22 @@ onBeforeUnmount(() => {
 }
 
 .image-studio-workspace {
-  max-height: inherit;
-  overflow: auto;
+  display: grid;
+  height: 100%;
+  min-height: 0;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  overflow: hidden;
   overscroll-behavior: contain;
   scrollbar-color: rgba(var(--brand-rgb), 0.32) transparent;
   scrollbar-width: thin;
 }
 
 .image-studio-preview-panel {
+  display: grid;
+  height: 100%;
   min-width: 0;
+  min-height: 0;
+  grid-template-rows: auto minmax(0, 1fr) auto;
 }
 
 .image-studio-workspace::before,
@@ -1245,6 +1507,10 @@ onBeforeUnmount(() => {
 }
 
 .image-studio-gallery {
+  display: grid;
+  min-height: 0;
+  max-height: clamp(11rem, 22dvh, 15rem);
+  grid-template-rows: auto minmax(0, 1fr);
   padding: clamp(0.82rem, 1.1vw, 1rem);
 }
 
@@ -1283,6 +1549,35 @@ onBeforeUnmount(() => {
   letter-spacing: 0;
   text-transform: uppercase;
   color: var(--brand-700);
+}
+
+.image-studio-step-heading {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  color: var(--studio-text);
+}
+
+.image-studio-step-heading-full {
+  grid-column: 1 / -1;
+}
+
+.image-studio-step-heading span {
+  display: inline-grid;
+  width: 1.62rem;
+  height: 1.62rem;
+  place-items: center;
+  border-radius: 0.5rem;
+  border: 1px solid rgba(148, 163, 184, 0.24);
+  background: rgba(15, 23, 42, 0.04);
+  color: rgb(71, 85, 105);
+  font-size: 0.68rem;
+  font-weight: 850;
+}
+
+.image-studio-step-heading strong {
+  font-size: 0.9rem;
+  font-weight: 820;
 }
 
 .image-studio-mode-switch {
@@ -1354,8 +1649,9 @@ onBeforeUnmount(() => {
 }
 
 .image-studio-field textarea {
-  min-height: clamp(11rem, 28dvh, 16.5rem);
-  resize: vertical;
+  height: 100%;
+  min-height: clamp(9rem, 24dvh, 15rem);
+  resize: none;
   padding: 0.92rem;
   line-height: 1.62;
 }
@@ -1369,8 +1665,17 @@ onBeforeUnmount(() => {
 
 .image-studio-command-surface {
   margin-top: 1rem;
-  display: grid;
+  display: flex;
+  height: 100%;
+  min-height: 0;
+  flex-direction: column;
   gap: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-right: 0.12rem;
+  scrollbar-color: rgba(var(--brand-rgb), 0.32) transparent;
+  scrollbar-width: thin;
 }
 
 .image-studio-prompt-section,
@@ -1380,9 +1685,19 @@ onBeforeUnmount(() => {
 
 .image-studio-prompt-section {
   margin-top: 0;
+  display: grid;
+  min-height: 0;
+  flex: 0 0 auto;
+  gap: 0.7rem;
+}
+
+.image-studio-prompt-field {
+  min-height: 0;
+  grid-template-rows: auto minmax(0, 1fr);
 }
 
 .image-studio-control-dock {
+  flex: 0 0 auto;
   margin-top: 0.95rem;
   display: grid;
   gap: 0.8rem;
@@ -1392,6 +1707,7 @@ onBeforeUnmount(() => {
 }
 
 .image-studio-foundation-row {
+  order: 3;
   display: grid;
   grid-template-columns: 1fr;
   gap: 0.75rem;
@@ -1399,6 +1715,7 @@ onBeforeUnmount(() => {
 }
 
 .image-studio-output-row {
+  order: 2;
   display: grid;
   grid-template-columns: 1fr;
   gap: 0.8rem;
@@ -1484,6 +1801,11 @@ onBeforeUnmount(() => {
     0 0 0 1px rgba(255, 255, 255, 0.72) inset;
 }
 
+.image-studio-select.is-drop-up .image-studio-select-menu {
+  top: auto;
+  bottom: calc(100% + 0.45rem);
+}
+
 .image-studio-select-option {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
@@ -1546,6 +1868,11 @@ onBeforeUnmount(() => {
   transform: translateY(-4px);
 }
 
+.image-studio-select.is-drop-up .image-studio-select-pop-enter-from,
+.image-studio-select.is-drop-up .image-studio-select-pop-leave-to {
+  transform: translateY(4px);
+}
+
 .image-studio-choice-section {
   margin-top: 0;
   border: 0;
@@ -1577,6 +1904,15 @@ onBeforeUnmount(() => {
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
+.image-studio-count-picker {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.image-studio-format-picker,
+.image-studio-background-picker {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
 .image-studio-choice-picker button {
   min-height: 3.05rem;
   border-radius: 0.68rem;
@@ -1590,6 +1926,11 @@ onBeforeUnmount(() => {
     background 180ms ease,
     color 180ms ease,
     transform 180ms ease;
+}
+
+.image-studio-choice-picker button:disabled {
+  cursor: not-allowed;
+  opacity: 0.46;
 }
 
 .image-studio-choice-picker button:hover,
@@ -1683,6 +2024,7 @@ onBeforeUnmount(() => {
 }
 
 .image-studio-upload-panel {
+  order: 1;
   display: grid;
   gap: 0.75rem;
   border-top: 1px solid rgba(203, 213, 225, 0.56);
@@ -1723,26 +2065,31 @@ onBeforeUnmount(() => {
 .image-studio-reference-list {
   display: grid;
   gap: 0.5rem;
+  margin-bottom: 1rem;
 }
 
 .image-studio-reference-item {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto;
+  grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
-  gap: 0.7rem;
+  gap: 0.65rem;
   border-radius: var(--studio-radius-sm);
   border: 1px solid var(--studio-border-soft);
   background: rgba(255, 255, 255, 0.78);
-  padding: 0.65rem 0.8rem;
+  padding: 0.42rem 0.5rem;
   color: rgb(51, 65, 85);
 }
 
-.image-studio-reference-item span {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: 0.86rem;
-  font-weight: 700;
+.image-studio-reference-thumb {
+  width: 3.25rem;
+  height: 3.25rem;
+  border-radius: 0.85rem;
+  border: 1px solid rgba(191, 219, 254, 0.88);
+  background: rgba(239, 246, 255, 0.72);
+  object-fit: cover;
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.72) inset,
+    0 10px 24px rgba(15, 23, 42, 0.1);
 }
 
 .image-studio-reference-item small {
@@ -1750,10 +2097,32 @@ onBeforeUnmount(() => {
   font-size: 0.75rem;
 }
 
+.image-studio-reference-item button {
+  display: grid;
+  width: 1.9rem;
+  height: 1.9rem;
+  place-items: center;
+  border-radius: 999px;
+  color: rgb(71, 85, 105);
+  transition:
+    background 180ms ease,
+    color 180ms ease,
+    transform 180ms ease;
+}
+
+.image-studio-reference-item button:hover,
+.image-studio-reference-item button:focus-visible {
+  background: rgba(239, 68, 68, 0.1);
+  color: rgb(220, 38, 38);
+  transform: translateY(-1px);
+}
+
 .image-studio-action-bar {
   position: relative;
   z-index: 1;
   display: grid;
+  flex: 0 0 auto;
+  align-self: end;
   grid-template-columns: 1fr;
   align-items: stretch;
   gap: 0.72rem;
@@ -1771,6 +2140,7 @@ onBeforeUnmount(() => {
     0 1px 0 rgba(255, 255, 255, 0.9) inset,
     0 14px 34px rgba(37, 99, 235, 0.12),
     0 4px 12px rgba(15, 23, 42, 0.06);
+  margin-top: 0.85rem;
   padding: 0.85rem;
 }
 
@@ -1828,8 +2198,11 @@ onBeforeUnmount(() => {
 
 .image-studio-canvas-stage {
   display: grid;
+  height: 100%;
   min-width: 0;
+  min-height: 0;
   gap: clamp(0.85rem, 1.2vw, 1rem);
+  grid-template-rows: minmax(0, 1fr) auto;
 }
 
 .image-studio-stage-meta {
@@ -1857,7 +2230,8 @@ onBeforeUnmount(() => {
 .image-studio-preview-frame {
   margin-top: 0.95rem;
   display: grid;
-  min-height: clamp(34rem, 66dvh, 52rem);
+  height: 100%;
+  min-height: 0;
   place-items: center;
   overflow: hidden;
   border-radius: 1rem;
@@ -1880,7 +2254,13 @@ onBeforeUnmount(() => {
 }
 
 .image-studio-stage-panel .image-studio-preview-open img {
+  height: auto;
+  width: auto;
+  max-height: min(100%, clamp(20rem, 54dvh, 36rem));
+  max-width: min(100%, clamp(26rem, 56vw, 56rem));
   border-radius: 0.8rem;
+  object-fit: contain;
+  object-position: center;
   box-shadow: 0 24px 60px rgba(15, 23, 42, 0.16);
 }
 
@@ -1893,6 +2273,22 @@ onBeforeUnmount(() => {
   place-items: center;
   overflow: hidden;
   color: white;
+}
+
+.image-studio-stage-panel .image-studio-preview-open {
+  display: flex;
+  height: 100%;
+  width: 100%;
+  max-height: 100%;
+  max-width: 100%;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.9rem;
+  background: rgba(255, 255, 255, 0.46);
+  padding: clamp(0.9rem, 1.4vw, 1.2rem);
+  box-shadow:
+    0 18px 42px rgba(15, 23, 42, 0.09),
+    inset 0 1px 0 rgba(255, 255, 255, 0.64);
 }
 
 .image-studio-preview-open img,
@@ -1936,6 +2332,12 @@ onBeforeUnmount(() => {
   transform: scale(1.025);
 }
 
+.image-studio-stage-panel .image-studio-preview-open:hover img,
+.image-studio-stage-panel .image-studio-preview-open:focus-visible img {
+  filter: saturate(1.04) brightness(0.9);
+  transform: none;
+}
+
 .image-studio-preview-open:hover > span,
 .image-studio-preview-open:focus-visible > span,
 .image-studio-image-thumb:hover > span,
@@ -1975,7 +2377,7 @@ onBeforeUnmount(() => {
 }
 
 .image-studio-empty-gallery {
-  min-height: 9rem;
+  min-height: 5.75rem;
   border-radius: 0.85rem;
   border: 1px dashed rgba(var(--brand-rgb), 0.22);
   background: rgba(239, 246, 255, 0.36);
@@ -2088,7 +2490,7 @@ onBeforeUnmount(() => {
 }
 
 .image-studio-current-actions {
-  margin-top: 0.78rem;
+  margin-top: clamp(1.35rem, 2vh, 1.8rem);
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
@@ -2133,22 +2535,23 @@ onBeforeUnmount(() => {
 
 .image-studio-gallery-grid,
 .image-studio-gallery-loading {
-  margin-top: 1rem;
+  margin-top: 0.72rem;
   display: grid;
-  grid-auto-columns: minmax(12rem, 15rem);
+  min-height: 0;
+  grid-auto-columns: minmax(11rem, 13rem);
   grid-auto-flow: column;
   grid-template-columns: none;
-  gap: 0.75rem;
+  gap: 0.62rem;
   overflow-x: auto;
   overflow-y: hidden;
-  padding: 0.1rem 0.1rem 0.35rem;
+  padding: 0.05rem 0.1rem 0.35rem;
   scroll-snap-type: x proximity;
   scrollbar-color: rgba(var(--brand-rgb), 0.32) transparent;
   scrollbar-width: thin;
 }
 
 .image-studio-gallery-loading div {
-  min-height: 13rem;
+  min-height: 8.25rem;
   border-radius: 0.86rem;
   background: linear-gradient(90deg, rgba(226, 232, 240, 0.64), rgba(239, 246, 255, 0.9), rgba(226, 232, 240, 0.64));
   background-size: 220% 100%;
@@ -2156,7 +2559,9 @@ onBeforeUnmount(() => {
 }
 
 .image-studio-image-card {
+  position: relative;
   overflow: hidden;
+  height: 100%;
   min-width: 0;
   border-radius: 0.9rem;
   border: 1px solid rgba(203, 213, 225, 0.58);
@@ -2222,10 +2627,32 @@ onBeforeUnmount(() => {
   flex-wrap: nowrap;
 }
 
+.image-studio-gallery-rail .image-studio-image-card-body {
+  position: absolute;
+  inset-inline: auto 0.42rem;
+  top: 0.42rem;
+  bottom: auto;
+  display: block;
+  width: max-content;
+  max-width: calc(100% - 0.84rem);
+  border-radius: 0.72rem;
+  background: rgba(255, 255, 255, 0.82);
+  padding: 0.25rem;
+  backdrop-filter: blur(12px);
+  box-shadow: 0 10px 22px rgba(15, 23, 42, 0.14);
+}
+
+.image-studio-gallery-rail .image-studio-image-card-body > div:first-child,
+.image-studio-gallery-rail .image-studio-image-card-body p {
+  display: none;
+}
+
 .image-studio-gallery-rail .image-studio-image-card-actions button {
   flex: 1 1 0;
+  height: 2rem;
+  min-height: 2rem;
   min-width: 0;
-  padding-inline: 0.45rem;
+  padding-inline: 0.38rem;
 }
 
 .image-studio-fade-enter-active,
@@ -2375,7 +2802,7 @@ onBeforeUnmount(() => {
 
 .image-studio-preview-actions {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 0.55rem;
   border-top: 1px solid rgba(203, 213, 225, 0.56);
   background: rgba(248, 250, 252, 0.72);
@@ -2407,6 +2834,18 @@ onBeforeUnmount(() => {
   background: white;
   box-shadow: 0 0 0 3px rgba(var(--brand-rgb), 0.12);
   transform: translateY(-1px);
+}
+
+.image-studio-preview-actions .image-studio-preview-delete-action {
+  border-color: rgba(239, 68, 68, 0.24);
+  color: rgb(220, 38, 38);
+}
+
+.image-studio-preview-actions .image-studio-preview-delete-action:hover,
+.image-studio-preview-actions .image-studio-preview-delete-action:focus-visible {
+  border-color: rgba(239, 68, 68, 0.42);
+  background: rgba(254, 242, 242, 0.92);
+  box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.12);
 }
 
 .image-studio-delete-modal {
@@ -2633,6 +3072,24 @@ onBeforeUnmount(() => {
   color: white;
 }
 
+.dark .image-studio-reference-thumb {
+  border-color: rgba(96, 165, 250, 0.32);
+  background: rgba(15, 23, 42, 0.92);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.04) inset,
+    0 12px 26px rgba(0, 0, 0, 0.26);
+}
+
+.dark .image-studio-reference-item button {
+  color: rgb(203, 213, 225);
+}
+
+.dark .image-studio-reference-item button:hover,
+.dark .image-studio-reference-item button:focus-visible {
+  background: rgba(248, 113, 113, 0.13);
+  color: rgb(254, 202, 202);
+}
+
 .dark .image-studio-command-surface,
 .dark .image-studio-control-dock,
 .dark .image-studio-foundation-row,
@@ -2726,6 +3183,11 @@ onBeforeUnmount(() => {
 .dark .image-studio-select-option.is-selected {
   color: rgb(191, 219, 254);
   background: linear-gradient(135deg, rgba(37, 99, 235, 0.22), rgba(6, 182, 212, 0.16));
+}
+
+.dark .image-studio-gallery-rail .image-studio-image-card-body {
+  background: rgba(15, 23, 42, 0.82);
+  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.28);
 }
 
 .dark .image-studio-mode-switch,
@@ -2852,6 +3314,19 @@ onBeforeUnmount(() => {
   background: rgba(2, 6, 23, 0.42);
 }
 
+.dark .image-studio-preview-actions .image-studio-preview-delete-action {
+  border-color: rgba(248, 113, 113, 0.28);
+  background: rgba(127, 29, 29, 0.18);
+  color: rgb(252, 165, 165);
+}
+
+.dark .image-studio-preview-actions .image-studio-preview-delete-action:hover,
+.dark .image-studio-preview-actions .image-studio-preview-delete-action:focus-visible {
+  border-color: rgba(248, 113, 113, 0.46);
+  background: rgba(127, 29, 29, 0.28);
+  box-shadow: 0 0 0 3px rgba(248, 113, 113, 0.14);
+}
+
 .dark .image-studio-delete-dialog {
   border-color: rgba(96, 165, 250, 0.22);
   background:
@@ -2929,26 +3404,53 @@ onBeforeUnmount(() => {
 }
 
 @media (max-width: 1100px) {
+  .image-studio-shell {
+    height: auto;
+    overflow: visible;
+    padding-bottom: 1.25rem;
+  }
+
   .image-studio-grid {
     grid-template-columns: 1fr;
   }
 
+  .image-studio-workbench,
   .image-studio-control-console {
-    position: static;
-    max-height: none;
+    height: auto;
+    min-height: 0;
   }
 
   .image-studio-workspace {
-    max-height: none;
+    height: auto;
+    grid-template-rows: auto;
     overflow: visible;
   }
 
+  .image-studio-command-surface {
+    overflow: visible;
+  }
+
+  .image-studio-prompt-section {
+    flex: none;
+  }
+
+  .image-studio-canvas-stage,
   .image-studio-preview-panel {
+    height: auto;
     position: static;
+  }
+
+  .image-studio-canvas-stage {
+    grid-template-rows: auto auto;
+  }
+
+  .image-studio-gallery {
+    max-height: none;
   }
 
   .image-studio-preview-frame {
     min-height: clamp(28rem, 58dvh, 42rem);
+    height: auto;
   }
 }
 

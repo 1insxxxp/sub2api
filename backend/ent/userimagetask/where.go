@@ -105,6 +105,16 @@ func Quality(v string) predicate.UserImageTask {
 	return predicate.UserImageTask(sql.FieldEQ(FieldQuality, v))
 }
 
+// OutputFormat applies equality check predicate on the "output_format" field. It's identical to OutputFormatEQ.
+func OutputFormat(v string) predicate.UserImageTask {
+	return predicate.UserImageTask(sql.FieldEQ(FieldOutputFormat, v))
+}
+
+// Background applies equality check predicate on the "background" field. It's identical to BackgroundEQ.
+func Background(v string) predicate.UserImageTask {
+	return predicate.UserImageTask(sql.FieldEQ(FieldBackground, v))
+}
+
 // Size applies equality check predicate on the "size" field. It's identical to SizeEQ.
 func Size(v string) predicate.UserImageTask {
 	return predicate.UserImageTask(sql.FieldEQ(FieldSize, v))
@@ -703,6 +713,136 @@ func QualityEqualFold(v string) predicate.UserImageTask {
 // QualityContainsFold applies the ContainsFold predicate on the "quality" field.
 func QualityContainsFold(v string) predicate.UserImageTask {
 	return predicate.UserImageTask(sql.FieldContainsFold(FieldQuality, v))
+}
+
+// OutputFormatEQ applies the EQ predicate on the "output_format" field.
+func OutputFormatEQ(v string) predicate.UserImageTask {
+	return predicate.UserImageTask(sql.FieldEQ(FieldOutputFormat, v))
+}
+
+// OutputFormatNEQ applies the NEQ predicate on the "output_format" field.
+func OutputFormatNEQ(v string) predicate.UserImageTask {
+	return predicate.UserImageTask(sql.FieldNEQ(FieldOutputFormat, v))
+}
+
+// OutputFormatIn applies the In predicate on the "output_format" field.
+func OutputFormatIn(vs ...string) predicate.UserImageTask {
+	return predicate.UserImageTask(sql.FieldIn(FieldOutputFormat, vs...))
+}
+
+// OutputFormatNotIn applies the NotIn predicate on the "output_format" field.
+func OutputFormatNotIn(vs ...string) predicate.UserImageTask {
+	return predicate.UserImageTask(sql.FieldNotIn(FieldOutputFormat, vs...))
+}
+
+// OutputFormatGT applies the GT predicate on the "output_format" field.
+func OutputFormatGT(v string) predicate.UserImageTask {
+	return predicate.UserImageTask(sql.FieldGT(FieldOutputFormat, v))
+}
+
+// OutputFormatGTE applies the GTE predicate on the "output_format" field.
+func OutputFormatGTE(v string) predicate.UserImageTask {
+	return predicate.UserImageTask(sql.FieldGTE(FieldOutputFormat, v))
+}
+
+// OutputFormatLT applies the LT predicate on the "output_format" field.
+func OutputFormatLT(v string) predicate.UserImageTask {
+	return predicate.UserImageTask(sql.FieldLT(FieldOutputFormat, v))
+}
+
+// OutputFormatLTE applies the LTE predicate on the "output_format" field.
+func OutputFormatLTE(v string) predicate.UserImageTask {
+	return predicate.UserImageTask(sql.FieldLTE(FieldOutputFormat, v))
+}
+
+// OutputFormatContains applies the Contains predicate on the "output_format" field.
+func OutputFormatContains(v string) predicate.UserImageTask {
+	return predicate.UserImageTask(sql.FieldContains(FieldOutputFormat, v))
+}
+
+// OutputFormatHasPrefix applies the HasPrefix predicate on the "output_format" field.
+func OutputFormatHasPrefix(v string) predicate.UserImageTask {
+	return predicate.UserImageTask(sql.FieldHasPrefix(FieldOutputFormat, v))
+}
+
+// OutputFormatHasSuffix applies the HasSuffix predicate on the "output_format" field.
+func OutputFormatHasSuffix(v string) predicate.UserImageTask {
+	return predicate.UserImageTask(sql.FieldHasSuffix(FieldOutputFormat, v))
+}
+
+// OutputFormatEqualFold applies the EqualFold predicate on the "output_format" field.
+func OutputFormatEqualFold(v string) predicate.UserImageTask {
+	return predicate.UserImageTask(sql.FieldEqualFold(FieldOutputFormat, v))
+}
+
+// OutputFormatContainsFold applies the ContainsFold predicate on the "output_format" field.
+func OutputFormatContainsFold(v string) predicate.UserImageTask {
+	return predicate.UserImageTask(sql.FieldContainsFold(FieldOutputFormat, v))
+}
+
+// BackgroundEQ applies the EQ predicate on the "background" field.
+func BackgroundEQ(v string) predicate.UserImageTask {
+	return predicate.UserImageTask(sql.FieldEQ(FieldBackground, v))
+}
+
+// BackgroundNEQ applies the NEQ predicate on the "background" field.
+func BackgroundNEQ(v string) predicate.UserImageTask {
+	return predicate.UserImageTask(sql.FieldNEQ(FieldBackground, v))
+}
+
+// BackgroundIn applies the In predicate on the "background" field.
+func BackgroundIn(vs ...string) predicate.UserImageTask {
+	return predicate.UserImageTask(sql.FieldIn(FieldBackground, vs...))
+}
+
+// BackgroundNotIn applies the NotIn predicate on the "background" field.
+func BackgroundNotIn(vs ...string) predicate.UserImageTask {
+	return predicate.UserImageTask(sql.FieldNotIn(FieldBackground, vs...))
+}
+
+// BackgroundGT applies the GT predicate on the "background" field.
+func BackgroundGT(v string) predicate.UserImageTask {
+	return predicate.UserImageTask(sql.FieldGT(FieldBackground, v))
+}
+
+// BackgroundGTE applies the GTE predicate on the "background" field.
+func BackgroundGTE(v string) predicate.UserImageTask {
+	return predicate.UserImageTask(sql.FieldGTE(FieldBackground, v))
+}
+
+// BackgroundLT applies the LT predicate on the "background" field.
+func BackgroundLT(v string) predicate.UserImageTask {
+	return predicate.UserImageTask(sql.FieldLT(FieldBackground, v))
+}
+
+// BackgroundLTE applies the LTE predicate on the "background" field.
+func BackgroundLTE(v string) predicate.UserImageTask {
+	return predicate.UserImageTask(sql.FieldLTE(FieldBackground, v))
+}
+
+// BackgroundContains applies the Contains predicate on the "background" field.
+func BackgroundContains(v string) predicate.UserImageTask {
+	return predicate.UserImageTask(sql.FieldContains(FieldBackground, v))
+}
+
+// BackgroundHasPrefix applies the HasPrefix predicate on the "background" field.
+func BackgroundHasPrefix(v string) predicate.UserImageTask {
+	return predicate.UserImageTask(sql.FieldHasPrefix(FieldBackground, v))
+}
+
+// BackgroundHasSuffix applies the HasSuffix predicate on the "background" field.
+func BackgroundHasSuffix(v string) predicate.UserImageTask {
+	return predicate.UserImageTask(sql.FieldHasSuffix(FieldBackground, v))
+}
+
+// BackgroundEqualFold applies the EqualFold predicate on the "background" field.
+func BackgroundEqualFold(v string) predicate.UserImageTask {
+	return predicate.UserImageTask(sql.FieldEqualFold(FieldBackground, v))
+}
+
+// BackgroundContainsFold applies the ContainsFold predicate on the "background" field.
+func BackgroundContainsFold(v string) predicate.UserImageTask {
+	return predicate.UserImageTask(sql.FieldContainsFold(FieldBackground, v))
 }
 
 // SizeEQ applies the EQ predicate on the "size" field.

@@ -233,7 +233,7 @@ func (s *ImageStudioService) Generate(ctx context.Context, input ImageStudioGene
 	if err != nil {
 		return nil, imageStudioExecutionError("generate image", err)
 	}
-	return s.storeExecutionResult(ctx, cfg, ImageStudioModeGeneration, normalized.UserID, normalized.Model, normalized.Prompt, normalized.AspectRatio, normalized.Size, result)
+	return s.storeExecutionResult(ctx, cfg, ImageStudioModeGeneration, normalized.UserID, normalized.Model, normalized.Prompt, normalized.AspectRatio, normalized.Size, normalized.OutputFormat, normalized.Background, result)
 }
 
 func (s *ImageStudioService) Edit(ctx context.Context, input ImageStudioEditInput) (*ImageStudioImageRecord, error) {
@@ -250,7 +250,7 @@ func (s *ImageStudioService) Edit(ctx context.Context, input ImageStudioEditInpu
 	if err != nil {
 		return nil, imageStudioExecutionError("edit image", err)
 	}
-	return s.storeExecutionResult(ctx, cfg, ImageStudioModeEdit, normalized.UserID, normalized.Model, normalized.Prompt, normalized.AspectRatio, normalized.Size, result)
+	return s.storeExecutionResult(ctx, cfg, ImageStudioModeEdit, normalized.UserID, normalized.Model, normalized.Prompt, normalized.AspectRatio, normalized.Size, normalized.OutputFormat, normalized.Background, result)
 }
 
 func (s *ImageStudioService) Delete(ctx context.Context, userID int64, imageID int64) error {
@@ -356,10 +356,17 @@ func (s *ImageStudioService) prepareGenerateInput(ctx context.Context, input Ima
 	if err != nil {
 		return nil, ImageStudioGenerateInput{}, infraerrors.BadRequest("INVALID_IMAGE_RENDER_SPEC", err.Error())
 	}
+	outputFormat := NormalizeImageStudioOutputFormat(input.OutputFormat)
+	background := NormalizeImageStudioBackground(input.Background)
+	if err := ValidateImageStudioOutputOptionsForModel(model, outputFormat, background); err != nil {
+		return nil, ImageStudioGenerateInput{}, infraerrors.BadRequest("INVALID_IMAGE_OUTPUT_OPTIONS", err.Error())
+	}
 	input.Model = model
 	input.Prompt = prompt
 	input.AspectRatio = aspectRatio
 	input.Quality = firstNonEmptyTrimmed(quality, billingTier)
+	input.OutputFormat = outputFormat
+	input.Background = background
 	input.Size = size
 	input.BillingTier = billingTier
 	return cfg, input, nil
@@ -402,6 +409,11 @@ func (s *ImageStudioService) prepareEditInput(ctx context.Context, input ImageSt
 	if err != nil {
 		return nil, ImageStudioEditInput{}, infraerrors.BadRequest("INVALID_IMAGE_RENDER_SPEC", err.Error())
 	}
+	outputFormat := NormalizeImageStudioOutputFormat(input.OutputFormat)
+	background := NormalizeImageStudioBackground(input.Background)
+	if err := ValidateImageStudioOutputOptionsForModel(model, outputFormat, background); err != nil {
+		return nil, ImageStudioEditInput{}, infraerrors.BadRequest("INVALID_IMAGE_OUTPUT_OPTIONS", err.Error())
+	}
 	if len(input.ReferenceImages) == 0 {
 		return nil, ImageStudioEditInput{}, infraerrors.BadRequest("IMAGE_REFERENCE_REQUIRED", "reference image is required")
 	}
@@ -428,6 +440,8 @@ func (s *ImageStudioService) prepareEditInput(ctx context.Context, input ImageSt
 	input.Prompt = prompt
 	input.AspectRatio = aspectRatio
 	input.Quality = firstNonEmptyTrimmed(quality, billingTier)
+	input.OutputFormat = outputFormat
+	input.Background = background
 	input.Size = size
 	input.BillingTier = billingTier
 	return cfg, input, nil
@@ -623,6 +637,8 @@ func (s *ImageStudioService) storeExecutionResult(
 	prompt string,
 	aspectRatio string,
 	size string,
+	outputFormat string,
+	background string,
 	result *ImageStudioExecutionResult,
 ) (*ImageStudioImageRecord, error) {
 	if result == nil || len(result.ImageBytes) == 0 {
@@ -636,6 +652,10 @@ func (s *ImageStudioService) storeExecutionResult(
 	if mimeType == "" {
 		mimeType = "image/png"
 	}
+	finalOutputFormat := firstNonEmptyTrimmed(result.OutputFormat, outputFormat, imageStudioOutputFormatFromMIMEType(mimeType))
+	finalOutputFormat = NormalizeImageStudioOutputFormat(finalOutputFormat)
+	finalBackground := firstNonEmptyTrimmed(result.Background, background, "auto")
+	finalBackground = NormalizeImageStudioBackground(finalBackground)
 	now := time.Now()
 	objectKey, err := GenerateImageStorageObjectKey(userID, mimeType, now)
 	if err != nil {
@@ -663,6 +683,8 @@ func (s *ImageStudioService) storeExecutionResult(
 		StorageDriver:    cfg.StorageDriver,
 		StorageObjectKey: objectKey,
 		MimeType:         mimeType,
+		OutputFormat:     finalOutputFormat,
+		Background:       finalBackground,
 		Bytes:            int64(len(result.ImageBytes)),
 		Cost:             result.Cost,
 		UsageLogID:       result.UsageLogID,
@@ -780,6 +802,8 @@ func (s *ImageStudioService) taskFromGenerateInput(_ *ImageStudioSettings, input
 		Prompt:        strings.TrimSpace(input.Prompt),
 		AspectRatio:   strings.TrimSpace(input.AspectRatio),
 		Quality:       strings.TrimSpace(input.Quality),
+		OutputFormat:  strings.TrimSpace(input.OutputFormat),
+		Background:    strings.TrimSpace(input.Background),
 		Size:          strings.TrimSpace(input.Size),
 		EstimatedCost: estimateImageStudioCost(nil, input.BillingTier),
 		CreatedAt:     now,
@@ -799,6 +823,8 @@ func (s *ImageStudioService) taskFromEditInput(_ *ImageStudioSettings, input Ima
 		Prompt:           strings.TrimSpace(input.Prompt),
 		AspectRatio:      strings.TrimSpace(input.AspectRatio),
 		Quality:          strings.TrimSpace(input.Quality),
+		OutputFormat:     strings.TrimSpace(input.OutputFormat),
+		Background:       strings.TrimSpace(input.Background),
 		Size:             strings.TrimSpace(input.Size),
 		EstimatedCost:    estimateImageStudioCost(nil, input.BillingTier),
 		SourceImageCount: len(input.ReferenceImages),
@@ -842,14 +868,16 @@ func (s *ImageStudioService) processTask(ctx context.Context, taskID int64) {
 	switch task.Mode {
 	case ImageStudioModeGeneration:
 		input := ImageStudioGenerateInput{
-			UserID:      task.UserID,
-			APIKeyID:    task.APIKeyID,
-			GroupID:     task.GroupID,
-			Model:       task.Model,
-			Prompt:      task.Prompt,
-			AspectRatio: task.AspectRatio,
-			Quality:     task.Quality,
-			Size:        task.Size,
+			UserID:       task.UserID,
+			APIKeyID:     task.APIKeyID,
+			GroupID:      task.GroupID,
+			Model:        task.Model,
+			Prompt:       task.Prompt,
+			AspectRatio:  task.AspectRatio,
+			Quality:      task.Quality,
+			OutputFormat: task.OutputFormat,
+			Background:   task.Background,
+			Size:         task.Size,
 		}
 		image, finalQuality, finalEstimatedCost, err = s.generateTaskWithRecovery(ctx, input, task.EstimatedCost)
 	default:

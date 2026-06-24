@@ -72,6 +72,8 @@ export interface ImageStudioImage {
   storage_driver: string
   storage_object_key: string
   mime_type: string
+  output_format?: string
+  background?: string
   bytes: number
   cost: number
   usage_log_id?: number | null
@@ -97,6 +99,8 @@ export interface ImageStudioTask {
   prompt: string
   aspect_ratio: string
   quality: string
+  output_format?: string
+  background?: string
   size: string
   estimated_cost: number
   source_image_count: number
@@ -116,6 +120,8 @@ export interface ImageStudioGeneratePayload {
   prompt: string
   aspect_ratio: string
   quality?: string
+  output_format?: string
+  background?: string
 }
 
 export interface ImageStudioTaskPayload extends ImageStudioGeneratePayload {
@@ -180,6 +186,12 @@ export async function edit(payload: ImageStudioEditPayload): Promise<ImageStudio
   formData.append('aspect_ratio', payload.aspect_ratio)
   if (payload.quality) {
     formData.append('quality', payload.quality)
+  }
+  if (payload.output_format) {
+    formData.append('output_format', payload.output_format)
+  }
+  if (payload.background) {
+    formData.append('background', payload.background)
   }
   for (const image of payload.images) {
     formData.append('image', image)

@@ -1743,6 +1743,8 @@ var (
 		{Name: "storage_driver", Type: field.TypeString, Size: 32, Default: "local"},
 		{Name: "storage_object_key", Type: field.TypeString, Size: 1024},
 		{Name: "mime_type", Type: field.TypeString, Size: 128, Default: "image/png"},
+		{Name: "output_format", Type: field.TypeString, Size: 16, Default: "png"},
+		{Name: "background", Type: field.TypeString, Size: 24, Default: "auto"},
 		{Name: "bytes", Type: field.TypeInt64, Default: 0},
 		{Name: "cost", Type: field.TypeFloat64, Default: 0, SchemaType: map[string]string{"postgres": "decimal(20,8)"}},
 		{Name: "usage_log_id", Type: field.TypeInt64, Nullable: true},
@@ -1761,7 +1763,7 @@ var (
 		ForeignKeys: []*schema.ForeignKey{
 			{
 				Symbol:     "user_images_users_user_images",
-				Columns:    []*schema.Column{UserImagesColumns[18]},
+				Columns:    []*schema.Column{UserImagesColumns[20]},
 				RefColumns: []*schema.Column{UsersColumns[0]},
 				OnDelete:   schema.NoAction,
 			},
@@ -1770,17 +1772,17 @@ var (
 			{
 				Name:    "userimage_user_id_created_at",
 				Unique:  false,
-				Columns: []*schema.Column{UserImagesColumns[18], UserImagesColumns[16]},
+				Columns: []*schema.Column{UserImagesColumns[20], UserImagesColumns[18]},
 			},
 			{
 				Name:    "userimage_deleted_at",
 				Unique:  false,
-				Columns: []*schema.Column{UserImagesColumns[15]},
+				Columns: []*schema.Column{UserImagesColumns[17]},
 			},
 			{
 				Name:    "userimage_expires_at",
 				Unique:  false,
-				Columns: []*schema.Column{UserImagesColumns[14]},
+				Columns: []*schema.Column{UserImagesColumns[16]},
 			},
 			{
 				Name:    "userimage_storage_object_key",
@@ -1800,6 +1802,8 @@ var (
 		{Name: "prompt", Type: field.TypeString, Nullable: true, Size: 2147483647},
 		{Name: "aspect_ratio", Type: field.TypeString, Size: 16},
 		{Name: "quality", Type: field.TypeString, Size: 32},
+		{Name: "output_format", Type: field.TypeString, Size: 16, Default: "png"},
+		{Name: "background", Type: field.TypeString, Size: 24, Default: "auto"},
 		{Name: "size", Type: field.TypeString, Size: 32},
 		{Name: "estimated_cost", Type: field.TypeFloat64, Default: 0, SchemaType: map[string]string{"postgres": "decimal(20,8)"}},
 		{Name: "source_image_count", Type: field.TypeInt, Default: 0},
@@ -1821,13 +1825,13 @@ var (
 		ForeignKeys: []*schema.ForeignKey{
 			{
 				Symbol:     "user_image_tasks_users_user_image_tasks",
-				Columns:    []*schema.Column{UserImageTasksColumns[19]},
+				Columns:    []*schema.Column{UserImageTasksColumns[21]},
 				RefColumns: []*schema.Column{UsersColumns[0]},
 				OnDelete:   schema.NoAction,
 			},
 			{
 				Symbol:     "user_image_tasks_user_images_tasks",
-				Columns:    []*schema.Column{UserImageTasksColumns[20]},
+				Columns:    []*schema.Column{UserImageTasksColumns[22]},
 				RefColumns: []*schema.Column{UserImagesColumns[0]},
 				OnDelete:   schema.SetNull,
 			},
@@ -1836,17 +1840,17 @@ var (
 			{
 				Name:    "userimagetask_user_id_created_at",
 				Unique:  false,
-				Columns: []*schema.Column{UserImageTasksColumns[19], UserImageTasksColumns[17]},
+				Columns: []*schema.Column{UserImageTasksColumns[21], UserImageTasksColumns[19]},
 			},
 			{
 				Name:    "userimagetask_status_created_at",
 				Unique:  false,
-				Columns: []*schema.Column{UserImageTasksColumns[4], UserImageTasksColumns[17]},
+				Columns: []*schema.Column{UserImageTasksColumns[4], UserImageTasksColumns[19]},
 			},
 			{
 				Name:    "userimagetask_image_id",
 				Unique:  false,
-				Columns: []*schema.Column{UserImageTasksColumns[20]},
+				Columns: []*schema.Column{UserImageTasksColumns[22]},
 			},
 		},
 	}
