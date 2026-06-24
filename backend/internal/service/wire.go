@@ -522,7 +522,13 @@ func ProvideImageStudioService(
 	svc.SetTaskRepository(taskRepo)
 	svc.SetGroupResolver(groupResolver)
 	svc.SetExecutor(executor)
+	if affected, err := svc.MarkInterruptedRunningTasks(context.Background()); err != nil {
+		logger.LegacyPrintf("service.image_studio", "[ImageStudio] failed to mark interrupted running tasks: %v", err)
+	} else if affected > 0 {
+		logger.LegacyPrintf("service.image_studio", "[ImageStudio] marked %d interrupted running tasks after startup", affected)
+	}
 	svc.StartTaskWorkers(2)
+	svc.StartExpiredImageCleanup(time.Hour, 100)
 	return svc
 }
 

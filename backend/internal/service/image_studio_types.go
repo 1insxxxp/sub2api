@@ -191,6 +191,15 @@ type ImageStudioLocalFile struct {
 	Close       func() error
 }
 
+type ImageStudioDownloadFile struct {
+	Name        string
+	ContentType string
+	ModTime     time.Time
+	Size        int64
+	Reader      io.ReadSeeker
+	Close       func() error
+}
+
 type ImageStudioPricePreview struct {
 	AspectRatio string  `json:"aspect_ratio"`
 	Size        string  `json:"size"`
@@ -385,18 +394,27 @@ func ImageStudioPromptWithAspectRatioGuidance(prompt string, aspectRatio string)
 }
 
 func imageStudioAspectRatioGuidance(aspectRatio string) string {
-	switch strings.TrimSpace(aspectRatio) {
+	normalized := strings.TrimSpace(aspectRatio)
+	shape := "selected"
+	switch normalized {
 	case "1:1":
-		return "请严格生成 1:1 正方形构图，最终画布比例必须为 1:1。"
+		shape = "square 1:1"
 	case "16:9":
-		return "请严格生成 16:9 横版构图，最终画布比例必须为 16:9。"
+		shape = "wide 16:9 landscape"
 	case "9:16":
-		return "请严格生成 9:16 竖版构图，最终画布比例必须为 9:16。"
+		shape = "vertical 9:16 portrait"
 	case "4:3":
-		return "请严格生成 4:3 横版构图，最终画布比例必须为 4:3。"
+		shape = "classic 4:3 landscape"
 	case "3:4":
-		return "请严格生成 3:4 竖版构图，最终画布比例必须为 3:4。"
-	default:
-		return fmt.Sprintf("请严格按照 %s 的画布比例生成图片。", strings.TrimSpace(aspectRatio))
+		shape = "vertical 3:4 portrait"
 	}
+	if normalized == "" {
+		normalized = "1:1"
+		shape = "square 1:1"
+	}
+	return fmt.Sprintf(
+		"Composition constraint: generate the image on a %s canvas. The final image canvas must be %s, with the main subject fully composed inside that frame. Do not create a wide, panoramic, letterboxed, or cropped composition unless the requested ratio is wide. Do not place a narrow image on a larger blank canvas.",
+		shape,
+		normalized,
+	)
 }

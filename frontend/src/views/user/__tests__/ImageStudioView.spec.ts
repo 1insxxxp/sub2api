@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import ImageStudioView from '../ImageStudioView.vue'
 
-const { getConfig, getOptions, generate, createTask, getTask, listTasks, edit, list, deleteImage, listKeys, refreshUser, showError, showSuccess } =
+const { getConfig, getOptions, generate, createTask, getTask, listTasks, edit, list, deleteImage, downloadImageFile, listKeys, refreshUser, showError, showSuccess } =
   vi.hoisted(() => ({
     getConfig: vi.fn(),
     getOptions: vi.fn(),
@@ -15,6 +15,7 @@ const { getConfig, getOptions, generate, createTask, getTask, listTasks, edit, l
     edit: vi.fn(),
     list: vi.fn(),
     deleteImage: vi.fn(),
+    downloadImageFile: vi.fn(),
     listKeys: vi.fn(),
     refreshUser: vi.fn(),
     showError: vi.fn(),
@@ -32,6 +33,7 @@ vi.mock('@/api/images', () => ({
     edit,
     list,
     delete: deleteImage,
+    download: downloadImageFile,
   },
 }))
 
@@ -211,6 +213,11 @@ describe('ImageStudioView', () => {
     edit.mockReset()
     list.mockReset()
     deleteImage.mockReset()
+    downloadImageFile.mockReset()
+    downloadImageFile.mockResolvedValue({
+      blob: new Blob(['png-bytes'], { type: 'image/png' }),
+      filename: 'passion-api-image-9.png',
+    })
     listKeys.mockReset()
     refreshUser.mockReset()
     showError.mockReset()
@@ -322,7 +329,52 @@ describe('ImageStudioView', () => {
     expect(refreshUser).toHaveBeenCalled()
   })
 
-  it('sends output format and background options with each generated image request', async () => {
+  it('downloads generated images through the same-origin download endpoint', async () => {
+    vi.useFakeTimers()
+    const click = vi.fn()
+    const appendChild = vi.spyOn(document.body, 'appendChild')
+    const createElement = vi.spyOn(document, 'createElement')
+    vi.mocked(URL.createObjectURL).mockReturnValueOnce('blob:downloaded-image')
+    createElement.mockImplementation(((tagName: string) => {
+      const element = document.createElementNS('http://www.w3.org/1999/xhtml', tagName) as HTMLElement
+      if (tagName.toLowerCase() === 'a') {
+        Object.defineProperty(element, 'click', { configurable: true, value: click })
+      }
+      return element
+    }) as typeof document.createElement)
+
+    const wrapper = mount(ImageStudioView, {
+      global: {
+        stubs: {
+          AppLayout: { template: '<div><slot /></div>' },
+          Icon: true,
+        },
+      },
+    })
+
+    await flushPromises()
+    await wrapper.get('[data-testid="image-studio-prompt"]').setValue('blue gateway')
+    await wrapper.get('[data-testid="image-studio-submit"]').trigger('submit')
+    await vi.advanceTimersByTimeAsync(1300)
+    await flushPromises()
+
+    await wrapper.get('.image-studio-current-actions button:nth-child(2)').trigger('click')
+    await flushPromises()
+
+    expect(downloadImageFile).toHaveBeenCalledWith(9)
+    expect(click).toHaveBeenCalled()
+    const anchor = appendChild.mock.calls
+      .map(([node]) => node)
+      .find((node): node is HTMLAnchorElement => node instanceof HTMLAnchorElement)
+    expect(anchor?.href).toBe('blob:downloaded-image')
+    expect(anchor?.download).toBe('passion-api-image-9.png')
+    expect(anchor?.href).not.toBe('https://assets.example.com/generated.png')
+
+    createElement.mockRestore()
+    appendChild.mockRestore()
+  })
+
+  it('hides background options and sends output format with each generated image request', async () => {
     vi.useFakeTimers()
     getOptions.mockResolvedValueOnce({
       ...options,
@@ -442,7 +494,9 @@ describe('ImageStudioView', () => {
     await wrapper.get('[data-testid="image-studio-ratio-16:9"]').trigger('click')
     await wrapper.get('[data-testid="image-studio-output-count-2"]').trigger('click')
     await wrapper.get('[data-testid="image-studio-output-format-webp"]').trigger('click')
-    await wrapper.get('[data-testid="image-studio-output-background-transparent"]').trigger('click')
+    expect(wrapper.find('[data-testid="image-studio-output-background-auto"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="image-studio-output-background-opaque"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="image-studio-output-background-transparent"]').exists()).toBe(false)
     await wrapper.get('[data-testid="image-studio-prompt"]').setValue('batch neon gateway')
     await wrapper.get('[data-testid="image-studio-submit"]').trigger('submit')
     await vi.advanceTimersByTimeAsync(2600)
@@ -458,7 +512,6 @@ describe('ImageStudioView', () => {
       aspect_ratio: '16:9',
       quality: '2K',
       output_format: 'webp',
-      background: 'transparent',
     })
     expect(createTask).toHaveBeenNthCalledWith(2, {
       mode: 'generation',
@@ -469,13 +522,184 @@ describe('ImageStudioView', () => {
       aspect_ratio: '16:9',
       quality: '2K',
       output_format: 'webp',
-      background: 'transparent',
     })
     expect(wrapper.find('img[src="https://assets.example.com/batch-1.webp"]').exists()).toBe(true)
     expect(wrapper.find('img[src="https://assets.example.com/batch-2.webp"]').exists()).toBe(true)
   })
 
-  it('disables transparent background when jpeg output is selected', async () => {
+  it('shows all images from a four-image generation batch in the main result canvas', async () => {
+    vi.useFakeTimers()
+    const batchImages = [1, 2, 3, 4].map((item) => ({
+      id: 40 + item,
+      mode: 'generation',
+      model: 'gpt-image-1',
+      prompt: 'four blue portals',
+      aspect_ratio: '16:9',
+      size: '2048x1152',
+      image_url: `https://assets.example.com/four-${item}.png`,
+      cost: 0.07,
+      bytes: 100,
+      source_image_count: 0,
+      created_at: '2026-06-22T00:00:00Z',
+      updated_at: '2026-06-22T00:00:00Z',
+    }))
+    createTask
+      .mockResolvedValueOnce({
+        id: 41,
+        mode: 'generation',
+        status: 'queued',
+        model: 'gpt-image-1',
+        prompt: 'four blue portals',
+        aspect_ratio: '16:9',
+        quality: '2K',
+        size: '2048x1152',
+        estimated_cost: 0.07,
+        source_image_count: 0,
+        created_at: '2026-06-22T00:00:00Z',
+        updated_at: '2026-06-22T00:00:00Z',
+      })
+      .mockResolvedValueOnce({
+        id: 42,
+        mode: 'generation',
+        status: 'queued',
+        model: 'gpt-image-1',
+        prompt: 'four blue portals',
+        aspect_ratio: '16:9',
+        quality: '2K',
+        size: '2048x1152',
+        estimated_cost: 0.07,
+        source_image_count: 0,
+        created_at: '2026-06-22T00:00:00Z',
+        updated_at: '2026-06-22T00:00:00Z',
+      })
+      .mockResolvedValueOnce({
+        id: 43,
+        mode: 'generation',
+        status: 'queued',
+        model: 'gpt-image-1',
+        prompt: 'four blue portals',
+        aspect_ratio: '16:9',
+        quality: '2K',
+        size: '2048x1152',
+        estimated_cost: 0.07,
+        source_image_count: 0,
+        created_at: '2026-06-22T00:00:00Z',
+        updated_at: '2026-06-22T00:00:00Z',
+      })
+      .mockResolvedValueOnce({
+        id: 44,
+        mode: 'generation',
+        status: 'queued',
+        model: 'gpt-image-1',
+        prompt: 'four blue portals',
+        aspect_ratio: '16:9',
+        quality: '2K',
+        size: '2048x1152',
+        estimated_cost: 0.07,
+        source_image_count: 0,
+        created_at: '2026-06-22T00:00:00Z',
+        updated_at: '2026-06-22T00:00:00Z',
+      })
+    getTask
+      .mockResolvedValueOnce({
+        id: 41,
+        mode: 'generation',
+        status: 'succeeded',
+        model: 'gpt-image-1',
+        prompt: 'four blue portals',
+        aspect_ratio: '16:9',
+        quality: '2K',
+        size: '2048x1152',
+        estimated_cost: 0.07,
+        source_image_count: 0,
+        image: batchImages[0],
+        created_at: '2026-06-22T00:00:00Z',
+        updated_at: '2026-06-22T00:00:00Z',
+      })
+      .mockResolvedValueOnce({
+        id: 42,
+        mode: 'generation',
+        status: 'succeeded',
+        model: 'gpt-image-1',
+        prompt: 'four blue portals',
+        aspect_ratio: '16:9',
+        quality: '2K',
+        size: '2048x1152',
+        estimated_cost: 0.07,
+        source_image_count: 0,
+        image: batchImages[1],
+        created_at: '2026-06-22T00:00:00Z',
+        updated_at: '2026-06-22T00:00:00Z',
+      })
+      .mockResolvedValueOnce({
+        id: 43,
+        mode: 'generation',
+        status: 'succeeded',
+        model: 'gpt-image-1',
+        prompt: 'four blue portals',
+        aspect_ratio: '16:9',
+        quality: '2K',
+        size: '2048x1152',
+        estimated_cost: 0.07,
+        source_image_count: 0,
+        image: batchImages[2],
+        created_at: '2026-06-22T00:00:00Z',
+        updated_at: '2026-06-22T00:00:00Z',
+      })
+      .mockResolvedValueOnce({
+        id: 44,
+        mode: 'generation',
+        status: 'succeeded',
+        model: 'gpt-image-1',
+        prompt: 'four blue portals',
+        aspect_ratio: '16:9',
+        quality: '2K',
+        size: '2048x1152',
+        estimated_cost: 0.07,
+        source_image_count: 0,
+        image: batchImages[3],
+        created_at: '2026-06-22T00:00:00Z',
+        updated_at: '2026-06-22T00:00:00Z',
+      })
+
+    const wrapper = mount(ImageStudioView, {
+      global: {
+        stubs: {
+          AppLayout: { template: '<div><slot /></div>' },
+          Icon: true,
+        },
+      },
+    })
+
+    await flushPromises()
+
+    await wrapper.get('[data-testid="image-studio-quality-2K"]').trigger('click')
+    await wrapper.get('[data-testid="image-studio-ratio-16:9"]').trigger('click')
+    await wrapper.get('[data-testid="image-studio-output-count-4"]').trigger('click')
+    await wrapper.get('[data-testid="image-studio-prompt"]').setValue('four blue portals')
+    await wrapper.get('[data-testid="image-studio-submit"]').trigger('submit')
+    await vi.advanceTimersByTimeAsync(2600)
+    await flushPromises()
+
+    const resultGrid = wrapper.get('[data-testid="image-studio-current-result-grid"]')
+    expect(createTask).toHaveBeenCalledTimes(4)
+    expect(resultGrid.findAll('img')).toHaveLength(4)
+    for (const image of batchImages) {
+      expect(resultGrid.find(`img[src="${image.image_url}"]`).exists()).toBe(true)
+    }
+    expect(resultGrid.text()).toContain('imageStudio.batchSummaryComplete')
+  })
+
+  it('preserves generated image aspect ratio in the current result batch', () => {
+    const batchImageRule = cssRulesFor('.image-studio-result-tile-preview img')[0] ?? ''
+    const batchTileRule = cssRulesFor('.image-studio-result-tile-preview')[0] ?? ''
+
+    expect(batchImageRule).toMatch(/object-fit:\s*contain/)
+    expect(batchImageRule).not.toMatch(/object-fit:\s*cover/)
+    expect(batchTileRule).toMatch(/background:/)
+  })
+
+  it('does not expose background controls when jpeg output is selected', async () => {
     getOptions.mockResolvedValueOnce({
       ...options,
       default_model: 'gpt-image-1',
@@ -503,18 +727,13 @@ describe('ImageStudioView', () => {
 
     await flushPromises()
 
-    await wrapper.get('[data-testid="image-studio-output-background-transparent"]').trigger('click')
-    expect(wrapper.get('[data-testid="image-studio-output-background-transparent"]').classes()).toContain('active')
-
     await wrapper.get('[data-testid="image-studio-output-format-jpeg"]').trigger('click')
-    const transparentButton = wrapper.get('[data-testid="image-studio-output-background-transparent"]')
 
-    expect(transparentButton.attributes('disabled')).toBeDefined()
-    expect(transparentButton.classes()).not.toContain('active')
-    expect(wrapper.get('[data-testid="image-studio-output-background-auto"]').classes()).toContain('active')
+    expect(wrapper.find('[data-testid="image-studio-output-background-auto"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="image-studio-output-background-transparent"]').exists()).toBe(false)
   })
 
-  it('disables transparent background for gpt-image-2', async () => {
+  it('does not expose background controls for gpt-image-2', async () => {
     const wrapper = mount(ImageStudioView, {
       global: {
         stubs: {
@@ -526,10 +745,8 @@ describe('ImageStudioView', () => {
 
     await flushPromises()
 
-    const transparentButton = wrapper.get('[data-testid="image-studio-output-background-transparent"]')
-    expect(transparentButton.attributes('disabled')).toBeDefined()
-    expect(transparentButton.classes()).not.toContain('active')
-    expect(wrapper.get('[data-testid="image-studio-output-background-auto"]').classes()).toContain('active')
+    expect(wrapper.find('[data-testid="image-studio-output-background-auto"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="image-studio-output-background-transparent"]').exists()).toBe(false)
   })
 
   it('shows an inline recovery panel and retries failed generation at 1K', async () => {
@@ -757,18 +974,150 @@ describe('ImageStudioView', () => {
     expect(wrapper.find('[data-testid="image-studio-workbench"]').exists()).toBe(true)
     expect(wrapper.find('[data-testid="image-studio-control-console"]').exists()).toBe(true)
     expect(wrapper.find('[data-testid="image-studio-canvas-stage"]').exists()).toBe(true)
-    expect(wrapper.find('[data-testid="image-studio-canvas-stage"] .image-studio-gallery-rail').exists()).toBe(true)
+    expect(wrapper.find('.image-studio-workbench > .image-studio-gallery-rail').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="image-studio-canvas-stage"] .image-studio-gallery-rail').exists()).toBe(false)
 
     const apiKeySelect = wrapper.get('[data-testid="image-studio-api-key-select"]')
     expect(apiKeySelect.text()).toContain('Image Key')
 
     const modelSelect = wrapper.get('[data-testid="image-studio-model-select"]')
     expect(modelSelect.classes()).toContain('image-studio-select-trigger')
+    expect(vueSource()).not.toContain('selectedGroup?.platform')
+
+    const selectTriggerRule = cssRulesFor('.image-studio-select-trigger')[0] ?? ''
+    const selectTriggerBeforeRule = cssRulesFor('.image-studio-select-trigger::before')[0] ?? ''
+    const selectTriggerIconRule = cssRulesFor('.image-studio-select-trigger svg')[0] ?? ''
+    const selectOpenRule =
+      vueSource().match(
+        /\.image-studio-select-trigger:hover:not\(:disabled\),\s*\.image-studio-select-trigger:focus-visible,\s*\.image-studio-select\.is-open \.image-studio-select-trigger\s*\{([^}]*)\}/,
+      )?.[1] ?? ''
+    const selectMenuRule = cssRulesFor('.image-studio-select-menu')[0] ?? ''
+
+    expect(selectTriggerRule).toMatch(/position:\s*relative/)
+    expect(selectTriggerRule).toMatch(/overflow:\s*hidden/)
+    expect(selectTriggerRule).toMatch(/border:\s*1px solid rgba\(37,\s*99,\s*235,\s*0\.18\)/)
+    expect(selectTriggerRule).toMatch(/linear-gradient\(135deg,\s*rgba\(255,\s*255,\s*255,\s*0\.94\)/)
+    expect(selectTriggerRule).toMatch(/padding:\s*0\.72rem 0\.76rem 0\.72rem 0\.9rem/)
+    expect(selectTriggerBeforeRule).toMatch(/width:\s*3px/)
+    expect(selectTriggerBeforeRule).toMatch(/linear-gradient\(180deg,\s*var\(--brand-600\),\s*var\(--brand-cyan\)\)/)
+    expect(selectTriggerIconRule).toMatch(/border-radius:\s*999px/)
+    expect(selectTriggerIconRule).toMatch(/background:\s*rgba\(239,\s*246,\s*255,\s*0\.88\)/)
+    expect(selectOpenRule).toMatch(/border-color:\s*rgba\(37,\s*99,\s*235,\s*0\.48\)/)
+    expect(selectOpenRule).toMatch(/background:\s*linear-gradient\(135deg,\s*rgba\(239,\s*246,\s*255,\s*0\.9\)/)
+    expect(selectMenuRule).toMatch(/border:\s*1px solid rgba\(37,\s*99,\s*235,\s*0\.18\)/)
+    expect(selectMenuRule).toMatch(/backdrop-filter:\s*blur\(14px\)/)
 
     await modelSelect.trigger('click')
 
     expect(wrapper.find('[data-testid="image-studio-model-menu"]').exists()).toBe(true)
     expect(wrapper.find('.image-studio-select-option.is-selected').text()).toContain('gpt-image-2')
+  })
+
+  it('keeps section dividers without showing empty reference separators in text-to-image mode', async () => {
+    const wrapper = mount(ImageStudioView, {
+      global: {
+        stubs: {
+          AppLayout: { template: '<div><slot /></div>' },
+          Icon: true,
+        },
+      },
+    })
+
+    await flushPromises()
+
+    const controlDockRule = cssRulesFor('.image-studio-control-dock')[0] ?? ''
+    const outputRowRule = cssRulesFor('.image-studio-output-row')[0] ?? ''
+    const foundationRowRule = cssRulesFor('.image-studio-foundation-row')[0] ?? ''
+    const editOutputRowRule = cssRulesFor('.image-studio-control-dock.is-edit-mode .image-studio-output-row')[0] ?? ''
+
+    expect(wrapper.find('.image-studio-upload-panel').exists()).toBe(false)
+    expect(wrapper.get('.image-studio-control-dock').classes()).not.toContain('is-edit-mode')
+    expect(controlDockRule).toMatch(/border-top:\s*2px solid transparent/)
+    expect(controlDockRule).toMatch(/linear-gradient\(90deg,\s*transparent,\s*rgba\(37,\s*99,\s*235,\s*0\.34\)/)
+    expect(controlDockRule).toMatch(/background-origin:\s*border-box/)
+    expect(controlDockRule).toMatch(/padding-top:\s*1rem/)
+    expect(outputRowRule).not.toMatch(/border-top:/)
+    expect(foundationRowRule).toMatch(/border-top:\s*2px solid transparent/)
+    expect(foundationRowRule).toMatch(/linear-gradient\(90deg,\s*transparent,\s*rgba\(37,\s*99,\s*235,\s*0\.34\)/)
+    expect(foundationRowRule).toMatch(/background-origin:\s*border-box/)
+    expect(foundationRowRule).toMatch(/padding-top:\s*0\.95rem/)
+    expect(editOutputRowRule).toMatch(/border-top:/)
+
+    await wrapper.findAll('.image-studio-mode-switch button')[1].trigger('click')
+
+    expect(wrapper.get('.image-studio-control-dock').classes()).toContain('is-edit-mode')
+    expect(wrapper.find('.image-studio-upload-panel').exists()).toBe(true)
+  })
+
+  it('uses clean lightweight option groups for image settings', () => {
+    const pickerRule = cssRulesFor('.image-studio-choice-picker')[0] ?? ''
+    const buttonRule = cssRulesFor('.image-studio-choice-picker button')[0] ?? ''
+    const activeRule = cssRulesFor('.image-studio-choice-picker button.active')[0] ?? ''
+    const hoverRule =
+      vueSource().match(
+        /\.image-studio-choice-picker button:hover,\s*\.image-studio-choice-picker button:focus-visible\s*\{([^}]*)\}/,
+      )?.[1] ?? ''
+
+    expect(pickerRule).toMatch(/background:\s*transparent/)
+    expect(pickerRule).not.toMatch(/box-shadow:\s*inset/)
+    expect(pickerRule).toMatch(/gap:\s*0\.42rem/)
+    expect(buttonRule).toMatch(/min-height:\s*2\.72rem/)
+    expect(buttonRule).toMatch(/border:\s*1px solid rgba\(203,\s*213,\s*225,\s*0\.64\)/)
+    expect(buttonRule).toMatch(/background:\s*rgba\(255,\s*255,\s*255,\s*0\.68\)/)
+    expect(hoverRule).toMatch(/background:\s*rgba\(239,\s*246,\s*255,\s*0\.72\)/)
+    expect(activeRule).toMatch(/border-color:\s*rgba\(37,\s*99,\s*235,\s*0\.54\)/)
+    expect(activeRule).toMatch(/background:\s*rgba\(239,\s*246,\s*255,\s*0\.78\)/)
+    expect(activeRule).not.toMatch(/0 10px 22px/)
+    expect(activeRule).not.toMatch(/linear-gradient\(180deg/)
+  })
+
+  it('uses a vertically resizable prompt textarea without internal scrolling', async () => {
+    const wrapper = mount(ImageStudioView, {
+      global: {
+        stubs: {
+          AppLayout: { template: '<div><slot /></div>' },
+          Icon: true,
+        },
+      },
+    })
+
+    await flushPromises()
+
+    const textarea = wrapper.get('[data-testid="image-studio-prompt"]')
+    const textareaBaseRule = cssRulesFor('.image-studio-field textarea').find((rule) => rule.includes('width: 100%')) ?? ''
+    const textareaSizingRule = cssRulesFor('.image-studio-field textarea').find((rule) => rule.includes('resize')) ?? ''
+    const textareaFocusRule = cssRulesFor('.image-studio-field textarea:focus')[0] ?? ''
+    const textareaFocusVisibleRule = cssRulesFor('.image-studio-field textarea:focus-visible')[0] ?? ''
+    const textareaResizerRule = cssRulesFor('.image-studio-field textarea::-webkit-resizer')[0] ?? ''
+    const promptFieldRule = cssRulesFor('.image-studio-prompt-field')[0] ?? ''
+
+    expect(textarea.attributes('rows')).toBe('5')
+    expect(textareaBaseRule).toMatch(/width:\s*100%/)
+    expect(textareaBaseRule).toMatch(/max-width:\s*100%/)
+    expect(textareaBaseRule).toMatch(/border:\s*1px solid rgba\(37,\s*99,\s*235,\s*0\.24\)/)
+    expect(textareaSizingRule).toMatch(/height:\s*auto/)
+    expect(textareaSizingRule).toMatch(/min-height:\s*clamp\(8rem,\s*18dvh,\s*12rem\)/)
+    expect(textareaSizingRule).toMatch(/resize:\s*vertical/)
+    expect(textareaSizingRule).toMatch(/overflow-y:\s*hidden/)
+    expect(textareaSizingRule).not.toMatch(/height:\s*100%/)
+    expect(textareaSizingRule).not.toMatch(/resize:\s*none/)
+    expect(textareaFocusRule).toMatch(/border-color:\s*rgba\(37,\s*99,\s*235,\s*0\.72\)/)
+    expect(textareaFocusRule).toMatch(/box-shadow:/)
+    expect(textareaFocusVisibleRule).toMatch(/outline:\s*none/)
+    expect(textareaFocusVisibleRule).toMatch(/border-color:\s*rgba\(37,\s*99,\s*235,\s*0\.72\)/)
+    expect(textareaResizerRule).toMatch(/background:/)
+    expect(textareaResizerRule).toMatch(/rgba\(37,\s*99,\s*235,\s*0\.38\)/)
+    expect(promptFieldRule).not.toMatch(/grid-template-rows:\s*auto minmax\(0,\s*1fr\)/)
+
+    const element = textarea.element as HTMLTextAreaElement
+    Object.defineProperty(element, 'scrollHeight', {
+      configurable: true,
+      value: 320,
+    })
+
+    await textarea.setValue('line 1\nline 2\nline 3')
+
+    expect(element.style.height).toBe('320px')
   })
 
   it('renumbers command steps by mode without skipping the reference step', async () => {
@@ -843,7 +1192,7 @@ describe('ImageStudioView', () => {
     expect(dropUpRule).toMatch(/bottom:\s*calc\(100%\s*\+\s*0\.45rem\)/)
   })
 
-  it('uses a narrow secondary left rail with a fixed bottom generate card', async () => {
+  it('uses a three-column workstation with history isolated from the canvas height', async () => {
     const wrapper = mount(ImageStudioView, {
       global: {
         stubs: {
@@ -859,7 +1208,7 @@ describe('ImageStudioView', () => {
     const workbenchRule = cssRulesFor('.image-studio-workbench').find((rule) => rule.includes('height: 100%')) ?? ''
     const workspaceRule = cssRulesFor('.image-studio-workspace').find((rule) => rule.includes('grid-template-rows')) ?? ''
     const commandSurfaceRule = cssRulesFor('.image-studio-command-surface').find((rule) => rule.includes('overflow-y')) ?? ''
-    const canvasRule = cssRulesFor('.image-studio-canvas-stage').find((rule) => rule.includes('grid-template-rows')) ?? ''
+    const canvasRule = cssRulesFor('.image-studio-canvas-stage').find((rule) => rule.includes('height: 100%')) ?? ''
     const previewRule = cssRulesFor('.image-studio-preview-panel').find((rule) => rule.includes('grid-template-rows')) ?? ''
     const previewOpenRule =
       cssRulesFor('.image-studio-stage-panel .image-studio-preview-open').find((rule) => rule.includes('height: 100%')) ?? ''
@@ -869,20 +1218,40 @@ describe('ImageStudioView', () => {
       vueSource().match(
         /\.image-studio-stage-panel \.image-studio-preview-open:hover img,\s*\.image-studio-stage-panel \.image-studio-preview-open:focus-visible img\s*\{([^}]*)\}/,
       )?.[1] ?? ''
-    const galleryRule = cssRulesFor('.image-studio-gallery').find((rule) => rule.includes('max-height')) ?? ''
+    const galleryRule = cssRulesFor('.image-studio-gallery').find((rule) => rule.includes('height: 100%')) ?? ''
+    const galleryRailHeaderRule = cssRulesFor('.image-studio-gallery-rail .image-studio-panel-header')[0] ?? ''
+    const galleryRailTitleRule = cssRulesFor('.image-studio-gallery-rail .image-studio-panel-header h2')[0] ?? ''
+    const galleryRailLabelRule = cssRulesFor('.image-studio-gallery-rail .image-studio-section-label')[0] ?? ''
+    const galleryRailCountRule = cssRulesFor('.image-studio-gallery-rail .image-studio-gallery-count')[0] ?? ''
+    const galleryRailThumbRule = cssRulesFor('.image-studio-gallery-rail .image-studio-image-thumb')[0] ?? ''
+    const galleryRailThumbImageRule = cssRulesFor('.image-studio-gallery-rail .image-studio-image-thumb img')[0] ?? ''
+    const galleryRailCardRule = cssRulesFor('.image-studio-gallery-rail .image-studio-image-card')[0] ?? ''
+    const galleryRailOverlayRule = cssRulesFor('.image-studio-gallery-rail .image-studio-image-card-body')[0] ?? ''
+    const galleryRailOverlayHoverRule =
+      vueSource().match(
+        /\.image-studio-gallery-rail \.image-studio-image-card:hover \.image-studio-image-card-body,\s*\.image-studio-gallery-rail \.image-studio-image-card:focus-within \.image-studio-image-card-body\s*\{([^}]*)\}/,
+      )?.[1] ?? ''
+    const galleryRailPreviewLabelRule =
+      cssRulesFor('.image-studio-gallery-rail .image-studio-image-thumb > span')[0] ?? ''
+    const galleryRailPreviewHoverRule =
+      vueSource().match(
+        /\.image-studio-gallery-rail \.image-studio-image-thumb:hover > span,\s*\.image-studio-gallery-rail \.image-studio-image-thumb:focus-visible > span\s*\{([^}]*)\}/,
+      )?.[1] ?? ''
     const galleryGridRule =
       vueSource().match(/\.image-studio-gallery-grid,\s*\.image-studio-gallery-loading\s*\{([^}]*)\}/)?.[1] ?? ''
 
     expect(shellRule).toMatch(/height:\s*var\(--studio-viewport-height\)/)
     expect(shellRule).toMatch(/overflow:\s*hidden/)
     expect(workbenchRule).toMatch(/align-items:\s*stretch/)
-    expect(workbenchRule).toMatch(/grid-template-columns:\s*minmax\(18\.5rem,\s*0\.56fr\) minmax\(38rem,\s*1\.44fr\)/)
+    expect(workbenchRule).toMatch(
+      /grid-template-columns:\s*minmax\(19rem,\s*0\.58fr\) minmax\(42rem,\s*1\.82fr\) minmax\(7rem,\s*0\.22fr\)/,
+    )
     expect(workspaceRule).toMatch(/height:\s*100%/)
     expect(workspaceRule).toMatch(/grid-template-rows:\s*auto minmax\(0,\s*1fr\) auto/)
     expect(commandSurfaceRule).toMatch(/height:\s*100%/)
     expect(commandSurfaceRule).toMatch(/overflow-y:\s*auto/)
     expect(canvasRule).toMatch(/height:\s*100%/)
-    expect(canvasRule).toMatch(/grid-template-rows:\s*minmax\(0,\s*1fr\) auto/)
+    expect(canvasRule).not.toMatch(/grid-template-rows:\s*minmax\(0,\s*1fr\) auto/)
     expect(previewRule).toMatch(/height:\s*100%/)
     expect(previewRule).toMatch(/grid-template-rows:\s*auto minmax\(0,\s*1fr\) auto/)
     expect(previewOpenRule).toMatch(/height:\s*100%/)
@@ -899,10 +1268,57 @@ describe('ImageStudioView', () => {
     expect(stagePreviewImageRule).toMatch(/max-width:\s*min\(100%,\s*clamp\(26rem,\s*56vw,\s*56rem\)\)/)
     expect(stagePreviewImageRule).toMatch(/object-fit:\s*contain/)
     expect(stagePreviewHoverRule).toMatch(/transform:\s*none/)
-    expect(galleryRule).toMatch(/max-height:\s*clamp\(11rem,\s*22dvh,\s*15rem\)/)
-    expect(galleryGridRule).toMatch(/grid-auto-columns:\s*minmax\(11rem,\s*13rem\)/)
+    expect(galleryRule).toMatch(/height:\s*100%/)
+    expect(galleryRule).toMatch(/padding:\s*clamp\(0\.55rem,\s*0\.72vw,\s*0\.7rem\)/)
+    expect(galleryRule).not.toMatch(/max-height:\s*clamp\(11rem,\s*22dvh,\s*15rem\)/)
+    expect(galleryRailHeaderRule).toMatch(/display:\s*grid/)
+    expect(galleryRailHeaderRule).toMatch(/grid-template-columns:\s*minmax\(0,\s*1fr\) auto/)
+    expect(galleryRailHeaderRule).toMatch(/gap:\s*0\.14rem 0\.28rem/)
+    expect(galleryRailTitleRule).toMatch(/grid-column:\s*1 \/ -1/)
+    expect(galleryRailTitleRule).toMatch(/white-space:\s*nowrap/)
+    expect(galleryRailTitleRule).toMatch(/text-overflow:\s*ellipsis/)
+    expect(galleryRailLabelRule).toMatch(/white-space:\s*nowrap/)
+    expect(galleryRailCountRule).toMatch(/white-space:\s*nowrap/)
+    expect(galleryRailCountRule).toMatch(/grid-column:\s*2/)
+    expect(galleryRailCardRule).not.toMatch(/height:\s*100%/)
+    expect(galleryRailCardRule).toMatch(/background:\s*transparent/)
+    expect(galleryRailCardRule).toMatch(/box-shadow:\s*none/)
+    expect(galleryRailThumbRule).toMatch(/height:\s*auto/)
+    expect(galleryRailThumbRule).toMatch(/aspect-ratio:\s*16 \/ 9/)
+    expect(galleryRailThumbRule).toMatch(/isolation:\s*isolate/)
+    expect(galleryRailThumbImageRule).toMatch(/position:\s*absolute/)
+    expect(galleryRailThumbImageRule).toMatch(/inset:\s*0/)
+    expect(galleryRailThumbImageRule).toMatch(/width:\s*100%/)
+    expect(galleryRailThumbImageRule).toMatch(/height:\s*100%/)
+    expect(galleryRailThumbImageRule).toMatch(/aspect-ratio:\s*auto/)
+    expect(galleryRailOverlayRule).toMatch(/position:\s*absolute/)
+    expect(galleryRailOverlayRule).toMatch(/inset:\s*auto 0 0/)
+    expect(galleryRailOverlayRule).toMatch(/background:\s*linear-gradient/)
+    expect(galleryRailOverlayRule).toMatch(/opacity:\s*0/)
+    expect(galleryRailOverlayRule).toMatch(/pointer-events:\s*none/)
+    expect(galleryRailOverlayHoverRule).toMatch(/opacity:\s*1/)
+    expect(galleryRailOverlayHoverRule).toMatch(/pointer-events:\s*auto/)
+    expect(galleryRailPreviewLabelRule).toMatch(/top:\s*50%/)
+    expect(galleryRailPreviewLabelRule).toMatch(/left:\s*50%/)
+    expect(galleryRailPreviewLabelRule).toMatch(/max-width:\s*calc\(100% - 1rem\)/)
+    expect(galleryRailPreviewLabelRule).toMatch(/padding:\s*0\.34rem 0\.5rem/)
+    expect(galleryRailPreviewLabelRule).toMatch(/transform:\s*translate\(-50%,\s*-50%\) scale\(0\.96\)/)
+    expect(galleryRailPreviewHoverRule).toMatch(/transform:\s*translate\(-50%,\s*-50%\) scale\(1\)/)
+    expect(galleryGridRule).toMatch(/grid-template-columns:\s*1fr/)
+    expect(galleryGridRule).toMatch(/gap:\s*0\.42rem/)
+    expect(galleryGridRule).toMatch(/overflow-y:\s*auto/)
+    expect(galleryGridRule).not.toMatch(/grid-auto-flow:\s*column/)
     expect(wrapper.get('.image-studio-workspace > .image-studio-action-bar').exists()).toBe(true)
     expect(wrapper.find('.image-studio-command-surface .image-studio-action-bar').exists()).toBe(false)
+  })
+
+  it('keeps batch index badges readable over light generated images', () => {
+    const indexRule = cssRulesFor('.image-studio-result-index')[0] ?? ''
+
+    expect(indexRule).toMatch(/background:\s*linear-gradient\(135deg,\s*rgba\(15,\s*23,\s*42,\s*0\.94\)/)
+    expect(indexRule).toMatch(/color:\s*white/)
+    expect(indexRule).toMatch(/text-shadow:/)
+    expect(indexRule).toMatch(/box-shadow:/)
   })
 
   it('keeps the cost and generate action panel in normal flow with an opaque surface', () => {
@@ -912,6 +1328,7 @@ describe('ImageStudioView', () => {
     expect(actionBarRule).not.toMatch(/position:\s*sticky/)
     expect(actionBarRule).not.toMatch(/bottom:\s*0/)
     expect(actionBarRule).toMatch(/box-shadow:/)
+    expect(actionBarRule).toMatch(/margin-top:\s*1\.15rem/)
     expect(actionBarRule).toMatch(/rgba\(255,\s*255,\s*255,\s*0\.9[5-9]\)/)
     expect(darkActionBarRule).toMatch(/rgba\(15,\s*23,\s*42,\s*0\.9[5-9]\)/)
   })
@@ -1037,7 +1454,8 @@ describe('ImageStudioView', () => {
     expect(wrapper.find('[data-testid="image-studio-preview-download"]').exists()).toBe(true)
     expect(wrapper.find('[data-testid="image-studio-preview-reference"]').exists()).toBe(true)
     expect(wrapper.find('[data-testid="image-studio-preview-delete"]').exists()).toBe(true)
-    expect(wrapper.find('.image-studio-gallery-rail .image-studio-image-card-actions').exists()).toBe(false)
+    expect(wrapper.find('.image-studio-gallery-rail .image-studio-image-card-actions').exists()).toBe(true)
+    expect(wrapper.findAll('.image-studio-gallery-rail .image-studio-image-card-actions button')).toHaveLength(3)
 
     document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
     await flushPromises()

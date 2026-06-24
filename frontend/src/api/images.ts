@@ -137,6 +137,11 @@ export interface ImageStudioListParams {
   page_size?: number
 }
 
+export interface ImageStudioDownloadResult {
+  blob: Blob
+  filename?: string
+}
+
 export async function getConfig(): Promise<ImageStudioConfig> {
   const { data } = await apiClient.get<ImageStudioConfig>('/user/images/config')
   return data
@@ -218,6 +223,38 @@ export async function deleteImage(id: number): Promise<{ deleted: boolean }> {
   return data
 }
 
+export function downloadURL(id: number): string {
+  const baseURL = String(apiClient.defaults.baseURL || '/api/v1').replace(/\/+$/, '')
+  return `${baseURL}/user/images/${id}/download`
+}
+
+export async function downloadImageFile(id: number): Promise<ImageStudioDownloadResult> {
+  const response = await apiClient.get<Blob>(`/user/images/${id}/download`, {
+    responseType: 'blob',
+    timeout: IMAGE_STUDIO_REQUEST_TIMEOUT_MS,
+  })
+  return {
+    blob: response.data,
+    filename: filenameFromContentDisposition(response.headers?.['content-disposition']),
+  }
+}
+
+function filenameFromContentDisposition(value: unknown): string | undefined {
+  if (typeof value !== 'string') return undefined
+  const utf8Match = value.match(/filename\*=UTF-8''([^;]+)/i)
+  if (utf8Match?.[1]) {
+    try {
+      return decodeURIComponent(utf8Match[1].trim())
+    } catch {
+      return utf8Match[1].trim()
+    }
+  }
+  const quotedMatch = value.match(/filename="([^"]+)"/i)
+  if (quotedMatch?.[1]) return quotedMatch[1].trim()
+  const plainMatch = value.match(/filename=([^;]+)/i)
+  return plainMatch?.[1]?.trim()
+}
+
 export const imageStudioAPI = {
   getConfig,
   getOptions,
@@ -228,6 +265,8 @@ export const imageStudioAPI = {
   edit,
   list,
   delete: deleteImage,
+  downloadURL,
+  download: downloadImageFile,
 }
 
 export default imageStudioAPI

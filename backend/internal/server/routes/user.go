@@ -55,6 +55,7 @@ func RegisterUserRoutes(
 				images.POST("/generate", h.ImageStudio.Generate)
 				images.POST("/edit", h.ImageStudio.Edit)
 				images.GET("", h.ImageStudio.List)
+				images.GET("/:id/download", h.ImageStudio.Download)
 				images.DELETE("/:id", h.ImageStudio.Delete)
 			}
 

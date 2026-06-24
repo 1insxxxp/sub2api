@@ -152,23 +152,27 @@
 
           <div class="px-5 pb-5">
             <div class="image-studio-ratio-table overflow-hidden rounded-2xl border border-blue-100/80 dark:border-blue-400/10">
-              <div class="grid grid-cols-[1fr,1.2fr,1fr] bg-blue-50/70 px-4 py-2 text-xs font-semibold uppercase text-blue-700 dark:bg-blue-950/30 dark:text-blue-200">
+              <div class="grid grid-cols-[0.8fr,1fr,1fr,1fr] bg-blue-50/70 px-4 py-2 text-xs font-semibold uppercase text-blue-700 dark:bg-blue-950/30 dark:text-blue-200">
                 <span>{{ t('admin.settings.imageStudio.ratio') }}</span>
-                <span>{{ t('admin.settings.imageStudio.size') }}</span>
-                <span>{{ t('admin.settings.imageStudio.billingTier') }}</span>
+                <span v-for="tier in renderQualityTiers" :key="tier">{{ tier }}</span>
               </div>
               <div
-                v-for="item in form.aspect_ratios"
-                :key="item.ratio"
-                class="grid grid-cols-[1fr,1.2fr,1fr] border-t border-blue-100/70 px-4 py-3 text-sm dark:border-blue-400/10"
+                v-for="row in renderSizeRows"
+                :key="row.ratio"
+                class="grid grid-cols-[0.8fr,1fr,1fr,1fr] border-t border-blue-100/70 px-4 py-3 text-sm dark:border-blue-400/10"
               >
-                <strong class="text-gray-900 dark:text-white">{{ item.ratio }}</strong>
-                <span class="font-mono text-gray-600 dark:text-dark-300">{{ item.size }}</span>
-                <span class="font-semibold text-primary-600 dark:text-primary-300">{{ item.billing_tier }}</span>
+                <strong class="text-gray-900 dark:text-white">{{ row.ratio }}</strong>
+                <span
+                  v-for="tier in renderQualityTiers"
+                  :key="tier"
+                  class="font-mono text-gray-600 dark:text-dark-300"
+                >
+                  {{ row.sizes[tier] }}
+                </span>
               </div>
             </div>
             <p class="mt-2 text-xs text-gray-500 dark:text-dark-400">
-              {{ t('admin.settings.imageStudio.aspectRatioHint') }}
+              {{ t('admin.settings.imageStudio.renderSizeMatrixHint') }}
             </p>
           </div>
         </div>
@@ -293,6 +297,17 @@ const defaultAspectRatios: ImageStudioAspectRatio[] = [
   { ratio: '3:4', size: '768x1024', billing_tier: '1k' },
 ]
 
+const renderQualityTiers = ['1K', '2K', '4K'] as const
+type RenderQualityTier = typeof renderQualityTiers[number]
+
+const renderSizeByRatioAndTier: Record<string, Record<RenderQualityTier, string>> = {
+  '1:1': { '1K': '1024x1024', '2K': '2048x2048', '4K': '4096x4096' },
+  '16:9': { '1K': '1024x576', '2K': '2048x1152', '4K': '3840x2160' },
+  '9:16': { '1K': '576x1024', '2K': '1152x2048', '4K': '2160x3840' },
+  '4:3': { '1K': '1024x768', '2K': '2048x1536', '4K': '4096x3072' },
+  '3:4': { '1K': '768x1024', '2K': '1536x2048', '4K': '3072x4096' },
+}
+
 const form = reactive<ImageStudioSettings>({
   enabled: false,
   allowed_models: ['gpt-image-1'],
@@ -328,6 +343,17 @@ const storageStatusClass = computed(() => {
   }
   return 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-200'
 })
+
+const renderSizeRows = computed(() =>
+  form.aspect_ratios.map((item) => ({
+    ratio: item.ratio,
+    sizes: renderSizeByRatioAndTier[item.ratio] ?? {
+      '1K': item.size,
+      '2K': item.size,
+      '4K': item.size,
+    },
+  })),
+)
 
 function parseModels(text: string): string[] {
   const seen = new Set<string>()

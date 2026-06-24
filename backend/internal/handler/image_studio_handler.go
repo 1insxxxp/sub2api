@@ -26,6 +26,7 @@ type ImageStudioService interface {
 	Edit(ctx context.Context, input service.ImageStudioEditInput) (*service.ImageStudioImageRecord, error)
 	List(ctx context.Context, userID int64, params pagination.PaginationParams) ([]service.ImageStudioImageRecord, *pagination.PaginationResult, error)
 	Delete(ctx context.Context, userID int64, imageID int64) error
+	Download(ctx context.Context, userID int64, imageID int64) (*service.ImageStudioDownloadFile, error)
 	OpenLocalFile(ctx context.Context, objectKey string) (*service.ImageStudioLocalFile, error)
 }
 
@@ -282,6 +283,36 @@ func (h *ImageStudioHandler) Delete(c *gin.Context) {
 		return
 	}
 	response.Success(c, gin.H{"deleted": true})
+}
+
+func (h *ImageStudioHandler) Download(c *gin.Context) {
+	subject, ok := middleware2.GetAuthSubjectFromContext(c)
+	if !ok {
+		response.Unauthorized(c, "User not authenticated")
+		return
+	}
+	id, err := strconv.ParseInt(strings.TrimSpace(c.Param("id")), 10, 64)
+	if err != nil || id <= 0 {
+		response.BadRequest(c, "Invalid image id")
+		return
+	}
+	file, err := h.imageStudioService.Download(c.Request.Context(), subject.UserID, id)
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	if file.Close != nil {
+		defer file.Close()
+	}
+	if file.ContentType != "" {
+		c.Header("Content-Type", file.ContentType)
+	}
+	if file.Size > 0 {
+		c.Header("Content-Length", strconv.FormatInt(file.Size, 10))
+	}
+	c.Header("Content-Disposition", `attachment; filename="`+strings.ReplaceAll(file.Name, `"`, "")+`"`)
+	c.Header("Cache-Control", "private, max-age=0, no-store")
+	http.ServeContent(c.Writer, c.Request, file.Name, file.ModTime, file.Reader)
 }
 
 func (h *ImageStudioHandler) ServeFile(c *gin.Context) {

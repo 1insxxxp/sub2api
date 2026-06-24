@@ -14,6 +14,7 @@ import (
 	"time"
 
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/pagination"
 )
 
@@ -29,6 +30,14 @@ var (
 		"IMAGE_PROVIDER_TIMEOUT_OR_DISCONNECT",
 		"image provider timed out or disconnected before returning an image; this request was not charged",
 	)
+)
+
+const (
+	imageStudioInterruptedTaskReason  = "IMAGE_TASK_INTERRUPTED_BY_RESTART"
+	imageStudioInterruptedTaskMessage = "image generation was interrupted by a local service restart after the upstream request was sent"
+	imageStudioRunningTaskStaleAfter  = 15 * time.Minute
+	imageStudioExpiredCleanupInterval = time.Hour
+	imageStudioExpiredCleanupBatch    = 100
 )
 
 type ImageStudioConfigReader interface {
@@ -56,6 +65,7 @@ type UserImageTaskRepository interface {
 	MarkRunning(ctx context.Context, taskID int64, startedAt time.Time) (bool, error)
 	MarkSucceeded(ctx context.Context, taskID int64, image *ImageStudioImageRecord, quality string, estimatedCost float64, completedAt time.Time) (*ImageStudioTask, error)
 	MarkFailed(ctx context.Context, taskID int64, reason string, message string, completedAt time.Time) (*ImageStudioTask, error)
+	MarkStaleRunningFailed(ctx context.Context, olderThan time.Time, completedAt time.Time, reason string, message string) (int, error)
 }
 
 type ImageStudioExecutor interface {
@@ -74,6 +84,7 @@ type ImageStudioService struct {
 	storageFactory ImageStudioStorageFactory
 	taskQueue      chan int64
 	workersStarted atomic.Bool
+	cleanupStarted atomic.Bool
 	now            func() time.Time
 }
 
@@ -117,7 +128,7 @@ func (s *ImageStudioService) GetOptions(ctx context.Context, userID int64) (*Ima
 	}
 	options := &ImageStudioOptions{
 		Enabled:      cfg.Enabled,
-		DefaultModel: firstImageStudioModel(cfg),
+		DefaultModel: cfg.DefaultModel,
 		Groups:       []ImageStudioGroupOption{},
 	}
 	if !cfg.Enabled {
@@ -208,6 +219,87 @@ func (s *ImageStudioService) StartTaskWorkers(workerCount int) {
 	}
 }
 
+func (s *ImageStudioService) StartExpiredImageCleanup(interval time.Duration, batchSize int) {
+	if interval <= 0 {
+		interval = imageStudioExpiredCleanupInterval
+	}
+	if batchSize <= 0 {
+		batchSize = imageStudioExpiredCleanupBatch
+	}
+	if !s.cleanupStarted.CompareAndSwap(false, true) {
+		return
+	}
+	go func() {
+		run := func() {
+			deleted, err := s.CleanupExpiredImages(context.Background(), batchSize)
+			if err != nil {
+				logger.LegacyPrintf("service.image_studio", "[ImageStudio] expired image cleanup failed: %v", err)
+				return
+			}
+			if deleted > 0 {
+				logger.LegacyPrintf("service.image_studio", "[ImageStudio] cleaned %d expired images", deleted)
+			}
+		}
+		run()
+		ticker := time.NewTicker(interval)
+		defer ticker.Stop()
+		for range ticker.C {
+			run()
+		}
+	}()
+}
+
+func (s *ImageStudioService) CleanupExpiredImages(ctx context.Context, batchSize int) (int, error) {
+	if batchSize <= 0 {
+		batchSize = imageStudioExpiredCleanupBatch
+	}
+	cfg, err := s.loadSettings(ctx)
+	if err != nil {
+		return 0, err
+	}
+	storage, err := s.resolveStorage(ctx, cfg)
+	if err != nil {
+		return 0, err
+	}
+	records, err := s.repo.ListExpired(ctx, s.now(), batchSize)
+	if err != nil {
+		return 0, fmt.Errorf("list expired user images: %w", err)
+	}
+	deleted := 0
+	for _, record := range records {
+		if record.ID <= 0 || record.UserID <= 0 {
+			continue
+		}
+		if err := s.repo.SoftDelete(ctx, record.ID, record.UserID); err != nil {
+			if errors.Is(err, ErrUserImageNotFound) {
+				continue
+			}
+			return deleted, fmt.Errorf("soft delete expired user image: %w", err)
+		}
+		deleted++
+		if objectKey := strings.TrimSpace(record.StorageObjectKey); objectKey != "" {
+			if err := storage.Delete(context.WithoutCancel(ctx), objectKey); err != nil {
+				logger.LegacyPrintf("service.image_studio", "[ImageStudio] delete expired image object failed: key=%s err=%v", objectKey, err)
+			}
+		}
+	}
+	return deleted, nil
+}
+
+func (s *ImageStudioService) MarkInterruptedRunningTasks(ctx context.Context) (int, error) {
+	if s.taskRepo == nil {
+		return 0, ErrImageStudioTaskRepoMissing
+	}
+	now := s.now()
+	return s.taskRepo.MarkStaleRunningFailed(
+		ctx,
+		now.Add(-imageStudioRunningTaskStaleAfter),
+		now,
+		imageStudioInterruptedTaskReason,
+		imageStudioInterruptedTaskMessage,
+	)
+}
+
 func (s *ImageStudioService) List(ctx context.Context, userID int64, params pagination.PaginationParams) ([]ImageStudioImageRecord, *pagination.PaginationResult, error) {
 	if err := s.ensureEnabled(ctx); err != nil {
 		return nil, nil, err
@@ -261,6 +353,46 @@ func (s *ImageStudioService) Delete(ctx context.Context, userID int64, imageID i
 		return fmt.Errorf("delete user image: %w", err)
 	}
 	return nil
+}
+
+func (s *ImageStudioService) Download(ctx context.Context, userID int64, imageID int64) (*ImageStudioDownloadFile, error) {
+	if err := s.ensureEnabled(ctx); err != nil {
+		return nil, err
+	}
+	if userID <= 0 || imageID <= 0 {
+		return nil, infraerrors.BadRequest("INVALID_IMAGE_ID", "invalid image id")
+	}
+	record, err := s.repo.GetByID(ctx, imageID)
+	if err != nil {
+		return nil, fmt.Errorf("get user image: %w", err)
+	}
+	if record == nil || record.UserID != userID || strings.TrimSpace(record.StorageObjectKey) == "" {
+		return nil, ErrUserImageNotFound
+	}
+	cfg, err := s.loadSettings(ctx)
+	if err != nil {
+		return nil, err
+	}
+	storage, err := s.resolveStorage(ctx, cfg)
+	if err != nil {
+		return nil, err
+	}
+	stored, err := storage.Open(ctx, record.StorageObjectKey)
+	if err != nil {
+		return nil, fmt.Errorf("open user image: %w", err)
+	}
+	contentType := strings.TrimSpace(stored.ContentType)
+	if contentType == "" {
+		contentType = firstNonEmptyTrimmed(record.MimeType, "application/octet-stream")
+	}
+	return &ImageStudioDownloadFile{
+		Name:        imageStudioDownloadFileName(record),
+		ContentType: contentType,
+		ModTime:     stored.ModTime,
+		Size:        stored.Size,
+		Reader:      stored.Reader,
+		Close:       stored.Close,
+	}, nil
 }
 
 func (s *ImageStudioService) OpenLocalFile(ctx context.Context, objectKey string) (*ImageStudioLocalFile, error) {
@@ -317,6 +449,14 @@ func (s *ImageStudioService) OpenLocalFile(ctx context.Context, objectKey string
 		Reader:      file,
 		Close:       file.Close,
 	}, nil
+}
+
+func imageStudioDownloadFileName(record *ImageStudioImageRecord) string {
+	if record == nil || record.ID <= 0 {
+		return "passion-api-image.png"
+	}
+	contentType := firstNonEmptyTrimmed(record.MimeType, mime.TypeByExtension(strings.ToLower(filepath.Ext(record.StorageObjectKey))))
+	return fmt.Sprintf("passion-api-image-%d%s", record.ID, imageStorageExtension(contentType))
 }
 
 func (s *ImageStudioService) prepareGenerateInput(ctx context.Context, input ImageStudioGenerateInput) (*ImageStudioSettings, ImageStudioGenerateInput, error) {
@@ -656,12 +796,16 @@ func (s *ImageStudioService) storeExecutionResult(
 	finalOutputFormat = NormalizeImageStudioOutputFormat(finalOutputFormat)
 	finalBackground := firstNonEmptyTrimmed(result.Background, background, "auto")
 	finalBackground = NormalizeImageStudioBackground(finalBackground)
+	imageBytes, mimeType, finalOutputFormat, err := normalizeImageStudioOutputImage(result.ImageBytes, mimeType, finalOutputFormat, finalBackground, aspectRatio, size)
+	if err != nil {
+		return nil, fmt.Errorf("normalize generated image: %w", err)
+	}
 	now := time.Now()
 	objectKey, err := GenerateImageStorageObjectKey(userID, mimeType, now)
 	if err != nil {
 		return nil, fmt.Errorf("generate image object key: %w", err)
 	}
-	imageURL, err := storage.Put(ctx, objectKey, mimeType, result.ImageBytes)
+	imageURL, err := storage.Put(ctx, objectKey, mimeType, imageBytes)
 	if err != nil {
 		return nil, fmt.Errorf("store generated image: %w", err)
 	}
@@ -685,7 +829,7 @@ func (s *ImageStudioService) storeExecutionResult(
 		MimeType:         mimeType,
 		OutputFormat:     finalOutputFormat,
 		Background:       finalBackground,
-		Bytes:            int64(len(result.ImageBytes)),
+		Bytes:            int64(len(imageBytes)),
 		Cost:             result.Cost,
 		UsageLogID:       result.UsageLogID,
 		SourceImageCount: result.SourceImageCount,
@@ -734,7 +878,17 @@ func defaultImageStudioStorageFactory(ctx context.Context, cfg *ImageStudioSetti
 		}
 		return NewLocalImageStorage(LocalImageStorageConfig{RootDir: rootDir, PublicBaseURL: publicBaseURL})
 	case ImageStorageDriverR2:
-		return nil, infraerrors.ServiceUnavailable("IMAGE_STUDIO_R2_NOT_CONFIGURED", "r2 storage requires server credentials")
+		storage, err := NewR2ImageStorage(R2ImageStorageConfig{
+			AccountID:     os.Getenv("R2_ACCOUNT_ID"),
+			AccessKeyID:   os.Getenv("R2_ACCESS_KEY_ID"),
+			SecretKey:     os.Getenv("R2_SECRET_ACCESS_KEY"),
+			Bucket:        os.Getenv("R2_BUCKET"),
+			PublicBaseURL: strings.TrimSpace(cfg.R2PublicBaseURL),
+		})
+		if err != nil {
+			return nil, infraerrors.ServiceUnavailable("IMAGE_STUDIO_R2_NOT_CONFIGURED", "r2 storage requires server credentials").WithCause(err)
+		}
+		return storage, nil
 	default:
 		return nil, ErrImageStudioStorageMissing
 	}

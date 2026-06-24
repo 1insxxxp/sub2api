@@ -4,7 +4,11 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"io"
+	"mime"
+	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/credentials"
@@ -21,6 +25,7 @@ type R2ImageStorageConfig struct {
 
 type r2S3Client interface {
 	PutObject(ctx context.Context, params *s3.PutObjectInput, optFns ...func(*s3.Options)) (*s3.PutObjectOutput, error)
+	GetObject(ctx context.Context, params *s3.GetObjectInput, optFns ...func(*s3.Options)) (*s3.GetObjectOutput, error)
 	DeleteObject(ctx context.Context, params *s3.DeleteObjectInput, optFns ...func(*s3.Options)) (*s3.DeleteObjectOutput, error)
 }
 
@@ -70,6 +75,42 @@ func (s *R2ImageStorage) Put(ctx context.Context, objectKey string, contentType 
 		return "", fmt.Errorf("put r2 image object: %w", err)
 	}
 	return joinPublicImageURL(s.publicBaseURL, objectKey), nil
+}
+
+func (s *R2ImageStorage) Open(ctx context.Context, objectKey string) (*ImageStudioStoredFile, error) {
+	if err := validateImageStorageObjectKey(objectKey); err != nil {
+		return nil, err
+	}
+	out, err := s.client.GetObject(ctx, &s3.GetObjectInput{
+		Bucket: aws.String(s.bucket),
+		Key:    aws.String(objectKey),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("get r2 image object: %w", err)
+	}
+	defer out.Body.Close()
+	data, err := io.ReadAll(out.Body)
+	if err != nil {
+		return nil, fmt.Errorf("read r2 image object: %w", err)
+	}
+	contentType := strings.TrimSpace(aws.ToString(out.ContentType))
+	if contentType == "" {
+		contentType = mime.TypeByExtension(strings.ToLower(filepath.Ext(objectKey)))
+	}
+	if contentType == "" {
+		contentType = "application/octet-stream"
+	}
+	modTime := time.Now()
+	if out.LastModified != nil {
+		modTime = *out.LastModified
+	}
+	return &ImageStudioStoredFile{
+		Name:        filepath.Base(objectKey),
+		ContentType: contentType,
+		ModTime:     modTime,
+		Size:        int64(len(data)),
+		Reader:      bytes.NewReader(data),
+	}, nil
 }
 
 func (s *R2ImageStorage) Delete(ctx context.Context, objectKey string) error {

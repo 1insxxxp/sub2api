@@ -3,8 +3,13 @@
 package service
 
 import (
+	"bytes"
 	"context"
 	"errors"
+	"image"
+	"image/color"
+	stddraw "image/draw"
+	"image/png"
 	"io"
 	"net/http"
 	"testing"
@@ -34,6 +39,10 @@ type imageStudioRepoStub struct {
 	createdRecords []ImageStudioImageRecord
 	createErr      error
 
+	getByIDRecord *ImageStudioImageRecord
+	getByIDID     int64
+	getByIDErr    error
+
 	listUserID int64
 	listParams pagination.PaginationParams
 	listItems  []ImageStudioImageRecord
@@ -48,6 +57,11 @@ type imageStudioRepoStub struct {
 	deleteOldestLimit  int
 	deleteOldestItems  []ImageStudioImageRecord
 	deleteOldestErr    error
+
+	listExpiredNow   time.Time
+	listExpiredLimit int
+	listExpiredItems []ImageStudioImageRecord
+	listExpiredErr   error
 }
 
 type imageStudioTaskRepoStub struct {
@@ -143,6 +157,24 @@ func (s *imageStudioTaskRepoStub) MarkFailed(ctx context.Context, taskID int64, 
 	return &task, nil
 }
 
+func (s *imageStudioTaskRepoStub) MarkStaleRunningFailed(ctx context.Context, olderThan time.Time, completedAt time.Time, reason string, message string) (int, error) {
+	s.ensure()
+	affected := 0
+	for id, task := range s.tasks {
+		if task.Status != ImageStudioTaskStatusRunning || task.StartedAt == nil || task.StartedAt.After(olderThan) {
+			continue
+		}
+		task.Status = ImageStudioTaskStatusFailed
+		task.ErrorReason = reason
+		task.ErrorMessage = message
+		task.CompletedAt = &completedAt
+		task.UpdatedAt = completedAt
+		s.tasks[id] = task
+		affected++
+	}
+	return affected, nil
+}
+
 func (s *imageStudioRepoStub) Create(ctx context.Context, record *ImageStudioImageRecord) error {
 	if s.createErr != nil {
 		return s.createErr
@@ -170,7 +202,15 @@ func (s *imageStudioRepoStub) ListByUser(ctx context.Context, userID int64, para
 }
 
 func (s *imageStudioRepoStub) GetByID(ctx context.Context, id int64) (*ImageStudioImageRecord, error) {
-	panic("unexpected GetByID call")
+	s.getByIDID = id
+	if s.getByIDErr != nil {
+		return nil, s.getByIDErr
+	}
+	if s.getByIDRecord != nil {
+		record := *s.getByIDRecord
+		return &record, nil
+	}
+	return nil, ErrUserImageNotFound
 }
 
 func (s *imageStudioRepoStub) SoftDelete(ctx context.Context, id int64, userID int64) error {
@@ -193,7 +233,12 @@ func (s *imageStudioRepoStub) DeleteOldestOverLimit(ctx context.Context, userID 
 }
 
 func (s *imageStudioRepoStub) ListExpired(ctx context.Context, now time.Time, limit int) ([]ImageStudioImageRecord, error) {
-	panic("unexpected ListExpired call")
+	s.listExpiredNow = now
+	s.listExpiredLimit = limit
+	if s.listExpiredErr != nil {
+		return nil, s.listExpiredErr
+	}
+	return append([]ImageStudioImageRecord(nil), s.listExpiredItems...), nil
 }
 
 type imageStudioExecutorStub struct {
@@ -252,6 +297,10 @@ type imageStudioStorageStub struct {
 	putContentType string
 	putData        []byte
 	deleteKey      string
+	deleteKeys     []string
+	openKey        string
+	openFile       *ImageStudioStoredFile
+	openErr        error
 	publicURL      string
 	putErr         error
 }
@@ -271,7 +320,25 @@ func (s *imageStudioStorageStub) Put(ctx context.Context, objectKey string, cont
 
 func (s *imageStudioStorageStub) Delete(ctx context.Context, objectKey string) error {
 	s.deleteKey = objectKey
+	s.deleteKeys = append(s.deleteKeys, objectKey)
 	return nil
+}
+
+func (s *imageStudioStorageStub) Open(ctx context.Context, objectKey string) (*ImageStudioStoredFile, error) {
+	s.openKey = objectKey
+	if s.openErr != nil {
+		return nil, s.openErr
+	}
+	if s.openFile != nil {
+		return s.openFile, nil
+	}
+	return &ImageStudioStoredFile{
+		Name:        "stored.png",
+		ContentType: "image/png",
+		Size:        int64(len("stored-bytes")),
+		Reader:      bytes.NewReader([]byte("stored-bytes")),
+		Close:       func() error { return nil },
+	}, nil
 }
 
 func TestImageStudioServiceGetConfigReturnsPublicConfig(t *testing.T) {
@@ -355,6 +422,34 @@ func TestImageStudioServiceGetOptionsReturnsSelectableGroupsModelsQualitiesAndPr
 	})
 }
 
+func TestImageStudioServiceGetOptionsUsesConfiguredDefaultModel(t *testing.T) {
+	settings := defaultImageStudioSettings()
+	settings.Enabled = true
+	settings.AllowedModels = []string{"gpt-image-1", "gpt-image-2"}
+	settings.DefaultModel = "gpt-image-2"
+
+	svc := NewImageStudioService(&imageStudioRepoStub{}, &imageStudioConfigReaderStub{cfg: settings})
+	svc.SetGroupResolver(&imageStudioGroupResolverStub{groups: []Group{
+		{
+			ID:                   2,
+			Name:                 "Image Pro",
+			Platform:             PlatformOpenAI,
+			Status:               StatusActive,
+			AllowImageGeneration: true,
+		},
+	}})
+
+	options, err := svc.GetOptions(context.Background(), 7)
+
+	require.NoError(t, err)
+	require.Equal(t, "gpt-image-2", options.DefaultModel)
+	require.Len(t, options.Groups, 1)
+	require.Equal(t, []ImageStudioModelOption{
+		{Model: "gpt-image-1", Label: "gpt-image-1", Capabilities: []string{ImageStudioModeGeneration, ImageStudioModeEdit}},
+		{Model: "gpt-image-2", Label: "gpt-image-2", Capabilities: []string{ImageStudioModeGeneration, ImageStudioModeEdit}},
+	}, options.Groups[0].Models)
+}
+
 func TestImageStudioServiceGetOptionsUsesOnlyGroupCustomImageModelsWhenEnabled(t *testing.T) {
 	settings := defaultImageStudioSettings()
 	settings.Enabled = true
@@ -427,6 +522,73 @@ func TestImageStudioServiceDeleteChecksCurrentUserThroughRepository(t *testing.T
 	repo.deleteErr = ErrUserImageNotFound
 	err := svc.Delete(context.Background(), 8, 99)
 	require.ErrorIs(t, err, ErrUserImageNotFound)
+}
+
+func TestImageStudioServiceDownloadChecksUserAndOpensStoredImage(t *testing.T) {
+	settings := defaultImageStudioSettings()
+	settings.Enabled = true
+	repo := &imageStudioRepoStub{
+		getByIDRecord: &ImageStudioImageRecord{
+			ID:               20,
+			UserID:           7,
+			StorageObjectKey: "images/user-7/2026/06/example.png",
+			MimeType:         "image/png",
+		},
+	}
+	storage := &imageStudioStorageStub{
+		openFile: &ImageStudioStoredFile{
+			Name:        "example.png",
+			ContentType: "image/png",
+			Size:        int64(len("png-bytes")),
+			Reader:      bytes.NewReader([]byte("png-bytes")),
+			Close:       func() error { return nil },
+		},
+	}
+	svc := NewImageStudioService(repo, &imageStudioConfigReaderStub{cfg: settings})
+	svc.SetStorageFactory(func(ctx context.Context, cfg *ImageStudioSettings) (ImageStorage, error) {
+		return storage, nil
+	})
+
+	file, err := svc.Download(context.Background(), 7, 20)
+	require.NoError(t, err)
+	require.Equal(t, int64(20), repo.getByIDID)
+	require.Equal(t, "images/user-7/2026/06/example.png", storage.openKey)
+	require.Equal(t, "passion-api-image-20.png", file.Name)
+	require.Equal(t, "image/png", file.ContentType)
+	body, err := io.ReadAll(file.Reader)
+	require.NoError(t, err)
+	require.Equal(t, []byte("png-bytes"), body)
+
+	_, err = svc.Download(context.Background(), 8, 20)
+	require.ErrorIs(t, err, ErrUserImageNotFound)
+}
+
+func TestImageStudioServiceCleanupExpiredImagesDeletesExpiredRecordsAndObjects(t *testing.T) {
+	settings := defaultImageStudioSettings()
+	settings.Enabled = true
+	repo := &imageStudioRepoStub{
+		listExpiredItems: []ImageStudioImageRecord{
+			{ID: 11, UserID: 7, StorageObjectKey: "images/user-7/old-a.png"},
+			{ID: 12, UserID: 7, StorageObjectKey: "images/user-7/old-b.png"},
+		},
+	}
+	storage := &imageStudioStorageStub{}
+	now := time.Date(2026, 6, 24, 16, 0, 0, 0, time.UTC)
+	svc := NewImageStudioService(repo, &imageStudioConfigReaderStub{cfg: settings})
+	svc.now = func() time.Time { return now }
+	svc.SetStorageFactory(func(ctx context.Context, cfg *ImageStudioSettings) (ImageStorage, error) {
+		return storage, nil
+	})
+
+	deleted, err := svc.CleanupExpiredImages(context.Background(), 50)
+
+	require.NoError(t, err)
+	require.Equal(t, 2, deleted)
+	require.Equal(t, now, repo.listExpiredNow)
+	require.Equal(t, 50, repo.listExpiredLimit)
+	require.Equal(t, []string{"images/user-7/old-a.png", "images/user-7/old-b.png"}, storage.deleteKeys)
+	require.Equal(t, int64(12), repo.deletedID)
+	require.Equal(t, int64(7), repo.deletedUserID)
 }
 
 func TestImageStudioServiceGenerateStoresExecutionResult(t *testing.T) {
@@ -596,6 +758,42 @@ func TestImageStudioServiceGenerationTaskRetriesAndDowngrades4KTimeouts(t *testi
 	require.Equal(t, "1024x576", repo.createdRecords[0].Size)
 }
 
+func TestImageStudioServiceMarksStaleRunningTasksInterruptedOnStartup(t *testing.T) {
+	now := time.Date(2026, 6, 24, 16, 40, 0, 0, time.UTC)
+	staleStartedAt := now.Add(-20 * time.Minute)
+	freshStartedAt := now.Add(-2 * time.Minute)
+	taskRepo := &imageStudioTaskRepoStub{
+		tasks: map[int64]ImageStudioTask{
+			1: {
+				ID:        1,
+				Status:    ImageStudioTaskStatusRunning,
+				StartedAt: &staleStartedAt,
+			},
+			2: {
+				ID:        2,
+				Status:    ImageStudioTaskStatusRunning,
+				StartedAt: &freshStartedAt,
+			},
+			3: {
+				ID:     3,
+				Status: ImageStudioTaskStatusQueued,
+			},
+		},
+	}
+	svc := NewImageStudioService(&imageStudioRepoStub{}, &imageStudioConfigReaderStub{})
+	svc.SetTaskRepository(taskRepo)
+	svc.now = func() time.Time { return now }
+
+	affected, err := svc.MarkInterruptedRunningTasks(context.Background())
+
+	require.NoError(t, err)
+	require.Equal(t, 1, affected)
+	require.Equal(t, ImageStudioTaskStatusFailed, taskRepo.tasks[1].Status)
+	require.Equal(t, "IMAGE_TASK_INTERRUPTED_BY_RESTART", taskRepo.tasks[1].ErrorReason)
+	require.Equal(t, ImageStudioTaskStatusRunning, taskRepo.tasks[2].Status)
+	require.Equal(t, ImageStudioTaskStatusQueued, taskRepo.tasks[3].Status)
+}
+
 func TestImageStudioServiceGenerateUsesSelectedGroupQualityAndRatio(t *testing.T) {
 	settings := defaultImageStudioSettings()
 	settings.Enabled = true
@@ -673,9 +871,60 @@ func TestImageStudioServiceGenerateAugmentsPromptWithAspectRatioForUpstreamOnly(
 	require.Equal(t, "生成一张海边风景图", repo.createdRecords[0].Prompt)
 	require.Contains(t, executor.generateInput.Prompt, "生成一张海边风景图")
 	require.Contains(t, executor.generateInput.Prompt, "9:16")
-	require.Contains(t, executor.generateInput.Prompt, "竖版")
-	require.Contains(t, executor.generateInput.Prompt, "画布比例")
+	require.Contains(t, executor.generateInput.Prompt, "vertical 9:16 portrait canvas")
+	require.Contains(t, executor.generateInput.Prompt, "Do not create a wide, panoramic, letterboxed, or cropped composition")
 	require.NotEqual(t, repo.createdRecords[0].Prompt, executor.generateInput.Prompt)
+}
+
+func TestImageStudioPromptWithAspectRatioGuidanceUsesStrongCanvasInstructions(t *testing.T) {
+	prompt := ImageStudioPromptWithAspectRatioGuidance("a golden dragon on white paper", "1:1")
+
+	require.Contains(t, prompt, "a golden dragon on white paper")
+	require.Contains(t, prompt, "square 1:1 canvas")
+	require.Contains(t, prompt, "final image canvas must be 1:1")
+	require.Contains(t, prompt, "Do not create a wide, panoramic, letterboxed, or cropped composition")
+	require.NotContains(t, prompt, "璇")
+	require.NotContains(t, prompt, "鐢")
+}
+
+func TestImageStudioServiceGenerateNormalizesStoredImageToSelectedAspectRatio(t *testing.T) {
+	settings := defaultImageStudioSettings()
+	settings.Enabled = true
+	settings.AllowedModels = []string{"gpt-image-2"}
+	settings.DefaultModel = "gpt-image-2"
+	sourcePNG := imageStudioTestPNG(t, 160, 90, color.RGBA{R: 25, G: 112, B: 245, A: 255})
+	repo := &imageStudioRepoStub{}
+	executor := &imageStudioExecutorStub{
+		result: &ImageStudioExecutionResult{
+			ImageBytes: sourcePNG,
+			MimeType:   "image/png",
+		},
+	}
+	storage := &imageStudioStorageStub{publicURL: "https://assets.example.com/out.png"}
+	svc := NewImageStudioService(repo, &imageStudioConfigReaderStub{cfg: settings})
+	svc.SetExecutor(executor)
+	svc.SetStorageFactory(func(ctx context.Context, cfg *ImageStudioSettings) (ImageStorage, error) {
+		return storage, nil
+	})
+
+	record, err := svc.Generate(context.Background(), ImageStudioGenerateInput{
+		UserID:      7,
+		Model:       "gpt-image-2",
+		Prompt:      "a clean app icon",
+		AspectRatio: "1:1",
+		Quality:     ImageBillingSize1K,
+	})
+
+	require.NoError(t, err)
+	require.NotNil(t, record)
+	require.Equal(t, "1024x1024", record.Size)
+	require.Equal(t, "image/png", record.MimeType)
+	require.Equal(t, "image/png", storage.putContentType)
+	cfg, _, err := image.DecodeConfig(bytes.NewReader(storage.putData))
+	require.NoError(t, err)
+	require.Equal(t, 1024, cfg.Width)
+	require.Equal(t, 1024, cfg.Height)
+	require.Equal(t, int64(len(storage.putData)), record.Bytes)
 }
 
 func TestImageStudioServiceGenerateAllowsGPTImage2FromSelectedImageGroup(t *testing.T) {
@@ -841,4 +1090,13 @@ func TestImageStudioServiceEditRequiresReferenceImage(t *testing.T) {
 
 func imageStudioInt64Ptr(v int64) *int64 {
 	return &v
+}
+
+func imageStudioTestPNG(t *testing.T, width int, height int, fill color.Color) []byte {
+	t.Helper()
+	img := image.NewRGBA(image.Rect(0, 0, width, height))
+	stddraw.Draw(img, img.Bounds(), &image.Uniform{C: fill}, image.Point{}, stddraw.Src)
+	var buf bytes.Buffer
+	require.NoError(t, png.Encode(&buf, img))
+	return buf.Bytes()
 }

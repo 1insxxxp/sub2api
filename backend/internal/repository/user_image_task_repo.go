@@ -176,6 +176,21 @@ func (r *userImageTaskRepository) MarkFailed(ctx context.Context, taskID int64, 
 	return userImageTaskEntityToService(row), nil
 }
 
+func (r *userImageTaskRepository) MarkStaleRunningFailed(ctx context.Context, olderThan time.Time, completedAt time.Time, reason string, message string) (int, error) {
+	client := clientFromContext(ctx, r.client)
+	return client.UserImageTask.Update().
+		Where(
+			userimagetask.StatusEQ(service.ImageStudioTaskStatusRunning),
+			userimagetask.StartedAtLTE(olderThan),
+		).
+		SetStatus(service.ImageStudioTaskStatusFailed).
+		SetErrorReason(reason).
+		SetErrorMessage(message).
+		SetCompletedAt(completedAt).
+		SetUpdatedAt(completedAt).
+		Save(ctx)
+}
+
 func userImageTaskEntitiesToService(rows []*dbent.UserImageTask) []service.ImageStudioTask {
 	out := make([]service.ImageStudioTask, 0, len(rows))
 	for _, row := range rows {

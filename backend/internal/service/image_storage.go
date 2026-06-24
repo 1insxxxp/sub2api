@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"io"
 	"mime"
 	"path/filepath"
 	"strings"
@@ -18,7 +19,17 @@ const (
 
 type ImageStorage interface {
 	Put(ctx context.Context, objectKey string, contentType string, data []byte) (string, error)
+	Open(ctx context.Context, objectKey string) (*ImageStudioStoredFile, error)
 	Delete(ctx context.Context, objectKey string) error
+}
+
+type ImageStudioStoredFile struct {
+	Name        string
+	ContentType string
+	ModTime     time.Time
+	Size        int64
+	Reader      io.ReadSeeker
+	Close       func() error
 }
 
 func GenerateImageStorageObjectKey(userID int64, contentType string, now time.Time) (string, error) {

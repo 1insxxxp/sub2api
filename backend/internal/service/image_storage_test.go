@@ -77,3 +77,21 @@ func TestNewR2ImageStorageValidatesConfig(t *testing.T) {
 	})
 	require.NoError(t, err)
 }
+
+func TestDefaultImageStudioStorageFactoryCreatesR2FromEnvironment(t *testing.T) {
+	t.Setenv("R2_ACCOUNT_ID", "account")
+	t.Setenv("R2_ACCESS_KEY_ID", "key")
+	t.Setenv("R2_SECRET_ACCESS_KEY", "secret")
+	t.Setenv("R2_BUCKET", "bucket")
+
+	storage, err := defaultImageStudioStorageFactory(context.Background(), &ImageStudioSettings{
+		StorageDriver:   ImageStorageDriverR2,
+		R2PublicBaseURL: "https://assets.example.com/images",
+	})
+
+	require.NoError(t, err)
+	r2Storage, ok := storage.(*R2ImageStorage)
+	require.True(t, ok)
+	require.Equal(t, "bucket", r2Storage.bucket)
+	require.Equal(t, "https://assets.example.com/images", r2Storage.publicBaseURL)
+}

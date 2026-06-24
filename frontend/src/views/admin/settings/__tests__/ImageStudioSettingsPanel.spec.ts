@@ -114,6 +114,20 @@ describe('ImageStudioSettingsPanel', () => {
     expect(wrapper.text()).toContain('admin.settings.imageStudio.storageStatus.ok')
   })
 
+  it('shows the real render sizes for each billing quality tier', async () => {
+    const wrapper = mountPanel()
+    await flushPromises()
+
+    const text = wrapper.text()
+    expect(text).toContain('1K')
+    expect(text).toContain('2K')
+    expect(text).toContain('4K')
+    expect(text).toContain('1024x576')
+    expect(text).toContain('2048x1152')
+    expect(text).toContain('3840x2160')
+    expect(text).toContain('admin.settings.imageStudio.renderSizeMatrixHint')
+  })
+
   it('saves normalized models and storage settings', async () => {
     const wrapper = mountPanel()
     await flushPromises()

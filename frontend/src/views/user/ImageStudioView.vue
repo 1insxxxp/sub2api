@@ -66,16 +66,18 @@
               <label class="image-studio-field image-studio-prompt-field">
                 <span>{{ t('imageStudio.promptLabel') }}</span>
                 <textarea
+                  ref="promptTextarea"
                   v-model="prompt"
                   data-testid="image-studio-prompt"
                   :placeholder="t('imageStudio.promptPlaceholder')"
                   :disabled="submitting || !canUse"
-                  rows="8"
+                  rows="5"
+                  @input="resizePromptTextarea"
                 ></textarea>
               </label>
             </section>
 
-            <section class="image-studio-control-dock">
+            <section class="image-studio-control-dock" :class="{ 'is-edit-mode': mode === 'edit' }">
               <transition name="image-studio-fade">
                 <div v-if="mode === 'edit'" class="image-studio-upload-panel">
                   <div class="image-studio-step-heading">
@@ -164,7 +166,7 @@
                   </div>
                 </div>
 
-                <div class="image-studio-field image-studio-choice-section">
+                <div v-if="showOutputBackgroundControls" class="image-studio-field image-studio-choice-section">
                   <span>{{ t('imageStudio.outputBackground') }}</span>
                   <div class="image-studio-choice-picker image-studio-background-picker">
                     <button
@@ -324,7 +326,6 @@
                       </div>
                     </transition>
                   </div>
-                  <small>{{ selectedGroup?.platform || '-' }}</small>
                 </div>
               </div>
             </section>
@@ -412,6 +413,67 @@
                   </button>
                 </div>
               </div>
+              <div
+                v-else-if="currentResultImages.length > 1"
+                class="image-studio-result-batch"
+                data-testid="image-studio-current-result-grid"
+              >
+                <div class="image-studio-result-batch-header">
+                  <div>
+                    <strong>{{ t('imageStudio.batchTitle') }}</strong>
+                    <span>{{ currentResultSummary }}</span>
+                  </div>
+                  <div class="image-studio-result-batch-actions">
+                    <button type="button" @click="copyCurrentBatchLinks">
+                      <Icon name="copy" size="sm" />
+                      {{ t('imageStudio.copyAllLinks') }}
+                    </button>
+                    <button type="button" @click="downloadCurrentBatchImages">
+                      <Icon name="download" size="sm" />
+                      {{ t('imageStudio.downloadAll') }}
+                    </button>
+                  </div>
+                </div>
+                <div
+                  class="image-studio-result-grid"
+                  :class="`is-count-${currentResultImages.length}`"
+                >
+                  <article
+                    v-for="(item, index) in currentResultImages"
+                    :key="item.id"
+                    class="image-studio-result-tile"
+                  >
+                    <button
+                      type="button"
+                      class="image-studio-result-tile-preview"
+                      :style="{ aspectRatio: cssAspectRatio(item.aspect_ratio) }"
+                      :aria-label="t('imageStudio.openPreview')"
+                      @click="openImagePreview(item)"
+                    >
+                      <img :src="item.image_url" :alt="item.prompt" loading="lazy" />
+                      <span class="image-studio-result-index">{{ index + 1 }}</span>
+                      <span class="image-studio-result-preview-label">
+                        <Icon name="eye" size="sm" />
+                        {{ t('imageStudio.previewImage') }}
+                      </span>
+                    </button>
+                    <div class="image-studio-result-tile-actions">
+                      <button type="button" :aria-label="t('imageStudio.copyLink')" @click="copyImageURL(item)">
+                        <Icon name="copy" size="sm" />
+                      </button>
+                      <button type="button" :aria-label="t('imageStudio.download')" @click="downloadImage(item)">
+                        <Icon name="download" size="sm" />
+                      </button>
+                      <button type="button" :aria-label="t('imageStudio.useAsReference')" @click="useAsReference(item)">
+                        <Icon name="edit" size="sm" />
+                      </button>
+                      <button type="button" :aria-label="t('imageStudio.deleteAction')" @click="requestDeleteImage(item)">
+                        <Icon name="trash" size="sm" />
+                      </button>
+                    </div>
+                  </article>
+                </div>
+              </div>
               <button
                 v-else-if="currentImage"
                 type="button"
@@ -433,7 +495,7 @@
               </div>
             </div>
 
-            <div v-if="currentImage" class="image-studio-current-actions">
+            <div v-if="currentImage && currentResultImages.length <= 1" class="image-studio-current-actions">
               <button type="button" @click="copyImageURL(currentImage)">
                 <Icon name="copy" size="sm" />
                 {{ t('imageStudio.copyLink') }}
@@ -448,44 +510,61 @@
               </button>
             </div>
           </aside>
-
-          <section class="image-studio-gallery image-studio-gallery-rail">
-            <div class="image-studio-panel-header">
-              <div>
-                <p class="image-studio-section-label">{{ t('imageStudio.galleryPanel') }}</p>
-                <h2>{{ t('imageStudio.recentImages') }}</h2>
-              </div>
-              <span class="image-studio-gallery-count">
-                {{ t('imageStudio.galleryCount', { count: images.length }) }}
-              </span>
-            </div>
-
-            <div v-if="loadingHistory && !images.length" class="image-studio-gallery-loading">
-              <div v-for="n in 6" :key="n"></div>
-            </div>
-            <div v-else-if="images.length" class="image-studio-gallery-grid">
-              <article v-for="item in images" :key="item.id" class="image-studio-image-card">
-                <button
-                  type="button"
-                  class="image-studio-image-thumb"
-                  :aria-label="t('imageStudio.openPreview')"
-                  @click="openImagePreview(item)"
-                >
-                  <img :src="item.image_url" :alt="item.prompt" loading="lazy" />
-                  <span>
-                    <Icon name="eye" size="sm" />
-                    {{ t('imageStudio.previewImage') }}
-                  </span>
-                </button>
-              </article>
-            </div>
-            <div v-else class="image-studio-empty-gallery">
-              <Icon name="inbox" size="xl" />
-              <strong>{{ t('imageStudio.emptyGalleryTitle') }}</strong>
-              <span>{{ t('imageStudio.emptyGalleryHint') }}</span>
-            </div>
-          </section>
         </div>
+
+        <section class="image-studio-gallery image-studio-gallery-rail">
+          <div class="image-studio-panel-header">
+            <div>
+              <p class="image-studio-section-label">{{ t('imageStudio.galleryPanel') }}</p>
+              <h2>{{ t('imageStudio.recentImages') }}</h2>
+            </div>
+            <span class="image-studio-gallery-count">
+              {{ t('imageStudio.galleryCount', { count: images.length }) }}
+            </span>
+          </div>
+
+          <div v-if="loadingHistory && !images.length" class="image-studio-gallery-loading">
+            <div v-for="n in 6" :key="n"></div>
+          </div>
+          <div v-else-if="images.length" class="image-studio-gallery-grid">
+            <article v-for="item in images" :key="item.id" class="image-studio-image-card">
+              <button
+                type="button"
+                class="image-studio-image-thumb"
+                :aria-label="t('imageStudio.openPreview')"
+                @click="openImagePreview(item)"
+              >
+                <img :src="item.image_url" :alt="item.prompt" loading="lazy" />
+                <span>
+                  <Icon name="eye" size="sm" />
+                  {{ t('imageStudio.previewImage') }}
+                </span>
+              </button>
+              <div class="image-studio-image-card-body">
+                <div>
+                  <strong>{{ item.aspect_ratio || item.size || item.model }}</strong>
+                  <span>{{ formatDateTime(item.created_at) || item.model }}</span>
+                </div>
+                <div class="image-studio-image-card-actions">
+                  <button type="button" :aria-label="t('imageStudio.copyLink')" @click="copyImageURL(item)">
+                    <Icon name="copy" size="sm" />
+                  </button>
+                  <button type="button" :aria-label="t('imageStudio.download')" @click="downloadImage(item)">
+                    <Icon name="download" size="sm" />
+                  </button>
+                  <button type="button" :aria-label="t('imageStudio.useAsReference')" @click="useAsReference(item)">
+                    <Icon name="edit" size="sm" />
+                  </button>
+                </div>
+              </div>
+            </article>
+          </div>
+          <div v-else class="image-studio-empty-gallery">
+            <Icon name="inbox" size="xl" />
+            <strong>{{ t('imageStudio.emptyGalleryTitle') }}</strong>
+            <span>{{ t('imageStudio.emptyGalleryHint') }}</span>
+          </div>
+        </section>
       </div>
 
       <div
@@ -643,6 +722,9 @@ const options = ref<ImageStudioOptions | null>(null)
 const apiKeys = ref<ApiKey[]>([])
 const images = ref<ImageStudioImage[]>([])
 const currentImage = ref<ImageStudioImage | null>(null)
+const currentResultImages = ref<ImageStudioImage[]>([])
+const currentResultRequestedCount = ref(0)
+const currentResultErrorCount = ref(0)
 const mode = ref<ImageStudioMode>('generation')
 const prompt = ref('')
 const selectedAPIKeyID = ref<number | null>(null)
@@ -655,6 +737,7 @@ type ImageStudioBackground = 'auto' | 'opaque' | 'transparent'
 const outputCount = ref<ImageStudioOutputCount>(1)
 const outputFormat = ref<ImageStudioOutputFormat>('png')
 const outputBackground = ref<ImageStudioBackground>('auto')
+const showOutputBackgroundControls = false
 const referenceFiles = ref<File[]>([])
 const referencePreviewUrls = new Map<File, string>()
 const loadingConfig = ref(false)
@@ -663,6 +746,7 @@ const submitting = ref(false)
 const dragging = ref(false)
 const loadError = ref('')
 const fileInput = ref<HTMLInputElement | null>(null)
+const promptTextarea = ref<HTMLTextAreaElement | null>(null)
 const totalImages = ref(0)
 type ImageStudioSelectMenu = 'apiKey' | 'model'
 type ImageStudioSelectPlacement = 'down' | 'up'
@@ -802,6 +886,18 @@ const activeTaskHint = computed(() => {
   }
   return t('imageStudio.generatingHint')
 })
+const currentResultSummary = computed(() =>
+  currentResultErrorCount.value > 0
+    ? t('imageStudio.batchSummary', {
+        count: currentResultImages.value.length,
+        total: currentResultRequestedCount.value || currentResultImages.value.length,
+        failed: currentResultErrorCount.value,
+      })
+    : t('imageStudio.batchSummaryComplete', {
+        count: currentResultImages.value.length,
+        total: currentResultRequestedCount.value || currentResultImages.value.length,
+      }),
+)
 
 watch(modelOptions, (items) => {
   if (!items.some((item) => item.model === model.value)) {
@@ -837,6 +933,17 @@ watch([outputFormat, model], () => {
     outputBackground.value = 'auto'
   }
 }, { immediate: true })
+
+watch(prompt, () => {
+  requestAnimationFrame(resizePromptTextarea)
+})
+
+function resizePromptTextarea() {
+  const textarea = promptTextarea.value
+  if (!textarea) return
+  textarea.style.height = 'auto'
+  textarea.style.height = `${textarea.scrollHeight}px`
+}
 
 function toggleSelect(menu: ImageStudioSelectMenu, event?: MouseEvent) {
   if (openSelect.value === menu) {
@@ -907,7 +1014,7 @@ async function loadHistory() {
     images.value = response.items ?? []
     totalImages.value = response.total ?? images.value.length
     if (!currentImage.value && images.value.length > 0) {
-      currentImage.value = images.value[0]
+      setCurrentResult([images.value[0]])
     }
   } catch (error) {
     appStore.showError(extractApiErrorMessage(error, t('imageStudio.historyLoadFailed')))
@@ -946,7 +1053,11 @@ async function handleSubmit() {
     })
 
     if (batch.created.length > 0) {
-      await authStore.refreshUser().catch(() => undefined)
+      setCurrentResult(batch.created, {
+        requested: outputCount.value,
+        failed: batch.errors.length,
+      })
+      await Promise.resolve(authStore.refreshUser()).catch(() => undefined)
       appStore.showSuccess(t('imageStudio.generateSuccess'))
     }
     if (batch.errors.length > 0) {
@@ -1033,7 +1144,7 @@ function restoreTaskFormState(task: ImageStudioTask) {
   if (isImageStudioOutputFormat(task.output_format)) {
     outputFormat.value = task.output_format
   }
-  if (isImageStudioBackground(task.background)) {
+  if (showOutputBackgroundControls && isImageStudioBackground(task.background)) {
     outputBackground.value = task.background
   }
 }
@@ -1042,7 +1153,8 @@ async function finishRecoveredGenerationTask(taskID: number) {
   try {
     const created = await waitForImageTask(taskID)
     applyGeneratedImage(created)
-    await authStore.refreshUser().catch(() => undefined)
+    setCurrentResult([created])
+    await Promise.resolve(authStore.refreshUser()).catch(() => undefined)
     appStore.showSuccess(t('imageStudio.generateSuccess'))
   } catch (error) {
     const message = extractApiErrorMessage(error, t('imageStudio.generateFailed'))
@@ -1063,6 +1175,25 @@ function applyGeneratedImage(created: ImageStudioImage) {
   if (!alreadyListed) {
     totalImages.value += 1
   }
+}
+
+function setCurrentResult(
+  created: ImageStudioImage[],
+  options: { requested?: number; failed?: number } = {},
+) {
+  currentResultImages.value = uniqueImages(created)
+  currentResultRequestedCount.value = options.requested ?? currentResultImages.value.length
+  currentResultErrorCount.value = options.failed ?? 0
+  currentImage.value = currentResultImages.value[0] ?? null
+}
+
+function uniqueImages(items: ImageStudioImage[]) {
+  const seen = new Set<number>()
+  return items.filter((item) => {
+    if (seen.has(item.id)) return false
+    seen.add(item.id)
+    return true
+  })
 }
 
 async function createAndPollGenerationTask(payload: {
@@ -1229,6 +1360,16 @@ function ratioPreviewLabel(item: ImageStudioAspectRatio): string {
   return `${size} / ${tier}`
 }
 
+function cssAspectRatio(ratio: string): string {
+  const [width, height] = String(ratio || '')
+    .split(':')
+    .map((item) => Number.parseFloat(item.trim()))
+  if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) {
+    return '1 / 1'
+  }
+  return `${width} / ${height}`
+}
+
 function chooseOutputCount(count: number) {
   if (count === 1 || count === 2 || count === 3 || count === 4) {
     outputCount.value = count
@@ -1253,7 +1394,7 @@ function selectedOutputPayload(): Pick<ImageStudioGeneratePayload, 'output_forma
   if (outputFormat.value !== 'png') {
     payload.output_format = outputFormat.value
   }
-  if (outputBackground.value !== 'auto') {
+  if (showOutputBackgroundControls && outputBackground.value !== 'auto') {
     payload.background = outputBackground.value
   }
   return payload
@@ -1290,14 +1431,41 @@ async function copyImageURL(image: ImageStudioImage) {
   }
 }
 
-function downloadImage(image: ImageStudioImage) {
-  const anchor = document.createElement('a')
-  anchor.href = image.image_url
-  anchor.download = `passion-api-image-${image.id}${imageFileExtension(image, image.mime_type || '')}`
-  anchor.rel = 'noopener'
-  document.body.appendChild(anchor)
-  anchor.click()
-  anchor.remove()
+async function copyCurrentBatchLinks() {
+  const links = currentResultImages.value.map((item) => item.image_url).join('\n')
+  if (!links) return
+  try {
+    await navigator.clipboard.writeText(links)
+    appStore.showSuccess(t('imageStudio.linksCopied'))
+  } catch {
+    appStore.showError(t('imageStudio.copyFailed'))
+  }
+}
+
+async function downloadCurrentBatchImages() {
+  for (const image of currentResultImages.value) {
+    await downloadImage(image)
+  }
+}
+
+async function downloadImage(image: ImageStudioImage) {
+  let objectURL = ''
+  try {
+    const result = await imageStudioAPI.download(image.id)
+    objectURL = URL.createObjectURL(result.blob)
+    const anchor = document.createElement('a')
+    anchor.href = objectURL
+    anchor.download = result.filename || `passion-api-image-${image.id}${imageFileExtension(image, image.mime_type || '')}`
+    document.body.appendChild(anchor)
+    anchor.click()
+    anchor.remove()
+  } catch {
+    appStore.showError(t('imageStudio.downloadFailed'))
+  } finally {
+    if (objectURL) {
+      URL.revokeObjectURL(objectURL)
+    }
+  }
 }
 
 async function useAsReference(image: ImageStudioImage) {
@@ -1391,8 +1559,9 @@ async function confirmDeleteImage() {
   try {
     await imageStudioAPI.delete(image.id)
     images.value = images.value.filter((item) => item.id !== image.id)
+    currentResultImages.value = currentResultImages.value.filter((item) => item.id !== image.id)
     if (currentImage.value?.id === image.id) {
-      currentImage.value = images.value[0] ?? null
+      currentImage.value = currentResultImages.value[0] ?? images.value[0] ?? null
     }
     if (previewImage.value?.id === image.id) {
       previewImage.value = null
@@ -1409,6 +1578,7 @@ async function confirmDeleteImage() {
 
 onMounted(() => {
   void loadInitialData()
+  requestAnimationFrame(resizePromptTextarea)
   document.addEventListener('click', closeSelectMenus)
   document.addEventListener('keydown', handlePreviewKeydown)
 })
@@ -1440,12 +1610,12 @@ onBeforeUnmount(() => {
   --studio-subtle: rgb(71, 85, 105);
   --studio-radius: 1rem;
   --studio-radius-sm: 0.72rem;
-  --studio-shadow: 0 18px 44px rgba(15, 23, 42, 0.07);
+  --studio-shadow: 0 14px 32px rgba(15, 23, 42, 0.055);
 }
 
 .image-studio-grid {
   display: grid;
-  gap: clamp(1rem, 1.6vw, 1.45rem);
+  gap: clamp(0.78rem, 1.05vw, 1.05rem);
   min-height: 0;
 }
 
@@ -1453,7 +1623,7 @@ onBeforeUnmount(() => {
   height: 100%;
   min-height: 0;
   align-items: stretch;
-  grid-template-columns: minmax(18.5rem, 0.56fr) minmax(38rem, 1.44fr);
+  grid-template-columns: minmax(19rem, 0.58fr) minmax(42rem, 1.82fr) minmax(7rem, 0.22fr);
 }
 
 .image-studio-control-console {
@@ -1503,15 +1673,15 @@ onBeforeUnmount(() => {
 
 .image-studio-workspace,
 .image-studio-preview-panel {
-  padding: clamp(0.9rem, 1.25vw, 1.15rem);
+  padding: clamp(0.82rem, 1.08vw, 1rem);
 }
 
 .image-studio-gallery {
   display: grid;
+  height: 100%;
   min-height: 0;
-  max-height: clamp(11rem, 22dvh, 15rem);
   grid-template-rows: auto minmax(0, 1fr);
-  padding: clamp(0.82rem, 1.1vw, 1rem);
+  padding: clamp(0.55rem, 0.72vw, 0.7rem);
 }
 
 .image-studio-panel-header {
@@ -1637,8 +1807,9 @@ onBeforeUnmount(() => {
 
 .image-studio-field textarea {
   width: 100%;
+  max-width: 100%;
   border-radius: 0.9rem;
-  border: 1px solid var(--studio-border-soft);
+  border: 1px solid rgba(37, 99, 235, 0.24);
   background: rgba(255, 255, 255, 0.82);
   color: var(--studio-text);
   outline: none;
@@ -1649,18 +1820,31 @@ onBeforeUnmount(() => {
 }
 
 .image-studio-field textarea {
-  height: 100%;
-  min-height: clamp(9rem, 24dvh, 15rem);
-  resize: none;
+  height: auto;
+  min-height: clamp(8rem, 18dvh, 12rem);
+  resize: vertical;
+  overflow-y: hidden;
   padding: 0.92rem;
   line-height: 1.62;
 }
 
 .image-studio-field textarea:focus {
-  border-color: rgba(var(--brand-rgb), 0.58);
+  border-color: rgba(37, 99, 235, 0.72);
   box-shadow:
     0 0 0 3px rgba(var(--brand-rgb), 0.12),
     0 14px 34px rgba(37, 99, 235, 0.1);
+}
+
+.image-studio-field textarea:focus-visible {
+  outline: none;
+  border-color: rgba(37, 99, 235, 0.72);
+}
+
+.image-studio-field textarea::-webkit-resizer {
+  background:
+    linear-gradient(135deg, transparent 45%, rgba(37, 99, 235, 0.38) 46%, rgba(37, 99, 235, 0.38) 58%, transparent 59%),
+    linear-gradient(135deg, transparent 62%, rgba(6, 182, 212, 0.36) 63%, rgba(6, 182, 212, 0.36) 75%, transparent 76%);
+  border-radius: 0 0 0.75rem 0;
 }
 
 .image-studio-command-surface {
@@ -1693,7 +1877,6 @@ onBeforeUnmount(() => {
 
 .image-studio-prompt-field {
   min-height: 0;
-  grid-template-rows: auto minmax(0, 1fr);
 }
 
 .image-studio-control-dock {
@@ -1701,9 +1884,12 @@ onBeforeUnmount(() => {
   margin-top: 0.95rem;
   display: grid;
   gap: 0.8rem;
-  border-top: 1px solid rgba(203, 213, 225, 0.62);
-  background: transparent;
-  padding-top: 0.85rem;
+  border-top: 2px solid transparent;
+  background:
+    linear-gradient(white, white) padding-box,
+    linear-gradient(90deg, transparent, rgba(37, 99, 235, 0.34), rgba(6, 182, 212, 0.32), transparent) border-box;
+  background-origin: border-box;
+  padding-top: 1rem;
 }
 
 .image-studio-foundation-row {
@@ -1712,6 +1898,12 @@ onBeforeUnmount(() => {
   grid-template-columns: 1fr;
   gap: 0.75rem;
   align-items: start;
+  border-top: 2px solid transparent;
+  background:
+    linear-gradient(white, white) padding-box,
+    linear-gradient(90deg, transparent, rgba(37, 99, 235, 0.34), rgba(6, 182, 212, 0.32), transparent) border-box;
+  background-origin: border-box;
+  padding-top: 0.95rem;
 }
 
 .image-studio-output-row {
@@ -1720,6 +1912,9 @@ onBeforeUnmount(() => {
   grid-template-columns: 1fr;
   gap: 0.8rem;
   align-items: start;
+}
+
+.image-studio-control-dock.is-edit-mode .image-studio-output-row {
   border-top: 1px solid rgba(203, 213, 225, 0.5);
   padding-top: 0.8rem;
 }
@@ -1733,23 +1928,38 @@ onBeforeUnmount(() => {
 }
 
 .image-studio-select-trigger {
+  position: relative;
   display: flex;
   min-height: 3.1rem;
   width: 100%;
   align-items: center;
   justify-content: space-between;
   gap: 0.75rem;
+  overflow: hidden;
   border-radius: 0.78rem;
-  border: 1px solid rgba(203, 213, 225, 0.7);
-  background: rgba(255, 255, 255, 0.86);
+  border: 1px solid rgba(37, 99, 235, 0.18);
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.94), rgba(239, 246, 255, 0.62)),
+    rgba(255, 255, 255, 0.76);
   color: var(--studio-text);
-  padding: 0.75rem 0.9rem;
+  padding: 0.72rem 0.76rem 0.72rem 0.9rem;
   text-align: left;
-  box-shadow: 0 1px 0 rgba(15, 23, 42, 0.02);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.82) inset,
+    0 10px 20px rgba(37, 99, 235, 0.055);
   transition:
     border-color 180ms ease,
     box-shadow 180ms ease,
     background 180ms ease;
+}
+
+.image-studio-select-trigger::before {
+  content: '';
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 3px;
+  background: linear-gradient(180deg, var(--brand-600), var(--brand-cyan));
+  opacity: 0.78;
 }
 
 .image-studio-select-trigger:disabled {
@@ -1760,14 +1970,20 @@ onBeforeUnmount(() => {
 .image-studio-select-trigger:hover:not(:disabled),
 .image-studio-select-trigger:focus-visible,
 .image-studio-select.is-open .image-studio-select-trigger {
-  border-color: rgba(var(--brand-rgb), 0.58);
+  border-color: rgba(37, 99, 235, 0.48);
+  background: linear-gradient(135deg, rgba(239, 246, 255, 0.9), rgba(236, 254, 255, 0.7));
   box-shadow:
     0 0 0 3px rgba(var(--brand-rgb), 0.12),
-    0 10px 26px rgba(37, 99, 235, 0.08);
+    0 14px 28px rgba(37, 99, 235, 0.1);
 }
 
 .image-studio-select-trigger svg {
   flex-shrink: 0;
+  width: 1.65rem;
+  height: 1.65rem;
+  border-radius: 999px;
+  background: rgba(239, 246, 255, 0.88);
+  padding: 0.25rem;
   color: var(--brand-600);
   transition: transform 180ms ease;
 }
@@ -1793,8 +2009,9 @@ onBeforeUnmount(() => {
   max-height: min(18rem, 48vh);
   overflow: auto;
   border-radius: var(--studio-radius);
-  border: 1px solid var(--studio-border);
-  background: rgba(255, 255, 255, 0.98);
+  border: 1px solid rgba(37, 99, 235, 0.18);
+  background: rgba(255, 255, 255, 0.92);
+  backdrop-filter: blur(14px);
   padding: 0.35rem;
   box-shadow:
     0 16px 36px rgba(15, 23, 42, 0.13),
@@ -1884,16 +2101,12 @@ onBeforeUnmount(() => {
 
 .image-studio-choice-picker {
   display: grid;
-  gap: 0.25rem;
-  border-radius: 0.86rem;
-  border: 1px solid rgba(148, 163, 184, 0.18);
-  background:
-    linear-gradient(180deg, rgba(226, 232, 240, 0.72), rgba(241, 245, 249, 0.54)),
-    rgba(226, 232, 240, 0.45);
-  padding: 0.3rem;
-  box-shadow:
-    inset 0 1px 2px rgba(15, 23, 42, 0.1),
-    inset 0 -1px 0 rgba(255, 255, 255, 0.72);
+  gap: 0.42rem;
+  border-radius: 0.74rem;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  box-shadow: none;
 }
 
 .image-studio-ratio-picker {
@@ -1914,12 +2127,12 @@ onBeforeUnmount(() => {
 }
 
 .image-studio-choice-picker button {
-  min-height: 3.05rem;
+  min-height: 2.72rem;
   border-radius: 0.68rem;
-  border: 1px solid transparent;
-  background: transparent;
+  border: 1px solid rgba(203, 213, 225, 0.64);
+  background: rgba(255, 255, 255, 0.68);
   color: rgb(51, 65, 85);
-  padding: 0.48rem 0.42rem;
+  padding: 0.44rem 0.42rem;
   transition:
     border-color 180ms ease,
     box-shadow 180ms ease,
@@ -1935,22 +2148,18 @@ onBeforeUnmount(() => {
 
 .image-studio-choice-picker button:hover,
 .image-studio-choice-picker button:focus-visible {
+  border-color: rgba(37, 99, 235, 0.32);
   color: var(--brand-700);
-  background: rgba(255, 255, 255, 0.58);
-  box-shadow: inset 0 0 0 1px rgba(var(--brand-rgb), 0.12);
+  background: rgba(239, 246, 255, 0.72);
+  box-shadow: 0 0 0 3px rgba(var(--brand-rgb), 0.08);
 }
 
 .image-studio-choice-picker button.active {
-  border-color: rgba(255, 255, 255, 0.92);
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.94), rgba(248, 250, 252, 0.82)),
-    white;
+  border-color: rgba(37, 99, 235, 0.54);
+  background: rgba(239, 246, 255, 0.78);
   color: var(--brand-700);
-  box-shadow:
-    0 10px 22px rgba(37, 99, 235, 0.14),
-    0 0 0 1px rgba(var(--brand-rgb), 0.24),
-    inset 0 1px 0 rgba(255, 255, 255, 0.9);
-  transform: translateY(-0.5px);
+  box-shadow: 0 0 0 3px rgba(var(--brand-rgb), 0.1);
+  transform: none;
 }
 
 .image-studio-choice-picker strong,
@@ -2027,8 +2236,6 @@ onBeforeUnmount(() => {
   order: 1;
   display: grid;
   gap: 0.75rem;
-  border-top: 1px solid rgba(203, 213, 225, 0.56);
-  padding-top: 0.85rem;
 }
 
 .image-studio-dropzone {
@@ -2140,7 +2347,7 @@ onBeforeUnmount(() => {
     0 1px 0 rgba(255, 255, 255, 0.9) inset,
     0 14px 34px rgba(37, 99, 235, 0.12),
     0 4px 12px rgba(15, 23, 42, 0.06);
-  margin-top: 0.85rem;
+  margin-top: 1.15rem;
   padding: 0.85rem;
 }
 
@@ -2201,8 +2408,6 @@ onBeforeUnmount(() => {
   height: 100%;
   min-width: 0;
   min-height: 0;
-  gap: clamp(0.85rem, 1.2vw, 1rem);
-  grid-template-rows: minmax(0, 1fr) auto;
 }
 
 .image-studio-stage-meta {
@@ -2350,6 +2555,236 @@ onBeforeUnmount(() => {
 .image-studio-image-thumb:focus-visible {
   outline: 3px solid rgba(var(--brand-rgb), 0.35);
   outline-offset: -3px;
+}
+
+.image-studio-result-batch {
+  display: grid;
+  width: min(100%, 58rem);
+  height: 100%;
+  min-height: 0;
+  gap: clamp(0.72rem, 1vw, 0.95rem);
+  align-content: center;
+  grid-template-rows: auto minmax(0, 1fr);
+  overflow: hidden;
+  padding: clamp(0.72rem, 1.2vw, 1rem);
+}
+
+.image-studio-result-batch-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.8rem;
+  border-radius: 0.9rem;
+  border: 1px solid rgba(var(--brand-rgb), 0.16);
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.86), rgba(239, 246, 255, 0.72)),
+    rgba(255, 255, 255, 0.74);
+  padding: 0.68rem 0.75rem;
+  box-shadow:
+    0 12px 28px rgba(37, 99, 235, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.78);
+}
+
+.image-studio-result-batch-header > div:first-child {
+  display: grid;
+  min-width: 0;
+  gap: 0.1rem;
+}
+
+.image-studio-result-batch-header strong {
+  color: var(--studio-text);
+  font-size: 0.92rem;
+  font-weight: 850;
+}
+
+.image-studio-result-batch-header span {
+  color: rgb(71, 85, 105);
+  font-size: 0.76rem;
+  font-weight: 720;
+}
+
+.image-studio-result-batch-actions {
+  display: inline-flex;
+  flex-shrink: 0;
+  gap: 0.45rem;
+}
+
+.image-studio-result-batch-actions button,
+.image-studio-result-tile-actions button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(var(--brand-rgb), 0.18);
+  background: rgba(255, 255, 255, 0.78);
+  color: var(--brand-700);
+  font-weight: 800;
+  transition:
+    border-color 180ms ease,
+    box-shadow 180ms ease,
+    transform 180ms ease,
+    background 180ms ease;
+}
+
+.image-studio-result-batch-actions button {
+  min-height: 2.25rem;
+  gap: 0.36rem;
+  border-radius: 9999px;
+  padding: 0.42rem 0.68rem;
+  font-size: 0.76rem;
+}
+
+.image-studio-result-batch-actions button:hover,
+.image-studio-result-batch-actions button:focus-visible,
+.image-studio-result-tile-actions button:hover,
+.image-studio-result-tile-actions button:focus-visible {
+  border-color: rgba(var(--brand-rgb), 0.5);
+  background: white;
+  box-shadow: 0 0 0 3px rgba(var(--brand-rgb), 0.12);
+  transform: translateY(-1px);
+}
+
+.image-studio-result-grid {
+  display: grid;
+  min-height: 0;
+  gap: clamp(0.62rem, 1vw, 0.9rem);
+  align-items: center;
+}
+
+.image-studio-result-grid.is-count-2 {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.image-studio-result-grid.is-count-3,
+.image-studio-result-grid.is-count-4 {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.image-studio-result-tile {
+  position: relative;
+  display: grid;
+  min-height: 0;
+  grid-template-rows: auto auto;
+  overflow: hidden;
+  min-width: 0;
+  border-radius: 0.92rem;
+  border: 1px solid rgba(203, 213, 225, 0.58);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.88), rgba(239, 246, 255, 0.5)),
+    rgba(255, 255, 255, 0.74);
+  box-shadow:
+    0 16px 36px rgba(15, 23, 42, 0.1),
+    inset 0 1px 0 rgba(255, 255, 255, 0.72);
+}
+
+.image-studio-result-tile-preview {
+  position: relative;
+  display: grid;
+  height: auto;
+  min-height: 0;
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  overflow: hidden;
+  place-items: center;
+  background:
+    linear-gradient(45deg, rgba(219, 234, 254, 0.34) 25%, transparent 25%),
+    linear-gradient(-45deg, rgba(219, 234, 254, 0.34) 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, rgba(219, 234, 254, 0.34) 75%),
+    linear-gradient(-45deg, transparent 75%, rgba(219, 234, 254, 0.34) 75%),
+    rgba(239, 246, 255, 0.68);
+  background-position: 0 0, 0 8px, 8px -8px, -8px 0;
+  background-size: 16px 16px;
+  padding: clamp(0.35rem, 0.7vw, 0.55rem);
+}
+
+.image-studio-result-tile-preview img {
+  display: block;
+  height: 100%;
+  width: 100%;
+  border-radius: 0.58rem;
+  object-fit: contain;
+  transition:
+    filter 200ms ease,
+    transform 240ms ease;
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.12);
+}
+
+.image-studio-result-grid.is-count-2 .image-studio-result-tile-preview,
+.image-studio-result-grid.is-count-3 .image-studio-result-tile-preview,
+.image-studio-result-grid.is-count-4 .image-studio-result-tile-preview {
+  max-height: min(30dvh, 18rem);
+}
+
+.image-studio-result-tile-preview:hover img,
+.image-studio-result-tile-preview:focus-visible img {
+  filter: saturate(1.08) brightness(0.84);
+  transform: scale(1.01);
+}
+
+.image-studio-result-index,
+.image-studio-result-preview-label {
+  position: absolute;
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid rgba(255, 255, 255, 0.38);
+  background:
+    linear-gradient(135deg, rgba(var(--brand-rgb), 0.92), rgba(var(--brand-cyan-rgb), 0.86)),
+    rgba(15, 23, 42, 0.7);
+  color: white;
+  box-shadow: 0 12px 24px rgba(15, 23, 42, 0.22);
+}
+
+.image-studio-result-index {
+  top: 0.55rem;
+  left: 0.55rem;
+  height: 2rem;
+  min-width: 2rem;
+  justify-content: center;
+  border-radius: 9999px;
+  border-color: rgba(255, 255, 255, 0.82);
+  background: linear-gradient(135deg, rgba(15, 23, 42, 0.94), rgba(30, 41, 59, 0.86));
+  color: white;
+  font-size: 0.8rem;
+  font-weight: 900;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.72);
+  box-shadow:
+    0 12px 24px rgba(15, 23, 42, 0.34),
+    0 0 0 3px rgba(255, 255, 255, 0.82),
+    0 0 0 5px rgba(var(--brand-rgb), 0.18);
+}
+
+.image-studio-result-preview-label {
+  left: 50%;
+  top: 50%;
+  gap: 0.38rem;
+  border-radius: 9999px;
+  padding: 0.46rem 0.7rem;
+  font-size: 0.78rem;
+  font-weight: 820;
+  opacity: 0;
+  pointer-events: none;
+  transform: translate(-50%, -42%) scale(0.96);
+  transition:
+    opacity 180ms ease,
+    transform 180ms ease;
+  white-space: nowrap;
+}
+
+.image-studio-result-tile-preview:hover .image-studio-result-preview-label,
+.image-studio-result-tile-preview:focus-visible .image-studio-result-preview-label {
+  opacity: 1;
+  transform: translate(-50%, -50%) scale(1);
+}
+
+.image-studio-result-tile-actions {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.35rem;
+  padding: 0.45rem;
+}
+
+.image-studio-result-tile-actions button {
+  min-height: 2.15rem;
+  border-radius: 0.64rem;
 }
 
 .image-studio-generating-state,
@@ -2526,34 +2961,110 @@ onBeforeUnmount(() => {
 
 .image-studio-gallery-count {
   border-radius: 9999px;
-  background: rgba(var(--brand-rgb), 0.07);
+  background: rgba(var(--brand-rgb), 0.055);
   color: var(--brand-700);
-  padding: 0.35rem 0.7rem;
-  font-size: 0.78rem;
+  padding: 0.25rem 0.48rem;
+  font-size: 0.7rem;
   font-weight: 800;
+}
+
+.image-studio-gallery-rail .image-studio-panel-header {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.14rem 0.28rem;
+  padding-bottom: 0.5rem;
+}
+
+.image-studio-gallery-rail .image-studio-panel-header > div {
+  min-width: 0;
+  display: contents;
+}
+
+.image-studio-gallery-rail .image-studio-panel-header h2 {
+  grid-column: 1 / -1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.88rem;
+  line-height: 1.2;
+}
+
+.image-studio-gallery-rail .image-studio-section-label {
+  grid-column: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.68rem;
+  line-height: 1.1;
+}
+
+.image-studio-gallery-rail .image-studio-gallery-count {
+  grid-column: 2;
+  white-space: nowrap;
+  padding: 0.2rem 0.34rem;
+  font-size: 0.64rem;
+  line-height: 1;
+}
+
+.image-studio-gallery-rail .image-studio-image-thumb {
+  display: block;
+  height: auto;
+  aspect-ratio: 16 / 9;
+  isolation: isolate;
+}
+
+.image-studio-gallery-rail .image-studio-image-thumb img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  aspect-ratio: auto;
+}
+
+.image-studio-gallery-rail .image-studio-image-thumb > span {
+  top: 50%;
+  left: 50%;
+  max-width: calc(100% - 1rem);
+  justify-content: center;
+  gap: 0.3rem;
+  padding: 0.34rem 0.5rem;
+  font-size: 0.72rem;
+  line-height: 1;
+  transform: translate(-50%, -50%) scale(0.96);
+}
+
+.image-studio-gallery-rail .image-studio-image-thumb:hover > span,
+.image-studio-gallery-rail .image-studio-image-thumb:focus-visible > span {
+  transform: translate(-50%, -50%) scale(1);
+}
+
+.image-studio-gallery-rail .image-studio-image-card {
+  border-color: rgba(203, 213, 225, 0.5);
+  background: transparent;
+  box-shadow: none;
 }
 
 .image-studio-gallery-grid,
 .image-studio-gallery-loading {
-  margin-top: 0.72rem;
+  margin-top: 0.52rem;
   display: grid;
   min-height: 0;
-  grid-auto-columns: minmax(11rem, 13rem);
-  grid-auto-flow: column;
-  grid-template-columns: none;
-  gap: 0.62rem;
-  overflow-x: auto;
-  overflow-y: hidden;
-  padding: 0.05rem 0.1rem 0.35rem;
-  scroll-snap-type: x proximity;
+  grid-template-columns: 1fr;
+  gap: 0.42rem;
+  overflow-x: hidden;
+  overflow-y: auto;
+  padding: 0.04rem 0.05rem 0.3rem;
+  scroll-snap-type: y proximity;
   scrollbar-color: rgba(var(--brand-rgb), 0.32) transparent;
   scrollbar-width: thin;
 }
 
 .image-studio-gallery-loading div {
-  min-height: 8.25rem;
-  border-radius: 0.86rem;
-  background: linear-gradient(90deg, rgba(226, 232, 240, 0.64), rgba(239, 246, 255, 0.9), rgba(226, 232, 240, 0.64));
+  min-height: 5.25rem;
+  border-radius: 0.68rem;
+  background: linear-gradient(90deg, rgba(226, 232, 240, 0.52), rgba(239, 246, 255, 0.78), rgba(226, 232, 240, 0.52));
   background-size: 220% 100%;
   animation: image-studio-shimmer 1.25s ease-in-out infinite;
 }
@@ -2561,32 +3072,42 @@ onBeforeUnmount(() => {
 .image-studio-image-card {
   position: relative;
   overflow: hidden;
-  height: 100%;
+  height: auto;
   min-width: 0;
-  border-radius: 0.9rem;
-  border: 1px solid rgba(203, 213, 225, 0.58);
-  background: rgba(255, 255, 255, 0.82);
-  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.055);
+  border-radius: 0.68rem;
+  border: 1px solid rgba(203, 213, 225, 0.42);
+  background: rgba(255, 255, 255, 0.72);
+  box-shadow: none;
   scroll-snap-align: start;
+  transition:
+    border-color 160ms ease,
+    background 160ms ease,
+    transform 160ms ease;
+}
+
+.image-studio-image-card:hover,
+.image-studio-image-card:focus-within {
+  border-color: rgba(var(--brand-rgb), 0.28);
+  background: rgba(255, 255, 255, 0.86);
 }
 
 .image-studio-image-thumb {
   height: auto;
-  aspect-ratio: 4 / 3;
-  background: rgba(239, 246, 255, 0.9);
+  aspect-ratio: 1 / 1;
+  background: rgba(239, 246, 255, 0.74);
 }
 
 .image-studio-image-thumb img {
   display: block;
   width: 100%;
-  aspect-ratio: 4 / 3;
+  aspect-ratio: 1 / 1;
   object-fit: cover;
 }
 
 .image-studio-image-card-body {
   display: grid;
-  gap: 0.55rem;
-  padding: 0.7rem;
+  gap: 0.38rem;
+  padding: 0.5rem;
 }
 
 .image-studio-image-card-body div:first-child {
@@ -2625,34 +3146,78 @@ onBeforeUnmount(() => {
 
 .image-studio-gallery-rail .image-studio-image-card-actions {
   flex-wrap: nowrap;
+  justify-content: flex-end;
+  gap: 0.24rem;
 }
 
 .image-studio-gallery-rail .image-studio-image-card-body {
   position: absolute;
-  inset-inline: auto 0.42rem;
-  top: 0.42rem;
-  bottom: auto;
-  display: block;
-  width: max-content;
-  max-width: calc(100% - 0.84rem);
-  border-radius: 0.72rem;
-  background: rgba(255, 255, 255, 0.82);
-  padding: 0.25rem;
-  backdrop-filter: blur(12px);
-  box-shadow: 0 10px 22px rgba(15, 23, 42, 0.14);
+  inset: auto 0 0;
+  display: grid;
+  gap: 0.38rem;
+  padding: 1.5rem 0.48rem 0.45rem;
+  background: linear-gradient(180deg, transparent 0%, rgba(15, 23, 42, 0.62) 42%, rgba(15, 23, 42, 0.88) 100%);
+  color: white;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(0.35rem);
+  transition:
+    opacity 160ms ease,
+    transform 160ms ease;
 }
 
-.image-studio-gallery-rail .image-studio-image-card-body > div:first-child,
-.image-studio-gallery-rail .image-studio-image-card-body p {
-  display: none;
+.image-studio-gallery-rail .image-studio-image-card:hover .image-studio-image-card-body,
+.image-studio-gallery-rail .image-studio-image-card:focus-within .image-studio-image-card-body {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0);
+}
+
+.image-studio-gallery-rail .image-studio-image-card-body > div:first-child {
+  display: grid;
+  gap: 0.1rem;
+}
+
+.image-studio-gallery-rail .image-studio-image-card-body strong,
+.image-studio-gallery-rail .image-studio-image-card-body span {
+  min-width: 0;
+  overflow: hidden;
+  color: white;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+}
+
+.image-studio-gallery-rail .image-studio-image-card-body strong {
+  font-size: 0.72rem;
+  font-weight: 820;
+}
+
+.image-studio-gallery-rail .image-studio-image-card-body span {
+  font-size: 0.62rem;
+  font-weight: 720;
+  opacity: 0.78;
 }
 
 .image-studio-gallery-rail .image-studio-image-card-actions button {
-  flex: 1 1 0;
-  height: 2rem;
-  min-height: 2rem;
+  flex: 0 0 auto;
+  width: 1.58rem;
+  height: 1.58rem;
+  min-height: 1.58rem;
   min-width: 0;
-  padding-inline: 0.38rem;
+  border-radius: 9999px;
+  border-color: rgba(255, 255, 255, 0.22);
+  background: rgba(255, 255, 255, 0.16);
+  color: white;
+  padding: 0;
+  backdrop-filter: blur(8px);
+}
+
+.image-studio-gallery-rail .image-studio-image-card-actions button:hover,
+.image-studio-gallery-rail .image-studio-image-card-actions button:focus-visible {
+  border-color: rgba(255, 255, 255, 0.55);
+  background: rgba(255, 255, 255, 0.26);
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.14);
 }
 
 .image-studio-fade-enter-active,
@@ -3072,6 +3637,45 @@ onBeforeUnmount(() => {
   color: white;
 }
 
+.dark .image-studio-select-trigger {
+  border-color: rgba(96, 165, 250, 0.28);
+  background:
+    linear-gradient(135deg, rgba(15, 23, 42, 0.86), rgba(30, 41, 59, 0.62)),
+    rgba(15, 23, 42, 0.78);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.04) inset,
+    0 14px 24px rgba(0, 0, 0, 0.22);
+}
+
+.dark .image-studio-select-trigger svg {
+  background: rgba(37, 99, 235, 0.22);
+  color: rgb(147, 197, 253);
+}
+
+.dark .image-studio-select-trigger:hover:not(:disabled),
+.dark .image-studio-select-trigger:focus-visible,
+.dark .image-studio-select.is-open .image-studio-select-trigger {
+  border-color: rgba(96, 165, 250, 0.52);
+  background: linear-gradient(135deg, rgba(30, 41, 59, 0.92), rgba(15, 23, 42, 0.74));
+  box-shadow:
+    0 0 0 3px rgba(96, 165, 250, 0.12),
+    0 16px 30px rgba(0, 0, 0, 0.28);
+}
+
+.dark .image-studio-select-menu {
+  border-color: rgba(96, 165, 250, 0.26);
+  background: rgba(15, 23, 42, 0.92);
+}
+
+.dark .image-studio-field textarea {
+  border-color: rgba(96, 165, 250, 0.34);
+}
+
+.dark .image-studio-field textarea:focus,
+.dark .image-studio-field textarea:focus-visible {
+  border-color: rgba(96, 165, 250, 0.78);
+}
+
 .dark .image-studio-reference-thumb {
   border-color: rgba(96, 165, 250, 0.32);
   background: rgba(15, 23, 42, 0.92);
@@ -3099,10 +3703,14 @@ onBeforeUnmount(() => {
   border-color: var(--studio-border-soft);
 }
 
-.dark .image-studio-control-dock {
+.dark .image-studio-control-dock,
+.dark .image-studio-foundation-row {
   background:
-    linear-gradient(180deg, rgba(15, 23, 42, 0.78), rgba(2, 6, 23, 0.52)),
-    rgba(15, 23, 42, 0.58);
+    linear-gradient(180deg, rgba(15, 23, 42, 0.78), rgba(2, 6, 23, 0.52)) padding-box,
+    linear-gradient(90deg, transparent, rgba(96, 165, 250, 0.48), rgba(34, 211, 238, 0.42), transparent) border-box;
+}
+
+.dark .image-studio-control-dock {
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.04),
     inset 0 -1px 0 rgba(148, 163, 184, 0.08);
@@ -3128,35 +3736,28 @@ onBeforeUnmount(() => {
 }
 
 .dark .image-studio-choice-picker {
-  border-color: rgba(96, 165, 250, 0.16);
-  background:
-    linear-gradient(180deg, rgba(15, 23, 42, 0.86), rgba(2, 6, 23, 0.5)),
-    rgba(15, 23, 42, 0.48);
-  box-shadow:
-    inset 0 1px 2px rgba(0, 0, 0, 0.36),
-    inset 0 -1px 0 rgba(148, 163, 184, 0.08);
+  background: transparent;
+  box-shadow: none;
 }
 
 .dark .image-studio-choice-picker button {
+  border-color: rgba(96, 165, 250, 0.22);
+  background: rgba(15, 23, 42, 0.46);
   color: rgb(203, 213, 225);
 }
 
 .dark .image-studio-choice-picker button:hover,
 .dark .image-studio-choice-picker button:focus-visible {
+  border-color: rgba(96, 165, 250, 0.38);
   color: rgb(191, 219, 254);
-  background: rgba(30, 41, 59, 0.78);
+  background: rgba(30, 41, 59, 0.64);
 }
 
 .dark .image-studio-choice-picker button.active {
-  border-color: rgba(96, 165, 250, 0.28);
-  background:
-    linear-gradient(180deg, rgba(37, 99, 235, 0.34), rgba(14, 165, 233, 0.2)),
-    rgba(15, 23, 42, 0.92);
+  border-color: rgba(96, 165, 250, 0.54);
+  background: rgba(30, 64, 175, 0.3);
   color: white;
-  box-shadow:
-    0 8px 18px rgba(0, 0, 0, 0.24),
-    0 0 0 1px rgba(96, 165, 250, 0.24),
-    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  box-shadow: 0 0 0 3px rgba(96, 165, 250, 0.12);
 }
 
 .dark .image-studio-choice-picker small,
@@ -3186,8 +3787,53 @@ onBeforeUnmount(() => {
 }
 
 .dark .image-studio-gallery-rail .image-studio-image-card-body {
-  background: rgba(15, 23, 42, 0.82);
-  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.28);
+  background: linear-gradient(180deg, transparent 0%, rgba(2, 6, 23, 0.64) 42%, rgba(2, 6, 23, 0.9) 100%);
+  box-shadow: none;
+}
+
+.dark .image-studio-result-batch-header,
+.dark .image-studio-result-tile {
+  border-color: rgba(96, 165, 250, 0.18);
+  background:
+    linear-gradient(180deg, rgba(15, 23, 42, 0.9), rgba(2, 6, 23, 0.72)),
+    rgba(15, 23, 42, 0.82);
+  box-shadow:
+    0 18px 38px rgba(0, 0, 0, 0.28),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+.dark .image-studio-result-batch-header strong {
+  color: white;
+}
+
+.dark .image-studio-result-batch-header span {
+  color: rgb(203, 213, 225);
+}
+
+.dark .image-studio-result-batch-actions button,
+.dark .image-studio-result-tile-actions button {
+  border-color: rgba(96, 165, 250, 0.2);
+  background: rgba(37, 99, 235, 0.14);
+  color: rgb(191, 219, 254);
+}
+
+.dark .image-studio-result-batch-actions button:hover,
+.dark .image-studio-result-batch-actions button:focus-visible,
+.dark .image-studio-result-tile-actions button:hover,
+.dark .image-studio-result-tile-actions button:focus-visible {
+  border-color: rgba(96, 165, 250, 0.42);
+  background: rgba(30, 41, 59, 0.9);
+}
+
+.dark .image-studio-result-tile-preview {
+  background:
+    linear-gradient(45deg, rgba(30, 64, 175, 0.2) 25%, transparent 25%),
+    linear-gradient(-45deg, rgba(30, 64, 175, 0.2) 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, rgba(30, 64, 175, 0.2) 75%),
+    linear-gradient(-45deg, transparent 75%, rgba(30, 64, 175, 0.2) 75%),
+    rgba(15, 23, 42, 0.9);
+  background-position: 0 0, 0 8px, 8px -8px, -8px 0;
+  background-size: 16px 16px;
 }
 
 .dark .image-studio-mode-switch,
@@ -3445,6 +4091,7 @@ onBeforeUnmount(() => {
   }
 
   .image-studio-gallery {
+    height: auto;
     max-height: none;
   }
 
@@ -3478,9 +4125,30 @@ onBeforeUnmount(() => {
     min-height: 24rem;
   }
 
+  .image-studio-result-batch {
+    align-content: start;
+    padding: 0.62rem;
+  }
+
+  .image-studio-result-batch-header {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .image-studio-result-batch-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .image-studio-result-grid.is-count-2,
+  .image-studio-result-grid.is-count-3,
+  .image-studio-result-grid.is-count-4 {
+    grid-template-columns: 1fr;
+  }
+
   .image-studio-gallery-grid,
   .image-studio-gallery-loading {
-    grid-auto-columns: minmax(10.5rem, 78vw);
+    grid-template-columns: repeat(auto-fill, minmax(9rem, 1fr));
   }
 
   .image-studio-stage-meta {
@@ -3554,6 +4222,8 @@ onBeforeUnmount(() => {
   .image-studio-image-thumb img,
   .image-studio-preview-open > span,
   .image-studio-image-thumb > span,
+  .image-studio-result-tile-preview img,
+  .image-studio-result-preview-label,
   .image-studio-preview-actions button,
   .image-studio-delete-actions button {
     transition: none;

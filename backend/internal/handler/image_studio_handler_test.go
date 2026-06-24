@@ -41,6 +41,10 @@ type imageStudioHandlerServiceStub struct {
 
 	localFileObjectKey string
 	localFile          *service.ImageStudioLocalFile
+
+	downloadUserID int64
+	downloadID     int64
+	downloadFile   *service.ImageStudioDownloadFile
 }
 
 func (s *imageStudioHandlerServiceStub) GetConfig(ctx context.Context) (*service.ImageStudioConfig, error) {
@@ -140,6 +144,12 @@ func (s *imageStudioHandlerServiceStub) Delete(ctx context.Context, userID int64
 func (s *imageStudioHandlerServiceStub) OpenLocalFile(ctx context.Context, objectKey string) (*service.ImageStudioLocalFile, error) {
 	s.localFileObjectKey = objectKey
 	return s.localFile, nil
+}
+
+func (s *imageStudioHandlerServiceStub) Download(ctx context.Context, userID int64, imageID int64) (*service.ImageStudioDownloadFile, error) {
+	s.downloadUserID = userID
+	s.downloadID = imageID
+	return s.downloadFile, nil
 }
 
 func TestImageStudioHandlerGetConfig(t *testing.T) {
@@ -342,6 +352,34 @@ func TestImageStudioHandlerServeFileStreamsLocalImage(t *testing.T) {
 	require.Equal(t, http.StatusOK, rec.Code)
 	require.Equal(t, "images/user-42/2026/06/example.png", svc.localFileObjectKey)
 	require.Equal(t, "image/png", rec.Header().Get("Content-Type"))
+	body, err := io.ReadAll(rec.Body)
+	require.NoError(t, err)
+	require.Equal(t, []byte("png-bytes"), body)
+}
+
+func TestImageStudioHandlerDownloadStreamsAttachment(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	svc := &imageStudioHandlerServiceStub{
+		downloadFile: &service.ImageStudioDownloadFile{
+			Name:        "passion-api-image-20.png",
+			ContentType: "image/png",
+			Size:        int64(len("png-bytes")),
+			Reader:      bytes.NewReader([]byte("png-bytes")),
+			Close:       func() error { return nil },
+		},
+	}
+	h := NewImageStudioHandler(svc)
+	c, rec := newImageStudioHandlerTestContext(http.MethodGet, "/api/v1/user/images/20/download", nil)
+	c.Params = gin.Params{{Key: "id", Value: "20"}}
+
+	h.Download(c)
+
+	require.Equal(t, http.StatusOK, rec.Code)
+	require.Equal(t, int64(42), svc.downloadUserID)
+	require.Equal(t, int64(20), svc.downloadID)
+	require.Equal(t, "image/png", rec.Header().Get("Content-Type"))
+	require.Contains(t, rec.Header().Get("Content-Disposition"), "attachment")
+	require.Contains(t, rec.Header().Get("Content-Disposition"), "passion-api-image-20.png")
 	body, err := io.ReadAll(rec.Body)
 	require.NoError(t, err)
 	require.Equal(t, []byte("png-bytes"), body)
