@@ -114,7 +114,7 @@ func createCheckinTestUser(t *testing.T, ctx context.Context, client *dbent.Clie
 	return createdUser
 }
 
-func createCheckinUsage(t *testing.T, ctx context.Context, client *dbent.Client, userID int64, cost float64) {
+func createCheckinUsage(t *testing.T, ctx context.Context, client *dbent.Client, userID int64, totalCost, actualCost float64) {
 	t.Helper()
 	suffix := strconv.FormatInt(userID, 10)
 	group, err := client.Group.Create().
@@ -140,8 +140,8 @@ func createCheckinUsage(t *testing.T, ctx context.Context, client *dbent.Client,
 		SetAccountID(account.ID).
 		SetRequestID("req-checkin-test-" + suffix).
 		SetModel("claude-test").
-		SetTotalCost(cost).
-		SetActualCost(cost).
+		SetTotalCost(totalCost).
+		SetActualCost(actualCost).
 		Save(ctx)
 	require.NoError(t, err)
 }
@@ -311,7 +311,7 @@ func TestCheckinServiceMinimumSpendBlocksLowUsageUser(t *testing.T) {
 	createdUser := createCheckinTestUser(t, ctx, client, "low-spend@example.com", 10)
 	settings := newCheckinSettingRepoStub()
 	setCheckinConfig(t, settings, CheckinConfig{Enabled: true, MinTotalUsageUSD: 5})
-	createCheckinUsage(t, ctx, client, createdUser.ID, 2.5)
+	createCheckinUsage(t, ctx, client, createdUser.ID, 2.5, 2.5)
 
 	svc := NewCheckinService(client, nil, nil)
 	svc.SetSettingRepository(settings)
@@ -342,7 +342,7 @@ func TestCheckinServiceMinimumSpendAllowsEligibleUser(t *testing.T) {
 	createdUser := createCheckinTestUser(t, ctx, client, "enough-spend@example.com", 10)
 	settings := newCheckinSettingRepoStub()
 	setCheckinConfig(t, settings, CheckinConfig{Enabled: true, MinTotalUsageUSD: 5})
-	createCheckinUsage(t, ctx, client, createdUser.ID, 7.5)
+	createCheckinUsage(t, ctx, client, createdUser.ID, 7.5, 7.5)
 
 	svc := NewCheckinService(client, nil, nil)
 	svc.SetSettingRepository(settings)
@@ -367,6 +367,23 @@ func TestCheckinServiceMinimumSpendAllowsEligibleUser(t *testing.T) {
 		Count(ctx)
 	require.NoError(t, err)
 	require.Equal(t, 1, usageRows)
+}
+
+func TestCheckinServiceMinimumSpendUsesActualCost(t *testing.T) {
+	client := newCheckinServiceTestClient(t)
+	ctx := context.Background()
+	createdUser := createCheckinTestUser(t, ctx, client, "actual-spend@example.com", 10)
+	settings := newCheckinSettingRepoStub()
+	setCheckinConfig(t, settings, CheckinConfig{Enabled: true, MinTotalUsageUSD: 5})
+	createCheckinUsage(t, ctx, client, createdUser.ID, 8, 4)
+
+	svc := NewCheckinService(client, nil, nil)
+	svc.SetSettingRepository(settings)
+
+	status, err := svc.GetStatus(ctx, createdUser.ID)
+	require.NoError(t, err)
+	require.False(t, status.Eligible)
+	require.Equal(t, 4.0, status.TotalUsageUSD)
 }
 
 func TestCheckinServiceCustomRewardConfigAndStreakBonus(t *testing.T) {

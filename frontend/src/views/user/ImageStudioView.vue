@@ -109,7 +109,27 @@
                     <small>{{ t('imageStudio.uploadHint', { mb: maxReferenceImageMB }) }}</small>
                   </button>
 
-                  <div v-if="referenceFiles.length" class="image-studio-reference-list">
+                  <div v-if="referenceLoadingImage || referenceFiles.length" class="image-studio-reference-list">
+                    <div
+                      v-if="referenceLoadingImage"
+                      class="image-studio-reference-item image-studio-reference-item-loading"
+                      data-testid="image-studio-reference-pending"
+                      aria-live="polite"
+                    >
+                      <img
+                        class="image-studio-reference-thumb"
+                        :src="referenceLoadingImage.image_url"
+                        :alt="referenceLoadingImage.prompt"
+                        loading="lazy"
+                      />
+                      <div class="image-studio-reference-loading-copy">
+                        <strong>{{ referenceLoadingImage.prompt }}</strong>
+                        <small>{{ t('common.loading') }}</small>
+                      </div>
+                      <span class="image-studio-reference-loading-indicator" aria-hidden="true">
+                        <Icon name="refresh" size="sm" class="animate-spin" />
+                      </span>
+                    </div>
                     <div v-for="file in referenceFiles" :key="file.name + file.size" class="image-studio-reference-item">
                       <img
                         class="image-studio-reference-thumb"
@@ -126,104 +146,9 @@
                 </div>
               </transition>
 
-              <div class="image-studio-output-row">
-                <div class="image-studio-step-heading image-studio-step-heading-full">
-                  <span>{{ mode === 'edit' ? '02' : '01' }}</span>
-                  <strong>{{ t('imageStudio.stepOutput') }}</strong>
-                </div>
-                <div class="image-studio-field image-studio-choice-section">
-                  <span>{{ t('imageStudio.outputCount') }}</span>
-                  <div class="image-studio-choice-picker image-studio-count-picker">
-                    <button
-                      v-for="item in outputCountOptions"
-                      :key="item"
-                      type="button"
-                      :data-testid="`image-studio-output-count-${item}`"
-                      :class="{ active: outputCount === item }"
-                      :disabled="submitting || !canUse"
-                      @click="chooseOutputCount(item)"
-                    >
-                      <strong>{{ item }}</strong>
-                      <small>×{{ item }}</small>
-                    </button>
-                  </div>
-                </div>
-
-                <div class="image-studio-field image-studio-choice-section">
-                  <span>{{ t('imageStudio.outputFormat') }}</span>
-                  <div class="image-studio-choice-picker image-studio-format-picker">
-                    <button
-                      v-for="item in outputFormatOptions"
-                      :key="item.value"
-                      type="button"
-                      :data-testid="`image-studio-output-format-${item.value}`"
-                      :class="{ active: outputFormat === item.value }"
-                      :disabled="submitting || !canUse"
-                      @click="chooseOutputFormat(item.value)"
-                    >
-                      <strong>{{ item.label }}</strong>
-                    </button>
-                  </div>
-                </div>
-
-                <div v-if="showOutputBackgroundControls" class="image-studio-field image-studio-choice-section">
-                  <span>{{ t('imageStudio.outputBackground') }}</span>
-                  <div class="image-studio-choice-picker image-studio-background-picker">
-                    <button
-                      v-for="item in outputBackgroundOptions"
-                      :key="item.value"
-                      type="button"
-                      :data-testid="`image-studio-output-background-${item.value}`"
-                      :class="{ active: outputBackground === item.value }"
-                      :disabled="submitting || !canUse || isOutputBackgroundDisabled(item.value)"
-                      @click="chooseOutputBackground(item.value)"
-                    >
-                      <strong>{{ t(item.labelKey) }}</strong>
-                    </button>
-                  </div>
-                </div>
-
-                <div class="image-studio-field image-studio-choice-section">
-                  <span>{{ t('imageStudio.quality') }}</span>
-                  <div class="image-studio-choice-picker image-studio-quality-picker">
-                    <button
-                      v-for="item in qualityOptions"
-                      :key="item.quality"
-                      type="button"
-                      :data-testid="`image-studio-quality-${item.quality}`"
-                      :class="{ active: quality === item.quality }"
-                      :disabled="submitting || !canUse"
-                      @click="quality = item.quality"
-                    >
-                      <strong>{{ item.label || item.quality }}</strong>
-                      <small>{{ formatCurrency(item.estimated_cost || 0) }}</small>
-                      <em v-if="item.quality === '4K'">{{ t('imageStudio.quality4KRisk') }}</em>
-                    </button>
-                  </div>
-                </div>
-
-                <div class="image-studio-field image-studio-choice-section">
-                  <span>{{ t('imageStudio.aspectRatio') }}</span>
-                  <div class="image-studio-choice-picker image-studio-ratio-picker">
-                    <button
-                      v-for="item in aspectRatioOptions"
-                      :key="item.ratio"
-                      type="button"
-                      :data-testid="`image-studio-ratio-${item.ratio}`"
-                      :class="{ active: aspectRatio === item.ratio }"
-                      :disabled="submitting || !canUse"
-                      @click="aspectRatio = item.ratio"
-                    >
-                      <strong>{{ item.ratio }}</strong>
-                      <small>{{ ratioPreviewLabel(item) }}</small>
-                    </button>
-                  </div>
-                </div>
-              </div>
-
               <div class="image-studio-foundation-row">
                 <div class="image-studio-step-heading image-studio-step-heading-full">
-                  <span>{{ mode === 'edit' ? '03' : '02' }}</span>
+                  <span>{{ mode === 'edit' ? '02' : '01' }}</span>
                   <strong>{{ t('imageStudio.stepConnection') }}</strong>
                 </div>
                 <div class="image-studio-field image-studio-select-field">
@@ -328,6 +253,101 @@
                   </div>
                 </div>
               </div>
+
+              <div class="image-studio-output-row">
+                <div class="image-studio-step-heading image-studio-step-heading-full">
+                  <span>{{ mode === 'edit' ? '03' : '02' }}</span>
+                  <strong>{{ t('imageStudio.stepOutput') }}</strong>
+                </div>
+                <div class="image-studio-field image-studio-choice-section">
+                  <span>{{ t('imageStudio.outputCount') }}</span>
+                  <div class="image-studio-choice-picker image-studio-count-picker">
+                    <button
+                      v-for="item in outputCountOptions"
+                      :key="item"
+                      type="button"
+                      :data-testid="`image-studio-output-count-${item}`"
+                      :class="{ active: outputCount === item }"
+                      :disabled="submitting || !canUse"
+                      @click="chooseOutputCount(item)"
+                    >
+                      <strong>{{ item }}</strong>
+                      <small>×{{ item }}</small>
+                    </button>
+                  </div>
+                </div>
+
+                <div class="image-studio-field image-studio-choice-section">
+                  <span>{{ t('imageStudio.outputFormat') }}</span>
+                  <div class="image-studio-choice-picker image-studio-format-picker">
+                    <button
+                      v-for="item in outputFormatOptions"
+                      :key="item.value"
+                      type="button"
+                      :data-testid="`image-studio-output-format-${item.value}`"
+                      :class="{ active: outputFormat === item.value }"
+                      :disabled="submitting || !canUse"
+                      @click="chooseOutputFormat(item.value)"
+                    >
+                      <strong>{{ item.label }}</strong>
+                    </button>
+                  </div>
+                </div>
+
+                <div v-if="showOutputBackgroundControls" class="image-studio-field image-studio-choice-section">
+                  <span>{{ t('imageStudio.outputBackground') }}</span>
+                  <div class="image-studio-choice-picker image-studio-background-picker">
+                    <button
+                      v-for="item in outputBackgroundOptions"
+                      :key="item.value"
+                      type="button"
+                      :data-testid="`image-studio-output-background-${item.value}`"
+                      :class="{ active: outputBackground === item.value }"
+                      :disabled="submitting || !canUse || isOutputBackgroundDisabled(item.value)"
+                      @click="chooseOutputBackground(item.value)"
+                    >
+                      <strong>{{ t(item.labelKey) }}</strong>
+                    </button>
+                  </div>
+                </div>
+
+                <div class="image-studio-field image-studio-choice-section">
+                  <span>{{ t('imageStudio.quality') }}</span>
+                  <div class="image-studio-choice-picker image-studio-quality-picker">
+                    <button
+                      v-for="item in qualityOptions"
+                      :key="item.quality"
+                      type="button"
+                      :data-testid="`image-studio-quality-${item.quality}`"
+                      :class="{ active: quality === item.quality }"
+                      :disabled="submitting || !canUse"
+                      @click="quality = item.quality"
+                    >
+                      <strong>{{ item.label || item.quality }}</strong>
+                      <small>{{ formatCurrency(item.estimated_cost || 0) }}</small>
+                      <em v-if="item.quality === '4K'">{{ t('imageStudio.quality4KRisk') }}</em>
+                    </button>
+                  </div>
+                </div>
+
+                <div class="image-studio-field image-studio-choice-section">
+                  <span>{{ t('imageStudio.aspectRatio') }}</span>
+                  <div class="image-studio-choice-picker image-studio-ratio-picker">
+                    <button
+                      v-for="item in aspectRatioOptions"
+                      :key="item.ratio"
+                      type="button"
+                      :data-testid="`image-studio-ratio-${item.ratio}`"
+                      :class="{ active: aspectRatio === item.ratio }"
+                      :disabled="submitting || !canUse"
+                      @click="aspectRatio = item.ratio"
+                    >
+                      <strong>{{ item.ratio }}</strong>
+                      <small>{{ ratioPreviewLabel(item) }}</small>
+                    </button>
+                  </div>
+                </div>
+              </div>
             </section>
           </div>
 
@@ -374,124 +394,140 @@
               </div>
             </div>
 
-            <div class="image-studio-preview-frame">
-              <div v-if="submitting && currentResultImages.length === 0 && !currentImage" class="image-studio-generating-state">
-                <div class="image-studio-loader"></div>
-                <strong>{{ t('imageStudio.generatingTitle') }}</strong>
-                <span>{{ activeTaskHint }}</span>
-              </div>
-              <div
-                v-else-if="generationFailure"
-                class="image-studio-failure-state"
-                data-testid="image-studio-failure-panel"
-                role="alert"
-              >
-                <div class="image-studio-failure-icon">
-                  <Icon name="exclamationCircle" size="lg" />
-                </div>
-                <strong>{{ t('imageStudio.failureTitle') }}</strong>
-                <span>{{ failureDescription }}</span>
-                <small>{{ t('imageStudio.failureNotCharged') }}</small>
-                <div class="image-studio-failure-actions">
-                  <button
-                    type="button"
-                    data-testid="image-studio-retry-button"
-                    :disabled="submitting || !canSubmit"
-                    @click="retryGeneration"
-                  >
-                    <Icon name="refresh" size="sm" />
-                    {{ t('imageStudio.retry') }}
-                  </button>
-                  <button
-                    type="button"
-                    data-testid="image-studio-retry-1k-button"
-                    :disabled="submitting || !canUse || !qualityOptions.some((item) => item.quality === '1K')"
-                    @click="retryAtLowQuality"
-                  >
-                    <Icon name="sparkles" size="sm" />
-                    {{ t('imageStudio.retryAt1K') }}
-                  </button>
+            <div
+              class="image-studio-preview-frame"
+              :class="{ 'is-generating': submitting, 'is-failure': !!generationFailure }"
+            >
+              <div v-if="submitting" class="image-studio-generating-overlay" data-testid="image-studio-generating-overlay" aria-live="polite">
+                <div class="image-studio-generating-state">
+                  <div class="image-studio-loader"></div>
+                  <strong>{{ t('imageStudio.generatingTitle') }}</strong>
+                  <span>{{ activeTaskHint }}</span>
                 </div>
               </div>
-              <div
-                v-else-if="currentResultImages.length > 1"
-                class="image-studio-result-batch"
-                data-testid="image-studio-current-result-grid"
-              >
-                <div class="image-studio-result-batch-header">
-                  <div>
-                    <strong>{{ t('imageStudio.batchTitle') }}</strong>
-                    <span>{{ currentResultSummary }}</span>
+              <div class="image-studio-preview-body">
+                <div
+                  v-if="generationFailure"
+                  class="image-studio-failure-state"
+                  data-testid="image-studio-failure-panel"
+                  role="alert"
+                >
+                  <div class="image-studio-failure-header">
+                    <div class="image-studio-failure-icon">
+                      <Icon name="exclamationCircle" size="lg" />
+                    </div>
+                    <div class="image-studio-failure-copy">
+                      <strong>{{ t('imageStudio.failureTitle') }}</strong>
+                      <span>{{ failureDescription }}</span>
+                    </div>
                   </div>
-                  <div class="image-studio-result-batch-actions">
-                    <button type="button" @click="copyCurrentBatchLinks">
-                      <Icon name="copy" size="sm" />
-                      {{ t('imageStudio.copyAllLinks') }}
+                  <small>{{ t('imageStudio.failureNotCharged') }}</small>
+                  <div class="image-studio-failure-actions">
+                    <button
+                      type="button"
+                      data-testid="image-studio-retry-button"
+                      :disabled="submitting || !canSubmit"
+                      @click="retryGeneration"
+                    >
+                      <Icon name="refresh" size="sm" />
+                      {{ t('imageStudio.retry') }}
                     </button>
-                    <button type="button" @click="downloadCurrentBatchImages">
-                      <Icon name="download" size="sm" />
-                      {{ t('imageStudio.downloadAll') }}
+                    <button
+                      type="button"
+                      data-testid="image-studio-retry-1k-button"
+                      :disabled="submitting || !canUse || !qualityOptions.some((item) => item.quality === '1K')"
+                      @click="retryAtLowQuality"
+                    >
+                      <Icon name="sparkles" size="sm" />
+                      {{ t('imageStudio.retryAt1K') }}
                     </button>
                   </div>
                 </div>
                 <div
-                  class="image-studio-result-grid"
-                  :class="`is-count-${currentResultImages.length}`"
+                  v-else-if="currentResultImages.length > 1"
+                  class="image-studio-result-batch"
+                  data-testid="image-studio-current-result-grid"
                 >
-                  <article
-                    v-for="(item, index) in currentResultImages"
-                    :key="item.id"
-                    class="image-studio-result-tile"
-                  >
-                    <button
-                      type="button"
-                      class="image-studio-result-tile-preview"
-                      :style="{ aspectRatio: cssAspectRatio(item.aspect_ratio) }"
-                      :aria-label="t('imageStudio.openPreview')"
-                      @click="openImagePreview(item)"
-                    >
-                      <img :src="item.image_url" :alt="item.prompt" loading="lazy" />
-                      <span class="image-studio-result-index">{{ index + 1 }}</span>
-                      <span class="image-studio-result-preview-label">
-                        <Icon name="eye" size="sm" />
-                        {{ t('imageStudio.previewImage') }}
-                      </span>
-                    </button>
-                    <div class="image-studio-result-tile-actions">
-                      <button type="button" :aria-label="t('imageStudio.copyLink')" @click="copyImageURL(item)">
+                  <div class="image-studio-result-batch-header">
+                    <div>
+                      <strong>{{ t('imageStudio.batchTitle') }}</strong>
+                      <span>{{ currentResultSummary }}</span>
+                    </div>
+                    <div class="image-studio-result-batch-actions">
+                      <button type="button" @click="copyCurrentBatchLinks">
                         <Icon name="copy" size="sm" />
+                        {{ t('imageStudio.copyAllLinks') }}
                       </button>
-                      <button type="button" :aria-label="t('imageStudio.download')" @click="downloadImage(item)">
+                      <button type="button" @click="downloadCurrentBatchImages">
                         <Icon name="download" size="sm" />
-                      </button>
-                      <button type="button" :aria-label="t('imageStudio.useAsReference')" @click="useAsReference(item)">
-                        <Icon name="edit" size="sm" />
-                      </button>
-                      <button type="button" :aria-label="t('imageStudio.deleteAction')" @click="requestDeleteImage(item)">
-                        <Icon name="trash" size="sm" />
+                        {{ t('imageStudio.downloadAll') }}
                       </button>
                     </div>
-                  </article>
+                  </div>
+                  <div
+                    class="image-studio-result-grid"
+                    :class="`is-count-${currentResultImages.length}`"
+                  >
+                    <article
+                      v-for="(item, index) in currentResultImages"
+                      :key="item.id"
+                      class="image-studio-result-tile"
+                    >
+                      <button
+                        type="button"
+                        class="image-studio-result-tile-preview"
+                        :style="{ aspectRatio: cssAspectRatio(item.aspect_ratio) }"
+                        :aria-label="t('imageStudio.openPreview')"
+                        @click="openImagePreview(item)"
+                      >
+                        <img :src="item.image_url" :alt="item.prompt" loading="lazy" />
+                        <span class="image-studio-result-index">{{ index + 1 }}</span>
+                        <span class="image-studio-result-preview-label">
+                          <Icon name="eye" size="sm" />
+                          {{ t('imageStudio.previewImage') }}
+                        </span>
+                      </button>
+                      <div class="image-studio-result-tile-actions">
+                        <button type="button" :aria-label="t('imageStudio.copyLink')" @click="copyImageURL(item)">
+                          <Icon name="copy" size="sm" />
+                        </button>
+                        <button type="button" :aria-label="t('imageStudio.download')" @click="downloadImage(item)">
+                          <Icon name="download" size="sm" />
+                        </button>
+                      <button
+                        type="button"
+                        :aria-label="t('imageStudio.useAsReference')"
+                        :disabled="submitting || !canUse || referenceLoadingImage !== null"
+                        @click="useAsReference(item)"
+                      >
+                        <Icon name="edit" size="sm" />
+                      </button>
+                        <button type="button" :aria-label="t('imageStudio.deleteAction')" @click="requestDeleteImage(item)">
+                          <Icon name="trash" size="sm" />
+                        </button>
+                      </div>
+                    </article>
+                  </div>
                 </div>
-              </div>
-              <button
-                v-else-if="currentImage"
-                type="button"
-                class="image-studio-preview-open"
-                data-testid="image-studio-current-preview"
-                :aria-label="t('imageStudio.openPreview')"
-                @click="openImagePreview(currentImage)"
-              >
-                <img :src="currentImage.image_url" :alt="currentImage.prompt" />
-                <span>
-                  <Icon name="eye" size="sm" />
-                  {{ t('imageStudio.previewImage') }}
-                </span>
-              </button>
-              <div v-else class="image-studio-empty-preview">
-                <Icon name="sparkles" size="xl" />
-                <strong>{{ t('imageStudio.emptyPreviewTitle') }}</strong>
-                <span>{{ t('imageStudio.emptyPreviewHint') }}</span>
+                <button
+                  v-else-if="currentImage"
+                  type="button"
+                  class="image-studio-preview-open"
+                  data-testid="image-studio-current-preview"
+                  :aria-label="t('imageStudio.openPreview')"
+                  @click="openImagePreview(currentImage)"
+                >
+                  <img :src="currentImage.image_url" :alt="currentImage.prompt" />
+                  <span>
+                    <Icon name="eye" size="sm" />
+                    {{ t('imageStudio.previewImage') }}
+                  </span>
+                </button>
+                <div v-else class="image-studio-empty-preview">
+                  <Icon name="sparkles" size="xl" />
+                  <strong>{{ t('imageStudio.emptyPreviewTitle') }}</strong>
+                  <span>{{ t('imageStudio.emptyPreviewHint') }}</span>
+                </div>
               </div>
             </div>
 
@@ -504,7 +540,11 @@
                 <Icon name="download" size="sm" />
                 {{ t('imageStudio.download') }}
               </button>
-              <button type="button" @click="useAsReference(currentImage)">
+              <button
+                type="button"
+                :disabled="submitting || !canUse || referenceLoadingImage !== null"
+                @click="useAsReference(currentImage)"
+              >
                 <Icon name="edit" size="sm" />
                 {{ t('imageStudio.useAsReference') }}
               </button>
@@ -566,9 +606,14 @@
                   <button type="button" :aria-label="t('imageStudio.download')" @click="downloadImage(item)">
                     <Icon name="download" size="sm" />
                   </button>
-                  <button type="button" :aria-label="t('imageStudio.useAsReference')" @click="useAsReference(item)">
-                    <Icon name="edit" size="sm" />
-                  </button>
+                      <button
+                        type="button"
+                        :aria-label="t('imageStudio.useAsReference')"
+                        :disabled="submitting || !canUse || referenceLoadingImage !== null"
+                        @click="useAsReference(item)"
+                      >
+                        <Icon name="edit" size="sm" />
+                      </button>
                 </div>
               </div>
             </article>
@@ -631,7 +676,12 @@
               <Icon name="download" size="sm" />
               {{ t('imageStudio.download') }}
             </button>
-            <button type="button" data-testid="image-studio-preview-reference" @click="usePreviewAsReference">
+            <button
+              type="button"
+              data-testid="image-studio-preview-reference"
+              :disabled="submitting || !canUse || referenceLoadingImage !== null"
+              @click="usePreviewAsReference"
+            >
               <Icon name="edit" size="sm" />
               {{ t('imageStudio.useAsReference') }}
             </button>
@@ -754,6 +804,7 @@ const outputBackground = ref<ImageStudioBackground>('auto')
 const showOutputBackgroundControls = false
 const referenceFiles = ref<File[]>([])
 const referencePreviewUrls = new Map<File, string>()
+const referenceLoadingImage = ref<ImageStudioImage | null>(null)
 const loadingConfig = ref(false)
 const loadingHistory = ref(false)
 const submitting = ref(false)
@@ -772,6 +823,7 @@ const selectPlacement = ref<Record<ImageStudioSelectMenu, ImageStudioSelectPlace
 const activeTask = ref<ImageStudioTask | null>(null)
 const activeTasks = ref<ImageStudioTask[]>([])
 const taskPollTimers = new Set<number>()
+const activeGenerationTaskStorageKey = 'image-studio-active-generation-task-id'
 const previewImage = ref<ImageStudioImage | null>(null)
 const pendingDeleteImage = ref<ImageStudioImage | null>(null)
 const deletingImage = ref(false)
@@ -1140,6 +1192,15 @@ async function runImageBatch(
 
 async function resumeUnfinishedGenerationTasks() {
   if (submitting.value || !canUse.value) return
+  const persistedTaskID = readPersistedGenerationTaskID()
+  if (persistedTaskID != null) {
+    try {
+      await resumePersistedGenerationTask(persistedTaskID)
+      return
+    } catch {
+      // Fall through to the list-based recovery below.
+    }
+  }
   try {
     const response = await imageStudioAPI.listTasks({ page: 1, page_size: 5 })
     const tasks = (response.items ?? []).filter(isUnfinishedGenerationTask).slice(0, 4)
@@ -1155,6 +1216,91 @@ async function resumeUnfinishedGenerationTasks() {
     void finishRecoveredGenerationTasks(tasks)
   } catch {
     // Task recovery is opportunistic; config/history load should stay usable if it fails.
+  }
+}
+
+function persistGenerationTaskID(taskID: number) {
+  if (typeof window === 'undefined') return
+  window.sessionStorage.setItem(activeGenerationTaskStorageKey, String(taskID))
+}
+
+function readPersistedGenerationTaskID(): number | null {
+  if (typeof window === 'undefined') return null
+  const value = window.sessionStorage.getItem(activeGenerationTaskStorageKey)
+  if (!value) return null
+  const taskID = Number(value)
+  return Number.isFinite(taskID) && taskID > 0 ? taskID : null
+}
+
+function clearPersistedGenerationTaskID() {
+  if (typeof window === 'undefined') return
+  window.sessionStorage.removeItem(activeGenerationTaskStorageKey)
+}
+
+async function resumePersistedGenerationTask(taskID: number) {
+  const task = await imageStudioAPI.getTask(taskID)
+  if (task.mode !== 'generation') {
+    clearPersistedGenerationTaskID()
+    return
+  }
+
+  if (task.status === 'succeeded') {
+    clearPersistedGenerationTaskID()
+    if (task.image) {
+      applyGeneratedImage(task.image)
+      setCurrentResult([task.image], {
+        requested: 1,
+        failed: 0,
+      })
+      await Promise.resolve(authStore.refreshUser()).catch(() => undefined)
+      appStore.showSuccess(t('imageStudio.generateSuccess'))
+    }
+    return
+  }
+
+  if (task.status === 'failed') {
+    clearPersistedGenerationTaskID()
+    const message = task.error_message || t('imageStudio.generateFailed')
+    generationFailure.value = {
+      message,
+      reason: task.error_reason,
+    }
+    appStore.showError(message)
+    return
+  }
+
+  if (!['queued', 'running'].includes(task.status)) {
+    clearPersistedGenerationTaskID()
+    return
+  }
+
+  restoreTaskFormState(task)
+  generationFailure.value = null
+  activeTask.value = task
+  activeTasks.value = [task]
+  submitting.value = true
+
+  try {
+    const created = await waitForImageTask(taskID)
+    applyGeneratedImage(created)
+    setCurrentResult([created], {
+      requested: 1,
+      failed: 0,
+    })
+    await Promise.resolve(authStore.refreshUser()).catch(() => undefined)
+    appStore.showSuccess(t('imageStudio.generateSuccess'))
+  } catch (error) {
+    const message = extractApiErrorMessage(error, t('imageStudio.generateFailed'))
+    generationFailure.value = {
+      message,
+      reason: extractApiErrorCode(error),
+    }
+    appStore.showError(message)
+    throw error
+  } finally {
+    submitting.value = false
+    resetActiveTasks()
+    clearPersistedGenerationTaskID()
   }
 }
 
@@ -1279,6 +1425,7 @@ async function createAndPollGenerationTask(payload: {
     mode: 'generation',
     ...payload,
   })
+  persistGenerationTaskID(task.id)
   updateActiveTask(task)
   return await waitForImageTask(task.id)
 }
@@ -1292,6 +1439,7 @@ async function waitForImageTask(taskID: number): Promise<ImageStudioImage> {
     updateActiveTask(task)
     if (task.status === 'succeeded') {
       removeActiveTask(taskID)
+      clearPersistedGenerationTaskID()
       if (task.image) {
         return task.image
       }
@@ -1299,6 +1447,7 @@ async function waitForImageTask(taskID: number): Promise<ImageStudioImage> {
     }
     if (task.status === 'failed') {
       removeActiveTask(taskID)
+      clearPersistedGenerationTaskID()
       throw {
         reason: task.error_reason,
         message: task.error_message || t('imageStudio.generateFailed'),
@@ -1576,6 +1725,7 @@ async function downloadImage(image: ImageStudioImage) {
 async function useAsReference(image: ImageStudioImage) {
   mode.value = 'edit'
   prompt.value = image.prompt
+  referenceLoadingImage.value = image
   try {
     const file = await imageToReferenceFile(image)
     const nextFiles = [file, ...referenceFiles.value.filter((item) => item.name !== file.name)].slice(0, 4)
@@ -1584,6 +1734,10 @@ async function useAsReference(image: ImageStudioImage) {
     appStore.showSuccess(t('imageStudio.referenceModeHint'))
   } catch (error) {
     appStore.showError(extractApiErrorMessage(error, t('imageStudio.referenceLoadFailed')))
+  } finally {
+    if (referenceLoadingImage.value?.id === image.id) {
+      referenceLoadingImage.value = null
+    }
   }
 }
 
@@ -1621,11 +1775,8 @@ function handlePreviewKeydown(event: KeyboardEvent) {
 }
 
 async function imageToReferenceFile(image: ImageStudioImage): Promise<File> {
-  const response = await fetch(image.image_url, { credentials: 'same-origin' })
-  if (!response.ok) {
-    throw new Error(`Failed to load reference image (${response.status})`)
-  }
-  const blob = await response.blob()
+  const response = await imageStudioAPI.download(image.id)
+  const blob = response.blob
   const type = blob.type || image.mime_type || 'image/png'
   return new File([blob], imageReferenceFileName(image, type), { type })
 }
@@ -2032,21 +2183,16 @@ onBeforeUnmount(() => {
 }
 
 .image-studio-foundation-row {
-  order: 3;
+  order: 2;
   display: grid;
   grid-template-columns: 1fr;
   gap: 0.75rem;
   align-items: start;
-  border-top: 2px solid transparent;
-  background:
-    linear-gradient(white, white) padding-box,
-    linear-gradient(90deg, transparent, rgba(37, 99, 235, 0.34), rgba(6, 182, 212, 0.32), transparent) border-box;
-  background-origin: border-box;
   padding-top: 0.95rem;
 }
 
 .image-studio-output-row {
-  order: 2;
+  order: 3;
   display: grid;
   grid-template-columns: 1fr;
   gap: 0.8rem;
@@ -2450,6 +2596,11 @@ onBeforeUnmount(() => {
   color: rgb(51, 65, 85);
 }
 
+.image-studio-reference-item-loading {
+  border-style: dashed;
+  background: rgba(239, 246, 255, 0.9);
+}
+
 .image-studio-reference-thumb {
   width: 3.25rem;
   height: 3.25rem;
@@ -2465,6 +2616,21 @@ onBeforeUnmount(() => {
 .image-studio-reference-item small {
   color: rgb(100, 116, 139);
   font-size: 0.75rem;
+}
+
+.image-studio-reference-loading-copy {
+  display: grid;
+  min-width: 0;
+  gap: 0.12rem;
+}
+
+.image-studio-reference-loading-indicator {
+  display: grid;
+  height: 1.9rem;
+  width: 1.9rem;
+  place-items: center;
+  border-radius: 999px;
+  color: var(--brand-600);
 }
 
 .image-studio-reference-item button {
@@ -2597,6 +2763,7 @@ onBeforeUnmount(() => {
 
 .image-studio-preview-frame {
   margin-top: 0.95rem;
+  position: relative;
   display: grid;
   height: 100%;
   min-height: 0;
@@ -2612,6 +2779,27 @@ onBeforeUnmount(() => {
     rgba(248, 250, 252, 0.82);
   background-position: 0 0, 0 10px, 10px -10px, -10px 0;
   background-size: 20px 20px;
+}
+
+.image-studio-preview-frame.is-failure {
+  place-items: stretch;
+}
+
+.image-studio-preview-body {
+  display: grid;
+  height: 100%;
+  width: 100%;
+  min-height: 0;
+}
+
+.image-studio-generating-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  background: rgba(248, 250, 252, 0.78);
+  backdrop-filter: blur(10px);
 }
 
 .image-studio-preview-frame img {
@@ -2990,8 +3178,10 @@ onBeforeUnmount(() => {
 }
 
 .image-studio-failure-state {
-  width: min(100%, 26rem);
-  justify-self: center;
+  display: grid;
+  align-content: start;
+  justify-self: stretch;
+  width: 100%;
   border-radius: 1rem;
   border: 1px solid rgba(var(--brand-rgb), 0.22);
   background:
@@ -3000,6 +3190,17 @@ onBeforeUnmount(() => {
   box-shadow:
     0 18px 44px rgba(37, 99, 235, 0.1),
     inset 0 1px 0 rgba(255, 255, 255, 0.9);
+}
+
+.image-studio-failure-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+}
+
+.image-studio-failure-copy {
+  display: grid;
+  gap: 0.28rem;
 }
 
 .image-studio-failure-state > span {
@@ -3033,9 +3234,9 @@ onBeforeUnmount(() => {
 .image-studio-failure-actions {
   display: flex;
   flex-wrap: wrap;
-  justify-content: center;
+  justify-content: flex-start;
   gap: 0.5rem;
-  padding-top: 0.2rem;
+  padding-top: 0.6rem;
 }
 
 .image-studio-failure-actions button {
@@ -3890,6 +4091,14 @@ onBeforeUnmount(() => {
   color: white;
 }
 
+.dark .image-studio-reference-item-loading {
+  background: rgba(30, 41, 59, 0.82);
+}
+
+.dark .image-studio-reference-loading-indicator {
+  color: rgb(147, 197, 253);
+}
+
 .dark .image-studio-gallery-rail {
   background:
     linear-gradient(180deg, rgba(15, 23, 42, 0.96), rgba(2, 6, 23, 0.9)),
@@ -3997,8 +4206,7 @@ onBeforeUnmount(() => {
   border-color: var(--studio-border-soft);
 }
 
-.dark .image-studio-control-dock,
-.dark .image-studio-foundation-row {
+.dark .image-studio-control-dock {
   background:
     linear-gradient(180deg, rgba(15, 23, 42, 0.78), rgba(2, 6, 23, 0.52)) padding-box,
     linear-gradient(90deg, transparent, rgba(96, 165, 250, 0.48), rgba(34, 211, 238, 0.42), transparent) border-box;
@@ -4178,6 +4386,10 @@ onBeforeUnmount(() => {
   box-shadow:
     0 18px 44px rgba(0, 0, 0, 0.28),
     inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+
+.dark .image-studio-failure-copy {
+  color: rgb(203, 213, 225);
 }
 
 .dark .image-studio-failure-state > span {

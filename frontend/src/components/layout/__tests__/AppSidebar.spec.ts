@@ -40,11 +40,23 @@ describe('AppSidebar shared shell structure', () => {
   })
 })
 
-describe('AppSidebar feature flags', () => {
-  it('hides the image studio entry behind the backend image studio switch', () => {
-    expect(componentSource).toContain("const flagImageStudio")
+describe('AppSidebar collapse motion', () => {
+  it('does not transition every link property while the active image studio item collapses', () => {
+    const sidebarLinkBlockMatch = styleSource.match(/\.sidebar-link\s*\{[\s\S]*?\n {2}\}/)
+
+    expect(sidebarLinkBlockMatch).not.toBeNull()
+    expect(sidebarLinkBlockMatch?.[0]).not.toContain('transition-all')
+    expect(sidebarLinkBlockMatch?.[0]).toContain('transition-property:')
+  })
+})
+
+describe('AppSidebar image studio entry', () => {
+  it('keeps the image studio entry visible without waiting on an async feature flag', () => {
+    expect(componentSource).not.toContain('imageStudioAPI')
+    expect(componentSource).not.toContain('refreshImageStudioFlag')
+    expect(componentSource).not.toContain('flagImageStudio')
     expect(componentSource).toMatch(
-      /\{ path: '\/images', label: t\('nav\.imageStudio'\), icon: SparklesIcon, hideInSimpleMode: true, featureFlag: flagImageStudio \}/,
+      /\{ path: '\/images', label: t\('nav\.imageStudio'\), icon: SparklesIcon, hideInSimpleMode: true \}/,
     )
   })
 })

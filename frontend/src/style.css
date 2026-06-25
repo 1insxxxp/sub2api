@@ -1667,10 +1667,12 @@
     @apply overflow-hidden;
     @apply text-sm font-semibold;
     @apply text-slate-600 dark:text-dark-300;
-    @apply transition-all duration-200;
     @apply hover:bg-primary-50/70 hover:text-primary-800 dark:hover:bg-primary-500/10 dark:hover:text-primary-200;
     padding-left: 1.0625rem;
     padding-right: 0.875rem;
+    transition-property: background-color, color, box-shadow, border-color;
+    transition-duration: 180ms;
+    transition-timing-function: ease-out;
   }
 
   .sidebar-link:hover {

@@ -945,7 +945,7 @@ func (s *CheckinService) totalUsageUSDWithClient(ctx context.Context, client *db
 	}
 	err := client.UsageLog.Query().
 		Where(usagelog.UserIDEQ(userID)).
-		Aggregate(dbent.As(dbent.Sum(usagelog.FieldTotalCost), "sum")).
+		Aggregate(dbent.As(dbent.Sum(usagelog.FieldActualCost), "sum")).
 		Scan(ctx, &result)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {

@@ -26,5 +26,7 @@ describe('AppLayout workspace sizing', () => {
     expect(componentSource).toContain("'app-shell-main-image-studio': route.path === '/images'")
     expect(componentSource).toContain('.app-shell-main-image-studio')
     expect(componentSource).toContain('transition: none;')
+    expect(componentSource).toContain('.app-shell-main-image-studio .app-shell-content')
+    expect(componentSource).toContain('.app-shell-image-studio .sidebar-label')
   })
 })

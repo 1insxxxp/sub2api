@@ -192,6 +192,7 @@ describe('ImageStudioView', () => {
   afterEach(() => {
     vi.unstubAllGlobals()
     vi.useRealTimers()
+    window.sessionStorage.clear()
   })
 
   beforeEach(() => {
@@ -222,6 +223,7 @@ describe('ImageStudioView', () => {
     refreshUser.mockReset()
     showError.mockReset()
     showSuccess.mockReset()
+    window.sessionStorage.clear()
 
     getConfig.mockResolvedValue(config)
     getOptions.mockResolvedValue(options)
@@ -312,6 +314,7 @@ describe('ImageStudioView', () => {
     expect(wrapper.text()).toContain('imageStudio.quality4KInlineHint')
     await wrapper.get('[data-testid="image-studio-prompt"]').setValue('blue gateway')
     await wrapper.get('[data-testid="image-studio-submit"]').trigger('submit')
+    expect(wrapper.find('[data-testid="image-studio-generating-overlay"]').exists()).toBe(true)
     await vi.advanceTimersByTimeAsync(1300)
     await flushPromises()
 
@@ -372,6 +375,61 @@ describe('ImageStudioView', () => {
 
     createElement.mockRestore()
     appendChild.mockRestore()
+  })
+
+  it('shows an immediate pending reference placeholder while the image is being prepared for editing', async () => {
+    const generatedImage = {
+      id: 9,
+      user_id: 42,
+      mode: 'generation',
+      model: 'gpt-image-2',
+      prompt: 'blue gateway',
+      aspect_ratio: '1:1',
+      size: '1024x1024',
+      image_url: 'https://assets.example.com/generated.png',
+      storage_driver: 'local',
+      storage_object_key: 'images/user-42/generated.png',
+      mime_type: 'image/png',
+      cost: 0.1,
+      bytes: 100,
+      source_image_count: 0,
+      created_at: '2026-06-22T00:00:00Z',
+      updated_at: '2026-06-22T00:00:00Z',
+    }
+    let resolveDownload!: (value: { blob: Blob; filename: string }) => void
+    const downloadPromise = new Promise<{ blob: Blob; filename: string }>((resolve) => {
+      resolveDownload = resolve
+    })
+    downloadImageFile.mockReturnValue(downloadPromise)
+    list.mockResolvedValueOnce({ items: [generatedImage], total: 1, page: 1, page_size: 12, pages: 1 })
+
+    const wrapper = mount(ImageStudioView, {
+      global: {
+        stubs: {
+          AppLayout: { template: '<div><slot /></div>' },
+          Icon: true,
+        },
+      },
+    })
+
+    await flushPromises()
+
+    const continueButton = wrapper.findAll('button').find((button) => button.text().includes('imageStudio.useAsReference'))
+    expect(continueButton).toBeTruthy()
+    await continueButton!.trigger('click')
+
+    expect(wrapper.find('[data-testid="image-studio-reference-pending"]').exists()).toBe(true)
+    expect(wrapper.text()).toContain('common.loading')
+    expect(wrapper.find('[data-testid="image-studio-reference-preview"]').exists()).toBe(false)
+
+    resolveDownload!({
+      blob: new Blob(['png-bytes'], { type: 'image/png' }),
+      filename: 'passion-api-image-9.png',
+    })
+    await flushPromises()
+
+    expect(wrapper.find('[data-testid="image-studio-reference-pending"]').exists()).toBe(false)
+    expect(wrapper.get('[data-testid="image-studio-reference-preview"]').attributes('src')).toBe('blob:passion-api-image-9.png')
   })
 
   it('hides background options and sends output format with each generated image request', async () => {
@@ -929,6 +987,74 @@ describe('ImageStudioView', () => {
     expect(refreshUser).toHaveBeenCalled()
   })
 
+  it('restores an active generation task from session storage after returning to the page', async () => {
+    vi.useFakeTimers()
+    window.sessionStorage.setItem('image-studio-active-generation-task-id', '22')
+    getTask
+      .mockResolvedValueOnce({
+        id: 22,
+        mode: 'generation',
+        status: 'running',
+        model: 'gpt-image-2',
+        prompt: 'blue gateway',
+        aspect_ratio: '16:9',
+        quality: '4K',
+        size: '3840x2160',
+        estimated_cost: 0.16,
+        source_image_count: 0,
+        created_at: '2026-06-22T00:00:00Z',
+        updated_at: '2026-06-22T00:00:00Z',
+      })
+      .mockResolvedValueOnce({
+        id: 22,
+        mode: 'generation',
+        status: 'succeeded',
+        model: 'gpt-image-2',
+        prompt: 'blue gateway',
+        aspect_ratio: '16:9',
+        quality: '4K',
+        size: '3840x2160',
+        estimated_cost: 0.16,
+        source_image_count: 0,
+        image: {
+          id: 14,
+          mode: 'generation',
+          model: 'gpt-image-2',
+          prompt: 'blue gateway',
+          aspect_ratio: '16:9',
+          size: '3840x2160',
+          image_url: 'https://assets.example.com/resumed-session.png',
+          cost: 0.16,
+          bytes: 100,
+          source_image_count: 0,
+          created_at: '2026-06-22T00:00:00Z',
+          updated_at: '2026-06-22T00:00:00Z',
+        },
+        created_at: '2026-06-22T00:00:00Z',
+        updated_at: '2026-06-22T00:00:00Z',
+      })
+
+    const wrapper = mount(ImageStudioView, {
+      global: {
+        stubs: {
+          AppLayout: { template: '<div><slot /></div>' },
+          Icon: true,
+        },
+      },
+    })
+
+    await flushPromises()
+
+    expect(getTask).toHaveBeenCalledWith(22)
+    expect(wrapper.find('[data-testid="image-studio-generating-overlay"]').exists()).toBe(true)
+
+    await vi.advanceTimersByTimeAsync(1300)
+    await flushPromises()
+
+    expect(wrapper.find('img[src="https://assets.example.com/resumed-session.png"]').exists()).toBe(true)
+    expect(refreshUser).toHaveBeenCalled()
+  })
+
   it('resumes every unfinished generation task after a page reload', async () => {
     vi.useFakeTimers()
     listTasks.mockResolvedValueOnce({
@@ -1157,7 +1283,7 @@ describe('ImageStudioView', () => {
 
     const frame = wrapper.get('.image-studio-preview-frame')
     expect(frame.find('img[src="https://assets.example.com/restored-partial.png"]').exists()).toBe(true)
-    expect(frame.text()).not.toContain('imageStudio.generatingTitle')
+    expect(wrapper.find('[data-testid="image-studio-generating-overlay"]').exists()).toBe(true)
   })
 
   it('uses a compact adaptive layout without hero or balance summary cards', async () => {
@@ -1249,7 +1375,7 @@ describe('ImageStudioView', () => {
     expect(wrapper.find('.image-studio-select-option.is-selected').text()).toContain('gpt-image-2')
   })
 
-  it('keeps section dividers without showing empty reference separators in text-to-image mode', async () => {
+  it('keeps a single section divider without doubling it in edit mode', async () => {
     const wrapper = mount(ImageStudioView, {
       global: {
         stubs: {
@@ -1273,9 +1399,7 @@ describe('ImageStudioView', () => {
     expect(controlDockRule).toMatch(/background-origin:\s*border-box/)
     expect(controlDockRule).toMatch(/padding-top:\s*1rem/)
     expect(outputRowRule).not.toMatch(/border-top:/)
-    expect(foundationRowRule).toMatch(/border-top:\s*2px solid transparent/)
-    expect(foundationRowRule).toMatch(/linear-gradient\(90deg,\s*transparent,\s*rgba\(37,\s*99,\s*235,\s*0\.34\)/)
-    expect(foundationRowRule).toMatch(/background-origin:\s*border-box/)
+    expect(foundationRowRule).not.toMatch(/border-top:\s*2px solid transparent/)
     expect(foundationRowRule).toMatch(/padding-top:\s*0\.95rem/)
     expect(editOutputRowRule).toMatch(/border-top:/)
 
@@ -1375,8 +1499,8 @@ describe('ImageStudioView', () => {
 
     expect(generationSteps).toEqual([
       { number: '00', label: 'imageStudio.stepPrompt' },
-      { number: '01', label: 'imageStudio.stepOutput' },
-      { number: '02', label: 'imageStudio.stepConnection' },
+      { number: '01', label: 'imageStudio.stepConnection' },
+      { number: '02', label: 'imageStudio.stepOutput' },
     ])
 
     await wrapper.findAll('.image-studio-mode-switch button')[1].trigger('click')
@@ -1389,8 +1513,8 @@ describe('ImageStudioView', () => {
     expect(editSteps).toEqual([
       { number: '00', label: 'imageStudio.stepPrompt' },
       { number: '01', label: 'imageStudio.stepReference' },
-      { number: '02', label: 'imageStudio.stepOutput' },
-      { number: '03', label: 'imageStudio.stepConnection' },
+      { number: '02', label: 'imageStudio.stepConnection' },
+      { number: '03', label: 'imageStudio.stepOutput' },
     ])
   })
 
@@ -1612,11 +1736,11 @@ describe('ImageStudioView', () => {
       created_at: '2026-06-22T00:00:00Z',
       updated_at: '2026-06-22T00:00:00Z',
     }
-    const fetchMock = vi.fn(async () => ({
-      ok: true,
-      blob: async () => new Blob(['png-bytes'], { type: 'image/png' }),
-    }))
-    vi.stubGlobal('fetch', fetchMock)
+    const downloadMock = vi.fn().mockResolvedValue({
+      blob: new Blob(['png-bytes'], { type: 'image/png' }),
+      filename: 'passion-api-image-9.png',
+    })
+    downloadImageFile.mockImplementation(downloadMock)
     list.mockResolvedValueOnce({ items: [generatedImage], total: 1, page: 1, page_size: 12, pages: 1 })
     edit.mockResolvedValue({ ...generatedImage, id: 10, mode: 'edit', source_image_count: 1 })
 
@@ -1636,7 +1760,7 @@ describe('ImageStudioView', () => {
     await continueButton!.trigger('click')
     await flushPromises()
 
-    expect(fetchMock).toHaveBeenCalledWith(generatedImage.image_url, { credentials: 'same-origin' })
+    expect(downloadMock).toHaveBeenCalledWith(9)
     expect(wrapper.text()).not.toContain('passion-api-image-9.png')
     const referencePreview = wrapper.get('[data-testid="image-studio-reference-preview"]')
     expect(referencePreview.attributes('src')).toBe('blob:passion-api-image-9.png')
