@@ -16,3 +16,10 @@ export function formatMultiplier(val: number): string {
   if (val >= 0.0001) return val.toFixed(4)
   return val.toPrecision(2)
 }
+
+export function formatVisibleRateMultiplier(value: number | null | undefined): string {
+  if (value === null || value === undefined || !Number.isFinite(value)) {
+    return ''
+  }
+  return Number(value.toFixed(2)).toString()
+}

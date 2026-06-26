@@ -13,8 +13,8 @@
     <span v-if="showLabel" :class="labelClass">
       <template v-if="hasCustomRate">
         <!-- 原倍率删除线 + 专属倍率高亮 -->
-        <span class="line-through opacity-50 mr-0.5">{{ formatVisibleRate(rateMultiplier) }}x</span>
-        <span class="font-bold">{{ formatVisibleRate(userRateMultiplier) }}x</span>
+        <span class="line-through opacity-50 mr-0.5">{{ formatVisibleRateMultiplier(rateMultiplier) }}x</span>
+        <span class="font-bold">{{ formatVisibleRateMultiplier(userRateMultiplier) }}x</span>
       </template>
       <template v-else>
         {{ labelText }}
@@ -27,6 +27,7 @@
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { SubscriptionType, GroupPlatform } from '@/types'
+import { formatVisibleRateMultiplier } from '@/utils/formatters'
 import PlatformIcon from './PlatformIcon.vue'
 
 interface Props {
@@ -57,13 +58,6 @@ const { t } = useI18n()
 
 const isSubscription = computed(() => props.subscriptionType === 'subscription')
 
-const formatVisibleRate = (value: number | null | undefined): string => {
-  if (value === null || value === undefined || !Number.isFinite(value)) {
-    return ''
-  }
-  return Number(value.toFixed(2)).toString()
-}
-
 // 是否有专属倍率（且与默认倍率不同）
 const hasCustomRate = computed(() => {
   return (
@@ -85,7 +79,7 @@ const showLabel = computed(() => {
 
 // Label text
 const labelText = computed(() => {
-  const rateLabel = props.rateMultiplier !== undefined ? `${formatVisibleRate(props.rateMultiplier)}x` : ''
+  const rateLabel = props.rateMultiplier !== undefined ? `${formatVisibleRateMultiplier(props.rateMultiplier)}x` : ''
   if (isSubscription.value && !props.alwaysShowRate) {
     // 如果有剩余天数，显示天数
     if (props.daysRemaining !== null && props.daysRemaining !== undefined) {

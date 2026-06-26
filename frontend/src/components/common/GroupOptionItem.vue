@@ -27,11 +27,11 @@
       <!-- Rate pill (platform color) -->
       <span v-if="rateMultiplier !== undefined" :class="['inline-flex items-center whitespace-nowrap rounded-full px-3 py-1 text-xs font-semibold', ratePillClass]">
         <template v-if="hasCustomRate">
-          <span class="mr-1 line-through opacity-50">{{ rateMultiplier }}x</span>
-          <span class="font-bold">{{ userRateMultiplier }}x</span>
+          <span class="mr-1 line-through opacity-50">{{ formatVisibleRateMultiplier(rateMultiplier) }}x</span>
+          <span class="font-bold">{{ formatVisibleRateMultiplier(userRateMultiplier) }}x</span>
         </template>
         <template v-else>
-          {{ rateMultiplier }}x 倍率
+          {{ formatVisibleRateMultiplier(rateMultiplier) }}x 倍率
         </template>
       </span>
       <!-- Checkmark -->
@@ -53,6 +53,7 @@
 import { computed } from 'vue'
 import GroupBadge from './GroupBadge.vue'
 import type { SubscriptionType, GroupPlatform } from '@/types'
+import { formatVisibleRateMultiplier } from '@/utils/formatters'
 
 interface Props {
   name: string
