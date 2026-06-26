@@ -520,25 +520,25 @@ const formatTokens = (value: number | undefined): string => {
   return formatTokenCount(value)
 }
 
+const toFiniteNumber = (value: unknown): number => {
+  const numberValue = Number(value)
+  return Number.isFinite(numberValue) ? numberValue : 0
+}
+
 const formatNumber = (value: number | null | undefined): string => {
-  value = safeNumber(value)
-  return value.toLocaleString()
+  return toFiniteNumber(value).toLocaleString()
 }
 
 const formatCost = (value: number | null | undefined): string => {
-  value = safeNumber(value)
-  if (value >= 1000) {
-    return (value / 1000).toFixed(2) + 'K'
-  } else if (value >= 1) {
-    return value.toFixed(2)
-  } else if (value >= 0.01) {
-    return value.toFixed(3)
+  const safeValue = toFiniteNumber(value)
+  if (safeValue >= 1000) {
+    return (safeValue / 1000).toFixed(2) + 'K'
+  } else if (safeValue >= 1) {
+    return safeValue.toFixed(2)
+  } else if (safeValue >= 0.01) {
+    return safeValue.toFixed(3)
   }
-  return value.toFixed(4)
-}
-
-const safeNumber = (value: number | null | undefined): number => {
-  return typeof value === 'number' && Number.isFinite(value) ? value : 0
+  return safeValue.toFixed(4)
 }
 
 const formatDuration = (ms: number): string => {

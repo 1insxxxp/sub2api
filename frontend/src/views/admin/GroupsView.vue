@@ -674,7 +674,7 @@
           </div>
           <div
             v-if="createModelsListState.enabled"
-            class="admin-list-surface"
+            class="admin-list-surface overflow-hidden rounded-lg border"
           >
             <div
               v-if="!createModelsListLoading && createModelsListState.items.length > 0"
@@ -1962,7 +1962,7 @@
           </div>
           <div
             v-if="editModelsListState.enabled"
-            class="admin-list-surface"
+            class="admin-list-surface overflow-hidden rounded-lg border"
           >
             <div
               v-if="!editModelsListLoading && editModelsListState.items.length > 0"
@@ -3136,6 +3136,7 @@ const platformOptions = computed(() => [
   { value: "openai", label: "OpenAI" },
   { value: "gemini", label: "Gemini" },
   { value: "antigravity", label: "Antigravity" },
+  { value: "grok", label: "Grok" },
 ]);
 
 const platformFilterOptions = computed(() => [
@@ -3144,6 +3145,7 @@ const platformFilterOptions = computed(() => [
   { value: "openai", label: "OpenAI" },
   { value: "gemini", label: "Gemini" },
   { value: "antigravity", label: "Antigravity" },
+  { value: "grok", label: "Grok" },
 ]);
 
 const editStatusOptions = computed(() => [
