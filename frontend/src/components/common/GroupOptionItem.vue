@@ -31,7 +31,7 @@
           <span class="font-bold">{{ formatVisibleRateMultiplier(userRateMultiplier) }}x</span>
         </template>
         <template v-else>
-          {{ formatVisibleRateMultiplier(rateMultiplier) }}x 倍率
+          {{ formatVisibleRateMultiplier(rateMultiplier) }}x {{ t('admin.groups.rateLabel') }}
         </template>
       </span>
       <!-- Checkmark -->
@@ -51,9 +51,12 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import GroupBadge from './GroupBadge.vue'
 import type { SubscriptionType, GroupPlatform } from '@/types'
 import { formatVisibleRateMultiplier } from '@/utils/formatters'
+
+const { t } = useI18n()
 
 interface Props {
   name: string

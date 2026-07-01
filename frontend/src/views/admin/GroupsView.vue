@@ -103,7 +103,9 @@
                     ? 'bg-primary-100 text-primary-700 dark:bg-primary-900/30 dark:text-primary-400'
                     : value === 'antigravity'
                       ? 'bg-cyan-100 text-cyan-700 dark:bg-cyan-900/30 dark:text-cyan-300'
-                      : 'bg-slate-100 text-slate-700 dark:bg-dark-700 dark:text-slate-300',
+                      : value === 'grok'
+                        ? 'bg-zinc-200 text-zinc-800 dark:bg-zinc-700 dark:text-zinc-100'
+                        : 'bg-slate-100 text-slate-700 dark:bg-dark-700 dark:text-slate-300',
               ]"
             >
               <PlatformIcon :platform="value" size="xs" />
@@ -681,8 +683,12 @@
               class="admin-panel-header !flex-row !items-center !px-3 !py-2 text-xs"
             >
               <span class="text-gray-500 dark:text-gray-400">
-                已选 {{ createModelsListSelectedCount }} /
-                {{ createModelsListState.items.length }}
+                {{
+                  t("admin.groups.modelsList.selectedSummary", {
+                    selected: createModelsListSelectedCount,
+                    total: createModelsListState.items.length,
+                  })
+                }}
               </span>
               <div class="flex items-center gap-1.5">
                 <button
@@ -690,14 +696,14 @@
                   class="rounded px-2 py-1 font-medium text-primary-600 transition-colors hover:bg-primary-50 dark:text-primary-400 dark:hover:bg-primary-900/20"
                   @click="selectAllModelsListItems(createModelsListState)"
                 >
-                  全选
+                  {{ t("admin.groups.modelsList.selectAll") }}
                 </button>
                 <button
                   type="button"
                   class="rounded px-2 py-1 font-medium text-slate-600 transition-colors hover:bg-primary-50 hover:text-primary-700 dark:text-slate-300 dark:hover:bg-primary-500/10 dark:hover:text-primary-200"
                   @click="invertModelsListSelection(createModelsListState)"
                 >
-                  反选
+                  {{ t("admin.groups.modelsList.invertSelection") }}
                 </button>
               </div>
             </div>
@@ -1295,20 +1301,20 @@
           class="border-t border-gray-200 dark:border-dark-400 pt-4 mt-4 space-y-4"
         >
           <h4 class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
-            账号过滤控制
+            {{ t("admin.groups.accountFilters.title") }}
           </h4>
 
           <!-- require_oauth_only toggle -->
           <div class="flex items-center justify-between">
             <div>
               <label class="text-sm text-gray-600 dark:text-gray-400"
-                >仅允许 OAuth 账号</label
+                >{{ t("admin.groups.accountFilters.oauthOnly") }}</label
               >
               <p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
                 {{
                   createForm.require_oauth_only
-                    ? "已启用 — 排除 API Key 类型账号"
-                    : "未启用"
+                    ? t("admin.groups.accountFilters.oauthOnlyEnabled")
+                    : t("admin.groups.accountFilters.disabled")
                 }}
               </p>
             </div>
@@ -1339,13 +1345,13 @@
           <div class="flex items-center justify-between">
             <div>
               <label class="text-sm text-gray-600 dark:text-gray-400"
-                >仅允许隐私保护已设置的账号</label
+                >{{ t("admin.groups.accountFilters.privacySetOnly") }}</label
               >
               <p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
                 {{
                   createForm.require_privacy_set
-                    ? "已启用 — Privacy 未设置的账号将被排除"
-                    : "未启用"
+                    ? t("admin.groups.accountFilters.privacySetOnlyEnabled")
+                    : t("admin.groups.accountFilters.disabled")
                 }}
               </p>
             </div>
@@ -1969,8 +1975,12 @@
               class="admin-panel-header !flex-row !items-center !px-3 !py-2 text-xs"
             >
               <span class="text-gray-500 dark:text-gray-400">
-                已选 {{ editModelsListSelectedCount }} /
-                {{ editModelsListState.items.length }}
+                {{
+                  t("admin.groups.modelsList.selectedSummary", {
+                    selected: editModelsListSelectedCount,
+                    total: editModelsListState.items.length,
+                  })
+                }}
               </span>
               <div class="flex items-center gap-1.5">
                 <button
@@ -1978,14 +1988,14 @@
                   class="rounded px-2 py-1 font-medium text-primary-600 transition-colors hover:bg-primary-50 dark:text-primary-400 dark:hover:bg-primary-900/20"
                   @click="selectAllModelsListItems(editModelsListState)"
                 >
-                  全选
+                  {{ t("admin.groups.modelsList.selectAll") }}
                 </button>
                 <button
                   type="button"
                   class="rounded px-2 py-1 font-medium text-slate-600 transition-colors hover:bg-primary-50 hover:text-primary-700 dark:text-slate-300 dark:hover:bg-primary-500/10 dark:hover:text-primary-200"
                   @click="invertModelsListSelection(editModelsListState)"
                 >
-                  反选
+                  {{ t("admin.groups.modelsList.invertSelection") }}
                 </button>
               </div>
             </div>
@@ -2579,20 +2589,20 @@
           class="border-t border-gray-200 dark:border-dark-400 pt-4 mt-4 space-y-4"
         >
           <h4 class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
-            账号过滤控制
+            {{ t("admin.groups.accountFilters.title") }}
           </h4>
 
           <!-- require_oauth_only toggle -->
           <div class="flex items-center justify-between">
             <div>
               <label class="text-sm text-gray-600 dark:text-gray-400"
-                >仅允许 OAuth 账号</label
+                >{{ t("admin.groups.accountFilters.oauthOnly") }}</label
               >
               <p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
                 {{
                   editForm.require_oauth_only
-                    ? "已启用 — 排除 API Key 类型账号"
-                    : "未启用"
+                    ? t("admin.groups.accountFilters.oauthOnlyEnabled")
+                    : t("admin.groups.accountFilters.disabled")
                 }}
               </p>
             </div>
@@ -2623,13 +2633,13 @@
           <div class="flex items-center justify-between">
             <div>
               <label class="text-sm text-gray-600 dark:text-gray-400"
-                >仅允许隐私保护已设置的账号</label
+                >{{ t("admin.groups.accountFilters.privacySetOnly") }}</label
               >
               <p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
                 {{
                   editForm.require_privacy_set
-                    ? "已启用 — Privacy 未设置的账号将被排除"
-                    : "未启用"
+                    ? t("admin.groups.accountFilters.privacySetOnlyEnabled")
+                    : t("admin.groups.accountFilters.disabled")
                 }}
               </p>
             </div>
@@ -2964,7 +2974,9 @@
                         ? 'bg-primary-100 text-primary-700 dark:bg-primary-900/30 dark:text-primary-400'
                         : group.platform === 'antigravity'
                           ? 'bg-cyan-100 text-cyan-700 dark:bg-cyan-900/30 dark:text-cyan-300'
-                          : 'bg-slate-100 text-slate-700 dark:bg-dark-700 dark:text-slate-300',
+                          : group.platform === 'grok'
+                            ? 'bg-zinc-200 text-zinc-800 dark:bg-zinc-700 dark:text-zinc-100'
+                            : 'bg-slate-100 text-slate-700 dark:bg-dark-700 dark:text-slate-300',
                   ]"
                 >
                   {{ t("admin.groups.platforms." + group.platform) }}
@@ -3239,7 +3251,7 @@ const copyAccountsGroupOptions = computed(() => {
   );
   return eligibleGroups.map((g) => ({
     value: g.id,
-    label: `${g.name} (${g.account_count || 0} 个账号)`,
+    label: `${g.name} (${t("admin.groups.accountsCount", { count: g.account_count || 0 })})`,
   }));
 });
 
@@ -3254,7 +3266,7 @@ const copyAccountsGroupOptionsForEdit = computed(() => {
   );
   return eligibleGroups.map((g) => ({
     value: g.id,
-    label: `${g.name} (${g.account_count || 0} 个账号)`,
+    label: `${g.name} (${t("admin.groups.accountsCount", { count: g.account_count || 0 })})`,
   }));
 });
 
