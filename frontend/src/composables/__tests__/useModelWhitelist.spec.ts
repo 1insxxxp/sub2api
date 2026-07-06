@@ -4,32 +4,19 @@ vi.mock('@/api/admin/accounts', () => ({
   getAntigravityDefaultModelMapping: vi.fn()
 }))
 
-import {
-  buildModelMappingObject,
-  getModelsByPlatform,
-  getPresetMappingsByPlatform,
-  splitModelMappingObject
-} from '../useModelWhitelist'
+import { buildModelMappingObject, getModelsByPlatform, splitModelMappingObject } from '../useModelWhitelist'
 
 describe('useModelWhitelist', () => {
-  it('keeps current OpenAI models and drops retired preview aliases', () => {
+  it('openai 模型列表包含 GPT-5.4 官方快照', () => {
     const models = getModelsByPlatform('openai')
 
     expect(models).toContain('gpt-5.4')
     expect(models).toContain('gpt-5.4-mini')
     expect(models).toContain('gpt-5.4-2026-03-05')
-    expect(models).toContain('gpt-4o-audio-preview')
-    expect(models).toContain('gpt-4o-realtime-preview')
     expect(models).toContain('codex-auto-review')
-
-    expect(models).not.toContain('gpt-4-turbo-preview')
-    expect(models).not.toContain('gpt-4.5-preview')
-    expect(models).not.toContain('o1-preview')
-    expect(models).not.toContain('o1-mini')
-    expect(models).not.toContain('chatgpt-4o-latest')
   })
 
-  it('does not expose removed ChatGPT Codex login models', () => {
+  it('openai 模型列表不再暴露已下线的 ChatGPT 登录 Codex 模型', () => {
     const models = getModelsByPlatform('openai')
 
     expect(models).not.toContain('gpt-5')
@@ -40,45 +27,12 @@ describe('useModelWhitelist', () => {
     expect(models).not.toContain('gpt-5.2-codex')
   })
 
-  it('keeps supported Anthropic IDs and removes retired direct models', () => {
-    const models = getModelsByPlatform('claude')
-
-    expect(models).toContain('claude-sonnet-4-6')
-    expect(models).toContain('claude-opus-4-6')
-    expect(models).toContain('claude-opus-4-7')
-    expect(models).toContain('claude-haiku-4-5-20251001')
-    expect(models).toContain('claude-3-haiku-20240307')
-
-    expect(models).not.toContain('claude-3-5-sonnet-20241022')
-    expect(models).not.toContain('claude-3-5-sonnet-20240620')
-    expect(models).not.toContain('claude-3-5-haiku-20241022')
-    expect(models).not.toContain('claude-3-opus-20240229')
-    expect(models).not.toContain('claude-3-sonnet-20240229')
-    expect(models).not.toContain('claude-3-7-sonnet-20250219')
-    expect(models).not.toContain('claude-2.1')
-    expect(models).not.toContain('claude-2.0')
-    expect(models).not.toContain('claude-instant-1.2')
-  })
-
-  it('replaces the retired Gemini 3 Pro preview with the 3.1 Pro preview family', () => {
-    const models = getModelsByPlatform('gemini')
-
-    expect(models).toContain('gemini-3.1-pro-preview')
-    expect(models).toContain('gemini-2.5-flash-image')
-    expect(models).toContain('gemini-3.1-flash-image')
-    expect(models.indexOf('gemini-3.1-flash-image')).toBeLessThan(models.indexOf('gemini-2.0-flash'))
-    expect(models.indexOf('gemini-2.5-flash-image')).toBeLessThan(models.indexOf('gemini-2.5-flash'))
-    expect(models).not.toContain('gemini-3-pro-preview')
-  })
-
-  it('keeps antigravity image compatibility entries available', () => {
+  it('antigravity 模型列表包含图片模型兼容项', () => {
     const models = getModelsByPlatform('antigravity')
 
     expect(models).toContain('gemini-2.5-flash-image')
     expect(models).toContain('gemini-3.1-flash-image')
     expect(models).toContain('gemini-3-pro-image')
-    expect(models.indexOf('gemini-3.1-flash-image')).toBeLessThan(models.indexOf('gemini-2.5-flash'))
-    expect(models.indexOf('gemini-2.5-flash-image')).toBeLessThan(models.indexOf('gemini-2.5-flash-lite'))
   })
 
   it('Claude 模型列表包含新发布的 Claude 模型', () => {
@@ -97,30 +51,38 @@ describe('useModelWhitelist', () => {
     expect(models.indexOf('gemini-2.5-flash-image')).toBeLessThan(models.indexOf('gemini-2.5-flash'))
   })
 
-  it('drops retired Anthropic preset shortcuts while keeping current presets', () => {
-    const presets = getPresetMappingsByPlatform('claude')
-    const sources = presets.map(preset => preset.from)
+  it('antigravity 模型列表会把新的 Gemini 图片模型排在前面', () => {
+    const models = getModelsByPlatform('antigravity')
 
-    expect(sources).toContain('claude-sonnet-4-6')
-    expect(sources).toContain('claude-opus-4-6')
-    expect(sources).toContain('claude-opus-4-7')
-    expect(sources).toContain('claude-haiku-4-5-20251001')
-    expect(sources).not.toContain('claude-3-5-haiku-20241022')
+    expect(models.indexOf('gemini-3.1-flash-image')).toBeLessThan(models.indexOf('gemini-2.5-flash'))
+    expect(models.indexOf('gemini-2.5-flash-image')).toBeLessThan(models.indexOf('gemini-2.5-flash-lite'))
   })
 
-  it('ignores wildcard entries when building whitelist mappings', () => {
-    const mapping = buildModelMappingObject('whitelist', ['claude-*', 'gemini-3.1-flash-image'], [])
+  it('antigravity 模型列表包含 Gemini 3.1 Pro 通用别名', () => {
+    const models = getModelsByPlatform('antigravity')
 
+    expect(models).toContain('gemini-3.1-pro')
+  })
+
+  it('whitelist 模式会忽略通配符条目', () => {
+    const mapping = buildModelMappingObject('whitelist', ['claude-*', 'gemini-3.1-flash-image'], [])
     expect(mapping).toEqual({
       'gemini-3.1-flash-image': 'gemini-3.1-flash-image'
     })
   })
 
-  it('keeps exact GPT-5.4 variants in whitelist mode', () => {
-    const mapping = buildModelMappingObject('whitelist', ['gpt-5.4-2026-03-05', 'gpt-5.4-mini'], [])
+  it('whitelist 模式会保留 GPT-5.4 官方快照的精确映射', () => {
+    const mapping = buildModelMappingObject('whitelist', ['gpt-5.4-2026-03-05'], [])
 
     expect(mapping).toEqual({
-      'gpt-5.4-2026-03-05': 'gpt-5.4-2026-03-05',
+      'gpt-5.4-2026-03-05': 'gpt-5.4-2026-03-05'
+    })
+  })
+
+  it('whitelist keeps GPT-5.4 mini exact mappings', () => {
+    const mapping = buildModelMappingObject('whitelist', ['gpt-5.4-mini'], [])
+
+    expect(mapping).toEqual({
       'gpt-5.4-mini': 'gpt-5.4-mini'
     })
   })
