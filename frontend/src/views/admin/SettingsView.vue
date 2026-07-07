@@ -7242,13 +7242,18 @@
         </div>
         <!-- /Tab: Email -->
 
+        <!-- Tab: Image Studio -->
+        <div v-show='activeTab === "imageStudio"'>
+          <ImageStudioSettingsPanel />
+        </div>
+
         <!-- Tab: Backup -->
         <div v-show="activeTab === 'backup'">
           <BackupSettings />
         </div>
 
         <!-- Save Button -->
-        <div v-show="activeTab !== 'backup'" class="flex justify-end">
+        <div v-show="activeTab !== 'backup' && activeTab !== 'imageStudio'" class="flex justify-end">
           <button
             type="submit"
             :disabled="saving || loadFailed"
@@ -7365,6 +7370,7 @@ import ProxySelector from "@/components/common/ProxySelector.vue";
 import ImageUpload from "@/components/common/ImageUpload.vue";
 import BackupSettings from "@/views/admin/BackupView.vue";
 import EmailTemplateEditor from "@/views/admin/settings/EmailTemplateEditor.vue";
+import ImageStudioSettingsPanel from "@/views/admin/settings/ImageStudioSettingsPanel.vue";
 import { useClipboard } from "@/composables/useClipboard";
 import { affiliatesAPI, type AffiliateAdminEntry, type SimpleUser as AffiliateSimpleUser } from "@/api/admin/affiliates";
 import { extractApiErrorMessage, extractI18nErrorMessage } from "@/utils/apiError";
@@ -7414,6 +7420,7 @@ type SettingsTab =
   | "gateway"
   | "payment"
   | "email"
+  | "imageStudio"
   | "backup";
 const activeTab = ref<SettingsTab>("general");
 const settingsTabs = [
@@ -7425,6 +7432,7 @@ const settingsTabs = [
   { key: "gateway" as SettingsTab, icon: "server" as const },
   { key: "payment" as SettingsTab, icon: "creditCard" as const },
   { key: "email" as SettingsTab, icon: "mail" as const },
+  { key: "imageStudio" as SettingsTab, icon: "sparkles" as const },
   { key: "backup" as SettingsTab, icon: "database" as const },
 ];
 

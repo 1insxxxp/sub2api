@@ -272,6 +272,14 @@ describe("admin SettingsView unified shell", () => {
     expect(settingsViewSource).not.toMatch(/rounded-lg border border-gray-200 bg-white/);
     expect(settingsViewSource).not.toMatch(/hover:bg-gray-100/);
   });
+
+  it("keeps the Image Studio settings panel reachable from the settings tabs", () => {
+    expect(settingsViewSource).toContain("import ImageStudioSettingsPanel");
+    expect(settingsViewSource).toContain('| "imageStudio"');
+    expect(settingsViewSource).toContain('{ key: "imageStudio" as SettingsTab');
+    expect(settingsViewSource).toContain('activeTab === "imageStudio"');
+    expect(settingsViewSource).toContain("<ImageStudioSettingsPanel");
+  });
 });
 
 const AppLayoutStub = { template: "<div><slot /></div>" };

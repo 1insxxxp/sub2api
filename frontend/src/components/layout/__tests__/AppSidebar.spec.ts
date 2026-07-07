@@ -60,3 +60,11 @@ describe('AppSidebar image studio entry', () => {
     )
   })
 })
+
+describe('AppSidebar admin entries', () => {
+  it('keeps the check-in management route visible from the admin sidebar', () => {
+    expect(componentSource).toMatch(
+      /\{ path: '\/admin\/checkins', label: t\('nav\.checkins'\), icon: [A-Za-z]+Icon, hideInSimpleMode: true \}/,
+    )
+  })
+})
