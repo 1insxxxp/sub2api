@@ -588,6 +588,7 @@ export default {
     loginFailed: 'Login failed. Please check your credentials and try again.',
     errors: {
       USER_NOT_ACTIVE: 'Account has been disabled.',
+      AUTH_IP_BLOCKED: 'Login from your current IP is blocked. Please contact the administrator.',
     },
     registrationFailed: 'Registration failed. Please try again.',
     emailSuffixNotAllowed: 'This email domain is not allowed for registration.',

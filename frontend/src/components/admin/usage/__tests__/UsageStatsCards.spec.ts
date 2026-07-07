@@ -64,4 +64,20 @@ describe('UsageStatsCards', () => {
     expect(text).toContain('Cache Read')
     expect(text).toContain('22')
   })
+
+  it('allows the token stat tooltip to escape the card bounds', () => {
+    const wrapper = mount(UsageStatsCards, {
+      props: {
+        stats,
+      },
+      global: {
+        stubs: {
+          Icon: true,
+        },
+      },
+    })
+
+    const tokenCard = wrapper.get('[data-test="usage-total-token-card"]')
+    expect(tokenCard.classes()).toContain('overflow-visible')
+  })
 })

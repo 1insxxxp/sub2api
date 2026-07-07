@@ -10,7 +10,7 @@
         <p class="stat-trend">{{ t('usage.inSelectedRange') }}</p>
       </div>
     </div>
-    <div class="stat-card">
+    <div class="stat-card overflow-visible" data-test="usage-total-token-card">
       <div class="stat-icon bg-amber-100 text-amber-600 dark:bg-amber-900/30 dark:text-amber-300">
         <Icon name="cube" size="md" />
       </div>

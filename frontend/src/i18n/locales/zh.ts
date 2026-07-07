@@ -587,6 +587,7 @@ export default {
     loginFailed: '登录失败，请检查您的凭据后重试。',
     errors: {
       USER_NOT_ACTIVE: '账号已被禁用',
+      AUTH_IP_BLOCKED: '当前 IP 被限制登录，请联系管理员处理。',
     },
     registrationFailed: '注册失败，请重试。',
     emailSuffixNotAllowed: '该邮箱域名不在允许注册范围内。',
