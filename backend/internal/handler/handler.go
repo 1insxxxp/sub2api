@@ -61,6 +61,7 @@ type Handlers struct {
 	AvailableChannel *AvailableChannelHandler
 	Checkin          *CheckinHandler
 	ImageStudio      *ImageStudioHandler
+	BatchImage       *BatchImageHandler
 }
 
 // BuildInfo contains build-time information

@@ -9,8 +9,11 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
+	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
 	"github.com/Wei-Shaw/sub2api/internal/handler/dto"
@@ -728,6 +731,12 @@ type UpdateSettingsRequest struct {
 	AuthSourceDingTalkPlatformQuotas map[string]*service.DefaultPlatformQuotaSetting `json:"auth_source_default_dingtalk_platform_quotas"`
 
 	AllowUserViewErrorRequests *bool `json:"allow_user_view_error_requests"`
+}
+
+type AuthIPBlacklistSettingsRequest struct {
+	Enabled   bool                            `json:"enabled"`
+	Rules     []string                        `json:"rules"`
+	AutoBlock service.AuthIPAutoBlockSettings `json:"auto_block"`
 }
 
 // UpdateSettings 更新系统设置
@@ -3264,6 +3273,140 @@ func (h *SettingHandler) SendTestEmail(c *gin.Context) {
 	}
 
 	response.Success(c, gin.H{"message": "Test email sent successfully"})
+}
+
+// GetAuthIPBlacklistSettings 获取认证入口全局 IP 黑名单配置。
+// GET /api/v1/admin/settings/auth-ip-blacklist
+func (h *SettingHandler) GetAuthIPBlacklistSettings(c *gin.Context) {
+	settings, err := h.settingService.GetAuthIPBlacklistSettings(c.Request.Context())
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	response.Success(c, settings)
+}
+
+// UpdateAuthIPBlacklistSettings 更新认证入口全局 IP 黑名单配置。
+// PUT /api/v1/admin/settings/auth-ip-blacklist
+func (h *SettingHandler) UpdateAuthIPBlacklistSettings(c *gin.Context) {
+	var req AuthIPBlacklistSettingsRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.BadRequest(c, "Invalid request: "+err.Error())
+		return
+	}
+
+	if err := h.settingService.SetAuthIPBlacklistSettings(c.Request.Context(), &service.AuthIPBlacklistSettings{
+		Enabled:   req.Enabled,
+		Rules:     req.Rules,
+		AutoBlock: req.AutoBlock,
+	}); err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+
+	settings, err := h.settingService.GetAuthIPBlacklistSettings(c.Request.Context())
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	response.Success(c, settings)
+}
+
+type imageStudioSettingsResponse struct {
+	*service.ImageStudioSettings
+	StorageStatus service.ImageStudioStorageStatus `json:"storage_status"`
+}
+
+func newImageStudioSettingsResponse(cfg *service.ImageStudioSettings) imageStudioSettingsResponse {
+	return imageStudioSettingsResponse{
+		ImageStudioSettings: cfg,
+		StorageStatus:       service.ImageStudioStorageStatusForConfig(cfg),
+	}
+}
+
+// GetImageStudioConfig returns AI Image Studio settings.
+// GET /api/v1/admin/settings/image-studio
+func (h *SettingHandler) GetImageStudioConfig(c *gin.Context) {
+	cfg, err := h.settingService.GetImageStudioConfig(c.Request.Context())
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	response.Success(c, newImageStudioSettingsResponse(cfg))
+}
+
+// UpdateImageStudioConfig updates AI Image Studio settings.
+// PUT /api/v1/admin/settings/image-studio
+func (h *SettingHandler) UpdateImageStudioConfig(c *gin.Context) {
+	var cfg service.ImageStudioSettings
+	if err := c.ShouldBindJSON(&cfg); err != nil {
+		response.BadRequest(c, "Invalid request: "+err.Error())
+		return
+	}
+
+	if err := h.settingService.SaveImageStudioConfig(c.Request.Context(), &cfg); err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+
+	updated, err := h.settingService.GetImageStudioConfig(c.Request.Context())
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	response.Success(c, newImageStudioSettingsResponse(updated))
+}
+
+// TestImageStudioStorage probes the configured image storage.
+// POST /api/v1/admin/settings/image-studio/storage/test
+func (h *SettingHandler) TestImageStudioStorage(c *gin.Context) {
+	cfg, err := h.settingService.GetImageStudioConfig(c.Request.Context())
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+
+	status := service.ImageStudioStorageStatusForConfig(cfg)
+	if cfg.StorageDriver != service.ImageStorageDriverLocal {
+		response.Success(c, status)
+		return
+	}
+
+	rootDir := strings.TrimSpace(cfg.LocalRootDir)
+	if rootDir == "" {
+		rootDir = filepath.Join(os.TempDir(), "sub2api-image-studio")
+	}
+	storage, err := service.NewLocalImageStorage(service.LocalImageStorageConfig{
+		RootDir:       rootDir,
+		PublicBaseURL: cfg.LocalPublicBaseURL,
+	})
+	if err != nil {
+		status.Status = "failed"
+		status.Configured = false
+		status.Message = err.Error()
+		response.Success(c, status)
+		return
+	}
+
+	objectKey := fmt.Sprintf("health/image-studio-%d.txt", time.Now().UnixNano())
+	if _, err := storage.Put(c.Request.Context(), objectKey, "text/plain", []byte("ok")); err != nil {
+		status.Status = "failed"
+		status.Configured = false
+		status.Message = err.Error()
+		response.Success(c, status)
+		return
+	}
+	if err := storage.Delete(c.Request.Context(), objectKey); err != nil {
+		status.Status = "failed"
+		status.Configured = false
+		status.Message = err.Error()
+		response.Success(c, status)
+		return
+	}
+
+	status.Status = "ok"
+	status.Configured = true
+	response.Success(c, status)
 }
 
 // GetAdminAPIKey 获取管理员 API Key 状态
