@@ -8,6 +8,9 @@ import (
 	"net"
 	"net/http"
 	"strings"
+
+	"github.com/Wei-Shaw/sub2api/internal/config"
+	pkghttputil "github.com/Wei-Shaw/sub2api/internal/pkg/httputil"
 )
 
 func extractMaxBytesError(err error) (*http.MaxBytesError, bool) {
@@ -52,4 +55,15 @@ func classifyRequestBodyReadError(err error) (int, string, string) {
 	}
 
 	return http.StatusBadRequest, "invalid_request_error", "Failed to read request body"
+}
+
+func readLenientJSONRequestBodyWithPrealloc(req *http.Request, cfg *config.Config) ([]byte, error) {
+	return pkghttputil.ReadLenientJSONRequestBodyWithPrealloc(req, gatewayMaxBodySize(cfg))
+}
+
+func gatewayMaxBodySize(cfg *config.Config) int64 {
+	if cfg == nil {
+		return 0
+	}
+	return cfg.Gateway.MaxBodySize
 }
