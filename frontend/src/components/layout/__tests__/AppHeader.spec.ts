@@ -256,6 +256,23 @@ describe('AppHeader daily check-in entry', () => {
     expect(wrapper.text()).toContain('$13.00')
   })
 
+  it('keeps the check-in button visible on mobile when enabled', async () => {
+    getCheckinStatus.mockResolvedValue({
+      enabled: true,
+      checked_in: false,
+      blacklisted: false,
+      checkin_date: '2026-06-05',
+      reward_amount: null
+    })
+
+    const wrapper = await mountHeader()
+    const buttonWrapper = wrapper.get('[data-test="daily-checkin-button"]').element.parentElement
+
+    expect(buttonWrapper?.classList.contains('hidden')).toBe(false)
+    expect(buttonWrapper?.classList.contains('sm:inline-flex')).toBe(false)
+    expect(buttonWrapper?.classList.contains('inline-flex')).toBe(true)
+  })
+
   it('explains eligibility and streak rewards in the hover panel', async () => {
     getCheckinStatus.mockResolvedValue({
       enabled: true,

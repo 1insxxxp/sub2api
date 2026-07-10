@@ -95,7 +95,7 @@
         <!-- Daily Check-in -->
         <div
           v-if="showCheckinButton"
-          class="group/checkin relative hidden sm:inline-flex"
+          class="group/checkin relative inline-flex"
         >
           <button
             type="button"
