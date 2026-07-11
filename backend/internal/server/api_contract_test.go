@@ -1082,7 +1082,7 @@ func TestAPIContracts(t *testing.T) {
 					"google_oauth_client_secret_configured": false,
 					"google_oauth_redirect_url": "",
 					"google_oauth_frontend_redirect_url": "/auth/oauth/callback",
-					"site_name": "Passion",
+					"site_name": "Sub2API",
 					"site_logo": "",
 					"site_logo_light": "",
 					"site_logo_dark": "",

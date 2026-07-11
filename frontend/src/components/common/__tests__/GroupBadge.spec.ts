@@ -2,10 +2,18 @@ import { mount } from '@vue/test-utils'
 import { describe, expect, it, vi } from 'vitest'
 import GroupBadge from '../GroupBadge.vue'
 
-vi.mock('vue-i18n', () => ({
-  useI18n: () => ({
-    t: (key: string) => key
-  })
+vi.mock('vue-i18n', async () => {
+  const actual = await vi.importActual<typeof import('vue-i18n')>('vue-i18n')
+  return {
+    ...actual,
+    useI18n: () => ({
+      t: (key: string) => key
+    })
+  }
+})
+
+vi.mock('@/stores/app', () => ({
+  useAppStore: () => ({ cachedPublicSettings: null })
 }))
 
 const mountBadge = (props: Record<string, unknown>) =>

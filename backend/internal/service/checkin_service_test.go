@@ -147,16 +147,17 @@ func createCheckinUsage(t *testing.T, ctx context.Context, client *dbent.Client,
 }
 
 func TestCheckinRewardForRollUsesWeightedTiers(t *testing.T) {
-	require.Equal(t, 1.0, checkinRewardForRoll(0))
-	require.Equal(t, 1.0, checkinRewardForRoll(0.3199))
-	require.Equal(t, 2.0, checkinRewardForRoll(0.32))
-	require.Equal(t, 2.0, checkinRewardForRoll(0.5699))
-	require.Equal(t, 3.0, checkinRewardForRoll(0.5701))
-	require.Equal(t, 4.0, checkinRewardForRoll(0.75))
-	require.Equal(t, 4.5, checkinRewardForRoll(0.85))
-	require.Equal(t, 5.0, checkinRewardForRoll(0.93))
-	require.Equal(t, 10.0, checkinRewardForRoll(0.98))
-	require.Equal(t, 10.0, checkinRewardForRoll(0.9999))
+	cfg := *DefaultCheckinConfig()
+	require.Equal(t, 1.0, selectCheckinReward(cfg, 0))
+	require.Equal(t, 1.0, selectCheckinReward(cfg, 0.3199))
+	require.Equal(t, 2.0, selectCheckinReward(cfg, 0.32))
+	require.Equal(t, 2.0, selectCheckinReward(cfg, 0.5699))
+	require.Equal(t, 3.0, selectCheckinReward(cfg, 0.5701))
+	require.Equal(t, 4.0, selectCheckinReward(cfg, 0.75))
+	require.Equal(t, 4.5, selectCheckinReward(cfg, 0.85))
+	require.Equal(t, 5.0, selectCheckinReward(cfg, 0.93))
+	require.Equal(t, 10.0, selectCheckinReward(cfg, 0.98))
+	require.Equal(t, 10.0, selectCheckinReward(cfg, 0.9999))
 }
 
 func TestCheckinServiceCheckinAwardsBalanceForBeijingDate(t *testing.T) {

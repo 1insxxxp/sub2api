@@ -783,14 +783,6 @@ func dedupeImageStudioModels(models []string) []string {
 	return out
 }
 
-func firstImageStudioModel(cfg *ImageStudioSettings) string {
-	models := imageStudioModelsForGroup(nil, cfg)
-	if len(models) > 0 {
-		return models[0]
-	}
-	return "gpt-image-2"
-}
-
 func (s *ImageStudioService) storeExecutionResult(
 	ctx context.Context,
 	cfg *ImageStudioSettings,

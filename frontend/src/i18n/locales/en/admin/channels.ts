@@ -62,6 +62,8 @@ export default {
       updateError: 'Failed to update channel',
       deleteError: 'Failed to delete channel',
       nameRequired: 'Please enter a channel name',
+      noGroupsSelected: 'No groups selected for {platform}',
+      emptyModelsInPricing: '{platform} has a pricing entry without models',
       duplicateModels: 'Model "{0}" appears in multiple pricing entries',
       modelConflict: "Model patterns '{model1}' and '{model2}' conflict: overlapping match range. Model names are matched case-insensitively, so an existing entry already covers all case variants — no need to add the variant separately.",
       mappingConflict: "Mapping source patterns '{model1}' and '{model2}' conflict: overlapping match range. Source patterns are matched case-insensitively, so an existing entry already covers all case variants.",
@@ -596,6 +598,7 @@ export default {
     // Subscriptions
     subscriptions: {
       title: 'Subscription Management',
+      manageSubscription: 'Manage subscription',
       description: 'Manage user subscriptions and quota limits',
       assignSubscription: 'Assign Subscription',
       adjustSubscription: 'Adjust Subscription',

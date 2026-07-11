@@ -84,7 +84,7 @@ func TestSettingService_GetPublicSettings_DefaultBranding(t *testing.T) {
 
 	settings, err := svc.GetPublicSettings(context.Background())
 	require.NoError(t, err)
-	require.Equal(t, "Passion", settings.SiteName)
+	require.Equal(t, "Sub2API", settings.SiteName)
 	require.Equal(t, "Subscription to API Conversion Platform", settings.SiteSubtitle)
 }
 

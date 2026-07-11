@@ -173,6 +173,8 @@ func (s *SettingService) GetPublicSettings(ctx context.Context) (*PublicSettings
 		SettingKeyAPIKeyACLTrustForwardedIP,
 		SettingKeySiteName,
 		SettingKeySiteLogo,
+		SettingKeySiteLogoLight,
+		SettingKeySiteLogoDark,
 		SettingKeySiteSubtitle,
 		SettingKeyAPIBaseURL,
 		SettingKeyContactInfo,
@@ -298,6 +300,8 @@ func (s *SettingService) GetPublicSettings(ctx context.Context) (*PublicSettings
 		TurnstileSiteKey:                 settings[SettingKeyTurnstileSiteKey],
 		SiteName:                         s.getStringOrDefault(settings, SettingKeySiteName, "Sub2API"),
 		SiteLogo:                         settings[SettingKeySiteLogo],
+		SiteLogoLight:                    settings[SettingKeySiteLogoLight],
+		SiteLogoDark:                     settings[SettingKeySiteLogoDark],
 		SiteSubtitle:                     s.getStringOrDefault(settings, SettingKeySiteSubtitle, "Subscription to API Conversion Platform"),
 		APIBaseURL:                       settings[SettingKeyAPIBaseURL],
 		ContactInfo:                      settings[SettingKeyContactInfo],
@@ -439,6 +443,7 @@ func (s *SettingService) IsUserErrorViewAllowed(ctx context.Context) bool {
 // A unit test diffs this struct's JSON keys against dto.PublicSettings to catch
 // drift automatically (see setting_service_injection_test.go).
 type PublicSettingsInjectionPayload struct {
+	Partial                          bool                     `json:"__partial,omitempty"`
 	RegistrationEnabled              bool                     `json:"registration_enabled"`
 	EmailVerifyEnabled               bool                     `json:"email_verify_enabled"`
 	RegistrationEmailSuffixWhitelist []string                 `json:"registration_email_suffix_whitelist"`
@@ -455,6 +460,8 @@ type PublicSettingsInjectionPayload struct {
 	TurnstileSiteKey                 string                   `json:"turnstile_site_key"`
 	SiteName                         string                   `json:"site_name"`
 	SiteLogo                         string                   `json:"site_logo"`
+	SiteLogoLight                    string                   `json:"site_logo_light"`
+	SiteLogoDark                     string                   `json:"site_logo_dark"`
 	SiteSubtitle                     string                   `json:"site_subtitle"`
 	APIBaseURL                       string                   `json:"api_base_url"`
 	ContactInfo                      string                   `json:"contact_info"`
@@ -499,6 +506,19 @@ type PublicSettingsInjectionPayload struct {
 	AllowUserViewErrorRequests           bool `json:"allow_user_view_error_requests"`
 }
 
+const publicSettingsInlineAssetMaxBytes = 8 * 1024
+
+func deferLargeInjectedDataURL(value string) (string, bool) {
+	trimmed := strings.TrimSpace(value)
+	if len(trimmed) <= publicSettingsInlineAssetMaxBytes {
+		return value, false
+	}
+	if !strings.HasPrefix(strings.ToLower(trimmed), "data:") {
+		return value, false
+	}
+	return "", true
+}
+
 // GetPublicSettingsForInjection returns public settings in a format suitable for HTML injection.
 // This implements the web.PublicSettingsProvider interface.
 func (s *SettingService) GetPublicSettingsForInjection(ctx context.Context) (any, error) {
@@ -507,7 +527,12 @@ func (s *SettingService) GetPublicSettingsForInjection(ctx context.Context) (any
 		return nil, err
 	}
 
+	siteLogo, siteLogoDeferred := deferLargeInjectedDataURL(settings.SiteLogo)
+	siteLogoLight, siteLogoLightDeferred := deferLargeInjectedDataURL(settings.SiteLogoLight)
+	siteLogoDark, siteLogoDarkDeferred := deferLargeInjectedDataURL(settings.SiteLogoDark)
+
 	return &PublicSettingsInjectionPayload{
+		Partial:                          siteLogoDeferred || siteLogoLightDeferred || siteLogoDarkDeferred,
 		RegistrationEnabled:              settings.RegistrationEnabled,
 		EmailVerifyEnabled:               settings.EmailVerifyEnabled,
 		RegistrationEmailSuffixWhitelist: settings.RegistrationEmailSuffixWhitelist,
@@ -523,7 +548,9 @@ func (s *SettingService) GetPublicSettingsForInjection(ctx context.Context) (any
 		TurnstileEnabled:                 settings.TurnstileEnabled,
 		TurnstileSiteKey:                 settings.TurnstileSiteKey,
 		SiteName:                         settings.SiteName,
-		SiteLogo:                         settings.SiteLogo,
+		SiteLogo:                         siteLogo,
+		SiteLogoLight:                    siteLogoLight,
+		SiteLogoDark:                     siteLogoDark,
 		SiteSubtitle:                     settings.SiteSubtitle,
 		APIBaseURL:                       settings.APIBaseURL,
 		ContactInfo:                      settings.ContactInfo,

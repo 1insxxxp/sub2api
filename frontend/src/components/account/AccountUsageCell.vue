@@ -374,7 +374,7 @@
             </span>
             <span
               v-if="grokLocalUsage.user_cost != null"
-              class="rounded bg-gray-100 px-1.5 py-0.5 dark:bg-gray-800"
+              class="rounded-md bg-slate-100 px-1.5 py-0.5 dark:bg-slate-800"
               :title="t('usage.userBilled')"
             >
               U ${{ formatWindowUserCost(grokLocalUsage) }}

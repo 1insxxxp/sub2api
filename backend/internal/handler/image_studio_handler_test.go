@@ -169,7 +169,8 @@ func TestImageStudioHandlerGetConfig(t *testing.T) {
 	require.Equal(t, http.StatusOK, rec.Code)
 	var envelope map[string]any
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &envelope))
-	data := envelope["data"].(map[string]any)
+	data, ok := envelope["data"].(map[string]any)
+	require.True(t, ok)
 	require.Equal(t, true, data["enabled"])
 	require.Equal(t, "gpt-image-1", data["default_model"])
 }
@@ -194,9 +195,12 @@ func TestImageStudioHandlerGetOptionsUsesAuthenticatedUser(t *testing.T) {
 	require.Equal(t, int64(42), svc.optionsUserID)
 	var envelope map[string]any
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &envelope))
-	data := envelope["data"].(map[string]any)
+	data, ok := envelope["data"].(map[string]any)
+	require.True(t, ok)
 	require.Equal(t, "gpt-image-2", data["default_model"])
-	require.Len(t, data["groups"].([]any), 1)
+	groups, ok := data["groups"].([]any)
+	require.True(t, ok)
+	require.Len(t, groups, 1)
 }
 
 func TestImageStudioHandlerGenerateUsesAuthenticatedUser(t *testing.T) {
@@ -270,8 +274,11 @@ func TestImageStudioHandlerListTasks(t *testing.T) {
 	require.Equal(t, int64(42), svc.taskUserID)
 	var envelope map[string]any
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &envelope))
-	data := envelope["data"].(map[string]any)
-	require.Len(t, data["items"].([]any), 1)
+	data, ok := envelope["data"].(map[string]any)
+	require.True(t, ok)
+	items, ok := data["items"].([]any)
+	require.True(t, ok)
+	require.Len(t, items, 1)
 }
 
 func TestImageStudioHandlerEditForwardsGroupAndQuality(t *testing.T) {

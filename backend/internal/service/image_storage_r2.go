@@ -88,7 +88,7 @@ func (s *R2ImageStorage) Open(ctx context.Context, objectKey string) (*ImageStud
 	if err != nil {
 		return nil, fmt.Errorf("get r2 image object: %w", err)
 	}
-	defer out.Body.Close()
+	defer func() { _ = out.Body.Close() }()
 	data, err := io.ReadAll(out.Body)
 	if err != nil {
 		return nil, fmt.Errorf("read r2 image object: %w", err)

@@ -75,6 +75,7 @@ defineExpose({ replayTour })
 }
 
 .app-shell-main-image-studio .app-shell-content {
+  container: image-studio-workspace / inline-size;
   transition: none;
 }
 

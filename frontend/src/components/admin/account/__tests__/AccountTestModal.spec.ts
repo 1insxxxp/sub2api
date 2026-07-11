@@ -167,11 +167,13 @@ describe('AccountTestModal', () => {
     ) as any
 
     const wrapper = mountModal({
-      id: 13,
-      name: 'Grok Account',
-      platform: 'grok',
-      type: 'oauth',
-      status: 'active'
+      account: {
+        id: 13,
+        name: 'Grok Account',
+        platform: 'grok',
+        type: 'oauth',
+        status: 'active'
+      }
     })
     await wrapper.setProps({ show: true })
     await flushPromises()
@@ -202,11 +204,13 @@ describe('AccountTestModal', () => {
     ) as any
 
     const wrapper = mountModal({
-      id: 42,
-      name: 'OpenAI OAuth',
-      platform: 'openai',
-      type: 'oauth',
-      status: 'active'
+      account: {
+        id: 42,
+        name: 'OpenAI OAuth',
+        platform: 'openai',
+        type: 'oauth',
+        status: 'active'
+      }
     })
     await wrapper.setProps({ show: true })
     await flushPromises()

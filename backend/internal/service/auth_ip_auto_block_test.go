@@ -2,15 +2,28 @@ package service
 
 import (
 	"context"
+	"fmt"
 	"testing"
+	"time"
 
-	"github.com/alicebob/miniredis/v2"
-	"github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/require"
 )
 
 type authIPAutoBlockSettingRepoStub struct {
 	values map[string]string
+}
+
+type authIPAutoBlockCounterStub struct {
+	counts map[string]int64
+}
+
+func (s *authIPAutoBlockCounterStub) Increment(_ context.Context, event AuthIPAbuseEvent, ip string, _ time.Duration) (int64, error) {
+	if s.counts == nil {
+		s.counts = make(map[string]int64)
+	}
+	key := fmt.Sprintf("%s:%s", event, ip)
+	s.counts[key]++
+	return s.counts[key], nil
 }
 
 func (s *authIPAutoBlockSettingRepoStub) Get(context.Context, string) (*Setting, error) {
@@ -59,12 +72,8 @@ func (s *authIPAutoBlockSettingRepoStub) Delete(context.Context, string) error {
 
 func newAuthIPAutoBlockGuardForTest(t *testing.T, values map[string]string) (*AuthIPAbuseGuard, *authIPAutoBlockSettingRepoStub) {
 	t.Helper()
-	mr := miniredis.RunT(t)
-	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
-	t.Cleanup(func() { require.NoError(t, rdb.Close()) })
-
 	repo := &authIPAutoBlockSettingRepoStub{values: values}
-	return NewAuthIPAbuseGuard(rdb, NewSettingService(repo, nil)), repo
+	return NewAuthIPAbuseGuard(&authIPAutoBlockCounterStub{}, NewSettingService(repo, nil)), repo
 }
 
 func TestAuthIPAbuseGuardAutoBlocksRegistrationIPAtThreshold(t *testing.T) {

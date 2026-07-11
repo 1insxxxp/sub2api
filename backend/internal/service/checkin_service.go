@@ -1049,10 +1049,6 @@ func (s *CheckinService) aggregateCheckins(ctx context.Context, startDate, endDa
 	return len(records), reward, nil
 }
 
-func checkinRewardForRoll(roll float64) float64 {
-	return selectCheckinReward(*DefaultCheckinConfig(), roll)
-}
-
 func selectCheckinReward(cfg CheckinConfig, roll float64) float64 {
 	normalized, err := normalizeCheckinConfig(cfg)
 	if err != nil || len(normalized.Tiers) == 0 {

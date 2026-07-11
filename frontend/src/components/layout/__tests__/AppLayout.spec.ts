@@ -29,4 +29,11 @@ describe('AppLayout workspace sizing', () => {
     expect(componentSource).toContain('.app-shell-main-image-studio .app-shell-content')
     expect(componentSource).toContain('.app-shell-image-studio .sidebar-label')
   })
+
+  it('exposes the available image studio width as a named layout container', () => {
+    const imageStudioContentRule =
+      componentSource.match(/\.app-shell-main-image-studio \.app-shell-content\s*\{([^}]*)\}/)?.[1] ?? ''
+
+    expect(imageStudioContentRule).toMatch(/container:\s*image-studio-workspace \/ inline-size/)
+  })
 })

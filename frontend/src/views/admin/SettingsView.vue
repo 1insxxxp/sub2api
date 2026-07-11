@@ -1,6 +1,6 @@
 <template>
   <AppLayout>
-    <div class="mx-auto max-w-6xl space-y-6">
+    <div class="settings-admin-page w-full min-w-0 space-y-6">
       <!-- Loading State -->
       <div v-if="loading" class="flex items-center justify-center py-12">
         <div
@@ -11,7 +11,8 @@
       <!-- Settings Form -->
       <form v-else @submit.prevent="saveSettings" class="space-y-6" novalidate>
         <!-- Tab Navigation -->
-        <div class="settings-tabs-shell">
+        <div class="settings-tabs-shell settings-tabs-brand-shell admin-toolbar-surface">
+          <div class="settings-tabs-brand-glow" aria-hidden="true"></div>
           <nav
             class="settings-tabs-scroll"
             role="tablist"
@@ -61,7 +62,8 @@
             <div class="space-y-4 p-6">
               <!-- Security Warning -->
               <div
-                class="rounded-lg border border-amber-200 bg-amber-50 p-4 dark:border-amber-800 dark:bg-amber-900/20"
+                data-test="settings-admin-api-warning"
+                class="admin-form-section rounded-lg border border-amber-200 bg-amber-50 p-4 dark:border-amber-800 dark:bg-amber-900/20"
               >
                 <div class="flex items-start">
                   <Icon
@@ -138,7 +140,7 @@
                       {{ t("admin.settings.adminApiKey.currentKey") }}
                     </label>
                     <code
-                      class="rounded bg-gray-100 px-2 py-1 font-mono text-sm text-gray-900 dark:bg-dark-700 dark:text-gray-100"
+                      class="inline-flex rounded-full border border-primary-100 bg-primary-50/80 px-2.5 py-1 font-mono text-sm font-medium text-primary-700 dark:border-primary-500/15 dark:bg-primary-500/10 dark:text-primary-200"
                     >
                       {{ adminApiKeyMasked }}
                     </code>
@@ -828,7 +830,7 @@
                       {{ getBetaDisplayName(rule.beta_token) }}
                     </span>
                     <span
-                      class="rounded bg-gray-100 px-2 py-0.5 text-xs text-gray-500 dark:bg-dark-700 dark:text-gray-400"
+                      class="rounded-full border border-primary-100 bg-primary-50/80 px-2.5 py-0.5 text-xs font-medium text-primary-700 dark:border-primary-500/15 dark:bg-primary-500/10 dark:text-primary-200"
                     >
                       {{ rule.beta_token }}
                     </span>
@@ -1478,13 +1480,13 @@
                   }}
                 </p>
                 <div
-                  class="mt-3 rounded-lg border border-gray-300 bg-white p-2 dark:border-dark-500 dark:bg-dark-700"
+                  class="admin-tag-input mt-3"
                 >
                   <div class="flex flex-wrap items-center gap-2">
                     <span
                       v-for="suffix in registrationEmailSuffixWhitelistTags"
                       :key="suffix"
-                      class="inline-flex items-center gap-1 rounded bg-gray-100 px-2 py-1 text-xs font-mono text-gray-700 dark:bg-dark-600 dark:text-gray-200"
+                      class="inline-flex items-center gap-1 rounded-full border border-primary-100 bg-primary-50/80 px-2.5 py-1 text-xs font-mono text-primary-700 dark:border-primary-500/15 dark:bg-primary-500/10 dark:text-primary-200"
                     >
                       <span>{{ suffix }}</span>
                       <button
@@ -4274,7 +4276,7 @@
                   <div
                     v-for="(block, index) in claudeOAuthSystemPromptBlocks"
                     :key="block.id"
-                    class="rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-dark-700 dark:bg-dark-800/60"
+                    class="admin-form-section !space-y-3 p-4"
                   >
                     <div
                       :class="[
@@ -4958,82 +4960,99 @@
           <!-- Web Search Test Dialog -->
           <div
             v-if="wsTestDialogOpen"
-            class="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+            class="brand-overlay z-50 flex items-start justify-center overflow-y-auto p-4 pt-[7vh]"
             @click.self="wsTestDialogOpen = false"
           >
-            <div
-              class="mx-4 w-full max-w-lg rounded-xl bg-white p-6 shadow-xl dark:bg-dark-800"
-            >
-              <h3
-                class="mb-4 text-lg font-semibold text-gray-900 dark:text-white"
-              >
-                {{ t("admin.settings.webSearchEmulation.testResultTitle") }}
-              </h3>
-              <div class="flex items-center gap-2">
-                <input
-                  v-model="wsTestQuery"
-                  type="text"
-                  class="input flex-1 text-sm"
-                  :placeholder="
-                    t('admin.settings.webSearchEmulation.testDefaultQuery')
-                  "
-                  @keyup.enter="testWebSearchProvider()"
-                />
+            <div class="brand-floating-panel w-full max-w-lg">
+              <div class="brand-floating-header flex items-start justify-between gap-4">
+                <div class="flex min-w-0 items-start gap-3">
+                  <div class="brand-floating-icon h-11 w-11 rounded-2xl">
+                    <Icon name="search" size="md" />
+                  </div>
+                  <div class="min-w-0">
+                    <span class="brand-floating-chip">{{ t("admin.settings.webSearchEmulation.test") }}</span>
+                    <h3 class="mt-3 text-lg font-semibold text-slate-950 dark:text-white">
+                      {{ t("admin.settings.webSearchEmulation.testResultTitle") }}
+                    </h3>
+                  </div>
+                </div>
                 <button
                   type="button"
-                  class="btn btn-primary btn-sm"
-                  :disabled="wsTestLoading"
-                  @click="testWebSearchProvider()"
-                >
-                  {{
-                    wsTestLoading
-                      ? t("admin.settings.webSearchEmulation.testing")
-                      : t("admin.settings.webSearchEmulation.test")
-                  }}
-                </button>
-              </div>
-              <!-- Test results -->
-              <div
-                v-if="wsTestResult"
-                class="mt-4 max-h-80 overflow-y-auto rounded-lg bg-gray-50 p-4 dark:bg-dark-700"
-              >
-                <p
-                  class="mb-2 text-sm font-medium text-gray-700 dark:text-gray-300"
-                >
-                  {{
-                    t("admin.settings.webSearchEmulation.testResultProvider")
-                  }}: {{ wsTestResult.provider }}
-                </p>
-                <div
-                  v-if="wsTestResult.results.length === 0"
-                  class="text-sm text-gray-400"
-                >
-                  {{ t("admin.settings.webSearchEmulation.testNoResults") }}
-                </div>
-                <div
-                  v-for="(r, rIdx) in wsTestResult.results"
-                  :key="rIdx"
-                  class="mt-2 border-t border-gray-200 pt-2 first:mt-0 first:border-0 first:pt-0 dark:border-dark-600"
-                >
-                  <a
-                    :href="r.url"
-                    target="_blank"
-                    class="text-sm font-medium text-blue-600 hover:underline dark:text-blue-400"
-                    >{{ r.title }}</a
-                  >
-                  <p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
-                    {{ r.snippet }}
-                  </p>
-                </div>
-              </div>
-              <div class="mt-4 flex justify-end">
-                <button
-                  type="button"
-                  class="btn btn-secondary btn-sm"
+                  class="brand-floating-close flex-shrink-0"
+                  :aria-label="t('common.close')"
                   @click="wsTestDialogOpen = false"
                 >
-                  {{ t("common.close") }}
+                  <Icon name="x" size="md" :stroke-width="2" />
                 </button>
+              </div>
+
+              <div class="max-h-[calc(85vh-9rem)] overflow-y-auto px-6 py-5">
+                <div class="flex flex-col gap-2 sm:flex-row sm:items-center">
+                  <input
+                    v-model="wsTestQuery"
+                    type="text"
+                    class="input flex-1 text-sm"
+                    :placeholder="
+                      t('admin.settings.webSearchEmulation.testDefaultQuery')
+                    "
+                    @keyup.enter="testWebSearchProvider()"
+                  />
+                  <button
+                    type="button"
+                    class="btn btn-primary btn-sm whitespace-nowrap"
+                    :disabled="wsTestLoading"
+                    @click="testWebSearchProvider()"
+                  >
+                    {{
+                      wsTestLoading
+                        ? t("admin.settings.webSearchEmulation.testing")
+                        : t("admin.settings.webSearchEmulation.test")
+                    }}
+                  </button>
+                </div>
+                <!-- Test results -->
+                <div
+                  v-if="wsTestResult"
+                  class="brand-floating-card mt-4 max-h-80 overflow-y-auto"
+                >
+                  <p
+                    class="mb-2 text-sm font-medium text-gray-700 dark:text-gray-300"
+                  >
+                    {{
+                      t("admin.settings.webSearchEmulation.testResultProvider")
+                    }}: {{ wsTestResult.provider }}
+                  </p>
+                  <div
+                    v-if="wsTestResult.results.length === 0"
+                    class="text-sm text-gray-400"
+                  >
+                    {{ t("admin.settings.webSearchEmulation.testNoResults") }}
+                  </div>
+                  <div
+                    v-for="(r, rIdx) in wsTestResult.results"
+                    :key="rIdx"
+                    class="mt-2 border-t border-gray-200 pt-2 first:mt-0 first:border-0 first:pt-0 dark:border-dark-600"
+                  >
+                    <a
+                      :href="r.url"
+                      target="_blank"
+                      class="text-sm font-medium text-blue-600 hover:underline dark:text-blue-400"
+                      >{{ r.title }}</a
+                    >
+                    <p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
+                      {{ r.snippet }}
+                    </p>
+                  </div>
+                </div>
+                <div class="mt-5 flex justify-end border-t border-blue-100/70 pt-4 dark:border-blue-500/10">
+                  <button
+                    type="button"
+                    class="btn btn-secondary btn-sm"
+                    @click="wsTestDialogOpen = false"
+                  >
+                    {{ t("common.close") }}
+                  </button>
+                </div>
               </div>
             </div>
           </div>
@@ -5371,19 +5390,57 @@
 
               <!-- Site Logo Upload -->
               <div>
-                <label
-                  class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300"
-                >
-                  {{ t("admin.settings.site.siteLogo") }}
-                </label>
-                <ImageUpload
-                  v-model="form.site_logo"
-                  mode="image"
-                  :upload-label="t('admin.settings.site.uploadImage')"
-                  :remove-label="t('admin.settings.site.remove')"
-                  :hint="t('admin.settings.site.logoHint')"
-                  :max-size="300 * 1024"
-                />
+                <div class="mb-3">
+                  <label
+                    class="block text-sm font-medium text-gray-700 dark:text-gray-300"
+                  >
+                    {{ t("admin.settings.site.siteLogo") }}
+                  </label>
+                  <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                    {{ t("admin.settings.site.themeLogoHint") }}
+                  </p>
+                </div>
+                <div class="grid gap-4 md:grid-cols-3">
+                  <div class="admin-form-section !space-y-3 p-3">
+                    <p class="mb-2 text-xs font-semibold text-gray-700 dark:text-gray-200">
+                      {{ t("admin.settings.site.defaultLogo") }}
+                    </p>
+                    <ImageUpload
+                      v-model="form.site_logo"
+                      mode="image"
+                      :upload-label="t('admin.settings.site.uploadImage')"
+                      :remove-label="t('admin.settings.site.remove')"
+                      :hint="t('admin.settings.site.defaultLogoHint')"
+                      :max-size="300 * 1024"
+                    />
+                  </div>
+                  <div class="rounded-lg border border-blue-200 bg-blue-50/60 p-3 dark:border-blue-500/20 dark:bg-blue-500/10">
+                    <p class="mb-2 text-xs font-semibold text-blue-700 dark:text-blue-200">
+                      {{ t("admin.settings.site.lightLogo") }}
+                    </p>
+                    <ImageUpload
+                      v-model="form.site_logo_light"
+                      mode="image"
+                      :upload-label="t('admin.settings.site.uploadImage')"
+                      :remove-label="t('admin.settings.site.remove')"
+                      :hint="t('admin.settings.site.lightLogoHint')"
+                      :max-size="300 * 1024"
+                    />
+                  </div>
+                  <div class="rounded-lg border border-slate-300 bg-slate-100 p-3 dark:border-slate-600 dark:bg-slate-900/70">
+                    <p class="mb-2 text-xs font-semibold text-slate-700 dark:text-slate-200">
+                      {{ t("admin.settings.site.darkLogo") }}
+                    </p>
+                    <ImageUpload
+                      v-model="form.site_logo_dark"
+                      mode="image"
+                      :upload-label="t('admin.settings.site.uploadImage')"
+                      :remove-label="t('admin.settings.site.remove')"
+                      :hint="t('admin.settings.site.darkLogoHint')"
+                      :max-size="300 * 1024"
+                    />
+                  </div>
+                </div>
               </div>
 
               <!-- Home Content -->
@@ -5457,7 +5514,7 @@
                     <button
                       v-if="index > 0"
                       type="button"
-                      class="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-dark-700"
+                      class="admin-inline-action min-h-8 min-w-8 rounded-md p-1"
                       :title="t('admin.settings.customMenu.moveUp')"
                       @click="moveMenuItem(index, -1)"
                     >
@@ -5479,7 +5536,7 @@
                     <button
                       v-if="index < form.custom_menu_items.length - 1"
                       type="button"
-                      class="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-dark-700"
+                      class="admin-inline-action min-h-8 min-w-8 rounded-md p-1"
                       :title="t('admin.settings.customMenu.moveDown')"
                       @click="moveMenuItem(index, 1)"
                     >
@@ -5651,14 +5708,14 @@
 	                  <label class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
 	                    {{ localText("展示形式", "Display mode") }}
 	                  </label>
-	                  <div class="grid grid-cols-2 gap-2 rounded-lg bg-gray-100 p-1 dark:bg-dark-700">
+	                  <div class="admin-list-surface grid grid-cols-2 gap-2 !rounded-2xl p-1">
                     <button
                       type="button"
-                      class="inline-flex items-center justify-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition"
+                      class="inline-flex items-center justify-center gap-2 rounded-xl px-3 py-2 text-sm font-medium transition-all duration-150"
                       :class="
                         form.login_agreement_mode === 'modal'
-                          ? 'bg-white text-primary-700 shadow-sm dark:bg-dark-800 dark:text-primary-300'
-                          : 'text-gray-600 hover:text-gray-900 dark:text-dark-300 dark:hover:text-white'
+                          ? 'admin-choice-card-active'
+                          : 'text-gray-600 hover:bg-primary-50/70 hover:text-primary-700 dark:text-dark-300 dark:hover:bg-primary-500/10 dark:hover:text-primary-200'
                       "
                       @click="form.login_agreement_mode = 'modal'"
                     >
@@ -5667,11 +5724,11 @@
                     </button>
                     <button
                       type="button"
-                      class="inline-flex items-center justify-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition"
+                      class="inline-flex items-center justify-center gap-2 rounded-xl px-3 py-2 text-sm font-medium transition-all duration-150"
                       :class="
                         form.login_agreement_mode === 'checkbox'
-                          ? 'bg-white text-primary-700 shadow-sm dark:bg-dark-800 dark:text-primary-300'
-                          : 'text-gray-600 hover:text-gray-900 dark:text-dark-300 dark:hover:text-white'
+                          ? 'admin-choice-card-active'
+                          : 'text-gray-600 hover:bg-primary-50/70 hover:text-primary-700 dark:text-dark-300 dark:hover:bg-primary-500/10 dark:hover:text-primary-200'
                       "
                       @click="form.login_agreement_mode = 'checkbox'"
                     >
@@ -5732,7 +5789,7 @@
                   <div
                     v-for="(doc, index) in form.login_agreement_documents"
                     :key="doc.id || index"
-                    class="rounded-lg border border-gray-200 bg-white p-4 dark:border-dark-700 dark:bg-dark-800/60"
+                    class="admin-list-row rounded-xl border border-blue-100/70 bg-white/75 p-4 shadow-sm dark:border-blue-500/10 dark:bg-white/[0.03]"
                   >
                     <div class="mb-3 flex items-center justify-between gap-3">
                       <div class="flex min-w-0 items-center gap-3">
@@ -5788,8 +5845,8 @@
                         <label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400">
                           {{ localText("路由标识", "Route slug") }}
                         </label>
-                        <div class="flex overflow-hidden rounded-lg border border-gray-300 bg-white focus-within:border-primary-500 focus-within:ring-1 focus-within:ring-primary-500 dark:border-dark-600 dark:bg-dark-900">
-                          <span class="inline-flex flex-shrink-0 items-center border-r border-gray-200 bg-gray-50 px-3 text-sm text-gray-500 dark:border-dark-700 dark:bg-dark-800 dark:text-dark-400">
+                        <div class="admin-tag-input flex overflow-hidden !rounded-xl !p-0">
+                          <span class="inline-flex flex-shrink-0 items-center border-r border-primary-100/80 bg-primary-50/70 px-3 text-sm text-primary-700 dark:border-primary-500/10 dark:bg-primary-500/10 dark:text-primary-200">
                             /legal/
                           </span>
                           <input
@@ -6198,35 +6255,55 @@
         <!-- Affiliate add/edit modal -->
         <div
           v-if="affiliateModal.open"
-          class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+          class="brand-overlay z-50 flex items-start justify-center overflow-y-auto p-4 pt-[7vh]"
           @click.self="closeAffiliateModal"
         >
-          <div class="w-full max-w-md rounded-lg bg-white p-6 shadow-xl dark:bg-dark-900">
-            <h3 class="mb-4 text-lg font-semibold">
-              {{ affiliateModal.mode === 'add' ? t('admin.settings.features.affiliate.modal.addTitle') : t('admin.settings.features.affiliate.modal.editTitle') }}
-            </h3>
-            <div class="space-y-4">
+          <div class="brand-floating-panel w-full max-w-md">
+            <div class="brand-floating-header flex items-start justify-between gap-4">
+              <div class="flex min-w-0 items-start gap-3">
+                <div class="brand-floating-icon h-11 w-11 rounded-2xl">
+                  <Icon name="users" size="md" />
+                </div>
+                <div class="min-w-0">
+                  <span class="brand-floating-chip">{{ t('admin.settings.tabs.features') }}</span>
+                  <h3 class="mt-3 text-lg font-semibold text-slate-950 dark:text-white">
+                    {{ affiliateModal.mode === 'add' ? t('admin.settings.features.affiliate.modal.addTitle') : t('admin.settings.features.affiliate.modal.editTitle') }}
+                  </h3>
+                </div>
+              </div>
+              <button
+                type="button"
+                class="brand-floating-close flex-shrink-0"
+                :aria-label="t('common.close')"
+                @click="closeAffiliateModal"
+              >
+                <Icon name="x" size="md" :stroke-width="2" />
+              </button>
+            </div>
+
+            <div class="max-h-[calc(85vh-9rem)] space-y-4 overflow-y-auto px-6 py-5">
               <div v-if="affiliateModal.mode === 'add'">
                 <label class="input-label">{{ t('admin.settings.features.affiliate.modal.userLabel') }}</label>
                 <!-- Chip showing the picked user; clicking it re-opens the search -->
                 <div
                   v-if="affiliateModal.selectedUser"
-                  class="flex items-center justify-between rounded-md border border-primary-200 bg-primary-50 px-3 py-2 dark:border-primary-700/50 dark:bg-primary-900/20"
+                  class="brand-floating-card flex items-center justify-between gap-3 px-3 py-2"
                 >
-                  <div class="text-sm">
-                    <span class="font-medium text-gray-900 dark:text-white">{{ affiliateModal.selectedUser.email }}</span>
-                    <span class="ml-1 text-xs text-gray-500">({{ affiliateModal.selectedUser.username }})</span>
+                  <div class="min-w-0 text-sm">
+                    <span class="block truncate font-medium text-gray-900 dark:text-white">{{ affiliateModal.selectedUser.email }}</span>
+                    <span class="text-xs text-gray-500 dark:text-gray-400">({{ affiliateModal.selectedUser.username }})</span>
                   </div>
                   <button
                     type="button"
-                    class="text-lg leading-none text-gray-400 hover:text-red-600"
+                    class="brand-floating-close h-8 w-8 flex-shrink-0 rounded-lg"
                     :title="t('admin.settings.features.affiliate.modal.changeUser')"
+                    :aria-label="t('admin.settings.features.affiliate.modal.changeUser')"
                     @click="clearSelectedAffiliateUser"
                   >
-                    ×
+                    <Icon name="x" size="xs" :stroke-width="2" />
                   </button>
                 </div>
-                <!-- Search input + result dropdown — hidden once a selection is made -->
+                <!-- Search input + result dropdown - hidden once a selection is made -->
                 <template v-else>
                   <input
                     v-model="affiliateModal.userQuery"
@@ -6237,13 +6314,13 @@
                   />
                   <div
                     v-if="affiliateModal.userResults.length > 0"
-                    class="mt-1 max-h-40 overflow-y-auto rounded border border-gray-200 dark:border-dark-700"
+                    class="brand-floating-card mt-2 max-h-40 overflow-y-auto px-0 py-1"
                   >
                     <button
                       v-for="u in affiliateModal.userResults"
                       :key="u.id"
                       type="button"
-                      class="w-full px-3 py-1.5 text-left text-sm hover:bg-gray-100 dark:hover:bg-dark-800"
+                      class="w-full px-3 py-2 text-left text-sm text-slate-700 transition-colors hover:bg-blue-50/70 dark:text-slate-200 dark:hover:bg-blue-500/10"
                       @click="selectAffiliateUser(u)"
                     >
                       {{ u.email }} <span class="text-xs text-gray-500">({{ u.username }})</span>
@@ -6295,7 +6372,7 @@
               </div>
             </div>
 
-            <div class="mt-6 flex items-center justify-between gap-3">
+            <div class="flex items-center justify-between gap-3 border-t border-blue-100/70 px-6 py-4 dark:border-blue-500/10">
               <p
                 v-if="!affiliateModalCanSubmit"
                 class="text-xs text-gray-500 dark:text-gray-400"
@@ -6323,32 +6400,54 @@
         <!-- Affiliate batch rate modal -->
         <div
           v-if="affiliateBatchModal.open"
-          class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+          class="brand-overlay z-50 flex items-start justify-center overflow-y-auto p-4 pt-[7vh]"
           @click.self="affiliateBatchModal.open = false"
         >
-          <div class="w-full max-w-md rounded-lg bg-white p-6 shadow-xl dark:bg-dark-900">
-            <h3 class="mb-4 text-lg font-semibold">
-              {{ t('admin.settings.features.affiliate.batchModal.title', { count: affiliateState.selected.length }) }}
-            </h3>
-            <p class="mb-4 text-sm text-gray-500">
-              {{ t('admin.settings.features.affiliate.batchModal.hint') }}
-            </p>
-            <div class="relative">
-              <input
-                v-model="affiliateBatchModal.rate"
-                type="number"
-                step="0.01"
-                min="0"
-                max="100"
-                class="input pr-8"
-                :placeholder="t('admin.settings.features.affiliate.batchModal.placeholder')"
-              />
-              <span class="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-gray-400">%</span>
+          <div class="brand-floating-panel w-full max-w-md">
+            <div class="brand-floating-header flex items-start justify-between gap-4">
+              <div class="flex min-w-0 items-start gap-3">
+                <div class="brand-floating-icon h-11 w-11 rounded-2xl">
+                  <Icon name="chart" size="md" />
+                </div>
+                <div class="min-w-0">
+                  <span class="brand-floating-chip">{{ t('admin.settings.tabs.features') }}</span>
+                  <h3 class="mt-3 text-lg font-semibold text-slate-950 dark:text-white">
+                    {{ t('admin.settings.features.affiliate.batchModal.title', { count: affiliateState.selected.length }) }}
+                  </h3>
+                  <p class="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-300">
+                    {{ t('admin.settings.features.affiliate.batchModal.hint') }}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                class="brand-floating-close flex-shrink-0"
+                :aria-label="t('common.close')"
+                @click="affiliateBatchModal.open = false"
+              >
+                <Icon name="x" size="md" :stroke-width="2" />
+              </button>
             </div>
-            <p class="mt-2 text-xs text-gray-400">
-              {{ t('admin.settings.features.affiliate.batchModal.clearHint') }}
-            </p>
-            <div class="mt-6 flex justify-end gap-2">
+
+            <div class="max-h-[calc(85vh-9rem)] overflow-y-auto px-6 py-5">
+              <div class="relative">
+                <input
+                  v-model="affiliateBatchModal.rate"
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  max="100"
+                  class="input pr-8"
+                  :placeholder="t('admin.settings.features.affiliate.batchModal.placeholder')"
+                />
+                <span class="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-gray-400">%</span>
+              </div>
+              <p class="mt-2 text-xs text-gray-400">
+                {{ t('admin.settings.features.affiliate.batchModal.clearHint') }}
+              </p>
+            </div>
+
+            <div class="flex justify-end gap-2 border-t border-blue-100/70 px-6 py-4 dark:border-blue-500/10">
               <button type="button" class="btn btn-secondary" @click="affiliateBatchModal.open = false">
                 {{ t('common.cancel') }}
               </button>
@@ -6445,7 +6544,7 @@
                       t("admin.settings.payment.preview")
                     }}</label>
                     <div
-                      class="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-600 dark:border-dark-600 dark:bg-dark-800 dark:text-gray-300"
+                      class="rounded-xl border border-blue-100/70 bg-white/75 px-3 py-2 text-sm text-gray-600 shadow-sm dark:border-blue-500/10 dark:bg-white/[0.03] dark:text-gray-300"
                     >
                       {{
                         (form.payment_product_name_prefix || "Sub2API") +
@@ -11050,15 +11149,32 @@ watch(
 
 /* ============ 系统设置 Tab 导航 ============ */
 .settings-tabs-shell {
-  @apply sticky z-20 -mx-1 rounded-2xl border border-white/80 bg-white/90 p-1.5 backdrop-blur-xl;
+  @apply sticky z-20 -mx-1 overflow-hidden rounded-2xl border p-1.5 backdrop-blur-xl;
   top: 4.75rem;
+}
+
+.settings-tabs-brand-shell {
+  border-color: transparent;
+  background:
+    radial-gradient(circle at 7% 0%, rgba(var(--brand-rgb), 0.12), transparent 36%),
+    radial-gradient(circle at 94% 0%, rgba(var(--brand-cyan-rgb), 0.14), transparent 34%),
+    linear-gradient(135deg, rgba(255, 255, 255, 0.94), rgba(239, 246, 255, 0.82));
   box-shadow:
-    0 12px 28px rgb(15 23 42 / 0.07),
-    0 1px 0 rgb(255 255 255 / 0.9) inset;
+    0 18px 42px rgba(37, 99, 235, 0.12),
+    0 1px 0 rgba(255, 255, 255, 0.92) inset;
+}
+
+.settings-tabs-brand-glow {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    linear-gradient(90deg, rgba(var(--brand-rgb), 0.1), transparent 22%, transparent 78%, rgba(var(--brand-cyan-rgb), 0.1)),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.64), transparent 48%);
 }
 
 .settings-tabs-scroll {
-  @apply overflow-x-auto;
+  @apply relative z-10 overflow-x-auto;
   -ms-overflow-style: none;
   scrollbar-width: none;
 }
@@ -11068,11 +11184,11 @@ watch(
 }
 
 .settings-tabs {
-  @apply flex min-w-max items-center gap-1;
+  @apply flex min-w-max items-center gap-1.5;
 }
 
 .settings-tab {
-  @apply relative isolate flex h-10 min-w-[6.75rem] shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-xl border border-transparent px-3 text-sm font-medium text-gray-600 outline-none transition-colors duration-200 ease-out dark:text-gray-300;
+  @apply relative isolate flex h-11 min-w-[6.75rem] shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-xl border border-transparent px-3 text-sm font-semibold text-slate-600 outline-none transition-all duration-200 ease-out dark:text-slate-300;
 }
 
 @media (min-width: 768px) {
@@ -11092,7 +11208,9 @@ watch(
 .settings-tab::before {
   @apply absolute inset-0 -z-10 rounded-xl opacity-0 transition-opacity duration-200;
   content: "";
-  background: linear-gradient(135deg, rgb(248 250 252 / 0.95), rgb(241 245 249 / 0.8));
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.78), rgba(219, 234, 254, 0.5)),
+    rgba(var(--brand-rgb), 0.045);
 }
 
 .settings-tab:hover::before,
@@ -11101,14 +11219,18 @@ watch(
 }
 
 .settings-tab:focus-visible {
-  @apply ring-2 ring-primary-500/40 ring-offset-2 ring-offset-white dark:ring-offset-dark-900;
+  @apply ring-2 ring-blue-500/35 ring-offset-2 ring-offset-white dark:ring-offset-dark-900;
 }
 
 .settings-tab-active {
-  @apply border-primary-200/80 bg-white text-primary-700 shadow-sm dark:border-primary-400/30 dark:bg-dark-700/95 dark:text-primary-200;
+  border-color: rgba(255, 255, 255, 0.72);
+  color: var(--brand-700);
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.98), rgba(236, 254, 255, 0.9)),
+    rgba(var(--brand-rgb), 0.08);
   box-shadow:
-    0 8px 18px rgb(15 23 42 / 0.08),
-    0 1px 0 rgb(255 255 255 / 0.92) inset;
+    0 12px 26px rgba(37, 99, 235, 0.14),
+    0 1px 0 rgba(255, 255, 255, 0.96) inset;
 }
 
 .settings-tab-active::before {
@@ -11118,29 +11240,67 @@ watch(
 .settings-tab-active::after {
   position: absolute;
   right: 0.75rem;
-  bottom: 0.25rem;
+  bottom: 0.28rem;
   left: 0.75rem;
   height: 2px;
   border-radius: 9999px;
   content: "";
-  background: linear-gradient(90deg, #14b8a6, #0ea5e9);
+  background: linear-gradient(90deg, var(--brand-600), var(--brand-500), var(--brand-cyan));
+  box-shadow: 0 0 12px rgba(var(--brand-cyan-rgb), 0.34);
 }
 
 .settings-tab-icon {
-  @apply flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-gray-500 transition-colors duration-200 dark:text-gray-400;
+  @apply flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-slate-500 transition-all duration-200 dark:text-slate-400;
 }
 
 .settings-tab:hover .settings-tab-icon,
 .settings-tab:focus-visible .settings-tab-icon {
-  @apply text-gray-700 dark:text-gray-200;
+  color: var(--brand-600);
 }
 
 .settings-tab-active .settings-tab-icon {
-  @apply bg-primary-50 text-primary-600 dark:bg-primary-400/10 dark:text-primary-300;
+  color: var(--brand-600);
+  background:
+    linear-gradient(135deg, rgba(var(--brand-rgb), 0.12), rgba(var(--brand-cyan-rgb), 0.12)),
+    rgba(255, 255, 255, 0.68);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.8) inset;
 }
 
 .settings-tab-label {
   @apply min-w-0 overflow-hidden text-ellipsis whitespace-nowrap leading-none;
+}
+
+.settings-admin-page :deep(.card) {
+  position: relative;
+  overflow: hidden;
+  border-radius: 1.25rem;
+  border-color: rgba(191, 219, 254, 0.4);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.985), rgba(248, 250, 252, 0.96)),
+    rgba(255, 255, 255, 0.96);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.9) inset,
+    0 18px 42px rgba(15, 23, 42, 0.055);
+}
+
+.settings-admin-page :deep(.card)::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 1px;
+  background: linear-gradient(90deg, rgba(37, 99, 235, 0.9), rgba(59, 130, 246, 0.42), rgba(34, 211, 238, 0.34));
+  pointer-events: none;
+}
+
+.settings-admin-page :deep(.card > .border-b) {
+  border-bottom-color: rgba(191, 219, 254, 0.24);
+  background:
+    linear-gradient(180deg, rgba(248, 250, 252, 0.78), rgba(248, 250, 252, 0.32)),
+    transparent;
+}
+
+.settings-admin-page :deep(.card .rounded-lg.border) {
+  border-radius: 1rem;
 }
 </style>
 
@@ -11149,20 +11309,62 @@ watch(
    because Vue's scoped-CSS compiler was dropping the `:global(.dark) ...`
    rules in the production build, leaving inactive tabs unreadable on dark. */
 .dark .settings-tabs-shell {
-  border-color: rgb(51 65 85 / 0.65);
-  background: rgb(15 23 42 / 0.86);
+  border-color: transparent;
+  background:
+    radial-gradient(circle at 8% 0%, rgba(37, 99, 235, 0.24), transparent 34%),
+    radial-gradient(circle at 92% 0%, rgba(6, 182, 212, 0.2), transparent 36%),
+    linear-gradient(135deg, rgba(15, 23, 42, 0.92), rgba(8, 13, 28, 0.88));
   box-shadow:
-    0 16px 36px rgb(0 0 0 / 0.28),
-    0 1px 0 rgb(255 255 255 / 0.06) inset;
+    0 18px 44px rgba(0, 0, 0, 0.28),
+    0 1px 0 rgba(255, 255, 255, 0.08) inset;
 }
 
 .dark .settings-tab::before {
-  background: linear-gradient(135deg, rgb(30 41 59 / 0.9), rgb(51 65 85 / 0.62));
+  background:
+    linear-gradient(135deg, rgba(30, 64, 175, 0.22), rgba(8, 145, 178, 0.14)),
+    rgba(255, 255, 255, 0.04);
+}
+
+.dark .settings-tab:hover .settings-tab-icon,
+.dark .settings-tab:focus-visible .settings-tab-icon {
+  color: rgb(125, 211, 252);
+}
+
+.dark .settings-tab-active {
+  border-color: rgba(125, 211, 252, 0.24);
+  color: rgb(219, 234, 254);
+  background:
+    linear-gradient(135deg, rgba(37, 99, 235, 0.28), rgba(8, 145, 178, 0.18)),
+    rgba(15, 23, 42, 0.82);
 }
 
 .dark .settings-tab-active {
   box-shadow:
-    0 12px 26px rgb(0 0 0 / 0.22),
-    0 1px 0 rgb(255 255 255 / 0.08) inset;
+    0 12px 28px rgba(0, 0, 0, 0.26),
+    0 1px 0 rgba(255, 255, 255, 0.08) inset;
+}
+
+.dark .settings-tab-active .settings-tab-icon {
+  color: rgb(125, 211, 252);
+  background:
+    linear-gradient(135deg, rgba(37, 99, 235, 0.22), rgba(6, 182, 212, 0.14)),
+    rgba(255, 255, 255, 0.06);
+}
+
+.dark .settings-admin-page .card {
+  border-color: rgba(96, 165, 250, 0.18);
+  background:
+    linear-gradient(180deg, rgba(15, 23, 42, 0.97), rgba(15, 23, 42, 0.93)),
+    rgba(15, 23, 42, 0.95);
+  box-shadow:
+    0 1px 0 rgb(255 255 255 / 0.05) inset,
+    0 22px 48px rgb(0 0 0 / 0.24);
+}
+
+.dark .settings-admin-page .card > .border-b {
+  border-bottom-color: rgba(96, 165, 250, 0.14);
+  background:
+    linear-gradient(180deg, rgba(30, 41, 59, 0.44), rgba(15, 23, 42, 0.12)),
+    transparent;
 }
 </style>

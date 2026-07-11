@@ -302,7 +302,7 @@ func (h *ImageStudioHandler) Download(c *gin.Context) {
 		return
 	}
 	if file.Close != nil {
-		defer file.Close()
+		defer func() { _ = file.Close() }()
 	}
 	if file.ContentType != "" {
 		c.Header("Content-Type", file.ContentType)
@@ -323,7 +323,7 @@ func (h *ImageStudioHandler) ServeFile(c *gin.Context) {
 		return
 	}
 	if file.Close != nil {
-		defer file.Close()
+		defer func() { _ = file.Close() }()
 	}
 	if file.ContentType != "" {
 		c.Header("Content-Type", file.ContentType)

@@ -1696,6 +1696,21 @@ describe('ImageStudioView', () => {
     expect(wrapper.find('.image-studio-command-surface .image-studio-action-bar').exists()).toBe(false)
   })
 
+  it('stacks the workstation when its available content width is too narrow', () => {
+    const source = vueSource()
+    const containerQueryStart = source.indexOf('@container image-studio-workspace (max-width: 72rem)')
+    const mobileMediaStart = source.indexOf('@media (max-width: 760px)')
+
+    expect(containerQueryStart).toBeGreaterThan(-1)
+    expect(mobileMediaStart).toBeGreaterThan(containerQueryStart)
+
+    const adaptiveRules = source.slice(containerQueryStart, mobileMediaStart)
+    expect(adaptiveRules).toMatch(/\.image-studio-shell\s*\{[^}]*height:\s*auto[^}]*overflow:\s*visible/s)
+    expect(adaptiveRules).toMatch(/\.image-studio-grid\s*\{[^}]*grid-template-columns:\s*1fr/s)
+    expect(adaptiveRules).toMatch(/\.image-studio-command-surface\s*\{[^}]*overflow:\s*visible/s)
+    expect(source).not.toContain('@media (max-width: 1100px)')
+  })
+
   it('keeps batch index badges readable over light generated images', () => {
     const indexRule = cssRulesFor('.image-studio-result-index')[0] ?? ''
 
@@ -1703,6 +1718,12 @@ describe('ImageStudioView', () => {
     expect(indexRule).toMatch(/color:\s*white/)
     expect(indexRule).toMatch(/text-shadow:/)
     expect(indexRule).toMatch(/box-shadow:/)
+  })
+
+  it('centers the empty result message within the preview canvas', () => {
+    const emptyPreviewRule = cssRulesFor('.image-studio-empty-preview')[0] ?? ''
+
+    expect(emptyPreviewRule).toMatch(/place-self:\s*center/)
   })
 
   it('keeps the cost and generate action panel in normal flow with an opaque surface', () => {

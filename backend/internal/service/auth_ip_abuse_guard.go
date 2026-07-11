@@ -2,12 +2,9 @@ package service
 
 import (
 	"context"
-	"fmt"
 	"net"
 	"strings"
 	"time"
-
-	"github.com/redis/go-redis/v9"
 )
 
 type AuthIPAbuseEvent string
@@ -26,18 +23,22 @@ type AuthIPAbuseDecision struct {
 	Threshold int64
 }
 
+type AuthIPAbuseCounter interface {
+	Increment(ctx context.Context, event AuthIPAbuseEvent, ip string, window time.Duration) (int64, error)
+}
+
 type AuthIPAbuseGuard struct {
-	redis      *redis.Client
+	counter    AuthIPAbuseCounter
 	settingSvc *SettingService
 }
 
-func NewAuthIPAbuseGuard(redisClient *redis.Client, settingSvc *SettingService) *AuthIPAbuseGuard {
-	return &AuthIPAbuseGuard{redis: redisClient, settingSvc: settingSvc}
+func NewAuthIPAbuseGuard(counter AuthIPAbuseCounter, settingSvc *SettingService) *AuthIPAbuseGuard {
+	return &AuthIPAbuseGuard{counter: counter, settingSvc: settingSvc}
 }
 
 func (g *AuthIPAbuseGuard) Record(ctx context.Context, event AuthIPAbuseEvent, clientIP string) (*AuthIPAbuseDecision, error) {
 	decision := &AuthIPAbuseDecision{Event: string(event), IP: strings.TrimSpace(clientIP)}
-	if g == nil || g.redis == nil || g.settingSvc == nil {
+	if g == nil || g.counter == nil || g.settingSvc == nil {
 		return decision, nil
 	}
 	if net.ParseIP(decision.IP) == nil {
@@ -63,15 +64,11 @@ func (g *AuthIPAbuseGuard) Record(ctx context.Context, event AuthIPAbuseEvent, c
 		window = time.Duration(defaultAuthIPAutoBlockWindowMinutes) * time.Minute
 	}
 
-	key := fmt.Sprintf("auth_ip_abuse:%s:%s", event, decision.IP)
-	count, err := g.redis.Incr(ctx, key).Result()
+	count, err := g.counter.Increment(ctx, event, decision.IP, window)
 	if err != nil {
 		return decision, err
 	}
 	decision.Count = count
-	if count == 1 {
-		_ = g.redis.Expire(ctx, key, window).Err()
-	}
 	if count < decision.Threshold {
 		return decision, nil
 	}

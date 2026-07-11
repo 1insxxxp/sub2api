@@ -14,6 +14,116 @@ export default {
     login: '登录',
     getStarted: '立即开始',
     goToDashboard: '进入控制台',
+    nav: {
+      features: '产品能力',
+      integration: '接入方式',
+      workflow: '使用流程'
+    },
+    hero: {
+      eyebrow: 'PASSION API GATEWAY',
+      title: 'Passion API 一站式 API 中转服务',
+      titleLead: 'Passion API',
+      titleAccent: '一站式 API 中转服务',
+      subtitle:
+        '保留 OpenAI 兼容调用方式，把账号池、渠道路由、余额计费和风控监控放在同一套控制台里。开发侧只改 Base URL，运营侧能看见每一次请求。',
+      primaryCta: '开始使用',
+      dashboardCta: '进入控制台',
+      secondaryCta: '查看文档',
+      statusBadge: '实时在线',
+      panelTitle: '路由与计费看板',
+      panelSubtitle: '请求进入网关后，按渠道状态、模型和余额规则选择可用线路。',
+      routeLabel: '路由',
+      billingLabel: '钱包计费',
+      latencyLabel: '延迟',
+      successLabel: '成功率',
+      proof: {
+        compatible: 'OpenAI 兼容调用',
+        routing: '账号池与故障切换',
+        billing: '余额计费与用量追踪'
+      },
+      channels: {
+        openai: 'OpenAI 兼容',
+        gemini: 'Gemini 池',
+        anthropic: 'Claude 池',
+        grok: 'Grok 路由'
+      }
+    },
+    trust: {
+      multiModel: {
+        title: '统一模型入口',
+        desc: '主流模型服务走同一套请求入口。'
+      },
+      routing: {
+        title: '渠道自动切换',
+        desc: '异常、限速或余额不足时及时避让。'
+      },
+      billing: {
+        title: '余额实时扣费',
+        desc: '每次调用都能对应到明细和成本。'
+      },
+      monitoring: {
+        title: '监控和风控',
+        desc: '把渠道健康和异常流量放到前台。'
+      }
+    },
+    sections: {
+      capabilitiesEyebrow: '日常运营',
+      capabilitiesTitle: '账号、路由、计费都在一个工作台',
+      capabilitiesSubtitle:
+        '面向实际运营流程整理功能，不把复杂度丢给开发者：谁在调用、走哪条线路、花了多少钱，都能在控制台里追踪。'
+    },
+    capabilities: {
+      unifiedApi: {
+        title: '兼容现有客户端',
+        desc: 'SDK 和请求结构不变，迁移时主要切换 Base URL。'
+      },
+      accountPool: {
+        title: '上游账号池',
+        desc: '按渠道组织账号，支持分配、限额和故障切换。'
+      },
+      monitoring: {
+        title: '渠道状态可见',
+        desc: '可用性、延迟、失败率先被看见，再决定是否调整路由。'
+      },
+      wallet: {
+        title: '钱包和明细',
+        desc: '按余额扣费，保留用户、模型、金额对应关系。'
+      },
+      keys: {
+        title: '用户 API Key',
+        desc: '发放密钥、控制访问，并按用户拆分调用记录。'
+      },
+      risk: {
+        title: '风控中心',
+        desc: '对异常注册、异常调用和高风险流量增加拦截点。'
+      }
+    },
+    integration: {
+      eyebrow: '开发者接入',
+      title: '不用重写客户端，只换入口地址',
+      subtitle:
+        '保留现有 SDK、模型参数和请求格式。把 Base URL 指向网关，再使用平台 API Key，即可把调用、成本和渠道状态纳入统一管理。',
+      replaceBaseUrl: '替换 Base URL',
+      useApiKey: '使用平台 API Key',
+      monitorCost: '查看调用、余额和渠道状态'
+    },
+    workflow: {
+      eyebrow: '接入路径',
+      title: '先跑通调用，再逐步打开运营能力',
+      subtitle: '适合把现有 OpenAI 兼容请求迁移进网关：先验证请求，再补齐余额、风控和渠道监控。',
+      step1: {
+        title: '创建账号和密钥',
+        desc: '进入控制台后创建 API Key，用于应用侧请求。'
+      },
+      step2: {
+        title: '配置可用渠道',
+        desc: '准备上游账号，确认模型、余额和路由规则可用。'
+      },
+      step3: {
+        title: '切换 Base URL',
+        desc: '让请求经过网关转发，并在控制台查看调用结果。'
+      }
+    },
     // 新增：面向用户的价值主张
     heroSubtitle: '一个密钥，畅用多个 AI 模型',
     heroDescription: '无需管理多个订阅账号，一站式接入 Claude、GPT、Gemini 等主流 AI 服务',
@@ -106,10 +216,12 @@ export default {
     // CTA 区块
     cta: {
       title: '准备好开始了吗？',
+      subtitle: '先把一条业务请求接进来，再逐步打开计费、路由和风控能力。',
       description: '注册即可获得免费试用额度，体验一站式 AI 服务',
       button: '免费注册'
     },
     footer: {
+      tagline: '为团队和开发者打造的稳定 AI API 网关。',
       allRightsReserved: '保留所有权利。'
     }
   },

@@ -3151,6 +3151,7 @@ onBeforeUnmount(() => {
 }
 
 .image-studio-empty-preview {
+  place-self: center;
   width: min(100%, 30rem);
   border-radius: 1.1rem;
   border: 1px solid rgba(var(--brand-rgb), 0.16);
@@ -4555,7 +4556,7 @@ onBeforeUnmount(() => {
   }
 }
 
-@media (max-width: 1100px) {
+@container image-studio-workspace (max-width: 72rem) {
   .image-studio-shell {
     height: auto;
     overflow: visible;

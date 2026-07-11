@@ -1,6 +1,8 @@
 package routes
 
 import (
+	"context"
+	"fmt"
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/handler"
@@ -23,7 +25,7 @@ func RegisterAuthRoutes(
 	// 创建速率限制器
 	rateLimiter := middleware.NewRateLimiter(redisClient)
 	if h != nil && h.Auth != nil {
-		h.Auth.SetAuthIPAbuseGuard(service.NewAuthIPAbuseGuard(redisClient, settingService))
+		h.Auth.SetAuthIPAbuseGuard(service.NewAuthIPAbuseGuard(redisAuthIPAbuseCounter{client: redisClient}, settingService))
 	}
 
 	// 公开接口
@@ -230,4 +232,23 @@ func RegisterAuthRoutes(
 		authenticated.POST("/auth/revoke-all-sessions", h.Auth.RevokeAllSessions)
 		authenticated.POST("/auth/oauth/bind-token", h.Auth.PrepareOAuthBindAccessTokenCookie)
 	}
+}
+
+type redisAuthIPAbuseCounter struct {
+	client *redis.Client
+}
+
+func (c redisAuthIPAbuseCounter) Increment(ctx context.Context, event service.AuthIPAbuseEvent, ip string, window time.Duration) (int64, error) {
+	if c.client == nil {
+		return 0, nil
+	}
+	key := fmt.Sprintf("auth_ip_abuse:%s:%s", event, ip)
+	count, err := c.client.Incr(ctx, key).Result()
+	if err != nil {
+		return 0, err
+	}
+	if count == 1 {
+		_ = c.client.Expire(ctx, key, window).Err()
+	}
+	return count, nil
 }
