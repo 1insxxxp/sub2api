@@ -10,6 +10,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
+
 	dbent "github.com/Wei-Shaw/sub2api/ent"
 	"github.com/Wei-Shaw/sub2api/ent/authidentity"
 	"github.com/Wei-Shaw/sub2api/ent/authidentitychannel"
@@ -1179,6 +1181,9 @@ func (s *adminServiceImpl) GenerateRedeemCodes(ctx context.Context, input *Gener
 	if input.ExpiresAt != nil && !input.ExpiresAt.After(time.Now()) {
 		return nil, ErrRedeemCodeExpired
 	}
+	if input.SingleUsePerUser && input.Type == RedeemTypeInvitation {
+		return nil, infraerrors.BadRequest("REDEEM_BATCH_LIMIT_UNSUPPORTED_TYPE", "invitation codes do not support single-use batches")
+	}
 
 	// 如果是订阅类型，验证必须有 GroupID
 	if input.Type == RedeemTypeSubscription {
@@ -1195,6 +1200,12 @@ func (s *adminServiceImpl) GenerateRedeemCodes(ctx context.Context, input *Gener
 		}
 	}
 
+	var batchID *string
+	if input.SingleUsePerUser {
+		generatedBatchID := uuid.NewString()
+		batchID = &generatedBatchID
+	}
+
 	codes := make([]RedeemCode, 0, input.Count)
 	for i := 0; i < input.Count; i++ {
 		codeValue, err := GenerateRedeemCode()
@@ -1207,6 +1218,7 @@ func (s *adminServiceImpl) GenerateRedeemCodes(ctx context.Context, input *Gener
 			Value:     input.Value,
 			Status:    StatusUnused,
 			ExpiresAt: input.ExpiresAt,
+			BatchID:   batchID,
 		}
 		// 订阅类型专用字段
 		if input.Type == RedeemTypeSubscription {

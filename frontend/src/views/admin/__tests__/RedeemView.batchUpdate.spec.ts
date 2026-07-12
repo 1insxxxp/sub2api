@@ -3,9 +3,10 @@ import { flushPromises, mount } from '@vue/test-utils'
 
 import RedeemView from '../RedeemView.vue'
 
-const { listRedeemCodes, batchUpdateRedeemCodes, getAllGroups, showSuccess, showError, showInfo } =
+const { listRedeemCodes, generateRedeemCodes, batchUpdateRedeemCodes, getAllGroups, showSuccess, showError, showInfo } =
   vi.hoisted(() => ({
     listRedeemCodes: vi.fn(),
+    generateRedeemCodes: vi.fn(),
     batchUpdateRedeemCodes: vi.fn(),
     getAllGroups: vi.fn(),
     showSuccess: vi.fn(),
@@ -17,7 +18,7 @@ vi.mock('@/api/admin', () => ({
   adminAPI: {
     redeem: {
       list: listRedeemCodes,
-      generate: vi.fn(),
+      generate: generateRedeemCodes,
       delete: vi.fn(),
       batchDelete: vi.fn(),
       batchUpdate: batchUpdateRedeemCodes,
@@ -105,6 +106,7 @@ describe('admin RedeemView batch update', () => {
     document.body.innerHTML = ''
 
     listRedeemCodes.mockReset()
+    generateRedeemCodes.mockReset()
     batchUpdateRedeemCodes.mockReset()
     getAllGroups.mockReset()
     showSuccess.mockReset()
@@ -122,7 +124,9 @@ describe('admin RedeemView batch update', () => {
           used_by: null,
           used_at: null,
           created_at: '2026-01-01T00:00:00Z',
-          expires_at: null
+          expires_at: null,
+          single_use_per_user: true,
+          batch_id: 'batch-1'
         },
         {
           id: 2,
@@ -142,6 +146,7 @@ describe('admin RedeemView batch update', () => {
       pages: 1
     })
     batchUpdateRedeemCodes.mockResolvedValue({ updated: 1, message: 'ok' })
+    generateRedeemCodes.mockResolvedValue([])
     getAllGroups.mockResolvedValue([])
   })
 
@@ -183,5 +188,71 @@ describe('admin RedeemView batch update', () => {
       notes: 'maintenance'
     })
     expect(showSuccess).toHaveBeenCalledWith('admin.redeem.batchUpdateSuccess')
+  })
+
+  it('generates a batch limited to one code per user and shows its badge', async () => {
+    const wrapper = mount(RedeemView, {
+      attachTo: document.body,
+      global: {
+        stubs: {
+          AppLayout: { template: '<div><slot /></div>' },
+          TablePageLayout: {
+            template: '<div><slot name="filters" /><slot name="table" /><slot name="pagination" /></div>'
+          },
+          DataTable: DataTableStub,
+          Pagination: true,
+          ConfirmDialog: true,
+          Select: SelectStub,
+          GroupBadge: true,
+          GroupOptionItem: true,
+          Icon: true,
+          Teleport: true
+        }
+      }
+    })
+
+    await flushPromises()
+    expect(wrapper.get('[data-test="single-use-badge"]').exists()).toBe(true)
+
+    await wrapper.get('[data-test="generate-codes-open"]').trigger('click')
+    await flushPromises()
+    await wrapper.get('[data-test="single-use-per-user"]').setValue(true)
+    await wrapper.get('[data-test="generate-codes-form"]').trigger('submit')
+    await flushPromises()
+
+    expect(generateRedeemCodes).toHaveBeenCalledWith(1, 'balance', 10, undefined, undefined, undefined, true)
+  })
+
+  it('hides and resets the single-use option for invitation codes', async () => {
+    const wrapper = mount(RedeemView, {
+      attachTo: document.body,
+      global: {
+        stubs: {
+          AppLayout: { template: '<div><slot /></div>' },
+          TablePageLayout: {
+            template: '<div><slot name="filters" /><slot name="table" /><slot name="pagination" /></div>'
+          },
+          DataTable: DataTableStub,
+          Pagination: true,
+          ConfirmDialog: true,
+          Select: SelectStub,
+          GroupBadge: true,
+          GroupOptionItem: true,
+          Icon: true,
+          Teleport: true
+        }
+      }
+    })
+
+    await flushPromises()
+    await wrapper.get('[data-test="generate-codes-open"]').trigger('click')
+    await wrapper.get('[data-test="single-use-per-user"]').setValue(true)
+    await wrapper.get('[data-test="generate-code-type"]').setValue('invitation')
+    await flushPromises()
+
+    expect(wrapper.find('[data-test="single-use-per-user"]').exists()).toBe(false)
+    await wrapper.get('[data-test="generate-codes-form"]').trigger('submit')
+    await flushPromises()
+    expect(generateRedeemCodes).toHaveBeenCalledWith(1, 'invitation', 0, undefined, undefined, undefined, false)
   })
 })

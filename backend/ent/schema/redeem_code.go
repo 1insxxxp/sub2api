@@ -72,6 +72,10 @@ func (RedeemCode) Fields() []ent.Field {
 			Nillable(),
 		field.Int("validity_days").
 			Default(30),
+		field.String("batch_id").
+			Optional().
+			Nillable().
+			MaxLen(64),
 	}
 }
 
@@ -95,5 +99,6 @@ func (RedeemCode) Indexes() []ent.Index {
 		index.Fields("used_by"),
 		index.Fields("group_id"),
 		index.Fields("expires_at"),
+		index.Fields("batch_id"),
 	}
 }

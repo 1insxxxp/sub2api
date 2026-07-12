@@ -56,7 +56,7 @@
               <Icon name="edit" size="md" class="mr-2" />
               {{ t('admin.redeem.batchUpdate') }}
             </button>
-            <button @click="showGenerateDialog = true" class="btn btn-primary">
+            <button data-test="generate-codes-open" @click="showGenerateDialog = true" class="btn btn-primary">
               {{ t('admin.redeem.generateCodes') }}
             </button>
           </div>
@@ -95,29 +95,38 @@
             />
           </template>
 
-          <template #cell-code="{ value }">
-            <div class="flex items-center space-x-2">
-              <code class="font-mono text-sm text-gray-900 dark:text-gray-100">{{ value }}</code>
-              <button
-                @click="copyToClipboard(value)"
-                :class="[
-                  'flex items-center transition-colors',
-                  copiedCode === value
-                    ? 'text-green-500'
-                    : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300'
-                ]"
-                :title="copiedCode === value ? t('admin.redeem.copied') : t('keys.copyToClipboard')"
+          <template #cell-code="{ value, row }">
+            <div class="space-y-1.5">
+              <div class="flex items-center space-x-2">
+                <code class="font-mono text-sm text-gray-900 dark:text-gray-100">{{ value }}</code>
+                <button
+                  @click="copyToClipboard(value)"
+                  :class="[
+                    'flex items-center transition-colors',
+                    copiedCode === value
+                      ? 'text-green-500'
+                      : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300'
+                  ]"
+                  :title="copiedCode === value ? t('admin.redeem.copied') : t('keys.copyToClipboard')"
+                >
+                  <Icon v-if="copiedCode !== value" name="copy" size="sm" :stroke-width="2" />
+                  <svg v-else class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="2"
+                      d="M5 13l4 4L19 7"
+                    />
+                  </svg>
+                </button>
+              </div>
+              <span
+                v-if="row.single_use_per_user"
+                data-test="single-use-badge"
+                class="inline-flex rounded bg-amber-50 px-1.5 py-0.5 text-[11px] font-medium text-amber-700 dark:bg-amber-500/10 dark:text-amber-200"
               >
-                <Icon v-if="copiedCode !== value" name="copy" size="sm" :stroke-width="2" />
-                <svg v-else class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    stroke-width="2"
-                    d="M5 13l4 4L19 7"
-                  />
-                </svg>
-              </button>
+                {{ t('admin.redeem.singleUseBadge') }}
+              </span>
             </div>
           </template>
 
@@ -303,10 +312,10 @@
               <Icon name="x" size="md" :stroke-width="2" />
             </button>
           </div>
-          <form @submit.prevent="handleGenerateCodes" class="max-h-[calc(85vh-9rem)] space-y-4 overflow-y-auto px-6 py-5">
+          <form data-test="generate-codes-form" @submit.prevent="handleGenerateCodes" class="max-h-[calc(85vh-9rem)] space-y-4 overflow-y-auto px-6 py-5">
             <div>
               <label class="input-label">{{ t('admin.redeem.codeType') }}</label>
-              <Select v-model="generateForm.type" :options="typeOptions" />
+              <Select data-test="generate-code-type" v-model="generateForm.type" :options="typeOptions" />
             </div>
             <!-- 余额/并发类型：显示数值输入 -->
             <div v-if="generateForm.type !== 'subscription' && generateForm.type !== 'invitation'">
@@ -377,6 +386,25 @@
                 />
               </div>
             </template>
+            <label
+              v-if="generateForm.type !== 'invitation'"
+              class="admin-form-section flex cursor-pointer items-start gap-3 !space-y-0 px-4 py-3"
+            >
+              <input
+                v-model="generateForm.single_use_per_user"
+                data-test="single-use-per-user"
+                type="checkbox"
+                class="mt-0.5 h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+              />
+              <span class="min-w-0">
+                <span class="block text-sm font-semibold text-gray-900 dark:text-white">
+                  {{ t('admin.redeem.singleUsePerUser') }}
+                </span>
+                <span class="mt-1 block text-xs text-gray-500 dark:text-dark-400">
+                  {{ t('admin.redeem.singleUsePerUserHint') }}
+                </span>
+              </span>
+            </label>
             <div>
               <label class="input-label">{{ t('admin.redeem.codeExpiry') }}</label>
               <div class="grid grid-cols-2 gap-2 sm:grid-cols-5">
@@ -852,7 +880,8 @@ const generateForm = reactive({
   group_id: null as number | null,
   validity_days: 30,
   expiry_option: 'never' as RedeemCodeExpiryOption,
-  custom_expiry_days: 7
+  custom_expiry_days: 7,
+  single_use_per_user: false
 })
 
 // 监听类型变化，邀请码类型时自动设置 value 为 0
@@ -861,6 +890,7 @@ watch(
   (newType) => {
     if (newType === 'invitation') {
       generateForm.value = 0
+      generateForm.single_use_per_user = false
     } else if (generateForm.value === 0) {
       generateForm.value = 10
     }
@@ -1056,7 +1086,8 @@ const handleGenerateCodes = async () => {
       generateForm.value,
       generateForm.type === 'subscription' ? generateForm.group_id : undefined,
       generateForm.type === 'subscription' ? generateForm.validity_days : undefined,
-      expiresInDays
+      expiresInDays,
+      generateForm.single_use_per_user
     )
     showGenerateDialog.value = false
     generatedCodes.value = result
@@ -1066,6 +1097,7 @@ const handleGenerateCodes = async () => {
     generateForm.validity_days = 30
     generateForm.expiry_option = 'never'
     generateForm.custom_expiry_days = 7
+    generateForm.single_use_per_user = false
     loadCodes()
   } catch (error: any) {
     appStore.showError(error.response?.data?.detail || t('admin.redeem.failedToGenerate'))

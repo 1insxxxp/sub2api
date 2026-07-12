@@ -1354,6 +1354,37 @@ var (
 			},
 		},
 	}
+	// RedeemBatchClaimsColumns holds the columns for the "redeem_batch_claims" table.
+	RedeemBatchClaimsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt64, Increment: true},
+		{Name: "batch_id", Type: field.TypeString, Size: 64},
+		{Name: "user_id", Type: field.TypeInt64},
+		{Name: "redeem_code_id", Type: field.TypeInt64},
+		{Name: "created_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
+	}
+	// RedeemBatchClaimsTable holds the schema information for the "redeem_batch_claims" table.
+	RedeemBatchClaimsTable = &schema.Table{
+		Name:       "redeem_batch_claims",
+		Columns:    RedeemBatchClaimsColumns,
+		PrimaryKey: []*schema.Column{RedeemBatchClaimsColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "redeembatchclaim_batch_id_user_id",
+				Unique:  true,
+				Columns: []*schema.Column{RedeemBatchClaimsColumns[1], RedeemBatchClaimsColumns[2]},
+			},
+			{
+				Name:    "redeembatchclaim_user_id",
+				Unique:  false,
+				Columns: []*schema.Column{RedeemBatchClaimsColumns[2]},
+			},
+			{
+				Name:    "redeembatchclaim_redeem_code_id",
+				Unique:  false,
+				Columns: []*schema.Column{RedeemBatchClaimsColumns[3]},
+			},
+		},
+	}
 	// RedeemCodesColumns holds the columns for the "redeem_codes" table.
 	RedeemCodesColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeInt64, Increment: true},
@@ -1366,6 +1397,7 @@ var (
 		{Name: "created_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
 		{Name: "expires_at", Type: field.TypeTime, Nullable: true, SchemaType: map[string]string{"postgres": "timestamptz"}},
 		{Name: "validity_days", Type: field.TypeInt, Default: 30},
+		{Name: "batch_id", Type: field.TypeString, Nullable: true, Size: 64},
 		{Name: "group_id", Type: field.TypeInt64, Nullable: true},
 		{Name: "used_by", Type: field.TypeInt64, Nullable: true},
 	}
@@ -1377,13 +1409,13 @@ var (
 		ForeignKeys: []*schema.ForeignKey{
 			{
 				Symbol:     "redeem_codes_groups_redeem_codes",
-				Columns:    []*schema.Column{RedeemCodesColumns[10]},
+				Columns:    []*schema.Column{RedeemCodesColumns[11]},
 				RefColumns: []*schema.Column{GroupsColumns[0]},
 				OnDelete:   schema.SetNull,
 			},
 			{
 				Symbol:     "redeem_codes_users_redeem_codes",
-				Columns:    []*schema.Column{RedeemCodesColumns[11]},
+				Columns:    []*schema.Column{RedeemCodesColumns[12]},
 				RefColumns: []*schema.Column{UsersColumns[0]},
 				OnDelete:   schema.SetNull,
 			},
@@ -1397,17 +1429,22 @@ var (
 			{
 				Name:    "redeemcode_used_by",
 				Unique:  false,
-				Columns: []*schema.Column{RedeemCodesColumns[11]},
+				Columns: []*schema.Column{RedeemCodesColumns[12]},
 			},
 			{
 				Name:    "redeemcode_group_id",
 				Unique:  false,
-				Columns: []*schema.Column{RedeemCodesColumns[10]},
+				Columns: []*schema.Column{RedeemCodesColumns[11]},
 			},
 			{
 				Name:    "redeemcode_expires_at",
 				Unique:  false,
 				Columns: []*schema.Column{RedeemCodesColumns[8]},
+			},
+			{
+				Name:    "redeemcode_batch_id",
+				Unique:  false,
+				Columns: []*schema.Column{RedeemCodesColumns[10]},
 			},
 		},
 	}
@@ -2228,6 +2265,7 @@ var (
 		PromoCodesTable,
 		PromoCodeUsagesTable,
 		ProxiesTable,
+		RedeemBatchClaimsTable,
 		RedeemCodesTable,
 		SecuritySecretsTable,
 		SettingsTable,
@@ -2343,6 +2381,9 @@ func init() {
 	ProxiesTable.ForeignKeys[0].RefTable = ProxiesTable
 	ProxiesTable.Annotation = &entsql.Annotation{
 		Table: "proxies",
+	}
+	RedeemBatchClaimsTable.Annotation = &entsql.Annotation{
+		Table: "redeem_batch_claims",
 	}
 	RedeemCodesTable.ForeignKeys[0].RefTable = GroupsTable
 	RedeemCodesTable.ForeignKeys[1].RefTable = UsersTable

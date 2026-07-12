@@ -399,7 +399,9 @@ type RedeemCode struct {
 type AdminRedeemCode struct {
 	RedeemCode
 
-	Notes string `json:"notes"`
+	Notes            string  `json:"notes"`
+	BatchID          *string `json:"batch_id,omitempty"`
+	SingleUsePerUser bool    `json:"single_use_per_user"`
 }
 
 type NullableTimeField struct {

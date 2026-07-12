@@ -3,6 +3,7 @@ package dto
 
 import (
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/service"
@@ -547,8 +548,10 @@ func RedeemCodeFromServiceAdmin(rc *service.RedeemCode) *AdminRedeemCode {
 		return nil
 	}
 	return &AdminRedeemCode{
-		RedeemCode: redeemCodeFromServiceBase(rc),
-		Notes:      rc.Notes,
+		RedeemCode:       redeemCodeFromServiceBase(rc),
+		Notes:            rc.Notes,
+		BatchID:          rc.BatchID,
+		SingleUsePerUser: rc.BatchID != nil && strings.TrimSpace(*rc.BatchID) != "",
 	}
 }
 

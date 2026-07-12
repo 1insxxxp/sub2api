@@ -16,12 +16,13 @@ import (
 )
 
 var (
-	ErrRedeemCodeNotFound  = infraerrors.NotFound("REDEEM_CODE_NOT_FOUND", "redeem code not found")
-	ErrRedeemCodeUsed      = infraerrors.Conflict("REDEEM_CODE_USED", "redeem code already used")
-	ErrRedeemCodeExpired   = infraerrors.Conflict("REDEEM_CODE_EXPIRED", "redeem code expired")
-	ErrInsufficientBalance = infraerrors.BadRequest("INSUFFICIENT_BALANCE", "insufficient balance")
-	ErrRedeemRateLimited   = infraerrors.TooManyRequests("REDEEM_RATE_LIMITED", "too many failed attempts, please try again later")
-	ErrRedeemCodeLocked    = infraerrors.Conflict("REDEEM_CODE_LOCKED", "redeem code is being processed, please try again")
+	ErrRedeemCodeNotFound   = infraerrors.NotFound("REDEEM_CODE_NOT_FOUND", "redeem code not found")
+	ErrRedeemCodeUsed       = infraerrors.Conflict("REDEEM_CODE_USED", "redeem code already used")
+	ErrRedeemCodeExpired    = infraerrors.Conflict("REDEEM_CODE_EXPIRED", "redeem code expired")
+	ErrInsufficientBalance  = infraerrors.BadRequest("INSUFFICIENT_BALANCE", "insufficient balance")
+	ErrRedeemRateLimited    = infraerrors.TooManyRequests("REDEEM_RATE_LIMITED", "too many failed attempts, please try again later")
+	ErrRedeemCodeLocked     = infraerrors.Conflict("REDEEM_CODE_LOCKED", "redeem code is being processed, please try again")
+	ErrRedeemBatchUserLimit = infraerrors.Conflict("REDEEM_BATCH_USER_LIMIT", "activity redeem codes are limited to one per user")
 )
 
 const (
@@ -443,6 +444,21 @@ func (s *RedeemService) Redeem(ctx context.Context, userID int64, code string) (
 
 	// 将事务放入 context，使 repository 方法能够使用同一事务
 	txCtx := dbent.NewTxContext(ctx, tx)
+
+	if redeemCode.BatchID != nil && strings.TrimSpace(*redeemCode.BatchID) != "" {
+		_, claimErr := tx.Client().RedeemBatchClaim.Create().
+			SetBatchID(strings.TrimSpace(*redeemCode.BatchID)).
+			SetUserID(userID).
+			SetRedeemCodeID(redeemCode.ID).
+			Save(txCtx)
+		if claimErr != nil {
+			if dbent.IsConstraintError(claimErr) {
+				s.incrementRedeemErrorCount(ctx, userID)
+				return nil, ErrRedeemBatchUserLimit
+			}
+			return nil, fmt.Errorf("claim redeem batch: %w", claimErr)
+		}
+	}
 
 	// 【关键】先标记兑换码为已使用，确保并发安全
 	// 利用数据库乐观锁（WHERE status = 'unused'）保证原子性

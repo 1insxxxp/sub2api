@@ -30,6 +30,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/promocode"
 	"github.com/Wei-Shaw/sub2api/ent/promocodeusage"
 	"github.com/Wei-Shaw/sub2api/ent/proxy"
+	"github.com/Wei-Shaw/sub2api/ent/redeembatchclaim"
 	"github.com/Wei-Shaw/sub2api/ent/redeemcode"
 	"github.com/Wei-Shaw/sub2api/ent/schema"
 	"github.com/Wei-Shaw/sub2api/ent/securitysecret"
@@ -1591,6 +1592,30 @@ func init() {
 	proxyDescExpiryWarnDays := proxyFields[10].Descriptor()
 	// proxy.DefaultExpiryWarnDays holds the default value on creation for the expiry_warn_days field.
 	proxy.DefaultExpiryWarnDays = proxyDescExpiryWarnDays.Default.(int)
+	redeembatchclaimFields := schema.RedeemBatchClaim{}.Fields()
+	_ = redeembatchclaimFields
+	// redeembatchclaimDescBatchID is the schema descriptor for batch_id field.
+	redeembatchclaimDescBatchID := redeembatchclaimFields[0].Descriptor()
+	// redeembatchclaim.BatchIDValidator is a validator for the "batch_id" field. It is called by the builders before save.
+	redeembatchclaim.BatchIDValidator = func() func(string) error {
+		validators := redeembatchclaimDescBatchID.Validators
+		fns := [...]func(string) error{
+			validators[0].(func(string) error),
+			validators[1].(func(string) error),
+		}
+		return func(batch_id string) error {
+			for _, fn := range fns {
+				if err := fn(batch_id); err != nil {
+					return err
+				}
+			}
+			return nil
+		}
+	}()
+	// redeembatchclaimDescCreatedAt is the schema descriptor for created_at field.
+	redeembatchclaimDescCreatedAt := redeembatchclaimFields[3].Descriptor()
+	// redeembatchclaim.DefaultCreatedAt holds the default value on creation for the created_at field.
+	redeembatchclaim.DefaultCreatedAt = redeembatchclaimDescCreatedAt.Default.(func() time.Time)
 	redeemcodeFields := schema.RedeemCode{}.Fields()
 	_ = redeemcodeFields
 	// redeemcodeDescCode is the schema descriptor for code field.
@@ -1635,6 +1660,10 @@ func init() {
 	redeemcodeDescValidityDays := redeemcodeFields[10].Descriptor()
 	// redeemcode.DefaultValidityDays holds the default value on creation for the validity_days field.
 	redeemcode.DefaultValidityDays = redeemcodeDescValidityDays.Default.(int)
+	// redeemcodeDescBatchID is the schema descriptor for batch_id field.
+	redeemcodeDescBatchID := redeemcodeFields[11].Descriptor()
+	// redeemcode.BatchIDValidator is a validator for the "batch_id" field. It is called by the builders before save.
+	redeemcode.BatchIDValidator = redeemcodeDescBatchID.Validators[0].(func(string) error)
 	securitysecretMixin := schema.SecuritySecret{}.Mixin()
 	securitysecretMixinFields0 := securitysecretMixin[0].Fields()
 	_ = securitysecretMixinFields0

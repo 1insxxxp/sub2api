@@ -34,6 +34,7 @@ func (r *redeemCodeRepository) Create(ctx context.Context, code *service.RedeemC
 		SetNillableUsedBy(code.UsedBy).
 		SetNillableUsedAt(code.UsedAt).
 		SetNillableGroupID(code.GroupID).
+		SetNillableBatchID(code.BatchID).
 		Save(ctx)
 	if err == nil {
 		code.ID = created.ID
@@ -60,7 +61,8 @@ func (r *redeemCodeRepository) CreateBatch(ctx context.Context, codes []service.
 			SetNillableExpiresAt(c.ExpiresAt).
 			SetNillableUsedBy(c.UsedBy).
 			SetNillableUsedAt(c.UsedAt).
-			SetNillableGroupID(c.GroupID)
+			SetNillableGroupID(c.GroupID).
+			SetNillableBatchID(c.BatchID)
 		builders = append(builders, b)
 	}
 
@@ -223,6 +225,11 @@ func (r *redeemCodeRepository) Update(ctx context.Context, code *service.RedeemC
 		up.SetExpiresAt(*code.ExpiresAt)
 	} else {
 		up.ClearExpiresAt()
+	}
+	if code.BatchID != nil {
+		up.SetBatchID(*code.BatchID)
+	} else {
+		up.ClearBatchID()
 	}
 
 	updated, err := up.Save(ctx)
@@ -423,6 +430,7 @@ func redeemCodeEntityToService(m *dbent.RedeemCode) *service.RedeemCode {
 		Notes:        derefString(m.Notes),
 		CreatedAt:    m.CreatedAt,
 		ExpiresAt:    m.ExpiresAt,
+		BatchID:      m.BatchID,
 		GroupID:      m.GroupID,
 		ValidityDays: m.ValidityDays,
 	}

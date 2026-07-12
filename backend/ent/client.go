@@ -40,6 +40,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/promocode"
 	"github.com/Wei-Shaw/sub2api/ent/promocodeusage"
 	"github.com/Wei-Shaw/sub2api/ent/proxy"
+	"github.com/Wei-Shaw/sub2api/ent/redeembatchclaim"
 	"github.com/Wei-Shaw/sub2api/ent/redeemcode"
 	"github.com/Wei-Shaw/sub2api/ent/securitysecret"
 	"github.com/Wei-Shaw/sub2api/ent/setting"
@@ -116,6 +117,8 @@ type Client struct {
 	PromoCodeUsage *PromoCodeUsageClient
 	// Proxy is the client for interacting with the Proxy builders.
 	Proxy *ProxyClient
+	// RedeemBatchClaim is the client for interacting with the RedeemBatchClaim builders.
+	RedeemBatchClaim *RedeemBatchClaimClient
 	// RedeemCode is the client for interacting with the RedeemCode builders.
 	RedeemCode *RedeemCodeClient
 	// SecuritySecret is the client for interacting with the SecuritySecret builders.
@@ -186,6 +189,7 @@ func (c *Client) init() {
 	c.PromoCode = NewPromoCodeClient(c.config)
 	c.PromoCodeUsage = NewPromoCodeUsageClient(c.config)
 	c.Proxy = NewProxyClient(c.config)
+	c.RedeemBatchClaim = NewRedeemBatchClaimClient(c.config)
 	c.RedeemCode = NewRedeemCodeClient(c.config)
 	c.SecuritySecret = NewSecuritySecretClient(c.config)
 	c.Setting = NewSettingClient(c.config)
@@ -320,6 +324,7 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 		PromoCode:                     NewPromoCodeClient(cfg),
 		PromoCodeUsage:                NewPromoCodeUsageClient(cfg),
 		Proxy:                         NewProxyClient(cfg),
+		RedeemBatchClaim:              NewRedeemBatchClaimClient(cfg),
 		RedeemCode:                    NewRedeemCodeClient(cfg),
 		SecuritySecret:                NewSecuritySecretClient(cfg),
 		Setting:                       NewSettingClient(cfg),
@@ -381,6 +386,7 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 		PromoCode:                     NewPromoCodeClient(cfg),
 		PromoCodeUsage:                NewPromoCodeUsageClient(cfg),
 		Proxy:                         NewProxyClient(cfg),
+		RedeemBatchClaim:              NewRedeemBatchClaimClient(cfg),
 		RedeemCode:                    NewRedeemCodeClient(cfg),
 		SecuritySecret:                NewSecuritySecretClient(cfg),
 		Setting:                       NewSettingClient(cfg),
@@ -434,9 +440,9 @@ func (c *Client) Use(hooks ...Hook) {
 		c.ErrorPassthroughRule, c.Group, c.IdempotencyRecord,
 		c.IdentityAdoptionDecision, c.PaymentAuditLog, c.PaymentOrder,
 		c.PaymentProviderInstance, c.PendingAuthSession, c.PromoCode, c.PromoCodeUsage,
-		c.Proxy, c.RedeemCode, c.SecuritySecret, c.Setting, c.SubscriptionPlan,
-		c.TLSFingerprintProfile, c.UsageCleanupTask, c.UsageLog, c.User,
-		c.UserAllowedGroup, c.UserAttributeDefinition, c.UserAttributeValue,
+		c.Proxy, c.RedeemBatchClaim, c.RedeemCode, c.SecuritySecret, c.Setting,
+		c.SubscriptionPlan, c.TLSFingerprintProfile, c.UsageCleanupTask, c.UsageLog,
+		c.User, c.UserAllowedGroup, c.UserAttributeDefinition, c.UserAttributeValue,
 		c.UserCheckin, c.UserCheckinBlacklist, c.UserImage, c.UserImageTask,
 		c.UserPlatformQuota, c.UserSubscription,
 	} {
@@ -455,9 +461,9 @@ func (c *Client) Intercept(interceptors ...Interceptor) {
 		c.ErrorPassthroughRule, c.Group, c.IdempotencyRecord,
 		c.IdentityAdoptionDecision, c.PaymentAuditLog, c.PaymentOrder,
 		c.PaymentProviderInstance, c.PendingAuthSession, c.PromoCode, c.PromoCodeUsage,
-		c.Proxy, c.RedeemCode, c.SecuritySecret, c.Setting, c.SubscriptionPlan,
-		c.TLSFingerprintProfile, c.UsageCleanupTask, c.UsageLog, c.User,
-		c.UserAllowedGroup, c.UserAttributeDefinition, c.UserAttributeValue,
+		c.Proxy, c.RedeemBatchClaim, c.RedeemCode, c.SecuritySecret, c.Setting,
+		c.SubscriptionPlan, c.TLSFingerprintProfile, c.UsageCleanupTask, c.UsageLog,
+		c.User, c.UserAllowedGroup, c.UserAttributeDefinition, c.UserAttributeValue,
 		c.UserCheckin, c.UserCheckinBlacklist, c.UserImage, c.UserImageTask,
 		c.UserPlatformQuota, c.UserSubscription,
 	} {
@@ -518,6 +524,8 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.PromoCodeUsage.mutate(ctx, m)
 	case *ProxyMutation:
 		return c.Proxy.mutate(ctx, m)
+	case *RedeemBatchClaimMutation:
+		return c.RedeemBatchClaim.mutate(ctx, m)
 	case *RedeemCodeMutation:
 		return c.RedeemCode.mutate(ctx, m)
 	case *SecuritySecretMutation:
@@ -4513,6 +4521,139 @@ func (c *ProxyClient) mutate(ctx context.Context, m *ProxyMutation) (Value, erro
 	}
 }
 
+// RedeemBatchClaimClient is a client for the RedeemBatchClaim schema.
+type RedeemBatchClaimClient struct {
+	config
+}
+
+// NewRedeemBatchClaimClient returns a client for the RedeemBatchClaim from the given config.
+func NewRedeemBatchClaimClient(c config) *RedeemBatchClaimClient {
+	return &RedeemBatchClaimClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `redeembatchclaim.Hooks(f(g(h())))`.
+func (c *RedeemBatchClaimClient) Use(hooks ...Hook) {
+	c.hooks.RedeemBatchClaim = append(c.hooks.RedeemBatchClaim, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `redeembatchclaim.Intercept(f(g(h())))`.
+func (c *RedeemBatchClaimClient) Intercept(interceptors ...Interceptor) {
+	c.inters.RedeemBatchClaim = append(c.inters.RedeemBatchClaim, interceptors...)
+}
+
+// Create returns a builder for creating a RedeemBatchClaim entity.
+func (c *RedeemBatchClaimClient) Create() *RedeemBatchClaimCreate {
+	mutation := newRedeemBatchClaimMutation(c.config, OpCreate)
+	return &RedeemBatchClaimCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of RedeemBatchClaim entities.
+func (c *RedeemBatchClaimClient) CreateBulk(builders ...*RedeemBatchClaimCreate) *RedeemBatchClaimCreateBulk {
+	return &RedeemBatchClaimCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *RedeemBatchClaimClient) MapCreateBulk(slice any, setFunc func(*RedeemBatchClaimCreate, int)) *RedeemBatchClaimCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &RedeemBatchClaimCreateBulk{err: fmt.Errorf("calling to RedeemBatchClaimClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*RedeemBatchClaimCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &RedeemBatchClaimCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for RedeemBatchClaim.
+func (c *RedeemBatchClaimClient) Update() *RedeemBatchClaimUpdate {
+	mutation := newRedeemBatchClaimMutation(c.config, OpUpdate)
+	return &RedeemBatchClaimUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *RedeemBatchClaimClient) UpdateOne(_m *RedeemBatchClaim) *RedeemBatchClaimUpdateOne {
+	mutation := newRedeemBatchClaimMutation(c.config, OpUpdateOne, withRedeemBatchClaim(_m))
+	return &RedeemBatchClaimUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *RedeemBatchClaimClient) UpdateOneID(id int64) *RedeemBatchClaimUpdateOne {
+	mutation := newRedeemBatchClaimMutation(c.config, OpUpdateOne, withRedeemBatchClaimID(id))
+	return &RedeemBatchClaimUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for RedeemBatchClaim.
+func (c *RedeemBatchClaimClient) Delete() *RedeemBatchClaimDelete {
+	mutation := newRedeemBatchClaimMutation(c.config, OpDelete)
+	return &RedeemBatchClaimDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *RedeemBatchClaimClient) DeleteOne(_m *RedeemBatchClaim) *RedeemBatchClaimDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *RedeemBatchClaimClient) DeleteOneID(id int64) *RedeemBatchClaimDeleteOne {
+	builder := c.Delete().Where(redeembatchclaim.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &RedeemBatchClaimDeleteOne{builder}
+}
+
+// Query returns a query builder for RedeemBatchClaim.
+func (c *RedeemBatchClaimClient) Query() *RedeemBatchClaimQuery {
+	return &RedeemBatchClaimQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeRedeemBatchClaim},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a RedeemBatchClaim entity by its id.
+func (c *RedeemBatchClaimClient) Get(ctx context.Context, id int64) (*RedeemBatchClaim, error) {
+	return c.Query().Where(redeembatchclaim.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *RedeemBatchClaimClient) GetX(ctx context.Context, id int64) *RedeemBatchClaim {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *RedeemBatchClaimClient) Hooks() []Hook {
+	return c.hooks.RedeemBatchClaim
+}
+
+// Interceptors returns the client interceptors.
+func (c *RedeemBatchClaimClient) Interceptors() []Interceptor {
+	return c.inters.RedeemBatchClaim
+}
+
+func (c *RedeemBatchClaimClient) mutate(ctx context.Context, m *RedeemBatchClaimMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&RedeemBatchClaimCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&RedeemBatchClaimUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&RedeemBatchClaimUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&RedeemBatchClaimDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown RedeemBatchClaim mutation op: %q", m.Op())
+	}
+}
+
 // RedeemCodeClient is a client for the RedeemCode schema.
 type RedeemCodeClient struct {
 	config
@@ -7398,10 +7539,10 @@ type (
 		ChannelMonitorRequestTemplate, ErrorPassthroughRule, Group, IdempotencyRecord,
 		IdentityAdoptionDecision, PaymentAuditLog, PaymentOrder,
 		PaymentProviderInstance, PendingAuthSession, PromoCode, PromoCodeUsage, Proxy,
-		RedeemCode, SecuritySecret, Setting, SubscriptionPlan, TLSFingerprintProfile,
-		UsageCleanupTask, UsageLog, User, UserAllowedGroup, UserAttributeDefinition,
-		UserAttributeValue, UserCheckin, UserCheckinBlacklist, UserImage,
-		UserImageTask, UserPlatformQuota, UserSubscription []ent.Hook
+		RedeemBatchClaim, RedeemCode, SecuritySecret, Setting, SubscriptionPlan,
+		TLSFingerprintProfile, UsageCleanupTask, UsageLog, User, UserAllowedGroup,
+		UserAttributeDefinition, UserAttributeValue, UserCheckin, UserCheckinBlacklist,
+		UserImage, UserImageTask, UserPlatformQuota, UserSubscription []ent.Hook
 	}
 	inters struct {
 		APIKey, Account, AccountGroup, Announcement, AnnouncementRead, AuthIdentity,
@@ -7410,10 +7551,10 @@ type (
 		ChannelMonitorRequestTemplate, ErrorPassthroughRule, Group, IdempotencyRecord,
 		IdentityAdoptionDecision, PaymentAuditLog, PaymentOrder,
 		PaymentProviderInstance, PendingAuthSession, PromoCode, PromoCodeUsage, Proxy,
-		RedeemCode, SecuritySecret, Setting, SubscriptionPlan, TLSFingerprintProfile,
-		UsageCleanupTask, UsageLog, User, UserAllowedGroup, UserAttributeDefinition,
-		UserAttributeValue, UserCheckin, UserCheckinBlacklist, UserImage,
-		UserImageTask, UserPlatformQuota, UserSubscription []ent.Interceptor
+		RedeemBatchClaim, RedeemCode, SecuritySecret, Setting, SubscriptionPlan,
+		TLSFingerprintProfile, UsageCleanupTask, UsageLog, User, UserAllowedGroup,
+		UserAttributeDefinition, UserAttributeValue, UserCheckin, UserCheckinBlacklist,
+		UserImage, UserImageTask, UserPlatformQuota, UserSubscription []ent.Interceptor
 	}
 )
 

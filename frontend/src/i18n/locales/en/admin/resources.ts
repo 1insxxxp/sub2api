@@ -251,6 +251,9 @@ export default {
       subscription: 'Subscription',
       invitation: 'Invitation',
       invitationHint: 'Invitation codes are used to restrict user registration. They are automatically marked as used after use.',
+      singleUsePerUser: 'Activity batch: one code per user',
+      singleUsePerUserHint: 'Codes generated in this operation share one batch, and each account may redeem only one.',
+      singleUseBadge: 'One per user',
       unused: 'Unused',
       used: 'Used',
       columns: {

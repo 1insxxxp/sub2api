@@ -309,6 +309,18 @@ func (f ProxyFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.ProxyMutation", m)
 }
 
+// The RedeemBatchClaimFunc type is an adapter to allow the use of ordinary
+// function as RedeemBatchClaim mutator.
+type RedeemBatchClaimFunc func(context.Context, *ent.RedeemBatchClaimMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f RedeemBatchClaimFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.RedeemBatchClaimMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.RedeemBatchClaimMutation", m)
+}
+
 // The RedeemCodeFunc type is an adapter to allow the use of ordinary
 // function as RedeemCode mutator.
 type RedeemCodeFunc func(context.Context, *ent.RedeemCodeMutation) (ent.Value, error)
