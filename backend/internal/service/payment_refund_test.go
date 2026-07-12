@@ -4,6 +4,7 @@ package service
 
 import (
 	"context"
+	"errors"
 	"strconv"
 	"testing"
 	"time"
@@ -64,6 +65,50 @@ func TestValidateRefundRequestRejectsLegacyGuessedProviderInstance(t *testing.T)
 	_, err = svc.validateRefundRequest(ctx, order.ID, user.ID)
 	require.Error(t, err)
 	require.Equal(t, "USER_REFUND_DISABLED", infraerrors.Reason(err))
+}
+
+func TestMarkRefundOkReconcilesAffiliateAfterSuccessfulPersistence(t *testing.T) {
+	ctx := context.Background()
+	client := newPaymentConfigServiceTestClient(t)
+	ensurePaymentAuditOrderActionUniqueIndex(t, ctx, client)
+	user, err := client.User.Create().SetEmail("refund-affiliate@example.com").SetPasswordHash("hash").SetUsername("refund-affiliate").Save(ctx)
+	require.NoError(t, err)
+	order, err := client.PaymentOrder.Create().
+		SetUserID(user.ID).SetUserEmail(user.Email).SetUserName(user.Username).
+		SetAmount(100).SetPayAmount(100).SetFeeRate(0).
+		SetRechargeCode("REFUND-AFFILIATE-RECONCILE").SetOutTradeNo("sub2_refund_affiliate_reconcile").
+		SetPaymentType(payment.TypeAlipay).SetPaymentTradeNo("trade-refund-affiliate-reconcile").SetOrderType(payment.OrderTypeBalance).
+		SetStatus(OrderStatusCompleted).SetExpiresAt(time.Now().Add(time.Hour)).SetClientIP("127.0.0.1").SetSrcHost("api.example.com").Save(ctx)
+	require.NoError(t, err)
+
+	settings := &paymentFulfillmentSettingRepoStub{values: map[string]string{
+		SettingKeyAffiliateQualificationAmount: "50",
+		SettingKeyAffiliateRebateRate:          "8",
+		SettingKeyAffiliateBronzeInvitees:      "3",
+		SettingKeyAffiliateBronzeRate:          "10",
+		SettingKeyAffiliateSilverInvitees:      "10",
+		SettingKeyAffiliateSilverRate:          "12",
+		SettingKeyAffiliateGoldInvitees:        "30",
+		SettingKeyAffiliateGoldRate:            "15",
+	}}
+	affiliateRepo := &paymentFulfillmentAffiliateRepoStub{reconcileErr: errors.New("post refund reconcile failed")}
+	svc := &PaymentService{entClient: client, affiliateService: NewAffiliateService(affiliateRepo, NewSettingService(settings, nil), nil, nil)}
+	plan := &RefundPlan{OrderID: order.ID, Order: order, RefundAmount: 100, Reason: "full refund", Force: true}
+
+	result, err := svc.markRefundOk(ctx, plan)
+
+	require.NoError(t, err)
+	require.True(t, result.Success)
+	reloaded, err := client.PaymentOrder.Get(ctx, order.ID)
+	require.NoError(t, err)
+	require.Equal(t, OrderStatusRefunded, reloaded.Status)
+	require.Equal(t, "true", settings.values[SettingKeyAffiliateTierReconcileRequired])
+	failures, err := client.PaymentAuditLog.Query().Where(
+		paymentauditlog.OrderIDEQ(strconv.FormatInt(order.ID, 10)),
+		paymentauditlog.ActionEQ("AFFILIATE_TIER_RECONCILE_FAILED"),
+	).Count(ctx)
+	require.NoError(t, err)
+	require.Equal(t, 1, failures)
 }
 
 func TestPrepareRefundRejectsLegacyGuessedProviderInstance(t *testing.T) {

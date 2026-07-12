@@ -53,6 +53,9 @@ type paymentFulfillmentAffiliateRepoStub struct {
 	inviteeSummary *AffiliateSummary
 	inviterSummary *AffiliateSummary
 	accrueCalls    []paymentFulfillmentAffiliateAccrueCall
+	qualifiedCount int
+	reconcileErr   error
+	reconcileCalls int
 }
 
 func (r *paymentFulfillmentAffiliateRepoStub) EnsureUserAffiliate(_ context.Context, userID int64) (*AffiliateSummary, error) {
@@ -142,6 +145,27 @@ func (r *paymentFulfillmentAffiliateRepoStub) ListAffiliateTransferRecords(conte
 
 func (r *paymentFulfillmentAffiliateRepoStub) GetAffiliateUserOverview(context.Context, int64) (*AffiliateUserOverview, error) {
 	panic("unexpected GetAffiliateUserOverview call")
+}
+
+func (r *paymentFulfillmentAffiliateRepoStub) ReconcileInviteeQualification(context.Context, int64, float64) (*AffiliateQualification, error) {
+	r.reconcileCalls++
+	if r.reconcileErr != nil {
+		return nil, r.reconcileErr
+	}
+	return &AffiliateQualification{}, nil
+}
+
+func (r *paymentFulfillmentAffiliateRepoStub) CountQualifiedInvitees(context.Context, int64, float64) (int, error) {
+	return r.qualifiedCount, nil
+}
+
+func (r *paymentFulfillmentAffiliateRepoStub) ReconcileAllAffiliateQualifications(context.Context, float64, int) error {
+	r.reconcileCalls++
+	return r.reconcileErr
+}
+
+func (r *paymentFulfillmentAffiliateRepoStub) TryWithAffiliateQualificationReconcileLock(ctx context.Context, fn func(context.Context) error) (bool, error) {
+	return true, fn(ctx)
 }
 
 type paymentFulfillmentSettingRepoStub struct {
@@ -817,6 +841,56 @@ func assertPaymentSubscriptionExpiry(t *testing.T, repo *subscriptionUserSubRepo
 	sub, err := repo.GetByUserIDAndGroupID(context.Background(), order.UserID, *order.SubscriptionGroupID)
 	require.NoError(t, err)
 	require.True(t, sub.ExpiresAt.Equal(expected), "subscription expiry changed from %s to %s", expected, sub.ExpiresAt)
+}
+
+func TestApplyAffiliateRebateFallsBackWhenPendingReconcileFails(t *testing.T) {
+	ctx := context.Background()
+	client := newPaymentConfigServiceTestClient(t)
+	ensurePaymentAuditOrderActionUniqueIndex(t, ctx, client)
+
+	user, err := client.User.Create().SetEmail("affiliate-fallback@example.com").SetPasswordHash("hash").SetUsername("affiliate-fallback").Save(ctx)
+	require.NoError(t, err)
+	order, err := client.PaymentOrder.Create().
+		SetUserID(user.ID).SetUserEmail(user.Email).SetUserName(user.Username).
+		SetAmount(100).SetPayAmount(100).SetFeeRate(0).
+		SetRechargeCode("PAY-AFFILIATE-FALLBACK").SetOutTradeNo("sub2_affiliate_fallback").
+		SetPaymentType(payment.TypeAlipay).SetPaymentTradeNo("trade-affiliate-fallback").SetOrderType(payment.OrderTypeBalance).
+		SetStatus(OrderStatusRecharging).SetExpiresAt(time.Now().Add(time.Hour)).
+		SetClientIP("127.0.0.1").SetSrcHost("api.example.com").Save(ctx)
+	require.NoError(t, err)
+
+	inviterID := int64(9010)
+	affiliateRepo := &paymentFulfillmentAffiliateRepoStub{
+		inviteeSummary: &AffiliateSummary{UserID: user.ID, InviterID: &inviterID, CreatedAt: time.Now().Add(-time.Hour)},
+		inviterSummary: &AffiliateSummary{UserID: inviterID},
+		reconcileErr:   errors.New("pending qualification reconcile failed"),
+	}
+	settings := &paymentFulfillmentSettingRepoStub{values: map[string]string{
+		SettingKeyAffiliateEnabled:               "true",
+		SettingKeyAffiliateRebateRate:            "8",
+		SettingKeyAffiliateTierReconcileRequired: "true",
+		SettingKeyAffiliateQualificationAmount:   "50",
+		SettingKeyAffiliateBronzeInvitees:        "3",
+		SettingKeyAffiliateBronzeRate:            "10",
+		SettingKeyAffiliateSilverInvitees:        "10",
+		SettingKeyAffiliateSilverRate:            "12",
+		SettingKeyAffiliateGoldInvitees:          "30",
+		SettingKeyAffiliateGoldRate:              "15",
+	}}
+	svc := &PaymentService{entClient: client, affiliateService: NewAffiliateService(affiliateRepo, NewSettingService(settings, nil), nil, nil)}
+
+	err = svc.applyAffiliateRebateForOrder(ctx, order)
+
+	require.NoError(t, err)
+	require.Len(t, affiliateRepo.accrueCalls, 1)
+	require.Equal(t, 8.0, affiliateRepo.accrueCalls[0].amount)
+	require.Equal(t, "true", settings.values[SettingKeyAffiliateTierReconcileRequired])
+	fallbacks, err := client.PaymentAuditLog.Query().Where(
+		paymentauditlog.OrderIDEQ(strconv.FormatInt(order.ID, 10)),
+		paymentauditlog.ActionEQ("AFFILIATE_TIER_FALLBACK"),
+	).Count(ctx)
+	require.NoError(t, err)
+	require.Equal(t, 1, fallbacks)
 }
 
 func TestExecuteSubscriptionFulfillmentAppliesAffiliateRebate(t *testing.T) {

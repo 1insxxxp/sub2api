@@ -163,6 +163,45 @@ func TestAffiliateService_AccrueKeepsFlatRateWithoutPendingReconcile(t *testing.
 	require.Equal(t, "true", settings.values[SettingKeyAffiliateTierReconcileRequired])
 }
 
+func TestAffiliateService_TierAwareAccrueUsesResolvedTierRate(t *testing.T) {
+	inviterID := int64(42)
+	settings := &affiliateTierServiceSettingRepo{values: map[string]string{
+		SettingKeyAffiliateEnabled:             "true",
+		SettingKeyAffiliateQualificationAmount: "50",
+		SettingKeyAffiliateBronzeInvitees:      "3",
+		SettingKeyAffiliateBronzeRate:          "10",
+		SettingKeyAffiliateSilverInvitees:      "10",
+		SettingKeyAffiliateSilverRate:          "12",
+		SettingKeyAffiliateGoldInvitees:        "30",
+		SettingKeyAffiliateGoldRate:            "15",
+	}}
+	repo := &affiliateTierServiceRepoStub{
+		qualifiedCount: 10,
+		inviteeSummary: &AffiliateSummary{UserID: 7, InviterID: &inviterID},
+		inviterSummary: &AffiliateSummary{UserID: inviterID},
+	}
+	svc := NewAffiliateService(repo, NewSettingService(settings, nil), nil, nil)
+
+	rebate, err := svc.AccrueTierAwareInviteRebateForOrder(context.Background(), 7, 100, nil)
+
+	require.NoError(t, err)
+	require.Equal(t, 12.0, rebate)
+	require.Equal(t, 12.0, repo.accruedAmount)
+	require.Equal(t, 1, repo.countCallCount())
+}
+
+func TestAffiliateService_ReconcileInviteeFailureKeepsRecoveryMarker(t *testing.T) {
+	wantErr := errors.New("invitee reconcile failed")
+	settings := newAffiliateTierServiceSettingRepo()
+	repo := &affiliateTierServiceRepoStub{reconcileInviteeErr: wantErr}
+	svc := NewAffiliateService(repo, NewSettingService(settings, nil), nil, nil)
+
+	err := svc.ReconcileInviteeQualification(context.Background(), 7)
+
+	require.ErrorIs(t, err, wantErr)
+	require.Equal(t, "true", settings.values[SettingKeyAffiliateTierReconcileRequired])
+}
+
 func TestAffiliateService_LegacyRateRemainsFlatCustomCompatible(t *testing.T) {
 	settings := &affiliateTierServiceSettingRepo{values: map[string]string{
 		SettingKeyAffiliateRebateRate: "15",
@@ -264,19 +303,20 @@ func TestAffiliateService_QualificationReconcileDatabaseLockCoordinatesInstances
 
 type affiliateTierServiceRepoStub struct {
 	AffiliateRepository
-	mu                sync.Mutex
-	qualifiedCount    int
-	countThreshold    float64
-	reconcileCalls    int
-	reconcileErr      error
-	reconcileStarted  chan struct{}
-	releaseReconcile  chan struct{}
-	reconcileFinished bool
-	countCalls        int
-	inviteeSummary    *AffiliateSummary
-	inviterSummary    *AffiliateSummary
-	accruedAmount     float64
-	advisoryLockHeld  bool
+	mu                  sync.Mutex
+	qualifiedCount      int
+	countThreshold      float64
+	reconcileCalls      int
+	reconcileErr        error
+	reconcileInviteeErr error
+	reconcileStarted    chan struct{}
+	releaseReconcile    chan struct{}
+	reconcileFinished   bool
+	countCalls          int
+	inviteeSummary      *AffiliateSummary
+	inviterSummary      *AffiliateSummary
+	accruedAmount       float64
+	advisoryLockHeld    bool
 }
 
 func (r *affiliateTierServiceRepoStub) CountQualifiedInvitees(_ context.Context, _ int64, threshold float64) (int, error) {
@@ -288,7 +328,7 @@ func (r *affiliateTierServiceRepoStub) CountQualifiedInvitees(_ context.Context,
 }
 
 func (r *affiliateTierServiceRepoStub) ReconcileInviteeQualification(context.Context, int64, float64) (*AffiliateQualification, error) {
-	panic("unexpected ReconcileInviteeQualification call")
+	return nil, r.reconcileInviteeErr
 }
 
 func (r *affiliateTierServiceRepoStub) ReconcileAllAffiliateQualifications(context.Context, float64, int) error {

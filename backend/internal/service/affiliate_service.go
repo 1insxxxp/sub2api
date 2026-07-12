@@ -346,6 +346,16 @@ func (s *AffiliateService) AccrueInviteRebate(ctx context.Context, inviteeUserID
 }
 
 func (s *AffiliateService) AccrueInviteRebateForOrder(ctx context.Context, inviteeUserID int64, baseRechargeAmount float64, sourceOrderID *int64) (float64, error) {
+	return s.accrueInviteRebateForOrder(ctx, inviteeUserID, baseRechargeAmount, sourceOrderID, false)
+}
+
+// AccrueTierAwareInviteRebateForOrder applies the configured automatic tier
+// rate while preserving the legacy rebate lifecycle and order idempotency.
+func (s *AffiliateService) AccrueTierAwareInviteRebateForOrder(ctx context.Context, inviteeUserID int64, baseRechargeAmount float64, sourceOrderID *int64) (float64, error) {
+	return s.accrueInviteRebateForOrder(ctx, inviteeUserID, baseRechargeAmount, sourceOrderID, true)
+}
+
+func (s *AffiliateService) accrueInviteRebateForOrder(ctx context.Context, inviteeUserID int64, baseRechargeAmount float64, sourceOrderID *int64, tierAware bool) (float64, error) {
 	if s == nil || s.repo == nil {
 		return 0, nil
 	}
@@ -380,6 +390,12 @@ func (s *AffiliateService) AccrueInviteRebateForOrder(ctx context.Context, invit
 	}
 
 	rebateRatePercent := s.resolveRebateRatePercent(ctx, inviterSummary)
+	if tierAware {
+		rebateRatePercent, err = s.ResolveTierAwareRate(ctx, inviterSummary)
+		if err != nil {
+			return 0, err
+		}
+	}
 	rebate := roundTo(baseRechargeAmount*(rebateRatePercent/100), 8)
 	if rebate <= 0 {
 		return 0, nil
@@ -541,6 +557,29 @@ func (s *AffiliateService) ReconcilePendingAffiliateQualifications(ctx context.C
 		}
 		return nil
 	})
+	return err
+}
+
+// ReconcileInviteeQualification refreshes one invitee's qualification from
+// completed orders. It deliberately does not clear the global marker: a
+// successful single-user repair does not prove the rest of the dataset is
+// reconciled.
+func (s *AffiliateService) ReconcileInviteeQualification(ctx context.Context, inviteeUserID int64) error {
+	if s == nil || s.qualificationRepo == nil {
+		return infraerrors.ServiceUnavailable("SERVICE_UNAVAILABLE", "affiliate qualification service unavailable")
+	}
+	if dbent.TxFromContext(ctx) != nil {
+		return fmt.Errorf("affiliate invitee qualification reconcile requires a non-transaction context")
+	}
+	config, err := s.affiliateTierConfigStrict(ctx)
+	if err == nil {
+		_, err = s.qualificationRepo.ReconcileInviteeQualification(ctx, inviteeUserID, config.QualificationAmount)
+	}
+	if err != nil && s.settingService != nil {
+		// A failed local repair must keep the recovery work visible to the next
+		// payment/startup attempt. Marker write is best-effort by design.
+		_ = s.settingService.SetAffiliateTierReconcileRequired(ctx, true)
+	}
 	return err
 }
 

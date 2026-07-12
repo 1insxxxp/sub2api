@@ -384,7 +384,22 @@ func (s *PaymentService) markCompleted(ctx context.Context, o *dbent.PaymentOrde
 		})
 		s.dispatchPaymentFulfillmentNotification(o, auditAction)
 	}
+	s.reconcileAffiliateAfterOrderCompletion(ctx, o)
 	return nil
+}
+
+func (s *PaymentService) reconcileAffiliateAfterOrderCompletion(ctx context.Context, o *dbent.PaymentOrder) {
+	if s == nil || s.affiliateService == nil || o == nil {
+		return
+	}
+	if err := s.affiliateService.ReconcileInviteeQualification(dbent.WithoutTx(ctx), o.UserID); err != nil {
+		slog.Warn("affiliate qualification reconcile after payment completion failed", "orderID", o.ID, "inviteeID", o.UserID, "error", err)
+		s.writeAuditLog(ctx, o.ID, "AFFILIATE_TIER_RECONCILE_FAILED", "system", map[string]any{
+			"inviteeUserID": o.UserID,
+			"phase":         "post_completion",
+			"error":         err.Error(),
+		})
+	}
 }
 
 func (s *PaymentService) dispatchPaymentFulfillmentNotification(o *dbent.PaymentOrder, auditAction string) {
@@ -626,6 +641,26 @@ func (s *PaymentService) applyAffiliateRebateForOrder(ctx context.Context, o *db
 		return nil
 	}
 
+	tierAware := true
+	reconcileCtx := dbent.WithoutTx(ctx)
+	if err := s.affiliateService.ReconcilePendingAffiliateQualifications(reconcileCtx); err != nil {
+		tierAware = false
+		s.writeAuditLog(ctx, o.ID, "AFFILIATE_TIER_FALLBACK", "system", map[string]any{
+			"phase": "pending_reconcile",
+			"error": err.Error(),
+		})
+	}
+	if tierAware {
+		if err := s.affiliateService.ReconcileInviteeQualification(reconcileCtx, o.UserID); err != nil {
+			tierAware = false
+			s.writeAuditLog(ctx, o.ID, "AFFILIATE_TIER_FALLBACK", "system", map[string]any{
+				"phase":         "invitee_reconcile",
+				"inviteeUserID": o.UserID,
+				"error":         err.Error(),
+			})
+		}
+	}
+
 	tx, err := s.entClient.Tx(ctx)
 	if err != nil {
 		s.writeAuditLog(ctx, o.ID, "AFFILIATE_REBATE_FAILED", "system", map[string]any{
@@ -648,7 +683,20 @@ func (s *PaymentService) applyAffiliateRebateForOrder(ctx context.Context, o *db
 	}
 
 	sourceOrderID := o.ID
-	rebateAmount, err := s.affiliateService.AccrueInviteRebateForOrder(txCtx, o.UserID, baseAmount, &sourceOrderID)
+	var rebateAmount float64
+	if tierAware {
+		rebateAmount, err = s.affiliateService.AccrueTierAwareInviteRebateForOrder(txCtx, o.UserID, baseAmount, &sourceOrderID)
+		if err != nil {
+			s.writeAuditLog(ctx, o.ID, "AFFILIATE_TIER_FALLBACK", "system", map[string]any{
+				"phase": "tier_rate",
+				"error": err.Error(),
+			})
+			tierAware = false
+		}
+	}
+	if !tierAware {
+		rebateAmount, err = s.affiliateService.AccrueInviteRebateForOrder(txCtx, o.UserID, baseAmount, &sourceOrderID)
+	}
 	if err != nil {
 		s.writeAuditLog(ctx, o.ID, "AFFILIATE_REBATE_FAILED", "system", map[string]any{
 			"error": err.Error(),
