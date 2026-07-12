@@ -583,9 +583,9 @@ func (s *PaymentService) markRefundOk(ctx context.Context, p *RefundPlan) (*Refu
 		}
 		return nil, infraerrors.Conflict("CONFLICT", "refund status changed before finalization")
 	}
-	var generation int64
+	var token AffiliateReconcileToken
 	if s.affiliateService != nil {
-		generation, err = s.affiliateService.MarkReconcileRequired(txCtx)
+		token, err = s.affiliateService.MarkReconcileRequired(txCtx)
 		if err != nil {
 			return nil, fmt.Errorf("mark affiliate qualification dirty after refund: %w", err)
 		}
@@ -596,7 +596,7 @@ func (s *PaymentService) markRefundOk(ctx context.Context, p *RefundPlan) (*Refu
 	if !s.hasAuditLog(ctx, p.OrderID, "REFUND_SUCCESS") {
 		s.writeAuditLog(ctx, p.OrderID, "REFUND_SUCCESS", "admin", map[string]any{"refundAmount": p.RefundAmount, "reason": p.Reason, "balanceDeducted": p.BalanceToDeduct, "force": p.Force})
 	}
-	s.reconcileAffiliateAfterOrderCompletion(ctx, p.Order, generation)
+	s.reconcileAffiliateAfterOrderCompletion(ctx, p.Order, token)
 	return &RefundResult{Success: true, BalanceDeducted: p.BalanceToDeduct, SubDaysDeducted: p.SubDaysToDeduct}, nil
 }
 

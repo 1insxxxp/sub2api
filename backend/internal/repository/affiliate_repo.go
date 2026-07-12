@@ -132,8 +132,8 @@ func NewAffiliateRepository(client *dbent.Client, db *sql.DB) service.AffiliateR
 
 var _ service.AffiliateQualificationRepository = (*affiliateRepository)(nil)
 
-func (r *affiliateRepository) MarkReconcileRequired(ctx context.Context) (int64, error) {
-	var generation int64
+func (r *affiliateRepository) MarkReconcileRequired(ctx context.Context) (service.AffiliateReconcileToken, error) {
+	var token service.AffiliateReconcileToken
 	err := r.withTx(ctx, func(txCtx context.Context, txClient *dbent.Client) error {
 		if _, err := txClient.ExecContext(txCtx, `
 INSERT INTO settings (key, value, updated_at)
@@ -141,14 +141,47 @@ VALUES ($1, '1', NOW())
 ON CONFLICT (key) DO NOTHING`, service.SettingKeyAffiliateTierReconcileGeneration); err != nil {
 			return fmt.Errorf("initialize affiliate reconcile generation: %w", err)
 		}
+		if _, err := txClient.ExecContext(txCtx, `
+INSERT INTO settings (key, value, updated_at)
+VALUES ($1, 'false', NOW())
+ON CONFLICT (key) DO NOTHING`, service.SettingKeyAffiliateTierReconcileRequired); err != nil {
+			return fmt.Errorf("initialize affiliate reconcile marker: %w", err)
+		}
 		rows, err := txClient.QueryContext(txCtx, `
-UPDATE settings
-SET value = (value::bigint + 1)::text,
-    updated_at = NOW()
-WHERE key = $1
-RETURNING value::bigint`, service.SettingKeyAffiliateTierReconcileGeneration)
+WITH locked AS MATERIALIZED (
+    SELECT key, value
+    FROM settings
+    WHERE key IN ($1, $2)
+    ORDER BY key
+    FOR UPDATE
+),
+old_state AS MATERIALIZED (
+    SELECT COALESCE(BOOL_OR(key = $2 AND LOWER(TRIM(value)) = 'true'), FALSE) AS was_pending_before,
+           COALESCE(MAX(CASE WHEN key = $1 THEN value::bigint END), 0) AS generation
+    FROM locked
+),
+bumped AS (
+    UPDATE settings AS generation
+    SET value = (old_state.generation + 1)::text,
+        updated_at = NOW()
+    FROM old_state
+    WHERE generation.key = $1
+    RETURNING generation.value::bigint AS generation
+),
+marked AS (
+    UPDATE settings AS marker
+    SET value = 'true', updated_at = NOW()
+    FROM old_state
+    WHERE marker.key = $2
+    RETURNING 1
+)
+SELECT bumped.generation, old_state.was_pending_before
+FROM bumped CROSS JOIN old_state CROSS JOIN marked`,
+			service.SettingKeyAffiliateTierReconcileGeneration,
+			service.SettingKeyAffiliateTierReconcileRequired,
+		)
 		if err != nil {
-			return fmt.Errorf("bump affiliate reconcile generation: %w", err)
+			return fmt.Errorf("mark affiliate reconcile generation required: %w", err)
 		}
 		if !rows.Next() {
 			closeErr := rows.Close()
@@ -157,25 +190,18 @@ RETURNING value::bigint`, service.SettingKeyAffiliateTierReconcileGeneration)
 			}
 			return errors.Join(fmt.Errorf("affiliate reconcile generation row missing"), closeErr)
 		}
-		if err := rows.Scan(&generation); err != nil {
+		if err := rows.Scan(&token.Generation, &token.WasPendingBefore); err != nil {
 			return errors.Join(err, rows.Close())
 		}
 		if err := rows.Close(); err != nil {
 			return err
 		}
-		if _, err := txClient.ExecContext(txCtx, `
-INSERT INTO settings (key, value, updated_at)
-VALUES ($1, 'true', NOW())
-ON CONFLICT (key) DO UPDATE
-SET value = 'true', updated_at = NOW()`, service.SettingKeyAffiliateTierReconcileRequired); err != nil {
-			return fmt.Errorf("set affiliate reconcile required: %w", err)
-		}
 		return nil
 	})
 	if err != nil {
-		return 0, err
+		return service.AffiliateReconcileToken{}, err
 	}
-	return generation, nil
+	return token, nil
 }
 
 func (r *affiliateRepository) ReadReconcilePendingSnapshot(ctx context.Context) (service.AffiliateReconcilePendingSnapshot, error) {

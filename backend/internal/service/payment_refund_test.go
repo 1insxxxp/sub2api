@@ -173,6 +173,31 @@ func TestMarkRefundOkRollsBackTerminalStatusWhenGenerationBumpFails(t *testing.T
 	require.Zero(t, reloaded.RefundAmount)
 }
 
+func TestMarkRefundOkLocalSuccessPreservesPreexistingPendingGeneration(t *testing.T) {
+	ctx := context.Background()
+	client := newPaymentConfigServiceTestClient(t)
+	user, err := client.User.Create().SetEmail("refund-pending-generation@example.com").SetPasswordHash("hash").SetUsername("refund-pending-generation").Save(ctx)
+	require.NoError(t, err)
+	order, err := client.PaymentOrder.Create().SetUserID(user.ID).SetUserEmail(user.Email).SetUserName(user.Username).
+		SetAmount(100).SetPayAmount(100).SetFeeRate(0).SetRechargeCode("REFUND-PENDING-GENERATION").SetOutTradeNo("sub2_refund_pending_generation").
+		SetPaymentType(payment.TypeAlipay).SetPaymentTradeNo("trade-refund-pending-generation").SetOrderType(payment.OrderTypeBalance).
+		SetStatus(OrderStatusCompleted).SetExpiresAt(time.Now().Add(time.Hour)).SetClientIP("127.0.0.1").SetSrcHost("api.example.com").Save(ctx)
+	require.NoError(t, err)
+	repo := &paymentFulfillmentAffiliateRepoStub{reconcileRequired: true, generation: 10}
+	svc := &PaymentService{entClient: client, affiliateService: NewAffiliateService(repo, nil, nil, nil)}
+	plan := &RefundPlan{OrderID: order.ID, Order: order, RefundAmount: 40, Reason: "partial"}
+
+	_, err = svc.markRefundOk(ctx, plan)
+
+	require.NoError(t, err)
+	require.True(t, repo.reconcileRequired)
+	require.Equal(t, int64(11), repo.generation)
+	require.Equal(t, 1, repo.reconcileCalls)
+	_, err = svc.markRefundOk(ctx, plan)
+	require.NoError(t, err)
+	require.Equal(t, int64(11), repo.generation, "refund retry must not bump generation")
+}
+
 func TestRequestRefundDoesNotRefreshAffiliateQualification(t *testing.T) {
 	ctx := context.Background()
 	client := newPaymentConfigServiceTestClient(t)

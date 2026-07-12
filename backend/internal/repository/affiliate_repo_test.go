@@ -70,18 +70,19 @@ func TestAffiliateQualificationMarkReconcileRequiredIsAtomic(t *testing.T) {
 	mock.ExpectExec("(?s)INSERT INTO settings .* DO NOTHING").
 		WithArgs(service.SettingKeyAffiliateTierReconcileGeneration).
 		WillReturnResult(sqlmock.NewResult(0, 1))
-	mock.ExpectQuery("(?s)UPDATE settings .* RETURNING value::bigint").
-		WithArgs(service.SettingKeyAffiliateTierReconcileGeneration).
-		WillReturnRows(sqlmock.NewRows([]string{"generation"}).AddRow(int64(7)))
-	mock.ExpectExec("(?s)INSERT INTO settings .* DO UPDATE").
+	mock.ExpectExec("(?s)INSERT INTO settings .* DO NOTHING").
 		WithArgs(service.SettingKeyAffiliateTierReconcileRequired).
 		WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectQuery("(?s)WITH locked AS .* UPDATE settings AS marker .* SELECT bumped.generation, old_state.was_pending_before").
+		WithArgs(service.SettingKeyAffiliateTierReconcileGeneration, service.SettingKeyAffiliateTierReconcileRequired).
+		WillReturnRows(sqlmock.NewRows([]string{"generation", "was_pending_before"}).AddRow(int64(7), true))
 	mock.ExpectCommit()
 
-	generation, err := repo.MarkReconcileRequired(context.Background())
+	token, err := repo.MarkReconcileRequired(context.Background())
 
 	require.NoError(t, err)
-	require.Equal(t, int64(7), generation)
+	require.Equal(t, int64(7), token.Generation)
+	require.True(t, token.WasPendingBefore)
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 

@@ -222,21 +222,24 @@ func TestAffiliateRepository_QualificationReconcileGenerationCAS(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	repo := NewAffiliateRepository(integrationEntClient, integrationDB).(service.AffiliateQualificationRepository)
+	clearAffiliateReconcilePending(t, ctx, repo)
 
 	first, err := repo.MarkReconcileRequired(ctx)
 	require.NoError(t, err)
+	require.False(t, first.WasPendingBefore)
 	snapshot, err := repo.ReadReconcilePendingSnapshot(ctx)
 	require.NoError(t, err)
 	require.True(t, snapshot.Required)
-	require.Equal(t, first, snapshot.Generation)
+	require.Equal(t, first.Generation, snapshot.Generation)
 
 	second, err := repo.MarkReconcileRequired(ctx)
 	require.NoError(t, err)
-	require.Greater(t, second, first)
-	cleared, err := repo.ClearReconcileRequiredIfGeneration(ctx, first)
+	require.True(t, second.WasPendingBefore)
+	require.Greater(t, second.Generation, first.Generation)
+	cleared, err := repo.ClearReconcileRequiredIfGeneration(ctx, first.Generation)
 	require.NoError(t, err)
 	require.False(t, cleared, "stale generation must not clear a newer dirty marker")
-	cleared, err = repo.ClearReconcileRequiredIfGeneration(ctx, second)
+	cleared, err = repo.ClearReconcileRequiredIfGeneration(ctx, second.Generation)
 	require.NoError(t, err)
 	require.True(t, cleared)
 }
@@ -253,8 +256,10 @@ func TestAffiliateRepository_QualificationServiceInstancesDatabaseLock(t *testin
 	settings := service.NewSettingService(settingsRepo, nil)
 	first := service.NewAffiliateService(repo1, settings, nil, nil)
 	second := service.NewAffiliateService(repo2, settings, nil, nil)
+	clearAffiliateReconcilePending(t, ctx, repo1)
 	initialGeneration, err := repo1.MarkReconcileRequired(ctx)
 	require.NoError(t, err)
+	require.False(t, initialGeneration.WasPendingBefore)
 
 	firstErr := make(chan error, 1)
 	go func() { firstErr <- first.ReconcilePendingAffiliateQualifications(ctx) }()
@@ -275,7 +280,7 @@ func TestAffiliateRepository_QualificationServiceInstancesDatabaseLock(t *testin
 
 	require.ErrorIs(t, secondErr, service.ErrAffiliateQualificationReconcileBusy)
 	require.True(t, snapshotWhileLocked.Required)
-	require.Equal(t, initialGeneration, snapshotWhileLocked.Generation)
+	require.Equal(t, initialGeneration.Generation, snapshotWhileLocked.Generation)
 	require.Equal(t, 1, callsWhileLocked)
 	select {
 	case err := <-firstErr:
@@ -286,7 +291,7 @@ func TestAffiliateRepository_QualificationServiceInstancesDatabaseLock(t *testin
 	finalSnapshot, err := repo2.ReadReconcilePendingSnapshot(ctx)
 	require.NoError(t, err)
 	require.False(t, finalSnapshot.Required)
-	require.Equal(t, initialGeneration, finalSnapshot.Generation)
+	require.Equal(t, initialGeneration.Generation, finalSnapshot.Generation)
 }
 
 func TestAffiliateRepository_QualificationFullReconcileDoesNotClearConcurrentGeneration(t *testing.T) {
@@ -298,8 +303,10 @@ func TestAffiliateRepository_QualificationFullReconcileDoesNotClearConcurrentGen
 	repo1 := &affiliateQualificationLockTestRepo{AffiliateRepository: base1, qualification: base1.(service.AffiliateQualificationRepository), shared: shared}
 	qualification2 := base2.(service.AffiliateQualificationRepository)
 	svc := service.NewAffiliateService(repo1, service.NewSettingService(newAffiliateQualificationLockSettingRepo(), nil), nil, nil)
+	clearAffiliateReconcilePending(t, ctx, repo1)
 	initialGeneration, err := repo1.MarkReconcileRequired(ctx)
 	require.NoError(t, err)
+	require.False(t, initialGeneration.WasPendingBefore)
 
 	result := make(chan error, 1)
 	go func() { result <- svc.ReconcilePendingAffiliateQualifications(ctx) }()
@@ -310,7 +317,8 @@ func TestAffiliateRepository_QualificationFullReconcileDoesNotClearConcurrentGen
 	}
 	concurrentGeneration, err := qualification2.MarkReconcileRequired(ctx)
 	require.NoError(t, err)
-	require.Greater(t, concurrentGeneration, initialGeneration)
+	require.True(t, concurrentGeneration.WasPendingBefore)
+	require.Greater(t, concurrentGeneration.Generation, initialGeneration.Generation)
 	close(shared.release)
 	select {
 	case err := <-result:
@@ -321,7 +329,19 @@ func TestAffiliateRepository_QualificationFullReconcileDoesNotClearConcurrentGen
 	finalSnapshot, err := qualification2.ReadReconcilePendingSnapshot(ctx)
 	require.NoError(t, err)
 	require.True(t, finalSnapshot.Required)
-	require.Equal(t, concurrentGeneration, finalSnapshot.Generation)
+	require.Equal(t, concurrentGeneration.Generation, finalSnapshot.Generation)
+}
+
+func clearAffiliateReconcilePending(t *testing.T, ctx context.Context, repo service.AffiliateQualificationRepository) {
+	t.Helper()
+	snapshot, err := repo.ReadReconcilePendingSnapshot(ctx)
+	require.NoError(t, err)
+	if !snapshot.Required {
+		return
+	}
+	cleared, err := repo.ClearReconcileRequiredIfGeneration(ctx, snapshot.Generation)
+	require.NoError(t, err)
+	require.True(t, cleared)
 }
 
 func TestAffiliateRepository_QualificationFullReconcileUsesIndependentTransactions(t *testing.T) {
@@ -431,7 +451,7 @@ func (r *affiliateQualificationLockTestRepo) TryWithAffiliateQualificationReconc
 	return r.qualification.TryWithAffiliateQualificationReconcileLock(ctx, fn)
 }
 
-func (r *affiliateQualificationLockTestRepo) MarkReconcileRequired(ctx context.Context) (int64, error) {
+func (r *affiliateQualificationLockTestRepo) MarkReconcileRequired(ctx context.Context) (service.AffiliateReconcileToken, error) {
 	return r.qualification.MarkReconcileRequired(ctx)
 }
 

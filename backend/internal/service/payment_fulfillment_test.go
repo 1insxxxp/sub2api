@@ -179,16 +179,17 @@ func (r *paymentFulfillmentAffiliateRepoStub) TryWithAffiliateQualificationRecon
 	return true, fn(ctx)
 }
 
-func (r *paymentFulfillmentAffiliateRepoStub) MarkReconcileRequired(context.Context) (int64, error) {
+func (r *paymentFulfillmentAffiliateRepoStub) MarkReconcileRequired(context.Context) (AffiliateReconcileToken, error) {
 	if r.markReconcileErr != nil {
-		return 0, r.markReconcileErr
+		return AffiliateReconcileToken{}, r.markReconcileErr
 	}
+	wasPending := r.reconcileRequired
 	r.generation++
 	if r.generation <= 0 {
 		r.generation = 1
 	}
 	r.reconcileRequired = true
-	return r.generation, nil
+	return AffiliateReconcileToken{Generation: r.generation, WasPendingBefore: wasPending}, nil
 }
 
 func (r *paymentFulfillmentAffiliateRepoStub) ReadReconcilePendingSnapshot(context.Context) (AffiliateReconcilePendingSnapshot, error) {
@@ -1170,6 +1171,34 @@ func TestMarkCompletedStaleLocalTokenKeepsConcurrentDirtyGeneration(t *testing.T
 	require.Equal(t, int64(2), repo.generation)
 	require.NoError(t, svc.markCompleted(ctx, order, lease, "PAYMENT_SUCCESS"))
 	require.Equal(t, int64(2), repo.generation, "completed retry must not bump a new generation")
+}
+
+func TestMarkCompletedLocalClearRespectsPriorPendingState(t *testing.T) {
+	for _, tt := range []struct {
+		name         string
+		wasPending   bool
+		wantRequired bool
+	}{
+		{name: "clean_before_terminal", wasPending: false, wantRequired: false},
+		{name: "pending_before_terminal", wasPending: true, wantRequired: true},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := context.Background()
+			client := newPaymentConfigServiceTestClient(t)
+			order := createPaymentFulfillmentSubscriptionOrder(t, ctx, client, OrderStatusPaid, time.Now())
+			repo := &paymentFulfillmentAffiliateRepoStub{reconcileRequired: tt.wasPending, generation: 10}
+			svc := &PaymentService{entClient: client, affiliateService: NewAffiliateService(repo, nil, nil, nil)}
+			lease, err := svc.acquirePaymentFulfillmentLease(ctx, order)
+			require.NoError(t, err)
+
+			require.NoError(t, svc.markCompleted(ctx, order, lease, "PAYMENT_SUCCESS"))
+			require.Equal(t, int64(11), repo.generation)
+			require.Equal(t, tt.wantRequired, repo.reconcileRequired)
+			require.Equal(t, 1, repo.reconcileCalls)
+			require.NoError(t, svc.markCompleted(ctx, order, lease, "PAYMENT_SUCCESS"))
+			require.Equal(t, int64(11), repo.generation, "completed retry must not bump generation")
+		})
+	}
 }
 
 func TestExecuteSubscriptionFulfillmentAppliesAffiliateRebate(t *testing.T) {

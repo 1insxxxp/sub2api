@@ -426,18 +426,19 @@ func (r *affiliateTierServiceRepoStub) TryWithAffiliateQualificationReconcileLoc
 	return true, fn(ctx)
 }
 
-func (r *affiliateTierServiceRepoStub) MarkReconcileRequired(context.Context) (int64, error) {
+func (r *affiliateTierServiceRepoStub) MarkReconcileRequired(context.Context) (AffiliateReconcileToken, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if r.markReconcileErr != nil {
-		return 0, r.markReconcileErr
+		return AffiliateReconcileToken{}, r.markReconcileErr
 	}
+	wasPending := r.reconcileRequired
 	r.generation++
 	if r.generation <= 0 {
 		r.generation = 1
 	}
 	r.reconcileRequired = true
-	return r.generation, nil
+	return AffiliateReconcileToken{Generation: r.generation, WasPendingBefore: wasPending}, nil
 }
 
 func (r *affiliateTierServiceRepoStub) ReadReconcilePendingSnapshot(context.Context) (AffiliateReconcilePendingSnapshot, error) {
