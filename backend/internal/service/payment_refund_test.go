@@ -102,7 +102,8 @@ func TestMarkRefundOkReconcilesAffiliateAfterSuccessfulPersistence(t *testing.T)
 	reloaded, err := client.PaymentOrder.Get(ctx, order.ID)
 	require.NoError(t, err)
 	require.Equal(t, OrderStatusRefunded, reloaded.Status)
-	require.Equal(t, "true", settings.values[SettingKeyAffiliateTierReconcileRequired])
+	require.True(t, affiliateRepo.reconcileRequired)
+	require.Equal(t, int64(1), affiliateRepo.generation)
 	failures, err := client.PaymentAuditLog.Query().Where(
 		paymentauditlog.OrderIDEQ(strconv.FormatInt(order.ID, 10)),
 		paymentauditlog.ActionEQ("AFFILIATE_TIER_RECONCILE_FAILED"),
@@ -142,6 +143,34 @@ func TestMarkRefundOkPartialRefundRefreshesAffiliateQualification(t *testing.T) 
 	require.NoError(t, err)
 	require.Equal(t, OrderStatusPartiallyRefunded, reloaded.Status)
 	require.Equal(t, 1, affiliateRepo.reconcileCalls)
+	require.False(t, affiliateRepo.reconcileRequired)
+	require.Equal(t, int64(1), affiliateRepo.generation)
+	_, err = svc.markRefundOk(ctx, &RefundPlan{OrderID: order.ID, Order: order, RefundAmount: 40, Reason: "partial refund"})
+	require.NoError(t, err)
+	require.Equal(t, int64(1), affiliateRepo.generation, "identical refund retry must not bump generation")
+	require.Equal(t, 1, affiliateRepo.reconcileCalls)
+}
+
+func TestMarkRefundOkRollsBackTerminalStatusWhenGenerationBumpFails(t *testing.T) {
+	ctx := context.Background()
+	client := newPaymentConfigServiceTestClient(t)
+	user, err := client.User.Create().SetEmail("refund-generation-failure@example.com").SetPasswordHash("hash").SetUsername("refund-generation-failure").Save(ctx)
+	require.NoError(t, err)
+	order, err := client.PaymentOrder.Create().SetUserID(user.ID).SetUserEmail(user.Email).SetUserName(user.Username).
+		SetAmount(100).SetPayAmount(100).SetFeeRate(0).SetRechargeCode("REFUND-GENERATION-FAILURE").SetOutTradeNo("sub2_refund_generation_failure").
+		SetPaymentType(payment.TypeAlipay).SetPaymentTradeNo("trade-refund-generation-failure").SetOrderType(payment.OrderTypeBalance).
+		SetStatus(OrderStatusCompleted).SetExpiresAt(time.Now().Add(time.Hour)).SetClientIP("127.0.0.1").SetSrcHost("api.example.com").Save(ctx)
+	require.NoError(t, err)
+	repo := &paymentFulfillmentAffiliateRepoStub{markReconcileErr: errors.New("generation unavailable")}
+	svc := &PaymentService{entClient: client, affiliateService: NewAffiliateService(repo, nil, nil, nil)}
+
+	_, err = svc.markRefundOk(ctx, &RefundPlan{OrderID: order.ID, Order: order, RefundAmount: 40, Reason: "partial"})
+
+	require.ErrorContains(t, err, "mark affiliate qualification dirty after refund")
+	reloaded, reloadErr := client.PaymentOrder.Get(ctx, order.ID)
+	require.NoError(t, reloadErr)
+	require.Equal(t, OrderStatusCompleted, reloaded.Status)
+	require.Zero(t, reloaded.RefundAmount)
 }
 
 func TestRequestRefundDoesNotRefreshAffiliateQualification(t *testing.T) {

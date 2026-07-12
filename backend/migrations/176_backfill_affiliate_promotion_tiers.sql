@@ -63,6 +63,10 @@ WHERE ua.user_id = backfill.user_id;
 -- startup/on-demand reconciliation (Task 3) consumes and clears this marker
 -- after rebuilding qualification from authoritative payment_orders.
 INSERT INTO settings (key, value)
+VALUES ('affiliate_tier_reconcile_generation', '1')
+ON CONFLICT (key) DO NOTHING;
+
+INSERT INTO settings (key, value)
 VALUES ('affiliate_tier_reconcile_required', 'true')
 ON CONFLICT (key) DO UPDATE
 SET value = 'true',

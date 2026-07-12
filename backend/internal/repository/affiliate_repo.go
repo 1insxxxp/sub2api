@@ -132,6 +132,103 @@ func NewAffiliateRepository(client *dbent.Client, db *sql.DB) service.AffiliateR
 
 var _ service.AffiliateQualificationRepository = (*affiliateRepository)(nil)
 
+func (r *affiliateRepository) MarkReconcileRequired(ctx context.Context) (int64, error) {
+	var generation int64
+	err := r.withTx(ctx, func(txCtx context.Context, txClient *dbent.Client) error {
+		if _, err := txClient.ExecContext(txCtx, `
+INSERT INTO settings (key, value, updated_at)
+VALUES ($1, '1', NOW())
+ON CONFLICT (key) DO NOTHING`, service.SettingKeyAffiliateTierReconcileGeneration); err != nil {
+			return fmt.Errorf("initialize affiliate reconcile generation: %w", err)
+		}
+		rows, err := txClient.QueryContext(txCtx, `
+UPDATE settings
+SET value = (value::bigint + 1)::text,
+    updated_at = NOW()
+WHERE key = $1
+RETURNING value::bigint`, service.SettingKeyAffiliateTierReconcileGeneration)
+		if err != nil {
+			return fmt.Errorf("bump affiliate reconcile generation: %w", err)
+		}
+		if !rows.Next() {
+			closeErr := rows.Close()
+			if rowsErr := rows.Err(); rowsErr != nil {
+				return errors.Join(rowsErr, closeErr)
+			}
+			return errors.Join(fmt.Errorf("affiliate reconcile generation row missing"), closeErr)
+		}
+		if err := rows.Scan(&generation); err != nil {
+			return errors.Join(err, rows.Close())
+		}
+		if err := rows.Close(); err != nil {
+			return err
+		}
+		if _, err := txClient.ExecContext(txCtx, `
+INSERT INTO settings (key, value, updated_at)
+VALUES ($1, 'true', NOW())
+ON CONFLICT (key) DO UPDATE
+SET value = 'true', updated_at = NOW()`, service.SettingKeyAffiliateTierReconcileRequired); err != nil {
+			return fmt.Errorf("set affiliate reconcile required: %w", err)
+		}
+		return nil
+	})
+	if err != nil {
+		return 0, err
+	}
+	return generation, nil
+}
+
+func (r *affiliateRepository) ReadReconcilePendingSnapshot(ctx context.Context) (service.AffiliateReconcilePendingSnapshot, error) {
+	client := clientFromContext(ctx, r.client)
+	rows, err := client.QueryContext(ctx, `
+SELECT COALESCE((SELECT LOWER(TRIM(value)) = 'true' FROM settings WHERE key = $1), FALSE),
+       COALESCE((SELECT value::bigint FROM settings WHERE key = $2), 0)`,
+		service.SettingKeyAffiliateTierReconcileRequired,
+		service.SettingKeyAffiliateTierReconcileGeneration,
+	)
+	if err != nil {
+		return service.AffiliateReconcilePendingSnapshot{}, fmt.Errorf("read affiliate reconcile snapshot: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+	if !rows.Next() {
+		return service.AffiliateReconcilePendingSnapshot{}, rows.Err()
+	}
+	var snapshot service.AffiliateReconcilePendingSnapshot
+	if err := rows.Scan(&snapshot.Required, &snapshot.Generation); err != nil {
+		return service.AffiliateReconcilePendingSnapshot{}, err
+	}
+	return snapshot, rows.Err()
+}
+
+func (r *affiliateRepository) ClearReconcileRequiredIfGeneration(ctx context.Context, expected int64) (bool, error) {
+	if expected <= 0 {
+		return false, nil
+	}
+	client := clientFromContext(ctx, r.client)
+	rows, err := client.QueryContext(ctx, `
+UPDATE settings AS marker
+SET value = 'false', updated_at = NOW()
+WHERE marker.key = $1
+  AND LOWER(TRIM(marker.value)) = 'true'
+  AND EXISTS (
+      SELECT 1 FROM settings AS generation
+      WHERE generation.key = $2 AND generation.value::bigint = $3
+  )
+RETURNING 1`, service.SettingKeyAffiliateTierReconcileRequired, service.SettingKeyAffiliateTierReconcileGeneration, expected)
+	if err != nil {
+		return false, fmt.Errorf("clear affiliate reconcile generation %d: %w", expected, err)
+	}
+	defer func() { _ = rows.Close() }()
+	if !rows.Next() {
+		return false, rows.Err()
+	}
+	var one int
+	if err := rows.Scan(&one); err != nil {
+		return false, err
+	}
+	return true, rows.Err()
+}
+
 func (r *affiliateRepository) TryWithAffiliateQualificationReconcileLock(ctx context.Context, fn func(context.Context) error) (bool, error) {
 	if dbent.TxFromContext(ctx) != nil {
 		return false, fmt.Errorf("affiliate qualification advisory lock requires a non-transaction context")

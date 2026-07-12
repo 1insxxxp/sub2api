@@ -205,6 +205,7 @@ const (
 	SettingKeyAffiliateGoldInvitees                = "affiliate_gold_invitees"
 	SettingKeyAffiliateGoldRate                    = "affiliate_gold_rate"
 	SettingKeyAffiliateTierReconcileRequired       = "affiliate_tier_reconcile_required"
+	SettingKeyAffiliateTierReconcileGeneration     = "affiliate_tier_reconcile_generation"
 	SettingKeyAffiliateRebateFreezeHours           = "affiliate_rebate_freeze_hours"    // 返利冻结期（小时，0=不冻结）
 	SettingKeyAffiliateRebateDurationDays          = "affiliate_rebate_duration_days"   // 返利有效期（天，0=永久）
 	SettingKeyAffiliateRebatePerInviteeCap         = "affiliate_rebate_per_invitee_cap" // 单人返利上限（0=无上限）

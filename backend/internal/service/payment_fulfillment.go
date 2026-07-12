@@ -360,21 +360,38 @@ func (s *PaymentService) markCompleted(ctx context.Context, o *dbent.PaymentOrde
 	if lease == nil {
 		return errors.New("missing payment fulfillment lease")
 	}
+	tx, err := s.entClient.Tx(ctx)
+	if err != nil {
+		return fmt.Errorf("begin mark completed transaction: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+	txCtx := dbent.NewTxContext(ctx, tx)
 	now := time.Now()
-	updated, err := s.entClient.PaymentOrder.Update().Where(
+	updated, err := tx.Client().PaymentOrder.Update().Where(
 		paymentorder.IDEQ(o.ID),
 		paymentorder.StatusEQ(OrderStatusRecharging),
 		paymentorder.UpdatedAtEQ(lease.version),
-	).SetStatus(OrderStatusCompleted).SetCompletedAt(now).Save(ctx)
+	).SetStatus(OrderStatusCompleted).SetCompletedAt(now).Save(txCtx)
 	if err != nil {
 		return fmt.Errorf("mark completed: %w", err)
 	}
 	if updated == 0 {
+		_ = tx.Rollback()
 		current, getErr := s.entClient.PaymentOrder.Get(ctx, o.ID)
 		if getErr == nil && current.Status == OrderStatusCompleted {
 			return nil
 		}
 		return infraerrors.Conflict("CONFLICT", "fulfillment lease was lost before completion")
+	}
+	var generation int64
+	if s.affiliateService != nil {
+		generation, err = s.affiliateService.MarkReconcileRequired(txCtx)
+		if err != nil {
+			return fmt.Errorf("mark affiliate qualification dirty: %w", err)
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("commit mark completed transaction: %w", err)
 	}
 	if !s.hasAuditLog(ctx, o.ID, auditAction) {
 		s.writeAuditLog(ctx, o.ID, auditAction, "system", map[string]any{
@@ -384,15 +401,15 @@ func (s *PaymentService) markCompleted(ctx context.Context, o *dbent.PaymentOrde
 		})
 		s.dispatchPaymentFulfillmentNotification(o, auditAction)
 	}
-	s.reconcileAffiliateAfterOrderCompletion(ctx, o)
+	s.reconcileAffiliateAfterOrderCompletion(ctx, o, generation)
 	return nil
 }
 
-func (s *PaymentService) reconcileAffiliateAfterOrderCompletion(ctx context.Context, o *dbent.PaymentOrder) {
-	if s == nil || s.affiliateService == nil || o == nil {
+func (s *PaymentService) reconcileAffiliateAfterOrderCompletion(ctx context.Context, o *dbent.PaymentOrder, generation int64) {
+	if s == nil || s.affiliateService == nil || o == nil || generation <= 0 {
 		return
 	}
-	if err := s.affiliateService.ReconcileInviteeQualification(dbent.WithoutTx(ctx), o.UserID); err != nil {
+	if err := s.affiliateService.ReconcileInviteeQualificationForGeneration(dbent.WithoutTx(ctx), o.UserID, generation); err != nil {
 		slog.Warn("affiliate qualification reconcile after payment completion failed", "orderID", o.ID, "inviteeID", o.UserID, "error", err)
 		s.writeAuditLog(ctx, o.ID, "AFFILIATE_TIER_RECONCILE_FAILED", "system", map[string]any{
 			"inviteeUserID": o.UserID,

@@ -558,13 +558,45 @@ func (s *PaymentService) markRefundOk(ctx context.Context, p *RefundPlan) (*Refu
 	if p.RefundAmount < p.Order.Amount {
 		fs = OrderStatusPartiallyRefunded
 	}
+	tx, err := s.entClient.Tx(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("begin mark refund transaction: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+	txCtx := dbent.NewTxContext(ctx, tx)
 	now := time.Now()
-	_, err := s.entClient.PaymentOrder.UpdateOneID(p.OrderID).SetStatus(fs).SetRefundAmount(p.RefundAmount).SetRefundReason(p.Reason).SetRefundAt(now).SetForceRefund(p.Force).Save(ctx)
+	updated, err := tx.Client().PaymentOrder.Update().Where(
+		paymentorder.IDEQ(p.OrderID),
+		paymentorder.Not(paymentorder.And(
+			paymentorder.StatusEQ(fs),
+			paymentorder.RefundAmountEQ(p.RefundAmount),
+		)),
+	).SetStatus(fs).SetRefundAmount(p.RefundAmount).SetRefundReason(p.Reason).SetRefundAt(now).SetForceRefund(p.Force).Save(txCtx)
 	if err != nil {
 		return nil, fmt.Errorf("mark refund: %w", err)
 	}
-	s.writeAuditLog(ctx, p.OrderID, "REFUND_SUCCESS", "admin", map[string]any{"refundAmount": p.RefundAmount, "reason": p.Reason, "balanceDeducted": p.BalanceToDeduct, "force": p.Force})
-	s.reconcileAffiliateAfterOrderCompletion(ctx, p.Order)
+	if updated == 0 {
+		_ = tx.Rollback()
+		current, getErr := s.entClient.PaymentOrder.Get(ctx, p.OrderID)
+		if getErr == nil && current.Status == fs && current.RefundAmount == p.RefundAmount {
+			return &RefundResult{Success: true}, nil
+		}
+		return nil, infraerrors.Conflict("CONFLICT", "refund status changed before finalization")
+	}
+	var generation int64
+	if s.affiliateService != nil {
+		generation, err = s.affiliateService.MarkReconcileRequired(txCtx)
+		if err != nil {
+			return nil, fmt.Errorf("mark affiliate qualification dirty after refund: %w", err)
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, fmt.Errorf("commit mark refund transaction: %w", err)
+	}
+	if !s.hasAuditLog(ctx, p.OrderID, "REFUND_SUCCESS") {
+		s.writeAuditLog(ctx, p.OrderID, "REFUND_SUCCESS", "admin", map[string]any{"refundAmount": p.RefundAmount, "reason": p.Reason, "balanceDeducted": p.BalanceToDeduct, "force": p.Force})
+	}
+	s.reconcileAffiliateAfterOrderCompletion(ctx, p.Order, generation)
 	return &RefundResult{Success: true, BalanceDeducted: p.BalanceToDeduct, SubDaysDeducted: p.SubDaysToDeduct}, nil
 }
 

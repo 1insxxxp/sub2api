@@ -73,6 +73,7 @@ CREATE UNIQUE INDEX CONCURRENTLY idx_user_affiliates_inviter_qualifying_amount
 		assertMigration175Qualification(t, ctx, conn, 12, "54.00000000", timestamp(12))
 		assertMigration175Unqualified(t, ctx, conn, 13)
 		assertReconcileRequired(t, ctx, conn)
+		assertReconcileGeneration(t, ctx, conn, "1")
 
 		// A relationship without an inviter is outside the backfill. Give it a
 		// sentinel value after the first run so replay proves it remains untouched.
@@ -86,12 +87,17 @@ WHERE user_id = 7`, unboundQualifiedAt)
 UPDATE settings SET value = 'false'
 WHERE key = 'affiliate_tier_reconcile_required'`)
 		require.NoError(t, err)
+		_, err = conn.ExecContext(ctx, `
+UPDATE settings SET value = '7'
+WHERE key = 'affiliate_tier_reconcile_generation'`)
+		require.NoError(t, err)
 
 		applyAffiliateTierMigrations(t, ctx, conn, migrations)
 		assertMigration175Qualification(t, ctx, conn, 2, "50.00000000", timestamp(2))
 		assertMigration175Qualification(t, ctx, conn, 3, "50.00000000", timestamp(3))
 		assertMigration175Qualification(t, ctx, conn, 7, "777.00000000", unboundQualifiedAt)
 		assertReconcileRequired(t, ctx, conn)
+		assertReconcileGeneration(t, ctx, conn, "7")
 	})
 
 	settingCases := []struct {
@@ -416,6 +422,14 @@ func assertReconcileRequired(t *testing.T, ctx context.Context, conn *sql.Conn) 
 	require.NoError(t, conn.QueryRowContext(ctx, `
 SELECT value FROM settings WHERE key = 'affiliate_tier_reconcile_required'`).Scan(&value))
 	require.Equal(t, "true", value)
+}
+
+func assertReconcileGeneration(t *testing.T, ctx context.Context, conn *sql.Conn, expected string) {
+	t.Helper()
+	var value string
+	require.NoError(t, conn.QueryRowContext(ctx, `
+SELECT value FROM settings WHERE key = 'affiliate_tier_reconcile_generation'`).Scan(&value))
+	require.Equal(t, expected, value)
 }
 
 func timestamp(day int) time.Time {

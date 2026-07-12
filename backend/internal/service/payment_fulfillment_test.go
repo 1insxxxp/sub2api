@@ -58,6 +58,9 @@ type paymentFulfillmentAffiliateRepoStub struct {
 	reconcileCalls     int
 	lockBusy           bool
 	reconcileInviteeFn func(context.Context, int64, float64) (*AffiliateQualification, error)
+	reconcileRequired  bool
+	generation         int64
+	markReconcileErr   error
 }
 
 func (r *paymentFulfillmentAffiliateRepoStub) EnsureUserAffiliate(_ context.Context, userID int64) (*AffiliateSummary, error) {
@@ -174,6 +177,30 @@ func (r *paymentFulfillmentAffiliateRepoStub) TryWithAffiliateQualificationRecon
 		return false, nil
 	}
 	return true, fn(ctx)
+}
+
+func (r *paymentFulfillmentAffiliateRepoStub) MarkReconcileRequired(context.Context) (int64, error) {
+	if r.markReconcileErr != nil {
+		return 0, r.markReconcileErr
+	}
+	r.generation++
+	if r.generation <= 0 {
+		r.generation = 1
+	}
+	r.reconcileRequired = true
+	return r.generation, nil
+}
+
+func (r *paymentFulfillmentAffiliateRepoStub) ReadReconcilePendingSnapshot(context.Context) (AffiliateReconcilePendingSnapshot, error) {
+	return AffiliateReconcilePendingSnapshot{Required: r.reconcileRequired, Generation: r.generation}, nil
+}
+
+func (r *paymentFulfillmentAffiliateRepoStub) ClearReconcileRequiredIfGeneration(_ context.Context, expected int64) (bool, error) {
+	if !r.reconcileRequired || r.generation != expected {
+		return false, nil
+	}
+	r.reconcileRequired = false
+	return true, nil
 }
 
 type paymentFulfillmentSettingRepoStub struct {
@@ -877,9 +904,11 @@ func TestApplyAffiliateRebateFallsBackWhenPendingReconcileFails(t *testing.T) {
 
 	inviterID := int64(9010)
 	affiliateRepo := &paymentFulfillmentAffiliateRepoStub{
-		inviteeSummary: &AffiliateSummary{UserID: user.ID, InviterID: &inviterID, CreatedAt: time.Now().Add(-time.Hour)},
-		inviterSummary: &AffiliateSummary{UserID: inviterID},
-		reconcileErr:   errors.New("pending qualification reconcile failed"),
+		inviteeSummary:    &AffiliateSummary{UserID: user.ID, InviterID: &inviterID, CreatedAt: time.Now().Add(-time.Hour)},
+		inviterSummary:    &AffiliateSummary{UserID: inviterID},
+		reconcileErr:      errors.New("pending qualification reconcile failed"),
+		reconcileRequired: true,
+		generation:        1,
 	}
 	settings := &paymentFulfillmentSettingRepoStub{values: map[string]string{
 		SettingKeyAffiliateEnabled:               "true",
@@ -900,7 +929,8 @@ func TestApplyAffiliateRebateFallsBackWhenPendingReconcileFails(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, affiliateRepo.accrueCalls, 1)
 	require.Equal(t, 8.0, affiliateRepo.accrueCalls[0].amount)
-	require.Equal(t, "true", settings.values[SettingKeyAffiliateTierReconcileRequired])
+	require.True(t, affiliateRepo.reconcileRequired)
+	require.Equal(t, int64(2), affiliateRepo.generation)
 	fallbacks, err := client.PaymentAuditLog.Query().Where(
 		paymentauditlog.OrderIDEQ(strconv.FormatInt(order.ID, 10)),
 		paymentauditlog.ActionEQ("AFFILIATE_TIER_FALLBACK"),
@@ -923,10 +953,12 @@ func TestApplyAffiliateRebateFallsBackWhenQualificationReconcileLockIsBusy(t *te
 
 	inviterID := int64(9011)
 	affiliateRepo := &paymentFulfillmentAffiliateRepoStub{
-		qualifiedCount: 30,
-		lockBusy:       true,
-		inviteeSummary: &AffiliateSummary{UserID: user.ID, InviterID: &inviterID, CreatedAt: time.Now().Add(-time.Hour)},
-		inviterSummary: &AffiliateSummary{UserID: inviterID},
+		qualifiedCount:    30,
+		lockBusy:          true,
+		reconcileRequired: true,
+		generation:        1,
+		inviteeSummary:    &AffiliateSummary{UserID: user.ID, InviterID: &inviterID, CreatedAt: time.Now().Add(-time.Hour)},
+		inviterSummary:    &AffiliateSummary{UserID: inviterID},
 	}
 	settings := &paymentFulfillmentSettingRepoStub{values: map[string]string{
 		SettingKeyAffiliateEnabled:               "true",
@@ -945,7 +977,8 @@ func TestApplyAffiliateRebateFallsBackWhenQualificationReconcileLockIsBusy(t *te
 	require.NoError(t, svc.applyAffiliateRebateForOrder(ctx, order))
 	require.Len(t, affiliateRepo.accrueCalls, 1)
 	require.Equal(t, 8.0, affiliateRepo.accrueCalls[0].amount)
-	require.Equal(t, "true", settings.values[SettingKeyAffiliateTierReconcileRequired])
+	require.True(t, affiliateRepo.reconcileRequired)
+	require.Equal(t, int64(1), affiliateRepo.generation)
 }
 
 func TestApplyAffiliateRebateStrictFailureAuditsMarkerWriteFailure(t *testing.T) {
@@ -961,11 +994,12 @@ func TestApplyAffiliateRebateStrictFailureAuditsMarkerWriteFailure(t *testing.T)
 	require.NoError(t, err)
 	inviterID := int64(9012)
 	affiliateRepo := &paymentFulfillmentAffiliateRepoStub{
-		qualifiedCount: 30,
-		inviteeSummary: &AffiliateSummary{UserID: user.ID, InviterID: &inviterID, CreatedAt: time.Now().Add(-time.Hour)},
-		inviterSummary: &AffiliateSummary{UserID: inviterID},
+		qualifiedCount:   30,
+		inviteeSummary:   &AffiliateSummary{UserID: user.ID, InviterID: &inviterID, CreatedAt: time.Now().Add(-time.Hour)},
+		inviterSummary:   &AffiliateSummary{UserID: inviterID},
+		markReconcileErr: errors.New("generation bump failed"),
 	}
-	settings := &paymentFulfillmentSettingRepoStub{setErr: errors.New("marker write failed"), values: map[string]string{
+	settings := &paymentFulfillmentSettingRepoStub{values: map[string]string{
 		SettingKeyAffiliateEnabled:             "true",
 		SettingKeyAffiliateRebateRate:          "8",
 		SettingKeyAffiliateQualificationAmount: "invalid",
@@ -980,7 +1014,7 @@ func TestApplyAffiliateRebateStrictFailureAuditsMarkerWriteFailure(t *testing.T)
 		paymentauditlog.ActionEQ("AFFILIATE_TIER_FALLBACK"),
 	).Only(ctx)
 	require.NoError(t, err)
-	require.Contains(t, fallback.Detail, "set affiliate qualification reconcile marker")
+	require.Contains(t, fallback.Detail, "bump affiliate qualification reconcile generation")
 }
 
 func TestPaymentTierThresholdOrderUsesOldRateAndNextOrderUsesNewRate(t *testing.T) {
@@ -1094,8 +1128,48 @@ func TestMarkCompletedKeepsBothPaymentTypesCompletedWhenAffiliateRefreshFails(t 
 			reloaded, err := client.PaymentOrder.Get(ctx, order.ID)
 			require.NoError(t, err)
 			require.Equal(t, OrderStatusCompleted, reloaded.Status)
+			require.True(t, affiliateRepo.reconcileRequired)
+			require.Equal(t, int64(1), affiliateRepo.generation)
 		})
 	}
+}
+
+func TestMarkCompletedRollsBackTerminalStatusWhenGenerationBumpFails(t *testing.T) {
+	ctx := context.Background()
+	client := newPaymentConfigServiceTestClient(t)
+	order := createPaymentFulfillmentSubscriptionOrder(t, ctx, client, OrderStatusPaid, time.Now())
+	repo := &paymentFulfillmentAffiliateRepoStub{markReconcileErr: errors.New("generation unavailable")}
+	svc := &PaymentService{entClient: client, affiliateService: NewAffiliateService(repo, nil, nil, nil)}
+	lease, err := svc.acquirePaymentFulfillmentLease(ctx, order)
+	require.NoError(t, err)
+
+	err = svc.markCompleted(ctx, order, lease, "PAYMENT_SUCCESS")
+
+	require.ErrorContains(t, err, "mark affiliate qualification dirty")
+	reloaded, reloadErr := client.PaymentOrder.Get(ctx, order.ID)
+	require.NoError(t, reloadErr)
+	require.Equal(t, OrderStatusRecharging, reloaded.Status)
+}
+
+func TestMarkCompletedStaleLocalTokenKeepsConcurrentDirtyGeneration(t *testing.T) {
+	ctx := context.Background()
+	client := newPaymentConfigServiceTestClient(t)
+	ensurePaymentAuditOrderActionUniqueIndex(t, ctx, client)
+	order := createPaymentFulfillmentSubscriptionOrder(t, ctx, client, OrderStatusPaid, time.Now())
+	repo := &paymentFulfillmentAffiliateRepoStub{}
+	repo.reconcileInviteeFn = func(ctx context.Context, userID int64, threshold float64) (*AffiliateQualification, error) {
+		_, err := repo.MarkReconcileRequired(ctx)
+		return &AffiliateQualification{InviteeUserID: userID, QualifyingPaymentAmount: threshold}, err
+	}
+	svc := &PaymentService{entClient: client, affiliateService: NewAffiliateService(repo, nil, nil, nil)}
+	lease, err := svc.acquirePaymentFulfillmentLease(ctx, order)
+	require.NoError(t, err)
+
+	require.NoError(t, svc.markCompleted(ctx, order, lease, "PAYMENT_SUCCESS"))
+	require.True(t, repo.reconcileRequired)
+	require.Equal(t, int64(2), repo.generation)
+	require.NoError(t, svc.markCompleted(ctx, order, lease, "PAYMENT_SUCCESS"))
+	require.Equal(t, int64(2), repo.generation, "completed retry must not bump a new generation")
 }
 
 func TestExecuteSubscriptionFulfillmentAppliesAffiliateRebate(t *testing.T) {

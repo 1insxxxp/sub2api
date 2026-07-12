@@ -218,6 +218,29 @@ func TestAffiliateRepository_QualificationAdvisoryLockIndependentConnections(t *
 	}
 }
 
+func TestAffiliateRepository_QualificationReconcileGenerationCAS(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	repo := NewAffiliateRepository(integrationEntClient, integrationDB).(service.AffiliateQualificationRepository)
+
+	first, err := repo.MarkReconcileRequired(ctx)
+	require.NoError(t, err)
+	snapshot, err := repo.ReadReconcilePendingSnapshot(ctx)
+	require.NoError(t, err)
+	require.True(t, snapshot.Required)
+	require.Equal(t, first, snapshot.Generation)
+
+	second, err := repo.MarkReconcileRequired(ctx)
+	require.NoError(t, err)
+	require.Greater(t, second, first)
+	cleared, err := repo.ClearReconcileRequiredIfGeneration(ctx, first)
+	require.NoError(t, err)
+	require.False(t, cleared, "stale generation must not clear a newer dirty marker")
+	cleared, err = repo.ClearReconcileRequiredIfGeneration(ctx, second)
+	require.NoError(t, err)
+	require.True(t, cleared)
+}
+
 func TestAffiliateRepository_QualificationServiceInstancesDatabaseLock(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -230,6 +253,8 @@ func TestAffiliateRepository_QualificationServiceInstancesDatabaseLock(t *testin
 	settings := service.NewSettingService(settingsRepo, nil)
 	first := service.NewAffiliateService(repo1, settings, nil, nil)
 	second := service.NewAffiliateService(repo2, settings, nil, nil)
+	initialGeneration, err := repo1.MarkReconcileRequired(ctx)
+	require.NoError(t, err)
 
 	firstErr := make(chan error, 1)
 	go func() { firstErr <- first.ReconcilePendingAffiliateQualifications(ctx) }()
@@ -243,23 +268,60 @@ func TestAffiliateRepository_QualificationServiceInstancesDatabaseLock(t *testin
 	defer releaseWinner()
 
 	secondErr := second.ReconcilePendingAffiliateQualifications(ctx)
-	markerWhileLocked := settingsRepo.value(service.SettingKeyAffiliateTierReconcileRequired)
+	snapshotWhileLocked, err := repo2.ReadReconcilePendingSnapshot(ctx)
+	require.NoError(t, err)
 	callsWhileLocked := shared.callCount()
-	writesWhileLocked := settingsRepo.setValues()
 	releaseWinner()
 
 	require.ErrorIs(t, secondErr, service.ErrAffiliateQualificationReconcileBusy)
-	require.Equal(t, "true", markerWhileLocked)
+	require.True(t, snapshotWhileLocked.Required)
+	require.Equal(t, initialGeneration, snapshotWhileLocked.Generation)
 	require.Equal(t, 1, callsWhileLocked)
-	require.Equal(t, []string{"true"}, writesWhileLocked, "lock loser must retain the recovery marker")
 	select {
 	case err := <-firstErr:
 		require.NoError(t, err)
 	case <-ctx.Done():
 		t.Fatal("timed out waiting for winning qualification reconcile")
 	}
-	require.Equal(t, "false", settingsRepo.value(service.SettingKeyAffiliateTierReconcileRequired))
-	require.Equal(t, []string{"true", "false"}, settingsRepo.setValues())
+	finalSnapshot, err := repo2.ReadReconcilePendingSnapshot(ctx)
+	require.NoError(t, err)
+	require.False(t, finalSnapshot.Required)
+	require.Equal(t, initialGeneration, finalSnapshot.Generation)
+}
+
+func TestAffiliateRepository_QualificationFullReconcileDoesNotClearConcurrentGeneration(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	base1 := NewAffiliateRepository(integrationEntClient, integrationDB)
+	base2 := NewAffiliateRepository(integrationEntClient, integrationDB)
+	shared := &affiliateQualificationLockTestState{started: make(chan struct{}), release: make(chan struct{})}
+	repo1 := &affiliateQualificationLockTestRepo{AffiliateRepository: base1, qualification: base1.(service.AffiliateQualificationRepository), shared: shared}
+	qualification2 := base2.(service.AffiliateQualificationRepository)
+	svc := service.NewAffiliateService(repo1, service.NewSettingService(newAffiliateQualificationLockSettingRepo(), nil), nil, nil)
+	initialGeneration, err := repo1.MarkReconcileRequired(ctx)
+	require.NoError(t, err)
+
+	result := make(chan error, 1)
+	go func() { result <- svc.ReconcilePendingAffiliateQualifications(ctx) }()
+	select {
+	case <-shared.started:
+	case <-ctx.Done():
+		t.Fatal("timed out waiting for full qualification reconcile")
+	}
+	concurrentGeneration, err := qualification2.MarkReconcileRequired(ctx)
+	require.NoError(t, err)
+	require.Greater(t, concurrentGeneration, initialGeneration)
+	close(shared.release)
+	select {
+	case err := <-result:
+		require.ErrorIs(t, err, service.ErrAffiliateQualificationReconcileStale)
+	case <-ctx.Done():
+		t.Fatal("timed out waiting for stale full qualification reconcile")
+	}
+	finalSnapshot, err := qualification2.ReadReconcilePendingSnapshot(ctx)
+	require.NoError(t, err)
+	require.True(t, finalSnapshot.Required)
+	require.Equal(t, concurrentGeneration, finalSnapshot.Generation)
 }
 
 func TestAffiliateRepository_QualificationFullReconcileUsesIndependentTransactions(t *testing.T) {
@@ -369,24 +431,34 @@ func (r *affiliateQualificationLockTestRepo) TryWithAffiliateQualificationReconc
 	return r.qualification.TryWithAffiliateQualificationReconcileLock(ctx, fn)
 }
 
+func (r *affiliateQualificationLockTestRepo) MarkReconcileRequired(ctx context.Context) (int64, error) {
+	return r.qualification.MarkReconcileRequired(ctx)
+}
+
+func (r *affiliateQualificationLockTestRepo) ReadReconcilePendingSnapshot(ctx context.Context) (service.AffiliateReconcilePendingSnapshot, error) {
+	return r.qualification.ReadReconcilePendingSnapshot(ctx)
+}
+
+func (r *affiliateQualificationLockTestRepo) ClearReconcileRequiredIfGeneration(ctx context.Context, expected int64) (bool, error) {
+	return r.qualification.ClearReconcileRequiredIfGeneration(ctx, expected)
+}
+
 type affiliateQualificationLockSettingRepo struct {
 	service.SettingRepository
-	mu         sync.Mutex
-	values     map[string]string
-	setHistory []string
+	mu     sync.Mutex
+	values map[string]string
 }
 
 func newAffiliateQualificationLockSettingRepo() *affiliateQualificationLockSettingRepo {
 	return &affiliateQualificationLockSettingRepo{values: map[string]string{
-		service.SettingKeyAffiliateTierReconcileRequired: "true",
-		service.SettingKeyAffiliateRebateRate:            "8",
-		service.SettingKeyAffiliateQualificationAmount:   "50",
-		service.SettingKeyAffiliateBronzeInvitees:        "3",
-		service.SettingKeyAffiliateBronzeRate:            "10",
-		service.SettingKeyAffiliateSilverInvitees:        "10",
-		service.SettingKeyAffiliateSilverRate:            "12",
-		service.SettingKeyAffiliateGoldInvitees:          "30",
-		service.SettingKeyAffiliateGoldRate:              "15",
+		service.SettingKeyAffiliateRebateRate:          "8",
+		service.SettingKeyAffiliateQualificationAmount: "50",
+		service.SettingKeyAffiliateBronzeInvitees:      "3",
+		service.SettingKeyAffiliateBronzeRate:          "10",
+		service.SettingKeyAffiliateSilverInvitees:      "10",
+		service.SettingKeyAffiliateSilverRate:          "12",
+		service.SettingKeyAffiliateGoldInvitees:        "30",
+		service.SettingKeyAffiliateGoldRate:            "15",
 	}}
 }
 
@@ -416,22 +488,7 @@ func (r *affiliateQualificationLockSettingRepo) Set(_ context.Context, key, valu
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.values[key] = value
-	if key == service.SettingKeyAffiliateTierReconcileRequired {
-		r.setHistory = append(r.setHistory, value)
-	}
 	return nil
-}
-
-func (r *affiliateQualificationLockSettingRepo) value(key string) string {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	return r.values[key]
-}
-
-func (r *affiliateQualificationLockSettingRepo) setValues() []string {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	return append([]string(nil), r.setHistory...)
 }
 
 func insertQualificationOrder(t *testing.T, ctx context.Context, client *dbent.Client, userID int64, amount, refundAmount float64, status, orderType string) {

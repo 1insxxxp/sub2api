@@ -83,51 +83,49 @@ func TestAffiliateService_TierStrictConfigErrorPropagates(t *testing.T) {
 func TestAffiliateService_QualificationReconcileMarkerClearsOnlyAfterSuccess(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
 		settings := newAffiliateTierServiceSettingRepo()
-		settings.values[SettingKeyAffiliateTierReconcileRequired] = "true"
-		repo := &affiliateTierServiceRepoStub{qualifiedCount: 3}
-		settings.beforeSet = func(key, value string) {
-			require.Equal(t, SettingKeyAffiliateTierReconcileRequired, key)
-			require.Equal(t, "false", value)
-			require.True(t, repo.reconcileFinished, "marker may clear only after full reconcile returns")
-		}
+		repo := &affiliateTierServiceRepoStub{qualifiedCount: 3, reconcileRequired: true, generation: 1}
 		svc := NewAffiliateService(repo, NewSettingService(settings, nil), nil, nil)
 
 		err := svc.ReconcilePendingAffiliateQualifications(context.Background())
 		require.NoError(t, err)
 		require.Equal(t, 1, repo.reconcileCalls)
-		require.Equal(t, "false", settings.values[SettingKeyAffiliateTierReconcileRequired])
+		snapshot, snapshotErr := repo.ReadReconcilePendingSnapshot(context.Background())
+		require.NoError(t, snapshotErr)
+		require.False(t, snapshot.Required)
+		require.Equal(t, int64(1), snapshot.Generation)
+		require.True(t, repo.reconcileFinished)
 	})
 
 	t.Run("failure", func(t *testing.T) {
 		settings := newAffiliateTierServiceSettingRepo()
-		settings.values[SettingKeyAffiliateTierReconcileRequired] = "true"
 		wantErr := errors.New("reconcile failed")
-		repo := &affiliateTierServiceRepoStub{reconcileErr: wantErr}
+		repo := &affiliateTierServiceRepoStub{reconcileErr: wantErr, reconcileRequired: true, generation: 1}
 		svc := NewAffiliateService(repo, NewSettingService(settings, nil), nil, nil)
 
 		err := svc.ReconcilePendingAffiliateQualifications(context.Background())
 		require.ErrorIs(t, err, wantErr)
-		require.Equal(t, "true", settings.values[SettingKeyAffiliateTierReconcileRequired])
+		snapshot, snapshotErr := repo.ReadReconcilePendingSnapshot(context.Background())
+		require.NoError(t, snapshotErr)
+		require.True(t, snapshot.Required)
+		require.Equal(t, int64(2), snapshot.Generation)
 	})
 
 	t.Run("marker clear failure", func(t *testing.T) {
 		settings := newAffiliateTierServiceSettingRepo()
-		settings.values[SettingKeyAffiliateTierReconcileRequired] = "true"
-		wantErr := errors.New("setting write failed")
-		settings.setErr = wantErr
-		repo := &affiliateTierServiceRepoStub{}
+		wantErr := errors.New("generation clear failed")
+		repo := &affiliateTierServiceRepoStub{reconcileRequired: true, generation: 1, clearReconcileErr: wantErr}
 		svc := NewAffiliateService(repo, NewSettingService(settings, nil), nil, nil)
 
 		err := svc.ReconcilePendingAffiliateQualifications(context.Background())
 		require.ErrorIs(t, err, wantErr)
 		require.Equal(t, 1, repo.reconcileCalls)
-		require.Equal(t, "true", settings.values[SettingKeyAffiliateTierReconcileRequired])
+		require.True(t, repo.reconcileRequired)
+		require.Equal(t, int64(2), repo.generation)
 	})
 }
 
 func TestAffiliateService_QualificationReconcileRejectsTransactionContext(t *testing.T) {
 	settings := newAffiliateTierServiceSettingRepo()
-	settings.values[SettingKeyAffiliateTierReconcileRequired] = "true"
 	repo := &affiliateTierServiceRepoStub{}
 	svc := NewAffiliateService(repo, NewSettingService(settings, nil), nil, nil)
 	txCtx := dbent.NewTxContext(context.Background(), &dbent.Tx{})
@@ -137,7 +135,8 @@ func TestAffiliateService_QualificationReconcileRejectsTransactionContext(t *tes
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "transaction")
 	require.Equal(t, 0, repo.reconcileCallCount())
-	require.Equal(t, "true", settings.values[SettingKeyAffiliateTierReconcileRequired])
+	require.True(t, repo.reconcileRequired)
+	require.Equal(t, int64(1), repo.generation)
 }
 
 func TestAffiliateService_AccrueKeepsFlatRateWithoutPendingReconcile(t *testing.T) {
@@ -199,7 +198,8 @@ func TestAffiliateService_ReconcileInviteeFailureKeepsRecoveryMarker(t *testing.
 	err := svc.ReconcileInviteeQualification(context.Background(), 7)
 
 	require.ErrorIs(t, err, wantErr)
-	require.Equal(t, "true", settings.values[SettingKeyAffiliateTierReconcileRequired])
+	require.True(t, repo.reconcileRequired)
+	require.Equal(t, int64(1), repo.generation)
 }
 
 func TestAffiliateService_StrictTierFailureSetsRecoveryMarker(t *testing.T) {
@@ -211,30 +211,51 @@ func TestAffiliateService_StrictTierFailureSetsRecoveryMarker(t *testing.T) {
 	err := svc.ReconcileInviteeQualification(context.Background(), 7)
 
 	require.Error(t, err)
-	require.Equal(t, "true", settings.values[SettingKeyAffiliateTierReconcileRequired])
+	require.True(t, repo.reconcileRequired)
+	require.Equal(t, int64(1), repo.generation)
 }
 
 func TestAffiliateService_ReconcilePendingBusyReturnsStableError(t *testing.T) {
 	settings := newAffiliateTierServiceSettingRepo()
-	settings.values[SettingKeyAffiliateTierReconcileRequired] = "true"
-	repo := &affiliateTierServiceRepoStub{advisoryLockHeld: true}
+	repo := &affiliateTierServiceRepoStub{advisoryLockHeld: true, reconcileRequired: true, generation: 1}
 	svc := NewAffiliateService(repo, NewSettingService(settings, nil), nil, nil)
 
 	err := svc.ReconcilePendingAffiliateQualifications(context.Background())
 
 	require.ErrorIs(t, err, ErrAffiliateQualificationReconcileBusy)
-	require.Equal(t, "true", settings.values[SettingKeyAffiliateTierReconcileRequired])
+	require.True(t, repo.reconcileRequired)
+	require.Equal(t, int64(1), repo.generation)
+}
+
+func TestAffiliateService_ReconcilePendingDoesNotClearConcurrentGeneration(t *testing.T) {
+	repo := &affiliateTierServiceRepoStub{reconcileRequired: true, generation: 10}
+	repo.duringReconcile = func() {
+		repo.mu.Lock()
+		repo.generation++
+		repo.reconcileRequired = true
+		repo.mu.Unlock()
+	}
+	svc := NewAffiliateService(repo, NewSettingService(newAffiliateTierServiceSettingRepo(), nil), nil, nil)
+
+	err := svc.ReconcilePendingAffiliateQualifications(context.Background())
+
+	require.ErrorIs(t, err, ErrAffiliateQualificationReconcileStale)
+	snapshot, snapshotErr := repo.ReadReconcilePendingSnapshot(context.Background())
+	require.NoError(t, snapshotErr)
+	require.True(t, snapshot.Required)
+	require.Equal(t, int64(11), snapshot.Generation)
 }
 
 func TestAffiliateService_PendingMarkerReadFailureSetsRecoveryMarker(t *testing.T) {
 	settings := newAffiliateTierServiceSettingRepo()
-	settings.getValueErr = errors.New("marker read failed")
-	svc := NewAffiliateService(&affiliateTierServiceRepoStub{}, NewSettingService(settings, nil), nil, nil)
+	repo := &affiliateTierServiceRepoStub{readSnapshotErr: errors.New("snapshot read failed")}
+	svc := NewAffiliateService(repo, NewSettingService(settings, nil), nil, nil)
 
 	err := svc.ReconcilePendingAffiliateQualifications(context.Background())
 
 	require.Error(t, err)
-	require.Equal(t, "true", settings.values[SettingKeyAffiliateTierReconcileRequired])
+	require.True(t, repo.reconcileRequired)
+	require.Equal(t, int64(1), repo.generation)
 }
 
 func TestAffiliateService_LegacyRateRemainsFlatCustomCompatible(t *testing.T) {
@@ -293,8 +314,7 @@ func TestAffiliateService_GetDetailDoesNotReadStrictTierConfig(t *testing.T) {
 
 func TestAffiliateService_QualificationReconcileMarkerConcurrentReadsSingleRun(t *testing.T) {
 	settings := newAffiliateTierServiceSettingRepo()
-	settings.values[SettingKeyAffiliateTierReconcileRequired] = "true"
-	repo := &affiliateTierServiceRepoStub{reconcileStarted: make(chan struct{}), releaseReconcile: make(chan struct{})}
+	repo := &affiliateTierServiceRepoStub{reconcileStarted: make(chan struct{}), releaseReconcile: make(chan struct{}), reconcileRequired: true, generation: 1}
 	svc := NewAffiliateService(repo, NewSettingService(settings, nil), nil, nil)
 
 	const readers = 8
@@ -316,8 +336,7 @@ func TestAffiliateService_QualificationReconcileMarkerConcurrentReadsSingleRun(t
 
 func TestAffiliateService_QualificationReconcileDatabaseLockCoordinatesInstances(t *testing.T) {
 	settings := newAffiliateTierServiceSettingRepo()
-	settings.values[SettingKeyAffiliateTierReconcileRequired] = "true"
-	repo := &affiliateTierServiceRepoStub{reconcileStarted: make(chan struct{}), releaseReconcile: make(chan struct{})}
+	repo := &affiliateTierServiceRepoStub{reconcileStarted: make(chan struct{}), releaseReconcile: make(chan struct{}), reconcileRequired: true, generation: 1}
 	first := NewAffiliateService(repo, NewSettingService(settings, nil), nil, nil)
 	second := NewAffiliateService(repo, NewSettingService(settings, nil), nil, nil)
 
@@ -326,15 +345,14 @@ func TestAffiliateService_QualificationReconcileDatabaseLockCoordinatesInstances
 	<-repo.reconcileStarted
 
 	secondErr := second.ReconcilePendingAffiliateQualifications(context.Background())
-	markerWhileLocked := settings.values[SettingKeyAffiliateTierReconcileRequired]
 	callsWhileLocked := repo.reconcileCallCount()
 
 	close(repo.releaseReconcile)
 	require.ErrorIs(t, secondErr, ErrAffiliateQualificationReconcileBusy)
-	require.Equal(t, "true", markerWhileLocked, "lock loser must not clear marker")
+	require.True(t, repo.reconcileRequired, "lock loser must not clear marker")
 	require.Equal(t, 1, callsWhileLocked)
 	require.NoError(t, <-firstErr)
-	require.Equal(t, "false", settings.values[SettingKeyAffiliateTierReconcileRequired])
+	require.False(t, repo.reconcileRequired)
 }
 
 type affiliateTierServiceRepoStub struct {
@@ -353,6 +371,12 @@ type affiliateTierServiceRepoStub struct {
 	inviterSummary      *AffiliateSummary
 	accruedAmount       float64
 	advisoryLockHeld    bool
+	reconcileRequired   bool
+	generation          int64
+	duringReconcile     func()
+	markReconcileErr    error
+	readSnapshotErr     error
+	clearReconcileErr   error
 }
 
 func (r *affiliateTierServiceRepoStub) CountQualifiedInvitees(_ context.Context, _ int64, threshold float64) (int, error) {
@@ -378,7 +402,11 @@ func (r *affiliateTierServiceRepoStub) ReconcileAllAffiliateQualifications(conte
 	}
 	r.mu.Lock()
 	r.reconcileFinished = true
+	duringReconcile := r.duringReconcile
 	r.mu.Unlock()
+	if duringReconcile != nil {
+		duringReconcile()
+	}
 	return r.reconcileErr
 }
 
@@ -396,6 +424,44 @@ func (r *affiliateTierServiceRepoStub) TryWithAffiliateQualificationReconcileLoc
 		r.mu.Unlock()
 	}()
 	return true, fn(ctx)
+}
+
+func (r *affiliateTierServiceRepoStub) MarkReconcileRequired(context.Context) (int64, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.markReconcileErr != nil {
+		return 0, r.markReconcileErr
+	}
+	r.generation++
+	if r.generation <= 0 {
+		r.generation = 1
+	}
+	r.reconcileRequired = true
+	return r.generation, nil
+}
+
+func (r *affiliateTierServiceRepoStub) ReadReconcilePendingSnapshot(context.Context) (AffiliateReconcilePendingSnapshot, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.readSnapshotErr != nil {
+		err := r.readSnapshotErr
+		r.readSnapshotErr = nil
+		return AffiliateReconcilePendingSnapshot{}, err
+	}
+	return AffiliateReconcilePendingSnapshot{Required: r.reconcileRequired, Generation: r.generation}, nil
+}
+
+func (r *affiliateTierServiceRepoStub) ClearReconcileRequiredIfGeneration(_ context.Context, expected int64) (bool, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.clearReconcileErr != nil {
+		return false, r.clearReconcileErr
+	}
+	if !r.reconcileRequired || r.generation != expected {
+		return false, nil
+	}
+	r.reconcileRequired = false
+	return true, nil
 }
 
 func (r *affiliateTierServiceRepoStub) EnsureUserAffiliate(_ context.Context, userID int64) (*AffiliateSummary, error) {

@@ -27,6 +27,8 @@ func TestMigration176BackfillsAffiliatePromotionTiers(t *testing.T) {
 	sql := string(content)
 	require.Contains(t, sql, "UPDATE user_affiliates")
 	require.Contains(t, sql, "affiliate_tier_reconcile_required")
+	require.Contains(t, sql, "affiliate_tier_reconcile_generation")
+	require.Contains(t, sql, "VALUES ('affiliate_tier_reconcile_generation', '1')")
 	require.Contains(t, sql, "'true'")
 	require.NotContains(t, sql, "ALTER TABLE")
 	require.NotContains(t, sql, "CREATE INDEX")

@@ -14,12 +14,13 @@ import (
 )
 
 var (
-	ErrAffiliateProfileNotFound            = infraerrors.NotFound("AFFILIATE_PROFILE_NOT_FOUND", "affiliate profile not found")
-	ErrAffiliateCodeInvalid                = infraerrors.BadRequest("AFFILIATE_CODE_INVALID", "invalid affiliate code")
-	ErrAffiliateCodeTaken                  = infraerrors.Conflict("AFFILIATE_CODE_TAKEN", "affiliate code already in use")
-	ErrAffiliateAlreadyBound               = infraerrors.Conflict("AFFILIATE_ALREADY_BOUND", "affiliate inviter already bound")
-	ErrAffiliateQuotaEmpty                 = infraerrors.BadRequest("AFFILIATE_QUOTA_EMPTY", "no affiliate quota available to transfer")
-	ErrAffiliateQualificationReconcileBusy = errors.New("affiliate qualification reconciliation is busy")
+	ErrAffiliateProfileNotFound             = infraerrors.NotFound("AFFILIATE_PROFILE_NOT_FOUND", "affiliate profile not found")
+	ErrAffiliateCodeInvalid                 = infraerrors.BadRequest("AFFILIATE_CODE_INVALID", "invalid affiliate code")
+	ErrAffiliateCodeTaken                   = infraerrors.Conflict("AFFILIATE_CODE_TAKEN", "affiliate code already in use")
+	ErrAffiliateAlreadyBound                = infraerrors.Conflict("AFFILIATE_ALREADY_BOUND", "affiliate inviter already bound")
+	ErrAffiliateQuotaEmpty                  = infraerrors.BadRequest("AFFILIATE_QUOTA_EMPTY", "no affiliate quota available to transfer")
+	ErrAffiliateQualificationReconcileBusy  = errors.New("affiliate qualification reconciliation is busy")
+	ErrAffiliateQualificationReconcileStale = errors.New("affiliate qualification reconciliation generation changed")
 )
 
 const (
@@ -92,6 +93,11 @@ type AffiliateQualification struct {
 	QualifiedAt             *time.Time `json:"-"`
 }
 
+type AffiliateReconcilePendingSnapshot struct {
+	Required   bool
+	Generation int64
+}
+
 type AffiliateDetail struct {
 	UserID          int64   `json:"user_id"`
 	AffCode         string  `json:"aff_code"`
@@ -142,6 +148,9 @@ type AffiliateQualificationRepository interface {
 	CountQualifiedInvitees(ctx context.Context, inviterID int64, threshold float64) (int, error)
 	ReconcileAllAffiliateQualifications(ctx context.Context, threshold float64, batchSize int) error
 	TryWithAffiliateQualificationReconcileLock(ctx context.Context, fn func(context.Context) error) (bool, error)
+	MarkReconcileRequired(ctx context.Context) (int64, error)
+	ReadReconcilePendingSnapshot(ctx context.Context) (AffiliateReconcilePendingSnapshot, error)
+	ClearReconcileRequiredIfGeneration(ctx context.Context, expected int64) (bool, error)
 }
 
 // AffiliateAdminFilter 列表筛选条件
@@ -530,24 +539,24 @@ func (s *AffiliateService) ReconcilePendingAffiliateQualifications(ctx context.C
 	if dbent.TxFromContext(ctx) != nil {
 		return s.withAffiliateTierReconcileMarker(ctx, fmt.Errorf("affiliate qualification reconcile requires a non-transaction context"))
 	}
-	if s.settingService == nil {
-		return nil
-	}
-	required, err := s.settingService.IsAffiliateTierReconcileRequired(ctx)
+	snapshot, err := s.qualificationRepo.ReadReconcilePendingSnapshot(ctx)
 	if err != nil {
-		return s.withAffiliateTierReconcileMarker(ctx, fmt.Errorf("read affiliate qualification reconcile marker: %w", err))
+		return s.withAffiliateTierReconcileMarker(ctx, fmt.Errorf("read affiliate qualification reconcile snapshot: %w", err))
 	}
-	if !required {
+	if !snapshot.Required {
 		return nil
 	}
 
 	acquired, err := s.qualificationRepo.TryWithAffiliateQualificationReconcileLock(ctx, func(lockCtx context.Context) error {
-		required, err := s.settingService.IsAffiliateTierReconcileRequired(lockCtx)
+		snapshot, err := s.qualificationRepo.ReadReconcilePendingSnapshot(lockCtx)
 		if err != nil {
-			return fmt.Errorf("recheck affiliate qualification reconcile marker: %w", err)
+			return fmt.Errorf("recheck affiliate qualification reconcile snapshot: %w", err)
 		}
-		if !required {
+		if !snapshot.Required {
 			return nil
+		}
+		if snapshot.Generation <= 0 {
+			return fmt.Errorf("invalid affiliate qualification reconcile generation %d", snapshot.Generation)
 		}
 		config, err := s.affiliateTierConfigStrict(lockCtx)
 		if err != nil {
@@ -556,30 +565,71 @@ func (s *AffiliateService) ReconcilePendingAffiliateQualifications(ctx context.C
 		if err := s.qualificationRepo.ReconcileAllAffiliateQualifications(lockCtx, config.QualificationAmount, 200); err != nil {
 			return fmt.Errorf("reconcile all affiliate qualifications: %w", err)
 		}
-		if err := s.settingService.SetAffiliateTierReconcileRequired(lockCtx, false); err != nil {
-			return fmt.Errorf("clear affiliate qualification reconcile marker: %w", err)
+		cleared, err := s.qualificationRepo.ClearReconcileRequiredIfGeneration(lockCtx, snapshot.Generation)
+		if err != nil {
+			return fmt.Errorf("clear affiliate qualification reconcile generation %d: %w", snapshot.Generation, err)
+		}
+		if !cleared {
+			return ErrAffiliateQualificationReconcileStale
 		}
 		return nil
 	})
 	if err != nil {
+		if errors.Is(err, ErrAffiliateQualificationReconcileStale) {
+			return err
+		}
 		return s.withAffiliateTierReconcileMarker(ctx, err)
 	}
 	if !acquired {
-		return s.withAffiliateTierReconcileMarker(ctx, ErrAffiliateQualificationReconcileBusy)
+		return ErrAffiliateQualificationReconcileBusy
 	}
 	return nil
 }
 
 func (s *AffiliateService) withAffiliateTierReconcileMarker(ctx context.Context, primary error) error {
-	if primary == nil || s == nil || s.settingService == nil {
+	if primary == nil || s == nil || s.qualificationRepo == nil {
 		return primary
 	}
-	markerErr := s.settingService.SetAffiliateTierReconcileRequired(dbent.WithoutTx(ctx), true)
+	_, markerErr := s.qualificationRepo.MarkReconcileRequired(dbent.WithoutTx(ctx))
 	if markerErr != nil {
-		logger.LegacyPrintf("service.affiliate", "[Affiliate] Failed to set tier reconcile marker: %v (cause: %v)", markerErr, primary)
-		return errors.Join(primary, fmt.Errorf("set affiliate qualification reconcile marker: %w", markerErr))
+		logger.LegacyPrintf("service.affiliate", "[Affiliate] Failed to bump tier reconcile generation: %v (cause: %v)", markerErr, primary)
+		return errors.Join(primary, fmt.Errorf("bump affiliate qualification reconcile generation: %w", markerErr))
 	}
 	return primary
+}
+
+func (s *AffiliateService) MarkReconcileRequired(ctx context.Context) (int64, error) {
+	if s == nil || s.qualificationRepo == nil {
+		return 0, infraerrors.ServiceUnavailable("SERVICE_UNAVAILABLE", "affiliate qualification service unavailable")
+	}
+	return s.qualificationRepo.MarkReconcileRequired(ctx)
+}
+
+func (s *AffiliateService) ReconcileInviteeQualificationForGeneration(ctx context.Context, inviteeUserID, generation int64) error {
+	if s == nil || s.qualificationRepo == nil {
+		return infraerrors.ServiceUnavailable("SERVICE_UNAVAILABLE", "affiliate qualification service unavailable")
+	}
+	if dbent.TxFromContext(ctx) != nil {
+		return fmt.Errorf("affiliate invitee qualification reconcile requires a non-transaction context")
+	}
+	if generation <= 0 {
+		return fmt.Errorf("invalid affiliate qualification reconcile generation %d", generation)
+	}
+	config, err := s.affiliateTierConfigStrict(ctx)
+	if err != nil {
+		return err
+	}
+	if _, err := s.qualificationRepo.ReconcileInviteeQualification(ctx, inviteeUserID, config.QualificationAmount); err != nil {
+		return err
+	}
+	cleared, err := s.qualificationRepo.ClearReconcileRequiredIfGeneration(ctx, generation)
+	if err != nil {
+		return err
+	}
+	if !cleared {
+		return ErrAffiliateQualificationReconcileStale
+	}
+	return nil
 }
 
 // ReconcileInviteeQualification refreshes one invitee's qualification from

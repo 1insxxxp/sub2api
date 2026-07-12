@@ -11,6 +11,7 @@ import (
 	entsql "entgo.io/ent/dialect/sql"
 	"github.com/DATA-DOG/go-sqlmock"
 	dbent "github.com/Wei-Shaw/sub2api/ent"
+	"github.com/Wei-Shaw/sub2api/internal/service"
 	"github.com/stretchr/testify/require"
 )
 
@@ -54,6 +55,58 @@ func TestAffiliateQualificationCountSQLUsesCurrentThreshold(t *testing.T) {
 	require.Contains(t, query, "qualifying_payment_amount >= $2")
 	require.NotContains(t, query, "qualified_at IS NOT NULL")
 	require.NotContains(t, query, "aff_count")
+}
+
+func TestAffiliateQualificationMarkReconcileRequiredIsAtomic(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = db.Close() })
+	driver := entsql.OpenDB(dialect.Postgres, db)
+	client := dbent.NewClient(dbent.Driver(driver))
+	t.Cleanup(func() { _ = client.Close() })
+	repo := &affiliateRepository{client: client, db: db}
+
+	mock.ExpectBegin()
+	mock.ExpectExec("(?s)INSERT INTO settings .* DO NOTHING").
+		WithArgs(service.SettingKeyAffiliateTierReconcileGeneration).
+		WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectQuery("(?s)UPDATE settings .* RETURNING value::bigint").
+		WithArgs(service.SettingKeyAffiliateTierReconcileGeneration).
+		WillReturnRows(sqlmock.NewRows([]string{"generation"}).AddRow(int64(7)))
+	mock.ExpectExec("(?s)INSERT INTO settings .* DO UPDATE").
+		WithArgs(service.SettingKeyAffiliateTierReconcileRequired).
+		WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectCommit()
+
+	generation, err := repo.MarkReconcileRequired(context.Background())
+
+	require.NoError(t, err)
+	require.Equal(t, int64(7), generation)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestAffiliateQualificationClearReconcileRequiredUsesGenerationCAS(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = db.Close() })
+	driver := entsql.OpenDB(dialect.Postgres, db)
+	client := dbent.NewClient(dbent.Driver(driver))
+	t.Cleanup(func() { _ = client.Close() })
+	repo := &affiliateRepository{client: client, db: db}
+
+	mock.ExpectQuery("(?s)UPDATE settings AS marker .* generation.value::bigint = \\$3 .* RETURNING 1").
+		WithArgs(
+			service.SettingKeyAffiliateTierReconcileRequired,
+			service.SettingKeyAffiliateTierReconcileGeneration,
+			int64(7),
+		).
+		WillReturnRows(sqlmock.NewRows([]string{"cleared"}).AddRow(1))
+
+	cleared, err := repo.ClearReconcileRequiredIfGeneration(context.Background(), 7)
+
+	require.NoError(t, err)
+	require.True(t, cleared)
+	require.NoError(t, mock.ExpectationsWereMet())
 }
 
 func TestAffiliateQualificationReconcileAllReturnsRowsIterationError(t *testing.T) {
