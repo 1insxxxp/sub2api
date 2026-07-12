@@ -244,6 +244,106 @@ func TestAffiliateRepository_QualificationReconcileGenerationCAS(t *testing.T) {
 	require.True(t, cleared)
 }
 
+func TestAffiliateRepository_QualificationClearWaitsForMarkAndKeepsCommittedGeneration(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	base1 := NewAffiliateRepository(integrationEntClient, integrationDB)
+	base2 := NewAffiliateRepository(integrationEntClient, integrationDB)
+	repo1 := base1.(service.AffiliateQualificationRepository)
+	repo2 := base2.(service.AffiliateQualificationRepository)
+	clearAffiliateReconcilePending(t, ctx, repo1)
+
+	before, err := repo1.ReadReconcilePendingSnapshot(ctx)
+	require.NoError(t, err)
+	tx, err := integrationEntClient.Tx(ctx)
+	require.NoError(t, err)
+	txFinished := false
+	defer func() {
+		if !txFinished {
+			_ = tx.Rollback()
+		}
+	}()
+	token, err := repo1.MarkReconcileRequired(dbent.NewTxContext(ctx, tx))
+	require.NoError(t, err)
+	require.Equal(t, before.Generation+1, token.Generation)
+
+	type clearResult struct {
+		cleared bool
+		err     error
+	}
+	result := make(chan clearResult, 1)
+	go func() {
+		cleared, clearErr := repo2.ClearReconcileRequiredIfGeneration(ctx, before.Generation)
+		result <- clearResult{cleared: cleared, err: clearErr}
+	}()
+
+	select {
+	case got := <-result:
+		t.Fatalf("clear returned before mark committed: cleared=%v err=%v", got.cleared, got.err)
+	case <-time.After(150 * time.Millisecond):
+	}
+	require.NoError(t, tx.Commit())
+	txFinished = true
+
+	select {
+	case got := <-result:
+		require.NoError(t, got.err)
+		require.False(t, got.cleared)
+	case <-ctx.Done():
+		t.Fatal("timed out waiting for clear after mark commit")
+	}
+	finalSnapshot, err := repo2.ReadReconcilePendingSnapshot(ctx)
+	require.NoError(t, err)
+	require.True(t, finalSnapshot.Required)
+	require.Equal(t, token.Generation, finalSnapshot.Generation)
+}
+
+func TestAffiliateRepository_QualificationDirtyAuditDeleteRequiresCurrentDetail(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	repo := NewAffiliateRepository(integrationEntClient, integrationDB).(service.AffiliateQualificationRepository)
+	orderID := fmt.Sprintf("task4-dirty-%d", time.Now().UnixNano())
+	oldDetail := `{"userID":101,"orderStatus":"COMPLETED","eventType":"payment_completed"}`
+	newDetail := `{"userID":101,"orderStatus":"REFUNDED","eventType":"refund_completed"}`
+	t.Cleanup(func() {
+		_, _ = integrationDB.ExecContext(context.Background(), `
+DELETE FROM payment_audit_logs WHERE order_id = $1 AND action = $2`, orderID, service.AffiliateQualificationDirtyAuditAction)
+	})
+	_, err := integrationDB.ExecContext(ctx, `
+INSERT INTO payment_audit_logs (order_id, action, detail, operator, created_at)
+VALUES ($1, $2, $3, 'test', NOW())`, orderID, service.AffiliateQualificationDirtyAuditAction, oldDetail)
+	require.NoError(t, err)
+
+	events, err := repo.ListAffiliateQualificationDirtyEvents(ctx, 500)
+	require.NoError(t, err)
+	oldEvent := findAffiliateQualificationDirtyEvent(t, events, orderID)
+	_, err = integrationDB.ExecContext(ctx, `
+UPDATE payment_audit_logs SET detail = $3 WHERE order_id = $1 AND action = $2`, orderID, service.AffiliateQualificationDirtyAuditAction, newDetail)
+	require.NoError(t, err)
+
+	deleted, err := repo.DeleteAffiliateQualificationDirtyEvent(ctx, oldEvent)
+	require.NoError(t, err)
+	require.False(t, deleted, "an old worker must not delete a newer terminal event")
+	events, err = repo.ListAffiliateQualificationDirtyEvents(ctx, 500)
+	require.NoError(t, err)
+	newEvent := findAffiliateQualificationDirtyEvent(t, events, orderID)
+	require.Equal(t, newDetail, newEvent.Detail)
+	deleted, err = repo.DeleteAffiliateQualificationDirtyEvent(ctx, newEvent)
+	require.NoError(t, err)
+	require.True(t, deleted)
+}
+
+func findAffiliateQualificationDirtyEvent(t *testing.T, events []service.AffiliateQualificationDirtyEvent, orderID string) service.AffiliateQualificationDirtyEvent {
+	t.Helper()
+	for _, event := range events {
+		if event.OrderID == orderID {
+			return event
+		}
+	}
+	t.Fatalf("affiliate qualification dirty event %s not found", orderID)
+	return service.AffiliateQualificationDirtyEvent{}
+}
+
 func TestAffiliateRepository_QualificationServiceInstancesDatabaseLock(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -461,6 +561,14 @@ func (r *affiliateQualificationLockTestRepo) ReadReconcilePendingSnapshot(ctx co
 
 func (r *affiliateQualificationLockTestRepo) ClearReconcileRequiredIfGeneration(ctx context.Context, expected int64) (bool, error) {
 	return r.qualification.ClearReconcileRequiredIfGeneration(ctx, expected)
+}
+
+func (r *affiliateQualificationLockTestRepo) ListAffiliateQualificationDirtyEvents(ctx context.Context, limit int) ([]service.AffiliateQualificationDirtyEvent, error) {
+	return r.qualification.ListAffiliateQualificationDirtyEvents(ctx, limit)
+}
+
+func (r *affiliateQualificationLockTestRepo) DeleteAffiliateQualificationDirtyEvent(ctx context.Context, event service.AffiliateQualificationDirtyEvent) (bool, error) {
+	return r.qualification.DeleteAffiliateQualificationDirtyEvent(ctx, event)
 }
 
 type affiliateQualificationLockSettingRepo struct {

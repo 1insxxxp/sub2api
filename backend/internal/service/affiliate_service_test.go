@@ -124,6 +124,72 @@ func TestAffiliateService_QualificationReconcileMarkerClearsOnlyAfterSuccess(t *
 	})
 }
 
+func TestAffiliateService_QualificationReconcileDrainsDirtyBeforeGlobalMarker(t *testing.T) {
+	event := AffiliateQualificationDirtyEvent{
+		OrderID:     "42",
+		UserID:      7,
+		OrderStatus: OrderStatusCompleted,
+		EventType:   "payment_completed",
+		Detail:      `{"userID":7,"orderStatus":"COMPLETED","eventType":"payment_completed"}`,
+	}
+	repo := &affiliateTierServiceRepoStub{dirtyEvents: []AffiliateQualificationDirtyEvent{event}}
+	svc := NewAffiliateService(repo, NewSettingService(newAffiliateTierServiceSettingRepo(), nil), nil, nil)
+
+	err := svc.ReconcilePendingAffiliateQualifications(context.Background())
+
+	require.NoError(t, err)
+	require.Empty(t, repo.dirtyEvents)
+	require.Equal(t, []AffiliateQualificationDirtyEvent{event}, repo.deletedDirtyEvents)
+	require.False(t, repo.reconcileRequired)
+	require.Zero(t, repo.generation)
+}
+
+func TestAffiliateService_QualificationReconcileRetainsFailedDirtyEvent(t *testing.T) {
+	event := AffiliateQualificationDirtyEvent{
+		OrderID:     "43",
+		UserID:      8,
+		OrderStatus: OrderStatusRefunded,
+		EventType:   "refund_completed",
+		Detail:      `{"userID":8,"orderStatus":"REFUNDED","eventType":"refund_completed"}`,
+	}
+	repo := &affiliateTierServiceRepoStub{
+		dirtyEvents:         []AffiliateQualificationDirtyEvent{event},
+		reconcileInviteeErr: errors.New("qualification unavailable"),
+	}
+	svc := NewAffiliateService(repo, NewSettingService(newAffiliateTierServiceSettingRepo(), nil), nil, nil)
+
+	err := svc.ReconcilePendingAffiliateQualifications(context.Background())
+
+	require.ErrorContains(t, err, "qualification unavailable")
+	require.Equal(t, []AffiliateQualificationDirtyEvent{event}, repo.dirtyEvents)
+	require.Empty(t, repo.deletedDirtyEvents)
+	require.True(t, repo.reconcileRequired)
+	require.Equal(t, int64(1), repo.generation)
+}
+
+func TestAffiliateService_DirtyEventSuccessDoesNotClearGlobalMarker(t *testing.T) {
+	event := AffiliateQualificationDirtyEvent{
+		OrderID:     "44",
+		UserID:      9,
+		OrderStatus: OrderStatusPartiallyRefunded,
+		EventType:   "refund_completed",
+		Detail:      `{"userID":9,"orderStatus":"PARTIALLY_REFUNDED","eventType":"refund_completed"}`,
+	}
+	repo := &affiliateTierServiceRepoStub{
+		dirtyEvents:       []AffiliateQualificationDirtyEvent{event},
+		reconcileRequired: true,
+		generation:        10,
+	}
+	svc := NewAffiliateService(repo, NewSettingService(newAffiliateTierServiceSettingRepo(), nil), nil, nil)
+
+	err := svc.ReconcileAffiliateQualificationDirtyEvent(context.Background(), event)
+
+	require.NoError(t, err)
+	require.Empty(t, repo.dirtyEvents)
+	require.True(t, repo.reconcileRequired)
+	require.Equal(t, int64(10), repo.generation)
+}
+
 func TestAffiliateService_QualificationReconcileRejectsTransactionContext(t *testing.T) {
 	settings := newAffiliateTierServiceSettingRepo()
 	repo := &affiliateTierServiceRepoStub{}
@@ -346,13 +412,17 @@ func TestAffiliateService_QualificationReconcileDatabaseLockCoordinatesInstances
 
 	secondErr := second.ReconcilePendingAffiliateQualifications(context.Background())
 	callsWhileLocked := repo.reconcileCallCount()
+	snapshotWhileLocked, snapshotErr := repo.ReadReconcilePendingSnapshot(context.Background())
 
-	close(repo.releaseReconcile)
 	require.ErrorIs(t, secondErr, ErrAffiliateQualificationReconcileBusy)
-	require.True(t, repo.reconcileRequired, "lock loser must not clear marker")
+	require.NoError(t, snapshotErr)
+	require.True(t, snapshotWhileLocked.Required, "lock loser must not clear marker")
 	require.Equal(t, 1, callsWhileLocked)
+	close(repo.releaseReconcile)
 	require.NoError(t, <-firstErr)
-	require.False(t, repo.reconcileRequired)
+	finalSnapshot, snapshotErr := repo.ReadReconcilePendingSnapshot(context.Background())
+	require.NoError(t, snapshotErr)
+	require.False(t, finalSnapshot.Required)
 }
 
 type affiliateTierServiceRepoStub struct {
@@ -377,6 +447,8 @@ type affiliateTierServiceRepoStub struct {
 	markReconcileErr    error
 	readSnapshotErr     error
 	clearReconcileErr   error
+	dirtyEvents         []AffiliateQualificationDirtyEvent
+	deletedDirtyEvents  []AffiliateQualificationDirtyEvent
 }
 
 func (r *affiliateTierServiceRepoStub) CountQualifiedInvitees(_ context.Context, _ int64, threshold float64) (int, error) {
@@ -463,6 +535,25 @@ func (r *affiliateTierServiceRepoStub) ClearReconcileRequiredIfGeneration(_ cont
 	}
 	r.reconcileRequired = false
 	return true, nil
+}
+
+func (r *affiliateTierServiceRepoStub) ListAffiliateQualificationDirtyEvents(context.Context, int) ([]AffiliateQualificationDirtyEvent, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return append([]AffiliateQualificationDirtyEvent(nil), r.dirtyEvents...), nil
+}
+
+func (r *affiliateTierServiceRepoStub) DeleteAffiliateQualificationDirtyEvent(_ context.Context, event AffiliateQualificationDirtyEvent) (bool, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	for i, pending := range r.dirtyEvents {
+		if pending.OrderID == event.OrderID && pending.Detail == event.Detail {
+			r.dirtyEvents = append(r.dirtyEvents[:i], r.dirtyEvents[i+1:]...)
+			r.deletedDirtyEvents = append(r.deletedDirtyEvents, event)
+			return true, nil
+		}
+	}
+	return false, nil
 }
 
 func (r *affiliateTierServiceRepoStub) EnsureUserAffiliate(_ context.Context, userID int64) (*AffiliateSummary, error) {

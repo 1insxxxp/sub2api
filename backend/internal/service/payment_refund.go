@@ -579,16 +579,14 @@ func (s *PaymentService) markRefundOk(ctx context.Context, p *RefundPlan) (*Refu
 		_ = tx.Rollback()
 		current, getErr := s.entClient.PaymentOrder.Get(ctx, p.OrderID)
 		if getErr == nil && current.Status == fs && current.RefundAmount == p.RefundAmount {
+			s.reconcilePendingAffiliateQualificationsBestEffort(ctx, p.OrderID, "terminal_refund_retry")
 			return &RefundResult{Success: true}, nil
 		}
 		return nil, infraerrors.Conflict("CONFLICT", "refund status changed before finalization")
 	}
-	var token AffiliateReconcileToken
-	if s.affiliateService != nil {
-		token, err = s.affiliateService.MarkReconcileRequired(txCtx)
-		if err != nil {
-			return nil, fmt.Errorf("mark affiliate qualification dirty after refund: %w", err)
-		}
+	dirtyEvent, err := upsertAffiliateQualificationDirtyAudit(txCtx, tx.Client(), p.OrderID, p.Order.UserID, fs, "refund_completed")
+	if err != nil {
+		return nil, fmt.Errorf("persist affiliate qualification dirty audit after refund: %w", err)
 	}
 	if err := tx.Commit(); err != nil {
 		return nil, fmt.Errorf("commit mark refund transaction: %w", err)
@@ -596,7 +594,7 @@ func (s *PaymentService) markRefundOk(ctx context.Context, p *RefundPlan) (*Refu
 	if !s.hasAuditLog(ctx, p.OrderID, "REFUND_SUCCESS") {
 		s.writeAuditLog(ctx, p.OrderID, "REFUND_SUCCESS", "admin", map[string]any{"refundAmount": p.RefundAmount, "reason": p.Reason, "balanceDeducted": p.BalanceToDeduct, "force": p.Force})
 	}
-	s.reconcileAffiliateAfterOrderCompletion(ctx, p.Order, token)
+	s.reconcileAffiliateAfterTerminalEvent(ctx, p.Order, dirtyEvent, "post_refund")
 	return &RefundResult{Success: true, BalanceDeducted: p.BalanceToDeduct, SubDaysDeducted: p.SubDaysToDeduct}, nil
 }
 

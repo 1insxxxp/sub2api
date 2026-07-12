@@ -144,16 +144,17 @@ func TestMarkRefundOkPartialRefundRefreshesAffiliateQualification(t *testing.T) 
 	require.Equal(t, OrderStatusPartiallyRefunded, reloaded.Status)
 	require.Equal(t, 1, affiliateRepo.reconcileCalls)
 	require.False(t, affiliateRepo.reconcileRequired)
-	require.Equal(t, int64(1), affiliateRepo.generation)
+	require.Zero(t, affiliateRepo.generation)
 	_, err = svc.markRefundOk(ctx, &RefundPlan{OrderID: order.ID, Order: order, RefundAmount: 40, Reason: "partial refund"})
 	require.NoError(t, err)
-	require.Equal(t, int64(1), affiliateRepo.generation, "identical refund retry must not bump generation")
+	require.Zero(t, affiliateRepo.generation, "identical refund retry must not bump generation")
 	require.Equal(t, 1, affiliateRepo.reconcileCalls)
 }
 
-func TestMarkRefundOkRollsBackTerminalStatusWhenGenerationBumpFails(t *testing.T) {
+func TestMarkRefundOkPersistsDirtyOutboxWhenGenerationMarkerFails(t *testing.T) {
 	ctx := context.Background()
 	client := newPaymentConfigServiceTestClient(t)
+	ensurePaymentAuditOrderActionUniqueIndex(t, ctx, client)
 	user, err := client.User.Create().SetEmail("refund-generation-failure@example.com").SetPasswordHash("hash").SetUsername("refund-generation-failure").Save(ctx)
 	require.NoError(t, err)
 	order, err := client.PaymentOrder.Create().SetUserID(user.ID).SetUserEmail(user.Email).SetUserName(user.Username).
@@ -161,16 +162,81 @@ func TestMarkRefundOkRollsBackTerminalStatusWhenGenerationBumpFails(t *testing.T
 		SetPaymentType(payment.TypeAlipay).SetPaymentTradeNo("trade-refund-generation-failure").SetOrderType(payment.OrderTypeBalance).
 		SetStatus(OrderStatusCompleted).SetExpiresAt(time.Now().Add(time.Hour)).SetClientIP("127.0.0.1").SetSrcHost("api.example.com").Save(ctx)
 	require.NoError(t, err)
-	repo := &paymentFulfillmentAffiliateRepoStub{markReconcileErr: errors.New("generation unavailable")}
+	repo := &paymentFulfillmentAffiliateRepoStub{
+		reconcileErr:     errors.New("local reconcile unavailable"),
+		markReconcileErr: errors.New("generation unavailable"),
+	}
 	svc := &PaymentService{entClient: client, affiliateService: NewAffiliateService(repo, nil, nil, nil)}
 
 	_, err = svc.markRefundOk(ctx, &RefundPlan{OrderID: order.ID, Order: order, RefundAmount: 40, Reason: "partial"})
 
-	require.ErrorContains(t, err, "mark affiliate qualification dirty after refund")
+	require.NoError(t, err)
 	reloaded, reloadErr := client.PaymentOrder.Get(ctx, order.ID)
 	require.NoError(t, reloadErr)
-	require.Equal(t, OrderStatusCompleted, reloaded.Status)
+	require.Equal(t, OrderStatusPartiallyRefunded, reloaded.Status)
+	require.Equal(t, 40.0, reloaded.RefundAmount)
+	dirty, auditErr := client.PaymentAuditLog.Query().Where(
+		paymentauditlog.OrderIDEQ(strconv.FormatInt(order.ID, 10)),
+		paymentauditlog.ActionEQ("AFFILIATE_QUALIFICATION_DIRTY"),
+	).Count(ctx)
+	require.NoError(t, auditErr)
+	require.Equal(t, 1, dirty)
+}
+
+func TestMarkRefundOkRollsBackStatusWhenDirtyOutboxCannotPersist(t *testing.T) {
+	ctx := context.Background()
+	client := newPaymentConfigServiceTestClient(t)
+	_, err := client.ExecContext(ctx, `
+CREATE TRIGGER fail_affiliate_dirty_audit
+BEFORE INSERT ON payment_audit_logs
+WHEN NEW.action = 'AFFILIATE_QUALIFICATION_DIRTY'
+BEGIN
+    SELECT RAISE(FAIL, 'injected dirty audit failure');
+END`)
+	require.NoError(t, err)
+	user, err := client.User.Create().SetEmail("refund-dirty-atomic@example.com").SetPasswordHash("hash").SetUsername("refund-dirty-atomic").Save(ctx)
+	require.NoError(t, err)
+	order, err := client.PaymentOrder.Create().SetUserID(user.ID).SetUserEmail(user.Email).SetUserName(user.Username).
+		SetAmount(100).SetPayAmount(100).SetFeeRate(0).SetRechargeCode("REFUND-DIRTY-ATOMIC").SetOutTradeNo("sub2_refund_dirty_atomic").
+		SetPaymentType(payment.TypeAlipay).SetPaymentTradeNo("trade-refund-dirty-atomic").SetOrderType(payment.OrderTypeBalance).
+		SetStatus(OrderStatusRefunding).SetExpiresAt(time.Now().Add(time.Hour)).SetClientIP("127.0.0.1").SetSrcHost("api.example.com").Save(ctx)
+	require.NoError(t, err)
+	svc := &PaymentService{entClient: client}
+
+	_, err = svc.markRefundOk(ctx, &RefundPlan{OrderID: order.ID, Order: order, RefundAmount: 40, Reason: "partial"})
+
+	require.ErrorContains(t, err, "persist affiliate qualification dirty audit")
+	reloaded, reloadErr := client.PaymentOrder.Get(ctx, order.ID)
+	require.NoError(t, reloadErr)
+	require.Equal(t, OrderStatusRefunding, reloaded.Status)
 	require.Zero(t, reloaded.RefundAmount)
+}
+
+func TestMarkRefundOkRetryRecoversCommittedDirtyOutbox(t *testing.T) {
+	ctx := context.Background()
+	client := newPaymentConfigServiceTestClient(t)
+	user, err := client.User.Create().SetEmail("refund-dirty-retry@example.com").SetPasswordHash("hash").SetUsername("refund-dirty-retry").Save(ctx)
+	require.NoError(t, err)
+	order, err := client.PaymentOrder.Create().SetUserID(user.ID).SetUserEmail(user.Email).SetUserName(user.Username).
+		SetAmount(100).SetPayAmount(100).SetFeeRate(0).SetRechargeCode("REFUND-DIRTY-RETRY").SetOutTradeNo("sub2_refund_dirty_retry").
+		SetPaymentType(payment.TypeAlipay).SetPaymentTradeNo("trade-refund-dirty-retry").SetOrderType(payment.OrderTypeBalance).
+		SetStatus(OrderStatusRefunding).SetExpiresAt(time.Now().Add(time.Hour)).SetClientIP("127.0.0.1").SetSrcHost("api.example.com").Save(ctx)
+	require.NoError(t, err)
+	plan := &RefundPlan{OrderID: order.ID, Order: order, RefundAmount: 40, Reason: "partial"}
+	crashedSvc := &PaymentService{entClient: client}
+	_, err = crashedSvc.markRefundOk(ctx, plan)
+	require.NoError(t, err)
+
+	repo := &paymentFulfillmentAffiliateRepoStub{auditClient: client}
+	recoverySvc := &PaymentService{entClient: client, affiliateService: NewAffiliateService(repo, nil, nil, nil)}
+	result, err := recoverySvc.markRefundOk(ctx, plan)
+
+	require.NoError(t, err)
+	require.True(t, result.Success)
+	require.Equal(t, 1, repo.reconcileCalls)
+	dirty, err := client.PaymentAuditLog.Query().Where(paymentauditlog.ActionEQ(AffiliateQualificationDirtyAuditAction)).Count(ctx)
+	require.NoError(t, err)
+	require.Zero(t, dirty)
 }
 
 func TestMarkRefundOkLocalSuccessPreservesPreexistingPendingGeneration(t *testing.T) {
@@ -191,11 +257,11 @@ func TestMarkRefundOkLocalSuccessPreservesPreexistingPendingGeneration(t *testin
 
 	require.NoError(t, err)
 	require.True(t, repo.reconcileRequired)
-	require.Equal(t, int64(11), repo.generation)
+	require.Equal(t, int64(10), repo.generation)
 	require.Equal(t, 1, repo.reconcileCalls)
 	_, err = svc.markRefundOk(ctx, plan)
 	require.NoError(t, err)
-	require.Equal(t, int64(11), repo.generation, "refund retry must not bump generation")
+	require.Equal(t, int64(10), repo.generation, "refund retry must not bump generation")
 }
 
 func TestRequestRefundDoesNotRefreshAffiliateQualification(t *testing.T) {

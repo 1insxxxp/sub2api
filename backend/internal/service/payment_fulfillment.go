@@ -193,6 +193,7 @@ func (s *PaymentService) alreadyProcessed(ctx context.Context, o *dbent.PaymentO
 	}
 	switch cur.Status {
 	case OrderStatusCompleted, OrderStatusRefunded:
+		s.reconcilePendingAffiliateQualificationsBestEffort(ctx, cur.ID, "terminal_callback_retry")
 		return nil
 	case OrderStatusFailed, OrderStatusPaid, OrderStatusRecharging:
 		return s.executeFulfillment(ctx, o.ID)
@@ -230,6 +231,7 @@ func (s *PaymentService) ExecuteBalanceFulfillment(ctx context.Context, oid int6
 		return infraerrors.NotFound("NOT_FOUND", "order not found")
 	}
 	if o.Status == OrderStatusCompleted {
+		s.reconcilePendingAffiliateQualificationsBestEffort(ctx, o.ID, "completed_balance_retry")
 		return nil
 	}
 	if psIsRefundStatus(o.Status) {
@@ -383,12 +385,9 @@ func (s *PaymentService) markCompleted(ctx context.Context, o *dbent.PaymentOrde
 		}
 		return infraerrors.Conflict("CONFLICT", "fulfillment lease was lost before completion")
 	}
-	var token AffiliateReconcileToken
-	if s.affiliateService != nil {
-		token, err = s.affiliateService.MarkReconcileRequired(txCtx)
-		if err != nil {
-			return fmt.Errorf("mark affiliate qualification dirty: %w", err)
-		}
+	dirtyEvent, err := upsertAffiliateQualificationDirtyAudit(txCtx, tx.Client(), o.ID, o.UserID, OrderStatusCompleted, "payment_completed")
+	if err != nil {
+		return fmt.Errorf("persist affiliate qualification dirty audit: %w", err)
 	}
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("commit mark completed transaction: %w", err)
@@ -401,22 +400,72 @@ func (s *PaymentService) markCompleted(ctx context.Context, o *dbent.PaymentOrde
 		})
 		s.dispatchPaymentFulfillmentNotification(o, auditAction)
 	}
-	s.reconcileAffiliateAfterOrderCompletion(ctx, o, token)
+	s.reconcileAffiliateAfterTerminalEvent(ctx, o, dirtyEvent, "post_completion")
 	return nil
 }
 
-func (s *PaymentService) reconcileAffiliateAfterOrderCompletion(ctx context.Context, o *dbent.PaymentOrder, token AffiliateReconcileToken) {
-	if s == nil || s.affiliateService == nil || o == nil || token.Generation <= 0 {
+func (s *PaymentService) reconcileAffiliateAfterTerminalEvent(ctx context.Context, o *dbent.PaymentOrder, event AffiliateQualificationDirtyEvent, phase string) {
+	if s == nil || s.affiliateService == nil || o == nil {
 		return
 	}
-	if err := s.affiliateService.ReconcileInviteeQualificationForGeneration(dbent.WithoutTx(ctx), o.UserID, token); err != nil {
-		slog.Warn("affiliate qualification reconcile after payment completion failed", "orderID", o.ID, "inviteeID", o.UserID, "error", err)
+	if err := s.affiliateService.ReconcileAffiliateQualificationDirtyEvent(dbent.WithoutTx(ctx), event); err != nil {
+		slog.Warn("affiliate qualification reconcile after terminal payment event failed", "orderID", o.ID, "inviteeID", o.UserID, "phase", phase, "error", err)
 		s.writeAuditLog(ctx, o.ID, "AFFILIATE_TIER_RECONCILE_FAILED", "system", map[string]any{
 			"inviteeUserID": o.UserID,
-			"phase":         "post_completion",
+			"phase":         phase,
 			"error":         err.Error(),
 		})
 	}
+}
+
+func (s *PaymentService) reconcilePendingAffiliateQualificationsBestEffort(ctx context.Context, orderID int64, phase string) {
+	if s == nil || s.affiliateService == nil {
+		return
+	}
+	if err := s.affiliateService.ReconcilePendingAffiliateQualifications(dbent.WithoutTx(ctx)); err != nil {
+		slog.Warn("pending affiliate qualification reconcile after terminal retry failed", "orderID", orderID, "phase", phase, "error", err)
+		s.writeAuditLog(ctx, orderID, "AFFILIATE_TIER_RECONCILE_FAILED", "system", map[string]any{
+			"phase": phase,
+			"error": err.Error(),
+		})
+	}
+}
+
+func upsertAffiliateQualificationDirtyAudit(ctx context.Context, client *dbent.Client, orderID, userID int64, orderStatus, eventType string) (AffiliateQualificationDirtyEvent, error) {
+	detail, err := json.Marshal(AffiliateQualificationDirtyEvent{
+		UserID:      userID,
+		OrderStatus: orderStatus,
+		EventType:   eventType,
+	})
+	if err != nil {
+		return AffiliateQualificationDirtyEvent{}, err
+	}
+	event := AffiliateQualificationDirtyEvent{
+		OrderID:     strconv.FormatInt(orderID, 10),
+		UserID:      userID,
+		OrderStatus: orderStatus,
+		EventType:   eventType,
+		Detail:      string(detail),
+	}
+	nowExpr := paymentAuditCurrentTimestampExpr(client)
+	var query string
+	if paymentAuditDialect(client) == dialect.Postgres {
+		query = fmt.Sprintf(`
+INSERT INTO payment_audit_logs (order_id, action, detail, operator, created_at)
+VALUES ($1, $2, $3, 'system', %s)
+ON CONFLICT (order_id, action) DO UPDATE
+SET detail = EXCLUDED.detail, operator = EXCLUDED.operator, created_at = EXCLUDED.created_at`, nowExpr)
+	} else {
+		query = fmt.Sprintf(`
+INSERT INTO payment_audit_logs (order_id, action, detail, operator, created_at)
+VALUES (?, ?, ?, 'system', %s)
+ON CONFLICT DO UPDATE
+SET detail = excluded.detail, operator = excluded.operator, created_at = excluded.created_at`, nowExpr)
+	}
+	if _, err := client.ExecContext(ctx, query, event.OrderID, AffiliateQualificationDirtyAuditAction, event.Detail); err != nil {
+		return AffiliateQualificationDirtyEvent{}, err
+	}
+	return event, nil
 }
 
 func (s *PaymentService) dispatchPaymentFulfillmentNotification(o *dbent.PaymentOrder, auditAction string) {
@@ -502,6 +551,7 @@ func (s *PaymentService) ExecuteSubscriptionFulfillment(ctx context.Context, oid
 		return infraerrors.NotFound("NOT_FOUND", "order not found")
 	}
 	if o.Status == OrderStatusCompleted {
+		s.reconcilePendingAffiliateQualificationsBestEffort(ctx, o.ID, "completed_subscription_retry")
 		return nil
 	}
 	if psIsRefundStatus(o.Status) {

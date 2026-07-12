@@ -27,8 +27,9 @@ const (
 	affiliateInviteesLimit = 100
 	// AffiliateCodeMinLength / AffiliateCodeMaxLength bound both system-generated
 	// 12-char codes and admin-customized codes (e.g. "VIP2026").
-	AffiliateCodeMinLength = 4
-	AffiliateCodeMaxLength = 32
+	AffiliateCodeMinLength                 = 4
+	AffiliateCodeMaxLength                 = 32
+	AffiliateQualificationDirtyAuditAction = "AFFILIATE_QUALIFICATION_DIRTY"
 )
 
 // affiliateCodeValidChar accepts uppercase letters, digits, underscore and dash.
@@ -156,6 +157,16 @@ type AffiliateQualificationRepository interface {
 	MarkReconcileRequired(ctx context.Context) (AffiliateReconcileToken, error)
 	ReadReconcilePendingSnapshot(ctx context.Context) (AffiliateReconcilePendingSnapshot, error)
 	ClearReconcileRequiredIfGeneration(ctx context.Context, expected int64) (bool, error)
+	ListAffiliateQualificationDirtyEvents(ctx context.Context, limit int) ([]AffiliateQualificationDirtyEvent, error)
+	DeleteAffiliateQualificationDirtyEvent(ctx context.Context, event AffiliateQualificationDirtyEvent) (bool, error)
+}
+
+type AffiliateQualificationDirtyEvent struct {
+	OrderID     string `json:"-"`
+	UserID      int64  `json:"userID"`
+	OrderStatus string `json:"orderStatus"`
+	EventType   string `json:"eventType"`
+	Detail      string `json:"-"`
 }
 
 // AffiliateAdminFilter 列表筛选条件
@@ -544,18 +555,13 @@ func (s *AffiliateService) ReconcilePendingAffiliateQualifications(ctx context.C
 	if dbent.TxFromContext(ctx) != nil {
 		return s.withAffiliateTierReconcileMarker(ctx, fmt.Errorf("affiliate qualification reconcile requires a non-transaction context"))
 	}
-	snapshot, err := s.qualificationRepo.ReadReconcilePendingSnapshot(ctx)
-	if err != nil {
-		return s.withAffiliateTierReconcileMarker(ctx, fmt.Errorf("read affiliate qualification reconcile snapshot: %w", err))
-	}
-	if !snapshot.Required {
-		return nil
-	}
-
 	acquired, err := s.qualificationRepo.TryWithAffiliateQualificationReconcileLock(ctx, func(lockCtx context.Context) error {
+		if err := s.drainAffiliateQualificationDirtyEvents(lockCtx); err != nil {
+			return err
+		}
 		snapshot, err := s.qualificationRepo.ReadReconcilePendingSnapshot(lockCtx)
 		if err != nil {
-			return fmt.Errorf("recheck affiliate qualification reconcile snapshot: %w", err)
+			return fmt.Errorf("read affiliate qualification reconcile snapshot: %w", err)
 		}
 		if !snapshot.Required {
 			return nil
@@ -587,6 +593,59 @@ func (s *AffiliateService) ReconcilePendingAffiliateQualifications(ctx context.C
 	}
 	if !acquired {
 		return ErrAffiliateQualificationReconcileBusy
+	}
+	return nil
+}
+
+func (s *AffiliateService) drainAffiliateQualificationDirtyEvents(ctx context.Context) error {
+	const batchSize = 200
+	for {
+		events, err := s.qualificationRepo.ListAffiliateQualificationDirtyEvents(ctx, batchSize)
+		if err != nil {
+			return fmt.Errorf("list affiliate qualification dirty events: %w", err)
+		}
+		for _, event := range events {
+			if err := s.reconcileAffiliateQualificationDirtyEvent(ctx, event); err != nil {
+				return err
+			}
+		}
+		if len(events) < batchSize {
+			return nil
+		}
+	}
+}
+
+func (s *AffiliateService) ReconcileAffiliateQualificationDirtyEvent(ctx context.Context, event AffiliateQualificationDirtyEvent) error {
+	if s == nil || s.qualificationRepo == nil {
+		return infraerrors.ServiceUnavailable("SERVICE_UNAVAILABLE", "affiliate qualification service unavailable")
+	}
+	if dbent.TxFromContext(ctx) != nil {
+		return fmt.Errorf("affiliate dirty event reconcile requires a non-transaction context")
+	}
+	err := s.reconcileAffiliateQualificationDirtyEvent(ctx, event)
+	if err != nil {
+		return s.withAffiliateTierReconcileMarker(ctx, err)
+	}
+	return nil
+}
+
+func (s *AffiliateService) reconcileAffiliateQualificationDirtyEvent(ctx context.Context, event AffiliateQualificationDirtyEvent) error {
+	if event.UserID <= 0 || strings.TrimSpace(event.OrderID) == "" || strings.TrimSpace(event.Detail) == "" {
+		return fmt.Errorf("invalid affiliate qualification dirty event for order %q", event.OrderID)
+	}
+	config, err := s.affiliateTierConfigStrict(ctx)
+	if err != nil {
+		return err
+	}
+	if _, err := s.qualificationRepo.ReconcileInviteeQualification(ctx, event.UserID, config.QualificationAmount); err != nil {
+		return fmt.Errorf("reconcile affiliate dirty event for order %s: %w", event.OrderID, err)
+	}
+	deleted, err := s.qualificationRepo.DeleteAffiliateQualificationDirtyEvent(ctx, event)
+	if err != nil {
+		return fmt.Errorf("delete affiliate qualification dirty event for order %s: %w", event.OrderID, err)
+	}
+	if !deleted {
+		return ErrAffiliateQualificationReconcileStale
 	}
 	return nil
 }

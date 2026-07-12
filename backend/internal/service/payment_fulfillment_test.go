@@ -4,6 +4,7 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"math"
 	"strconv"
@@ -61,6 +62,8 @@ type paymentFulfillmentAffiliateRepoStub struct {
 	reconcileRequired  bool
 	generation         int64
 	markReconcileErr   error
+	dirtyEvents        []AffiliateQualificationDirtyEvent
+	auditClient        *dbent.Client
 }
 
 func (r *paymentFulfillmentAffiliateRepoStub) EnsureUserAffiliate(_ context.Context, userID int64) (*AffiliateSummary, error) {
@@ -201,6 +204,43 @@ func (r *paymentFulfillmentAffiliateRepoStub) ClearReconcileRequiredIfGeneration
 		return false, nil
 	}
 	r.reconcileRequired = false
+	return true, nil
+}
+
+func (r *paymentFulfillmentAffiliateRepoStub) ListAffiliateQualificationDirtyEvents(ctx context.Context, _ int) ([]AffiliateQualificationDirtyEvent, error) {
+	if r.auditClient != nil {
+		logs, err := r.auditClient.PaymentAuditLog.Query().Where(paymentauditlog.ActionEQ(AffiliateQualificationDirtyAuditAction)).All(ctx)
+		if err != nil {
+			return nil, err
+		}
+		events := make([]AffiliateQualificationDirtyEvent, 0, len(logs))
+		for _, logEntry := range logs {
+			event := AffiliateQualificationDirtyEvent{OrderID: logEntry.OrderID, Detail: logEntry.Detail}
+			if err := json.Unmarshal([]byte(logEntry.Detail), &event); err != nil {
+				return nil, err
+			}
+			events = append(events, event)
+		}
+		return events, nil
+	}
+	return append([]AffiliateQualificationDirtyEvent(nil), r.dirtyEvents...), nil
+}
+
+func (r *paymentFulfillmentAffiliateRepoStub) DeleteAffiliateQualificationDirtyEvent(ctx context.Context, event AffiliateQualificationDirtyEvent) (bool, error) {
+	if r.auditClient != nil {
+		deleted, err := r.auditClient.PaymentAuditLog.Delete().Where(
+			paymentauditlog.OrderIDEQ(event.OrderID),
+			paymentauditlog.ActionEQ(AffiliateQualificationDirtyAuditAction),
+			paymentauditlog.DetailEQ(event.Detail),
+		).Exec(ctx)
+		return deleted == 1, err
+	}
+	for i, pending := range r.dirtyEvents {
+		if pending.OrderID == event.OrderID && pending.Detail == event.Detail {
+			r.dirtyEvents = append(r.dirtyEvents[:i], r.dirtyEvents[i+1:]...)
+			return true, nil
+		}
+	}
 	return true, nil
 }
 
@@ -1135,21 +1175,111 @@ func TestMarkCompletedKeepsBothPaymentTypesCompletedWhenAffiliateRefreshFails(t 
 	}
 }
 
-func TestMarkCompletedRollsBackTerminalStatusWhenGenerationBumpFails(t *testing.T) {
+func TestMarkCompletedPersistsDirtyOutboxWhenGenerationMarkerFails(t *testing.T) {
 	ctx := context.Background()
 	client := newPaymentConfigServiceTestClient(t)
+	ensurePaymentAuditOrderActionUniqueIndex(t, ctx, client)
 	order := createPaymentFulfillmentSubscriptionOrder(t, ctx, client, OrderStatusPaid, time.Now())
-	repo := &paymentFulfillmentAffiliateRepoStub{markReconcileErr: errors.New("generation unavailable")}
+	repo := &paymentFulfillmentAffiliateRepoStub{
+		reconcileErr:     errors.New("local reconcile unavailable"),
+		markReconcileErr: errors.New("generation unavailable"),
+	}
 	svc := &PaymentService{entClient: client, affiliateService: NewAffiliateService(repo, nil, nil, nil)}
 	lease, err := svc.acquirePaymentFulfillmentLease(ctx, order)
 	require.NoError(t, err)
 
 	err = svc.markCompleted(ctx, order, lease, "PAYMENT_SUCCESS")
 
-	require.ErrorContains(t, err, "mark affiliate qualification dirty")
+	require.NoError(t, err)
+	reloaded, reloadErr := client.PaymentOrder.Get(ctx, order.ID)
+	require.NoError(t, reloadErr)
+	require.Equal(t, OrderStatusCompleted, reloaded.Status)
+	dirty, auditErr := client.PaymentAuditLog.Query().Where(
+		paymentauditlog.OrderIDEQ(strconv.FormatInt(order.ID, 10)),
+		paymentauditlog.ActionEQ("AFFILIATE_QUALIFICATION_DIRTY"),
+	).Count(ctx)
+	require.NoError(t, auditErr)
+	require.Equal(t, 1, dirty)
+}
+
+func TestMarkCompletedDirtyOutboxRecoversAfterCommitWithoutLocalReconcile(t *testing.T) {
+	ctx := context.Background()
+	client := newPaymentConfigServiceTestClient(t)
+	order := createPaymentFulfillmentSubscriptionOrder(t, ctx, client, OrderStatusPaid, time.Now())
+	svc := &PaymentService{entClient: client}
+	lease, err := svc.acquirePaymentFulfillmentLease(ctx, order)
+	require.NoError(t, err)
+
+	require.NoError(t, svc.markCompleted(ctx, order, lease, "PAYMENT_SUCCESS"))
+	reloaded, err := client.PaymentOrder.Get(ctx, order.ID)
+	require.NoError(t, err)
+	require.Equal(t, OrderStatusCompleted, reloaded.Status)
+	dirtyBefore, err := client.PaymentAuditLog.Query().Where(paymentauditlog.ActionEQ(AffiliateQualificationDirtyAuditAction)).Count(ctx)
+	require.NoError(t, err)
+	require.Equal(t, 1, dirtyBefore)
+
+	repo := &paymentFulfillmentAffiliateRepoStub{auditClient: client}
+	recoverySvc := &PaymentService{entClient: client, affiliateService: NewAffiliateService(repo, nil, nil, nil)}
+	require.NoError(t, recoverySvc.ExecuteSubscriptionFulfillment(ctx, order.ID))
+	require.Equal(t, 1, repo.reconcileCalls)
+	dirtyAfter, err := client.PaymentAuditLog.Query().Where(paymentauditlog.ActionEQ(AffiliateQualificationDirtyAuditAction)).Count(ctx)
+	require.NoError(t, err)
+	require.Zero(t, dirtyAfter)
+	require.False(t, repo.reconcileRequired, "draining an outbox event must not create or clear a global marker")
+}
+
+func TestMarkCompletedRollsBackStatusWhenDirtyOutboxCannotPersist(t *testing.T) {
+	ctx := context.Background()
+	client := newPaymentConfigServiceTestClient(t)
+	_, err := client.ExecContext(ctx, `
+CREATE TRIGGER fail_affiliate_dirty_audit
+BEFORE INSERT ON payment_audit_logs
+WHEN NEW.action = 'AFFILIATE_QUALIFICATION_DIRTY'
+BEGIN
+    SELECT RAISE(FAIL, 'injected dirty audit failure');
+END`)
+	require.NoError(t, err)
+	order := createPaymentFulfillmentSubscriptionOrder(t, ctx, client, OrderStatusPaid, time.Now())
+	svc := &PaymentService{entClient: client}
+	lease, err := svc.acquirePaymentFulfillmentLease(ctx, order)
+	require.NoError(t, err)
+
+	err = svc.markCompleted(ctx, order, lease, "PAYMENT_SUCCESS")
+
+	require.ErrorContains(t, err, "persist affiliate qualification dirty audit")
 	reloaded, reloadErr := client.PaymentOrder.Get(ctx, order.ID)
 	require.NoError(t, reloadErr)
 	require.Equal(t, OrderStatusRecharging, reloaded.Status)
+}
+
+func TestAffiliateQualificationDirtyOutboxUpsertsLatestTerminalEvent(t *testing.T) {
+	ctx := context.Background()
+	client := newPaymentConfigServiceTestClient(t)
+	ensurePaymentAuditOrderActionUniqueIndex(t, ctx, client)
+	order := createPaymentFulfillmentSubscriptionOrder(t, ctx, client, OrderStatusPaid, time.Now())
+	svc := &PaymentService{entClient: client}
+	lease, err := svc.acquirePaymentFulfillmentLease(ctx, order)
+	require.NoError(t, err)
+	require.NoError(t, svc.markCompleted(ctx, order, lease, "PAYMENT_SUCCESS"))
+	completed, err := client.PaymentOrder.Get(ctx, order.ID)
+	require.NoError(t, err)
+
+	plan := &RefundPlan{OrderID: order.ID, Order: completed, RefundAmount: completed.Amount / 2, Reason: "partial"}
+	_, err = svc.markRefundOk(ctx, plan)
+	require.NoError(t, err)
+	_, err = svc.markRefundOk(ctx, plan)
+	require.NoError(t, err)
+
+	logs, err := client.PaymentAuditLog.Query().Where(
+		paymentauditlog.OrderIDEQ(strconv.FormatInt(order.ID, 10)),
+		paymentauditlog.ActionEQ(AffiliateQualificationDirtyAuditAction),
+	).All(ctx)
+	require.NoError(t, err)
+	require.Len(t, logs, 1)
+	var event AffiliateQualificationDirtyEvent
+	require.NoError(t, json.Unmarshal([]byte(logs[0].Detail), &event))
+	require.Equal(t, "refund_completed", event.EventType)
+	require.Equal(t, OrderStatusPartiallyRefunded, event.OrderStatus)
 }
 
 func TestMarkCompletedStaleLocalTokenKeepsConcurrentDirtyGeneration(t *testing.T) {
@@ -1168,9 +1298,9 @@ func TestMarkCompletedStaleLocalTokenKeepsConcurrentDirtyGeneration(t *testing.T
 
 	require.NoError(t, svc.markCompleted(ctx, order, lease, "PAYMENT_SUCCESS"))
 	require.True(t, repo.reconcileRequired)
-	require.Equal(t, int64(2), repo.generation)
+	require.Equal(t, int64(1), repo.generation)
 	require.NoError(t, svc.markCompleted(ctx, order, lease, "PAYMENT_SUCCESS"))
-	require.Equal(t, int64(2), repo.generation, "completed retry must not bump a new generation")
+	require.Equal(t, int64(1), repo.generation, "completed retry must not bump a new generation")
 }
 
 func TestMarkCompletedLocalClearRespectsPriorPendingState(t *testing.T) {
@@ -1192,11 +1322,11 @@ func TestMarkCompletedLocalClearRespectsPriorPendingState(t *testing.T) {
 			require.NoError(t, err)
 
 			require.NoError(t, svc.markCompleted(ctx, order, lease, "PAYMENT_SUCCESS"))
-			require.Equal(t, int64(11), repo.generation)
+			require.Equal(t, int64(10), repo.generation)
 			require.Equal(t, tt.wantRequired, repo.reconcileRequired)
 			require.Equal(t, 1, repo.reconcileCalls)
 			require.NoError(t, svc.markCompleted(ctx, order, lease, "PAYMENT_SUCCESS"))
-			require.Equal(t, int64(11), repo.generation, "completed retry must not bump generation")
+			require.Equal(t, int64(10), repo.generation, "completed retry must not bump generation")
 		})
 	}
 }

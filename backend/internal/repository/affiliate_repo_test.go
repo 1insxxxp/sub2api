@@ -73,9 +73,17 @@ func TestAffiliateQualificationMarkReconcileRequiredIsAtomic(t *testing.T) {
 	mock.ExpectExec("(?s)INSERT INTO settings .* DO NOTHING").
 		WithArgs(service.SettingKeyAffiliateTierReconcileRequired).
 		WillReturnResult(sqlmock.NewResult(0, 1))
-	mock.ExpectQuery("(?s)WITH locked AS .* UPDATE settings AS marker .* SELECT bumped.generation, old_state.was_pending_before").
+	mock.ExpectQuery("SELECT key, value FROM settings WHERE key IN \\(\\$1, \\$2\\) ORDER BY key FOR UPDATE").
 		WithArgs(service.SettingKeyAffiliateTierReconcileGeneration, service.SettingKeyAffiliateTierReconcileRequired).
-		WillReturnRows(sqlmock.NewRows([]string{"generation", "was_pending_before"}).AddRow(int64(7), true))
+		WillReturnRows(sqlmock.NewRows([]string{"key", "value"}).
+			AddRow(service.SettingKeyAffiliateTierReconcileGeneration, "6").
+			AddRow(service.SettingKeyAffiliateTierReconcileRequired, "true"))
+	mock.ExpectExec("UPDATE settings SET value = \\$2, updated_at = NOW\\(\\) WHERE key = \\$1").
+		WithArgs(service.SettingKeyAffiliateTierReconcileGeneration, "7").
+		WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectExec("UPDATE settings SET value = 'true', updated_at = NOW\\(\\) WHERE key = \\$1").
+		WithArgs(service.SettingKeyAffiliateTierReconcileRequired).
+		WillReturnResult(sqlmock.NewResult(0, 1))
 	mock.ExpectCommit()
 
 	token, err := repo.MarkReconcileRequired(context.Background())
@@ -95,18 +103,57 @@ func TestAffiliateQualificationClearReconcileRequiredUsesGenerationCAS(t *testin
 	t.Cleanup(func() { _ = client.Close() })
 	repo := &affiliateRepository{client: client, db: db}
 
-	mock.ExpectQuery("(?s)UPDATE settings AS marker .* generation.value::bigint = \\$3 .* RETURNING 1").
-		WithArgs(
-			service.SettingKeyAffiliateTierReconcileRequired,
-			service.SettingKeyAffiliateTierReconcileGeneration,
-			int64(7),
-		).
-		WillReturnRows(sqlmock.NewRows([]string{"cleared"}).AddRow(1))
+	mock.ExpectBegin()
+	mock.ExpectExec("(?s)INSERT INTO settings .* DO NOTHING").
+		WithArgs(service.SettingKeyAffiliateTierReconcileGeneration).
+		WillReturnResult(sqlmock.NewResult(0, 0))
+	mock.ExpectExec("(?s)INSERT INTO settings .* DO NOTHING").
+		WithArgs(service.SettingKeyAffiliateTierReconcileRequired).
+		WillReturnResult(sqlmock.NewResult(0, 0))
+	mock.ExpectQuery("SELECT key, value FROM settings WHERE key IN \\(\\$1, \\$2\\) ORDER BY key FOR UPDATE").
+		WithArgs(service.SettingKeyAffiliateTierReconcileGeneration, service.SettingKeyAffiliateTierReconcileRequired).
+		WillReturnRows(sqlmock.NewRows([]string{"key", "value"}).
+			AddRow(service.SettingKeyAffiliateTierReconcileGeneration, "7").
+			AddRow(service.SettingKeyAffiliateTierReconcileRequired, "true"))
+	mock.ExpectExec("UPDATE settings SET value = 'false', updated_at = NOW\\(\\) WHERE key = \\$1").
+		WithArgs(service.SettingKeyAffiliateTierReconcileRequired).
+		WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectCommit()
 
 	cleared, err := repo.ClearReconcileRequiredIfGeneration(context.Background(), 7)
 
 	require.NoError(t, err)
 	require.True(t, cleared)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestAffiliateQualificationClearReconcileRequiredKeepsNewerGeneration(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = db.Close() })
+	driver := entsql.OpenDB(dialect.Postgres, db)
+	client := dbent.NewClient(dbent.Driver(driver))
+	t.Cleanup(func() { _ = client.Close() })
+	repo := &affiliateRepository{client: client, db: db}
+
+	mock.ExpectBegin()
+	mock.ExpectExec("(?s)INSERT INTO settings .* DO NOTHING").
+		WithArgs(service.SettingKeyAffiliateTierReconcileGeneration).
+		WillReturnResult(sqlmock.NewResult(0, 0))
+	mock.ExpectExec("(?s)INSERT INTO settings .* DO NOTHING").
+		WithArgs(service.SettingKeyAffiliateTierReconcileRequired).
+		WillReturnResult(sqlmock.NewResult(0, 0))
+	mock.ExpectQuery("SELECT key, value FROM settings WHERE key IN \\(\\$1, \\$2\\) ORDER BY key FOR UPDATE").
+		WithArgs(service.SettingKeyAffiliateTierReconcileGeneration, service.SettingKeyAffiliateTierReconcileRequired).
+		WillReturnRows(sqlmock.NewRows([]string{"key", "value"}).
+			AddRow(service.SettingKeyAffiliateTierReconcileGeneration, "8").
+			AddRow(service.SettingKeyAffiliateTierReconcileRequired, "true"))
+	mock.ExpectCommit()
+
+	cleared, err := repo.ClearReconcileRequiredIfGeneration(context.Background(), 7)
+
+	require.NoError(t, err)
+	require.False(t, cleared)
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 
