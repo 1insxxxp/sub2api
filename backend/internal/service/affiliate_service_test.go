@@ -4,35 +4,36 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"math"
 	"strconv"
 	"sync"
 	"testing"
+	"time"
 
+	dbent "github.com/Wei-Shaw/sub2api/ent"
 	"github.com/stretchr/testify/require"
 )
 
-// TestResolveRebateRatePercent_PerUserOverride verifies custom > automatic
-// priority, including dirty custom values and clearing an override.
-func TestResolveRebateRatePercent_PerUserOverride(t *testing.T) {
+func TestAffiliateService_ResolveTierAwareRateCustomPriority(t *testing.T) {
 	repo := &affiliateTierServiceRepoStub{qualifiedCount: 10}
 	settings := newAffiliateTierServiceSettingRepo()
 	svc := NewAffiliateService(repo, NewSettingService(settings, nil), nil, nil)
 
 	rate := 50.0
-	got, err := svc.resolveRebateRatePercent(context.Background(), &AffiliateSummary{UserID: 1, AffRebateRatePercent: &rate})
+	got, err := svc.ResolveTierAwareRate(context.Background(), &AffiliateSummary{UserID: 1, AffRebateRatePercent: &rate})
 	require.NoError(t, err)
 	require.Equal(t, 50.0, got)
 
 	for _, dirty := range []float64{math.NaN(), math.Inf(1), -5, 250} {
 		dirty := dirty
-		got, err = svc.resolveRebateRatePercent(context.Background(), &AffiliateSummary{UserID: 1, AffRebateRatePercent: &dirty})
+		got, err = svc.ResolveTierAwareRate(context.Background(), &AffiliateSummary{UserID: 1, AffRebateRatePercent: &dirty})
 		require.NoError(t, err)
 		require.Equal(t, 12.0, got, "dirty custom values must fall back to automatic silver rate")
 	}
 
-	got, err = svc.resolveRebateRatePercent(context.Background(), &AffiliateSummary{UserID: 1})
+	got, err = svc.ResolveTierAwareRate(context.Background(), &AffiliateSummary{UserID: 1})
 	require.NoError(t, err)
 	require.Equal(t, 12.0, got, "clearing custom rate must restore automatic tier")
 }
@@ -57,7 +58,7 @@ func TestAffiliateService_TierSnapshotBoundaries(t *testing.T) {
 		t.Run(strconv.Itoa(tt.count), func(t *testing.T) {
 			repo := &affiliateTierServiceRepoStub{qualifiedCount: tt.count}
 			svc := NewAffiliateService(repo, NewSettingService(newAffiliateTierServiceSettingRepo(), nil), nil, nil)
-			snapshot, err := svc.GetAffiliateTierSnapshot(context.Background(), 42)
+			snapshot, err := svc.ResolveAffiliateTierSnapshot(context.Background(), 42)
 			require.NoError(t, err)
 			require.Equal(t, tt.level, snapshot.Level)
 			require.Equal(t, tt.rate, snapshot.AutomaticRatePercent)
@@ -75,7 +76,7 @@ func TestAffiliateService_TierStrictConfigErrorPropagates(t *testing.T) {
 	settings.getMultipleErr = wantErr
 	svc := NewAffiliateService(&affiliateTierServiceRepoStub{}, NewSettingService(settings, nil), nil, nil)
 
-	_, err := svc.GetAffiliateTierSnapshot(context.Background(), 42)
+	_, err := svc.ResolveAffiliateTierSnapshot(context.Background(), 42)
 	require.ErrorIs(t, err, wantErr)
 }
 
@@ -84,9 +85,14 @@ func TestAffiliateService_QualificationReconcileMarkerClearsOnlyAfterSuccess(t *
 		settings := newAffiliateTierServiceSettingRepo()
 		settings.values[SettingKeyAffiliateTierReconcileRequired] = "true"
 		repo := &affiliateTierServiceRepoStub{qualifiedCount: 3}
+		settings.beforeSet = func(key, value string) {
+			require.Equal(t, SettingKeyAffiliateTierReconcileRequired, key)
+			require.Equal(t, "false", value)
+			require.True(t, repo.reconcileFinished, "marker may clear only after full reconcile returns")
+		}
 		svc := NewAffiliateService(repo, NewSettingService(settings, nil), nil, nil)
 
-		_, err := svc.GetAffiliateTierSnapshot(context.Background(), 42)
+		err := svc.ReconcilePendingAffiliateQualifications(context.Background())
 		require.NoError(t, err)
 		require.Equal(t, 1, repo.reconcileCalls)
 		require.Equal(t, "false", settings.values[SettingKeyAffiliateTierReconcileRequired])
@@ -99,7 +105,7 @@ func TestAffiliateService_QualificationReconcileMarkerClearsOnlyAfterSuccess(t *
 		repo := &affiliateTierServiceRepoStub{reconcileErr: wantErr}
 		svc := NewAffiliateService(repo, NewSettingService(settings, nil), nil, nil)
 
-		_, err := svc.GetAffiliateTierSnapshot(context.Background(), 42)
+		err := svc.ReconcilePendingAffiliateQualifications(context.Background())
 		require.ErrorIs(t, err, wantErr)
 		require.Equal(t, "true", settings.values[SettingKeyAffiliateTierReconcileRequired])
 	})
@@ -112,11 +118,103 @@ func TestAffiliateService_QualificationReconcileMarkerClearsOnlyAfterSuccess(t *
 		repo := &affiliateTierServiceRepoStub{}
 		svc := NewAffiliateService(repo, NewSettingService(settings, nil), nil, nil)
 
-		_, err := svc.GetAffiliateTierSnapshot(context.Background(), 42)
+		err := svc.ReconcilePendingAffiliateQualifications(context.Background())
 		require.ErrorIs(t, err, wantErr)
 		require.Equal(t, 1, repo.reconcileCalls)
 		require.Equal(t, "true", settings.values[SettingKeyAffiliateTierReconcileRequired])
 	})
+}
+
+func TestAffiliateService_QualificationReconcileRejectsTransactionContext(t *testing.T) {
+	settings := newAffiliateTierServiceSettingRepo()
+	settings.values[SettingKeyAffiliateTierReconcileRequired] = "true"
+	repo := &affiliateTierServiceRepoStub{}
+	svc := NewAffiliateService(repo, NewSettingService(settings, nil), nil, nil)
+	txCtx := dbent.NewTxContext(context.Background(), &dbent.Tx{})
+
+	err := svc.ReconcilePendingAffiliateQualifications(txCtx)
+
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "transaction")
+	require.Equal(t, 0, repo.reconcileCallCount())
+	require.Equal(t, "true", settings.values[SettingKeyAffiliateTierReconcileRequired])
+}
+
+func TestAffiliateService_AccrueKeepsFlatRateWithoutPendingReconcile(t *testing.T) {
+	inviterID := int64(42)
+	settings := &affiliateTierServiceSettingRepo{values: map[string]string{
+		SettingKeyAffiliateEnabled:               "true",
+		SettingKeyAffiliateRebateRate:            "15",
+		SettingKeyAffiliateTierReconcileRequired: "true",
+	}}
+	repo := &affiliateTierServiceRepoStub{
+		inviteeSummary: &AffiliateSummary{UserID: 7, InviterID: &inviterID},
+		inviterSummary: &AffiliateSummary{UserID: inviterID},
+	}
+	svc := NewAffiliateService(repo, NewSettingService(settings, nil), nil, nil)
+
+	rebate, err := svc.AccrueInviteRebateForOrder(context.Background(), 7, 100, nil)
+
+	require.NoError(t, err)
+	require.Equal(t, 15.0, rebate)
+	require.Equal(t, 15.0, repo.accruedAmount)
+	require.Equal(t, 0, repo.reconcileCallCount(), "legacy accrue must not consume pending tier reconcile")
+	require.Equal(t, 0, repo.countCallCount(), "legacy accrue must not resolve an automatic tier")
+	require.Equal(t, "true", settings.values[SettingKeyAffiliateTierReconcileRequired])
+}
+
+func TestAffiliateService_LegacyRateRemainsFlatCustomCompatible(t *testing.T) {
+	settings := &affiliateTierServiceSettingRepo{values: map[string]string{
+		SettingKeyAffiliateRebateRate: "15",
+	}}
+	repo := &affiliateTierServiceRepoStub{qualifiedCount: 30}
+	svc := NewAffiliateService(repo, NewSettingService(settings, nil), nil, nil)
+
+	custom := 50.0
+	require.Equal(t, 50.0, svc.resolveRebateRatePercent(context.Background(), &AffiliateSummary{AffRebateRatePercent: &custom}))
+	dirty := math.NaN()
+	require.Equal(t, 15.0, svc.resolveRebateRatePercent(context.Background(), &AffiliateSummary{AffRebateRatePercent: &dirty}))
+	tooHigh := 250.0
+	require.Equal(t, AffiliateRebateRateMax, svc.resolveRebateRatePercent(context.Background(), &AffiliateSummary{AffRebateRatePercent: &tooHigh}))
+	require.Equal(t, 0, repo.countCallCount())
+}
+
+func TestAffiliateDetailJSONDoesNotExposeTierQualificationBeforeTask5(t *testing.T) {
+	qualifiedAt := time.Now()
+	payload, err := json.Marshal(AffiliateDetail{
+		Invitees: []AffiliateInvitee{{
+			UserID:                  1,
+			QualifyingPaymentAmount: 50,
+			QualifiedAt:             &qualifiedAt,
+		}},
+	})
+	require.NoError(t, err)
+	require.NotContains(t, string(payload), `"tier"`)
+	require.NotContains(t, string(payload), "qualifying_payment_amount")
+	require.NotContains(t, string(payload), "qualified_at")
+
+	qualificationPayload, err := json.Marshal(AffiliateQualification{
+		InviteeUserID:           1,
+		QualifyingPaymentAmount: 50,
+		QualifiedAt:             &qualifiedAt,
+	})
+	require.NoError(t, err)
+	require.Equal(t, `{}`, string(qualificationPayload))
+}
+
+func TestAffiliateService_GetDetailDoesNotReadStrictTierConfig(t *testing.T) {
+	settings := newAffiliateTierServiceSettingRepo()
+	settings.getMultipleErr = errors.New("tier settings unavailable")
+	repo := &affiliateTierServiceRepoStub{}
+	svc := NewAffiliateService(repo, NewSettingService(settings, nil), nil, nil)
+
+	detail, err := svc.GetAffiliateDetail(context.Background(), 42)
+
+	require.NoError(t, err)
+	require.NotNil(t, detail)
+	require.Equal(t, AffiliateRebateRateDefault, detail.EffectiveRebateRatePercent)
+	require.Equal(t, 0, repo.countCallCount())
+	require.Equal(t, 0, repo.reconcileCallCount())
 }
 
 func TestAffiliateService_QualificationReconcileMarkerConcurrentReadsSingleRun(t *testing.T) {
@@ -129,7 +227,7 @@ func TestAffiliateService_QualificationReconcileMarkerConcurrentReadsSingleRun(t
 	errs := make(chan error, readers)
 	for i := 0; i < readers; i++ {
 		go func() {
-			_, err := svc.GetAffiliateTierSnapshot(context.Background(), 42)
+			err := svc.ReconcilePendingAffiliateQualifications(context.Background())
 			errs <- err
 		}()
 	}
@@ -143,18 +241,24 @@ func TestAffiliateService_QualificationReconcileMarkerConcurrentReadsSingleRun(t
 
 type affiliateTierServiceRepoStub struct {
 	AffiliateRepository
-	mu               sync.Mutex
-	qualifiedCount   int
-	countThreshold   float64
-	reconcileCalls   int
-	reconcileErr     error
-	reconcileStarted chan struct{}
-	releaseReconcile chan struct{}
+	mu                sync.Mutex
+	qualifiedCount    int
+	countThreshold    float64
+	reconcileCalls    int
+	reconcileErr      error
+	reconcileStarted  chan struct{}
+	releaseReconcile  chan struct{}
+	reconcileFinished bool
+	countCalls        int
+	inviteeSummary    *AffiliateSummary
+	inviterSummary    *AffiliateSummary
+	accruedAmount     float64
 }
 
 func (r *affiliateTierServiceRepoStub) CountQualifiedInvitees(_ context.Context, _ int64, threshold float64) (int, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	r.countCalls++
 	r.countThreshold = threshold
 	return r.qualifiedCount, nil
 }
@@ -168,7 +272,33 @@ func (r *affiliateTierServiceRepoStub) ReconcileAllAffiliateQualifications(conte
 		close(r.reconcileStarted)
 		<-r.releaseReconcile
 	}
+	r.mu.Lock()
+	r.reconcileFinished = true
+	r.mu.Unlock()
 	return r.reconcileErr
+}
+
+func (r *affiliateTierServiceRepoStub) EnsureUserAffiliate(_ context.Context, userID int64) (*AffiliateSummary, error) {
+	if r.inviteeSummary != nil && r.inviteeSummary.UserID == userID {
+		return r.inviteeSummary, nil
+	}
+	if r.inviterSummary != nil && r.inviterSummary.UserID == userID {
+		return r.inviterSummary, nil
+	}
+	return &AffiliateSummary{UserID: userID}, nil
+}
+
+func (r *affiliateTierServiceRepoStub) AccrueQuota(_ context.Context, _, _ int64, amount float64, _ int, _ *int64) (bool, error) {
+	r.accruedAmount = amount
+	return true, nil
+}
+
+func (r *affiliateTierServiceRepoStub) ThawFrozenQuota(context.Context, int64) (float64, error) {
+	return 0, nil
+}
+
+func (r *affiliateTierServiceRepoStub) ListInvitees(context.Context, int64, int) ([]AffiliateInvitee, error) {
+	return nil, nil
 }
 
 func (r *affiliateTierServiceRepoStub) reconcileCallCount() int {
@@ -177,12 +307,19 @@ func (r *affiliateTierServiceRepoStub) reconcileCallCount() int {
 	return r.reconcileCalls
 }
 
+func (r *affiliateTierServiceRepoStub) countCallCount() int {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.countCalls
+}
+
 type affiliateTierServiceSettingRepo struct {
 	SettingRepository
 	mu             sync.Mutex
 	values         map[string]string
 	getMultipleErr error
 	setErr         error
+	beforeSet      func(key, value string)
 }
 
 func newAffiliateTierServiceSettingRepo() *affiliateTierServiceSettingRepo {
@@ -228,6 +365,9 @@ func (r *affiliateTierServiceSettingRepo) Set(_ context.Context, key, value stri
 	defer r.mu.Unlock()
 	if r.setErr != nil {
 		return r.setErr
+	}
+	if r.beforeSet != nil {
+		r.beforeSet(key, value)
 	}
 	r.values[key] = value
 	return nil
