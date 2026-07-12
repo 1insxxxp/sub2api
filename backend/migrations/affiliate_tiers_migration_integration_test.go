@@ -38,8 +38,8 @@ func TestMigration175Postgres(t *testing.T) {
 		execTransactionalMigration(t, ctx, conn, migrations.storageSQL)
 
 		_, err := conn.ExecContext(ctx, `
-CREATE UNIQUE INDEX CONCURRENTLY idx_user_affiliates_inviter_qualified
-    ON user_affiliates (inviter_id)`)
+CREATE UNIQUE INDEX CONCURRENTLY idx_user_affiliates_inviter_qualifying_amount
+    ON user_affiliates (inviter_id, qualifying_payment_amount)`)
 		require.Error(t, err, "duplicate inviter IDs must leave a failed concurrent index")
 
 		valid, _ := affiliateQualifiedIndexState(t, ctx, conn, schema)
@@ -49,7 +49,7 @@ CREATE UNIQUE INDEX CONCURRENTLY idx_user_affiliates_inviter_qualified
 
 		valid, predicate := affiliateQualifiedIndexState(t, ctx, conn, schema)
 		require.True(t, valid, "177 must replace the INVALID index with a valid index")
-		require.Contains(t, predicate, "qualified_at IS NOT NULL")
+		require.Empty(t, predicate)
 	})
 
 	t.Run("ordered migrations build schema backfill and replay", func(t *testing.T) {
@@ -352,9 +352,9 @@ WHERE table_schema = $1 AND table_name = 'user_affiliates'
 SELECT indexdef
 FROM pg_indexes
 WHERE schemaname = $1 AND tablename = 'user_affiliates'
-  AND indexname = 'idx_user_affiliates_inviter_qualified'`, schema).Scan(&indexDefinition))
-	require.Contains(t, indexDefinition, "(inviter_id)")
-	require.Contains(t, indexDefinition, "qualified_at IS NOT NULL")
+  AND indexname = 'idx_user_affiliates_inviter_qualifying_amount'`, schema).Scan(&indexDefinition))
+	require.Contains(t, indexDefinition, "(inviter_id, qualifying_payment_amount)")
+	require.NotContains(t, indexDefinition, "WHERE")
 }
 
 func affiliateQualifiedIndexState(
@@ -373,7 +373,7 @@ FROM pg_index i
 JOIN pg_class idx ON idx.oid = i.indexrelid
 JOIN pg_namespace ns ON ns.oid = idx.relnamespace
 WHERE ns.nspname = $1
-  AND idx.relname = 'idx_user_affiliates_inviter_qualified'`, schema).Scan(&valid, &predicate))
+  AND idx.relname = 'idx_user_affiliates_inviter_qualifying_amount'`, schema).Scan(&valid, &predicate))
 	return valid, predicate.String
 }
 

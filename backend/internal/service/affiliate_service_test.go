@@ -239,6 +239,29 @@ func TestAffiliateService_QualificationReconcileMarkerConcurrentReadsSingleRun(t
 	require.Equal(t, 1, repo.reconcileCallCount())
 }
 
+func TestAffiliateService_QualificationReconcileDatabaseLockCoordinatesInstances(t *testing.T) {
+	settings := newAffiliateTierServiceSettingRepo()
+	settings.values[SettingKeyAffiliateTierReconcileRequired] = "true"
+	repo := &affiliateTierServiceRepoStub{reconcileStarted: make(chan struct{}), releaseReconcile: make(chan struct{})}
+	first := NewAffiliateService(repo, NewSettingService(settings, nil), nil, nil)
+	second := NewAffiliateService(repo, NewSettingService(settings, nil), nil, nil)
+
+	firstErr := make(chan error, 1)
+	go func() { firstErr <- first.ReconcilePendingAffiliateQualifications(context.Background()) }()
+	<-repo.reconcileStarted
+
+	secondErr := second.ReconcilePendingAffiliateQualifications(context.Background())
+	markerWhileLocked := settings.values[SettingKeyAffiliateTierReconcileRequired]
+	callsWhileLocked := repo.reconcileCallCount()
+
+	close(repo.releaseReconcile)
+	require.NoError(t, secondErr)
+	require.Equal(t, "true", markerWhileLocked, "lock loser must not clear marker")
+	require.Equal(t, 1, callsWhileLocked)
+	require.NoError(t, <-firstErr)
+	require.Equal(t, "false", settings.values[SettingKeyAffiliateTierReconcileRequired])
+}
+
 type affiliateTierServiceRepoStub struct {
 	AffiliateRepository
 	mu                sync.Mutex
@@ -253,6 +276,7 @@ type affiliateTierServiceRepoStub struct {
 	inviteeSummary    *AffiliateSummary
 	inviterSummary    *AffiliateSummary
 	accruedAmount     float64
+	advisoryLockHeld  bool
 }
 
 func (r *affiliateTierServiceRepoStub) CountQualifiedInvitees(_ context.Context, _ int64, threshold float64) (int, error) {
@@ -261,6 +285,10 @@ func (r *affiliateTierServiceRepoStub) CountQualifiedInvitees(_ context.Context,
 	r.countCalls++
 	r.countThreshold = threshold
 	return r.qualifiedCount, nil
+}
+
+func (r *affiliateTierServiceRepoStub) ReconcileInviteeQualification(context.Context, int64, float64) (*AffiliateQualification, error) {
+	panic("unexpected ReconcileInviteeQualification call")
 }
 
 func (r *affiliateTierServiceRepoStub) ReconcileAllAffiliateQualifications(context.Context, float64, int) error {
@@ -276,6 +304,22 @@ func (r *affiliateTierServiceRepoStub) ReconcileAllAffiliateQualifications(conte
 	r.reconcileFinished = true
 	r.mu.Unlock()
 	return r.reconcileErr
+}
+
+func (r *affiliateTierServiceRepoStub) TryWithAffiliateQualificationReconcileLock(ctx context.Context, fn func(context.Context) error) (bool, error) {
+	r.mu.Lock()
+	if r.advisoryLockHeld {
+		r.mu.Unlock()
+		return false, nil
+	}
+	r.advisoryLockHeld = true
+	r.mu.Unlock()
+	defer func() {
+		r.mu.Lock()
+		r.advisoryLockHeld = false
+		r.mu.Unlock()
+	}()
+	return true, fn(ctx)
 }
 
 func (r *affiliateTierServiceRepoStub) EnsureUserAffiliate(_ context.Context, userID int64) (*AffiliateSummary, error) {

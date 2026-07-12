@@ -1,10 +1,16 @@
 package repository
 
 import (
+	"context"
+	"errors"
 	"os"
 	"strings"
 	"testing"
 
+	"entgo.io/ent/dialect"
+	entsql "entgo.io/ent/dialect/sql"
+	"github.com/DATA-DOG/go-sqlmock"
+	dbent "github.com/Wei-Shaw/sub2api/ent"
 	"github.com/stretchr/testify/require"
 )
 
@@ -48,4 +54,83 @@ func TestAffiliateQualificationCountSQLUsesCurrentThreshold(t *testing.T) {
 	require.Contains(t, query, "qualifying_payment_amount >= $2")
 	require.NotContains(t, query, "qualified_at IS NOT NULL")
 	require.NotContains(t, query, "aff_count")
+}
+
+func TestAffiliateQualificationReconcileAllReturnsRowsIterationError(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = db.Close() })
+	driver := entsql.OpenDB(dialect.Postgres, db)
+	client := dbent.NewClient(dbent.Driver(driver))
+	t.Cleanup(func() { _ = client.Close() })
+	repo := &affiliateRepository{client: client, db: db}
+	wantErr := errors.New("rows iteration failed")
+
+	mock.ExpectQuery("SELECT user_id FROM user_affiliates").
+		WithArgs(int64(0), 2).
+		WillReturnRows(sqlmock.NewRows([]string{"user_id"}).
+			AddRow(int64(11)).
+			AddRow(int64(12)).
+			RowError(1, wantErr))
+
+	err = repo.ReconcileAllAffiliateQualifications(context.Background(), 50, 2)
+	require.ErrorIs(t, err, wantErr)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestAffiliateQualificationReconcileAllRejectsOuterTransaction(t *testing.T) {
+	repo := &affiliateRepository{}
+	txCtx := dbent.NewTxContext(context.Background(), &dbent.Tx{})
+
+	err := repo.ReconcileAllAffiliateQualifications(txCtx, 50, 10)
+
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "transaction")
+}
+
+func TestAffiliateQualificationAdvisoryLockSkipsCallbackWhenBusy(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = db.Close() })
+	repo := &affiliateRepository{db: db}
+
+	mock.ExpectBegin()
+	mock.ExpectQuery("SELECT pg_try_advisory_xact_lock").
+		WithArgs(affiliateQualificationReconcileAdvisoryLockKey).
+		WillReturnRows(sqlmock.NewRows([]string{"locked"}).AddRow(false))
+	mock.ExpectRollback()
+	called := false
+	acquired, err := repo.TryWithAffiliateQualificationReconcileLock(context.Background(), func(context.Context) error {
+		called = true
+		return nil
+	})
+
+	require.NoError(t, err)
+	require.False(t, acquired)
+	require.False(t, called)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestAffiliateQualificationAdvisoryLockCommitsAfterCallback(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = db.Close() })
+	repo := &affiliateRepository{db: db}
+
+	mock.ExpectBegin()
+	mock.ExpectQuery("SELECT pg_try_advisory_xact_lock").
+		WithArgs(affiliateQualificationReconcileAdvisoryLockKey).
+		WillReturnRows(sqlmock.NewRows([]string{"locked"}).AddRow(true))
+	mock.ExpectCommit()
+	called := false
+	acquired, err := repo.TryWithAffiliateQualificationReconcileLock(context.Background(), func(callbackCtx context.Context) error {
+		called = true
+		require.Nil(t, dbent.TxFromContext(callbackCtx))
+		return nil
+	})
+
+	require.NoError(t, err)
+	require.True(t, acquired)
+	require.True(t, called)
+	require.NoError(t, mock.ExpectationsWereMet())
 }

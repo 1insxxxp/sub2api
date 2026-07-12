@@ -4,6 +4,7 @@ package repository
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 	"testing"
@@ -107,6 +108,7 @@ func TestAffiliateRepository_QualificationReconcileAndCount(t *testing.T) {
 	txCtx := dbent.NewTxContext(ctx, tx)
 	client := tx.Client()
 	repo := NewAffiliateRepository(client, integrationDB)
+	qualificationRepo := repo.(service.AffiliateQualificationRepository)
 
 	inviter := mustCreateUser(t, client, &service.User{Email: fmt.Sprintf("affiliate-tier-inviter-%d@example.com", time.Now().UnixNano()), PasswordHash: "hash", Role: service.RoleUser, Status: service.StatusActive})
 	invitees := make([]*service.User, 3)
@@ -122,7 +124,10 @@ func TestAffiliateRepository_QualificationReconcileAndCount(t *testing.T) {
 	insertQualificationOrder(t, txCtx, client, invitees[2].ID, 100, 30, "PARTIALLY_REFUNDED", "subscription")
 	insertQualificationOrder(t, txCtx, client, invitees[2].ID, 500, 0, "COMPLETED", "other")
 
-	require.NoError(t, repo.ReconcileAllAffiliateQualifications(txCtx, 50, 1))
+	for _, invitee := range invitees {
+		_, err := qualificationRepo.ReconcileInviteeQualification(txCtx, invitee.ID, 50)
+		require.NoError(t, err)
+	}
 
 	assertQualification := func(userID int64, amount float64, qualified bool) time.Time {
 		t.Helper()
@@ -146,43 +151,131 @@ func TestAffiliateRepository_QualificationReconcileAndCount(t *testing.T) {
 	qualifiedAt := assertQualification(invitees[1].ID, 50, true)
 	assertQualification(invitees[2].ID, 70, true)
 
-	count, err := repo.CountQualifiedInvitees(txCtx, inviter.ID, 50)
+	count, err := qualificationRepo.CountQualifiedInvitees(txCtx, inviter.ID, 50)
 	require.NoError(t, err)
 	require.Equal(t, 2, count)
-	count, err = repo.CountQualifiedInvitees(txCtx, inviter.ID, 60)
+	count, err = qualificationRepo.CountQualifiedInvitees(txCtx, inviter.ID, 60)
 	require.NoError(t, err)
 	require.Equal(t, 1, count, "count must react immediately to a configured threshold change")
+
+	_, err = qualificationRepo.ReconcileInviteeQualification(txCtx, invitees[1].ID, 50)
+	require.NoError(t, err)
+	require.Equal(t, qualifiedAt, assertQualification(invitees[1].ID, 50, true), "idempotent reconcile must preserve qualified_at")
+
+	_, err = qualificationRepo.ReconcileInviteeQualification(txCtx, invitees[1].ID, 60)
+	require.NoError(t, err)
+	assertQualification(invitees[1].ID, 50, false)
+}
+
+func TestAffiliateRepository_QualificationAdvisoryLockIndependentConnections(t *testing.T) {
+	ctx := context.Background()
+	repo1 := NewAffiliateRepository(integrationEntClient, integrationDB).(*affiliateRepository)
+	repo2 := NewAffiliateRepository(integrationEntClient, integrationDB).(*affiliateRepository)
+	started := make(chan struct{})
+	release := make(chan struct{})
+	firstResult := make(chan error, 1)
+
+	go func() {
+		acquired, err := repo1.TryWithAffiliateQualificationReconcileLock(ctx, func(context.Context) error {
+			close(started)
+			<-release
+			return nil
+		})
+		if err == nil && !acquired {
+			err = errors.New("first repository did not acquire advisory lock")
+		}
+		firstResult <- err
+	}()
+	<-started
+
+	secondCalled := false
+	acquired, err := repo2.TryWithAffiliateQualificationReconcileLock(ctx, func(context.Context) error {
+		secondCalled = true
+		return nil
+	})
+	require.NoError(t, err)
+	require.False(t, acquired)
+	require.False(t, secondCalled)
+
+	close(release)
+	require.NoError(t, <-firstResult)
+}
+
+func TestAffiliateRepository_QualificationServiceInstancesDatabaseLock(t *testing.T) {
+	ctx := context.Background()
+	base1 := NewAffiliateRepository(integrationEntClient, integrationDB)
+	base2 := NewAffiliateRepository(integrationEntClient, integrationDB)
+	shared := &affiliateQualificationLockTestState{started: make(chan struct{}), release: make(chan struct{})}
+	repo1 := &affiliateQualificationLockTestRepo{AffiliateRepository: base1, qualification: base1.(service.AffiliateQualificationRepository), shared: shared}
+	repo2 := &affiliateQualificationLockTestRepo{AffiliateRepository: base2, qualification: base2.(service.AffiliateQualificationRepository), shared: shared}
+	settingsRepo := newAffiliateQualificationLockSettingRepo()
+	settings := service.NewSettingService(settingsRepo, nil)
+	first := service.NewAffiliateService(repo1, settings, nil, nil)
+	second := service.NewAffiliateService(repo2, settings, nil, nil)
+
+	firstErr := make(chan error, 1)
+	go func() { firstErr <- first.ReconcilePendingAffiliateQualifications(ctx) }()
+	<-shared.started
+
+	secondErr := second.ReconcilePendingAffiliateQualifications(ctx)
+	markerWhileLocked := settingsRepo.value(service.SettingKeyAffiliateTierReconcileRequired)
+	callsWhileLocked := shared.callCount()
+	close(shared.release)
+
+	require.NoError(t, secondErr)
+	require.Equal(t, "true", markerWhileLocked)
+	require.Equal(t, 1, callsWhileLocked)
+	require.NoError(t, <-firstErr)
+	require.Equal(t, "false", settingsRepo.value(service.SettingKeyAffiliateTierReconcileRequired))
+	require.Equal(t, 1, settingsRepo.setCallCount())
+}
+
+func TestAffiliateRepository_QualificationFullReconcileUsesIndependentTransactions(t *testing.T) {
+	ctx := context.Background()
+	repo := NewAffiliateRepository(integrationEntClient, integrationDB)
+	inviter := mustCreateUser(t, integrationEntClient, &service.User{
+		Email: fmt.Sprintf("affiliate-full-inviter-%d@example.com", time.Now().UnixNano()), PasswordHash: "hash", Role: service.RoleUser, Status: service.StatusActive,
+	})
+	invitee := mustCreateUser(t, integrationEntClient, &service.User{
+		Email: fmt.Sprintf("affiliate-full-invitee-%d@example.com", time.Now().UnixNano()), PasswordHash: "hash", Role: service.RoleUser, Status: service.StatusActive,
+	})
+	t.Cleanup(func() {
+		_, _ = integrationDB.ExecContext(context.Background(), "DELETE FROM payment_orders WHERE user_id = $1", invitee.ID)
+		_, _ = integrationDB.ExecContext(context.Background(), "DELETE FROM user_affiliates WHERE user_id IN ($1, $2)", inviter.ID, invitee.ID)
+		_, _ = integrationDB.ExecContext(context.Background(), "DELETE FROM users WHERE id IN ($1, $2)", inviter.ID, invitee.ID)
+	})
+	_, err := repo.EnsureUserAffiliate(ctx, inviter.ID)
+	require.NoError(t, err)
+	_, err = repo.EnsureUserAffiliate(ctx, invitee.ID)
+	require.NoError(t, err)
+	bound, err := repo.BindInviter(ctx, invitee.ID, inviter.ID)
+	require.NoError(t, err)
+	require.True(t, bound)
+	insertQualificationOrder(t, ctx, integrationEntClient, invitee.ID, 50, 0, "COMPLETED", "balance")
+
+	require.NoError(t, repo.(service.AffiliateQualificationRepository).ReconcileAllAffiliateQualifications(ctx, 50, 1))
+	require.InDelta(t, 50.0, querySingleFloat(t, ctx, integrationEntClient,
+		"SELECT qualifying_payment_amount::double precision FROM user_affiliates WHERE user_id = $1", invitee.ID), 1e-9)
 
 	const readers = 8
 	var wg sync.WaitGroup
 	errs := make(chan error, readers)
-	counts := make(chan int, readers)
 	for i := 0; i < readers; i++ {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			got, err := repo.CountQualifiedInvitees(txCtx, inviter.ID, 50)
-			counts <- got
+			count, err := repo.(service.AffiliateQualificationRepository).CountQualifiedInvitees(ctx, inviter.ID, 50)
+			if err == nil && count != 1 {
+				err = fmt.Errorf("qualified count = %d, want 1", count)
+			}
 			errs <- err
 		}()
 	}
 	wg.Wait()
-	close(counts)
 	close(errs)
 	for err := range errs {
 		require.NoError(t, err)
 	}
-	for got := range counts {
-		require.Equal(t, 2, got)
-	}
-
-	_, err = repo.ReconcileInviteeQualification(txCtx, invitees[1].ID, 50)
-	require.NoError(t, err)
-	require.Equal(t, qualifiedAt, assertQualification(invitees[1].ID, 50, true), "idempotent reconcile must preserve qualified_at")
-
-	_, err = repo.ReconcileInviteeQualification(txCtx, invitees[1].ID, 60)
-	require.NoError(t, err)
-	assertQualification(invitees[1].ID, 50, false)
 }
 
 func insertAffiliateRelationship(ctx context.Context, client *dbent.Client, userID, inviterID int64, code string) error {
@@ -190,6 +283,116 @@ func insertAffiliateRelationship(ctx context.Context, client *dbent.Client, user
 INSERT INTO user_affiliates (user_id, aff_code, inviter_id, created_at, updated_at)
 VALUES ($1, $2, $3, NOW(), NOW())`, userID, code, inviterID)
 	return err
+}
+
+type affiliateQualificationLockTestState struct {
+	mu      sync.Mutex
+	calls   int
+	started chan struct{}
+	release chan struct{}
+}
+
+func (s *affiliateQualificationLockTestState) reconcile() {
+	s.mu.Lock()
+	s.calls++
+	call := s.calls
+	s.mu.Unlock()
+	if call == 1 {
+		close(s.started)
+		<-s.release
+	}
+}
+
+func (s *affiliateQualificationLockTestState) callCount() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.calls
+}
+
+type affiliateQualificationLockTestRepo struct {
+	service.AffiliateRepository
+	qualification service.AffiliateQualificationRepository
+	shared        *affiliateQualificationLockTestState
+}
+
+func (r *affiliateQualificationLockTestRepo) ReconcileInviteeQualification(ctx context.Context, userID int64, threshold float64) (*service.AffiliateQualification, error) {
+	return r.qualification.ReconcileInviteeQualification(ctx, userID, threshold)
+}
+
+func (r *affiliateQualificationLockTestRepo) CountQualifiedInvitees(ctx context.Context, inviterID int64, threshold float64) (int, error) {
+	return r.qualification.CountQualifiedInvitees(ctx, inviterID, threshold)
+}
+
+func (r *affiliateQualificationLockTestRepo) ReconcileAllAffiliateQualifications(context.Context, float64, int) error {
+	r.shared.reconcile()
+	return nil
+}
+
+func (r *affiliateQualificationLockTestRepo) TryWithAffiliateQualificationReconcileLock(ctx context.Context, fn func(context.Context) error) (bool, error) {
+	return r.qualification.TryWithAffiliateQualificationReconcileLock(ctx, fn)
+}
+
+type affiliateQualificationLockSettingRepo struct {
+	service.SettingRepository
+	mu       sync.Mutex
+	values   map[string]string
+	setCalls int
+}
+
+func newAffiliateQualificationLockSettingRepo() *affiliateQualificationLockSettingRepo {
+	return &affiliateQualificationLockSettingRepo{values: map[string]string{
+		service.SettingKeyAffiliateTierReconcileRequired: "true",
+		service.SettingKeyAffiliateRebateRate:            "8",
+		service.SettingKeyAffiliateQualificationAmount:   "50",
+		service.SettingKeyAffiliateBronzeInvitees:        "3",
+		service.SettingKeyAffiliateBronzeRate:            "10",
+		service.SettingKeyAffiliateSilverInvitees:        "10",
+		service.SettingKeyAffiliateSilverRate:            "12",
+		service.SettingKeyAffiliateGoldInvitees:          "30",
+		service.SettingKeyAffiliateGoldRate:              "15",
+	}}
+}
+
+func (r *affiliateQualificationLockSettingRepo) GetValue(_ context.Context, key string) (string, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	value, ok := r.values[key]
+	if !ok {
+		return "", service.ErrSettingNotFound
+	}
+	return value, nil
+}
+
+func (r *affiliateQualificationLockSettingRepo) GetMultiple(_ context.Context, keys []string) (map[string]string, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	out := make(map[string]string, len(keys))
+	for _, key := range keys {
+		if value, ok := r.values[key]; ok {
+			out[key] = value
+		}
+	}
+	return out, nil
+}
+
+func (r *affiliateQualificationLockSettingRepo) Set(_ context.Context, key, value string) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.values[key] = value
+	r.setCalls++
+	return nil
+}
+
+func (r *affiliateQualificationLockSettingRepo) value(key string) string {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.values[key]
+}
+
+func (r *affiliateQualificationLockSettingRepo) setCallCount() int {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.setCalls
 }
 
 func insertQualificationOrder(t *testing.T, ctx context.Context, client *dbent.Client, userID int64, amount, refundAmount float64, status, orderType string) {

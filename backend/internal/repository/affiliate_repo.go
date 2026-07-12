@@ -17,8 +17,9 @@ import (
 )
 
 const (
-	affiliateCodeLength      = 12
-	affiliateCodeMaxAttempts = 12
+	affiliateCodeLength                                  = 12
+	affiliateCodeMaxAttempts                             = 12
+	affiliateQualificationReconcileAdvisoryLockKey int64 = 0x4146465155414c
 )
 
 var affiliateCodeCharset = []byte("ABCDEFGHJKLMNPQRSTUVWXYZ23456789")
@@ -122,10 +123,55 @@ type affiliateQueryExecer interface {
 
 type affiliateRepository struct {
 	client *dbent.Client
+	db     *sql.DB
 }
 
-func NewAffiliateRepository(client *dbent.Client, _ *sql.DB) service.AffiliateRepository {
-	return &affiliateRepository{client: client}
+func NewAffiliateRepository(client *dbent.Client, db *sql.DB) service.AffiliateRepository {
+	return &affiliateRepository{client: client, db: db}
+}
+
+var _ service.AffiliateQualificationRepository = (*affiliateRepository)(nil)
+
+func (r *affiliateRepository) TryWithAffiliateQualificationReconcileLock(ctx context.Context, fn func(context.Context) error) (bool, error) {
+	if dbent.TxFromContext(ctx) != nil {
+		return false, fmt.Errorf("affiliate qualification advisory lock requires a non-transaction context")
+	}
+	if r.db == nil {
+		return false, fmt.Errorf("affiliate qualification advisory lock database unavailable")
+	}
+	lockTx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return false, fmt.Errorf("begin affiliate qualification advisory lock transaction: %w", err)
+	}
+	finished := false
+	defer func() {
+		if !finished {
+			_ = lockTx.Rollback()
+		}
+	}()
+
+	var acquired bool
+	if err := lockTx.QueryRowContext(ctx, "SELECT pg_try_advisory_xact_lock($1)", affiliateQualificationReconcileAdvisoryLockKey).Scan(&acquired); err != nil {
+		return false, fmt.Errorf("acquire affiliate qualification advisory lock: %w", err)
+	}
+	if !acquired {
+		if err := lockTx.Rollback(); err != nil {
+			return false, fmt.Errorf("release unacquired affiliate qualification advisory lock transaction: %w", err)
+		}
+		finished = true
+		return false, nil
+	}
+	if fn == nil {
+		return true, fmt.Errorf("affiliate qualification advisory lock callback is nil")
+	}
+	if err := fn(dbent.WithoutTx(ctx)); err != nil {
+		return true, err
+	}
+	if err := lockTx.Commit(); err != nil {
+		return true, fmt.Errorf("commit affiliate qualification advisory lock transaction: %w", err)
+	}
+	finished = true
+	return true, nil
 }
 
 func (r *affiliateRepository) EnsureUserAffiliate(ctx context.Context, userID int64) (*service.AffiliateSummary, error) {
@@ -508,6 +554,9 @@ func (r *affiliateRepository) CountQualifiedInvitees(ctx context.Context, invite
 }
 
 func (r *affiliateRepository) ReconcileAllAffiliateQualifications(ctx context.Context, threshold float64, batchSize int) error {
+	if dbent.TxFromContext(ctx) != nil {
+		return fmt.Errorf("affiliate qualification full reconcile requires a non-transaction context")
+	}
 	if threshold <= 0 || math.IsNaN(threshold) || math.IsInf(threshold, 0) {
 		return fmt.Errorf("invalid affiliate qualification threshold")
 	}
@@ -531,10 +580,12 @@ LIMIT $2`, lastUserID, batchSize)
 		for rows.Next() {
 			var userID int64
 			if err := rows.Scan(&userID); err != nil {
-				_ = rows.Close()
-				return err
+				return errors.Join(err, rows.Close())
 			}
 			ids = append(ids, userID)
+		}
+		if err := rows.Err(); err != nil {
+			return errors.Join(err, rows.Close())
 		}
 		if err := rows.Close(); err != nil {
 			return err

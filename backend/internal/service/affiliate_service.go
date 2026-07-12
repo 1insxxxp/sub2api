@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"math"
 	"strings"
-	"sync"
 	"time"
 
 	dbent "github.com/Wei-Shaw/sub2api/ent"
@@ -124,9 +123,6 @@ type AffiliateRepository interface {
 	ThawFrozenQuota(ctx context.Context, userID int64) (float64, error)
 	TransferQuotaToBalance(ctx context.Context, userID int64) (float64, float64, error)
 	ListInvitees(ctx context.Context, inviterID int64, limit int) ([]AffiliateInvitee, error)
-	ReconcileInviteeQualification(ctx context.Context, inviteeUserID int64, threshold float64) (*AffiliateQualification, error)
-	CountQualifiedInvitees(ctx context.Context, inviterID int64, threshold float64) (int, error)
-	ReconcileAllAffiliateQualifications(ctx context.Context, threshold float64, batchSize int) error
 
 	// 管理端：用户级专属配置
 	UpdateUserAffCode(ctx context.Context, userID int64, newCode string) error
@@ -138,6 +134,13 @@ type AffiliateRepository interface {
 	ListAffiliateRebateRecords(ctx context.Context, filter AffiliateRecordFilter) ([]AffiliateRebateRecord, int64, error)
 	ListAffiliateTransferRecords(ctx context.Context, filter AffiliateRecordFilter) ([]AffiliateTransferRecord, int64, error)
 	GetAffiliateUserOverview(ctx context.Context, userID int64) (*AffiliateUserOverview, error)
+}
+
+type AffiliateQualificationRepository interface {
+	ReconcileInviteeQualification(ctx context.Context, inviteeUserID int64, threshold float64) (*AffiliateQualification, error)
+	CountQualifiedInvitees(ctx context.Context, inviterID int64, threshold float64) (int, error)
+	ReconcileAllAffiliateQualifications(ctx context.Context, threshold float64, batchSize int) error
+	TryWithAffiliateQualificationReconcileLock(ctx context.Context, fn func(context.Context) error) (bool, error)
 }
 
 // AffiliateAdminFilter 列表筛选条件
@@ -230,15 +233,17 @@ type AffiliateUserOverview struct {
 
 type AffiliateService struct {
 	repo                 AffiliateRepository
+	qualificationRepo    AffiliateQualificationRepository
 	settingService       *SettingService
 	authCacheInvalidator APIKeyAuthCacheInvalidator
 	billingCacheService  *BillingCacheService
-	tierReconcileMu      sync.Mutex
 }
 
 func NewAffiliateService(repo AffiliateRepository, settingService *SettingService, authCacheInvalidator APIKeyAuthCacheInvalidator, billingCacheService *BillingCacheService) *AffiliateService {
+	qualificationRepo, _ := repo.(AffiliateQualificationRepository)
 	return &AffiliateService{
 		repo:                 repo,
+		qualificationRepo:    qualificationRepo,
 		settingService:       settingService,
 		authCacheInvalidator: authCacheInvalidator,
 		billingCacheService:  billingCacheService,
@@ -468,7 +473,10 @@ func (s *AffiliateService) ResolveAffiliateTierSnapshot(ctx context.Context, inv
 	if err != nil {
 		return nil, err
 	}
-	qualifiedCount, err := s.repo.CountQualifiedInvitees(ctx, inviterID, config.QualificationAmount)
+	if s.qualificationRepo == nil {
+		return nil, infraerrors.ServiceUnavailable("SERVICE_UNAVAILABLE", "affiliate qualification service unavailable")
+	}
+	qualifiedCount, err := s.qualificationRepo.CountQualifiedInvitees(ctx, inviterID, config.QualificationAmount)
 	if err != nil {
 		return nil, fmt.Errorf("count qualified affiliate invitees: %w", err)
 	}
@@ -493,8 +501,10 @@ func (s *AffiliateService) affiliateTierConfigStrict(ctx context.Context) (Affil
 	return s.settingService.GetAffiliateTierConfigStrict(ctx)
 }
 
+// ReconcilePendingAffiliateQualifications is an explicit orchestration hook for
+// Task 4 startup/payment flows. Existing payment and API reads must not call it implicitly.
 func (s *AffiliateService) ReconcilePendingAffiliateQualifications(ctx context.Context) error {
-	if s == nil || s.repo == nil {
+	if s == nil || s.qualificationRepo == nil {
 		return infraerrors.ServiceUnavailable("SERVICE_UNAVAILABLE", "affiliate service unavailable")
 	}
 	if dbent.TxFromContext(ctx) != nil {
@@ -511,26 +521,27 @@ func (s *AffiliateService) ReconcilePendingAffiliateQualifications(ctx context.C
 		return nil
 	}
 
-	s.tierReconcileMu.Lock()
-	defer s.tierReconcileMu.Unlock()
-	required, err = s.settingService.IsAffiliateTierReconcileRequired(ctx)
-	if err != nil {
-		return fmt.Errorf("recheck affiliate qualification reconcile marker: %w", err)
-	}
-	if !required {
+	_, err = s.qualificationRepo.TryWithAffiliateQualificationReconcileLock(ctx, func(lockCtx context.Context) error {
+		required, err := s.settingService.IsAffiliateTierReconcileRequired(lockCtx)
+		if err != nil {
+			return fmt.Errorf("recheck affiliate qualification reconcile marker: %w", err)
+		}
+		if !required {
+			return nil
+		}
+		config, err := s.affiliateTierConfigStrict(lockCtx)
+		if err != nil {
+			return err
+		}
+		if err := s.qualificationRepo.ReconcileAllAffiliateQualifications(lockCtx, config.QualificationAmount, 200); err != nil {
+			return fmt.Errorf("reconcile all affiliate qualifications: %w", err)
+		}
+		if err := s.settingService.SetAffiliateTierReconcileRequired(lockCtx, false); err != nil {
+			return fmt.Errorf("clear affiliate qualification reconcile marker: %w", err)
+		}
 		return nil
-	}
-	config, err := s.affiliateTierConfigStrict(ctx)
-	if err != nil {
-		return err
-	}
-	if err := s.repo.ReconcileAllAffiliateQualifications(ctx, config.QualificationAmount, 200); err != nil {
-		return fmt.Errorf("reconcile all affiliate qualifications: %w", err)
-	}
-	if err := s.settingService.SetAffiliateTierReconcileRequired(ctx, false); err != nil {
-		return fmt.Errorf("clear affiliate qualification reconcile marker: %w", err)
-	}
-	return nil
+	})
+	return err
 }
 
 func (s *AffiliateService) TransferAffiliateQuota(ctx context.Context, userID int64) (float64, float64, error) {
