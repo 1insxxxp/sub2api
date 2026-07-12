@@ -392,19 +392,36 @@ func TestAffiliateService_LegacyRateRemainsFlatCustomCompatible(t *testing.T) {
 	require.Equal(t, 0, repo.countCallCount())
 }
 
-func TestAffiliateDetailJSONDoesNotExposeTierQualificationBeforeTask5(t *testing.T) {
+func TestAffiliateDetailJSONExposesTierProgressWithoutInternalRecoveryFields(t *testing.T) {
+	customRate := 18.0
 	qualifiedAt := time.Now()
 	payload, err := json.Marshal(AffiliateDetail{
+		AutomaticLevel:             AffiliateTierBronze,
+		AutomaticRebateRatePercent: 10,
+		EffectiveRebateRatePercent: 18,
+		HasCustomRebateRate:        true,
+		CustomRebateRatePercent:    &customRate,
+		QualifiedInviteeCount:      3,
+		QualificationAmount:        50,
+		NextLevelInviteeThreshold:  affiliateIntPtr(10),
+		RemainingQualifiedInvitees: 7,
+		Tiers:                      []AffiliateTierDefinition{{Level: AffiliateTierStandard, MinQualifiedInvitees: 0, RatePercent: 8}},
 		Invitees: []AffiliateInvitee{{
 			UserID:                  1,
 			QualifyingPaymentAmount: 50,
+			Qualified:               true,
 			QualifiedAt:             &qualifiedAt,
 		}},
 	})
 	require.NoError(t, err)
-	require.NotContains(t, string(payload), `"tier"`)
-	require.NotContains(t, string(payload), "qualifying_payment_amount")
-	require.NotContains(t, string(payload), "qualified_at")
+	require.Contains(t, string(payload), `"automatic_level":"bronze"`)
+	require.Contains(t, string(payload), `"custom_rebate_rate_percent":18`)
+	require.Contains(t, string(payload), `"qualifying_payment_amount":50`)
+	require.Contains(t, string(payload), `"qualified":true`)
+	require.Contains(t, string(payload), `"qualified_at"`)
+	require.NotContains(t, string(payload), "generation")
+	require.NotContains(t, string(payload), "marker")
+	require.NotContains(t, string(payload), "outbox")
 
 	qualificationPayload, err := json.Marshal(AffiliateQualification{
 		InviteeUserID:           1,
@@ -415,7 +432,7 @@ func TestAffiliateDetailJSONDoesNotExposeTierQualificationBeforeTask5(t *testing
 	require.Equal(t, `{}`, string(qualificationPayload))
 }
 
-func TestAffiliateService_GetDetailDoesNotReadStrictTierConfig(t *testing.T) {
+func TestAffiliateService_GetDetailRequiresStrictTierConfig(t *testing.T) {
 	settings := newAffiliateTierServiceSettingRepo()
 	settings.getMultipleErr = errors.New("tier settings unavailable")
 	repo := &affiliateTierServiceRepoStub{}
@@ -423,12 +440,129 @@ func TestAffiliateService_GetDetailDoesNotReadStrictTierConfig(t *testing.T) {
 
 	detail, err := svc.GetAffiliateDetail(context.Background(), 42)
 
+	require.ErrorContains(t, err, "tier settings unavailable")
+	require.Nil(t, detail)
+	require.Equal(t, 0, repo.countCallCount())
+}
+
+func TestAffiliateService_GetDetailSeparatesAutomaticAndCustomRates(t *testing.T) {
+	customRate := 18.0
+	qualifiedAt := time.Now()
+	repo := &affiliateTierServiceRepoStub{
+		qualifiedCount: 3,
+		inviterSummary: &AffiliateSummary{UserID: 42, AffCode: "ALICE", AffRebateRatePercent: &customRate},
+		invitees: []AffiliateInvitee{
+			{UserID: 49, Email: "first@example.com", QualifyingPaymentAmount: 49},
+			{UserID: 50, Email: "second@example.com", QualifyingPaymentAmount: 50, QualifiedAt: &qualifiedAt},
+		},
+	}
+	svc := NewAffiliateService(repo, NewSettingService(newAffiliateTierServiceSettingRepo(), nil), nil, nil)
+
+	detail, err := svc.GetAffiliateDetail(context.Background(), 42)
+
+	require.NoError(t, err)
+	require.Equal(t, AffiliateTierBronze, detail.AutomaticLevel)
+	require.Equal(t, 10.0, detail.AutomaticRebateRatePercent)
+	require.Equal(t, 18.0, detail.EffectiveRebateRatePercent)
+	require.True(t, detail.HasCustomRebateRate)
+	require.Equal(t, &customRate, detail.CustomRebateRatePercent)
+	require.Equal(t, 3, detail.QualifiedInviteeCount)
+	require.Equal(t, 50.0, detail.QualificationAmount)
+	require.Equal(t, affiliateIntPtr(10), detail.NextLevelInviteeThreshold)
+	require.Equal(t, 7, detail.RemainingQualifiedInvitees)
+	require.Len(t, detail.Tiers, 4)
+	require.False(t, detail.Invitees[0].Qualified)
+	require.True(t, detail.Invitees[1].Qualified)
+	require.Equal(t, "f***@e***.com", detail.Invitees[0].Email)
+	require.Equal(t, 50.0, repo.listInviteesThreshold)
+}
+
+func TestAffiliateService_GetDetailZeroAndGoldNextThresholdsAreNullable(t *testing.T) {
+	settings := NewSettingService(newAffiliateTierServiceSettingRepo(), nil)
+	for _, tc := range []struct {
+		name           string
+		qualifiedCount int
+		wantLevel      AffiliateTier
+		wantNext       *int
+	}{
+		{name: "zero", qualifiedCount: 0, wantLevel: AffiliateTierStandard, wantNext: affiliateIntPtr(3)},
+		{name: "gold", qualifiedCount: 30, wantLevel: AffiliateTierGold, wantNext: nil},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			repo := &affiliateTierServiceRepoStub{qualifiedCount: tc.qualifiedCount, inviterSummary: &AffiliateSummary{UserID: 42}}
+			detail, err := NewAffiliateService(repo, settings, nil, nil).GetAffiliateDetail(context.Background(), 42)
+			require.NoError(t, err)
+			require.Equal(t, tc.wantLevel, detail.AutomaticLevel)
+			require.Equal(t, tc.wantNext, detail.NextLevelInviteeThreshold)
+			require.Equal(t, detail.AutomaticRebateRatePercent, detail.EffectiveRebateRatePercent)
+			require.False(t, detail.HasCustomRebateRate)
+			require.Nil(t, detail.CustomRebateRatePercent)
+			if tc.wantNext == nil {
+				payload, marshalErr := json.Marshal(detail)
+				require.NoError(t, marshalErr)
+				require.Contains(t, string(payload), `"next_level_invitee_threshold":null`)
+			}
+		})
+	}
+}
+
+func TestAffiliateService_GetDetailIgnoresPendingRecoveryFailure(t *testing.T) {
+	repo := &affiliateTierServiceRepoStub{
+		inviterSummary:  &AffiliateSummary{UserID: 42},
+		readSnapshotErr: errors.New("recovery unavailable"),
+	}
+	svc := NewAffiliateService(repo, NewSettingService(newAffiliateTierServiceSettingRepo(), nil), nil, nil)
+
+	detail, err := svc.GetAffiliateDetail(context.Background(), 42)
+
 	require.NoError(t, err)
 	require.NotNil(t, detail)
-	require.Equal(t, AffiliateRebateRateDefault, detail.EffectiveRebateRatePercent)
-	require.Equal(t, 0, repo.countCallCount())
-	require.Equal(t, 0, repo.reconcileCallCount())
+	require.Equal(t, AffiliateTierStandard, detail.AutomaticLevel)
 }
+
+func TestAffiliateService_AdminOverviewAndInviteRecordsExposeTierProgress(t *testing.T) {
+	customRate := 18.0
+	qualifiedAt := time.Now()
+	repo := &affiliateTierServiceRepoStub{
+		qualifiedCount: 3,
+		overview:       &AffiliateUserOverview{UserID: 42, CustomRebateRatePercent: &customRate},
+		inviteRecords:  []AffiliateInviteRecord{{InviteeID: 9, QualifyingPaymentAmount: 50, QualifiedAt: &qualifiedAt}},
+	}
+	svc := NewAffiliateService(repo, NewSettingService(newAffiliateTierServiceSettingRepo(), nil), nil, nil)
+
+	overview, err := svc.AdminGetUserOverview(context.Background(), 42)
+	require.NoError(t, err)
+	require.Equal(t, AffiliateTierBronze, overview.AutomaticLevel)
+	require.Equal(t, 10.0, overview.AutomaticRebateRatePercent)
+	require.Equal(t, 18.0, overview.EffectiveRebateRatePercent)
+	require.Equal(t, &customRate, overview.CustomRebateRatePercent)
+	require.Equal(t, affiliateIntPtr(10), overview.NextLevelInviteeThreshold)
+
+	records, _, err := svc.AdminListInviteRecords(context.Background(), AffiliateRecordFilter{})
+	require.NoError(t, err)
+	require.True(t, records[0].Qualified)
+	require.Equal(t, 50.0, repo.listRecordsThreshold)
+}
+
+func TestAffiliateService_AdminOverviewWithoutCustomRateUsesAutomaticTier(t *testing.T) {
+	repo := &affiliateTierServiceRepoStub{
+		qualifiedCount: 3,
+		overview:       &AffiliateUserOverview{UserID: 42},
+	}
+	svc := NewAffiliateService(repo, NewSettingService(newAffiliateTierServiceSettingRepo(), nil), nil, nil)
+
+	overview, err := svc.AdminGetUserOverview(context.Background(), 42)
+
+	require.NoError(t, err)
+	require.Equal(t, AffiliateTierBronze, overview.AutomaticLevel)
+	require.Equal(t, 10.0, overview.AutomaticRebateRatePercent)
+	require.Equal(t, 10.0, overview.EffectiveRebateRatePercent)
+	require.Equal(t, 10.0, overview.RebateRatePercent)
+	require.False(t, overview.HasCustomRebateRate)
+	require.Nil(t, overview.CustomRebateRatePercent)
+}
+
+func affiliateIntPtr(value int) *int { return &value }
 
 func TestAffiliateService_QualificationReconcileMarkerConcurrentReadsSingleRun(t *testing.T) {
 	settings := newAffiliateTierServiceSettingRepo()
@@ -503,6 +637,11 @@ type affiliateTierServiceRepoStub struct {
 	dirtyEvents           []AffiliateQualificationDirtyEvent
 	deletedDirtyEvents    []AffiliateQualificationDirtyEvent
 	failedDirtyEvents     []AffiliateQualificationDirtyEvent
+	invitees              []AffiliateInvitee
+	listInviteesThreshold float64
+	overview              *AffiliateUserOverview
+	inviteRecords         []AffiliateInviteRecord
+	listRecordsThreshold  float64
 }
 
 func (r *affiliateTierServiceRepoStub) CountQualifiedInvitees(_ context.Context, _ int64, threshold float64) (int, error) {
@@ -645,8 +784,24 @@ func (r *affiliateTierServiceRepoStub) ThawFrozenQuota(context.Context, int64) (
 	return 0, nil
 }
 
-func (r *affiliateTierServiceRepoStub) ListInvitees(context.Context, int64, int) ([]AffiliateInvitee, error) {
-	return nil, nil
+func (r *affiliateTierServiceRepoStub) ListInviteesWithQualification(_ context.Context, _ int64, _ int, threshold float64) ([]AffiliateInvitee, error) {
+	r.listInviteesThreshold = threshold
+	return append([]AffiliateInvitee(nil), r.invitees...), nil
+}
+
+func (r *affiliateTierServiceRepoStub) GetAffiliateUserOverviewWithQualification(_ context.Context, _ int64, _ float64) (*AffiliateUserOverview, error) {
+	if r.overview == nil {
+		return nil, ErrUserNotFound
+	}
+	cloned := *r.overview
+	cloned.QualifiedInviteeCount = r.qualifiedCount
+	return &cloned, nil
+}
+
+func (r *affiliateTierServiceRepoStub) ListAffiliateInviteRecordsWithQualification(_ context.Context, _ AffiliateRecordFilter, threshold float64) ([]AffiliateInviteRecord, int64, error) {
+	r.listRecordsThreshold = threshold
+	items := append([]AffiliateInviteRecord(nil), r.inviteRecords...)
+	return items, int64(len(items)), nil
 }
 
 func (r *affiliateTierServiceRepoStub) reconcileCallCount() int {

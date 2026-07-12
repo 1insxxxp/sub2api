@@ -40,6 +40,70 @@ func TestAPIContracts(t *testing.T) {
 		wantJSON   string
 	}{
 		{
+			name:       "GET /api/v1/user/aff exposes tier progress and preserves legacy fields",
+			method:     http.MethodGet,
+			path:       "/api/v1/user/aff",
+			wantStatus: http.StatusOK,
+			wantJSON: `{
+				"code": 0,
+				"message": "success",
+				"data": {
+					"user_id": 1,
+					"aff_code": "ALICECODE",
+					"aff_count": 2,
+					"aff_quota": 12.5,
+					"aff_frozen_quota": 1.5,
+					"aff_history_quota": 20,
+					"automatic_level": "standard",
+					"automatic_rebate_rate_percent": 8,
+					"effective_rebate_rate_percent": 18,
+					"has_custom_rebate_rate": true,
+					"custom_rebate_rate_percent": 18,
+					"qualified_invitee_count": 0,
+					"qualification_amount": 50,
+					"next_level_invitee_threshold": 3,
+					"remaining_qualified_invitees": 3,
+					"tiers": [
+						{"level":"standard","min_qualified_invitees":0,"rate_percent":8},
+						{"level":"bronze","min_qualified_invitees":3,"rate_percent":10},
+						{"level":"silver","min_qualified_invitees":10,"rate_percent":12},
+						{"level":"gold","min_qualified_invitees":30,"rate_percent":15}
+					],
+					"invitees": [
+						{"user_id":2,"email":"b***@e***.com","username":"bob","created_at":"2025-01-02T03:04:05Z","total_rebate":2,"qualifying_payment_amount":49,"qualified":false,"qualified_at":null},
+						{"user_id":3,"email":"c***@e***.com","username":"carol","created_at":"2025-01-02T03:04:05Z","total_rebate":3,"qualifying_payment_amount":50,"qualified":true,"qualified_at":"2025-01-02T03:04:05Z"}
+					]
+				}
+			}`,
+		},
+		{
+			name:       "GET /api/v1/admin/affiliates/users/1/overview separates automatic and custom rates",
+			method:     http.MethodGet,
+			path:       "/api/v1/admin/affiliates/users/1/overview",
+			wantStatus: http.StatusOK,
+			wantJSON: `{
+				"code":0,"message":"success","data":{
+					"user_id":1,"email":"alice@example.com","username":"alice","aff_code":"ALICECODE",
+					"rebate_rate_percent":18,"invited_count":2,"rebated_invitee_count":2,"available_quota":12.5,"history_quota":20,
+					"automatic_level":"standard","automatic_rebate_rate_percent":8,"effective_rebate_rate_percent":18,
+					"has_custom_rebate_rate":true,"custom_rebate_rate_percent":18,"qualified_invitee_count":0,
+					"qualification_amount":50,"next_level_invitee_threshold":3,"remaining_qualified_invitees":3
+				}
+			}`,
+		},
+		{
+			name:       "GET /api/v1/admin/affiliates/invites exposes dynamic qualification status",
+			method:     http.MethodGet,
+			path:       "/api/v1/admin/affiliates/invites",
+			wantStatus: http.StatusOK,
+			wantJSON: `{
+				"code":0,"message":"success","data":{
+					"items":[{"inviter_id":1,"inviter_email":"alice@example.com","inviter_username":"alice","invitee_id":3,"invitee_email":"carol@example.com","invitee_username":"carol","aff_code":"ALICECODE","total_rebate":3,"qualifying_payment_amount":50,"qualified":true,"qualified_at":"2025-01-02T03:04:05Z","created_at":"2025-01-02T03:04:05Z"}],
+					"total":1,"page":1,"page_size":20,"pages":1
+				}
+			}`,
+		},
+		{
 			name:       "GET /api/v1/auth/me",
 			method:     http.MethodGet,
 			path:       "/api/v1/auth/me",
@@ -1324,15 +1388,16 @@ func TestAPIContracts(t *testing.T) {
 }
 
 type contractDeps struct {
-	now         time.Time
-	router      http.Handler
-	cfg         *config.Config
-	apiKeyRepo  *stubApiKeyRepo
-	groupRepo   *stubGroupRepo
-	userSubRepo *stubUserSubscriptionRepo
-	usageRepo   *stubUsageLogRepo
-	settingRepo *stubSettingRepo
-	redeemRepo  *stubRedeemCodeRepo
+	now           time.Time
+	router        http.Handler
+	cfg           *config.Config
+	apiKeyRepo    *stubApiKeyRepo
+	groupRepo     *stubGroupRepo
+	userSubRepo   *stubUserSubscriptionRepo
+	usageRepo     *stubUsageLogRepo
+	settingRepo   *stubSettingRepo
+	redeemRepo    *stubRedeemCodeRepo
+	affiliateRepo *stubAffiliateRepo
 }
 
 func newContractDeps(t *testing.T) *contractDeps {
@@ -1386,7 +1451,20 @@ func newContractDeps(t *testing.T) *contractDeps {
 	redeemHandler := handler.NewRedeemHandler(redeemService)
 
 	settingRepo := newStubSettingRepo()
+	settingRepo.SetAll(map[string]string{
+		service.SettingKeyAffiliateRebateRate:          "8",
+		service.SettingKeyAffiliateQualificationAmount: "50",
+		service.SettingKeyAffiliateBronzeInvitees:      "3",
+		service.SettingKeyAffiliateBronzeRate:          "10",
+		service.SettingKeyAffiliateSilverInvitees:      "10",
+		service.SettingKeyAffiliateSilverRate:          "12",
+		service.SettingKeyAffiliateGoldInvitees:        "30",
+		service.SettingKeyAffiliateGoldRate:            "15",
+	})
 	settingService := service.NewSettingService(settingRepo, cfg)
+	customRate := 18.0
+	affiliateRepo := newStubAffiliateRepo(now, &customRate)
+	affiliateService := service.NewAffiliateService(affiliateRepo, settingService, nil, nil)
 
 	adminService := service.NewAdminService(userRepo, groupRepo, &accountRepo, proxyRepo, apiKeyRepo, redeemRepo, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
 	authHandler := handler.NewAuthHandler(cfg, nil, userService, settingService, nil, redeemService, nil, nil)
@@ -1394,6 +1472,8 @@ func newContractDeps(t *testing.T) *contractDeps {
 	usageHandler := handler.NewUsageHandler(usageService, apiKeyService, nil, nil)
 	adminSettingHandler := adminhandler.NewSettingHandler(settingService, nil, nil, nil, nil, nil, nil)
 	adminAccountHandler := adminhandler.NewAccountHandler(adminService, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
+	userHandler := handler.NewUserHandler(userService, nil, nil, nil, affiliateService, nil)
+	adminAffiliateHandler := adminhandler.NewAffiliateHandler(affiliateService, adminService)
 
 	jwtAuth := func(c *gin.Context) {
 		c.Set(string(middleware.ContextKeyUser), middleware.AuthSubject{
@@ -1430,6 +1510,7 @@ func newContractDeps(t *testing.T) *contractDeps {
 	v1Usage.Use(jwtAuth)
 	v1Usage.GET("/usage", usageHandler.List)
 	v1Usage.GET("/usage/stats", usageHandler.Stats)
+	v1Usage.GET("/user/aff", userHandler.GetAffiliate)
 
 	v1Subs := v1.Group("")
 	v1Subs.Use(jwtAuth)
@@ -1443,18 +1524,69 @@ func newContractDeps(t *testing.T) *contractDeps {
 	v1Admin.Use(adminAuth)
 	v1Admin.GET("/settings", adminSettingHandler.GetSettings)
 	v1Admin.POST("/accounts/bulk-update", adminAccountHandler.BulkUpdate)
+	v1Admin.GET("/affiliates/users/:user_id/overview", adminAffiliateHandler.GetUserOverview)
+	v1Admin.GET("/affiliates/invites", adminAffiliateHandler.ListInviteRecords)
 
 	return &contractDeps{
-		now:         now,
-		router:      r,
-		cfg:         cfg,
-		apiKeyRepo:  apiKeyRepo,
-		groupRepo:   groupRepo,
-		userSubRepo: userSubRepo,
-		usageRepo:   usageRepo,
-		settingRepo: settingRepo,
-		redeemRepo:  redeemRepo,
+		now:           now,
+		router:        r,
+		cfg:           cfg,
+		apiKeyRepo:    apiKeyRepo,
+		groupRepo:     groupRepo,
+		userSubRepo:   userSubRepo,
+		usageRepo:     usageRepo,
+		settingRepo:   settingRepo,
+		redeemRepo:    redeemRepo,
+		affiliateRepo: affiliateRepo,
 	}
+}
+
+type stubAffiliateRepo struct {
+	service.AffiliateRepository
+	service.AffiliateQualificationRepository
+	now        time.Time
+	customRate *float64
+}
+
+func newStubAffiliateRepo(now time.Time, customRate *float64) *stubAffiliateRepo {
+	return &stubAffiliateRepo{now: now, customRate: customRate}
+}
+
+func (r *stubAffiliateRepo) EnsureUserAffiliate(context.Context, int64) (*service.AffiliateSummary, error) {
+	return &service.AffiliateSummary{UserID: 1, AffCode: "ALICECODE", AffCount: 2, AffQuota: 12.5, AffFrozenQuota: 1.5, AffHistoryQuota: 20, AffRebateRatePercent: r.customRate}, nil
+}
+
+func (r *stubAffiliateRepo) ThawFrozenQuota(context.Context, int64) (float64, error) { return 0, nil }
+
+func (r *stubAffiliateRepo) ListInviteesWithQualification(context.Context, int64, int, float64) ([]service.AffiliateInvitee, error) {
+	return []service.AffiliateInvitee{
+		{UserID: 2, Email: "bob@example.com", Username: "bob", CreatedAt: &r.now, TotalRebate: 2, QualifyingPaymentAmount: 49},
+		{UserID: 3, Email: "carol@example.com", Username: "carol", CreatedAt: &r.now, TotalRebate: 3, QualifyingPaymentAmount: 50, QualifiedAt: &r.now},
+	}, nil
+}
+
+func (r *stubAffiliateRepo) CountQualifiedInvitees(context.Context, int64, float64) (int, error) {
+	return 0, nil
+}
+
+func (r *stubAffiliateRepo) GetAffiliateUserOverviewWithQualification(context.Context, int64, float64) (*service.AffiliateUserOverview, error) {
+	return &service.AffiliateUserOverview{UserID: 1, Email: "alice@example.com", Username: "alice", AffCode: "ALICECODE", RebateRatePercent: 18, RebateRateCustom: true, CustomRebateRatePercent: r.customRate, InvitedCount: 2, RebatedInviteeCount: 2, AvailableQuota: 12.5, HistoryQuota: 20}, nil
+}
+
+func (r *stubAffiliateRepo) ListAffiliateInviteRecordsWithQualification(context.Context, service.AffiliateRecordFilter, float64) ([]service.AffiliateInviteRecord, int64, error) {
+	return []service.AffiliateInviteRecord{{InviterID: 1, InviterEmail: "alice@example.com", InviterUsername: "alice", InviteeID: 3, InviteeEmail: "carol@example.com", InviteeUsername: "carol", AffCode: "ALICECODE", TotalRebate: 3, QualifyingPaymentAmount: 50, QualifiedAt: &r.now, CreatedAt: r.now}}, 1, nil
+}
+
+func (r *stubAffiliateRepo) TryWithAffiliateQualificationReconcileLock(ctx context.Context, fn func(context.Context) error) (bool, error) {
+	return true, fn(ctx)
+}
+
+func (r *stubAffiliateRepo) ListAffiliateQualificationDirtyEvents(context.Context, int) ([]service.AffiliateQualificationDirtyEvent, error) {
+	return nil, nil
+}
+
+func (r *stubAffiliateRepo) ReadReconcilePendingSnapshot(context.Context) (service.AffiliateReconcilePendingSnapshot, error) {
+	return service.AffiliateReconcilePendingSnapshot{}, nil
 }
 
 func doRequest(t *testing.T, router http.Handler, method, path, body string, headers map[string]string) (int, string) {

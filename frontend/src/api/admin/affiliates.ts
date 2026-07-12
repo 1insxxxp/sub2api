@@ -5,7 +5,7 @@
  */
 
 import { apiClient } from '../client'
-import type { PaginatedResponse } from '@/types'
+import type { AffiliateTierProgress, PaginatedResponse } from '@/types'
 
 export interface AffiliateAdminEntry {
   user_id: number
@@ -43,6 +43,9 @@ export interface AffiliateInviteRecord {
   invitee_username: string
   aff_code: string
   total_rebate: number
+  qualifying_payment_amount: number
+  qualified: boolean
+  qualified_at: string | null
   created_at: string
 }
 
@@ -77,7 +80,7 @@ export interface AffiliateTransferRecord {
   created_at: string
 }
 
-export interface AffiliateUserOverview {
+export interface AffiliateUserOverview extends AffiliateTierProgress {
   user_id: number
   email: string
   username: string

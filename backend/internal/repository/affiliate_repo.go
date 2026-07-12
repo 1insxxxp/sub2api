@@ -101,7 +101,8 @@ SELECT ua.user_id,
        ua.aff_count,
        COALESCE(rebated.rebated_invitee_count, 0),
        (ua.aff_quota + COALESCE(matured.matured_frozen_quota, 0))::double precision,
-       ua.aff_history_quota::double precision
+       ua.aff_history_quota::double precision,
+       COALESCE(qualified.qualified_invitee_count, 0)
 FROM user_affiliates ua
 JOIN users u ON u.id = ua.user_id
 LEFT JOIN (
@@ -116,8 +117,61 @@ LEFT JOIN (
     WHERE action = 'accrue' AND frozen_until IS NOT NULL AND frozen_until <= NOW()
     GROUP BY user_id
 ) matured ON matured.user_id = ua.user_id
+LEFT JOIN (
+    SELECT inviter_id, COUNT(*)::integer AS qualified_invitee_count
+    FROM user_affiliates
+    WHERE qualifying_payment_amount >= $2
+      AND inviter_id IS NOT NULL
+    GROUP BY inviter_id
+) qualified ON qualified.inviter_id = ua.user_id
 WHERE ua.user_id = $1
 LIMIT 1`
+
+const affiliateInviteesSQL = `
+SELECT ua.user_id,
+       COALESCE(u.email, ''),
+       COALESCE(u.username, ''),
+       ua.created_at,
+       COALESCE(SUM(ual.amount), 0)::double precision AS total_rebate,
+       ua.qualifying_payment_amount::double precision,
+       (ua.qualifying_payment_amount >= $3) AS qualified,
+       ua.qualified_at
+FROM user_affiliates ua
+LEFT JOIN users u ON u.id = ua.user_id
+LEFT JOIN user_affiliate_ledger ual
+       ON ual.user_id = $1
+      AND ual.source_user_id = ua.user_id
+      AND ual.action = 'accrue'
+WHERE ua.inviter_id = $1
+GROUP BY ua.user_id, u.email, u.username, ua.created_at, ua.qualifying_payment_amount, ua.qualified_at
+ORDER BY ua.created_at DESC
+LIMIT $2`
+
+const affiliateInviteRecordsSQL = `
+SELECT ua.inviter_id,
+       COALESCE(inviter.email, ''),
+       COALESCE(inviter.username, ''),
+       ua.user_id,
+       COALESCE(invitee.email, ''),
+       COALESCE(invitee.username, ''),
+       COALESCE(inviter_aff.aff_code, ''),
+       COALESCE(SUM(ual.amount), 0)::double precision AS total_rebate,
+       ua.qualifying_payment_amount::double precision,
+       (ua.qualifying_payment_amount >= %s) AS qualified,
+       ua.qualified_at,
+       ua.created_at
+FROM user_affiliates ua
+JOIN users invitee ON invitee.id = ua.user_id
+JOIN users inviter ON inviter.id = ua.inviter_id
+JOIN user_affiliates inviter_aff ON inviter_aff.user_id = ua.inviter_id
+LEFT JOIN user_affiliate_ledger ual
+       ON ual.user_id = ua.inviter_id
+      AND ual.source_user_id = ua.user_id
+      AND ual.action = 'accrue'
+%s
+GROUP BY ua.inviter_id, inviter.email, inviter.username, ua.user_id, invitee.email, invitee.username, inviter_aff.aff_code, ua.qualifying_payment_amount, ua.qualified_at, ua.created_at
+%s
+LIMIT %s OFFSET %s`
 
 type affiliateQueryExecer interface {
 	QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error)
@@ -673,28 +727,15 @@ VALUES ($1, 'transfer', $2, NULL, $3, $4, $5, $6, NOW(), NOW())`,
 }
 
 func (r *affiliateRepository) ListInvitees(ctx context.Context, inviterID int64, limit int) ([]service.AffiliateInvitee, error) {
+	return r.ListInviteesWithQualification(ctx, inviterID, limit, service.AffiliateQualificationAmountDefault)
+}
+
+func (r *affiliateRepository) ListInviteesWithQualification(ctx context.Context, inviterID int64, limit int, qualificationAmount float64) ([]service.AffiliateInvitee, error) {
 	if limit <= 0 {
 		limit = 100
 	}
 	client := clientFromContext(ctx, r.client)
-	rows, err := client.QueryContext(ctx, `
-SELECT ua.user_id,
-       COALESCE(u.email, ''),
-       COALESCE(u.username, ''),
-       ua.created_at,
-       COALESCE(SUM(ual.amount), 0)::double precision AS total_rebate,
-       ua.qualifying_payment_amount::double precision,
-       ua.qualified_at
-FROM user_affiliates ua
-LEFT JOIN users u ON u.id = ua.user_id
-LEFT JOIN user_affiliate_ledger ual
-       ON ual.user_id = $1
-      AND ual.source_user_id = ua.user_id
-      AND ual.action = 'accrue'
-WHERE ua.inviter_id = $1
-GROUP BY ua.user_id, u.email, u.username, ua.created_at, ua.qualifying_payment_amount, ua.qualified_at
-ORDER BY ua.created_at DESC
-LIMIT $2`, inviterID, limit)
+	rows, err := client.QueryContext(ctx, affiliateInviteesSQL, inviterID, limit, qualificationAmount)
 	if err != nil {
 		return nil, err
 	}
@@ -704,7 +745,7 @@ LIMIT $2`, inviterID, limit)
 	for rows.Next() {
 		var item service.AffiliateInvitee
 		var createdAt time.Time
-		if err := rows.Scan(&item.UserID, &item.Email, &item.Username, &createdAt, &item.TotalRebate, &item.QualifyingPaymentAmount, &item.QualifiedAt); err != nil {
+		if err := rows.Scan(&item.UserID, &item.Email, &item.Username, &createdAt, &item.TotalRebate, &item.QualifyingPaymentAmount, &item.Qualified, &item.QualifiedAt); err != nil {
 			return nil, err
 		}
 		item.CreatedAt = &createdAt
@@ -823,6 +864,10 @@ LIMIT $2`, lastUserID, batchSize)
 }
 
 func (r *affiliateRepository) ListAffiliateInviteRecords(ctx context.Context, filter service.AffiliateRecordFilter) ([]service.AffiliateInviteRecord, int64, error) {
+	return r.ListAffiliateInviteRecordsWithQualification(ctx, filter, service.AffiliateQualificationAmountDefault)
+}
+
+func (r *affiliateRepository) ListAffiliateInviteRecordsWithQualification(ctx context.Context, filter service.AffiliateRecordFilter, qualificationAmount float64) ([]service.AffiliateInviteRecord, int64, error) {
 	client := clientFromContext(ctx, r.client)
 	where, args := buildAffiliateRecordWhere(filter, "ua.created_at", []string{
 		"inviter.email", "inviter.username", "invitee.email", "invitee.username",
@@ -847,29 +892,18 @@ JOIN user_affiliates inviter_aff ON inviter_aff.user_id = ua.inviter_id
 		"total_rebate": "total_rebate",
 		"created_at":   "ua.created_at",
 	}, "ua.created_at")
+	args = append(args, qualificationAmount)
+	qualificationPlaceholder := "$" + fmt.Sprint(len(args))
 	args = append(args, filter.PageSize, (filter.Page-1)*filter.PageSize)
-	rows, err := client.QueryContext(ctx, `
-SELECT ua.inviter_id,
-       COALESCE(inviter.email, ''),
-       COALESCE(inviter.username, ''),
-       ua.user_id,
-       COALESCE(invitee.email, ''),
-       COALESCE(invitee.username, ''),
-       COALESCE(inviter_aff.aff_code, ''),
-       COALESCE(SUM(ual.amount), 0)::double precision AS total_rebate,
-       ua.created_at
-FROM user_affiliates ua
-JOIN users invitee ON invitee.id = ua.user_id
-JOIN users inviter ON inviter.id = ua.inviter_id
-JOIN user_affiliates inviter_aff ON inviter_aff.user_id = ua.inviter_id
-LEFT JOIN user_affiliate_ledger ual
-       ON ual.user_id = ua.inviter_id
-      AND ual.source_user_id = ua.user_id
-      AND ual.action = 'accrue'
-`+where+`
-GROUP BY ua.inviter_id, inviter.email, inviter.username, ua.user_id, invitee.email, invitee.username, inviter_aff.aff_code, ua.created_at
-`+orderBy+`
-LIMIT $`+fmt.Sprint(len(args)-1)+` OFFSET $`+fmt.Sprint(len(args)), args...)
+	query := fmt.Sprintf(
+		affiliateInviteRecordsSQL,
+		qualificationPlaceholder,
+		where,
+		orderBy,
+		"$"+fmt.Sprint(len(args)-1),
+		"$"+fmt.Sprint(len(args)),
+	)
+	rows, err := client.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -887,6 +921,9 @@ LIMIT $`+fmt.Sprint(len(args)-1)+` OFFSET $`+fmt.Sprint(len(args)), args...)
 			&item.InviteeUsername,
 			&item.AffCode,
 			&item.TotalRebate,
+			&item.QualifyingPaymentAmount,
+			&item.Qualified,
+			&item.QualifiedAt,
 			&item.CreatedAt,
 		); err != nil {
 			return nil, 0, err
@@ -1070,11 +1107,15 @@ LIMIT $`+fmt.Sprint(len(args)-1)+` OFFSET $`+fmt.Sprint(len(args)), args...)
 }
 
 func (r *affiliateRepository) GetAffiliateUserOverview(ctx context.Context, userID int64) (*service.AffiliateUserOverview, error) {
+	return r.GetAffiliateUserOverviewWithQualification(ctx, userID, service.AffiliateQualificationAmountDefault)
+}
+
+func (r *affiliateRepository) GetAffiliateUserOverviewWithQualification(ctx context.Context, userID int64, qualificationAmount float64) (*service.AffiliateUserOverview, error) {
 	if userID <= 0 {
 		return nil, service.ErrUserNotFound
 	}
 	client := clientFromContext(ctx, r.client)
-	rows, err := client.QueryContext(ctx, affiliateUserOverviewSQL, userID)
+	rows, err := client.QueryContext(ctx, affiliateUserOverviewSQL, userID, qualificationAmount)
 	if err != nil {
 		return nil, err
 	}
@@ -1101,12 +1142,14 @@ func (r *affiliateRepository) GetAffiliateUserOverview(ctx context.Context, user
 		&overview.RebatedInviteeCount,
 		&overview.AvailableQuota,
 		&overview.HistoryQuota,
+		&overview.QualifiedInviteeCount,
 	); err != nil {
 		return nil, err
 	}
 	if hasCustomRate {
 		overview.RebateRatePercent = customRate
 		overview.RebateRateCustom = true
+		overview.CustomRebateRatePercent = &customRate
 	}
 	return &overview, rows.Err()
 }

@@ -131,15 +131,38 @@ export interface RegisterRequest {
   aff_code?: string
 }
 
+export type AffiliateTier = 'standard' | 'bronze' | 'silver' | 'gold'
+
+export interface AffiliateTierDefinition {
+  level: AffiliateTier
+  min_qualified_invitees: number
+  rate_percent: number
+}
+
+export interface AffiliateTierProgress {
+  automatic_level: AffiliateTier
+  automatic_rebate_rate_percent: number
+  effective_rebate_rate_percent: number
+  has_custom_rebate_rate: boolean
+  custom_rebate_rate_percent: number | null
+  qualified_invitee_count: number
+  qualification_amount: number
+  next_level_invitee_threshold: number | null
+  remaining_qualified_invitees: number
+}
+
 export interface AffiliateInvitee {
   user_id: number
   email: string
   username: string
   created_at?: string
   total_rebate: number
+  qualifying_payment_amount: number
+  qualified: boolean
+  qualified_at: string | null
 }
 
-export interface UserAffiliateDetail {
+export interface UserAffiliateDetail extends AffiliateTierProgress {
   user_id: number
   aff_code: string
   inviter_id?: number | null
@@ -147,8 +170,7 @@ export interface UserAffiliateDetail {
   aff_quota: number
   aff_frozen_quota: number
   aff_history_quota: number
-  /** 当前用户作为邀请人时实际生效的返利比例（专属覆盖全局）。0-100。 */
-  effective_rebate_rate_percent: number
+  tiers: AffiliateTierDefinition[]
   invitees: AffiliateInvitee[]
 }
 

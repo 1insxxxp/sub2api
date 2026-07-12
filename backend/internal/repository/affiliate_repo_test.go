@@ -22,6 +22,21 @@ func TestAffiliateUserOverviewSQLIncludesMaturedFrozenQuota(t *testing.T) {
 	require.Contains(t, query, "frozen_until <= NOW()")
 }
 
+func TestAffiliateReadQueriesProjectDynamicQualificationFields(t *testing.T) {
+	inviteesQuery := strings.Join(strings.Fields(affiliateInviteesSQL), " ")
+	require.Contains(t, inviteesQuery, "ua.qualifying_payment_amount::double precision")
+	require.Contains(t, inviteesQuery, "(ua.qualifying_payment_amount >= $3) AS qualified")
+	require.Contains(t, inviteesQuery, "ua.qualified_at")
+
+	recordsQuery := strings.Join(strings.Fields(affiliateInviteRecordsSQL), " ")
+	require.Contains(t, recordsQuery, "ua.qualifying_payment_amount::double precision")
+	require.Contains(t, recordsQuery, "(ua.qualifying_payment_amount >= %s) AS qualified")
+	require.Contains(t, recordsQuery, "ua.qualified_at")
+
+	overviewQuery := strings.Join(strings.Fields(affiliateUserOverviewSQL), " ")
+	require.Contains(t, overviewQuery, "qualifying_payment_amount >= $2")
+}
+
 func TestAffiliateRecordQueriesUseLedgerAuditFields(t *testing.T) {
 	source, err := os.ReadFile("affiliate_repo.go")
 	require.NoError(t, err)
