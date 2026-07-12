@@ -33,31 +33,31 @@
             </div>
           </div>
 
-          <div v-if="config && !config.enabled" class="image-studio-disabled">
-            <Icon name="lock" size="lg" />
-            <div>
-              <strong>{{ t('imageStudio.disabledTitle') }}</strong>
-              <span>{{ t('imageStudio.disabledDescription') }}</span>
-            </div>
-          </div>
-
-          <div v-else-if="options && groupOptions.length === 0" class="image-studio-disabled">
-            <Icon name="lock" size="lg" />
-            <div>
-              <strong>{{ t('imageStudio.noGroupsTitle') }}</strong>
-              <span>{{ t('imageStudio.noGroupsDescription') }}</span>
-            </div>
-          </div>
-
-          <div v-else-if="options && availableAPIKeys.length === 0" class="image-studio-disabled">
-            <Icon name="key" size="lg" />
-            <div>
-              <strong>{{ t('imageStudio.noApiKeysTitle') }}</strong>
-              <span>{{ t('imageStudio.noApiKeysDescription') }}</span>
-            </div>
-          </div>
-
           <div class="image-studio-command-surface">
+            <div v-if="config && !config.enabled" class="image-studio-disabled">
+              <Icon name="lock" size="lg" />
+              <div>
+                <strong>{{ t('imageStudio.disabledTitle') }}</strong>
+                <span>{{ t('imageStudio.disabledDescription') }}</span>
+              </div>
+            </div>
+
+            <div v-else-if="options && groupOptions.length === 0" class="image-studio-disabled">
+              <Icon name="lock" size="lg" />
+              <div>
+                <strong>{{ t('imageStudio.noGroupsTitle') }}</strong>
+                <span>{{ t('imageStudio.noGroupsDescription') }}</span>
+              </div>
+            </div>
+
+            <div v-else-if="options && availableAPIKeys.length === 0" class="image-studio-disabled">
+              <Icon name="key" size="lg" />
+              <div>
+                <strong>{{ t('imageStudio.noApiKeysTitle') }}</strong>
+                <span>{{ t('imageStudio.noApiKeysDescription') }}</span>
+              </div>
+            </div>
+
             <section class="image-studio-prompt-section">
               <div class="image-studio-step-heading">
                 <span>00</span>
@@ -2520,7 +2520,20 @@ onBeforeUnmount(() => {
 
 .image-studio-disabled div {
   display: grid;
+  min-width: 0;
   gap: 0.15rem;
+}
+
+.image-studio-command-surface > .image-studio-disabled {
+  flex: 0 0 auto;
+  margin-top: 0;
+  margin-bottom: 0.95rem;
+  align-items: flex-start;
+}
+
+.image-studio-disabled strong,
+.image-studio-disabled span {
+  overflow-wrap: anywhere;
 }
 
 .image-studio-disabled span,

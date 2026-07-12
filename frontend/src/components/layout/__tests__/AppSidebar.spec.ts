@@ -74,12 +74,12 @@ describe('AppSidebar collapse motion', () => {
 })
 
 describe('AppSidebar image studio entry', () => {
-  it('keeps the image studio entry visible without waiting on an async feature flag', () => {
+  it('uses the shared image studio feature flag', () => {
     expect(componentSource).not.toContain('imageStudioAPI')
     expect(componentSource).not.toContain('refreshImageStudioFlag')
-    expect(componentSource).not.toContain('flagImageStudio')
+    expect(componentSource).toContain('const flagImageStudio = makeSidebarFlag(FeatureFlags.imageStudio)')
     expect(componentSource).toMatch(
-      /\{ path: '\/images', label: t\('nav\.imageStudio'\), icon: SparklesIcon, hideInSimpleMode: true \}/,
+      /\{ path: '\/images', label: t\('nav\.imageStudio'\), icon: SparklesIcon, hideInSimpleMode: true, featureFlag: flagImageStudio \}/,
     )
   })
 })

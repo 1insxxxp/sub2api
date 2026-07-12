@@ -1,4 +1,12 @@
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
+import { readFileSync } from 'node:fs'
+import { dirname, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
+
+const routerSource = readFileSync(
+  resolve(dirname(fileURLToPath(import.meta.url)), '../index.ts'),
+  'utf8',
+)
 
 type NavigationGuard = (
   to: Record<string, any>,
@@ -25,6 +33,7 @@ const appStore = vi.hoisted(() => ({
   cachedPublicSettings: null as null | {
     payment_enabled?: boolean
     risk_control_enabled?: boolean
+    image_studio_enabled?: boolean
     custom_menu_items?: []
   },
   fetchPublicSettings: vi.fn(),
@@ -119,6 +128,12 @@ describe('feature route guard', () => {
     appStore.fetchPublicSettings.mockReset()
   })
 
+  it('marks the image studio route as feature protected', () => {
+    expect(routerSource).toMatch(
+      /path: '\/images',[\s\S]*?requiresImageStudio: true[\s\S]*?titleKey: 'imageStudio\.title'/,
+    )
+  })
+
   it('waits for the first public-settings request before deciding payment access', async () => {
     const deferred = createDeferred<{ payment_enabled: boolean }>()
     appStore.fetchPublicSettings.mockImplementation(async () => {
@@ -142,6 +157,7 @@ describe('feature route guard', () => {
   it.each([
     ['payment', { requiresPayment: true }, '/purchase'],
     ['risk control', { requiresRiskControl: true }, '/admin/risk-control'],
+    ['image studio', { requiresImageStudio: true }, '/images'],
   ])('does not treat a failed %s settings load as explicitly disabled', async (_name, meta, path) => {
     authStore.isAdmin = meta.requiresRiskControl === true
     appStore.fetchPublicSettings.mockResolvedValue(null)
@@ -162,6 +178,7 @@ describe('feature route guard', () => {
       { risk_control_enabled: false },
       '/admin/settings',
     ],
+    ['image studio', { requiresImageStudio: true }, { image_studio_enabled: false }, '/dashboard'],
   ])('redirects when loaded settings explicitly disable %s', async (_name, meta, settings, target) => {
     authStore.isAdmin = meta.requiresRiskControl === true
     appStore.cachedPublicSettings = settings

@@ -7,12 +7,14 @@ const {
   getImageStudioSettings,
   updateImageStudioSettings,
   testImageStudioStorage,
+  fetchPublicSettings,
   showError,
   showSuccess,
 } = vi.hoisted(() => ({
   getImageStudioSettings: vi.fn(),
   updateImageStudioSettings: vi.fn(),
   testImageStudioStorage: vi.fn(),
+  fetchPublicSettings: vi.fn(),
   showError: vi.fn(),
   showSuccess: vi.fn(),
 }))
@@ -31,6 +33,7 @@ vi.mock('@/stores', () => ({
   useAppStore: () => ({
     showError,
     showSuccess,
+    fetchPublicSettings,
   }),
 }))
 
@@ -83,6 +86,7 @@ describe('ImageStudioSettingsPanel', () => {
     getImageStudioSettings.mockReset()
     updateImageStudioSettings.mockReset()
     testImageStudioStorage.mockReset()
+    fetchPublicSettings.mockReset()
     showError.mockReset()
     showSuccess.mockReset()
 
@@ -101,6 +105,7 @@ describe('ImageStudioSettingsPanel', () => {
       configured: true,
       message: 'ok',
     })
+    fetchPublicSettings.mockResolvedValue(null)
   })
 
   it('loads the current image studio configuration', async () => {
@@ -145,6 +150,7 @@ describe('ImageStudioSettingsPanel', () => {
     expect(payload.default_model).toBe('flux-dev')
     expect(payload.storage_driver).toBe('r2')
     expect(payload.r2_public_base_url).toBe('https://images.example.com')
+    expect(fetchPublicSettings).toHaveBeenCalledWith(true)
     expect(showSuccess).toHaveBeenCalledWith('admin.settings.imageStudio.saveSuccess')
   })
 

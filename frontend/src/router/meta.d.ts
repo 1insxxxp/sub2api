@@ -54,6 +54,8 @@ declare module 'vue-router' {
      * @default false
      */
     requiresRiskControl?: boolean
+    /** Whether this route requires the user-facing AI image studio feature. */
+    requiresImageStudio?: boolean
 
     /**
      * i18n key for the page title

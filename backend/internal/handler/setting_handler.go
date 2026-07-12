@@ -103,6 +103,7 @@ func (h *SettingHandler) GetPublicSettings(c *gin.Context) {
 		AffiliateEnabled: settings.AffiliateEnabled,
 
 		RiskControlEnabled: settings.RiskControlEnabled,
+		ImageStudioEnabled: settings.ImageStudioEnabled,
 
 		AllowUserViewErrorRequests: settings.AllowUserViewErrorRequests,
 	})

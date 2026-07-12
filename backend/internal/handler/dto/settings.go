@@ -366,6 +366,8 @@ type PublicSettings struct {
 
 	RiskControlEnabled bool `json:"risk_control_enabled"`
 
+	ImageStudioEnabled bool `json:"image_studio_enabled"`
+
 	AllowUserViewErrorRequests bool `json:"allow_user_view_error_requests"`
 }
 

@@ -1953,6 +1953,29 @@ describe('ImageStudioView', () => {
     expect(wrapper.get('[data-testid="image-studio-generate-button"]').attributes('disabled')).toBeDefined()
   })
 
+  it('keeps the unavailable-group notice in normal flow above the prompt', async () => {
+    getOptions.mockResolvedValueOnce({ ...options, groups: [] })
+
+    const wrapper = mount(ImageStudioView, {
+      global: {
+        stubs: {
+          AppLayout: { template: '<div><slot /></div>' },
+          Icon: true,
+        },
+      },
+    })
+
+    await flushPromises()
+
+    const commandSurface = wrapper.get('.image-studio-command-surface')
+    const unavailableNotice = wrapper.get('.image-studio-disabled')
+    const promptSection = wrapper.get('.image-studio-prompt-section')
+
+    expect(commandSurface.element.contains(unavailableNotice.element)).toBe(true)
+    expect(unavailableNotice.element.nextElementSibling).toBe(promptSection.element)
+    expect(wrapper.text()).toContain('imageStudio.noGroupsTitle')
+  })
+
   it('requires an active image-enabled API key before generating', async () => {
     listKeys.mockResolvedValueOnce({ ...apiKeys, items: [], total: 0, pages: 0 })
 

@@ -114,6 +114,11 @@ export const FeatureFlags = {
     mode: 'opt-in',
     label: 'Risk Control',
   }),
+  imageStudio: defineFlag({
+    key: 'image_studio_enabled',
+    mode: 'opt-in',
+    label: 'AI Image Studio',
+  }),
   affiliate: defineFlag({
     key: 'affiliate_enabled',
     mode: 'opt-in',

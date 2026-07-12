@@ -424,6 +424,7 @@ async function handleSave(): Promise<void> {
   try {
     const updated = await adminAPI.settings.updateImageStudioSettings(buildPayload())
     applySettings(updated)
+    await appStore.fetchPublicSettings(true)
     appStore.showSuccess(t('admin.settings.imageStudio.saveSuccess'))
   } catch (error) {
     appStore.showError(extractApiErrorMessage(error, t('admin.settings.imageStudio.saveFailed')))
