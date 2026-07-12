@@ -4,6 +4,7 @@ package service
 
 import (
 	"context"
+	"errors"
 	"math"
 	"net/http"
 	"testing"
@@ -69,6 +70,78 @@ func TestSettingService_ParseSettings_AffiliateTierDefaultsAndDirtyValueFallback
 	require.Equal(t, 13.0, got.AffiliateSilverRate)
 	require.Equal(t, 35, got.AffiliateGoldInvitees)
 	require.Equal(t, 16.0, got.AffiliateGoldRate)
+}
+
+func TestSettingService_AffiliateTierLegacyBaseNormalizesRatesAndHelpersAgree(t *testing.T) {
+	repo := &affiliateTierReconcileRepoStub{values: map[string]string{
+		SettingKeyAffiliateRebateRate: "20",
+	}}
+	svc := NewSettingService(repo, &config.Config{})
+
+	tier, err := svc.GetAffiliateTierConfigStrict(context.Background())
+	require.NoError(t, err)
+	require.Equal(t, AffiliateTierConfig{
+		QualificationAmount: 50,
+		StandardRate:        20,
+		BronzeInvitees:      3,
+		BronzeRate:          20,
+		SilverInvitees:      10,
+		SilverRate:          20,
+		GoldInvitees:        30,
+		GoldRate:            20,
+	}, tier)
+	require.Equal(t, tier, svc.GetAffiliateTierConfig(context.Background()))
+	require.Equal(t, tier.StandardRate, svc.GetAffiliateRebateRatePercent(context.Background()))
+}
+
+func TestSettingService_AffiliateTierConfiguredAndDirtyHelpersAgree(t *testing.T) {
+	tests := map[string]map[string]string{
+		"configured": {
+			SettingKeyAffiliateRebateRate:          "9",
+			SettingKeyAffiliateQualificationAmount: "60",
+			SettingKeyAffiliateBronzeInvitees:      "4",
+			SettingKeyAffiliateBronzeRate:          "11",
+			SettingKeyAffiliateSilverInvitees:      "12",
+			SettingKeyAffiliateSilverRate:          "13",
+			SettingKeyAffiliateGoldInvitees:        "40",
+			SettingKeyAffiliateGoldRate:            "16",
+		},
+		"dirty": {
+			SettingKeyAffiliateRebateRate:          "not-a-rate",
+			SettingKeyAffiliateQualificationAmount: "not-an-amount",
+			SettingKeyAffiliateBronzeInvitees:      "bad",
+		},
+	}
+
+	for name, values := range tests {
+		t.Run(name, func(t *testing.T) {
+			svc := NewSettingService(&affiliateTierReconcileRepoStub{values: values}, &config.Config{})
+			tier := svc.GetAffiliateTierConfig(context.Background())
+			require.Equal(t, tier.StandardRate, svc.GetAffiliateRebateRatePercent(context.Background()))
+		})
+	}
+}
+
+func TestSettingService_GetAffiliateTierConfigStrictReturnsRepositoryError(t *testing.T) {
+	wantErr := errors.New("settings unavailable")
+	svc := NewSettingService(&affiliateTierReadErrorRepoStub{err: wantErr}, &config.Config{})
+
+	_, err := svc.GetAffiliateTierConfigStrict(context.Background())
+
+	require.ErrorIs(t, err, wantErr)
+	require.Equal(t, DefaultAffiliateTierConfig(), svc.GetAffiliateTierConfig(context.Background()))
+	require.Equal(t, AffiliateRebateRateDefault, svc.GetAffiliateRebateRatePercent(context.Background()))
+}
+
+func TestSettingService_GetAffiliateTierConfigStrictRejectsDirtyStoredConfig(t *testing.T) {
+	svc := NewSettingService(&affiliateTierReconcileRepoStub{values: map[string]string{
+		SettingKeyAffiliateRebateRate: "not-a-rate",
+	}}, &config.Config{})
+
+	_, err := svc.GetAffiliateTierConfigStrict(context.Background())
+
+	require.Error(t, err)
+	require.Contains(t, err.Error(), SettingKeyAffiliateRebateRate)
 }
 
 func TestSettingService_UpdateSettings_AffiliateTierPersistsCompleteConfig(t *testing.T) {
@@ -183,7 +256,37 @@ func (s *affiliateTierReconcileRepoStub) Set(_ context.Context, key, value strin
 }
 
 func (s *affiliateTierReconcileRepoStub) GetMultiple(context.Context, []string) (map[string]string, error) {
-	panic("unexpected GetMultiple call")
+	out := make(map[string]string, len(s.values))
+	for key, value := range s.values {
+		out[key] = value
+	}
+	return out, nil
+}
+
+type affiliateTierReadErrorRepoStub struct {
+	err error
+}
+
+func (s *affiliateTierReadErrorRepoStub) Get(context.Context, string) (*Setting, error) {
+	return nil, s.err
+}
+func (s *affiliateTierReadErrorRepoStub) GetValue(context.Context, string) (string, error) {
+	return "", s.err
+}
+func (s *affiliateTierReadErrorRepoStub) Set(context.Context, string, string) error {
+	return s.err
+}
+func (s *affiliateTierReadErrorRepoStub) GetMultiple(context.Context, []string) (map[string]string, error) {
+	return nil, s.err
+}
+func (s *affiliateTierReadErrorRepoStub) SetMultiple(context.Context, map[string]string) error {
+	return s.err
+}
+func (s *affiliateTierReadErrorRepoStub) GetAll(context.Context) (map[string]string, error) {
+	return nil, s.err
+}
+func (s *affiliateTierReadErrorRepoStub) Delete(context.Context, string) error {
+	return s.err
 }
 
 func (s *affiliateTierReconcileRepoStub) SetMultiple(context.Context, map[string]string) error {

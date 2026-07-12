@@ -81,15 +81,31 @@ func (s *SettingService) IsAffiliateEnabled(ctx context.Context) bool {
 // 解析失败、缺失或越界都回退到 AffiliateRebateRateDefault — 该比例从不抛错，
 // 调用方只关心一个可用的数值。
 func (s *SettingService) GetAffiliateRebateRatePercent(ctx context.Context) float64 {
-	raw, err := s.settingRepo.GetValue(ctx, SettingKeyAffiliateRebateRate)
-	if err != nil {
-		return AffiliateRebateRateDefault
-	}
-	return parseAffiliateRate(raw, AffiliateRebateRateDefault)
+	return s.GetAffiliateTierConfig(ctx).StandardRate
 }
 
 func (s *SettingService) GetAffiliateTierConfig(ctx context.Context) AffiliateTierConfig {
-	keys := []string{
+	settings, err := s.settingRepo.GetMultiple(ctx, affiliateTierSettingKeys())
+	if err != nil {
+		return DefaultAffiliateTierConfig()
+	}
+	return parseAffiliateTierConfig(settings)
+}
+
+func (s *SettingService) GetAffiliateTierConfigStrict(ctx context.Context) (AffiliateTierConfig, error) {
+	settings, err := s.settingRepo.GetMultiple(ctx, affiliateTierSettingKeys())
+	if err != nil {
+		return AffiliateTierConfig{}, fmt.Errorf("get affiliate tier settings: %w", err)
+	}
+	config, err := parseAffiliateTierConfigStrict(settings)
+	if err != nil {
+		return AffiliateTierConfig{}, fmt.Errorf("parse affiliate tier settings: %w", err)
+	}
+	return config, nil
+}
+
+func affiliateTierSettingKeys() []string {
+	return []string{
 		SettingKeyAffiliateRebateRate,
 		SettingKeyAffiliateQualificationAmount,
 		SettingKeyAffiliateBronzeInvitees,
@@ -99,11 +115,6 @@ func (s *SettingService) GetAffiliateTierConfig(ctx context.Context) AffiliateTi
 		SettingKeyAffiliateGoldInvitees,
 		SettingKeyAffiliateGoldRate,
 	}
-	settings, err := s.settingRepo.GetMultiple(ctx, keys)
-	if err != nil {
-		return DefaultAffiliateTierConfig()
-	}
-	return parseAffiliateTierConfig(settings)
 }
 
 func (s *SettingService) IsAffiliateTierReconcileRequired(ctx context.Context) (bool, error) {

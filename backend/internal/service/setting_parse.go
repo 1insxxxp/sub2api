@@ -869,45 +869,102 @@ func clampAffiliateRebateRate(value float64) float64 {
 }
 
 func parseAffiliateTierConfig(settings map[string]string) AffiliateTierConfig {
-	defaults := DefaultAffiliateTierConfig()
-	config := AffiliateTierConfig{
-		QualificationAmount: parsePositiveFiniteFloat(settings[SettingKeyAffiliateQualificationAmount], defaults.QualificationAmount),
-		StandardRate:        parseAffiliateRate(settings[SettingKeyAffiliateRebateRate], defaults.StandardRate),
-		BronzeInvitees:      parsePositiveInt(settings[SettingKeyAffiliateBronzeInvitees], defaults.BronzeInvitees),
-		BronzeRate:          parseAffiliateRate(settings[SettingKeyAffiliateBronzeRate], defaults.BronzeRate),
-		SilverInvitees:      parsePositiveInt(settings[SettingKeyAffiliateSilverInvitees], defaults.SilverInvitees),
-		SilverRate:          parseAffiliateRate(settings[SettingKeyAffiliateSilverRate], defaults.SilverRate),
-		GoldInvitees:        parsePositiveInt(settings[SettingKeyAffiliateGoldInvitees], defaults.GoldInvitees),
-		GoldRate:            parseAffiliateRate(settings[SettingKeyAffiliateGoldRate], defaults.GoldRate),
-	}
-	if validateAffiliateTierConfig(config) != nil {
-		return defaults
-	}
+	config, _ := normalizeAffiliateTierConfig(settings, false)
 	return config
 }
 
-func parsePositiveFiniteFloat(raw string, fallback float64) float64 {
-	value, err := strconv.ParseFloat(strings.TrimSpace(raw), 64)
-	if err != nil || value <= 0 || math.IsNaN(value) || math.IsInf(value, 0) {
-		return fallback
-	}
-	return value
+func parseAffiliateTierConfigStrict(settings map[string]string) (AffiliateTierConfig, error) {
+	return normalizeAffiliateTierConfig(settings, true)
 }
 
-func parsePositiveInt(raw string, fallback int) int {
+func normalizeAffiliateTierConfig(settings map[string]string, strict bool) (AffiliateTierConfig, error) {
+	defaults := DefaultAffiliateTierConfig()
+	qualificationAmount, err := parseAffiliateFloatSetting(settings, SettingKeyAffiliateQualificationAmount, defaults.QualificationAmount, func(value float64) bool {
+		return value > 0 && !math.IsNaN(value) && !math.IsInf(value, 0)
+	}, strict)
+	if err != nil {
+		return AffiliateTierConfig{}, err
+	}
+	standardRate, err := parseAffiliateFloatSetting(settings, SettingKeyAffiliateRebateRate, defaults.StandardRate, validAffiliateRate, strict)
+	if err != nil {
+		return AffiliateTierConfig{}, err
+	}
+	bronzeInvitees, err := parseAffiliateIntSetting(settings, SettingKeyAffiliateBronzeInvitees, defaults.BronzeInvitees, strict)
+	if err != nil {
+		return AffiliateTierConfig{}, err
+	}
+	bronzeRate, err := parseAffiliateFloatSetting(settings, SettingKeyAffiliateBronzeRate, math.Max(standardRate, defaults.BronzeRate), validAffiliateRate, strict)
+	if err != nil {
+		return AffiliateTierConfig{}, err
+	}
+	silverInvitees, err := parseAffiliateIntSetting(settings, SettingKeyAffiliateSilverInvitees, defaults.SilverInvitees, strict)
+	if err != nil {
+		return AffiliateTierConfig{}, err
+	}
+	silverRate, err := parseAffiliateFloatSetting(settings, SettingKeyAffiliateSilverRate, math.Max(bronzeRate, defaults.SilverRate), validAffiliateRate, strict)
+	if err != nil {
+		return AffiliateTierConfig{}, err
+	}
+	goldInvitees, err := parseAffiliateIntSetting(settings, SettingKeyAffiliateGoldInvitees, defaults.GoldInvitees, strict)
+	if err != nil {
+		return AffiliateTierConfig{}, err
+	}
+	goldRate, err := parseAffiliateFloatSetting(settings, SettingKeyAffiliateGoldRate, math.Max(silverRate, defaults.GoldRate), validAffiliateRate, strict)
+	if err != nil {
+		return AffiliateTierConfig{}, err
+	}
+
+	config := AffiliateTierConfig{
+		QualificationAmount: qualificationAmount,
+		StandardRate:        standardRate,
+		BronzeInvitees:      bronzeInvitees,
+		BronzeRate:          bronzeRate,
+		SilverInvitees:      silverInvitees,
+		SilverRate:          silverRate,
+		GoldInvitees:        goldInvitees,
+		GoldRate:            goldRate,
+	}
+	if err := validateAffiliateTierConfig(config); err != nil {
+		if strict {
+			return AffiliateTierConfig{}, err
+		}
+		return defaults, nil
+	}
+	return config, nil
+}
+
+func parseAffiliateFloatSetting(settings map[string]string, key string, fallback float64, valid func(float64) bool, strict bool) (float64, error) {
+	raw, ok := settings[key]
+	if !ok {
+		return fallback, nil
+	}
+	value, err := strconv.ParseFloat(strings.TrimSpace(raw), 64)
+	if err != nil || !valid(value) {
+		if strict {
+			return 0, fmt.Errorf("invalid %s", key)
+		}
+		return fallback, nil
+	}
+	return value, nil
+}
+
+func parseAffiliateIntSetting(settings map[string]string, key string, fallback int, strict bool) (int, error) {
+	raw, ok := settings[key]
+	if !ok {
+		return fallback, nil
+	}
 	value, err := strconv.Atoi(strings.TrimSpace(raw))
 	if err != nil || value <= 0 {
-		return fallback
+		if strict {
+			return 0, fmt.Errorf("invalid %s", key)
+		}
+		return fallback, nil
 	}
-	return value
+	return value, nil
 }
 
-func parseAffiliateRate(raw string, fallback float64) float64 {
-	value, err := strconv.ParseFloat(strings.TrimSpace(raw), 64)
-	if err != nil || value < AffiliateRebateRateMin || value > AffiliateRebateRateMax || math.IsNaN(value) || math.IsInf(value, 0) {
-		return fallback
-	}
-	return value
+func validAffiliateRate(value float64) bool {
+	return value >= AffiliateRebateRateMin && value <= AffiliateRebateRateMax && !math.IsNaN(value) && !math.IsInf(value, 0)
 }
 
 func isFalseSettingValue(value string) bool {
