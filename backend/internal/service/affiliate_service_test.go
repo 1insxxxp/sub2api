@@ -4,46 +4,233 @@ package service
 
 import (
 	"context"
+	"errors"
 	"math"
+	"strconv"
+	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 )
 
-// TestResolveRebateRatePercent_PerUserOverride verifies that per-inviter
-// AffRebateRatePercent overrides the global rate, that NULL falls back to the
-// global rate, and that out-of-range exclusive rates are clamped silently.
-//
-// SettingService is left nil here so globalRebateRatePercent returns the
-// documented default (AffiliateRebateRateDefault = 20%) — this exercises the
-// fallback path without spinning up a settings stub.
+// TestResolveRebateRatePercent_PerUserOverride verifies custom > automatic
+// priority, including dirty custom values and clearing an override.
 func TestResolveRebateRatePercent_PerUserOverride(t *testing.T) {
-	t.Parallel()
-	svc := &AffiliateService{}
+	repo := &affiliateTierServiceRepoStub{qualifiedCount: 10}
+	settings := newAffiliateTierServiceSettingRepo()
+	svc := NewAffiliateService(repo, NewSettingService(settings, nil), nil, nil)
 
-	// nil exclusive rate → falls back to global default (20%)
-	require.InDelta(t, AffiliateRebateRateDefault,
-		svc.resolveRebateRatePercent(context.Background(), &AffiliateSummary{}), 1e-9)
-
-	// exclusive rate set → overrides global
 	rate := 50.0
-	require.InDelta(t, 50.0,
-		svc.resolveRebateRatePercent(context.Background(), &AffiliateSummary{AffRebateRatePercent: &rate}), 1e-9)
+	got, err := svc.resolveRebateRatePercent(context.Background(), &AffiliateSummary{UserID: 1, AffRebateRatePercent: &rate})
+	require.NoError(t, err)
+	require.Equal(t, 50.0, got)
 
-	// exclusive rate 0 → returns 0 (no rebate, intentional)
-	zero := 0.0
-	require.InDelta(t, 0.0,
-		svc.resolveRebateRatePercent(context.Background(), &AffiliateSummary{AffRebateRatePercent: &zero}), 1e-9)
+	for _, dirty := range []float64{math.NaN(), math.Inf(1), -5, 250} {
+		dirty := dirty
+		got, err = svc.resolveRebateRatePercent(context.Background(), &AffiliateSummary{UserID: 1, AffRebateRatePercent: &dirty})
+		require.NoError(t, err)
+		require.Equal(t, 12.0, got, "dirty custom values must fall back to automatic silver rate")
+	}
 
-	// exclusive rate above max → clamped to Max
-	tooHigh := 250.0
-	require.InDelta(t, AffiliateRebateRateMax,
-		svc.resolveRebateRatePercent(context.Background(), &AffiliateSummary{AffRebateRatePercent: &tooHigh}), 1e-9)
+	got, err = svc.resolveRebateRatePercent(context.Background(), &AffiliateSummary{UserID: 1})
+	require.NoError(t, err)
+	require.Equal(t, 12.0, got, "clearing custom rate must restore automatic tier")
+}
 
-	// exclusive rate below min → clamped to Min
-	tooLow := -5.0
-	require.InDelta(t, AffiliateRebateRateMin,
-		svc.resolveRebateRatePercent(context.Background(), &AffiliateSummary{AffRebateRatePercent: &tooLow}), 1e-9)
+func TestAffiliateService_TierSnapshotBoundaries(t *testing.T) {
+	tests := []struct {
+		count     int
+		level     AffiliateTier
+		rate      float64
+		next      int
+		remaining int
+	}{
+		{0, AffiliateTierStandard, 8, 3, 3},
+		{2, AffiliateTierStandard, 8, 3, 1},
+		{3, AffiliateTierBronze, 10, 10, 7},
+		{9, AffiliateTierBronze, 10, 10, 1},
+		{10, AffiliateTierSilver, 12, 30, 20},
+		{29, AffiliateTierSilver, 12, 30, 1},
+		{30, AffiliateTierGold, 15, 0, 0},
+	}
+	for _, tt := range tests {
+		t.Run(strconv.Itoa(tt.count), func(t *testing.T) {
+			repo := &affiliateTierServiceRepoStub{qualifiedCount: tt.count}
+			svc := NewAffiliateService(repo, NewSettingService(newAffiliateTierServiceSettingRepo(), nil), nil, nil)
+			snapshot, err := svc.GetAffiliateTierSnapshot(context.Background(), 42)
+			require.NoError(t, err)
+			require.Equal(t, tt.level, snapshot.Level)
+			require.Equal(t, tt.rate, snapshot.AutomaticRatePercent)
+			require.Equal(t, tt.count, snapshot.QualifiedInviteeCount)
+			require.Equal(t, tt.next, snapshot.NextTierThreshold)
+			require.Equal(t, tt.remaining, snapshot.RemainingToNextTier)
+			require.Equal(t, 50.0, repo.countThreshold)
+		})
+	}
+}
+
+func TestAffiliateService_TierStrictConfigErrorPropagates(t *testing.T) {
+	wantErr := errors.New("settings unavailable")
+	settings := newAffiliateTierServiceSettingRepo()
+	settings.getMultipleErr = wantErr
+	svc := NewAffiliateService(&affiliateTierServiceRepoStub{}, NewSettingService(settings, nil), nil, nil)
+
+	_, err := svc.GetAffiliateTierSnapshot(context.Background(), 42)
+	require.ErrorIs(t, err, wantErr)
+}
+
+func TestAffiliateService_QualificationReconcileMarkerClearsOnlyAfterSuccess(t *testing.T) {
+	t.Run("success", func(t *testing.T) {
+		settings := newAffiliateTierServiceSettingRepo()
+		settings.values[SettingKeyAffiliateTierReconcileRequired] = "true"
+		repo := &affiliateTierServiceRepoStub{qualifiedCount: 3}
+		svc := NewAffiliateService(repo, NewSettingService(settings, nil), nil, nil)
+
+		_, err := svc.GetAffiliateTierSnapshot(context.Background(), 42)
+		require.NoError(t, err)
+		require.Equal(t, 1, repo.reconcileCalls)
+		require.Equal(t, "false", settings.values[SettingKeyAffiliateTierReconcileRequired])
+	})
+
+	t.Run("failure", func(t *testing.T) {
+		settings := newAffiliateTierServiceSettingRepo()
+		settings.values[SettingKeyAffiliateTierReconcileRequired] = "true"
+		wantErr := errors.New("reconcile failed")
+		repo := &affiliateTierServiceRepoStub{reconcileErr: wantErr}
+		svc := NewAffiliateService(repo, NewSettingService(settings, nil), nil, nil)
+
+		_, err := svc.GetAffiliateTierSnapshot(context.Background(), 42)
+		require.ErrorIs(t, err, wantErr)
+		require.Equal(t, "true", settings.values[SettingKeyAffiliateTierReconcileRequired])
+	})
+
+	t.Run("marker clear failure", func(t *testing.T) {
+		settings := newAffiliateTierServiceSettingRepo()
+		settings.values[SettingKeyAffiliateTierReconcileRequired] = "true"
+		wantErr := errors.New("setting write failed")
+		settings.setErr = wantErr
+		repo := &affiliateTierServiceRepoStub{}
+		svc := NewAffiliateService(repo, NewSettingService(settings, nil), nil, nil)
+
+		_, err := svc.GetAffiliateTierSnapshot(context.Background(), 42)
+		require.ErrorIs(t, err, wantErr)
+		require.Equal(t, 1, repo.reconcileCalls)
+		require.Equal(t, "true", settings.values[SettingKeyAffiliateTierReconcileRequired])
+	})
+}
+
+func TestAffiliateService_QualificationReconcileMarkerConcurrentReadsSingleRun(t *testing.T) {
+	settings := newAffiliateTierServiceSettingRepo()
+	settings.values[SettingKeyAffiliateTierReconcileRequired] = "true"
+	repo := &affiliateTierServiceRepoStub{reconcileStarted: make(chan struct{}), releaseReconcile: make(chan struct{})}
+	svc := NewAffiliateService(repo, NewSettingService(settings, nil), nil, nil)
+
+	const readers = 8
+	errs := make(chan error, readers)
+	for i := 0; i < readers; i++ {
+		go func() {
+			_, err := svc.GetAffiliateTierSnapshot(context.Background(), 42)
+			errs <- err
+		}()
+	}
+	<-repo.reconcileStarted
+	close(repo.releaseReconcile)
+	for i := 0; i < readers; i++ {
+		require.NoError(t, <-errs)
+	}
+	require.Equal(t, 1, repo.reconcileCallCount())
+}
+
+type affiliateTierServiceRepoStub struct {
+	AffiliateRepository
+	mu               sync.Mutex
+	qualifiedCount   int
+	countThreshold   float64
+	reconcileCalls   int
+	reconcileErr     error
+	reconcileStarted chan struct{}
+	releaseReconcile chan struct{}
+}
+
+func (r *affiliateTierServiceRepoStub) CountQualifiedInvitees(_ context.Context, _ int64, threshold float64) (int, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.countThreshold = threshold
+	return r.qualifiedCount, nil
+}
+
+func (r *affiliateTierServiceRepoStub) ReconcileAllAffiliateQualifications(context.Context, float64, int) error {
+	r.mu.Lock()
+	r.reconcileCalls++
+	call := r.reconcileCalls
+	r.mu.Unlock()
+	if call == 1 && r.reconcileStarted != nil {
+		close(r.reconcileStarted)
+		<-r.releaseReconcile
+	}
+	return r.reconcileErr
+}
+
+func (r *affiliateTierServiceRepoStub) reconcileCallCount() int {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.reconcileCalls
+}
+
+type affiliateTierServiceSettingRepo struct {
+	SettingRepository
+	mu             sync.Mutex
+	values         map[string]string
+	getMultipleErr error
+	setErr         error
+}
+
+func newAffiliateTierServiceSettingRepo() *affiliateTierServiceSettingRepo {
+	return &affiliateTierServiceSettingRepo{values: map[string]string{
+		SettingKeyAffiliateRebateRate:          "8",
+		SettingKeyAffiliateQualificationAmount: "50",
+		SettingKeyAffiliateBronzeInvitees:      "3",
+		SettingKeyAffiliateBronzeRate:          "10",
+		SettingKeyAffiliateSilverInvitees:      "10",
+		SettingKeyAffiliateSilverRate:          "12",
+		SettingKeyAffiliateGoldInvitees:        "30",
+		SettingKeyAffiliateGoldRate:            "15",
+	}}
+}
+
+func (r *affiliateTierServiceSettingRepo) GetMultiple(_ context.Context, keys []string) (map[string]string, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.getMultipleErr != nil {
+		return nil, r.getMultipleErr
+	}
+	out := make(map[string]string, len(keys))
+	for _, key := range keys {
+		if value, ok := r.values[key]; ok {
+			out[key] = value
+		}
+	}
+	return out, nil
+}
+
+func (r *affiliateTierServiceSettingRepo) GetValue(_ context.Context, key string) (string, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	value, ok := r.values[key]
+	if !ok {
+		return "", ErrSettingNotFound
+	}
+	return value, nil
+}
+
+func (r *affiliateTierServiceSettingRepo) Set(_ context.Context, key, value string) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.setErr != nil {
+		return r.setErr
+	}
+	r.values[key] = value
+	return nil
 }
 
 // TestIsEnabled_NilSettingServiceReturnsDefault verifies that IsEnabled

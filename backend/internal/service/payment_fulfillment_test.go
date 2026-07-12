@@ -108,6 +108,18 @@ func (r *paymentFulfillmentAffiliateRepoStub) ListInvitees(context.Context, int6
 	panic("unexpected ListInvitees call")
 }
 
+func (r *paymentFulfillmentAffiliateRepoStub) ReconcileInviteeQualification(context.Context, int64, float64) (*AffiliateQualification, error) {
+	panic("unexpected ReconcileInviteeQualification call")
+}
+
+func (r *paymentFulfillmentAffiliateRepoStub) CountQualifiedInvitees(context.Context, int64, float64) (int, error) {
+	return 0, nil
+}
+
+func (r *paymentFulfillmentAffiliateRepoStub) ReconcileAllAffiliateQualifications(context.Context, float64, int) error {
+	return nil
+}
+
 func (r *paymentFulfillmentAffiliateRepoStub) UpdateUserAffCode(context.Context, int64, string) error {
 	panic("unexpected UpdateUserAffCode call")
 }

@@ -6,6 +6,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"math"
 	"strings"
 	"time"
 
@@ -21,6 +22,70 @@ const (
 )
 
 var affiliateCodeCharset = []byte("ABCDEFGHJKLMNPQRSTUVWXYZ23456789")
+
+const affiliateQualificationReconcileSQL = `
+WITH locked AS (
+    SELECT qualifying_payment_amount, qualified_at
+    FROM user_affiliates
+    WHERE user_id = $1
+    FOR UPDATE
+),
+authoritative_orders AS (
+    SELECT po.id AS order_id,
+           COALESCE(po.completed_at, po.paid_at, po.created_at) AS payment_at,
+           CASE
+               WHEN po.status IN (
+                   'COMPLETED',
+                   'REFUND_REQUESTED',
+                   'REFUNDING',
+                   'REFUND_PENDING',
+                   'REFUND_FAILED'
+               ) THEN GREATEST(po.amount, 0)
+               WHEN po.status = 'PARTIALLY_REFUNDED'
+                   THEN GREATEST(po.amount - po.refund_amount, 0)
+               WHEN po.status = 'REFUNDED' THEN 0
+               ELSE 0
+           END AS net_amount
+    FROM payment_orders po
+    CROSS JOIN locked
+    WHERE po.user_id = $1
+      AND po.order_type IN ('balance', 'subscription')
+),
+running_payments AS (
+    SELECT payment_at,
+           SUM(net_amount) OVER (
+               ORDER BY payment_at, order_id
+               ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
+           ) AS cumulative_amount
+    FROM authoritative_orders
+),
+totals AS (
+    SELECT GREATEST(COALESCE((SELECT SUM(net_amount) FROM authoritative_orders), 0), 0)::DECIMAL(20,8) AS amount,
+           (SELECT MIN(payment_at) FROM running_payments WHERE cumulative_amount >= $2) AS qualified_at
+),
+updated AS (
+    UPDATE user_affiliates ua
+    SET qualifying_payment_amount = totals.amount,
+        qualified_at = CASE
+            WHEN totals.amount >= $2 AND locked.qualifying_payment_amount < $2
+                THEN COALESCE(totals.qualified_at, NOW())
+            WHEN totals.amount >= $2 AND locked.qualified_at IS NULL
+                THEN COALESCE(totals.qualified_at, NOW())
+            WHEN totals.amount < $2 THEN NULL
+            ELSE locked.qualified_at
+        END,
+        updated_at = NOW()
+    FROM locked, totals
+    WHERE ua.user_id = $1
+    RETURNING ua.qualifying_payment_amount::double precision, ua.qualified_at
+)
+SELECT qualifying_payment_amount, qualified_at FROM updated`
+
+const affiliateQualificationCountSQL = `
+SELECT COUNT(*)::integer
+FROM user_affiliates
+WHERE inviter_id = $1
+  AND qualifying_payment_amount >= $2`
 
 const affiliateUserOverviewSQL = `
 SELECT ua.user_id,
@@ -351,7 +416,9 @@ SELECT ua.user_id,
        COALESCE(u.email, ''),
        COALESCE(u.username, ''),
        ua.created_at,
-       COALESCE(SUM(ual.amount), 0)::double precision AS total_rebate
+       COALESCE(SUM(ual.amount), 0)::double precision AS total_rebate,
+       ua.qualifying_payment_amount::double precision,
+       ua.qualified_at
 FROM user_affiliates ua
 LEFT JOIN users u ON u.id = ua.user_id
 LEFT JOIN user_affiliate_ledger ual
@@ -359,7 +426,7 @@ LEFT JOIN user_affiliate_ledger ual
       AND ual.source_user_id = ua.user_id
       AND ual.action = 'accrue'
 WHERE ua.inviter_id = $1
-GROUP BY ua.user_id, u.email, u.username, ua.created_at
+GROUP BY ua.user_id, u.email, u.username, ua.created_at, ua.qualifying_payment_amount, ua.qualified_at
 ORDER BY ua.created_at DESC
 LIMIT $2`, inviterID, limit)
 	if err != nil {
@@ -371,7 +438,7 @@ LIMIT $2`, inviterID, limit)
 	for rows.Next() {
 		var item service.AffiliateInvitee
 		var createdAt time.Time
-		if err := rows.Scan(&item.UserID, &item.Email, &item.Username, &createdAt, &item.TotalRebate); err != nil {
+		if err := rows.Scan(&item.UserID, &item.Email, &item.Username, &createdAt, &item.TotalRebate, &item.QualifyingPaymentAmount, &item.QualifiedAt); err != nil {
 			return nil, err
 		}
 		item.CreatedAt = &createdAt
@@ -381,6 +448,107 @@ LIMIT $2`, inviterID, limit)
 		return nil, err
 	}
 	return invitees, nil
+}
+
+func (r *affiliateRepository) ReconcileInviteeQualification(ctx context.Context, inviteeUserID int64, threshold float64) (*service.AffiliateQualification, error) {
+	if inviteeUserID <= 0 {
+		return nil, service.ErrUserNotFound
+	}
+	if threshold <= 0 || math.IsNaN(threshold) || math.IsInf(threshold, 0) {
+		return nil, fmt.Errorf("invalid affiliate qualification threshold")
+	}
+
+	var qualification *service.AffiliateQualification
+	err := r.withTx(ctx, func(txCtx context.Context, txClient *dbent.Client) error {
+		rows, err := txClient.QueryContext(txCtx, affiliateQualificationReconcileSQL, inviteeUserID, threshold)
+		if err != nil {
+			return fmt.Errorf("reconcile affiliate qualification: %w", err)
+		}
+		defer func() { _ = rows.Close() }()
+		if !rows.Next() {
+			if err := rows.Err(); err != nil {
+				return err
+			}
+			return service.ErrAffiliateProfileNotFound
+		}
+		out := &service.AffiliateQualification{InviteeUserID: inviteeUserID}
+		if err := rows.Scan(&out.QualifyingPaymentAmount, &out.QualifiedAt); err != nil {
+			return err
+		}
+		qualification = out
+		return rows.Err()
+	})
+	if err != nil {
+		return nil, err
+	}
+	return qualification, nil
+}
+
+func (r *affiliateRepository) CountQualifiedInvitees(ctx context.Context, inviterID int64, threshold float64) (int, error) {
+	if inviterID <= 0 {
+		return 0, service.ErrUserNotFound
+	}
+	if threshold <= 0 || math.IsNaN(threshold) || math.IsInf(threshold, 0) {
+		return 0, fmt.Errorf("invalid affiliate qualification threshold")
+	}
+	client := clientFromContext(ctx, r.client)
+	rows, err := client.QueryContext(ctx, affiliateQualificationCountSQL, inviterID, threshold)
+	if err != nil {
+		return 0, fmt.Errorf("count qualified affiliate invitees: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+	if !rows.Next() {
+		return 0, rows.Err()
+	}
+	var count int
+	if err := rows.Scan(&count); err != nil {
+		return 0, err
+	}
+	return count, rows.Err()
+}
+
+func (r *affiliateRepository) ReconcileAllAffiliateQualifications(ctx context.Context, threshold float64, batchSize int) error {
+	if threshold <= 0 || math.IsNaN(threshold) || math.IsInf(threshold, 0) {
+		return fmt.Errorf("invalid affiliate qualification threshold")
+	}
+	if batchSize <= 0 {
+		batchSize = 200
+	}
+
+	var lastUserID int64
+	for {
+		client := clientFromContext(ctx, r.client)
+		rows, err := client.QueryContext(ctx, `
+SELECT user_id
+FROM user_affiliates
+WHERE inviter_id IS NOT NULL AND user_id > $1
+ORDER BY user_id
+LIMIT $2`, lastUserID, batchSize)
+		if err != nil {
+			return fmt.Errorf("list affiliate qualifications for reconcile: %w", err)
+		}
+		ids := make([]int64, 0, batchSize)
+		for rows.Next() {
+			var userID int64
+			if err := rows.Scan(&userID); err != nil {
+				_ = rows.Close()
+				return err
+			}
+			ids = append(ids, userID)
+		}
+		if err := rows.Close(); err != nil {
+			return err
+		}
+		if len(ids) == 0 {
+			return nil
+		}
+		for _, userID := range ids {
+			if _, err := r.ReconcileInviteeQualification(ctx, userID, threshold); err != nil {
+				return fmt.Errorf("reconcile affiliate qualification for user %d: %w", userID, err)
+			}
+			lastUserID = userID
+		}
+	}
 }
 
 func (r *affiliateRepository) ListAffiliateInviteRecords(ctx context.Context, filter service.AffiliateRecordFilter) ([]service.AffiliateInviteRecord, int64, error) {
@@ -789,6 +957,8 @@ SELECT user_id,
        aff_quota::double precision,
        aff_frozen_quota::double precision,
        aff_history_quota::double precision,
+       qualifying_payment_amount::double precision,
+       qualified_at,
        created_at,
        updated_at
 FROM user_affiliates
@@ -817,6 +987,8 @@ WHERE user_id = $1`, userID)
 		&out.AffQuota,
 		&out.AffFrozenQuota,
 		&out.AffHistoryQuota,
+		&out.QualifyingPaymentAmount,
+		&out.QualifiedAt,
 		&out.CreatedAt,
 		&out.UpdatedAt,
 	); err != nil {
@@ -843,6 +1015,8 @@ SELECT user_id,
        aff_quota::double precision,
        aff_frozen_quota::double precision,
        aff_history_quota::double precision,
+       qualifying_payment_amount::double precision,
+       qualified_at,
        created_at,
        updated_at
 FROM user_affiliates
@@ -873,6 +1047,8 @@ LIMIT 1`, strings.ToUpper(strings.TrimSpace(code)))
 		&out.AffQuota,
 		&out.AffFrozenQuota,
 		&out.AffHistoryQuota,
+		&out.QualifyingPaymentAmount,
+		&out.QualifiedAt,
 		&out.CreatedAt,
 		&out.UpdatedAt,
 	); err != nil {

@@ -3,8 +3,10 @@ package service
 import (
 	"context"
 	"errors"
+	"fmt"
 	"math"
 	"strings"
+	"sync"
 	"time"
 
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
@@ -58,25 +60,35 @@ func isValidAffiliateCodeFormat(code string) bool {
 }
 
 type AffiliateSummary struct {
-	UserID               int64     `json:"user_id"`
-	AffCode              string    `json:"aff_code"`
-	AffCodeCustom        bool      `json:"aff_code_custom"`
-	AffRebateRatePercent *float64  `json:"aff_rebate_rate_percent,omitempty"`
-	InviterID            *int64    `json:"inviter_id,omitempty"`
-	AffCount             int       `json:"aff_count"`
-	AffQuota             float64   `json:"aff_quota"`
-	AffFrozenQuota       float64   `json:"aff_frozen_quota"`
-	AffHistoryQuota      float64   `json:"aff_history_quota"`
-	CreatedAt            time.Time `json:"created_at"`
-	UpdatedAt            time.Time `json:"updated_at"`
+	UserID                  int64      `json:"user_id"`
+	AffCode                 string     `json:"aff_code"`
+	AffCodeCustom           bool       `json:"aff_code_custom"`
+	AffRebateRatePercent    *float64   `json:"aff_rebate_rate_percent,omitempty"`
+	InviterID               *int64     `json:"inviter_id,omitempty"`
+	AffCount                int        `json:"aff_count"`
+	AffQuota                float64    `json:"aff_quota"`
+	AffFrozenQuota          float64    `json:"aff_frozen_quota"`
+	AffHistoryQuota         float64    `json:"aff_history_quota"`
+	QualifyingPaymentAmount float64    `json:"qualifying_payment_amount"`
+	QualifiedAt             *time.Time `json:"qualified_at,omitempty"`
+	CreatedAt               time.Time  `json:"created_at"`
+	UpdatedAt               time.Time  `json:"updated_at"`
 }
 
 type AffiliateInvitee struct {
-	UserID      int64      `json:"user_id"`
-	Email       string     `json:"email"`
-	Username    string     `json:"username"`
-	CreatedAt   *time.Time `json:"created_at,omitempty"`
-	TotalRebate float64    `json:"total_rebate"`
+	UserID                  int64      `json:"user_id"`
+	Email                   string     `json:"email"`
+	Username                string     `json:"username"`
+	CreatedAt               *time.Time `json:"created_at,omitempty"`
+	TotalRebate             float64    `json:"total_rebate"`
+	QualifyingPaymentAmount float64    `json:"qualifying_payment_amount"`
+	QualifiedAt             *time.Time `json:"qualified_at,omitempty"`
+}
+
+type AffiliateQualification struct {
+	InviteeUserID           int64      `json:"invitee_user_id"`
+	QualifyingPaymentAmount float64    `json:"qualifying_payment_amount"`
+	QualifiedAt             *time.Time `json:"qualified_at,omitempty"`
 }
 
 type AffiliateDetail struct {
@@ -88,10 +100,19 @@ type AffiliateDetail struct {
 	AffFrozenQuota  float64 `json:"aff_frozen_quota"`
 	AffHistoryQuota float64 `json:"aff_history_quota"`
 	// EffectiveRebateRatePercent 是当前用户作为邀请人时实际生效的返利比例：
-	// 优先用户自己的专属比例（aff_rebate_rate_percent），否则回退到全局比例。
+	// 优先合法专属比例（aff_rebate_rate_percent），否则回退到自动等级比例。
 	// 用于在用户的 /affiliate 页面直观展示「分享后能拿到多少」。
-	EffectiveRebateRatePercent float64            `json:"effective_rebate_rate_percent"`
-	Invitees                   []AffiliateInvitee `json:"invitees"`
+	EffectiveRebateRatePercent float64               `json:"effective_rebate_rate_percent"`
+	Tier                       AffiliateTierSnapshot `json:"tier"`
+	Invitees                   []AffiliateInvitee    `json:"invitees"`
+}
+
+type AffiliateTierSnapshot struct {
+	Level                 AffiliateTier `json:"level"`
+	AutomaticRatePercent  float64       `json:"automatic_rate_percent"`
+	QualifiedInviteeCount int           `json:"qualified_invitee_count"`
+	NextTierThreshold     int           `json:"next_tier_threshold"`
+	RemainingToNextTier   int           `json:"remaining_to_next_tier"`
 }
 
 type AffiliateRepository interface {
@@ -103,6 +124,9 @@ type AffiliateRepository interface {
 	ThawFrozenQuota(ctx context.Context, userID int64) (float64, error)
 	TransferQuotaToBalance(ctx context.Context, userID int64) (float64, float64, error)
 	ListInvitees(ctx context.Context, inviterID int64, limit int) ([]AffiliateInvitee, error)
+	ReconcileInviteeQualification(ctx context.Context, inviteeUserID int64, threshold float64) (*AffiliateQualification, error)
+	CountQualifiedInvitees(ctx context.Context, inviterID int64, threshold float64) (int, error)
+	ReconcileAllAffiliateQualifications(ctx context.Context, threshold float64, batchSize int) error
 
 	// 管理端：用户级专属配置
 	UpdateUserAffCode(ctx context.Context, userID int64, newCode string) error
@@ -209,6 +233,7 @@ type AffiliateService struct {
 	settingService       *SettingService
 	authCacheInvalidator APIKeyAuthCacheInvalidator
 	billingCacheService  *BillingCacheService
+	tierReconcileMu      sync.Mutex
 }
 
 func NewAffiliateService(repo AffiliateRepository, settingService *SettingService, authCacheInvalidator APIKeyAuthCacheInvalidator, billingCacheService *BillingCacheService) *AffiliateService {
@@ -249,6 +274,10 @@ func (s *AffiliateService) GetAffiliateDetail(ctx context.Context, userID int64)
 	if err != nil {
 		return nil, err
 	}
+	tier, err := s.GetAffiliateTierSnapshot(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
 	invitees, err := s.listInvitees(ctx, userID)
 	if err != nil {
 		return nil, err
@@ -261,7 +290,8 @@ func (s *AffiliateService) GetAffiliateDetail(ctx context.Context, userID int64)
 		AffQuota:                   summary.AffQuota,
 		AffFrozenQuota:             summary.AffFrozenQuota,
 		AffHistoryQuota:            summary.AffHistoryQuota,
-		EffectiveRebateRatePercent: s.resolveRebateRatePercent(ctx, summary),
+		EffectiveRebateRatePercent: effectiveAffiliateRebateRate(summary, tier.AutomaticRatePercent),
+		Tier:                       *tier,
 		Invitees:                   invitees,
 	}, nil
 }
@@ -349,7 +379,10 @@ func (s *AffiliateService) AccrueInviteRebateForOrder(ctx context.Context, invit
 		}
 	}
 
-	rebateRatePercent := s.resolveRebateRatePercent(ctx, inviterSummary)
+	rebateRatePercent, err := s.resolveRebateRatePercent(ctx, inviterSummary)
+	if err != nil {
+		return 0, err
+	}
 	rebate := roundTo(baseRechargeAmount*(rebateRatePercent/100), 8)
 	if rebate <= 0 {
 		return 0, nil
@@ -386,26 +419,99 @@ func (s *AffiliateService) AccrueInviteRebateForOrder(ctx context.Context, invit
 	return rebate, nil
 }
 
-// resolveRebateRatePercent returns the inviter's exclusive rate when set,
-// otherwise the global setting value (clamped to [Min, Max]).
-func (s *AffiliateService) resolveRebateRatePercent(ctx context.Context, inviter *AffiliateSummary) float64 {
-	if inviter != nil && inviter.AffRebateRatePercent != nil {
-		v := *inviter.AffRebateRatePercent
-		if math.IsNaN(v) || math.IsInf(v, 0) {
-			return s.globalRebateRatePercent(ctx)
+// resolveRebateRatePercent applies custom override > automatic tier > base.
+func (s *AffiliateService) resolveRebateRatePercent(ctx context.Context, inviter *AffiliateSummary) (float64, error) {
+	if inviter == nil || inviter.UserID <= 0 {
+		config, err := s.affiliateTierConfigStrict(ctx)
+		if err != nil {
+			return 0, err
 		}
-		return clampAffiliateRebateRate(v)
+		return config.StandardRate, nil
 	}
-	return s.globalRebateRatePercent(ctx)
+	snapshot, err := s.GetAffiliateTierSnapshot(ctx, inviter.UserID)
+	if err != nil {
+		return 0, err
+	}
+	return effectiveAffiliateRebateRate(inviter, snapshot.AutomaticRatePercent), nil
 }
 
-// globalRebateRatePercent reads the system-wide rebate rate via SettingService,
-// returning the documented default when SettingService is unavailable.
-func (s *AffiliateService) globalRebateRatePercent(ctx context.Context) float64 {
-	if s == nil || s.settingService == nil {
-		return AffiliateRebateRateDefault
+func effectiveAffiliateRebateRate(inviter *AffiliateSummary, automaticRate float64) float64 {
+	if inviter != nil && inviter.AffRebateRatePercent != nil {
+		custom := *inviter.AffRebateRatePercent
+		if !math.IsNaN(custom) && !math.IsInf(custom, 0) && custom >= AffiliateRebateRateMin && custom <= AffiliateRebateRateMax {
+			return custom
+		}
 	}
-	return s.settingService.GetAffiliateRebateRatePercent(ctx)
+	return automaticRate
+}
+
+func (s *AffiliateService) GetAffiliateTierSnapshot(ctx context.Context, inviterID int64) (*AffiliateTierSnapshot, error) {
+	if s == nil || s.repo == nil {
+		return nil, infraerrors.ServiceUnavailable("SERVICE_UNAVAILABLE", "affiliate service unavailable")
+	}
+	if inviterID <= 0 {
+		return nil, infraerrors.BadRequest("INVALID_USER", "invalid user")
+	}
+	config, err := s.affiliateTierConfigStrict(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.reconcileAffiliateQualificationsIfRequired(ctx, config.QualificationAmount); err != nil {
+		return nil, err
+	}
+	qualifiedCount, err := s.repo.CountQualifiedInvitees(ctx, inviterID, config.QualificationAmount)
+	if err != nil {
+		return nil, fmt.Errorf("count qualified affiliate invitees: %w", err)
+	}
+	level, automaticRate, nextThreshold := config.Resolve(qualifiedCount)
+	remaining := 0
+	if nextThreshold > qualifiedCount {
+		remaining = nextThreshold - qualifiedCount
+	}
+	return &AffiliateTierSnapshot{
+		Level:                 level,
+		AutomaticRatePercent:  automaticRate,
+		QualifiedInviteeCount: qualifiedCount,
+		NextTierThreshold:     nextThreshold,
+		RemainingToNextTier:   remaining,
+	}, nil
+}
+
+func (s *AffiliateService) affiliateTierConfigStrict(ctx context.Context) (AffiliateTierConfig, error) {
+	if s == nil || s.settingService == nil {
+		return DefaultAffiliateTierConfig(), nil
+	}
+	return s.settingService.GetAffiliateTierConfigStrict(ctx)
+}
+
+func (s *AffiliateService) reconcileAffiliateQualificationsIfRequired(ctx context.Context, threshold float64) error {
+	if s.settingService == nil {
+		return nil
+	}
+	required, err := s.settingService.IsAffiliateTierReconcileRequired(ctx)
+	if err != nil {
+		return fmt.Errorf("read affiliate qualification reconcile marker: %w", err)
+	}
+	if !required {
+		return nil
+	}
+
+	s.tierReconcileMu.Lock()
+	defer s.tierReconcileMu.Unlock()
+	required, err = s.settingService.IsAffiliateTierReconcileRequired(ctx)
+	if err != nil {
+		return fmt.Errorf("recheck affiliate qualification reconcile marker: %w", err)
+	}
+	if !required {
+		return nil
+	}
+	if err := s.repo.ReconcileAllAffiliateQualifications(ctx, threshold, 200); err != nil {
+		return fmt.Errorf("reconcile all affiliate qualifications: %w", err)
+	}
+	if err := s.settingService.SetAffiliateTierReconcileRequired(ctx, false); err != nil {
+		return fmt.Errorf("clear affiliate qualification reconcile marker: %w", err)
+	}
+	return nil
 }
 
 func (s *AffiliateService) TransferAffiliateQuota(ctx context.Context, userID int64) (float64, float64, error) {
@@ -600,10 +706,15 @@ func (s *AffiliateService) AdminGetUserOverview(ctx context.Context, userID int6
 		return nil, err
 	}
 	if overview != nil {
-		if !overview.RebateRateCustom {
-			overview.RebateRatePercent = s.globalRebateRatePercent(ctx)
+		snapshot, err := s.GetAffiliateTierSnapshot(ctx, userID)
+		if err != nil {
+			return nil, err
 		}
-		overview.RebateRatePercent = clampAffiliateRebateRate(overview.RebateRatePercent)
+		var customRate *float64
+		if overview.RebateRateCustom {
+			customRate = &overview.RebateRatePercent
+		}
+		overview.RebateRatePercent = effectiveAffiliateRebateRate(&AffiliateSummary{AffRebateRatePercent: customRate}, snapshot.AutomaticRatePercent)
 	}
 	return overview, nil
 }

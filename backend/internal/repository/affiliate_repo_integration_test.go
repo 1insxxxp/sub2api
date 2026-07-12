@@ -5,6 +5,7 @@ package repository
 import (
 	"context"
 	"fmt"
+	"sync"
 	"testing"
 	"time"
 
@@ -98,6 +99,123 @@ LIMIT 1`, u.ID)
 	require.InDelta(t, 0.0, quotaAfter, 1e-9)
 	require.InDelta(t, 0.0, frozenAfter, 1e-9)
 	require.InDelta(t, 12.34, historyAfter, 1e-9)
+}
+
+func TestAffiliateRepository_QualificationReconcileAndCount(t *testing.T) {
+	ctx := context.Background()
+	tx := testEntTx(t)
+	txCtx := dbent.NewTxContext(ctx, tx)
+	client := tx.Client()
+	repo := NewAffiliateRepository(client, integrationDB)
+
+	inviter := mustCreateUser(t, client, &service.User{Email: fmt.Sprintf("affiliate-tier-inviter-%d@example.com", time.Now().UnixNano()), PasswordHash: "hash", Role: service.RoleUser, Status: service.StatusActive})
+	invitees := make([]*service.User, 3)
+	for i := range invitees {
+		invitees[i] = mustCreateUser(t, client, &service.User{Email: fmt.Sprintf("affiliate-tier-invitee-%d-%d@example.com", time.Now().UnixNano(), i), PasswordHash: "hash", Role: service.RoleUser, Status: service.StatusActive})
+		require.NoError(t, insertAffiliateRelationship(txCtx, client, invitees[i].ID, inviter.ID, fmt.Sprintf("TIER%07d", invitees[i].ID%10_000_000)))
+	}
+
+	insertQualificationOrder(t, txCtx, client, invitees[0].ID, 49, 0, "COMPLETED", "balance")
+	insertQualificationOrder(t, txCtx, client, invitees[1].ID, 30, 0, "COMPLETED", "balance")
+	insertQualificationOrder(t, txCtx, client, invitees[1].ID, 20, 0, "REFUND_PENDING", "subscription")
+	insertQualificationOrder(t, txCtx, client, invitees[1].ID, 999, 0, "PENDING", "balance")
+	insertQualificationOrder(t, txCtx, client, invitees[2].ID, 100, 30, "PARTIALLY_REFUNDED", "subscription")
+	insertQualificationOrder(t, txCtx, client, invitees[2].ID, 500, 0, "COMPLETED", "other")
+
+	require.NoError(t, repo.ReconcileAllAffiliateQualifications(txCtx, 50, 1))
+
+	assertQualification := func(userID int64, amount float64, qualified bool) time.Time {
+		t.Helper()
+		rows, err := client.QueryContext(txCtx, "SELECT qualifying_payment_amount::double precision, qualified_at FROM user_affiliates WHERE user_id = $1", userID)
+		require.NoError(t, err)
+		defer func() { _ = rows.Close() }()
+		require.True(t, rows.Next())
+		var gotAmount float64
+		var qualifiedAt *time.Time
+		require.NoError(t, rows.Scan(&gotAmount, &qualifiedAt))
+		require.InDelta(t, amount, gotAmount, 1e-9)
+		if qualified {
+			require.NotNil(t, qualifiedAt)
+			return *qualifiedAt
+		}
+		require.Nil(t, qualifiedAt)
+		return time.Time{}
+	}
+
+	assertQualification(invitees[0].ID, 49, false)
+	qualifiedAt := assertQualification(invitees[1].ID, 50, true)
+	assertQualification(invitees[2].ID, 70, true)
+
+	count, err := repo.CountQualifiedInvitees(txCtx, inviter.ID, 50)
+	require.NoError(t, err)
+	require.Equal(t, 2, count)
+	count, err = repo.CountQualifiedInvitees(txCtx, inviter.ID, 60)
+	require.NoError(t, err)
+	require.Equal(t, 1, count, "count must react immediately to a configured threshold change")
+
+	const readers = 8
+	var wg sync.WaitGroup
+	errs := make(chan error, readers)
+	counts := make(chan int, readers)
+	for i := 0; i < readers; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			got, err := repo.CountQualifiedInvitees(txCtx, inviter.ID, 50)
+			counts <- got
+			errs <- err
+		}()
+	}
+	wg.Wait()
+	close(counts)
+	close(errs)
+	for err := range errs {
+		require.NoError(t, err)
+	}
+	for got := range counts {
+		require.Equal(t, 2, got)
+	}
+
+	_, err = repo.ReconcileInviteeQualification(txCtx, invitees[1].ID, 50)
+	require.NoError(t, err)
+	require.Equal(t, qualifiedAt, assertQualification(invitees[1].ID, 50, true), "idempotent reconcile must preserve qualified_at")
+
+	_, err = repo.ReconcileInviteeQualification(txCtx, invitees[1].ID, 60)
+	require.NoError(t, err)
+	assertQualification(invitees[1].ID, 50, false)
+}
+
+func insertAffiliateRelationship(ctx context.Context, client *dbent.Client, userID, inviterID int64, code string) error {
+	_, err := client.ExecContext(ctx, `
+INSERT INTO user_affiliates (user_id, aff_code, inviter_id, created_at, updated_at)
+VALUES ($1, $2, $3, NOW(), NOW())`, userID, code, inviterID)
+	return err
+}
+
+func insertQualificationOrder(t *testing.T, ctx context.Context, client *dbent.Client, userID int64, amount, refundAmount float64, status, orderType string) {
+	t.Helper()
+	now := time.Now()
+	_, err := client.PaymentOrder.Create().
+		SetUserID(userID).
+		SetUserEmail(fmt.Sprintf("qualification-%d@example.com", userID)).
+		SetUserName("qualification").
+		SetAmount(amount).
+		SetPayAmount(amount).
+		SetFeeRate(0).
+		SetRechargeCode(fmt.Sprintf("QUAL-%d-%d", userID, now.UnixNano())).
+		SetOutTradeNo(fmt.Sprintf("qual_%d_%d", userID, now.UnixNano())).
+		SetPaymentType("test").
+		SetPaymentTradeNo(fmt.Sprintf("trade_%d", now.UnixNano())).
+		SetOrderType(orderType).
+		SetStatus(status).
+		SetRefundAmount(refundAmount).
+		SetExpiresAt(now.Add(time.Hour)).
+		SetClientIP("127.0.0.1").
+		SetSrcHost("affiliate-qualification-test").
+		SetCreatedAt(now).
+		SetUpdatedAt(now).
+		Save(ctx)
+	require.NoError(t, err)
 }
 
 // TestAffiliateRepository_AccrueQuota_ReusesOuterTransaction guards the
