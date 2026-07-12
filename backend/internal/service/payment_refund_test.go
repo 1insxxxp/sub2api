@@ -67,6 +67,34 @@ func TestValidateRefundRequestRejectsLegacyGuessedProviderInstance(t *testing.T)
 	require.Equal(t, "USER_REFUND_DISABLED", infraerrors.Reason(err))
 }
 
+func TestPrepareRefundDrainsTerminalDirtyOutboxBeforeInvalidStatus(t *testing.T) {
+	for _, status := range []string{OrderStatusRefunded, OrderStatusPartiallyRefunded} {
+		t.Run(status, func(t *testing.T) {
+			ctx := context.Background()
+			client := newPaymentConfigServiceTestClient(t)
+			user, err := client.User.Create().SetEmail("refund-dirty-entry-" + status + "@example.com").SetPasswordHash("hash").SetUsername("refund-dirty-entry-" + status).Save(ctx)
+			require.NoError(t, err)
+			order, err := client.PaymentOrder.Create().SetUserID(user.ID).SetUserEmail(user.Email).SetUserName(user.Username).
+				SetAmount(100).SetPayAmount(100).SetFeeRate(0).SetRechargeCode("REFUND-DIRTY-ENTRY-" + status).SetOutTradeNo("sub2_refund_dirty_entry_" + status).
+				SetPaymentType(payment.TypeAlipay).SetPaymentTradeNo("trade-refund-dirty-entry-" + status).SetOrderType(payment.OrderTypeBalance).
+				SetStatus(status).SetRefundAmount(40).SetExpiresAt(time.Now().Add(time.Hour)).SetClientIP("127.0.0.1").SetSrcHost("api.example.com").Save(ctx)
+			require.NoError(t, err)
+			_, err = upsertAffiliateQualificationDirtyAudit(ctx, client, order.ID, order.UserID, status, "refund_completed")
+			require.NoError(t, err)
+			repo := &paymentFulfillmentAffiliateRepoStub{auditClient: client}
+			svc := &PaymentService{entClient: client, affiliateService: NewAffiliateService(repo, nil, nil, nil)}
+
+			_, _, err = svc.PrepareRefund(ctx, order.ID, 10, "retry", false, false)
+
+			require.Equal(t, "INVALID_STATUS", infraerrors.Reason(err))
+			require.Equal(t, 1, repo.reconcileCalls)
+			dirty, countErr := client.PaymentAuditLog.Query().Where(paymentauditlog.ActionEQ(AffiliateQualificationDirtyAuditAction)).Count(ctx)
+			require.NoError(t, countErr)
+			require.Zero(t, dirty)
+		})
+	}
+}
+
 func TestMarkRefundOkReconcilesAffiliateAfterSuccessfulPersistence(t *testing.T) {
 	ctx := context.Background()
 	client := newPaymentConfigServiceTestClient(t)

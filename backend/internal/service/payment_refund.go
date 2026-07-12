@@ -205,6 +205,7 @@ func (s *PaymentService) validateRefundRequest(ctx context.Context, oid, uid int
 }
 
 func (s *PaymentService) PrepareRefund(ctx context.Context, oid int64, amt float64, reason string, force, deduct bool) (*RefundPlan, *RefundResult, error) {
+	s.reconcilePendingAffiliateQualificationsBestEffort(ctx, oid, "prepare_refund")
 	o, err := s.entClient.PaymentOrder.Get(ctx, oid)
 	if err != nil {
 		return nil, nil, infraerrors.NotFound("NOT_FOUND", "order not found")
@@ -399,6 +400,7 @@ func (s *PaymentService) finishRefund(ctx context.Context, p *RefundPlan, resp *
 }
 
 func (s *PaymentService) QueryAndFinalizeRefund(ctx context.Context, oid int64) (*RefundResult, error) {
+	s.reconcilePendingAffiliateQualificationsBestEffort(ctx, oid, "query_finalize_refund")
 	o, err := s.entClient.PaymentOrder.Get(ctx, oid)
 	if err != nil {
 		return nil, infraerrors.NotFound("NOT_FOUND", "order not found")

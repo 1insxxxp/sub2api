@@ -83,6 +83,7 @@ func provideCleanup(
 	accountExpiry *service.AccountExpiryService,
 	proxyExpiry *service.ProxyExpiryService,
 	subscriptionExpiry *service.SubscriptionExpiryService,
+	affiliateQualificationRecovery *service.AffiliateQualificationRecoveryWorker,
 	usageCleanup *service.UsageCleanupService,
 	idempotencyCleanup *service.IdempotencyCleanupService,
 	batchImageCleanup *service.BatchImageCleanupService,
@@ -195,6 +196,12 @@ func provideCleanup(
 			}},
 			{"SubscriptionExpiryService", func() error {
 				subscriptionExpiry.Stop()
+				return nil
+			}},
+			{"AffiliateQualificationRecoveryWorker", func() error {
+				if affiliateQualificationRecovery != nil {
+					affiliateQualificationRecovery.Stop()
+				}
 				return nil
 			}},
 			{"SubscriptionService", func() error {

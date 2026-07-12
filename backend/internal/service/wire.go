@@ -686,6 +686,7 @@ var ProviderSet = wire.NewSet(
 	NewModelPricingResolver,
 	NewContentModerationService,
 	NewAffiliateService,
+	ProvideAffiliateQualificationRecoveryWorker,
 	ProvidePaymentConfigService,
 	ProvidePaymentService,
 	ProvidePaymentOrderExpiryService,
@@ -695,6 +696,14 @@ var ProviderSet = wire.NewSet(
 	NewChannelMonitorRequestTemplateService,
 	ProvideUserPlatformQuotaUsageFlusher,
 )
+
+// ProvideAffiliateQualificationRecoveryWorker starts durable affiliate
+// qualification recovery as part of the production service lifecycle.
+func ProvideAffiliateQualificationRecoveryWorker(affiliateService *AffiliateService) *AffiliateQualificationRecoveryWorker {
+	worker := NewAffiliateQualificationRecoveryWorker(affiliateService)
+	worker.Start(context.Background())
+	return worker
+}
 
 // ProvideUserPlatformQuotaUsageFlusher 创建并启动 UserPlatformQuotaUsageFlusher。
 func ProvideUserPlatformQuotaUsageFlusher(cfg *config.Config, cache BillingCache, quotaRepo UserPlatformQuotaRepository, tw *TimingWheelService) *UserPlatformQuotaUsageFlusher {
