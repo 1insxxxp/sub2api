@@ -114,6 +114,13 @@ func (s *SettingService) InitializeDefaultSettings(ctx context.Context) error {
 		SettingKeyDefaultConcurrency:                        strconv.Itoa(s.cfg.Default.UserConcurrency),
 		SettingKeyDefaultBalance:                            strconv.FormatFloat(s.cfg.Default.UserBalance, 'f', 8, 64),
 		SettingKeyAffiliateRebateRate:                       strconv.FormatFloat(AffiliateRebateRateDefault, 'f', 8, 64),
+		SettingKeyAffiliateQualificationAmount:              strconv.FormatFloat(AffiliateQualificationAmountDefault, 'f', 8, 64),
+		SettingKeyAffiliateBronzeInvitees:                   strconv.Itoa(AffiliateBronzeInviteesDefault),
+		SettingKeyAffiliateBronzeRate:                       strconv.FormatFloat(AffiliateBronzeRateDefault, 'f', 8, 64),
+		SettingKeyAffiliateSilverInvitees:                   strconv.Itoa(AffiliateSilverInviteesDefault),
+		SettingKeyAffiliateSilverRate:                       strconv.FormatFloat(AffiliateSilverRateDefault, 'f', 8, 64),
+		SettingKeyAffiliateGoldInvitees:                     strconv.Itoa(AffiliateGoldInviteesDefault),
+		SettingKeyAffiliateGoldRate:                         strconv.FormatFloat(AffiliateGoldRateDefault, 'f', 8, 64),
 		SettingKeyAffiliateRebateFreezeHours:                strconv.Itoa(AffiliateRebateFreezeHoursDefault),
 		SettingKeyAffiliateRebateDurationDays:               strconv.Itoa(AffiliateRebateDurationDaysDefault),
 		SettingKeyAffiliateRebatePerInviteeCap:              strconv.FormatFloat(AffiliateRebatePerInviteeCapDefault, 'f', 2, 64),
@@ -312,11 +319,15 @@ func (s *SettingService) parseSettings(settings map[string]string) *SystemSettin
 	} else {
 		result.DefaultBalance = s.cfg.Default.UserBalance
 	}
-	if rebateRate, err := strconv.ParseFloat(settings[SettingKeyAffiliateRebateRate], 64); err == nil {
-		result.AffiliateRebateRate = clampAffiliateRebateRate(rebateRate)
-	} else {
-		result.AffiliateRebateRate = AffiliateRebateRateDefault
-	}
+	affiliateTier := parseAffiliateTierConfig(settings)
+	result.AffiliateRebateRate = affiliateTier.StandardRate
+	result.AffiliateQualificationAmount = affiliateTier.QualificationAmount
+	result.AffiliateBronzeInvitees = affiliateTier.BronzeInvitees
+	result.AffiliateBronzeRate = affiliateTier.BronzeRate
+	result.AffiliateSilverInvitees = affiliateTier.SilverInvitees
+	result.AffiliateSilverRate = affiliateTier.SilverRate
+	result.AffiliateGoldInvitees = affiliateTier.GoldInvitees
+	result.AffiliateGoldRate = affiliateTier.GoldRate
 	if freezeHours, err := strconv.Atoi(settings[SettingKeyAffiliateRebateFreezeHours]); err == nil && freezeHours >= 0 {
 		if freezeHours > AffiliateRebateFreezeHoursMax {
 			freezeHours = AffiliateRebateFreezeHoursMax
@@ -853,6 +864,48 @@ func clampAffiliateRebateRate(value float64) float64 {
 	}
 	if value > AffiliateRebateRateMax {
 		return AffiliateRebateRateMax
+	}
+	return value
+}
+
+func parseAffiliateTierConfig(settings map[string]string) AffiliateTierConfig {
+	defaults := DefaultAffiliateTierConfig()
+	config := AffiliateTierConfig{
+		QualificationAmount: parsePositiveFiniteFloat(settings[SettingKeyAffiliateQualificationAmount], defaults.QualificationAmount),
+		StandardRate:        parseAffiliateRate(settings[SettingKeyAffiliateRebateRate], defaults.StandardRate),
+		BronzeInvitees:      parsePositiveInt(settings[SettingKeyAffiliateBronzeInvitees], defaults.BronzeInvitees),
+		BronzeRate:          parseAffiliateRate(settings[SettingKeyAffiliateBronzeRate], defaults.BronzeRate),
+		SilverInvitees:      parsePositiveInt(settings[SettingKeyAffiliateSilverInvitees], defaults.SilverInvitees),
+		SilverRate:          parseAffiliateRate(settings[SettingKeyAffiliateSilverRate], defaults.SilverRate),
+		GoldInvitees:        parsePositiveInt(settings[SettingKeyAffiliateGoldInvitees], defaults.GoldInvitees),
+		GoldRate:            parseAffiliateRate(settings[SettingKeyAffiliateGoldRate], defaults.GoldRate),
+	}
+	if validateAffiliateTierConfig(config) != nil {
+		return defaults
+	}
+	return config
+}
+
+func parsePositiveFiniteFloat(raw string, fallback float64) float64 {
+	value, err := strconv.ParseFloat(strings.TrimSpace(raw), 64)
+	if err != nil || value <= 0 || math.IsNaN(value) || math.IsInf(value, 0) {
+		return fallback
+	}
+	return value
+}
+
+func parsePositiveInt(raw string, fallback int) int {
+	value, err := strconv.Atoi(strings.TrimSpace(raw))
+	if err != nil || value <= 0 {
+		return fallback
+	}
+	return value
+}
+
+func parseAffiliateRate(raw string, fallback float64) float64 {
+	value, err := strconv.ParseFloat(strings.TrimSpace(raw), 64)
+	if err != nil || value < AffiliateRebateRateMin || value > AffiliateRebateRateMax || math.IsNaN(value) || math.IsInf(value, 0) {
+		return fallback
 	}
 	return value
 }

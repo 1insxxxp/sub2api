@@ -299,6 +299,27 @@ func diffSettings(before *service.SystemSettings, after *service.SystemSettings,
 	if before.AffiliateRebateRate != after.AffiliateRebateRate {
 		changed = append(changed, "affiliate_rebate_rate")
 	}
+	if before.AffiliateQualificationAmount != after.AffiliateQualificationAmount {
+		changed = append(changed, "affiliate_qualification_amount")
+	}
+	if before.AffiliateBronzeInvitees != after.AffiliateBronzeInvitees {
+		changed = append(changed, "affiliate_bronze_invitees")
+	}
+	if before.AffiliateBronzeRate != after.AffiliateBronzeRate {
+		changed = append(changed, "affiliate_bronze_rate")
+	}
+	if before.AffiliateSilverInvitees != after.AffiliateSilverInvitees {
+		changed = append(changed, "affiliate_silver_invitees")
+	}
+	if before.AffiliateSilverRate != after.AffiliateSilverRate {
+		changed = append(changed, "affiliate_silver_rate")
+	}
+	if before.AffiliateGoldInvitees != after.AffiliateGoldInvitees {
+		changed = append(changed, "affiliate_gold_invitees")
+	}
+	if before.AffiliateGoldRate != after.AffiliateGoldRate {
+		changed = append(changed, "affiliate_gold_rate")
+	}
 	if before.AffiliateRebateFreezeHours != after.AffiliateRebateFreezeHours {
 		changed = append(changed, "affiliate_rebate_freeze_hours")
 	}

@@ -151,6 +151,14 @@ type SystemSettings struct {
 	CyberSessionBlockTTLSeconds  int
 	AffiliateEnabled             bool
 	AffiliateRebateRate          float64
+	AffiliateQualificationAmount float64
+	AffiliateBronzeInvitees      int
+	AffiliateBronzeRate          float64
+	AffiliateSilverInvitees      int
+	AffiliateSilverRate          float64
+	AffiliateGoldInvitees        int
+	AffiliateGoldRate            float64
+	affiliateTierConfigProvided  bool
 	AffiliateRebateFreezeHours   int
 	AffiliateRebateDurationDays  int
 	AffiliateRebatePerInviteeCap float64
@@ -266,6 +274,18 @@ type SystemSettings struct {
 type DefaultSubscriptionSetting struct {
 	GroupID      int64 `json:"group_id"`
 	ValidityDays int   `json:"validity_days"`
+}
+
+func (s *SystemSettings) SetAffiliateTierConfig(config AffiliateTierConfig) {
+	s.AffiliateRebateRate = config.StandardRate
+	s.AffiliateQualificationAmount = config.QualificationAmount
+	s.AffiliateBronzeInvitees = config.BronzeInvitees
+	s.AffiliateBronzeRate = config.BronzeRate
+	s.AffiliateSilverInvitees = config.SilverInvitees
+	s.AffiliateSilverRate = config.SilverRate
+	s.AffiliateGoldInvitees = config.GoldInvitees
+	s.AffiliateGoldRate = config.GoldRate
+	s.affiliateTierConfigProvided = true
 }
 
 type PublicSettings struct {

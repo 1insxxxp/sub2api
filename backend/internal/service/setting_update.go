@@ -51,6 +51,30 @@ func (s *SettingService) UpdateSettingsWithAuthSourceDefaults(ctx context.Contex
 }
 
 func (s *SettingService) buildSystemSettingsUpdates(ctx context.Context, settings *SystemSettings) (map[string]string, error) {
+	affiliateTier := AffiliateTierConfig{
+		QualificationAmount: settings.AffiliateQualificationAmount,
+		StandardRate:        settings.AffiliateRebateRate,
+		BronzeInvitees:      settings.AffiliateBronzeInvitees,
+		BronzeRate:          settings.AffiliateBronzeRate,
+		SilverInvitees:      settings.AffiliateSilverInvitees,
+		SilverRate:          settings.AffiliateSilverRate,
+		GoldInvitees:        settings.AffiliateGoldInvitees,
+		GoldRate:            settings.AffiliateGoldRate,
+	}
+	if affiliateTier == (AffiliateTierConfig{}) && !settings.affiliateTierConfigProvided {
+		affiliateTier = DefaultAffiliateTierConfig()
+		settings.AffiliateRebateRate = affiliateTier.StandardRate
+		settings.AffiliateQualificationAmount = affiliateTier.QualificationAmount
+		settings.AffiliateBronzeInvitees = affiliateTier.BronzeInvitees
+		settings.AffiliateBronzeRate = affiliateTier.BronzeRate
+		settings.AffiliateSilverInvitees = affiliateTier.SilverInvitees
+		settings.AffiliateSilverRate = affiliateTier.SilverRate
+		settings.AffiliateGoldInvitees = affiliateTier.GoldInvitees
+		settings.AffiliateGoldRate = affiliateTier.GoldRate
+	}
+	if err := validateAffiliateTierConfig(affiliateTier); err != nil {
+		return nil, infraerrors.BadRequest("INVALID_AFFILIATE_TIER_CONFIG", err.Error())
+	}
 	if err := s.validateDefaultSubscriptionGroups(ctx, settings.DefaultSubscriptions); err != nil {
 		return nil, err
 	}
@@ -277,8 +301,14 @@ func (s *SettingService) buildSystemSettingsUpdates(ctx context.Context, setting
 	// 默认配置
 	updates[SettingKeyDefaultConcurrency] = strconv.Itoa(settings.DefaultConcurrency)
 	updates[SettingKeyDefaultBalance] = strconv.FormatFloat(settings.DefaultBalance, 'f', 8, 64)
-	settings.AffiliateRebateRate = clampAffiliateRebateRate(settings.AffiliateRebateRate)
 	updates[SettingKeyAffiliateRebateRate] = strconv.FormatFloat(settings.AffiliateRebateRate, 'f', 8, 64)
+	updates[SettingKeyAffiliateQualificationAmount] = strconv.FormatFloat(settings.AffiliateQualificationAmount, 'f', 8, 64)
+	updates[SettingKeyAffiliateBronzeInvitees] = strconv.Itoa(settings.AffiliateBronzeInvitees)
+	updates[SettingKeyAffiliateBronzeRate] = strconv.FormatFloat(settings.AffiliateBronzeRate, 'f', 8, 64)
+	updates[SettingKeyAffiliateSilverInvitees] = strconv.Itoa(settings.AffiliateSilverInvitees)
+	updates[SettingKeyAffiliateSilverRate] = strconv.FormatFloat(settings.AffiliateSilverRate, 'f', 8, 64)
+	updates[SettingKeyAffiliateGoldInvitees] = strconv.Itoa(settings.AffiliateGoldInvitees)
+	updates[SettingKeyAffiliateGoldRate] = strconv.FormatFloat(settings.AffiliateGoldRate, 'f', 8, 64)
 	if settings.AffiliateRebateFreezeHours < 0 {
 		settings.AffiliateRebateFreezeHours = AffiliateRebateFreezeHoursDefault
 	}
@@ -417,6 +447,28 @@ func (s *SettingService) buildSystemSettingsUpdates(ctx context.Context, setting
 	updates[SettingKeyAllowUserViewErrorRequests] = strconv.FormatBool(settings.AllowUserViewErrorRequests)
 
 	return updates, nil
+}
+
+func validateAffiliateTierConfig(config AffiliateTierConfig) error {
+	if config.QualificationAmount <= 0 || math.IsNaN(config.QualificationAmount) || math.IsInf(config.QualificationAmount, 0) {
+		return fmt.Errorf("affiliate qualification amount must be finite and greater than zero")
+	}
+	if config.BronzeInvitees <= 0 || config.SilverInvitees <= 0 || config.GoldInvitees <= 0 {
+		return fmt.Errorf("affiliate invitee thresholds must be greater than zero")
+	}
+	if !(config.BronzeInvitees < config.SilverInvitees && config.SilverInvitees < config.GoldInvitees) {
+		return fmt.Errorf("affiliate invitee thresholds must be strictly increasing")
+	}
+	rates := []float64{config.StandardRate, config.BronzeRate, config.SilverRate, config.GoldRate}
+	for _, rate := range rates {
+		if math.IsNaN(rate) || math.IsInf(rate, 0) || rate < AffiliateRebateRateMin || rate > AffiliateRebateRateMax {
+			return fmt.Errorf("affiliate rebate rates must be finite and between 0 and 100")
+		}
+	}
+	if !(config.StandardRate <= config.BronzeRate && config.BronzeRate <= config.SilverRate && config.SilverRate <= config.GoldRate) {
+		return fmt.Errorf("affiliate rebate rates must be non-decreasing")
+	}
+	return nil
 }
 
 // validateDefaultPlatformQuotaMap 校验 platform quota map 的合法性：

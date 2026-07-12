@@ -77,7 +77,7 @@ func (s *SettingService) IsAffiliateEnabled(ctx context.Context) bool {
 	return value == "true"
 }
 
-// GetAffiliateRebateRatePercent 读取并 clamp 全局返利比例。
+// GetAffiliateRebateRatePercent 读取全局返利比例。
 // 解析失败、缺失或越界都回退到 AffiliateRebateRateDefault — 该比例从不抛错，
 // 调用方只关心一个可用的数值。
 func (s *SettingService) GetAffiliateRebateRatePercent(ctx context.Context) float64 {
@@ -85,11 +85,40 @@ func (s *SettingService) GetAffiliateRebateRatePercent(ctx context.Context) floa
 	if err != nil {
 		return AffiliateRebateRateDefault
 	}
-	rate, err := strconv.ParseFloat(strings.TrimSpace(raw), 64)
-	if err != nil || math.IsNaN(rate) || math.IsInf(rate, 0) {
-		return AffiliateRebateRateDefault
+	return parseAffiliateRate(raw, AffiliateRebateRateDefault)
+}
+
+func (s *SettingService) GetAffiliateTierConfig(ctx context.Context) AffiliateTierConfig {
+	keys := []string{
+		SettingKeyAffiliateRebateRate,
+		SettingKeyAffiliateQualificationAmount,
+		SettingKeyAffiliateBronzeInvitees,
+		SettingKeyAffiliateBronzeRate,
+		SettingKeyAffiliateSilverInvitees,
+		SettingKeyAffiliateSilverRate,
+		SettingKeyAffiliateGoldInvitees,
+		SettingKeyAffiliateGoldRate,
 	}
-	return clampAffiliateRebateRate(rate)
+	settings, err := s.settingRepo.GetMultiple(ctx, keys)
+	if err != nil {
+		return DefaultAffiliateTierConfig()
+	}
+	return parseAffiliateTierConfig(settings)
+}
+
+func (s *SettingService) IsAffiliateTierReconcileRequired(ctx context.Context) (bool, error) {
+	value, err := s.settingRepo.GetValue(ctx, SettingKeyAffiliateTierReconcileRequired)
+	if errors.Is(err, ErrSettingNotFound) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	return strings.EqualFold(strings.TrimSpace(value), "true"), nil
+}
+
+func (s *SettingService) SetAffiliateTierReconcileRequired(ctx context.Context, required bool) error {
+	return s.settingRepo.Set(ctx, SettingKeyAffiliateTierReconcileRequired, strconv.FormatBool(required))
 }
 
 // GetAffiliateRebateFreezeHours 返回返利冻结期（小时）。

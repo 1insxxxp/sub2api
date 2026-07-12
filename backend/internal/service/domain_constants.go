@@ -24,9 +24,16 @@ const (
 
 // Affiliate rebate settings
 const (
-	AffiliateRebateRateDefault          = 20.0
+	AffiliateRebateRateDefault          = 8.0
 	AffiliateRebateRateMin              = 0.0
 	AffiliateRebateRateMax              = 100.0
+	AffiliateQualificationAmountDefault = 50.0
+	AffiliateBronzeInviteesDefault      = 3
+	AffiliateBronzeRateDefault          = 10.0
+	AffiliateSilverInviteesDefault      = 10
+	AffiliateSilverRateDefault          = 12.0
+	AffiliateGoldInviteesDefault        = 30
+	AffiliateGoldRateDefault            = 15.0
 	AffiliateEnabledDefault             = false // 邀请返利总开关默认关闭
 	AffiliateRebateFreezeHoursDefault   = 0     // 0 = 不冻结（向后兼容）
 	AffiliateRebateFreezeHoursMax       = 720   // 最大 30 天
@@ -34,6 +41,53 @@ const (
 	AffiliateRebateDurationDaysMax      = 3650  // ~10 年
 	AffiliateRebatePerInviteeCapDefault = 0.0   // 0 = 无上限
 )
+
+type AffiliateTier string
+
+const (
+	AffiliateTierStandard AffiliateTier = "standard"
+	AffiliateTierBronze   AffiliateTier = "bronze"
+	AffiliateTierSilver   AffiliateTier = "silver"
+	AffiliateTierGold     AffiliateTier = "gold"
+)
+
+type AffiliateTierConfig struct {
+	QualificationAmount float64
+	StandardRate        float64
+	BronzeInvitees      int
+	BronzeRate          float64
+	SilverInvitees      int
+	SilverRate          float64
+	GoldInvitees        int
+	GoldRate            float64
+}
+
+func DefaultAffiliateTierConfig() AffiliateTierConfig {
+	return AffiliateTierConfig{
+		QualificationAmount: AffiliateQualificationAmountDefault,
+		StandardRate:        AffiliateRebateRateDefault,
+		BronzeInvitees:      AffiliateBronzeInviteesDefault,
+		BronzeRate:          AffiliateBronzeRateDefault,
+		SilverInvitees:      AffiliateSilverInviteesDefault,
+		SilverRate:          AffiliateSilverRateDefault,
+		GoldInvitees:        AffiliateGoldInviteesDefault,
+		GoldRate:            AffiliateGoldRateDefault,
+	}
+}
+
+// Resolve returns the automatic tier, rate, and next tier threshold. Gold has no next threshold.
+func (c AffiliateTierConfig) Resolve(qualifiedInvitees int) (AffiliateTier, float64, int) {
+	if qualifiedInvitees >= c.GoldInvitees {
+		return AffiliateTierGold, c.GoldRate, 0
+	}
+	if qualifiedInvitees >= c.SilverInvitees {
+		return AffiliateTierSilver, c.SilverRate, c.GoldInvitees
+	}
+	if qualifiedInvitees >= c.BronzeInvitees {
+		return AffiliateTierBronze, c.BronzeRate, c.SilverInvitees
+	}
+	return AffiliateTierStandard, c.StandardRate, c.BronzeInvitees
+}
 
 // Platform constants
 const (
@@ -143,17 +197,25 @@ const (
 	SettingKeyAuthIPAutoBlockLoginFailureThreshold = "auth_ip_auto_block_login_failure_threshold" // 窗口内登录失败次数阈值
 	SettingKeyAffiliateEnabled                     = "affiliate_enabled"                          // 邀请返利功能总开关
 	SettingKeyAffiliateRebateRate                  = "affiliate_rebate_rate"                      // 邀请返利比例（百分比，0-100）
-	SettingKeyAffiliateRebateFreezeHours           = "affiliate_rebate_freeze_hours"              // 返利冻结期（小时，0=不冻结）
-	SettingKeyAffiliateRebateDurationDays          = "affiliate_rebate_duration_days"             // 返利有效期（天，0=永久）
-	SettingKeyAffiliateRebatePerInviteeCap         = "affiliate_rebate_per_invitee_cap"           // 单人返利上限（0=无上限）
-	SettingKeyRiskControlEnabled                   = "risk_control_enabled"                       // 是否启用风控中心入口与审计链路
-	SettingKeyContentModerationConfig              = "content_moderation_config"                  // 内容审计配置（JSON）
-	SettingKeyCyberSessionBlockEnabled             = "cyber_session_block_enabled"                // cyber 命中后会话级自动屏蔽总开关(默认关)
-	SettingKeyCyberSessionBlockTTLSeconds          = "cyber_session_block_ttl_seconds"            // 会话屏蔽 TTL 秒数(默认 3600)
-	SettingKeyLoginAgreementEnabled                = "login_agreement_enabled"                    // 登录前是否要求同意条款
-	SettingKeyLoginAgreementMode                   = "login_agreement_mode"                       // 条款确认展示模式：modal / checkbox
-	SettingKeyLoginAgreementUpdatedAt              = "login_agreement_updated_at"                 // 条款更新日期（展示用）
-	SettingKeyLoginAgreementDocuments              = "login_agreement_documents"                  // 条款文档列表（JSON，Markdown 内容）
+	SettingKeyAffiliateQualificationAmount         = "affiliate_qualification_amount"
+	SettingKeyAffiliateBronzeInvitees              = "affiliate_bronze_invitees"
+	SettingKeyAffiliateBronzeRate                  = "affiliate_bronze_rate"
+	SettingKeyAffiliateSilverInvitees              = "affiliate_silver_invitees"
+	SettingKeyAffiliateSilverRate                  = "affiliate_silver_rate"
+	SettingKeyAffiliateGoldInvitees                = "affiliate_gold_invitees"
+	SettingKeyAffiliateGoldRate                    = "affiliate_gold_rate"
+	SettingKeyAffiliateTierReconcileRequired       = "affiliate_tier_reconcile_required"
+	SettingKeyAffiliateRebateFreezeHours           = "affiliate_rebate_freeze_hours"    // 返利冻结期（小时，0=不冻结）
+	SettingKeyAffiliateRebateDurationDays          = "affiliate_rebate_duration_days"   // 返利有效期（天，0=永久）
+	SettingKeyAffiliateRebatePerInviteeCap         = "affiliate_rebate_per_invitee_cap" // 单人返利上限（0=无上限）
+	SettingKeyRiskControlEnabled                   = "risk_control_enabled"             // 是否启用风控中心入口与审计链路
+	SettingKeyContentModerationConfig              = "content_moderation_config"        // 内容审计配置（JSON）
+	SettingKeyCyberSessionBlockEnabled             = "cyber_session_block_enabled"      // cyber 命中后会话级自动屏蔽总开关(默认关)
+	SettingKeyCyberSessionBlockTTLSeconds          = "cyber_session_block_ttl_seconds"  // 会话屏蔽 TTL 秒数(默认 3600)
+	SettingKeyLoginAgreementEnabled                = "login_agreement_enabled"          // 登录前是否要求同意条款
+	SettingKeyLoginAgreementMode                   = "login_agreement_mode"             // 条款确认展示模式：modal / checkbox
+	SettingKeyLoginAgreementUpdatedAt              = "login_agreement_updated_at"       // 条款更新日期（展示用）
+	SettingKeyLoginAgreementDocuments              = "login_agreement_documents"        // 条款文档列表（JSON，Markdown 内容）
 
 	// 邮件服务设置
 	SettingKeySMTPHost     = "smtp_host"      // SMTP服务器地址

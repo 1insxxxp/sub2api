@@ -146,6 +146,13 @@ type UpdateSettingsRequest struct {
 	DefaultConcurrency                        int                               `json:"default_concurrency"`
 	DefaultBalance                            float64                           `json:"default_balance"`
 	AffiliateRebateRate                       *float64                          `json:"affiliate_rebate_rate"`
+	AffiliateQualificationAmount              *float64                          `json:"affiliate_qualification_amount"`
+	AffiliateBronzeInvitees                   *int                              `json:"affiliate_bronze_invitees"`
+	AffiliateBronzeRate                       *float64                          `json:"affiliate_bronze_rate"`
+	AffiliateSilverInvitees                   *int                              `json:"affiliate_silver_invitees"`
+	AffiliateSilverRate                       *float64                          `json:"affiliate_silver_rate"`
+	AffiliateGoldInvitees                     *int                              `json:"affiliate_gold_invitees"`
+	AffiliateGoldRate                         *float64                          `json:"affiliate_gold_rate"`
 	AffiliateRebateFreezeHours                *int                              `json:"affiliate_rebate_freeze_hours"`
 	AffiliateRebateDurationDays               *int                              `json:"affiliate_rebate_duration_days"`
 	AffiliateRebatePerInviteeCap              *float64                          `json:"affiliate_rebate_per_invitee_cap"`
@@ -358,11 +365,33 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 	if req.AffiliateRebateRate != nil {
 		affiliateRebateRate = *req.AffiliateRebateRate
 	}
-	if affiliateRebateRate < service.AffiliateRebateRateMin {
-		affiliateRebateRate = service.AffiliateRebateRateMin
+	affiliateQualificationAmount := previousSettings.AffiliateQualificationAmount
+	if req.AffiliateQualificationAmount != nil {
+		affiliateQualificationAmount = *req.AffiliateQualificationAmount
 	}
-	if affiliateRebateRate > service.AffiliateRebateRateMax {
-		affiliateRebateRate = service.AffiliateRebateRateMax
+	affiliateBronzeInvitees := previousSettings.AffiliateBronzeInvitees
+	if req.AffiliateBronzeInvitees != nil {
+		affiliateBronzeInvitees = *req.AffiliateBronzeInvitees
+	}
+	affiliateBronzeRate := previousSettings.AffiliateBronzeRate
+	if req.AffiliateBronzeRate != nil {
+		affiliateBronzeRate = *req.AffiliateBronzeRate
+	}
+	affiliateSilverInvitees := previousSettings.AffiliateSilverInvitees
+	if req.AffiliateSilverInvitees != nil {
+		affiliateSilverInvitees = *req.AffiliateSilverInvitees
+	}
+	affiliateSilverRate := previousSettings.AffiliateSilverRate
+	if req.AffiliateSilverRate != nil {
+		affiliateSilverRate = *req.AffiliateSilverRate
+	}
+	affiliateGoldInvitees := previousSettings.AffiliateGoldInvitees
+	if req.AffiliateGoldInvitees != nil {
+		affiliateGoldInvitees = *req.AffiliateGoldInvitees
+	}
+	affiliateGoldRate := previousSettings.AffiliateGoldRate
+	if req.AffiliateGoldRate != nil {
+		affiliateGoldRate = *req.AffiliateGoldRate
 	}
 	affiliateRebateFreezeHours := previousSettings.AffiliateRebateFreezeHours
 	if req.AffiliateRebateFreezeHours != nil {
@@ -1276,6 +1305,13 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 		DefaultConcurrency:                     req.DefaultConcurrency,
 		DefaultBalance:                         req.DefaultBalance,
 		AffiliateRebateRate:                    affiliateRebateRate,
+		AffiliateQualificationAmount:           affiliateQualificationAmount,
+		AffiliateBronzeInvitees:                affiliateBronzeInvitees,
+		AffiliateBronzeRate:                    affiliateBronzeRate,
+		AffiliateSilverInvitees:                affiliateSilverInvitees,
+		AffiliateSilverRate:                    affiliateSilverRate,
+		AffiliateGoldInvitees:                  affiliateGoldInvitees,
+		AffiliateGoldRate:                      affiliateGoldRate,
 		AffiliateRebateFreezeHours:             affiliateRebateFreezeHours,
 		AffiliateRebateDurationDays:            affiliateRebateDurationDays,
 		AffiliateRebatePerInviteeCap:           affiliateRebatePerInviteeCap,
@@ -1530,6 +1566,16 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 			return previousSettings.CyberSessionBlockTTLSeconds
 		}(),
 	}
+	settings.SetAffiliateTierConfig(service.AffiliateTierConfig{
+		QualificationAmount: affiliateQualificationAmount,
+		StandardRate:        affiliateRebateRate,
+		BronzeInvitees:      affiliateBronzeInvitees,
+		BronzeRate:          affiliateBronzeRate,
+		SilverInvitees:      affiliateSilverInvitees,
+		SilverRate:          affiliateSilverRate,
+		GoldInvitees:        affiliateGoldInvitees,
+		GoldRate:            affiliateGoldRate,
+	})
 
 	// req.AuthSourceXxxPlatformQuotas 为 nil 表示本次请求未包含该 source 的 quota 配置（保留 previousAuthSourceDefaults 中的值）；
 	// non-nil（含 empty map）表示整体覆盖：empty map = 清空该 source 的所有 quota 配置。
@@ -1783,6 +1829,13 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 		DefaultConcurrency:                                     updatedSettings.DefaultConcurrency,
 		DefaultBalance:                                         updatedSettings.DefaultBalance,
 		AffiliateRebateRate:                                    updatedSettings.AffiliateRebateRate,
+		AffiliateQualificationAmount:                           updatedSettings.AffiliateQualificationAmount,
+		AffiliateBronzeInvitees:                                updatedSettings.AffiliateBronzeInvitees,
+		AffiliateBronzeRate:                                    updatedSettings.AffiliateBronzeRate,
+		AffiliateSilverInvitees:                                updatedSettings.AffiliateSilverInvitees,
+		AffiliateSilverRate:                                    updatedSettings.AffiliateSilverRate,
+		AffiliateGoldInvitees:                                  updatedSettings.AffiliateGoldInvitees,
+		AffiliateGoldRate:                                      updatedSettings.AffiliateGoldRate,
 		AffiliateRebateFreezeHours:                             updatedSettings.AffiliateRebateFreezeHours,
 		AffiliateRebateDurationDays:                            updatedSettings.AffiliateRebateDurationDays,
 		AffiliateRebatePerInviteeCap:                           updatedSettings.AffiliateRebatePerInviteeCap,
