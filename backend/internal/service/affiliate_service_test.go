@@ -202,6 +202,41 @@ func TestAffiliateService_ReconcileInviteeFailureKeepsRecoveryMarker(t *testing.
 	require.Equal(t, "true", settings.values[SettingKeyAffiliateTierReconcileRequired])
 }
 
+func TestAffiliateService_StrictTierFailureSetsRecoveryMarker(t *testing.T) {
+	settings := newAffiliateTierServiceSettingRepo()
+	settings.getMultipleErr = errors.New("tier settings unavailable")
+	repo := &affiliateTierServiceRepoStub{}
+	svc := NewAffiliateService(repo, NewSettingService(settings, nil), nil, nil)
+
+	err := svc.ReconcileInviteeQualification(context.Background(), 7)
+
+	require.Error(t, err)
+	require.Equal(t, "true", settings.values[SettingKeyAffiliateTierReconcileRequired])
+}
+
+func TestAffiliateService_ReconcilePendingBusyReturnsStableError(t *testing.T) {
+	settings := newAffiliateTierServiceSettingRepo()
+	settings.values[SettingKeyAffiliateTierReconcileRequired] = "true"
+	repo := &affiliateTierServiceRepoStub{advisoryLockHeld: true}
+	svc := NewAffiliateService(repo, NewSettingService(settings, nil), nil, nil)
+
+	err := svc.ReconcilePendingAffiliateQualifications(context.Background())
+
+	require.ErrorIs(t, err, ErrAffiliateQualificationReconcileBusy)
+	require.Equal(t, "true", settings.values[SettingKeyAffiliateTierReconcileRequired])
+}
+
+func TestAffiliateService_PendingMarkerReadFailureSetsRecoveryMarker(t *testing.T) {
+	settings := newAffiliateTierServiceSettingRepo()
+	settings.getValueErr = errors.New("marker read failed")
+	svc := NewAffiliateService(&affiliateTierServiceRepoStub{}, NewSettingService(settings, nil), nil, nil)
+
+	err := svc.ReconcilePendingAffiliateQualifications(context.Background())
+
+	require.Error(t, err)
+	require.Equal(t, "true", settings.values[SettingKeyAffiliateTierReconcileRequired])
+}
+
 func TestAffiliateService_LegacyRateRemainsFlatCustomCompatible(t *testing.T) {
 	settings := &affiliateTierServiceSettingRepo{values: map[string]string{
 		SettingKeyAffiliateRebateRate: "15",
@@ -273,7 +308,8 @@ func TestAffiliateService_QualificationReconcileMarkerConcurrentReadsSingleRun(t
 	<-repo.reconcileStarted
 	close(repo.releaseReconcile)
 	for i := 0; i < readers; i++ {
-		require.NoError(t, <-errs)
+		err := <-errs
+		require.True(t, err == nil || errors.Is(err, ErrAffiliateQualificationReconcileBusy))
 	}
 	require.Equal(t, 1, repo.reconcileCallCount())
 }
@@ -294,7 +330,7 @@ func TestAffiliateService_QualificationReconcileDatabaseLockCoordinatesInstances
 	callsWhileLocked := repo.reconcileCallCount()
 
 	close(repo.releaseReconcile)
-	require.NoError(t, secondErr)
+	require.ErrorIs(t, secondErr, ErrAffiliateQualificationReconcileBusy)
 	require.Equal(t, "true", markerWhileLocked, "lock loser must not clear marker")
 	require.Equal(t, 1, callsWhileLocked)
 	require.NoError(t, <-firstErr)
@@ -402,6 +438,7 @@ type affiliateTierServiceSettingRepo struct {
 	mu             sync.Mutex
 	values         map[string]string
 	getMultipleErr error
+	getValueErr    error
 	setErr         error
 	beforeSet      func(key, value string)
 }
@@ -437,6 +474,9 @@ func (r *affiliateTierServiceSettingRepo) GetMultiple(_ context.Context, keys []
 func (r *affiliateTierServiceSettingRepo) GetValue(_ context.Context, key string) (string, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	if r.getValueErr != nil {
+		return "", r.getValueErr
+	}
 	value, ok := r.values[key]
 	if !ok {
 		return "", ErrSettingNotFound

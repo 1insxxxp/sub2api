@@ -14,11 +14,12 @@ import (
 )
 
 var (
-	ErrAffiliateProfileNotFound = infraerrors.NotFound("AFFILIATE_PROFILE_NOT_FOUND", "affiliate profile not found")
-	ErrAffiliateCodeInvalid     = infraerrors.BadRequest("AFFILIATE_CODE_INVALID", "invalid affiliate code")
-	ErrAffiliateCodeTaken       = infraerrors.Conflict("AFFILIATE_CODE_TAKEN", "affiliate code already in use")
-	ErrAffiliateAlreadyBound    = infraerrors.Conflict("AFFILIATE_ALREADY_BOUND", "affiliate inviter already bound")
-	ErrAffiliateQuotaEmpty      = infraerrors.BadRequest("AFFILIATE_QUOTA_EMPTY", "no affiliate quota available to transfer")
+	ErrAffiliateProfileNotFound            = infraerrors.NotFound("AFFILIATE_PROFILE_NOT_FOUND", "affiliate profile not found")
+	ErrAffiliateCodeInvalid                = infraerrors.BadRequest("AFFILIATE_CODE_INVALID", "invalid affiliate code")
+	ErrAffiliateCodeTaken                  = infraerrors.Conflict("AFFILIATE_CODE_TAKEN", "affiliate code already in use")
+	ErrAffiliateAlreadyBound               = infraerrors.Conflict("AFFILIATE_ALREADY_BOUND", "affiliate inviter already bound")
+	ErrAffiliateQuotaEmpty                 = infraerrors.BadRequest("AFFILIATE_QUOTA_EMPTY", "no affiliate quota available to transfer")
+	ErrAffiliateQualificationReconcileBusy = errors.New("affiliate qualification reconciliation is busy")
 )
 
 const (
@@ -457,13 +458,13 @@ func (s *AffiliateService) ResolveTierAwareRate(ctx context.Context, inviter *Af
 	if inviter == nil || inviter.UserID <= 0 {
 		config, err := s.affiliateTierConfigStrict(ctx)
 		if err != nil {
-			return 0, err
+			return 0, s.withAffiliateTierReconcileMarker(ctx, err)
 		}
 		return config.StandardRate, nil
 	}
 	snapshot, err := s.ResolveAffiliateTierSnapshot(ctx, inviter.UserID)
 	if err != nil {
-		return 0, err
+		return 0, s.withAffiliateTierReconcileMarker(ctx, err)
 	}
 	return effectiveAffiliateRebateRate(inviter, snapshot.AutomaticRatePercent), nil
 }
@@ -520,24 +521,27 @@ func (s *AffiliateService) affiliateTierConfigStrict(ctx context.Context) (Affil
 // ReconcilePendingAffiliateQualifications is an explicit orchestration hook for
 // Task 4 startup/payment flows. Existing payment and API reads must not call it implicitly.
 func (s *AffiliateService) ReconcilePendingAffiliateQualifications(ctx context.Context) error {
-	if s == nil || s.qualificationRepo == nil {
+	if s == nil {
 		return infraerrors.ServiceUnavailable("SERVICE_UNAVAILABLE", "affiliate service unavailable")
 	}
+	if s.qualificationRepo == nil {
+		return s.withAffiliateTierReconcileMarker(ctx, infraerrors.ServiceUnavailable("SERVICE_UNAVAILABLE", "affiliate qualification service unavailable"))
+	}
 	if dbent.TxFromContext(ctx) != nil {
-		return fmt.Errorf("affiliate qualification reconcile requires a non-transaction context")
+		return s.withAffiliateTierReconcileMarker(ctx, fmt.Errorf("affiliate qualification reconcile requires a non-transaction context"))
 	}
 	if s.settingService == nil {
 		return nil
 	}
 	required, err := s.settingService.IsAffiliateTierReconcileRequired(ctx)
 	if err != nil {
-		return fmt.Errorf("read affiliate qualification reconcile marker: %w", err)
+		return s.withAffiliateTierReconcileMarker(ctx, fmt.Errorf("read affiliate qualification reconcile marker: %w", err))
 	}
 	if !required {
 		return nil
 	}
 
-	_, err = s.qualificationRepo.TryWithAffiliateQualificationReconcileLock(ctx, func(lockCtx context.Context) error {
+	acquired, err := s.qualificationRepo.TryWithAffiliateQualificationReconcileLock(ctx, func(lockCtx context.Context) error {
 		required, err := s.settingService.IsAffiliateTierReconcileRequired(lockCtx)
 		if err != nil {
 			return fmt.Errorf("recheck affiliate qualification reconcile marker: %w", err)
@@ -557,7 +561,25 @@ func (s *AffiliateService) ReconcilePendingAffiliateQualifications(ctx context.C
 		}
 		return nil
 	})
-	return err
+	if err != nil {
+		return s.withAffiliateTierReconcileMarker(ctx, err)
+	}
+	if !acquired {
+		return s.withAffiliateTierReconcileMarker(ctx, ErrAffiliateQualificationReconcileBusy)
+	}
+	return nil
+}
+
+func (s *AffiliateService) withAffiliateTierReconcileMarker(ctx context.Context, primary error) error {
+	if primary == nil || s == nil || s.settingService == nil {
+		return primary
+	}
+	markerErr := s.settingService.SetAffiliateTierReconcileRequired(dbent.WithoutTx(ctx), true)
+	if markerErr != nil {
+		logger.LegacyPrintf("service.affiliate", "[Affiliate] Failed to set tier reconcile marker: %v (cause: %v)", markerErr, primary)
+		return errors.Join(primary, fmt.Errorf("set affiliate qualification reconcile marker: %w", markerErr))
+	}
+	return primary
 }
 
 // ReconcileInviteeQualification refreshes one invitee's qualification from
@@ -565,22 +587,25 @@ func (s *AffiliateService) ReconcilePendingAffiliateQualifications(ctx context.C
 // successful single-user repair does not prove the rest of the dataset is
 // reconciled.
 func (s *AffiliateService) ReconcileInviteeQualification(ctx context.Context, inviteeUserID int64) error {
-	if s == nil || s.qualificationRepo == nil {
+	if s == nil {
 		return infraerrors.ServiceUnavailable("SERVICE_UNAVAILABLE", "affiliate qualification service unavailable")
 	}
+	if s.qualificationRepo == nil {
+		return s.withAffiliateTierReconcileMarker(ctx, infraerrors.ServiceUnavailable("SERVICE_UNAVAILABLE", "affiliate qualification service unavailable"))
+	}
 	if dbent.TxFromContext(ctx) != nil {
-		return fmt.Errorf("affiliate invitee qualification reconcile requires a non-transaction context")
+		return s.withAffiliateTierReconcileMarker(ctx, fmt.Errorf("affiliate invitee qualification reconcile requires a non-transaction context"))
 	}
 	config, err := s.affiliateTierConfigStrict(ctx)
 	if err == nil {
 		_, err = s.qualificationRepo.ReconcileInviteeQualification(ctx, inviteeUserID, config.QualificationAmount)
 	}
-	if err != nil && s.settingService != nil {
+	if err != nil {
 		// A failed local repair must keep the recovery work visible to the next
 		// payment/startup attempt. Marker write is best-effort by design.
-		_ = s.settingService.SetAffiliateTierReconcileRequired(ctx, true)
+		return s.withAffiliateTierReconcileMarker(ctx, err)
 	}
-	return err
+	return nil
 }
 
 func (s *AffiliateService) TransferAffiliateQuota(ctx context.Context, userID int64) (float64, float64, error) {

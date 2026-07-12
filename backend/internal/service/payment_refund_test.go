@@ -111,6 +111,67 @@ func TestMarkRefundOkReconcilesAffiliateAfterSuccessfulPersistence(t *testing.T)
 	require.Equal(t, 1, failures)
 }
 
+func TestMarkRefundOkPartialRefundRefreshesAffiliateQualification(t *testing.T) {
+	ctx := context.Background()
+	client := newPaymentConfigServiceTestClient(t)
+	user, err := client.User.Create().SetEmail("partial-refund-affiliate@example.com").SetPasswordHash("hash").SetUsername("partial-refund-affiliate").Save(ctx)
+	require.NoError(t, err)
+	order, err := client.PaymentOrder.Create().SetUserID(user.ID).SetUserEmail(user.Email).SetUserName(user.Username).
+		SetAmount(100).SetPayAmount(100).SetFeeRate(0).SetRechargeCode("PARTIAL-REFUND-AFFILIATE").SetOutTradeNo("sub2_partial_refund_affiliate").
+		SetPaymentType(payment.TypeAlipay).SetPaymentTradeNo("trade-partial-refund-affiliate").SetOrderType(payment.OrderTypeBalance).
+		SetStatus(OrderStatusCompleted).SetExpiresAt(time.Now().Add(time.Hour)).SetClientIP("127.0.0.1").SetSrcHost("api.example.com").Save(ctx)
+	require.NoError(t, err)
+	settings := &paymentFulfillmentSettingRepoStub{values: map[string]string{
+		SettingKeyAffiliateQualificationAmount: "50",
+		SettingKeyAffiliateRebateRate:          "8",
+		SettingKeyAffiliateBronzeInvitees:      "3",
+		SettingKeyAffiliateBronzeRate:          "10",
+		SettingKeyAffiliateSilverInvitees:      "10",
+		SettingKeyAffiliateSilverRate:          "12",
+		SettingKeyAffiliateGoldInvitees:        "30",
+		SettingKeyAffiliateGoldRate:            "15",
+	}}
+	affiliateRepo := &paymentFulfillmentAffiliateRepoStub{}
+	svc := &PaymentService{entClient: client, affiliateService: NewAffiliateService(affiliateRepo, NewSettingService(settings, nil), nil, nil)}
+
+	result, err := svc.markRefundOk(ctx, &RefundPlan{OrderID: order.ID, Order: order, RefundAmount: 40, Reason: "partial refund"})
+
+	require.NoError(t, err)
+	require.True(t, result.Success)
+	reloaded, err := client.PaymentOrder.Get(ctx, order.ID)
+	require.NoError(t, err)
+	require.Equal(t, OrderStatusPartiallyRefunded, reloaded.Status)
+	require.Equal(t, 1, affiliateRepo.reconcileCalls)
+}
+
+func TestRequestRefundDoesNotRefreshAffiliateQualification(t *testing.T) {
+	ctx := context.Background()
+	client := newPaymentConfigServiceTestClient(t)
+	user, err := client.User.Create().SetEmail("requested-refund-affiliate@example.com").SetPasswordHash("hash").SetUsername("requested-refund-affiliate").Save(ctx)
+	require.NoError(t, err)
+	instance, err := client.PaymentProviderInstance.Create().SetProviderKey(payment.TypeAlipay).SetName("requested-refund-provider").SetConfig("{}").
+		SetSupportedTypes("alipay").SetEnabled(true).SetAllowUserRefund(true).SetRefundEnabled(true).Save(ctx)
+	require.NoError(t, err)
+	order, err := client.PaymentOrder.Create().SetUserID(user.ID).SetUserEmail(user.Email).SetUserName(user.Username).
+		SetAmount(100).SetPayAmount(100).SetFeeRate(0).SetRechargeCode("REQUESTED-REFUND-AFFILIATE").SetOutTradeNo("sub2_requested_refund_affiliate").
+		SetPaymentType(payment.TypeAlipay).SetPaymentTradeNo("trade-requested-refund-affiliate").SetOrderType(payment.OrderTypeBalance).
+		SetStatus(OrderStatusCompleted).SetExpiresAt(time.Now().Add(time.Hour)).SetClientIP("127.0.0.1").SetSrcHost("api.example.com").
+		SetProviderInstanceID(strconv.FormatInt(instance.ID, 10)).Save(ctx)
+	require.NoError(t, err)
+	affiliateRepo := &paymentFulfillmentAffiliateRepoStub{}
+	svc := &PaymentService{
+		entClient:        client,
+		userRepo:         &mockUserRepo{getByIDUser: &User{ID: user.ID, Balance: 200}},
+		affiliateService: NewAffiliateService(affiliateRepo, nil, nil, nil),
+	}
+
+	require.NoError(t, svc.RequestRefund(ctx, order.ID, user.ID, "requested"))
+	reloaded, err := client.PaymentOrder.Get(ctx, order.ID)
+	require.NoError(t, err)
+	require.Equal(t, OrderStatusRefundRequested, reloaded.Status)
+	require.Zero(t, affiliateRepo.reconcileCalls)
+}
+
 func TestPrepareRefundRejectsLegacyGuessedProviderInstance(t *testing.T) {
 	ctx := context.Background()
 	client := newPaymentConfigServiceTestClient(t)
@@ -293,9 +354,11 @@ func TestFinishRefundPendingMarksOrderPendingAndRollsBackDeduction(t *testing.T)
 		rolledBack += amount
 		return nil
 	}
+	affiliateRepo := &paymentFulfillmentAffiliateRepoStub{}
 	svc := &PaymentService{
-		entClient: client,
-		userRepo:  userRepo,
+		entClient:        client,
+		userRepo:         userRepo,
+		affiliateService: NewAffiliateService(affiliateRepo, nil, nil, nil),
 	}
 	plan := &RefundPlan{
 		OrderID:         order.ID,
@@ -334,6 +397,7 @@ func TestFinishRefundPendingMarksOrderPendingAndRollsBackDeduction(t *testing.T)
 		Count(ctx)
 	require.NoError(t, err)
 	require.Zero(t, successAudits)
+	require.Zero(t, affiliateRepo.reconcileCalls)
 }
 
 func TestFinishRefundSuccessStatusesFinalize(t *testing.T) {
@@ -420,11 +484,13 @@ func TestQueryAndFinalizeRefundFinalizesProviderStatuses(t *testing.T) {
 			ctx := context.Background()
 			client := newPaymentConfigServiceTestClient(t)
 			order := createPendingRefundOrderForTest(t, ctx, client, "query-finalize-"+tc.name)
+			affiliateRepo := &paymentFulfillmentAffiliateRepoStub{}
 
 			var deducted float64
 			svc := &PaymentService{
-				entClient:    client,
-				loadBalancer: &captureLoadBalancer{},
+				entClient:        client,
+				loadBalancer:     &captureLoadBalancer{},
+				affiliateService: NewAffiliateService(affiliateRepo, nil, nil, nil),
 				userRepo: &mockUserRepo{deductBalanceFn: func(ctx context.Context, id int64, amount float64) error {
 					deducted += amount
 					return nil
@@ -444,6 +510,11 @@ func TestQueryAndFinalizeRefundFinalizesProviderStatuses(t *testing.T) {
 			reloaded, err := client.PaymentOrder.Get(ctx, order.ID)
 			require.NoError(t, err)
 			require.Equal(t, tc.wantStatus, reloaded.Status)
+			if tc.status == payment.ProviderStatusSuccess {
+				require.Equal(t, 1, affiliateRepo.reconcileCalls)
+			} else {
+				require.Zero(t, affiliateRepo.reconcileCalls)
+			}
 		})
 	}
 }

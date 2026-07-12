@@ -50,12 +50,14 @@ type paymentFulfillmentAffiliateAccrueCall struct {
 }
 
 type paymentFulfillmentAffiliateRepoStub struct {
-	inviteeSummary *AffiliateSummary
-	inviterSummary *AffiliateSummary
-	accrueCalls    []paymentFulfillmentAffiliateAccrueCall
-	qualifiedCount int
-	reconcileErr   error
-	reconcileCalls int
+	inviteeSummary     *AffiliateSummary
+	inviterSummary     *AffiliateSummary
+	accrueCalls        []paymentFulfillmentAffiliateAccrueCall
+	qualifiedCount     int
+	reconcileErr       error
+	reconcileCalls     int
+	lockBusy           bool
+	reconcileInviteeFn func(context.Context, int64, float64) (*AffiliateQualification, error)
 }
 
 func (r *paymentFulfillmentAffiliateRepoStub) EnsureUserAffiliate(_ context.Context, userID int64) (*AffiliateSummary, error) {
@@ -147,8 +149,11 @@ func (r *paymentFulfillmentAffiliateRepoStub) GetAffiliateUserOverview(context.C
 	panic("unexpected GetAffiliateUserOverview call")
 }
 
-func (r *paymentFulfillmentAffiliateRepoStub) ReconcileInviteeQualification(context.Context, int64, float64) (*AffiliateQualification, error) {
+func (r *paymentFulfillmentAffiliateRepoStub) ReconcileInviteeQualification(ctx context.Context, userID int64, threshold float64) (*AffiliateQualification, error) {
 	r.reconcileCalls++
+	if r.reconcileInviteeFn != nil {
+		return r.reconcileInviteeFn(ctx, userID, threshold)
+	}
 	if r.reconcileErr != nil {
 		return nil, r.reconcileErr
 	}
@@ -165,11 +170,16 @@ func (r *paymentFulfillmentAffiliateRepoStub) ReconcileAllAffiliateQualification
 }
 
 func (r *paymentFulfillmentAffiliateRepoStub) TryWithAffiliateQualificationReconcileLock(ctx context.Context, fn func(context.Context) error) (bool, error) {
+	if r.lockBusy {
+		return false, nil
+	}
 	return true, fn(ctx)
 }
 
 type paymentFulfillmentSettingRepoStub struct {
-	values map[string]string
+	values         map[string]string
+	setErr         error
+	getMultipleErr error
 }
 
 func (s *paymentFulfillmentSettingRepoStub) Get(context.Context, string) (*Setting, error) {
@@ -188,6 +198,9 @@ func (s *paymentFulfillmentSettingRepoStub) GetValue(_ context.Context, key stri
 }
 
 func (s *paymentFulfillmentSettingRepoStub) Set(_ context.Context, key, value string) error {
+	if s.setErr != nil {
+		return s.setErr
+	}
 	if s.values == nil {
 		s.values = map[string]string{}
 	}
@@ -196,6 +209,9 @@ func (s *paymentFulfillmentSettingRepoStub) Set(_ context.Context, key, value st
 }
 
 func (s *paymentFulfillmentSettingRepoStub) GetMultiple(_ context.Context, keys []string) (map[string]string, error) {
+	if s.getMultipleErr != nil {
+		return nil, s.getMultipleErr
+	}
 	out := make(map[string]string, len(keys))
 	for _, key := range keys {
 		out[key] = s.values[key]
@@ -891,6 +907,195 @@ func TestApplyAffiliateRebateFallsBackWhenPendingReconcileFails(t *testing.T) {
 	).Count(ctx)
 	require.NoError(t, err)
 	require.Equal(t, 1, fallbacks)
+}
+
+func TestApplyAffiliateRebateFallsBackWhenQualificationReconcileLockIsBusy(t *testing.T) {
+	ctx := context.Background()
+	client := newPaymentConfigServiceTestClient(t)
+	ensurePaymentAuditOrderActionUniqueIndex(t, ctx, client)
+	user, err := client.User.Create().SetEmail("affiliate-lock-busy@example.com").SetPasswordHash("hash").SetUsername("affiliate-lock-busy").Save(ctx)
+	require.NoError(t, err)
+	order, err := client.PaymentOrder.Create().SetUserID(user.ID).SetUserEmail(user.Email).SetUserName(user.Username).
+		SetAmount(100).SetPayAmount(100).SetFeeRate(0).SetRechargeCode("PAY-AFFILIATE-LOCK-BUSY").SetOutTradeNo("sub2_affiliate_lock_busy").
+		SetPaymentType(payment.TypeAlipay).SetPaymentTradeNo("trade-affiliate-lock-busy").SetOrderType(payment.OrderTypeBalance).
+		SetStatus(OrderStatusRecharging).SetExpiresAt(time.Now().Add(time.Hour)).SetClientIP("127.0.0.1").SetSrcHost("api.example.com").Save(ctx)
+	require.NoError(t, err)
+
+	inviterID := int64(9011)
+	affiliateRepo := &paymentFulfillmentAffiliateRepoStub{
+		qualifiedCount: 30,
+		lockBusy:       true,
+		inviteeSummary: &AffiliateSummary{UserID: user.ID, InviterID: &inviterID, CreatedAt: time.Now().Add(-time.Hour)},
+		inviterSummary: &AffiliateSummary{UserID: inviterID},
+	}
+	settings := &paymentFulfillmentSettingRepoStub{values: map[string]string{
+		SettingKeyAffiliateEnabled:               "true",
+		SettingKeyAffiliateRebateRate:            "8",
+		SettingKeyAffiliateTierReconcileRequired: "true",
+		SettingKeyAffiliateQualificationAmount:   "50",
+		SettingKeyAffiliateBronzeInvitees:        "3",
+		SettingKeyAffiliateBronzeRate:            "10",
+		SettingKeyAffiliateSilverInvitees:        "10",
+		SettingKeyAffiliateSilverRate:            "12",
+		SettingKeyAffiliateGoldInvitees:          "30",
+		SettingKeyAffiliateGoldRate:              "15",
+	}}
+	svc := &PaymentService{entClient: client, affiliateService: NewAffiliateService(affiliateRepo, NewSettingService(settings, nil), nil, nil)}
+
+	require.NoError(t, svc.applyAffiliateRebateForOrder(ctx, order))
+	require.Len(t, affiliateRepo.accrueCalls, 1)
+	require.Equal(t, 8.0, affiliateRepo.accrueCalls[0].amount)
+	require.Equal(t, "true", settings.values[SettingKeyAffiliateTierReconcileRequired])
+}
+
+func TestApplyAffiliateRebateStrictFailureAuditsMarkerWriteFailure(t *testing.T) {
+	ctx := context.Background()
+	client := newPaymentConfigServiceTestClient(t)
+	ensurePaymentAuditOrderActionUniqueIndex(t, ctx, client)
+	user, err := client.User.Create().SetEmail("affiliate-strict-failure@example.com").SetPasswordHash("hash").SetUsername("affiliate-strict-failure").Save(ctx)
+	require.NoError(t, err)
+	order, err := client.PaymentOrder.Create().SetUserID(user.ID).SetUserEmail(user.Email).SetUserName(user.Username).
+		SetAmount(100).SetPayAmount(100).SetFeeRate(0).SetRechargeCode("PAY-AFFILIATE-STRICT-FAILURE").SetOutTradeNo("sub2_affiliate_strict_failure").
+		SetPaymentType(payment.TypeAlipay).SetPaymentTradeNo("trade-affiliate-strict-failure").SetOrderType(payment.OrderTypeBalance).
+		SetStatus(OrderStatusRecharging).SetExpiresAt(time.Now().Add(time.Hour)).SetClientIP("127.0.0.1").SetSrcHost("api.example.com").Save(ctx)
+	require.NoError(t, err)
+	inviterID := int64(9012)
+	affiliateRepo := &paymentFulfillmentAffiliateRepoStub{
+		qualifiedCount: 30,
+		inviteeSummary: &AffiliateSummary{UserID: user.ID, InviterID: &inviterID, CreatedAt: time.Now().Add(-time.Hour)},
+		inviterSummary: &AffiliateSummary{UserID: inviterID},
+	}
+	settings := &paymentFulfillmentSettingRepoStub{setErr: errors.New("marker write failed"), values: map[string]string{
+		SettingKeyAffiliateEnabled:             "true",
+		SettingKeyAffiliateRebateRate:          "8",
+		SettingKeyAffiliateQualificationAmount: "invalid",
+	}}
+	svc := &PaymentService{entClient: client, affiliateService: NewAffiliateService(affiliateRepo, NewSettingService(settings, nil), nil, nil)}
+
+	require.NoError(t, svc.applyAffiliateRebateForOrder(ctx, order))
+	require.Len(t, affiliateRepo.accrueCalls, 1)
+	require.Equal(t, 8.0, affiliateRepo.accrueCalls[0].amount)
+	fallback, err := client.PaymentAuditLog.Query().Where(
+		paymentauditlog.OrderIDEQ(strconv.FormatInt(order.ID, 10)),
+		paymentauditlog.ActionEQ("AFFILIATE_TIER_FALLBACK"),
+	).Only(ctx)
+	require.NoError(t, err)
+	require.Contains(t, fallback.Detail, "set affiliate qualification reconcile marker")
+}
+
+func TestPaymentTierThresholdOrderUsesOldRateAndNextOrderUsesNewRate(t *testing.T) {
+	tests := []struct {
+		name    string
+		before  int
+		after   int
+		oldRate float64
+		newRate float64
+	}{
+		{name: "bronze", before: 2, after: 3, oldRate: 8, newRate: 10},
+		{name: "silver", before: 9, after: 10, oldRate: 10, newRate: 12},
+		{name: "gold", before: 29, after: 30, oldRate: 12, newRate: 15},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := context.Background()
+			client := newPaymentConfigServiceTestClient(t)
+			ensurePaymentAuditOrderActionUniqueIndex(t, ctx, client)
+			user, err := client.User.Create().SetEmail("tier-" + tt.name + "@example.com").SetPasswordHash("hash").SetUsername("tier-" + tt.name).Save(ctx)
+			require.NoError(t, err)
+			inviterID := int64(9100 + tt.after)
+			repo := &paymentFulfillmentAffiliateRepoStub{
+				qualifiedCount: tt.before,
+				inviteeSummary: &AffiliateSummary{UserID: user.ID, InviterID: &inviterID, CreatedAt: time.Now().Add(-time.Hour)},
+				inviterSummary: &AffiliateSummary{UserID: inviterID},
+			}
+			var firstOrderID int64
+			repo.reconcileInviteeFn = func(ctx context.Context, userID int64, threshold float64) (*AffiliateQualification, error) {
+				if firstOrderID > 0 {
+					first, getErr := client.PaymentOrder.Get(ctx, firstOrderID)
+					require.NoError(t, getErr)
+					if first.Status == OrderStatusCompleted {
+						repo.qualifiedCount = tt.after
+					}
+				}
+				return &AffiliateQualification{InviteeUserID: userID, QualifyingPaymentAmount: threshold}, nil
+			}
+			settings := &paymentFulfillmentSettingRepoStub{values: map[string]string{
+				SettingKeyAffiliateEnabled:             "true",
+				SettingKeyAffiliateRebateRate:          "8",
+				SettingKeyAffiliateQualificationAmount: "50",
+				SettingKeyAffiliateBronzeInvitees:      "3",
+				SettingKeyAffiliateBronzeRate:          "10",
+				SettingKeyAffiliateSilverInvitees:      "10",
+				SettingKeyAffiliateSilverRate:          "12",
+				SettingKeyAffiliateGoldInvitees:        "30",
+				SettingKeyAffiliateGoldRate:            "15",
+			}}
+			svc := &PaymentService{entClient: client, affiliateService: NewAffiliateService(repo, NewSettingService(settings, nil), nil, nil)}
+			createOrder := func(suffix string) *dbent.PaymentOrder {
+				order, createErr := client.PaymentOrder.Create().SetUserID(user.ID).SetUserEmail(user.Email).SetUserName(user.Username).
+					SetAmount(100).SetPayAmount(100).SetFeeRate(0).SetRechargeCode("TIER-" + tt.name + "-" + suffix).SetOutTradeNo("sub2_tier_" + tt.name + "_" + suffix).
+					SetPaymentType(payment.TypeAlipay).SetPaymentTradeNo("trade-tier-" + tt.name + "-" + suffix).SetOrderType(payment.OrderTypeBalance).
+					SetStatus(OrderStatusPaid).SetExpiresAt(time.Now().Add(time.Hour)).SetClientIP("127.0.0.1").SetSrcHost("api.example.com").Save(ctx)
+				require.NoError(t, createErr)
+				return order
+			}
+
+			first := createOrder("first")
+			firstOrderID = first.ID
+			firstLease, err := svc.acquirePaymentFulfillmentLease(ctx, first)
+			require.NoError(t, err)
+			require.NoError(t, svc.applyAffiliateRebateForOrder(ctx, first))
+			require.Equal(t, tt.oldRate, repo.accrueCalls[0].amount)
+			require.NoError(t, svc.markCompleted(ctx, first, firstLease, "TIER_FIRST_COMPLETED"))
+			require.Equal(t, tt.after, repo.qualifiedCount)
+
+			second := createOrder("second")
+			_, err = svc.acquirePaymentFulfillmentLease(ctx, second)
+			require.NoError(t, err)
+			require.NoError(t, svc.applyAffiliateRebateForOrder(ctx, second))
+			require.Len(t, repo.accrueCalls, 2)
+			require.Equal(t, tt.newRate, repo.accrueCalls[1].amount)
+		})
+	}
+}
+
+func TestMarkCompletedKeepsBothPaymentTypesCompletedWhenAffiliateRefreshFails(t *testing.T) {
+	for _, orderType := range []string{payment.OrderTypeBalance, payment.OrderTypeSubscription} {
+		t.Run(orderType, func(t *testing.T) {
+			ctx := context.Background()
+			client := newPaymentConfigServiceTestClient(t)
+			ensurePaymentAuditOrderActionUniqueIndex(t, ctx, client)
+			order := createPaymentFulfillmentSubscriptionOrder(t, ctx, client, OrderStatusPaid, time.Now())
+			if orderType == payment.OrderTypeBalance {
+				var err error
+				order, err = client.PaymentOrder.UpdateOneID(order.ID).SetOrderType(payment.OrderTypeBalance).ClearPlanID().ClearSubscriptionGroupID().ClearSubscriptionDays().Save(ctx)
+				require.NoError(t, err)
+			}
+			var err error
+			order, err = client.PaymentOrder.Get(ctx, order.ID)
+			require.NoError(t, err)
+			settings := &paymentFulfillmentSettingRepoStub{values: map[string]string{
+				SettingKeyAffiliateQualificationAmount: "50",
+				SettingKeyAffiliateRebateRate:          "8",
+				SettingKeyAffiliateBronzeInvitees:      "3",
+				SettingKeyAffiliateBronzeRate:          "10",
+				SettingKeyAffiliateSilverInvitees:      "10",
+				SettingKeyAffiliateSilverRate:          "12",
+				SettingKeyAffiliateGoldInvitees:        "30",
+				SettingKeyAffiliateGoldRate:            "15",
+			}}
+			affiliateRepo := &paymentFulfillmentAffiliateRepoStub{reconcileErr: errors.New("refresh failed")}
+			svc := &PaymentService{entClient: client, affiliateService: NewAffiliateService(affiliateRepo, NewSettingService(settings, nil), nil, nil)}
+			lease, err := svc.acquirePaymentFulfillmentLease(ctx, order)
+			require.NoError(t, err)
+			require.NotNil(t, lease)
+
+			require.NoError(t, svc.markCompleted(ctx, order, lease, "PAYMENT_SUCCESS"))
+			reloaded, err := client.PaymentOrder.Get(ctx, order.ID)
+			require.NoError(t, err)
+			require.Equal(t, OrderStatusCompleted, reloaded.Status)
+		})
+	}
 }
 
 func TestExecuteSubscriptionFulfillmentAppliesAffiliateRebate(t *testing.T) {
