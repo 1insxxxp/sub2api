@@ -21,6 +21,8 @@ export interface CheckinStatus {
   next_reset_at?: string
   min_total_usage_usd: number
   total_usage_usd: number
+  min_total_recharge_usd: number
+  total_recharge_usd: number
   ineligible_reason?: string
   next_streak_rule?: CheckinStreakRule | null
   recent_records?: CheckinRecord[]

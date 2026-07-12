@@ -390,6 +390,11 @@ const (
 	// Defaults to 0 when unset.
 	SettingKeyCheckinMinTotalUsageUSD = "checkin_min_total_usage_usd"
 
+	// SettingKeyCheckinMinTotalRechargeUSD allows users to qualify through
+	// cumulative credited balance as an alternative to cumulative usage.
+	// Defaults to 0 when unset, which disables this individual criterion.
+	SettingKeyCheckinMinTotalRechargeUSD = "checkin_min_total_recharge_usd"
+
 	// SettingKeyCheckinRewardConfig stores JSON config for random reward tiers and
 	// streak bonus rules.
 	SettingKeyCheckinRewardConfig = "checkin_reward_config"

@@ -85,6 +85,11 @@ vi.mock('vue-i18n', async () => {
     'checkin.eligibilityTitle': 'Check-in eligibility',
     'checkin.eligibilitySatisfied': 'Cumulative spend reached {min}; current {current}',
     'checkin.eligibilityPending': 'Check-in unlocks at {min} cumulative spend; current {current}',
+    'checkin.eligibilityEitherSatisfied': 'Usage or recharge requirement reached',
+    'checkin.eligibilityEitherPending': 'Reach either usage or recharge requirement',
+    'checkin.usageCriterion': 'Cumulative usage',
+    'checkin.rechargeCriterion': 'Cumulative recharge',
+    'checkin.criterionProgress': '{current} / {min}',
     'checkin.rewardBreakdown': 'Reward breakdown',
     'checkin.baseReward': 'Base reward',
     'checkin.streakBonus': 'Streak bonus',
@@ -288,6 +293,8 @@ describe('AppHeader daily check-in entry', () => {
       lifetime_checkin_days: 1,
       min_total_usage_usd: 10,
       total_usage_usd: 18.5,
+      min_total_recharge_usd: 0,
+      total_recharge_usd: 0,
       next_streak_rule: {
         day: 7,
         bonus_amount: 10
@@ -319,13 +326,66 @@ describe('AppHeader daily check-in entry', () => {
       lifetime_checkin_days: 0,
       min_total_usage_usd: 50,
       total_usage_usd: 73.77,
+      min_total_recharge_usd: 0,
+      total_recharge_usd: 0,
       recent_records: []
     })
 
     const wrapper = await mountHeader()
-    const progress = wrapper.get('[data-test="daily-checkin-eligibility-progress"]')
+    const progress = wrapper.get('[data-test="daily-checkin-usage-progress"]')
 
     expect(progress.attributes('style')).toContain('width: 100%')
+  })
+
+  it('renders usage and recharge progress and enables check-in when recharge qualifies', async () => {
+    getCheckinStatus.mockResolvedValue({
+      enabled: true,
+      eligible: true,
+      checked_in: false,
+      blacklisted: false,
+      checkin_date: '2026-06-16',
+      reward_amount: null,
+      current_streak: 0,
+      lifetime_checkin_days: 0,
+      min_total_usage_usd: 10,
+      total_usage_usd: 4,
+      min_total_recharge_usd: 20,
+      total_recharge_usd: 20,
+      recent_records: []
+    })
+
+    const wrapper = await mountHeader()
+
+    expect(wrapper.get('[data-test="daily-checkin-usage-progress"]').attributes('style')).toContain('width: 40%')
+    expect(wrapper.get('[data-test="daily-checkin-recharge-progress"]').attributes('style')).toContain('width: 100%')
+    expect(wrapper.text()).toContain('Cumulative usage')
+    expect(wrapper.text()).toContain('Cumulative recharge')
+    expect(wrapper.get('[data-test="daily-checkin-button"]').attributes('disabled')).toBeUndefined()
+  })
+
+  it('omits disabled eligibility criteria', async () => {
+    getCheckinStatus.mockResolvedValue({
+      enabled: true,
+      eligible: false,
+      checked_in: false,
+      blacklisted: false,
+      checkin_date: '2026-06-16',
+      reward_amount: null,
+      current_streak: 0,
+      lifetime_checkin_days: 0,
+      min_total_usage_usd: 0,
+      total_usage_usd: 100,
+      min_total_recharge_usd: 20,
+      total_recharge_usd: 5,
+      ineligible_reason: 'insufficient_usage_or_recharge',
+      recent_records: []
+    })
+
+    const wrapper = await mountHeader()
+
+    expect(wrapper.find('[data-test="daily-checkin-usage-progress"]').exists()).toBe(false)
+    expect(wrapper.get('[data-test="daily-checkin-recharge-progress"]').attributes('style')).toContain('width: 25%')
+    expect(wrapper.get('[data-test="daily-checkin-button"]').attributes('disabled')).toBeDefined()
   })
 })
 

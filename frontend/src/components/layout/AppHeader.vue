@@ -178,17 +178,28 @@
                     {{ checkinStatus?.eligible === false ? t('checkin.eligibilityPendingBadge') : t('checkin.eligibilityReadyBadge') }}
                   </span>
                 </div>
-                <div
-                  v-if="checkinMinSpend > 0"
-                  class="checkin-progress-track mt-3"
-                  :aria-label="t('checkin.eligibilityTitle')"
-                >
-                  <div
-                    class="checkin-progress-fill"
-                    data-test="daily-checkin-eligibility-progress"
-                    :style="{ width: `${eligibilityProgressPercent}%` }"
-                  >
-                    <span class="checkin-progress-sheen" aria-hidden="true" />
+                <div v-if="eligibilityCriteria.length > 0" class="mt-3 space-y-3">
+                  <div v-for="criterion in eligibilityCriteria" :key="criterion.key">
+                    <div class="mb-1.5 flex items-center justify-between gap-3 text-[11px]">
+                      <span class="font-medium text-slate-600 dark:text-slate-300">
+                        {{ criterion.label }}
+                      </span>
+                      <span class="shrink-0 text-slate-500 dark:text-slate-400">
+                        {{ t('checkin.criterionProgress', { current: formatUsd(criterion.current), min: formatUsd(criterion.min) }) }}
+                      </span>
+                    </div>
+                    <div
+                      class="checkin-progress-track"
+                      :aria-label="criterion.label"
+                    >
+                      <div
+                        class="checkin-progress-fill"
+                        :data-test="`daily-checkin-${criterion.key}-progress`"
+                        :style="{ width: `${criterion.percent}%` }"
+                      >
+                        <span class="checkin-progress-sheen" aria-hidden="true" />
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -489,11 +500,11 @@ const checkinButtonLabel = computed(() => {
 const checkinButtonTitle = computed(() => {
   const status = checkinStatus.value
   if (!status) return checkinButtonLabel.value
-  if (status.eligible === false && status.ineligible_reason === 'insufficient_spend') {
-    return t('checkin.insufficientSpend', {
-      min: formatUsd(status.min_total_usage_usd),
-      current: formatUsd(status.total_usage_usd),
-    })
+  if (
+    status.eligible === false &&
+    ['insufficient_spend', 'insufficient_usage_or_recharge'].includes(status.ineligible_reason ?? '')
+  ) {
+    return eligibilityMessage.value
   }
   return checkinButtonLabel.value
 })
@@ -511,21 +522,70 @@ const checkinCurrentSpend = computed(() => {
   return Math.max(0, Number(checkinStatus.value?.total_usage_usd ?? 0))
 })
 
-const eligibilityProgressPercent = computed(() => {
-  if (checkinMinSpend.value <= 0) return 100
-  return Math.min(100, Math.max(0, (checkinCurrentSpend.value / checkinMinSpend.value) * 100))
+const checkinMinRecharge = computed(() => {
+  return Math.max(0, Number(checkinStatus.value?.min_total_recharge_usd ?? 0))
+})
+
+const checkinCurrentRecharge = computed(() => {
+  return Math.max(0, Number(checkinStatus.value?.total_recharge_usd ?? 0))
+})
+
+const eligibilityCriteria = computed(() => {
+  const criteria: Array<{
+    key: 'usage' | 'recharge'
+    label: string
+    min: number
+    current: number
+    percent: number
+  }> = []
+  if (checkinMinSpend.value > 0) {
+    criteria.push({
+      key: 'usage',
+      label: t('checkin.usageCriterion'),
+      min: checkinMinSpend.value,
+      current: checkinCurrentSpend.value,
+      percent: Math.min(100, (checkinCurrentSpend.value / checkinMinSpend.value) * 100),
+    })
+  }
+  if (checkinMinRecharge.value > 0) {
+    criteria.push({
+      key: 'recharge',
+      label: t('checkin.rechargeCriterion'),
+      min: checkinMinRecharge.value,
+      current: checkinCurrentRecharge.value,
+      percent: Math.min(100, (checkinCurrentRecharge.value / checkinMinRecharge.value) * 100),
+    })
+  }
+  return criteria
 })
 
 const eligibilityMessage = computed(() => {
-  const min = formatUsd(checkinMinSpend.value)
-  const current = formatUsd(checkinCurrentSpend.value)
-  if (checkinMinSpend.value <= 0) {
+  const usageEnabled = checkinMinSpend.value > 0
+  const rechargeEnabled = checkinMinRecharge.value > 0
+  if (!usageEnabled && !rechargeEnabled) {
     return t('checkin.eligibilityNoThreshold')
   }
-  if (checkinStatus.value?.eligible === false) {
-    return t('checkin.eligibilityPending', { min, current })
+  if (usageEnabled && rechargeEnabled) {
+    return checkinStatus.value?.eligible === false
+      ? t('checkin.eligibilityEitherPending')
+      : t('checkin.eligibilityEitherSatisfied')
   }
-  return t('checkin.eligibilitySatisfied', { min, current })
+  if (usageEnabled) {
+    const params = {
+      min: formatUsd(checkinMinSpend.value),
+      current: formatUsd(checkinCurrentSpend.value),
+    }
+    return checkinStatus.value?.eligible === false
+      ? t('checkin.eligibilityPending', params)
+      : t('checkin.eligibilitySatisfied', params)
+  }
+  const params = {
+    min: formatUsd(checkinMinRecharge.value),
+    current: formatUsd(checkinCurrentRecharge.value),
+  }
+  return checkinStatus.value?.eligible === false
+    ? t('checkin.eligibilityRechargePending', params)
+    : t('checkin.eligibilityRechargeSatisfied', params)
 })
 
 const baseRewardLabel = computed(() => {

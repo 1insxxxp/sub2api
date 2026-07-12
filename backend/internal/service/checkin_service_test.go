@@ -99,6 +99,7 @@ func setCheckinConfig(t *testing.T, repo *checkinSettingRepoStub, cfg CheckinCon
 	t.Helper()
 	repo.values[SettingKeyCheckinEnabled] = strconv.FormatBool(cfg.Enabled)
 	repo.values[SettingKeyCheckinMinTotalUsageUSD] = strconv.FormatFloat(cfg.MinTotalUsageUSD, 'f', -1, 64)
+	repo.values[SettingKeyCheckinMinTotalRechargeUSD] = strconv.FormatFloat(cfg.MinTotalRechargeUSD, 'f', -1, 64)
 }
 
 func createCheckinTestUser(t *testing.T, ctx context.Context, client *dbent.Client, email string, balance float64) *dbent.User {
@@ -385,6 +386,107 @@ func TestCheckinServiceMinimumSpendUsesActualCost(t *testing.T) {
 	require.NoError(t, err)
 	require.False(t, status.Eligible)
 	require.Equal(t, 4.0, status.TotalUsageUSD)
+}
+
+func TestCheckinServiceRechargeEligibility(t *testing.T) {
+	tests := []struct {
+		name           string
+		minUsage       float64
+		minRecharge    float64
+		totalUsage     float64
+		totalRecharged float64
+		eligible       bool
+	}{
+		{name: "usage route met", minUsage: 5, minRecharge: 10, totalUsage: 5, eligible: true},
+		{name: "recharge route met", minUsage: 5, minRecharge: 10, totalRecharged: 10, eligible: true},
+		{name: "neither route met", minUsage: 5, minRecharge: 10, totalUsage: 4, totalRecharged: 9, eligible: false},
+		{name: "recharge only enabled", minRecharge: 10, totalUsage: 100, totalRecharged: 9, eligible: false},
+		{name: "usage only remains compatible", minUsage: 5, totalUsage: 5, eligible: true},
+		{name: "both disabled is unrestricted", eligible: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			client := newCheckinServiceTestClient(t)
+			ctx := context.Background()
+			createdUser := createCheckinTestUser(t, ctx, client, "eligibility-"+strconv.FormatInt(time.Now().UnixNano(), 10)+"@example.com", 10)
+			if tt.totalRecharged > 0 {
+				_, err := client.User.UpdateOneID(createdUser.ID).
+					SetTotalRecharged(tt.totalRecharged).
+					Save(ctx)
+				require.NoError(t, err)
+			}
+			if tt.totalUsage > 0 {
+				createCheckinUsage(t, ctx, client, createdUser.ID, tt.totalUsage, tt.totalUsage)
+			}
+
+			settings := newCheckinSettingRepoStub()
+			setCheckinConfig(t, settings, CheckinConfig{
+				Enabled:             true,
+				MinTotalUsageUSD:    tt.minUsage,
+				MinTotalRechargeUSD: tt.minRecharge,
+			})
+			svc := NewCheckinService(client, nil, nil)
+			svc.SetSettingRepository(settings)
+			svc.rewardRoll = func() float64 { return 0 }
+
+			status, err := svc.GetStatus(ctx, createdUser.ID)
+			require.NoError(t, err)
+			require.Equal(t, tt.eligible, status.Eligible)
+			require.Equal(t, tt.minUsage, status.MinTotalUsageUSD)
+			require.Equal(t, tt.minRecharge, status.MinTotalRechargeUSD)
+			require.Equal(t, tt.totalUsage, status.TotalUsageUSD)
+			require.Equal(t, tt.totalRecharged, status.TotalRechargeUSD)
+
+			result, err := svc.Checkin(ctx, createdUser.ID)
+			if tt.eligible {
+				require.NoError(t, err)
+				require.NotNil(t, result)
+				return
+			}
+			require.ErrorIs(t, err, ErrCheckinInsufficientEligibility)
+			require.Equal(t, CheckinIneligibleReasonInsufficientEligibility, status.IneligibleReason)
+		})
+	}
+}
+
+func TestCheckinServiceRejectsNegativeRechargeThreshold(t *testing.T) {
+	client := newCheckinServiceTestClient(t)
+	settings := newCheckinSettingRepoStub()
+	svc := NewCheckinService(client, nil, nil)
+	svc.SetSettingRepository(settings)
+
+	_, err := svc.UpdateConfig(context.Background(), CheckinConfig{
+		Enabled:             true,
+		MinTotalRechargeUSD: -1,
+		Tiers:               DefaultCheckinConfig().Tiers,
+	})
+	require.Error(t, err)
+}
+
+func TestCheckinServicePersistsRechargeThreshold(t *testing.T) {
+	client := newCheckinServiceTestClient(t)
+	settings := newCheckinSettingRepoStub()
+	svc := NewCheckinService(client, nil, nil)
+	svc.SetSettingRepository(settings)
+	defaults := DefaultCheckinConfig()
+
+	updated, err := svc.UpdateConfig(context.Background(), CheckinConfig{
+		Enabled:             true,
+		MinTotalUsageUSD:    5,
+		MinTotalRechargeUSD: 20,
+		Tiers:               defaults.Tiers,
+		StreakEnabled:       defaults.StreakEnabled,
+		StreakRules:         defaults.StreakRules,
+	})
+	require.NoError(t, err)
+	require.Equal(t, 20.0, updated.MinTotalRechargeUSD)
+	require.Equal(t, "20", settings.values[SettingKeyCheckinMinTotalRechargeUSD])
+
+	loaded, err := svc.GetConfig(context.Background())
+	require.NoError(t, err)
+	require.Equal(t, 5.0, loaded.MinTotalUsageUSD)
+	require.Equal(t, 20.0, loaded.MinTotalRechargeUSD)
 }
 
 func TestCheckinServiceCustomRewardConfigAndStreakBonus(t *testing.T) {

@@ -19,6 +19,7 @@ export interface AdminCheckinStats {
 export interface AdminCheckinConfig {
   enabled: boolean
   min_total_usage_usd: number
+  min_total_recharge_usd: number
   tiers: CheckinRewardTier[]
   streak_enabled: boolean
   streak_rules: CheckinStreakRule[]

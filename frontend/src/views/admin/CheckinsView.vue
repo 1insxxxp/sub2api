@@ -32,6 +32,7 @@
             </button>
             <button
               type="button"
+              data-test="save-checkin-config"
               class="btn btn-primary inline-flex items-center gap-2"
               :disabled="configSaving || configLoading"
               @click="handleSaveConfig"
@@ -123,6 +124,24 @@
               </div>
               <p class="mt-2 text-xs text-gray-500 dark:text-dark-400">
                 {{ t('admin.checkins.minSpendHint') }}
+              </p>
+            </div>
+
+            <div>
+              <label class="input-label">{{ t('admin.checkins.minTotalRechargeUsd') }}</label>
+              <div class="relative">
+                <span class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm font-semibold text-gray-400">$</span>
+                <input
+                  v-model.number="configForm.min_total_recharge_usd"
+                  data-test="min-total-recharge-usd"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  class="input pl-7"
+                />
+              </div>
+              <p class="mt-2 text-xs text-gray-500 dark:text-dark-400">
+                {{ t('admin.checkins.minRechargeHint') }}
               </p>
             </div>
 
@@ -636,6 +655,7 @@ const blacklistReason = ref('')
 const configForm = reactive({
   enabled: true,
   min_total_usage_usd: 0,
+  min_total_recharge_usd: 0,
   tiers: [] as CheckinRewardTier[],
   streak_enabled: true,
   streak_rules: [] as CheckinStreakRule[],
@@ -754,6 +774,7 @@ async function loadConfig() {
     config.value = await adminAPI.checkins.getConfig()
     configForm.enabled = config.value.enabled
     configForm.min_total_usage_usd = config.value.min_total_usage_usd
+    configForm.min_total_recharge_usd = config.value.min_total_recharge_usd
     configForm.tiers = cloneTiers(config.value.tiers)
     configForm.streak_enabled = config.value.streak_enabled
     configForm.streak_rules = cloneStreakRules(config.value.streak_rules)
@@ -769,12 +790,17 @@ async function handleSaveConfig() {
     appStore.showError(t('admin.checkins.invalidMinTotalUsageUsd'))
     return
   }
+  if (!Number.isFinite(configForm.min_total_recharge_usd) || configForm.min_total_recharge_usd < 0) {
+    appStore.showError(t('admin.checkins.invalidMinTotalRechargeUsd'))
+    return
+  }
   if (!validateRewardRules()) return
   configSaving.value = true
   try {
     config.value = await adminAPI.checkins.updateConfig({
       enabled: configForm.enabled,
       min_total_usage_usd: Number(configForm.min_total_usage_usd),
+      min_total_recharge_usd: Number(configForm.min_total_recharge_usd),
       tiers: configForm.tiers.map((tier, index) => ({
         amount: Number(tier.amount),
         probability: Number(tier.probability),
@@ -794,6 +820,7 @@ async function handleSaveConfig() {
     })
     configForm.enabled = config.value.enabled
     configForm.min_total_usage_usd = config.value.min_total_usage_usd
+    configForm.min_total_recharge_usd = config.value.min_total_recharge_usd
     configForm.tiers = cloneTiers(config.value.tiers)
     configForm.streak_enabled = config.value.streak_enabled
     configForm.streak_rules = cloneStreakRules(config.value.streak_rules)

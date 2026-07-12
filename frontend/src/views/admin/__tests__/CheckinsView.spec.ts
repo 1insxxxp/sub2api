@@ -10,6 +10,8 @@ const currentDir = dirname(fileURLToPath(import.meta.url))
 const checkinsViewPath = resolve(currentDir, '../CheckinsView.vue')
 
 const {
+  getConfig,
+  updateConfig,
   getStats,
   listRecords,
   listBlacklist,
@@ -19,6 +21,8 @@ const {
   showSuccess,
   showError,
 } = vi.hoisted(() => ({
+  getConfig: vi.fn(),
+  updateConfig: vi.fn(),
   getStats: vi.fn(),
   listRecords: vi.fn(),
   listBlacklist: vi.fn(),
@@ -32,6 +36,8 @@ const {
 vi.mock('@/api/admin', () => ({
   adminAPI: {
     checkins: {
+      getConfig,
+      updateConfig,
       getStats,
       listRecords,
       listBlacklist,
@@ -83,6 +89,8 @@ const DataTableStub = {
 
 describe('Admin CheckinsView', () => {
   beforeEach(() => {
+    getConfig.mockReset()
+    updateConfig.mockReset()
     getStats.mockReset()
     listRecords.mockReset()
     listBlacklist.mockReset()
@@ -91,6 +99,19 @@ describe('Admin CheckinsView', () => {
     listUsers.mockReset()
     showSuccess.mockReset()
     showError.mockReset()
+
+    const config = {
+      enabled: true,
+      min_total_usage_usd: 5,
+      min_total_recharge_usd: 20,
+      tiers: [{ amount: 1, probability: 100, sort_order: 1 }],
+      streak_enabled: false,
+      streak_rules: [],
+      probability_total: 100,
+      preview: { min_reward: 1, max_reward: 1, average_reward: 1 },
+    }
+    getConfig.mockResolvedValue(config)
+    updateConfig.mockImplementation(async (request) => ({ ...config, ...request }))
 
     getStats.mockResolvedValue({
       today_count: 3,
@@ -230,5 +251,51 @@ describe('Admin CheckinsView', () => {
     expect(source).not.toContain('rounded-lg bg-gray-50')
     expect(source).not.toContain('hover:bg-gray-50 dark:border-dark-700 dark:hover:bg-dark-700')
     expect(source).not.toContain('border-gray-200 bg-gray-50')
+  })
+
+  it('loads and saves the cumulative recharge threshold', async () => {
+    const wrapper = mount(CheckinsView, {
+      global: {
+        stubs: {
+          AppLayout: { template: '<div><slot /></div>' },
+          DataTable: DataTableStub,
+          Pagination: true,
+          Icon: true,
+        },
+      },
+    })
+
+    await flushPromises()
+
+    const rechargeInput = wrapper.get('[data-test="min-total-recharge-usd"]')
+    expect((rechargeInput.element as HTMLInputElement).value).toBe('20')
+    await rechargeInput.setValue('25')
+    await wrapper.get('[data-test="save-checkin-config"]').trigger('click')
+    await flushPromises()
+
+    expect(updateConfig).toHaveBeenCalledWith(expect.objectContaining({
+      min_total_usage_usd: 5,
+      min_total_recharge_usd: 25,
+    }))
+  })
+
+  it('rejects a negative cumulative recharge threshold', async () => {
+    const wrapper = mount(CheckinsView, {
+      global: {
+        stubs: {
+          AppLayout: { template: '<div><slot /></div>' },
+          DataTable: DataTableStub,
+          Pagination: true,
+          Icon: true,
+        },
+      },
+    })
+
+    await flushPromises()
+    await wrapper.get('[data-test="min-total-recharge-usd"]').setValue('-1')
+    await wrapper.get('[data-test="save-checkin-config"]').trigger('click')
+
+    expect(updateConfig).not.toHaveBeenCalled()
+    expect(showError).toHaveBeenCalledWith('admin.checkins.invalidMinTotalRechargeUsd')
   })
 })
