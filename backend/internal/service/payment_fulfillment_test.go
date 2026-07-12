@@ -62,6 +62,7 @@ type paymentFulfillmentAffiliateRepoStub struct {
 	reconcileRequired  bool
 	generation         int64
 	markReconcileErr   error
+	markReconcileCalls int
 	dirtyEvents        []AffiliateQualificationDirtyEvent
 	auditClient        *dbent.Client
 }
@@ -183,6 +184,7 @@ func (r *paymentFulfillmentAffiliateRepoStub) TryWithAffiliateQualificationRecon
 }
 
 func (r *paymentFulfillmentAffiliateRepoStub) MarkReconcileRequired(context.Context) (AffiliateReconcileToken, error) {
+	r.markReconcileCalls++
 	if r.markReconcileErr != nil {
 		return AffiliateReconcileToken{}, r.markReconcileErr
 	}
@@ -242,6 +244,10 @@ func (r *paymentFulfillmentAffiliateRepoStub) DeleteAffiliateQualificationDirtyE
 		}
 	}
 	return true, nil
+}
+
+func (r *paymentFulfillmentAffiliateRepoStub) MarkAffiliateQualificationDirtyEventFailed(context.Context, AffiliateQualificationDirtyEvent, error) error {
+	return nil
 }
 
 type paymentFulfillmentSettingRepoStub struct {

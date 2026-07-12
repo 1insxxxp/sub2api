@@ -27,9 +27,10 @@ const (
 	affiliateInviteesLimit = 100
 	// AffiliateCodeMinLength / AffiliateCodeMaxLength bound both system-generated
 	// 12-char codes and admin-customized codes (e.g. "VIP2026").
-	AffiliateCodeMinLength                 = 4
-	AffiliateCodeMaxLength                 = 32
-	AffiliateQualificationDirtyAuditAction = "AFFILIATE_QUALIFICATION_DIRTY"
+	AffiliateCodeMinLength                       = 4
+	AffiliateCodeMaxLength                       = 32
+	AffiliateQualificationDirtyAuditAction       = "AFFILIATE_QUALIFICATION_DIRTY"
+	AffiliateQualificationDirtyFailedAuditAction = "AFFILIATE_QUALIFICATION_DIRTY_FAILED"
 )
 
 // affiliateCodeValidChar accepts uppercase letters, digits, underscore and dash.
@@ -159,6 +160,7 @@ type AffiliateQualificationRepository interface {
 	ClearReconcileRequiredIfGeneration(ctx context.Context, expected int64) (bool, error)
 	ListAffiliateQualificationDirtyEvents(ctx context.Context, limit int) ([]AffiliateQualificationDirtyEvent, error)
 	DeleteAffiliateQualificationDirtyEvent(ctx context.Context, event AffiliateQualificationDirtyEvent) (bool, error)
+	MarkAffiliateQualificationDirtyEventFailed(ctx context.Context, event AffiliateQualificationDirtyEvent, cause error) error
 }
 
 type AffiliateQualificationDirtyEvent struct {
@@ -167,6 +169,7 @@ type AffiliateQualificationDirtyEvent struct {
 	OrderStatus string `json:"orderStatus"`
 	EventType   string `json:"eventType"`
 	Detail      string `json:"-"`
+	ParseError  string `json:"-"`
 }
 
 // AffiliateAdminFilter 列表筛选条件
@@ -605,6 +608,12 @@ func (s *AffiliateService) drainAffiliateQualificationDirtyEvents(ctx context.Co
 			return fmt.Errorf("list affiliate qualification dirty events: %w", err)
 		}
 		for _, event := range events {
+			if event.ParseError != "" || event.UserID <= 0 || strings.TrimSpace(event.Detail) == "" {
+				if err := s.qualificationRepo.MarkAffiliateQualificationDirtyEventFailed(ctx, event, errors.New(event.ParseError)); err != nil {
+					return fmt.Errorf("dead-letter affiliate qualification dirty event %s: %w", event.OrderID, err)
+				}
+				continue
+			}
 			if err := s.reconcileAffiliateQualificationDirtyEvent(ctx, event); err != nil {
 				return err
 			}

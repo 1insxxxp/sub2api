@@ -211,7 +211,7 @@ func TestMarkRefundOkPersistsDirtyOutboxWhenGenerationMarkerFails(t *testing.T) 
 	require.Equal(t, 1, dirty)
 }
 
-func TestMarkRefundOkRollsBackStatusWhenDirtyOutboxCannotPersist(t *testing.T) {
+func TestMarkRefundOkCommitsTerminalStatusWhenDirtyOutboxAndMarkerFail(t *testing.T) {
 	ctx := context.Background()
 	client := newPaymentConfigServiceTestClient(t)
 	_, err := client.ExecContext(ctx, `
@@ -229,15 +229,73 @@ END`)
 		SetPaymentType(payment.TypeAlipay).SetPaymentTradeNo("trade-refund-dirty-atomic").SetOrderType(payment.OrderTypeBalance).
 		SetStatus(OrderStatusRefunding).SetExpiresAt(time.Now().Add(time.Hour)).SetClientIP("127.0.0.1").SetSrcHost("api.example.com").Save(ctx)
 	require.NoError(t, err)
-	svc := &PaymentService{entClient: client}
+	repo := &paymentFulfillmentAffiliateRepoStub{markReconcileErr: errors.New("marker unavailable")}
+	svc := &PaymentService{entClient: client, affiliateService: NewAffiliateService(repo, nil, nil, nil)}
 
-	_, err = svc.markRefundOk(ctx, &RefundPlan{OrderID: order.ID, Order: order, RefundAmount: 40, Reason: "partial"})
+	result, err := svc.markRefundOk(ctx, &RefundPlan{OrderID: order.ID, Order: order, RefundAmount: 40, Reason: "partial"})
 
-	require.ErrorContains(t, err, "persist affiliate qualification dirty audit")
+	require.NoError(t, err)
+	require.True(t, result.Success)
+	require.NotEmpty(t, result.Warning)
 	reloaded, reloadErr := client.PaymentOrder.Get(ctx, order.ID)
 	require.NoError(t, reloadErr)
-	require.Equal(t, OrderStatusRefunding, reloaded.Status)
-	require.Zero(t, reloaded.RefundAmount)
+	require.Equal(t, OrderStatusPartiallyRefunded, reloaded.Status)
+	require.Equal(t, 40.0, reloaded.RefundAmount)
+	require.False(t, repo.reconcileRequired)
+	require.GreaterOrEqual(t, repo.markReconcileCalls, 1)
+	degraded, auditErr := client.PaymentAuditLog.Query().Where(
+		paymentauditlog.OrderIDEQ(strconv.FormatInt(order.ID, 10)),
+		paymentauditlog.ActionEQ("AFFILIATE_QUALIFICATION_DIRTY_DEGRADED"),
+	).Count(ctx)
+	require.NoError(t, auditErr)
+	require.Equal(t, 1, degraded)
+
+	retry, retryErr := svc.markRefundOk(ctx, &RefundPlan{OrderID: order.ID, Order: order, RefundAmount: 40, Reason: "partial"})
+	require.NoError(t, retryErr)
+	require.True(t, retry.Success)
+	reloaded, reloadErr = client.PaymentOrder.Get(ctx, order.ID)
+	require.NoError(t, reloadErr)
+	require.Equal(t, OrderStatusPartiallyRefunded, reloaded.Status)
+}
+
+func TestMarkRefundOkCommitsFullRefundWhenDirtyOutboxFailsAndMarkerSucceeds(t *testing.T) {
+	ctx := context.Background()
+	client := newPaymentConfigServiceTestClient(t)
+	_, err := client.ExecContext(ctx, `
+CREATE TRIGGER fail_affiliate_dirty_audit
+BEFORE INSERT ON payment_audit_logs
+WHEN NEW.action = 'AFFILIATE_QUALIFICATION_DIRTY'
+BEGIN
+    SELECT RAISE(FAIL, 'injected dirty audit failure');
+END`)
+	require.NoError(t, err)
+	user, err := client.User.Create().SetEmail("refund-dirty-full@example.com").SetPasswordHash("hash").SetUsername("refund-dirty-full").Save(ctx)
+	require.NoError(t, err)
+	order, err := client.PaymentOrder.Create().SetUserID(user.ID).SetUserEmail(user.Email).SetUserName(user.Username).
+		SetAmount(100).SetPayAmount(100).SetFeeRate(0).SetRechargeCode("REFUND-DIRTY-FULL").SetOutTradeNo("sub2_refund_dirty_full").
+		SetPaymentType(payment.TypeAlipay).SetPaymentTradeNo("trade-refund-dirty-full").SetOrderType(payment.OrderTypeBalance).
+		SetStatus(OrderStatusRefunding).SetExpiresAt(time.Now().Add(time.Hour)).SetClientIP("127.0.0.1").SetSrcHost("api.example.com").Save(ctx)
+	require.NoError(t, err)
+	repo := &paymentFulfillmentAffiliateRepoStub{}
+	svc := &PaymentService{entClient: client, affiliateService: NewAffiliateService(repo, nil, nil, nil)}
+
+	result, err := svc.markRefundOk(ctx, &RefundPlan{OrderID: order.ID, Order: order, RefundAmount: 100, Reason: "full"})
+
+	require.NoError(t, err)
+	require.True(t, result.Success)
+	require.NotEmpty(t, result.Warning)
+	reloaded, reloadErr := client.PaymentOrder.Get(ctx, order.ID)
+	require.NoError(t, reloadErr)
+	require.Equal(t, OrderStatusRefunded, reloaded.Status)
+	require.Equal(t, 100.0, reloaded.RefundAmount)
+	require.True(t, repo.reconcileRequired)
+	require.Equal(t, 1, repo.markReconcileCalls)
+	degraded, auditErr := client.PaymentAuditLog.Query().Where(
+		paymentauditlog.OrderIDEQ(strconv.FormatInt(order.ID, 10)),
+		paymentauditlog.ActionEQ("AFFILIATE_QUALIFICATION_DIRTY_DEGRADED"),
+	).Count(ctx)
+	require.NoError(t, auditErr)
+	require.Equal(t, 1, degraded)
 }
 
 func TestMarkRefundOkRetryRecoversCommittedDirtyOutbox(t *testing.T) {

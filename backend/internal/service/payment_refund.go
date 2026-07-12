@@ -586,9 +586,20 @@ func (s *PaymentService) markRefundOk(ctx context.Context, p *RefundPlan) (*Refu
 		}
 		return nil, infraerrors.Conflict("CONFLICT", "refund status changed before finalization")
 	}
-	dirtyEvent, err := upsertAffiliateQualificationDirtyAudit(txCtx, tx.Client(), p.OrderID, p.Order.UserID, fs, "refund_completed")
-	if err != nil {
-		return nil, fmt.Errorf("persist affiliate qualification dirty audit after refund: %w", err)
+	var dirtyEvent AffiliateQualificationDirtyEvent
+	dirtyErr := withPaymentSavepoint(txCtx, tx.Client(), "affiliate_refund_dirty", func() error {
+		var saveErr error
+		dirtyEvent, saveErr = upsertAffiliateQualificationDirtyAudit(txCtx, tx.Client(), p.OrderID, p.Order.UserID, fs, "refund_completed")
+		return saveErr
+	})
+	markerPersisted := false
+	var markerErr error
+	if dirtyErr != nil && s.affiliateService != nil {
+		markerErr = withPaymentSavepoint(txCtx, tx.Client(), "affiliate_refund_marker", func() error {
+			_, markErr := s.affiliateService.MarkReconcileRequired(txCtx)
+			return markErr
+		})
+		markerPersisted = markerErr == nil
 	}
 	if err := tx.Commit(); err != nil {
 		return nil, fmt.Errorf("commit mark refund transaction: %w", err)
@@ -596,8 +607,49 @@ func (s *PaymentService) markRefundOk(ctx context.Context, p *RefundPlan) (*Refu
 	if !s.hasAuditLog(ctx, p.OrderID, "REFUND_SUCCESS") {
 		s.writeAuditLog(ctx, p.OrderID, "REFUND_SUCCESS", "admin", map[string]any{"refundAmount": p.RefundAmount, "reason": p.Reason, "balanceDeducted": p.BalanceToDeduct, "force": p.Force})
 	}
+	result := &RefundResult{Success: true, BalanceDeducted: p.BalanceToDeduct, SubDaysDeducted: p.SubDaysToDeduct}
+	if dirtyErr != nil {
+		if !markerPersisted && s.affiliateService != nil {
+			_, postCommitMarkerErr := s.affiliateService.MarkReconcileRequired(dbent.WithoutTx(ctx))
+			markerErr = errors.Join(markerErr, postCommitMarkerErr)
+			markerPersisted = postCommitMarkerErr == nil
+		}
+		slog.Error("affiliate qualification dirty outbox degraded after successful refund",
+			"orderID", p.OrderID,
+			"status", fs,
+			"outboxError", dirtyErr,
+			"markerPersisted", markerPersisted,
+			"markerError", markerErr,
+		)
+		s.writeAuditLog(ctx, p.OrderID, "AFFILIATE_QUALIFICATION_DIRTY_DEGRADED", "system", map[string]any{
+			"status":          fs,
+			"eventType":       "refund_completed",
+			"outboxError":     dirtyErr.Error(),
+			"markerPersisted": markerPersisted,
+			"markerError":     psErrMsg(markerErr),
+		})
+		result.Warning = "refund completed; affiliate qualification recovery was deferred"
+		return result, nil
+	}
 	s.reconcileAffiliateAfterTerminalEvent(ctx, p.Order, dirtyEvent, "post_refund")
-	return &RefundResult{Success: true, BalanceDeducted: p.BalanceToDeduct, SubDaysDeducted: p.SubDaysToDeduct}, nil
+	return result, nil
+}
+
+func withPaymentSavepoint(ctx context.Context, client *dbent.Client, name string, fn func() error) error {
+	if _, err := client.ExecContext(ctx, "SAVEPOINT "+name); err != nil {
+		return fmt.Errorf("create savepoint %s: %w", name, err)
+	}
+	if err := fn(); err != nil {
+		_, rollbackErr := client.ExecContext(ctx, "ROLLBACK TO SAVEPOINT "+name)
+		_, releaseErr := client.ExecContext(ctx, "RELEASE SAVEPOINT "+name)
+		return errors.Join(err, rollbackErr, releaseErr)
+	}
+	if _, err := client.ExecContext(ctx, "RELEASE SAVEPOINT "+name); err != nil {
+		_, rollbackErr := client.ExecContext(ctx, "ROLLBACK TO SAVEPOINT "+name)
+		_, cleanupErr := client.ExecContext(ctx, "RELEASE SAVEPOINT "+name)
+		return errors.Join(fmt.Errorf("release savepoint %s: %w", name, err), rollbackErr, cleanupErr)
+	}
+	return nil
 }
 
 func (s *PaymentService) markRefundPending(ctx context.Context, p *RefundPlan, resp *payment.RefundResponse) (*RefundResult, error) {

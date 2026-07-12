@@ -235,14 +235,50 @@ func (r *affiliateRepository) ListAffiliateQualificationDirtyEvents(ctx context.
 	for _, logEntry := range logs {
 		event := service.AffiliateQualificationDirtyEvent{OrderID: logEntry.OrderID, Detail: logEntry.Detail}
 		if err := json.Unmarshal([]byte(logEntry.Detail), &event); err != nil {
-			return nil, fmt.Errorf("decode affiliate qualification dirty audit %d: %w", logEntry.ID, err)
+			event.ParseError = fmt.Sprintf("invalid JSON: %v", err)
+			events = append(events, event)
+			continue
 		}
 		if event.UserID <= 0 {
-			return nil, fmt.Errorf("affiliate qualification dirty audit %d has invalid userID", logEntry.ID)
+			event.ParseError = fmt.Sprintf("invalid userID %d", event.UserID)
 		}
 		events = append(events, event)
 	}
 	return events, nil
+}
+
+func (r *affiliateRepository) MarkAffiliateQualificationDirtyEventFailed(ctx context.Context, event service.AffiliateQualificationDirtyEvent, cause error) error {
+	causeText := "poison affiliate qualification dirty event"
+	if cause != nil && strings.TrimSpace(cause.Error()) != "" {
+		causeText = cause.Error()
+	}
+	deadLetterDetail, err := json.Marshal(map[string]string{
+		"original_detail": event.Detail,
+		"error":           causeText,
+	})
+	if err != nil {
+		return err
+	}
+	return r.withTx(ctx, func(txCtx context.Context, client *dbent.Client) error {
+		if _, err := client.ExecContext(txCtx, `
+DELETE FROM payment_audit_logs
+WHERE order_id = $1 AND action = $2`, event.OrderID, service.AffiliateQualificationDirtyFailedAuditAction); err != nil {
+			return fmt.Errorf("remove existing affiliate qualification dead-letter: %w", err)
+		}
+		if _, err := client.ExecContext(txCtx, `
+UPDATE payment_audit_logs
+SET action = $3, detail = $4, operator = 'system', created_at = NOW()
+WHERE order_id = $1 AND action = $2 AND detail = $5`,
+			event.OrderID,
+			service.AffiliateQualificationDirtyAuditAction,
+			service.AffiliateQualificationDirtyFailedAuditAction,
+			string(deadLetterDetail),
+			event.Detail,
+		); err != nil {
+			return fmt.Errorf("dead-letter affiliate qualification dirty audit: %w", err)
+		}
+		return nil
+	})
 }
 
 func (r *affiliateRepository) DeleteAffiliateQualificationDirtyEvent(ctx context.Context, event service.AffiliateQualificationDirtyEvent) (bool, error) {

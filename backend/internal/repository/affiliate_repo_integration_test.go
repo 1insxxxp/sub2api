@@ -571,6 +571,10 @@ func (r *affiliateQualificationLockTestRepo) DeleteAffiliateQualificationDirtyEv
 	return r.qualification.DeleteAffiliateQualificationDirtyEvent(ctx, event)
 }
 
+func (r *affiliateQualificationLockTestRepo) MarkAffiliateQualificationDirtyEventFailed(ctx context.Context, event service.AffiliateQualificationDirtyEvent, cause error) error {
+	return r.qualification.MarkAffiliateQualificationDirtyEventFailed(ctx, event, cause)
+}
+
 type affiliateQualificationLockSettingRepo struct {
 	service.SettingRepository
 	mu     sync.Mutex

@@ -190,6 +190,37 @@ func TestAffiliateService_DirtyEventSuccessDoesNotClearGlobalMarker(t *testing.T
 	require.Equal(t, int64(10), repo.generation)
 }
 
+func TestAffiliateService_PoisonDirtyEventIsDeadLetteredAndBatchContinues(t *testing.T) {
+	bad := AffiliateQualificationDirtyEvent{
+		OrderID:    "45",
+		Detail:     "{not-json",
+		ParseError: "invalid JSON: unexpected end of JSON input",
+	}
+	good := AffiliateQualificationDirtyEvent{
+		OrderID:     "46",
+		UserID:      10,
+		OrderStatus: OrderStatusCompleted,
+		EventType:   "payment_completed",
+		Detail:      `{"userID":10,"orderStatus":"COMPLETED","eventType":"payment_completed"}`,
+	}
+	repo := &affiliateTierServiceRepoStub{
+		dirtyEvents:       []AffiliateQualificationDirtyEvent{bad, good},
+		reconcileRequired: true,
+		generation:        1,
+	}
+	svc := NewAffiliateService(repo, NewSettingService(newAffiliateTierServiceSettingRepo(), nil), nil, nil)
+
+	err := svc.ReconcilePendingAffiliateQualifications(context.Background())
+
+	require.NoError(t, err)
+	require.Len(t, repo.failedDirtyEvents, 1)
+	require.Equal(t, bad.OrderID, repo.failedDirtyEvents[0].OrderID)
+	require.Empty(t, repo.dirtyEvents)
+	require.Equal(t, 1, repo.reconcileInviteeCalls, "the good event must be reconciled")
+	require.Equal(t, 1, repo.reconcileCalls, "full reconciliation must still run")
+	require.False(t, repo.reconcileRequired, "full reconciliation must continue after dead-lettering poison data")
+}
+
 func TestAffiliateService_QualificationReconcileRejectsTransactionContext(t *testing.T) {
 	settings := newAffiliateTierServiceSettingRepo()
 	repo := &affiliateTierServiceRepoStub{}
@@ -427,28 +458,30 @@ func TestAffiliateService_QualificationReconcileDatabaseLockCoordinatesInstances
 
 type affiliateTierServiceRepoStub struct {
 	AffiliateRepository
-	mu                  sync.Mutex
-	qualifiedCount      int
-	countThreshold      float64
-	reconcileCalls      int
-	reconcileErr        error
-	reconcileInviteeErr error
-	reconcileStarted    chan struct{}
-	releaseReconcile    chan struct{}
-	reconcileFinished   bool
-	countCalls          int
-	inviteeSummary      *AffiliateSummary
-	inviterSummary      *AffiliateSummary
-	accruedAmount       float64
-	advisoryLockHeld    bool
-	reconcileRequired   bool
-	generation          int64
-	duringReconcile     func()
-	markReconcileErr    error
-	readSnapshotErr     error
-	clearReconcileErr   error
-	dirtyEvents         []AffiliateQualificationDirtyEvent
-	deletedDirtyEvents  []AffiliateQualificationDirtyEvent
+	mu                    sync.Mutex
+	qualifiedCount        int
+	countThreshold        float64
+	reconcileCalls        int
+	reconcileErr          error
+	reconcileInviteeErr   error
+	reconcileInviteeCalls int
+	reconcileStarted      chan struct{}
+	releaseReconcile      chan struct{}
+	reconcileFinished     bool
+	countCalls            int
+	inviteeSummary        *AffiliateSummary
+	inviterSummary        *AffiliateSummary
+	accruedAmount         float64
+	advisoryLockHeld      bool
+	reconcileRequired     bool
+	generation            int64
+	duringReconcile       func()
+	markReconcileErr      error
+	readSnapshotErr       error
+	clearReconcileErr     error
+	dirtyEvents           []AffiliateQualificationDirtyEvent
+	deletedDirtyEvents    []AffiliateQualificationDirtyEvent
+	failedDirtyEvents     []AffiliateQualificationDirtyEvent
 }
 
 func (r *affiliateTierServiceRepoStub) CountQualifiedInvitees(_ context.Context, _ int64, threshold float64) (int, error) {
@@ -460,6 +493,9 @@ func (r *affiliateTierServiceRepoStub) CountQualifiedInvitees(_ context.Context,
 }
 
 func (r *affiliateTierServiceRepoStub) ReconcileInviteeQualification(context.Context, int64, float64) (*AffiliateQualification, error) {
+	r.mu.Lock()
+	r.reconcileInviteeCalls++
+	r.mu.Unlock()
 	return nil, r.reconcileInviteeErr
 }
 
@@ -554,6 +590,19 @@ func (r *affiliateTierServiceRepoStub) DeleteAffiliateQualificationDirtyEvent(_ 
 		}
 	}
 	return false, nil
+}
+
+func (r *affiliateTierServiceRepoStub) MarkAffiliateQualificationDirtyEventFailed(_ context.Context, event AffiliateQualificationDirtyEvent, _ error) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	for i, pending := range r.dirtyEvents {
+		if pending.OrderID == event.OrderID && pending.Detail == event.Detail {
+			r.dirtyEvents = append(r.dirtyEvents[:i], r.dirtyEvents[i+1:]...)
+			r.failedDirtyEvents = append(r.failedDirtyEvents, event)
+			return nil
+		}
+	}
+	return nil
 }
 
 func (r *affiliateTierServiceRepoStub) EnsureUserAffiliate(_ context.Context, userID int64) (*AffiliateSummary, error) {
