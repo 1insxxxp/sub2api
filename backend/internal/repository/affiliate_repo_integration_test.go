@@ -168,25 +168,37 @@ func TestAffiliateRepository_QualificationReconcileAndCount(t *testing.T) {
 }
 
 func TestAffiliateRepository_QualificationAdvisoryLockIndependentConnections(t *testing.T) {
-	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
 	repo1 := NewAffiliateRepository(integrationEntClient, integrationDB).(*affiliateRepository)
 	repo2 := NewAffiliateRepository(integrationEntClient, integrationDB).(*affiliateRepository)
 	started := make(chan struct{})
 	release := make(chan struct{})
+	var releaseOnce sync.Once
+	releaseFirst := func() { releaseOnce.Do(func() { close(release) }) }
+	defer releaseFirst()
 	firstResult := make(chan error, 1)
 
 	go func() {
-		acquired, err := repo1.TryWithAffiliateQualificationReconcileLock(ctx, func(context.Context) error {
+		acquired, err := repo1.TryWithAffiliateQualificationReconcileLock(ctx, func(lockCtx context.Context) error {
 			close(started)
-			<-release
-			return nil
+			select {
+			case <-release:
+				return nil
+			case <-lockCtx.Done():
+				return lockCtx.Err()
+			}
 		})
 		if err == nil && !acquired {
 			err = errors.New("first repository did not acquire advisory lock")
 		}
 		firstResult <- err
 	}()
-	<-started
+	select {
+	case <-started:
+	case <-ctx.Done():
+		t.Fatal("timed out waiting for first advisory lock holder")
+	}
 
 	secondCalled := false
 	acquired, err := repo2.TryWithAffiliateQualificationReconcileLock(ctx, func(context.Context) error {
@@ -197,12 +209,18 @@ func TestAffiliateRepository_QualificationAdvisoryLockIndependentConnections(t *
 	require.False(t, acquired)
 	require.False(t, secondCalled)
 
-	close(release)
-	require.NoError(t, <-firstResult)
+	releaseFirst()
+	select {
+	case err := <-firstResult:
+		require.NoError(t, err)
+	case <-ctx.Done():
+		t.Fatal("timed out waiting for first advisory lock holder to finish")
+	}
 }
 
 func TestAffiliateRepository_QualificationServiceInstancesDatabaseLock(t *testing.T) {
-	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
 	base1 := NewAffiliateRepository(integrationEntClient, integrationDB)
 	base2 := NewAffiliateRepository(integrationEntClient, integrationDB)
 	shared := &affiliateQualificationLockTestState{started: make(chan struct{}), release: make(chan struct{})}
@@ -215,19 +233,33 @@ func TestAffiliateRepository_QualificationServiceInstancesDatabaseLock(t *testin
 
 	firstErr := make(chan error, 1)
 	go func() { firstErr <- first.ReconcilePendingAffiliateQualifications(ctx) }()
-	<-shared.started
+	select {
+	case <-shared.started:
+	case <-ctx.Done():
+		t.Fatal("timed out waiting for first qualification reconcile")
+	}
+	var releaseOnce sync.Once
+	releaseWinner := func() { releaseOnce.Do(func() { close(shared.release) }) }
+	defer releaseWinner()
 
 	secondErr := second.ReconcilePendingAffiliateQualifications(ctx)
 	markerWhileLocked := settingsRepo.value(service.SettingKeyAffiliateTierReconcileRequired)
 	callsWhileLocked := shared.callCount()
-	close(shared.release)
+	writesWhileLocked := settingsRepo.setValues()
+	releaseWinner()
 
-	require.NoError(t, secondErr)
+	require.ErrorIs(t, secondErr, service.ErrAffiliateQualificationReconcileBusy)
 	require.Equal(t, "true", markerWhileLocked)
 	require.Equal(t, 1, callsWhileLocked)
-	require.NoError(t, <-firstErr)
+	require.Equal(t, []string{"true"}, writesWhileLocked, "lock loser must retain the recovery marker")
+	select {
+	case err := <-firstErr:
+		require.NoError(t, err)
+	case <-ctx.Done():
+		t.Fatal("timed out waiting for winning qualification reconcile")
+	}
 	require.Equal(t, "false", settingsRepo.value(service.SettingKeyAffiliateTierReconcileRequired))
-	require.Equal(t, 1, settingsRepo.setCallCount())
+	require.Equal(t, []string{"true", "false"}, settingsRepo.setValues())
 }
 
 func TestAffiliateRepository_QualificationFullReconcileUsesIndependentTransactions(t *testing.T) {
@@ -292,15 +324,21 @@ type affiliateQualificationLockTestState struct {
 	release chan struct{}
 }
 
-func (s *affiliateQualificationLockTestState) reconcile() {
+func (s *affiliateQualificationLockTestState) reconcile(ctx context.Context) error {
 	s.mu.Lock()
 	s.calls++
 	call := s.calls
 	s.mu.Unlock()
 	if call == 1 {
 		close(s.started)
-		<-s.release
+		select {
+		case <-s.release:
+			return nil
+		case <-ctx.Done():
+			return ctx.Err()
+		}
 	}
+	return nil
 }
 
 func (s *affiliateQualificationLockTestState) callCount() int {
@@ -323,9 +361,8 @@ func (r *affiliateQualificationLockTestRepo) CountQualifiedInvitees(ctx context.
 	return r.qualification.CountQualifiedInvitees(ctx, inviterID, threshold)
 }
 
-func (r *affiliateQualificationLockTestRepo) ReconcileAllAffiliateQualifications(context.Context, float64, int) error {
-	r.shared.reconcile()
-	return nil
+func (r *affiliateQualificationLockTestRepo) ReconcileAllAffiliateQualifications(ctx context.Context, _ float64, _ int) error {
+	return r.shared.reconcile(ctx)
 }
 
 func (r *affiliateQualificationLockTestRepo) TryWithAffiliateQualificationReconcileLock(ctx context.Context, fn func(context.Context) error) (bool, error) {
@@ -334,9 +371,9 @@ func (r *affiliateQualificationLockTestRepo) TryWithAffiliateQualificationReconc
 
 type affiliateQualificationLockSettingRepo struct {
 	service.SettingRepository
-	mu       sync.Mutex
-	values   map[string]string
-	setCalls int
+	mu         sync.Mutex
+	values     map[string]string
+	setHistory []string
 }
 
 func newAffiliateQualificationLockSettingRepo() *affiliateQualificationLockSettingRepo {
@@ -379,7 +416,9 @@ func (r *affiliateQualificationLockSettingRepo) Set(_ context.Context, key, valu
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.values[key] = value
-	r.setCalls++
+	if key == service.SettingKeyAffiliateTierReconcileRequired {
+		r.setHistory = append(r.setHistory, value)
+	}
 	return nil
 }
 
@@ -389,10 +428,10 @@ func (r *affiliateQualificationLockSettingRepo) value(key string) string {
 	return r.values[key]
 }
 
-func (r *affiliateQualificationLockSettingRepo) setCallCount() int {
+func (r *affiliateQualificationLockSettingRepo) setValues() []string {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	return r.setCalls
+	return append([]string(nil), r.setHistory...)
 }
 
 func insertQualificationOrder(t *testing.T, ctx context.Context, client *dbent.Client, userID int64, amount, refundAmount float64, status, orderType string) {
