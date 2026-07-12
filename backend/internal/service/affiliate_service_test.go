@@ -205,8 +205,8 @@ func TestAffiliateService_PoisonDirtyEventIsDeadLetteredAndBatchContinues(t *tes
 	}
 	repo := &affiliateTierServiceRepoStub{
 		dirtyEvents:       []AffiliateQualificationDirtyEvent{bad, good},
-		reconcileRequired: true,
-		generation:        1,
+		reconcileRequired: false,
+		generation:        0,
 	}
 	svc := NewAffiliateService(repo, NewSettingService(newAffiliateTierServiceSettingRepo(), nil), nil, nil)
 
@@ -218,7 +218,28 @@ func TestAffiliateService_PoisonDirtyEventIsDeadLetteredAndBatchContinues(t *tes
 	require.Empty(t, repo.dirtyEvents)
 	require.Equal(t, 1, repo.reconcileInviteeCalls, "the good event must be reconciled")
 	require.Equal(t, 1, repo.reconcileCalls, "full reconciliation must still run")
+	require.Equal(t, int64(1), repo.generation)
 	require.False(t, repo.reconcileRequired, "full reconciliation must continue after dead-lettering poison data")
+}
+
+func TestAffiliateService_PoisonDirtyEventKeepsOriginalWhenMarkerFails(t *testing.T) {
+	bad := AffiliateQualificationDirtyEvent{
+		OrderID:    "47",
+		Detail:     "{not-json",
+		ParseError: "invalid JSON",
+	}
+	repo := &affiliateTierServiceRepoStub{
+		dirtyEvents:      []AffiliateQualificationDirtyEvent{bad},
+		markReconcileErr: errors.New("marker unavailable"),
+	}
+	svc := NewAffiliateService(repo, NewSettingService(newAffiliateTierServiceSettingRepo(), nil), nil, nil)
+
+	err := svc.ReconcilePendingAffiliateQualifications(context.Background())
+
+	require.ErrorContains(t, err, "marker unavailable")
+	require.Equal(t, []AffiliateQualificationDirtyEvent{bad}, repo.dirtyEvents)
+	require.Empty(t, repo.failedDirtyEvents)
+	require.Zero(t, repo.reconcileCalls)
 }
 
 func TestAffiliateService_QualificationReconcileRejectsTransactionContext(t *testing.T) {

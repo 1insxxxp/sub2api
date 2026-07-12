@@ -602,6 +602,7 @@ func (s *AffiliateService) ReconcilePendingAffiliateQualifications(ctx context.C
 
 func (s *AffiliateService) drainAffiliateQualificationDirtyEvents(ctx context.Context) error {
 	const batchSize = 200
+	forceFull := false
 	for {
 		events, err := s.qualificationRepo.ListAffiliateQualificationDirtyEvents(ctx, batchSize)
 		if err != nil {
@@ -609,6 +610,12 @@ func (s *AffiliateService) drainAffiliateQualificationDirtyEvents(ctx context.Co
 		}
 		for _, event := range events {
 			if event.ParseError != "" || event.UserID <= 0 || strings.TrimSpace(event.Detail) == "" {
+				if !forceFull {
+					if _, err := s.qualificationRepo.MarkReconcileRequired(ctx); err != nil {
+						return fmt.Errorf("mark full affiliate qualification reconcile for poison event %s: %w", event.OrderID, err)
+					}
+					forceFull = true
+				}
 				if err := s.qualificationRepo.MarkAffiliateQualificationDirtyEventFailed(ctx, event, errors.New(event.ParseError)); err != nil {
 					return fmt.Errorf("dead-letter affiliate qualification dirty event %s: %w", event.OrderID, err)
 				}
