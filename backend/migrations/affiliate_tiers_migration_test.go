@@ -1,6 +1,7 @@
 package migrations
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -36,7 +37,11 @@ func TestMigration177AddsAffiliateQualifiedLookupIndexConcurrently(t *testing.T)
 	require.NoError(t, err)
 
 	sql := string(content)
-	require.Contains(t, sql, "CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_user_affiliates_inviter_qualified")
+	dropStatement := "DROP INDEX CONCURRENTLY IF EXISTS idx_user_affiliates_inviter_qualified"
+	createStatement := "CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_user_affiliates_inviter_qualified"
+	require.Contains(t, sql, dropStatement)
+	require.Contains(t, sql, createStatement)
+	require.Less(t, strings.Index(sql, dropStatement), strings.Index(sql, createStatement))
 	require.Contains(t, sql, "ON user_affiliates (inviter_id)")
 	require.Contains(t, sql, "WHERE qualified_at IS NOT NULL")
 	require.NotContains(t, sql, "UPDATE ")

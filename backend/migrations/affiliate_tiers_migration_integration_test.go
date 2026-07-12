@@ -29,6 +29,29 @@ func TestMigration175Postgres(t *testing.T) {
 	db := startMigration175Postgres(t)
 	migrations := readAffiliateTierMigrations(t)
 
+	t.Run("177 recovers an invalid same-name index", func(t *testing.T) {
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+
+		conn, schema := newMigration175Schema(t, ctx, db, "invalid_index")
+		seedMigration175AffiliatesAndOrders(t, ctx, conn)
+		execTransactionalMigration(t, ctx, conn, migrations.storageSQL)
+
+		_, err := conn.ExecContext(ctx, `
+CREATE UNIQUE INDEX CONCURRENTLY idx_user_affiliates_inviter_qualified
+    ON user_affiliates (inviter_id)`)
+		require.Error(t, err, "duplicate inviter IDs must leave a failed concurrent index")
+
+		valid, _ := affiliateQualifiedIndexState(t, ctx, conn, schema)
+		require.False(t, valid, "failed concurrent build must leave an INVALID index")
+
+		execNonTransactionalMigration(t, ctx, conn, migrations.indexSQL)
+
+		valid, predicate := affiliateQualifiedIndexState(t, ctx, conn, schema)
+		require.True(t, valid, "177 must replace the INVALID index with a valid index")
+		require.Contains(t, predicate, "qualified_at IS NOT NULL")
+	})
+
 	t.Run("ordered migrations build schema backfill and replay", func(t *testing.T) {
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
@@ -130,8 +153,7 @@ func applyAffiliateTierMigrations(
 
 	// The runner executes *_notx.sql directly because PostgreSQL prohibits
 	// CREATE INDEX CONCURRENTLY inside a transaction block.
-	_, err := conn.ExecContext(ctx, migrations.indexSQL)
-	require.NoError(t, err)
+	execNonTransactionalMigration(t, ctx, conn, migrations.indexSQL)
 }
 
 func execTransactionalMigration(t *testing.T, ctx context.Context, conn *sql.Conn, migrationSQL string) {
@@ -143,6 +165,17 @@ func execTransactionalMigration(t *testing.T, ctx context.Context, conn *sql.Con
 		require.NoError(t, err)
 	}
 	require.NoError(t, tx.Commit())
+}
+
+func execNonTransactionalMigration(t *testing.T, ctx context.Context, conn *sql.Conn, migrationSQL string) {
+	t.Helper()
+	for _, statement := range strings.Split(migrationSQL, ";") {
+		if strings.TrimSpace(statement) == "" {
+			continue
+		}
+		_, err := conn.ExecContext(ctx, statement)
+		require.NoError(t, err)
+	}
 }
 
 func startMigration175Postgres(t *testing.T) *sql.DB {
@@ -322,6 +355,26 @@ WHERE schemaname = $1 AND tablename = 'user_affiliates'
   AND indexname = 'idx_user_affiliates_inviter_qualified'`, schema).Scan(&indexDefinition))
 	require.Contains(t, indexDefinition, "(inviter_id)")
 	require.Contains(t, indexDefinition, "qualified_at IS NOT NULL")
+}
+
+func affiliateQualifiedIndexState(
+	t *testing.T,
+	ctx context.Context,
+	conn *sql.Conn,
+	schema string,
+) (bool, string) {
+	t.Helper()
+
+	var valid bool
+	var predicate sql.NullString
+	require.NoError(t, conn.QueryRowContext(ctx, `
+SELECT i.indisvalid, pg_get_expr(i.indpred, i.indrelid)
+FROM pg_index i
+JOIN pg_class idx ON idx.oid = i.indexrelid
+JOIN pg_namespace ns ON ns.oid = idx.relnamespace
+WHERE ns.nspname = $1
+  AND idx.relname = 'idx_user_affiliates_inviter_qualified'`, schema).Scan(&valid, &predicate))
+	return valid, predicate.String
 }
 
 func assertMigration175Qualification(
