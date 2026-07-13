@@ -2,6 +2,8 @@ package repository
 
 import (
 	"context"
+	"math"
+	"strconv"
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/ent"
@@ -70,6 +72,10 @@ func (r *settingRepository) GetMultiple(ctx context.Context, keys []string) (map
 }
 
 func (r *settingRepository) SetMultiple(ctx context.Context, settings map[string]string) error {
+	return setMultiple(ctx, r.client, settings)
+}
+
+func setMultiple(ctx context.Context, client *ent.Client, settings map[string]string) error {
 	if len(settings) == 0 {
 		return nil
 	}
@@ -77,13 +83,62 @@ func (r *settingRepository) SetMultiple(ctx context.Context, settings map[string
 	now := time.Now()
 	builders := make([]*ent.SettingCreate, 0, len(settings))
 	for key, value := range settings {
-		builders = append(builders, r.client.Setting.Create().SetKey(key).SetValue(value).SetUpdatedAt(now))
+		builders = append(builders, client.Setting.Create().SetKey(key).SetValue(value).SetUpdatedAt(now))
 	}
-	return r.client.Setting.
+	return client.Setting.
 		CreateBulk(builders...).
 		OnConflictColumns(setting.FieldKey).
 		UpdateNewValues().
 		Exec(ctx)
+}
+
+func (r *settingRepository) SetMultipleWithAffiliateQualificationReconcile(
+	ctx context.Context,
+	settings map[string]string,
+	defaultQualificationAmount float64,
+	reconcileUpdates map[string]string,
+) error {
+	tx, err := r.client.Tx(ctx)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	stored, err := tx.Setting.Query().
+		Where(setting.KeyEQ(service.SettingKeyAffiliateQualificationAmount)).
+		ForUpdate().
+		Only(ctx)
+	oldAmount := defaultQualificationAmount
+	if err == nil {
+		oldAmount, err = strconv.ParseFloat(stored.Value, 64)
+		if err != nil {
+			oldAmount = math.NaN()
+		}
+	} else if !ent.IsNotFound(err) {
+		return err
+	}
+
+	newAmount, err := strconv.ParseFloat(settings[service.SettingKeyAffiliateQualificationAmount], 64)
+	if err != nil {
+		return err
+	}
+	toWrite := settings
+	if oldAmount != newAmount {
+		toWrite = make(map[string]string, len(settings)+len(reconcileUpdates))
+		for key, value := range settings {
+			toWrite[key] = value
+		}
+		for key, value := range reconcileUpdates {
+			toWrite[key] = value
+		}
+	}
+	if err := setMultiple(ctx, tx.Client(), toWrite); err != nil {
+		return err
+	}
+	if err := tx.Commit(); err != nil {
+		return err
+	}
+	return nil
 }
 
 func (r *settingRepository) GetAll(ctx context.Context) (map[string]string, error) {

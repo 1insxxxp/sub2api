@@ -23,7 +23,7 @@ func (s *SettingService) UpdateSettings(ctx context.Context, settings *SystemSet
 		return err
 	}
 
-	err = s.settingRepo.SetMultiple(ctx, updates)
+	err = s.persistSystemSettingsUpdates(ctx, updates)
 	if err == nil {
 		s.refreshCachedSettings(settings)
 	}
@@ -45,7 +45,7 @@ func (s *SettingService) UpdateSettingsWithAuthSourceDefaults(ctx context.Contex
 		updates[key] = value
 	}
 
-	err = s.settingRepo.SetMultiple(ctx, updates)
+	err = s.persistSystemSettingsUpdates(ctx, updates)
 	if err == nil {
 		s.refreshCachedSettings(settings)
 	}
@@ -133,12 +133,6 @@ func (s *SettingService) buildSystemSettingsUpdates(ctx context.Context, setting
 	}
 
 	updates := make(map[string]string)
-	reconcileGeneration, err := newAffiliateReconcileGeneration()
-	if err != nil {
-		return nil, fmt.Errorf("generate affiliate qualification reconcile generation: %w", err)
-	}
-	updates[SettingKeyAffiliateTierReconcileGeneration] = strconv.FormatInt(reconcileGeneration, 10)
-	updates[SettingKeyAffiliateTierReconcileRequired] = "true"
 
 	// 注册设置
 	updates[SettingKeyRegistrationEnabled] = strconv.FormatBool(settings.RegistrationEnabled)
@@ -455,6 +449,27 @@ func (s *SettingService) buildSystemSettingsUpdates(ctx context.Context, setting
 	updates[SettingKeyAllowUserViewErrorRequests] = strconv.FormatBool(settings.AllowUserViewErrorRequests)
 
 	return updates, nil
+}
+
+func (s *SettingService) persistSystemSettingsUpdates(ctx context.Context, updates map[string]string) error {
+	repo, ok := s.settingRepo.(AffiliateQualificationSettingRepository)
+	if !ok {
+		return s.settingRepo.SetMultiple(ctx, updates)
+	}
+
+	reconcileGeneration, err := newAffiliateReconcileGeneration()
+	if err != nil {
+		return fmt.Errorf("generate affiliate qualification reconcile generation: %w", err)
+	}
+	return repo.SetMultipleWithAffiliateQualificationReconcile(
+		ctx,
+		updates,
+		AffiliateQualificationAmountDefault,
+		map[string]string{
+			SettingKeyAffiliateTierReconcileGeneration: strconv.FormatInt(reconcileGeneration, 10),
+			SettingKeyAffiliateTierReconcileRequired:   "true",
+		},
+	)
 }
 
 func newAffiliateReconcileGeneration() (int64, error) {

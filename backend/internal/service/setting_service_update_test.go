@@ -5,6 +5,8 @@ package service
 import (
 	"context"
 	"encoding/json"
+	"math"
+	"strconv"
 	"testing"
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
@@ -14,8 +16,10 @@ import (
 )
 
 type settingUpdateRepoStub struct {
+	values  map[string]string
 	updates map[string]string
 	setErr  error
+	readErr error
 }
 
 func (s *settingUpdateRepoStub) Get(ctx context.Context, key string) (*Setting, error) {
@@ -43,6 +47,35 @@ func (s *settingUpdateRepoStub) SetMultiple(ctx context.Context, settings map[st
 		s.updates[k] = v
 	}
 	return nil
+}
+
+func (s *settingUpdateRepoStub) SetMultipleWithAffiliateQualificationReconcile(
+	ctx context.Context,
+	settings map[string]string,
+	defaultQualificationAmount float64,
+	reconcileUpdates map[string]string,
+) error {
+	if s.readErr != nil {
+		return s.readErr
+	}
+	oldAmount := defaultQualificationAmount
+	if raw, ok := s.values[SettingKeyAffiliateQualificationAmount]; ok {
+		var err error
+		oldAmount, err = strconv.ParseFloat(raw, 64)
+		if err != nil {
+			oldAmount = math.NaN()
+		}
+	}
+	newAmount, err := strconv.ParseFloat(settings[SettingKeyAffiliateQualificationAmount], 64)
+	if err != nil {
+		return err
+	}
+	if oldAmount != newAmount {
+		for key, value := range reconcileUpdates {
+			settings[key] = value
+		}
+	}
+	return s.SetMultiple(ctx, settings)
 }
 
 func (s *settingUpdateRepoStub) GetAll(ctx context.Context) (map[string]string, error) {

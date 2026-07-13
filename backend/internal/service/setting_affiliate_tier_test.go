@@ -146,7 +146,9 @@ func TestSettingService_GetAffiliateTierConfigStrictRejectsDirtyStoredConfig(t *
 }
 
 func TestSettingService_UpdateSettings_AffiliateTierPersistsCompleteConfig(t *testing.T) {
-	repo := &settingUpdateRepoStub{}
+	repo := &settingUpdateRepoStub{values: map[string]string{
+		SettingKeyAffiliateQualificationAmount: "50.00000000",
+	}}
 	svc := NewSettingService(repo, &config.Config{})
 
 	err := svc.UpdateSettings(context.Background(), &SystemSettings{
@@ -175,18 +177,66 @@ func TestSettingService_UpdateSettings_AffiliateTierPersistsCompleteConfig(t *te
 	require.Positive(t, generation)
 }
 
-func TestSettingService_UpdateSettings_AffiliateTierAdvancesPersistentReconcileGeneration(t *testing.T) {
-	repo := &settingUpdateRepoStub{}
+func TestSettingService_UpdateSettings_AffiliateTierDoesNotAdvanceReconcileGenerationWhenUnchanged(t *testing.T) {
+	repo := &settingUpdateRepoStub{values: map[string]string{
+		SettingKeyAffiliateQualificationAmount: "50",
+	}}
 	svc := NewSettingService(repo, &config.Config{})
 	settings := settingsWithAffiliateTier(DefaultAffiliateTierConfig())
 
 	require.NoError(t, svc.UpdateSettings(context.Background(), settings))
-	first := repo.updates[SettingKeyAffiliateTierReconcileGeneration]
-	require.NoError(t, svc.UpdateSettings(context.Background(), settings))
-	second := repo.updates[SettingKeyAffiliateTierReconcileGeneration]
+	require.NotContains(t, repo.updates, SettingKeyAffiliateTierReconcileGeneration)
+	require.NotContains(t, repo.updates, SettingKeyAffiliateTierReconcileRequired)
+}
 
-	require.NotEqual(t, first, second)
-	require.Equal(t, "true", repo.updates[SettingKeyAffiliateTierReconcileRequired])
+func TestSettingService_UpdateSettings_UnrelatedChangeDoesNotRequestAffiliateReconcile(t *testing.T) {
+	repo := &settingUpdateRepoStub{values: map[string]string{
+		SettingKeyAffiliateQualificationAmount: "50.00000000",
+	}}
+	svc := NewSettingService(repo, &config.Config{})
+	settings := settingsWithAffiliateTier(DefaultAffiliateTierConfig())
+	settings.SiteName = "updated name"
+
+	require.NoError(t, svc.UpdateSettings(context.Background(), settings))
+	require.Equal(t, "updated name", repo.updates[SettingKeySiteName])
+	require.NotContains(t, repo.updates, SettingKeyAffiliateTierReconcileGeneration)
+	require.NotContains(t, repo.updates, SettingKeyAffiliateTierReconcileRequired)
+}
+
+func TestSettingService_UpdateSettings_MissingQualificationUsesDefaultForComparison(t *testing.T) {
+	t.Run("default is unchanged", func(t *testing.T) {
+		repo := &settingUpdateRepoStub{}
+		svc := NewSettingService(repo, &config.Config{})
+
+		require.NoError(t, svc.UpdateSettings(context.Background(), settingsWithAffiliateTier(DefaultAffiliateTierConfig())))
+		require.NotContains(t, repo.updates, SettingKeyAffiliateTierReconcileGeneration)
+		require.NotContains(t, repo.updates, SettingKeyAffiliateTierReconcileRequired)
+	})
+
+	t.Run("non-default is changed", func(t *testing.T) {
+		repo := &settingUpdateRepoStub{}
+		svc := NewSettingService(repo, &config.Config{})
+		settings := settingsWithAffiliateTier(DefaultAffiliateTierConfig())
+		settings.AffiliateQualificationAmount = 75
+
+		require.NoError(t, svc.UpdateSettings(context.Background(), settings))
+		require.Equal(t, "true", repo.updates[SettingKeyAffiliateTierReconcileRequired])
+		require.NotEmpty(t, repo.updates[SettingKeyAffiliateTierReconcileGeneration])
+	})
+}
+
+func TestSettingService_UpdateSettings_AffiliateQualificationReadFailureDoesNotWriteOrRefreshCache(t *testing.T) {
+	wantErr := errors.New("qualification setting read failed")
+	repo := &settingUpdateRepoStub{readErr: wantErr}
+	svc := NewSettingService(repo, &config.Config{})
+	refreshed := false
+	svc.onUpdate = func() { refreshed = true }
+
+	err := svc.UpdateSettings(context.Background(), settingsWithAffiliateTier(DefaultAffiliateTierConfig()))
+
+	require.ErrorIs(t, err, wantErr)
+	require.Nil(t, repo.updates)
+	require.False(t, refreshed)
 }
 
 func TestSettingService_UpdateSettings_AffiliateTierMarkerWriteFailureIsReturned(t *testing.T) {

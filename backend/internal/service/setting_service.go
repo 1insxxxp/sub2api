@@ -34,6 +34,17 @@ type SettingRepository interface {
 	Delete(ctx context.Context, key string) error
 }
 
+// AffiliateQualificationSettingRepository atomically compares the persisted
+// qualification amount and writes reconcile markers only when it changes.
+type AffiliateQualificationSettingRepository interface {
+	SetMultipleWithAffiliateQualificationReconcile(
+		ctx context.Context,
+		settings map[string]string,
+		defaultQualificationAmount float64,
+		reconcileUpdates map[string]string,
+	) error
+}
+
 // DefaultSubscriptionGroupReader validates group references used by default subscriptions.
 type DefaultSubscriptionGroupReader interface {
 	GetByID(ctx context.Context, id int64) (*Group, error)
