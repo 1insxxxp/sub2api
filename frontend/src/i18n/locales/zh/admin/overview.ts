@@ -378,7 +378,7 @@ export default {
         loadFailed: '加载邀请返利记录失败'
       },
       tiers: {
-        standard: 'Standard',
+        standard: '普通',
         bronze: '青铜',
         silver: '白银',
         gold: '黄金'

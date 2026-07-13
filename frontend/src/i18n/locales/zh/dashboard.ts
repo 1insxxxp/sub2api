@@ -522,10 +522,10 @@ export default {
       rulesDescription: '受邀用户累计实付达到 {amount} 即计为合格邀请；等级累计达标后永久保留。专属返利比例优先生效，但自动等级仍会继续晋升。',
       requirement: '{count} 位合格邀请',
       levels: {
-        standard: 'Standard',
-        bronze: 'Bronze',
-        silver: 'Silver',
-        gold: 'Gold'
+        standard: '普通',
+        bronze: '青铜',
+        silver: '白银',
+        gold: '黄金'
       }
     },
     stats: {
