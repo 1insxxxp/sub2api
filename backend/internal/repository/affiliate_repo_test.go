@@ -30,11 +30,29 @@ func TestAffiliateReadQueriesProjectDynamicQualificationFields(t *testing.T) {
 
 	recordsQuery := strings.Join(strings.Fields(affiliateInviteRecordsSQL), " ")
 	require.Contains(t, recordsQuery, "ua.qualifying_payment_amount::double precision")
-	require.Contains(t, recordsQuery, "(ua.qualifying_payment_amount >= %s) AS qualified")
+	require.Contains(t, recordsQuery, "(ua.qualifying_payment_amount >= %[1]s) AS qualified")
 	require.Contains(t, recordsQuery, "ua.qualified_at")
 
 	overviewQuery := strings.Join(strings.Fields(affiliateUserOverviewSQL), " ")
 	require.Contains(t, overviewQuery, "qualifying_payment_amount >= $2")
+}
+
+func TestAffiliateBatchReconcileSQLKeepsQualifiedAndQualifiedAtConsistent(t *testing.T) {
+	for _, query := range []string{affiliateInviterQualificationReconcileSQL, affiliateInviteesQualificationReconcileSQL} {
+		normalized := strings.Join(strings.Fields(query), " ")
+		require.Contains(t, normalized, "PARTITION BY user_id")
+		require.Contains(t, normalized, "WHEN totals.amount >= $2 THEN COALESCE(totals.qualified_at, NOW())")
+		require.Contains(t, normalized, "ELSE NULL")
+		require.Contains(t, normalized, "RETURNING ua.user_id")
+	}
+}
+
+func TestAffiliateInviteRecordsSQLProjectsInviterTierInputs(t *testing.T) {
+	query := strings.Join(strings.Fields(affiliateInviteRecordsSQL), " ")
+	require.Contains(t, query, "inviter_progress AS")
+	require.Contains(t, query, "invited_count")
+	require.Contains(t, query, "qualified_invitee_count")
+	require.Contains(t, query, "aff_rebate_rate_percent")
 }
 
 func TestAffiliateRecordQueriesUseLedgerAuditFields(t *testing.T) {
@@ -59,8 +77,8 @@ func TestAffiliateQualificationReconcileSQLMatchesAuthoritativePaymentRules(t *t
 	require.Contains(t, query, "WHEN po.status = 'PARTIALLY_REFUNDED' THEN GREATEST(po.amount - po.refund_amount, 0)")
 	require.Contains(t, query, "WHEN po.status = 'REFUNDED' THEN 0")
 	require.Contains(t, query, "GREATEST(COALESCE((SELECT SUM(net_amount) FROM authoritative_orders), 0), 0)")
-	require.Contains(t, query, "WHEN totals.amount >= $2 AND locked.qualifying_payment_amount < $2")
-	require.Contains(t, query, "WHEN totals.amount < $2 THEN NULL")
+	require.Contains(t, query, "WHEN totals.amount >= $2 THEN COALESCE(totals.qualified_at, NOW())")
+	require.Contains(t, query, "ELSE NULL")
 }
 
 func TestAffiliateQualificationCountSQLUsesCurrentThreshold(t *testing.T) {

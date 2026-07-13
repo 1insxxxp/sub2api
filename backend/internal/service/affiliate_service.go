@@ -182,6 +182,11 @@ type AffiliateQualificationRepository interface {
 	MarkAffiliateQualificationDirtyEventFailed(ctx context.Context, event AffiliateQualificationDirtyEvent, cause error) error
 }
 
+type AffiliateQualificationReadReconciler interface {
+	ReconcileInviterInvitees(ctx context.Context, inviterID int64, threshold float64) error
+	ReconcileInvitees(ctx context.Context, inviteeUserIDs []int64, threshold float64) error
+}
+
 type AffiliateQualificationDirtyEvent struct {
 	OrderID     string `json:"-"`
 	UserID      int64  `json:"userID"`
@@ -220,18 +225,24 @@ type AffiliateRecordFilter struct {
 }
 
 type AffiliateInviteRecord struct {
-	InviterID               int64      `json:"inviter_id"`
-	InviterEmail            string     `json:"inviter_email"`
-	InviterUsername         string     `json:"inviter_username"`
-	InviteeID               int64      `json:"invitee_id"`
-	InviteeEmail            string     `json:"invitee_email"`
-	InviteeUsername         string     `json:"invitee_username"`
-	AffCode                 string     `json:"aff_code"`
-	TotalRebate             float64    `json:"total_rebate"`
-	QualifyingPaymentAmount float64    `json:"qualifying_payment_amount"`
-	Qualified               bool       `json:"qualified"`
-	QualifiedAt             *time.Time `json:"qualified_at"`
-	CreatedAt               time.Time  `json:"created_at"`
+	InviterID                  int64         `json:"inviter_id"`
+	InviterEmail               string        `json:"inviter_email"`
+	InviterUsername            string        `json:"inviter_username"`
+	InviteeID                  int64         `json:"invitee_id"`
+	InviteeEmail               string        `json:"invitee_email"`
+	InviteeUsername            string        `json:"invitee_username"`
+	AffCode                    string        `json:"aff_code"`
+	TotalRebate                float64       `json:"total_rebate"`
+	QualifyingPaymentAmount    float64       `json:"qualifying_payment_amount"`
+	Qualified                  bool          `json:"qualified"`
+	QualifiedAt                *time.Time    `json:"qualified_at"`
+	InvitedCount               int           `json:"invited_count"`
+	QualifiedInviteeCount      int           `json:"qualified_invitee_count"`
+	AutomaticLevel             AffiliateTier `json:"automatic_level"`
+	AutomaticRebateRatePercent float64       `json:"automatic_rebate_rate_percent"`
+	CustomRebateRatePercent    *float64      `json:"custom_rebate_rate_percent"`
+	EffectiveRebateRatePercent float64       `json:"effective_rebate_rate_percent"`
+	CreatedAt                  time.Time     `json:"created_at"`
 }
 
 type AffiliateRebateRecord struct {
@@ -292,24 +303,27 @@ type AffiliateUserOverview struct {
 }
 
 type AffiliateService struct {
-	repo                 AffiliateRepository
-	tierReadRepo         AffiliateTierReadRepository
-	qualificationRepo    AffiliateQualificationRepository
-	settingService       *SettingService
-	authCacheInvalidator APIKeyAuthCacheInvalidator
-	billingCacheService  *BillingCacheService
+	repo                  AffiliateRepository
+	tierReadRepo          AffiliateTierReadRepository
+	qualificationRepo     AffiliateQualificationRepository
+	qualificationReadRepo AffiliateQualificationReadReconciler
+	settingService        *SettingService
+	authCacheInvalidator  APIKeyAuthCacheInvalidator
+	billingCacheService   *BillingCacheService
 }
 
 func NewAffiliateService(repo AffiliateRepository, settingService *SettingService, authCacheInvalidator APIKeyAuthCacheInvalidator, billingCacheService *BillingCacheService) *AffiliateService {
 	qualificationRepo, _ := repo.(AffiliateQualificationRepository)
+	qualificationReadRepo, _ := repo.(AffiliateQualificationReadReconciler)
 	tierReadRepo, _ := repo.(AffiliateTierReadRepository)
 	return &AffiliateService{
-		repo:                 repo,
-		tierReadRepo:         tierReadRepo,
-		qualificationRepo:    qualificationRepo,
-		settingService:       settingService,
-		authCacheInvalidator: authCacheInvalidator,
-		billingCacheService:  billingCacheService,
+		repo:                  repo,
+		tierReadRepo:          tierReadRepo,
+		qualificationRepo:     qualificationRepo,
+		qualificationReadRepo: qualificationReadRepo,
+		settingService:        settingService,
+		authCacheInvalidator:  authCacheInvalidator,
+		billingCacheService:   billingCacheService,
 	}
 }
 
@@ -344,7 +358,17 @@ func (s *AffiliateService) GetAffiliateDetail(ctx context.Context, userID int64)
 	if err != nil {
 		return nil, err
 	}
-	config, snapshot, err := s.resolveAffiliateTierProgress(ctx, userID)
+	config, err := s.affiliateTierConfigStrict(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if s.qualificationReadRepo == nil {
+		return nil, infraerrors.ServiceUnavailable("SERVICE_UNAVAILABLE", "affiliate qualification service unavailable")
+	}
+	if err := s.qualificationReadRepo.ReconcileInviterInvitees(ctx, userID, config.QualificationAmount); err != nil {
+		return nil, fmt.Errorf("reconcile affiliate invitees for current threshold: %w", err)
+	}
+	snapshot, err := s.resolveAffiliateTierProgressWithConfig(ctx, userID, config)
 	if err != nil {
 		return nil, err
 	}
@@ -573,19 +597,24 @@ func (s *AffiliateService) resolveAffiliateTierProgress(ctx context.Context, inv
 	if err != nil {
 		return AffiliateTierConfig{}, nil, err
 	}
+	snapshot, err := s.resolveAffiliateTierProgressWithConfig(ctx, inviterID, config)
+	return config, snapshot, err
+}
+
+func (s *AffiliateService) resolveAffiliateTierProgressWithConfig(ctx context.Context, inviterID int64, config AffiliateTierConfig) (*AffiliateTierSnapshot, error) {
 	if s.qualificationRepo == nil {
-		return AffiliateTierConfig{}, nil, infraerrors.ServiceUnavailable("SERVICE_UNAVAILABLE", "affiliate qualification service unavailable")
+		return nil, infraerrors.ServiceUnavailable("SERVICE_UNAVAILABLE", "affiliate qualification service unavailable")
 	}
 	qualifiedCount, err := s.qualificationRepo.CountQualifiedInvitees(ctx, inviterID, config.QualificationAmount)
 	if err != nil {
-		return AffiliateTierConfig{}, nil, fmt.Errorf("count qualified affiliate invitees: %w", err)
+		return nil, fmt.Errorf("count qualified affiliate invitees: %w", err)
 	}
 	level, automaticRate, nextThreshold := config.Resolve(qualifiedCount)
 	remaining := 0
 	if nextThreshold > qualifiedCount {
 		remaining = nextThreshold - qualifiedCount
 	}
-	return config, &AffiliateTierSnapshot{
+	return &AffiliateTierSnapshot{
 		Level:                 level,
 		AutomaticRatePercent:  automaticRate,
 		QualifiedInviteeCount: qualifiedCount,
@@ -825,6 +854,9 @@ func (s *AffiliateService) listInvitees(ctx context.Context, inviterID int64, qu
 	for i := range invitees {
 		invitees[i].Email = maskEmail(invitees[i].Email)
 		invitees[i].Qualified = invitees[i].QualifyingPaymentAmount >= qualificationAmount
+		if invitees[i].Qualified != (invitees[i].QualifiedAt != nil) {
+			return nil, fmt.Errorf("affiliate invitee %d qualification state is inconsistent", invitees[i].UserID)
+		}
 	}
 	return invitees, nil
 }
@@ -1003,12 +1035,37 @@ func (s *AffiliateService) AdminListInviteRecords(ctx context.Context, filter Af
 	if s.tierReadRepo == nil {
 		return nil, 0, infraerrors.ServiceUnavailable("SERVICE_UNAVAILABLE", "affiliate tier read service unavailable")
 	}
-	items, total, err := s.tierReadRepo.ListAffiliateInviteRecordsWithQualification(ctx, normalizeAffiliateRecordFilter(filter), config.QualificationAmount)
+	normalizedFilter := normalizeAffiliateRecordFilter(filter)
+	items, total, err := s.tierReadRepo.ListAffiliateInviteRecordsWithQualification(ctx, normalizedFilter, config.QualificationAmount)
+	if err != nil {
+		return nil, 0, err
+	}
+	if len(items) == 0 {
+		return items, total, nil
+	}
+	inviteeIDs := make([]int64, 0, len(items))
+	for _, item := range items {
+		inviteeIDs = append(inviteeIDs, item.InviteeID)
+	}
+	if s.qualificationReadRepo == nil {
+		return nil, 0, infraerrors.ServiceUnavailable("SERVICE_UNAVAILABLE", "affiliate qualification service unavailable")
+	}
+	if err := s.qualificationReadRepo.ReconcileInvitees(ctx, inviteeIDs, config.QualificationAmount); err != nil {
+		return nil, 0, fmt.Errorf("reconcile affiliate invite records for current threshold: %w", err)
+	}
+	items, total, err = s.tierReadRepo.ListAffiliateInviteRecordsWithQualification(ctx, normalizedFilter, config.QualificationAmount)
 	if err != nil {
 		return nil, 0, err
 	}
 	for i := range items {
 		items[i].Qualified = items[i].QualifyingPaymentAmount >= config.QualificationAmount
+		if items[i].Qualified != (items[i].QualifiedAt != nil) {
+			return nil, 0, fmt.Errorf("affiliate invite record %d qualification state is inconsistent", items[i].InviteeID)
+		}
+		level, automaticRate, _ := config.Resolve(items[i].QualifiedInviteeCount)
+		items[i].AutomaticLevel = level
+		items[i].AutomaticRebateRatePercent = automaticRate
+		items[i].EffectiveRebateRatePercent = effectiveAffiliateRebateRate(&AffiliateSummary{AffRebateRatePercent: items[i].CustomRebateRatePercent}, automaticRate)
 	}
 	return items, total, nil
 }
@@ -1041,6 +1098,12 @@ func (s *AffiliateService) AdminGetUserOverview(ctx context.Context, userID int6
 	}
 	if s.tierReadRepo == nil {
 		return nil, infraerrors.ServiceUnavailable("SERVICE_UNAVAILABLE", "affiliate tier read service unavailable")
+	}
+	if s.qualificationReadRepo == nil {
+		return nil, infraerrors.ServiceUnavailable("SERVICE_UNAVAILABLE", "affiliate qualification service unavailable")
+	}
+	if err := s.qualificationReadRepo.ReconcileInviterInvitees(ctx, userID, config.QualificationAmount); err != nil {
+		return nil, fmt.Errorf("reconcile affiliate invitees for current threshold: %w", err)
 	}
 	overview, err := s.tierReadRepo.GetAffiliateUserOverviewWithQualification(ctx, userID, config.QualificationAmount)
 	if err != nil {

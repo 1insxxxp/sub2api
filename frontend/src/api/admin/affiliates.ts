@@ -46,6 +46,12 @@ export interface AffiliateInviteRecord {
   qualifying_payment_amount: number
   qualified: boolean
   qualified_at: string | null
+  invited_count: number
+  qualified_invitee_count: number
+  automatic_level: AffiliateTierProgress['automatic_level']
+  automatic_rebate_rate_percent: number
+  custom_rebate_rate_percent: number | null
+  effective_rebate_rate_percent: number
   created_at: string
 }
 

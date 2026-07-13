@@ -98,7 +98,7 @@ func TestAPIContracts(t *testing.T) {
 			wantStatus: http.StatusOK,
 			wantJSON: `{
 				"code":0,"message":"success","data":{
-					"items":[{"inviter_id":1,"inviter_email":"alice@example.com","inviter_username":"alice","invitee_id":3,"invitee_email":"carol@example.com","invitee_username":"carol","aff_code":"ALICECODE","total_rebate":3,"qualifying_payment_amount":50,"qualified":true,"qualified_at":"2025-01-02T03:04:05Z","created_at":"2025-01-02T03:04:05Z"}],
+					"items":[{"inviter_id":1,"inviter_email":"alice@example.com","inviter_username":"alice","invitee_id":3,"invitee_email":"carol@example.com","invitee_username":"carol","aff_code":"ALICECODE","total_rebate":3,"qualifying_payment_amount":50,"qualified":true,"qualified_at":"2025-01-02T03:04:05Z","invited_count":2,"qualified_invitee_count":1,"automatic_level":"standard","automatic_rebate_rate_percent":8,"custom_rebate_rate_percent":18,"effective_rebate_rate_percent":18,"created_at":"2025-01-02T03:04:05Z"}],
 					"total":1,"page":1,"page_size":20,"pages":1
 				}
 			}`,
@@ -1574,8 +1574,13 @@ func (r *stubAffiliateRepo) GetAffiliateUserOverviewWithQualification(context.Co
 }
 
 func (r *stubAffiliateRepo) ListAffiliateInviteRecordsWithQualification(context.Context, service.AffiliateRecordFilter, float64) ([]service.AffiliateInviteRecord, int64, error) {
-	return []service.AffiliateInviteRecord{{InviterID: 1, InviterEmail: "alice@example.com", InviterUsername: "alice", InviteeID: 3, InviteeEmail: "carol@example.com", InviteeUsername: "carol", AffCode: "ALICECODE", TotalRebate: 3, QualifyingPaymentAmount: 50, QualifiedAt: &r.now, CreatedAt: r.now}}, 1, nil
+	return []service.AffiliateInviteRecord{{InviterID: 1, InviterEmail: "alice@example.com", InviterUsername: "alice", InviteeID: 3, InviteeEmail: "carol@example.com", InviteeUsername: "carol", AffCode: "ALICECODE", TotalRebate: 3, QualifyingPaymentAmount: 50, QualifiedAt: &r.now, InvitedCount: 2, QualifiedInviteeCount: 1, CustomRebateRatePercent: r.customRate, CreatedAt: r.now}}, 1, nil
 }
+
+func (r *stubAffiliateRepo) ReconcileInviterInvitees(context.Context, int64, float64) error {
+	return nil
+}
+func (r *stubAffiliateRepo) ReconcileInvitees(context.Context, []int64, float64) error { return nil }
 
 func (r *stubAffiliateRepo) TryWithAffiliateQualificationReconcileLock(ctx context.Context, fn func(context.Context) error) (bool, error) {
 	return true, fn(ctx)

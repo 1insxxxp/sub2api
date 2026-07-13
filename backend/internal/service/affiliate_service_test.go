@@ -544,6 +544,107 @@ func TestAffiliateService_AdminOverviewAndInviteRecordsExposeTierProgress(t *tes
 	require.Equal(t, 50.0, repo.listRecordsThreshold)
 }
 
+func TestAffiliateService_AdminInviteRecordsIncludeInviterTierFields(t *testing.T) {
+	customRate := 18.0
+	repo := &affiliateTierServiceRepoStub{
+		inviteRecords: []AffiliateInviteRecord{{
+			InviterID:               42,
+			InviteeID:               9,
+			InvitedCount:            12,
+			QualifiedInviteeCount:   10,
+			CustomRebateRatePercent: &customRate,
+		}},
+	}
+	svc := NewAffiliateService(repo, NewSettingService(newAffiliateTierServiceSettingRepo(), nil), nil, nil)
+
+	records, _, err := svc.AdminListInviteRecords(context.Background(), AffiliateRecordFilter{})
+
+	require.NoError(t, err)
+	require.Len(t, records, 1)
+	require.Equal(t, 12, records[0].InvitedCount)
+	require.Equal(t, 10, records[0].QualifiedInviteeCount)
+	require.Equal(t, AffiliateTierSilver, records[0].AutomaticLevel)
+	require.Equal(t, 12.0, records[0].AutomaticRebateRatePercent)
+	require.Equal(t, &customRate, records[0].CustomRebateRatePercent)
+	require.Equal(t, 18.0, records[0].EffectiveRebateRatePercent)
+}
+
+func TestAffiliateService_UserDetailReconcilesQualifiedAtForCurrentThreshold(t *testing.T) {
+	for _, tc := range []struct {
+		name            string
+		threshold       string
+		amount          float64
+		initialAt       *time.Time
+		wantQualified   bool
+		wantQualifiedAt bool
+	}{
+		{name: "lower threshold qualifies 49", threshold: "40", amount: 49, wantQualified: true, wantQualifiedAt: true},
+		{name: "raise threshold disqualifies 50", threshold: "60", amount: 50, initialAt: affiliateTimePtr(time.Now()), wantQualified: false, wantQualifiedAt: false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			settings := newAffiliateTierServiceSettingRepo()
+			settings.values[SettingKeyAffiliateQualificationAmount] = tc.threshold
+			repo := &affiliateTierServiceRepoStub{
+				inviterSummary: &AffiliateSummary{UserID: 42},
+				invitees:       []AffiliateInvitee{{UserID: 9, QualifyingPaymentAmount: tc.amount, QualifiedAt: tc.initialAt}},
+			}
+			repo.reconcileInviter = func(threshold float64) {
+				if tc.amount >= threshold {
+					repo.invitees[0].QualifiedAt = affiliateTimePtr(time.Now())
+				} else {
+					repo.invitees[0].QualifiedAt = nil
+				}
+			}
+
+			detail, err := NewAffiliateService(repo, NewSettingService(settings, nil), nil, nil).GetAffiliateDetail(context.Background(), 42)
+
+			require.NoError(t, err)
+			require.Equal(t, tc.wantQualified, detail.Invitees[0].Qualified)
+			require.Equal(t, tc.wantQualifiedAt, detail.Invitees[0].QualifiedAt != nil)
+			require.Equal(t, 1, repo.reconcileInviterCalls)
+		})
+	}
+}
+
+func TestAffiliateService_AdminRecordsReconcileCurrentPageForCurrentThreshold(t *testing.T) {
+	for _, tc := range []struct {
+		name            string
+		threshold       string
+		amount          float64
+		initialAt       *time.Time
+		wantQualified   bool
+		wantQualifiedAt bool
+	}{
+		{name: "lower threshold qualifies 49", threshold: "40", amount: 49, wantQualified: true, wantQualifiedAt: true},
+		{name: "raise threshold disqualifies 50", threshold: "60", amount: 50, initialAt: affiliateTimePtr(time.Now()), wantQualified: false, wantQualifiedAt: false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			settings := newAffiliateTierServiceSettingRepo()
+			settings.values[SettingKeyAffiliateQualificationAmount] = tc.threshold
+			repo := &affiliateTierServiceRepoStub{
+				inviteRecords: []AffiliateInviteRecord{{InviteeID: 9, QualifyingPaymentAmount: tc.amount, QualifiedAt: tc.initialAt}},
+			}
+			repo.reconcileInvitees = func(_ []int64, threshold float64) {
+				if tc.amount >= threshold {
+					repo.inviteRecords[0].QualifiedAt = affiliateTimePtr(time.Now())
+				} else {
+					repo.inviteRecords[0].QualifiedAt = nil
+				}
+			}
+
+			records, _, err := NewAffiliateService(repo, NewSettingService(settings, nil), nil, nil).AdminListInviteRecords(context.Background(), AffiliateRecordFilter{})
+
+			require.NoError(t, err)
+			require.Equal(t, tc.wantQualified, records[0].Qualified)
+			require.Equal(t, tc.wantQualifiedAt, records[0].QualifiedAt != nil)
+			require.Equal(t, 1, repo.reconcileInviteesCalls)
+			require.Equal(t, 2, repo.listRecordsCalls)
+		})
+	}
+}
+
+func affiliateTimePtr(value time.Time) *time.Time { return &value }
+
 func TestAffiliateService_AdminOverviewWithoutCustomRateUsesAutomaticTier(t *testing.T) {
 	repo := &affiliateTierServiceRepoStub{
 		qualifiedCount: 3,
@@ -613,35 +714,40 @@ func TestAffiliateService_QualificationReconcileDatabaseLockCoordinatesInstances
 
 type affiliateTierServiceRepoStub struct {
 	AffiliateRepository
-	mu                    sync.Mutex
-	qualifiedCount        int
-	countThreshold        float64
-	reconcileCalls        int
-	reconcileErr          error
-	reconcileInviteeErr   error
-	reconcileInviteeCalls int
-	reconcileStarted      chan struct{}
-	releaseReconcile      chan struct{}
-	reconcileFinished     bool
-	countCalls            int
-	inviteeSummary        *AffiliateSummary
-	inviterSummary        *AffiliateSummary
-	accruedAmount         float64
-	advisoryLockHeld      bool
-	reconcileRequired     bool
-	generation            int64
-	duringReconcile       func()
-	markReconcileErr      error
-	readSnapshotErr       error
-	clearReconcileErr     error
-	dirtyEvents           []AffiliateQualificationDirtyEvent
-	deletedDirtyEvents    []AffiliateQualificationDirtyEvent
-	failedDirtyEvents     []AffiliateQualificationDirtyEvent
-	invitees              []AffiliateInvitee
-	listInviteesThreshold float64
-	overview              *AffiliateUserOverview
-	inviteRecords         []AffiliateInviteRecord
-	listRecordsThreshold  float64
+	mu                     sync.Mutex
+	qualifiedCount         int
+	countThreshold         float64
+	reconcileCalls         int
+	reconcileErr           error
+	reconcileInviteeErr    error
+	reconcileInviteeCalls  int
+	reconcileStarted       chan struct{}
+	releaseReconcile       chan struct{}
+	reconcileFinished      bool
+	countCalls             int
+	inviteeSummary         *AffiliateSummary
+	inviterSummary         *AffiliateSummary
+	accruedAmount          float64
+	advisoryLockHeld       bool
+	reconcileRequired      bool
+	generation             int64
+	duringReconcile        func()
+	markReconcileErr       error
+	readSnapshotErr        error
+	clearReconcileErr      error
+	dirtyEvents            []AffiliateQualificationDirtyEvent
+	deletedDirtyEvents     []AffiliateQualificationDirtyEvent
+	failedDirtyEvents      []AffiliateQualificationDirtyEvent
+	invitees               []AffiliateInvitee
+	listInviteesThreshold  float64
+	overview               *AffiliateUserOverview
+	inviteRecords          []AffiliateInviteRecord
+	listRecordsThreshold   float64
+	listRecordsCalls       int
+	reconcileInviterCalls  int
+	reconcileInviteesCalls int
+	reconcileInviter       func(threshold float64)
+	reconcileInvitees      func(userIDs []int64, threshold float64)
 }
 
 func (r *affiliateTierServiceRepoStub) CountQualifiedInvitees(_ context.Context, _ int64, threshold float64) (int, error) {
@@ -800,8 +906,25 @@ func (r *affiliateTierServiceRepoStub) GetAffiliateUserOverviewWithQualification
 
 func (r *affiliateTierServiceRepoStub) ListAffiliateInviteRecordsWithQualification(_ context.Context, _ AffiliateRecordFilter, threshold float64) ([]AffiliateInviteRecord, int64, error) {
 	r.listRecordsThreshold = threshold
+	r.listRecordsCalls++
 	items := append([]AffiliateInviteRecord(nil), r.inviteRecords...)
 	return items, int64(len(items)), nil
+}
+
+func (r *affiliateTierServiceRepoStub) ReconcileInviterInvitees(_ context.Context, _ int64, threshold float64) error {
+	r.reconcileInviterCalls++
+	if r.reconcileInviter != nil {
+		r.reconcileInviter(threshold)
+	}
+	return nil
+}
+
+func (r *affiliateTierServiceRepoStub) ReconcileInvitees(_ context.Context, userIDs []int64, threshold float64) error {
+	r.reconcileInviteesCalls++
+	if r.reconcileInvitees != nil {
+		r.reconcileInvitees(userIDs, threshold)
+	}
+	return nil
 }
 
 func (r *affiliateTierServiceRepoStub) reconcileCallCount() int {

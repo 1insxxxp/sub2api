@@ -71,12 +71,8 @@ updated AS (
     UPDATE user_affiliates ua
     SET qualifying_payment_amount = totals.amount,
         qualified_at = CASE
-            WHEN totals.amount >= $2 AND locked.qualifying_payment_amount < $2
-                THEN COALESCE(totals.qualified_at, NOW())
-            WHEN totals.amount >= $2 AND locked.qualified_at IS NULL
-                THEN COALESCE(totals.qualified_at, NOW())
-            WHEN totals.amount < $2 THEN NULL
-            ELSE locked.qualified_at
+            WHEN totals.amount >= $2 THEN COALESCE(totals.qualified_at, NOW())
+            ELSE NULL
         END,
         updated_at = NOW()
     FROM locked, totals
@@ -84,6 +80,86 @@ updated AS (
     RETURNING ua.qualifying_payment_amount::double precision, ua.qualified_at
 )
 SELECT qualifying_payment_amount, qualified_at FROM updated`
+
+const affiliateQualificationBatchReconcileTemplate = `
+WITH target_users AS (
+    %s
+),
+locked AS (
+    SELECT ua.user_id
+    FROM user_affiliates ua
+    JOIN target_users target ON target.user_id = ua.user_id
+    FOR UPDATE
+),
+authoritative_orders AS (
+    SELECT locked.user_id,
+           po.id AS order_id,
+           COALESCE(po.completed_at, po.paid_at, po.created_at) AS payment_at,
+           CASE
+               WHEN po.status IN (
+                   'COMPLETED',
+                   'REFUND_REQUESTED',
+                   'REFUNDING',
+                   'REFUND_PENDING',
+                   'REFUND_FAILED'
+               ) THEN GREATEST(po.amount, 0)
+               WHEN po.status = 'PARTIALLY_REFUNDED'
+                   THEN GREATEST(po.amount - po.refund_amount, 0)
+               WHEN po.status = 'REFUNDED' THEN 0
+               ELSE 0
+           END AS net_amount
+    FROM locked
+    LEFT JOIN payment_orders po
+           ON po.user_id = locked.user_id
+          AND po.order_type IN ('balance', 'subscription')
+),
+running_payments AS (
+    SELECT user_id,
+           payment_at,
+           SUM(net_amount) OVER (
+               PARTITION BY user_id
+               ORDER BY payment_at, order_id
+               ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
+           ) AS cumulative_amount
+    FROM authoritative_orders
+),
+totals AS (
+    SELECT locked.user_id,
+           GREATEST(COALESCE(SUM(authoritative_orders.net_amount), 0), 0)::DECIMAL(20,8) AS amount,
+           (
+               SELECT MIN(running.payment_at)
+               FROM running_payments running
+               WHERE running.user_id = locked.user_id
+                 AND running.cumulative_amount >= $2
+           ) AS qualified_at
+    FROM locked
+    LEFT JOIN authoritative_orders ON authoritative_orders.user_id = locked.user_id
+    GROUP BY locked.user_id
+),
+updated AS (
+    UPDATE user_affiliates ua
+    SET qualifying_payment_amount = totals.amount,
+        qualified_at = CASE
+            WHEN totals.amount >= $2 THEN COALESCE(totals.qualified_at, NOW())
+            ELSE NULL
+        END,
+        updated_at = NOW()
+    FROM totals
+    WHERE ua.user_id = totals.user_id
+    RETURNING ua.user_id, ua.qualifying_payment_amount::double precision, ua.qualified_at
+)
+SELECT user_id, qualifying_payment_amount, qualified_at FROM updated`
+
+var (
+	affiliateInviterQualificationReconcileSQL = fmt.Sprintf(
+		affiliateQualificationBatchReconcileTemplate,
+		"SELECT user_id FROM user_affiliates WHERE inviter_id = $1",
+	)
+	affiliateInviteesQualificationReconcileSQL = fmt.Sprintf(
+		affiliateQualificationBatchReconcileTemplate,
+		"SELECT DISTINCT unnest($1::bigint[]) AS user_id",
+	)
+)
 
 const affiliateQualificationCountSQL = `
 SELECT COUNT(*)::integer
@@ -148,6 +224,17 @@ ORDER BY ua.created_at DESC
 LIMIT $2`
 
 const affiliateInviteRecordsSQL = `
+WITH inviter_progress AS (
+    SELECT inviter_aff.user_id,
+           COUNT(invitee_aff.user_id)::integer AS invited_count,
+           COUNT(invitee_aff.user_id) FILTER (
+               WHERE invitee_aff.qualifying_payment_amount >= %[1]s
+           )::integer AS qualified_invitee_count,
+           inviter_aff.aff_rebate_rate_percent
+    FROM user_affiliates inviter_aff
+    LEFT JOIN user_affiliates invitee_aff ON invitee_aff.inviter_id = inviter_aff.user_id
+    GROUP BY inviter_aff.user_id, inviter_aff.aff_rebate_rate_percent
+)
 SELECT ua.inviter_id,
        COALESCE(inviter.email, ''),
        COALESCE(inviter.username, ''),
@@ -157,21 +244,25 @@ SELECT ua.inviter_id,
        COALESCE(inviter_aff.aff_code, ''),
        COALESCE(SUM(ual.amount), 0)::double precision AS total_rebate,
        ua.qualifying_payment_amount::double precision,
-       (ua.qualifying_payment_amount >= %s) AS qualified,
+       (ua.qualifying_payment_amount >= %[1]s) AS qualified,
        ua.qualified_at,
+       inviter_progress.invited_count,
+       inviter_progress.qualified_invitee_count,
+       inviter_progress.aff_rebate_rate_percent,
        ua.created_at
 FROM user_affiliates ua
 JOIN users invitee ON invitee.id = ua.user_id
 JOIN users inviter ON inviter.id = ua.inviter_id
 JOIN user_affiliates inviter_aff ON inviter_aff.user_id = ua.inviter_id
+JOIN inviter_progress ON inviter_progress.user_id = ua.inviter_id
 LEFT JOIN user_affiliate_ledger ual
        ON ual.user_id = ua.inviter_id
       AND ual.source_user_id = ua.user_id
       AND ual.action = 'accrue'
-%s
-GROUP BY ua.inviter_id, inviter.email, inviter.username, ua.user_id, invitee.email, invitee.username, inviter_aff.aff_code, ua.qualifying_payment_amount, ua.qualified_at, ua.created_at
-%s
-LIMIT %s OFFSET %s`
+%[2]s
+GROUP BY ua.inviter_id, inviter.email, inviter.username, ua.user_id, invitee.email, invitee.username, inviter_aff.aff_code, ua.qualifying_payment_amount, ua.qualified_at, inviter_progress.invited_count, inviter_progress.qualified_invitee_count, inviter_progress.aff_rebate_rate_percent, ua.created_at
+%[3]s
+LIMIT %[4]s OFFSET %[5]s`
 
 type affiliateQueryExecer interface {
 	QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error)
@@ -791,6 +882,63 @@ func (r *affiliateRepository) ReconcileInviteeQualification(ctx context.Context,
 	return qualification, nil
 }
 
+func (r *affiliateRepository) ReconcileInviterInvitees(ctx context.Context, inviterID int64, threshold float64) error {
+	if inviterID <= 0 {
+		return service.ErrUserNotFound
+	}
+	if err := validateAffiliateQualificationThreshold(threshold); err != nil {
+		return err
+	}
+	return r.executeAffiliateQualificationBatch(ctx, affiliateInviterQualificationReconcileSQL, inviterID, threshold)
+}
+
+func (r *affiliateRepository) ReconcileInvitees(ctx context.Context, inviteeUserIDs []int64, threshold float64) error {
+	if err := validateAffiliateQualificationThreshold(threshold); err != nil {
+		return err
+	}
+	cleaned := make([]int64, 0, len(inviteeUserIDs))
+	seen := make(map[int64]struct{}, len(inviteeUserIDs))
+	for _, userID := range inviteeUserIDs {
+		if userID <= 0 {
+			continue
+		}
+		if _, ok := seen[userID]; ok {
+			continue
+		}
+		seen[userID] = struct{}{}
+		cleaned = append(cleaned, userID)
+	}
+	if len(cleaned) == 0 {
+		return nil
+	}
+	return r.executeAffiliateQualificationBatch(ctx, affiliateInviteesQualificationReconcileSQL, pq.Array(cleaned), threshold)
+}
+
+func (r *affiliateRepository) executeAffiliateQualificationBatch(ctx context.Context, query string, target any, threshold float64) error {
+	client := clientFromContext(ctx, r.client)
+	rows, err := client.QueryContext(ctx, query, target, threshold)
+	if err != nil {
+		return fmt.Errorf("reconcile affiliate qualifications: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+	for rows.Next() {
+		var userID int64
+		var amount float64
+		var qualifiedAt *time.Time
+		if err := rows.Scan(&userID, &amount, &qualifiedAt); err != nil {
+			return err
+		}
+	}
+	return rows.Err()
+}
+
+func validateAffiliateQualificationThreshold(threshold float64) error {
+	if threshold <= 0 || math.IsNaN(threshold) || math.IsInf(threshold, 0) {
+		return fmt.Errorf("invalid affiliate qualification threshold")
+	}
+	return nil
+}
+
 func (r *affiliateRepository) CountQualifiedInvitees(ctx context.Context, inviterID int64, threshold float64) (int, error) {
 	if inviterID <= 0 {
 		return 0, service.ErrUserNotFound
@@ -924,6 +1072,9 @@ JOIN user_affiliates inviter_aff ON inviter_aff.user_id = ua.inviter_id
 			&item.QualifyingPaymentAmount,
 			&item.Qualified,
 			&item.QualifiedAt,
+			&item.InvitedCount,
+			&item.QualifiedInviteeCount,
+			&item.CustomRebateRatePercent,
 			&item.CreatedAt,
 		); err != nil {
 			return nil, 0, err
