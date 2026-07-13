@@ -374,7 +374,7 @@ function formatCount(value: number): string {
 
 @media (min-width: 1024px) {
   .tier-identity__layout {
-    grid-template-columns: minmax(0, 1fr) minmax(280px, 0.85fr);
+    grid-template-columns: minmax(0, 1fr) minmax(0, 0.85fr);
     gap: 1.5rem;
     padding: 1.5rem;
   }
