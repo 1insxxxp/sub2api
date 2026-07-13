@@ -282,9 +282,9 @@ Use the configured image-generation gateway and the imagegen skill. Prompt for t
 - Passion API-style segmented geometry;
 - blue/cyan dominant palette;
 - white structural lines and circular nodes;
-- increasing complexity from one core to pulse, orbit, and complete core;
+- four clearly different silhouettes: open seed arc, horizontal pulse wings, tilted orbital paths, and six-direction core matrix;
 - no words, letters, numbers, crowns, shields, armor, realistic metal, or warm tier palettes;
-- clear silhouette at 40px and 88px.
+- clear silhouette at 40px and 88px; reject a set if the four assets read as variations of the same concentric target.
 
 **Step 2: Remove chroma key and normalize assets**
 

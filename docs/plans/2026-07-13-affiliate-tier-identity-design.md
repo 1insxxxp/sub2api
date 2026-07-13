@@ -21,14 +21,14 @@ The user affiliate page and administrator affiliate/settings views must use the 
 
 Use one coherent family of transparent blue/cyan geometric badges derived from the Passion API logo language: segmented geometry, white structural lines, circular nodes, and restrained soft glow. Avoid realistic metal, shields, crowns, armor, and large bronze/silver/gold color fields.
 
-The badge structure grows with the tier:
+The badges share line weight, nodes, material, and blue/cyan palette, but they must not rely on adding similar concentric rings. Each tier uses a distinct primary silhouette:
 
-- Origin: one core node and a single segmented ring.
-- Pulse: a second ring and visible energy connections.
-- Orbit: an orbital structure with multiple linked nodes.
-- Core: a complete multilayer core and network structure.
+- Origin: an open circular arc with one seed-like core node.
+- Pulse: a horizontal double-wing pulse waveform around a luminous core.
+- Orbit: tilted orbital paths with multiple linked nodes and clear rotational movement.
+- Core: a full six-direction matrix surrounding a compact central core.
 
-All four badges remain primarily blue/cyan. Tier distinction comes from structural complexity, brightness, and small white or cool-blue highlights. The assets contain no text and must stay legible at the current summary and compact rule-list sizes.
+Tier distinction comes first from silhouette, then from structural complexity and brightness. At 36-40px, a user must be able to identify each tier from shape alone. The assets contain no text and avoid crowns, shields, armor, realistic metal, and four near-identical circular targets.
 
 ## Tier-Aware Page Presentation
 
