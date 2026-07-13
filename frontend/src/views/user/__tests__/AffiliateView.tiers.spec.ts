@@ -45,11 +45,17 @@ vi.mock('vue-i18n', async (importOriginal) => {
           'affiliate.tiers.remaining': '{count} more to {level}',
           'affiliate.tiers.highestLevel': 'Highest level reached',
           'affiliate.tiers.rulesTitle': 'Promotion levels',
+          'affiliate.tiers.rulesDescription': 'Qualifies after {amount}.',
           'affiliate.tiers.levels.standard': 'Origin',
           'affiliate.tiers.levels.bronze': 'Pulse',
           'affiliate.tiers.levels.silver': 'Orbit',
           'affiliate.tiers.levels.gold': 'Core',
           'affiliate.tiers.requirement': '{count} qualified invitees',
+          'affiliate.tiers.identity.stageObjective': 'Current objective',
+          'affiliate.tiers.objectives.origin': 'Complete your first qualified invite to activate your promotion path',
+          'affiliate.tiers.objectives.pulse': '{count} more qualified invitees to reach Orbit',
+          'affiliate.tiers.objectives.orbit': '{count} more qualified invitees to reach Core; current qualified ratio {ratio}, cumulative rebate {rebate}',
+          'affiliate.tiers.objectives.core': 'Highest tier reached: {qualified} qualified invitees, {rebate} cumulative rebate, and a {rate} current rebate rate',
           'affiliate.invitees.columns.paymentProgress': 'Cumulative paid',
           'affiliate.invitees.qualified': 'Qualified',
           'affiliate.invitees.inProgress': 'In progress'
@@ -130,15 +136,19 @@ describe('AffiliateView promotion tiers', () => {
     getAffiliateDetail.mockReset()
   })
 
-  it('shows the automatic level, effective rate, qualification progress, and all four rules', async () => {
+  it('renders one integrated identity with the automatic level, progress, objectives, and all rules', async () => {
     const wrapper = await mountView(makeDetail())
 
-    const summary = wrapper.get('[data-testid="tier-summary"]')
+    const summaries = wrapper.findAll('[data-testid="tier-summary"]')
+    expect(summaries).toHaveLength(1)
+    const summary = summaries[0]
     expect(summary.text()).toContain('Orbit')
     expect(summary.text()).toContain('12%')
     expect(summary.text()).toContain('12')
     expect(summary.text()).toContain('12 / 30 qualified invitees')
-    expect(summary.text()).toContain('18 more to Core')
+    expect(summary.text()).toContain('18 more qualified invitees to reach Core')
+    expect(summary.text()).toContain('current qualified ratio 100%')
+    expect(summary.text()).toContain('cumulative rebate $20.00')
 
     const rules = wrapper.findAll('[data-testid="tier-rule"]')
     expect(rules).toHaveLength(4)
@@ -150,18 +160,38 @@ describe('AffiliateView promotion tiers', () => {
     ]))
 
     const currentBadge = wrapper.get('[data-testid="current-tier-badge"]')
-    expect(currentBadge.attributes('alt')).toBe('Orbit')
-    expect(currentBadge.classes()).toContain('tier-badge-pulse')
+    expect(currentBadge.attributes('alt')).toBe('')
 
     const ruleBadges = wrapper.findAll('[data-testid="tier-rule-badge"]')
     expect(ruleBadges).toHaveLength(4)
-    expect(ruleBadges.map((badge) => badge.attributes('alt'))).toEqual([
-      'Origin',
-      'Pulse',
-      'Orbit',
-      'Core'
-    ])
+    expect(ruleBadges.every((badge) => badge.attributes('alt') === '')).toBe(true)
     expect(wrapper.get('[data-testid="tier-rule"][data-current="true"]').text()).toContain('Orbit')
+    expect(wrapper.html()).not.toContain('tier-badge-gold')
+    expect(wrapper.html()).not.toContain('tier-badge-pulse')
+  })
+
+  it.each([
+    ['standard', 'origin', 'invited', 'Complete your first qualified invite'],
+    ['bronze', 'pulse', 'invited', 'more qualified invitees to reach Orbit'],
+    ['silver', 'orbit', 'history', 'current qualified ratio 100%'],
+    ['gold', 'core', 'rate', 'Highest tier reached']
+  ] as const)('uses the %s level\'s %s theme and features the %s stat', async (level, theme, featuredStat, objective) => {
+    const wrapper = await mountView(makeDetail({
+      automatic_level: level,
+      next_level_invitee_threshold: level === 'gold' ? null : 30
+    }))
+
+    expect(wrapper.get('[data-testid="tier-summary"]').attributes('data-tier-theme')).toBe(theme)
+    expect(wrapper.get('[data-testid="tier-summary"]').text()).toContain(objective)
+    const stats = wrapper.findAll('[data-stat]')
+    expect(stats.map((stat) => stat.attributes('data-stat'))).toEqual([
+      'rate',
+      'invited',
+      'available',
+      'history'
+    ])
+    expect(wrapper.get(`[data-stat="${featuredStat}"]`).attributes('data-featured')).toBe('true')
+    expect(stats.filter((stat) => stat.attributes('data-featured') === 'true')).toHaveLength(1)
   })
 
   it('labels a custom rate while preserving automatic-level progress', async () => {
@@ -181,7 +211,7 @@ describe('AffiliateView promotion tiers', () => {
     expect(summary.text()).toContain('13.5%')
     expect(summary.text()).toContain('Custom rate')
     expect(summary.text()).toContain('7 / 10 qualified invitees')
-    expect(summary.text()).toContain('3 more to Orbit')
+    expect(summary.text()).toContain('3 more qualified invitees to reach Orbit')
   })
 
   it('shows Core as the completed highest level', async () => {
@@ -195,7 +225,8 @@ describe('AffiliateView promotion tiers', () => {
     }))
 
     expect(wrapper.get('[data-testid="tier-summary"]').text()).toContain('Highest level reached')
-    expect(wrapper.get('[data-testid="current-tier-badge"]').classes()).toContain('tier-badge-gold')
+    expect(wrapper.get('[data-testid="tier-summary"]').attributes('data-tier-theme')).toBe('core')
+    expect(wrapper.find('[role="progressbar"]').exists()).toBe(false)
     expect(wrapper.get('[data-testid="tier-rule"][data-current="true"]').text()).toContain('Core')
   })
 
@@ -209,6 +240,8 @@ describe('AffiliateView promotion tiers', () => {
     expect(mobile.text()).toContain('In progress')
     expect(mobile.text()).toContain('$50.00 / $50.00')
     expect(mobile.text()).toContain('Qualified')
+    expect(wrapper.text()).toContain('AFF123')
+    expect(wrapper.text()).toContain('/register?aff=AFF123')
     expect(wrapper.html()).not.toMatch(/min-w-\[/)
     expect(mobile.findAll('.break-all').length).toBeGreaterThan(0)
   })
