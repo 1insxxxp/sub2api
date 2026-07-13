@@ -235,9 +235,9 @@ const columns = computed<Column[]>(() => {
     return [
       { key: 'inviter', label: t('admin.affiliates.records.inviter'), sortable: true },
       { key: 'invitee', label: t('admin.affiliates.records.invitee'), sortable: true },
-      { key: 'aff_code', label: t('admin.affiliates.records.affCode'), sortable: true, class: 'hidden md:table-cell' },
-      { key: 'tier', label: t('admin.affiliates.records.automaticTier'), class: 'hidden md:table-cell' },
-      { key: 'qualified', label: t('admin.affiliates.records.qualification'), class: 'hidden md:table-cell' },
+      { key: 'aff_code', label: t('admin.affiliates.records.affCode'), sortable: true, class: 'hidden md:table-cell', mobileHidden: true },
+      { key: 'tier', label: t('admin.affiliates.records.automaticTier'), class: 'hidden md:table-cell', mobileHidden: true },
+      { key: 'qualified', label: t('admin.affiliates.records.qualification'), class: 'hidden md:table-cell', mobileHidden: true },
       { key: 'rate', label: t('admin.affiliates.records.effectiveRate') },
       { key: 'total_rebate', label: t('admin.affiliates.records.totalRebate'), sortable: true },
       { key: 'created_at', label: t('admin.affiliates.records.invitedAt'), sortable: true },

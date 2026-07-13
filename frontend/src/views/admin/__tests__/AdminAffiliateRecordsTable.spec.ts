@@ -45,6 +45,35 @@ function mountTable() {
   })
 }
 
+function mountTableWithRealDataTable(isDesktop: boolean) {
+  Object.defineProperty(window, 'matchMedia', {
+    configurable: true,
+    writable: true,
+    value: vi.fn().mockImplementation((query: string) => ({
+      matches: isDesktop,
+      media: query,
+      onchange: null,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    })),
+  })
+
+  return mount(AdminAffiliateRecordsTable, {
+    props: { type: 'invites' },
+    global: { stubs: {
+      AppLayout: { template: '<div><slot /></div>' },
+      TablePageLayout: { template: '<div><slot name="filters"/><slot name="table"/><slot name="pagination"/></div>' },
+      Pagination: true,
+      Icon: true,
+      BaseDialog: { props: ['show'], template: '<div v-if="show"><slot /></div>' },
+      OrderStatusBadge: true,
+    } },
+  })
+}
+
 describe('AdminAffiliateRecordsTable promotion reporting', () => {
   beforeEach(() => {
     listInviteRecords.mockResolvedValue({ items: [{
@@ -120,6 +149,26 @@ describe('AdminAffiliateRecordsTable promotion reporting', () => {
     await flushPromises()
     const secondary = wrapper.vm.$.setupState.columns.filter((column: { key: string }) => ['aff_code', 'tier', 'qualified'].includes(column.key))
     expect(secondary.every((column: { class?: string }) => column.class?.includes('hidden') && column.class?.includes('md:table-cell'))).toBe(true)
+    expect(secondary.every((column: { mobileHidden?: boolean }) => column.mobileHidden)).toBe(true)
     expect(wrapper.html()).not.toMatch(/min-w-\[/)
+  })
+
+  it('omits folded invite details from real mobile cards while retaining desktop columns', async () => {
+    const mobileWrapper = mountTableWithRealDataTable(false)
+    await flushPromises()
+
+    const mobileLabels = mobileWrapper.findAll('.admin-surface > .space-y-3 > div > span').map((label) => label.text())
+    expect(mobileLabels).not.toContain('admin.affiliates.records.affCode')
+    expect(mobileLabels).not.toContain('admin.affiliates.records.automaticTier')
+    expect(mobileLabels).not.toContain('admin.affiliates.records.qualification')
+    expect(mobileWrapper.get('[data-test="mobile-inviter-tier"]').exists()).toBe(true)
+    expect(mobileWrapper.get('[data-test="mobile-invitee-qualification"]').exists()).toBe(true)
+
+    const desktopWrapper = mountTableWithRealDataTable(true)
+    await flushPromises()
+    const desktopHeaders = desktopWrapper.findAll('th').map((header) => header.text())
+    expect(desktopHeaders).toContain('admin.affiliates.records.affCode')
+    expect(desktopHeaders).toContain('admin.affiliates.records.automaticTier')
+    expect(desktopHeaders).toContain('admin.affiliates.records.qualification')
   })
 })

@@ -30,6 +30,22 @@ const stubDesktopMatchMedia = () => {
   })
 }
 
+const stubMobileMatchMedia = () => {
+  Object.defineProperty(window, 'matchMedia', {
+    writable: true,
+    value: vi.fn().mockImplementation((query: string) => ({
+      matches: false,
+      media: query,
+      onchange: null,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    })),
+  })
+}
+
 describe('DataTable', () => {
   beforeEach(() => {
     stubDesktopMatchMedia()
@@ -92,5 +108,25 @@ describe('DataTable', () => {
     expect(nameHeader.attributes('aria-sort')).toBe('descending')
     expect(nameHeader.findAll('svg')[0].classes()).toContain('text-gray-300')
     expect(nameHeader.findAll('svg')[1].classes()).toContain('text-primary-600')
+  })
+
+  it('hides mobileHidden columns from cards without removing desktop columns', () => {
+    const columns: Column[] = [
+      { key: 'name', label: 'Name' },
+      { key: 'details', label: 'Details', mobileHidden: true },
+    ]
+    const data = [{ id: 1, name: 'Alice', details: 'Desktop detail' }]
+
+    stubMobileMatchMedia()
+    const mobileWrapper = mount(DataTable, { props: { columns, data } })
+
+    expect(mobileWrapper.text()).toContain('Name')
+    expect(mobileWrapper.text()).not.toContain('Details')
+    expect(mobileWrapper.text()).not.toContain('Desktop detail')
+
+    stubDesktopMatchMedia()
+    const desktopWrapper = mount(DataTable, { props: { columns, data } })
+
+    expect(desktopWrapper.findAll('th').map((header) => header.text())).toEqual(['Name', 'Details'])
   })
 })

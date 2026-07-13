@@ -558,7 +558,9 @@ const resolveRowKey = (row: any, index: number) => {
   return key ?? index
 }
 
-const dataColumns = computed(() => props.columns.filter((column) => column.key !== 'actions'))
+const dataColumns = computed(() =>
+  props.columns.filter((column) => column.key !== 'actions' && !column.mobileHidden)
+)
 const columnsSignature = computed(() =>
   props.columns.map((column) => `${column.key}:${column.sortable ? '1' : '0'}`).join('|')
 )
