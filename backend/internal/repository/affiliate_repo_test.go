@@ -6,6 +6,7 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"time"
 
 	"entgo.io/ent/dialect"
 	entsql "entgo.io/ent/dialect/sql"
@@ -51,7 +52,9 @@ func TestAffiliateInviteRecordsSQLProjectsInviterTierInputs(t *testing.T) {
 	query := strings.Join(strings.Fields(affiliateInviteRecordsSQL), " ")
 	require.Contains(t, query, "page_inviter_ids AS")
 	require.Contains(t, query, "JOIN page_inviter_ids")
-	require.Contains(t, query, "COUNT(*) OVER() AS total_count")
+	require.Contains(t, query, "record_count AS")
+	require.Contains(t, query, "COUNT(*)::bigint AS total_count FROM matched_records")
+	require.Contains(t, query, "LEFT JOIN page_records ON TRUE")
 	require.Contains(t, query, "invited_count")
 	require.Contains(t, query, "qualified_invitee_count")
 	require.Contains(t, query, "aff_rebate_rate_percent")
@@ -69,6 +72,36 @@ func TestAffiliateInviteRecordsUseOneSnapshotForCountAndPage(t *testing.T) {
 
 	require.NotContains(t, method, "queryAffiliateRecordCount")
 	require.Equal(t, 1, strings.Count(method, "QueryContext"))
+}
+
+func TestAffiliateInviteRecordsReturnsTotalForEmptyOutOfRangePage(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = db.Close() })
+	driver := entsql.OpenDB(dialect.Postgres, db)
+	client := dbent.NewClient(dbent.Driver(driver))
+	t.Cleanup(func() { _ = client.Close() })
+	repo := &affiliateRepository{client: client, db: db}
+
+	mock.ExpectQuery("(?s)WITH matched_records AS MATERIALIZED.*record_count").
+		WithArgs(service.AffiliateQualificationAmountDefault, 20, 1980).
+		WillReturnRows(sqlmock.NewRows([]string{
+			"has_record", "inviter_id", "inviter_email", "inviter_username",
+			"invitee_id", "invitee_email", "invitee_username", "aff_code",
+			"total_rebate", "qualifying_payment_amount", "qualified", "qualified_at",
+			"invited_count", "qualified_invitee_count", "aff_rebate_rate_percent",
+			"created_at", "total_count",
+		}).AddRow(false, int64(0), "", "", int64(0), "", "", "", 0.0, 0.0, false, nil, 0, 0, nil, time.Now(), int64(7)))
+
+	items, total, err := repo.ListAffiliateInviteRecordsWithQualification(context.Background(), service.AffiliateRecordFilter{
+		Page:     100,
+		PageSize: 20,
+	}, service.AffiliateQualificationAmountDefault)
+
+	require.NoError(t, err)
+	require.Empty(t, items)
+	require.Equal(t, int64(7), total)
+	require.NoError(t, mock.ExpectationsWereMet())
 }
 
 func TestAffiliateInviteRecordOrderingUsesUniqueTieBreaker(t *testing.T) {

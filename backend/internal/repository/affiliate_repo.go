@@ -227,7 +227,7 @@ ORDER BY ua.created_at DESC
 LIMIT $2`
 
 const affiliateInviteRecordsSQL = `
-WITH page_records AS MATERIALIZED (
+WITH matched_records AS MATERIALIZED (
     SELECT ua.inviter_id,
            COALESCE(inviter.email, '') AS inviter_email,
            COALESCE(inviter.username, '') AS inviter_username,
@@ -243,8 +243,7 @@ WITH page_records AS MATERIALIZED (
                ELSE NULL
            END AS qualified_at,
            inviter_aff.aff_rebate_rate_percent,
-           ua.created_at,
-           COUNT(*) OVER() AS total_count
+           ua.created_at
     FROM user_affiliates ua
     JOIN users invitee ON invitee.id = ua.user_id
     JOIN users inviter ON inviter.id = ua.inviter_id
@@ -255,6 +254,12 @@ WITH page_records AS MATERIALIZED (
           AND ual.action = 'accrue'
     %[2]s
     GROUP BY ua.inviter_id, inviter.email, inviter.username, ua.user_id, invitee.email, invitee.username, inviter_aff.aff_code, ua.qualifying_payment_amount, ua.qualified_at, inviter_aff.aff_rebate_rate_percent, ua.created_at
+),
+record_count AS (
+    SELECT COUNT(*)::bigint AS total_count FROM matched_records
+),
+page_records AS MATERIALIZED (
+    SELECT * FROM matched_records
     %[3]s
     LIMIT %[4]s OFFSET %[5]s
 ),
@@ -273,24 +278,26 @@ inviter_progress AS (
     LEFT JOIN user_affiliates invitee_aff ON invitee_aff.inviter_id = inviter_aff.user_id
     GROUP BY inviter_aff.user_id, inviter_aff.aff_rebate_rate_percent
 )
-SELECT page_records.inviter_id,
-       page_records.inviter_email,
-       page_records.inviter_username,
-       page_records.invitee_id,
-       page_records.invitee_email,
-       page_records.invitee_username,
-       page_records.aff_code,
-       page_records.total_rebate,
-       page_records.qualifying_payment_amount,
-       page_records.qualified,
+SELECT (page_records.invitee_id IS NOT NULL) AS has_record,
+       COALESCE(page_records.inviter_id, 0),
+       COALESCE(page_records.inviter_email, ''),
+       COALESCE(page_records.inviter_username, ''),
+       COALESCE(page_records.invitee_id, 0),
+       COALESCE(page_records.invitee_email, ''),
+       COALESCE(page_records.invitee_username, ''),
+       COALESCE(page_records.aff_code, ''),
+       COALESCE(page_records.total_rebate, 0)::double precision,
+       COALESCE(page_records.qualifying_payment_amount, 0)::double precision,
+       COALESCE(page_records.qualified, FALSE),
        page_records.qualified_at,
-       inviter_progress.invited_count,
-       inviter_progress.qualified_invitee_count,
+       COALESCE(inviter_progress.invited_count, 0),
+       COALESCE(inviter_progress.qualified_invitee_count, 0),
        page_records.aff_rebate_rate_percent,
-       page_records.created_at,
-       page_records.total_count
-FROM page_records
-JOIN inviter_progress ON inviter_progress.user_id = page_records.inviter_id
+       COALESCE(page_records.created_at, NOW()),
+       record_count.total_count
+FROM record_count
+LEFT JOIN page_records ON TRUE
+LEFT JOIN inviter_progress ON inviter_progress.user_id = page_records.inviter_id
 %[6]s`
 
 type affiliateQueryExecer interface {
@@ -1051,13 +1058,13 @@ func (r *affiliateRepository) ListAffiliateInviteRecordsWithQualification(ctx co
 		"ua.inviter_id::text", "ua.user_id::text", "inviter_aff.aff_code",
 	})
 
-	orderBy := buildAffiliateRecordOrderBy(filter, map[string]string{
-		"inviter":      "inviter.email",
-		"invitee":      "invitee.email",
-		"aff_code":     "inviter_aff.aff_code",
-		"total_rebate": "total_rebate",
-		"created_at":   "ua.created_at",
-	}, "ua.created_at", "ua.user_id")
+	pageOrderBy := buildAffiliateRecordOrderBy(filter, map[string]string{
+		"inviter":      "matched_records.inviter_email",
+		"invitee":      "matched_records.invitee_email",
+		"aff_code":     "matched_records.aff_code",
+		"total_rebate": "matched_records.total_rebate",
+		"created_at":   "matched_records.created_at",
+	}, "matched_records.created_at", "matched_records.invitee_id")
 	resultOrderBy := buildAffiliateRecordOrderBy(filter, map[string]string{
 		"inviter":      "page_records.inviter_email",
 		"invitee":      "page_records.invitee_email",
@@ -1072,7 +1079,7 @@ func (r *affiliateRepository) ListAffiliateInviteRecordsWithQualification(ctx co
 		affiliateInviteRecordsSQL,
 		qualificationPlaceholder,
 		where,
-		orderBy,
+		pageOrderBy,
 		"$"+fmt.Sprint(len(args)-1),
 		"$"+fmt.Sprint(len(args)),
 		resultOrderBy,
@@ -1087,7 +1094,9 @@ func (r *affiliateRepository) ListAffiliateInviteRecordsWithQualification(ctx co
 	var total int64
 	for rows.Next() {
 		var item service.AffiliateInviteRecord
+		var hasRecord bool
 		if err := rows.Scan(
+			&hasRecord,
 			&item.InviterID,
 			&item.InviterEmail,
 			&item.InviterUsername,
@@ -1107,7 +1116,9 @@ func (r *affiliateRepository) ListAffiliateInviteRecordsWithQualification(ctx co
 		); err != nil {
 			return nil, 0, err
 		}
-		items = append(items, item)
+		if hasRecord {
+			items = append(items, item)
+		}
 	}
 	if err := rows.Err(); err != nil {
 		return nil, 0, err
