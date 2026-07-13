@@ -23,7 +23,10 @@ vi.mock('vue-i18n', async () => {
   return {
     ...actual,
     useI18n: () => ({
-      t: (key: string) => key === 'admin.affiliates.tiers.silver' ? 'Orbit' : key
+      t: (key: string) => ({
+        'admin.affiliates.tiers.standard': 'Origin',
+        'admin.affiliates.tiers.silver': 'Orbit'
+      })[key] ?? key
     })
   }
 })
@@ -108,6 +111,23 @@ describe('AdminAffiliateRecordsTable promotion reporting', () => {
     expect(wrapper.text()).toContain('admin.affiliates.records.qualified')
     expect(wrapper.text()).toContain('18%')
     expect(wrapper.text()).toContain('admin.affiliates.records.customOverride')
+  })
+
+  it('falls back to Origin when an invite record has a future runtime tier', async () => {
+    const response = await listInviteRecords()
+    listInviteRecords.mockResolvedValueOnce({
+      ...response,
+      items: response.items.map((item: Record<string, unknown>) => ({
+        ...item,
+        automatic_level: 'future-tier'
+      }))
+    })
+
+    const wrapper = mountTable()
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('Origin')
+    expect(wrapper.text()).not.toContain('admin.affiliates.tiers.future-tier')
   })
 
   it('shows mobile tier and qualification summaries under the related users', async () => {

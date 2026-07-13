@@ -2,7 +2,10 @@ import { describe, expect, it } from 'vitest'
 
 import enDashboard from '@/i18n/locales/en/dashboard'
 import zhDashboard from '@/i18n/locales/zh/dashboard'
-import { getAffiliateTierPresentation } from '../affiliateTierPresentation'
+import {
+  getAffiliateTierPresentation,
+  normalizeAffiliateTier
+} from '../affiliateTierPresentation'
 
 const tierCases = [
   {
@@ -55,6 +58,19 @@ function interpolationPlaceholders(message: string): string[] {
 }
 
 describe('affiliate tier presentation', () => {
+  it.each([
+    ['standard', 'standard'],
+    ['bronze', 'bronze'],
+    ['silver', 'silver'],
+    ['gold', 'gold'],
+    ['future-tier', 'standard'],
+    ['', 'standard'],
+    [null, 'standard'],
+    [undefined, 'standard']
+  ] as const)('normalizes runtime tier %s to %s', (level, expected) => {
+    expect(normalizeAffiliateTier(level)).toBe(expected)
+  })
+
   it.each(tierCases)('maps $level to the approved presentation', ({ level, theme, featuredMetric }) => {
     const presentation = getAffiliateTierPresentation(level)
 

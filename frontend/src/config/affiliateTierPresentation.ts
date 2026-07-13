@@ -37,12 +37,16 @@ const affiliateTierPresentations = Object.freeze({
   })
 }) satisfies Readonly<Record<AffiliateTier, AffiliateTierPresentation>>
 
+export function normalizeAffiliateTier(
+  level: AffiliateTier | string | null | undefined
+): AffiliateTier {
+  return level && Object.prototype.hasOwnProperty.call(affiliateTierPresentations, level)
+    ? level as AffiliateTier
+    : 'standard'
+}
+
 export function getAffiliateTierPresentation(
   level: AffiliateTier | string | null | undefined
 ): AffiliateTierPresentation {
-  if (level && Object.prototype.hasOwnProperty.call(affiliateTierPresentations, level)) {
-    return affiliateTierPresentations[level as AffiliateTier]
-  }
-
-  return affiliateTierPresentations.standard
+  return affiliateTierPresentations[normalizeAffiliateTier(level)]
 }

@@ -198,6 +198,7 @@
 <script setup lang="ts">
 import { computed, defineComponent, h, onMounted, reactive, ref, type PropType } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { normalizeAffiliateTier } from '@/config/affiliateTierPresentation'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import TablePageLayout from '@/components/layout/TablePageLayout.vue'
 import DataTable from '@/components/common/DataTable.vue'
@@ -370,7 +371,7 @@ function formatPercent(value: number | null | undefined): string {
 }
 
 function tierLabel(level: AffiliateInviteRecord['automatic_level']): string {
-  return t(`admin.affiliates.tiers.${level || 'standard'}`)
+  return t(`admin.affiliates.tiers.${normalizeAffiliateTier(level)}`)
 }
 
 function formatQualifiedCount(qualified: number, invited: number): string {

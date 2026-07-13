@@ -287,7 +287,8 @@ const featuredStat = computed(() => {
 })
 
 function formatCount(value: number): string {
-  return value.toLocaleString()
+  const normalized = Number.isFinite(value) ? Math.floor(Math.max(0, value)) : 0
+  return normalized.toLocaleString()
 }
 
 async function loadAffiliateDetail(silent = false): Promise<void> {

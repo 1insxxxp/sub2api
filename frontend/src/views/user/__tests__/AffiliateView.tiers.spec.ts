@@ -314,6 +314,34 @@ describe('AffiliateView promotion tiers', () => {
     expect(summary.text()).toContain('3 more qualified invitees to reach Orbit')
   })
 
+  it.each([
+    { affCount: Number.NaN, qualifiedCount: Number.POSITIVE_INFINITY },
+    { affCount: -12, qualifiedCount: -7 }
+  ])('sanitizes invalid acquisition counts to zero', async ({ affCount, qualifiedCount }) => {
+    const wrapper = await mountView(makeDetail({
+      automatic_level: 'bronze',
+      aff_count: affCount,
+      qualified_invitee_count: qualifiedCount
+    }))
+
+    const acquisition = wrapper.get('[data-stat="acquisition"]')
+    expect(acquisition.findAll('[data-acquisition="primary"] p')[1].text()).toBe('0')
+    expect(acquisition.get('[data-acquisition="secondary"] strong').text()).toBe('0')
+    expect(acquisition.text()).not.toMatch(/NaN|Infinity|-[0-9]/)
+  })
+
+  it('rounds positive decimal acquisition counts down consistently', async () => {
+    const wrapper = await mountView(makeDetail({
+      automatic_level: 'bronze',
+      aff_count: 12.9,
+      qualified_invitee_count: 7.8
+    }))
+
+    const acquisition = wrapper.get('[data-stat="acquisition"]')
+    expect(acquisition.findAll('[data-acquisition="primary"] p')[1].text()).toBe('7')
+    expect(acquisition.get('[data-acquisition="secondary"] strong').text()).toBe('12')
+  })
+
   it('shows Core as the completed highest level', async () => {
     const wrapper = await mountView(makeDetail({
       automatic_level: 'gold',

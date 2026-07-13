@@ -160,7 +160,10 @@ import standardTierBadge from '@/assets/affiliate-tiers/standard.webp'
 import bronzeTierBadge from '@/assets/affiliate-tiers/bronze.webp'
 import silverTierBadge from '@/assets/affiliate-tiers/silver.webp'
 import goldTierBadge from '@/assets/affiliate-tiers/gold.webp'
-import { getAffiliateTierPresentation } from '@/config/affiliateTierPresentation'
+import {
+  getAffiliateTierPresentation,
+  normalizeAffiliateTier
+} from '@/config/affiliateTierPresentation'
 import type {
   AffiliateTier,
   AffiliateTierDefinition,
@@ -184,9 +187,7 @@ const tierBadgeSources: Readonly<Record<AffiliateTier, string>> = Object.freeze(
   gold: goldTierBadge
 })
 
-const knownTiers = new Set<AffiliateTier>(['standard', 'bronze', 'silver', 'gold'])
-
-const currentLevel = computed<AffiliateTier>(() => normalizeTier(props.detail.automatic_level))
+const currentLevel = computed<AffiliateTier>(() => normalizeAffiliateTier(props.detail.automatic_level))
 const presentation = computed(() => getAffiliateTierPresentation(currentLevel.value))
 const displayNextTier = computed(() => presentation.value.theme === 'core' ? null : props.nextTier)
 const safeProgress = computed(() => normalizeNumber(props.progress, 100))
@@ -221,16 +222,12 @@ const objectiveText = computed(() => t(presentation.value.objectiveKey, {
   rate: `${safeFormattedRate.value}%`
 }))
 
-function normalizeTier(level: AffiliateTier | string | null | undefined): AffiliateTier {
-  return level && knownTiers.has(level as AffiliateTier) ? level as AffiliateTier : 'standard'
-}
-
 function tierLabel(level: AffiliateTier | string): string {
   return t(getAffiliateTierPresentation(level).labelKey)
 }
 
 function badgeSource(level: AffiliateTier | string): string {
-  return tierBadgeSources[normalizeTier(level)]
+  return tierBadgeSources[normalizeAffiliateTier(level)]
 }
 
 function isCurrentTier(level: AffiliateTier): boolean {
