@@ -159,6 +159,13 @@ var (
 		affiliateQualificationBatchReconcileTemplate,
 		"SELECT DISTINCT unnest($1::bigint[]) AS user_id",
 	)
+	affiliateInvitersQualificationReconcileSQL = fmt.Sprintf(
+		affiliateQualificationBatchReconcileTemplate,
+		`SELECT ua.user_id
+         FROM user_affiliates ua
+         JOIN (SELECT DISTINCT unnest($1::bigint[]) AS inviter_id) target_inviters
+           ON target_inviters.inviter_id = ua.inviter_id`,
+	)
 )
 
 const affiliateQualificationCountSQL = `
@@ -224,7 +231,37 @@ ORDER BY ua.created_at DESC
 LIMIT $2`
 
 const affiliateInviteRecordsSQL = `
-WITH inviter_progress AS (
+WITH page_records AS MATERIALIZED (
+    SELECT ua.inviter_id,
+           COALESCE(inviter.email, '') AS inviter_email,
+           COALESCE(inviter.username, '') AS inviter_username,
+           ua.user_id AS invitee_id,
+           COALESCE(invitee.email, '') AS invitee_email,
+           COALESCE(invitee.username, '') AS invitee_username,
+           COALESCE(inviter_aff.aff_code, '') AS aff_code,
+           COALESCE(SUM(ual.amount), 0)::double precision AS total_rebate,
+           ua.qualifying_payment_amount::double precision AS qualifying_payment_amount,
+           (ua.qualifying_payment_amount >= %[1]s) AS qualified,
+           ua.qualified_at,
+           inviter_aff.aff_rebate_rate_percent,
+           ua.created_at
+    FROM user_affiliates ua
+    JOIN users invitee ON invitee.id = ua.user_id
+    JOIN users inviter ON inviter.id = ua.inviter_id
+    JOIN user_affiliates inviter_aff ON inviter_aff.user_id = ua.inviter_id
+    LEFT JOIN user_affiliate_ledger ual
+           ON ual.user_id = ua.inviter_id
+          AND ual.source_user_id = ua.user_id
+          AND ual.action = 'accrue'
+    %[2]s
+    GROUP BY ua.inviter_id, inviter.email, inviter.username, ua.user_id, invitee.email, invitee.username, inviter_aff.aff_code, ua.qualifying_payment_amount, ua.qualified_at, inviter_aff.aff_rebate_rate_percent, ua.created_at
+    %[3]s
+    LIMIT %[4]s OFFSET %[5]s
+),
+page_inviter_ids AS (
+    SELECT DISTINCT inviter_id FROM page_records
+),
+inviter_progress AS (
     SELECT inviter_aff.user_id,
            COUNT(invitee_aff.user_id)::integer AS invited_count,
            COUNT(invitee_aff.user_id) FILTER (
@@ -232,37 +269,28 @@ WITH inviter_progress AS (
            )::integer AS qualified_invitee_count,
            inviter_aff.aff_rebate_rate_percent
     FROM user_affiliates inviter_aff
+    JOIN page_inviter_ids ON page_inviter_ids.inviter_id = inviter_aff.user_id
     LEFT JOIN user_affiliates invitee_aff ON invitee_aff.inviter_id = inviter_aff.user_id
     GROUP BY inviter_aff.user_id, inviter_aff.aff_rebate_rate_percent
 )
-SELECT ua.inviter_id,
-       COALESCE(inviter.email, ''),
-       COALESCE(inviter.username, ''),
-       ua.user_id,
-       COALESCE(invitee.email, ''),
-       COALESCE(invitee.username, ''),
-       COALESCE(inviter_aff.aff_code, ''),
-       COALESCE(SUM(ual.amount), 0)::double precision AS total_rebate,
-       ua.qualifying_payment_amount::double precision,
-       (ua.qualifying_payment_amount >= %[1]s) AS qualified,
-       ua.qualified_at,
+SELECT page_records.inviter_id,
+       page_records.inviter_email,
+       page_records.inviter_username,
+       page_records.invitee_id,
+       page_records.invitee_email,
+       page_records.invitee_username,
+       page_records.aff_code,
+       page_records.total_rebate,
+       page_records.qualifying_payment_amount,
+       page_records.qualified,
+       page_records.qualified_at,
        inviter_progress.invited_count,
        inviter_progress.qualified_invitee_count,
-       inviter_progress.aff_rebate_rate_percent,
-       ua.created_at
-FROM user_affiliates ua
-JOIN users invitee ON invitee.id = ua.user_id
-JOIN users inviter ON inviter.id = ua.inviter_id
-JOIN user_affiliates inviter_aff ON inviter_aff.user_id = ua.inviter_id
-JOIN inviter_progress ON inviter_progress.user_id = ua.inviter_id
-LEFT JOIN user_affiliate_ledger ual
-       ON ual.user_id = ua.inviter_id
-      AND ual.source_user_id = ua.user_id
-      AND ual.action = 'accrue'
-%[2]s
-GROUP BY ua.inviter_id, inviter.email, inviter.username, ua.user_id, invitee.email, invitee.username, inviter_aff.aff_code, ua.qualifying_payment_amount, ua.qualified_at, inviter_progress.invited_count, inviter_progress.qualified_invitee_count, inviter_progress.aff_rebate_rate_percent, ua.created_at
-%[3]s
-LIMIT %[4]s OFFSET %[5]s`
+       page_records.aff_rebate_rate_percent,
+       page_records.created_at
+FROM page_records
+JOIN inviter_progress ON inviter_progress.user_id = page_records.inviter_id
+%[6]s`
 
 type affiliateQueryExecer interface {
 	QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error)
@@ -914,6 +942,17 @@ func (r *affiliateRepository) ReconcileInvitees(ctx context.Context, inviteeUser
 	return r.executeAffiliateQualificationBatch(ctx, affiliateInviteesQualificationReconcileSQL, pq.Array(cleaned), threshold)
 }
 
+func (r *affiliateRepository) ReconcileInvitersInvitees(ctx context.Context, inviterIDs []int64, threshold float64) error {
+	if err := validateAffiliateQualificationThreshold(threshold); err != nil {
+		return err
+	}
+	cleaned := uniquePositiveInt64s(inviterIDs)
+	if len(cleaned) == 0 {
+		return nil
+	}
+	return r.executeAffiliateQualificationBatch(ctx, affiliateInvitersQualificationReconcileSQL, pq.Array(cleaned), threshold)
+}
+
 func (r *affiliateRepository) executeAffiliateQualificationBatch(ctx context.Context, query string, target any, threshold float64) error {
 	client := clientFromContext(ctx, r.client)
 	rows, err := client.QueryContext(ctx, query, target, threshold)
@@ -1039,7 +1078,14 @@ JOIN user_affiliates inviter_aff ON inviter_aff.user_id = ua.inviter_id
 		"aff_code":     "inviter_aff.aff_code",
 		"total_rebate": "total_rebate",
 		"created_at":   "ua.created_at",
-	}, "ua.created_at")
+	}, "ua.created_at", "ua.user_id")
+	resultOrderBy := buildAffiliateRecordOrderBy(filter, map[string]string{
+		"inviter":      "page_records.inviter_email",
+		"invitee":      "page_records.invitee_email",
+		"aff_code":     "page_records.aff_code",
+		"total_rebate": "page_records.total_rebate",
+		"created_at":   "page_records.created_at",
+	}, "page_records.created_at", "page_records.invitee_id")
 	args = append(args, qualificationAmount)
 	qualificationPlaceholder := "$" + fmt.Sprint(len(args))
 	args = append(args, filter.PageSize, (filter.Page-1)*filter.PageSize)
@@ -1050,6 +1096,7 @@ JOIN user_affiliates inviter_aff ON inviter_aff.user_id = ua.inviter_id
 		orderBy,
 		"$"+fmt.Sprint(len(args)-1),
 		"$"+fmt.Sprint(len(args)),
+		resultOrderBy,
 	)
 	rows, err := client.QueryContext(ctx, query, args...)
 	if err != nil {
@@ -1331,7 +1378,7 @@ func buildAffiliateRecordWhere(filter service.AffiliateRecordFilter, timeColumn 
 	return "WHERE " + strings.Join(clauses, " AND "), args
 }
 
-func buildAffiliateRecordOrderBy(filter service.AffiliateRecordFilter, sortColumns map[string]string, fallbackColumn string) string {
+func buildAffiliateRecordOrderBy(filter service.AffiliateRecordFilter, sortColumns map[string]string, fallbackColumn string, tieBreakers ...string) string {
 	column := sortColumns[filter.SortBy]
 	if column == "" {
 		column = fallbackColumn
@@ -1340,7 +1387,13 @@ func buildAffiliateRecordOrderBy(filter service.AffiliateRecordFilter, sortColum
 	if !filter.SortDesc {
 		direction = "ASC"
 	}
-	return "ORDER BY " + column + " " + direction + " NULLS LAST"
+	orderBy := "ORDER BY " + column + " " + direction + " NULLS LAST"
+	for _, tieBreaker := range tieBreakers {
+		if tieBreaker != "" && tieBreaker != column {
+			orderBy += ", " + tieBreaker + " " + direction
+		}
+	}
+	return orderBy
 }
 
 func queryAffiliateRecordCount(ctx context.Context, client affiliateQueryExecer, query string, args ...any) (int64, error) {

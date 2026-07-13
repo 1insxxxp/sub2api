@@ -1581,6 +1581,9 @@ func (r *stubAffiliateRepo) ReconcileInviterInvitees(context.Context, int64, flo
 	return nil
 }
 func (r *stubAffiliateRepo) ReconcileInvitees(context.Context, []int64, float64) error { return nil }
+func (r *stubAffiliateRepo) ReconcileInvitersInvitees(context.Context, []int64, float64) error {
+	return nil
+}
 
 func (r *stubAffiliateRepo) TryWithAffiliateQualificationReconcileLock(ctx context.Context, fn func(context.Context) error) (bool, error) {
 	return true, fn(ctx)

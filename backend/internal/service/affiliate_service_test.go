@@ -526,7 +526,7 @@ func TestAffiliateService_AdminOverviewAndInviteRecordsExposeTierProgress(t *tes
 	repo := &affiliateTierServiceRepoStub{
 		qualifiedCount: 3,
 		overview:       &AffiliateUserOverview{UserID: 42, CustomRebateRatePercent: &customRate},
-		inviteRecords:  []AffiliateInviteRecord{{InviteeID: 9, QualifyingPaymentAmount: 50, QualifiedAt: &qualifiedAt}},
+		inviteRecords:  []AffiliateInviteRecord{{InviterID: 42, InviteeID: 9, QualifyingPaymentAmount: 50, QualifiedAt: &qualifiedAt}},
 	}
 	svc := NewAffiliateService(repo, NewSettingService(newAffiliateTierServiceSettingRepo(), nil), nil, nil)
 
@@ -622,9 +622,9 @@ func TestAffiliateService_AdminRecordsReconcileCurrentPageForCurrentThreshold(t 
 			settings := newAffiliateTierServiceSettingRepo()
 			settings.values[SettingKeyAffiliateQualificationAmount] = tc.threshold
 			repo := &affiliateTierServiceRepoStub{
-				inviteRecords: []AffiliateInviteRecord{{InviteeID: 9, QualifyingPaymentAmount: tc.amount, QualifiedAt: tc.initialAt}},
+				inviteRecords: []AffiliateInviteRecord{{InviterID: 42, InviteeID: 9, QualifyingPaymentAmount: tc.amount, QualifiedAt: tc.initialAt}},
 			}
-			repo.reconcileInvitees = func(_ []int64, threshold float64) {
+			repo.reconcileInviters = func(_ []int64, threshold float64) {
 				if tc.amount >= threshold {
 					repo.inviteRecords[0].QualifiedAt = affiliateTimePtr(time.Now())
 				} else {
@@ -637,10 +637,42 @@ func TestAffiliateService_AdminRecordsReconcileCurrentPageForCurrentThreshold(t 
 			require.NoError(t, err)
 			require.Equal(t, tc.wantQualified, records[0].Qualified)
 			require.Equal(t, tc.wantQualifiedAt, records[0].QualifiedAt != nil)
-			require.Equal(t, 1, repo.reconcileInviteesCalls)
+			require.Equal(t, 1, repo.reconcileInvitersCalls)
 			require.Equal(t, 2, repo.listRecordsCalls)
 		})
 	}
+}
+
+func TestAffiliateService_AdminRecordsReconcileAllInviteesForPageInviters(t *testing.T) {
+	repo := &affiliateTierServiceRepoStub{inviteRecords: []AffiliateInviteRecord{
+		{InviterID: 42, InviteeID: 9},
+		{InviterID: 42, InviteeID: 10},
+		{InviterID: 77, InviteeID: 11},
+	}}
+	svc := NewAffiliateService(repo, NewSettingService(newAffiliateTierServiceSettingRepo(), nil), nil, nil)
+
+	_, _, err := svc.AdminListInviteRecords(context.Background(), AffiliateRecordFilter{})
+
+	require.NoError(t, err)
+	require.Equal(t, [][]int64{{42, 77}}, repo.reconciledInviterIDs)
+}
+
+func TestAffiliateService_AdminRecordsReconcilesInvitersIntroducedByPageDrift(t *testing.T) {
+	repo := &affiliateTierServiceRepoStub{
+		inviteRecordPages: [][]AffiliateInviteRecord{
+			{{InviterID: 42, InviteeID: 9}},
+			{{InviterID: 77, InviteeID: 10}},
+			{{InviterID: 77, InviteeID: 10}},
+		},
+	}
+	svc := NewAffiliateService(repo, NewSettingService(newAffiliateTierServiceSettingRepo(), nil), nil, nil)
+
+	records, _, err := svc.AdminListInviteRecords(context.Background(), AffiliateRecordFilter{})
+
+	require.NoError(t, err)
+	require.Equal(t, int64(77), records[0].InviterID)
+	require.Equal(t, [][]int64{{42}, {77}}, repo.reconciledInviterIDs)
+	require.Equal(t, 3, repo.listRecordsCalls)
 }
 
 func affiliateTimePtr(value time.Time) *time.Time { return &value }
@@ -742,12 +774,16 @@ type affiliateTierServiceRepoStub struct {
 	listInviteesThreshold  float64
 	overview               *AffiliateUserOverview
 	inviteRecords          []AffiliateInviteRecord
+	inviteRecordPages      [][]AffiliateInviteRecord
 	listRecordsThreshold   float64
 	listRecordsCalls       int
 	reconcileInviterCalls  int
 	reconcileInviteesCalls int
+	reconcileInvitersCalls int
+	reconciledInviterIDs   [][]int64
 	reconcileInviter       func(threshold float64)
 	reconcileInvitees      func(userIDs []int64, threshold float64)
+	reconcileInviters      func(inviterIDs []int64, threshold float64)
 }
 
 func (r *affiliateTierServiceRepoStub) CountQualifiedInvitees(_ context.Context, _ int64, threshold float64) (int, error) {
@@ -907,8 +943,25 @@ func (r *affiliateTierServiceRepoStub) GetAffiliateUserOverviewWithQualification
 func (r *affiliateTierServiceRepoStub) ListAffiliateInviteRecordsWithQualification(_ context.Context, _ AffiliateRecordFilter, threshold float64) ([]AffiliateInviteRecord, int64, error) {
 	r.listRecordsThreshold = threshold
 	r.listRecordsCalls++
+	if len(r.inviteRecordPages) > 0 {
+		index := r.listRecordsCalls - 1
+		if index >= len(r.inviteRecordPages) {
+			index = len(r.inviteRecordPages) - 1
+		}
+		items := append([]AffiliateInviteRecord(nil), r.inviteRecordPages[index]...)
+		return items, int64(len(items)), nil
+	}
 	items := append([]AffiliateInviteRecord(nil), r.inviteRecords...)
 	return items, int64(len(items)), nil
+}
+
+func (r *affiliateTierServiceRepoStub) ReconcileInvitersInvitees(_ context.Context, inviterIDs []int64, threshold float64) error {
+	r.reconcileInvitersCalls++
+	r.reconciledInviterIDs = append(r.reconciledInviterIDs, append([]int64(nil), inviterIDs...))
+	if r.reconcileInviters != nil {
+		r.reconcileInviters(inviterIDs, threshold)
+	}
+	return nil
 }
 
 func (r *affiliateTierServiceRepoStub) ReconcileInviterInvitees(_ context.Context, _ int64, threshold float64) error {

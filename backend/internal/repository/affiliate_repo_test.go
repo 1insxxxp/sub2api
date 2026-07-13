@@ -49,10 +49,26 @@ func TestAffiliateBatchReconcileSQLKeepsQualifiedAndQualifiedAtConsistent(t *tes
 
 func TestAffiliateInviteRecordsSQLProjectsInviterTierInputs(t *testing.T) {
 	query := strings.Join(strings.Fields(affiliateInviteRecordsSQL), " ")
-	require.Contains(t, query, "inviter_progress AS")
+	require.Contains(t, query, "page_inviter_ids AS")
+	require.Contains(t, query, "JOIN page_inviter_ids")
 	require.Contains(t, query, "invited_count")
 	require.Contains(t, query, "qualified_invitee_count")
 	require.Contains(t, query, "aff_rebate_rate_percent")
+}
+
+func TestAffiliateInviteRecordOrderingUsesUniqueTieBreaker(t *testing.T) {
+	orderBy := buildAffiliateRecordOrderBy(service.AffiliateRecordFilter{SortBy: "created_at", SortDesc: true}, map[string]string{
+		"created_at": "ua.created_at",
+	}, "ua.created_at", "ua.user_id")
+
+	require.Equal(t, "ORDER BY ua.created_at DESC NULLS LAST, ua.user_id DESC", orderBy)
+}
+
+func TestAffiliateInvitersBatchReconcileTargetsAllTheirInvitees(t *testing.T) {
+	query := strings.Join(strings.Fields(affiliateInvitersQualificationReconcileSQL), " ")
+	require.Contains(t, query, "unnest($1::bigint[])")
+	require.Contains(t, query, "target_inviters ON target_inviters.inviter_id")
+	require.Contains(t, query, "ua.inviter_id")
 }
 
 func TestAffiliateRecordQueriesUseLedgerAuditFields(t *testing.T) {
