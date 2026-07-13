@@ -58,7 +58,7 @@ export default {
             amountError: '合格充值金额必须大于 0。',
             thresholdError: '等级门槛必须为正整数，且严格递增。',
             rateError: '所有返利比例必须是 0 到 100 之间的数字。',
-            rateOrderError: '返利比例必须按基础、铜牌、银牌、金牌顺序递增。',
+            rateOrderError: '返利比例必须按原点级、脉冲级、星环级、极核级顺序递增。',
           },
           freezeHours: '返利冻结期（小时）',
           freezeHoursDesc: '新产生的返利将在冻结期内无法提现。0 = 不冻结。',

@@ -58,7 +58,7 @@ export default {
             amountError: 'Qualifying payment amount must be greater than 0.',
             thresholdError: 'Tier thresholds must be positive whole numbers in strictly increasing order.',
             rateError: 'Every rebate rate must be a number from 0 to 100.',
-            rateOrderError: 'Rebate rates must be non-decreasing from Standard through Bronze, Silver, and Gold.',
+            rateOrderError: 'Rebate rates must be non-decreasing from Origin through Pulse, Orbit, and Core.',
           },
           freezeHours: 'Rebate Freeze Period (hours)',
           freezeHoursDesc: 'New rebates will be frozen for this period before becoming available for withdrawal. 0 = no freeze.',

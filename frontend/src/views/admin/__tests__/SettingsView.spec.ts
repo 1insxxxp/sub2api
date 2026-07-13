@@ -193,7 +193,7 @@ vi.mock("vue-i18n", async () => {
     "admin.settings.openaiExperimentalScheduler.weightsDescription": "留空时使用配置/环境变量值；配置未设置时使用内置默认值。页面非空设置优先。",
     "admin.settings.openaiExperimentalScheduler.defaultPlaceholder": "配置/默认：{value}",
     "admin.settings.features.affiliate.tiers.rateOrderError":
-      "返利比例必须按基础、铜牌、银牌、金牌顺序递增。",
+      "返利比例必须按原点级、脉冲级、星环级、极核级顺序递增。",
     "admin.settings.openaiExperimentalScheduler.topKLabel": "TopK",
     "admin.settings.openaiExperimentalScheduler.priorityWeight": "优先级",
     "admin.settings.openaiExperimentalScheduler.loadWeight": "负载",
@@ -906,7 +906,7 @@ describe("admin SettingsView payment visible method controls", () => {
     await flushPromises();
 
     expect(wrapper.get('[data-test="affiliate-tier-error"]').text()).toBe(
-      "返利比例必须按基础、铜牌、银牌、金牌顺序递增。",
+      "返利比例必须按原点级、脉冲级、星环级、极核级顺序递增。",
     );
     expect(updateSettings).not.toHaveBeenCalled();
   });
