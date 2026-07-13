@@ -11,16 +11,8 @@ COMMENT ON COLUMN user_affiliates.qualifying_payment_amount IS
 COMMENT ON COLUMN user_affiliates.qualified_at IS
     'First time currently valid historical payments reached the qualification threshold';
 
--- Seed the new base rate when absent. Existing administrator values are left
--- intact except for the legacy rollout default, including numeric forms such
--- as 10.0, which moves from 10 percent to 8 percent.
+-- Seed the new base rate only when absent. Every existing value is an
+-- administrator configuration and must be preserved.
 INSERT INTO settings (key, value)
 VALUES ('affiliate_rebate_rate', '8')
 ON CONFLICT (key) DO NOTHING;
-
-UPDATE settings
-SET value = '8',
-    updated_at = NOW()
-WHERE key = 'affiliate_rebate_rate'
-  AND value ~ '^[[:space:]]*[+-]?([0-9]+([.][0-9]*)?|[.][0-9]+)[[:space:]]*$'
-  AND value::numeric = 10;

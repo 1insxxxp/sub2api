@@ -7,6 +7,7 @@ import (
 	"errors"
 	"math"
 	"net/http"
+	"strconv"
 	"testing"
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
@@ -168,6 +169,38 @@ func TestSettingService_UpdateSettings_AffiliateTierPersistsCompleteConfig(t *te
 	require.Equal(t, "14.00000000", repo.updates[SettingKeyAffiliateSilverRate])
 	require.Equal(t, "40", repo.updates[SettingKeyAffiliateGoldInvitees])
 	require.Equal(t, "18.00000000", repo.updates[SettingKeyAffiliateGoldRate])
+	require.Equal(t, "true", repo.updates[SettingKeyAffiliateTierReconcileRequired])
+	generation, err := strconv.ParseInt(repo.updates[SettingKeyAffiliateTierReconcileGeneration], 10, 64)
+	require.NoError(t, err)
+	require.Positive(t, generation)
+}
+
+func TestSettingService_UpdateSettings_AffiliateTierAdvancesPersistentReconcileGeneration(t *testing.T) {
+	repo := &settingUpdateRepoStub{}
+	svc := NewSettingService(repo, &config.Config{})
+	settings := settingsWithAffiliateTier(DefaultAffiliateTierConfig())
+
+	require.NoError(t, svc.UpdateSettings(context.Background(), settings))
+	first := repo.updates[SettingKeyAffiliateTierReconcileGeneration]
+	require.NoError(t, svc.UpdateSettings(context.Background(), settings))
+	second := repo.updates[SettingKeyAffiliateTierReconcileGeneration]
+
+	require.NotEqual(t, first, second)
+	require.Equal(t, "true", repo.updates[SettingKeyAffiliateTierReconcileRequired])
+}
+
+func TestSettingService_UpdateSettings_AffiliateTierMarkerWriteFailureIsReturned(t *testing.T) {
+	wantErr := errors.New("settings transaction rolled back")
+	repo := &settingUpdateRepoStub{setErr: wantErr}
+	svc := NewSettingService(repo, &config.Config{})
+	updated := false
+	svc.onUpdate = func() { updated = true }
+
+	err := svc.UpdateSettings(context.Background(), settingsWithAffiliateTier(DefaultAffiliateTierConfig()))
+
+	require.ErrorIs(t, err, wantErr)
+	require.False(t, updated)
+	require.Nil(t, repo.updates)
 }
 
 func TestSettingService_UpdateSettings_AffiliateTierRejectsInvalidConfigWithoutWriting(t *testing.T) {

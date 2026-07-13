@@ -15,7 +15,8 @@ func TestMigration175AddsAffiliatePromotionTierStorage(t *testing.T) {
 	require.Contains(t, sql, "ADD COLUMN IF NOT EXISTS qualifying_payment_amount DECIMAL(20,8) NOT NULL DEFAULT 0")
 	require.Contains(t, sql, "ADD COLUMN IF NOT EXISTS qualified_at TIMESTAMPTZ NULL")
 	require.Contains(t, sql, "VALUES ('affiliate_rebate_rate', '8')")
-	require.Contains(t, sql, "value::numeric = 10")
+	require.NotContains(t, sql, "UPDATE settings")
+	require.NotContains(t, sql, "value::numeric")
 	require.NotContains(t, sql, "payment_orders")
 	require.NotContains(t, sql, "CREATE INDEX")
 }

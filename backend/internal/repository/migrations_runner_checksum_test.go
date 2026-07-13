@@ -161,4 +161,13 @@ func TestIsMigrationChecksumCompatible(t *testing.T) {
 		)
 		require.False(t, ok)
 	})
+
+	t.Run("175危险旧版本checksum可兼容修正版", func(t *testing.T) {
+		ok := isMigrationChecksumCompatible(
+			"175_add_affiliate_promotion_tiers.sql",
+			"540245d5c28dbb2ad6a74cdff38c19b3e585ee20d9e891956329a8fe685a8bf7",
+			"0809ed493d30d9a917cc2d30f912c3fdf4ff1b1a134f836125411b3f02c4df9b",
+		)
+		require.True(t, ok)
+	})
 }

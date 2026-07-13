@@ -15,6 +15,7 @@ import (
 
 type settingUpdateRepoStub struct {
 	updates map[string]string
+	setErr  error
 }
 
 func (s *settingUpdateRepoStub) Get(ctx context.Context, key string) (*Setting, error) {
@@ -34,6 +35,9 @@ func (s *settingUpdateRepoStub) GetMultiple(ctx context.Context, keys []string) 
 }
 
 func (s *settingUpdateRepoStub) SetMultiple(ctx context.Context, settings map[string]string) error {
+	if s.setErr != nil {
+		return s.setErr
+	}
 	s.updates = make(map[string]string, len(settings))
 	for k, v := range settings {
 		s.updates[k] = v

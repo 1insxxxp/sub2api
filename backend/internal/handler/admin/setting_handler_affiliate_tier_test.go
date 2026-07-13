@@ -36,6 +36,8 @@ func TestSettingHandler_UpdateSettings_AffiliateTierMapsAllFields(t *testing.T) 
 	require.Equal(t, "14.00000000", repo.lastUpdates[service.SettingKeyAffiliateSilverRate])
 	require.Equal(t, "40", repo.lastUpdates[service.SettingKeyAffiliateGoldInvitees])
 	require.Equal(t, "18.00000000", repo.lastUpdates[service.SettingKeyAffiliateGoldRate])
+	require.Equal(t, "true", repo.lastUpdates[service.SettingKeyAffiliateTierReconcileRequired])
+	require.NotEmpty(t, repo.lastUpdates[service.SettingKeyAffiliateTierReconcileGeneration])
 
 	var resp response.Response
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))

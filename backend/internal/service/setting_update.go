@@ -2,6 +2,8 @@ package service
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/binary"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -131,6 +133,12 @@ func (s *SettingService) buildSystemSettingsUpdates(ctx context.Context, setting
 	}
 
 	updates := make(map[string]string)
+	reconcileGeneration, err := newAffiliateReconcileGeneration()
+	if err != nil {
+		return nil, fmt.Errorf("generate affiliate qualification reconcile generation: %w", err)
+	}
+	updates[SettingKeyAffiliateTierReconcileGeneration] = strconv.FormatInt(reconcileGeneration, 10)
+	updates[SettingKeyAffiliateTierReconcileRequired] = "true"
 
 	// 注册设置
 	updates[SettingKeyRegistrationEnabled] = strconv.FormatBool(settings.RegistrationEnabled)
@@ -447,6 +455,14 @@ func (s *SettingService) buildSystemSettingsUpdates(ctx context.Context, setting
 	updates[SettingKeyAllowUserViewErrorRequests] = strconv.FormatBool(settings.AllowUserViewErrorRequests)
 
 	return updates, nil
+}
+
+func newAffiliateReconcileGeneration() (int64, error) {
+	var raw [8]byte
+	if _, err := rand.Read(raw[:]); err != nil {
+		return 0, err
+	}
+	return int64(binary.BigEndian.Uint64(raw[:])%math.MaxInt64) + 1, nil
 }
 
 func validateAffiliateTierConfig(config AffiliateTierConfig) error {
