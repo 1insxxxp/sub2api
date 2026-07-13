@@ -9490,25 +9490,32 @@ const affiliateTierError = ref("");
 
 function validateAffiliateTierSettings(): boolean {
   affiliateTierError.value = "";
-  const amount = Number(form.affiliate_qualification_amount);
-  if (!Number.isFinite(amount) || amount <= 0) {
+  const amountInput = String(form.affiliate_qualification_amount ?? "").trim();
+  const amount = Number(amountInput);
+  if (amountInput === "" || !Number.isFinite(amount) || amount <= 0) {
     affiliateTierError.value = t("admin.settings.features.affiliate.tiers.amountError");
     return false;
   }
-  const thresholds = [
-    Number(form.affiliate_bronze_invitees),
-    Number(form.affiliate_silver_invitees),
-    Number(form.affiliate_gold_invitees),
+  const thresholdInputs = [
+    form.affiliate_bronze_invitees,
+    form.affiliate_silver_invitees,
+    form.affiliate_gold_invitees,
   ];
+  const thresholds = thresholdInputs.map((value) => Number(value));
   if (
+    thresholdInputs.some((value) => String(value ?? "").trim() === "") ||
     thresholds.some((value) => !Number.isInteger(value) || value <= 0) ||
     !(thresholds[0] < thresholds[1] && thresholds[1] < thresholds[2])
   ) {
     affiliateTierError.value = t("admin.settings.features.affiliate.tiers.thresholdError");
     return false;
   }
-  const rates = affiliateTierFields.map((tier) => Number(form[tier.rateKey]));
-  if (rates.some((value) => !Number.isFinite(value) || value < 0 || value > 100)) {
+  const rateInputs = affiliateTierFields.map((tier) => form[tier.rateKey]);
+  const rates = rateInputs.map((value) => Number(value));
+  if (
+    rateInputs.some((value) => String(value ?? "").trim() === "") ||
+    rates.some((value) => !Number.isFinite(value) || value < 0 || value > 100)
+  ) {
     affiliateTierError.value = t("admin.settings.features.affiliate.tiers.rateError");
     return false;
   }

@@ -27,22 +27,44 @@
           @sort="handleSort"
         >
           <template #cell-inviter="{ row }">
-            <UserCell
-              :id="row.inviter_id"
-              :email="row.inviter_email"
-              :username="row.inviter_username"
-              :clickable="props.type !== 'transfers'"
-              @open="openUserOverview"
-            />
+            <div>
+              <UserCell
+                :id="row.inviter_id"
+                :email="row.inviter_email"
+                :username="row.inviter_username"
+                :clickable="props.type !== 'transfers'"
+                @open="openUserOverview"
+              />
+              <div
+                v-if="props.type === 'invites'"
+                data-test="mobile-inviter-tier"
+                class="mt-2 border-t border-gray-100 pt-1.5 text-xs text-gray-500 dark:border-dark-700 dark:text-dark-400 md:hidden"
+              >
+                {{ t('admin.affiliates.records.automaticTier') }}:
+                <span class="font-medium text-gray-800 dark:text-gray-200">{{ tierLabel(row.automatic_level) }}</span>
+              </div>
+            </div>
           </template>
           <template #cell-invitee="{ row }">
-            <UserCell
-              :id="row.invitee_id"
-              :email="row.invitee_email"
-              :username="row.invitee_username"
-              :clickable="props.type !== 'transfers'"
-              @open="openUserOverview"
-            />
+            <div>
+              <UserCell
+                :id="row.invitee_id"
+                :email="row.invitee_email"
+                :username="row.invitee_username"
+                :clickable="props.type !== 'transfers'"
+                @open="openUserOverview"
+              />
+              <div
+                v-if="props.type === 'invites'"
+                data-test="mobile-invitee-qualification"
+                class="mt-2 border-t border-gray-100 pt-1.5 text-xs text-gray-500 dark:border-dark-700 dark:text-dark-400 md:hidden"
+              >
+                <div :class="row.qualified ? 'text-emerald-600 dark:text-emerald-400' : ''">
+                  {{ t(`admin.affiliates.records.${row.qualified ? 'qualified' : 'unqualified'}`) }}
+                </div>
+                <div>{{ formatQualifiedCount(row.qualified_invitee_count, row.invited_count) }}</div>
+              </div>
+            </div>
           </template>
           <template #cell-user="{ row }">
             <UserCell
@@ -68,10 +90,18 @@
             </div>
           </template>
           <template #cell-rate="{ row }">
-            <div class="space-y-0.5 text-sm">
-              <span class="font-semibold text-gray-900 dark:text-white">{{ formatPercent(row.effective_rebate_rate_percent) }}</span>
-              <div v-if="row.custom_rebate_rate_percent != null" class="text-xs text-primary-600 dark:text-primary-400">
-                {{ t('admin.affiliates.records.customOverride') }}
+            <div data-test="invite-rate-details" class="space-y-1 text-xs">
+              <div>
+                <div class="text-gray-500 dark:text-dark-400">{{ t('admin.affiliates.records.customOverride') }}</div>
+                <div data-test="rate-value" class="font-medium text-primary-600 dark:text-primary-400">
+                  {{ row.custom_rebate_rate_percent == null ? '-' : formatPercent(row.custom_rebate_rate_percent) }}
+                </div>
+              </div>
+              <div>
+                <div class="text-gray-500 dark:text-dark-400">{{ t('admin.affiliates.records.effectiveRate') }}</div>
+                <div data-test="rate-value" class="text-sm font-semibold text-gray-900 dark:text-white">
+                  {{ formatPercent(row.effective_rebate_rate_percent) }}
+                </div>
               </div>
             </div>
           </template>

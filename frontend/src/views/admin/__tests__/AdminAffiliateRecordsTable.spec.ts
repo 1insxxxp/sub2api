@@ -76,6 +76,32 @@ describe('AdminAffiliateRecordsTable promotion reporting', () => {
     expect(wrapper.text()).toContain('admin.affiliates.records.customOverride')
   })
 
+  it('shows mobile tier and qualification summaries under the related users', async () => {
+    const wrapper = mountTable()
+    await flushPromises()
+
+    const tierSummary = wrapper.get('[data-test="mobile-inviter-tier"]')
+    expect(tierSummary.classes()).toContain('md:hidden')
+    expect(tierSummary.text()).toContain('admin.affiliates.records.automaticTier')
+    expect(tierSummary.text()).toContain('admin.affiliates.tiers.silver')
+
+    const qualificationSummary = wrapper.get('[data-test="mobile-invitee-qualification"]')
+    expect(qualificationSummary.classes()).toContain('md:hidden')
+    expect(qualificationSummary.text()).toContain('admin.affiliates.records.qualified')
+    expect(qualificationSummary.text()).toContain('10 / 12')
+  })
+
+  it('shows custom override value separately from the effective rate', async () => {
+    const wrapper = mountTable()
+    await flushPromises()
+
+    const rate = wrapper.get('[data-test="invite-rate-details"]')
+    expect(rate.text()).toContain('admin.affiliates.records.customOverride')
+    expect(rate.text()).toContain('18%')
+    expect(rate.text()).toContain('admin.affiliates.records.effectiveRate')
+    expect(rate.findAll('[data-test="rate-value"]').map((node) => node.text())).toEqual(['18%', '18%'])
+  })
+
   it('shows promotion details in the user overview', async () => {
     const wrapper = mountTable()
     await flushPromises()

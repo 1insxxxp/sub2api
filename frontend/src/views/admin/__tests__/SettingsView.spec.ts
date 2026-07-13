@@ -840,6 +840,39 @@ describe("admin SettingsView payment visible method controls", () => {
     expect(updateSettings).not.toHaveBeenCalled();
   });
 
+  it.each([
+    ["qualification amount", "affiliate-qualification-amount"],
+    ["bronze threshold", "affiliate-bronze-threshold"],
+    ["silver threshold", "affiliate-silver-threshold"],
+    ["gold threshold", "affiliate-gold-threshold"],
+    ["standard rate", "affiliate-standard-rate"],
+    ["bronze rate", "affiliate-bronze-rate"],
+    ["silver rate", "affiliate-silver-rate"],
+    ["gold rate", "affiliate-gold-rate"],
+  ])("blocks affiliate tier submission when %s is empty", async (_label, field) => {
+    getSettings.mockResolvedValueOnce({
+      ...baseSettingsResponse,
+      affiliate_enabled: true,
+      affiliate_qualification_amount: 50,
+      affiliate_bronze_invitees: 3,
+      affiliate_silver_invitees: 10,
+      affiliate_gold_invitees: 30,
+      affiliate_rebate_rate: 8,
+      affiliate_bronze_rate: 10,
+      affiliate_silver_rate: 12,
+      affiliate_gold_rate: 15,
+    });
+    const wrapper = mountView();
+    await flushPromises();
+
+    await wrapper.get(`[data-test="${field}"]`).setValue("");
+    await wrapper.find("form").trigger("submit.prevent");
+    await flushPromises();
+
+    expect(wrapper.find('[data-test="affiliate-tier-error"]').exists()).toBe(true);
+    expect(updateSettings).not.toHaveBeenCalled();
+  });
+
   it("renders previews for configured theme-specific site logos", async () => {
     const defaultLogo = "data:image/png;base64,ZGVmYXVsdC1sb2dv";
     const lightLogo = "data:image/png;base64,bGlnaHQtbG9nbw==";
