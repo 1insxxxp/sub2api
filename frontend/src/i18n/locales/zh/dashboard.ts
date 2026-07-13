@@ -510,6 +510,24 @@ export default {
     linkCopied: '邀请链接已复制',
     loadFailed: '加载邀请返利数据失败',
     transferFailed: '转入余额失败',
+    tiers: {
+      currentLevel: '当前自动等级',
+      effectiveRate: '有效返利比例',
+      qualifiedCount: '合格邀请人数',
+      customRate: '专属返利比例',
+      nextProgress: '{current} / {target} 位合格邀请',
+      remaining: '再有 {count} 位即可升至 {level}',
+      highestLevel: '已达最高等级',
+      rulesTitle: '推广等级规则',
+      rulesDescription: '受邀用户累计实付达到 {amount} 即计为合格邀请；等级累计达标后永久保留。专属返利比例优先生效，但自动等级仍会继续晋升。',
+      requirement: '{count} 位合格邀请',
+      levels: {
+        standard: 'Standard',
+        bronze: 'Bronze',
+        silver: 'Silver',
+        gold: 'Gold'
+      }
+    },
     stats: {
       rebateRate: '我的返利比例',
       rebateRateHint: '被邀请用户每次充值后你可获得的返利比例',
@@ -533,9 +551,12 @@ export default {
       columns: {
         email: '邮箱',
         username: '用户名',
+        paymentProgress: '累计实付',
         rebate: '返利明细',
         joinedAt: '注册时间'
-      }
+      },
+      qualified: '已达标',
+      inProgress: '进行中'
     },
     tips: {
       title: '使用说明',

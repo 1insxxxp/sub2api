@@ -44,6 +44,77 @@
           </div>
         </div>
 
+        <section data-testid="tier-summary" class="card overflow-hidden">
+          <div class="grid gap-5 p-5 lg:grid-cols-[minmax(0,1fr)_minmax(280px,0.85fr)] lg:p-6">
+            <div class="min-w-0">
+              <div class="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <p class="text-xs font-medium uppercase text-gray-500 dark:text-dark-400">
+                    {{ t('affiliate.tiers.currentLevel') }}
+                  </p>
+                  <div class="mt-1.5 flex flex-wrap items-center gap-2">
+                    <p class="text-xl font-semibold text-gray-900 dark:text-white">
+                      {{ tierLabel(detail.automatic_level) }}
+                    </p>
+                    <span
+                      v-if="detail.has_custom_rebate_rate"
+                      class="rounded-md bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800 dark:bg-amber-900/30 dark:text-amber-300"
+                    >
+                      {{ t('affiliate.tiers.customRate') }}
+                    </span>
+                  </div>
+                </div>
+                <div class="text-right">
+                  <p class="text-xs text-gray-500 dark:text-dark-400">{{ t('affiliate.tiers.effectiveRate') }}</p>
+                  <p class="mt-1 text-xl font-semibold text-primary-600 dark:text-primary-400">
+                    {{ formattedRebateRate }}%
+                  </p>
+                </div>
+              </div>
+
+              <div class="mt-5 border-t border-gray-100 pt-4 dark:border-dark-800">
+                <div class="flex flex-wrap items-end justify-between gap-2 text-sm">
+                  <div>
+                    <span class="text-gray-500 dark:text-dark-400">{{ t('affiliate.tiers.qualifiedCount') }}</span>
+                    <strong class="ml-2 text-gray-900 dark:text-white">{{ formatCount(detail.qualified_invitee_count) }}</strong>
+                  </div>
+                  <span v-if="nextTier" class="text-xs font-medium text-gray-600 dark:text-gray-300">
+                    {{ t('affiliate.tiers.nextProgress', { current: detail.qualified_invitee_count, target: nextTier.min_qualified_invitees }) }}
+                  </span>
+                  <span v-else class="text-xs font-medium text-emerald-600 dark:text-emerald-400">
+                    {{ t('affiliate.tiers.highestLevel') }}
+                  </span>
+                </div>
+                <div class="mt-2 h-2 overflow-hidden rounded-md bg-gray-100 dark:bg-dark-800" role="progressbar" :aria-valuenow="tierProgress" aria-valuemin="0" aria-valuemax="100">
+                  <div class="h-full rounded-md bg-primary-500 transition-[width]" :style="{ width: `${tierProgress}%` }"></div>
+                </div>
+                <p v-if="nextTier" class="mt-2 text-xs text-gray-500 dark:text-dark-400">
+                  {{ t('affiliate.tiers.remaining', { count: detail.remaining_qualified_invitees, level: tierLabel(nextTier.level) }) }}
+                </p>
+              </div>
+            </div>
+
+            <div class="border-t border-gray-200 pt-4 dark:border-dark-700 lg:border-l lg:border-t-0 lg:pl-5 lg:pt-0">
+              <h3 class="text-sm font-semibold text-gray-900 dark:text-white">{{ t('affiliate.tiers.rulesTitle') }}</h3>
+              <p class="mt-1 text-xs leading-5 text-gray-500 dark:text-dark-400">{{ t('affiliate.tiers.rulesDescription', { amount: formatCurrency(detail.qualification_amount) }) }}</p>
+              <div class="mt-3 grid grid-cols-2 border-y border-gray-100 dark:border-dark-800">
+                <div
+                  v-for="tier in detail.tiers"
+                  :key="tier.level"
+                  data-testid="tier-rule"
+                  class="min-w-0 border-b border-gray-100 px-2 py-2.5 odd:border-r dark:border-dark-800 [&:nth-last-child(-n+2)]:border-b-0"
+                >
+                  <div class="flex min-w-0 items-center justify-between gap-2">
+                    <span class="truncate text-sm font-medium text-gray-800 dark:text-gray-200">{{ tierLabel(tier.level) }}</span>
+                    <span class="shrink-0 text-sm font-semibold text-primary-600 dark:text-primary-400">{{ formatRate(tier.rate_percent) }}%</span>
+                  </div>
+                  <p class="mt-0.5 truncate text-xs text-gray-500 dark:text-dark-400">{{ t('affiliate.tiers.requirement', { count: tier.min_qualified_invitees }) }}</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
         <div class="card p-6">
           <h3 class="text-base font-semibold text-gray-900 dark:text-white">{{ t('affiliate.title') }}</h3>
           <p class="mt-1 text-sm text-gray-500 dark:text-dark-400">{{ t('affiliate.description') }}</p>
@@ -51,7 +122,7 @@
           <div class="mt-5 grid gap-4 md:grid-cols-2">
             <div class="space-y-2">
               <p class="text-sm font-medium text-gray-700 dark:text-gray-300">{{ t('affiliate.yourCode') }}</p>
-              <div class="flex items-center gap-2 rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 dark:border-dark-700 dark:bg-dark-900">
+              <div class="flex items-center gap-2 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 dark:border-dark-700 dark:bg-dark-900">
                 <code class="flex-1 truncate text-sm font-semibold text-gray-900 dark:text-white">{{ detail.aff_code }}</code>
                 <button class="btn btn-secondary btn-sm" @click="copyCode">
                   <Icon name="copy" size="sm" />
@@ -62,7 +133,7 @@
 
             <div class="space-y-2">
               <p class="text-sm font-medium text-gray-700 dark:text-gray-300">{{ t('affiliate.inviteLink') }}</p>
-              <div class="flex items-center gap-2 rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 dark:border-dark-700 dark:bg-dark-900">
+              <div class="flex items-center gap-2 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 dark:border-dark-700 dark:bg-dark-900">
                 <code class="flex-1 truncate text-sm text-gray-700 dark:text-gray-300">{{ inviteLink }}</code>
                 <button class="btn btn-secondary btn-sm" @click="copyInviteLink">
                   <Icon name="copy" size="sm" />
@@ -72,7 +143,7 @@
             </div>
           </div>
 
-          <div class="mt-5 rounded-xl border border-primary-200 bg-primary-50 p-4 dark:border-primary-900/40 dark:bg-primary-900/20">
+          <div class="mt-5 rounded-lg border border-primary-200 bg-primary-50 p-4 dark:border-primary-900/40 dark:bg-primary-900/20">
             <p class="text-sm font-medium text-primary-800 dark:text-primary-200">{{ t('affiliate.tips.title') }}</p>
             <ul class="mt-2 space-y-1 text-sm text-primary-700 dark:text-primary-300">
               <li>1. {{ t('affiliate.tips.line1') }}</li>
@@ -106,15 +177,17 @@
 
         <div class="card p-6">
           <h3 class="text-base font-semibold text-gray-900 dark:text-white">{{ t('affiliate.invitees.title') }}</h3>
-          <div v-if="detail.invitees.length === 0" class="mt-4 rounded-xl border border-dashed border-gray-300 p-6 text-center text-sm text-gray-500 dark:border-dark-700 dark:text-dark-400">
+          <div v-if="detail.invitees.length === 0" class="mt-4 rounded-lg border border-dashed border-gray-300 p-6 text-center text-sm text-gray-500 dark:border-dark-700 dark:text-dark-400">
             {{ t('affiliate.invitees.empty') }}
           </div>
-          <div v-else class="mt-4 overflow-x-auto">
-            <table class="w-full min-w-[560px] text-left text-sm">
+          <template v-else>
+            <div data-testid="invitees-desktop" class="mt-4 hidden md:block">
+            <table class="w-full table-fixed text-left text-sm">
               <thead>
                 <tr class="border-b border-gray-200 text-gray-500 dark:border-dark-700 dark:text-dark-400">
                   <th class="px-3 py-2 font-medium">{{ t('affiliate.invitees.columns.email') }}</th>
                   <th class="px-3 py-2 font-medium">{{ t('affiliate.invitees.columns.username') }}</th>
+                  <th class="px-3 py-2 font-medium">{{ t('affiliate.invitees.columns.paymentProgress') }}</th>
                   <th class="px-3 py-2 font-medium text-right">{{ t('affiliate.invitees.columns.rebate') }}</th>
                   <th class="px-3 py-2 font-medium">{{ t('affiliate.invitees.columns.joinedAt') }}</th>
                 </tr>
@@ -125,14 +198,46 @@
                   :key="item.user_id"
                   class="border-b border-gray-100 last:border-b-0 dark:border-dark-800"
                 >
-                  <td class="px-3 py-3 text-gray-900 dark:text-white">{{ item.email || '-' }}</td>
-                  <td class="px-3 py-3 text-gray-700 dark:text-gray-300">{{ item.username || '-' }}</td>
+                  <td class="break-all px-3 py-3 text-gray-900 dark:text-white">{{ item.email || '-' }}</td>
+                  <td class="break-all px-3 py-3 text-gray-700 dark:text-gray-300">{{ item.username || '-' }}</td>
+                  <td class="px-3 py-3">
+                    <p class="font-medium text-gray-800 dark:text-gray-200">{{ formatCurrency(item.qualifying_payment_amount) }} / {{ formatCurrency(detail.qualification_amount) }}</p>
+                    <p :class="item.qualified ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-600 dark:text-amber-400'" class="mt-0.5 text-xs">
+                      {{ item.qualified ? t('affiliate.invitees.qualified') : t('affiliate.invitees.inProgress') }}
+                    </p>
+                  </td>
                   <td class="px-3 py-3 text-right font-medium text-emerald-600 dark:text-emerald-400">{{ formatCurrency(item.total_rebate) }}</td>
                   <td class="px-3 py-3 text-gray-700 dark:text-gray-300">{{ formatDateTime(item.created_at) || '-' }}</td>
                 </tr>
               </tbody>
             </table>
-          </div>
+            </div>
+
+            <div data-testid="invitees-mobile" class="mt-4 divide-y divide-gray-100 border-y border-gray-100 md:hidden dark:divide-dark-800 dark:border-dark-800">
+              <article v-for="item in detail.invitees" :key="item.user_id" class="min-w-0 py-4 first:pt-2 last:pb-2">
+                <div class="flex min-w-0 items-start justify-between gap-3">
+                  <div class="min-w-0">
+                    <p class="break-all text-sm font-medium text-gray-900 dark:text-white">{{ item.email || '-' }}</p>
+                    <p class="mt-0.5 break-all text-xs text-gray-500 dark:text-dark-400">{{ item.username || '-' }}</p>
+                  </div>
+                  <span :class="item.qualified ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300' : 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300'" class="shrink-0 rounded-md px-2 py-1 text-xs font-medium">
+                    {{ item.qualified ? t('affiliate.invitees.qualified') : t('affiliate.invitees.inProgress') }}
+                  </span>
+                </div>
+                <div class="mt-3 flex min-w-0 flex-wrap items-end justify-between gap-x-3 gap-y-2 text-xs">
+                  <div class="min-w-0">
+                    <p class="text-gray-500 dark:text-dark-400">{{ t('affiliate.invitees.columns.paymentProgress') }}</p>
+                    <p class="mt-0.5 font-medium text-gray-800 dark:text-gray-200">{{ formatCurrency(item.qualifying_payment_amount) }} / {{ formatCurrency(detail.qualification_amount) }}</p>
+                  </div>
+                  <div class="text-right">
+                    <p class="text-gray-500 dark:text-dark-400">{{ t('affiliate.invitees.columns.rebate') }}</p>
+                    <p class="mt-0.5 font-medium text-emerald-600 dark:text-emerald-400">{{ formatCurrency(item.total_rebate) }}</p>
+                  </div>
+                </div>
+                <p class="mt-2 text-xs text-gray-400 dark:text-dark-500">{{ formatDateTime(item.created_at) || '-' }}</p>
+              </article>
+            </div>
+          </template>
         </div>
       </template>
     </div>
@@ -145,7 +250,7 @@ import { useI18n } from 'vue-i18n'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import Icon from '@/components/icons/Icon.vue'
 import userAPI from '@/api/user'
-import type { UserAffiliateDetail } from '@/types'
+import type { AffiliateTier, UserAffiliateDetail } from '@/types'
 import { useAppStore } from '@/stores/app'
 import { useAuthStore } from '@/stores/auth'
 import { useClipboard } from '@/composables/useClipboard'
@@ -174,6 +279,29 @@ const formattedRebateRate = computed(() => {
   const rounded = Math.round(v * 100) / 100
   return Number.isInteger(rounded) ? String(rounded) : rounded.toString()
 })
+
+const nextTier = computed(() => {
+  if (!detail.value?.next_level_invitee_threshold) return null
+  return detail.value.tiers.find((tier) => tier.min_qualified_invitees === detail.value?.next_level_invitee_threshold) ?? null
+})
+
+const tierProgress = computed(() => {
+  if (!detail.value || !nextTier.value) return 100
+  const currentTier = detail.value.tiers.find((tier) => tier.level === detail.value?.automatic_level)
+  const floor = currentTier?.min_qualified_invitees ?? 0
+  const span = nextTier.value.min_qualified_invitees - floor
+  if (span <= 0) return 100
+  return Math.min(100, Math.max(0, ((detail.value.qualified_invitee_count - floor) / span) * 100))
+})
+
+function tierLabel(level: AffiliateTier): string {
+  return t(`affiliate.tiers.levels.${level}`)
+}
+
+function formatRate(value: number): string {
+  const rounded = Math.round(value * 100) / 100
+  return Number.isInteger(rounded) ? String(rounded) : rounded.toString()
+}
 
 function formatCount(value: number): string {
   return value.toLocaleString()

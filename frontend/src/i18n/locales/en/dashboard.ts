@@ -505,6 +505,24 @@ export default {
     linkCopied: 'Invite link copied',
     loadFailed: 'Failed to load affiliate data',
     transferFailed: 'Failed to transfer affiliate quota',
+    tiers: {
+      currentLevel: 'Current automatic level',
+      effectiveRate: 'Effective rebate rate',
+      qualifiedCount: 'Qualified invitees',
+      customRate: 'Custom rebate rate',
+      nextProgress: '{current} / {target} qualified invitees',
+      remaining: '{count} more to reach {level}',
+      highestLevel: 'Highest level reached',
+      rulesTitle: 'Promotion level rules',
+      rulesDescription: 'An invitee qualifies after {amount} in cumulative paid purchases. Levels are retained permanently once reached. A custom rebate rate takes precedence while automatic level progress continues.',
+      requirement: '{count} qualified invitees',
+      levels: {
+        standard: 'Standard',
+        bronze: 'Bronze',
+        silver: 'Silver',
+        gold: 'Gold'
+      }
+    },
     stats: {
       rebateRate: 'My Rebate Rate',
       rebateRateHint: 'What you earn each time an invitee recharges',
@@ -528,9 +546,12 @@ export default {
       columns: {
         email: 'Email',
         username: 'Username',
+        paymentProgress: 'Cumulative paid',
         rebate: 'Rebate',
         joinedAt: 'Joined At'
-      }
+      },
+      qualified: 'Qualified',
+      inProgress: 'In progress'
     },
     tips: {
       title: 'How It Works',
