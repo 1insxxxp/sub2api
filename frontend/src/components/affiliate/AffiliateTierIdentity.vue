@@ -22,7 +22,7 @@
           <img
             data-testid="current-tier-badge"
             :src="badgeSource(currentLevel)"
-            :alt="tierLabel(currentLevel)"
+            alt=""
             class="tier-identity__badge relative z-[1] h-[72px] w-[72px] shrink-0 object-contain sm:h-[92px] sm:w-[92px]"
           />
 
@@ -50,7 +50,7 @@
                   {{ t('affiliate.tiers.effectiveRate') }}
                 </p>
                 <p class="mt-1 text-xl font-semibold text-primary-600 dark:text-cyan-400">
-                  {{ formattedRate }}%
+                  {{ safeFormattedRate }}%
                 </p>
               </div>
             </div>
@@ -62,13 +62,13 @@
                     {{ t('affiliate.tiers.qualifiedCount') }}
                   </span>
                   <strong class="ml-2 text-gray-900 dark:text-white">
-                    {{ formatCount(detail.qualified_invitee_count) }}
+                    {{ formatCount(safeQualifiedCount) }}
                   </strong>
                 </div>
                 <span v-if="displayNextTier" class="text-xs font-medium text-gray-600 dark:text-gray-300">
                   {{ t('affiliate.tiers.nextProgress', {
-                    current: detail.qualified_invitee_count,
-                    target: displayNextTier.min_qualified_invitees
+                    current: safeQualifiedCount,
+                    target: safeNextTierTarget
                   }) }}
                 </span>
                 <span v-else class="text-xs font-medium text-cyan-700 dark:text-cyan-300">
@@ -77,8 +77,10 @@
               </div>
 
               <div
+                v-if="displayNextTier"
                 class="mt-2 h-2 overflow-hidden rounded-md bg-blue-100/80 dark:bg-blue-950/70"
                 role="progressbar"
+                :aria-label="progressLabel"
                 :aria-valuenow="safeProgress"
                 aria-valuemin="0"
                 aria-valuemax="100"
@@ -125,7 +127,7 @@
               <img
                 data-testid="tier-rule-badge"
                 :src="badgeSource(tier.level)"
-                :alt="tierLabel(tier.level)"
+                alt=""
                 class="h-9 w-9 shrink-0 object-contain"
               />
               <div class="min-w-0 flex-1">
@@ -185,17 +187,36 @@ const knownTiers = new Set<AffiliateTier>(['standard', 'bronze', 'silver', 'gold
 const currentLevel = computed<AffiliateTier>(() => normalizeTier(props.detail.automatic_level))
 const presentation = computed(() => getAffiliateTierPresentation(currentLevel.value))
 const displayNextTier = computed(() => presentation.value.theme === 'core' ? null : props.nextTier)
-const safeProgress = computed(() => Math.min(100, Math.max(0, props.progress)))
+const safeProgress = computed(() => normalizeNumber(props.progress, 100))
+const safeAffCount = computed(() => normalizeNumber(props.detail.aff_count))
+const safeQualifiedRatioCount = computed(() => normalizeNumber(props.detail.qualified_invitee_count))
+const safeQualifiedCount = computed(() => normalizeNumber(props.detail.qualified_invitee_count, Infinity, true))
+const safeRemainingCount = computed(() => normalizeNumber(props.detail.remaining_qualified_invitees, Infinity, true))
+const safeHistoryRebate = computed(() => normalizeNumber(props.detail.aff_history_quota))
+const safeFormattedRate = computed(() => formatSafeNumber(props.formattedRate, 100))
+const safeNextTierTarget = computed(() => normalizeNumber(
+  displayNextTier.value?.min_qualified_invitees ?? 0,
+  Infinity,
+  true
+))
 const qualifiedRatio = computed(() => {
-  if (props.detail.aff_count <= 0) return '0%'
-  return `${Math.round((props.detail.qualified_invitee_count / props.detail.aff_count) * 100)}%`
+  if (safeAffCount.value <= 0) return '0%'
+  const ratio = normalizeNumber(
+    (safeQualifiedRatioCount.value / safeAffCount.value) * 100,
+    100
+  )
+  return `${Math.round(ratio)}%`
 })
+const progressLabel = computed(() => t('affiliate.tiers.nextProgress', {
+  current: safeQualifiedCount.value,
+  target: safeNextTierTarget.value
+}))
 const objectiveText = computed(() => t(presentation.value.objectiveKey, {
-  count: props.detail.remaining_qualified_invitees,
+  count: safeRemainingCount.value,
   ratio: qualifiedRatio.value,
-  rebate: formatCurrency(props.detail.aff_history_quota),
-  qualified: props.detail.qualified_invitee_count,
-  rate: `${props.formattedRate}%`
+  rebate: formatCurrency(safeHistoryRebate.value),
+  qualified: safeQualifiedCount.value,
+  rate: `${safeFormattedRate.value}%`
 }))
 
 function normalizeTier(level: AffiliateTier | string | null | undefined): AffiliateTier {
@@ -214,9 +235,20 @@ function isCurrentTier(level: AffiliateTier): boolean {
   return level === currentLevel.value
 }
 
-function formatRate(value: number): string {
-  const rounded = Math.round(value * 100) / 100
+function normalizeNumber(value: number | string, max = Infinity, integer = false): number {
+  const parsed = typeof value === 'string' && value.trim() === '' ? 0 : Number(value)
+  if (!Number.isFinite(parsed)) return 0
+  const normalized = Math.min(max, Math.max(0, parsed))
+  return integer ? Math.floor(normalized) : normalized
+}
+
+function formatSafeNumber(value: number | string, max = Infinity): string {
+  const rounded = Math.round(normalizeNumber(value, max) * 100) / 100
   return Number.isInteger(rounded) ? String(rounded) : rounded.toString()
+}
+
+function formatRate(value: number): string {
+  return formatSafeNumber(value, 100)
 }
 
 function formatCount(value: number): string {
@@ -360,11 +392,6 @@ function formatCount(value: number): string {
 
 .tier-identity__progress {
   background: linear-gradient(90deg, rgb(var(--tier-accent)), rgb(var(--tier-cyan)));
-  transition: width 300ms ease;
-}
-
-.tier-identity__rule {
-  transition: background-color 160ms ease, box-shadow 160ms ease;
 }
 
 .tier-identity__rule--current {
@@ -398,6 +425,14 @@ function formatCount(value: number): string {
 }
 
 @media (prefers-reduced-motion: no-preference) {
+  .tier-identity__progress {
+    transition: width 300ms ease;
+  }
+
+  .tier-identity__rule {
+    transition: background-color 160ms ease, box-shadow 160ms ease;
+  }
+
   .tier-identity[data-tier-theme='pulse'] .tier-identity__ring--outer,
   .tier-identity[data-tier-theme='orbit'] .tier-identity__ring--outer,
   .tier-identity[data-tier-theme='core'] .tier-identity__ring--outer {
