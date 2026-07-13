@@ -46,51 +46,68 @@
 
         <section data-testid="tier-summary" class="card overflow-hidden">
           <div class="grid gap-5 p-5 lg:grid-cols-[minmax(0,1fr)_minmax(280px,0.85fr)] lg:p-6">
-            <div class="min-w-0">
-              <div class="flex flex-wrap items-start justify-between gap-3">
-                <div>
-                  <p class="text-xs font-medium uppercase text-gray-500 dark:text-dark-400">
-                    {{ t('affiliate.tiers.currentLevel') }}
-                  </p>
-                  <div class="mt-1.5 flex flex-wrap items-center gap-2">
-                    <p class="text-xl font-semibold text-gray-900 dark:text-white">
-                      {{ tierLabel(detail.automatic_level) }}
-                    </p>
-                    <span
-                      v-if="detail.has_custom_rebate_rate"
-                      class="rounded-md bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800 dark:bg-amber-900/30 dark:text-amber-300"
-                    >
-                      {{ t('affiliate.tiers.customRate') }}
-                    </span>
-                  </div>
-                </div>
-                <div class="text-right">
-                  <p class="text-xs text-gray-500 dark:text-dark-400">{{ t('affiliate.tiers.effectiveRate') }}</p>
-                  <p class="mt-1 text-xl font-semibold text-primary-600 dark:text-primary-400">
-                    {{ formattedRebateRate }}%
-                  </p>
-                </div>
+            <div class="flex min-w-0 items-start gap-3 sm:gap-4">
+              <div
+                class="tier-badge-stage relative flex h-[68px] w-[68px] shrink-0 items-center justify-center sm:h-[88px] sm:w-[88px]"
+                :class="tierBadgeTone(detail.automatic_level)"
+              >
+                <span class="tier-badge-glow" aria-hidden="true"></span>
+                <img
+                  data-testid="current-tier-badge"
+                  :src="tierBadgeSource(detail.automatic_level)"
+                  :alt="tierLabel(detail.automatic_level)"
+                  class="tier-badge-pulse relative z-[1] h-full w-full object-contain"
+                  :class="{ 'tier-badge-gold': detail.automatic_level === 'gold' }"
+                />
+                <span v-if="detail.automatic_level === 'gold'" class="tier-badge-shine" aria-hidden="true"></span>
               </div>
 
-              <div class="mt-5 border-t border-gray-100 pt-4 dark:border-dark-800">
-                <div class="flex flex-wrap items-end justify-between gap-2 text-sm">
+              <div class="min-w-0 flex-1">
+                <div class="flex flex-wrap items-start justify-between gap-3">
                   <div>
-                    <span class="text-gray-500 dark:text-dark-400">{{ t('affiliate.tiers.qualifiedCount') }}</span>
-                    <strong class="ml-2 text-gray-900 dark:text-white">{{ formatCount(detail.qualified_invitee_count) }}</strong>
+                    <p class="text-xs font-medium uppercase text-gray-500 dark:text-dark-400">
+                      {{ t('affiliate.tiers.currentLevel') }}
+                    </p>
+                    <div class="mt-1.5 flex flex-wrap items-center gap-2">
+                      <p class="text-xl font-semibold text-gray-900 dark:text-white">
+                        {{ tierLabel(detail.automatic_level) }}
+                      </p>
+                      <span
+                        v-if="detail.has_custom_rebate_rate"
+                        class="rounded-md bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800 dark:bg-amber-900/30 dark:text-amber-300"
+                      >
+                        {{ t('affiliate.tiers.customRate') }}
+                      </span>
+                    </div>
                   </div>
-                  <span v-if="nextTier" class="text-xs font-medium text-gray-600 dark:text-gray-300">
-                    {{ t('affiliate.tiers.nextProgress', { current: detail.qualified_invitee_count, target: nextTier.min_qualified_invitees }) }}
-                  </span>
-                  <span v-else class="text-xs font-medium text-emerald-600 dark:text-emerald-400">
-                    {{ t('affiliate.tiers.highestLevel') }}
-                  </span>
+                  <div class="text-right">
+                    <p class="text-xs text-gray-500 dark:text-dark-400">{{ t('affiliate.tiers.effectiveRate') }}</p>
+                    <p class="mt-1 text-xl font-semibold text-primary-600 dark:text-primary-400">
+                      {{ formattedRebateRate }}%
+                    </p>
+                  </div>
                 </div>
-                <div class="mt-2 h-2 overflow-hidden rounded-md bg-gray-100 dark:bg-dark-800" role="progressbar" :aria-valuenow="tierProgress" aria-valuemin="0" aria-valuemax="100">
-                  <div class="h-full rounded-md bg-primary-500 transition-[width]" :style="{ width: `${tierProgress}%` }"></div>
+
+                <div class="mt-5 border-t border-gray-100 pt-4 dark:border-dark-800">
+                  <div class="flex flex-wrap items-end justify-between gap-2 text-sm">
+                    <div>
+                      <span class="text-gray-500 dark:text-dark-400">{{ t('affiliate.tiers.qualifiedCount') }}</span>
+                      <strong class="ml-2 text-gray-900 dark:text-white">{{ formatCount(detail.qualified_invitee_count) }}</strong>
+                    </div>
+                    <span v-if="nextTier" class="text-xs font-medium text-gray-600 dark:text-gray-300">
+                      {{ t('affiliate.tiers.nextProgress', { current: detail.qualified_invitee_count, target: nextTier.min_qualified_invitees }) }}
+                    </span>
+                    <span v-else class="text-xs font-medium text-emerald-600 dark:text-emerald-400">
+                      {{ t('affiliate.tiers.highestLevel') }}
+                    </span>
+                  </div>
+                  <div class="mt-2 h-2 overflow-hidden rounded-md bg-gray-100 dark:bg-dark-800" role="progressbar" :aria-valuenow="tierProgress" aria-valuemin="0" aria-valuemax="100">
+                    <div class="h-full rounded-md bg-primary-500 transition-[width]" :style="{ width: `${tierProgress}%` }"></div>
+                  </div>
+                  <p v-if="nextTier" class="mt-2 text-xs text-gray-500 dark:text-dark-400">
+                    {{ t('affiliate.tiers.remaining', { count: detail.remaining_qualified_invitees, level: tierLabel(nextTier.level) }) }}
+                  </p>
                 </div>
-                <p v-if="nextTier" class="mt-2 text-xs text-gray-500 dark:text-dark-400">
-                  {{ t('affiliate.tiers.remaining', { count: detail.remaining_qualified_invitees, level: tierLabel(nextTier.level) }) }}
-                </p>
               </div>
             </div>
 
@@ -102,13 +119,25 @@
                   v-for="tier in detail.tiers"
                   :key="tier.level"
                   data-testid="tier-rule"
+                  :data-current="tier.level === detail.automatic_level ? 'true' : 'false'"
                   class="min-w-0 border-b border-gray-100 px-2 py-2.5 odd:border-r dark:border-dark-800 [&:nth-last-child(-n+2)]:border-b-0"
+                  :class="tier.level === detail.automatic_level ? 'bg-primary-50/70 ring-1 ring-inset ring-primary-200 dark:bg-primary-900/15 dark:ring-primary-800/70' : ''"
                 >
-                  <div class="flex min-w-0 items-center justify-between gap-2">
-                    <span class="truncate text-sm font-medium text-gray-800 dark:text-gray-200">{{ tierLabel(tier.level) }}</span>
-                    <span class="shrink-0 text-sm font-semibold text-primary-600 dark:text-primary-400">{{ formatRate(tier.rate_percent) }}%</span>
+                  <div class="flex min-w-0 items-center gap-2">
+                    <img
+                      data-testid="tier-rule-badge"
+                      :src="tierBadgeSource(tier.level)"
+                      :alt="tierLabel(tier.level)"
+                      class="h-10 w-10 shrink-0 object-contain"
+                    />
+                    <div class="min-w-0 flex-1">
+                      <p class="text-sm font-medium text-gray-800 dark:text-gray-200">{{ tierLabel(tier.level) }}</p>
+                      <div class="mt-0.5 flex min-w-0 items-baseline gap-1.5">
+                        <span class="shrink-0 text-sm font-semibold text-primary-600 dark:text-primary-400">{{ formatRate(tier.rate_percent) }}%</span>
+                        <span class="truncate text-xs text-gray-500 dark:text-dark-400">{{ t('affiliate.tiers.requirement', { count: tier.min_qualified_invitees }) }}</span>
+                      </div>
+                    </div>
                   </div>
-                  <p class="mt-0.5 truncate text-xs text-gray-500 dark:text-dark-400">{{ t('affiliate.tiers.requirement', { count: tier.min_qualified_invitees }) }}</p>
                 </div>
               </div>
             </div>
@@ -256,6 +285,10 @@ import { useAuthStore } from '@/stores/auth'
 import { useClipboard } from '@/composables/useClipboard'
 import { formatCurrency, formatDateTime } from '@/utils/format'
 import { extractApiErrorMessage } from '@/utils/apiError'
+import standardTierBadge from '@/assets/affiliate-tiers/standard.webp'
+import bronzeTierBadge from '@/assets/affiliate-tiers/bronze.webp'
+import silverTierBadge from '@/assets/affiliate-tiers/silver.webp'
+import goldTierBadge from '@/assets/affiliate-tiers/gold.webp'
 
 const { t } = useI18n()
 const appStore = useAppStore()
@@ -265,6 +298,13 @@ const { copyToClipboard } = useClipboard()
 const loading = ref(true)
 const transferring = ref(false)
 const detail = ref<UserAffiliateDetail | null>(null)
+
+const tierBadgeSources: Record<AffiliateTier, string> = {
+  standard: standardTierBadge,
+  bronze: bronzeTierBadge,
+  silver: silverTierBadge,
+  gold: goldTierBadge,
+}
 
 const inviteLink = computed(() => {
   if (!detail.value) return ''
@@ -296,6 +336,14 @@ const tierProgress = computed(() => {
 
 function tierLabel(level: AffiliateTier): string {
   return t(`affiliate.tiers.levels.${level}`)
+}
+
+function tierBadgeSource(level: AffiliateTier): string {
+  return tierBadgeSources[level]
+}
+
+function tierBadgeTone(level: AffiliateTier): string {
+  return `tier-badge-${level}`
 }
 
 function formatRate(value: number): string {
@@ -353,3 +401,90 @@ onMounted(() => {
   void loadAffiliateDetail()
 })
 </script>
+
+<style scoped>
+.tier-badge-stage {
+  --tier-glow: rgb(34 211 238 / 0.36);
+  isolation: isolate;
+}
+
+.tier-badge-bronze {
+  --tier-glow: rgb(180 112 54 / 0.42);
+}
+
+.tier-badge-silver {
+  --tier-glow: rgb(147 197 253 / 0.46);
+}
+
+.tier-badge-gold {
+  --tier-glow: rgb(250 204 21 / 0.48);
+}
+
+.tier-badge-glow {
+  position: absolute;
+  inset: 14%;
+  z-index: 0;
+  border-radius: 50%;
+  background: var(--tier-glow);
+  filter: blur(14px);
+  opacity: 0.52;
+}
+
+.tier-badge-pulse {
+  animation: tier-badge-breathe 3.6s ease-in-out infinite;
+  filter: drop-shadow(0 5px 6px rgb(15 23 42 / 0.18));
+}
+
+.tier-badge-shine {
+  position: absolute;
+  inset: 8%;
+  z-index: 2;
+  overflow: hidden;
+  border-radius: 24%;
+  pointer-events: none;
+}
+
+.tier-badge-shine::after {
+  content: '';
+  position: absolute;
+  top: -25%;
+  bottom: -25%;
+  left: -45%;
+  width: 20%;
+  transform: rotate(18deg);
+  background: linear-gradient(90deg, transparent, rgb(255 255 255 / 0.52), transparent);
+  animation: tier-badge-sweep 5.6s ease-in-out infinite;
+}
+
+@keyframes tier-badge-breathe {
+  0%, 100% {
+    transform: scale(1);
+    filter: drop-shadow(0 5px 6px rgb(15 23 42 / 0.18));
+  }
+  50% {
+    transform: scale(1.025);
+    filter: drop-shadow(0 6px 10px var(--tier-glow));
+  }
+}
+
+@keyframes tier-badge-sweep {
+  0%, 68%, 100% {
+    transform: translateX(0) rotate(18deg);
+    opacity: 0;
+  }
+  74% {
+    opacity: 0.9;
+  }
+  86% {
+    transform: translateX(560%) rotate(18deg);
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tier-badge-pulse,
+  .tier-badge-shine::after {
+    animation: none;
+  }
+}
+</style>

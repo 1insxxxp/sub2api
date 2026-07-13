@@ -148,6 +148,20 @@ describe('AffiliateView promotion tiers', () => {
       expect.stringContaining('Silver'),
       expect.stringContaining('Gold')
     ]))
+
+    const currentBadge = wrapper.get('[data-testid="current-tier-badge"]')
+    expect(currentBadge.attributes('alt')).toBe('Silver')
+    expect(currentBadge.classes()).toContain('tier-badge-pulse')
+
+    const ruleBadges = wrapper.findAll('[data-testid="tier-rule-badge"]')
+    expect(ruleBadges).toHaveLength(4)
+    expect(ruleBadges.map((badge) => badge.attributes('alt'))).toEqual([
+      'Standard',
+      'Bronze',
+      'Silver',
+      'Gold'
+    ])
+    expect(wrapper.get('[data-testid="tier-rule"][data-current="true"]').text()).toContain('Silver')
   })
 
   it('labels a custom rate while preserving automatic-level progress', async () => {
@@ -181,6 +195,8 @@ describe('AffiliateView promotion tiers', () => {
     }))
 
     expect(wrapper.get('[data-testid="tier-summary"]').text()).toContain('Highest level reached')
+    expect(wrapper.get('[data-testid="current-tier-badge"]').classes()).toContain('tier-badge-gold')
+    expect(wrapper.get('[data-testid="tier-rule"][data-current="true"]').text()).toContain('Gold')
   })
 
   it('declares separate desktop and wrapping mobile invitee layouts without fixed minimum width', async () => {
