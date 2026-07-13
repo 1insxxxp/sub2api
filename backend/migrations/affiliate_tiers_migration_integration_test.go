@@ -106,7 +106,7 @@ WHERE key = 'affiliate_tier_reconcile_generation'`)
 		expected string
 	}{
 		{name: "missing inserts eight", expected: "8"},
-		{name: "numeric ten updates to eight", initial: stringPointer("10.0"), expected: "8"},
+		{name: "explicit ten is preserved", initial: stringPointer("10.0"), expected: "10.0"},
 		{name: "administrator value is preserved", initial: stringPointer("12.5"), expected: "12.5"},
 	}
 	for _, tc := range settingCases {
