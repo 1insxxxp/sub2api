@@ -270,6 +270,36 @@ describe('AffiliateTierIdentity', () => {
     ]))
   })
 
+  it.each([
+    Number.NaN,
+    Number.POSITIVE_INFINITY,
+    -50
+  ])('sanitizes qualification amount %s before formatting it as currency', (qualificationAmount) => {
+    const wrapper = mountIdentity(makeDetail({
+      qualification_amount: qualificationAmount
+    }))
+
+    expect(wrapper.text()).toContain('Qualifies after $0.00.')
+    expect(wrapper.text()).not.toMatch(/NaN|Infinity|-\$50/)
+  })
+
+  it('sanitizes tier rule invitee thresholds as non-negative integers', () => {
+    const unsafeTiers: AffiliateTierDefinition[] = [
+      { level: 'standard', min_qualified_invitees: Number.NaN, rate_percent: 8 },
+      { level: 'bronze', min_qualified_invitees: Number.POSITIVE_INFINITY, rate_percent: 10 },
+      { level: 'silver', min_qualified_invitees: -10, rate_percent: 12 },
+      { level: 'gold', min_qualified_invitees: 4.8, rate_percent: 15 }
+    ]
+    const wrapper = mountIdentity(makeDetail({ tiers: unsafeTiers }))
+
+    expect(wrapper.findAll('[data-testid="tier-rule"]').map((rule) => rule.text())).toEqual([
+      expect.stringContaining('0 qualified invitees'),
+      expect.stringContaining('0 qualified invitees'),
+      expect.stringContaining('0 qualified invitees'),
+      expect.stringContaining('4 qualified invitees')
+    ])
+  })
+
   it('sanitizes tier rule rates without hiding localized tier labels', () => {
     const unsafeTiers: AffiliateTierDefinition[] = [
       { level: 'standard', min_qualified_invitees: 0, rate_percent: Number.NaN },

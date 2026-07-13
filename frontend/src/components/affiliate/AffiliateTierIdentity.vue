@@ -110,7 +110,7 @@
         </h3>
         <p class="mt-1 text-xs leading-5 text-gray-500 dark:text-dark-400">
           {{ t('affiliate.tiers.rulesDescription', {
-            amount: formatCurrency(detail.qualification_amount)
+            amount: formatCurrency(normalizeNumber(detail.qualification_amount))
           }) }}
         </p>
 
@@ -139,7 +139,9 @@
                     {{ formatRate(tier.rate_percent) }}%
                   </span>
                   <span class="truncate text-xs text-gray-500 dark:text-dark-400">
-                    {{ t('affiliate.tiers.requirement', { count: tier.min_qualified_invitees }) }}
+                    {{ t('affiliate.tiers.requirement', {
+                      count: normalizeNumber(tier.min_qualified_invitees, Infinity, true)
+                    }) }}
                   </span>
                 </div>
               </div>
