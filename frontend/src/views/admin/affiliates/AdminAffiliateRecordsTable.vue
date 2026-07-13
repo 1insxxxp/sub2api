@@ -56,6 +56,25 @@
           <template #cell-aff_code="{ row }">
             <span class="font-mono text-sm text-gray-700 dark:text-gray-300">{{ row.aff_code || '-' }}</span>
           </template>
+          <template #cell-tier="{ row }">
+            <span class="text-sm font-medium text-gray-900 dark:text-white">{{ tierLabel(row.automatic_level) }}</span>
+          </template>
+          <template #cell-qualified="{ row }">
+            <div class="space-y-0.5 text-sm">
+              <span :class="row.qualified ? 'text-emerald-600 dark:text-emerald-400' : 'text-gray-500 dark:text-dark-400'">
+                {{ t(`admin.affiliates.records.${row.qualified ? 'qualified' : 'unqualified'}`) }}
+              </span>
+              <div class="text-xs text-gray-500 dark:text-dark-400">{{ formatQualifiedCount(row.qualified_invitee_count, row.invited_count) }}</div>
+            </div>
+          </template>
+          <template #cell-rate="{ row }">
+            <div class="space-y-0.5 text-sm">
+              <span class="font-semibold text-gray-900 dark:text-white">{{ formatPercent(row.effective_rebate_rate_percent) }}</span>
+              <div v-if="row.custom_rebate_rate_percent != null" class="text-xs text-primary-600 dark:text-primary-400">
+                {{ t('admin.affiliates.records.customOverride') }}
+              </div>
+            </div>
+          </template>
           <template #cell-order="{ row }">
             <div class="space-y-0.5">
               <div class="font-mono text-sm text-gray-900 dark:text-white">#{{ row.order_id }}</div>
@@ -133,6 +152,11 @@
           <OverviewStat :label="t('admin.affiliates.overview.rebateRate')" :value="formatPercent(selectedOverview.rebate_rate_percent)" />
           <OverviewStat :label="t('admin.affiliates.overview.invitedCount')" :value="String(selectedOverview.invited_count)" />
           <OverviewStat :label="t('admin.affiliates.overview.rebatedInviteeCount')" :value="String(selectedOverview.rebated_invitee_count)" />
+          <OverviewStat :label="t('admin.affiliates.overview.automaticTier')" :value="tierLabel(selectedOverview.automatic_level)" />
+          <OverviewStat :label="t('admin.affiliates.overview.qualifiedInvitees')" :value="formatQualifiedCount(selectedOverview.qualified_invitee_count, selectedOverview.invited_count)" />
+          <OverviewStat :label="t('admin.affiliates.overview.automaticRate')" :value="formatPercent(selectedOverview.automatic_rebate_rate_percent)" />
+          <OverviewStat :label="t('admin.affiliates.overview.customOverride')" :value="selectedOverview.has_custom_rebate_rate ? formatPercent(selectedOverview.custom_rebate_rate_percent) : t('admin.affiliates.overview.none')" />
+          <OverviewStat :label="t('admin.affiliates.overview.effectiveRate')" :value="formatPercent(selectedOverview.effective_rebate_rate_percent)" />
           <OverviewStat :label="t('admin.affiliates.overview.availableQuota')" :value="'$' + formatAmount(selectedOverview.available_quota)" />
           <OverviewStat :label="t('admin.affiliates.overview.historyQuota')" :value="'$' + formatAmount(selectedOverview.history_quota)" />
         </div>
@@ -181,7 +205,10 @@ const columns = computed<Column[]>(() => {
     return [
       { key: 'inviter', label: t('admin.affiliates.records.inviter'), sortable: true },
       { key: 'invitee', label: t('admin.affiliates.records.invitee'), sortable: true },
-      { key: 'aff_code', label: t('admin.affiliates.records.affCode'), sortable: true },
+      { key: 'aff_code', label: t('admin.affiliates.records.affCode'), sortable: true, class: 'hidden md:table-cell' },
+      { key: 'tier', label: t('admin.affiliates.records.automaticTier'), class: 'hidden md:table-cell' },
+      { key: 'qualified', label: t('admin.affiliates.records.qualification'), class: 'hidden md:table-cell' },
+      { key: 'rate', label: t('admin.affiliates.records.effectiveRate') },
       { key: 'total_rebate', label: t('admin.affiliates.records.totalRebate'), sortable: true },
       { key: 'created_at', label: t('admin.affiliates.records.invitedAt'), sortable: true },
     ]
@@ -310,6 +337,14 @@ function formatAmount(value: number | null | undefined): string {
 function formatPercent(value: number | null | undefined): string {
   const rounded = Math.round(Number(value || 0) * 100) / 100
   return `${Number.isInteger(rounded) ? rounded.toString() : rounded.toString()}%`
+}
+
+function tierLabel(level: AffiliateInviteRecord['automatic_level']): string {
+  return t(`admin.affiliates.tiers.${level || 'standard'}`)
+}
+
+function formatQualifiedCount(qualified: number, invited: number): string {
+  return `${Number(qualified || 0)} / ${Number(invited || 0)}`
 }
 
 function formatDateTime(value: string | null | undefined): string {

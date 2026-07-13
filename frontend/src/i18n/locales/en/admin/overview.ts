@@ -377,6 +377,12 @@ export default {
       errors: {
         loadFailed: 'Failed to load affiliate records'
       },
+      tiers: {
+        standard: 'Standard',
+        bronze: 'Bronze',
+        silver: 'Silver',
+        gold: 'Gold'
+      },
       records: {
         search: 'Search',
         searchPlaceholder: 'Email, username, user ID, or order number',
@@ -386,6 +392,12 @@ export default {
         invitee: 'Invitee',
         user: 'User',
         affCode: 'Invite Code',
+        automaticTier: 'Automatic Tier',
+        qualification: 'Qualification',
+        qualified: 'Qualified',
+        unqualified: 'Not qualified',
+        effectiveRate: 'Effective Rate',
+        customOverride: 'Custom override',
         order: 'Order',
         totalRebate: 'Total Rebate',
         orderAmount: 'Top-up Amount',
@@ -408,6 +420,12 @@ export default {
         rebateRate: 'Rebate Rate',
         invitedCount: 'Invited Users',
         rebatedInviteeCount: 'Rebated Invitees',
+        automaticTier: 'Automatic Tier',
+        qualifiedInvitees: 'Qualified Invitees',
+        automaticRate: 'Automatic Rate',
+        customOverride: 'Custom Override',
+        effectiveRate: 'Effective Rate',
+        none: 'None',
         availableQuota: 'Available Quota',
         historyQuota: 'Historical Rebate'
       }

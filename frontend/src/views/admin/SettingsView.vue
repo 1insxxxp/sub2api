@@ -6047,22 +6047,74 @@
             <div v-if="form.affiliate_enabled" class="space-y-6">
               <div>
                 <label class="input-label">
-                  {{ t('admin.settings.features.affiliate.rebateRate') }}
+                  {{ t('admin.settings.features.affiliate.qualificationAmount') }}
                 </label>
-                <div class="relative">
-                  <input
-                    v-model.number="form.affiliate_rebate_rate"
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    max="100"
-                    class="input pr-8"
-                    placeholder="20"
-                  />
-                  <span class="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-gray-400">%</span>
+                <input
+                  v-model.number="form.affiliate_qualification_amount"
+                  data-test="affiliate-qualification-amount"
+                  type="number"
+                  step="0.01"
+                  min="0.01"
+                  class="input"
+                />
+                <p class="mt-1 text-xs text-gray-400">
+                  {{ t('admin.settings.features.affiliate.qualificationAmountHint') }}
+                </p>
+              </div>
+
+              <div>
+                <label class="input-label">
+                  {{ t('admin.settings.features.affiliate.tiers.title') }}
+                </label>
+                <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                  <div
+                    v-for="tier in affiliateTierFields"
+                    :key="tier.level"
+                    class="admin-form-section !space-y-3 !p-4"
+                  >
+                    <div class="text-sm font-semibold text-gray-900 dark:text-white">
+                      {{ t(`admin.affiliates.tiers.${tier.level}`) }}
+                    </div>
+                    <label v-if="tier.thresholdKey" class="block">
+                      <span class="mb-1 block text-xs text-gray-500">{{ t('admin.settings.features.affiliate.tiers.threshold') }}</span>
+                      <input
+                        v-model.number="form[tier.thresholdKey]"
+                        :data-test="`affiliate-${tier.level}-threshold`"
+                        type="number"
+                        step="1"
+                        min="1"
+                        class="input"
+                      />
+                    </label>
+                    <div v-else class="text-xs text-gray-500">
+                      {{ t('admin.settings.features.affiliate.tiers.standardHint') }}
+                    </div>
+                    <label class="block">
+                      <span class="mb-1 block text-xs text-gray-500">{{ t('admin.settings.features.affiliate.tiers.rate') }}</span>
+                      <div class="relative">
+                        <input
+                          v-model.number="form[tier.rateKey]"
+                          :data-test="`affiliate-${tier.level}-rate`"
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          max="100"
+                          class="input pr-8"
+                        />
+                        <span class="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-gray-400">%</span>
+                      </div>
+                    </label>
+                  </div>
                 </div>
                 <p class="mt-1 text-xs text-gray-400">
-                  {{ t('admin.settings.features.affiliate.rebateRateHint') }}
+                  {{ t('admin.settings.features.affiliate.tiers.hint') }}
+                </p>
+                <p
+                  v-if="affiliateTierError"
+                  data-test="affiliate-tier-error"
+                  class="mt-2 text-sm text-red-600 dark:text-red-400"
+                >
+                  {{ affiliateTierError }}
                 </p>
               </div>
 
@@ -8216,6 +8268,13 @@ const form = reactive<SettingsForm>({
   default_balance: 0,
   default_platform_quotas: normalizePlatformQuotasMap() as DefaultPlatformQuotasMap,
   affiliate_rebate_rate: 20,
+  affiliate_qualification_amount: 50,
+  affiliate_bronze_invitees: 3,
+  affiliate_bronze_rate: 10,
+  affiliate_silver_invitees: 10,
+  affiliate_silver_rate: 12,
+  affiliate_gold_invitees: 30,
+  affiliate_gold_rate: 15,
   affiliate_rebate_freeze_hours: 0,
   affiliate_rebate_duration_days: 0,
   affiliate_rebate_per_invitee_cap: 0,
@@ -9407,9 +9466,61 @@ function findDuplicateDefaultSubscription(
   });
 }
 
+type AffiliateThresholdKey =
+  | "affiliate_bronze_invitees"
+  | "affiliate_silver_invitees"
+  | "affiliate_gold_invitees";
+type AffiliateRateKey =
+  | "affiliate_rebate_rate"
+  | "affiliate_bronze_rate"
+  | "affiliate_silver_rate"
+  | "affiliate_gold_rate";
+
+const affiliateTierFields: Array<{
+  level: "standard" | "bronze" | "silver" | "gold";
+  thresholdKey: AffiliateThresholdKey | null;
+  rateKey: AffiliateRateKey;
+}> = [
+  { level: "standard", thresholdKey: null, rateKey: "affiliate_rebate_rate" },
+  { level: "bronze", thresholdKey: "affiliate_bronze_invitees", rateKey: "affiliate_bronze_rate" },
+  { level: "silver", thresholdKey: "affiliate_silver_invitees", rateKey: "affiliate_silver_rate" },
+  { level: "gold", thresholdKey: "affiliate_gold_invitees", rateKey: "affiliate_gold_rate" },
+];
+const affiliateTierError = ref("");
+
+function validateAffiliateTierSettings(): boolean {
+  affiliateTierError.value = "";
+  const amount = Number(form.affiliate_qualification_amount);
+  if (!Number.isFinite(amount) || amount <= 0) {
+    affiliateTierError.value = t("admin.settings.features.affiliate.tiers.amountError");
+    return false;
+  }
+  const thresholds = [
+    Number(form.affiliate_bronze_invitees),
+    Number(form.affiliate_silver_invitees),
+    Number(form.affiliate_gold_invitees),
+  ];
+  if (
+    thresholds.some((value) => !Number.isInteger(value) || value <= 0) ||
+    !(thresholds[0] < thresholds[1] && thresholds[1] < thresholds[2])
+  ) {
+    affiliateTierError.value = t("admin.settings.features.affiliate.tiers.thresholdError");
+    return false;
+  }
+  const rates = affiliateTierFields.map((tier) => Number(form[tier.rateKey]));
+  if (rates.some((value) => !Number.isFinite(value) || value < 0 || value > 100)) {
+    affiliateTierError.value = t("admin.settings.features.affiliate.tiers.rateError");
+    return false;
+  }
+  return true;
+}
+
 async function saveSettings() {
   saving.value = true;
   try {
+    if (form.affiliate_enabled && !validateAffiliateTierSettings()) {
+      return;
+    }
     const normalizedTableDefaultPageSize = Math.floor(
       Number(form.table_default_page_size),
     );
@@ -9573,6 +9684,13 @@ async function saveSettings() {
         100,
         Math.max(0, Number(form.affiliate_rebate_rate) || 0),
       ),
+      affiliate_qualification_amount: Number(form.affiliate_qualification_amount),
+      affiliate_bronze_invitees: Number(form.affiliate_bronze_invitees),
+      affiliate_bronze_rate: Number(form.affiliate_bronze_rate),
+      affiliate_silver_invitees: Number(form.affiliate_silver_invitees),
+      affiliate_silver_rate: Number(form.affiliate_silver_rate),
+      affiliate_gold_invitees: Number(form.affiliate_gold_invitees),
+      affiliate_gold_rate: Number(form.affiliate_gold_rate),
       affiliate_rebate_freeze_hours: Math.max(0, Math.min(720, Number(form.affiliate_rebate_freeze_hours) || 0)),
       affiliate_rebate_duration_days: Math.max(0, Math.min(3650, Math.floor(Number(form.affiliate_rebate_duration_days) || 0))),
       affiliate_rebate_per_invitee_cap: Math.max(0, Number(form.affiliate_rebate_per_invitee_cap) || 0),

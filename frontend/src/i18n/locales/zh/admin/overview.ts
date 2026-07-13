@@ -377,6 +377,12 @@ export default {
       errors: {
         loadFailed: '加载邀请返利记录失败'
       },
+      tiers: {
+        standard: 'Standard',
+        bronze: '青铜',
+        silver: '白银',
+        gold: '黄金'
+      },
       records: {
         search: '搜索',
         searchPlaceholder: '邮箱、用户名、用户 ID、订单号',
@@ -386,6 +392,12 @@ export default {
         invitee: '被邀请人',
         user: '用户',
         affCode: '邀请码',
+        automaticTier: '自动等级',
+        qualification: '合格状态',
+        qualified: '已合格',
+        unqualified: '未合格',
+        effectiveRate: '有效比例',
+        customOverride: '自定义覆盖',
         order: '订单',
         totalRebate: '累计返利',
         orderAmount: '充值金额',
@@ -408,6 +420,12 @@ export default {
         rebateRate: '返利比例',
         invitedCount: '邀请人数',
         rebatedInviteeCount: '已产生返利人数',
+        automaticTier: '自动等级',
+        qualifiedInvitees: '合格人数',
+        automaticRate: '自动比例',
+        customOverride: '自定义覆盖',
+        effectiveRate: '有效比例',
+        none: '无',
         availableQuota: '可提余额',
         historyQuota: '历史返利'
       }

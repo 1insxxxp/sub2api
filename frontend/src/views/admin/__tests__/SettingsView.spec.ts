@@ -773,6 +773,73 @@ describe("admin SettingsView payment visible method controls", () => {
     );
   });
 
+  it("loads and saves affiliate promotion tier settings", async () => {
+    getSettings.mockResolvedValueOnce({
+      ...baseSettingsResponse,
+      affiliate_enabled: true,
+      affiliate_qualification_amount: 50,
+      affiliate_bronze_invitees: 3,
+      affiliate_silver_invitees: 10,
+      affiliate_gold_invitees: 30,
+      affiliate_rebate_rate: 8,
+      affiliate_bronze_rate: 10,
+      affiliate_silver_rate: 12,
+      affiliate_gold_rate: 15,
+    });
+
+    const wrapper = mountView();
+    await flushPromises();
+
+    expect((wrapper.get('[data-test="affiliate-qualification-amount"]').element as HTMLInputElement).value).toBe("50");
+    expect((wrapper.get('[data-test="affiliate-bronze-threshold"]').element as HTMLInputElement).value).toBe("3");
+    expect((wrapper.get('[data-test="affiliate-silver-threshold"]').element as HTMLInputElement).value).toBe("10");
+    expect((wrapper.get('[data-test="affiliate-gold-threshold"]').element as HTMLInputElement).value).toBe("30");
+    expect((wrapper.get('[data-test="affiliate-standard-rate"]').element as HTMLInputElement).value).toBe("8");
+    expect((wrapper.get('[data-test="affiliate-gold-rate"]').element as HTMLInputElement).value).toBe("15");
+
+    await wrapper.find("form").trigger("submit.prevent");
+    await flushPromises();
+
+    expect(updateSettings).toHaveBeenCalledWith(expect.objectContaining({
+      affiliate_qualification_amount: 50,
+      affiliate_bronze_invitees: 3,
+      affiliate_silver_invitees: 10,
+      affiliate_gold_invitees: 30,
+      affiliate_rebate_rate: 8,
+      affiliate_bronze_rate: 10,
+      affiliate_silver_rate: 12,
+      affiliate_gold_rate: 15,
+    }));
+  });
+
+  it.each([
+    ["qualification amount", "affiliate-qualification-amount", "0"],
+    ["non-increasing thresholds", "affiliate-silver-threshold", "3"],
+    ["invalid rate", "affiliate-gold-rate", "101"],
+  ])("blocks affiliate tier submission for %s", async (_label, field, value) => {
+    getSettings.mockResolvedValueOnce({
+      ...baseSettingsResponse,
+      affiliate_enabled: true,
+      affiliate_qualification_amount: 50,
+      affiliate_bronze_invitees: 3,
+      affiliate_silver_invitees: 10,
+      affiliate_gold_invitees: 30,
+      affiliate_rebate_rate: 8,
+      affiliate_bronze_rate: 10,
+      affiliate_silver_rate: 12,
+      affiliate_gold_rate: 15,
+    });
+    const wrapper = mountView();
+    await flushPromises();
+
+    await wrapper.get(`[data-test="${field}"]`).setValue(value);
+    await wrapper.find("form").trigger("submit.prevent");
+    await flushPromises();
+
+    expect(wrapper.find('[data-test="affiliate-tier-error"]').exists()).toBe(true);
+    expect(updateSettings).not.toHaveBeenCalled();
+  });
+
   it("renders previews for configured theme-specific site logos", async () => {
     const defaultLogo = "data:image/png;base64,ZGVmYXVsdC1sb2dv";
     const lightLogo = "data:image/png;base64,bGlnaHQtbG9nbw==";

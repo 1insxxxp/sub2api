@@ -382,6 +382,13 @@ export interface SystemSettings {
   // Default settings
   default_balance: number;
   affiliate_rebate_rate: number;
+  affiliate_qualification_amount: number;
+  affiliate_bronze_invitees: number;
+  affiliate_bronze_rate: number;
+  affiliate_silver_invitees: number;
+  affiliate_silver_rate: number;
+  affiliate_gold_invitees: number;
+  affiliate_gold_rate: number;
   affiliate_rebate_freeze_hours: number;
   affiliate_rebate_duration_days: number;
   affiliate_rebate_per_invitee_cap: number;
@@ -681,6 +688,13 @@ export interface UpdateSettingsRequest {
   login_agreement_documents?: LoginAgreementDocument[];
   default_balance?: number;
   affiliate_rebate_rate?: number;
+  affiliate_qualification_amount?: number;
+  affiliate_bronze_invitees?: number;
+  affiliate_bronze_rate?: number;
+  affiliate_silver_invitees?: number;
+  affiliate_silver_rate?: number;
+  affiliate_gold_invitees?: number;
+  affiliate_gold_rate?: number;
   affiliate_rebate_freeze_hours?: number;
   affiliate_rebate_duration_days?: number;
   affiliate_rebate_per_invitee_cap?: number;
