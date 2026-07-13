@@ -529,6 +529,7 @@ export default {
       },
       identity: {
         stageObjective: '当前阶段目标',
+        featuredMetric: '当前等级重点指标',
         qualifiedRatio: '合格邀请率',
         cumulativeRebate: '累计推广返利',
         highestAchievement: '最高等级成就'

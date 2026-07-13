@@ -2,6 +2,8 @@ import { flushPromises, mount } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import AffiliateView from '../AffiliateView.vue'
+import enDashboard from '@/i18n/locales/en/dashboard'
+import zhDashboard from '@/i18n/locales/zh/dashboard'
 import type { UserAffiliateDetail } from '@/types'
 
 const { getAffiliateDetail } = vi.hoisted(() => ({
@@ -52,10 +54,12 @@ vi.mock('vue-i18n', async (importOriginal) => {
           'affiliate.tiers.levels.gold': 'Core',
           'affiliate.tiers.requirement': '{count} qualified invitees',
           'affiliate.tiers.identity.stageObjective': 'Current objective',
+          'affiliate.tiers.identity.featuredMetric': 'Featured metric for current tier',
           'affiliate.tiers.objectives.origin': 'Complete your first qualified invite to activate your promotion path',
           'affiliate.tiers.objectives.pulse': '{count} more qualified invitees to reach Orbit',
           'affiliate.tiers.objectives.orbit': '{count} more qualified invitees to reach Core; current qualified ratio {ratio}, cumulative rebate {rebate}',
           'affiliate.tiers.objectives.core': 'Highest tier reached: {qualified} qualified invitees, {rebate} cumulative rebate, and a {rate} current rebate rate',
+          'affiliate.stats.invitedUsers': 'Invited users',
           'affiliate.invitees.columns.paymentProgress': 'Cumulative paid',
           'affiliate.invitees.qualified': 'Qualified',
           'affiliate.invitees.inProgress': 'In progress'
@@ -136,6 +140,11 @@ describe('AffiliateView promotion tiers', () => {
     getAffiliateDetail.mockReset()
   })
 
+  it('provides localized accessible text for featured metrics', () => {
+    expect(enDashboard.affiliate.tiers.identity.featuredMetric).toBe('Featured metric for current tier')
+    expect(zhDashboard.affiliate.tiers.identity.featuredMetric).toBe('当前等级重点指标')
+  })
+
   it('renders one integrated identity with the automatic level, progress, objectives, and all rules', async () => {
     const wrapper = await mountView(makeDetail())
 
@@ -171,14 +180,87 @@ describe('AffiliateView promotion tiers', () => {
   })
 
   it.each([
-    ['standard', 'origin', 'invited', 'Complete your first qualified invite'],
-    ['bronze', 'pulse', 'invited', 'more qualified invitees to reach Orbit'],
-    ['silver', 'orbit', 'history', 'current qualified ratio 100%'],
-    ['gold', 'core', 'rate', 'Highest tier reached']
-  ] as const)('uses the %s level\'s %s theme and features the %s stat', async (level, theme, featuredStat, objective) => {
+    {
+      level: 'standard',
+      theme: 'origin',
+      qualified: 1,
+      nextThreshold: 3,
+      remaining: 2,
+      featuredStat: 'acquisition',
+      acquisitionMetric: 'invited',
+      primaryLabel: 'Invited users',
+      primaryValue: '40',
+      secondaryLabel: 'Qualified invitees',
+      secondaryValue: '1',
+      objective: 'Complete your first qualified invite',
+      progressTarget: '1 / 3 qualified invitees'
+    },
+    {
+      level: 'bronze',
+      theme: 'pulse',
+      qualified: 7,
+      nextThreshold: 10,
+      remaining: 3,
+      featuredStat: 'acquisition',
+      acquisitionMetric: 'qualified',
+      primaryLabel: 'Qualified invitees',
+      primaryValue: '7',
+      secondaryLabel: 'Invited users',
+      secondaryValue: '40',
+      objective: '3 more qualified invitees to reach Orbit',
+      progressTarget: '7 / 10 qualified invitees'
+    },
+    {
+      level: 'silver',
+      theme: 'orbit',
+      qualified: 12,
+      nextThreshold: 30,
+      remaining: 18,
+      featuredStat: 'history',
+      acquisitionMetric: 'invited',
+      primaryLabel: 'Invited users',
+      primaryValue: '40',
+      secondaryLabel: 'Qualified invitees',
+      secondaryValue: '12',
+      objective: 'current qualified ratio 30%',
+      progressTarget: '12 / 30 qualified invitees'
+    },
+    {
+      level: 'gold',
+      theme: 'core',
+      qualified: 32,
+      nextThreshold: null,
+      remaining: 0,
+      featuredStat: 'rate',
+      acquisitionMetric: 'invited',
+      primaryLabel: 'Invited users',
+      primaryValue: '40',
+      secondaryLabel: 'Qualified invitees',
+      secondaryValue: '32',
+      objective: 'Highest tier reached',
+      progressTarget: null
+    }
+  ] as const)('renders coherent $level tier metrics and progress', async ({
+    level,
+    theme,
+    qualified,
+    nextThreshold,
+    remaining,
+    featuredStat,
+    acquisitionMetric,
+    primaryLabel,
+    primaryValue,
+    secondaryLabel,
+    secondaryValue,
+    objective,
+    progressTarget
+  }) => {
     const wrapper = await mountView(makeDetail({
       automatic_level: level,
-      next_level_invitee_threshold: level === 'gold' ? null : 30
+      aff_count: 40,
+      qualified_invitee_count: qualified,
+      next_level_invitee_threshold: nextThreshold,
+      remaining_qualified_invitees: remaining
     }))
 
     expect(wrapper.get('[data-testid="tier-summary"]').attributes('data-tier-theme')).toBe(theme)
@@ -186,12 +268,30 @@ describe('AffiliateView promotion tiers', () => {
     const stats = wrapper.findAll('[data-stat]')
     expect(stats.map((stat) => stat.attributes('data-stat'))).toEqual([
       'rate',
-      'invited',
+      'acquisition',
       'available',
       'history'
     ])
-    expect(wrapper.get(`[data-stat="${featuredStat}"]`).attributes('data-featured')).toBe('true')
+    const acquisition = wrapper.get('[data-stat="acquisition"]')
+    expect(acquisition.attributes('data-metric')).toBe(acquisitionMetric)
+    expect(acquisition.get('[data-acquisition="primary"]').text()).toContain(primaryLabel)
+    expect(acquisition.get('[data-acquisition="primary"]').text()).toContain(primaryValue)
+    expect(acquisition.get('[data-acquisition="secondary"]').text()).toContain(secondaryLabel)
+    expect(acquisition.get('[data-acquisition="secondary"]').text()).toContain(secondaryValue)
+
+    const featured = wrapper.get(`[data-stat="${featuredStat}"]`)
+    expect(featured.attributes('data-featured')).toBe('true')
+    expect(featured.get('.sr-only').text()).toBe('Featured metric for current tier')
     expect(stats.filter((stat) => stat.attributes('data-featured') === 'true')).toHaveLength(1)
+    expect(stats.filter((stat) => stat.find('.sr-only').exists())).toHaveLength(1)
+
+    const progressbar = wrapper.find('[role="progressbar"]')
+    if (progressTarget) {
+      expect(progressbar.exists()).toBe(true)
+      expect(progressbar.attributes('aria-label')).toBe(progressTarget)
+    } else {
+      expect(progressbar.exists()).toBe(false)
+    }
   })
 
   it('labels a custom rate while preserving automatic-level progress', async () => {

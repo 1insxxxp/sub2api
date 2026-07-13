@@ -524,6 +524,7 @@ export default {
       },
       identity: {
         stageObjective: 'Current objective',
+        featuredMetric: 'Featured metric for current tier',
         qualifiedRatio: 'Qualified invite ratio',
         cumulativeRebate: 'Cumulative affiliate rebate',
         highestAchievement: 'Highest-tier achievement'

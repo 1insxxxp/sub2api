@@ -11,10 +11,13 @@
         <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <div
             data-stat="rate"
-            :data-featured="featuredMetric === 'rate' ? 'true' : undefined"
+            :data-featured="featuredStat === 'rate' ? 'true' : undefined"
             class="card affiliate-stat p-5"
-            :class="{ 'affiliate-stat--featured': featuredMetric === 'rate' }"
+            :class="{ 'affiliate-stat--featured': featuredStat === 'rate' }"
           >
+            <span v-if="featuredStat === 'rate'" class="sr-only">
+              {{ t('affiliate.tiers.identity.featuredMetric') }}
+            </span>
             <p class="flex items-center gap-1.5 text-sm text-gray-500 dark:text-dark-400">
               <Icon name="dollar" size="sm" class="text-primary-500" />
               {{ t('affiliate.stats.rebateRate') }}
@@ -27,14 +30,33 @@
             </p>
           </div>
           <div
-            data-stat="invited"
-            :data-featured="featuredMetric === 'invited' ? 'true' : undefined"
+            data-stat="acquisition"
+            :data-metric="acquisitionMetric"
+            :data-featured="featuredStat === 'acquisition' ? 'true' : undefined"
             class="card affiliate-stat p-5"
-            :class="{ 'affiliate-stat--featured': featuredMetric === 'invited' }"
+            :class="{ 'affiliate-stat--featured': featuredStat === 'acquisition' }"
           >
-            <p class="text-sm text-gray-500 dark:text-dark-400">{{ t('affiliate.stats.invitedUsers') }}</p>
-            <p class="mt-2 text-2xl font-semibold text-gray-900 dark:text-white">
-              {{ formatCount(detail.aff_count) }}
+            <span v-if="featuredStat === 'acquisition'" class="sr-only">
+              {{ t('affiliate.tiers.identity.featuredMetric') }}
+            </span>
+            <div data-acquisition="primary">
+              <p class="text-sm text-gray-500 dark:text-dark-400">
+                {{ t(acquisitionMetric === 'qualified' ? 'affiliate.tiers.qualifiedCount' : 'affiliate.stats.invitedUsers') }}
+              </p>
+              <p class="mt-2 text-2xl font-semibold text-gray-900 dark:text-white">
+                {{ formatCount(acquisitionMetric === 'qualified' ? detail.qualified_invitee_count : detail.aff_count) }}
+              </p>
+            </div>
+            <p
+              data-acquisition="secondary"
+              class="mt-1 flex flex-wrap items-baseline gap-x-1.5 text-xs text-gray-400 dark:text-dark-500"
+            >
+              <span>
+                {{ t(acquisitionMetric === 'qualified' ? 'affiliate.stats.invitedUsers' : 'affiliate.tiers.qualifiedCount') }}
+              </span>
+              <strong class="font-medium text-gray-500 dark:text-dark-400">
+                {{ formatCount(acquisitionMetric === 'qualified' ? detail.aff_count : detail.qualified_invitee_count) }}
+              </strong>
             </p>
           </div>
           <div
@@ -48,10 +70,13 @@
           </div>
           <div
             data-stat="history"
-            :data-featured="featuredMetric === 'history' ? 'true' : undefined"
+            :data-featured="featuredStat === 'history' ? 'true' : undefined"
             class="card affiliate-stat p-5"
-            :class="{ 'affiliate-stat--featured': featuredMetric === 'history' }"
+            :class="{ 'affiliate-stat--featured': featuredStat === 'history' }"
           >
+            <span v-if="featuredStat === 'history'" class="sr-only">
+              {{ t('affiliate.tiers.identity.featuredMetric') }}
+            </span>
             <p class="text-sm text-gray-500 dark:text-dark-400">{{ t('affiliate.stats.totalQuota') }}</p>
             <p class="mt-2 text-2xl font-semibold text-gray-900 dark:text-white">
               {{ formatCurrency(detail.aff_history_quota) }}
@@ -251,8 +276,14 @@ const tierProgress = computed(() => {
 })
 
 const featuredMetric = computed(() => {
-  const metric = getAffiliateTierPresentation(detail.value?.automatic_level).featuredMetric
-  return metric === 'qualified' ? 'invited' : metric
+  return getAffiliateTierPresentation(detail.value?.automatic_level).featuredMetric
+})
+
+const acquisitionMetric = computed(() => featuredMetric.value === 'qualified' ? 'qualified' : 'invited')
+const featuredStat = computed(() => {
+  return featuredMetric.value === 'invited' || featuredMetric.value === 'qualified'
+    ? 'acquisition'
+    : featuredMetric.value
 })
 
 function formatCount(value: number): string {
