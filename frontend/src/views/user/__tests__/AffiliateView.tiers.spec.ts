@@ -183,7 +183,7 @@ describe('AffiliateView promotion tiers', () => {
     expect(wrapper.get('[data-testid="tier-summary"]').text()).toContain('Highest level reached')
   })
 
-  it('keeps a desktop table and uses a wrapping mobile invitee layout without fixed minimum width', async () => {
+  it('declares separate desktop and wrapping mobile invitee layouts without fixed minimum width', async () => {
     const wrapper = await mountView(makeDetail())
 
     expect(wrapper.get('[data-testid="invitees-desktop"]').classes()).toContain('hidden')
@@ -196,4 +196,9 @@ describe('AffiliateView promotion tiers', () => {
     expect(wrapper.html()).not.toMatch(/min-w-\[/)
     expect(mobile.findAll('.break-all').length).toBeGreaterThan(0)
   })
+
+  // Vitest currently runs this file in jsdom, where layout metrics are always zero.
+  // Keep these requirements pending until Task 8 provides the project's browser runner.
+  it.todo('at a 320px browser viewport keeps the page and promotion content scrollWidth within clientWidth')
+  it.todo('at a 390px browser viewport keeps the page and promotion content scrollWidth within clientWidth')
 })
