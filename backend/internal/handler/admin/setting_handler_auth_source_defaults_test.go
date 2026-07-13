@@ -7,6 +7,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"testing"
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
@@ -66,6 +67,37 @@ func (s *settingHandlerRepoStub) SetMultiple(ctx context.Context, settings map[s
 		s.values[key] = value
 	}
 	return nil
+}
+
+func (s *settingHandlerRepoStub) SetMultipleWithAffiliateQualificationReconcile(
+	ctx context.Context,
+	settings map[string]string,
+	defaultQualificationAmount float64,
+	reconcileUpdates map[string]string,
+) error {
+	oldAmount := defaultQualificationAmount
+	if value, ok := s.values[service.SettingKeyAffiliateQualificationAmount]; ok {
+		parsed, err := strconv.ParseFloat(value, 64)
+		if err != nil {
+			return err
+		}
+		oldAmount = parsed
+	}
+	newAmount, err := strconv.ParseFloat(settings[service.SettingKeyAffiliateQualificationAmount], 64)
+	if err != nil {
+		return err
+	}
+	toWrite := settings
+	if oldAmount != newAmount {
+		toWrite = make(map[string]string, len(settings)+len(reconcileUpdates))
+		for key, value := range settings {
+			toWrite[key] = value
+		}
+		for key, value := range reconcileUpdates {
+			toWrite[key] = value
+		}
+	}
+	return s.SetMultiple(ctx, toWrite)
 }
 
 func (s *settingHandlerRepoStub) GetAll(ctx context.Context) (map[string]string, error) {
