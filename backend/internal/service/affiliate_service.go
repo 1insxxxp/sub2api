@@ -185,7 +185,6 @@ type AffiliateQualificationRepository interface {
 type AffiliateQualificationReadReconciler interface {
 	ReconcileInviterInvitees(ctx context.Context, inviterID int64, threshold float64) error
 	ReconcileInvitees(ctx context.Context, inviteeUserIDs []int64, threshold float64) error
-	ReconcileInvitersInvitees(ctx context.Context, inviterIDs []int64, threshold float64) error
 }
 
 type AffiliateQualificationDirtyEvent struct {
@@ -347,8 +346,6 @@ func (s *AffiliateService) EnsureUserAffiliate(ctx context.Context, userID int64
 }
 
 func (s *AffiliateService) GetAffiliateDetail(ctx context.Context, userID int64) (*AffiliateDetail, error) {
-	s.bestEffortRecoverPendingQualifications(ctx)
-
 	// Lazy thaw: move any matured frozen quota to available before reading.
 	if s != nil && s.repo != nil {
 		// best-effort: thaw failure is non-fatal
@@ -362,12 +359,6 @@ func (s *AffiliateService) GetAffiliateDetail(ctx context.Context, userID int64)
 	config, err := s.affiliateTierConfigStrict(ctx)
 	if err != nil {
 		return nil, err
-	}
-	if s.qualificationReadRepo == nil {
-		return nil, infraerrors.ServiceUnavailable("SERVICE_UNAVAILABLE", "affiliate qualification service unavailable")
-	}
-	if err := s.qualificationReadRepo.ReconcileInviterInvitees(ctx, userID, config.QualificationAmount); err != nil {
-		return nil, fmt.Errorf("reconcile affiliate invitees for current threshold: %w", err)
 	}
 	snapshot, err := s.resolveAffiliateTierProgressWithConfig(ctx, userID, config)
 	if err != nil {
@@ -1028,7 +1019,6 @@ func (s *AffiliateService) AdminListInviteRecords(ctx context.Context, filter Af
 	if s == nil || s.repo == nil {
 		return nil, 0, infraerrors.ServiceUnavailable("SERVICE_UNAVAILABLE", "affiliate service unavailable")
 	}
-	s.bestEffortRecoverPendingQualifications(ctx)
 	config, err := s.affiliateTierConfigStrict(ctx)
 	if err != nil {
 		return nil, 0, err
@@ -1041,32 +1031,6 @@ func (s *AffiliateService) AdminListInviteRecords(ctx context.Context, filter Af
 	if err != nil {
 		return nil, 0, err
 	}
-	if len(items) == 0 {
-		return items, total, nil
-	}
-	if s.qualificationReadRepo == nil {
-		return nil, 0, infraerrors.ServiceUnavailable("SERVICE_UNAVAILABLE", "affiliate qualification service unavailable")
-	}
-	reconciled := make(map[int64]struct{})
-	for attempts := 0; ; attempts++ {
-		inviterIDs := unreconciledAffiliateInviterIDs(items, reconciled)
-		if len(inviterIDs) == 0 {
-			break
-		}
-		if attempts >= 3 {
-			return nil, 0, fmt.Errorf("affiliate invite records changed repeatedly during qualification reconciliation")
-		}
-		if err := s.qualificationReadRepo.ReconcileInvitersInvitees(ctx, inviterIDs, config.QualificationAmount); err != nil {
-			return nil, 0, fmt.Errorf("reconcile affiliate invite records for current threshold: %w", err)
-		}
-		for _, inviterID := range inviterIDs {
-			reconciled[inviterID] = struct{}{}
-		}
-		items, total, err = s.tierReadRepo.ListAffiliateInviteRecordsWithQualification(ctx, normalizedFilter, config.QualificationAmount)
-		if err != nil {
-			return nil, 0, err
-		}
-	}
 	for i := range items {
 		items[i].Qualified = items[i].QualifyingPaymentAmount >= config.QualificationAmount
 		if items[i].Qualified != (items[i].QualifiedAt != nil) {
@@ -1078,25 +1042,6 @@ func (s *AffiliateService) AdminListInviteRecords(ctx context.Context, filter Af
 		items[i].EffectiveRebateRatePercent = effectiveAffiliateRebateRate(&AffiliateSummary{AffRebateRatePercent: items[i].CustomRebateRatePercent}, automaticRate)
 	}
 	return items, total, nil
-}
-
-func unreconciledAffiliateInviterIDs(items []AffiliateInviteRecord, reconciled map[int64]struct{}) []int64 {
-	ids := make([]int64, 0, len(items))
-	seen := make(map[int64]struct{}, len(items))
-	for _, item := range items {
-		if item.InviterID <= 0 {
-			continue
-		}
-		if _, ok := reconciled[item.InviterID]; ok {
-			continue
-		}
-		if _, ok := seen[item.InviterID]; ok {
-			continue
-		}
-		seen[item.InviterID] = struct{}{}
-		ids = append(ids, item.InviterID)
-	}
-	return ids
 }
 
 func (s *AffiliateService) AdminListRebateRecords(ctx context.Context, filter AffiliateRecordFilter) ([]AffiliateRebateRecord, int64, error) {
@@ -1120,19 +1065,12 @@ func (s *AffiliateService) AdminGetUserOverview(ctx context.Context, userID int6
 	if s == nil || s.repo == nil {
 		return nil, infraerrors.ServiceUnavailable("SERVICE_UNAVAILABLE", "affiliate service unavailable")
 	}
-	s.bestEffortRecoverPendingQualifications(ctx)
 	config, err := s.affiliateTierConfigStrict(ctx)
 	if err != nil {
 		return nil, err
 	}
 	if s.tierReadRepo == nil {
 		return nil, infraerrors.ServiceUnavailable("SERVICE_UNAVAILABLE", "affiliate tier read service unavailable")
-	}
-	if s.qualificationReadRepo == nil {
-		return nil, infraerrors.ServiceUnavailable("SERVICE_UNAVAILABLE", "affiliate qualification service unavailable")
-	}
-	if err := s.qualificationReadRepo.ReconcileInviterInvitees(ctx, userID, config.QualificationAmount); err != nil {
-		return nil, fmt.Errorf("reconcile affiliate invitees for current threshold: %w", err)
 	}
 	overview, err := s.tierReadRepo.GetAffiliateUserOverviewWithQualification(ctx, userID, config.QualificationAmount)
 	if err != nil {

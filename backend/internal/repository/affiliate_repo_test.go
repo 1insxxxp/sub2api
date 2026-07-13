@@ -26,12 +26,12 @@ func TestAffiliateReadQueriesProjectDynamicQualificationFields(t *testing.T) {
 	inviteesQuery := strings.Join(strings.Fields(affiliateInviteesSQL), " ")
 	require.Contains(t, inviteesQuery, "ua.qualifying_payment_amount::double precision")
 	require.Contains(t, inviteesQuery, "(ua.qualifying_payment_amount >= $3) AS qualified")
-	require.Contains(t, inviteesQuery, "ua.qualified_at")
+	require.Contains(t, inviteesQuery, "CASE WHEN ua.qualifying_payment_amount >= $3 THEN COALESCE(ua.qualified_at, ua.created_at) ELSE NULL END AS qualified_at")
 
 	recordsQuery := strings.Join(strings.Fields(affiliateInviteRecordsSQL), " ")
 	require.Contains(t, recordsQuery, "ua.qualifying_payment_amount::double precision")
 	require.Contains(t, recordsQuery, "(ua.qualifying_payment_amount >= %[1]s) AS qualified")
-	require.Contains(t, recordsQuery, "ua.qualified_at")
+	require.Contains(t, recordsQuery, "CASE WHEN ua.qualifying_payment_amount >= %[1]s THEN COALESCE(ua.qualified_at, ua.created_at) ELSE NULL END AS qualified_at")
 
 	overviewQuery := strings.Join(strings.Fields(affiliateUserOverviewSQL), " ")
 	require.Contains(t, overviewQuery, "qualifying_payment_amount >= $2")
@@ -51,9 +51,24 @@ func TestAffiliateInviteRecordsSQLProjectsInviterTierInputs(t *testing.T) {
 	query := strings.Join(strings.Fields(affiliateInviteRecordsSQL), " ")
 	require.Contains(t, query, "page_inviter_ids AS")
 	require.Contains(t, query, "JOIN page_inviter_ids")
+	require.Contains(t, query, "COUNT(*) OVER() AS total_count")
 	require.Contains(t, query, "invited_count")
 	require.Contains(t, query, "qualified_invitee_count")
 	require.Contains(t, query, "aff_rebate_rate_percent")
+}
+
+func TestAffiliateInviteRecordsUseOneSnapshotForCountAndPage(t *testing.T) {
+	source, err := os.ReadFile("affiliate_repo.go")
+	require.NoError(t, err)
+	method := string(source)
+	start := strings.Index(method, "func (r *affiliateRepository) ListAffiliateInviteRecordsWithQualification")
+	require.NotEqual(t, -1, start)
+	end := strings.Index(method[start:], "func (r *affiliateRepository) ListAffiliateRebateRecords")
+	require.NotEqual(t, -1, end)
+	method = method[start : start+end]
+
+	require.NotContains(t, method, "queryAffiliateRecordCount")
+	require.Equal(t, 1, strings.Count(method, "QueryContext"))
 }
 
 func TestAffiliateInviteRecordOrderingUsesUniqueTieBreaker(t *testing.T) {
@@ -62,13 +77,6 @@ func TestAffiliateInviteRecordOrderingUsesUniqueTieBreaker(t *testing.T) {
 	}, "ua.created_at", "ua.user_id")
 
 	require.Equal(t, "ORDER BY ua.created_at DESC NULLS LAST, ua.user_id DESC", orderBy)
-}
-
-func TestAffiliateInvitersBatchReconcileTargetsAllTheirInvitees(t *testing.T) {
-	query := strings.Join(strings.Fields(affiliateInvitersQualificationReconcileSQL), " ")
-	require.Contains(t, query, "unnest($1::bigint[])")
-	require.Contains(t, query, "target_inviters ON target_inviters.inviter_id")
-	require.Contains(t, query, "ua.inviter_id")
 }
 
 func TestAffiliateRecordQueriesUseLedgerAuditFields(t *testing.T) {

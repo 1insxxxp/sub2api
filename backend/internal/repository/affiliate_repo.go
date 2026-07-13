@@ -159,13 +159,6 @@ var (
 		affiliateQualificationBatchReconcileTemplate,
 		"SELECT DISTINCT unnest($1::bigint[]) AS user_id",
 	)
-	affiliateInvitersQualificationReconcileSQL = fmt.Sprintf(
-		affiliateQualificationBatchReconcileTemplate,
-		`SELECT ua.user_id
-         FROM user_affiliates ua
-         JOIN (SELECT DISTINCT unnest($1::bigint[]) AS inviter_id) target_inviters
-           ON target_inviters.inviter_id = ua.inviter_id`,
-	)
 )
 
 const affiliateQualificationCountSQL = `
@@ -218,7 +211,10 @@ SELECT ua.user_id,
        COALESCE(SUM(ual.amount), 0)::double precision AS total_rebate,
        ua.qualifying_payment_amount::double precision,
        (ua.qualifying_payment_amount >= $3) AS qualified,
-       ua.qualified_at
+       CASE
+           WHEN ua.qualifying_payment_amount >= $3 THEN COALESCE(ua.qualified_at, ua.created_at)
+           ELSE NULL
+       END AS qualified_at
 FROM user_affiliates ua
 LEFT JOIN users u ON u.id = ua.user_id
 LEFT JOIN user_affiliate_ledger ual
@@ -242,9 +238,13 @@ WITH page_records AS MATERIALIZED (
            COALESCE(SUM(ual.amount), 0)::double precision AS total_rebate,
            ua.qualifying_payment_amount::double precision AS qualifying_payment_amount,
            (ua.qualifying_payment_amount >= %[1]s) AS qualified,
-           ua.qualified_at,
+           CASE
+               WHEN ua.qualifying_payment_amount >= %[1]s THEN COALESCE(ua.qualified_at, ua.created_at)
+               ELSE NULL
+           END AS qualified_at,
            inviter_aff.aff_rebate_rate_percent,
-           ua.created_at
+           ua.created_at,
+           COUNT(*) OVER() AS total_count
     FROM user_affiliates ua
     JOIN users invitee ON invitee.id = ua.user_id
     JOIN users inviter ON inviter.id = ua.inviter_id
@@ -287,7 +287,8 @@ SELECT page_records.inviter_id,
        inviter_progress.invited_count,
        inviter_progress.qualified_invitee_count,
        page_records.aff_rebate_rate_percent,
-       page_records.created_at
+       page_records.created_at,
+       page_records.total_count
 FROM page_records
 JOIN inviter_progress ON inviter_progress.user_id = page_records.inviter_id
 %[6]s`
@@ -942,17 +943,6 @@ func (r *affiliateRepository) ReconcileInvitees(ctx context.Context, inviteeUser
 	return r.executeAffiliateQualificationBatch(ctx, affiliateInviteesQualificationReconcileSQL, pq.Array(cleaned), threshold)
 }
 
-func (r *affiliateRepository) ReconcileInvitersInvitees(ctx context.Context, inviterIDs []int64, threshold float64) error {
-	if err := validateAffiliateQualificationThreshold(threshold); err != nil {
-		return err
-	}
-	cleaned := uniquePositiveInt64s(inviterIDs)
-	if len(cleaned) == 0 {
-		return nil
-	}
-	return r.executeAffiliateQualificationBatch(ctx, affiliateInvitersQualificationReconcileSQL, pq.Array(cleaned), threshold)
-}
-
 func (r *affiliateRepository) executeAffiliateQualificationBatch(ctx context.Context, query string, target any, threshold float64) error {
 	client := clientFromContext(ctx, r.client)
 	rows, err := client.QueryContext(ctx, query, target, threshold)
@@ -1061,17 +1051,6 @@ func (r *affiliateRepository) ListAffiliateInviteRecordsWithQualification(ctx co
 		"ua.inviter_id::text", "ua.user_id::text", "inviter_aff.aff_code",
 	})
 
-	total, err := queryAffiliateRecordCount(ctx, client, `
-SELECT COUNT(*)
-FROM user_affiliates ua
-JOIN users invitee ON invitee.id = ua.user_id
-JOIN users inviter ON inviter.id = ua.inviter_id
-JOIN user_affiliates inviter_aff ON inviter_aff.user_id = ua.inviter_id
-`+where, args...)
-	if err != nil {
-		return nil, 0, err
-	}
-
 	orderBy := buildAffiliateRecordOrderBy(filter, map[string]string{
 		"inviter":      "inviter.email",
 		"invitee":      "invitee.email",
@@ -1105,6 +1084,7 @@ JOIN user_affiliates inviter_aff ON inviter_aff.user_id = ua.inviter_id
 	defer func() { _ = rows.Close() }()
 
 	items := make([]service.AffiliateInviteRecord, 0)
+	var total int64
 	for rows.Next() {
 		var item service.AffiliateInviteRecord
 		if err := rows.Scan(
@@ -1123,6 +1103,7 @@ JOIN user_affiliates inviter_aff ON inviter_aff.user_id = ua.inviter_id
 			&item.QualifiedInviteeCount,
 			&item.CustomRebateRatePercent,
 			&item.CreatedAt,
+			&total,
 		); err != nil {
 			return nil, 0, err
 		}
