@@ -36,6 +36,7 @@ const {
   adminSettingsFetch,
   showError,
   showSuccess,
+  listAffiliateUsers,
 } = vi.hoisted(() => ({
   getSettings: vi.fn(),
   updateSettings: vi.fn(),
@@ -61,6 +62,7 @@ const {
   adminSettingsFetch: vi.fn(),
   showError: vi.fn(),
   showSuccess: vi.fn(),
+  listAffiliateUsers: vi.fn(),
 }));
 
 const localeRef = vi.hoisted(() => ({ value: "zh-CN" }));
@@ -107,6 +109,11 @@ vi.mock("@/stores", () => ({
     fetchPublicSettings,
   }),
 }));
+
+vi.mock("@/api/admin/affiliates", () => {
+  const affiliatesAPI = { listUsers: listAffiliateUsers };
+  return { affiliatesAPI, default: affiliatesAPI };
+});
 
 vi.mock("@/stores/adminSettings", () => ({
   useAdminSettingsStore: () => ({
@@ -185,6 +192,8 @@ vi.mock("vue-i18n", async () => {
     "admin.settings.openaiExperimentalScheduler.weightsTitle": "调度权值覆盖",
     "admin.settings.openaiExperimentalScheduler.weightsDescription": "留空时使用配置/环境变量值；配置未设置时使用内置默认值。页面非空设置优先。",
     "admin.settings.openaiExperimentalScheduler.defaultPlaceholder": "配置/默认：{value}",
+    "admin.settings.features.affiliate.tiers.rateOrderError":
+      "返利比例必须按基础、铜牌、银牌、金牌顺序递增。",
     "admin.settings.openaiExperimentalScheduler.topKLabel": "TopK",
     "admin.settings.openaiExperimentalScheduler.priorityWeight": "优先级",
     "admin.settings.openaiExperimentalScheduler.loadWeight": "负载",
@@ -633,6 +642,7 @@ describe("admin SettingsView payment visible method controls", () => {
     getStreamTimeoutSettings.mockReset();
     getRectifierSettings.mockReset();
     getBetaPolicySettings.mockReset();
+    getImageStudioSettings.mockReset();
     getGroups.mockReset();
     listProxies.mockReset();
     getProviders.mockReset();
@@ -643,6 +653,7 @@ describe("admin SettingsView payment visible method controls", () => {
     adminSettingsFetch.mockReset();
     showError.mockReset();
     showSuccess.mockReset();
+    listAffiliateUsers.mockReset();
     localeRef.value = "zh-CN";
 
     getSettings.mockResolvedValue({ ...baseSettingsResponse });
@@ -688,6 +699,7 @@ describe("admin SettingsView payment visible method controls", () => {
     getBetaPolicySettings.mockResolvedValue({
       rules: [],
     });
+    getImageStudioSettings.mockResolvedValue({});
     getGroups.mockResolvedValue([]);
     listProxies.mockResolvedValue({
       items: [],
@@ -697,6 +709,7 @@ describe("admin SettingsView payment visible method controls", () => {
     });
     fetchPublicSettings.mockResolvedValue(undefined);
     adminSettingsFetch.mockResolvedValue(undefined);
+    listAffiliateUsers.mockResolvedValue({ items: [], total: 0 });
   });
 
   it("does not render legacy visible payment method controls", async () => {
@@ -870,6 +883,59 @@ describe("admin SettingsView payment visible method controls", () => {
     await flushPromises();
 
     expect(wrapper.find('[data-test="affiliate-tier-error"]').exists()).toBe(true);
+    expect(updateSettings).not.toHaveBeenCalled();
+  });
+
+  it("blocks non-monotonic affiliate rebate rates with a localized inline error", async () => {
+    getSettings.mockResolvedValueOnce({
+      ...baseSettingsResponse,
+      affiliate_enabled: true,
+      affiliate_qualification_amount: 50,
+      affiliate_bronze_invitees: 3,
+      affiliate_silver_invitees: 10,
+      affiliate_gold_invitees: 30,
+      affiliate_rebate_rate: 8,
+      affiliate_bronze_rate: 10,
+      affiliate_silver_rate: 9,
+      affiliate_gold_rate: 15,
+    });
+    const wrapper = mountView();
+    await flushPromises();
+
+    await wrapper.find("form").trigger("submit.prevent");
+    await flushPromises();
+
+    expect(wrapper.get('[data-test="affiliate-tier-error"]').text()).toBe(
+      "返利比例必须按基础、铜牌、银牌、金牌顺序递增。",
+    );
+    expect(updateSettings).not.toHaveBeenCalled();
+  });
+
+  it("still validates cleared affiliate tier fields after affiliate is disabled", async () => {
+    getSettings.mockResolvedValueOnce({
+      ...baseSettingsResponse,
+      affiliate_enabled: true,
+      affiliate_qualification_amount: 50,
+      affiliate_bronze_invitees: 3,
+      affiliate_silver_invitees: 10,
+      affiliate_gold_invitees: 30,
+      affiliate_rebate_rate: 8,
+      affiliate_bronze_rate: 10,
+      affiliate_silver_rate: 12,
+      affiliate_gold_rate: 15,
+    });
+    const wrapper = mountView();
+    await flushPromises();
+
+    await wrapper.get('[data-test="affiliate-silver-rate"]').setValue("");
+    const affiliateCard = wrapper
+      .findAll(".card")
+      .find((node) => node.text().includes("admin.settings.features.affiliate.title"));
+    expect(affiliateCard).toBeDefined();
+    await affiliateCard!.get('input[type="checkbox"]').setValue(false);
+    await wrapper.find("form").trigger("submit.prevent");
+    await flushPromises();
+
     expect(updateSettings).not.toHaveBeenCalled();
   });
 

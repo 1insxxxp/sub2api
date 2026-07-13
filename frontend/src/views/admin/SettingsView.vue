@@ -8267,7 +8267,7 @@ const form = reactive<SettingsForm>({
   login_agreement_documents: defaultLoginAgreementDocuments(),
   default_balance: 0,
   default_platform_quotas: normalizePlatformQuotasMap() as DefaultPlatformQuotasMap,
-  affiliate_rebate_rate: 20,
+  affiliate_rebate_rate: 8,
   affiliate_qualification_amount: 50,
   affiliate_bronze_invitees: 3,
   affiliate_bronze_rate: 10,
@@ -9519,13 +9519,19 @@ function validateAffiliateTierSettings(): boolean {
     affiliateTierError.value = t("admin.settings.features.affiliate.tiers.rateError");
     return false;
   }
+  if (!(rates[0] <= rates[1] && rates[1] <= rates[2] && rates[2] <= rates[3])) {
+    affiliateTierError.value = t(
+      "admin.settings.features.affiliate.tiers.rateOrderError",
+    );
+    return false;
+  }
   return true;
 }
 
 async function saveSettings() {
   saving.value = true;
   try {
-    if (form.affiliate_enabled && !validateAffiliateTierSettings()) {
+    if (!validateAffiliateTierSettings()) {
       return;
     }
     const normalizedTableDefaultPageSize = Math.floor(
