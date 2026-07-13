@@ -20,7 +20,12 @@ vi.mock('@/api/admin/affiliates', () => {
 vi.mock('@/stores/app', () => ({ useAppStore: () => ({ showError: vi.fn() }) }))
 vi.mock('vue-i18n', async () => {
   const actual = await vi.importActual<typeof import('vue-i18n')>('vue-i18n')
-  return { ...actual, useI18n: () => ({ t: (key: string) => key }) }
+  return {
+    ...actual,
+    useI18n: () => ({
+      t: (key: string) => key === 'admin.affiliates.tiers.silver' ? 'Orbit' : key
+    })
+  }
 })
 
 vi.mock('@/utils/apiError', () => ({ extractI18nErrorMessage: () => 'error' }))
@@ -99,7 +104,7 @@ describe('AdminAffiliateRecordsTable promotion reporting', () => {
   it('shows tier, qualification, custom override, and effective rate on invite records', async () => {
     const wrapper = mountTable()
     await flushPromises()
-    expect(wrapper.text()).toContain('admin.affiliates.tiers.silver')
+    expect(wrapper.text()).toContain('Orbit')
     expect(wrapper.text()).toContain('admin.affiliates.records.qualified')
     expect(wrapper.text()).toContain('18%')
     expect(wrapper.text()).toContain('admin.affiliates.records.customOverride')
@@ -112,7 +117,7 @@ describe('AdminAffiliateRecordsTable promotion reporting', () => {
     const tierSummary = wrapper.get('[data-test="mobile-inviter-tier"]')
     expect(tierSummary.classes()).toContain('md:hidden')
     expect(tierSummary.text()).toContain('admin.affiliates.records.automaticTier')
-    expect(tierSummary.text()).toContain('admin.affiliates.tiers.silver')
+    expect(tierSummary.text()).toContain('Orbit')
 
     const qualificationSummary = wrapper.get('[data-test="mobile-invitee-qualification"]')
     expect(qualificationSummary.classes()).toContain('md:hidden')

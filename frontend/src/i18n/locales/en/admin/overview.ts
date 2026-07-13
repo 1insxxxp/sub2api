@@ -378,10 +378,10 @@ export default {
         loadFailed: 'Failed to load affiliate records'
       },
       tiers: {
-        standard: 'Standard',
-        bronze: 'Bronze',
-        silver: 'Silver',
-        gold: 'Gold'
+        standard: 'Origin',
+        bronze: 'Pulse',
+        silver: 'Orbit',
+        gold: 'Core'
       },
       records: {
         search: 'Search',

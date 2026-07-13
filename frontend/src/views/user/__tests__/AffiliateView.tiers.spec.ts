@@ -45,10 +45,10 @@ vi.mock('vue-i18n', async (importOriginal) => {
           'affiliate.tiers.remaining': '{count} more to {level}',
           'affiliate.tiers.highestLevel': 'Highest level reached',
           'affiliate.tiers.rulesTitle': 'Promotion levels',
-          'affiliate.tiers.levels.standard': 'Standard',
-          'affiliate.tiers.levels.bronze': 'Bronze',
-          'affiliate.tiers.levels.silver': 'Silver',
-          'affiliate.tiers.levels.gold': 'Gold',
+          'affiliate.tiers.levels.standard': 'Origin',
+          'affiliate.tiers.levels.bronze': 'Pulse',
+          'affiliate.tiers.levels.silver': 'Orbit',
+          'affiliate.tiers.levels.gold': 'Core',
           'affiliate.tiers.requirement': '{count} qualified invitees',
           'affiliate.invitees.columns.paymentProgress': 'Cumulative paid',
           'affiliate.invitees.qualified': 'Qualified',
@@ -134,34 +134,34 @@ describe('AffiliateView promotion tiers', () => {
     const wrapper = await mountView(makeDetail())
 
     const summary = wrapper.get('[data-testid="tier-summary"]')
-    expect(summary.text()).toContain('Silver')
+    expect(summary.text()).toContain('Orbit')
     expect(summary.text()).toContain('12%')
     expect(summary.text()).toContain('12')
     expect(summary.text()).toContain('12 / 30 qualified invitees')
-    expect(summary.text()).toContain('18 more to Gold')
+    expect(summary.text()).toContain('18 more to Core')
 
     const rules = wrapper.findAll('[data-testid="tier-rule"]')
     expect(rules).toHaveLength(4)
     expect(rules.map((rule) => rule.text())).toEqual(expect.arrayContaining([
-      expect.stringContaining('Standard'),
-      expect.stringContaining('Bronze'),
-      expect.stringContaining('Silver'),
-      expect.stringContaining('Gold')
+      expect.stringContaining('Origin'),
+      expect.stringContaining('Pulse'),
+      expect.stringContaining('Orbit'),
+      expect.stringContaining('Core')
     ]))
 
     const currentBadge = wrapper.get('[data-testid="current-tier-badge"]')
-    expect(currentBadge.attributes('alt')).toBe('Silver')
+    expect(currentBadge.attributes('alt')).toBe('Orbit')
     expect(currentBadge.classes()).toContain('tier-badge-pulse')
 
     const ruleBadges = wrapper.findAll('[data-testid="tier-rule-badge"]')
     expect(ruleBadges).toHaveLength(4)
     expect(ruleBadges.map((badge) => badge.attributes('alt'))).toEqual([
-      'Standard',
-      'Bronze',
-      'Silver',
-      'Gold'
+      'Origin',
+      'Pulse',
+      'Orbit',
+      'Core'
     ])
-    expect(wrapper.get('[data-testid="tier-rule"][data-current="true"]').text()).toContain('Silver')
+    expect(wrapper.get('[data-testid="tier-rule"][data-current="true"]').text()).toContain('Orbit')
   })
 
   it('labels a custom rate while preserving automatic-level progress', async () => {
@@ -177,14 +177,14 @@ describe('AffiliateView promotion tiers', () => {
     }))
 
     const summary = wrapper.get('[data-testid="tier-summary"]')
-    expect(summary.text()).toContain('Bronze')
+    expect(summary.text()).toContain('Pulse')
     expect(summary.text()).toContain('13.5%')
     expect(summary.text()).toContain('Custom rate')
     expect(summary.text()).toContain('7 / 10 qualified invitees')
-    expect(summary.text()).toContain('3 more to Silver')
+    expect(summary.text()).toContain('3 more to Orbit')
   })
 
-  it('shows Gold as the completed highest level', async () => {
+  it('shows Core as the completed highest level', async () => {
     const wrapper = await mountView(makeDetail({
       automatic_level: 'gold',
       automatic_rebate_rate_percent: 15,
@@ -196,7 +196,7 @@ describe('AffiliateView promotion tiers', () => {
 
     expect(wrapper.get('[data-testid="tier-summary"]').text()).toContain('Highest level reached')
     expect(wrapper.get('[data-testid="current-tier-badge"]').classes()).toContain('tier-badge-gold')
-    expect(wrapper.get('[data-testid="tier-rule"][data-current="true"]').text()).toContain('Gold')
+    expect(wrapper.get('[data-testid="tier-rule"][data-current="true"]').text()).toContain('Core')
   })
 
   it('declares separate desktop and wrapping mobile invitee layouts without fixed minimum width', async () => {

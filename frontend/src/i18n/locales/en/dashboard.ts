@@ -517,10 +517,22 @@ export default {
       rulesDescription: 'An invitee qualifies after {amount} in cumulative paid purchases. Levels are retained permanently once reached. A custom rebate rate takes precedence while automatic level progress continues.',
       requirement: '{count} qualified invitees',
       levels: {
-        standard: 'Standard',
-        bronze: 'Bronze',
-        silver: 'Silver',
-        gold: 'Gold'
+        standard: 'Origin',
+        bronze: 'Pulse',
+        silver: 'Orbit',
+        gold: 'Core'
+      },
+      identity: {
+        stageObjective: 'Current objective',
+        qualifiedRatio: 'Qualified invite ratio',
+        cumulativeRebate: 'Cumulative affiliate rebate',
+        highestAchievement: 'Highest-tier achievement'
+      },
+      objectives: {
+        origin: 'Complete your first qualified invite to activate your promotion path',
+        pulse: '{count} more qualified invitees to reach Orbit',
+        orbit: '{count} more qualified invitees to reach Core; current qualified ratio {ratio}, cumulative rebate {rebate}',
+        core: 'Highest tier reached: {qualified} qualified invitees, {rebate} cumulative rebate, and a {rate} current rebate rate'
       }
     },
     stats: {

@@ -378,10 +378,10 @@ export default {
         loadFailed: '加载邀请返利记录失败'
       },
       tiers: {
-        standard: '普通',
-        bronze: '青铜',
-        silver: '白银',
-        gold: '黄金'
+        standard: '原点级',
+        bronze: '脉冲级',
+        silver: '星环级',
+        gold: '极核级'
       },
       records: {
         search: '搜索',

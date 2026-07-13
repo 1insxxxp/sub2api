@@ -522,10 +522,22 @@ export default {
       rulesDescription: '受邀用户累计实付达到 {amount} 即计为合格邀请；等级累计达标后永久保留。专属返利比例优先生效，但自动等级仍会继续晋升。',
       requirement: '{count} 位合格邀请',
       levels: {
-        standard: '普通',
-        bronze: '青铜',
-        silver: '白银',
-        gold: '黄金'
+        standard: '原点级',
+        bronze: '脉冲级',
+        silver: '星环级',
+        gold: '极核级'
+      },
+      identity: {
+        stageObjective: '当前阶段目标',
+        qualifiedRatio: '合格邀请率',
+        cumulativeRebate: '累计推广返利',
+        highestAchievement: '最高等级成就'
+      },
+      objectives: {
+        origin: '完成首位合格邀请，激活推广成长路径',
+        pulse: '再有 {count} 位合格邀请即可进入星环级',
+        orbit: '再有 {count} 位合格邀请即可进入极核级；当前合格率 {ratio}，累计返利 {rebate}',
+        core: '已达最高等级：{qualified} 位合格邀请，累计返利 {rebate}，当前返利比例 {rate}'
       }
     },
     stats: {
