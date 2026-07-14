@@ -21,6 +21,10 @@ vi.mock('vue-i18n', async (importOriginal) => {
           'affiliate.tiers.rulesTitle': 'Promotion level rules',
           'affiliate.tiers.rulesDescription': 'Qualifies after {amount}.',
           'affiliate.tiers.requirement': '{count} qualified invitees',
+          'affiliate.tiers.ruleStatus.unlocked': 'Unlocked',
+          'affiliate.tiers.ruleStatus.current': 'Current tier',
+          'affiliate.tiers.ruleStatus.locked': 'Locked',
+          'affiliate.tiers.ruleStatus.remaining': '{count} more qualified invitees',
           'affiliate.tiers.levels.standard': 'Origin',
           'affiliate.tiers.levels.bronze': 'Pulse',
           'affiliate.tiers.levels.silver': 'Orbit',
@@ -155,6 +159,30 @@ describe('AffiliateTierIdentity', () => {
     expect(wrapper.text()).toContain('18 more qualified invitees to reach Core')
     expect(wrapper.text()).toContain('current qualified ratio 75%')
     expect(wrapper.text()).toContain('cumulative rebate $234.50')
+  })
+
+  it('renders every tier as a complete card with unlocked, current, and locked states', () => {
+    const wrapper = mountIdentity(makeDetail({
+      automatic_level: 'silver',
+      qualified_invitee_count: 12,
+      remaining_qualified_invitees: 18
+    }), { nextTier: tiers[3], formattedRate: '12' })
+
+    const rules = wrapper.findAll('[data-testid="tier-rule"]')
+
+    expect(rules).toHaveLength(4)
+    expect(rules.every((rule) => rule.classes().includes('tier-identity__rule-card'))).toBe(true)
+    expect(rules.map((rule) => rule.attributes('data-tier-state'))).toEqual([
+      'unlocked',
+      'unlocked',
+      'current',
+      'locked'
+    ])
+    expect(rules[0].text()).toContain('Unlocked')
+    expect(rules[1].text()).toContain('Unlocked')
+    expect(rules[2].text()).toContain('Current tier')
+    expect(rules[3].text()).toContain('Locked')
+    expect(rules[3].text()).toContain('18 more qualified invitees')
   })
 
   it.each([
