@@ -129,17 +129,19 @@
           }) }}
         </p>
 
-        <div class="mt-3 grid grid-cols-2 border-y border-blue-100/80 dark:border-blue-900/60">
+        <div class="mt-3 grid grid-cols-1 gap-2.5 sm:grid-cols-2">
           <div
             v-for="tier in detail.tiers"
             :key="tier.level"
             data-testid="tier-rule"
             :data-current="isCurrentTier(tier.level) ? 'true' : 'false'"
             :data-effect-theme="effectTheme(tier.level)"
-            class="tier-identity__rule min-w-0 border-b border-blue-100/80 px-2 py-2.5 odd:border-r dark:border-blue-900/60 [&:nth-last-child(-n+2)]:border-b-0"
+            :data-tier-state="tierRuleState(tier.level)"
+            class="tier-identity__rule tier-identity__rule-card min-w-0"
             :class="{ 'tier-identity__rule--current': isCurrentTier(tier.level) }"
           >
-            <div class="flex min-w-0 items-center gap-2">
+            <span class="tier-identity__rule-frame" aria-hidden="true"></span>
+            <div class="flex min-w-0 items-center gap-3">
               <div
                 data-testid="tier-rule-effect"
                 class="tier-badge-effect tier-badge-effect--compact"
@@ -161,7 +163,7 @@
                 />
               </div>
               <div class="min-w-0 flex-1">
-                <p class="truncate text-sm font-medium text-gray-800 dark:text-gray-200">
+                <p class="text-sm font-semibold text-gray-800 dark:text-gray-100">
                   {{ tierLabel(tier.level) }}
                 </p>
                 <div class="mt-0.5 flex min-w-0 items-baseline gap-1.5">
@@ -175,6 +177,21 @@
                   </span>
                 </div>
               </div>
+            </div>
+
+            <div class="tier-identity__rule-meta">
+              <span class="tier-identity__rule-status">
+                <span class="tier-identity__rule-status-dot" aria-hidden="true"></span>
+                {{ tierRuleStatusLabel(tier.level) }}
+              </span>
+              <span
+                v-if="tierRuleState(tier.level) === 'locked'"
+                class="tier-identity__rule-remaining"
+              >
+                {{ t('affiliate.tiers.ruleStatus.remaining', {
+                  count: remainingForTier(tier)
+                }) }}
+              </span>
             </div>
           </div>
         </div>
@@ -217,7 +234,15 @@ const tierBadgeSources: Readonly<Record<AffiliateTier, string>> = Object.freeze(
   gold: goldTierBadge
 })
 
+type TierRuleState = 'unlocked' | 'current' | 'locked'
+
 const currentLevel = computed<AffiliateTier>(() => normalizeAffiliateTier(props.detail.automatic_level))
+const currentTierIndex = computed(() => {
+  const index = props.detail.tiers.findIndex((tier) => (
+    normalizeAffiliateTier(tier.level) === currentLevel.value
+  ))
+  return index >= 0 ? index : 0
+})
 const presentation = computed(() => getAffiliateTierPresentation(currentLevel.value))
 const displayNextTier = computed(() => presentation.value.theme === 'core' ? null : props.nextTier)
 const safeProgress = computed(() => normalizeNumber(props.progress, 100))
@@ -266,6 +291,21 @@ function effectTheme(level: AffiliateTier | string): string {
 
 function isCurrentTier(level: AffiliateTier): boolean {
   return level === currentLevel.value
+}
+
+function tierRuleState(level: AffiliateTier): TierRuleState {
+  const index = props.detail.tiers.findIndex((tier) => tier.level === level)
+  if (index === currentTierIndex.value) return 'current'
+  return index >= 0 && index < currentTierIndex.value ? 'unlocked' : 'locked'
+}
+
+function tierRuleStatusLabel(level: AffiliateTier): string {
+  return t(`affiliate.tiers.ruleStatus.${tierRuleState(level)}`)
+}
+
+function remainingForTier(tier: AffiliateTierDefinition): number {
+  const threshold = normalizeNumber(tier.min_qualified_invitees, Infinity, true)
+  return Math.max(0, threshold - safeQualifiedCount.value)
 }
 
 function normalizeNumber(value: number | string, max = Infinity, integer = false): number {
@@ -768,14 +808,18 @@ function formatCount(value: number): string {
   background: linear-gradient(90deg, rgb(var(--tier-accent)), rgb(var(--tier-cyan)));
 }
 
-.tier-identity__rule--current {
-  background: rgb(var(--tier-accent) / 0.06);
-  box-shadow: inset 0 0 0 1px rgb(var(--tier-accent) / 0.18);
-}
-
 .tier-identity__rule {
   position: relative;
+  min-height: 7.25rem;
+  overflow: hidden;
+  border: 1px solid rgb(191 219 254 / 0.92);
+  border-radius: 8px;
+  background: rgb(255 255 255 / 0.86);
+  box-shadow:
+    0 1px 2px rgb(15 23 42 / 0.04),
+    inset 0 0 0 1px rgb(255 255 255 / 0.68);
   isolation: isolate;
+  padding: 0.75rem;
 }
 
 .tier-identity__rule > * {
@@ -783,19 +827,142 @@ function formatCount(value: number): string {
   z-index: 1;
 }
 
+.tier-identity__rule-frame {
+  position: absolute;
+  z-index: 0;
+  inset: 3px;
+  border: 1px solid rgb(var(--tier-accent) / 0.14);
+  border-radius: 5px;
+  pointer-events: none;
+}
+
+.tier-identity__rule[data-effect-theme='origin'] .tier-identity__rule-frame {
+  border-top-color: rgb(var(--tier-cyan) / 0.46);
+  border-left-color: rgb(var(--tier-cyan) / 0.3);
+  box-shadow: inset 8px 8px 14px -16px rgb(var(--tier-cyan) / 0.88);
+}
+
+.tier-identity__rule[data-effect-theme='pulse'] .tier-identity__rule-frame {
+  border-top-color: rgb(var(--tier-cyan) / 0.58);
+  border-bottom-color: rgb(var(--tier-accent) / 0.3);
+  box-shadow:
+    inset 0 2px 0 -1px rgb(var(--tier-cyan) / 0.28),
+    inset 0 -2px 0 -1px rgb(var(--tier-accent) / 0.18);
+}
+
+.tier-identity__rule[data-effect-theme='orbit'] .tier-identity__rule-frame {
+  border-color: rgb(var(--tier-cyan) / 0.42);
+  border-right-color: rgb(var(--tier-accent) / 0.58);
+  box-shadow:
+    inset 0 0 0 1px rgb(var(--tier-accent) / 0.08),
+    inset -10px 0 18px -20px rgb(var(--tier-cyan) / 0.9);
+}
+
+.tier-identity__rule--current {
+  border-color: rgb(var(--tier-cyan) / 0.92);
+  background: rgb(239 250 255 / 0.96);
+  box-shadow:
+    0 0 0 1px rgb(var(--tier-cyan) / 0.22),
+    0 8px 20px -16px rgb(var(--tier-accent) / 0.7),
+    inset 3px 0 0 rgb(var(--tier-cyan) / 0.92);
+}
+
+.tier-identity__rule[data-tier-state='locked'] {
+  border-color: rgb(203 213 225 / 0.9);
+  background: rgb(248 250 252 / 0.78);
+}
+
+.tier-identity__rule[data-tier-state='locked'] .tier-badge-effect {
+  filter: grayscale(0.32) saturate(0.72);
+  opacity: 0.68;
+}
+
+.tier-identity__rule-meta {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-top: 0.7rem;
+  border-top: 1px solid rgb(219 234 254 / 0.8);
+  padding-top: 0.55rem;
+}
+
+.tier-identity__rule-status {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 0.35rem;
+  color: rgb(71 85 105);
+  font-size: 0.6875rem;
+  font-weight: 600;
+  line-height: 1rem;
+}
+
+.tier-identity__rule-status-dot {
+  width: 0.375rem;
+  height: 0.375rem;
+  border-radius: 50%;
+  background: rgb(100 116 139);
+  box-shadow: 0 0 0 2px rgb(226 232 240);
+}
+
+.tier-identity__rule[data-tier-state='unlocked'] .tier-identity__rule-status {
+  color: rgb(3 105 161);
+}
+
+.tier-identity__rule[data-tier-state='unlocked'] .tier-identity__rule-status-dot {
+  background: rgb(14 165 233);
+  box-shadow: 0 0 0 2px rgb(224 242 254);
+}
+
+.tier-identity__rule[data-tier-state='current'] .tier-identity__rule-status {
+  color: rgb(8 145 178);
+}
+
+.tier-identity__rule[data-tier-state='current'] .tier-identity__rule-status-dot {
+  background: rgb(var(--tier-cyan));
+  box-shadow:
+    0 0 0 2px rgb(207 250 254),
+    0 0 8px rgb(var(--tier-cyan) / 0.72);
+}
+
+.tier-identity__rule-remaining {
+  min-width: 0;
+  color: rgb(100 116 139);
+  font-size: 0.6875rem;
+  line-height: 1rem;
+  text-align: right;
+}
+
 .tier-identity__rule[data-effect-theme='core'] {
   background:
-    linear-gradient(110deg, rgb(var(--tier-accent) / 0.1), transparent 44%),
-    linear-gradient(290deg, rgb(var(--tier-cyan) / 0.12), transparent 52%);
+    linear-gradient(110deg, rgb(var(--tier-accent) / 0.07), transparent 44%),
+    linear-gradient(290deg, rgb(var(--tier-cyan) / 0.08), transparent 52%),
+    rgb(248 253 255 / 0.92);
   box-shadow:
-    inset 3px 0 0 rgb(var(--tier-cyan) / 0.92),
-    inset 0 0 16px rgb(var(--tier-accent) / 0.08);
+    0 1px 2px rgb(15 23 42 / 0.04),
+    inset 0 0 16px rgb(var(--tier-accent) / 0.07);
+}
+
+.tier-identity__rule--current[data-effect-theme='core'] {
+  border-color: rgb(var(--tier-cyan) / 0.96);
+  background:
+    linear-gradient(110deg, rgb(var(--tier-accent) / 0.12), transparent 44%),
+    linear-gradient(290deg, rgb(var(--tier-cyan) / 0.16), transparent 52%),
+    rgb(239 250 255 / 0.98);
+  box-shadow:
+    0 0 0 1px rgb(var(--tier-cyan) / 0.26),
+    0 10px 24px -16px rgb(var(--tier-accent) / 0.82),
+    inset 3px 0 0 rgb(var(--tier-cyan) / 0.96),
+    inset 0 0 18px rgb(var(--tier-accent) / 0.1);
 }
 
 .tier-identity__rule[data-effect-theme='core']::after {
   position: absolute;
   z-index: 0;
-  inset: 2px;
+  inset: 3px;
+  border-radius: 5px;
   border: 1px solid rgb(var(--tier-cyan) / 0.78);
   background: transparent;
   box-shadow:
@@ -805,6 +972,43 @@ function formatCount(value: number): string {
   opacity: 0.76;
   padding: 1px;
   pointer-events: none;
+}
+
+.tier-identity__rule[data-tier-state='locked'][data-effect-theme='core']::after {
+  opacity: 0.42;
+}
+
+:global(.dark) .tier-identity__rule {
+  border-color: rgb(30 64 175 / 0.62);
+  background: rgb(15 23 42 / 0.68);
+  box-shadow: inset 0 0 0 1px rgb(30 58 138 / 0.18);
+}
+
+:global(.dark) .tier-identity__rule--current {
+  border-color: rgb(var(--tier-cyan) / 0.78);
+  background: rgb(8 47 73 / 0.66);
+  box-shadow:
+    0 0 0 1px rgb(var(--tier-cyan) / 0.16),
+    inset 3px 0 0 rgb(var(--tier-cyan) / 0.8);
+}
+
+:global(.dark) .tier-identity__rule[data-tier-state='locked'] {
+  border-color: rgb(51 65 85 / 0.9);
+  background: rgb(15 23 42 / 0.48);
+}
+
+:global(.dark) .tier-identity__rule-meta {
+  border-top-color: rgb(30 64 175 / 0.42);
+}
+
+:global(.dark) .tier-identity__rule-status,
+:global(.dark) .tier-identity__rule-remaining {
+  color: rgb(148 163 184);
+}
+
+:global(.dark) .tier-identity__rule[data-tier-state='unlocked'] .tier-identity__rule-status,
+:global(.dark) .tier-identity__rule[data-tier-state='current'] .tier-identity__rule-status {
+  color: rgb(103 232 249);
 }
 
 @supports ((-webkit-mask-composite: xor) or (mask-composite: exclude)) {

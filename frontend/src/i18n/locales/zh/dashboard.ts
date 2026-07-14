@@ -528,6 +528,12 @@ export default {
       rulesTitle: '推广等级规则',
       rulesDescription: '受邀用户累计实付达到 {amount} 即计为合格邀请；等级累计达标后永久保留。专属返利比例优先生效，但自动等级仍会继续晋升。',
       requirement: '{count} 位合格邀请',
+      ruleStatus: {
+        unlocked: '已解锁',
+        current: '当前等级',
+        locked: '未解锁',
+        remaining: '还差 {count} 位合格邀请'
+      },
       levels: {
         standard: '原点级',
         bronze: '脉冲级',

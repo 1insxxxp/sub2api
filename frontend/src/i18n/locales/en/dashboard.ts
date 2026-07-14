@@ -523,6 +523,12 @@ export default {
       rulesTitle: 'Promotion level rules',
       rulesDescription: 'An invitee qualifies after {amount} in cumulative paid purchases. Levels are retained permanently once reached. A custom rebate rate takes precedence while automatic level progress continues.',
       requirement: '{count} qualified invitees',
+      ruleStatus: {
+        unlocked: 'Unlocked',
+        current: 'Current tier',
+        locked: 'Locked',
+        remaining: '{count} more qualified invitees'
+      },
       levels: {
         standard: 'Origin',
         bronze: 'Pulse',
