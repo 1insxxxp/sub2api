@@ -280,8 +280,9 @@ describe('AffiliateTierIdentity', () => {
     expect(currentEffect.attributes('data-effect-theme')).toBe('orbit')
     expect(currentEffect.attributes('data-effect-active')).toBe('true')
     const decorativeLayers = currentEffect.findAll('.tier-badge-effect__layer')
-    expect(decorativeLayers).toHaveLength(3)
+    expect(decorativeLayers).toHaveLength(4)
     expect(decorativeLayers.every((layer) => layer.attributes('aria-hidden') === 'true')).toBe(true)
+    expect(currentEffect.get('.tier-badge-effect__aura').exists()).toBe(true)
 
     const ruleEffects = wrapper.findAll('[data-testid="tier-rule-effect"]')
     expect(ruleEffects).toHaveLength(4)
@@ -297,6 +298,7 @@ describe('AffiliateTierIdentity', () => {
       'true',
       'false'
     ])
+    expect(ruleEffects.every((effect) => effect.find('.tier-badge-effect__aura').exists())).toBe(true)
   })
 
   it('defines distinct tier animations and a reduced-motion fallback', () => {
@@ -328,6 +330,15 @@ describe('AffiliateTierIdentity', () => {
 
   it('does not add unreachable focus animation to informational tier rules', () => {
     expect(affiliateTierIdentitySource).not.toContain('.tier-identity__rule:focus-within')
+  })
+
+  it('defines high-energy aura animations with short cycles and strong peaks', () => {
+    expect(affiliateTierIdentitySource).toContain('animation: tier-origin-surge 2.8s')
+    expect(affiliateTierIdentitySource).toContain('animation: tier-pulse-afterglow 2.2s')
+    expect(affiliateTierIdentitySource).toContain('animation: tier-orbit-counterspin 3.6s')
+    expect(affiliateTierIdentitySource).toContain('animation: tier-core-shockwave 3s')
+    expect(affiliateTierIdentitySource).toContain('opacity: 0.92;')
+    expect(affiliateTierIdentitySource).toContain('opacity: 0.96;')
   })
 
   it.each([
