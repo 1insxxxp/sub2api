@@ -2,6 +2,7 @@ import { mount } from '@vue/test-utils'
 import { describe, expect, it, vi } from 'vitest'
 
 import AffiliateTierIdentity from '../AffiliateTierIdentity.vue'
+import affiliateTierIdentitySource from '../AffiliateTierIdentity.vue?raw'
 import type { AffiliateTier, AffiliateTierDefinition, UserAffiliateDetail } from '@/types'
 
 vi.mock('vue-i18n', async (importOriginal) => {
@@ -268,6 +269,46 @@ describe('AffiliateTierIdentity', () => {
       expect.stringContaining('Orbit'),
       expect.stringContaining('Core')
     ]))
+  })
+
+  it('exposes tier-themed light effects and activates only the current compact badge', () => {
+    const wrapper = mountIdentity(makeDetail({ automatic_level: 'silver' }), {
+      nextTier: tiers[3]
+    })
+
+    const currentEffect = wrapper.get('[data-testid="current-tier-effect"]')
+    expect(currentEffect.attributes('data-effect-theme')).toBe('orbit')
+    expect(currentEffect.attributes('data-effect-active')).toBe('true')
+    const decorativeLayers = currentEffect.findAll('.tier-badge-effect__layer')
+    expect(decorativeLayers).toHaveLength(3)
+    expect(decorativeLayers.every((layer) => layer.attributes('aria-hidden') === 'true')).toBe(true)
+
+    const ruleEffects = wrapper.findAll('[data-testid="tier-rule-effect"]')
+    expect(ruleEffects).toHaveLength(4)
+    expect(ruleEffects.map((effect) => effect.attributes('data-effect-theme'))).toEqual([
+      'origin',
+      'pulse',
+      'orbit',
+      'core'
+    ])
+    expect(ruleEffects.map((effect) => effect.attributes('data-effect-active'))).toEqual([
+      'false',
+      'false',
+      'true',
+      'false'
+    ])
+  })
+
+  it('defines distinct tier animations and a reduced-motion fallback', () => {
+    expect(affiliateTierIdentitySource).toContain("[data-effect-theme='origin']")
+    expect(affiliateTierIdentitySource).toContain("[data-effect-theme='pulse']")
+    expect(affiliateTierIdentitySource).toContain("[data-effect-theme='orbit']")
+    expect(affiliateTierIdentitySource).toContain("[data-effect-theme='core']")
+    expect(affiliateTierIdentitySource).toContain('@keyframes tier-origin-breathe')
+    expect(affiliateTierIdentitySource).toContain('@keyframes tier-pulse-expand')
+    expect(affiliateTierIdentitySource).toContain('@keyframes tier-orbit-track')
+    expect(affiliateTierIdentitySource).toContain('@keyframes tier-core-converge')
+    expect(affiliateTierIdentitySource).toContain('@media (prefers-reduced-motion: reduce)')
   })
 
   it.each([

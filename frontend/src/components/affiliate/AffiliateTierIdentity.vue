@@ -10,21 +10,32 @@
     <div class="tier-identity__layout relative z-[1]">
       <div class="tier-identity__primary min-w-0">
         <div class="flex min-w-0 items-start gap-3 sm:gap-5">
-          <div class="tier-identity__badge-stage" aria-hidden="true">
-            <span class="tier-identity__ring tier-identity__ring--outer"></span>
-            <span class="tier-identity__ring tier-identity__ring--inner"></span>
-            <span class="tier-identity__node tier-identity__node--one"></span>
-            <span class="tier-identity__node tier-identity__node--two"></span>
-            <span class="tier-identity__node tier-identity__node--three"></span>
-            <span class="tier-identity__node tier-identity__node--four"></span>
-          </div>
+          <div
+            data-testid="current-tier-effect"
+            class="tier-badge-effect tier-badge-effect--large"
+            :data-effect-theme="presentation.theme"
+            data-effect-active="true"
+          >
+            <span class="tier-badge-effect__layer tier-badge-effect__glow" aria-hidden="true"></span>
+            <span class="tier-badge-effect__layer tier-badge-effect__beam" aria-hidden="true"></span>
+            <span class="tier-badge-effect__layer tier-badge-effect__orbit" aria-hidden="true"></span>
 
-          <img
-            data-testid="current-tier-badge"
-            :src="badgeSource(currentLevel)"
-            alt=""
-            class="tier-identity__badge relative z-[1] h-[72px] w-[72px] shrink-0 object-contain sm:h-[92px] sm:w-[92px]"
-          />
+            <div class="tier-identity__badge-stage" aria-hidden="true">
+              <span class="tier-identity__ring tier-identity__ring--outer"></span>
+              <span class="tier-identity__ring tier-identity__ring--inner"></span>
+              <span class="tier-identity__node tier-identity__node--one"></span>
+              <span class="tier-identity__node tier-identity__node--two"></span>
+              <span class="tier-identity__node tier-identity__node--three"></span>
+              <span class="tier-identity__node tier-identity__node--four"></span>
+            </div>
+
+            <img
+              data-testid="current-tier-badge"
+              :src="badgeSource(currentLevel)"
+              alt=""
+              class="tier-identity__badge relative z-[1] h-full w-full object-contain"
+            />
+          </div>
 
           <div class="min-w-0 flex-1">
             <div class="flex min-w-0 flex-wrap items-start justify-between gap-x-4 gap-y-2">
@@ -124,12 +135,22 @@
             :class="{ 'tier-identity__rule--current': isCurrentTier(tier.level) }"
           >
             <div class="flex min-w-0 items-center gap-2">
-              <img
-                data-testid="tier-rule-badge"
-                :src="badgeSource(tier.level)"
-                alt=""
-                class="h-9 w-9 shrink-0 object-contain"
-              />
+              <div
+                data-testid="tier-rule-effect"
+                class="tier-badge-effect tier-badge-effect--compact"
+                :data-effect-theme="effectTheme(tier.level)"
+                :data-effect-active="isCurrentTier(tier.level) ? 'true' : 'false'"
+              >
+                <span class="tier-badge-effect__layer tier-badge-effect__glow" aria-hidden="true"></span>
+                <span class="tier-badge-effect__layer tier-badge-effect__beam" aria-hidden="true"></span>
+                <span class="tier-badge-effect__layer tier-badge-effect__orbit" aria-hidden="true"></span>
+                <img
+                  data-testid="tier-rule-badge"
+                  :src="badgeSource(tier.level)"
+                  alt=""
+                  class="relative z-[1] h-full w-full object-contain"
+                />
+              </div>
               <div class="min-w-0 flex-1">
                 <p class="truncate text-sm font-medium text-gray-800 dark:text-gray-200">
                   {{ tierLabel(tier.level) }}
@@ -230,6 +251,10 @@ function badgeSource(level: AffiliateTier | string): string {
   return tierBadgeSources[normalizeAffiliateTier(level)]
 }
 
+function effectTheme(level: AffiliateTier | string): string {
+  return getAffiliateTierPresentation(level).theme
+}
+
 function isCurrentTier(level: AffiliateTier): boolean {
   return level === currentLevel.value
 }
@@ -306,6 +331,133 @@ function formatCount(value: number): string {
   transform: translateX(-120%);
 }
 
+.tier-badge-effect {
+  position: relative;
+  display: grid;
+  flex: none;
+  place-items: center;
+  isolation: isolate;
+}
+
+.tier-badge-effect--large {
+  width: 4.5rem;
+  height: 4.5rem;
+}
+
+.tier-badge-effect--compact {
+  width: 2.25rem;
+  height: 2.25rem;
+}
+
+.tier-badge-effect__layer {
+  position: absolute;
+  pointer-events: none;
+}
+
+.tier-badge-effect__glow {
+  inset: 12%;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgb(var(--tier-cyan) / 0.42), transparent 68%);
+  filter: blur(5px);
+  opacity: 0.18;
+}
+
+.tier-badge-effect__beam,
+.tier-badge-effect__orbit {
+  opacity: 0;
+}
+
+.tier-badge-effect[data-effect-theme='origin'] .tier-badge-effect__beam {
+  inset: -5%;
+  border-radius: 50%;
+  background: conic-gradient(
+    from 205deg,
+    transparent 0 70%,
+    rgb(255 255 255 / 0.86) 77%,
+    rgb(var(--tier-cyan) / 0.78) 82%,
+    transparent 90%
+  );
+  mask: radial-gradient(circle, transparent 61%, black 64%, black 69%, transparent 72%);
+  transform: rotate(-24deg);
+}
+
+.tier-badge-effect[data-effect-theme='pulse'] .tier-badge-effect__beam {
+  inset: 34% -18%;
+  border-radius: 999px;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgb(var(--tier-accent) / 0.22) 14%,
+    rgb(var(--tier-cyan) / 0.9) 47%,
+    rgb(255 255 255 / 0.95) 50%,
+    rgb(var(--tier-cyan) / 0.9) 53%,
+    rgb(var(--tier-accent) / 0.22) 86%,
+    transparent
+  );
+  filter: blur(1px);
+  transform: scaleX(0.22);
+}
+
+.tier-badge-effect[data-effect-theme='pulse'] .tier-badge-effect__orbit {
+  inset: 9%;
+  border: 1px solid rgb(var(--tier-cyan) / 0.35);
+  border-radius: 50%;
+  transform: scale(0.68);
+}
+
+.tier-badge-effect[data-effect-theme='orbit'] .tier-badge-effect__orbit {
+  inset: -7%;
+  border: 1px solid rgb(var(--tier-cyan) / 0.56);
+  border-radius: 50%;
+  box-shadow: 0 0 8px rgb(var(--tier-cyan) / 0.24);
+  transform: rotate(-30deg) scaleY(0.5);
+}
+
+.tier-badge-effect[data-effect-theme='orbit'] .tier-badge-effect__orbit::after {
+  position: absolute;
+  top: 50%;
+  right: -3px;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: rgb(255 255 255);
+  box-shadow:
+    0 0 4px rgb(255 255 255 / 0.95),
+    0 0 10px rgb(var(--tier-cyan) / 0.9);
+  content: '';
+  transform: translateY(-50%) scaleY(2);
+}
+
+.tier-badge-effect[data-effect-theme='core'] .tier-badge-effect__orbit {
+  inset: -3%;
+  background: conic-gradient(
+    from 0deg,
+    rgb(var(--tier-cyan) / 0.08),
+    rgb(var(--tier-cyan) / 0.9),
+    rgb(var(--tier-accent) / 0.12) 17%,
+    transparent 22% 100%
+  );
+  clip-path: polygon(50% 0, 93% 25%, 93% 75%, 50% 100%, 7% 75%, 7% 25%);
+  mask: radial-gradient(circle, transparent 61%, black 63%);
+}
+
+.tier-badge-effect[data-effect-theme='core'] .tier-badge-effect__beam {
+  inset: 15%;
+  border-radius: 50%;
+  background: radial-gradient(
+    circle,
+    rgb(255 255 255 / 0.95),
+    rgb(var(--tier-cyan) / 0.72) 18%,
+    transparent 64%
+  );
+  filter: blur(2px);
+  transform: scale(1.3);
+}
+
+.tier-badge-effect--compact .tier-badge-effect__glow {
+  filter: blur(3px);
+}
+
 .tier-identity[data-tier-theme='pulse'] .tier-identity__scan {
   opacity: 0.35;
 }
@@ -320,11 +472,12 @@ function formatCount(value: number): string {
 
 .tier-identity__badge-stage {
   position: absolute;
-  top: 0.9rem;
-  left: 0.5rem;
+  top: 50%;
+  left: 50%;
   width: 6.25rem;
   height: 6.25rem;
   pointer-events: none;
+  transform: translate(-50%, -50%);
 }
 
 .tier-identity__ring {
@@ -411,13 +564,19 @@ function formatCount(value: number): string {
   }
 }
 
+@media (min-width: 640px) {
+  .tier-badge-effect--large {
+    width: 5.75rem;
+    height: 5.75rem;
+  }
+}
+
 @media (max-width: 374px) {
   .tier-identity__layout {
     padding: 1rem;
   }
 
   .tier-identity__badge-stage {
-    left: 0.1rem;
     width: 5rem;
     height: 5rem;
   }
@@ -443,6 +602,73 @@ function formatCount(value: number): string {
   .tier-identity[data-tier-theme='core'] .tier-identity__scan {
     animation: tier-scan 7s ease-in-out infinite;
   }
+
+  .tier-badge-effect[data-effect-theme='origin'][data-effect-active='true'] .tier-badge-effect__glow,
+  .tier-identity__rule:hover .tier-badge-effect[data-effect-theme='origin'] .tier-badge-effect__glow,
+  .tier-identity__rule:focus-within .tier-badge-effect[data-effect-theme='origin'] .tier-badge-effect__glow {
+    animation: tier-origin-breathe 3.8s ease-in-out infinite;
+  }
+
+  .tier-badge-effect[data-effect-theme='origin'][data-effect-active='true'] .tier-badge-effect__beam,
+  .tier-identity__rule:hover .tier-badge-effect[data-effect-theme='origin'] .tier-badge-effect__beam,
+  .tier-identity__rule:focus-within .tier-badge-effect[data-effect-theme='origin'] .tier-badge-effect__beam {
+    animation: tier-origin-glint 5.6s ease-in-out infinite;
+  }
+
+  .tier-badge-effect[data-effect-theme='pulse'][data-effect-active='true'] .tier-badge-effect__beam,
+  .tier-identity__rule:hover .tier-badge-effect[data-effect-theme='pulse'] .tier-badge-effect__beam,
+  .tier-identity__rule:focus-within .tier-badge-effect[data-effect-theme='pulse'] .tier-badge-effect__beam {
+    animation: tier-pulse-expand 2.8s ease-out infinite;
+  }
+
+  .tier-badge-effect[data-effect-theme='pulse'][data-effect-active='true'] .tier-badge-effect__glow,
+  .tier-badge-effect[data-effect-theme='pulse'][data-effect-active='true'] .tier-badge-effect__orbit,
+  .tier-identity__rule:hover .tier-badge-effect[data-effect-theme='pulse'] .tier-badge-effect__glow,
+  .tier-identity__rule:hover .tier-badge-effect[data-effect-theme='pulse'] .tier-badge-effect__orbit,
+  .tier-identity__rule:focus-within .tier-badge-effect[data-effect-theme='pulse'] .tier-badge-effect__glow,
+  .tier-identity__rule:focus-within .tier-badge-effect[data-effect-theme='pulse'] .tier-badge-effect__orbit {
+    animation: tier-pulse-core 2.8s ease-in-out infinite;
+  }
+
+  .tier-badge-effect[data-effect-theme='orbit'][data-effect-active='true'] .tier-badge-effect__orbit,
+  .tier-identity__rule:hover .tier-badge-effect[data-effect-theme='orbit'] .tier-badge-effect__orbit,
+  .tier-identity__rule:focus-within .tier-badge-effect[data-effect-theme='orbit'] .tier-badge-effect__orbit {
+    animation: tier-orbit-track 7.2s linear infinite;
+  }
+
+  .tier-badge-effect[data-effect-theme='orbit'][data-effect-active='true'] .tier-badge-effect__glow,
+  .tier-identity__rule:hover .tier-badge-effect[data-effect-theme='orbit'] .tier-badge-effect__glow,
+  .tier-identity__rule:focus-within .tier-badge-effect[data-effect-theme='orbit'] .tier-badge-effect__glow {
+    animation: tier-orbit-breathe 4.2s ease-in-out infinite;
+  }
+
+  .tier-badge-effect[data-effect-theme='core'][data-effect-active='true'] .tier-badge-effect__beam,
+  .tier-identity__rule:hover .tier-badge-effect[data-effect-theme='core'] .tier-badge-effect__beam,
+  .tier-identity__rule:focus-within .tier-badge-effect[data-effect-theme='core'] .tier-badge-effect__beam {
+    animation: tier-core-converge 3.4s ease-in-out infinite;
+  }
+
+  .tier-badge-effect[data-effect-theme='core'][data-effect-active='true'] .tier-badge-effect__orbit,
+  .tier-identity__rule:hover .tier-badge-effect[data-effect-theme='core'] .tier-badge-effect__orbit,
+  .tier-identity__rule:focus-within .tier-badge-effect[data-effect-theme='core'] .tier-badge-effect__orbit {
+    animation: tier-core-flow 6.4s linear infinite;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tier-badge-effect__layer {
+    animation: none !important;
+  }
+
+  .tier-badge-effect__beam,
+  .tier-badge-effect__orbit {
+    opacity: 0 !important;
+  }
+
+  .tier-badge-effect__glow {
+    opacity: 0.22 !important;
+    transform: none !important;
+  }
 }
 
 @keyframes tier-ring-rotate {
@@ -452,6 +678,110 @@ function formatCount(value: number): string {
 @keyframes tier-scan {
   0%, 18% { transform: translateX(-120%); }
   68%, 100% { transform: translateX(250%); }
+}
+
+@keyframes tier-origin-breathe {
+  0%, 100% {
+    opacity: 0.16;
+    transform: scale(0.92);
+  }
+  50% {
+    opacity: 0.52;
+    transform: scale(1.08);
+  }
+}
+
+@keyframes tier-origin-glint {
+  0%, 62%, 100% {
+    opacity: 0;
+    transform: rotate(-34deg);
+  }
+  76% {
+    opacity: 0.82;
+  }
+  88% {
+    opacity: 0;
+    transform: rotate(28deg);
+  }
+}
+
+@keyframes tier-pulse-expand {
+  0%, 18% {
+    opacity: 0;
+    transform: scaleX(0.2);
+  }
+  42% {
+    opacity: 0.86;
+  }
+  76%, 100% {
+    opacity: 0;
+    transform: scaleX(1);
+  }
+}
+
+@keyframes tier-pulse-core {
+  0%, 100% {
+    opacity: 0.16;
+    transform: scale(0.68);
+  }
+  48% {
+    opacity: 0.58;
+    transform: scale(1.02);
+  }
+}
+
+@keyframes tier-orbit-track {
+  0% {
+    opacity: 0.18;
+    transform: rotate(-30deg) scaleY(0.5);
+  }
+  22%, 78% {
+    opacity: 0.82;
+  }
+  100% {
+    opacity: 0.18;
+    transform: rotate(330deg) scaleY(0.5);
+  }
+}
+
+@keyframes tier-orbit-breathe {
+  0%, 100% {
+    opacity: 0.12;
+    transform: scale(0.92);
+  }
+  50% {
+    opacity: 0.42;
+    transform: scale(1.08);
+  }
+}
+
+@keyframes tier-core-converge {
+  0%, 62%, 100% {
+    opacity: 0.12;
+    transform: scale(1.3);
+  }
+  78% {
+    opacity: 0.74;
+    transform: scale(0.72);
+  }
+  88% {
+    opacity: 0.28;
+    transform: scale(1);
+  }
+}
+
+@keyframes tier-core-flow {
+  0% {
+    opacity: 0.18;
+    transform: rotate(0deg);
+  }
+  35%, 68% {
+    opacity: 0.78;
+  }
+  100% {
+    opacity: 0.18;
+    transform: rotate(360deg);
+  }
 }
 
 :global(.dark) .tier-identity {
