@@ -315,16 +315,13 @@ describe('AffiliateTierIdentity', () => {
 
   it('clips compact light layers to the fixed badge footprint', () => {
     expect(affiliateTierIdentitySource).toMatch(
-      /\.tier-badge-effect--compact\s*{[^}]*overflow:\s*clip;/s
+      /\.tier-badge-effect--compact\s*{[^}]*width:\s*2\.25rem;[^}]*height:\s*2\.25rem;[^}]*overflow:\s*hidden;[^}]*overflow:\s*clip;/s
     )
   })
 
   it('keeps non-current compact effects static on touch input', () => {
-    expect(affiliateTierIdentitySource).toContain(
-      '@media (prefers-reduced-motion: no-preference) and (hover: none)'
-    )
-    expect(affiliateTierIdentitySource).toContain(
-      ".tier-badge-effect--compact[data-effect-active='false'] .tier-badge-effect__layer"
+    expect(affiliateTierIdentitySource).toMatch(
+      /@media \(prefers-reduced-motion: no-preference\) and \(hover: none\),[\s\S]*?\(pointer: coarse\)\s*{[\s\S]*?\.tier-badge-effect--compact\[data-effect-active='false'\] \.tier-badge-effect__layer\s*{[^}]*animation:\s*none !important;/
     )
   })
 
@@ -333,12 +330,42 @@ describe('AffiliateTierIdentity', () => {
   })
 
   it('defines high-energy aura animations with short cycles and strong peaks', () => {
-    expect(affiliateTierIdentitySource).toContain('animation: tier-origin-surge 2.8s')
-    expect(affiliateTierIdentitySource).toContain('animation: tier-pulse-afterglow 2.2s')
-    expect(affiliateTierIdentitySource).toContain('animation: tier-orbit-counterspin 3.6s')
-    expect(affiliateTierIdentitySource).toContain('animation: tier-core-shockwave 3s')
-    expect(affiliateTierIdentitySource).toContain('opacity: 0.92;')
-    expect(affiliateTierIdentitySource).toContain('opacity: 0.96;')
+    const durationContracts = [
+      ['tier-origin-breathe', '2.4s'],
+      ['tier-origin-glint', '3.2s'],
+      ['tier-origin-surge', '2.8s'],
+      ['tier-pulse-expand', '1.9s'],
+      ['tier-pulse-core', '2.2s'],
+      ['tier-pulse-afterglow', '2.2s'],
+      ['tier-orbit-track', '3.4s'],
+      ['tier-orbit-breathe', '2.8s'],
+      ['tier-orbit-counterspin', '3.6s'],
+      ['tier-core-converge', '2.4s'],
+      ['tier-core-flow', '3.6s'],
+      ['tier-core-shockwave', '3s']
+    ] as const
+
+    for (const [name, duration] of durationContracts) {
+      expect(affiliateTierIdentitySource).toContain(`animation: ${name} ${duration}`)
+    }
+
+    const peakContracts = [
+      ['tier-origin-surge', '0.92'],
+      ['tier-pulse-afterglow', '0.96'],
+      ['tier-orbit-counterspin', '0.92'],
+      ['tier-core-shockwave', '0.96']
+    ] as const
+
+    for (const [name, opacity] of peakContracts) {
+      const escapedOpacity = opacity.replace('.', '\\.')
+      expect(affiliateTierIdentitySource).toMatch(
+        new RegExp(`@keyframes ${name}\\s*\\{(?:(?!@keyframes)[\\s\\S])*?opacity:\\s*${escapedOpacity};`)
+      )
+    }
+
+    expect(affiliateTierIdentitySource).toMatch(
+      /@media \(prefers-reduced-motion: reduce\)\s*{[\s\S]*?\.tier-badge-effect__layer\s*{[^}]*animation:\s*none !important;/
+    )
   })
 
   it.each([

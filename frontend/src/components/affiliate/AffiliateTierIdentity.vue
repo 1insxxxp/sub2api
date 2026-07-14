@@ -349,6 +349,7 @@ function formatCount(value: number): string {
 .tier-badge-effect--compact {
   width: 2.25rem;
   height: 2.25rem;
+  overflow: hidden;
   overflow: clip;
 }
 
