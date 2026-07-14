@@ -29,10 +29,13 @@ var affiliateCodeCharset = []byte("ABCDEFGHJKLMNPQRSTUVWXYZ23456789")
 
 const affiliateQualificationReconcileSQL = `
 WITH locked AS (
-    SELECT qualifying_payment_amount, qualified_at
-    FROM user_affiliates
-    WHERE user_id = $1
-    FOR UPDATE
+    SELECT ua.qualifying_payment_amount,
+           ua.qualified_at,
+           GREATEST(COALESCE(u.total_recharged, 0), 0) AS legacy_total_recharged
+    FROM user_affiliates ua
+    JOIN users u ON u.id = ua.user_id
+    WHERE ua.user_id = $1
+    FOR UPDATE OF ua
 ),
 authoritative_orders AS (
     SELECT po.id AS order_id,
@@ -64,7 +67,11 @@ running_payments AS (
     FROM authoritative_orders
 ),
 totals AS (
-    SELECT GREATEST(COALESCE((SELECT SUM(net_amount) FROM authoritative_orders), 0), 0)::DECIMAL(20,8) AS amount,
+    SELECT GREATEST(
+               COALESCE((SELECT SUM(net_amount) FROM authoritative_orders), 0),
+               COALESCE((SELECT legacy_total_recharged FROM locked), 0),
+               0
+           )::DECIMAL(20,8) AS amount,
            (SELECT MIN(payment_at) FROM running_payments WHERE cumulative_amount >= $2) AS qualified_at
 ),
 updated AS (
@@ -86,10 +93,12 @@ WITH target_users AS (
     %s
 ),
 locked AS (
-    SELECT ua.user_id
+    SELECT ua.user_id,
+           GREATEST(COALESCE(u.total_recharged, 0), 0) AS legacy_total_recharged
     FROM user_affiliates ua
     JOIN target_users target ON target.user_id = ua.user_id
-    FOR UPDATE
+    JOIN users u ON u.id = ua.user_id
+    FOR UPDATE OF ua
 ),
 authoritative_orders AS (
     SELECT locked.user_id,
@@ -125,7 +134,11 @@ running_payments AS (
 ),
 totals AS (
     SELECT locked.user_id,
-           GREATEST(COALESCE(SUM(authoritative_orders.net_amount), 0), 0)::DECIMAL(20,8) AS amount,
+           GREATEST(
+               COALESCE(SUM(authoritative_orders.net_amount), 0),
+               COALESCE(MAX(locked.legacy_total_recharged), 0),
+               0
+           )::DECIMAL(20,8) AS amount,
            (
                SELECT MIN(running.payment_at)
                FROM running_payments running

@@ -128,14 +128,25 @@ func TestAffiliateQualificationReconcileSQLMatchesAuthoritativePaymentRules(t *t
 	query := strings.Join(strings.Fields(affiliateQualificationReconcileSQL), " ")
 
 	require.Contains(t, query, "FOR UPDATE")
+	require.Contains(t, query, "JOIN users u ON u.id = ua.user_id")
+	require.Contains(t, query, "GREATEST(COALESCE(u.total_recharged, 0), 0) AS legacy_total_recharged")
 	require.Contains(t, query, "FROM payment_orders po CROSS JOIN locked")
 	require.Contains(t, query, "po.order_type IN ('balance', 'subscription')")
 	require.Contains(t, query, "'COMPLETED', 'REFUND_REQUESTED', 'REFUNDING', 'REFUND_PENDING', 'REFUND_FAILED'")
 	require.Contains(t, query, "WHEN po.status = 'PARTIALLY_REFUNDED' THEN GREATEST(po.amount - po.refund_amount, 0)")
 	require.Contains(t, query, "WHEN po.status = 'REFUNDED' THEN 0")
-	require.Contains(t, query, "GREATEST(COALESCE((SELECT SUM(net_amount) FROM authoritative_orders), 0), 0)")
+	require.Contains(t, query, "GREATEST( COALESCE((SELECT SUM(net_amount) FROM authoritative_orders), 0), COALESCE((SELECT legacy_total_recharged FROM locked), 0), 0 )")
 	require.Contains(t, query, "WHEN totals.amount >= $2 THEN COALESCE(totals.qualified_at, NOW())")
 	require.Contains(t, query, "ELSE NULL")
+}
+
+func TestAffiliateBatchQualificationReconcileSQLIncludesLegacyTotalRecharged(t *testing.T) {
+	for _, query := range []string{affiliateInviterQualificationReconcileSQL, affiliateInviteesQualificationReconcileSQL} {
+		normalized := strings.Join(strings.Fields(query), " ")
+		require.Contains(t, normalized, "JOIN users u ON u.id = ua.user_id")
+		require.Contains(t, normalized, "GREATEST(COALESCE(u.total_recharged, 0), 0) AS legacy_total_recharged")
+		require.Contains(t, normalized, "GREATEST( COALESCE(SUM(authoritative_orders.net_amount), 0), COALESCE(MAX(locked.legacy_total_recharged), 0), 0 )")
+	}
 }
 
 func TestAffiliateQualificationCountSQLUsesCurrentThreshold(t *testing.T) {

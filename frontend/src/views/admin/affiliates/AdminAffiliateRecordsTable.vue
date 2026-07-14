@@ -60,9 +60,9 @@
                 class="mt-2 border-t border-gray-100 pt-1.5 text-xs text-gray-500 dark:border-dark-700 dark:text-dark-400 md:hidden"
               >
                 <div :class="row.qualified ? 'text-emerald-600 dark:text-emerald-400' : ''">
-                  {{ t(`admin.affiliates.records.${row.qualified ? 'qualified' : 'unqualified'}`) }}
+                  {{ formatInviteQualification(row.qualified) }}
                 </div>
-                <div>{{ formatQualifiedCount(row.qualified_invitee_count, row.invited_count) }}</div>
+                <div>{{ formatQualifiedInviteeSummary(row.qualified_invitee_count, row.invited_count) }}</div>
               </div>
             </div>
           </template>
@@ -84,9 +84,9 @@
           <template #cell-qualified="{ row }">
             <div class="space-y-0.5 text-sm">
               <span :class="row.qualified ? 'text-emerald-600 dark:text-emerald-400' : 'text-gray-500 dark:text-dark-400'">
-                {{ t(`admin.affiliates.records.${row.qualified ? 'qualified' : 'unqualified'}`) }}
+                {{ formatInviteQualification(row.qualified) }}
               </span>
-              <div class="text-xs text-gray-500 dark:text-dark-400">{{ formatQualifiedCount(row.qualified_invitee_count, row.invited_count) }}</div>
+              <div class="text-xs text-gray-500 dark:text-dark-400">{{ formatQualifiedInviteeSummary(row.qualified_invitee_count, row.invited_count) }}</div>
             </div>
           </template>
           <template #cell-rate="{ row }">
@@ -183,7 +183,7 @@
           <OverviewStat :label="t('admin.affiliates.overview.invitedCount')" :value="String(selectedOverview.invited_count)" />
           <OverviewStat :label="t('admin.affiliates.overview.rebatedInviteeCount')" :value="String(selectedOverview.rebated_invitee_count)" />
           <OverviewStat :label="t('admin.affiliates.overview.automaticTier')" :value="tierLabel(selectedOverview.automatic_level)" />
-          <OverviewStat :label="t('admin.affiliates.overview.qualifiedInvitees')" :value="formatQualifiedCount(selectedOverview.qualified_invitee_count, selectedOverview.invited_count)" />
+          <OverviewStat :label="t('admin.affiliates.overview.qualifiedInvitees')" :value="formatOverviewQualifiedInviteeSummary(selectedOverview.qualified_invitee_count, selectedOverview.invited_count)" />
           <OverviewStat :label="t('admin.affiliates.overview.automaticRate')" :value="formatPercent(selectedOverview.automatic_rebate_rate_percent)" />
           <OverviewStat :label="t('admin.affiliates.overview.customOverride')" :value="selectedOverview.has_custom_rebate_rate ? formatPercent(selectedOverview.custom_rebate_rate_percent) : t('admin.affiliates.overview.none')" />
           <OverviewStat :label="t('admin.affiliates.overview.effectiveRate')" :value="formatPercent(selectedOverview.effective_rebate_rate_percent)" />
@@ -238,7 +238,7 @@ const columns = computed<Column[]>(() => {
       { key: 'invitee', label: t('admin.affiliates.records.invitee'), sortable: true },
       { key: 'aff_code', label: t('admin.affiliates.records.affCode'), sortable: true, class: 'hidden md:table-cell', mobileHidden: true },
       { key: 'tier', label: t('admin.affiliates.records.automaticTier'), class: 'hidden md:table-cell', mobileHidden: true },
-      { key: 'qualified', label: t('admin.affiliates.records.qualification'), class: 'hidden md:table-cell', mobileHidden: true },
+      { key: 'qualified', label: t('admin.affiliates.records.qualifiedInvitees'), class: 'hidden md:table-cell', mobileHidden: true },
       { key: 'rate', label: t('admin.affiliates.records.effectiveRate') },
       { key: 'total_rebate', label: t('admin.affiliates.records.totalRebate'), sortable: true },
       { key: 'created_at', label: t('admin.affiliates.records.invitedAt'), sortable: true },
@@ -374,8 +374,26 @@ function tierLabel(level: AffiliateInviteRecord['automatic_level']): string {
   return t(`admin.affiliates.tiers.${normalizeAffiliateTier(level)}`)
 }
 
-function formatQualifiedCount(qualified: number, invited: number): string {
-  return `${Number(qualified || 0)} / ${Number(invited || 0)}`
+function normalizeCount(value: number): number {
+  return Number(value || 0)
+}
+
+function formatInviteQualification(qualified: boolean): string {
+  return t(`admin.affiliates.records.${qualified ? 'qualifiedInvite' : 'unqualifiedInvite'}`)
+}
+
+function formatQualifiedInviteeSummary(qualified: number, invited: number): string {
+  return t('admin.affiliates.records.qualifiedInviteesSummary', {
+    qualified: normalizeCount(qualified),
+    invited: normalizeCount(invited),
+  })
+}
+
+function formatOverviewQualifiedInviteeSummary(qualified: number, invited: number): string {
+  return t('admin.affiliates.overview.qualifiedInviteesSummary', {
+    qualified: normalizeCount(qualified),
+    invited: normalizeCount(invited),
+  })
 }
 
 function formatDateTime(value: string | null | undefined): string {

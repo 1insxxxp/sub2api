@@ -23,9 +23,14 @@ vi.mock('vue-i18n', async () => {
   return {
     ...actual,
     useI18n: () => ({
-      t: (key: string) => ({
+      t: (key: string, params?: Record<string, unknown>) => ({
         'admin.affiliates.tiers.standard': 'Origin',
-        'admin.affiliates.tiers.silver': 'Orbit'
+        'admin.affiliates.tiers.silver': 'Orbit',
+        'admin.affiliates.records.qualifiedInvite': '本次邀请已有效',
+        'admin.affiliates.records.unqualifiedInvite': '本次邀请未有效',
+        'admin.affiliates.records.qualifiedInviteesSummary': `累计有效 ${params?.qualified} / 邀请 ${params?.invited}`,
+        'admin.affiliates.records.qualifiedInvitees': '有效邀请',
+        'admin.affiliates.overview.qualifiedInviteesSummary': `累计有效 ${params?.qualified} / 邀请 ${params?.invited}`,
       })[key] ?? key
     })
   }
@@ -108,7 +113,7 @@ describe('AdminAffiliateRecordsTable promotion reporting', () => {
     const wrapper = mountTable()
     await flushPromises()
     expect(wrapper.text()).toContain('Orbit')
-    expect(wrapper.text()).toContain('admin.affiliates.records.qualified')
+    expect(wrapper.text()).toContain('本次邀请已有效')
     expect(wrapper.text()).toContain('18%')
     expect(wrapper.text()).toContain('admin.affiliates.records.customOverride')
   })
@@ -141,8 +146,8 @@ describe('AdminAffiliateRecordsTable promotion reporting', () => {
 
     const qualificationSummary = wrapper.get('[data-test="mobile-invitee-qualification"]')
     expect(qualificationSummary.classes()).toContain('md:hidden')
-    expect(qualificationSummary.text()).toContain('admin.affiliates.records.qualified')
-    expect(qualificationSummary.text()).toContain('10 / 12')
+    expect(qualificationSummary.text()).toContain('本次邀请已有效')
+    expect(qualificationSummary.text()).toContain('累计有效 10 / 邀请 12')
   })
 
   it('shows custom override value separately from the effective rate', async () => {
@@ -164,7 +169,7 @@ describe('AdminAffiliateRecordsTable promotion reporting', () => {
     await userButton?.trigger('click')
     await flushPromises()
     expect(wrapper.text()).toContain('admin.affiliates.overview.automaticTier')
-    expect(wrapper.text()).toContain('10 / 12')
+    expect(wrapper.text()).toContain('累计有效 10 / 邀请 12')
     expect(wrapper.text()).toContain('admin.affiliates.overview.customOverride')
     expect(wrapper.text()).toContain('admin.affiliates.overview.effectiveRate')
   })
@@ -185,7 +190,7 @@ describe('AdminAffiliateRecordsTable promotion reporting', () => {
     const mobileLabels = mobileWrapper.findAll('.admin-surface > .space-y-3 > div > span').map((label) => label.text())
     expect(mobileLabels).not.toContain('admin.affiliates.records.affCode')
     expect(mobileLabels).not.toContain('admin.affiliates.records.automaticTier')
-    expect(mobileLabels).not.toContain('admin.affiliates.records.qualification')
+    expect(mobileLabels).not.toContain('有效邀请')
     expect(mobileWrapper.get('[data-test="mobile-inviter-tier"]').exists()).toBe(true)
     expect(mobileWrapper.get('[data-test="mobile-invitee-qualification"]').exists()).toBe(true)
 
@@ -194,6 +199,6 @@ describe('AdminAffiliateRecordsTable promotion reporting', () => {
     const desktopHeaders = desktopWrapper.findAll('th').map((header) => header.text())
     expect(desktopHeaders).toContain('admin.affiliates.records.affCode')
     expect(desktopHeaders).toContain('admin.affiliates.records.automaticTier')
-    expect(desktopHeaders).toContain('admin.affiliates.records.qualification')
+    expect(desktopHeaders).toContain('有效邀请')
   })
 })

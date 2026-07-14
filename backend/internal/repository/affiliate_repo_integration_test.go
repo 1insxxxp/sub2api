@@ -113,7 +113,11 @@ func TestAffiliateRepository_QualificationReconcileAndCount(t *testing.T) {
 	inviter := mustCreateUser(t, client, &service.User{Email: fmt.Sprintf("affiliate-tier-inviter-%d@example.com", time.Now().UnixNano()), PasswordHash: "hash", Role: service.RoleUser, Status: service.StatusActive})
 	invitees := make([]*service.User, 3)
 	for i := range invitees {
-		invitees[i] = mustCreateUser(t, client, &service.User{Email: fmt.Sprintf("affiliate-tier-invitee-%d-%d@example.com", time.Now().UnixNano(), i), PasswordHash: "hash", Role: service.RoleUser, Status: service.StatusActive})
+		totalRecharged := 0.0
+		if i == 0 {
+			totalRecharged = 55
+		}
+		invitees[i] = mustCreateUser(t, client, &service.User{Email: fmt.Sprintf("affiliate-tier-invitee-%d-%d@example.com", time.Now().UnixNano(), i), PasswordHash: "hash", Role: service.RoleUser, Status: service.StatusActive, TotalRecharged: totalRecharged})
 		require.NoError(t, insertAffiliateRelationship(txCtx, client, invitees[i].ID, inviter.ID, fmt.Sprintf("TIER%07d", invitees[i].ID%10_000_000)))
 	}
 
@@ -147,13 +151,13 @@ func TestAffiliateRepository_QualificationReconcileAndCount(t *testing.T) {
 		return time.Time{}
 	}
 
-	assertQualification(invitees[0].ID, 49, false)
+	assertQualification(invitees[0].ID, 55, true)
 	qualifiedAt := assertQualification(invitees[1].ID, 50, true)
 	assertQualification(invitees[2].ID, 70, true)
 
 	count, err := qualificationRepo.CountQualifiedInvitees(txCtx, inviter.ID, 50)
 	require.NoError(t, err)
-	require.Equal(t, 2, count)
+	require.Equal(t, 3, count)
 	count, err = qualificationRepo.CountQualifiedInvitees(txCtx, inviter.ID, 60)
 	require.NoError(t, err)
 	require.Equal(t, 1, count, "count must react immediately to a configured threshold change")
