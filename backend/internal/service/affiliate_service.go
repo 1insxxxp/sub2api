@@ -19,6 +19,10 @@ var (
 	ErrAffiliateCodeTaken                   = infraerrors.Conflict("AFFILIATE_CODE_TAKEN", "affiliate code already in use")
 	ErrAffiliateAlreadyBound                = infraerrors.Conflict("AFFILIATE_ALREADY_BOUND", "affiliate inviter already bound")
 	ErrAffiliateQuotaEmpty                  = infraerrors.BadRequest("AFFILIATE_QUOTA_EMPTY", "no affiliate quota available to transfer")
+	ErrAffiliateRewardNotFound              = infraerrors.NotFound("AFFILIATE_REWARD_NOT_FOUND", "affiliate reward rule not found")
+	ErrAffiliateRewardNotQualified          = infraerrors.BadRequest("AFFILIATE_REWARD_NOT_QUALIFIED", "affiliate reward is not qualified yet")
+	ErrAffiliateRewardAlreadyClaimed        = infraerrors.Conflict("AFFILIATE_REWARD_ALREADY_CLAIMED", "affiliate reward already claimed")
+	ErrAffiliateRewardInvalid               = infraerrors.BadRequest("AFFILIATE_REWARD_INVALID", "invalid affiliate reward rule")
 	ErrAffiliateQualificationReconcileBusy  = errors.New("affiliate qualification reconciliation is busy")
 	ErrAffiliateQualificationReconcileStale = errors.New("affiliate qualification reconciliation generation changed")
 )
@@ -31,6 +35,8 @@ const (
 	AffiliateCodeMaxLength                       = 32
 	AffiliateQualificationDirtyAuditAction       = "AFFILIATE_QUALIFICATION_DIRTY"
 	AffiliateQualificationDirtyFailedAuditAction = "AFFILIATE_QUALIFICATION_DIRTY_FAILED"
+	AffiliateRewardTypeBalance                   = "balance"
+	AffiliateRewardTypeSubscription              = "subscription"
 )
 
 // affiliateCodeValidChar accepts uppercase letters, digits, underscore and dash.
@@ -124,7 +130,53 @@ type AffiliateDetail struct {
 	NextLevelInviteeThreshold  *int                      `json:"next_level_invitee_threshold"`
 	RemainingQualifiedInvitees int                       `json:"remaining_qualified_invitees"`
 	Tiers                      []AffiliateTierDefinition `json:"tiers"`
+	Rewards                    []AffiliateRewardProgress `json:"rewards"`
 	Invitees                   []AffiliateInvitee        `json:"invitees"`
+}
+
+type AffiliateRewardRule struct {
+	ID                        int64     `json:"id"`
+	Name                      string    `json:"name"`
+	Description               string    `json:"description"`
+	Enabled                   bool      `json:"enabled"`
+	RequiredQualifiedInvitees int       `json:"required_qualified_invitees"`
+	RewardType                string    `json:"reward_type"`
+	BalanceValue              float64   `json:"balance_value"`
+	GroupID                   *int64    `json:"group_id,omitempty"`
+	GroupName                 string    `json:"group_name,omitempty"`
+	ValidityDays              int       `json:"validity_days"`
+	RedeemExpiresInDays       int       `json:"redeem_expires_in_days"`
+	SortOrder                 int       `json:"sort_order"`
+	CreatedAt                 time.Time `json:"created_at"`
+	UpdatedAt                 time.Time `json:"updated_at"`
+}
+
+type AffiliateRewardClaim struct {
+	ID                            int64     `json:"id"`
+	UserID                        int64     `json:"user_id"`
+	RuleID                        int64     `json:"rule_id"`
+	RedeemCodeID                  int64     `json:"redeem_code_id"`
+	Code                          string    `json:"code"`
+	QualifiedInviteeCountSnapshot int       `json:"qualified_invitee_count_snapshot"`
+	ClaimedAt                     time.Time `json:"claimed_at"`
+}
+
+type AffiliateRewardProgress struct {
+	AffiliateRewardRule
+	QualifiedInviteeCount int        `json:"qualified_invitee_count"`
+	RemainingInvitees     int        `json:"remaining_invitees"`
+	Claimable             bool       `json:"claimable"`
+	Claimed               bool       `json:"claimed"`
+	ClaimedAt             *time.Time `json:"claimed_at,omitempty"`
+	RedeemCodeID          *int64     `json:"redeem_code_id,omitempty"`
+	Code                  string     `json:"code,omitempty"`
+}
+
+type AffiliateRewardClaimResult struct {
+	RuleID       int64     `json:"rule_id"`
+	RedeemCodeID int64     `json:"redeem_code_id"`
+	Code         string    `json:"code"`
+	ClaimedAt    time.Time `json:"claimed_at"`
 }
 
 type AffiliateTierDefinition struct {
@@ -161,6 +213,15 @@ type AffiliateRepository interface {
 	ListAffiliateRebateRecords(ctx context.Context, filter AffiliateRecordFilter) ([]AffiliateRebateRecord, int64, error)
 	ListAffiliateTransferRecords(ctx context.Context, filter AffiliateRecordFilter) ([]AffiliateTransferRecord, int64, error)
 	GetAffiliateUserOverview(ctx context.Context, userID int64) (*AffiliateUserOverview, error)
+}
+
+type AffiliateRewardRepository interface {
+	ListAffiliateRewardRules(ctx context.Context, includeDisabled bool) ([]AffiliateRewardRule, error)
+	GetAffiliateRewardRule(ctx context.Context, ruleID int64) (*AffiliateRewardRule, error)
+	SaveAffiliateRewardRule(ctx context.Context, rule AffiliateRewardRule) (*AffiliateRewardRule, error)
+	DeleteAffiliateRewardRule(ctx context.Context, ruleID int64) error
+	ListAffiliateRewardClaims(ctx context.Context, userID int64) ([]AffiliateRewardClaim, error)
+	CreateAffiliateRewardClaimWithCode(ctx context.Context, userID int64, rule AffiliateRewardRule, code RedeemCode, qualifiedInviteeCount int) (*AffiliateRewardClaim, error)
 }
 
 type AffiliateTierReadRepository interface {
@@ -307,6 +368,7 @@ type AffiliateService struct {
 	tierReadRepo          AffiliateTierReadRepository
 	qualificationRepo     AffiliateQualificationRepository
 	qualificationReadRepo AffiliateQualificationReadReconciler
+	rewardRepo            AffiliateRewardRepository
 	settingService        *SettingService
 	authCacheInvalidator  APIKeyAuthCacheInvalidator
 	billingCacheService   *BillingCacheService
@@ -316,11 +378,13 @@ func NewAffiliateService(repo AffiliateRepository, settingService *SettingServic
 	qualificationRepo, _ := repo.(AffiliateQualificationRepository)
 	qualificationReadRepo, _ := repo.(AffiliateQualificationReadReconciler)
 	tierReadRepo, _ := repo.(AffiliateTierReadRepository)
+	rewardRepo, _ := repo.(AffiliateRewardRepository)
 	return &AffiliateService{
 		repo:                  repo,
 		tierReadRepo:          tierReadRepo,
 		qualificationRepo:     qualificationRepo,
 		qualificationReadRepo: qualificationReadRepo,
+		rewardRepo:            rewardRepo,
 		settingService:        settingService,
 		authCacheInvalidator:  authCacheInvalidator,
 		billingCacheService:   billingCacheService,
@@ -368,6 +432,10 @@ func (s *AffiliateService) GetAffiliateDetail(ctx context.Context, userID int64)
 	if err != nil {
 		return nil, err
 	}
+	rewards, err := s.buildAffiliateRewardProgress(ctx, userID, snapshot.QualifiedInviteeCount)
+	if err != nil {
+		return nil, err
+	}
 	effectiveRate := effectiveAffiliateRebateRate(summary, snapshot.AutomaticRatePercent)
 	return &AffiliateDetail{
 		UserID:                     summary.UserID,
@@ -387,7 +455,117 @@ func (s *AffiliateService) GetAffiliateDetail(ctx context.Context, userID int64)
 		NextLevelInviteeThreshold:  nullableAffiliateThreshold(snapshot.NextTierThreshold),
 		RemainingQualifiedInvitees: snapshot.RemainingToNextTier,
 		Tiers:                      affiliateTierDefinitions(config),
+		Rewards:                    rewards,
 		Invitees:                   invitees,
+	}, nil
+}
+
+func (s *AffiliateService) buildAffiliateRewardProgress(ctx context.Context, userID int64, qualifiedCount int) ([]AffiliateRewardProgress, error) {
+	if s == nil || s.rewardRepo == nil {
+		return []AffiliateRewardProgress{}, nil
+	}
+	rules, err := s.rewardRepo.ListAffiliateRewardRules(ctx, false)
+	if err != nil {
+		return nil, err
+	}
+	if len(rules) == 0 {
+		return []AffiliateRewardProgress{}, nil
+	}
+	claims, err := s.rewardRepo.ListAffiliateRewardClaims(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	claimsByRule := make(map[int64]AffiliateRewardClaim, len(claims))
+	for _, claim := range claims {
+		claimsByRule[claim.RuleID] = claim
+	}
+	progress := make([]AffiliateRewardProgress, 0, len(rules))
+	for _, rule := range rules {
+		remaining := rule.RequiredQualifiedInvitees - qualifiedCount
+		if remaining < 0 {
+			remaining = 0
+		}
+		item := AffiliateRewardProgress{
+			AffiliateRewardRule:   rule,
+			QualifiedInviteeCount: qualifiedCount,
+			RemainingInvitees:     remaining,
+			Claimable:             rule.Enabled && remaining == 0,
+		}
+		if claim, ok := claimsByRule[rule.ID]; ok {
+			redeemCodeID := claim.RedeemCodeID
+			claimedAt := claim.ClaimedAt
+			item.Claimed = true
+			item.Claimable = false
+			item.RedeemCodeID = &redeemCodeID
+			item.Code = claim.Code
+			item.ClaimedAt = &claimedAt
+		}
+		progress = append(progress, item)
+	}
+	return progress, nil
+}
+
+func (s *AffiliateService) ClaimAffiliateReward(ctx context.Context, userID, ruleID int64) (*AffiliateRewardClaimResult, error) {
+	if userID <= 0 || ruleID <= 0 {
+		return nil, infraerrors.BadRequest("INVALID_REQUEST", "invalid affiliate reward claim request")
+	}
+	if s == nil || s.repo == nil || s.qualificationRepo == nil || s.rewardRepo == nil {
+		return nil, infraerrors.ServiceUnavailable("SERVICE_UNAVAILABLE", "affiliate service unavailable")
+	}
+	if _, err := s.EnsureUserAffiliate(ctx, userID); err != nil {
+		return nil, err
+	}
+	rule, err := s.rewardRepo.GetAffiliateRewardRule(ctx, ruleID)
+	if err != nil {
+		return nil, err
+	}
+	if rule == nil || !rule.Enabled {
+		return nil, ErrAffiliateRewardNotFound
+	}
+	if err := validateAffiliateRewardRule(*rule); err != nil {
+		return nil, err
+	}
+	config, err := s.affiliateTierConfigStrict(ctx)
+	if err != nil {
+		return nil, err
+	}
+	qualifiedCount, err := s.qualificationRepo.CountQualifiedInvitees(ctx, userID, config.QualificationAmount)
+	if err != nil {
+		return nil, err
+	}
+	if qualifiedCount < rule.RequiredQualifiedInvitees {
+		return nil, ErrAffiliateRewardNotQualified
+	}
+	code, err := GenerateRedeemCode()
+	if err != nil {
+		return nil, fmt.Errorf("generate affiliate reward redeem code: %w", err)
+	}
+	redeemCode := RedeemCode{
+		Code:   strings.ToUpper(code),
+		Type:   RedeemTypeBalance,
+		Value:  rule.BalanceValue,
+		Status: StatusUnused,
+		Notes:  fmt.Sprintf("affiliate reward rule #%d: %s", rule.ID, rule.Name),
+	}
+	if rule.RedeemExpiresInDays > 0 {
+		expiresAt := time.Now().UTC().AddDate(0, 0, rule.RedeemExpiresInDays)
+		redeemCode.ExpiresAt = &expiresAt
+	}
+	if rule.RewardType == AffiliateRewardTypeSubscription {
+		redeemCode.Type = RedeemTypeSubscription
+		redeemCode.Value = 1
+		redeemCode.GroupID = cloneInt64Ptr(rule.GroupID)
+		redeemCode.ValidityDays = rule.ValidityDays
+	}
+	claim, err := s.rewardRepo.CreateAffiliateRewardClaimWithCode(ctx, userID, *rule, redeemCode, qualifiedCount)
+	if err != nil {
+		return nil, err
+	}
+	return &AffiliateRewardClaimResult{
+		RuleID:       claim.RuleID,
+		RedeemCodeID: claim.RedeemCodeID,
+		Code:         claim.Code,
+		ClaimedAt:    claim.ClaimedAt,
 	}, nil
 }
 
@@ -885,6 +1063,34 @@ func cloneFloat64Ptr(value *float64) *float64 {
 	return &cloned
 }
 
+func validateAffiliateRewardRule(rule AffiliateRewardRule) error {
+	if strings.TrimSpace(rule.Name) == "" {
+		return infraerrors.BadRequest("AFFILIATE_REWARD_NAME_REQUIRED", "affiliate reward name is required")
+	}
+	if rule.RequiredQualifiedInvitees <= 0 {
+		return infraerrors.BadRequest("AFFILIATE_REWARD_THRESHOLD_INVALID", "required qualified invitees must be positive")
+	}
+	switch rule.RewardType {
+	case AffiliateRewardTypeBalance:
+		if rule.BalanceValue <= 0 || math.IsNaN(rule.BalanceValue) || math.IsInf(rule.BalanceValue, 0) {
+			return infraerrors.BadRequest("AFFILIATE_REWARD_BALANCE_INVALID", "balance reward value must be positive")
+		}
+	case AffiliateRewardTypeSubscription:
+		if rule.GroupID == nil || *rule.GroupID <= 0 {
+			return infraerrors.BadRequest("AFFILIATE_REWARD_GROUP_REQUIRED", "subscription reward group_id is required")
+		}
+		if rule.ValidityDays <= 0 {
+			return infraerrors.BadRequest("AFFILIATE_REWARD_VALIDITY_INVALID", "subscription validity_days must be positive")
+		}
+	default:
+		return infraerrors.BadRequest("AFFILIATE_REWARD_TYPE_INVALID", "affiliate reward type must be balance or subscription")
+	}
+	if rule.RedeemExpiresInDays < 0 {
+		return infraerrors.BadRequest("AFFILIATE_REWARD_EXPIRY_INVALID", "redeem expiry days cannot be negative")
+	}
+	return nil
+}
+
 func roundTo(v float64, scale int) float64 {
 	factor := math.Pow10(scale)
 	return math.Round(v*factor) / factor
@@ -939,6 +1145,43 @@ func (s *AffiliateService) invalidateAffiliateCaches(ctx context.Context, userID
 // =========================
 // Admin: 专属配置管理
 // =========================
+
+func (s *AffiliateService) AdminListRewardRules(ctx context.Context) ([]AffiliateRewardRule, error) {
+	if s == nil || s.rewardRepo == nil {
+		return nil, infraerrors.ServiceUnavailable("SERVICE_UNAVAILABLE", "affiliate service unavailable")
+	}
+	return s.rewardRepo.ListAffiliateRewardRules(ctx, true)
+}
+
+func (s *AffiliateService) AdminSaveRewardRule(ctx context.Context, rule AffiliateRewardRule) (*AffiliateRewardRule, error) {
+	if s == nil || s.rewardRepo == nil {
+		return nil, infraerrors.ServiceUnavailable("SERVICE_UNAVAILABLE", "affiliate service unavailable")
+	}
+	rule.Name = strings.TrimSpace(rule.Name)
+	rule.Description = strings.TrimSpace(rule.Description)
+	rule.RewardType = strings.TrimSpace(rule.RewardType)
+	if rule.RewardType == "" {
+		rule.RewardType = AffiliateRewardTypeBalance
+	}
+	if rule.RewardType == AffiliateRewardTypeBalance {
+		rule.GroupID = nil
+		rule.ValidityDays = 0
+	}
+	if err := validateAffiliateRewardRule(rule); err != nil {
+		return nil, err
+	}
+	return s.rewardRepo.SaveAffiliateRewardRule(ctx, rule)
+}
+
+func (s *AffiliateService) AdminDeleteRewardRule(ctx context.Context, ruleID int64) error {
+	if s == nil || s.rewardRepo == nil {
+		return infraerrors.ServiceUnavailable("SERVICE_UNAVAILABLE", "affiliate service unavailable")
+	}
+	if ruleID <= 0 {
+		return infraerrors.BadRequest("INVALID_REWARD_RULE", "invalid affiliate reward rule")
+	}
+	return s.rewardRepo.DeleteAffiliateRewardRule(ctx, ruleID)
+}
 
 // validateExclusiveRate ensures a per-user override is finite and within
 // [Min, Max]. nil is always valid (means "clear / fall back to global").

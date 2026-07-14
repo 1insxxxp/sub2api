@@ -185,6 +185,98 @@ func (h *AffiliateHandler) LookupUsers(c *gin.Context) {
 	response.Success(c, result)
 }
 
+// ListRewardRules lists all configured affiliate milestone rewards.
+// GET /api/v1/admin/affiliates/rewards
+func (h *AffiliateHandler) ListRewardRules(c *gin.Context) {
+	rules, err := h.affiliateService.AdminListRewardRules(c.Request.Context())
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	response.Success(c, rules)
+}
+
+type SaveAffiliateRewardRuleRequest struct {
+	Name                      string  `json:"name" binding:"required"`
+	Description               string  `json:"description"`
+	Enabled                   bool    `json:"enabled"`
+	RequiredQualifiedInvitees int     `json:"required_qualified_invitees" binding:"required"`
+	RewardType                string  `json:"reward_type" binding:"required"`
+	BalanceValue              float64 `json:"balance_value"`
+	GroupID                   *int64  `json:"group_id"`
+	ValidityDays              int     `json:"validity_days"`
+	RedeemExpiresInDays       int     `json:"redeem_expires_in_days"`
+	SortOrder                 int     `json:"sort_order"`
+}
+
+func (req SaveAffiliateRewardRuleRequest) toServiceRule(id int64) service.AffiliateRewardRule {
+	return service.AffiliateRewardRule{
+		ID:                        id,
+		Name:                      req.Name,
+		Description:               req.Description,
+		Enabled:                   req.Enabled,
+		RequiredQualifiedInvitees: req.RequiredQualifiedInvitees,
+		RewardType:                req.RewardType,
+		BalanceValue:              req.BalanceValue,
+		GroupID:                   req.GroupID,
+		ValidityDays:              req.ValidityDays,
+		RedeemExpiresInDays:       req.RedeemExpiresInDays,
+		SortOrder:                 req.SortOrder,
+	}
+}
+
+// CreateRewardRule creates an affiliate milestone reward rule.
+// POST /api/v1/admin/affiliates/rewards
+func (h *AffiliateHandler) CreateRewardRule(c *gin.Context) {
+	var req SaveAffiliateRewardRuleRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.BadRequest(c, "Invalid request: "+err.Error())
+		return
+	}
+	rule, err := h.affiliateService.AdminSaveRewardRule(c.Request.Context(), req.toServiceRule(0))
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	response.Success(c, rule)
+}
+
+// UpdateRewardRule updates an affiliate milestone reward rule.
+// PUT /api/v1/admin/affiliates/rewards/:rule_id
+func (h *AffiliateHandler) UpdateRewardRule(c *gin.Context) {
+	ruleID, err := strconv.ParseInt(c.Param("rule_id"), 10, 64)
+	if err != nil || ruleID <= 0 {
+		response.BadRequest(c, "Invalid rule_id")
+		return
+	}
+	var req SaveAffiliateRewardRuleRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.BadRequest(c, "Invalid request: "+err.Error())
+		return
+	}
+	rule, err := h.affiliateService.AdminSaveRewardRule(c.Request.Context(), req.toServiceRule(ruleID))
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	response.Success(c, rule)
+}
+
+// DeleteRewardRule deletes an unused affiliate milestone reward rule.
+// DELETE /api/v1/admin/affiliates/rewards/:rule_id
+func (h *AffiliateHandler) DeleteRewardRule(c *gin.Context) {
+	ruleID, err := strconv.ParseInt(c.Param("rule_id"), 10, 64)
+	if err != nil || ruleID <= 0 {
+		response.BadRequest(c, "Invalid rule_id")
+		return
+	}
+	if err := h.affiliateService.AdminDeleteRewardRule(c.Request.Context(), ruleID); err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	response.Success(c, gin.H{"id": ruleID})
+}
+
 // GetUserOverview returns one user's affiliate overview.
 // GET /api/v1/admin/affiliates/users/:user_id/overview
 func (h *AffiliateHandler) GetUserOverview(c *gin.Context) {

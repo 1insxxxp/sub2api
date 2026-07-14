@@ -80,6 +80,57 @@ func TestAffiliateService_TierStrictConfigErrorPropagates(t *testing.T) {
 	require.ErrorIs(t, err, wantErr)
 }
 
+func TestAffiliateService_ClaimRewardCreatesSubscriptionRedeemCode(t *testing.T) {
+	groupID := int64(9)
+	repo := &affiliateTierServiceRepoStub{
+		qualifiedCount: 3,
+		rewardRules: []AffiliateRewardRule{{
+			ID:                        7,
+			Name:                      "3 人首充奖励",
+			Enabled:                   true,
+			RequiredQualifiedInvitees: 3,
+			RewardType:                AffiliateRewardTypeSubscription,
+			GroupID:                   &groupID,
+			ValidityDays:              30,
+			RedeemExpiresInDays:       14,
+		}},
+	}
+	svc := NewAffiliateService(repo, NewSettingService(newAffiliateTierServiceSettingRepo(), nil), nil, nil)
+
+	result, err := svc.ClaimAffiliateReward(context.Background(), 42, 7)
+
+	require.NoError(t, err)
+	require.Equal(t, int64(7), result.RuleID)
+	require.Equal(t, "REWARD-CODE-1", result.Code)
+	require.Len(t, repo.createdRewardCodes, 1)
+	require.Equal(t, RedeemTypeSubscription, repo.createdRewardCodes[0].Type)
+	require.Equal(t, groupID, *repo.createdRewardCodes[0].GroupID)
+	require.Equal(t, 30, repo.createdRewardCodes[0].ValidityDays)
+	require.Equal(t, int64(7), repo.createdRewardClaims[0].RuleID)
+	require.Equal(t, 3, repo.createdRewardClaims[0].QualifiedInviteeCountSnapshot)
+}
+
+func TestAffiliateService_ClaimRewardRejectsBeforeThreshold(t *testing.T) {
+	repo := &affiliateTierServiceRepoStub{
+		qualifiedCount: 2,
+		rewardRules: []AffiliateRewardRule{{
+			ID:                        7,
+			Name:                      "3 人首充奖励",
+			Enabled:                   true,
+			RequiredQualifiedInvitees: 3,
+			RewardType:                AffiliateRewardTypeBalance,
+			BalanceValue:              10,
+		}},
+	}
+	svc := NewAffiliateService(repo, NewSettingService(newAffiliateTierServiceSettingRepo(), nil), nil, nil)
+
+	_, err := svc.ClaimAffiliateReward(context.Background(), 42, 7)
+
+	require.ErrorIs(t, err, ErrAffiliateRewardNotQualified)
+	require.Empty(t, repo.createdRewardCodes)
+	require.Empty(t, repo.createdRewardClaims)
+}
+
 func TestAffiliateService_QualificationReconcileMarkerClearsOnlyAfterSuccess(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
 		settings := newAffiliateTierServiceSettingRepo()
@@ -737,6 +788,10 @@ type affiliateTierServiceRepoStub struct {
 	reconcileInvitersCalls int
 	reconcileInviter       func(threshold float64)
 	reconcileInvitees      func(userIDs []int64, threshold float64)
+	rewardRules            []AffiliateRewardRule
+	rewardClaims           []AffiliateRewardClaim
+	createdRewardCodes     []RedeemCode
+	createdRewardClaims    []AffiliateRewardClaim
 }
 
 func (r *affiliateTierServiceRepoStub) CountQualifiedInvitees(_ context.Context, _ int64, threshold float64) (int, error) {
@@ -914,6 +969,74 @@ func (r *affiliateTierServiceRepoStub) ReconcileInvitees(_ context.Context, user
 		r.reconcileInvitees(userIDs, threshold)
 	}
 	return nil
+}
+
+func (r *affiliateTierServiceRepoStub) ListAffiliateRewardRules(_ context.Context, includeDisabled bool) ([]AffiliateRewardRule, error) {
+	rules := make([]AffiliateRewardRule, 0, len(r.rewardRules))
+	for _, rule := range r.rewardRules {
+		if !includeDisabled && !rule.Enabled {
+			continue
+		}
+		rules = append(rules, rule)
+	}
+	return rules, nil
+}
+
+func (r *affiliateTierServiceRepoStub) GetAffiliateRewardRule(_ context.Context, ruleID int64) (*AffiliateRewardRule, error) {
+	for _, rule := range r.rewardRules {
+		if rule.ID == ruleID {
+			cloned := rule
+			return &cloned, nil
+		}
+	}
+	return nil, ErrAffiliateRewardNotFound
+}
+
+func (r *affiliateTierServiceRepoStub) SaveAffiliateRewardRule(_ context.Context, rule AffiliateRewardRule) (*AffiliateRewardRule, error) {
+	r.rewardRules = append(r.rewardRules, rule)
+	return &rule, nil
+}
+
+func (r *affiliateTierServiceRepoStub) DeleteAffiliateRewardRule(_ context.Context, ruleID int64) error {
+	for i, rule := range r.rewardRules {
+		if rule.ID == ruleID {
+			r.rewardRules = append(r.rewardRules[:i], r.rewardRules[i+1:]...)
+			return nil
+		}
+	}
+	return ErrAffiliateRewardNotFound
+}
+
+func (r *affiliateTierServiceRepoStub) ListAffiliateRewardClaims(_ context.Context, userID int64) ([]AffiliateRewardClaim, error) {
+	claims := make([]AffiliateRewardClaim, 0, len(r.rewardClaims))
+	for _, claim := range r.rewardClaims {
+		if claim.UserID == userID {
+			claims = append(claims, claim)
+		}
+	}
+	return claims, nil
+}
+
+func (r *affiliateTierServiceRepoStub) CreateAffiliateRewardClaimWithCode(_ context.Context, userID int64, rule AffiliateRewardRule, code RedeemCode, qualifiedInviteeCount int) (*AffiliateRewardClaim, error) {
+	for _, claim := range r.createdRewardClaims {
+		if claim.UserID == userID && claim.RuleID == rule.ID {
+			return nil, ErrAffiliateRewardAlreadyClaimed
+		}
+	}
+	code.ID = int64(len(r.createdRewardCodes) + 1)
+	code.Code = "REWARD-CODE-" + strconv.Itoa(len(r.createdRewardCodes)+1)
+	r.createdRewardCodes = append(r.createdRewardCodes, code)
+	claim := AffiliateRewardClaim{
+		ID:                            int64(len(r.createdRewardClaims) + 1),
+		UserID:                        userID,
+		RuleID:                        rule.ID,
+		RedeemCodeID:                  code.ID,
+		Code:                          code.Code,
+		QualifiedInviteeCountSnapshot: qualifiedInviteeCount,
+		ClaimedAt:                     time.Now(),
+	}
+	r.createdRewardClaims = append(r.createdRewardClaims, claim)
+	return &claim, nil
 }
 
 func (r *affiliateTierServiceRepoStub) reconcileCallCount() int {

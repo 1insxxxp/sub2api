@@ -5,7 +5,11 @@
  */
 
 import { apiClient } from '../client'
-import type { AffiliateTierProgress, PaginatedResponse } from '@/types'
+import type {
+  AffiliateRewardRule,
+  AffiliateTierProgress,
+  PaginatedResponse,
+} from '@/types'
 
 export interface AffiliateAdminEntry {
   user_id: number
@@ -118,6 +122,11 @@ export interface SimpleUser {
   username: string
 }
 
+export type SaveAffiliateRewardRuleRequest = Omit<
+  AffiliateRewardRule,
+  'id' | 'created_at' | 'updated_at'
+>
+
 export async function listUsers(
   params: ListAffiliateUsersParams = {},
 ): Promise<PaginatedResponse<AffiliateAdminEntry>> {
@@ -224,6 +233,41 @@ export async function getUserOverview(
   return data
 }
 
+export async function listRewardRules(): Promise<AffiliateRewardRule[]> {
+  const { data } = await apiClient.get<AffiliateRewardRule[]>(
+    '/admin/affiliates/rewards',
+  )
+  return data
+}
+
+export async function createRewardRule(
+  payload: SaveAffiliateRewardRuleRequest,
+): Promise<AffiliateRewardRule> {
+  const { data } = await apiClient.post<AffiliateRewardRule>(
+    '/admin/affiliates/rewards',
+    payload,
+  )
+  return data
+}
+
+export async function updateRewardRule(
+  ruleId: number,
+  payload: SaveAffiliateRewardRuleRequest,
+): Promise<AffiliateRewardRule> {
+  const { data } = await apiClient.put<AffiliateRewardRule>(
+    `/admin/affiliates/rewards/${ruleId}`,
+    payload,
+  )
+  return data
+}
+
+export async function deleteRewardRule(ruleId: number): Promise<{ id: number }> {
+  const { data } = await apiClient.delete<{ id: number }>(
+    `/admin/affiliates/rewards/${ruleId}`,
+  )
+  return data
+}
+
 export const affiliatesAPI = {
   listUsers,
   lookupUsers,
@@ -234,6 +278,10 @@ export const affiliatesAPI = {
   listRebateRecords,
   listTransferRecords,
   getUserOverview,
+  listRewardRules,
+  createRewardRule,
+  updateRewardRule,
+  deleteRewardRule,
 }
 
 export default affiliatesAPI

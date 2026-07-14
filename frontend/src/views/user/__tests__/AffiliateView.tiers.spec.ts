@@ -6,14 +6,16 @@ import enDashboard from '@/i18n/locales/en/dashboard'
 import zhDashboard from '@/i18n/locales/zh/dashboard'
 import type { UserAffiliateDetail } from '@/types'
 
-const { getAffiliateDetail } = vi.hoisted(() => ({
-  getAffiliateDetail: vi.fn()
+const { getAffiliateDetail, claimAffiliateReward } = vi.hoisted(() => ({
+  getAffiliateDetail: vi.fn(),
+  claimAffiliateReward: vi.fn()
 }))
 
 vi.mock('@/api/user', () => ({
   default: {
     getAffiliateDetail,
-    transferAffiliateQuota: vi.fn()
+    transferAffiliateQuota: vi.fn(),
+    claimAffiliateReward
   }
 }))
 
@@ -59,7 +61,45 @@ vi.mock('vue-i18n', async (importOriginal) => {
           'affiliate.tiers.objectives.pulse': '{count} more qualified invitees to reach Orbit',
           'affiliate.tiers.objectives.orbit': '{count} more qualified invitees to reach Core; current qualified ratio {ratio}, cumulative rebate {rebate}',
           'affiliate.tiers.objectives.core': 'Highest tier reached: {qualified} qualified invitees, {rebate} cumulative rebate, and a {rate} current rebate rate',
+          'affiliate.campaign.eyebrow': 'Growth console',
+          'affiliate.campaign.title': 'Invite friends, unlock higher rebates',
+          'affiliate.campaign.subtitle': 'Share your link, track qualified purchases, and transfer available rebate quota into balance.',
+          'affiliate.campaign.nextTier': '{count} more qualified invitees to unlock {level}',
+          'affiliate.campaign.maxTier': 'Top tier unlocked',
+          'affiliate.campaign.stepsTitle': '3-step reward path',
+          'affiliate.campaign.stepRegisterTitle': 'Friend registers',
+          'affiliate.campaign.stepRegisterDescription': 'New users bind to you from the invite link or affiliate code.',
+          'affiliate.campaign.stepRechargeTitle': 'Friend pays {amount}',
+          'affiliate.campaign.stepRechargeDescription': 'Cumulative paid purchases turn them into a qualified invitee.',
+          'affiliate.campaign.stepRewardTitle': 'You earn rebates',
+          'affiliate.campaign.stepRewardDescription': 'Recharge rebates follow your current rate and can be moved into balance.',
+          'affiliate.campaign.toolsTitle': 'Invite toolkit',
+          'affiliate.campaign.toolsDescription': 'Copy the materials users actually need when sharing in groups.',
+          'affiliate.campaign.copyPitch': 'Copy pitch',
+          'affiliate.campaign.pitchCopied': 'Pitch copied',
+          'affiliate.campaign.pitchTemplate': 'Sign up for trial credits and access GPT, Claude, Gemini, and other models: {link}',
+          'affiliate.campaign.progressTitle': 'Progress center',
+          'affiliate.campaign.progressDescription': 'Qualified invitees drive permanent tier upgrades.',
+          'affiliate.campaign.qualifiedRatio': 'Qualified ratio',
+          'affiliate.campaign.mobileCta': 'Copy invite link',
           'affiliate.stats.invitedUsers': 'Invited users',
+          'affiliate.stats.rebateRate': 'My rebate rate',
+          'affiliate.stats.availableQuota': 'Available quota',
+          'affiliate.stats.totalQuota': 'Historical quota',
+          'affiliate.rewards.title': 'Milestone rewards',
+          'affiliate.rewards.description': 'Claim redeem codes after qualified-invite milestones.',
+          'affiliate.rewards.requirement': '{count} qualified invitees',
+          'affiliate.rewards.balanceBenefit': '{amount} balance reward',
+          'affiliate.rewards.subscriptionBenefit': '{group} subscription reward for {days} days',
+          'affiliate.rewards.groupFallback': 'Group #{id}',
+          'affiliate.rewards.subscriptionGeneric': 'subscription',
+          'affiliate.rewards.remaining': '{count} more qualified invitees to claim',
+          'affiliate.rewards.claim': 'Claim redeem code',
+          'affiliate.rewards.claiming': 'Claiming...',
+          'affiliate.rewards.claimSuccess': 'Redeem code claimed: {code}',
+          'affiliate.rewards.claimFailed': 'Failed to claim milestone reward',
+          'affiliate.rewards.copyCode': 'Copy code',
+          'affiliate.rewards.codeCopied': 'Redeem code copied',
           'affiliate.invitees.columns.paymentProgress': 'Cumulative paid',
           'affiliate.invitees.qualified': 'Qualified',
           'affiliate.invitees.inProgress': 'In progress'
@@ -95,6 +135,63 @@ function makeDetail(overrides: Partial<UserAffiliateDetail> = {}): UserAffiliate
     next_level_invitee_threshold: 30,
     remaining_qualified_invitees: 18,
     tiers,
+    rewards: [
+      {
+        id: 1,
+        name: 'Starter bonus',
+        description: 'First milestone',
+        enabled: true,
+        required_qualified_invitees: 3,
+        reward_type: 'balance',
+        balance_value: 10,
+        group_id: null,
+        validity_days: 0,
+        redeem_expires_in_days: 0,
+        sort_order: 1,
+        qualified_invitee_count: 12,
+        remaining_invitees: 0,
+        claimable: false,
+        claimed: true,
+        claimed_at: '2026-07-12T00:00:00Z',
+        redeem_code_id: 88,
+        code: 'CLAIMED-CODE'
+      },
+      {
+        id: 2,
+        name: 'Orbit trial',
+        description: '',
+        enabled: true,
+        required_qualified_invitees: 10,
+        reward_type: 'subscription',
+        balance_value: 0,
+        group_id: 9,
+        group_name: 'GPT Full Models',
+        validity_days: 30,
+        redeem_expires_in_days: 14,
+        sort_order: 2,
+        qualified_invitee_count: 12,
+        remaining_invitees: 0,
+        claimable: true,
+        claimed: false
+      },
+      {
+        id: 3,
+        name: 'Core bonus',
+        description: '',
+        enabled: true,
+        required_qualified_invitees: 30,
+        reward_type: 'balance',
+        balance_value: 100,
+        group_id: null,
+        validity_days: 0,
+        redeem_expires_in_days: 0,
+        sort_order: 3,
+        qualified_invitee_count: 12,
+        remaining_invitees: 18,
+        claimable: false,
+        claimed: false
+      }
+    ],
     invitees: [
       {
         user_id: 2,
@@ -138,11 +235,19 @@ async function mountView(detail: UserAffiliateDetail) {
 describe('AffiliateView promotion tiers', () => {
   beforeEach(() => {
     getAffiliateDetail.mockReset()
+    claimAffiliateReward.mockReset()
   })
 
   it('provides localized accessible text for featured metrics', () => {
     expect(enDashboard.affiliate.tiers.identity.featuredMetric).toBe('Featured metric for current tier')
     expect(zhDashboard.affiliate.tiers.identity.featuredMetric).toBe('当前等级重点指标')
+  })
+
+  it('keeps the Chinese promotion pitch focused on trial credits and full-model access', () => {
+    expect(zhDashboard.affiliate.campaign.pitchTemplate).toContain('注册即送体验额度')
+    expect(zhDashboard.affiliate.campaign.pitchTemplate).toContain('GPT、Claude、Gemini 全模型')
+    expect(zhDashboard.affiliate.campaign.pitchTemplate).toContain('每天还可以签到领免费额度')
+    expect(zhDashboard.affiliate.campaign.pitchTemplate).not.toContain('充值满')
   })
 
   it('renders one integrated identity with the automatic level, progress, objectives, and all rules', async () => {
@@ -177,6 +282,63 @@ describe('AffiliateView promotion tiers', () => {
     expect(wrapper.get('[data-testid="tier-rule"][data-current="true"]').text()).toContain('Orbit')
     expect(wrapper.html()).not.toContain('tier-badge-gold')
     expect(wrapper.html()).not.toContain('tier-badge-pulse')
+  })
+
+  it('renders the promotion console with reward steps, invite tools, progress, and a mobile CTA', async () => {
+    const wrapper = await mountView(makeDetail({
+      automatic_level: 'bronze',
+      qualified_invitee_count: 7,
+      next_level_invitee_threshold: 10,
+      remaining_qualified_invitees: 3
+    }))
+
+    const console = wrapper.get('[data-testid="affiliate-promotion-console"]')
+    expect(console.text()).toContain('Growth console')
+    expect(console.text()).toContain('Invite friends, unlock higher rebates')
+    expect(console.text()).toContain('3 more qualified invitees to unlock Orbit')
+
+    const steps = wrapper.findAll('[data-testid="affiliate-reward-step"]')
+    expect(steps).toHaveLength(3)
+    expect(steps.map((step) => step.text())).toEqual([
+      expect.stringContaining('Friend registers'),
+      expect.stringContaining('Friend pays $50.00'),
+      expect.stringContaining('You earn rebates')
+    ])
+
+    const tools = wrapper.get('[data-testid="affiliate-invite-tools"]')
+    expect(tools.text()).toContain('AFF123')
+    expect(tools.text()).toContain('/register?aff=AFF123')
+    expect(tools.text()).toContain('Copy pitch')
+    expect(tools.text()).toContain('GPT, Claude, Gemini')
+
+    const progress = wrapper.get('[data-testid="affiliate-progress-center"]')
+    expect(progress.text()).toContain('Progress center')
+    expect(progress.text()).toContain('Qualified ratio')
+    expect(progress.text()).toContain('58%')
+
+    const mobileCta = wrapper.get('[data-testid="affiliate-mobile-cta"]')
+    expect(mobileCta.classes()).toEqual(expect.arrayContaining(['md:hidden', 'sticky']))
+    expect(mobileCta.text()).toContain('Copy invite link')
+  })
+
+  it('renders milestone reward tasks with claimed, claimable, and locked states', async () => {
+    const wrapper = await mountView(makeDetail())
+
+    const panel = wrapper.get('[data-testid="affiliate-milestone-rewards"]')
+    expect(panel.text()).toContain('Milestone rewards')
+
+    const tasks = wrapper.findAll('[data-testid="affiliate-reward-task"]')
+    expect(tasks).toHaveLength(3)
+    expect(tasks[0].attributes('data-state')).toBe('claimed')
+    expect(tasks[0].text()).toContain('CLAIMED-CODE')
+    expect(tasks[0].text()).toContain('$10.00 balance reward')
+
+    expect(tasks[1].attributes('data-state')).toBe('claimable')
+    expect(tasks[1].text()).toContain('GPT Full Models subscription reward for 30 days')
+    expect(tasks[1].text()).toContain('Claim redeem code')
+
+    expect(tasks[2].attributes('data-state')).toBe('locked')
+    expect(tasks[2].text()).toContain('18 more qualified invitees to claim')
   })
 
   it.each([

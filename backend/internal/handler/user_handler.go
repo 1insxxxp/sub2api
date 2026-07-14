@@ -2,6 +2,7 @@ package handler
 
 import (
 	"context"
+	"strconv"
 	"strings"
 	"time"
 
@@ -230,6 +231,27 @@ func (h *UserHandler) TransferAffiliateQuota(c *gin.Context) {
 		"transferred_quota": transferred,
 		"balance":           balance,
 	})
+}
+
+// ClaimAffiliateReward manually claims one configured affiliate milestone reward.
+// POST /api/v1/user/aff/rewards/:rule_id/claim
+func (h *UserHandler) ClaimAffiliateReward(c *gin.Context) {
+	subject, ok := middleware2.GetAuthSubjectFromContext(c)
+	if !ok {
+		response.Unauthorized(c, "User not authenticated")
+		return
+	}
+	ruleID, err := strconv.ParseInt(c.Param("rule_id"), 10, 64)
+	if err != nil || ruleID <= 0 {
+		response.BadRequest(c, "Invalid rule_id")
+		return
+	}
+	result, err := h.affiliateService.ClaimAffiliateReward(c.Request.Context(), subject.UserID, ruleID)
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	response.Success(c, result)
 }
 
 type StartIdentityBindingRequest struct {

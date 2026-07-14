@@ -16,6 +16,7 @@ import type {
   UserAuthProvider,
   UserAffiliateDetail,
   AffiliateTransferResponse,
+  AffiliateRewardClaimResult,
   PlatformQuotasResponse,
 } from '@/types'
 
@@ -186,6 +187,13 @@ export async function transferAffiliateQuota(): Promise<AffiliateTransferRespons
   return data
 }
 
+export async function claimAffiliateReward(ruleId: number): Promise<AffiliateRewardClaimResult> {
+  const { data } = await apiClient.post<AffiliateRewardClaimResult>(
+    `/user/aff/rewards/${ruleId}/claim`
+  )
+  return data
+}
+
 /**
  * 获取当前用户的平台限额 + 用量。
  */
@@ -209,6 +217,7 @@ export const userAPI = {
   startOAuthBinding,
   getAffiliateDetail,
   transferAffiliateQuota,
+  claimAffiliateReward,
   getMyPlatformQuotas,
 }
 

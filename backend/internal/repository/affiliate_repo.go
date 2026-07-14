@@ -998,6 +998,236 @@ func (r *affiliateRepository) CountQualifiedInvitees(ctx context.Context, invite
 	return count, rows.Err()
 }
 
+func (r *affiliateRepository) ListAffiliateRewardRules(ctx context.Context, includeDisabled bool) ([]service.AffiliateRewardRule, error) {
+	client := clientFromContext(ctx, r.client)
+	where := ""
+	if !includeDisabled {
+		where = "WHERE affiliate_reward_rules.enabled = TRUE"
+	}
+	rows, err := client.QueryContext(ctx, `
+SELECT affiliate_reward_rules.id, affiliate_reward_rules.name, affiliate_reward_rules.description,
+       affiliate_reward_rules.enabled, affiliate_reward_rules.required_qualified_invitees,
+       affiliate_reward_rules.reward_type, affiliate_reward_rules.balance_value::double precision,
+       affiliate_reward_rules.group_id, COALESCE(g.name, '') AS group_name,
+       affiliate_reward_rules.validity_days, affiliate_reward_rules.redeem_expires_in_days,
+       affiliate_reward_rules.sort_order, affiliate_reward_rules.created_at,
+       affiliate_reward_rules.updated_at
+FROM affiliate_reward_rules
+LEFT JOIN groups g ON g.id = affiliate_reward_rules.group_id
+`+where+`
+ORDER BY affiliate_reward_rules.sort_order ASC, affiliate_reward_rules.required_qualified_invitees ASC, affiliate_reward_rules.id ASC`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	rules := []service.AffiliateRewardRule{}
+	for rows.Next() {
+		rule, scanErr := scanAffiliateRewardRule(rows)
+		if scanErr != nil {
+			return nil, scanErr
+		}
+		rules = append(rules, rule)
+	}
+	return rules, rows.Err()
+}
+
+func (r *affiliateRepository) GetAffiliateRewardRule(ctx context.Context, ruleID int64) (*service.AffiliateRewardRule, error) {
+	if ruleID <= 0 {
+		return nil, service.ErrAffiliateRewardNotFound
+	}
+	client := clientFromContext(ctx, r.client)
+	rows, err := client.QueryContext(ctx, `
+SELECT id, name, description, enabled, required_qualified_invitees, reward_type,
+       balance_value::double precision, group_id,
+       COALESCE((SELECT name FROM groups WHERE groups.id = affiliate_reward_rules.group_id), '') AS group_name,
+       validity_days, redeem_expires_in_days, sort_order, created_at, updated_at
+FROM affiliate_reward_rules
+WHERE id = $1
+LIMIT 1`, ruleID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	if !rows.Next() {
+		return nil, service.ErrAffiliateRewardNotFound
+	}
+	rule, err := scanAffiliateRewardRule(rows)
+	if err != nil {
+		return nil, err
+	}
+	return &rule, rows.Err()
+}
+
+func (r *affiliateRepository) SaveAffiliateRewardRule(ctx context.Context, rule service.AffiliateRewardRule) (*service.AffiliateRewardRule, error) {
+	var saved *service.AffiliateRewardRule
+	err := r.withTx(ctx, func(txCtx context.Context, txClient *dbent.Client) error {
+		var rows *sql.Rows
+		var err error
+		if rule.ID > 0 {
+			rows, err = txClient.QueryContext(txCtx, `
+UPDATE affiliate_reward_rules
+SET name = $2,
+    description = $3,
+    enabled = $4,
+    required_qualified_invitees = $5,
+    reward_type = $6,
+    balance_value = $7,
+    group_id = $8,
+    validity_days = $9,
+    redeem_expires_in_days = $10,
+    sort_order = $11,
+    updated_at = NOW()
+WHERE id = $1
+RETURNING id, name, description, enabled, required_qualified_invitees, reward_type,
+          balance_value::double precision, group_id,
+          COALESCE((SELECT name FROM groups WHERE groups.id = affiliate_reward_rules.group_id), '') AS group_name,
+          validity_days, redeem_expires_in_days,
+          sort_order, created_at, updated_at`,
+				rule.ID, rule.Name, rule.Description, rule.Enabled, rule.RequiredQualifiedInvitees,
+				rule.RewardType, rule.BalanceValue, rule.GroupID, rule.ValidityDays,
+				rule.RedeemExpiresInDays, rule.SortOrder)
+		} else {
+			rows, err = txClient.QueryContext(txCtx, `
+INSERT INTO affiliate_reward_rules (
+    name, description, enabled, required_qualified_invitees, reward_type,
+    balance_value, group_id, validity_days, redeem_expires_in_days, sort_order
+) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+RETURNING id, name, description, enabled, required_qualified_invitees, reward_type,
+          balance_value::double precision, group_id,
+          COALESCE((SELECT name FROM groups WHERE groups.id = affiliate_reward_rules.group_id), '') AS group_name,
+          validity_days, redeem_expires_in_days,
+          sort_order, created_at, updated_at`,
+				rule.Name, rule.Description, rule.Enabled, rule.RequiredQualifiedInvitees,
+				rule.RewardType, rule.BalanceValue, rule.GroupID, rule.ValidityDays,
+				rule.RedeemExpiresInDays, rule.SortOrder)
+		}
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+		if !rows.Next() {
+			return service.ErrAffiliateRewardNotFound
+		}
+		scanned, err := scanAffiliateRewardRule(rows)
+		if err != nil {
+			return err
+		}
+		if err := rows.Err(); err != nil {
+			return err
+		}
+		saved = &scanned
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return saved, nil
+}
+
+func (r *affiliateRepository) DeleteAffiliateRewardRule(ctx context.Context, ruleID int64) error {
+	if ruleID <= 0 {
+		return service.ErrAffiliateRewardNotFound
+	}
+	client := clientFromContext(ctx, r.client)
+	result, err := client.ExecContext(ctx, "DELETE FROM affiliate_reward_rules WHERE id = $1", ruleID)
+	if err != nil {
+		return err
+	}
+	affected, err := result.RowsAffected()
+	if err == nil && affected == 0 {
+		return service.ErrAffiliateRewardNotFound
+	}
+	return nil
+}
+
+func (r *affiliateRepository) ListAffiliateRewardClaims(ctx context.Context, userID int64) ([]service.AffiliateRewardClaim, error) {
+	if userID <= 0 {
+		return []service.AffiliateRewardClaim{}, nil
+	}
+	client := clientFromContext(ctx, r.client)
+	rows, err := client.QueryContext(ctx, `
+SELECT arc.id, arc.user_id, arc.rule_id, arc.redeem_code_id, COALESCE(rc.code, ''),
+       arc.qualified_invitee_count_snapshot, arc.claimed_at
+FROM affiliate_reward_claims arc
+LEFT JOIN redeem_codes rc ON rc.id = arc.redeem_code_id
+WHERE arc.user_id = $1
+ORDER BY arc.claimed_at DESC`, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	claims := []service.AffiliateRewardClaim{}
+	for rows.Next() {
+		var claim service.AffiliateRewardClaim
+		if err := rows.Scan(&claim.ID, &claim.UserID, &claim.RuleID, &claim.RedeemCodeID, &claim.Code, &claim.QualifiedInviteeCountSnapshot, &claim.ClaimedAt); err != nil {
+			return nil, err
+		}
+		claims = append(claims, claim)
+	}
+	return claims, rows.Err()
+}
+
+func (r *affiliateRepository) CreateAffiliateRewardClaimWithCode(ctx context.Context, userID int64, rule service.AffiliateRewardRule, code service.RedeemCode, qualifiedInviteeCount int) (*service.AffiliateRewardClaim, error) {
+	if userID <= 0 || rule.ID <= 0 {
+		return nil, service.ErrAffiliateRewardInvalid
+	}
+	if code.Status == "" {
+		code.Status = service.StatusUnused
+	}
+	var claim *service.AffiliateRewardClaim
+	err := r.withTx(ctx, func(txCtx context.Context, txClient *dbent.Client) error {
+		rows, err := txClient.QueryContext(txCtx, `
+INSERT INTO redeem_codes (code, type, value, status, notes, expires_at, group_id, validity_days)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+RETURNING id`,
+			code.Code, code.Type, code.Value, code.Status, code.Notes, code.ExpiresAt, code.GroupID, code.ValidityDays)
+		if err != nil {
+			return err
+		}
+		if !rows.Next() {
+			rows.Close()
+			return errors.New("insert affiliate reward redeem code returned no row")
+		}
+		if err := rows.Scan(&code.ID); err != nil {
+			rows.Close()
+			return err
+		}
+		if err := rows.Close(); err != nil {
+			return err
+		}
+
+		claimRows, err := txClient.QueryContext(txCtx, `
+INSERT INTO affiliate_reward_claims (user_id, rule_id, redeem_code_id, qualified_invitee_count_snapshot)
+VALUES ($1, $2, $3, $4)
+RETURNING id, user_id, rule_id, redeem_code_id, qualified_invitee_count_snapshot, claimed_at`,
+			userID, rule.ID, code.ID, qualifiedInviteeCount)
+		if err != nil {
+			if isAffiliateRewardUniqueViolation(err) {
+				return service.ErrAffiliateRewardAlreadyClaimed
+			}
+			return err
+		}
+		defer claimRows.Close()
+		if !claimRows.Next() {
+			return errors.New("insert affiliate reward claim returned no row")
+		}
+		var saved service.AffiliateRewardClaim
+		if err := claimRows.Scan(&saved.ID, &saved.UserID, &saved.RuleID, &saved.RedeemCodeID, &saved.QualifiedInviteeCountSnapshot, &saved.ClaimedAt); err != nil {
+			return err
+		}
+		if err := claimRows.Err(); err != nil {
+			return err
+		}
+		saved.Code = code.Code
+		claim = &saved
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return claim, nil
+}
+
 func (r *affiliateRepository) ReconcileAllAffiliateQualifications(ctx context.Context, threshold float64, batchSize int) error {
 	if dbent.TxFromContext(ctx) != nil {
 		return fmt.Errorf("affiliate qualification full reconcile requires a non-transaction context")
@@ -1402,6 +1632,42 @@ func queryAffiliateRecordCount(ctx context.Context, client affiliateQueryExecer,
 		return 0, err
 	}
 	return total, rows.Err()
+}
+
+func scanAffiliateRewardRule(rows *sql.Rows) (service.AffiliateRewardRule, error) {
+	var rule service.AffiliateRewardRule
+	var groupID sql.NullInt64
+	if err := rows.Scan(
+		&rule.ID,
+		&rule.Name,
+		&rule.Description,
+		&rule.Enabled,
+		&rule.RequiredQualifiedInvitees,
+		&rule.RewardType,
+		&rule.BalanceValue,
+		&groupID,
+		&rule.GroupName,
+		&rule.ValidityDays,
+		&rule.RedeemExpiresInDays,
+		&rule.SortOrder,
+		&rule.CreatedAt,
+		&rule.UpdatedAt,
+	); err != nil {
+		return service.AffiliateRewardRule{}, err
+	}
+	if groupID.Valid {
+		value := groupID.Int64
+		rule.GroupID = &value
+	}
+	return rule, nil
+}
+
+func isAffiliateRewardUniqueViolation(err error) bool {
+	var pqErr *pq.Error
+	if errors.As(err, &pqErr) {
+		return string(pqErr.Code) == "23505"
+	}
+	return false
 }
 
 func (r *affiliateRepository) withTx(ctx context.Context, fn func(txCtx context.Context, txClient *dbent.Client) error) error {

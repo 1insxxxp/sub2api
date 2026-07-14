@@ -50,3 +50,17 @@ func TestMigration177AddsAffiliateQualifiedLookupIndexConcurrently(t *testing.T)
 	require.NotContains(t, sql, "UPDATE ")
 	require.NotContains(t, sql, "ALTER TABLE")
 }
+
+func TestMigration178AddsAffiliateRewardRules(t *testing.T) {
+	content, err := FS.ReadFile("178_add_affiliate_reward_rules.sql")
+	require.NoError(t, err)
+
+	sql := string(content)
+	require.Contains(t, sql, "CREATE TABLE IF NOT EXISTS affiliate_reward_rules")
+	require.Contains(t, sql, "required_qualified_invitees INTEGER NOT NULL")
+	require.Contains(t, sql, "reward_type IN ('balance', 'subscription')")
+	require.Contains(t, sql, "group_id IS NOT NULL AND group_id > 0 AND validity_days > 0")
+	require.Contains(t, sql, "CREATE TABLE IF NOT EXISTS affiliate_reward_claims")
+	require.Contains(t, sql, "UNIQUE (user_id, rule_id)")
+	require.Contains(t, sql, "REFERENCES redeem_codes")
+}

@@ -162,6 +162,42 @@ export interface AffiliateInvitee {
   qualified_at: string | null
 }
 
+export type AffiliateRewardType = 'balance' | 'subscription'
+
+export interface AffiliateRewardRule {
+  id: number
+  name: string
+  description: string
+  enabled: boolean
+  required_qualified_invitees: number
+  reward_type: AffiliateRewardType
+  balance_value: number
+  group_id?: number | null
+  group_name?: string
+  validity_days: number
+  redeem_expires_in_days: number
+  sort_order: number
+  created_at?: string
+  updated_at?: string
+}
+
+export interface AffiliateRewardProgress extends AffiliateRewardRule {
+  qualified_invitee_count: number
+  remaining_invitees: number
+  claimable: boolean
+  claimed: boolean
+  claimed_at?: string | null
+  redeem_code_id?: number | null
+  code?: string
+}
+
+export interface AffiliateRewardClaimResult {
+  rule_id: number
+  redeem_code_id: number
+  code: string
+  claimed_at: string
+}
+
 export interface UserAffiliateDetail extends AffiliateTierProgress {
   user_id: number
   aff_code: string
@@ -171,6 +207,7 @@ export interface UserAffiliateDetail extends AffiliateTierProgress {
   aff_frozen_quota: number
   aff_history_quota: number
   tiers: AffiliateTierDefinition[]
+  rewards: AffiliateRewardProgress[]
   invitees: AffiliateInvitee[]
 }
 

@@ -6118,6 +6118,249 @@
                 </p>
               </div>
 
+              <div class="border-t border-gray-100 pt-6 dark:border-dark-700">
+                <div class="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <h3 class="text-sm font-semibold text-gray-900 dark:text-white">
+                      {{ localText('邀请阶梯奖励', 'Milestone rewards') }}
+                    </h3>
+                    <p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
+                      {{ localText('配置达到多少位合格邀请后，用户可手动领取什么兑换码奖励。订阅奖励按分组 + 有效天数发放。', 'Configure what redeem-code reward users can manually claim after each qualified-invite milestone. Subscription rewards use group + validity days.') }}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    class="btn btn-secondary btn-sm"
+                    :disabled="affiliateRewardState.loading"
+                    @click="loadAffiliateRewardRules"
+                  >
+                    <Icon name="refresh" size="sm" />
+                    {{ t('common.refresh') }}
+                  </button>
+                </div>
+
+                <div class="rounded-lg border border-cyan-100 bg-cyan-50/40 p-4 dark:border-cyan-900/50 dark:bg-cyan-950/10">
+                  <p class="mb-3 text-xs leading-5 text-cyan-800 dark:text-cyan-200">
+                    {{ localText('新增一条阶梯奖励：先填用户看到的奖励名称，再设置达到几位合格邀请可领取，以及领取后生成哪种兑换码。', 'Add one milestone reward: name it, set how many qualified invitees are required, then choose what redeem code will be generated.') }}
+                  </p>
+                  <div class="grid gap-3 xl:grid-cols-[minmax(0,1.15fr)_130px_130px_minmax(0,1fr)_120px_140px_100px_auto]">
+                    <label class="block min-w-0">
+                      <span class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-300">
+                        {{ localText('奖励名称', 'Reward name') }}
+                      </span>
+                      <input
+                        v-model="affiliateRewardDraft.name"
+                        type="text"
+                        class="input"
+                        :placeholder="localText('例如：3 人首充奖励', 'e.g. 3-invite bonus')"
+                      />
+                    </label>
+                    <label class="block min-w-0">
+                      <span class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-300">
+                        {{ localText('达标人数', 'Required') }}
+                      </span>
+                      <input
+                        v-model.number="affiliateRewardDraft.required_qualified_invitees"
+                        type="number"
+                        min="1"
+                        step="1"
+                        class="input"
+                        :placeholder="localText('合格邀请数', 'Invitees')"
+                      />
+                    </label>
+                    <label class="block min-w-0">
+                      <span class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-300">
+                        {{ localText('奖励类型', 'Reward type') }}
+                      </span>
+                      <select v-model="affiliateRewardDraft.reward_type" class="input" @change="normalizeAffiliateRewardDraft">
+                        <option value="balance">{{ localText('余额', 'Balance') }}</option>
+                        <option value="subscription">{{ localText('订阅', 'Subscription') }}</option>
+                      </select>
+                    </label>
+                    <label class="block min-w-0">
+                      <span class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-300">
+                        {{ affiliateRewardDraft.reward_type === 'balance' ? localText('余额金额 USD', 'Balance USD') : localText('订阅分组', 'Subscription group') }}
+                      </span>
+                      <input
+                        v-if="affiliateRewardDraft.reward_type === 'balance'"
+                        v-model.number="affiliateRewardDraft.balance_value"
+                        type="number"
+                        min="0.01"
+                        step="0.01"
+                        class="input"
+                        :placeholder="localText('兑换后增加的余额', 'Balance granted')"
+                      />
+                      <select
+                        v-else
+                        v-model.number="affiliateRewardDraft.group_id"
+                        class="input"
+                        :disabled="subscriptionGroups.length === 0"
+                      >
+                        <option :value="null">{{ localText('选择分组', 'Select group') }}</option>
+                        <option v-for="group in subscriptionGroups" :key="group.id" :value="group.id">
+                          {{ group.name }}
+                        </option>
+                      </select>
+                    </label>
+                    <label class="block min-w-0">
+                      <span class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-300">
+                        {{ localText('有效天数', 'Validity days') }}
+                      </span>
+                      <input
+                        v-model.number="affiliateRewardDraft.validity_days"
+                        type="number"
+                        min="1"
+                        step="1"
+                        class="input"
+                        :disabled="affiliateRewardDraft.reward_type !== 'subscription'"
+                        :placeholder="localText('仅订阅奖励', 'Subscription only')"
+                      />
+                    </label>
+                    <label class="block min-w-0">
+                      <span class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-300">
+                        {{ localText('兑换码过期', 'Code expiry') }}
+                      </span>
+                      <input
+                        v-model.number="affiliateRewardDraft.redeem_expires_in_days"
+                        type="number"
+                        min="0"
+                        step="1"
+                        class="input"
+                        :placeholder="localText('0 不过期', '0 never')"
+                      />
+                    </label>
+                    <label class="block min-w-0">
+                      <span class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-300">
+                        {{ localText('排序', 'Sort') }}
+                      </span>
+                      <input
+                        v-model.number="affiliateRewardDraft.sort_order"
+                        type="number"
+                        step="1"
+                        class="input"
+                        :placeholder="localText('小靠前', 'Low first')"
+                      />
+                    </label>
+                    <button
+                      type="button"
+                      class="btn btn-primary btn-sm justify-center self-end"
+                      :disabled="affiliateRewardState.savingId === 0"
+                      @click="createAffiliateRewardRule"
+                    >
+                      <Icon v-if="affiliateRewardState.savingId === 0" name="refresh" size="sm" class="animate-spin" />
+                      <Icon v-else name="plus" size="sm" />
+                      {{ localText('添加', 'Add') }}
+                    </button>
+                  </div>
+                </div>
+
+                <div class="mt-4 space-y-3">
+                  <div v-if="affiliateRewardState.loading" class="rounded-lg border border-gray-200 p-4 text-sm text-gray-500 dark:border-dark-700 dark:text-dark-400">
+                    {{ t('common.loading') }}
+                  </div>
+                  <div v-else-if="affiliateRewardState.rules.length === 0" class="rounded-lg border border-dashed border-gray-300 p-4 text-center text-sm text-gray-500 dark:border-dark-700 dark:text-dark-400">
+                    {{ localText('暂无阶梯奖励规则', 'No milestone rewards yet') }}
+                  </div>
+                  <article
+                    v-for="rule in affiliateRewardState.rules"
+                    v-else
+                    :key="rule.id"
+                    class="rounded-lg border border-gray-200 p-4 dark:border-dark-700"
+                  >
+                    <div class="grid gap-3 xl:grid-cols-[minmax(0,1.15fr)_130px_130px_minmax(0,1fr)_120px_140px_100px_90px_auto]">
+                      <label class="block min-w-0">
+                        <span class="mb-1 block text-xs font-medium text-gray-500">{{ localText('奖励名称', 'Reward name') }}</span>
+                        <input v-model="rule.name" type="text" class="input" />
+                      </label>
+                      <label class="block min-w-0">
+                        <span class="mb-1 block text-xs font-medium text-gray-500">{{ localText('达标人数', 'Required') }}</span>
+                        <input v-model.number="rule.required_qualified_invitees" type="number" min="1" step="1" class="input" />
+                      </label>
+                      <label class="block min-w-0">
+                        <span class="mb-1 block text-xs font-medium text-gray-500">{{ localText('奖励类型', 'Reward type') }}</span>
+                        <select v-model="rule.reward_type" class="input" @change="normalizeAffiliateRewardRule(rule)">
+                          <option value="balance">{{ localText('余额', 'Balance') }}</option>
+                          <option value="subscription">{{ localText('订阅', 'Subscription') }}</option>
+                        </select>
+                      </label>
+                      <label class="block min-w-0">
+                        <span class="mb-1 block text-xs font-medium text-gray-500">
+                          {{ rule.reward_type === 'balance' ? localText('余额金额 USD', 'Balance USD') : localText('订阅分组', 'Subscription group') }}
+                        </span>
+                        <input
+                          v-if="rule.reward_type === 'balance'"
+                          v-model.number="rule.balance_value"
+                          type="number"
+                          min="0.01"
+                          step="0.01"
+                          class="input"
+                        />
+                        <select
+                          v-else
+                          v-model.number="rule.group_id"
+                          class="input"
+                          :disabled="subscriptionGroups.length === 0"
+                        >
+                          <option :value="null">{{ localText('选择分组', 'Select group') }}</option>
+                          <option v-for="group in subscriptionGroups" :key="group.id" :value="group.id">
+                            {{ group.name }}
+                          </option>
+                        </select>
+                      </label>
+                      <label class="block min-w-0">
+                        <span class="mb-1 block text-xs font-medium text-gray-500">{{ localText('有效天数', 'Validity days') }}</span>
+                        <input
+                          v-model.number="rule.validity_days"
+                          type="number"
+                          min="1"
+                          step="1"
+                          class="input"
+                          :disabled="rule.reward_type !== 'subscription'"
+                        />
+                      </label>
+                      <label class="block min-w-0">
+                        <span class="mb-1 block text-xs font-medium text-gray-500">{{ localText('兑换码过期', 'Code expiry') }}</span>
+                        <input v-model.number="rule.redeem_expires_in_days" type="number" min="0" step="1" class="input" />
+                      </label>
+                      <label class="block min-w-0">
+                        <span class="mb-1 block text-xs font-medium text-gray-500">{{ localText('排序', 'Sort') }}</span>
+                        <input v-model.number="rule.sort_order" type="number" step="1" class="input" />
+                      </label>
+                      <label class="block min-w-0">
+                        <span class="mb-1 block text-xs font-medium text-gray-500">{{ localText('启用', 'Enabled') }}</span>
+                        <div class="flex h-10 items-center">
+                          <Toggle v-model="rule.enabled" />
+                        </div>
+                      </label>
+                      <div class="flex items-end gap-2">
+                        <button
+                          type="button"
+                          class="btn btn-secondary btn-sm"
+                          :disabled="affiliateRewardState.savingId === rule.id"
+                          @click="saveAffiliateRewardRule(rule)"
+                        >
+                          {{ t('common.save') }}
+                        </button>
+                        <button
+                          type="button"
+                          class="btn btn-danger btn-sm"
+                          :disabled="affiliateRewardState.deletingId === rule.id"
+                          @click="deleteAffiliateRewardRule(rule)"
+                        >
+                          {{ t('common.delete') }}
+                        </button>
+                      </div>
+                    </div>
+                    <input
+                      v-model="rule.description"
+                      type="text"
+                      class="input mt-3"
+                      :placeholder="localText('奖励说明，可选', 'Optional reward description')"
+                    />
+                  </article>
+                </div>
+              </div>
+
               <!-- 专属用户管理 -->
               <div class="border-t border-gray-100 pt-6 dark:border-dark-700">
                 <div class="mb-3 flex items-center justify-between">
@@ -7519,6 +7762,7 @@ import type {
 } from "@/api/admin/settings";
 import type {
   AdminGroup,
+  AffiliateRewardRule,
   LoginAgreementDocument,
   NotifyEmailEntry,
   Proxy,
@@ -7540,7 +7784,7 @@ import EmailTemplateEditor from "@/views/admin/settings/EmailTemplateEditor.vue"
 import ImageStudioSettingsPanel from "@/views/admin/settings/ImageStudioSettingsPanel.vue";
 import OpenAIFastPolicyUserSelector from "@/views/admin/settings/OpenAIFastPolicyUserSelector.vue";
 import { useClipboard } from "@/composables/useClipboard";
-import { affiliatesAPI, type AffiliateAdminEntry, type SimpleUser as AffiliateSimpleUser } from "@/api/admin/affiliates";
+import { affiliatesAPI, type AffiliateAdminEntry, type SaveAffiliateRewardRuleRequest, type SimpleUser as AffiliateSimpleUser } from "@/api/admin/affiliates";
 import { extractApiErrorMessage, extractI18nErrorMessage } from "@/utils/apiError";
 import { useAppStore } from "@/stores";
 import { useAdminSettingsStore } from "@/stores/adminSettings";
@@ -10830,6 +11074,7 @@ async function handleDeleteProvider() {
 onMounted(() => {
   loadSettings();
   loadSubscriptionGroups();
+  loadAffiliateRewardRules();
   loadAdminApiKey();
   loadOverloadCooldownSettings();
   loadRateLimit429CooldownSettings();
@@ -10864,6 +11109,167 @@ const affiliateState = reactive<AffiliateState>({
   selected: [],
   searchTimer: null,
 });
+
+interface AffiliateRewardState {
+  loading: boolean;
+  savingId: number | null;
+  deletingId: number | null;
+  rules: AffiliateRewardRule[];
+}
+
+function defaultAffiliateRewardDraft(): SaveAffiliateRewardRuleRequest {
+  return {
+    name: "",
+    description: "",
+    enabled: true,
+    required_qualified_invitees: 3,
+    reward_type: "balance",
+    balance_value: 10,
+    group_id: null,
+    validity_days: 30,
+    redeem_expires_in_days: 0,
+    sort_order: 0,
+  };
+}
+
+const affiliateRewardState = reactive<AffiliateRewardState>({
+  loading: false,
+  savingId: null,
+  deletingId: null,
+  rules: [],
+});
+
+const affiliateRewardDraft = reactive<SaveAffiliateRewardRuleRequest>(
+  defaultAffiliateRewardDraft(),
+);
+
+function normalizeAffiliateRewardPayload(
+  raw: AffiliateRewardRule | SaveAffiliateRewardRuleRequest,
+): SaveAffiliateRewardRuleRequest | null {
+  const payload: SaveAffiliateRewardRuleRequest = {
+    name: String(raw.name ?? "").trim(),
+    description: String(raw.description ?? "").trim(),
+    enabled: Boolean(raw.enabled),
+    required_qualified_invitees: Math.floor(Number(raw.required_qualified_invitees)),
+    reward_type: raw.reward_type,
+    balance_value: Number(raw.balance_value ?? 0),
+    group_id: raw.group_id == null ? null : Number(raw.group_id),
+    validity_days: Math.floor(Number(raw.validity_days ?? 0)),
+    redeem_expires_in_days: Math.floor(Number(raw.redeem_expires_in_days ?? 0)),
+    sort_order: Math.floor(Number(raw.sort_order ?? 0)),
+  };
+  if (!payload.name) {
+    appStore.showError(localText("请填写奖励名称", "Please enter a reward name"));
+    return null;
+  }
+  if (!Number.isInteger(payload.required_qualified_invitees) || payload.required_qualified_invitees <= 0) {
+    appStore.showError(localText("合格邀请人数必须大于 0", "Qualified invitee count must be greater than 0"));
+    return null;
+  }
+  if (payload.reward_type === "subscription") {
+    if (!payload.group_id || payload.group_id <= 0) {
+      appStore.showError(localText("订阅奖励必须选择分组", "Subscription rewards require a group"));
+      return null;
+    }
+    if (!Number.isInteger(payload.validity_days) || payload.validity_days <= 0) {
+      appStore.showError(localText("订阅有效天数必须大于 0", "Subscription validity days must be greater than 0"));
+      return null;
+    }
+    payload.balance_value = 0;
+  } else {
+    payload.reward_type = "balance";
+    payload.group_id = null;
+    payload.validity_days = 0;
+    if (!Number.isFinite(payload.balance_value) || payload.balance_value <= 0) {
+      appStore.showError(localText("余额奖励金额必须大于 0", "Balance reward amount must be greater than 0"));
+      return null;
+    }
+  }
+  if (!Number.isInteger(payload.redeem_expires_in_days) || payload.redeem_expires_in_days < 0) {
+    appStore.showError(localText("兑换码过期天数不能小于 0", "Redeem-code expiry days cannot be negative"));
+    return null;
+  }
+  return payload;
+}
+
+function normalizeAffiliateRewardDraft() {
+  if (affiliateRewardDraft.reward_type === "subscription") {
+    affiliateRewardDraft.group_id = affiliateRewardDraft.group_id || subscriptionGroups.value[0]?.id || null;
+    affiliateRewardDraft.validity_days = affiliateRewardDraft.validity_days || 30;
+    affiliateRewardDraft.balance_value = 0;
+  } else {
+    affiliateRewardDraft.group_id = null;
+    affiliateRewardDraft.validity_days = 0;
+    affiliateRewardDraft.balance_value = affiliateRewardDraft.balance_value || 10;
+  }
+}
+
+function normalizeAffiliateRewardRule(rule: AffiliateRewardRule) {
+  if (rule.reward_type === "subscription") {
+    rule.group_id = rule.group_id || subscriptionGroups.value[0]?.id || null;
+    rule.validity_days = rule.validity_days || 30;
+    rule.balance_value = 0;
+  } else {
+    rule.group_id = null;
+    rule.validity_days = 0;
+    rule.balance_value = rule.balance_value || 10;
+  }
+}
+
+async function loadAffiliateRewardRules() {
+  affiliateRewardState.loading = true;
+  try {
+    affiliateRewardState.rules = await affiliatesAPI.listRewardRules();
+  } catch (err) {
+    appStore.showError(extractApiErrorMessage(err, t("common.error")));
+  } finally {
+    affiliateRewardState.loading = false;
+  }
+}
+
+async function createAffiliateRewardRule() {
+  const payload = normalizeAffiliateRewardPayload(affiliateRewardDraft);
+  if (!payload) return;
+  affiliateRewardState.savingId = 0;
+  try {
+    await affiliatesAPI.createRewardRule(payload);
+    Object.assign(affiliateRewardDraft, defaultAffiliateRewardDraft());
+    appStore.showSuccess(t("common.saved"));
+    await loadAffiliateRewardRules();
+  } catch (err) {
+    appStore.showError(extractApiErrorMessage(err, t("common.error")));
+  } finally {
+    affiliateRewardState.savingId = null;
+  }
+}
+
+async function saveAffiliateRewardRule(rule: AffiliateRewardRule) {
+  const payload = normalizeAffiliateRewardPayload(rule);
+  if (!payload) return;
+  affiliateRewardState.savingId = rule.id;
+  try {
+    await affiliatesAPI.updateRewardRule(rule.id, payload);
+    appStore.showSuccess(t("common.saved"));
+    await loadAffiliateRewardRules();
+  } catch (err) {
+    appStore.showError(extractApiErrorMessage(err, t("common.error")));
+  } finally {
+    affiliateRewardState.savingId = null;
+  }
+}
+
+async function deleteAffiliateRewardRule(rule: AffiliateRewardRule) {
+  affiliateRewardState.deletingId = rule.id;
+  try {
+    await affiliatesAPI.deleteRewardRule(rule.id);
+    appStore.showSuccess(t("common.deleted"));
+    await loadAffiliateRewardRules();
+  } catch (err) {
+    appStore.showError(extractApiErrorMessage(err, t("common.error")));
+  } finally {
+    affiliateRewardState.deletingId = null;
+  }
+}
 
 // `rate` is typed as string|number because <input type="number"> makes Vue's
 // v-model auto-cast the bound value to a Number on every keystroke. We keep
@@ -11188,6 +11594,7 @@ watch(
   (enabled, prev) => {
     if (enabled && !prev) {
       loadAffiliateUsers();
+      loadAffiliateRewardRules();
     }
   },
 );
