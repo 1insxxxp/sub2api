@@ -20,6 +20,9 @@
             <span class="tier-badge-effect__layer tier-badge-effect__glow" aria-hidden="true"></span>
             <span class="tier-badge-effect__layer tier-badge-effect__beam" aria-hidden="true"></span>
             <span class="tier-badge-effect__layer tier-badge-effect__orbit" aria-hidden="true"></span>
+            <span class="tier-badge-effect__layer tier-badge-effect__reactor" aria-hidden="true"></span>
+            <span class="tier-badge-effect__layer tier-badge-effect__nodes" aria-hidden="true"></span>
+            <span class="tier-badge-effect__layer tier-badge-effect__arc" aria-hidden="true"></span>
 
             <div class="tier-identity__badge-stage" aria-hidden="true">
               <span class="tier-identity__ring tier-identity__ring--outer"></span>
@@ -146,6 +149,9 @@
                 <span class="tier-badge-effect__layer tier-badge-effect__glow" aria-hidden="true"></span>
                 <span class="tier-badge-effect__layer tier-badge-effect__beam" aria-hidden="true"></span>
                 <span class="tier-badge-effect__layer tier-badge-effect__orbit" aria-hidden="true"></span>
+                <span class="tier-badge-effect__layer tier-badge-effect__reactor" aria-hidden="true"></span>
+                <span class="tier-badge-effect__layer tier-badge-effect__nodes" aria-hidden="true"></span>
+                <span class="tier-badge-effect__layer tier-badge-effect__arc" aria-hidden="true"></span>
                 <img
                   data-testid="tier-rule-badge"
                   :src="badgeSource(tier.level)"
@@ -383,6 +389,19 @@ function formatCount(value: number): string {
   opacity: 0;
 }
 
+.tier-badge-effect__reactor,
+.tier-badge-effect__nodes,
+.tier-badge-effect__arc {
+  display: none;
+  opacity: 0;
+}
+
+.tier-badge-effect[data-effect-theme='core'] .tier-badge-effect__reactor,
+.tier-badge-effect[data-effect-theme='core'] .tier-badge-effect__nodes,
+.tier-badge-effect[data-effect-theme='core'] .tier-badge-effect__arc {
+  display: block;
+}
+
 .tier-badge-effect[data-effect-theme='origin'] .tier-badge-effect__beam {
   inset: -5%;
   border-radius: 50%;
@@ -528,12 +547,112 @@ function formatCount(value: number): string {
   transform: scale(1.3);
 }
 
+.tier-badge-effect[data-effect-theme='core'] .tier-badge-effect__reactor {
+  inset: -18%;
+  background:
+    radial-gradient(circle at 50% 5%, rgb(255 255 255) 0 2.5%, rgb(var(--tier-cyan)) 3.5%, transparent 6%),
+    radial-gradient(circle at 89% 27%, rgb(255 255 255) 0 2.5%, rgb(var(--tier-cyan)) 3.5%, transparent 6%),
+    radial-gradient(circle at 89% 73%, rgb(255 255 255) 0 2.5%, rgb(var(--tier-cyan)) 3.5%, transparent 6%),
+    radial-gradient(circle at 50% 95%, rgb(255 255 255) 0 2.5%, rgb(var(--tier-cyan)) 3.5%, transparent 6%),
+    radial-gradient(circle at 11% 73%, rgb(255 255 255) 0 2.5%, rgb(var(--tier-cyan)) 3.5%, transparent 6%),
+    radial-gradient(circle at 11% 27%, rgb(255 255 255) 0 2.5%, rgb(var(--tier-cyan)) 3.5%, transparent 6%),
+    radial-gradient(circle, rgb(var(--tier-cyan) / 0.24), transparent 54%);
+  clip-path: polygon(50% 0, 93% 25%, 93% 75%, 50% 100%, 7% 75%, 7% 25%);
+  filter:
+    drop-shadow(0 0 4px rgb(255 255 255 / 0.82))
+    drop-shadow(0 0 11px rgb(var(--tier-cyan) / 0.96));
+  opacity: 0.62;
+}
+
+.tier-badge-effect[data-effect-theme='core'] .tier-badge-effect__nodes {
+  inset: -18%;
+  background: radial-gradient(
+    circle at 50% 5%,
+    rgb(255 255 255) 0 2.6%,
+    rgb(var(--tier-cyan)) 3.6%,
+    transparent 6.2%
+  );
+  clip-path: polygon(50% 0, 93% 25%, 93% 75%, 50% 100%, 7% 75%, 7% 25%);
+  filter:
+    drop-shadow(0 0 4px rgb(255 255 255 / 0.92))
+    drop-shadow(0 0 10px rgb(var(--tier-cyan)));
+  opacity: 0.84;
+  transform-origin: center;
+}
+
+.tier-badge-effect[data-effect-theme='core'] .tier-badge-effect__reactor::before,
+.tier-badge-effect[data-effect-theme='core'] .tier-badge-effect__reactor::after {
+  position: absolute;
+  content: '';
+  clip-path: polygon(50% 0, 93% 25%, 93% 75%, 50% 100%, 7% 75%, 7% 25%);
+  background: conic-gradient(
+    from 0deg,
+    rgb(255 255 255 / 0.98),
+    rgb(var(--tier-cyan) / 0.86) 7%,
+    rgb(var(--tier-accent) / 0.12) 15%,
+    transparent 20% 34%,
+    rgb(var(--tier-cyan) / 0.76) 40%,
+    transparent 47% 67%,
+    rgb(var(--tier-cyan) / 0.82) 74%,
+    transparent 82% 100%
+  );
+  filter: drop-shadow(0 0 5px rgb(var(--tier-cyan) / 0.82));
+  mask: radial-gradient(circle, transparent 61%, black 64%, black 69%, transparent 72%);
+}
+
+.tier-badge-effect[data-effect-theme='core'] .tier-badge-effect__reactor::before {
+  inset: 2%;
+}
+
+.tier-badge-effect[data-effect-theme='core'] .tier-badge-effect__reactor::after {
+  inset: 19%;
+  opacity: 0.82;
+}
+
+.tier-badge-effect[data-effect-theme='core'] .tier-badge-effect__arc {
+  inset: -8%;
+  border-radius: 50%;
+  background: conic-gradient(
+    from 210deg,
+    transparent 0 10%,
+    rgb(255 255 255) 12%,
+    rgb(var(--tier-cyan) / 0.98) 14%,
+    transparent 18% 43%,
+    rgb(255 255 255 / 0.96) 45%,
+    rgb(var(--tier-cyan) / 0.78) 47%,
+    transparent 51% 100%
+  );
+  clip-path: polygon(50% 0, 93% 25%, 93% 75%, 50% 100%, 7% 75%, 7% 25%);
+  filter:
+    blur(0.5px)
+    drop-shadow(0 0 4px rgb(255 255 255 / 0.96))
+    drop-shadow(0 0 9px rgb(var(--tier-cyan)));
+  mask: radial-gradient(circle, transparent 56%, black 59%, black 66%, transparent 69%);
+}
+
 .tier-badge-effect--compact .tier-badge-effect__glow {
   filter: blur(3px);
 }
 
 .tier-badge-effect--compact .tier-badge-effect__aura {
   filter: blur(1px);
+}
+
+.tier-badge-effect--compact[data-effect-theme='core'] .tier-badge-effect__reactor {
+  inset: 12%;
+  filter: drop-shadow(0 0 2px rgb(var(--tier-cyan) / 0.92));
+}
+
+.tier-badge-effect--compact[data-effect-theme='core'] .tier-badge-effect__nodes {
+  inset: 12%;
+  filter:
+    drop-shadow(0 0 2px rgb(255 255 255 / 0.9))
+    drop-shadow(0 0 3px rgb(var(--tier-cyan)));
+}
+
+.tier-badge-effect--compact[data-effect-theme='core'] .tier-badge-effect__arc {
+  inset: 10%;
+  filter: drop-shadow(0 0 2px rgb(var(--tier-cyan) / 0.88));
 }
 
 .tier-badge-effect img {
@@ -753,12 +872,54 @@ function formatCount(value: number): string {
   .tier-identity__rule:hover .tier-badge-effect[data-effect-theme='core'] .tier-badge-effect__aura {
     animation: tier-core-shockwave 3s ease-out infinite;
   }
+
+  .tier-badge-effect--compact[data-effect-theme='core'][data-effect-active='false'] .tier-badge-effect__nodes {
+    animation: tier-core-compact-idle 4.8s steps(6, end) infinite;
+  }
+
+  .tier-badge-effect[data-effect-theme='core'][data-effect-active='true'] .tier-badge-effect__nodes,
+  .tier-identity__rule:hover .tier-badge-effect[data-effect-theme='core'] .tier-badge-effect__nodes {
+    animation: tier-core-node-ignite 3s steps(6, end) infinite;
+  }
+
+  .tier-badge-effect[data-effect-theme='core'][data-effect-active='true'] .tier-badge-effect__reactor::before,
+  .tier-identity__rule:hover .tier-badge-effect[data-effect-theme='core'] .tier-badge-effect__reactor::before {
+    animation: tier-core-reactor-spin 4s linear infinite;
+  }
+
+  .tier-badge-effect[data-effect-theme='core'][data-effect-active='true'] .tier-badge-effect__reactor::after,
+  .tier-identity__rule:hover .tier-badge-effect[data-effect-theme='core'] .tier-badge-effect__reactor::after {
+    animation: tier-core-reactor-spin 3.2s linear infinite reverse;
+  }
+
+  .tier-badge-effect[data-effect-theme='core'][data-effect-active='true'] .tier-badge-effect__arc,
+  .tier-identity__rule:hover .tier-badge-effect[data-effect-theme='core'] .tier-badge-effect__arc {
+    animation: tier-core-electric-arc 3s ease-in-out infinite;
+  }
 }
 
 @media (prefers-reduced-motion: no-preference) and (hover: none),
   (prefers-reduced-motion: no-preference) and (pointer: coarse) {
   .tier-badge-effect--compact[data-effect-active='false'] .tier-badge-effect__layer {
     animation: none !important;
+  }
+
+  .tier-badge-effect[data-effect-theme='core'] .tier-badge-effect__nodes {
+    animation: tier-core-compact-idle 5.2s steps(6, end) infinite !important;
+  }
+
+  .tier-badge-effect[data-effect-theme='core'] .tier-badge-effect__reactor::before,
+  .tier-badge-effect[data-effect-theme='core'] .tier-badge-effect__reactor::after,
+  .tier-badge-effect[data-effect-theme='core'] .tier-badge-effect__reactor,
+  .tier-badge-effect[data-effect-theme='core'] .tier-badge-effect__arc,
+  .tier-badge-effect[data-effect-theme='core'] .tier-badge-effect__aura,
+  .tier-badge-effect[data-effect-theme='core'] .tier-badge-effect__beam,
+  .tier-badge-effect[data-effect-theme='core'] .tier-badge-effect__orbit {
+    animation: none !important;
+  }
+
+  .tier-badge-effect[data-effect-theme='core'] .tier-badge-effect__arc {
+    opacity: 0 !important;
   }
 }
 
@@ -776,6 +937,26 @@ function formatCount(value: number): string {
   .tier-badge-effect__glow {
     opacity: 0.42 !important;
     transform: none !important;
+  }
+
+  .tier-badge-effect[data-effect-theme='core'] .tier-badge-effect__reactor {
+    opacity: 0.52 !important;
+    transform: none !important;
+  }
+
+  .tier-badge-effect[data-effect-theme='core'] .tier-badge-effect__nodes {
+    opacity: 0.72 !important;
+    transform: none !important;
+  }
+
+  .tier-badge-effect[data-effect-theme='core'] .tier-badge-effect__reactor::before,
+  .tier-badge-effect[data-effect-theme='core'] .tier-badge-effect__reactor::after {
+    animation: none !important;
+    transform: none !important;
+  }
+
+  .tier-badge-effect[data-effect-theme='core'] .tier-badge-effect__arc {
+    opacity: 0 !important;
   }
 }
 
@@ -953,6 +1134,46 @@ function formatCount(value: number): string {
     opacity: 0;
     transform: scale(1.28) rotate(60deg);
   }
+}
+
+@keyframes tier-core-reactor-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+@keyframes tier-core-node-ignite {
+  0% { opacity: 0.68; transform: rotate(0deg); }
+  50% { opacity: 1; }
+  100% { opacity: 0.68; transform: rotate(360deg); }
+}
+
+@keyframes tier-core-electric-arc {
+  0%, 20%, 100% {
+    opacity: 0;
+    transform: rotate(-18deg) scale(0.82);
+  }
+  32% {
+    opacity: 0.96;
+    transform: rotate(0deg) scale(1.02);
+  }
+  42% {
+    opacity: 0.18;
+    transform: rotate(8deg) scale(0.94);
+  }
+  52% {
+    opacity: 0.82;
+    transform: rotate(18deg) scale(1);
+  }
+  64% {
+    opacity: 0;
+    transform: rotate(28deg) scale(1.08);
+  }
+}
+
+@keyframes tier-core-compact-idle {
+  0% { opacity: 0.52; transform: rotate(0deg); }
+  50% { opacity: 0.8; }
+  100% { opacity: 0.52; transform: rotate(360deg); }
 }
 
 :global(.dark) .tier-identity {

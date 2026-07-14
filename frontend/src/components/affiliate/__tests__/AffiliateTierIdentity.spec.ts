@@ -280,9 +280,12 @@ describe('AffiliateTierIdentity', () => {
     expect(currentEffect.attributes('data-effect-theme')).toBe('orbit')
     expect(currentEffect.attributes('data-effect-active')).toBe('true')
     const decorativeLayers = currentEffect.findAll('.tier-badge-effect__layer')
-    expect(decorativeLayers).toHaveLength(4)
+    expect(decorativeLayers).toHaveLength(7)
     expect(decorativeLayers.every((layer) => layer.attributes('aria-hidden') === 'true')).toBe(true)
     expect(currentEffect.get('.tier-badge-effect__aura').exists()).toBe(true)
+    expect(currentEffect.get('.tier-badge-effect__reactor').exists()).toBe(true)
+    expect(currentEffect.get('.tier-badge-effect__nodes').exists()).toBe(true)
+    expect(currentEffect.get('.tier-badge-effect__arc').exists()).toBe(true)
 
     const ruleEffects = wrapper.findAll('[data-testid="tier-rule-effect"]')
     expect(ruleEffects).toHaveLength(4)
@@ -299,6 +302,9 @@ describe('AffiliateTierIdentity', () => {
       'false'
     ])
     expect(ruleEffects.every((effect) => effect.find('.tier-badge-effect__aura').exists())).toBe(true)
+    expect(ruleEffects.every((effect) => effect.find('.tier-badge-effect__reactor').exists())).toBe(true)
+    expect(ruleEffects.every((effect) => effect.find('.tier-badge-effect__nodes').exists())).toBe(true)
+    expect(ruleEffects.every((effect) => effect.find('.tier-badge-effect__arc').exists())).toBe(true)
   })
 
   it('defines distinct tier animations and a reduced-motion fallback', () => {
@@ -365,6 +371,38 @@ describe('AffiliateTierIdentity', () => {
 
     expect(affiliateTierIdentitySource).toMatch(
       /@media \(prefers-reduced-motion: reduce\)\s*{[\s\S]*?\.tier-badge-effect__layer\s*{[^}]*animation:\s*none !important;/
+    )
+  })
+
+  it('defines exclusive full, compact, touch, and reduced-motion Core reactor states', () => {
+    expect(affiliateTierIdentitySource).toContain('animation: tier-core-reactor-spin 4s')
+    expect(affiliateTierIdentitySource).toContain('animation: tier-core-node-ignite 3s')
+    expect(affiliateTierIdentitySource).toContain('animation: tier-core-electric-arc 3s')
+    expect(affiliateTierIdentitySource).toContain('animation: tier-core-compact-idle 4.8s')
+    expect(affiliateTierIdentitySource).toContain(
+      ".tier-badge-effect[data-effect-theme='core'][data-effect-active='true'] .tier-badge-effect__nodes"
+    )
+    expect(affiliateTierIdentitySource).toContain(
+      ".tier-badge-effect--compact[data-effect-theme='core'][data-effect-active='false'] .tier-badge-effect__nodes"
+    )
+    expect(affiliateTierIdentitySource).toContain(
+      ".tier-badge-effect[data-effect-theme='core'] .tier-badge-effect__nodes"
+    )
+    expect(affiliateTierIdentitySource).toContain('inset: 12%;')
+    expect(affiliateTierIdentitySource).toMatch(
+      /@keyframes tier-core-node-ignite\s*{[\s\S]*?transform:\s*rotate\(360deg\);/
+    )
+    expect(affiliateTierIdentitySource).toMatch(
+      /@keyframes tier-core-compact-idle\s*{(?:(?!@keyframes)[\s\S])*?transform:\s*rotate\(360deg\);/
+    )
+    expect(affiliateTierIdentitySource).not.toMatch(
+      /@keyframes tier-core-compact-idle\s*{(?:(?!@keyframes)[\s\S])*?scale\(/
+    )
+    expect(affiliateTierIdentitySource).toMatch(
+      /@media \(prefers-reduced-motion: no-preference\) and \(hover: none\),[\s\S]*?tier-core-compact-idle 5\.2s/
+    )
+    expect(affiliateTierIdentitySource).toMatch(
+      /@media \(prefers-reduced-motion: reduce\)[\s\S]*?data-effect-theme='core'[^}]*tier-badge-effect__reactor[^}]*opacity:\s*0\.52 !important;/
     )
   })
 
