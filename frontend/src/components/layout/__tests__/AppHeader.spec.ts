@@ -278,6 +278,24 @@ describe('AppHeader daily check-in entry', () => {
     expect(buttonWrapper?.classList.contains('inline-flex')).toBe(true)
   })
 
+  it('compacts the check-in label below 360px without hiding the action', async () => {
+    getCheckinStatus.mockResolvedValue({
+      enabled: true,
+      checked_in: false,
+      blacklisted: false,
+      checkin_date: '2026-06-05',
+      reward_amount: null
+    })
+
+    const wrapper = await mountHeader()
+    const button = wrapper.get('[data-test="daily-checkin-button"]')
+    const label = button.get('[data-test="daily-checkin-label"]')
+
+    expect(button.attributes('aria-label')).toBe('签到')
+    expect(label.classes()).toContain('hidden')
+    expect(label.classes()).toContain('min-[360px]:inline')
+  })
+
   it('explains eligibility and streak rewards in the hover panel', async () => {
     getCheckinStatus.mockResolvedValue({
       enabled: true,

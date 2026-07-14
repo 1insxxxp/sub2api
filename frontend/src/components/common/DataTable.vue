@@ -35,6 +35,7 @@
       <div
         v-for="(row, index) in sortedData"
         :key="resolveRowKey(row, index)"
+        data-mobile-table-row
         class="admin-surface rounded-2xl p-4"
         :class="{ 'cursor-pointer': clickableRows }"
         @click="clickableRows && emit('rowClick', row)"
@@ -45,10 +46,16 @@
             :key="column.key"
             class="flex items-start justify-between gap-4"
           >
-            <span class="text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-dark-400">
+            <span
+              data-mobile-column-label
+              class="shrink-0 text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-dark-400"
+            >
               {{ column.label }}
             </span>
-            <div class="text-right text-sm text-gray-900 dark:text-gray-100">
+            <div
+              data-mobile-column-value
+              class="min-w-0 flex-1 break-words text-right text-sm text-gray-900 [overflow-wrap:anywhere] dark:text-gray-100"
+            >
               <slot :name="`cell-${column.key}`" :row="row" :value="row[column.key]" :expanded="actionsExpanded">
                 {{ column.formatter ? column.formatter(row[column.key], row) : row[column.key] }}
               </slot>

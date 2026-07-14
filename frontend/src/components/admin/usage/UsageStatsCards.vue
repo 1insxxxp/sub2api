@@ -1,22 +1,22 @@
 <template>
-  <div class="grid grid-cols-2 gap-4 lg:grid-cols-4">
-    <div class="stat-card">
-      <div class="stat-icon bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-300">
+  <div data-test="usage-stats-grid" class="grid grid-cols-1 gap-4 min-[360px]:grid-cols-2 lg:grid-cols-4">
+    <div class="stat-card !gap-3 !p-4 sm:!gap-4 sm:!p-5">
+      <div class="stat-icon shrink-0 bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-300">
         <Icon name="document" size="md" />
       </div>
-      <div>
+      <div class="min-w-0">
         <p class="stat-label">{{ t('usage.totalRequests') }}</p>
-        <p class="stat-value">{{ stats?.total_requests?.toLocaleString() || '0' }}</p>
+        <p data-test="usage-stat-value" class="stat-value !text-xl sm:!text-2xl">{{ stats?.total_requests?.toLocaleString() || '0' }}</p>
         <p class="stat-trend">{{ t('usage.inSelectedRange') }}</p>
       </div>
     </div>
-    <div class="stat-card overflow-visible" data-test="usage-total-token-card">
-      <div class="stat-icon bg-amber-100 text-amber-600 dark:bg-amber-900/30 dark:text-amber-300">
+    <div class="stat-card !gap-3 !p-4 sm:!gap-4 sm:!p-5 overflow-visible" data-test="usage-total-token-card">
+      <div class="stat-icon shrink-0 bg-amber-100 text-amber-600 dark:bg-amber-900/30 dark:text-amber-300">
         <Icon name="cube" size="md" />
       </div>
       <div class="min-w-0">
         <p class="stat-label">{{ t('usage.totalTokens') }}</p>
-        <p class="stat-value">{{ formatTokens(stats?.total_tokens || 0) }}</p>
+        <p class="stat-value !text-xl sm:!text-2xl">{{ formatTokens(stats?.total_tokens || 0) }}</p>
         <p class="flex flex-wrap items-center gap-x-1 text-xs text-gray-500 dark:text-gray-400">
           <span>{{ t('usage.in') }}: {{ formatTokens(stats?.total_input_tokens || 0) }}</span>
           <span>/</span>
@@ -38,7 +38,8 @@
               />
             </svg>
             <span
-              class="pointer-events-none absolute left-1/2 top-full z-30 mt-2 w-56 -translate-x-1/2 rounded-lg border border-gray-200 bg-white p-3 text-left text-xs text-gray-700 opacity-0 shadow-lg transition-opacity duration-150 group-hover:opacity-100 group-focus:opacity-100 dark:border-dark-600 dark:bg-dark-800 dark:text-dark-200"
+              data-test="usage-token-tooltip"
+              class="pointer-events-none absolute right-0 top-full z-30 mt-2 w-56 translate-x-0 rounded-lg border border-gray-200 bg-white p-3 text-left text-xs text-gray-700 opacity-0 shadow-lg transition-opacity duration-150 group-hover:opacity-100 group-focus:opacity-100 sm:left-1/2 sm:right-auto sm:-translate-x-1/2 dark:border-dark-600 dark:bg-dark-800 dark:text-dark-200"
             >
               <span class="mb-2 block font-medium text-gray-900 dark:text-white">
                 {{ cacheDetailLabel() }}
@@ -60,13 +61,13 @@
         </p>
       </div>
     </div>
-    <div class="stat-card">
-      <div class="stat-icon bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-300">
+    <div class="stat-card !gap-3 !p-4 sm:!gap-4 sm:!p-5">
+      <div class="stat-icon shrink-0 bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-300">
         <Icon name="dollar" size="md" />
       </div>
       <div class="min-w-0 flex-1">
         <p class="stat-label">{{ t('usage.totalCost') }}</p>
-        <p class="stat-value text-emerald-600 dark:text-emerald-300">
+        <p data-test="usage-total-cost-value" class="stat-value !text-lg text-emerald-600 min-[430px]:!text-xl sm:!text-2xl dark:text-emerald-300">
           ${{ (stats?.total_actual_cost || 0).toFixed(4) }}
         </p>
         <p class="text-xs text-gray-500 dark:text-gray-400">
@@ -81,13 +82,13 @@
         </p>
       </div>
     </div>
-    <div class="stat-card">
-      <div class="stat-icon bg-violet-100 text-violet-600 dark:bg-violet-900/30 dark:text-violet-300">
+    <div class="stat-card !gap-3 !p-4 sm:!gap-4 sm:!p-5">
+      <div class="stat-icon shrink-0 bg-violet-100 text-violet-600 dark:bg-violet-900/30 dark:text-violet-300">
         <Icon name="clock" size="md" />
       </div>
-      <div>
+      <div class="min-w-0">
         <p class="stat-label">{{ t('usage.avgDuration') }}</p>
-        <p class="stat-value">{{ formatDuration(stats?.average_duration_ms || 0) }}</p>
+        <p class="stat-value !text-xl sm:!text-2xl">{{ formatDuration(stats?.average_duration_ms || 0) }}</p>
       </div>
     </div>
   </div>

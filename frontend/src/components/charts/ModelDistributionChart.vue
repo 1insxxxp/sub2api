@@ -1,12 +1,12 @@
 <template>
   <div class="card p-4">
-    <div class="mb-4 flex items-center justify-between gap-3">
+    <div data-test="distribution-chart-header" class="mb-4 flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between">
       <h3 class="text-sm font-semibold text-gray-900 dark:text-white">
         {{ !enableRankingView || activeView === 'model_distribution'
           ? t('admin.dashboard.modelDistribution')
           : t('admin.dashboard.spendingRankingTitle') }}
       </h3>
-      <div class="flex flex-wrap items-center justify-end gap-2">
+      <div class="flex w-full flex-wrap items-center justify-start gap-2 sm:w-auto sm:justify-end">
         <div
           v-if="showSourceToggle"
           class="inline-flex rounded-2xl border border-primary-200/80 bg-white/80 p-1 shadow-sm shadow-primary-500/5 dark:border-primary-500/20 dark:bg-white/5"
@@ -104,12 +104,13 @@
     </div>
     <div
       v-else-if="activeView === 'model_distribution' && displayModelStats.length > 0 && chartData"
-      class="flex items-center gap-6"
+      data-test="distribution-chart-content"
+      class="flex flex-col items-stretch gap-4 sm:flex-row sm:items-center sm:gap-6"
     >
-      <div class="h-48 w-48">
+      <div class="mx-auto h-44 w-44 shrink-0 sm:h-48 sm:w-48">
         <Doughnut :data="chartData" :options="doughnutOptions" />
       </div>
-      <div class="max-h-48 flex-1 overflow-y-auto">
+      <div class="max-h-48 min-w-0 w-full flex-1 overflow-x-auto overflow-y-auto">
         <table class="w-full text-xs">
           <thead>
             <tr class="text-gray-500 dark:text-gray-400">
@@ -185,11 +186,11 @@
     >
       {{ t('admin.dashboard.failedToLoad') }}
     </div>
-    <div v-else-if="rankingDisplayItems.length > 0 && rankingChartData" class="flex items-center gap-6">
-      <div class="h-48 w-48">
+    <div v-else-if="rankingDisplayItems.length > 0 && rankingChartData" class="flex flex-col items-stretch gap-4 sm:flex-row sm:items-center sm:gap-6">
+      <div class="mx-auto h-44 w-44 shrink-0 sm:h-48 sm:w-48">
         <Doughnut :data="rankingChartData" :options="rankingDoughnutOptions" />
       </div>
-      <div class="max-h-48 flex-1 overflow-y-auto">
+      <div class="max-h-48 min-w-0 w-full flex-1 overflow-x-auto overflow-y-auto">
         <table class="w-full text-xs">
           <thead>
             <tr class="text-gray-500 dark:text-gray-400">

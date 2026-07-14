@@ -102,7 +102,8 @@
             data-test="daily-checkin-button"
             :disabled="checkinButtonDisabled"
             :title="checkinButtonTitle"
-            class="inline-flex items-center gap-1.5 rounded-lg border border-amber-200 bg-amber-50 px-3 py-1.5 text-sm font-semibold text-amber-700 shadow-sm shadow-amber-900/5 transition-colors hover:bg-amber-100 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400 dark:border-amber-500/30 dark:bg-amber-900/20 dark:text-amber-200 dark:hover:bg-amber-900/30 dark:disabled:border-dark-700 dark:disabled:bg-dark-800 dark:disabled:text-dark-400"
+            :aria-label="checkinButtonLabel"
+            class="inline-flex items-center gap-1.5 rounded-lg border border-amber-200 bg-amber-50 px-2 py-1.5 text-sm font-semibold text-amber-700 shadow-sm shadow-amber-900/5 transition-colors hover:bg-amber-100 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400 min-[360px]:px-3 dark:border-amber-500/30 dark:bg-amber-900/20 dark:text-amber-200 dark:hover:bg-amber-900/30 dark:disabled:border-dark-700 dark:disabled:bg-dark-800 dark:disabled:text-dark-400"
             @click="handleCheckin"
           >
             <Icon
@@ -110,7 +111,7 @@
               size="sm"
               :class="checkinSubmitting ? 'animate-pulse' : ''"
             />
-            <span>{{ checkinButtonLabel }}</span>
+            <span data-test="daily-checkin-label" class="hidden min-[360px]:inline">{{ checkinButtonLabel }}</span>
           </button>
 
           <div

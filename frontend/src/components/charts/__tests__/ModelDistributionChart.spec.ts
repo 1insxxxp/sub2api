@@ -68,6 +68,21 @@ describe('ModelDistributionChart', () => {
     },
   ]
 
+  it('stacks the chart title and controls on mobile', () => {
+    const wrapper = mount(ModelDistributionChart, {
+      props: {
+        modelStats: [],
+        showSourceToggle: true,
+        showMetricToggle: true,
+      },
+      global: { stubs: { LoadingSpinner: true } },
+    })
+
+    const header = wrapper.get('[data-test="distribution-chart-header"]')
+    expect(header.classes()).toContain('flex-col')
+    expect(header.classes()).toContain('sm:flex-row')
+  })
+
   it('uses total_tokens and token ordering by default', () => {
     const wrapper = mount(ModelDistributionChart, {
       props: {
@@ -83,6 +98,9 @@ describe('ModelDistributionChart', () => {
     const chartData = JSON.parse(wrapper.find('.chart-data').text())
     expect(chartData.labels).toEqual(['model-a', 'model-b'])
     expect(chartData.datasets[0].data).toEqual([1000, 500])
+    const content = wrapper.get('[data-test="distribution-chart-content"]')
+    expect(content.classes()).toContain('flex-col')
+    expect(content.classes()).toContain('sm:flex-row')
 
     const rows = wrapper.findAll('tbody tr')
     expect(rows[0].text()).toContain('model-a')

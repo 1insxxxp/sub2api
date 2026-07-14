@@ -188,4 +188,19 @@ describe('DataTable', () => {
     expect(instance.options.getItemKey(0)).toBe(100)
     expect(instance.options.getItemKey(5)).toBe(105)
   })
+
+  it('keeps mobile labels readable beside long unbroken values', () => {
+    stubMobileMatchMedia()
+    const wrapper = mount(DataTable, {
+      props: {
+        columns: [{ key: 'code', label: '兑换码' }],
+        data: [{ id: 1, code: 'a0d2d2877a72fe3f413eb85d8981bd36' }],
+      },
+    })
+
+    const row = wrapper.get('[data-mobile-table-row]')
+    expect(row.get('[data-mobile-column-label]').classes()).toContain('shrink-0')
+    expect(row.get('[data-mobile-column-value]').classes()).toContain('min-w-0')
+    expect(row.get('[data-mobile-column-value]').classes()).toContain('[overflow-wrap:anywhere]')
+  })
 })
