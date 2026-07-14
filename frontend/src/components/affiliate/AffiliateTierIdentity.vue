@@ -170,7 +170,10 @@
                   <span class="shrink-0 text-sm font-semibold text-primary-600 dark:text-cyan-400">
                     {{ formatRate(tier.rate_percent) }}%
                   </span>
-                  <span class="truncate text-xs text-gray-500 dark:text-dark-400">
+                  <span
+                    data-testid="tier-rule-requirement"
+                    class="min-w-0 break-words text-xs leading-4 text-gray-500 dark:text-dark-400"
+                  >
                     {{ t('affiliate.tiers.requirement', {
                       count: normalizeNumber(tier.min_qualified_invitees, Infinity, true)
                     }) }}
@@ -831,15 +834,33 @@ function formatCount(value: number): string {
   position: absolute;
   z-index: 0;
   inset: 3px;
+  overflow: hidden;
   border: 1px solid rgb(var(--tier-accent) / 0.14);
   border-radius: 5px;
   pointer-events: none;
+}
+
+.tier-identity__rule-frame::before {
+  position: absolute;
+  content: '';
 }
 
 .tier-identity__rule[data-effect-theme='origin'] .tier-identity__rule-frame {
   border-top-color: rgb(var(--tier-cyan) / 0.46);
   border-left-color: rgb(var(--tier-cyan) / 0.3);
   box-shadow: inset 8px 8px 14px -16px rgb(var(--tier-cyan) / 0.88);
+}
+
+.tier-identity__rule[data-effect-theme='origin'] .tier-identity__rule-frame::before {
+  top: -0.8rem;
+  right: -0.8rem;
+  width: 2.5rem;
+  height: 2.5rem;
+  border: 1px solid rgb(var(--tier-cyan) / 0.52);
+  border-bottom-color: transparent;
+  border-left-color: transparent;
+  border-radius: 50%;
+  box-shadow: 0 0 8px rgb(var(--tier-cyan) / 0.12);
 }
 
 .tier-identity__rule[data-effect-theme='pulse'] .tier-identity__rule-frame {
@@ -850,12 +871,34 @@ function formatCount(value: number): string {
     inset 0 -2px 0 -1px rgb(var(--tier-accent) / 0.18);
 }
 
+.tier-identity__rule[data-effect-theme='pulse'] .tier-identity__rule-frame::before {
+  right: 0.35rem;
+  bottom: 0.3rem;
+  width: 3.25rem;
+  height: 0.7rem;
+  background: rgb(var(--tier-cyan) / 0.44);
+  clip-path: polygon(0 48%, 16% 48%, 24% 12%, 34% 88%, 44% 32%, 53% 62%, 64% 48%, 100% 48%, 100% 58%, 62% 58%, 54% 72%, 44% 44%, 34% 100%, 23% 28%, 17% 58%, 0 58%);
+  filter: drop-shadow(0 0 3px rgb(var(--tier-cyan) / 0.36));
+}
+
 .tier-identity__rule[data-effect-theme='orbit'] .tier-identity__rule-frame {
   border-color: rgb(var(--tier-cyan) / 0.42);
   border-right-color: rgb(var(--tier-accent) / 0.58);
   box-shadow:
     inset 0 0 0 1px rgb(var(--tier-accent) / 0.08),
     inset -10px 0 18px -20px rgb(var(--tier-cyan) / 0.9);
+}
+
+.tier-identity__rule[data-effect-theme='orbit'] .tier-identity__rule-frame::before {
+  top: 0.25rem;
+  right: -1.1rem;
+  width: 3.5rem;
+  height: 1.65rem;
+  border: 1px solid rgb(var(--tier-cyan) / 0.54);
+  border-left-color: transparent;
+  border-radius: 50%;
+  box-shadow: 0 0 7px rgb(var(--tier-accent) / 0.16);
+  transform: rotate(-18deg);
 }
 
 .tier-identity__rule--current {
@@ -917,7 +960,7 @@ function formatCount(value: number): string {
 }
 
 .tier-identity__rule[data-tier-state='current'] .tier-identity__rule-status {
-  color: rgb(8 145 178);
+  color: rgb(14 116 144);
 }
 
 .tier-identity__rule[data-tier-state='current'] .tier-identity__rule-status-dot {
@@ -1166,12 +1209,18 @@ function formatCount(value: number): string {
     animation: tier-core-electric-arc 3s ease-in-out infinite;
   }
 
-  .tier-identity__rule[data-effect-theme='core']::after {
+  .tier-identity__rule[data-effect-theme='core']:not([data-tier-state='locked'])::after {
     animation: tier-core-cell-idle 4.8s ease-in-out infinite;
   }
 
-  .tier-identity__rule[data-effect-theme='core']:hover::after {
+  .tier-identity__rule[data-effect-theme='core']:not([data-tier-state='locked']):hover::after {
     animation: tier-core-cell-burst 3s ease-in-out infinite;
+  }
+
+  .tier-identity__rule[data-tier-state='locked'] .tier-badge-effect__layer,
+  .tier-identity__rule[data-tier-state='locked'] .tier-badge-effect__reactor::before,
+  .tier-identity__rule[data-tier-state='locked'] .tier-badge-effect__reactor::after {
+    animation: none !important;
   }
 }
 
@@ -1199,7 +1248,7 @@ function formatCount(value: number): string {
     opacity: 0 !important;
   }
 
-  .tier-identity__rule[data-effect-theme='core']::after {
+  .tier-identity__rule[data-effect-theme='core']:not([data-tier-state='locked'])::after {
     animation: tier-core-cell-idle 5.4s ease-in-out infinite !important;
   }
 }
@@ -1243,6 +1292,10 @@ function formatCount(value: number): string {
   .tier-identity__rule[data-effect-theme='core']::after {
     animation: none !important;
     opacity: 0.72 !important;
+  }
+
+  .tier-identity__rule[data-tier-state='locked'][data-effect-theme='core']::after {
+    opacity: 0.42 !important;
   }
 }
 

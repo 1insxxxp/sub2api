@@ -186,6 +186,51 @@ describe('AffiliateTierIdentity', () => {
   })
 
   it.each([
+    ['standard', ['current', 'locked', 'locked', 'locked']],
+    ['bronze', ['unlocked', 'current', 'locked', 'locked']],
+    ['silver', ['unlocked', 'unlocked', 'current', 'locked']],
+    ['gold', ['unlocked', 'unlocked', 'unlocked', 'current']]
+  ] as const)('derives the complete rule state sequence for %s', (level, expectedStates) => {
+    const wrapper = mountIdentity(makeDetail({ automatic_level: level }), {
+      nextTier: nextTier(level)
+    })
+
+    expect(wrapper.findAll('[data-testid="tier-rule"]').map((rule) => (
+      rule.attributes('data-tier-state')
+    ))).toEqual(expectedStates)
+  })
+
+  it('allows long tier thresholds to wrap instead of truncating them', () => {
+    const wrapper = mountIdentity(makeDetail())
+    const requirements = wrapper.findAll('[data-testid="tier-rule-requirement"]')
+
+    expect(requirements).toHaveLength(4)
+    expect(requirements.every((requirement) => !requirement.classes().includes('truncate'))).toBe(true)
+    expect(requirements.every((requirement) => requirement.classes().includes('break-words'))).toBe(true)
+  })
+
+  it('defines distinct Origin, Pulse, and Orbit frame motifs', () => {
+    expect(affiliateTierIdentitySource).toContain(
+      ".tier-identity__rule[data-effect-theme='origin'] .tier-identity__rule-frame::before"
+    )
+    expect(affiliateTierIdentitySource).toContain(
+      ".tier-identity__rule[data-effect-theme='pulse'] .tier-identity__rule-frame::before"
+    )
+    expect(affiliateTierIdentitySource).toContain(
+      ".tier-identity__rule[data-effect-theme='orbit'] .tier-identity__rule-frame::before"
+    )
+  })
+
+  it('keeps the locked Core frame static', () => {
+    expect(affiliateTierIdentitySource).toContain(
+      ".tier-identity__rule[data-effect-theme='core']:not([data-tier-state='locked'])::after"
+    )
+    expect(affiliateTierIdentitySource).not.toContain(
+      ".tier-identity__rule[data-effect-theme='core']::after {\n    animation: tier-core-cell-idle"
+    )
+  })
+
+  it.each([
     [Number.NaN, 12, '0%'],
     [Number.POSITIVE_INFINITY, 12, '0%'],
     [10, -3, '0%'],
