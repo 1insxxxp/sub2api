@@ -61,7 +61,7 @@ Expected: FAIL because the new effect CSS is absent.
 - Core: six-point glow sequence and center convergence.
 - Large badge: continuously active.
 - Compact current badge: continuously active.
-- Compact non-current badge: active on `hover` or `focus-within` only.
+- Compact non-current badge: active only on hover-capable pointer devices; do not make informational badges keyboard-focusable solely for decoration.
 - Reduced motion: remove animations and transforms while retaining a static glow.
 
 Animate only opacity, transform, and filter. Keep effect layers clipped to fixed badge footprints and pointer-events disabled.

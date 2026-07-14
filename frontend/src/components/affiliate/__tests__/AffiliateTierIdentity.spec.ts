@@ -311,6 +311,25 @@ describe('AffiliateTierIdentity', () => {
     expect(affiliateTierIdentitySource).toContain('@media (prefers-reduced-motion: reduce)')
   })
 
+  it('clips compact light layers to the fixed badge footprint', () => {
+    expect(affiliateTierIdentitySource).toMatch(
+      /\.tier-badge-effect--compact\s*{[^}]*overflow:\s*clip;/s
+    )
+  })
+
+  it('keeps non-current compact effects static on touch input', () => {
+    expect(affiliateTierIdentitySource).toContain(
+      '@media (prefers-reduced-motion: no-preference) and (hover: none)'
+    )
+    expect(affiliateTierIdentitySource).toContain(
+      ".tier-badge-effect--compact[data-effect-active='false'] .tier-badge-effect__layer"
+    )
+  })
+
+  it('does not add unreachable focus animation to informational tier rules', () => {
+    expect(affiliateTierIdentitySource).not.toContain('.tier-identity__rule:focus-within')
+  })
+
   it.each([
     Number.NaN,
     Number.POSITIVE_INFINITY,

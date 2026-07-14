@@ -347,6 +347,7 @@ function formatCount(value: number): string {
 .tier-badge-effect--compact {
   width: 2.25rem;
   height: 2.25rem;
+  overflow: clip;
 }
 
 .tier-badge-effect__layer {
@@ -604,54 +605,52 @@ function formatCount(value: number): string {
   }
 
   .tier-badge-effect[data-effect-theme='origin'][data-effect-active='true'] .tier-badge-effect__glow,
-  .tier-identity__rule:hover .tier-badge-effect[data-effect-theme='origin'] .tier-badge-effect__glow,
-  .tier-identity__rule:focus-within .tier-badge-effect[data-effect-theme='origin'] .tier-badge-effect__glow {
+  .tier-identity__rule:hover .tier-badge-effect[data-effect-theme='origin'] .tier-badge-effect__glow {
     animation: tier-origin-breathe 3.8s ease-in-out infinite;
   }
 
   .tier-badge-effect[data-effect-theme='origin'][data-effect-active='true'] .tier-badge-effect__beam,
-  .tier-identity__rule:hover .tier-badge-effect[data-effect-theme='origin'] .tier-badge-effect__beam,
-  .tier-identity__rule:focus-within .tier-badge-effect[data-effect-theme='origin'] .tier-badge-effect__beam {
+  .tier-identity__rule:hover .tier-badge-effect[data-effect-theme='origin'] .tier-badge-effect__beam {
     animation: tier-origin-glint 5.6s ease-in-out infinite;
   }
 
   .tier-badge-effect[data-effect-theme='pulse'][data-effect-active='true'] .tier-badge-effect__beam,
-  .tier-identity__rule:hover .tier-badge-effect[data-effect-theme='pulse'] .tier-badge-effect__beam,
-  .tier-identity__rule:focus-within .tier-badge-effect[data-effect-theme='pulse'] .tier-badge-effect__beam {
+  .tier-identity__rule:hover .tier-badge-effect[data-effect-theme='pulse'] .tier-badge-effect__beam {
     animation: tier-pulse-expand 2.8s ease-out infinite;
   }
 
   .tier-badge-effect[data-effect-theme='pulse'][data-effect-active='true'] .tier-badge-effect__glow,
   .tier-badge-effect[data-effect-theme='pulse'][data-effect-active='true'] .tier-badge-effect__orbit,
   .tier-identity__rule:hover .tier-badge-effect[data-effect-theme='pulse'] .tier-badge-effect__glow,
-  .tier-identity__rule:hover .tier-badge-effect[data-effect-theme='pulse'] .tier-badge-effect__orbit,
-  .tier-identity__rule:focus-within .tier-badge-effect[data-effect-theme='pulse'] .tier-badge-effect__glow,
-  .tier-identity__rule:focus-within .tier-badge-effect[data-effect-theme='pulse'] .tier-badge-effect__orbit {
+  .tier-identity__rule:hover .tier-badge-effect[data-effect-theme='pulse'] .tier-badge-effect__orbit {
     animation: tier-pulse-core 2.8s ease-in-out infinite;
   }
 
   .tier-badge-effect[data-effect-theme='orbit'][data-effect-active='true'] .tier-badge-effect__orbit,
-  .tier-identity__rule:hover .tier-badge-effect[data-effect-theme='orbit'] .tier-badge-effect__orbit,
-  .tier-identity__rule:focus-within .tier-badge-effect[data-effect-theme='orbit'] .tier-badge-effect__orbit {
+  .tier-identity__rule:hover .tier-badge-effect[data-effect-theme='orbit'] .tier-badge-effect__orbit {
     animation: tier-orbit-track 7.2s linear infinite;
   }
 
   .tier-badge-effect[data-effect-theme='orbit'][data-effect-active='true'] .tier-badge-effect__glow,
-  .tier-identity__rule:hover .tier-badge-effect[data-effect-theme='orbit'] .tier-badge-effect__glow,
-  .tier-identity__rule:focus-within .tier-badge-effect[data-effect-theme='orbit'] .tier-badge-effect__glow {
+  .tier-identity__rule:hover .tier-badge-effect[data-effect-theme='orbit'] .tier-badge-effect__glow {
     animation: tier-orbit-breathe 4.2s ease-in-out infinite;
   }
 
   .tier-badge-effect[data-effect-theme='core'][data-effect-active='true'] .tier-badge-effect__beam,
-  .tier-identity__rule:hover .tier-badge-effect[data-effect-theme='core'] .tier-badge-effect__beam,
-  .tier-identity__rule:focus-within .tier-badge-effect[data-effect-theme='core'] .tier-badge-effect__beam {
+  .tier-identity__rule:hover .tier-badge-effect[data-effect-theme='core'] .tier-badge-effect__beam {
     animation: tier-core-converge 3.4s ease-in-out infinite;
   }
 
   .tier-badge-effect[data-effect-theme='core'][data-effect-active='true'] .tier-badge-effect__orbit,
-  .tier-identity__rule:hover .tier-badge-effect[data-effect-theme='core'] .tier-badge-effect__orbit,
-  .tier-identity__rule:focus-within .tier-badge-effect[data-effect-theme='core'] .tier-badge-effect__orbit {
+  .tier-identity__rule:hover .tier-badge-effect[data-effect-theme='core'] .tier-badge-effect__orbit {
     animation: tier-core-flow 6.4s linear infinite;
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) and (hover: none),
+  (prefers-reduced-motion: no-preference) and (pointer: coarse) {
+  .tier-badge-effect--compact[data-effect-active='false'] .tier-badge-effect__layer {
+    animation: none !important;
   }
 }
 

@@ -8,7 +8,7 @@ Add restrained blue/cyan light animation to the affiliate tier badges while pres
 
 Use CSS-only decorative layers around the existing transparent WebP assets. Do not replace the assets with animated images, add a runtime animation library, or use canvas.
 
-The current large badge plays a slow, continuous tier-specific effect. In the compact tier rule grid, only the current tier plays a persistent low-intensity effect; the other tiers animate on hover or keyboard focus. Mobile devices therefore keep a single continuously animated compact badge.
+The current large badge plays a slow, continuous tier-specific effect. In the compact tier rule grid, only the current tier plays a persistent low-intensity effect; the other tiers animate on hover-capable pointer devices. Mobile devices therefore keep a single continuously animated compact badge.
 
 ## Tier Effects
 
@@ -30,12 +30,12 @@ The large badge effect remains inside the existing fixed badge area. Compact rul
 - Preserve text labels so animation is never the only tier indicator.
 - Stop transforms and repeated animation under `prefers-reduced-motion: reduce` while retaining a static, low-opacity glow.
 - Keep animation CSS-only and limit animated properties to `opacity`, `transform`, and `filter` where practical.
-- Support keyboard focus with `focus-within` wherever hover starts an effect.
+- Do not add keyboard tab stops to informational badges solely to trigger decorative motion.
 - Avoid rapid flashes and keep every cycle slower than two seconds.
 
 ## Responsive Behavior
 
-The large badge runs continuously at desktop and mobile sizes. Compact non-current badges require hover or focus and therefore remain static on touch-only use. No effect may alter the established 72px/92px large badge or 36px compact badge dimensions.
+The large badge runs continuously at desktop and mobile sizes. Compact non-current badges require hover-capable pointer input and therefore remain static on touch-only use. No effect may alter the established 72px/92px large badge or 36px compact badge dimensions.
 
 ## Verification
 
