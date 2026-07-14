@@ -16,6 +16,7 @@ import {
   PROVIDER_OPENAI,
   PROVIDER_ANTHROPIC,
   PROVIDER_GEMINI,
+  PROVIDER_GROK,
   STATUS_OPERATIONAL,
   STATUS_DEGRADED,
   STATUS_FAILED,
@@ -57,7 +58,12 @@ export function useChannelMonitorFormat() {
   }
 
   function providerLabel(p: Provider | string): string {
-    if (p === PROVIDER_OPENAI || p === PROVIDER_ANTHROPIC || p === PROVIDER_GEMINI) {
+    if (
+      p === PROVIDER_OPENAI ||
+      p === PROVIDER_ANTHROPIC ||
+      p === PROVIDER_GEMINI ||
+      p === PROVIDER_GROK
+    ) {
       return t(`monitorCommon.providers.${p}`)
     }
     return p || '-'
@@ -71,6 +77,8 @@ export function useChannelMonitorFormat() {
         return 'bg-orange-100 text-orange-700 dark:bg-orange-500/15 dark:text-orange-300'
       case PROVIDER_GEMINI:
         return 'bg-sky-100 text-sky-700 dark:bg-sky-500/15 dark:text-sky-300'
+      case PROVIDER_GROK:
+        return 'bg-zinc-100 text-zinc-700 dark:bg-zinc-500/15 dark:text-zinc-300'
       default:
         return NEUTRAL_BADGE
     }
@@ -95,6 +103,10 @@ export function useChannelMonitorFormat() {
         return active
           ? 'admin-choice-card-active border-sky-500 text-sky-700 dark:border-sky-400 dark:text-sky-300'
           : 'hover:border-sky-300 hover:text-sky-700 dark:hover:border-sky-500/50'
+      case PROVIDER_GROK:
+        return active
+          ? 'admin-choice-card-active border-zinc-500 text-zinc-800 dark:border-zinc-400 dark:text-zinc-200'
+          : 'hover:border-zinc-400 hover:text-zinc-800 dark:hover:border-zinc-500/50'
       default:
         return active
           ? 'admin-choice-card-active border-primary-500 text-primary-700 dark:border-primary-400 dark:text-primary-300'
@@ -166,6 +178,8 @@ export function providerGradient(provider: string): string {
       return 'bg-gradient-to-br from-orange-50 to-amber-100 dark:from-orange-500/10 dark:to-amber-500/20'
     case PROVIDER_GEMINI:
       return 'bg-gradient-to-br from-sky-50 to-indigo-100 dark:from-sky-500/10 dark:to-indigo-500/20'
+    case PROVIDER_GROK:
+      return 'bg-gradient-to-br from-zinc-50 to-neutral-200 dark:from-zinc-500/10 dark:to-neutral-500/20'
     default:
       return 'bg-gradient-to-br from-gray-100 to-gray-200 dark:from-dark-700 dark:to-dark-600'
   }
