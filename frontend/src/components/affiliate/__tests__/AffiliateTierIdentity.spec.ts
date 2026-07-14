@@ -289,6 +289,13 @@ describe('AffiliateTierIdentity', () => {
 
     const ruleEffects = wrapper.findAll('[data-testid="tier-rule-effect"]')
     expect(ruleEffects).toHaveLength(4)
+    const ruleCells = wrapper.findAll('[data-testid="tier-rule"]')
+    expect(ruleCells.map((rule) => rule.attributes('data-effect-theme'))).toEqual([
+      'origin',
+      'pulse',
+      'orbit',
+      'core'
+    ])
     expect(ruleEffects.map((effect) => effect.attributes('data-effect-theme'))).toEqual([
       'origin',
       'pulse',
@@ -388,7 +395,7 @@ describe('AffiliateTierIdentity', () => {
     expect(affiliateTierIdentitySource).toContain(
       ".tier-badge-effect[data-effect-theme='core'] .tier-badge-effect__nodes"
     )
-    expect(affiliateTierIdentitySource).toContain('inset: 12%;')
+    expect(affiliateTierIdentitySource).toContain('inset: 8%;')
     expect(affiliateTierIdentitySource).toMatch(
       /@keyframes tier-core-node-ignite\s*{[\s\S]*?transform:\s*rotate\(360deg\);/
     )
@@ -403,6 +410,29 @@ describe('AffiliateTierIdentity', () => {
     )
     expect(affiliateTierIdentitySource).toMatch(
       /@media \(prefers-reduced-motion: reduce\)[\s\S]*?data-effect-theme='core'[^}]*tier-badge-effect__reactor[^}]*opacity:\s*0\.52 !important;/
+    )
+  })
+
+  it('keeps the compact Core badge and rule cell visibly distinct while idle', () => {
+    expect(affiliateTierIdentitySource).toContain(
+      ".tier-identity__rule[data-effect-theme='core']::after"
+    )
+    expect(affiliateTierIdentitySource).toContain(
+      ".tier-badge-effect--compact[data-effect-theme='core'] .tier-badge-effect__reactor"
+    )
+    expect(affiliateTierIdentitySource).toMatch(
+      /tier-badge-effect--compact\[data-effect-theme='core'\] \.tier-badge-effect__reactor\s*{[^}]*z-index:\s*2;[^}]*inset:\s*8%;[^}]*drop-shadow\(0 0 2px/
+    )
+    expect(affiliateTierIdentitySource).toContain(
+      '@supports ((-webkit-mask-composite: xor) or (mask-composite: exclude))'
+    )
+    expect(affiliateTierIdentitySource).toContain('animation: tier-core-cell-idle 4.8s')
+    expect(affiliateTierIdentitySource).toContain('animation: tier-core-cell-burst 3s')
+    expect(affiliateTierIdentitySource).toMatch(
+      /@media \(prefers-reduced-motion: no-preference\) and \(hover: none\),[\s\S]*?tier-core-cell-idle 5\.4s/
+    )
+    expect(affiliateTierIdentitySource).toMatch(
+      /@media \(prefers-reduced-motion: reduce\)[\s\S]*?tier-identity__rule\[data-effect-theme='core'\]::after[^}]*animation:\s*none !important;/
     )
   })
 
