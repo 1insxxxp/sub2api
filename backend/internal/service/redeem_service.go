@@ -534,8 +534,8 @@ func (s *RedeemService) Redeem(ctx context.Context, userID int64, code string) (
 
 	// 余额类正数兑换码触发邀请返利（best-effort，失败不影响兑换结果）
 	if redeemCode.Type == RedeemTypeBalance && redeemCode.Value > 0 {
-		s.tryAccrueAffiliateRebateForRedeem(ctx, userID, redeemCode.Value)
-		s.tryReconcileAffiliateQualificationForRedeem(ctx, userID)
+		tierAware := s.tryPrepareTierAwareAffiliateRebateForRedeem(ctx, userID)
+		s.tryAccrueAffiliateRebateForRedeem(ctx, userID, redeemCode.Value, tierAware)
 	}
 
 	// 重新获取更新后的兑换码
@@ -587,7 +587,7 @@ func (s *RedeemService) invalidateRedeemCaches(ctx context.Context, userID int64
 	}
 }
 
-func (s *RedeemService) tryAccrueAffiliateRebateForRedeem(ctx context.Context, userID int64, amount float64) {
+func (s *RedeemService) tryAccrueAffiliateRebateForRedeem(ctx context.Context, userID int64, amount float64, tierAware bool) {
 	if ctx.Value(ctxKeySkipRedeemAffiliate{}) != nil {
 		return
 	}
@@ -597,7 +597,20 @@ func (s *RedeemService) tryAccrueAffiliateRebateForRedeem(ctx context.Context, u
 	if !s.affiliateService.IsEnabled(ctx) {
 		return
 	}
-	rebate, err := s.affiliateService.AccrueInviteRebate(ctx, userID, amount)
+	var (
+		rebate float64
+		err    error
+	)
+	if tierAware {
+		rebate, err = s.affiliateService.AccrueTierAwareInviteRebateForOrder(ctx, userID, amount, nil)
+		if err != nil {
+			logger.LegacyPrintf("service.redeem", "[Redeem] tier-aware affiliate rebate failed for user %d amount %.2f, falling back to flat rate: %v", userID, amount, err)
+			tierAware = false
+		}
+	}
+	if !tierAware {
+		rebate, err = s.affiliateService.AccrueInviteRebate(ctx, userID, amount)
+	}
 	if err != nil {
 		logger.LegacyPrintf("service.redeem", "[Redeem] affiliate rebate failed for user %d amount %.2f: %v", userID, amount, err)
 		return
@@ -607,19 +620,25 @@ func (s *RedeemService) tryAccrueAffiliateRebateForRedeem(ctx context.Context, u
 	}
 }
 
-func (s *RedeemService) tryReconcileAffiliateQualificationForRedeem(ctx context.Context, userID int64) {
+func (s *RedeemService) tryPrepareTierAwareAffiliateRebateForRedeem(ctx context.Context, userID int64) bool {
 	if ctx.Value(ctxKeySkipRedeemAffiliate{}) != nil {
-		return
+		return false
 	}
 	if s.affiliateService == nil {
-		return
+		return false
 	}
 	if !s.affiliateService.IsEnabled(ctx) {
-		return
+		return false
+	}
+	if err := s.affiliateService.ReconcilePendingAffiliateQualifications(ctx); err != nil {
+		logger.LegacyPrintf("service.redeem", "[Redeem] affiliate pending qualification reconcile failed for user %d: %v", userID, err)
+		return false
 	}
 	if err := s.affiliateService.ReconcileInviteeQualification(ctx, userID); err != nil {
 		logger.LegacyPrintf("service.redeem", "[Redeem] affiliate qualification reconcile failed for user %d: %v", userID, err)
+		return false
 	}
+	return true
 }
 
 // GetByID 根据ID获取兑换码

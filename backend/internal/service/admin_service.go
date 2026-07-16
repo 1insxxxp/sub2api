@@ -612,7 +612,7 @@ type adminServiceImpl struct {
 }
 
 type adminRechargeAffiliateAccruer interface {
-	AccrueInviteRebate(ctx context.Context, inviteeUserID int64, baseRechargeAmount float64) (float64, error)
+	AccrueTierAwareInviteRebateForOrder(ctx context.Context, inviteeUserID int64, baseRechargeAmount float64, sourceOrderID *int64) (float64, error)
 }
 
 type userGroupRateBatchReader interface {

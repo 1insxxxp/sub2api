@@ -150,6 +150,10 @@ func (s *userRepoStub) BatchAddConcurrency(context.Context, []int64, int) (int, 
 	return 0, nil
 }
 
+func (s *userRepoStub) BatchUpdateLimits(context.Context, []int64, *int, *int) (int, error) {
+	return 0, nil
+}
+
 func (s *userRepoStub) ExistsByEmail(ctx context.Context, email string) (bool, error) {
 	if s.existsErr != nil {
 		return false, s.existsErr
@@ -298,6 +302,7 @@ type affiliateTierServiceRepoStub struct {
 	AffiliateRepository
 	AffiliateQualificationRepository
 	mu                    sync.Mutex
+	qualifiedCount        int
 	inviteeSummary        *AffiliateSummary
 	inviterSummary        *AffiliateSummary
 	accruedAmount         float64
@@ -320,6 +325,25 @@ func (r *affiliateTierServiceRepoStub) AccrueQuota(_ context.Context, _, _ int64
 	return true, nil
 }
 
+func (r *affiliateTierServiceRepoStub) CountQualifiedInvitees(context.Context, int64, float64) (int, error) {
+	return r.qualifiedCount, nil
+}
+
+func (r *affiliateTierServiceRepoStub) TryWithAffiliateQualificationReconcileLock(ctx context.Context, fn func(context.Context) error) (bool, error) {
+	if fn == nil {
+		return true, nil
+	}
+	return true, fn(ctx)
+}
+
+func (r *affiliateTierServiceRepoStub) ListAffiliateQualificationDirtyEvents(context.Context, int) ([]AffiliateQualificationDirtyEvent, error) {
+	return nil, nil
+}
+
+func (r *affiliateTierServiceRepoStub) ReadReconcilePendingSnapshot(context.Context) (AffiliateReconcilePendingSnapshot, error) {
+	return AffiliateReconcilePendingSnapshot{}, nil
+}
+
 func (r *affiliateTierServiceRepoStub) ReconcileInviteeQualification(context.Context, int64, float64) (*AffiliateQualification, error) {
 	r.mu.Lock()
 	r.reconcileInviteeCalls++
@@ -337,6 +361,12 @@ func newAffiliateTierServiceSettingRepo() *affiliateTierServiceSettingRepo {
 	return &affiliateTierServiceSettingRepo{values: map[string]string{
 		SettingKeyAffiliateRebateRate:          "8",
 		SettingKeyAffiliateQualificationAmount: "50",
+		SettingKeyAffiliateBronzeInvitees:      "3",
+		SettingKeyAffiliateBronzeRate:          "10",
+		SettingKeyAffiliateSilverInvitees:      "10",
+		SettingKeyAffiliateSilverRate:          "12",
+		SettingKeyAffiliateGoldInvitees:        "30",
+		SettingKeyAffiliateGoldRate:            "15",
 	}}
 }
 

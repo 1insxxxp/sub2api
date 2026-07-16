@@ -124,6 +124,7 @@ func TestRedeemBalanceCodeReconcilesAffiliateQualification(t *testing.T) {
 		userRepoStub: &userRepoStub{user: &User{ID: inviteeID}},
 	}
 	affiliateRepo := &affiliateTierServiceRepoStub{
+		qualifiedCount: 10,
 		inviteeSummary: &AffiliateSummary{
 			UserID:    inviteeID,
 			InviterID: &inviterID,
@@ -144,6 +145,6 @@ func TestRedeemBalanceCodeReconcilesAffiliateQualification(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, code.Code, result.Code)
 	require.Equal(t, 500.0, userRepo.balance)
-	require.Equal(t, 40.0, affiliateRepo.accruedAmount)
+	require.Equal(t, 60.0, affiliateRepo.accruedAmount)
 	require.Equal(t, 1, affiliateRepo.reconcileInviteeCalls)
 }

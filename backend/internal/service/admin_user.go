@@ -568,7 +568,7 @@ func (s *adminServiceImpl) tryAccrueAffiliateRebateForAdminRecharge(ctx context.
 		return
 	}
 
-	rebate, err := s.affiliateService.AccrueInviteRebate(ctx, userID, amount)
+	rebate, err := s.affiliateService.AccrueTierAwareInviteRebateForOrder(ctx, userID, amount, nil)
 	if err != nil {
 		logger.LegacyPrintf("service.admin", "affiliate rebate failed for admin recharge: user_id=%d amount=%.8f err=%v", userID, amount, err)
 		return
