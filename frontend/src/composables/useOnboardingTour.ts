@@ -1,4 +1,5 @@
-import { onMounted, onUnmounted, nextTick } from 'vue'
+import { onMounted, onUnmounted, nextTick, watch } from 'vue'
+import { useRoute } from 'vue-router'
 import { driver, type Driver, type DriveStep } from 'driver.js'
 import 'driver.js/dist/driver.css'
 import { useAuthStore as useUserStore } from '@/stores/auth'
@@ -11,8 +12,27 @@ export interface OnboardingOptions {
   autoStart?: boolean
 }
 
+export function cleanupDriverDomArtifacts(): void {
+  document
+    .querySelectorAll('.driver-overlay, .driver-popover, .driver-popover-arrow')
+    .forEach((node) => node.remove())
+
+  document.body.classList.remove('driver-active', 'driver-fade', 'driver-simple')
+  document.documentElement.classList.remove('driver-active', 'driver-fade', 'driver-simple')
+  document
+    .querySelectorAll('.driver-active-element, .driver-no-interaction')
+    .forEach((node) => {
+      node.classList.remove('driver-active-element', 'driver-no-interaction')
+    })
+}
+
+export function shouldAutoStartOnboardingTour(path: string, isAdmin: boolean): boolean {
+  return isAdmin ? path === '/admin/dashboard' : path === '/dashboard'
+}
+
 export function useOnboardingTour(options: OnboardingOptions) {
   const { t } = useI18n()
+  const route = useRoute()
   const userStore = useUserStore()
   const onboardingStore = useOnboardingStore()
   const storageVersion = 'v4_interactive' // Bump version for new tour type
@@ -74,6 +94,32 @@ export function useOnboardingTour(options: OnboardingOptions) {
 
   const clearSeen = () => {
     localStorage.removeItem(getStorageKey())
+  }
+
+  const cleanupOrphanedDriverDom = () => {
+    const isActive = onboardingStore.isDriverActive()
+    const hasPopover = document.querySelector('.driver-popover') !== null
+
+    if (isActive && hasPopover) return
+
+    if (isActive && !hasPopover) {
+      onboardingStore.getDriverInstance()?.destroy?.()
+      onboardingStore.setDriverInstance(null)
+    }
+
+    const driverNodes = document.querySelectorAll(
+      '.driver-overlay, .driver-popover, .driver-popover-arrow',
+    )
+
+    const hasDriverClass =
+      document.body.classList.contains('driver-active') ||
+      document.documentElement.classList.contains('driver-active')
+
+    if (driverNodes.length === 0 && !hasDriverClass) {
+      return
+    }
+
+    cleanupDriverDomArtifacts()
   }
 
   /**
@@ -279,6 +325,8 @@ export function useOnboardingTour(options: OnboardingOptions) {
            const exists = await ensureElement(step.element, 8000)
            if (!exists) {
              console.warn(`Tour element not found after 8s: ${step.element}`)
+             driverInstance?.destroy()
+             onboardingStore.setDriverInstance(null)
              return
            }
            element = document.querySelector(step.element) as HTMLElement
@@ -521,6 +569,8 @@ export function useOnboardingTour(options: OnboardingOptions) {
   }
 
   onMounted(async () => {
+    cleanupOrphanedDriverDom()
+
     onboardingStore.setControlMethods({
       nextStep,
       isCurrentStep
@@ -543,6 +593,8 @@ export function useOnboardingTour(options: OnboardingOptions) {
     }
 
     if (!options.autoStart || hasSeen()) return
+    if (!shouldAutoStartOnboardingTour(route.path, isAdmin)) return
+
     autoStartTimer = setTimeout(() => {
       void startTour()
     }, TIMING.AUTO_START_DELAY_MS)
@@ -556,6 +608,13 @@ export function useOnboardingTour(options: OnboardingOptions) {
     // 关键修复：不再此处清理 globalKeyboardHandler，交由 driver.onDestroyed 管理
     onboardingStore.clearControlMethods()
   })
+
+  watch(
+    () => route.fullPath,
+    () => {
+      window.setTimeout(cleanupOrphanedDriverDom, 0)
+    },
+  )
 
   return {
     startTour,

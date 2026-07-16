@@ -136,7 +136,7 @@ const removeToast = (id: string) => {
   background: rgba(148, 163, 184, 0.16);
 }
 
-:global(.dark) .toast-progress-track {
+:global(.dark .toast-progress-track) {
   background: rgba(255, 255, 255, 0.08);
 }
 

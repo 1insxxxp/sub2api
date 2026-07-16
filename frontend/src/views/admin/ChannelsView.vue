@@ -1630,7 +1630,7 @@ onUnmounted(() => {
     rgba(255, 255, 255, 0.92);
 }
 
-:global(.dark) .channel-tab-strip {
+:global(.dark .channel-tab-strip) {
   border-bottom-color: rgba(96, 165, 250, 0.14);
   background:
     linear-gradient(180deg, rgba(30, 64, 175, 0.14), rgba(2, 6, 23, 0.92)),

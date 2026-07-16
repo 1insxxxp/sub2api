@@ -376,6 +376,29 @@ function formatCount(value: number): string {
   opacity: 0.8;
 }
 
+:global(.dark .tier-identity) {
+  background:
+    linear-gradient(135deg, rgb(8 47 73 / 0.38), transparent 42%),
+    linear-gradient(180deg, rgb(15 23 42 / 0.96), rgb(2 6 23 / 0.9)),
+    rgb(15 23 42) !important;
+  border-color: rgb(34 211 238 / 0.22) !important;
+  color: rgb(226 232 240) !important;
+  box-shadow:
+    inset 0 0 0 1px rgb(255 255 255 / 0.035),
+    0 18px 40px rgb(0 0 0 / 0.22) !important;
+}
+
+:global(.dark .tier-identity__grid) {
+  background-image:
+    linear-gradient(rgb(var(--tier-cyan) / 0.06) 1px, transparent 1px),
+    linear-gradient(90deg, rgb(var(--tier-cyan) / 0.06) 1px, transparent 1px);
+  opacity: 0.72;
+}
+
+:global(.dark .tier-identity__scan) {
+  background: linear-gradient(90deg, transparent, rgb(var(--tier-cyan) / 0.12), transparent);
+}
+
 .tier-identity__scan {
   width: 46%;
   background: linear-gradient(90deg, transparent, rgb(var(--tier-cyan) / 0.08), transparent);
@@ -1021,37 +1044,50 @@ function formatCount(value: number): string {
   opacity: 0.42;
 }
 
-:global(.dark) .tier-identity__rule {
-  border-color: rgb(30 64 175 / 0.62);
-  background: rgb(15 23 42 / 0.68);
-  box-shadow: inset 0 0 0 1px rgb(30 58 138 / 0.18);
+:global(.dark .tier-identity__rule) {
+  border-color: rgb(34 211 238 / 0.2) !important;
+  background:
+    linear-gradient(180deg, rgb(15 23 42 / 0.9), rgb(2 6 23 / 0.5)),
+    rgb(15 23 42) !important;
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.03);
 }
 
-:global(.dark) .tier-identity__rule--current {
-  border-color: rgb(var(--tier-cyan) / 0.78);
-  background: rgb(8 47 73 / 0.66);
+:global(.dark .tier-identity__rule--current) {
+  border-color: rgb(var(--tier-cyan) / 0.72) !important;
+  background:
+    linear-gradient(135deg, rgb(8 47 73 / 0.82), rgb(15 23 42 / 0.9)),
+    rgb(15 23 42) !important;
   box-shadow:
     0 0 0 1px rgb(var(--tier-cyan) / 0.16),
+    0 10px 24px -18px rgb(var(--tier-cyan) / 0.72),
     inset 3px 0 0 rgb(var(--tier-cyan) / 0.8);
 }
 
-:global(.dark) .tier-identity__rule[data-tier-state='locked'] {
-  border-color: rgb(51 65 85 / 0.9);
-  background: rgb(15 23 42 / 0.48);
+:global(.dark .tier-identity__rule[data-tier-state='locked']) {
+  border-color: rgb(51 65 85 / 0.95) !important;
+  background:
+    linear-gradient(180deg, rgb(15 23 42 / 0.66), rgb(2 6 23 / 0.42)),
+    rgb(15 23 42) !important;
 }
 
-:global(.dark) .tier-identity__rule-meta {
+:global(.dark .tier-identity__rule-meta) {
   border-top-color: rgb(30 64 175 / 0.42);
 }
 
-:global(.dark) .tier-identity__rule-status,
-:global(.dark) .tier-identity__rule-remaining {
+:global(.dark .tier-identity__rule-status),
+:global(.dark .tier-identity__rule-remaining) {
   color: rgb(148 163 184);
 }
 
-:global(.dark) .tier-identity__rule[data-tier-state='unlocked'] .tier-identity__rule-status,
-:global(.dark) .tier-identity__rule[data-tier-state='current'] .tier-identity__rule-status {
+:global(.dark .tier-identity__rule[data-tier-state='unlocked'] .tier-identity__rule-status),
+:global(.dark .tier-identity__rule[data-tier-state='current'] .tier-identity__rule-status) {
   color: rgb(103 232 249);
+}
+
+@media (min-width: 1024px) {
+  :global(.dark .tier-identity__rules) {
+    border-left-color: rgb(34 211 238 / 0.16);
+  }
 }
 
 @supports ((-webkit-mask-composite: xor) or (mask-composite: exclude)) {
@@ -1541,17 +1577,4 @@ function formatCount(value: number): string {
   }
 }
 
-:global(.dark) .tier-identity {
-  background-color: rgb(15 23 42);
-}
-
-:global(.dark) .tier-identity__grid {
-  opacity: 0.26;
-}
-
-@media (min-width: 1024px) {
-  :global(.dark) .tier-identity__rules {
-    border-left-color: rgb(30 64 175 / 0.45);
-  }
-}
 </style>

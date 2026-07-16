@@ -92,7 +92,6 @@ onMounted(() => {
 .auth-card {
   position: relative;
   overflow: hidden;
-  background: rgba(255, 255, 255, 0.92);
 }
 
 .auth-card::before {
@@ -101,11 +100,6 @@ onMounted(() => {
   height: 2px;
   content: '';
   background: linear-gradient(90deg, #2563eb, #3b82f6, #06b6d4);
-}
-
-:global(html.dark) .auth-card,
-:global(.dark) .auth-card {
-  background: rgba(15, 23, 42, 0.82);
 }
 
 .auth-logo-frame {

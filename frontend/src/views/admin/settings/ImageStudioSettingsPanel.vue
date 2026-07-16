@@ -455,7 +455,7 @@ onMounted(loadSettings)
     rgba(255, 255, 255, 0.84);
 }
 
-:global(.dark) .image-studio-ratio-table {
+:global(.dark .image-studio-ratio-table) {
   background:
     linear-gradient(180deg, rgba(15, 23, 42, 0.82), rgba(2, 6, 23, 0.78)),
     rgba(15, 23, 42, 0.72);

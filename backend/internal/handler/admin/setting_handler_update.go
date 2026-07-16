@@ -14,6 +14,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/internal/service"
 
 	"github.com/gin-gonic/gin"
+	"github.com/gin-gonic/gin/binding"
 )
 
 // UpdateSettingsRequest 更新设置请求
@@ -344,7 +345,12 @@ type UpdateSettingsRequest struct {
 // PUT /api/v1/admin/settings
 func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 	var req UpdateSettingsRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
+	if err := c.ShouldBindBodyWith(&req, binding.JSON); err != nil {
+		response.BadRequest(c, "Invalid request: "+err.Error())
+		return
+	}
+	var providedFields map[string]json.RawMessage
+	if err := c.ShouldBindBodyWith(&providedFields, binding.JSON); err != nil {
 		response.BadRequest(c, "Invalid request: "+err.Error())
 		return
 	}
@@ -1198,6 +1204,10 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 		return
 	}
 
+	_, siteNameProvided := providedFields["site_name"]
+	_, siteLogoProvided := providedFields["site_logo"]
+	_, siteSubtitleProvided := providedFields["site_subtitle"]
+
 	settings := &service.SystemSettings{
 		// 系统全局 platform quota 默认值（整体替换语义）
 		DefaultPlatformQuotas: req.DefaultPlatformQuotas,
@@ -1300,9 +1310,9 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 		GoogleOAuthClientSecret:                req.GoogleOAuthClientSecret,
 		GoogleOAuthRedirectURL:                 req.GoogleOAuthRedirectURL,
 		GoogleOAuthFrontendRedirectURL:         req.GoogleOAuthFrontendRedirectURL,
-		SiteName:                               req.SiteName,
-		SiteLogo:                               req.SiteLogo,
-		SiteSubtitle:                           req.SiteSubtitle,
+		SiteName:                               stringValueOrDefaultWhenOmitted(siteNameProvided, req.SiteName, previousSettings.SiteName),
+		SiteLogo:                               stringValueOrDefaultWhenOmitted(siteLogoProvided, req.SiteLogo, previousSettings.SiteLogo),
+		SiteSubtitle:                           stringValueOrDefaultWhenOmitted(siteSubtitleProvided, req.SiteSubtitle, previousSettings.SiteSubtitle),
 		APIBaseURL:                             req.APIBaseURL,
 		ContactInfo:                            req.ContactInfo,
 		DocURL:                                 req.DocURL,
@@ -2015,6 +2025,13 @@ func hasPaymentFields(req UpdateSettingsRequest) bool {
 		req.PaymentCancelRateLimitMax != nil || req.PaymentCancelRateLimitWindow != nil ||
 		req.PaymentCancelRateLimitUnit != nil || req.PaymentCancelRateLimitMode != nil ||
 		req.PaymentAlipayForceQRCode != nil
+}
+
+func stringValueOrDefaultWhenOmitted(provided bool, value string, fallback string) string {
+	if !provided {
+		return fallback
+	}
+	return value
 }
 
 // ensureDingTalkSyncAttributes 在保存 settings 后，按 admin 配置的 (attr key, attr name)

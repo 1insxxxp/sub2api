@@ -535,6 +535,7 @@ func (s *RedeemService) Redeem(ctx context.Context, userID int64, code string) (
 	// 余额类正数兑换码触发邀请返利（best-effort，失败不影响兑换结果）
 	if redeemCode.Type == RedeemTypeBalance && redeemCode.Value > 0 {
 		s.tryAccrueAffiliateRebateForRedeem(ctx, userID, redeemCode.Value)
+		s.tryReconcileAffiliateQualificationForRedeem(ctx, userID)
 	}
 
 	// 重新获取更新后的兑换码
@@ -603,6 +604,21 @@ func (s *RedeemService) tryAccrueAffiliateRebateForRedeem(ctx context.Context, u
 	}
 	if rebate > 0 {
 		logger.LegacyPrintf("service.redeem", "[Redeem] affiliate rebate accrued %.8f for inviter of user %d", rebate, userID)
+	}
+}
+
+func (s *RedeemService) tryReconcileAffiliateQualificationForRedeem(ctx context.Context, userID int64) {
+	if ctx.Value(ctxKeySkipRedeemAffiliate{}) != nil {
+		return
+	}
+	if s.affiliateService == nil {
+		return
+	}
+	if !s.affiliateService.IsEnabled(ctx) {
+		return
+	}
+	if err := s.affiliateService.ReconcileInviteeQualification(ctx, userID); err != nil {
+		logger.LegacyPrintf("service.redeem", "[Redeem] affiliate qualification reconcile failed for user %d: %v", userID, err)
 	}
 }
 

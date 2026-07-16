@@ -105,7 +105,7 @@ const sizeClass = computed(() => `default-user-avatar--${props.size}`)
   border-radius: 1.5rem;
 }
 
-:global(.dark) .default-user-avatar {
+:global(.dark .default-user-avatar) {
   border-color: rgba(96, 165, 250, 0.26);
   background:
     radial-gradient(circle at 28% 16%, rgba(255, 255, 255, 0.18), transparent 30%),

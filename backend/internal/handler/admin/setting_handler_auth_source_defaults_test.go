@@ -246,6 +246,44 @@ func TestSettingHandler_UpdateSettings_PreservesOmittedAuthSourceDefaults(t *tes
 	require.Equal(t, true, data["force_email_on_third_party_signup"])
 }
 
+func TestSettingHandler_UpdateSettings_PreservesOmittedBrandingFields(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	repo := &settingHandlerRepoStub{
+		values: map[string]string{
+			service.SettingKeySiteName:     "Passion API",
+			service.SettingKeySiteLogo:     "data:image/png;base64,logo",
+			service.SettingKeySiteSubtitle: "AI gateway",
+		},
+	}
+	svc := service.NewSettingService(repo, &config.Config{Default: config.DefaultConfig{UserConcurrency: 5}})
+	handler := NewSettingHandler(svc, nil, nil, nil, nil, nil, nil)
+
+	body := map[string]any{
+		"custom_menu_items": []map[string]any{
+			{
+				"id":         "card",
+				"label":      "充值卡网",
+				"url":        "https://card.passionapi.com/categories/zhongzhuan",
+				"visibility": "user",
+			},
+		},
+	}
+	rawBody, err := json.Marshal(body)
+	require.NoError(t, err)
+
+	rec := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(rec)
+	c.Request = httptest.NewRequest(http.MethodPut, "/api/v1/admin/settings", bytes.NewReader(rawBody))
+	c.Request.Header.Set("Content-Type", "application/json")
+
+	handler.UpdateSettings(c)
+
+	require.Equal(t, http.StatusOK, rec.Code)
+	require.Equal(t, "Passion API", repo.lastUpdates[service.SettingKeySiteName])
+	require.Equal(t, "data:image/png;base64,logo", repo.lastUpdates[service.SettingKeySiteLogo])
+	require.Equal(t, "AI gateway", repo.lastUpdates[service.SettingKeySiteSubtitle])
+}
+
 func TestSettingHandler_UpdateSettings_PersistsPaymentVisibleMethodsAndAdvancedScheduler(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	repo := &settingHandlerRepoStub{

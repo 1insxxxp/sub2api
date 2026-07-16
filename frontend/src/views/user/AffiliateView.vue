@@ -63,7 +63,7 @@
         <div class="grid gap-5 lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1.35fr)]">
           <section
             data-testid="affiliate-invite-tools"
-            class="card affiliate-tools p-6"
+            class="card affiliate-panel affiliate-tools p-6"
           >
             <div class="flex items-start justify-between gap-4">
               <div>
@@ -96,7 +96,7 @@
                 </div>
               </div>
 
-              <div class="rounded-lg border border-cyan-200/80 bg-cyan-50/70 p-3 dark:border-cyan-900/50 dark:bg-cyan-950/20">
+              <div class="affiliate-pitch-card rounded-lg border border-cyan-200/80 bg-cyan-50/70 p-3 dark:border-cyan-900/50 dark:bg-cyan-950/20">
                 <p class="text-xs font-medium text-cyan-700 dark:text-cyan-300">{{ t('affiliate.campaign.copyPitch') }}</p>
                 <p class="mt-1 break-words text-sm leading-6 text-gray-700 dark:text-gray-200">
                   {{ promotionPitch }}
@@ -111,7 +111,7 @@
 
           <section
             data-testid="affiliate-progress-center"
-            class="card affiliate-progress-panel p-6"
+            class="card affiliate-panel affiliate-progress-panel p-6"
           >
             <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
               <div>
@@ -214,7 +214,7 @@
         <section
           v-if="rewardTasks.length > 0"
           data-testid="affiliate-milestone-rewards"
-          class="card affiliate-rewards p-6"
+          class="card affiliate-panel affiliate-rewards p-6"
         >
           <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <div>
@@ -283,7 +283,7 @@
           </div>
         </section>
 
-        <div class="card p-6">
+        <div class="card affiliate-panel p-6">
           <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <h3 class="text-base font-semibold text-gray-900 dark:text-white">{{ t('affiliate.transfer.title') }}</h3>
@@ -304,7 +304,7 @@
           </p>
         </div>
 
-        <div class="card p-6">
+        <div class="card affiliate-panel p-6">
           <h3 class="text-base font-semibold text-gray-900 dark:text-white">{{ t('affiliate.invitees.title') }}</h3>
           <div v-if="detail.invitees.length === 0" class="mt-4 rounded-lg border border-dashed border-gray-300 p-6 text-center text-sm text-gray-500 dark:border-dark-700 dark:text-dark-400">
             {{ t('affiliate.invitees.empty') }}
@@ -616,7 +616,9 @@ onMounted(() => {
 }
 
 .affiliate-tools,
-.affiliate-progress-panel {
+.affiliate-progress-panel,
+.affiliate-rewards,
+.affiliate-panel {
   overflow: hidden;
   border-color: rgb(165 243 252 / 0.65);
 }
@@ -689,58 +691,121 @@ onMounted(() => {
   color: rgb(8 145 178);
 }
 
-:global(.dark) .affiliate-tools,
-:global(.dark) .affiliate-progress-panel {
-  border-color: rgb(14 116 144 / 0.5);
+:global(.dark .affiliate-tools),
+:global(.dark .affiliate-progress-panel),
+:global(.dark .affiliate-rewards),
+:global(.dark .affiliate-panel) {
+  border-color: rgb(34 211 238 / 0.28) !important;
+  color: rgb(226 232 240) !important;
+  box-shadow:
+    inset 0 0 0 1px rgb(255 255 255 / 0.035),
+    0 16px 34px rgb(0 0 0 / 0.22) !important;
 }
 
-:global(.dark) .affiliate-tools {
+:global(.dark .affiliate-panel) {
   background:
-    radial-gradient(circle at top right, rgb(34 211 238 / 0.12), transparent 36%),
-    rgb(17 24 39 / 0.86);
+    linear-gradient(145deg, rgb(15 23 42 / 0.96), rgb(2 6 23 / 0.88)),
+    rgb(15 23 42) !important;
 }
 
-:global(.dark) .affiliate-progress-panel {
+:global(.dark .affiliate-console) {
   background:
-    linear-gradient(135deg, rgb(8 47 73 / 0.28), rgb(17 24 39 / 0.92)),
-    rgb(17 24 39);
+    linear-gradient(135deg, rgb(8 47 73 / 0.46), transparent 44%),
+    rgb(15 23 42 / 0.94);
+  border-color: rgb(34 211 238 / 0.28);
+  box-shadow:
+    inset 0 0 0 1px rgb(255 255 255 / 0.035),
+    0 18px 38px rgb(0 0 0 / 0.24);
 }
 
-:global(.dark) .affiliate-copy-row {
-  border-color: rgb(55 65 81);
-  background: rgb(15 23 42 / 0.72);
-}
-
-:global(.dark) .affiliate-stat {
-  border-color: rgb(30 64 175 / 0.46);
-  background: rgb(15 23 42 / 0.58);
-  box-shadow: inset 0 0 0 1px rgb(14 116 144 / 0.08);
-}
-
-:global(.dark) .affiliate-stat--featured {
-  border-color: rgb(14 116 144 / 0.7);
-  background: linear-gradient(135deg, rgb(23 37 84 / 0.24), rgb(8 51 68 / 0.2));
-  box-shadow: inset 0 0 0 1px rgb(34 211 238 / 0.08), 0 5px 16px rgb(6 182 212 / 0.06);
-}
-
-:global(.dark) .affiliate-reward-card {
-  border-color: rgb(14 116 144 / 0.5);
+:global(.dark .affiliate-console__grid) {
   background:
-    linear-gradient(135deg, rgb(8 47 73 / 0.26), rgb(15 23 42 / 0.82)),
+    linear-gradient(120deg, rgb(34 211 238 / 0.12), transparent 44%),
+    linear-gradient(rgb(103 232 249 / 0.055) 1px, transparent 1px),
+    linear-gradient(90deg, rgb(103 232 249 / 0.055) 1px, transparent 1px);
+  opacity: 0.82;
+}
+
+:global(.dark .affiliate-step) {
+  background:
+    linear-gradient(145deg, rgb(15 23 42 / 0.82), rgb(8 47 73 / 0.48)),
     rgb(15 23 42);
+  border-color: rgb(34 211 238 / 0.22);
+  box-shadow:
+    inset 0 0 0 1px rgb(255 255 255 / 0.035),
+    0 10px 24px -22px rgb(6 182 212 / 0.72);
 }
 
-:global(.dark) .affiliate-reward-card[data-state="claimable"] {
+:global(.dark .affiliate-tools) {
+  background:
+    radial-gradient(circle at top right, rgb(34 211 238 / 0.16), transparent 38%),
+    linear-gradient(180deg, rgb(15 23 42 / 0.96), rgb(2 6 23 / 0.86)),
+    rgb(15 23 42) !important;
+}
+
+:global(.dark .affiliate-progress-panel) {
+  background:
+    linear-gradient(135deg, rgb(8 47 73 / 0.42), rgb(15 23 42 / 0.94)),
+    rgb(15 23 42) !important;
+}
+
+:global(.dark .affiliate-rewards) {
+  background:
+    linear-gradient(135deg, rgb(15 23 42 / 0.96), rgb(30 41 59 / 0.72)),
+    rgb(15 23 42) !important;
+}
+
+:global(.dark .affiliate-pitch-card) {
+  border-color: rgb(34 211 238 / 0.3) !important;
+  background:
+    linear-gradient(135deg, rgb(8 47 73 / 0.5), rgb(15 23 42 / 0.86)),
+    rgb(15 23 42) !important;
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.035);
+}
+
+:global(.dark .affiliate-copy-row) {
+  border-color: rgb(51 65 85 / 0.95) !important;
+  background: rgb(2 6 23 / 0.48) !important;
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.025);
+}
+
+:global(.dark .affiliate-stat) {
+  border-color: rgb(34 211 238 / 0.2) !important;
+  background:
+    linear-gradient(180deg, rgb(15 23 42 / 0.88), rgb(2 6 23 / 0.48)),
+    rgb(15 23 42) !important;
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.03);
+}
+
+:global(.dark .affiliate-stat--featured) {
+  border-color: rgb(34 211 238 / 0.58) !important;
+  background:
+    linear-gradient(135deg, rgb(8 47 73 / 0.78), rgb(15 23 42 / 0.84)),
+    rgb(15 23 42) !important;
+  box-shadow:
+    inset 0 0 0 1px rgb(34 211 238 / 0.08),
+    0 8px 22px rgb(6 182 212 / 0.08);
+}
+
+:global(.dark .affiliate-reward-card) {
+  border-color: rgb(34 211 238 / 0.24) !important;
+  background:
+    linear-gradient(135deg, rgb(8 47 73 / 0.42), rgb(15 23 42 / 0.9)),
+    rgb(15 23 42) !important;
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.03);
+}
+
+:global(.dark .affiliate-reward-card[data-state="claimable"]) {
   border-color: rgb(34 211 238 / 0.7);
   box-shadow: inset 0 0 0 1px rgb(34 211 238 / 0.1), 0 10px 24px -22px rgb(6 182 212 / 0.8);
 }
 
-:global(.dark) .affiliate-reward-icon {
+:global(.dark .affiliate-reward-icon) {
   background: rgb(30 41 59);
   color: rgb(148 163 184);
 }
 
-:global(.dark) .affiliate-reward-icon[data-ready="true"] {
+:global(.dark .affiliate-reward-icon[data-ready="true"]) {
   background: rgb(8 145 178 / 0.28);
   color: rgb(103 232 249);
 }

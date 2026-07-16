@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"testing"
+	"time"
 
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/pagination"
@@ -99,4 +100,50 @@ func TestRedeemRejectsInvitationCodeBeforeTransaction(t *testing.T) {
 	require.False(t, redeemRepo.useCalled)
 	require.Equal(t, StatusUnused, redeemRepo.code.Status)
 	require.Nil(t, redeemRepo.code.UsedBy)
+}
+
+func TestRedeemBalanceCodeReconcilesAffiliateQualification(t *testing.T) {
+	ctx := context.Background()
+	client := newCheckinServiceTestClient(t)
+	inviterID := int64(1)
+	inviteeID := int64(2)
+	code := &RedeemCode{
+		ID:     201,
+		Code:   "BALANCE-500",
+		Type:   RedeemTypeBalance,
+		Value:  500,
+		Status: StatusUnused,
+	}
+	redeemRepo := &batchRedeemRepo{
+		redeemRejectRepo: &redeemRejectRepo{},
+		codes: map[string]*RedeemCode{
+			code.Code: code,
+		},
+	}
+	userRepo := &batchRedeemUserRepo{
+		userRepoStub: &userRepoStub{user: &User{ID: inviteeID}},
+	}
+	affiliateRepo := &affiliateTierServiceRepoStub{
+		inviteeSummary: &AffiliateSummary{
+			UserID:    inviteeID,
+			InviterID: &inviterID,
+			CreatedAt: time.Now().Add(-time.Hour),
+		},
+		inviterSummary: &AffiliateSummary{
+			UserID:    inviterID,
+			CreatedAt: time.Now().Add(-24 * time.Hour),
+		},
+	}
+	settingRepo := newAffiliateTierServiceSettingRepo()
+	settingRepo.values[SettingKeyAffiliateEnabled] = "true"
+	affiliateService := NewAffiliateService(affiliateRepo, NewSettingService(settingRepo, nil), nil, nil)
+	redeemService := NewRedeemService(redeemRepo, userRepo, nil, nil, nil, client, nil, affiliateService)
+
+	result, err := redeemService.Redeem(ctx, inviteeID, code.Code)
+
+	require.NoError(t, err)
+	require.Equal(t, code.Code, result.Code)
+	require.Equal(t, 500.0, userRepo.balance)
+	require.Equal(t, 40.0, affiliateRepo.accruedAmount)
+	require.Equal(t, 1, affiliateRepo.reconcileInviteeCalls)
 }
