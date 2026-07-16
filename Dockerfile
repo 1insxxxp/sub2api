@@ -24,7 +24,7 @@ ARG PNPM_VERSION
 ARG NPM_CONFIG_REGISTRY
 
 WORKDIR /app/frontend
-ENV NODE_OPTIONS=--max-old-space-size=1536
+ENV NODE_OPTIONS=--max-old-space-size=2560
 
 # Install a pinned pnpm version so Docker builds are not affected by
 # backwards-incompatible behavior changes in the latest pnpm release.
