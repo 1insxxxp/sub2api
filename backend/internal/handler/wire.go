@@ -42,7 +42,10 @@ func ProvideAdminHandlers(
 	affiliateHandler *admin.AffiliateHandler,
 	complianceHandler *admin.ComplianceHandler,
 	checkinHandler *admin.CheckinHandler,
+	auditLogHandler *admin.AuditLogHandler,
+	upstreamBillingProbe *service.UpstreamBillingProbeService,
 ) *AdminHandlers {
+	accountHandler.SetUpstreamBillingProbeService(upstreamBillingProbe)
 	return &AdminHandlers{
 		Dashboard:              dashboardHandler,
 		User:                   userHandler,
@@ -77,6 +80,7 @@ func ProvideAdminHandlers(
 		Affiliate:              affiliateHandler,
 		Compliance:             complianceHandler,
 		Checkin:                checkinHandler,
+		AuditLog:               auditLogHandler,
 	}
 }
 
@@ -123,6 +127,7 @@ func ProvideHandlers(
 	availableChannelHandler *AvailableChannelHandler,
 	checkinHandler *CheckinHandler,
 	imageStudioHandler *ImageStudioHandler,
+	asyncImageHandler *AsyncImageHandler,
 	batchImageHandler *BatchImageHandler,
 	_ *service.IdempotencyCoordinator,
 	_ *service.IdempotencyCleanupService,
@@ -146,6 +151,7 @@ func ProvideHandlers(
 		AvailableChannel: availableChannelHandler,
 		Checkin:          checkinHandler,
 		ImageStudio:      imageStudioHandler,
+		AsyncImage:       asyncImageHandler,
 		BatchImage:       batchImageHandler,
 	}
 }
@@ -170,6 +176,7 @@ var ProviderSet = wire.NewSet(
 	NewAvailableChannelHandler,
 	NewCheckinHandler,
 	ProvideImageStudioHandler,
+	NewAsyncImageHandler,
 	NewBatchImageHandler,
 
 	// Admin handlers
@@ -206,6 +213,7 @@ var ProviderSet = wire.NewSet(
 	admin.NewAffiliateHandler,
 	admin.NewComplianceHandler,
 	admin.NewCheckinHandler,
+	admin.NewAuditLogHandler,
 
 	// AdminHandlers and Handlers constructors
 	ProvideAdminHandlers,
