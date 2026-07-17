@@ -83,24 +83,6 @@ func (w *AffiliateQualificationRecoveryWorker) Stop() {
 	<-done
 }
 
-func (w *AffiliateQualificationRecoveryWorker) stopped() bool {
-	if w == nil {
-		return true
-	}
-	w.mu.Lock()
-	done := w.done
-	w.mu.Unlock()
-	if done == nil {
-		return true
-	}
-	select {
-	case <-done:
-		return true
-	default:
-		return false
-	}
-}
-
 func (w *AffiliateQualificationRecoveryWorker) run(ctx context.Context, done chan struct{}) {
 	defer close(done)
 	if ctx.Err() != nil {

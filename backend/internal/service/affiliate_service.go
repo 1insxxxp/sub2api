@@ -1031,13 +1031,6 @@ func (s *AffiliateService) listInvitees(ctx context.Context, inviterID int64, qu
 	return invitees, nil
 }
 
-func (s *AffiliateService) bestEffortRecoverPendingQualifications(ctx context.Context) {
-	if s == nil || s.qualificationRepo == nil {
-		return
-	}
-	_ = s.ReconcilePendingAffiliateQualifications(ctx)
-}
-
 func affiliateTierDefinitions(config AffiliateTierConfig) []AffiliateTierDefinition {
 	return []AffiliateTierDefinition{
 		{Level: AffiliateTierStandard, MinQualifiedInvitees: 0, RatePercent: config.StandardRate},

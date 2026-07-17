@@ -93,6 +93,24 @@ func TestProvideAffiliateQualificationRecoveryWorkerStartsAndStops(t *testing.T)
 	require.True(t, worker.stopped())
 }
 
+func (w *AffiliateQualificationRecoveryWorker) stopped() bool {
+	if w == nil {
+		return true
+	}
+	w.mu.Lock()
+	done := w.done
+	w.mu.Unlock()
+	if done == nil {
+		return true
+	}
+	select {
+	case <-done:
+		return true
+	default:
+		return false
+	}
+}
+
 func waitForAffiliateRecoveryCall(t *testing.T, called <-chan struct{}) {
 	t.Helper()
 	select {

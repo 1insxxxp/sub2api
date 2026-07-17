@@ -1032,7 +1032,7 @@ ORDER BY affiliate_reward_rules.sort_order ASC, affiliate_reward_rules.required_
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	rules := []service.AffiliateRewardRule{}
 	for rows.Next() {
 		rule, scanErr := scanAffiliateRewardRule(rows)
@@ -1060,7 +1060,7 @@ LIMIT 1`, ruleID)
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	if !rows.Next() {
 		return nil, service.ErrAffiliateRewardNotFound
 	}
@@ -1117,7 +1117,7 @@ RETURNING id, name, description, enabled, required_qualified_invitees, reward_ty
 		if err != nil {
 			return err
 		}
-		defer rows.Close()
+		defer func() { _ = rows.Close() }()
 		if !rows.Next() {
 			return service.ErrAffiliateRewardNotFound
 		}
@@ -1168,7 +1168,7 @@ ORDER BY arc.claimed_at DESC`, userID)
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	claims := []service.AffiliateRewardClaim{}
 	for rows.Next() {
 		var claim service.AffiliateRewardClaim
@@ -1198,11 +1198,15 @@ RETURNING id`,
 			return err
 		}
 		if !rows.Next() {
-			rows.Close()
+			if closeErr := rows.Close(); closeErr != nil {
+				return closeErr
+			}
 			return errors.New("insert affiliate reward redeem code returned no row")
 		}
 		if err := rows.Scan(&code.ID); err != nil {
-			rows.Close()
+			if closeErr := rows.Close(); closeErr != nil {
+				return closeErr
+			}
 			return err
 		}
 		if err := rows.Close(); err != nil {
@@ -1220,7 +1224,7 @@ RETURNING id, user_id, rule_id, redeem_code_id, qualified_invitee_count_snapshot
 			}
 			return err
 		}
-		defer claimRows.Close()
+		defer func() { _ = claimRows.Close() }()
 		if !claimRows.Next() {
 			return errors.New("insert affiliate reward claim returned no row")
 		}

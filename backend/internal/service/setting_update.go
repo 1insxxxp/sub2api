@@ -493,7 +493,7 @@ func validateAffiliateTierConfig(config AffiliateTierConfig) error {
 	if config.BronzeInvitees <= 0 || config.SilverInvitees <= 0 || config.GoldInvitees <= 0 {
 		return fmt.Errorf("affiliate invitee thresholds must be greater than zero")
 	}
-	if !(config.BronzeInvitees < config.SilverInvitees && config.SilverInvitees < config.GoldInvitees) {
+	if config.BronzeInvitees >= config.SilverInvitees || config.SilverInvitees >= config.GoldInvitees {
 		return fmt.Errorf("affiliate invitee thresholds must be strictly increasing")
 	}
 	rates := []float64{config.StandardRate, config.BronzeRate, config.SilverRate, config.GoldRate}
