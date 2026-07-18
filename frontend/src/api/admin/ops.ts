@@ -935,8 +935,7 @@ export interface OpsErrorLog {
   request_type?: number | null
   user_agent?: string
 
-  // 已删除 KEY 所有者(INVALID_API_KEY 归因快照):认证失败行 user_id 为空,
-  // 用户列以此回退显示所有者
+  // Deleted key owner snapshot for INVALID_API_KEY attribution.
   deleted_key_owner_user_id?: number | null
   deleted_key_owner_email?: string | null
 }
@@ -958,13 +957,12 @@ export interface OpsErrorDetail extends OpsErrorLog {
 
   is_business_limited: boolean
 
-  // Deleted key owner info (INVALID_API_KEY attribution);
-  // owner user_id/email 已上移到 OpsErrorLog(列表用户列回退)
-  attempted_key_prefix?: string | null
-  deleted_key_name?: string | null
-
   // Bound (non-deleted) key prefix, snapshotted at error time
   api_key_prefix?: string | null
+
+  // Deleted key detail snapshot for INVALID_API_KEY attribution.
+  attempted_key_prefix?: string | null
+  deleted_key_name?: string | null
 }
 
 export type OpsErrorLogsResponse = PaginatedResponse<OpsErrorLog>
