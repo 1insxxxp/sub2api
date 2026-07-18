@@ -148,6 +148,17 @@ func (s *GatewayService) Forward(ctx context.Context, c *gin.Context, account *A
 	reqStream := parsed.Stream
 	originalModel := reqModel
 
+	if parsed.GroupID != nil {
+		if group := s.groupFromContext(ctx, *parsed.GroupID); group != nil {
+			if rewritten, applied := ApplyGroupDefaultReasoningEffort(body, group); applied {
+				if err := replaceBody(rewritten); err != nil {
+					return nil, err
+				}
+				logger.LegacyPrintf("service.gateway", "Applied group default reasoning effort: group=%d effort=%s", group.ID, group.DefaultReasoningEffort)
+			}
+		}
+	}
+
 	// === DEBUG: 打印客户端原始请求（headers + body 摘要）===
 	if c != nil {
 		s.debugLogGatewaySnapshot("CLIENT_ORIGINAL", c.Request.Header, body, map[string]string{

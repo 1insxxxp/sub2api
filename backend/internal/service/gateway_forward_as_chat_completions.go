@@ -89,6 +89,16 @@ func (s *GatewayService) ForwardAsChatCompletions(
 	if err != nil {
 		return nil, fmt.Errorf("marshal anthropic request: %w", err)
 	}
+	var groupDefaultReasoningEffort *string
+	if parsed != nil && parsed.GroupID != nil {
+		if group := s.groupFromContext(ctx, *parsed.GroupID); group != nil {
+			if rewritten, applied := ApplyGroupDefaultReasoningEffort(anthropicBody, group); applied {
+				anthropicBody = rewritten
+				groupDefaultReasoningEffort = NormalizeClaudeOutputEffort(gjson.GetBytes(anthropicBody, "output_config.effort").String())
+				logger.LegacyPrintf("service.gateway", "Applied group default reasoning effort for chat completions: group=%d effort=%s", group.ID, group.DefaultReasoningEffort)
+			}
+		}
+	}
 
 	// 6. Apply Claude Code mimicry for OAuth accounts.
 	// Chat Completions 协议进来的请求永远不是 Claude Code 客户端，所以对 OAuth 账号
@@ -184,6 +194,9 @@ func (s *GatewayService) ForwardAsChatCompletions(
 	// 如果上游是 passback-required 国产模型 (Kimi-anthropic / GLM-anthropic / MiniMax)
 	// 且客户端在 body 里传了 thinking.type=enabled，补中默认 effort。
 	reasoningEffort = ApplyThinkingEnabledFallback(reasoningEffort, body, mappedModel)
+	if reasoningEffort == nil {
+		reasoningEffort = groupDefaultReasoningEffort
+	}
 
 	// 14. Handle normal response
 	// Read Anthropic SSE → convert to Responses events → convert to CC format

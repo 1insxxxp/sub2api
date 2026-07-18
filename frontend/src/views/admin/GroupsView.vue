@@ -1337,6 +1337,18 @@
               {{ t("admin.groups.claudeCode.fallbackHint") }}
             </p>
           </div>
+          <div class="mt-3">
+            <label class="input-label">{{
+              t("admin.groups.defaultReasoning.title")
+            }}</label>
+            <Select
+              v-model="createForm.default_reasoning_effort"
+              :options="defaultReasoningEffortOptions"
+            />
+            <p class="input-hint">
+              {{ t("admin.groups.defaultReasoning.hint") }}
+            </p>
+          </div>
         </div>
 
         <!-- Codex 网页搜索按次计费（仅 openai 平台） -->
@@ -2847,6 +2859,18 @@
               {{ t("admin.groups.claudeCode.fallbackHint") }}
             </p>
           </div>
+          <div class="mt-3">
+            <label class="input-label">{{
+              t("admin.groups.defaultReasoning.title")
+            }}</label>
+            <Select
+              v-model="editForm.default_reasoning_effort"
+              :options="defaultReasoningEffortOptions"
+            />
+            <p class="input-hint">
+              {{ t("admin.groups.defaultReasoning.hint") }}
+            </p>
+          </div>
         </div>
 
         <!-- Codex 网页搜索按次计费（仅 openai 平台） -->
@@ -3837,6 +3861,14 @@ const subscriptionTypeOptions = computed(() => [
   { value: "subscription", label: t("admin.groups.subscription.subscription") },
 ]);
 
+const defaultReasoningEffortOptions = computed(() => [
+  { value: "", label: t("admin.groups.defaultReasoning.off") },
+  { value: "low", label: t("admin.groups.defaultReasoning.low") },
+  { value: "medium", label: t("admin.groups.defaultReasoning.medium") },
+  { value: "high", label: t("admin.groups.defaultReasoning.high") },
+  { value: "xhigh", label: t("admin.groups.defaultReasoning.xhigh") },
+]);
+
 // 降级分组选项（创建时）- 仅包含 anthropic 平台且未启用 claude_code_only 的分组
 const fallbackGroupOptions = computed(() => {
   const options: { value: number | null; label: string }[] = [
@@ -4043,6 +4075,7 @@ const createForm = reactive({
   claude_code_only: false,
   fallback_group_id: null as number | null,
   fallback_group_id_on_invalid_request: null as number | null,
+  default_reasoning_effort: "" as "" | "low" | "medium" | "high" | "xhigh",
   // OpenAI Messages 调度配置（仅 openai 平台使用）
   allow_messages_dispatch: false,
   opus_mapped_model: createMessagesDispatchDefaults.opus_mapped_model,
@@ -4390,6 +4423,7 @@ const editForm = reactive({
   claude_code_only: false,
   fallback_group_id: null as number | null,
   fallback_group_id_on_invalid_request: null as number | null,
+  default_reasoning_effort: "" as "" | "low" | "medium" | "high" | "xhigh",
   // OpenAI Messages 调度配置（仅 openai 平台使用）
   allow_messages_dispatch: false,
   default_mapped_model: '',
@@ -4792,6 +4826,7 @@ const closeCreateModal = () => {
   createForm.claude_code_only = false;
   createForm.fallback_group_id = null;
   createForm.fallback_group_id_on_invalid_request = null;
+  createForm.default_reasoning_effort = "";
   resetMessagesDispatchFormState(createForm);
   createForm.require_oauth_only = false;
   createForm.require_privacy_set = false;
@@ -4961,6 +4996,7 @@ const handleEdit = async (group: AdminGroup) => {
   editForm.fallback_group_id = group.fallback_group_id;
   editForm.fallback_group_id_on_invalid_request =
     group.fallback_group_id_on_invalid_request;
+  editForm.default_reasoning_effort = group.default_reasoning_effort || "";
   const messagesDispatchFormState = messagesDispatchConfigToFormState(
     group.messages_dispatch_model_config,
   );
@@ -5011,6 +5047,7 @@ const closeEditModal = () => {
   editForm.video_price_720p = null;
   editForm.video_price_1080p = null;
   editForm.web_search_price_per_call = null;
+  editForm.default_reasoning_effort = "";
   resetMessagesDispatchFormState(editForm);
   resetModelsListState(editModelsListState);
 };
@@ -5222,6 +5259,12 @@ watch(
     if (!["anthropic", "antigravity"].includes(newVal)) {
       createForm.fallback_group_id_on_invalid_request = null;
     }
+    if (newVal !== "anthropic") {
+      createForm.claude_code_only = false;
+      createForm.fallback_group_id = null;
+      createForm.default_reasoning_effort = "";
+      createForm.model_routing_enabled = false;
+    }
     if (newVal !== "openai") {
       resetMessagesDispatchFormState(createForm);
     }
@@ -5254,6 +5297,12 @@ watch(
   (newVal) => {
     if (!["anthropic", "antigravity"].includes(newVal)) {
       editForm.fallback_group_id_on_invalid_request = null;
+    }
+    if (newVal !== "anthropic") {
+      editForm.claude_code_only = false;
+      editForm.fallback_group_id = null;
+      editForm.default_reasoning_effort = "";
+      editForm.model_routing_enabled = false;
     }
     if (newVal !== "openai") {
       resetMessagesDispatchFormState(editForm);

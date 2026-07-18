@@ -735,6 +735,20 @@ func (_u *GroupUpdate) ClearFallbackGroupIDOnInvalidRequest() *GroupUpdate {
 	return _u
 }
 
+// SetDefaultReasoningEffort sets the "default_reasoning_effort" field.
+func (_u *GroupUpdate) SetDefaultReasoningEffort(v string) *GroupUpdate {
+	_u.mutation.SetDefaultReasoningEffort(v)
+	return _u
+}
+
+// SetNillableDefaultReasoningEffort sets the "default_reasoning_effort" field if the given value is not nil.
+func (_u *GroupUpdate) SetNillableDefaultReasoningEffort(v *string) *GroupUpdate {
+	if v != nil {
+		_u.SetDefaultReasoningEffort(*v)
+	}
+	return _u
+}
+
 // SetModelRouting sets the "model_routing" field.
 func (_u *GroupUpdate) SetModelRouting(v map[string][]int64) *GroupUpdate {
 	_u.mutation.SetModelRouting(v)
@@ -1208,6 +1222,11 @@ func (_u *GroupUpdate) check() error {
 			return &ValidationError{Name: "subscription_type", err: fmt.Errorf(`ent: validator failed for field "Group.subscription_type": %w`, err)}
 		}
 	}
+	if v, ok := _u.mutation.DefaultReasoningEffort(); ok {
+		if err := group.DefaultReasoningEffortValidator(v); err != nil {
+			return &ValidationError{Name: "default_reasoning_effort", err: fmt.Errorf(`ent: validator failed for field "Group.default_reasoning_effort": %w`, err)}
+		}
+	}
 	if v, ok := _u.mutation.DefaultMappedModel(); ok {
 		if err := group.DefaultMappedModelValidator(v); err != nil {
 			return &ValidationError{Name: "default_mapped_model", err: fmt.Errorf(`ent: validator failed for field "Group.default_mapped_model": %w`, err)}
@@ -1434,6 +1453,9 @@ func (_u *GroupUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if _u.mutation.FallbackGroupIDOnInvalidRequestCleared() {
 		_spec.ClearField(group.FieldFallbackGroupIDOnInvalidRequest, field.TypeInt64)
+	}
+	if value, ok := _u.mutation.DefaultReasoningEffort(); ok {
+		_spec.SetField(group.FieldDefaultReasoningEffort, field.TypeString, value)
 	}
 	if value, ok := _u.mutation.ModelRouting(); ok {
 		_spec.SetField(group.FieldModelRouting, field.TypeJSON, value)
@@ -2498,6 +2520,20 @@ func (_u *GroupUpdateOne) ClearFallbackGroupIDOnInvalidRequest() *GroupUpdateOne
 	return _u
 }
 
+// SetDefaultReasoningEffort sets the "default_reasoning_effort" field.
+func (_u *GroupUpdateOne) SetDefaultReasoningEffort(v string) *GroupUpdateOne {
+	_u.mutation.SetDefaultReasoningEffort(v)
+	return _u
+}
+
+// SetNillableDefaultReasoningEffort sets the "default_reasoning_effort" field if the given value is not nil.
+func (_u *GroupUpdateOne) SetNillableDefaultReasoningEffort(v *string) *GroupUpdateOne {
+	if v != nil {
+		_u.SetDefaultReasoningEffort(*v)
+	}
+	return _u
+}
+
 // SetModelRouting sets the "model_routing" field.
 func (_u *GroupUpdateOne) SetModelRouting(v map[string][]int64) *GroupUpdateOne {
 	_u.mutation.SetModelRouting(v)
@@ -2984,6 +3020,11 @@ func (_u *GroupUpdateOne) check() error {
 			return &ValidationError{Name: "subscription_type", err: fmt.Errorf(`ent: validator failed for field "Group.subscription_type": %w`, err)}
 		}
 	}
+	if v, ok := _u.mutation.DefaultReasoningEffort(); ok {
+		if err := group.DefaultReasoningEffortValidator(v); err != nil {
+			return &ValidationError{Name: "default_reasoning_effort", err: fmt.Errorf(`ent: validator failed for field "Group.default_reasoning_effort": %w`, err)}
+		}
+	}
 	if v, ok := _u.mutation.DefaultMappedModel(); ok {
 		if err := group.DefaultMappedModelValidator(v); err != nil {
 			return &ValidationError{Name: "default_mapped_model", err: fmt.Errorf(`ent: validator failed for field "Group.default_mapped_model": %w`, err)}
@@ -3227,6 +3268,9 @@ func (_u *GroupUpdateOne) sqlSave(ctx context.Context) (_node *Group, err error)
 	}
 	if _u.mutation.FallbackGroupIDOnInvalidRequestCleared() {
 		_spec.ClearField(group.FieldFallbackGroupIDOnInvalidRequest, field.TypeInt64)
+	}
+	if value, ok := _u.mutation.DefaultReasoningEffort(); ok {
+		_spec.SetField(group.FieldDefaultReasoningEffort, field.TypeString, value)
 	}
 	if value, ok := _u.mutation.ModelRouting(); ok {
 		_spec.SetField(group.FieldModelRouting, field.TypeJSON, value)

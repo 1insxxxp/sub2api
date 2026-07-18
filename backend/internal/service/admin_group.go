@@ -43,6 +43,21 @@ func (s *adminServiceImpl) GetAllGroupsIncludingInactive(ctx context.Context) ([
 	return groups, err
 }
 
+func normalizeDefaultReasoningEffortSetting(raw string) string {
+	switch strings.ToLower(strings.TrimSpace(raw)) {
+	case "low":
+		return "low"
+	case "medium":
+		return "medium"
+	case "high":
+		return "high"
+	case "xhigh", "max":
+		return "xhigh"
+	default:
+		return ""
+	}
+}
+
 func (s *adminServiceImpl) GetGroup(ctx context.Context, id int64) (*Group, error) {
 	return s.groupRepo.GetByID(ctx, id)
 }
@@ -292,6 +307,7 @@ func (s *adminServiceImpl) CreateGroup(ctx context.Context, input *CreateGroupIn
 		ClaudeCodeOnly:                  input.ClaudeCodeOnly,
 		FallbackGroupID:                 input.FallbackGroupID,
 		FallbackGroupIDOnInvalidRequest: fallbackOnInvalidRequest,
+		DefaultReasoningEffort:          normalizeDefaultReasoningEffortSetting(input.DefaultReasoningEffort),
 		ModelRouting:                    input.ModelRouting,
 		MCPXMLInject:                    mcpXMLInject,
 		SupportedModelScopes:            input.SupportedModelScopes,
@@ -579,6 +595,9 @@ func (s *adminServiceImpl) UpdateGroup(ctx context.Context, id int64, input *Upd
 		}
 	}
 	group.FallbackGroupIDOnInvalidRequest = fallbackOnInvalidRequest
+	if input.DefaultReasoningEffort != nil {
+		group.DefaultReasoningEffort = normalizeDefaultReasoningEffortSetting(*input.DefaultReasoningEffort)
+	}
 
 	// 模型路由配置
 	if input.ModelRouting != nil {

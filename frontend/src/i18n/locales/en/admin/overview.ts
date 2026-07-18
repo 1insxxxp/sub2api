@@ -1019,6 +1019,15 @@ export default {
         fallbackHint: 'Non-Claude Code requests will use this group. Leave empty to reject directly.',
         noFallback: 'No Fallback (Reject)'
       },
+      defaultReasoning: {
+        title: 'Default Thinking Strength',
+        hint: 'Injected only when the client does not send thinking or output_config.effort. Explicit client settings are never overwritten.',
+        off: 'Off (Do not inject)',
+        low: 'Low',
+        medium: 'Medium',
+        high: 'High',
+        xhigh: 'Extra High'
+      },
       openaiMessages: {
         title: 'OpenAI Messages Dispatch',
         allowDispatch: 'Allow /v1/messages dispatch',

@@ -240,6 +240,11 @@ func FallbackGroupIDOnInvalidRequest(v int64) predicate.Group {
 	return predicate.Group(sql.FieldEQ(FieldFallbackGroupIDOnInvalidRequest, v))
 }
 
+// DefaultReasoningEffort applies equality check predicate on the "default_reasoning_effort" field. It's identical to DefaultReasoningEffortEQ.
+func DefaultReasoningEffort(v string) predicate.Group {
+	return predicate.Group(sql.FieldEQ(FieldDefaultReasoningEffort, v))
+}
+
 // ModelRoutingEnabled applies equality check predicate on the "model_routing_enabled" field. It's identical to ModelRoutingEnabledEQ.
 func ModelRoutingEnabled(v bool) predicate.Group {
 	return predicate.Group(sql.FieldEQ(FieldModelRoutingEnabled, v))
@@ -1898,6 +1903,71 @@ func FallbackGroupIDOnInvalidRequestIsNil() predicate.Group {
 // FallbackGroupIDOnInvalidRequestNotNil applies the NotNil predicate on the "fallback_group_id_on_invalid_request" field.
 func FallbackGroupIDOnInvalidRequestNotNil() predicate.Group {
 	return predicate.Group(sql.FieldNotNull(FieldFallbackGroupIDOnInvalidRequest))
+}
+
+// DefaultReasoningEffortEQ applies the EQ predicate on the "default_reasoning_effort" field.
+func DefaultReasoningEffortEQ(v string) predicate.Group {
+	return predicate.Group(sql.FieldEQ(FieldDefaultReasoningEffort, v))
+}
+
+// DefaultReasoningEffortNEQ applies the NEQ predicate on the "default_reasoning_effort" field.
+func DefaultReasoningEffortNEQ(v string) predicate.Group {
+	return predicate.Group(sql.FieldNEQ(FieldDefaultReasoningEffort, v))
+}
+
+// DefaultReasoningEffortIn applies the In predicate on the "default_reasoning_effort" field.
+func DefaultReasoningEffortIn(vs ...string) predicate.Group {
+	return predicate.Group(sql.FieldIn(FieldDefaultReasoningEffort, vs...))
+}
+
+// DefaultReasoningEffortNotIn applies the NotIn predicate on the "default_reasoning_effort" field.
+func DefaultReasoningEffortNotIn(vs ...string) predicate.Group {
+	return predicate.Group(sql.FieldNotIn(FieldDefaultReasoningEffort, vs...))
+}
+
+// DefaultReasoningEffortGT applies the GT predicate on the "default_reasoning_effort" field.
+func DefaultReasoningEffortGT(v string) predicate.Group {
+	return predicate.Group(sql.FieldGT(FieldDefaultReasoningEffort, v))
+}
+
+// DefaultReasoningEffortGTE applies the GTE predicate on the "default_reasoning_effort" field.
+func DefaultReasoningEffortGTE(v string) predicate.Group {
+	return predicate.Group(sql.FieldGTE(FieldDefaultReasoningEffort, v))
+}
+
+// DefaultReasoningEffortLT applies the LT predicate on the "default_reasoning_effort" field.
+func DefaultReasoningEffortLT(v string) predicate.Group {
+	return predicate.Group(sql.FieldLT(FieldDefaultReasoningEffort, v))
+}
+
+// DefaultReasoningEffortLTE applies the LTE predicate on the "default_reasoning_effort" field.
+func DefaultReasoningEffortLTE(v string) predicate.Group {
+	return predicate.Group(sql.FieldLTE(FieldDefaultReasoningEffort, v))
+}
+
+// DefaultReasoningEffortContains applies the Contains predicate on the "default_reasoning_effort" field.
+func DefaultReasoningEffortContains(v string) predicate.Group {
+	return predicate.Group(sql.FieldContains(FieldDefaultReasoningEffort, v))
+}
+
+// DefaultReasoningEffortHasPrefix applies the HasPrefix predicate on the "default_reasoning_effort" field.
+func DefaultReasoningEffortHasPrefix(v string) predicate.Group {
+	return predicate.Group(sql.FieldHasPrefix(FieldDefaultReasoningEffort, v))
+}
+
+// DefaultReasoningEffortHasSuffix applies the HasSuffix predicate on the "default_reasoning_effort" field.
+func DefaultReasoningEffortHasSuffix(v string) predicate.Group {
+	return predicate.Group(sql.FieldHasSuffix(FieldDefaultReasoningEffort, v))
+}
+
+// DefaultReasoningEffortEqualFold applies the EqualFold predicate on the "default_reasoning_effort" field.
+func DefaultReasoningEffortEqualFold(v string) predicate.Group {
+	return predicate.Group(sql.FieldEqualFold(FieldDefaultReasoningEffort, v))
+}
+
+// DefaultReasoningEffortContainsFold applies the ContainsFold predicate on the "default_reasoning_effort" field.
+func DefaultReasoningEffortContainsFold(v string) predicate.Group {
+	return predicate.Group(sql.FieldContainsFold(FieldDefaultReasoningEffort, v))
 }
 
 // ModelRoutingIsNil applies the IsNil predicate on the "model_routing" field.

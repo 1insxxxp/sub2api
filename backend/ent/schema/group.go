@@ -166,6 +166,10 @@ func (Group) Fields() []ent.Field {
 			Optional().
 			Nillable().
 			Comment("无效请求兜底使用的分组 ID"),
+		field.String("default_reasoning_effort").
+			MaxLen(20).
+			Default("").
+			Comment("默认推理/思维强度：空=不注入；low/medium/high/xhigh 仅用于 Anthropic Messages 路径"),
 
 		// 模型路由配置 (added by migration 040)
 		field.JSON("model_routing", map[string][]int64{}).

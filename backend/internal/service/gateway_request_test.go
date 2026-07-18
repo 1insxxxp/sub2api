@@ -1229,6 +1229,89 @@ func TestNormalizeClaudeOutputEffort(t *testing.T) {
 	}
 }
 
+func TestApplyGroupDefaultReasoningEffort(t *testing.T) {
+	tests := []struct {
+		name              string
+		group             *Group
+		input             string
+		wantApplied       bool
+		wantUnchanged     bool
+		wantEffort        string
+		wantThinkingType  string
+		wantBudget        int64
+		wantMinMaxTokens  int64
+		wantOutputMissing bool
+	}{
+		{
+			name:          "nil group does nothing",
+			group:         nil,
+			input:         `{"model":"claude-opus-4-7","max_tokens":4096,"messages":[]}`,
+			wantUnchanged: true,
+		},
+		{
+			name:          "empty group default does nothing",
+			group:         &Group{DefaultReasoningEffort: ""},
+			input:         `{"model":"claude-opus-4-7","max_tokens":4096,"messages":[]}`,
+			wantUnchanged: true,
+		},
+		{
+			name:          "existing thinking is preserved",
+			group:         &Group{DefaultReasoningEffort: "high"},
+			input:         `{"model":"claude-opus-4-7","max_tokens":4096,"thinking":{"type":"adaptive"},"messages":[]}`,
+			wantUnchanged: true,
+		},
+		{
+			name:          "existing output effort is preserved",
+			group:         &Group{DefaultReasoningEffort: "high"},
+			input:         `{"model":"claude-opus-4-7","max_tokens":4096,"output_config":{"effort":"medium"},"messages":[]}`,
+			wantUnchanged: true,
+		},
+		{
+			name:             "high injects thinking and output effort",
+			group:            &Group{DefaultReasoningEffort: "high"},
+			input:            `{"model":"claude-opus-4-7","max_tokens":4096,"messages":[]}`,
+			wantApplied:      true,
+			wantEffort:       "high",
+			wantThinkingType: "enabled",
+			wantBudget:       10240,
+			wantMinMaxTokens: 10241,
+		},
+		{
+			name:             "xhigh maps to max effort",
+			group:            &Group{DefaultReasoningEffort: "xhigh"},
+			input:            `{"model":"claude-opus-4-7","max_tokens":8192,"messages":[]}`,
+			wantApplied:      true,
+			wantEffort:       "max",
+			wantThinkingType: "enabled",
+			wantBudget:       32768,
+			wantMinMaxTokens: 32769,
+		},
+		{
+			name:          "invalid default is ignored",
+			group:         &Group{DefaultReasoningEffort: "banana"},
+			input:         `{"model":"claude-opus-4-7","max_tokens":4096,"messages":[]}`,
+			wantUnchanged: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, applied := ApplyGroupDefaultReasoningEffort([]byte(tt.input), tt.group)
+			require.Equal(t, tt.wantApplied, applied)
+			if tt.wantUnchanged {
+				require.Equal(t, tt.input, string(got))
+				return
+			}
+
+			require.True(t, gjson.ValidBytes(got))
+			require.Equal(t, tt.wantEffort, gjson.GetBytes(got, "output_config.effort").String())
+			require.Equal(t, tt.wantThinkingType, gjson.GetBytes(got, "thinking.type").String())
+			require.Equal(t, tt.wantBudget, gjson.GetBytes(got, "thinking.budget_tokens").Int())
+			require.GreaterOrEqual(t, gjson.GetBytes(got, "max_tokens").Int(), tt.wantMinMaxTokens)
+		})
+	}
+}
+
 func BenchmarkParseGatewayRequest_New_Large(b *testing.B) {
 	data := buildLargeJSON()
 	b.SetBytes(int64(len(data)))

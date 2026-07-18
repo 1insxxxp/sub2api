@@ -239,6 +239,8 @@ type CreateGroupInput struct {
 	FallbackGroupID       *int64 // 降级分组 ID
 	// 无效请求兜底分组 ID（仅 anthropic 平台使用）
 	FallbackGroupIDOnInvalidRequest *int64
+	// 默认推理/思维强度（仅 anthropic 平台使用）：空=关闭
+	DefaultReasoningEffort string
 	// 模型路由配置（仅 anthropic 平台使用）
 	ModelRouting        map[string][]int64
 	ModelRoutingEnabled bool // 是否启用模型路由
@@ -295,6 +297,8 @@ type UpdateGroupInput struct {
 	FallbackGroupID       *int64 // 降级分组 ID
 	// 无效请求兜底分组 ID（仅 anthropic 平台使用）
 	FallbackGroupIDOnInvalidRequest *int64
+	// 默认推理/思维强度（仅 anthropic 平台使用）：nil=不修改，空=关闭
+	DefaultReasoningEffort *string
 	// 模型路由配置（仅 anthropic 平台使用）
 	ModelRouting        map[string][]int64
 	ModelRoutingEnabled *bool // 是否启用模型路由

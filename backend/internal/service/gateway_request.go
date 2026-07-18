@@ -1225,6 +1225,70 @@ func NormalizeClaudeOutputEffort(raw string) *string {
 	}
 }
 
+// ApplyGroupDefaultReasoningEffort injects a group's default Anthropic thinking
+// controls only when the client did not provide any top-level thinking or
+// output_config.effort. The caller should invoke this only on Anthropic-format
+// forwarding paths after model mapping and request normalization.
+func ApplyGroupDefaultReasoningEffort(body []byte, group *Group) ([]byte, bool) {
+	if group == nil {
+		return body, false
+	}
+	if group.Platform != "" && group.Platform != PlatformAnthropic {
+		return body, false
+	}
+	effort, budget := normalizeGroupDefaultReasoningEffort(group.DefaultReasoningEffort)
+	if effort == "" {
+		return body, false
+	}
+	if len(body) == 0 || !gjson.ValidBytes(body) {
+		return body, false
+	}
+	if gjson.GetBytes(body, "thinking.type").Exists() {
+		return body, false
+	}
+	if strings.TrimSpace(gjson.GetBytes(body, "output_config.effort").String()) != "" {
+		return body, false
+	}
+
+	modified := body
+	changed := false
+	set := func(path string, value any) {
+		next, err := sjson.SetBytes(modified, path, value)
+		if err != nil {
+			return
+		}
+		modified = next
+		changed = true
+	}
+	set("output_config.effort", effort)
+	set("thinking.type", "enabled")
+	set("thinking.budget_tokens", budget)
+	minMaxTokens := int64(budget + 1)
+	currentMaxTokens := gjson.GetBytes(modified, "max_tokens").Int()
+	if currentMaxTokens < minMaxTokens {
+		set("max_tokens", minMaxTokens)
+	}
+	if !changed {
+		return body, false
+	}
+	return modified, true
+}
+
+func normalizeGroupDefaultReasoningEffort(raw string) (effort string, budget int) {
+	switch strings.ToLower(strings.TrimSpace(raw)) {
+	case "low":
+		return "low", 1024
+	case "medium":
+		return "medium", 4096
+	case "high":
+		return "high", 10240
+	case "xhigh", "max":
+		return "max", 32768
+	default:
+		return "", 0
+	}
+}
+
 // DefaultEffortForThinkingEnabled 给"开启了 thinking 但协议层没有 effort 档位概念"
 // 的国产模型族返回一个默认 effort 字符串（"high"），用于 usage_log.reasoning_effort
 // 字段，避免该字段长期为 NULL 导致用量分析无法区分 thinking 开/关。

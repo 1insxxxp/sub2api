@@ -88,6 +88,16 @@ func (s *GatewayService) ForwardAsResponses(
 	if err != nil {
 		return nil, fmt.Errorf("marshal anthropic request: %w", err)
 	}
+	var groupDefaultReasoningEffort *string
+	if parsed != nil && parsed.GroupID != nil {
+		if group := s.groupFromContext(ctx, *parsed.GroupID); group != nil {
+			if rewritten, applied := ApplyGroupDefaultReasoningEffort(anthropicBody, group); applied {
+				anthropicBody = rewritten
+				groupDefaultReasoningEffort = NormalizeClaudeOutputEffort(gjson.GetBytes(anthropicBody, "output_config.effort").String())
+				logger.LegacyPrintf("service.gateway", "Applied group default reasoning effort for responses: group=%d effort=%s", group.ID, group.DefaultReasoningEffort)
+			}
+		}
+	}
 
 	// 6. Apply Claude Code mimicry for OAuth accounts (non-Claude-Code endpoints).
 	// OpenAI Responses 协议进来的请求永远不是 Claude Code 客户端，所以对 OAuth 账号
@@ -182,8 +192,14 @@ func (s *GatewayService) ForwardAsResponses(
 	var result *ForwardResult
 	var handleErr error
 	if clientStream {
+		if reasoningEffort == nil {
+			reasoningEffort = groupDefaultReasoningEffort
+		}
 		result, handleErr = s.handleResponsesStreamingResponse(resp, c, originalModel, mappedModel, reasoningEffort, startTime)
 	} else {
+		if reasoningEffort == nil {
+			reasoningEffort = groupDefaultReasoningEffort
+		}
 		result, handleErr = s.handleResponsesBufferedStreamingResponse(resp, c, originalModel, mappedModel, reasoningEffort, startTime)
 	}
 

@@ -539,6 +539,20 @@ func (_c *GroupCreate) SetNillableFallbackGroupIDOnInvalidRequest(v *int64) *Gro
 	return _c
 }
 
+// SetDefaultReasoningEffort sets the "default_reasoning_effort" field.
+func (_c *GroupCreate) SetDefaultReasoningEffort(v string) *GroupCreate {
+	_c.mutation.SetDefaultReasoningEffort(v)
+	return _c
+}
+
+// SetNillableDefaultReasoningEffort sets the "default_reasoning_effort" field if the given value is not nil.
+func (_c *GroupCreate) SetNillableDefaultReasoningEffort(v *string) *GroupCreate {
+	if v != nil {
+		_c.SetDefaultReasoningEffort(*v)
+	}
+	return _c
+}
+
 // SetModelRouting sets the "model_routing" field.
 func (_c *GroupCreate) SetModelRouting(v map[string][]int64) *GroupCreate {
 	_c.mutation.SetModelRouting(v)
@@ -908,6 +922,10 @@ func (_c *GroupCreate) defaults() error {
 		v := group.DefaultClaudeCodeOnly
 		_c.mutation.SetClaudeCodeOnly(v)
 	}
+	if _, ok := _c.mutation.DefaultReasoningEffort(); !ok {
+		v := group.DefaultDefaultReasoningEffort
+		_c.mutation.SetDefaultReasoningEffort(v)
+	}
 	if _, ok := _c.mutation.ModelRoutingEnabled(); !ok {
 		v := group.DefaultModelRoutingEnabled
 		_c.mutation.SetModelRoutingEnabled(v)
@@ -1057,6 +1075,14 @@ func (_c *GroupCreate) check() error {
 	}
 	if _, ok := _c.mutation.ClaudeCodeOnly(); !ok {
 		return &ValidationError{Name: "claude_code_only", err: errors.New(`ent: missing required field "Group.claude_code_only"`)}
+	}
+	if _, ok := _c.mutation.DefaultReasoningEffort(); !ok {
+		return &ValidationError{Name: "default_reasoning_effort", err: errors.New(`ent: missing required field "Group.default_reasoning_effort"`)}
+	}
+	if v, ok := _c.mutation.DefaultReasoningEffort(); ok {
+		if err := group.DefaultReasoningEffortValidator(v); err != nil {
+			return &ValidationError{Name: "default_reasoning_effort", err: fmt.Errorf(`ent: validator failed for field "Group.default_reasoning_effort": %w`, err)}
+		}
 	}
 	if _, ok := _c.mutation.ModelRoutingEnabled(); !ok {
 		return &ValidationError{Name: "model_routing_enabled", err: errors.New(`ent: missing required field "Group.model_routing_enabled"`)}
@@ -1270,6 +1296,10 @@ func (_c *GroupCreate) createSpec() (*Group, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.FallbackGroupIDOnInvalidRequest(); ok {
 		_spec.SetField(group.FieldFallbackGroupIDOnInvalidRequest, field.TypeInt64, value)
 		_node.FallbackGroupIDOnInvalidRequest = &value
+	}
+	if value, ok := _c.mutation.DefaultReasoningEffort(); ok {
+		_spec.SetField(group.FieldDefaultReasoningEffort, field.TypeString, value)
+		_node.DefaultReasoningEffort = value
 	}
 	if value, ok := _c.mutation.ModelRouting(); ok {
 		_spec.SetField(group.FieldModelRouting, field.TypeJSON, value)
@@ -2090,6 +2120,18 @@ func (u *GroupUpsert) AddFallbackGroupIDOnInvalidRequest(v int64) *GroupUpsert {
 // ClearFallbackGroupIDOnInvalidRequest clears the value of the "fallback_group_id_on_invalid_request" field.
 func (u *GroupUpsert) ClearFallbackGroupIDOnInvalidRequest() *GroupUpsert {
 	u.SetNull(group.FieldFallbackGroupIDOnInvalidRequest)
+	return u
+}
+
+// SetDefaultReasoningEffort sets the "default_reasoning_effort" field.
+func (u *GroupUpsert) SetDefaultReasoningEffort(v string) *GroupUpsert {
+	u.Set(group.FieldDefaultReasoningEffort, v)
+	return u
+}
+
+// UpdateDefaultReasoningEffort sets the "default_reasoning_effort" field to the value that was provided on create.
+func (u *GroupUpsert) UpdateDefaultReasoningEffort() *GroupUpsert {
+	u.SetExcluded(group.FieldDefaultReasoningEffort)
 	return u
 }
 
@@ -3021,6 +3063,20 @@ func (u *GroupUpsertOne) UpdateFallbackGroupIDOnInvalidRequest() *GroupUpsertOne
 func (u *GroupUpsertOne) ClearFallbackGroupIDOnInvalidRequest() *GroupUpsertOne {
 	return u.Update(func(s *GroupUpsert) {
 		s.ClearFallbackGroupIDOnInvalidRequest()
+	})
+}
+
+// SetDefaultReasoningEffort sets the "default_reasoning_effort" field.
+func (u *GroupUpsertOne) SetDefaultReasoningEffort(v string) *GroupUpsertOne {
+	return u.Update(func(s *GroupUpsert) {
+		s.SetDefaultReasoningEffort(v)
+	})
+}
+
+// UpdateDefaultReasoningEffort sets the "default_reasoning_effort" field to the value that was provided on create.
+func (u *GroupUpsertOne) UpdateDefaultReasoningEffort() *GroupUpsertOne {
+	return u.Update(func(s *GroupUpsert) {
+		s.UpdateDefaultReasoningEffort()
 	})
 }
 
@@ -4145,6 +4201,20 @@ func (u *GroupUpsertBulk) UpdateFallbackGroupIDOnInvalidRequest() *GroupUpsertBu
 func (u *GroupUpsertBulk) ClearFallbackGroupIDOnInvalidRequest() *GroupUpsertBulk {
 	return u.Update(func(s *GroupUpsert) {
 		s.ClearFallbackGroupIDOnInvalidRequest()
+	})
+}
+
+// SetDefaultReasoningEffort sets the "default_reasoning_effort" field.
+func (u *GroupUpsertBulk) SetDefaultReasoningEffort(v string) *GroupUpsertBulk {
+	return u.Update(func(s *GroupUpsert) {
+		s.SetDefaultReasoningEffort(v)
+	})
+}
+
+// UpdateDefaultReasoningEffort sets the "default_reasoning_effort" field to the value that was provided on create.
+func (u *GroupUpsertBulk) UpdateDefaultReasoningEffort() *GroupUpsertBulk {
+	return u.Update(func(s *GroupUpsert) {
+		s.UpdateDefaultReasoningEffort()
 	})
 }
 
