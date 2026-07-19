@@ -34,6 +34,9 @@ export default {
         imageOutputPrice: '图片输出',
         perRequestPrice: '每次请求',
         intervals: '阶梯定价',
+        officialPriceLabel: '官方价',
+        sitePriceLabel: '本站价',
+        currencyCNY: '¥',
         unitPerMillion: '/ 1M token',
         unitPerRequest: '/ 次'
       }
@@ -181,10 +184,14 @@ export default {
         noGroupsInChannel: '上方平台标签页中未选择分组',
         unnamed: '未命名',
         syncLatestModels: '同步最新模型',
+        syncGroupAvailableModels: '同步分组可用模型',
         syncingModels: '同步中...',
         syncModelsSuccess: '已同步 {count} 个新模型',
+        syncGroupModelsSuccess: '已按分组可用模型同步 {count} 个新模型，并填入默认官方定价',
         syncModelsAlreadyUpToDate: '模型列表已是最新',
-        syncModelsError: '同步模型失败'
+        syncModelsError: '同步模型失败',
+        syncGroupModelsError: '同步分组可用模型失败',
+        syncGroupModelsNoGroups: '请先为当前平台选择分组'
       }
     },
 

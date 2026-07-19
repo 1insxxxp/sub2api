@@ -1,7 +1,9 @@
 package admin
 
 import (
+	"context"
 	"fmt"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -18,11 +20,22 @@ type ChannelHandler struct {
 	channelService *service.ChannelService
 	billingService *service.BillingService
 	pricingService *service.PricingService
+	gatewayService availableModelsResolver
+}
+
+type availableModelsResolver interface {
+	GetAvailableModels(ctx context.Context, groupID *int64, platform string) []string
+	HasSchedulableAccountsForGroupPlatform(ctx context.Context, groupID int64, platform string) bool
 }
 
 // NewChannelHandler creates a new admin channel handler
-func NewChannelHandler(channelService *service.ChannelService, billingService *service.BillingService, pricingService *service.PricingService) *ChannelHandler {
-	return &ChannelHandler{channelService: channelService, billingService: billingService, pricingService: pricingService}
+func NewChannelHandler(channelService *service.ChannelService, billingService *service.BillingService, pricingService *service.PricingService, gatewayService *service.GatewayService) *ChannelHandler {
+	return &ChannelHandler{
+		channelService: channelService,
+		billingService: billingService,
+		pricingService: pricingService,
+		gatewayService: gatewayService,
+	}
 }
 
 // --- Request / Response types ---
@@ -537,4 +550,131 @@ func (h *ChannelHandler) SyncPricingModels(c *gin.Context) {
 
 	models := h.pricingService.ListModelNamesByProvider(provider)
 	response.Success(c, gin.H{"models": models})
+}
+
+// SyncGroupAvailablePricingModels returns model pricing entries synthesized
+// from the selected groups' currently schedulable account model mappings.
+// GET /api/v1/admin/channels/pricing/sync-group-models?platform=openai&group_ids=1,2
+func (h *ChannelHandler) SyncGroupAvailablePricingModels(c *gin.Context) {
+	platform := strings.ToLower(strings.TrimSpace(c.Query("platform")))
+	if platform == "" {
+		response.ErrorFrom(c, infraerrors.BadRequest("MISSING_PARAMETER", "platform parameter is required").
+			WithMetadata(map[string]string{"param": "platform"}))
+		return
+	}
+	if _, ok := platformToLiteLLMProvider[platform]; !ok {
+		response.ErrorFrom(c, infraerrors.BadRequest("UNSUPPORTED_PLATFORM",
+			fmt.Sprintf("unsupported platform: %s", platform)).
+			WithMetadata(map[string]string{"param": "platform"}))
+		return
+	}
+	if h.gatewayService == nil {
+		response.ErrorFrom(c, infraerrors.InternalServer("AVAILABLE_MODELS_UNAVAILABLE", "available models resolver is not configured"))
+		return
+	}
+
+	groupIDs, err := parseGroupIDList(c.Query("group_ids"))
+	if err != nil {
+		response.ErrorFrom(c, infraerrors.BadRequest("INVALID_GROUP_IDS", err.Error()).
+			WithMetadata(map[string]string{"param": "group_ids"}))
+		return
+	}
+	if len(groupIDs) == 0 {
+		response.ErrorFrom(c, infraerrors.BadRequest("MISSING_PARAMETER", "group_ids parameter is required").
+			WithMetadata(map[string]string{"param": "group_ids"}))
+		return
+	}
+
+	models := h.groupAvailableModels(c.Request.Context(), platform, groupIDs)
+	pricing := make([]channelModelPricingResponse, 0, len(models))
+	for _, model := range models {
+		entry := h.defaultPricingEntry(platform, model)
+		pricing = append(pricing, pricingToResponse(&entry))
+	}
+
+	response.Success(c, gin.H{
+		"models":  models,
+		"pricing": pricing,
+	})
+}
+
+func parseGroupIDList(raw string) ([]int64, error) {
+	parts := strings.Split(raw, ",")
+	out := make([]int64, 0, len(parts))
+	seen := make(map[int64]struct{}, len(parts))
+	for _, part := range parts {
+		part = strings.TrimSpace(part)
+		if part == "" {
+			continue
+		}
+		id, err := strconv.ParseInt(part, 10, 64)
+		if err != nil || id <= 0 {
+			return nil, fmt.Errorf("invalid group id: %s", part)
+		}
+		if _, ok := seen[id]; ok {
+			continue
+		}
+		seen[id] = struct{}{}
+		out = append(out, id)
+	}
+	return out, nil
+}
+
+func (h *ChannelHandler) groupAvailableModels(ctx context.Context, platform string, groupIDs []int64) []string {
+	modelSet := make(map[string]string)
+	for _, groupID := range groupIDs {
+		gid := groupID
+		models := h.gatewayService.GetAvailableModels(ctx, &gid, platform)
+		if len(models) == 0 && h.gatewayService.HasSchedulableAccountsForGroupPlatform(ctx, groupID, platform) {
+			models = service.DefaultModelIDsForPlatform(platform)
+		}
+		for _, model := range models {
+			model = strings.TrimSpace(model)
+			if model == "" {
+				continue
+			}
+			key := strings.ToLower(model)
+			if _, ok := modelSet[key]; !ok {
+				modelSet[key] = model
+			}
+		}
+	}
+
+	models := make([]string, 0, len(modelSet))
+	for _, model := range modelSet {
+		models = append(models, model)
+	}
+	sort.Slice(models, func(i, j int) bool {
+		return strings.ToLower(models[i]) < strings.ToLower(models[j])
+	})
+	return models
+}
+
+func (h *ChannelHandler) defaultPricingEntry(platform, model string) service.ChannelModelPricing {
+	entry := service.ChannelModelPricing{
+		Platform:    platform,
+		Models:      []string{model},
+		BillingMode: service.BillingModeToken,
+	}
+	if h == nil || h.billingService == nil {
+		return entry
+	}
+	pricing, err := h.billingService.GetModelPricing(model)
+	if err != nil || pricing == nil {
+		return entry
+	}
+	entry.InputPrice = nonZeroPricePtr(pricing.InputPricePerToken)
+	entry.OutputPrice = nonZeroPricePtr(pricing.OutputPricePerToken)
+	entry.CacheWritePrice = nonZeroPricePtr(pricing.CacheCreationPricePerToken)
+	entry.CacheReadPrice = nonZeroPricePtr(pricing.CacheReadPricePerToken)
+	entry.ImageInputPrice = nonZeroPricePtr(pricing.ImageInputPricePerToken)
+	entry.ImageOutputPrice = nonZeroPricePtr(pricing.ImageOutputPricePerToken)
+	return entry
+}
+
+func nonZeroPricePtr(v float64) *float64 {
+	if v == 0 {
+		return nil
+	}
+	return &v
 }

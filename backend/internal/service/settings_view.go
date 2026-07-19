@@ -191,7 +191,8 @@ type SystemSettings struct {
 	ChannelMonitorDefaultIntervalSeconds int  `json:"channel_monitor_default_interval_seconds"`
 
 	// Available Channels feature (user-facing aggregate view)
-	AvailableChannelsEnabled bool `json:"available_channels_enabled"`
+	AvailableChannelsEnabled            bool    `json:"available_channels_enabled"`
+	AvailableChannelsPriceCNYMultiplier float64 `json:"available_channels_price_cny_multiplier"`
 
 	// Claude Code version check
 	MinClaudeCodeVersion string
@@ -354,7 +355,8 @@ type PublicSettings struct {
 	ChannelMonitorDefaultIntervalSeconds int  `json:"channel_monitor_default_interval_seconds"`
 
 	// Available Channels feature (user-facing aggregate view)
-	AvailableChannelsEnabled bool `json:"available_channels_enabled"`
+	AvailableChannelsEnabled            bool    `json:"available_channels_enabled"`
+	AvailableChannelsPriceCNYMultiplier float64 `json:"available_channels_price_cny_multiplier"`
 
 	// Affiliate (邀请返利) feature toggle
 	AffiliateEnabled bool `json:"affiliate_enabled"`

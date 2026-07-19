@@ -519,8 +519,13 @@ export default {
       imageOutputPrice: '图片输出',
       perRequestPrice: '每次请求',
       intervals: '阶梯定价',
+      officialPriceLabel: '官方价',
+      sitePriceLabel: '本站价',
+      currencyCNY: '¥',
       unitPerMillion: '/ 1M token',
-      unitPerRequest: '/ 次'
+      unitPerRequest: '/ 次',
+      unitCNYPerMillion: '¥ / 1M token',
+      unitCNYPerRequest: '¥ / 次'
     }
   },
 

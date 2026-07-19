@@ -20,6 +20,8 @@ export interface UserAvailableGroup {
   peak_rate_multiplier: number
   /** true = 专属分组（小范围授权）；false = 公开分组。 */
   is_exclusive: boolean
+  /** 当前分组真实可用模型；优先按分组展示，避免渠道同步列表污染。 */
+  supported_models?: UserSupportedModel[]
 }
 
 export interface UserPricingInterval {

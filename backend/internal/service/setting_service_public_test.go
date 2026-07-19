@@ -154,6 +154,25 @@ func TestSettingService_GetPublicSettings_ExposesAllowUserViewErrorRequests(t *t
 	require.True(t, settings.AllowUserViewErrorRequests)
 }
 
+func TestSettingService_GetPublicSettings_ExposesAvailableChannelsPriceCNYMultiplier(t *testing.T) {
+	repo := &settingPublicRepoStub{
+		values: map[string]string{
+			SettingKeyAvailableChannelsPriceCNYMultiplier: "0.16",
+		},
+	}
+	svc := NewSettingService(repo, &config.Config{})
+
+	settings, err := svc.GetPublicSettings(context.Background())
+	require.NoError(t, err)
+	require.InDelta(t, 0.16, settings.AvailableChannelsPriceCNYMultiplier, 1e-12)
+
+	payloadAny, err := svc.GetPublicSettingsForInjection(context.Background())
+	require.NoError(t, err)
+	payload, ok := payloadAny.(*PublicSettingsInjectionPayload)
+	require.True(t, ok)
+	require.InDelta(t, 0.16, payload.AvailableChannelsPriceCNYMultiplier, 1e-12)
+}
+
 func TestSettingService_GetPublicSettings_ExposesImageStudioEnabled(t *testing.T) {
 	repo := &settingPublicRepoStub{
 		values: map[string]string{

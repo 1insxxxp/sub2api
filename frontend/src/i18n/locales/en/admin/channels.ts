@@ -34,6 +34,9 @@ export default {
         imageOutputPrice: 'Image Output',
         perRequestPrice: 'Per Request',
         intervals: 'Tiered Pricing',
+        officialPriceLabel: 'Official',
+        sitePriceLabel: 'Site',
+        currencyCNY: '¥',
         unitPerMillion: '/ 1M tokens',
         unitPerRequest: '/ request'
       }
@@ -181,10 +184,14 @@ export default {
          noGroupsInChannel: 'No groups selected in platform tabs above',
          unnamed: 'Unnamed',
          syncLatestModels: 'Sync Latest Models',
+         syncGroupAvailableModels: 'Sync Group Models',
          syncingModels: 'Syncing...',
          syncModelsSuccess: 'Synced {count} new model(s)',
+         syncGroupModelsSuccess: 'Synced {count} group-available model(s) with default official pricing',
          syncModelsAlreadyUpToDate: 'Models already up to date',
-         syncModelsError: 'Failed to sync models'
+         syncModelsError: 'Failed to sync models',
+         syncGroupModelsError: 'Failed to sync group-available models',
+         syncGroupModelsNoGroups: 'Select at least one group for this platform first'
        }
      },
 

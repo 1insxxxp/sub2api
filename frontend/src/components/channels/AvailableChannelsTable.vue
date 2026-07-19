@@ -148,7 +148,33 @@
 
           <!-- 支持模型 -->
           <td class="align-top px-4 py-3">
-            <div class="flex flex-wrap gap-1">
+            <div v-if="hasGroupScopedModels(section)" class="flex flex-col gap-2">
+              <div
+                v-for="g in section.groups"
+                :key="`models-${g.id}`"
+                class="border-l border-gray-200 pl-2 dark:border-dark-600"
+              >
+                <div class="mb-1 text-[11px] font-medium text-gray-600 dark:text-gray-300">
+                  {{ g.name }}
+                </div>
+                <div class="flex flex-wrap gap-1">
+                  <SupportedModelChip
+                    v-for="m in groupSupportedModels(g)"
+                    :key="`${g.id}-${m.name}`"
+                    :model="m"
+                    :pricing-key-prefix="pricingKeyPrefix"
+                    :no-pricing-label="noPricingLabel"
+                    :show-platform="false"
+                    :platform-hint="g.platform"
+                    :cny-price-multiplier="groupCNYMultiplier(g)"
+                  />
+                  <span v-if="groupSupportedModels(g).length === 0" class="text-xs text-gray-400">
+                    {{ noModelsLabel }}
+                  </span>
+                </div>
+              </div>
+            </div>
+            <div v-else class="flex flex-wrap gap-1">
               <SupportedModelChip
                 v-for="m in section.supported_models"
                 :key="`${section.platform}-${m.name}`"
@@ -157,6 +183,7 @@
                 :no-pricing-label="noPricingLabel"
                 :show-platform="false"
                 :platform-hint="section.platform"
+                :cny-price-multiplier="sectionCNYMultiplier(section)"
               />
               <span v-if="section.supported_models.length === 0" class="text-xs text-gray-400">
                 {{ noModelsLabel }}
@@ -175,7 +202,7 @@ import Icon from '@/components/icons/Icon.vue'
 import PlatformIcon from '@/components/common/PlatformIcon.vue'
 import GroupBadge from '@/components/common/GroupBadge.vue'
 import SupportedModelChip from './SupportedModelChip.vue'
-import type { UserAvailableChannel, UserAvailableGroup, UserChannelPlatformSection } from '@/api/channels'
+import type { UserAvailableChannel, UserAvailableGroup, UserChannelPlatformSection, UserSupportedModel } from '@/api/channels'
 import type { GroupPlatform, SubscriptionType } from '@/types'
 import { platformBadgeClass } from '@/utils/platformColors'
 import { useAppStore } from '@/stores/app'
@@ -197,6 +224,8 @@ const props = defineProps<{
   emptyLabel: string
   /** 用户专属倍率（group_id → multiplier）；无专属时由 GroupBadge 仅显示默认倍率。 */
   userGroupRates: Record<number, number>
+  /** 人民币展示充值比例；0 表示不展示人民币折算。 */
+  priceCnyMultiplier?: number
 }>()
 
 // Suppress unused warning — props is accessed via template automatically but
@@ -211,6 +240,27 @@ function exclusiveGroups(section: UserChannelPlatformSection): UserAvailableGrou
 
 function publicGroups(section: UserChannelPlatformSection): UserAvailableGroup[] {
   return section.groups.filter((g) => !g.is_exclusive)
+}
+
+function hasGroupScopedModels(section: UserChannelPlatformSection): boolean {
+  return section.groups.some((g) => Array.isArray(g.supported_models))
+}
+
+function groupSupportedModels(group: UserAvailableGroup): UserSupportedModel[] {
+  return group.supported_models ?? []
+}
+
+function resolvedGroupRate(group: UserAvailableGroup): number {
+  return props.userGroupRates[group.id] ?? group.rate_multiplier ?? 1
+}
+
+function groupCNYMultiplier(group: UserAvailableGroup): number {
+  return (props.priceCnyMultiplier ?? 0) * resolvedGroupRate(group)
+}
+
+function sectionCNYMultiplier(section: UserChannelPlatformSection): number {
+  const firstGroup = section.groups[0]
+  return firstGroup ? groupCNYMultiplier(firstGroup) : 0
 }
 
 const appStore = useAppStore()

@@ -29,6 +29,9 @@ export default {
           configureLink: '前往 渠道管理 > 渠道定价 配置模型价格',
           enabled: '启用可用渠道',
           enabledHint: '关闭后用户端侧边栏入口隐藏，接口返回空数组。',
+          priceCnyMultiplier: '人民币展示充值比例',
+          priceCnyMultiplierHint: '仅影响可用渠道页面展示。最终展示价 = 官方 USD 定价 × 分组倍率 × 此比例；填 0 不展示人民币折算。',
+          priceCnyPreview: '示例：官方 $10 / 1M token，分组倍率 1x 时展示 ¥{value} / 1M token。',
         },
         riskControl: {
           title: '风控中心',

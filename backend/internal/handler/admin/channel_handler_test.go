@@ -3,6 +3,7 @@
 package admin
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -474,4 +475,64 @@ func TestSyncPricingModels_ValidPlatform_EmptyService(t *testing.T) {
 		require.NoError(t, json.Unmarshal(w.Body.Bytes(), &body))
 		require.NotNil(t, body.Data.Models, "models must not be null for platform=%s", platform)
 	}
+}
+
+type fakeAvailableModelsResolver struct {
+	models map[int64][]string
+}
+
+func (f fakeAvailableModelsResolver) GetAvailableModels(_ context.Context, groupID *int64, _ string) []string {
+	if groupID == nil {
+		return nil
+	}
+	return f.models[*groupID]
+}
+
+func (f fakeAvailableModelsResolver) HasSchedulableAccountsForGroupPlatform(_ context.Context, groupID int64, _ string) bool {
+	_, ok := f.models[groupID]
+	return ok
+}
+
+func TestSyncGroupAvailablePricingModels_FillsDefaultPricingAndDedupes(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	router := gin.New()
+	h := &ChannelHandler{
+		billingService: service.NewBillingService(nil, nil),
+		gatewayService: fakeAvailableModelsResolver{
+			models: map[int64][]string{
+				10: {"gpt-5.4", "gpt-5.4-mini"},
+				11: {"gpt-5.4"},
+			},
+		},
+	}
+	router.GET("/channels/pricing/sync-group-models", h.SyncGroupAvailablePricingModels)
+
+	req := httptest.NewRequest(http.MethodGet, "/channels/pricing/sync-group-models?platform=openai&group_ids=10,11", nil)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	require.Equal(t, http.StatusOK, w.Code)
+
+	var body struct {
+		Data struct {
+			Models  []string                      `json:"models"`
+			Pricing []channelModelPricingResponse `json:"pricing"`
+		} `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &body))
+	require.Equal(t, []string{"gpt-5.4", "gpt-5.4-mini"}, body.Data.Models)
+	require.Len(t, body.Data.Pricing, 2)
+
+	byModel := make(map[string]channelModelPricingResponse)
+	for _, p := range body.Data.Pricing {
+		require.Equal(t, service.PlatformOpenAI, p.Platform)
+		require.Equal(t, string(service.BillingModeToken), p.BillingMode)
+		require.Len(t, p.Models, 1)
+		byModel[p.Models[0]] = p
+	}
+	require.InDelta(t, 2.5e-6, *byModel["gpt-5.4"].InputPrice, 1e-12)
+	require.InDelta(t, 15e-6, *byModel["gpt-5.4"].OutputPrice, 1e-12)
+	require.InDelta(t, 0.25e-6, *byModel["gpt-5.4"].CacheReadPrice, 1e-12)
+	require.InDelta(t, 0.75e-6, *byModel["gpt-5.4-mini"].InputPrice, 1e-12)
+	require.InDelta(t, 4.5e-6, *byModel["gpt-5.4-mini"].OutputPrice, 1e-12)
 }

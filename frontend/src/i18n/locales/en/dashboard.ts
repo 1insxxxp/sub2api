@@ -514,8 +514,13 @@ export default {
       imageOutputPrice: 'Image Output',
       perRequestPrice: 'Per Request',
       intervals: 'Tiered Pricing',
+      officialPriceLabel: 'Official',
+      sitePriceLabel: 'Site',
+      currencyCNY: '¥',
       unitPerMillion: '/ 1M tokens',
-      unitPerRequest: '/ request'
+      unitPerRequest: '/ request',
+      unitCNYPerMillion: '¥ / 1M tokens',
+      unitCNYPerRequest: '¥ / request'
     }
   },
 

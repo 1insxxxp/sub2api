@@ -42,6 +42,7 @@
           :no-pricing-label="t('availableChannels.noPricing')"
           :no-models-label="t('availableChannels.noModels')"
           :empty-label="t('availableChannels.empty')"
+          :price-cny-multiplier="priceCnyMultiplier"
         />
       </template>
     </TablePageLayout>
@@ -67,6 +68,11 @@ const channels = ref<UserAvailableChannel[]>([])
 const userGroupRates = ref<Record<number, number>>({})
 const loading = ref(false)
 const searchQuery = ref('')
+
+const priceCnyMultiplier = computed(() => {
+  const value = Number(appStore.cachedPublicSettings?.available_channels_price_cny_multiplier)
+  return Number.isFinite(value) && value > 0 ? value : 0
+})
 
 const columnLabels = computed(() => ({
   name: t('availableChannels.columns.name'),

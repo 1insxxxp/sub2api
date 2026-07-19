@@ -1225,6 +1225,26 @@ func (s *GatewayService) GetAvailableModels(ctx context.Context, groupID *int64,
 	return cloneStringSlice(models)
 }
 
+// HasSchedulableAccountsForGroupPlatform reports whether the group currently has
+// at least one schedulable account for the requested platform. It is used by
+// display paths that need to distinguish "no model_mapping, use defaults" from
+// "no account can serve this platform".
+func (s *GatewayService) HasSchedulableAccountsForGroupPlatform(ctx context.Context, groupID int64, platform string) bool {
+	if s == nil || s.accountRepo == nil || groupID <= 0 || strings.TrimSpace(platform) == "" {
+		return false
+	}
+	accounts, err := s.accountRepo.ListSchedulableByGroupID(ctx, groupID)
+	if err != nil {
+		return false
+	}
+	for _, account := range accounts {
+		if account.Platform == platform {
+			return true
+		}
+	}
+	return false
+}
+
 func (s *GatewayService) InvalidateAvailableModelsCache(groupID *int64, platform string) {
 	if s == nil || s.modelsListCache == nil {
 		return

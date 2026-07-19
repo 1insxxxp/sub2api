@@ -3,6 +3,7 @@
 package handler
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -13,6 +14,30 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
 )
+
+type availableChannelsAccountRepoStub struct {
+	service.AccountRepository
+
+	byGroup map[int64][]service.Account
+}
+
+func (s *availableChannelsAccountRepoStub) ListSchedulableByGroupID(ctx context.Context, groupID int64) ([]service.Account, error) {
+	accounts, ok := s.byGroup[groupID]
+	if !ok {
+		return nil, nil
+	}
+	out := make([]service.Account, len(accounts))
+	copy(out, accounts)
+	return out, nil
+}
+
+func newAvailableChannelsGatewayServiceForTest(repo service.AccountRepository) *service.GatewayService {
+	return service.NewGatewayService(
+		repo,
+		nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil,
+		nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil,
+	)
+}
 
 func TestUserAvailableChannel_Unauthenticated401(t *testing.T) {
 	// 没有 AuthSubject 注入时，handler 应返回 401 且不触达 service 依赖。
@@ -154,4 +179,121 @@ func TestBuildPlatformSections_GroupsByPlatform(t *testing.T) {
 	require.Equal(t, int64(2), sections[0].Groups[0].ID)
 	require.Len(t, sections[0].SupportedModels, 1)
 	require.Equal(t, "claude-sonnet-4-6", sections[0].SupportedModels[0].Name)
+}
+
+func TestAttachGroupSupportedModels_UsesRealGroupModelsInsteadOfSyncedChannelList(t *testing.T) {
+	// 渠道 pricing/mapping 曾经同步出 stale-model，但真实可调度账号只配置 live-a / live-b。
+	// 用户页必须按分组真实可用模型展示，避免把已经不可用的同步模型继续暴露出来。
+	groupID := int64(20)
+	h := &AvailableChannelHandler{
+		gatewayService: newAvailableChannelsGatewayServiceForTest(&availableChannelsAccountRepoStub{
+			byGroup: map[int64][]service.Account{
+				groupID: {
+					{
+						ID:       1,
+						Platform: service.PlatformOpenAI,
+						Credentials: map[string]any{
+							"model_mapping": map[string]any{
+								"live-a": "upstream-a",
+								"live-b": "upstream-b",
+							},
+						},
+					},
+				},
+			},
+		}),
+	}
+	ch := service.AvailableChannel{
+		SupportedModels: []service.SupportedModel{
+			{Name: "stale-model", Platform: service.PlatformOpenAI},
+			{Name: "live-a", Platform: service.PlatformOpenAI},
+			{Name: "live-b", Platform: service.PlatformOpenAI},
+		},
+	}
+	groups := []userAvailableGroup{
+		{ID: groupID, Name: "openai-live", Platform: service.PlatformOpenAI},
+	}
+
+	out := h.attachGroupSupportedModels(context.Background(), ch, groups)
+
+	require.Len(t, out, 1)
+	require.ElementsMatch(t, []string{"live-a", "live-b"}, userSupportedModelNames(out[0].SupportedModels))
+}
+
+func TestAttachGroupSupportedModels_AppliesCustomModelsList(t *testing.T) {
+	groupID := int64(21)
+	h := &AvailableChannelHandler{
+		gatewayService: newAvailableChannelsGatewayServiceForTest(&availableChannelsAccountRepoStub{
+			byGroup: map[int64][]service.Account{
+				groupID: {
+					{
+						ID:       1,
+						Platform: service.PlatformAnthropic,
+						Credentials: map[string]any{
+							"model_mapping": map[string]any{
+								"claude-live":    "claude-live",
+								"claude-hidden":  "claude-hidden",
+								"claude-stale-*": "claude-stale-*",
+							},
+						},
+					},
+				},
+			},
+		}),
+	}
+	ch := service.AvailableChannel{
+		SupportedModels: []service.SupportedModel{
+			{Name: "claude-live", Platform: service.PlatformAnthropic},
+			{Name: "claude-hidden", Platform: service.PlatformAnthropic},
+			{Name: "claude-stale-1", Platform: service.PlatformAnthropic},
+		},
+	}
+	groups := []userAvailableGroup{
+		{
+			ID:       groupID,
+			Name:     "anthropic-custom",
+			Platform: service.PlatformAnthropic,
+			modelsListConfig: service.GroupModelsListConfig{
+				Enabled: true,
+				Models:  []string{"claude-live", "not-real", "claude-stale-1"},
+			},
+		},
+	}
+
+	out := h.attachGroupSupportedModels(context.Background(), ch, groups)
+
+	require.Len(t, out, 1)
+	require.Equal(t, []string{"claude-live", "claude-stale-1"}, userSupportedModelNames(out[0].SupportedModels))
+}
+
+func TestAttachGroupSupportedModels_FallsBackToPlatformDefaultsWhenAccountHasNoMapping(t *testing.T) {
+	// 网关语义：账号未配置 model_mapping 时代表使用平台默认模型列表。
+	// 可用渠道页也应与 /v1/models 保持一致，不能显示成“未配置模型”。
+	groupID := int64(22)
+	h := &AvailableChannelHandler{
+		gatewayService: newAvailableChannelsGatewayServiceForTest(&availableChannelsAccountRepoStub{
+			byGroup: map[int64][]service.Account{
+				groupID: {
+					{ID: 1, Platform: service.PlatformOpenAI},
+				},
+			},
+		}),
+	}
+	ch := service.AvailableChannel{}
+	groups := []userAvailableGroup{
+		{ID: groupID, Name: "openai-defaults", Platform: service.PlatformOpenAI},
+	}
+
+	out := h.attachGroupSupportedModels(context.Background(), ch, groups)
+
+	require.Len(t, out, 1)
+	require.Contains(t, userSupportedModelNames(out[0].SupportedModels), "gpt-5.6")
+}
+
+func userSupportedModelNames(models []userSupportedModel) []string {
+	names := make([]string, 0, len(models))
+	for _, model := range models {
+		names = append(names, model.Name)
+	}
+	return names
 }

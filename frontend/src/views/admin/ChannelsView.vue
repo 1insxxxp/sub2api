@@ -424,6 +424,14 @@
                 <div class="flex items-center gap-2">
                   <button
                     type="button"
+                    @click="syncGroupAvailableModels(sIdx)"
+                    :disabled="syncingGroupPlatform === section.platform || section.group_ids.length === 0"
+                    class="text-xs text-primary-600 hover:text-primary-700 disabled:opacity-50 disabled:hover:text-primary-600"
+                  >
+                    {{ syncingGroupPlatform === section.platform ? t('admin.channels.form.syncingModels') : t('admin.channels.form.syncGroupAvailableModels') }}
+                  </button>
+                  <button
+                    type="button"
                     @click="syncLatestModels(sIdx)"
                     :disabled="syncingPlatform === section.platform"
                     class="text-xs text-gray-500 hover:text-primary-600 disabled:opacity-50"
@@ -863,6 +871,7 @@ function addPricingEntry(sectionIdx: number) {
 }
 
 const syncingPlatform = ref<string | null>(null)
+const syncingGroupPlatform = ref<string | null>(null)
 
 async function syncLatestModels(sectionIdx: number) {
   const platform = form.platforms[sectionIdx].platform
@@ -898,6 +907,57 @@ async function syncLatestModels(sectionIdx: number) {
     appStore.showError(extractApiErrorMessage(error, t('admin.channels.form.syncModelsError')))
   } finally {
     syncingPlatform.value = null
+  }
+}
+
+async function syncGroupAvailableModels(sectionIdx: number) {
+  const section = form.platforms[sectionIdx]
+  if (syncingGroupPlatform.value) return
+  if (section.group_ids.length === 0) {
+    appStore.showError(t('admin.channels.form.syncGroupModelsNoGroups'))
+    return
+  }
+  syncingGroupPlatform.value = section.platform
+  try {
+    const result = await adminAPI.channels.syncGroupAvailablePricingModels(section.platform, section.group_ids)
+    const existingModels = new Set<string>()
+    for (const entry of section.model_pricing) {
+      for (const m of entry.models) existingModels.add(m.toLowerCase())
+    }
+
+    let added = 0
+    for (const pricing of result.pricing || []) {
+      const newModels = (pricing.models || []).filter(m => !existingModels.has(m.toLowerCase()))
+      if (newModels.length === 0) continue
+      for (const m of newModels) existingModels.add(m.toLowerCase())
+      section.model_pricing.push(apiPricingToFormEntry({ ...pricing, models: newModels }))
+      added += newModels.length
+    }
+
+    if (added === 0) {
+      appStore.showSuccess(t('admin.channels.form.syncModelsAlreadyUpToDate'))
+      return
+    }
+    appStore.showSuccess(t('admin.channels.form.syncGroupModelsSuccess', { count: added }))
+  } catch (error) {
+    appStore.showError(extractApiErrorMessage(error, t('admin.channels.form.syncGroupModelsError')))
+  } finally {
+    syncingGroupPlatform.value = null
+  }
+}
+
+function apiPricingToFormEntry(pricing: ChannelModelPricing): PricingFormEntry {
+  return {
+    models: pricing.models || [],
+    billing_mode: pricing.billing_mode || 'token',
+    input_price: perTokenToMTok(pricing.input_price),
+    output_price: perTokenToMTok(pricing.output_price),
+    cache_write_price: perTokenToMTok(pricing.cache_write_price),
+    cache_read_price: perTokenToMTok(pricing.cache_read_price),
+    image_input_price: perTokenToMTok(pricing.image_input_price),
+    image_output_price: perTokenToMTok(pricing.image_output_price),
+    per_request_price: pricing.per_request_price,
+    intervals: apiIntervalsToForm(pricing.intervals || [])
   }
 }
 

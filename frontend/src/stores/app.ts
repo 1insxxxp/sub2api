@@ -403,6 +403,7 @@ export const useAppStore = defineStore('app', () => {
         channel_monitor_enabled: true,
         channel_monitor_default_interval_seconds: 60,
         available_channels_enabled: false,
+        available_channels_price_cny_multiplier: 0,
         risk_control_enabled: false,
         image_studio_enabled: false,
         service_quota_enabled: false,

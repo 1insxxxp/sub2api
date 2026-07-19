@@ -313,7 +313,8 @@ type UpdateSettingsRequest struct {
 	ChannelMonitorDefaultIntervalSeconds *int  `json:"channel_monitor_default_interval_seconds"`
 
 	// Available Channels feature switch (user-facing)
-	AvailableChannelsEnabled *bool `json:"available_channels_enabled"`
+	AvailableChannelsEnabled            *bool    `json:"available_channels_enabled"`
+	AvailableChannelsPriceCNYMultiplier *float64 `json:"available_channels_price_cny_multiplier"`
 
 	// Affiliate (邀请返利) feature switch
 	AffiliateEnabled *bool `json:"affiliate_enabled"`
@@ -1643,6 +1644,15 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 			}
 			return previousSettings.AvailableChannelsEnabled
 		}(),
+		AvailableChannelsPriceCNYMultiplier: func() float64 {
+			if req.AvailableChannelsPriceCNYMultiplier != nil {
+				if *req.AvailableChannelsPriceCNYMultiplier < 0 {
+					return 0
+				}
+				return *req.AvailableChannelsPriceCNYMultiplier
+			}
+			return previousSettings.AvailableChannelsPriceCNYMultiplier
+		}(),
 		AffiliateEnabled: func() bool {
 			if req.AffiliateEnabled != nil {
 				return *req.AffiliateEnabled
@@ -2045,7 +2055,8 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 		ChannelMonitorEnabled:                updatedSettings.ChannelMonitorEnabled,
 		ChannelMonitorDefaultIntervalSeconds: updatedSettings.ChannelMonitorDefaultIntervalSeconds,
 
-		AvailableChannelsEnabled: updatedSettings.AvailableChannelsEnabled,
+		AvailableChannelsEnabled:            updatedSettings.AvailableChannelsEnabled,
+		AvailableChannelsPriceCNYMultiplier: updatedSettings.AvailableChannelsPriceCNYMultiplier,
 
 		AffiliateEnabled: updatedSettings.AffiliateEnabled,
 

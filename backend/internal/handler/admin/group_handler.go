@@ -172,7 +172,7 @@ type UpdateGroupRequest struct {
 	ClaudeCodeOnly                  *bool    `json:"claude_code_only"`
 	FallbackGroupID                 *int64   `json:"fallback_group_id"`
 	FallbackGroupIDOnInvalidRequest *int64   `json:"fallback_group_id_on_invalid_request"`
-	DefaultReasoningEffort          *string  `json:"default_reasoning_effort" binding:"omitempty,oneof=low medium high xhigh max"`
+	DefaultReasoningEffort          *string  `json:"default_reasoning_effort"`
 	// 模型路由配置（仅 anthropic 平台使用）
 	ModelRouting        map[string][]int64 `json:"model_routing"`
 	ModelRoutingEnabled *bool              `json:"model_routing_enabled"`
@@ -428,6 +428,10 @@ func (h *GroupHandler) Update(c *gin.Context) {
 		response.BadRequest(c, "Invalid request: "+err.Error())
 		return
 	}
+	if req.DefaultReasoningEffort != nil && !isValidDefaultReasoningEffortInput(*req.DefaultReasoningEffort) {
+		response.BadRequest(c, "default_reasoning_effort must be one of low, medium, high, xhigh, max, or empty")
+		return
+	}
 
 	group, err := h.adminService.UpdateGroup(c.Request.Context(), groupID, &service.UpdateGroupInput{
 		Name:                            req.Name,
@@ -482,6 +486,15 @@ func (h *GroupHandler) Update(c *gin.Context) {
 	}
 
 	response.Success(c, dto.GroupFromServiceAdmin(group))
+}
+
+func isValidDefaultReasoningEffortInput(raw string) bool {
+	switch strings.ToLower(strings.TrimSpace(raw)) {
+	case "", "low", "medium", "high", "xhigh", "max":
+		return true
+	default:
+		return false
+	}
 }
 
 // Delete handles deleting a group

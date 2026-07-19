@@ -71,24 +71,48 @@
                 :value="model.pricing.input_price"
                 :unit="t(prefixKey('unitPerMillion'))"
                 :scale="perMillionScale"
+                :official-label="officialDisplayLabel"
+                :converted-value="convertedPrice(model.pricing.input_price)"
+                :converted-unit="unitPerMillion"
+                :converted-scale="perMillionScale"
+                :converted-label="sitePriceLabel"
+                :converted-currency-symbol="cnyCurrencySymbol"
               />
               <PricingRow
                 :label="t(prefixKey('outputPrice'))"
                 :value="model.pricing.output_price"
                 :unit="t(prefixKey('unitPerMillion'))"
                 :scale="perMillionScale"
+                :official-label="officialDisplayLabel"
+                :converted-value="convertedPrice(model.pricing.output_price)"
+                :converted-unit="unitPerMillion"
+                :converted-scale="perMillionScale"
+                :converted-label="sitePriceLabel"
+                :converted-currency-symbol="cnyCurrencySymbol"
               />
               <PricingRow
                 :label="t(prefixKey('cacheWritePrice'))"
                 :value="model.pricing.cache_write_price"
                 :unit="t(prefixKey('unitPerMillion'))"
                 :scale="perMillionScale"
+                :official-label="officialDisplayLabel"
+                :converted-value="convertedPrice(model.pricing.cache_write_price)"
+                :converted-unit="unitPerMillion"
+                :converted-scale="perMillionScale"
+                :converted-label="sitePriceLabel"
+                :converted-currency-symbol="cnyCurrencySymbol"
               />
               <PricingRow
                 :label="t(prefixKey('cacheReadPrice'))"
                 :value="model.pricing.cache_read_price"
                 :unit="t(prefixKey('unitPerMillion'))"
                 :scale="perMillionScale"
+                :official-label="officialDisplayLabel"
+                :converted-value="convertedPrice(model.pricing.cache_read_price)"
+                :converted-unit="unitPerMillion"
+                :converted-scale="perMillionScale"
+                :converted-label="sitePriceLabel"
+                :converted-currency-symbol="cnyCurrencySymbol"
               />
               <PricingRow
                 v-if="model.pricing.image_input_price != null && model.pricing.image_input_price > 0"
@@ -96,6 +120,12 @@
                 :value="model.pricing.image_input_price"
                 :unit="t(prefixKey('unitPerMillion'))"
                 :scale="perMillionScale"
+                :official-label="officialDisplayLabel"
+                :converted-value="convertedPrice(model.pricing.image_input_price)"
+                :converted-unit="unitPerMillion"
+                :converted-scale="perMillionScale"
+                :converted-label="sitePriceLabel"
+                :converted-currency-symbol="cnyCurrencySymbol"
               />
               <PricingRow
                 v-if="model.pricing.image_output_price != null && model.pricing.image_output_price > 0"
@@ -103,6 +133,12 @@
                 :value="model.pricing.image_output_price"
                 :unit="t(prefixKey('unitPerMillion'))"
                 :scale="perMillionScale"
+                :official-label="officialDisplayLabel"
+                :converted-value="convertedPrice(model.pricing.image_output_price)"
+                :converted-unit="unitPerMillion"
+                :converted-scale="perMillionScale"
+                :converted-label="sitePriceLabel"
+                :converted-currency-symbol="cnyCurrencySymbol"
               />
             </template>
 
@@ -115,6 +151,12 @@
               :value="model.pricing.per_request_price"
               :unit="t(prefixKey('unitPerRequest'))"
               :scale="1"
+              :official-label="officialDisplayLabel"
+              :converted-value="convertedPrice(model.pricing.per_request_price)"
+              :converted-unit="unitPerRequest"
+              :converted-scale="1"
+              :converted-label="sitePriceLabel"
+              :converted-currency-symbol="cnyCurrencySymbol"
             />
 
             <PricingRow
@@ -126,6 +168,12 @@
               :value="model.pricing.image_output_price"
               :unit="t(prefixKey('unitPerRequest'))"
               :scale="1"
+              :official-label="officialDisplayLabel"
+              :converted-value="convertedPrice(model.pricing.image_output_price)"
+              :converted-unit="unitPerRequest"
+              :converted-scale="1"
+              :converted-label="sitePriceLabel"
+              :converted-currency-symbol="cnyCurrencySymbol"
             />
 
             <div
@@ -146,7 +194,20 @@
                     <template v-if="iv.tier_label">{{ iv.tier_label }}</template>
                     <template v-else>{{ formatRange(iv.min_tokens, iv.max_tokens) }}</template>
                   </span>
-                  <span>{{ formatInterval(iv, model.pricing.billing_mode) }}</span>
+                  <span class="text-right">
+                    <span>
+                      <span v-if="officialDisplayLabel" class="mr-1 rounded border border-gray-200 bg-gray-50 px-1 py-0.5 text-[10px] font-medium leading-none text-gray-500 dark:border-dark-600 dark:bg-dark-700 dark:text-gray-300">
+                        {{ officialDisplayLabel }}
+                      </span>
+                      {{ formatInterval(iv, model.pricing.billing_mode) }}
+                    </span>
+                    <span v-if="formatIntervalCNY(iv, model.pricing.billing_mode)" class="block text-primary-600 dark:text-primary-300">
+                      <span class="mr-1 rounded border border-primary-200 bg-primary-50 px-1 py-0.5 text-[10px] font-medium leading-none text-primary-700 dark:border-primary-500/30 dark:bg-primary-500/10 dark:text-primary-200">
+                        {{ sitePriceLabel }}
+                      </span>
+                      {{ formatIntervalCNY(iv, model.pricing.billing_mode) }}
+                    </span>
+                  </span>
                 </div>
               </div>
             </div>
@@ -182,6 +243,7 @@ const props = withDefaults(
     pricingKeyPrefix?: string
     noPricingLabel?: string
     showPlatform?: boolean
+    cnyPriceMultiplier?: number
     /**
      * 当 model.platform 缺失（如 admin 聚合场景）时，用父行的平台作为兜底着色。
      * 仅用于视觉，不影响业务逻辑。
@@ -192,6 +254,7 @@ const props = withDefaults(
     pricingKeyPrefix: 'availableChannels.pricing',
     noPricingLabel: '',
     showPlatform: true,
+    cnyPriceMultiplier: 0,
     platformHint: ''
   }
 )
@@ -202,6 +265,24 @@ const { t } = useI18n()
 
 /** 按 token 定价展示时的换算单位：每百万 token。 */
 const perMillionScale = 1_000_000
+
+const showCNYPrice = computed(() => Number(props.cnyPriceMultiplier) > 0)
+const unitPerMillion = computed(() => t(prefixKey('unitPerMillion')))
+const unitPerRequest = computed(() => t(prefixKey('unitPerRequest')))
+const officialPriceLabel = computed(() => t(prefixKey('officialPriceLabel')))
+const officialDisplayLabel = computed(() => showCNYPrice.value ? officialPriceLabel.value : '')
+const sitePriceLabel = computed(() => t(prefixKey('sitePriceLabel')))
+const cnyCurrencySymbol = computed(() => t(prefixKey('currencyCNY')))
+
+function convertedPrice(value: number | null | undefined): number | null {
+  if (!showCNYPrice.value || value == null) return null
+  return value * Number(props.cnyPriceMultiplier)
+}
+
+function formatConvertedScaled(value: number | null, scale: number): string {
+  if (value == null) return '-'
+  return `${cnyCurrencySymbol.value}${(value * scale).toPrecision(10).replace(/\.?0+$/, '')}`
+}
 
 // Popover border + header classes echo the platform theme so each card reads
 // at a glance which model family it belongs to.
@@ -246,6 +327,16 @@ function formatInterval(iv: UserPricingInterval, mode: BillingMode): string {
   const input = formatScaled(iv.input_price, perMillionScale)
   const output = formatScaled(iv.output_price, perMillionScale)
   return `${input} / ${output}`
+}
+
+function formatIntervalCNY(iv: UserPricingInterval, mode: BillingMode): string {
+  if (!showCNYPrice.value) return ''
+  if (mode === BILLING_MODE_PER_REQUEST || mode === BILLING_MODE_IMAGE) {
+    return `${formatConvertedScaled(convertedPrice(iv.per_request_price), 1)} ${unitPerRequest.value}`
+  }
+  const input = formatConvertedScaled(convertedPrice(iv.input_price), perMillionScale)
+  const output = formatConvertedScaled(convertedPrice(iv.output_price), perMillionScale)
+  return `${input} / ${output} ${unitPerMillion.value}`
 }
 
 // ── Popover positioning ─────────────────────────────────────────────

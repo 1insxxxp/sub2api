@@ -29,6 +29,9 @@ export default {
           configureLink: 'Configure model pricing in Channel Management > Channel Pricing',
           enabled: 'Enable Available Channels',
           enabledHint: 'When off, the sidebar entry is hidden and the endpoint returns an empty list.',
+          priceCnyMultiplier: 'CNY display multiplier',
+          priceCnyMultiplierHint: 'Only affects the Available Channels display. Final display price = official USD price × group rate × this multiplier. Use 0 to hide CNY conversion.',
+          priceCnyPreview: 'Example: official $10 / 1M tokens with 1x group rate displays ¥{value} / 1M tokens.',
         },
         riskControl: {
           title: 'Risk Control',

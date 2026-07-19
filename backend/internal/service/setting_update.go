@@ -367,6 +367,7 @@ func (s *SettingService) buildSystemSettingsUpdates(ctx context.Context, setting
 
 	// Available channels feature switch
 	updates[SettingKeyAvailableChannelsEnabled] = strconv.FormatBool(settings.AvailableChannelsEnabled)
+	updates[SettingKeyAvailableChannelsPriceCNYMultiplier] = formatNonNegativeFloatSetting(settings.AvailableChannelsPriceCNYMultiplier)
 
 	// Affiliate (邀请返利) feature switch
 	updates[SettingKeyAffiliateEnabled] = strconv.FormatBool(settings.AffiliateEnabled)
@@ -713,4 +714,11 @@ func (s *SettingService) validateDefaultSubscriptionGroups(ctx context.Context, 
 	}
 
 	return nil
+}
+
+func formatNonNegativeFloatSetting(value float64) string {
+	if value < 0 {
+		value = 0
+	}
+	return strconv.FormatFloat(value, 'f', -1, 64)
 }

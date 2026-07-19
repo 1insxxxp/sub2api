@@ -6135,6 +6135,36 @@
               </div>
               <Toggle v-model="form.available_channels_enabled" />
             </div>
+            <div>
+              <label class="input-label">
+                {{ t('admin.settings.features.availableChannels.priceCnyMultiplier') }}
+              </label>
+              <input
+                :value="form.available_channels_price_cny_multiplier || ''"
+                @input="
+                  form.available_channels_price_cny_multiplier =
+                    parseFloat(($event.target as HTMLInputElement).value) || 0
+                "
+                type="number"
+                step="0.001"
+                min="0"
+                class="input"
+                placeholder="0.16"
+              />
+              <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                {{ t('admin.settings.features.availableChannels.priceCnyMultiplierHint') }}
+              </p>
+              <p
+                v-if="Number(form.available_channels_price_cny_multiplier) > 0"
+                class="mt-1 text-xs font-medium text-primary-600 dark:text-primary-400"
+              >
+                {{
+                  t('admin.settings.features.availableChannels.priceCnyPreview', {
+                    value: (10 * Number(form.available_channels_price_cny_multiplier || 0)).toFixed(2),
+                  })
+                }}
+              </p>
+            </div>
           </div>
         </div>
 
@@ -8953,6 +8983,7 @@ const form = reactive<SettingsForm>({
   channel_monitor_default_interval_seconds: 60,
   // Available Channels feature switch
   available_channels_enabled: false,
+  available_channels_price_cny_multiplier: 0,
   // Affiliate (邀请返利) feature switch
   affiliate_enabled: false,
   // Allow user view error requests
@@ -10424,6 +10455,8 @@ async function saveSettings() {
         Number(form.channel_monitor_default_interval_seconds) || 60,
       // Available Channels feature switch
       available_channels_enabled: form.available_channels_enabled,
+      available_channels_price_cny_multiplier:
+        Number(form.available_channels_price_cny_multiplier) || 0,
       // Affiliate (邀请返利) feature switch
       affiliate_enabled: form.affiliate_enabled,
       allow_user_view_error_requests: form.allow_user_view_error_requests,

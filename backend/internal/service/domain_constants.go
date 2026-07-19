@@ -451,6 +451,10 @@ const (
 	// sidebar entry is hidden. Defaults to false (opt-in feature).
 	SettingKeyAvailableChannelsEnabled = "available_channels_enabled"
 
+	// SettingKeyAvailableChannelsPriceCNYMultiplier controls optional CNY price
+	// display in the user-facing available channels page. 0 disables CNY display.
+	SettingKeyAvailableChannelsPriceCNYMultiplier = "available_channels_price_cny_multiplier"
+
 	// SettingKeyUpstreamBillingProbeSettings stores the global enable switch and interval
 	// for probing remote Sub2API API-key billing metadata.
 	SettingKeyUpstreamBillingProbeSettings = "upstream_billing_probe_settings"

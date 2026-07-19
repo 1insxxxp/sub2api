@@ -180,5 +180,26 @@ export async function syncPricingModels(platform: string): Promise<SyncPricingMo
   return data
 }
 
-const channelsAPI = { list, getById, create, update, remove, getModelDefaultPricing, syncPricingModels }
+export interface SyncGroupAvailablePricingModelsResult {
+  models: string[]
+  pricing: ChannelModelPricing[]
+}
+
+/**
+ * Fetch pricing entries from the models currently available in selected groups.
+ */
+export async function syncGroupAvailablePricingModels(
+  platform: string,
+  groupIds: number[]
+): Promise<SyncGroupAvailablePricingModelsResult> {
+  const { data } = await apiClient.get<SyncGroupAvailablePricingModelsResult>('/admin/channels/pricing/sync-group-models', {
+    params: {
+      platform,
+      group_ids: groupIds.join(',')
+    }
+  })
+  return data
+}
+
+const channelsAPI = { list, getById, create, update, remove, getModelDefaultPricing, syncPricingModels, syncGroupAvailablePricingModels }
 export default channelsAPI

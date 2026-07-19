@@ -1,7 +1,9 @@
 package handler
 
 import (
+	"context"
 	"sort"
+	"strings"
 
 	"github.com/Wei-Shaw/sub2api/internal/pkg/response"
 	"github.com/Wei-Shaw/sub2api/internal/server/middleware"
@@ -15,15 +17,15 @@ import (
 // 用户侧接口委托 ChannelService.ListAvailable，并在返回前做三层过滤：
 //  1. 行过滤：只保留状态为 Active 且与当前用户可访问分组有交集的渠道；
 //  2. 分组过滤：渠道的 Groups 只保留用户可访问的那些；
-//  3. 平台过滤：渠道的 SupportedModels 只保留平台在用户可见 Groups 中出现过的模型，
-//     防止"渠道同时挂在 antigravity / anthropic 两个平台的分组上，用户只访问
-//     antigravity，却看到 anthropic 模型"这类跨平台信息泄漏；
+//  3. 分组模型：每个用户可见 Group 使用网关真实可调度模型列表；平台 section 的
+//     SupportedModels 仅保留为兼容字段，取同平台分组模型并集；
 //  4. 字段白名单：仅返回用户需要的字段（省略 BillingModelSource / RestrictModels
 //     / 内部 ID / Status 等管理字段）。
 type AvailableChannelHandler struct {
 	channelService *service.ChannelService
 	apiKeyService  *service.APIKeyService
 	settingService *service.SettingService
+	gatewayService *service.GatewayService
 }
 
 // NewAvailableChannelHandler 创建用户侧可用渠道 handler。
@@ -31,11 +33,13 @@ func NewAvailableChannelHandler(
 	channelService *service.ChannelService,
 	apiKeyService *service.APIKeyService,
 	settingService *service.SettingService,
+	gatewayService *service.GatewayService,
 ) *AvailableChannelHandler {
 	return &AvailableChannelHandler{
 		channelService: channelService,
 		apiKeyService:  apiKeyService,
 		settingService: settingService,
+		gatewayService: gatewayService,
 	}
 }
 
@@ -53,16 +57,19 @@ func (h *AvailableChannelHandler) featureEnabled(c *gin.Context) bool {
 // 订阅视觉加深），并展示默认倍率与高峰倍率规则；用户专属倍率前端走
 // /groups/rates，和 API 密钥页面保持一致。
 type userAvailableGroup struct {
-	ID                 int64   `json:"id"`
-	Name               string  `json:"name"`
-	Platform           string  `json:"platform"`
-	SubscriptionType   string  `json:"subscription_type"`
-	RateMultiplier     float64 `json:"rate_multiplier"`
-	PeakRateEnabled    bool    `json:"peak_rate_enabled"`
-	PeakStart          string  `json:"peak_start"`
-	PeakEnd            string  `json:"peak_end"`
-	PeakRateMultiplier float64 `json:"peak_rate_multiplier"`
-	IsExclusive        bool    `json:"is_exclusive"`
+	ID                 int64                `json:"id"`
+	Name               string               `json:"name"`
+	Platform           string               `json:"platform"`
+	SubscriptionType   string               `json:"subscription_type"`
+	RateMultiplier     float64              `json:"rate_multiplier"`
+	PeakRateEnabled    bool                 `json:"peak_rate_enabled"`
+	PeakStart          string               `json:"peak_start"`
+	PeakEnd            string               `json:"peak_end"`
+	PeakRateMultiplier float64              `json:"peak_rate_multiplier"`
+	IsExclusive        bool                 `json:"is_exclusive"`
+	SupportedModels    []userSupportedModel `json:"supported_models"`
+
+	modelsListConfig service.GroupModelsListConfig
 }
 
 // userSupportedModelPricing 用户可见的定价字段白名单。
@@ -157,6 +164,7 @@ func (h *AvailableChannelHandler) List(c *gin.Context) {
 		if len(visibleGroups) == 0 {
 			continue
 		}
+		visibleGroups = h.attachGroupSupportedModels(c.Request.Context(), ch, visibleGroups)
 		sections := buildPlatformSections(ch, visibleGroups)
 		if len(sections) == 0 {
 			continue
@@ -201,10 +209,38 @@ func buildPlatformSections(
 		sections = append(sections, userChannelPlatformSection{
 			Platform:        platform,
 			Groups:          groupsByPlatform[platform],
-			SupportedModels: toUserSupportedModels(ch.SupportedModels, platformSet),
+			SupportedModels: supportedModelsForSection(groupsByPlatform[platform], ch.SupportedModels, platformSet),
 		})
 	}
 	return sections
+}
+
+func supportedModelsForSection(
+	groups []userAvailableGroup,
+	fallback []service.SupportedModel,
+	platformSet map[string]struct{},
+) []userSupportedModel {
+	out := make([]userSupportedModel, 0)
+	seen := make(map[string]struct{})
+	hasGroupModels := false
+	for _, g := range groups {
+		if len(g.SupportedModels) == 0 {
+			continue
+		}
+		hasGroupModels = true
+		for _, model := range g.SupportedModels {
+			key := model.Platform + "\x00" + model.Name
+			if _, ok := seen[key]; ok {
+				continue
+			}
+			seen[key] = struct{}{}
+			out = append(out, model)
+		}
+	}
+	if hasGroupModels {
+		return out
+	}
+	return toUserSupportedModels(fallback, platformSet)
 }
 
 // filterUserVisibleGroups 仅保留用户可访问的分组。
@@ -228,9 +264,89 @@ func filterUserVisibleGroups(
 			PeakEnd:            g.PeakEnd,
 			PeakRateMultiplier: g.PeakRateMultiplier,
 			IsExclusive:        g.IsExclusive,
+			SupportedModels:    []userSupportedModel{},
+			modelsListConfig:   g.ModelsListConfig,
 		})
 	}
 	return visible
+}
+
+func (h *AvailableChannelHandler) attachGroupSupportedModels(
+	ctx context.Context,
+	ch service.AvailableChannel,
+	groups []userAvailableGroup,
+) []userAvailableGroup {
+	out := make([]userAvailableGroup, len(groups))
+	copy(out, groups)
+	if h == nil || h.gatewayService == nil {
+		return out
+	}
+	for i := range out {
+		modelIDs := h.groupAvailableModelIDs(ctx, out[i])
+		out[i].SupportedModels = toUserSupportedModelsByIDs(ch.SupportedModels, out[i].Platform, modelIDs)
+	}
+	return out
+}
+
+func (h *AvailableChannelHandler) groupAvailableModelIDs(ctx context.Context, group userAvailableGroup) []string {
+	if h == nil || h.gatewayService == nil || group.ID <= 0 || strings.TrimSpace(group.Platform) == "" {
+		return nil
+	}
+	groupID := group.ID
+	availableModels := h.gatewayService.GetAvailableModels(ctx, &groupID, group.Platform)
+	if len(availableModels) == 0 && h.gatewayService.HasSchedulableAccountsForGroupPlatform(ctx, groupID, group.Platform) {
+		availableModels = defaultModelIDsForPlatform(group.Platform)
+	}
+	if group.modelsListConfig.Enabled && len(group.modelsListConfig.Models) > 0 {
+		fallbackModels := defaultModelIDsForPlatform(group.Platform)
+		availableModels = filterModelsByCustomList(customModelsListSource(group.Platform, availableModels, fallbackModels), fallbackModels, group.modelsListConfig.Models)
+	}
+	return availableModels
+}
+
+func toUserSupportedModelsByIDs(src []service.SupportedModel, platform string, modelIDs []string) []userSupportedModel {
+	if len(modelIDs) == 0 {
+		return []userSupportedModel{}
+	}
+
+	byName := make(map[string]service.SupportedModel, len(src))
+	for _, model := range src {
+		if model.Platform != platform {
+			continue
+		}
+		key := strings.TrimSpace(model.Name)
+		if key == "" {
+			continue
+		}
+		byName[key] = model
+	}
+
+	out := make([]userSupportedModel, 0, len(modelIDs))
+	seen := make(map[string]struct{}, len(modelIDs))
+	for _, modelID := range modelIDs {
+		modelID = strings.TrimSpace(modelID)
+		if modelID == "" {
+			continue
+		}
+		if _, ok := seen[modelID]; ok {
+			continue
+		}
+		seen[modelID] = struct{}{}
+		if priced, ok := byName[modelID]; ok {
+			out = append(out, userSupportedModel{
+				Name:     priced.Name,
+				Platform: priced.Platform,
+				Pricing:  toUserPricing(priced.Pricing),
+			})
+			continue
+		}
+		out = append(out, userSupportedModel{
+			Name:     modelID,
+			Platform: platform,
+			Pricing:  nil,
+		})
+	}
+	return out
 }
 
 // toUserSupportedModels 将 service 层支持模型转换为用户 DTO（字段白名单）。

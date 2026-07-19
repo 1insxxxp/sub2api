@@ -222,6 +222,7 @@ func (s *SettingService) GetPublicSettings(ctx context.Context) (*PublicSettings
 		SettingKeyChannelMonitorEnabled,
 		SettingKeyChannelMonitorDefaultIntervalSeconds,
 		SettingKeyAvailableChannelsEnabled,
+		SettingKeyAvailableChannelsPriceCNYMultiplier,
 		SettingKeyAffiliateEnabled,
 		SettingKeyRiskControlEnabled,
 		SettingKeyImageStudioConfig,
@@ -335,7 +336,8 @@ func (s *SettingService) GetPublicSettings(ctx context.Context) (*PublicSettings
 		ChannelMonitorEnabled:                !isFalseSettingValue(settings[SettingKeyChannelMonitorEnabled]),
 		ChannelMonitorDefaultIntervalSeconds: parseChannelMonitorInterval(settings[SettingKeyChannelMonitorDefaultIntervalSeconds]),
 
-		AvailableChannelsEnabled: settings[SettingKeyAvailableChannelsEnabled] == "true",
+		AvailableChannelsEnabled:            settings[SettingKeyAvailableChannelsEnabled] == "true",
+		AvailableChannelsPriceCNYMultiplier: parseNonNegativeFloatSetting(settings[SettingKeyAvailableChannelsPriceCNYMultiplier]),
 
 		AffiliateEnabled: settings[SettingKeyAffiliateEnabled] == "true",
 
@@ -363,6 +365,14 @@ func parseChannelMonitorInterval(raw string) int {
 		return channelMonitorIntervalFallback
 	}
 	return clampChannelMonitorInterval(v)
+}
+
+func parseNonNegativeFloatSetting(raw string) float64 {
+	v, err := strconv.ParseFloat(strings.TrimSpace(raw), 64)
+	if err != nil || v < 0 {
+		return 0
+	}
+	return v
 }
 
 // clampChannelMonitorInterval clamps v to the allowed range. 0 means "not provided".
@@ -501,13 +511,14 @@ type PublicSettingsInjectionPayload struct {
 	// Feature flags — MUST match the opt-in/opt-out registry in
 	// frontend/src/utils/featureFlags.ts. Missing a field here is the bug
 	// that hid the "可用渠道" menu on page refresh.
-	ChannelMonitorEnabled                bool `json:"channel_monitor_enabled"`
-	ChannelMonitorDefaultIntervalSeconds int  `json:"channel_monitor_default_interval_seconds"`
-	AvailableChannelsEnabled             bool `json:"available_channels_enabled"`
-	AffiliateEnabled                     bool `json:"affiliate_enabled"`
-	RiskControlEnabled                   bool `json:"risk_control_enabled"`
-	ImageStudioEnabled                   bool `json:"image_studio_enabled"`
-	AllowUserViewErrorRequests           bool `json:"allow_user_view_error_requests"`
+	ChannelMonitorEnabled                bool    `json:"channel_monitor_enabled"`
+	ChannelMonitorDefaultIntervalSeconds int     `json:"channel_monitor_default_interval_seconds"`
+	AvailableChannelsEnabled             bool    `json:"available_channels_enabled"`
+	AvailableChannelsPriceCNYMultiplier  float64 `json:"available_channels_price_cny_multiplier"`
+	AffiliateEnabled                     bool    `json:"affiliate_enabled"`
+	RiskControlEnabled                   bool    `json:"risk_control_enabled"`
+	ImageStudioEnabled                   bool    `json:"image_studio_enabled"`
+	AllowUserViewErrorRequests           bool    `json:"allow_user_view_error_requests"`
 }
 
 const publicSettingsInlineAssetMaxBytes = 8 * 1024
@@ -590,6 +601,7 @@ func (s *SettingService) GetPublicSettingsForInjection(ctx context.Context) (any
 		ChannelMonitorEnabled:                settings.ChannelMonitorEnabled,
 		ChannelMonitorDefaultIntervalSeconds: settings.ChannelMonitorDefaultIntervalSeconds,
 		AvailableChannelsEnabled:             settings.AvailableChannelsEnabled,
+		AvailableChannelsPriceCNYMultiplier:  settings.AvailableChannelsPriceCNYMultiplier,
 		AffiliateEnabled:                     settings.AffiliateEnabled,
 		RiskControlEnabled:                   settings.RiskControlEnabled,
 		ImageStudioEnabled:                   settings.ImageStudioEnabled,
