@@ -613,7 +613,7 @@ func ProvideSettingService(settingRepo SettingRepository, groupRepo GroupReposit
 	svc := NewSettingService(settingRepo, cfg)
 	svc.SetDefaultSubscriptionGroupReader(groupRepo)
 	svc.SetProxyRepository(proxyRepo)
-	if err := svc.LoadAPIKeyACLTrustForwardedIPSetting(context.Background()); err != nil {
+	if err := svc.LoadForwardedClientIPSettings(context.Background()); err != nil {
 		logger.LegacyPrintf("service.setting", "Warning: load api key acl forwarded ip setting failed: %v", err)
 	}
 	if err := svc.MigrateOpenAIAllowClaudeCodeCodexPluginSetting(context.Background()); err != nil {
@@ -684,6 +684,17 @@ func ProvideImageStudioService(
 	return svc
 }
 
+// ProvideImageStorageSettingService constructs the runtime-configurable image storage settings service.
+func ProvideImageStorageSettingService(
+	settingRepo SettingRepository,
+	encryptor SecretEncryptor,
+	backup *BackupService,
+	factory ImageStorageFactory,
+	cfg *config.Config,
+) *ImageStorageSettingService {
+	return NewImageStorageSettingService(settingRepo, encryptor, backup, factory, cfg.ImageStorage)
+}
+
 // ProviderSet is the Wire provider set for all services
 var ProviderSet = wire.NewSet(
 	// Core services
@@ -738,6 +749,7 @@ var ProviderSet = wire.NewSet(
 	ProvideAccountTestService,
 	ProvideUpstreamBillingProbeService,
 	ProvideSettingService,
+	ProvideImageStorageSettingService,
 	ProvideImageStudioService,
 	NewImageStudioGatewayExecutor,
 	wire.Bind(new(ImageStudioConfigReader), new(*SettingService)),

@@ -123,6 +123,7 @@ var ProviderSet = wire.NewSet(
 	NewUpdateCache,
 	NewGeminiTokenCache,
 	NewImageTaskStore,
+	ProvideImageStorageFactory,
 	NewBatchImageQueue,
 	NewBatchImageDownloadLimiter,
 	NewLeaderLockCache,
@@ -188,6 +189,13 @@ func ProvideImageStorage(cfg *config.Config) (service.ImageResultStorage, error)
 		return nil, err
 	}
 	return store, nil
+}
+
+// ProvideImageStorageFactory builds an object storage client from current runtime settings.
+func ProvideImageStorageFactory() service.ImageStorageFactory {
+	return func(ctx context.Context, cfg *config.ImageStorageConfig) (service.ImageResultStorage, error) {
+		return NewS3ImageStorage(ctx, cfg)
+	}
 }
 
 // ProvideSQLDB 从 Ent 客户端提取底层的 *sql.DB 连接。
