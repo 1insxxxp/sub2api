@@ -416,9 +416,9 @@ async function loadDashboardAdvancedSettings() {
     const settings = await opsAPI.getAdvancedSettings()
     showAlertEvents.value = settings.display_alert_events
     showOpenAITokenStats.value = settings.display_openai_token_stats
-    autoRefreshEnabled.value = settings.auto_refresh_enabled
+    autoRefreshEnabled.value = false
     autoRefreshIntervalMs.value = settings.auto_refresh_interval_seconds * 1000
-    autoRefreshCountdown.value = settings.auto_refresh_interval_seconds
+    autoRefreshCountdown.value = 0
   } catch (err) {
     console.error('[OpsDashboard] Failed to load dashboard advanced settings', err)
     showAlertEvents.value = true
