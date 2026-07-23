@@ -67,95 +67,98 @@
               <!-- More Tools Dropdown -->
               <div class="relative" ref="accountToolsDropdownRef">
                 <button
-                  @click="
-                    showAccountToolsDropdown = !showAccountToolsDropdown;
-                    showAutoRefreshDropdown = false
-                  "
+                  ref="accountToolsTriggerRef"
+                  @click="toggleAccountToolsDropdown"
                   class="btn btn-secondary px-2 md:px-3"
                   :title="t('admin.accounts.moreActions')"
+                  :aria-expanded="showAccountToolsDropdown"
                 >
                   <Icon name="more" size="sm" class="md:mr-1.5" />
                   <span class="hidden md:inline">{{ t('admin.accounts.moreActions') }}</span>
                   <Icon name="chevronDown" size="xs" class="ml-1 hidden md:inline" />
                 </button>
-                <div
-                  v-if="showAccountToolsDropdown"
-                  class="admin-action-menu absolute right-0 z-50 mt-2 w-[min(20rem,calc(100vw-2rem))] origin-top-right"
-                >
-                  <div class="max-h-[70vh] overflow-y-auto">
-                    <div class="px-2 py-2">
-                      <div class="text-xs font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">
-                        {{ t('admin.accounts.dataActions') }}
+                <Teleport to="body">
+                  <div
+                    v-if="showAccountToolsDropdown"
+                    class="admin-action-menu fixed z-[9999] origin-top-right overflow-hidden"
+                    :style="accountToolsDropdownStyle"
+                    @click.stop
+                  >
+                    <div class="overflow-y-auto p-2" :style="{ maxHeight: `${accountToolsDropdownPosition.maxHeight}px` }">
+                      <div class="px-2 py-2">
+                        <div class="text-xs font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">
+                          {{ t('admin.accounts.dataActions') }}
+                        </div>
                       </div>
-                    </div>
-                    <button class="account-tools-menu-item" @click="openSyncFromCrs">
-                      <span class="account-tools-menu-icon bg-blue-50 text-blue-600 dark:bg-blue-900/30 dark:text-blue-300">
-                        <Icon name="sync" size="sm" />
-                      </span>
-                      <span class="flex-1 text-left">{{ t('admin.accounts.syncFromCrs') }}</span>
-                    </button>
-                    <button class="account-tools-menu-item" @click="openImportData">
-                      <span class="account-tools-menu-icon bg-cyan-50 text-cyan-600 dark:bg-cyan-900/30 dark:text-cyan-300">
-                        <Icon name="upload" size="sm" />
-                      </span>
-                      <span class="flex-1 text-left">{{ t('admin.accounts.dataImport') }}</span>
-                    </button>
-                    <button class="account-tools-menu-item" @click="openExportDataDialogFromMenu">
-                      <span class="account-tools-menu-icon bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-200">
-                        <Icon name="download" size="sm" />
-                      </span>
-                      <span class="flex-1 text-left">
-                        {{ selIds.length ? t('admin.accounts.dataExportSelected') : t('admin.accounts.dataExport') }}
-                      </span>
-                      <span
-                        v-if="selIds.length"
-                        class="rounded-full bg-primary-100 px-2 py-0.5 text-xs font-medium text-primary-700 dark:bg-primary-900/40 dark:text-primary-300"
-                      >
-                        {{ t('admin.accounts.selectedCount', { count: selIds.length }) }}
-                      </span>
-                    </button>
-
-                    <div class="admin-action-menu-divider"></div>
-                    <div class="px-2 py-2">
-                      <div class="text-xs font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">
-                        {{ t('admin.accounts.toolActions') }}
-                      </div>
-                    </div>
-                    <button class="account-tools-menu-item" @click="openErrorPassthrough">
-                      <span class="account-tools-menu-icon bg-amber-50 text-amber-600 dark:bg-amber-900/30 dark:text-amber-300">
-                        <Icon name="shield" size="sm" />
-                      </span>
-                      <span class="flex-1 text-left">{{ t('admin.errorPassthrough.title') }}</span>
-                    </button>
-                    <button class="account-tools-menu-item" @click="openTLSFingerprintProfiles">
-                      <span class="account-tools-menu-icon bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-200">
-                        <Icon name="lock" size="sm" />
-                      </span>
-                      <span class="flex-1 text-left">{{ t('admin.tlsFingerprintProfiles.title') }}</span>
-                    </button>
-
-                    <div class="admin-action-menu-divider"></div>
-                    <div class="px-2 py-2">
-                      <div class="flex items-center justify-between gap-3">
-                        <span class="text-xs font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">
-                          {{ t('admin.accounts.viewColumns') }}
+                      <button class="account-tools-menu-item" @click="openSyncFromCrs">
+                        <span class="account-tools-menu-icon bg-blue-50 text-blue-600 dark:bg-blue-900/30 dark:text-blue-300">
+                          <Icon name="sync" size="sm" />
                         </span>
-                        <Icon name="grid" size="sm" class="text-slate-400" />
-                      </div>
-                    </div>
-                    <div class="grid grid-cols-1 gap-1">
-                      <button
-                        v-for="col in toggleableColumns"
-                        :key="col.key"
-                        @click="toggleColumn(col.key)"
-                        class="admin-action-menu-item justify-between"
-                      >
-                        <span class="truncate">{{ col.label }}</span>
-                        <Icon v-if="isColumnVisible(col.key)" name="check" size="sm" class="text-primary-500" />
+                        <span class="flex-1 text-left">{{ t('admin.accounts.syncFromCrs') }}</span>
                       </button>
+                      <button class="account-tools-menu-item" @click="openImportData">
+                        <span class="account-tools-menu-icon bg-cyan-50 text-cyan-600 dark:bg-cyan-900/30 dark:text-cyan-300">
+                          <Icon name="upload" size="sm" />
+                        </span>
+                        <span class="flex-1 text-left">{{ t('admin.accounts.dataImport') }}</span>
+                      </button>
+                      <button class="account-tools-menu-item" @click="openExportDataDialogFromMenu">
+                        <span class="account-tools-menu-icon bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-200">
+                          <Icon name="download" size="sm" />
+                        </span>
+                        <span class="flex-1 text-left">
+                          {{ selIds.length ? t('admin.accounts.dataExportSelected') : t('admin.accounts.dataExport') }}
+                        </span>
+                        <span
+                          v-if="selIds.length"
+                          class="rounded-full bg-primary-100 px-2 py-0.5 text-xs font-medium text-primary-700 dark:bg-primary-900/40 dark:text-primary-300"
+                        >
+                          {{ t('admin.accounts.selectedCount', { count: selIds.length }) }}
+                        </span>
+                      </button>
+
+                      <div class="admin-action-menu-divider"></div>
+                      <div class="px-2 py-2">
+                        <div class="text-xs font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">
+                          {{ t('admin.accounts.toolActions') }}
+                        </div>
+                      </div>
+                      <button class="account-tools-menu-item" @click="openErrorPassthrough">
+                        <span class="account-tools-menu-icon bg-amber-50 text-amber-600 dark:bg-amber-900/30 dark:text-amber-300">
+                          <Icon name="shield" size="sm" />
+                        </span>
+                        <span class="flex-1 text-left">{{ t('admin.errorPassthrough.title') }}</span>
+                      </button>
+                      <button class="account-tools-menu-item" @click="openTLSFingerprintProfiles">
+                        <span class="account-tools-menu-icon bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-200">
+                          <Icon name="lock" size="sm" />
+                        </span>
+                        <span class="flex-1 text-left">{{ t('admin.tlsFingerprintProfiles.title') }}</span>
+                      </button>
+
+                      <div class="admin-action-menu-divider"></div>
+                      <div class="px-2 py-2">
+                        <div class="flex items-center justify-between gap-3">
+                          <span class="text-xs font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">
+                            {{ t('admin.accounts.viewColumns') }}
+                          </span>
+                          <Icon name="grid" size="sm" class="text-slate-400" />
+                        </div>
+                      </div>
+                      <div class="grid grid-cols-1 gap-1">
+                        <button
+                          v-for="col in toggleableColumns"
+                          :key="col.key"
+                          @click="toggleColumn(col.key)"
+                          class="admin-action-menu-item justify-between"
+                        >
+                          <span class="truncate">{{ col.label }}</span>
+                          <Icon v-if="isColumnVisible(col.key)" name="check" size="sm" class="text-primary-500" />
+                        </button>
+                      </div>
                     </div>
                   </div>
-                </div>
+                </Teleport>
               </div>
               </template>
             </AccountTableActions>
@@ -504,6 +507,7 @@ import { formatDateTime, formatRelativeTime } from '@/utils/format'
 import { proxyExpiryBadgeClass, proxyExpiryLabelKey } from '@/utils/proxyExpiry'
 import { extractApiErrorMessage } from '@/utils/apiError'
 import { sanitizeUrl } from '@/utils/url'
+import { getFloatingPanelPosition } from '@/utils/floatingPanel'
 import type { Account, AccountPlatform, AccountSchedulerGroupScore, AccountType, Proxy as AccountProxy, AdminGroup, WindowStats, ClaudeModel, UpstreamBillingProbeSnapshot } from '@/types'
 
 const CreateAccountModal = defineAsyncComponent(() => import('@/components/account/CreateAccountModal.vue'))
@@ -604,6 +608,20 @@ useIntervalFn(() => { upstreamBillingNow.value = Date.now() }, 60_000)
 // Account tools dropdown
 const showAccountToolsDropdown = ref(false)
 const accountToolsDropdownRef = ref<HTMLElement | null>(null)
+const accountToolsTriggerRef = ref<HTMLElement | null>(null)
+const accountToolsDropdownPosition = reactive({
+  top: null as number | null,
+  bottom: null as number | null,
+  left: 16,
+  width: 320,
+  maxHeight: 0
+})
+const accountToolsDropdownStyle = computed(() => ({
+  top: accountToolsDropdownPosition.top == null ? 'auto' : `${accountToolsDropdownPosition.top}px`,
+  bottom: accountToolsDropdownPosition.bottom == null ? 'auto' : `${accountToolsDropdownPosition.bottom}px`,
+  left: `${accountToolsDropdownPosition.left}px`,
+  width: `${accountToolsDropdownPosition.width}px`
+}))
 const hiddenColumns = reactive<Set<string>>(new Set())
 const DEFAULT_HIDDEN_COLUMNS = ['today_stats', 'proxy', 'notes', 'priority', 'scheduler_score', 'rate_multiplier']
 const HIDDEN_COLUMNS_KEY = 'account-hidden-columns'
@@ -1254,6 +1272,25 @@ const closeAccountToolsDropdown = () => {
   showAccountToolsDropdown.value = false
 }
 
+const updateAccountToolsDropdownPosition = () => {
+  const trigger = accountToolsTriggerRef.value
+  if (!trigger) return
+
+  const position = getFloatingPanelPosition(
+    trigger.getBoundingClientRect(),
+    document.documentElement.clientWidth || window.innerWidth,
+    window.innerHeight
+  )
+  Object.assign(accountToolsDropdownPosition, position)
+}
+
+const toggleAccountToolsDropdown = () => {
+  const nextVisible = !showAccountToolsDropdown.value
+  showAutoRefreshDropdown.value = false
+  if (nextVisible) updateAccountToolsDropdownPosition()
+  showAccountToolsDropdown.value = nextVisible
+}
+
 const openSyncFromCrs = () => {
   closeAccountToolsDropdown()
   showSync.value = true
@@ -1448,8 +1485,8 @@ const allColumns = computed(() => {
   if (!authStore.isSimpleMode) {
     c.push({ key: 'groups', label: t('admin.accounts.columns.groups'), sortable: false })
   }
+  c.push({ key: 'usage', label: t('admin.accounts.columns.usageWindows'), sortable: false })
   c.push(
-    { key: 'usage', label: t('admin.accounts.columns.usageWindows'), sortable: false },
     { key: 'proxy', label: t('admin.accounts.columns.proxy'), sortable: false },
     { key: 'priority', label: t('admin.accounts.columns.priority'), sortable: true },
     { key: 'scheduler_score', label: t('admin.accounts.columns.schedulerScore'), sortable: false },
@@ -2111,9 +2148,14 @@ const proxyExpiryText = (p: AccountProxy): string => {
   return params ? t(key, params) : t(key)
 }
 
-// 滚动时关闭操作菜单（不关闭列设置下拉菜单）
+// 表格滚动时关闭行操作菜单，并让顶部工具菜单继续贴紧触发按钮。
 const handleScroll = () => {
   menu.show = false
+  if (showAccountToolsDropdown.value) updateAccountToolsDropdownPosition()
+}
+
+const handleViewportResize = () => {
+  if (showAccountToolsDropdown.value) updateAccountToolsDropdownPosition()
 }
 
 // 点击外部关闭顶部下拉菜单
@@ -2138,6 +2180,7 @@ onMounted(async () => {
     console.error('Failed to load proxies/groups:', error)
   }
   window.addEventListener('scroll', handleScroll, true)
+  window.addEventListener('resize', handleViewportResize)
   document.addEventListener('click', handleClickOutside)
 
   if (autoRefreshEnabled.value) {
@@ -2150,6 +2193,7 @@ onMounted(async () => {
 
 onUnmounted(() => {
   window.removeEventListener('scroll', handleScroll, true)
+  window.removeEventListener('resize', handleViewportResize)
   document.removeEventListener('click', handleClickOutside)
 })
 </script>

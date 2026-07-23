@@ -40,6 +40,12 @@ func DefaultModelIDsForPlatform(platform string) []string {
 		return mergeDefaultModelIDs(ids, nil)
 	case PlatformGrok:
 		return xai.DefaultModelIDs()
+	case PlatformComposite:
+		ids := make([]string, 0)
+		for _, concretePlatform := range []string{PlatformAnthropic, PlatformGemini, PlatformOpenAI, PlatformAntigravity, PlatformGrok} {
+			ids = mergeDefaultModelIDs(ids, DefaultModelIDsForPlatform(concretePlatform))
+		}
+		return ids
 	default:
 		ids := make([]string, 0, len(claude.DefaultModels))
 		for _, model := range claude.DefaultModels {
