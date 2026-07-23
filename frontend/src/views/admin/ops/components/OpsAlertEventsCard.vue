@@ -402,7 +402,7 @@ const empty = computed(() => events.value.length === 0 && !loading.value)
           <div
             v-for="row in events"
             :key="row.id"
-            class="cursor-pointer space-y-2 p-4 hover:bg-gray-50 dark:hover:bg-dark-700/50"
+            class="admin-list-row cursor-pointer space-y-2 p-4"
             @click="openDetail(row)"
           >
             <div class="flex flex-wrap items-center gap-2">

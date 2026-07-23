@@ -372,7 +372,7 @@
                 "
                 :disabled="duplicatingGroupIds.has(row.id)"
                 @click="handleDuplicate(row)"
-                class="flex flex-col items-center gap-0.5 rounded-lg p-1.5 text-gray-500 transition-colors hover:bg-gray-100 hover:text-primary-600 disabled:cursor-not-allowed disabled:opacity-50 dark:hover:bg-dark-700 dark:hover:text-primary-400"
+                class="admin-inline-action disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <Icon name="copy" size="sm" />
                 <span class="text-xs">
@@ -386,7 +386,7 @@
               <button
                 v-if="row.platform === 'composite'"
                 @click="handleCompositeRoutes(row)"
-                class="flex flex-col items-center gap-0.5 rounded-lg p-1.5 text-gray-500 transition-colors hover:bg-gray-100 hover:text-cyan-600 dark:hover:bg-dark-700 dark:hover:text-cyan-400"
+                class="admin-inline-action"
               >
                 <Icon name="swap" size="sm" />
                 <span class="text-xs">{{
@@ -1393,7 +1393,7 @@
               {{ t("admin.groups.webSearchPricing.pricePerCallHint") }}
             </p>
             <div
-              class="mt-2 rounded-lg bg-gray-50 p-3 text-xs text-gray-600 dark:bg-dark-700 dark:text-gray-300"
+              class="admin-form-section mt-2 !space-y-0 !rounded-xl !p-3 text-xs text-gray-600 dark:text-gray-300"
             >
               {{
                 t("admin.groups.webSearchPricing.finalPricePreview", {
@@ -2923,7 +2923,7 @@
               {{ t("admin.groups.webSearchPricing.pricePerCallHint") }}
             </p>
             <div
-              class="mt-2 rounded-lg bg-gray-50 p-3 text-xs text-gray-600 dark:bg-dark-700 dark:text-gray-300"
+              class="admin-form-section mt-2 !space-y-0 !rounded-xl !p-3 text-xs text-gray-600 dark:text-gray-300"
             >
               {{
                 t("admin.groups.webSearchPricing.finalPricePreview", {
@@ -3643,9 +3643,7 @@
             </button>
           </div>
 
-          <div
-            class="overflow-hidden rounded-lg border border-gray-200 dark:border-dark-600"
-          >
+          <div class="admin-list-surface">
             <div
               v-if="compositeRoutesLoading"
               class="flex h-36 items-center justify-center text-sm text-gray-500 dark:text-gray-400"
@@ -3720,7 +3718,7 @@
                       <div class="flex justify-end gap-1">
                         <button
                           type="button"
-                          class="rounded p-1.5 text-gray-500 hover:bg-gray-100 hover:text-primary-600 dark:hover:bg-dark-700 dark:hover:text-primary-400"
+                          class="admin-inline-action !min-h-8 !min-w-8 !rounded-md !p-1.5"
                           :title="t('common.edit')"
                           @click="editCompositeRoute(route)"
                         >

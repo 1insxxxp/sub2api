@@ -1671,14 +1671,14 @@
                   {{ t("admin.settings.apiKeyAcl.forwardedClientIpHeadersHint") }}
                 </p>
                 <div
-                  class="mt-3 rounded-lg border border-gray-300 bg-white p-2 dark:border-dark-500 dark:bg-dark-700"
+                  class="admin-tag-input mt-3"
                 >
                   <div class="flex flex-wrap items-center gap-2">
                     <span
                       v-for="header in form.forwarded_client_ip_headers"
                       :key="header"
                       data-testid="forwarded-client-ip-header-tag"
-                      class="inline-flex items-center gap-1 rounded bg-gray-100 px-2 py-1 text-xs font-mono text-gray-700 dark:bg-dark-600 dark:text-gray-200"
+                      class="badge badge-gray inline-flex items-center gap-1 font-mono text-xs"
                     >
                       <span>{{ header }}</span>
                       <button

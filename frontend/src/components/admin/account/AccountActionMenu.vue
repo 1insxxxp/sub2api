@@ -22,7 +22,7 @@
               <Icon name="clock" size="sm" class="text-orange-500" />
               {{ t('admin.scheduledTests.schedule') }}
             </button>
-            <button v-if="canDuplicate" @click="$emit('duplicate', account); $emit('close')" class="flex w-full items-center gap-2 px-4 py-2 text-sm hover:bg-gray-100 dark:hover:bg-dark-700">
+            <button v-if="canDuplicate" @click="$emit('duplicate', account); $emit('close')" class="admin-action-menu-item">
               <Icon name="copy" size="sm" class="text-sky-500" />
               {{ t('admin.accounts.duplicateAccount') }}
             </button>

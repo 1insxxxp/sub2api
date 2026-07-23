@@ -93,7 +93,7 @@
       </section>
 
       <!-- Async image object storage -->
-      <div class="card p-6">
+      <div class="admin-surface p-6">
         <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
           <div>
             <h3 class="text-base font-semibold text-gray-900 dark:text-white">
