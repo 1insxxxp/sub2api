@@ -363,7 +363,7 @@ func (s *BillingService) initFallbackPricing() {
 
 	// ============================================================
 	// 国产 LLM 兜底定价（数据源：各家官方定价页/USD 口径）
-	// 顺序：DeepSeek → 智谱 GLM → 月之暗面 Kimi → MiniMax
+	// 顺序：DeepSeek → 智谱 GLM → 月之暗面 Kimi → 通义 Qwen → 小米 MiMo → MiniMax
 	// 覆盖逻辑见同文件 getFallbackPricing()
 	// ============================================================
 
@@ -387,6 +387,12 @@ func (s *BillingService) initFallbackPricing() {
 	// Source: https://docs.z.ai/guides/overview/pricing (USD per 1M tokens)
 	// 注意：CacheReadPricePerToken 即"缓存命中"价格，CacheCreationPricePerToken 留空（智谱未公开写入价，按 0 处理）。
 	// GLM-4.6 与 GLM-4.5 在 z.ai 国际版上定价一致；GLM-4.5 国内按 ¥0.8/¥2，汇率换算后约 $0.112/$0.28，与国际版 $0.6/$2.2 不同，本分支采用国际版 USD 口径与现有 Claude/GPT 一致。
+	s.fallbackPrices["glm-5.2"] = &ModelPricing{
+		InputPricePerToken:     1.4e-6, // $1.40 per MTok
+		OutputPricePerToken:    4.4e-6, // $4.40 per MTok
+		CacheReadPricePerToken: 0.26e-6,
+		SupportsCacheBreakdown: false,
+	}
 	s.fallbackPrices["glm-5.1"] = &ModelPricing{
 		InputPricePerToken:     1.4e-6, // $1.40 per MTok
 		OutputPricePerToken:    4.4e-6, // $4.40 per MTok
@@ -469,6 +475,18 @@ func (s *BillingService) initFallbackPricing() {
 	//       交叉验证：https://www.tmtpost.com/7961404.html (USD 口径)
 	// Moonshot V1 (¥2/¥5/¥10 多 tier) 公开页未直接标注 USD 价，本分支不覆盖，避免误计价。
 	// K2-0905 / K2-0711 官方页面未保留定价，不覆盖。
+	s.fallbackPrices["kimi-k3"] = &ModelPricing{
+		InputPricePerToken:     2.80e-6,  // ¥20 per MTok ≈ $2.80
+		OutputPricePerToken:    14.00e-6, // ¥100 per MTok ≈ $14.00
+		CacheReadPricePerToken: 0.28e-6,  // ¥2 per MTok ≈ $0.28
+		SupportsCacheBreakdown: false,
+	}
+	s.fallbackPrices["kimi-k2.7-code"] = &ModelPricing{
+		InputPricePerToken:     0.91e-6,  // ¥6.5 per MTok ≈ $0.91
+		OutputPricePerToken:    3.78e-6,  // ¥27 per MTok ≈ $3.78
+		CacheReadPricePerToken: 0.182e-6, // ¥1.3 per MTok ≈ $0.182
+		SupportsCacheBreakdown: false,
+	}
 	s.fallbackPrices["kimi-k2.6"] = &ModelPricing{
 		InputPricePerToken:     0.95e-6, // $0.95 per MTok (cache miss)
 		OutputPricePerToken:    4e-6,    // $4.00 per MTok
@@ -498,6 +516,43 @@ func (s *BillingService) initFallbackPricing() {
 		InputPricePerToken:     0.56e-6, // ¥4/百万
 		OutputPricePerToken:    2.24e-6, // ¥16/百万
 		CacheReadPricePerToken: 0.14e-6, // ¥1/百万
+		SupportsCacheBreakdown: false,
+	}
+
+	// ---- 通义千问 Qwen 3.7 ----
+	// Source: https://help.aliyun.com/en/model-studio/model-pricing (CNY per 1M tokens, USD 1 = CNY 7.14)
+	s.fallbackPrices["qwen3.7-max"] = &ModelPricing{
+		InputPricePerToken:         1.68e-6, // ¥12 per MTok ≈ $1.68
+		OutputPricePerToken:        5.04e-6, // ¥36 per MTok ≈ $5.04
+		CacheCreationPricePerToken: 2.10e-6, // ¥15 per MTok ≈ $2.10
+		CacheCreationPriceExplicit: true,
+		CacheReadPricePerToken:     0.336e-6, // ¥2.4 per MTok ≈ $0.336
+		SupportsCacheBreakdown:     false,
+	}
+	s.fallbackPrices["qwen3.7-plus"] = &ModelPricing{
+		InputPricePerToken:          0.28e-6, // ¥2 per MTok ≈ $0.28
+		OutputPricePerToken:         1.12e-6, // ¥8 per MTok ≈ $1.12
+		CacheCreationPricePerToken:  0.35e-6, // ¥2.5 per MTok ≈ $0.35
+		CacheCreationPriceExplicit:  true,
+		CacheReadPricePerToken:      0.056e-6, // ¥0.4 per MTok ≈ $0.056
+		SupportsCacheBreakdown:      false,
+		LongContextInputThreshold:   256000,
+		LongContextInputMultiplier:  3.0,
+		LongContextOutputMultiplier: 3.0,
+	}
+
+	// ---- 小米 MiMo ----
+	// Source: https://platform.xiaomimimo.com/docs/zh-CN/pricing (CNY per 1M tokens, USD 1 = CNY 7.14)
+	s.fallbackPrices["mimo-v2.5-pro"] = &ModelPricing{
+		InputPricePerToken:     0.42e-6,   // ¥3 per MTok ≈ $0.42
+		OutputPricePerToken:    0.84e-6,   // ¥6 per MTok ≈ $0.84
+		CacheReadPricePerToken: 0.0035e-6, // ¥0.025 per MTok ≈ $0.0035
+		SupportsCacheBreakdown: false,
+	}
+	s.fallbackPrices["mimo-v2.5"] = &ModelPricing{
+		InputPricePerToken:     0.14e-6,   // ¥1 per MTok ≈ $0.14
+		OutputPricePerToken:    0.28e-6,   // ¥2 per MTok ≈ $0.28
+		CacheReadPricePerToken: 0.0028e-6, // ¥0.02 per MTok ≈ $0.0028
 		SupportsCacheBreakdown: false,
 	}
 
@@ -635,8 +690,11 @@ func (s *BillingService) getFallbackPricing(model string) *ModelPricing {
 	// 匹配策略：长 key 优先（具体模型 → 系列 / 厂商），未知型号不回退以避免误计价。
 	// 与 DeepSeek 一样采用"白名单"语义：未在本表命中的国产模型 alias 一律不返回兜底价。
 
-	// 智谱 GLM（z.ai 公开 SKU：glm-5.1 / glm-5 / glm-5-turbo / glm-4.7 / glm-4.6 / glm-4.5 等）
+	// 智谱 GLM（z.ai 公开 SKU：glm-5.2 / glm-5.1 / glm-5 / glm-5-turbo / glm-4.7 / glm-4.6 / glm-4.5 等）
 	// 匹配顺序：先判别最高 tier，再依次降级。
+	if strings.Contains(modelLower, "glm-5.2") {
+		return s.fallbackPrices["glm-5.2"]
+	}
 	if strings.Contains(modelLower, "glm-5.1") {
 		return s.fallbackPrices["glm-5.1"]
 	}
@@ -677,8 +735,14 @@ func (s *BillingService) getFallbackPricing(model string) *ModelPricing {
 		return s.fallbackPrices["glm-4-32b-0414-128k"]
 	}
 
-	// 月之暗面 Kimi（kimi-k2.6 / kimi-for-coding / kimi-k2.5 / kimi-k2-thinking / kimi-k2）
+	// 月之暗面 Kimi（kimi-k3 / kimi-k2.7-code / kimi-k2.6 / kimi-for-coding / kimi-k2.5 / kimi-k2-thinking / kimi-k2）
 	// K2-0905 / K2-0711 官方未保留定价，不进入 fallback。
+	if strings.Contains(modelLower, "kimi-k3") {
+		return s.fallbackPrices["kimi-k3"]
+	}
+	if strings.Contains(modelLower, "kimi-k2.7-code") || strings.Contains(modelLower, "kimi-k2-7-code") {
+		return s.fallbackPrices["kimi-k2.7-code"]
+	}
 	if strings.Contains(modelLower, "kimi-for-coding") {
 		return s.fallbackPrices["kimi-for-coding"]
 	}
@@ -693,6 +757,22 @@ func (s *BillingService) getFallbackPricing(model string) *ModelPricing {
 	}
 	if strings.Contains(modelLower, "kimi-k2") || strings.Contains(modelLower, "kimi/k2") {
 		return s.fallbackPrices["kimi-k2"]
+	}
+
+	// 通义千问 Qwen 3.7
+	if strings.Contains(modelLower, "qwen3.7-max") || strings.Contains(modelLower, "qwen3-7-max") {
+		return s.fallbackPrices["qwen3.7-max"]
+	}
+	if strings.Contains(modelLower, "qwen3.7-plus") || strings.Contains(modelLower, "qwen3-7-plus") {
+		return s.fallbackPrices["qwen3.7-plus"]
+	}
+
+	// 小米 MiMo：Pro 必须先于基础版匹配。
+	if strings.Contains(modelLower, "mimo-v2.5-pro") || strings.Contains(modelLower, "mimo-v2-5-pro") {
+		return s.fallbackPrices["mimo-v2.5-pro"]
+	}
+	if strings.Contains(modelLower, "mimo-v2.5") || strings.Contains(modelLower, "mimo-v2-5") {
+		return s.fallbackPrices["mimo-v2.5"]
 	}
 
 	// MiniMax M 系列（M3 / M2.7 / M2.5 / M2.1 / M2；含 highspeed 变体）
