@@ -76,9 +76,9 @@
             <div class="mt-5 space-y-4">
               <div class="min-w-0 space-y-2">
                 <p class="text-sm font-medium text-gray-700 dark:text-gray-300">{{ t('affiliate.yourCode') }}</p>
-                <div class="affiliate-copy-row">
-                  <code class="flex-1 truncate text-sm font-semibold text-gray-900 dark:text-white">{{ detail.aff_code }}</code>
-                  <button class="btn btn-secondary btn-sm" @click="copyCode">
+                <div class="affiliate-copy-row flex-col items-stretch sm:flex-row sm:items-center">
+                  <code class="min-w-0 break-all text-sm font-semibold text-gray-900 dark:text-white sm:flex-1 sm:truncate">{{ detail.aff_code }}</code>
+                  <button class="btn btn-secondary btn-sm w-full sm:w-auto sm:shrink-0" @click="copyCode">
                     <Icon name="copy" size="sm" />
                     <span>{{ t('affiliate.copyCode') }}</span>
                   </button>
@@ -87,9 +87,9 @@
 
               <div class="min-w-0 space-y-2">
                 <p class="text-sm font-medium text-gray-700 dark:text-gray-300">{{ t('affiliate.inviteLink') }}</p>
-                <div class="affiliate-copy-row">
-                  <code class="flex-1 truncate text-sm text-gray-700 dark:text-gray-300">{{ inviteLink }}</code>
-                  <button class="btn btn-secondary btn-sm" @click="copyInviteLink">
+                <div class="affiliate-copy-row flex-col items-stretch sm:flex-row sm:items-center">
+                  <code class="min-w-0 break-all text-sm text-gray-700 dark:text-gray-300 sm:flex-1 sm:truncate">{{ inviteLink }}</code>
+                  <button class="btn btn-secondary btn-sm w-full sm:w-auto sm:shrink-0" @click="copyInviteLink">
                     <Icon name="copy" size="sm" />
                     <span>{{ t('affiliate.copyLink') }}</span>
                   </button>

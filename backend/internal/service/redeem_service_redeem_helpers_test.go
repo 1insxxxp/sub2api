@@ -50,6 +50,10 @@ func (s *userRepoStub) Create(ctx context.Context, user *User) error {
 	return nil
 }
 
+func (s *userRepoStub) CreateWithEmailAliasGuard(ctx context.Context, user *User) error {
+	return s.Create(ctx, user)
+}
+
 func (s *userRepoStub) GetByID(ctx context.Context, id int64) (*User, error) {
 	if s.getErr != nil {
 		return nil, s.getErr
@@ -159,6 +163,10 @@ func (s *userRepoStub) ExistsByEmail(ctx context.Context, email string) (bool, e
 		return false, s.existsErr
 	}
 	return s.exists, nil
+}
+
+func (s *userRepoStub) ExistsByEmailAlias(ctx context.Context, email string) (bool, error) {
+	return s.ExistsByEmail(ctx, email)
 }
 
 func (s *userRepoStub) RemoveGroupFromAllowedGroups(ctx context.Context, groupID int64) (int64, error) {
