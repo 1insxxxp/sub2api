@@ -796,6 +796,63 @@ func TestGetFallbackPricing_DomesticModels(t *testing.T) {
 	}
 }
 
+func TestCalculateCost_Qwen37PlusAtLongContextBoundaryUsesBasePrices(t *testing.T) {
+	svc := newTestBillingService()
+	tokens := UsageTokens{
+		InputTokens:         200000,
+		OutputTokens:        1000,
+		CacheCreationTokens: 10000,
+		CacheReadTokens:     46000,
+	}
+
+	cost, err := svc.CalculateCost("cline-pass/qwen3.7-plus", tokens, 1.0)
+	require.NoError(t, err)
+
+	require.InDelta(t, float64(tokens.InputTokens)*0.28e-6, cost.InputCost, 1e-12)
+	require.InDelta(t, float64(tokens.OutputTokens)*1.12e-6, cost.OutputCost, 1e-12)
+	require.InDelta(t, float64(tokens.CacheCreationTokens)*0.35e-6, cost.CacheCreationCost, 1e-12)
+	require.InDelta(t, float64(tokens.CacheReadTokens)*0.056e-6, cost.CacheReadCost, 1e-12)
+	require.False(t, cost.LongContextBillingApplied)
+}
+
+func TestCalculateCost_Qwen37PlusAboveLongContextThresholdScalesWholeSession(t *testing.T) {
+	svc := newTestBillingService()
+	tokens := UsageTokens{
+		InputTokens:         200000,
+		OutputTokens:        1000,
+		CacheCreationTokens: 10000,
+		CacheReadTokens:     46001,
+	}
+
+	cost, err := svc.CalculateCost("cline-pass/qwen3.7-plus", tokens, 1.0)
+	require.NoError(t, err)
+
+	require.InDelta(t, float64(tokens.InputTokens)*0.28e-6*3, cost.InputCost, 1e-12)
+	require.InDelta(t, float64(tokens.OutputTokens)*1.12e-6*3, cost.OutputCost, 1e-12)
+	require.InDelta(t, float64(tokens.CacheCreationTokens)*0.35e-6*3, cost.CacheCreationCost, 1e-12)
+	require.InDelta(t, float64(tokens.CacheReadTokens)*0.056e-6*3, cost.CacheReadCost, 1e-12)
+	require.True(t, cost.LongContextBillingApplied)
+}
+
+func TestCalculateCost_DomesticModelRateMultiplierOnlyScalesActualCost(t *testing.T) {
+	svc := newTestBillingService()
+	tokens := UsageTokens{
+		InputTokens:     1000,
+		OutputTokens:    500,
+		CacheReadTokens: 200,
+	}
+
+	cost, err := svc.CalculateCost("cline-pass/kimi-k3", tokens, 3.0)
+	require.NoError(t, err)
+
+	expectedTotal := float64(tokens.InputTokens)*2.80e-6 +
+		float64(tokens.OutputTokens)*14.00e-6 +
+		float64(tokens.CacheReadTokens)*0.28e-6
+	require.Greater(t, cost.TotalCost, 0.0)
+	require.InDelta(t, expectedTotal, cost.TotalCost, 1e-12)
+	require.InDelta(t, expectedTotal*3, cost.ActualCost, 1e-12)
+}
+
 // doubao-embedding-vision 是首个图文不同价的 embedding：文本 ¥0.7/MTok、图片 ¥1.8/MTok。
 // 验证回退表同时携带文本与图片两档单价，且能被带版本后缀 / 大小写别名命中。
 func TestGetModelPricing_DoubaoEmbeddingVisionImageInputRate(t *testing.T) {
