@@ -158,17 +158,30 @@ func TestGetModelPricing_FallbackWarnPerModelNotGlobal(t *testing.T) {
 	require.Equal(t, 0, strings.Count(out, "model: GLM-5.2"), out) // 大写经 ToLower 归一,不应单独成行
 }
 
-// 回归:glm-5.2 仍解析到 glm-5 兜底价(计费金额不变,防止日志改动掩盖未来计费回归)。
-func TestGetModelPricing_GLM52FallsBackToGLM5Price(t *testing.T) {
+// GLM-5.2 有独立官方价格，不能被宽泛的 glm-5 匹配提前截获。
+func TestGetModelPricing_GLM52UsesExactOfficialPrice(t *testing.T) {
 	svc := newTestBillingService()
 
 	got, err := svc.GetModelPricing("glm-5.2")
 	require.NoError(t, err)
 	require.NotNil(t, got)
 
-	// glm-5 base：Input 1e-6 / Output 3.2e-6(见 TestGetFallbackPricing_FamilyMatching)。
-	require.InDelta(t, 1e-6, got.InputPricePerToken, 1e-12)
-	require.InDelta(t, 3.2e-6, got.OutputPricePerToken, 1e-12)
+	require.InDelta(t, 1.40e-6, got.InputPricePerToken, 1e-12)
+	require.InDelta(t, 4.40e-6, got.OutputPricePerToken, 1e-12)
+	require.InDelta(t, 0.26e-6, got.CacheReadPricePerToken, 1e-12)
+}
+
+// Kimi K2.7 Code 必须在 kimi-k2 系列宽匹配之前命中自己的官方价格。
+func TestGetModelPricing_KimiK27CodeUsesExactOfficialPrice(t *testing.T) {
+	svc := newTestBillingService()
+
+	got, err := svc.GetModelPricing("cline-pass/kimi-k2.7-code")
+	require.NoError(t, err)
+	require.NotNil(t, got)
+
+	require.InDelta(t, 0.91e-6, got.InputPricePerToken, 1e-12)
+	require.InDelta(t, 3.78e-6, got.OutputPricePerToken, 1e-12)
+	require.InDelta(t, 0.182e-6, got.CacheReadPricePerToken, 1e-12)
 }
 
 func TestGetModelPricing_UnknownClaudeModelFallsBackToSonnet(t *testing.T) {
@@ -736,6 +749,53 @@ func TestGetFallbackPricing_FamilyMatching(t *testing.T) {
 	}
 }
 
+func TestGetFallbackPricing_DomesticModels(t *testing.T) {
+	svc := newTestBillingService()
+
+	tests := []struct {
+		name                  string
+		model                 string
+		input                 float64
+		output                float64
+		cacheRead             float64
+		cacheCreation         float64
+		cacheCreationExplicit bool
+		longContextThreshold  int
+		longContextInput      float64
+		longContextOutput     float64
+	}{
+		{name: "kimi k3", model: "kimi-k3", input: 2.80e-6, output: 14.00e-6, cacheRead: 0.28e-6},
+		{name: "kimi k3 production alias", model: "cline-pass/kimi-k3", input: 2.80e-6, output: 14.00e-6, cacheRead: 0.28e-6},
+		{name: "kimi k2.7 code", model: "kimi-k2.7-code", input: 0.91e-6, output: 3.78e-6, cacheRead: 0.182e-6},
+		{name: "kimi k2.7 code production alias", model: "cline-pass/kimi-k2.7-code", input: 0.91e-6, output: 3.78e-6, cacheRead: 0.182e-6},
+		{name: "qwen 3.7 max", model: "qwen3.7-max", input: 1.68e-6, output: 5.04e-6, cacheRead: 0.336e-6, cacheCreation: 2.10e-6, cacheCreationExplicit: true},
+		{name: "qwen 3.7 max production alias", model: "cline-pass/qwen3.7-max", input: 1.68e-6, output: 5.04e-6, cacheRead: 0.336e-6, cacheCreation: 2.10e-6, cacheCreationExplicit: true},
+		{name: "qwen 3.7 plus", model: "qwen3.7-plus", input: 0.28e-6, output: 1.12e-6, cacheRead: 0.056e-6, cacheCreation: 0.35e-6, cacheCreationExplicit: true, longContextThreshold: 256000, longContextInput: 3, longContextOutput: 3},
+		{name: "qwen 3.7 plus production alias", model: "cline-pass/qwen3.7-plus", input: 0.28e-6, output: 1.12e-6, cacheRead: 0.056e-6, cacheCreation: 0.35e-6, cacheCreationExplicit: true, longContextThreshold: 256000, longContextInput: 3, longContextOutput: 3},
+		{name: "mimo v2.5 pro", model: "mimo-v2.5-pro", input: 0.42e-6, output: 0.84e-6, cacheRead: 0.0035e-6},
+		{name: "mimo v2.5 pro production alias", model: "cline-pass/mimo-v2.5-pro", input: 0.42e-6, output: 0.84e-6, cacheRead: 0.0035e-6},
+		{name: "mimo v2.5", model: "mimo-v2.5", input: 0.14e-6, output: 0.28e-6, cacheRead: 0.0028e-6},
+		{name: "mimo v2.5 production alias", model: "cline-pass/mimo-v2.5", input: 0.14e-6, output: 0.28e-6, cacheRead: 0.0028e-6},
+		{name: "glm 5.2", model: "glm-5.2", input: 1.40e-6, output: 4.40e-6, cacheRead: 0.26e-6},
+		{name: "glm 5.2 production alias", model: "cline-pass/glm-5.2", input: 1.40e-6, output: 4.40e-6, cacheRead: 0.26e-6},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			pricing := svc.getFallbackPricing(tt.model)
+			require.NotNil(t, pricing)
+			require.InDelta(t, tt.input, pricing.InputPricePerToken, 1e-14)
+			require.InDelta(t, tt.output, pricing.OutputPricePerToken, 1e-14)
+			require.InDelta(t, tt.cacheRead, pricing.CacheReadPricePerToken, 1e-14)
+			require.InDelta(t, tt.cacheCreation, pricing.CacheCreationPricePerToken, 1e-14)
+			require.Equal(t, tt.cacheCreationExplicit, pricing.CacheCreationPriceExplicit)
+			require.Equal(t, tt.longContextThreshold, pricing.LongContextInputThreshold)
+			require.InDelta(t, tt.longContextInput, pricing.LongContextInputMultiplier, 1e-12)
+			require.InDelta(t, tt.longContextOutput, pricing.LongContextOutputMultiplier, 1e-12)
+		})
+	}
+}
+
 // doubao-embedding-vision 是首个图文不同价的 embedding：文本 ¥0.7/MTok、图片 ¥1.8/MTok。
 // 验证回退表同时携带文本与图片两档单价，且能被带版本后缀 / 大小写别名命中。
 func TestGetModelPricing_DoubaoEmbeddingVisionImageInputRate(t *testing.T) {
@@ -810,8 +870,8 @@ func TestComputeTokenBreakdown_GptImage2ImageEditIssue4386(t *testing.T) {
 
 	cost := svc.computeTokenBreakdown(pricing, tokens, 1.0, "", false)
 
-	wantTextInput := float64(19) * 5e-6    // 0.000095
-	wantImageInput := float64(352) * 8e-6  // 0.002816
+	wantTextInput := float64(19) * 5e-6     // 0.000095
+	wantImageInput := float64(352) * 8e-6   // 0.002816
 	wantImageOutput := float64(439) * 30e-6 // 0.013170
 	require.InDelta(t, wantTextInput, cost.InputCost, 1e-15, "InputCost 仅含文本输入")
 	require.InDelta(t, wantImageInput, cost.ImageInputCost, 1e-15, "图片输入按 $8/1M 独立计费")
