@@ -1,19 +1,18 @@
 import { mount } from '@vue/test-utils'
 import { describe, expect, it, vi } from 'vitest'
+
 import GroupOptionItem from '../GroupOptionItem.vue'
 
 vi.mock('vue-i18n', async () => {
   const actual = await vi.importActual<typeof import('vue-i18n')>('vue-i18n')
   return {
     ...actual,
-    useI18n: () => ({
-      t: (key: string) => key
-    })
+    useI18n: () => ({ t: (key: string) => key }),
   }
 })
 
 vi.mock('@/stores/app', () => ({
-  useAppStore: () => ({ cachedPublicSettings: null })
+  useAppStore: () => ({ cachedPublicSettings: null }),
 }))
 
 const mountOption = (props: Record<string, unknown>) =>
@@ -21,23 +20,23 @@ const mountOption = (props: Record<string, unknown>) =>
     props: {
       name: 'Test Group',
       platform: 'openai',
-      ...props
+      ...props,
     },
     global: {
       stubs: {
         GroupBadge: {
           template: '<span>{{ name }}</span>',
-          props: ['name']
-        }
-      }
-    }
+          props: ['name'],
+        },
+      },
+    },
   })
 
 describe('GroupOptionItem', () => {
   it('formats custom rate multipliers with at most two decimals', () => {
     const wrapper = mountOption({
       rateMultiplier: 1,
-      userRateMultiplier: 0.0635
+      userRateMultiplier: 0.0635,
     })
 
     expect(wrapper.text()).toContain('1x')
@@ -46,11 +45,23 @@ describe('GroupOptionItem', () => {
   })
 
   it('trims trailing zeros from standard rate labels', () => {
-    const wrapper = mountOption({
-      rateMultiplier: 1.5
-    })
+    const wrapper = mountOption({ rateMultiplier: 1.5 })
 
     expect(wrapper.text()).toContain('1.5x')
     expect(wrapper.text()).not.toContain('1.50x')
+  })
+
+  it('applies multiline and overflow-safe text styles', () => {
+    const description = 'First section\nvery-long-unbroken-description-value-that-must-not-overflow'
+    const wrapper = mountOption({ description })
+    const descriptionElement = wrapper
+      .findAll('span')
+      .find((element) => element.text() === description)
+
+    expect(descriptionElement).toBeDefined()
+    expect(descriptionElement?.classes()).toContain('whitespace-pre-line')
+    expect(descriptionElement?.classes()).toContain('[overflow-wrap:anywhere]')
+    expect(descriptionElement?.classes()).toContain('line-clamp-3')
+    expect(wrapper.find('[title]').attributes('title')).toBe(description)
   })
 })
