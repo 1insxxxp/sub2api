@@ -169,6 +169,13 @@
             <input :value="entry.per_request_price" @input="emitField('per_request_price', ($event.target as HTMLInputElement).value)"
               type="number" step="any" min="0" class="input text-sm" :placeholder="t('admin.channels.form.pricePlaceholder')" />
           </div>
+          <div
+            data-test="per-request-billing-hint"
+            class="mt-2 space-y-1 text-xs text-gray-500 dark:text-gray-400"
+          >
+            <p>{{ t('admin.channels.form.perRequestSuccessHint') }}</p>
+            <p>{{ t('admin.channels.form.perRequestFallbackHint') }}</p>
+          </div>
 
           <!-- Tiers -->
           <div class="mt-3 flex items-center justify-between">

@@ -297,4 +297,12 @@ describe('admin ChannelsView', () => {
     expect(source).not.toContain('rounded-lg border border-gray-200 bg-gray-50')
     expect(source).not.toContain('bg-white shadow-lg')
   })
+
+  it('warns when per-request pricing is not based on the requested model', () => {
+    const source = readFileSync(resolve(currentDir, '../ChannelsView.vue'), 'utf8')
+
+    expect(source).toContain('data-test="per-request-requested-model-warning"')
+    expect(source).toContain("hasPerRequestPricing && form.billing_model_source !== 'requested'")
+    expect(source).toContain('admin.channels.form.perRequestRequestedModelWarning')
+  })
 })

@@ -226,6 +226,13 @@
               <p class="mt-1 text-xs text-gray-400">
                 {{ t('admin.channels.form.billingModelSourceHint', 'Controls which model name is used for pricing lookup') }}
               </p>
+              <p
+                v-if="hasPerRequestPricing && form.billing_model_source !== 'requested'"
+                data-test="per-request-requested-model-warning"
+                class="mt-2 text-xs text-amber-600 dark:text-amber-300"
+              >
+                {{ t('admin.channels.form.perRequestRequestedModelWarning') }}
+              </p>
             </div>
 
             <!-- Platform Management -->
@@ -764,6 +771,14 @@ const form = reactive({
   platforms: [] as PlatformSection[],
   apply_pricing_to_account_stats: false,
 })
+
+const hasPerRequestPricing = computed(() =>
+  form.platforms.some(section =>
+    section.enabled && section.model_pricing.some(entry =>
+      entry.models.length > 0 && entry.billing_mode === 'per_request'
+    )
+  )
+)
 
 let abortController: AbortController | null = null
 
