@@ -81,7 +81,7 @@ func newImageStorageFixtureWithKey(t *testing.T, fallback config.ImageStorageCon
 	}, encryptor, nil, nil)
 
 	var built []config.ImageStorageConfig
-	factory := func(_ context.Context, cfg *config.ImageStorageConfig) (ImageStorage, error) {
+	factory := func(_ context.Context, cfg *config.ImageStorageConfig) (ImageResultStorage, error) {
 		built = append(built, *cfg)
 		return &recordingStorage{}, nil
 	}

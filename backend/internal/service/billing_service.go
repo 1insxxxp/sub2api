@@ -492,9 +492,9 @@ func (s *BillingService) initFallbackPricing() {
 	// Moonshot V1 (¥2/¥5/¥10 多 tier) 公开页未直接标注 USD 价，本分支不覆盖，避免误计价。
 	// K2-0905 / K2-0711 官方页面未保留定价，不覆盖。
 	s.fallbackPrices["kimi-k3"] = &ModelPricing{
-		InputPricePerToken:     2.80e-6,  // ¥20 per MTok ≈ $2.80
-		OutputPricePerToken:    14.00e-6, // ¥100 per MTok ≈ $14.00
-		CacheReadPricePerToken: 0.28e-6,  // ¥2 per MTok ≈ $0.28
+		InputPricePerToken:     3e-6,    // $3.00 per MTok (cache miss)
+		OutputPricePerToken:    15e-6,   // $15.00 per MTok
+		CacheReadPricePerToken: 0.30e-6, // $0.30 per MTok (cache hit)
 		SupportsCacheBreakdown: false,
 	}
 	s.fallbackPrices["kimi-k2.7-code"] = &ModelPricing{
@@ -763,14 +763,18 @@ func (s *BillingService) getFallbackPricing(model string) *ModelPricing {
 
 	// 月之暗面 Kimi（kimi-k3 / kimi-k2.7-code / kimi-k2.6 / kimi-for-coding / kimi-k2.5 / kimi-k2-thinking / kimi-k2）
 	// K2-0905 / K2-0711 官方未保留定价，不进入 fallback。
-	if strings.Contains(modelLower, "kimi-k3") {
-		return s.fallbackPrices["kimi-k3"]
-	}
+	// K3 规则置于 K2 前：仅匹配官方 kimi-k3 与明确的 Code bare aliases，
+	// 避免 kimi-k30 等未知型号误命中；kimi-k3[1m] 是客户端上下文语法，不进入 fallback。
 	if strings.Contains(modelLower, "kimi-k2.7-code") || strings.Contains(modelLower, "kimi-k2-7-code") {
 		return s.fallbackPrices["kimi-k2.7-code"]
 	}
 	if strings.Contains(modelLower, "kimi-for-coding") {
 		return s.fallbackPrices["kimi-for-coding"]
+	}
+	if modelLower == "kimi-k3" || strings.HasSuffix(modelLower, "/kimi-k3") ||
+		modelLower == "k3" || modelLower == "k3-256k" ||
+		strings.HasSuffix(modelLower, "/k3") || strings.HasSuffix(modelLower, "/k3-256k") {
+		return s.fallbackPrices["kimi-k3"]
 	}
 	if strings.Contains(modelLower, "kimi-k2.6") || strings.Contains(modelLower, "kimi-k2-6") {
 		return s.fallbackPrices["kimi-k2.6"]
