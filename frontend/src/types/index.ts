@@ -1115,6 +1115,7 @@ export interface Account {
   // 改为通过 credentials_status.has_<key> 暴露存在性。
   credentials?: Record<string, unknown>
   credentials_status?: Record<string, boolean>
+  model_system_prompts?: Record<string, string>
   ollama_cloud_usage?: OllamaCloudUsageState
   // Extra fields including Codex usage, OpenAI compact capability, and model-level rate limits.
   extra?: (CodexUsageSnapshot & OpenAICompactState & {
@@ -1396,6 +1397,7 @@ export interface CreateAccountRequest {
   type: AccountType
   credentials: Record<string, unknown>
   extra?: Record<string, unknown>
+  model_system_prompts?: Record<string, string>
   proxy_id?: number | null
   concurrency?: number
   load_factor?: number | null
@@ -1414,6 +1416,7 @@ export interface UpdateAccountRequest {
   type?: AccountType
   credentials?: Record<string, unknown>
   extra?: Record<string, unknown>
+  model_system_prompts?: Record<string, string>
   proxy_id?: number | null
   concurrency?: number
   load_factor?: number | null

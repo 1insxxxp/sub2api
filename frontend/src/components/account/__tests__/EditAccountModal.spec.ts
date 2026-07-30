@@ -316,6 +316,25 @@ describe('EditAccountModal', () => {
     authIsSimpleMode.value = true
   })
 
+  it('edits and submits model system prompts for the selected account', async () => {
+    const account = buildAccount()
+    account.model_system_prompts = { 'gpt-5.4': 'Existing rules' }
+    updateAccountMock.mockReset()
+    checkMixedChannelRiskMock.mockReset()
+    checkMixedChannelRiskMock.mockResolvedValue({ has_risk: false })
+    updateAccountMock.mockResolvedValue(account)
+
+    const wrapper = mountModal(account)
+    expect((wrapper.get('[data-testid="model-system-prompt-model-0"]').element as HTMLInputElement).value).toBe('gpt-5.4')
+    await wrapper.get('[data-testid="model-system-prompt-text-0"]').setValue('Stay in character.')
+    await wrapper.get('form#edit-account-form').trigger('submit.prevent')
+
+    expect(updateAccountMock).toHaveBeenCalledTimes(1)
+    expect(updateAccountMock.mock.calls[0]?.[1]?.model_system_prompts).toEqual({
+      'gpt-5.4': 'Stay in character.'
+    })
+  })
+
   it('reopening the same account rehydrates the OpenAI whitelist from props', async () => {
     const account = buildAccount()
     updateAccountMock.mockReset()

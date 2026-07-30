@@ -26,6 +26,41 @@
         <p class="input-hint">{{ t('admin.accounts.notesHint') }}</p>
       </div>
 
+      <div class="space-y-3 border-t border-gray-200 pt-4 dark:border-dark-600">
+        <div>
+          <label class="input-label">{{ t('admin.accounts.modelSystemPrompts') }}</label>
+          <p class="input-hint">{{ t('admin.accounts.modelSystemPromptsHint') }}</p>
+        </div>
+        <div
+          v-for="(row, index) in modelSystemPromptRows"
+          :key="row.id"
+          class="space-y-2 rounded-lg border border-gray-200 p-3 dark:border-dark-600"
+        >
+          <div class="flex items-center gap-2">
+            <input
+              v-model="row.model"
+              type="text"
+              class="input font-mono"
+              :data-testid="`model-system-prompt-model-${index}`"
+              :placeholder="t('admin.accounts.modelSystemPromptModelPlaceholder')"
+            />
+            <button type="button" class="text-sm text-red-500 hover:text-red-700" @click="removeModelSystemPrompt(index)">
+              {{ t('common.delete') }}
+            </button>
+          </div>
+          <textarea
+            v-model="row.prompt"
+            rows="5"
+            class="input font-mono"
+            :data-testid="`model-system-prompt-text-${index}`"
+            :placeholder="t('admin.accounts.modelSystemPromptTextPlaceholder')"
+          ></textarea>
+        </div>
+        <button type="button" class="btn btn-secondary text-sm" data-testid="add-model-system-prompt" @click="addModelSystemPrompt">
+          + {{ t('admin.accounts.addModelSystemPrompt') }}
+        </button>
+      </div>
+
       <!-- API Key fields (only for apikey type) -->
       <div v-if="account.type === 'apikey'" class="space-y-4">
         <div>
@@ -2725,6 +2760,13 @@ const isBedrockAPIKeyMode = computed(() =>
   (props.account?.credentials as Record<string, unknown>)?.auth_mode === 'apikey'
 )
 const modelMappings = ref<ModelMapping[]>([])
+interface ModelSystemPromptRow {
+  id: number
+  model: string
+  prompt: string
+}
+let modelSystemPromptRowID = 0
+const modelSystemPromptRows = ref<ModelSystemPromptRow[]>([])
 const openAICompactModelMappings = ref<ModelMapping[]>([])
 const modelRestrictionMode = ref<'whitelist' | 'mapping'>('whitelist')
 const allowedModels = ref<string[]>([])
@@ -3247,6 +3289,11 @@ const syncFormFromAccount = (newAccount: Account | null) => {
     : 'active'
   form.group_ids = newAccount.group_ids || []
   form.expires_at = newAccount.expires_at ?? null
+  modelSystemPromptRows.value = Object.entries(newAccount.model_system_prompts || {}).map(([model, prompt]) => ({
+    id: ++modelSystemPromptRowID,
+    model,
+    prompt
+  }))
 
   // Load intercept warmup requests setting (applies to all account types)
   const credentials = newAccount.credentials as Record<string, unknown> | undefined
@@ -3582,6 +3629,27 @@ watch(
 // Model mapping helpers
 const addModelMapping = () => {
   modelMappings.value.push({ from: '', to: '' })
+}
+
+const addModelSystemPrompt = () => {
+  modelSystemPromptRows.value.push({ id: ++modelSystemPromptRowID, model: '', prompt: '' })
+}
+
+const removeModelSystemPrompt = (index: number) => {
+  modelSystemPromptRows.value.splice(index, 1)
+}
+
+const buildModelSystemPrompts = (): Record<string, string> => {
+  const result: Record<string, string> = {}
+  for (const row of modelSystemPromptRows.value) {
+    const model = row.model.trim()
+    const prompt = row.prompt.trim()
+    if (!model || !prompt) throw new Error(t('admin.accounts.modelSystemPromptRequired'))
+    if (Object.prototype.hasOwnProperty.call(result, model)) throw new Error(t('admin.accounts.modelSystemPromptDuplicate', { model }))
+    if (new TextEncoder().encode(prompt).length > 32 * 1024) throw new Error(t('admin.accounts.modelSystemPromptTooLong', { model }))
+    result[model] = prompt
+  }
+  return result
 }
 
 const removeModelMapping = (index: number) => {
@@ -4050,6 +4118,7 @@ const handleSubmit = async () => {
       updatePayload.load_factor = 0
     }
     updatePayload.auto_pause_on_expired = autoPauseOnExpired.value
+    updatePayload.model_system_prompts = buildModelSystemPrompts()
 
     // For apikey type, handle credentials update
     if (props.account.type === 'apikey') {
