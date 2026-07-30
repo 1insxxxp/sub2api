@@ -92,6 +92,11 @@ func (s *GeminiMessagesCompatService) forwardClaudeBodyAsChatCompletions(
 	if err != nil {
 		return nil, s.writeChatCompletionsError(c, http.StatusBadRequest, "invalid_request_error", err.Error())
 	}
+	if injectedBody, applied, injectErr := ApplyAccountModelSystemPrompt(geminiReq, account, mappedModel, ModelSystemPromptGemini); injectErr != nil {
+		return nil, s.writeChatCompletionsError(c, http.StatusBadRequest, "invalid_request_error", injectErr.Error())
+	} else if applied {
+		geminiReq = injectedBody
+	}
 	geminiReq = ensureGeminiFunctionCallThoughtSignatures(geminiReq)
 
 	proxyURL := ""

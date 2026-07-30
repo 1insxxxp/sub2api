@@ -604,6 +604,11 @@ func (s *GeminiMessagesCompatService) Forward(ctx context.Context, c *gin.Contex
 	if err != nil {
 		return nil, s.writeClaudeError(c, http.StatusBadRequest, "invalid_request_error", err.Error())
 	}
+	if injectedBody, applied, injectErr := ApplyAccountModelSystemPrompt(geminiReq, account, mappedModel, ModelSystemPromptGemini); injectErr != nil {
+		return nil, s.writeClaudeError(c, http.StatusBadRequest, "invalid_request_error", injectErr.Error())
+	} else if applied {
+		geminiReq = injectedBody
+	}
 	geminiReq = ensureGeminiFunctionCallThoughtSignatures(geminiReq)
 	originalClaudeBody := body
 
@@ -1148,6 +1153,11 @@ func (s *GeminiMessagesCompatService) ForwardNative(ctx context.Context, c *gin.
 	mappedModel := originalModel
 	if account.Type == AccountTypeAPIKey || account.Type == AccountTypeServiceAccount {
 		mappedModel = account.GetMappedModel(originalModel)
+	}
+	if injectedBody, applied, injectErr := ApplyAccountModelSystemPrompt(body, account, mappedModel, ModelSystemPromptGemini); injectErr != nil {
+		return nil, s.writeGoogleError(c, http.StatusBadRequest, injectErr.Error())
+	} else if applied {
+		body = injectedBody
 	}
 
 	proxyURL := ""
