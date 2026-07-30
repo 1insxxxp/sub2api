@@ -26,6 +26,7 @@ type Account struct {
 	Type                    string
 	Credentials             map[string]any
 	Extra                   map[string]any
+	ModelSystemPrompts      map[string]string
 	ProxyID                 *int64
 	ProxyFallbackOriginID   *int64
 	ProxyFallbackOriginName *string // 仅展示用

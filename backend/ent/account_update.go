@@ -131,6 +131,12 @@ func (_u *AccountUpdate) SetExtra(v map[string]interface{}) *AccountUpdate {
 	return _u
 }
 
+// SetModelSystemPrompts sets the "model_system_prompts" field.
+func (_u *AccountUpdate) SetModelSystemPrompts(v map[string]string) *AccountUpdate {
+	_u.mutation.SetModelSystemPrompts(v)
+	return _u
+}
+
 // SetProxyID sets the "proxy_id" field.
 func (_u *AccountUpdate) SetProxyID(v int64) *AccountUpdate {
 	_u.mutation.SetProxyID(v)
@@ -832,6 +838,9 @@ func (_u *AccountUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	if value, ok := _u.mutation.Extra(); ok {
 		_spec.SetField(account.FieldExtra, field.TypeJSON, value)
 	}
+	if value, ok := _u.mutation.ModelSystemPrompts(); ok {
+		_spec.SetField(account.FieldModelSystemPrompts, field.TypeJSON, value)
+	}
 	if value, ok := _u.mutation.ProxyFallbackOriginID(); ok {
 		_spec.SetField(account.FieldProxyFallbackOriginID, field.TypeInt64, value)
 	}
@@ -1268,6 +1277,12 @@ func (_u *AccountUpdateOne) SetCredentials(v map[string]interface{}) *AccountUpd
 // SetExtra sets the "extra" field.
 func (_u *AccountUpdateOne) SetExtra(v map[string]interface{}) *AccountUpdateOne {
 	_u.mutation.SetExtra(v)
+	return _u
+}
+
+// SetModelSystemPrompts sets the "model_system_prompts" field.
+func (_u *AccountUpdateOne) SetModelSystemPrompts(v map[string]string) *AccountUpdateOne {
+	_u.mutation.SetModelSystemPrompts(v)
 	return _u
 }
 
@@ -2001,6 +2016,9 @@ func (_u *AccountUpdateOne) sqlSave(ctx context.Context) (_node *Account, err er
 	}
 	if value, ok := _u.mutation.Extra(); ok {
 		_spec.SetField(account.FieldExtra, field.TypeJSON, value)
+	}
+	if value, ok := _u.mutation.ModelSystemPrompts(); ok {
+		_spec.SetField(account.FieldModelSystemPrompts, field.TypeJSON, value)
 	}
 	if value, ok := _u.mutation.ProxyFallbackOriginID(); ok {
 		_spec.SetField(account.FieldProxyFallbackOriginID, field.TypeInt64, value)

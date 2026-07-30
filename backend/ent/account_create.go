@@ -111,6 +111,12 @@ func (_c *AccountCreate) SetExtra(v map[string]interface{}) *AccountCreate {
 	return _c
 }
 
+// SetModelSystemPrompts sets the "model_system_prompts" field.
+func (_c *AccountCreate) SetModelSystemPrompts(v map[string]string) *AccountCreate {
+	_c.mutation.SetModelSystemPrompts(v)
+	return _c
+}
+
 // SetProxyID sets the "proxy_id" field.
 func (_c *AccountCreate) SetProxyID(v int64) *AccountCreate {
 	_c.mutation.SetProxyID(v)
@@ -553,6 +559,13 @@ func (_c *AccountCreate) defaults() error {
 		v := account.DefaultExtra()
 		_c.mutation.SetExtra(v)
 	}
+	if _, ok := _c.mutation.ModelSystemPrompts(); !ok {
+		if account.DefaultModelSystemPrompts == nil {
+			return fmt.Errorf("ent: uninitialized account.DefaultModelSystemPrompts (forgotten import ent/runtime?)")
+		}
+		v := account.DefaultModelSystemPrompts()
+		_c.mutation.SetModelSystemPrompts(v)
+	}
 	if _, ok := _c.mutation.Concurrency(); !ok {
 		v := account.DefaultConcurrency
 		_c.mutation.SetConcurrency(v)
@@ -621,6 +634,9 @@ func (_c *AccountCreate) check() error {
 	}
 	if _, ok := _c.mutation.Extra(); !ok {
 		return &ValidationError{Name: "extra", err: errors.New(`ent: missing required field "Account.extra"`)}
+	}
+	if _, ok := _c.mutation.ModelSystemPrompts(); !ok {
+		return &ValidationError{Name: "model_system_prompts", err: errors.New(`ent: missing required field "Account.model_system_prompts"`)}
 	}
 	if _, ok := _c.mutation.Concurrency(); !ok {
 		return &ValidationError{Name: "concurrency", err: errors.New(`ent: missing required field "Account.concurrency"`)}
@@ -720,6 +736,10 @@ func (_c *AccountCreate) createSpec() (*Account, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.Extra(); ok {
 		_spec.SetField(account.FieldExtra, field.TypeJSON, value)
 		_node.Extra = value
+	}
+	if value, ok := _c.mutation.ModelSystemPrompts(); ok {
+		_spec.SetField(account.FieldModelSystemPrompts, field.TypeJSON, value)
+		_node.ModelSystemPrompts = value
 	}
 	if value, ok := _c.mutation.ProxyFallbackOriginID(); ok {
 		_spec.SetField(account.FieldProxyFallbackOriginID, field.TypeInt64, value)
@@ -1044,6 +1064,18 @@ func (u *AccountUpsert) SetExtra(v map[string]interface{}) *AccountUpsert {
 // UpdateExtra sets the "extra" field to the value that was provided on create.
 func (u *AccountUpsert) UpdateExtra() *AccountUpsert {
 	u.SetExcluded(account.FieldExtra)
+	return u
+}
+
+// SetModelSystemPrompts sets the "model_system_prompts" field.
+func (u *AccountUpsert) SetModelSystemPrompts(v map[string]string) *AccountUpsert {
+	u.Set(account.FieldModelSystemPrompts, v)
+	return u
+}
+
+// UpdateModelSystemPrompts sets the "model_system_prompts" field to the value that was provided on create.
+func (u *AccountUpsert) UpdateModelSystemPrompts() *AccountUpsert {
+	u.SetExcluded(account.FieldModelSystemPrompts)
 	return u
 }
 
@@ -1599,6 +1631,20 @@ func (u *AccountUpsertOne) SetExtra(v map[string]interface{}) *AccountUpsertOne 
 func (u *AccountUpsertOne) UpdateExtra() *AccountUpsertOne {
 	return u.Update(func(s *AccountUpsert) {
 		s.UpdateExtra()
+	})
+}
+
+// SetModelSystemPrompts sets the "model_system_prompts" field.
+func (u *AccountUpsertOne) SetModelSystemPrompts(v map[string]string) *AccountUpsertOne {
+	return u.Update(func(s *AccountUpsert) {
+		s.SetModelSystemPrompts(v)
+	})
+}
+
+// UpdateModelSystemPrompts sets the "model_system_prompts" field to the value that was provided on create.
+func (u *AccountUpsertOne) UpdateModelSystemPrompts() *AccountUpsertOne {
+	return u.Update(func(s *AccountUpsert) {
+		s.UpdateModelSystemPrompts()
 	})
 }
 
@@ -2384,6 +2430,20 @@ func (u *AccountUpsertBulk) SetExtra(v map[string]interface{}) *AccountUpsertBul
 func (u *AccountUpsertBulk) UpdateExtra() *AccountUpsertBulk {
 	return u.Update(func(s *AccountUpsert) {
 		s.UpdateExtra()
+	})
+}
+
+// SetModelSystemPrompts sets the "model_system_prompts" field.
+func (u *AccountUpsertBulk) SetModelSystemPrompts(v map[string]string) *AccountUpsertBulk {
+	return u.Update(func(s *AccountUpsert) {
+		s.SetModelSystemPrompts(v)
+	})
+}
+
+// UpdateModelSystemPrompts sets the "model_system_prompts" field to the value that was provided on create.
+func (u *AccountUpsertBulk) UpdateModelSystemPrompts() *AccountUpsertBulk {
+	return u.Update(func(s *AccountUpsert) {
+		s.UpdateModelSystemPrompts()
 	})
 }
 

@@ -109,6 +109,7 @@ func createAccountRecord(ctx context.Context, client *dbent.Client, account *ser
 		SetType(account.Type).
 		SetCredentials(normalizeJSONMap(account.Credentials)).
 		SetExtra(normalizeJSONMap(account.Extra)).
+		SetModelSystemPrompts(normalizeStringMap(account.ModelSystemPrompts)).
 		SetConcurrency(account.Concurrency).
 		SetPriority(account.Priority).
 		SetStatus(account.Status).
@@ -471,6 +472,7 @@ func (r *accountRepository) updateLockedAccount(ctx context.Context, client *dbe
 		SetType(account.Type).
 		SetCredentials(normalizeJSONMap(account.Credentials)).
 		SetExtra(extra).
+		SetModelSystemPrompts(normalizeStringMap(account.ModelSystemPrompts)).
 		SetConcurrency(account.Concurrency).
 		SetPriority(account.Priority).
 		SetStatus(account.Status).
@@ -3241,6 +3243,7 @@ func accountEntityToService(m *dbent.Account) *service.Account {
 		Type:                    m.Type,
 		Credentials:             copyJSONMap(m.Credentials),
 		Extra:                   copyJSONMap(m.Extra),
+		ModelSystemPrompts:      copyStringMap(m.ModelSystemPrompts),
 		ProxyID:                 m.ProxyID,
 		ProxyFallbackOriginID:   m.ProxyFallbackOriginID,
 		Concurrency:             m.Concurrency,
@@ -3273,6 +3276,24 @@ func normalizeJSONMap(in map[string]any) map[string]any {
 		return map[string]any{}
 	}
 	return in
+}
+
+func normalizeStringMap(in map[string]string) map[string]string {
+	if in == nil {
+		return map[string]string{}
+	}
+	return in
+}
+
+func copyStringMap(in map[string]string) map[string]string {
+	if in == nil {
+		return map[string]string{}
+	}
+	out := make(map[string]string, len(in))
+	for key, value := range in {
+		out[key] = value
+	}
+	return out
 }
 
 func copyJSONMap(in map[string]any) map[string]any {

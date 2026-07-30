@@ -44,6 +44,26 @@ func TestAccountsToService_LargeActiveAccountSetDoesNotExceedPostgresParameterLi
 	require.Len(t, got, len(accounts))
 }
 
+func TestAccountEntityToServiceCopiesModelSystemPrompts(t *testing.T) {
+	entity := &dbent.Account{
+		ID:                 1,
+		Name:               "prompt-account",
+		Platform:           service.PlatformOpenAI,
+		Type:               service.AccountTypeAPIKey,
+		Credentials:        map[string]any{},
+		Extra:              map[string]any{},
+		ModelSystemPrompts: map[string]string{"gpt-5.4": "Stay in character."},
+		Status:             service.StatusActive,
+		Schedulable:        true,
+	}
+
+	got := accountEntityToService(entity)
+	require.Equal(t, map[string]string{"gpt-5.4": "Stay in character."}, got.ModelSystemPrompts)
+
+	entity.ModelSystemPrompts["gpt-5.4"] = "mutated"
+	require.Equal(t, "Stay in character.", got.ModelSystemPrompts["gpt-5.4"])
+}
+
 func newParameterLimitAccountRepo(t *testing.T) *accountRepository {
 	t.Helper()
 

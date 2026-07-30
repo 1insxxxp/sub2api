@@ -2304,6 +2304,7 @@ type AccountMutation struct {
 	_type                       *string
 	credentials                 *map[string]interface{}
 	extra                       *map[string]interface{}
+	model_system_prompts        *map[string]string
 	proxy_fallback_origin_id    *int64
 	addproxy_fallback_origin_id *int64
 	concurrency                 *int
@@ -2794,6 +2795,42 @@ func (m *AccountMutation) OldExtra(ctx context.Context) (v map[string]interface{
 // ResetExtra resets all changes to the "extra" field.
 func (m *AccountMutation) ResetExtra() {
 	m.extra = nil
+}
+
+// SetModelSystemPrompts sets the "model_system_prompts" field.
+func (m *AccountMutation) SetModelSystemPrompts(value map[string]string) {
+	m.model_system_prompts = &value
+}
+
+// ModelSystemPrompts returns the value of the "model_system_prompts" field in the mutation.
+func (m *AccountMutation) ModelSystemPrompts() (r map[string]string, exists bool) {
+	v := m.model_system_prompts
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldModelSystemPrompts returns the old "model_system_prompts" field's value of the Account entity.
+// If the Account object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AccountMutation) OldModelSystemPrompts(ctx context.Context) (v map[string]string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldModelSystemPrompts is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldModelSystemPrompts requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldModelSystemPrompts: %w", err)
+	}
+	return oldValue.ModelSystemPrompts, nil
+}
+
+// ResetModelSystemPrompts resets all changes to the "model_system_prompts" field.
+func (m *AccountMutation) ResetModelSystemPrompts() {
+	m.model_system_prompts = nil
 }
 
 // SetProxyID sets the "proxy_id" field.
@@ -4148,7 +4185,7 @@ func (m *AccountMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *AccountMutation) Fields() []string {
-	fields := make([]string, 0, 31)
+	fields := make([]string, 0, 32)
 	if m.created_at != nil {
 		fields = append(fields, account.FieldCreatedAt)
 	}
@@ -4175,6 +4212,9 @@ func (m *AccountMutation) Fields() []string {
 	}
 	if m.extra != nil {
 		fields = append(fields, account.FieldExtra)
+	}
+	if m.model_system_prompts != nil {
+		fields = append(fields, account.FieldModelSystemPrompts)
 	}
 	if m.proxy != nil {
 		fields = append(fields, account.FieldProxyID)
@@ -4268,6 +4308,8 @@ func (m *AccountMutation) Field(name string) (ent.Value, bool) {
 		return m.Credentials()
 	case account.FieldExtra:
 		return m.Extra()
+	case account.FieldModelSystemPrompts:
+		return m.ModelSystemPrompts()
 	case account.FieldProxyID:
 		return m.ProxyID()
 	case account.FieldProxyFallbackOriginID:
@@ -4339,6 +4381,8 @@ func (m *AccountMutation) OldField(ctx context.Context, name string) (ent.Value,
 		return m.OldCredentials(ctx)
 	case account.FieldExtra:
 		return m.OldExtra(ctx)
+	case account.FieldModelSystemPrompts:
+		return m.OldModelSystemPrompts(ctx)
 	case account.FieldProxyID:
 		return m.OldProxyID(ctx)
 	case account.FieldProxyFallbackOriginID:
@@ -4454,6 +4498,13 @@ func (m *AccountMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetExtra(v)
+		return nil
+	case account.FieldModelSystemPrompts:
+		v, ok := value.(map[string]string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetModelSystemPrompts(v)
 		return nil
 	case account.FieldProxyID:
 		v, ok := value.(int64)
@@ -4852,6 +4903,9 @@ func (m *AccountMutation) ResetField(name string) error {
 		return nil
 	case account.FieldExtra:
 		m.ResetExtra()
+		return nil
+	case account.FieldModelSystemPrompts:
+		m.ResetModelSystemPrompts()
 		return nil
 	case account.FieldProxyID:
 		m.ResetProxyID()

@@ -37,6 +37,8 @@ type Account struct {
 	Credentials map[string]interface{} `json:"credentials,omitempty"`
 	// Extra holds the value of the "extra" field.
 	Extra map[string]interface{} `json:"extra,omitempty"`
+	// ModelSystemPrompts holds the value of the "model_system_prompts" field.
+	ModelSystemPrompts map[string]string `json:"model_system_prompts,omitempty"`
 	// ProxyID holds the value of the "proxy_id" field.
 	ProxyID *int64 `json:"proxy_id,omitempty"`
 	// Original proxy id replaced by expiry-fallback; for manual revert. NULL = not in fallback.
@@ -169,7 +171,7 @@ func (*Account) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case account.FieldCredentials, account.FieldExtra:
+		case account.FieldCredentials, account.FieldExtra, account.FieldModelSystemPrompts:
 			values[i] = new([]byte)
 		case account.FieldAutoPauseOnExpired, account.FieldSchedulable:
 			values[i] = new(sql.NullBool)
@@ -260,6 +262,14 @@ func (_m *Account) assignValues(columns []string, values []any) error {
 			} else if value != nil && len(*value) > 0 {
 				if err := json.Unmarshal(*value, &_m.Extra); err != nil {
 					return fmt.Errorf("unmarshal field extra: %w", err)
+				}
+			}
+		case account.FieldModelSystemPrompts:
+			if value, ok := values[i].(*[]byte); !ok {
+				return fmt.Errorf("unexpected type %T for field model_system_prompts", values[i])
+			} else if value != nil && len(*value) > 0 {
+				if err := json.Unmarshal(*value, &_m.ModelSystemPrompts); err != nil {
+					return fmt.Errorf("unmarshal field model_system_prompts: %w", err)
 				}
 			}
 		case account.FieldProxyID:
@@ -505,6 +515,9 @@ func (_m *Account) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("extra=")
 	builder.WriteString(fmt.Sprintf("%v", _m.Extra))
+	builder.WriteString(", ")
+	builder.WriteString("model_system_prompts=")
+	builder.WriteString(fmt.Sprintf("%v", _m.ModelSystemPrompts))
 	builder.WriteString(", ")
 	if v := _m.ProxyID; v != nil {
 		builder.WriteString("proxy_id=")

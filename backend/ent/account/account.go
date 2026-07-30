@@ -34,6 +34,8 @@ const (
 	FieldCredentials = "credentials"
 	// FieldExtra holds the string denoting the extra field in the database.
 	FieldExtra = "extra"
+	// FieldModelSystemPrompts holds the string denoting the model_system_prompts field in the database.
+	FieldModelSystemPrompts = "model_system_prompts"
 	// FieldProxyID holds the string denoting the proxy_id field in the database.
 	FieldProxyID = "proxy_id"
 	// FieldProxyFallbackOriginID holds the string denoting the proxy_fallback_origin_id field in the database.
@@ -140,6 +142,7 @@ var Columns = []string{
 	FieldType,
 	FieldCredentials,
 	FieldExtra,
+	FieldModelSystemPrompts,
 	FieldProxyID,
 	FieldProxyFallbackOriginID,
 	FieldConcurrency,
@@ -204,6 +207,8 @@ var (
 	DefaultCredentials func() map[string]interface{}
 	// DefaultExtra holds the default value on creation for the "extra" field.
 	DefaultExtra func() map[string]interface{}
+	// DefaultModelSystemPrompts holds the default value on creation for the "model_system_prompts" field.
+	DefaultModelSystemPrompts func() map[string]string
 	// DefaultConcurrency holds the default value on creation for the "concurrency" field.
 	DefaultConcurrency int
 	// DefaultPriority holds the default value on creation for the "priority" field.

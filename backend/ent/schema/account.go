@@ -86,6 +86,11 @@ func (Account) Fields() []ent.Field {
 			Default(func() map[string]any { return map[string]any{} }).
 			SchemaType(map[string]string{dialect.Postgres: "jsonb"}),
 
+		// model_system_prompts: mapped upstream model -> prepended system prompt.
+		field.JSON("model_system_prompts", map[string]string{}).
+			Default(func() map[string]string { return map[string]string{} }).
+			SchemaType(map[string]string{dialect.Postgres: "jsonb"}),
+
 		// proxy_id: 关联的代理配置 ID（可选）
 		// 用于需要通过特定代理访问 API 的场景
 		field.Int64("proxy_id").
