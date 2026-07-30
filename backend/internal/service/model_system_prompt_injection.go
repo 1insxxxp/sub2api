@@ -25,6 +25,18 @@ func (a *Account) ResolveModelSystemPrompt(mappedModel string) (string, bool) {
 	return prompt, ok && prompt != ""
 }
 
+func ApplyAccountModelSystemPrompt(body []byte, account *Account, mappedModel string, protocol ModelSystemPromptProtocol) ([]byte, bool, error) {
+	prompt, ok := account.ResolveModelSystemPrompt(mappedModel)
+	if !ok {
+		return body, false, nil
+	}
+	updated, err := PrependModelSystemPrompt(body, protocol, prompt)
+	if err != nil {
+		return nil, false, err
+	}
+	return updated, true, nil
+}
+
 func PrependModelSystemPrompt(body []byte, protocol ModelSystemPromptProtocol, prompt string) ([]byte, error) {
 	prompt = strings.TrimSpace(prompt)
 	if prompt == "" {

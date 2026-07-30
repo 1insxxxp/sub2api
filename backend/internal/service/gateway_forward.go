@@ -309,6 +309,14 @@ func (s *GatewayService) Forward(ctx context.Context, c *gin.Context, account *A
 		logger.LegacyPrintf("service.gateway", "Model mapping applied: %s -> %s (account: %s, source=%s)", originalModel, mappedModel, account.Name, mappingSource)
 	}
 
+	if injectedBody, applied, injectErr := ApplyAccountModelSystemPrompt(body, account, reqModel, ModelSystemPromptClaude); injectErr != nil {
+		return nil, fmt.Errorf("inject account model system prompt: %w", injectErr)
+	} else if applied {
+		if err := replaceBody(injectedBody); err != nil {
+			return nil, err
+		}
+	}
+
 	if s.shouldInjectAnthropicCacheTTL1h(ctx, account) {
 		if err := replaceBody(injectAnthropicCacheControlTTL1h(body)); err != nil {
 			return nil, err

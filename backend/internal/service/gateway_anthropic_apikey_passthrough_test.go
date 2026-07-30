@@ -1154,6 +1154,28 @@ func TestGatewayService_AnthropicAPIKeyPassthrough_ForwardDirect_NonStreamingSuc
 	require.Equal(t, upstreamJSON, rec.Body.String())
 }
 
+func TestGatewayService_AnthropicAPIKeyPassthroughPrependsMappedModelSystemPrompt(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	rec := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(rec)
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1/messages", nil)
+
+	upstream := &anthropicHTTPUpstreamRecorder{resp: &http.Response{
+		StatusCode: http.StatusOK,
+		Header:     http.Header{"Content-Type": []string{"application/json"}},
+		Body:       io.NopCloser(strings.NewReader(`{"id":"msg_1","type":"message","usage":{"input_tokens":1,"output_tokens":1}}`)),
+	}}
+	account := newAnthropicAPIKeyAccountForTest()
+	account.ModelSystemPrompts = map[string]string{"claude-upstream": "Injected rules"}
+	svc := &GatewayService{cfg: &config.Config{}, httpUpstream: upstream, rateLimitService: &RateLimitService{}}
+	body := []byte(`{"model":"claude-upstream","system":[{"type":"text","text":"Client rules"}],"messages":[{"role":"user","content":"hello"}]}`)
+
+	_, err := svc.forwardAnthropicAPIKeyPassthrough(context.Background(), c, account, body, "claude-upstream", "public-alias", false, time.Now())
+	require.NoError(t, err)
+	require.Equal(t, "Injected rules", gjson.GetBytes(upstream.lastBody, "system.0.text").String())
+	require.Equal(t, "Client rules", gjson.GetBytes(upstream.lastBody, "system.1.text").String())
+}
+
 func TestGatewayService_AnthropicAPIKeyPassthrough_ForwardDirect_InvalidTokenType(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	rec := httptest.NewRecorder()

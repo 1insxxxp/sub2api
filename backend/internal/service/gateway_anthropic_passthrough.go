@@ -78,6 +78,11 @@ func (s *GatewayService) forwardAnthropicAPIKeyPassthroughWithInput(
 	if c != nil {
 		c.Set("anthropic_passthrough", true)
 	}
+	if injectedBody, applied, injectErr := ApplyAccountModelSystemPrompt(input.Body, account, input.RequestModel, ModelSystemPromptClaude); injectErr != nil {
+		return nil, fmt.Errorf("inject account model system prompt: %w", injectErr)
+	} else if applied {
+		input.Body = injectedBody
+	}
 	// Pre-filter: strip empty text blocks (including nested in tool_result) to prevent upstream 400.
 	input.Body = StripEmptyTextBlocks(input.Body)
 	// Pre-filter: strip web-search history blocks the upstream cannot accept
