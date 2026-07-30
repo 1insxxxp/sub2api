@@ -100,3 +100,16 @@ func TestAccountFromServiceShallow_NilCredentialsOmitsStatus(t *testing.T) {
 	require.Nil(t, got.Credentials)
 	require.Nil(t, got.CredentialsStatus)
 }
+
+func TestAccountFromServiceShallowExposesModelSystemPrompts(t *testing.T) {
+	src := &service.Account{
+		ID:                 7,
+		Name:               "roleplay",
+		Platform:           service.PlatformOpenAI,
+		Type:               service.AccountTypeAPIKey,
+		ModelSystemPrompts: map[string]string{"gpt-5.4": "Stay in character."},
+	}
+
+	got := AccountFromServiceShallow(src)
+	require.Equal(t, src.ModelSystemPrompts, got.ModelSystemPrompts)
+}

@@ -2,6 +2,7 @@
 package dto
 
 import (
+	"maps"
 	"strconv"
 	"strings"
 	"time"
@@ -240,6 +241,7 @@ func AccountFromServiceShallow(a *service.Account) *Account {
 		Credentials:             redactedCreds,
 		CredentialsStatus:       credsStatus,
 		Extra:                   extra,
+		ModelSystemPrompts:      maps.Clone(a.ModelSystemPrompts),
 		OllamaCloudUsage:        ollamaCloudUsage,
 		ProxyID:                 a.ProxyID,
 		ProxyFallbackOriginID:   a.ProxyFallbackOriginID,
