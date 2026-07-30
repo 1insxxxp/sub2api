@@ -23,7 +23,8 @@
               <button
                 :ref="(el) => setGroupButtonRef(key.id, el)"
                 @click="openGroupSelector(key)"
-                class="-mx-1 -my-0.5 flex cursor-pointer items-center gap-1 rounded-lg px-1.5 py-1 transition-colors hover:bg-primary-50/80 dark:hover:bg-primary-500/10"
+                data-test="group-selector-trigger"
+                class="-mx-1 -my-0.5 flex max-w-full min-w-0 flex-wrap cursor-pointer items-center gap-1 rounded-lg px-1.5 py-1 transition-colors hover:bg-primary-50/80 dark:hover:bg-primary-500/10"
                 :disabled="updatingKeyIds.has(key.id)"
               >
                 <GroupBadge
@@ -36,6 +37,7 @@
                   :peak-start="key.group.peak_start"
                   :peak-end="key.group.peak_end"
                   :peak-rate-multiplier="key.group.peak_rate_multiplier"
+                  :wrap-name="true"
                 />
                 <span v-else class="text-gray-400 italic">{{ t('admin.users.none') }}</span>
                 <svg v-if="updatingKeyIds.has(key.id)" class="h-3 w-3 animate-spin text-primary-500" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
@@ -54,7 +56,7 @@
     <div
       v-if="groupSelectorKeyId !== null && dropdownPosition"
       ref="dropdownRef"
-      class="admin-action-menu fixed z-[100000020] w-64"
+      class="admin-action-menu fixed z-[100000020] w-[calc(100vw-16px)] sm:w-64"
       :style="{ top: dropdownPosition.top + 'px', left: dropdownPosition.left + 'px' }"
     >
       <div class="max-h-64 space-y-0.5 overflow-y-auto">
@@ -178,6 +180,7 @@ const loadGroups = async () => {
 
 const DROPDOWN_HEIGHT = 272 // max-h-64 = 16rem = 256px + padding
 const DROPDOWN_GAP = 4
+const DROPDOWN_VIEWPORT_PADDING = 8
 
 const openGroupSelector = (key: ApiKey) => {
   if (groupSelectorKeyId.value === key.id) {
@@ -188,9 +191,15 @@ const openGroupSelector = (key: ApiKey) => {
       const rect = buttonEl.getBoundingClientRect()
       const spaceBelow = window.innerHeight - rect.bottom
       const openUpward = spaceBelow < DROPDOWN_HEIGHT && rect.top > spaceBelow
+      const dropdownWidth = window.innerWidth < 640
+        ? window.innerWidth - DROPDOWN_VIEWPORT_PADDING * 2
+        : 256
       dropdownPosition.value = {
         top: openUpward ? rect.top - DROPDOWN_HEIGHT - DROPDOWN_GAP : rect.bottom + DROPDOWN_GAP,
-        left: rect.left
+        left: Math.max(
+          DROPDOWN_VIEWPORT_PADDING,
+          Math.min(rect.left, window.innerWidth - dropdownWidth - DROPDOWN_VIEWPORT_PADDING)
+        )
       }
     }
     groupSelectorKeyId.value = key.id
@@ -252,10 +261,12 @@ const handleClose = () => {
 onMounted(() => {
   document.addEventListener('click', handleClickOutside)
   document.addEventListener('keydown', handleKeyDown, true)
+  window.addEventListener('resize', closeGroupSelector)
 })
 
 onUnmounted(() => {
   document.removeEventListener('click', handleClickOutside)
   document.removeEventListener('keydown', handleKeyDown, true)
+  window.removeEventListener('resize', closeGroupSelector)
 })
 </script>

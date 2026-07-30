@@ -2,13 +2,19 @@
   <span
     :class="[
       'inline-flex items-center gap-1.5 rounded-md px-2 py-0.5 text-xs font-medium transition-colors',
+      wrapName ? 'max-w-full whitespace-normal' : '',
       badgeClass
     ]"
   >
     <!-- Platform logo -->
     <PlatformIcon v-if="platform" :platform="platform" size="sm" />
     <!-- Group name -->
-    <span class="truncate">{{ name }}</span>
+    <span
+      data-test="group-badge-name"
+      :class="wrapName ? 'min-w-0 whitespace-normal [overflow-wrap:anywhere] sm:truncate' : 'truncate'"
+    >
+      {{ name }}
+    </span>
     <!-- Right side label -->
     <span v-if="showLabel" :class="labelClass">
       <template v-if="hasCustomRate">
@@ -53,6 +59,8 @@ interface Props {
    * 只关心费率、不关心有效期的场景）。
    */
   alwaysShowRate?: boolean
+  /** Allow long names to wrap on mobile while retaining compact desktop truncation. */
+  wrapName?: boolean
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -61,7 +69,8 @@ const props = withDefaults(defineProps<Props>(), {
   daysRemaining: null,
   userRateMultiplier: null,
   peakRateEnabled: false,
-  alwaysShowRate: false
+  alwaysShowRate: false,
+  wrapName: false
 })
 
 const { t } = useI18n()

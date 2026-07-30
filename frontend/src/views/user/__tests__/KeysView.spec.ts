@@ -170,6 +170,9 @@ const DataTableStub = {
           <slot name="cell-id" :value="row.id" :row="row" />
         </div>
         <slot name="cell-name" :value="row.name" :row="row" />
+        <div data-test="group-cell">
+          <slot name="cell-group" :row="row" />
+        </div>
         <div data-test="current-concurrency">
           <slot name="cell-current_concurrency" :value="row.current_concurrency" :row="row" />
         </div>
@@ -392,6 +395,40 @@ describe('user KeysView column settings', () => {
     const wrapper = await mountView()
 
     expect(wrapper.get('[data-test="current-concurrency"]').text()).toBe('3')
+  })
+
+  it('closes an open group selector after a resize event', async () => {
+    const wrapper = await mountView()
+    await wrapper.get('[data-test="group-selector-trigger"]').trigger('click')
+    expect(wrapper.find('.fixed.z-\\[100000020\\]').exists()).toBe(true)
+
+    window.dispatchEvent(new Event('resize'))
+    await nextTick()
+
+    expect(wrapper.find('.fixed.z-\\[100000020\\]').exists()).toBe(false)
+    wrapper.unmount()
+  })
+
+  it.each([320, 390])('keeps a right-edge group selector within a %dpx viewport', async (width) => {
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: width })
+    const wrapper = await mountView()
+    const trigger = wrapper.get('[data-test="group-selector-trigger"]')
+    trigger.element.getBoundingClientRect = () => ({
+      top: 80,
+      right: width,
+      bottom: 104,
+      left: width - 24,
+      width: 24,
+      height: 24,
+      x: width - 24,
+      y: 80,
+      toJSON: () => ({}),
+    })
+
+    await trigger.trigger('click')
+
+    expect(wrapper.get('.fixed.z-\\[100000020\\]').attributes('style')).toContain('left: 8px')
+    wrapper.unmount()
   })
 
   it('marks current concurrency as sortable', async () => {

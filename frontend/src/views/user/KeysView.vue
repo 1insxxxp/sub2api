@@ -136,7 +136,8 @@
               <button
                 :ref="(el) => setGroupButtonRef(row.id, el)"
                 @click="openGroupSelector(row)"
-                class="-mx-2 -my-1 flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1 transition-all duration-200 hover:bg-gray-100 dark:hover:bg-dark-700"
+                data-test="group-selector-trigger"
+                class="-mx-2 -my-1 flex max-w-full min-w-0 flex-wrap cursor-pointer items-center gap-2 rounded-lg px-2 py-1 transition-all duration-200 hover:bg-gray-100 dark:hover:bg-dark-700"
                 :title="t('keys.clickToChangeGroup')"
               >
                 <GroupBadge
@@ -150,6 +151,7 @@
                   :peak-start="row.group.peak_start"
                   :peak-end="row.group.peak_end"
                   :peak-rate-multiplier="row.group.peak_rate_multiplier"
+                  :wrap-name="true"
                 />
                 <span v-else class="text-sm text-gray-400 dark:text-dark-500">{{
                   t('keys.noGroup')
@@ -1048,7 +1050,7 @@
       <div
         v-if="groupSelectorKeyId !== null && dropdownPosition"
         ref="dropdownRef"
-        class="animate-in fade-in slide-in-from-top-2 fixed z-[100000020] w-max max-w-[calc(100vw-16px)] overflow-hidden rounded-xl bg-white shadow-lg ring-1 ring-black/5 duration-200 sm:min-w-[380px] dark:bg-dark-800 dark:ring-white/10"
+        class="animate-in fade-in slide-in-from-top-2 fixed z-[100000020] w-[calc(100vw-16px)] overflow-hidden rounded-xl bg-white shadow-lg ring-1 ring-black/5 duration-200 sm:w-[380px] dark:bg-dark-800 dark:ring-white/10"
         style="pointer-events: auto !important;"
         :style="{
           top: dropdownPosition.top !== undefined ? dropdownPosition.top + 'px' : undefined,
@@ -1308,6 +1310,7 @@ const publicSettings = ref<PublicSettings | null>(null)
 const dropdownRef = ref<HTMLElement | null>(null)
 const columnDropdownRef = ref<HTMLElement | null>(null)
 const dropdownPosition = ref<{ top?: number; bottom?: number; left: number } | null>(null)
+const dropdownViewportPadding = 8
 const groupButtonRefs = ref<Map<number, HTMLElement>>(new Map())
 let abortController: AbortController | null = null
 
@@ -1603,11 +1606,14 @@ const openGroupSelector = (key: ApiKey) => {
     if (buttonEl) {
       const rect = buttonEl.getBoundingClientRect()
       const dropdownEstHeight = 400 // estimated max dropdown height
-      const dropdownEstWidth = Math.min(380, window.innerWidth - 16)
+      const dropdownEstWidth = Math.min(380, window.innerWidth - dropdownViewportPadding * 2)
       const spaceBelow = window.innerHeight - rect.bottom
       const spaceAbove = rect.top
       // 夹取 left，避免窄屏下浮层超出视口右缘
-      const left = Math.max(8, Math.min(rect.left, window.innerWidth - dropdownEstWidth - 8))
+      const left = Math.max(
+        dropdownViewportPadding,
+        Math.min(rect.left, window.innerWidth - dropdownEstWidth - dropdownViewportPadding)
+      )
 
       if (spaceBelow < dropdownEstHeight && spaceAbove > spaceBelow) {
         // Not enough space below, pop upward
@@ -1642,12 +1648,16 @@ const changeGroup = async (key: ApiKey, newGroupId: number | null) => {
   }
 }
 
-const closeGroupSelector = (event: MouseEvent) => {
+const closeGroupSelector = () => {
+  groupSelectorKeyId.value = null
+  dropdownPosition.value = null
+}
+
+const handleDocumentClick = (event: MouseEvent) => {
   const target = event.target as HTMLElement
   // Check if click is inside the dropdown or the trigger button
   if (!target.closest('.group\\/dropdown') && !dropdownRef.value?.contains(target)) {
-    groupSelectorKeyId.value = null
-    dropdownPosition.value = null
+    closeGroupSelector()
   }
   if (columnDropdownRef.value && !columnDropdownRef.value.contains(target)) {
     showColumnDropdown.value = false
@@ -1957,12 +1967,14 @@ onMounted(() => {
   loadGroups()
   loadUserGroupRates()
   loadPublicSettings()
-  document.addEventListener('click', closeGroupSelector)
+  document.addEventListener('click', handleDocumentClick)
+  window.addEventListener('resize', closeGroupSelector)
   resetTimer = setInterval(() => { now.value = new Date() }, 60000)
 })
 
 onUnmounted(() => {
-  document.removeEventListener('click', closeGroupSelector)
+  document.removeEventListener('click', handleDocumentClick)
+  window.removeEventListener('resize', closeGroupSelector)
   if (resetTimer) clearInterval(resetTimer)
 })
 </script>

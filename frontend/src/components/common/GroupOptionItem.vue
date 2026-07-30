@@ -1,5 +1,8 @@
 <template>
-  <div class="flex min-w-0 flex-1 items-start justify-between gap-3">
+  <div
+    data-test="group-option-layout"
+    class="flex min-w-0 flex-1 flex-col items-stretch gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-3"
+  >
     <!-- Left: name + description -->
     <div
       class="flex min-w-0 flex-1 flex-col items-start"
@@ -11,7 +14,8 @@
         :platform="platform"
         :subscription-type="subscriptionType"
         :show-rate="false"
-        class="groupOptionItemBadge"
+        wrap-name
+        class="groupOptionItemBadge font-semibold"
       />
       <!-- Row 2: description with top spacing -->
       <span
@@ -23,7 +27,7 @@
     </div>
 
     <!-- Right: rate pill + checkmark (vertically centered to first row) -->
-    <div class="flex shrink-0 items-center gap-2 pt-0.5">
+    <div class="flex w-full shrink-0 items-center justify-end gap-2 sm:w-auto sm:pt-0.5">
       <div class="flex shrink-0 flex-col items-end gap-1">
         <!-- Rate pill (platform color) -->
         <span v-if="rateMultiplier !== undefined" :class="['inline-flex items-center whitespace-nowrap rounded-full px-3 py-1 text-xs font-semibold', ratePillClass]">
@@ -138,10 +142,3 @@ const ratePillClass = computed(() => {
   }
 })
 </script>
-
-<style scoped>
-/* Bold the group name inside GroupBadge when used in dropdown option */
-.groupOptionItemBadge :deep(span.truncate) {
-  font-weight: 600;
-}
-</style>
