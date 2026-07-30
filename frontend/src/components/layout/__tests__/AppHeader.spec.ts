@@ -3,6 +3,7 @@ import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 import { flushPromises, mount } from '@vue/test-utils'
+import { createPinia } from 'pinia'
 import { reactive } from 'vue'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -117,6 +118,7 @@ const mountHeader = async () => {
   const AppHeader = (await import('../AppHeader.vue')).default
   const wrapper = mount(AppHeader, {
     global: {
+      plugins: [createPinia()],
       stubs: {
         AnnouncementBell: true,
         LocaleSwitcher: true,
