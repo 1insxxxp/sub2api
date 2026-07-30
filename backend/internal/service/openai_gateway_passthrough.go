@@ -49,6 +49,20 @@ func (s *OpenAIGatewayService) forwardOpenAIPassthrough(
 			attemptImageIntentInvalidated = true
 		}
 	}
+	promptModel := strings.TrimSpace(upstreamPassthroughModel)
+	if promptModel == "" {
+		promptModel = strings.TrimSpace(gjson.GetBytes(body, "model").String())
+	}
+	if promptModel == "" {
+		promptModel = reqModel
+	}
+	if !IsImageGenerationIntent(openAIResponsesEndpoint, promptModel, canonicalImageIntentBody) {
+		if injectedBody, applied, injectErr := ApplyAccountModelSystemPrompt(body, account, promptModel, ModelSystemPromptOpenAIResponses); injectErr != nil {
+			return nil, fmt.Errorf("inject account model system prompt: %w", injectErr)
+		} else if applied {
+			body = injectedBody
+		}
+	}
 
 	if account != nil && account.Type == AccountTypeOAuth {
 		if rejectReason := detectOpenAIPassthroughInstructionsRejectReason(reqModel, body); rejectReason != "" {

@@ -73,6 +73,11 @@ func (s *OpenAIGatewayService) forwardAnthropicViaRawChatCompletions(
 	if err != nil {
 		return nil, fmt.Errorf("marshal chat completions request: %w", err)
 	}
+	if injectedBody, applied, injectErr := ApplyAccountModelSystemPrompt(chatBody, account, upstreamModel, ModelSystemPromptOpenAIChat); injectErr != nil {
+		return nil, fmt.Errorf("inject account model system prompt: %w", injectErr)
+	} else if applied {
+		chatBody = injectedBody
+	}
 	if normalizedBody, normalized := NormalizeGLMOpenAIReasoningEffort(chatBody, upstreamModel); normalized {
 		chatBody = normalizedBody
 	}

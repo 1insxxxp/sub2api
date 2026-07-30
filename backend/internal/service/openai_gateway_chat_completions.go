@@ -105,6 +105,14 @@ func (s *OpenAIGatewayService) ForwardAsChatCompletions(
 	// derive a stable seed from the final upstream model family.
 	billingModel := resolveOpenAIForwardModel(account, originalModel, defaultMappedModel)
 	upstreamModel := normalizeOpenAIModelForUpstream(account, billingModel)
+	if injectedBody, applied, injectErr := ApplyAccountModelSystemPrompt(body, account, upstreamModel, ModelSystemPromptOpenAIChat); injectErr != nil {
+		return nil, fmt.Errorf("inject account model system prompt: %w", injectErr)
+	} else if applied {
+		body = injectedBody
+		if err := json.Unmarshal(body, &chatReq); err != nil {
+			return nil, fmt.Errorf("parse injected chat completions request: %w", err)
+		}
+	}
 
 	promptCacheKey = strings.TrimSpace(promptCacheKey)
 	compatPromptCacheInjected := false

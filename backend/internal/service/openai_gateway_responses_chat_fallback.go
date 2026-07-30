@@ -72,6 +72,13 @@ func (s *OpenAIGatewayService) forwardResponsesViaRawChatCompletions(
 	if err != nil {
 		return nil, fmt.Errorf("marshal chat completions fallback request: %w", err)
 	}
+	if !IsImageGenerationIntent(openAIResponsesEndpoint, upstreamModel, body) {
+		if injectedBody, applied, injectErr := ApplyAccountModelSystemPrompt(chatBody, account, upstreamModel, ModelSystemPromptOpenAIChat); injectErr != nil {
+			return nil, fmt.Errorf("inject account model system prompt: %w", injectErr)
+		} else if applied {
+			chatBody = injectedBody
+		}
+	}
 	chatBody, err = s.applyOpenAIFastPolicyToBody(ctx, account, upstreamModel, chatBody)
 	if err != nil {
 		var blocked *OpenAIFastBlockedError

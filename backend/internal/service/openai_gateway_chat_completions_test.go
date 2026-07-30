@@ -280,6 +280,10 @@ func TestForwardAsChatCompletions_OAuthDoesNotInjectDefaultInstructions(t *testi
 }
 
 func forwardOAuthChatCompletionsForUpstreamBody(t *testing.T, body []byte) []byte {
+	return forwardOAuthChatCompletionsForUpstreamBodyWithPrompts(t, body, nil)
+}
+
+func forwardOAuthChatCompletionsForUpstreamBodyWithPrompts(t *testing.T, body []byte, prompts map[string]string) []byte {
 	t.Helper()
 
 	gin.SetMode(gin.TestMode)
@@ -304,6 +308,7 @@ func forwardOAuthChatCompletionsForUpstreamBody(t *testing.T, body []byte) []byt
 			"access_token":       "oauth-token",
 			"chatgpt_account_id": "chatgpt-acc",
 		},
+		ModelSystemPrompts: prompts,
 	}
 
 	result, err := svc.ForwardAsChatCompletions(context.Background(), c, account, body, "", "gpt-5.4")
@@ -311,6 +316,15 @@ func forwardOAuthChatCompletionsForUpstreamBody(t *testing.T, body []byte) []byt
 	require.Nil(t, result)
 	require.NotEmpty(t, upstream.lastBody)
 	return upstream.lastBody
+}
+
+func TestForwardAsChatCompletionsPrependsMappedModelSystemPrompt(t *testing.T) {
+	body := []byte(`{"model":"gpt-5.4","messages":[{"role":"system","content":"Client rules"},{"role":"user","content":"hello"}],"stream":false}`)
+
+	upstreamBody := forwardOAuthChatCompletionsForUpstreamBodyWithPrompts(t, body, map[string]string{"gpt-5.4": "Injected rules"})
+
+	require.Contains(t, gjson.GetBytes(upstreamBody, "instructions").String(), "Injected rules")
+	require.Less(t, strings.Index(string(upstreamBody), "Injected rules"), strings.Index(string(upstreamBody), "Client rules"))
 }
 
 func TestForwardAsChatCompletions_OAuthPromotesSystemMessageWithoutDuplication(t *testing.T) {

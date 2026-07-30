@@ -57,6 +57,15 @@ func (s *OpenAIGatewayService) ForwardAsAnthropic(
 	// 2. Model mapping
 	billingModel := resolveOpenAIForwardModel(account, normalizedModel, defaultMappedModel)
 	upstreamModel := normalizeOpenAIModelForUpstream(account, billingModel)
+	if injectedBody, applied, injectErr := ApplyAccountModelSystemPrompt(body, account, upstreamModel, ModelSystemPromptClaude); injectErr != nil {
+		return nil, fmt.Errorf("inject account model system prompt: %w", injectErr)
+	} else if applied {
+		body = injectedBody
+		if err := json.Unmarshal(body, &anthropicReq); err != nil {
+			return nil, fmt.Errorf("parse injected anthropic request: %w", err)
+		}
+		applyOpenAICompatModelNormalization(&anthropicReq)
+	}
 	promptCacheKey = strings.TrimSpace(promptCacheKey)
 	apiKeyID := getAPIKeyIDFromContext(c)
 	anthropicDigestChain := ""

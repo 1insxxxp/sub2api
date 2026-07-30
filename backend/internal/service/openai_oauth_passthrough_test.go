@@ -25,6 +25,30 @@ import (
 
 func f64p(v float64) *float64 { return &v }
 
+func TestForwardAsRawChatCompletionsPrependsMappedModelSystemPrompt(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	body := []byte(`{"model":"public-alias","messages":[{"role":"system","content":"Client rules"},{"role":"user","content":"hello"}],"stream":false}`)
+	rec := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(rec)
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1/chat/completions", bytes.NewReader(body))
+
+	upstream := &httpUpstreamRecorder{resp: &http.Response{
+		StatusCode: http.StatusOK,
+		Header:     http.Header{"Content-Type": []string{"application/json"}},
+		Body:       io.NopCloser(strings.NewReader(`{"id":"chatcmpl_1","choices":[{"message":{"role":"assistant","content":"ok"}}],"usage":{"prompt_tokens":1,"completion_tokens":1}}`)),
+	}}
+	svc := &OpenAIGatewayService{cfg: &config.Config{Security: config.SecurityConfig{URLAllowlist: config.URLAllowlistConfig{Enabled: false, AllowInsecureHTTP: true}}}, httpUpstream: upstream}
+	account := &Account{ID: 101, Name: "raw-openai-apikey", Platform: PlatformOpenAI, Type: AccountTypeAPIKey, Concurrency: 1, Credentials: map[string]any{
+		"api_key": "sk-test", "base_url": "http://upstream.example", "model_mapping": map[string]any{"public-alias": "gpt-upstream"},
+	}, ModelSystemPrompts: map[string]string{"gpt-upstream": "Injected rules"}}
+
+	_, err := svc.forwardAsRawChatCompletions(context.Background(), c, account, body, "")
+	require.NoError(t, err)
+	require.Equal(t, "gpt-upstream", gjson.GetBytes(upstream.lastBody, "model").String())
+	require.Equal(t, "Injected rules", gjson.GetBytes(upstream.lastBody, "messages.0.content").String())
+	require.Equal(t, "Client rules", gjson.GetBytes(upstream.lastBody, "messages.1.content").String())
+}
+
 type httpUpstreamRecorder struct {
 	lastReq      *http.Request
 	lastBody     []byte

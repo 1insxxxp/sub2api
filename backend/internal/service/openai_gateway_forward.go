@@ -515,6 +515,14 @@ func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, acco
 			requestView = newOpenAIRequestView(body)
 		}
 	}
+	if !imageIntent {
+		if injectedBody, applied, injectErr := ApplyAccountModelSystemPrompt(body, account, upstreamModel, ModelSystemPromptOpenAIResponses); injectErr != nil {
+			return nil, fmt.Errorf("inject account model system prompt: %w", injectErr)
+		} else if applied {
+			body = injectedBody
+			requestView = newOpenAIRequestView(body)
+		}
+	}
 	imageBillingModel := ""
 	imageSizeTier := ""
 	imageInputSize := ""
