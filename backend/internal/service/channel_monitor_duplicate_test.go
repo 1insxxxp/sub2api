@@ -36,6 +36,7 @@ func (r *duplicateChannelMonitorRepoStub) Create(_ context.Context, monitor *Cha
 
 	stored := *monitor
 	stored.ExtraModels = append([]string(nil), monitor.ExtraModels...)
+	stored.ModelMappings = cloneStringMap(monitor.ModelMappings)
 	stored.ExtraHeaders = cloneStringMap(monitor.ExtraHeaders)
 	stored.BodyOverride = mustCloneJSONMap(monitor.BodyOverride)
 	if monitor.TemplateID != nil {
@@ -59,6 +60,7 @@ func (r *duplicateChannelMonitorRepoStub) FindByDuplicateOperationID(_ context.C
 	}
 	cloned := *monitor
 	cloned.ExtraModels = append([]string(nil), monitor.ExtraModels...)
+	cloned.ModelMappings = cloneStringMap(monitor.ModelMappings)
 	cloned.ExtraHeaders = cloneStringMap(monitor.ExtraHeaders)
 	cloned.BodyOverride = mustCloneJSONMap(monitor.BodyOverride)
 	return &cloned, nil
@@ -120,6 +122,7 @@ func TestDuplicateChannelMonitorCopiesConfigurationAndResetsRuntimeState(t *test
 		APIKey:           "OLD:top-secret",
 		PrimaryModel:     "gpt-5.4-mini",
 		ExtraModels:      []string{"gpt-5.4", "gpt-5.3"},
+		ModelMappings:    map[string]string{"gpt-5.4-mini": "gpt-5.4-mini-upstream"},
 		GroupName:        "production",
 		Enabled:          true,
 		IntervalSeconds:  90,
@@ -152,6 +155,7 @@ func TestDuplicateChannelMonitorCopiesConfigurationAndResetsRuntimeState(t *test
 	require.Equal(t, "NEW:top-secret", stored.APIKey)
 	require.Equal(t, source.PrimaryModel, duplicate.PrimaryModel)
 	require.Equal(t, source.ExtraModels, duplicate.ExtraModels)
+	require.Equal(t, source.ModelMappings, duplicate.ModelMappings)
 	require.Equal(t, source.GroupName, duplicate.GroupName)
 	require.Equal(t, source.IntervalSeconds, duplicate.IntervalSeconds)
 	require.Equal(t, source.JitterSeconds, duplicate.JitterSeconds)
@@ -166,10 +170,12 @@ func TestDuplicateChannelMonitorCopiesConfigurationAndResetsRuntimeState(t *test
 	require.NotEmpty(t, duplicate.DuplicateOperationID)
 
 	duplicate.ExtraModels[0] = "changed"
+	duplicate.ModelMappings["gpt-5.4-mini"] = "changed"
 	duplicate.ExtraHeaders["User-Agent"] = "changed"
 	duplicate.BodyOverride["metadata"].(map[string]any)["source"] = "changed"
 	*duplicate.TemplateID = 10
 	require.Equal(t, []string{"gpt-5.4", "gpt-5.3"}, source.ExtraModels)
+	require.Equal(t, "gpt-5.4-mini-upstream", source.ModelMappings["gpt-5.4-mini"])
 	require.Equal(t, "Codex", source.ExtraHeaders["User-Agent"])
 	require.Equal(t, "original", source.BodyOverride["metadata"].(map[string]any)["source"])
 	require.Equal(t, int64(9), *source.TemplateID)

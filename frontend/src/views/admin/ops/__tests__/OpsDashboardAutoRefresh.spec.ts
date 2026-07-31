@@ -8,13 +8,16 @@ const componentPath = resolve(dirname(fileURLToPath(import.meta.url)), '../OpsDa
 const componentSource = readFileSync(componentPath, 'utf8')
 
 describe('OpsDashboard auto refresh', () => {
-  it('keeps polling disabled while retaining manual dashboard fetches', () => {
-    expect(componentSource).not.toContain(
+  it('follows the saved polling setting while retaining manual dashboard fetches', () => {
+    expect(componentSource).toContain(
       'autoRefreshEnabled.value = settings.auto_refresh_enabled'
     )
     expect(componentSource).toMatch(
-      /async function loadDashboardAdvancedSettings\(\)[\s\S]*autoRefreshEnabled\.value = false[\s\S]*autoRefreshCountdown\.value = 0/
+      /const settings = await opsAPI\.getAdvancedSettings\(\)[\s\S]*autoRefreshEnabled\.value = settings\.auto_refresh_enabled[\s\S]*autoRefreshIntervalMs\.value = settings\.auto_refresh_interval_seconds \* 1000/
     )
     expect(componentSource).toContain('await fetchData()')
+    expect(componentSource).toContain("document.addEventListener('visibilitychange', handleVisibilityChange)")
+    expect(componentSource).toContain("document.removeEventListener('visibilitychange', handleVisibilityChange)")
+    expect(componentSource).toContain('if (document.hidden)')
   })
 })

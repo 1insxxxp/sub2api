@@ -10,14 +10,15 @@ import {
   PROVIDER_GROK,
 } from '@/constants/channelMonitor'
 
-const { listTemplates } = vi.hoisted(() => ({
+const { createMonitor, listTemplates } = vi.hoisted(() => ({
+  createMonitor: vi.fn(),
   listTemplates: vi.fn(),
 }))
 
 vi.mock('@/api/admin', () => ({
   adminAPI: {
     channelMonitor: {
-      create: vi.fn(),
+      create: createMonitor,
       update: vi.fn(),
     },
     channelMonitorTemplate: {
@@ -73,7 +74,26 @@ function mountDialog() {
 
 describe('channel monitor Grok provider', () => {
   beforeEach(() => {
+    createMonitor.mockReset().mockResolvedValue({})
     listTemplates.mockReset().mockResolvedValue({ items: [] })
+  })
+
+  it('submits a display model mapped to its upstream request model', async () => {
+    const wrapper = mountDialog()
+    await flushPromises()
+
+    await wrapper.get('input[placeholder="admin.channelMonitor.form.namePlaceholder"]').setValue('Tavern Opus')
+    await wrapper.get('[data-testid="monitor-endpoint"]').setValue('https://gateway.example.com')
+    await wrapper.get('input[type="password"]').setValue('sk-test')
+    await wrapper.get('[data-testid="monitor-primary-model"]').setValue('tavern-opus')
+    await wrapper.get('[data-testid="monitor-model-mapping-tavern-opus"]').setValue('claude-opus-4-6')
+    await wrapper.get('form').trigger('submit')
+    await flushPromises()
+
+    expect(createMonitor).toHaveBeenCalledWith(expect.objectContaining({
+      primary_model: 'tavern-opus',
+      model_mappings: { 'tavern-opus': 'claude-opus-4-6' },
+    }))
   })
 
   it('offers Grok in the responsive provider grid and prefills its official defaults', async () => {

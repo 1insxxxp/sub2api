@@ -103,6 +103,12 @@ func (_c *ChannelMonitorCreate) SetExtraModels(v []string) *ChannelMonitorCreate
 	return _c
 }
 
+// SetModelMappings sets the "model_mappings" field.
+func (_c *ChannelMonitorCreate) SetModelMappings(v map[string]string) *ChannelMonitorCreate {
+	_c.mutation.SetModelMappings(v)
+	return _c
+}
+
 // SetGroupName sets the "group_name" field.
 func (_c *ChannelMonitorCreate) SetGroupName(v string) *ChannelMonitorCreate {
 	_c.mutation.SetGroupName(v)
@@ -311,6 +317,10 @@ func (_c *ChannelMonitorCreate) defaults() {
 		v := channelmonitor.DefaultExtraModels
 		_c.mutation.SetExtraModels(v)
 	}
+	if _, ok := _c.mutation.ModelMappings(); !ok {
+		v := channelmonitor.DefaultModelMappings
+		_c.mutation.SetModelMappings(v)
+	}
 	if _, ok := _c.mutation.GroupName(); !ok {
 		v := channelmonitor.DefaultGroupName
 		_c.mutation.SetGroupName(v)
@@ -391,6 +401,9 @@ func (_c *ChannelMonitorCreate) check() error {
 	}
 	if _, ok := _c.mutation.ExtraModels(); !ok {
 		return &ValidationError{Name: "extra_models", err: errors.New(`ent: missing required field "ChannelMonitor.extra_models"`)}
+	}
+	if _, ok := _c.mutation.ModelMappings(); !ok {
+		return &ValidationError{Name: "model_mappings", err: errors.New(`ent: missing required field "ChannelMonitor.model_mappings"`)}
 	}
 	if v, ok := _c.mutation.GroupName(); ok {
 		if err := channelmonitor.GroupNameValidator(v); err != nil {
@@ -492,6 +505,10 @@ func (_c *ChannelMonitorCreate) createSpec() (*ChannelMonitor, *sqlgraph.CreateS
 	if value, ok := _c.mutation.ExtraModels(); ok {
 		_spec.SetField(channelmonitor.FieldExtraModels, field.TypeJSON, value)
 		_node.ExtraModels = value
+	}
+	if value, ok := _c.mutation.ModelMappings(); ok {
+		_spec.SetField(channelmonitor.FieldModelMappings, field.TypeJSON, value)
+		_node.ModelMappings = value
 	}
 	if value, ok := _c.mutation.GroupName(); ok {
 		_spec.SetField(channelmonitor.FieldGroupName, field.TypeString, value)
@@ -723,6 +740,18 @@ func (u *ChannelMonitorUpsert) SetExtraModels(v []string) *ChannelMonitorUpsert 
 // UpdateExtraModels sets the "extra_models" field to the value that was provided on create.
 func (u *ChannelMonitorUpsert) UpdateExtraModels() *ChannelMonitorUpsert {
 	u.SetExcluded(channelmonitor.FieldExtraModels)
+	return u
+}
+
+// SetModelMappings sets the "model_mappings" field.
+func (u *ChannelMonitorUpsert) SetModelMappings(v map[string]string) *ChannelMonitorUpsert {
+	u.Set(channelmonitor.FieldModelMappings, v)
+	return u
+}
+
+// UpdateModelMappings sets the "model_mappings" field to the value that was provided on create.
+func (u *ChannelMonitorUpsert) UpdateModelMappings() *ChannelMonitorUpsert {
+	u.SetExcluded(channelmonitor.FieldModelMappings)
 	return u
 }
 
@@ -1042,6 +1071,20 @@ func (u *ChannelMonitorUpsertOne) SetExtraModels(v []string) *ChannelMonitorUpse
 func (u *ChannelMonitorUpsertOne) UpdateExtraModels() *ChannelMonitorUpsertOne {
 	return u.Update(func(s *ChannelMonitorUpsert) {
 		s.UpdateExtraModels()
+	})
+}
+
+// SetModelMappings sets the "model_mappings" field.
+func (u *ChannelMonitorUpsertOne) SetModelMappings(v map[string]string) *ChannelMonitorUpsertOne {
+	return u.Update(func(s *ChannelMonitorUpsert) {
+		s.SetModelMappings(v)
+	})
+}
+
+// UpdateModelMappings sets the "model_mappings" field to the value that was provided on create.
+func (u *ChannelMonitorUpsertOne) UpdateModelMappings() *ChannelMonitorUpsertOne {
+	return u.Update(func(s *ChannelMonitorUpsert) {
+		s.UpdateModelMappings()
 	})
 }
 
@@ -1554,6 +1597,20 @@ func (u *ChannelMonitorUpsertBulk) SetExtraModels(v []string) *ChannelMonitorUps
 func (u *ChannelMonitorUpsertBulk) UpdateExtraModels() *ChannelMonitorUpsertBulk {
 	return u.Update(func(s *ChannelMonitorUpsert) {
 		s.UpdateExtraModels()
+	})
+}
+
+// SetModelMappings sets the "model_mappings" field.
+func (u *ChannelMonitorUpsertBulk) SetModelMappings(v map[string]string) *ChannelMonitorUpsertBulk {
+	return u.Update(func(s *ChannelMonitorUpsert) {
+		s.SetModelMappings(v)
+	})
+}
+
+// UpdateModelMappings sets the "model_mappings" field to the value that was provided on create.
+func (u *ChannelMonitorUpsertBulk) UpdateModelMappings() *ChannelMonitorUpsertBulk {
+	return u.Update(func(s *ChannelMonitorUpsert) {
+		s.UpdateModelMappings()
 	})
 }
 

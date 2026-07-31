@@ -100,6 +100,32 @@
         />
       </div>
 
+      <div v-if="configuredModels.length > 0" class="admin-form-section">
+        <label class="input-label">{{ t('admin.channelMonitor.form.modelMappings') }}</label>
+        <p class="mb-3 text-xs text-gray-400">{{ t('admin.channelMonitor.form.modelMappingsHint') }}</p>
+        <div class="space-y-2">
+          <div
+            v-for="model in configuredModels"
+            :key="model"
+            class="grid items-center gap-2 sm:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)]"
+          >
+            <div class="min-w-0 truncate rounded-md bg-gray-50 px-3 py-2 text-sm font-medium text-gray-700 dark:bg-dark-800 dark:text-gray-200" :title="model">
+              {{ model }}
+            </div>
+            <span class="hidden text-center text-gray-400 sm:block" aria-hidden="true">→</span>
+            <input
+              :data-testid="`monitor-model-mapping-${model}`"
+              :value="form.model_mappings[model] || ''"
+              type="text"
+              maxlength="200"
+              class="input min-w-0"
+              :placeholder="t('admin.channelMonitor.form.modelMappingPlaceholder')"
+              @input="setModelMapping(model, ($event.target as HTMLInputElement).value)"
+            />
+          </div>
+        </div>
+      </div>
+
       <div class="admin-form-section">
         <label class="input-label">{{ t('admin.channelMonitor.form.groupName') }}</label>
         <input v-model="form.group_name" type="text" class="input" :placeholder="t('admin.channelMonitor.form.groupNamePlaceholder')" />
@@ -263,6 +289,7 @@ interface MonitorForm {
   api_key: string
   primary_model: string
   extra_models: string[]
+  model_mappings: Record<string, string>
   group_name: string
   interval_seconds: number
   jitter_seconds: number
@@ -282,6 +309,7 @@ const form = reactive<MonitorForm>({
   api_key: '',
   primary_model: '',
   extra_models: [],
+  model_mappings: {},
   group_name: '',
   interval_seconds: systemDefaultInterval.value,
   jitter_seconds: 0,
@@ -312,6 +340,24 @@ const templateOptions = computed(() => {
     ...items.map((t) => ({ value: String(t.id), label: templateOptionLabel(t) })),
   ]
 })
+
+const configuredModels = computed(() => {
+  const models = [form.primary_model.trim(), ...form.extra_models.map(model => model.trim())]
+  return [...new Set(models.filter(Boolean))]
+})
+
+function setModelMapping(displayModel: string, requestModel: string) {
+  form.model_mappings[displayModel] = requestModel
+}
+
+function normalizedModelMappings(): Record<string, string> {
+  const allowed = new Set(configuredModels.value)
+  return Object.fromEntries(
+    Object.entries(form.model_mappings)
+      .map(([display, request]) => [display.trim(), request.trim()] as const)
+      .filter(([display, request]) => allowed.has(display) && request && request !== display),
+  )
+}
 
 async function loadTemplates() {
   if (templatesCache.value.length > 0) return
@@ -451,6 +497,7 @@ function resetForm() {
   form.api_key = ''
   form.primary_model = ''
   form.extra_models = []
+  form.model_mappings = {}
   form.group_name = ''
   form.interval_seconds = systemDefaultInterval.value
   form.jitter_seconds = 0
@@ -471,6 +518,7 @@ function loadFromMonitor(m: ChannelMonitor) {
   form.api_key = ''
   form.primary_model = m.primary_model
   form.extra_models = [...(m.extra_models || [])]
+  form.model_mappings = { ...(m.model_mappings || {}) }
   form.group_name = m.group_name || ''
   form.interval_seconds = m.interval_seconds || systemDefaultInterval.value
   form.jitter_seconds = m.jitter_seconds || 0
@@ -537,6 +585,7 @@ function buildPayload(): CreateParams {
     api_key: form.api_key.trim(),
     primary_model: form.primary_model.trim(),
     extra_models: form.extra_models,
+    model_mappings: normalizedModelMappings(),
     group_name: form.group_name.trim(),
     enabled: form.enabled,
     interval_seconds: form.interval_seconds,

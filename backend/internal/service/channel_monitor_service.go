@@ -137,6 +137,7 @@ func (s *ChannelMonitorService) Create(ctx context.Context, p ChannelMonitorCrea
 		APIKey:           encrypted, // 注意：传入 repository 时该字段为密文
 		PrimaryModel:     normalizeMonitorPrimaryModel(p.Provider, p.PrimaryModel),
 		ExtraModels:      normalizeModels(p.ExtraModels),
+		ModelMappings:    normalizeMonitorModelMappings(normalizeMonitorPrimaryModel(p.Provider, p.PrimaryModel), normalizeModels(p.ExtraModels), p.ModelMappings),
 		GroupName:        strings.TrimSpace(p.GroupName),
 		Enabled:          p.Enabled,
 		IntervalSeconds:  p.IntervalSeconds,
@@ -202,6 +203,7 @@ func (s *ChannelMonitorService) Duplicate(
 		APIKey:               encryptedAPIKey,
 		PrimaryModel:         source.PrimaryModel,
 		ExtraModels:          append([]string{}, source.ExtraModels...),
+		ModelMappings:        cloneChannelMonitorHeaders(source.ModelMappings),
 		GroupName:            source.GroupName,
 		Enabled:              false,
 		IntervalSeconds:      source.IntervalSeconds,
@@ -339,6 +341,9 @@ func validateCreateParams(p ChannelMonitorCreateParams) error {
 	}
 	if normalizeMonitorPrimaryModel(p.Provider, p.PrimaryModel) == "" {
 		return ErrChannelMonitorMissingPrimaryModel
+	}
+	if err := validateMonitorModelMappings(p.PrimaryModel, p.ExtraModels, p.ModelMappings); err != nil {
+		return err
 	}
 	return nil
 }
@@ -487,7 +492,15 @@ func (s *ChannelMonitorService) runChecksConcurrent(ctx context.Context, m *Chan
 	for i, model := range models {
 		i, model := i, model
 		eg.Go(func() error {
-			r := runCheckForModel(ctx, m.Provider, m.Endpoint, m.APIKey, model, opts)
+			requestModel := resolveMonitorRequestModel(model, m.ModelMappings)
+			checkOpts := opts
+			if requestModel != model {
+				mappedOpts := *opts
+				mappedOpts.OverrideModelInReplace = true
+				checkOpts = &mappedOpts
+			}
+			r := runCheckForModel(ctx, m.Provider, m.Endpoint, m.APIKey, requestModel, checkOpts)
+			r.Model = model
 			r.PingLatencyMs = pingMs
 			mu.Lock()
 			results[i] = r
@@ -676,6 +689,13 @@ func applyMonitorUpdate(existing *ChannelMonitor, p ChannelMonitorUpdateParams) 
 	}
 	if p.ExtraModels != nil {
 		existing.ExtraModels = normalizeModels(*p.ExtraModels)
+	}
+	if p.ModelMappings != nil {
+		existing.ModelMappings = *p.ModelMappings
+	}
+	existing.ModelMappings = normalizeMonitorModelMappings(existing.PrimaryModel, existing.ExtraModels, existing.ModelMappings)
+	if err := validateMonitorModelMappings(existing.PrimaryModel, existing.ExtraModels, existing.ModelMappings); err != nil {
+		return err
 	}
 	if p.GroupName != nil {
 		existing.GroupName = strings.TrimSpace(*p.GroupName)

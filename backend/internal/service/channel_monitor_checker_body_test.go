@@ -195,6 +195,83 @@ func TestRunCheckForModel_OpenAI_DefaultChatRequest(t *testing.T) {
 	}
 }
 
+func TestRunChecksConcurrent_UsesMappedRequestModelAndKeepsDisplayName(t *testing.T) {
+	h := &openAICaptureHandler{}
+	endpoint := setupFakeOpenAI(t, h)
+	monitor := &ChannelMonitor{
+		Provider:     MonitorProviderOpenAI,
+		Endpoint:     endpoint,
+		APIKey:       "sk-openai",
+		PrimaryModel: "tavern-opus",
+		ModelMappings: map[string]string{
+			"tavern-opus": "claude-opus-4-6",
+		},
+	}
+
+	results := (&ChannelMonitorService{}).runChecksConcurrent(context.Background(), monitor)
+
+	if len(results) != 1 {
+		t.Fatalf("expected one result, got %d", len(results))
+	}
+	if h.lastBody["model"] != "claude-opus-4-6" {
+		t.Fatalf("expected mapped upstream model, got %v", h.lastBody["model"])
+	}
+	if results[0].Model != "tavern-opus" {
+		t.Fatalf("expected display model in result, got %q", results[0].Model)
+	}
+}
+
+func TestRunChecksConcurrent_MappedModelOverridesReplaceBodyModel(t *testing.T) {
+	h := &captureHandler{respondText: "ok"}
+	endpoint := setupFakeAnthropic(t, h)
+	monitor := &ChannelMonitor{
+		Provider:     MonitorProviderAnthropic,
+		Endpoint:     endpoint,
+		APIKey:       "sk-anthropic",
+		PrimaryModel: "tavern-opus",
+		ModelMappings: map[string]string{
+			"tavern-opus": "claude-opus-4-6",
+		},
+		BodyOverrideMode: MonitorBodyOverrideModeReplace,
+		BodyOverride: map[string]any{
+			"model":      "stale-template-model",
+			"messages":   []any{map[string]any{"role": "user", "content": "ping"}},
+			"max_tokens": float64(10),
+		},
+	}
+
+	results := (&ChannelMonitorService{}).runChecksConcurrent(context.Background(), monitor)
+
+	if h.lastBody["model"] != "claude-opus-4-6" {
+		t.Fatalf("expected mapped model to override replace body, got %v", h.lastBody["model"])
+	}
+	if results[0].Model != "tavern-opus" {
+		t.Fatalf("expected display model in result, got %q", results[0].Model)
+	}
+}
+
+func TestNormalizeMonitorModelMappings_PrunesInvalidEntries(t *testing.T) {
+	got := normalizeMonitorModelMappings(" tavern-opus ", []string{" tavern-sonnet "}, map[string]string{
+		"tavern-opus":   " claude-opus-4-6 ",
+		"tavern-sonnet": "tavern-sonnet",
+		"removed-model": "claude-haiku-4-5",
+	})
+
+	if len(got) != 1 || got["tavern-opus"] != "claude-opus-4-6" {
+		t.Fatalf("unexpected normalized mappings: %#v", got)
+	}
+}
+
+func TestValidateMonitorModelMappings_RejectsOversizedTarget(t *testing.T) {
+	err := validateMonitorModelMappings("tavern-opus", nil, map[string]string{
+		"tavern-opus": strings.Repeat("x", monitorModelNameMaxLength+1),
+	})
+
+	if err == nil {
+		t.Fatal("expected oversized mapped model to be rejected")
+	}
+}
+
 func TestGrokMonitorConfiguration(t *testing.T) {
 	if err := validateProvider(MonitorProviderGrok); err != nil {
 		t.Fatalf("grok provider should be supported: %v", err)

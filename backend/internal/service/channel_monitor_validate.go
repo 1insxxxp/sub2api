@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/url"
 	"strings"
+	"unicode/utf8"
 )
 
 // 渠道监控参数校验与归一化辅助函数。
@@ -122,6 +123,46 @@ func normalizeModels(in []string) []string {
 		out = append(out, m)
 	}
 	return out
+}
+
+// normalizeMonitorModelMappings keeps mappings only for configured display
+// models. Empty targets and identity mappings use the display model directly.
+func normalizeMonitorModelMappings(primary string, extras []string, in map[string]string) map[string]string {
+	allowed := make(map[string]struct{}, len(extras)+1)
+	if primary = strings.TrimSpace(primary); primary != "" {
+		allowed[primary] = struct{}{}
+	}
+	for _, model := range extras {
+		if model = strings.TrimSpace(model); model != "" {
+			allowed[model] = struct{}{}
+		}
+	}
+	out := make(map[string]string)
+	for display, request := range in {
+		display = strings.TrimSpace(display)
+		request = strings.TrimSpace(request)
+		if _, ok := allowed[display]; !ok || request == "" || request == display {
+			continue
+		}
+		out[display] = request
+	}
+	return out
+}
+
+func validateMonitorModelMappings(primary string, extras []string, mappings map[string]string) error {
+	for _, requestModel := range normalizeMonitorModelMappings(primary, extras, mappings) {
+		if utf8.RuneCountInString(requestModel) > monitorModelNameMaxLength {
+			return ErrChannelMonitorInvalidModelMapping
+		}
+	}
+	return nil
+}
+
+func resolveMonitorRequestModel(displayModel string, mappings map[string]string) string {
+	if requestModel := strings.TrimSpace(mappings[displayModel]); requestModel != "" {
+		return requestModel
+	}
+	return displayModel
 }
 
 // normalizeMonitorPrimaryModel applies the Grok health-check default while

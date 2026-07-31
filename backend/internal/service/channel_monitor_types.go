@@ -36,6 +36,7 @@ type ChannelMonitor struct {
 	APIKey          string // 解密后的明文 API Key（仅在 service 内部使用，handler 层不应直接序列化返回）
 	PrimaryModel    string
 	ExtraModels     []string
+	ModelMappings   map[string]string // display model -> upstream request model
 	GroupName       string
 	Enabled         bool
 	IntervalSeconds int
@@ -80,6 +81,7 @@ type ChannelMonitorCreateParams struct {
 	APIKey           string
 	PrimaryModel     string
 	ExtraModels      []string
+	ModelMappings    map[string]string
 	GroupName        string
 	Enabled          bool
 	IntervalSeconds  int
@@ -100,6 +102,7 @@ type ChannelMonitorUpdateParams struct {
 	APIKey          *string // 空字符串表示不修改；非空字符串覆盖
 	PrimaryModel    *string
 	ExtraModels     *[]string
+	ModelMappings   *map[string]string
 	GroupName       *string
 	Enabled         *bool
 	IntervalSeconds *int

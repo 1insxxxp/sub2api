@@ -33,6 +33,8 @@ const (
 	// monitorMinIntervalSeconds / monitorMaxIntervalSeconds 用户配置的检测间隔上下限。
 	monitorMinIntervalSeconds = 15
 	monitorMaxIntervalSeconds = 3600
+	// monitorModelNameMaxLength 与 primary_model 的 schema 限制一致。
+	monitorModelNameMaxLength = 200
 	// monitorMessageMaxBytes message 字段最大字节数（与 schema/migration 一致）。
 	monitorMessageMaxBytes = 500
 	// monitorResponseMaxBytes 单次模型响应最大读取字节，防止 OOM。
@@ -152,6 +154,9 @@ var (
 	)
 	ErrChannelMonitorMissingPrimaryModel = infraerrors.BadRequest(
 		"CHANNEL_MONITOR_MISSING_PRIMARY_MODEL", "primary_model is required",
+	)
+	ErrChannelMonitorInvalidModelMapping = infraerrors.BadRequest(
+		"CHANNEL_MONITOR_INVALID_MODEL_MAPPING", "mapped upstream model must not exceed 200 characters",
 	)
 	ErrChannelMonitorAPIKeyDecryptFailed = infraerrors.InternalServer(
 		"CHANNEL_MONITOR_KEY_DECRYPT_FAILED", "api key decryption failed; please re-edit the monitor with a fresh key",

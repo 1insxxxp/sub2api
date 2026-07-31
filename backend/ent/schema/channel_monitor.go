@@ -54,6 +54,9 @@ func (ChannelMonitor) Fields() []ent.Field {
 		field.JSON("extra_models", []string{}).
 			Default([]string{}).
 			Comment("Additional model names to test alongside primary_model"),
+		field.JSON("model_mappings", map[string]string{}).
+			Default(map[string]string{}).
+			Comment("Display model name to upstream request model name"),
 		field.String("group_name").
 			Optional().
 			Default("").

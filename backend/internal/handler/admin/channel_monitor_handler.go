@@ -45,6 +45,7 @@ type channelMonitorCreateRequest struct {
 	APIKey           string            `json:"api_key" binding:"required,max=2000"`
 	PrimaryModel     string            `json:"primary_model" binding:"max=200"`
 	ExtraModels      []string          `json:"extra_models"`
+	ModelMappings    map[string]string `json:"model_mappings"`
 	GroupName        string            `json:"group_name" binding:"max=100"`
 	Enabled          *bool             `json:"enabled"`
 	IntervalSeconds  int               `json:"interval_seconds" binding:"required,min=15,max=3600"`
@@ -63,6 +64,7 @@ type channelMonitorUpdateRequest struct {
 	APIKey           *string            `json:"api_key" binding:"omitempty,max=2000"`
 	PrimaryModel     *string            `json:"primary_model" binding:"omitempty,max=200"`
 	ExtraModels      *[]string          `json:"extra_models"`
+	ModelMappings    *map[string]string `json:"model_mappings"`
 	GroupName        *string            `json:"group_name" binding:"omitempty,max=100"`
 	Enabled          *bool              `json:"enabled"`
 	IntervalSeconds  *int               `json:"interval_seconds" binding:"omitempty,min=15,max=3600"`
@@ -84,6 +86,7 @@ type channelMonitorResponse struct {
 	APIKeyDecryptFailed bool                                 `json:"api_key_decrypt_failed"`
 	PrimaryModel        string                               `json:"primary_model"`
 	ExtraModels         []string                             `json:"extra_models"`
+	ModelMappings       map[string]string                    `json:"model_mappings"`
 	GroupName           string                               `json:"group_name"`
 	Enabled             bool                                 `json:"enabled"`
 	IntervalSeconds     int                                  `json:"interval_seconds"`
@@ -142,6 +145,10 @@ func channelMonitorToResponse(m *service.ChannelMonitor) *channelMonitorResponse
 	if headers == nil {
 		headers = map[string]string{}
 	}
+	mappings := m.ModelMappings
+	if mappings == nil {
+		mappings = map[string]string{}
+	}
 	resp := &channelMonitorResponse{
 		ID:                  m.ID,
 		Name:                m.Name,
@@ -152,6 +159,7 @@ func channelMonitorToResponse(m *service.ChannelMonitor) *channelMonitorResponse
 		APIKeyDecryptFailed: m.APIKeyDecryptFailed,
 		PrimaryModel:        m.PrimaryModel,
 		ExtraModels:         extras,
+		ModelMappings:       mappings,
 		GroupName:           m.GroupName,
 		Enabled:             m.Enabled,
 		IntervalSeconds:     m.IntervalSeconds,
@@ -318,6 +326,7 @@ func (h *ChannelMonitorHandler) Create(c *gin.Context) {
 		APIKey:           req.APIKey,
 		PrimaryModel:     req.PrimaryModel,
 		ExtraModels:      req.ExtraModels,
+		ModelMappings:    req.ModelMappings,
 		GroupName:        req.GroupName,
 		Enabled:          enabled,
 		IntervalSeconds:  req.IntervalSeconds,
@@ -412,6 +421,7 @@ func (h *ChannelMonitorHandler) Update(c *gin.Context) {
 		APIKey:           req.APIKey,
 		PrimaryModel:     req.PrimaryModel,
 		ExtraModels:      req.ExtraModels,
+		ModelMappings:    req.ModelMappings,
 		GroupName:        req.GroupName,
 		Enabled:          req.Enabled,
 		IntervalSeconds:  req.IntervalSeconds,

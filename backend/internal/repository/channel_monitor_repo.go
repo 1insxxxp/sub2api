@@ -45,6 +45,7 @@ func (r *channelMonitorRepository) Create(ctx context.Context, m *service.Channe
 		SetAPIKeyEncrypted(m.APIKey). // 调用方传入的已是密文
 		SetPrimaryModel(m.PrimaryModel).
 		SetExtraModels(emptySliceIfNil(m.ExtraModels)).
+		SetModelMappings(emptyStringMapIfNil(m.ModelMappings)).
 		SetGroupName(m.GroupName).
 		SetEnabled(m.Enabled).
 		SetIntervalSeconds(m.IntervalSeconds).
@@ -113,6 +114,7 @@ func (r *channelMonitorRepository) Update(ctx context.Context, m *service.Channe
 		SetAPIKeyEncrypted(m.APIKey).
 		SetPrimaryModel(m.PrimaryModel).
 		SetExtraModels(emptySliceIfNil(m.ExtraModels)).
+		SetModelMappings(emptyStringMapIfNil(m.ModelMappings)).
 		SetGroupName(m.GroupName).
 		SetEnabled(m.Enabled).
 		SetIntervalSeconds(m.IntervalSeconds).
@@ -746,6 +748,7 @@ func entToServiceMonitor(row *dbent.ChannelMonitor) *service.ChannelMonitor {
 		APIKey:               row.APIKeyEncrypted, // 仍为密文，service 层负责解密
 		PrimaryModel:         row.PrimaryModel,
 		ExtraModels:          extras,
+		ModelMappings:        emptyStringMapIfNil(row.ModelMappings),
 		GroupName:            row.GroupName,
 		Enabled:              row.Enabled,
 		IntervalSeconds:      row.IntervalSeconds,
@@ -810,6 +813,13 @@ func defaultAPIModeRepo(apiMode string) string {
 func emptySliceIfNil(in []string) []string {
 	if in == nil {
 		return []string{}
+	}
+	return in
+}
+
+func emptyStringMapIfNil(in map[string]string) map[string]string {
+	if in == nil {
+		return map[string]string{}
 	}
 	return in
 }

@@ -134,6 +134,12 @@ func (_u *ChannelMonitorUpdate) AppendExtraModels(v []string) *ChannelMonitorUpd
 	return _u
 }
 
+// SetModelMappings sets the "model_mappings" field.
+func (_u *ChannelMonitorUpdate) SetModelMappings(v map[string]string) *ChannelMonitorUpdate {
+	_u.mutation.SetModelMappings(v)
+	return _u
+}
+
 // SetGroupName sets the "group_name" field.
 func (_u *ChannelMonitorUpdate) SetGroupName(v string) *ChannelMonitorUpdate {
 	_u.mutation.SetGroupName(v)
@@ -537,6 +543,9 @@ func (_u *ChannelMonitorUpdate) sqlSave(ctx context.Context) (_node int, err err
 			sqljson.Append(u, channelmonitor.FieldExtraModels, value)
 		})
 	}
+	if value, ok := _u.mutation.ModelMappings(); ok {
+		_spec.SetField(channelmonitor.FieldModelMappings, field.TypeJSON, value)
+	}
 	if value, ok := _u.mutation.GroupName(); ok {
 		_spec.SetField(channelmonitor.FieldGroupName, field.TypeString, value)
 	}
@@ -820,6 +829,12 @@ func (_u *ChannelMonitorUpdateOne) SetExtraModels(v []string) *ChannelMonitorUpd
 // AppendExtraModels appends value to the "extra_models" field.
 func (_u *ChannelMonitorUpdateOne) AppendExtraModels(v []string) *ChannelMonitorUpdateOne {
 	_u.mutation.AppendExtraModels(v)
+	return _u
+}
+
+// SetModelMappings sets the "model_mappings" field.
+func (_u *ChannelMonitorUpdateOne) SetModelMappings(v map[string]string) *ChannelMonitorUpdateOne {
+	_u.mutation.SetModelMappings(v)
 	return _u
 }
 
@@ -1255,6 +1270,9 @@ func (_u *ChannelMonitorUpdateOne) sqlSave(ctx context.Context) (_node *ChannelM
 		_spec.AddModifier(func(u *sql.UpdateBuilder) {
 			sqljson.Append(u, channelmonitor.FieldExtraModels, value)
 		})
+	}
+	if value, ok := _u.mutation.ModelMappings(); ok {
+		_spec.SetField(channelmonitor.FieldModelMappings, field.TypeJSON, value)
 	}
 	if value, ok := _u.mutation.GroupName(); ok {
 		_spec.SetField(channelmonitor.FieldGroupName, field.TypeString, value)

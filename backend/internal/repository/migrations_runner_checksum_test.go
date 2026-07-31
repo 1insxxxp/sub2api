@@ -170,4 +170,13 @@ func TestIsMigrationChecksumCompatible(t *testing.T) {
 		)
 		require.True(t, ok)
 	})
+
+	t.Run("188已验证约束版本可兼容not-valid版本", func(t *testing.T) {
+		ok := isMigrationChecksumCompatible(
+			"188_allow_live_usage_request_type.sql",
+			"0233dba07a75bd9c740402a64e3af75c2a3884dfc8c4b63145df115e716fd35e",
+			"a9c1dc91959773ccc3f94eb88e5bfd663de87c6f93d4e6e9d79b83597f79af66",
+		)
+		require.True(t, ok)
+	})
 }

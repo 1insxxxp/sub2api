@@ -37,6 +37,8 @@ type ChannelMonitor struct {
 	PrimaryModel string `json:"primary_model,omitempty"`
 	// Additional model names to test alongside primary_model
 	ExtraModels []string `json:"extra_models,omitempty"`
+	// Display model name to upstream request model name
+	ModelMappings map[string]string `json:"model_mappings,omitempty"`
 	// GroupName holds the value of the "group_name" field.
 	GroupName string `json:"group_name,omitempty"`
 	// Enabled holds the value of the "enabled" field.
@@ -110,7 +112,7 @@ func (*ChannelMonitor) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case channelmonitor.FieldExtraModels, channelmonitor.FieldExtraHeaders, channelmonitor.FieldBodyOverride:
+		case channelmonitor.FieldExtraModels, channelmonitor.FieldModelMappings, channelmonitor.FieldExtraHeaders, channelmonitor.FieldBodyOverride:
 			values[i] = new([]byte)
 		case channelmonitor.FieldEnabled:
 			values[i] = new(sql.NullBool)
@@ -195,6 +197,14 @@ func (_m *ChannelMonitor) assignValues(columns []string, values []any) error {
 			} else if value != nil && len(*value) > 0 {
 				if err := json.Unmarshal(*value, &_m.ExtraModels); err != nil {
 					return fmt.Errorf("unmarshal field extra_models: %w", err)
+				}
+			}
+		case channelmonitor.FieldModelMappings:
+			if value, ok := values[i].(*[]byte); !ok {
+				return fmt.Errorf("unexpected type %T for field model_mappings", values[i])
+			} else if value != nil && len(*value) > 0 {
+				if err := json.Unmarshal(*value, &_m.ModelMappings); err != nil {
+					return fmt.Errorf("unmarshal field model_mappings: %w", err)
 				}
 			}
 		case channelmonitor.FieldGroupName:
@@ -339,6 +349,9 @@ func (_m *ChannelMonitor) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("extra_models=")
 	builder.WriteString(fmt.Sprintf("%v", _m.ExtraModels))
+	builder.WriteString(", ")
+	builder.WriteString("model_mappings=")
+	builder.WriteString(fmt.Sprintf("%v", _m.ModelMappings))
 	builder.WriteString(", ")
 	builder.WriteString("group_name=")
 	builder.WriteString(_m.GroupName)

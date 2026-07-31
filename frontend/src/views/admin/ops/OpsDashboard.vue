@@ -395,6 +395,7 @@ const { pause: pauseCountdown, resume: resumeCountdown } = useIntervalFn(
   () => {
     if (!autoRefreshEnabled.value) return
     if (!opsEnabled.value) return
+    if (document.hidden) return
     if (loading.value) return
 
     if (autoRefreshCountdown.value <= 0) {
@@ -410,13 +411,24 @@ const { pause: pauseCountdown, resume: resumeCountdown } = useIntervalFn(
   { immediate: false }
 )
 
+function handleVisibilityChange() {
+  if (document.hidden) {
+    pauseCountdown()
+    return
+  }
+  if (autoRefreshEnabled.value && opsEnabled.value) {
+    autoRefreshCountdown.value = Math.floor(autoRefreshIntervalMs.value / 1000)
+    resumeCountdown()
+  }
+}
+
 // Load ops dashboard presentation settings from backend.
 async function loadDashboardAdvancedSettings() {
   try {
     const settings = await opsAPI.getAdvancedSettings()
     showAlertEvents.value = settings.display_alert_events
     showOpenAITokenStats.value = settings.display_openai_token_stats
-    autoRefreshEnabled.value = false
+    autoRefreshEnabled.value = settings.auto_refresh_enabled
     autoRefreshIntervalMs.value = settings.auto_refresh_interval_seconds * 1000
     autoRefreshCountdown.value = 0
   } catch (err) {
@@ -773,6 +785,7 @@ watch(
 onMounted(async () => {
   // Fullscreen mode: listen for ESC key
   window.addEventListener('keydown', handleKeydown)
+  document.addEventListener('visibilitychange', handleVisibilityChange)
 
   await adminSettingsStore.fetch()
   if (!adminSettingsStore.opsMonitoringEnabled) {
@@ -792,7 +805,7 @@ onMounted(async () => {
 
   // Start auto refresh if enabled
   if (autoRefreshEnabled.value) {
-    resumeCountdown()
+    handleVisibilityChange()
   }
 })
 
@@ -808,6 +821,7 @@ async function loadThresholds() {
 
 onUnmounted(() => {
   window.removeEventListener('keydown', handleKeydown)
+  document.removeEventListener('visibilitychange', handleVisibilityChange)
   abortDashboardFetch()
   pauseCountdown()
 })
@@ -815,8 +829,7 @@ onUnmounted(() => {
 // Watch auto refresh settings changes
 watch(autoRefreshEnabled, (enabled) => {
   if (enabled) {
-    autoRefreshCountdown.value = Math.floor(autoRefreshIntervalMs.value / 1000)
-    resumeCountdown()
+    handleVisibilityChange()
   } else {
     pauseCountdown()
     autoRefreshCountdown.value = 0

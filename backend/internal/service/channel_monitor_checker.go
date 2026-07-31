@@ -50,6 +50,9 @@ type CheckOptions struct {
 	// BodyOverride 在 merge 模式下做浅合并（key 命中黑名单时静默丢弃），
 	// 在 replace 模式下直接当作完整 body。
 	BodyOverride map[string]any
+	// OverrideModelInReplace is set internally when a display model maps to a
+	// different upstream model. It preserves legacy replace bodies otherwise.
+	OverrideModelInReplace bool
 }
 
 // runCheckForModel 对单个 (provider, model) 做一次完整检测。
@@ -400,10 +403,18 @@ func buildRequestBody(adapter providerAdapter, provider, apiMode, model, prompt 
 		if opts == nil || len(opts.BodyOverride) == 0 {
 			return nil, fmt.Errorf("replace mode: body_override is empty")
 		}
-		if err := validateReplaceRequestBody(provider, apiMode, opts.BodyOverride); err != nil {
+		replaceBody := opts.BodyOverride
+		if opts.OverrideModelInReplace && provider != MonitorProviderGemini {
+			replaceBody = make(map[string]any, len(opts.BodyOverride)+1)
+			for key, value := range opts.BodyOverride {
+				replaceBody[key] = value
+			}
+			replaceBody["model"] = model
+		}
+		if err := validateReplaceRequestBody(provider, apiMode, replaceBody); err != nil {
 			return nil, err
 		}
-		body, err := json.Marshal(opts.BodyOverride)
+		body, err := json.Marshal(replaceBody)
 		if err != nil {
 			return nil, fmt.Errorf("marshal body_override (replace): %w", err)
 		}

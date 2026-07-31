@@ -25,6 +25,7 @@ export interface ChannelMonitor {
   api_key_decrypt_failed?: boolean
   primary_model: string
   extra_models: string[]
+  model_mappings?: Record<string, string>
   group_name: string
   enabled: boolean
   interval_seconds: number
@@ -79,6 +80,7 @@ export interface CreateParams {
   api_key: string
   primary_model: string
   extra_models?: string[]
+  model_mappings?: Record<string, string>
   group_name?: string
   enabled?: boolean
   interval_seconds: number
