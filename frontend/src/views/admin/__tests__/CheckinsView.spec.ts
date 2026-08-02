@@ -349,6 +349,49 @@ describe('Admin CheckinsView', () => {
     }))
   })
 
+  it('keeps streak rewards as fixed amounts when usage rebates are enabled', async () => {
+    getConfig.mockResolvedValueOnce({
+      enabled: true,
+      min_total_usage_usd: 5,
+      min_total_recharge_usd: 20,
+      tiers: [{ amount: 1, probability: 100, sort_order: 1 }],
+      streak_enabled: true,
+      streak_rules: [{ day: 7, bonus_amount: 4, bonus_rate_percent: 10 }],
+      usage_rebate_enabled: true,
+      usage_rebate_rate_percent: 8,
+      usage_rebate_cap: 8,
+      total_reward_cap: 10,
+      probability_total: 100,
+      preview: { min_reward: 1, max_reward: 1, average_reward: 1 },
+    })
+
+    const wrapper = mount(CheckinsView, {
+      global: {
+        stubs: {
+          AppLayout: { template: '<div><slot /></div>' },
+          DataTable: DataTableStub,
+          Pagination: true,
+          Icon: true,
+        },
+      },
+    })
+
+    await flushPromises()
+
+    const amountInput = wrapper.get('[data-test="streak-bonus-amount"]')
+    expect((amountInput.element as HTMLInputElement).value).toBe('4')
+    expect(wrapper.find('[data-test="streak-bonus-percent"]').exists()).toBe(false)
+
+    await amountInput.setValue('5')
+    await wrapper.get('[data-test="save-checkin-config"]').trigger('click')
+    await flushPromises()
+
+    expect(updateConfig).toHaveBeenCalledWith(expect.objectContaining({
+      usage_rebate_enabled: true,
+      streak_rules: [{ day: 7, bonus_amount: 5 }],
+    }))
+  })
+
   it('validates enabled usage-linked reward settings before saving', async () => {
     const wrapper = mount(CheckinsView, {
       global: {

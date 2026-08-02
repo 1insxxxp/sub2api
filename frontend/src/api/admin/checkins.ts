@@ -40,7 +40,7 @@ export interface CheckinRewardTier {
 export interface CheckinStreakRule {
   day: number
   bonus_amount: number
-  bonus_rate_percent: number
+  bonus_rate_percent?: number
 }
 
 export interface CheckinRewardPreview {

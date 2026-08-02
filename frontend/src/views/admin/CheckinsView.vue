@@ -383,19 +383,15 @@
                       <input v-model.number="rule.day" type="number" min="1" step="1" class="input h-9" />
                     </div>
                     <div>
-                      <label class="input-label">
-                        {{ configForm.usage_rebate_enabled ? t('admin.checkins.streakBonusPercent') : t('admin.checkins.streakBonusUsd') }}
-                      </label>
+                      <label class="input-label">{{ t('admin.checkins.streakBonusUsd') }}</label>
                       <input
-                        v-if="configForm.usage_rebate_enabled"
-                        v-model.number="rule.bonus_rate_percent"
+                        v-model.number="rule.bonus_amount"
+                        data-test="streak-bonus-amount"
                         type="number"
                         min="0.01"
-                        max="100"
                         step="0.01"
                         class="input h-9"
                       />
-                      <input v-else v-model.number="rule.bonus_amount" type="number" min="0.01" step="0.01" class="input h-9" />
                     </div>
                   </div>
                 </div>
@@ -940,8 +936,7 @@ async function handleSaveConfig() {
       streak_enabled: configForm.streak_enabled,
       streak_rules: configForm.streak_rules.map((rule) => ({
         day: Math.floor(Number(rule.day)),
-        bonus_amount: configForm.usage_rebate_enabled ? 0 : Number(rule.bonus_amount),
-        bonus_rate_percent: configForm.usage_rebate_enabled ? Number(rule.bonus_rate_percent) : 0,
+        bonus_amount: Number(rule.bonus_amount),
       })),
       usage_rebate_enabled: configForm.usage_rebate_enabled,
       usage_rebate_rate_percent: Number(configForm.usage_rebate_rate_percent),
@@ -997,8 +992,7 @@ function validateRewardRules(): boolean {
   const days = new Set<number>()
   for (const rule of configForm.streak_rules) {
     const day = Math.floor(safeNumber(rule.day))
-    const bonusValue = configForm.usage_rebate_enabled ? rule.bonus_rate_percent : rule.bonus_amount
-    if (day <= 0 || safeNumber(bonusValue) <= 0 || (configForm.usage_rebate_enabled && safeNumber(bonusValue) > 100)) {
+    if (day <= 0 || safeNumber(rule.bonus_amount) <= 0) {
       appStore.showError(t('admin.checkins.invalidStreakRule'))
       return false
     }
@@ -1055,8 +1049,8 @@ function addStreakRule() {
   const maxDay = configForm.streak_rules.reduce((max, rule) => Math.max(max, safeNumber(rule.day)), 0)
   configForm.streak_rules.push({
     day: Math.max(1, Math.floor(maxDay) + 7),
-    bonus_amount: configForm.usage_rebate_enabled ? 0 : 1,
-    bonus_rate_percent: configForm.usage_rebate_enabled ? 10 : 0,
+    bonus_amount: 1,
+    bonus_rate_percent: 0,
   })
 }
 
