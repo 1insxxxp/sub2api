@@ -148,6 +148,36 @@ func createCheckinUsage(t *testing.T, ctx context.Context, client *dbent.Client,
 	require.NoError(t, err)
 }
 
+func createCheckinUsageAt(t *testing.T, ctx context.Context, client *dbent.Client, userID int64, requestID string, actualCost float64, createdAt time.Time) {
+	t.Helper()
+	group, err := client.Group.Create().SetName("checkin-usage-" + requestID).Save(ctx)
+	require.NoError(t, err)
+	apiKey, err := client.APIKey.Create().
+		SetUserID(userID).
+		SetKey("sk-checkin-" + requestID).
+		SetName("check-in usage").
+		SetGroupID(group.ID).
+		Save(ctx)
+	require.NoError(t, err)
+	account, err := client.Account.Create().
+		SetName("checkin-account-" + requestID).
+		SetPlatform("anthropic").
+		SetType("api_key").
+		Save(ctx)
+	require.NoError(t, err)
+	_, err = client.UsageLog.Create().
+		SetUserID(userID).
+		SetAPIKeyID(apiKey.ID).
+		SetAccountID(account.ID).
+		SetRequestID(requestID).
+		SetModel("claude-test").
+		SetTotalCost(actualCost).
+		SetActualCost(actualCost).
+		SetCreatedAt(createdAt).
+		Save(ctx)
+	require.NoError(t, err)
+}
+
 func TestCheckinRewardForRollUsesWeightedTiers(t *testing.T) {
 	cfg := *DefaultCheckinConfig()
 	require.Equal(t, 1.0, selectCheckinReward(cfg, 0))
@@ -703,6 +733,88 @@ func TestPreviousBeijingDayUsage(t *testing.T) {
 	usage, err := svc.previousBeijingDayUsageUSDWithClient(ctx, client, createdUser.ID, "2026-08-02")
 	require.NoError(t, err)
 	require.Equal(t, 4.0, usage)
+}
+
+func TestCheckinService_Checkin_UsageRebate(t *testing.T) {
+	client := newCheckinServiceTestClient(t)
+	ctx := context.Background()
+	createdUser := createCheckinTestUser(t, ctx, client, "usage-rebate@example.com", 10)
+	settings := newCheckinSettingRepoStub()
+	svc := NewCheckinService(client, nil, nil)
+	svc.SetSettingRepository(settings)
+	_, err := svc.UpdateConfig(ctx, CheckinConfig{
+		Enabled:                true,
+		Tiers:                  []CheckinRewardTier{{Amount: 0.8, Probability: 100}},
+		UsageRebateEnabled:     true,
+		UsageRebateRatePercent: 8,
+		UsageRebateCap:         8,
+		TotalRewardCap:         10,
+	})
+	require.NoError(t, err)
+	svc.rewardRoll = func() float64 { return 0 }
+	beijing := time.FixedZone("CST", 8*60*60)
+	svc.now = func() time.Time { return time.Date(2026, 8, 2, 9, 0, 0, 0, beijing) }
+	createCheckinUsageAt(t, ctx, client, createdUser.ID, "usage-rebate-first", 50, time.Date(2026, 8, 1, 12, 0, 0, 0, beijing))
+
+	status, err := svc.GetStatus(ctx, createdUser.ID)
+	require.NoError(t, err)
+	require.Equal(t, 50.0, status.PreviousDayUsageAmount)
+	require.Equal(t, 4.0, status.EstimatedUsageRebate)
+
+	result, err := svc.Checkin(ctx, createdUser.ID)
+	require.NoError(t, err)
+	require.False(t, result.AlreadyCheckedIn)
+	require.Equal(t, 50.0, result.PreviousDayUsageAmount)
+	require.Equal(t, 0.8, result.BaseRewardAmount)
+	require.Equal(t, 4.0, result.UsageRebateAmount)
+	require.Zero(t, result.BonusRewardAmount)
+	require.Equal(t, 4.8, result.TotalRewardAmount)
+	require.Equal(t, 14.8, result.BalanceAfter)
+
+	record, err := client.UserCheckin.Query().Only(ctx)
+	require.NoError(t, err)
+	require.Equal(t, 50.0, record.PreviousDayUsageAmount)
+	require.Equal(t, 4.0, record.UsageRebateAmount)
+	require.Zero(t, record.RewardCapAdjustment)
+}
+
+func TestCheckinService_Checkin_IdempotentUsageSnapshot(t *testing.T) {
+	client := newCheckinServiceTestClient(t)
+	ctx := context.Background()
+	createdUser := createCheckinTestUser(t, ctx, client, "usage-rebate-retry@example.com", 10)
+	settings := newCheckinSettingRepoStub()
+	svc := NewCheckinService(client, nil, nil)
+	svc.SetSettingRepository(settings)
+	_, err := svc.UpdateConfig(ctx, CheckinConfig{
+		Enabled:                true,
+		Tiers:                  []CheckinRewardTier{{Amount: 0.5, Probability: 100}},
+		UsageRebateEnabled:     true,
+		UsageRebateRatePercent: 8,
+		UsageRebateCap:         8,
+		TotalRewardCap:         10,
+	})
+	require.NoError(t, err)
+	svc.rewardRoll = func() float64 { return 0 }
+	beijing := time.FixedZone("CST", 8*60*60)
+	svc.now = func() time.Time { return time.Date(2026, 8, 2, 9, 0, 0, 0, beijing) }
+	createCheckinUsageAt(t, ctx, client, createdUser.ID, "usage-retry-first", 10, time.Date(2026, 8, 1, 10, 0, 0, 0, beijing))
+
+	first, err := svc.Checkin(ctx, createdUser.ID)
+	require.NoError(t, err)
+	require.Equal(t, 0.8, first.UsageRebateAmount)
+	require.Equal(t, 1.3, first.TotalRewardAmount)
+
+	createCheckinUsageAt(t, ctx, client, createdUser.ID, "usage-retry-late", 90, time.Date(2026, 8, 1, 11, 0, 0, 0, beijing))
+	second, err := svc.Checkin(ctx, createdUser.ID)
+	require.NoError(t, err)
+	require.True(t, second.AlreadyCheckedIn)
+	require.Equal(t, first.PreviousDayUsageAmount, second.PreviousDayUsageAmount)
+	require.Equal(t, first.UsageRebateAmount, second.UsageRebateAmount)
+	require.Equal(t, first.TotalRewardAmount, second.TotalRewardAmount)
+
+	userAfter, err := client.User.Get(ctx, createdUser.ID)
+	require.NoError(t, err)
+	require.Equal(t, 11.3, userAfter.Balance)
 }
 
 func TestCheckinServiceCustomRewardConfigAndStreakBonus(t *testing.T) {
