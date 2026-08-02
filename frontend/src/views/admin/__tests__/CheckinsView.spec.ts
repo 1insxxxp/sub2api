@@ -107,6 +107,10 @@ describe('Admin CheckinsView', () => {
       tiers: [{ amount: 1, probability: 100, sort_order: 1 }],
       streak_enabled: false,
       streak_rules: [],
+      usage_rebate_enabled: true,
+      usage_rebate_rate_percent: 8,
+      usage_rebate_cap: 8,
+      total_reward_cap: 10,
       probability_total: 100,
       preview: { min_reward: 1, max_reward: 1, average_reward: 1 },
     }
@@ -132,6 +136,12 @@ describe('Admin CheckinsView', () => {
           username: 'alice',
           checkin_date: '2026-06-05',
           reward_amount: 3,
+          base_reward_amount: 0.5,
+          previous_day_usage_amount: 25,
+          usage_rebate_amount: 2,
+          bonus_reward_amount: 0.5,
+          reward_cap_adjustment: 0,
+          total_reward_amount: 3,
           balance_before: 10,
           balance_after: 13,
           created_at: '2026-06-05T01:00:00Z',
@@ -297,5 +307,77 @@ describe('Admin CheckinsView', () => {
 
     expect(updateConfig).not.toHaveBeenCalled()
     expect(showError).toHaveBeenCalledWith('admin.checkins.invalidMinTotalRechargeUsd')
+  })
+
+  it('loads, previews, and saves usage-linked reward settings', async () => {
+    const wrapper = mount(CheckinsView, {
+      global: {
+        stubs: {
+          AppLayout: { template: '<div><slot /></div>' },
+          DataTable: DataTableStub,
+          Pagination: true,
+          Icon: true,
+        },
+      },
+    })
+
+    await flushPromises()
+
+    expect((wrapper.get('[data-test="usage-rebate-rate"]').element as HTMLInputElement).value).toBe('8')
+    expect((wrapper.get('[data-test="usage-rebate-cap"]').element as HTMLInputElement).value).toBe('8')
+    expect((wrapper.get('[data-test="total-reward-cap"]').element as HTMLInputElement).value).toBe('10')
+    expect(wrapper.get('[data-test="usage-rebate-preview-0"]').text()).toContain('$0.00')
+    expect(wrapper.get('[data-test="usage-rebate-preview-10"]').text()).toContain('$0.80')
+    expect(wrapper.get('[data-test="usage-rebate-preview-20"]').text()).toContain('$1.60')
+    expect(wrapper.get('[data-test="usage-rebate-preview-50"]').text()).toContain('$4.00')
+    expect(wrapper.get('[data-test="usage-rebate-preview-100"]').text()).toContain('$8.00')
+    expect(wrapper.get('[data-test="record-previous-day-usage"]').text()).toContain('$25.00')
+    expect(wrapper.get('[data-test="record-base-reward"]').text()).toContain('$0.50')
+    expect(wrapper.get('[data-test="record-usage-rebate"]').text()).toContain('$2.00')
+    expect(wrapper.get('[data-test="record-streak-bonus"]').text()).toContain('$0.50')
+    expect(wrapper.get('[data-test="record-cap-adjustment"]').text()).toContain('$0.00')
+
+    await wrapper.get('[data-test="usage-rebate-rate"]').setValue('6')
+    await wrapper.get('[data-test="save-checkin-config"]').trigger('click')
+    await flushPromises()
+
+    expect(updateConfig).toHaveBeenCalledWith(expect.objectContaining({
+      usage_rebate_enabled: true,
+      usage_rebate_rate_percent: 6,
+      usage_rebate_cap: 8,
+      total_reward_cap: 10,
+    }))
+  })
+
+  it('validates enabled usage-linked reward settings before saving', async () => {
+    const wrapper = mount(CheckinsView, {
+      global: {
+        stubs: {
+          AppLayout: { template: '<div><slot /></div>' },
+          DataTable: DataTableStub,
+          Pagination: true,
+          Icon: true,
+        },
+      },
+    })
+
+    await flushPromises()
+
+    await wrapper.get('[data-test="usage-rebate-rate"]').setValue('101')
+    await wrapper.get('[data-test="save-checkin-config"]').trigger('click')
+    expect(updateConfig).not.toHaveBeenCalled()
+    expect(showError).toHaveBeenLastCalledWith('admin.checkins.invalidUsageRebateRate')
+
+    await wrapper.get('[data-test="usage-rebate-rate"]').setValue('8')
+    await wrapper.get('[data-test="usage-rebate-cap"]').setValue('0')
+    await wrapper.get('[data-test="save-checkin-config"]').trigger('click')
+    expect(updateConfig).not.toHaveBeenCalled()
+    expect(showError).toHaveBeenLastCalledWith('admin.checkins.invalidUsageRebateCap')
+
+    await wrapper.get('[data-test="usage-rebate-cap"]').setValue('8')
+    await wrapper.get('[data-test="total-reward-cap"]').setValue('0.5')
+    await wrapper.get('[data-test="save-checkin-config"]').trigger('click')
+    expect(updateConfig).not.toHaveBeenCalled()
+    expect(showError).toHaveBeenLastCalledWith('admin.checkins.totalRewardCapBelowTier')
   })
 })

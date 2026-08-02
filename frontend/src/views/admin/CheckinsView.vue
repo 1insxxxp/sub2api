@@ -242,6 +242,97 @@
             </section>
 
             <section class="border-t border-gray-100 pt-5 dark:border-dark-700">
+              <div class="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <div class="min-w-0">
+                  <h4 class="text-sm font-semibold text-gray-900 dark:text-white">
+                    {{ t('admin.checkins.usageRebateTitle') }}
+                  </h4>
+                  <p class="mt-1 text-xs text-gray-500 dark:text-dark-400">
+                    {{ t('admin.checkins.usageRebateHint') }}
+                  </p>
+                </div>
+                <label class="inline-flex shrink-0 cursor-pointer items-center gap-2 text-sm text-gray-700 dark:text-gray-200">
+                  <input
+                    v-model="configForm.usage_rebate_enabled"
+                    data-test="usage-rebate-enabled"
+                    type="checkbox"
+                    class="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                  />
+                  {{ t('admin.checkins.usageRebateEnabled') }}
+                </label>
+              </div>
+
+              <div v-if="configForm.usage_rebate_enabled" class="space-y-4">
+                <div class="grid gap-3 sm:grid-cols-3">
+                  <div>
+                    <label class="input-label">{{ t('admin.checkins.usageRebateRate') }}</label>
+                    <div class="relative">
+                      <input
+                        v-model.number="configForm.usage_rebate_rate_percent"
+                        data-test="usage-rebate-rate"
+                        type="number"
+                        min="0.01"
+                        max="100"
+                        step="0.01"
+                        class="input pr-8"
+                      />
+                      <span class="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-sm font-semibold text-gray-400">%</span>
+                    </div>
+                  </div>
+                  <div>
+                    <label class="input-label">{{ t('admin.checkins.usageRebateCap') }}</label>
+                    <div class="relative">
+                      <span class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm font-semibold text-gray-400">$</span>
+                      <input
+                        v-model.number="configForm.usage_rebate_cap"
+                        data-test="usage-rebate-cap"
+                        type="number"
+                        min="0.01"
+                        step="0.01"
+                        class="input pl-7"
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <label class="input-label">{{ t('admin.checkins.totalRewardCap') }}</label>
+                    <div class="relative">
+                      <span class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm font-semibold text-gray-400">$</span>
+                      <input
+                        v-model.number="configForm.total_reward_cap"
+                        data-test="total-reward-cap"
+                        type="number"
+                        min="0.01"
+                        step="0.01"
+                        class="input pl-7"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div class="admin-form-section !space-y-0 overflow-hidden">
+                  <div class="grid grid-cols-[minmax(0,1fr),minmax(84px,auto),minmax(96px,auto)] gap-3 border-b border-gray-100 px-3 py-2 text-xs font-semibold text-gray-500 dark:border-dark-700 dark:text-dark-300">
+                    <span>{{ t('admin.checkins.previewUsage') }}</span>
+                    <span class="text-right">{{ t('admin.checkins.previewRebate') }}</span>
+                    <span class="text-right">{{ t('admin.checkins.previewAverageTotal') }}</span>
+                  </div>
+                  <div
+                    v-for="usage in usagePreviewAmounts"
+                    :key="usage"
+                    :data-test="`usage-rebate-preview-${usage}`"
+                    class="grid grid-cols-[minmax(0,1fr),minmax(84px,auto),minmax(96px,auto)] gap-3 border-b border-gray-100 px-3 py-2 text-sm last:border-b-0 dark:border-dark-700"
+                  >
+                    <span class="text-gray-600 dark:text-gray-300">{{ formatUsd(usage) }}</span>
+                    <span class="text-right font-medium tabular-nums text-emerald-600 dark:text-emerald-300">{{ formatUsd(previewUsageRebate(usage)) }}</span>
+                    <span class="text-right font-semibold tabular-nums text-gray-900 dark:text-white">{{ formatUsd(previewAverageTotal(usage)) }}</span>
+                  </div>
+                </div>
+                <p class="text-xs text-gray-500 dark:text-dark-400">
+                  {{ t('admin.checkins.previewAverageBase', { amount: formatUsd(estimatedAverageReward) }) }}
+                </p>
+              </div>
+            </section>
+
+            <section class="border-t border-gray-100 pt-5 dark:border-dark-700">
               <div class="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                   <h4 class="text-sm font-semibold text-gray-900 dark:text-white">
@@ -292,8 +383,19 @@
                       <input v-model.number="rule.day" type="number" min="1" step="1" class="input h-9" />
                     </div>
                     <div>
-                      <label class="input-label">{{ t('admin.checkins.streakBonusUsd') }}</label>
-                      <input v-model.number="rule.bonus_amount" type="number" min="0.01" step="0.01" class="input h-9" />
+                      <label class="input-label">
+                        {{ configForm.usage_rebate_enabled ? t('admin.checkins.streakBonusPercent') : t('admin.checkins.streakBonusUsd') }}
+                      </label>
+                      <input
+                        v-if="configForm.usage_rebate_enabled"
+                        v-model.number="rule.bonus_rate_percent"
+                        type="number"
+                        min="0.01"
+                        max="100"
+                        step="0.01"
+                        class="input h-9"
+                      />
+                      <input v-else v-model.number="rule.bonus_amount" type="number" min="0.01" step="0.01" class="input h-9" />
                     </div>
                   </div>
                 </div>
@@ -381,12 +483,20 @@
             </span>
           </template>
           <template #cell-reward_detail="{ row }">
-            <span class="text-xs text-gray-500 dark:text-dark-400">
-              {{ formatUsd(row.base_reward_amount || row.reward_amount) }}
-              <template v-if="row.bonus_reward_amount > 0">
-                + {{ formatUsd(row.bonus_reward_amount) }}
-              </template>
-            </span>
+            <dl class="grid min-w-56 grid-cols-[minmax(0,1fr),auto] gap-x-3 gap-y-1 text-xs text-gray-500 dark:text-dark-400">
+              <dt>{{ t('admin.checkins.baseReward') }}</dt>
+              <dd data-test="record-base-reward" class="text-right tabular-nums">{{ formatUsd(row.base_reward_amount || row.reward_amount) }}</dd>
+              <dt>{{ t('admin.checkins.previousDayUsage') }}</dt>
+              <dd data-test="record-previous-day-usage" class="text-right tabular-nums">{{ formatUsd(row.previous_day_usage_amount) }}</dd>
+              <dt>{{ t('admin.checkins.usageRebate') }}</dt>
+              <dd data-test="record-usage-rebate" class="text-right tabular-nums">{{ formatUsd(row.usage_rebate_amount) }}</dd>
+              <dt>{{ t('admin.checkins.streakBonus') }}</dt>
+              <dd data-test="record-streak-bonus" class="text-right tabular-nums">{{ formatUsd(row.bonus_reward_amount) }}</dd>
+              <dt>{{ t('admin.checkins.capAdjustment') }}</dt>
+              <dd data-test="record-cap-adjustment" class="text-right tabular-nums">{{ formatUsd(row.reward_cap_adjustment) }}</dd>
+              <dt class="font-semibold text-gray-700 dark:text-gray-200">{{ t('admin.checkins.totalReward') }}</dt>
+              <dd class="text-right font-semibold tabular-nums text-gray-900 dark:text-white">{{ formatUsd(row.total_reward_amount || row.reward_amount) }}</dd>
+            </dl>
           </template>
           <template #cell-balance_before="{ value }">
             {{ formatUsd(value) }}
@@ -659,7 +769,12 @@ const configForm = reactive({
   tiers: [] as CheckinRewardTier[],
   streak_enabled: true,
   streak_rules: [] as CheckinStreakRule[],
+  usage_rebate_enabled: false,
+  usage_rebate_rate_percent: 0,
+  usage_rebate_cap: 0,
+  total_reward_cap: 0,
 })
+const usagePreviewAmounts = [0, 10, 20, 50, 100]
 let recordSearchTimeout: ReturnType<typeof setTimeout> | undefined
 let blacklistSearchTimeout: ReturnType<typeof setTimeout> | undefined
 
@@ -728,6 +843,16 @@ const estimatedAverageReward = computed(() => {
   }, 0)
 })
 
+function previewUsageRebate(usage: number): number {
+  const rawRebate = usage * safeNumber(configForm.usage_rebate_rate_percent) / 100
+  return Math.max(0, Math.min(rawRebate, safeNumber(configForm.usage_rebate_cap)))
+}
+
+function previewAverageTotal(usage: number): number {
+  const uncapped = estimatedAverageReward.value + previewUsageRebate(usage)
+  return Math.max(0, Math.min(uncapped, safeNumber(configForm.total_reward_cap)))
+}
+
 function formatUsd(value: number): string {
   const amount = Number.isFinite(value) ? value : 0
   return `$${amount.toFixed(2)}`
@@ -750,6 +875,7 @@ function cloneStreakRules(rules: CheckinStreakRule[] | undefined): CheckinStreak
   return (rules || []).map((rule) => ({
     day: Math.floor(safeNumber(rule.day)),
     bonus_amount: safeNumber(rule.bonus_amount),
+    bonus_rate_percent: safeNumber(rule.bonus_rate_percent),
   }))
 }
 
@@ -778,6 +904,10 @@ async function loadConfig() {
     configForm.tiers = cloneTiers(config.value.tiers)
     configForm.streak_enabled = config.value.streak_enabled
     configForm.streak_rules = cloneStreakRules(config.value.streak_rules)
+    configForm.usage_rebate_enabled = config.value.usage_rebate_enabled
+    configForm.usage_rebate_rate_percent = safeNumber(config.value.usage_rebate_rate_percent)
+    configForm.usage_rebate_cap = safeNumber(config.value.usage_rebate_cap)
+    configForm.total_reward_cap = safeNumber(config.value.total_reward_cap)
   } catch (error) {
     appStore.showError(extractApiErrorMessage(error, t('admin.checkins.failedToLoadConfig')))
   } finally {
@@ -795,6 +925,7 @@ async function handleSaveConfig() {
     return
   }
   if (!validateRewardRules()) return
+  if (!validateUsageRebateSettings()) return
   configSaving.value = true
   try {
     config.value = await adminAPI.checkins.updateConfig({
@@ -809,8 +940,13 @@ async function handleSaveConfig() {
       streak_enabled: configForm.streak_enabled,
       streak_rules: configForm.streak_rules.map((rule) => ({
         day: Math.floor(Number(rule.day)),
-        bonus_amount: Number(rule.bonus_amount),
+        bonus_amount: configForm.usage_rebate_enabled ? 0 : Number(rule.bonus_amount),
+        bonus_rate_percent: configForm.usage_rebate_enabled ? Number(rule.bonus_rate_percent) : 0,
       })),
+      usage_rebate_enabled: configForm.usage_rebate_enabled,
+      usage_rebate_rate_percent: Number(configForm.usage_rebate_rate_percent),
+      usage_rebate_cap: Number(configForm.usage_rebate_cap),
+      total_reward_cap: Number(configForm.total_reward_cap),
       probability_total: rewardProbabilityTotal.value,
       preview: {
         min_reward: 0,
@@ -824,6 +960,10 @@ async function handleSaveConfig() {
     configForm.tiers = cloneTiers(config.value.tiers)
     configForm.streak_enabled = config.value.streak_enabled
     configForm.streak_rules = cloneStreakRules(config.value.streak_rules)
+    configForm.usage_rebate_enabled = config.value.usage_rebate_enabled
+    configForm.usage_rebate_rate_percent = safeNumber(config.value.usage_rebate_rate_percent)
+    configForm.usage_rebate_cap = safeNumber(config.value.usage_rebate_cap)
+    configForm.total_reward_cap = safeNumber(config.value.total_reward_cap)
     appStore.showSuccess(t('admin.checkins.configSaved'))
   } catch (error) {
     appStore.showError(extractApiErrorMessage(error, t('admin.checkins.failedToSaveConfig')))
@@ -857,7 +997,8 @@ function validateRewardRules(): boolean {
   const days = new Set<number>()
   for (const rule of configForm.streak_rules) {
     const day = Math.floor(safeNumber(rule.day))
-    if (day <= 0 || safeNumber(rule.bonus_amount) <= 0) {
+    const bonusValue = configForm.usage_rebate_enabled ? rule.bonus_rate_percent : rule.bonus_amount
+    if (day <= 0 || safeNumber(bonusValue) <= 0 || (configForm.usage_rebate_enabled && safeNumber(bonusValue) > 100)) {
       appStore.showError(t('admin.checkins.invalidStreakRule'))
       return false
     }
@@ -866,6 +1007,31 @@ function validateRewardRules(): boolean {
       return false
     }
     days.add(day)
+  }
+  return true
+}
+
+function validateUsageRebateSettings(): boolean {
+  if (!configForm.usage_rebate_enabled) return true
+  const rate = Number(configForm.usage_rebate_rate_percent)
+  const rebateCap = Number(configForm.usage_rebate_cap)
+  const totalCap = Number(configForm.total_reward_cap)
+  if (!Number.isFinite(rate) || rate <= 0 || rate > 100) {
+    appStore.showError(t('admin.checkins.invalidUsageRebateRate'))
+    return false
+  }
+  if (!Number.isFinite(rebateCap) || rebateCap <= 0) {
+    appStore.showError(t('admin.checkins.invalidUsageRebateCap'))
+    return false
+  }
+  if (!Number.isFinite(totalCap) || totalCap <= 0) {
+    appStore.showError(t('admin.checkins.invalidTotalRewardCap'))
+    return false
+  }
+  const minimumTier = Math.min(...configForm.tiers.map((tier) => safeNumber(tier.amount)))
+  if (totalCap < minimumTier) {
+    appStore.showError(t('admin.checkins.totalRewardCapBelowTier'))
+    return false
   }
   return true
 }
@@ -889,7 +1055,8 @@ function addStreakRule() {
   const maxDay = configForm.streak_rules.reduce((max, rule) => Math.max(max, safeNumber(rule.day)), 0)
   configForm.streak_rules.push({
     day: Math.max(1, Math.floor(maxDay) + 7),
-    bonus_amount: 10,
+    bonus_amount: configForm.usage_rebate_enabled ? 0 : 1,
+    bonus_rate_percent: configForm.usage_rebate_enabled ? 10 : 0,
   })
 }
 

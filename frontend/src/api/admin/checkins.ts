@@ -23,6 +23,10 @@ export interface AdminCheckinConfig {
   tiers: CheckinRewardTier[]
   streak_enabled: boolean
   streak_rules: CheckinStreakRule[]
+  usage_rebate_enabled: boolean
+  usage_rebate_rate_percent: number
+  usage_rebate_cap: number
+  total_reward_cap: number
   probability_total: number
   preview: CheckinRewardPreview
 }
@@ -36,6 +40,7 @@ export interface CheckinRewardTier {
 export interface CheckinStreakRule {
   day: number
   bonus_amount: number
+  bonus_rate_percent: number
 }
 
 export interface CheckinRewardPreview {
@@ -53,6 +58,9 @@ export interface AdminCheckinRecord {
   streak_day: number
   base_reward_amount: number
   bonus_reward_amount: number
+  previous_day_usage_amount: number
+  usage_rebate_amount: number
+  reward_cap_adjustment: number
   total_reward_amount: number
   reward_amount: number
   balance_before: number
