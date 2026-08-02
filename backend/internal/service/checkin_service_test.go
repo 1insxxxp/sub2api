@@ -520,12 +520,12 @@ func TestCheckinServicePersistsRechargeThreshold(t *testing.T) {
 	require.Equal(t, 20.0, loaded.MinTotalRechargeUSD)
 }
 
-func TestCheckinConfig_NormalizesUsageRebateMode(t *testing.T) {
+func TestCheckinConfig_NormalizesUsageRebateWithFixedStreak(t *testing.T) {
 	cfg := CheckinConfig{
 		Enabled:                true,
 		Tiers:                  []CheckinRewardTier{{Amount: 0.3, Probability: 100}},
 		StreakEnabled:          true,
-		StreakRules:            []CheckinStreakRule{{Day: 7, BonusRatePercent: 10}},
+		StreakRules:            []CheckinStreakRule{{Day: 7, BonusAmount: 10}},
 		UsageRebateEnabled:     true,
 		UsageRebateRatePercent: 8,
 		UsageRebateCap:         8,
@@ -538,8 +538,8 @@ func TestCheckinConfig_NormalizesUsageRebateMode(t *testing.T) {
 	require.Equal(t, 8.0, normalized.UsageRebateRatePercent)
 	require.Equal(t, 8.0, normalized.UsageRebateCap)
 	require.Equal(t, 10.0, normalized.TotalRewardCap)
-	require.Equal(t, 10.0, normalized.StreakRules[0].BonusRatePercent)
-	require.Zero(t, normalized.StreakRules[0].BonusAmount)
+	require.Equal(t, 10.0, normalized.StreakRules[0].BonusAmount)
+	require.Zero(t, normalized.StreakRules[0].BonusRatePercent)
 }
 
 func TestCheckinConfig_LegacyFixedStreakRemainsValid(t *testing.T) {
@@ -553,6 +553,24 @@ func TestCheckinConfig_LegacyFixedStreakRemainsValid(t *testing.T) {
 	normalized, err := normalizeCheckinConfig(cfg)
 	require.NoError(t, err)
 	require.False(t, normalized.UsageRebateEnabled)
+	require.Equal(t, 4.0, normalized.StreakRules[0].BonusAmount)
+	require.Zero(t, normalized.StreakRules[0].BonusRatePercent)
+}
+
+func TestCheckinConfig_UsageRebatePreservesFixedStreakBonus(t *testing.T) {
+	cfg := CheckinConfig{
+		Enabled:                true,
+		Tiers:                  []CheckinRewardTier{{Amount: 1, Probability: 100}},
+		StreakEnabled:          true,
+		StreakRules:            []CheckinStreakRule{{Day: 7, BonusAmount: 4}},
+		UsageRebateEnabled:     true,
+		UsageRebateRatePercent: 8,
+		UsageRebateCap:         8,
+		TotalRewardCap:         10,
+	}
+
+	normalized, err := normalizeCheckinConfig(cfg)
+	require.NoError(t, err)
 	require.Equal(t, 4.0, normalized.StreakRules[0].BonusAmount)
 	require.Zero(t, normalized.StreakRules[0].BonusRatePercent)
 }
@@ -601,7 +619,7 @@ func TestCheckinServicePersistsUsageRebateConfig(t *testing.T) {
 		Enabled:                true,
 		Tiers:                  []CheckinRewardTier{{Amount: 0.3, Probability: 100}},
 		StreakEnabled:          true,
-		StreakRules:            []CheckinStreakRule{{Day: 7, BonusRatePercent: 10}},
+		StreakRules:            []CheckinStreakRule{{Day: 7, BonusAmount: 10}},
 		UsageRebateEnabled:     true,
 		UsageRebateRatePercent: 8,
 		UsageRebateCap:         8,
@@ -612,7 +630,7 @@ func TestCheckinServicePersistsUsageRebateConfig(t *testing.T) {
 	require.JSONEq(t, `{
 		"tiers":[{"amount":0.3,"probability":100,"sort_order":1}],
 		"streak_enabled":true,
-		"streak_rules":[{"day":7,"bonus_amount":0,"bonus_rate_percent":10}],
+		"streak_rules":[{"day":7,"bonus_amount":10,"bonus_rate_percent":0}],
 		"usage_rebate_enabled":true,
 		"usage_rebate_rate_percent":8,
 		"usage_rebate_cap":8,
@@ -650,16 +668,16 @@ func TestCalculateUsageLinkedCheckinReward(t *testing.T) {
 		name              string
 		base              float64
 		usage             float64
-		streakRate        float64
+		streakBonus       float64
 		wantRebate        float64
 		wantStreak        float64
 		wantTotal         float64
 		wantCapAdjustment float64
 	}{
-		{name: "zero usage", base: 0.5, usage: 0, streakRate: 10, wantTotal: 0.5},
+		{name: "zero usage", base: 0.5, usage: 0, wantTotal: 0.5},
 		{name: "normal usage", base: 0.8, usage: 50, wantRebate: 4, wantTotal: 4.8},
 		{name: "rebate cap", base: 0.3, usage: 500, wantRebate: 8, wantTotal: 8.3, wantCapAdjustment: 32},
-		{name: "streak and total cap", base: 3, usage: 100, streakRate: 20, wantRebate: 7, wantTotal: 10, wantCapAdjustment: 2.6},
+		{name: "fixed streak is added after total cap", base: 3, usage: 100, streakBonus: 4, wantRebate: 7, wantStreak: 4, wantTotal: 14, wantCapAdjustment: 1},
 	}
 
 	for _, tt := range tests {
@@ -670,12 +688,12 @@ func TestCalculateUsageLinkedCheckinReward(t *testing.T) {
 				UsageRebateRatePercent: 8,
 				UsageRebateCap:         8,
 				TotalRewardCap:         10,
-				StreakEnabled:          tt.streakRate > 0,
+				StreakEnabled:          tt.streakBonus > 0,
 			}
 			streakDay := 0
-			if tt.streakRate > 0 {
+			if tt.streakBonus > 0 {
 				streakDay = 7
-				cfg.StreakRules = []CheckinStreakRule{{Day: streakDay, BonusRatePercent: tt.streakRate}}
+				cfg.StreakRules = []CheckinStreakRule{{Day: streakDay, BonusAmount: tt.streakBonus}}
 			}
 
 			got := calculateUsageLinkedCheckinReward(cfg, tt.usage, tt.base, streakDay)
@@ -687,6 +705,26 @@ func TestCalculateUsageLinkedCheckinReward(t *testing.T) {
 			require.Equal(t, tt.wantCapAdjustment, got.CapAdjustment)
 		})
 	}
+}
+
+func TestCalculateUsageLinkedCheckinReward_AddsFixedStreakAfterCap(t *testing.T) {
+	cfg := CheckinConfig{
+		Tiers:                  []CheckinRewardTier{{Amount: 3, Probability: 100}},
+		UsageRebateEnabled:     true,
+		UsageRebateRatePercent: 8,
+		UsageRebateCap:         8,
+		TotalRewardCap:         10,
+		StreakEnabled:          true,
+		StreakRules:            []CheckinStreakRule{{Day: 7, BonusAmount: 4}},
+	}
+
+	got := calculateUsageLinkedCheckinReward(cfg, 100, 3, 7)
+
+	require.Equal(t, 3.0, got.BaseReward)
+	require.Equal(t, 7.0, got.UsageRebate)
+	require.Equal(t, 4.0, got.StreakBonus)
+	require.Equal(t, 14.0, got.TotalReward)
+	require.Equal(t, 1.0, got.CapAdjustment)
 }
 
 func TestPreviousBeijingDayUsage(t *testing.T) {

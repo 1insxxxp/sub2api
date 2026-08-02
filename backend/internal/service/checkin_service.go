@@ -928,22 +928,13 @@ func normalizeRewardRules(cfg CheckinConfig) (*CheckinConfig, error) {
 			return nil, infraerrors.BadRequest("CHECKIN_STREAK_CONFIG_DUPLICATE_DAY", "streak days must be unique")
 		}
 		seenDays[rule.Day] = struct{}{}
-		normalizedRule := CheckinStreakRule{Day: rule.Day}
-		if cfg.UsageRebateEnabled {
-			if math.IsNaN(rule.BonusRatePercent) || math.IsInf(rule.BonusRatePercent, 0) || rule.BonusRatePercent <= 0 || rule.BonusRatePercent > 100 {
-				return nil, infraerrors.BadRequest("CHECKIN_STREAK_CONFIG_INVALID_BONUS_RATE", fmt.Sprintf("rule %d: bonus rate must be between 0 and 100", index+1))
-			}
-			scaledRate, err := scaledCheckinProbability(rule.BonusRatePercent)
-			if err != nil {
-				return nil, infraerrors.BadRequest("CHECKIN_STREAK_CONFIG_INVALID_BONUS_RATE", fmt.Sprintf("rule %d: %s", index+1, err.Error()))
-			}
-			normalizedRule.BonusRatePercent = float64(scaledRate) / checkinRewardProbabilityScale
-		} else {
-			bonusCents, err := scaledCheckinMoney(rule.BonusAmount)
-			if err != nil {
-				return nil, infraerrors.BadRequest("CHECKIN_STREAK_CONFIG_INVALID_BONUS_AMOUNT", fmt.Sprintf("rule %d: %s", index+1, err.Error()))
-			}
-			normalizedRule.BonusAmount = float64(bonusCents) / 100
+		bonusCents, err := scaledCheckinMoney(rule.BonusAmount)
+		if err != nil {
+			return nil, infraerrors.BadRequest("CHECKIN_STREAK_CONFIG_INVALID_BONUS_AMOUNT", fmt.Sprintf("rule %d: %s", index+1, err.Error()))
+		}
+		normalizedRule := CheckinStreakRule{
+			Day:         rule.Day,
+			BonusAmount: float64(bonusCents) / 100,
 		}
 		normalized.StreakRules = append(normalized.StreakRules, normalizedRule)
 	}
@@ -1293,24 +1284,15 @@ func calculateUsageLinkedCheckinReward(cfg CheckinConfig, previousDayUsage, base
 
 	rawRebate := roundCheckinMoney(usage * cfg.UsageRebateRatePercent / 100)
 	cappedRebate := math.Min(rawRebate, cfg.UsageRebateCap)
-	rawStreak := 0.0
-	if cfg.StreakEnabled && cappedRebate > 0 {
-		for _, rule := range cfg.StreakRules {
-			if rule.Day == streakDay {
-				rawStreak = roundCheckinMoney(cappedRebate * rule.BonusRatePercent / 100)
-				break
-			}
-		}
-	}
+	fixedStreak := roundCheckinMoney(selectCheckinStreakBonus(cfg, streakDay))
 
 	remaining := math.Max(0, cfg.TotalRewardCap)
 	result.BaseReward = math.Min(base, remaining)
 	remaining = roundCheckinMoney(remaining - result.BaseReward)
 	result.UsageRebate = math.Min(cappedRebate, remaining)
-	remaining = roundCheckinMoney(remaining - result.UsageRebate)
-	result.StreakBonus = math.Min(rawStreak, remaining)
+	result.StreakBonus = fixedStreak
 	result.TotalReward = roundCheckinMoney(result.BaseReward + result.UsageRebate + result.StreakBonus)
-	result.CapAdjustment = roundCheckinMoney(math.Max(0, base+rawRebate+rawStreak-result.TotalReward))
+	result.CapAdjustment = roundCheckinMoney(math.Max(0, base+rawRebate-result.BaseReward-result.UsageRebate))
 	return result
 }
 
