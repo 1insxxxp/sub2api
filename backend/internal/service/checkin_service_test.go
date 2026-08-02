@@ -615,6 +615,96 @@ func TestCheckinServiceLoadsLegacyRewardConfigWithUsageRebateDisabled(t *testing
 	require.Zero(t, loaded.StreakRules[0].BonusRatePercent)
 }
 
+func TestCalculateUsageLinkedCheckinReward(t *testing.T) {
+	tests := []struct {
+		name              string
+		base              float64
+		usage             float64
+		streakRate        float64
+		wantRebate        float64
+		wantStreak        float64
+		wantTotal         float64
+		wantCapAdjustment float64
+	}{
+		{name: "zero usage", base: 0.5, usage: 0, streakRate: 10, wantTotal: 0.5},
+		{name: "normal usage", base: 0.8, usage: 50, wantRebate: 4, wantTotal: 4.8},
+		{name: "rebate cap", base: 0.3, usage: 500, wantRebate: 8, wantTotal: 8.3, wantCapAdjustment: 32},
+		{name: "streak and total cap", base: 3, usage: 100, streakRate: 20, wantRebate: 7, wantTotal: 10, wantCapAdjustment: 2.6},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := CheckinConfig{
+				Tiers:                  []CheckinRewardTier{{Amount: tt.base, Probability: 100}},
+				UsageRebateEnabled:     true,
+				UsageRebateRatePercent: 8,
+				UsageRebateCap:         8,
+				TotalRewardCap:         10,
+				StreakEnabled:          tt.streakRate > 0,
+			}
+			streakDay := 0
+			if tt.streakRate > 0 {
+				streakDay = 7
+				cfg.StreakRules = []CheckinStreakRule{{Day: streakDay, BonusRatePercent: tt.streakRate}}
+			}
+
+			got := calculateUsageLinkedCheckinReward(cfg, tt.usage, tt.base, streakDay)
+			require.Equal(t, tt.usage, got.PreviousDayUsage)
+			require.Equal(t, tt.base, got.BaseReward)
+			require.Equal(t, tt.wantRebate, got.UsageRebate)
+			require.Equal(t, tt.wantStreak, got.StreakBonus)
+			require.Equal(t, tt.wantTotal, got.TotalReward)
+			require.Equal(t, tt.wantCapAdjustment, got.CapAdjustment)
+		})
+	}
+}
+
+func TestPreviousBeijingDayUsage(t *testing.T) {
+	client := newCheckinServiceTestClient(t)
+	ctx := context.Background()
+	createdUser := createCheckinTestUser(t, ctx, client, "previous-day-usage@example.com", 10)
+	group, err := client.Group.Create().SetName("previous-day-usage-group").Save(ctx)
+	require.NoError(t, err)
+	apiKey, err := client.APIKey.Create().
+		SetUserID(createdUser.ID).
+		SetKey("sk-previous-day-usage").
+		SetName("previous day usage").
+		SetGroupID(group.ID).
+		Save(ctx)
+	require.NoError(t, err)
+	account, err := client.Account.Create().
+		SetName("previous-day-usage-account").
+		SetPlatform("anthropic").
+		SetType("api_key").
+		Save(ctx)
+	require.NoError(t, err)
+
+	createAt := func(requestID string, amount float64, createdAt time.Time) {
+		t.Helper()
+		_, createErr := client.UsageLog.Create().
+			SetUserID(createdUser.ID).
+			SetAPIKeyID(apiKey.ID).
+			SetAccountID(account.ID).
+			SetRequestID(requestID).
+			SetModel("claude-test").
+			SetTotalCost(amount).
+			SetActualCost(amount).
+			SetCreatedAt(createdAt).
+			Save(ctx)
+		require.NoError(t, createErr)
+	}
+	beijing := time.FixedZone("CST", 8*60*60)
+	createAt("before", 100, time.Date(2026, 7, 31, 23, 59, 59, 0, beijing))
+	createAt("at-start", 1.25, time.Date(2026, 8, 1, 0, 0, 0, 0, beijing))
+	createAt("at-end", 2.75, time.Date(2026, 8, 1, 23, 59, 59, 0, beijing))
+	createAt("after", 200, time.Date(2026, 8, 2, 0, 0, 0, 0, beijing))
+
+	svc := NewCheckinService(client, nil, nil)
+	usage, err := svc.previousBeijingDayUsageUSDWithClient(ctx, client, createdUser.ID, "2026-08-02")
+	require.NoError(t, err)
+	require.Equal(t, 4.0, usage)
+}
+
 func TestCheckinServiceCustomRewardConfigAndStreakBonus(t *testing.T) {
 	client := newCheckinServiceTestClient(t)
 	ctx := context.Background()

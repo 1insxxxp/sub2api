@@ -78,6 +78,15 @@ type CheckinRewardPreview struct {
 	AverageReward float64 `json:"average_reward"`
 }
 
+type checkinRewardCalculation struct {
+	PreviousDayUsage float64
+	BaseReward       float64
+	UsageRebate      float64
+	StreakBonus      float64
+	TotalReward      float64
+	CapAdjustment    float64
+}
+
 type CheckinStatus struct {
 	Enabled             bool               `json:"enabled"`
 	Eligible            bool               `json:"eligible"`
@@ -1092,6 +1101,36 @@ func (s *CheckinService) totalUsageUSDWithClient(ctx context.Context, client *db
 	return result[0].Sum, nil
 }
 
+func (s *CheckinService) previousBeijingDayUsageUSDWithClient(ctx context.Context, client *dbent.Client, userID int64, checkinDate string) (float64, error) {
+	checkinDay, err := time.ParseInLocation("2006-01-02", checkinDate, s.beijingLocation)
+	if err != nil {
+		return 0, fmt.Errorf("parse check-in date for previous-day usage: %w", err)
+	}
+	start := checkinDay.AddDate(0, 0, -1)
+	end := checkinDay
+	var result []struct {
+		Sum float64 `json:"sum"`
+	}
+	err = client.UsageLog.Query().
+		Where(
+			usagelog.UserIDEQ(userID),
+			usagelog.CreatedAtGTE(start),
+			usagelog.CreatedAtLT(end),
+		).
+		Aggregate(dbent.As(dbent.Sum(usagelog.FieldActualCost), "sum")).
+		Scan(ctx, &result)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return 0, nil
+		}
+		return 0, fmt.Errorf("sum previous Beijing day usage: %w", err)
+	}
+	if len(result) == 0 || result[0].Sum <= 0 || math.IsNaN(result[0].Sum) || math.IsInf(result[0].Sum, 0) {
+		return 0, nil
+	}
+	return roundCheckinMoney(result[0].Sum), nil
+}
+
 type checkinHistorySnapshotResult struct {
 	CurrentStreak int
 	LifetimeDays  int
@@ -1202,6 +1241,42 @@ func selectCheckinReward(cfg CheckinConfig, roll float64) float64 {
 	return normalized.Tiers[len(normalized.Tiers)-1].Amount
 }
 
+func calculateUsageLinkedCheckinReward(cfg CheckinConfig, previousDayUsage, baseReward float64, streakDay int) checkinRewardCalculation {
+	usage := roundCheckinMoney(math.Max(0, previousDayUsage))
+	base := roundCheckinMoney(math.Max(0, baseReward))
+	result := checkinRewardCalculation{
+		PreviousDayUsage: usage,
+		BaseReward:       base,
+	}
+	if !cfg.UsageRebateEnabled {
+		result.StreakBonus = roundCheckinMoney(selectCheckinStreakBonus(cfg, streakDay))
+		result.TotalReward = roundCheckinMoney(result.BaseReward + result.StreakBonus)
+		return result
+	}
+
+	rawRebate := roundCheckinMoney(usage * cfg.UsageRebateRatePercent / 100)
+	cappedRebate := math.Min(rawRebate, cfg.UsageRebateCap)
+	rawStreak := 0.0
+	if cfg.StreakEnabled && cappedRebate > 0 {
+		for _, rule := range cfg.StreakRules {
+			if rule.Day == streakDay {
+				rawStreak = roundCheckinMoney(cappedRebate * rule.BonusRatePercent / 100)
+				break
+			}
+		}
+	}
+
+	remaining := math.Max(0, cfg.TotalRewardCap)
+	result.BaseReward = math.Min(base, remaining)
+	remaining = roundCheckinMoney(remaining - result.BaseReward)
+	result.UsageRebate = math.Min(cappedRebate, remaining)
+	remaining = roundCheckinMoney(remaining - result.UsageRebate)
+	result.StreakBonus = math.Min(rawStreak, remaining)
+	result.TotalReward = roundCheckinMoney(result.BaseReward + result.UsageRebate + result.StreakBonus)
+	result.CapAdjustment = roundCheckinMoney(math.Max(0, base+rawRebate+rawStreak-result.TotalReward))
+	return result
+}
+
 func selectCheckinStreakBonus(cfg CheckinConfig, streakDay int) float64 {
 	if streakDay <= 0 {
 		return 0
@@ -1260,6 +1335,13 @@ func scaledCheckinMoney(value float64) (int64, error) {
 		return 0, fmt.Errorf("amount must use at most 2 decimal places")
 	}
 	return int64(scaled), nil
+}
+
+func roundCheckinMoney(value float64) float64 {
+	if math.IsNaN(value) || math.IsInf(value, 0) {
+		return 0
+	}
+	return math.Round(value*100) / 100
 }
 
 func scaledCheckinProbability(value float64) (int64, error) {
