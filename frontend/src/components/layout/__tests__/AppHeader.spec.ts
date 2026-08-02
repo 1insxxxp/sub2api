@@ -323,7 +323,8 @@ describe('AppHeader daily check-in entry', () => {
       total_recharge_usd: 0,
       next_streak_rule: {
         day: 7,
-        bonus_amount: 10
+        bonus_amount: 10,
+        bonus_rate_percent: 99
       },
       recent_records: []
     })
@@ -338,6 +339,7 @@ describe('AppHeader daily check-in entry', () => {
     expect(text).toContain('No streak bonus today')
     expect(text).toContain('Streak bonus rules')
     expect(text).toContain('Streak day 7 earns an extra $10.00')
+    expect(text).not.toContain('99%')
   })
 
   it('shows previous-day usage and the deterministic rebate estimate before check-in', async () => {

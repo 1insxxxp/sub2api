@@ -675,9 +675,7 @@ const nextStreakBonusMessage = computed(() => {
   }
   return t('checkin.nextStreakBonus', {
     day: rule.day,
-    amount: rule.bonus_rate_percent
-      ? t('checkin.rebatePercent', { percent: rule.bonus_rate_percent })
-      : formatUsd(rule.bonus_amount),
+    amount: formatUsd(rule.bonus_amount),
   })
 })
 
