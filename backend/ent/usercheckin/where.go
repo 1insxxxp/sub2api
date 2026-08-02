@@ -105,6 +105,21 @@ func TotalRewardAmount(v float64) predicate.UserCheckin {
 	return predicate.UserCheckin(sql.FieldEQ(FieldTotalRewardAmount, v))
 }
 
+// PreviousDayUsageAmount applies equality check predicate on the "previous_day_usage_amount" field. It's identical to PreviousDayUsageAmountEQ.
+func PreviousDayUsageAmount(v float64) predicate.UserCheckin {
+	return predicate.UserCheckin(sql.FieldEQ(FieldPreviousDayUsageAmount, v))
+}
+
+// UsageRebateAmount applies equality check predicate on the "usage_rebate_amount" field. It's identical to UsageRebateAmountEQ.
+func UsageRebateAmount(v float64) predicate.UserCheckin {
+	return predicate.UserCheckin(sql.FieldEQ(FieldUsageRebateAmount, v))
+}
+
+// RewardCapAdjustment applies equality check predicate on the "reward_cap_adjustment" field. It's identical to RewardCapAdjustmentEQ.
+func RewardCapAdjustment(v float64) predicate.UserCheckin {
+	return predicate.UserCheckin(sql.FieldEQ(FieldRewardCapAdjustment, v))
+}
+
 // UserIDEQ applies the EQ predicate on the "user_id" field.
 func UserIDEQ(v int64) predicate.UserCheckin {
 	return predicate.UserCheckin(sql.FieldEQ(FieldUserID, v))
@@ -508,6 +523,126 @@ func TotalRewardAmountLT(v float64) predicate.UserCheckin {
 // TotalRewardAmountLTE applies the LTE predicate on the "total_reward_amount" field.
 func TotalRewardAmountLTE(v float64) predicate.UserCheckin {
 	return predicate.UserCheckin(sql.FieldLTE(FieldTotalRewardAmount, v))
+}
+
+// PreviousDayUsageAmountEQ applies the EQ predicate on the "previous_day_usage_amount" field.
+func PreviousDayUsageAmountEQ(v float64) predicate.UserCheckin {
+	return predicate.UserCheckin(sql.FieldEQ(FieldPreviousDayUsageAmount, v))
+}
+
+// PreviousDayUsageAmountNEQ applies the NEQ predicate on the "previous_day_usage_amount" field.
+func PreviousDayUsageAmountNEQ(v float64) predicate.UserCheckin {
+	return predicate.UserCheckin(sql.FieldNEQ(FieldPreviousDayUsageAmount, v))
+}
+
+// PreviousDayUsageAmountIn applies the In predicate on the "previous_day_usage_amount" field.
+func PreviousDayUsageAmountIn(vs ...float64) predicate.UserCheckin {
+	return predicate.UserCheckin(sql.FieldIn(FieldPreviousDayUsageAmount, vs...))
+}
+
+// PreviousDayUsageAmountNotIn applies the NotIn predicate on the "previous_day_usage_amount" field.
+func PreviousDayUsageAmountNotIn(vs ...float64) predicate.UserCheckin {
+	return predicate.UserCheckin(sql.FieldNotIn(FieldPreviousDayUsageAmount, vs...))
+}
+
+// PreviousDayUsageAmountGT applies the GT predicate on the "previous_day_usage_amount" field.
+func PreviousDayUsageAmountGT(v float64) predicate.UserCheckin {
+	return predicate.UserCheckin(sql.FieldGT(FieldPreviousDayUsageAmount, v))
+}
+
+// PreviousDayUsageAmountGTE applies the GTE predicate on the "previous_day_usage_amount" field.
+func PreviousDayUsageAmountGTE(v float64) predicate.UserCheckin {
+	return predicate.UserCheckin(sql.FieldGTE(FieldPreviousDayUsageAmount, v))
+}
+
+// PreviousDayUsageAmountLT applies the LT predicate on the "previous_day_usage_amount" field.
+func PreviousDayUsageAmountLT(v float64) predicate.UserCheckin {
+	return predicate.UserCheckin(sql.FieldLT(FieldPreviousDayUsageAmount, v))
+}
+
+// PreviousDayUsageAmountLTE applies the LTE predicate on the "previous_day_usage_amount" field.
+func PreviousDayUsageAmountLTE(v float64) predicate.UserCheckin {
+	return predicate.UserCheckin(sql.FieldLTE(FieldPreviousDayUsageAmount, v))
+}
+
+// UsageRebateAmountEQ applies the EQ predicate on the "usage_rebate_amount" field.
+func UsageRebateAmountEQ(v float64) predicate.UserCheckin {
+	return predicate.UserCheckin(sql.FieldEQ(FieldUsageRebateAmount, v))
+}
+
+// UsageRebateAmountNEQ applies the NEQ predicate on the "usage_rebate_amount" field.
+func UsageRebateAmountNEQ(v float64) predicate.UserCheckin {
+	return predicate.UserCheckin(sql.FieldNEQ(FieldUsageRebateAmount, v))
+}
+
+// UsageRebateAmountIn applies the In predicate on the "usage_rebate_amount" field.
+func UsageRebateAmountIn(vs ...float64) predicate.UserCheckin {
+	return predicate.UserCheckin(sql.FieldIn(FieldUsageRebateAmount, vs...))
+}
+
+// UsageRebateAmountNotIn applies the NotIn predicate on the "usage_rebate_amount" field.
+func UsageRebateAmountNotIn(vs ...float64) predicate.UserCheckin {
+	return predicate.UserCheckin(sql.FieldNotIn(FieldUsageRebateAmount, vs...))
+}
+
+// UsageRebateAmountGT applies the GT predicate on the "usage_rebate_amount" field.
+func UsageRebateAmountGT(v float64) predicate.UserCheckin {
+	return predicate.UserCheckin(sql.FieldGT(FieldUsageRebateAmount, v))
+}
+
+// UsageRebateAmountGTE applies the GTE predicate on the "usage_rebate_amount" field.
+func UsageRebateAmountGTE(v float64) predicate.UserCheckin {
+	return predicate.UserCheckin(sql.FieldGTE(FieldUsageRebateAmount, v))
+}
+
+// UsageRebateAmountLT applies the LT predicate on the "usage_rebate_amount" field.
+func UsageRebateAmountLT(v float64) predicate.UserCheckin {
+	return predicate.UserCheckin(sql.FieldLT(FieldUsageRebateAmount, v))
+}
+
+// UsageRebateAmountLTE applies the LTE predicate on the "usage_rebate_amount" field.
+func UsageRebateAmountLTE(v float64) predicate.UserCheckin {
+	return predicate.UserCheckin(sql.FieldLTE(FieldUsageRebateAmount, v))
+}
+
+// RewardCapAdjustmentEQ applies the EQ predicate on the "reward_cap_adjustment" field.
+func RewardCapAdjustmentEQ(v float64) predicate.UserCheckin {
+	return predicate.UserCheckin(sql.FieldEQ(FieldRewardCapAdjustment, v))
+}
+
+// RewardCapAdjustmentNEQ applies the NEQ predicate on the "reward_cap_adjustment" field.
+func RewardCapAdjustmentNEQ(v float64) predicate.UserCheckin {
+	return predicate.UserCheckin(sql.FieldNEQ(FieldRewardCapAdjustment, v))
+}
+
+// RewardCapAdjustmentIn applies the In predicate on the "reward_cap_adjustment" field.
+func RewardCapAdjustmentIn(vs ...float64) predicate.UserCheckin {
+	return predicate.UserCheckin(sql.FieldIn(FieldRewardCapAdjustment, vs...))
+}
+
+// RewardCapAdjustmentNotIn applies the NotIn predicate on the "reward_cap_adjustment" field.
+func RewardCapAdjustmentNotIn(vs ...float64) predicate.UserCheckin {
+	return predicate.UserCheckin(sql.FieldNotIn(FieldRewardCapAdjustment, vs...))
+}
+
+// RewardCapAdjustmentGT applies the GT predicate on the "reward_cap_adjustment" field.
+func RewardCapAdjustmentGT(v float64) predicate.UserCheckin {
+	return predicate.UserCheckin(sql.FieldGT(FieldRewardCapAdjustment, v))
+}
+
+// RewardCapAdjustmentGTE applies the GTE predicate on the "reward_cap_adjustment" field.
+func RewardCapAdjustmentGTE(v float64) predicate.UserCheckin {
+	return predicate.UserCheckin(sql.FieldGTE(FieldRewardCapAdjustment, v))
+}
+
+// RewardCapAdjustmentLT applies the LT predicate on the "reward_cap_adjustment" field.
+func RewardCapAdjustmentLT(v float64) predicate.UserCheckin {
+	return predicate.UserCheckin(sql.FieldLT(FieldRewardCapAdjustment, v))
+}
+
+// RewardCapAdjustmentLTE applies the LTE predicate on the "reward_cap_adjustment" field.
+func RewardCapAdjustmentLTE(v float64) predicate.UserCheckin {
+	return predicate.UserCheckin(sql.FieldLTE(FieldRewardCapAdjustment, v))
 }
 
 // HasUser applies the HasEdge predicate on the "user" edge.

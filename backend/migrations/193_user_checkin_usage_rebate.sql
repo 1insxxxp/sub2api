@@ -1,0 +1,4 @@
+ALTER TABLE user_checkins
+    ADD COLUMN IF NOT EXISTS previous_day_usage_amount DECIMAL(20,8) NOT NULL DEFAULT 0,
+    ADD COLUMN IF NOT EXISTS usage_rebate_amount DECIMAL(20,8) NOT NULL DEFAULT 0,
+    ADD COLUMN IF NOT EXISTS reward_cap_adjustment DECIMAL(20,8) NOT NULL DEFAULT 0;

@@ -203,6 +203,69 @@ func (_u *UserCheckinUpdate) AddTotalRewardAmount(v float64) *UserCheckinUpdate 
 	return _u
 }
 
+// SetPreviousDayUsageAmount sets the "previous_day_usage_amount" field.
+func (_u *UserCheckinUpdate) SetPreviousDayUsageAmount(v float64) *UserCheckinUpdate {
+	_u.mutation.ResetPreviousDayUsageAmount()
+	_u.mutation.SetPreviousDayUsageAmount(v)
+	return _u
+}
+
+// SetNillablePreviousDayUsageAmount sets the "previous_day_usage_amount" field if the given value is not nil.
+func (_u *UserCheckinUpdate) SetNillablePreviousDayUsageAmount(v *float64) *UserCheckinUpdate {
+	if v != nil {
+		_u.SetPreviousDayUsageAmount(*v)
+	}
+	return _u
+}
+
+// AddPreviousDayUsageAmount adds value to the "previous_day_usage_amount" field.
+func (_u *UserCheckinUpdate) AddPreviousDayUsageAmount(v float64) *UserCheckinUpdate {
+	_u.mutation.AddPreviousDayUsageAmount(v)
+	return _u
+}
+
+// SetUsageRebateAmount sets the "usage_rebate_amount" field.
+func (_u *UserCheckinUpdate) SetUsageRebateAmount(v float64) *UserCheckinUpdate {
+	_u.mutation.ResetUsageRebateAmount()
+	_u.mutation.SetUsageRebateAmount(v)
+	return _u
+}
+
+// SetNillableUsageRebateAmount sets the "usage_rebate_amount" field if the given value is not nil.
+func (_u *UserCheckinUpdate) SetNillableUsageRebateAmount(v *float64) *UserCheckinUpdate {
+	if v != nil {
+		_u.SetUsageRebateAmount(*v)
+	}
+	return _u
+}
+
+// AddUsageRebateAmount adds value to the "usage_rebate_amount" field.
+func (_u *UserCheckinUpdate) AddUsageRebateAmount(v float64) *UserCheckinUpdate {
+	_u.mutation.AddUsageRebateAmount(v)
+	return _u
+}
+
+// SetRewardCapAdjustment sets the "reward_cap_adjustment" field.
+func (_u *UserCheckinUpdate) SetRewardCapAdjustment(v float64) *UserCheckinUpdate {
+	_u.mutation.ResetRewardCapAdjustment()
+	_u.mutation.SetRewardCapAdjustment(v)
+	return _u
+}
+
+// SetNillableRewardCapAdjustment sets the "reward_cap_adjustment" field if the given value is not nil.
+func (_u *UserCheckinUpdate) SetNillableRewardCapAdjustment(v *float64) *UserCheckinUpdate {
+	if v != nil {
+		_u.SetRewardCapAdjustment(*v)
+	}
+	return _u
+}
+
+// AddRewardCapAdjustment adds value to the "reward_cap_adjustment" field.
+func (_u *UserCheckinUpdate) AddRewardCapAdjustment(v float64) *UserCheckinUpdate {
+	_u.mutation.AddRewardCapAdjustment(v)
+	return _u
+}
+
 // SetUser sets the "user" edge to the User entity.
 func (_u *UserCheckinUpdate) SetUser(v *User) *UserCheckinUpdate {
 	return _u.SetUserID(v.ID)
@@ -315,6 +378,24 @@ func (_u *UserCheckinUpdate) sqlSave(ctx context.Context) (_node int, err error)
 	}
 	if value, ok := _u.mutation.AddedTotalRewardAmount(); ok {
 		_spec.AddField(usercheckin.FieldTotalRewardAmount, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.PreviousDayUsageAmount(); ok {
+		_spec.SetField(usercheckin.FieldPreviousDayUsageAmount, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.AddedPreviousDayUsageAmount(); ok {
+		_spec.AddField(usercheckin.FieldPreviousDayUsageAmount, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.UsageRebateAmount(); ok {
+		_spec.SetField(usercheckin.FieldUsageRebateAmount, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.AddedUsageRebateAmount(); ok {
+		_spec.AddField(usercheckin.FieldUsageRebateAmount, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.RewardCapAdjustment(); ok {
+		_spec.SetField(usercheckin.FieldRewardCapAdjustment, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.AddedRewardCapAdjustment(); ok {
+		_spec.AddField(usercheckin.FieldRewardCapAdjustment, field.TypeFloat64, value)
 	}
 	if _u.mutation.UserCleared() {
 		edge := &sqlgraph.EdgeSpec{
@@ -540,6 +621,69 @@ func (_u *UserCheckinUpdateOne) AddTotalRewardAmount(v float64) *UserCheckinUpda
 	return _u
 }
 
+// SetPreviousDayUsageAmount sets the "previous_day_usage_amount" field.
+func (_u *UserCheckinUpdateOne) SetPreviousDayUsageAmount(v float64) *UserCheckinUpdateOne {
+	_u.mutation.ResetPreviousDayUsageAmount()
+	_u.mutation.SetPreviousDayUsageAmount(v)
+	return _u
+}
+
+// SetNillablePreviousDayUsageAmount sets the "previous_day_usage_amount" field if the given value is not nil.
+func (_u *UserCheckinUpdateOne) SetNillablePreviousDayUsageAmount(v *float64) *UserCheckinUpdateOne {
+	if v != nil {
+		_u.SetPreviousDayUsageAmount(*v)
+	}
+	return _u
+}
+
+// AddPreviousDayUsageAmount adds value to the "previous_day_usage_amount" field.
+func (_u *UserCheckinUpdateOne) AddPreviousDayUsageAmount(v float64) *UserCheckinUpdateOne {
+	_u.mutation.AddPreviousDayUsageAmount(v)
+	return _u
+}
+
+// SetUsageRebateAmount sets the "usage_rebate_amount" field.
+func (_u *UserCheckinUpdateOne) SetUsageRebateAmount(v float64) *UserCheckinUpdateOne {
+	_u.mutation.ResetUsageRebateAmount()
+	_u.mutation.SetUsageRebateAmount(v)
+	return _u
+}
+
+// SetNillableUsageRebateAmount sets the "usage_rebate_amount" field if the given value is not nil.
+func (_u *UserCheckinUpdateOne) SetNillableUsageRebateAmount(v *float64) *UserCheckinUpdateOne {
+	if v != nil {
+		_u.SetUsageRebateAmount(*v)
+	}
+	return _u
+}
+
+// AddUsageRebateAmount adds value to the "usage_rebate_amount" field.
+func (_u *UserCheckinUpdateOne) AddUsageRebateAmount(v float64) *UserCheckinUpdateOne {
+	_u.mutation.AddUsageRebateAmount(v)
+	return _u
+}
+
+// SetRewardCapAdjustment sets the "reward_cap_adjustment" field.
+func (_u *UserCheckinUpdateOne) SetRewardCapAdjustment(v float64) *UserCheckinUpdateOne {
+	_u.mutation.ResetRewardCapAdjustment()
+	_u.mutation.SetRewardCapAdjustment(v)
+	return _u
+}
+
+// SetNillableRewardCapAdjustment sets the "reward_cap_adjustment" field if the given value is not nil.
+func (_u *UserCheckinUpdateOne) SetNillableRewardCapAdjustment(v *float64) *UserCheckinUpdateOne {
+	if v != nil {
+		_u.SetRewardCapAdjustment(*v)
+	}
+	return _u
+}
+
+// AddRewardCapAdjustment adds value to the "reward_cap_adjustment" field.
+func (_u *UserCheckinUpdateOne) AddRewardCapAdjustment(v float64) *UserCheckinUpdateOne {
+	_u.mutation.AddRewardCapAdjustment(v)
+	return _u
+}
+
 // SetUser sets the "user" edge to the User entity.
 func (_u *UserCheckinUpdateOne) SetUser(v *User) *UserCheckinUpdateOne {
 	return _u.SetUserID(v.ID)
@@ -682,6 +826,24 @@ func (_u *UserCheckinUpdateOne) sqlSave(ctx context.Context) (_node *UserCheckin
 	}
 	if value, ok := _u.mutation.AddedTotalRewardAmount(); ok {
 		_spec.AddField(usercheckin.FieldTotalRewardAmount, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.PreviousDayUsageAmount(); ok {
+		_spec.SetField(usercheckin.FieldPreviousDayUsageAmount, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.AddedPreviousDayUsageAmount(); ok {
+		_spec.AddField(usercheckin.FieldPreviousDayUsageAmount, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.UsageRebateAmount(); ok {
+		_spec.SetField(usercheckin.FieldUsageRebateAmount, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.AddedUsageRebateAmount(); ok {
+		_spec.AddField(usercheckin.FieldUsageRebateAmount, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.RewardCapAdjustment(); ok {
+		_spec.SetField(usercheckin.FieldRewardCapAdjustment, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.AddedRewardCapAdjustment(); ok {
+		_spec.AddField(usercheckin.FieldRewardCapAdjustment, field.TypeFloat64, value)
 	}
 	if _u.mutation.UserCleared() {
 		edge := &sqlgraph.EdgeSpec{

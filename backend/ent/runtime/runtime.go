@@ -2456,6 +2456,18 @@ func init() {
 	usercheckinDescTotalRewardAmount := usercheckinFields[9].Descriptor()
 	// usercheckin.DefaultTotalRewardAmount holds the default value on creation for the total_reward_amount field.
 	usercheckin.DefaultTotalRewardAmount = usercheckinDescTotalRewardAmount.Default.(float64)
+	// usercheckinDescPreviousDayUsageAmount is the schema descriptor for previous_day_usage_amount field.
+	usercheckinDescPreviousDayUsageAmount := usercheckinFields[10].Descriptor()
+	// usercheckin.DefaultPreviousDayUsageAmount holds the default value on creation for the previous_day_usage_amount field.
+	usercheckin.DefaultPreviousDayUsageAmount = usercheckinDescPreviousDayUsageAmount.Default.(float64)
+	// usercheckinDescUsageRebateAmount is the schema descriptor for usage_rebate_amount field.
+	usercheckinDescUsageRebateAmount := usercheckinFields[11].Descriptor()
+	// usercheckin.DefaultUsageRebateAmount holds the default value on creation for the usage_rebate_amount field.
+	usercheckin.DefaultUsageRebateAmount = usercheckinDescUsageRebateAmount.Default.(float64)
+	// usercheckinDescRewardCapAdjustment is the schema descriptor for reward_cap_adjustment field.
+	usercheckinDescRewardCapAdjustment := usercheckinFields[12].Descriptor()
+	// usercheckin.DefaultRewardCapAdjustment holds the default value on creation for the reward_cap_adjustment field.
+	usercheckin.DefaultRewardCapAdjustment = usercheckinDescRewardCapAdjustment.Default.(float64)
 	usercheckinblacklistMixin := schema.UserCheckinBlacklist{}.Mixin()
 	usercheckinblacklistMixinFields0 := usercheckinblacklistMixin[0].Fields()
 	_ = usercheckinblacklistMixinFields0

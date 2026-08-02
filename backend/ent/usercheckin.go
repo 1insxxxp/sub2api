@@ -38,6 +38,12 @@ type UserCheckin struct {
 	BonusRewardAmount float64 `json:"bonus_reward_amount,omitempty"`
 	// TotalRewardAmount holds the value of the "total_reward_amount" field.
 	TotalRewardAmount float64 `json:"total_reward_amount,omitempty"`
+	// PreviousDayUsageAmount holds the value of the "previous_day_usage_amount" field.
+	PreviousDayUsageAmount float64 `json:"previous_day_usage_amount,omitempty"`
+	// UsageRebateAmount holds the value of the "usage_rebate_amount" field.
+	UsageRebateAmount float64 `json:"usage_rebate_amount,omitempty"`
+	// RewardCapAdjustment holds the value of the "reward_cap_adjustment" field.
+	RewardCapAdjustment float64 `json:"reward_cap_adjustment,omitempty"`
 	// Edges holds the relations/edges for other nodes in the graph.
 	// The values are being populated by the UserCheckinQuery when eager-loading is set.
 	Edges        UserCheckinEdges `json:"edges"`
@@ -69,7 +75,7 @@ func (*UserCheckin) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case usercheckin.FieldRewardAmount, usercheckin.FieldBalanceBefore, usercheckin.FieldBalanceAfter, usercheckin.FieldBaseRewardAmount, usercheckin.FieldBonusRewardAmount, usercheckin.FieldTotalRewardAmount:
+		case usercheckin.FieldRewardAmount, usercheckin.FieldBalanceBefore, usercheckin.FieldBalanceAfter, usercheckin.FieldBaseRewardAmount, usercheckin.FieldBonusRewardAmount, usercheckin.FieldTotalRewardAmount, usercheckin.FieldPreviousDayUsageAmount, usercheckin.FieldUsageRebateAmount, usercheckin.FieldRewardCapAdjustment:
 			values[i] = new(sql.NullFloat64)
 		case usercheckin.FieldID, usercheckin.FieldUserID, usercheckin.FieldStreakDay:
 			values[i] = new(sql.NullInt64)
@@ -158,6 +164,24 @@ func (_m *UserCheckin) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				_m.TotalRewardAmount = value.Float64
 			}
+		case usercheckin.FieldPreviousDayUsageAmount:
+			if value, ok := values[i].(*sql.NullFloat64); !ok {
+				return fmt.Errorf("unexpected type %T for field previous_day_usage_amount", values[i])
+			} else if value.Valid {
+				_m.PreviousDayUsageAmount = value.Float64
+			}
+		case usercheckin.FieldUsageRebateAmount:
+			if value, ok := values[i].(*sql.NullFloat64); !ok {
+				return fmt.Errorf("unexpected type %T for field usage_rebate_amount", values[i])
+			} else if value.Valid {
+				_m.UsageRebateAmount = value.Float64
+			}
+		case usercheckin.FieldRewardCapAdjustment:
+			if value, ok := values[i].(*sql.NullFloat64); !ok {
+				return fmt.Errorf("unexpected type %T for field reward_cap_adjustment", values[i])
+			} else if value.Valid {
+				_m.RewardCapAdjustment = value.Float64
+			}
 		default:
 			_m.selectValues.Set(columns[i], values[i])
 		}
@@ -228,6 +252,15 @@ func (_m *UserCheckin) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("total_reward_amount=")
 	builder.WriteString(fmt.Sprintf("%v", _m.TotalRewardAmount))
+	builder.WriteString(", ")
+	builder.WriteString("previous_day_usage_amount=")
+	builder.WriteString(fmt.Sprintf("%v", _m.PreviousDayUsageAmount))
+	builder.WriteString(", ")
+	builder.WriteString("usage_rebate_amount=")
+	builder.WriteString(fmt.Sprintf("%v", _m.UsageRebateAmount))
+	builder.WriteString(", ")
+	builder.WriteString("reward_cap_adjustment=")
+	builder.WriteString(fmt.Sprintf("%v", _m.RewardCapAdjustment))
 	builder.WriteByte(')')
 	return builder.String()
 }

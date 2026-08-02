@@ -147,6 +147,48 @@ func (_c *UserCheckinCreate) SetNillableTotalRewardAmount(v *float64) *UserCheck
 	return _c
 }
 
+// SetPreviousDayUsageAmount sets the "previous_day_usage_amount" field.
+func (_c *UserCheckinCreate) SetPreviousDayUsageAmount(v float64) *UserCheckinCreate {
+	_c.mutation.SetPreviousDayUsageAmount(v)
+	return _c
+}
+
+// SetNillablePreviousDayUsageAmount sets the "previous_day_usage_amount" field if the given value is not nil.
+func (_c *UserCheckinCreate) SetNillablePreviousDayUsageAmount(v *float64) *UserCheckinCreate {
+	if v != nil {
+		_c.SetPreviousDayUsageAmount(*v)
+	}
+	return _c
+}
+
+// SetUsageRebateAmount sets the "usage_rebate_amount" field.
+func (_c *UserCheckinCreate) SetUsageRebateAmount(v float64) *UserCheckinCreate {
+	_c.mutation.SetUsageRebateAmount(v)
+	return _c
+}
+
+// SetNillableUsageRebateAmount sets the "usage_rebate_amount" field if the given value is not nil.
+func (_c *UserCheckinCreate) SetNillableUsageRebateAmount(v *float64) *UserCheckinCreate {
+	if v != nil {
+		_c.SetUsageRebateAmount(*v)
+	}
+	return _c
+}
+
+// SetRewardCapAdjustment sets the "reward_cap_adjustment" field.
+func (_c *UserCheckinCreate) SetRewardCapAdjustment(v float64) *UserCheckinCreate {
+	_c.mutation.SetRewardCapAdjustment(v)
+	return _c
+}
+
+// SetNillableRewardCapAdjustment sets the "reward_cap_adjustment" field if the given value is not nil.
+func (_c *UserCheckinCreate) SetNillableRewardCapAdjustment(v *float64) *UserCheckinCreate {
+	if v != nil {
+		_c.SetRewardCapAdjustment(*v)
+	}
+	return _c
+}
+
 // SetUser sets the "user" edge to the User entity.
 func (_c *UserCheckinCreate) SetUser(v *User) *UserCheckinCreate {
 	return _c.SetUserID(v.ID)
@@ -219,6 +261,18 @@ func (_c *UserCheckinCreate) defaults() {
 		v := usercheckin.DefaultTotalRewardAmount
 		_c.mutation.SetTotalRewardAmount(v)
 	}
+	if _, ok := _c.mutation.PreviousDayUsageAmount(); !ok {
+		v := usercheckin.DefaultPreviousDayUsageAmount
+		_c.mutation.SetPreviousDayUsageAmount(v)
+	}
+	if _, ok := _c.mutation.UsageRebateAmount(); !ok {
+		v := usercheckin.DefaultUsageRebateAmount
+		_c.mutation.SetUsageRebateAmount(v)
+	}
+	if _, ok := _c.mutation.RewardCapAdjustment(); !ok {
+		v := usercheckin.DefaultRewardCapAdjustment
+		_c.mutation.SetRewardCapAdjustment(v)
+	}
 }
 
 // check runs all checks and user-defined validators on the builder.
@@ -257,6 +311,15 @@ func (_c *UserCheckinCreate) check() error {
 	}
 	if _, ok := _c.mutation.TotalRewardAmount(); !ok {
 		return &ValidationError{Name: "total_reward_amount", err: errors.New(`ent: missing required field "UserCheckin.total_reward_amount"`)}
+	}
+	if _, ok := _c.mutation.PreviousDayUsageAmount(); !ok {
+		return &ValidationError{Name: "previous_day_usage_amount", err: errors.New(`ent: missing required field "UserCheckin.previous_day_usage_amount"`)}
+	}
+	if _, ok := _c.mutation.UsageRebateAmount(); !ok {
+		return &ValidationError{Name: "usage_rebate_amount", err: errors.New(`ent: missing required field "UserCheckin.usage_rebate_amount"`)}
+	}
+	if _, ok := _c.mutation.RewardCapAdjustment(); !ok {
+		return &ValidationError{Name: "reward_cap_adjustment", err: errors.New(`ent: missing required field "UserCheckin.reward_cap_adjustment"`)}
 	}
 	if len(_c.mutation.UserIDs()) == 0 {
 		return &ValidationError{Name: "user", err: errors.New(`ent: missing required edge "UserCheckin.user"`)}
@@ -323,6 +386,18 @@ func (_c *UserCheckinCreate) createSpec() (*UserCheckin, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.TotalRewardAmount(); ok {
 		_spec.SetField(usercheckin.FieldTotalRewardAmount, field.TypeFloat64, value)
 		_node.TotalRewardAmount = value
+	}
+	if value, ok := _c.mutation.PreviousDayUsageAmount(); ok {
+		_spec.SetField(usercheckin.FieldPreviousDayUsageAmount, field.TypeFloat64, value)
+		_node.PreviousDayUsageAmount = value
+	}
+	if value, ok := _c.mutation.UsageRebateAmount(); ok {
+		_spec.SetField(usercheckin.FieldUsageRebateAmount, field.TypeFloat64, value)
+		_node.UsageRebateAmount = value
+	}
+	if value, ok := _c.mutation.RewardCapAdjustment(); ok {
+		_spec.SetField(usercheckin.FieldRewardCapAdjustment, field.TypeFloat64, value)
+		_node.RewardCapAdjustment = value
 	}
 	if nodes := _c.mutation.UserIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{
@@ -543,6 +618,60 @@ func (u *UserCheckinUpsert) AddTotalRewardAmount(v float64) *UserCheckinUpsert {
 	return u
 }
 
+// SetPreviousDayUsageAmount sets the "previous_day_usage_amount" field.
+func (u *UserCheckinUpsert) SetPreviousDayUsageAmount(v float64) *UserCheckinUpsert {
+	u.Set(usercheckin.FieldPreviousDayUsageAmount, v)
+	return u
+}
+
+// UpdatePreviousDayUsageAmount sets the "previous_day_usage_amount" field to the value that was provided on create.
+func (u *UserCheckinUpsert) UpdatePreviousDayUsageAmount() *UserCheckinUpsert {
+	u.SetExcluded(usercheckin.FieldPreviousDayUsageAmount)
+	return u
+}
+
+// AddPreviousDayUsageAmount adds v to the "previous_day_usage_amount" field.
+func (u *UserCheckinUpsert) AddPreviousDayUsageAmount(v float64) *UserCheckinUpsert {
+	u.Add(usercheckin.FieldPreviousDayUsageAmount, v)
+	return u
+}
+
+// SetUsageRebateAmount sets the "usage_rebate_amount" field.
+func (u *UserCheckinUpsert) SetUsageRebateAmount(v float64) *UserCheckinUpsert {
+	u.Set(usercheckin.FieldUsageRebateAmount, v)
+	return u
+}
+
+// UpdateUsageRebateAmount sets the "usage_rebate_amount" field to the value that was provided on create.
+func (u *UserCheckinUpsert) UpdateUsageRebateAmount() *UserCheckinUpsert {
+	u.SetExcluded(usercheckin.FieldUsageRebateAmount)
+	return u
+}
+
+// AddUsageRebateAmount adds v to the "usage_rebate_amount" field.
+func (u *UserCheckinUpsert) AddUsageRebateAmount(v float64) *UserCheckinUpsert {
+	u.Add(usercheckin.FieldUsageRebateAmount, v)
+	return u
+}
+
+// SetRewardCapAdjustment sets the "reward_cap_adjustment" field.
+func (u *UserCheckinUpsert) SetRewardCapAdjustment(v float64) *UserCheckinUpsert {
+	u.Set(usercheckin.FieldRewardCapAdjustment, v)
+	return u
+}
+
+// UpdateRewardCapAdjustment sets the "reward_cap_adjustment" field to the value that was provided on create.
+func (u *UserCheckinUpsert) UpdateRewardCapAdjustment() *UserCheckinUpsert {
+	u.SetExcluded(usercheckin.FieldRewardCapAdjustment)
+	return u
+}
+
+// AddRewardCapAdjustment adds v to the "reward_cap_adjustment" field.
+func (u *UserCheckinUpsert) AddRewardCapAdjustment(v float64) *UserCheckinUpsert {
+	u.Add(usercheckin.FieldRewardCapAdjustment, v)
+	return u
+}
+
 // UpdateNewValues updates the mutable fields using the new values that were set on create.
 // Using this option is equivalent to using:
 //
@@ -760,6 +889,69 @@ func (u *UserCheckinUpsertOne) AddTotalRewardAmount(v float64) *UserCheckinUpser
 func (u *UserCheckinUpsertOne) UpdateTotalRewardAmount() *UserCheckinUpsertOne {
 	return u.Update(func(s *UserCheckinUpsert) {
 		s.UpdateTotalRewardAmount()
+	})
+}
+
+// SetPreviousDayUsageAmount sets the "previous_day_usage_amount" field.
+func (u *UserCheckinUpsertOne) SetPreviousDayUsageAmount(v float64) *UserCheckinUpsertOne {
+	return u.Update(func(s *UserCheckinUpsert) {
+		s.SetPreviousDayUsageAmount(v)
+	})
+}
+
+// AddPreviousDayUsageAmount adds v to the "previous_day_usage_amount" field.
+func (u *UserCheckinUpsertOne) AddPreviousDayUsageAmount(v float64) *UserCheckinUpsertOne {
+	return u.Update(func(s *UserCheckinUpsert) {
+		s.AddPreviousDayUsageAmount(v)
+	})
+}
+
+// UpdatePreviousDayUsageAmount sets the "previous_day_usage_amount" field to the value that was provided on create.
+func (u *UserCheckinUpsertOne) UpdatePreviousDayUsageAmount() *UserCheckinUpsertOne {
+	return u.Update(func(s *UserCheckinUpsert) {
+		s.UpdatePreviousDayUsageAmount()
+	})
+}
+
+// SetUsageRebateAmount sets the "usage_rebate_amount" field.
+func (u *UserCheckinUpsertOne) SetUsageRebateAmount(v float64) *UserCheckinUpsertOne {
+	return u.Update(func(s *UserCheckinUpsert) {
+		s.SetUsageRebateAmount(v)
+	})
+}
+
+// AddUsageRebateAmount adds v to the "usage_rebate_amount" field.
+func (u *UserCheckinUpsertOne) AddUsageRebateAmount(v float64) *UserCheckinUpsertOne {
+	return u.Update(func(s *UserCheckinUpsert) {
+		s.AddUsageRebateAmount(v)
+	})
+}
+
+// UpdateUsageRebateAmount sets the "usage_rebate_amount" field to the value that was provided on create.
+func (u *UserCheckinUpsertOne) UpdateUsageRebateAmount() *UserCheckinUpsertOne {
+	return u.Update(func(s *UserCheckinUpsert) {
+		s.UpdateUsageRebateAmount()
+	})
+}
+
+// SetRewardCapAdjustment sets the "reward_cap_adjustment" field.
+func (u *UserCheckinUpsertOne) SetRewardCapAdjustment(v float64) *UserCheckinUpsertOne {
+	return u.Update(func(s *UserCheckinUpsert) {
+		s.SetRewardCapAdjustment(v)
+	})
+}
+
+// AddRewardCapAdjustment adds v to the "reward_cap_adjustment" field.
+func (u *UserCheckinUpsertOne) AddRewardCapAdjustment(v float64) *UserCheckinUpsertOne {
+	return u.Update(func(s *UserCheckinUpsert) {
+		s.AddRewardCapAdjustment(v)
+	})
+}
+
+// UpdateRewardCapAdjustment sets the "reward_cap_adjustment" field to the value that was provided on create.
+func (u *UserCheckinUpsertOne) UpdateRewardCapAdjustment() *UserCheckinUpsertOne {
+	return u.Update(func(s *UserCheckinUpsert) {
+		s.UpdateRewardCapAdjustment()
 	})
 }
 
@@ -1146,6 +1338,69 @@ func (u *UserCheckinUpsertBulk) AddTotalRewardAmount(v float64) *UserCheckinUpse
 func (u *UserCheckinUpsertBulk) UpdateTotalRewardAmount() *UserCheckinUpsertBulk {
 	return u.Update(func(s *UserCheckinUpsert) {
 		s.UpdateTotalRewardAmount()
+	})
+}
+
+// SetPreviousDayUsageAmount sets the "previous_day_usage_amount" field.
+func (u *UserCheckinUpsertBulk) SetPreviousDayUsageAmount(v float64) *UserCheckinUpsertBulk {
+	return u.Update(func(s *UserCheckinUpsert) {
+		s.SetPreviousDayUsageAmount(v)
+	})
+}
+
+// AddPreviousDayUsageAmount adds v to the "previous_day_usage_amount" field.
+func (u *UserCheckinUpsertBulk) AddPreviousDayUsageAmount(v float64) *UserCheckinUpsertBulk {
+	return u.Update(func(s *UserCheckinUpsert) {
+		s.AddPreviousDayUsageAmount(v)
+	})
+}
+
+// UpdatePreviousDayUsageAmount sets the "previous_day_usage_amount" field to the value that was provided on create.
+func (u *UserCheckinUpsertBulk) UpdatePreviousDayUsageAmount() *UserCheckinUpsertBulk {
+	return u.Update(func(s *UserCheckinUpsert) {
+		s.UpdatePreviousDayUsageAmount()
+	})
+}
+
+// SetUsageRebateAmount sets the "usage_rebate_amount" field.
+func (u *UserCheckinUpsertBulk) SetUsageRebateAmount(v float64) *UserCheckinUpsertBulk {
+	return u.Update(func(s *UserCheckinUpsert) {
+		s.SetUsageRebateAmount(v)
+	})
+}
+
+// AddUsageRebateAmount adds v to the "usage_rebate_amount" field.
+func (u *UserCheckinUpsertBulk) AddUsageRebateAmount(v float64) *UserCheckinUpsertBulk {
+	return u.Update(func(s *UserCheckinUpsert) {
+		s.AddUsageRebateAmount(v)
+	})
+}
+
+// UpdateUsageRebateAmount sets the "usage_rebate_amount" field to the value that was provided on create.
+func (u *UserCheckinUpsertBulk) UpdateUsageRebateAmount() *UserCheckinUpsertBulk {
+	return u.Update(func(s *UserCheckinUpsert) {
+		s.UpdateUsageRebateAmount()
+	})
+}
+
+// SetRewardCapAdjustment sets the "reward_cap_adjustment" field.
+func (u *UserCheckinUpsertBulk) SetRewardCapAdjustment(v float64) *UserCheckinUpsertBulk {
+	return u.Update(func(s *UserCheckinUpsert) {
+		s.SetRewardCapAdjustment(v)
+	})
+}
+
+// AddRewardCapAdjustment adds v to the "reward_cap_adjustment" field.
+func (u *UserCheckinUpsertBulk) AddRewardCapAdjustment(v float64) *UserCheckinUpsertBulk {
+	return u.Update(func(s *UserCheckinUpsert) {
+		s.AddRewardCapAdjustment(v)
+	})
+}
+
+// UpdateRewardCapAdjustment sets the "reward_cap_adjustment" field to the value that was provided on create.
+func (u *UserCheckinUpsertBulk) UpdateRewardCapAdjustment() *UserCheckinUpsertBulk {
+	return u.Update(func(s *UserCheckinUpsert) {
+		s.UpdateRewardCapAdjustment()
 	})
 }
 

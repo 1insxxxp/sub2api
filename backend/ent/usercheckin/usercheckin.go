@@ -34,6 +34,12 @@ const (
 	FieldBonusRewardAmount = "bonus_reward_amount"
 	// FieldTotalRewardAmount holds the string denoting the total_reward_amount field in the database.
 	FieldTotalRewardAmount = "total_reward_amount"
+	// FieldPreviousDayUsageAmount holds the string denoting the previous_day_usage_amount field in the database.
+	FieldPreviousDayUsageAmount = "previous_day_usage_amount"
+	// FieldUsageRebateAmount holds the string denoting the usage_rebate_amount field in the database.
+	FieldUsageRebateAmount = "usage_rebate_amount"
+	// FieldRewardCapAdjustment holds the string denoting the reward_cap_adjustment field in the database.
+	FieldRewardCapAdjustment = "reward_cap_adjustment"
 	// EdgeUser holds the string denoting the user edge name in mutations.
 	EdgeUser = "user"
 	// Table holds the table name of the usercheckin in the database.
@@ -60,6 +66,9 @@ var Columns = []string{
 	FieldBaseRewardAmount,
 	FieldBonusRewardAmount,
 	FieldTotalRewardAmount,
+	FieldPreviousDayUsageAmount,
+	FieldUsageRebateAmount,
+	FieldRewardCapAdjustment,
 }
 
 // ValidColumn reports if the column name is valid (part of the table columns).
@@ -91,6 +100,12 @@ var (
 	DefaultBonusRewardAmount float64
 	// DefaultTotalRewardAmount holds the default value on creation for the "total_reward_amount" field.
 	DefaultTotalRewardAmount float64
+	// DefaultPreviousDayUsageAmount holds the default value on creation for the "previous_day_usage_amount" field.
+	DefaultPreviousDayUsageAmount float64
+	// DefaultUsageRebateAmount holds the default value on creation for the "usage_rebate_amount" field.
+	DefaultUsageRebateAmount float64
+	// DefaultRewardCapAdjustment holds the default value on creation for the "reward_cap_adjustment" field.
+	DefaultRewardCapAdjustment float64
 )
 
 // OrderOption defines the ordering options for the UserCheckin queries.
@@ -149,6 +164,21 @@ func ByBonusRewardAmount(opts ...sql.OrderTermOption) OrderOption {
 // ByTotalRewardAmount orders the results by the total_reward_amount field.
 func ByTotalRewardAmount(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldTotalRewardAmount, opts...).ToFunc()
+}
+
+// ByPreviousDayUsageAmount orders the results by the previous_day_usage_amount field.
+func ByPreviousDayUsageAmount(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldPreviousDayUsageAmount, opts...).ToFunc()
+}
+
+// ByUsageRebateAmount orders the results by the usage_rebate_amount field.
+func ByUsageRebateAmount(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldUsageRebateAmount, opts...).ToFunc()
+}
+
+// ByRewardCapAdjustment orders the results by the reward_cap_adjustment field.
+func ByRewardCapAdjustment(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldRewardCapAdjustment, opts...).ToFunc()
 }
 
 // ByUserField orders the results by user field.
