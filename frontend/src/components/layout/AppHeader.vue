@@ -1,5 +1,5 @@
 <template>
-  <header class="app-header-shell theme-crisp sticky top-0 z-30">
+  <header class="app-header-shell theme-crisp sticky top-0 z-30" @keydown.esc="closeCheckinPopover">
     <div class="app-header-toolbar">
       <!-- Left: Mobile Menu Toggle + Page Title -->
       <div class="app-header-title-group">
@@ -105,7 +105,12 @@
         <!-- Daily Check-in -->
         <div
           v-if="showCheckinButton"
+          ref="checkinContainerRef"
           class="group/checkin relative inline-flex"
+          @mouseenter="openCheckinPopover"
+          @mouseleave="closeCheckinPopover"
+          @focusin="openCheckinPopover"
+          @focusout="handleCheckinFocusOut"
         >
           <button
             type="button"
@@ -113,8 +118,11 @@
             :disabled="checkinButtonDisabled"
             :title="checkinButtonTitle"
             :aria-label="checkinButtonLabel"
+            aria-controls="daily-checkin-popover"
+            aria-haspopup="dialog"
+            :aria-expanded="checkinPopoverOpen"
             class="inline-flex items-center gap-1.5 rounded-lg border border-amber-200 bg-amber-50 px-2 py-1.5 text-sm font-semibold text-amber-700 shadow-sm shadow-amber-900/5 transition-colors hover:bg-amber-100 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400 min-[360px]:px-3 dark:border-amber-500/30 dark:bg-amber-900/20 dark:text-amber-200 dark:hover:bg-amber-900/30 dark:disabled:border-dark-700 dark:disabled:bg-dark-800 dark:disabled:text-dark-400"
-            @click="handleCheckin"
+            @click.stop="handleCheckinButton"
           >
             <Icon
               :name="checkinStatus?.checked_in ? 'check' : 'gift'"
@@ -125,10 +133,14 @@
           </button>
 
           <div
-            class="brand-floating-panel pointer-events-none absolute right-0 top-full z-50 mt-3 w-[25rem] max-w-[calc(100vw-1rem)] translate-y-1 overflow-hidden text-left opacity-0 transition-all duration-150 group-hover/checkin:pointer-events-auto group-hover/checkin:translate-y-0 group-hover/checkin:opacity-100 group-focus-within/checkin:pointer-events-auto group-focus-within/checkin:translate-y-0 group-focus-within/checkin:opacity-100"
+            id="daily-checkin-popover"
+            class="brand-floating-panel daily-checkin-popover pointer-events-none absolute right-0 top-full z-50 mt-3 w-[25rem] max-w-[calc(100vw-1rem)] translate-y-1 overflow-hidden text-left opacity-0 transition-all duration-150"
+            :class="checkinPopoverOpen ? 'pointer-events-auto translate-y-0 opacity-100' : ''"
+            role="dialog"
+            :aria-hidden="!checkinPopoverOpen"
             data-test="daily-checkin-popover"
           >
-            <div class="brand-floating-header px-6 py-5">
+            <div class="brand-floating-header daily-checkin-popover-header px-6 py-5">
               <div class="flex items-start justify-between gap-3">
                 <div class="min-w-0">
                   <div class="mb-3 flex items-center gap-3">
@@ -154,7 +166,7 @@
               </div>
             </div>
 
-            <div class="p-4">
+            <div class="daily-checkin-popover-body p-4">
               <div class="grid grid-cols-2 gap-3">
                 <div class="brand-floating-card">
                   <p class="text-xs text-slate-500 dark:text-slate-400">{{ t('checkin.currentStreak') }}</p>
@@ -251,6 +263,18 @@
                   {{ nextStreakBonusMessage }}
                 </p>
               </div>
+
+              <button
+                v-if="checkinCanSubmit"
+                type="button"
+                data-test="daily-checkin-submit"
+                :disabled="checkinButtonDisabled"
+                class="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-amber-500 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-amber-600 disabled:cursor-not-allowed disabled:opacity-60"
+                @click.stop="handleCheckin"
+              >
+                <Icon name="gift" size="sm" :class="checkinSubmitting ? 'animate-pulse' : ''" />
+                {{ checkinButtonLabel }}
+              </button>
 
               <div v-if="recentCheckinRecords.length > 0" class="mt-4 space-y-2">
                 <p class="text-xs font-medium text-slate-500 dark:text-slate-400">
@@ -493,6 +517,8 @@ const avatarUrl = computed(() => user.value?.avatar_url?.trim() || '')
 const checkinStatus = ref<CheckinStatus | null>(null)
 const checkinLoading = ref(false)
 const checkinSubmitting = ref(false)
+const checkinPopoverOpen = ref(false)
+const checkinContainerRef = ref<HTMLElement | null>(null)
 let checkinStatusRequest = 0
 const availableBalance = computed(() => Number(user.value?.balance || 0))
 const frozenBalance = computed(() => Number(user.value?.frozen_balance || 0))
@@ -512,12 +538,11 @@ const showCheckinButton = computed(() => {
 })
 
 const checkinButtonDisabled = computed(() => {
-  return (
-    checkinLoading.value ||
-    checkinSubmitting.value ||
-    checkinStatus.value?.checked_in === true ||
-    checkinStatus.value?.eligible === false
-  )
+  return checkinLoading.value || checkinSubmitting.value
+})
+
+const checkinCanSubmit = computed(() => {
+  return checkinStatus.value?.checked_in !== true && checkinStatus.value?.eligible !== false
 })
 
 const checkinButtonLabel = computed(() => {
@@ -748,7 +773,7 @@ async function loadCheckinStatus() {
 }
 
 async function handleCheckin() {
-  if (!user.value || checkinButtonDisabled.value) return
+  if (!user.value || checkinButtonDisabled.value || !checkinCanSubmit.value) return
 
   checkinSubmitting.value = true
   try {
@@ -770,6 +795,25 @@ async function handleCheckin() {
   }
 }
 
+function handleCheckinButton() {
+  openCheckinPopover()
+}
+
+function openCheckinPopover() {
+  checkinPopoverOpen.value = true
+}
+
+function closeCheckinPopover() {
+  checkinPopoverOpen.value = false
+}
+
+function handleCheckinFocusOut(event: FocusEvent) {
+  const nextTarget = event.relatedTarget
+  if (!(nextTarget instanceof Node) || !checkinContainerRef.value?.contains(nextTarget)) {
+    closeCheckinPopover()
+  }
+}
+
 function formatUsd(value: number | null | undefined): string {
   const amount = Number.isFinite(value) ? Number(value) : 0
   return `$${amount.toFixed(2)}`
@@ -783,6 +827,9 @@ function formatHeaderMoney(value: number) {
 function handleClickOutside(event: MouseEvent) {
   if (dropdownRef.value && !dropdownRef.value.contains(event.target as Node)) {
     closeDropdown()
+  }
+  if (checkinContainerRef.value && !checkinContainerRef.value.contains(event.target as Node)) {
+    closeCheckinPopover()
   }
 }
 
@@ -798,6 +845,7 @@ watch(
   () => user.value?.id,
   (id) => {
     checkinStatus.value = null
+    closeCheckinPopover()
     checkinStatusRequest += 1
     if (id) {
       void loadCheckinStatus()
@@ -808,6 +856,56 @@ watch(
 </script>
 
 <style scoped>
+.daily-checkin-popover {
+  display: flex;
+  max-height: min(42rem, calc(100dvh - 5rem));
+  flex-direction: column;
+}
+
+.daily-checkin-popover-header {
+  flex: 0 0 auto;
+}
+
+.daily-checkin-popover-body {
+  min-height: 0;
+  flex: 1 1 auto;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+@media (max-width: 420px) {
+  :global(.app-header-shell) {
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+
+  .daily-checkin-popover {
+    position: fixed;
+    top: auto;
+    right: 0.75rem;
+    bottom: max(0.75rem, env(safe-area-inset-bottom, 0px));
+    left: 0.75rem;
+    width: auto;
+    max-width: none;
+    max-height: min(38rem, calc(100dvh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px) - 5.5rem));
+    margin-top: 0;
+    transform: translateY(0.5rem);
+    border-radius: 1.25rem;
+    box-shadow:
+      0 24px 64px rgba(15, 23, 42, 0.26),
+      0 1px 0 rgba(255, 255, 255, 0.86) inset;
+  }
+
+  .daily-checkin-popover-header {
+    padding: 0.95rem 1rem 0.85rem;
+  }
+
+  .daily-checkin-popover-body {
+    padding: 0.75rem 0.85rem 0.95rem;
+  }
+}
+
 .profile-menu {
   overflow: hidden;
   border-radius: 12px;

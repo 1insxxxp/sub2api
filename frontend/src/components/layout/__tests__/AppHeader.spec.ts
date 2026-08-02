@@ -258,6 +258,8 @@ describe('AppHeader daily check-in entry', () => {
     expect(button.text()).toContain('签到')
 
     await button.trigger('click')
+    expect(submitCheckin).not.toHaveBeenCalled()
+    await wrapper.get('[data-test="daily-checkin-submit"]').trigger('click')
     await flushPromises()
 
     expect(submitCheckin).toHaveBeenCalledTimes(1)
@@ -410,6 +412,7 @@ describe('AppHeader daily check-in entry', () => {
 
     const wrapper = await mountHeader()
     await wrapper.get('[data-test="daily-checkin-button"]').trigger('click')
+    await wrapper.get('[data-test="daily-checkin-submit"]').trigger('click')
     await flushPromises()
 
     expect(wrapper.get('[data-test="checkin-base-reward"]').text()).toContain('$0.80')
@@ -464,11 +467,100 @@ describe('AppHeader daily check-in entry', () => {
     expect(wrapper.get('[data-test="recent-checkin-total"]').text()).toContain('$0.50')
   })
 
-  it('keeps the reward breakdown responsive at a 320px viewport', () => {
+  it('keeps the reward breakdown viewport-bound on narrow screens', () => {
     expect(componentSource).toContain('max-w-[calc(100vw-1rem)]')
+    expect(componentSource).toContain('daily-checkin-popover')
+    expect(componentSource).toContain('daily-checkin-popover-body')
+    expect(componentSource).toContain('max-height: min(42rem, calc(100dvh - 5rem))')
+    expect(componentSource).toContain('overflow-y: auto')
+    expect(componentSource).toContain('@media (max-width: 420px)')
+    expect(componentSource).toContain(':global(.app-header-shell)')
+    expect(componentSource).toContain('backdrop-filter: none')
+    expect(componentSource).toContain('position: fixed')
+    expect(componentSource).toContain('top: auto')
+    expect(componentSource).toContain('bottom: max(0.75rem, env(safe-area-inset-bottom, 0px))')
+    expect(componentSource).toContain('max-height: min(38rem, calc(100dvh')
     expect(componentSource).toContain('grid-cols-[minmax(0,1fr),auto]')
     expect(componentSource).toContain('break-words')
     expect(componentSource).toContain('tabular-nums')
+  })
+
+  it('lets an already checked-in user open and close reward details without submitting again', async () => {
+    getCheckinStatus.mockResolvedValue({
+      enabled: true,
+      eligible: true,
+      checked_in: true,
+      blacklisted: false,
+      checkin_date: '2026-06-16',
+      reward_amount: 1,
+      current_streak: 2,
+      lifetime_checkin_days: 5,
+      recent_records: []
+    })
+
+    const wrapper = await mountHeader()
+    const button = wrapper.get('[data-test="daily-checkin-button"]')
+
+    expect(button.attributes('disabled')).toBeUndefined()
+    expect(button.attributes('aria-expanded')).toBe('false')
+    await button.trigger('click')
+    expect(button.attributes('aria-expanded')).toBe('true')
+    expect(submitCheckin).not.toHaveBeenCalled()
+
+    await wrapper.get('header').trigger('keydown', { key: 'Escape' })
+    expect(button.attributes('aria-expanded')).toBe('false')
+  })
+
+  it('lets an ineligible user inspect eligibility details without submitting', async () => {
+    getCheckinStatus.mockResolvedValue({
+      enabled: true,
+      eligible: false,
+      ineligible_reason: 'insufficient_spend',
+      checked_in: false,
+      blacklisted: false,
+      checkin_date: '2026-06-16',
+      reward_amount: null,
+      current_streak: 0,
+      lifetime_checkin_days: 0,
+      min_total_usage_usd: 50,
+      total_usage_usd: 5,
+      recent_records: []
+    })
+
+    const wrapper = await mountHeader()
+    const button = wrapper.get('[data-test="daily-checkin-button"]')
+
+    expect(button.attributes('disabled')).toBeUndefined()
+    await button.trigger('click')
+    expect(button.attributes('aria-expanded')).toBe('true')
+    expect(submitCheckin).not.toHaveBeenCalled()
+  })
+
+  it('preserves desktop pointer preview without submitting', async () => {
+    getCheckinStatus.mockResolvedValue({
+      enabled: true,
+      eligible: true,
+      checked_in: false,
+      blacklisted: false,
+      checkin_date: '2026-06-16',
+      reward_amount: null,
+      current_streak: 0,
+      lifetime_checkin_days: 0,
+      recent_records: []
+    })
+
+    const wrapper = await mountHeader()
+    const container = wrapper.get('[data-test="daily-checkin-button"]').element.parentElement
+    const button = wrapper.get('[data-test="daily-checkin-button"]')
+
+    container?.dispatchEvent(new MouseEvent('mouseenter'))
+    await wrapper.vm.$nextTick()
+    expect(button.attributes('aria-expanded')).toBe('true')
+    expect(submitCheckin).not.toHaveBeenCalled()
+
+    container?.dispatchEvent(new MouseEvent('mouseleave'))
+    await wrapper.vm.$nextTick()
+    expect(button.attributes('aria-expanded')).toBe('false')
   })
 
   it('renders the eligibility progress bar based on cumulative spend and caps at 100%', async () => {
@@ -542,7 +634,7 @@ describe('AppHeader daily check-in entry', () => {
 
     expect(wrapper.find('[data-test="daily-checkin-usage-progress"]').exists()).toBe(false)
     expect(wrapper.get('[data-test="daily-checkin-recharge-progress"]').attributes('style')).toContain('width: 25%')
-    expect(wrapper.get('[data-test="daily-checkin-button"]').attributes('disabled')).toBeDefined()
+    expect(wrapper.get('[data-test="daily-checkin-button"]').attributes('disabled')).toBeUndefined()
   })
 })
 
