@@ -5,6 +5,7 @@ package service
 import (
 	"context"
 	"database/sql"
+	"math"
 	"strconv"
 	"testing"
 	"time"
@@ -487,6 +488,131 @@ func TestCheckinServicePersistsRechargeThreshold(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, 5.0, loaded.MinTotalUsageUSD)
 	require.Equal(t, 20.0, loaded.MinTotalRechargeUSD)
+}
+
+func TestCheckinConfig_NormalizesUsageRebateMode(t *testing.T) {
+	cfg := CheckinConfig{
+		Enabled:                true,
+		Tiers:                  []CheckinRewardTier{{Amount: 0.3, Probability: 100}},
+		StreakEnabled:          true,
+		StreakRules:            []CheckinStreakRule{{Day: 7, BonusRatePercent: 10}},
+		UsageRebateEnabled:     true,
+		UsageRebateRatePercent: 8,
+		UsageRebateCap:         8,
+		TotalRewardCap:         10,
+	}
+
+	normalized, err := normalizeCheckinConfig(cfg)
+	require.NoError(t, err)
+	require.True(t, normalized.UsageRebateEnabled)
+	require.Equal(t, 8.0, normalized.UsageRebateRatePercent)
+	require.Equal(t, 8.0, normalized.UsageRebateCap)
+	require.Equal(t, 10.0, normalized.TotalRewardCap)
+	require.Equal(t, 10.0, normalized.StreakRules[0].BonusRatePercent)
+	require.Zero(t, normalized.StreakRules[0].BonusAmount)
+}
+
+func TestCheckinConfig_LegacyFixedStreakRemainsValid(t *testing.T) {
+	cfg := CheckinConfig{
+		Enabled:       true,
+		Tiers:         []CheckinRewardTier{{Amount: 1, Probability: 100}},
+		StreakEnabled: true,
+		StreakRules:   []CheckinStreakRule{{Day: 7, BonusAmount: 4}},
+	}
+
+	normalized, err := normalizeCheckinConfig(cfg)
+	require.NoError(t, err)
+	require.False(t, normalized.UsageRebateEnabled)
+	require.Equal(t, 4.0, normalized.StreakRules[0].BonusAmount)
+	require.Zero(t, normalized.StreakRules[0].BonusRatePercent)
+}
+
+func TestCheckinConfig_RejectsInvalidUsageRebateValues(t *testing.T) {
+	valid := func() CheckinConfig {
+		return CheckinConfig{
+			Enabled:                true,
+			Tiers:                  []CheckinRewardTier{{Amount: 0.3, Probability: 100}},
+			UsageRebateEnabled:     true,
+			UsageRebateRatePercent: 8,
+			UsageRebateCap:         8,
+			TotalRewardCap:         10,
+		}
+	}
+	tests := []struct {
+		name   string
+		mutate func(*CheckinConfig)
+	}{
+		{"nan rate", func(cfg *CheckinConfig) { cfg.UsageRebateRatePercent = math.NaN() }},
+		{"infinite cap", func(cfg *CheckinConfig) { cfg.UsageRebateCap = math.Inf(1) }},
+		{"negative rate", func(cfg *CheckinConfig) { cfg.UsageRebateRatePercent = -1 }},
+		{"rate over one hundred", func(cfg *CheckinConfig) { cfg.UsageRebateRatePercent = 101 }},
+		{"zero rebate cap", func(cfg *CheckinConfig) { cfg.UsageRebateCap = 0 }},
+		{"zero total cap", func(cfg *CheckinConfig) { cfg.TotalRewardCap = 0 }},
+		{"total cap below minimum base", func(cfg *CheckinConfig) { cfg.TotalRewardCap = 0.2 }},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := valid()
+			tt.mutate(&cfg)
+			_, err := normalizeCheckinConfig(cfg)
+			require.Error(t, err)
+		})
+	}
+}
+
+func TestCheckinServicePersistsUsageRebateConfig(t *testing.T) {
+	client := newCheckinServiceTestClient(t)
+	settings := newCheckinSettingRepoStub()
+	svc := NewCheckinService(client, nil, nil)
+	svc.SetSettingRepository(settings)
+
+	updated, err := svc.UpdateConfig(context.Background(), CheckinConfig{
+		Enabled:                true,
+		Tiers:                  []CheckinRewardTier{{Amount: 0.3, Probability: 100}},
+		StreakEnabled:          true,
+		StreakRules:            []CheckinStreakRule{{Day: 7, BonusRatePercent: 10}},
+		UsageRebateEnabled:     true,
+		UsageRebateRatePercent: 8,
+		UsageRebateCap:         8,
+		TotalRewardCap:         10,
+	})
+	require.NoError(t, err)
+	require.True(t, updated.UsageRebateEnabled)
+	require.JSONEq(t, `{
+		"tiers":[{"amount":0.3,"probability":100,"sort_order":1}],
+		"streak_enabled":true,
+		"streak_rules":[{"day":7,"bonus_amount":0,"bonus_rate_percent":10}],
+		"usage_rebate_enabled":true,
+		"usage_rebate_rate_percent":8,
+		"usage_rebate_cap":8,
+		"total_reward_cap":10
+	}`, settings.values[SettingKeyCheckinRewardConfig])
+
+	loaded, err := svc.GetConfig(context.Background())
+	require.NoError(t, err)
+	require.Equal(t, updated, loaded)
+}
+
+func TestCheckinServiceLoadsLegacyRewardConfigWithUsageRebateDisabled(t *testing.T) {
+	client := newCheckinServiceTestClient(t)
+	settings := newCheckinSettingRepoStub()
+	settings.values[SettingKeyCheckinRewardConfig] = `{
+		"tiers":[{"amount":1,"probability":100,"sort_order":1}],
+		"streak_enabled":true,
+		"streak_rules":[{"day":7,"bonus_amount":4}]
+	}`
+	svc := NewCheckinService(client, nil, nil)
+	svc.SetSettingRepository(settings)
+
+	loaded, err := svc.GetConfig(context.Background())
+	require.NoError(t, err)
+	require.False(t, loaded.UsageRebateEnabled)
+	require.Zero(t, loaded.UsageRebateRatePercent)
+	require.Zero(t, loaded.UsageRebateCap)
+	require.Zero(t, loaded.TotalRewardCap)
+	require.Equal(t, 4.0, loaded.StreakRules[0].BonusAmount)
+	require.Zero(t, loaded.StreakRules[0].BonusRatePercent)
 }
 
 func TestCheckinServiceCustomRewardConfigAndStreakBonus(t *testing.T) {

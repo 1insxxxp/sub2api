@@ -46,14 +46,18 @@ const (
 )
 
 type CheckinConfig struct {
-	Enabled             bool                 `json:"enabled"`
-	MinTotalUsageUSD    float64              `json:"min_total_usage_usd"`
-	MinTotalRechargeUSD float64              `json:"min_total_recharge_usd"`
-	Tiers               []CheckinRewardTier  `json:"tiers"`
-	StreakEnabled       bool                 `json:"streak_enabled"`
-	StreakRules         []CheckinStreakRule  `json:"streak_rules"`
-	ProbabilityTotal    float64              `json:"probability_total"`
-	Preview             CheckinRewardPreview `json:"preview"`
+	Enabled                bool                 `json:"enabled"`
+	MinTotalUsageUSD       float64              `json:"min_total_usage_usd"`
+	MinTotalRechargeUSD    float64              `json:"min_total_recharge_usd"`
+	Tiers                  []CheckinRewardTier  `json:"tiers"`
+	StreakEnabled          bool                 `json:"streak_enabled"`
+	StreakRules            []CheckinStreakRule  `json:"streak_rules"`
+	UsageRebateEnabled     bool                 `json:"usage_rebate_enabled"`
+	UsageRebateRatePercent float64              `json:"usage_rebate_rate_percent"`
+	UsageRebateCap         float64              `json:"usage_rebate_cap"`
+	TotalRewardCap         float64              `json:"total_reward_cap"`
+	ProbabilityTotal       float64              `json:"probability_total"`
+	Preview                CheckinRewardPreview `json:"preview"`
 }
 
 type CheckinRewardTier struct {
@@ -63,8 +67,9 @@ type CheckinRewardTier struct {
 }
 
 type CheckinStreakRule struct {
-	Day         int     `json:"day"`
-	BonusAmount float64 `json:"bonus_amount"`
+	Day              int     `json:"day"`
+	BonusAmount      float64 `json:"bonus_amount"`
+	BonusRatePercent float64 `json:"bonus_rate_percent"`
 }
 
 type CheckinRewardPreview struct {
@@ -656,6 +661,10 @@ func (s *CheckinService) GetConfig(ctx context.Context) (*CheckinConfig, error) 
 			cfg.Tiers = normalized.Tiers
 			cfg.StreakEnabled = normalized.StreakEnabled
 			cfg.StreakRules = normalized.StreakRules
+			cfg.UsageRebateEnabled = normalized.UsageRebateEnabled
+			cfg.UsageRebateRatePercent = normalized.UsageRebateRatePercent
+			cfg.UsageRebateCap = normalized.UsageRebateCap
+			cfg.TotalRewardCap = normalized.TotalRewardCap
 		}
 	}
 	finalized, err := normalizeCheckinConfig(*cfg)
@@ -720,10 +729,10 @@ func DefaultCheckinConfig() *CheckinConfig {
 }
 
 func normalizeCheckinConfig(cfg CheckinConfig) (*CheckinConfig, error) {
-	if cfg.MinTotalUsageUSD < 0 {
+	if math.IsNaN(cfg.MinTotalUsageUSD) || math.IsInf(cfg.MinTotalUsageUSD, 0) || cfg.MinTotalUsageUSD < 0 {
 		return nil, infraerrors.BadRequest("INVALID_CHECKIN_MIN_TOTAL_USAGE_USD", "minimum total usage must be a non-negative number")
 	}
-	if cfg.MinTotalRechargeUSD < 0 {
+	if math.IsNaN(cfg.MinTotalRechargeUSD) || math.IsInf(cfg.MinTotalRechargeUSD, 0) || cfg.MinTotalRechargeUSD < 0 {
 		return nil, infraerrors.BadRequest("INVALID_CHECKIN_MIN_TOTAL_RECHARGE_USD", "minimum total recharge must be a non-negative number")
 	}
 	rewardRules, err := normalizeRewardRules(cfg)
@@ -731,12 +740,16 @@ func normalizeCheckinConfig(cfg CheckinConfig) (*CheckinConfig, error) {
 		return nil, err
 	}
 	normalized := &CheckinConfig{
-		Enabled:             cfg.Enabled,
-		MinTotalUsageUSD:    cfg.MinTotalUsageUSD,
-		MinTotalRechargeUSD: cfg.MinTotalRechargeUSD,
-		Tiers:               rewardRules.Tiers,
-		StreakEnabled:       rewardRules.StreakEnabled,
-		StreakRules:         rewardRules.StreakRules,
+		Enabled:                cfg.Enabled,
+		MinTotalUsageUSD:       cfg.MinTotalUsageUSD,
+		MinTotalRechargeUSD:    cfg.MinTotalRechargeUSD,
+		Tiers:                  rewardRules.Tiers,
+		StreakEnabled:          rewardRules.StreakEnabled,
+		StreakRules:            rewardRules.StreakRules,
+		UsageRebateEnabled:     rewardRules.UsageRebateEnabled,
+		UsageRebateRatePercent: rewardRules.UsageRebateRatePercent,
+		UsageRebateCap:         rewardRules.UsageRebateCap,
+		TotalRewardCap:         rewardRules.TotalRewardCap,
 	}
 	normalized.ProbabilityTotal = checkinProbabilityTotal(normalized.Tiers)
 	normalized.Preview = checkinRewardPreview(normalized.Tiers)
@@ -769,9 +782,13 @@ func checkinIneligibleReason(cfg CheckinConfig) string {
 
 func normalizeRewardRules(cfg CheckinConfig) (*CheckinConfig, error) {
 	normalized := &CheckinConfig{
-		Tiers:         make([]CheckinRewardTier, 0, len(cfg.Tiers)),
-		StreakEnabled: cfg.StreakEnabled,
-		StreakRules:   make([]CheckinStreakRule, 0, len(cfg.StreakRules)),
+		Tiers:                  make([]CheckinRewardTier, 0, len(cfg.Tiers)),
+		StreakEnabled:          cfg.StreakEnabled,
+		StreakRules:            make([]CheckinStreakRule, 0, len(cfg.StreakRules)),
+		UsageRebateEnabled:     cfg.UsageRebateEnabled,
+		UsageRebateRatePercent: cfg.UsageRebateRatePercent,
+		UsageRebateCap:         cfg.UsageRebateCap,
+		TotalRewardCap:         cfg.TotalRewardCap,
 	}
 	if len(cfg.Tiers) == 0 {
 		return nil, infraerrors.BadRequest("CHECKIN_REWARD_CONFIG_EMPTY", "at least one reward tier is required")
@@ -832,6 +849,30 @@ func normalizeRewardRules(cfg CheckinConfig) (*CheckinConfig, error) {
 	if probabilityTotal != checkinRewardProbabilityTotal {
 		return nil, infraerrors.BadRequest("CHECKIN_REWARD_CONFIG_INVALID_TOTAL", "reward probabilities must add up to exactly 100")
 	}
+	if math.IsNaN(cfg.UsageRebateRatePercent) || math.IsInf(cfg.UsageRebateRatePercent, 0) || cfg.UsageRebateRatePercent < 0 || cfg.UsageRebateRatePercent > 100 {
+		return nil, infraerrors.BadRequest("CHECKIN_USAGE_REBATE_CONFIG_INVALID_RATE", "usage rebate rate must be between 0 and 100")
+	}
+	if math.IsNaN(cfg.UsageRebateCap) || math.IsInf(cfg.UsageRebateCap, 0) || cfg.UsageRebateCap < 0 {
+		return nil, infraerrors.BadRequest("CHECKIN_USAGE_REBATE_CONFIG_INVALID_CAP", "usage rebate cap must be a non-negative amount")
+	}
+	if math.IsNaN(cfg.TotalRewardCap) || math.IsInf(cfg.TotalRewardCap, 0) || cfg.TotalRewardCap < 0 {
+		return nil, infraerrors.BadRequest("CHECKIN_TOTAL_REWARD_CONFIG_INVALID_CAP", "total reward cap must be a non-negative amount")
+	}
+	if cfg.UsageRebateEnabled {
+		if cfg.UsageRebateRatePercent <= 0 {
+			return nil, infraerrors.BadRequest("CHECKIN_USAGE_REBATE_CONFIG_INVALID_RATE", "usage rebate rate must be greater than 0 when enabled")
+		}
+		if _, err := scaledCheckinMoney(cfg.UsageRebateCap); err != nil {
+			return nil, infraerrors.BadRequest("CHECKIN_USAGE_REBATE_CONFIG_INVALID_CAP", err.Error())
+		}
+		if _, err := scaledCheckinMoney(cfg.TotalRewardCap); err != nil {
+			return nil, infraerrors.BadRequest("CHECKIN_TOTAL_REWARD_CONFIG_INVALID_CAP", err.Error())
+		}
+		preview := checkinRewardPreview(normalized.Tiers)
+		if cfg.TotalRewardCap < preview.MinReward {
+			return nil, infraerrors.BadRequest("CHECKIN_TOTAL_REWARD_CONFIG_CAP_TOO_LOW", "total reward cap must not be below the minimum random reward")
+		}
+	}
 
 	if len(cfg.StreakRules) > checkinStreakMaxRules {
 		return nil, infraerrors.BadRequest("CHECKIN_STREAK_CONFIG_TOO_MANY_RULES", fmt.Sprintf("at most %d streak rules are allowed", checkinStreakMaxRules))
@@ -845,14 +886,24 @@ func normalizeRewardRules(cfg CheckinConfig) (*CheckinConfig, error) {
 			return nil, infraerrors.BadRequest("CHECKIN_STREAK_CONFIG_DUPLICATE_DAY", "streak days must be unique")
 		}
 		seenDays[rule.Day] = struct{}{}
-		bonusCents, err := scaledCheckinMoney(rule.BonusAmount)
-		if err != nil {
-			return nil, infraerrors.BadRequest("CHECKIN_STREAK_CONFIG_INVALID_BONUS_AMOUNT", fmt.Sprintf("rule %d: %s", index+1, err.Error()))
+		normalizedRule := CheckinStreakRule{Day: rule.Day}
+		if cfg.UsageRebateEnabled {
+			if math.IsNaN(rule.BonusRatePercent) || math.IsInf(rule.BonusRatePercent, 0) || rule.BonusRatePercent <= 0 || rule.BonusRatePercent > 100 {
+				return nil, infraerrors.BadRequest("CHECKIN_STREAK_CONFIG_INVALID_BONUS_RATE", fmt.Sprintf("rule %d: bonus rate must be between 0 and 100", index+1))
+			}
+			scaledRate, err := scaledCheckinProbability(rule.BonusRatePercent)
+			if err != nil {
+				return nil, infraerrors.BadRequest("CHECKIN_STREAK_CONFIG_INVALID_BONUS_RATE", fmt.Sprintf("rule %d: %s", index+1, err.Error()))
+			}
+			normalizedRule.BonusRatePercent = float64(scaledRate) / checkinRewardProbabilityScale
+		} else {
+			bonusCents, err := scaledCheckinMoney(rule.BonusAmount)
+			if err != nil {
+				return nil, infraerrors.BadRequest("CHECKIN_STREAK_CONFIG_INVALID_BONUS_AMOUNT", fmt.Sprintf("rule %d: %s", index+1, err.Error()))
+			}
+			normalizedRule.BonusAmount = float64(bonusCents) / 100
 		}
-		normalized.StreakRules = append(normalized.StreakRules, CheckinStreakRule{
-			Day:         rule.Day,
-			BonusAmount: float64(bonusCents) / 100,
-		})
+		normalized.StreakRules = append(normalized.StreakRules, normalizedRule)
 	}
 	sort.SliceStable(normalized.StreakRules, func(i, j int) bool {
 		return normalized.StreakRules[i].Day < normalized.StreakRules[j].Day
@@ -862,13 +913,21 @@ func normalizeRewardRules(cfg CheckinConfig) (*CheckinConfig, error) {
 
 func mustMarshalCheckinRewardConfig(cfg CheckinConfig) string {
 	payload := struct {
-		Tiers         []CheckinRewardTier `json:"tiers"`
-		StreakEnabled bool                `json:"streak_enabled"`
-		StreakRules   []CheckinStreakRule `json:"streak_rules"`
+		Tiers                  []CheckinRewardTier `json:"tiers"`
+		StreakEnabled          bool                `json:"streak_enabled"`
+		StreakRules            []CheckinStreakRule `json:"streak_rules"`
+		UsageRebateEnabled     bool                `json:"usage_rebate_enabled"`
+		UsageRebateRatePercent float64             `json:"usage_rebate_rate_percent"`
+		UsageRebateCap         float64             `json:"usage_rebate_cap"`
+		TotalRewardCap         float64             `json:"total_reward_cap"`
 	}{
-		Tiers:         cfg.Tiers,
-		StreakEnabled: cfg.StreakEnabled,
-		StreakRules:   cfg.StreakRules,
+		Tiers:                  cfg.Tiers,
+		StreakEnabled:          cfg.StreakEnabled,
+		StreakRules:            cfg.StreakRules,
+		UsageRebateEnabled:     cfg.UsageRebateEnabled,
+		UsageRebateRatePercent: cfg.UsageRebateRatePercent,
+		UsageRebateCap:         cfg.UsageRebateCap,
+		TotalRewardCap:         cfg.TotalRewardCap,
 	}
 	raw, err := json.Marshal(payload)
 	if err != nil {
