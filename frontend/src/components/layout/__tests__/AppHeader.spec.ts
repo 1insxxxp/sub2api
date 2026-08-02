@@ -258,8 +258,6 @@ describe('AppHeader daily check-in entry', () => {
     expect(button.text()).toContain('签到')
 
     await button.trigger('click')
-    expect(submitCheckin).not.toHaveBeenCalled()
-    await wrapper.get('[data-test="daily-checkin-submit"]').trigger('click')
     await flushPromises()
 
     expect(submitCheckin).toHaveBeenCalledTimes(1)
@@ -267,6 +265,11 @@ describe('AppHeader daily check-in entry', () => {
     expect(showSuccess).toHaveBeenCalledWith('签到成功，获得 $3.00')
     expect(wrapper.get('[data-test="daily-checkin-button"]').text()).toContain('已签到')
     expect(wrapper.text()).toContain('$13.00')
+    expect(button.attributes('aria-expanded')).toBe('true')
+
+    button.element.parentElement?.dispatchEvent(new MouseEvent('mouseleave'))
+    await wrapper.vm.$nextTick()
+    expect(button.attributes('aria-expanded')).toBe('true')
   })
 
   it('keeps the check-in button visible on mobile when enabled', async () => {
@@ -414,7 +417,6 @@ describe('AppHeader daily check-in entry', () => {
 
     const wrapper = await mountHeader()
     await wrapper.get('[data-test="daily-checkin-button"]').trigger('click')
-    await wrapper.get('[data-test="daily-checkin-submit"]').trigger('click')
     await flushPromises()
 
     expect(wrapper.get('[data-test="checkin-base-reward"]').text()).toContain('$0.80')

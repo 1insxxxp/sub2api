@@ -107,9 +107,9 @@
           v-if="showCheckinButton"
           ref="checkinContainerRef"
           class="group/checkin relative inline-flex"
-          @mouseenter="openCheckinPopover"
-          @mouseleave="closeCheckinPopover"
-          @focusin="openCheckinPopover"
+          @mouseenter="openCheckinPreview"
+          @mouseleave="closeCheckinPreview"
+          @focusin="openCheckinPreview"
           @focusout="handleCheckinFocusOut"
         >
           <button
@@ -263,18 +263,6 @@
                   {{ nextStreakBonusMessage }}
                 </p>
               </div>
-
-              <button
-                v-if="checkinCanSubmit"
-                type="button"
-                data-test="daily-checkin-submit"
-                :disabled="checkinButtonDisabled"
-                class="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-amber-500 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-amber-600 disabled:cursor-not-allowed disabled:opacity-60"
-                @click.stop="handleCheckin"
-              >
-                <Icon name="gift" size="sm" :class="checkinSubmitting ? 'animate-pulse' : ''" />
-                {{ checkinButtonLabel }}
-              </button>
 
               <div v-if="recentCheckinRecords.length > 0" class="mt-4 space-y-2">
                 <p class="text-xs font-medium text-slate-500 dark:text-slate-400">
@@ -517,7 +505,9 @@ const avatarUrl = computed(() => user.value?.avatar_url?.trim() || '')
 const checkinStatus = ref<CheckinStatus | null>(null)
 const checkinLoading = ref(false)
 const checkinSubmitting = ref(false)
-const checkinPopoverOpen = ref(false)
+const checkinPopoverPinned = ref(false)
+const checkinPopoverPreview = ref(false)
+const checkinPopoverOpen = computed(() => checkinPopoverPinned.value || checkinPopoverPreview.value)
 const checkinContainerRef = ref<HTMLElement | null>(null)
 let checkinStatusRequest = 0
 const availableBalance = computed(() => Number(user.value?.balance || 0))
@@ -794,21 +784,29 @@ async function handleCheckin() {
 }
 
 function handleCheckinButton() {
-  openCheckinPopover()
+  checkinPopoverPinned.value = true
+  if (checkinCanSubmit.value) {
+    void handleCheckin()
+  }
 }
 
-function openCheckinPopover() {
-  checkinPopoverOpen.value = true
+function openCheckinPreview() {
+  checkinPopoverPreview.value = true
+}
+
+function closeCheckinPreview() {
+  checkinPopoverPreview.value = false
 }
 
 function closeCheckinPopover() {
-  checkinPopoverOpen.value = false
+  checkinPopoverPinned.value = false
+  checkinPopoverPreview.value = false
 }
 
 function handleCheckinFocusOut(event: FocusEvent) {
   const nextTarget = event.relatedTarget
   if (!(nextTarget instanceof Node) || !checkinContainerRef.value?.contains(nextTarget)) {
-    closeCheckinPopover()
+    closeCheckinPreview()
   }
 }
 
