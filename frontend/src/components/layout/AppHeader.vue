@@ -125,7 +125,7 @@
           </button>
 
           <div
-            class="brand-floating-panel pointer-events-none absolute right-0 top-full z-50 mt-3 w-[25rem] max-w-[calc(100vw-2rem)] translate-y-1 overflow-hidden text-left opacity-0 transition-all duration-150 group-hover/checkin:pointer-events-auto group-hover/checkin:translate-y-0 group-hover/checkin:opacity-100 group-focus-within/checkin:pointer-events-auto group-focus-within/checkin:translate-y-0 group-focus-within/checkin:opacity-100"
+            class="brand-floating-panel pointer-events-none absolute right-0 top-full z-50 mt-3 w-[25rem] max-w-[calc(100vw-1rem)] translate-y-1 overflow-hidden text-left opacity-0 transition-all duration-150 group-hover/checkin:pointer-events-auto group-hover/checkin:translate-y-0 group-hover/checkin:opacity-100 group-focus-within/checkin:pointer-events-auto group-focus-within/checkin:translate-y-0 group-focus-within/checkin:opacity-100"
             data-test="daily-checkin-popover"
           >
             <div class="brand-floating-header px-6 py-5">
@@ -221,24 +221,29 @@
                 </p>
               </div>
 
-              <div class="mt-2 grid grid-cols-2 gap-2">
-                <div class="brand-floating-card border-emerald-100/80 bg-emerald-50/72 dark:border-emerald-400/14 dark:bg-emerald-500/10">
-                  <p class="text-[11px] font-semibold uppercase tracking-wide text-emerald-700 dark:text-emerald-200">
-                    {{ t('checkin.baseReward') }}
-                  </p>
-                  <p class="mt-1 text-sm font-bold text-emerald-800 dark:text-emerald-100">
-                    {{ baseRewardLabel }}
-                  </p>
-                </div>
-                <div class="brand-floating-card border-amber-100/80 bg-amber-50/72 dark:border-amber-400/14 dark:bg-amber-500/10">
-                  <p class="text-[11px] font-semibold uppercase tracking-wide text-amber-700 dark:text-amber-200">
-                    {{ t('checkin.streakBonus') }}
-                  </p>
-                  <p class="mt-1 text-sm font-bold text-amber-800 dark:text-amber-100">
-                    {{ streakBonusLabel }}
-                  </p>
-                </div>
-              </div>
+              <dl class="brand-floating-card mt-2 grid grid-cols-[minmax(0,1fr),auto] gap-x-3 gap-y-2 px-3 py-3 text-xs">
+                <dt class="min-w-0 break-words text-slate-500 dark:text-slate-400">{{ t('checkin.baseReward') }}</dt>
+                <dd data-test="checkin-base-reward" class="shrink-0 text-right font-semibold tabular-nums text-slate-900 dark:text-white">{{ baseRewardLabel }}</dd>
+
+                <dt class="min-w-0 break-words text-slate-500 dark:text-slate-400">{{ t('checkin.previousDayUsage') }}</dt>
+                <dd data-test="checkin-previous-day-usage" class="shrink-0 text-right font-semibold tabular-nums text-slate-900 dark:text-white">{{ formatUsd(checkinStatus?.previous_day_usage_amount) }}</dd>
+
+                <dt class="min-w-0 break-words text-slate-500 dark:text-slate-400">
+                  {{ checkinStatus?.checked_in ? t('checkin.usageRebate') : t('checkin.estimatedUsageRebate') }}
+                </dt>
+                <dd data-test="checkin-usage-rebate" class="shrink-0 text-right font-semibold tabular-nums text-emerald-600 dark:text-emerald-300">{{ formatUsd(displayUsageRebate) }}</dd>
+
+                <dt class="min-w-0 break-words text-slate-500 dark:text-slate-400">{{ t('checkin.streakBonus') }}</dt>
+                <dd data-test="checkin-streak-bonus" class="shrink-0 text-right font-semibold tabular-nums text-slate-900 dark:text-white">
+                  {{ streakBonusLabel }}
+                  <span v-if="checkinStatus?.checked_in && displayStreakBonus <= 0" class="sr-only">{{ t('checkin.noStreakBonusToday') }}</span>
+                </dd>
+
+                <template v-if="checkinStatus?.checked_in">
+                  <dt class="min-w-0 break-words border-t border-slate-100 pt-2 font-semibold text-slate-700 dark:border-white/10 dark:text-slate-200">{{ t('checkin.creditedToday') }}</dt>
+                  <dd data-test="checkin-total-reward" class="shrink-0 border-t border-slate-100 pt-2 text-right font-bold tabular-nums text-emerald-600 dark:border-white/10 dark:text-emerald-300">{{ formatUsd(displayRewardAmount) }}</dd>
+                </template>
+              </dl>
 
               <div class="brand-floating-card mt-3 border-blue-100/80 bg-[linear-gradient(135deg,rgba(239,246,255,0.96),rgba(250,245,255,0.9))] px-3 py-2 text-xs text-blue-700 dark:border-blue-400/14 dark:bg-[linear-gradient(135deg,rgba(37,99,235,0.18),rgba(124,58,237,0.12))] dark:text-blue-200">
                 <p class="font-semibold">{{ t('checkin.streakBonusTitle') }}</p>
@@ -254,17 +259,29 @@
                 <div
                   v-for="record in recentCheckinRecords"
                   :key="record.id"
-                  class="brand-floating-card flex items-center justify-between px-3 py-2 text-xs"
+                  class="brand-floating-card px-3 py-2 text-xs"
                 >
-                  <div>
+                  <div class="flex items-start justify-between gap-3">
+                    <div class="min-w-0">
                     <p class="font-semibold text-slate-800 dark:text-slate-100">{{ record.checkin_date }}</p>
                     <p class="text-slate-500 dark:text-slate-400">
                       {{ t('checkin.streakDay', { day: record.streak_day || 1 }) }}
                     </p>
+                    </div>
+                    <span data-test="recent-checkin-total" class="shrink-0 font-semibold tabular-nums text-emerald-600 dark:text-emerald-300">
+                      +{{ formatUsd(record.total_reward_amount ?? record.reward_amount ?? 0) }}
+                    </span>
                   </div>
-                  <span class="font-semibold text-emerald-600 dark:text-emerald-300">
-                    +{{ formatUsd(record.reward_amount || record.total_reward_amount || 0) }}
-                  </span>
+                  <dl class="mt-2 grid grid-cols-[minmax(0,1fr),auto] gap-x-3 gap-y-1 border-t border-slate-100 pt-2 text-[11px] dark:border-white/10">
+                    <dt class="min-w-0 break-words text-slate-500 dark:text-slate-400">{{ t('checkin.baseReward') }}</dt>
+                    <dd class="shrink-0 tabular-nums text-slate-700 dark:text-slate-200">{{ formatUsd(record.base_reward_amount) }}</dd>
+                    <dt class="min-w-0 break-words text-slate-500 dark:text-slate-400">{{ t('checkin.previousDayUsage') }}</dt>
+                    <dd data-test="recent-checkin-previous-day-usage" class="shrink-0 tabular-nums text-slate-700 dark:text-slate-200">{{ formatUsd(record.previous_day_usage_amount) }}</dd>
+                    <dt class="min-w-0 break-words text-slate-500 dark:text-slate-400">{{ t('checkin.usageRebate') }}</dt>
+                    <dd data-test="recent-checkin-usage-rebate" class="shrink-0 tabular-nums text-slate-700 dark:text-slate-200">{{ formatUsd(record.usage_rebate_amount) }}</dd>
+                    <dt class="min-w-0 break-words text-slate-500 dark:text-slate-400">{{ t('checkin.streakBonus') }}</dt>
+                    <dd class="shrink-0 tabular-nums text-slate-700 dark:text-slate-200">{{ formatUsd(record.bonus_reward_amount) }}</dd>
+                  </dl>
                 </div>
               </div>
             </div>
@@ -610,16 +627,20 @@ const baseRewardLabel = computed(() => {
   return formatUsd(amount)
 })
 
+const displayUsageRebate = computed(() => {
+  const status = checkinStatus.value
+  if (status?.checked_in) return Number(status.usage_rebate_amount ?? 0)
+  return Number(status?.estimated_usage_rebate ?? 0)
+})
+
+const displayStreakBonus = computed(() => Number(checkinStatus.value?.bonus_reward_amount ?? 0))
+
 const streakBonusLabel = computed(() => {
   const status = checkinStatus.value
-  const amount = Number(status?.bonus_reward_amount ?? 0)
   if (!status?.checked_in) {
     return t('checkin.streakBonusWhenReached')
   }
-  if (amount <= 0) {
-    return t('checkin.noStreakBonusToday')
-  }
-  return formatUsd(amount)
+  return formatUsd(displayStreakBonus.value)
 })
 
 const nextStreakBonusMessage = computed(() => {
@@ -629,7 +650,9 @@ const nextStreakBonusMessage = computed(() => {
   }
   return t('checkin.nextStreakBonus', {
     day: rule.day,
-    amount: formatUsd(rule.bonus_amount),
+    amount: rule.bonus_rate_percent
+      ? t('checkin.rebatePercent', { percent: rule.bonus_rate_percent })
+      : formatUsd(rule.bonus_amount),
   })
 })
 
@@ -737,7 +760,8 @@ async function handleCheckin() {
         balance: result.balance_after
       }
     }
-    appStore.showSuccess(t('checkin.success', { amount: (result.reward_amount ?? 0).toFixed(2) }))
+    const creditedAmount = result.total_reward_amount ?? result.reward_amount ?? 0
+    appStore.showSuccess(t('checkin.success', { amount: creditedAmount.toFixed(2) }))
     await authStore.refreshUser()
   } catch (error) {
     appStore.showError(extractApiErrorMessage(error, t('checkin.failed')))

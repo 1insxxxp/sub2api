@@ -92,7 +92,11 @@ vi.mock('vue-i18n', async () => {
     'checkin.rechargeCriterion': 'Cumulative recharge',
     'checkin.criterionProgress': '{current} / {min}',
     'checkin.rewardBreakdown': 'Reward breakdown',
-    'checkin.baseReward': 'Base reward',
+    'checkin.baseReward': 'Random reward',
+    'checkin.previousDayUsage': "Yesterday's usage",
+    'checkin.usageRebate': 'Usage rebate',
+    'checkin.estimatedUsageRebate': 'Estimated usage rebate',
+    'checkin.creditedToday': 'Credited today',
     'checkin.streakBonus': 'Streak bonus',
     'checkin.noStreakBonusToday': 'No streak bonus today',
     'checkin.streakBonusTitle': 'Streak bonus rules',
@@ -328,10 +332,143 @@ describe('AppHeader daily check-in entry', () => {
     expect(text).toContain('Check-in eligibility')
     expect(text).toContain('Cumulative spend reached $10.00; current $18.50')
     expect(text).toContain('Reward breakdown')
-    expect(text).toContain('Base reward')
+    expect(text).toContain('Random reward')
     expect(text).toContain('No streak bonus today')
     expect(text).toContain('Streak bonus rules')
     expect(text).toContain('Streak day 7 earns an extra $10.00')
+  })
+
+  it('shows previous-day usage and the deterministic rebate estimate before check-in', async () => {
+    getCheckinStatus.mockResolvedValue({
+      enabled: true,
+      eligible: true,
+      checked_in: false,
+      blacklisted: false,
+      checkin_date: '2026-06-16',
+      reward_amount: null,
+      current_streak: 0,
+      lifetime_checkin_days: 4,
+      previous_day_usage_amount: 50,
+      estimated_usage_rebate: 4,
+      min_total_usage_usd: 0,
+      total_usage_usd: 50,
+      min_total_recharge_usd: 0,
+      total_recharge_usd: 0,
+      recent_records: []
+    })
+
+    const wrapper = await mountHeader()
+
+    expect(wrapper.get('[data-test="checkin-base-reward"]').text()).toContain('checkin.randomReward')
+    expect(wrapper.get('[data-test="checkin-previous-day-usage"]').text()).toContain('$50.00')
+    expect(wrapper.get('[data-test="checkin-usage-rebate"]').text()).toContain('$4.00')
+  })
+
+  it('shows the actual reward breakdown and credits the total reward after check-in', async () => {
+    getCheckinStatus.mockResolvedValue({
+      enabled: true,
+      eligible: true,
+      checked_in: false,
+      blacklisted: false,
+      checkin_date: '2026-06-16',
+      reward_amount: null,
+      current_streak: 6,
+      lifetime_checkin_days: 6,
+      previous_day_usage_amount: 50,
+      estimated_usage_rebate: 4,
+      min_total_usage_usd: 0,
+      total_usage_usd: 50,
+      min_total_recharge_usd: 0,
+      total_recharge_usd: 0,
+      recent_records: []
+    })
+    submitCheckin.mockResolvedValue({
+      enabled: true,
+      eligible: true,
+      blacklisted: false,
+      checked_in: true,
+      already_checked_in: false,
+      checkin_date: '2026-06-16',
+      reward_amount: 3,
+      base_reward_amount: 0.8,
+      previous_day_usage_amount: 50,
+      usage_rebate_amount: 4,
+      estimated_usage_rebate: 4,
+      bonus_reward_amount: 0,
+      reward_cap_adjustment: 0,
+      total_reward_amount: 4.8,
+      current_streak: 7,
+      lifetime_checkin_days: 7,
+      min_total_usage_usd: 0,
+      total_usage_usd: 50,
+      min_total_recharge_usd: 0,
+      total_recharge_usd: 0,
+      balance_before: 10,
+      balance_after: 14.8,
+      recent_records: []
+    })
+
+    const wrapper = await mountHeader()
+    await wrapper.get('[data-test="daily-checkin-button"]').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.get('[data-test="checkin-base-reward"]').text()).toContain('$0.80')
+    expect(wrapper.get('[data-test="checkin-previous-day-usage"]').text()).toContain('$50.00')
+    expect(wrapper.get('[data-test="checkin-usage-rebate"]').text()).toContain('$4.00')
+    expect(wrapper.get('[data-test="checkin-streak-bonus"]').text()).toContain('$0.00')
+    expect(wrapper.get('[data-test="checkin-total-reward"]').text()).toContain('$4.80')
+    expect(showSuccess).toHaveBeenCalledWith('签到成功，获得 $4.80')
+  })
+
+  it('shows zero usage, capped rebates, and auditable recent record details', async () => {
+    getCheckinStatus.mockResolvedValue({
+      enabled: true,
+      eligible: true,
+      checked_in: false,
+      blacklisted: false,
+      checkin_date: '2026-06-16',
+      reward_amount: null,
+      current_streak: 0,
+      lifetime_checkin_days: 2,
+      previous_day_usage_amount: 1000,
+      estimated_usage_rebate: 8,
+      min_total_usage_usd: 0,
+      total_usage_usd: 1000,
+      min_total_recharge_usd: 0,
+      total_recharge_usd: 0,
+      recent_records: [
+        {
+          id: 1,
+          user_id: 12,
+          checkin_date: '2026-06-15',
+          streak_day: 2,
+          base_reward_amount: 0.5,
+          previous_day_usage_amount: 0,
+          usage_rebate_amount: 0,
+          bonus_reward_amount: 0,
+          reward_cap_adjustment: 0,
+          total_reward_amount: 0.5,
+          reward_amount: 0.5,
+          balance_before: 10,
+          balance_after: 10.5,
+          created_at: '2026-06-15T01:00:00Z'
+        }
+      ]
+    })
+
+    const wrapper = await mountHeader()
+
+    expect(wrapper.get('[data-test="checkin-usage-rebate"]').text()).toContain('$8.00')
+    expect(wrapper.get('[data-test="recent-checkin-previous-day-usage"]').text()).toContain('$0.00')
+    expect(wrapper.get('[data-test="recent-checkin-usage-rebate"]').text()).toContain('$0.00')
+    expect(wrapper.get('[data-test="recent-checkin-total"]').text()).toContain('$0.50')
+  })
+
+  it('keeps the reward breakdown responsive at a 320px viewport', () => {
+    expect(componentSource).toContain('max-w-[calc(100vw-1rem)]')
+    expect(componentSource).toContain('grid-cols-[minmax(0,1fr),auto]')
+    expect(componentSource).toContain('break-words')
+    expect(componentSource).toContain('tabular-nums')
   })
 
   it('renders the eligibility progress bar based on cumulative spend and caps at 100%', async () => {

@@ -15,6 +15,10 @@ export interface CheckinStatus {
   lifetime_checkin_days: number
   base_reward_amount?: number | null
   bonus_reward_amount?: number | null
+  previous_day_usage_amount?: number | null
+  usage_rebate_amount?: number | null
+  reward_cap_adjustment?: number | null
+  estimated_usage_rebate?: number | null
   total_reward_amount?: number | null
   reward_amount?: number | null
   checked_in_at?: string | null
@@ -37,6 +41,7 @@ export interface CheckinResult extends CheckinStatus {
 export interface CheckinStreakRule {
   day: number
   bonus_amount: number
+  bonus_rate_percent?: number
 }
 
 export interface CheckinRecord {
@@ -46,6 +51,9 @@ export interface CheckinRecord {
   streak_day: number
   base_reward_amount: number
   bonus_reward_amount: number
+  previous_day_usage_amount: number
+  usage_rebate_amount: number
+  reward_cap_adjustment: number
   total_reward_amount: number
   reward_amount: number
   balance_before: number
