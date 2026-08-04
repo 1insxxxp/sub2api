@@ -228,6 +228,31 @@ func (s *APIKeyRepoSuite) TestListByUserID() {
 	s.Require().Equal(int64(2), page.Total)
 }
 
+func (s *APIKeyRepoSuite) TestListByUserIDPreloadsCustomGroup() {
+	user := s.mustCreateUser("list-custom-group@test.com")
+	customGroup, err := s.client.UserCustomGroup.Create().
+		SetUserID(user.ID).
+		SetName("酒馆key").
+		SetStatus(service.StatusActive).
+		Save(s.ctx)
+	s.Require().NoError(err)
+
+	key := &service.APIKey{
+		UserID:        user.ID,
+		Key:           "sk-list-custom-group",
+		Name:          "酒馆",
+		CustomGroupID: &customGroup.ID,
+		Status:        service.StatusActive,
+	}
+	s.Require().NoError(s.repo.Create(s.ctx, key))
+
+	keys, _, err := s.repo.ListByUserID(s.ctx, user.ID, pagination.PaginationParams{Page: 1, PageSize: 10}, service.APIKeyListFilters{})
+	s.Require().NoError(err)
+	s.Require().Len(keys, 1)
+	s.Require().NotNil(keys[0].CustomGroup)
+	s.Require().Equal("酒馆key", keys[0].CustomGroup.Name)
+}
+
 func (s *APIKeyRepoSuite) TestListByUserID_Pagination() {
 	user := s.mustCreateUser("paging@test.com")
 	for i := 0; i < 5; i++ {
