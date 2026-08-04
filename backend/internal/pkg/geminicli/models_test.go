@@ -1,6 +1,10 @@
 package geminicli
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/stretchr/testify/require"
+)
 
 func TestDefaultModels_ContainsImageModels(t *testing.T) {
 	t.Parallel()
@@ -20,4 +24,16 @@ func TestDefaultModels_ContainsImageModels(t *testing.T) {
 			t.Fatalf("expected curated Gemini model %q to exist", id)
 		}
 	}
+}
+
+func TestDefaultModels_ExcludeShutdownModels(t *testing.T) {
+	t.Parallel()
+
+	ids := make(map[string]struct{}, len(DefaultModels))
+	for _, model := range DefaultModels {
+		ids[model.ID] = struct{}{}
+	}
+
+	require.NotContains(t, ids, "gemini-2.0-flash")
+	require.NotEqual(t, "gemini-2.0-flash", DefaultTestModel)
 }
