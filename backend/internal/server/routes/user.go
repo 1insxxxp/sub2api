@@ -108,6 +108,16 @@ func RegisterUserRoutes(
 			keys.DELETE("/:id", h.APIKey.Delete)
 		}
 
+		customGroups := authenticated.Group("/custom-groups")
+		{
+			customGroups.GET("", h.UserCustomGroup.List)
+			customGroups.GET("/candidates", h.UserCustomGroup.Candidates)
+			customGroups.GET("/:id", h.UserCustomGroup.Get)
+			customGroups.POST("", h.UserCustomGroup.Create)
+			customGroups.PUT("/:id", h.UserCustomGroup.Update)
+			customGroups.DELETE("/:id", h.UserCustomGroup.Delete)
+		}
+
 		// 用户可用分组（非管理员接口）
 		groups := authenticated.Group("/groups")
 		{

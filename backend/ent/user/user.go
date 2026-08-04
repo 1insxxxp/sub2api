@@ -73,6 +73,8 @@ const (
 	FieldRpmLimit = "rpm_limit"
 	// EdgeAPIKeys holds the string denoting the api_keys edge name in mutations.
 	EdgeAPIKeys = "api_keys"
+	// EdgeCustomGroups holds the string denoting the custom_groups edge name in mutations.
+	EdgeCustomGroups = "custom_groups"
 	// EdgeRedeemCodes holds the string denoting the redeem_codes edge name in mutations.
 	EdgeRedeemCodes = "redeem_codes"
 	// EdgeSubscriptions holds the string denoting the subscriptions edge name in mutations.
@@ -116,6 +118,13 @@ const (
 	APIKeysInverseTable = "api_keys"
 	// APIKeysColumn is the table column denoting the api_keys relation/edge.
 	APIKeysColumn = "user_id"
+	// CustomGroupsTable is the table that holds the custom_groups relation/edge.
+	CustomGroupsTable = "user_custom_groups"
+	// CustomGroupsInverseTable is the table name for the UserCustomGroup entity.
+	// It exists in this package in order to avoid circular dependency with the "usercustomgroup" package.
+	CustomGroupsInverseTable = "user_custom_groups"
+	// CustomGroupsColumn is the table column denoting the custom_groups relation/edge.
+	CustomGroupsColumn = "user_id"
 	// RedeemCodesTable is the table that holds the redeem_codes relation/edge.
 	RedeemCodesTable = "redeem_codes"
 	// RedeemCodesInverseTable is the table name for the RedeemCode entity.
@@ -514,6 +523,20 @@ func ByAPIKeys(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
 	}
 }
 
+// ByCustomGroupsCount orders the results by custom_groups count.
+func ByCustomGroupsCount(opts ...sql.OrderTermOption) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborsCount(s, newCustomGroupsStep(), opts...)
+	}
+}
+
+// ByCustomGroups orders the results by custom_groups terms.
+func ByCustomGroups(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborTerms(s, newCustomGroupsStep(), append([]sql.OrderTerm{term}, terms...)...)
+	}
+}
+
 // ByRedeemCodesCount orders the results by redeem_codes count.
 func ByRedeemCodesCount(opts ...sql.OrderTermOption) OrderOption {
 	return func(s *sql.Selector) {
@@ -756,6 +779,13 @@ func newAPIKeysStep() *sqlgraph.Step {
 		sqlgraph.From(Table, FieldID),
 		sqlgraph.To(APIKeysInverseTable, FieldID),
 		sqlgraph.Edge(sqlgraph.O2M, false, APIKeysTable, APIKeysColumn),
+	)
+}
+func newCustomGroupsStep() *sqlgraph.Step {
+	return sqlgraph.NewStep(
+		sqlgraph.From(Table, FieldID),
+		sqlgraph.To(CustomGroupsInverseTable, FieldID),
+		sqlgraph.Edge(sqlgraph.O2M, false, CustomGroupsTable, CustomGroupsColumn),
 	)
 }
 func newRedeemCodesStep() *sqlgraph.Step {

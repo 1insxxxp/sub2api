@@ -1073,6 +1073,15 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 // Falls back to default models if no whitelist is configured
 func (h *GatewayHandler) Models(c *gin.Context) {
 	apiKey, _ := middleware2.GetAPIKeyFromContext(c)
+	if apiKey != nil && apiKey.CustomGroupID != nil {
+		models, err := h.apiKeyService.ListCustomGroupModels(c.Request.Context(), apiKey)
+		if err != nil {
+			h.errorResponse(c, http.StatusForbidden, "permission_error", "Custom group is unavailable")
+			return
+		}
+		writeModelsList(c, service.PlatformComposite, models)
+		return
+	}
 
 	var groupID *int64
 	var platform string

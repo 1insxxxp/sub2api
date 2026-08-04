@@ -55,6 +55,8 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/userattributevalue"
 	"github.com/Wei-Shaw/sub2api/ent/usercheckin"
 	"github.com/Wei-Shaw/sub2api/ent/usercheckinblacklist"
+	"github.com/Wei-Shaw/sub2api/ent/usercustomgroup"
+	"github.com/Wei-Shaw/sub2api/ent/usercustomgroupmodel"
 	"github.com/Wei-Shaw/sub2api/ent/userimage"
 	"github.com/Wei-Shaw/sub2api/ent/userimagetask"
 	"github.com/Wei-Shaw/sub2api/ent/userplatformquota"
@@ -148,6 +150,10 @@ type Client struct {
 	UserCheckin *UserCheckinClient
 	// UserCheckinBlacklist is the client for interacting with the UserCheckinBlacklist builders.
 	UserCheckinBlacklist *UserCheckinBlacklistClient
+	// UserCustomGroup is the client for interacting with the UserCustomGroup builders.
+	UserCustomGroup *UserCustomGroupClient
+	// UserCustomGroupModel is the client for interacting with the UserCustomGroupModel builders.
+	UserCustomGroupModel *UserCustomGroupModelClient
 	// UserImage is the client for interacting with the UserImage builders.
 	UserImage *UserImageClient
 	// UserImageTask is the client for interacting with the UserImageTask builders.
@@ -207,6 +213,8 @@ func (c *Client) init() {
 	c.UserAttributeValue = NewUserAttributeValueClient(c.config)
 	c.UserCheckin = NewUserCheckinClient(c.config)
 	c.UserCheckinBlacklist = NewUserCheckinBlacklistClient(c.config)
+	c.UserCustomGroup = NewUserCustomGroupClient(c.config)
+	c.UserCustomGroupModel = NewUserCustomGroupModelClient(c.config)
 	c.UserImage = NewUserImageClient(c.config)
 	c.UserImageTask = NewUserImageTaskClient(c.config)
 	c.UserPlatformQuota = NewUserPlatformQuotaClient(c.config)
@@ -343,6 +351,8 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 		UserAttributeValue:            NewUserAttributeValueClient(cfg),
 		UserCheckin:                   NewUserCheckinClient(cfg),
 		UserCheckinBlacklist:          NewUserCheckinBlacklistClient(cfg),
+		UserCustomGroup:               NewUserCustomGroupClient(cfg),
+		UserCustomGroupModel:          NewUserCustomGroupModelClient(cfg),
 		UserImage:                     NewUserImageClient(cfg),
 		UserImageTask:                 NewUserImageTaskClient(cfg),
 		UserPlatformQuota:             NewUserPlatformQuotaClient(cfg),
@@ -406,6 +416,8 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 		UserAttributeValue:            NewUserAttributeValueClient(cfg),
 		UserCheckin:                   NewUserCheckinClient(cfg),
 		UserCheckinBlacklist:          NewUserCheckinBlacklistClient(cfg),
+		UserCustomGroup:               NewUserCustomGroupClient(cfg),
+		UserCustomGroupModel:          NewUserCustomGroupModelClient(cfg),
 		UserImage:                     NewUserImageClient(cfg),
 		UserImageTask:                 NewUserImageTaskClient(cfg),
 		UserPlatformQuota:             NewUserPlatformQuotaClient(cfg),
@@ -449,8 +461,9 @@ func (c *Client) Use(hooks ...Hook) {
 		c.Proxy, c.RedeemBatchClaim, c.RedeemCode, c.SecuritySecret, c.Setting,
 		c.SubscriptionPlan, c.TLSFingerprintProfile, c.UsageCleanupTask, c.UsageLog,
 		c.User, c.UserAllowedGroup, c.UserAttributeDefinition, c.UserAttributeValue,
-		c.UserCheckin, c.UserCheckinBlacklist, c.UserImage, c.UserImageTask,
-		c.UserPlatformQuota, c.UserSubscription,
+		c.UserCheckin, c.UserCheckinBlacklist, c.UserCustomGroup,
+		c.UserCustomGroupModel, c.UserImage, c.UserImageTask, c.UserPlatformQuota,
+		c.UserSubscription,
 	} {
 		n.Use(hooks...)
 	}
@@ -470,8 +483,9 @@ func (c *Client) Intercept(interceptors ...Interceptor) {
 		c.Proxy, c.RedeemBatchClaim, c.RedeemCode, c.SecuritySecret, c.Setting,
 		c.SubscriptionPlan, c.TLSFingerprintProfile, c.UsageCleanupTask, c.UsageLog,
 		c.User, c.UserAllowedGroup, c.UserAttributeDefinition, c.UserAttributeValue,
-		c.UserCheckin, c.UserCheckinBlacklist, c.UserImage, c.UserImageTask,
-		c.UserPlatformQuota, c.UserSubscription,
+		c.UserCheckin, c.UserCheckinBlacklist, c.UserCustomGroup,
+		c.UserCustomGroupModel, c.UserImage, c.UserImageTask, c.UserPlatformQuota,
+		c.UserSubscription,
 	} {
 		n.Intercept(interceptors...)
 	}
@@ -560,6 +574,10 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.UserCheckin.mutate(ctx, m)
 	case *UserCheckinBlacklistMutation:
 		return c.UserCheckinBlacklist.mutate(ctx, m)
+	case *UserCustomGroupMutation:
+		return c.UserCustomGroup.mutate(ctx, m)
+	case *UserCustomGroupModelMutation:
+		return c.UserCustomGroupModel.mutate(ctx, m)
 	case *UserImageMutation:
 		return c.UserImage.mutate(ctx, m)
 	case *UserImageTaskMutation:
@@ -706,6 +724,22 @@ func (c *APIKeyClient) QueryGroup(_m *APIKey) *GroupQuery {
 			sqlgraph.From(apikey.Table, apikey.FieldID, id),
 			sqlgraph.To(group.Table, group.FieldID),
 			sqlgraph.Edge(sqlgraph.M2O, true, apikey.GroupTable, apikey.GroupColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryCustomGroup queries the custom_group edge of a APIKey.
+func (c *APIKeyClient) QueryCustomGroup(_m *APIKey) *UserCustomGroupQuery {
+	query := (&UserCustomGroupClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(apikey.Table, apikey.FieldID, id),
+			sqlgraph.To(usercustomgroup.Table, usercustomgroup.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, apikey.CustomGroupTable, apikey.CustomGroupColumn),
 		)
 		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
 		return fromV, nil
@@ -3223,6 +3257,22 @@ func (c *GroupClient) QueryUsageLogs(_m *Group) *UsageLogQuery {
 			sqlgraph.From(group.Table, group.FieldID, id),
 			sqlgraph.To(usagelog.Table, usagelog.FieldID),
 			sqlgraph.Edge(sqlgraph.O2M, false, group.UsageLogsTable, group.UsageLogsColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryCustomModelRoutes queries the custom_model_routes edge of a Group.
+func (c *GroupClient) QueryCustomModelRoutes(_m *Group) *UserCustomGroupModelQuery {
+	query := (&UserCustomGroupModelClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(group.Table, group.FieldID, id),
+			sqlgraph.To(usercustomgroupmodel.Table, usercustomgroupmodel.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, group.CustomModelRoutesTable, group.CustomModelRoutesColumn),
 		)
 		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
 		return fromV, nil
@@ -5815,6 +5865,22 @@ func (c *UsageLogClient) QueryGroup(_m *UsageLog) *GroupQuery {
 	return query
 }
 
+// QueryCustomGroup queries the custom_group edge of a UsageLog.
+func (c *UsageLogClient) QueryCustomGroup(_m *UsageLog) *UserCustomGroupQuery {
+	query := (&UserCustomGroupClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(usagelog.Table, usagelog.FieldID, id),
+			sqlgraph.To(usercustomgroup.Table, usercustomgroup.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, usagelog.CustomGroupTable, usagelog.CustomGroupColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
 // QuerySubscription queries the subscription edge of a UsageLog.
 func (c *UsageLogClient) QuerySubscription(_m *UsageLog) *UserSubscriptionQuery {
 	query := (&UserSubscriptionClient{config: c.config}).Query()
@@ -5973,6 +6039,22 @@ func (c *UserClient) QueryAPIKeys(_m *User) *APIKeyQuery {
 			sqlgraph.From(user.Table, user.FieldID, id),
 			sqlgraph.To(apikey.Table, apikey.FieldID),
 			sqlgraph.Edge(sqlgraph.O2M, false, user.APIKeysTable, user.APIKeysColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryCustomGroups queries the custom_groups edge of a User.
+func (c *UserClient) QueryCustomGroups(_m *User) *UserCustomGroupQuery {
+	query := (&UserCustomGroupClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(user.Table, user.FieldID, id),
+			sqlgraph.To(usercustomgroup.Table, usercustomgroup.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, user.CustomGroupsTable, user.CustomGroupsColumn),
 		)
 		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
 		return fromV, nil
@@ -7009,6 +7091,370 @@ func (c *UserCheckinBlacklistClient) mutate(ctx context.Context, m *UserCheckinB
 	}
 }
 
+// UserCustomGroupClient is a client for the UserCustomGroup schema.
+type UserCustomGroupClient struct {
+	config
+}
+
+// NewUserCustomGroupClient returns a client for the UserCustomGroup from the given config.
+func NewUserCustomGroupClient(c config) *UserCustomGroupClient {
+	return &UserCustomGroupClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `usercustomgroup.Hooks(f(g(h())))`.
+func (c *UserCustomGroupClient) Use(hooks ...Hook) {
+	c.hooks.UserCustomGroup = append(c.hooks.UserCustomGroup, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `usercustomgroup.Intercept(f(g(h())))`.
+func (c *UserCustomGroupClient) Intercept(interceptors ...Interceptor) {
+	c.inters.UserCustomGroup = append(c.inters.UserCustomGroup, interceptors...)
+}
+
+// Create returns a builder for creating a UserCustomGroup entity.
+func (c *UserCustomGroupClient) Create() *UserCustomGroupCreate {
+	mutation := newUserCustomGroupMutation(c.config, OpCreate)
+	return &UserCustomGroupCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of UserCustomGroup entities.
+func (c *UserCustomGroupClient) CreateBulk(builders ...*UserCustomGroupCreate) *UserCustomGroupCreateBulk {
+	return &UserCustomGroupCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *UserCustomGroupClient) MapCreateBulk(slice any, setFunc func(*UserCustomGroupCreate, int)) *UserCustomGroupCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &UserCustomGroupCreateBulk{err: fmt.Errorf("calling to UserCustomGroupClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*UserCustomGroupCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &UserCustomGroupCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for UserCustomGroup.
+func (c *UserCustomGroupClient) Update() *UserCustomGroupUpdate {
+	mutation := newUserCustomGroupMutation(c.config, OpUpdate)
+	return &UserCustomGroupUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *UserCustomGroupClient) UpdateOne(_m *UserCustomGroup) *UserCustomGroupUpdateOne {
+	mutation := newUserCustomGroupMutation(c.config, OpUpdateOne, withUserCustomGroup(_m))
+	return &UserCustomGroupUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *UserCustomGroupClient) UpdateOneID(id int64) *UserCustomGroupUpdateOne {
+	mutation := newUserCustomGroupMutation(c.config, OpUpdateOne, withUserCustomGroupID(id))
+	return &UserCustomGroupUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for UserCustomGroup.
+func (c *UserCustomGroupClient) Delete() *UserCustomGroupDelete {
+	mutation := newUserCustomGroupMutation(c.config, OpDelete)
+	return &UserCustomGroupDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *UserCustomGroupClient) DeleteOne(_m *UserCustomGroup) *UserCustomGroupDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *UserCustomGroupClient) DeleteOneID(id int64) *UserCustomGroupDeleteOne {
+	builder := c.Delete().Where(usercustomgroup.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &UserCustomGroupDeleteOne{builder}
+}
+
+// Query returns a query builder for UserCustomGroup.
+func (c *UserCustomGroupClient) Query() *UserCustomGroupQuery {
+	return &UserCustomGroupQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeUserCustomGroup},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a UserCustomGroup entity by its id.
+func (c *UserCustomGroupClient) Get(ctx context.Context, id int64) (*UserCustomGroup, error) {
+	return c.Query().Where(usercustomgroup.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *UserCustomGroupClient) GetX(ctx context.Context, id int64) *UserCustomGroup {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// QueryUser queries the user edge of a UserCustomGroup.
+func (c *UserCustomGroupClient) QueryUser(_m *UserCustomGroup) *UserQuery {
+	query := (&UserClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(usercustomgroup.Table, usercustomgroup.FieldID, id),
+			sqlgraph.To(user.Table, user.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, usercustomgroup.UserTable, usercustomgroup.UserColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryModels queries the models edge of a UserCustomGroup.
+func (c *UserCustomGroupClient) QueryModels(_m *UserCustomGroup) *UserCustomGroupModelQuery {
+	query := (&UserCustomGroupModelClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(usercustomgroup.Table, usercustomgroup.FieldID, id),
+			sqlgraph.To(usercustomgroupmodel.Table, usercustomgroupmodel.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, usercustomgroup.ModelsTable, usercustomgroup.ModelsColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryAPIKeys queries the api_keys edge of a UserCustomGroup.
+func (c *UserCustomGroupClient) QueryAPIKeys(_m *UserCustomGroup) *APIKeyQuery {
+	query := (&APIKeyClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(usercustomgroup.Table, usercustomgroup.FieldID, id),
+			sqlgraph.To(apikey.Table, apikey.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, usercustomgroup.APIKeysTable, usercustomgroup.APIKeysColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryUsageLogs queries the usage_logs edge of a UserCustomGroup.
+func (c *UserCustomGroupClient) QueryUsageLogs(_m *UserCustomGroup) *UsageLogQuery {
+	query := (&UsageLogClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(usercustomgroup.Table, usercustomgroup.FieldID, id),
+			sqlgraph.To(usagelog.Table, usagelog.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, usercustomgroup.UsageLogsTable, usercustomgroup.UsageLogsColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// Hooks returns the client hooks.
+func (c *UserCustomGroupClient) Hooks() []Hook {
+	hooks := c.hooks.UserCustomGroup
+	return append(hooks[:len(hooks):len(hooks)], usercustomgroup.Hooks[:]...)
+}
+
+// Interceptors returns the client interceptors.
+func (c *UserCustomGroupClient) Interceptors() []Interceptor {
+	inters := c.inters.UserCustomGroup
+	return append(inters[:len(inters):len(inters)], usercustomgroup.Interceptors[:]...)
+}
+
+func (c *UserCustomGroupClient) mutate(ctx context.Context, m *UserCustomGroupMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&UserCustomGroupCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&UserCustomGroupUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&UserCustomGroupUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&UserCustomGroupDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown UserCustomGroup mutation op: %q", m.Op())
+	}
+}
+
+// UserCustomGroupModelClient is a client for the UserCustomGroupModel schema.
+type UserCustomGroupModelClient struct {
+	config
+}
+
+// NewUserCustomGroupModelClient returns a client for the UserCustomGroupModel from the given config.
+func NewUserCustomGroupModelClient(c config) *UserCustomGroupModelClient {
+	return &UserCustomGroupModelClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `usercustomgroupmodel.Hooks(f(g(h())))`.
+func (c *UserCustomGroupModelClient) Use(hooks ...Hook) {
+	c.hooks.UserCustomGroupModel = append(c.hooks.UserCustomGroupModel, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `usercustomgroupmodel.Intercept(f(g(h())))`.
+func (c *UserCustomGroupModelClient) Intercept(interceptors ...Interceptor) {
+	c.inters.UserCustomGroupModel = append(c.inters.UserCustomGroupModel, interceptors...)
+}
+
+// Create returns a builder for creating a UserCustomGroupModel entity.
+func (c *UserCustomGroupModelClient) Create() *UserCustomGroupModelCreate {
+	mutation := newUserCustomGroupModelMutation(c.config, OpCreate)
+	return &UserCustomGroupModelCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of UserCustomGroupModel entities.
+func (c *UserCustomGroupModelClient) CreateBulk(builders ...*UserCustomGroupModelCreate) *UserCustomGroupModelCreateBulk {
+	return &UserCustomGroupModelCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *UserCustomGroupModelClient) MapCreateBulk(slice any, setFunc func(*UserCustomGroupModelCreate, int)) *UserCustomGroupModelCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &UserCustomGroupModelCreateBulk{err: fmt.Errorf("calling to UserCustomGroupModelClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*UserCustomGroupModelCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &UserCustomGroupModelCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for UserCustomGroupModel.
+func (c *UserCustomGroupModelClient) Update() *UserCustomGroupModelUpdate {
+	mutation := newUserCustomGroupModelMutation(c.config, OpUpdate)
+	return &UserCustomGroupModelUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *UserCustomGroupModelClient) UpdateOne(_m *UserCustomGroupModel) *UserCustomGroupModelUpdateOne {
+	mutation := newUserCustomGroupModelMutation(c.config, OpUpdateOne, withUserCustomGroupModel(_m))
+	return &UserCustomGroupModelUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *UserCustomGroupModelClient) UpdateOneID(id int64) *UserCustomGroupModelUpdateOne {
+	mutation := newUserCustomGroupModelMutation(c.config, OpUpdateOne, withUserCustomGroupModelID(id))
+	return &UserCustomGroupModelUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for UserCustomGroupModel.
+func (c *UserCustomGroupModelClient) Delete() *UserCustomGroupModelDelete {
+	mutation := newUserCustomGroupModelMutation(c.config, OpDelete)
+	return &UserCustomGroupModelDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *UserCustomGroupModelClient) DeleteOne(_m *UserCustomGroupModel) *UserCustomGroupModelDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *UserCustomGroupModelClient) DeleteOneID(id int64) *UserCustomGroupModelDeleteOne {
+	builder := c.Delete().Where(usercustomgroupmodel.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &UserCustomGroupModelDeleteOne{builder}
+}
+
+// Query returns a query builder for UserCustomGroupModel.
+func (c *UserCustomGroupModelClient) Query() *UserCustomGroupModelQuery {
+	return &UserCustomGroupModelQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeUserCustomGroupModel},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a UserCustomGroupModel entity by its id.
+func (c *UserCustomGroupModelClient) Get(ctx context.Context, id int64) (*UserCustomGroupModel, error) {
+	return c.Query().Where(usercustomgroupmodel.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *UserCustomGroupModelClient) GetX(ctx context.Context, id int64) *UserCustomGroupModel {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// QueryCustomGroup queries the custom_group edge of a UserCustomGroupModel.
+func (c *UserCustomGroupModelClient) QueryCustomGroup(_m *UserCustomGroupModel) *UserCustomGroupQuery {
+	query := (&UserCustomGroupClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(usercustomgroupmodel.Table, usercustomgroupmodel.FieldID, id),
+			sqlgraph.To(usercustomgroup.Table, usercustomgroup.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, usercustomgroupmodel.CustomGroupTable, usercustomgroupmodel.CustomGroupColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QuerySourceGroup queries the source_group edge of a UserCustomGroupModel.
+func (c *UserCustomGroupModelClient) QuerySourceGroup(_m *UserCustomGroupModel) *GroupQuery {
+	query := (&GroupClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(usercustomgroupmodel.Table, usercustomgroupmodel.FieldID, id),
+			sqlgraph.To(group.Table, group.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, usercustomgroupmodel.SourceGroupTable, usercustomgroupmodel.SourceGroupColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// Hooks returns the client hooks.
+func (c *UserCustomGroupModelClient) Hooks() []Hook {
+	return c.hooks.UserCustomGroupModel
+}
+
+// Interceptors returns the client interceptors.
+func (c *UserCustomGroupModelClient) Interceptors() []Interceptor {
+	return c.inters.UserCustomGroupModel
+}
+
+func (c *UserCustomGroupModelClient) mutate(ctx context.Context, m *UserCustomGroupModelMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&UserCustomGroupModelCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&UserCustomGroupModelUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&UserCustomGroupModelUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&UserCustomGroupModelDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown UserCustomGroupModel mutation op: %q", m.Op())
+	}
+}
+
 // UserImageClient is a client for the UserImage schema.
 type UserImageClient struct {
 	config
@@ -7701,8 +8147,8 @@ type (
 		PromoCodeUsage, Proxy, RedeemBatchClaim, RedeemCode, SecuritySecret, Setting,
 		SubscriptionPlan, TLSFingerprintProfile, UsageCleanupTask, UsageLog, User,
 		UserAllowedGroup, UserAttributeDefinition, UserAttributeValue, UserCheckin,
-		UserCheckinBlacklist, UserImage, UserImageTask, UserPlatformQuota,
-		UserSubscription []ent.Hook
+		UserCheckinBlacklist, UserCustomGroup, UserCustomGroupModel, UserImage,
+		UserImageTask, UserPlatformQuota, UserSubscription []ent.Hook
 	}
 	inters struct {
 		APIKey, Account, AccountGroup, Announcement, AnnouncementRead, AuthIdentity,
@@ -7714,8 +8160,8 @@ type (
 		PromoCodeUsage, Proxy, RedeemBatchClaim, RedeemCode, SecuritySecret, Setting,
 		SubscriptionPlan, TLSFingerprintProfile, UsageCleanupTask, UsageLog, User,
 		UserAllowedGroup, UserAttributeDefinition, UserAttributeValue, UserCheckin,
-		UserCheckinBlacklist, UserImage, UserImageTask, UserPlatformQuota,
-		UserSubscription []ent.Interceptor
+		UserCheckinBlacklist, UserCustomGroup, UserCustomGroupModel, UserImage,
+		UserImageTask, UserPlatformQuota, UserSubscription []ent.Interceptor
 	}
 )
 

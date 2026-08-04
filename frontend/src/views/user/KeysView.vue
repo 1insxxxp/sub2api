@@ -468,6 +468,7 @@
           <label class="input-label">{{ t('keys.groupLabel') }}</label>
           <Select
             v-model="formData.group_id"
+            @update:modelValue="formData.custom_group_id = null"
             :options="groupOptions"
             :placeholder="t('keys.selectGroup')"
             :searchable="true"
@@ -505,6 +506,15 @@
               />
             </template>
           </Select>
+        </div>
+
+        <div>
+          <label class="input-label">{{ t('nav.customGroups') }}</label>
+          <select v-model="formData.custom_group_id" class="input" @change="formData.group_id = null">
+            <option :value="null">不使用自定义分组</option>
+            <option v-for="group in customGroups" :key="group.id" :value="group.id">{{ group.name }} · {{ group.models.length }} 个模型</option>
+          </select>
+          <p class="input-hint">选择后，此 Key 会根据请求模型转发到你配置的来源分组。</p>
         </div>
 
         <!-- Custom Key Section (only for create) -->
@@ -1126,6 +1136,7 @@ import { getPersistedPageSize } from '@/composables/usePersistedPageSize'
 
 const { t } = useI18n()
 import { keysAPI, authAPI, usageAPI, userGroupsAPI } from '@/api'
+import { customGroupsAPI } from '@/api/customGroups'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import TablePageLayout from '@/components/layout/TablePageLayout.vue'
 	import DataTable from '@/components/common/DataTable.vue'
@@ -1140,7 +1151,7 @@ import TablePageLayout from '@/components/layout/TablePageLayout.vue'
 	import EndpointPopover from '@/components/keys/EndpointPopover.vue'
 	import GroupBadge from '@/components/common/GroupBadge.vue'
 	import GroupOptionItem from '@/components/common/GroupOptionItem.vue'
-	import type { ApiKey, Group, PublicSettings, SubscriptionType, GroupPlatform, UpdateApiKeyRequest } from '@/types'
+	import type { ApiKey, Group, PublicSettings, SubscriptionType, GroupPlatform, UpdateApiKeyRequest, UserCustomGroup } from '@/types'
 import type { Column } from '@/components/common/types'
 import type { BatchApiKeyUsageStats } from '@/api/usage'
 import { formatDateTime } from '@/utils/format'
@@ -1271,6 +1282,7 @@ const columns = computed<Column[]>(() =>
 
 const apiKeys = ref<ApiKey[]>([])
 const groups = ref<Group[]>([])
+const customGroups = ref<UserCustomGroup[]>([])
 const loading = ref(false)
 const submitting = ref(false)
 const now = ref(new Date())
@@ -1331,6 +1343,7 @@ const setGroupButtonRef = (keyId: number, el: Element | ComponentPublicInstance 
 const formData = ref({
   name: '',
   group_id: null as number | null,
+  custom_group_id: null as number | null,
   status: 'active' as 'active' | 'inactive',
   use_custom_key: false,
   custom_key: '',
@@ -1514,6 +1527,14 @@ const loadGroups = async () => {
   }
 }
 
+const loadCustomGroups = async () => {
+  try {
+    customGroups.value = (await customGroupsAPI.list()).filter(group => group.status === 'active')
+  } catch {
+    customGroups.value = []
+  }
+}
+
 const loadUserGroupRates = async () => {
   try {
     userGroupRates.value = await userGroupsAPI.getUserGroupRates()
@@ -1565,6 +1586,7 @@ const editKey = (key: ApiKey) => {
   formData.value = {
     name: key.name,
     group_id: key.group_id,
+    custom_group_id: key.custom_group_id,
     status: key.status === 'quota_exhausted' || key.status === 'expired' ? 'inactive' : key.status,
     use_custom_key: false,
     custom_key: '',
@@ -1670,8 +1692,7 @@ const confirmDelete = (key: ApiKey) => {
 }
 
 const handleSubmit = async () => {
-  // Validate group_id is required
-  if (formData.value.group_id === null) {
+  if (formData.value.group_id === null && formData.value.custom_group_id === null) {
     appStore.showError(t('keys.groupRequired'))
     return
   }
@@ -1729,6 +1750,7 @@ const handleSubmit = async () => {
       const updates: UpdateApiKeyRequest = {
         name: formData.value.name,
         group_id: formData.value.group_id,
+        custom_group_id: formData.value.custom_group_id,
         ip_whitelist: ipWhitelist,
         ip_blacklist: ipBlacklist,
         quota: quota,
@@ -1753,6 +1775,7 @@ const handleSubmit = async () => {
         quota,
         expiresInDays,
         rateLimitData
+        ,formData.value.custom_group_id
       )
       appStore.showSuccess(t('keys.keyCreatedSuccess'))
       // Only advance tour if active, on submit step, and creation succeeded
@@ -1798,6 +1821,7 @@ const closeModals = () => {
   formData.value = {
     name: '',
     group_id: null,
+    custom_group_id: null,
     status: 'active',
     use_custom_key: false,
     custom_key: '',
@@ -1965,6 +1989,7 @@ onMounted(() => {
   loadSavedColumns()
   loadApiKeys()
   loadGroups()
+  loadCustomGroups()
   loadUserGroupRates()
   loadPublicSettings()
   document.addEventListener('click', handleDocumentClick)

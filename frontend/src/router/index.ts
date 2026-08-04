@@ -216,6 +216,12 @@ const routes: RouteRecordRaw[] = [
     }
   },
   {
+    path: '/custom-groups',
+    name: 'CustomGroups',
+    component: () => import('@/views/user/CustomGroupsView.vue'),
+    meta: { requiresAuth: true, requiresAdmin: false, title: 'Custom Groups' }
+  },
+  {
     path: '/batch-image',
     name: 'BatchImageGuide',
     alias: '/docs/batch-image',

@@ -126,6 +126,12 @@ type UserCheckin func(*sql.Selector)
 // UserCheckinBlacklist is the predicate function for usercheckinblacklist builders.
 type UserCheckinBlacklist func(*sql.Selector)
 
+// UserCustomGroup is the predicate function for usercustomgroup builders.
+type UserCustomGroup func(*sql.Selector)
+
+// UserCustomGroupModel is the predicate function for usercustomgroupmodel builders.
+type UserCustomGroupModel func(*sql.Selector)
+
 // UserImage is the predicate function for userimage builders.
 type UserImage func(*sql.Selector)
 

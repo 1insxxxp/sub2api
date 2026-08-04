@@ -136,6 +136,8 @@ const (
 	EdgeSubscriptions = "subscriptions"
 	// EdgeUsageLogs holds the string denoting the usage_logs edge name in mutations.
 	EdgeUsageLogs = "usage_logs"
+	// EdgeCustomModelRoutes holds the string denoting the custom_model_routes edge name in mutations.
+	EdgeCustomModelRoutes = "custom_model_routes"
 	// EdgeAccounts holds the string denoting the accounts edge name in mutations.
 	EdgeAccounts = "accounts"
 	// EdgeAllowedUsers holds the string denoting the allowed_users edge name in mutations.
@@ -174,6 +176,13 @@ const (
 	UsageLogsInverseTable = "usage_logs"
 	// UsageLogsColumn is the table column denoting the usage_logs relation/edge.
 	UsageLogsColumn = "group_id"
+	// CustomModelRoutesTable is the table that holds the custom_model_routes relation/edge.
+	CustomModelRoutesTable = "user_custom_group_models"
+	// CustomModelRoutesInverseTable is the table name for the UserCustomGroupModel entity.
+	// It exists in this package in order to avoid circular dependency with the "usercustomgroupmodel" package.
+	CustomModelRoutesInverseTable = "user_custom_group_models"
+	// CustomModelRoutesColumn is the table column denoting the custom_model_routes relation/edge.
+	CustomModelRoutesColumn = "source_group_id"
 	// AccountsTable is the table that holds the accounts relation/edge. The primary key declared below.
 	AccountsTable = "account_groups"
 	// AccountsInverseTable is the table name for the Account entity.
@@ -709,6 +718,20 @@ func ByUsageLogs(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
 	}
 }
 
+// ByCustomModelRoutesCount orders the results by custom_model_routes count.
+func ByCustomModelRoutesCount(opts ...sql.OrderTermOption) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborsCount(s, newCustomModelRoutesStep(), opts...)
+	}
+}
+
+// ByCustomModelRoutes orders the results by custom_model_routes terms.
+func ByCustomModelRoutes(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborTerms(s, newCustomModelRoutesStep(), append([]sql.OrderTerm{term}, terms...)...)
+	}
+}
+
 // ByAccountsCount orders the results by accounts count.
 func ByAccountsCount(opts ...sql.OrderTermOption) OrderOption {
 	return func(s *sql.Selector) {
@@ -790,6 +813,13 @@ func newUsageLogsStep() *sqlgraph.Step {
 		sqlgraph.From(Table, FieldID),
 		sqlgraph.To(UsageLogsInverseTable, FieldID),
 		sqlgraph.Edge(sqlgraph.O2M, false, UsageLogsTable, UsageLogsColumn),
+	)
+}
+func newCustomModelRoutesStep() *sqlgraph.Step {
+	return sqlgraph.NewStep(
+		sqlgraph.From(Table, FieldID),
+		sqlgraph.To(CustomModelRoutesInverseTable, FieldID),
+		sqlgraph.Edge(sqlgraph.O2M, false, CustomModelRoutesTable, CustomModelRoutesColumn),
 	)
 }
 func newAccountsStep() *sqlgraph.Step {

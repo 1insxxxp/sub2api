@@ -90,6 +90,11 @@ func GroupID(v int64) predicate.APIKey {
 	return predicate.APIKey(sql.FieldEQ(FieldGroupID, v))
 }
 
+// CustomGroupID applies equality check predicate on the "custom_group_id" field. It's identical to CustomGroupIDEQ.
+func CustomGroupID(v int64) predicate.APIKey {
+	return predicate.APIKey(sql.FieldEQ(FieldCustomGroupID, v))
+}
+
 // Status applies equality check predicate on the "status" field. It's identical to StatusEQ.
 func Status(v string) predicate.APIKey {
 	return predicate.APIKey(sql.FieldEQ(FieldStatus, v))
@@ -468,6 +473,36 @@ func GroupIDIsNil() predicate.APIKey {
 // GroupIDNotNil applies the NotNil predicate on the "group_id" field.
 func GroupIDNotNil() predicate.APIKey {
 	return predicate.APIKey(sql.FieldNotNull(FieldGroupID))
+}
+
+// CustomGroupIDEQ applies the EQ predicate on the "custom_group_id" field.
+func CustomGroupIDEQ(v int64) predicate.APIKey {
+	return predicate.APIKey(sql.FieldEQ(FieldCustomGroupID, v))
+}
+
+// CustomGroupIDNEQ applies the NEQ predicate on the "custom_group_id" field.
+func CustomGroupIDNEQ(v int64) predicate.APIKey {
+	return predicate.APIKey(sql.FieldNEQ(FieldCustomGroupID, v))
+}
+
+// CustomGroupIDIn applies the In predicate on the "custom_group_id" field.
+func CustomGroupIDIn(vs ...int64) predicate.APIKey {
+	return predicate.APIKey(sql.FieldIn(FieldCustomGroupID, vs...))
+}
+
+// CustomGroupIDNotIn applies the NotIn predicate on the "custom_group_id" field.
+func CustomGroupIDNotIn(vs ...int64) predicate.APIKey {
+	return predicate.APIKey(sql.FieldNotIn(FieldCustomGroupID, vs...))
+}
+
+// CustomGroupIDIsNil applies the IsNil predicate on the "custom_group_id" field.
+func CustomGroupIDIsNil() predicate.APIKey {
+	return predicate.APIKey(sql.FieldIsNull(FieldCustomGroupID))
+}
+
+// CustomGroupIDNotNil applies the NotNil predicate on the "custom_group_id" field.
+func CustomGroupIDNotNil() predicate.APIKey {
+	return predicate.APIKey(sql.FieldNotNull(FieldCustomGroupID))
 }
 
 // StatusEQ applies the EQ predicate on the "status" field.
@@ -1163,6 +1198,29 @@ func HasGroup() predicate.APIKey {
 func HasGroupWith(preds ...predicate.Group) predicate.APIKey {
 	return predicate.APIKey(func(s *sql.Selector) {
 		step := newGroupStep()
+		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
+			for _, p := range preds {
+				p(s)
+			}
+		})
+	})
+}
+
+// HasCustomGroup applies the HasEdge predicate on the "custom_group" edge.
+func HasCustomGroup() predicate.APIKey {
+	return predicate.APIKey(func(s *sql.Selector) {
+		step := sqlgraph.NewStep(
+			sqlgraph.From(Table, FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, CustomGroupTable, CustomGroupColumn),
+		)
+		sqlgraph.HasNeighbors(s, step)
+	})
+}
+
+// HasCustomGroupWith applies the HasEdge predicate on the "custom_group" edge with a given conditions (other predicates).
+func HasCustomGroupWith(preds ...predicate.UserCustomGroup) predicate.APIKey {
+	return predicate.APIKey(func(s *sql.Selector) {
+		step := newCustomGroupStep()
 		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
 			for _, p := range preds {
 				p(s)

@@ -1688,6 +1688,29 @@ func HasAPIKeysWith(preds ...predicate.APIKey) predicate.User {
 	})
 }
 
+// HasCustomGroups applies the HasEdge predicate on the "custom_groups" edge.
+func HasCustomGroups() predicate.User {
+	return predicate.User(func(s *sql.Selector) {
+		step := sqlgraph.NewStep(
+			sqlgraph.From(Table, FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, CustomGroupsTable, CustomGroupsColumn),
+		)
+		sqlgraph.HasNeighbors(s, step)
+	})
+}
+
+// HasCustomGroupsWith applies the HasEdge predicate on the "custom_groups" edge with a given conditions (other predicates).
+func HasCustomGroupsWith(preds ...predicate.UserCustomGroup) predicate.User {
+	return predicate.User(func(s *sql.Selector) {
+		step := newCustomGroupsStep()
+		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
+			for _, p := range preds {
+				p(s)
+			}
+		})
+	})
+}
+
 // HasRedeemCodes applies the HasEdge predicate on the "redeem_codes" edge.
 func HasRedeemCodes() predicate.User {
 	return predicate.User(func(s *sql.Selector) {

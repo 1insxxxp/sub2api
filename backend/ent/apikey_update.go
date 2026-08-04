@@ -17,6 +17,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/predicate"
 	"github.com/Wei-Shaw/sub2api/ent/usagelog"
 	"github.com/Wei-Shaw/sub2api/ent/user"
+	"github.com/Wei-Shaw/sub2api/ent/usercustomgroup"
 )
 
 // APIKeyUpdate is the builder for updating APIKey entities.
@@ -117,6 +118,26 @@ func (_u *APIKeyUpdate) SetNillableGroupID(v *int64) *APIKeyUpdate {
 // ClearGroupID clears the value of the "group_id" field.
 func (_u *APIKeyUpdate) ClearGroupID() *APIKeyUpdate {
 	_u.mutation.ClearGroupID()
+	return _u
+}
+
+// SetCustomGroupID sets the "custom_group_id" field.
+func (_u *APIKeyUpdate) SetCustomGroupID(v int64) *APIKeyUpdate {
+	_u.mutation.SetCustomGroupID(v)
+	return _u
+}
+
+// SetNillableCustomGroupID sets the "custom_group_id" field if the given value is not nil.
+func (_u *APIKeyUpdate) SetNillableCustomGroupID(v *int64) *APIKeyUpdate {
+	if v != nil {
+		_u.SetCustomGroupID(*v)
+	}
+	return _u
+}
+
+// ClearCustomGroupID clears the value of the "custom_group_id" field.
+func (_u *APIKeyUpdate) ClearCustomGroupID() *APIKeyUpdate {
+	_u.mutation.ClearCustomGroupID()
 	return _u
 }
 
@@ -448,6 +469,11 @@ func (_u *APIKeyUpdate) SetGroup(v *Group) *APIKeyUpdate {
 	return _u.SetGroupID(v.ID)
 }
 
+// SetCustomGroup sets the "custom_group" edge to the UserCustomGroup entity.
+func (_u *APIKeyUpdate) SetCustomGroup(v *UserCustomGroup) *APIKeyUpdate {
+	return _u.SetCustomGroupID(v.ID)
+}
+
 // AddUsageLogIDs adds the "usage_logs" edge to the UsageLog entity by IDs.
 func (_u *APIKeyUpdate) AddUsageLogIDs(ids ...int64) *APIKeyUpdate {
 	_u.mutation.AddUsageLogIDs(ids...)
@@ -477,6 +503,12 @@ func (_u *APIKeyUpdate) ClearUser() *APIKeyUpdate {
 // ClearGroup clears the "group" edge to the Group entity.
 func (_u *APIKeyUpdate) ClearGroup() *APIKeyUpdate {
 	_u.mutation.ClearGroup()
+	return _u
+}
+
+// ClearCustomGroup clears the "custom_group" edge to the UserCustomGroup entity.
+func (_u *APIKeyUpdate) ClearCustomGroup() *APIKeyUpdate {
+	_u.mutation.ClearCustomGroup()
 	return _u
 }
 
@@ -754,6 +786,35 @@ func (_u *APIKeyUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 		}
 		_spec.Edges.Add = append(_spec.Edges.Add, edge)
 	}
+	if _u.mutation.CustomGroupCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: true,
+			Table:   apikey.CustomGroupTable,
+			Columns: []string{apikey.CustomGroupColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(usercustomgroup.FieldID, field.TypeInt64),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.CustomGroupIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: true,
+			Table:   apikey.CustomGroupTable,
+			Columns: []string{apikey.CustomGroupColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(usercustomgroup.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
 	if _u.mutation.UsageLogsCleared() {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.O2M,
@@ -904,6 +965,26 @@ func (_u *APIKeyUpdateOne) SetNillableGroupID(v *int64) *APIKeyUpdateOne {
 // ClearGroupID clears the value of the "group_id" field.
 func (_u *APIKeyUpdateOne) ClearGroupID() *APIKeyUpdateOne {
 	_u.mutation.ClearGroupID()
+	return _u
+}
+
+// SetCustomGroupID sets the "custom_group_id" field.
+func (_u *APIKeyUpdateOne) SetCustomGroupID(v int64) *APIKeyUpdateOne {
+	_u.mutation.SetCustomGroupID(v)
+	return _u
+}
+
+// SetNillableCustomGroupID sets the "custom_group_id" field if the given value is not nil.
+func (_u *APIKeyUpdateOne) SetNillableCustomGroupID(v *int64) *APIKeyUpdateOne {
+	if v != nil {
+		_u.SetCustomGroupID(*v)
+	}
+	return _u
+}
+
+// ClearCustomGroupID clears the value of the "custom_group_id" field.
+func (_u *APIKeyUpdateOne) ClearCustomGroupID() *APIKeyUpdateOne {
+	_u.mutation.ClearCustomGroupID()
 	return _u
 }
 
@@ -1235,6 +1316,11 @@ func (_u *APIKeyUpdateOne) SetGroup(v *Group) *APIKeyUpdateOne {
 	return _u.SetGroupID(v.ID)
 }
 
+// SetCustomGroup sets the "custom_group" edge to the UserCustomGroup entity.
+func (_u *APIKeyUpdateOne) SetCustomGroup(v *UserCustomGroup) *APIKeyUpdateOne {
+	return _u.SetCustomGroupID(v.ID)
+}
+
 // AddUsageLogIDs adds the "usage_logs" edge to the UsageLog entity by IDs.
 func (_u *APIKeyUpdateOne) AddUsageLogIDs(ids ...int64) *APIKeyUpdateOne {
 	_u.mutation.AddUsageLogIDs(ids...)
@@ -1264,6 +1350,12 @@ func (_u *APIKeyUpdateOne) ClearUser() *APIKeyUpdateOne {
 // ClearGroup clears the "group" edge to the Group entity.
 func (_u *APIKeyUpdateOne) ClearGroup() *APIKeyUpdateOne {
 	_u.mutation.ClearGroup()
+	return _u
+}
+
+// ClearCustomGroup clears the "custom_group" edge to the UserCustomGroup entity.
+func (_u *APIKeyUpdateOne) ClearCustomGroup() *APIKeyUpdateOne {
+	_u.mutation.ClearCustomGroup()
 	return _u
 }
 
@@ -1564,6 +1656,35 @@ func (_u *APIKeyUpdateOne) sqlSave(ctx context.Context) (_node *APIKey, err erro
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(group.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
+	if _u.mutation.CustomGroupCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: true,
+			Table:   apikey.CustomGroupTable,
+			Columns: []string{apikey.CustomGroupColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(usercustomgroup.FieldID, field.TypeInt64),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.CustomGroupIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: true,
+			Table:   apikey.CustomGroupTable,
+			Columns: []string{apikey.CustomGroupColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(usercustomgroup.FieldID, field.TypeInt64),
 			},
 		}
 		for _, k := range nodes {

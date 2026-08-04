@@ -52,6 +52,8 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/userattributevalue"
 	"github.com/Wei-Shaw/sub2api/ent/usercheckin"
 	"github.com/Wei-Shaw/sub2api/ent/usercheckinblacklist"
+	"github.com/Wei-Shaw/sub2api/ent/usercustomgroup"
+	"github.com/Wei-Shaw/sub2api/ent/usercustomgroupmodel"
 	"github.com/Wei-Shaw/sub2api/ent/userimage"
 	"github.com/Wei-Shaw/sub2api/ent/userimagetask"
 	"github.com/Wei-Shaw/sub2api/ent/userplatformquota"
@@ -156,6 +158,8 @@ func checkColumn(t, c string) error {
 			userattributevalue.Table:            userattributevalue.ValidColumn,
 			usercheckin.Table:                   usercheckin.ValidColumn,
 			usercheckinblacklist.Table:          usercheckinblacklist.ValidColumn,
+			usercustomgroup.Table:               usercustomgroup.ValidColumn,
+			usercustomgroupmodel.Table:          usercustomgroupmodel.ValidColumn,
 			userimage.Table:                     userimage.ValidColumn,
 			userimagetask.Table:                 userimagetask.ValidColumn,
 			userplatformquota.Table:             userplatformquota.ValidColumn,

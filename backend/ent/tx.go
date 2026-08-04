@@ -94,6 +94,10 @@ type Tx struct {
 	UserCheckin *UserCheckinClient
 	// UserCheckinBlacklist is the client for interacting with the UserCheckinBlacklist builders.
 	UserCheckinBlacklist *UserCheckinBlacklistClient
+	// UserCustomGroup is the client for interacting with the UserCustomGroup builders.
+	UserCustomGroup *UserCustomGroupClient
+	// UserCustomGroupModel is the client for interacting with the UserCustomGroupModel builders.
+	UserCustomGroupModel *UserCustomGroupModelClient
 	// UserImage is the client for interacting with the UserImage builders.
 	UserImage *UserImageClient
 	// UserImageTask is the client for interacting with the UserImageTask builders.
@@ -273,6 +277,8 @@ func (tx *Tx) init() {
 	tx.UserAttributeValue = NewUserAttributeValueClient(tx.config)
 	tx.UserCheckin = NewUserCheckinClient(tx.config)
 	tx.UserCheckinBlacklist = NewUserCheckinBlacklistClient(tx.config)
+	tx.UserCustomGroup = NewUserCustomGroupClient(tx.config)
+	tx.UserCustomGroupModel = NewUserCustomGroupModelClient(tx.config)
 	tx.UserImage = NewUserImageClient(tx.config)
 	tx.UserImageTask = NewUserImageTaskClient(tx.config)
 	tx.UserPlatformQuota = NewUserPlatformQuotaClient(tx.config)

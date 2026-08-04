@@ -15,6 +15,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/group"
 	"github.com/Wei-Shaw/sub2api/ent/usagelog"
 	"github.com/Wei-Shaw/sub2api/ent/user"
+	"github.com/Wei-Shaw/sub2api/ent/usercustomgroup"
 )
 
 // APIKeyCreate is the builder for creating a APIKey entity.
@@ -95,6 +96,20 @@ func (_c *APIKeyCreate) SetGroupID(v int64) *APIKeyCreate {
 func (_c *APIKeyCreate) SetNillableGroupID(v *int64) *APIKeyCreate {
 	if v != nil {
 		_c.SetGroupID(*v)
+	}
+	return _c
+}
+
+// SetCustomGroupID sets the "custom_group_id" field.
+func (_c *APIKeyCreate) SetCustomGroupID(v int64) *APIKeyCreate {
+	_c.mutation.SetCustomGroupID(v)
+	return _c
+}
+
+// SetNillableCustomGroupID sets the "custom_group_id" field if the given value is not nil.
+func (_c *APIKeyCreate) SetNillableCustomGroupID(v *int64) *APIKeyCreate {
+	if v != nil {
+		_c.SetCustomGroupID(*v)
 	}
 	return _c
 }
@@ -315,6 +330,11 @@ func (_c *APIKeyCreate) SetUser(v *User) *APIKeyCreate {
 // SetGroup sets the "group" edge to the Group entity.
 func (_c *APIKeyCreate) SetGroup(v *Group) *APIKeyCreate {
 	return _c.SetGroupID(v.ID)
+}
+
+// SetCustomGroup sets the "custom_group" edge to the UserCustomGroup entity.
+func (_c *APIKeyCreate) SetCustomGroup(v *UserCustomGroup) *APIKeyCreate {
+	return _c.SetCustomGroupID(v.ID)
 }
 
 // AddUsageLogIDs adds the "usage_logs" edge to the UsageLog entity by IDs.
@@ -629,6 +649,23 @@ func (_c *APIKeyCreate) createSpec() (*APIKey, *sqlgraph.CreateSpec) {
 		_node.GroupID = &nodes[0]
 		_spec.Edges = append(_spec.Edges, edge)
 	}
+	if nodes := _c.mutation.CustomGroupIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: true,
+			Table:   apikey.CustomGroupTable,
+			Columns: []string{apikey.CustomGroupColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(usercustomgroup.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_node.CustomGroupID = &nodes[0]
+		_spec.Edges = append(_spec.Edges, edge)
+	}
 	if nodes := _c.mutation.UsageLogsIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.O2M,
@@ -778,6 +815,24 @@ func (u *APIKeyUpsert) UpdateGroupID() *APIKeyUpsert {
 // ClearGroupID clears the value of the "group_id" field.
 func (u *APIKeyUpsert) ClearGroupID() *APIKeyUpsert {
 	u.SetNull(apikey.FieldGroupID)
+	return u
+}
+
+// SetCustomGroupID sets the "custom_group_id" field.
+func (u *APIKeyUpsert) SetCustomGroupID(v int64) *APIKeyUpsert {
+	u.Set(apikey.FieldCustomGroupID, v)
+	return u
+}
+
+// UpdateCustomGroupID sets the "custom_group_id" field to the value that was provided on create.
+func (u *APIKeyUpsert) UpdateCustomGroupID() *APIKeyUpsert {
+	u.SetExcluded(apikey.FieldCustomGroupID)
+	return u
+}
+
+// ClearCustomGroupID clears the value of the "custom_group_id" field.
+func (u *APIKeyUpsert) ClearCustomGroupID() *APIKeyUpsert {
+	u.SetNull(apikey.FieldCustomGroupID)
 	return u
 }
 
@@ -1203,6 +1258,27 @@ func (u *APIKeyUpsertOne) UpdateGroupID() *APIKeyUpsertOne {
 func (u *APIKeyUpsertOne) ClearGroupID() *APIKeyUpsertOne {
 	return u.Update(func(s *APIKeyUpsert) {
 		s.ClearGroupID()
+	})
+}
+
+// SetCustomGroupID sets the "custom_group_id" field.
+func (u *APIKeyUpsertOne) SetCustomGroupID(v int64) *APIKeyUpsertOne {
+	return u.Update(func(s *APIKeyUpsert) {
+		s.SetCustomGroupID(v)
+	})
+}
+
+// UpdateCustomGroupID sets the "custom_group_id" field to the value that was provided on create.
+func (u *APIKeyUpsertOne) UpdateCustomGroupID() *APIKeyUpsertOne {
+	return u.Update(func(s *APIKeyUpsert) {
+		s.UpdateCustomGroupID()
+	})
+}
+
+// ClearCustomGroupID clears the value of the "custom_group_id" field.
+func (u *APIKeyUpsertOne) ClearCustomGroupID() *APIKeyUpsertOne {
+	return u.Update(func(s *APIKeyUpsert) {
+		s.ClearCustomGroupID()
 	})
 }
 
@@ -1841,6 +1917,27 @@ func (u *APIKeyUpsertBulk) UpdateGroupID() *APIKeyUpsertBulk {
 func (u *APIKeyUpsertBulk) ClearGroupID() *APIKeyUpsertBulk {
 	return u.Update(func(s *APIKeyUpsert) {
 		s.ClearGroupID()
+	})
+}
+
+// SetCustomGroupID sets the "custom_group_id" field.
+func (u *APIKeyUpsertBulk) SetCustomGroupID(v int64) *APIKeyUpsertBulk {
+	return u.Update(func(s *APIKeyUpsert) {
+		s.SetCustomGroupID(v)
+	})
+}
+
+// UpdateCustomGroupID sets the "custom_group_id" field to the value that was provided on create.
+func (u *APIKeyUpsertBulk) UpdateCustomGroupID() *APIKeyUpsertBulk {
+	return u.Update(func(s *APIKeyUpsert) {
+		s.UpdateCustomGroupID()
+	})
+}
+
+// ClearCustomGroupID clears the value of the "custom_group_id" field.
+func (u *APIKeyUpsertBulk) ClearCustomGroupID() *APIKeyUpsertBulk {
+	return u.Update(func(s *APIKeyUpsert) {
+		s.ClearCustomGroupID()
 	})
 }
 

@@ -35,6 +35,7 @@ var (
 		{Name: "window_7d_start", Type: field.TypeTime, Nullable: true},
 		{Name: "group_id", Type: field.TypeInt64, Nullable: true},
 		{Name: "user_id", Type: field.TypeInt64},
+		{Name: "custom_group_id", Type: field.TypeInt64, Nullable: true},
 	}
 	// APIKeysTable holds the schema information for the "api_keys" table.
 	APIKeysTable = &schema.Table{
@@ -54,6 +55,12 @@ var (
 				RefColumns: []*schema.Column{UsersColumns[0]},
 				OnDelete:   schema.NoAction,
 			},
+			{
+				Symbol:     "api_keys_user_custom_groups_api_keys",
+				Columns:    []*schema.Column{APIKeysColumns[24]},
+				RefColumns: []*schema.Column{UserCustomGroupsColumns[0]},
+				OnDelete:   schema.SetNull,
+			},
 		},
 		Indexes: []*schema.Index{
 			{
@@ -65,6 +72,11 @@ var (
 				Name:    "apikey_group_id",
 				Unique:  false,
 				Columns: []*schema.Column{APIKeysColumns[22]},
+			},
+			{
+				Name:    "apikey_custom_group_id",
+				Unique:  false,
+				Columns: []*schema.Column{APIKeysColumns[24]},
 			},
 			{
 				Name:    "apikey_status",
@@ -1701,6 +1713,7 @@ var (
 		{Name: "account_id", Type: field.TypeInt64},
 		{Name: "group_id", Type: field.TypeInt64, Nullable: true},
 		{Name: "user_id", Type: field.TypeInt64},
+		{Name: "custom_group_id", Type: field.TypeInt64, Nullable: true},
 		{Name: "subscription_id", Type: field.TypeInt64, Nullable: true},
 	}
 	// UsageLogsTable holds the schema information for the "usage_logs" table.
@@ -1734,8 +1747,14 @@ var (
 				OnDelete:   schema.NoAction,
 			},
 			{
-				Symbol:     "usage_logs_user_subscriptions_usage_logs",
+				Symbol:     "usage_logs_user_custom_groups_usage_logs",
 				Columns:    []*schema.Column{UsageLogsColumns[45]},
+				RefColumns: []*schema.Column{UserCustomGroupsColumns[0]},
+				OnDelete:   schema.SetNull,
+			},
+			{
+				Symbol:     "usage_logs_user_subscriptions_usage_logs",
+				Columns:    []*schema.Column{UsageLogsColumns[46]},
 				RefColumns: []*schema.Column{UserSubscriptionsColumns[0]},
 				OnDelete:   schema.SetNull,
 			},
@@ -1762,9 +1781,14 @@ var (
 				Columns: []*schema.Column{UsageLogsColumns[43]},
 			},
 			{
-				Name:    "usagelog_subscription_id",
+				Name:    "usagelog_custom_group_id",
 				Unique:  false,
 				Columns: []*schema.Column{UsageLogsColumns[45]},
+			},
+			{
+				Name:    "usagelog_subscription_id",
+				Unique:  false,
+				Columns: []*schema.Column{UsageLogsColumns[46]},
 			},
 			{
 				Name:    "usagelog_created_at",
@@ -2062,6 +2086,97 @@ var (
 				Name:    "idx_user_checkin_blacklist_removed_at",
 				Unique:  false,
 				Columns: []*schema.Column{UserCheckinBlacklistColumns[6]},
+			},
+		},
+	}
+	// UserCustomGroupsColumns holds the columns for the "user_custom_groups" table.
+	UserCustomGroupsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt64, Increment: true},
+		{Name: "created_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
+		{Name: "updated_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
+		{Name: "deleted_at", Type: field.TypeTime, Nullable: true, SchemaType: map[string]string{"postgres": "timestamptz"}},
+		{Name: "name", Type: field.TypeString, Size: 100},
+		{Name: "status", Type: field.TypeString, Size: 20, Default: "active"},
+		{Name: "user_id", Type: field.TypeInt64},
+	}
+	// UserCustomGroupsTable holds the schema information for the "user_custom_groups" table.
+	UserCustomGroupsTable = &schema.Table{
+		Name:       "user_custom_groups",
+		Columns:    UserCustomGroupsColumns,
+		PrimaryKey: []*schema.Column{UserCustomGroupsColumns[0]},
+		ForeignKeys: []*schema.ForeignKey{
+			{
+				Symbol:     "user_custom_groups_users_custom_groups",
+				Columns:    []*schema.Column{UserCustomGroupsColumns[6]},
+				RefColumns: []*schema.Column{UsersColumns[0]},
+				OnDelete:   schema.NoAction,
+			},
+		},
+		Indexes: []*schema.Index{
+			{
+				Name:    "usercustomgroup_user_id",
+				Unique:  false,
+				Columns: []*schema.Column{UserCustomGroupsColumns[6]},
+			},
+			{
+				Name:    "usercustomgroup_status",
+				Unique:  false,
+				Columns: []*schema.Column{UserCustomGroupsColumns[5]},
+			},
+			{
+				Name:    "usercustomgroup_deleted_at",
+				Unique:  false,
+				Columns: []*schema.Column{UserCustomGroupsColumns[3]},
+			},
+			{
+				Name:    "idx_user_custom_groups_owner_name_active",
+				Unique:  true,
+				Columns: []*schema.Column{UserCustomGroupsColumns[6], UserCustomGroupsColumns[4]},
+				Annotation: &entsql.IndexAnnotation{
+					Where: "deleted_at IS NULL",
+				},
+			},
+		},
+	}
+	// UserCustomGroupModelsColumns holds the columns for the "user_custom_group_models" table.
+	UserCustomGroupModelsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt64, Increment: true},
+		{Name: "public_model", Type: field.TypeString, Size: 200},
+		{Name: "source_model", Type: field.TypeString, Size: 200},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "updated_at", Type: field.TypeTime},
+		{Name: "source_group_id", Type: field.TypeInt64},
+		{Name: "custom_group_id", Type: field.TypeInt64},
+	}
+	// UserCustomGroupModelsTable holds the schema information for the "user_custom_group_models" table.
+	UserCustomGroupModelsTable = &schema.Table{
+		Name:       "user_custom_group_models",
+		Columns:    UserCustomGroupModelsColumns,
+		PrimaryKey: []*schema.Column{UserCustomGroupModelsColumns[0]},
+		ForeignKeys: []*schema.ForeignKey{
+			{
+				Symbol:     "user_custom_group_models_groups_custom_model_routes",
+				Columns:    []*schema.Column{UserCustomGroupModelsColumns[5]},
+				RefColumns: []*schema.Column{GroupsColumns[0]},
+				OnDelete:   schema.NoAction,
+			},
+			{
+				Symbol:     "user_custom_group_models_user_custom_groups_models",
+				Columns:    []*schema.Column{UserCustomGroupModelsColumns[6]},
+				RefColumns: []*schema.Column{UserCustomGroupsColumns[0]},
+				OnDelete:   schema.Cascade,
+			},
+		},
+		Indexes: []*schema.Index{
+			{
+				Name:    "usercustomgroupmodel_custom_group_id_public_model",
+				Unique:  true,
+				Columns: []*schema.Column{UserCustomGroupModelsColumns[6], UserCustomGroupModelsColumns[1]},
+			},
+			{
+				Name:    "usercustomgroupmodel_source_group_id",
+				Unique:  false,
+				Columns: []*schema.Column{UserCustomGroupModelsColumns[5]},
 			},
 		},
 	}
@@ -2366,6 +2481,8 @@ var (
 		UserAttributeValuesTable,
 		UserCheckinsTable,
 		UserCheckinBlacklistTable,
+		UserCustomGroupsTable,
+		UserCustomGroupModelsTable,
 		UserImagesTable,
 		UserImageTasksTable,
 		UserPlatformQuotasTable,
@@ -2376,6 +2493,7 @@ var (
 func init() {
 	APIKeysTable.ForeignKeys[0].RefTable = GroupsTable
 	APIKeysTable.ForeignKeys[1].RefTable = UsersTable
+	APIKeysTable.ForeignKeys[2].RefTable = UserCustomGroupsTable
 	APIKeysTable.Annotation = &entsql.Annotation{
 		Table: "api_keys",
 	}
@@ -2500,7 +2618,8 @@ func init() {
 	UsageLogsTable.ForeignKeys[1].RefTable = AccountsTable
 	UsageLogsTable.ForeignKeys[2].RefTable = GroupsTable
 	UsageLogsTable.ForeignKeys[3].RefTable = UsersTable
-	UsageLogsTable.ForeignKeys[4].RefTable = UserSubscriptionsTable
+	UsageLogsTable.ForeignKeys[4].RefTable = UserCustomGroupsTable
+	UsageLogsTable.ForeignKeys[5].RefTable = UserSubscriptionsTable
 	UsageLogsTable.Annotation = &entsql.Annotation{
 		Table: "usage_logs",
 	}
@@ -2527,6 +2646,15 @@ func init() {
 	UserCheckinBlacklistTable.ForeignKeys[0].RefTable = UsersTable
 	UserCheckinBlacklistTable.Annotation = &entsql.Annotation{
 		Table: "user_checkin_blacklist",
+	}
+	UserCustomGroupsTable.ForeignKeys[0].RefTable = UsersTable
+	UserCustomGroupsTable.Annotation = &entsql.Annotation{
+		Table: "user_custom_groups",
+	}
+	UserCustomGroupModelsTable.ForeignKeys[0].RefTable = GroupsTable
+	UserCustomGroupModelsTable.ForeignKeys[1].RefTable = UserCustomGroupsTable
+	UserCustomGroupModelsTable.Annotation = &entsql.Annotation{
+		Table: "user_custom_group_models",
 	}
 	UserImagesTable.ForeignKeys[0].RefTable = UsersTable
 	UserImagesTable.Annotation = &entsql.Annotation{

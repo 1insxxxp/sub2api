@@ -49,6 +49,8 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/userattributevalue"
 	"github.com/Wei-Shaw/sub2api/ent/usercheckin"
 	"github.com/Wei-Shaw/sub2api/ent/usercheckinblacklist"
+	"github.com/Wei-Shaw/sub2api/ent/usercustomgroup"
+	"github.com/Wei-Shaw/sub2api/ent/usercustomgroupmodel"
 	"github.com/Wei-Shaw/sub2api/ent/userimage"
 	"github.com/Wei-Shaw/sub2api/ent/userimagetask"
 	"github.com/Wei-Shaw/sub2api/ent/userplatformquota"
@@ -1191,6 +1193,60 @@ func (f TraverseUserCheckinBlacklist) Traverse(ctx context.Context, q ent.Query)
 	return fmt.Errorf("unexpected query type %T. expect *ent.UserCheckinBlacklistQuery", q)
 }
 
+// The UserCustomGroupFunc type is an adapter to allow the use of ordinary function as a Querier.
+type UserCustomGroupFunc func(context.Context, *ent.UserCustomGroupQuery) (ent.Value, error)
+
+// Query calls f(ctx, q).
+func (f UserCustomGroupFunc) Query(ctx context.Context, q ent.Query) (ent.Value, error) {
+	if q, ok := q.(*ent.UserCustomGroupQuery); ok {
+		return f(ctx, q)
+	}
+	return nil, fmt.Errorf("unexpected query type %T. expect *ent.UserCustomGroupQuery", q)
+}
+
+// The TraverseUserCustomGroup type is an adapter to allow the use of ordinary function as Traverser.
+type TraverseUserCustomGroup func(context.Context, *ent.UserCustomGroupQuery) error
+
+// Intercept is a dummy implementation of Intercept that returns the next Querier in the pipeline.
+func (f TraverseUserCustomGroup) Intercept(next ent.Querier) ent.Querier {
+	return next
+}
+
+// Traverse calls f(ctx, q).
+func (f TraverseUserCustomGroup) Traverse(ctx context.Context, q ent.Query) error {
+	if q, ok := q.(*ent.UserCustomGroupQuery); ok {
+		return f(ctx, q)
+	}
+	return fmt.Errorf("unexpected query type %T. expect *ent.UserCustomGroupQuery", q)
+}
+
+// The UserCustomGroupModelFunc type is an adapter to allow the use of ordinary function as a Querier.
+type UserCustomGroupModelFunc func(context.Context, *ent.UserCustomGroupModelQuery) (ent.Value, error)
+
+// Query calls f(ctx, q).
+func (f UserCustomGroupModelFunc) Query(ctx context.Context, q ent.Query) (ent.Value, error) {
+	if q, ok := q.(*ent.UserCustomGroupModelQuery); ok {
+		return f(ctx, q)
+	}
+	return nil, fmt.Errorf("unexpected query type %T. expect *ent.UserCustomGroupModelQuery", q)
+}
+
+// The TraverseUserCustomGroupModel type is an adapter to allow the use of ordinary function as Traverser.
+type TraverseUserCustomGroupModel func(context.Context, *ent.UserCustomGroupModelQuery) error
+
+// Intercept is a dummy implementation of Intercept that returns the next Querier in the pipeline.
+func (f TraverseUserCustomGroupModel) Intercept(next ent.Querier) ent.Querier {
+	return next
+}
+
+// Traverse calls f(ctx, q).
+func (f TraverseUserCustomGroupModel) Traverse(ctx context.Context, q ent.Query) error {
+	if q, ok := q.(*ent.UserCustomGroupModelQuery); ok {
+		return f(ctx, q)
+	}
+	return fmt.Errorf("unexpected query type %T. expect *ent.UserCustomGroupModelQuery", q)
+}
+
 // The UserImageFunc type is an adapter to allow the use of ordinary function as a Querier.
 type UserImageFunc func(context.Context, *ent.UserImageQuery) (ent.Value, error)
 
@@ -1382,6 +1438,10 @@ func NewQuery(q ent.Query) (Query, error) {
 		return &query[*ent.UserCheckinQuery, predicate.UserCheckin, usercheckin.OrderOption]{typ: ent.TypeUserCheckin, tq: q}, nil
 	case *ent.UserCheckinBlacklistQuery:
 		return &query[*ent.UserCheckinBlacklistQuery, predicate.UserCheckinBlacklist, usercheckinblacklist.OrderOption]{typ: ent.TypeUserCheckinBlacklist, tq: q}, nil
+	case *ent.UserCustomGroupQuery:
+		return &query[*ent.UserCustomGroupQuery, predicate.UserCustomGroup, usercustomgroup.OrderOption]{typ: ent.TypeUserCustomGroup, tq: q}, nil
+	case *ent.UserCustomGroupModelQuery:
+		return &query[*ent.UserCustomGroupModelQuery, predicate.UserCustomGroupModel, usercustomgroupmodel.OrderOption]{typ: ent.TypeUserCustomGroupModel, tq: q}, nil
 	case *ent.UserImageQuery:
 		return &query[*ent.UserImageQuery, predicate.UserImage, userimage.OrderOption]{typ: ent.TypeUserImage, tq: q}, nil
 	case *ent.UserImageTaskQuery:

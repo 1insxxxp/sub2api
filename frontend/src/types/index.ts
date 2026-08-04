@@ -736,6 +736,8 @@ export interface ApiKey {
   key: string
   name: string
   group_id: number | null
+  custom_group_id: number | null
+  custom_group?: UserCustomGroup
   status: 'active' | 'inactive' | 'quota_exhausted' | 'expired'
   ip_whitelist: string[]
   ip_blacklist: string[]
@@ -765,6 +767,7 @@ export interface ApiKey {
 export interface CreateApiKeyRequest {
   name: string
   group_id?: number | null
+  custom_group_id?: number | null
   custom_key?: string // Optional custom API Key
   ip_whitelist?: string[]
   ip_blacklist?: string[]
@@ -778,6 +781,7 @@ export interface CreateApiKeyRequest {
 export interface UpdateApiKeyRequest {
   name?: string
   group_id?: number | null
+  custom_group_id?: number | null
   status?: 'active' | 'inactive'
   ip_whitelist?: string[]
   ip_blacklist?: string[]
@@ -788,6 +792,32 @@ export interface UpdateApiKeyRequest {
   rate_limit_1d?: number
   rate_limit_7d?: number
   reset_rate_limit_usage?: boolean
+}
+
+export interface UserCustomGroupModel {
+  id: number
+  custom_group_id: number
+  public_model: string
+  source_group_id: number
+  source_model: string
+  source_group?: Group
+}
+
+export interface UserCustomGroup {
+  id: number
+  user_id: number
+  name: string
+  status: 'active' | 'disabled'
+  models: UserCustomGroupModel[]
+  created_at: string
+  updated_at: string
+}
+
+export interface CustomGroupCandidate {
+  id: number
+  name: string
+  platform: GroupPlatform
+  models: string[]
 }
 
 export interface CreateGroupRequest {

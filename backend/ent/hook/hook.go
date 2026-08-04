@@ -489,6 +489,30 @@ func (f UserCheckinBlacklistFunc) Mutate(ctx context.Context, m ent.Mutation) (e
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.UserCheckinBlacklistMutation", m)
 }
 
+// The UserCustomGroupFunc type is an adapter to allow the use of ordinary
+// function as UserCustomGroup mutator.
+type UserCustomGroupFunc func(context.Context, *ent.UserCustomGroupMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f UserCustomGroupFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.UserCustomGroupMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.UserCustomGroupMutation", m)
+}
+
+// The UserCustomGroupModelFunc type is an adapter to allow the use of ordinary
+// function as UserCustomGroupModel mutator.
+type UserCustomGroupModelFunc func(context.Context, *ent.UserCustomGroupModelMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f UserCustomGroupModelFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.UserCustomGroupModelMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.UserCustomGroupModelMutation", m)
+}
+
 // The UserImageFunc type is an adapter to allow the use of ordinary
 // function as UserImage mutator.
 type UserImageFunc func(context.Context, *ent.UserImageMutation) (ent.Value, error)

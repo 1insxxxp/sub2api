@@ -16,6 +16,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/predicate"
 	"github.com/Wei-Shaw/sub2api/ent/usagelog"
 	"github.com/Wei-Shaw/sub2api/ent/user"
+	"github.com/Wei-Shaw/sub2api/ent/usercustomgroup"
 	"github.com/Wei-Shaw/sub2api/ent/usersubscription"
 )
 
@@ -246,6 +247,26 @@ func (_u *UsageLogUpdate) SetNillableGroupID(v *int64) *UsageLogUpdate {
 // ClearGroupID clears the value of the "group_id" field.
 func (_u *UsageLogUpdate) ClearGroupID() *UsageLogUpdate {
 	_u.mutation.ClearGroupID()
+	return _u
+}
+
+// SetCustomGroupID sets the "custom_group_id" field.
+func (_u *UsageLogUpdate) SetCustomGroupID(v int64) *UsageLogUpdate {
+	_u.mutation.SetCustomGroupID(v)
+	return _u
+}
+
+// SetNillableCustomGroupID sets the "custom_group_id" field if the given value is not nil.
+func (_u *UsageLogUpdate) SetNillableCustomGroupID(v *int64) *UsageLogUpdate {
+	if v != nil {
+		_u.SetCustomGroupID(*v)
+	}
+	return _u
+}
+
+// ClearCustomGroupID clears the value of the "custom_group_id" field.
+func (_u *UsageLogUpdate) ClearCustomGroupID() *UsageLogUpdate {
+	_u.mutation.ClearCustomGroupID()
 	return _u
 }
 
@@ -927,6 +948,11 @@ func (_u *UsageLogUpdate) SetGroup(v *Group) *UsageLogUpdate {
 	return _u.SetGroupID(v.ID)
 }
 
+// SetCustomGroup sets the "custom_group" edge to the UserCustomGroup entity.
+func (_u *UsageLogUpdate) SetCustomGroup(v *UserCustomGroup) *UsageLogUpdate {
+	return _u.SetCustomGroupID(v.ID)
+}
+
 // SetSubscription sets the "subscription" edge to the UserSubscription entity.
 func (_u *UsageLogUpdate) SetSubscription(v *UserSubscription) *UsageLogUpdate {
 	return _u.SetSubscriptionID(v.ID)
@@ -958,6 +984,12 @@ func (_u *UsageLogUpdate) ClearAccount() *UsageLogUpdate {
 // ClearGroup clears the "group" edge to the Group entity.
 func (_u *UsageLogUpdate) ClearGroup() *UsageLogUpdate {
 	_u.mutation.ClearGroup()
+	return _u
+}
+
+// ClearCustomGroup clears the "custom_group" edge to the UserCustomGroup entity.
+func (_u *UsageLogUpdate) ClearCustomGroup() *UsageLogUpdate {
+	_u.mutation.ClearCustomGroup()
 	return _u
 }
 
@@ -1440,6 +1472,35 @@ func (_u *UsageLogUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 		}
 		_spec.Edges.Add = append(_spec.Edges.Add, edge)
 	}
+	if _u.mutation.CustomGroupCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: true,
+			Table:   usagelog.CustomGroupTable,
+			Columns: []string{usagelog.CustomGroupColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(usercustomgroup.FieldID, field.TypeInt64),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.CustomGroupIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: true,
+			Table:   usagelog.CustomGroupTable,
+			Columns: []string{usagelog.CustomGroupColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(usercustomgroup.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
 	if _u.mutation.SubscriptionCleared() {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.M2O,
@@ -1703,6 +1764,26 @@ func (_u *UsageLogUpdateOne) SetNillableGroupID(v *int64) *UsageLogUpdateOne {
 // ClearGroupID clears the value of the "group_id" field.
 func (_u *UsageLogUpdateOne) ClearGroupID() *UsageLogUpdateOne {
 	_u.mutation.ClearGroupID()
+	return _u
+}
+
+// SetCustomGroupID sets the "custom_group_id" field.
+func (_u *UsageLogUpdateOne) SetCustomGroupID(v int64) *UsageLogUpdateOne {
+	_u.mutation.SetCustomGroupID(v)
+	return _u
+}
+
+// SetNillableCustomGroupID sets the "custom_group_id" field if the given value is not nil.
+func (_u *UsageLogUpdateOne) SetNillableCustomGroupID(v *int64) *UsageLogUpdateOne {
+	if v != nil {
+		_u.SetCustomGroupID(*v)
+	}
+	return _u
+}
+
+// ClearCustomGroupID clears the value of the "custom_group_id" field.
+func (_u *UsageLogUpdateOne) ClearCustomGroupID() *UsageLogUpdateOne {
+	_u.mutation.ClearCustomGroupID()
 	return _u
 }
 
@@ -2384,6 +2465,11 @@ func (_u *UsageLogUpdateOne) SetGroup(v *Group) *UsageLogUpdateOne {
 	return _u.SetGroupID(v.ID)
 }
 
+// SetCustomGroup sets the "custom_group" edge to the UserCustomGroup entity.
+func (_u *UsageLogUpdateOne) SetCustomGroup(v *UserCustomGroup) *UsageLogUpdateOne {
+	return _u.SetCustomGroupID(v.ID)
+}
+
 // SetSubscription sets the "subscription" edge to the UserSubscription entity.
 func (_u *UsageLogUpdateOne) SetSubscription(v *UserSubscription) *UsageLogUpdateOne {
 	return _u.SetSubscriptionID(v.ID)
@@ -2415,6 +2501,12 @@ func (_u *UsageLogUpdateOne) ClearAccount() *UsageLogUpdateOne {
 // ClearGroup clears the "group" edge to the Group entity.
 func (_u *UsageLogUpdateOne) ClearGroup() *UsageLogUpdateOne {
 	_u.mutation.ClearGroup()
+	return _u
+}
+
+// ClearCustomGroup clears the "custom_group" edge to the UserCustomGroup entity.
+func (_u *UsageLogUpdateOne) ClearCustomGroup() *UsageLogUpdateOne {
+	_u.mutation.ClearCustomGroup()
 	return _u
 }
 
@@ -2920,6 +3012,35 @@ func (_u *UsageLogUpdateOne) sqlSave(ctx context.Context) (_node *UsageLog, err 
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(group.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
+	if _u.mutation.CustomGroupCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: true,
+			Table:   usagelog.CustomGroupTable,
+			Columns: []string{usagelog.CustomGroupColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(usercustomgroup.FieldID, field.TypeInt64),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.CustomGroupIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: true,
+			Table:   usagelog.CustomGroupTable,
+			Columns: []string{usagelog.CustomGroupColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(usercustomgroup.FieldID, field.TypeInt64),
 			},
 		}
 		for _, k := range nodes {

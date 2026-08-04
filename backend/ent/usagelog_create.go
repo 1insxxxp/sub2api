@@ -16,6 +16,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/group"
 	"github.com/Wei-Shaw/sub2api/ent/usagelog"
 	"github.com/Wei-Shaw/sub2api/ent/user"
+	"github.com/Wei-Shaw/sub2api/ent/usercustomgroup"
 	"github.com/Wei-Shaw/sub2api/ent/usersubscription"
 )
 
@@ -151,6 +152,20 @@ func (_c *UsageLogCreate) SetGroupID(v int64) *UsageLogCreate {
 func (_c *UsageLogCreate) SetNillableGroupID(v *int64) *UsageLogCreate {
 	if v != nil {
 		_c.SetGroupID(*v)
+	}
+	return _c
+}
+
+// SetCustomGroupID sets the "custom_group_id" field.
+func (_c *UsageLogCreate) SetCustomGroupID(v int64) *UsageLogCreate {
+	_c.mutation.SetCustomGroupID(v)
+	return _c
+}
+
+// SetNillableCustomGroupID sets the "custom_group_id" field if the given value is not nil.
+func (_c *UsageLogCreate) SetNillableCustomGroupID(v *int64) *UsageLogCreate {
+	if v != nil {
+		_c.SetCustomGroupID(*v)
 	}
 	return _c
 }
@@ -627,6 +642,11 @@ func (_c *UsageLogCreate) SetAccount(v *Account) *UsageLogCreate {
 // SetGroup sets the "group" edge to the Group entity.
 func (_c *UsageLogCreate) SetGroup(v *Group) *UsageLogCreate {
 	return _c.SetGroupID(v.ID)
+}
+
+// SetCustomGroup sets the "custom_group" edge to the UserCustomGroup entity.
+func (_c *UsageLogCreate) SetCustomGroup(v *UserCustomGroup) *UsageLogCreate {
+	return _c.SetCustomGroupID(v.ID)
 }
 
 // SetSubscription sets the "subscription" edge to the UserSubscription entity.
@@ -1162,6 +1182,23 @@ func (_c *UsageLogCreate) createSpec() (*UsageLog, *sqlgraph.CreateSpec) {
 		_node.GroupID = &nodes[0]
 		_spec.Edges = append(_spec.Edges, edge)
 	}
+	if nodes := _c.mutation.CustomGroupIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: true,
+			Table:   usagelog.CustomGroupTable,
+			Columns: []string{usagelog.CustomGroupColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(usercustomgroup.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_node.CustomGroupID = &nodes[0]
+		_spec.Edges = append(_spec.Edges, edge)
+	}
 	if nodes := _c.mutation.SubscriptionIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.M2O,
@@ -1420,6 +1457,24 @@ func (u *UsageLogUpsert) UpdateGroupID() *UsageLogUpsert {
 // ClearGroupID clears the value of the "group_id" field.
 func (u *UsageLogUpsert) ClearGroupID() *UsageLogUpsert {
 	u.SetNull(usagelog.FieldGroupID)
+	return u
+}
+
+// SetCustomGroupID sets the "custom_group_id" field.
+func (u *UsageLogUpsert) SetCustomGroupID(v int64) *UsageLogUpsert {
+	u.Set(usagelog.FieldCustomGroupID, v)
+	return u
+}
+
+// UpdateCustomGroupID sets the "custom_group_id" field to the value that was provided on create.
+func (u *UsageLogUpsert) UpdateCustomGroupID() *UsageLogUpsert {
+	u.SetExcluded(usagelog.FieldCustomGroupID)
+	return u
+}
+
+// ClearCustomGroupID clears the value of the "custom_group_id" field.
+func (u *UsageLogUpsert) ClearCustomGroupID() *UsageLogUpsert {
+	u.SetNull(usagelog.FieldCustomGroupID)
 	return u
 }
 
@@ -2271,6 +2326,27 @@ func (u *UsageLogUpsertOne) UpdateGroupID() *UsageLogUpsertOne {
 func (u *UsageLogUpsertOne) ClearGroupID() *UsageLogUpsertOne {
 	return u.Update(func(s *UsageLogUpsert) {
 		s.ClearGroupID()
+	})
+}
+
+// SetCustomGroupID sets the "custom_group_id" field.
+func (u *UsageLogUpsertOne) SetCustomGroupID(v int64) *UsageLogUpsertOne {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.SetCustomGroupID(v)
+	})
+}
+
+// UpdateCustomGroupID sets the "custom_group_id" field to the value that was provided on create.
+func (u *UsageLogUpsertOne) UpdateCustomGroupID() *UsageLogUpsertOne {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.UpdateCustomGroupID()
+	})
+}
+
+// ClearCustomGroupID clears the value of the "custom_group_id" field.
+func (u *UsageLogUpsertOne) ClearCustomGroupID() *UsageLogUpsertOne {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.ClearCustomGroupID()
 	})
 }
 
@@ -3385,6 +3461,27 @@ func (u *UsageLogUpsertBulk) UpdateGroupID() *UsageLogUpsertBulk {
 func (u *UsageLogUpsertBulk) ClearGroupID() *UsageLogUpsertBulk {
 	return u.Update(func(s *UsageLogUpsert) {
 		s.ClearGroupID()
+	})
+}
+
+// SetCustomGroupID sets the "custom_group_id" field.
+func (u *UsageLogUpsertBulk) SetCustomGroupID(v int64) *UsageLogUpsertBulk {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.SetCustomGroupID(v)
+	})
+}
+
+// UpdateCustomGroupID sets the "custom_group_id" field to the value that was provided on create.
+func (u *UsageLogUpsertBulk) UpdateCustomGroupID() *UsageLogUpsertBulk {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.UpdateCustomGroupID()
+	})
+}
+
+// ClearCustomGroupID clears the value of the "custom_group_id" field.
+func (u *UsageLogUpsertBulk) ClearCustomGroupID() *UsageLogUpsertBulk {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.ClearCustomGroupID()
 	})
 }
 
