@@ -1084,12 +1084,27 @@
 
     <!-- Group Selector Dropdown (Teleported to body to avoid overflow clipping) -->
     <Teleport to="body">
+      <button
+        v-if="groupSelectorKeyId !== null && dropdownPosition && isMobileGroupSelector"
+        type="button"
+        data-test="group-selector-backdrop"
+        class="fixed inset-0 z-[100000019] bg-black/35 backdrop-blur-[1px]"
+        :aria-label="t('common.close')"
+        @click="closeGroupSelector"
+      />
       <div
         v-if="groupSelectorKeyId !== null && dropdownPosition"
         ref="dropdownRef"
-        class="animate-in fade-in slide-in-from-top-2 fixed z-[100000020] w-[calc(100vw-16px)] overflow-hidden rounded-xl bg-white shadow-lg ring-1 ring-black/5 duration-200 sm:w-[380px] dark:bg-dark-800 dark:ring-white/10"
+        role="dialog"
+        :aria-modal="isMobileGroupSelector ? 'true' : undefined"
+        :class="[
+          'animate-in fade-in fixed z-[100000020] overflow-hidden rounded-xl bg-white shadow-lg ring-1 ring-black/5 duration-200 dark:bg-dark-800 dark:ring-white/10',
+          isMobileGroupSelector
+            ? 'inset-x-2 bottom-2 max-h-[calc(100dvh-16px)] w-auto slide-in-from-bottom-2'
+            : 'w-[380px] slide-in-from-top-2'
+        ]"
         style="pointer-events: auto !important;"
-        :style="{
+        :style="isMobileGroupSelector ? undefined : {
           top: dropdownPosition.top !== undefined ? dropdownPosition.top + 'px' : undefined,
           bottom: dropdownPosition.bottom !== undefined ? dropdownPosition.bottom + 'px' : undefined,
           left: dropdownPosition.left + 'px'
@@ -1111,7 +1126,7 @@
           </div>
         </div>
         <!-- Group list -->
-        <div class="max-h-80 overflow-y-auto p-1.5">
+        <div :class="[isMobileGroupSelector ? 'max-h-[70dvh]' : 'max-h-80', 'overflow-y-auto p-1.5']">
           <button
             v-for="option in filteredGroupOptions"
             :key="option.value ?? 'null'"
@@ -1347,6 +1362,7 @@ const pendingCcsRow = ref<ApiKey | null>(null)
 const selectedKey = ref<ApiKey | null>(null)
 const copiedKeyId = ref<number | null>(null)
 const groupSelectorKeyId = ref<number | null>(null)
+const isMobileGroupSelector = ref(false)
 const publicSettings = ref<PublicSettings | null>(null)
 const dropdownRef = ref<HTMLElement | null>(null)
 const columnDropdownRef = ref<HTMLElement | null>(null)
@@ -1650,9 +1666,9 @@ const toggleKeyStatus = async (key: ApiKey) => {
 
 const openGroupSelector = (key: ApiKey) => {
   if (groupSelectorKeyId.value === key.id) {
-    groupSelectorKeyId.value = null
-    dropdownPosition.value = null
+    closeGroupSelector()
   } else {
+    isMobileGroupSelector.value = window.innerWidth < 768
     const buttonEl = groupButtonRefs.value.get(key.id)
     if (buttonEl) {
       const rect = buttonEl.getBoundingClientRect()
@@ -1702,6 +1718,7 @@ const changeGroup = async (key: ApiKey, newGroupId: number | null) => {
 const closeGroupSelector = () => {
   groupSelectorKeyId.value = null
   dropdownPosition.value = null
+  isMobileGroupSelector.value = false
 }
 
 const handleDocumentClick = (event: MouseEvent) => {

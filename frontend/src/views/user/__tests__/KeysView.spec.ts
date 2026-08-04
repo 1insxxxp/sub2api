@@ -409,7 +409,7 @@ describe('user KeysView column settings', () => {
     wrapper.unmount()
   })
 
-  it.each([320, 390])('keeps a right-edge group selector within a %dpx viewport', async (width) => {
+  it.each([320, 390, 693])('uses a full-width bottom sheet at a %dpx viewport', async (width) => {
     Object.defineProperty(window, 'innerWidth', { configurable: true, value: width })
     const wrapper = await mountView()
     const trigger = wrapper.get('[data-test="group-selector-trigger"]')
@@ -427,7 +427,33 @@ describe('user KeysView column settings', () => {
 
     await trigger.trigger('click')
 
-    expect(wrapper.get('.fixed.z-\\[100000020\\]').attributes('style')).toContain('left: 8px')
+    expect(wrapper.get('.fixed.z-\\[100000020\\]').classes()).toContain('inset-x-2')
+    expect(wrapper.get('.fixed.z-\\[100000020\\]').classes()).toContain('bottom-2')
+    expect(wrapper.get('[data-test="group-selector-backdrop"]')).toBeTruthy()
+    expect(wrapper.get('.fixed.z-\\[100000020\\]').attributes('style')).not.toContain('left:')
+    wrapper.unmount()
+  })
+
+  it('keeps the group selector anchored to its trigger on desktop', async () => {
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 1024 })
+    const wrapper = await mountView()
+    const trigger = wrapper.get('[data-test="group-selector-trigger"]')
+    trigger.element.getBoundingClientRect = () => ({
+      top: 80,
+      right: 1000,
+      bottom: 104,
+      left: 976,
+      width: 24,
+      height: 24,
+      x: 976,
+      y: 80,
+      toJSON: () => ({}),
+    })
+
+    await trigger.trigger('click')
+
+    expect(wrapper.get('.fixed.z-\\[100000020\\]').attributes('style')).toContain('left: 636px')
+    expect(wrapper.find('[data-test="group-selector-backdrop"]').exists()).toBe(false)
     wrapper.unmount()
   })
 

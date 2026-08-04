@@ -20,9 +20,12 @@ describe('KeysView toolbar layout', () => {
     expect(keysViewSource).toMatch(/class="btn btn-primary"\s+data-test="custom-groups-entry"/)
   })
 
-  it('keeps the group selector inside the mobile viewport', () => {
-    expect(keysViewSource).toContain('w-[calc(100vw-16px)]')
-    expect(keysViewSource).toContain('sm:w-[380px]')
+  it('uses a bottom sheet for the group selector on narrow screens', () => {
+    expect(keysViewSource).toContain('isMobileGroupSelector')
+    expect(keysViewSource).toContain('window.innerWidth < 768')
+    expect(keysViewSource).toContain('data-test="group-selector-backdrop"')
+    expect(keysViewSource).toContain('inset-x-2 bottom-2')
+    expect(keysViewSource).toContain("isMobileGroupSelector ? undefined")
     expect(keysViewSource).toContain('const dropdownViewportPadding = 8')
     expect(keysViewSource).toContain(':wrap-name="true"')
     expect(keysViewSource).toContain('data-test="group-selector-trigger"')
