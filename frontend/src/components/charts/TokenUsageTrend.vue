@@ -36,6 +36,7 @@ import { Line } from 'vue-chartjs'
 import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
 import type { TrendDataPoint } from '@/types'
 import { formatTokenCount } from '@/utils/format'
+import { getLatestHourlyBuckets } from '@/utils/hourlyBuckets'
 
 ChartJS.register(
   CategoryScale,
@@ -53,6 +54,7 @@ const { t } = useI18n()
 const props = defineProps<{
   trendData: TrendDataPoint[]
   loading?: boolean
+  latestHours?: number
 }>()
 
 const isDarkMode = computed(() => {
@@ -72,12 +74,18 @@ const chartColors = computed(() => ({
 const chartData = computed(() => {
   if (!props.trendData?.length) return null
 
+  const pointsByDate = new Map(props.trendData.map((point) => [point.date, point]))
+  const labels = props.latestHours
+    ? getLatestHourlyBuckets(props.latestHours)
+    : props.trendData.map((point) => point.date)
+  const orderedData = labels.map((date) => pointsByDate.get(date))
+
   return {
-    labels: props.trendData.map((d) => d.date),
+    labels,
     datasets: [
       {
         label: 'Input',
-        data: props.trendData.map((d) => d.input_tokens),
+        data: orderedData.map((d) => d?.input_tokens || 0),
         borderColor: chartColors.value.input,
         backgroundColor: `${chartColors.value.input}20`,
         fill: true,
@@ -85,7 +93,7 @@ const chartData = computed(() => {
       },
       {
         label: 'Output',
-        data: props.trendData.map((d) => d.output_tokens),
+        data: orderedData.map((d) => d?.output_tokens || 0),
         borderColor: chartColors.value.output,
         backgroundColor: `${chartColors.value.output}20`,
         fill: true,
@@ -93,7 +101,7 @@ const chartData = computed(() => {
       },
       {
         label: 'Cache Creation',
-        data: props.trendData.map((d) => d.cache_creation_tokens),
+        data: orderedData.map((d) => d?.cache_creation_tokens || 0),
         borderColor: chartColors.value.cacheCreation,
         backgroundColor: `${chartColors.value.cacheCreation}20`,
         fill: true,
@@ -101,7 +109,7 @@ const chartData = computed(() => {
       },
       {
         label: 'Cache Read',
-        data: props.trendData.map((d) => d.cache_read_tokens),
+        data: orderedData.map((d) => d?.cache_read_tokens || 0),
         borderColor: chartColors.value.cacheRead,
         backgroundColor: `${chartColors.value.cacheRead}20`,
         fill: true,
@@ -109,7 +117,8 @@ const chartData = computed(() => {
       },
       {
         label: 'Cache Hit Rate',
-        data: props.trendData.map((d) => {
+        data: orderedData.map((d) => {
+          if (!d) return 0
           const totalPromptTokens = d.input_tokens + d.cache_read_tokens + d.cache_creation_tokens
           return totalPromptTokens > 0 ? (d.cache_read_tokens / totalPromptTokens) * 100 : 0
         }),
@@ -154,8 +163,9 @@ const lineOptions = computed(() => ({
         },
         footer: (tooltipItems: any) => {
           const dataIndex = tooltipItems[0]?.dataIndex
-          if (dataIndex !== undefined && props.trendData[dataIndex]) {
-            const data = props.trendData[dataIndex]
+          const label = tooltipItems[0]?.label
+          const data = props.trendData.find((point) => point.date === label)
+          if (dataIndex !== undefined && data) {
             return `Actual: $${formatCost(data.actual_cost)} | Standard: $${formatCost(data.cost)}`
           }
           return ''

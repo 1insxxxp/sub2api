@@ -93,4 +93,19 @@ describe('DateRangePicker', () => {
       }
     ])
   })
+
+  it('opens as a dismissible bottom sheet on mobile', async () => {
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 390 })
+    const today = formatLocalDate(new Date())
+    const wrapper = mount(DateRangePicker, {
+      attachTo: document.body,
+      props: { startDate: today, endDate: today },
+      global: { stubs: { Icon: true } }
+    })
+    await wrapper.find('.date-picker-trigger').trigger('click')
+
+    expect(document.querySelector('[data-test="date-picker-backdrop"]')).not.toBeNull()
+    expect(document.querySelector('[data-test="date-picker-sheet"]')?.className).toContain('inset-x-2')
+    wrapper.unmount()
+  })
 })

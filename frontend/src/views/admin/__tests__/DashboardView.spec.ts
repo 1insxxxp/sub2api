@@ -5,10 +5,22 @@ import { createPinia, setActivePinia } from 'pinia'
 import type { DashboardStats } from '@/types'
 import DashboardView from '../DashboardView.vue'
 
-const { getSnapshotV2, getUserUsageTrend, getUserSpendingRanking } = vi.hoisted(() => ({
+const { getSnapshotV2, getUserUsageTrend, getUserSpendingRanking, lineCapture } = vi.hoisted(() => ({
   getSnapshotV2: vi.fn(),
   getUserUsageTrend: vi.fn(),
-  getUserSpendingRanking: vi.fn()
+  getUserSpendingRanking: vi.fn(),
+  lineCapture: { props: null as any }
+}))
+
+vi.mock('vue-chartjs', () => ({
+  Line: {
+    name: 'Line',
+    props: ['data', 'options'],
+    setup(props: any) {
+      lineCapture.props = props
+      return () => null
+    }
+  }
 }))
 
 vi.mock('@/api/admin', () => ({
@@ -93,6 +105,7 @@ describe('admin DashboardView', () => {
     getSnapshotV2.mockReset()
     getUserUsageTrend.mockReset()
     getUserSpendingRanking.mockReset()
+    lineCapture.props = null
 
     getSnapshotV2.mockResolvedValue({
       stats: createDashboardStats(),
@@ -115,7 +128,7 @@ describe('admin DashboardView', () => {
     })
   })
 
-  it('uses the current local day as the default dashboard range', async () => {
+  it('uses the last 24 hours as the default dashboard range', async () => {
     mount(DashboardView, {
       global: {
         stubs: {
@@ -134,10 +147,11 @@ describe('admin DashboardView', () => {
     await flushPromises()
 
     const now = new Date()
+    const yesterday = new Date(now.getTime() - 24 * 60 * 60 * 1000)
 
     expect(getSnapshotV2).toHaveBeenCalledTimes(1)
     expect(getSnapshotV2).toHaveBeenCalledWith(expect.objectContaining({
-      start_date: formatLocalDate(now),
+      start_date: formatLocalDate(yesterday),
       end_date: formatLocalDate(now),
       granularity: 'hour'
     }))
@@ -168,5 +182,38 @@ describe('admin DashboardView', () => {
     expect(wrapper.find('.admin-page-hero').exists()).toBe(false)
     expect(wrapper.find('[data-test="dashboard-user-trend-surface"]').classes()).toContain('admin-surface')
     expect(wrapper.find('[data-test="dashboard-user-trend-header"]').classes()).toContain('admin-panel-header')
+  })
+
+  it('fills the recent usage chart with the latest 24 hourly buckets', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date(2026, 7, 5, 1, 30))
+    getUserUsageTrend.mockResolvedValue({
+      trend: [
+        { date: '2026-08-04 18:00', user_id: 1, username: 'admin', email: '', requests: 1, tokens: 6200, cost: 0, actual_cost: 0 },
+        { date: '2026-08-04 19:00', user_id: 1, username: 'admin', email: '', requests: 1, tokens: 400, cost: 0, actual_cost: 0 }
+      ],
+      start_date: '2026-08-04',
+      end_date: '2026-08-05',
+      granularity: 'hour'
+    })
+
+    mount(DashboardView, {
+      global: {
+        stubs: {
+          AppLayout: { template: '<div><slot /></div>' }, LoadingSpinner: true, Icon: true,
+          DateRangePicker: true, Select: true, ModelDistributionChart: true, TokenUsageTrend: true,
+        }
+      }
+    })
+    await flushPromises()
+
+    const chartData = lineCapture.props.data as any
+    expect(chartData.labels).toHaveLength(24)
+    expect(chartData.labels[0]).toBe('2026-08-04 02:00')
+    expect(chartData.labels.at(-1)).toBe('2026-08-05 01:00')
+    expect(chartData.datasets[0].data[16]).toBe(6200)
+    expect(chartData.datasets[0].data[17]).toBe(400)
+    expect(chartData.datasets[0].data[0]).toBe(0)
+    vi.useRealTimers()
   })
 })

@@ -17,7 +17,24 @@ describe('KeysView toolbar layout', () => {
     expect(keysViewSource).toContain('@click="showCustomGroupsModal = true"')
     expect(keysViewSource).toContain('data-test="custom-groups-dialog"')
     expect(keysViewSource).toContain('width="full"')
-    expect(keysViewSource).toMatch(/class="btn btn-primary"\s+data-test="custom-groups-entry"/)
+    expect(keysViewSource).toMatch(/class="[^"]*keys-mobile-secondary-action[^"]*whitespace-nowrap[^"]*"\s+data-test="custom-groups-entry"/)
+  })
+
+  it('uses compact, visually ranked actions on mobile', () => {
+    expect(keysViewSource).toContain('grid-cols-[44px_44px_minmax(0,1fr)_minmax(0,1fr)]')
+    expect(keysViewSource).toContain('sm:flex sm:w-auto')
+    expect(keysViewSource).toContain('data-test="keys-create-entry"')
+    expect(keysViewSource).toMatch(/data-test="keys-create-entry"[^>]*class="[^"]*btn-primary[^"]*whitespace-nowrap/)
+    expect(keysViewSource).toContain('max-[359px]:hidden')
+  })
+
+  it('uses a bottom sheet for column settings on narrow screens', () => {
+    expect(keysViewSource).toContain('isMobileColumnSelector')
+    expect(keysViewSource).toContain('data-test="column-selector-backdrop"')
+    expect(keysViewSource).toContain('data-test="column-selector-sheet"')
+    expect(keysViewSource).toContain('inset-x-2 bottom-2')
+    expect(keysViewSource).toContain('@click="closeColumnSelector"')
+    expect(keysViewSource).toContain('showColumnDropdown && !isMobileColumnSelector')
   })
 
   it('uses a bottom sheet for the group selector on narrow screens', () => {
@@ -40,5 +57,12 @@ describe('KeysView toolbar layout', () => {
   it('shows the bound custom group instead of treating the key as ungrouped', () => {
     expect(keysViewSource).toContain('v-else-if="row.custom_group"')
     expect(keysViewSource).toContain('{{ row.custom_group.name }}')
+  })
+
+  it('uses the responsive Select component for custom groups in the key dialog', () => {
+    expect(keysViewSource).toContain('data-test="custom-group-selector"')
+    expect(keysViewSource).toContain(':options="customGroupOptions"')
+    expect(keysViewSource).toContain('@update:modelValue="formData.group_id = null"')
+    expect(keysViewSource).not.toContain('<select v-model="formData.custom_group_id"')
   })
 })

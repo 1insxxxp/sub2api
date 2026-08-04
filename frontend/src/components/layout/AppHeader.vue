@@ -132,10 +132,25 @@
             <span data-test="daily-checkin-label" class="hidden min-[360px]:inline">{{ checkinButtonLabel }}</span>
           </button>
 
+          <Teleport to="body">
+            <button
+              v-if="checkinPopoverOpen && isMobileCheckinPopover"
+              data-test="daily-checkin-backdrop"
+              class="fixed inset-0 z-[100000019] bg-slate-950/35 backdrop-blur-[2px]"
+              :aria-label="t('common.close')"
+              @click="closeCheckinPopover"
+            />
+          </Teleport>
+          <Teleport to="body" :disabled="!isMobileCheckinPopover">
           <div
             id="daily-checkin-popover"
-            class="brand-floating-panel daily-checkin-popover pointer-events-none absolute right-0 top-full z-50 mt-3 w-[25rem] max-w-[calc(100vw-1rem)] translate-y-1 overflow-hidden text-left opacity-0 transition-all duration-150"
-            :class="checkinPopoverOpen ? 'pointer-events-auto translate-y-0 opacity-100' : ''"
+            class="brand-floating-panel daily-checkin-popover pointer-events-none translate-y-1 overflow-hidden text-left opacity-0 transition-all duration-150"
+            :class="[
+              isMobileCheckinPopover
+                ? 'fixed inset-x-2 bottom-2 z-[100000020] mb-[env(safe-area-inset-bottom)] max-h-[calc(100dvh-1rem-env(safe-area-inset-top)-env(safe-area-inset-bottom))] rounded-2xl'
+                : 'absolute right-0 top-full z-50 mt-3 w-[25rem] max-w-[calc(100vw-1rem)]',
+              checkinPopoverOpen ? 'pointer-events-auto translate-y-0 opacity-100' : ''
+            ]"
             role="dialog"
             :aria-hidden="!checkinPopoverOpen"
             data-test="daily-checkin-popover"
@@ -163,6 +178,9 @@
                 >
                   +{{ formatUsd(displayRewardAmount) }}
                 </span>
+                <button v-if="isMobileCheckinPopover" type="button" class="grid h-9 w-9 shrink-0 place-items-center rounded-xl text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800" :aria-label="t('common.close')" @click="closeCheckinPopover">
+                  <Icon name="x" size="sm" />
+                </button>
               </div>
             </div>
 
@@ -298,6 +316,7 @@
               </div>
             </div>
           </div>
+          </Teleport>
         </div>
 
         <!-- User Dropdown -->
@@ -507,6 +526,7 @@ const checkinLoading = ref(false)
 const checkinSubmitting = ref(false)
 const checkinPopoverPinned = ref(false)
 const checkinPopoverPreview = ref(false)
+const isMobileCheckinPopover = ref(false)
 const checkinPopoverOpen = computed(() => checkinPopoverPinned.value || checkinPopoverPreview.value)
 const checkinContainerRef = ref<HTMLElement | null>(null)
 let checkinStatusRequest = 0
@@ -784,13 +804,16 @@ async function handleCheckin() {
 }
 
 function handleCheckinButton() {
+  isMobileCheckinPopover.value = window.innerWidth < 640
   checkinPopoverPinned.value = true
+  window.dispatchEvent(new CustomEvent('app-header-floating-panel-open', { detail: 'checkin' }))
   if (checkinCanSubmit.value) {
     void handleCheckin()
   }
 }
 
 function openCheckinPreview() {
+  if (window.innerWidth < 640) return
   checkinPopoverPreview.value = true
 }
 
@@ -801,6 +824,7 @@ function closeCheckinPreview() {
 function closeCheckinPopover() {
   checkinPopoverPinned.value = false
   checkinPopoverPreview.value = false
+  isMobileCheckinPopover.value = false
 }
 
 function handleCheckinFocusOut(event: FocusEvent) {
@@ -824,17 +848,31 @@ function handleClickOutside(event: MouseEvent) {
   if (dropdownRef.value && !dropdownRef.value.contains(event.target as Node)) {
     closeDropdown()
   }
-  if (checkinContainerRef.value && !checkinContainerRef.value.contains(event.target as Node)) {
+  const target = event.target as Element
+  if (target.closest?.('[data-test="daily-checkin-popover"]')) return
+  if (checkinContainerRef.value && !checkinContainerRef.value.contains(target)) {
     closeCheckinPopover()
   }
 }
 
+function handleFloatingPanelOpen(event: Event) {
+  if ((event as CustomEvent<string>).detail !== 'checkin') closeCheckinPopover()
+}
+
+function handleHeaderResize() {
+  if (checkinPopoverOpen.value) closeCheckinPopover()
+}
+
 onMounted(() => {
   document.addEventListener('click', handleClickOutside)
+  window.addEventListener('resize', handleHeaderResize)
+  window.addEventListener('app-header-floating-panel-open', handleFloatingPanelOpen)
 })
 
 onBeforeUnmount(() => {
   document.removeEventListener('click', handleClickOutside)
+  window.removeEventListener('resize', handleHeaderResize)
+  window.removeEventListener('app-header-floating-panel-open', handleFloatingPanelOpen)
 })
 
 watch(

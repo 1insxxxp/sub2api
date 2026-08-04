@@ -24,19 +24,22 @@
                 @update:model-value="onStatusFilterChange"
               />
             </div>
-            <div class="flex w-full justify-end gap-3 sm:w-auto" data-test="keys-toolbar-actions">
+            <div
+              class="grid w-full grid-cols-[44px_44px_minmax(0,1fr)_minmax(0,1fr)] gap-2 sm:flex sm:w-auto sm:justify-end sm:gap-3"
+              data-test="keys-toolbar-actions"
+            >
               <button
                 @click="loadApiKeys"
                 :disabled="loading"
-                class="btn btn-secondary"
+                class="btn btn-secondary h-11 w-11 p-0 sm:h-auto sm:w-auto sm:px-4 sm:py-2.5"
                 :title="t('common.refresh')"
               >
                 <Icon name="refresh" size="md" :class="loading ? 'animate-spin' : ''" />
               </button>
-              <div class="relative" ref="columnDropdownRef">
+              <div class="relative h-11 w-11 sm:h-auto sm:w-auto" ref="columnDropdownRef">
                 <button
-                  @click="showColumnDropdown = !showColumnDropdown"
-                  class="btn btn-secondary px-2 md:px-3"
+                  @click="toggleColumnSelector"
+                  class="btn btn-secondary h-11 w-11 p-0 sm:h-auto sm:w-auto sm:px-2 sm:py-2.5 md:px-3"
                   :title="t('keys.columnSettings')"
                 >
                   <svg class="h-4 w-4 md:mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">
@@ -45,7 +48,7 @@
                   <span class="hidden md:inline">{{ t('keys.columnSettings') }}</span>
                 </button>
                 <div
-                  v-if="showColumnDropdown"
+                  v-if="showColumnDropdown && !isMobileColumnSelector"
                   class="absolute right-0 top-full z-50 mt-1 max-h-80 w-48 overflow-y-auto rounded-lg border border-gray-200 bg-white py-1 shadow-lg dark:border-dark-600 dark:bg-dark-800"
                 >
                   <button
@@ -67,15 +70,20 @@
               </div>
               <button
                 type="button"
-                class="btn btn-primary"
+                class="btn btn-primary keys-mobile-secondary-action h-11 min-w-0 gap-1.5 whitespace-nowrap px-2 text-xs sm:h-auto sm:gap-2 sm:px-4 sm:py-2.5 sm:text-sm"
                 data-test="custom-groups-entry"
                 @click="showCustomGroupsModal = true"
               >
-                <Icon name="grid" size="md" class="mr-2" />
+                <Icon name="grid" size="sm" class="shrink-0 max-[359px]:hidden" />
                 {{ t('nav.customGroups') }}
               </button>
-              <button @click="showCreateModal = true" class="btn btn-primary" data-tour="keys-create-btn">
-                <Icon name="plus" size="md" class="mr-2" />
+              <button
+                @click="showCreateModal = true"
+                data-test="keys-create-entry"
+                class="btn btn-primary h-11 min-w-0 gap-1.5 whitespace-nowrap px-2 text-xs sm:h-auto sm:gap-2 sm:px-4 sm:py-2.5 sm:text-sm"
+                data-tour="keys-create-btn"
+              >
+                <Icon name="plus" size="sm" class="shrink-0 max-[359px]:hidden" />
                 {{ t('keys.createKey') }}
               </button>
             </div>
@@ -537,10 +545,13 @@
 
         <div>
           <label class="input-label">{{ t('nav.customGroups') }}</label>
-          <select v-model="formData.custom_group_id" class="input" @change="formData.group_id = null">
-            <option :value="null">不使用自定义分组</option>
-            <option v-for="group in customGroups" :key="group.id" :value="group.id">{{ group.name }} · {{ group.models.length }} 个模型</option>
-          </select>
+          <Select
+            v-model="formData.custom_group_id"
+            :options="customGroupOptions"
+            :searchable="customGroups.length > 5"
+            data-test="custom-group-selector"
+            @update:modelValue="formData.group_id = null"
+          />
           <p class="input-hint">选择后，此 Key 会根据请求模型转发到你配置的来源分组。</p>
         </div>
 
@@ -1085,6 +1096,59 @@
     <!-- Group Selector Dropdown (Teleported to body to avoid overflow clipping) -->
     <Teleport to="body">
       <button
+        v-if="showColumnDropdown && isMobileColumnSelector"
+        type="button"
+        data-test="column-selector-backdrop"
+        class="fixed inset-0 z-[100000019] bg-black/35 backdrop-blur-[1px]"
+        :aria-label="t('common.close')"
+        @click="closeColumnSelector"
+      />
+      <section
+        v-if="showColumnDropdown && isMobileColumnSelector"
+        role="dialog"
+        aria-modal="true"
+        :aria-label="t('keys.columnSettings')"
+        data-test="column-selector-sheet"
+        class="animate-in fade-in slide-in-from-bottom-2 fixed inset-x-2 bottom-2 z-[100000020] max-h-[calc(100dvh-16px)] overflow-hidden rounded-2xl border border-white/70 bg-white/95 shadow-2xl shadow-slate-950/20 backdrop-blur-xl duration-200 dark:border-white/10 dark:bg-dark-800/95"
+      >
+        <header class="flex items-center justify-between border-b border-slate-100 px-4 py-3 dark:border-dark-700">
+          <div>
+            <h2 class="text-base font-semibold text-slate-900 dark:text-white">
+              {{ t('keys.columnSettings') }}
+            </h2>
+            <p class="mt-0.5 text-xs text-slate-500 dark:text-dark-400">
+              {{ t('keys.columnSettingsHint') }}
+            </p>
+          </div>
+          <button
+            type="button"
+            class="inline-flex h-9 w-9 items-center justify-center rounded-xl text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-900 focus:outline-none focus:ring-2 focus:ring-primary-500/40 dark:text-dark-300 dark:hover:bg-dark-700 dark:hover:text-white"
+            :aria-label="t('common.close')"
+            @click="closeColumnSelector"
+          >
+            <Icon name="x" size="sm" />
+          </button>
+        </header>
+        <div class="max-h-[min(62dvh,28rem)] overflow-y-auto p-2">
+          <button
+            v-for="col in toggleableColumns"
+            :key="col.key"
+            type="button"
+            class="flex min-h-12 w-full items-center justify-between rounded-xl px-3.5 py-2.5 text-left text-sm font-medium text-slate-700 transition-colors hover:bg-primary-50/70 dark:text-dark-200 dark:hover:bg-primary-500/10"
+            @click="toggleColumn(col.key)"
+          >
+            <span class="min-w-0 pr-4">{{ col.label }}</span>
+            <span
+              class="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-lg transition-colors"
+              :class="isColumnVisible(col.key) ? 'bg-primary-500 text-white shadow-sm shadow-primary-500/25' : 'bg-slate-100 text-transparent dark:bg-dark-700'"
+            >
+              <Icon name="check" size="xs" :stroke-width="2.5" />
+            </span>
+          </button>
+        </div>
+      </section>
+
+      <button
         v-if="groupSelectorKeyId !== null && dropdownPosition && isMobileGroupSelector"
         type="button"
         data-test="group-selector-backdrop"
@@ -1358,6 +1422,7 @@ const showResetRateLimitDialog = ref(false)
 const showUseKeyModal = ref(false)
 const showCcsClientSelect = ref(false)
 const showColumnDropdown = ref(false)
+const isMobileColumnSelector = ref(false)
 const pendingCcsRow = ref<ApiKey | null>(null)
 const selectedKey = ref<ApiKey | null>(null)
 const copiedKeyId = ref<number | null>(null)
@@ -1482,6 +1547,14 @@ const groupOptions = computed(() =>
     platform: group.platform
   }))
 )
+
+const customGroupOptions = computed(() => [
+  { value: null, label: '不使用自定义分组' },
+  ...customGroups.value.map((group) => ({
+    value: group.id,
+    label: `${group.name} · ${group.models.length} 个模型`
+  }))
+])
 
 // Group dropdown search
 const groupSearchQuery = ref('')
@@ -1721,14 +1794,32 @@ const closeGroupSelector = () => {
   isMobileGroupSelector.value = false
 }
 
+const closeColumnSelector = () => {
+  showColumnDropdown.value = false
+  isMobileColumnSelector.value = false
+}
+
+const toggleColumnSelector = () => {
+  if (showColumnDropdown.value) {
+    closeColumnSelector()
+    return
+  }
+  isMobileColumnSelector.value = window.innerWidth < 640
+  showColumnDropdown.value = true
+}
+
 const handleDocumentClick = (event: MouseEvent) => {
   const target = event.target as HTMLElement
   // Check if click is inside the dropdown or the trigger button
   if (!target.closest('.group\\/dropdown') && !dropdownRef.value?.contains(target)) {
     closeGroupSelector()
   }
-  if (columnDropdownRef.value && !columnDropdownRef.value.contains(target)) {
-    showColumnDropdown.value = false
+  if (
+    columnDropdownRef.value &&
+    !columnDropdownRef.value.contains(target) &&
+    !target.closest('[data-test="column-selector-sheet"]')
+  ) {
+    closeColumnSelector()
   }
 }
 
@@ -2040,12 +2131,39 @@ onMounted(() => {
   loadPublicSettings()
   document.addEventListener('click', handleDocumentClick)
   window.addEventListener('resize', closeGroupSelector)
+  window.addEventListener('resize', closeColumnSelector)
   resetTimer = setInterval(() => { now.value = new Date() }, 60000)
 })
 
 onUnmounted(() => {
   document.removeEventListener('click', handleDocumentClick)
   window.removeEventListener('resize', closeGroupSelector)
+  window.removeEventListener('resize', closeColumnSelector)
   if (resetTimer) clearInterval(resetTimer)
 })
 </script>
+
+<style scoped>
+@media (max-width: 639px) {
+  .keys-mobile-secondary-action {
+    border-color: rgb(var(--brand-rgb) / 0.2);
+    background: rgb(var(--brand-rgb) / 0.08);
+    color: rgb(var(--brand-rgb));
+    box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.7);
+    text-shadow: none;
+  }
+
+  .keys-mobile-secondary-action:hover {
+    background: rgb(var(--brand-rgb) / 0.13);
+    box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.75);
+    transform: none;
+  }
+
+  :global(.dark) .keys-mobile-secondary-action {
+    border-color: rgb(var(--brand-rgb) / 0.28);
+    background: rgb(var(--brand-rgb) / 0.14);
+    color: rgb(191 219 254);
+    box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.04);
+  }
+}
+</style>

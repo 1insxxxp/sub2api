@@ -179,4 +179,13 @@ func TestIsMigrationChecksumCompatible(t *testing.T) {
 		)
 		require.True(t, ok)
 	})
+
+	t.Run("194已执行的索引版本可兼容在线安全版本", func(t *testing.T) {
+		ok := isMigrationChecksumCompatible(
+			"194_user_custom_model_groups.sql",
+			"0b0ebfcf2d805801c1ee6d7ac25c7b763ceea4a2a715b5823ba4f7a3766bbdc4",
+			"19d3e56cbeaea564b76c3bf1aab3a8350f8fab4f036d20700f27b2974be36dde",
+		)
+		require.True(t, ok)
+	})
 }

@@ -297,7 +297,11 @@
               :end-date="endDate"
               @ranking-click="goToUserUsage"
             />
-            <TokenUsageTrend :trend-data="trendData" :loading="chartsLoading" />
+            <TokenUsageTrend
+              :trend-data="trendData"
+              :loading="chartsLoading"
+              :latest-hours="isDefaultRollingRange ? 24 : undefined"
+            />
           </div>
 
           <!-- User Usage Trend (Full Width) -->
@@ -360,6 +364,7 @@ import Select from '@/components/common/Select.vue'
 import ModelDistributionChart from '@/components/charts/ModelDistributionChart.vue'
 import TokenUsageTrend from '@/components/charts/TokenUsageTrend.vue'
 import { formatTokenCount } from '@/utils/format'
+import { getLatestHourlyBuckets } from '@/utils/hourlyBuckets'
 import { useBatchImageAccess } from '@/composables/useBatchImageAccess'
 
 import {
@@ -413,16 +418,27 @@ const formatLocalDate = (date: Date): string => {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
 }
 
-const getCurrentDayRangeDates = (): { start: string; end: string } => {
-  const today = formatLocalDate(new Date())
-  return { start: today, end: today }
+const getLast24HoursRangeDates = (): { start: string; end: string } => {
+  const end = new Date()
+  const start = new Date(end.getTime() - 24 * 60 * 60 * 1000)
+  return {
+    start: formatLocalDate(start),
+    end: formatLocalDate(end)
+  }
 }
 
 // Date range
 const granularity = ref<'day' | 'hour'>('hour')
-const defaultRange = getCurrentDayRangeDates()
+const defaultRange = getLast24HoursRangeDates()
 const startDate = ref(defaultRange.start)
 const endDate = ref(defaultRange.end)
+
+const isDefaultRollingRange = computed(
+  () =>
+    granularity.value === 'hour' &&
+    startDate.value === defaultRange.start &&
+    endDate.value === defaultRange.end
+)
 
 // Granularity options for Select component
 const granularityOptions = computed(() => [
@@ -533,7 +549,9 @@ const userTrendChartData = computed(() => {
     userGroups.get(key)!.data.set(point.date, point.tokens)
   })
 
-  const sortedDates = Array.from(allDates).sort()
+  const sortedDates = isDefaultRollingRange.value
+    ? getLatestHourlyBuckets(24)
+    : Array.from(allDates).sort()
   const colors = [
     '#2563eb',
     '#0891b2',

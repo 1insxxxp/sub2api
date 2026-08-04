@@ -20,8 +20,33 @@
       </span>
     </button>
 
-    <Transition name="date-picker-dropdown">
-      <div v-if="isOpen" class="date-picker-dropdown">
+    <Teleport to="body">
+      <Transition name="date-picker-backdrop">
+        <button
+          v-if="isOpen && isMobilePicker"
+          data-test="date-picker-backdrop"
+          type="button"
+          class="fixed inset-0 z-[100000019] cursor-default bg-black/40 backdrop-blur-[1px]"
+          :aria-label="t('common.close')"
+          @click="closePicker"
+        />
+      </Transition>
+    </Teleport>
+
+    <Teleport to="body" :disabled="!isMobilePicker">
+      <Transition name="date-picker-dropdown">
+        <div
+          v-if="isOpen"
+          data-test="date-picker-sheet"
+          :class="isMobilePicker ? 'date-picker-mobile-sheet fixed inset-x-2 bottom-2' : 'date-picker-dropdown'"
+          @click.stop
+        >
+          <div v-if="isMobilePicker" class="date-picker-mobile-header">
+            <span class="date-picker-mobile-handle" />
+            <button type="button" class="date-picker-mobile-close" :aria-label="t('common.close')" @click="closePicker">
+              <Icon name="x" size="sm" />
+            </button>
+          </div>
         <!-- Quick presets -->
         <div class="date-picker-presets">
           <button
@@ -70,8 +95,9 @@
             {{ t('dates.apply') }}
           </button>
         </div>
-      </div>
-    </Transition>
+        </div>
+      </Transition>
+    </Teleport>
   </div>
 </template>
 
@@ -103,6 +129,7 @@ const emit = defineEmits<Emits>()
 const { t, locale } = useI18n()
 
 const isOpen = ref(false)
+const isMobilePicker = ref(false)
 const containerRef = ref<HTMLElement | null>(null)
 const localStartDate = ref(props.startDate)
 const localEndDate = ref(props.endDate)
@@ -264,7 +291,17 @@ const onDateChange = () => {
 }
 
 const toggle = () => {
-  isOpen.value = !isOpen.value
+  if (isOpen.value) {
+    closePicker()
+    return
+  }
+  isMobilePicker.value = window.innerWidth < 640
+  isOpen.value = true
+}
+
+const closePicker = () => {
+  isOpen.value = false
+  isMobilePicker.value = false
 }
 
 const apply = () => {
@@ -275,19 +312,25 @@ const apply = () => {
     endDate: localEndDate.value,
     preset: activePreset.value
   })
-  isOpen.value = false
+  closePicker()
 }
 
 const handleClickOutside = (event: MouseEvent) => {
-  if (containerRef.value && !containerRef.value.contains(event.target as Node)) {
-    isOpen.value = false
+  const target = event.target as Element
+  if (target.closest?.('[data-test="date-picker-sheet"]')) return
+  if (containerRef.value && !containerRef.value.contains(target)) {
+    closePicker()
   }
 }
 
 const handleEscape = (event: KeyboardEvent) => {
   if (event.key === 'Escape' && isOpen.value) {
-    isOpen.value = false
+    closePicker()
   }
+}
+
+const handleResize = () => {
+  if (isOpen.value) closePicker()
 }
 
 // Sync local state with props
@@ -310,6 +353,7 @@ watch(
 onMounted(() => {
   document.addEventListener('click', handleClickOutside)
   document.addEventListener('keydown', handleEscape)
+  window.addEventListener('resize', handleResize)
   // Initialize active preset detection
   onDateChange()
 })
@@ -317,6 +361,7 @@ onMounted(() => {
 onUnmounted(() => {
   document.removeEventListener('click', handleClickOutside)
   document.removeEventListener('keydown', handleEscape)
+  window.removeEventListener('resize', handleResize)
 })
 </script>
 
@@ -357,6 +402,26 @@ onUnmounted(() => {
   @apply shadow-lg shadow-black/10 dark:shadow-black/30;
   @apply overflow-hidden;
   @apply min-w-[320px];
+}
+
+.date-picker-mobile-sheet {
+  @apply z-[100000020] max-h-[calc(100dvh-1rem)] overflow-y-auto rounded-2xl;
+  @apply border border-gray-200 bg-white shadow-2xl dark:border-dark-700 dark:bg-dark-800;
+  overscroll-behavior: contain;
+  margin-bottom: env(safe-area-inset-bottom);
+}
+
+.date-picker-mobile-header {
+  @apply relative flex h-11 items-center justify-center border-b border-gray-100 dark:border-dark-700;
+}
+
+.date-picker-mobile-handle {
+  @apply h-1 w-10 rounded-full bg-gray-300 dark:bg-dark-600;
+}
+
+.date-picker-mobile-close {
+  @apply absolute right-2 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full;
+  @apply text-gray-500 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-dark-700;
 }
 
 .date-picker-presets {
@@ -433,5 +498,33 @@ onUnmounted(() => {
 .date-picker-dropdown-leave-to {
   opacity: 0;
   transform: translateY(-8px);
+}
+
+.date-picker-backdrop-enter-active,
+.date-picker-backdrop-leave-active {
+  transition: opacity 0.2s ease;
+}
+
+.date-picker-backdrop-enter-from,
+.date-picker-backdrop-leave-to {
+  opacity: 0;
+}
+
+@media (max-width: 639px) {
+  .date-picker-custom {
+    @apply grid grid-cols-1 items-stretch;
+  }
+
+  .date-picker-separator {
+    @apply hidden;
+  }
+
+  .date-picker-actions {
+    @apply p-3 pt-0;
+  }
+
+  .date-picker-apply {
+    @apply min-h-11 w-full;
+  }
 }
 </style>

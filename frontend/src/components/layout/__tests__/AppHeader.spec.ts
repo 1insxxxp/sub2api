@@ -487,6 +487,10 @@ describe('AppHeader daily check-in entry', () => {
     expect(componentSource).toContain('grid-cols-[minmax(0,1fr),auto]')
     expect(componentSource).toContain('break-words')
     expect(componentSource).toContain('tabular-nums')
+    expect(componentSource).toContain('daily-checkin-backdrop')
+    expect(componentSource).toContain(':disabled="!isMobileCheckinPopover"')
+    expect(componentSource).toContain('inset-x-2 bottom-2')
+    expect(componentSource).toContain('app-header-floating-panel-open')
   })
 
   it('lets an already checked-in user open and close reward details without submitting again', async () => {

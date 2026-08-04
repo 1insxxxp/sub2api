@@ -80,6 +80,7 @@ export default {
     allGroups: 'All Groups',
     allStatus: 'All Status',
     columnSettings: 'Column Settings',
+    columnSettingsHint: 'Choose which information appears in the key list',
     columnAlwaysVisible: 'This column is always visible',
     createKey: 'Create API Key',
     editKey: 'Edit API Key',
