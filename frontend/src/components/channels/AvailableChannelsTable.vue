@@ -322,7 +322,34 @@
                 <dt class="mb-1.5 text-[11px] font-medium text-gray-500 dark:text-gray-400">
                   {{ columns.supportedModels }}
                 </dt>
-                <dd class="flex min-w-0 flex-wrap gap-1">
+                <dd v-if="hasGroupScopedModels(section)" class="flex min-w-0 flex-col gap-2">
+                  <div
+                    v-for="g in section.groups"
+                    :key="`mobile-models-${g.id}`"
+                    class="min-w-0 border-l border-gray-200 pl-2 dark:border-dark-600"
+                  >
+                    <div class="mb-1 text-[11px] font-medium text-gray-600 dark:text-gray-300">
+                      {{ g.name }}
+                    </div>
+                    <div class="flex min-w-0 flex-wrap gap-1">
+                      <SupportedModelChip
+                        v-for="m in groupSupportedModels(g)"
+                        :key="`mobile-${g.id}-${m.name}`"
+                        class="max-w-full [&>span]:max-w-full [&>span]:truncate"
+                        :model="m"
+                        :pricing-key-prefix="pricingKeyPrefix"
+                        :no-pricing-label="noPricingLabel"
+                        :show-platform="false"
+                        :platform-hint="g.platform"
+                        :cny-price-multiplier="groupCNYMultiplier(g)"
+                      />
+                      <span v-if="groupSupportedModels(g).length === 0" class="text-xs text-gray-400">
+                        {{ noModelsLabel }}
+                      </span>
+                    </div>
+                  </div>
+                </dd>
+                <dd v-else class="flex min-w-0 flex-wrap gap-1">
                   <SupportedModelChip
                     v-for="m in section.supported_models"
                     :key="`mobile-${section.platform}-${m.name}`"
@@ -332,6 +359,7 @@
                     :no-pricing-label="noPricingLabel"
                     :show-platform="false"
                     :platform-hint="section.platform"
+                    :cny-price-multiplier="sectionCNYMultiplier(section)"
                   />
                   <span v-if="section.supported_models.length === 0" class="text-xs text-gray-400">
                     {{ noModelsLabel }}

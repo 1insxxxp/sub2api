@@ -101,8 +101,9 @@ function mountTable(props = {}) {
             '<span data-group-badge>{{ name }}:{{ rateMultiplier }}:{{ userRateMultiplier }}</span>',
         },
         SupportedModelChip: {
-          props: ['model', 'noPricingLabel'],
-          template: '<span data-model-chip>{{ model.name }}:{{ noPricingLabel }}</span>',
+          props: ['model', 'noPricingLabel', 'cnyPriceMultiplier'],
+          template:
+            '<span data-model-chip :data-cny-multiplier="cnyPriceMultiplier">{{ model.name }}:{{ noPricingLabel }}</span>',
         },
       },
     },
@@ -145,6 +146,55 @@ describe('AvailableChannelsTable responsive surfaces', () => {
     expect(mobile.text()).toContain('×1.5')
     expect(mobile.get('[data-model-chip]').text()).toBe('claude-test:No pricing')
     expect(mobile.findAll('.max-w-full')).not.toHaveLength(0)
+  })
+
+  it('uses each source group effective multiplier for mobile site prices', () => {
+    const wrapper = mountTable({
+      priceCnyMultiplier: 7.2,
+      userGroupRates: { 11: 0.5 },
+      rows: [
+        {
+          name: 'Mixed prices',
+          description: '',
+          platforms: [
+            {
+              platform: 'anthropic',
+              groups: [
+                {
+                  id: 11,
+                  name: 'User rate group',
+                  platform: 'anthropic',
+                  subscription_type: 'standard',
+                  rate_multiplier: 1.2,
+                  is_exclusive: false,
+                  supported_models: [{ name: 'model-user-rate', platform: 'anthropic', pricing: null }],
+                },
+                {
+                  id: 12,
+                  name: 'Default rate group',
+                  platform: 'anthropic',
+                  subscription_type: 'standard',
+                  rate_multiplier: 2,
+                  is_exclusive: false,
+                  supported_models: [{ name: 'model-default-rate', platform: 'anthropic', pricing: null }],
+                },
+              ],
+              supported_models: [],
+            },
+          ],
+        },
+      ],
+    })
+    const mobile = wrapper.get('[data-testid="mobile-channels"]')
+    const chips = mobile.findAll('[data-model-chip]')
+
+    expect(mobile.text()).toContain('User rate group')
+    expect(mobile.text()).toContain('Default rate group')
+    expect(chips.map((chip) => chip.text())).toEqual([
+      'model-user-rate:No pricing',
+      'model-default-rate:No pricing',
+    ])
+    expect(chips.map((chip) => chip.attributes('data-cny-multiplier'))).toEqual(['3.6', '14.4'])
   })
 
   it('keeps the mobile placeholders when a platform has no groups or models', () => {
