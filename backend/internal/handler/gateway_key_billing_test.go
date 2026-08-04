@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Wei-Shaw/sub2api/internal/config"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/timezone"
 	middleware2 "github.com/Wei-Shaw/sub2api/internal/server/middleware"
 	"github.com/Wei-Shaw/sub2api/internal/service"
@@ -36,6 +37,12 @@ func newKeyBillingHandler(repo service.UserGroupRateRepository) *GatewayHandler 
 	return &GatewayHandler{
 		gatewayService:       newKeyBillingGatewayService(repo),
 		openAIGatewayService: newKeyBillingOpenAIGatewayService(repo),
+		cfg: &config.Config{
+			RunMode: config.RunModeStandard,
+			Gateway: config.GatewayConfig{
+				BillingProbeEnabled: true,
+			},
+		},
 	}
 }
 
@@ -108,6 +115,25 @@ func TestGatewayHandlerKeyBillingInfoUsesGroupRate(t *testing.T) {
 	require.NotContains(t, fields, "timezone")
 	require.NotContains(t, w.Body.String(), apiKey.Key)
 	require.NotContains(t, w.Body.String(), apiKey.Group.Name)
+}
+
+func TestGatewayHandlerKeyBillingInfoIsDisabledByDefault(t *testing.T) {
+	groupID := int64(7)
+	apiKey := &service.APIKey{
+		UserID:  11,
+		GroupID: &groupID,
+		Group:   &service.Group{ID: groupID, RateMultiplier: 0.75},
+	}
+	c, w := newKeyBillingContext(apiKey)
+	repo := &keyBillingUserGroupRateRepo{}
+
+	h := newKeyBillingHandler(repo)
+	h.cfg.Gateway.BillingProbeEnabled = false
+	h.KeyBillingInfo(c)
+
+	require.Equal(t, http.StatusNotFound, w.Code)
+	require.NotContains(t, w.Body.String(), "rate_multiplier")
+	require.Zero(t, repo.lookupCalls)
 }
 
 func TestGatewayHandlerKeyBillingInfoUsesUserOverride(t *testing.T) {
@@ -231,7 +257,12 @@ func TestGatewayHandlerKeyBillingInfoErrorsAreSafe(t *testing.T) {
 			GroupID: &groupID,
 			Group:   &service.Group{ID: groupID, RateMultiplier: 1},
 		})
-		(&GatewayHandler{}).KeyBillingInfo(c)
+		(&GatewayHandler{cfg: &config.Config{
+			RunMode: config.RunModeStandard,
+			Gateway: config.GatewayConfig{
+				BillingProbeEnabled: true,
+			},
+		}}).KeyBillingInfo(c)
 		require.Equal(t, http.StatusInternalServerError, w.Code)
 	})
 
@@ -270,6 +301,12 @@ func TestGatewayHandlerKeyBillingInfoSharesBillingResolverCacheByPlatform(t *tes
 			h := &GatewayHandler{
 				gatewayService:       gatewayService,
 				openAIGatewayService: openAIGatewayService,
+				cfg: &config.Config{
+					RunMode: config.RunModeStandard,
+					Gateway: config.GatewayConfig{
+						BillingProbeEnabled: true,
+					},
+				},
 			}
 			apiKey := &service.APIKey{
 				UserID:  11,

@@ -885,6 +885,9 @@ const (
 
 // GatewayConfig API网关相关配置
 type GatewayConfig struct {
+	// BillingProbeEnabled allows API-key holders to query their effective billing multiplier.
+	// Disabled by default to avoid exposing rate information to downstream services.
+	BillingProbeEnabled bool `mapstructure:"billing_probe_enabled"`
 	// 等待上游响应头的超时时间（秒），0表示无超时
 	// 注意：这不影响流式数据传输，只控制等待响应头的时间
 	ResponseHeaderTimeout int `mapstructure:"response_header_timeout"`

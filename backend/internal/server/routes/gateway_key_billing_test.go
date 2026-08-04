@@ -44,7 +44,7 @@ func (r *keyBillingRouteRateRepo) GetRPMOverrideByUserAndGroup(context.Context, 
 	return nil, nil
 }
 
-func newKeyBillingRouteTestRouter(runMode string) (*gin.Engine, *keyBillingRouteRateRepo, string) {
+func newKeyBillingRouteTestRouter(runMode string, billingProbeEnabled bool) (*gin.Engine, *keyBillingRouteRateRepo, string) {
 	gin.SetMode(gin.TestMode)
 	group := &service.Group{
 		ID:               42,
@@ -70,7 +70,12 @@ func newKeyBillingRouteTestRouter(runMode string) (*gin.Engine, *keyBillingRoute
 		GroupID: groupID,
 		Group:   apiKeyGroup,
 	}
-	cfg := &config.Config{RunMode: runMode}
+	cfg := &config.Config{
+		RunMode: runMode,
+		Gateway: config.GatewayConfig{
+			BillingProbeEnabled: billingProbeEnabled,
+		},
+	}
 	rateRepo := &keyBillingRouteRateRepo{}
 	apiKeyService := service.NewAPIKeyService(
 		&keyBillingRouteAPIKeyRepo{apiKey: apiKey}, nil, nil, nil, rateRepo, nil, cfg,
@@ -120,7 +125,7 @@ func TestGatewayRoutesKeyBillingInfoPathIsRegistered(t *testing.T) {
 
 func TestGatewayRoutesKeyBillingInfoEndToEnd(t *testing.T) {
 	t.Run("missing credentials", func(t *testing.T) {
-		router, rateRepo, _ := newKeyBillingRouteTestRouter(config.RunModeStandard)
+		router, rateRepo, _ := newKeyBillingRouteTestRouter(config.RunModeStandard, false)
 		w := httptest.NewRecorder()
 
 		router.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/v1/sub2api/billing", nil))
@@ -131,8 +136,28 @@ func TestGatewayRoutesKeyBillingInfoEndToEnd(t *testing.T) {
 		require.Zero(t, rateRepo.lookupCalls)
 	})
 
+	t.Run("standard mode disabled", func(t *testing.T) {
+		router, rateRepo, key := newKeyBillingRouteTestRouter(config.RunModeStandard, false)
+		req := httptest.NewRequest(http.MethodGet, "/v1/sub2api/billing", nil)
+		req.Header.Set("Authorization", "Bearer "+key)
+		w := httptest.NewRecorder()
+
+		router.ServeHTTP(w, req)
+
+		require.Equal(t, http.StatusNotFound, w.Code)
+		require.JSONEq(t, `{
+			"type": "error",
+			"error": {
+				"type": "not_found_error",
+				"message": "Billing information is not supported"
+			}
+		}`, w.Body.String())
+		require.NotContains(t, w.Body.String(), "rate_multiplier")
+		require.Zero(t, rateRepo.lookupCalls)
+	})
+
 	t.Run("standard mode", func(t *testing.T) {
-		router, rateRepo, key := newKeyBillingRouteTestRouter(config.RunModeStandard)
+		router, rateRepo, key := newKeyBillingRouteTestRouter(config.RunModeStandard, true)
 		req := httptest.NewRequest(http.MethodGet, "/v1/sub2api/billing", nil)
 		req.Header.Set("Authorization", "Bearer "+key)
 		w := httptest.NewRecorder()
@@ -151,7 +176,7 @@ func TestGatewayRoutesKeyBillingInfoEndToEnd(t *testing.T) {
 	})
 
 	t.Run("simple mode", func(t *testing.T) {
-		router, rateRepo, key := newKeyBillingRouteTestRouter(config.RunModeSimple)
+		router, rateRepo, key := newKeyBillingRouteTestRouter(config.RunModeSimple, true)
 		req := httptest.NewRequest(http.MethodGet, "/v1/sub2api/billing", nil)
 		req.Header.Set("x-api-key", key)
 		w := httptest.NewRecorder()

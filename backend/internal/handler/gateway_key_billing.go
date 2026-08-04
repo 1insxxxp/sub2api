@@ -38,6 +38,10 @@ func (h *GatewayHandler) KeyBillingInfo(c *gin.Context) {
 		h.errorResponse(c, http.StatusUnauthorized, "authentication_error", "Invalid API key")
 		return
 	}
+	if h.cfg == nil || !h.cfg.Gateway.BillingProbeEnabled {
+		h.errorResponse(c, http.StatusNotFound, "not_found_error", "Billing information is not supported")
+		return
+	}
 	if h.cfg != nil && h.cfg.RunMode == config.RunModeSimple {
 		h.errorResponse(c, http.StatusNotFound, "not_found_error", "Billing information is not supported in simple mode")
 		return
