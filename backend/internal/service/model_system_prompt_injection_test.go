@@ -39,10 +39,16 @@ func TestPrependModelSystemPrompt(t *testing.T) {
 			protocol: ModelSystemPromptOpenAIChat,
 			body:     `{"model":"gpt-5.4","messages":[{"role":"system","content":"Client rules"},{"role":"user","content":"hello"}]}`,
 			assert: func(t *testing.T, got map[string]any) {
-				messages := got["messages"].([]any)
-				require.Equal(t, "system", messages[0].(map[string]any)["role"])
-				require.Equal(t, "Injected rules", messages[0].(map[string]any)["content"])
-				require.Equal(t, "Client rules", messages[1].(map[string]any)["content"])
+				messages, ok := got["messages"].([]any)
+				require.True(t, ok)
+				require.Len(t, messages, 3)
+				firstMessage, ok := messages[0].(map[string]any)
+				require.True(t, ok)
+				secondMessage, ok := messages[1].(map[string]any)
+				require.True(t, ok)
+				require.Equal(t, "system", firstMessage["role"])
+				require.Equal(t, "Injected rules", firstMessage["content"])
+				require.Equal(t, "Client rules", secondMessage["content"])
 			},
 		},
 		{

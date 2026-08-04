@@ -114,7 +114,9 @@ const modelKey = (model: string) => model.toLowerCase()
 const load = async () => {
   loading.value = true
   try {
-    ;[groups.value, candidates.value] = await Promise.all([customGroupsAPI.list(), customGroupsAPI.candidates()])
+    const [loadedGroups, loadedCandidates] = await Promise.all([customGroupsAPI.list(), customGroupsAPI.candidates()])
+    groups.value = loadedGroups
+    candidates.value = loadedCandidates
   } finally {
     loading.value = false
   }
