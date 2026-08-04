@@ -27,4 +27,9 @@ describe('KeysView toolbar layout', () => {
     expect(keysViewSource).toContain("window.addEventListener('resize', closeGroupSelector)")
     expect(keysViewSource).toContain("window.removeEventListener('resize', closeGroupSelector)")
   })
+
+  it('shows the bound custom group instead of treating the key as ungrouped', () => {
+    expect(keysViewSource).toContain('v-else-if="row.custom_group"')
+    expect(keysViewSource).toContain('{{ row.custom_group.name }}')
+  })
 })

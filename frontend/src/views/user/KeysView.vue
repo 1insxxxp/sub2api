@@ -153,6 +153,12 @@
                   :peak-rate-multiplier="row.group.peak_rate_multiplier"
                   :wrap-name="true"
                 />
+                <span
+                  v-else-if="row.custom_group"
+                  class="inline-flex max-w-full items-center rounded-md bg-violet-50 px-2 py-1 text-sm font-medium text-violet-700 dark:bg-violet-500/10 dark:text-violet-300"
+                >
+                  {{ row.custom_group.name }}
+                </span>
                 <span v-else class="text-sm text-gray-400 dark:text-dark-500">{{
                   t('keys.noGroup')
                 }}</span>

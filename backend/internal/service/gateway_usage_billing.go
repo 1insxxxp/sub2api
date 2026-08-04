@@ -1026,6 +1026,7 @@ func (s *GatewayService) buildRecordUsageLog(
 		IPAddress:             optionalTrimmedStringPtr(input.IPAddress),
 		SessionID:             optionalTrimmedStringPtr(input.SessionID),
 		GroupID:               apiKey.GroupID,
+		CustomGroupID:         apiKey.CustomGroupID,
 		SubscriptionID:        optionalSubscriptionID(subscription),
 		CreatedAt:             time.Now(),
 	}
