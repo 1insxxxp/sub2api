@@ -64,10 +64,16 @@ func TestPrependModelSystemPrompt(t *testing.T) {
 			protocol: ModelSystemPromptClaude,
 			body:     `{"model":"claude-opus-5","system":[{"type":"text","text":"Client rules","cache_control":{"type":"ephemeral"}}],"messages":[]}`,
 			assert: func(t *testing.T, got map[string]any) {
-				blocks := got["system"].([]any)
-				require.Equal(t, "Injected rules", blocks[0].(map[string]any)["text"])
-				require.Equal(t, "Client rules", blocks[1].(map[string]any)["text"])
-				require.NotNil(t, blocks[1].(map[string]any)["cache_control"])
+				blocks, ok := got["system"].([]any)
+				require.True(t, ok)
+				require.Len(t, blocks, 2)
+				firstBlock, ok := blocks[0].(map[string]any)
+				require.True(t, ok)
+				secondBlock, ok := blocks[1].(map[string]any)
+				require.True(t, ok)
+				require.Equal(t, "Injected rules", firstBlock["text"])
+				require.Equal(t, "Client rules", secondBlock["text"])
+				require.NotNil(t, secondBlock["cache_control"])
 			},
 		},
 		{
@@ -75,10 +81,17 @@ func TestPrependModelSystemPrompt(t *testing.T) {
 			protocol: ModelSystemPromptGemini,
 			body:     `{"contents":[],"systemInstruction":{"parts":[{"text":"Client rules"}]}}`,
 			assert: func(t *testing.T, got map[string]any) {
-				system := got["systemInstruction"].(map[string]any)
-				parts := system["parts"].([]any)
-				require.Equal(t, "Injected rules", parts[0].(map[string]any)["text"])
-				require.Equal(t, "Client rules", parts[1].(map[string]any)["text"])
+				system, ok := got["systemInstruction"].(map[string]any)
+				require.True(t, ok)
+				parts, ok := system["parts"].([]any)
+				require.True(t, ok)
+				require.Len(t, parts, 2)
+				firstPart, ok := parts[0].(map[string]any)
+				require.True(t, ok)
+				secondPart, ok := parts[1].(map[string]any)
+				require.True(t, ok)
+				require.Equal(t, "Injected rules", firstPart["text"])
+				require.Equal(t, "Client rules", secondPart["text"])
 			},
 		},
 	}
