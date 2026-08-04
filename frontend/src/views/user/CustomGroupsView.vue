@@ -1,5 +1,6 @@
 <template>
-  <div class="mx-auto max-w-6xl space-y-6 px-4 py-6 sm:px-6">
+  <AppLayout>
+    <div class="mx-auto max-w-6xl space-y-6 px-4 py-6 sm:px-6">
     <section class="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm dark:border-dark-700 dark:bg-dark-800">
       <div class="flex flex-col gap-4 border-b border-gray-100 px-6 py-5 sm:flex-row sm:items-center sm:justify-between dark:border-dark-700">
         <div>
@@ -61,11 +62,13 @@
       </form>
       <template #footer><button class="btn btn-secondary" type="button" @click="dialogOpen = false">取消</button><button class="btn btn-primary" form="custom-group-form" :disabled="saving || selected.size === 0">{{ saving ? '保存中…' : '保存' }}</button></template>
     </BaseDialog>
-  </div>
+    </div>
+  </AppLayout>
 </template>
 
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
+import AppLayout from '@/components/layout/AppLayout.vue'
 import BaseDialog from '@/components/common/BaseDialog.vue'
 import { customGroupsAPI, type CustomGroupModelInput } from '@/api/customGroups'
 import type { CustomGroupCandidate, UserCustomGroup } from '@/types'
