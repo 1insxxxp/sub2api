@@ -1277,6 +1277,9 @@ func (s *GatewayService) GetAvailableModels(ctx context.Context, groupID *int64,
 		if len(mapping) > 0 {
 			hasAnyMapping = true
 			for model := range mapping {
+				if shouldHideRetiredAnthropicModel(&acc, model) {
+					continue
+				}
 				modelSet[model] = struct{}{}
 			}
 		}
