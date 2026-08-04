@@ -11,5 +11,7 @@ describe('CustomGroupsView layout', () => {
   it('renders inside the shared application shell', () => {
     expect(source).toContain('<AppLayout>')
     expect(source).toContain("import AppLayout from '@/components/layout/AppLayout.vue'")
+    expect(source).toContain('<CustomGroupsManager')
+    expect(source).toContain("import CustomGroupsManager from '@/components/custom-groups/CustomGroupsManager.vue'")
   })
 })

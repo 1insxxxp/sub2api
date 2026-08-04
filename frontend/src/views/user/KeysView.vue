@@ -65,14 +65,15 @@
                   </button>
                 </div>
               </div>
-              <RouterLink
-                to="/custom-groups"
-                class="btn btn-secondary"
+              <button
+                type="button"
+                class="inline-flex min-h-10 items-center justify-center rounded-xl border border-amber-300 bg-amber-100 px-4 py-2 text-sm font-semibold text-amber-900 shadow-sm transition hover:-translate-y-0.5 hover:border-amber-400 hover:bg-amber-200 hover:shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500/40 dark:border-amber-700/70 dark:bg-amber-900/30 dark:text-amber-200 dark:hover:bg-amber-900/50"
                 data-test="custom-groups-entry"
+                @click="showCustomGroupsModal = true"
               >
                 <Icon name="grid" size="md" class="mr-2" />
                 {{ t('nav.customGroups') }}
-              </RouterLink>
+              </button>
               <button @click="showCreateModal = true" class="btn btn-primary" data-tour="keys-create-btn">
                 <Icon name="plus" size="md" class="mr-2" />
                 {{ t('keys.createKey') }}
@@ -457,6 +458,18 @@
         />
       </template>
     </TablePageLayout>
+
+    <BaseDialog
+      :show="showCustomGroupsModal"
+      :title="t('nav.customGroups')"
+      width="full"
+      data-test="custom-groups-dialog"
+      @close="showCustomGroupsModal = false"
+    >
+      <div class="flex h-[calc(100dvh-8rem)] min-h-0 flex-col sm:h-[min(76vh,760px)]">
+        <CustomGroupsManager @changed="loadCustomGroups" />
+      </div>
+    </BaseDialog>
 
     <!-- Create/Edit Modal -->
     <BaseDialog
@@ -1152,6 +1165,7 @@ const { t } = useI18n()
 import { keysAPI, authAPI, usageAPI, userGroupsAPI } from '@/api'
 import { customGroupsAPI } from '@/api/customGroups'
 import AppLayout from '@/components/layout/AppLayout.vue'
+import CustomGroupsManager from '@/components/custom-groups/CustomGroupsManager.vue'
 import TablePageLayout from '@/components/layout/TablePageLayout.vue'
 	import DataTable from '@/components/common/DataTable.vue'
 	import Pagination from '@/components/common/Pagination.vue'
@@ -1321,6 +1335,7 @@ const filterStatus = ref('')
 const filterGroupId = ref<string | number>('')
 
 const showCreateModal = ref(false)
+const showCustomGroupsModal = ref(false)
 const showEditModal = ref(false)
 const showDeleteDialog = ref(false)
 const showResetQuotaDialog = ref(false)

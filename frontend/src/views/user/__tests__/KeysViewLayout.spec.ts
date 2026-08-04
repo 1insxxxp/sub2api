@@ -13,7 +13,10 @@ describe('KeysView toolbar layout', () => {
     expect(keysViewSource).toContain('data-test="keys-toolbar"')
     expect(keysViewSource).toContain('data-test="keys-toolbar-actions"')
     expect(keysViewSource).toContain('data-test="custom-groups-entry"')
-    expect(keysViewSource).toContain('to="/custom-groups"')
+    expect(keysViewSource).not.toContain('to="/custom-groups"')
+    expect(keysViewSource).toContain('@click="showCustomGroupsModal = true"')
+    expect(keysViewSource).toContain('data-test="custom-groups-dialog"')
+    expect(keysViewSource).toContain('width="full"')
   })
 
   it('keeps the group selector inside the mobile viewport', () => {
