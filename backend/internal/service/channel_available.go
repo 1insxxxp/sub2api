@@ -136,6 +136,19 @@ func (s *ChannelService) fillGlobalPricingFallback(models []SupportedModel) {
 	}
 }
 
+// GetDisplayModelPricing returns global catalog pricing for user-facing channel
+// displays. It does not participate in request billing or persist channel prices.
+func (s *ChannelService) GetDisplayModelPricing(model string) *ChannelModelPricing {
+	if s == nil || s.pricingService == nil {
+		return nil
+	}
+	lp := s.pricingService.GetModelPricing(model)
+	if lp == nil {
+		return nil
+	}
+	return synthesizePricingFromLiteLLM(lp, nil)
+}
+
 // pricingNeedsFallback 判定一个 ChannelModelPricing 是否需要走全局回落。
 // 价格全部缺失（无 flat 字段且无任何带价 interval）即视为未配置。
 func pricingNeedsFallback(p *ChannelModelPricing) bool {

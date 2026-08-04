@@ -311,7 +311,7 @@ func (h *AvailableChannelHandler) attachGroupSupportedModels(
 	}
 	for i := range out {
 		modelIDs := h.groupAvailableModelIDs(ctx, out[i])
-		out[i].SupportedModels = toUserSupportedModelsByIDs(ch.SupportedModels, out[i].Platform, modelIDs)
+		out[i].SupportedModels = h.toUserSupportedModelsByIDs(ch.SupportedModels, out[i].Platform, modelIDs)
 	}
 	return out
 }
@@ -332,7 +332,7 @@ func (h *AvailableChannelHandler) groupAvailableModelIDs(ctx context.Context, gr
 	return availableModels
 }
 
-func toUserSupportedModelsByIDs(src []service.SupportedModel, platform string, modelIDs []string) []userSupportedModel {
+func (h *AvailableChannelHandler) toUserSupportedModelsByIDs(src []service.SupportedModel, platform string, modelIDs []string) []userSupportedModel {
 	if len(modelIDs) == 0 {
 		return []userSupportedModel{}
 	}
@@ -368,10 +368,14 @@ func toUserSupportedModelsByIDs(src []service.SupportedModel, platform string, m
 			})
 			continue
 		}
+		var pricing *service.ChannelModelPricing
+		if h != nil && h.channelService != nil {
+			pricing = h.channelService.GetDisplayModelPricing(modelID)
+		}
 		out = append(out, userSupportedModel{
 			Name:     modelID,
 			Platform: platform,
-			Pricing:  nil,
+			Pricing:  toUserPricing(pricing),
 		})
 	}
 	return out
