@@ -1069,7 +1069,7 @@ function markUpstreamBillingSortRefresh() {
   }
 }
 
-const load = async () => {
+const load = async (options: { silent?: boolean } = {}) => {
   const requestParams = params as any
   markUpstreamBillingSortRefresh()
   syncAccountListDerivedParams()
@@ -1079,7 +1079,7 @@ const load = async () => {
   if (isFirstLoad.value) {
     requestParams.lite = '1'
   }
-  await baseLoad()
+  await baseLoad(options)
   if (isFirstLoad.value) {
     isFirstLoad.value = false
     delete requestParams.lite
@@ -1980,7 +1980,7 @@ const patchUpstreamBillingSnapshot = (accountID: number, snapshot: UpstreamBilli
 }
 const refreshAccountsAfterUpstreamBillingProbe = async () => {
   try {
-    await load()
+    await load({ silent: true })
   } catch (error) {
     console.error('Failed to refresh accounts after upstream billing probe:', error)
   }

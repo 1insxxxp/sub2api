@@ -17,6 +17,10 @@ interface TableLoaderOptions<T, P> {
   debounceMs?: number
 }
 
+interface TableLoadOptions {
+  silent?: boolean
+}
+
 /**
  * 通用表格数据加载 Composable
  * 统一处理分页、筛选、搜索防抖和请求取消
@@ -40,13 +44,13 @@ export function useTableLoader<T, P extends Record<string, any>>(options: TableL
     return error?.name === 'AbortError' || error?.code === 'ERR_CANCELED' || error?.name === 'CanceledError'
   }
 
-  const load = async () => {
+  const load = async (loadOptions: TableLoadOptions = {}) => {
     if (abortController) {
       abortController.abort()
     }
     const currentController = new AbortController()
     abortController = currentController
-    loading.value = true
+    loading.value = !loadOptions.silent
 
     try {
       const response = await fetchFn(

@@ -75,6 +75,20 @@ describe('useTableLoader', () => {
       expect(loading.value).toBe(false)
     })
 
+    it('silent load updates data without enabling table loading', async () => {
+      let resolveLoad: (value: any) => void
+      const fetchFn = vi.fn(() => new Promise((resolve) => { resolveLoad = resolve }))
+      const { items, loading, load } = useTableLoader({ fetchFn })
+
+      const pending = load({ silent: true })
+
+      expect(loading.value).toBe(false)
+      resolveLoad!({ items: [{ id: 9 }], total: 1, pages: 1 })
+      await pending
+      expect(items.value).toEqual([{ id: 9 }])
+      expect(loading.value).toBe(false)
+    })
+
     it('使用默认 pageSize=20', async () => {
       const fetchFn = createMockFetchFn()
       const { load, pagination } = useTableLoader({ fetchFn })
@@ -227,6 +241,25 @@ describe('useTableLoader', () => {
 
       // 第二次请求的结果生效
       expect(fetchFn).toHaveBeenCalledTimes(2)
+    })
+
+    it('silent load can replace a visible load without leaving loading stuck', async () => {
+      const resolvers: Array<(value: any) => void> = []
+      const fetchFn = vi.fn((_page, _size, _params, options) => new Promise((resolve, reject) => {
+        resolvers.push(resolve)
+        options?.signal?.addEventListener('abort', () => reject({ name: 'CanceledError' }))
+      }))
+      const { loading, load } = useTableLoader({ fetchFn })
+
+      const visibleRequest = load()
+      expect(loading.value).toBe(true)
+
+      const silentRequest = load({ silent: true })
+      expect(loading.value).toBe(false)
+
+      resolvers[1]({ items: [], total: 0, pages: 0 })
+      await Promise.allSettled([visibleRequest, silentRequest])
+      expect(loading.value).toBe(false)
     })
   })
 
