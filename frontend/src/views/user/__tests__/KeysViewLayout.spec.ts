@@ -17,6 +17,7 @@ describe('KeysView toolbar layout', () => {
     expect(keysViewSource).toContain('@click="showCustomGroupsModal = true"')
     expect(keysViewSource).toContain('data-test="custom-groups-dialog"')
     expect(keysViewSource).toContain('width="full"')
+    expect(keysViewSource).toMatch(/class="btn btn-primary"\s+data-test="custom-groups-entry"/)
   })
 
   it('keeps the group selector inside the mobile viewport', () => {

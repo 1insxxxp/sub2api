@@ -67,7 +67,7 @@
               </div>
               <button
                 type="button"
-                class="inline-flex min-h-10 items-center justify-center rounded-xl border border-amber-300 bg-amber-100 px-4 py-2 text-sm font-semibold text-amber-900 shadow-sm transition hover:-translate-y-0.5 hover:border-amber-400 hover:bg-amber-200 hover:shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500/40 dark:border-amber-700/70 dark:bg-amber-900/30 dark:text-amber-200 dark:hover:bg-amber-900/50"
+                class="btn btn-primary"
                 data-test="custom-groups-entry"
                 @click="showCustomGroupsModal = true"
               >
