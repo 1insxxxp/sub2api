@@ -12,6 +12,8 @@ describe('KeysView toolbar layout', () => {
     expect(keysViewSource).not.toContain('<template #actions>')
     expect(keysViewSource).toContain('data-test="keys-toolbar"')
     expect(keysViewSource).toContain('data-test="keys-toolbar-actions"')
+    expect(keysViewSource).toContain('data-test="custom-groups-entry"')
+    expect(keysViewSource).toContain('to="/custom-groups"')
   })
 
   it('keeps the group selector inside the mobile viewport', () => {

@@ -65,6 +65,14 @@
                   </button>
                 </div>
               </div>
+              <RouterLink
+                to="/custom-groups"
+                class="btn btn-secondary"
+                data-test="custom-groups-entry"
+              >
+                <Icon name="grid" size="md" class="mr-2" />
+                {{ t('nav.customGroups') }}
+              </RouterLink>
               <button @click="showCreateModal = true" class="btn btn-primary" data-tour="keys-create-btn">
                 <Icon name="plus" size="md" class="mr-2" />
                 {{ t('keys.createKey') }}
