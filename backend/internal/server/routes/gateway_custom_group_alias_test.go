@@ -62,9 +62,9 @@ func TestRewriteCustomGroupRequestModelRewritesMultipartAndPreservesFile(t *test
 	require.Equal(t, []string{"gpt-image-1"}, form.Value["model"])
 	opened, err := form.File["image"][0].Open()
 	require.NoError(t, err)
-	defer opened.Close()
 	contents, err := io.ReadAll(opened)
 	require.NoError(t, err)
+	require.NoError(t, opened.Close())
 	require.Equal(t, []byte("png-bytes"), contents)
 }
 
