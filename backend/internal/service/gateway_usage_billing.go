@@ -721,6 +721,7 @@ func (s *GatewayService) recordUsageCore(ctx context.Context, input *recordUsage
 	if input.OriginalModel != "" {
 		requestedModel = input.OriginalModel
 	}
+	requestedModel = requestedModelForUsage(ctx, requestedModel)
 
 	// 计算费用
 	cost := s.calculateRecordUsageCost(ctx, result, apiKey, billingModel, multiplier, imageMultiplier, opts)
