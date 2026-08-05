@@ -15,4 +15,12 @@ describe('CustomGroupsManager', () => {
     expect(source).toContain('min-h-0 flex-1 overflow-y-auto')
     expect(source).not.toContain('<BaseDialog')
   })
+
+  it('shows editable call names with real model and source metadata in a mobile stack', () => {
+    expect(source).toContain('调用名称')
+    expect(source).toContain('真实模型')
+    expect(source).toContain('来源分组')
+    expect(source).toContain('sourceMappingKey')
+    expect(source).toContain('grid-cols-1')
+  })
 })
