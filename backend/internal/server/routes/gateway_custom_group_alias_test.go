@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"io"
+	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -27,7 +28,7 @@ func (s customGroupAliasResolverStub) ResolveCustomGroupModel(context.Context, *
 func TestRewriteCustomGroupRequestModelUsesRealModel(t *testing.T) {
 	body := []byte(`{"model":"claude-opus-discount","messages":[]}`)
 
-	rewritten, err := rewriteCustomGroupRequestModel(body, "claude-opus-discount", "claude-opus-4-6")
+	rewritten, err := rewriteCustomGroupRequestModel("application/json", body, "claude-opus-discount", "claude-opus-4-6")
 
 	require.NoError(t, err)
 	require.Equal(t, "claude-opus-4-6", gjson.GetBytes(rewritten, "model").String())
@@ -36,16 +37,59 @@ func TestRewriteCustomGroupRequestModelUsesRealModel(t *testing.T) {
 func TestRewriteCustomGroupRequestModelKeepsMatchingModel(t *testing.T) {
 	body := []byte(`{"model":"claude-opus-4-6","messages":[]}`)
 
-	rewritten, err := rewriteCustomGroupRequestModel(body, "claude-opus-4-6", "claude-opus-4-6")
+	rewritten, err := rewriteCustomGroupRequestModel("application/json", body, "claude-opus-4-6", "claude-opus-4-6")
 
 	require.NoError(t, err)
 	require.Equal(t, body, rewritten)
 }
 
-func TestRewriteCustomGroupRequestModelRejectsNonJSONAlias(t *testing.T) {
-	_, err := rewriteCustomGroupRequestModel([]byte("multipart-body"), "image-alias", "gpt-image-1")
+func TestRewriteCustomGroupRequestModelRewritesMultipartAndPreservesFile(t *testing.T) {
+	var body bytes.Buffer
+	writer := multipart.NewWriter(&body)
+	require.NoError(t, writer.WriteField("model", "image-alias"))
+	file, err := writer.CreateFormFile("image", "sample.png")
+	require.NoError(t, err)
+	_, err = file.Write([]byte("png-bytes"))
+	require.NoError(t, err)
+	require.NoError(t, writer.Close())
 
-	require.Error(t, err)
+	rewritten, err := rewriteCustomGroupRequestModel(writer.FormDataContentType(), body.Bytes(), "image-alias", "gpt-image-1")
+	require.NoError(t, err)
+
+	reader := multipart.NewReader(bytes.NewReader(rewritten), writer.Boundary())
+	form, err := reader.ReadForm(1024)
+	require.NoError(t, err)
+	require.Equal(t, []string{"gpt-image-1"}, form.Value["model"])
+	opened, err := form.File["image"][0].Open()
+	require.NoError(t, err)
+	defer opened.Close()
+	contents, err := io.ReadAll(opened)
+	require.NoError(t, err)
+	require.Equal(t, []byte("png-bytes"), contents)
+}
+
+func TestCustomGroupGeminiTargetMiddlewareRewritesPathAndBindsSourceGroup(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	customGroupID, sourceGroupID := int64(7), int64(42)
+	originalKey := &service.APIKey{UserID: 9, CustomGroupID: &customGroupID}
+	resolvedKey := &service.APIKey{UserID: 9, CustomGroupID: &customGroupID, GroupID: &sourceGroupID, Group: &service.Group{ID: sourceGroupID, Platform: service.PlatformGemini}}
+	resolver := customGroupAliasResolverStub{resolution: &service.CustomGroupModelResolution{APIKey: resolvedKey, PublicModel: "gemini-fast", SourceModel: "gemini-2.5-flash"}}
+	router := gin.New()
+	router.Use(func(c *gin.Context) { c.Set(string(middleware.ContextKeyAPIKey), originalKey); c.Next() })
+	router.Use(customGroupGeminiTargetMiddleware(resolver))
+	router.POST("/v1beta/models/*modelAction", func(c *gin.Context) {
+		key, _ := middleware.GetAPIKeyFromContext(c)
+		publicModel, sourceModel, ok := service.CustomGroupModelResolutionFromContext(c.Request.Context())
+		require.True(t, ok)
+		c.JSON(http.StatusOK, gin.H{"path_model": compositeGeminiModelFromParams(c), "group_id": *key.GroupID, "public_model": publicModel, "source_model": sourceModel})
+	})
+
+	request := httptest.NewRequest(http.MethodPost, "/v1beta/models/gemini-fast:generateContent", bytes.NewBufferString(`{"contents":[]}`))
+	recorder := httptest.NewRecorder()
+	router.ServeHTTP(recorder, request)
+
+	require.Equal(t, http.StatusOK, recorder.Code)
+	require.JSONEq(t, `{"path_model":"gemini-2.5-flash","group_id":42,"public_model":"gemini-fast","source_model":"gemini-2.5-flash"}`, recorder.Body.String())
 }
 
 func TestCustomGroupModelContextPreservesBothNames(t *testing.T) {
