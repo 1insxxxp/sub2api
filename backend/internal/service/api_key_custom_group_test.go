@@ -40,7 +40,7 @@ func TestResolveCustomGroupModelUsesConfiguredSourceGroup(t *testing.T) {
 	}
 	svc := &APIKeyService{
 		customGroupRepo: customGroupRouteRepoStub{route: &UserCustomGroupModel{
-			PublicModel:   "claude-sonnet-4-5",
+			PublicModel:   "claude-sonnet-discount",
 			SourceModel:   "claude-sonnet-4-5",
 			SourceGroupID: sourceGroupID,
 		}},
@@ -49,10 +49,11 @@ func TestResolveCustomGroupModelUsesConfiguredSourceGroup(t *testing.T) {
 		}},
 	}
 
-	resolved, err := svc.ResolveCustomGroupModel(context.Background(), key, "claude-sonnet-4-5")
+	resolution, err := svc.ResolveCustomGroupModel(context.Background(), key, "claude-sonnet-discount")
 	if err != nil {
 		t.Fatalf("ResolveCustomGroupModel() error = %v", err)
 	}
+	resolved := resolution.APIKey
 	if resolved == key {
 		t.Fatal("ResolveCustomGroupModel() returned the original key instead of a request-scoped clone")
 	}
@@ -64,6 +65,12 @@ func TestResolveCustomGroupModelUsesConfiguredSourceGroup(t *testing.T) {
 	}
 	if resolved.CustomGroupID == nil || *resolved.CustomGroupID != customGroupID {
 		t.Fatalf("resolved CustomGroupID = %v, want %d", resolved.CustomGroupID, customGroupID)
+	}
+	if resolution.PublicModel != "claude-sonnet-discount" {
+		t.Fatalf("resolution PublicModel = %q, want alias", resolution.PublicModel)
+	}
+	if resolution.SourceModel != "claude-sonnet-4-5" {
+		t.Fatalf("resolution SourceModel = %q, want real model", resolution.SourceModel)
 	}
 }
 
@@ -78,11 +85,11 @@ func TestResolveCustomGroupModelRejectsUnavailableSourceWithoutFallback(t *testi
 		}},
 	}
 
-	resolved, err := svc.ResolveCustomGroupModel(context.Background(), key, "claude-sonnet-4-5")
+	resolution, err := svc.ResolveCustomGroupModel(context.Background(), key, "claude-sonnet-4-5")
 	if err == nil {
 		t.Fatal("ResolveCustomGroupModel() error = nil, want unavailable source error")
 	}
-	if resolved != nil {
-		t.Fatalf("ResolveCustomGroupModel() resolved = %#v, want nil (no fallback)", resolved)
+	if resolution != nil {
+		t.Fatalf("ResolveCustomGroupModel() resolution = %#v, want nil (no fallback)", resolution)
 	}
 }

@@ -430,10 +430,16 @@ func (s *APIKeyService) canUserBindGroup(ctx context.Context, user *User, group 
 	return user.CanBindGroup(group.ID, group.IsExclusive)
 }
 
-// ResolveCustomGroupModel returns a per-request API key clone bound to the configured concrete source group.
-func (s *APIKeyService) ResolveCustomGroupModel(ctx context.Context, key *APIKey, model string) (*APIKey, error) {
+type CustomGroupModelResolution struct {
+	APIKey      *APIKey
+	PublicModel string
+	SourceModel string
+}
+
+// ResolveCustomGroupModel returns a per-request API key clone and the configured real model.
+func (s *APIKeyService) ResolveCustomGroupModel(ctx context.Context, key *APIKey, model string) (*CustomGroupModelResolution, error) {
 	if key == nil || key.CustomGroupID == nil || s.customGroupRepo == nil {
-		return key, nil
+		return &CustomGroupModelResolution{APIKey: key, PublicModel: model, SourceModel: model}, nil
 	}
 	route, err := s.customGroupRepo.ResolveModel(ctx, *key.CustomGroupID, key.UserID, model)
 	if err != nil {
@@ -449,7 +455,11 @@ func (s *APIKeyService) ResolveCustomGroupModel(ctx context.Context, key *APIKey
 	clone := *key
 	clone.GroupID = &group.ID
 	clone.Group = group
-	return &clone, nil
+	return &CustomGroupModelResolution{
+		APIKey:      &clone,
+		PublicModel: route.PublicModel,
+		SourceModel: route.SourceModel,
+	}, nil
 }
 
 func (s *APIKeyService) ListCustomGroupModels(ctx context.Context, key *APIKey) ([]string, error) {
