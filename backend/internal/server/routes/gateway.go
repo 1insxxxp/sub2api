@@ -2,6 +2,7 @@ package routes
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"io"
 	"mime"
@@ -442,7 +443,11 @@ func compositeTargetPlatformMiddleware(resolver *service.CompositeRouteResolver)
 	}
 }
 
-func customGroupTargetMiddleware(apiKeys *service.APIKeyService) gin.HandlerFunc {
+type customGroupModelResolver interface {
+	ResolveCustomGroupModel(context.Context, *service.APIKey, string) (*service.CustomGroupModelResolution, error)
+}
+
+func customGroupTargetMiddleware(apiKeys customGroupModelResolver) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		apiKey, ok := middleware.GetAPIKeyFromContext(c)
 		if !ok || apiKey == nil || apiKey.CustomGroupID == nil {
@@ -459,7 +464,6 @@ func customGroupTargetMiddleware(apiKeys *service.APIKeyService) gin.HandlerFunc
 			return
 		}
 		model := compositeRequestModelFromBody(c.GetHeader("Content-Type"), body)
-		resetRequestBody(c, body)
 		if model == "" {
 			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": gin.H{"type": "invalid_request_error", "message": "Model is required for a custom group key"}})
 			return
@@ -469,9 +473,35 @@ func customGroupTargetMiddleware(apiKeys *service.APIKeyService) gin.HandlerFunc
 			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": gin.H{"type": "permission_error", "message": "The selected model source group is unavailable"}})
 			return
 		}
+		rewrittenBody, err := rewriteCustomGroupRequestModel(body, resolution.PublicModel, resolution.SourceModel)
+		if err != nil {
+			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": gin.H{"type": "invalid_request_error", "message": "Custom model aliases require a JSON request body"}})
+			return
+		}
+		c.Request = c.Request.WithContext(service.WithCustomGroupModelResolution(c.Request.Context(), resolution.PublicModel, resolution.SourceModel))
+		resetRequestBody(c, rewrittenBody)
 		c.Set(string(middleware.ContextKeyAPIKey), resolution.APIKey)
 		c.Next()
 	}
+}
+
+func rewriteCustomGroupRequestModel(body []byte, publicModel, sourceModel string) ([]byte, error) {
+	publicModel = strings.TrimSpace(publicModel)
+	sourceModel = strings.TrimSpace(sourceModel)
+	if sourceModel == "" {
+		return nil, errors.New("custom group source model is empty")
+	}
+	if strings.EqualFold(publicModel, sourceModel) {
+		return body, nil
+	}
+	if !gjson.ValidBytes(body) {
+		return nil, errors.New("custom group alias body is not JSON")
+	}
+	rewritten, err := sjson.SetBytes(body, "model", sourceModel)
+	if err != nil {
+		return nil, err
+	}
+	return rewritten, nil
 }
 
 func compositeRequestModelFromBody(contentType string, body []byte) string {
