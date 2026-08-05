@@ -1351,6 +1351,21 @@ func TestOpenAIGatewayServiceRecordUsage_UsesRequestedModelAndUpstreamModelMetad
 	require.Equal(t, 1, userRepo.deductCalls)
 }
 
+func TestOpenAIGatewayServiceRecordUsage_PreservesCustomGroupPublicAlias(t *testing.T) {
+	usageRepo := &openAIRecordUsageLogRepoStub{inserted: true}
+	svc := newOpenAIRecordUsageServiceForTest(usageRepo, &openAIRecordUsageUserRepoStub{}, &openAIRecordUsageSubRepoStub{}, nil)
+	ctx := WithCustomGroupModelResolution(context.Background(), "gpt-fast", "gpt-5.1")
+
+	err := svc.RecordUsage(ctx, &OpenAIRecordUsageInput{
+		Result: &OpenAIForwardResult{RequestID: "custom_alias", Model: "gpt-5.1", Usage: OpenAIUsage{InputTokens: 20, OutputTokens: 10}, Duration: time.Second},
+		APIKey: &APIKey{ID: 10}, User: &User{ID: 20}, Account: &Account{ID: 30},
+	})
+
+	require.NoError(t, err)
+	require.Equal(t, "gpt-fast", usageRepo.lastLog.RequestedModel)
+	require.Equal(t, "gpt-5.1", usageRepo.lastLog.Model)
+}
+
 func TestOpenAIGatewayServiceRecordUsage_PreservesChannelMappedUpstreamModel(t *testing.T) {
 	usageRepo := &openAIRecordUsageLogRepoStub{inserted: true}
 	userRepo := &openAIRecordUsageUserRepoStub{}

@@ -91,6 +91,13 @@ func RequestedPublicModelFromContext(ctx context.Context) (string, bool) {
 	return model, true
 }
 
+func requestedModelForUsage(ctx context.Context, fallback string) string {
+	if publicModel, ok := RequestedPublicModelFromContext(ctx); ok {
+		return publicModel
+	}
+	return fallback
+}
+
 func CompositeRouteSourceFromContext(ctx context.Context) (string, bool) {
 	if ctx == nil {
 		return "", false

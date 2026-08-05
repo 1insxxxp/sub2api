@@ -722,6 +722,7 @@ func (s *GatewayService) recordUsageCore(ctx context.Context, input *recordUsage
 	if input.OriginalModel != "" {
 		requestedModel = input.OriginalModel
 	}
+	requestedModel = requestedModelForUsage(ctx, requestedModel)
 
 	// 计算费用。调度阶段已做前置价格准入；这里再次校验，防止异步计费或
 	// 非标准调用路径把意外的价格缺失静默记录为 $0。

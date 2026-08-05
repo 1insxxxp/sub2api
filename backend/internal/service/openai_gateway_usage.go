@@ -263,6 +263,7 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 	if input.OriginalModel != "" {
 		requestedModel = input.OriginalModel
 	}
+	requestedModel = requestedModelForUsage(ctx, requestedModel)
 
 	usageLog := &UsageLog{
 		UserID:              user.ID,

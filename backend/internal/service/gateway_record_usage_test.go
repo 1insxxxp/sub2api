@@ -194,6 +194,21 @@ func TestGatewayServiceRecordUsage_PreservesRequestedAndUpstreamModels(t *testin
 	require.Equal(t, mappedModel, *usageRepo.lastLog.UpstreamModel)
 }
 
+func TestGatewayServiceRecordUsage_PreservesCustomGroupPublicAlias(t *testing.T) {
+	usageRepo := &openAIRecordUsageLogRepoStub{inserted: true}
+	svc := newGatewayRecordUsageServiceForTest(usageRepo, &openAIRecordUsageUserRepoStub{}, &openAIRecordUsageSubRepoStub{})
+	ctx := WithCustomGroupModelResolution(context.Background(), "claude-discount", "claude-sonnet-4-5")
+
+	err := svc.RecordUsage(ctx, &RecordUsageInput{
+		Result: &ForwardResult{RequestID: "custom_alias", Usage: ClaudeUsage{InputTokens: 10, OutputTokens: 6}, Model: "claude-sonnet-4-5", Duration: time.Second},
+		APIKey: &APIKey{ID: 501, Quota: 100}, User: &User{ID: 601}, Account: &Account{ID: 701},
+	})
+
+	require.NoError(t, err)
+	require.Equal(t, "claude-discount", usageRepo.lastLog.RequestedModel)
+	require.Equal(t, "claude-sonnet-4-5", usageRepo.lastLog.Model)
+}
+
 func TestGatewayServiceRecordUsage_PreservesChannelMappedUpstreamModel(t *testing.T) {
 	usageRepo := &openAIRecordUsageLogRepoStub{inserted: true}
 	svc := newGatewayRecordUsageServiceForTest(usageRepo, &openAIRecordUsageUserRepoStub{}, &openAIRecordUsageSubRepoStub{})
