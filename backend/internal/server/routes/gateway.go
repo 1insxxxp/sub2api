@@ -464,12 +464,12 @@ func customGroupTargetMiddleware(apiKeys *service.APIKeyService) gin.HandlerFunc
 			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": gin.H{"type": "invalid_request_error", "message": "Model is required for a custom group key"}})
 			return
 		}
-		resolved, err := apiKeys.ResolveCustomGroupModel(c.Request.Context(), apiKey, model)
+		resolution, err := apiKeys.ResolveCustomGroupModel(c.Request.Context(), apiKey, model)
 		if err != nil {
 			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": gin.H{"type": "permission_error", "message": "The selected model source group is unavailable"}})
 			return
 		}
-		c.Set(string(middleware.ContextKeyAPIKey), resolved)
+		c.Set(string(middleware.ContextKeyAPIKey), resolution.APIKey)
 		c.Next()
 	}
 }
