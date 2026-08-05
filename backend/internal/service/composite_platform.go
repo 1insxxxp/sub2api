@@ -48,6 +48,25 @@ func WithCompositeRouteDecision(ctx context.Context, decision CompositeRouteDeci
 	return ctx
 }
 
+func WithCustomGroupModelResolution(ctx context.Context, publicModel, sourceModel string) context.Context {
+	if ctx == nil {
+		return ctx
+	}
+	if model := strings.TrimSpace(publicModel); model != "" {
+		ctx = context.WithValue(ctx, ctxkey.RequestedPublicModel, model)
+	}
+	if model := strings.TrimSpace(sourceModel); model != "" {
+		ctx = context.WithValue(ctx, ctxkey.ResolvedUpstreamModel, model)
+	}
+	return ctx
+}
+
+func CustomGroupModelResolutionFromContext(ctx context.Context) (string, string, bool) {
+	publicModel, publicOK := RequestedPublicModelFromContext(ctx)
+	sourceModel, sourceOK := ResolvedUpstreamModelFromContext(ctx)
+	return publicModel, sourceModel, publicOK && sourceOK
+}
+
 func ResolvedUpstreamModelFromContext(ctx context.Context) (string, bool) {
 	if ctx == nil {
 		return "", false
