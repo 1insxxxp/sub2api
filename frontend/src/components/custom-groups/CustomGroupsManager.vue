@@ -53,7 +53,7 @@
         </button>
         <div class="min-w-0">
           <h3 class="truncate text-lg font-semibold text-gray-900 dark:text-white">{{ editing ? '编辑自定义分组' : '新建自定义分组' }}</h3>
-          <p class="text-xs text-gray-500">每个模型只能选择一个来源分组</p>
+          <p class="text-xs text-gray-500">同一个真实模型可添加多个来源，请为每条线路设置不同调用名称</p>
         </div>
       </div>
 
@@ -73,11 +73,23 @@
                 <strong class="text-sm text-gray-900 dark:text-white">{{ source.name }}</strong>
                 <span class="badge">{{ source.platform }}</span>
               </div>
-              <div class="grid gap-2 md:grid-cols-2">
-                <label v-for="model in source.models" :key="`${source.id}:${model}`" class="flex min-h-11 cursor-pointer items-center gap-3 rounded-xl border border-transparent px-3 py-2 text-sm hover:border-amber-200 hover:bg-amber-50/60 dark:hover:border-amber-900/60 dark:hover:bg-amber-950/20">
-                  <input type="checkbox" class="checkbox" :checked="isSelected(source.id, model)" @change="selectModel(source.id, model)" />
-                  <span class="min-w-0 break-all">{{ model }}</span>
-                </label>
+              <div class="grid grid-cols-1 gap-2 xl:grid-cols-2">
+                <article v-for="model in source.models" :key="sourceMappingKey(source.id, model)" :class="['rounded-xl border p-3 transition', isSelected(source.id, model) ? 'border-blue-300 bg-blue-50/60 dark:border-blue-800 dark:bg-blue-950/20' : 'border-gray-100 hover:border-amber-200 dark:border-dark-700 dark:hover:border-amber-900/60']">
+                  <label class="flex min-h-8 cursor-pointer items-start gap-3 text-sm">
+                    <input type="checkbox" class="checkbox mt-0.5 shrink-0" :checked="isSelected(source.id, model)" @change="selectModel(source.id, model, source.name)" />
+                    <span class="min-w-0">
+                      <span class="block text-[11px] font-medium text-gray-400">真实模型</span>
+                      <span class="block break-all font-medium text-gray-800 dark:text-gray-100">{{ model }}</span>
+                      <span class="mt-1 block text-xs text-gray-500">来源分组 · {{ source.name }}</span>
+                    </span>
+                  </label>
+                  <div v-if="isSelected(source.id, model)" class="mt-3 border-t border-blue-100 pt-3 dark:border-blue-900/50">
+                    <label class="mb-1.5 block text-xs font-semibold text-gray-600 dark:text-gray-300">调用名称</label>
+                    <input :value="selectedItem(source.id, model)?.public_model" class="input min-h-11 w-full font-mono text-sm" maxlength="200" autocomplete="off" :aria-invalid="Boolean(aliasErrors.get(sourceMappingKey(source.id, model)))" @input="updateCallName(source.id, model, ($event.target as HTMLInputElement).value)" />
+                    <p v-if="aliasErrors.get(sourceMappingKey(source.id, model))" class="mt-1.5 text-xs text-red-600">{{ aliasErrors.get(sourceMappingKey(source.id, model)) }}</p>
+                    <p v-else class="mt-1.5 text-xs text-gray-400">请求时使用该名称，实际转发与计费仍按上面的真实模型和来源分组。</p>
+                  </div>
+                </article>
               </div>
               <p v-if="source.models.length === 0" class="text-sm text-amber-600">该分组未配置可选模型列表。</p>
             </section>
@@ -85,7 +97,7 @@
         </div>
         <div class="flex shrink-0 flex-col-reverse gap-3 border-t border-gray-100 bg-white pt-4 sm:flex-row sm:justify-end dark:border-dark-700 dark:bg-dark-900">
           <button class="btn btn-secondary min-h-11 w-full sm:w-auto" type="button" @click="backToList">取消</button>
-          <button class="btn btn-primary min-h-11 w-full sm:w-auto" type="submit" :disabled="saving || selected.size === 0">{{ saving ? '保存中…' : '保存' }}</button>
+          <button class="btn btn-primary min-h-11 w-full sm:w-auto" type="submit" :disabled="saving || selected.size === 0 || aliasErrors.size > 0">{{ saving ? '保存中…' : '保存' }}</button>
         </div>
       </form>
     </template>
@@ -93,11 +105,12 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import Icon from '@/components/icons/Icon.vue'
 import { customGroupsAPI, type CustomGroupModelInput } from '@/api/customGroups'
 import type { CustomGroupCandidate, UserCustomGroup } from '@/types'
 import { useAppStore } from '@/stores/app'
+import { sourceMappingKey, suggestCallName, validateCallNames } from './modelAliases'
 
 const emit = defineEmits<{ (e: 'changed'): void }>()
 const app = useAppStore()
@@ -109,7 +122,7 @@ const saving = ref(false)
 const editing = ref<UserCustomGroup | null>(null)
 const name = ref('')
 const selected = ref(new Map<string, CustomGroupModelInput>())
-const modelKey = (model: string) => model.toLowerCase()
+const aliasErrors = computed(() => validateCallNames([...selected.value.entries()].map(([key, item]) => ({ key, callName: item.public_model }))))
 
 const load = async () => {
   loading.value = true
@@ -130,19 +143,32 @@ const startCreate = () => {
 const startEdit = (group: UserCustomGroup) => {
   editing.value = group
   name.value = group.name
-  selected.value = new Map(group.models.map(model => [modelKey(model.public_model), { public_model: model.public_model, source_group_id: model.source_group_id, source_model: model.source_model }]))
+  selected.value = new Map(group.models.map(model => [sourceMappingKey(model.source_group_id, model.source_model), { public_model: model.public_model, source_group_id: model.source_group_id, source_model: model.source_model }]))
   mode.value = 'form'
 }
 const backToList = () => { mode.value = 'list' }
-const isSelected = (sourceId: number, model: string) => selected.value.get(modelKey(model))?.source_group_id === sourceId
-const selectModel = (sourceId: number, model: string) => {
+const selectedItem = (sourceId: number, model: string) => selected.value.get(sourceMappingKey(sourceId, model))
+const isSelected = (sourceId: number, model: string) => selected.value.has(sourceMappingKey(sourceId, model))
+const selectModel = (sourceId: number, model: string, sourceName: string) => {
   const next = new Map(selected.value)
-  const key = modelKey(model)
-  if (next.get(key)?.source_group_id === sourceId) next.delete(key)
-  else next.set(key, { public_model: model, source_group_id: sourceId, source_model: model })
+  const key = sourceMappingKey(sourceId, model)
+  if (next.has(key)) next.delete(key)
+  else next.set(key, { public_model: suggestCallName(model, sourceName, [...next.values()].map(item => item.public_model)), source_group_id: sourceId, source_model: model })
+  selected.value = next
+}
+const updateCallName = (sourceId: number, model: string, publicModel: string) => {
+  const key = sourceMappingKey(sourceId, model)
+  const item = selected.value.get(key)
+  if (!item) return
+  const next = new Map(selected.value)
+  next.set(key, { ...item, public_model: publicModel })
   selected.value = next
 }
 const save = async () => {
+	if (aliasErrors.value.size > 0) {
+		app.showError('请先修正调用名称')
+		return
+	}
   saving.value = true
   try {
     const models = [...selected.value.values()]
