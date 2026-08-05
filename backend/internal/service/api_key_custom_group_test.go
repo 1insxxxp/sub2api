@@ -63,6 +63,29 @@ func TestListCustomGroupModelsExposesAliasesOnly(t *testing.T) {
 	}
 }
 
+func TestListCustomGroupModelsForPlatformFiltersOtherSources(t *testing.T) {
+	customGroupID := int64(7)
+	key := &APIKey{UserID: 9, CustomGroupID: &customGroupID, User: &User{ID: 9}}
+	svc := &APIKeyService{
+		customGroupRepo: customGroupRouteRepoStub{group: &UserCustomGroup{ID: customGroupID, UserID: 9, Status: StatusActive, Models: []UserCustomGroupModel{
+			{PublicModel: "gemini-fast", SourceModel: "gemini-2.5-flash", SourceGroupID: 11},
+			{PublicModel: "claude-fast", SourceModel: "claude-sonnet-4-5", SourceGroupID: 12},
+		}}},
+		groupRepo: customGroupSourceRepoStub{groups: map[int64]*Group{
+			11: {ID: 11, Status: StatusActive, Platform: PlatformGemini},
+			12: {ID: 12, Status: StatusActive, Platform: PlatformAnthropic},
+		}},
+	}
+
+	models, err := svc.ListCustomGroupModelsForPlatform(context.Background(), key, PlatformGemini)
+	if err != nil {
+		t.Fatalf("ListCustomGroupModelsForPlatform() error = %v", err)
+	}
+	if len(models) != 1 || models[0] != "gemini-fast" {
+		t.Fatalf("ListCustomGroupModelsForPlatform() = %#v, want Gemini alias only", models)
+	}
+}
+
 func TestResolveCustomGroupModelUsesConfiguredSourceGroup(t *testing.T) {
 	customGroupID := int64(7)
 	originalGroupID := int64(3)

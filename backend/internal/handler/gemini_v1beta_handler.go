@@ -40,7 +40,7 @@ func (h *GatewayHandler) GeminiV1BetaListModels(c *gin.Context) {
 		return
 	}
 	if apiKey.CustomGroupID != nil {
-		models, err := h.apiKeyService.ListCustomGroupModels(c.Request.Context(), apiKey)
+		models, err := h.apiKeyService.ListCustomGroupModelsForPlatform(c.Request.Context(), apiKey, service.PlatformGemini)
 		if err != nil {
 			googleError(c, http.StatusForbidden, "Custom group is unavailable")
 			return
