@@ -571,6 +571,10 @@ func customGroupGeminiTargetMiddleware(apiKeys customGroupModelResolver) gin.Han
 			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": gin.H{"code": http.StatusForbidden, "message": "The selected model source group is unavailable", "status": "PERMISSION_DENIED"}})
 			return
 		}
+		if resolution.APIKey == nil || resolution.APIKey.Group == nil || resolution.APIKey.Group.Platform != service.PlatformGemini {
+			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": gin.H{"code": http.StatusForbidden, "message": "The selected model is not available through the Gemini API", "status": "PERMISSION_DENIED"}})
+			return
+		}
 		for i := range c.Params {
 			switch c.Params[i].Key {
 			case "model":

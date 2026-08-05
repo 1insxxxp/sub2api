@@ -463,6 +463,10 @@ func (s *APIKeyService) ResolveCustomGroupModel(ctx context.Context, key *APIKey
 }
 
 func (s *APIKeyService) ListCustomGroupModels(ctx context.Context, key *APIKey) ([]string, error) {
+	return s.ListCustomGroupModelsForPlatform(ctx, key, "")
+}
+
+func (s *APIKeyService) ListCustomGroupModelsForPlatform(ctx context.Context, key *APIKey, platform string) ([]string, error) {
 	if key == nil || key.CustomGroupID == nil || s.customGroupRepo == nil {
 		return nil, ErrUserCustomGroupNotFound
 	}
@@ -476,7 +480,7 @@ func (s *APIKeyService) ListCustomGroupModels(ctx context.Context, key *APIKey) 
 	out := make([]string, 0, len(group.Models))
 	for _, route := range group.Models {
 		source, err := s.groupRepo.GetByIDLite(ctx, route.SourceGroupID)
-		if err == nil && source.Status == StatusActive && s.canUserBindGroup(ctx, key.User, source) {
+		if err == nil && source.Status == StatusActive && (platform == "" || source.Platform == platform) && s.canUserBindGroup(ctx, key.User, source) {
 			out = append(out, route.PublicModel)
 		}
 	}
