@@ -863,7 +863,8 @@ func (s *BillingService) getFallbackPricing(model string) *ModelPricing {
 	switch modelLower {
 	case "grok", "grok-latest", "grok-4.5", "grok-4.5-latest", "grok-build-latest":
 		return s.fallbackPrices["grok-4.5"]
-	case "grok-4.3",
+	case "grok-3-mini", // Retired slug: xAI bills post-retirement traffic at grok-4.3 rates.
+		"grok-4.3",
 		"grok-4.20-0309-reasoning",
 		"grok-4.20-0309-non-reasoning",
 		"grok-4.20-multi-agent-0309",

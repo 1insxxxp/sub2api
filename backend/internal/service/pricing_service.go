@@ -707,7 +707,7 @@ func (s *PricingService) buildModelLookupCandidates(modelLower string) []string 
 	// one later. Today Antigravity's Gemini 3.6 Flash tiers share the base rate,
 	// so the normalized base remains the fallback after the exact aliases.
 	candidates := rawCandidates
-	if normalizeGeminiThinkingTierAlias(lastSegment(modelLower)) != lastSegment(modelLower) {
+	if normalizeGeminiPricingAlias(lastSegment(modelLower)) != lastSegment(modelLower) {
 		candidates = append(candidates, normalized)
 	} else {
 		// Prefer canonical model names for all other aliases (including models/xxx).
@@ -760,15 +760,22 @@ func normalizeModelNameForPricing(model string) string {
 		}
 		return canonical
 	}
-	return normalizeGeminiThinkingTierAlias(model)
+	return normalizeGeminiPricingAlias(model)
 }
 
-// normalizeGeminiThinkingTierAlias maps Antigravity thinking variants to their
-// public base models. The suffix controls reasoning behavior, not the published
-// token rate, so these aliases must use the same price card as the base model.
-func normalizeGeminiThinkingTierAlias(model string) string {
-	if model == "gemini-2.5-flash-thinking" {
+// normalizeGeminiPricingAlias maps Antigravity behavior/tier aliases to the
+// public model whose token rate applies. Exact catalog entries still take
+// precedence because buildModelLookupCandidates checks the raw alias first.
+func normalizeGeminiPricingAlias(model string) string {
+	switch model {
+	case "gemini-2.5-flash-thinking", "gemini-2.5-flash-nothinking":
 		return "gemini-2.5-flash"
+	case "gemini-3-flash-agent":
+		return "gemini-3-flash"
+	case "gemini-3.5-flash-low", "gemini-3.5-flash-extra-low":
+		return "gemini-3.5-flash"
+	case "gemini-3-pro-high", "gemini-3-pro-low", "gemini-pro-agent":
+		return "gemini-3-pro-preview"
 	}
 
 	const baseModel = "gemini-3.6-flash"

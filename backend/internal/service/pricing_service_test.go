@@ -496,6 +496,42 @@ func TestPricingService_Gemini25FlashThinkingUsesBasePricingAndMultiplier(t *tes
 	require.InDelta(t, 0.0030305, cost.ActualCost, 1e-12)
 }
 
+func TestPricingService_AntigravityGeminiAliasesUseBasePricing(t *testing.T) {
+	gemini25Flash := &LiteLLMModelPricing{InputCostPerToken: 0.3e-6}
+	gemini3Flash := &LiteLLMModelPricing{InputCostPerToken: 0.5e-6}
+	gemini35Flash := &LiteLLMModelPricing{InputCostPerToken: 1.5e-6}
+	gemini3Pro := &LiteLLMModelPricing{InputCostPerToken: 2e-6}
+	svc := &PricingService{pricingData: map[string]*LiteLLMModelPricing{
+		"gemini-2.5-flash":     gemini25Flash,
+		"gemini-3-flash":       gemini3Flash,
+		"gemini-3.5-flash":     gemini35Flash,
+		"gemini-3-pro-preview": gemini3Pro,
+	}}
+
+	tests := map[string]*LiteLLMModelPricing{
+		"gemini-2.5-flash-nothinking": gemini25Flash,
+		"gemini-3-flash-agent":        gemini3Flash,
+		"gemini-3.5-flash-low":        gemini35Flash,
+		"gemini-3.5-flash-extra-low":  gemini35Flash,
+		"gemini-3-pro-high":           gemini3Pro,
+		"gemini-3-pro-low":            gemini3Pro,
+		"gemini-pro-agent":            gemini3Pro,
+	}
+	for model, expected := range tests {
+		t.Run(model, func(t *testing.T) {
+			require.Same(t, expected, svc.GetModelPricing(model))
+		})
+	}
+}
+
+func TestGetModelPricing_Grok3MiniUsesRetirementRate(t *testing.T) {
+	svc := newTestBillingService()
+	pricing, err := svc.GetModelPricing("grok-3-mini")
+	require.NoError(t, err)
+	require.InDelta(t, 1.25e-6, pricing.InputPricePerToken, 1e-12)
+	require.InDelta(t, 2.5e-6, pricing.OutputPricePerToken, 1e-12)
+}
+
 func TestPricingService_Gemini36FlashTierSpecificPricingTakesPrecedence(t *testing.T) {
 	basePricing := &LiteLLMModelPricing{InputCostPerToken: 1.5e-6}
 	tierPricing := &LiteLLMModelPricing{InputCostPerToken: 2e-6}
