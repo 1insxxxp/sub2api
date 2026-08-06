@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"strings"
 	"time"
@@ -722,8 +723,12 @@ func (s *GatewayService) recordUsageCore(ctx context.Context, input *recordUsage
 		requestedModel = input.OriginalModel
 	}
 
-	// 计算费用
-	cost := s.calculateRecordUsageCost(ctx, result, apiKey, billingModel, multiplier, imageMultiplier, opts)
+	// 计算费用。调度阶段已做前置价格准入；这里再次校验，防止异步计费或
+	// 非标准调用路径把意外的价格缺失静默记录为 $0。
+	cost, err := s.calculateRecordUsageCostChecked(ctx, result, apiKey, billingModel, multiplier, imageMultiplier, opts)
+	if err != nil {
+		return err
+	}
 
 	// 判断计费方式：订阅模式 vs 余额模式
 	isSubscriptionBilling := subscription != nil && apiKey.Group != nil && apiKey.Group.IsSubscriptionType()
@@ -815,6 +820,30 @@ func (s *GatewayService) calculateRecordUsageCost(
 
 	// Token 计费
 	return s.calculateTokenCost(ctx, result, apiKey, billingModel, multiplier, opts)
+}
+
+func (s *GatewayService) calculateRecordUsageCostChecked(
+	ctx context.Context,
+	result *ForwardResult,
+	apiKey *APIKey,
+	billingModel string,
+	multiplier float64,
+	imageMultiplier float64,
+	opts *recordUsageOpts,
+) (*CostBreakdown, error) {
+	if result == nil {
+		return nil, fmt.Errorf("calculate usage cost: nil forward result")
+	}
+	if result.ImageCount <= 0 || !apiKeyHasConfiguredImagePrice(apiKey, NormalizeImageBillingTierOrDefault(result.ImageSize)) {
+		var groupID *int64
+		if apiKey != nil {
+			groupID = apiKey.GroupID
+		}
+		if err := s.ensureModelPricingAvailable(ctx, groupID, billingModel, result.UpstreamModel, result.Model); err != nil {
+			return nil, err
+		}
+	}
+	return s.calculateRecordUsageCost(ctx, result, apiKey, billingModel, multiplier, imageMultiplier, opts), nil
 }
 
 // compositeBillableModel 决定 composite 分组请求的计费模型：来源覆盖把计费模型

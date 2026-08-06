@@ -32,6 +32,7 @@ func (s *GatewayService) SelectAccountForModel(ctx context.Context, groupID *int
 
 // SelectAccountForModelWithExclusions selects an account supporting the requested model while excluding specified accounts.
 func (s *GatewayService) SelectAccountForModelWithExclusions(ctx context.Context, groupID *int64, sessionHash string, requestedModel string, excludedIDs map[int64]struct{}) (*Account, error) {
+	originalRequestedModel := requestedModel
 	// 优先检查 context 中的强制平台（/antigravity 路由）
 	var platform string
 	forcePlatform, hasForcePlatform := ctx.Value(ctxkey.ForcePlatform).(string)
@@ -82,7 +83,14 @@ func (s *GatewayService) SelectAccountForModelWithExclusions(ctx context.Context
 		if err != nil {
 			return nil, err
 		}
-		return s.hydrateSelectedAccount(ctx, account)
+		hydrated, err := s.hydrateSelectedAccount(ctx, account)
+		if err != nil {
+			return nil, err
+		}
+		if err := s.validateSelectedAccountPricing(ctx, groupID, originalRequestedModel, hydrated); err != nil {
+			return nil, err
+		}
+		return hydrated, nil
 	}
 
 	// antigravity 分组、强制平台模式或无分组使用单平台选择
@@ -91,7 +99,14 @@ func (s *GatewayService) SelectAccountForModelWithExclusions(ctx context.Context
 	if err != nil {
 		return nil, err
 	}
-	return s.hydrateSelectedAccount(ctx, account)
+	hydrated, err := s.hydrateSelectedAccount(ctx, account)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.validateSelectedAccountPricing(ctx, groupID, originalRequestedModel, hydrated); err != nil {
+		return nil, err
+	}
+	return hydrated, nil
 }
 
 // SelectAccountWithLoadAwareness selects account with load-awareness and wait plan.
@@ -118,6 +133,7 @@ func (s *GatewayService) SelectAccountWithLoadAwareness(ctx context.Context, gro
 	}
 	ctx = s.withGroupContext(ctx, group)
 	ctx = s.withGatewayProfitControlGate(ctx, groupID)
+	ctx = withPricingAdmissionRequest(ctx, groupID, requestedModel)
 
 	// Claude Code 限制可能已将 groupID 解析为 fallback group，
 	// 渠道限制预检查必须使用解析后的分组。
@@ -1452,6 +1468,14 @@ func (s *GatewayService) newSelectionResult(ctx context.Context, account *Accoun
 	hydrated, err := s.hydrateSelectedAccount(ctx, account)
 	if err != nil {
 		return nil, err
+	}
+	if request, ok := pricingAdmissionRequestFromContext(ctx); ok {
+		if err := s.validateSelectedAccountPricing(ctx, request.groupID, request.requestedModel, hydrated); err != nil {
+			if acquired && release != nil {
+				release()
+			}
+			return nil, err
+		}
 	}
 	return attachSelectionProfitGate(ctx, &AccountSelectionResult{
 		Account:     hydrated,
