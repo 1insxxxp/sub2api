@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
+import { h } from 'vue'
 
 import type { DashboardStats } from '@/types'
 import DashboardView from '../DashboardView.vue'
@@ -214,6 +215,60 @@ describe('admin DashboardView', () => {
     expect(chartData.datasets[0].data[16]).toBe(6200)
     expect(chartData.datasets[0].data[17]).toBe(400)
     expect(chartData.datasets[0].data[0]).toBe(0)
+    vi.useRealTimers()
+  })
+
+  it('keeps 24 hourly buckets when today is selected', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date(2026, 7, 7, 1, 30))
+    getUserUsageTrend.mockResolvedValue({
+      trend: [
+        { date: '2026-08-07 00:00', user_id: 1, username: 'admin', email: '', requests: 1, tokens: 6200, cost: 0, actual_cost: 0 },
+        { date: '2026-08-07 01:00', user_id: 1, username: 'admin', email: '', requests: 1, tokens: 400, cost: 0, actual_cost: 0 }
+      ],
+      start_date: '2026-08-07',
+      end_date: '2026-08-07',
+      granularity: 'hour'
+    })
+
+    const wrapper = mount(DashboardView, {
+      global: {
+        stubs: {
+          AppLayout: { template: '<div><slot /></div>' },
+          LoadingSpinner: true,
+          Icon: true,
+          DateRangePicker: {
+            emits: ['update:startDate', 'update:endDate', 'change'],
+            setup(_, { emit }) {
+              return () => h('button', {
+                'data-test': 'choose-today',
+                onClick: () => {
+                  emit('update:startDate', '2026-08-07')
+                  emit('update:endDate', '2026-08-07')
+                  emit('change', {
+                    startDate: '2026-08-07',
+                    endDate: '2026-08-07',
+                    preset: 'today'
+                  })
+                }
+              }, 'today')
+            }
+          },
+          Select: true,
+          ModelDistributionChart: true,
+          TokenUsageTrend: true
+        }
+      }
+    })
+    await flushPromises()
+
+    await wrapper.get('[data-test="choose-today"]').trigger('click')
+    await flushPromises()
+
+    const chartData = lineCapture.props.data as any
+    expect(chartData.labels).toHaveLength(24)
+    expect(chartData.labels[0]).toBe('2026-08-06 02:00')
+    expect(chartData.labels.at(-1)).toBe('2026-08-07 01:00')
     vi.useRealTimers()
   })
 })

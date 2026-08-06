@@ -300,7 +300,7 @@
             <TokenUsageTrend
               :trend-data="trendData"
               :loading="chartsLoading"
-              :latest-hours="isDefaultRollingRange ? 24 : undefined"
+              :latest-hours="shouldFillLatestHourlyBuckets ? 24 : undefined"
             />
           </div>
 
@@ -440,6 +440,18 @@ const isDefaultRollingRange = computed(
     endDate.value === defaultRange.end
 )
 
+const shouldFillLatestHourlyBuckets = computed(
+  () =>
+    granularity.value === 'hour' &&
+    (
+      isDefaultRollingRange.value ||
+      (
+        startDate.value === formatLocalDate(new Date()) &&
+        endDate.value === startDate.value
+      )
+    )
+)
+
 // Granularity options for Select component
 const granularityOptions = computed(() => [
   { value: 'day', label: t('admin.dashboard.day') },
@@ -549,7 +561,7 @@ const userTrendChartData = computed(() => {
     userGroups.get(key)!.data.set(point.date, point.tokens)
   })
 
-  const sortedDates = isDefaultRollingRange.value
+  const sortedDates = shouldFillLatestHourlyBuckets.value
     ? getLatestHourlyBuckets(24)
     : Array.from(allDates).sort()
   const colors = [

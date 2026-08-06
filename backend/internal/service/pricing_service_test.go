@@ -477,6 +477,25 @@ func TestPricingService_Gemini36FlashThinkingTiersUseBasePricing(t *testing.T) {
 	}
 }
 
+func TestPricingService_Gemini25FlashThinkingUsesBasePricingAndMultiplier(t *testing.T) {
+	basePricing := &LiteLLMModelPricing{
+		InputCostPerToken:  0.3e-6,
+		OutputCostPerToken: 2.5e-6,
+	}
+	pricingSvc := &PricingService{pricingData: map[string]*LiteLLMModelPricing{
+		"gemini-2.5-flash": basePricing,
+	}}
+	billingSvc := NewBillingService(&config.Config{}, pricingSvc)
+
+	cost, err := billingSvc.CalculateCost("gemini-2.5-flash-thinking", UsageTokens{
+		InputTokens:  2699,
+		OutputTokens: 161,
+	}, 2.5)
+	require.NoError(t, err)
+	require.InDelta(t, 0.0012122, cost.TotalCost, 1e-12)
+	require.InDelta(t, 0.0030305, cost.ActualCost, 1e-12)
+}
+
 func TestPricingService_Gemini36FlashTierSpecificPricingTakesPrecedence(t *testing.T) {
 	basePricing := &LiteLLMModelPricing{InputCostPerToken: 1.5e-6}
 	tierPricing := &LiteLLMModelPricing{InputCostPerToken: 2e-6}
