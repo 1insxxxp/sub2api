@@ -193,6 +193,21 @@
             <div v-if="showAccountBilling && row.account_rate_multiplier != null" class="mt-0.5 text-[11px] text-orange-500 dark:text-orange-400">
               A ${{ accountBilled(row).toFixed(6) }}
             </div>
+            <div v-if="row.compensated_cost > 0" class="mt-1 space-y-0.5 text-[11px] tabular-nums">
+              <div class="text-emerald-600 dark:text-emerald-400">{{ t('usage.emptyResponse.refunded') }} ${{ row.compensated_cost.toFixed(6) }}</div>
+              <div class="font-semibold text-slate-700 dark:text-slate-200">{{ t('usage.emptyResponse.netCharge') }} ${{ row.net_actual_cost.toFixed(6) }}</div>
+            </div>
+            <button
+              v-if="showCompensationAction && row.compensation_eligible"
+              type="button"
+              class="mt-1.5 rounded-lg bg-primary-50 px-2 py-1 text-[11px] font-semibold text-primary-700 transition-colors hover:bg-primary-100 dark:bg-primary-500/10 dark:text-primary-300 dark:hover:bg-primary-500/20"
+              @click="emit('compensationClaim', row)"
+            >
+              {{ t('usage.emptyResponse.action') }}
+            </button>
+            <span v-else-if="showCompensationAction && row.claim_status" class="mt-1.5 inline-flex rounded-full bg-slate-100 px-2 py-1 text-[10px] font-medium text-slate-600 dark:bg-dark-700 dark:text-slate-300">
+              {{ t(`usage.emptyResponse.status.${row.claim_status}`) }}
+            </span>
           </div>
         </template>
 
@@ -523,6 +538,7 @@ interface Props {
   defaultSortOrder?: 'asc' | 'desc'
   showAccountBilling?: boolean
   showUpstreamEndpoint?: boolean
+  showCompensationAction?: boolean
   /** 嵌入统一卡片内使用：去掉自身卡片外观 */
   flat?: boolean
 }
@@ -534,16 +550,19 @@ const props = withDefaults(defineProps<Props>(), {
   defaultSortOrder: 'asc',
   showAccountBilling: true,
   showUpstreamEndpoint: true,
+  showCompensationAction: false,
   flat: false
 })
 const emit = defineEmits<{
   userClick: [userID: number, email?: string]
   sort: [key: string, order: 'asc' | 'desc']
   ipGeoBatchFailed: []
+  compensationClaim: [row: AdminUsageLog]
 }>()
 const { t } = useI18n()
 const showAccountBilling = props.showAccountBilling
 const showUpstreamEndpoint = props.showUpstreamEndpoint
+const showCompensationAction = props.showCompensationAction
 const ipGeoBatchLoading = ref(false)
 
 const showIpGeoToolbar = computed(() => props.columns.some((col) => col.key === 'ip_address'))

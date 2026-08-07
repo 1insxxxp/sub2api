@@ -51,6 +51,7 @@ type UsageStats struct {
 	TotalTokens              int64   `json:"total_tokens"`
 	TotalCost                float64 `json:"total_cost"`
 	TotalActualCost          float64 `json:"total_actual_cost"`
+	TotalNetActualCost       float64 `json:"total_net_actual_cost"`
 	AverageDurationMs        float64 `json:"average_duration_ms"`
 }
 
@@ -154,6 +155,7 @@ func (s *UsageService) GetByID(ctx context.Context, id int64) (*UsageLog, error)
 	if err != nil {
 		return nil, fmt.Errorf("get usage log: %w", err)
 	}
+	projectUsageLogCompensation(log, time.Now())
 	return log, nil
 }
 
@@ -201,6 +203,7 @@ func (s *UsageService) GetStatsByUser(ctx context.Context, userID int64, startTi
 		TotalTokens:              stats.TotalTokens,
 		TotalCost:                stats.TotalCost,
 		TotalActualCost:          stats.TotalActualCost,
+		TotalNetActualCost:       stats.TotalNetActualCost,
 		AverageDurationMs:        stats.AverageDurationMs,
 	}, nil
 }
@@ -441,7 +444,39 @@ func (s *UsageService) ListWithFilters(ctx context.Context, params pagination.Pa
 	if err != nil {
 		return nil, nil, fmt.Errorf("list usage logs with filters: %w", err)
 	}
+	now := time.Now()
+	for i := range logs {
+		projectUsageLogCompensation(&logs[i], now)
+	}
 	return logs, result, nil
+}
+
+func projectUsageLogCompensation(log *UsageLog, now time.Time) {
+	if log == nil {
+		return
+	}
+	if log.EmptyResponseClaimStatus != "" {
+		log.CompensationEligible = false
+		log.CompensationEligibility = UsageCompensationClaimed
+		return
+	}
+	group := Group{}
+	if log.Group != nil {
+		group = *log.Group
+	}
+	decision := EvaluateEmptyResponseClaim(now, *log, log.Outcome, group, 0)
+	log.CompensationReasonCode = decision.ReasonCode
+	switch decision.Status {
+	case EmptyResponseClaimApproved:
+		log.CompensationEligible = true
+		log.CompensationEligibility = UsageCompensationEligible
+	case EmptyResponseClaimManualReview:
+		log.CompensationEligible = true
+		log.CompensationEligibility = UsageCompensationManualReview
+	default:
+		log.CompensationEligible = false
+		log.CompensationEligibility = UsageCompensationUnavailable
+	}
 }
 
 // GetGlobalStats returns global usage stats for a time range.

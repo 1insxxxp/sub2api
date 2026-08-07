@@ -10,6 +10,7 @@ const {
   getDashboardSnapshotV2,
   list,
   getAvailable,
+  submitEmptyResponseClaim,
   showError,
   showWarning,
   showSuccess,
@@ -21,6 +22,7 @@ const {
   getDashboardSnapshotV2: vi.fn(),
   list: vi.fn(),
   getAvailable: vi.fn(),
+  submitEmptyResponseClaim: vi.fn(),
   showError: vi.fn(),
   showWarning: vi.fn(),
   showSuccess: vi.fn(),
@@ -70,6 +72,7 @@ vi.mock('@/api', () => ({
     getStats,
     getDashboardModels,
     getDashboardSnapshotV2,
+    submitEmptyResponseClaim,
   },
   keysAPI: {
     list,
@@ -155,6 +158,7 @@ describe('user UsageView', () => {
     getDashboardSnapshotV2.mockReset()
     list.mockReset()
     getAvailable.mockReset()
+    submitEmptyResponseClaim.mockReset()
     showError.mockReset()
     showWarning.mockReset()
     showSuccess.mockReset()
@@ -189,6 +193,14 @@ describe('user UsageView', () => {
     })
     list.mockResolvedValue({ items: [{ id: 1, name: 'demo-key' }] })
     getAvailable.mockResolvedValue([{ id: 1, name: 'default' }])
+		submitEmptyResponseClaim.mockResolvedValue({
+			id: 9,
+			usage_log_id: 1,
+			status: 'compensated',
+			reason_code: 'pure_empty',
+			estimated_refund: 0.092883,
+			refunded_amount: 0.092883,
+		})
   })
 
   it('loads logs, stats, model stats, and snapshot on first render', async () => {
@@ -308,4 +320,33 @@ describe('user UsageView', () => {
     vi.unstubAllGlobals()
     clickSpy.mockRestore()
   })
+
+	it('submits an eligible claim and updates only the matching usage row in place', async () => {
+		query.mockResolvedValue({
+			items: [{
+				...usageLog,
+				compensation_eligible: true,
+				compensation_eligibility: 'eligible',
+				compensated_cost: 0,
+				net_actual_cost: usageLog.actual_cost,
+			}],
+			total: 1,
+			pages: 1,
+		})
+		const wrapper = mountUsageView()
+		await flushPromises()
+
+		;(wrapper.vm as any).openEmptyResponseClaim((wrapper.vm as any).usageLogs[0])
+		await (wrapper.vm as any).submitEmptyResponseClaim('empty response')
+		await flushPromises()
+
+		expect(submitEmptyResponseClaim).toHaveBeenCalledWith(1, { reason: 'empty response' })
+		expect((wrapper.vm as any).usageLogs[0]).toMatchObject({
+			claim_status: 'compensated',
+			compensation_eligible: false,
+			compensated_cost: usageLog.actual_cost,
+			net_actual_cost: 0,
+		})
+		expect(query).toHaveBeenCalledTimes(1)
+	})
 })

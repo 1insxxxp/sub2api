@@ -178,10 +178,12 @@
           :server-side-sort="true"
           :show-account-billing="false"
           :show-upstream-endpoint="false"
+          :show-compensation-action="true"
           default-sort-key="created_at"
           default-sort-order="desc"
           @sort="handleSort"
           @ipGeoBatchFailed="handleIpGeoBatchFailed"
+          @compensationClaim="openEmptyResponseClaim"
         />
 
         <Pagination
@@ -210,6 +212,14 @@
     </div>
   </AppLayout>
 
+  <EmptyResponseClaimDialog
+    :show="Boolean(selectedClaimLog)"
+    :log="selectedClaimLog"
+    :submitting="claimSubmitting"
+    @close="selectedClaimLog = null"
+    @submit="submitEmptyResponseClaim"
+  />
+
 </template>
 
 <script setup lang="ts">
@@ -229,6 +239,7 @@ import EndpointDistributionChart from '@/components/charts/EndpointDistributionC
 import TokenUsageTrend from '@/components/charts/TokenUsageTrend.vue'
 import Icon from '@/components/icons/Icon.vue'
 import UserErrorRequestsTable from '@/components/user/UserErrorRequestsTable.vue'
+import EmptyResponseClaimDialog from '@/components/usage/EmptyResponseClaimDialog.vue'
 import { getPersistedPageSize } from '@/composables/usePersistedPageSize'
 import { formatReasoningEffort } from '@/utils/format'
 import { BILLING_MODE_IMAGE, getBillingModeLabel } from '@/utils/billingMode'
@@ -256,6 +267,8 @@ type EndpointSource = 'inbound' | 'upstream' | 'path'
 
 const usageStats = ref<UsageStatsResponse | null>(null)
 const usageLogs = ref<UsageLog[]>([])
+const selectedClaimLog = ref<UsageLog | null>(null)
+const claimSubmitting = ref(false)
 const trendData = ref<TrendDataPoint[]>([])
 const requestedModelStats = ref<ModelStat[]>([])
 const groupStats = ref<GroupStat[]>([])
@@ -448,6 +461,36 @@ const loadLogs = async () => {
     }
   } finally {
     if (abortController === controller) loading.value = false
+  }
+}
+
+const openEmptyResponseClaim = (log: UsageLog) => {
+  if (!log.compensation_eligible) return
+  selectedClaimLog.value = log
+}
+
+const submitEmptyResponseClaim = async (reason: string) => {
+  const selected = selectedClaimLog.value
+  if (!selected || claimSubmitting.value) return
+  claimSubmitting.value = true
+  try {
+    const claim = await usageAPI.submitEmptyResponseClaim(selected.id, { reason })
+    const row = usageLogs.value.find((item) => item.id === selected.id)
+    if (row) {
+      row.claim_status = claim.status
+      row.compensation_reason_code = claim.reason_code
+      row.compensation_eligible = false
+      row.compensation_eligibility = 'claimed'
+      row.compensated_cost = Math.min(row.actual_cost, Math.max(0, claim.refunded_amount))
+      row.net_actual_cost = Math.max(0, row.actual_cost - row.compensated_cost)
+    }
+    selectedClaimLog.value = null
+    appStore.showSuccess(t('usage.emptyResponse.submitSuccess'))
+  } catch (error) {
+    console.error('Failed to submit empty response claim:', error)
+    appStore.showError(t('usage.emptyResponse.submitFailed'))
+  } finally {
+    claimSubmitting.value = false
   }
 }
 

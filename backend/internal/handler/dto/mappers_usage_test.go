@@ -171,6 +171,28 @@ func TestUsageLogFromService_KeepsUserBillingAndIPWithoutAdminCostFields(t *test
 	require.NotContains(t, string(userJSON), "account_cost")
 }
 
+func TestUsageLogFromService_IncludesEmptyResponseCompensationProjection(t *testing.T) {
+	t.Parallel()
+
+	log := &service.UsageLog{
+		ID:                       42,
+		ActualCost:               1.25,
+		CompensatedCost:          0.75,
+		CompensationEligible:     false,
+		CompensationEligibility:  service.UsageCompensationClaimed,
+		CompensationReasonCode:   service.EmptyResponseReasonPureEmpty,
+		EmptyResponseClaimStatus: service.EmptyResponseClaimCompensated,
+	}
+
+	got := UsageLogFromService(log)
+	require.False(t, got.CompensationEligible)
+	require.Equal(t, service.UsageCompensationClaimed, got.CompensationEligibility)
+	require.Equal(t, service.EmptyResponseReasonPureEmpty, got.CompensationReasonCode)
+	require.Equal(t, service.EmptyResponseClaimCompensated, got.ClaimStatus)
+	require.InDelta(t, 0.75, got.CompensatedCost, 1e-12)
+	require.InDelta(t, 0.50, got.NetActualCost, 1e-12)
+}
+
 func TestUsageLogFromService_FallsBackToLegacyModelWhenRequestedModelMissing(t *testing.T) {
 	t.Parallel()
 

@@ -17,9 +17,12 @@ import (
 	"github.com/Wei-Shaw/sub2api/internal/pkg/pagination"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/usagestats"
 	"github.com/Wei-Shaw/sub2api/internal/service"
+	"github.com/lib/pq"
 )
 
-const usageLogSelectColumns = "id, user_id, api_key_id, account_id, request_id, model, requested_model, upstream_model, group_id, custom_group_id, subscription_id, input_tokens, output_tokens, cache_creation_tokens, cache_read_tokens, cache_creation_5m_tokens, cache_creation_1h_tokens, image_output_tokens, image_output_cost, image_input_tokens, image_input_cost, input_cost, output_cost, cache_creation_cost, cache_read_cost, total_cost, actual_cost, rate_multiplier, account_rate_multiplier, billing_type, request_type, stream, openai_ws_mode, duration_ms, first_token_ms, user_agent, ip_address, image_count, image_size, image_input_size, image_output_size, image_size_source, image_size_breakdown, video_count, video_resolution, video_duration_seconds, service_tier, reasoning_effort, inbound_endpoint, upstream_endpoint, cache_ttl_overridden, long_context_billing_applied, channel_id, model_mapping_chain, billing_tier, billing_mode, account_stats_cost, session_id, created_at"
+const usageLogSelectColumns = "id, user_id, api_key_id, account_id, request_id, model, requested_model, upstream_model, group_id, custom_group_id, subscription_id, input_tokens, output_tokens, cache_creation_tokens, cache_read_tokens, cache_creation_5m_tokens, cache_creation_1h_tokens, image_output_tokens, image_output_cost, image_input_tokens, image_input_cost, input_cost, output_cost, cache_creation_cost, cache_read_cost, total_cost, actual_cost, compensated_cost, rate_multiplier, account_rate_multiplier, billing_type, request_type, stream, openai_ws_mode, duration_ms, first_token_ms, user_agent, ip_address, image_count, image_size, image_input_size, image_output_size, image_size_source, image_size_breakdown, video_count, video_resolution, video_duration_seconds, service_tier, reasoning_effort, inbound_endpoint, upstream_endpoint, cache_ttl_overridden, long_context_billing_applied, channel_id, model_mapping_chain, billing_tier, billing_mode, account_stats_cost, session_id, created_at"
+
+const usageLogNetActualCostExpr = "GREATEST(actual_cost - compensated_cost, 0)"
 
 func (r *usageLogRepository) GetByID(ctx context.Context, id int64) (log *service.UsageLog, err error) {
 	query := "SELECT " + usageLogSelectColumns + " FROM usage_logs WHERE id = $1"
@@ -48,6 +51,14 @@ func (r *usageLogRepository) GetByID(ctx context.Context, id int64) (log *servic
 	if err = rows.Err(); err != nil {
 		return nil, err
 	}
+	logs := []service.UsageLog{*log}
+	if err = r.hydrateUsageLogAssociations(ctx, logs); err != nil {
+		return nil, err
+	}
+	if err = r.hydrateUsageLogCompensation(ctx, logs); err != nil {
+		return nil, err
+	}
+	log = &logs[0]
 	return log, nil
 }
 
@@ -154,7 +165,78 @@ func (r *usageLogRepository) ListWithFilters(ctx context.Context, params paginat
 	if err := r.hydrateUsageLogAssociations(ctx, logs); err != nil {
 		return nil, nil, err
 	}
+	if err := r.hydrateUsageLogCompensation(ctx, logs); err != nil {
+		return nil, nil, err
+	}
 	return logs, page, nil
+}
+
+func (r *usageLogRepository) hydrateUsageLogCompensation(ctx context.Context, logs []service.UsageLog) error {
+	if len(logs) == 0 {
+		return nil
+	}
+	ids := make([]int64, 0, len(logs))
+	byID := make(map[int64]*service.UsageLog, len(logs))
+	for i := range logs {
+		ids = append(ids, logs[i].ID)
+		byID[logs[i].ID] = &logs[i]
+	}
+	rows, err := r.sql.QueryContext(ctx, `
+		SELECT ul.id, erc.id, erc.status, erc.reason_code,
+			uro.http_status, uro.upstream_status, uro.has_text, uro.has_tool_call,
+			uro.has_reasoning, uro.has_media, uro.output_bytes, uro.event_count,
+			uro.stream_completed, uro.finish_reason, uro.disconnect_source,
+			uro.upstream_error_kind, uro.collector_version
+		FROM usage_logs ul
+		LEFT JOIN empty_response_claims erc ON erc.usage_log_id = ul.id
+		LEFT JOIN usage_response_outcomes uro ON uro.usage_log_id = ul.id
+		WHERE ul.id = ANY($1)
+	`, pq.Array(ids))
+	if err != nil {
+		return fmt.Errorf("load usage compensation projection: %w", err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var usageID int64
+		var claimID, httpStatus, upstreamStatus, outputBytes, eventCount, collectorVersion sql.NullInt64
+		var claimStatus, reasonCode, finishReason, disconnectSource, upstreamErrorKind sql.NullString
+		var hasText, hasToolCall, hasReasoning, hasMedia, streamCompleted sql.NullBool
+		if err := rows.Scan(
+			&usageID, &claimID, &claimStatus, &reasonCode,
+			&httpStatus, &upstreamStatus, &hasText, &hasToolCall,
+			&hasReasoning, &hasMedia, &outputBytes, &eventCount,
+			&streamCompleted, &finishReason, &disconnectSource,
+			&upstreamErrorKind, &collectorVersion,
+		); err != nil {
+			return err
+		}
+		log := byID[usageID]
+		if log == nil {
+			continue
+		}
+		if claimID.Valid {
+			id := claimID.Int64
+			log.EmptyResponseClaimID = &id
+			log.EmptyResponseClaimStatus = claimStatus.String
+			log.CompensationReasonCode = reasonCode.String
+		}
+		if collectorVersion.Valid {
+			log.Outcome = &service.ResponseOutcome{
+				HTTPStatus: int(httpStatus.Int64), UpstreamStatus: int(upstreamStatus.Int64),
+				HasText: hasText.Bool, HasToolCall: hasToolCall.Bool,
+				HasReasoning: hasReasoning.Bool, HasMedia: hasMedia.Bool,
+				OutputBytes: outputBytes.Int64, EventCount: int(eventCount.Int64),
+				StreamCompleted: streamCompleted.Bool, FinishReason: finishReason.String,
+				DisconnectSource:  service.DisconnectSource(disconnectSource.String),
+				UpstreamErrorKind: service.UpstreamErrorKind(upstreamErrorKind.String),
+				CollectorVersion:  int(collectorVersion.Int64),
+			}
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	return nil
 }
 
 func shouldUseFastUsageLogTotal(filters UsageLogFilters) bool {
@@ -456,6 +538,7 @@ func scanUsageLog(scanner interface{ Scan(...any) error }) (*service.UsageLog, e
 		cacheReadCost             float64
 		totalCost                 float64
 		actualCost                float64
+		compensatedCost           float64
 		rateMultiplier            float64
 		accountRateMultiplier     sql.NullFloat64
 		billingType               int16
@@ -518,6 +601,7 @@ func scanUsageLog(scanner interface{ Scan(...any) error }) (*service.UsageLog, e
 		&cacheReadCost,
 		&totalCost,
 		&actualCost,
+		&compensatedCost,
 		&rateMultiplier,
 		&accountRateMultiplier,
 		&billingType,
@@ -577,6 +661,7 @@ func scanUsageLog(scanner interface{ Scan(...any) error }) (*service.UsageLog, e
 		CacheReadCost:             cacheReadCost,
 		TotalCost:                 totalCost,
 		ActualCost:                actualCost,
+		CompensatedCost:           compensatedCost,
 		RateMultiplier:            rateMultiplier,
 		AccountRateMultiplier:     nullFloat64Ptr(accountRateMultiplier),
 		BillingType:               int8(billingType),

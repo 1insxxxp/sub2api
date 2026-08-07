@@ -33,15 +33,17 @@ type userModelStat struct {
 	TotalTokens         int64   `json:"total_tokens"`
 	Cost                float64 `json:"cost"`
 	ActualCost          float64 `json:"actual_cost"`
+	NetActualCost       float64 `json:"net_actual_cost"`
 }
 
 type userGroupStat struct {
-	GroupID     int64   `json:"group_id"`
-	GroupName   string  `json:"group_name"`
-	Requests    int64   `json:"requests"`
-	TotalTokens int64   `json:"total_tokens"`
-	Cost        float64 `json:"cost"`
-	ActualCost  float64 `json:"actual_cost"`
+	GroupID       int64   `json:"group_id"`
+	GroupName     string  `json:"group_name"`
+	Requests      int64   `json:"requests"`
+	TotalTokens   int64   `json:"total_tokens"`
+	Cost          float64 `json:"cost"`
+	ActualCost    float64 `json:"actual_cost"`
+	NetActualCost float64 `json:"net_actual_cost"`
 }
 
 // UsageHandler handles usage-related requests
@@ -581,6 +583,7 @@ func userModelStatsFromUsageStats(stats []usagestats.ModelStat) []userModelStat 
 			TotalTokens:         stat.TotalTokens,
 			Cost:                stat.Cost,
 			ActualCost:          stat.ActualCost,
+			NetActualCost:       stat.NetActualCost,
 		})
 	}
 	return out
@@ -590,12 +593,13 @@ func userGroupStatsFromUsageStats(stats []usagestats.GroupStat) []userGroupStat 
 	out := make([]userGroupStat, 0, len(stats))
 	for _, stat := range stats {
 		out = append(out, userGroupStat{
-			GroupID:     stat.GroupID,
-			GroupName:   stat.GroupName,
-			Requests:    stat.Requests,
-			TotalTokens: stat.TotalTokens,
-			Cost:        stat.Cost,
-			ActualCost:  stat.ActualCost,
+			GroupID:       stat.GroupID,
+			GroupName:     stat.GroupName,
+			Requests:      stat.Requests,
+			TotalTokens:   stat.TotalTokens,
+			Cost:          stat.Cost,
+			ActualCost:    stat.ActualCost,
+			NetActualCost: stat.NetActualCost,
 		})
 	}
 	return out

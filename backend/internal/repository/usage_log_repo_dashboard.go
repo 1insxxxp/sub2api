@@ -412,6 +412,7 @@ func (r *usageLogRepository) GetUserDashboardStats(ctx context.Context, userID i
 			COALESCE(SUM(cache_read_tokens), 0) as total_cache_read_tokens,
 			COALESCE(SUM(total_cost), 0) as total_cost,
 			COALESCE(SUM(actual_cost), 0) as total_actual_cost,
+			COALESCE(SUM(GREATEST(actual_cost - compensated_cost, 0)), 0) as total_net_actual_cost,
 			COALESCE(AVG(duration_ms), 0) as avg_duration_ms
 		FROM usage_logs
 		WHERE user_id = $1
@@ -428,6 +429,7 @@ func (r *usageLogRepository) GetUserDashboardStats(ctx context.Context, userID i
 		&stats.TotalCacheReadTokens,
 		&stats.TotalCost,
 		&stats.TotalActualCost,
+		&stats.TotalNetActualCost,
 		&stats.AverageDurationMs,
 	); err != nil {
 		return nil, err
@@ -443,7 +445,8 @@ func (r *usageLogRepository) GetUserDashboardStats(ctx context.Context, userID i
 			COALESCE(SUM(cache_creation_tokens), 0) as today_cache_creation_tokens,
 			COALESCE(SUM(cache_read_tokens), 0) as today_cache_read_tokens,
 			COALESCE(SUM(total_cost), 0) as today_cost,
-			COALESCE(SUM(actual_cost), 0) as today_actual_cost
+			COALESCE(SUM(actual_cost), 0) as today_actual_cost,
+			COALESCE(SUM(GREATEST(actual_cost - compensated_cost, 0)), 0) as today_net_actual_cost
 		FROM usage_logs
 		WHERE user_id = $1 AND created_at >= $2
 	`
@@ -459,6 +462,7 @@ func (r *usageLogRepository) GetUserDashboardStats(ctx context.Context, userID i
 		&stats.TodayCacheReadTokens,
 		&stats.TodayCost,
 		&stats.TodayActualCost,
+		&stats.TodayNetActualCost,
 	); err != nil {
 		return nil, err
 	}

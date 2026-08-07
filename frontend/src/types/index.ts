@@ -1716,6 +1716,12 @@ export interface UsageLog {
   cache_read_cost: number
   total_cost: number
   actual_cost: number
+  compensated_cost: number
+  net_actual_cost: number
+  compensation_eligible: boolean
+  compensation_eligibility: 'eligible' | 'manual_review' | 'claimed' | 'unavailable'
+  compensation_reason_code?: string
+  claim_status?: 'evaluating' | 'manual_review' | 'approved' | 'rejected' | 'compensated'
   rate_multiplier: number
   long_context_billing_applied: boolean
   billing_type: number
@@ -1754,6 +1760,18 @@ export interface UsageLog {
   api_key?: ApiKey
   group?: Group
   subscription?: UserSubscription
+}
+
+export interface EmptyResponseClaim {
+  id: number
+  usage_log_id: number
+  status: 'evaluating' | 'manual_review' | 'approved' | 'rejected' | 'compensated'
+  reason_code: string
+  estimated_refund: number
+  refunded_amount: number
+  created_at?: string
+  updated_at?: string
+  compensated_at?: string | null
 }
 
 export interface UsageLogAccountSummary {

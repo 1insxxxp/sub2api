@@ -17,6 +17,7 @@ import type {
   UserErrorRequestDetail,
   UserErrorListParams
 } from '@/types'
+import type { EmptyResponseClaim } from '@/types'
 
 // ==================== Dashboard Types ====================
 
@@ -368,6 +369,17 @@ export async function getMyErrorDetail(id: number): Promise<UserErrorRequestDeta
   return data
 }
 
+export async function submitEmptyResponseClaim(
+  usageLogId: number,
+  input: { reason: string }
+): Promise<EmptyResponseClaim> {
+  const { data } = await apiClient.post<EmptyResponseClaim>(
+    `/usage/${usageLogId}/empty-response-claim`,
+    input
+  )
+  return data
+}
+
 export const usageAPI = {
   list,
   query,
@@ -384,7 +396,8 @@ export const usageAPI = {
   getDashboardApiKeysUsage,
   // Error requests
   listMyErrorRequests,
-  getMyErrorDetail
+  getMyErrorDetail,
+  submitEmptyResponseClaim
 }
 
 export default usageAPI

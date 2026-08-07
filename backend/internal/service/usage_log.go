@@ -150,13 +150,20 @@ type UsageLog struct {
 	ImageOutputTokens int
 	ImageOutputCost   float64
 
-	InputCost                 float64
-	OutputCost                float64
-	CacheCreationCost         float64
-	CacheReadCost             float64
-	TotalCost                 float64
-	ActualCost                float64
-	CompensatedCost           float64
+	InputCost         float64
+	OutputCost        float64
+	CacheCreationCost float64
+	CacheReadCost     float64
+	TotalCost         float64
+	ActualCost        float64
+	CompensatedCost   float64
+	// Compensation projection is computed server-side. Clients must not
+	// reconstruct eligibility rules from timestamps or response metadata.
+	CompensationEligible      bool
+	CompensationEligibility   string
+	CompensationReasonCode    string
+	EmptyResponseClaimID      *int64
+	EmptyResponseClaimStatus  string
 	RateMultiplier            float64
 	LongContextBillingApplied bool
 	// AccountRateMultiplier 账号计费倍率快照（nil 表示历史数据，按 1.0 处理）
@@ -204,6 +211,20 @@ type UsageLog struct {
 	Account      *Account
 	Group        *Group
 	Subscription *UserSubscription
+}
+
+const (
+	UsageCompensationEligible     = "eligible"
+	UsageCompensationManualReview = "manual_review"
+	UsageCompensationClaimed      = "claimed"
+	UsageCompensationUnavailable  = "unavailable"
+)
+
+func (u *UsageLog) NetActualCost() float64 {
+	if u == nil || u.ActualCost <= u.CompensatedCost {
+		return 0
+	}
+	return u.ActualCost - u.CompensatedCost
 }
 
 func (u *UsageLog) TotalTokens() int {

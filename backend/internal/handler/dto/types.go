@@ -515,6 +515,12 @@ type UsageLog struct {
 	CacheReadCost             float64 `json:"cache_read_cost"`
 	TotalCost                 float64 `json:"total_cost"`
 	ActualCost                float64 `json:"actual_cost"`
+	CompensatedCost           float64 `json:"compensated_cost"`
+	NetActualCost             float64 `json:"net_actual_cost"`
+	CompensationEligible      bool    `json:"compensation_eligible"`
+	CompensationEligibility   string  `json:"compensation_eligibility"`
+	CompensationReasonCode    string  `json:"compensation_reason_code,omitempty"`
+	ClaimStatus               string  `json:"claim_status,omitempty"`
 	RateMultiplier            float64 `json:"rate_multiplier"`
 	LongContextBillingApplied bool    `json:"long_context_billing_applied"`
 
