@@ -383,7 +383,18 @@ func (s *GatewayService) handleStreamingResponseAnthropicAPIKeyPassthrough(
 	account *Account,
 	startTime time.Time,
 	model string,
-) (*streamingResult, error) {
+) (result *streamingResult, err error) {
+	ctx, outcomeCollector := WithResponseOutcomeCollector(ctx, resp.StatusCode, resp.StatusCode)
+	defer func() {
+		if result != nil && result.clientDisconnect {
+			outcomeCollector.MarkStreamError(errors.New("client disconnected"), true)
+		} else if err != nil && !outcomeCollector.Snapshot().StreamCompleted {
+			outcomeCollector.MarkStreamError(err, false)
+		}
+		if result != nil {
+			result.outcome = outcomeCollector.Snapshot()
+		}
+	}()
 	if s.rateLimitService != nil {
 		s.rateLimitService.UpdateSessionWindow(ctx, account, resp.Header)
 	}
@@ -537,6 +548,7 @@ func (s *GatewayService) handleStreamingResponseAnthropicAPIKeyPassthrough(
 			line := ev.line
 			if data, ok := extractAnthropicSSEDataLine(line); ok {
 				trimmed := strings.TrimSpace(data)
+				outcomeCollector.ObserveAnthropicSSEData(data)
 				if anthropicStreamEventIsTerminal("", trimmed) {
 					sawTerminalEvent = true
 				}
@@ -779,6 +791,7 @@ func (s *GatewayService) handleNonStreamingResponseAnthropicAPIKeyPassthrough(
 	c *gin.Context,
 	account *Account,
 ) (*ClaudeUsage, error) {
+	ctx, outcomeCollector := WithResponseOutcomeCollector(ctx, resp.StatusCode, resp.StatusCode)
 	if s.rateLimitService != nil {
 		s.rateLimitService.UpdateSessionWindow(ctx, account, resp.Header)
 	}
@@ -793,6 +806,8 @@ func (s *GatewayService) handleNonStreamingResponseAnthropicAPIKeyPassthrough(
 		if err := json.Unmarshal(body, &raw); err != nil {
 			return nil, s.invalidNonStreamingJSONFailoverError(ctx, resp, account, body, err)
 		}
+		outcomeCollector.ObserveEvent(len(body))
+		_ = outcomeCollector.ObserveJSONPayload(ResponseOutcomeProtocolAnthropic, body)
 	}
 
 	usage := parseClaudeUsageFromResponseBody(body)

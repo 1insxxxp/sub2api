@@ -57,6 +57,28 @@ type ResponseOutcomeCollector struct {
 	outcome ResponseOutcome
 }
 
+type responseOutcomeCollectorContextKey struct{}
+
+func WithResponseOutcomeCollector(ctx context.Context, httpStatus, upstreamStatus int) (context.Context, *ResponseOutcomeCollector) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if existing, ok := ResponseOutcomeCollectorFromContext(ctx); ok {
+		existing.SetStatuses(httpStatus, upstreamStatus)
+		return ctx, existing
+	}
+	collector := NewResponseOutcomeCollector(httpStatus, upstreamStatus)
+	return context.WithValue(ctx, responseOutcomeCollectorContextKey{}, collector), collector
+}
+
+func ResponseOutcomeCollectorFromContext(ctx context.Context) (*ResponseOutcomeCollector, bool) {
+	if ctx == nil {
+		return nil, false
+	}
+	collector, ok := ctx.Value(responseOutcomeCollectorContextKey{}).(*ResponseOutcomeCollector)
+	return collector, ok && collector != nil
+}
+
 func NewResponseOutcomeCollector(httpStatus, upstreamStatus int) *ResponseOutcomeCollector {
 	collector := &ResponseOutcomeCollector{}
 	collector.outcome.HTTPStatus = httpStatus
@@ -68,6 +90,23 @@ func NewResponseOutcomeCollector(httpStatus, upstreamStatus int) *ResponseOutcom
 		collector.outcome.UpstreamErrorKind = UpstreamErrorHTTP5xx
 	}
 	return collector
+}
+
+func (c *ResponseOutcomeCollector) SetStatuses(httpStatus, upstreamStatus int) {
+	if c == nil {
+		return
+	}
+	c.mu.Lock()
+	if httpStatus > 0 {
+		c.outcome.HTTPStatus = httpStatus
+	}
+	if upstreamStatus > 0 {
+		c.outcome.UpstreamStatus = upstreamStatus
+		if upstreamStatus >= 500 {
+			c.outcome.UpstreamErrorKind = UpstreamErrorHTTP5xx
+		}
+	}
+	c.mu.Unlock()
 }
 
 func (c *ResponseOutcomeCollector) ObserveText(value string) {
@@ -129,6 +168,15 @@ func (c *ResponseOutcomeCollector) MarkCompleted(finishReason string) {
 	c.mu.Unlock()
 }
 
+func (c *ResponseOutcomeCollector) ObserveFinishReason(finishReason string) {
+	if c == nil || strings.TrimSpace(finishReason) == "" {
+		return
+	}
+	c.mu.Lock()
+	c.outcome.FinishReason = strings.TrimSpace(finishReason)
+	c.mu.Unlock()
+}
+
 func (c *ResponseOutcomeCollector) MarkStreamError(err error, clientCanceled bool) {
 	if c == nil || err == nil {
 		return
@@ -144,7 +192,9 @@ func (c *ResponseOutcomeCollector) MarkStreamError(err error, clientCanceled boo
 	switch {
 	case errors.Is(err, context.DeadlineExceeded), isTimeoutError(err):
 		c.outcome.UpstreamErrorKind = UpstreamErrorTimeout
-	case strings.Contains(strings.ToLower(err.Error()), "eof"), strings.Contains(strings.ToLower(err.Error()), "protocol"):
+	case strings.Contains(strings.ToLower(err.Error()), "timeout"):
+		c.outcome.UpstreamErrorKind = UpstreamErrorTimeout
+	case strings.Contains(strings.ToLower(err.Error()), "eof"), strings.Contains(strings.ToLower(err.Error()), "protocol"), strings.Contains(strings.ToLower(err.Error()), "missing terminal"):
 		c.outcome.UpstreamErrorKind = UpstreamErrorProtocol
 	default:
 		c.outcome.UpstreamErrorKind = UpstreamErrorOther

@@ -322,6 +322,7 @@ func (s *GatewayService) handleResponsesBufferedStreamingResponse(
 	clientToolMapping apicompat.ResponsesClientToolMapping,
 ) (*ForwardResult, error) {
 	requestID := resp.Header.Get("x-request-id")
+	outcomeCollector := NewResponseOutcomeCollector(http.StatusOK, resp.StatusCode)
 
 	scanner := bufio.NewScanner(resp.Body)
 	maxLineSize := defaultMaxLineSize
@@ -350,6 +351,7 @@ func (s *GatewayService) handleResponsesBufferedStreamingResponse(
 		if !ok {
 			continue
 		}
+		outcomeCollector.ObserveAnthropicSSEData(payload)
 
 		var event apicompat.AnthropicStreamEvent
 		if err := json.Unmarshal([]byte(payload), &event); err != nil {
@@ -397,12 +399,15 @@ func (s *GatewayService) handleResponsesBufferedStreamingResponse(
 	}
 
 	if err := scanner.Err(); err != nil {
+		outcomeCollector.MarkStreamError(err, false)
 		if !errors.Is(err, context.Canceled) && !errors.Is(err, context.DeadlineExceeded) {
 			logger.L().Warn("forward_as_responses buffered: read error",
 				zap.Error(err),
 				zap.String("request_id", requestID),
 			)
 		}
+	} else if !outcomeCollector.Snapshot().StreamCompleted {
+		outcomeCollector.MarkStreamError(errors.New("missing terminal event"), false)
 	}
 
 	if finalResp == nil {
@@ -444,6 +449,7 @@ func (s *GatewayService) handleResponsesBufferedStreamingResponse(
 		c.JSON(http.StatusOK, responsesResp)
 	}
 
+	outcome := outcomeCollector.Snapshot()
 	return &ForwardResult{
 		RequestID:       requestID,
 		Usage:           usage,
@@ -452,6 +458,7 @@ func (s *GatewayService) handleResponsesBufferedStreamingResponse(
 		ReasoningEffort: reasoningEffort,
 		Stream:          false,
 		Duration:        time.Since(startTime),
+		Outcome:         &outcome,
 	}, nil
 }
 
@@ -467,6 +474,7 @@ func (s *GatewayService) handleResponsesStreamingResponse(
 	clientToolMapping apicompat.ResponsesClientToolMapping,
 ) (*ForwardResult, error) {
 	requestID := resp.Header.Get("x-request-id")
+	outcomeCollector := NewResponseOutcomeCollector(http.StatusOK, resp.StatusCode)
 
 	if s.responseHeaderFilter != nil {
 		responseheaders.WriteFilteredHeaders(c.Writer.Header(), resp.Header, s.responseHeaderFilter)
@@ -492,6 +500,7 @@ func (s *GatewayService) handleResponsesStreamingResponse(
 	scanner.Buffer(make([]byte, 0, 64*1024), maxLineSize)
 
 	resultWithUsage := func() *ForwardResult {
+		outcome := outcomeCollector.Snapshot()
 		return &ForwardResult{
 			RequestID:       requestID,
 			Usage:           usage,
@@ -501,6 +510,7 @@ func (s *GatewayService) handleResponsesStreamingResponse(
 			Stream:          true,
 			Duration:        time.Since(startTime),
 			FirstTokenMs:    firstTokenMs,
+			Outcome:         &outcome,
 		}
 	}
 
@@ -589,6 +599,7 @@ func (s *GatewayService) handleResponsesStreamingResponse(
 		if !ok {
 			continue
 		}
+		outcomeCollector.ObserveAnthropicSSEData(payload)
 
 		var event apicompat.AnthropicStreamEvent
 		if err := json.Unmarshal([]byte(payload), &event); err != nil {
@@ -601,17 +612,21 @@ func (s *GatewayService) handleResponsesStreamingResponse(
 		}
 
 		if processEvent(&event) {
+			outcomeCollector.MarkStreamError(errors.New("client disconnected"), true)
 			return resultWithUsage(), nil
 		}
 	}
 
 	if err := scanner.Err(); err != nil {
+		outcomeCollector.MarkStreamError(err, false)
 		if !errors.Is(err, context.Canceled) && !errors.Is(err, context.DeadlineExceeded) {
 			logger.L().Warn("forward_as_responses stream: read error",
 				zap.Error(err),
 				zap.String("request_id", requestID),
 			)
 		}
+	} else if !outcomeCollector.Snapshot().StreamCompleted {
+		outcomeCollector.MarkStreamError(errors.New("missing terminal event"), false)
 	}
 
 	return finalizeStream()

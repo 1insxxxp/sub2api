@@ -240,6 +240,7 @@ func (s *GatewayService) handleCCBufferedFromAnthropic(
 	startTime time.Time,
 ) (*ForwardResult, error) {
 	requestID := resp.Header.Get("x-request-id")
+	outcomeCollector := NewResponseOutcomeCollector(http.StatusOK, resp.StatusCode)
 
 	scanner := bufio.NewScanner(resp.Body)
 	maxLineSize := defaultMaxLineSize
@@ -266,6 +267,7 @@ func (s *GatewayService) handleCCBufferedFromAnthropic(
 		if !ok {
 			continue
 		}
+		outcomeCollector.ObserveAnthropicSSEData(payload)
 
 		var event apicompat.AnthropicStreamEvent
 		if err := json.Unmarshal([]byte(payload), &event); err != nil {
@@ -306,12 +308,15 @@ func (s *GatewayService) handleCCBufferedFromAnthropic(
 	}
 
 	if err := scanner.Err(); err != nil {
+		outcomeCollector.MarkStreamError(err, false)
 		if !errors.Is(err, context.Canceled) && !errors.Is(err, context.DeadlineExceeded) {
 			logger.L().Warn("forward_as_cc buffered: read error",
 				zap.Error(err),
 				zap.String("request_id", requestID),
 			)
 		}
+	} else if !outcomeCollector.Snapshot().StreamCompleted {
+		outcomeCollector.MarkStreamError(errors.New("missing terminal event"), false)
 	}
 
 	if finalResp == nil {
@@ -351,6 +356,7 @@ func (s *GatewayService) handleCCBufferedFromAnthropic(
 		c.JSON(http.StatusOK, ccResp)
 	}
 
+	outcome := outcomeCollector.Snapshot()
 	return &ForwardResult{
 		RequestID:       requestID,
 		Usage:           usage,
@@ -359,6 +365,7 @@ func (s *GatewayService) handleCCBufferedFromAnthropic(
 		ReasoningEffort: reasoningEffort,
 		Stream:          false,
 		Duration:        time.Since(startTime),
+		Outcome:         &outcome,
 	}, nil
 }
 
@@ -374,6 +381,7 @@ func (s *GatewayService) handleCCStreamingFromAnthropic(
 	includeUsage bool,
 ) (*ForwardResult, error) {
 	requestID := resp.Header.Get("x-request-id")
+	outcomeCollector := NewResponseOutcomeCollector(http.StatusOK, resp.StatusCode)
 
 	if s.responseHeaderFilter != nil {
 		responseheaders.WriteFilteredHeaders(c.Writer.Header(), resp.Header, s.responseHeaderFilter)
@@ -403,6 +411,7 @@ func (s *GatewayService) handleCCStreamingFromAnthropic(
 	scanner.Buffer(make([]byte, 0, 64*1024), maxLineSize)
 
 	resultWithUsage := func() *ForwardResult {
+		outcome := outcomeCollector.Snapshot()
 		return &ForwardResult{
 			RequestID:       requestID,
 			Usage:           usage,
@@ -412,6 +421,7 @@ func (s *GatewayService) handleCCStreamingFromAnthropic(
 			Stream:          true,
 			Duration:        time.Since(startTime),
 			FirstTokenMs:    firstTokenMs,
+			Outcome:         &outcome,
 		}
 	}
 
@@ -473,6 +483,7 @@ func (s *GatewayService) handleCCStreamingFromAnthropic(
 		if !ok {
 			continue
 		}
+		outcomeCollector.ObserveAnthropicSSEData(payload)
 
 		var event apicompat.AnthropicStreamEvent
 		if err := json.Unmarshal([]byte(payload), &event); err != nil {
@@ -480,17 +491,21 @@ func (s *GatewayService) handleCCStreamingFromAnthropic(
 		}
 
 		if processAnthropicEvent(&event) {
+			outcomeCollector.MarkStreamError(errors.New("client disconnected"), true)
 			return resultWithUsage(), nil
 		}
 	}
 
 	if err := scanner.Err(); err != nil {
+		outcomeCollector.MarkStreamError(err, false)
 		if !errors.Is(err, context.Canceled) && !errors.Is(err, context.DeadlineExceeded) {
 			logger.L().Warn("forward_as_cc stream: read error",
 				zap.Error(err),
 				zap.String("request_id", requestID),
 			)
 		}
+	} else if !outcomeCollector.Snapshot().StreamCompleted {
+		outcomeCollector.MarkStreamError(errors.New("missing terminal event"), false)
 	}
 
 	// Finalize both state machines

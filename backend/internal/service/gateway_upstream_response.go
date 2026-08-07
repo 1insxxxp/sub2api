@@ -645,6 +645,7 @@ type streamingResult struct {
 	usage            *ClaudeUsage
 	firstTokenMs     *int
 	clientDisconnect bool // 客户端是否在流式传输过程中断开
+	outcome          ResponseOutcome
 }
 
 // hasObservedTokens 报告流式过程中是否已观测到任何上游计量的 token。
@@ -682,10 +683,22 @@ func partialStreamUsageResult(resp *http.Response, streamResult *streamingResult
 		Duration:         time.Since(startTime),
 		FirstTokenMs:     streamResult.firstTokenMs,
 		ClientDisconnect: streamResult.clientDisconnect,
+		Outcome:          &streamResult.outcome,
 	}
 }
 
-func (s *GatewayService) handleStreamingResponse(ctx context.Context, resp *http.Response, c *gin.Context, account *Account, startTime time.Time, originalModel, mappedModel string, mimicClaudeCode bool) (*streamingResult, error) {
+func (s *GatewayService) handleStreamingResponse(ctx context.Context, resp *http.Response, c *gin.Context, account *Account, startTime time.Time, originalModel, mappedModel string, mimicClaudeCode bool) (result *streamingResult, err error) {
+	ctx, outcomeCollector := WithResponseOutcomeCollector(ctx, resp.StatusCode, resp.StatusCode)
+	defer func() {
+		if result != nil && result.clientDisconnect {
+			outcomeCollector.MarkStreamError(errors.New("client disconnected"), true)
+		} else if err != nil && !outcomeCollector.Snapshot().StreamCompleted {
+			outcomeCollector.MarkStreamError(err, false)
+		}
+		if result != nil {
+			result.outcome = outcomeCollector.Snapshot()
+		}
+	}()
 	// 更新5h窗口状态
 	s.rateLimitService.UpdateSessionWindow(ctx, account, resp.Header)
 
@@ -861,6 +874,7 @@ func (s *GatewayService) handleStreamingResponse(ctx context.Context, resp *http
 
 		if dataLine == "[DONE]" {
 			sawTerminalEvent = true
+			outcomeCollector.ObserveAnthropicSSEData(dataLine)
 			block := ""
 			if eventName != "" {
 				block = "event: " + eventName + "\n"
@@ -881,6 +895,7 @@ func (s *GatewayService) handleStreamingResponse(ctx context.Context, resp *http
 		}
 
 		eventType, _ := event["type"].(string)
+		outcomeCollector.ObserveAnthropicSSEData(dataLine)
 		if eventName == "" {
 			eventName = eventType
 		}
@@ -1369,6 +1384,7 @@ func (s *GatewayService) resolveCacheTTLUsageOverrideTarget(ctx context.Context,
 }
 
 func (s *GatewayService) handleNonStreamingResponse(ctx context.Context, resp *http.Response, c *gin.Context, account *Account, originalModel, mappedModel string) (*ClaudeUsage, error) {
+	ctx, outcomeCollector := WithResponseOutcomeCollector(ctx, resp.StatusCode, resp.StatusCode)
 	// 更新5h窗口状态
 	s.rateLimitService.UpdateSessionWindow(ctx, account, resp.Header)
 
@@ -1387,6 +1403,8 @@ func (s *GatewayService) handleNonStreamingResponse(ctx context.Context, resp *h
 		}
 		return nil, fmt.Errorf("parse response: %w", err)
 	}
+	outcomeCollector.ObserveEvent(len(body))
+	_ = outcomeCollector.ObserveJSONPayload(ResponseOutcomeProtocolAnthropic, body)
 
 	// 解析嵌套的 cache_creation 对象中的 5m/1h 明细
 	cc5m := gjson.GetBytes(body, "usage.cache_creation.ephemeral_5m_input_tokens")

@@ -20,6 +20,7 @@ type antigravityStreamResult struct {
 	usage            *ClaudeUsage
 	firstTokenMs     *int
 	clientDisconnect bool // 客户端是否在流式传输过程中断开
+	outcome          ResponseOutcome
 }
 
 // antigravityClientWriter 封装流式响应的客户端写入，自动检测断开并标记。
@@ -766,6 +767,7 @@ func (s *AntigravityGatewayService) writeGoogleError(c *gin.Context, status int,
 // collectClaudeStreamResponse 收集上游流式响应，转换为 Claude 非流式格式返回
 // 用于处理客户端非流式请求但上游只支持流式的情况
 func (s *AntigravityGatewayService) collectClaudeStreamResponse(resp *http.Response, startTime time.Time, originalModel string) ([]byte, *antigravityStreamResult, error) {
+	outcomeCollector := NewResponseOutcomeCollector(http.StatusOK, resp.StatusCode)
 	scanner := bufio.NewScanner(resp.Body)
 	maxLineSize := defaultMaxLineSize
 	if s.settingService.cfg != nil && s.settingService.cfg.Gateway.MaxLineSize > 0 {
@@ -860,6 +862,8 @@ func (s *AntigravityGatewayService) collectClaudeStreamResponse(resp *http.Respo
 			if parseErr != nil {
 				continue
 			}
+			outcomeCollector.ObserveEvent(len(inner))
+			_ = outcomeCollector.ObserveJSONPayload(ResponseOutcomeProtocolGemini, inner)
 
 			var parsed map[string]any
 			if err := json.Unmarshal(inner, &parsed); err != nil {
@@ -895,6 +899,9 @@ func (s *AntigravityGatewayService) collectClaudeStreamResponse(resp *http.Respo
 	}
 
 returnResponse:
+	if !outcomeCollector.Snapshot().StreamCompleted {
+		outcomeCollector.MarkStreamError(errors.New("missing terminal event"), false)
+	}
 	// 处理空响应情况 — 触发同账号重试 + failover 切换账号
 	if !meaningfulResponse {
 		logger.LegacyPrintf("service.antigravity_gateway", "[antigravity-Forward] warning: empty stream response (claude non-stream), triggering failover")
@@ -935,7 +942,7 @@ returnResponse:
 		ImageOutputTokens:        agUsage.ImageOutputTokens,
 	}
 
-	return claudeResp, &antigravityStreamResult{usage: usage, firstTokenMs: firstTokenMs}, nil
+	return claudeResp, &antigravityStreamResult{usage: usage, firstTokenMs: firstTokenMs, outcome: outcomeCollector.Snapshot()}, nil
 }
 
 // handleClaudeStreamToNonStreaming 收集上游流式响应，转换为 Claude 非流式格式返回
@@ -969,7 +976,19 @@ func (s *AntigravityGatewayService) handleClaudeStreamToNonStreaming(c *gin.Cont
 }
 
 // handleClaudeStreamingResponse 处理 Claude 流式响应（Gemini SSE → Claude SSE 转换）
-func (s *AntigravityGatewayService) handleClaudeStreamingResponse(c *gin.Context, resp *http.Response, startTime time.Time, originalModel string) (*antigravityStreamResult, error) {
+func (s *AntigravityGatewayService) handleClaudeStreamingResponse(c *gin.Context, resp *http.Response, startTime time.Time, originalModel string) (result *antigravityStreamResult, err error) {
+	outcomeCollector := NewResponseOutcomeCollector(http.StatusOK, resp.StatusCode)
+	defer func() {
+		if result == nil {
+			return
+		}
+		if result.clientDisconnect {
+			outcomeCollector.MarkStreamError(errors.New("client disconnected"), true)
+		} else if err != nil && !outcomeCollector.Snapshot().StreamCompleted {
+			outcomeCollector.MarkStreamError(err, false)
+		}
+		result.outcome = outcomeCollector.Snapshot()
+	}()
 	c.Header("Content-Type", "text/event-stream")
 	c.Header("Cache-Control", "no-cache")
 	c.Header("Connection", "keep-alive")
@@ -1090,6 +1109,9 @@ func (s *AntigravityGatewayService) handleClaudeStreamingResponse(c *gin.Context
 		select {
 		case ev, ok := <-events:
 			if !ok {
+				if !outcomeCollector.Snapshot().StreamCompleted {
+					outcomeCollector.MarkStreamError(errors.New("missing terminal event"), false)
+				}
 				// 上游完成，发送结束事件
 				finalEvents, agUsage := processor.Finish()
 				if len(finalEvents) > 0 {
@@ -1120,6 +1142,16 @@ func (s *AntigravityGatewayService) handleClaudeStreamingResponse(c *gin.Context
 			}
 
 			lastDataAt = time.Now()
+			trimmedLine := strings.TrimSpace(ev.line)
+			if strings.HasPrefix(trimmedLine, "data:") {
+				payload := strings.TrimSpace(strings.TrimPrefix(trimmedLine, "data:"))
+				if payload != "" && payload != "[DONE]" {
+					if inner, unwrapErr := s.unwrapV1InternalResponse([]byte(payload)); unwrapErr == nil {
+						outcomeCollector.ObserveEvent(len(inner))
+						_ = outcomeCollector.ObserveJSONPayload(ResponseOutcomeProtocolGemini, inner)
+					}
+				}
+			}
 
 			// 处理 SSE 行，转换为 Claude 格式
 			claudeEvents := processor.ProcessLine(strings.TrimRight(ev.line, "\r\n"))

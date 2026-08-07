@@ -59,3 +59,15 @@ func TestResponseOutcomeCollectorObserveJSONPayloadRejectsInvalidJSON(t *testing
 	require.Error(t, collector.ObserveJSONPayload(ResponseOutcomeProtocolOpenAI, []byte(`{"choices":`)))
 	require.False(t, collector.Snapshot().HasEffectiveOutput())
 }
+
+func TestResponseOutcomeCollectorAnthropicSSERequiresTerminalFrame(t *testing.T) {
+	collector := NewResponseOutcomeCollector(200, 200)
+	collector.ObserveAnthropicSSEData(`{"type":"message_delta","delta":{"stop_reason":"end_turn"}}`)
+
+	beforeStop := collector.Snapshot()
+	require.Equal(t, "end_turn", beforeStop.FinishReason)
+	require.False(t, beforeStop.StreamCompleted)
+
+	collector.ObserveAnthropicSSEData(`{"type":"message_stop"}`)
+	require.True(t, collector.Snapshot().StreamCompleted)
+}

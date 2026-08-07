@@ -55,6 +55,55 @@ func (c *ResponseOutcomeCollector) observeAnthropicJSON(root gjson.Result) {
 	}
 }
 
+func (c *ResponseOutcomeCollector) ObserveAnthropicSSEData(data string) {
+	if c == nil {
+		return
+	}
+	trimmed := strings.TrimSpace(data)
+	if trimmed == "" {
+		return
+	}
+	c.ObserveEvent(len(data))
+	if trimmed == "[DONE]" {
+		c.MarkCompleted("done")
+		return
+	}
+	if !gjson.Valid(trimmed) {
+		return
+	}
+	root := gjson.Parse(trimmed)
+	switch root.Get("type").String() {
+	case "message_start":
+		c.observeAnthropicJSON(root.Get("message"))
+	case "content_block_start":
+		switch root.Get("content_block.type").String() {
+		case "text":
+			c.ObserveText(root.Get("content_block.text").String())
+		case "thinking", "redacted_thinking":
+			c.ObserveReasoning(root.Get("content_block.thinking").String())
+		case "tool_use", "server_tool_use":
+			c.ObserveToolCall()
+		case "image", "document":
+			c.ObserveMedia()
+		}
+	case "content_block_delta":
+		switch root.Get("delta.type").String() {
+		case "text_delta":
+			c.ObserveText(root.Get("delta.text").String())
+		case "thinking_delta", "signature_delta":
+			c.ObserveReasoning(root.Get("delta.thinking").String())
+		case "input_json_delta":
+			c.ObserveToolCall()
+		}
+	case "message_delta":
+		if reason := root.Get("delta.stop_reason").String(); reason != "" {
+			c.ObserveFinishReason(reason)
+		}
+	case "message_stop":
+		c.MarkCompleted("message_stop")
+	}
+}
+
 func (c *ResponseOutcomeCollector) observeOpenAIJSON(root gjson.Result) {
 	root.Get("choices").ForEach(func(_, choice gjson.Result) bool {
 		message := choice.Get("message")
