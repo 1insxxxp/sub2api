@@ -6,6 +6,8 @@ import (
 	"net"
 	"strings"
 	"sync"
+
+	"github.com/gin-gonic/gin"
 )
 
 const ResponseOutcomeCollectorVersion = 1
@@ -77,6 +79,39 @@ func ResponseOutcomeCollectorFromContext(ctx context.Context) (*ResponseOutcomeC
 	}
 	collector, ok := ctx.Value(responseOutcomeCollectorContextKey{}).(*ResponseOutcomeCollector)
 	return collector, ok && collector != nil
+}
+
+func ResponseOutcomeSnapshotFromContext(ctx context.Context) *ResponseOutcome {
+	collector, ok := ResponseOutcomeCollectorFromContext(ctx)
+	if !ok {
+		return nil
+	}
+	snapshot := collector.Snapshot()
+	return &snapshot
+}
+
+func EnsureResponseOutcomeCollector(ctx context.Context, c *gin.Context, httpStatus, upstreamStatus int) (context.Context, *ResponseOutcomeCollector) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if existing, ok := ResponseOutcomeCollectorFromContext(ctx); ok {
+		existing.SetStatuses(httpStatus, upstreamStatus)
+		if c != nil && c.Request != nil {
+			c.Request = c.Request.WithContext(context.WithValue(c.Request.Context(), responseOutcomeCollectorContextKey{}, existing))
+		}
+		return ctx, existing
+	}
+	if c != nil && c.Request != nil {
+		if existing, ok := ResponseOutcomeCollectorFromContext(c.Request.Context()); ok {
+			existing.SetStatuses(httpStatus, upstreamStatus)
+			return context.WithValue(ctx, responseOutcomeCollectorContextKey{}, existing), existing
+		}
+	}
+	ctx, collector := WithResponseOutcomeCollector(ctx, httpStatus, upstreamStatus)
+	if c != nil && c.Request != nil {
+		c.Request = c.Request.WithContext(context.WithValue(c.Request.Context(), responseOutcomeCollectorContextKey{}, collector))
+	}
+	return ctx, collector
 }
 
 func NewResponseOutcomeCollector(httpStatus, upstreamStatus int) *ResponseOutcomeCollector {

@@ -257,6 +257,7 @@ func (s *OpenAIGatewayService) forwardOpenAIPassthrough(
 	responseID := ""
 	imageCount := 0
 	var imageOutputSizes []string
+	var outcome *ResponseOutcome
 	if reqStream {
 		result, err := s.handleStreamingResponsePassthrough(ctx, resp, c, account, startTime, reqModel, upstreamPassthroughModel)
 		if err != nil {
@@ -267,6 +268,7 @@ func (s *OpenAIGatewayService) forwardOpenAIPassthrough(
 		responseID = strings.TrimSpace(result.responseID)
 		imageCount = result.imageCount
 		imageOutputSizes = result.imageOutputSizes
+		outcome = &result.outcome
 	} else {
 		result, err := s.handleNonStreamingResponsePassthrough(ctx, resp, c, reqModel, upstreamPassthroughModel)
 		if err != nil {
@@ -276,6 +278,7 @@ func (s *OpenAIGatewayService) forwardOpenAIPassthrough(
 		responseID = strings.TrimSpace(result.responseID)
 		imageCount = result.imageCount
 		imageOutputSizes = result.imageOutputSizes
+		outcome = &result.outcome
 	}
 	s.bindHTTPResponseAccount(ctx, c, account, responseID)
 
@@ -302,6 +305,7 @@ func (s *OpenAIGatewayService) forwardOpenAIPassthrough(
 		OpenAIWSMode:    false,
 		Duration:        time.Since(startTime),
 		FirstTokenMs:    firstTokenMs,
+		Outcome:         outcome,
 	}
 	if imageCount > 0 {
 		forwardResult.ImageCount = imageCount
@@ -733,6 +737,7 @@ type openaiStreamingResultPassthrough struct {
 	responseID       string
 	imageCount       int
 	imageOutputSizes []string
+	outcome          ResponseOutcome
 }
 
 type openaiNonStreamingResultPassthrough struct {
@@ -741,6 +746,7 @@ type openaiNonStreamingResultPassthrough struct {
 	responseID       string
 	imageCount       int
 	imageOutputSizes []string
+	outcome          ResponseOutcome
 }
 
 func openAIStreamClientOutputStarted(c *gin.Context, localStarted bool) bool {
@@ -1063,7 +1069,19 @@ func (s *OpenAIGatewayService) handleStreamingResponsePassthrough(
 	startTime time.Time,
 	originalModel string,
 	mappedModel string,
-) (*openaiStreamingResultPassthrough, error) {
+) (result *openaiStreamingResultPassthrough, err error) {
+	ctx, outcomeCollector := EnsureResponseOutcomeCollector(ctx, c, http.StatusOK, resp.StatusCode)
+	clientDisconnected := false
+	defer func() {
+		if clientDisconnected {
+			outcomeCollector.MarkStreamError(errors.New("client disconnected"), true)
+		} else if err != nil && !outcomeCollector.Snapshot().StreamCompleted {
+			outcomeCollector.MarkStreamError(err, false)
+		}
+		if result != nil {
+			result.outcome = outcomeCollector.Snapshot()
+		}
+	}()
 	writeOpenAIPassthroughResponseHeaders(c.Writer.Header(), resp.Header, s.responseHeaderFilter)
 
 	// SSE headers
@@ -1085,7 +1103,6 @@ func (s *OpenAIGatewayService) handleStreamingResponsePassthrough(
 	imageCounter := newOpenAIImageOutputCounter()
 	var firstTokenMs *int
 	responseID := ""
-	clientDisconnected := false
 	sawDone := false
 	sawTerminalEvent := false
 	sawFailedEvent := false
@@ -1134,6 +1151,7 @@ func (s *OpenAIGatewayService) handleStreamingResponsePassthrough(
 			responseID:       responseID,
 			imageCount:       imageCounter.Count(),
 			imageOutputSizes: imageCounter.Sizes(),
+			outcome:          outcomeCollector.Snapshot(),
 		}
 	}
 
@@ -1142,6 +1160,7 @@ func (s *OpenAIGatewayService) handleStreamingResponsePassthrough(
 		lineStartsClientOutput := false
 		forceFlushFailedEvent := false
 		if data, ok := extractOpenAISSEDataLine(line); ok {
+			outcomeCollector.ObserveOpenAISSEData(data)
 			dataBytes := []byte(data)
 			trimmedData := strings.TrimSpace(data)
 			if needModelReplace && strings.Contains(data, mappedModel) {
@@ -1326,6 +1345,7 @@ func (s *OpenAIGatewayService) handleNonStreamingResponsePassthrough(
 	originalModel string,
 	mappedModel string,
 ) (*openaiNonStreamingResultPassthrough, error) {
+	ctx, outcomeCollector := EnsureResponseOutcomeCollector(ctx, c, resp.StatusCode, resp.StatusCode)
 	body, err := ReadUpstreamResponseBody(resp.Body, s.cfg, c, openAITooLargeError)
 	if err != nil {
 		return nil, err
@@ -1351,6 +1371,10 @@ func (s *OpenAIGatewayService) handleNonStreamingResponsePassthrough(
 		// 兜底：尝试从 SSE 文本中解析 usage
 		usage = s.parseSSEUsageFromBody(string(body))
 	}
+	outcomeCollector.ObserveEvent(len(body))
+	if observeErr := outcomeCollector.ObserveJSONPayload(ResponseOutcomeProtocolOpenAI, body); observeErr == nil {
+		outcomeCollector.MarkCompleted("http_response")
+	}
 
 	writeOpenAIPassthroughResponseHeaders(c.Writer.Header(), resp.Header, s.responseHeaderFilter)
 
@@ -1374,6 +1398,7 @@ func (s *OpenAIGatewayService) handleNonStreamingResponsePassthrough(
 		responseID:       extractOpenAIResponseIDFromJSONBytes(body),
 		imageCount:       countOpenAIResponseImageOutputsFromJSONBytes(body),
 		imageOutputSizes: collectOpenAIResponseImageOutputSizesFromJSONBytes(body),
+		outcome:          outcomeCollector.Snapshot(),
 	}, nil
 }
 
@@ -1382,7 +1407,14 @@ func (s *OpenAIGatewayService) handleNonStreamingResponsePassthrough(
 // preserving passthrough payloads, except compact-only model remapping may
 // rewrite model fields back to the original requested model.
 func (s *OpenAIGatewayService) handlePassthroughSSEToJSON(resp *http.Response, c *gin.Context, body []byte, originalModel string, mappedModel string) (*openaiNonStreamingResultPassthrough, error) {
+	_, outcomeCollector := EnsureResponseOutcomeCollector(c.Request.Context(), c, resp.StatusCode, resp.StatusCode)
 	bodyText := string(body)
+	forEachOpenAISSEDataPayload(bodyText, func(data []byte) {
+		outcomeCollector.ObserveOpenAISSEData(string(data))
+	})
+	if !outcomeCollector.Snapshot().StreamCompleted {
+		outcomeCollector.MarkStreamError(errors.New("missing terminal event"), false)
+	}
 	finalResponse, ok := extractCodexFinalResponse(bodyText)
 
 	usage := &OpenAIUsage{}
@@ -1446,6 +1478,7 @@ func (s *OpenAIGatewayService) handlePassthroughSSEToJSON(resp *http.Response, c
 		responseID:       extractOpenAIResponseIDFromJSONBytes(body),
 		imageCount:       countOpenAIImageOutputsFromSSEBody(bodyText),
 		imageOutputSizes: collectOpenAIImageOutputSizesFromSSEBody(bodyText),
+		outcome:          outcomeCollector.Snapshot(),
 	}, nil
 }
 

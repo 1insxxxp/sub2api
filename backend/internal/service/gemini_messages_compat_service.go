@@ -1060,6 +1060,7 @@ func (s *GeminiMessagesCompatService) Forward(ctx context.Context, c *gin.Contex
 	if requestID != "" {
 		c.Header("x-request-id", requestID)
 	}
+	_, outcomeCollector := EnsureResponseOutcomeCollector(ctx, c, http.StatusOK, resp.StatusCode)
 
 	var usage *ClaudeUsage
 	var firstTokenMs *int
@@ -1077,6 +1078,11 @@ func (s *GeminiMessagesCompatService) Forward(ctx context.Context, c *gin.Contex
 				return nil, s.writeClaudeError(c, http.StatusBadGateway, "upstream_error", "Failed to read upstream stream")
 			}
 			collectedBytes, _ := json.Marshal(collected)
+			outcomeCollector.ObserveEvent(len(collectedBytes))
+			_ = outcomeCollector.ObserveJSONPayload(ResponseOutcomeProtocolGemini, collectedBytes)
+			if !outcomeCollector.Snapshot().StreamCompleted {
+				outcomeCollector.MarkStreamError(errors.New("missing terminal event"), false)
+			}
 			claudeResp, usageObj2 := convertGeminiToClaudeMessage(collected, originalModel, collectedBytes, false)
 			c.JSON(http.StatusOK, claudeResp)
 			usage = usageObj2
@@ -1110,6 +1116,7 @@ func (s *GeminiMessagesCompatService) Forward(ctx context.Context, c *gin.Contex
 		ImageCount:     imageCount,
 		ImageSize:      imageSize,
 		ImageInputSize: imageInputSize,
+		Outcome:        ResponseOutcomeSnapshotFromContext(c.Request.Context()),
 	}, nil
 }
 
@@ -1598,6 +1605,7 @@ func (s *GeminiMessagesCompatService) ForwardNative(ctx context.Context, c *gin.
 
 	var usage *ClaudeUsage
 	var firstTokenMs *int
+	_, outcomeCollector := EnsureResponseOutcomeCollector(ctx, c, http.StatusOK, resp.StatusCode)
 
 	if stream {
 		streamRes, err := s.handleNativeStreamingResponse(c, resp, startTime, isOAuth)
@@ -1613,6 +1621,11 @@ func (s *GeminiMessagesCompatService) ForwardNative(ctx context.Context, c *gin.
 				return nil, s.writeGoogleError(c, http.StatusBadGateway, "Failed to read upstream stream")
 			}
 			b, _ := json.Marshal(collected)
+			outcomeCollector.ObserveEvent(len(b))
+			_ = outcomeCollector.ObserveJSONPayload(ResponseOutcomeProtocolGemini, b)
+			if !outcomeCollector.Snapshot().StreamCompleted {
+				outcomeCollector.MarkStreamError(errors.New("missing terminal event"), false)
+			}
 			c.Data(http.StatusOK, "application/json", b)
 			usage = usageObj
 		} else {
@@ -1647,6 +1660,7 @@ func (s *GeminiMessagesCompatService) ForwardNative(ctx context.Context, c *gin.
 		ImageCount:     imageCount,
 		ImageSize:      imageSize,
 		ImageInputSize: imageInputSize,
+		Outcome:        ResponseOutcomeSnapshotFromContext(c.Request.Context()),
 	}, nil
 }
 
@@ -1997,9 +2011,15 @@ func mapGeminiStatusToClaudeErrorType(status string) string {
 type geminiStreamResult struct {
 	usage        *ClaudeUsage
 	firstTokenMs *int
+	outcome      ResponseOutcome
 }
 
 func (s *GeminiMessagesCompatService) handleNonStreamingResponse(c *gin.Context, resp *http.Response, originalModel string) (*ClaudeUsage, error) {
+	ctx := context.Background()
+	if c != nil && c.Request != nil {
+		ctx = c.Request.Context()
+	}
+	_, outcomeCollector := EnsureResponseOutcomeCollector(ctx, c, resp.StatusCode, resp.StatusCode)
 	body, err := io.ReadAll(io.LimitReader(resp.Body, 8<<20))
 	if err != nil {
 		return nil, s.writeClaudeError(c, http.StatusBadGateway, "upstream_error", "Failed to read upstream response")
@@ -2014,6 +2034,8 @@ func (s *GeminiMessagesCompatService) handleNonStreamingResponse(c *gin.Context,
 	if err := json.Unmarshal(unwrappedBody, &geminiResp); err != nil {
 		return nil, s.writeClaudeError(c, http.StatusBadGateway, "upstream_error", "Failed to parse upstream response")
 	}
+	outcomeCollector.ObserveEvent(len(unwrappedBody))
+	_ = outcomeCollector.ObserveJSONPayload(ResponseOutcomeProtocolGemini, unwrappedBody)
 
 	claudeResp, usage := convertGeminiToClaudeMessage(geminiResp, originalModel, unwrappedBody, false)
 	c.JSON(http.StatusOK, claudeResp)
@@ -2021,7 +2043,22 @@ func (s *GeminiMessagesCompatService) handleNonStreamingResponse(c *gin.Context,
 	return usage, nil
 }
 
-func (s *GeminiMessagesCompatService) handleStreamingResponse(c *gin.Context, resp *http.Response, startTime time.Time, originalModel string) (*geminiStreamResult, error) {
+func (s *GeminiMessagesCompatService) handleStreamingResponse(c *gin.Context, resp *http.Response, startTime time.Time, originalModel string) (result *geminiStreamResult, err error) {
+	ctx := context.Background()
+	if c != nil && c.Request != nil {
+		ctx = c.Request.Context()
+	}
+	_, outcomeCollector := EnsureResponseOutcomeCollector(ctx, c, resp.StatusCode, resp.StatusCode)
+	defer func() {
+		if err != nil && !outcomeCollector.Snapshot().StreamCompleted {
+			outcomeCollector.MarkStreamError(err, false)
+		} else if err == nil && !outcomeCollector.Snapshot().StreamCompleted {
+			outcomeCollector.MarkStreamError(errors.New("missing terminal event"), false)
+		}
+		if result != nil {
+			result.outcome = outcomeCollector.Snapshot()
+		}
+	}()
 	c.Header("Content-Type", "text/event-stream")
 	c.Header("Cache-Control", "no-cache")
 	c.Header("Connection", "keep-alive")
@@ -2092,6 +2129,7 @@ func (s *GeminiMessagesCompatService) handleStreamingResponse(c *gin.Context, re
 		if err != nil {
 			continue
 		}
+		outcomeCollector.ObserveGeminiSSEData(string(unwrappedBytes))
 
 		var geminiResp map[string]any
 		if err := json.Unmarshal(unwrappedBytes, &geminiResp); err != nil {
@@ -2287,7 +2325,7 @@ func (s *GeminiMessagesCompatService) handleStreamingResponse(c *gin.Context, re
 	})
 	flusher.Flush()
 
-	return &geminiStreamResult{usage: &usage, firstTokenMs: firstTokenMs}, nil
+	return &geminiStreamResult{usage: &usage, firstTokenMs: firstTokenMs, outcome: outcomeCollector.Snapshot()}, nil
 }
 
 func writeSSE(w io.Writer, event string, data any) {
@@ -2503,6 +2541,7 @@ func mergeCollectedTextParts(response map[string]any, textParts []string) map[st
 type geminiNativeStreamResult struct {
 	usage        *ClaudeUsage
 	firstTokenMs *int
+	outcome      ResponseOutcome
 }
 
 func isGeminiInsufficientScope(headers http.Header, body []byte) bool {
@@ -2572,6 +2611,11 @@ type UpstreamHTTPResult struct {
 }
 
 func (s *GeminiMessagesCompatService) handleNativeNonStreamingResponse(c *gin.Context, resp *http.Response, isOAuth bool) (*ClaudeUsage, error) {
+	ctx := context.Background()
+	if c != nil && c.Request != nil {
+		ctx = c.Request.Context()
+	}
+	_, outcomeCollector := EnsureResponseOutcomeCollector(ctx, c, resp.StatusCode, resp.StatusCode)
 	if s.cfg != nil && s.cfg.Gateway.GeminiDebugResponseHeaders {
 		logger.LegacyPrintf("service.gemini_messages_compat", "[GeminiAPI] ========== Response Headers ==========")
 		for key, values := range resp.Header {
@@ -2593,6 +2637,8 @@ func (s *GeminiMessagesCompatService) handleNativeNonStreamingResponse(c *gin.Co
 			respBody = unwrappedBody
 		}
 	}
+	outcomeCollector.ObserveEvent(len(respBody))
+	_ = outcomeCollector.ObserveJSONPayload(ResponseOutcomeProtocolGemini, respBody)
 
 	responseheaders.WriteFilteredHeaders(c.Writer.Header(), resp.Header, s.responseHeaderFilter)
 
@@ -2608,7 +2654,22 @@ func (s *GeminiMessagesCompatService) handleNativeNonStreamingResponse(c *gin.Co
 	return &ClaudeUsage{}, nil
 }
 
-func (s *GeminiMessagesCompatService) handleNativeStreamingResponse(c *gin.Context, resp *http.Response, startTime time.Time, isOAuth bool) (*geminiNativeStreamResult, error) {
+func (s *GeminiMessagesCompatService) handleNativeStreamingResponse(c *gin.Context, resp *http.Response, startTime time.Time, isOAuth bool) (result *geminiNativeStreamResult, err error) {
+	ctx := context.Background()
+	if c != nil && c.Request != nil {
+		ctx = c.Request.Context()
+	}
+	_, outcomeCollector := EnsureResponseOutcomeCollector(ctx, c, resp.StatusCode, resp.StatusCode)
+	defer func() {
+		if err != nil && !outcomeCollector.Snapshot().StreamCompleted {
+			outcomeCollector.MarkStreamError(err, false)
+		} else if err == nil && !outcomeCollector.Snapshot().StreamCompleted {
+			outcomeCollector.MarkStreamError(errors.New("missing terminal event"), false)
+		}
+		if result != nil {
+			result.outcome = outcomeCollector.Snapshot()
+		}
+	}()
 	if s.cfg != nil && s.cfg.Gateway.GeminiDebugResponseHeaders {
 		logger.LegacyPrintf("service.gemini_messages_compat", "[GeminiAPI] ========== Streaming Response Headers ==========")
 		for key, values := range resp.Header {
@@ -2671,6 +2732,7 @@ func (s *GeminiMessagesCompatService) handleNativeStreamingResponse(c *gin.Conte
 					if u := extractGeminiUsage(rawBytes); u != nil {
 						usage = u
 					}
+					outcomeCollector.ObserveGeminiSSEData(string(rawBytes))
 
 					if firstTokenMs == nil {
 						ms := int(time.Since(startTime).Milliseconds())
@@ -2700,7 +2762,7 @@ func (s *GeminiMessagesCompatService) handleNativeStreamingResponse(c *gin.Conte
 		}
 	}
 
-	return &geminiNativeStreamResult{usage: usage, firstTokenMs: firstTokenMs}, nil
+	return &geminiNativeStreamResult{usage: usage, firstTokenMs: firstTokenMs, outcome: outcomeCollector.Snapshot()}, nil
 }
 
 // ForwardAIStudioGET forwards a GET request to AI Studio (generativelanguage.googleapis.com) for

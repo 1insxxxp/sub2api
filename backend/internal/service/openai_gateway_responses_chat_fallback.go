@@ -138,11 +138,22 @@ func (s *OpenAIGatewayService) bufferChatCompletionsAsResponses(
 	startTime time.Time,
 ) (*OpenAIForwardResult, error) {
 	requestID := resp.Header.Get("x-request-id")
+	ctx := context.Background()
+	if c != nil && c.Request != nil {
+		ctx = c.Request.Context()
+	}
+	_, outcomeCollector := EnsureResponseOutcomeCollector(ctx, c, http.StatusOK, resp.StatusCode)
 	ccResp, usage, err := s.readCCUpstreamJSONResponse(c, resp, writeOpenAIResponsesFallbackError)
 	if err != nil {
 		return nil, err
 	}
 	responsesResp := apicompat.ChatCompletionsResponseToResponses(ccResp, originalModel, customTools, toolSearch, namespaceTools)
+	if raw, marshalErr := json.Marshal(ccResp); marshalErr == nil {
+		outcomeCollector.ObserveEvent(len(raw))
+		if observeErr := outcomeCollector.ObserveJSONPayload(ResponseOutcomeProtocolOpenAI, raw); observeErr == nil {
+			outcomeCollector.MarkCompleted("http_response")
+		}
+	}
 
 	if s.responseHeaderFilter != nil {
 		responseheaders.WriteFilteredHeaders(c.Writer.Header(), resp.Header, s.responseHeaderFilter)
@@ -159,6 +170,7 @@ func (s *OpenAIGatewayService) bufferChatCompletionsAsResponses(
 		ServiceTier:     serviceTier,
 		Stream:          false,
 		Duration:        time.Since(startTime),
+		Outcome:         ResponseOutcomeSnapshotFromContext(c.Request.Context()),
 	}, nil
 }
 
@@ -176,6 +188,11 @@ func (s *OpenAIGatewayService) streamChatCompletionsAsResponses(
 	startTime time.Time,
 ) (*OpenAIForwardResult, error) {
 	requestID := resp.Header.Get("x-request-id")
+	ctx := context.Background()
+	if c != nil && c.Request != nil {
+		ctx = c.Request.Context()
+	}
+	_, outcomeCollector := EnsureResponseOutcomeCollector(ctx, c, http.StatusOK, resp.StatusCode)
 	writeStreamHeaders := s.newStreamHeaderWriter(c, resp.Header)
 
 	state := apicompat.NewChatCompletionsToResponsesStreamState(originalModel)
@@ -211,10 +228,14 @@ func (s *OpenAIGatewayService) streamChatCompletionsAsResponses(
 	}
 
 	scan := s.scanCCStream(resp, "openai responses chat fallback", requestID, startTime, func(chunk *apicompat.ChatCompletionsChunk) {
+		if raw, marshalErr := json.Marshal(chunk); marshalErr == nil {
+			outcomeCollector.ObserveOpenAISSEData(string(raw))
+		}
 		writeEvents(apicompat.ChatCompletionsChunkToResponsesEvents(chunk, state))
 	})
 
 	if scan.Err != nil {
+		outcomeCollector.MarkStreamError(scan.Err, clientDisconnected)
 		return &OpenAIForwardResult{
 			RequestID:       requestID,
 			Usage:           scan.Usage,
@@ -226,6 +247,7 @@ func (s *OpenAIGatewayService) streamChatCompletionsAsResponses(
 			Stream:          true,
 			Duration:        time.Since(startTime),
 			FirstTokenMs:    scan.FirstTokenMs,
+			Outcome:         ResponseOutcomeSnapshotFromContext(c.Request.Context()),
 		}, fmt.Errorf("stream usage incomplete: %w", scan.Err)
 	}
 
@@ -241,6 +263,12 @@ func (s *OpenAIGatewayService) streamChatCompletionsAsResponses(
 	}
 	if !scan.SawDone {
 		logCCStreamMissingDoneSentinel("openai responses chat fallback", requestID)
+		outcomeCollector.MarkStreamError(errors.New("missing terminal event"), false)
+	} else {
+		outcomeCollector.MarkCompleted("done")
+	}
+	if clientDisconnected {
+		outcomeCollector.MarkStreamError(errors.New("client disconnected"), true)
 	}
 
 	return &OpenAIForwardResult{
@@ -254,6 +282,7 @@ func (s *OpenAIGatewayService) streamChatCompletionsAsResponses(
 		Stream:          true,
 		Duration:        time.Since(startTime),
 		FirstTokenMs:    scan.FirstTokenMs,
+		Outcome:         ResponseOutcomeSnapshotFromContext(c.Request.Context()),
 	}, nil
 }
 

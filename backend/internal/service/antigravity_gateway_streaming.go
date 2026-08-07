@@ -95,7 +95,25 @@ func handleStreamReadError(err error, clientDisconnected bool, prefix string) (d
 	return false, false
 }
 
-func (s *AntigravityGatewayService) handleGeminiStreamingResponse(c *gin.Context, resp *http.Response, startTime time.Time) (*antigravityStreamResult, error) {
+func (s *AntigravityGatewayService) handleGeminiStreamingResponse(c *gin.Context, resp *http.Response, startTime time.Time) (result *antigravityStreamResult, err error) {
+	ctx := context.Background()
+	if c != nil && c.Request != nil {
+		ctx = c.Request.Context()
+	}
+	_, outcomeCollector := EnsureResponseOutcomeCollector(ctx, c, resp.StatusCode, resp.StatusCode)
+	defer func() {
+		if result == nil {
+			return
+		}
+		if result.clientDisconnect {
+			outcomeCollector.MarkStreamError(errors.New("client disconnected"), true)
+		} else if err != nil && !outcomeCollector.Snapshot().StreamCompleted {
+			outcomeCollector.MarkStreamError(err, false)
+		} else if !outcomeCollector.Snapshot().StreamCompleted {
+			outcomeCollector.MarkStreamError(errors.New("missing terminal event"), false)
+		}
+		result.outcome = outcomeCollector.Snapshot()
+	}()
 	c.Status(resp.StatusCode)
 	c.Header("Cache-Control", "no-cache")
 	c.Header("Connection", "keep-alive")
@@ -233,6 +251,7 @@ func (s *AntigravityGatewayService) handleGeminiStreamingResponse(c *gin.Context
 				inner, parseErr := s.unwrapV1InternalResponse([]byte(payload))
 				if parseErr == nil && inner != nil {
 					payload = string(inner)
+					outcomeCollector.ObserveGeminiSSEData(payload)
 				}
 
 				// 解析 usage
@@ -299,6 +318,12 @@ func (s *AntigravityGatewayService) handleGeminiStreamingResponse(c *gin.Context
 // handleGeminiStreamToNonStreaming 读取上游流式响应，合并为非流式响应返回给客户端
 // Gemini 流式响应是增量的，需要累积所有 chunk 的内容
 func (s *AntigravityGatewayService) handleGeminiStreamToNonStreaming(c *gin.Context, resp *http.Response, startTime time.Time) (*antigravityStreamResult, error) {
+	ctx := context.Background()
+	if c != nil && c.Request != nil {
+		ctx = c.Request.Context()
+	}
+	_, outcomeCollector := EnsureResponseOutcomeCollector(ctx, c, resp.StatusCode, resp.StatusCode)
+
 	scanner := bufio.NewScanner(resp.Body)
 	maxLineSize := defaultMaxLineSize
 	if s.settingService.cfg != nil && s.settingService.cfg.Gateway.MaxLineSize > 0 {
@@ -394,6 +419,7 @@ func (s *AntigravityGatewayService) handleGeminiStreamToNonStreaming(c *gin.Cont
 			if parseErr != nil {
 				continue
 			}
+			_ = outcomeCollector.ObserveJSONPayload(ResponseOutcomeProtocolGemini, inner)
 
 			var parsed map[string]any
 			if err := json.Unmarshal(inner, &parsed); err != nil {
@@ -481,8 +507,11 @@ returnResponse:
 		return nil, fmt.Errorf("failed to marshal response: %w", err)
 	}
 	c.Data(http.StatusOK, "application/json", respBody)
+	if !outcomeCollector.Snapshot().StreamCompleted {
+		outcomeCollector.MarkStreamError(errors.New("missing terminal event"), false)
+	}
 
-	return &antigravityStreamResult{usage: usage, firstTokenMs: firstTokenMs}, nil
+	return &antigravityStreamResult{usage: usage, firstTokenMs: firstTokenMs, outcome: outcomeCollector.Snapshot()}, nil
 }
 
 // getOrCreateGeminiParts 获取 Gemini 响应的 parts 结构，返回深拷贝和更新回调

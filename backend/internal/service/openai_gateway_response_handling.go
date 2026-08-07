@@ -28,6 +28,7 @@ type openaiStreamingResult struct {
 	responseID       string
 	imageCount       int
 	imageOutputSizes []string
+	outcome          ResponseOutcome
 }
 
 type openaiNonStreamingResult struct {
@@ -36,13 +37,26 @@ type openaiNonStreamingResult struct {
 	responseID       string
 	imageCount       int
 	imageOutputSizes []string
+	outcome          ResponseOutcome
 }
 
 func (s *OpenAIGatewayService) handleStreamingResponse(ctx context.Context, resp *http.Response, c *gin.Context, account *Account, startTime time.Time, originalModel, mappedModel string) (*openaiStreamingResult, error) {
 	return s.handleStreamingResponseWithReasoning(ctx, resp, c, account, startTime, originalModel, mappedModel, "")
 }
 
-func (s *OpenAIGatewayService) handleStreamingResponseWithReasoning(ctx context.Context, resp *http.Response, c *gin.Context, account *Account, startTime time.Time, originalModel, mappedModel, reasoningEffort string) (*openaiStreamingResult, error) {
+func (s *OpenAIGatewayService) handleStreamingResponseWithReasoning(ctx context.Context, resp *http.Response, c *gin.Context, account *Account, startTime time.Time, originalModel, mappedModel, reasoningEffort string) (result *openaiStreamingResult, err error) {
+	ctx, outcomeCollector := EnsureResponseOutcomeCollector(ctx, c, http.StatusOK, resp.StatusCode)
+	clientDisconnected := false
+	defer func() {
+		if clientDisconnected {
+			outcomeCollector.MarkStreamError(errors.New("client disconnected"), true)
+		} else if err != nil && !outcomeCollector.Snapshot().StreamCompleted {
+			outcomeCollector.MarkStreamError(err, false)
+		}
+		if result != nil {
+			result.outcome = outcomeCollector.Snapshot()
+		}
+	}()
 	firstOutputTimeout := time.Duration(0)
 	if account != nil && account.Platform == PlatformOpenAI {
 		firstOutputTimeout = s.openAIFirstOutputTimeout(reasoningEffort)
@@ -209,7 +223,6 @@ func (s *OpenAIGatewayService) handleStreamingResponseWithReasoning(ctx context.
 	// 注意：OpenAI `/v1/responses` streaming 事件必须符合 OpenAI Responses schema；
 	// 否则下游 SDK（例如 OpenCode）会因为类型校验失败而报错。
 	errorEventSent := false
-	clientDisconnected := false // 客户端断开后继续 drain 上游以收集 usage
 	sawTerminalEvent := false
 	sawFailedEvent := false
 	failedMessage := ""
@@ -295,6 +308,7 @@ func (s *OpenAIGatewayService) handleStreamingResponseWithReasoning(ctx context.
 			responseID:       responseID,
 			imageCount:       imageCounter.Count(),
 			imageOutputSizes: imageCounter.Sizes(),
+			outcome:          outcomeCollector.Snapshot(),
 		}
 	}
 	flushPending := func(disconnectMessage string) {
@@ -403,6 +417,7 @@ func (s *OpenAIGatewayService) handleStreamingResponseWithReasoning(ctx context.
 		}
 		// Extract data from SSE line (supports both "data: " and "data:" formats)
 		if data, ok := extractOpenAISSEDataLine(line); ok {
+			outcomeCollector.ObserveOpenAISSEData(data)
 			dataBytes := []byte(data)
 			eventTypeRaw := gjson.GetBytes(dataBytes, "type").String()
 			eventType := strings.TrimSpace(eventTypeRaw)
@@ -1106,6 +1121,7 @@ func openAICacheCreationTokensFromUsage(value gjson.Result) int {
 }
 
 func (s *OpenAIGatewayService) handleNonStreamingResponse(ctx context.Context, resp *http.Response, c *gin.Context, account *Account, originalModel, mappedModel string) (*openaiNonStreamingResult, error) {
+	ctx, outcomeCollector := EnsureResponseOutcomeCollector(ctx, c, resp.StatusCode, resp.StatusCode)
 	body, err := ReadUpstreamResponseBody(resp.Body, s.cfg, c, openAITooLargeError)
 	if err != nil {
 		return nil, err
@@ -1148,6 +1164,10 @@ func (s *OpenAIGatewayService) handleNonStreamingResponse(ctx context.Context, r
 		return nil, fmt.Errorf("parse response: invalid json response")
 	}
 	usage := &usageValue
+	outcomeCollector.ObserveEvent(len(body))
+	if observeErr := outcomeCollector.ObserveJSONPayload(ResponseOutcomeProtocolOpenAI, body); observeErr == nil {
+		outcomeCollector.MarkCompleted("http_response")
+	}
 
 	// Replace model in response if needed
 	if originalModel != mappedModel {
@@ -1180,6 +1200,7 @@ func (s *OpenAIGatewayService) handleNonStreamingResponse(ctx context.Context, r
 		responseID:       extractOpenAIResponseIDFromJSONBytes(body),
 		imageCount:       countOpenAIResponseImageOutputsFromJSONBytes(body),
 		imageOutputSizes: collectOpenAIResponseImageOutputSizesFromJSONBytes(body),
+		outcome:          outcomeCollector.Snapshot(),
 	}, nil
 }
 
@@ -1205,7 +1226,14 @@ func bodyHasSSEFraming(body []byte) bool {
 }
 
 func (s *OpenAIGatewayService) handleSSEToJSON(resp *http.Response, c *gin.Context, body []byte, originalModel, mappedModel string) (*openaiNonStreamingResult, error) {
+	_, outcomeCollector := EnsureResponseOutcomeCollector(c.Request.Context(), c, resp.StatusCode, resp.StatusCode)
 	bodyText := string(body)
+	forEachOpenAISSEDataPayload(bodyText, func(data []byte) {
+		outcomeCollector.ObserveOpenAISSEData(string(data))
+	})
+	if !outcomeCollector.Snapshot().StreamCompleted {
+		outcomeCollector.MarkStreamError(errors.New("missing terminal event"), false)
+	}
 	finalResponse, ok := extractCodexFinalResponse(bodyText)
 
 	usage := &OpenAIUsage{}
@@ -1274,6 +1302,7 @@ func (s *OpenAIGatewayService) handleSSEToJSON(resp *http.Response, c *gin.Conte
 		responseID:       extractOpenAIResponseIDFromJSONBytes(body),
 		imageCount:       countOpenAIImageOutputsFromSSEBody(bodyText),
 		imageOutputSizes: collectOpenAIImageOutputSizesFromSSEBody(bodyText),
+		outcome:          outcomeCollector.Snapshot(),
 	}, nil
 }
 

@@ -860,6 +860,9 @@ func TestAntigravityGatewayService_ForwardGemini_BillsWithMappedModel(t *testing
 	require.NotNil(t, result)
 	require.Equal(t, "gemini-2.5-flash", result.Model)
 	require.Equal(t, mappedModel, result.UpstreamModel)
+	require.NotNil(t, result.Outcome)
+	require.True(t, result.Outcome.HasText)
+	require.True(t, result.Outcome.StreamCompleted)
 }
 
 func TestAntigravityGatewayService_ForwardGemini_RetriesCorruptedThoughtSignature(t *testing.T) {

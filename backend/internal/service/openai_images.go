@@ -8,6 +8,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"mime"
@@ -682,6 +683,7 @@ func (s *OpenAIGatewayService) forwardOpenAIImagesAPIKey(
 					ImageSize:        parsed.SizeTier,
 					ImageInputSize:   parsed.Size,
 					ImageOutputSizes: streamSizes,
+					Outcome:          ResponseOutcomeSnapshotFromContext(c.Request.Context()),
 				}, err
 			}
 			return nil, err
@@ -703,6 +705,7 @@ func (s *OpenAIGatewayService) forwardOpenAIImagesAPIKey(
 			ImageSize:        parsed.SizeTier,
 			ImageInputSize:   parsed.Size,
 			ImageOutputSizes: imageOutputSizes,
+			Outcome:          ResponseOutcomeSnapshotFromContext(c.Request.Context()),
 		}, nil
 	} else {
 		nonStreamUsage, nonStreamCount, nonStreamSizes, err := s.handleOpenAIImagesNonStreamingResponse(resp, c)
@@ -724,6 +727,7 @@ func (s *OpenAIGatewayService) forwardOpenAIImagesAPIKey(
 			ImageSize:        parsed.SizeTier,
 			ImageInputSize:   parsed.Size,
 			ImageOutputSizes: nonStreamSizes,
+			Outcome:          ResponseOutcomeSnapshotFromContext(c.Request.Context()),
 		}, nil
 	}
 }
@@ -875,6 +879,11 @@ func cloneMultipartHeader(src textproto.MIMEHeader) textproto.MIMEHeader {
 }
 
 func (s *OpenAIGatewayService) handleOpenAIImagesNonStreamingResponse(resp *http.Response, c *gin.Context) (OpenAIUsage, int, []string, error) {
+	ctx := context.Background()
+	if c != nil && c.Request != nil {
+		ctx = c.Request.Context()
+	}
+	_, outcomeCollector := EnsureResponseOutcomeCollector(ctx, c, resp.StatusCode, resp.StatusCode)
 	body, err := ReadUpstreamResponseBody(resp.Body, s.cfg, c, openAITooLargeError)
 	if err != nil {
 		return OpenAIUsage{}, 0, nil, err
@@ -887,7 +896,12 @@ func (s *OpenAIGatewayService) handleOpenAIImagesNonStreamingResponse(resp *http
 		}
 	}
 	if err := writeOpenAIImagesDataResponse(c, resp.StatusCode, contentType, body); err != nil {
+		outcomeCollector.MarkStreamError(err, true)
 		return OpenAIUsage{}, 0, nil, err
+	}
+	outcomeCollector.ObserveEvent(len(body))
+	if err := outcomeCollector.ObserveJSONPayload(ResponseOutcomeProtocolOpenAI, body); err == nil {
+		outcomeCollector.MarkCompleted("http_response")
 	}
 
 	usage, _ := extractOpenAIUsageFromJSONBytes(body)
@@ -914,7 +928,22 @@ func (s *OpenAIGatewayService) handleOpenAIImagesStreamingResponse(
 	resp *http.Response,
 	c *gin.Context,
 	startTime time.Time,
-) (OpenAIUsage, int, []string, *int, error) {
+) (resultUsage OpenAIUsage, resultCount int, resultSizes []string, resultFirstTokenMs *int, err error) {
+	ctx := context.Background()
+	if c != nil && c.Request != nil {
+		ctx = c.Request.Context()
+	}
+	_, outcomeCollector := EnsureResponseOutcomeCollector(ctx, c, resp.StatusCode, resp.StatusCode)
+	clientDisconnected := false
+	defer func() {
+		if clientDisconnected {
+			outcomeCollector.MarkStreamError(errors.New("client disconnected"), true)
+		} else if err != nil && !outcomeCollector.Snapshot().StreamCompleted {
+			outcomeCollector.MarkStreamError(err, false)
+		} else if !outcomeCollector.Snapshot().StreamCompleted {
+			outcomeCollector.MarkStreamError(errors.New("missing terminal event"), false)
+		}
+	}()
 	responseheaders.WriteFilteredHeaders(c.Writer.Header(), resp.Header, s.responseHeaderFilter)
 	contentType := strings.TrimSpace(resp.Header.Get("Content-Type"))
 	if contentType == "" {
@@ -931,7 +960,6 @@ func (s *OpenAIGatewayService) handleOpenAIImagesStreamingResponse(
 	usage := OpenAIUsage{}
 	imageCounter := newOpenAIImageOutputCounter()
 	var firstTokenMs *int
-	clientDisconnected := false
 	lastDownstreamWriteAt := time.Now()
 	var fallbackBody bytes.Buffer
 	fallbackBytes := int64(0)
@@ -946,6 +974,7 @@ func (s *OpenAIGatewayService) handleOpenAIImagesStreamingResponse(
 		fallbackBytes = 0
 		mergeOpenAIUsage(&usage, dataBytes)
 		imageCounter.AddSSEData(dataBytes)
+		outcomeCollector.ObserveOpenAISSEData(string(dataBytes))
 	}
 
 	flushSSEEvent := func() {
@@ -996,6 +1025,10 @@ func (s *OpenAIGatewayService) handleOpenAIImagesStreamingResponse(
 		}
 		mergeOpenAIUsage(&usage, body)
 		imageCounter.AddJSONResponse(body)
+		outcomeCollector.ObserveEvent(len(body))
+		if observeErr := outcomeCollector.ObserveJSONPayload(ResponseOutcomeProtocolOpenAI, body); observeErr == nil {
+			outcomeCollector.MarkCompleted("http_response")
+		}
 	}
 
 	streamInterval := s.openAIImageStreamDataInterval()

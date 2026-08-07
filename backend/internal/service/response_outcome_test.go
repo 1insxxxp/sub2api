@@ -4,9 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 
+	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
 )
 
@@ -86,4 +89,16 @@ func TestResponseOutcomeSnapshotDoesNotRetainObservedContent(t *testing.T) {
 	require.NotContains(t, string(raw), "private-response-marker")
 	require.NotContains(t, string(raw), "private-reasoning-marker")
 	require.False(t, strings.Contains(strings.ToLower(string(raw)), "content"))
+}
+
+func TestEnsureResponseOutcomeCollectorAcceptsNilContextWithRequestCollector(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	c, _ := gin.CreateTestContext(httptest.NewRecorder())
+	requestContext, collector := WithResponseOutcomeCollector(context.Background(), http.StatusOK, http.StatusOK)
+	c.Request = httptest.NewRequest(http.MethodPost, "/", nil).WithContext(requestContext)
+
+	ctx, ensured := EnsureResponseOutcomeCollector(nil, c, http.StatusOK, http.StatusOK)
+
+	require.NotNil(t, ctx)
+	require.Same(t, collector, ensured)
 }
