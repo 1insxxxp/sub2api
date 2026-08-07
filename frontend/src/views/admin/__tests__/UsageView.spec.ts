@@ -146,6 +146,7 @@ const mountRouteFilteredUsageView = () => mount(UsageView, {
     DateRangePicker: true, Icon: true, TokenUsageTrend: true,
     ModelDistributionChart: true, GroupDistributionChart: true,
     EndpointDistributionChart: true, UserTokenRanking: true,
+    EmptyResponseClaimsPanel: true,
   } },
 })
 
@@ -184,6 +185,13 @@ describe('admin UsageView route filters', () => {
     expect(getById).toHaveBeenCalledWith(42, true)
     expect(list).toHaveBeenCalledWith(expect.objectContaining({ user_id: 42 }), expect.anything())
     expect(wrapper.find('[data-test="user-filter-label"]').text()).toBe('route-user@test.com')
+  })
+
+  it('keeps empty response claims inside the existing usage detail tabs', async () => {
+    const wrapper = mountRouteFilteredUsageView()
+    await flushPromises()
+    const tabs = wrapper.findAll('[data-testid="usage-detail-tab"]')
+    expect(tabs.map((tab) => tab.text())).toContain('admin.usage.emptyResponseClaims.tab')
   })
 
   it('does not apply a stale routed user label after user_id changes', async () => {
@@ -548,7 +556,8 @@ describe('admin UsageView ranking tab', () => {
         UserBalanceHistoryModal: true, Pagination: true, Select: true,
         DateRangePicker: true, Icon: true, TokenUsageTrend: true,
         ModelDistributionChart: true, GroupDistributionChart: true, EndpointDistributionChart: true,
-        UserTokenRanking: UserTokenRankingStub, OpsErrorLogTable: true, OpsErrorDetailModal: true,
+        UserTokenRanking: UserTokenRankingStub, EmptyResponseClaimsPanel: true,
+        OpsErrorLogTable: true, OpsErrorDetailModal: true,
       } },
     })
     vi.advanceTimersByTime(120)
@@ -558,7 +567,7 @@ describe('admin UsageView ranking tab', () => {
     expect(wrapper.find('[data-test="ranking"]').exists()).toBe(false)
 
     const tabs = wrapper.findAll('[data-testid="usage-detail-tab"]')
-    expect(tabs).toHaveLength(3)
+    expect(tabs).toHaveLength(4)
     await tabs[2].trigger('click')
     await flushPromises()
     expect(wrapper.find('[data-test="ranking"]').exists()).toBe(true)

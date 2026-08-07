@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
+	"github.com/stretchr/testify/require"
 )
 
 func TestOpsServiceListSystemLogs_DefaultClampAndSuccess(t *testing.T) {
@@ -42,6 +43,19 @@ func TestOpsServiceListSystemLogs_DefaultClampAndSuccess(t *testing.T) {
 	if out.Total != 1 || len(out.Logs) != 1 {
 		t.Fatalf("unexpected result: %+v", out)
 	}
+}
+
+func TestEmptyResponseClaimAuditFieldsAreStructuredAndContentFree(t *testing.T) {
+	fields := emptyResponseClaimAuditFields(11, "approve", []int64{21, 22}, 2, 0, 1.25)
+	require.Equal(t, int64(11), fields["operator_id"])
+	require.Equal(t, "approve", fields["action"])
+	require.Equal(t, []int64{21, 22}, fields["claim_ids"])
+	require.Equal(t, 2, fields["succeeded_count"])
+	require.Equal(t, 0, fields["failed_count"])
+	require.Equal(t, 1.25, fields["refund_amount"])
+	require.NotContains(t, fields, "response")
+	require.NotContains(t, fields, "content")
+	require.NotContains(t, fields, "prompt")
 }
 
 func TestOpsServiceListSystemLogs_MonitoringDisabled(t *testing.T) {

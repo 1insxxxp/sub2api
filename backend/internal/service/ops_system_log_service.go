@@ -10,6 +10,7 @@ import (
 	"time"
 
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
 )
 
 func (s *OpsService) ListSystemLogs(ctx context.Context, filter *OpsSystemLogFilter) (*OpsSystemLogList, error) {
@@ -42,6 +43,18 @@ func (s *OpsService) ListSystemLogs(ctx context.Context, filter *OpsSystemLogFil
 		return nil, infraerrors.InternalServer("OPS_SYSTEM_LOG_LIST_FAILED", "Failed to list system logs").WithCause(err)
 	}
 	return result, nil
+}
+
+func emptyResponseClaimAuditFields(operatorID int64, action string, claimIDs []int64, succeeded, failed int, refundAmount float64) map[string]any {
+	return map[string]any{
+		"operator_id": operatorID, "action": strings.TrimSpace(action), "claim_ids": claimIDs,
+		"succeeded_count": succeeded, "failed_count": failed, "refund_amount": refundAmount,
+	}
+}
+
+func (s *OpsService) RecordEmptyResponseClaimAudit(operatorID int64, action string, claimIDs []int64, succeeded, failed int, refundAmount float64) {
+	logger.WriteSinkEvent("info", "audit.empty_response_claim", "empty response claim reviewed",
+		emptyResponseClaimAuditFields(operatorID, action, claimIDs, succeeded, failed, refundAmount))
 }
 
 func (s *OpsService) CleanupSystemLogs(ctx context.Context, filter *OpsSystemLogCleanupFilter, operatorID int64) (int64, error) {

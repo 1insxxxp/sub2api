@@ -189,9 +189,11 @@ func ProvideAdminUsageHandler(
 	adminService service.AdminService,
 	cleanupService *service.UsageCleanupService,
 	claimService *service.EmptyResponseClaimAdminService,
+	opsService *service.OpsService,
 ) *admin.UsageHandler {
 	h := admin.NewUsageHandler(usageService, apiKeyService, adminService, cleanupService)
 	h.SetEmptyResponseClaimService(claimService)
+	h.SetOpsService(opsService)
 	return h
 }
 

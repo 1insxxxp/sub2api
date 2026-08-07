@@ -22,9 +22,11 @@ type adminClaimRepositoryStub struct {
 	seenStatus string
 	seenAdmin  int64
 	seenNote   string
+	seenFilter service.EmptyResponseClaimListFilters
 }
 
-func (s *adminClaimRepositoryStub) List(_ context.Context, params pagination.PaginationParams, _ service.EmptyResponseClaimListFilters) ([]service.EmptyResponseClaim, *pagination.PaginationResult, error) {
+func (s *adminClaimRepositoryStub) List(_ context.Context, params pagination.PaginationParams, filters service.EmptyResponseClaimListFilters) ([]service.EmptyResponseClaim, *pagination.PaginationResult, error) {
+	s.seenFilter = filters
 	return s.claims, &pagination.PaginationResult{Total: int64(len(s.claims)), Page: params.Page, PageSize: params.PageSize, Pages: 1}, nil
 }
 
@@ -46,7 +48,21 @@ func newAdminClaimHandlerTestRouter(repo *adminClaimRepositoryStub) *gin.Engine 
 	router.GET("/admin/usage/empty-response-claims", handler.ListEmptyResponseClaims)
 	router.POST("/admin/usage/empty-response-claims/:id/approve", handler.ApproveEmptyResponseClaim)
 	router.POST("/admin/usage/empty-response-claims/:id/reject", handler.RejectEmptyResponseClaim)
+	router.POST("/admin/usage/empty-response-claims/batch", handler.BatchEmptyResponseClaims)
 	return router
+}
+
+func TestAdminEmptyResponseClaimListAppliesInclusiveCalendarRange(t *testing.T) {
+	repo := &adminClaimRepositoryStub{}
+	router := newAdminClaimHandlerTestRouter(repo)
+	recorder := httptest.NewRecorder()
+	router.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/admin/usage/empty-response-claims?start_date=2026-08-01&end_date=2026-08-07", nil))
+
+	require.Equal(t, http.StatusOK, recorder.Code)
+	require.NotNil(t, repo.seenFilter.StartTime)
+	require.NotNil(t, repo.seenFilter.EndTime)
+	require.Equal(t, "2026-08-01", repo.seenFilter.StartTime.Format("2006-01-02"))
+	require.Equal(t, "2026-08-08", repo.seenFilter.EndTime.Format("2006-01-02"))
 }
 
 func TestAdminEmptyResponseClaimListExposesStructuredEvidenceOnly(t *testing.T) {
@@ -87,5 +103,17 @@ func TestAdminEmptyResponseClaimApproveUsesAuthenticatedReviewer(t *testing.T) {
 	require.Equal(t, http.StatusOK, recorder.Code)
 	require.Equal(t, int64(12), repo.seenID)
 	require.Equal(t, int64(9), repo.seenAdmin)
+	require.Equal(t, service.EmptyResponseClaimApproved, repo.seenStatus)
+}
+
+func TestAdminEmptyResponseClaimBatchAcceptsActionVerbs(t *testing.T) {
+	repo := &adminClaimRepositoryStub{}
+	router := newAdminClaimHandlerTestRouter(repo)
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodPost, "/admin/usage/empty-response-claims/batch", bytes.NewBufferString(`{"ids":[12],"action":"approve","note":"verified"}`))
+	request.Header.Set("Content-Type", "application/json")
+	router.ServeHTTP(recorder, request)
+
+	require.Equal(t, http.StatusOK, recorder.Code)
 	require.Equal(t, service.EmptyResponseClaimApproved, repo.seenStatus)
 }

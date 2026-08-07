@@ -39,10 +39,22 @@ type EmptyResponseClaimBatchResult struct {
 type EmptyResponseClaimAdminService struct {
 	repo        EmptyResponseClaimAdminRepository
 	compensator EmptyResponseClaimCompensator
+	metrics     *EmptyResponseClaimMetricsService
 }
 
 func NewEmptyResponseClaimAdminService(repo EmptyResponseClaimAdminRepository, compensator EmptyResponseClaimCompensator) *EmptyResponseClaimAdminService {
-	return &EmptyResponseClaimAdminService{repo: repo, compensator: compensator}
+	service := &EmptyResponseClaimAdminService{repo: repo, compensator: compensator}
+	if metricsRepo, ok := repo.(EmptyResponseClaimMetricsRepository); ok {
+		service.metrics = NewEmptyResponseClaimMetricsService(metricsRepo)
+	}
+	return service
+}
+
+func (s *EmptyResponseClaimAdminService) Metrics(ctx context.Context, start, end time.Time) (*EmptyResponseClaimMetrics, error) {
+	if s == nil || s.metrics == nil {
+		return nil, ErrEmptyResponseClaimNotFound
+	}
+	return s.metrics.Get(ctx, start, end)
 }
 
 func (s *EmptyResponseClaimAdminService) List(ctx context.Context, params pagination.PaginationParams, filters EmptyResponseClaimListFilters) ([]EmptyResponseClaim, *pagination.PaginationResult, error) {

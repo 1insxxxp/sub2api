@@ -92,6 +92,70 @@ export interface AdminUsageQueryParams extends UsageQueryParams {
   status_code?: number | null
 }
 
+export interface EmptyResponseOutcomeEvidence {
+  http_status: number
+  upstream_status: number
+  has_text: boolean
+  has_tool_call: boolean
+  has_reasoning: boolean
+  has_media: boolean
+  output_bytes: number
+  event_count: number
+  stream_completed: boolean
+  finish_reason?: string
+  disconnect_source: string
+  upstream_error_kind: string
+  collector_version: number
+}
+
+export interface AdminEmptyResponseClaim {
+  id: number
+  usage_log_id: number
+  status: string
+  reason_code: string
+  estimated_refund: number
+  refunded_amount: number
+  user_id: number
+  user_email: string
+  api_key_id: number
+  account_id: number
+  account_name: string
+  group_id: number | null
+  group_name: string
+  model: string
+  user_reason: string
+  admin_note: string
+  rule_version: number
+  balance_refund: number
+  subscription_refund: number
+  api_key_quota_refund: number
+  evidence: EmptyResponseOutcomeEvidence
+  created_at: string
+  updated_at: string
+}
+
+export interface EmptyResponseClaimMetricDimension {
+  id: number
+  name: string
+  charged_requests: number
+  claims: number
+  refund_amount: number
+  empty_response_rate: number
+}
+
+export interface EmptyResponseClaimMetrics {
+  total_charged_requests: number
+  total_claims: number
+  compensated_claims: number
+  manual_review_claims: number
+  rejected_claims: number
+  total_refund_amount: number
+  empty_response_rate: number
+  by_group: EmptyResponseClaimMetricDimension[]
+  by_account: EmptyResponseClaimMetricDimension[]
+  by_model: EmptyResponseClaimMetricDimension[]
+}
+
 // ==================== API Functions ====================
 
 /**
@@ -204,6 +268,48 @@ export async function cancelCleanupTask(taskId: number): Promise<{ id: number; s
   return data
 }
 
+export async function listClaims(params: {
+  page?: number
+  page_size?: number
+  status?: string
+  model?: string
+  user_id?: number
+  group_id?: number
+  account_id?: number
+  start_date?: string
+  end_date?: string
+}): Promise<PaginatedResponse<AdminEmptyResponseClaim>> {
+  const { data } = await apiClient.get<PaginatedResponse<AdminEmptyResponseClaim>>(
+    '/admin/usage/empty-response-claims',
+    { params }
+  )
+  return data
+}
+
+export async function getClaimMetrics(params: { start_date?: string; end_date?: string }): Promise<EmptyResponseClaimMetrics> {
+  const { data } = await apiClient.get<EmptyResponseClaimMetrics>('/admin/usage/empty-response-claims/metrics', { params })
+  return data
+}
+
+export async function approveClaim(id: number, payload: { note: string }): Promise<AdminEmptyResponseClaim> {
+  const { data } = await apiClient.post<AdminEmptyResponseClaim>(`/admin/usage/empty-response-claims/${id}/approve`, payload)
+  return data
+}
+
+export async function rejectClaim(id: number, payload: { note: string }): Promise<AdminEmptyResponseClaim> {
+  const { data } = await apiClient.post<AdminEmptyResponseClaim>(`/admin/usage/empty-response-claims/${id}/reject`, payload)
+  return data
+}
+
+export async function batchClaims(payload: { ids: number[]; action: 'approved' | 'rejected'; note: string }): Promise<{ succeeded: number[]; failed: Record<number, string>; claims: AdminEmptyResponseClaim[] }> {
+  const { data } = await apiClient.post<{
+    succeeded: number[]
+    failed: Record<number, string>
+    claims: AdminEmptyResponseClaim[]
+  }>('/admin/usage/empty-response-claims/batch', payload)
+  return data
+}
+
 export const adminUsageAPI = {
   list,
   getStats,
@@ -211,7 +317,12 @@ export const adminUsageAPI = {
   searchApiKeys,
   listCleanupTasks,
   createCleanupTask,
-  cancelCleanupTask
+  cancelCleanupTask,
+  listClaims,
+  getClaimMetrics,
+  approveClaim,
+  rejectClaim,
+  batchClaims
 }
 
 export default adminUsageAPI

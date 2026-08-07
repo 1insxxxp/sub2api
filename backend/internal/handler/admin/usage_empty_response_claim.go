@@ -3,6 +3,7 @@ package admin
 import (
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/handler/dto"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/pagination"
@@ -38,6 +39,23 @@ func (h *UsageHandler) ListEmptyResponseClaims(c *gin.Context) {
 			}
 			*target = value
 		}
+		if raw := strings.TrimSpace(c.Query("start_date")); raw != "" {
+			parsed, err := time.Parse("2006-01-02", raw)
+			if err != nil {
+				response.BadRequest(c, "Invalid start_date")
+				return
+			}
+			filters.StartTime = &parsed
+		}
+		if raw := strings.TrimSpace(c.Query("end_date")); raw != "" {
+			parsed, err := time.Parse("2006-01-02", raw)
+			if err != nil {
+				response.BadRequest(c, "Invalid end_date")
+				return
+			}
+			parsed = parsed.AddDate(0, 0, 1)
+			filters.EndTime = &parsed
+		}
 	}
 	claims, result, err := h.emptyResponseClaimService.List(c.Request.Context(), pagination.PaginationParams{Page: page, PageSize: pageSize, SortBy: "created_at", SortOrder: "desc"}, filters)
 	if err != nil {
@@ -49,6 +67,37 @@ func (h *UsageHandler) ListEmptyResponseClaims(c *gin.Context) {
 		items = append(items, *dto.EmptyResponseClaimFromServiceAdmin(&claims[i]))
 	}
 	response.Paginated(c, items, result.Total, page, pageSize)
+}
+
+func (h *UsageHandler) GetEmptyResponseClaimMetrics(c *gin.Context) {
+	if h.emptyResponseClaimService == nil {
+		response.InternalError(c, "Empty response claim service not available")
+		return
+	}
+	now := time.Now()
+	start, end := now.AddDate(0, 0, -7), now
+	if raw := strings.TrimSpace(c.Query("start_date")); raw != "" {
+		parsed, err := time.Parse("2006-01-02", raw)
+		if err != nil {
+			response.BadRequest(c, "Invalid start_date")
+			return
+		}
+		start = parsed
+	}
+	if raw := strings.TrimSpace(c.Query("end_date")); raw != "" {
+		parsed, err := time.Parse("2006-01-02", raw)
+		if err != nil {
+			response.BadRequest(c, "Invalid end_date")
+			return
+		}
+		end = parsed.AddDate(0, 0, 1)
+	}
+	metrics, err := h.emptyResponseClaimService.Metrics(c.Request.Context(), start, end)
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	response.Success(c, metrics)
 }
 
 func (h *UsageHandler) ApproveEmptyResponseClaim(c *gin.Context) {
@@ -89,6 +138,10 @@ func (h *UsageHandler) reviewEmptyResponseClaim(c *gin.Context, status string) {
 		response.ErrorFrom(c, err)
 		return
 	}
+	if h.opsService != nil {
+		refund := claim.BalanceRefund + claim.SubscriptionRefund
+		h.opsService.RecordEmptyResponseClaimAudit(subject.UserID, status, []int64{id}, 1, 0, refund)
+	}
 	response.Success(c, dto.EmptyResponseClaimFromServiceAdmin(claim))
 }
 
@@ -103,12 +156,25 @@ func (h *UsageHandler) BatchEmptyResponseClaims(c *gin.Context) {
 		response.BadRequest(c, "Invalid batch request")
 		return
 	}
+	switch request.Action {
+	case "approve":
+		request.Action = service.EmptyResponseClaimApproved
+	case "reject":
+		request.Action = service.EmptyResponseClaimRejected
+	}
 	result, err := h.emptyResponseClaimService.Batch(c.Request.Context(), service.EmptyResponseClaimBatchInput{
 		IDs: request.IDs, Action: request.Action, ReviewerID: subject.UserID, Note: request.Note,
 	})
 	if err != nil {
 		response.ErrorFrom(c, err)
 		return
+	}
+	if h.opsService != nil {
+		refund := 0.0
+		for i := range result.Claims {
+			refund += result.Claims[i].BalanceRefund + result.Claims[i].SubscriptionRefund
+		}
+		h.opsService.RecordEmptyResponseClaimAudit(subject.UserID, request.Action, result.Succeeded, len(result.Succeeded), len(result.Failed), refund)
 	}
 	response.Success(c, result)
 }

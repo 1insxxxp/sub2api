@@ -685,6 +685,7 @@ func registerUsageRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 	usage := admin.Group("/usage")
 	{
 		usage.GET("/empty-response-claims", h.Admin.Usage.ListEmptyResponseClaims)
+		usage.GET("/empty-response-claims/metrics", h.Admin.Usage.GetEmptyResponseClaimMetrics)
 		usage.POST("/empty-response-claims/batch", h.Admin.Usage.BatchEmptyResponseClaims)
 		usage.POST("/empty-response-claims/:id/approve", h.Admin.Usage.ApproveEmptyResponseClaim)
 		usage.POST("/empty-response-claims/:id/reject", h.Admin.Usage.RejectEmptyResponseClaim)

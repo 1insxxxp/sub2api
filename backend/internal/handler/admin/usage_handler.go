@@ -26,10 +26,15 @@ type UsageHandler struct {
 	adminService              service.AdminService
 	cleanupService            *service.UsageCleanupService
 	emptyResponseClaimService *service.EmptyResponseClaimAdminService
+	opsService                *service.OpsService
 }
 
 func (h *UsageHandler) SetEmptyResponseClaimService(claimService *service.EmptyResponseClaimAdminService) {
 	h.emptyResponseClaimService = claimService
+}
+
+func (h *UsageHandler) SetOpsService(opsService *service.OpsService) {
+	h.opsService = opsService
 }
 
 // NewUsageHandler creates a new admin usage handler
