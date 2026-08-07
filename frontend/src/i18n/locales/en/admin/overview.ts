@@ -912,6 +912,10 @@ export default {
       groupUpdatedSuccess: 'Group updated successfully',
       groupDeletedSuccess: 'Group deleted successfully',
       rateMultiplierHint: 'Cost multiplier for this group (e.g., 1.5 = 150% of base cost)',
+      emptyResponseCompensation: {
+        enable: 'Allow self-service empty-response refunds',
+        hint: 'This is a user refund policy, not an upstream refund guarantee. Eligible empty or interrupted responses are refunded automatically; ambiguous cases require review.'
+      },
       exclusiveHint: 'Exclusive group, manually assign to specific users',
       exclusiveTooltip: {
         title: 'What is an exclusive group?',

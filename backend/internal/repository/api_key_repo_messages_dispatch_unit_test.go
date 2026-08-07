@@ -34,6 +34,11 @@ func TestGroupEntityToService_PreservesMessagesDispatchModelConfig(t *testing.T)
 	require.Equal(t, group.MessagesDispatchModelConfig, got.MessagesDispatchModelConfig)
 }
 
+func TestGroupEntityToServicePreservesEmptyResponseCompensationPolicy(t *testing.T) {
+	got := groupEntityToService(&dbent.Group{ID: 9, EmptyResponseCompensationEnabled: true})
+	require.True(t, got.EmptyResponseCompensationEnabled)
+}
+
 func TestAPIKeyRepository_GetByKeyForAuth_PreservesMessagesDispatchModelConfig_SQLite(t *testing.T) {
 	repo, client := newAPIKeyRepoSQLite(t)
 	ctx := context.Background()

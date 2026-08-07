@@ -607,6 +607,23 @@
           />
           <p class="input-hint">{{ t("admin.groups.form.rpmLimitHint") }}</p>
         </div>
+        <div class="rounded-xl border border-sky-200 bg-sky-50/70 p-4 dark:border-sky-900/70 dark:bg-sky-950/20">
+          <label class="flex cursor-pointer items-start gap-3">
+            <input
+              v-model="createForm.empty_response_compensation_enabled"
+              type="checkbox"
+              class="mt-0.5 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+            />
+            <span>
+              <span class="block text-sm font-medium text-gray-800 dark:text-gray-100">
+                {{ t("admin.groups.emptyResponseCompensation.enable") }}
+              </span>
+              <span class="mt-1 block text-xs leading-5 text-gray-500 dark:text-gray-400">
+                {{ t("admin.groups.emptyResponseCompensation.hint") }}
+              </span>
+            </span>
+          </label>
+        </div>
         <ReasoningEffortPolicyFields
           v-if="supportsReasoningEffortPolicyPlatform(createForm.platform)"
           ref="createReasoningEffortPolicyRef"
@@ -2221,6 +2238,23 @@
             :placeholder="t('admin.groups.form.rpmLimitPlaceholder')"
           />
           <p class="input-hint">{{ t("admin.groups.form.rpmLimitHint") }}</p>
+        </div>
+        <div class="rounded-xl border border-sky-200 bg-sky-50/70 p-4 dark:border-sky-900/70 dark:bg-sky-950/20">
+          <label class="flex cursor-pointer items-start gap-3">
+            <input
+              v-model="editForm.empty_response_compensation_enabled"
+              type="checkbox"
+              class="mt-0.5 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+            />
+            <span>
+              <span class="block text-sm font-medium text-gray-800 dark:text-gray-100">
+                {{ t("admin.groups.emptyResponseCompensation.enable") }}
+              </span>
+              <span class="mt-1 block text-xs leading-5 text-gray-500 dark:text-gray-400">
+                {{ t("admin.groups.emptyResponseCompensation.hint") }}
+              </span>
+            </span>
+          </label>
         </div>
         <ReasoningEffortPolicyFields
           v-if="supportsReasoningEffortPolicyPlatform(editForm.platform)"
@@ -4726,6 +4760,7 @@ const createForm = reactive({
   description: "",
   platform: "anthropic" as GroupPlatform,
   rate_multiplier: 1.0,
+  empty_response_compensation_enabled: false,
   is_exclusive: false,
   subscription_type: "standard" as SubscriptionType,
   daily_limit_usd: null as number | null,
@@ -5080,6 +5115,7 @@ const editForm = reactive({
   description: "",
   platform: "anthropic" as GroupPlatform,
   rate_multiplier: 1.0,
+  empty_response_compensation_enabled: false,
   is_exclusive: false,
   status: "active" as "active" | "inactive",
   subscription_type: "standard" as SubscriptionType,
@@ -5534,6 +5570,7 @@ const closeCreateModal = () => {
   createForm.description = "";
   createForm.platform = "anthropic";
   createForm.rate_multiplier = 1.0;
+  createForm.empty_response_compensation_enabled = false;
   createForm.is_exclusive = false;
   createForm.subscription_type = "standard";
   createForm.daily_limit_usd = null;
@@ -5743,6 +5780,8 @@ const handleEdit = async (group: AdminGroup) => {
   editForm.description = group.description || "";
   editForm.platform = group.platform;
   editForm.rate_multiplier = group.rate_multiplier;
+  editForm.empty_response_compensation_enabled =
+    group.empty_response_compensation_enabled ?? false;
   editForm.is_exclusive = group.is_exclusive;
   editForm.status = group.status;
   editForm.subscription_type = group.subscription_type || "standard";
@@ -5835,6 +5874,7 @@ const closeEditModal = () => {
   editModelRoutingRules.value = [];
   editForm.copy_accounts_from_group_ids = [];
   editForm.peak_rate_enabled = false;
+  editForm.empty_response_compensation_enabled = false;
   editForm.peak_start = "";
   editForm.peak_end = "";
   editForm.peak_rate_multiplier = 1.0;

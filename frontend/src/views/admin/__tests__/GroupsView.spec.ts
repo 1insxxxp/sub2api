@@ -17,4 +17,10 @@ describe("admin GroupsView layout", () => {
     expect(groupsViewSource).toContain("admin-toolbar");
     expect(groupsViewSource).toContain("admin-toolbar-group");
   });
+
+  it("renders the empty response refund policy in both group forms", () => {
+    expect(groupsViewSource).toContain('v-model="createForm.empty_response_compensation_enabled"');
+    expect(groupsViewSource).toContain('v-model="editForm.empty_response_compensation_enabled"');
+    expect(groupsViewSource).toContain("admin.groups.emptyResponseCompensation.hint");
+  });
 });
