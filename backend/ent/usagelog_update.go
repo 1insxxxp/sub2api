@@ -542,6 +542,27 @@ func (_u *UsageLogUpdate) AddActualCost(v float64) *UsageLogUpdate {
 	return _u
 }
 
+// SetCompensatedCost sets the "compensated_cost" field.
+func (_u *UsageLogUpdate) SetCompensatedCost(v float64) *UsageLogUpdate {
+	_u.mutation.ResetCompensatedCost()
+	_u.mutation.SetCompensatedCost(v)
+	return _u
+}
+
+// SetNillableCompensatedCost sets the "compensated_cost" field if the given value is not nil.
+func (_u *UsageLogUpdate) SetNillableCompensatedCost(v *float64) *UsageLogUpdate {
+	if v != nil {
+		_u.SetCompensatedCost(*v)
+	}
+	return _u
+}
+
+// AddCompensatedCost adds value to the "compensated_cost" field.
+func (_u *UsageLogUpdate) AddCompensatedCost(v float64) *UsageLogUpdate {
+	_u.mutation.AddCompensatedCost(v)
+	return _u
+}
+
 // SetRateMultiplier sets the "rate_multiplier" field.
 func (_u *UsageLogUpdate) SetRateMultiplier(v float64) *UsageLogUpdate {
 	_u.mutation.ResetRateMultiplier()
@@ -1238,6 +1259,12 @@ func (_u *UsageLogUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if value, ok := _u.mutation.AddedActualCost(); ok {
 		_spec.AddField(usagelog.FieldActualCost, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.CompensatedCost(); ok {
+		_spec.SetField(usagelog.FieldCompensatedCost, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.AddedCompensatedCost(); ok {
+		_spec.AddField(usagelog.FieldCompensatedCost, field.TypeFloat64, value)
 	}
 	if value, ok := _u.mutation.RateMultiplier(); ok {
 		_spec.SetField(usagelog.FieldRateMultiplier, field.TypeFloat64, value)
@@ -2059,6 +2086,27 @@ func (_u *UsageLogUpdateOne) AddActualCost(v float64) *UsageLogUpdateOne {
 	return _u
 }
 
+// SetCompensatedCost sets the "compensated_cost" field.
+func (_u *UsageLogUpdateOne) SetCompensatedCost(v float64) *UsageLogUpdateOne {
+	_u.mutation.ResetCompensatedCost()
+	_u.mutation.SetCompensatedCost(v)
+	return _u
+}
+
+// SetNillableCompensatedCost sets the "compensated_cost" field if the given value is not nil.
+func (_u *UsageLogUpdateOne) SetNillableCompensatedCost(v *float64) *UsageLogUpdateOne {
+	if v != nil {
+		_u.SetCompensatedCost(*v)
+	}
+	return _u
+}
+
+// AddCompensatedCost adds value to the "compensated_cost" field.
+func (_u *UsageLogUpdateOne) AddCompensatedCost(v float64) *UsageLogUpdateOne {
+	_u.mutation.AddCompensatedCost(v)
+	return _u
+}
+
 // SetRateMultiplier sets the "rate_multiplier" field.
 func (_u *UsageLogUpdateOne) SetRateMultiplier(v float64) *UsageLogUpdateOne {
 	_u.mutation.ResetRateMultiplier()
@@ -2785,6 +2833,12 @@ func (_u *UsageLogUpdateOne) sqlSave(ctx context.Context) (_node *UsageLog, err 
 	}
 	if value, ok := _u.mutation.AddedActualCost(); ok {
 		_spec.AddField(usagelog.FieldActualCost, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.CompensatedCost(); ok {
+		_spec.SetField(usagelog.FieldCompensatedCost, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.AddedCompensatedCost(); ok {
+		_spec.AddField(usagelog.FieldCompensatedCost, field.TypeFloat64, value)
 	}
 	if value, ok := _u.mutation.RateMultiplier(); ok {
 		_spec.SetField(usagelog.FieldRateMultiplier, field.TypeFloat64, value)

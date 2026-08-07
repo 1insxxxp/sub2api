@@ -118,6 +118,20 @@ func (_u *GroupUpdate) AddRateMultiplier(v float64) *GroupUpdate {
 	return _u
 }
 
+// SetEmptyResponseCompensationEnabled sets the "empty_response_compensation_enabled" field.
+func (_u *GroupUpdate) SetEmptyResponseCompensationEnabled(v bool) *GroupUpdate {
+	_u.mutation.SetEmptyResponseCompensationEnabled(v)
+	return _u
+}
+
+// SetNillableEmptyResponseCompensationEnabled sets the "empty_response_compensation_enabled" field if the given value is not nil.
+func (_u *GroupUpdate) SetNillableEmptyResponseCompensationEnabled(v *bool) *GroupUpdate {
+	if v != nil {
+		_u.SetEmptyResponseCompensationEnabled(*v)
+	}
+	return _u
+}
+
 // SetPeakRateEnabled sets the "peak_rate_enabled" field.
 func (_u *GroupUpdate) SetPeakRateEnabled(v bool) *GroupUpdate {
 	_u.mutation.SetPeakRateEnabled(v)
@@ -1409,6 +1423,9 @@ func (_u *GroupUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	if value, ok := _u.mutation.AddedRateMultiplier(); ok {
 		_spec.AddField(group.FieldRateMultiplier, field.TypeFloat64, value)
 	}
+	if value, ok := _u.mutation.EmptyResponseCompensationEnabled(); ok {
+		_spec.SetField(group.FieldEmptyResponseCompensationEnabled, field.TypeBool, value)
+	}
 	if value, ok := _u.mutation.PeakRateEnabled(); ok {
 		_spec.SetField(group.FieldPeakRateEnabled, field.TypeBool, value)
 	}
@@ -2111,6 +2128,20 @@ func (_u *GroupUpdateOne) SetNillableRateMultiplier(v *float64) *GroupUpdateOne 
 // AddRateMultiplier adds value to the "rate_multiplier" field.
 func (_u *GroupUpdateOne) AddRateMultiplier(v float64) *GroupUpdateOne {
 	_u.mutation.AddRateMultiplier(v)
+	return _u
+}
+
+// SetEmptyResponseCompensationEnabled sets the "empty_response_compensation_enabled" field.
+func (_u *GroupUpdateOne) SetEmptyResponseCompensationEnabled(v bool) *GroupUpdateOne {
+	_u.mutation.SetEmptyResponseCompensationEnabled(v)
+	return _u
+}
+
+// SetNillableEmptyResponseCompensationEnabled sets the "empty_response_compensation_enabled" field if the given value is not nil.
+func (_u *GroupUpdateOne) SetNillableEmptyResponseCompensationEnabled(v *bool) *GroupUpdateOne {
+	if v != nil {
+		_u.SetEmptyResponseCompensationEnabled(*v)
+	}
 	return _u
 }
 
@@ -3434,6 +3465,9 @@ func (_u *GroupUpdateOne) sqlSave(ctx context.Context) (_node *Group, err error)
 	}
 	if value, ok := _u.mutation.AddedRateMultiplier(); ok {
 		_spec.AddField(group.FieldRateMultiplier, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.EmptyResponseCompensationEnabled(); ok {
+		_spec.SetField(group.FieldEmptyResponseCompensationEnabled, field.TypeBool, value)
 	}
 	if value, ok := _u.mutation.PeakRateEnabled(); ok {
 		_spec.SetField(group.FieldPeakRateEnabled, field.TypeBool, value)

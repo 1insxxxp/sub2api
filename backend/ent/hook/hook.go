@@ -189,6 +189,18 @@ func (f CompositeModelRouteFunc) Mutate(ctx context.Context, m ent.Mutation) (en
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.CompositeModelRouteMutation", m)
 }
 
+// The EmptyResponseClaimFunc type is an adapter to allow the use of ordinary
+// function as EmptyResponseClaim mutator.
+type EmptyResponseClaimFunc func(context.Context, *ent.EmptyResponseClaimMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f EmptyResponseClaimFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.EmptyResponseClaimMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.EmptyResponseClaimMutation", m)
+}
+
 // The ErrorPassthroughRuleFunc type is an adapter to allow the use of ordinary
 // function as ErrorPassthroughRule mutator.
 type ErrorPassthroughRuleFunc func(context.Context, *ent.ErrorPassthroughRuleMutation) (ent.Value, error)
@@ -415,6 +427,18 @@ func (f UsageLogFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, er
 		return f(ctx, mv)
 	}
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.UsageLogMutation", m)
+}
+
+// The UsageResponseOutcomeFunc type is an adapter to allow the use of ordinary
+// function as UsageResponseOutcome mutator.
+type UsageResponseOutcomeFunc func(context.Context, *ent.UsageResponseOutcomeMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f UsageResponseOutcomeFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.UsageResponseOutcomeMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.UsageResponseOutcomeMutation", m)
 }
 
 // The UserFunc type is an adapter to allow the use of ordinary

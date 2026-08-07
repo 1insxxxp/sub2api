@@ -869,6 +869,65 @@ var (
 			},
 		},
 	}
+	// EmptyResponseClaimsColumns holds the columns for the "empty_response_claims" table.
+	EmptyResponseClaimsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt64, Increment: true},
+		{Name: "usage_log_id", Type: field.TypeInt64},
+		{Name: "outcome_id", Type: field.TypeInt64, Nullable: true},
+		{Name: "user_id", Type: field.TypeInt64},
+		{Name: "api_key_id", Type: field.TypeInt64},
+		{Name: "account_id", Type: field.TypeInt64},
+		{Name: "group_id", Type: field.TypeInt64, Nullable: true},
+		{Name: "subscription_id", Type: field.TypeInt64, Nullable: true},
+		{Name: "status", Type: field.TypeString, Size: 24, Default: "evaluating"},
+		{Name: "reason_code", Type: field.TypeString, Size: 64, Default: ""},
+		{Name: "user_reason", Type: field.TypeString, Size: 255, Default: ""},
+		{Name: "admin_note", Type: field.TypeString, Default: "", SchemaType: map[string]string{"postgres": "text"}},
+		{Name: "original_actual_cost", Type: field.TypeFloat64, Default: 0, SchemaType: map[string]string{"postgres": "decimal(20,10)"}},
+		{Name: "balance_refund", Type: field.TypeFloat64, Default: 0, SchemaType: map[string]string{"postgres": "decimal(20,10)"}},
+		{Name: "subscription_refund", Type: field.TypeFloat64, Default: 0, SchemaType: map[string]string{"postgres": "decimal(20,10)"}},
+		{Name: "api_key_quota_refund", Type: field.TypeFloat64, Default: 0, SchemaType: map[string]string{"postgres": "decimal(20,10)"}},
+		{Name: "evidence", Type: field.TypeJSON, Nullable: true, SchemaType: map[string]string{"postgres": "jsonb"}},
+		{Name: "rule_version", Type: field.TypeInt, Default: 1},
+		{Name: "reviewed_by", Type: field.TypeInt64, Nullable: true},
+		{Name: "reviewed_at", Type: field.TypeTime, Nullable: true},
+		{Name: "compensated_at", Type: field.TypeTime, Nullable: true},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "updated_at", Type: field.TypeTime},
+	}
+	// EmptyResponseClaimsTable holds the schema information for the "empty_response_claims" table.
+	EmptyResponseClaimsTable = &schema.Table{
+		Name:       "empty_response_claims",
+		Columns:    EmptyResponseClaimsColumns,
+		PrimaryKey: []*schema.Column{EmptyResponseClaimsColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "emptyresponseclaim_usage_log_id",
+				Unique:  true,
+				Columns: []*schema.Column{EmptyResponseClaimsColumns[1]},
+			},
+			{
+				Name:    "emptyresponseclaim_status_created_at",
+				Unique:  false,
+				Columns: []*schema.Column{EmptyResponseClaimsColumns[8], EmptyResponseClaimsColumns[21]},
+			},
+			{
+				Name:    "emptyresponseclaim_user_id_created_at",
+				Unique:  false,
+				Columns: []*schema.Column{EmptyResponseClaimsColumns[3], EmptyResponseClaimsColumns[21]},
+			},
+			{
+				Name:    "emptyresponseclaim_group_id_created_at",
+				Unique:  false,
+				Columns: []*schema.Column{EmptyResponseClaimsColumns[6], EmptyResponseClaimsColumns[21]},
+			},
+			{
+				Name:    "emptyresponseclaim_account_id_created_at",
+				Unique:  false,
+				Columns: []*schema.Column{EmptyResponseClaimsColumns[5], EmptyResponseClaimsColumns[21]},
+			},
+		},
+	}
 	// ErrorPassthroughRulesColumns holds the columns for the "error_passthrough_rules" table.
 	ErrorPassthroughRulesColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeInt64, Increment: true},
@@ -915,6 +974,7 @@ var (
 		{Name: "name", Type: field.TypeString, Size: 100},
 		{Name: "description", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "text"}},
 		{Name: "rate_multiplier", Type: field.TypeFloat64, Default: 1, SchemaType: map[string]string{"postgres": "decimal(10,4)"}},
+		{Name: "empty_response_compensation_enabled", Type: field.TypeBool, Default: false},
 		{Name: "peak_rate_enabled", Type: field.TypeBool, Default: false},
 		{Name: "peak_start", Type: field.TypeString, Size: 5, Default: ""},
 		{Name: "peak_end", Type: field.TypeString, Size: 5, Default: ""},
@@ -975,22 +1035,22 @@ var (
 			{
 				Name:    "group_status",
 				Unique:  false,
-				Columns: []*schema.Column{GroupsColumns[12]},
+				Columns: []*schema.Column{GroupsColumns[13]},
 			},
 			{
 				Name:    "group_platform",
 				Unique:  false,
-				Columns: []*schema.Column{GroupsColumns[14]},
+				Columns: []*schema.Column{GroupsColumns[15]},
 			},
 			{
 				Name:    "group_subscription_type",
 				Unique:  false,
-				Columns: []*schema.Column{GroupsColumns[15]},
+				Columns: []*schema.Column{GroupsColumns[16]},
 			},
 			{
 				Name:    "group_is_exclusive",
 				Unique:  false,
-				Columns: []*schema.Column{GroupsColumns[11]},
+				Columns: []*schema.Column{GroupsColumns[12]},
 			},
 			{
 				Name:    "group_deleted_at",
@@ -1000,12 +1060,12 @@ var (
 			{
 				Name:    "group_sort_order",
 				Unique:  false,
-				Columns: []*schema.Column{GroupsColumns[43]},
+				Columns: []*schema.Column{GroupsColumns[44]},
 			},
 			{
 				Name:    "idx_groups_duplicate_operation_id_active",
 				Unique:  true,
-				Columns: []*schema.Column{GroupsColumns[13]},
+				Columns: []*schema.Column{GroupsColumns[14]},
 				Annotation: &entsql.IndexAnnotation{
 					Where: "duplicate_operation_id IS NOT NULL AND deleted_at IS NULL",
 				},
@@ -1689,6 +1749,7 @@ var (
 		{Name: "cache_read_cost", Type: field.TypeFloat64, Default: 0, SchemaType: map[string]string{"postgres": "decimal(20,10)"}},
 		{Name: "total_cost", Type: field.TypeFloat64, Default: 0, SchemaType: map[string]string{"postgres": "decimal(20,10)"}},
 		{Name: "actual_cost", Type: field.TypeFloat64, Default: 0, SchemaType: map[string]string{"postgres": "decimal(20,10)"}},
+		{Name: "compensated_cost", Type: field.TypeFloat64, Default: 0, SchemaType: map[string]string{"postgres": "decimal(20,10)"}},
 		{Name: "rate_multiplier", Type: field.TypeFloat64, Default: 1, SchemaType: map[string]string{"postgres": "decimal(10,4)"}},
 		{Name: "long_context_billing_applied", Type: field.TypeBool, Default: false},
 		{Name: "account_rate_multiplier", Type: field.TypeFloat64, Nullable: true, SchemaType: map[string]string{"postgres": "decimal(10,4)"}},
@@ -1724,37 +1785,37 @@ var (
 		ForeignKeys: []*schema.ForeignKey{
 			{
 				Symbol:     "usage_logs_api_keys_usage_logs",
-				Columns:    []*schema.Column{UsageLogsColumns[41]},
+				Columns:    []*schema.Column{UsageLogsColumns[42]},
 				RefColumns: []*schema.Column{APIKeysColumns[0]},
 				OnDelete:   schema.NoAction,
 			},
 			{
 				Symbol:     "usage_logs_accounts_usage_logs",
-				Columns:    []*schema.Column{UsageLogsColumns[42]},
+				Columns:    []*schema.Column{UsageLogsColumns[43]},
 				RefColumns: []*schema.Column{AccountsColumns[0]},
 				OnDelete:   schema.NoAction,
 			},
 			{
 				Symbol:     "usage_logs_groups_usage_logs",
-				Columns:    []*schema.Column{UsageLogsColumns[43]},
+				Columns:    []*schema.Column{UsageLogsColumns[44]},
 				RefColumns: []*schema.Column{GroupsColumns[0]},
 				OnDelete:   schema.SetNull,
 			},
 			{
 				Symbol:     "usage_logs_users_usage_logs",
-				Columns:    []*schema.Column{UsageLogsColumns[44]},
+				Columns:    []*schema.Column{UsageLogsColumns[45]},
 				RefColumns: []*schema.Column{UsersColumns[0]},
 				OnDelete:   schema.NoAction,
 			},
 			{
 				Symbol:     "usage_logs_user_custom_groups_usage_logs",
-				Columns:    []*schema.Column{UsageLogsColumns[45]},
+				Columns:    []*schema.Column{UsageLogsColumns[46]},
 				RefColumns: []*schema.Column{UserCustomGroupsColumns[0]},
 				OnDelete:   schema.SetNull,
 			},
 			{
 				Symbol:     "usage_logs_user_subscriptions_usage_logs",
-				Columns:    []*schema.Column{UsageLogsColumns[46]},
+				Columns:    []*schema.Column{UsageLogsColumns[47]},
 				RefColumns: []*schema.Column{UserSubscriptionsColumns[0]},
 				OnDelete:   schema.SetNull,
 			},
@@ -1763,37 +1824,37 @@ var (
 			{
 				Name:    "usagelog_user_id",
 				Unique:  false,
-				Columns: []*schema.Column{UsageLogsColumns[44]},
+				Columns: []*schema.Column{UsageLogsColumns[45]},
 			},
 			{
 				Name:    "usagelog_api_key_id",
 				Unique:  false,
-				Columns: []*schema.Column{UsageLogsColumns[41]},
+				Columns: []*schema.Column{UsageLogsColumns[42]},
 			},
 			{
 				Name:    "usagelog_account_id",
 				Unique:  false,
-				Columns: []*schema.Column{UsageLogsColumns[42]},
+				Columns: []*schema.Column{UsageLogsColumns[43]},
 			},
 			{
 				Name:    "usagelog_group_id",
 				Unique:  false,
-				Columns: []*schema.Column{UsageLogsColumns[43]},
+				Columns: []*schema.Column{UsageLogsColumns[44]},
 			},
 			{
 				Name:    "usagelog_custom_group_id",
 				Unique:  false,
-				Columns: []*schema.Column{UsageLogsColumns[45]},
+				Columns: []*schema.Column{UsageLogsColumns[46]},
 			},
 			{
 				Name:    "usagelog_subscription_id",
 				Unique:  false,
-				Columns: []*schema.Column{UsageLogsColumns[46]},
+				Columns: []*schema.Column{UsageLogsColumns[47]},
 			},
 			{
 				Name:    "usagelog_created_at",
 				Unique:  false,
-				Columns: []*schema.Column{UsageLogsColumns[40]},
+				Columns: []*schema.Column{UsageLogsColumns[41]},
 			},
 			{
 				Name:    "usagelog_model",
@@ -1813,17 +1874,74 @@ var (
 			{
 				Name:    "usagelog_user_id_created_at",
 				Unique:  false,
-				Columns: []*schema.Column{UsageLogsColumns[44], UsageLogsColumns[40]},
+				Columns: []*schema.Column{UsageLogsColumns[45], UsageLogsColumns[41]},
 			},
 			{
 				Name:    "usagelog_api_key_id_created_at",
 				Unique:  false,
-				Columns: []*schema.Column{UsageLogsColumns[41], UsageLogsColumns[40]},
+				Columns: []*schema.Column{UsageLogsColumns[42], UsageLogsColumns[41]},
 			},
 			{
 				Name:    "usagelog_group_id_created_at",
 				Unique:  false,
-				Columns: []*schema.Column{UsageLogsColumns[43], UsageLogsColumns[40]},
+				Columns: []*schema.Column{UsageLogsColumns[44], UsageLogsColumns[41]},
+			},
+		},
+	}
+	// UsageResponseOutcomesColumns holds the columns for the "usage_response_outcomes" table.
+	UsageResponseOutcomesColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt64, Increment: true},
+		{Name: "usage_log_id", Type: field.TypeInt64, Nullable: true},
+		{Name: "request_id", Type: field.TypeString, Size: 64},
+		{Name: "api_key_id", Type: field.TypeInt64},
+		{Name: "user_id", Type: field.TypeInt64},
+		{Name: "account_id", Type: field.TypeInt64},
+		{Name: "group_id", Type: field.TypeInt64, Nullable: true},
+		{Name: "http_status", Type: field.TypeInt, Default: 0},
+		{Name: "upstream_status", Type: field.TypeInt, Default: 0},
+		{Name: "has_text", Type: field.TypeBool, Default: false},
+		{Name: "has_tool_call", Type: field.TypeBool, Default: false},
+		{Name: "has_reasoning", Type: field.TypeBool, Default: false},
+		{Name: "has_media", Type: field.TypeBool, Default: false},
+		{Name: "output_bytes", Type: field.TypeInt64, Default: 0},
+		{Name: "event_count", Type: field.TypeInt, Default: 0},
+		{Name: "stream_completed", Type: field.TypeBool, Default: false},
+		{Name: "finish_reason", Type: field.TypeString, Size: 100, Default: ""},
+		{Name: "disconnect_source", Type: field.TypeString, Size: 20, Default: "none"},
+		{Name: "upstream_error_kind", Type: field.TypeString, Size: 32, Default: "none"},
+		{Name: "collector_version", Type: field.TypeInt16, Default: 1},
+		{Name: "created_at", Type: field.TypeTime},
+	}
+	// UsageResponseOutcomesTable holds the schema information for the "usage_response_outcomes" table.
+	UsageResponseOutcomesTable = &schema.Table{
+		Name:       "usage_response_outcomes",
+		Columns:    UsageResponseOutcomesColumns,
+		PrimaryKey: []*schema.Column{UsageResponseOutcomesColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "usageresponseoutcome_usage_log_id",
+				Unique:  true,
+				Columns: []*schema.Column{UsageResponseOutcomesColumns[1]},
+			},
+			{
+				Name:    "usageresponseoutcome_request_id_api_key_id",
+				Unique:  true,
+				Columns: []*schema.Column{UsageResponseOutcomesColumns[2], UsageResponseOutcomesColumns[3]},
+			},
+			{
+				Name:    "usageresponseoutcome_user_id_created_at",
+				Unique:  false,
+				Columns: []*schema.Column{UsageResponseOutcomesColumns[4], UsageResponseOutcomesColumns[20]},
+			},
+			{
+				Name:    "usageresponseoutcome_group_id_created_at",
+				Unique:  false,
+				Columns: []*schema.Column{UsageResponseOutcomesColumns[6], UsageResponseOutcomesColumns[20]},
+			},
+			{
+				Name:    "usageresponseoutcome_account_id_created_at",
+				Unique:  false,
+				Columns: []*schema.Column{UsageResponseOutcomesColumns[5], UsageResponseOutcomesColumns[20]},
 			},
 		},
 	}
@@ -2456,6 +2574,7 @@ var (
 		ChannelMonitorHistoriesTable,
 		ChannelMonitorRequestTemplatesTable,
 		CompositeModelRoutesTable,
+		EmptyResponseClaimsTable,
 		ErrorPassthroughRulesTable,
 		GroupsTable,
 		IdempotencyRecordsTable,
@@ -2475,6 +2594,7 @@ var (
 		TLSFingerprintProfilesTable,
 		UsageCleanupTasksTable,
 		UsageLogsTable,
+		UsageResponseOutcomesTable,
 		UsersTable,
 		UserAllowedGroupsTable,
 		UserAttributeDefinitionsTable,
@@ -2551,6 +2671,9 @@ func init() {
 	CompositeModelRoutesTable.Annotation = &entsql.Annotation{
 		Table: "composite_model_routes",
 	}
+	EmptyResponseClaimsTable.Annotation = &entsql.Annotation{
+		Table: "empty_response_claims",
+	}
 	ErrorPassthroughRulesTable.Annotation = &entsql.Annotation{
 		Table: "error_passthrough_rules",
 	}
@@ -2622,6 +2745,9 @@ func init() {
 	UsageLogsTable.ForeignKeys[5].RefTable = UserSubscriptionsTable
 	UsageLogsTable.Annotation = &entsql.Annotation{
 		Table: "usage_logs",
+	}
+	UsageResponseOutcomesTable.Annotation = &entsql.Annotation{
+		Table: "usage_response_outcomes",
 	}
 	UsersTable.Annotation = &entsql.Annotation{
 		Table: "users",

@@ -27,6 +27,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/channelmonitorhistory"
 	"github.com/Wei-Shaw/sub2api/ent/channelmonitorrequesttemplate"
 	"github.com/Wei-Shaw/sub2api/ent/compositemodelroute"
+	"github.com/Wei-Shaw/sub2api/ent/emptyresponseclaim"
 	"github.com/Wei-Shaw/sub2api/ent/errorpassthroughrule"
 	"github.com/Wei-Shaw/sub2api/ent/group"
 	"github.com/Wei-Shaw/sub2api/ent/idempotencyrecord"
@@ -47,6 +48,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/tlsfingerprintprofile"
 	"github.com/Wei-Shaw/sub2api/ent/usagecleanuptask"
 	"github.com/Wei-Shaw/sub2api/ent/usagelog"
+	"github.com/Wei-Shaw/sub2api/ent/usageresponseoutcome"
 	"github.com/Wei-Shaw/sub2api/ent/user"
 	"github.com/Wei-Shaw/sub2api/ent/userallowedgroup"
 	"github.com/Wei-Shaw/sub2api/ent/userattributedefinition"
@@ -86,6 +88,7 @@ const (
 	TypeChannelMonitorHistory         = "ChannelMonitorHistory"
 	TypeChannelMonitorRequestTemplate = "ChannelMonitorRequestTemplate"
 	TypeCompositeModelRoute           = "CompositeModelRoute"
+	TypeEmptyResponseClaim            = "EmptyResponseClaim"
 	TypeErrorPassthroughRule          = "ErrorPassthroughRule"
 	TypeGroup                         = "Group"
 	TypeIdempotencyRecord             = "IdempotencyRecord"
@@ -105,6 +108,7 @@ const (
 	TypeTLSFingerprintProfile         = "TLSFingerprintProfile"
 	TypeUsageCleanupTask              = "UsageCleanupTask"
 	TypeUsageLog                      = "UsageLog"
+	TypeUsageResponseOutcome          = "UsageResponseOutcome"
 	TypeUser                          = "User"
 	TypeUserAllowedGroup              = "UserAllowedGroup"
 	TypeUserAttributeDefinition       = "UserAttributeDefinition"
@@ -20762,6 +20766,2038 @@ func (m *CompositeModelRouteMutation) ResetEdge(name string) error {
 	return fmt.Errorf("unknown CompositeModelRoute edge %s", name)
 }
 
+// EmptyResponseClaimMutation represents an operation that mutates the EmptyResponseClaim nodes in the graph.
+type EmptyResponseClaimMutation struct {
+	config
+	op                      Op
+	typ                     string
+	id                      *int64
+	usage_log_id            *int64
+	addusage_log_id         *int64
+	outcome_id              *int64
+	addoutcome_id           *int64
+	user_id                 *int64
+	adduser_id              *int64
+	api_key_id              *int64
+	addapi_key_id           *int64
+	account_id              *int64
+	addaccount_id           *int64
+	group_id                *int64
+	addgroup_id             *int64
+	subscription_id         *int64
+	addsubscription_id      *int64
+	status                  *string
+	reason_code             *string
+	user_reason             *string
+	admin_note              *string
+	original_actual_cost    *float64
+	addoriginal_actual_cost *float64
+	balance_refund          *float64
+	addbalance_refund       *float64
+	subscription_refund     *float64
+	addsubscription_refund  *float64
+	api_key_quota_refund    *float64
+	addapi_key_quota_refund *float64
+	evidence                *map[string]interface{}
+	rule_version            *int
+	addrule_version         *int
+	reviewed_by             *int64
+	addreviewed_by          *int64
+	reviewed_at             *time.Time
+	compensated_at          *time.Time
+	created_at              *time.Time
+	updated_at              *time.Time
+	clearedFields           map[string]struct{}
+	done                    bool
+	oldValue                func(context.Context) (*EmptyResponseClaim, error)
+	predicates              []predicate.EmptyResponseClaim
+}
+
+var _ ent.Mutation = (*EmptyResponseClaimMutation)(nil)
+
+// emptyresponseclaimOption allows management of the mutation configuration using functional options.
+type emptyresponseclaimOption func(*EmptyResponseClaimMutation)
+
+// newEmptyResponseClaimMutation creates new mutation for the EmptyResponseClaim entity.
+func newEmptyResponseClaimMutation(c config, op Op, opts ...emptyresponseclaimOption) *EmptyResponseClaimMutation {
+	m := &EmptyResponseClaimMutation{
+		config:        c,
+		op:            op,
+		typ:           TypeEmptyResponseClaim,
+		clearedFields: make(map[string]struct{}),
+	}
+	for _, opt := range opts {
+		opt(m)
+	}
+	return m
+}
+
+// withEmptyResponseClaimID sets the ID field of the mutation.
+func withEmptyResponseClaimID(id int64) emptyresponseclaimOption {
+	return func(m *EmptyResponseClaimMutation) {
+		var (
+			err   error
+			once  sync.Once
+			value *EmptyResponseClaim
+		)
+		m.oldValue = func(ctx context.Context) (*EmptyResponseClaim, error) {
+			once.Do(func() {
+				if m.done {
+					err = errors.New("querying old values post mutation is not allowed")
+				} else {
+					value, err = m.Client().EmptyResponseClaim.Get(ctx, id)
+				}
+			})
+			return value, err
+		}
+		m.id = &id
+	}
+}
+
+// withEmptyResponseClaim sets the old EmptyResponseClaim of the mutation.
+func withEmptyResponseClaim(node *EmptyResponseClaim) emptyresponseclaimOption {
+	return func(m *EmptyResponseClaimMutation) {
+		m.oldValue = func(context.Context) (*EmptyResponseClaim, error) {
+			return node, nil
+		}
+		m.id = &node.ID
+	}
+}
+
+// Client returns a new `ent.Client` from the mutation. If the mutation was
+// executed in a transaction (ent.Tx), a transactional client is returned.
+func (m EmptyResponseClaimMutation) Client() *Client {
+	client := &Client{config: m.config}
+	client.init()
+	return client
+}
+
+// Tx returns an `ent.Tx` for mutations that were executed in transactions;
+// it returns an error otherwise.
+func (m EmptyResponseClaimMutation) Tx() (*Tx, error) {
+	if _, ok := m.driver.(*txDriver); !ok {
+		return nil, errors.New("ent: mutation is not running in a transaction")
+	}
+	tx := &Tx{config: m.config}
+	tx.init()
+	return tx, nil
+}
+
+// ID returns the ID value in the mutation. Note that the ID is only available
+// if it was provided to the builder or after it was returned from the database.
+func (m *EmptyResponseClaimMutation) ID() (id int64, exists bool) {
+	if m.id == nil {
+		return
+	}
+	return *m.id, true
+}
+
+// IDs queries the database and returns the entity ids that match the mutation's predicate.
+// That means, if the mutation is applied within a transaction with an isolation level such
+// as sql.LevelSerializable, the returned ids match the ids of the rows that will be updated
+// or updated by the mutation.
+func (m *EmptyResponseClaimMutation) IDs(ctx context.Context) ([]int64, error) {
+	switch {
+	case m.op.Is(OpUpdateOne | OpDeleteOne):
+		id, exists := m.ID()
+		if exists {
+			return []int64{id}, nil
+		}
+		fallthrough
+	case m.op.Is(OpUpdate | OpDelete):
+		return m.Client().EmptyResponseClaim.Query().Where(m.predicates...).IDs(ctx)
+	default:
+		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
+	}
+}
+
+// SetUsageLogID sets the "usage_log_id" field.
+func (m *EmptyResponseClaimMutation) SetUsageLogID(i int64) {
+	m.usage_log_id = &i
+	m.addusage_log_id = nil
+}
+
+// UsageLogID returns the value of the "usage_log_id" field in the mutation.
+func (m *EmptyResponseClaimMutation) UsageLogID() (r int64, exists bool) {
+	v := m.usage_log_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUsageLogID returns the old "usage_log_id" field's value of the EmptyResponseClaim entity.
+// If the EmptyResponseClaim object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *EmptyResponseClaimMutation) OldUsageLogID(ctx context.Context) (v int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUsageLogID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUsageLogID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUsageLogID: %w", err)
+	}
+	return oldValue.UsageLogID, nil
+}
+
+// AddUsageLogID adds i to the "usage_log_id" field.
+func (m *EmptyResponseClaimMutation) AddUsageLogID(i int64) {
+	if m.addusage_log_id != nil {
+		*m.addusage_log_id += i
+	} else {
+		m.addusage_log_id = &i
+	}
+}
+
+// AddedUsageLogID returns the value that was added to the "usage_log_id" field in this mutation.
+func (m *EmptyResponseClaimMutation) AddedUsageLogID() (r int64, exists bool) {
+	v := m.addusage_log_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetUsageLogID resets all changes to the "usage_log_id" field.
+func (m *EmptyResponseClaimMutation) ResetUsageLogID() {
+	m.usage_log_id = nil
+	m.addusage_log_id = nil
+}
+
+// SetOutcomeID sets the "outcome_id" field.
+func (m *EmptyResponseClaimMutation) SetOutcomeID(i int64) {
+	m.outcome_id = &i
+	m.addoutcome_id = nil
+}
+
+// OutcomeID returns the value of the "outcome_id" field in the mutation.
+func (m *EmptyResponseClaimMutation) OutcomeID() (r int64, exists bool) {
+	v := m.outcome_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldOutcomeID returns the old "outcome_id" field's value of the EmptyResponseClaim entity.
+// If the EmptyResponseClaim object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *EmptyResponseClaimMutation) OldOutcomeID(ctx context.Context) (v *int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldOutcomeID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldOutcomeID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldOutcomeID: %w", err)
+	}
+	return oldValue.OutcomeID, nil
+}
+
+// AddOutcomeID adds i to the "outcome_id" field.
+func (m *EmptyResponseClaimMutation) AddOutcomeID(i int64) {
+	if m.addoutcome_id != nil {
+		*m.addoutcome_id += i
+	} else {
+		m.addoutcome_id = &i
+	}
+}
+
+// AddedOutcomeID returns the value that was added to the "outcome_id" field in this mutation.
+func (m *EmptyResponseClaimMutation) AddedOutcomeID() (r int64, exists bool) {
+	v := m.addoutcome_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ClearOutcomeID clears the value of the "outcome_id" field.
+func (m *EmptyResponseClaimMutation) ClearOutcomeID() {
+	m.outcome_id = nil
+	m.addoutcome_id = nil
+	m.clearedFields[emptyresponseclaim.FieldOutcomeID] = struct{}{}
+}
+
+// OutcomeIDCleared returns if the "outcome_id" field was cleared in this mutation.
+func (m *EmptyResponseClaimMutation) OutcomeIDCleared() bool {
+	_, ok := m.clearedFields[emptyresponseclaim.FieldOutcomeID]
+	return ok
+}
+
+// ResetOutcomeID resets all changes to the "outcome_id" field.
+func (m *EmptyResponseClaimMutation) ResetOutcomeID() {
+	m.outcome_id = nil
+	m.addoutcome_id = nil
+	delete(m.clearedFields, emptyresponseclaim.FieldOutcomeID)
+}
+
+// SetUserID sets the "user_id" field.
+func (m *EmptyResponseClaimMutation) SetUserID(i int64) {
+	m.user_id = &i
+	m.adduser_id = nil
+}
+
+// UserID returns the value of the "user_id" field in the mutation.
+func (m *EmptyResponseClaimMutation) UserID() (r int64, exists bool) {
+	v := m.user_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUserID returns the old "user_id" field's value of the EmptyResponseClaim entity.
+// If the EmptyResponseClaim object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *EmptyResponseClaimMutation) OldUserID(ctx context.Context) (v int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUserID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUserID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUserID: %w", err)
+	}
+	return oldValue.UserID, nil
+}
+
+// AddUserID adds i to the "user_id" field.
+func (m *EmptyResponseClaimMutation) AddUserID(i int64) {
+	if m.adduser_id != nil {
+		*m.adduser_id += i
+	} else {
+		m.adduser_id = &i
+	}
+}
+
+// AddedUserID returns the value that was added to the "user_id" field in this mutation.
+func (m *EmptyResponseClaimMutation) AddedUserID() (r int64, exists bool) {
+	v := m.adduser_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetUserID resets all changes to the "user_id" field.
+func (m *EmptyResponseClaimMutation) ResetUserID() {
+	m.user_id = nil
+	m.adduser_id = nil
+}
+
+// SetAPIKeyID sets the "api_key_id" field.
+func (m *EmptyResponseClaimMutation) SetAPIKeyID(i int64) {
+	m.api_key_id = &i
+	m.addapi_key_id = nil
+}
+
+// APIKeyID returns the value of the "api_key_id" field in the mutation.
+func (m *EmptyResponseClaimMutation) APIKeyID() (r int64, exists bool) {
+	v := m.api_key_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldAPIKeyID returns the old "api_key_id" field's value of the EmptyResponseClaim entity.
+// If the EmptyResponseClaim object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *EmptyResponseClaimMutation) OldAPIKeyID(ctx context.Context) (v int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldAPIKeyID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldAPIKeyID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldAPIKeyID: %w", err)
+	}
+	return oldValue.APIKeyID, nil
+}
+
+// AddAPIKeyID adds i to the "api_key_id" field.
+func (m *EmptyResponseClaimMutation) AddAPIKeyID(i int64) {
+	if m.addapi_key_id != nil {
+		*m.addapi_key_id += i
+	} else {
+		m.addapi_key_id = &i
+	}
+}
+
+// AddedAPIKeyID returns the value that was added to the "api_key_id" field in this mutation.
+func (m *EmptyResponseClaimMutation) AddedAPIKeyID() (r int64, exists bool) {
+	v := m.addapi_key_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetAPIKeyID resets all changes to the "api_key_id" field.
+func (m *EmptyResponseClaimMutation) ResetAPIKeyID() {
+	m.api_key_id = nil
+	m.addapi_key_id = nil
+}
+
+// SetAccountID sets the "account_id" field.
+func (m *EmptyResponseClaimMutation) SetAccountID(i int64) {
+	m.account_id = &i
+	m.addaccount_id = nil
+}
+
+// AccountID returns the value of the "account_id" field in the mutation.
+func (m *EmptyResponseClaimMutation) AccountID() (r int64, exists bool) {
+	v := m.account_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldAccountID returns the old "account_id" field's value of the EmptyResponseClaim entity.
+// If the EmptyResponseClaim object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *EmptyResponseClaimMutation) OldAccountID(ctx context.Context) (v int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldAccountID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldAccountID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldAccountID: %w", err)
+	}
+	return oldValue.AccountID, nil
+}
+
+// AddAccountID adds i to the "account_id" field.
+func (m *EmptyResponseClaimMutation) AddAccountID(i int64) {
+	if m.addaccount_id != nil {
+		*m.addaccount_id += i
+	} else {
+		m.addaccount_id = &i
+	}
+}
+
+// AddedAccountID returns the value that was added to the "account_id" field in this mutation.
+func (m *EmptyResponseClaimMutation) AddedAccountID() (r int64, exists bool) {
+	v := m.addaccount_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetAccountID resets all changes to the "account_id" field.
+func (m *EmptyResponseClaimMutation) ResetAccountID() {
+	m.account_id = nil
+	m.addaccount_id = nil
+}
+
+// SetGroupID sets the "group_id" field.
+func (m *EmptyResponseClaimMutation) SetGroupID(i int64) {
+	m.group_id = &i
+	m.addgroup_id = nil
+}
+
+// GroupID returns the value of the "group_id" field in the mutation.
+func (m *EmptyResponseClaimMutation) GroupID() (r int64, exists bool) {
+	v := m.group_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldGroupID returns the old "group_id" field's value of the EmptyResponseClaim entity.
+// If the EmptyResponseClaim object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *EmptyResponseClaimMutation) OldGroupID(ctx context.Context) (v *int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldGroupID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldGroupID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldGroupID: %w", err)
+	}
+	return oldValue.GroupID, nil
+}
+
+// AddGroupID adds i to the "group_id" field.
+func (m *EmptyResponseClaimMutation) AddGroupID(i int64) {
+	if m.addgroup_id != nil {
+		*m.addgroup_id += i
+	} else {
+		m.addgroup_id = &i
+	}
+}
+
+// AddedGroupID returns the value that was added to the "group_id" field in this mutation.
+func (m *EmptyResponseClaimMutation) AddedGroupID() (r int64, exists bool) {
+	v := m.addgroup_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ClearGroupID clears the value of the "group_id" field.
+func (m *EmptyResponseClaimMutation) ClearGroupID() {
+	m.group_id = nil
+	m.addgroup_id = nil
+	m.clearedFields[emptyresponseclaim.FieldGroupID] = struct{}{}
+}
+
+// GroupIDCleared returns if the "group_id" field was cleared in this mutation.
+func (m *EmptyResponseClaimMutation) GroupIDCleared() bool {
+	_, ok := m.clearedFields[emptyresponseclaim.FieldGroupID]
+	return ok
+}
+
+// ResetGroupID resets all changes to the "group_id" field.
+func (m *EmptyResponseClaimMutation) ResetGroupID() {
+	m.group_id = nil
+	m.addgroup_id = nil
+	delete(m.clearedFields, emptyresponseclaim.FieldGroupID)
+}
+
+// SetSubscriptionID sets the "subscription_id" field.
+func (m *EmptyResponseClaimMutation) SetSubscriptionID(i int64) {
+	m.subscription_id = &i
+	m.addsubscription_id = nil
+}
+
+// SubscriptionID returns the value of the "subscription_id" field in the mutation.
+func (m *EmptyResponseClaimMutation) SubscriptionID() (r int64, exists bool) {
+	v := m.subscription_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldSubscriptionID returns the old "subscription_id" field's value of the EmptyResponseClaim entity.
+// If the EmptyResponseClaim object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *EmptyResponseClaimMutation) OldSubscriptionID(ctx context.Context) (v *int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldSubscriptionID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldSubscriptionID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldSubscriptionID: %w", err)
+	}
+	return oldValue.SubscriptionID, nil
+}
+
+// AddSubscriptionID adds i to the "subscription_id" field.
+func (m *EmptyResponseClaimMutation) AddSubscriptionID(i int64) {
+	if m.addsubscription_id != nil {
+		*m.addsubscription_id += i
+	} else {
+		m.addsubscription_id = &i
+	}
+}
+
+// AddedSubscriptionID returns the value that was added to the "subscription_id" field in this mutation.
+func (m *EmptyResponseClaimMutation) AddedSubscriptionID() (r int64, exists bool) {
+	v := m.addsubscription_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ClearSubscriptionID clears the value of the "subscription_id" field.
+func (m *EmptyResponseClaimMutation) ClearSubscriptionID() {
+	m.subscription_id = nil
+	m.addsubscription_id = nil
+	m.clearedFields[emptyresponseclaim.FieldSubscriptionID] = struct{}{}
+}
+
+// SubscriptionIDCleared returns if the "subscription_id" field was cleared in this mutation.
+func (m *EmptyResponseClaimMutation) SubscriptionIDCleared() bool {
+	_, ok := m.clearedFields[emptyresponseclaim.FieldSubscriptionID]
+	return ok
+}
+
+// ResetSubscriptionID resets all changes to the "subscription_id" field.
+func (m *EmptyResponseClaimMutation) ResetSubscriptionID() {
+	m.subscription_id = nil
+	m.addsubscription_id = nil
+	delete(m.clearedFields, emptyresponseclaim.FieldSubscriptionID)
+}
+
+// SetStatus sets the "status" field.
+func (m *EmptyResponseClaimMutation) SetStatus(s string) {
+	m.status = &s
+}
+
+// Status returns the value of the "status" field in the mutation.
+func (m *EmptyResponseClaimMutation) Status() (r string, exists bool) {
+	v := m.status
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldStatus returns the old "status" field's value of the EmptyResponseClaim entity.
+// If the EmptyResponseClaim object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *EmptyResponseClaimMutation) OldStatus(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldStatus is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldStatus requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldStatus: %w", err)
+	}
+	return oldValue.Status, nil
+}
+
+// ResetStatus resets all changes to the "status" field.
+func (m *EmptyResponseClaimMutation) ResetStatus() {
+	m.status = nil
+}
+
+// SetReasonCode sets the "reason_code" field.
+func (m *EmptyResponseClaimMutation) SetReasonCode(s string) {
+	m.reason_code = &s
+}
+
+// ReasonCode returns the value of the "reason_code" field in the mutation.
+func (m *EmptyResponseClaimMutation) ReasonCode() (r string, exists bool) {
+	v := m.reason_code
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldReasonCode returns the old "reason_code" field's value of the EmptyResponseClaim entity.
+// If the EmptyResponseClaim object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *EmptyResponseClaimMutation) OldReasonCode(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldReasonCode is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldReasonCode requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldReasonCode: %w", err)
+	}
+	return oldValue.ReasonCode, nil
+}
+
+// ResetReasonCode resets all changes to the "reason_code" field.
+func (m *EmptyResponseClaimMutation) ResetReasonCode() {
+	m.reason_code = nil
+}
+
+// SetUserReason sets the "user_reason" field.
+func (m *EmptyResponseClaimMutation) SetUserReason(s string) {
+	m.user_reason = &s
+}
+
+// UserReason returns the value of the "user_reason" field in the mutation.
+func (m *EmptyResponseClaimMutation) UserReason() (r string, exists bool) {
+	v := m.user_reason
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUserReason returns the old "user_reason" field's value of the EmptyResponseClaim entity.
+// If the EmptyResponseClaim object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *EmptyResponseClaimMutation) OldUserReason(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUserReason is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUserReason requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUserReason: %w", err)
+	}
+	return oldValue.UserReason, nil
+}
+
+// ResetUserReason resets all changes to the "user_reason" field.
+func (m *EmptyResponseClaimMutation) ResetUserReason() {
+	m.user_reason = nil
+}
+
+// SetAdminNote sets the "admin_note" field.
+func (m *EmptyResponseClaimMutation) SetAdminNote(s string) {
+	m.admin_note = &s
+}
+
+// AdminNote returns the value of the "admin_note" field in the mutation.
+func (m *EmptyResponseClaimMutation) AdminNote() (r string, exists bool) {
+	v := m.admin_note
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldAdminNote returns the old "admin_note" field's value of the EmptyResponseClaim entity.
+// If the EmptyResponseClaim object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *EmptyResponseClaimMutation) OldAdminNote(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldAdminNote is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldAdminNote requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldAdminNote: %w", err)
+	}
+	return oldValue.AdminNote, nil
+}
+
+// ResetAdminNote resets all changes to the "admin_note" field.
+func (m *EmptyResponseClaimMutation) ResetAdminNote() {
+	m.admin_note = nil
+}
+
+// SetOriginalActualCost sets the "original_actual_cost" field.
+func (m *EmptyResponseClaimMutation) SetOriginalActualCost(f float64) {
+	m.original_actual_cost = &f
+	m.addoriginal_actual_cost = nil
+}
+
+// OriginalActualCost returns the value of the "original_actual_cost" field in the mutation.
+func (m *EmptyResponseClaimMutation) OriginalActualCost() (r float64, exists bool) {
+	v := m.original_actual_cost
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldOriginalActualCost returns the old "original_actual_cost" field's value of the EmptyResponseClaim entity.
+// If the EmptyResponseClaim object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *EmptyResponseClaimMutation) OldOriginalActualCost(ctx context.Context) (v float64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldOriginalActualCost is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldOriginalActualCost requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldOriginalActualCost: %w", err)
+	}
+	return oldValue.OriginalActualCost, nil
+}
+
+// AddOriginalActualCost adds f to the "original_actual_cost" field.
+func (m *EmptyResponseClaimMutation) AddOriginalActualCost(f float64) {
+	if m.addoriginal_actual_cost != nil {
+		*m.addoriginal_actual_cost += f
+	} else {
+		m.addoriginal_actual_cost = &f
+	}
+}
+
+// AddedOriginalActualCost returns the value that was added to the "original_actual_cost" field in this mutation.
+func (m *EmptyResponseClaimMutation) AddedOriginalActualCost() (r float64, exists bool) {
+	v := m.addoriginal_actual_cost
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetOriginalActualCost resets all changes to the "original_actual_cost" field.
+func (m *EmptyResponseClaimMutation) ResetOriginalActualCost() {
+	m.original_actual_cost = nil
+	m.addoriginal_actual_cost = nil
+}
+
+// SetBalanceRefund sets the "balance_refund" field.
+func (m *EmptyResponseClaimMutation) SetBalanceRefund(f float64) {
+	m.balance_refund = &f
+	m.addbalance_refund = nil
+}
+
+// BalanceRefund returns the value of the "balance_refund" field in the mutation.
+func (m *EmptyResponseClaimMutation) BalanceRefund() (r float64, exists bool) {
+	v := m.balance_refund
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldBalanceRefund returns the old "balance_refund" field's value of the EmptyResponseClaim entity.
+// If the EmptyResponseClaim object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *EmptyResponseClaimMutation) OldBalanceRefund(ctx context.Context) (v float64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldBalanceRefund is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldBalanceRefund requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldBalanceRefund: %w", err)
+	}
+	return oldValue.BalanceRefund, nil
+}
+
+// AddBalanceRefund adds f to the "balance_refund" field.
+func (m *EmptyResponseClaimMutation) AddBalanceRefund(f float64) {
+	if m.addbalance_refund != nil {
+		*m.addbalance_refund += f
+	} else {
+		m.addbalance_refund = &f
+	}
+}
+
+// AddedBalanceRefund returns the value that was added to the "balance_refund" field in this mutation.
+func (m *EmptyResponseClaimMutation) AddedBalanceRefund() (r float64, exists bool) {
+	v := m.addbalance_refund
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetBalanceRefund resets all changes to the "balance_refund" field.
+func (m *EmptyResponseClaimMutation) ResetBalanceRefund() {
+	m.balance_refund = nil
+	m.addbalance_refund = nil
+}
+
+// SetSubscriptionRefund sets the "subscription_refund" field.
+func (m *EmptyResponseClaimMutation) SetSubscriptionRefund(f float64) {
+	m.subscription_refund = &f
+	m.addsubscription_refund = nil
+}
+
+// SubscriptionRefund returns the value of the "subscription_refund" field in the mutation.
+func (m *EmptyResponseClaimMutation) SubscriptionRefund() (r float64, exists bool) {
+	v := m.subscription_refund
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldSubscriptionRefund returns the old "subscription_refund" field's value of the EmptyResponseClaim entity.
+// If the EmptyResponseClaim object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *EmptyResponseClaimMutation) OldSubscriptionRefund(ctx context.Context) (v float64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldSubscriptionRefund is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldSubscriptionRefund requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldSubscriptionRefund: %w", err)
+	}
+	return oldValue.SubscriptionRefund, nil
+}
+
+// AddSubscriptionRefund adds f to the "subscription_refund" field.
+func (m *EmptyResponseClaimMutation) AddSubscriptionRefund(f float64) {
+	if m.addsubscription_refund != nil {
+		*m.addsubscription_refund += f
+	} else {
+		m.addsubscription_refund = &f
+	}
+}
+
+// AddedSubscriptionRefund returns the value that was added to the "subscription_refund" field in this mutation.
+func (m *EmptyResponseClaimMutation) AddedSubscriptionRefund() (r float64, exists bool) {
+	v := m.addsubscription_refund
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetSubscriptionRefund resets all changes to the "subscription_refund" field.
+func (m *EmptyResponseClaimMutation) ResetSubscriptionRefund() {
+	m.subscription_refund = nil
+	m.addsubscription_refund = nil
+}
+
+// SetAPIKeyQuotaRefund sets the "api_key_quota_refund" field.
+func (m *EmptyResponseClaimMutation) SetAPIKeyQuotaRefund(f float64) {
+	m.api_key_quota_refund = &f
+	m.addapi_key_quota_refund = nil
+}
+
+// APIKeyQuotaRefund returns the value of the "api_key_quota_refund" field in the mutation.
+func (m *EmptyResponseClaimMutation) APIKeyQuotaRefund() (r float64, exists bool) {
+	v := m.api_key_quota_refund
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldAPIKeyQuotaRefund returns the old "api_key_quota_refund" field's value of the EmptyResponseClaim entity.
+// If the EmptyResponseClaim object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *EmptyResponseClaimMutation) OldAPIKeyQuotaRefund(ctx context.Context) (v float64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldAPIKeyQuotaRefund is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldAPIKeyQuotaRefund requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldAPIKeyQuotaRefund: %w", err)
+	}
+	return oldValue.APIKeyQuotaRefund, nil
+}
+
+// AddAPIKeyQuotaRefund adds f to the "api_key_quota_refund" field.
+func (m *EmptyResponseClaimMutation) AddAPIKeyQuotaRefund(f float64) {
+	if m.addapi_key_quota_refund != nil {
+		*m.addapi_key_quota_refund += f
+	} else {
+		m.addapi_key_quota_refund = &f
+	}
+}
+
+// AddedAPIKeyQuotaRefund returns the value that was added to the "api_key_quota_refund" field in this mutation.
+func (m *EmptyResponseClaimMutation) AddedAPIKeyQuotaRefund() (r float64, exists bool) {
+	v := m.addapi_key_quota_refund
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetAPIKeyQuotaRefund resets all changes to the "api_key_quota_refund" field.
+func (m *EmptyResponseClaimMutation) ResetAPIKeyQuotaRefund() {
+	m.api_key_quota_refund = nil
+	m.addapi_key_quota_refund = nil
+}
+
+// SetEvidence sets the "evidence" field.
+func (m *EmptyResponseClaimMutation) SetEvidence(value map[string]interface{}) {
+	m.evidence = &value
+}
+
+// Evidence returns the value of the "evidence" field in the mutation.
+func (m *EmptyResponseClaimMutation) Evidence() (r map[string]interface{}, exists bool) {
+	v := m.evidence
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldEvidence returns the old "evidence" field's value of the EmptyResponseClaim entity.
+// If the EmptyResponseClaim object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *EmptyResponseClaimMutation) OldEvidence(ctx context.Context) (v map[string]interface{}, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldEvidence is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldEvidence requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldEvidence: %w", err)
+	}
+	return oldValue.Evidence, nil
+}
+
+// ClearEvidence clears the value of the "evidence" field.
+func (m *EmptyResponseClaimMutation) ClearEvidence() {
+	m.evidence = nil
+	m.clearedFields[emptyresponseclaim.FieldEvidence] = struct{}{}
+}
+
+// EvidenceCleared returns if the "evidence" field was cleared in this mutation.
+func (m *EmptyResponseClaimMutation) EvidenceCleared() bool {
+	_, ok := m.clearedFields[emptyresponseclaim.FieldEvidence]
+	return ok
+}
+
+// ResetEvidence resets all changes to the "evidence" field.
+func (m *EmptyResponseClaimMutation) ResetEvidence() {
+	m.evidence = nil
+	delete(m.clearedFields, emptyresponseclaim.FieldEvidence)
+}
+
+// SetRuleVersion sets the "rule_version" field.
+func (m *EmptyResponseClaimMutation) SetRuleVersion(i int) {
+	m.rule_version = &i
+	m.addrule_version = nil
+}
+
+// RuleVersion returns the value of the "rule_version" field in the mutation.
+func (m *EmptyResponseClaimMutation) RuleVersion() (r int, exists bool) {
+	v := m.rule_version
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldRuleVersion returns the old "rule_version" field's value of the EmptyResponseClaim entity.
+// If the EmptyResponseClaim object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *EmptyResponseClaimMutation) OldRuleVersion(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldRuleVersion is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldRuleVersion requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldRuleVersion: %w", err)
+	}
+	return oldValue.RuleVersion, nil
+}
+
+// AddRuleVersion adds i to the "rule_version" field.
+func (m *EmptyResponseClaimMutation) AddRuleVersion(i int) {
+	if m.addrule_version != nil {
+		*m.addrule_version += i
+	} else {
+		m.addrule_version = &i
+	}
+}
+
+// AddedRuleVersion returns the value that was added to the "rule_version" field in this mutation.
+func (m *EmptyResponseClaimMutation) AddedRuleVersion() (r int, exists bool) {
+	v := m.addrule_version
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetRuleVersion resets all changes to the "rule_version" field.
+func (m *EmptyResponseClaimMutation) ResetRuleVersion() {
+	m.rule_version = nil
+	m.addrule_version = nil
+}
+
+// SetReviewedBy sets the "reviewed_by" field.
+func (m *EmptyResponseClaimMutation) SetReviewedBy(i int64) {
+	m.reviewed_by = &i
+	m.addreviewed_by = nil
+}
+
+// ReviewedBy returns the value of the "reviewed_by" field in the mutation.
+func (m *EmptyResponseClaimMutation) ReviewedBy() (r int64, exists bool) {
+	v := m.reviewed_by
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldReviewedBy returns the old "reviewed_by" field's value of the EmptyResponseClaim entity.
+// If the EmptyResponseClaim object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *EmptyResponseClaimMutation) OldReviewedBy(ctx context.Context) (v *int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldReviewedBy is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldReviewedBy requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldReviewedBy: %w", err)
+	}
+	return oldValue.ReviewedBy, nil
+}
+
+// AddReviewedBy adds i to the "reviewed_by" field.
+func (m *EmptyResponseClaimMutation) AddReviewedBy(i int64) {
+	if m.addreviewed_by != nil {
+		*m.addreviewed_by += i
+	} else {
+		m.addreviewed_by = &i
+	}
+}
+
+// AddedReviewedBy returns the value that was added to the "reviewed_by" field in this mutation.
+func (m *EmptyResponseClaimMutation) AddedReviewedBy() (r int64, exists bool) {
+	v := m.addreviewed_by
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ClearReviewedBy clears the value of the "reviewed_by" field.
+func (m *EmptyResponseClaimMutation) ClearReviewedBy() {
+	m.reviewed_by = nil
+	m.addreviewed_by = nil
+	m.clearedFields[emptyresponseclaim.FieldReviewedBy] = struct{}{}
+}
+
+// ReviewedByCleared returns if the "reviewed_by" field was cleared in this mutation.
+func (m *EmptyResponseClaimMutation) ReviewedByCleared() bool {
+	_, ok := m.clearedFields[emptyresponseclaim.FieldReviewedBy]
+	return ok
+}
+
+// ResetReviewedBy resets all changes to the "reviewed_by" field.
+func (m *EmptyResponseClaimMutation) ResetReviewedBy() {
+	m.reviewed_by = nil
+	m.addreviewed_by = nil
+	delete(m.clearedFields, emptyresponseclaim.FieldReviewedBy)
+}
+
+// SetReviewedAt sets the "reviewed_at" field.
+func (m *EmptyResponseClaimMutation) SetReviewedAt(t time.Time) {
+	m.reviewed_at = &t
+}
+
+// ReviewedAt returns the value of the "reviewed_at" field in the mutation.
+func (m *EmptyResponseClaimMutation) ReviewedAt() (r time.Time, exists bool) {
+	v := m.reviewed_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldReviewedAt returns the old "reviewed_at" field's value of the EmptyResponseClaim entity.
+// If the EmptyResponseClaim object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *EmptyResponseClaimMutation) OldReviewedAt(ctx context.Context) (v *time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldReviewedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldReviewedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldReviewedAt: %w", err)
+	}
+	return oldValue.ReviewedAt, nil
+}
+
+// ClearReviewedAt clears the value of the "reviewed_at" field.
+func (m *EmptyResponseClaimMutation) ClearReviewedAt() {
+	m.reviewed_at = nil
+	m.clearedFields[emptyresponseclaim.FieldReviewedAt] = struct{}{}
+}
+
+// ReviewedAtCleared returns if the "reviewed_at" field was cleared in this mutation.
+func (m *EmptyResponseClaimMutation) ReviewedAtCleared() bool {
+	_, ok := m.clearedFields[emptyresponseclaim.FieldReviewedAt]
+	return ok
+}
+
+// ResetReviewedAt resets all changes to the "reviewed_at" field.
+func (m *EmptyResponseClaimMutation) ResetReviewedAt() {
+	m.reviewed_at = nil
+	delete(m.clearedFields, emptyresponseclaim.FieldReviewedAt)
+}
+
+// SetCompensatedAt sets the "compensated_at" field.
+func (m *EmptyResponseClaimMutation) SetCompensatedAt(t time.Time) {
+	m.compensated_at = &t
+}
+
+// CompensatedAt returns the value of the "compensated_at" field in the mutation.
+func (m *EmptyResponseClaimMutation) CompensatedAt() (r time.Time, exists bool) {
+	v := m.compensated_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCompensatedAt returns the old "compensated_at" field's value of the EmptyResponseClaim entity.
+// If the EmptyResponseClaim object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *EmptyResponseClaimMutation) OldCompensatedAt(ctx context.Context) (v *time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCompensatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCompensatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCompensatedAt: %w", err)
+	}
+	return oldValue.CompensatedAt, nil
+}
+
+// ClearCompensatedAt clears the value of the "compensated_at" field.
+func (m *EmptyResponseClaimMutation) ClearCompensatedAt() {
+	m.compensated_at = nil
+	m.clearedFields[emptyresponseclaim.FieldCompensatedAt] = struct{}{}
+}
+
+// CompensatedAtCleared returns if the "compensated_at" field was cleared in this mutation.
+func (m *EmptyResponseClaimMutation) CompensatedAtCleared() bool {
+	_, ok := m.clearedFields[emptyresponseclaim.FieldCompensatedAt]
+	return ok
+}
+
+// ResetCompensatedAt resets all changes to the "compensated_at" field.
+func (m *EmptyResponseClaimMutation) ResetCompensatedAt() {
+	m.compensated_at = nil
+	delete(m.clearedFields, emptyresponseclaim.FieldCompensatedAt)
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (m *EmptyResponseClaimMutation) SetCreatedAt(t time.Time) {
+	m.created_at = &t
+}
+
+// CreatedAt returns the value of the "created_at" field in the mutation.
+func (m *EmptyResponseClaimMutation) CreatedAt() (r time.Time, exists bool) {
+	v := m.created_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCreatedAt returns the old "created_at" field's value of the EmptyResponseClaim entity.
+// If the EmptyResponseClaim object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *EmptyResponseClaimMutation) OldCreatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCreatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCreatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCreatedAt: %w", err)
+	}
+	return oldValue.CreatedAt, nil
+}
+
+// ResetCreatedAt resets all changes to the "created_at" field.
+func (m *EmptyResponseClaimMutation) ResetCreatedAt() {
+	m.created_at = nil
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (m *EmptyResponseClaimMutation) SetUpdatedAt(t time.Time) {
+	m.updated_at = &t
+}
+
+// UpdatedAt returns the value of the "updated_at" field in the mutation.
+func (m *EmptyResponseClaimMutation) UpdatedAt() (r time.Time, exists bool) {
+	v := m.updated_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUpdatedAt returns the old "updated_at" field's value of the EmptyResponseClaim entity.
+// If the EmptyResponseClaim object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *EmptyResponseClaimMutation) OldUpdatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUpdatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUpdatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUpdatedAt: %w", err)
+	}
+	return oldValue.UpdatedAt, nil
+}
+
+// ResetUpdatedAt resets all changes to the "updated_at" field.
+func (m *EmptyResponseClaimMutation) ResetUpdatedAt() {
+	m.updated_at = nil
+}
+
+// Where appends a list predicates to the EmptyResponseClaimMutation builder.
+func (m *EmptyResponseClaimMutation) Where(ps ...predicate.EmptyResponseClaim) {
+	m.predicates = append(m.predicates, ps...)
+}
+
+// WhereP appends storage-level predicates to the EmptyResponseClaimMutation builder. Using this method,
+// users can use type-assertion to append predicates that do not depend on any generated package.
+func (m *EmptyResponseClaimMutation) WhereP(ps ...func(*sql.Selector)) {
+	p := make([]predicate.EmptyResponseClaim, len(ps))
+	for i := range ps {
+		p[i] = ps[i]
+	}
+	m.Where(p...)
+}
+
+// Op returns the operation name.
+func (m *EmptyResponseClaimMutation) Op() Op {
+	return m.op
+}
+
+// SetOp allows setting the mutation operation.
+func (m *EmptyResponseClaimMutation) SetOp(op Op) {
+	m.op = op
+}
+
+// Type returns the node type of this mutation (EmptyResponseClaim).
+func (m *EmptyResponseClaimMutation) Type() string {
+	return m.typ
+}
+
+// Fields returns all fields that were changed during this mutation. Note that in
+// order to get all numeric fields that were incremented/decremented, call
+// AddedFields().
+func (m *EmptyResponseClaimMutation) Fields() []string {
+	fields := make([]string, 0, 22)
+	if m.usage_log_id != nil {
+		fields = append(fields, emptyresponseclaim.FieldUsageLogID)
+	}
+	if m.outcome_id != nil {
+		fields = append(fields, emptyresponseclaim.FieldOutcomeID)
+	}
+	if m.user_id != nil {
+		fields = append(fields, emptyresponseclaim.FieldUserID)
+	}
+	if m.api_key_id != nil {
+		fields = append(fields, emptyresponseclaim.FieldAPIKeyID)
+	}
+	if m.account_id != nil {
+		fields = append(fields, emptyresponseclaim.FieldAccountID)
+	}
+	if m.group_id != nil {
+		fields = append(fields, emptyresponseclaim.FieldGroupID)
+	}
+	if m.subscription_id != nil {
+		fields = append(fields, emptyresponseclaim.FieldSubscriptionID)
+	}
+	if m.status != nil {
+		fields = append(fields, emptyresponseclaim.FieldStatus)
+	}
+	if m.reason_code != nil {
+		fields = append(fields, emptyresponseclaim.FieldReasonCode)
+	}
+	if m.user_reason != nil {
+		fields = append(fields, emptyresponseclaim.FieldUserReason)
+	}
+	if m.admin_note != nil {
+		fields = append(fields, emptyresponseclaim.FieldAdminNote)
+	}
+	if m.original_actual_cost != nil {
+		fields = append(fields, emptyresponseclaim.FieldOriginalActualCost)
+	}
+	if m.balance_refund != nil {
+		fields = append(fields, emptyresponseclaim.FieldBalanceRefund)
+	}
+	if m.subscription_refund != nil {
+		fields = append(fields, emptyresponseclaim.FieldSubscriptionRefund)
+	}
+	if m.api_key_quota_refund != nil {
+		fields = append(fields, emptyresponseclaim.FieldAPIKeyQuotaRefund)
+	}
+	if m.evidence != nil {
+		fields = append(fields, emptyresponseclaim.FieldEvidence)
+	}
+	if m.rule_version != nil {
+		fields = append(fields, emptyresponseclaim.FieldRuleVersion)
+	}
+	if m.reviewed_by != nil {
+		fields = append(fields, emptyresponseclaim.FieldReviewedBy)
+	}
+	if m.reviewed_at != nil {
+		fields = append(fields, emptyresponseclaim.FieldReviewedAt)
+	}
+	if m.compensated_at != nil {
+		fields = append(fields, emptyresponseclaim.FieldCompensatedAt)
+	}
+	if m.created_at != nil {
+		fields = append(fields, emptyresponseclaim.FieldCreatedAt)
+	}
+	if m.updated_at != nil {
+		fields = append(fields, emptyresponseclaim.FieldUpdatedAt)
+	}
+	return fields
+}
+
+// Field returns the value of a field with the given name. The second boolean
+// return value indicates that this field was not set, or was not defined in the
+// schema.
+func (m *EmptyResponseClaimMutation) Field(name string) (ent.Value, bool) {
+	switch name {
+	case emptyresponseclaim.FieldUsageLogID:
+		return m.UsageLogID()
+	case emptyresponseclaim.FieldOutcomeID:
+		return m.OutcomeID()
+	case emptyresponseclaim.FieldUserID:
+		return m.UserID()
+	case emptyresponseclaim.FieldAPIKeyID:
+		return m.APIKeyID()
+	case emptyresponseclaim.FieldAccountID:
+		return m.AccountID()
+	case emptyresponseclaim.FieldGroupID:
+		return m.GroupID()
+	case emptyresponseclaim.FieldSubscriptionID:
+		return m.SubscriptionID()
+	case emptyresponseclaim.FieldStatus:
+		return m.Status()
+	case emptyresponseclaim.FieldReasonCode:
+		return m.ReasonCode()
+	case emptyresponseclaim.FieldUserReason:
+		return m.UserReason()
+	case emptyresponseclaim.FieldAdminNote:
+		return m.AdminNote()
+	case emptyresponseclaim.FieldOriginalActualCost:
+		return m.OriginalActualCost()
+	case emptyresponseclaim.FieldBalanceRefund:
+		return m.BalanceRefund()
+	case emptyresponseclaim.FieldSubscriptionRefund:
+		return m.SubscriptionRefund()
+	case emptyresponseclaim.FieldAPIKeyQuotaRefund:
+		return m.APIKeyQuotaRefund()
+	case emptyresponseclaim.FieldEvidence:
+		return m.Evidence()
+	case emptyresponseclaim.FieldRuleVersion:
+		return m.RuleVersion()
+	case emptyresponseclaim.FieldReviewedBy:
+		return m.ReviewedBy()
+	case emptyresponseclaim.FieldReviewedAt:
+		return m.ReviewedAt()
+	case emptyresponseclaim.FieldCompensatedAt:
+		return m.CompensatedAt()
+	case emptyresponseclaim.FieldCreatedAt:
+		return m.CreatedAt()
+	case emptyresponseclaim.FieldUpdatedAt:
+		return m.UpdatedAt()
+	}
+	return nil, false
+}
+
+// OldField returns the old value of the field from the database. An error is
+// returned if the mutation operation is not UpdateOne, or the query to the
+// database failed.
+func (m *EmptyResponseClaimMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
+	switch name {
+	case emptyresponseclaim.FieldUsageLogID:
+		return m.OldUsageLogID(ctx)
+	case emptyresponseclaim.FieldOutcomeID:
+		return m.OldOutcomeID(ctx)
+	case emptyresponseclaim.FieldUserID:
+		return m.OldUserID(ctx)
+	case emptyresponseclaim.FieldAPIKeyID:
+		return m.OldAPIKeyID(ctx)
+	case emptyresponseclaim.FieldAccountID:
+		return m.OldAccountID(ctx)
+	case emptyresponseclaim.FieldGroupID:
+		return m.OldGroupID(ctx)
+	case emptyresponseclaim.FieldSubscriptionID:
+		return m.OldSubscriptionID(ctx)
+	case emptyresponseclaim.FieldStatus:
+		return m.OldStatus(ctx)
+	case emptyresponseclaim.FieldReasonCode:
+		return m.OldReasonCode(ctx)
+	case emptyresponseclaim.FieldUserReason:
+		return m.OldUserReason(ctx)
+	case emptyresponseclaim.FieldAdminNote:
+		return m.OldAdminNote(ctx)
+	case emptyresponseclaim.FieldOriginalActualCost:
+		return m.OldOriginalActualCost(ctx)
+	case emptyresponseclaim.FieldBalanceRefund:
+		return m.OldBalanceRefund(ctx)
+	case emptyresponseclaim.FieldSubscriptionRefund:
+		return m.OldSubscriptionRefund(ctx)
+	case emptyresponseclaim.FieldAPIKeyQuotaRefund:
+		return m.OldAPIKeyQuotaRefund(ctx)
+	case emptyresponseclaim.FieldEvidence:
+		return m.OldEvidence(ctx)
+	case emptyresponseclaim.FieldRuleVersion:
+		return m.OldRuleVersion(ctx)
+	case emptyresponseclaim.FieldReviewedBy:
+		return m.OldReviewedBy(ctx)
+	case emptyresponseclaim.FieldReviewedAt:
+		return m.OldReviewedAt(ctx)
+	case emptyresponseclaim.FieldCompensatedAt:
+		return m.OldCompensatedAt(ctx)
+	case emptyresponseclaim.FieldCreatedAt:
+		return m.OldCreatedAt(ctx)
+	case emptyresponseclaim.FieldUpdatedAt:
+		return m.OldUpdatedAt(ctx)
+	}
+	return nil, fmt.Errorf("unknown EmptyResponseClaim field %s", name)
+}
+
+// SetField sets the value of a field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *EmptyResponseClaimMutation) SetField(name string, value ent.Value) error {
+	switch name {
+	case emptyresponseclaim.FieldUsageLogID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUsageLogID(v)
+		return nil
+	case emptyresponseclaim.FieldOutcomeID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetOutcomeID(v)
+		return nil
+	case emptyresponseclaim.FieldUserID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUserID(v)
+		return nil
+	case emptyresponseclaim.FieldAPIKeyID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetAPIKeyID(v)
+		return nil
+	case emptyresponseclaim.FieldAccountID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetAccountID(v)
+		return nil
+	case emptyresponseclaim.FieldGroupID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetGroupID(v)
+		return nil
+	case emptyresponseclaim.FieldSubscriptionID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetSubscriptionID(v)
+		return nil
+	case emptyresponseclaim.FieldStatus:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetStatus(v)
+		return nil
+	case emptyresponseclaim.FieldReasonCode:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetReasonCode(v)
+		return nil
+	case emptyresponseclaim.FieldUserReason:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUserReason(v)
+		return nil
+	case emptyresponseclaim.FieldAdminNote:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetAdminNote(v)
+		return nil
+	case emptyresponseclaim.FieldOriginalActualCost:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetOriginalActualCost(v)
+		return nil
+	case emptyresponseclaim.FieldBalanceRefund:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetBalanceRefund(v)
+		return nil
+	case emptyresponseclaim.FieldSubscriptionRefund:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetSubscriptionRefund(v)
+		return nil
+	case emptyresponseclaim.FieldAPIKeyQuotaRefund:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetAPIKeyQuotaRefund(v)
+		return nil
+	case emptyresponseclaim.FieldEvidence:
+		v, ok := value.(map[string]interface{})
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetEvidence(v)
+		return nil
+	case emptyresponseclaim.FieldRuleVersion:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetRuleVersion(v)
+		return nil
+	case emptyresponseclaim.FieldReviewedBy:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetReviewedBy(v)
+		return nil
+	case emptyresponseclaim.FieldReviewedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetReviewedAt(v)
+		return nil
+	case emptyresponseclaim.FieldCompensatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCompensatedAt(v)
+		return nil
+	case emptyresponseclaim.FieldCreatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCreatedAt(v)
+		return nil
+	case emptyresponseclaim.FieldUpdatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUpdatedAt(v)
+		return nil
+	}
+	return fmt.Errorf("unknown EmptyResponseClaim field %s", name)
+}
+
+// AddedFields returns all numeric fields that were incremented/decremented during
+// this mutation.
+func (m *EmptyResponseClaimMutation) AddedFields() []string {
+	var fields []string
+	if m.addusage_log_id != nil {
+		fields = append(fields, emptyresponseclaim.FieldUsageLogID)
+	}
+	if m.addoutcome_id != nil {
+		fields = append(fields, emptyresponseclaim.FieldOutcomeID)
+	}
+	if m.adduser_id != nil {
+		fields = append(fields, emptyresponseclaim.FieldUserID)
+	}
+	if m.addapi_key_id != nil {
+		fields = append(fields, emptyresponseclaim.FieldAPIKeyID)
+	}
+	if m.addaccount_id != nil {
+		fields = append(fields, emptyresponseclaim.FieldAccountID)
+	}
+	if m.addgroup_id != nil {
+		fields = append(fields, emptyresponseclaim.FieldGroupID)
+	}
+	if m.addsubscription_id != nil {
+		fields = append(fields, emptyresponseclaim.FieldSubscriptionID)
+	}
+	if m.addoriginal_actual_cost != nil {
+		fields = append(fields, emptyresponseclaim.FieldOriginalActualCost)
+	}
+	if m.addbalance_refund != nil {
+		fields = append(fields, emptyresponseclaim.FieldBalanceRefund)
+	}
+	if m.addsubscription_refund != nil {
+		fields = append(fields, emptyresponseclaim.FieldSubscriptionRefund)
+	}
+	if m.addapi_key_quota_refund != nil {
+		fields = append(fields, emptyresponseclaim.FieldAPIKeyQuotaRefund)
+	}
+	if m.addrule_version != nil {
+		fields = append(fields, emptyresponseclaim.FieldRuleVersion)
+	}
+	if m.addreviewed_by != nil {
+		fields = append(fields, emptyresponseclaim.FieldReviewedBy)
+	}
+	return fields
+}
+
+// AddedField returns the numeric value that was incremented/decremented on a field
+// with the given name. The second boolean return value indicates that this field
+// was not set, or was not defined in the schema.
+func (m *EmptyResponseClaimMutation) AddedField(name string) (ent.Value, bool) {
+	switch name {
+	case emptyresponseclaim.FieldUsageLogID:
+		return m.AddedUsageLogID()
+	case emptyresponseclaim.FieldOutcomeID:
+		return m.AddedOutcomeID()
+	case emptyresponseclaim.FieldUserID:
+		return m.AddedUserID()
+	case emptyresponseclaim.FieldAPIKeyID:
+		return m.AddedAPIKeyID()
+	case emptyresponseclaim.FieldAccountID:
+		return m.AddedAccountID()
+	case emptyresponseclaim.FieldGroupID:
+		return m.AddedGroupID()
+	case emptyresponseclaim.FieldSubscriptionID:
+		return m.AddedSubscriptionID()
+	case emptyresponseclaim.FieldOriginalActualCost:
+		return m.AddedOriginalActualCost()
+	case emptyresponseclaim.FieldBalanceRefund:
+		return m.AddedBalanceRefund()
+	case emptyresponseclaim.FieldSubscriptionRefund:
+		return m.AddedSubscriptionRefund()
+	case emptyresponseclaim.FieldAPIKeyQuotaRefund:
+		return m.AddedAPIKeyQuotaRefund()
+	case emptyresponseclaim.FieldRuleVersion:
+		return m.AddedRuleVersion()
+	case emptyresponseclaim.FieldReviewedBy:
+		return m.AddedReviewedBy()
+	}
+	return nil, false
+}
+
+// AddField adds the value to the field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *EmptyResponseClaimMutation) AddField(name string, value ent.Value) error {
+	switch name {
+	case emptyresponseclaim.FieldUsageLogID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddUsageLogID(v)
+		return nil
+	case emptyresponseclaim.FieldOutcomeID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddOutcomeID(v)
+		return nil
+	case emptyresponseclaim.FieldUserID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddUserID(v)
+		return nil
+	case emptyresponseclaim.FieldAPIKeyID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddAPIKeyID(v)
+		return nil
+	case emptyresponseclaim.FieldAccountID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddAccountID(v)
+		return nil
+	case emptyresponseclaim.FieldGroupID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddGroupID(v)
+		return nil
+	case emptyresponseclaim.FieldSubscriptionID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddSubscriptionID(v)
+		return nil
+	case emptyresponseclaim.FieldOriginalActualCost:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddOriginalActualCost(v)
+		return nil
+	case emptyresponseclaim.FieldBalanceRefund:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddBalanceRefund(v)
+		return nil
+	case emptyresponseclaim.FieldSubscriptionRefund:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddSubscriptionRefund(v)
+		return nil
+	case emptyresponseclaim.FieldAPIKeyQuotaRefund:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddAPIKeyQuotaRefund(v)
+		return nil
+	case emptyresponseclaim.FieldRuleVersion:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddRuleVersion(v)
+		return nil
+	case emptyresponseclaim.FieldReviewedBy:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddReviewedBy(v)
+		return nil
+	}
+	return fmt.Errorf("unknown EmptyResponseClaim numeric field %s", name)
+}
+
+// ClearedFields returns all nullable fields that were cleared during this
+// mutation.
+func (m *EmptyResponseClaimMutation) ClearedFields() []string {
+	var fields []string
+	if m.FieldCleared(emptyresponseclaim.FieldOutcomeID) {
+		fields = append(fields, emptyresponseclaim.FieldOutcomeID)
+	}
+	if m.FieldCleared(emptyresponseclaim.FieldGroupID) {
+		fields = append(fields, emptyresponseclaim.FieldGroupID)
+	}
+	if m.FieldCleared(emptyresponseclaim.FieldSubscriptionID) {
+		fields = append(fields, emptyresponseclaim.FieldSubscriptionID)
+	}
+	if m.FieldCleared(emptyresponseclaim.FieldEvidence) {
+		fields = append(fields, emptyresponseclaim.FieldEvidence)
+	}
+	if m.FieldCleared(emptyresponseclaim.FieldReviewedBy) {
+		fields = append(fields, emptyresponseclaim.FieldReviewedBy)
+	}
+	if m.FieldCleared(emptyresponseclaim.FieldReviewedAt) {
+		fields = append(fields, emptyresponseclaim.FieldReviewedAt)
+	}
+	if m.FieldCleared(emptyresponseclaim.FieldCompensatedAt) {
+		fields = append(fields, emptyresponseclaim.FieldCompensatedAt)
+	}
+	return fields
+}
+
+// FieldCleared returns a boolean indicating if a field with the given name was
+// cleared in this mutation.
+func (m *EmptyResponseClaimMutation) FieldCleared(name string) bool {
+	_, ok := m.clearedFields[name]
+	return ok
+}
+
+// ClearField clears the value of the field with the given name. It returns an
+// error if the field is not defined in the schema.
+func (m *EmptyResponseClaimMutation) ClearField(name string) error {
+	switch name {
+	case emptyresponseclaim.FieldOutcomeID:
+		m.ClearOutcomeID()
+		return nil
+	case emptyresponseclaim.FieldGroupID:
+		m.ClearGroupID()
+		return nil
+	case emptyresponseclaim.FieldSubscriptionID:
+		m.ClearSubscriptionID()
+		return nil
+	case emptyresponseclaim.FieldEvidence:
+		m.ClearEvidence()
+		return nil
+	case emptyresponseclaim.FieldReviewedBy:
+		m.ClearReviewedBy()
+		return nil
+	case emptyresponseclaim.FieldReviewedAt:
+		m.ClearReviewedAt()
+		return nil
+	case emptyresponseclaim.FieldCompensatedAt:
+		m.ClearCompensatedAt()
+		return nil
+	}
+	return fmt.Errorf("unknown EmptyResponseClaim nullable field %s", name)
+}
+
+// ResetField resets all changes in the mutation for the field with the given name.
+// It returns an error if the field is not defined in the schema.
+func (m *EmptyResponseClaimMutation) ResetField(name string) error {
+	switch name {
+	case emptyresponseclaim.FieldUsageLogID:
+		m.ResetUsageLogID()
+		return nil
+	case emptyresponseclaim.FieldOutcomeID:
+		m.ResetOutcomeID()
+		return nil
+	case emptyresponseclaim.FieldUserID:
+		m.ResetUserID()
+		return nil
+	case emptyresponseclaim.FieldAPIKeyID:
+		m.ResetAPIKeyID()
+		return nil
+	case emptyresponseclaim.FieldAccountID:
+		m.ResetAccountID()
+		return nil
+	case emptyresponseclaim.FieldGroupID:
+		m.ResetGroupID()
+		return nil
+	case emptyresponseclaim.FieldSubscriptionID:
+		m.ResetSubscriptionID()
+		return nil
+	case emptyresponseclaim.FieldStatus:
+		m.ResetStatus()
+		return nil
+	case emptyresponseclaim.FieldReasonCode:
+		m.ResetReasonCode()
+		return nil
+	case emptyresponseclaim.FieldUserReason:
+		m.ResetUserReason()
+		return nil
+	case emptyresponseclaim.FieldAdminNote:
+		m.ResetAdminNote()
+		return nil
+	case emptyresponseclaim.FieldOriginalActualCost:
+		m.ResetOriginalActualCost()
+		return nil
+	case emptyresponseclaim.FieldBalanceRefund:
+		m.ResetBalanceRefund()
+		return nil
+	case emptyresponseclaim.FieldSubscriptionRefund:
+		m.ResetSubscriptionRefund()
+		return nil
+	case emptyresponseclaim.FieldAPIKeyQuotaRefund:
+		m.ResetAPIKeyQuotaRefund()
+		return nil
+	case emptyresponseclaim.FieldEvidence:
+		m.ResetEvidence()
+		return nil
+	case emptyresponseclaim.FieldRuleVersion:
+		m.ResetRuleVersion()
+		return nil
+	case emptyresponseclaim.FieldReviewedBy:
+		m.ResetReviewedBy()
+		return nil
+	case emptyresponseclaim.FieldReviewedAt:
+		m.ResetReviewedAt()
+		return nil
+	case emptyresponseclaim.FieldCompensatedAt:
+		m.ResetCompensatedAt()
+		return nil
+	case emptyresponseclaim.FieldCreatedAt:
+		m.ResetCreatedAt()
+		return nil
+	case emptyresponseclaim.FieldUpdatedAt:
+		m.ResetUpdatedAt()
+		return nil
+	}
+	return fmt.Errorf("unknown EmptyResponseClaim field %s", name)
+}
+
+// AddedEdges returns all edge names that were set/added in this mutation.
+func (m *EmptyResponseClaimMutation) AddedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// AddedIDs returns all IDs (to other nodes) that were added for the given edge
+// name in this mutation.
+func (m *EmptyResponseClaimMutation) AddedIDs(name string) []ent.Value {
+	return nil
+}
+
+// RemovedEdges returns all edge names that were removed in this mutation.
+func (m *EmptyResponseClaimMutation) RemovedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// RemovedIDs returns all IDs (to other nodes) that were removed for the edge with
+// the given name in this mutation.
+func (m *EmptyResponseClaimMutation) RemovedIDs(name string) []ent.Value {
+	return nil
+}
+
+// ClearedEdges returns all edge names that were cleared in this mutation.
+func (m *EmptyResponseClaimMutation) ClearedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// EdgeCleared returns a boolean which indicates if the edge with the given name
+// was cleared in this mutation.
+func (m *EmptyResponseClaimMutation) EdgeCleared(name string) bool {
+	return false
+}
+
+// ClearEdge clears the value of the edge with the given name. It returns an error
+// if that edge is not defined in the schema.
+func (m *EmptyResponseClaimMutation) ClearEdge(name string) error {
+	return fmt.Errorf("unknown EmptyResponseClaim unique edge %s", name)
+}
+
+// ResetEdge resets all changes to the edge with the given name in this mutation.
+// It returns an error if the edge is not defined in the schema.
+func (m *EmptyResponseClaimMutation) ResetEdge(name string) error {
+	return fmt.Errorf("unknown EmptyResponseClaim edge %s", name)
+}
+
 // ErrorPassthroughRuleMutation represents an operation that mutates the ErrorPassthroughRule nodes in the graph.
 type ErrorPassthroughRuleMutation struct {
 	config
@@ -22095,6 +24131,7 @@ type GroupMutation struct {
 	description                             *string
 	rate_multiplier                         *float64
 	addrate_multiplier                      *float64
+	empty_response_compensation_enabled     *bool
 	peak_rate_enabled                       *bool
 	peak_start                              *string
 	peak_end                                *string
@@ -22554,6 +24591,42 @@ func (m *GroupMutation) AddedRateMultiplier() (r float64, exists bool) {
 func (m *GroupMutation) ResetRateMultiplier() {
 	m.rate_multiplier = nil
 	m.addrate_multiplier = nil
+}
+
+// SetEmptyResponseCompensationEnabled sets the "empty_response_compensation_enabled" field.
+func (m *GroupMutation) SetEmptyResponseCompensationEnabled(b bool) {
+	m.empty_response_compensation_enabled = &b
+}
+
+// EmptyResponseCompensationEnabled returns the value of the "empty_response_compensation_enabled" field in the mutation.
+func (m *GroupMutation) EmptyResponseCompensationEnabled() (r bool, exists bool) {
+	v := m.empty_response_compensation_enabled
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldEmptyResponseCompensationEnabled returns the old "empty_response_compensation_enabled" field's value of the Group entity.
+// If the Group object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *GroupMutation) OldEmptyResponseCompensationEnabled(ctx context.Context) (v bool, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldEmptyResponseCompensationEnabled is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldEmptyResponseCompensationEnabled requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldEmptyResponseCompensationEnabled: %w", err)
+	}
+	return oldValue.EmptyResponseCompensationEnabled, nil
+}
+
+// ResetEmptyResponseCompensationEnabled resets all changes to the "empty_response_compensation_enabled" field.
+func (m *GroupMutation) ResetEmptyResponseCompensationEnabled() {
+	m.empty_response_compensation_enabled = nil
 }
 
 // SetPeakRateEnabled sets the "peak_rate_enabled" field.
@@ -25432,7 +27505,7 @@ func (m *GroupMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *GroupMutation) Fields() []string {
-	fields := make([]string, 0, 56)
+	fields := make([]string, 0, 57)
 	if m.created_at != nil {
 		fields = append(fields, group.FieldCreatedAt)
 	}
@@ -25450,6 +27523,9 @@ func (m *GroupMutation) Fields() []string {
 	}
 	if m.rate_multiplier != nil {
 		fields = append(fields, group.FieldRateMultiplier)
+	}
+	if m.empty_response_compensation_enabled != nil {
+		fields = append(fields, group.FieldEmptyResponseCompensationEnabled)
 	}
 	if m.peak_rate_enabled != nil {
 		fields = append(fields, group.FieldPeakRateEnabled)
@@ -25621,6 +27697,8 @@ func (m *GroupMutation) Field(name string) (ent.Value, bool) {
 		return m.Description()
 	case group.FieldRateMultiplier:
 		return m.RateMultiplier()
+	case group.FieldEmptyResponseCompensationEnabled:
+		return m.EmptyResponseCompensationEnabled()
 	case group.FieldPeakRateEnabled:
 		return m.PeakRateEnabled()
 	case group.FieldPeakStart:
@@ -25742,6 +27820,8 @@ func (m *GroupMutation) OldField(ctx context.Context, name string) (ent.Value, e
 		return m.OldDescription(ctx)
 	case group.FieldRateMultiplier:
 		return m.OldRateMultiplier(ctx)
+	case group.FieldEmptyResponseCompensationEnabled:
+		return m.OldEmptyResponseCompensationEnabled(ctx)
 	case group.FieldPeakRateEnabled:
 		return m.OldPeakRateEnabled(ctx)
 	case group.FieldPeakStart:
@@ -25892,6 +27972,13 @@ func (m *GroupMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetRateMultiplier(v)
+		return nil
+	case group.FieldEmptyResponseCompensationEnabled:
+		v, ok := value.(bool)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetEmptyResponseCompensationEnabled(v)
 		return nil
 	case group.FieldPeakRateEnabled:
 		v, ok := value.(bool)
@@ -26687,6 +28774,9 @@ func (m *GroupMutation) ResetField(name string) error {
 		return nil
 	case group.FieldRateMultiplier:
 		m.ResetRateMultiplier()
+		return nil
+	case group.FieldEmptyResponseCompensationEnabled:
+		m.ResetEmptyResponseCompensationEnabled()
 		return nil
 	case group.FieldPeakRateEnabled:
 		m.ResetPeakRateEnabled()
@@ -44393,6 +46483,8 @@ type UsageLogMutation struct {
 	addtotal_cost                *float64
 	actual_cost                  *float64
 	addactual_cost               *float64
+	compensated_cost             *float64
+	addcompensated_cost          *float64
 	rate_multiplier              *float64
 	addrate_multiplier           *float64
 	long_context_billing_applied *bool
@@ -45851,6 +47943,62 @@ func (m *UsageLogMutation) ResetActualCost() {
 	m.addactual_cost = nil
 }
 
+// SetCompensatedCost sets the "compensated_cost" field.
+func (m *UsageLogMutation) SetCompensatedCost(f float64) {
+	m.compensated_cost = &f
+	m.addcompensated_cost = nil
+}
+
+// CompensatedCost returns the value of the "compensated_cost" field in the mutation.
+func (m *UsageLogMutation) CompensatedCost() (r float64, exists bool) {
+	v := m.compensated_cost
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCompensatedCost returns the old "compensated_cost" field's value of the UsageLog entity.
+// If the UsageLog object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *UsageLogMutation) OldCompensatedCost(ctx context.Context) (v float64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCompensatedCost is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCompensatedCost requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCompensatedCost: %w", err)
+	}
+	return oldValue.CompensatedCost, nil
+}
+
+// AddCompensatedCost adds f to the "compensated_cost" field.
+func (m *UsageLogMutation) AddCompensatedCost(f float64) {
+	if m.addcompensated_cost != nil {
+		*m.addcompensated_cost += f
+	} else {
+		m.addcompensated_cost = &f
+	}
+}
+
+// AddedCompensatedCost returns the value that was added to the "compensated_cost" field in this mutation.
+func (m *UsageLogMutation) AddedCompensatedCost() (r float64, exists bool) {
+	v := m.addcompensated_cost
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetCompensatedCost resets all changes to the "compensated_cost" field.
+func (m *UsageLogMutation) ResetCompensatedCost() {
+	m.compensated_cost = nil
+	m.addcompensated_cost = nil
+}
+
 // SetRateMultiplier sets the "rate_multiplier" field.
 func (m *UsageLogMutation) SetRateMultiplier(f float64) {
 	m.rate_multiplier = &f
@@ -47087,7 +49235,7 @@ func (m *UsageLogMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *UsageLogMutation) Fields() []string {
-	fields := make([]string, 0, 46)
+	fields := make([]string, 0, 47)
 	if m.user != nil {
 		fields = append(fields, usagelog.FieldUserID)
 	}
@@ -47165,6 +49313,9 @@ func (m *UsageLogMutation) Fields() []string {
 	}
 	if m.actual_cost != nil {
 		fields = append(fields, usagelog.FieldActualCost)
+	}
+	if m.compensated_cost != nil {
+		fields = append(fields, usagelog.FieldCompensatedCost)
 	}
 	if m.rate_multiplier != nil {
 		fields = append(fields, usagelog.FieldRateMultiplier)
@@ -47286,6 +49437,8 @@ func (m *UsageLogMutation) Field(name string) (ent.Value, bool) {
 		return m.TotalCost()
 	case usagelog.FieldActualCost:
 		return m.ActualCost()
+	case usagelog.FieldCompensatedCost:
+		return m.CompensatedCost()
 	case usagelog.FieldRateMultiplier:
 		return m.RateMultiplier()
 	case usagelog.FieldLongContextBillingApplied:
@@ -47387,6 +49540,8 @@ func (m *UsageLogMutation) OldField(ctx context.Context, name string) (ent.Value
 		return m.OldTotalCost(ctx)
 	case usagelog.FieldActualCost:
 		return m.OldActualCost(ctx)
+	case usagelog.FieldCompensatedCost:
+		return m.OldCompensatedCost(ctx)
 	case usagelog.FieldRateMultiplier:
 		return m.OldRateMultiplier(ctx)
 	case usagelog.FieldLongContextBillingApplied:
@@ -47618,6 +49773,13 @@ func (m *UsageLogMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetActualCost(v)
 		return nil
+	case usagelog.FieldCompensatedCost:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCompensatedCost(v)
+		return nil
 	case usagelog.FieldRateMultiplier:
 		v, ok := value.(float64)
 		if !ok {
@@ -47805,6 +49967,9 @@ func (m *UsageLogMutation) AddedFields() []string {
 	if m.addactual_cost != nil {
 		fields = append(fields, usagelog.FieldActualCost)
 	}
+	if m.addcompensated_cost != nil {
+		fields = append(fields, usagelog.FieldCompensatedCost)
+	}
 	if m.addrate_multiplier != nil {
 		fields = append(fields, usagelog.FieldRateMultiplier)
 	}
@@ -47863,6 +50028,8 @@ func (m *UsageLogMutation) AddedField(name string) (ent.Value, bool) {
 		return m.AddedTotalCost()
 	case usagelog.FieldActualCost:
 		return m.AddedActualCost()
+	case usagelog.FieldCompensatedCost:
+		return m.AddedCompensatedCost()
 	case usagelog.FieldRateMultiplier:
 		return m.AddedRateMultiplier()
 	case usagelog.FieldAccountRateMultiplier:
@@ -47978,6 +50145,13 @@ func (m *UsageLogMutation) AddField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.AddActualCost(v)
+		return nil
+	case usagelog.FieldCompensatedCost:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddCompensatedCost(v)
 		return nil
 	case usagelog.FieldRateMultiplier:
 		v, ok := value.(float64)
@@ -48269,6 +50443,9 @@ func (m *UsageLogMutation) ResetField(name string) error {
 	case usagelog.FieldActualCost:
 		m.ResetActualCost()
 		return nil
+	case usagelog.FieldCompensatedCost:
+		m.ResetCompensatedCost()
+		return nil
 	case usagelog.FieldRateMultiplier:
 		m.ResetRateMultiplier()
 		return nil
@@ -48495,6 +50672,1734 @@ func (m *UsageLogMutation) ResetEdge(name string) error {
 		return nil
 	}
 	return fmt.Errorf("unknown UsageLog edge %s", name)
+}
+
+// UsageResponseOutcomeMutation represents an operation that mutates the UsageResponseOutcome nodes in the graph.
+type UsageResponseOutcomeMutation struct {
+	config
+	op                   Op
+	typ                  string
+	id                   *int64
+	usage_log_id         *int64
+	addusage_log_id      *int64
+	request_id           *string
+	api_key_id           *int64
+	addapi_key_id        *int64
+	user_id              *int64
+	adduser_id           *int64
+	account_id           *int64
+	addaccount_id        *int64
+	group_id             *int64
+	addgroup_id          *int64
+	http_status          *int
+	addhttp_status       *int
+	upstream_status      *int
+	addupstream_status   *int
+	has_text             *bool
+	has_tool_call        *bool
+	has_reasoning        *bool
+	has_media            *bool
+	output_bytes         *int64
+	addoutput_bytes      *int64
+	event_count          *int
+	addevent_count       *int
+	stream_completed     *bool
+	finish_reason        *string
+	disconnect_source    *string
+	upstream_error_kind  *string
+	collector_version    *int16
+	addcollector_version *int16
+	created_at           *time.Time
+	clearedFields        map[string]struct{}
+	done                 bool
+	oldValue             func(context.Context) (*UsageResponseOutcome, error)
+	predicates           []predicate.UsageResponseOutcome
+}
+
+var _ ent.Mutation = (*UsageResponseOutcomeMutation)(nil)
+
+// usageresponseoutcomeOption allows management of the mutation configuration using functional options.
+type usageresponseoutcomeOption func(*UsageResponseOutcomeMutation)
+
+// newUsageResponseOutcomeMutation creates new mutation for the UsageResponseOutcome entity.
+func newUsageResponseOutcomeMutation(c config, op Op, opts ...usageresponseoutcomeOption) *UsageResponseOutcomeMutation {
+	m := &UsageResponseOutcomeMutation{
+		config:        c,
+		op:            op,
+		typ:           TypeUsageResponseOutcome,
+		clearedFields: make(map[string]struct{}),
+	}
+	for _, opt := range opts {
+		opt(m)
+	}
+	return m
+}
+
+// withUsageResponseOutcomeID sets the ID field of the mutation.
+func withUsageResponseOutcomeID(id int64) usageresponseoutcomeOption {
+	return func(m *UsageResponseOutcomeMutation) {
+		var (
+			err   error
+			once  sync.Once
+			value *UsageResponseOutcome
+		)
+		m.oldValue = func(ctx context.Context) (*UsageResponseOutcome, error) {
+			once.Do(func() {
+				if m.done {
+					err = errors.New("querying old values post mutation is not allowed")
+				} else {
+					value, err = m.Client().UsageResponseOutcome.Get(ctx, id)
+				}
+			})
+			return value, err
+		}
+		m.id = &id
+	}
+}
+
+// withUsageResponseOutcome sets the old UsageResponseOutcome of the mutation.
+func withUsageResponseOutcome(node *UsageResponseOutcome) usageresponseoutcomeOption {
+	return func(m *UsageResponseOutcomeMutation) {
+		m.oldValue = func(context.Context) (*UsageResponseOutcome, error) {
+			return node, nil
+		}
+		m.id = &node.ID
+	}
+}
+
+// Client returns a new `ent.Client` from the mutation. If the mutation was
+// executed in a transaction (ent.Tx), a transactional client is returned.
+func (m UsageResponseOutcomeMutation) Client() *Client {
+	client := &Client{config: m.config}
+	client.init()
+	return client
+}
+
+// Tx returns an `ent.Tx` for mutations that were executed in transactions;
+// it returns an error otherwise.
+func (m UsageResponseOutcomeMutation) Tx() (*Tx, error) {
+	if _, ok := m.driver.(*txDriver); !ok {
+		return nil, errors.New("ent: mutation is not running in a transaction")
+	}
+	tx := &Tx{config: m.config}
+	tx.init()
+	return tx, nil
+}
+
+// ID returns the ID value in the mutation. Note that the ID is only available
+// if it was provided to the builder or after it was returned from the database.
+func (m *UsageResponseOutcomeMutation) ID() (id int64, exists bool) {
+	if m.id == nil {
+		return
+	}
+	return *m.id, true
+}
+
+// IDs queries the database and returns the entity ids that match the mutation's predicate.
+// That means, if the mutation is applied within a transaction with an isolation level such
+// as sql.LevelSerializable, the returned ids match the ids of the rows that will be updated
+// or updated by the mutation.
+func (m *UsageResponseOutcomeMutation) IDs(ctx context.Context) ([]int64, error) {
+	switch {
+	case m.op.Is(OpUpdateOne | OpDeleteOne):
+		id, exists := m.ID()
+		if exists {
+			return []int64{id}, nil
+		}
+		fallthrough
+	case m.op.Is(OpUpdate | OpDelete):
+		return m.Client().UsageResponseOutcome.Query().Where(m.predicates...).IDs(ctx)
+	default:
+		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
+	}
+}
+
+// SetUsageLogID sets the "usage_log_id" field.
+func (m *UsageResponseOutcomeMutation) SetUsageLogID(i int64) {
+	m.usage_log_id = &i
+	m.addusage_log_id = nil
+}
+
+// UsageLogID returns the value of the "usage_log_id" field in the mutation.
+func (m *UsageResponseOutcomeMutation) UsageLogID() (r int64, exists bool) {
+	v := m.usage_log_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUsageLogID returns the old "usage_log_id" field's value of the UsageResponseOutcome entity.
+// If the UsageResponseOutcome object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *UsageResponseOutcomeMutation) OldUsageLogID(ctx context.Context) (v *int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUsageLogID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUsageLogID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUsageLogID: %w", err)
+	}
+	return oldValue.UsageLogID, nil
+}
+
+// AddUsageLogID adds i to the "usage_log_id" field.
+func (m *UsageResponseOutcomeMutation) AddUsageLogID(i int64) {
+	if m.addusage_log_id != nil {
+		*m.addusage_log_id += i
+	} else {
+		m.addusage_log_id = &i
+	}
+}
+
+// AddedUsageLogID returns the value that was added to the "usage_log_id" field in this mutation.
+func (m *UsageResponseOutcomeMutation) AddedUsageLogID() (r int64, exists bool) {
+	v := m.addusage_log_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ClearUsageLogID clears the value of the "usage_log_id" field.
+func (m *UsageResponseOutcomeMutation) ClearUsageLogID() {
+	m.usage_log_id = nil
+	m.addusage_log_id = nil
+	m.clearedFields[usageresponseoutcome.FieldUsageLogID] = struct{}{}
+}
+
+// UsageLogIDCleared returns if the "usage_log_id" field was cleared in this mutation.
+func (m *UsageResponseOutcomeMutation) UsageLogIDCleared() bool {
+	_, ok := m.clearedFields[usageresponseoutcome.FieldUsageLogID]
+	return ok
+}
+
+// ResetUsageLogID resets all changes to the "usage_log_id" field.
+func (m *UsageResponseOutcomeMutation) ResetUsageLogID() {
+	m.usage_log_id = nil
+	m.addusage_log_id = nil
+	delete(m.clearedFields, usageresponseoutcome.FieldUsageLogID)
+}
+
+// SetRequestID sets the "request_id" field.
+func (m *UsageResponseOutcomeMutation) SetRequestID(s string) {
+	m.request_id = &s
+}
+
+// RequestID returns the value of the "request_id" field in the mutation.
+func (m *UsageResponseOutcomeMutation) RequestID() (r string, exists bool) {
+	v := m.request_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldRequestID returns the old "request_id" field's value of the UsageResponseOutcome entity.
+// If the UsageResponseOutcome object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *UsageResponseOutcomeMutation) OldRequestID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldRequestID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldRequestID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldRequestID: %w", err)
+	}
+	return oldValue.RequestID, nil
+}
+
+// ResetRequestID resets all changes to the "request_id" field.
+func (m *UsageResponseOutcomeMutation) ResetRequestID() {
+	m.request_id = nil
+}
+
+// SetAPIKeyID sets the "api_key_id" field.
+func (m *UsageResponseOutcomeMutation) SetAPIKeyID(i int64) {
+	m.api_key_id = &i
+	m.addapi_key_id = nil
+}
+
+// APIKeyID returns the value of the "api_key_id" field in the mutation.
+func (m *UsageResponseOutcomeMutation) APIKeyID() (r int64, exists bool) {
+	v := m.api_key_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldAPIKeyID returns the old "api_key_id" field's value of the UsageResponseOutcome entity.
+// If the UsageResponseOutcome object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *UsageResponseOutcomeMutation) OldAPIKeyID(ctx context.Context) (v int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldAPIKeyID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldAPIKeyID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldAPIKeyID: %w", err)
+	}
+	return oldValue.APIKeyID, nil
+}
+
+// AddAPIKeyID adds i to the "api_key_id" field.
+func (m *UsageResponseOutcomeMutation) AddAPIKeyID(i int64) {
+	if m.addapi_key_id != nil {
+		*m.addapi_key_id += i
+	} else {
+		m.addapi_key_id = &i
+	}
+}
+
+// AddedAPIKeyID returns the value that was added to the "api_key_id" field in this mutation.
+func (m *UsageResponseOutcomeMutation) AddedAPIKeyID() (r int64, exists bool) {
+	v := m.addapi_key_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetAPIKeyID resets all changes to the "api_key_id" field.
+func (m *UsageResponseOutcomeMutation) ResetAPIKeyID() {
+	m.api_key_id = nil
+	m.addapi_key_id = nil
+}
+
+// SetUserID sets the "user_id" field.
+func (m *UsageResponseOutcomeMutation) SetUserID(i int64) {
+	m.user_id = &i
+	m.adduser_id = nil
+}
+
+// UserID returns the value of the "user_id" field in the mutation.
+func (m *UsageResponseOutcomeMutation) UserID() (r int64, exists bool) {
+	v := m.user_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUserID returns the old "user_id" field's value of the UsageResponseOutcome entity.
+// If the UsageResponseOutcome object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *UsageResponseOutcomeMutation) OldUserID(ctx context.Context) (v int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUserID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUserID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUserID: %w", err)
+	}
+	return oldValue.UserID, nil
+}
+
+// AddUserID adds i to the "user_id" field.
+func (m *UsageResponseOutcomeMutation) AddUserID(i int64) {
+	if m.adduser_id != nil {
+		*m.adduser_id += i
+	} else {
+		m.adduser_id = &i
+	}
+}
+
+// AddedUserID returns the value that was added to the "user_id" field in this mutation.
+func (m *UsageResponseOutcomeMutation) AddedUserID() (r int64, exists bool) {
+	v := m.adduser_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetUserID resets all changes to the "user_id" field.
+func (m *UsageResponseOutcomeMutation) ResetUserID() {
+	m.user_id = nil
+	m.adduser_id = nil
+}
+
+// SetAccountID sets the "account_id" field.
+func (m *UsageResponseOutcomeMutation) SetAccountID(i int64) {
+	m.account_id = &i
+	m.addaccount_id = nil
+}
+
+// AccountID returns the value of the "account_id" field in the mutation.
+func (m *UsageResponseOutcomeMutation) AccountID() (r int64, exists bool) {
+	v := m.account_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldAccountID returns the old "account_id" field's value of the UsageResponseOutcome entity.
+// If the UsageResponseOutcome object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *UsageResponseOutcomeMutation) OldAccountID(ctx context.Context) (v int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldAccountID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldAccountID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldAccountID: %w", err)
+	}
+	return oldValue.AccountID, nil
+}
+
+// AddAccountID adds i to the "account_id" field.
+func (m *UsageResponseOutcomeMutation) AddAccountID(i int64) {
+	if m.addaccount_id != nil {
+		*m.addaccount_id += i
+	} else {
+		m.addaccount_id = &i
+	}
+}
+
+// AddedAccountID returns the value that was added to the "account_id" field in this mutation.
+func (m *UsageResponseOutcomeMutation) AddedAccountID() (r int64, exists bool) {
+	v := m.addaccount_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetAccountID resets all changes to the "account_id" field.
+func (m *UsageResponseOutcomeMutation) ResetAccountID() {
+	m.account_id = nil
+	m.addaccount_id = nil
+}
+
+// SetGroupID sets the "group_id" field.
+func (m *UsageResponseOutcomeMutation) SetGroupID(i int64) {
+	m.group_id = &i
+	m.addgroup_id = nil
+}
+
+// GroupID returns the value of the "group_id" field in the mutation.
+func (m *UsageResponseOutcomeMutation) GroupID() (r int64, exists bool) {
+	v := m.group_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldGroupID returns the old "group_id" field's value of the UsageResponseOutcome entity.
+// If the UsageResponseOutcome object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *UsageResponseOutcomeMutation) OldGroupID(ctx context.Context) (v *int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldGroupID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldGroupID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldGroupID: %w", err)
+	}
+	return oldValue.GroupID, nil
+}
+
+// AddGroupID adds i to the "group_id" field.
+func (m *UsageResponseOutcomeMutation) AddGroupID(i int64) {
+	if m.addgroup_id != nil {
+		*m.addgroup_id += i
+	} else {
+		m.addgroup_id = &i
+	}
+}
+
+// AddedGroupID returns the value that was added to the "group_id" field in this mutation.
+func (m *UsageResponseOutcomeMutation) AddedGroupID() (r int64, exists bool) {
+	v := m.addgroup_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ClearGroupID clears the value of the "group_id" field.
+func (m *UsageResponseOutcomeMutation) ClearGroupID() {
+	m.group_id = nil
+	m.addgroup_id = nil
+	m.clearedFields[usageresponseoutcome.FieldGroupID] = struct{}{}
+}
+
+// GroupIDCleared returns if the "group_id" field was cleared in this mutation.
+func (m *UsageResponseOutcomeMutation) GroupIDCleared() bool {
+	_, ok := m.clearedFields[usageresponseoutcome.FieldGroupID]
+	return ok
+}
+
+// ResetGroupID resets all changes to the "group_id" field.
+func (m *UsageResponseOutcomeMutation) ResetGroupID() {
+	m.group_id = nil
+	m.addgroup_id = nil
+	delete(m.clearedFields, usageresponseoutcome.FieldGroupID)
+}
+
+// SetHTTPStatus sets the "http_status" field.
+func (m *UsageResponseOutcomeMutation) SetHTTPStatus(i int) {
+	m.http_status = &i
+	m.addhttp_status = nil
+}
+
+// HTTPStatus returns the value of the "http_status" field in the mutation.
+func (m *UsageResponseOutcomeMutation) HTTPStatus() (r int, exists bool) {
+	v := m.http_status
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldHTTPStatus returns the old "http_status" field's value of the UsageResponseOutcome entity.
+// If the UsageResponseOutcome object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *UsageResponseOutcomeMutation) OldHTTPStatus(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldHTTPStatus is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldHTTPStatus requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldHTTPStatus: %w", err)
+	}
+	return oldValue.HTTPStatus, nil
+}
+
+// AddHTTPStatus adds i to the "http_status" field.
+func (m *UsageResponseOutcomeMutation) AddHTTPStatus(i int) {
+	if m.addhttp_status != nil {
+		*m.addhttp_status += i
+	} else {
+		m.addhttp_status = &i
+	}
+}
+
+// AddedHTTPStatus returns the value that was added to the "http_status" field in this mutation.
+func (m *UsageResponseOutcomeMutation) AddedHTTPStatus() (r int, exists bool) {
+	v := m.addhttp_status
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetHTTPStatus resets all changes to the "http_status" field.
+func (m *UsageResponseOutcomeMutation) ResetHTTPStatus() {
+	m.http_status = nil
+	m.addhttp_status = nil
+}
+
+// SetUpstreamStatus sets the "upstream_status" field.
+func (m *UsageResponseOutcomeMutation) SetUpstreamStatus(i int) {
+	m.upstream_status = &i
+	m.addupstream_status = nil
+}
+
+// UpstreamStatus returns the value of the "upstream_status" field in the mutation.
+func (m *UsageResponseOutcomeMutation) UpstreamStatus() (r int, exists bool) {
+	v := m.upstream_status
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUpstreamStatus returns the old "upstream_status" field's value of the UsageResponseOutcome entity.
+// If the UsageResponseOutcome object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *UsageResponseOutcomeMutation) OldUpstreamStatus(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUpstreamStatus is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUpstreamStatus requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUpstreamStatus: %w", err)
+	}
+	return oldValue.UpstreamStatus, nil
+}
+
+// AddUpstreamStatus adds i to the "upstream_status" field.
+func (m *UsageResponseOutcomeMutation) AddUpstreamStatus(i int) {
+	if m.addupstream_status != nil {
+		*m.addupstream_status += i
+	} else {
+		m.addupstream_status = &i
+	}
+}
+
+// AddedUpstreamStatus returns the value that was added to the "upstream_status" field in this mutation.
+func (m *UsageResponseOutcomeMutation) AddedUpstreamStatus() (r int, exists bool) {
+	v := m.addupstream_status
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetUpstreamStatus resets all changes to the "upstream_status" field.
+func (m *UsageResponseOutcomeMutation) ResetUpstreamStatus() {
+	m.upstream_status = nil
+	m.addupstream_status = nil
+}
+
+// SetHasText sets the "has_text" field.
+func (m *UsageResponseOutcomeMutation) SetHasText(b bool) {
+	m.has_text = &b
+}
+
+// HasText returns the value of the "has_text" field in the mutation.
+func (m *UsageResponseOutcomeMutation) HasText() (r bool, exists bool) {
+	v := m.has_text
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldHasText returns the old "has_text" field's value of the UsageResponseOutcome entity.
+// If the UsageResponseOutcome object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *UsageResponseOutcomeMutation) OldHasText(ctx context.Context) (v bool, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldHasText is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldHasText requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldHasText: %w", err)
+	}
+	return oldValue.HasText, nil
+}
+
+// ResetHasText resets all changes to the "has_text" field.
+func (m *UsageResponseOutcomeMutation) ResetHasText() {
+	m.has_text = nil
+}
+
+// SetHasToolCall sets the "has_tool_call" field.
+func (m *UsageResponseOutcomeMutation) SetHasToolCall(b bool) {
+	m.has_tool_call = &b
+}
+
+// HasToolCall returns the value of the "has_tool_call" field in the mutation.
+func (m *UsageResponseOutcomeMutation) HasToolCall() (r bool, exists bool) {
+	v := m.has_tool_call
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldHasToolCall returns the old "has_tool_call" field's value of the UsageResponseOutcome entity.
+// If the UsageResponseOutcome object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *UsageResponseOutcomeMutation) OldHasToolCall(ctx context.Context) (v bool, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldHasToolCall is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldHasToolCall requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldHasToolCall: %w", err)
+	}
+	return oldValue.HasToolCall, nil
+}
+
+// ResetHasToolCall resets all changes to the "has_tool_call" field.
+func (m *UsageResponseOutcomeMutation) ResetHasToolCall() {
+	m.has_tool_call = nil
+}
+
+// SetHasReasoning sets the "has_reasoning" field.
+func (m *UsageResponseOutcomeMutation) SetHasReasoning(b bool) {
+	m.has_reasoning = &b
+}
+
+// HasReasoning returns the value of the "has_reasoning" field in the mutation.
+func (m *UsageResponseOutcomeMutation) HasReasoning() (r bool, exists bool) {
+	v := m.has_reasoning
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldHasReasoning returns the old "has_reasoning" field's value of the UsageResponseOutcome entity.
+// If the UsageResponseOutcome object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *UsageResponseOutcomeMutation) OldHasReasoning(ctx context.Context) (v bool, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldHasReasoning is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldHasReasoning requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldHasReasoning: %w", err)
+	}
+	return oldValue.HasReasoning, nil
+}
+
+// ResetHasReasoning resets all changes to the "has_reasoning" field.
+func (m *UsageResponseOutcomeMutation) ResetHasReasoning() {
+	m.has_reasoning = nil
+}
+
+// SetHasMedia sets the "has_media" field.
+func (m *UsageResponseOutcomeMutation) SetHasMedia(b bool) {
+	m.has_media = &b
+}
+
+// HasMedia returns the value of the "has_media" field in the mutation.
+func (m *UsageResponseOutcomeMutation) HasMedia() (r bool, exists bool) {
+	v := m.has_media
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldHasMedia returns the old "has_media" field's value of the UsageResponseOutcome entity.
+// If the UsageResponseOutcome object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *UsageResponseOutcomeMutation) OldHasMedia(ctx context.Context) (v bool, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldHasMedia is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldHasMedia requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldHasMedia: %w", err)
+	}
+	return oldValue.HasMedia, nil
+}
+
+// ResetHasMedia resets all changes to the "has_media" field.
+func (m *UsageResponseOutcomeMutation) ResetHasMedia() {
+	m.has_media = nil
+}
+
+// SetOutputBytes sets the "output_bytes" field.
+func (m *UsageResponseOutcomeMutation) SetOutputBytes(i int64) {
+	m.output_bytes = &i
+	m.addoutput_bytes = nil
+}
+
+// OutputBytes returns the value of the "output_bytes" field in the mutation.
+func (m *UsageResponseOutcomeMutation) OutputBytes() (r int64, exists bool) {
+	v := m.output_bytes
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldOutputBytes returns the old "output_bytes" field's value of the UsageResponseOutcome entity.
+// If the UsageResponseOutcome object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *UsageResponseOutcomeMutation) OldOutputBytes(ctx context.Context) (v int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldOutputBytes is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldOutputBytes requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldOutputBytes: %w", err)
+	}
+	return oldValue.OutputBytes, nil
+}
+
+// AddOutputBytes adds i to the "output_bytes" field.
+func (m *UsageResponseOutcomeMutation) AddOutputBytes(i int64) {
+	if m.addoutput_bytes != nil {
+		*m.addoutput_bytes += i
+	} else {
+		m.addoutput_bytes = &i
+	}
+}
+
+// AddedOutputBytes returns the value that was added to the "output_bytes" field in this mutation.
+func (m *UsageResponseOutcomeMutation) AddedOutputBytes() (r int64, exists bool) {
+	v := m.addoutput_bytes
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetOutputBytes resets all changes to the "output_bytes" field.
+func (m *UsageResponseOutcomeMutation) ResetOutputBytes() {
+	m.output_bytes = nil
+	m.addoutput_bytes = nil
+}
+
+// SetEventCount sets the "event_count" field.
+func (m *UsageResponseOutcomeMutation) SetEventCount(i int) {
+	m.event_count = &i
+	m.addevent_count = nil
+}
+
+// EventCount returns the value of the "event_count" field in the mutation.
+func (m *UsageResponseOutcomeMutation) EventCount() (r int, exists bool) {
+	v := m.event_count
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldEventCount returns the old "event_count" field's value of the UsageResponseOutcome entity.
+// If the UsageResponseOutcome object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *UsageResponseOutcomeMutation) OldEventCount(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldEventCount is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldEventCount requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldEventCount: %w", err)
+	}
+	return oldValue.EventCount, nil
+}
+
+// AddEventCount adds i to the "event_count" field.
+func (m *UsageResponseOutcomeMutation) AddEventCount(i int) {
+	if m.addevent_count != nil {
+		*m.addevent_count += i
+	} else {
+		m.addevent_count = &i
+	}
+}
+
+// AddedEventCount returns the value that was added to the "event_count" field in this mutation.
+func (m *UsageResponseOutcomeMutation) AddedEventCount() (r int, exists bool) {
+	v := m.addevent_count
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetEventCount resets all changes to the "event_count" field.
+func (m *UsageResponseOutcomeMutation) ResetEventCount() {
+	m.event_count = nil
+	m.addevent_count = nil
+}
+
+// SetStreamCompleted sets the "stream_completed" field.
+func (m *UsageResponseOutcomeMutation) SetStreamCompleted(b bool) {
+	m.stream_completed = &b
+}
+
+// StreamCompleted returns the value of the "stream_completed" field in the mutation.
+func (m *UsageResponseOutcomeMutation) StreamCompleted() (r bool, exists bool) {
+	v := m.stream_completed
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldStreamCompleted returns the old "stream_completed" field's value of the UsageResponseOutcome entity.
+// If the UsageResponseOutcome object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *UsageResponseOutcomeMutation) OldStreamCompleted(ctx context.Context) (v bool, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldStreamCompleted is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldStreamCompleted requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldStreamCompleted: %w", err)
+	}
+	return oldValue.StreamCompleted, nil
+}
+
+// ResetStreamCompleted resets all changes to the "stream_completed" field.
+func (m *UsageResponseOutcomeMutation) ResetStreamCompleted() {
+	m.stream_completed = nil
+}
+
+// SetFinishReason sets the "finish_reason" field.
+func (m *UsageResponseOutcomeMutation) SetFinishReason(s string) {
+	m.finish_reason = &s
+}
+
+// FinishReason returns the value of the "finish_reason" field in the mutation.
+func (m *UsageResponseOutcomeMutation) FinishReason() (r string, exists bool) {
+	v := m.finish_reason
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldFinishReason returns the old "finish_reason" field's value of the UsageResponseOutcome entity.
+// If the UsageResponseOutcome object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *UsageResponseOutcomeMutation) OldFinishReason(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldFinishReason is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldFinishReason requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldFinishReason: %w", err)
+	}
+	return oldValue.FinishReason, nil
+}
+
+// ResetFinishReason resets all changes to the "finish_reason" field.
+func (m *UsageResponseOutcomeMutation) ResetFinishReason() {
+	m.finish_reason = nil
+}
+
+// SetDisconnectSource sets the "disconnect_source" field.
+func (m *UsageResponseOutcomeMutation) SetDisconnectSource(s string) {
+	m.disconnect_source = &s
+}
+
+// DisconnectSource returns the value of the "disconnect_source" field in the mutation.
+func (m *UsageResponseOutcomeMutation) DisconnectSource() (r string, exists bool) {
+	v := m.disconnect_source
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldDisconnectSource returns the old "disconnect_source" field's value of the UsageResponseOutcome entity.
+// If the UsageResponseOutcome object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *UsageResponseOutcomeMutation) OldDisconnectSource(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldDisconnectSource is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldDisconnectSource requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldDisconnectSource: %w", err)
+	}
+	return oldValue.DisconnectSource, nil
+}
+
+// ResetDisconnectSource resets all changes to the "disconnect_source" field.
+func (m *UsageResponseOutcomeMutation) ResetDisconnectSource() {
+	m.disconnect_source = nil
+}
+
+// SetUpstreamErrorKind sets the "upstream_error_kind" field.
+func (m *UsageResponseOutcomeMutation) SetUpstreamErrorKind(s string) {
+	m.upstream_error_kind = &s
+}
+
+// UpstreamErrorKind returns the value of the "upstream_error_kind" field in the mutation.
+func (m *UsageResponseOutcomeMutation) UpstreamErrorKind() (r string, exists bool) {
+	v := m.upstream_error_kind
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUpstreamErrorKind returns the old "upstream_error_kind" field's value of the UsageResponseOutcome entity.
+// If the UsageResponseOutcome object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *UsageResponseOutcomeMutation) OldUpstreamErrorKind(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUpstreamErrorKind is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUpstreamErrorKind requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUpstreamErrorKind: %w", err)
+	}
+	return oldValue.UpstreamErrorKind, nil
+}
+
+// ResetUpstreamErrorKind resets all changes to the "upstream_error_kind" field.
+func (m *UsageResponseOutcomeMutation) ResetUpstreamErrorKind() {
+	m.upstream_error_kind = nil
+}
+
+// SetCollectorVersion sets the "collector_version" field.
+func (m *UsageResponseOutcomeMutation) SetCollectorVersion(i int16) {
+	m.collector_version = &i
+	m.addcollector_version = nil
+}
+
+// CollectorVersion returns the value of the "collector_version" field in the mutation.
+func (m *UsageResponseOutcomeMutation) CollectorVersion() (r int16, exists bool) {
+	v := m.collector_version
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCollectorVersion returns the old "collector_version" field's value of the UsageResponseOutcome entity.
+// If the UsageResponseOutcome object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *UsageResponseOutcomeMutation) OldCollectorVersion(ctx context.Context) (v int16, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCollectorVersion is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCollectorVersion requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCollectorVersion: %w", err)
+	}
+	return oldValue.CollectorVersion, nil
+}
+
+// AddCollectorVersion adds i to the "collector_version" field.
+func (m *UsageResponseOutcomeMutation) AddCollectorVersion(i int16) {
+	if m.addcollector_version != nil {
+		*m.addcollector_version += i
+	} else {
+		m.addcollector_version = &i
+	}
+}
+
+// AddedCollectorVersion returns the value that was added to the "collector_version" field in this mutation.
+func (m *UsageResponseOutcomeMutation) AddedCollectorVersion() (r int16, exists bool) {
+	v := m.addcollector_version
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetCollectorVersion resets all changes to the "collector_version" field.
+func (m *UsageResponseOutcomeMutation) ResetCollectorVersion() {
+	m.collector_version = nil
+	m.addcollector_version = nil
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (m *UsageResponseOutcomeMutation) SetCreatedAt(t time.Time) {
+	m.created_at = &t
+}
+
+// CreatedAt returns the value of the "created_at" field in the mutation.
+func (m *UsageResponseOutcomeMutation) CreatedAt() (r time.Time, exists bool) {
+	v := m.created_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCreatedAt returns the old "created_at" field's value of the UsageResponseOutcome entity.
+// If the UsageResponseOutcome object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *UsageResponseOutcomeMutation) OldCreatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCreatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCreatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCreatedAt: %w", err)
+	}
+	return oldValue.CreatedAt, nil
+}
+
+// ResetCreatedAt resets all changes to the "created_at" field.
+func (m *UsageResponseOutcomeMutation) ResetCreatedAt() {
+	m.created_at = nil
+}
+
+// Where appends a list predicates to the UsageResponseOutcomeMutation builder.
+func (m *UsageResponseOutcomeMutation) Where(ps ...predicate.UsageResponseOutcome) {
+	m.predicates = append(m.predicates, ps...)
+}
+
+// WhereP appends storage-level predicates to the UsageResponseOutcomeMutation builder. Using this method,
+// users can use type-assertion to append predicates that do not depend on any generated package.
+func (m *UsageResponseOutcomeMutation) WhereP(ps ...func(*sql.Selector)) {
+	p := make([]predicate.UsageResponseOutcome, len(ps))
+	for i := range ps {
+		p[i] = ps[i]
+	}
+	m.Where(p...)
+}
+
+// Op returns the operation name.
+func (m *UsageResponseOutcomeMutation) Op() Op {
+	return m.op
+}
+
+// SetOp allows setting the mutation operation.
+func (m *UsageResponseOutcomeMutation) SetOp(op Op) {
+	m.op = op
+}
+
+// Type returns the node type of this mutation (UsageResponseOutcome).
+func (m *UsageResponseOutcomeMutation) Type() string {
+	return m.typ
+}
+
+// Fields returns all fields that were changed during this mutation. Note that in
+// order to get all numeric fields that were incremented/decremented, call
+// AddedFields().
+func (m *UsageResponseOutcomeMutation) Fields() []string {
+	fields := make([]string, 0, 20)
+	if m.usage_log_id != nil {
+		fields = append(fields, usageresponseoutcome.FieldUsageLogID)
+	}
+	if m.request_id != nil {
+		fields = append(fields, usageresponseoutcome.FieldRequestID)
+	}
+	if m.api_key_id != nil {
+		fields = append(fields, usageresponseoutcome.FieldAPIKeyID)
+	}
+	if m.user_id != nil {
+		fields = append(fields, usageresponseoutcome.FieldUserID)
+	}
+	if m.account_id != nil {
+		fields = append(fields, usageresponseoutcome.FieldAccountID)
+	}
+	if m.group_id != nil {
+		fields = append(fields, usageresponseoutcome.FieldGroupID)
+	}
+	if m.http_status != nil {
+		fields = append(fields, usageresponseoutcome.FieldHTTPStatus)
+	}
+	if m.upstream_status != nil {
+		fields = append(fields, usageresponseoutcome.FieldUpstreamStatus)
+	}
+	if m.has_text != nil {
+		fields = append(fields, usageresponseoutcome.FieldHasText)
+	}
+	if m.has_tool_call != nil {
+		fields = append(fields, usageresponseoutcome.FieldHasToolCall)
+	}
+	if m.has_reasoning != nil {
+		fields = append(fields, usageresponseoutcome.FieldHasReasoning)
+	}
+	if m.has_media != nil {
+		fields = append(fields, usageresponseoutcome.FieldHasMedia)
+	}
+	if m.output_bytes != nil {
+		fields = append(fields, usageresponseoutcome.FieldOutputBytes)
+	}
+	if m.event_count != nil {
+		fields = append(fields, usageresponseoutcome.FieldEventCount)
+	}
+	if m.stream_completed != nil {
+		fields = append(fields, usageresponseoutcome.FieldStreamCompleted)
+	}
+	if m.finish_reason != nil {
+		fields = append(fields, usageresponseoutcome.FieldFinishReason)
+	}
+	if m.disconnect_source != nil {
+		fields = append(fields, usageresponseoutcome.FieldDisconnectSource)
+	}
+	if m.upstream_error_kind != nil {
+		fields = append(fields, usageresponseoutcome.FieldUpstreamErrorKind)
+	}
+	if m.collector_version != nil {
+		fields = append(fields, usageresponseoutcome.FieldCollectorVersion)
+	}
+	if m.created_at != nil {
+		fields = append(fields, usageresponseoutcome.FieldCreatedAt)
+	}
+	return fields
+}
+
+// Field returns the value of a field with the given name. The second boolean
+// return value indicates that this field was not set, or was not defined in the
+// schema.
+func (m *UsageResponseOutcomeMutation) Field(name string) (ent.Value, bool) {
+	switch name {
+	case usageresponseoutcome.FieldUsageLogID:
+		return m.UsageLogID()
+	case usageresponseoutcome.FieldRequestID:
+		return m.RequestID()
+	case usageresponseoutcome.FieldAPIKeyID:
+		return m.APIKeyID()
+	case usageresponseoutcome.FieldUserID:
+		return m.UserID()
+	case usageresponseoutcome.FieldAccountID:
+		return m.AccountID()
+	case usageresponseoutcome.FieldGroupID:
+		return m.GroupID()
+	case usageresponseoutcome.FieldHTTPStatus:
+		return m.HTTPStatus()
+	case usageresponseoutcome.FieldUpstreamStatus:
+		return m.UpstreamStatus()
+	case usageresponseoutcome.FieldHasText:
+		return m.HasText()
+	case usageresponseoutcome.FieldHasToolCall:
+		return m.HasToolCall()
+	case usageresponseoutcome.FieldHasReasoning:
+		return m.HasReasoning()
+	case usageresponseoutcome.FieldHasMedia:
+		return m.HasMedia()
+	case usageresponseoutcome.FieldOutputBytes:
+		return m.OutputBytes()
+	case usageresponseoutcome.FieldEventCount:
+		return m.EventCount()
+	case usageresponseoutcome.FieldStreamCompleted:
+		return m.StreamCompleted()
+	case usageresponseoutcome.FieldFinishReason:
+		return m.FinishReason()
+	case usageresponseoutcome.FieldDisconnectSource:
+		return m.DisconnectSource()
+	case usageresponseoutcome.FieldUpstreamErrorKind:
+		return m.UpstreamErrorKind()
+	case usageresponseoutcome.FieldCollectorVersion:
+		return m.CollectorVersion()
+	case usageresponseoutcome.FieldCreatedAt:
+		return m.CreatedAt()
+	}
+	return nil, false
+}
+
+// OldField returns the old value of the field from the database. An error is
+// returned if the mutation operation is not UpdateOne, or the query to the
+// database failed.
+func (m *UsageResponseOutcomeMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
+	switch name {
+	case usageresponseoutcome.FieldUsageLogID:
+		return m.OldUsageLogID(ctx)
+	case usageresponseoutcome.FieldRequestID:
+		return m.OldRequestID(ctx)
+	case usageresponseoutcome.FieldAPIKeyID:
+		return m.OldAPIKeyID(ctx)
+	case usageresponseoutcome.FieldUserID:
+		return m.OldUserID(ctx)
+	case usageresponseoutcome.FieldAccountID:
+		return m.OldAccountID(ctx)
+	case usageresponseoutcome.FieldGroupID:
+		return m.OldGroupID(ctx)
+	case usageresponseoutcome.FieldHTTPStatus:
+		return m.OldHTTPStatus(ctx)
+	case usageresponseoutcome.FieldUpstreamStatus:
+		return m.OldUpstreamStatus(ctx)
+	case usageresponseoutcome.FieldHasText:
+		return m.OldHasText(ctx)
+	case usageresponseoutcome.FieldHasToolCall:
+		return m.OldHasToolCall(ctx)
+	case usageresponseoutcome.FieldHasReasoning:
+		return m.OldHasReasoning(ctx)
+	case usageresponseoutcome.FieldHasMedia:
+		return m.OldHasMedia(ctx)
+	case usageresponseoutcome.FieldOutputBytes:
+		return m.OldOutputBytes(ctx)
+	case usageresponseoutcome.FieldEventCount:
+		return m.OldEventCount(ctx)
+	case usageresponseoutcome.FieldStreamCompleted:
+		return m.OldStreamCompleted(ctx)
+	case usageresponseoutcome.FieldFinishReason:
+		return m.OldFinishReason(ctx)
+	case usageresponseoutcome.FieldDisconnectSource:
+		return m.OldDisconnectSource(ctx)
+	case usageresponseoutcome.FieldUpstreamErrorKind:
+		return m.OldUpstreamErrorKind(ctx)
+	case usageresponseoutcome.FieldCollectorVersion:
+		return m.OldCollectorVersion(ctx)
+	case usageresponseoutcome.FieldCreatedAt:
+		return m.OldCreatedAt(ctx)
+	}
+	return nil, fmt.Errorf("unknown UsageResponseOutcome field %s", name)
+}
+
+// SetField sets the value of a field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *UsageResponseOutcomeMutation) SetField(name string, value ent.Value) error {
+	switch name {
+	case usageresponseoutcome.FieldUsageLogID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUsageLogID(v)
+		return nil
+	case usageresponseoutcome.FieldRequestID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetRequestID(v)
+		return nil
+	case usageresponseoutcome.FieldAPIKeyID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetAPIKeyID(v)
+		return nil
+	case usageresponseoutcome.FieldUserID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUserID(v)
+		return nil
+	case usageresponseoutcome.FieldAccountID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetAccountID(v)
+		return nil
+	case usageresponseoutcome.FieldGroupID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetGroupID(v)
+		return nil
+	case usageresponseoutcome.FieldHTTPStatus:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetHTTPStatus(v)
+		return nil
+	case usageresponseoutcome.FieldUpstreamStatus:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUpstreamStatus(v)
+		return nil
+	case usageresponseoutcome.FieldHasText:
+		v, ok := value.(bool)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetHasText(v)
+		return nil
+	case usageresponseoutcome.FieldHasToolCall:
+		v, ok := value.(bool)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetHasToolCall(v)
+		return nil
+	case usageresponseoutcome.FieldHasReasoning:
+		v, ok := value.(bool)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetHasReasoning(v)
+		return nil
+	case usageresponseoutcome.FieldHasMedia:
+		v, ok := value.(bool)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetHasMedia(v)
+		return nil
+	case usageresponseoutcome.FieldOutputBytes:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetOutputBytes(v)
+		return nil
+	case usageresponseoutcome.FieldEventCount:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetEventCount(v)
+		return nil
+	case usageresponseoutcome.FieldStreamCompleted:
+		v, ok := value.(bool)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetStreamCompleted(v)
+		return nil
+	case usageresponseoutcome.FieldFinishReason:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetFinishReason(v)
+		return nil
+	case usageresponseoutcome.FieldDisconnectSource:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetDisconnectSource(v)
+		return nil
+	case usageresponseoutcome.FieldUpstreamErrorKind:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUpstreamErrorKind(v)
+		return nil
+	case usageresponseoutcome.FieldCollectorVersion:
+		v, ok := value.(int16)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCollectorVersion(v)
+		return nil
+	case usageresponseoutcome.FieldCreatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCreatedAt(v)
+		return nil
+	}
+	return fmt.Errorf("unknown UsageResponseOutcome field %s", name)
+}
+
+// AddedFields returns all numeric fields that were incremented/decremented during
+// this mutation.
+func (m *UsageResponseOutcomeMutation) AddedFields() []string {
+	var fields []string
+	if m.addusage_log_id != nil {
+		fields = append(fields, usageresponseoutcome.FieldUsageLogID)
+	}
+	if m.addapi_key_id != nil {
+		fields = append(fields, usageresponseoutcome.FieldAPIKeyID)
+	}
+	if m.adduser_id != nil {
+		fields = append(fields, usageresponseoutcome.FieldUserID)
+	}
+	if m.addaccount_id != nil {
+		fields = append(fields, usageresponseoutcome.FieldAccountID)
+	}
+	if m.addgroup_id != nil {
+		fields = append(fields, usageresponseoutcome.FieldGroupID)
+	}
+	if m.addhttp_status != nil {
+		fields = append(fields, usageresponseoutcome.FieldHTTPStatus)
+	}
+	if m.addupstream_status != nil {
+		fields = append(fields, usageresponseoutcome.FieldUpstreamStatus)
+	}
+	if m.addoutput_bytes != nil {
+		fields = append(fields, usageresponseoutcome.FieldOutputBytes)
+	}
+	if m.addevent_count != nil {
+		fields = append(fields, usageresponseoutcome.FieldEventCount)
+	}
+	if m.addcollector_version != nil {
+		fields = append(fields, usageresponseoutcome.FieldCollectorVersion)
+	}
+	return fields
+}
+
+// AddedField returns the numeric value that was incremented/decremented on a field
+// with the given name. The second boolean return value indicates that this field
+// was not set, or was not defined in the schema.
+func (m *UsageResponseOutcomeMutation) AddedField(name string) (ent.Value, bool) {
+	switch name {
+	case usageresponseoutcome.FieldUsageLogID:
+		return m.AddedUsageLogID()
+	case usageresponseoutcome.FieldAPIKeyID:
+		return m.AddedAPIKeyID()
+	case usageresponseoutcome.FieldUserID:
+		return m.AddedUserID()
+	case usageresponseoutcome.FieldAccountID:
+		return m.AddedAccountID()
+	case usageresponseoutcome.FieldGroupID:
+		return m.AddedGroupID()
+	case usageresponseoutcome.FieldHTTPStatus:
+		return m.AddedHTTPStatus()
+	case usageresponseoutcome.FieldUpstreamStatus:
+		return m.AddedUpstreamStatus()
+	case usageresponseoutcome.FieldOutputBytes:
+		return m.AddedOutputBytes()
+	case usageresponseoutcome.FieldEventCount:
+		return m.AddedEventCount()
+	case usageresponseoutcome.FieldCollectorVersion:
+		return m.AddedCollectorVersion()
+	}
+	return nil, false
+}
+
+// AddField adds the value to the field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *UsageResponseOutcomeMutation) AddField(name string, value ent.Value) error {
+	switch name {
+	case usageresponseoutcome.FieldUsageLogID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddUsageLogID(v)
+		return nil
+	case usageresponseoutcome.FieldAPIKeyID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddAPIKeyID(v)
+		return nil
+	case usageresponseoutcome.FieldUserID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddUserID(v)
+		return nil
+	case usageresponseoutcome.FieldAccountID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddAccountID(v)
+		return nil
+	case usageresponseoutcome.FieldGroupID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddGroupID(v)
+		return nil
+	case usageresponseoutcome.FieldHTTPStatus:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddHTTPStatus(v)
+		return nil
+	case usageresponseoutcome.FieldUpstreamStatus:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddUpstreamStatus(v)
+		return nil
+	case usageresponseoutcome.FieldOutputBytes:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddOutputBytes(v)
+		return nil
+	case usageresponseoutcome.FieldEventCount:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddEventCount(v)
+		return nil
+	case usageresponseoutcome.FieldCollectorVersion:
+		v, ok := value.(int16)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddCollectorVersion(v)
+		return nil
+	}
+	return fmt.Errorf("unknown UsageResponseOutcome numeric field %s", name)
+}
+
+// ClearedFields returns all nullable fields that were cleared during this
+// mutation.
+func (m *UsageResponseOutcomeMutation) ClearedFields() []string {
+	var fields []string
+	if m.FieldCleared(usageresponseoutcome.FieldUsageLogID) {
+		fields = append(fields, usageresponseoutcome.FieldUsageLogID)
+	}
+	if m.FieldCleared(usageresponseoutcome.FieldGroupID) {
+		fields = append(fields, usageresponseoutcome.FieldGroupID)
+	}
+	return fields
+}
+
+// FieldCleared returns a boolean indicating if a field with the given name was
+// cleared in this mutation.
+func (m *UsageResponseOutcomeMutation) FieldCleared(name string) bool {
+	_, ok := m.clearedFields[name]
+	return ok
+}
+
+// ClearField clears the value of the field with the given name. It returns an
+// error if the field is not defined in the schema.
+func (m *UsageResponseOutcomeMutation) ClearField(name string) error {
+	switch name {
+	case usageresponseoutcome.FieldUsageLogID:
+		m.ClearUsageLogID()
+		return nil
+	case usageresponseoutcome.FieldGroupID:
+		m.ClearGroupID()
+		return nil
+	}
+	return fmt.Errorf("unknown UsageResponseOutcome nullable field %s", name)
+}
+
+// ResetField resets all changes in the mutation for the field with the given name.
+// It returns an error if the field is not defined in the schema.
+func (m *UsageResponseOutcomeMutation) ResetField(name string) error {
+	switch name {
+	case usageresponseoutcome.FieldUsageLogID:
+		m.ResetUsageLogID()
+		return nil
+	case usageresponseoutcome.FieldRequestID:
+		m.ResetRequestID()
+		return nil
+	case usageresponseoutcome.FieldAPIKeyID:
+		m.ResetAPIKeyID()
+		return nil
+	case usageresponseoutcome.FieldUserID:
+		m.ResetUserID()
+		return nil
+	case usageresponseoutcome.FieldAccountID:
+		m.ResetAccountID()
+		return nil
+	case usageresponseoutcome.FieldGroupID:
+		m.ResetGroupID()
+		return nil
+	case usageresponseoutcome.FieldHTTPStatus:
+		m.ResetHTTPStatus()
+		return nil
+	case usageresponseoutcome.FieldUpstreamStatus:
+		m.ResetUpstreamStatus()
+		return nil
+	case usageresponseoutcome.FieldHasText:
+		m.ResetHasText()
+		return nil
+	case usageresponseoutcome.FieldHasToolCall:
+		m.ResetHasToolCall()
+		return nil
+	case usageresponseoutcome.FieldHasReasoning:
+		m.ResetHasReasoning()
+		return nil
+	case usageresponseoutcome.FieldHasMedia:
+		m.ResetHasMedia()
+		return nil
+	case usageresponseoutcome.FieldOutputBytes:
+		m.ResetOutputBytes()
+		return nil
+	case usageresponseoutcome.FieldEventCount:
+		m.ResetEventCount()
+		return nil
+	case usageresponseoutcome.FieldStreamCompleted:
+		m.ResetStreamCompleted()
+		return nil
+	case usageresponseoutcome.FieldFinishReason:
+		m.ResetFinishReason()
+		return nil
+	case usageresponseoutcome.FieldDisconnectSource:
+		m.ResetDisconnectSource()
+		return nil
+	case usageresponseoutcome.FieldUpstreamErrorKind:
+		m.ResetUpstreamErrorKind()
+		return nil
+	case usageresponseoutcome.FieldCollectorVersion:
+		m.ResetCollectorVersion()
+		return nil
+	case usageresponseoutcome.FieldCreatedAt:
+		m.ResetCreatedAt()
+		return nil
+	}
+	return fmt.Errorf("unknown UsageResponseOutcome field %s", name)
+}
+
+// AddedEdges returns all edge names that were set/added in this mutation.
+func (m *UsageResponseOutcomeMutation) AddedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// AddedIDs returns all IDs (to other nodes) that were added for the given edge
+// name in this mutation.
+func (m *UsageResponseOutcomeMutation) AddedIDs(name string) []ent.Value {
+	return nil
+}
+
+// RemovedEdges returns all edge names that were removed in this mutation.
+func (m *UsageResponseOutcomeMutation) RemovedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// RemovedIDs returns all IDs (to other nodes) that were removed for the edge with
+// the given name in this mutation.
+func (m *UsageResponseOutcomeMutation) RemovedIDs(name string) []ent.Value {
+	return nil
+}
+
+// ClearedEdges returns all edge names that were cleared in this mutation.
+func (m *UsageResponseOutcomeMutation) ClearedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// EdgeCleared returns a boolean which indicates if the edge with the given name
+// was cleared in this mutation.
+func (m *UsageResponseOutcomeMutation) EdgeCleared(name string) bool {
+	return false
+}
+
+// ClearEdge clears the value of the edge with the given name. It returns an error
+// if that edge is not defined in the schema.
+func (m *UsageResponseOutcomeMutation) ClearEdge(name string) error {
+	return fmt.Errorf("unknown UsageResponseOutcome unique edge %s", name)
+}
+
+// ResetEdge resets all changes to the edge with the given name in this mutation.
+// It returns an error if the edge is not defined in the schema.
+func (m *UsageResponseOutcomeMutation) ResetEdge(name string) error {
+	return fmt.Errorf("unknown UsageResponseOutcome edge %s", name)
 }
 
 // UserMutation represents an operation that mutates the User nodes in the graph.

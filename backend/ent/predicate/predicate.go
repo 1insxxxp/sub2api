@@ -51,6 +51,9 @@ type ChannelMonitorRequestTemplate func(*sql.Selector)
 // CompositeModelRoute is the predicate function for compositemodelroute builders.
 type CompositeModelRoute func(*sql.Selector)
 
+// EmptyResponseClaim is the predicate function for emptyresponseclaim builders.
+type EmptyResponseClaim func(*sql.Selector)
+
 // ErrorPassthroughRule is the predicate function for errorpassthroughrule builders.
 type ErrorPassthroughRule func(*sql.Selector)
 
@@ -107,6 +110,9 @@ type UsageCleanupTask func(*sql.Selector)
 
 // UsageLog is the predicate function for usagelog builders.
 type UsageLog func(*sql.Selector)
+
+// UsageResponseOutcome is the predicate function for usageresponseoutcome builders.
+type UsageResponseOutcome func(*sql.Selector)
 
 // User is the predicate function for user builders.
 type User func(*sql.Selector)

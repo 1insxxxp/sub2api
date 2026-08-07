@@ -85,6 +85,11 @@ func RateMultiplier(v float64) predicate.Group {
 	return predicate.Group(sql.FieldEQ(FieldRateMultiplier, v))
 }
 
+// EmptyResponseCompensationEnabled applies equality check predicate on the "empty_response_compensation_enabled" field. It's identical to EmptyResponseCompensationEnabledEQ.
+func EmptyResponseCompensationEnabled(v bool) predicate.Group {
+	return predicate.Group(sql.FieldEQ(FieldEmptyResponseCompensationEnabled, v))
+}
+
 // PeakRateEnabled applies equality check predicate on the "peak_rate_enabled" field. It's identical to PeakRateEnabledEQ.
 func PeakRateEnabled(v bool) predicate.Group {
 	return predicate.Group(sql.FieldEQ(FieldPeakRateEnabled, v))
@@ -618,6 +623,16 @@ func RateMultiplierLT(v float64) predicate.Group {
 // RateMultiplierLTE applies the LTE predicate on the "rate_multiplier" field.
 func RateMultiplierLTE(v float64) predicate.Group {
 	return predicate.Group(sql.FieldLTE(FieldRateMultiplier, v))
+}
+
+// EmptyResponseCompensationEnabledEQ applies the EQ predicate on the "empty_response_compensation_enabled" field.
+func EmptyResponseCompensationEnabledEQ(v bool) predicate.Group {
+	return predicate.Group(sql.FieldEQ(FieldEmptyResponseCompensationEnabled, v))
+}
+
+// EmptyResponseCompensationEnabledNEQ applies the NEQ predicate on the "empty_response_compensation_enabled" field.
+func EmptyResponseCompensationEnabledNEQ(v bool) predicate.Group {
+	return predicate.Group(sql.FieldNEQ(FieldEmptyResponseCompensationEnabled, v))
 }
 
 // PeakRateEnabledEQ applies the EQ predicate on the "peak_rate_enabled" field.

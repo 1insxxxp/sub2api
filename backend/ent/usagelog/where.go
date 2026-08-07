@@ -185,6 +185,11 @@ func ActualCost(v float64) predicate.UsageLog {
 	return predicate.UsageLog(sql.FieldEQ(FieldActualCost, v))
 }
 
+// CompensatedCost applies equality check predicate on the "compensated_cost" field. It's identical to CompensatedCostEQ.
+func CompensatedCost(v float64) predicate.UsageLog {
+	return predicate.UsageLog(sql.FieldEQ(FieldCompensatedCost, v))
+}
+
 // RateMultiplier applies equality check predicate on the "rate_multiplier" field. It's identical to RateMultiplierEQ.
 func RateMultiplier(v float64) predicate.UsageLog {
 	return predicate.UsageLog(sql.FieldEQ(FieldRateMultiplier, v))
@@ -1463,6 +1468,46 @@ func ActualCostLT(v float64) predicate.UsageLog {
 // ActualCostLTE applies the LTE predicate on the "actual_cost" field.
 func ActualCostLTE(v float64) predicate.UsageLog {
 	return predicate.UsageLog(sql.FieldLTE(FieldActualCost, v))
+}
+
+// CompensatedCostEQ applies the EQ predicate on the "compensated_cost" field.
+func CompensatedCostEQ(v float64) predicate.UsageLog {
+	return predicate.UsageLog(sql.FieldEQ(FieldCompensatedCost, v))
+}
+
+// CompensatedCostNEQ applies the NEQ predicate on the "compensated_cost" field.
+func CompensatedCostNEQ(v float64) predicate.UsageLog {
+	return predicate.UsageLog(sql.FieldNEQ(FieldCompensatedCost, v))
+}
+
+// CompensatedCostIn applies the In predicate on the "compensated_cost" field.
+func CompensatedCostIn(vs ...float64) predicate.UsageLog {
+	return predicate.UsageLog(sql.FieldIn(FieldCompensatedCost, vs...))
+}
+
+// CompensatedCostNotIn applies the NotIn predicate on the "compensated_cost" field.
+func CompensatedCostNotIn(vs ...float64) predicate.UsageLog {
+	return predicate.UsageLog(sql.FieldNotIn(FieldCompensatedCost, vs...))
+}
+
+// CompensatedCostGT applies the GT predicate on the "compensated_cost" field.
+func CompensatedCostGT(v float64) predicate.UsageLog {
+	return predicate.UsageLog(sql.FieldGT(FieldCompensatedCost, v))
+}
+
+// CompensatedCostGTE applies the GTE predicate on the "compensated_cost" field.
+func CompensatedCostGTE(v float64) predicate.UsageLog {
+	return predicate.UsageLog(sql.FieldGTE(FieldCompensatedCost, v))
+}
+
+// CompensatedCostLT applies the LT predicate on the "compensated_cost" field.
+func CompensatedCostLT(v float64) predicate.UsageLog {
+	return predicate.UsageLog(sql.FieldLT(FieldCompensatedCost, v))
+}
+
+// CompensatedCostLTE applies the LTE predicate on the "compensated_cost" field.
+func CompensatedCostLTE(v float64) predicate.UsageLog {
+	return predicate.UsageLog(sql.FieldLTE(FieldCompensatedCost, v))
 }
 
 // RateMultiplierEQ applies the EQ predicate on the "rate_multiplier" field.

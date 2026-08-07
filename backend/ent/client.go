@@ -30,6 +30,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/channelmonitorhistory"
 	"github.com/Wei-Shaw/sub2api/ent/channelmonitorrequesttemplate"
 	"github.com/Wei-Shaw/sub2api/ent/compositemodelroute"
+	"github.com/Wei-Shaw/sub2api/ent/emptyresponseclaim"
 	"github.com/Wei-Shaw/sub2api/ent/errorpassthroughrule"
 	"github.com/Wei-Shaw/sub2api/ent/group"
 	"github.com/Wei-Shaw/sub2api/ent/idempotencyrecord"
@@ -49,6 +50,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/tlsfingerprintprofile"
 	"github.com/Wei-Shaw/sub2api/ent/usagecleanuptask"
 	"github.com/Wei-Shaw/sub2api/ent/usagelog"
+	"github.com/Wei-Shaw/sub2api/ent/usageresponseoutcome"
 	"github.com/Wei-Shaw/sub2api/ent/user"
 	"github.com/Wei-Shaw/sub2api/ent/userallowedgroup"
 	"github.com/Wei-Shaw/sub2api/ent/userattributedefinition"
@@ -100,6 +102,8 @@ type Client struct {
 	ChannelMonitorRequestTemplate *ChannelMonitorRequestTemplateClient
 	// CompositeModelRoute is the client for interacting with the CompositeModelRoute builders.
 	CompositeModelRoute *CompositeModelRouteClient
+	// EmptyResponseClaim is the client for interacting with the EmptyResponseClaim builders.
+	EmptyResponseClaim *EmptyResponseClaimClient
 	// ErrorPassthroughRule is the client for interacting with the ErrorPassthroughRule builders.
 	ErrorPassthroughRule *ErrorPassthroughRuleClient
 	// Group is the client for interacting with the Group builders.
@@ -138,6 +142,8 @@ type Client struct {
 	UsageCleanupTask *UsageCleanupTaskClient
 	// UsageLog is the client for interacting with the UsageLog builders.
 	UsageLog *UsageLogClient
+	// UsageResponseOutcome is the client for interacting with the UsageResponseOutcome builders.
+	UsageResponseOutcome *UsageResponseOutcomeClient
 	// User is the client for interacting with the User builders.
 	User *UserClient
 	// UserAllowedGroup is the client for interacting with the UserAllowedGroup builders.
@@ -188,6 +194,7 @@ func (c *Client) init() {
 	c.ChannelMonitorHistory = NewChannelMonitorHistoryClient(c.config)
 	c.ChannelMonitorRequestTemplate = NewChannelMonitorRequestTemplateClient(c.config)
 	c.CompositeModelRoute = NewCompositeModelRouteClient(c.config)
+	c.EmptyResponseClaim = NewEmptyResponseClaimClient(c.config)
 	c.ErrorPassthroughRule = NewErrorPassthroughRuleClient(c.config)
 	c.Group = NewGroupClient(c.config)
 	c.IdempotencyRecord = NewIdempotencyRecordClient(c.config)
@@ -207,6 +214,7 @@ func (c *Client) init() {
 	c.TLSFingerprintProfile = NewTLSFingerprintProfileClient(c.config)
 	c.UsageCleanupTask = NewUsageCleanupTaskClient(c.config)
 	c.UsageLog = NewUsageLogClient(c.config)
+	c.UsageResponseOutcome = NewUsageResponseOutcomeClient(c.config)
 	c.User = NewUserClient(c.config)
 	c.UserAllowedGroup = NewUserAllowedGroupClient(c.config)
 	c.UserAttributeDefinition = NewUserAttributeDefinitionClient(c.config)
@@ -326,6 +334,7 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 		ChannelMonitorHistory:         NewChannelMonitorHistoryClient(cfg),
 		ChannelMonitorRequestTemplate: NewChannelMonitorRequestTemplateClient(cfg),
 		CompositeModelRoute:           NewCompositeModelRouteClient(cfg),
+		EmptyResponseClaim:            NewEmptyResponseClaimClient(cfg),
 		ErrorPassthroughRule:          NewErrorPassthroughRuleClient(cfg),
 		Group:                         NewGroupClient(cfg),
 		IdempotencyRecord:             NewIdempotencyRecordClient(cfg),
@@ -345,6 +354,7 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 		TLSFingerprintProfile:         NewTLSFingerprintProfileClient(cfg),
 		UsageCleanupTask:              NewUsageCleanupTaskClient(cfg),
 		UsageLog:                      NewUsageLogClient(cfg),
+		UsageResponseOutcome:          NewUsageResponseOutcomeClient(cfg),
 		User:                          NewUserClient(cfg),
 		UserAllowedGroup:              NewUserAllowedGroupClient(cfg),
 		UserAttributeDefinition:       NewUserAttributeDefinitionClient(cfg),
@@ -391,6 +401,7 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 		ChannelMonitorHistory:         NewChannelMonitorHistoryClient(cfg),
 		ChannelMonitorRequestTemplate: NewChannelMonitorRequestTemplateClient(cfg),
 		CompositeModelRoute:           NewCompositeModelRouteClient(cfg),
+		EmptyResponseClaim:            NewEmptyResponseClaimClient(cfg),
 		ErrorPassthroughRule:          NewErrorPassthroughRuleClient(cfg),
 		Group:                         NewGroupClient(cfg),
 		IdempotencyRecord:             NewIdempotencyRecordClient(cfg),
@@ -410,6 +421,7 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 		TLSFingerprintProfile:         NewTLSFingerprintProfileClient(cfg),
 		UsageCleanupTask:              NewUsageCleanupTaskClient(cfg),
 		UsageLog:                      NewUsageLogClient(cfg),
+		UsageResponseOutcome:          NewUsageResponseOutcomeClient(cfg),
 		User:                          NewUserClient(cfg),
 		UserAllowedGroup:              NewUserAllowedGroupClient(cfg),
 		UserAttributeDefinition:       NewUserAttributeDefinitionClient(cfg),
@@ -455,15 +467,15 @@ func (c *Client) Use(hooks ...Hook) {
 		c.AuthIdentity, c.AuthIdentityChannel, c.BatchImageEvent, c.BatchImageItem,
 		c.BatchImageJob, c.ChannelMonitor, c.ChannelMonitorDailyRollup,
 		c.ChannelMonitorHistory, c.ChannelMonitorRequestTemplate,
-		c.CompositeModelRoute, c.ErrorPassthroughRule, c.Group, c.IdempotencyRecord,
-		c.IdentityAdoptionDecision, c.PaymentAuditLog, c.PaymentOrder,
-		c.PaymentProviderInstance, c.PendingAuthSession, c.PromoCode, c.PromoCodeUsage,
-		c.Proxy, c.RedeemBatchClaim, c.RedeemCode, c.SecuritySecret, c.Setting,
-		c.SubscriptionPlan, c.TLSFingerprintProfile, c.UsageCleanupTask, c.UsageLog,
-		c.User, c.UserAllowedGroup, c.UserAttributeDefinition, c.UserAttributeValue,
-		c.UserCheckin, c.UserCheckinBlacklist, c.UserCustomGroup,
-		c.UserCustomGroupModel, c.UserImage, c.UserImageTask, c.UserPlatformQuota,
-		c.UserSubscription,
+		c.CompositeModelRoute, c.EmptyResponseClaim, c.ErrorPassthroughRule, c.Group,
+		c.IdempotencyRecord, c.IdentityAdoptionDecision, c.PaymentAuditLog,
+		c.PaymentOrder, c.PaymentProviderInstance, c.PendingAuthSession, c.PromoCode,
+		c.PromoCodeUsage, c.Proxy, c.RedeemBatchClaim, c.RedeemCode, c.SecuritySecret,
+		c.Setting, c.SubscriptionPlan, c.TLSFingerprintProfile, c.UsageCleanupTask,
+		c.UsageLog, c.UsageResponseOutcome, c.User, c.UserAllowedGroup,
+		c.UserAttributeDefinition, c.UserAttributeValue, c.UserCheckin,
+		c.UserCheckinBlacklist, c.UserCustomGroup, c.UserCustomGroupModel, c.UserImage,
+		c.UserImageTask, c.UserPlatformQuota, c.UserSubscription,
 	} {
 		n.Use(hooks...)
 	}
@@ -477,15 +489,15 @@ func (c *Client) Intercept(interceptors ...Interceptor) {
 		c.AuthIdentity, c.AuthIdentityChannel, c.BatchImageEvent, c.BatchImageItem,
 		c.BatchImageJob, c.ChannelMonitor, c.ChannelMonitorDailyRollup,
 		c.ChannelMonitorHistory, c.ChannelMonitorRequestTemplate,
-		c.CompositeModelRoute, c.ErrorPassthroughRule, c.Group, c.IdempotencyRecord,
-		c.IdentityAdoptionDecision, c.PaymentAuditLog, c.PaymentOrder,
-		c.PaymentProviderInstance, c.PendingAuthSession, c.PromoCode, c.PromoCodeUsage,
-		c.Proxy, c.RedeemBatchClaim, c.RedeemCode, c.SecuritySecret, c.Setting,
-		c.SubscriptionPlan, c.TLSFingerprintProfile, c.UsageCleanupTask, c.UsageLog,
-		c.User, c.UserAllowedGroup, c.UserAttributeDefinition, c.UserAttributeValue,
-		c.UserCheckin, c.UserCheckinBlacklist, c.UserCustomGroup,
-		c.UserCustomGroupModel, c.UserImage, c.UserImageTask, c.UserPlatformQuota,
-		c.UserSubscription,
+		c.CompositeModelRoute, c.EmptyResponseClaim, c.ErrorPassthroughRule, c.Group,
+		c.IdempotencyRecord, c.IdentityAdoptionDecision, c.PaymentAuditLog,
+		c.PaymentOrder, c.PaymentProviderInstance, c.PendingAuthSession, c.PromoCode,
+		c.PromoCodeUsage, c.Proxy, c.RedeemBatchClaim, c.RedeemCode, c.SecuritySecret,
+		c.Setting, c.SubscriptionPlan, c.TLSFingerprintProfile, c.UsageCleanupTask,
+		c.UsageLog, c.UsageResponseOutcome, c.User, c.UserAllowedGroup,
+		c.UserAttributeDefinition, c.UserAttributeValue, c.UserCheckin,
+		c.UserCheckinBlacklist, c.UserCustomGroup, c.UserCustomGroupModel, c.UserImage,
+		c.UserImageTask, c.UserPlatformQuota, c.UserSubscription,
 	} {
 		n.Intercept(interceptors...)
 	}
@@ -524,6 +536,8 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.ChannelMonitorRequestTemplate.mutate(ctx, m)
 	case *CompositeModelRouteMutation:
 		return c.CompositeModelRoute.mutate(ctx, m)
+	case *EmptyResponseClaimMutation:
+		return c.EmptyResponseClaim.mutate(ctx, m)
 	case *ErrorPassthroughRuleMutation:
 		return c.ErrorPassthroughRule.mutate(ctx, m)
 	case *GroupMutation:
@@ -562,6 +576,8 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.UsageCleanupTask.mutate(ctx, m)
 	case *UsageLogMutation:
 		return c.UsageLog.mutate(ctx, m)
+	case *UsageResponseOutcomeMutation:
+		return c.UsageResponseOutcome.mutate(ctx, m)
 	case *UserMutation:
 		return c.User.mutate(ctx, m)
 	case *UserAllowedGroupMutation:
@@ -2956,6 +2972,139 @@ func (c *CompositeModelRouteClient) mutate(ctx context.Context, m *CompositeMode
 		return (&CompositeModelRouteDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
 	default:
 		return nil, fmt.Errorf("ent: unknown CompositeModelRoute mutation op: %q", m.Op())
+	}
+}
+
+// EmptyResponseClaimClient is a client for the EmptyResponseClaim schema.
+type EmptyResponseClaimClient struct {
+	config
+}
+
+// NewEmptyResponseClaimClient returns a client for the EmptyResponseClaim from the given config.
+func NewEmptyResponseClaimClient(c config) *EmptyResponseClaimClient {
+	return &EmptyResponseClaimClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `emptyresponseclaim.Hooks(f(g(h())))`.
+func (c *EmptyResponseClaimClient) Use(hooks ...Hook) {
+	c.hooks.EmptyResponseClaim = append(c.hooks.EmptyResponseClaim, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `emptyresponseclaim.Intercept(f(g(h())))`.
+func (c *EmptyResponseClaimClient) Intercept(interceptors ...Interceptor) {
+	c.inters.EmptyResponseClaim = append(c.inters.EmptyResponseClaim, interceptors...)
+}
+
+// Create returns a builder for creating a EmptyResponseClaim entity.
+func (c *EmptyResponseClaimClient) Create() *EmptyResponseClaimCreate {
+	mutation := newEmptyResponseClaimMutation(c.config, OpCreate)
+	return &EmptyResponseClaimCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of EmptyResponseClaim entities.
+func (c *EmptyResponseClaimClient) CreateBulk(builders ...*EmptyResponseClaimCreate) *EmptyResponseClaimCreateBulk {
+	return &EmptyResponseClaimCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *EmptyResponseClaimClient) MapCreateBulk(slice any, setFunc func(*EmptyResponseClaimCreate, int)) *EmptyResponseClaimCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &EmptyResponseClaimCreateBulk{err: fmt.Errorf("calling to EmptyResponseClaimClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*EmptyResponseClaimCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &EmptyResponseClaimCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for EmptyResponseClaim.
+func (c *EmptyResponseClaimClient) Update() *EmptyResponseClaimUpdate {
+	mutation := newEmptyResponseClaimMutation(c.config, OpUpdate)
+	return &EmptyResponseClaimUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *EmptyResponseClaimClient) UpdateOne(_m *EmptyResponseClaim) *EmptyResponseClaimUpdateOne {
+	mutation := newEmptyResponseClaimMutation(c.config, OpUpdateOne, withEmptyResponseClaim(_m))
+	return &EmptyResponseClaimUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *EmptyResponseClaimClient) UpdateOneID(id int64) *EmptyResponseClaimUpdateOne {
+	mutation := newEmptyResponseClaimMutation(c.config, OpUpdateOne, withEmptyResponseClaimID(id))
+	return &EmptyResponseClaimUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for EmptyResponseClaim.
+func (c *EmptyResponseClaimClient) Delete() *EmptyResponseClaimDelete {
+	mutation := newEmptyResponseClaimMutation(c.config, OpDelete)
+	return &EmptyResponseClaimDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *EmptyResponseClaimClient) DeleteOne(_m *EmptyResponseClaim) *EmptyResponseClaimDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *EmptyResponseClaimClient) DeleteOneID(id int64) *EmptyResponseClaimDeleteOne {
+	builder := c.Delete().Where(emptyresponseclaim.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &EmptyResponseClaimDeleteOne{builder}
+}
+
+// Query returns a query builder for EmptyResponseClaim.
+func (c *EmptyResponseClaimClient) Query() *EmptyResponseClaimQuery {
+	return &EmptyResponseClaimQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeEmptyResponseClaim},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a EmptyResponseClaim entity by its id.
+func (c *EmptyResponseClaimClient) Get(ctx context.Context, id int64) (*EmptyResponseClaim, error) {
+	return c.Query().Where(emptyresponseclaim.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *EmptyResponseClaimClient) GetX(ctx context.Context, id int64) *EmptyResponseClaim {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *EmptyResponseClaimClient) Hooks() []Hook {
+	return c.hooks.EmptyResponseClaim
+}
+
+// Interceptors returns the client interceptors.
+func (c *EmptyResponseClaimClient) Interceptors() []Interceptor {
+	return c.inters.EmptyResponseClaim
+}
+
+func (c *EmptyResponseClaimClient) mutate(ctx context.Context, m *EmptyResponseClaimMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&EmptyResponseClaimCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&EmptyResponseClaimUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&EmptyResponseClaimUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&EmptyResponseClaimDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown EmptyResponseClaim mutation op: %q", m.Op())
 	}
 }
 
@@ -5922,6 +6071,139 @@ func (c *UsageLogClient) mutate(ctx context.Context, m *UsageLogMutation) (Value
 	}
 }
 
+// UsageResponseOutcomeClient is a client for the UsageResponseOutcome schema.
+type UsageResponseOutcomeClient struct {
+	config
+}
+
+// NewUsageResponseOutcomeClient returns a client for the UsageResponseOutcome from the given config.
+func NewUsageResponseOutcomeClient(c config) *UsageResponseOutcomeClient {
+	return &UsageResponseOutcomeClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `usageresponseoutcome.Hooks(f(g(h())))`.
+func (c *UsageResponseOutcomeClient) Use(hooks ...Hook) {
+	c.hooks.UsageResponseOutcome = append(c.hooks.UsageResponseOutcome, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `usageresponseoutcome.Intercept(f(g(h())))`.
+func (c *UsageResponseOutcomeClient) Intercept(interceptors ...Interceptor) {
+	c.inters.UsageResponseOutcome = append(c.inters.UsageResponseOutcome, interceptors...)
+}
+
+// Create returns a builder for creating a UsageResponseOutcome entity.
+func (c *UsageResponseOutcomeClient) Create() *UsageResponseOutcomeCreate {
+	mutation := newUsageResponseOutcomeMutation(c.config, OpCreate)
+	return &UsageResponseOutcomeCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of UsageResponseOutcome entities.
+func (c *UsageResponseOutcomeClient) CreateBulk(builders ...*UsageResponseOutcomeCreate) *UsageResponseOutcomeCreateBulk {
+	return &UsageResponseOutcomeCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *UsageResponseOutcomeClient) MapCreateBulk(slice any, setFunc func(*UsageResponseOutcomeCreate, int)) *UsageResponseOutcomeCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &UsageResponseOutcomeCreateBulk{err: fmt.Errorf("calling to UsageResponseOutcomeClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*UsageResponseOutcomeCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &UsageResponseOutcomeCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for UsageResponseOutcome.
+func (c *UsageResponseOutcomeClient) Update() *UsageResponseOutcomeUpdate {
+	mutation := newUsageResponseOutcomeMutation(c.config, OpUpdate)
+	return &UsageResponseOutcomeUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *UsageResponseOutcomeClient) UpdateOne(_m *UsageResponseOutcome) *UsageResponseOutcomeUpdateOne {
+	mutation := newUsageResponseOutcomeMutation(c.config, OpUpdateOne, withUsageResponseOutcome(_m))
+	return &UsageResponseOutcomeUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *UsageResponseOutcomeClient) UpdateOneID(id int64) *UsageResponseOutcomeUpdateOne {
+	mutation := newUsageResponseOutcomeMutation(c.config, OpUpdateOne, withUsageResponseOutcomeID(id))
+	return &UsageResponseOutcomeUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for UsageResponseOutcome.
+func (c *UsageResponseOutcomeClient) Delete() *UsageResponseOutcomeDelete {
+	mutation := newUsageResponseOutcomeMutation(c.config, OpDelete)
+	return &UsageResponseOutcomeDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *UsageResponseOutcomeClient) DeleteOne(_m *UsageResponseOutcome) *UsageResponseOutcomeDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *UsageResponseOutcomeClient) DeleteOneID(id int64) *UsageResponseOutcomeDeleteOne {
+	builder := c.Delete().Where(usageresponseoutcome.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &UsageResponseOutcomeDeleteOne{builder}
+}
+
+// Query returns a query builder for UsageResponseOutcome.
+func (c *UsageResponseOutcomeClient) Query() *UsageResponseOutcomeQuery {
+	return &UsageResponseOutcomeQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeUsageResponseOutcome},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a UsageResponseOutcome entity by its id.
+func (c *UsageResponseOutcomeClient) Get(ctx context.Context, id int64) (*UsageResponseOutcome, error) {
+	return c.Query().Where(usageresponseoutcome.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *UsageResponseOutcomeClient) GetX(ctx context.Context, id int64) *UsageResponseOutcome {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *UsageResponseOutcomeClient) Hooks() []Hook {
+	return c.hooks.UsageResponseOutcome
+}
+
+// Interceptors returns the client interceptors.
+func (c *UsageResponseOutcomeClient) Interceptors() []Interceptor {
+	return c.inters.UsageResponseOutcome
+}
+
+func (c *UsageResponseOutcomeClient) mutate(ctx context.Context, m *UsageResponseOutcomeMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&UsageResponseOutcomeCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&UsageResponseOutcomeUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&UsageResponseOutcomeUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&UsageResponseOutcomeDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown UsageResponseOutcome mutation op: %q", m.Op())
+	}
+}
+
 // UserClient is a client for the User schema.
 type UserClient struct {
 	config
@@ -8141,27 +8423,29 @@ type (
 		APIKey, Account, AccountGroup, Announcement, AnnouncementRead, AuthIdentity,
 		AuthIdentityChannel, BatchImageEvent, BatchImageItem, BatchImageJob,
 		ChannelMonitor, ChannelMonitorDailyRollup, ChannelMonitorHistory,
-		ChannelMonitorRequestTemplate, CompositeModelRoute, ErrorPassthroughRule,
-		Group, IdempotencyRecord, IdentityAdoptionDecision, PaymentAuditLog,
-		PaymentOrder, PaymentProviderInstance, PendingAuthSession, PromoCode,
-		PromoCodeUsage, Proxy, RedeemBatchClaim, RedeemCode, SecuritySecret, Setting,
-		SubscriptionPlan, TLSFingerprintProfile, UsageCleanupTask, UsageLog, User,
-		UserAllowedGroup, UserAttributeDefinition, UserAttributeValue, UserCheckin,
-		UserCheckinBlacklist, UserCustomGroup, UserCustomGroupModel, UserImage,
-		UserImageTask, UserPlatformQuota, UserSubscription []ent.Hook
+		ChannelMonitorRequestTemplate, CompositeModelRoute, EmptyResponseClaim,
+		ErrorPassthroughRule, Group, IdempotencyRecord, IdentityAdoptionDecision,
+		PaymentAuditLog, PaymentOrder, PaymentProviderInstance, PendingAuthSession,
+		PromoCode, PromoCodeUsage, Proxy, RedeemBatchClaim, RedeemCode, SecuritySecret,
+		Setting, SubscriptionPlan, TLSFingerprintProfile, UsageCleanupTask, UsageLog,
+		UsageResponseOutcome, User, UserAllowedGroup, UserAttributeDefinition,
+		UserAttributeValue, UserCheckin, UserCheckinBlacklist, UserCustomGroup,
+		UserCustomGroupModel, UserImage, UserImageTask, UserPlatformQuota,
+		UserSubscription []ent.Hook
 	}
 	inters struct {
 		APIKey, Account, AccountGroup, Announcement, AnnouncementRead, AuthIdentity,
 		AuthIdentityChannel, BatchImageEvent, BatchImageItem, BatchImageJob,
 		ChannelMonitor, ChannelMonitorDailyRollup, ChannelMonitorHistory,
-		ChannelMonitorRequestTemplate, CompositeModelRoute, ErrorPassthroughRule,
-		Group, IdempotencyRecord, IdentityAdoptionDecision, PaymentAuditLog,
-		PaymentOrder, PaymentProviderInstance, PendingAuthSession, PromoCode,
-		PromoCodeUsage, Proxy, RedeemBatchClaim, RedeemCode, SecuritySecret, Setting,
-		SubscriptionPlan, TLSFingerprintProfile, UsageCleanupTask, UsageLog, User,
-		UserAllowedGroup, UserAttributeDefinition, UserAttributeValue, UserCheckin,
-		UserCheckinBlacklist, UserCustomGroup, UserCustomGroupModel, UserImage,
-		UserImageTask, UserPlatformQuota, UserSubscription []ent.Interceptor
+		ChannelMonitorRequestTemplate, CompositeModelRoute, EmptyResponseClaim,
+		ErrorPassthroughRule, Group, IdempotencyRecord, IdentityAdoptionDecision,
+		PaymentAuditLog, PaymentOrder, PaymentProviderInstance, PendingAuthSession,
+		PromoCode, PromoCodeUsage, Proxy, RedeemBatchClaim, RedeemCode, SecuritySecret,
+		Setting, SubscriptionPlan, TLSFingerprintProfile, UsageCleanupTask, UsageLog,
+		UsageResponseOutcome, User, UserAllowedGroup, UserAttributeDefinition,
+		UserAttributeValue, UserCheckin, UserCheckinBlacklist, UserCustomGroup,
+		UserCustomGroupModel, UserImage, UserImageTask, UserPlatformQuota,
+		UserSubscription []ent.Interceptor
 	}
 )
 
