@@ -71,6 +71,10 @@ type usageLogBestEffortWriter interface {
 	CreateBestEffort(ctx context.Context, log *UsageLog) error
 }
 
+type usageResponseOutcomeWriter interface {
+	UpsertResponseOutcome(ctx context.Context, log *UsageLog) error
+}
+
 // postUsageBillingParams 统一扣费所需的参数
 type postUsageBillingParams struct {
 	Cost                  *CostBreakdown
@@ -532,7 +536,11 @@ func writeUsageLogBestEffort(ctx context.Context, repo UsageLogRepository, usage
 	defer cancel()
 
 	if writer, ok := repo.(usageLogBestEffortWriter); ok {
-		if err := writer.CreateBestEffort(usageCtx, usageLog); err != nil {
+		err := writer.CreateBestEffort(usageCtx, usageLog)
+		if err == nil {
+			err = writeResponseOutcome(usageCtx, repo, usageLog)
+		}
+		if err != nil {
 			logger.LegacyPrintf(logKey, "Create usage log failed: %v", err)
 			// 计费已在此前完成，日志必须落库：dropped（批处理队列超时）同样走同步兜底，
 			// 否则会出现“已扣费但无 usage_log”的对账缺口（issue #3656）。
@@ -544,16 +552,35 @@ func writeUsageLogBestEffort(ctx context.Context, repo UsageLogRepository, usage
 				fallbackCtx, fallbackCancel = detachedBillingContext(context.Background())
 				defer fallbackCancel()
 			}
-			if _, syncErr := repo.Create(fallbackCtx, usageLog); syncErr != nil {
+			_, syncErr := repo.Create(fallbackCtx, usageLog)
+			if syncErr == nil {
+				syncErr = writeResponseOutcome(fallbackCtx, repo, usageLog)
+			}
+			if syncErr != nil {
 				logger.LegacyPrintf(logKey, "Create usage log sync fallback failed: %v", syncErr)
 			}
 		}
 		return
 	}
 
-	if _, err := repo.Create(usageCtx, usageLog); err != nil {
+	_, err := repo.Create(usageCtx, usageLog)
+	if err == nil {
+		err = writeResponseOutcome(usageCtx, repo, usageLog)
+	}
+	if err != nil {
 		logger.LegacyPrintf(logKey, "Create usage log failed: %v", err)
 	}
+}
+
+func writeResponseOutcome(ctx context.Context, repo UsageLogRepository, usageLog *UsageLog) error {
+	if usageLog == nil || usageLog.Outcome == nil {
+		return nil
+	}
+	writer, ok := repo.(usageResponseOutcomeWriter)
+	if !ok {
+		return nil
+	}
+	return writer.UpsertResponseOutcome(ctx, usageLog)
 }
 
 // recordUsageOpts 内部选项，参数化普通计费与长上下文计费的差异点。
@@ -1057,6 +1084,7 @@ func (s *GatewayService) buildRecordUsageLog(
 		UserAgent:             optionalTrimmedStringPtr(input.UserAgent),
 		IPAddress:             optionalTrimmedStringPtr(input.IPAddress),
 		SessionID:             optionalTrimmedStringPtr(input.SessionID),
+		Outcome:               result.Outcome,
 		GroupID:               apiKey.GroupID,
 		CustomGroupID:         apiKey.CustomGroupID,
 		SubscriptionID:        optionalSubscriptionID(subscription),

@@ -87,6 +87,35 @@ func (s *UsageLogRepoSuite) TestCreate() {
 	s.Require().NotZero(log.ID)
 }
 
+func (s *UsageLogRepoSuite) TestUpsertResponseOutcomeIsIdempotentAndLinked() {
+	user := mustCreateUser(s.T(), s.client, &service.User{Email: "outcome-create@test.com"})
+	apiKey := mustCreateApiKey(s.T(), s.client, &service.APIKey{UserID: user.ID, Key: "sk-outcome-create", Name: "k"})
+	account := mustCreateAccount(s.T(), s.client, &service.Account{Name: "acc-outcome-create"})
+	usage := s.createUsageLog(user, apiKey, account, 10, 20, 0.5, time.Now())
+	usage.Outcome = &service.ResponseOutcome{
+		HTTPStatus:        200,
+		UpstreamStatus:    200,
+		StreamCompleted:   true,
+		DisconnectSource:  service.DisconnectSourceNone,
+		UpstreamErrorKind: service.UpstreamErrorNone,
+		CollectorVersion:  service.ResponseOutcomeCollectorVersion,
+	}
+
+	s.Require().NoError(s.repo.UpsertResponseOutcome(s.ctx, usage))
+	usage.Outcome.HasText = true
+	s.Require().NoError(s.repo.UpsertResponseOutcome(s.ctx, usage))
+
+	var count int
+	var usageLogID int64
+	var hasText bool
+	s.Require().NoError(scanSingleRow(s.ctx, s.tx,
+		"SELECT COUNT(*), MAX(usage_log_id), BOOL_OR(has_text) FROM usage_response_outcomes WHERE request_id = $1 AND api_key_id = $2",
+		[]any{usage.RequestID, usage.APIKeyID}, &count, &usageLogID, &hasText))
+	s.Require().Equal(1, count)
+	s.Require().Equal(usage.ID, usageLogID)
+	s.Require().True(hasText)
+}
+
 func TestUsageLogRepositoryCreate_BatchPathConcurrent(t *testing.T) {
 	ctx := context.Background()
 	client := testEntClient(t)

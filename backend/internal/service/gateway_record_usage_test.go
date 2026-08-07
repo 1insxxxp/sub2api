@@ -66,6 +66,32 @@ type openAIRecordUsageBestEffortLogRepoStub struct {
 	lastCtxErr      error
 }
 
+type usageOutcomeWriterRepoStub struct {
+	UsageLogRepository
+
+	steps        []string
+	outcomeCalls int
+}
+
+func (s *usageOutcomeWriterRepoStub) CreateBestEffort(_ context.Context, _ *UsageLog) error {
+	s.steps = append(s.steps, "usage_best_effort")
+	return nil
+}
+
+func (s *usageOutcomeWriterRepoStub) Create(_ context.Context, _ *UsageLog) (bool, error) {
+	s.steps = append(s.steps, "usage_sync")
+	return false, nil
+}
+
+func (s *usageOutcomeWriterRepoStub) UpsertResponseOutcome(_ context.Context, _ *UsageLog) error {
+	s.steps = append(s.steps, "outcome")
+	s.outcomeCalls++
+	if s.outcomeCalls == 1 {
+		return errors.New("temporary outcome write failure")
+	}
+	return nil
+}
+
 func (s *openAIRecordUsageBestEffortLogRepoStub) CreateBestEffort(ctx context.Context, log *UsageLog) error {
 	s.bestEffortCalls++
 	s.lastLog = log
@@ -80,7 +106,18 @@ func (s *openAIRecordUsageBestEffortLogRepoStub) Create(ctx context.Context, log
 	return false, s.createErr
 }
 
-func TestGatewayServiceRecordUsage_BillingUsesDetachedContext(t *testing.T) {
+func TestWriteUsageLogBestEffortPersistsUsageBeforeOutcomeAndRetriesEvidence(t *testing.T) {
+	repo := &usageOutcomeWriterRepoStub{}
+	writeUsageLogBestEffort(context.Background(), repo, &UsageLog{
+		RequestID: "outcome-retry",
+		APIKeyID:  2,
+		Outcome:   &ResponseOutcome{StreamCompleted: true},
+	}, "test")
+
+	require.Equal(t, []string{"usage_best_effort", "outcome", "usage_sync", "outcome"}, repo.steps)
+}
+
+func TestGatewayServiceRecordUsage_BillingUsesDetachedContextAndCarriesOutcome(t *testing.T) {
 	usageRepo := &openAIRecordUsageLogRepoStub{inserted: false, err: context.DeadlineExceeded}
 	userRepo := &openAIRecordUsageUserRepoStub{}
 	subRepo := &openAIRecordUsageSubRepoStub{}
@@ -99,6 +136,7 @@ func TestGatewayServiceRecordUsage_BillingUsesDetachedContext(t *testing.T) {
 			},
 			Model:    "claude-sonnet-4",
 			Duration: time.Second,
+			Outcome:  &ResponseOutcome{HasText: true, StreamCompleted: true},
 		},
 		APIKey: &APIKey{
 			ID:    501,
@@ -111,6 +149,9 @@ func TestGatewayServiceRecordUsage_BillingUsesDetachedContext(t *testing.T) {
 
 	require.NoError(t, err)
 	require.Equal(t, 1, usageRepo.calls)
+	require.NotNil(t, usageRepo.lastLog.Outcome)
+	require.True(t, usageRepo.lastLog.Outcome.HasText)
+	require.True(t, usageRepo.lastLog.Outcome.StreamCompleted)
 	require.Equal(t, 1, userRepo.deductCalls)
 	require.NoError(t, userRepo.lastCtxErr)
 	require.Equal(t, 1, quotaSvc.quotaCalls)
@@ -579,6 +620,7 @@ func TestGatewayServiceRecordUsage_DroppedUsageLogFallsBackToSyncCreate(t *testi
 			},
 			Model:    "claude-sonnet-4",
 			Duration: time.Second,
+			Outcome:  &ResponseOutcome{StreamCompleted: true},
 		},
 		APIKey:  &APIKey{ID: 508},
 		User:    &User{ID: 608},
@@ -588,6 +630,7 @@ func TestGatewayServiceRecordUsage_DroppedUsageLogFallsBackToSyncCreate(t *testi
 	require.NoError(t, err)
 	require.Equal(t, 1, usageRepo.bestEffortCalls)
 	require.Equal(t, 1, usageRepo.createCalls)
+	require.NotNil(t, usageRepo.lastLog.Outcome)
 	// 兜底调用使用的 ctx 必须仍然存活，不能带着已死的 ctx 走过场。
 	require.NoError(t, usageRepo.lastCtxErr)
 }
