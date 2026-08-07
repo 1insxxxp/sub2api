@@ -6,8 +6,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
+	"github.com/Wei-Shaw/sub2api/internal/pkg/pagination"
 	"github.com/Wei-Shaw/sub2api/internal/service"
 )
 
@@ -15,7 +17,7 @@ type emptyResponseClaimRepository struct {
 	sql sqlExecutor
 }
 
-func NewEmptyResponseClaimRepository(sqlDB *sql.DB) service.EmptyResponseClaimRepository {
+func NewEmptyResponseClaimRepository(sqlDB *sql.DB) *emptyResponseClaimRepository {
 	return newEmptyResponseClaimRepositoryWithSQL(sqlDB)
 }
 
@@ -158,16 +160,18 @@ const emptyResponseClaimSelectColumns = `
 	id, usage_log_id, outcome_id, user_id, api_key_id, account_id, group_id, subscription_id,
 	status, reason_code, user_reason, original_actual_cost::float8, balance_refund::float8,
 	subscription_refund::float8, api_key_quota_refund::float8, evidence, rule_version,
-	created_at, updated_at`
+	admin_note, reviewed_by, reviewed_at, compensated_at, created_at, updated_at`
 
 func (r *emptyResponseClaimRepository) scanClaim(ctx context.Context, query string, args []any) (*service.EmptyResponseClaim, error) {
 	claim := &service.EmptyResponseClaim{}
-	var outcomeID, groupID, subscriptionID sql.NullInt64
+	var outcomeID, groupID, subscriptionID, reviewedBy sql.NullInt64
+	var reviewedAt, compensatedAt sql.NullTime
 	var evidence []byte
 	err := scanSingleRow(ctx, r.sql, query, args,
 		&claim.ID, &claim.UsageLogID, &outcomeID, &claim.UserID, &claim.APIKeyID, &claim.AccountID, &groupID, &subscriptionID,
 		&claim.Status, &claim.ReasonCode, &claim.UserReason, &claim.OriginalActualCost, &claim.BalanceRefund,
 		&claim.SubscriptionRefund, &claim.APIKeyQuotaRefund, &evidence, &claim.RuleVersion,
+		&claim.AdminNote, &reviewedBy, &reviewedAt, &compensatedAt,
 		&claim.CreatedAt, &claim.UpdatedAt,
 	)
 	if err != nil {
@@ -182,9 +186,161 @@ func (r *emptyResponseClaimRepository) scanClaim(ctx context.Context, query stri
 	if subscriptionID.Valid {
 		claim.SubscriptionID = &subscriptionID.Int64
 	}
+	if reviewedBy.Valid {
+		claim.ReviewedBy = &reviewedBy.Int64
+	}
+	if reviewedAt.Valid {
+		claim.ReviewedAt = &reviewedAt.Time
+	}
+	if compensatedAt.Valid {
+		claim.CompensatedAt = &compensatedAt.Time
+	}
 	if len(evidence) > 0 && string(evidence) != "null" {
 		if err := json.Unmarshal(evidence, &claim.Evidence); err != nil {
 			return nil, fmt.Errorf("decode empty response evidence: %w", err)
+		}
+	}
+	return claim, nil
+}
+
+func (r *emptyResponseClaimRepository) List(ctx context.Context, params pagination.PaginationParams, filters service.EmptyResponseClaimListFilters) ([]service.EmptyResponseClaim, *pagination.PaginationResult, error) {
+	where := []string{"1=1"}
+	args := make([]any, 0, 8)
+	add := func(condition string, value any) {
+		args = append(args, value)
+		where = append(where, fmt.Sprintf(condition, len(args)))
+	}
+	if status := strings.TrimSpace(filters.Status); status != "" {
+		add("erc.status = $%d", status)
+	}
+	if filters.UserID > 0 {
+		add("erc.user_id = $%d", filters.UserID)
+	}
+	if filters.GroupID > 0 {
+		add("erc.group_id = $%d", filters.GroupID)
+	}
+	if filters.AccountID > 0 {
+		add("erc.account_id = $%d", filters.AccountID)
+	}
+	if model := strings.TrimSpace(filters.Model); model != "" {
+		add("ul.model = $%d", model)
+	}
+	if filters.StartTime != nil {
+		add("erc.created_at >= $%d", *filters.StartTime)
+	}
+	if filters.EndTime != nil {
+		add("erc.created_at < $%d", *filters.EndTime)
+	}
+	whereSQL := strings.Join(where, " AND ")
+	countQuery := "SELECT COUNT(*) FROM empty_response_claims erc JOIN usage_logs ul ON ul.id = erc.usage_log_id WHERE " + whereSQL
+	var total int64
+	if err := scanSingleRow(ctx, r.sql, countQuery, args, &total); err != nil {
+		return nil, nil, fmt.Errorf("count empty response claims: %w", err)
+	}
+
+	limit, offset := params.Limit(), params.Offset()
+	queryArgs := append(append([]any{}, args...), limit, offset)
+	query := `
+		SELECT ` + prefixedEmptyResponseClaimSelectColumns("erc") + `,
+			ul.model, COALESCE(u.email, ''), COALESCE(a.name, ''), COALESCE(g.name, '')
+		FROM empty_response_claims erc
+		JOIN usage_logs ul ON ul.id = erc.usage_log_id
+		LEFT JOIN users u ON u.id = erc.user_id
+		LEFT JOIN accounts a ON a.id = erc.account_id
+		LEFT JOIN groups g ON g.id = erc.group_id
+		WHERE ` + whereSQL + fmt.Sprintf(" ORDER BY erc.created_at DESC LIMIT $%d OFFSET $%d", len(args)+1, len(args)+2)
+	rows, err := r.sql.QueryContext(ctx, query, queryArgs...)
+	if err != nil {
+		return nil, nil, fmt.Errorf("list empty response claims: %w", err)
+	}
+	defer rows.Close()
+	claims := make([]service.EmptyResponseClaim, 0, limit)
+	for rows.Next() {
+		claim, scanErr := scanEmptyResponseClaimRow(rows, true)
+		if scanErr != nil {
+			return nil, nil, fmt.Errorf("scan empty response claim: %w", scanErr)
+		}
+		claims = append(claims, *claim)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, nil, fmt.Errorf("iterate empty response claims: %w", err)
+	}
+	pages := int((total + int64(limit) - 1) / int64(limit))
+	if pages < 1 {
+		pages = 1
+	}
+	return claims, &pagination.PaginationResult{Total: total, Page: params.Page, PageSize: limit, Pages: pages}, nil
+}
+
+func (r *emptyResponseClaimRepository) Review(ctx context.Context, id int64, status string, reviewerID int64, note string) (*service.EmptyResponseClaim, error) {
+	allowed := "('manual_review','evaluating')"
+	if status == service.EmptyResponseClaimApproved {
+		allowed = "('manual_review','evaluating','approved')"
+	}
+	query := `UPDATE empty_response_claims SET status = $2, reviewed_by = $3, reviewed_at = NOW(), admin_note = $4, updated_at = NOW()
+		WHERE id = $1 AND status IN ` + allowed + ` RETURNING ` + emptyResponseClaimSelectColumns
+	claim, err := r.scanClaim(ctx, query, []any{id, status, reviewerID, note})
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, service.ErrEmptyResponseClaimNotFound
+	}
+	if err != nil {
+		return nil, fmt.Errorf("review empty response claim: %w", err)
+	}
+	return claim, nil
+}
+
+func prefixedEmptyResponseClaimSelectColumns(prefix string) string {
+	columns := strings.Split(strings.TrimSpace(emptyResponseClaimSelectColumns), ",")
+	for i := range columns {
+		column := strings.TrimSpace(columns[i])
+		if strings.Contains(column, "::") {
+			parts := strings.SplitN(column, "::", 2)
+			columns[i] = prefix + "." + parts[0] + "::" + parts[1]
+		} else {
+			columns[i] = prefix + "." + column
+		}
+	}
+	return strings.Join(columns, ", ")
+}
+
+func scanEmptyResponseClaimRow(row rowScanner, withIdentity bool) (*service.EmptyResponseClaim, error) {
+	claim := &service.EmptyResponseClaim{}
+	var outcomeID, groupID, subscriptionID, reviewedBy sql.NullInt64
+	var reviewedAt, compensatedAt sql.NullTime
+	var evidence []byte
+	dest := []any{
+		&claim.ID, &claim.UsageLogID, &outcomeID, &claim.UserID, &claim.APIKeyID, &claim.AccountID, &groupID, &subscriptionID,
+		&claim.Status, &claim.ReasonCode, &claim.UserReason, &claim.OriginalActualCost, &claim.BalanceRefund,
+		&claim.SubscriptionRefund, &claim.APIKeyQuotaRefund, &evidence, &claim.RuleVersion,
+		&claim.AdminNote, &reviewedBy, &reviewedAt, &compensatedAt, &claim.CreatedAt, &claim.UpdatedAt,
+	}
+	if withIdentity {
+		dest = append(dest, &claim.Model, &claim.UserEmail, &claim.AccountName, &claim.GroupName)
+	}
+	if err := row.Scan(dest...); err != nil {
+		return nil, err
+	}
+	if outcomeID.Valid {
+		claim.OutcomeID = &outcomeID.Int64
+	}
+	if groupID.Valid {
+		claim.GroupID = &groupID.Int64
+	}
+	if subscriptionID.Valid {
+		claim.SubscriptionID = &subscriptionID.Int64
+	}
+	if reviewedBy.Valid {
+		claim.ReviewedBy = &reviewedBy.Int64
+	}
+	if reviewedAt.Valid {
+		claim.ReviewedAt = &reviewedAt.Time
+	}
+	if compensatedAt.Valid {
+		claim.CompensatedAt = &compensatedAt.Time
+	}
+	if len(evidence) > 0 && string(evidence) != "null" {
+		if err := json.Unmarshal(evidence, &claim.Evidence); err != nil {
+			return nil, err
 		}
 	}
 	return claim, nil

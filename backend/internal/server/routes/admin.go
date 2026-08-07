@@ -684,6 +684,10 @@ func registerSubscriptionRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 func registerUsageRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 	usage := admin.Group("/usage")
 	{
+		usage.GET("/empty-response-claims", h.Admin.Usage.ListEmptyResponseClaims)
+		usage.POST("/empty-response-claims/batch", h.Admin.Usage.BatchEmptyResponseClaims)
+		usage.POST("/empty-response-claims/:id/approve", h.Admin.Usage.ApproveEmptyResponseClaim)
+		usage.POST("/empty-response-claims/:id/reject", h.Admin.Usage.RejectEmptyResponseClaim)
 		usage.GET("", h.Admin.Usage.List)
 		usage.GET("/stats", h.Admin.Usage.Stats)
 		usage.GET("/search-users", h.Admin.Usage.SearchUsers)

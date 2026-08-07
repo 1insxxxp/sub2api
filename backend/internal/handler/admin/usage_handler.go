@@ -21,10 +21,15 @@ import (
 
 // UsageHandler handles admin usage-related requests
 type UsageHandler struct {
-	usageService   *service.UsageService
-	apiKeyService  *service.APIKeyService
-	adminService   service.AdminService
-	cleanupService *service.UsageCleanupService
+	usageService              *service.UsageService
+	apiKeyService             *service.APIKeyService
+	adminService              service.AdminService
+	cleanupService            *service.UsageCleanupService
+	emptyResponseClaimService *service.EmptyResponseClaimAdminService
+}
+
+func (h *UsageHandler) SetEmptyResponseClaimService(claimService *service.EmptyResponseClaimAdminService) {
+	h.emptyResponseClaimService = claimService
 }
 
 // NewUsageHandler creates a new admin usage handler

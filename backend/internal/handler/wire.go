@@ -171,6 +171,30 @@ func ProvideImageStudioHandler(imageStudioService *service.ImageStudioService) *
 	return NewImageStudioHandler(imageStudioService)
 }
 
+func ProvideUsageHandler(
+	usageService *service.UsageService,
+	apiKeyService *service.APIKeyService,
+	opsService *service.OpsService,
+	settingService *service.SettingService,
+	claimService *service.EmptyResponseClaimService,
+) *UsageHandler {
+	h := NewUsageHandler(usageService, apiKeyService, opsService, settingService)
+	h.SetEmptyResponseClaimService(claimService)
+	return h
+}
+
+func ProvideAdminUsageHandler(
+	usageService *service.UsageService,
+	apiKeyService *service.APIKeyService,
+	adminService service.AdminService,
+	cleanupService *service.UsageCleanupService,
+	claimService *service.EmptyResponseClaimAdminService,
+) *admin.UsageHandler {
+	h := admin.NewUsageHandler(usageService, apiKeyService, adminService, cleanupService)
+	h.SetEmptyResponseClaimService(claimService)
+	return h
+}
+
 // ProvideHandlers creates the Handlers struct
 func ProvideHandlers(
 	authHandler *AuthHandler,
@@ -233,7 +257,7 @@ var ProviderSet = wire.NewSet(
 	NewUserHandler,
 	NewAPIKeyHandler,
 	NewUserCustomGroupHandler,
-	NewUsageHandler,
+	ProvideUsageHandler,
 	NewRedeemHandler,
 	NewSubscriptionHandler,
 	NewAnnouncementHandler,
@@ -272,7 +296,7 @@ var ProviderSet = wire.NewSet(
 	admin.NewOpsHandler,
 	ProvideSystemHandler,
 	admin.NewSubscriptionHandler,
-	admin.NewUsageHandler,
+	ProvideAdminUsageHandler,
 	admin.NewUserAttributeHandler,
 	admin.NewErrorPassthroughHandler,
 	admin.NewTLSFingerprintProfileHandler,

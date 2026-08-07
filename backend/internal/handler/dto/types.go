@@ -586,6 +586,56 @@ type AdminUsageLog struct {
 	Account *AccountSummary `json:"account,omitempty"`
 }
 
+type EmptyResponseClaim struct {
+	ID              int64      `json:"id"`
+	UsageLogID      int64      `json:"usage_log_id"`
+	Status          string     `json:"status"`
+	ReasonCode      string     `json:"reason_code"`
+	EstimatedRefund float64    `json:"estimated_refund"`
+	RefundedAmount  float64    `json:"refunded_amount"`
+	CreatedAt       time.Time  `json:"created_at"`
+	UpdatedAt       time.Time  `json:"updated_at"`
+	CompensatedAt   *time.Time `json:"compensated_at,omitempty"`
+}
+
+type EmptyResponseOutcomeEvidence struct {
+	HTTPStatus        int    `json:"http_status"`
+	UpstreamStatus    int    `json:"upstream_status"`
+	HasText           bool   `json:"has_text"`
+	HasToolCall       bool   `json:"has_tool_call"`
+	HasReasoning      bool   `json:"has_reasoning"`
+	HasMedia          bool   `json:"has_media"`
+	OutputBytes       int64  `json:"output_bytes"`
+	EventCount        int    `json:"event_count"`
+	StreamCompleted   bool   `json:"stream_completed"`
+	FinishReason      string `json:"finish_reason,omitempty"`
+	DisconnectSource  string `json:"disconnect_source"`
+	UpstreamErrorKind string `json:"upstream_error_kind"`
+	CollectorVersion  int    `json:"collector_version"`
+}
+
+type AdminEmptyResponseClaim struct {
+	EmptyResponseClaim
+	UserID             int64                        `json:"user_id"`
+	UserEmail          string                       `json:"user_email"`
+	APIKeyID           int64                        `json:"api_key_id"`
+	AccountID          int64                        `json:"account_id"`
+	AccountName        string                       `json:"account_name"`
+	GroupID            *int64                       `json:"group_id"`
+	GroupName          string                       `json:"group_name"`
+	SubscriptionID     *int64                       `json:"subscription_id"`
+	Model              string                       `json:"model"`
+	UserReason         string                       `json:"user_reason"`
+	AdminNote          string                       `json:"admin_note"`
+	RuleVersion        int                          `json:"rule_version"`
+	ReviewedBy         *int64                       `json:"reviewed_by,omitempty"`
+	ReviewedAt         *time.Time                   `json:"reviewed_at,omitempty"`
+	BalanceRefund      float64                      `json:"balance_refund"`
+	SubscriptionRefund float64                      `json:"subscription_refund"`
+	APIKeyQuotaRefund  float64                      `json:"api_key_quota_refund"`
+	Evidence           EmptyResponseOutcomeEvidence `json:"evidence"`
+}
+
 type UsageCleanupFilters struct {
 	StartTime   time.Time `json:"start_time"`
 	EndTime     time.Time `json:"end_time"`

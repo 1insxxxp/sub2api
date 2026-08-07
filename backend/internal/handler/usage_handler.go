@@ -46,10 +46,15 @@ type userGroupStat struct {
 
 // UsageHandler handles usage-related requests
 type UsageHandler struct {
-	usageService   *service.UsageService
-	apiKeyService  *service.APIKeyService
-	opsService     *service.OpsService
-	settingService *service.SettingService
+	usageService              *service.UsageService
+	apiKeyService             *service.APIKeyService
+	opsService                *service.OpsService
+	settingService            *service.SettingService
+	emptyResponseClaimService *service.EmptyResponseClaimService
+}
+
+func (h *UsageHandler) SetEmptyResponseClaimService(claimService *service.EmptyResponseClaimService) {
+	h.emptyResponseClaimService = claimService
 }
 
 // NewUsageHandler creates a new UsageHandler

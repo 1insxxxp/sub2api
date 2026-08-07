@@ -727,6 +727,65 @@ func UsageLogFromServiceAdmin(l *service.UsageLog) *AdminUsageLog {
 	}
 }
 
+func EmptyResponseClaimFromService(claim *service.EmptyResponseClaim) *EmptyResponseClaim {
+	if claim == nil {
+		return nil
+	}
+	refunded := claim.BalanceRefund + claim.SubscriptionRefund
+	return &EmptyResponseClaim{
+		ID:              claim.ID,
+		UsageLogID:      claim.UsageLogID,
+		Status:          claim.Status,
+		ReasonCode:      claim.ReasonCode,
+		EstimatedRefund: claim.OriginalActualCost,
+		RefundedAmount:  refunded,
+		CreatedAt:       claim.CreatedAt,
+		UpdatedAt:       claim.UpdatedAt,
+		CompensatedAt:   claim.CompensatedAt,
+	}
+}
+
+func EmptyResponseClaimFromServiceAdmin(claim *service.EmptyResponseClaim) *AdminEmptyResponseClaim {
+	if claim == nil {
+		return nil
+	}
+	return &AdminEmptyResponseClaim{
+		EmptyResponseClaim: *EmptyResponseClaimFromService(claim),
+		UserID:             claim.UserID,
+		UserEmail:          claim.UserEmail,
+		APIKeyID:           claim.APIKeyID,
+		AccountID:          claim.AccountID,
+		AccountName:        claim.AccountName,
+		GroupID:            claim.GroupID,
+		GroupName:          claim.GroupName,
+		SubscriptionID:     claim.SubscriptionID,
+		Model:              claim.Model,
+		UserReason:         claim.UserReason,
+		AdminNote:          claim.AdminNote,
+		RuleVersion:        claim.RuleVersion,
+		ReviewedBy:         claim.ReviewedBy,
+		ReviewedAt:         claim.ReviewedAt,
+		BalanceRefund:      claim.BalanceRefund,
+		SubscriptionRefund: claim.SubscriptionRefund,
+		APIKeyQuotaRefund:  claim.APIKeyQuotaRefund,
+		Evidence: EmptyResponseOutcomeEvidence{
+			HTTPStatus:        claim.Evidence.HTTPStatus,
+			UpstreamStatus:    claim.Evidence.UpstreamStatus,
+			HasText:           claim.Evidence.HasText,
+			HasToolCall:       claim.Evidence.HasToolCall,
+			HasReasoning:      claim.Evidence.HasReasoning,
+			HasMedia:          claim.Evidence.HasMedia,
+			OutputBytes:       claim.Evidence.OutputBytes,
+			EventCount:        claim.Evidence.EventCount,
+			StreamCompleted:   claim.Evidence.StreamCompleted,
+			FinishReason:      claim.Evidence.FinishReason,
+			DisconnectSource:  string(claim.Evidence.DisconnectSource),
+			UpstreamErrorKind: string(claim.Evidence.UpstreamErrorKind),
+			CollectorVersion:  claim.Evidence.CollectorVersion,
+		},
+	}
+}
+
 func UsageCleanupTaskFromService(task *service.UsageCleanupTask) *UsageCleanupTask {
 	if task == nil {
 		return nil

@@ -70,7 +70,7 @@ func TestAsyncImageEnablesWithoutRestart(t *testing.T) {
 	backup := service.NewBackupService(repo, &config.Config{
 		Totp: config.TotpConfig{EncryptionKeyConfigured: true},
 	}, passthroughEncryptor{}, nil, nil)
-	factory := func(context.Context, *config.ImageStorageConfig) (service.ImageStorage, error) {
+	factory := func(context.Context, *config.ImageStorageConfig) (service.ImageResultStorage, error) {
 		return noopImageStorage{}, nil
 	}
 	settings := service.NewImageStorageSettingService(repo, passthroughEncryptor{}, backup, factory, config.ImageStorageConfig{})

@@ -66,6 +66,14 @@ type EmptyResponseClaim struct {
 	APIKeyQuotaRefund  float64
 	Evidence           ResponseOutcome
 	RuleVersion        int
+	AdminNote          string
+	ReviewedBy         *int64
+	ReviewedAt         *time.Time
+	CompensatedAt      *time.Time
+	Model              string
+	UserEmail          string
+	AccountName        string
+	GroupName          string
 	CreatedAt          time.Time
 	UpdatedAt          time.Time
 }
@@ -151,6 +159,13 @@ func (s *EmptyResponseClaimService) Submit(ctx context.Context, input EmptyRespo
 	if claim != nil && decision.Status == EmptyResponseClaimApproved && s.compensator != nil {
 		if err := s.compensator.CompensateApprovedClaim(ctx, claim.ID); err != nil {
 			return claim, err
+		}
+		claim.Status = EmptyResponseClaimCompensated
+		claim.APIKeyQuotaRefund = claim.OriginalActualCost
+		if evaluation.Usage.BillingType == BillingTypeSubscription {
+			claim.SubscriptionRefund = claim.OriginalActualCost
+		} else {
+			claim.BalanceRefund = claim.OriginalActualCost
 		}
 	}
 	return claim, nil

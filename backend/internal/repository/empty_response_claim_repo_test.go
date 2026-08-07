@@ -68,7 +68,7 @@ func TestEmptyResponseClaimRepositoryCreateReturnsExistingClaimOnUniqueUsage(t *
 	claimColumns := []string{
 		"id", "usage_log_id", "outcome_id", "user_id", "api_key_id", "account_id", "group_id", "subscription_id",
 		"status", "reason_code", "user_reason", "original_actual_cost", "balance_refund", "subscription_refund",
-		"api_key_quota_refund", "evidence", "rule_version", "created_at", "updated_at",
+		"api_key_quota_refund", "evidence", "rule_version", "admin_note", "reviewed_by", "reviewed_at", "compensated_at", "created_at", "updated_at",
 	}
 
 	mock.ExpectQuery("INSERT INTO empty_response_claims").
@@ -83,7 +83,7 @@ func TestEmptyResponseClaimRepositoryCreateReturnsExistingClaimOnUniqueUsage(t *
 		WillReturnRows(sqlmock.NewRows(claimColumns).AddRow(
 			201, 100, 55, 7, 8, 9, 10, nil,
 			service.EmptyResponseClaimCompensated, service.EmptyResponseReasonPureEmpty, "empty reply", 1.25, 1.25, 0, 1.25,
-			`{"http_status":200,"stream_completed":true}`, 1, now, now,
+			`{"http_status":200,"stream_completed":true}`, 1, "", nil, nil, now, now, now,
 		))
 
 	claim, created, err := repo.Create(context.Background(), input)

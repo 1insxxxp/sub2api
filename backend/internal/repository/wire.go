@@ -81,6 +81,8 @@ var ProviderSet = wire.NewSet(
 	NewAnnouncementReadRepository,
 	NewUsageLogRepository,
 	NewEmptyResponseClaimRepository,
+	wire.Bind(new(service.EmptyResponseClaimRepository), new(*emptyResponseClaimRepository)),
+	wire.Bind(new(service.EmptyResponseClaimAdminRepository), new(*emptyResponseClaimRepository)),
 	NewEmptyResponseCompensationRepository,
 	NewUsageBillingRepository,
 	NewBatchImageRepository,
