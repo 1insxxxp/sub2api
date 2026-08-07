@@ -39,7 +39,7 @@ func TestUsageLogRepositoryUpsertResponseOutcomeLinksExistingUsageRow(t *testing
 		},
 	}
 
-	mock.ExpectExec(`(?s)`+regexp.QuoteMeta("INSERT INTO usage_response_outcomes")+`.*`+regexp.QuoteMeta("FROM usage_logs ul")+`.*`+regexp.QuoteMeta("ON CONFLICT (request_id, api_key_id) DO UPDATE")).
+	mock.ExpectExec(`(?s)`+regexp.QuoteMeta("INSERT INTO usage_response_outcomes")+`.*`+regexp.QuoteMeta("ul.id, $1::varchar(64)")+`.*`+regexp.QuoteMeta("WHERE ul.request_id = $1::varchar(64)")+`.*`+regexp.QuoteMeta("ON CONFLICT (request_id, api_key_id) DO UPDATE")).
 		WithArgs(
 			log.RequestID, log.APIKeyID, log.UserID, log.AccountID, log.GroupID,
 			200, 200, true, false, false, false, int64(12), 2, true, "stop",

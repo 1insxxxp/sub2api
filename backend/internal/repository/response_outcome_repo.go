@@ -42,12 +42,12 @@ func (r *usageLogRepository) upsertResponseOutcome(ctx context.Context, log *ser
 			disconnect_source, upstream_error_kind, collector_version
 		)
 		SELECT
-			ul.id, $1, $2, $3, $4, $5,
+			ul.id, $1::varchar(64), $2, $3, $4, $5,
 			$6, $7, $8, $9, $10,
 			$11, $12, $13, $14, $15,
 			$16, $17, $18
 		FROM usage_logs ul
-		WHERE ul.request_id = $1 AND ul.api_key_id = $2
+		WHERE ul.request_id = $1::varchar(64) AND ul.api_key_id = $2
 		ON CONFLICT (request_id, api_key_id) DO UPDATE SET
 			usage_log_id = EXCLUDED.usage_log_id,
 			user_id = EXCLUDED.user_id,
