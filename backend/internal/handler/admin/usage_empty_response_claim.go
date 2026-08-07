@@ -3,11 +3,11 @@ package admin
 import (
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/handler/dto"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/pagination"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/response"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/timezone"
 	middleware2 "github.com/Wei-Shaw/sub2api/internal/server/middleware"
 	"github.com/Wei-Shaw/sub2api/internal/service"
 	"github.com/gin-gonic/gin"
@@ -39,23 +39,24 @@ func (h *UsageHandler) ListEmptyResponseClaims(c *gin.Context) {
 			}
 			*target = value
 		}
-		if raw := strings.TrimSpace(c.Query("start_date")); raw != "" {
-			parsed, err := time.Parse("2006-01-02", raw)
-			if err != nil {
-				response.BadRequest(c, "Invalid start_date")
-				return
-			}
-			filters.StartTime = &parsed
+	}
+	userTZ := strings.TrimSpace(c.Query("timezone"))
+	if raw := strings.TrimSpace(c.Query("start_date")); raw != "" {
+		parsed, err := timezone.ParseInUserLocation("2006-01-02", raw, userTZ)
+		if err != nil {
+			response.BadRequest(c, "Invalid start_date")
+			return
 		}
-		if raw := strings.TrimSpace(c.Query("end_date")); raw != "" {
-			parsed, err := time.Parse("2006-01-02", raw)
-			if err != nil {
-				response.BadRequest(c, "Invalid end_date")
-				return
-			}
-			parsed = parsed.AddDate(0, 0, 1)
-			filters.EndTime = &parsed
+		filters.StartTime = &parsed
+	}
+	if raw := strings.TrimSpace(c.Query("end_date")); raw != "" {
+		parsed, err := timezone.ParseInUserLocation("2006-01-02", raw, userTZ)
+		if err != nil {
+			response.BadRequest(c, "Invalid end_date")
+			return
 		}
+		parsed = parsed.AddDate(0, 0, 1)
+		filters.EndTime = &parsed
 	}
 	claims, result, err := h.emptyResponseClaimService.List(c.Request.Context(), pagination.PaginationParams{Page: page, PageSize: pageSize, SortBy: "created_at", SortOrder: "desc"}, filters)
 	if err != nil {
@@ -74,10 +75,11 @@ func (h *UsageHandler) GetEmptyResponseClaimMetrics(c *gin.Context) {
 		response.InternalError(c, "Empty response claim service not available")
 		return
 	}
-	now := time.Now()
+	userTZ := strings.TrimSpace(c.Query("timezone"))
+	now := timezone.NowInUserLocation(userTZ)
 	start, end := now.AddDate(0, 0, -7), now
 	if raw := strings.TrimSpace(c.Query("start_date")); raw != "" {
-		parsed, err := time.Parse("2006-01-02", raw)
+		parsed, err := timezone.ParseInUserLocation("2006-01-02", raw, userTZ)
 		if err != nil {
 			response.BadRequest(c, "Invalid start_date")
 			return
@@ -85,7 +87,7 @@ func (h *UsageHandler) GetEmptyResponseClaimMetrics(c *gin.Context) {
 		start = parsed
 	}
 	if raw := strings.TrimSpace(c.Query("end_date")); raw != "" {
-		parsed, err := time.Parse("2006-01-02", raw)
+		parsed, err := timezone.ParseInUserLocation("2006-01-02", raw, userTZ)
 		if err != nil {
 			response.BadRequest(c, "Invalid end_date")
 			return

@@ -3,21 +3,34 @@ import { flushPromises, mount } from '@vue/test-utils'
 
 import EmptyResponseClaimsPanel from '../EmptyResponseClaimsPanel.vue'
 
-const { listClaims, getClaimMetrics, approveClaim, rejectClaim, batchClaims } = vi.hoisted(() => ({
+const { listClaims, getClaimMetrics, approveClaim, rejectClaim, batchClaims, showError, showSuccess } = vi.hoisted(() => ({
   listClaims: vi.fn(),
   getClaimMetrics: vi.fn(),
   approveClaim: vi.fn(),
   rejectClaim: vi.fn(),
   batchClaims: vi.fn(),
+  showError: vi.fn(),
+  showSuccess: vi.fn(),
 }))
 
 vi.mock('@/api/admin/usage', () => ({
   adminUsageAPI: { listClaims, getClaimMetrics, approveClaim, rejectClaim, batchClaims },
 }))
 
+vi.mock('@/stores/app', () => ({
+  useAppStore: () => ({ showError, showSuccess }),
+}))
+
 vi.mock('vue-i18n', async () => {
   const actual = await vi.importActual<typeof import('vue-i18n')>('vue-i18n')
-  return { ...actual, useI18n: () => ({ t: (key: string) => key }) }
+  return {
+    ...actual,
+    useI18n: () => ({
+      t: (key: string, params?: Record<string, unknown>) => key === 'admin.usage.emptyResponseClaims.evidenceSummary'
+        ? `HTTP ${params?.http} · upstream ${params?.upstream} · ${params?.events} events · ${params?.completion}`
+        : key,
+    }),
+  }
 })
 
 const claim = {
@@ -61,7 +74,7 @@ const claim = {
 
 describe('EmptyResponseClaimsPanel', () => {
   beforeEach(() => {
-    listClaims.mockReset().mockResolvedValue({ items: [claim], total: 1, pages: 1 })
+    listClaims.mockReset().mockResolvedValue({ items: [claim], total: 1, page: 1, page_size: 20, pages: 1 })
     getClaimMetrics.mockReset().mockResolvedValue({
       total_charged_requests: 100,
       total_claims: 4,
@@ -77,6 +90,8 @@ describe('EmptyResponseClaimsPanel', () => {
     approveClaim.mockReset().mockResolvedValue({ ...claim, status: 'compensated' })
     rejectClaim.mockReset().mockResolvedValue({ ...claim, status: 'rejected' })
     batchClaims.mockReset().mockResolvedValue({ succeeded: [1], failed: {}, claims: [] })
+    showError.mockReset()
+    showSuccess.mockReset()
   })
 
   it('renders desktop table, mobile cards, structured evidence and metrics', async () => {
@@ -123,5 +138,44 @@ describe('EmptyResponseClaimsPanel', () => {
     expect(submit.attributes('disabled')).toBeDefined()
     await wrapper.get('textarea').setValue('not an empty response')
     expect(wrapper.get('[data-testid="submit-claim-review"]').attributes('disabled')).toBeUndefined()
+  })
+
+  it('pages through all claims instead of truncating the queue', async () => {
+    listClaims.mockResolvedValue({ items: [claim], total: 21, page: 1, page_size: 20, pages: 2 })
+    const wrapper = mount(EmptyResponseClaimsPanel, {
+      props: { startDate: '2026-08-01', endDate: '2026-08-07' },
+      global: {
+        stubs: {
+          Pagination: {
+            props: ['page', 'total', 'pageSize'],
+            template: '<button data-testid="claim-next-page" @click="$emit(\'update:page\', 2)">next</button>',
+          },
+        },
+      },
+    })
+    await flushPromises()
+
+    await wrapper.get('[data-testid="claim-next-page"]').trigger('click')
+    await flushPromises()
+
+    expect(listClaims).toHaveBeenLastCalledWith(expect.objectContaining({ page: 2, page_size: 20 }))
+  })
+
+  it('reports load and review failures without losing the review dialog', async () => {
+    listClaims.mockRejectedValueOnce(new Error('offline'))
+    const wrapper = mount(EmptyResponseClaimsPanel, { props: { startDate: '2026-08-01', endDate: '2026-08-07' } })
+    await flushPromises()
+    expect(showError).toHaveBeenCalledWith('admin.usage.emptyResponseClaims.loadFailed')
+
+    listClaims.mockResolvedValue({ items: [claim], total: 1, page: 1, page_size: 20, pages: 1 })
+    await (wrapper.vm as { reload: () => void }).reload()
+    await flushPromises()
+    approveClaim.mockRejectedValueOnce(new Error('conflict'))
+    await wrapper.get('[data-testid="approve-claim-1"]').trigger('click')
+    await wrapper.get('[data-testid="submit-claim-review"]').trigger('click')
+    await flushPromises()
+
+    expect(showError).toHaveBeenCalledWith('admin.usage.emptyResponseClaims.reviewFailed')
+    expect(wrapper.find('[data-testid="submit-claim-review"]').exists()).toBe(true)
   })
 })

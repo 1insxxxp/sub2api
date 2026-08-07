@@ -65,6 +65,19 @@ func TestAdminEmptyResponseClaimListAppliesInclusiveCalendarRange(t *testing.T) 
 	require.Equal(t, "2026-08-08", repo.seenFilter.EndTime.Format("2006-01-02"))
 }
 
+func TestAdminEmptyResponseClaimListUsesRequestedTimezone(t *testing.T) {
+	repo := &adminClaimRepositoryStub{}
+	router := newAdminClaimHandlerTestRouter(repo)
+	recorder := httptest.NewRecorder()
+	router.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/admin/usage/empty-response-claims?start_date=2026-08-01&end_date=2026-08-07&timezone=America%2FLos_Angeles", nil))
+
+	require.Equal(t, http.StatusOK, recorder.Code)
+	require.NotNil(t, repo.seenFilter.StartTime)
+	require.NotNil(t, repo.seenFilter.EndTime)
+	require.Equal(t, "America/Los_Angeles", repo.seenFilter.StartTime.Location().String())
+	require.Equal(t, "America/Los_Angeles", repo.seenFilter.EndTime.Location().String())
+}
+
 func TestAdminEmptyResponseClaimListExposesStructuredEvidenceOnly(t *testing.T) {
 	repo := &adminClaimRepositoryStub{claims: []service.EmptyResponseClaim{{
 		ID: 1, Status: service.EmptyResponseClaimManualReview, Model: "gpt-test",

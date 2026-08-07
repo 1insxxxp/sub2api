@@ -596,6 +596,44 @@ export default {
           failed: 'Failed',
           canceled: 'Canceled'
         }
+      },
+      emptyResponseClaims: {
+        tab: 'Empty-response claims',
+        rate: 'Empty-response claim rate',
+        warning: 'The empty-response claim rate is {rate}, above the 1% review threshold. Check the highest-ranked accounts and models first.',
+        claims: 'Claims',
+        refunded: 'Refunded amount',
+        pending: 'Manual review',
+        allStatuses: 'All statuses',
+        batchApprove: 'Approve selected',
+        batchReject: 'Reject selected',
+        approve: 'Approve',
+        reject: 'Reject',
+        identity: 'User / group / account',
+        evidence: 'Structured evidence',
+        refund: 'Estimated refund',
+        statusLabel: 'Status',
+        empty: 'No empty-response claims match these filters',
+        loadFailed: 'Failed to load empty-response claims',
+        reviewSuccess: 'Review completed',
+        reviewFailed: 'Review failed. Refresh and try again.',
+        rejectionNote: 'Rejection reason (required)',
+        reviewNote: 'Review note (optional)',
+        rankings: {
+          group: 'Groups by empty responses',
+          account: 'Accounts by empty responses',
+          model: 'Models by empty responses'
+        },
+        evidenceSummary: 'HTTP {http} · upstream {upstream} · {events} events · {completion}',
+        complete: 'complete',
+        interrupted: 'interrupted',
+        status: {
+          evaluating: 'Evaluating',
+          manual_review: 'Manual review',
+          approved: 'Approved',
+          rejected: 'Rejected',
+          compensated: 'Compensated'
+        }
       }
     },
 

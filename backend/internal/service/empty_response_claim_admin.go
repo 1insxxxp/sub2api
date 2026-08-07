@@ -89,7 +89,13 @@ func (s *EmptyResponseClaimAdminService) review(ctx context.Context, id, reviewe
 			return claim, err
 		}
 		claim.Status = EmptyResponseClaimCompensated
-		claim.BalanceRefund = claim.OriginalActualCost
+		if claim.SubscriptionID != nil {
+			claim.SubscriptionRefund = claim.OriginalActualCost
+			claim.BalanceRefund = 0
+		} else {
+			claim.BalanceRefund = claim.OriginalActualCost
+			claim.SubscriptionRefund = 0
+		}
 		claim.APIKeyQuotaRefund = claim.OriginalActualCost
 	}
 	return claim, nil

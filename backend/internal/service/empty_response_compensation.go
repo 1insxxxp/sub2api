@@ -2,7 +2,7 @@ package service
 
 import (
 	"context"
-	"errors"
+	"log/slog"
 
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
 )
@@ -62,14 +62,15 @@ func (s *EmptyResponseCompensationService) CompensateApprovedClaim(ctx context.C
 		return ErrEmptyResponseCompensationInvalidState
 	}
 
-	var invalidateErrs []error
 	if s.cache != nil {
 		if err := s.cache.InvalidateUserBalance(ctx, result.UserID); err != nil {
-			invalidateErrs = append(invalidateErrs, err)
+			slog.Warn("empty response compensation balance cache invalidation failed",
+				"claim_id", claimID, "user_id", result.UserID, "error", err)
 		}
 		if result.SubscriptionID != nil && result.GroupID != nil {
 			if err := s.cache.InvalidateSubscription(ctx, result.UserID, *result.GroupID); err != nil {
-				invalidateErrs = append(invalidateErrs, err)
+				slog.Warn("empty response compensation subscription cache invalidation failed",
+					"claim_id", claimID, "user_id", result.UserID, "group_id", *result.GroupID, "error", err)
 			}
 		}
 	}
@@ -80,5 +81,5 @@ func (s *EmptyResponseCompensationService) CompensateApprovedClaim(ctx context.C
 			s.authCache.InvalidateAuthCacheByUserID(ctx, result.UserID)
 		}
 	}
-	return errors.Join(invalidateErrs...)
+	return nil
 }

@@ -154,21 +154,36 @@ func (s *EmptyResponseClaimService) Submit(ctx context.Context, input EmptyRespo
 		return nil, err
 	}
 	if !created {
+		if claim != nil && claim.Status == EmptyResponseClaimApproved && s.compensator != nil {
+			if err := s.compensateClaim(ctx, claim, evaluation.Usage.BillingType); err != nil {
+				return claim, err
+			}
+			return claim, nil
+		}
 		return claim, ErrEmptyResponseClaimAlreadyExists
 	}
 	if claim != nil && decision.Status == EmptyResponseClaimApproved && s.compensator != nil {
-		if err := s.compensator.CompensateApprovedClaim(ctx, claim.ID); err != nil {
+		if err := s.compensateClaim(ctx, claim, evaluation.Usage.BillingType); err != nil {
 			return claim, err
-		}
-		claim.Status = EmptyResponseClaimCompensated
-		claim.APIKeyQuotaRefund = claim.OriginalActualCost
-		if evaluation.Usage.BillingType == BillingTypeSubscription {
-			claim.SubscriptionRefund = claim.OriginalActualCost
-		} else {
-			claim.BalanceRefund = claim.OriginalActualCost
 		}
 	}
 	return claim, nil
+}
+
+func (s *EmptyResponseClaimService) compensateClaim(ctx context.Context, claim *EmptyResponseClaim, billingType int8) error {
+	if err := s.compensator.CompensateApprovedClaim(ctx, claim.ID); err != nil {
+		return err
+	}
+	claim.Status = EmptyResponseClaimCompensated
+	claim.APIKeyQuotaRefund = claim.OriginalActualCost
+	if billingType == BillingTypeSubscription {
+		claim.SubscriptionRefund = claim.OriginalActualCost
+		claim.BalanceRefund = 0
+	} else {
+		claim.BalanceRefund = claim.OriginalActualCost
+		claim.SubscriptionRefund = 0
+	}
+	return nil
 }
 
 func emptyResponseClaimBusinessDay(now time.Time) (time.Time, time.Time) {

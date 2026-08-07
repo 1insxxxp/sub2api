@@ -155,3 +155,26 @@ func TestEmptyResponseClaimServiceRejectsExistingClaimWithoutCompensatingAgain(t
 	require.ErrorIs(t, err, ErrEmptyResponseClaimAlreadyExists)
 	require.Zero(t, compensator.claimID)
 }
+
+func TestEmptyResponseClaimServiceRetriesAnExistingApprovedClaim(t *testing.T) {
+	now := time.Date(2026, 8, 7, 12, 0, 0, 0, time.UTC)
+	repo := &emptyResponseClaimRepoStub{
+		evaluation: &EmptyResponseClaimEvaluation{
+			Usage:   UsageLog{ID: 100, UserID: 7, APIKeyID: 8, AccountID: 9, ActualCost: 1, CreatedAt: now.Add(-time.Hour)},
+			Outcome: &ResponseOutcome{HTTPStatus: 200, UpstreamStatus: 200, StreamCompleted: true, CollectorVersion: 1},
+			Group:   Group{EmptyResponseCompensationEnabled: true},
+		},
+		claim:   &EmptyResponseClaim{ID: 202, Status: EmptyResponseClaimApproved, OriginalActualCost: 1},
+		created: false,
+	}
+	compensator := &emptyResponseClaimCompensatorStub{}
+	svc := NewEmptyResponseClaimService(repo, compensator)
+	svc.now = func() time.Time { return now }
+
+	claim, err := svc.Submit(context.Background(), EmptyResponseClaimSubmitInput{UserID: 7, UsageLogID: 100})
+
+	require.NoError(t, err)
+	require.Equal(t, int64(202), compensator.claimID)
+	require.Equal(t, EmptyResponseClaimCompensated, claim.Status)
+	require.Equal(t, 1.0, claim.BalanceRefund)
+}

@@ -85,3 +85,18 @@ func TestEmptyResponseCompensationDoesNotInvalidateBeforeFailedTransaction(t *te
 	require.ErrorIs(t, err, repoErr)
 	require.Equal(t, []string{"commit"}, steps)
 }
+
+func TestEmptyResponseCompensationDoesNotReportFailureAfterCommittedRefundWhenCacheInvalidationFails(t *testing.T) {
+	steps := []string{}
+	cacheErr := errors.New("redis unavailable")
+	svc := NewEmptyResponseCompensationService(
+		&emptyResponseCompensationRepoStub{steps: &steps, result: &EmptyResponseCompensationResult{Applied: true, UserID: 7}},
+		&emptyResponseCompensationCacheStub{steps: &steps, err: cacheErr},
+		nil,
+	)
+
+	err := svc.CompensateApprovedClaim(context.Background(), 100)
+
+	require.NoError(t, err)
+	require.Equal(t, []string{"commit", "balance_cache"}, steps)
+}

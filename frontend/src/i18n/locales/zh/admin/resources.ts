@@ -593,6 +593,44 @@ export default {
           failed: '失败',
           canceled: '已取消'
         }
+      },
+      emptyResponseClaims: {
+        tab: '空回申请',
+        rate: '空回申请率',
+        warning: '当前空回申请率为 {rate}，已达到 1% 关注阈值，请优先检查高排名账号和模型。',
+        claims: '申请数',
+        refunded: '已补金额',
+        pending: '待人工审核',
+        allStatuses: '全部状态',
+        batchApprove: '批量批准',
+        batchReject: '批量拒绝',
+        approve: '批准',
+        reject: '拒绝',
+        identity: '用户 / 分组 / 账号',
+        evidence: '结构化证据',
+        refund: '预计补偿',
+        statusLabel: '状态',
+        empty: '当前条件下暂无空回申请',
+        loadFailed: '加载空回申请失败',
+        reviewSuccess: '审核操作已完成',
+        reviewFailed: '审核操作失败，请刷新后重试',
+        rejectionNote: '拒绝原因（必填）',
+        reviewNote: '审核备注（可选）',
+        rankings: {
+          group: '分组空回排行',
+          account: '账号空回排行',
+          model: '模型空回排行'
+        },
+        evidenceSummary: 'HTTP {http} · 上游 {upstream} · {events} 个事件 · {completion}',
+        complete: '完整结束',
+        interrupted: '中断',
+        status: {
+          evaluating: '判定中',
+          manual_review: '待人工审核',
+          approved: '已批准',
+          rejected: '已拒绝',
+          compensated: '已补偿'
+        }
       }
     },
 

@@ -198,7 +198,7 @@ func (c *ResponseOutcomeCollector) MarkCompleted(finishReason string) {
 	}
 	c.mu.Lock()
 	c.outcome.StreamCompleted = true
-	c.outcome.FinishReason = strings.TrimSpace(finishReason)
+	c.outcome.FinishReason = sanitizeResponseOutcomeFinishReason(finishReason)
 	c.outcome.DisconnectSource = DisconnectSourceNone
 	c.mu.Unlock()
 }
@@ -208,8 +208,36 @@ func (c *ResponseOutcomeCollector) ObserveFinishReason(finishReason string) {
 		return
 	}
 	c.mu.Lock()
-	c.outcome.FinishReason = strings.TrimSpace(finishReason)
+	c.outcome.FinishReason = sanitizeResponseOutcomeFinishReason(finishReason)
 	c.mu.Unlock()
+}
+
+// sanitizeResponseOutcomeFinishReason keeps only protocol-level lifecycle
+// categories. Upstreams control this value, so persisting it verbatim could
+// retain URLs, model output, or other untrusted content in otherwise
+// privacy-safe response evidence.
+func sanitizeResponseOutcomeFinishReason(value string) string {
+	value = strings.ToLower(strings.TrimSpace(value))
+	if value == "" {
+		return ""
+	}
+	switch value {
+	case "stop", "length", "tool_calls", "function_call", "content_filter",
+		"end_turn", "max_tokens", "stop_sequence", "tool_use", "pause_turn", "refusal",
+		"done", "completed", "incomplete", "failed", "cancelled", "canceled",
+		"message_stop", "http_response", "response.completed", "response.done",
+		"response.failed", "response.incomplete", "response.cancelled", "response.canceled",
+		"finish_reason_unspecified", "safety", "recitation", "language", "blocklist",
+		"prohibited_content", "spii", "malformed_function_call", "image_safety",
+		"unexpected_tool_call", "too_many_tool_calls", "no_image", "other":
+		return value
+	default:
+		if strings.Contains(value, "image_generation") &&
+			(strings.HasSuffix(value, ".completed") || strings.HasSuffix(value, ".done")) {
+			return "image_generation_completed"
+		}
+		return "other"
+	}
 }
 
 func (c *ResponseOutcomeCollector) MarkStreamError(err error, clientCanceled bool) {

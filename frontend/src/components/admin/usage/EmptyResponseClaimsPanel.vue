@@ -72,6 +72,7 @@
             </div>
             <p class="mt-2 text-xs text-slate-500">{{ claim.user_email }} · {{ claim.group_name }} · {{ claim.account_name }}</p>
             <p class="mt-2 text-xs text-slate-600 dark:text-slate-300">{{ evidenceSummary(claim) }}</p>
+            <p class="mt-1 text-xs text-slate-500">{{ reasonSummary(claim) }}</p>
             <div class="mt-3 flex items-center justify-between">
               <span class="font-mono text-sm font-semibold text-emerald-600">${{ claim.estimated_refund.toFixed(6) }}</span>
               <div v-if="canReview(claim)" class="flex gap-2">
@@ -94,7 +95,7 @@
             <td class="px-4 py-3"><input type="checkbox" :checked="selected.has(claim.id)" @change="toggleSelected(claim.id)" /></td>
             <td class="px-4 py-3"><p class="text-slate-900 dark:text-white">{{ claim.user_email }}</p><p class="text-xs text-slate-500">{{ claim.group_name }} · {{ claim.account_name }}</p></td>
             <td class="max-w-56 break-all px-4 py-3 font-mono text-xs">{{ claim.model }}</td>
-            <td class="px-4 py-3 text-xs text-slate-600 dark:text-slate-300">{{ evidenceSummary(claim) }}</td>
+            <td class="px-4 py-3 text-xs text-slate-600 dark:text-slate-300"><p>{{ evidenceSummary(claim) }}</p><p class="mt-1 text-slate-500">{{ reasonSummary(claim) }}</p></td>
             <td class="px-4 py-3 font-mono text-emerald-600">${{ claim.estimated_refund.toFixed(6) }}</td>
             <td class="px-4 py-3"><span :class="statusClass(claim.status)" class="rounded-full px-2 py-1 text-xs font-semibold">{{ t(`admin.usage.emptyResponseClaims.status.${claim.status}`) }}</span></td>
             <td class="px-4 py-3 text-right"><div v-if="canReview(claim)" class="flex justify-end gap-2"><button :data-testid="`reject-claim-${claim.id}`" class="btn btn-secondary btn-sm text-rose-600" @click="openReview(claim, 'reject')">{{ t('admin.usage.emptyResponseClaims.reject') }}</button><button :data-testid="`approve-claim-${claim.id}`" class="btn btn-primary btn-sm" @click="openReview(claim, 'approve')">{{ t('admin.usage.emptyResponseClaims.approve') }}</button></div></td>
@@ -104,6 +105,15 @@
     </div>
 
     <p v-if="!loading && claims.length === 0" class="py-12 text-center text-sm text-slate-500">{{ t('admin.usage.emptyResponseClaims.empty') }}</p>
+
+    <Pagination
+      v-if="total > pageSize"
+      :page="page"
+      :total="total"
+      :page-size="pageSize"
+      :show-page-size-selector="false"
+      @update:page="changePage"
+    />
 
     <EmptyResponseClaimReviewDialog
       :show="Boolean(reviewClaim)"
@@ -121,13 +131,19 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { adminUsageAPI } from '@/api/admin/usage'
 import type { AdminEmptyResponseClaim, EmptyResponseClaimMetrics } from '@/api/admin/usage'
+import { useAppStore } from '@/stores/app'
+import Pagination from '@/components/common/Pagination.vue'
 import EmptyResponseClaimReviewDialog from './EmptyResponseClaimReviewDialog.vue'
 
 const props = defineProps<{ startDate: string; endDate: string }>()
 const { t } = useI18n()
+const appStore = useAppStore()
 const claims = ref<AdminEmptyResponseClaim[]>([])
 const metrics = ref<EmptyResponseClaimMetrics | null>(null)
 const status = ref('')
+const page = ref(1)
+const pageSize = 20
+const total = ref(0)
 const loading = ref(false)
 const submitting = ref(false)
 const selected = ref(new Set<number>())
@@ -148,17 +164,29 @@ const load = async () => {
   loading.value = true
   try {
     const [list, summary] = await Promise.all([
-      adminUsageAPI.listClaims({ page: 1, page_size: 100, status: status.value || undefined, start_date: props.startDate, end_date: props.endDate }),
+      adminUsageAPI.listClaims({ page: page.value, page_size: pageSize, status: status.value || undefined, start_date: props.startDate, end_date: props.endDate }),
       adminUsageAPI.getClaimMetrics({ start_date: props.startDate, end_date: props.endDate }),
     ])
     claims.value = list.items
+    total.value = list.total
     metrics.value = summary
     selected.value = new Set()
+  } catch (error) {
+    console.error('Failed to load empty-response claims:', error)
+    appStore.showError(t('admin.usage.emptyResponseClaims.loadFailed'))
   } finally {
     loading.value = false
   }
 }
-const reload = () => { void load() }
+const reload = () => {
+  page.value = 1
+  void load()
+}
+const changePage = (value: number) => {
+  if (value === page.value || value < 1) return
+  page.value = value
+  void load()
+}
 const toggleSelected = (id: number) => {
   const next = new Set(selected.value)
   next.has(id) ? next.delete(id) : next.add(id)
@@ -167,8 +195,16 @@ const toggleSelected = (id: number) => {
 const canReview = (claim: AdminEmptyResponseClaim) => ['manual_review', 'evaluating', 'approved'].includes(claim.status)
 const evidenceSummary = (claim: AdminEmptyResponseClaim) => {
   const e = claim.evidence
-  return `HTTP ${e.http_status} · Upstream ${e.upstream_status} · ${e.event_count} events · ${e.stream_completed ? 'complete' : 'interrupted'}`
+  return t('admin.usage.emptyResponseClaims.evidenceSummary', {
+    http: e.http_status,
+    upstream: e.upstream_status,
+    events: e.event_count,
+    completion: t(e.stream_completed
+      ? 'admin.usage.emptyResponseClaims.complete'
+      : 'admin.usage.emptyResponseClaims.interrupted'),
+  })
 }
+const reasonSummary = (claim: AdminEmptyResponseClaim) => t(`usage.emptyResponse.reasonCode.${claim.reason_code}`)
 const statusClass = (value: string) => value === 'compensated'
   ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300'
   : value === 'rejected'
@@ -202,7 +238,11 @@ const submitReview = async (note: string) => {
       await adminUsageAPI.rejectClaim(reviewClaim.value.id, { note })
     }
     reviewClaim.value = null
+    appStore.showSuccess(t('admin.usage.emptyResponseClaims.reviewSuccess'))
     await load()
+  } catch (error) {
+    console.error('Failed to review empty-response claim:', error)
+    appStore.showError(t('admin.usage.emptyResponseClaims.reviewFailed'))
   } finally {
     submitting.value = false
   }
