@@ -39,6 +39,15 @@ func (h *GatewayHandler) GeminiV1BetaListModels(c *gin.Context) {
 		googleError(c, http.StatusUnauthorized, "Invalid API key")
 		return
 	}
+	if apiKey.CustomGroupID != nil {
+		models, err := h.apiKeyService.ListCustomGroupModelsForPlatform(c.Request.Context(), apiKey, service.PlatformGemini)
+		if err != nil {
+			googleError(c, http.StatusForbidden, "Custom group is unavailable")
+			return
+		}
+		c.JSON(http.StatusOK, customGroupGeminiModels(models))
+		return
+	}
 	// 检查平台：优先使用强制平台（/antigravity 路由），否则要求 gemini 分组
 	forcePlatform, hasForcePlatform := middleware.GetForcePlatformFromContext(c)
 	if !hasForcePlatform && effectiveAPIKeyPlatform(c, apiKey) != service.PlatformGemini {
@@ -84,6 +93,10 @@ func (h *GatewayHandler) GeminiV1BetaGetModel(c *gin.Context) {
 	apiKey, ok := middleware.GetAPIKeyFromContext(c)
 	if !ok || apiKey == nil {
 		googleError(c, http.StatusUnauthorized, "Invalid API key")
+		return
+	}
+	if publicModel, _, resolved := service.CustomGroupModelResolutionFromContext(c.Request.Context()); resolved {
+		c.JSON(http.StatusOK, gemini.FallbackModel(publicModel))
 		return
 	}
 	// 检查平台：优先使用强制平台（/antigravity 路由），否则要求 gemini 分组
@@ -138,6 +151,14 @@ func (h *GatewayHandler) GeminiV1BetaGetModel(c *gin.Context) {
 		return
 	}
 	writeUpstreamResponse(c, res)
+}
+
+func customGroupGeminiModels(models []string) gemini.ModelsListResponse {
+	result := make([]gemini.Model, 0, len(models))
+	for _, model := range models {
+		result = append(result, gemini.FallbackModel(model))
+	}
+	return gemini.ModelsListResponse{Models: result}
 }
 
 // GeminiV1BetaModels proxies Gemini native REST endpoints like:

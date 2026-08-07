@@ -8,11 +8,16 @@ import (
 type customGroupRouteRepoStub struct {
 	UserCustomGroupRepository
 	route *UserCustomGroupModel
+	group *UserCustomGroup
 	err   error
 }
 
 func (s customGroupRouteRepoStub) ResolveModel(context.Context, int64, int64, string) (*UserCustomGroupModel, error) {
 	return s.route, s.err
+}
+
+func (s customGroupRouteRepoStub) GetOwned(context.Context, int64, int64) (*UserCustomGroup, error) {
+	return s.group, s.err
 }
 
 type customGroupSourceRepoStub struct {
@@ -28,6 +33,59 @@ func (s customGroupSourceRepoStub) GetByID(_ context.Context, id int64) (*Group,
 	return group, nil
 }
 
+func (s customGroupSourceRepoStub) GetByIDLite(ctx context.Context, id int64) (*Group, error) {
+	return s.GetByID(ctx, id)
+}
+
+func TestListCustomGroupModelsExposesAliasesOnly(t *testing.T) {
+	customGroupID := int64(7)
+	key := &APIKey{UserID: 9, CustomGroupID: &customGroupID, User: &User{ID: 9}}
+	svc := &APIKeyService{
+		customGroupRepo: customGroupRouteRepoStub{group: &UserCustomGroup{
+			ID: customGroupID, UserID: 9, Status: StatusActive,
+			Models: []UserCustomGroupModel{
+				{PublicModel: "claude-balance", SourceModel: "claude-sonnet-4-5", SourceGroupID: 11},
+				{PublicModel: "claude-discount", SourceModel: "claude-sonnet-4-5", SourceGroupID: 12},
+			},
+		}},
+		groupRepo: customGroupSourceRepoStub{groups: map[int64]*Group{
+			11: {ID: 11, Status: StatusActive, Platform: PlatformAnthropic},
+			12: {ID: 12, Status: StatusActive, Platform: PlatformAnthropic},
+		}},
+	}
+
+	models, err := svc.ListCustomGroupModels(context.Background(), key)
+	if err != nil {
+		t.Fatalf("ListCustomGroupModels() error = %v", err)
+	}
+	if len(models) != 2 || models[0] != "claude-balance" || models[1] != "claude-discount" {
+		t.Fatalf("ListCustomGroupModels() = %#v, want public aliases only", models)
+	}
+}
+
+func TestListCustomGroupModelsForPlatformFiltersOtherSources(t *testing.T) {
+	customGroupID := int64(7)
+	key := &APIKey{UserID: 9, CustomGroupID: &customGroupID, User: &User{ID: 9}}
+	svc := &APIKeyService{
+		customGroupRepo: customGroupRouteRepoStub{group: &UserCustomGroup{ID: customGroupID, UserID: 9, Status: StatusActive, Models: []UserCustomGroupModel{
+			{PublicModel: "gemini-fast", SourceModel: "gemini-2.5-flash", SourceGroupID: 11},
+			{PublicModel: "claude-fast", SourceModel: "claude-sonnet-4-5", SourceGroupID: 12},
+		}}},
+		groupRepo: customGroupSourceRepoStub{groups: map[int64]*Group{
+			11: {ID: 11, Status: StatusActive, Platform: PlatformGemini},
+			12: {ID: 12, Status: StatusActive, Platform: PlatformAnthropic},
+		}},
+	}
+
+	models, err := svc.ListCustomGroupModelsForPlatform(context.Background(), key, PlatformGemini)
+	if err != nil {
+		t.Fatalf("ListCustomGroupModelsForPlatform() error = %v", err)
+	}
+	if len(models) != 1 || models[0] != "gemini-fast" {
+		t.Fatalf("ListCustomGroupModelsForPlatform() = %#v, want Gemini alias only", models)
+	}
+}
+
 func TestResolveCustomGroupModelUsesConfiguredSourceGroup(t *testing.T) {
 	customGroupID := int64(7)
 	originalGroupID := int64(3)
@@ -40,7 +98,7 @@ func TestResolveCustomGroupModelUsesConfiguredSourceGroup(t *testing.T) {
 	}
 	svc := &APIKeyService{
 		customGroupRepo: customGroupRouteRepoStub{route: &UserCustomGroupModel{
-			PublicModel:   "claude-sonnet-4-5",
+			PublicModel:   "claude-sonnet-discount",
 			SourceModel:   "claude-sonnet-4-5",
 			SourceGroupID: sourceGroupID,
 		}},
@@ -49,10 +107,11 @@ func TestResolveCustomGroupModelUsesConfiguredSourceGroup(t *testing.T) {
 		}},
 	}
 
-	resolved, err := svc.ResolveCustomGroupModel(context.Background(), key, "claude-sonnet-4-5")
+	resolution, err := svc.ResolveCustomGroupModel(context.Background(), key, "claude-sonnet-discount")
 	if err != nil {
 		t.Fatalf("ResolveCustomGroupModel() error = %v", err)
 	}
+	resolved := resolution.APIKey
 	if resolved == key {
 		t.Fatal("ResolveCustomGroupModel() returned the original key instead of a request-scoped clone")
 	}
@@ -64,6 +123,12 @@ func TestResolveCustomGroupModelUsesConfiguredSourceGroup(t *testing.T) {
 	}
 	if resolved.CustomGroupID == nil || *resolved.CustomGroupID != customGroupID {
 		t.Fatalf("resolved CustomGroupID = %v, want %d", resolved.CustomGroupID, customGroupID)
+	}
+	if resolution.PublicModel != "claude-sonnet-discount" {
+		t.Fatalf("resolution PublicModel = %q, want alias", resolution.PublicModel)
+	}
+	if resolution.SourceModel != "claude-sonnet-4-5" {
+		t.Fatalf("resolution SourceModel = %q, want real model", resolution.SourceModel)
 	}
 }
 
@@ -78,11 +143,11 @@ func TestResolveCustomGroupModelRejectsUnavailableSourceWithoutFallback(t *testi
 		}},
 	}
 
-	resolved, err := svc.ResolveCustomGroupModel(context.Background(), key, "claude-sonnet-4-5")
+	resolution, err := svc.ResolveCustomGroupModel(context.Background(), key, "claude-sonnet-4-5")
 	if err == nil {
 		t.Fatal("ResolveCustomGroupModel() error = nil, want unavailable source error")
 	}
-	if resolved != nil {
-		t.Fatalf("ResolveCustomGroupModel() resolved = %#v, want nil (no fallback)", resolved)
+	if resolution != nil {
+		t.Fatalf("ResolveCustomGroupModel() resolution = %#v, want nil (no fallback)", resolution)
 	}
 }

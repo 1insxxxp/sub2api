@@ -120,11 +120,12 @@ func (s *UserCustomGroupService) validateModels(ctx context.Context, userID int6
 		return err
 	}
 	seen := make(map[string]struct{}, len(models))
+	seenSources := make(map[string]struct{}, len(models))
 	for i := range models {
 		m := &models[i]
 		m.PublicModel = strings.TrimSpace(m.PublicModel)
 		m.SourceModel = strings.TrimSpace(m.SourceModel)
-		if m.PublicModel == "" || m.SourceModel == "" || m.PublicModel != m.SourceModel || len(m.PublicModel) > 200 {
+		if m.PublicModel == "" || m.SourceModel == "" || len(m.PublicModel) > 200 || len(m.SourceModel) > 200 {
 			return ErrUserCustomGroupInvalidModel
 		}
 		key := strings.ToLower(m.PublicModel)
@@ -132,6 +133,11 @@ func (s *UserCustomGroupService) validateModels(ctx context.Context, userID int6
 			return ErrUserCustomGroupInvalidModel
 		}
 		seen[key] = struct{}{}
+		sourceKey := fmt.Sprintf("%d:%s", m.SourceGroupID, strings.ToLower(m.SourceModel))
+		if _, ok := seenSources[sourceKey]; ok {
+			return ErrUserCustomGroupInvalidModel
+		}
+		seenSources[sourceKey] = struct{}{}
 		group, err := s.groupRepo.GetByIDLite(ctx, m.SourceGroupID)
 		if err != nil || group.Status != StatusActive || group.Platform == PlatformComposite || !user.CanBindGroup(group.ID, group.IsExclusive) {
 			return ErrGroupNotAllowed

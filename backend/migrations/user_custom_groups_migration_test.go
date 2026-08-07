@@ -33,3 +33,15 @@ func TestMigration194aCreatesIndexesConcurrently(t *testing.T) {
 	require.NotContains(t, sql, "BEGIN")
 	require.NotContains(t, sql, "COMMIT")
 }
+
+func TestUserCustomGroupCallNameCasefoldMigration(t *testing.T) {
+	content, err := FS.ReadFile("195_user_custom_group_call_name_casefold_notx.sql")
+	require.NoError(t, err)
+
+	sql := string(content)
+	require.Contains(t, sql, "CREATE UNIQUE INDEX CONCURRENTLY IF NOT EXISTS uq_user_custom_group_public_model_casefold")
+	require.Contains(t, sql, "ON user_custom_group_models (custom_group_id, LOWER(public_model))")
+	require.NotContains(t, sql, "CREATE UNIQUE INDEX IF NOT EXISTS")
+	require.NotContains(t, sql, "BEGIN")
+	require.NotContains(t, sql, "COMMIT")
+}

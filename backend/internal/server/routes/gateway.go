@@ -2,6 +2,7 @@ package routes
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"io"
 	"mime"
@@ -40,6 +41,7 @@ func RegisterGatewayRoutes(
 	endpointNorm := handler.InboundEndpointMiddleware()
 	compositeTarget := compositeTargetPlatformMiddleware(compositeResolver)
 	customTarget := customGroupTargetMiddleware(apiKeyService)
+	customGeminiTarget := customGroupGeminiTargetMiddleware(apiKeyService)
 	compositeGeminiTarget := compositeGeminiTargetPlatformMiddleware(compositeResolver)
 
 	// 未分组 Key 拦截中间件（按协议格式区分错误响应）
@@ -272,6 +274,7 @@ func RegisterGatewayRoutes(
 	gemini.Use(opsErrorLogger)
 	gemini.Use(endpointNorm)
 	gemini.Use(middleware.APIKeyAuthWithSubscriptionGoogle(apiKeyService, subscriptionService, cfg))
+	gemini.Use(customGeminiTarget)
 	gemini.Use(compositeGeminiTarget)
 	gemini.Use(requireGroupGoogle)
 	{
@@ -291,7 +294,7 @@ func RegisterGatewayRoutes(
 	}
 	r.POST("/responses", bodyLimit, clientRequestID, opsErrorLogger, endpointNorm, gin.HandlerFunc(apiKeyAuth), customTarget, compositeTarget, requireGroupAnthropic, responsesHandler)
 	r.POST("/responses/*subpath", bodyLimit, clientRequestID, opsErrorLogger, endpointNorm, gin.HandlerFunc(apiKeyAuth), customTarget, compositeTarget, requireGroupAnthropic, guardResponsesSubpath(responsesHandler))
-	r.POST("/alpha/search", textBodyLimit, clientRequestID, opsErrorLogger, endpointNorm, gin.HandlerFunc(apiKeyAuth), compositeTarget, requireGroupAnthropic, h.OpenAIGateway.AlphaSearch)
+	r.POST("/alpha/search", textBodyLimit, clientRequestID, opsErrorLogger, endpointNorm, gin.HandlerFunc(apiKeyAuth), customTarget, compositeTarget, requireGroupAnthropic, h.OpenAIGateway.AlphaSearch)
 	r.GET("/responses", bodyLimit, clientRequestID, opsErrorLogger, endpointNorm, gin.HandlerFunc(apiKeyAuth), compositeTarget, requireGroupAnthropic, func(c *gin.Context) {
 		h.OpenAIGateway.ResponsesWebSocket(c)
 	})
@@ -318,7 +321,7 @@ func RegisterGatewayRoutes(
 		}
 		h.Gateway.ChatCompletions(c)
 	})
-	r.POST("/embeddings", textBodyLimit, clientRequestID, opsErrorLogger, endpointNorm, gin.HandlerFunc(apiKeyAuth), compositeTarget, requireGroupAnthropic, func(c *gin.Context) {
+	r.POST("/embeddings", textBodyLimit, clientRequestID, opsErrorLogger, endpointNorm, gin.HandlerFunc(apiKeyAuth), customTarget, compositeTarget, requireGroupAnthropic, func(c *gin.Context) {
 		if !isOpenAIOnlyEndpointGatewayPlatform(c) {
 			service.MarkOpsClientBusinessLimited(c, service.OpsClientBusinessLimitedReasonLocalFeatureGate)
 			c.JSON(http.StatusNotFound, gin.H{
@@ -331,14 +334,14 @@ func RegisterGatewayRoutes(
 		}
 		h.OpenAIGateway.Embeddings(c)
 	})
-	r.POST("/images/generations", bodyLimit, clientRequestID, opsErrorLogger, endpointNorm, gin.HandlerFunc(apiKeyAuth), compositeTarget, requireGroupAnthropic, imagesHandler)
-	r.POST("/images/edits", bodyLimit, clientRequestID, opsErrorLogger, endpointNorm, gin.HandlerFunc(apiKeyAuth), compositeTarget, requireGroupAnthropic, imagesHandler)
-	r.POST("/images/generations/async", bodyLimit, clientRequestID, opsErrorLogger, endpointNorm, gin.HandlerFunc(apiKeyAuth), compositeTarget, requireGroupAnthropic, h.AsyncImage.Submit)
-	r.POST("/images/edits/async", bodyLimit, clientRequestID, opsErrorLogger, endpointNorm, gin.HandlerFunc(apiKeyAuth), compositeTarget, requireGroupAnthropic, h.AsyncImage.Submit)
+	r.POST("/images/generations", bodyLimit, clientRequestID, opsErrorLogger, endpointNorm, gin.HandlerFunc(apiKeyAuth), customTarget, compositeTarget, requireGroupAnthropic, imagesHandler)
+	r.POST("/images/edits", bodyLimit, clientRequestID, opsErrorLogger, endpointNorm, gin.HandlerFunc(apiKeyAuth), customTarget, compositeTarget, requireGroupAnthropic, imagesHandler)
+	r.POST("/images/generations/async", bodyLimit, clientRequestID, opsErrorLogger, endpointNorm, gin.HandlerFunc(apiKeyAuth), customTarget, compositeTarget, requireGroupAnthropic, h.AsyncImage.Submit)
+	r.POST("/images/edits/async", bodyLimit, clientRequestID, opsErrorLogger, endpointNorm, gin.HandlerFunc(apiKeyAuth), customTarget, compositeTarget, requireGroupAnthropic, h.AsyncImage.Submit)
 	r.GET("/images/tasks/:task_id", bodyLimit, clientRequestID, opsErrorLogger, endpointNorm, gin.HandlerFunc(apiKeyAuth), compositeTarget, requireGroupAnthropic, h.AsyncImage.Get)
-	r.POST("/videos/generations", bodyLimit, clientRequestID, opsErrorLogger, endpointNorm, gin.HandlerFunc(apiKeyAuth), compositeTarget, requireGroupAnthropic, videoGenerationHandler)
-	r.POST("/videos/edits", bodyLimit, clientRequestID, opsErrorLogger, endpointNorm, gin.HandlerFunc(apiKeyAuth), compositeTarget, requireGroupAnthropic, videoEditHandler)
-	r.POST("/videos/extensions", bodyLimit, clientRequestID, opsErrorLogger, endpointNorm, gin.HandlerFunc(apiKeyAuth), compositeTarget, requireGroupAnthropic, videoExtensionHandler)
+	r.POST("/videos/generations", bodyLimit, clientRequestID, opsErrorLogger, endpointNorm, gin.HandlerFunc(apiKeyAuth), customTarget, compositeTarget, requireGroupAnthropic, videoGenerationHandler)
+	r.POST("/videos/edits", bodyLimit, clientRequestID, opsErrorLogger, endpointNorm, gin.HandlerFunc(apiKeyAuth), customTarget, compositeTarget, requireGroupAnthropic, videoEditHandler)
+	r.POST("/videos/extensions", bodyLimit, clientRequestID, opsErrorLogger, endpointNorm, gin.HandlerFunc(apiKeyAuth), customTarget, compositeTarget, requireGroupAnthropic, videoExtensionHandler)
 	r.GET("/videos/:request_id", bodyLimit, clientRequestID, opsErrorLogger, endpointNorm, gin.HandlerFunc(apiKeyAuth), compositeTarget, requireGroupAnthropic, videoStatusHandler)
 	r.GET("/videos/:request_id/content", bodyLimit, clientRequestID, opsErrorLogger, endpointNorm, gin.HandlerFunc(apiKeyAuth), compositeTarget, requireGroupAnthropic, videoContentHandler)
 
@@ -442,7 +445,11 @@ func compositeTargetPlatformMiddleware(resolver *service.CompositeRouteResolver)
 	}
 }
 
-func customGroupTargetMiddleware(apiKeys *service.APIKeyService) gin.HandlerFunc {
+type customGroupModelResolver interface {
+	ResolveCustomGroupModel(context.Context, *service.APIKey, string) (*service.CustomGroupModelResolution, error)
+}
+
+func customGroupTargetMiddleware(apiKeys customGroupModelResolver) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		apiKey, ok := middleware.GetAPIKeyFromContext(c)
 		if !ok || apiKey == nil || apiKey.CustomGroupID == nil {
@@ -459,17 +466,130 @@ func customGroupTargetMiddleware(apiKeys *service.APIKeyService) gin.HandlerFunc
 			return
 		}
 		model := compositeRequestModelFromBody(c.GetHeader("Content-Type"), body)
-		resetRequestBody(c, body)
 		if model == "" {
 			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": gin.H{"type": "invalid_request_error", "message": "Model is required for a custom group key"}})
 			return
 		}
-		resolved, err := apiKeys.ResolveCustomGroupModel(c.Request.Context(), apiKey, model)
+		resolution, err := apiKeys.ResolveCustomGroupModel(c.Request.Context(), apiKey, model)
 		if err != nil {
 			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": gin.H{"type": "permission_error", "message": "The selected model source group is unavailable"}})
 			return
 		}
-		c.Set(string(middleware.ContextKeyAPIKey), resolved)
+		rewrittenBody, err := rewriteCustomGroupRequestModel(c.GetHeader("Content-Type"), body, resolution.PublicModel, resolution.SourceModel)
+		if err != nil {
+			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": gin.H{"type": "invalid_request_error", "message": "Failed to rewrite the custom model alias"}})
+			return
+		}
+		c.Request = c.Request.WithContext(service.WithCustomGroupModelResolution(c.Request.Context(), resolution.PublicModel, resolution.SourceModel))
+		resetRequestBody(c, rewrittenBody)
+		c.Set(string(middleware.ContextKeyAPIKey), resolution.APIKey)
+		c.Next()
+	}
+}
+
+func rewriteCustomGroupRequestModel(contentType string, body []byte, publicModel, sourceModel string) ([]byte, error) {
+	publicModel = strings.TrimSpace(publicModel)
+	sourceModel = strings.TrimSpace(sourceModel)
+	if sourceModel == "" {
+		return nil, errors.New("custom group source model is empty")
+	}
+	if strings.EqualFold(publicModel, sourceModel) {
+		return body, nil
+	}
+	if gjson.ValidBytes(body) {
+		rewritten, err := sjson.SetBytes(body, "model", sourceModel)
+		if err != nil {
+			return nil, err
+		}
+		return rewritten, nil
+	}
+	return rewriteMultipartModel(contentType, body, sourceModel)
+}
+
+func rewriteMultipartModel(contentType string, body []byte, sourceModel string) ([]byte, error) {
+	mediaType, params, err := mime.ParseMediaType(strings.TrimSpace(contentType))
+	if err != nil || !strings.EqualFold(mediaType, "multipart/form-data") || strings.TrimSpace(params["boundary"]) == "" {
+		return nil, errors.New("custom group alias body is neither JSON nor multipart")
+	}
+	boundary := strings.TrimSpace(params["boundary"])
+	reader := multipart.NewReader(bytes.NewReader(body), boundary)
+	var output bytes.Buffer
+	writer := multipart.NewWriter(&output)
+	if err := writer.SetBoundary(boundary); err != nil {
+		return nil, err
+	}
+	foundModel := false
+	for {
+		part, nextErr := reader.NextPart()
+		if errors.Is(nextErr, io.EOF) {
+			break
+		}
+		if nextErr != nil {
+			return nil, nextErr
+		}
+		destination, createErr := writer.CreatePart(part.Header)
+		if createErr != nil {
+			return nil, createErr
+		}
+		if part.FormName() == "model" && part.FileName() == "" {
+			if _, err := io.Copy(io.Discard, part); err != nil {
+				return nil, err
+			}
+			if _, err := io.WriteString(destination, sourceModel); err != nil {
+				return nil, err
+			}
+			foundModel = true
+			continue
+		}
+		if _, err := io.Copy(destination, part); err != nil {
+			return nil, err
+		}
+	}
+	if !foundModel {
+		return nil, errors.New("multipart model field is missing")
+	}
+	if err := writer.Close(); err != nil {
+		return nil, err
+	}
+	return output.Bytes(), nil
+}
+
+func customGroupGeminiTargetMiddleware(apiKeys customGroupModelResolver) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		apiKey, ok := middleware.GetAPIKeyFromContext(c)
+		if !ok || apiKey == nil || apiKey.CustomGroupID == nil {
+			c.Next()
+			return
+		}
+		model := compositeGeminiModelFromParams(c)
+		if model == "" { // GET /v1beta/models is handled by the list handler.
+			c.Next()
+			return
+		}
+		resolution, err := apiKeys.ResolveCustomGroupModel(c.Request.Context(), apiKey, model)
+		if err != nil {
+			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": gin.H{"code": http.StatusForbidden, "message": "The selected model source group is unavailable", "status": "PERMISSION_DENIED"}})
+			return
+		}
+		if resolution.APIKey == nil || resolution.APIKey.Group == nil || resolution.APIKey.Group.Platform != service.PlatformGemini {
+			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": gin.H{"code": http.StatusForbidden, "message": "The selected model is not available through the Gemini API", "status": "PERMISSION_DENIED"}})
+			return
+		}
+		for i := range c.Params {
+			switch c.Params[i].Key {
+			case "model":
+				c.Params[i].Value = resolution.SourceModel
+			case "modelAction":
+				value := strings.TrimPrefix(c.Params[i].Value, "/")
+				action := ""
+				if idx := strings.LastIndex(value, ":"); idx >= 0 {
+					action = value[idx:]
+				}
+				c.Params[i].Value = "/" + resolution.SourceModel + action
+			}
+		}
+		c.Request = c.Request.WithContext(service.WithCustomGroupModelResolution(c.Request.Context(), resolution.PublicModel, resolution.SourceModel))
+		c.Set(string(middleware.ContextKeyAPIKey), resolution.APIKey)
 		c.Next()
 	}
 }
