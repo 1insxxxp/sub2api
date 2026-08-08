@@ -570,6 +570,35 @@ export default {
       unitPerRequest: '/ request',
       unitCNYPerMillion: '¥ / 1M tokens',
       unitCNYPerRequest: '¥ / request'
+    },
+    catalog: {
+      officialPrice: 'Official price',
+      sitePrice: 'Site price',
+      effectiveRate: 'Effective rate',
+      startingFrom: 'Starting from',
+      peakPrice: 'Peak price',
+      regularPrice: 'Regular price',
+      showDetails: 'Show price details',
+      hideDetails: 'Hide price details',
+      unpriced: 'Pricing unavailable',
+      cacheWrite: 'Cache write',
+      cacheRead: 'Cache read',
+      imageInput: 'Image input',
+      imageOutput: 'Image output',
+      input: 'Input',
+      output: 'Output',
+      perMillion: '/ 1M tokens',
+      perRequest: '/ request',
+      perImage: '/ image',
+      tieredPricing: 'Tiered pricing',
+      rangeBetween: '{min}–{max} tokens',
+      rangeFrom: '{min}+ tokens',
+      billingMode: {
+        token: 'Per token',
+        per_request: 'Per request',
+        image: 'Per image',
+        unknown: 'Unknown billing'
+      }
     }
   },
 

@@ -575,6 +575,35 @@ export default {
       unitPerRequest: '/ 次',
       unitCNYPerMillion: '¥ / 1M token',
       unitCNYPerRequest: '¥ / 次'
+    },
+    catalog: {
+      officialPrice: '官方价',
+      sitePrice: '本站价',
+      effectiveRate: '实际倍率',
+      startingFrom: '起',
+      peakPrice: '高峰价格',
+      regularPrice: '常规价格',
+      showDetails: '展开价格详情',
+      hideDetails: '收起价格详情',
+      unpriced: '暂未定价',
+      cacheWrite: '缓存写入',
+      cacheRead: '缓存读取',
+      imageInput: '图片输入',
+      imageOutput: '图片输出',
+      input: '输入',
+      output: '输出',
+      perMillion: '/ 1M token',
+      perRequest: '/ 次',
+      perImage: '/ 张',
+      tieredPricing: '阶梯定价',
+      rangeBetween: '{min}–{max} token',
+      rangeFrom: '{min}+ token',
+      billingMode: {
+        token: '按 Token',
+        per_request: '按次',
+        image: '按图片',
+        unknown: '未知计费'
+      }
     }
   },
 
