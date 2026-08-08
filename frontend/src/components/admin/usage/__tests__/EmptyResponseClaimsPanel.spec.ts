@@ -173,7 +173,7 @@ describe('EmptyResponseClaimsPanel', () => {
     await flushPromises()
     expect(approveClaim).toHaveBeenCalledWith(1, { note: '' })
 
-    await wrapper.findAll('input[type="checkbox"]')[0].setValue(true)
+    await wrapper.get('[data-testid="select-claim-1-mobile"]').setValue(true)
     await wrapper.get('[data-testid="batch-approve-claims"]').trigger('click')
     await wrapper.get('[data-testid="submit-claim-review"]').trigger('click')
     await flushPromises()
@@ -223,8 +223,8 @@ describe('EmptyResponseClaimsPanel', () => {
     const wrapper = mount(EmptyResponseClaimsPanel, { props: { startDate: '2026-08-01', endDate: '2026-08-07' } })
     await flushPromises()
 
-    await wrapper.findAll('input[type="checkbox"]')[0].setValue(true)
-    await wrapper.findAll('input[type="checkbox"]')[1].setValue(true)
+    await wrapper.get('[data-testid="select-claim-1-mobile"]').setValue(true)
+    await wrapper.get('[data-testid="select-claim-2-mobile"]').setValue(true)
     await wrapper.get('[data-testid="batch-approve-claims"]').trigger('click')
     await wrapper.get('[data-testid="submit-claim-review"]').trigger('click')
     await flushPromises()
@@ -235,6 +235,98 @@ describe('EmptyResponseClaimsPanel', () => {
     await wrapper.get('[data-testid="submit-claim-review"]').trigger('click')
     await flushPromises()
     expect(batchClaims).toHaveBeenLastCalledWith({ ids: [2], action: 'approved', note: '' })
+  })
+
+  it('shows every selected claim in batch review and switches the expanded detail', async () => {
+    const secondClaim = {
+      ...claim,
+      id: 2,
+      user_email: 'second@example.com',
+      group_name: 'gemini',
+      account_name: 'pool-2',
+      model: 'gemini-2.5-pro',
+      request_id: 'client:review-request-2',
+      estimated_refund: 0.75,
+      reason_code: 'pure_empty',
+    }
+    listClaims.mockResolvedValue({ items: [claim, secondClaim], total: 2, page: 1, page_size: 20, pages: 1 })
+    const wrapper = mount(EmptyResponseClaimsPanel, { props: { startDate: '2026-08-01', endDate: '2026-08-07' } })
+    await flushPromises()
+
+    await wrapper.get('[data-testid="select-claim-1-mobile"]').setValue(true)
+    await wrapper.get('[data-testid="select-claim-2-mobile"]').setValue(true)
+    await wrapper.get('[data-testid="batch-approve-claims"]').trigger('click')
+
+    expect(wrapper.get('[data-testid="batch-review-item-1"]').text()).toContain('user@example.com')
+    expect(wrapper.get('[data-testid="batch-review-item-1"]').text()).toContain('claude-opus-4-6')
+    expect(wrapper.get('[data-testid="batch-review-item-2"]').text()).toContain('second@example.com')
+    expect(wrapper.get('[data-testid="batch-review-item-2"]').text()).toContain('gemini-2.5-pro')
+    expect(wrapper.get('[data-testid="batch-review-detail-1"]').text()).toContain('client:review-request-1')
+    expect(wrapper.find('[data-testid="batch-review-detail-2"]').exists()).toBe(false)
+
+    await wrapper.get('[data-testid="toggle-batch-review-item-2"]').trigger('click')
+    expect(wrapper.find('[data-testid="batch-review-detail-1"]').exists()).toBe(false)
+    expect(wrapper.get('[data-testid="batch-review-detail-2"]').text()).toContain('client:review-request-2')
+  })
+
+  it('selects or clears every reviewable claim on the current page', async () => {
+    const secondClaim = { ...claim, id: 2, model: 'claude-sonnet-4-6', status: 'evaluating' }
+    const completedClaim = { ...claim, id: 3, model: 'claude-haiku-4-5', status: 'compensated' }
+    listClaims.mockResolvedValue({ items: [claim, secondClaim, completedClaim], total: 3, page: 1, page_size: 20, pages: 1 })
+    const wrapper = mount(EmptyResponseClaimsPanel, { props: { startDate: '2026-08-01', endDate: '2026-08-07' } })
+    await flushPromises()
+
+    const pageSelector = wrapper.get('[data-testid="select-page-claims"]')
+    await wrapper.get('[data-testid="select-claim-1-desktop"]').setValue(true)
+    expect((pageSelector.element as HTMLInputElement).indeterminate).toBe(true)
+
+    await pageSelector.setValue(true)
+    expect((wrapper.get('[data-testid="select-claim-1-desktop"]').element as HTMLInputElement).checked).toBe(true)
+    expect((wrapper.get('[data-testid="select-claim-2-desktop"]').element as HTMLInputElement).checked).toBe(true)
+    expect(wrapper.get('[data-testid="select-claim-3-desktop"]').attributes('disabled')).toBeDefined()
+
+    await pageSelector.setValue(false)
+    expect(wrapper.find('[data-testid="batch-approve-claims"]').exists()).toBe(false)
+
+    await pageSelector.setValue(true)
+    await wrapper.get('[data-testid="batch-approve-claims"]').trigger('click')
+    await wrapper.get('[data-testid="submit-claim-review"]').trigger('click')
+    await flushPromises()
+    expect(batchClaims).toHaveBeenCalledWith({ ids: [1, 2], action: 'approved', note: '' })
+  })
+
+  it('uses the mobile page selector without clearing selections from other pages', async () => {
+    const secondPageClaim = { ...claim, id: 2, model: 'claude-sonnet-4-6' }
+    listClaims.mockImplementation(({ page: requestedPage }: { page: number }) => Promise.resolve({
+      items: requestedPage === 2 ? [secondPageClaim] : [claim],
+      total: 21,
+      page: requestedPage,
+      page_size: 20,
+      pages: 2,
+    }))
+    const wrapper = mount(EmptyResponseClaimsPanel, {
+      props: { startDate: '2026-08-01', endDate: '2026-08-07' },
+      global: {
+        stubs: {
+          Pagination: {
+            props: ['page', 'total', 'pageSize'],
+            template: '<button data-testid="claim-next-page" @click="$emit(\'update:page\', 2)">next</button>',
+          },
+        },
+      },
+    })
+    await flushPromises()
+
+    await wrapper.get('[data-testid="select-page-claims-mobile"]').trigger('click')
+    await wrapper.get('[data-testid="claim-next-page"]').trigger('click')
+    await flushPromises()
+    await wrapper.get('[data-testid="select-page-claims-mobile"]').trigger('click')
+    await wrapper.get('[data-testid="select-page-claims-mobile"]').trigger('click')
+
+    await wrapper.get('[data-testid="batch-approve-claims"]').trigger('click')
+    await wrapper.get('[data-testid="submit-claim-review"]').trigger('click')
+    await flushPromises()
+    expect(batchClaims).toHaveBeenCalledWith({ ids: [1], action: 'approved', note: '' })
   })
 
   it('reports load and review failures without losing the review dialog', async () => {

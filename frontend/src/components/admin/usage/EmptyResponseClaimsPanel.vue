@@ -55,6 +55,20 @@
         <option value="rejected">{{ t('admin.usage.emptyResponseClaims.status.rejected') }}</option>
       </select>
       <button type="button" class="btn btn-secondary" :disabled="loading" @click="reload">{{ t('common.refresh') }}</button>
+      <div class="flex w-full items-center gap-2 md:hidden">
+        <button
+          data-testid="select-page-claims-mobile"
+          type="button"
+          class="btn btn-secondary btn-sm"
+          :disabled="selectableClaims.length === 0"
+          @click="togglePageSelection"
+        >
+          {{ t(allPageSelected ? 'admin.usage.emptyResponseClaims.clearPageSelection' : 'admin.usage.emptyResponseClaims.selectPage') }}
+        </button>
+        <span v-if="selectedIDs.length" class="ml-auto text-xs font-medium text-primary-600 dark:text-primary-300">
+          {{ t('admin.usage.emptyResponseClaims.selectedCount', { count: selectedIDs.length }) }}
+        </span>
+      </div>
       <div class="ml-auto flex gap-2" v-if="selectedIDs.length">
         <button data-testid="batch-approve-claims" type="button" class="btn btn-primary btn-sm" @click="openBatch('approve')">{{ t('admin.usage.emptyResponseClaims.batchApprove') }}</button>
         <button data-testid="batch-reject-claims" type="button" class="btn btn-secondary btn-sm text-rose-600" @click="openBatch('reject')">{{ t('admin.usage.emptyResponseClaims.batchReject') }}</button>
@@ -71,7 +85,14 @@
     <div data-testid="claim-mobile-cards" class="space-y-3 md:hidden">
       <article v-for="claim in claims" :key="claim.id" class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-dark-600 dark:bg-dark-800">
         <div class="flex items-start gap-3">
-          <input type="checkbox" :checked="selected.has(claim.id)" class="mt-1" @change="toggleSelected(claim.id)" />
+          <input
+            type="checkbox"
+            :data-testid="`select-claim-${claim.id}-mobile`"
+            :checked="selected.has(claim.id)"
+            :disabled="!canReview(claim)"
+            class="mt-1 disabled:cursor-not-allowed disabled:opacity-40"
+            @change="toggleSelected(claim.id)"
+          />
           <div class="min-w-0 flex-1">
             <div class="flex items-start justify-between gap-3">
               <p class="break-all font-mono text-sm font-semibold text-slate-900 dark:text-white">{{ claim.model }}</p>
@@ -99,11 +120,34 @@
     <div data-testid="claim-desktop-table" class="hidden overflow-x-auto rounded-2xl border border-slate-200 bg-white md:block dark:border-dark-600 dark:bg-dark-800">
       <table class="min-w-full divide-y divide-slate-200 text-sm dark:divide-dark-600">
         <thead class="bg-slate-50 text-left text-xs text-slate-500 dark:bg-dark-900/50 dark:text-slate-400">
-          <tr><th class="px-4 py-3"></th><th class="px-4 py-3">{{ t('admin.usage.emptyResponseClaims.identity') }}</th><th class="px-4 py-3">{{ t('usage.model') }}</th><th class="px-4 py-3">{{ t('admin.usage.emptyResponseClaims.evidence') }}</th><th class="px-4 py-3">{{ t('admin.usage.emptyResponseClaims.refund') }}</th><th class="px-4 py-3">{{ t('admin.usage.emptyResponseClaims.statusLabel') }}</th><th class="px-4 py-3 text-right">{{ t('common.actions') }}</th></tr>
+          <tr>
+            <th class="px-4 py-3">
+              <input
+                data-testid="select-page-claims"
+                type="checkbox"
+                :checked="allPageSelected"
+                :indeterminate="somePageSelected"
+                :disabled="selectableClaims.length === 0"
+                :aria-label="t(allPageSelected ? 'admin.usage.emptyResponseClaims.clearPageSelection' : 'admin.usage.emptyResponseClaims.selectPage')"
+                class="disabled:cursor-not-allowed disabled:opacity-40"
+                @change="togglePageSelection"
+              />
+            </th>
+            <th class="px-4 py-3">{{ t('admin.usage.emptyResponseClaims.identity') }}</th><th class="px-4 py-3">{{ t('usage.model') }}</th><th class="px-4 py-3">{{ t('admin.usage.emptyResponseClaims.evidence') }}</th><th class="px-4 py-3">{{ t('admin.usage.emptyResponseClaims.refund') }}</th><th class="px-4 py-3">{{ t('admin.usage.emptyResponseClaims.statusLabel') }}</th><th class="px-4 py-3 text-right">{{ t('common.actions') }}</th>
+          </tr>
         </thead>
         <tbody class="divide-y divide-slate-100 dark:divide-dark-700">
           <tr v-for="claim in claims" :key="claim.id">
-            <td class="px-4 py-3"><input type="checkbox" :checked="selected.has(claim.id)" @change="toggleSelected(claim.id)" /></td>
+            <td class="px-4 py-3">
+              <input
+                type="checkbox"
+                :data-testid="`select-claim-${claim.id}-desktop`"
+                :checked="selected.has(claim.id)"
+                :disabled="!canReview(claim)"
+                class="disabled:cursor-not-allowed disabled:opacity-40"
+                @change="toggleSelected(claim.id)"
+              />
+            </td>
             <td class="px-4 py-3"><p class="text-slate-900 dark:text-white">{{ claim.user_email }}</p><p class="text-xs text-slate-500">{{ claim.group_name }} · {{ claim.account_name }}</p></td>
             <td class="max-w-56 break-all px-4 py-3 font-mono text-xs">{{ claim.model }}</td>
             <td class="px-4 py-3 text-xs text-slate-600 dark:text-slate-300"><p>{{ evidenceSummary(claim) }}</p><p class="mt-1 break-all text-slate-500">{{ usageSummary(claim) }}</p><p class="mt-1 text-slate-500">{{ reasonSummary(claim) }}</p></td>
@@ -137,6 +181,7 @@
     <EmptyResponseClaimReviewDialog
       :show="Boolean(reviewClaim)"
       :claim="reviewClaim"
+      :claims="batchMode ? selectedClaims : undefined"
       :action="reviewAction"
       :submitting="submitting"
       :batch-count="batchMode ? selectedIDs.length : 1"
@@ -173,8 +218,17 @@ const reviewClaim = ref<AdminEmptyResponseClaim | null>(null)
 const reviewAction = ref<'view' | 'approve' | 'reject'>('view')
 const batchMode = ref(false)
 const batchResult = ref<{ succeeded: number[]; failed: Record<number, string>; claims: AdminEmptyResponseClaim[] } | null>(null)
+const reviewableStatuses = new Set(['manual_review', 'evaluating', 'approved'])
+const canReview = (claim: AdminEmptyResponseClaim) => reviewableStatuses.has(claim.status)
 const selectedIDs = computed(() => Array.from(selected.value))
+const selectedClaims = computed(() => selectedIDs.value
+  .map((id) => claimCache.value.get(id))
+  .filter((claim): claim is AdminEmptyResponseClaim => Boolean(claim)))
 const selectedEstimatedRefund = computed(() => selectedIDs.value.reduce((sum, id) => sum + (claimCache.value.get(id)?.estimated_refund ?? 0), 0))
+const selectableClaims = computed(() => claims.value.filter(canReview))
+const selectedPageCount = computed(() => selectableClaims.value.filter((claim) => selected.value.has(claim.id)).length)
+const allPageSelected = computed(() => selectableClaims.value.length > 0 && selectedPageCount.value === selectableClaims.value.length)
+const somePageSelected = computed(() => selectedPageCount.value > 0 && !allPageSelected.value)
 const warningThreshold = 0.01
 const rateWarning = computed(() => (metrics.value?.empty_response_rate ?? 0) >= warningThreshold)
 const rankings = computed(() => [
@@ -221,11 +275,21 @@ const changePage = (value: number) => {
   void load(selected.value)
 }
 const toggleSelected = (id: number) => {
+  const claim = claimCache.value.get(id)
+  if (!claim || !canReview(claim)) return
   const next = new Set(selected.value)
   next.has(id) ? next.delete(id) : next.add(id)
   selected.value = next
 }
-const canReview = (claim: AdminEmptyResponseClaim) => ['manual_review', 'evaluating', 'approved'].includes(claim.status)
+const togglePageSelection = () => {
+  if (selectableClaims.value.length === 0) return
+  const next = new Set(selected.value)
+  for (const claim of selectableClaims.value) {
+    if (allPageSelected.value) next.delete(claim.id)
+    else next.add(claim.id)
+  }
+  selected.value = next
+}
 const evidenceSummary = (claim: AdminEmptyResponseClaim) => {
   const e = claim.evidence
   return t('admin.usage.emptyResponseClaims.evidenceSummary', {
@@ -255,8 +319,7 @@ const openReview = (claim: AdminEmptyResponseClaim, action: 'approve' | 'reject'
   batchMode.value = false
 }
 const openBatch = (action: 'approve' | 'reject') => {
-  const first = claims.value.find((claim) => selected.value.has(claim.id))
-    ?? selectedIDs.value.map((id) => claimCache.value.get(id)).find((claim): claim is AdminEmptyResponseClaim => Boolean(claim))
+  const first = selectedClaims.value[0]
   if (!first) return
   reviewClaim.value = first
   reviewAction.value = action

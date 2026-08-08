@@ -6,7 +6,7 @@
           <p class="text-xs font-semibold uppercase tracking-[0.18em] text-amber-600 dark:text-amber-400">Model workspace</p>
           <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">把不同来源分组的模型汇集到同一个 API Key。</p>
         </div>
-        <button class="btn btn-primary min-h-11 w-full sm:w-auto" type="button" @click="startCreate">
+        <button data-test="custom-groups-create" class="btn btn-primary min-h-11 w-full sm:w-auto" type="button" @click="startCreate">
           <Icon name="plus" size="sm" class="mr-2" />
           新建自定义分组
         </button>
@@ -37,7 +37,7 @@
               <span v-if="group.models.length > 8" class="px-2 py-1 text-xs text-gray-500">+{{ group.models.length - 8 }}</span>
             </div>
             <div class="mt-5 flex flex-wrap gap-2">
-              <button class="btn btn-secondary btn-sm" type="button" @click="startEdit(group)">编辑</button>
+              <button :data-test="`custom-groups-edit-${group.id}`" class="btn btn-secondary btn-sm" type="button" @click="startEdit(group)">编辑</button>
               <button class="btn btn-secondary btn-sm" type="button" @click="toggle(group)">{{ group.status === 'active' ? '停用' : '启用' }}</button>
               <button class="btn btn-danger btn-sm ml-auto" type="button" @click="remove(group)">删除</button>
             </div>
@@ -63,35 +63,59 @@
             <label class="input-label">名称</label>
             <input v-model.trim="name" class="input min-h-11" maxlength="100" required placeholder="例如：酒馆统一模型" />
           </div>
-          <div class="mb-3 flex items-center justify-between gap-3">
+          <div class="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <label class="input-label mb-0">选择模型及来源</label>
-            <span class="shrink-0 rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-700 dark:bg-amber-900/30 dark:text-amber-300">已选 {{ selected.size }}</span>
+            <div class="flex items-center justify-between gap-2 sm:justify-end">
+              <button data-test="custom-group-sources-toggle-all" class="btn btn-secondary min-h-11 px-3 text-xs sm:min-h-9" type="button" :disabled="candidates.length === 0" @click="allSourcesExpanded ? collapseAllSources() : expandAllSources()">
+                {{ allSourcesExpanded ? '全部折叠' : '全部展开' }}
+              </button>
+              <span class="shrink-0 rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-700 dark:bg-amber-900/30 dark:text-amber-300">已选 {{ selected.size }}</span>
+            </div>
           </div>
           <div class="space-y-4">
-            <section v-for="source in candidates" :key="source.id" class="rounded-2xl border border-gray-200 p-4 dark:border-dark-600">
-              <div class="mb-3 flex flex-wrap items-center gap-2">
-                <strong class="text-sm text-gray-900 dark:text-white">{{ source.name }}</strong>
-                <span class="badge">{{ source.platform }}</span>
+            <section v-for="source in candidates" :key="source.id" class="overflow-hidden rounded-2xl border border-gray-200 bg-white transition-colors dark:border-dark-600 dark:bg-dark-800">
+              <button
+                :data-test="`custom-group-source-toggle-${source.id}`"
+                class="flex min-h-12 w-full items-center justify-between gap-3 px-4 py-3 text-left transition hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500 dark:hover:bg-dark-700/60"
+                type="button"
+                :aria-expanded="isSourceExpanded(source.id)"
+                :aria-controls="`custom-group-source-models-${source.id}`"
+                @click="toggleSource(source.id)"
+              >
+                <span class="flex min-w-0 flex-1 flex-wrap items-center gap-2">
+                  <strong class="min-w-0 break-words text-sm text-gray-900 dark:text-white">{{ source.name }}</strong>
+                  <span class="badge">{{ source.platform }}</span>
+                  <span class="text-xs text-gray-500 dark:text-gray-400">{{ source.models.length }} 个模型</span>
+                  <span v-if="selectedCountForSource(source.id) > 0" class="rounded-full bg-blue-50 px-2.5 py-1 text-xs font-semibold text-blue-700 dark:bg-blue-950/40 dark:text-blue-300">已选 {{ selectedCountForSource(source.id) }}</span>
+                </span>
+                <Icon name="chevronDown" size="sm" :class="['shrink-0 text-gray-400 transition-transform duration-200', isSourceExpanded(source.id) ? 'rotate-180' : '']" />
+              </button>
+              <div
+                v-if="isSourceExpanded(source.id)"
+                :id="`custom-group-source-models-${source.id}`"
+                :data-test="`custom-group-source-models-${source.id}`"
+                class="border-t border-gray-100 p-4 dark:border-dark-700"
+              >
+                <div v-if="source.models.length > 0" class="grid grid-cols-1 gap-2 xl:grid-cols-2">
+                  <article v-for="model in source.models" :key="sourceMappingKey(source.id, model)" :class="['rounded-xl border p-3 transition', isSelected(source.id, model) ? 'border-blue-300 bg-blue-50/60 dark:border-blue-800 dark:bg-blue-950/20' : 'border-gray-100 hover:border-amber-200 dark:border-dark-700 dark:hover:border-amber-900/60']">
+                    <label class="flex min-h-8 cursor-pointer items-start gap-3 text-sm">
+                      <input type="checkbox" class="checkbox mt-0.5 shrink-0" :checked="isSelected(source.id, model)" @change="selectModel(source.id, model, source.name)" />
+                      <span class="min-w-0">
+                        <span class="block text-[11px] font-medium text-gray-400">真实模型</span>
+                        <span class="block break-all font-medium text-gray-800 dark:text-gray-100">{{ model }}</span>
+                        <span class="mt-1 block text-xs text-gray-500">来源分组 · {{ source.name }}</span>
+                      </span>
+                    </label>
+                    <div v-if="isSelected(source.id, model)" class="mt-3 border-t border-blue-100 pt-3 dark:border-blue-900/50">
+                      <label class="mb-1.5 block text-xs font-semibold text-gray-600 dark:text-gray-300">调用名称</label>
+                      <input :value="selectedItem(source.id, model)?.public_model" class="input min-h-11 w-full font-mono text-sm" maxlength="200" autocomplete="off" :aria-invalid="Boolean(aliasErrors.get(sourceMappingKey(source.id, model)))" @input="updateCallName(source.id, model, ($event.target as HTMLInputElement).value)" />
+                      <p v-if="aliasErrors.get(sourceMappingKey(source.id, model))" class="mt-1.5 text-xs text-red-600">{{ aliasErrors.get(sourceMappingKey(source.id, model)) }}</p>
+                      <p v-else class="mt-1.5 text-xs text-gray-400">请求时使用该名称，实际转发与计费仍按上面的真实模型和来源分组。</p>
+                    </div>
+                  </article>
+                </div>
+                <p v-else class="text-sm text-amber-600">该分组未配置可选模型列表。</p>
               </div>
-              <div class="grid grid-cols-1 gap-2 xl:grid-cols-2">
-                <article v-for="model in source.models" :key="sourceMappingKey(source.id, model)" :class="['rounded-xl border p-3 transition', isSelected(source.id, model) ? 'border-blue-300 bg-blue-50/60 dark:border-blue-800 dark:bg-blue-950/20' : 'border-gray-100 hover:border-amber-200 dark:border-dark-700 dark:hover:border-amber-900/60']">
-                  <label class="flex min-h-8 cursor-pointer items-start gap-3 text-sm">
-                    <input type="checkbox" class="checkbox mt-0.5 shrink-0" :checked="isSelected(source.id, model)" @change="selectModel(source.id, model, source.name)" />
-                    <span class="min-w-0">
-                      <span class="block text-[11px] font-medium text-gray-400">真实模型</span>
-                      <span class="block break-all font-medium text-gray-800 dark:text-gray-100">{{ model }}</span>
-                      <span class="mt-1 block text-xs text-gray-500">来源分组 · {{ source.name }}</span>
-                    </span>
-                  </label>
-                  <div v-if="isSelected(source.id, model)" class="mt-3 border-t border-blue-100 pt-3 dark:border-blue-900/50">
-                    <label class="mb-1.5 block text-xs font-semibold text-gray-600 dark:text-gray-300">调用名称</label>
-                    <input :value="selectedItem(source.id, model)?.public_model" class="input min-h-11 w-full font-mono text-sm" maxlength="200" autocomplete="off" :aria-invalid="Boolean(aliasErrors.get(sourceMappingKey(source.id, model)))" @input="updateCallName(source.id, model, ($event.target as HTMLInputElement).value)" />
-                    <p v-if="aliasErrors.get(sourceMappingKey(source.id, model))" class="mt-1.5 text-xs text-red-600">{{ aliasErrors.get(sourceMappingKey(source.id, model)) }}</p>
-                    <p v-else class="mt-1.5 text-xs text-gray-400">请求时使用该名称，实际转发与计费仍按上面的真实模型和来源分组。</p>
-                  </div>
-                </article>
-              </div>
-              <p v-if="source.models.length === 0" class="text-sm text-amber-600">该分组未配置可选模型列表。</p>
             </section>
           </div>
         </div>
@@ -122,7 +146,9 @@ const saving = ref(false)
 const editing = ref<UserCustomGroup | null>(null)
 const name = ref('')
 const selected = ref(new Map<string, CustomGroupModelInput>())
+const expandedSourceIds = ref(new Set<number>())
 const aliasErrors = computed(() => validateCallNames([...selected.value.entries()].map(([key, item]) => ({ key, callName: item.public_model }))))
+const allSourcesExpanded = computed(() => candidates.value.length > 0 && candidates.value.every(source => expandedSourceIds.value.has(source.id)))
 
 const load = async () => {
   loading.value = true
@@ -138,15 +164,28 @@ const startCreate = () => {
   editing.value = null
   name.value = ''
   selected.value = new Map()
+  resetExpandedSources()
   mode.value = 'form'
 }
 const startEdit = (group: UserCustomGroup) => {
   editing.value = group
   name.value = group.name
   selected.value = new Map(group.models.map(model => [sourceMappingKey(model.source_group_id, model.source_model), { public_model: model.public_model, source_group_id: model.source_group_id, source_model: model.source_model }]))
+  resetExpandedSources()
   mode.value = 'form'
 }
 const backToList = () => { mode.value = 'list' }
+const resetExpandedSources = () => { expandedSourceIds.value = new Set() }
+const isSourceExpanded = (sourceId: number) => expandedSourceIds.value.has(sourceId)
+const toggleSource = (sourceId: number) => {
+  const next = new Set(expandedSourceIds.value)
+  if (next.has(sourceId)) next.delete(sourceId)
+  else next.add(sourceId)
+  expandedSourceIds.value = next
+}
+const expandAllSources = () => { expandedSourceIds.value = new Set(candidates.value.map(source => source.id)) }
+const collapseAllSources = () => { expandedSourceIds.value = new Set() }
+const selectedCountForSource = (sourceId: number) => [...selected.value.values()].filter(item => item.source_group_id === sourceId).length
 const selectedItem = (sourceId: number, model: string) => selected.value.get(sourceMappingKey(sourceId, model))
 const isSelected = (sourceId: number, model: string) => selected.value.has(sourceMappingKey(sourceId, model))
 const selectModel = (sourceId: number, model: string, sourceName: string) => {
