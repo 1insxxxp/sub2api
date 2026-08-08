@@ -425,6 +425,14 @@ describe('buildAvailableChannelCatalog', () => {
     const reorderedTarget = reordered.groups.find((entry) => entry.id === 18)
     expect(reorderedTarget?.key).toBe(baseTarget.groups[0].key)
     expect(reorderedTarget?.models[0].key).toBe(baseTarget.groups[0].models[0].key)
+
+    const reversed = buildAvailableChannelCatalog([channel('Target channel', [targetGroup, sibling])], {}, 7.2)[0]
+    const reversedTarget = reversed.groups.find((entry) => entry.id === 18)
+    const removedSibling = buildAvailableChannelCatalog([target], {}, 7.2)[0]
+    expect(reversed.key).toBe(baseTarget.key)
+    expect(reversedTarget?.key).toBe(baseTarget.groups[0].key)
+    expect(removedSibling.key).toBe(baseTarget.key)
+    expect(removedSibling.groups[0].key).toBe(baseTarget.groups[0].key)
   })
 
   it('adds occurrences only for duplicate stable channel and group identities', () => {
@@ -436,12 +444,17 @@ describe('buildAvailableChannelCatalog', () => {
     })])
 
     const catalog = buildAvailableChannelCatalog([duplicateChannelA, duplicateChannelB], {}, 7.2)
+    const exactDuplicates = buildAvailableChannelCatalog([
+      duplicateChannelA,
+      structuredClone(duplicateChannelA),
+    ], {}, 7.2)
 
     expect(new Set(catalog.map((entry) => entry.key)).size).toBe(2)
     expect(new Set(catalog[0].groups.map((entry) => entry.key)).size).toBe(2)
+    expect(exactDuplicates[1].key).toBe(`${exactDuplicates[0].key}:occ:1`)
   })
 
-  it('keeps distinct same-name channel keys stable when those channels reorder or grow', () => {
+  it('keeps case-variant channel keys stable when those channels reorder or grow', () => {
     const first = channel('Shared channel', [
       group(93, 'First route', { supported_models: [model('model-a', pricing())] }),
     ], { description: 'First upstream route' })
@@ -483,7 +496,7 @@ describe('buildAvailableChannelCatalog', () => {
         rate_multiplier: 0.5,
         supported_models: [model('model-a', pricing({ input_price: 5 }))],
       }),
-    ], { description: 'Stable route identity' })
+    ], { description: 'Updated route copy' })
     const after = channel('Mutable catalog data', [
       group(96, 'Renamed display group', {
         rate_multiplier: 1.25,
@@ -505,12 +518,12 @@ describe('buildAvailableChannelCatalog', () => {
     expect(refreshed.groups[0].key).toBe(original.groups[0].key)
   })
 
-  it('uses full canonical identities and namespaces shared group ids by channel', () => {
-    const first = channel('Collision candidate', [
-      group(97, 'First group', { supported_models: [model('same-model', pricing())] }),
+  it('preserves case-sensitive channel identities and namespaces shared group ids by channel', () => {
+    const upper = channel('Foo', [
+      group(97, 'Shared shape', { supported_models: [model('same-model', pricing())] }),
     ], { description: 'Same description' })
-    const second = channel(' collision CANDIDATE ', [
-      group(98, 'Second group', { supported_models: [model('same-model', pricing())] }),
+    const lower = channel('foo', [
+      group(97, 'Shared shape', { supported_models: [model('same-model', pricing())] }),
     ], { description: 'Same description' })
     const sharedGroupFirst = channel('Shared group A', [
       group(99, 'Shared id', { supported_models: [model('shared-model', pricing())] }),
@@ -519,15 +532,38 @@ describe('buildAvailableChannelCatalog', () => {
       group(99, 'Shared id', { supported_models: [model('shared-model', pricing())] }),
     ], { description: 'Route B' })
 
-    const collisionCandidates = buildAvailableChannelCatalog([first, second], {}, 7.2)
+    const caseVariants = buildAvailableChannelCatalog([upper, lower], {}, 7.2)
+    const reorderedCaseVariants = buildAvailableChannelCatalog([lower, upper], {}, 7.2)
     const sharedGroups = buildAvailableChannelCatalog([sharedGroupFirst, sharedGroupSecond], {}, 7.2)
 
-    expect(collisionCandidates[0].key).not.toBe(collisionCandidates[1].key)
-    expect(collisionCandidates.every((entry) => !entry.key.includes(':fp:'))).toBe(true)
+    expect(caseVariants[0].key).not.toBe(caseVariants[1].key)
+    expect(reorderedCaseVariants.find((entry) => entry.name === 'Foo')?.key).toBe(caseVariants[0].key)
+    expect(reorderedCaseVariants.find((entry) => entry.name === 'foo')?.key).toBe(caseVariants[1].key)
+    expect(caseVariants.every((entry) => !entry.key.includes(':fp:'))).toBe(true)
     expect(sharedGroups[0].groups[0].key).not.toBe(sharedGroups[1].groups[0].key)
     expect(sharedGroups[0].groups[0].models[0].key).not.toBe(
       sharedGroups[1].groups[0].models[0].key,
     )
+  })
+
+  it('keeps an exact-name channel key stable as a case-variant peer appears and disappears', () => {
+    const target = channel('Peer-sensitive channel', [
+      group(100, 'Target route', { supported_models: [model('target-model', pricing())] }),
+    ], { description: 'Shared base identity' })
+    const peer = channel(' peer-sensitive CHANNEL ', [
+      group(101, 'Peer route', { supported_models: [model('peer-model', pricing())] }),
+    ], { description: 'Shared base identity' })
+
+    const aloneBefore = buildAvailableChannelCatalog([target], {}, 7.2)[0]
+    const withPeer = buildAvailableChannelCatalog([target, peer], {}, 7.2)
+    const reordered = buildAvailableChannelCatalog([peer, target], {}, 7.2)
+    const aloneAfter = buildAvailableChannelCatalog([target], {}, 7.2)[0]
+    const targetWithPeer = withPeer.find((entry) => entry.groups[0].id === 100)
+    const targetReordered = reordered.find((entry) => entry.groups[0].id === 100)
+
+    expect(targetWithPeer?.key).toBe(aloneBefore.key)
+    expect(targetReordered?.key).toBe(aloneBefore.key)
+    expect(aloneAfter.key).toBe(aloneBefore.key)
   })
 
   it('safely creates keys from upstream names containing lone UTF-16 surrogates', () => {

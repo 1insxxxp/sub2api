@@ -92,25 +92,34 @@ interface PriceContext {
   peakFactor: number | null
 }
 
-function keySegment(value: string): string {
-  let wellFormed = ''
-  for (let index = 0; index < value.length; index += 1) {
-    const code = value.charCodeAt(index)
+function safelyEncodedKeySegment(value: string, preserveCase: boolean): string {
+  const normalized = preserveCase ? value.trim() : value.trim().toLocaleLowerCase()
+  let encoded = ''
+  for (let index = 0; index < normalized.length; index += 1) {
+    const code = normalized.charCodeAt(index)
     if (code >= 0xd800 && code <= 0xdbff) {
-      const next = value.charCodeAt(index + 1)
+      const next = normalized.charCodeAt(index + 1)
       if (next >= 0xdc00 && next <= 0xdfff) {
-        wellFormed += value[index] + value[index + 1]
+        encoded += encodeURIComponent(normalized[index] + normalized[index + 1])
         index += 1
       } else {
-        wellFormed += '\ufffd'
+        encoded += `%u${code.toString(16).padStart(4, '0')}`
       }
     } else if (code >= 0xdc00 && code <= 0xdfff) {
-      wellFormed += '\ufffd'
+      encoded += `%u${code.toString(16).padStart(4, '0')}`
     } else {
-      wellFormed += value[index]
+      encoded += encodeURIComponent(normalized[index])
     }
   }
-  return encodeURIComponent(wellFormed.trim().toLowerCase())
+  return encoded
+}
+
+function keySegment(value: string): string {
+  return safelyEncodedKeySegment(value, false)
+}
+
+function exactKeySegment(value: string): string {
+  return safelyEncodedKeySegment(value, true)
 }
 
 function unique(values: string[]): string[] {
@@ -219,33 +228,6 @@ function resolvePlatform(platform: string | null | undefined, fallback: string):
   return normalized === '' || normalized.toLowerCase() === 'composite'
     ? fallback
     : normalized
-}
-
-function normalizedIdentityText(value: string): string {
-  return value.trim().toLocaleLowerCase()
-}
-
-function channelBaseIdentity(channel: UserAvailableChannel): string {
-  return JSON.stringify([
-    normalizedIdentityText(channel.name),
-    normalizedIdentityText(channel.description),
-  ])
-}
-
-function channelCanonicalIdentity(
-  channel: UserAvailableChannel,
-  baseIdentity: string,
-  includeGroups: boolean,
-): string {
-  if (!includeGroups) return baseIdentity
-  const sections = channel.platforms.map((section) => {
-    const groups = section.groups.map((group) => [
-      group.id,
-      normalizedIdentityText(resolvePlatform(group.platform, section.platform)),
-    ] as const).sort((left, right) => JSON.stringify(left).localeCompare(JSON.stringify(right)))
-    return [normalizedIdentityText(section.platform), groups] as const
-  }).sort((left, right) => JSON.stringify(left).localeCompare(JSON.stringify(right)))
-  return JSON.stringify([baseIdentity, sections])
 }
 
 function deduplicateModels(models: UserSupportedModel[]): UserSupportedModel[] {
@@ -394,22 +376,14 @@ export function buildAvailableChannelCatalog(
   userGroupRates: Record<number, number>,
   cnyMultiplier: number,
 ): CatalogChannelEntry[] {
-  const baseIdentities = rows.map(channelBaseIdentity)
-  const baseIdentityCounts = new Map<string, number>()
-  baseIdentities.forEach((identity) => {
-    baseIdentityCounts.set(identity, (baseIdentityCounts.get(identity) ?? 0) + 1)
-  })
   const channelOccurrences = new Map<string, number>()
-  return rows.map((channel, channelIndex) => {
-    const baseIdentity = baseIdentities[channelIndex]
-    const canonicalIdentity = channelCanonicalIdentity(
-      channel,
-      baseIdentity,
-      (baseIdentityCounts.get(baseIdentity) ?? 0) > 1,
-    )
+  return rows.map((channel) => {
+    // Database invariant: idx_channels_name is a case-sensitive UNIQUE index.
+    // Exact trimmed names are therefore the only stable channel identity in production.
+    const canonicalIdentity = channel.name.trim()
     const channelOccurrence = channelOccurrences.get(canonicalIdentity) ?? 0
     channelOccurrences.set(canonicalIdentity, channelOccurrence + 1)
-    const channelKey = `channel:${keySegment(canonicalIdentity)}${channelOccurrence > 0 ? `:occ:${channelOccurrence}` : ''}`
+    const channelKey = `channel:${exactKeySegment(canonicalIdentity)}${channelOccurrence > 0 ? `:occ:${channelOccurrence}` : ''}`
     const groupOccurrences = new Map<string, number>()
     const groups = channel.platforms.flatMap((section) => {
       const hasGroupScopedModels = section.groups.some((item) => Array.isArray(item.supported_models))
