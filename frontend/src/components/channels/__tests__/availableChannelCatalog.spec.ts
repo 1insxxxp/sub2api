@@ -193,6 +193,67 @@ describe('buildAvailableChannelCatalog', () => {
     expect(entry.prices.output).toBeNull()
   })
 
+  it('disables site prices for zero or non-finite CNY multipliers while preserving official prices', () => {
+    const source = channel('CNY disabled', [
+      group(81, 'Published prices', {
+        peak_rate_enabled: true,
+        peak_rate_multiplier: 2,
+        supported_models: [model('priced', pricing({ input_price: 5, output_price: 0 }))],
+      }),
+    ])
+
+    for (const multiplier of [0, Number.NaN, Number.POSITIVE_INFINITY]) {
+      const entry = buildAvailableChannelCatalog([source], {}, multiplier)[0].groups[0].models[0]
+
+      expect(entry.prices.input).toEqual({ official: 5, site: null, peakSite: null })
+      expect(entry.prices.output).toEqual({ official: 0, site: null, peakSite: null })
+    }
+
+    const validEntry = buildAvailableChannelCatalog([source], {}, 7.2)[0].groups[0].models[0]
+    expect(validEntry.prices.output).toEqual({ official: 0, site: 0, peakSite: 0 })
+  })
+
+  it('normalizes invalid prices and rates without exposing NaN or Infinity', () => {
+    const invalidRaw = channel('Invalid raw prices', [
+      group(82, 'Invalid raw', {
+        supported_models: [model('broken-price', pricing({
+          input_price: Number.NaN,
+          output_price: Number.POSITIVE_INFINITY,
+          cache_write_price: Number.MAX_VALUE,
+        }))],
+      }),
+    ])
+    const invalidRates = channel('Invalid rates', [
+      group(83, 'Fallback rate', {
+        rate_multiplier: 0.25,
+        peak_rate_enabled: true,
+        peak_rate_multiplier: Number.POSITIVE_INFINITY,
+        supported_models: [model('valid-price', pricing())],
+      }),
+      group(84, 'Invalid default rate', {
+        rate_multiplier: Number.POSITIVE_INFINITY,
+        supported_models: [model('fallback-default', pricing())],
+      }),
+    ])
+
+    const rawEntry = buildAvailableChannelCatalog([invalidRaw], {}, 7.2)[0].groups[0].models[0]
+    const rateGroups = buildAvailableChannelCatalog([invalidRates], { 83: Number.NaN }, 7.2)[0].groups
+
+    expect(rawEntry.prices.input).toBeNull()
+    expect(rawEntry.prices.output).toBeNull()
+    expect(rawEntry.prices.cacheWrite).toEqual({
+      official: Number.MAX_VALUE,
+      site: null,
+      peakSite: null,
+    })
+    expect(rateGroups[0]).toMatchObject({ defaultRate: 0.25, userRate: null, normalRate: 0.25 })
+    expect(rateGroups[0].peak).toMatchObject({ factor: 1 })
+    expect(rateGroups[0].models[0].prices.input?.site).toBe(9)
+    expect(rateGroups[0].models[0].prices.input?.peakSite).toBe(9)
+    expect(rateGroups[1]).toMatchObject({ defaultRate: 1, userRate: null, normalRate: 1 })
+    expect(rateGroups[1].models[0].prices.input?.site).toBe(36)
+  })
+
   it('normalizes image and per-request prices without applying peak multipliers', () => {
     const source = channel('Media', [
       group(9, 'Media peak group', {
@@ -318,6 +379,77 @@ describe('buildAvailableChannelCatalog', () => {
     expect(new Set(entries.map((entry) => entry.key)).size).toBe(3)
   })
 
+  it('resolves composite group and model platforms to the concrete section platform', () => {
+    const composite = group(16, 'Composite route', {
+      platform: 'composite',
+      supported_models: [model('claude-composite', pricing(), '')],
+    })
+    const explicit = group(17, 'Explicit route', {
+      platform: 'openai',
+      supported_models: [model('openai-explicit', pricing(), '')],
+    })
+    const source = channel('Expanded platforms', [composite, explicit])
+
+    const catalog = buildAvailableChannelCatalog([source], {}, 7.2)
+
+    expect(catalog[0].groups[0].platform).toBe('anthropic')
+    expect(catalog[0].groups[0].models[0].platform).toBe('anthropic')
+    expect(catalog[0].groups[1].platform).toBe('openai')
+    expect(catalog[0].groups[1].models[0].platform).toBe('openai')
+    expect(filterAvailableChannelCatalog(catalog, {
+      search: '', platform: 'anthropic', pricedOnly: false,
+    })[0].groups.map((entry) => entry.id)).toEqual([16])
+  })
+
+  it('keeps channel, group, and model keys stable when unrelated rows are inserted or reordered', () => {
+    const targetGroup = group(18, 'Target group', {
+      supported_models: [model('target-model', pricing())],
+    })
+    const target = channel('Target channel', [targetGroup])
+    const unrelated = channel('Unrelated channel', [
+      group(19, 'Unrelated group', { supported_models: [model('other', pricing())] }),
+    ])
+    const baseTarget = buildAvailableChannelCatalog([target], {}, 7.2)[0]
+    const insertedTarget = buildAvailableChannelCatalog([unrelated, target], {}, 7.2)[1]
+
+    expect(insertedTarget.key).toBe(baseTarget.key)
+    expect(insertedTarget.groups[0].key).toBe(baseTarget.groups[0].key)
+    expect(insertedTarget.groups[0].models[0].key).toBe(baseTarget.groups[0].models[0].key)
+
+    const sibling = group(20, 'Sibling', { supported_models: [model('sibling', pricing())] })
+    const reordered = buildAvailableChannelCatalog([channel('Target channel', [sibling, targetGroup])], {}, 7.2)[0]
+    const reorderedTarget = reordered.groups.find((entry) => entry.id === 18)
+    expect(reorderedTarget?.key).toBe(baseTarget.groups[0].key)
+    expect(reorderedTarget?.models[0].key).toBe(baseTarget.groups[0].models[0].key)
+  })
+
+  it('adds occurrences only for duplicate stable channel and group identities', () => {
+    const duplicateGroupA = group(90, 'Duplicate A', { supported_models: [model('a', pricing())] })
+    const duplicateGroupB = group(90, 'Duplicate B', { supported_models: [model('b', pricing())] })
+    const duplicateChannelA = channel('Same channel', [duplicateGroupA, duplicateGroupB])
+    const duplicateChannelB = channel(' same CHANNEL ', [group(91, 'Other', {
+      supported_models: [model('c', pricing())],
+    })])
+
+    const catalog = buildAvailableChannelCatalog([duplicateChannelA, duplicateChannelB], {}, 7.2)
+
+    expect(new Set(catalog.map((entry) => entry.key)).size).toBe(2)
+    expect(new Set(catalog[0].groups.map((entry) => entry.key)).size).toBe(2)
+  })
+
+  it('safely creates keys from upstream names containing lone UTF-16 surrogates', () => {
+    const source = channel('Broken\uD800 channel', [
+      group(92, 'Safe group', {
+        supported_models: [model('Broken\uDFFF model', pricing())],
+      }),
+    ])
+
+    expect(() => buildAvailableChannelCatalog([source], {}, 7.2)).not.toThrow()
+    const catalog = buildAvailableChannelCatalog([source], {}, 7.2)
+    expect(catalog[0].key).toContain('channel:')
+    expect(catalog[0].groups[0].models[0].key).toContain(':model:')
+  })
+
   it('attaches section fallback models only to the first group when group-scoped arrays are unavailable', () => {
     const first = group(13, 'First', { rate_multiplier: 0.5 })
     const second = group(14, 'Second', { rate_multiplier: 2 })
@@ -419,6 +551,62 @@ describe('filterAvailableChannelCatalog', () => {
     })
 
     expect(result).toEqual([])
+  })
+
+  it('retains raw empty groups by default, with platform filters, and on metadata matches', () => {
+    const emptyCatalog = buildAvailableChannelCatalog([
+      channel('Empty Channel', [group(41, 'Empty Group')]),
+    ], {}, 7.2)
+
+    const defaults = filterAvailableChannelCatalog(emptyCatalog, {
+      search: '', platform: 'all', pricedOnly: false,
+    })
+    const byPlatform = filterAvailableChannelCatalog(emptyCatalog, {
+      search: '', platform: 'anthropic', pricedOnly: false,
+    })
+    const byChannel = filterAvailableChannelCatalog(emptyCatalog, {
+      search: 'empty channel', platform: 'all', pricedOnly: false,
+    })
+    const byGroup = filterAvailableChannelCatalog(emptyCatalog, {
+      search: 'empty group', platform: 'all', pricedOnly: false,
+    })
+
+    for (const result of [defaults, byPlatform, byChannel, byGroup]) {
+      expect(result).toHaveLength(1)
+      expect(result[0]).toMatchObject({ groupCount: 1, modelCount: 0 })
+      expect(result[0].groups[0]).toMatchObject({ id: 41, modelCount: 0, models: [] })
+    }
+  })
+
+  it('removes raw empty groups on unmatched model search but not solely for priced-only', () => {
+    const emptyCatalog = buildAvailableChannelCatalog([
+      channel('Empty Channel', [group(42, 'Empty Group')]),
+    ], {}, 7.2)
+
+    expect(filterAvailableChannelCatalog(emptyCatalog, {
+      search: 'missing-model', platform: 'all', pricedOnly: false,
+    })).toEqual([])
+    expect(filterAvailableChannelCatalog(emptyCatalog, {
+      search: '', platform: 'all', pricedOnly: true,
+    })[0]).toMatchObject({ groupCount: 1, modelCount: 0 })
+    expect(filterAvailableChannelCatalog(emptyCatalog, {
+      search: '', platform: 'openai', pricedOnly: false,
+    })).toEqual([])
+  })
+
+  it('removes originally nonempty groups when model search or priced-only empties them', () => {
+    const nonemptyCatalog = buildAvailableChannelCatalog([
+      channel('Unpriced Channel', [
+        group(43, 'Unpriced Group', { supported_models: [model('unpriced-model', null)] }),
+      ]),
+    ], {}, 7.2)
+
+    expect(filterAvailableChannelCatalog(nonemptyCatalog, {
+      search: 'different-model', platform: 'all', pricedOnly: false,
+    })).toEqual([])
+    expect(filterAvailableChannelCatalog(nonemptyCatalog, {
+      search: '', platform: 'all', pricedOnly: true,
+    })).toEqual([])
   })
 
   it('does not mutate the source catalog while filtering', () => {

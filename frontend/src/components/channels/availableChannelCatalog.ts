@@ -93,21 +93,60 @@ interface PriceContext {
 }
 
 function keySegment(value: string): string {
-  return encodeURIComponent(value.trim().toLowerCase())
+  let wellFormed = ''
+  for (let index = 0; index < value.length; index += 1) {
+    const code = value.charCodeAt(index)
+    if (code >= 0xd800 && code <= 0xdbff) {
+      const next = value.charCodeAt(index + 1)
+      if (next >= 0xdc00 && next <= 0xdfff) {
+        wellFormed += value[index] + value[index + 1]
+        index += 1
+      } else {
+        wellFormed += '\ufffd'
+      }
+    } else if (code >= 0xdc00 && code <= 0xdfff) {
+      wellFormed += '\ufffd'
+    } else {
+      wellFormed += value[index]
+    }
+  }
+  return encodeURIComponent(wellFormed.trim().toLowerCase())
 }
 
 function unique(values: string[]): string[] {
   return [...new Set(values)]
 }
 
+function finiteRate(value: number | null | undefined): number | null {
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : null
+}
+
 function priceValue(rawValue: number | null, context: PriceContext): CatalogPriceValue | null {
-  if (rawValue == null) return null
+  if (rawValue == null || !Number.isFinite(rawValue)) return null
+
+  if (
+    !Number.isFinite(context.cnyMultiplier)
+    || context.cnyMultiplier <= 0
+    || !Number.isFinite(context.normalRate)
+    || context.normalRate < 0
+  ) {
+    return { official: rawValue, site: null, peakSite: null }
+  }
 
   const site = rawValue * context.cnyMultiplier * context.normalRate
+  if (!Number.isFinite(site)) {
+    return { official: rawValue, site: null, peakSite: null }
+  }
+
+  const peakSite = context.peakFactor == null
+    || !Number.isFinite(context.peakFactor)
+    || context.peakFactor < 0
+    ? null
+    : site * context.peakFactor
   return {
     official: rawValue,
     site,
-    peakSite: context.peakFactor == null ? null : site * context.peakFactor,
+    peakSite: peakSite != null && Number.isFinite(peakSite) ? peakSite : null,
   }
 }
 
@@ -140,28 +179,33 @@ function collectionHasPricing(prices: CatalogPriceCollection): boolean {
 
 function intervalFingerprint(interval: UserPricingInterval): unknown[] {
   return [
-    interval.min_tokens,
-    interval.max_tokens,
+    fingerprintNumber(interval.min_tokens),
+    fingerprintNumber(interval.max_tokens),
     interval.tier_label ?? null,
-    interval.input_price,
-    interval.output_price,
-    interval.cache_write_price,
-    interval.cache_read_price,
-    interval.per_request_price,
+    fingerprintNumber(interval.input_price),
+    fingerprintNumber(interval.output_price),
+    fingerprintNumber(interval.cache_write_price),
+    fingerprintNumber(interval.cache_read_price),
+    fingerprintNumber(interval.per_request_price),
   ]
+}
+
+function fingerprintNumber(value: number | null): number | string | null {
+  if (value == null || Number.isFinite(value)) return value
+  return String(value)
 }
 
 function pricingFingerprint(modelPricing: UserSupportedModelPricing | null): unknown {
   if (modelPricing == null) return null
   return [
     modelPricing.billing_mode,
-    modelPricing.input_price,
-    modelPricing.output_price,
-    modelPricing.cache_write_price,
-    modelPricing.cache_read_price,
-    modelPricing.image_input_price,
-    modelPricing.image_output_price,
-    modelPricing.per_request_price,
+    fingerprintNumber(modelPricing.input_price),
+    fingerprintNumber(modelPricing.output_price),
+    fingerprintNumber(modelPricing.cache_write_price),
+    fingerprintNumber(modelPricing.cache_read_price),
+    fingerprintNumber(modelPricing.image_input_price),
+    fingerprintNumber(modelPricing.image_output_price),
+    fingerprintNumber(modelPricing.per_request_price),
     (modelPricing.intervals ?? []).map(intervalFingerprint),
   ]
 }
@@ -185,13 +229,30 @@ function normalizeIntervals(
   modelKey: string,
   context: PriceContext,
 ): CatalogPricingInterval[] {
-  return intervals.map((interval, index) => ({
-    key: `${modelKey}:interval:${index}:${interval.min_tokens}:${interval.max_tokens ?? 'max'}`,
-    minTokens: interval.min_tokens,
-    maxTokens: interval.max_tokens,
-    tierLabel: interval.tier_label ?? null,
-    prices: priceCollection(interval, context),
-  }))
+  const occurrences = new Map<string, number>()
+  return intervals.map((interval) => {
+    const identity = [
+      interval.min_tokens,
+      interval.max_tokens ?? 'max',
+      keySegment(interval.tier_label ?? ''),
+    ].join(':')
+    const occurrence = occurrences.get(identity) ?? 0
+    occurrences.set(identity, occurrence + 1)
+    return {
+      key: `${modelKey}:interval:${identity}${occurrence > 0 ? `:occ:${occurrence}` : ''}`,
+      minTokens: interval.min_tokens,
+      maxTokens: interval.max_tokens,
+      tierLabel: interval.tier_label ?? null,
+      prices: priceCollection(interval, context),
+    }
+  })
+}
+
+function resolvePlatform(platform: string | null | undefined, fallback: string): string {
+  const normalized = platform?.trim() ?? ''
+  return normalized === '' || normalized.toLowerCase() === 'composite'
+    ? fallback
+    : normalized
 }
 
 function normalizeModel(
@@ -203,11 +264,13 @@ function normalizeModel(
   defaultRate: number,
   userRate: number | null,
   normalRate: number,
+  resolvedGroupPlatform: string,
+  configuredPeakFactor: number | null,
 ): CatalogModelEntry {
   const billingMode = source.pricing?.billing_mode ?? null
   const peakFactor =
     billingMode === BILLING_MODE_TOKEN && group.peak_rate_enabled
-      ? group.peak_rate_multiplier
+      ? configuredPeakFactor
       : null
   const context: PriceContext = { cnyMultiplier, normalRate, peakFactor }
   const modelKey = `${groupKey}:model:${keySegment(source.name)}:${occurrence}`
@@ -228,7 +291,7 @@ function normalizeModel(
     key: modelKey,
     groupKey,
     name: source.name,
-    platform: source.platform || group.platform,
+    platform: resolvePlatform(source.platform, resolvedGroupPlatform),
     billingMode,
     hasPricing: collectionHasPricing(prices)
       || intervals.some((interval) => collectionHasPricing(interval.prices)),
@@ -245,17 +308,17 @@ function normalizeGroup(
   source: UserAvailableGroup,
   models: UserSupportedModel[],
   channelKey: string,
-  sectionPlatform: string,
-  sectionIndex: number,
-  groupIndex: number,
+  groupKey: string,
+  resolvedPlatform: string,
   userGroupRates: Record<number, number>,
   cnyMultiplier: number,
 ): CatalogGroupEntry {
-  const defaultRate = source.rate_multiplier ?? 1
-  const userRate = userGroupRates[source.id] ?? null
-  const normalRate = userGroupRates[source.id] ?? source.rate_multiplier ?? 1
-  const platform = source.platform || sectionPlatform
-  const groupKey = `${channelKey}:section:${sectionIndex}:${keySegment(sectionPlatform)}:group:${source.id}:${groupIndex}`
+  const defaultRate = finiteRate(source.rate_multiplier) ?? 1
+  const userRate = finiteRate(userGroupRates[source.id])
+  const normalRate = userRate ?? defaultRate
+  const configuredPeakFactor = source.peak_rate_enabled
+    ? finiteRate(source.peak_rate_multiplier) ?? 1
+    : null
   const occurrences = new Map<string, number>()
   const normalizedModels = deduplicateModels(models).map((item) => {
     const modelIdentity = keySegment(item.name)
@@ -270,6 +333,8 @@ function normalizeGroup(
       defaultRate,
       userRate,
       normalRate,
+      resolvedPlatform,
+      configuredPeakFactor,
     )
   })
 
@@ -278,7 +343,7 @@ function normalizeGroup(
     channelKey,
     id: source.id,
     name: source.name,
-    platform,
+    platform: resolvedPlatform,
     subscriptionType: source.subscription_type,
     isExclusive: source.is_exclusive,
     normalRate,
@@ -289,7 +354,7 @@ function normalizeGroup(
           enabled: true,
           start: source.peak_start,
           end: source.peak_end,
-          factor: source.peak_rate_multiplier,
+          factor: configuredPeakFactor ?? 1,
         }
       : null,
     models: normalizedModels,
@@ -302,9 +367,14 @@ export function buildAvailableChannelCatalog(
   userGroupRates: Record<number, number>,
   cnyMultiplier: number,
 ): CatalogChannelEntry[] {
-  return rows.map((channel, channelIndex) => {
-    const channelKey = `channel:${channelIndex}:${keySegment(channel.name)}`
-    const groups = channel.platforms.flatMap((section, sectionIndex) => {
+  const channelOccurrences = new Map<string, number>()
+  return rows.map((channel) => {
+    const channelIdentity = keySegment(channel.name)
+    const channelOccurrence = channelOccurrences.get(channelIdentity) ?? 0
+    channelOccurrences.set(channelIdentity, channelOccurrence + 1)
+    const channelKey = `channel:${channelIdentity}${channelOccurrence > 0 ? `:occ:${channelOccurrence}` : ''}`
+    const groupOccurrences = new Map<string, number>()
+    const groups = channel.platforms.flatMap((section) => {
       const hasGroupScopedModels = section.groups.some((item) => Array.isArray(item.supported_models))
 
       return section.groups.map((item, groupIndex) => {
@@ -313,13 +383,17 @@ export function buildAvailableChannelCatalog(
           : groupIndex === 0
             ? section.supported_models ?? []
             : []
+        const resolvedPlatform = resolvePlatform(item.platform, section.platform)
+        const groupIdentity = `${keySegment(resolvedPlatform)}:${item.id}`
+        const groupOccurrence = groupOccurrences.get(groupIdentity) ?? 0
+        groupOccurrences.set(groupIdentity, groupOccurrence + 1)
+        const groupKey = `${channelKey}:platform:${keySegment(resolvedPlatform)}:group:${item.id}${groupOccurrence > 0 ? `:occ:${groupOccurrence}` : ''}`
         return normalizeGroup(
           item,
           models,
           channelKey,
-          section.platform,
-          sectionIndex,
-          groupIndex,
+          groupKey,
+          resolvedPlatform,
           userGroupRates,
           cnyMultiplier,
         )
@@ -329,8 +403,12 @@ export function buildAvailableChannelCatalog(
     return {
       key: channelKey,
       name: channel.name,
-      description: channel.description,
-      platforms: unique(channel.platforms.map((section) => section.platform)),
+      description: channel.description || '',
+      platforms: unique(
+        groups.length > 0
+          ? groups.map((group) => group.platform)
+          : channel.platforms.map((section) => section.platform),
+      ),
       groups,
       groupCount: groups.length,
       modelCount: groups.reduce((count, item) => count + item.modelCount, 0),
@@ -360,14 +438,16 @@ export function filterAvailableChannelCatalog(
       if (!platformMatches(group, filters.platform)) return []
 
       const groupMatches = search !== '' && includes(group.name, search)
-      let models = search === '' || channelMatches || groupMatches
+      const metadataMatches = search === '' || channelMatches || groupMatches
+      let models = metadataMatches
         ? group.models
         : group.models.filter((model) => includes(model.name, search))
 
       if (filters.pricedOnly) {
         models = models.filter((model) => model.hasPricing)
       }
-      if (models.length === 0) return []
+      const isRawEmptyGroup = group.models.length === 0
+      if (models.length === 0 && !(isRawEmptyGroup && metadataMatches)) return []
 
       return [{ ...group, models: [...models], modelCount: models.length }]
     })
