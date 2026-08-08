@@ -61,6 +61,13 @@
       </div>
     </div>
 
+    <div v-if="batchResult" data-testid="batch-result" class="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm dark:border-dark-600 dark:bg-dark-900/50">
+      <p class="font-medium text-slate-800 dark:text-slate-200">{{ t('admin.usage.emptyResponseClaims.batchResult', { succeeded: batchResult.succeeded.length, failed: Object.keys(batchResult.failed).length }) }}</p>
+      <ul v-if="Object.keys(batchResult.failed).length" class="mt-2 space-y-1 text-rose-600 dark:text-rose-300">
+        <li v-for="(reason, id) in batchResult.failed" :key="id">#{{ id }}: {{ reason }}</li>
+      </ul>
+    </div>
+
     <div data-testid="claim-mobile-cards" class="space-y-3 md:hidden">
       <article v-for="claim in claims" :key="claim.id" class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-dark-600 dark:bg-dark-800">
         <div class="flex items-start gap-3">
@@ -72,6 +79,7 @@
             </div>
             <p class="mt-2 text-xs text-slate-500">{{ claim.user_email }} · {{ claim.group_name }} · {{ claim.account_name }}</p>
             <p class="mt-2 text-xs text-slate-600 dark:text-slate-300">{{ evidenceSummary(claim) }}</p>
+            <p class="mt-1 break-all text-xs text-slate-500 dark:text-slate-400">{{ usageSummary(claim) }}</p>
             <p class="mt-1 text-xs text-slate-500">{{ reasonSummary(claim) }}</p>
             <div class="mt-3 flex items-center justify-between">
               <span class="font-mono text-sm font-semibold text-emerald-600">${{ claim.estimated_refund.toFixed(6) }}</span>
@@ -95,7 +103,7 @@
             <td class="px-4 py-3"><input type="checkbox" :checked="selected.has(claim.id)" @change="toggleSelected(claim.id)" /></td>
             <td class="px-4 py-3"><p class="text-slate-900 dark:text-white">{{ claim.user_email }}</p><p class="text-xs text-slate-500">{{ claim.group_name }} · {{ claim.account_name }}</p></td>
             <td class="max-w-56 break-all px-4 py-3 font-mono text-xs">{{ claim.model }}</td>
-            <td class="px-4 py-3 text-xs text-slate-600 dark:text-slate-300"><p>{{ evidenceSummary(claim) }}</p><p class="mt-1 text-slate-500">{{ reasonSummary(claim) }}</p></td>
+            <td class="px-4 py-3 text-xs text-slate-600 dark:text-slate-300"><p>{{ evidenceSummary(claim) }}</p><p class="mt-1 break-all text-slate-500">{{ usageSummary(claim) }}</p><p class="mt-1 text-slate-500">{{ reasonSummary(claim) }}</p></td>
             <td class="px-4 py-3 font-mono text-emerald-600">${{ claim.estimated_refund.toFixed(6) }}</td>
             <td class="px-4 py-3"><span :class="statusClass(claim.status)" class="rounded-full px-2 py-1 text-xs font-semibold">{{ t(`admin.usage.emptyResponseClaims.status.${claim.status}`) }}</span></td>
             <td class="px-4 py-3 text-right"><div v-if="canReview(claim)" class="flex justify-end gap-2"><button :data-testid="`reject-claim-${claim.id}`" class="btn btn-secondary btn-sm text-rose-600" @click="openReview(claim, 'reject')">{{ t('admin.usage.emptyResponseClaims.reject') }}</button><button :data-testid="`approve-claim-${claim.id}`" class="btn btn-primary btn-sm" @click="openReview(claim, 'approve')">{{ t('admin.usage.emptyResponseClaims.approve') }}</button></div></td>
@@ -120,6 +128,8 @@
       :claim="reviewClaim"
       :action="reviewAction"
       :submitting="submitting"
+      :batch-count="batchMode ? selectedIDs.length : 1"
+      :batch-estimated-refund="batchMode ? selectedEstimatedRefund : reviewClaim?.estimated_refund"
       @close="reviewClaim = null"
       @submit="submitReview"
     />
@@ -150,7 +160,10 @@ const selected = ref(new Set<number>())
 const reviewClaim = ref<AdminEmptyResponseClaim | null>(null)
 const reviewAction = ref<'approve' | 'reject'>('approve')
 const batchMode = ref(false)
+const batchResult = ref<{ succeeded: number[]; failed: Record<number, string>; claims: AdminEmptyResponseClaim[] } | null>(null)
 const selectedIDs = computed(() => Array.from(selected.value))
+const selectedClaims = computed(() => claims.value.filter((claim) => selected.value.has(claim.id)))
+const selectedEstimatedRefund = computed(() => selectedClaims.value.reduce((sum, claim) => sum + claim.estimated_refund, 0))
 const warningThreshold = 0.01
 const rateWarning = computed(() => (metrics.value?.empty_response_rate ?? 0) >= warningThreshold)
 const rankings = computed(() => [
@@ -205,6 +218,7 @@ const evidenceSummary = (claim: AdminEmptyResponseClaim) => {
   })
 }
 const reasonSummary = (claim: AdminEmptyResponseClaim) => t(`usage.emptyResponse.reasonCode.${claim.reason_code}`)
+const usageSummary = (claim: AdminEmptyResponseClaim) => `${claim.request_id || '—'} · ${claim.input_tokens}/${claim.output_tokens} tokens · ${claim.inbound_endpoint || '—'}`
 const statusClass = (value: string) => value === 'compensated'
   ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300'
   : value === 'rejected'
@@ -227,11 +241,20 @@ const submitReview = async (note: string) => {
   submitting.value = true
   try {
     if (batchMode.value) {
-      await adminUsageAPI.batchClaims({
+      const result = await adminUsageAPI.batchClaims({
         ids: selectedIDs.value,
         action: reviewAction.value === 'approve' ? 'approved' : 'rejected',
         note,
       })
+      batchResult.value = result
+      if (Object.keys(result.failed).length) {
+        appStore.showError(t('admin.usage.emptyResponseClaims.batchPartialFailure'))
+      }
+      const failedIDs = new Set(Object.keys(result.failed).map(Number))
+      reviewClaim.value = null
+      await load()
+      selected.value = new Set(claims.value.filter((claim) => failedIDs.has(claim.id)).map((claim) => claim.id))
+      return
     } else if (reviewAction.value === 'approve') {
       await adminUsageAPI.approveClaim(reviewClaim.value.id, { note })
     } else {

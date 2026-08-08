@@ -126,9 +126,29 @@ export interface AdminEmptyResponseClaim {
   user_reason: string
   admin_note: string
   rule_version: number
+  compensation_source: 'automatic' | 'manual' | 'none'
   balance_refund: number
   subscription_refund: number
   api_key_quota_refund: number
+  request_id: string
+  usage_created_at: string
+  input_tokens: number
+  output_tokens: number
+  cache_creation_tokens: number
+  cache_read_tokens: number
+  total_cost: number
+  actual_cost: number
+  compensated_cost: number
+  billing_type: number
+  request_type: string
+  stream: boolean
+  duration_ms?: number | null
+  first_token_ms?: number | null
+  inbound_endpoint: string
+  upstream_endpoint: string
+  reviewed_by?: number | null
+  reviewed_at?: string | null
+  compensated_at?: string | null
   evidence: EmptyResponseOutcomeEvidence
   created_at: string
   updated_at: string

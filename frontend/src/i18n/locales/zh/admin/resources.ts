@@ -614,8 +614,41 @@ export default {
         loadFailed: '加载空回申请失败',
         reviewSuccess: '审核操作已完成',
         reviewFailed: '审核操作失败，请刷新后重试',
+        batchSelected: '已选择 {count} 条申请',
+        batchEstimatedRefund: '预计总补偿：${amount}',
+        batchResult: '批量处理完成：成功 {succeeded} 条，失败 {failed} 条',
+        batchPartialFailure: '批量处理部分失败，请查看失败原因',
         rejectionNote: '拒绝原因（必填）',
         reviewNote: '审核备注（可选）',
+        request: '请求 ID',
+        usageTime: '调用时间',
+        tokens: 'Token 用量',
+        cost: '实际费用 / 请求类型',
+        endpoint: '入口 / 上游端点',
+        timing: '耗时 / 首 Token',
+        httpStatus: 'HTTP / 上游状态',
+        events: '事件 / 输出字节',
+        outputFlags: '输出类型',
+        disconnect: '断开 / 上游错误',
+        userReason: '用户说明',
+        missingEvidenceWarning: '缺少服务端响应证据，只能依据用量与其他结构化信息人工判断。',
+        privacyNotice: '仅展示结构化元数据，不读取或保存请求正文、响应正文和工具参数。',
+        source: {
+          automatic: '系统自动补偿',
+          manual: '管理员审批补偿',
+          none: '未补偿'
+        },
+        billingType: {
+          balance: '余额计费',
+          subscription: '订阅计费'
+        },
+        output: {
+          text: '文本',
+          tool: '工具',
+          reasoning: '推理',
+          media: '媒体',
+          none: '无有效输出'
+        },
         rankings: {
           group: '分组空回排行',
           account: '账号空回排行',

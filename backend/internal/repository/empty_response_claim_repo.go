@@ -242,7 +242,12 @@ func (r *emptyResponseClaimRepository) List(ctx context.Context, params paginati
 	queryArgs := append(append([]any{}, args...), limit, offset)
 	query := `
 		SELECT ` + prefixedEmptyResponseClaimSelectColumns("erc") + `,
-			ul.model, COALESCE(u.email, ''), COALESCE(a.name, ''), COALESCE(g.name, '')
+			ul.model, COALESCE(u.email, ''), COALESCE(a.name, ''), COALESCE(g.name, ''),
+			COALESCE(ul.request_id, ''), ul.created_at,
+			ul.input_tokens, ul.output_tokens, ul.cache_creation_tokens, ul.cache_read_tokens,
+			ul.total_cost::float8, ul.actual_cost::float8, ul.compensated_cost::float8,
+			ul.billing_type, ul.request_type, ul.stream, ul.duration_ms, ul.first_token_ms,
+			COALESCE(ul.inbound_endpoint, ''), COALESCE(ul.upstream_endpoint, '')
 		FROM empty_response_claims erc
 		JOIN usage_logs ul ON ul.id = erc.usage_log_id
 		LEFT JOIN users u ON u.id = erc.user_id
@@ -308,6 +313,13 @@ func scanEmptyResponseClaimRow(row rowScanner, withIdentity bool) (*service.Empt
 	var outcomeID, groupID, subscriptionID, reviewedBy sql.NullInt64
 	var reviewedAt, compensatedAt sql.NullTime
 	var evidence []byte
+	var requestID, inboundEndpoint, upstreamEndpoint sql.NullString
+	var usageCreatedAt time.Time
+	var inputTokens, outputTokens, cacheCreationTokens, cacheReadTokens int64
+	var totalCost, actualCost, compensatedCost float64
+	var billingType, requestType sql.NullInt64
+	var stream sql.NullBool
+	var durationMs, firstTokenMs sql.NullInt64
 	dest := []any{
 		&claim.ID, &claim.UsageLogID, &outcomeID, &claim.UserID, &claim.APIKeyID, &claim.AccountID, &groupID, &subscriptionID,
 		&claim.Status, &claim.ReasonCode, &claim.UserReason, &claim.OriginalActualCost, &claim.BalanceRefund,
@@ -316,6 +328,13 @@ func scanEmptyResponseClaimRow(row rowScanner, withIdentity bool) (*service.Empt
 	}
 	if withIdentity {
 		dest = append(dest, &claim.Model, &claim.UserEmail, &claim.AccountName, &claim.GroupName)
+		dest = append(dest,
+			&requestID, &usageCreatedAt,
+			&inputTokens, &outputTokens, &cacheCreationTokens, &cacheReadTokens,
+			&totalCost, &actualCost, &compensatedCost,
+			&billingType, &requestType, &stream, &durationMs, &firstTokenMs,
+			&inboundEndpoint, &upstreamEndpoint,
+		)
 	}
 	if err := row.Scan(dest...); err != nil {
 		return nil, err
@@ -342,6 +361,34 @@ func scanEmptyResponseClaimRow(row rowScanner, withIdentity bool) (*service.Empt
 		if err := json.Unmarshal(evidence, &claim.Evidence); err != nil {
 			return nil, err
 		}
+	}
+	if withIdentity {
+		claim.RequestID = requestID.String
+		claim.UsageCreatedAt = usageCreatedAt
+		claim.InputTokens = int(inputTokens)
+		claim.OutputTokens = int(outputTokens)
+		claim.CacheCreationTokens = int(cacheCreationTokens)
+		claim.CacheReadTokens = int(cacheReadTokens)
+		claim.TotalCost = totalCost
+		claim.ActualCost = actualCost
+		claim.CompensatedCost = compensatedCost
+		if billingType.Valid {
+			claim.BillingType = int8(billingType.Int64)
+		}
+		if requestType.Valid {
+			claim.RequestType = service.RequestTypeFromInt16(int16(requestType.Int64))
+		}
+		claim.Stream = stream.Bool
+		if durationMs.Valid {
+			value := int(durationMs.Int64)
+			claim.DurationMs = &value
+		}
+		if firstTokenMs.Valid {
+			value := int(firstTokenMs.Int64)
+			claim.FirstTokenMs = &value
+		}
+		claim.InboundEndpoint = inboundEndpoint.String
+		claim.UpstreamEndpoint = upstreamEndpoint.String
 	}
 	return claim, nil
 }

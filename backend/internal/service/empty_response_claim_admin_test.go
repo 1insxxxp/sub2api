@@ -45,3 +45,14 @@ func TestEmptyResponseClaimAdminApproveReportsSubscriptionRefundSource(t *testin
 	require.Equal(t, 1.25, claim.SubscriptionRefund)
 	require.Equal(t, 1.25, claim.APIKeyQuotaRefund)
 }
+
+func TestEmptyResponseClaimCompensationSourceDistinguishesAutomaticAndManual(t *testing.T) {
+	automatic := &EmptyResponseClaim{Status: EmptyResponseClaimCompensated}
+	manualReviewer := int64(9)
+	manual := &EmptyResponseClaim{Status: EmptyResponseClaimCompensated, ReviewedBy: &manualReviewer}
+	rejected := &EmptyResponseClaim{Status: EmptyResponseClaimRejected}
+
+	require.Equal(t, "automatic", automatic.CompensationSource())
+	require.Equal(t, "manual", manual.CompensationSource())
+	require.Equal(t, "none", rejected.CompensationSource())
+}

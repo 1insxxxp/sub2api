@@ -49,6 +49,23 @@ const claim = {
   group_name: 'cc',
   model: 'claude-opus-4-6',
   user_reason: 'empty',
+  request_id: 'client:review-request-1',
+  usage_created_at: '2026-08-07T00:00:00Z',
+  input_tokens: 1234,
+  output_tokens: 0,
+  cache_creation_tokens: 0,
+  cache_read_tokens: 45,
+  total_cost: 1.5,
+  actual_cost: 1.25,
+  compensated_cost: 0,
+  billing_type: 0,
+  request_type: 'stream',
+  stream: true,
+  inbound_endpoint: '/v1/messages',
+  upstream_endpoint: '/v1/messages',
+  duration_ms: 1800,
+  first_token_ms: 320,
+  compensation_source: 'none',
   admin_note: '',
   rule_version: 1,
   balance_refund: 0,
@@ -106,6 +123,21 @@ describe('EmptyResponseClaimsPanel', () => {
     expect(wrapper.text()).toContain('account-ranking')
     expect(wrapper.text()).toContain('model-ranking')
     expect(wrapper.text()).toContain('admin.usage.emptyResponseClaims.warning')
+    expect(wrapper.text()).toContain('client:review-request-1')
+    expect(wrapper.text()).toContain('1234')
+    expect(wrapper.text()).toContain('/v1/messages')
+    expect(wrapper.text()).not.toContain('response body')
+  })
+
+  it('shows the full privacy-safe review context in the approval dialog', async () => {
+    const wrapper = mount(EmptyResponseClaimsPanel, { props: { startDate: '2026-08-01', endDate: '2026-08-07' } })
+    await flushPromises()
+
+    await wrapper.get('[data-testid="approve-claim-1"]').trigger('click')
+    expect(wrapper.text()).toContain('client:review-request-1')
+    expect(wrapper.text()).toContain('1234')
+    expect(wrapper.text()).toContain('empty')
+    expect(wrapper.text()).toContain('admin.usage.emptyResponseClaims.privacyNotice')
     expect(wrapper.text()).not.toContain('response body')
   })
 
@@ -159,6 +191,19 @@ describe('EmptyResponseClaimsPanel', () => {
     await flushPromises()
 
     expect(listClaims).toHaveBeenLastCalledWith(expect.objectContaining({ page: 2, page_size: 20 }))
+  })
+
+  it('reports partial batch results without hiding failed claims', async () => {
+    batchClaims.mockResolvedValueOnce({ succeeded: [1], failed: { 2: 'claim already reviewed' }, claims: [] })
+    const wrapper = mount(EmptyResponseClaimsPanel, { props: { startDate: '2026-08-01', endDate: '2026-08-07' } })
+    await flushPromises()
+
+    await wrapper.findAll('input[type="checkbox"]')[0].setValue(true)
+    await wrapper.get('[data-testid="batch-approve-claims"]').trigger('click')
+    await wrapper.get('[data-testid="submit-claim-review"]').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('claim already reviewed')
   })
 
   it('reports load and review failures without losing the review dialog', async () => {

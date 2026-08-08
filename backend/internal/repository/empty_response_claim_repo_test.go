@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/DATA-DOG/go-sqlmock"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/pagination"
 	"github.com/Wei-Shaw/sub2api/internal/service"
 	"github.com/stretchr/testify/require"
 )
@@ -110,5 +111,43 @@ func TestEmptyResponseClaimRepositoryCountsShanghaiBusinessDayRange(t *testing.T
 	count, err := repo.CountUserClaims(context.Background(), 7, start, end)
 	require.NoError(t, err)
 	require.Equal(t, 10, count)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestEmptyResponseClaimRepositoryListIncludesPrivacySafeReviewContext(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+	repo := newEmptyResponseClaimRepositoryWithSQL(db)
+	now := time.Now().UTC()
+	claimColumns := []string{
+		"id", "usage_log_id", "outcome_id", "user_id", "api_key_id", "account_id", "group_id", "subscription_id",
+		"status", "reason_code", "user_reason", "original_actual_cost", "balance_refund", "subscription_refund",
+		"api_key_quota_refund", "evidence", "rule_version", "admin_note", "reviewed_by", "reviewed_at", "compensated_at", "created_at", "updated_at",
+		"model", "user_email", "account_name", "group_name", "request_id", "usage_created_at", "input_tokens", "output_tokens",
+		"cache_creation_tokens", "cache_read_tokens", "total_cost", "actual_cost", "compensated_cost", "billing_type", "request_type",
+		"stream", "duration_ms", "first_token_ms", "inbound_endpoint", "upstream_endpoint",
+	}
+	mock.ExpectQuery("SELECT COUNT\\(\\*\\) FROM empty_response_claims").
+		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(1))
+	mock.ExpectQuery(`(?s)` + regexp.QuoteMeta("FROM empty_response_claims erc") + `.*` + regexp.QuoteMeta("JOIN usage_logs ul") + `.*` + regexp.QuoteMeta("ORDER BY erc.created_at DESC")).
+		WillReturnRows(sqlmock.NewRows(claimColumns).AddRow(
+			1, 100, nil, 7, 8, 9, 10, nil,
+			service.EmptyResponseClaimManualReview, service.EmptyResponseReasonMissingEvidence, "empty reply", 1.25, 0, 0, 0,
+			`{}`, 1, "", nil, nil, nil, now, now,
+			"claude-opus-4-6", "user@example.com", "pool-1", "cc", "client:req-1", now, 1234, 0,
+			12, 34, 1.5, 1.25, 0, int8(0), int16(service.RequestTypeStream), true, 1800, 320, "/v1/messages", "/v1/messages",
+		))
+
+	claims, _, err := repo.List(context.Background(), pagination.PaginationParams{Page: 1, PageSize: 20}, service.EmptyResponseClaimListFilters{})
+	require.NoError(t, err)
+	require.Len(t, claims, 1)
+	require.Equal(t, "client:req-1", claims[0].RequestID)
+	require.Equal(t, 1234, claims[0].InputTokens)
+	require.Equal(t, 34, claims[0].CacheReadTokens)
+	require.Equal(t, service.RequestTypeStream, claims[0].RequestType)
+	require.NotNil(t, claims[0].DurationMs)
+	require.Equal(t, 1800, *claims[0].DurationMs)
+	require.Equal(t, "/v1/messages", claims[0].InboundEndpoint)
 	require.NoError(t, mock.ExpectationsWereMet())
 }

@@ -74,8 +74,39 @@ type EmptyResponseClaim struct {
 	UserEmail          string
 	AccountName        string
 	GroupName          string
-	CreatedAt          time.Time
-	UpdatedAt          time.Time
+	// Review context is limited to billing/request metadata and structural
+	// response evidence. Request and response bodies are intentionally absent.
+	RequestID           string
+	UsageCreatedAt      time.Time
+	InputTokens         int
+	OutputTokens        int
+	CacheCreationTokens int
+	CacheReadTokens     int
+	TotalCost           float64
+	ActualCost          float64
+	CompensatedCost     float64
+	BillingType         int8
+	RequestType         RequestType
+	Stream              bool
+	DurationMs          *int
+	FirstTokenMs        *int
+	InboundEndpoint     string
+	UpstreamEndpoint    string
+	CreatedAt           time.Time
+	UpdatedAt           time.Time
+}
+
+// CompensationSource identifies whether a completed refund came from the
+// server-side rule or an administrator review. Pending and rejected claims
+// have no compensation source.
+func (c *EmptyResponseClaim) CompensationSource() string {
+	if c == nil || c.Status != EmptyResponseClaimCompensated {
+		return "none"
+	}
+	if c.ReviewedBy != nil {
+		return "manual"
+	}
+	return "automatic"
 }
 
 type EmptyResponseClaimEvaluation struct {

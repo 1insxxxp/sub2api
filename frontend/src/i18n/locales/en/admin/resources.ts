@@ -617,8 +617,41 @@ export default {
         loadFailed: 'Failed to load empty-response claims',
         reviewSuccess: 'Review completed',
         reviewFailed: 'Review failed. Refresh and try again.',
+        batchSelected: '{count} claims selected',
+        batchEstimatedRefund: 'Estimated total refund: ${amount}',
+        batchResult: 'Batch complete: {succeeded} succeeded, {failed} failed',
+        batchPartialFailure: 'Some batch actions failed. Check the failure reasons.',
         rejectionNote: 'Rejection reason (required)',
         reviewNote: 'Review note (optional)',
+        request: 'Request ID',
+        usageTime: 'Usage time',
+        tokens: 'Token usage',
+        cost: 'Actual cost / request type',
+        endpoint: 'Inbound / upstream endpoint',
+        timing: 'Duration / first token',
+        httpStatus: 'HTTP / upstream status',
+        events: 'Events / output bytes',
+        outputFlags: 'Output flags',
+        disconnect: 'Disconnect / upstream error',
+        userReason: 'User explanation',
+        missingEvidenceWarning: 'Server-side response evidence is missing; review must rely on usage and other structured metadata.',
+        privacyNotice: 'Only structured metadata is shown. Request/response bodies and tool arguments are never read or stored.',
+        source: {
+          automatic: 'Automatic refund',
+          manual: 'Admin-approved refund',
+          none: 'Not refunded'
+        },
+        billingType: {
+          balance: 'Balance billing',
+          subscription: 'Subscription billing'
+        },
+        output: {
+          text: 'text',
+          tool: 'tool',
+          reasoning: 'reasoning',
+          media: 'media',
+          none: 'no effective output'
+        },
         rankings: {
           group: 'Groups by empty responses',
           account: 'Accounts by empty responses',
