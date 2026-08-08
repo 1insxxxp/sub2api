@@ -23,7 +23,7 @@
       </div>
 
       <div class="shrink-0 text-right">
-        <p class="text-[11px] leading-4 text-gray-500 dark:text-gray-400">
+        <p class="text-xs leading-4 text-gray-600 dark:text-gray-300">
           {{ t(`${catalogKey}.effectiveRate`) }}
         </p>
         <p class="font-mono text-sm font-semibold tabular-nums text-gray-800 dark:text-gray-100">
@@ -42,19 +42,19 @@
         data-testid="official-price"
         class="min-w-0 rounded-xl border border-gray-200 bg-gray-50/90 p-3 dark:border-dark-500 dark:bg-dark-700/70"
       >
-        <h4 class="text-xs font-semibold text-gray-500 dark:text-gray-300">
+        <h4 class="text-xs font-semibold text-gray-600 dark:text-gray-300">
           {{ t(`${catalogKey}.officialPrice`) }}
         </h4>
         <div class="mt-2 space-y-2.5">
           <div v-for="metric in primaryMetrics" :key="metric.key" class="min-w-0">
-            <p v-if="metric.label" class="text-[11px] text-gray-500 dark:text-gray-400">
+            <p v-if="metric.label" class="text-xs text-gray-600 dark:text-gray-300">
               {{ metric.label }}
             </p>
             <p
               class="mt-0.5 break-words font-mono text-sm font-semibold tabular-nums text-gray-800 dark:text-gray-100"
             >
               {{ formatOfficial(metric.value?.official ?? null, metric.scale) }}
-              <span class="text-[10px] font-medium text-gray-400 dark:text-gray-500">
+              <span class="text-xs font-medium text-gray-600 dark:text-gray-300">
                 {{ metric.unit }}
               </span>
             </p>
@@ -71,27 +71,27 @@
         </h4>
         <div class="mt-2 space-y-2.5">
           <div v-for="metric in primaryMetrics" :key="metric.key" class="min-w-0">
-            <p v-if="metric.label" class="text-[11px] text-primary-700/70 dark:text-primary-200/70">
+            <p v-if="metric.label" class="text-xs text-primary-700 dark:text-primary-200">
               {{ metric.label }}
             </p>
             <template v-if="metric.value?.peakSite != null">
-              <p class="mt-0.5 text-[10px] font-medium text-primary-700/70 dark:text-primary-200/70">
+              <p class="mt-0.5 text-xs font-medium text-primary-700 dark:text-primary-200">
                 {{ t(`${catalogKey}.regularPrice`) }}
               </p>
               <p
                 class="break-words font-mono text-sm font-bold tabular-nums text-primary-700 dark:text-primary-200"
               >
                 {{ formatCny(metric.value.site, metric.scale) }}
-                <span class="text-[10px] font-medium opacity-70">{{ metric.unit }}</span>
+                <span class="text-xs font-medium text-primary-700 dark:text-primary-200">{{ metric.unit }}</span>
               </p>
-              <p class="mt-1.5 text-[10px] font-medium text-amber-700 dark:text-amber-300">
+              <p class="mt-1.5 text-xs font-medium text-amber-700 dark:text-amber-300">
                 {{ t(`${catalogKey}.peakPrice`) }}
               </p>
               <p
                 class="break-words font-mono text-sm font-bold tabular-nums text-amber-700 dark:text-amber-300"
               >
                 {{ formatCny(metric.value.peakSite, metric.scale) }}
-                <span class="text-[10px] font-medium opacity-70">{{ metric.unit }}</span>
+                <span class="text-xs font-medium text-amber-700 dark:text-amber-300">{{ metric.unit }}</span>
               </p>
             </template>
             <p
@@ -99,7 +99,7 @@
               class="mt-0.5 break-words font-mono text-sm font-bold tabular-nums text-primary-700 dark:text-primary-200"
             >
               {{ formatCny(metric.value?.site ?? null, metric.scale) }}
-              <span class="text-[10px] font-medium opacity-70">{{ metric.unit }}</span>
+              <span class="text-xs font-medium text-primary-700 dark:text-primary-200">{{ metric.unit }}</span>
             </p>
           </div>
         </div>
@@ -121,38 +121,63 @@
         data-testid="price-details"
         class="border-t border-gray-100 bg-gray-50/50 px-3 py-3 dark:border-dark-600 dark:bg-dark-900/20 sm:px-5"
       >
-        <div v-if="model.intervals.length > 0" class="space-y-3">
+        <div class="space-y-3">
           <section
-            v-for="interval in model.intervals"
-            :key="interval.key"
-            data-testid="pricing-tier"
+            v-for="section in detailSections"
+            :key="section.key"
+            :data-testid="section.isTier ? 'pricing-tier' : undefined"
             class="rounded-xl border border-gray-200 bg-white p-3 dark:border-dark-500 dark:bg-dark-800"
           >
-            <h5 class="text-xs font-semibold text-gray-800 dark:text-gray-100">
-              {{ intervalLabel(interval) }}
+            <h5 v-if="section.label" class="text-xs font-semibold text-gray-800 dark:text-gray-100">
+              {{ section.label }}
             </h5>
-            <div class="mt-3 space-y-2">
-              <DetailPriceRow
-                v-for="metric in priceMetrics(interval.prices)"
+            <div :class="section.label ? 'mt-3' : ''" class="space-y-2">
+              <div
+                v-for="metric in section.metrics"
                 :key="metric.key"
-                :label="metric.label"
-                :value="metric.value"
-                :scale="metric.scale"
-                :unit="metric.unit"
-              />
+                class="rounded-lg border border-gray-200/80 bg-white p-3 dark:border-dark-500 dark:bg-dark-800"
+              >
+                <p v-if="metric.label" class="mb-2 text-xs font-medium text-gray-700 dark:text-gray-200">
+                  {{ metric.label }}
+                </p>
+                <div class="grid grid-cols-2 gap-3">
+                  <div class="min-w-0">
+                    <p class="text-xs text-gray-600 dark:text-gray-300">
+                      {{ t(`${catalogKey}.officialPrice`) }}
+                    </p>
+                    <p class="mt-0.5 break-words font-mono text-xs font-semibold tabular-nums text-gray-800 dark:text-gray-100">
+                      {{ formatOfficial(metric.value?.official ?? null, metric.scale) }} {{ metric.unit }}
+                    </p>
+                  </div>
+                  <div class="min-w-0">
+                    <p class="text-xs text-primary-700 dark:text-primary-200">
+                      {{ t(`${catalogKey}.sitePrice`) }}
+                    </p>
+                    <template v-if="metric.value?.peakSite != null">
+                      <p class="mt-1 text-xs text-primary-700 dark:text-primary-200">
+                        {{ t(`${catalogKey}.regularPrice`) }}
+                      </p>
+                      <p class="break-words font-mono text-xs font-bold tabular-nums text-primary-700 dark:text-primary-200">
+                        {{ formatCny(metric.value.site, metric.scale) }} {{ metric.unit }}
+                      </p>
+                      <p class="mt-1 text-xs text-amber-700 dark:text-amber-300">
+                        {{ t(`${catalogKey}.peakPrice`) }}
+                      </p>
+                      <p class="break-words font-mono text-xs font-bold tabular-nums text-amber-700 dark:text-amber-300">
+                        {{ formatCny(metric.value.peakSite, metric.scale) }} {{ metric.unit }}
+                      </p>
+                    </template>
+                    <p
+                      v-else
+                      class="mt-0.5 break-words font-mono text-xs font-bold tabular-nums text-primary-700 dark:text-primary-200"
+                    >
+                      {{ formatCny(metric.value?.site ?? null, metric.scale) }} {{ metric.unit }}
+                    </p>
+                  </div>
+                </div>
+              </div>
             </div>
           </section>
-        </div>
-
-        <div v-else class="space-y-2">
-          <DetailPriceRow
-            v-for="metric in detailMetrics"
-            :key="metric.key"
-            :label="metric.label"
-            :value="metric.value"
-            :scale="metric.scale"
-            :unit="metric.unit"
-          />
         </div>
       </div>
 
@@ -179,14 +204,13 @@
 </template>
 
 <script setup lang="ts">
-import { computed, defineComponent, h, ref, type PropType } from 'vue'
+import { computed, getCurrentInstance, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import {
   BILLING_MODE_IMAGE,
   BILLING_MODE_PER_REQUEST,
   BILLING_MODE_TOKEN,
 } from '@/constants/channel'
-import { formatScaled } from '@/utils/pricing'
 import type {
   CatalogModelEntry,
   CatalogPriceCollection,
@@ -201,6 +225,7 @@ const { t } = useI18n()
 const props = defineProps<{
   model: CatalogModelEntry
 }>()
+const instanceUid = getCurrentInstance()?.uid ?? 0
 
 interface PriceMetric {
   key: string
@@ -210,25 +235,43 @@ interface PriceMetric {
   unit: string
 }
 
-function preciseNumber(value: number, scale: number, minimumFractionDigits = 2): string {
-  let result = (value * scale).toPrecision(10).replace(/\.?0+$/, '')
-  if (!result.includes('e')) {
-    const decimalIndex = result.indexOf('.')
-    const digits = decimalIndex === -1 ? 0 : result.length - decimalIndex - 1
+function formatMoney(
+  value: number | null,
+  scale: number,
+  symbol: '$' | '¥',
+  minimumFractionDigits = 2,
+): string {
+  if (value == null) return '-'
+  const scaled = value * scale
+  if (!Number.isFinite(scaled)) return '-'
+  if (scaled === 0) return `${symbol}0.${'0'.repeat(minimumFractionDigits)}`
+
+  const [rawMantissa, rawExponent] = scaled.toPrecision(10).split('e')
+  let mantissa = rawMantissa.includes('.')
+    ? rawMantissa.replace(/0+$/, '').replace(/\.$/, '')
+    : rawMantissa
+  if (rawExponent != null) {
+    const exponent = Number(rawExponent)
+    return `${symbol}${mantissa}e${exponent >= 0 ? '+' : ''}${exponent}`
+  }
+
+  if (minimumFractionDigits > 0) {
+    const decimalIndex = mantissa.indexOf('.')
+    const digits = decimalIndex === -1 ? 0 : mantissa.length - decimalIndex - 1
     if (digits < minimumFractionDigits) {
-      result = (decimalIndex === -1 ? `${result}.` : result)
+      mantissa = (decimalIndex === -1 ? `${mantissa}.` : mantissa)
         + '0'.repeat(minimumFractionDigits - digits)
     }
   }
-  return result
+  return `${symbol}${mantissa}`
 }
 
 function formatCny(value: number | null, scale: number): string {
-  return value == null ? '-' : `¥${preciseNumber(value, scale)}`
+  return formatMoney(value, scale, '¥')
 }
 
 function formatOfficial(value: number | null, scale: number): string {
-  return formatScaled(value, scale, 2)
+  return formatMoney(value, scale, '$')
 }
 
 function formatRate(value: number): string {
@@ -253,10 +296,6 @@ function safeId(value: string): string {
 function hasValue(value: CatalogPriceValue | null): boolean {
   return value != null
     && (value.official != null || value.site != null || value.peakSite != null)
-}
-
-function hasCollectionValue(prices: CatalogPriceCollection): boolean {
-  return Object.values(prices).some(hasValue)
 }
 
 function metricsForCollection(
@@ -316,29 +355,54 @@ function requestMetric(prices: CatalogPriceCollection, unit: string): PriceMetri
   return [{ key: 'request', label: '', value: prices.request, scale: 1, unit }]
 }
 
-function priceMetrics(prices: CatalogPriceCollection): PriceMetric[] {
+function allMeaningfulMetrics(prices: CatalogPriceCollection): PriceMetric[] {
+  return metricsForCollection(prices, true)
+    .concat(requestMetric(prices, t(`${catalogKey}.perRequest`)))
+    .filter((metric) => hasValue(metric.value))
+}
+
+function primaryMetricsForCollection(prices: CatalogPriceCollection): PriceMetric[] {
   if (props.model.billingMode === BILLING_MODE_PER_REQUEST) {
-    return requestMetric(prices, t(`${catalogKey}.perRequest`)).filter((metric) => hasValue(metric.value))
+    const request = requestMetric(prices, t(`${catalogKey}.perRequest`))
+      .filter((metric) => hasValue(metric.value))
+    return request.length > 0 ? request : allMeaningfulMetrics(prices)
   }
   if (props.model.billingMode === BILLING_MODE_IMAGE) {
-    return requestMetric(prices, t(`${catalogKey}.perImage`)).filter((metric) => hasValue(metric.value))
+    const request = requestMetric(prices, t(`${catalogKey}.perImage`))
+      .filter((metric) => hasValue(metric.value))
+    return request.length > 0 ? request : allMeaningfulMetrics(prices)
   }
   if (props.model.billingMode === BILLING_MODE_TOKEN) {
-    return metricsForCollection(prices, true).filter((metric) => hasValue(metric.value))
+    const token = metricsForCollection(prices, false).filter((metric) => hasValue(metric.value))
+    return token.length > 0 ? token : allMeaningfulMetrics(prices)
   }
   if (hasValue(prices.request)) {
     return requestMetric(prices, t(`${catalogKey}.perRequest`))
   }
-  return metricsForCollection(prices, true).filter((metric) => hasValue(metric.value))
+  return allMeaningfulMetrics(prices)
+}
+
+function priceMetrics(prices: CatalogPriceCollection): PriceMetric[] {
+  const primary = primaryMetricsForCollection(prices)
+  const primaryKeys = new Set(primary.map((metric) => metric.key))
+  return primary.concat(
+    allMeaningfulMetrics(prices).filter((metric) => !primaryKeys.has(metric.key)),
+  )
 }
 
 const expanded = ref(false)
-const detailRegionId = computed(() => safeId(props.model.key))
-const primaryPrices = computed(() => props.model.intervals[0]?.prices ?? props.model.prices)
-const hasDisplayPricing = computed(() =>
-  hasCollectionValue(primaryPrices.value)
-  || props.model.intervals.some((interval) => hasCollectionValue(interval.prices)),
-)
+const detailRegionId = computed(() => `${safeId(props.model.key)}-${instanceUid.toString(36)}`)
+const primaryMetrics = computed<PriceMetric[]>(() => {
+  const candidates = props.model.intervals
+    .map((interval) => interval.prices)
+    .concat(props.model.prices)
+  for (const prices of candidates) {
+    const metrics = primaryMetricsForCollection(prices)
+    if (metrics.length > 0) return metrics
+  }
+  return []
+})
+const hasDisplayPricing = computed(() => primaryMetrics.value.length > 0)
 const billingModeLabel = computed(() => {
   const mode = props.model.billingMode
   if (mode === BILLING_MODE_TOKEN || mode === BILLING_MODE_PER_REQUEST || mode === BILLING_MODE_IMAGE) {
@@ -346,26 +410,34 @@ const billingModeLabel = computed(() => {
   }
   return t(`${catalogKey}.billingMode.unknown`)
 })
-const primaryMetrics = computed<PriceMetric[]>(() => {
-  const prices = primaryPrices.value
-  if (props.model.billingMode === BILLING_MODE_PER_REQUEST) {
-    return requestMetric(prices, t(`${catalogKey}.perRequest`))
-  }
-  if (props.model.billingMode === BILLING_MODE_IMAGE) {
-    return requestMetric(prices, t(`${catalogKey}.perImage`))
-  }
-  if (props.model.billingMode === BILLING_MODE_TOKEN) {
-    return metricsForCollection(prices, false)
-  }
-  if (hasValue(prices.request)) {
-    return requestMetric(prices, t(`${catalogKey}.perRequest`))
-  }
-  return metricsForCollection(prices, false).filter((metric) => hasValue(metric.value))
-})
 const detailMetrics = computed(() => metricsForCollection(props.model.prices, true)
   .slice(2)
-  .filter((metric) => hasValue(metric.value)))
-const hasDetails = computed(() => props.model.intervals.length > 0 || detailMetrics.value.length > 0)
+  .filter((metric) => hasValue(metric.value))
+  .filter((metric) => !primaryMetrics.value.some((primary) => primary.key === metric.key)))
+
+interface DetailSection {
+  key: string
+  label: string | null
+  isTier: boolean
+  metrics: PriceMetric[]
+}
+
+const detailSections = computed<DetailSection[]>(() => {
+  if (props.model.intervals.length > 0) {
+    return props.model.intervals
+      .map((interval) => ({
+        key: interval.key,
+        label: intervalLabel(interval),
+        isTier: true,
+        metrics: priceMetrics(interval.prices),
+      }))
+      .filter((section) => section.metrics.length > 0)
+  }
+  return detailMetrics.value.length > 0
+    ? [{ key: 'extended', label: null, isTier: false, metrics: detailMetrics.value }]
+    : []
+})
+const hasDetails = computed(() => detailSections.value.length > 0)
 
 function intervalLabel(interval: CatalogPricingInterval): string {
   if (interval.tierLabel) return interval.tierLabel
@@ -379,47 +451,4 @@ function intervalLabel(interval: CatalogPricingInterval): string {
   })
 }
 
-const DetailPriceRow = defineComponent({
-  name: 'DetailPriceRow',
-  props: {
-    label: { type: String, required: true },
-    value: { type: Object as PropType<CatalogPriceValue | null>, default: null },
-    scale: { type: Number, required: true },
-    unit: { type: String, required: true },
-  },
-  setup(rowProps) {
-    return () => h('div', {
-      class: 'rounded-lg border border-gray-200/80 bg-white p-3 dark:border-dark-500 dark:bg-dark-800',
-    }, [
-      rowProps.label ? h('p', {
-        class: 'mb-2 text-xs font-medium text-gray-700 dark:text-gray-200',
-      }, rowProps.label) : null,
-      h('div', { class: 'grid grid-cols-2 gap-3' }, [
-        h('div', { class: 'min-w-0' }, [
-          h('p', { class: 'text-[10px] text-gray-500 dark:text-gray-400' }, t(`${catalogKey}.officialPrice`)),
-          h('p', {
-            class: 'mt-0.5 break-words font-mono text-xs font-semibold tabular-nums text-gray-800 dark:text-gray-100',
-          }, `${formatOfficial(rowProps.value?.official ?? null, rowProps.scale)} ${rowProps.unit}`),
-        ]),
-        h('div', { class: 'min-w-0' }, [
-          h('p', { class: 'text-[10px] text-primary-700 dark:text-primary-200' }, t(`${catalogKey}.sitePrice`)),
-          rowProps.value?.peakSite != null
-            ? h('div', [
-                h('p', { class: 'mt-1 text-[10px] text-primary-700/70 dark:text-primary-200/70' }, t(`${catalogKey}.regularPrice`)),
-                h('p', {
-                  class: 'break-words font-mono text-xs font-bold tabular-nums text-primary-700 dark:text-primary-200',
-                }, `${formatCny(rowProps.value.site, rowProps.scale)} ${rowProps.unit}`),
-                h('p', { class: 'mt-1 text-[10px] text-amber-700 dark:text-amber-300' }, t(`${catalogKey}.peakPrice`)),
-                h('p', {
-                  class: 'break-words font-mono text-xs font-bold tabular-nums text-amber-700 dark:text-amber-300',
-                }, `${formatCny(rowProps.value.peakSite, rowProps.scale)} ${rowProps.unit}`),
-              ])
-            : h('p', {
-                class: 'mt-0.5 break-words font-mono text-xs font-bold tabular-nums text-primary-700 dark:text-primary-200',
-              }, `${formatCny(rowProps.value?.site ?? null, rowProps.scale)} ${rowProps.unit}`),
-        ]),
-      ]),
-    ])
-  },
-})
 </script>

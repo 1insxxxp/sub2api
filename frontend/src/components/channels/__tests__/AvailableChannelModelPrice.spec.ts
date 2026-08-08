@@ -3,6 +3,7 @@ import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 import { mount, type VueWrapper } from '@vue/test-utils'
+import { defineComponent, h } from 'vue'
 import { describe, expect, it, vi } from 'vitest'
 import type { CatalogModelEntry, CatalogPriceCollection } from '../availableChannelCatalog'
 
@@ -151,6 +152,41 @@ describe('AvailableChannelModelPrice', () => {
     expect(site.text()).not.toContain('¥-')
   })
 
+  it.runIf(existsSync(componentPath))('formats null, zero, tiny exponents, and large prices without changing magnitude', async () => {
+    const unavailable = await mountPrice(makeModel({
+      billingMode: 'per_request',
+      prices: { ...emptyPrices(), request: price(null, null) },
+      hasPricing: false,
+    }))
+    expect(unavailable.text()).toContain('暂未定价')
+
+    const zero = await mountPrice(makeModel({
+      billingMode: 'per_request',
+      prices: { ...emptyPrices(), request: price(0, 0) },
+    }))
+    expect(zero.get('[data-testid="official-price"]').text()).toContain('$0.00')
+    expect(zero.get('[data-testid="site-price"]').text()).toContain('¥0.00')
+
+    const tiny = await mountPrice(makeModel({
+      prices: {
+        ...emptyPrices(),
+        input: price(1e-16, 1e-16),
+        output: price(1e-15, 1e-15),
+      },
+    }))
+    expect(tiny.get('[data-testid="official-price"]').text()).toContain('$1e-10')
+    expect(tiny.get('[data-testid="site-price"]').text()).toContain('¥1e-10')
+    expect(tiny.get('[data-testid="official-price"]').text()).toContain('$1e-9')
+    expect(tiny.get('[data-testid="official-price"]').text()).not.toContain('$1e-1 ')
+
+    const large = await mountPrice(makeModel({
+      billingMode: 'per_request',
+      prices: { ...emptyPrices(), request: price(1_234_567_890, 9_876_543_210) },
+    }))
+    expect(large.get('[data-testid="official-price"]').text()).toContain('$1234567890.00')
+    expect(large.get('[data-testid="site-price"]').text()).toContain('¥9876543210.00')
+  })
+
   it.runIf(existsSync(componentPath))('uses one request value and request units for per-request billing', async () => {
     const wrapper = await mountPrice(makeModel({
       billingMode: 'per_request',
@@ -242,6 +278,79 @@ describe('AvailableChannelModelPrice', () => {
     expect(details.text()).toContain('¥6.30')
   })
 
+  it.runIf(existsSync(componentPath))('uses the first priced tier for the headline when an earlier tier is empty', async () => {
+    const wrapper = await mountPrice(makeModel({
+      prices: emptyPrices(),
+      intervals: [
+        {
+          key: 'empty-tier',
+          minTokens: 0,
+          maxTokens: 1_000,
+          tierLabel: 'Empty',
+          prices: emptyPrices(),
+        },
+        {
+          key: 'priced-tier',
+          minTokens: 1_001,
+          maxTokens: null,
+          tierLabel: 'Priced',
+          prices: {
+            ...emptyPrices(),
+            input: price(0.000003, 0.000012),
+            output: price(0.000009, 0.000036),
+          },
+        },
+      ],
+    }))
+
+    expect(wrapper.get('[data-testid="official-price"]').text()).toContain('$3.00')
+    expect(wrapper.get('[data-testid="official-price"]').text()).toContain('$9.00')
+    expect(wrapper.get('[data-testid="site-price"]').text()).toContain('¥12.00')
+    expect(wrapper.get('[data-testid="site-price"]').text()).toContain('¥36.00')
+  })
+
+  it.runIf(existsSync(componentPath))('promotes cache-only token pricing into the headline comparison', async () => {
+    const wrapper = await mountPrice(makeModel({
+      prices: {
+        ...emptyPrices(),
+        cacheRead: price(0.0000004, 0.0000016),
+      },
+    }))
+
+    expect(wrapper.get('[data-testid="official-price"]').text()).toContain('缓存读取')
+    expect(wrapper.get('[data-testid="official-price"]').text()).toContain('$0.40')
+    expect(wrapper.get('[data-testid="site-price"]').text()).toContain('¥1.60')
+  })
+
+  it.runIf(existsSync(componentPath))('promotes image-token-only pricing into the headline comparison', async () => {
+    const wrapper = await mountPrice(makeModel({
+      prices: {
+        ...emptyPrices(),
+        imageInput: price(0.000004, 0.000016),
+        imageOutput: price(0.000012, 0.000048),
+      },
+    }))
+
+    expect(wrapper.get('[data-testid="official-price"]').text()).toContain('图片输入')
+    expect(wrapper.get('[data-testid="official-price"]').text()).toContain('图片输出')
+    expect(wrapper.get('[data-testid="site-price"]').text()).toContain('¥16.00')
+    expect(wrapper.get('[data-testid="site-price"]').text()).toContain('¥48.00')
+  })
+
+  it.runIf(existsSync(componentPath))('promotes extended pricing for an unknown billing mode', async () => {
+    const wrapper = await mountPrice(makeModel({
+      billingMode: null,
+      prices: {
+        ...emptyPrices(),
+        cacheWrite: price(0.000002, 0.000008),
+      },
+    }))
+
+    expect(wrapper.get('[data-testid="official-price"]').text()).toContain('缓存写入')
+    expect(wrapper.get('[data-testid="official-price"]').text()).toContain('$2.00')
+    expect(wrapper.get('[data-testid="site-price"]').text()).toContain('¥8.00')
+  })
+
   it.runIf(existsSync(componentPath))('shows the first tier as starting price and every tier in source order', async () => {
     const wrapper = await mountPrice(makeModel({
       prices: emptyPrices(),
@@ -290,11 +399,11 @@ describe('AvailableChannelModelPrice', () => {
     await wrapper.get('button').trigger('click')
     const tiers = wrapper.findAll('[data-testid="pricing-tier"]')
     expect(tiers).toHaveLength(3)
-    expect(tiers.map((tier) => tier.text())).toEqual(expect.arrayContaining([
-      expect.stringContaining('Starter'),
-      expect.stringContaining('1,001–2,000 token'),
-      expect.stringContaining('2,001+ token'),
-    ]))
+    expect(tiers.map((tier) => tier.get('h5').text())).toEqual([
+      'Starter',
+      '1,001–2,000 token',
+      '2,001+ token',
+    ])
     expect(tiers[0].text()).toContain('$1.00')
     expect(tiers[2].text()).toContain('¥28.00')
   })
@@ -325,10 +434,65 @@ describe('AvailableChannelModelPrice', () => {
     expect(wrapper.text().match(/¥7\.00/g)).toHaveLength(1)
   })
 
+  it.runIf(existsSync(componentPath))('uses opaque accessible colors for compact price labels and units', async () => {
+    const wrapper = await mountPrice(makeModel())
+    const official = wrapper.get('[data-testid="official-price"]')
+    const site = wrapper.get('[data-testid="site-price"]')
+
+    expect(official.get('h4').classes()).toContain('text-gray-600')
+    expect(official.findAll('p')[0].classes()).toContain('text-gray-600')
+    expect(official.get('span').classes()).toContain('text-gray-600')
+    expect(site.get('h4').classes()).toContain('text-primary-700')
+    expect(site.findAll('p')[0].classes()).toContain('text-primary-700')
+    expect(site.get('span').classes()).toContain('text-primary-700')
+    expect(site.html()).not.toMatch(/primary-700\/70|opacity-70/)
+  })
+
+  it.runIf(existsSync(componentPath))('gives repeated model cards unique controls that target their own regions', async () => {
+    const component = (await import('../AvailableChannelModelPrice.vue')).default
+    const repeatedModel = makeModel({
+      key: 'same:model/key',
+      prices: {
+        ...emptyPrices(),
+        input: price(0.000002, 0.000007),
+        cacheRead: price(0.0000002, 0.0000007),
+      },
+    })
+    const wrapper = mount(defineComponent({
+      setup: () => () => h('div', [
+        h(component, { model: repeatedModel }),
+        h(component, { model: repeatedModel }),
+      ]),
+    }))
+    const buttons = wrapper.findAll('button')
+    const controlIds = buttons.map((button) => button.attributes('aria-controls'))
+
+    expect(buttons).toHaveLength(2)
+    expect(new Set(controlIds).size).toBe(2)
+    await buttons[0].trigger('click')
+    await buttons[1].trigger('click')
+    expect(wrapper.findAll(`#${controlIds[0]}`)).toHaveLength(1)
+    expect(wrapper.findAll(`#${controlIds[1]}`)).toHaveLength(1)
+  })
+
   it.runIf(existsSync(componentPath))('does not depend on legacy chips or overlay pricing', () => {
     const source = readFileSync(componentPath, 'utf8')
-    expect(source).not.toMatch(/SupportedModelChip/)
-    expect(source).not.toMatch(/PricingRow/)
-    expect(source).not.toMatch(/Popover|Teleport/)
+    expect(source).not.toMatch(/import[^\n]+SupportedModelChip/)
+    expect(source).not.toMatch(/import[^\n]+PricingRow/)
+  })
+
+  it.runIf(existsSync(componentPath))('renders no overlay or teleported price UI', async () => {
+    const wrapper = await mountPrice(makeModel({
+      prices: {
+        ...emptyPrices(),
+        input: price(0.000002, 0.000007),
+        cacheRead: price(0.0000002, 0.0000007),
+      },
+    }))
+
+    await wrapper.get('button').trigger('click')
+    expect(wrapper.find('[role="tooltip"]').exists()).toBe(false)
+    expect(wrapper.find('[role="dialog"]').exists()).toBe(false)
+    expect(document.body.querySelector('[data-v-app] > [data-testid="price-details"]')).toBeNull()
   })
 })
