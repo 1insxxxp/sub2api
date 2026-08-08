@@ -33,16 +33,12 @@
       </template>
 
       <template #table>
-        <AvailableChannelsTable
-          :columns="columnLabels"
-          :rows="filteredChannels"
+        <AvailableChannelCatalog
+          :channels="filteredCatalog"
           :loading="loading"
-          :user-group-rates="userGroupRates"
-          pricing-key-prefix="availableChannels.pricing"
-          :no-pricing-label="t('availableChannels.noPricing')"
-          :no-models-label="t('availableChannels.noModels')"
-          :empty-label="t('availableChannels.empty')"
-          :price-cny-multiplier="priceCnyMultiplier"
+          :refreshing="loading && channels.length > 0"
+          :rate-fallback="rateFallback"
+          :empty-kind="channels.length > 0 && filteredCatalog.length === 0 ? 'no-results' : 'no-data'"
         />
       </template>
     </TablePageLayout>
@@ -55,7 +51,8 @@ import { useI18n } from 'vue-i18n'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import TablePageLayout from '@/components/layout/TablePageLayout.vue'
 import Icon from '@/components/icons/Icon.vue'
-import AvailableChannelsTable from '@/components/channels/AvailableChannelsTable.vue'
+import AvailableChannelCatalog from '@/components/channels/AvailableChannelCatalog.vue'
+import { buildAvailableChannelCatalog, filterAvailableChannelCatalog } from '@/components/channels/availableChannelCatalog'
 import userChannelsAPI, { type UserAvailableChannel } from '@/api/channels'
 import userGroupsAPI from '@/api/groups'
 import { useAppStore } from '@/stores/app'
@@ -74,13 +71,7 @@ const priceCnyMultiplier = computed(() => {
   return Number.isFinite(value) && value > 0 ? value : 0
 })
 
-const columnLabels = computed(() => ({
-  name: t('availableChannels.columns.name'),
-  description: t('availableChannels.columns.description'),
-  platform: t('availableChannels.columns.platform'),
-  groups: t('availableChannels.columns.groups'),
-  supportedModels: t('availableChannels.columns.supportedModels'),
-}))
+const rateFallback = ref(false)
 
 /**
  * 搜索过滤：
@@ -88,35 +79,24 @@ const columnLabels = computed(() => ({
  * - 否则按 platform/group/model 维度在 sections 里过滤，保留有匹配的 section
  * - 所有 sections 都不匹配时，渠道本身被过滤掉
  */
-const filteredChannels = computed(() => {
-  const q = searchQuery.value.trim().toLowerCase()
-  if (!q) return channels.value
-  return channels.value
-    .map((ch) => {
-      const nameHit = ch.name.toLowerCase().includes(q)
-      const descHit = (ch.description || '').toLowerCase().includes(q)
-      if (nameHit || descHit) return ch
-      const matchingSections = ch.platforms.filter(
-        (p) =>
-          p.platform.toLowerCase().includes(q) ||
-          p.groups.some((g) => g.name.toLowerCase().includes(q)) ||
-          p.supported_models.some((m) => m.name.toLowerCase().includes(q)),
-      )
-      if (matchingSections.length === 0) return null
-      return { ...ch, platforms: matchingSections }
-    })
-    .filter((ch): ch is UserAvailableChannel => ch !== null)
-})
+const catalog = computed(() => buildAvailableChannelCatalog(channels.value, userGroupRates.value, priceCnyMultiplier.value))
+const filteredCatalog = computed(() => filterAvailableChannelCatalog(catalog.value, {
+  search: searchQuery.value,
+  platform: '',
+  pricedOnly: false,
+}))
 
 async function loadChannels() {
   loading.value = true
   try {
     // 渠道列表和用户专属倍率并发拉取。专属倍率失败不阻塞渠道展示——
     // 失败时只是无法渲染专属倍率角标，降级为仅显示默认倍率。
+    rateFallback.value = false
     const [list, rates] = await Promise.all([
       userChannelsAPI.getAvailable(),
       userGroupsAPI.getUserGroupRates().catch((err: unknown) => {
         console.error('Failed to load user group rates:', err)
+        rateFallback.value = true
         return {} as Record<number, number>
       }),
     ])
