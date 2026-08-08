@@ -307,6 +307,12 @@ describe('AvailableChannelModelPrice', () => {
     expect(wrapper.get('[data-testid="official-price"]').text()).toContain('$9.00')
     expect(wrapper.get('[data-testid="site-price"]').text()).toContain('¥12.00')
     expect(wrapper.get('[data-testid="site-price"]').text()).toContain('¥36.00')
+
+    await wrapper.get('button').trigger('click')
+    const tiers = wrapper.findAll('[data-testid="pricing-tier"]')
+    expect(tiers.map((tier) => tier.get('h5').text())).toEqual(['Empty', 'Priced'])
+    expect(tiers[0].text()).toContain('暂未定价')
+    expect(tiers[1].text()).toContain('$3.00')
   })
 
   it.runIf(existsSync(componentPath))('promotes cache-only token pricing into the headline comparison', async () => {
