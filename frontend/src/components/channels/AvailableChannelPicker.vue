@@ -6,6 +6,7 @@
       data-testid="channel-picker-trigger"
       class="flex min-h-11 w-full min-w-0 items-center justify-between gap-3 rounded-2xl border border-gray-200 bg-white px-4 py-3 text-left shadow-sm transition-colors motion-reduce:transition-none dark:border-dark-600 dark:bg-dark-800 xl:hidden"
       :aria-expanded="open"
+      :aria-controls="dialogId"
       aria-haspopup="dialog"
       @click="openPicker"
     >
@@ -25,6 +26,7 @@
       <div
         v-if="open"
         data-testid="channel-picker-dialog"
+        :id="dialogId"
         class="fixed inset-0 z-[70] flex items-end bg-black/45"
         role="dialog"
         aria-modal="true"
@@ -86,6 +88,7 @@ const searchRef = ref<HTMLInputElement | null>(null)
 const previousOverflow = ref('')
 const openedSelectionKey = ref<string | null>(null)
 const titleId = `available-channel-picker-${getCurrentInstance()?.uid ?? 0}`
+const dialogId = `${titleId}-dialog`
 const selectedChannel = computed(() => props.channels.find(channel => channel.key === props.modelValue) ?? null)
 const filteredChannels = computed(() => {
   const term = query.value.trim().toLocaleLowerCase()
