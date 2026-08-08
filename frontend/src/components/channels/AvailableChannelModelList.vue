@@ -23,7 +23,11 @@ function price(value: number | null | undefined, currency: string) {
   if (value == null || !Number.isFinite(value)) return t('availableChannels.catalog.unpriced')
   return `${currency}${value}`
 }
-function detailsId(key: string) { return `${uid}-details-${key.replace(/[^a-zA-Z0-9_-]/g, '-')}` }
+function detailsId(key: string) { return `${uid}-details-${encodeURIComponent(key)}` }
+function summaryPrice(offering: CatalogModelOffering) {
+  const collections = offering.prices
+  return collections.input ?? collections.output ?? collections.request ?? collections.imageInput ?? collections.imageOutput ?? collections.cacheWrite ?? collections.cacheRead ?? null
+}
 
 // Keep only still-present stable keys after parent list refresh/reorder.
 watch(activeKeys, (keys) => { expanded.value = new Set([...expanded.value].filter((key) => keys.has(key))) }, { immediate: true })
@@ -45,8 +49,8 @@ watch(activeKeys, (keys) => { expanded.value = new Set([...expanded.value].filte
           </div>
         </header>
         <template v-if="representative(entry)">
-          <div data-testid="representative-official" class="px-4 pb-3 sm:px-5 xl:p-3"><span class="text-xs text-gray-500 dark:text-gray-400 xl:hidden">{{ t('availableChannels.catalog.officialPrice') }}</span><p class="break-words font-mono text-sm font-semibold tabular-nums text-gray-800 dark:text-gray-100">{{ price(representative(entry)!.prices.input?.official, '$') }}</p></div>
-          <div data-testid="representative-site" class="px-4 pb-3 sm:px-5 xl:p-3"><span class="text-xs text-primary-600 dark:text-primary-300 xl:hidden">{{ t('availableChannels.catalog.sitePrice') }}</span><p class="break-words font-mono text-sm font-bold tabular-nums text-primary-700 dark:text-primary-200">{{ price(representative(entry)!.prices.input?.site, '¥') }}</p></div>
+          <div data-testid="representative-official" class="px-4 pb-3 sm:px-5 xl:p-3"><span class="text-xs text-gray-500 dark:text-gray-400 xl:hidden">{{ t('availableChannels.catalog.officialPrice') }} · 代表</span><p class="break-words font-mono text-sm font-semibold tabular-nums text-gray-800 dark:text-gray-100">{{ price(summaryPrice(representative(entry)!)?.official, '$') }}</p></div>
+          <div data-testid="representative-site" class="px-4 pb-3 sm:px-5 xl:p-3"><span class="text-xs text-primary-600 dark:text-primary-300 xl:hidden">{{ t('availableChannels.catalog.sitePrice') }} · 代表</span><p class="break-words font-mono text-sm font-bold tabular-nums text-primary-700 dark:text-primary-200">{{ price(summaryPrice(representative(entry)!)?.site, '¥') }}</p></div>
         </template>
         <div v-else class="px-4 pb-3 text-sm text-amber-700 sm:px-5 xl:p-3">{{ t('availableChannels.catalog.unpriced') }}</div>
         <button type="button" data-testid="model-offering-toggle" class="min-h-11 w-full border-t border-gray-100 px-4 py-2 text-left text-sm font-medium text-primary-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary-500 dark:border-dark-600 dark:text-primary-300 xl:rounded-xl xl:border xl:px-3" :aria-expanded="isExpanded(entry.key)" :aria-controls="detailsId(entry.key)" @click="toggle(entry.key)" @keydown.enter.prevent="toggle(entry.key)" @keydown.space.prevent="toggle(entry.key)">{{ isExpanded(entry.key) ? t('availableChannels.catalog.hideOfferings') : (entry.offerings.length > 1 ? t('availableChannels.catalog.moreOfferings', { count: entry.offerings.length - 1 }) : t('availableChannels.catalog.showOfferings')) }}</button>

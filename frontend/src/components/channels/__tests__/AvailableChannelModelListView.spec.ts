@@ -40,6 +40,7 @@ describe('AvailableChannelModelList', () => {
     expect(wrapper.text()).toContain('gemini-pro'); expect(wrapper.text()).toContain('1 个渠道'); expect(wrapper.text()).toContain('1 个分组')
     expect(wrapper.get('[data-testid="representative-official"]').text()).toContain('$2')
     expect(wrapper.get('[data-testid="representative-site"]').text()).toContain('¥7.2')
+    expect(wrapper.get('[data-testid="representative-official"]').text()).toContain('代表')
     expect(wrapper.find('[data-testid="offering-details"]').exists()).toBe(false)
   })
   it('chooses first priced offering, preserves zero, and marks unpriced', () => {
@@ -65,6 +66,26 @@ describe('AvailableChannelModelList', () => {
     expect(details.text()).toContain('Alpha'); expect(details.text()).toContain('Retail'); expect(details.text()).toContain('Beta')
     expect(details.findAll('[data-testid="full-price"]')).toHaveLength(2)
     await toggles[0].trigger('keydown', { key: ' ' }); expect(wrapper.find('[data-testid="offering-details"]').exists()).toBe(false)
+  })
+  it('uses collision-safe details ids and summarizes request/image pricing', async () => {
+    const request = offering('request', 'A', 'G1', null)
+    request.hasPricing = true
+    request.prices.input = null
+    request.prices.request = { official: 0.2, site: 0.4, peakSite: null }
+    request.model.prices = request.prices
+    const image = offering('image', 'B', 'G2', null)
+    image.hasPricing = true
+    image.prices.input = null
+    image.prices.imageInput = { official: 0, site: 0, peakSite: null }
+    image.model.prices = image.prices
+    const first = entry('a/b', [request])
+    const second = entry('a?b', [image])
+    const wrapper = mount(AvailableChannelModelList, { props: { entries: [first, second] }, global: { stubs } })
+    const toggles = wrapper.findAll('[data-testid="model-offering-toggle"]')
+    expect(toggles[0].attributes('aria-controls')).not.toBe(toggles[1].attributes('aria-controls'))
+    expect(wrapper.get('[data-testid="representative-official"]').text()).toContain('$0.2')
+    expect(wrapper.get('[data-testid="representative-site"]').text()).toContain('¥0.4')
+    expect(wrapper.findAll('[data-testid="representative-official"]')[1].text()).toContain('$0')
   })
   it('keeps expansion by stable key after reorder', async () => {
     const one = entry('one', [offering('a', 'Alpha', 'Retail', 1)]); const two = entry('two', [offering('b', 'Beta', 'Pro', 2)])
