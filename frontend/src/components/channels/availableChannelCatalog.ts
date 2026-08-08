@@ -447,7 +447,10 @@ export function filterAvailableChannelCatalog(
         models = models.filter((model) => model.hasPricing)
       }
       const isRawEmptyGroup = group.models.length === 0
-      if (models.length === 0 && !(isRawEmptyGroup && metadataMatches)) return []
+      if (
+        models.length === 0
+        && !(isRawEmptyGroup && metadataMatches && !filters.pricedOnly)
+      ) return []
 
       return [{ ...group, models: [...models], modelCount: models.length }]
     })

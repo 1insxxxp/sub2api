@@ -578,7 +578,7 @@ describe('filterAvailableChannelCatalog', () => {
     }
   })
 
-  it('removes raw empty groups on unmatched model search but not solely for priced-only', () => {
+  it('removes raw empty groups on unmatched model search and platform mismatch', () => {
     const emptyCatalog = buildAvailableChannelCatalog([
       channel('Empty Channel', [group(42, 'Empty Group')]),
     ], {}, 7.2)
@@ -587,10 +587,17 @@ describe('filterAvailableChannelCatalog', () => {
       search: 'missing-model', platform: 'all', pricedOnly: false,
     })).toEqual([])
     expect(filterAvailableChannelCatalog(emptyCatalog, {
-      search: '', platform: 'all', pricedOnly: true,
-    })[0]).toMatchObject({ groupCount: 1, modelCount: 0 })
-    expect(filterAvailableChannelCatalog(emptyCatalog, {
       search: '', platform: 'openai', pricedOnly: false,
+    })).toEqual([])
+  })
+
+  it('removes raw empty groups when only priced models are requested', () => {
+    const emptyCatalog = buildAvailableChannelCatalog([
+      channel('Empty Channel', [group(44, 'Empty Group')]),
+    ], {}, 7.2)
+
+    expect(filterAvailableChannelCatalog(emptyCatalog, {
+      search: '', platform: 'all', pricedOnly: true,
     })).toEqual([])
   })
 
