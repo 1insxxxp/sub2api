@@ -130,7 +130,7 @@ function priceCollection(
     cacheRead: priceValue(source.cache_read_price, context),
     imageInput: priceValue(source.image_input_price ?? null, context),
     imageOutput: priceValue(source.image_output_price ?? null, context),
-    request: priceValue(source.per_request_price, context),
+    request: priceValue(source.per_request_price, { ...context, peakFactor: null }),
   }
 }
 
@@ -258,8 +258,9 @@ function normalizeGroup(
   const groupKey = `${channelKey}:section:${sectionIndex}:${keySegment(sectionPlatform)}:group:${source.id}:${groupIndex}`
   const occurrences = new Map<string, number>()
   const normalizedModels = deduplicateModels(models).map((item) => {
-    const occurrence = occurrences.get(item.name) ?? 0
-    occurrences.set(item.name, occurrence + 1)
+    const modelIdentity = keySegment(item.name)
+    const occurrence = occurrences.get(modelIdentity) ?? 0
+    occurrences.set(modelIdentity, occurrence + 1)
     return normalizeModel(
       item,
       source,

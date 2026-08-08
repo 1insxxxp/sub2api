@@ -79,6 +79,7 @@ function channel(
 describe('buildAvailableChannelCatalog', () => {
   it('normalizes token prices with user rate, peak prices, intervals, and group metadata', () => {
     const tokenPricing = pricing({
+      per_request_price: 3,
       intervals: [
         {
           min_tokens: 0,
@@ -88,7 +89,7 @@ describe('buildAvailableChannelCatalog', () => {
           output_price: 8,
           cache_write_price: 1.5,
           cache_read_price: 0.4,
-          per_request_price: null,
+          per_request_price: 2.5,
         },
       ],
     })
@@ -150,7 +151,7 @@ describe('buildAvailableChannelCatalog', () => {
     expect(entry.prices.imageInput?.peakSite).toBeCloseTo(3.6)
     expect(entry.prices.imageOutput?.site).toBeCloseTo(2.7)
     expect(entry.prices.imageOutput?.peakSite).toBeCloseTo(5.4)
-    expect(entry.prices.request).toBeNull()
+    expect(entry.prices.request).toEqual({ official: 3, site: 10.8, peakSite: null })
     expect(entry.intervals[0]).toMatchObject({
       minTokens: 0,
       maxTokens: 100_000,
@@ -164,7 +165,11 @@ describe('buildAvailableChannelCatalog', () => {
     expect(entry.intervals[0].prices.cacheWrite?.peakSite).toBeCloseTo(10.8)
     expect(entry.intervals[0].prices.cacheRead?.site).toBeCloseTo(1.44)
     expect(entry.intervals[0].prices.cacheRead?.peakSite).toBeCloseTo(2.88)
-    expect(entry.intervals[0].prices.request).toBeNull()
+    expect(entry.intervals[0].prices.request).toEqual({
+      official: 2.5,
+      site: 9,
+      peakSite: null,
+    })
     expect(catalogChannel.key).toMatch(/^channel:/)
     expect(catalogGroup.key).toContain(catalogChannel.key)
     expect(entry.key).toContain(catalogGroup.key)
@@ -294,6 +299,23 @@ describe('buildAvailableChannelCatalog', () => {
     expect(groups[0].models[0].prices.input?.site).toBe(18)
     expect(groups[1].models[0].prices.input?.site).toBe(72)
     expect(new Set(groups[0].models.map((entry) => entry.key)).size).toBe(2)
+  })
+
+  it('gives case and whitespace variants unique keys when they are not exact duplicates', () => {
+    const source = channel('Key collisions', [
+      group(15, 'Variants', {
+        supported_models: [
+          model('GPT-4', pricing()),
+          model('gpt-4', pricing()),
+          model(' GPT-4 ', pricing()),
+        ],
+      }),
+    ])
+
+    const entries = buildAvailableChannelCatalog([source], {}, 7.2)[0].groups[0].models
+
+    expect(entries.map((entry) => entry.name)).toEqual(['GPT-4', 'gpt-4', ' GPT-4 '])
+    expect(new Set(entries.map((entry) => entry.key)).size).toBe(3)
   })
 
   it('attaches section fallback models only to the first group when group-scoped arrays are unavailable', () => {
