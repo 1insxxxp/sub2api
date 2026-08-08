@@ -610,6 +610,8 @@ export default {
       publicGroup: '公开',
       exclusiveGroup: '专属',
       subscriptionGroup: '订阅',
+      modelColumn: '模型',
+      detailsColumn: '详情',
       billingMode: {
         token: '按 Token',
         per_request: '按次',

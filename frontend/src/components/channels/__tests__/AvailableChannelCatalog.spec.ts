@@ -14,6 +14,9 @@ import type {
 import { useAppStore } from '@/stores/app'
 
 const labels: Record<string, string> = {
+  'availableChannels.catalog.officialPrice': '官方价',
+  'availableChannels.catalog.sitePrice': '本站价',
+  'availableChannels.catalog.effectiveRate': '实际倍率',
   'availableChannels.catalog.groupsCount': '{count} 个分组',
   'availableChannels.catalog.modelsCount': '{count} 个模型',
   'availableChannels.catalog.noModelsInGroup': '该分组暂无模型',
@@ -26,6 +29,8 @@ const labels: Record<string, string> = {
   'availableChannels.catalog.publicGroup': '公开',
   'availableChannels.catalog.exclusiveGroup': '专属',
   'availableChannels.catalog.subscriptionGroup': '订阅',
+  'availableChannels.catalog.modelColumn': '模型',
+  'availableChannels.catalog.detailsColumn': '详情',
 }
 
 vi.mock('vue-i18n', async () => {
@@ -323,6 +328,45 @@ describe('AvailableChannelCatalog', () => {
     await toggles[1].trigger('click')
     expect(toggles[1].attributes('aria-expanded')).toBe('true')
     expect(wrapper.findAll('[data-testid="group-body"]')[1].classes()).not.toContain('hidden')
+  })
+
+  it.runIf(existsSync(catalogPath))('separates the mobile accordion from a noninteractive desktop header', async () => {
+    const wrapper = await mountCatalog()
+    const groups = wrapper.findAll('[data-testid="channel-group"]')
+
+    expect(groups).toHaveLength(2)
+    for (const group of groups) {
+      const mobileToggle = group.get('[data-testid="group-toggle"]')
+      const desktopHeader = group.get('[data-testid="group-desktop-header"]')
+
+      expect(mobileToggle.element.tagName).toBe('BUTTON')
+      expect(mobileToggle.classes()).toContain('lg:hidden')
+      expect(desktopHeader.element.tagName).toBe('HEADER')
+      expect(desktopHeader.classes()).toContain('hidden')
+      expect(desktopHeader.classes()).toContain('lg:flex')
+      expect(desktopHeader.find('button').exists()).toBe(false)
+    }
+
+    const secondToggle = groups[1].get('[data-testid="group-toggle"]')
+    expect(secondToggle.attributes('aria-expanded')).toBe('false')
+    await secondToggle.trigger('click')
+    expect(secondToggle.attributes('aria-expanded')).toBe('true')
+  })
+
+  it.runIf(existsSync(catalogPath))('renders one desktop price heading row per group', async () => {
+    const wrapper = await mountCatalog()
+    const headings = wrapper.findAll('[data-testid="desktop-price-columns"]')
+
+    expect(headings).toHaveLength(2)
+    for (const heading of headings) {
+      expect(heading.classes()).toContain('hidden')
+      expect(heading.classes()).toContain('lg:grid')
+      expect(heading.text()).toContain('模型')
+      expect(heading.text()).toContain('官方价')
+      expect(heading.text()).toContain('本站价')
+      expect(heading.text()).toContain('实际倍率')
+      expect(heading.text()).toContain('详情')
+    }
   })
 
   it.runIf(existsSync(catalogPath))('shows group rates, access, subscription, and timezone-aware peak window', async () => {

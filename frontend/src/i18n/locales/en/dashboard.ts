@@ -605,6 +605,8 @@ export default {
       publicGroup: 'Public',
       exclusiveGroup: 'Exclusive',
       subscriptionGroup: 'Subscription',
+      modelColumn: 'Model',
+      detailsColumn: 'Details',
       billingMode: {
         token: 'Per token',
         per_request: 'Per request',
