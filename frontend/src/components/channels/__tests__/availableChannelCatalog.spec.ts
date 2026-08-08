@@ -1,0 +1,411 @@
+import { describe, expect, it } from 'vitest'
+
+import type {
+  UserAvailableChannel,
+  UserAvailableGroup,
+  UserSupportedModel,
+  UserSupportedModelPricing,
+} from '@/api/channels'
+import {
+  buildAvailableChannelCatalog,
+  filterAvailableChannelCatalog,
+} from '../availableChannelCatalog'
+
+function pricing(
+  overrides: Partial<UserSupportedModelPricing> = {},
+): UserSupportedModelPricing {
+  return {
+    billing_mode: 'token',
+    input_price: 5,
+    output_price: 10,
+    cache_write_price: 2,
+    cache_read_price: 1,
+    image_input_price: 0.5,
+    image_output_price: 0.75,
+    per_request_price: null,
+    intervals: [],
+    ...overrides,
+  }
+}
+
+function model(
+  name: string,
+  modelPricing: UserSupportedModelPricing | null,
+  platform = 'anthropic',
+): UserSupportedModel {
+  return { name, platform, pricing: modelPricing }
+}
+
+function group(
+  id: number,
+  name: string,
+  overrides: Partial<UserAvailableGroup> = {},
+): UserAvailableGroup {
+  return {
+    id,
+    name,
+    platform: 'anthropic',
+    subscription_type: 'standard',
+    rate_multiplier: 1,
+    peak_rate_enabled: false,
+    peak_start: '',
+    peak_end: '',
+    peak_rate_multiplier: 1,
+    is_exclusive: false,
+    supported_models: [],
+    ...overrides,
+  }
+}
+
+function channel(
+  name: string,
+  groups: UserAvailableGroup[],
+  overrides: Partial<UserAvailableChannel> = {},
+): UserAvailableChannel {
+  return {
+    name,
+    description: '',
+    platforms: [
+      {
+        platform: 'anthropic',
+        groups,
+        supported_models: [],
+      },
+    ],
+    ...overrides,
+  }
+}
+
+describe('buildAvailableChannelCatalog', () => {
+  it('normalizes token prices with user rate, peak prices, intervals, and group metadata', () => {
+    const tokenPricing = pricing({
+      intervals: [
+        {
+          min_tokens: 0,
+          max_tokens: 100_000,
+          tier_label: 'Standard context',
+          input_price: 4,
+          output_price: 8,
+          cache_write_price: 1.5,
+          cache_read_price: 0.4,
+          per_request_price: null,
+        },
+      ],
+    })
+    const source = channel('Official Anthropic', [
+      group(7, 'Pro', {
+        subscription_type: 'subscription',
+        rate_multiplier: 0.8,
+        peak_rate_enabled: true,
+        peak_start: '08:00',
+        peak_end: '10:00',
+        peak_rate_multiplier: 2,
+        is_exclusive: true,
+        supported_models: [model('claude-opus', tokenPricing)],
+      }),
+    ], { description: 'Fast premium route' })
+
+    const catalog = buildAvailableChannelCatalog([source], { 7: 0.5 }, 7.2)
+    const catalogChannel = catalog[0]
+    const catalogGroup = catalogChannel.groups[0]
+    const entry = catalogGroup.models[0]
+
+    expect(catalogChannel).toMatchObject({
+      name: 'Official Anthropic',
+      description: 'Fast premium route',
+      platforms: ['anthropic'],
+      groupCount: 1,
+      modelCount: 1,
+    })
+    expect(catalogGroup).toMatchObject({
+      id: 7,
+      name: 'Pro',
+      platform: 'anthropic',
+      subscriptionType: 'subscription',
+      isExclusive: true,
+      defaultRate: 0.8,
+      userRate: 0.5,
+      normalRate: 0.5,
+      modelCount: 1,
+      peak: { enabled: true, start: '08:00', end: '10:00', factor: 2 },
+    })
+    expect(entry).toMatchObject({
+      name: 'claude-opus',
+      platform: 'anthropic',
+      billingMode: 'token',
+      hasPricing: true,
+      defaultRate: 0.8,
+      userRate: 0.5,
+      normalRate: 0.5,
+      peakFactor: 2,
+    })
+    expect(entry.groupKey).toBe(catalogGroup.key)
+    expect(entry.prices.input).toEqual({ official: 5, site: 18, peakSite: 36 })
+    expect(entry.prices.output).toEqual({ official: 10, site: 36, peakSite: 72 })
+    expect(entry.prices.cacheWrite?.site).toBeCloseTo(7.2)
+    expect(entry.prices.cacheWrite?.peakSite).toBeCloseTo(14.4)
+    expect(entry.prices.cacheRead?.site).toBeCloseTo(3.6)
+    expect(entry.prices.cacheRead?.peakSite).toBeCloseTo(7.2)
+    expect(entry.prices.imageInput?.site).toBeCloseTo(1.8)
+    expect(entry.prices.imageInput?.peakSite).toBeCloseTo(3.6)
+    expect(entry.prices.imageOutput?.site).toBeCloseTo(2.7)
+    expect(entry.prices.imageOutput?.peakSite).toBeCloseTo(5.4)
+    expect(entry.prices.request).toBeNull()
+    expect(entry.intervals[0]).toMatchObject({
+      minTokens: 0,
+      maxTokens: 100_000,
+      tierLabel: 'Standard context',
+    })
+    expect(entry.intervals[0].prices.input?.site).toBeCloseTo(14.4)
+    expect(entry.intervals[0].prices.input?.peakSite).toBeCloseTo(28.8)
+    expect(entry.intervals[0].prices.output?.site).toBeCloseTo(28.8)
+    expect(entry.intervals[0].prices.output?.peakSite).toBeCloseTo(57.6)
+    expect(entry.intervals[0].prices.cacheWrite?.site).toBeCloseTo(5.4)
+    expect(entry.intervals[0].prices.cacheWrite?.peakSite).toBeCloseTo(10.8)
+    expect(entry.intervals[0].prices.cacheRead?.site).toBeCloseTo(1.44)
+    expect(entry.intervals[0].prices.cacheRead?.peakSite).toBeCloseTo(2.88)
+    expect(entry.intervals[0].prices.request).toBeNull()
+    expect(catalogChannel.key).toMatch(/^channel:/)
+    expect(catalogGroup.key).toContain(catalogChannel.key)
+    expect(entry.key).toContain(catalogGroup.key)
+  })
+
+  it('uses the default rate when the user has no override and preserves zero prices', () => {
+    const source = channel('Default-rate channel', [
+      group(8, 'Default rate', {
+        rate_multiplier: 0.25,
+        supported_models: [
+          model('free-input', pricing({ input_price: 0, output_price: null })),
+        ],
+      }),
+    ])
+
+    const entry = buildAvailableChannelCatalog([source], {}, 7.2)[0].groups[0].models[0]
+
+    expect(entry.normalRate).toBe(0.25)
+    expect(entry.userRate).toBeNull()
+    expect(entry.prices.input).toEqual({ official: 0, site: 0, peakSite: null })
+    expect(entry.prices.output).toBeNull()
+  })
+
+  it('normalizes image and per-request prices without applying peak multipliers', () => {
+    const source = channel('Media', [
+      group(9, 'Media peak group', {
+        rate_multiplier: 0.5,
+        peak_rate_enabled: true,
+        peak_rate_multiplier: 3,
+        supported_models: [
+          model('image-model', pricing({
+            billing_mode: 'image',
+            input_price: null,
+            output_price: null,
+            cache_write_price: null,
+            cache_read_price: null,
+            image_input_price: 0.2,
+            image_output_price: 0.8,
+            per_request_price: 1,
+          })),
+          model('request-model', pricing({
+            billing_mode: 'per_request',
+            input_price: null,
+            output_price: null,
+            cache_write_price: null,
+            cache_read_price: null,
+            image_input_price: null,
+            image_output_price: null,
+            per_request_price: 2,
+            intervals: [
+              {
+                min_tokens: 0,
+                max_tokens: null,
+                input_price: null,
+                output_price: null,
+                cache_write_price: null,
+                cache_read_price: null,
+                per_request_price: 1.5,
+              },
+            ],
+          })),
+        ],
+      }),
+    ])
+
+    const [imageEntry, requestEntry] = buildAvailableChannelCatalog([source], {}, 7.2)[0].groups[0].models
+
+    expect(imageEntry.peakFactor).toBeNull()
+    expect(imageEntry.prices.imageInput?.site).toBeCloseTo(0.72)
+    expect(imageEntry.prices.imageInput?.peakSite).toBeNull()
+    expect(imageEntry.prices.imageOutput?.site).toBeCloseTo(2.88)
+    expect(imageEntry.prices.imageOutput?.peakSite).toBeNull()
+    expect(imageEntry.prices.request).toEqual({ official: 1, site: 3.6, peakSite: null })
+    expect(requestEntry.peakFactor).toBeNull()
+    expect(requestEntry.prices.request).toEqual({ official: 2, site: 7.2, peakSite: null })
+    expect(requestEntry.intervals[0].prices.request?.official).toBe(1.5)
+    expect(requestEntry.intervals[0].prices.request?.site).toBeCloseTo(5.4)
+    expect(requestEntry.intervals[0].prices.request?.peakSite).toBeNull()
+  })
+
+  it('marks null and empty pricing payloads as unpriced without coercing missing values to zero', () => {
+    const emptyPricing = pricing({
+      input_price: null,
+      output_price: null,
+      cache_write_price: null,
+      cache_read_price: null,
+      image_input_price: null,
+      image_output_price: null,
+      per_request_price: null,
+    })
+    const source = channel('Unpriced', [
+      group(10, 'No prices', {
+        supported_models: [
+          model('no-payload', null),
+          model('empty-payload', emptyPricing),
+        ],
+      }),
+    ])
+
+    const entries = buildAvailableChannelCatalog([source], {}, 7.2)[0].groups[0].models
+
+    expect(entries.map((entry) => entry.hasPricing)).toEqual([false, false])
+    expect(entries[0].prices.input).toBeNull()
+    expect(entries[1].prices.input).toBeNull()
+  })
+
+  it('preserves same-name models across groups and removes only exact duplicates within one group', () => {
+    const shared = model('same-model', pricing())
+    const source = channel('Duplicates', [
+      group(11, 'Low rate', {
+        rate_multiplier: 0.5,
+        supported_models: [shared, { ...shared }, model('same-model', pricing({ input_price: 6 }))],
+      }),
+      group(12, 'High rate', {
+        rate_multiplier: 2,
+        supported_models: [shared],
+      }),
+    ])
+
+    const groups = buildAvailableChannelCatalog([source], {}, 7.2)[0].groups
+
+    expect(groups[0].models).toHaveLength(2)
+    expect(groups[1].models).toHaveLength(1)
+    expect(groups[0].models[0].name).toBe('same-model')
+    expect(groups[1].models[0].name).toBe('same-model')
+    expect(groups[0].models[0].groupKey).not.toBe(groups[1].models[0].groupKey)
+    expect(groups[0].models[0].prices.input?.site).toBe(18)
+    expect(groups[1].models[0].prices.input?.site).toBe(72)
+    expect(new Set(groups[0].models.map((entry) => entry.key)).size).toBe(2)
+  })
+
+  it('attaches section fallback models only to the first group when group-scoped arrays are unavailable', () => {
+    const first = group(13, 'First', { rate_multiplier: 0.5 })
+    const second = group(14, 'Second', { rate_multiplier: 2 })
+    delete first.supported_models
+    delete second.supported_models
+    const source = channel('Legacy fallback', [first, second])
+    source.platforms[0].supported_models = [model('legacy-model', pricing())]
+
+    const groups = buildAvailableChannelCatalog([source], {}, 7.2)[0].groups
+
+    expect(groups[0].models.map((entry) => entry.name)).toEqual(['legacy-model'])
+    expect(groups[0].models[0].prices.input?.site).toBe(18)
+    expect(groups[1].models).toEqual([])
+  })
+})
+
+describe('filterAvailableChannelCatalog', () => {
+  const catalog = buildAvailableChannelCatalog([
+    channel('Premium Routes', [
+      group(21, 'Claude Pro', {
+        supported_models: [
+          model('claude-opus', pricing()),
+          model('claude-unpriced', null),
+        ],
+      }),
+      group(22, 'Shared Budget', {
+        supported_models: [model('claude-haiku', pricing({ input_price: 1 }))],
+      }),
+    ], { description: 'Low latency west coast' }),
+    {
+      name: 'OpenAI Direct',
+      description: 'Official GPT access',
+      platforms: [
+        {
+          platform: 'openai',
+          groups: [
+            group(31, 'GPT Standard', {
+              platform: 'openai',
+              supported_models: [
+                model('gpt-priced', pricing(), 'openai'),
+                model('gpt-unpriced', null, 'openai'),
+              ],
+            }),
+          ],
+          supported_models: [],
+        },
+      ],
+    },
+  ], {}, 7.2)
+
+  it('preserves all descendants when channel name or description matches', () => {
+    const byName = filterAvailableChannelCatalog(catalog, {
+      search: 'premium', platform: 'all', pricedOnly: false,
+    })
+    const byDescription = filterAvailableChannelCatalog(catalog, {
+      search: 'west coast', platform: 'all', pricedOnly: false,
+    })
+
+    expect(byName).toHaveLength(1)
+    expect(byName[0].groupCount).toBe(2)
+    expect(byName[0].modelCount).toBe(3)
+    expect(byDescription[0].modelCount).toBe(3)
+  })
+
+  it('preserves all models in a matching group and narrows model-only matches', () => {
+    const byGroup = filterAvailableChannelCatalog(catalog, {
+      search: 'claude pro', platform: 'all', pricedOnly: false,
+    })
+    const byModel = filterAvailableChannelCatalog(catalog, {
+      search: 'opus', platform: 'all', pricedOnly: false,
+    })
+
+    expect(byGroup[0].groups).toHaveLength(1)
+    expect(byGroup[0].groups[0].models.map((entry) => entry.name)).toEqual([
+      'claude-opus',
+      'claude-unpriced',
+    ])
+    expect(byGroup[0].modelCount).toBe(2)
+    expect(byModel[0].groups).toHaveLength(1)
+    expect(byModel[0].groups[0].models.map((entry) => entry.name)).toEqual(['claude-opus'])
+    expect(byModel[0].modelCount).toBe(1)
+  })
+
+  it('composes platform and priced-only filters and recomputes descendant counts', () => {
+    const result = filterAvailableChannelCatalog(catalog, {
+      search: '', platform: 'anthropic', pricedOnly: true,
+    })
+
+    expect(result).toHaveLength(1)
+    expect(result[0].platforms).toEqual(['anthropic'])
+    expect(result[0].groupCount).toBe(2)
+    expect(result[0].modelCount).toBe(2)
+    expect(result[0].groups.flatMap((entry) => entry.models).every((entry) => entry.hasPricing)).toBe(true)
+  })
+
+  it('removes groups and channels emptied by composed filters', () => {
+    const result = filterAvailableChannelCatalog(catalog, {
+      search: 'unpriced', platform: 'openai', pricedOnly: true,
+    })
+
+    expect(result).toEqual([])
+  })
+
+  it('does not mutate the source catalog while filtering', () => {
+    filterAvailableChannelCatalog(catalog, {
+      search: 'opus', platform: 'anthropic', pricedOnly: true,
+    })
+
+    expect(catalog[0].groupCount).toBe(2)
+    expect(catalog[0].modelCount).toBe(3)
+    expect(catalog[0].groups[0].models).toHaveLength(2)
+  })
+})
