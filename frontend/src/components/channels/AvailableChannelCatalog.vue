@@ -216,7 +216,7 @@ watch(
   async (keys) => {
     const focusWasInListbox = channelListboxRef.value?.contains(document.activeElement) ?? false
     let selectionChanged = false
-    if (!props.modelEntries && (selectedChannelKey.value == null || !keys.includes(selectedChannelKey.value))) {
+    if (selectedChannelKey.value == null || !keys.includes(selectedChannelKey.value)) {
       selectedChannelKey.value = keys[0] ?? null
       selectionChanged = true
     }
