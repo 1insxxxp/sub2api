@@ -447,7 +447,16 @@ const detailSections = computed<DetailSection[]>(() => {
     ? [{ key: 'extended', label: null, isTier: false, metrics: detailMetrics.value }]
     : []
 })
-const hasDetails = computed(() => detailSections.value.length > 0)
+const hasDetails = computed(() => {
+  if (props.model.intervals.length > 0) return true
+  const isAdditionalMetric = (key: string, value: CatalogPriceValue | null) =>
+    hasValue(value) && !primaryMetrics.value.some((primary) => primary.key === key)
+  const prices = props.model.prices
+  return isAdditionalMetric('cache-write', prices.cacheWrite)
+    || isAdditionalMetric('cache-read', prices.cacheRead)
+    || isAdditionalMetric('image-input', prices.imageInput)
+    || isAdditionalMetric('image-output', prices.imageOutput)
+})
 
 function intervalLabel(interval: CatalogPricingInterval): string {
   if (interval.tierLabel) return interval.tierLabel
