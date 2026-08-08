@@ -1,10 +1,11 @@
 <template>
   <article
-    class="w-full overflow-hidden rounded-2xl border border-gray-200/90 bg-white shadow-sm dark:border-dark-600 dark:bg-dark-800"
+    data-testid="model-price-row"
+    class="w-full min-w-0 overflow-hidden rounded-2xl border border-gray-200/90 bg-white shadow-sm dark:border-dark-600 dark:bg-dark-800 lg:grid lg:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(88px,0.5fr)_minmax(72px,0.4fr)] lg:items-start lg:gap-4 lg:p-3"
   >
-    <header class="flex flex-wrap items-start justify-between gap-3 px-4 pb-3 pt-4 sm:px-5">
-      <div class="min-w-0">
-        <h3 class="break-words text-sm font-semibold leading-5 text-gray-900 dark:text-white">
+    <header class="flex flex-wrap items-start justify-between gap-3 px-4 pb-3 pt-4 sm:px-5 lg:contents">
+      <div class="min-w-0 lg:col-start-1 lg:row-start-1 lg:p-3">
+        <h3 class="break-words text-sm font-semibold leading-5 text-gray-900 [overflow-wrap:anywhere] dark:text-white">
           {{ model.name }}
         </h3>
         <div class="mt-2 flex flex-wrap items-center gap-2">
@@ -22,7 +23,10 @@
         </div>
       </div>
 
-      <div class="shrink-0 text-right">
+      <div
+        data-testid="effective-rate"
+        class="min-w-0 shrink-0 text-right lg:col-start-4 lg:row-start-1 lg:p-3 lg:text-left"
+      >
         <p class="text-xs leading-4 text-gray-600 dark:text-gray-300">
           {{ t(`${catalogKey}.effectiveRate`) }}
         </p>
@@ -35,17 +39,17 @@
     <div
       v-if="hasDisplayPricing"
       data-testid="price-comparison"
-      class="grid grid-cols-2 gap-2 px-3 pb-3 sm:gap-3 sm:px-5 lg:grid-cols-2"
+      class="grid grid-cols-2 gap-2 px-3 pb-3 sm:gap-3 sm:px-5 lg:contents"
       :aria-hidden="expanded && model.intervals.length > 0 ? 'true' : undefined"
     >
       <section
         data-testid="official-price"
-        class="min-w-0 rounded-xl border border-gray-200 bg-gray-50/90 p-3 dark:border-dark-500 dark:bg-dark-700/70"
+        class="min-w-0 rounded-xl border border-gray-200 bg-gray-50/90 p-3 dark:border-dark-500 dark:bg-dark-700/70 lg:col-start-2 lg:row-start-1"
       >
-        <h4 class="text-xs font-semibold text-gray-600 dark:text-gray-300">
+        <h4 class="text-xs font-semibold text-gray-600 dark:text-gray-300 lg:sr-only">
           {{ t(`${catalogKey}.officialPrice`) }}
         </h4>
-        <div class="mt-2 space-y-2.5">
+        <div class="mt-2 space-y-2.5 lg:mt-0">
           <div v-for="metric in primaryMetrics" :key="metric.key" class="min-w-0">
             <p v-if="metric.label" class="text-xs text-gray-600 dark:text-gray-300">
               {{ metric.label }}
@@ -64,12 +68,12 @@
 
       <section
         data-testid="site-price"
-        class="min-w-0 rounded-xl border border-primary-200 bg-primary-50/70 p-3 dark:border-primary-500/30 dark:bg-primary-500/10"
+        class="min-w-0 rounded-xl border border-primary-200 bg-primary-50/70 p-3 dark:border-primary-500/30 dark:bg-primary-500/10 lg:col-start-3 lg:row-start-1"
       >
-        <h4 class="text-xs font-semibold text-primary-700 dark:text-primary-200">
+        <h4 class="text-xs font-semibold text-primary-700 dark:text-primary-200 lg:sr-only">
           {{ t(`${catalogKey}.sitePrice`) }}
         </h4>
-        <div class="mt-2 space-y-2.5">
+        <div class="mt-2 space-y-2.5 lg:mt-0">
           <div v-for="metric in primaryMetrics" :key="metric.key" class="min-w-0">
             <p v-if="metric.label" class="text-xs text-primary-700 dark:text-primary-200">
               {{ metric.label }}
@@ -109,7 +113,7 @@
     <div
       v-else
       data-testid="unpriced-state"
-      class="mx-4 mb-4 rounded-xl border border-dashed border-amber-300 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-700 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-300 sm:mx-5"
+      class="mx-4 mb-4 min-w-0 rounded-xl border border-dashed border-amber-300 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-700 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-300 sm:mx-5 lg:col-span-2 lg:col-start-2 lg:row-start-1 lg:m-0 lg:flex lg:min-h-full lg:items-center"
     >
       {{ t(`${catalogKey}.unpriced`) }}
     </div>
@@ -119,7 +123,7 @@
         v-if="expanded"
         :id="detailRegionId"
         data-testid="price-details"
-        class="border-t border-gray-100 bg-gray-50/50 px-3 py-3 dark:border-dark-600 dark:bg-dark-900/20 sm:px-5"
+        class="border-t border-gray-100 bg-gray-50/50 px-3 py-3 dark:border-dark-600 dark:bg-dark-900/20 sm:px-5 lg:col-span-5 lg:col-start-1 lg:row-start-2 lg:rounded-xl lg:border"
       >
         <div class="space-y-3">
           <section
@@ -194,12 +198,16 @@
 
       <button
         type="button"
-        class="flex min-h-11 w-full items-center justify-center gap-2 border-t border-gray-100 px-4 py-2 text-sm font-medium text-gray-600 transition-colors hover:bg-gray-50 hover:text-primary-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary-500 dark:border-dark-600 dark:text-gray-300 dark:hover:bg-dark-700 dark:hover:text-primary-300"
+        data-testid="price-detail-toggle"
+        class="flex min-h-11 w-full min-w-0 items-center justify-center gap-2 border-t border-gray-100 px-4 py-2 text-sm font-medium text-gray-600 transition-colors hover:bg-gray-50 hover:text-primary-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary-500 dark:border-dark-600 dark:text-gray-300 dark:hover:bg-dark-700 dark:hover:text-primary-300 lg:col-start-5 lg:row-start-1 lg:min-h-full lg:rounded-xl lg:border lg:px-2 lg:py-3"
         :aria-expanded="expanded"
         :aria-controls="detailRegionId"
         @click="expanded = !expanded"
       >
-        {{ expanded ? t(`${catalogKey}.hideDetails`) : t(`${catalogKey}.showDetails`) }}
+        <span class="lg:hidden">
+          {{ expanded ? t(`${catalogKey}.hideDetails`) : t(`${catalogKey}.showDetails`) }}
+        </span>
+        <span class="hidden lg:inline">{{ t(`${catalogKey}.detailsColumn`) }}</span>
         <svg
           class="h-4 w-4 transition-transform"
           :class="expanded ? 'rotate-180' : ''"

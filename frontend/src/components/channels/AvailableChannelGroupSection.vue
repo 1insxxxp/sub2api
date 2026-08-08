@@ -107,12 +107,12 @@
     <div
       :id="bodyId"
       data-testid="group-body"
-      class="gap-4 border-t border-gray-100 bg-gray-50/50 p-4 dark:border-dark-600 dark:bg-dark-900/20 sm:p-5 lg:grid 2xl:grid-cols-2"
+      class="grid-cols-1 gap-4 border-t border-gray-100 bg-gray-50/50 p-4 dark:border-dark-600 dark:bg-dark-900/20 sm:p-5 lg:grid"
       :class="expanded ? 'grid' : 'hidden'"
     >
       <div
         data-testid="desktop-price-columns"
-        class="col-span-full hidden min-w-0 grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(88px,0.5fr)_minmax(72px,0.4fr)] gap-4 border-b border-gray-200 px-3 pb-2 text-xs font-semibold text-gray-500 dark:border-dark-600 dark:text-gray-400 lg:grid"
+        class="col-span-full hidden min-w-0 gap-4 border-b border-gray-200 px-3 pb-2 text-xs font-semibold text-gray-500 dark:border-dark-600 dark:text-gray-400 lg:grid lg:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(88px,0.5fr)_minmax(72px,0.4fr)]"
         aria-hidden="true"
       >
         <span>{{ t(`${catalogKey}.modelColumn`) }}</span>

@@ -27,6 +27,7 @@ const labels: Record<string, string> = {
   'availableChannels.catalog.perRequest': '/ 次',
   'availableChannels.catalog.perImage': '/ 张',
   'availableChannels.catalog.tieredPricing': '阶梯定价',
+  'availableChannels.catalog.detailsColumn': '详情',
   'availableChannels.catalog.billingMode.token': '按 Token',
   'availableChannels.catalog.billingMode.per_request': '按次',
   'availableChannels.catalog.billingMode.image': '按图片',
@@ -55,6 +56,7 @@ const componentPath = resolve(
   dirname(fileURLToPath(import.meta.url)),
   '../AvailableChannelModelPrice.vue',
 )
+const desktopPriceGrid = 'lg:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(88px,0.5fr)_minmax(72px,0.4fr)]'
 
 function emptyPrices(): CatalogPriceCollection {
   return {
@@ -130,6 +132,41 @@ describe('AvailableChannelModelPrice', () => {
       expect(site.text()).toContain('¥28.00')
     },
   )
+
+  it.runIf(existsSync(componentPath))('morphs one price DOM into the shared five-column desktop row', async () => {
+    const wrapper = await mountPrice(makeModel({
+      prices: {
+        ...emptyPrices(),
+        input: price(0.000002, 0.000007),
+        output: price(0.000008, 0.000028),
+        cacheRead: price(0.0000002, 0.0000007),
+      },
+    }))
+    const row = wrapper.get('[data-testid="model-price-row"]')
+    const comparison = wrapper.get('[data-testid="price-comparison"]')
+    const official = wrapper.get('[data-testid="official-price"]')
+    const site = wrapper.get('[data-testid="site-price"]')
+    const rate = wrapper.get('[data-testid="effective-rate"]')
+    const detailButton = wrapper.get('[data-testid="price-detail-toggle"]')
+
+    expect(row.classes()).toContain('lg:grid')
+    expect(row.classes()).toContain(desktopPriceGrid)
+    expect(wrapper.get('header').classes()).toContain('lg:contents')
+    expect(comparison.classes()).toContain('grid-cols-2')
+    expect(comparison.classes()).toContain('lg:contents')
+    expect(official.classes()).toContain('lg:col-start-2')
+    expect(site.classes()).toContain('lg:col-start-3')
+    expect(rate.classes()).toContain('lg:col-start-4')
+    expect(detailButton.classes()).toContain('lg:col-start-5')
+    expect(wrapper.findAll('[data-testid="price-comparison"]')).toHaveLength(1)
+    expect(wrapper.findAll('[data-testid="official-price"]')).toHaveLength(1)
+    expect(wrapper.findAll('[data-testid="site-price"]')).toHaveLength(1)
+
+    await detailButton.trigger('click')
+    const details = wrapper.get('[data-testid="price-details"]')
+    expect(details.classes()).toContain('lg:col-span-5')
+    expect(details.classes()).toContain('lg:col-start-1')
+  })
 
   it.runIf(existsSync(componentPath))('does not expose an empty detail control', async () => {
     const wrapper = await mountPrice(makeModel())
@@ -216,7 +253,10 @@ describe('AvailableChannelModelPrice', () => {
       prices: emptyPrices(),
     }))
 
-    expect(wrapper.get('[data-testid="unpriced-state"]').text()).toContain('暂未定价')
+    const state = wrapper.get('[data-testid="unpriced-state"]')
+    expect(state.text()).toContain('暂未定价')
+    expect(state.classes()).toContain('lg:col-span-2')
+    expect(state.classes()).toContain('lg:col-start-2')
     expect(wrapper.find('[data-testid="official-price"]').exists()).toBe(false)
     expect(wrapper.find('[data-testid="site-price"]').exists()).toBe(false)
     expect(wrapper.find('button').exists()).toBe(false)
@@ -433,7 +473,7 @@ describe('AvailableChannelModelPrice', () => {
     expect(root.classes()).toContain('w-full')
     expect(root.classes()).toContain('overflow-hidden')
     expect(comparison.classes()).toContain('grid-cols-2')
-    expect(comparison.classes()).toContain('lg:grid-cols-2')
+    expect(comparison.classes()).toContain('lg:contents')
     expect(wrapper.findAll('[data-testid="official-price"]')).toHaveLength(1)
     expect(wrapper.findAll('[data-testid="site-price"]')).toHaveLength(1)
     expect(wrapper.text().match(/\$2\.00/g)).toHaveLength(1)

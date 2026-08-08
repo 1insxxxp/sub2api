@@ -52,6 +52,7 @@ vi.mock('vue-i18n', async () => {
 const testDirectory = dirname(fileURLToPath(import.meta.url))
 const catalogPath = resolve(testDirectory, '../AvailableChannelCatalog.vue')
 const groupSectionPath = resolve(testDirectory, '../AvailableChannelGroupSection.vue')
+const desktopPriceGrid = 'lg:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(88px,0.5fr)_minmax(72px,0.4fr)]'
 
 afterEach(() => {
   document.body.innerHTML = ''
@@ -356,17 +357,21 @@ describe('AvailableChannelCatalog', () => {
   it.runIf(existsSync(catalogPath))('renders one desktop price heading row per group', async () => {
     const wrapper = await mountCatalog()
     const headings = wrapper.findAll('[data-testid="desktop-price-columns"]')
+    const bodies = wrapper.findAll('[data-testid="group-body"]')
 
     expect(headings).toHaveLength(2)
     for (const heading of headings) {
       expect(heading.classes()).toContain('hidden')
       expect(heading.classes()).toContain('lg:grid')
+      expect(heading.classes()).toContain(desktopPriceGrid)
       expect(heading.text()).toContain('模型')
       expect(heading.text()).toContain('官方价')
       expect(heading.text()).toContain('本站价')
       expect(heading.text()).toContain('实际倍率')
       expect(heading.text()).toContain('详情')
     }
+    expect(bodies).toHaveLength(2)
+    expect(bodies.every((body) => !body.classes().includes('2xl:grid-cols-2'))).toBe(true)
   })
 
   it.runIf(existsSync(catalogPath))('shows group rates, access, subscription, and timezone-aware peak window', async () => {
