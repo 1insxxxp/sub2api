@@ -14,7 +14,7 @@
       class="flex min-h-11 w-full min-w-0 items-start justify-between gap-3 px-4 py-4 text-left transition-colors motion-reduce:transition-none hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary-500 dark:hover:bg-dark-700/60 sm:px-5 xl:hidden"
       :aria-expanded="expanded"
       :aria-controls="bodyId"
-      @click="expanded = !expanded"
+      @click="toggleExpanded"
     >
       <span class="min-w-0 flex-1">
         <GroupBadge
@@ -162,7 +162,15 @@ const props = withDefaults(defineProps<{
 const { t } = useI18n()
 const appStore = useAppStore()
 const expanded = ref(props.defaultExpanded)
+const autoExpanded = ref(props.defaultExpanded)
+const userControlled = ref(false)
 const instanceUid = getCurrentInstance()?.uid ?? 0
+
+function toggleExpanded(): void {
+  expanded.value = !expanded.value
+  autoExpanded.value = false
+  userControlled.value = true
+}
 
 function safeId(value: string): string {
   const normalized = value
@@ -186,7 +194,14 @@ const groupHeadingId = computed(() => `${bodyId.value}-heading`)
 watch(
   () => props.defaultExpanded,
   (isDefault, wasDefault) => {
-    if (isDefault && !wasDefault) expanded.value = true
+    if (userControlled.value) return
+    if (isDefault && !wasDefault) {
+      expanded.value = true
+      autoExpanded.value = true
+    } else if (!isDefault && wasDefault && autoExpanded.value) {
+      expanded.value = false
+      autoExpanded.value = false
+    }
   },
 )
 

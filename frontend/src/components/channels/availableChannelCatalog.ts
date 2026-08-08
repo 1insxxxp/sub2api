@@ -122,6 +122,10 @@ function exactKeySegment(value: string): string {
   return safelyEncodedKeySegment(value, true)
 }
 
+function exactModelIdentity(name: string, platform: string): string {
+  return `${exactKeySegment(name)}:platform:${exactKeySegment(platform)}`
+}
+
 function unique(values: string[]): string[] {
   return [...new Set(values)]
 }
@@ -276,13 +280,14 @@ function normalizeModel(
   resolvedGroupPlatform: string,
   configuredPeakFactor: number | null,
 ): CatalogModelEntry {
+  const resolvedModelPlatform = resolvePlatform(source.platform, resolvedGroupPlatform)
   const billingMode = source.pricing?.billing_mode ?? null
   const peakFactor =
     billingMode === BILLING_MODE_TOKEN && group.peak_rate_enabled
       ? configuredPeakFactor
       : null
   const context: PriceContext = { cnyMultiplier, normalRate, peakFactor }
-  const modelKey = `${groupKey}:model:${keySegment(source.name)}:${occurrence}`
+  const modelKey = `${groupKey}:model:${exactModelIdentity(source.name, resolvedModelPlatform)}:${occurrence}`
   const prices = source.pricing
     ? priceCollection(source.pricing, context)
     : priceCollection({
@@ -300,7 +305,7 @@ function normalizeModel(
     key: modelKey,
     groupKey,
     name: source.name,
-    platform: resolvePlatform(source.platform, resolvedGroupPlatform),
+    platform: resolvedModelPlatform,
     billingMode,
     hasPricing: collectionHasPricing(prices)
       || intervals.some((interval) => collectionHasPricing(interval.prices)),
@@ -330,7 +335,10 @@ function normalizeGroup(
     : null
   const occurrences = new Map<string, number>()
   const normalizedModels = deduplicateModels(models).map((item) => {
-    const modelIdentity = keySegment(item.name)
+    const modelIdentity = exactModelIdentity(
+      item.name,
+      resolvePlatform(item.platform, resolvedPlatform),
+    )
     const occurrence = occurrences.get(modelIdentity) ?? 0
     occurrences.set(modelIdentity, occurrence + 1)
     return normalizeModel(

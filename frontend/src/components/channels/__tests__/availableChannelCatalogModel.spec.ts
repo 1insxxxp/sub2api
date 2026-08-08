@@ -570,6 +570,36 @@ describe('buildAvailableChannelCatalog', () => {
     expect(aloneAfter.key).toBe(aloneBefore.key)
   })
 
+  it('keeps exact model name and platform keys stable across reorder', () => {
+    const variants = [
+      model('GPT-4', pricing(), 'openai'),
+      model('gpt-4', pricing(), 'openai'),
+      model(' GPT-4 ', pricing(), 'openai'),
+      model('platform-model', pricing(), 'OpenAI'),
+      model('platform-model', pricing(), 'openai'),
+    ]
+    const source = (supportedModels: UserSupportedModel[]) => channel('Exact model identities', [
+      group(102, 'Model variants', { supported_models: supportedModels }),
+    ])
+    const initial = buildAvailableChannelCatalog([source(variants)], {}, 7.2)[0].groups[0].models
+    const reordered = buildAvailableChannelCatalog([source([...variants].reverse())], {}, 7.2)[0].groups[0].models
+    const identityKeys = (entries: typeof initial) => new Map(
+      entries.map((entry) => [`${entry.name}\u0000${entry.platform}`, entry.key]),
+    )
+    const initialKeys = identityKeys(initial)
+    const reorderedKeys = identityKeys(reordered)
+
+    expect(new Set(initial.map((entry) => entry.key)).size).toBe(variants.length)
+    expect(initialKeys.get('GPT-4\u0000openai')).toContain(':model:GPT-4:platform:openai:0')
+    expect(initialKeys.get('gpt-4\u0000openai')).toContain(':model:gpt-4:platform:openai:0')
+    expect(initialKeys.get(' GPT-4 \u0000openai')).toContain(':model:%20GPT-4%20:platform:openai:0')
+    expect(initialKeys.get('platform-model\u0000OpenAI')).toContain(':platform:OpenAI:0')
+    expect(initialKeys.get('platform-model\u0000openai')).toContain(':platform:openai:0')
+    for (const [identity, key] of initialKeys) {
+      expect(reorderedKeys.get(identity)).toBe(key)
+    }
+  })
+
   it('safely creates keys from upstream names containing lone UTF-16 surrogates', () => {
     const source = channel('Broken\uD800 channel', [
       group(92, 'Safe group', {

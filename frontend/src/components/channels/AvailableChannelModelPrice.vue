@@ -5,9 +5,9 @@
   >
     <header class="flex flex-wrap items-start justify-between gap-3 px-4 pb-3 pt-4 sm:px-5 xl:contents">
       <div class="min-w-0 xl:col-start-1 xl:row-start-1 xl:p-3">
-        <h3 class="break-words text-sm font-semibold leading-5 text-gray-900 [overflow-wrap:anywhere] dark:text-white">
+        <h4 class="break-words text-sm font-semibold leading-5 text-gray-900 [overflow-wrap:anywhere] dark:text-white">
           {{ model.name }}
-        </h3>
+        </h4>
         <div class="mt-2 flex flex-wrap items-center gap-2">
           <span
             class="rounded-md border border-gray-200 bg-gray-50 px-2 py-0.5 text-xs font-medium text-gray-600 dark:border-dark-500 dark:bg-dark-700 dark:text-gray-300"
@@ -46,9 +46,9 @@
         data-testid="official-price"
         class="min-w-0 rounded-xl border border-gray-200 bg-gray-50/90 p-3 dark:border-dark-500 dark:bg-dark-700/70 xl:col-start-2 xl:row-start-1"
       >
-        <h4 class="text-xs font-semibold text-gray-600 dark:text-gray-300 xl:sr-only">
+        <h5 class="text-xs font-semibold text-gray-600 dark:text-gray-300 xl:sr-only">
           {{ t(`${catalogKey}.officialPrice`) }}
-        </h4>
+        </h5>
         <div class="mt-2 space-y-2.5 xl:mt-0">
           <div v-for="metric in primaryMetrics" :key="metric.key" class="min-w-0">
             <p v-if="metric.label" class="text-xs text-gray-600 dark:text-gray-300">
@@ -70,9 +70,9 @@
         data-testid="site-price"
         class="min-w-0 rounded-xl border border-primary-200 bg-primary-50/70 p-3 dark:border-primary-500/30 dark:bg-primary-500/10 xl:col-start-3 xl:row-start-1"
       >
-        <h4 class="text-xs font-semibold text-primary-700 dark:text-primary-200 xl:sr-only">
+        <h5 class="text-xs font-semibold text-primary-700 dark:text-primary-200 xl:sr-only">
           {{ t(`${catalogKey}.sitePrice`) }}
-        </h4>
+        </h5>
         <div class="mt-2 space-y-2.5 xl:mt-0">
           <div v-for="metric in primaryMetrics" :key="metric.key" class="min-w-0">
             <p v-if="metric.label" class="text-xs text-primary-700 dark:text-primary-200">

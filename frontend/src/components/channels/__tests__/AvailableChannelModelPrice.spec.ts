@@ -488,10 +488,10 @@ describe('AvailableChannelModelPrice', () => {
     const official = wrapper.get('[data-testid="official-price"]')
     const site = wrapper.get('[data-testid="site-price"]')
 
-    expect(official.get('h4').classes()).toContain('text-gray-600')
+    expect(official.get('h5').classes()).toContain('text-gray-600')
     expect(official.findAll('p')[0].classes()).toContain('text-gray-600')
     expect(official.get('span').classes()).toContain('text-gray-600')
-    expect(site.get('h4').classes()).toContain('text-primary-700')
+    expect(site.get('h5').classes()).toContain('text-primary-700')
     expect(site.findAll('p')[0].classes()).toContain('text-primary-700')
     expect(site.get('span').classes()).toContain('text-primary-700')
     expect(site.html()).not.toMatch(/primary-700\/70|opacity-70/)

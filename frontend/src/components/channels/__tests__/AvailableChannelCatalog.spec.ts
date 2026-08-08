@@ -351,9 +351,11 @@ describe('AvailableChannelCatalog', () => {
 
     expect(wrapper.element).toBe(host.element)
     expect(host.classes()).toContain('table-wrapper')
-    expect(host.classes()).toContain('h-full')
+    expect(host.classes()).not.toContain('h-full')
     expect(host.classes()).toContain('min-h-0')
-    expect(host.classes()).toContain('[container-type:size]')
+    expect(host.classes()).not.toContain('[container-type:size]')
+    expect(host.classes()).toContain('xl:h-full')
+    expect(host.classes()).toContain('xl:[container-type:size]')
     expect(rail.classes()).toContain('xl:max-h-[calc(100cqh-2rem)]')
     expect(source).not.toMatch(/100(?:d|s|l)?vh/)
   })
@@ -445,7 +447,33 @@ describe('AvailableChannelCatalog', () => {
     reordered[0].groups = [reordered[0].groups[1], reordered[0].groups[0]]
     expect(reorderedWrapper.findAll('[data-testid="group-toggle"]')[1].attributes('aria-expanded')).toBe('false')
     await reorderedWrapper.setProps({ channels: reordered })
-    expect(reorderedWrapper.findAll('[data-testid="group-toggle"]')[0].attributes('aria-expanded')).toBe('true')
+    const reorderedToggles = reorderedWrapper.findAll('[data-testid="group-toggle"]')
+    expect(reorderedToggles[0].attributes('aria-expanded')).toBe('true')
+    expect(reorderedToggles[1].attributes('aria-expanded')).toBe('false')
+  })
+
+  it.runIf(existsSync(catalogPath))('preserves manual accordion choices when the default group changes', async () => {
+    const manuallyOpen = await mountCatalog()
+    let toggles = manuallyOpen.findAll('[data-testid="group-toggle"]')
+    await toggles[0].trigger('click')
+    await toggles[0].trigger('click')
+    const reorderedOpen = structuredClone(channels)
+    reorderedOpen[0].groups = [reorderedOpen[0].groups[1], reorderedOpen[0].groups[0]]
+    await manuallyOpen.setProps({ channels: reorderedOpen })
+    toggles = manuallyOpen.findAll('[data-testid="group-toggle"]')
+    expect(toggles[0].attributes('aria-expanded')).toBe('true')
+    expect(toggles[1].attributes('aria-expanded')).toBe('true')
+
+    const manuallyClosed = await mountCatalog()
+    toggles = manuallyClosed.findAll('[data-testid="group-toggle"]')
+    await toggles[1].trigger('click')
+    await toggles[1].trigger('click')
+    const reorderedClosed = structuredClone(channels)
+    reorderedClosed[0].groups = [reorderedClosed[0].groups[1], reorderedClosed[0].groups[0]]
+    await manuallyClosed.setProps({ channels: reorderedClosed })
+    toggles = manuallyClosed.findAll('[data-testid="group-toggle"]')
+    expect(toggles[0].attributes('aria-expanded')).toBe('false')
+    expect(toggles[1].attributes('aria-expanded')).toBe('false')
   })
 
   it.runIf(existsSync(catalogPath))('isolates mobile group expansion when channels share a group id and platform', async () => {
@@ -482,6 +510,55 @@ describe('AvailableChannelCatalog', () => {
       expect(group.attributes('aria-labelledby')).toBe(headings[0].attributes('id'))
       expect(group.findAll('h3')).toHaveLength(1)
     }
+  })
+
+  it.runIf(existsSync(groupSectionPath) && existsSync(modelPricePath))('renders a real h3 group, h4 model, and h5 price outline', async () => {
+    const component = (await import('../AvailableChannelGroupSection.vue')).default
+    const semanticGroupKey = 'channel:outline:platform:openai:group:88'
+    const semanticModel = model(
+      `${semanticGroupKey}:model:outline:0`,
+      semanticGroupKey,
+      'Outline model',
+    )
+    semanticModel.prices.cacheRead = { official: 0.0000001, site: 0.00000036, peakSite: null }
+    semanticModel.intervals = [{
+      key: `${semanticModel.key}:interval:0`,
+      minTokens: 0,
+      maxTokens: 1000,
+      tierLabel: 'Short context',
+      prices: semanticModel.prices,
+    }]
+    const semanticGroup = group(
+      semanticGroupKey,
+      'channel:outline',
+      'Outline group',
+      [semanticModel],
+    )
+    const wrapper = mount(component, {
+      attachTo: document.body,
+      props: { group: semanticGroup, defaultExpanded: true },
+      global: {
+        plugins: [installPinia()],
+        stubs: {
+          PlatformIcon: true,
+          GroupBadge: {
+            props: ['name'],
+            template: '<span>{{ name }}</span>',
+          },
+        },
+      },
+    })
+
+    expect(wrapper.get('[data-testid="group-semantic-heading"]').element.tagName).toBe('H3')
+    const priceRow = wrapper.get('[data-testid="model-price-row"]')
+    expect(priceRow.get('header h4').text()).toBe('Outline model')
+    expect(priceRow.get('[data-testid="official-price"] h5').exists()).toBe(true)
+    expect(priceRow.get('[data-testid="site-price"] h5').exists()).toBe(true)
+    expect(priceRow.find('h3').exists()).toBe(false)
+
+    await priceRow.get('[data-testid="price-detail-toggle"]').trigger('click')
+    expect(priceRow.get('[data-testid="price-details"]').findAll('h5').length).toBeGreaterThan(0)
+    expect(priceRow.get('[data-testid="price-details"]').find('h4').exists()).toBe(false)
   })
 
   it.runIf(existsSync(catalogPath))('shows group rates, access, subscription, and timezone-aware peak window', async () => {
@@ -548,6 +625,7 @@ describe('AvailableChannelCatalog', () => {
 
     expect(summary.element.tagName).toBe('DIV')
     expect(summary.find('button').exists()).toBe(false)
+    expect(summary.find('svg').exists()).toBe(false)
     expect(summary.attributes('role')).toBeUndefined()
   })
 

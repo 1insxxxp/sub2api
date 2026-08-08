@@ -1,7 +1,7 @@
 <template>
   <div
     data-testid="catalog-scroll-host"
-    class="table-wrapper h-full min-h-0 [container-type:size]"
+    class="table-wrapper min-h-0 xl:h-full xl:[container-type:size]"
   >
     <section
       v-if="loading && channels.length === 0"
@@ -68,9 +68,6 @@
             {{ selectedChannel?.name }}
           </span>
         </span>
-        <svg class="h-5 w-5 shrink-0 text-gray-400" viewBox="0 0 20 20" fill="none" aria-hidden="true">
-          <path d="m5 7.5 5 5 5-5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" />
-        </svg>
       </div>
 
       <aside
