@@ -141,6 +141,29 @@ describe('EmptyResponseClaimsPanel', () => {
     expect(wrapper.text()).not.toContain('response body')
   })
 
+  it('opens a read-only detail dialog for a completed claim', async () => {
+    const completedClaim = {
+      ...claim,
+      id: 2,
+      status: 'compensated',
+      compensation_source: 'manual',
+      refunded_amount: 1.25,
+    }
+    listClaims.mockResolvedValue({ items: [completedClaim], total: 1, page: 1, page_size: 20, pages: 1 })
+    const wrapper = mount(EmptyResponseClaimsPanel, { props: { startDate: '2026-08-01', endDate: '2026-08-07' } })
+    await flushPromises()
+
+    await wrapper.get('[data-testid="view-claim-2"]').trigger('click')
+
+    expect(wrapper.text()).toContain('client:review-request-1')
+    expect(wrapper.text()).toContain('1234')
+    expect(wrapper.text()).toContain('HTTP')
+    expect(wrapper.find('textarea').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="submit-claim-review"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="approve-claim-2"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="reject-claim-2"]').exists()).toBe(false)
+  })
+
   it('approves one claim and normalizes batch actions for the API', async () => {
     const wrapper = mount(EmptyResponseClaimsPanel, { props: { startDate: '2026-08-01', endDate: '2026-08-07' } })
     await flushPromises()

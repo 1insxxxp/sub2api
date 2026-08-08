@@ -4,7 +4,7 @@
       <header class="flex items-start justify-between border-b border-slate-100 px-5 py-4 dark:border-dark-700">
         <div>
           <p class="text-xs font-semibold uppercase tracking-[0.16em] text-primary-600 dark:text-primary-400">#{{ claim.id }}</p>
-          <h3 class="mt-1 text-lg font-semibold text-slate-950 dark:text-white">{{ action === 'approve' ? t('admin.usage.emptyResponseClaims.approve') : t('admin.usage.emptyResponseClaims.reject') }}</h3>
+          <h3 class="mt-1 text-lg font-semibold text-slate-950 dark:text-white">{{ dialogTitle }}</h3>
         </div>
         <button type="button" class="h-9 w-9 rounded-xl text-slate-400 hover:bg-slate-100 dark:hover:bg-dark-700" @click="emit('close')">×</button>
       </header>
@@ -17,7 +17,10 @@
           <div class="rounded-2xl bg-slate-50 p-4 text-sm dark:bg-dark-900/60">
             <div class="flex flex-wrap items-start justify-between gap-3">
               <p class="break-all font-mono font-semibold text-slate-900 dark:text-white">{{ claim.model }}</p>
-              <span class="rounded-full bg-slate-200 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-slate-600 dark:bg-dark-700 dark:text-slate-300">{{ sourceLabel }}</span>
+              <div class="flex flex-wrap justify-end gap-2">
+                <span :class="statusClass" class="rounded-full px-2 py-1 text-[10px] font-semibold">{{ statusLabel }}</span>
+                <span class="rounded-full bg-slate-200 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-slate-600 dark:bg-dark-700 dark:text-slate-300">{{ sourceLabel }}</span>
+              </div>
             </div>
             <div class="mt-2 flex flex-wrap justify-between gap-2 text-slate-500 dark:text-slate-400">
               <span>{{ claim.user_email }} · {{ claim.group_name }} · {{ claim.account_name }}</span>
@@ -50,7 +53,7 @@
             <p class="mt-1 whitespace-pre-wrap break-words text-slate-700 dark:text-slate-300">{{ claim.user_reason }}</p>
           </div>
         </div>
-        <label class="block">
+        <label v-if="action !== 'view'" class="block">
           <span class="mb-2 block text-sm font-medium text-slate-800 dark:text-slate-200">
             {{ action === 'reject' ? t('admin.usage.emptyResponseClaims.rejectionNote') : t('admin.usage.emptyResponseClaims.reviewNote') }}
           </span>
@@ -58,8 +61,10 @@
         </label>
       </div>
       <footer class="flex gap-3 border-t border-slate-100 p-4 dark:border-dark-700">
-        <button type="button" class="btn btn-secondary flex-1" :disabled="submitting" @click="emit('close')">{{ t('common.cancel') }}</button>
+        <button v-if="action === 'view'" type="button" class="btn btn-primary w-full" @click="emit('close')">{{ t('admin.usage.emptyResponseClaims.closeDetail') }}</button>
+        <button v-else type="button" class="btn btn-secondary flex-1" :disabled="submitting" @click="emit('close')">{{ t('common.cancel') }}</button>
         <button
+          v-if="action !== 'view'"
           data-testid="submit-claim-review"
           type="button"
           class="btn flex-[1.4]"
@@ -82,7 +87,7 @@ import type { AdminEmptyResponseClaim } from '@/api/admin/usage'
 const props = defineProps<{
   show: boolean
   claim: AdminEmptyResponseClaim | null
-  action: 'approve' | 'reject'
+  action: 'view' | 'approve' | 'reject'
   submitting: boolean
   batchCount?: number
   batchEstimatedRefund?: number
@@ -92,7 +97,18 @@ const { t } = useI18n()
 const note = ref('')
 const batchCount = computed(() => props.batchCount ?? 1)
 const batchEstimatedRefund = computed(() => props.batchEstimatedRefund ?? props.claim?.estimated_refund ?? 0)
+const dialogTitle = computed(() => props.action === 'view'
+  ? t('admin.usage.emptyResponseClaims.detailTitle')
+  : props.action === 'approve'
+    ? t('admin.usage.emptyResponseClaims.approve')
+    : t('admin.usage.emptyResponseClaims.reject'))
 const sourceLabel = computed(() => t(`admin.usage.emptyResponseClaims.source.${props.claim?.compensation_source || 'none'}`))
+const statusLabel = computed(() => t(`admin.usage.emptyResponseClaims.status.${props.claim?.status || 'evaluating'}`))
+const statusClass = computed(() => props.claim?.status === 'compensated'
+  ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300'
+  : props.claim?.status === 'rejected'
+    ? 'bg-rose-100 text-rose-700 dark:bg-rose-500/15 dark:text-rose-300'
+    : 'bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300')
 const billingTypeLabel = computed(() => t(`admin.usage.emptyResponseClaims.billingType.${props.claim?.billing_type === 1 ? 'subscription' : 'balance'}`))
 const outputFlags = computed(() => {
   if (!props.claim) return '—'

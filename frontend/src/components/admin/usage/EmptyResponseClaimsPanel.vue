@@ -81,11 +81,14 @@
             <p class="mt-2 text-xs text-slate-600 dark:text-slate-300">{{ evidenceSummary(claim) }}</p>
             <p class="mt-1 break-all text-xs text-slate-500 dark:text-slate-400">{{ usageSummary(claim) }}</p>
             <p class="mt-1 text-xs text-slate-500">{{ reasonSummary(claim) }}</p>
-            <div class="mt-3 flex items-center justify-between">
+            <div class="mt-3 flex items-center justify-between gap-3">
               <span class="font-mono text-sm font-semibold text-emerald-600">${{ claim.estimated_refund.toFixed(6) }}</span>
-              <div v-if="canReview(claim)" class="flex gap-2">
-                <button :data-testid="`reject-claim-${claim.id}`" class="btn btn-secondary btn-sm text-rose-600" @click="openReview(claim, 'reject')">{{ t('admin.usage.emptyResponseClaims.reject') }}</button>
-                <button :data-testid="`approve-claim-${claim.id}`" class="btn btn-primary btn-sm" @click="openReview(claim, 'approve')">{{ t('admin.usage.emptyResponseClaims.approve') }}</button>
+              <div class="flex flex-wrap justify-end gap-2">
+                <button :data-testid="`view-claim-${claim.id}`" class="btn btn-secondary btn-sm" @click="openDetail(claim)">{{ t('admin.usage.emptyResponseClaims.viewDetails') }}</button>
+                <template v-if="canReview(claim)">
+                  <button :data-testid="`reject-claim-${claim.id}`" class="btn btn-secondary btn-sm text-rose-600" @click="openReview(claim, 'reject')">{{ t('admin.usage.emptyResponseClaims.reject') }}</button>
+                  <button :data-testid="`approve-claim-${claim.id}`" class="btn btn-primary btn-sm" @click="openReview(claim, 'approve')">{{ t('admin.usage.emptyResponseClaims.approve') }}</button>
+                </template>
               </div>
             </div>
           </div>
@@ -106,7 +109,15 @@
             <td class="px-4 py-3 text-xs text-slate-600 dark:text-slate-300"><p>{{ evidenceSummary(claim) }}</p><p class="mt-1 break-all text-slate-500">{{ usageSummary(claim) }}</p><p class="mt-1 text-slate-500">{{ reasonSummary(claim) }}</p></td>
             <td class="px-4 py-3 font-mono text-emerald-600">${{ claim.estimated_refund.toFixed(6) }}</td>
             <td class="px-4 py-3"><span :class="statusClass(claim.status)" class="rounded-full px-2 py-1 text-xs font-semibold">{{ t(`admin.usage.emptyResponseClaims.status.${claim.status}`) }}</span></td>
-            <td class="px-4 py-3 text-right"><div v-if="canReview(claim)" class="flex justify-end gap-2"><button :data-testid="`reject-claim-${claim.id}`" class="btn btn-secondary btn-sm text-rose-600" @click="openReview(claim, 'reject')">{{ t('admin.usage.emptyResponseClaims.reject') }}</button><button :data-testid="`approve-claim-${claim.id}`" class="btn btn-primary btn-sm" @click="openReview(claim, 'approve')">{{ t('admin.usage.emptyResponseClaims.approve') }}</button></div></td>
+            <td class="px-4 py-3 text-right">
+              <div class="flex justify-end gap-2">
+                <button :data-testid="`view-claim-${claim.id}`" class="btn btn-secondary btn-sm" @click="openDetail(claim)">{{ t('admin.usage.emptyResponseClaims.viewDetails') }}</button>
+                <template v-if="canReview(claim)">
+                  <button :data-testid="`reject-claim-${claim.id}`" class="btn btn-secondary btn-sm text-rose-600" @click="openReview(claim, 'reject')">{{ t('admin.usage.emptyResponseClaims.reject') }}</button>
+                  <button :data-testid="`approve-claim-${claim.id}`" class="btn btn-primary btn-sm" @click="openReview(claim, 'approve')">{{ t('admin.usage.emptyResponseClaims.approve') }}</button>
+                </template>
+              </div>
+            </td>
           </tr>
         </tbody>
       </table>
@@ -159,7 +170,7 @@ const submitting = ref(false)
 const selected = ref(new Set<number>())
 const claimCache = ref(new Map<number, AdminEmptyResponseClaim>())
 const reviewClaim = ref<AdminEmptyResponseClaim | null>(null)
-const reviewAction = ref<'approve' | 'reject'>('approve')
+const reviewAction = ref<'view' | 'approve' | 'reject'>('view')
 const batchMode = ref(false)
 const batchResult = ref<{ succeeded: number[]; failed: Record<number, string>; claims: AdminEmptyResponseClaim[] } | null>(null)
 const selectedIDs = computed(() => Array.from(selected.value))
@@ -233,6 +244,11 @@ const statusClass = (value: string) => value === 'compensated'
   : value === 'rejected'
     ? 'bg-rose-100 text-rose-700 dark:bg-rose-500/15 dark:text-rose-300'
     : 'bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300'
+const openDetail = (claim: AdminEmptyResponseClaim) => {
+  reviewClaim.value = claim
+  reviewAction.value = 'view'
+  batchMode.value = false
+}
 const openReview = (claim: AdminEmptyResponseClaim, action: 'approve' | 'reject') => {
   reviewClaim.value = claim
   reviewAction.value = action
@@ -248,7 +264,7 @@ const openBatch = (action: 'approve' | 'reject') => {
   batchResult.value = null
 }
 const submitReview = async (note: string) => {
-  if (!reviewClaim.value) return
+  if (!reviewClaim.value || reviewAction.value === 'view') return
   submitting.value = true
   try {
     if (batchMode.value) {
