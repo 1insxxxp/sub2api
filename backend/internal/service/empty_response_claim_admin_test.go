@@ -12,8 +12,11 @@ import (
 )
 
 type emptyResponseAdminRepoStub struct {
-	claim     *EmptyResponseClaim
-	reviewErr error
+	claim        *EmptyResponseClaim
+	detailClaim  *EmptyResponseClaim
+	reviewErr    error
+	detailErr    error
+	detailLoaded bool
 }
 
 func (s *emptyResponseAdminRepoStub) List(context.Context, pagination.PaginationParams, EmptyResponseClaimListFilters) ([]EmptyResponseClaim, *pagination.PaginationResult, error) {
@@ -27,6 +30,14 @@ func (s *emptyResponseAdminRepoStub) Review(context.Context, int64, string, int6
 	return s.claim, nil
 }
 
+func (s *emptyResponseAdminRepoStub) GetAdminByID(context.Context, int64) (*EmptyResponseClaim, error) {
+	s.detailLoaded = true
+	if s.detailErr != nil {
+		return nil, s.detailErr
+	}
+	return s.detailClaim, nil
+}
+
 type emptyResponseAdminCompensatorStub struct{}
 
 func (emptyResponseAdminCompensatorStub) CompensateApprovedClaim(context.Context, int64) error {
@@ -35,17 +46,33 @@ func (emptyResponseAdminCompensatorStub) CompensateApprovedClaim(context.Context
 
 func TestEmptyResponseClaimAdminApproveReportsSubscriptionRefundSource(t *testing.T) {
 	subscriptionID := int64(18)
+	detail := &EmptyResponseClaim{
+		ID:                 12,
+		Model:              "claude-opus-4-6",
+		UserEmail:          "user@example.com",
+		RequestID:          "req-empty-response",
+		SubscriptionID:     &subscriptionID,
+		OriginalActualCost: 1.25,
+		Status:             EmptyResponseClaimCompensated,
+		SubscriptionRefund: 1.25,
+		APIKeyQuotaRefund:  1.25,
+	}
 	repo := &emptyResponseAdminRepoStub{claim: &EmptyResponseClaim{
 		ID:                 12,
 		SubscriptionID:     &subscriptionID,
 		OriginalActualCost: 1.25,
-	}}
+	}, detailClaim: detail}
 	svc := NewEmptyResponseClaimAdminService(repo, emptyResponseAdminCompensatorStub{})
 
 	claim, err := svc.Approve(context.Background(), 12, 9, "verified")
 
 	require.NoError(t, err)
+	require.True(t, repo.detailLoaded)
+	require.Same(t, detail, claim)
 	require.Equal(t, EmptyResponseClaimCompensated, claim.Status)
+	require.Equal(t, "claude-opus-4-6", claim.Model)
+	require.Equal(t, "user@example.com", claim.UserEmail)
+	require.Equal(t, "req-empty-response", claim.RequestID)
 	require.Zero(t, claim.BalanceRefund)
 	require.Equal(t, 1.25, claim.SubscriptionRefund)
 	require.Equal(t, 1.25, claim.APIKeyQuotaRefund)
@@ -75,4 +102,22 @@ func TestEmptyResponseClaimBatchRedactsInternalFailureDetails(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, "review_failed", result.Failed[12])
 	require.NotContains(t, result.Failed[12], "password")
+}
+
+func TestEmptyResponseClaimAdminApproveDoesNotReportFailureWhenDetailReloadFails(t *testing.T) {
+	reviewed := &EmptyResponseClaim{ID: 12, OriginalActualCost: 1.25}
+	repo := &emptyResponseAdminRepoStub{
+		claim:     reviewed,
+		detailErr: errors.New("temporary read failure"),
+	}
+	svc := NewEmptyResponseClaimAdminService(repo, emptyResponseAdminCompensatorStub{})
+
+	claim, err := svc.Approve(context.Background(), 12, 9, "verified")
+
+	require.NoError(t, err)
+	require.True(t, repo.detailLoaded)
+	require.Same(t, reviewed, claim)
+	require.Equal(t, EmptyResponseClaimCompensated, claim.Status)
+	require.Equal(t, 1.25, claim.BalanceRefund)
+	require.Equal(t, 1.25, claim.APIKeyQuotaRefund)
 }

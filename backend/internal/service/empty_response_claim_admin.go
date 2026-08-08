@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/pagination"
 )
 
@@ -22,6 +23,15 @@ type EmptyResponseClaimListFilters struct {
 type EmptyResponseClaimAdminRepository interface {
 	List(ctx context.Context, params pagination.PaginationParams, filters EmptyResponseClaimListFilters) ([]EmptyResponseClaim, *pagination.PaginationResult, error)
 	Review(ctx context.Context, id int64, status string, reviewerID int64, note string) (*EmptyResponseClaim, error)
+}
+
+// EmptyResponseClaimAdminDetailRepository is implemented by production
+// repositories that can reload the joined, privacy-safe review context after
+// a mutation. Keeping it separate preserves compatibility with lightweight
+// repositories while ensuring admin mutation responses are complete when the
+// capability is available.
+type EmptyResponseClaimAdminDetailRepository interface {
+	GetAdminByID(ctx context.Context, id int64) (*EmptyResponseClaim, error)
 }
 
 type EmptyResponseClaimBatchInput struct {
@@ -98,6 +108,17 @@ func (s *EmptyResponseClaimAdminService) review(ctx context.Context, id, reviewe
 			claim.SubscriptionRefund = 0
 		}
 		claim.APIKeyQuotaRefund = claim.OriginalActualCost
+	}
+	if detailRepo, ok := s.repo.(EmptyResponseClaimAdminDetailRepository); ok {
+		detail, err := detailRepo.GetAdminByID(ctx, claim.ID)
+		if err == nil {
+			claim = detail
+		} else {
+			// Review and compensation may already be committed. A transient
+			// detail reload failure must not turn that committed success into an
+			// apparent failure that callers retry or count as uncompensated.
+			logger.LegacyPrintf("service.empty_response_claim_admin", "reload reviewed claim %d failed after committed mutation: %v", claim.ID, err)
+		}
 	}
 	return claim, nil
 }

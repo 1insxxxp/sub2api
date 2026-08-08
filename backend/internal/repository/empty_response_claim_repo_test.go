@@ -151,3 +151,37 @@ func TestEmptyResponseClaimRepositoryListIncludesPrivacySafeReviewContext(t *tes
 	require.Equal(t, "/v1/messages", claims[0].InboundEndpoint)
 	require.NoError(t, mock.ExpectationsWereMet())
 }
+
+func TestEmptyResponseClaimRepositoryGetAdminByIDReloadsMutationDetails(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+	repo := newEmptyResponseClaimRepositoryWithSQL(db)
+	now := time.Now().UTC()
+	claimColumns := []string{
+		"id", "usage_log_id", "outcome_id", "user_id", "api_key_id", "account_id", "group_id", "subscription_id",
+		"status", "reason_code", "user_reason", "original_actual_cost", "balance_refund", "subscription_refund",
+		"api_key_quota_refund", "evidence", "rule_version", "admin_note", "reviewed_by", "reviewed_at", "compensated_at", "created_at", "updated_at",
+		"model", "user_email", "account_name", "group_name", "request_id", "usage_created_at", "input_tokens", "output_tokens",
+		"cache_creation_tokens", "cache_read_tokens", "total_cost", "actual_cost", "compensated_cost", "billing_type", "request_type",
+		"stream", "duration_ms", "first_token_ms", "inbound_endpoint", "upstream_endpoint",
+	}
+	mock.ExpectQuery(`(?s)` + regexp.QuoteMeta("FROM empty_response_claims erc") + `.*` + regexp.QuoteMeta("WHERE erc.id = $1")).
+		WithArgs(int64(12)).
+		WillReturnRows(sqlmock.NewRows(claimColumns).AddRow(
+			12, 100, nil, 7, 8, 9, 10, nil,
+			service.EmptyResponseClaimCompensated, service.EmptyResponseReasonPureEmpty, "empty reply", 1.25, 1.25, 0, 1.25,
+			`{"http_status":200}`, 1, "verified", 99, now, now, now, now,
+			"claude-opus-4-6", "user@example.com", "pool-1", "cc", "req-empty-response", now, 1234, 0,
+			12, 34, 1.5, 1.25, 1.25, int8(0), int16(service.RequestTypeStream), true, 1800, 320, "/v1/messages", "/v1/messages",
+		))
+
+	claim, err := repo.GetAdminByID(context.Background(), 12)
+	require.NoError(t, err)
+	require.Equal(t, service.EmptyResponseClaimCompensated, claim.Status)
+	require.Equal(t, "claude-opus-4-6", claim.Model)
+	require.Equal(t, "user@example.com", claim.UserEmail)
+	require.Equal(t, "req-empty-response", claim.RequestID)
+	require.NotNil(t, claim.CompensatedAt)
+	require.NoError(t, mock.ExpectationsWereMet())
+}

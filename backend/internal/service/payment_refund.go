@@ -504,9 +504,52 @@ func (s *PaymentService) finalizePendingRefundSuccess(ctx context.Context, p *Re
 	if err != nil {
 		return nil, err
 	}
+	finalStatus := OrderStatusRefunded
+	if p.RefundAmount < p.Order.Amount {
+		finalStatus = OrderStatusPartiallyRefunded
+	}
+	var dirtyEvent AffiliateQualificationDirtyEvent
+	dirtyErr := withPaymentSavepoint(txCtx, tx.Client(), "affiliate_refund_dirty", func() error {
+		var saveErr error
+		dirtyEvent, saveErr = upsertAffiliateQualificationDirtyAudit(txCtx, tx.Client(), p.OrderID, p.Order.UserID, finalStatus, "refund_completed")
+		return saveErr
+	})
+	markerPersisted := false
+	var markerErr error
+	if dirtyErr != nil && s.affiliateService != nil {
+		markerErr = withPaymentSavepoint(txCtx, tx.Client(), "affiliate_refund_marker", func() error {
+			_, markErr := s.affiliateService.MarkReconcileRequired(txCtx)
+			return markErr
+		})
+		markerPersisted = markerErr == nil
+	}
 	if err = tx.Commit(); err != nil {
 		return nil, fmt.Errorf("commit refund finalization: %w", err)
 	}
+	if dirtyErr != nil {
+		if !markerPersisted && s.affiliateService != nil {
+			_, postCommitMarkerErr := s.affiliateService.MarkReconcileRequired(dbent.WithoutTx(ctx))
+			markerErr = errors.Join(markerErr, postCommitMarkerErr)
+			markerPersisted = postCommitMarkerErr == nil
+		}
+		slog.Error("affiliate qualification dirty outbox degraded after successful refund",
+			"orderID", p.OrderID,
+			"status", finalStatus,
+			"outboxError", dirtyErr,
+			"markerPersisted", markerPersisted,
+			"markerError", markerErr,
+		)
+		s.writeAuditLog(ctx, p.OrderID, "AFFILIATE_QUALIFICATION_DIRTY_DEGRADED", "system", map[string]any{
+			"status":          finalStatus,
+			"eventType":       "refund_completed",
+			"outboxError":     dirtyErr.Error(),
+			"markerPersisted": markerPersisted,
+			"markerError":     psErrMsg(markerErr),
+		})
+		result.Warning = "refund completed; affiliate qualification recovery was deferred"
+		return result, nil
+	}
+	s.reconcileAffiliateAfterTerminalEvent(ctx, p.Order, dirtyEvent, "post_refund")
 	return result, nil
 }
 

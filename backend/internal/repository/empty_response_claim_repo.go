@@ -277,6 +277,39 @@ func (r *emptyResponseClaimRepository) List(ctx context.Context, params paginati
 	return claims, &pagination.PaginationResult{Total: total, Page: params.Page, PageSize: limit, Pages: pages}, nil
 }
 
+func (r *emptyResponseClaimRepository) GetAdminByID(ctx context.Context, id int64) (*service.EmptyResponseClaim, error) {
+	query := `
+		SELECT ` + prefixedEmptyResponseClaimSelectColumns("erc") + `,
+			ul.model, COALESCE(u.email, ''), COALESCE(a.name, ''), COALESCE(g.name, ''),
+			COALESCE(ul.request_id, ''), ul.created_at,
+			ul.input_tokens, ul.output_tokens, ul.cache_creation_tokens, ul.cache_read_tokens,
+			ul.total_cost::float8, ul.actual_cost::float8, ul.compensated_cost::float8,
+			ul.billing_type, ul.request_type, ul.stream, ul.duration_ms, ul.first_token_ms,
+			COALESCE(ul.inbound_endpoint, ''), COALESCE(ul.upstream_endpoint, '')
+		FROM empty_response_claims erc
+		JOIN usage_logs ul ON ul.id = erc.usage_log_id
+		LEFT JOIN users u ON u.id = erc.user_id
+		LEFT JOIN accounts a ON a.id = erc.account_id
+		LEFT JOIN groups g ON g.id = erc.group_id
+		WHERE erc.id = $1`
+	rows, err := r.sql.QueryContext(ctx, query, id)
+	if err != nil {
+		return nil, fmt.Errorf("get admin empty response claim: %w", err)
+	}
+	defer rows.Close()
+	if !rows.Next() {
+		if err := rows.Err(); err != nil {
+			return nil, fmt.Errorf("get admin empty response claim: %w", err)
+		}
+		return nil, service.ErrEmptyResponseClaimNotFound
+	}
+	claim, err := scanEmptyResponseClaimRow(rows, true)
+	if err != nil {
+		return nil, fmt.Errorf("scan admin empty response claim: %w", err)
+	}
+	return claim, nil
+}
+
 func (r *emptyResponseClaimRepository) Review(ctx context.Context, id int64, status string, reviewerID int64, note string) (*service.EmptyResponseClaim, error) {
 	allowed := "('manual_review','evaluating')"
 	if status == service.EmptyResponseClaimApproved {

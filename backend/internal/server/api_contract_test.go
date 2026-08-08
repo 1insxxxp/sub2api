@@ -63,6 +63,7 @@ func TestAPIContracts(t *testing.T) {
 					"qualification_amount": 50,
 					"next_level_invitee_threshold": 3,
 					"remaining_qualified_invitees": 3,
+					"rewards": [],
 					"tiers": [
 						{"level":"standard","min_qualified_invitees":0,"rate_percent":8},
 						{"level":"bronze","min_qualified_invitees":3,"rate_percent":10},
@@ -294,6 +295,7 @@ func TestAPIContracts(t *testing.T) {
 					"key": "sk_custom_1234567890",
 					"name": "Key One",
 					"group_id": null,
+					"custom_group_id": null,
 					"status": "active",
 					"ip_whitelist": null,
 					"ip_blacklist": null,
@@ -345,6 +347,7 @@ func TestAPIContracts(t *testing.T) {
 							"key": "sk_custom_1234567890",
 							"name": "Key One",
 							"group_id": null,
+							"custom_group_id": null,
 							"status": "active",
 							"ip_whitelist": null,
 							"ip_blacklist": null,
@@ -415,6 +418,7 @@ func TestAPIContracts(t *testing.T) {
 					{
 						"id": 10,
 						"name": "Group One",
+						"default_reasoning_effort": "",
 						"description": "desc",
 						"platform": "anthropic",
 						"rate_multiplier": 1.5,
@@ -446,6 +450,7 @@ func TestAPIContracts(t *testing.T) {
 						"claude_code_only": false,
 						"allow_messages_dispatch": false,
 						"allow_live": false,
+						"empty_response_compensation_enabled": false,
 						"fallback_group_id": null,
 						"fallback_group_id_on_invalid_request": null,
 						"require_oauth_only": false,
@@ -601,6 +606,7 @@ func TestAPIContracts(t *testing.T) {
 					"total_tokens": 53,
 					"total_cost": 0.75,
 					"total_actual_cost": 0.75,
+					"total_net_actual_cost": 0,
 					"average_duration_ms": 200
 				}
 			}`,
@@ -682,6 +688,11 @@ func TestAPIContracts(t *testing.T) {
 							"image_size_breakdown": null,
 							"media_type": null,
 							"cache_ttl_overridden": false,
+							"compensated_cost": 0,
+							"net_actual_cost": 0.5,
+							"compensation_eligible": false,
+							"compensation_eligibility": "unavailable",
+							"compensation_reason_code": "group_disabled",
 							"created_at": "2025-01-02T03:04:05Z",
 							"user_agent": null
 						}
@@ -1050,6 +1061,7 @@ func TestAPIContracts(t *testing.T) {
 					"channel_monitor_enabled": true,
 					"channel_monitor_default_interval_seconds": 60,
 					"available_channels_enabled": false,
+					"available_channels_price_cny_multiplier": 0,
 					"model_plaza_enabled": false,
 					"model_plaza_require_auth": false,
 					"model_plaza_description": "",
@@ -1361,6 +1373,7 @@ func TestAPIContracts(t *testing.T) {
 					"channel_monitor_enabled": true,
 					"channel_monitor_default_interval_seconds": 60,
 					"available_channels_enabled": false,
+					"available_channels_price_cny_multiplier": 0,
 					"model_plaza_enabled": false,
 					"model_plaza_require_auth": false,
 					"model_plaza_description": "",
