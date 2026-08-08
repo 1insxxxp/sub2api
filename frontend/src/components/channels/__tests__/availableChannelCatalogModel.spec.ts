@@ -525,6 +525,9 @@ describe('buildAvailableChannelCatalog', () => {
     const lower = channel('foo', [
       group(97, 'Shared shape', { supported_models: [model('same-model', pricing())] }),
     ], { description: 'Same description' })
+    const spaced = channel(' Foo ', [
+      group(97, 'Shared shape', { supported_models: [model('same-model', pricing())] }),
+    ], { description: 'Same description' })
     const sharedGroupFirst = channel('Shared group A', [
       group(99, 'Shared id', { supported_models: [model('shared-model', pricing())] }),
     ], { description: 'Route A' })
@@ -532,13 +535,14 @@ describe('buildAvailableChannelCatalog', () => {
       group(99, 'Shared id', { supported_models: [model('shared-model', pricing())] }),
     ], { description: 'Route B' })
 
-    const caseVariants = buildAvailableChannelCatalog([upper, lower], {}, 7.2)
-    const reorderedCaseVariants = buildAvailableChannelCatalog([lower, upper], {}, 7.2)
+    const caseVariants = buildAvailableChannelCatalog([upper, lower, spaced], {}, 7.2)
+    const reorderedCaseVariants = buildAvailableChannelCatalog([spaced, lower, upper], {}, 7.2)
     const sharedGroups = buildAvailableChannelCatalog([sharedGroupFirst, sharedGroupSecond], {}, 7.2)
 
-    expect(caseVariants[0].key).not.toBe(caseVariants[1].key)
+    expect(new Set(caseVariants.map((entry) => entry.key)).size).toBe(3)
     expect(reorderedCaseVariants.find((entry) => entry.name === 'Foo')?.key).toBe(caseVariants[0].key)
     expect(reorderedCaseVariants.find((entry) => entry.name === 'foo')?.key).toBe(caseVariants[1].key)
+    expect(reorderedCaseVariants.find((entry) => entry.name === ' Foo ')?.key).toBe(caseVariants[2].key)
     expect(caseVariants.every((entry) => !entry.key.includes(':fp:'))).toBe(true)
     expect(sharedGroups[0].groups[0].key).not.toBe(sharedGroups[1].groups[0].key)
     expect(sharedGroups[0].groups[0].models[0].key).not.toBe(

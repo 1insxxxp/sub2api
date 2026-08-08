@@ -93,7 +93,7 @@ interface PriceContext {
 }
 
 function safelyEncodedKeySegment(value: string, preserveCase: boolean): string {
-  const normalized = preserveCase ? value.trim() : value.trim().toLocaleLowerCase()
+  const normalized = preserveCase ? value : value.trim().toLocaleLowerCase()
   let encoded = ''
   for (let index = 0; index < normalized.length; index += 1) {
     const code = normalized.charCodeAt(index)
@@ -379,8 +379,8 @@ export function buildAvailableChannelCatalog(
   const channelOccurrences = new Map<string, number>()
   return rows.map((channel) => {
     // Database invariant: idx_channels_name is a case-sensitive UNIQUE index.
-    // Exact trimmed names are therefore the only stable channel identity in production.
-    const canonicalIdentity = channel.name.trim()
+    // Verbatim names are therefore the only stable channel identity in production.
+    const canonicalIdentity = channel.name
     const channelOccurrence = channelOccurrences.get(canonicalIdentity) ?? 0
     channelOccurrences.set(canonicalIdentity, channelOccurrence + 1)
     const channelKey = `channel:${exactKeySegment(canonicalIdentity)}${channelOccurrence > 0 ? `:occ:${channelOccurrence}` : ''}`
