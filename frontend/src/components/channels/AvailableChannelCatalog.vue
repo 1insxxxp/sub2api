@@ -107,14 +107,14 @@
       </aside>
 
       <section
-        v-if="selectedChannel"
+        v-if="selectedChannel || modelEntries"
         :id="detailRegionId"
         data-testid="channel-detail"
         class="min-w-0 space-y-4"
         :aria-labelledby="detailHeadingId"
       >
         <header class="min-w-0 rounded-2xl border border-gray-200 bg-white p-4 shadow-sm dark:border-dark-600 dark:bg-dark-800 sm:p-5">
-          <div class="flex min-w-0 flex-wrap items-start justify-between gap-4">
+          <div v-if="selectedChannel" class="flex min-w-0 flex-wrap items-start justify-between gap-4">
             <div class="min-w-0 flex-1">
               <h2
                 :id="detailHeadingId"
@@ -142,7 +142,7 @@
               </span>
             </div>
           </div>
-          <div class="mt-4 flex flex-wrap gap-2">
+          <div v-if="selectedChannel" class="mt-4 flex flex-wrap gap-2">
             <span class="rounded-lg bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-600 dark:bg-dark-700 dark:text-gray-300">
               {{ t(`${catalogKey}.groupsCount`, { count: selectedChannel.groupCount }) }}
             </span>
@@ -152,8 +152,14 @@
           </div>
         </header>
 
+        <AvailableChannelModelList
+          v-if="modelEntries"
+          :entries="visibleModelEntries"
+          class="rounded-2xl"
+        />
         <AvailableChannelGroupSection
-          v-for="(group, index) in selectedChannel.groups"
+          v-else
+          v-for="(group, index) in selectedChannel?.groups ?? []"
           :key="group.key"
           :group="group"
           :default-expanded="index === 0"
@@ -170,6 +176,8 @@ import type { GroupPlatform } from '@/types'
 import PlatformIcon from '@/components/common/PlatformIcon.vue'
 import AvailableChannelGroupSection from './AvailableChannelGroupSection.vue'
 import AvailableChannelPicker from './AvailableChannelPicker.vue'
+import AvailableChannelModelList from './AvailableChannelModelList.vue'
+import type { CatalogModelListEntry } from './availableChannelCatalog'
 import type { CatalogChannelEntry } from './availableChannelCatalog'
 
 const catalogKey = 'availableChannels.catalog'
@@ -179,6 +187,7 @@ const props = withDefaults(defineProps<{
   refreshing: boolean
   rateFallback: boolean
   emptyKind?: 'no-data' | 'no-results'
+  modelEntries?: CatalogModelListEntry[]
 }>(), {
   emptyKind: 'no-data',
 })
@@ -194,13 +203,20 @@ const detailHeadingId = `${detailRegionId}-heading`
 const selectedChannel = computed(() => (
   props.channels.find((channel) => channel.key === selectedChannelKey.value) ?? null
 ))
+const visibleModelEntries = computed(() => {
+  if (!props.modelEntries) return []
+  if (!selectedChannelKey.value) return props.modelEntries
+  return props.modelEntries
+    .map(entry => ({ ...entry, offerings: entry.offerings.filter(offering => offering.channelKey === selectedChannelKey.value) }))
+    .filter(entry => entry.offerings.length > 0)
+})
 
 watch(
   () => props.channels.map((channel) => channel.key),
   async (keys) => {
     const focusWasInListbox = channelListboxRef.value?.contains(document.activeElement) ?? false
     let selectionChanged = false
-    if (selectedChannelKey.value == null || !keys.includes(selectedChannelKey.value)) {
+    if (!props.modelEntries && (selectedChannelKey.value == null || !keys.includes(selectedChannelKey.value))) {
       selectedChannelKey.value = keys[0] ?? null
       selectionChanged = true
     }

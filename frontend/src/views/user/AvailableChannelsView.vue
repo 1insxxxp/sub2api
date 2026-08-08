@@ -17,6 +17,16 @@
                 class="input pl-10"
               />
             </div>
+            <div class="flex flex-wrap items-center gap-2">
+              <select v-model="platformFilter" class="input min-w-32" :aria-label="t('availableChannels.catalog.platformFilter')">
+                <option value="">{{ t('availableChannels.catalog.allPlatforms') }}</option>
+                <option v-for="platform in availablePlatforms" :key="platform" :value="platform">{{ platform }}</option>
+              </select>
+              <label class="inline-flex items-center gap-2 text-sm text-gray-600 dark:text-gray-300">
+                <input v-model="pricedOnly" type="checkbox" class="checkbox" />
+                {{ t('availableChannels.catalog.pricedOnly') }}
+              </label>
+            </div>
           </div>
 
           <div class="flex w-full flex-shrink-0 flex-wrap items-center justify-end gap-3 lg:w-auto">
@@ -35,6 +45,7 @@
       <template #table>
         <AvailableChannelCatalog
           :channels="filteredCatalog"
+          :model-entries="modelEntries"
           :loading="loading"
           :refreshing="loading && channels.length > 0"
           :rate-fallback="rateFallback"
@@ -52,7 +63,7 @@ import AppLayout from '@/components/layout/AppLayout.vue'
 import TablePageLayout from '@/components/layout/TablePageLayout.vue'
 import Icon from '@/components/icons/Icon.vue'
 import AvailableChannelCatalog from '@/components/channels/AvailableChannelCatalog.vue'
-import { buildAvailableChannelCatalog, filterAvailableChannelCatalog } from '@/components/channels/availableChannelCatalog'
+import { buildAvailableChannelCatalog, buildAvailableChannelModelList, filterAvailableChannelCatalog } from '@/components/channels/availableChannelCatalog'
 import userChannelsAPI, { type UserAvailableChannel } from '@/api/channels'
 import userGroupsAPI from '@/api/groups'
 import { useAppStore } from '@/stores/app'
@@ -65,6 +76,8 @@ const channels = ref<UserAvailableChannel[]>([])
 const userGroupRates = ref<Record<number, number>>({})
 const loading = ref(false)
 const searchQuery = ref('')
+const platformFilter = ref('')
+const pricedOnly = ref(false)
 
 const priceCnyMultiplier = computed(() => {
   const value = Number(appStore.cachedPublicSettings?.available_channels_price_cny_multiplier)
@@ -82,9 +95,11 @@ const rateFallback = ref(false)
 const catalog = computed(() => buildAvailableChannelCatalog(channels.value, userGroupRates.value, priceCnyMultiplier.value))
 const filteredCatalog = computed(() => filterAvailableChannelCatalog(catalog.value, {
   search: searchQuery.value,
-  platform: '',
-  pricedOnly: false,
+  platform: platformFilter.value,
+  pricedOnly: pricedOnly.value,
 }))
+const modelEntries = computed(() => buildAvailableChannelModelList(filteredCatalog.value))
+const availablePlatforms = computed(() => [...new Set(catalog.value.flatMap(channel => channel.platforms))].sort())
 
 async function loadChannels() {
   loading.value = true
