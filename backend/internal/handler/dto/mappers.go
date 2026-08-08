@@ -810,6 +810,22 @@ func EmptyResponseClaimFromServiceAdmin(claim *service.EmptyResponseClaim) *Admi
 	}
 }
 
+func EmptyResponseClaimBatchResultFromService(result *service.EmptyResponseClaimBatchResult) *AdminEmptyResponseClaimBatchResult {
+	if result == nil {
+		return nil
+	}
+	claims := make([]*AdminEmptyResponseClaim, 0, len(result.Claims))
+	for i := range result.Claims {
+		claim := result.Claims[i]
+		claims = append(claims, EmptyResponseClaimFromServiceAdmin(&claim))
+	}
+	return &AdminEmptyResponseClaimBatchResult{
+		Succeeded: result.Succeeded,
+		Failed:    result.Failed,
+		Claims:    claims,
+	}
+}
+
 func UsageCleanupTaskFromService(task *service.UsageCleanupTask) *UsageCleanupTask {
 	if task == nil {
 		return nil

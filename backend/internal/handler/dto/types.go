@@ -660,6 +660,12 @@ type AdminEmptyResponseClaim struct {
 	Evidence            EmptyResponseOutcomeEvidence `json:"evidence"`
 }
 
+type AdminEmptyResponseClaimBatchResult struct {
+	Succeeded []int64                    `json:"succeeded"`
+	Failed    map[int64]string           `json:"failed"`
+	Claims    []*AdminEmptyResponseClaim `json:"claims"`
+}
+
 type UsageCleanupFilters struct {
 	StartTime   time.Time `json:"start_time"`
 	EndTime     time.Time `json:"end_time"`

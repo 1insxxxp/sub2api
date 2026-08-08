@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"time"
 
@@ -115,7 +116,7 @@ func (s *EmptyResponseClaimAdminService) Batch(ctx context.Context, input EmptyR
 	seen := make(map[int64]struct{}, len(input.IDs))
 	for _, id := range input.IDs {
 		if id <= 0 {
-			result.Failed[id] = ErrEmptyResponseClaimInvalidInput.Error()
+			result.Failed[id] = emptyResponseClaimBatchFailureReason(ErrEmptyResponseClaimInvalidInput)
 			continue
 		}
 		if _, duplicate := seen[id]; duplicate {
@@ -124,13 +125,28 @@ func (s *EmptyResponseClaimAdminService) Batch(ctx context.Context, input EmptyR
 		seen[id] = struct{}{}
 		claim, err := s.review(ctx, id, input.ReviewerID, input.Action, input.Note)
 		if err != nil {
-			result.Failed[id] = err.Error()
+			result.Failed[id] = emptyResponseClaimBatchFailureReason(err)
 			continue
 		}
 		result.Succeeded = append(result.Succeeded, id)
 		result.Claims = append(result.Claims, *claim)
 	}
 	return result, nil
+}
+
+// emptyResponseClaimBatchFailureReason deliberately returns a stable, safe
+// reason code instead of exposing repository/SQL error details to admins.
+func emptyResponseClaimBatchFailureReason(err error) string {
+	switch {
+	case errors.Is(err, ErrEmptyResponseClaimNotFound):
+		return "not_found"
+	case errors.Is(err, ErrEmptyResponseClaimAlreadyExists):
+		return "already_processed"
+	case errors.Is(err, ErrEmptyResponseClaimInvalidInput):
+		return "invalid_input"
+	default:
+		return "review_failed"
+	}
 }
 
 func trimEmptyResponseClaimAdminNote(value string) string {

@@ -4,6 +4,7 @@ package service
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	"github.com/Wei-Shaw/sub2api/internal/pkg/pagination"
@@ -11,7 +12,8 @@ import (
 )
 
 type emptyResponseAdminRepoStub struct {
-	claim *EmptyResponseClaim
+	claim     *EmptyResponseClaim
+	reviewErr error
 }
 
 func (s *emptyResponseAdminRepoStub) List(context.Context, pagination.PaginationParams, EmptyResponseClaimListFilters) ([]EmptyResponseClaim, *pagination.PaginationResult, error) {
@@ -19,6 +21,9 @@ func (s *emptyResponseAdminRepoStub) List(context.Context, pagination.Pagination
 }
 
 func (s *emptyResponseAdminRepoStub) Review(context.Context, int64, string, int64, string) (*EmptyResponseClaim, error) {
+	if s.reviewErr != nil {
+		return nil, s.reviewErr
+	}
 	return s.claim, nil
 }
 
@@ -55,4 +60,19 @@ func TestEmptyResponseClaimCompensationSourceDistinguishesAutomaticAndManual(t *
 	require.Equal(t, "automatic", automatic.CompensationSource())
 	require.Equal(t, "manual", manual.CompensationSource())
 	require.Equal(t, "none", rejected.CompensationSource())
+}
+
+func TestEmptyResponseClaimBatchRedactsInternalFailureDetails(t *testing.T) {
+	repo := &emptyResponseAdminRepoStub{reviewErr: errors.New("sql: password=should-not-leak")}
+	svc := NewEmptyResponseClaimAdminService(repo, nil)
+
+	result, err := svc.Batch(context.Background(), EmptyResponseClaimBatchInput{
+		IDs:        []int64{12},
+		Action:     EmptyResponseClaimApproved,
+		ReviewerID: 9,
+	})
+
+	require.NoError(t, err)
+	require.Equal(t, "review_failed", result.Failed[12])
+	require.NotContains(t, result.Failed[12], "password")
 }

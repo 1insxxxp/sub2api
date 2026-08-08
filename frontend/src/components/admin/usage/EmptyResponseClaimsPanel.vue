@@ -157,13 +157,13 @@ const total = ref(0)
 const loading = ref(false)
 const submitting = ref(false)
 const selected = ref(new Set<number>())
+const claimCache = ref(new Map<number, AdminEmptyResponseClaim>())
 const reviewClaim = ref<AdminEmptyResponseClaim | null>(null)
 const reviewAction = ref<'approve' | 'reject'>('approve')
 const batchMode = ref(false)
 const batchResult = ref<{ succeeded: number[]; failed: Record<number, string>; claims: AdminEmptyResponseClaim[] } | null>(null)
 const selectedIDs = computed(() => Array.from(selected.value))
-const selectedClaims = computed(() => claims.value.filter((claim) => selected.value.has(claim.id)))
-const selectedEstimatedRefund = computed(() => selectedClaims.value.reduce((sum, claim) => sum + claim.estimated_refund, 0))
+const selectedEstimatedRefund = computed(() => selectedIDs.value.reduce((sum, id) => sum + (claimCache.value.get(id)?.estimated_refund ?? 0), 0))
 const warningThreshold = 0.01
 const rateWarning = computed(() => (metrics.value?.empty_response_rate ?? 0) >= warningThreshold)
 const rankings = computed(() => [
@@ -173,7 +173,7 @@ const rankings = computed(() => [
 ])
 const hasRankings = computed(() => rankings.value.some((ranking) => ranking.items.length > 0))
 
-const load = async () => {
+const load = async (preserveSelectedIDs: Set<number> | null = null) => {
   loading.value = true
   try {
     const [list, summary] = await Promise.all([
@@ -181,9 +181,16 @@ const load = async () => {
       adminUsageAPI.getClaimMetrics({ start_date: props.startDate, end_date: props.endDate }),
     ])
     claims.value = list.items
+    for (const claim of list.items) claimCache.value.set(claim.id, claim)
     total.value = list.total
     metrics.value = summary
-    selected.value = new Set()
+    if (preserveSelectedIDs) {
+      selected.value = new Set(preserveSelectedIDs)
+    } else {
+      selected.value = new Set()
+      claimCache.value.clear()
+      for (const claim of list.items) claimCache.value.set(claim.id, claim)
+    }
   } catch (error) {
     console.error('Failed to load empty-response claims:', error)
     appStore.showError(t('admin.usage.emptyResponseClaims.loadFailed'))
@@ -193,12 +200,14 @@ const load = async () => {
 }
 const reload = () => {
   page.value = 1
+  batchResult.value = null
   void load()
 }
 const changePage = (value: number) => {
   if (value === page.value || value < 1) return
   page.value = value
-  void load()
+  batchResult.value = null
+  void load(selected.value)
 }
 const toggleSelected = (id: number) => {
   const next = new Set(selected.value)
@@ -231,10 +240,12 @@ const openReview = (claim: AdminEmptyResponseClaim, action: 'approve' | 'reject'
 }
 const openBatch = (action: 'approve' | 'reject') => {
   const first = claims.value.find((claim) => selected.value.has(claim.id))
+    ?? selectedIDs.value.map((id) => claimCache.value.get(id)).find((claim): claim is AdminEmptyResponseClaim => Boolean(claim))
   if (!first) return
   reviewClaim.value = first
   reviewAction.value = action
   batchMode.value = true
+  batchResult.value = null
 }
 const submitReview = async (note: string) => {
   if (!reviewClaim.value) return
@@ -252,8 +263,7 @@ const submitReview = async (note: string) => {
       }
       const failedIDs = new Set(Object.keys(result.failed).map(Number))
       reviewClaim.value = null
-      await load()
-      selected.value = new Set(claims.value.filter((claim) => failedIDs.has(claim.id)).map((claim) => claim.id))
+      await load(failedIDs)
       return
     } else if (reviewAction.value === 'approve') {
       await adminUsageAPI.approveClaim(reviewClaim.value.id, { note })

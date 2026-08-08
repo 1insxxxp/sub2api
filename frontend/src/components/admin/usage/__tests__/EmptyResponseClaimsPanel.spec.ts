@@ -194,16 +194,24 @@ describe('EmptyResponseClaimsPanel', () => {
   })
 
   it('reports partial batch results without hiding failed claims', async () => {
+    const secondClaim = { ...claim, id: 2, model: 'claude-sonnet-4-6' }
+    listClaims.mockResolvedValue({ items: [claim, secondClaim], total: 2, page: 1, page_size: 20, pages: 1 })
     batchClaims.mockResolvedValueOnce({ succeeded: [1], failed: { 2: 'claim already reviewed' }, claims: [] })
     const wrapper = mount(EmptyResponseClaimsPanel, { props: { startDate: '2026-08-01', endDate: '2026-08-07' } })
     await flushPromises()
 
     await wrapper.findAll('input[type="checkbox"]')[0].setValue(true)
+    await wrapper.findAll('input[type="checkbox"]')[1].setValue(true)
     await wrapper.get('[data-testid="batch-approve-claims"]').trigger('click')
     await wrapper.get('[data-testid="submit-claim-review"]').trigger('click')
     await flushPromises()
 
     expect(wrapper.text()).toContain('claim already reviewed')
+
+    await wrapper.get('[data-testid="batch-approve-claims"]').trigger('click')
+    await wrapper.get('[data-testid="submit-claim-review"]').trigger('click')
+    await flushPromises()
+    expect(batchClaims).toHaveBeenLastCalledWith({ ids: [2], action: 'approved', note: '' })
   })
 
   it('reports load and review failures without losing the review dialog', async () => {

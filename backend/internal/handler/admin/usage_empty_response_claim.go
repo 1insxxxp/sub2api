@@ -178,5 +178,5 @@ func (h *UsageHandler) BatchEmptyResponseClaims(c *gin.Context) {
 		}
 		h.opsService.RecordEmptyResponseClaimAudit(subject.UserID, request.Action, result.Succeeded, len(result.Succeeded), len(result.Failed), refund)
 	}
-	response.Success(c, result)
+	response.Success(c, dto.EmptyResponseClaimBatchResultFromService(result))
 }

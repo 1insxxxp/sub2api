@@ -129,4 +129,7 @@ func TestAdminEmptyResponseClaimBatchAcceptsActionVerbs(t *testing.T) {
 
 	require.Equal(t, http.StatusOK, recorder.Code)
 	require.Equal(t, service.EmptyResponseClaimApproved, repo.seenStatus)
+	require.Contains(t, recorder.Body.String(), `"claims":[`)
+	require.Contains(t, recorder.Body.String(), `"status":"approved"`)
+	require.NotContains(t, recorder.Body.String(), `"Status"`)
 }
