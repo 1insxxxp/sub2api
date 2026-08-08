@@ -24,6 +24,8 @@ const labels: Record<string, string> = {
   'availableChannels.catalog.loading': '正在加载可用渠道',
   'availableChannels.catalog.refreshing': '正在更新渠道数据',
   'availableChannels.catalog.empty': '暂无可用渠道',
+  'availableChannels.catalog.noChannels': '暂无可用渠道',
+  'availableChannels.catalog.noMatchingResults': '没有匹配的渠道或模型',
   'availableChannels.catalog.selectChannel': '选择渠道',
   'availableChannels.catalog.channelNavigation': '渠道导航',
   'availableChannels.catalog.publicGroup': '公开',
@@ -52,7 +54,8 @@ vi.mock('vue-i18n', async () => {
 const testDirectory = dirname(fileURLToPath(import.meta.url))
 const catalogPath = resolve(testDirectory, '../AvailableChannelCatalog.vue')
 const groupSectionPath = resolve(testDirectory, '../AvailableChannelGroupSection.vue')
-const desktopPriceGrid = 'lg:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(88px,0.5fr)_minmax(72px,0.4fr)]'
+const modelPricePath = resolve(testDirectory, '../AvailableChannelModelPrice.vue')
+const desktopPriceGrid = 'xl:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(88px,0.5fr)_minmax(72px,0.4fr)]'
 
 afterEach(() => {
   document.body.innerHTML = ''
@@ -179,6 +182,7 @@ async function mountCatalog(
     loading: boolean
     refreshing: boolean
     rateFallback: boolean
+    emptyKind: 'no-data' | 'no-results'
   }> = {},
 ): Promise<VueWrapper> {
   const component = (await import('../AvailableChannelCatalog.vue')).default
@@ -189,6 +193,7 @@ async function mountCatalog(
       loading: false,
       refreshing: false,
       rateFallback: false,
+      emptyKind: 'no-data',
       ...props,
     },
     global: {
@@ -302,14 +307,29 @@ describe('AvailableChannelCatalog', () => {
     const layout = wrapper.get('[data-testid="channel-catalog-layout"]')
     const rail = wrapper.get('[data-testid="channel-navigation"]')
 
-    expect(layout.classes()).toContain('lg:grid')
-    expect(layout.classes()).toContain('lg:grid-cols-[280px_minmax(0,1fr)]')
+    expect(layout.classes()).toContain('xl:grid')
+    expect(layout.classes()).toContain('xl:grid-cols-[280px_minmax(0,1fr)]')
     expect(rail.classes()).toContain('hidden')
-    expect(rail.classes()).toContain('lg:block')
-    expect(rail.classes()).toContain('lg:sticky')
-    expect(rail.classes()).toContain('lg:overflow-y-auto')
-    expect(wrapper.get('[data-testid="mobile-channel-summary"]').classes()).toContain('lg:hidden')
+    expect(rail.classes()).toContain('xl:block')
+    expect(rail.classes()).toContain('xl:sticky')
+    expect(rail.classes()).toContain('xl:overflow-y-auto')
+    expect(wrapper.get('[data-testid="mobile-channel-summary"]').classes()).toContain('xl:hidden')
     expect(wrapper.findAll('[data-testid="channel-detail"]')).toHaveLength(1)
+  })
+
+  it.runIf(existsSync(catalogPath))('mounts directly on the TablePageLayout scroll-host contract', async () => {
+    const wrapper = await mountCatalog()
+    const host = wrapper.get('[data-testid="catalog-scroll-host"]')
+    const rail = wrapper.get('[data-testid="channel-navigation"]')
+    const source = readFileSync(catalogPath, 'utf8')
+
+    expect(wrapper.element).toBe(host.element)
+    expect(host.classes()).toContain('table-wrapper')
+    expect(host.classes()).toContain('h-full')
+    expect(host.classes()).toContain('min-h-0')
+    expect(host.classes()).toContain('[container-type:size]')
+    expect(rail.classes()).toContain('xl:max-h-[calc(100cqh-2rem)]')
+    expect(source).not.toMatch(/100(?:d|s|l)?vh/)
   })
 
   it.runIf(existsSync(catalogPath))('opens only the first mobile group and keeps all bodies desktop-visible', async () => {
@@ -324,7 +344,7 @@ describe('AvailableChannelCatalog', () => {
     expect(toggles[0].attributes('aria-controls')).toMatch(/^available-channel-group-[a-z0-9-]+$/)
     expect(bodies[0].classes()).not.toContain('hidden')
     expect(bodies[1].classes()).toContain('hidden')
-    expect(bodies.every((body) => body.classes().includes('lg:grid'))).toBe(true)
+    expect(bodies.every((body) => body.classes().includes('xl:grid'))).toBe(true)
 
     await toggles[1].trigger('click')
     expect(toggles[1].attributes('aria-expanded')).toBe('true')
@@ -341,10 +361,10 @@ describe('AvailableChannelCatalog', () => {
       const desktopHeader = group.get('[data-testid="group-desktop-header"]')
 
       expect(mobileToggle.element.tagName).toBe('BUTTON')
-      expect(mobileToggle.classes()).toContain('lg:hidden')
+      expect(mobileToggle.classes()).toContain('xl:hidden')
       expect(desktopHeader.element.tagName).toBe('HEADER')
       expect(desktopHeader.classes()).toContain('hidden')
-      expect(desktopHeader.classes()).toContain('lg:flex')
+      expect(desktopHeader.classes()).toContain('xl:flex')
       expect(desktopHeader.find('button').exists()).toBe(false)
     }
 
@@ -362,7 +382,7 @@ describe('AvailableChannelCatalog', () => {
     expect(headings).toHaveLength(2)
     for (const heading of headings) {
       expect(heading.classes()).toContain('hidden')
-      expect(heading.classes()).toContain('lg:grid')
+      expect(heading.classes()).toContain('xl:grid')
       expect(heading.classes()).toContain(desktopPriceGrid)
       expect(heading.text()).toContain('模型')
       expect(heading.text()).toContain('官方价')
@@ -372,6 +392,51 @@ describe('AvailableChannelCatalog', () => {
     }
     expect(bodies).toHaveLength(2)
     expect(bodies.every((body) => !body.classes().includes('2xl:grid-cols-2'))).toBe(true)
+  })
+
+  it.runIf(existsSync(catalogPath))('uses xl consistently for catalog, group, and model desktop surfaces', () => {
+    const source = [catalogPath, groupSectionPath, modelPricePath]
+      .map((path) => readFileSync(path, 'utf8'))
+      .join('\n')
+
+    expect(source).not.toMatch(/\blg:/)
+    expect(source).toContain('xl:grid-cols-[280px_minmax(0,1fr)]')
+    expect(source.match(/xl:grid-cols-\[minmax\(0,1\.35fr\)_minmax\(0,1fr\)_minmax\(0,1fr\)_minmax\(88px,0\.5fr\)_minmax\(72px,0\.4fr\)\]/g)).toHaveLength(2)
+  })
+
+  it.runIf(existsSync(catalogPath))('opens a group when it becomes first without resetting an unchanged user toggle', async () => {
+    const wrapper = await mountCatalog()
+    const secondToggle = wrapper.findAll('[data-testid="group-toggle"]')[1]
+
+    expect(secondToggle.attributes('aria-expanded')).toBe('false')
+    await secondToggle.trigger('click')
+    expect(secondToggle.attributes('aria-expanded')).toBe('true')
+    await wrapper.setProps({ channels: structuredClone(channels) })
+    expect(wrapper.findAll('[data-testid="group-toggle"]')[1].attributes('aria-expanded')).toBe('true')
+
+    const reorderedWrapper = await mountCatalog()
+    const reordered = structuredClone(channels)
+    reordered[0].groups = [reordered[0].groups[1], reordered[0].groups[0]]
+    expect(reorderedWrapper.findAll('[data-testid="group-toggle"]')[1].attributes('aria-expanded')).toBe('false')
+    await reorderedWrapper.setProps({ channels: reordered })
+    expect(reorderedWrapper.findAll('[data-testid="group-toggle"]')[0].attributes('aria-expanded')).toBe('true')
+  })
+
+  it.runIf(existsSync(catalogPath))('labels channel and group regions with one semantic heading each', async () => {
+    const wrapper = await mountCatalog()
+    const detail = wrapper.get('[data-testid="channel-detail"]')
+    const detailHeading = wrapper.get('[data-testid="channel-detail-name"]')
+    const groups = wrapper.findAll('[data-testid="channel-group"]')
+
+    expect(detail.element.tagName).toBe('SECTION')
+    expect(detail.attributes('aria-labelledby')).toBe(detailHeading.attributes('id'))
+    for (const group of groups) {
+      const headings = group.findAll('[data-testid="group-semantic-heading"]')
+      expect(headings).toHaveLength(1)
+      expect(headings[0].element.tagName).toBe('H3')
+      expect(group.attributes('aria-labelledby')).toBe(headings[0].attributes('id'))
+      expect(group.findAll('h3')).toHaveLength(1)
+    }
   })
 
   it.runIf(existsSync(catalogPath))('shows group rates, access, subscription, and timezone-aware peak window', async () => {
@@ -420,9 +485,54 @@ describe('AvailableChannelCatalog', () => {
     expect(loading.get('[data-testid="catalog-loading-detail"]')).toBeTruthy()
     expect(loading.text()).toContain('正在加载可用渠道')
 
-    const empty = await mountCatalog({ channels: [], loading: false })
-    expect(empty.get('[data-testid="catalog-empty"]').text()).toContain('暂无可用渠道')
-    expect(empty.find('[data-testid="catalog-loading"]').exists()).toBe(false)
+    const noData = await mountCatalog({ channels: [], loading: false })
+    expect(noData.get('[data-testid="catalog-empty"]').text()).toContain('暂无可用渠道')
+    expect(noData.find('[data-testid="catalog-loading"]').exists()).toBe(false)
+
+    const noResults = await mountCatalog({
+      channels: [],
+      loading: false,
+      emptyKind: 'no-results',
+    })
+    expect(noResults.get('[data-testid="catalog-empty"]').text()).toContain('没有匹配的渠道或模型')
+  })
+
+  it.runIf(existsSync(catalogPath))('renders the temporary mobile channel summary as noninteractive', async () => {
+    const wrapper = await mountCatalog()
+    const summary = wrapper.get('[data-testid="mobile-channel-summary"]')
+
+    expect(summary.element.tagName).toBe('DIV')
+    expect(summary.find('button').exists()).toBe(false)
+    expect(summary.attributes('role')).toBeUndefined()
+  })
+
+  it.runIf(existsSync(catalogPath))('restores focus to fallback only when a removed option owned focus', async () => {
+    const wrapper = await mountCatalog()
+    const options = wrapper.findAll('[data-testid="channel-nav-item"]')
+    await options[1].trigger('click')
+    options[1].element.focus()
+    expect(document.activeElement).toBe(options[1].element)
+
+    await wrapper.setProps({ channels: [structuredClone(channels[0])] })
+    await flushPromises()
+
+    const fallback = wrapper.get('[data-testid="channel-nav-item"]')
+    expect(fallback.attributes('aria-selected')).toBe('true')
+    expect(document.activeElement).toBe(fallback.element)
+  })
+
+  it.runIf(existsSync(catalogPath))('does not steal external focus when selection falls back after refresh', async () => {
+    const wrapper = await mountCatalog()
+    await wrapper.findAll('[data-testid="channel-nav-item"]')[1].trigger('click')
+    const externalInput = document.createElement('input')
+    document.body.append(externalInput)
+    externalInput.focus()
+
+    await wrapper.setProps({ channels: [structuredClone(channels[0])] })
+    await flushPromises()
+
+    expect(wrapper.get('[data-testid="channel-nav-item"]').attributes('aria-selected')).toBe('true')
+    expect(document.activeElement).toBe(externalInput)
   })
 
   it.runIf(existsSync(catalogPath))('keeps content mounted while refreshing and exposes rate fallback', async () => {
@@ -442,6 +552,17 @@ describe('AvailableChannelCatalog', () => {
     expect(wrapper.get('[data-testid="channel-detail-name"]').classes()).toContain('[overflow-wrap:anywhere]')
     expect(wrapper.get('[data-testid="channel-description"]').classes()).toContain('break-words')
     expect(wrapper.get('[data-testid="group-toggle"]').classes()).toContain('min-w-0')
+  })
+
+  it.runIf(existsSync(catalogPath))('opts animations out for reduced motion and contains large offscreen groups safely', async () => {
+    const loading = await mountCatalog({ channels: [], loading: true })
+    expect(loading.findAll('.animate-pulse').every((item) => item.classes().includes('motion-reduce:animate-none'))).toBe(true)
+
+    const wrapper = await mountCatalog()
+    expect(wrapper.get('[data-testid="channel-nav-item"]').classes()).toContain('motion-reduce:transition-none')
+    expect(wrapper.get('[data-testid="group-toggle"] svg').classes()).toContain('motion-reduce:transition-none')
+    expect(wrapper.get('[data-testid="channel-group"]').classes()).toContain('[content-visibility:auto]')
+    expect(wrapper.get('[data-testid="channel-group"]').classes()).toContain('[contain-intrinsic-size:auto_480px]')
   })
 
   it.runIf(existsSync(catalogPath) && existsSync(groupSectionPath))('does not reintroduce old table, chips, popovers, or price calculation', () => {

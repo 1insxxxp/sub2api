@@ -605,6 +605,8 @@ export default {
       loading: '正在加载可用渠道',
       refreshing: '正在更新渠道数据',
       empty: '暂无可用渠道',
+      noChannels: '暂无可用渠道',
+      noMatchingResults: '没有匹配的渠道或模型',
       selectChannel: '选择渠道',
       channelNavigation: '渠道导航',
       publicGroup: '公开',

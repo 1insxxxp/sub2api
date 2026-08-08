@@ -56,7 +56,7 @@ const componentPath = resolve(
   dirname(fileURLToPath(import.meta.url)),
   '../AvailableChannelModelPrice.vue',
 )
-const desktopPriceGrid = 'lg:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(88px,0.5fr)_minmax(72px,0.4fr)]'
+const desktopPriceGrid = 'xl:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(88px,0.5fr)_minmax(72px,0.4fr)]'
 
 function emptyPrices(): CatalogPriceCollection {
   return {
@@ -149,23 +149,26 @@ describe('AvailableChannelModelPrice', () => {
     const rate = wrapper.get('[data-testid="effective-rate"]')
     const detailButton = wrapper.get('[data-testid="price-detail-toggle"]')
 
-    expect(row.classes()).toContain('lg:grid')
+    expect(row.classes()).toContain('xl:grid')
     expect(row.classes()).toContain(desktopPriceGrid)
-    expect(wrapper.get('header').classes()).toContain('lg:contents')
+    expect(wrapper.get('header').classes()).toContain('xl:contents')
     expect(comparison.classes()).toContain('grid-cols-2')
-    expect(comparison.classes()).toContain('lg:contents')
-    expect(official.classes()).toContain('lg:col-start-2')
-    expect(site.classes()).toContain('lg:col-start-3')
-    expect(rate.classes()).toContain('lg:col-start-4')
-    expect(detailButton.classes()).toContain('lg:col-start-5')
+    expect(comparison.classes()).toContain('xl:contents')
+    expect(official.classes()).toContain('xl:col-start-2')
+    expect(site.classes()).toContain('xl:col-start-3')
+    expect(rate.classes()).toContain('xl:col-start-4')
+    expect(detailButton.classes()).toContain('xl:col-start-5')
     expect(wrapper.findAll('[data-testid="price-comparison"]')).toHaveLength(1)
     expect(wrapper.findAll('[data-testid="official-price"]')).toHaveLength(1)
     expect(wrapper.findAll('[data-testid="site-price"]')).toHaveLength(1)
 
     await detailButton.trigger('click')
     const details = wrapper.get('[data-testid="price-details"]')
-    expect(details.classes()).toContain('lg:col-span-5')
-    expect(details.classes()).toContain('lg:col-start-1')
+    expect(details.classes()).toContain('xl:col-span-5')
+    expect(details.classes()).toContain('xl:col-start-1')
+
+    const relationship = detailButton.element.compareDocumentPosition(details.element)
+    expect(relationship & Node.DOCUMENT_POSITION_FOLLOWING).not.toBe(0)
   })
 
   it.runIf(existsSync(componentPath))('does not expose an empty detail control', async () => {
@@ -255,8 +258,8 @@ describe('AvailableChannelModelPrice', () => {
 
     const state = wrapper.get('[data-testid="unpriced-state"]')
     expect(state.text()).toContain('暂未定价')
-    expect(state.classes()).toContain('lg:col-span-2')
-    expect(state.classes()).toContain('lg:col-start-2')
+    expect(state.classes()).toContain('xl:col-span-2')
+    expect(state.classes()).toContain('xl:col-start-2')
     expect(wrapper.find('[data-testid="official-price"]').exists()).toBe(false)
     expect(wrapper.find('[data-testid="site-price"]').exists()).toBe(false)
     expect(wrapper.find('button').exists()).toBe(false)
@@ -473,7 +476,7 @@ describe('AvailableChannelModelPrice', () => {
     expect(root.classes()).toContain('w-full')
     expect(root.classes()).toContain('overflow-hidden')
     expect(comparison.classes()).toContain('grid-cols-2')
-    expect(comparison.classes()).toContain('lg:contents')
+    expect(comparison.classes()).toContain('xl:contents')
     expect(wrapper.findAll('[data-testid="official-price"]')).toHaveLength(1)
     expect(wrapper.findAll('[data-testid="site-price"]')).toHaveLength(1)
     expect(wrapper.text().match(/\$2\.00/g)).toHaveLength(1)
@@ -492,6 +495,22 @@ describe('AvailableChannelModelPrice', () => {
     expect(site.findAll('p')[0].classes()).toContain('text-primary-700')
     expect(site.get('span').classes()).toContain('text-primary-700')
     expect(site.html()).not.toMatch(/primary-700\/70|opacity-70/)
+  })
+
+  it.runIf(existsSync(componentPath))('uses the xl breakpoint, reduced-motion opt-outs, and safe rendering containment', async () => {
+    const wrapper = await mountPrice(makeModel({
+      prices: {
+        ...emptyPrices(),
+        input: price(0.000002, 0.000007),
+        cacheRead: price(0.0000002, 0.0000007),
+      },
+    }))
+    const source = readFileSync(componentPath, 'utf8')
+
+    expect(source).not.toMatch(/\blg:/)
+    expect(wrapper.get('[data-testid="model-price-row"]').classes()).toContain('[content-visibility:auto]')
+    expect(wrapper.get('[data-testid="price-detail-toggle"]').classes()).toContain('motion-reduce:transition-none')
+    expect(wrapper.get('[data-testid="price-detail-toggle"] svg').classes()).toContain('motion-reduce:transition-none')
   })
 
   it.runIf(existsSync(componentPath))('gives repeated model cards unique controls that target their own regions', async () => {

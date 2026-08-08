@@ -1,13 +1,17 @@
 <template>
   <section
     data-testid="channel-group"
-    class="min-w-0 overflow-hidden rounded-2xl border border-l-4 bg-white shadow-sm dark:border-dark-600 dark:bg-dark-800"
+    class="min-w-0 overflow-hidden rounded-2xl border border-l-4 bg-white shadow-sm [contain-intrinsic-size:auto_480px] [content-visibility:auto] dark:border-dark-600 dark:bg-dark-800"
     :class="accentClass"
+    :aria-labelledby="groupHeadingId"
   >
+    <h3 :id="groupHeadingId" data-testid="group-semantic-heading" class="sr-only">
+      {{ group.name }}
+    </h3>
     <button
       type="button"
       data-testid="group-toggle"
-      class="flex min-h-11 w-full min-w-0 items-start justify-between gap-3 px-4 py-4 text-left transition-colors hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary-500 dark:hover:bg-dark-700/60 sm:px-5 lg:hidden"
+      class="flex min-h-11 w-full min-w-0 items-start justify-between gap-3 px-4 py-4 text-left transition-colors motion-reduce:transition-none hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary-500 dark:hover:bg-dark-700/60 sm:px-5 xl:hidden"
       :aria-expanded="expanded"
       :aria-controls="bodyId"
       @click="expanded = !expanded"
@@ -51,7 +55,7 @@
       </span>
 
       <svg
-        class="mt-1 h-5 w-5 shrink-0 text-gray-400 transition-transform lg:hidden"
+        class="mt-1 h-5 w-5 shrink-0 text-gray-400 transition-transform motion-reduce:transition-none xl:hidden"
         :class="expanded ? 'rotate-180' : ''"
         viewBox="0 0 20 20"
         fill="none"
@@ -63,7 +67,7 @@
 
     <header
       data-testid="group-desktop-header"
-      class="hidden min-w-0 items-start justify-between gap-3 px-5 py-4 lg:flex"
+      class="hidden min-w-0 items-start justify-between gap-3 px-5 py-4 xl:flex"
     >
       <span class="min-w-0 flex-1">
         <GroupBadge
@@ -107,12 +111,12 @@
     <div
       :id="bodyId"
       data-testid="group-body"
-      class="grid-cols-1 gap-4 border-t border-gray-100 bg-gray-50/50 p-4 dark:border-dark-600 dark:bg-dark-900/20 sm:p-5 lg:grid"
+      class="grid-cols-1 gap-4 border-t border-gray-100 bg-gray-50/50 p-4 dark:border-dark-600 dark:bg-dark-900/20 sm:p-5 xl:grid"
       :class="expanded ? 'grid' : 'hidden'"
     >
       <div
         data-testid="desktop-price-columns"
-        class="col-span-full hidden min-w-0 gap-4 border-b border-gray-200 px-3 pb-2 text-xs font-semibold text-gray-500 dark:border-dark-600 dark:text-gray-400 lg:grid lg:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(88px,0.5fr)_minmax(72px,0.4fr)]"
+        class="col-span-full hidden min-w-0 gap-4 border-b border-gray-200 px-3 pb-2 text-xs font-semibold text-gray-500 dark:border-dark-600 dark:text-gray-400 xl:grid xl:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(88px,0.5fr)_minmax(72px,0.4fr)]"
         aria-hidden="true"
       >
         <span>{{ t(`${catalogKey}.modelColumn`) }}</span>
@@ -138,7 +142,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, getCurrentInstance, ref } from 'vue'
+import { computed, getCurrentInstance, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { GroupPlatform, SubscriptionType } from '@/types'
 import { useAppStore } from '@/stores/app'
@@ -177,6 +181,14 @@ function asSubscriptionType(value: string): SubscriptionType {
 }
 
 const bodyId = computed(() => `available-channel-group-${safeId(props.group.key)}-${instanceUid}`)
+const groupHeadingId = computed(() => `${bodyId.value}-heading`)
+
+watch(
+  () => props.defaultExpanded,
+  (isDefault, wasDefault) => {
+    if (isDefault && !wasDefault) expanded.value = true
+  },
+)
 
 const peakWindow = computed(() => {
   const peak = props.group.peak

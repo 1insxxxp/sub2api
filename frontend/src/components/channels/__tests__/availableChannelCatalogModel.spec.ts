@@ -171,7 +171,8 @@ describe('buildAvailableChannelCatalog', () => {
       peakSite: null,
     })
     expect(catalogChannel.key).toMatch(/^channel:/)
-    expect(catalogGroup.key).toContain(catalogChannel.key)
+    expect(catalogGroup.channelKey).toBe(catalogChannel.key)
+    expect(catalogGroup.key).toMatch(/^group:/)
     expect(entry.key).toContain(catalogGroup.key)
   })
 
@@ -435,6 +436,42 @@ describe('buildAvailableChannelCatalog', () => {
 
     expect(new Set(catalog.map((entry) => entry.key)).size).toBe(2)
     expect(new Set(catalog[0].groups.map((entry) => entry.key)).size).toBe(2)
+  })
+
+  it('keeps distinct same-name channel keys stable when those channels reorder or grow', () => {
+    const first = channel('Shared channel', [
+      group(93, 'First route', { supported_models: [model('model-a', pricing())] }),
+    ], { description: 'First upstream route' })
+    const second = channel(' shared CHANNEL ', [
+      group(94, 'Second route', { supported_models: [model('model-b', pricing({ input_price: 7 }))] }),
+    ], { description: 'Second upstream route' })
+    const inserted = channel('SHARED CHANNEL', [
+      group(95, 'Inserted route', { supported_models: [model('model-c', pricing({ output_price: 12 }))] }),
+    ], { description: 'Inserted upstream route' })
+
+    const beforeDuplicateExists = buildAvailableChannelCatalog([first], {}, 7.2)
+    const initial = buildAvailableChannelCatalog([first, second], {}, 7.2)
+    const reordered = buildAvailableChannelCatalog([second, first], {}, 7.2)
+    const grown = buildAvailableChannelCatalog([inserted, second, first], {}, 7.2)
+    const initialByDescription = new Map(initial.map((entry) => [entry.description, entry.key]))
+    const reorderedByDescription = new Map(reordered.map((entry) => [entry.description, entry.key]))
+    const grownByDescription = new Map(grown.map((entry) => [entry.description, entry.key]))
+
+    expect(initialByDescription.get('First upstream route')).toBe(beforeDuplicateExists[0].key)
+    expect(reorderedByDescription.get('First upstream route')).toBe(
+      initialByDescription.get('First upstream route'),
+    )
+    expect(reorderedByDescription.get('Second upstream route')).toBe(
+      initialByDescription.get('Second upstream route'),
+    )
+    expect(grownByDescription.get('First upstream route')).toBe(
+      initialByDescription.get('First upstream route'),
+    )
+    expect(grownByDescription.get('Second upstream route')).toBe(
+      initialByDescription.get('Second upstream route'),
+    )
+    expect(new Set(initial.map((entry) => entry.key)).size).toBe(2)
+    expect(new Set(grown.map((entry) => entry.key)).size).toBe(3)
   })
 
   it('safely creates keys from upstream names containing lone UTF-16 surrogates', () => {

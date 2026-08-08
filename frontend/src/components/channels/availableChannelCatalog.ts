@@ -214,6 +214,47 @@ function modelFingerprint(model: UserSupportedModel): string {
   return JSON.stringify([model.name, model.platform, pricingFingerprint(model.pricing)])
 }
 
+function stableHash(value: string): string {
+  let fnv = 2166136261
+  let djb = 5381
+  for (let index = 0; index < value.length; index += 1) {
+    const code = value.charCodeAt(index)
+    fnv ^= code
+    fnv = Math.imul(fnv, 16777619)
+    djb = Math.imul(djb, 33) ^ code
+  }
+  return `${(fnv >>> 0).toString(36)}-${(djb >>> 0).toString(36)}`
+}
+
+function channelFingerprint(channel: UserAvailableChannel): string {
+  const sections = channel.platforms.map((section) => {
+    const groups = section.groups.map((group) => JSON.stringify([
+      group.id,
+      group.name.trim(),
+      group.platform.trim().toLocaleLowerCase(),
+      group.subscription_type,
+      fingerprintNumber(group.rate_multiplier),
+      group.peak_rate_enabled,
+      group.peak_start,
+      group.peak_end,
+      fingerprintNumber(group.peak_rate_multiplier),
+      group.is_exclusive,
+      (group.supported_models ?? []).map(modelFingerprint).sort(),
+    ])).sort()
+    return JSON.stringify([
+      section.platform.trim().toLocaleLowerCase(),
+      groups,
+      section.supported_models.map(modelFingerprint).sort(),
+    ])
+  }).sort()
+
+  return JSON.stringify([
+    channel.name.trim().toLocaleLowerCase(),
+    channel.description.trim(),
+    sections,
+  ])
+}
+
 function deduplicateModels(models: UserSupportedModel[]): UserSupportedModel[] {
   const seen = new Set<string>()
   return models.filter((model) => {
@@ -369,9 +410,12 @@ export function buildAvailableChannelCatalog(
 ): CatalogChannelEntry[] {
   const channelOccurrences = new Map<string, number>()
   return rows.map((channel) => {
-    const channelIdentity = keySegment(channel.name)
-    const channelOccurrence = channelOccurrences.get(channelIdentity) ?? 0
-    channelOccurrences.set(channelIdentity, channelOccurrence + 1)
+    const channelName = keySegment(channel.name)
+    const fingerprint = channelFingerprint(channel)
+    const channelIdentity = `${channelName}:fp:${stableHash(fingerprint)}`
+    const occurrenceIdentity = `${channelName}\u0000${fingerprint}`
+    const channelOccurrence = channelOccurrences.get(occurrenceIdentity) ?? 0
+    channelOccurrences.set(occurrenceIdentity, channelOccurrence + 1)
     const channelKey = `channel:${channelIdentity}${channelOccurrence > 0 ? `:occ:${channelOccurrence}` : ''}`
     const groupOccurrences = new Map<string, number>()
     const groups = channel.platforms.flatMap((section) => {
@@ -387,7 +431,7 @@ export function buildAvailableChannelCatalog(
         const groupIdentity = `${keySegment(resolvedPlatform)}:${item.id}`
         const groupOccurrence = groupOccurrences.get(groupIdentity) ?? 0
         groupOccurrences.set(groupIdentity, groupOccurrence + 1)
-        const groupKey = `${channelKey}:platform:${keySegment(resolvedPlatform)}:group:${item.id}${groupOccurrence > 0 ? `:occ:${groupOccurrence}` : ''}`
+        const groupKey = `group:${item.id}:platform:${keySegment(resolvedPlatform)}${groupOccurrence > 0 ? `:occ:${groupOccurrence}` : ''}`
         return normalizeGroup(
           item,
           models,

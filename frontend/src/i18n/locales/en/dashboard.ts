@@ -600,6 +600,8 @@ export default {
       loading: 'Loading available channels',
       refreshing: 'Updating channel data',
       empty: 'No available channels',
+      noChannels: 'No available channels',
+      noMatchingResults: 'No matching channels or models',
       selectChannel: 'Select channel',
       channelNavigation: 'Channel navigation',
       publicGroup: 'Public',
