@@ -56,19 +56,7 @@
         {{ t(`${catalogKey}.refreshing`) }}
       </div>
 
-      <div
-        data-testid="mobile-channel-summary"
-        class="flex min-h-11 w-full min-w-0 items-center justify-between gap-3 rounded-2xl border border-gray-200 bg-white px-4 py-3 text-left shadow-sm dark:border-dark-600 dark:bg-dark-800 xl:hidden"
-      >
-        <span class="min-w-0">
-          <span class="block text-xs font-medium text-gray-500 dark:text-gray-400">
-            {{ t(`${catalogKey}.selectChannel`) }}
-          </span>
-          <span class="mt-0.5 block truncate text-sm font-semibold text-gray-900 dark:text-white">
-            {{ selectedChannel?.name }}
-          </span>
-        </span>
-      </div>
+      <AvailableChannelPicker v-model="selectedChannelKey" :channels="channels" />
 
       <aside
         data-testid="channel-navigation"
@@ -181,6 +169,7 @@ import { useI18n } from 'vue-i18n'
 import type { GroupPlatform } from '@/types'
 import PlatformIcon from '@/components/common/PlatformIcon.vue'
 import AvailableChannelGroupSection from './AvailableChannelGroupSection.vue'
+import AvailableChannelPicker from './AvailableChannelPicker.vue'
 import type { CatalogChannelEntry } from './availableChannelCatalog'
 
 const catalogKey = 'availableChannels.catalog'

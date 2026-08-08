@@ -339,7 +339,7 @@ describe('AvailableChannelCatalog', () => {
     expect(rail.classes()).toContain('xl:block')
     expect(rail.classes()).toContain('xl:sticky')
     expect(rail.classes()).toContain('xl:overflow-y-auto')
-    expect(wrapper.get('[data-testid="mobile-channel-summary"]').classes()).toContain('xl:hidden')
+    expect(wrapper.get('[data-testid="channel-picker-trigger"]').classes()).toContain('xl:hidden')
     expect(wrapper.findAll('[data-testid="channel-detail"]')).toHaveLength(1)
   })
 
@@ -619,14 +619,28 @@ describe('AvailableChannelCatalog', () => {
     expect(noResults.get('[data-testid="catalog-empty"]').text()).toContain('没有匹配的渠道或模型')
   })
 
-  it.runIf(existsSync(catalogPath))('renders the temporary mobile channel summary as noninteractive', async () => {
+  it.runIf(existsSync(catalogPath))('shares mobile picker selection with the desktop rail and detail', async () => {
     const wrapper = await mountCatalog()
-    const summary = wrapper.get('[data-testid="mobile-channel-summary"]')
+    expect(wrapper.findAll('[data-testid="channel-picker-trigger"]')).toHaveLength(1)
+    await wrapper.get('[data-testid="channel-picker-trigger"]').trigger('click')
+    await flushPromises()
+    const options = document.body.querySelectorAll<HTMLButtonElement>('[data-testid="channel-picker-option"]')
+    options[1].click()
+    await flushPromises()
+    expect(wrapper.get('[data-testid="channel-detail"]').text()).toContain('Beta channel')
+    expect(wrapper.findAll('[data-testid="channel-nav-item"]')[1].attributes('aria-selected')).toBe('true')
+    expect(document.body.querySelector('[data-testid="channel-picker-dialog"]')).toBeNull()
+  })
 
-    expect(summary.element.tagName).toBe('DIV')
-    expect(summary.find('button').exists()).toBe(false)
-    expect(summary.find('svg').exists()).toBe(false)
-    expect(summary.attributes('role')).toBeUndefined()
+  it.runIf(existsSync(catalogPath))('closes the mobile picker when its selected channel disappears', async () => {
+    const wrapper = await mountCatalog()
+    await wrapper.get('[data-testid="channel-picker-trigger"]').trigger('click')
+    await flushPromises()
+    expect(document.body.querySelector('[data-testid="channel-picker-dialog"]')).not.toBeNull()
+    await wrapper.setProps({ channels: [structuredClone(channels[1])] })
+    await flushPromises()
+    expect(document.body.querySelector('[data-testid="channel-picker-dialog"]')).toBeNull()
+    expect(wrapper.get('[data-testid="channel-detail"]').text()).toContain('Beta channel')
   })
 
   it.runIf(existsSync(catalogPath))('restores focus to fallback only when a removed option owned focus', async () => {
