@@ -5,12 +5,14 @@ import { fileURLToPath } from 'node:url'
 import { createPinia } from 'pinia'
 import { flushPromises, mount, type VueWrapper } from '@vue/test-utils'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import type { UserAvailableChannel } from '@/api/channels'
 import type {
   CatalogChannelEntry,
   CatalogGroupEntry,
   CatalogModelEntry,
   CatalogPriceCollection,
 } from '../availableChannelCatalog'
+import { buildAvailableChannelCatalog } from '../availableChannelCatalog'
 import { useAppStore } from '@/stores/app'
 
 const labels: Record<string, string> = {
@@ -217,6 +219,30 @@ async function mountCatalog(
   })
 }
 
+function rawChannelWithSharedGroup(name: string, description: string): UserAvailableChannel {
+  return {
+    name,
+    description,
+    platforms: [{
+      platform: 'openai',
+      groups: [{
+        id: 77,
+        name: `${name} group`,
+        platform: 'openai',
+        subscription_type: 'standard',
+        rate_multiplier: 1,
+        peak_rate_enabled: false,
+        peak_start: '',
+        peak_end: '',
+        peak_rate_multiplier: 1,
+        is_exclusive: false,
+        supported_models: [{ name: 'shared-model', platform: 'openai', pricing: null }],
+      }],
+      supported_models: [],
+    }],
+  }
+}
+
 describe('AvailableChannelCatalog', () => {
   it('provides the catalog and group-section components', () => {
     expect(existsSync(catalogPath)).toBe(true)
@@ -420,6 +446,25 @@ describe('AvailableChannelCatalog', () => {
     expect(reorderedWrapper.findAll('[data-testid="group-toggle"]')[1].attributes('aria-expanded')).toBe('false')
     await reorderedWrapper.setProps({ channels: reordered })
     expect(reorderedWrapper.findAll('[data-testid="group-toggle"]')[0].attributes('aria-expanded')).toBe('true')
+  })
+
+  it.runIf(existsSync(catalogPath))('isolates mobile group expansion when channels share a group id and platform', async () => {
+    const sharedIdChannels = buildAvailableChannelCatalog([
+      rawChannelWithSharedGroup('Channel A', 'First route'),
+      rawChannelWithSharedGroup('Channel B', 'Second route'),
+    ], {}, 7.2)
+    const wrapper = await mountCatalog({ channels: sharedIdChannels })
+
+    const firstToggle = wrapper.get('[data-testid="group-toggle"]')
+    expect(firstToggle.attributes('aria-expanded')).toBe('true')
+    await firstToggle.trigger('click')
+    expect(firstToggle.attributes('aria-expanded')).toBe('false')
+
+    await wrapper.findAll('[data-testid="channel-nav-item"]')[1].trigger('click')
+    expect(wrapper.get('[data-testid="group-toggle"]').attributes('aria-expanded')).toBe('true')
+
+    await wrapper.findAll('[data-testid="channel-nav-item"]')[0].trigger('click')
+    expect(wrapper.get('[data-testid="group-toggle"]').attributes('aria-expanded')).toBe('true')
   })
 
   it.runIf(existsSync(catalogPath))('labels channel and group regions with one semantic heading each', async () => {

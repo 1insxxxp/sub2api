@@ -172,7 +172,7 @@ describe('buildAvailableChannelCatalog', () => {
     })
     expect(catalogChannel.key).toMatch(/^channel:/)
     expect(catalogGroup.channelKey).toBe(catalogChannel.key)
-    expect(catalogGroup.key).toMatch(/^group:/)
+    expect(catalogGroup.key).toContain(catalogChannel.key)
     expect(entry.key).toContain(catalogGroup.key)
   })
 
@@ -417,7 +417,10 @@ describe('buildAvailableChannelCatalog', () => {
     expect(insertedTarget.groups[0].key).toBe(baseTarget.groups[0].key)
     expect(insertedTarget.groups[0].models[0].key).toBe(baseTarget.groups[0].models[0].key)
 
-    const sibling = group(20, 'Sibling', { supported_models: [model('sibling', pricing())] })
+    const sibling = group(20, 'Sibling', {
+      platform: 'openai',
+      supported_models: [model('sibling', pricing(), 'openai')],
+    })
     const reordered = buildAvailableChannelCatalog([channel('Target channel', [sibling, targetGroup])], {}, 7.2)[0]
     const reorderedTarget = reordered.groups.find((entry) => entry.id === 18)
     expect(reorderedTarget?.key).toBe(baseTarget.groups[0].key)
@@ -472,6 +475,59 @@ describe('buildAvailableChannelCatalog', () => {
     )
     expect(new Set(initial.map((entry) => entry.key)).size).toBe(2)
     expect(new Set(grown.map((entry) => entry.key)).size).toBe(3)
+  })
+
+  it('keeps channel identity stable across pricing, rate, and model refreshes', () => {
+    const before = channel('Mutable catalog data', [
+      group(96, 'Stable group', {
+        rate_multiplier: 0.5,
+        supported_models: [model('model-a', pricing({ input_price: 5 }))],
+      }),
+    ], { description: 'Stable route identity' })
+    const after = channel('Mutable catalog data', [
+      group(96, 'Renamed display group', {
+        rate_multiplier: 1.25,
+        peak_rate_enabled: true,
+        peak_start: '09:00',
+        peak_end: '11:00',
+        peak_rate_multiplier: 2,
+        supported_models: [
+          model('model-a', pricing({ input_price: 99, output_price: 101 })),
+          model('new-model', pricing({ input_price: 3 })),
+        ],
+      }),
+    ], { description: 'Stable route identity' })
+
+    const original = buildAvailableChannelCatalog([before], {}, 7.2)[0]
+    const refreshed = buildAvailableChannelCatalog([after], { 96: 0.25 }, 8)[0]
+
+    expect(refreshed.key).toBe(original.key)
+    expect(refreshed.groups[0].key).toBe(original.groups[0].key)
+  })
+
+  it('uses full canonical identities and namespaces shared group ids by channel', () => {
+    const first = channel('Collision candidate', [
+      group(97, 'First group', { supported_models: [model('same-model', pricing())] }),
+    ], { description: 'Same description' })
+    const second = channel(' collision CANDIDATE ', [
+      group(98, 'Second group', { supported_models: [model('same-model', pricing())] }),
+    ], { description: 'Same description' })
+    const sharedGroupFirst = channel('Shared group A', [
+      group(99, 'Shared id', { supported_models: [model('shared-model', pricing())] }),
+    ], { description: 'Route A' })
+    const sharedGroupSecond = channel('Shared group B', [
+      group(99, 'Shared id', { supported_models: [model('shared-model', pricing())] }),
+    ], { description: 'Route B' })
+
+    const collisionCandidates = buildAvailableChannelCatalog([first, second], {}, 7.2)
+    const sharedGroups = buildAvailableChannelCatalog([sharedGroupFirst, sharedGroupSecond], {}, 7.2)
+
+    expect(collisionCandidates[0].key).not.toBe(collisionCandidates[1].key)
+    expect(collisionCandidates.every((entry) => !entry.key.includes(':fp:'))).toBe(true)
+    expect(sharedGroups[0].groups[0].key).not.toBe(sharedGroups[1].groups[0].key)
+    expect(sharedGroups[0].groups[0].models[0].key).not.toBe(
+      sharedGroups[1].groups[0].models[0].key,
+    )
   })
 
   it('safely creates keys from upstream names containing lone UTF-16 surrogates', () => {
