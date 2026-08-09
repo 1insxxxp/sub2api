@@ -11,8 +11,9 @@ import type {
   CatalogGroupEntry,
   CatalogModelEntry,
   CatalogPriceCollection,
+  CatalogModelListEntry,
 } from '../availableChannelCatalog'
-import { buildAvailableChannelCatalog } from '../availableChannelCatalog'
+import { buildAvailableChannelCatalog, projectModelEntriesForChannel } from '../availableChannelCatalog'
 import { useAppStore } from '@/stores/app'
 
 const labels: Record<string, string> = {
@@ -20,7 +21,15 @@ const labels: Record<string, string> = {
   'availableChannels.catalog.sitePrice': '本站价',
   'availableChannels.catalog.effectiveRate': '实际倍率',
   'availableChannels.catalog.groupsCount': '{count} 个分组',
+  'availableChannels.catalog.channelsCount': '{count} 个渠道',
   'availableChannels.catalog.modelsCount': '{count} 个模型',
+  'availableChannels.catalog.moreOfferings': '还有 {count} 个方案',
+  'availableChannels.catalog.showOfferings': '展开方案',
+  'availableChannels.catalog.hideOfferings': '收起方案',
+  'availableChannels.catalog.offeringsColumn': '方案',
+  'availableChannels.catalog.representativePrice': '代表价',
+  'availableChannels.catalog.tieredSummary': '阶梯价 · 展开查看',
+  'availableChannels.catalog.noModels': '该渠道暂无可用模型',
   'availableChannels.catalog.noModelsInGroup': '该分组暂无模型',
   'availableChannels.catalog.rateFallback': '专属倍率暂不可用，当前显示默认倍率',
   'availableChannels.catalog.loading': '正在加载可用渠道',
@@ -185,6 +194,7 @@ async function mountCatalog(
     refreshing: boolean
     rateFallback: boolean
     emptyKind: 'no-data' | 'no-results'
+    modelEntries: CatalogModelListEntry[]
   }> = {},
 ): Promise<VueWrapper> {
   const component = (await import('../AvailableChannelCatalog.vue')).default
@@ -326,6 +336,29 @@ describe('AvailableChannelCatalog', () => {
     await wrapper.findAll('[data-testid="channel-nav-item"]')[1].trigger('click')
     expect(wrapper.get('[data-testid="group-empty"]').text()).toContain('该分组暂无模型')
     expect(wrapper.find('[data-model-price]').exists()).toBe(false)
+  })
+
+  it.runIf(existsSync(catalogPath))('recomputes model metadata after selecting one channel', async () => {
+    const sharedModelEntries: CatalogModelListEntry[] = [{
+      key: 'shared', name: 'shared', offerings: [
+        { key: 'a', channelKey: alphaKey, channelName: 'Alpha', groupKey: 'ga', groupName: 'GA', platform: 'openai', hasPricing: false, model: model('a', 'ga', 'shared'), prices: emptyPrices(), intervals: [] },
+        { key: 'b', channelKey: betaKey, channelName: 'Beta', groupKey: 'gb', groupName: 'GB', platform: 'gemini', hasPricing: true, model: model('b', 'gb', 'shared', 'gemini'), prices: emptyPrices(), intervals: [] },
+      ], channelCount: 2, groupCount: 2, platforms: ['gemini', 'openai'], hasPricedOffering: true,
+    }]
+    sharedModelEntries[0].offerings[0].model.hasPricing = false
+    const projected = projectModelEntriesForChannel(sharedModelEntries, alphaKey)
+    expect(projected[0]).toMatchObject({ channelCount: 1, groupCount: 1, platforms: ['openai'], hasPricedOffering: false })
+
+    const wrapper = await mountCatalog({ modelEntries: sharedModelEntries })
+    expect(wrapper.get('[data-testid="model-list-row"]').text()).toContain('1 个渠道')
+    expect(wrapper.get('[data-testid="model-list-row"]').text()).toContain('1 个分组')
+    expect(wrapper.get('[data-testid="model-list-row"]').text()).not.toContain('gemini')
+  })
+
+  it.runIf(existsSync(catalogPath))('shows an explicit model-list empty state for a selected channel with no models', async () => {
+    const wrapper = await mountCatalog({ modelEntries: [] })
+    expect(wrapper.get('[data-testid="channel-detail-name"]').text()).toContain('Alpha')
+    expect(wrapper.get('[data-testid="model-list-empty"]').text()).toContain('该渠道暂无可用模型')
   })
 
   it.runIf(existsSync(catalogPath))('uses one responsive detail DOM with a desktop rail and mobile summary', async () => {

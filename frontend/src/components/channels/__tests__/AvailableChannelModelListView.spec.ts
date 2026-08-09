@@ -3,6 +3,8 @@ import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { mount } from '@vue/test-utils'
 import { describe, expect, it, vi } from 'vitest'
+import enDashboard from '@/i18n/locales/en/dashboard'
+import zhDashboard from '@/i18n/locales/zh/dashboard'
 import AvailableChannelModelList from '../AvailableChannelModelList.vue'
 import type { CatalogModelListEntry, CatalogModelOffering, CatalogPriceCollection } from '../availableChannelCatalog'
 
@@ -13,6 +15,10 @@ vi.mock('vue-i18n', () => ({ useI18n: () => ({ t: (key: string, params?: Record<
   'availableChannels.catalog.channelsCount': `${params?.count ?? 0} 个渠道`,
   'availableChannels.catalog.groupsCount': `${params?.count ?? 0} 个分组`,
   'availableChannels.catalog.showOfferings': '展开方案', 'availableChannels.catalog.hideOfferings': '收起方案',
+  'availableChannels.catalog.offeringsColumn': '方案', 'availableChannels.catalog.representativePrice': '代表价',
+  'availableChannels.catalog.perMillion': '/ 1M token', 'availableChannels.catalog.perRequest': '/ 次',
+  'availableChannels.catalog.perImage': '/ 张', 'availableChannels.catalog.tieredSummary': '阶梯价 · 展开查看',
+  'availableChannels.catalog.noModels': '该渠道暂无可用模型',
 }[key] ?? key) }) }))
 
 const prices = (official: number | null, site: number | null = official): CatalogPriceCollection => ({
@@ -27,6 +33,16 @@ function offering(key: string, channel: string, group: string, official: number 
   return { key, channelKey: channel, channelName: channel, groupKey: group, groupName: group,
     platform: 'gemini', hasPricing: model.hasPricing, model, prices: collection, intervals: [] }
 }
+
+function setBilling(offering: CatalogModelOffering, mode: string, field: keyof CatalogPriceCollection, official: number, site: number) {
+  offering.model.billingMode = mode
+  offering.prices.input = null
+  offering.prices[field] = { official, site, peakSite: null }
+  offering.model.prices = offering.prices
+  offering.hasPricing = true
+  offering.model.hasPricing = true
+  return offering
+}
 function entry(key: string, offerings: CatalogModelOffering[]): CatalogModelListEntry {
   return { key, name: key, offerings, channelCount: new Set(offerings.map(x => x.channelKey)).size,
     groupCount: new Set(offerings.map(x => x.groupKey)).size,
@@ -38,10 +54,37 @@ describe('AvailableChannelModelList', () => {
   it('shows metadata and representative prices before expansion', () => {
     const wrapper = mount(AvailableChannelModelList, { props: { entries: [entry('gemini-pro', [offering('a', 'Alpha', 'Retail', 2, 7.2)])] }, global: { stubs } })
     expect(wrapper.text()).toContain('gemini-pro'); expect(wrapper.text()).toContain('1 个渠道'); expect(wrapper.text()).toContain('1 个分组')
-    expect(wrapper.get('[data-testid="representative-official"]').text()).toContain('$2')
-    expect(wrapper.get('[data-testid="representative-site"]').text()).toContain('¥7.2')
-    expect(wrapper.get('[data-testid="representative-official"]').text()).toContain('代表')
+    expect(wrapper.get('[data-testid="representative-official"]').text()).toContain('$2000000')
+    expect(wrapper.get('[data-testid="representative-site"]').text()).toContain('¥7200000')
+    expect(wrapper.get('[data-testid="representative-official"]').text()).toContain('/ 1M token')
+    expect(wrapper.get('[data-testid="representative-official"]').text()).toContain('代表价')
     expect(wrapper.find('[data-testid="offering-details"]').exists()).toBe(false)
+  })
+  it('uses billing-aware units for request and image summaries', () => {
+    const request = setBilling(offering('request', 'A', 'G1', null), 'per_request', 'request', 0.2, 0.4)
+    const image = setBilling(offering('image', 'B', 'G2', null), 'image', 'request', 0.3, 0.6)
+    const wrapper = mount(AvailableChannelModelList, { props: { entries: [entry('request-model', [request]), entry('image-model', [image])] }, global: { stubs } })
+    const official = wrapper.findAll('[data-testid="representative-official"]')
+    expect(official[0].text()).toContain('$0.20 / 次')
+    expect(official[1].text()).toContain('$0.30 / 张')
+  })
+  it('keeps a request unit when token mode falls back to request-only pricing', () => {
+    const fallback = setBilling(offering('fallback', 'A', 'G1', null), 'token', 'request', 0.2, 0.4)
+    const wrapper = mount(AvailableChannelModelList, { props: { entries: [entry('fallback-model', [fallback])] }, global: { stubs } })
+    expect(wrapper.get('[data-testid="representative-official"]').text()).toContain('$0.20 / 次')
+  })
+  it('shows a tier summary instead of unpriced for tier-only offerings and preserves zero', () => {
+    const tiered = offering('tiered', 'A', 'G1', null)
+    tiered.intervals = [{ key: 'tier:1', minTokens: 0, maxTokens: 1000, tierLabel: null, prices: prices(0.000002, 0.000004) }]
+    tiered.model.intervals = tiered.intervals
+    tiered.hasPricing = true
+    tiered.model.hasPricing = true
+    const free = offering('free', 'B', 'G2', 0, 0)
+    const wrapper = mount(AvailableChannelModelList, { props: { entries: [entry('tier', [tiered]), entry('free', [free])] }, global: { stubs } })
+    const rows = wrapper.findAll('[data-testid="model-list-row"]')
+    expect(rows[0].text()).toContain('阶梯价 · 展开查看')
+    expect(rows[0].text()).not.toContain('暂未定价')
+    expect(rows[1].get('[data-testid="representative-official"]').text()).toContain('$0.00 / 1M token')
   })
   it('chooses first priced offering, preserves zero, and marks unpriced', () => {
     const wrapper = mount(AvailableChannelModelList, { props: { entries: [
@@ -70,11 +113,13 @@ describe('AvailableChannelModelList', () => {
   it('uses collision-safe details ids and summarizes request/image pricing', async () => {
     const request = offering('request', 'A', 'G1', null)
     request.hasPricing = true
+    request.model.billingMode = 'per_request'
     request.prices.input = null
     request.prices.request = { official: 0.2, site: 0.4, peakSite: null }
     request.model.prices = request.prices
     const image = offering('image', 'B', 'G2', null)
     image.hasPricing = true
+    image.model.billingMode = 'image'
     image.prices.input = null
     image.prices.imageInput = { official: 0, site: 0, peakSite: null }
     image.model.prices = image.prices
@@ -96,9 +141,33 @@ describe('AvailableChannelModelList', () => {
   it('handles empty input and has one responsive, wrapping, touch-friendly DOM', () => {
     const wrapper = mount(AvailableChannelModelList, { props: { entries: [] }, global: { stubs } })
     expect(wrapper.find('[data-testid="model-list-row"]').exists()).toBe(false)
+    expect(wrapper.get('[data-testid="model-list-empty"]').text()).toContain('该渠道暂无可用模型')
     const source = readFileSync(resolve(dirname(fileURLToPath(import.meta.url)), '../AvailableChannelModelList.vue'), 'utf8')
     expect(source).toContain('xl:grid'); expect(source).toContain('xl:hidden'); expect(source).toContain('min-h-11')
     expect(source).toContain('[overflow-wrap:anywhere]'); expect(source).toContain('motion-reduce:transition-none')
     expect(source).not.toMatch(/fetch\(|axios|\/api\//); expect(source.match(/v-for="entry in entries"/g)).toHaveLength(1)
+    expect(source).not.toContain('Math.random')
+  })
+  it('uses unique stable instance-scoped detail ids', async () => {
+    const data = [entry('a/b', [offering('a', 'A', 'G', 1)]), entry('a?b', [offering('b', 'B', 'G', 1)])]
+    const first = mount(AvailableChannelModelList, { props: { entries: data }, global: { stubs } })
+    const before = first.findAll('[data-testid="model-offering-toggle"]').map(item => item.attributes('aria-controls'))
+    await first.setProps({ entries: [...data].reverse() })
+    const after = first.findAll('[data-testid="model-offering-toggle"]').map(item => item.attributes('aria-controls'))
+    expect(new Set(before).size).toBe(2)
+    expect(after).toEqual([...before].reverse())
+    const second = mount(AvailableChannelModelList, { props: { entries: data }, global: { stubs } })
+    expect(second.findAll('[data-testid="model-offering-toggle"]')[0].attributes('aria-controls')).not.toBe(before[0])
+  })
+  it('ships complete Chinese and English catalog labels', () => {
+    const zh = zhDashboard.availableChannels.catalog
+    const en = enDashboard.availableChannels.catalog
+    const keys = ['channelsCount', 'moreOfferings', 'showOfferings', 'hideOfferings', 'offeringsColumn', 'representativePrice', 'tieredSummary', 'noModels'] as const
+    for (const key of keys) {
+      expect(zh[key]).toBeTruthy()
+      expect(en[key]).toBeTruthy()
+      expect(en[key]).not.toMatch(/[\u3400-\u9fff]/u)
+      expect(en[key]).not.toContain(`availableChannels.catalog.${key}`)
+    }
   })
 })

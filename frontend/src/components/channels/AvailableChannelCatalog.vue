@@ -177,7 +177,7 @@ import PlatformIcon from '@/components/common/PlatformIcon.vue'
 import AvailableChannelGroupSection from './AvailableChannelGroupSection.vue'
 import AvailableChannelPicker from './AvailableChannelPicker.vue'
 import AvailableChannelModelList from './AvailableChannelModelList.vue'
-import type { CatalogModelListEntry } from './availableChannelCatalog'
+import { projectModelEntriesForChannel, type CatalogModelListEntry } from './availableChannelCatalog'
 import type { CatalogChannelEntry } from './availableChannelCatalog'
 
 const catalogKey = 'availableChannels.catalog'
@@ -205,10 +205,7 @@ const selectedChannel = computed(() => (
 ))
 const visibleModelEntries = computed(() => {
   if (!props.modelEntries) return []
-  if (!selectedChannelKey.value) return props.modelEntries
-  return props.modelEntries
-    .map(entry => ({ ...entry, offerings: entry.offerings.filter(offering => offering.channelKey === selectedChannelKey.value) }))
-    .filter(entry => entry.offerings.length > 0)
+  return projectModelEntriesForChannel(props.modelEntries, selectedChannelKey.value)
 })
 
 watch(

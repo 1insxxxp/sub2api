@@ -588,3 +588,23 @@ export function buildAvailableChannelModelList(
     })
     .sort((left, right) => compareDisplayText(left.name, right.name) || left.key.localeCompare(right.key))
 }
+
+/** Narrows model-first entries to one channel and recomputes all derived metadata. */
+export function projectModelEntriesForChannel(
+  entries: CatalogModelListEntry[],
+  channelKey: string | null,
+): CatalogModelListEntry[] {
+  if (channelKey == null) return entries
+  return entries.flatMap((entry) => {
+    const offerings = entry.offerings.filter((offering) => offering.channelKey === channelKey)
+    if (offerings.length === 0) return []
+    return [{
+      ...entry,
+      offerings,
+      channelCount: new Set(offerings.map((offering) => offering.channelKey)).size,
+      groupCount: new Set(offerings.map((offering) => offering.groupKey)).size,
+      platforms: unique(offerings.map((offering) => offering.platform)).sort(compareDisplayText),
+      hasPricedOffering: offerings.some((offering) => offering.hasPricing),
+    }]
+  })
+}
