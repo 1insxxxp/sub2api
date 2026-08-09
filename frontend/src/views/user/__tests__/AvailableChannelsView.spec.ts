@@ -1,28 +1,22 @@
-import { readFileSync } from 'node:fs'
-import { dirname, resolve } from 'node:path'
-import { fileURLToPath } from 'node:url'
-import { describe, expect, it } from 'vitest'
+import { flushPromises, mount } from '@vue/test-utils'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import AvailableChannelsView from '@/views/user/AvailableChannelsView.vue'
 
-const viewPath = resolve(dirname(fileURLToPath(import.meta.url)), '../AvailableChannelsView.vue')
-const source = readFileSync(viewPath, 'utf8')
+const api = vi.hoisted(() => ({ channels: vi.fn(), rates: vi.fn() }))
+vi.mock('@/api/channels', () => ({ default: { getAvailable: api.channels } }))
+vi.mock('@/api/groups', () => ({ default: { getUserGroupRates: api.rates } }))
+vi.mock('@/stores/app', () => ({ useAppStore: () => ({ cachedPublicSettings: { available_channels_price_cny_multiplier: 7 }, showError: vi.fn() }) }))
+vi.mock('vue-i18n', async (importOriginal) => ({ ...(await importOriginal<typeof import('vue-i18n')>()), useI18n: () => ({ t: (key: string, p?: { count?: number }) => p?.count == null ? key : `${key}:${p.count}` }) }))
 
-describe('AvailableChannelsView catalog integration', () => {
-  it('renders the pricing catalog instead of the legacy table', () => {
-    expect(source).toContain('AvailableChannelCatalog')
-    expect(source).toContain(':channels="filteredCatalog"')
-    expect(source).not.toContain('AvailableChannelsTable')
-  })
+const channel = (name = 'Alpha', platform = 'openai', model = 'gpt-test', priced = true) => ({ name, description: 'test', platforms: [{ platform, groups: [{ id: name === 'Alpha' ? 1 : 2, name: 'public', platform, subscription_type: 'standard', rate_multiplier: 1, peak_rate_enabled: false, peak_start: '', peak_end: '', peak_rate_multiplier: 1, is_exclusive: false, supported_models: [{ name: model, platform, pricing: priced ? { billing_mode: 'token', input_price: 1, output_price: 2, cache_write_price: null, cache_read_price: null, image_input_price: null, image_output_price: null, per_request_price: null, intervals: [] } : null }] }], supported_models: [] }] })
+const stubs = { AppLayout: { template: '<div><slot /></div>' }, TablePageLayout: { template: '<div><slot name="filters"/><slot name="table"/></div>' }, Icon: { template: '<span />' }, AvailableChannelModelPrice: { template: '<div />' } }
 
-  it('keeps search filtering and distinguishes refresh from first load', () => {
-    expect(source).toContain('filterAvailableChannelCatalog')
-    expect(source).toContain('search: searchQuery.value')
-    expect(source).toContain(':refreshing="loading && channels.length > 0"')
-    expect(source).toContain(":empty-kind=\"channels.length > 0 && filteredCatalog.length === 0 ? 'no-results' : 'no-data'\"")
-  })
-
-  it('uses the configured public multiplier and user rates without recalculating prices in the view', () => {
-    expect(source).toContain('buildAvailableChannelCatalog(channels.value, userGroupRates.value, priceCnyMultiplier.value)')
-    expect(source).not.toContain('input_price *')
-    expect(source).not.toContain('output_price *')
-  })
+describe('AvailableChannelsView integration', () => {
+  beforeEach(() => { api.channels.mockReset(); api.rates.mockReset(); api.rates.mockResolvedValue({}) })
+  it('renders model list from fetched catalog', async () => { api.channels.mockResolvedValue([channel()]); const w = mount(AvailableChannelsView, { global: { stubs } }); await flushPromises(); expect(w.find('[data-testid="available-model-list"]').exists()).toBe(true); expect(w.text()).toContain('gpt-test') })
+  it('filters platform and priced-only results and keeps model counts', async () => { api.channels.mockResolvedValue([channel(), channel('Beta', 'gemini', 'gemini-test', false)]); const w = mount(AvailableChannelsView, { global: { stubs } }); await flushPromises(); expect(w.findAll('[data-testid="model-list-row"]')).toHaveLength(1); await w.findAll('[data-testid="channel-nav-item"]')[1].trigger('click'); expect(w.text()).toContain('gemini-test'); await w.find('select').setValue('openai'); expect(w.text()).not.toContain('gemini-test'); await w.find('select').setValue(''); await w.find('input[type="checkbox"]').setValue(true); expect(w.text()).not.toContain('gemini-test') })
+  it('keeps old content while refreshing and distinguishes empty states', async () => { let resolve!: (v: unknown) => void; api.channels.mockResolvedValueOnce([channel(), channel('Beta', 'gemini', 'gemini-test', false)]).mockReturnValueOnce(new Promise(r => { resolve = r })); const w = mount(AvailableChannelsView, { global: { stubs } }); await flushPromises(); const picker = w.get('[data-testid="channel-picker-trigger"]'); expect(picker.text()).toContain('Alpha'); expect(w.find('[data-testid="channel-nav-item"]').attributes('aria-selected')).toBe('true'); await w.find('input[type="text"]').setValue('does-not-exist'); expect(w.find('[data-testid="catalog-empty"]').text()).toContain('noMatchingResults'); await w.find('input[type="text"]').setValue(''); await w.find('button[title]').trigger('click'); expect(w.find('[data-testid="refreshing-indicator"]').exists()).toBe(true); expect(w.text()).toContain('gpt-test'); resolve([]); await flushPromises(); expect(w.find('[data-testid="catalog-empty"]').text()).toContain('noChannels') })
+  it('shows rate fallback warning', async () => { api.channels.mockResolvedValue([channel()]); api.rates.mockRejectedValue(new Error('offline')); const w = mount(AvailableChannelsView, { global: { stubs } }); await flushPromises(); expect(w.find('[data-testid="rate-fallback-warning"]').exists()).toBe(true) })
+  it('falls back to the first remaining channel after refresh removes the selection', async () => { api.channels.mockResolvedValueOnce([channel(), channel('Beta', 'gemini', 'gemini-test', true)]).mockResolvedValueOnce([channel()]); const w = mount(AvailableChannelsView, { global: { stubs } }); await flushPromises(); await w.findAll('[data-testid="channel-nav-item"]')[1].trigger('click'); expect(w.findAll('[data-testid="channel-nav-item"]')[1].attributes('aria-selected')).toBe('true'); expect(w.get('[data-testid="available-model-list"]').text()).toContain('gemini-test'); await w.find('button[title]').trigger('click'); await flushPromises(); expect(w.findAll('[data-testid="channel-nav-item"]')).toHaveLength(1); expect(w.get('[data-testid="channel-nav-item"]').attributes('aria-selected')).toBe('true'); expect(w.get('[data-testid="channel-detail-name"]').text()).toContain('Alpha'); expect(w.get('[data-testid="available-model-list"]').text()).toContain('gpt-test'); expect(w.get('[data-testid="available-model-list"]').text()).not.toContain('gemini-test') })
+  it('opens the mobile picker and switches the model list', async () => { api.channels.mockResolvedValue([channel(), channel('Beta', 'gemini', 'gemini-test', true)]); const w = mount(AvailableChannelsView, { global: { stubs } }); await flushPromises(); await w.get('[data-testid="channel-picker-trigger"]').trigger('click'); const dialog = document.body.querySelector<HTMLElement>('[data-testid="channel-picker-dialog"]')!; expect(dialog).not.toBeNull(); expect(dialog.getAttribute('aria-modal')).toBe('true'); const options = dialog.querySelectorAll<HTMLButtonElement>('[data-testid="channel-picker-option"]'); expect(options).toHaveLength(2); options[1].click(); await flushPromises(); expect(document.body.querySelector('[data-testid="channel-picker-dialog"]')).toBeNull(); expect(w.get('[data-testid="channel-picker-trigger"]').text()).toContain('Beta'); expect(w.get('[data-testid="available-model-list"]').text()).toContain('gemini-test'); expect(w.get('[data-testid="available-model-list"]').text()).not.toContain('gpt-test') })
 })

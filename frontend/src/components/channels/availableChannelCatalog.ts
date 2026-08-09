@@ -80,6 +80,29 @@ export interface CatalogChannelEntry {
   modelCount: number
 }
 
+export interface CatalogModelOffering {
+  key: string
+  channelKey: string
+  channelName: string
+  groupKey: string
+  groupName: string
+  platform: string
+  hasPricing: boolean
+  model: CatalogModelEntry
+  prices: CatalogPriceCollection
+  intervals: CatalogPricingInterval[]
+}
+
+export interface CatalogModelListEntry {
+  key: string
+  name: string
+  offerings: CatalogModelOffering[]
+  channelCount: number
+  groupCount: number
+  platforms: string[]
+  hasPricedOffering: boolean
+}
+
 export interface AvailableChannelCatalogFilters {
   search: string
   platform: string
@@ -481,6 +504,107 @@ export function filterAvailableChannelCatalog(
       groups,
       groupCount: groups.length,
       modelCount: groups.reduce((count, group) => count + group.modelCount, 0),
+    }]
+  })
+}
+
+const naturalNameCollator = new Intl.Collator('en', {
+  numeric: true,
+  sensitivity: 'base',
+})
+
+function normalizedDisplayName(value: string): string {
+  return value.trim().toLocaleLowerCase()
+}
+
+function compareExactText(left: string, right: string): number {
+  return left < right ? -1 : left > right ? 1 : 0
+}
+
+function compareDisplayText(left: string, right: string): number {
+  return naturalNameCollator.compare(left.trim(), right.trim())
+    || compareExactText(left, right)
+}
+
+function compareDisplayNameVariant(left: string, right: string): number {
+  const leftMixedCase = /\p{Lu}/u.test(left) && /\p{Ll}/u.test(left)
+  const rightMixedCase = /\p{Lu}/u.test(right) && /\p{Ll}/u.test(right)
+  return Number(rightMixedCase) - Number(leftMixedCase) || compareExactText(left, right)
+}
+
+function compareOfferings(left: CatalogModelOffering, right: CatalogModelOffering): number {
+  return compareDisplayText(left.channelName, right.channelName)
+    || compareDisplayText(left.groupName, right.groupName)
+    || compareDisplayText(left.platform, right.platform)
+    || compareExactText(left.model.name, right.model.name)
+    || left.key.localeCompare(right.key)
+}
+
+/**
+ * Projects an already-authorized channel catalog into a model-first list.
+ * Price collections, intervals, and model entries intentionally remain shared references.
+ */
+export function buildAvailableChannelModelList(
+  catalog: CatalogChannelEntry[],
+): CatalogModelListEntry[] {
+  const buckets = new Map<string, CatalogModelOffering[]>()
+
+  for (const channel of catalog) {
+    for (const group of channel.groups) {
+      for (const model of group.models) {
+        const identity = normalizedDisplayName(model.name)
+        const offerings = buckets.get(identity) ?? []
+        offerings.push({
+          key: model.key,
+          channelKey: channel.key,
+          channelName: channel.name,
+          groupKey: group.key,
+          groupName: group.name,
+          platform: model.platform,
+          hasPricing: model.hasPricing,
+          model,
+          prices: model.prices,
+          intervals: model.intervals,
+        })
+        buckets.set(identity, offerings)
+      }
+    }
+  }
+
+  return [...buckets.entries()]
+    .map(([identity, unsortedOfferings]) => {
+      const offerings = [...unsortedOfferings].sort(compareOfferings)
+      const displayNames = unique(offerings.map((offering) => offering.model.name.trim()))
+        .sort(compareDisplayNameVariant)
+      return {
+        key: `model-list:${keySegment(identity)}`,
+        name: displayNames[0] ?? identity,
+        offerings,
+        channelCount: new Set(offerings.map((offering) => offering.channelKey)).size,
+        groupCount: new Set(offerings.map((offering) => offering.groupKey)).size,
+        platforms: unique(offerings.map((offering) => offering.platform)).sort(compareDisplayText),
+        hasPricedOffering: offerings.some((offering) => offering.hasPricing),
+      }
+    })
+    .sort((left, right) => compareDisplayText(left.name, right.name) || left.key.localeCompare(right.key))
+}
+
+/** Narrows model-first entries to one channel and recomputes all derived metadata. */
+export function projectModelEntriesForChannel(
+  entries: CatalogModelListEntry[],
+  channelKey: string | null,
+): CatalogModelListEntry[] {
+  if (channelKey == null) return entries
+  return entries.flatMap((entry) => {
+    const offerings = entry.offerings.filter((offering) => offering.channelKey === channelKey)
+    if (offerings.length === 0) return []
+    return [{
+      ...entry,
+      offerings,
+      channelCount: new Set(offerings.map((offering) => offering.channelKey)).size,
+      groupCount: new Set(offerings.map((offering) => offering.groupKey)).size,
+      platforms: unique(offerings.map((offering) => offering.platform)).sort(compareDisplayText),
+      hasPricedOffering: offerings.some((offering) => offering.hasPricing),
     }]
   })
 }

@@ -237,6 +237,7 @@ import type {
   CatalogPriceValue,
   CatalogPricingInterval,
 } from './availableChannelCatalog'
+import { formatCatalogMoney } from './availableChannelPriceDisplay'
 
 const catalogKey = 'availableChannels.catalog'
 const perMillion = 1_000_000
@@ -255,43 +256,12 @@ interface PriceMetric {
   unit: string
 }
 
-function formatMoney(
-  value: number | null,
-  scale: number,
-  symbol: '$' | '¥',
-  minimumFractionDigits = 2,
-): string {
-  if (value == null) return '-'
-  const scaled = value * scale
-  if (!Number.isFinite(scaled)) return '-'
-  if (scaled === 0) return `${symbol}0.${'0'.repeat(minimumFractionDigits)}`
-
-  const [rawMantissa, rawExponent] = scaled.toPrecision(10).split('e')
-  let mantissa = rawMantissa.includes('.')
-    ? rawMantissa.replace(/0+$/, '').replace(/\.$/, '')
-    : rawMantissa
-  if (rawExponent != null) {
-    const exponent = Number(rawExponent)
-    return `${symbol}${mantissa}e${exponent >= 0 ? '+' : ''}${exponent}`
-  }
-
-  if (minimumFractionDigits > 0) {
-    const decimalIndex = mantissa.indexOf('.')
-    const digits = decimalIndex === -1 ? 0 : mantissa.length - decimalIndex - 1
-    if (digits < minimumFractionDigits) {
-      mantissa = (decimalIndex === -1 ? `${mantissa}.` : mantissa)
-        + '0'.repeat(minimumFractionDigits - digits)
-    }
-  }
-  return `${symbol}${mantissa}`
-}
-
 function formatCny(value: number | null, scale: number): string {
-  return formatMoney(value, scale, '¥')
+  return formatCatalogMoney(value, scale, '¥')
 }
 
 function formatOfficial(value: number | null, scale: number): string {
-  return formatMoney(value, scale, '$')
+  return formatCatalogMoney(value, scale, '$')
 }
 
 function formatRate(value: number): string {
