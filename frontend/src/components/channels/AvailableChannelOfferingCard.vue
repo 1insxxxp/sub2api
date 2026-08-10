@@ -49,7 +49,7 @@ const hasAnyPrice = computed(() => directMetrics.value.length > 0 || tiers.value
         <p class="mt-1 break-words text-xs text-gray-500 [overflow-wrap:anywhere] dark:text-gray-400">{{ offering.groupName }}</p>
       </div>
       <div class="shrink-0 rounded-xl bg-primary-50 px-3 py-1.5 text-right dark:bg-primary-500/10">
-        <span class="block text-[10px] text-primary-600 dark:text-primary-300">{{ t(`${catalogKey}.effectiveRate`) }}</span>
+        <span class="block text-[10px] text-primary-600 dark:text-primary-300">{{ t(`${catalogKey}.groupRate`) }}</span>
         <strong class="font-mono text-sm tabular-nums text-primary-700 dark:text-primary-200">{{ rate(offering.model.normalRate) }}×</strong>
       </div>
     </header>

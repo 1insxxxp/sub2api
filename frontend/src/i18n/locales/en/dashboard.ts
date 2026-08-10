@@ -575,6 +575,7 @@ export default {
       officialPrice: 'Official price',
       sitePrice: 'Site price',
       effectiveRate: 'Effective rate',
+      groupRate: 'Group rate',
       startingFrom: 'Starting from',
       peakPrice: 'Peak price',
       regularPrice: 'Regular price',

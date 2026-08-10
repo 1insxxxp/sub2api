@@ -580,6 +580,7 @@ export default {
       officialPrice: '官方价',
       sitePrice: '本站价',
       effectiveRate: '实际倍率',
+      groupRate: '分组倍率',
       startingFrom: '起',
       peakPrice: '高峰价格',
       regularPrice: '常规价格',

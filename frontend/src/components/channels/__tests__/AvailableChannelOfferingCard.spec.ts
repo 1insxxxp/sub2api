@@ -6,6 +6,7 @@ import type { CatalogModelOffering, CatalogPriceCollection } from '../availableC
 vi.mock('vue-i18n', () => ({ useI18n: () => ({ t: (key: string, params?: Record<string, unknown>) => ({
   'availableChannels.catalog.officialPrice': '官方价', 'availableChannels.catalog.sitePrice': '本站价',
   'availableChannels.catalog.effectiveRate': '实际倍率', 'availableChannels.catalog.input': '输入',
+  'availableChannels.catalog.groupRate': '分组倍率',
   'availableChannels.catalog.output': '输出', 'availableChannels.catalog.cacheWrite': '缓存写入',
   'availableChannels.catalog.cacheRead': '缓存读取', 'availableChannels.catalog.imageInput': '图片输入',
   'availableChannels.catalog.imageOutput': '图片输出', 'availableChannels.catalog.priceRequest': '按次',
@@ -29,6 +30,8 @@ describe('AvailableChannelOfferingCard', () => {
     expect(wrapper.text()).toContain('Anthropic')
     expect(wrapper.text()).toContain('余额 [claude max]')
     expect(wrapper.text()).toContain('7.5×')
+    expect(wrapper.text()).toContain('分组倍率')
+    expect(wrapper.text()).not.toContain('实际倍率')
     expect(wrapper.findAll('[data-testid="offering-price-cell"]')).toHaveLength(3)
     expect(wrapper.text()).toContain('$10.00')
     expect(wrapper.text()).toContain('¥12.00')
