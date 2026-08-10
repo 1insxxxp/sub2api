@@ -31,7 +31,7 @@
       <header
         v-if="$slots.toolbar"
         data-testid="channel-navigation-heading"
-        class="hidden min-w-0 rounded-2xl border border-slate-200/90 bg-white px-4 py-3 shadow-sm dark:border-dark-600 dark:bg-dark-800 xl:col-start-1 xl:block xl:p-4"
+        class="hidden min-w-0 rounded-2xl border border-slate-200/90 bg-white px-4 py-3 shadow-sm dark:border-dark-600 dark:bg-dark-800 xl:col-start-1 xl:block xl:min-h-[78px] xl:p-4"
       >
         <h2 class="text-sm font-semibold text-slate-900 dark:text-white">
           {{ t(`${catalogKey}.channelNavigation`) }}
@@ -86,7 +86,7 @@
       <header
         v-if="$slots.toolbar"
         data-testid="channel-navigation-heading"
-        class="hidden min-w-0 rounded-2xl border border-slate-200/90 bg-white px-4 py-3 shadow-sm dark:border-dark-600 dark:bg-dark-800 xl:col-start-1 xl:block xl:p-4"
+        class="hidden min-w-0 rounded-2xl border border-slate-200/90 bg-white px-4 py-3 shadow-sm dark:border-dark-600 dark:bg-dark-800 xl:col-start-1 xl:block xl:min-h-[78px] xl:p-4"
       >
         <h2 class="text-sm font-semibold text-slate-900 dark:text-white">
           {{ t(`${catalogKey}.channelNavigation`) }}

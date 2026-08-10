@@ -373,7 +373,7 @@ describe('AvailableChannelCatalog', () => {
 
     expect(layout.classes()).toContain('xl:grid')
     expect(layout.classes()).toContain('xl:grid-cols-[260px_minmax(0,1fr)]')
-    expect(heading.classes()).toEqual(expect.arrayContaining(['hidden', 'xl:block', 'xl:col-start-1']))
+    expect(heading.classes()).toEqual(expect.arrayContaining(['hidden', 'xl:block', 'xl:col-start-1', 'xl:min-h-[78px]']))
     expect(heading.text()).toContain('渠道导航')
     expect(heading.text()).toContain('2 个渠道')
     expect(toolbar.classes()).toContain('xl:col-start-2')
