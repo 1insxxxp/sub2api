@@ -3,6 +3,7 @@ import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { CatalogModelOffering, CatalogPriceCollection, CatalogPriceValue, CatalogPricingInterval } from './availableChannelCatalog'
 import { formatCatalogMoney } from './availableChannelPriceDisplay'
+import { formatAvailableChannelRate } from './availableChannelRateDisplay'
 
 const props = defineProps<{ offering: CatalogModelOffering }>()
 const { t } = useI18n()
@@ -26,7 +27,6 @@ function metrics(prices: CatalogPriceCollection): Metric[] {
   return result
 }
 function money(value: number | null, scale: number, symbol: '$' | '¥') { return formatCatalogMoney(value, scale, symbol) }
-function rate(value: number) { return Number.isFinite(value) ? Number(value.toPrecision(6)).toString() : '-' }
 function tierLabel(interval: CatalogPricingInterval) {
   if (interval.tierLabel) return interval.tierLabel
   const min = new Intl.NumberFormat('en-US').format(interval.minTokens)
@@ -51,11 +51,11 @@ const hasAnyPrice = computed(() => directMetrics.value.length > 0 || tiers.value
       <div class="grid shrink-0 grid-cols-2 divide-x divide-primary-100 overflow-hidden rounded-xl bg-primary-50 text-right dark:divide-primary-500/20 dark:bg-primary-500/10">
         <div class="px-3 py-1.5">
           <span class="block text-[10px] text-primary-600 dark:text-primary-300">{{ t(`${catalogKey}.groupRate`) }}</span>
-          <strong class="font-mono text-sm tabular-nums text-primary-700 dark:text-primary-200">{{ rate(offering.model.normalRate) }}×</strong>
+          <strong class="font-mono text-sm tabular-nums text-primary-700 dark:text-primary-200">{{ formatAvailableChannelRate(offering.model.normalRate) }}×</strong>
         </div>
         <div class="px-3 py-1.5">
           <span class="block text-[10px] text-primary-600 dark:text-primary-300">{{ t(`${catalogKey}.effectiveRate`) }}</span>
-          <strong class="font-mono text-sm tabular-nums text-primary-700 dark:text-primary-200">{{ offering.model.effectiveRate == null ? '-' : `${rate(offering.model.effectiveRate)}×` }}</strong>
+          <strong class="font-mono text-sm tabular-nums text-primary-700 dark:text-primary-200">{{ offering.model.effectiveRate == null ? '-' : `${formatAvailableChannelRate(offering.model.effectiveRate)}×` }}</strong>
         </div>
       </div>
     </header>

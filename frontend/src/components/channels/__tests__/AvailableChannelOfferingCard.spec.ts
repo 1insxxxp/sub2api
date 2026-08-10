@@ -19,7 +19,7 @@ vi.mock('vue-i18n', () => ({ useI18n: () => ({ t: (key: string, params?: Record<
 const empty = (): CatalogPriceCollection => ({ input: null, output: null, cacheWrite: null, cacheRead: null, imageInput: null, imageOutput: null, request: null })
 const offering = (): CatalogModelOffering => {
   const prices = { ...empty(), input: { official: 0.00001, site: 0.000012, peakSite: null }, output: { official: 0.00005, site: 0.00006, peakSite: null }, cacheRead: { official: 0.000001, site: 0.0000012, peakSite: null } }
-  const model = { key: 'm', groupKey: 'g', name: 'claude-fable-5', platform: 'anthropic', billingMode: 'token' as const, hasPricing: true, normalRate: 7.5, effectiveRate: 1.2, defaultRate: 7.5, userRate: null, peakFactor: null, prices, intervals: [] }
+  const model = { key: 'm', groupKey: 'g', name: 'claude-fable-5', platform: 'anthropic', billingMode: 'token' as const, hasPricing: true, normalRate: 7.5, effectiveRate: 1.239, defaultRate: 7.5, userRate: null, peakFactor: null, prices, intervals: [] }
   return { key: 'o', channelKey: 'c', channelName: 'Anthropic', groupKey: 'g', groupName: '余额 [claude max]', platform: 'anthropic', hasPricing: true, model, prices, intervals: [] }
 }
 
@@ -29,10 +29,11 @@ describe('AvailableChannelOfferingCard', () => {
     expect(wrapper.get('[data-testid="flat-offering-card"]').classes()).not.toContain('xl:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(88px,0.5fr)_minmax(72px,0.4fr)]')
     expect(wrapper.text()).toContain('Anthropic')
     expect(wrapper.text()).toContain('余额 [claude max]')
-    expect(wrapper.text()).toContain('7.5×')
+    expect(wrapper.text()).toContain('7.50×')
     expect(wrapper.text()).toContain('分组倍率')
     expect(wrapper.text()).toContain('实际倍率')
-    expect(wrapper.text()).toContain('1.2×')
+    expect(wrapper.text()).toContain('1.23×')
+    expect(wrapper.text()).not.toContain('1.239×')
     expect(wrapper.findAll('[data-testid="offering-price-cell"]')).toHaveLength(3)
     expect(wrapper.text()).toContain('$10.00')
     expect(wrapper.text()).toContain('¥12.00')
