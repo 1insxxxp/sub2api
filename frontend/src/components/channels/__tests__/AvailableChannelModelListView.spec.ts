@@ -19,6 +19,8 @@ vi.mock('vue-i18n', () => ({ useI18n: () => ({ t: (key: string, params?: Record<
   'availableChannels.catalog.perMillion': '/ 1M token', 'availableChannels.catalog.perRequest': '/ 次',
   'availableChannels.catalog.perImage': '/ 张', 'availableChannels.catalog.tieredSummary': '阶梯价 · 展开查看',
   'availableChannels.catalog.noModels': '该渠道暂无可用模型',
+  'availableChannels.catalog.savePercent': `省 ${params?.count ?? 0}%`,
+  'availableChannels.catalog.priceInput': '输入',
 }[key] ?? key) }) }))
 
 const prices = (official: number | null, site: number | null = official): CatalogPriceCollection => ({
@@ -60,6 +62,17 @@ describe('AvailableChannelModelList', () => {
     expect(wrapper.get('[data-testid="representative-official"]').text()).toContain('代表价')
     expect(wrapper.find('[data-testid="offering-details"]').exists()).toBe(false)
   })
+  it('renders a colorful card grid with immediate official/site savings comparison', () => {
+    const wrapper = mount(AvailableChannelModelList, { props: { entries: [entry('gemini-pro', [offering('a', 'Alpha', 'Retail', 0.00001, 0.000004)])] }, global: { stubs } })
+    const card = wrapper.get('[data-testid="model-card"]')
+    expect(wrapper.get('[data-testid="model-card-grid"]').classes()).toContain('grid')
+    expect(card.find('[data-testid="brand-icon"]').attributes('data-brand')).toBe('gemini')
+    expect(card.get('[data-testid="primary-site-price"]').text()).toContain('¥4.00')
+    expect(card.get('[data-testid="primary-official-price"]').text()).toContain('$10.00')
+    expect(card.get('[data-testid="primary-official-price"]').classes()).toContain('line-through')
+    expect(card.get('[data-testid="savings-badge"]').text()).toContain('60%')
+    expect(card.text()).toContain('输入')
+  })
   it('uses billing-aware units for request and image summaries', () => {
     const request = setBilling(offering('request', 'A', 'G1', null), 'per_request', 'request', 0.2, 0.4)
     const image = setBilling(offering('image', 'B', 'G2', null), 'image', 'request', 0.3, 0.6)
@@ -81,7 +94,7 @@ describe('AvailableChannelModelList', () => {
     tiered.model.hasPricing = true
     const free = offering('free', 'B', 'G2', 0, 0)
     const wrapper = mount(AvailableChannelModelList, { props: { entries: [entry('tier', [tiered]), entry('free', [free])] }, global: { stubs } })
-    const rows = wrapper.findAll('[data-testid="model-list-row"]')
+    const rows = wrapper.findAll('[data-testid="model-card"]')
     expect(rows[0].text()).toContain('阶梯价 · 展开查看')
     expect(rows[0].text()).not.toContain('暂未定价')
     expect(rows[1].get('[data-testid="representative-official"]').text()).toContain('$0.00 / 1M token')
@@ -91,7 +104,7 @@ describe('AvailableChannelModelList', () => {
       entry('mixed', [offering('empty', 'A', 'G1', null), offering('free', 'B', 'G2', 0, 0), offering('paid', 'C', 'G3', 3)]),
       entry('none', [offering('none-1', 'A', 'G1', null)]),
     ] }, global: { stubs } })
-    const rows = wrapper.findAll('[data-testid="model-list-row"]')
+    const rows = wrapper.findAll('[data-testid="model-card"]')
     expect(rows[0].get('[data-testid="representative-official"]').text()).toContain('$0')
     expect(rows[0].get('[data-testid="representative-site"]').text()).toContain('¥0')
     expect(rows[0].text()).toContain('还有 2 个方案'); expect(rows[1].text()).toContain('暂未定价')
@@ -136,14 +149,14 @@ describe('AvailableChannelModelList', () => {
     const one = entry('one', [offering('a', 'Alpha', 'Retail', 1)]); const two = entry('two', [offering('b', 'Beta', 'Pro', 2)])
     const wrapper = mount(AvailableChannelModelList, { props: { entries: [one, two] }, global: { stubs } })
     await wrapper.findAll('[data-testid="model-offering-toggle"]')[0].trigger('click'); await wrapper.setProps({ entries: [two, one] })
-    expect(wrapper.findAll('[data-testid="model-list-row"]')[1].get('[data-testid="model-offering-toggle"]').attributes('aria-expanded')).toBe('true')
+    expect(wrapper.findAll('[data-testid="model-card"]')[1].get('[data-testid="model-offering-toggle"]').attributes('aria-expanded')).toBe('true')
   })
   it('handles empty input and has one responsive, wrapping, touch-friendly DOM', () => {
     const wrapper = mount(AvailableChannelModelList, { props: { entries: [] }, global: { stubs } })
-    expect(wrapper.find('[data-testid="model-list-row"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="model-card"]').exists()).toBe(false)
     expect(wrapper.get('[data-testid="model-list-empty"]').text()).toContain('该渠道暂无可用模型')
     const source = readFileSync(resolve(dirname(fileURLToPath(import.meta.url)), '../AvailableChannelModelList.vue'), 'utf8')
-    expect(source).toContain('xl:grid'); expect(source).toContain('xl:hidden'); expect(source).toContain('min-h-11')
+    expect(source).toContain('md:grid-cols-2'); expect(source).toContain('2xl:grid-cols-3'); expect(source).toContain('min-h-11')
     expect(source).toContain('[overflow-wrap:anywhere]'); expect(source).toContain('motion-reduce:transition-none')
     expect(source).not.toMatch(/fetch\(|axios|\/api\//); expect(source.match(/v-for="entry in entries"/g)).toHaveLength(1)
     expect(source).not.toContain('Math.random')

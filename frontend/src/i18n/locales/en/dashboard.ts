@@ -601,6 +601,8 @@ export default {
       hideOfferings: 'Hide offerings',
       offeringsColumn: 'Offerings',
       representativePrice: 'Representative',
+      savePercent: 'Save {count}%',
+      priceInput: 'Input',
       tieredSummary: 'Tiered price · View details',
       noModels: 'No models are available for this channel',
       noModelsInGroup: 'No models in this group',

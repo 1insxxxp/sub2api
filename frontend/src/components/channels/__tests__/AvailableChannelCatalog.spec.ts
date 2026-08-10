@@ -350,9 +350,9 @@ describe('AvailableChannelCatalog', () => {
     expect(projected[0]).toMatchObject({ channelCount: 1, groupCount: 1, platforms: ['openai'], hasPricedOffering: false })
 
     const wrapper = await mountCatalog({ modelEntries: sharedModelEntries })
-    expect(wrapper.get('[data-testid="model-list-row"]').text()).toContain('1 个渠道')
-    expect(wrapper.get('[data-testid="model-list-row"]').text()).toContain('1 个分组')
-    expect(wrapper.get('[data-testid="model-list-row"]').text()).not.toContain('gemini')
+    expect(wrapper.get('[data-testid="model-card"]').text()).toContain('1 个渠道')
+    expect(wrapper.get('[data-testid="model-card"]').text()).toContain('1 个分组')
+    expect(wrapper.get('[data-testid="model-card"]').text()).not.toContain('gemini')
   })
 
   it.runIf(existsSync(catalogPath))('shows an explicit model-list empty state for a selected channel with no models', async () => {
