@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, getCurrentInstance, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import AvailableChannelModelPrice from './AvailableChannelModelPrice.vue'
+import AvailableChannelOfferingCard from './AvailableChannelOfferingCard.vue'
 import AvailableChannelBrandIcon from './AvailableChannelBrandIcon.vue'
 import type { CatalogModelListEntry, CatalogModelOffering, CatalogPriceValue } from './availableChannelCatalog'
 import { compareOfferingPrice, formatCatalogMoney, summarizeOfferingPrice } from './availableChannelPriceDisplay'
@@ -112,10 +112,7 @@ watch(activeKeys, (keys) => { expanded.value = new Set([...expanded.value].filte
         <button type="button" data-testid="model-offering-toggle" class="mt-3 min-h-11 w-full border-t border-gray-100 px-4 py-2.5 text-left text-sm font-semibold text-primary-600 transition-colors hover:bg-primary-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary-500 motion-reduce:transition-none dark:border-dark-600 dark:text-primary-300 dark:hover:bg-primary-500/10 sm:px-5" :aria-expanded="isExpanded(entry.key)" :aria-controls="detailsId(entry.key)" @click="toggle(entry.key)" @keydown.enter.prevent="toggle(entry.key)" @keydown.space.prevent="toggle(entry.key)">{{ isExpanded(entry.key) ? t('availableChannels.catalog.hideOfferings') : (entry.offerings.length > 1 ? t('availableChannels.catalog.moreOfferings', { count: entry.offerings.length - 1 }) : t('availableChannels.catalog.showOfferings')) }}</button>
         <div v-if="isExpanded(entry.key)" :id="detailsId(entry.key)" data-testid="offering-details" class="border-t border-gray-100 bg-gray-50/70 px-3 py-3 dark:border-dark-600 dark:bg-dark-900/20 sm:px-5">
           <div class="space-y-3">
-            <section v-for="offering in entry.offerings" :key="offering.key" class="min-w-0 rounded-xl border border-gray-200 bg-white p-3 dark:border-dark-500 dark:bg-dark-800">
-              <div class="mb-3 flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-1"><strong class="break-words text-sm [overflow-wrap:anywhere]">{{ offering.channelName }}</strong><span class="break-words text-xs text-gray-500 [overflow-wrap:anywhere]">{{ offering.groupName }} · {{ offering.platform }}</span></div>
-              <AvailableChannelModelPrice :model="offering.model" details-expanded />
-            </section>
+            <AvailableChannelOfferingCard v-for="offering in entry.offerings" :key="offering.key" :offering="offering" />
           </div>
         </div>
       </article>
