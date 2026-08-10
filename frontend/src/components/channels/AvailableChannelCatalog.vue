@@ -25,10 +25,37 @@
 
     <section
       v-else-if="channels.length === 0"
-      data-testid="catalog-empty"
-      class="rounded-2xl border border-dashed border-gray-300 bg-white px-6 py-16 text-center text-sm text-gray-500 dark:border-dark-600 dark:bg-dark-800 dark:text-gray-400"
+      data-testid="catalog-empty-layout"
+      class="min-w-0 space-y-4 xl:grid xl:grid-cols-[260px_minmax(0,1fr)] xl:items-start xl:gap-x-4 xl:gap-y-4 xl:space-y-0"
     >
-      {{ t(emptyKind === 'no-results' ? `${catalogKey}.noMatchingResults` : `${catalogKey}.noChannels`) }}
+      <header
+        v-if="$slots.toolbar"
+        data-testid="channel-navigation-heading"
+        class="hidden min-w-0 rounded-2xl border border-slate-200/90 bg-white px-4 py-3 shadow-sm dark:border-dark-600 dark:bg-dark-800 xl:col-start-1 xl:block xl:p-4"
+      >
+        <h2 class="text-sm font-semibold text-slate-900 dark:text-white">
+          {{ t(`${catalogKey}.channelNavigation`) }}
+        </h2>
+        <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">
+          {{ t(`${catalogKey}.channelsCount`, { count: 0 }) }}
+        </p>
+      </header>
+
+      <div
+        v-if="$slots.toolbar"
+        data-testid="channel-toolbar-region"
+        class="min-w-0 xl:col-start-2"
+      >
+        <slot name="toolbar" />
+      </div>
+
+      <div
+        data-testid="catalog-empty"
+        class="rounded-2xl border border-dashed border-gray-300 bg-white px-6 py-16 text-center text-sm text-gray-500 dark:border-dark-600 dark:bg-dark-800 dark:text-gray-400"
+        :class="$slots.toolbar ? 'xl:col-start-2' : 'xl:col-span-2'"
+      >
+        {{ t(emptyKind === 'no-results' ? `${catalogKey}.noMatchingResults` : `${catalogKey}.noChannels`) }}
+      </div>
     </section>
 
     <section

@@ -1,47 +1,6 @@
 <template>
   <AppLayout>
     <TablePageLayout>
-      <template #filters>
-        <div class="flex flex-col justify-between gap-4 lg:flex-row lg:items-start">
-          <div class="flex flex-1 flex-wrap items-center gap-3">
-            <div class="relative w-full sm:w-80">
-              <Icon
-                name="search"
-                size="md"
-                class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 dark:text-gray-500"
-              />
-              <input
-                v-model="searchQuery"
-                type="text"
-                :placeholder="t('availableChannels.searchPlaceholder')"
-                class="input pl-10"
-              />
-            </div>
-            <div class="flex flex-wrap items-center gap-2">
-              <select v-model="platformFilter" class="input min-w-32" :aria-label="t('availableChannels.catalog.platformFilter')">
-                <option value="">{{ t('availableChannels.catalog.allPlatforms') }}</option>
-                <option v-for="platform in availablePlatforms" :key="platform" :value="platform">{{ platform }}</option>
-              </select>
-              <label class="inline-flex items-center gap-2 text-sm text-gray-600 dark:text-gray-300">
-                <input v-model="pricedOnly" type="checkbox" class="checkbox" />
-                {{ t('availableChannels.catalog.pricedOnly') }}
-              </label>
-            </div>
-          </div>
-
-          <div class="flex w-full flex-shrink-0 flex-wrap items-center justify-end gap-3 lg:w-auto">
-            <button
-              @click="loadChannels"
-              :disabled="loading"
-              class="btn btn-secondary"
-              :title="t('common.refresh', 'Refresh')"
-            >
-              <Icon name="refresh" size="md" :class="loading ? 'animate-spin' : ''" />
-            </button>
-          </div>
-        </div>
-      </template>
-
       <template #table>
         <AvailableChannelCatalog
           :channels="filteredCatalog"
@@ -50,7 +9,18 @@
           :refreshing="loading && channels.length > 0"
           :rate-fallback="rateFallback"
           :empty-kind="channels.length > 0 && filteredCatalog.length === 0 ? 'no-results' : 'no-data'"
-        />
+        >
+          <template #toolbar>
+            <AvailableChannelsToolbar
+              v-model:search="searchQuery"
+              v-model:platform="platformFilter"
+              v-model:priced-only="pricedOnly"
+              :platforms="availablePlatforms"
+              :loading="loading"
+              @refresh="loadChannels"
+            />
+          </template>
+        </AvailableChannelCatalog>
       </template>
     </TablePageLayout>
   </AppLayout>
@@ -61,8 +31,8 @@ import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import TablePageLayout from '@/components/layout/TablePageLayout.vue'
-import Icon from '@/components/icons/Icon.vue'
 import AvailableChannelCatalog from '@/components/channels/AvailableChannelCatalog.vue'
+import AvailableChannelsToolbar from '@/components/channels/AvailableChannelsToolbar.vue'
 import { buildAvailableChannelCatalog, buildAvailableChannelModelList, filterAvailableChannelCatalog } from '@/components/channels/availableChannelCatalog'
 import userChannelsAPI, { type UserAvailableChannel } from '@/api/channels'
 import userGroupsAPI from '@/api/groups'
