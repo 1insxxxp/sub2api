@@ -40,7 +40,7 @@
       v-if="hasDisplayPricing"
       data-testid="price-comparison"
       class="grid grid-cols-2 gap-2 px-3 pb-3 sm:gap-3 sm:px-5 xl:contents"
-      :aria-hidden="expanded && model.intervals.length > 0 ? 'true' : undefined"
+      :aria-hidden="detailsOpen && model.intervals.length > 0 ? 'true' : undefined"
     >
       <section
         data-testid="official-price"
@@ -120,6 +120,7 @@
 
     <template v-if="hasDetails">
       <button
+        v-if="!detailsExpanded"
         type="button"
         data-testid="price-detail-toggle"
         class="flex min-h-11 w-full min-w-0 items-center justify-center gap-2 border-t border-gray-100 px-4 py-2 text-sm font-medium text-gray-600 transition-colors motion-reduce:transition-none hover:bg-gray-50 hover:text-primary-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary-500 dark:border-dark-600 dark:text-gray-300 dark:hover:bg-dark-700 dark:hover:text-primary-300 xl:col-start-5 xl:row-start-1 xl:min-h-full xl:rounded-xl xl:border xl:px-2 xl:py-3"
@@ -143,7 +144,7 @@
       </button>
 
       <div
-        v-if="expanded"
+        v-if="detailsOpen"
         :id="detailRegionId"
         data-testid="price-details"
         class="border-t border-gray-100 bg-gray-50/50 px-3 py-3 dark:border-dark-600 dark:bg-dark-900/20 sm:px-5 xl:col-span-5 xl:col-start-1 xl:row-start-2 xl:rounded-xl xl:border"
@@ -243,9 +244,10 @@ const catalogKey = 'availableChannels.catalog'
 const perMillion = 1_000_000
 const { t } = useI18n()
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   model: CatalogModelEntry
-}>()
+  detailsExpanded?: boolean
+}>(), { detailsExpanded: false })
 const instanceUid = getCurrentInstance()?.uid ?? 0
 
 interface PriceMetric {
@@ -381,6 +383,7 @@ function priceMetrics(prices: CatalogPriceCollection): PriceMetric[] {
 }
 
 const expanded = ref(false)
+const detailsOpen = computed(() => props.detailsExpanded || expanded.value)
 const detailRegionId = computed(() => `${safeId(props.model.key)}-${instanceUid.toString(36)}`)
 const primaryMetrics = computed<PriceMetric[]>(() => {
   const candidates = props.model.intervals

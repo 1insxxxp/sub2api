@@ -100,9 +100,9 @@ function makeModel(overrides: Partial<CatalogModelEntry> = {}): CatalogModelEntr
   }
 }
 
-async function mountPrice(model: CatalogModelEntry): Promise<VueWrapper> {
+async function mountPrice(model: CatalogModelEntry, detailsExpanded = false): Promise<VueWrapper> {
   const component = (await import('../AvailableChannelModelPrice.vue')).default
-  return mount(component, { props: { model } })
+  return mount(component, { props: { model, detailsExpanded } })
 }
 
 describe('AvailableChannelModelPrice', () => {
@@ -319,6 +319,20 @@ describe('AvailableChannelModelPrice', () => {
     expect(details.text()).toContain('常规价格')
     expect(details.text()).toContain('高峰价格')
     expect(details.text()).toContain('¥6.30')
+  })
+
+  it.runIf(existsSync(componentPath))('renders full details inline without a second toggle when requested', async () => {
+    const wrapper = await mountPrice(makeModel({
+      prices: {
+        ...emptyPrices(),
+        input: price(0.000002, 0.000007),
+        output: price(0.000008, 0.000028),
+        cacheRead: price(0.0000002, 0.0000007),
+      },
+    }), true)
+
+    expect(wrapper.find('[data-testid="price-detail-toggle"]').exists()).toBe(false)
+    expect(wrapper.get('[data-testid="price-details"]').text()).toContain('缓存读取')
   })
 
   it.runIf(existsSync(componentPath))('uses the first priced tier for the headline when an earlier tier is empty', async () => {

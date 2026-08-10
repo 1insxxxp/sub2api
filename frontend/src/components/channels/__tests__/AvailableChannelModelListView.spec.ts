@@ -53,7 +53,7 @@ function entry(key: string, offerings: CatalogModelOffering[]): CatalogModelList
     groupCount: new Set(offerings.map(x => x.groupKey)).size,
     platforms: ['gemini', 'openai-with-a-very-long-platform-name'], hasPricedOffering: offerings.some(x => x.hasPricing) }
 }
-const stubs = { AvailableChannelModelPrice: { props: ['model'], template: '<div data-testid="full-price">{{ model.key }}</div>' } }
+const stubs = { AvailableChannelModelPrice: { props: ['model', 'detailsExpanded'], template: '<div data-testid="full-price" :data-details-expanded="detailsExpanded ? \'true\' : \'false\'">{{ model.key }}</div>' } }
 
 describe('AvailableChannelModelList', () => {
   it('shows metadata and representative prices before expansion', () => {
@@ -141,6 +141,8 @@ describe('AvailableChannelModelList', () => {
     const details = wrapper.get('[data-testid="offering-details"]')
     expect(details.text()).toContain('Alpha'); expect(details.text()).toContain('Retail'); expect(details.text()).toContain('Beta')
     expect(details.findAll('[data-testid="full-price"]')).toHaveLength(2)
+    const source = readFileSync(resolve(dirname(fileURLToPath(import.meta.url)), '../AvailableChannelModelList.vue'), 'utf8')
+    expect(source).toContain('<AvailableChannelModelPrice :model="offering.model" details-expanded />')
     await toggles[0].trigger('keydown', { key: ' ' }); expect(wrapper.find('[data-testid="offering-details"]').exists()).toBe(false)
   })
   it('uses collision-safe details ids and summarizes request/image pricing', async () => {

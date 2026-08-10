@@ -114,7 +114,7 @@ watch(activeKeys, (keys) => { expanded.value = new Set([...expanded.value].filte
           <div class="space-y-3">
             <section v-for="offering in entry.offerings" :key="offering.key" class="min-w-0 rounded-xl border border-gray-200 bg-white p-3 dark:border-dark-500 dark:bg-dark-800">
               <div class="mb-3 flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-1"><strong class="break-words text-sm [overflow-wrap:anywhere]">{{ offering.channelName }}</strong><span class="break-words text-xs text-gray-500 [overflow-wrap:anywhere]">{{ offering.groupName }} · {{ offering.platform }}</span></div>
-              <AvailableChannelModelPrice :model="offering.model" />
+              <AvailableChannelModelPrice :model="offering.model" details-expanded />
             </section>
           </div>
         </div>
