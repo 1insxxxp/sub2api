@@ -6,11 +6,19 @@ const labels: Record<string, string> = {
   'availableChannels.catalog.platformFilter': '平台筛选',
   'availableChannels.catalog.allPlatforms': '全部平台',
   'availableChannels.catalog.pricedOnly': '仅显示有价模型',
+  'availableChannels.catalog.groupsCount': '{count} 个分组',
+  'availableChannels.catalog.modelsCount': '{count} 个模型',
   'common.refresh': '刷新',
 }
 
 vi.mock('vue-i18n', () => ({
-  useI18n: () => ({ t: (key: string) => labels[key] ?? key }),
+  useI18n: () => ({ t: (key: string, params?: Record<string, string | number>) => {
+    const value = labels[key] ?? key
+    return Object.entries(params ?? {}).reduce(
+      (result, [name, replacement]) => result.replace(`{${name}}`, String(replacement)),
+      value,
+    )
+  } }),
 }))
 
 async function mountToolbar(overrides: Record<string, unknown> = {}) {
@@ -22,6 +30,11 @@ async function mountToolbar(overrides: Record<string, unknown> = {}) {
       pricedOnly: false,
       platforms: ['anthropic', 'openai'],
       loading: false,
+      channelName: 'Anthropic',
+      channelDescription: '官渠cc满血',
+      channelPlatforms: ['anthropic'],
+      groupCount: 1,
+      modelCount: 13,
       ...overrides,
     },
     global: {
@@ -45,6 +58,20 @@ describe('AvailableChannelsToolbar', () => {
     expect(wrapper.emitted('update:pricedOnly')).toEqual([[true]])
   })
 
+  it('places selected channel context before one aligned filter row', async () => {
+    const wrapper = await mountToolbar()
+    const context = wrapper.get('[data-testid="channel-context"]')
+    const filters = wrapper.get('[data-testid="channel-filter-row"]')
+
+    expect(context.text()).toContain('Anthropic')
+    expect(context.text()).toContain('官渠cc满血')
+    expect(context.text()).toContain('anthropic')
+    expect(context.text()).toContain('1 个分组')
+    expect(context.text()).toContain('13 个模型')
+    expect(context.element.compareDocumentPosition(filters.element) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(wrapper.findAll('[data-testid="available-channels-toolbar"]')).toHaveLength(1)
+  })
+
   it('emits refresh from a fixed touch target', async () => {
     const wrapper = await mountToolbar()
     const refresh = wrapper.get('[data-testid="channel-refresh"]')
@@ -66,7 +93,7 @@ describe('AvailableChannelsToolbar', () => {
     const wrapper = await mountToolbar({ platforms: [] })
     const toolbar = wrapper.get('[data-testid="available-channels-toolbar"]')
 
-    expect(toolbar.classes()).toEqual(expect.arrayContaining([
+    expect(wrapper.get('[data-testid="channel-filter-row"]').classes()).toEqual(expect.arrayContaining([
       'grid-cols-[minmax(0,1fr)_auto_auto]',
       'sm:grid-cols-[minmax(0,1fr)_minmax(10rem,13rem)_auto_auto]',
     ]))
