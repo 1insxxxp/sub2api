@@ -16,6 +16,10 @@ export interface CatalogSummaryPrice {
   unitKey: 'perMillion' | 'perRequest' | 'perImage'
 }
 
+export interface CatalogPriceComparison extends CatalogSummaryPrice {
+  savingsPercent: number | null
+}
+
 const perMillion = 1_000_000
 
 function hasValue(value: CatalogPriceValue | null): boolean {
@@ -57,6 +61,19 @@ export function summarizeOfferingPrice(offering: CatalogModelOffering): CatalogS
     return { kind: 'tiered', value: null, scale: 1, unitKey: 'perMillion' }
   }
   return { kind: 'unpriced', value: null, scale: 1, unitKey: 'perMillion' }
+}
+
+export function compareOfferingPrice(offering: CatalogModelOffering): CatalogPriceComparison {
+  const summary = summarizeOfferingPrice(offering)
+  const official = summary.value?.official
+  const site = summary.value?.site
+  const savingsPercent = summary.kind === 'price'
+    && official != null && site != null
+    && Number.isFinite(official) && Number.isFinite(site)
+    && official > 0 && site >= 0 && site < official
+    ? Math.round((1 - site / official) * 100)
+    : null
+  return { ...summary, savingsPercent }
 }
 
 export function formatCatalogMoney(
