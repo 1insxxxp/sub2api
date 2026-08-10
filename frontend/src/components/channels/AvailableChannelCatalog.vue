@@ -6,7 +6,7 @@
     <section
       v-if="loading && channels.length === 0"
       data-testid="catalog-loading"
-      class="xl:grid xl:grid-cols-[280px_minmax(0,1fr)] xl:gap-6"
+      class="xl:grid xl:grid-cols-[260px_minmax(0,1fr)] xl:gap-4"
       :aria-label="t(`${catalogKey}.loading`)"
       aria-busy="true"
     >
@@ -34,7 +34,7 @@
     <section
       v-else
       data-testid="channel-catalog-layout"
-      class="relative min-w-0 space-y-4 xl:grid xl:grid-cols-[280px_minmax(0,1fr)] xl:items-start xl:gap-6 xl:space-y-0"
+      class="relative min-w-0 space-y-4 xl:grid xl:grid-cols-[260px_minmax(0,1fr)] xl:items-start xl:gap-x-4 xl:gap-y-4 xl:space-y-0"
       :aria-busy="refreshing"
     >
       <div
@@ -56,11 +56,32 @@
         {{ t(`${catalogKey}.refreshing`) }}
       </div>
 
+      <header
+        v-if="$slots.toolbar"
+        data-testid="channel-navigation-heading"
+        class="hidden min-w-0 rounded-2xl border border-slate-200/90 bg-white px-4 py-3 shadow-sm dark:border-dark-600 dark:bg-dark-800 xl:col-start-1 xl:block xl:p-4"
+      >
+        <h2 class="text-sm font-semibold text-slate-900 dark:text-white">
+          {{ t(`${catalogKey}.channelNavigation`) }}
+        </h2>
+        <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">
+          {{ t(`${catalogKey}.channelsCount`, { count: channels.length }) }}
+        </p>
+      </header>
+
+      <div
+        v-if="$slots.toolbar"
+        data-testid="channel-toolbar-region"
+        class="min-w-0 xl:col-start-2"
+      >
+        <slot name="toolbar" />
+      </div>
+
       <AvailableChannelPicker v-model="selectedChannelKey" :channels="channels" />
 
       <aside
         data-testid="channel-navigation"
-        class="hidden rounded-2xl border border-gray-200 bg-white p-3 shadow-sm dark:border-dark-600 dark:bg-dark-800 xl:sticky xl:top-4 xl:block xl:max-h-[calc(100cqh-2rem)] xl:overflow-y-auto"
+        class="hidden rounded-2xl border border-gray-200 bg-white p-3 shadow-sm dark:border-dark-600 dark:bg-dark-800 xl:sticky xl:top-4 xl:col-start-1 xl:block xl:max-h-[calc(100cqh-2rem)] xl:overflow-y-auto"
       >
         <div
           ref="channelListboxRef"
@@ -110,7 +131,7 @@
         v-if="selectedChannel || modelEntries"
         :id="detailRegionId"
         data-testid="channel-detail"
-        class="min-w-0 space-y-4"
+        class="min-w-0 space-y-4 xl:col-start-2"
         :aria-labelledby="detailHeadingId"
       >
         <header class="min-w-0 rounded-2xl border border-gray-200 bg-white p-4 shadow-sm dark:border-dark-600 dark:bg-dark-800 sm:p-5">

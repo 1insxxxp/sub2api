@@ -196,6 +196,7 @@ async function mountCatalog(
     emptyKind: 'no-data' | 'no-results'
     modelEntries: CatalogModelListEntry[]
   }> = {},
+  slots: Record<string, string> = {},
 ): Promise<VueWrapper> {
   const component = (await import('../AvailableChannelCatalog.vue')).default
   return mount(component, {
@@ -208,6 +209,7 @@ async function mountCatalog(
       emptyKind: 'no-data',
       ...props,
     },
+    slots,
     global: {
       plugins: [installPinia()],
       stubs: {
@@ -361,17 +363,27 @@ describe('AvailableChannelCatalog', () => {
     expect(wrapper.get('[data-testid="model-list-empty"]').text()).toContain('该渠道暂无可用模型')
   })
 
-  it.runIf(existsSync(catalogPath))('uses one responsive detail DOM with a desktop rail and mobile summary', async () => {
-    const wrapper = await mountCatalog()
+  it.runIf(existsSync(catalogPath))('aligns toolbar, navigation, and detail on one responsive grid', async () => {
+    const wrapper = await mountCatalog({}, { toolbar: '<div>toolbar fixture</div>' })
     const layout = wrapper.get('[data-testid="channel-catalog-layout"]')
+    const heading = wrapper.get('[data-testid="channel-navigation-heading"]')
+    const toolbar = wrapper.get('[data-testid="channel-toolbar-region"]')
     const rail = wrapper.get('[data-testid="channel-navigation"]')
+    const detail = wrapper.get('[data-testid="channel-detail"]')
 
     expect(layout.classes()).toContain('xl:grid')
-    expect(layout.classes()).toContain('xl:grid-cols-[280px_minmax(0,1fr)]')
+    expect(layout.classes()).toContain('xl:grid-cols-[260px_minmax(0,1fr)]')
+    expect(heading.classes()).toEqual(expect.arrayContaining(['hidden', 'xl:block', 'xl:col-start-1']))
+    expect(heading.text()).toContain('渠道导航')
+    expect(heading.text()).toContain('2 个渠道')
+    expect(toolbar.classes()).toContain('xl:col-start-2')
+    expect(toolbar.text()).toContain('toolbar fixture')
     expect(rail.classes()).toContain('hidden')
     expect(rail.classes()).toContain('xl:block')
+    expect(rail.classes()).toContain('xl:col-start-1')
     expect(rail.classes()).toContain('xl:sticky')
     expect(rail.classes()).toContain('xl:overflow-y-auto')
+    expect(detail.classes()).toContain('xl:col-start-2')
     expect(wrapper.get('[data-testid="channel-picker-trigger"]').classes()).toContain('xl:hidden')
     expect(wrapper.findAll('[data-testid="channel-detail"]')).toHaveLength(1)
   })
@@ -461,7 +473,7 @@ describe('AvailableChannelCatalog', () => {
       .join('\n')
 
     expect(source).not.toMatch(/\blg:/)
-    expect(source).toContain('xl:grid-cols-[280px_minmax(0,1fr)]')
+    expect(source).toContain('xl:grid-cols-[260px_minmax(0,1fr)]')
     expect(source.match(/xl:grid-cols-\[minmax\(0,1\.35fr\)_minmax\(0,1fr\)_minmax\(0,1fr\)_minmax\(88px,0\.5fr\)_minmax\(72px,0\.4fr\)\]/g)).toHaveLength(2)
   })
 
