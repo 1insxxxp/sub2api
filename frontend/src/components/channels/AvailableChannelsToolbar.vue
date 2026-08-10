@@ -1,8 +1,54 @@
 <template>
   <div
     data-testid="available-channels-toolbar"
-    class="grid min-w-0 grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-2 rounded-2xl border border-slate-200/90 bg-white p-3 shadow-sm dark:border-dark-600 dark:bg-dark-800 sm:grid-cols-[minmax(0,1fr)_minmax(10rem,13rem)_auto_auto] lg:p-4"
+    class="min-w-0 overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-sm dark:border-dark-600 dark:bg-dark-800"
   >
+    <div
+      v-if="channelName"
+      data-testid="channel-context"
+      class="flex min-w-0 flex-col gap-3 px-4 py-4 sm:px-5 lg:flex-row lg:items-center lg:justify-between"
+    >
+      <div class="min-w-0 flex-1">
+        <h2
+          :id="headingId"
+          data-testid="channel-detail-name"
+          class="min-w-0 text-lg font-semibold leading-6 text-slate-900 [overflow-wrap:anywhere] dark:text-white"
+        >
+          {{ channelName }}
+        </h2>
+        <p
+          v-if="channelDescription"
+          data-testid="channel-description"
+          class="mt-1 min-w-0 break-words text-sm leading-5 text-slate-500 dark:text-slate-400"
+        >
+          {{ channelDescription }}
+        </p>
+      </div>
+
+      <div class="flex min-w-0 shrink-0 flex-wrap items-center gap-2 lg:justify-end">
+        <span
+          v-for="item in channelPlatforms"
+          :key="item"
+          class="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-medium text-slate-600 dark:border-dark-500 dark:bg-dark-700 dark:text-slate-300"
+        >
+          <PlatformIcon :platform="asPlatform(item)" size="sm" />
+          {{ item }}
+        </span>
+        <span class="h-4 w-px bg-slate-200 dark:bg-dark-500" aria-hidden="true" />
+        <span class="rounded-lg bg-slate-100 px-2.5 py-1 text-xs font-medium tabular-nums text-slate-600 dark:bg-dark-700 dark:text-slate-300">
+          {{ t('availableChannels.catalog.groupsCount', { count: groupCount }) }}
+        </span>
+        <span class="rounded-lg bg-slate-100 px-2.5 py-1 text-xs font-medium tabular-nums text-slate-600 dark:bg-dark-700 dark:text-slate-300">
+          {{ t('availableChannels.catalog.modelsCount', { count: modelCount }) }}
+        </span>
+      </div>
+    </div>
+
+    <div
+      data-testid="channel-filter-row"
+      class="grid min-w-0 grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-2 border-slate-100 bg-slate-50/55 p-3 dark:border-dark-600 dark:bg-dark-900/35 sm:grid-cols-[minmax(0,1fr)_minmax(10rem,13rem)_auto_auto] lg:px-4"
+      :class="channelName ? 'border-t' : ''"
+    >
     <div
       data-testid="channel-search-shell"
       class="relative col-span-3 min-w-0 sm:col-span-1"
@@ -17,7 +63,7 @@
         :value="search"
         type="search"
         :placeholder="t('availableChannels.searchPlaceholder')"
-        class="input h-11 w-full min-w-0 rounded-xl border-slate-200 bg-slate-50/70 pl-10 pr-3 text-sm shadow-none transition-colors placeholder:text-slate-400 hover:border-slate-300 focus:bg-white dark:border-dark-600 dark:bg-dark-900/70 dark:hover:border-dark-500 dark:focus:bg-dark-900"
+        class="input h-11 w-full min-w-0 rounded-xl border-slate-200 bg-white pl-10 pr-3 text-sm shadow-none transition-colors placeholder:text-slate-400 hover:border-slate-300 focus:border-primary-300 dark:border-dark-600 dark:bg-dark-800 dark:hover:border-dark-500"
         @input="emit('update:search', ($event.target as HTMLInputElement).value)"
       />
     </div>
@@ -25,7 +71,7 @@
     <select
       data-testid="platform-filter"
       :value="platform"
-      class="input h-11 w-full min-w-0 rounded-xl border-slate-200 bg-slate-50/70 px-3 text-sm shadow-none transition-colors hover:border-slate-300 focus:bg-white dark:border-dark-600 dark:bg-dark-900/70 dark:hover:border-dark-500 dark:focus:bg-dark-900"
+      class="input h-11 w-full min-w-0 rounded-xl border-slate-200 bg-white px-3 text-sm shadow-none transition-colors hover:border-slate-300 focus:border-primary-300 dark:border-dark-600 dark:bg-dark-800 dark:hover:border-dark-500"
       :aria-label="t('availableChannels.catalog.platformFilter')"
       @change="emit('update:platform', ($event.target as HTMLSelectElement).value)"
     >
@@ -34,7 +80,7 @@
     </select>
 
     <label
-      class="group inline-flex min-h-11 shrink-0 cursor-pointer items-center gap-2 whitespace-nowrap rounded-xl border border-slate-200 bg-slate-50/70 px-3 text-xs font-semibold text-slate-600 transition-colors hover:border-slate-300 hover:bg-white focus-within:ring-2 focus-within:ring-primary-500/40 dark:border-dark-600 dark:bg-dark-900/70 dark:text-slate-300 dark:hover:border-dark-500 dark:hover:bg-dark-900 sm:text-sm"
+      class="group inline-flex min-h-11 shrink-0 cursor-pointer items-center gap-2 whitespace-nowrap rounded-xl border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-600 transition-colors hover:border-primary-200 hover:text-primary-700 focus-within:ring-2 focus-within:ring-primary-500/40 dark:border-dark-600 dark:bg-dark-800 dark:text-slate-300 dark:hover:border-primary-500/40 dark:hover:text-primary-300 sm:text-sm"
     >
       <input
         data-testid="priced-only-filter"
@@ -63,11 +109,14 @@
     >
       <Icon name="refresh" size="md" :class="loading ? 'animate-spin motion-reduce:animate-none' : ''" />
     </button>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
+import type { GroupPlatform } from '@/types'
+import PlatformIcon from '@/components/common/PlatformIcon.vue'
 import Icon from '@/components/icons/Icon.vue'
 
 withDefaults(defineProps<{
@@ -76,8 +125,20 @@ withDefaults(defineProps<{
   pricedOnly: boolean
   platforms: string[]
   loading?: boolean
+  channelName?: string
+  channelDescription?: string
+  channelPlatforms?: string[]
+  groupCount?: number
+  modelCount?: number
+  headingId?: string
 }>(), {
   loading: false,
+  channelName: '',
+  channelDescription: '',
+  channelPlatforms: () => [],
+  groupCount: 0,
+  modelCount: 0,
+  headingId: undefined,
 })
 
 const emit = defineEmits<{
@@ -88,4 +149,8 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useI18n()
+
+function asPlatform(value: string): GroupPlatform {
+  return value as GroupPlatform
+}
 </script>

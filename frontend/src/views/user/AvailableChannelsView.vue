@@ -10,13 +10,19 @@
           :rate-fallback="rateFallback"
           :empty-kind="channels.length > 0 && filteredCatalog.length === 0 ? 'no-results' : 'no-data'"
         >
-          <template #toolbar>
+          <template #toolbar="{ selectedChannel, headingId }">
             <AvailableChannelsToolbar
               v-model:search="searchQuery"
               v-model:platform="platformFilter"
               v-model:priced-only="pricedOnly"
               :platforms="availablePlatforms"
               :loading="loading"
+              :channel-name="selectedChannel?.name"
+              :channel-description="selectedChannel?.description"
+              :channel-platforms="selectedChannel?.platforms"
+              :group-count="selectedChannel?.groupCount"
+              :model-count="selectedChannel?.modelCount"
+              :heading-id="headingId"
               @refresh="loadChannels"
             />
           </template>
