@@ -127,6 +127,7 @@ describe('buildAvailableChannelCatalog', () => {
       defaultRate: 0.8,
       userRate: 0.5,
       normalRate: 0.5,
+      effectiveRate: 3.6,
       modelCount: 1,
       peak: { enabled: true, start: '08:00', end: '10:00', factor: 2 },
     })

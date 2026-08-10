@@ -47,6 +47,7 @@ export interface CatalogModelEntry {
   billingMode: BillingMode | null
   hasPricing: boolean
   normalRate: number
+  effectiveRate?: number | null
   defaultRate: number
   userRate: number | null
   peakFactor: number | null
@@ -63,6 +64,7 @@ export interface CatalogGroupEntry {
   subscriptionType: string
   isExclusive: boolean
   normalRate: number
+  effectiveRate?: number | null
   defaultRate: number
   userRate: number | null
   peak: CatalogPeakMetadata | null
@@ -155,6 +157,11 @@ function unique(values: string[]): string[] {
 
 function finiteRate(value: number | null | undefined): number | null {
   return typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : null
+}
+
+function effectiveRate(normalRate: number, cnyMultiplier: number): number | null {
+  const value = normalRate * cnyMultiplier
+  return Number.isFinite(value) && value >= 0 && cnyMultiplier > 0 ? value : null
 }
 
 function priceValue(rawValue: number | null, context: PriceContext): CatalogPriceValue | null {
@@ -333,6 +340,7 @@ function normalizeModel(
     hasPricing: collectionHasPricing(prices)
       || intervals.some((interval) => collectionHasPricing(interval.prices)),
     normalRate,
+    effectiveRate: effectiveRate(normalRate, cnyMultiplier),
     defaultRate,
     userRate,
     peakFactor,
@@ -387,6 +395,7 @@ function normalizeGroup(
     subscriptionType: source.subscription_type,
     isExclusive: source.is_exclusive,
     normalRate,
+    effectiveRate: effectiveRate(normalRate, cnyMultiplier),
     defaultRate,
     userRate,
     peak: source.peak_rate_enabled

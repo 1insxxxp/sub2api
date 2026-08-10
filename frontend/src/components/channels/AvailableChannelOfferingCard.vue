@@ -48,9 +48,15 @@ const hasAnyPrice = computed(() => directMetrics.value.length > 0 || tiers.value
         </div>
         <p class="mt-1 break-words text-xs text-gray-500 [overflow-wrap:anywhere] dark:text-gray-400">{{ offering.groupName }}</p>
       </div>
-      <div class="shrink-0 rounded-xl bg-primary-50 px-3 py-1.5 text-right dark:bg-primary-500/10">
-        <span class="block text-[10px] text-primary-600 dark:text-primary-300">{{ t(`${catalogKey}.groupRate`) }}</span>
-        <strong class="font-mono text-sm tabular-nums text-primary-700 dark:text-primary-200">{{ rate(offering.model.normalRate) }}×</strong>
+      <div class="grid shrink-0 grid-cols-2 divide-x divide-primary-100 overflow-hidden rounded-xl bg-primary-50 text-right dark:divide-primary-500/20 dark:bg-primary-500/10">
+        <div class="px-3 py-1.5">
+          <span class="block text-[10px] text-primary-600 dark:text-primary-300">{{ t(`${catalogKey}.groupRate`) }}</span>
+          <strong class="font-mono text-sm tabular-nums text-primary-700 dark:text-primary-200">{{ rate(offering.model.normalRate) }}×</strong>
+        </div>
+        <div class="px-3 py-1.5">
+          <span class="block text-[10px] text-primary-600 dark:text-primary-300">{{ t(`${catalogKey}.effectiveRate`) }}</span>
+          <strong class="font-mono text-sm tabular-nums text-primary-700 dark:text-primary-200">{{ offering.model.effectiveRate == null ? '-' : `${rate(offering.model.effectiveRate)}×` }}</strong>
+        </div>
       </div>
     </header>
 
