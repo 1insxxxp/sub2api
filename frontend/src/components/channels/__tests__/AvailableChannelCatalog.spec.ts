@@ -389,6 +389,7 @@ describe('AvailableChannelCatalog', () => {
   it.runIf(existsSync(catalogPath))('mounts directly on the TablePageLayout scroll-host contract', async () => {
     const wrapper = await mountCatalog()
     const host = wrapper.get('[data-testid="catalog-scroll-host"]')
+    const shell = wrapper.get('[data-testid="channel-navigation-shell"]')
     const rail = wrapper.get('[data-testid="channel-navigation"]')
     const source = readFileSync(catalogPath, 'utf8')
 
@@ -399,7 +400,8 @@ describe('AvailableChannelCatalog', () => {
     expect(host.classes()).not.toContain('[container-type:size]')
     expect(host.classes()).toContain('xl:h-full')
     expect(host.classes()).toContain('xl:[container-type:size]')
-    expect(rail.classes()).toContain('xl:max-h-[calc(100cqh-2rem)]')
+    expect(shell.classes()).toContain('xl:max-h-[calc(100cqh-2rem)]')
+    expect(rail.classes()).toContain('xl:overflow-y-auto')
     expect(source).not.toMatch(/100(?:d|s|l)?vh/)
   })
 
@@ -471,7 +473,7 @@ describe('AvailableChannelCatalog', () => {
       .join('\n')
 
     expect(source).not.toMatch(/\blg:/)
-    expect(source).toContain('xl:grid-cols-[260px_minmax(0,1fr)]')
+    expect(source).toContain('xl:grid-cols-[240px_minmax(0,1fr)]')
     expect(source.match(/xl:grid-cols-\[minmax\(0,1\.35fr\)_minmax\(0,1fr\)_minmax\(0,1fr\)_minmax\(88px,0\.5fr\)_minmax\(72px,0\.4fr\)\]/g)).toHaveLength(2)
   })
 
@@ -721,6 +723,7 @@ describe('AvailableChannelCatalog', () => {
     expect(wrapper.get('[data-testid="channel-catalog-layout"]').attributes('aria-busy')).toBe('true')
     expect(wrapper.get('[data-testid="refreshing-indicator"]').text()).toContain('正在更新渠道数据')
     expect(wrapper.get('[data-testid="rate-fallback-warning"]').text()).toContain('默认倍率')
+    expect(wrapper.get('[data-testid="channel-navigation-shell"]').classes()).toContain('xl:row-start-2')
     expect(wrapper.get('[data-testid="channel-detail"]').text()).toContain('Alpha channel')
     expect(wrapper.findAll('[data-testid="channel-nav-item"]')).toHaveLength(2)
   })

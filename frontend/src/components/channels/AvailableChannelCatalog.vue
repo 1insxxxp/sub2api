@@ -6,7 +6,7 @@
     <section
       v-if="loading && channels.length === 0"
       data-testid="catalog-loading"
-      class="xl:grid xl:grid-cols-[260px_minmax(0,1fr)] xl:gap-4"
+      class="xl:grid xl:grid-cols-[240px_minmax(0,1fr)] xl:gap-4"
       :aria-label="t(`${catalogKey}.loading`)"
       aria-busy="true"
     >
@@ -26,27 +26,29 @@
     <section
       v-else-if="channels.length === 0"
       data-testid="catalog-empty-layout"
-      class="min-w-0 space-y-4 xl:grid xl:grid-cols-[260px_minmax(0,1fr)] xl:items-start xl:gap-x-4 xl:gap-y-4 xl:space-y-0"
+      class="min-w-0 space-y-4 xl:grid xl:grid-cols-[240px_minmax(0,1fr)] xl:items-start xl:gap-x-4 xl:space-y-0"
     >
-      <header
+      <aside
         v-if="$slots.toolbar"
-        data-testid="channel-navigation-heading"
-        class="hidden min-w-0 rounded-2xl border border-slate-200/90 bg-white px-4 py-3 shadow-sm dark:border-dark-600 dark:bg-dark-800 xl:col-start-1 xl:block xl:min-h-[78px] xl:p-4"
+        data-testid="channel-navigation-shell"
+        class="hidden min-w-0 overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-sm dark:border-dark-600 dark:bg-dark-800 xl:col-start-1 xl:block"
       >
-        <h2 class="text-sm font-semibold text-slate-900 dark:text-white">
-          {{ t(`${catalogKey}.channelNavigation`) }}
-        </h2>
-        <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">
-          {{ t(`${catalogKey}.channelsCount`, { count: 0 }) }}
-        </p>
-      </header>
+        <div class="border-b border-slate-100 px-4 py-4 dark:border-dark-600">
+          <h2 class="text-sm font-semibold text-slate-900 dark:text-white">
+            {{ t(`${catalogKey}.channelNavigation`) }}
+          </h2>
+          <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">
+            {{ t(`${catalogKey}.channelsCount`, { count: 0 }) }}
+          </p>
+        </div>
+      </aside>
 
       <div
         v-if="$slots.toolbar"
         data-testid="channel-toolbar-region"
         class="min-w-0 xl:col-start-2"
       >
-        <slot name="toolbar" />
+        <slot name="toolbar" :selected-channel="null" :heading-id="detailHeadingId" />
       </div>
 
       <div
@@ -61,7 +63,7 @@
     <section
       v-else
       data-testid="channel-catalog-layout"
-      class="relative min-w-0 space-y-4 xl:grid xl:grid-cols-[260px_minmax(0,1fr)] xl:items-start xl:gap-x-4 xl:gap-y-4 xl:space-y-0"
+      class="relative min-w-0 space-y-4 xl:grid xl:grid-cols-[240px_minmax(0,1fr)] xl:items-start xl:gap-x-4 xl:gap-y-4 xl:space-y-0"
       :aria-busy="refreshing"
     >
       <div
@@ -83,38 +85,44 @@
         {{ t(`${catalogKey}.refreshing`) }}
       </div>
 
-      <header
-        v-if="$slots.toolbar"
-        data-testid="channel-navigation-heading"
-        class="hidden min-w-0 rounded-2xl border border-slate-200/90 bg-white px-4 py-3 shadow-sm dark:border-dark-600 dark:bg-dark-800 xl:col-start-1 xl:block xl:min-h-[78px] xl:p-4"
-      >
-        <h2 class="text-sm font-semibold text-slate-900 dark:text-white">
-          {{ t(`${catalogKey}.channelNavigation`) }}
-        </h2>
-        <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">
-          {{ t(`${catalogKey}.channelsCount`, { count: channels.length }) }}
-        </p>
-      </header>
-
       <div
         v-if="$slots.toolbar"
         data-testid="channel-toolbar-region"
         class="min-w-0 xl:col-start-2"
       >
-        <slot name="toolbar" />
+        <slot
+          name="toolbar"
+          :selected-channel="selectedChannel"
+          :heading-id="detailHeadingId"
+        />
       </div>
 
       <AvailableChannelPicker v-model="selectedChannelKey" :channels="channels" />
 
       <aside
-        data-testid="channel-navigation"
-        class="hidden rounded-2xl border border-gray-200 bg-white p-3 shadow-sm dark:border-dark-600 dark:bg-dark-800 xl:sticky xl:top-4 xl:col-start-1 xl:block xl:max-h-[calc(100cqh-2rem)] xl:overflow-y-auto"
+        data-testid="channel-navigation-shell"
+        class="hidden min-h-0 overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-sm dark:border-dark-600 dark:bg-dark-800 xl:sticky xl:top-4 xl:col-start-1 xl:row-span-2 xl:block xl:max-h-[calc(100cqh-2rem)]"
+        :class="rateFallback ? 'xl:row-start-2' : 'xl:row-start-1'"
       >
+        <header class="border-b border-slate-100 px-4 py-4 dark:border-dark-600">
+          <div class="flex items-center justify-between gap-3">
+            <h2 class="text-sm font-semibold text-slate-900 dark:text-white">
+              {{ t(`${catalogKey}.channelNavigation`) }}
+            </h2>
+            <span class="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold tabular-nums text-slate-500 dark:bg-dark-700 dark:text-slate-300">
+              {{ channels.length }}
+            </span>
+          </div>
+          <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">
+            {{ t(`${catalogKey}.channelsCount`, { count: channels.length }) }}
+          </p>
+        </header>
         <div
+          data-testid="channel-navigation"
           ref="channelListboxRef"
           role="listbox"
           :aria-label="t(`${catalogKey}.channelNavigation`)"
-          class="space-y-2"
+          class="min-h-0 space-y-1 overflow-y-auto p-2 xl:max-h-[calc(100cqh-7rem)] xl:overflow-y-auto"
         >
           <button
             v-for="channel in channels"
@@ -123,9 +131,9 @@
             type="button"
             role="option"
             data-testid="channel-nav-item"
-            class="w-full min-w-0 rounded-xl border px-3 py-3 text-left transition-colors motion-reduce:transition-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
+            class="relative w-full min-w-0 rounded-xl border px-3 py-3 text-left transition-colors motion-reduce:transition-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
             :class="channel.key === selectedChannelKey
-              ? 'border-primary-300 bg-primary-50 text-primary-800 dark:border-primary-500/40 dark:bg-primary-500/10 dark:text-primary-100'
+              ? 'border-primary-200 bg-primary-50/80 pl-4 text-primary-800 before:absolute before:bottom-3 before:left-1 before:top-3 before:w-0.5 before:rounded-full before:bg-primary-500 dark:border-primary-500/30 dark:bg-primary-500/10 dark:text-primary-100'
               : 'border-transparent text-gray-700 hover:border-gray-200 hover:bg-gray-50 dark:text-gray-200 dark:hover:border-dark-500 dark:hover:bg-dark-700'"
             :aria-selected="channel.key === selectedChannelKey"
             :tabindex="channel.key === selectedChannelKey ? 0 : -1"
@@ -136,7 +144,7 @@
             <span class="block min-w-0 break-words text-sm font-semibold [overflow-wrap:anywhere]">
               {{ channel.name }}
             </span>
-            <span class="mt-2 flex flex-wrap gap-1.5">
+            <span class="mt-1.5 flex flex-wrap gap-1.5">
               <span
                 v-for="platform in channel.platforms"
                 :key="platform"
@@ -146,7 +154,7 @@
                 {{ platform }}
               </span>
             </span>
-            <span class="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs text-gray-500 dark:text-gray-400">
+            <span class="mt-1.5 flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-gray-500 dark:text-gray-400">
               <span>{{ t(`${catalogKey}.groupsCount`, { count: channel.groupCount }) }}</span>
               <span>{{ t(`${catalogKey}.modelsCount`, { count: channel.modelCount }) }}</span>
             </span>
@@ -161,7 +169,11 @@
         class="min-w-0 space-y-4 xl:col-start-2"
         :aria-labelledby="detailHeadingId"
       >
-        <header class="min-w-0 rounded-2xl border border-gray-200 bg-white p-4 shadow-sm dark:border-dark-600 dark:bg-dark-800 sm:p-5">
+        <header
+          v-if="selectedChannel && !$slots.toolbar"
+          data-testid="channel-detail-summary"
+          class="min-w-0 rounded-2xl border border-gray-200 bg-white p-4 shadow-sm dark:border-dark-600 dark:bg-dark-800 sm:p-5"
+        >
           <div v-if="selectedChannel" class="flex min-w-0 flex-wrap items-start justify-between gap-4">
             <div class="min-w-0 flex-1">
               <h2
