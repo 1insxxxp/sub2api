@@ -1,6 +1,10 @@
 import { mount } from '@vue/test-utils'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import ImageUpload from '@/components/common/ImageUpload.vue'
+
+vi.mock('vue-i18n', () => ({
+  useI18n: () => ({ t: (key: string) => key })
+}))
 
 const originalFileReader = globalThis.FileReader
 
