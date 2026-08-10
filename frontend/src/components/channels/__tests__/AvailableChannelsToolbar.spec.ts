@@ -91,7 +91,6 @@ describe('AvailableChannelsToolbar', () => {
 
   it('uses deterministic responsive rows and retains the all-platform option', async () => {
     const wrapper = await mountToolbar({ platforms: [] })
-    const toolbar = wrapper.get('[data-testid="available-channels-toolbar"]')
 
     expect(wrapper.get('[data-testid="channel-filter-row"]').classes()).toEqual(expect.arrayContaining([
       'grid-cols-[minmax(0,1fr)_auto_auto]',

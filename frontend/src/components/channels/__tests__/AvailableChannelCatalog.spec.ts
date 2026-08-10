@@ -376,6 +376,7 @@ describe('AvailableChannelCatalog', () => {
     expect(wrapper.find('[data-testid="channel-navigation-heading"]').exists()).toBe(false)
     expect(wrapper.findAll('[data-testid="channel-navigation-shell"]')).toHaveLength(1)
     expect(shell.classes()).toEqual(expect.arrayContaining(['hidden', 'xl:block', 'xl:col-start-1', 'xl:row-span-2']))
+    expect(shell.classes()).toContain('xl:top-0')
     expect(shell.text()).toContain('渠道导航')
     expect(shell.text()).toContain('2 个渠道')
     expect(toolbar.classes()).toContain('xl:col-start-2')

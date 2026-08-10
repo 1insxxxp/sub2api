@@ -101,7 +101,7 @@
 
       <aside
         data-testid="channel-navigation-shell"
-        class="hidden min-h-0 overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-sm dark:border-dark-600 dark:bg-dark-800 xl:sticky xl:top-4 xl:col-start-1 xl:row-span-2 xl:block xl:max-h-[calc(100cqh-2rem)]"
+        class="hidden min-h-0 overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-sm dark:border-dark-600 dark:bg-dark-800 xl:sticky xl:top-0 xl:col-start-1 xl:row-span-2 xl:block xl:max-h-[calc(100cqh-2rem)]"
         :class="rateFallback ? 'xl:row-start-2' : 'xl:row-start-1'"
       >
         <header class="border-b border-slate-100 px-4 py-4 dark:border-dark-600">
