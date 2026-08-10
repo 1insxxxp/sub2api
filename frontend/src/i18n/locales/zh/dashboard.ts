@@ -608,6 +608,8 @@ export default {
       representativePrice: '代表价',
       savePercent: '省 {count}%',
       priceInput: '输入',
+      priceRequest: '按次',
+      priceImage: '图片',
       tieredSummary: '阶梯价 · 展开查看',
       noModels: '该渠道暂无可用模型',
       noModelsInGroup: '该分组暂无模型',

@@ -21,6 +21,9 @@ vi.mock('vue-i18n', () => ({ useI18n: () => ({ t: (key: string, params?: Record<
   'availableChannels.catalog.noModels': '该渠道暂无可用模型',
   'availableChannels.catalog.savePercent': `省 ${params?.count ?? 0}%`,
   'availableChannels.catalog.priceInput': '输入',
+  'availableChannels.catalog.input': '输入', 'availableChannels.catalog.output': '输出',
+  'availableChannels.catalog.cacheWrite': '缓存写入', 'availableChannels.catalog.cacheRead': '缓存读取',
+  'availableChannels.catalog.priceRequest': '按次', 'availableChannels.catalog.priceImage': '图片',
 }[key] ?? key) }) }))
 
 const prices = (official: number | null, site: number | null = official): CatalogPriceCollection => ({
@@ -72,6 +75,23 @@ describe('AvailableChannelModelList', () => {
     expect(card.get('[data-testid="primary-official-price"]').classes()).toContain('line-through')
     expect(card.get('[data-testid="savings-badge"]').text()).toContain('60%')
     expect(card.text()).toContain('输入')
+  })
+  it('shows input, output and cache comparisons directly on the card', () => {
+    const priced = offering('a', 'Alpha', 'Retail', 0.00001, 0.000004)
+    priced.prices.output = { official: 0.00002, site: 0.000008, peakSite: null }
+    priced.prices.cacheRead = { official: 0.000001, site: 0, peakSite: null }
+    priced.model.prices = priced.prices
+    const wrapper = mount(AvailableChannelModelList, { props: { entries: [entry('gemini-pro', [priced])] }, global: { stubs } })
+    const rows = wrapper.findAll('[data-testid="price-dimension-row"]')
+    expect(rows).toHaveLength(3)
+    expect(rows[0].text()).toContain('输入')
+    expect(rows[0].text()).toContain('$10.00')
+    expect(rows[0].text()).toContain('¥4.00')
+    expect(rows[1].text()).toContain('输出')
+    expect(rows[1].text()).toContain('$20.00')
+    expect(rows[1].text()).toContain('¥8.00')
+    expect(rows[2].text()).toContain('缓存读取')
+    expect(rows[2].text()).toContain('¥0.00')
   })
   it('uses billing-aware units for request and image summaries', () => {
     const request = setBilling(offering('request', 'A', 'G1', null), 'per_request', 'request', 0.2, 0.4)

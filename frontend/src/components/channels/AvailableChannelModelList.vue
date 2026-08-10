@@ -3,7 +3,7 @@ import { computed, getCurrentInstance, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import AvailableChannelModelPrice from './AvailableChannelModelPrice.vue'
 import AvailableChannelBrandIcon from './AvailableChannelBrandIcon.vue'
-import type { CatalogModelListEntry, CatalogModelOffering } from './availableChannelCatalog'
+import type { CatalogModelListEntry, CatalogModelOffering, CatalogPriceValue } from './availableChannelCatalog'
 import { compareOfferingPrice, formatCatalogMoney, summarizeOfferingPrice } from './availableChannelPriceDisplay'
 
 const props = withDefaults(defineProps<{ entries: CatalogModelListEntry[]; headingLevel?: 'h2' | 'h3' }>(), { headingLevel: 'h2' })
@@ -31,6 +31,23 @@ function price(offering: CatalogModelOffering, currency: '$' | '¥') {
 }
 function comparison(offering: CatalogModelOffering) { return compareOfferingPrice(offering) }
 function platform(entry: CatalogModelListEntry) { return entry.platforms[0] || 'AI' }
+function dimensionValue(value: CatalogPriceValue, currency: '$' | '¥', scale: number) {
+  return formatCatalogMoney(currency === '$' ? value.official : value.site, scale, currency)
+}
+function priceDimensions(offering: CatalogModelOffering) {
+  const tokenDimensions = [
+    ['input', offering.prices.input], ['output', offering.prices.output],
+    ['cacheWrite', offering.prices.cacheWrite], ['cacheRead', offering.prices.cacheRead],
+    ['imageInput', offering.prices.imageInput], ['imageOutput', offering.prices.imageOutput],
+  ] as const
+  const rows: Array<{ label: string; value: CatalogPriceValue; scale: number }> = tokenDimensions
+    .filter((entry): entry is [typeof entry[0], CatalogPriceValue] => entry[1] != null && (entry[1].official != null || entry[1].site != null))
+    .map(([label, value]) => ({ label, value, scale: 1_000_000 }))
+  if (offering.prices.request && (offering.prices.request.official != null || offering.prices.request.site != null)) {
+    rows.push({ label: offering.model.billingMode === 'image' ? 'priceImage' : 'priceRequest', value: offering.prices.request, scale: 1 })
+  }
+  return rows.slice(0, 4)
+}
 function detailsId(key: string) {
   let hash = 2166136261
   for (let index = 0; index < key.length; index += 1) {
@@ -77,9 +94,13 @@ watch(activeKeys, (keys) => { expanded.value = new Set([...expanded.value].filte
               <span data-testid="primary-official-price" class="font-mono tabular-nums" :class="comparison(representative(entry)!).savingsPercent != null ? 'line-through decoration-gray-400' : 'font-semibold text-gray-700 dark:text-gray-300'">{{ price(representative(entry)!, '$') }}</span>
               <span class="rounded-md bg-white/80 px-1.5 py-0.5 text-[10px] font-medium text-gray-500 shadow-sm dark:bg-dark-700">{{ t('availableChannels.catalog.representativePrice') }}</span>
             </div>
-            <div class="mt-3 grid grid-cols-2 gap-2 border-t border-emerald-100 pt-3 text-xs dark:border-emerald-500/20">
-              <span class="text-gray-500 dark:text-gray-400">{{ t('availableChannels.catalog.priceInput') }}</span>
-              <span class="text-right font-mono font-semibold tabular-nums text-gray-800 dark:text-gray-100">{{ price(representative(entry)!, '¥') }}</span>
+            <div v-if="priceDimensions(representative(entry)!).length" class="mt-3 space-y-1.5 border-t border-emerald-100 pt-3 text-xs dark:border-emerald-500/20">
+              <div class="grid grid-cols-[minmax(0,1fr)_auto_auto] gap-2 text-[10px] font-medium text-gray-400"><span /><span>{{ t('availableChannels.catalog.officialPrice') }}</span><span>{{ t('availableChannels.catalog.sitePrice') }}</span></div>
+              <div v-for="dimension in priceDimensions(representative(entry)!)" :key="dimension.label" data-testid="price-dimension-row" class="grid min-w-0 grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-2">
+                <span class="truncate text-gray-600 dark:text-gray-300">{{ t(`availableChannels.catalog.${dimension.label}`) }}</span>
+                <span class="font-mono tabular-nums text-gray-400">{{ dimensionValue(dimension.value, '$', dimension.scale) }}</span>
+                <span class="font-mono font-bold tabular-nums text-emerald-700 dark:text-emerald-300">{{ dimensionValue(dimension.value, '¥', dimension.scale) }}</span>
+              </div>
             </div>
           </div>
         </template>
