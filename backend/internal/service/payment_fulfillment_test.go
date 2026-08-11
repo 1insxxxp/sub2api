@@ -884,6 +884,129 @@ func TestPaymentNotificationRejectsAmountMismatchBeforeFulfillment(t *testing.T)
 	require.Equal(t, OrderStatusPending, reloaded.Status)
 }
 
+func TestPaymentNotificationTransitionsUnpaidFailedOrderBeforeFulfillment(t *testing.T) {
+	ctx := context.Background()
+	client := newPaymentConfigServiceTestClient(t)
+	order := createPaymentFulfillmentSubscriptionOrder(t, ctx, client, OrderStatusFailed, time.Now())
+	order, err := client.PaymentOrder.UpdateOneID(order.ID).
+		ClearPaidAt().
+		SetPaymentTradeNo("").
+		Save(ctx)
+	require.NoError(t, err)
+
+	svc := &PaymentService{
+		entClient: client,
+		groupRepo: &subscriptionGroupRepoStub{group: &Group{
+			ID:               7,
+			Status:           StatusDisabled,
+			SubscriptionType: SubscriptionTypeSubscription,
+		}},
+	}
+	notification := &payment.PaymentNotification{
+		TradeNo: "late-success-trade",
+		OrderID: order.OutTradeNo,
+		Amount:  order.PayAmount,
+		Status:  payment.NotificationStatusSuccess,
+	}
+
+	err = svc.HandlePaymentNotification(ctx, notification, payment.TypeAlipay)
+	require.Error(t, err, "fulfillment should still report the inactive group")
+	reloaded, getErr := client.PaymentOrder.Get(ctx, order.ID)
+	require.NoError(t, getErr)
+	require.Equal(t, OrderStatusFailed, reloaded.Status)
+	require.NotNil(t, reloaded.PaidAt, "the successful callback must persist payment before fulfillment")
+	require.Equal(t, notification.TradeNo, reloaded.PaymentTradeNo)
+}
+
+func TestAlreadyProcessedDoesNotFulfillUnpaidFailedOrder(t *testing.T) {
+	ctx := context.Background()
+	client := newPaymentConfigServiceTestClient(t)
+	order := createPaymentFulfillmentSubscriptionOrder(t, ctx, client, OrderStatusFailed, time.Now())
+	order, err := client.PaymentOrder.UpdateOneID(order.ID).ClearPaidAt().Save(ctx)
+	require.NoError(t, err)
+
+	svc := &PaymentService{
+		entClient: client,
+		groupRepo: &subscriptionGroupRepoStub{group: &Group{
+			ID:               7,
+			Status:           StatusDisabled,
+			SubscriptionType: SubscriptionTypeSubscription,
+		}},
+	}
+
+	require.NoError(t, svc.alreadyProcessed(ctx, order))
+	reloaded, getErr := client.PaymentOrder.Get(ctx, order.ID)
+	require.NoError(t, getErr)
+	require.Equal(t, OrderStatusFailed, reloaded.Status)
+	require.Nil(t, reloaded.PaidAt)
+}
+
+func TestPaymentNotificationExpiredRecoveryUsesOriginalExpiry(t *testing.T) {
+	tests := []struct {
+		name        string
+		expiresAt   time.Time
+		updatedAt   time.Time
+		recoverable bool
+	}{
+		{
+			name:        "old expiry with recently refreshed row is not recoverable",
+			expiresAt:   time.Now().Add(-payment.PaymentRecoveryGracePeriod - time.Minute),
+			updatedAt:   time.Now(),
+			recoverable: false,
+		},
+		{
+			name:        "recent expiry with stale row timestamp is recoverable",
+			expiresAt:   time.Now().Add(-time.Minute),
+			updatedAt:   time.Now().Add(-payment.PaymentRecoveryGracePeriod - time.Minute),
+			recoverable: true,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx := context.Background()
+			client := newPaymentConfigServiceTestClient(t)
+			order := createPaymentFulfillmentSubscriptionOrder(t, ctx, client, OrderStatusExpired, tc.updatedAt)
+			order, err := client.PaymentOrder.UpdateOneID(order.ID).
+				ClearPaidAt().
+				SetPaymentTradeNo("").
+				SetExpiresAt(tc.expiresAt).
+				SetUpdatedAt(tc.updatedAt).
+				Save(ctx)
+			require.NoError(t, err)
+
+			svc := &PaymentService{
+				entClient: client,
+				groupRepo: &subscriptionGroupRepoStub{group: &Group{
+					ID:               7,
+					Status:           StatusDisabled,
+					SubscriptionType: SubscriptionTypeSubscription,
+				}},
+			}
+			notification := &payment.PaymentNotification{
+				TradeNo: "expired-success-trade",
+				OrderID: order.OutTradeNo,
+				Amount:  order.PayAmount,
+				Status:  payment.NotificationStatusSuccess,
+			}
+
+			err = svc.HandlePaymentNotification(ctx, notification, payment.TypeAlipay)
+			reloaded, getErr := client.PaymentOrder.Get(ctx, order.ID)
+			require.NoError(t, getErr)
+			if tc.recoverable {
+				require.Error(t, err, "fulfillment should still report the inactive group")
+				require.Equal(t, OrderStatusFailed, reloaded.Status)
+				require.NotNil(t, reloaded.PaidAt)
+				require.Equal(t, notification.TradeNo, reloaded.PaymentTradeNo)
+				return
+			}
+			require.NoError(t, err)
+			require.Equal(t, OrderStatusExpired, reloaded.Status)
+			require.Nil(t, reloaded.PaidAt)
+		})
+	}
+}
+
 func TestExecuteSubscriptionFulfillmentRecoversCommittedAssignmentWithoutExtendingAgain(t *testing.T) {
 	ctx := context.Background()
 	client := newPaymentConfigServiceTestClient(t)

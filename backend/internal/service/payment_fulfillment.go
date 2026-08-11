@@ -156,9 +156,10 @@ func (s *PaymentService) toPaid(ctx context.Context, o *dbent.PaymentOrder, trad
 		paymentorder.Or(
 			paymentorder.StatusEQ(OrderStatusPending),
 			paymentorder.StatusEQ(OrderStatusCancelled),
+			paymentorder.StatusEQ(OrderStatusFailed),
 			paymentorder.And(
 				paymentorder.StatusEQ(OrderStatusExpired),
-				paymentorder.UpdatedAtGTE(grace),
+				paymentorder.ExpiresAtGTE(grace),
 			),
 		),
 	).SetStatus(OrderStatusPaid).SetPayAmount(paid).SetPaymentTradeNo(tradeNo).SetPaidAt(now).ClearFailedAt().ClearFailedReason().Save(ctx)
@@ -195,17 +196,22 @@ func (s *PaymentService) alreadyProcessed(ctx context.Context, o *dbent.PaymentO
 	case OrderStatusCompleted, OrderStatusRefunded:
 		s.reconcilePendingAffiliateQualificationsBestEffort(ctx, cur.ID, "terminal_callback_retry")
 		return nil
-	case OrderStatusFailed, OrderStatusPaid, OrderStatusRecharging:
+	case OrderStatusFailed:
+		if cur.PaidAt == nil {
+			return nil
+		}
+		return s.executeFulfillment(ctx, o.ID)
+	case OrderStatusPaid, OrderStatusRecharging:
 		return s.executeFulfillment(ctx, o.ID)
 	case OrderStatusExpired:
 		slog.Warn("webhook payment success for expired order beyond grace period",
 			"orderID", o.ID,
 			"status", cur.Status,
-			"updatedAt", cur.UpdatedAt,
+			"expiresAt", cur.ExpiresAt,
 		)
 		s.writeAuditLog(ctx, o.ID, "PAYMENT_AFTER_EXPIRY", "system", map[string]any{
 			"status":    cur.Status,
-			"updatedAt": cur.UpdatedAt,
+			"expiresAt": cur.ExpiresAt,
 			"reason":    "payment arrived after expiry grace period",
 		})
 		return nil

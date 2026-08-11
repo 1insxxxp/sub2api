@@ -199,7 +199,7 @@ func systemCustomGroupReferencesExist(ctx context.Context, client *dbent.Client,
 		{
 			label: "fulfillable subscription order",
 			sql: "SELECT EXISTS (SELECT 1 FROM payment_orders WHERE (subscription_group_id = $1 OR plan_id IN (SELECT id FROM subscription_plans WHERE group_id = $1)) AND " +
-				"(status IN ($2, $3, $4, $5) OR (status = $6 AND paid_at IS NOT NULL) OR (status = $7 AND updated_at >= $8)))",
+				"(status IN ($2, $3, $4, $5, $6) OR (status = $7 AND expires_at >= $8)))",
 			args: []any{
 				groupID,
 				service.OrderStatusPending,

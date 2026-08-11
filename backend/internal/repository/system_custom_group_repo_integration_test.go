@@ -174,6 +174,7 @@ func TestSystemCustomGroupRepositoryDeleteProtectsFulfillableSubscriptionOrders(
 		planIDOnly bool
 		paid       bool
 		updatedAgo time.Duration
+		expiresAgo time.Duration
 	}{
 		{name: service.OrderStatusPending, status: service.OrderStatusPending, blocked: true},
 		{name: service.OrderStatusPaid, status: service.OrderStatusPaid, blocked: true},
@@ -181,9 +182,9 @@ func TestSystemCustomGroupRepositoryDeleteProtectsFulfillableSubscriptionOrders(
 		{name: "PENDING_PLAN_ID_ONLY", status: service.OrderStatusPending, blocked: true, planIDOnly: true},
 		{name: service.OrderStatusCancelled, status: service.OrderStatusCancelled, blocked: true},
 		{name: "FAILED_PAID_PLAN_ID_ONLY", status: service.OrderStatusFailed, blocked: true, paid: true, planIDOnly: true},
-		{name: "FAILED_UNPAID", status: service.OrderStatusFailed, blocked: false},
-		{name: "EXPIRED_WITHIN_GRACE", status: service.OrderStatusExpired, blocked: true, updatedAgo: time.Minute},
-		{name: "EXPIRED_BEYOND_GRACE", status: service.OrderStatusExpired, blocked: false, updatedAgo: 10 * time.Minute},
+		{name: "FAILED_UNPAID", status: service.OrderStatusFailed, blocked: true},
+		{name: "EXPIRED_WITHIN_GRACE_STALE_UPDATED_AT", status: service.OrderStatusExpired, blocked: true, updatedAgo: 10 * time.Minute, expiresAgo: time.Minute},
+		{name: "EXPIRED_BEYOND_GRACE_REFRESHED_UPDATED_AT", status: service.OrderStatusExpired, blocked: false, updatedAgo: time.Minute, expiresAgo: 10 * time.Minute},
 		{name: service.OrderStatusCompleted, status: service.OrderStatusCompleted, blocked: false},
 		{name: service.OrderStatusRefunded, status: service.OrderStatusRefunded, blocked: false},
 	}
@@ -207,6 +208,10 @@ func TestSystemCustomGroupRepositoryDeleteProtectsFulfillableSubscriptionOrders(
 			require.NoError(t, err)
 			if tc.updatedAgo > 0 {
 				_, err = integrationDB.ExecContext(ctx, "UPDATE payment_orders SET updated_at = $2 WHERE id = $1", order.ID, time.Now().Add(-tc.updatedAgo))
+				require.NoError(t, err)
+			}
+			if tc.expiresAgo > 0 {
+				_, err = integrationDB.ExecContext(ctx, "UPDATE payment_orders SET expires_at = $2 WHERE id = $1", order.ID, time.Now().Add(-tc.expiresAgo))
 				require.NoError(t, err)
 			}
 			t.Cleanup(func() {

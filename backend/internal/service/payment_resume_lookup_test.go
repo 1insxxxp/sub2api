@@ -14,6 +14,7 @@ import (
 
 type paymentResumeLookupProvider struct {
 	queryCount int
+	response   *payment.QueryOrderResponse
 }
 
 func (p *paymentResumeLookupProvider) Name() string { return "resume-lookup-provider" }
@@ -30,6 +31,9 @@ func (p *paymentResumeLookupProvider) CreatePayment(context.Context, payment.Cre
 
 func (p *paymentResumeLookupProvider) QueryOrder(context.Context, string) (*payment.QueryOrderResponse, error) {
 	p.queryCount++
+	if p.response != nil {
+		return p.response, nil
+	}
 	return &payment.QueryOrderResponse{Status: payment.ProviderStatusPending}, nil
 }
 
@@ -256,6 +260,73 @@ func TestGetPublicOrderByResumeTokenChecksUpstreamForPendingOrder(t *testing.T) 
 	got, err := svc.GetPublicOrderByResumeToken(ctx, token)
 	require.NoError(t, err)
 	require.Equal(t, order.ID, got.ID)
+	require.Equal(t, 1, provider.queryCount)
+}
+
+func TestGetPublicOrderByResumeTokenDoesNotRecoverOrderBeyondExpiryGrace(t *testing.T) {
+	ctx := context.Background()
+	client := newPaymentConfigServiceTestClient(t)
+	user, err := client.User.Create().
+		SetEmail("resume-old-expired@example.com").
+		SetPasswordHash("hash").
+		SetUsername("resume-old-expired-user").
+		Save(ctx)
+	require.NoError(t, err)
+
+	order, err := client.PaymentOrder.Create().
+		SetUserID(user.ID).
+		SetUserEmail(user.Email).
+		SetUserName(user.Username).
+		SetAmount(88).
+		SetPayAmount(88).
+		SetFeeRate(0).
+		SetRechargeCode("RESUME-OLD-EXPIRED").
+		SetOutTradeNo("sub2_resume_old_expired").
+		SetPaymentType(payment.TypeAlipay).
+		SetPaymentTradeNo("").
+		SetOrderType(payment.OrderTypeSubscription).
+		SetPlanID(100).
+		SetSubscriptionGroupID(7).
+		SetSubscriptionDays(30).
+		SetStatus(OrderStatusExpired).
+		SetExpiresAt(time.Now().Add(-payment.PaymentRecoveryGracePeriod - time.Minute)).
+		SetClientIP("127.0.0.1").
+		SetSrcHost("api.example.com").
+		Save(ctx)
+	require.NoError(t, err)
+
+	resumeSvc := NewPaymentResumeService([]byte("0123456789abcdef0123456789abcdef"))
+	token, err := resumeSvc.CreateToken(ResumeTokenClaims{
+		OrderID:     order.ID,
+		UserID:      user.ID,
+		PaymentType: payment.TypeAlipay,
+	})
+	require.NoError(t, err)
+
+	registry := payment.NewRegistry()
+	provider := &paymentResumeLookupProvider{response: &payment.QueryOrderResponse{
+		TradeNo: "late-resume-old-expired-trade",
+		Status:  payment.ProviderStatusPaid,
+		Amount:  order.PayAmount,
+	}}
+	registry.Register(provider)
+	svc := &PaymentService{
+		entClient:       client,
+		registry:        registry,
+		resumeService:   resumeSvc,
+		providersLoaded: true,
+		groupRepo: &subscriptionGroupRepoStub{group: &Group{
+			ID:               7,
+			Status:           StatusDisabled,
+			SubscriptionType: SubscriptionTypeSubscription,
+		}},
+	}
+
+	got, err := svc.GetPublicOrderByResumeToken(ctx, token)
+	require.NoError(t, err)
+	require.Equal(t, OrderStatusExpired, got.Status)
+	require.Nil(t, got.PaidAt)
+	require.Equal(t, provider.response.TradeNo, got.PaymentTradeNo)
 	require.Equal(t, 1, provider.queryCount)
 }
 

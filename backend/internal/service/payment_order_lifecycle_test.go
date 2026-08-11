@@ -263,6 +263,66 @@ func TestVerifyOrderByOutTradeNoBackfillsTradeNoFromPaidQuery(t *testing.T) {
 	require.Equal(t, user.ID, redeemRepo.useCalls[0].userID)
 }
 
+func TestVerifyOrderByOutTradeNoDoesNotRecoverExpiredOrderAfterTradeNoRefresh(t *testing.T) {
+	ctx := context.Background()
+	client := newPaymentOrderLifecycleTestClient(t)
+
+	user, err := client.User.Create().
+		SetEmail("checkpaid-old-expired@example.com").
+		SetPasswordHash("hash").
+		SetUsername("checkpaid-old-expired-user").
+		Save(ctx)
+	require.NoError(t, err)
+
+	order, err := client.PaymentOrder.Create().
+		SetUserID(user.ID).
+		SetUserEmail(user.Email).
+		SetUserName(user.Username).
+		SetAmount(88).
+		SetPayAmount(88).
+		SetFeeRate(0).
+		SetRechargeCode("CHECKPAID-OLD-EXPIRED").
+		SetOutTradeNo("sub2_checkpaid_old_expired").
+		SetPaymentType(payment.TypeAlipay).
+		SetPaymentTradeNo("").
+		SetOrderType(payment.OrderTypeSubscription).
+		SetPlanID(100).
+		SetSubscriptionGroupID(7).
+		SetSubscriptionDays(30).
+		SetStatus(OrderStatusExpired).
+		SetExpiresAt(time.Now().Add(-payment.PaymentRecoveryGracePeriod - time.Minute)).
+		SetClientIP("127.0.0.1").
+		SetSrcHost("api.example.com").
+		Save(ctx)
+	require.NoError(t, err)
+
+	registry := payment.NewRegistry()
+	provider := &paymentOrderLifecycleQueryProvider{
+		resp: &payment.QueryOrderResponse{
+			TradeNo: "late-old-expired-trade",
+			Status:  payment.ProviderStatusPaid,
+			Amount:  order.PayAmount,
+		},
+	}
+	registry.Register(provider)
+	svc := &PaymentService{
+		entClient:       client,
+		registry:        registry,
+		providersLoaded: true,
+		groupRepo: &subscriptionGroupRepoStub{group: &Group{
+			ID:               7,
+			Status:           StatusDisabled,
+			SubscriptionType: SubscriptionTypeSubscription,
+		}},
+	}
+
+	got, err := svc.VerifyOrderByOutTradeNo(ctx, order.OutTradeNo, user.ID)
+	require.NoError(t, err)
+	require.Equal(t, OrderStatusExpired, got.Status)
+	require.Nil(t, got.PaidAt)
+	require.Equal(t, provider.resp.TradeNo, got.PaymentTradeNo, "the query may backfill its reference without extending recovery")
+}
+
 func TestVerifyOrderByOutTradeNoRetriesZeroAmountPaidQueryOnce(t *testing.T) {
 	ctx := context.Background()
 	client := newPaymentOrderLifecycleTestClient(t)
