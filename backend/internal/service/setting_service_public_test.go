@@ -195,7 +195,8 @@ func TestSettingService_GetPublicSettings_ExposesAllowUserViewErrorRequests(t *t
 func TestSettingService_GetPublicSettings_ExposesAvailableChannelsPriceCNYMultiplier(t *testing.T) {
 	repo := &settingPublicRepoStub{
 		values: map[string]string{
-			SettingKeyAvailableChannelsPriceCNYMultiplier: "0.16",
+			SettingKeyAvailableChannelsPriceCNYMultiplier:    "0.16",
+			SettingKeyAvailableChannelsPriceCNYMultiplierMax: "0.20",
 		},
 	}
 	svc := NewSettingService(repo, &config.Config{})
@@ -203,12 +204,112 @@ func TestSettingService_GetPublicSettings_ExposesAvailableChannelsPriceCNYMultip
 	settings, err := svc.GetPublicSettings(context.Background())
 	require.NoError(t, err)
 	require.InDelta(t, 0.16, settings.AvailableChannelsPriceCNYMultiplier, 1e-12)
+	require.InDelta(t, 0.20, settings.AvailableChannelsPriceCNYMultiplierMax, 1e-12)
 
 	payloadAny, err := svc.GetPublicSettingsForInjection(context.Background())
 	require.NoError(t, err)
 	payload, ok := payloadAny.(*PublicSettingsInjectionPayload)
 	require.True(t, ok)
 	require.InDelta(t, 0.16, payload.AvailableChannelsPriceCNYMultiplier, 1e-12)
+	require.InDelta(t, 0.20, payload.AvailableChannelsPriceCNYMultiplierMax, 1e-12)
+}
+
+func TestSettingService_GetPublicSettings_NormalizesAvailableChannelsPriceCNYMultiplierRange(t *testing.T) {
+	t.Run("defaults a missing maximum to point two", func(t *testing.T) {
+		svc := NewSettingService(&settingPublicRepoStub{values: map[string]string{
+			SettingKeyAvailableChannelsPriceCNYMultiplier: "0.16",
+		}}, &config.Config{})
+
+		settings, err := svc.GetPublicSettings(context.Background())
+		require.NoError(t, err)
+		require.InDelta(t, 0.20, settings.AvailableChannelsPriceCNYMultiplierMax, 1e-12)
+	})
+
+	t.Run("preserves an explicit zero when the minimum is zero", func(t *testing.T) {
+		svc := NewSettingService(&settingPublicRepoStub{values: map[string]string{
+			SettingKeyAvailableChannelsPriceCNYMultiplier:    "0",
+			SettingKeyAvailableChannelsPriceCNYMultiplierMax: "0",
+		}}, &config.Config{})
+
+		settings, err := svc.GetPublicSettings(context.Background())
+		require.NoError(t, err)
+		require.Zero(t, settings.AvailableChannelsPriceCNYMultiplierMax)
+	})
+
+	t.Run("raises a maximum below the minimum", func(t *testing.T) {
+		svc := NewSettingService(&settingPublicRepoStub{values: map[string]string{
+			SettingKeyAvailableChannelsPriceCNYMultiplier:    "0.20",
+			SettingKeyAvailableChannelsPriceCNYMultiplierMax: "0.16",
+		}}, &config.Config{})
+
+		settings, err := svc.GetPublicSettings(context.Background())
+		require.NoError(t, err)
+		require.InDelta(t, 0.20, settings.AvailableChannelsPriceCNYMultiplierMax, 1e-12)
+	})
+
+	for _, raw := range []string{"invalid", "NaN", "+Inf", "-1"} {
+		t.Run("falls back to point two for invalid maximum "+raw, func(t *testing.T) {
+			svc := NewSettingService(&settingPublicRepoStub{values: map[string]string{
+				SettingKeyAvailableChannelsPriceCNYMultiplier:    "0.16",
+				SettingKeyAvailableChannelsPriceCNYMultiplierMax: raw,
+			}}, &config.Config{})
+
+			settings, err := svc.GetPublicSettings(context.Background())
+			require.NoError(t, err)
+			require.InDelta(t, 0.20, settings.AvailableChannelsPriceCNYMultiplierMax, 1e-12)
+		})
+	}
+}
+
+func TestSettingService_GetPublicSettings_ExposesOfficialUSDToCNYRate(t *testing.T) {
+	t.Run("defaults to seven when unset", func(t *testing.T) {
+		svc := NewSettingService(&settingPublicRepoStub{values: map[string]string{}}, &config.Config{})
+
+		settings, err := svc.GetPublicSettings(context.Background())
+		require.NoError(t, err)
+		require.InDelta(t, 7, settings.AvailableChannelsOfficialUSDToCNYRate, 1e-12)
+	})
+
+	t.Run("exposes configured rate to API and injection payloads", func(t *testing.T) {
+		repo := &settingPublicRepoStub{
+			values: map[string]string{
+				SettingKeyAvailableChannelsOfficialUSDToCNYRate: "7.15",
+			},
+		}
+		svc := NewSettingService(repo, &config.Config{})
+
+		settings, err := svc.GetPublicSettings(context.Background())
+		require.NoError(t, err)
+		require.InDelta(t, 7.15, settings.AvailableChannelsOfficialUSDToCNYRate, 1e-12)
+
+		payloadAny, err := svc.GetPublicSettingsForInjection(context.Background())
+		require.NoError(t, err)
+		payload, ok := payloadAny.(*PublicSettingsInjectionPayload)
+		require.True(t, ok)
+		require.InDelta(t, 7.15, payload.AvailableChannelsOfficialUSDToCNYRate, 1e-12)
+	})
+
+	t.Run("keeps an explicit zero as the operator opt-out", func(t *testing.T) {
+		svc := NewSettingService(&settingPublicRepoStub{values: map[string]string{
+			SettingKeyAvailableChannelsOfficialUSDToCNYRate: "0",
+		}}, &config.Config{})
+
+		settings, err := svc.GetPublicSettings(context.Background())
+		require.NoError(t, err)
+		require.Zero(t, settings.AvailableChannelsOfficialUSDToCNYRate)
+	})
+
+	for _, raw := range []string{"invalid", "NaN", "+Inf", "-1"} {
+		t.Run("falls back to seven for invalid value "+raw, func(t *testing.T) {
+			svc := NewSettingService(&settingPublicRepoStub{values: map[string]string{
+				SettingKeyAvailableChannelsOfficialUSDToCNYRate: raw,
+			}}, &config.Config{})
+
+			settings, err := svc.GetPublicSettings(context.Background())
+			require.NoError(t, err)
+			require.InDelta(t, 7, settings.AvailableChannelsOfficialUSDToCNYRate, 1e-12)
+		})
+	}
 }
 
 func TestSettingService_GetPublicSettings_ExposesImageStudioEnabled(t *testing.T) {

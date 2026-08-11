@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"log/slog"
+	"math"
 	"net/http"
 	"reflect"
 	"strconv"
@@ -346,8 +347,10 @@ type UpdateSettingsRequest struct {
 	GrokDefaultBaseURLMode         *string `json:"grok_default_base_url_mode"`
 
 	// Available Channels feature switch (user-facing)
-	AvailableChannelsEnabled            *bool    `json:"available_channels_enabled"`
-	AvailableChannelsPriceCNYMultiplier *float64 `json:"available_channels_price_cny_multiplier"`
+	AvailableChannelsEnabled               *bool    `json:"available_channels_enabled"`
+	AvailableChannelsPriceCNYMultiplier    *float64 `json:"available_channels_price_cny_multiplier"`
+	AvailableChannelsPriceCNYMultiplierMax *float64 `json:"available_channels_price_cny_multiplier_max"`
+	AvailableChannelsOfficialUSDToCNYRate  *float64 `json:"available_channels_official_usd_to_cny_rate"`
 
 	// Model Plaza feature switches + description
 	ModelPlazaEnabled     *bool   `json:"model_plaza_enabled"`
@@ -1525,6 +1528,23 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 	_, siteNameProvided := sentFields["site_name"]
 	_, siteLogoProvided := sentFields["site_logo"]
 	_, siteSubtitleProvided := sentFields["site_subtitle"]
+	availableChannelsPriceCNYMultiplier := previousSettings.AvailableChannelsPriceCNYMultiplier
+	if req.AvailableChannelsPriceCNYMultiplier != nil {
+		availableChannelsPriceCNYMultiplier = *req.AvailableChannelsPriceCNYMultiplier
+		if availableChannelsPriceCNYMultiplier < 0 || math.IsNaN(availableChannelsPriceCNYMultiplier) || math.IsInf(availableChannelsPriceCNYMultiplier, 0) {
+			availableChannelsPriceCNYMultiplier = 0
+		}
+	}
+	availableChannelsPriceCNYMultiplierMax := previousSettings.AvailableChannelsPriceCNYMultiplierMax
+	if req.AvailableChannelsPriceCNYMultiplierMax != nil {
+		availableChannelsPriceCNYMultiplierMax = *req.AvailableChannelsPriceCNYMultiplierMax
+	}
+	if availableChannelsPriceCNYMultiplierMax < 0 || math.IsNaN(availableChannelsPriceCNYMultiplierMax) || math.IsInf(availableChannelsPriceCNYMultiplierMax, 0) {
+		availableChannelsPriceCNYMultiplierMax = service.AvailableChannelsPriceCNYMultiplierMaxDefault
+	}
+	if availableChannelsPriceCNYMultiplierMax < availableChannelsPriceCNYMultiplier {
+		availableChannelsPriceCNYMultiplierMax = availableChannelsPriceCNYMultiplier
+	}
 
 	settings := &service.SystemSettings{
 		// 系统全局 platform quota 默认值（整体替换语义）
@@ -1957,14 +1977,16 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 			}
 			return previousSettings.AvailableChannelsEnabled
 		}(),
-		AvailableChannelsPriceCNYMultiplier: func() float64 {
-			if req.AvailableChannelsPriceCNYMultiplier != nil {
-				if *req.AvailableChannelsPriceCNYMultiplier < 0 {
+		AvailableChannelsPriceCNYMultiplier:    availableChannelsPriceCNYMultiplier,
+		AvailableChannelsPriceCNYMultiplierMax: availableChannelsPriceCNYMultiplierMax,
+		AvailableChannelsOfficialUSDToCNYRate: func() float64 {
+			if req.AvailableChannelsOfficialUSDToCNYRate != nil {
+				if *req.AvailableChannelsOfficialUSDToCNYRate < 0 {
 					return 0
 				}
-				return *req.AvailableChannelsPriceCNYMultiplier
+				return *req.AvailableChannelsOfficialUSDToCNYRate
 			}
-			return previousSettings.AvailableChannelsPriceCNYMultiplier
+			return previousSettings.AvailableChannelsOfficialUSDToCNYRate
 		}(),
 		ModelPlazaEnabled: func() bool {
 			if req.ModelPlazaEnabled != nil {
@@ -2417,8 +2439,10 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 		GrokCrossClientModelMapEnabled: updatedSettings.GrokCrossClientModelMapEnabled,
 		GrokDefaultBaseURLMode:         updatedSettings.GrokDefaultBaseURLMode,
 
-		AvailableChannelsEnabled:            updatedSettings.AvailableChannelsEnabled,
-		AvailableChannelsPriceCNYMultiplier: updatedSettings.AvailableChannelsPriceCNYMultiplier,
+		AvailableChannelsEnabled:               updatedSettings.AvailableChannelsEnabled,
+		AvailableChannelsPriceCNYMultiplier:    updatedSettings.AvailableChannelsPriceCNYMultiplier,
+		AvailableChannelsPriceCNYMultiplierMax: updatedSettings.AvailableChannelsPriceCNYMultiplierMax,
+		AvailableChannelsOfficialUSDToCNYRate:  updatedSettings.AvailableChannelsOfficialUSDToCNYRate,
 
 		ModelPlazaEnabled:     updatedSettings.ModelPlazaEnabled,
 		ModelPlazaRequireAuth: updatedSettings.ModelPlazaRequireAuth,

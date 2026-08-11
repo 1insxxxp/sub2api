@@ -518,6 +518,16 @@ const (
 	// SettingKeyAvailableChannelsPriceCNYMultiplier controls optional CNY price
 	// display in the user-facing available channels page. 0 disables CNY display.
 	SettingKeyAvailableChannelsPriceCNYMultiplier = "available_channels_price_cny_multiplier"
+	// SettingKeyAvailableChannelsPriceCNYMultiplierMax is the upper endpoint of
+	// the recharge-ratio range. Missing or invalid values default to 0.20.
+	SettingKeyAvailableChannelsPriceCNYMultiplierMax = "available_channels_price_cny_multiplier_max"
+	AvailableChannelsPriceCNYMultiplierMaxDefault    = 0.20
+
+	// SettingKeyAvailableChannelsOfficialUSDToCNYRate converts the official USD
+	// benchmark to CNY before calculating the user-facing savings percentage.
+	// 0 explicitly disables the savings badge; missing values default to 7.
+	SettingKeyAvailableChannelsOfficialUSDToCNYRate = "available_channels_official_usd_to_cny_rate"
+	AvailableChannelsOfficialUSDToCNYRateDefault    = 7.0
 
 	// SettingKeyModelPlazaEnabled is a DB-backed soft switch for the Model Plaza page
 	// (public group/model pricing showcase). When false: the plaza endpoint returns 404
