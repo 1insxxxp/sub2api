@@ -371,26 +371,29 @@ describe('AvailableChannelCatalog', () => {
     expect(wrapper.get('[data-testid="model-list-empty"]').text()).toContain('该渠道暂无可用模型')
   })
 
-  it.runIf(existsSync(catalogPath))('renders one continuous rail beside the toolbar and detail', async () => {
+  it.runIf(existsSync(catalogPath))('renders horizontal channel tabs above the full-width toolbar and detail', async () => {
     const wrapper = await mountCatalog({}, { toolbar: '<div>toolbar fixture</div>' })
     const layout = wrapper.get('[data-testid="channel-catalog-layout"]')
-    const shell = wrapper.get('[data-testid="channel-navigation-shell"]')
+    const shell = wrapper.get('[data-testid="channel-tabs-shell"]')
     const toolbar = wrapper.get('[data-testid="channel-toolbar-region"]')
-    const rail = wrapper.get('[data-testid="channel-navigation"]')
+    const tabs = wrapper.get('[data-testid="channel-navigation"]')
     const detail = wrapper.get('[data-testid="channel-detail"]')
 
-    expect(layout.classes()).toContain('xl:grid')
-    expect(layout.classes()).toContain('xl:grid-cols-[240px_minmax(0,1fr)]')
+    expect(layout.classes()).not.toContain('xl:grid')
+    expect(layout.classes()).not.toContain('xl:grid-cols-[240px_minmax(0,1fr)]')
     expect(wrapper.find('[data-testid="channel-navigation-heading"]').exists()).toBe(false)
-    expect(wrapper.findAll('[data-testid="channel-navigation-shell"]')).toHaveLength(1)
-    expect(shell.classes()).toEqual(expect.arrayContaining(['hidden', 'xl:block', 'xl:col-start-1', 'xl:row-span-2']))
-    expect(shell.classes()).toContain('xl:top-0')
+    expect(wrapper.find('[data-testid="channel-navigation-shell"]').exists()).toBe(false)
+    expect(wrapper.findAll('[data-testid="channel-tabs-shell"]')).toHaveLength(1)
+    expect(shell.classes()).toEqual(expect.arrayContaining(['hidden', 'xl:block']))
+    expect(shell.classes()).not.toContain('xl:sticky')
     expect(shell.text()).toContain('渠道导航')
     expect(shell.text()).toContain('2 个渠道')
-    expect(toolbar.classes()).toContain('xl:col-start-2')
+    expect(tabs.classes()).toEqual(expect.arrayContaining(['flex', 'overflow-x-auto']))
+    expect(wrapper.get('[data-testid="channel-nav-item"]').classes()).toContain('shrink-0')
+    expect(toolbar.classes()).not.toContain('xl:col-start-2')
     expect(toolbar.text()).toContain('toolbar fixture')
-    expect(rail.element.parentElement).toBe(shell.element)
-    expect(detail.classes()).toContain('xl:col-start-2')
+    expect(tabs.element.parentElement).toBe(shell.element)
+    expect(detail.classes()).not.toContain('xl:col-start-2')
     expect(wrapper.get('[data-testid="channel-picker-trigger"]').classes()).toContain('xl:hidden')
     expect(wrapper.findAll('[data-testid="channel-detail"]')).toHaveLength(1)
   })
@@ -398,8 +401,8 @@ describe('AvailableChannelCatalog', () => {
   it.runIf(existsSync(catalogPath))('mounts directly on the TablePageLayout scroll-host contract', async () => {
     const wrapper = await mountCatalog()
     const host = wrapper.get('[data-testid="catalog-scroll-host"]')
-    const shell = wrapper.get('[data-testid="channel-navigation-shell"]')
-    const rail = wrapper.get('[data-testid="channel-navigation"]')
+    const shell = wrapper.get('[data-testid="channel-tabs-shell"]')
+    const tabs = wrapper.get('[data-testid="channel-navigation"]')
     const source = readFileSync(catalogPath, 'utf8')
 
     expect(wrapper.element).toBe(host.element)
@@ -407,10 +410,11 @@ describe('AvailableChannelCatalog', () => {
     expect(host.classes()).not.toContain('h-full')
     expect(host.classes()).toContain('min-h-0')
     expect(host.classes()).not.toContain('[container-type:size]')
-    expect(host.classes()).toContain('xl:h-full')
-    expect(host.classes()).toContain('xl:[container-type:size]')
-    expect(shell.classes()).toContain('xl:max-h-[calc(100cqh-2rem)]')
-    expect(rail.classes()).toContain('xl:overflow-y-auto')
+    expect(host.classes()).not.toContain('xl:h-full')
+    expect(host.classes()).not.toContain('xl:[container-type:size]')
+    expect(shell.classes()).not.toContain('xl:max-h-[calc(100cqh-2rem)]')
+    expect(tabs.classes()).toContain('overflow-x-auto')
+    expect(tabs.classes()).not.toContain('overflow-y-auto')
     expect(source).not.toMatch(/100(?:d|s|l)?vh/)
   })
 
@@ -482,7 +486,7 @@ describe('AvailableChannelCatalog', () => {
       .join('\n')
 
     expect(source).not.toMatch(/\blg:/)
-    expect(source).toContain('xl:grid-cols-[240px_minmax(0,1fr)]')
+    expect(source).not.toContain('xl:grid-cols-[240px_minmax(0,1fr)]')
     expect(source.match(/xl:grid-cols-\[minmax\(0,1\.35fr\)_minmax\(0,1fr\)_minmax\(0,1fr\)_minmax\(88px,0\.5fr\)_minmax\(72px,0\.4fr\)\]/g)).toHaveLength(2)
   })
 
@@ -631,18 +635,18 @@ describe('AvailableChannelCatalog', () => {
     expect(wrapper.findAll('[data-testid="channel-group"]')[1].text()).toContain('公开')
   })
 
-  it.runIf(existsSync(catalogPath))('supports ArrowUp, ArrowDown, Home, and End with focus movement', async () => {
+  it.runIf(existsSync(catalogPath))('supports ArrowLeft, ArrowRight, Home, and End with focus movement', async () => {
     const wrapper = await mountCatalog()
     let options = wrapper.findAll('[data-testid="channel-nav-item"]')
     options[0].element.focus()
 
-    await options[0].trigger('keydown', { key: 'ArrowDown' })
+    await options[0].trigger('keydown', { key: 'ArrowRight' })
     await flushPromises()
     options = wrapper.findAll('[data-testid="channel-nav-item"]')
     expect(options[1].attributes('aria-selected')).toBe('true')
     expect(document.activeElement).toBe(options[1].element)
 
-    await options[1].trigger('keydown', { key: 'ArrowUp' })
+    await options[1].trigger('keydown', { key: 'ArrowLeft' })
     await flushPromises()
     expect(wrapper.findAll('[data-testid="channel-nav-item"]')[0].attributes('aria-selected')).toBe('true')
 
@@ -657,13 +661,22 @@ describe('AvailableChannelCatalog', () => {
 
   it.runIf(existsSync(catalogPath))('renders structural loading and explicit empty states', async () => {
     const loading = await mountCatalog({ channels: [], loading: true })
-    expect(loading.get('[data-testid="catalog-loading-rail"]')).toBeTruthy()
+    expect(loading.get('[data-testid="catalog-loading-tabs"]')).toBeTruthy()
     expect(loading.get('[data-testid="catalog-loading-detail"]')).toBeTruthy()
+    expect(loading.get('[data-testid="catalog-loading"]').classes()).not.toContain('xl:grid-cols-[240px_minmax(0,1fr)]')
     expect(loading.text()).toContain('正在加载可用渠道')
 
     const noData = await mountCatalog({ channels: [], loading: false })
     expect(noData.get('[data-testid="catalog-empty"]').text()).toContain('暂无可用渠道')
+    expect(noData.get('[data-testid="catalog-empty-layout"]').classes()).not.toContain('xl:grid-cols-[240px_minmax(0,1fr)]')
     expect(noData.find('[data-testid="catalog-loading"]').exists()).toBe(false)
+
+    const noDataWithToolbar = await mountCatalog(
+      { channels: [], loading: false },
+      { toolbar: '<div>toolbar fixture</div>' },
+    )
+    expect(noDataWithToolbar.get('[data-testid="channel-tabs-shell"]').text()).toContain('0 个渠道')
+    expect(noDataWithToolbar.get('[data-testid="channel-toolbar-region"]').text()).toContain('toolbar fixture')
 
     const noResults = await mountCatalog({
       channels: [],
@@ -673,7 +686,7 @@ describe('AvailableChannelCatalog', () => {
     expect(noResults.get('[data-testid="catalog-empty"]').text()).toContain('没有匹配的渠道或模型')
   })
 
-  it.runIf(existsSync(catalogPath))('shares mobile picker selection with the desktop rail and detail', async () => {
+  it.runIf(existsSync(catalogPath))('shares mobile picker selection with the desktop tabs and detail', async () => {
     const wrapper = await mountCatalog()
     expect(wrapper.findAll('[data-testid="channel-picker-trigger"]')).toHaveLength(1)
     await wrapper.get('[data-testid="channel-picker-trigger"]').trigger('click')
@@ -732,7 +745,7 @@ describe('AvailableChannelCatalog', () => {
     expect(wrapper.get('[data-testid="channel-catalog-layout"]').attributes('aria-busy')).toBe('true')
     expect(wrapper.get('[data-testid="refreshing-indicator"]').text()).toContain('正在更新渠道数据')
     expect(wrapper.get('[data-testid="rate-fallback-warning"]').text()).toContain('默认倍率')
-    expect(wrapper.get('[data-testid="channel-navigation-shell"]').classes()).toContain('xl:row-start-2')
+    expect(wrapper.get('[data-testid="channel-tabs-shell"]').classes()).not.toContain('xl:row-start-2')
     expect(wrapper.get('[data-testid="channel-detail"]').text()).toContain('Alpha channel')
     expect(wrapper.findAll('[data-testid="channel-nav-item"]')).toHaveLength(2)
   })
