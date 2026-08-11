@@ -368,6 +368,76 @@ func TestPaymentConfigPlanMutationsAllowActiveSubscriptionGroup(t *testing.T) {
 	require.Equal(t, name, updated.Name)
 }
 
+func TestPaymentConfigUpdatePlanAllowsRetiringPlanAfterGroupDisabled(t *testing.T) {
+	ctx := context.Background()
+	client := newPaymentConfigServiceTestClient(t)
+	group := createPaymentPlanTestGroup(t, ctx, client, "retire-disabled")
+	plan, err := client.SubscriptionPlan.Create().
+		SetGroupID(group.ID).
+		SetName("existing sale plan").
+		SetPrice(10).
+		SetValidityDays(30).
+		SetValidityUnit("day").
+		SetForSale(true).
+		Save(ctx)
+	require.NoError(t, err)
+	_, err = client.Group.UpdateOneID(group.ID).SetStatus(StatusDisabled).Save(ctx)
+	require.NoError(t, err)
+	svc := &PaymentConfigService{entClient: client}
+	forSale := false
+
+	updated, err := svc.UpdatePlan(ctx, plan.ID, UpdatePlanRequest{ForSale: &forSale})
+
+	require.NoError(t, err)
+	require.False(t, updated.ForSale)
+	persisted, err := client.SubscriptionPlan.Get(ctx, plan.ID)
+	require.NoError(t, err)
+	require.False(t, persisted.ForSale)
+}
+
+func TestPaymentConfigCreatePlanAllowsDraftForDisabledGroup(t *testing.T) {
+	ctx := context.Background()
+	client := newPaymentConfigServiceTestClient(t)
+	group := createPaymentPlanTestGroup(t, ctx, client, "draft-disabled")
+	_, err := client.Group.UpdateOneID(group.ID).SetStatus(StatusDisabled).Save(ctx)
+	require.NoError(t, err)
+	svc := &PaymentConfigService{entClient: client}
+	req := validCreatePlanRequest(group.ID)
+	req.ForSale = false
+
+	plan, err := svc.CreatePlan(ctx, req)
+
+	require.NoError(t, err)
+	require.Equal(t, group.ID, plan.GroupID)
+	require.False(t, plan.ForSale)
+}
+
+func TestPaymentConfigUpdatePlanAllowsDraftMoveToNonSubscriptionGroup(t *testing.T) {
+	ctx := context.Background()
+	client := newPaymentConfigServiceTestClient(t)
+	oldGroup := createPaymentPlanTestGroup(t, ctx, client, "draft-old")
+	targetGroup := createPaymentPlanTestGroup(t, ctx, client, "draft-standard")
+	_, err := client.Group.UpdateOneID(targetGroup.ID).SetSubscriptionType(SubscriptionTypeStandard).Save(ctx)
+	require.NoError(t, err)
+	plan, err := client.SubscriptionPlan.Create().
+		SetGroupID(oldGroup.ID).
+		SetName("draft").
+		SetPrice(10).
+		SetValidityDays(30).
+		SetValidityUnit("day").
+		SetForSale(false).
+		Save(ctx)
+	require.NoError(t, err)
+	svc := &PaymentConfigService{entClient: client}
+	forSale := false
+
+	updated, err := svc.UpdatePlan(ctx, plan.ID, UpdatePlanRequest{GroupID: &targetGroup.ID, ForSale: &forSale})
+
+	require.NoError(t, err)
+	require.Equal(t, targetGroup.ID, updated.GroupID)
+	require.False(t, updated.ForSale)
+}
+
 func createPaymentPlanTestGroup(t *testing.T, ctx context.Context, client *dbent.Client, suffix string) *dbent.Group {
 	t.Helper()
 	group, err := client.Group.Create().

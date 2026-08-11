@@ -146,8 +146,10 @@ func (s *PaymentConfigService) CreatePlan(ctx context.Context, req CreatePlanReq
 		if err := groupref.LockGroupReferenceWrites(txCtx, tx, req.GroupID); err != nil {
 			return nil, err
 		}
-		if err := validatePlanReferenceGroup(txCtx, tx.Client(), req.GroupID); err != nil {
-			return nil, err
+		if req.ForSale {
+			if err := validatePlanReferenceGroup(txCtx, tx.Client(), req.GroupID); err != nil {
+				return nil, err
+			}
 		}
 		b := tx.Client().SubscriptionPlan.Create().
 			SetGroupID(req.GroupID).SetName(req.Name).SetDescription(req.Description).
@@ -184,11 +186,11 @@ func (s *PaymentConfigService) UpdatePlan(ctx context.Context, id int64, req Upd
 			}
 			return nil, err
 		}
-		targetGroupID := current.GroupID
+		requestedGroupID := current.GroupID
 		if req.GroupID != nil {
-			targetGroupID = *req.GroupID
+			requestedGroupID = *req.GroupID
 		}
-		if err := groupref.LockGroupReferenceWrites(txCtx, tx, current.GroupID, targetGroupID); err != nil {
+		if err := groupref.LockGroupReferenceWrites(txCtx, tx, current.GroupID, requestedGroupID); err != nil {
 			return nil, err
 		}
 		lockedQuery := tx.Client().SubscriptionPlan.Query().Where(subscriptionplan.IDEQ(id))
@@ -205,8 +207,18 @@ func (s *PaymentConfigService) UpdatePlan(ctx context.Context, id int64, req Upd
 		if locked.GroupID != current.GroupID {
 			return nil, infraerrors.Conflict("PLAN_CONCURRENTLY_MODIFIED", "subscription plan changed concurrently; retry the request")
 		}
-		if err := validatePlanReferenceGroup(txCtx, tx.Client(), targetGroupID); err != nil {
-			return nil, err
+		targetGroupID := locked.GroupID
+		if req.GroupID != nil {
+			targetGroupID = *req.GroupID
+		}
+		finalForSale := locked.ForSale
+		if req.ForSale != nil {
+			finalForSale = *req.ForSale
+		}
+		if finalForSale {
+			if err := validatePlanReferenceGroup(txCtx, tx.Client(), targetGroupID); err != nil {
+				return nil, err
+			}
 		}
 		return applyPlanPatch(txCtx, tx.Client(), id, req, currency)
 	})
