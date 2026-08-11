@@ -37,11 +37,14 @@ type Group struct {
 	// an already committed one-click copy. It must never be mapped to API DTOs.
 	DuplicateOperationID string
 
-	SubscriptionType    string
-	DailyLimitUSD       *float64
-	WeeklyLimitUSD      *float64
-	MonthlyLimitUSD     *float64
-	DefaultValidityDays int
+	SubscriptionType string
+	// SystemCustomRoutingEnabled marks a subscription container whose public
+	// models resolve to explicitly configured direct source groups.
+	SystemCustomRoutingEnabled bool
+	DailyLimitUSD              *float64
+	WeeklyLimitUSD             *float64
+	MonthlyLimitUSD            *float64
+	DefaultValidityDays        int
 
 	// 图片生成计费配置（antigravity 和 gemini 平台使用）
 	AllowImageGeneration         bool
@@ -141,6 +144,10 @@ func (g *Group) IsActive() bool {
 
 func (g *Group) IsSubscriptionType() bool {
 	return g.SubscriptionType == SubscriptionTypeSubscription
+}
+
+func (g *Group) IsSystemCustomRouteGroup() bool {
+	return g != nil && g.SystemCustomRoutingEnabled && g.Platform == PlatformComposite && g.IsSubscriptionType()
 }
 
 func (g *Group) HasDailyLimit() bool {
