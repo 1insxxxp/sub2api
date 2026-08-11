@@ -5,9 +5,14 @@ package repository
 import (
 	"math"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 )
+
+func TestRedeemRateLimitDurationMatchesHourlyPolicy(t *testing.T) {
+	require.Equal(t, time.Hour, redeemRateLimitDuration)
+}
 
 func TestRedeemRateLimitKey(t *testing.T) {
 	tests := []struct {
