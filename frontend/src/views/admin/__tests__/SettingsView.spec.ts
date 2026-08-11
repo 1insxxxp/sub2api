@@ -797,6 +797,81 @@ describe("admin SettingsView available channels price range", () => {
     });
   });
 
+  it("omits new range settings when an old backend did not return them", async () => {
+    getSettings.mockResolvedValueOnce({
+      ...baseSettingsResponse,
+      available_channels_price_cny_multiplier: 0.16,
+    });
+
+    const wrapper = mountView();
+    await flushPromises();
+    await wrapper.find("form").trigger("submit.prevent");
+    await flushPromises();
+
+    const payload = updateSettings.mock.calls.at(-1)?.[0];
+    expect(payload).not.toHaveProperty(
+      "available_channels_price_cny_multiplier_max",
+    );
+    expect(payload).not.toHaveProperty(
+      "available_channels_official_usd_to_cny_rate",
+    );
+  });
+
+  it("submits new range settings when they are explicitly edited after an old-backend load", async () => {
+    getSettings.mockResolvedValueOnce({
+      ...baseSettingsResponse,
+      available_channels_price_cny_multiplier: 0.16,
+    });
+
+    const wrapper = mountView();
+    await flushPromises();
+    await openFeaturesTab(wrapper);
+
+    await wrapper
+      .get('[data-test="available-channels-price-cny-multiplier-max"]')
+      .setValue("0.25");
+    await wrapper
+      .get('[data-test="available-channels-official-usd-to-cny-rate"]')
+      .setValue("7.2");
+    await wrapper.find("form").trigger("submit.prevent");
+    await flushPromises();
+
+    expect(updateSettings.mock.calls.at(-1)?.[0]).toMatchObject({
+      available_channels_price_cny_multiplier: 0.16,
+      available_channels_price_cny_multiplier_max: 0.25,
+      available_channels_official_usd_to_cny_rate: 7.2,
+    });
+  });
+
+  it("associates each range label and hint with its input", async () => {
+    getSettings.mockResolvedValueOnce({
+      ...baseSettingsResponse,
+      available_channels_price_cny_multiplier: 0.16,
+      available_channels_price_cny_multiplier_max: 0.2,
+      available_channels_official_usd_to_cny_rate: 7,
+    });
+
+    const wrapper = mountView();
+    await flushPromises();
+    await openFeaturesTab(wrapper);
+
+    for (const id of [
+      "available-channels-price-cny-multiplier-min",
+      "available-channels-price-cny-multiplier-max",
+      "available-channels-official-usd-to-cny-rate",
+    ]) {
+      expect(wrapper.get(`label[for="${id}"]`).exists()).toBe(true);
+      expect(wrapper.get(`#${id}`).attributes("aria-describedby")).toBe(
+        `${id}-hint`,
+      );
+      expect(wrapper.get(`#${id}-hint`).exists()).toBe(true);
+    }
+
+    expect(
+      wrapper.get('label[for="available-channels-price-cny-multiplier-min"]').text(),
+    ).toBe("admin.settings.features.availableChannels.priceCnyMultiplier");
+  });
+
   it("normalizes the maximum display multiplier to at least the minimum", async () => {
     getSettings.mockResolvedValueOnce({
       ...baseSettingsResponse,
@@ -893,6 +968,52 @@ describe("admin SettingsView available channels price range", () => {
     expect(updateSettings.mock.calls.at(-1)?.[0]).toMatchObject({
       available_channels_price_cny_multiplier: 0,
       available_channels_price_cny_multiplier_max: 0,
+    });
+  });
+
+  it.each([
+    ["infinite", "1e309"],
+    ["not-a-number", ""],
+    ["negative", "-1"],
+  ])("falls back to rate 7 for an explicitly edited %s official rate", async (_case, value) => {
+    getSettings.mockResolvedValueOnce({
+      ...baseSettingsResponse,
+      available_channels_official_usd_to_cny_rate: 6.9,
+    });
+
+    const wrapper = mountView();
+    await flushPromises();
+    await openFeaturesTab(wrapper);
+
+    await wrapper
+      .get('[data-test="available-channels-official-usd-to-cny-rate"]')
+      .setValue(value);
+    await wrapper.find("form").trigger("submit.prevent");
+    await flushPromises();
+
+    expect(updateSettings.mock.calls.at(-1)?.[0]).toMatchObject({
+      available_channels_official_usd_to_cny_rate: 7,
+    });
+  });
+
+  it("preserves an explicitly edited zero official rate", async () => {
+    getSettings.mockResolvedValueOnce({
+      ...baseSettingsResponse,
+      available_channels_official_usd_to_cny_rate: 6.9,
+    });
+
+    const wrapper = mountView();
+    await flushPromises();
+    await openFeaturesTab(wrapper);
+
+    await wrapper
+      .get('[data-test="available-channels-official-usd-to-cny-rate"]')
+      .setValue("0");
+    await wrapper.find("form").trigger("submit.prevent");
+    await flushPromises();
+
+    expect(updateSettings.mock.calls.at(-1)?.[0]).toMatchObject({
+      available_channels_official_usd_to_cny_rate: 0,
     });
   });
 });

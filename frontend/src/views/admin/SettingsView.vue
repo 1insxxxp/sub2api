@@ -7132,11 +7132,16 @@
             </div>
             <div class="grid gap-4 md:grid-cols-2">
               <div>
-                <label class="input-label">
+                <label
+                  for="available-channels-price-cny-multiplier-min"
+                  class="input-label"
+                >
                   {{ t('admin.settings.features.availableChannels.priceCnyMultiplier') }}
                 </label>
                 <input
+                  id="available-channels-price-cny-multiplier-min"
                   data-test="available-channels-price-cny-multiplier-min"
+                  aria-describedby="available-channels-price-cny-multiplier-min-hint"
                   :value="form.available_channels_price_cny_multiplier"
                   @input="
                     form.available_channels_price_cny_multiplier =
@@ -7148,7 +7153,10 @@
                   class="input"
                   placeholder="0.16"
                 />
-                <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                <p
+                  id="available-channels-price-cny-multiplier-min-hint"
+                  class="mt-1 text-xs text-gray-500 dark:text-gray-400"
+                >
                   {{ t('admin.settings.features.availableChannels.priceCnyMultiplierHint') }}
                 </p>
                 <p
@@ -7163,45 +7171,55 @@
                 </p>
               </div>
               <div>
-                <label class="input-label">
+                <label
+                  for="available-channels-price-cny-multiplier-max"
+                  class="input-label"
+                >
                   {{ t('admin.settings.features.availableChannels.priceCnyMultiplierMax') }}
                 </label>
                 <input
+                  id="available-channels-price-cny-multiplier-max"
                   data-test="available-channels-price-cny-multiplier-max"
+                  aria-describedby="available-channels-price-cny-multiplier-max-hint"
                   :value="form.available_channels_price_cny_multiplier_max"
-                  @input="
-                    form.available_channels_price_cny_multiplier_max =
-                      parseFloat(($event.target as HTMLInputElement).value)
-                  "
+                  @input="handleAvailableChannelsPriceMultiplierMaxInput"
                   type="number"
                   step="0.01"
                   min="0"
                   class="input"
                   placeholder="0.20"
                 />
-                <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                <p
+                  id="available-channels-price-cny-multiplier-max-hint"
+                  class="mt-1 text-xs text-gray-500 dark:text-gray-400"
+                >
                   {{ t('admin.settings.features.availableChannels.priceCnyMultiplierMaxHint') }}
                 </p>
               </div>
             </div>
             <div>
-              <label class="input-label">
+              <label
+                for="available-channels-official-usd-to-cny-rate"
+                class="input-label"
+              >
                 {{ t('admin.settings.features.availableChannels.officialUsdToCnyRate') }}
               </label>
               <input
+                id="available-channels-official-usd-to-cny-rate"
                 data-test="available-channels-official-usd-to-cny-rate"
+                aria-describedby="available-channels-official-usd-to-cny-rate-hint"
                 :value="form.available_channels_official_usd_to_cny_rate"
-                @input="
-                  form.available_channels_official_usd_to_cny_rate =
-                    Math.max(0, parseFloat(($event.target as HTMLInputElement).value) || 0)
-                "
+                @input="handleAvailableChannelsOfficialUSDToCNYRateInput"
                 type="number"
                 step="0.01"
                 min="0"
                 class="input"
                 placeholder="7"
               />
-              <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+              <p
+                id="available-channels-official-usd-to-cny-rate-hint"
+                class="mt-1 text-xs text-gray-500 dark:text-gray-400"
+              >
                 {{ t('admin.settings.features.availableChannels.officialUsdToCnyRateHint') }}
               </p>
             </div>
@@ -10184,6 +10202,25 @@ const form = reactive<SettingsForm>({
   allow_user_view_error_requests: false,
 });
 
+const availableChannelsPriceMultiplierMaxLoaded = ref(false);
+const availableChannelsPriceMultiplierMaxDirty = ref(false);
+const availableChannelsOfficialUSDToCNYRateLoaded = ref(false);
+const availableChannelsOfficialUSDToCNYRateDirty = ref(false);
+
+function handleAvailableChannelsPriceMultiplierMaxInput(event: Event): void {
+  form.available_channels_price_cny_multiplier_max = parseFloat(
+    (event.target as HTMLInputElement).value,
+  );
+  availableChannelsPriceMultiplierMaxDirty.value = true;
+}
+
+function handleAvailableChannelsOfficialUSDToCNYRateInput(event: Event): void {
+  form.available_channels_official_usd_to_cny_rate = parseFloat(
+    (event.target as HTMLInputElement).value,
+  );
+  availableChannelsOfficialUSDToCNYRateDirty.value = true;
+}
+
 // 人机验证 UI 状态：单卡片「总开关 + 服务商单选」，落库仍是三个独立
 // enabled 键（与上游一致），由下面的映射保证同一时间至多一家启用。
 type CaptchaProviderSelection = "turnstile" | "tencent" | "aliyun";
@@ -11139,6 +11176,18 @@ async function loadSettings() {
   loadFailed.value = false;
   try {
     const settings = await adminAPI.settings.getSettings();
+    availableChannelsPriceMultiplierMaxLoaded.value =
+      Object.prototype.hasOwnProperty.call(
+        settings,
+        "available_channels_price_cny_multiplier_max",
+      );
+    availableChannelsOfficialUSDToCNYRateLoaded.value =
+      Object.prototype.hasOwnProperty.call(
+        settings,
+        "available_channels_official_usd_to_cny_rate",
+      );
+    availableChannelsPriceMultiplierMaxDirty.value = false;
+    availableChannelsOfficialUSDToCNYRateDirty.value = false;
     settings.payment_load_balance_strategy =
       settings.payment_load_balance_strategy || "round-robin";
     // Only assign non-null values from backend (null means unconfigured, keep defaults)
@@ -11604,6 +11653,14 @@ async function saveSettings() {
         ? Math.max(0, parsedAvailableChannelsPriceMultiplierMax)
         : 0.2,
     );
+    const parsedAvailableChannelsOfficialUSDToCNYRate = Number(
+      form.available_channels_official_usd_to_cny_rate,
+    );
+    const availableChannelsOfficialUSDToCNYRate =
+      Number.isFinite(parsedAvailableChannelsOfficialUSDToCNYRate) &&
+      parsedAvailableChannelsOfficialUSDToCNYRate >= 0
+        ? parsedAvailableChannelsOfficialUSDToCNYRate
+        : 7;
 
     const payload: UpdateSettingsRequest = {
       registration_enabled: form.registration_enabled,
@@ -11920,10 +11977,6 @@ async function saveSettings() {
       available_channels_enabled: form.available_channels_enabled,
       available_channels_price_cny_multiplier:
         availableChannelsPriceMultiplier,
-      available_channels_price_cny_multiplier_max:
-        availableChannelsPriceMultiplierMax,
-      available_channels_official_usd_to_cny_rate:
-        Math.max(0, Number(form.available_channels_official_usd_to_cny_rate) || 0),
       // Model Plaza feature switches + description
       model_plaza_enabled: form.model_plaza_enabled,
       model_plaza_require_auth: form.model_plaza_require_auth,
@@ -11932,6 +11985,21 @@ async function saveSettings() {
       affiliate_enabled: form.affiliate_enabled,
       allow_user_view_error_requests: form.allow_user_view_error_requests,
     };
+
+    if (
+      availableChannelsPriceMultiplierMaxLoaded.value ||
+      availableChannelsPriceMultiplierMaxDirty.value
+    ) {
+      payload.available_channels_price_cny_multiplier_max =
+        availableChannelsPriceMultiplierMax;
+    }
+    if (
+      availableChannelsOfficialUSDToCNYRateLoaded.value ||
+      availableChannelsOfficialUSDToCNYRateDirty.value
+    ) {
+      payload.available_channels_official_usd_to_cny_rate =
+        availableChannelsOfficialUSDToCNYRate;
+    }
 
     // 仅当 openai_fast_policy_settings 已成功从后端加载时才回写，
     // 否则省略整个字段，让后端保留既有规则（含默认值）。
