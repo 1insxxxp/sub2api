@@ -451,6 +451,23 @@ func TestAdminService_UpdateGroup_WithImagePricing(t *testing.T) {
 	require.InDelta(t, 0.36, *repo.updated.ImagePrice4K, 0.0001)
 }
 
+func TestAdminService_UpdateGroupRejectsSystemCustomGroupBeforeMutation(t *testing.T) {
+	repo := &groupRepoStubForAdmin{getByID: &Group{
+		ID: 8, Name: "managed", Platform: PlatformComposite, RateMultiplier: 1,
+		SubscriptionType: SubscriptionTypeSubscription, SystemCustomRoutingEnabled: true,
+	}}
+	svc := &adminServiceImpl{groupRepo: repo}
+	rate := 9.0
+
+	updated, err := svc.UpdateGroup(context.Background(), 8, &UpdateGroupInput{
+		Platform: PlatformAnthropic, SubscriptionType: SubscriptionTypeStandard, RateMultiplier: &rate,
+	})
+
+	require.Nil(t, updated)
+	require.ErrorIs(t, err, ErrSystemCustomGroupManagedOnly)
+	require.Nil(t, repo.updated)
+}
+
 func TestAdminService_UpdateGroup_WithVideoPricing(t *testing.T) {
 	existingGroup := &Group{
 		ID:       1,

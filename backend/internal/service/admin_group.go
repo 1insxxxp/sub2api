@@ -651,6 +651,9 @@ func (s *adminServiceImpl) UpdateGroup(ctx context.Context, id int64, input *Upd
 	if err != nil {
 		return nil, err
 	}
+	if group.SystemCustomRoutingEnabled {
+		return nil, ErrSystemCustomGroupManagedOnly
+	}
 
 	if input.Name != "" {
 		group.Name = input.Name
@@ -979,6 +982,13 @@ func (s *adminServiceImpl) UpdateGroup(ctx context.Context, id int64, input *Upd
 }
 
 func (s *adminServiceImpl) DeleteGroup(ctx context.Context, id int64) error {
+	group, err := s.groupRepo.GetByID(ctx, id)
+	if err != nil {
+		return err
+	}
+	if group.SystemCustomRoutingEnabled {
+		return ErrSystemCustomGroupManagedOnly
+	}
 	var groupKeys []string
 	if s.authCacheInvalidator != nil {
 		keys, err := s.apiKeyRepo.ListKeysByGroupID(ctx, id)

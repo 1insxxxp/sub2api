@@ -244,6 +244,8 @@ func (s *userRepoStub) GetByIDIncludeDeleted(ctx context.Context, id int64) (*Us
 }
 
 type groupRepoStub struct {
+	group           *Group
+	getCalls        []int64
 	affectedUserIDs []int64
 	deleteErr       error
 	deleteCalls     []int64
@@ -254,7 +256,12 @@ func (s *groupRepoStub) Create(ctx context.Context, group *Group) error {
 }
 
 func (s *groupRepoStub) GetByID(ctx context.Context, id int64) (*Group, error) {
-	panic("unexpected GetByID call")
+	s.getCalls = append(s.getCalls, id)
+	if s.group != nil {
+		copy := *s.group
+		return &copy, nil
+	}
+	return &Group{ID: id, Name: "ordinary", Status: StatusActive}, nil
 }
 
 func (s *groupRepoStub) GetByIDLite(ctx context.Context, id int64) (*Group, error) {
@@ -684,6 +691,19 @@ func TestAdminService_DeleteGroup_InvalidatesAuthCacheForBoundKeys(t *testing.T)
 	require.Equal(t, []int64{5}, repo.deleteCalls)
 	require.Equal(t, []int64{5}, apiKeyRepo.listGroupIDs)
 	require.Equal(t, []string{"k1", "k2"}, invalidator.keys)
+}
+
+func TestAdminService_DeleteGroupRejectsSystemCustomGroupBeforeCacheCollection(t *testing.T) {
+	repo := &groupRepoStub{group: &Group{ID: 5, SystemCustomRoutingEnabled: true}}
+	apiKeyRepo := &deleteGroupAPIKeyRepoStub{keys: []string{"must-not-be-read"}}
+	svc := &adminServiceImpl{groupRepo: repo, apiKeyRepo: apiKeyRepo, authCacheInvalidator: &authCacheInvalidatorStub{}}
+
+	err := svc.DeleteGroup(context.Background(), 5)
+
+	require.ErrorIs(t, err, ErrSystemCustomGroupManagedOnly)
+	require.Equal(t, []int64{5}, repo.getCalls)
+	require.Empty(t, repo.deleteCalls)
+	require.Empty(t, apiKeyRepo.listGroupIDs)
 }
 
 func TestAdminService_DeleteGroup_NotFound(t *testing.T) {

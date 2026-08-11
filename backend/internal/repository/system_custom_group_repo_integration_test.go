@@ -4,13 +4,16 @@ package repository
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"testing"
 	"time"
 
 	dbent "github.com/Wei-Shaw/sub2api/ent"
+	"github.com/Wei-Shaw/sub2api/ent/apikey"
 	"github.com/Wei-Shaw/sub2api/ent/group"
 	"github.com/Wei-Shaw/sub2api/ent/systemcustomgroupmodel"
+	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
 	"github.com/Wei-Shaw/sub2api/internal/service"
 	"github.com/stretchr/testify/require"
 )
@@ -30,6 +33,11 @@ func TestSystemCustomGroupRepositoryCreateRollsBackGroupRoutesAndOutboxWhenAnyRo
 
 	require.Error(t, err)
 	require.ErrorIs(t, err, service.ErrSystemCustomGroupDuplicatePublicModel)
+	var appErr *infraerrors.ApplicationError
+	require.True(t, errors.As(err, &appErr))
+	require.Equal(t, map[string]string{
+		"public_model": "shared-model", "source_group_id": fmt.Sprintf("%d", sourceTwo.ID), "source_model": "source-two",
+	}, appErr.Metadata)
 	var groupCount, routeCount, outboxCount int
 	require.NoError(t, integrationDB.QueryRowContext(ctx, "SELECT COUNT(*) FROM groups WHERE name = $1", container.Name).Scan(&groupCount))
 	require.NoError(t, integrationDB.QueryRowContext(ctx, "SELECT COUNT(*) FROM system_custom_group_models WHERE group_id = $1", container.ID).Scan(&routeCount))
@@ -157,7 +165,96 @@ func TestSystemCustomGroupRepositoryDeleteRejectsCurrentActiveSubscription(t *te
 	requireSystemCustomContainerAndRouteExist(t, container.ID)
 }
 
-func TestSystemCustomGroupRepositoryDeleteUnreferencedGroupAtomicallyCleansRoutesPlansAndExpiredSubscriptions(t *testing.T) {
+func TestSystemCustomGroupRepositoryDeleteRejectsActiveSubscriptionBeforeItsStartTime(t *testing.T) {
+	ctx := context.Background()
+	repo := NewSystemCustomGroupRepository(integrationEntClient)
+	container, _ := createDeletableSystemCustomGroupForIntegration(t, repo, "future-active-subscription")
+	user := mustCreateUser(t, integrationEntClient, &service.User{})
+	sub := mustCreateSubscription(t, integrationEntClient, &service.UserSubscription{
+		UserID: user.ID, GroupID: container.ID, Status: service.SubscriptionStatusActive,
+		StartsAt: time.Now().Add(time.Hour), ExpiresAt: time.Now().Add(2 * time.Hour),
+	})
+	t.Cleanup(func() {
+		_, _ = integrationDB.ExecContext(context.Background(), "DELETE FROM user_subscriptions WHERE id = $1", sub.ID)
+		_, _ = integrationDB.ExecContext(context.Background(), "DELETE FROM users WHERE id = $1", user.ID)
+	})
+
+	err := repo.Delete(ctx, container.ID)
+	require.ErrorIs(t, err, service.ErrSystemCustomGroupInUse)
+	requireSystemCustomContainerAndRouteExist(t, container.ID)
+}
+
+func TestSystemCustomGroupRepositoryDeleteLocksGroupBeforeReferencesWithoutBlockingUnrelatedWrites(t *testing.T) {
+	ctx := context.Background()
+	repo := NewSystemCustomGroupRepository(integrationEntClient)
+	container, _ := createDeletableSystemCustomGroupForIntegration(t, repo, "lock-order")
+	unrelatedGroup := createSystemCustomSourceGroupForIntegration(t, time.Now().UnixNano(), "unrelated-write")
+	unrelatedUser := mustCreateUser(t, integrationEntClient, &service.User{})
+
+	blocker, err := integrationDB.BeginTx(ctx, nil)
+	require.NoError(t, err)
+	defer func() { _ = blocker.Rollback() }()
+	var lockedID int64
+	require.NoError(t, blocker.QueryRowContext(ctx, "SELECT id FROM groups WHERE id = $1 FOR UPDATE", container.ID).Scan(&lockedID))
+
+	deleteResult := make(chan error, 1)
+	deleteCtx, cancelDelete := context.WithTimeout(ctx, 5*time.Second)
+	defer cancelDelete()
+	go func() { deleteResult <- repo.Delete(deleteCtx, container.ID) }()
+
+	deadline := time.Now().Add(2 * time.Second)
+	blockedOnGroup := false
+	for time.Now().Before(deadline) {
+		var waiting int
+		require.NoError(t, integrationDB.QueryRowContext(ctx, `
+			SELECT COUNT(*)
+			FROM pg_stat_activity
+			WHERE datname = current_database()
+			  AND wait_event_type = 'Lock'
+			  AND query ILIKE '%system_custom_routing_enabled%'
+			  AND query ILIKE '%FOR UPDATE%'
+		`).Scan(&waiting))
+		if waiting > 0 {
+			blockedOnGroup = true
+			break
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	require.True(t, blockedOnGroup, "delete transaction did not reach the group row lock")
+
+	writeCtx, cancelWrite := context.WithTimeout(ctx, time.Second)
+	plan, err := integrationEntClient.SubscriptionPlan.Create().
+		SetGroupID(unrelatedGroup.ID).
+		SetName("unrelated plan during delete").
+		SetPrice(1).
+		SetForSale(false).
+		Save(writeCtx)
+	require.NoError(t, err, "unrelated subscription plan writes must not be blocked by delete")
+	sub, err := integrationEntClient.UserSubscription.Create().
+		SetUserID(unrelatedUser.ID).
+		SetGroupID(unrelatedGroup.ID).
+		SetStartsAt(time.Now()).
+		SetExpiresAt(time.Now().Add(time.Hour)).
+		SetStatus(service.SubscriptionStatusExpired).
+		Save(writeCtx)
+	cancelWrite()
+	require.NoError(t, err, "unrelated subscription writes must not be blocked by delete")
+	t.Cleanup(func() {
+		_, _ = integrationDB.ExecContext(context.Background(), "DELETE FROM subscription_plans WHERE id = $1", plan.ID)
+		_, _ = integrationDB.ExecContext(context.Background(), "DELETE FROM user_subscriptions WHERE id = $1", sub.ID)
+		_, _ = integrationDB.ExecContext(context.Background(), "DELETE FROM users WHERE id = $1", unrelatedUser.ID)
+	})
+
+	require.NoError(t, blocker.Rollback())
+	select {
+	case err := <-deleteResult:
+		require.NoError(t, err)
+	case <-time.After(5 * time.Second):
+		t.Fatal("delete did not resume after releasing group row lock")
+	}
+}
+
+func TestSystemCustomGroupRepositoryDeleteUnreferencedGroupRetiresContainerAndPreservesHistoricalReferences(t *testing.T) {
 	ctx := context.Background()
 	repo := NewSystemCustomGroupRepository(integrationEntClient)
 	container, _ := createDeletableSystemCustomGroupForIntegration(t, repo, "unreferenced")
@@ -173,7 +270,29 @@ func TestSystemCustomGroupRepositoryDeleteUnreferencedGroupAtomicallyCleansRoute
 		UserID: user.ID, GroupID: container.ID, Status: service.SubscriptionStatusExpired,
 		StartsAt: time.Now().Add(-48 * time.Hour), ExpiresAt: time.Now().Add(-24 * time.Hour),
 	})
+	apiKey, err := integrationEntClient.APIKey.Create().
+		SetUserID(user.ID).
+		SetGroupID(container.ID).
+		SetKey(fmt.Sprintf("sk-system-custom-delete-%d", time.Now().UnixNano())).
+		SetName("historical system custom key").
+		Save(ctx)
+	require.NoError(t, err)
+	account := mustCreateAccount(t, integrationEntClient, &service.Account{
+		Name: fmt.Sprintf("system-custom-history-%d", time.Now().UnixNano()),
+	})
+	usage, err := integrationEntClient.UsageLog.Create().
+		SetUserID(user.ID).
+		SetAPIKeyID(apiKey.ID).
+		SetAccountID(account.ID).
+		SetGroupID(container.ID).
+		SetRequestID(fmt.Sprintf("system-custom-history-%d", time.Now().UnixNano())).
+		SetModel("historical-model").
+		Save(ctx)
+	require.NoError(t, err)
 	t.Cleanup(func() {
+		_, _ = integrationDB.ExecContext(context.Background(), "DELETE FROM usage_logs WHERE id = $1", usage.ID)
+		_, _ = integrationDB.ExecContext(context.Background(), "DELETE FROM api_keys WHERE id = $1", apiKey.ID)
+		_, _ = integrationDB.ExecContext(context.Background(), "DELETE FROM accounts WHERE id = $1", account.ID)
 		_, _ = integrationDB.ExecContext(context.Background(), "DELETE FROM users WHERE id = $1", user.ID)
 	})
 
@@ -183,18 +302,30 @@ func TestSystemCustomGroupRepositoryDeleteUnreferencedGroupAtomicallyCleansRoute
 		name string
 		sql  string
 		arg  int64
+		want int
 	}{
-		{name: "group", sql: "SELECT COUNT(*) FROM groups WHERE id = $1", arg: container.ID},
-		{name: "routes", sql: "SELECT COUNT(*) FROM system_custom_group_models WHERE group_id = $1", arg: container.ID},
-		{name: "inactive plans", sql: "SELECT COUNT(*) FROM subscription_plans WHERE id = $1", arg: plan.ID},
-		{name: "expired subscriptions", sql: "SELECT COUNT(*) FROM user_subscriptions WHERE id = $1", arg: sub.ID},
+		{name: "soft-deleted group retained", sql: "SELECT COUNT(*) FROM groups WHERE id = $1 AND deleted_at IS NOT NULL", arg: container.ID, want: 1},
+		{name: "routes removed", sql: "SELECT COUNT(*) FROM system_custom_group_models WHERE group_id = $1", arg: container.ID, want: 0},
+		{name: "inactive plans cleaned", sql: "SELECT COUNT(*) FROM subscription_plans WHERE id = $1", arg: plan.ID, want: 0},
+		{name: "expired subscriptions retained", sql: "SELECT COUNT(*) FROM user_subscriptions WHERE id = $1 AND group_id = $2", arg: sub.ID, want: 1},
+		{name: "api key group retained", sql: "SELECT COUNT(*) FROM api_keys WHERE id = $1 AND group_id = $2", arg: apiKey.ID, want: 1},
+		{name: "usage group retained", sql: "SELECT COUNT(*) FROM usage_logs WHERE id = $1 AND group_id = $2", arg: usage.ID, want: 1},
 	} {
 		t.Run(query.name, func(t *testing.T) {
 			var count int
-			require.NoError(t, integrationDB.QueryRowContext(ctx, query.sql, query.arg).Scan(&count))
-			require.Zero(t, count)
+			args := []any{query.arg}
+			if query.name == "expired subscriptions retained" || query.name == "api key group retained" || query.name == "usage group retained" {
+				args = append(args, container.ID)
+			}
+			require.NoError(t, integrationDB.QueryRowContext(ctx, query.sql, args...).Scan(&count))
+			require.Equal(t, query.want, count)
 		})
 	}
+	reloadedKey, err := integrationEntClient.APIKey.Query().Where(apikey.IDEQ(apiKey.ID)).WithGroup().Only(ctx)
+	require.NoError(t, err)
+	require.NotNil(t, reloadedKey.GroupID)
+	require.Equal(t, container.ID, *reloadedKey.GroupID)
+	require.Nil(t, reloadedKey.Edges.Group, "soft-deleted group must reload as unavailable, not as a wallet key")
 	var outboxCount int
 	require.NoError(t, integrationDB.QueryRowContext(ctx, "SELECT COUNT(*) FROM scheduler_outbox WHERE group_id = $1", container.ID).Scan(&outboxCount))
 	require.Equal(t, 1, outboxCount)

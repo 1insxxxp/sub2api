@@ -1,7 +1,9 @@
 package service
 
 import (
+	"errors"
 	"fmt"
+	"strconv"
 	"time"
 
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
@@ -20,6 +22,8 @@ var (
 	ErrSystemCustomGroupInvalidRoute         = infraerrors.BadRequest("SYSTEM_CUSTOM_GROUP_INVALID_ROUTE", "system custom group model route is invalid")
 	ErrSystemCustomGroupInvalidInput         = infraerrors.BadRequest("SYSTEM_CUSTOM_GROUP_INVALID_INPUT", "system custom group input is invalid")
 	ErrSystemCustomGroupInUse                = infraerrors.Conflict("SYSTEM_CUSTOM_GROUP_IN_USE", "system custom group is in use")
+	ErrSystemCustomGroupManagedOnly          = infraerrors.Conflict("SYSTEM_CUSTOM_GROUP_MANAGED_ONLY", "system custom groups must be managed through the dedicated API")
+	ErrSystemCustomGroupRetryableConflict    = infraerrors.ServiceUnavailable("SYSTEM_CUSTOM_GROUP_RETRYABLE_CONFLICT", "system custom group changed concurrently; retry the request")
 )
 
 // SystemCustomGroupRouteError preserves machine-readable error identity while
@@ -39,7 +43,30 @@ func (e *SystemCustomGroupRouteError) Error() string {
 	return fmt.Sprintf("%v: public_model=%q source_group_id=%d source_model=%q", e.Kind, e.PublicModel, e.SourceGroupID, e.SourceModel)
 }
 
-func (e *SystemCustomGroupRouteError) Unwrap() error { return e.Kind }
+func (e *SystemCustomGroupRouteError) Unwrap() error {
+	if e == nil {
+		return nil
+	}
+	var appErr *infraerrors.ApplicationError
+	if !errors.As(e.Kind, &appErr) {
+		return e.Kind
+	}
+	metadata := make(map[string]string, len(appErr.Metadata)+3)
+	for key, value := range appErr.Metadata {
+		metadata[key] = value
+	}
+	metadata["public_model"] = e.PublicModel
+	metadata["source_group_id"] = strconv.FormatInt(e.SourceGroupID, 10)
+	metadata["source_model"] = e.SourceModel
+	return appErr.WithMetadata(metadata)
+}
+
+// SystemCustomGroupDeleteImpact contains cache identities collected in the
+// same transaction that retired a system custom group.
+type SystemCustomGroupDeleteImpact struct {
+	APIKeyValues []string
+	UserIDs      []int64
+}
 
 type SystemCustomGroupModelInput struct {
 	PublicModel   string `json:"public_model"`

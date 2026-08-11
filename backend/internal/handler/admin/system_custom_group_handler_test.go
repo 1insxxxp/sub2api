@@ -9,6 +9,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
@@ -99,17 +100,19 @@ func performSystemCustomGroupRequest(t *testing.T, router http.Handler, method, 
 }
 
 func decodeSystemCustomGroupEnvelope(t *testing.T, recorder *httptest.ResponseRecorder) struct {
-	Code    int             `json:"code"`
-	Message string          `json:"message"`
-	Reason  string          `json:"reason"`
-	Data    json.RawMessage `json:"data"`
+	Code     int               `json:"code"`
+	Message  string            `json:"message"`
+	Reason   string            `json:"reason"`
+	Metadata map[string]string `json:"metadata"`
+	Data     json.RawMessage   `json:"data"`
 } {
 	t.Helper()
 	var envelope struct {
-		Code    int             `json:"code"`
-		Message string          `json:"message"`
-		Reason  string          `json:"reason"`
-		Data    json.RawMessage `json:"data"`
+		Code     int               `json:"code"`
+		Message  string            `json:"message"`
+		Reason   string            `json:"reason"`
+		Metadata map[string]string `json:"metadata"`
+		Data     json.RawMessage   `json:"data"`
 	}
 	require.NoError(t, json.Unmarshal(recorder.Body.Bytes(), &envelope))
 	return envelope
@@ -151,18 +154,19 @@ func TestSystemCustomGroupHandlerSixEndpointsSuccess(t *testing.T) {
 
 func TestSystemCustomGroupHandlerMapsStableErrors(t *testing.T) {
 	tests := []struct {
-		name       string
-		err        error
-		wantStatus int
-		wantReason string
-		wantMsg    string
+		name         string
+		err          error
+		wantStatus   int
+		wantReason   string
+		wantMsg      string
+		wantMetadata map[string]string
 	}{
-		{name: "duplicate public alias", err: &service.SystemCustomGroupRouteError{Kind: service.ErrSystemCustomGroupDuplicatePublicModel, PublicModel: "sonnet"}, wantStatus: http.StatusConflict, wantReason: "SYSTEM_CUSTOM_GROUP_DUPLICATE_PUBLIC_MODEL", wantMsg: "system custom group public model already exists"},
-		{name: "duplicate source model", err: &service.SystemCustomGroupRouteError{Kind: service.ErrSystemCustomGroupDuplicateSourceModel, SourceGroupID: 7, SourceModel: "claude-sonnet"}, wantStatus: http.StatusConflict, wantReason: "SYSTEM_CUSTOM_GROUP_DUPLICATE_SOURCE_MODEL", wantMsg: "system custom group source model already exists"},
-		{name: "invalid source", err: service.ErrSystemCustomGroupInvalidSourceGroup, wantStatus: http.StatusBadRequest, wantReason: "SYSTEM_CUSTOM_GROUP_INVALID_SOURCE_GROUP", wantMsg: "system custom group source group is invalid"},
-		{name: "missing source model", err: service.ErrSystemCustomGroupMissingSourceModel, wantStatus: http.StatusBadRequest, wantReason: "SYSTEM_CUSTOM_GROUP_MISSING_SOURCE_MODEL", wantMsg: "system custom group source model is unavailable"},
-		{name: "self reference", err: service.ErrSystemCustomGroupSelfReference, wantStatus: http.StatusBadRequest, wantReason: "SYSTEM_CUSTOM_GROUP_SELF_REFERENCE", wantMsg: "system custom group cannot route to itself"},
-		{name: "invalid route", err: service.ErrSystemCustomGroupInvalidRoute, wantStatus: http.StatusBadRequest, wantReason: "SYSTEM_CUSTOM_GROUP_INVALID_ROUTE", wantMsg: "system custom group model route is invalid"},
+		{name: "duplicate public alias", err: &service.SystemCustomGroupRouteError{Kind: service.ErrSystemCustomGroupDuplicatePublicModel, PublicModel: "sonnet", SourceGroupID: 7, SourceModel: "claude-sonnet"}, wantStatus: http.StatusConflict, wantReason: "SYSTEM_CUSTOM_GROUP_DUPLICATE_PUBLIC_MODEL", wantMsg: "system custom group public model already exists", wantMetadata: map[string]string{"public_model": "sonnet", "source_group_id": "7", "source_model": "claude-sonnet"}},
+		{name: "duplicate source model", err: &service.SystemCustomGroupRouteError{Kind: service.ErrSystemCustomGroupDuplicateSourceModel, SourceGroupID: 7, SourceModel: "claude-sonnet"}, wantStatus: http.StatusConflict, wantReason: "SYSTEM_CUSTOM_GROUP_DUPLICATE_SOURCE_MODEL", wantMsg: "system custom group source model already exists", wantMetadata: map[string]string{"public_model": "", "source_group_id": "7", "source_model": "claude-sonnet"}},
+		{name: "invalid source", err: &service.SystemCustomGroupRouteError{Kind: service.ErrSystemCustomGroupInvalidSourceGroup, PublicModel: "sonnet", SourceGroupID: 7, SourceModel: "claude-sonnet"}, wantStatus: http.StatusBadRequest, wantReason: "SYSTEM_CUSTOM_GROUP_INVALID_SOURCE_GROUP", wantMsg: "system custom group source group is invalid", wantMetadata: map[string]string{"public_model": "sonnet", "source_group_id": "7", "source_model": "claude-sonnet"}},
+		{name: "missing source model", err: &service.SystemCustomGroupRouteError{Kind: service.ErrSystemCustomGroupMissingSourceModel, PublicModel: "sonnet", SourceGroupID: 7, SourceModel: "claude-missing"}, wantStatus: http.StatusBadRequest, wantReason: "SYSTEM_CUSTOM_GROUP_MISSING_SOURCE_MODEL", wantMsg: "system custom group source model is unavailable", wantMetadata: map[string]string{"public_model": "sonnet", "source_group_id": "7", "source_model": "claude-missing"}},
+		{name: "self reference", err: &service.SystemCustomGroupRouteError{Kind: service.ErrSystemCustomGroupSelfReference, PublicModel: "sonnet", SourceGroupID: 42, SourceModel: "claude-sonnet"}, wantStatus: http.StatusBadRequest, wantReason: "SYSTEM_CUSTOM_GROUP_SELF_REFERENCE", wantMsg: "system custom group cannot route to itself", wantMetadata: map[string]string{"public_model": "sonnet", "source_group_id": "42", "source_model": "claude-sonnet"}},
+		{name: "invalid route", err: &service.SystemCustomGroupRouteError{Kind: service.ErrSystemCustomGroupInvalidRoute, PublicModel: "", SourceGroupID: 7, SourceModel: "claude-sonnet"}, wantStatus: http.StatusBadRequest, wantReason: "SYSTEM_CUSTOM_GROUP_INVALID_ROUTE", wantMsg: "system custom group model route is invalid", wantMetadata: map[string]string{"public_model": "", "source_group_id": "7", "source_model": "claude-sonnet"}},
 		{name: "invalid input", err: service.ErrSystemCustomGroupInvalidInput, wantStatus: http.StatusBadRequest, wantReason: "SYSTEM_CUSTOM_GROUP_INVALID_INPUT", wantMsg: "system custom group input is invalid"},
 		{name: "not found", err: service.ErrSystemCustomGroupNotFound, wantStatus: http.StatusNotFound, wantReason: "SYSTEM_CUSTOM_GROUP_NOT_FOUND", wantMsg: "system custom group not found"},
 		{name: "unexpected", err: errors.New("pq: secret sql detail"), wantStatus: http.StatusInternalServerError, wantReason: "", wantMsg: "internal error"},
@@ -180,9 +184,23 @@ func TestSystemCustomGroupHandlerMapsStableErrors(t *testing.T) {
 			require.Equal(t, tt.wantStatus, envelope.Code)
 			require.Equal(t, tt.wantReason, envelope.Reason)
 			require.Equal(t, tt.wantMsg, envelope.Message)
+			require.Equal(t, tt.wantMetadata, envelope.Metadata)
 			require.NotContains(t, recorder.Body.String(), "secret sql detail")
 		})
 	}
+}
+
+func TestSystemCustomGroupHandlerRejectsBodyOverLimitEvenWhenExcessIsWhitespace(t *testing.T) {
+	router := newSystemCustomGroupHandlerTestRouter(completeSystemCustomGroupAdminServiceStub())
+	valid := `{"name":"Monthly","default_validity_days":30,"models":[{"public_model":"sonnet","source_group_id":7,"source_model":"claude-sonnet","enabled":true}]}`
+	body := valid + strings.Repeat(" ", (1<<20)-len(valid)+1)
+
+	recorder := performSystemCustomGroupRequest(t, router, http.MethodPost, "/", body)
+
+	require.Equal(t, http.StatusBadRequest, recorder.Code)
+	envelope := decodeSystemCustomGroupEnvelope(t, recorder)
+	require.Equal(t, http.StatusBadRequest, envelope.Code)
+	require.Equal(t, "SYSTEM_CUSTOM_GROUP_INVALID_INPUT", envelope.Reason)
 }
 
 func TestSystemCustomGroupHandlerRejectsInvalidIDAndBodies(t *testing.T) {

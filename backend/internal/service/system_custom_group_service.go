@@ -7,6 +7,9 @@ import (
 	"math"
 	"sort"
 	"strings"
+	"time"
+
+	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
 )
 
 type SystemCustomGroupRepository interface {
@@ -16,6 +19,12 @@ type SystemCustomGroupRepository interface {
 	ListModels(ctx context.Context, groupID int64, enabledOnly bool) ([]SystemCustomGroupModel, error)
 	ResolveModel(ctx context.Context, groupID int64, publicModel string) (*SystemCustomGroupModel, error)
 	Delete(ctx context.Context, groupID int64) error
+}
+
+// SystemCustomGroupDeleteImpactRepository extends the legacy repository
+// without breaking implementations that only provide Delete.
+type SystemCustomGroupDeleteImpactRepository interface {
+	DeleteWithImpact(ctx context.Context, groupID int64) (*SystemCustomGroupDeleteImpact, error)
 }
 
 // SystemCustomGroupModelCatalog is deliberately the small subset of
@@ -28,9 +37,27 @@ type SystemCustomGroupModelCatalog interface {
 }
 
 type SystemCustomGroupService struct {
-	repo       SystemCustomGroupRepository
-	groupRepo  GroupRepository
-	modelIndex SystemCustomGroupModelCatalog
+	repo                 SystemCustomGroupRepository
+	groupRepo            GroupRepository
+	modelIndex           SystemCustomGroupModelCatalog
+	authCacheInvalidator APIKeyAuthCacheInvalidator
+	billingCacheService  *BillingCacheService
+}
+
+// NewSystemCustomGroupServiceWithCacheInvalidation is the production Wire
+// constructor. NewSystemCustomGroupService remains source-compatible for tests
+// and integrations that do not own cache invalidation dependencies.
+func NewSystemCustomGroupServiceWithCacheInvalidation(
+	repo SystemCustomGroupRepository,
+	groupRepo GroupRepository,
+	modelIndex SystemCustomGroupModelCatalog,
+	authCacheInvalidator APIKeyAuthCacheInvalidator,
+	billingCacheService *BillingCacheService,
+) *SystemCustomGroupService {
+	service := NewSystemCustomGroupService(repo, groupRepo, modelIndex)
+	service.authCacheInvalidator = authCacheInvalidator
+	service.billingCacheService = billingCacheService
+	return service
 }
 
 func NewSystemCustomGroupService(repo SystemCustomGroupRepository, groupRepo GroupRepository, modelIndex SystemCustomGroupModelCatalog) *SystemCustomGroupService {
@@ -145,7 +172,37 @@ func (s *SystemCustomGroupService) Delete(ctx context.Context, groupID int64) er
 	if s == nil || s.repo == nil {
 		return fmt.Errorf("system custom group service is not configured")
 	}
-	return s.repo.Delete(ctx, groupID)
+	impactRepo, ok := s.repo.(SystemCustomGroupDeleteImpactRepository)
+	if !ok {
+		return s.repo.Delete(ctx, groupID)
+	}
+	impact, err := impactRepo.DeleteWithImpact(ctx, groupID)
+	if err != nil {
+		return err
+	}
+	if impact == nil {
+		return nil
+	}
+	cacheCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
+	defer cancel()
+	if s.authCacheInvalidator != nil {
+		for _, key := range impact.APIKeyValues {
+			if key != "" {
+				s.authCacheInvalidator.InvalidateAuthCacheByKey(cacheCtx, key)
+			}
+		}
+	}
+	if s.billingCacheService != nil {
+		for _, userID := range impact.UserIDs {
+			if userID <= 0 {
+				continue
+			}
+			if err := s.billingCacheService.InvalidateSubscription(cacheCtx, userID, groupID); err != nil {
+				logger.LegacyPrintf("service.system_custom_group", "invalidate subscription cache failed: user_id=%d group_id=%d err=%v", userID, groupID, err)
+			}
+		}
+	}
+	return nil
 }
 
 // ValidateRoutes normalizes route names in place and verifies the full route

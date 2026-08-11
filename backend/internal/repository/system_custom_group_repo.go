@@ -2,13 +2,13 @@ package repository
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 	"strings"
 
 	dbent "github.com/Wei-Shaw/sub2api/ent"
 	"github.com/Wei-Shaw/sub2api/ent/group"
-	"github.com/Wei-Shaw/sub2api/ent/schema/mixins"
 	"github.com/Wei-Shaw/sub2api/ent/systemcustomgroupmodel"
 	"github.com/Wei-Shaw/sub2api/internal/service"
 	"github.com/lib/pq"
@@ -82,23 +82,70 @@ func (r *systemCustomGroupRepository) Update(ctx context.Context, groupIn *servi
 }
 
 func (r *systemCustomGroupRepository) Delete(ctx context.Context, groupID int64) error {
+	_, err := r.DeleteWithImpact(ctx, groupID)
+	return err
+}
+
+func (r *systemCustomGroupRepository) DeleteWithImpact(ctx context.Context, groupID int64) (*service.SystemCustomGroupDeleteImpact, error) {
 	if r == nil || r.client == nil {
-		return errors.New("system custom group repository is not configured")
+		return nil, errors.New("system custom group repository is not configured")
 	}
-	tx, err := r.client.Tx(ctx)
+	tx, err := r.client.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelSerializable})
 	if err != nil {
-		return err
+		return nil, systemCustomGroupDeleteTransactionError("begin system custom group deletion", err)
 	}
 	defer func() { _ = tx.Rollback() }()
 	client := tx.Client()
 
-	// Plans have no foreign key to groups, and an existing subscription can be
-	// reactivated without changing group_id. Lock both tables so the reference
-	// check and deletion form one atomic operation instead of a TOCTOU window.
-	if _, err := client.ExecContext(ctx, "LOCK TABLE subscription_plans, user_subscriptions IN SHARE ROW EXCLUSIVE MODE"); err != nil {
-		return fmt.Errorf("lock system custom group references: %w", err)
+	isSystemCustom, err := lockSystemCustomGroupForDelete(ctx, client, groupID)
+	if err != nil {
+		return nil, err
 	}
-	var isSystemCustom bool
+	if !isSystemCustom {
+		return nil, service.ErrSystemCustomGroupNotFound
+	}
+
+	inUse, err := systemCustomGroupReferencesExist(ctx, client, groupID)
+	if err != nil {
+		return nil, err
+	}
+	if inUse {
+		return nil, service.ErrSystemCustomGroupInUse
+	}
+
+	impact, err := loadSystemCustomGroupDeleteImpact(ctx, client, groupID)
+	if err != nil {
+		return nil, err
+	}
+	if _, err := client.ExecContext(ctx, "DELETE FROM subscription_plans WHERE group_id = $1 AND for_sale = FALSE", groupID); err != nil {
+		return nil, systemCustomGroupDeleteTransactionError("delete retired system custom group plans", err)
+	}
+	if _, err := client.SystemCustomGroupModel.Delete().
+		Where(systemcustomgroupmodel.GroupIDEQ(groupID)).
+		Exec(ctx); err != nil {
+		return nil, systemCustomGroupDeleteTransactionError("delete system custom group route snapshot", err)
+	}
+	// Use the normal Group delete hook so the container is soft-deleted. This
+	// preserves historical subscriptions, usage ownership, and API key group_id.
+	deleted, err := client.Group.Delete().
+		Where(group.IDEQ(groupID), group.SystemCustomRoutingEnabledEQ(true)).
+		Exec(ctx)
+	if err != nil {
+		return nil, systemCustomGroupDeleteTransactionError("soft-delete system custom group", err)
+	}
+	if deleted != 1 {
+		return nil, service.ErrSystemCustomGroupNotFound
+	}
+	if err := enqueueSchedulerOutbox(ctx, client, service.SchedulerOutboxEventGroupChanged, nil, &groupID, nil); err != nil {
+		return nil, systemCustomGroupDeleteTransactionError("enqueue system custom group scheduler event", err)
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, systemCustomGroupDeleteTransactionError("commit system custom group deletion", err)
+	}
+	return impact, nil
+}
+
+func lockSystemCustomGroupForDelete(ctx context.Context, client *dbent.Client, groupID int64) (bool, error) {
 	rows, err := client.QueryContext(ctx, `
 		SELECT system_custom_routing_enabled
 		FROM groups
@@ -106,54 +153,23 @@ func (r *systemCustomGroupRepository) Delete(ctx context.Context, groupID int64)
 		FOR UPDATE
 	`, groupID)
 	if err != nil {
-		return fmt.Errorf("lock system custom group: %w", err)
+		return false, systemCustomGroupDeleteTransactionError("lock system custom group", err)
 	}
+	var isSystemCustom bool
 	if rows.Next() {
 		err = rows.Scan(&isSystemCustom)
 	}
 	closeErr := rows.Close()
 	if err != nil {
-		return fmt.Errorf("scan system custom group: %w", err)
+		return false, systemCustomGroupDeleteTransactionError("scan system custom group", err)
 	}
 	if closeErr != nil {
-		return fmt.Errorf("close system custom group row: %w", closeErr)
+		return false, systemCustomGroupDeleteTransactionError("close system custom group row", closeErr)
 	}
 	if err := rows.Err(); err != nil {
-		return fmt.Errorf("read system custom group: %w", err)
+		return false, systemCustomGroupDeleteTransactionError("read system custom group", err)
 	}
-	if !isSystemCustom {
-		return service.ErrSystemCustomGroupNotFound
-	}
-
-	inUse, err := systemCustomGroupReferencesExist(ctx, client, groupID)
-	if err != nil {
-		return err
-	}
-	if inUse {
-		return service.ErrSystemCustomGroupInUse
-	}
-
-	// Retired plans cannot outlive their group because subscription_plans has no
-	// FK. Expired/cancelled subscriptions are removed by the group FK cascade.
-	if _, err := client.ExecContext(ctx, "DELETE FROM subscription_plans WHERE group_id = $1", groupID); err != nil {
-		return fmt.Errorf("delete retired system custom group plans: %w", err)
-	}
-	deleted, err := client.Group.Delete().
-		Where(group.IDEQ(groupID), group.SystemCustomRoutingEnabledEQ(true)).
-		Exec(mixins.SkipSoftDelete(ctx))
-	if err != nil {
-		return fmt.Errorf("delete system custom group: %w", err)
-	}
-	if deleted != 1 {
-		return service.ErrSystemCustomGroupNotFound
-	}
-	if err := enqueueSchedulerOutbox(ctx, client, service.SchedulerOutboxEventGroupChanged, nil, &groupID, nil); err != nil {
-		return fmt.Errorf("enqueue system custom group scheduler event: %w", err)
-	}
-	if err := tx.Commit(); err != nil {
-		return err
-	}
-	return nil
+	return isSystemCustom, nil
 }
 
 func systemCustomGroupReferencesExist(ctx context.Context, client *dbent.Client, groupID int64) (bool, error) {
@@ -162,12 +178,12 @@ func systemCustomGroupReferencesExist(ctx context.Context, client *dbent.Client,
 		sql   string
 	}{
 		{label: "active plan", sql: "SELECT EXISTS (SELECT 1 FROM subscription_plans WHERE group_id = $1 AND for_sale = TRUE)"},
-		{label: "active subscription", sql: "SELECT EXISTS (SELECT 1 FROM user_subscriptions WHERE group_id = $1 AND deleted_at IS NULL AND status = 'active' AND starts_at <= NOW() AND expires_at > NOW())"},
+		{label: "active subscription", sql: "SELECT EXISTS (SELECT 1 FROM user_subscriptions WHERE group_id = $1 AND deleted_at IS NULL AND status = 'active' AND expires_at > NOW())"},
 	}
 	for _, query := range queries {
 		rows, err := client.QueryContext(ctx, query.sql, groupID)
 		if err != nil {
-			return false, fmt.Errorf("check system custom group %s reference: %w", query.label, err)
+			return false, systemCustomGroupDeleteTransactionError("check system custom group "+query.label+" reference", err)
 		}
 		var exists bool
 		if rows.Next() {
@@ -175,19 +191,69 @@ func systemCustomGroupReferencesExist(ctx context.Context, client *dbent.Client,
 		}
 		closeErr := rows.Close()
 		if err != nil {
-			return false, fmt.Errorf("scan system custom group %s reference: %w", query.label, err)
+			return false, systemCustomGroupDeleteTransactionError("scan system custom group "+query.label+" reference", err)
 		}
 		if closeErr != nil {
-			return false, fmt.Errorf("close system custom group %s reference: %w", query.label, closeErr)
+			return false, systemCustomGroupDeleteTransactionError("close system custom group "+query.label+" reference", closeErr)
 		}
 		if err := rows.Err(); err != nil {
-			return false, fmt.Errorf("read system custom group %s reference: %w", query.label, err)
+			return false, systemCustomGroupDeleteTransactionError("read system custom group "+query.label+" reference", err)
 		}
 		if exists {
 			return true, nil
 		}
 	}
 	return false, nil
+}
+
+func loadSystemCustomGroupDeleteImpact(ctx context.Context, client *dbent.Client, groupID int64) (*service.SystemCustomGroupDeleteImpact, error) {
+	impact := &service.SystemCustomGroupDeleteImpact{}
+	keyRows, err := client.QueryContext(ctx, "SELECT key FROM api_keys WHERE group_id = $1 AND deleted_at IS NULL ORDER BY id", groupID)
+	if err != nil {
+		return nil, systemCustomGroupDeleteTransactionError("list system custom group api keys", err)
+	}
+	for keyRows.Next() {
+		var key string
+		if err := keyRows.Scan(&key); err != nil {
+			_ = keyRows.Close()
+			return nil, systemCustomGroupDeleteTransactionError("scan system custom group api key", err)
+		}
+		impact.APIKeyValues = append(impact.APIKeyValues, key)
+	}
+	if err := keyRows.Close(); err != nil {
+		return nil, systemCustomGroupDeleteTransactionError("close system custom group api keys", err)
+	}
+	if err := keyRows.Err(); err != nil {
+		return nil, systemCustomGroupDeleteTransactionError("read system custom group api keys", err)
+	}
+
+	userRows, err := client.QueryContext(ctx, "SELECT DISTINCT user_id FROM user_subscriptions WHERE group_id = $1 ORDER BY user_id", groupID)
+	if err != nil {
+		return nil, systemCustomGroupDeleteTransactionError("list system custom group subscription users", err)
+	}
+	for userRows.Next() {
+		var userID int64
+		if err := userRows.Scan(&userID); err != nil {
+			_ = userRows.Close()
+			return nil, systemCustomGroupDeleteTransactionError("scan system custom group subscription user", err)
+		}
+		impact.UserIDs = append(impact.UserIDs, userID)
+	}
+	if err := userRows.Close(); err != nil {
+		return nil, systemCustomGroupDeleteTransactionError("close system custom group subscription users", err)
+	}
+	if err := userRows.Err(); err != nil {
+		return nil, systemCustomGroupDeleteTransactionError("read system custom group subscription users", err)
+	}
+	return impact, nil
+}
+
+func systemCustomGroupDeleteTransactionError(operation string, err error) error {
+	var pgErr *pq.Error
+	if errors.As(err, &pgErr) && (pgErr.Code == "40001" || pgErr.Code == "40P01") {
+		return service.ErrSystemCustomGroupRetryableConflict.WithCause(err)
+	}
+	return fmt.Errorf("%s: %w", operation, err)
 }
 
 func (r *systemCustomGroupRepository) Get(ctx context.Context, groupID int64) (*service.SystemCustomGroup, error) {

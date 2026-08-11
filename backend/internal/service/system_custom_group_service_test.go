@@ -3,8 +3,10 @@ package service
 import (
 	"context"
 	"errors"
+	"strconv"
 	"testing"
 
+	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
 	"github.com/stretchr/testify/require"
 )
 
@@ -17,11 +19,17 @@ type systemCustomGroupRepositoryStub struct {
 	stored        *SystemCustomGroup
 	deletedID     int64
 	deleteErr     error
+	deleteImpact  *SystemCustomGroupDeleteImpact
 }
 
 func (s *systemCustomGroupRepositoryStub) Delete(_ context.Context, groupID int64) error {
 	s.deletedID = groupID
 	return s.deleteErr
+}
+
+func (s *systemCustomGroupRepositoryStub) DeleteWithImpact(_ context.Context, groupID int64) (*SystemCustomGroupDeleteImpact, error) {
+	s.deletedID = groupID
+	return s.deleteImpact, s.deleteErr
 }
 
 func (s *systemCustomGroupRepositoryStub) Update(_ context.Context, group *Group, models []SystemCustomGroupModelInput) error {
@@ -182,6 +190,13 @@ func TestValidateSystemCustomRoutesRejectsDuplicatePublicNameCaseInsensitive(t *
 
 	require.ErrorIs(t, err, ErrSystemCustomGroupDuplicatePublicModel)
 	require.Contains(t, err.Error(), "claude-premium")
+	var appErr *infraerrors.ApplicationError
+	require.ErrorAs(t, err, &appErr)
+	require.Equal(t, map[string]string{
+		"public_model":    "claude-premium",
+		"source_group_id": strconv.FormatInt(20, 10),
+		"source_model":    "model-b",
+	}, appErr.Metadata)
 }
 
 func TestValidateSystemCustomRoutesRejectsDuplicateSourceModel(t *testing.T) {
@@ -394,4 +409,27 @@ func TestSystemCustomGroupServiceDeletePreservesInUseError(t *testing.T) {
 
 	err := svc.Delete(context.Background(), 42)
 	require.ErrorIs(t, err, ErrSystemCustomGroupInUse)
+}
+
+func TestSystemCustomGroupServiceDeleteInvalidatesAffectedAuthAndSubscriptionCachesAfterCommit(t *testing.T) {
+	repo := &systemCustomGroupRepositoryStub{deleteImpact: &SystemCustomGroupDeleteImpact{
+		APIKeyValues: []string{"sk-one", "sk-two"},
+		UserIDs:      []int64{11, 12},
+	}}
+	authCache := &authCacheInvalidatorStub{}
+	billingCache := newBillingCacheStub(2)
+	svc := NewSystemCustomGroupServiceWithCacheInvalidation(
+		repo,
+		systemCustomSourceGroupRepositoryStub{},
+		systemCustomModelCatalogStub{},
+		authCache,
+		&BillingCacheService{cache: billingCache},
+	)
+
+	require.NoError(t, svc.Delete(context.Background(), 42))
+	require.Equal(t, []string{"sk-one", "sk-two"}, authCache.keys)
+	require.ElementsMatch(t, []subscriptionInvalidateCall{
+		{userID: 11, groupID: 42},
+		{userID: 12, groupID: 42},
+	}, waitForInvalidations(t, billingCache.invalidations, 2))
 }

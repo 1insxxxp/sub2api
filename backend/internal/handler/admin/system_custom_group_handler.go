@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"io"
+	"net/http"
 	"strconv"
 	"time"
 
@@ -182,7 +183,8 @@ func parseSystemCustomGroupID(c *gin.Context) (int64, bool) {
 }
 
 func decodeSystemCustomGroupBody(c *gin.Context, dst any) bool {
-	decoder := json.NewDecoder(io.LimitReader(c.Request.Body, 1<<20))
+	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 1<<20)
+	decoder := json.NewDecoder(c.Request.Body)
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(dst); err != nil {
 		response.ErrorFrom(c, service.ErrSystemCustomGroupInvalidInput)
