@@ -59,6 +59,11 @@ const latestAPIKeyIPIndexMigration = "174_add_usage_logs_api_key_latest_ip_index
 const latestAPIKeyIPIndex = "idx_usage_logs_api_key_latest_ip"
 const usageLogsUpstreamModelMismatchIndexMigration = "195_add_usage_log_upstream_model_mismatch_index_notx.sql"
 const usageLogsUpstreamModelMismatchIndex = "idx_usage_logs_upstream_model_mismatch_created_at"
+const systemCustomGroupRouteIndexesMigration = "221a_system_custom_group_route_indexes_notx.sql"
+const systemCustomGroupPublicModelCIIndex = "uq_system_custom_group_public_model_ci"
+const systemCustomGroupSourceModelCIIndex = "uq_system_custom_group_source_model_ci"
+const systemCustomGroupSourceGroupIDIndex = "idx_system_custom_group_models_source_group_id"
+const usageLogsSourceGroupIDIndex = "idx_usage_logs_source_group_id"
 
 type migrationChecksumCompatibilityRule struct {
 	fileChecksum       string
@@ -298,9 +303,26 @@ func prepareNonTransactionalMigration(ctx context.Context, db migrationConnectio
 		return dropInvalidIndexIfPresent(ctx, db, latestAPIKeyIPIndex)
 	case usageLogsUpstreamModelMismatchIndexMigration:
 		return dropInvalidIndexIfPresent(ctx, db, usageLogsUpstreamModelMismatchIndex)
+	case systemCustomGroupRouteIndexesMigration:
+		return prepareSystemCustomGroupRouteIndexes(ctx, db)
 	default:
 		return nil
 	}
+}
+
+func prepareSystemCustomGroupRouteIndexes(ctx context.Context, db migrationConnection) error {
+	indexNames := [...]string{
+		systemCustomGroupPublicModelCIIndex,
+		systemCustomGroupSourceModelCIIndex,
+		systemCustomGroupSourceGroupIDIndex,
+		usageLogsSourceGroupIDIndex,
+	}
+	for _, indexName := range indexNames {
+		if err := dropInvalidIndexIfPresent(ctx, db, indexName); err != nil {
+			return fmt.Errorf("prepare system custom route index %s: %w", indexName, err)
+		}
+	}
+	return nil
 }
 
 func preparePaymentOrdersOutTradeNoUniqueMigration(ctx context.Context, db migrationConnection) error {
