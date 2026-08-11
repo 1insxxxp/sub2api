@@ -33,6 +33,7 @@ type UsageLogQuery struct {
 	withAPIKey       *APIKeyQuery
 	withAccount      *AccountQuery
 	withGroup        *GroupQuery
+	withSourceGroup  *GroupQuery
 	withCustomGroup  *UserCustomGroupQuery
 	withSubscription *UserSubscriptionQuery
 	modifiers        []func(*sql.Selector)
@@ -153,6 +154,28 @@ func (_q *UsageLogQuery) QueryGroup() *GroupQuery {
 			sqlgraph.From(usagelog.Table, usagelog.FieldID, selector),
 			sqlgraph.To(group.Table, group.FieldID),
 			sqlgraph.Edge(sqlgraph.M2O, true, usagelog.GroupTable, usagelog.GroupColumn),
+		)
+		fromU = sqlgraph.SetNeighbors(_q.driver.Dialect(), step)
+		return fromU, nil
+	}
+	return query
+}
+
+// QuerySourceGroup chains the current query on the "source_group" edge.
+func (_q *UsageLogQuery) QuerySourceGroup() *GroupQuery {
+	query := (&GroupClient{config: _q.config}).Query()
+	query.path = func(ctx context.Context) (fromU *sql.Selector, err error) {
+		if err := _q.prepareQuery(ctx); err != nil {
+			return nil, err
+		}
+		selector := _q.sqlQuery(ctx)
+		if err := selector.Err(); err != nil {
+			return nil, err
+		}
+		step := sqlgraph.NewStep(
+			sqlgraph.From(usagelog.Table, usagelog.FieldID, selector),
+			sqlgraph.To(group.Table, group.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, false, usagelog.SourceGroupTable, usagelog.SourceGroupColumn),
 		)
 		fromU = sqlgraph.SetNeighbors(_q.driver.Dialect(), step)
 		return fromU, nil
@@ -400,6 +423,7 @@ func (_q *UsageLogQuery) Clone() *UsageLogQuery {
 		withAPIKey:       _q.withAPIKey.Clone(),
 		withAccount:      _q.withAccount.Clone(),
 		withGroup:        _q.withGroup.Clone(),
+		withSourceGroup:  _q.withSourceGroup.Clone(),
 		withCustomGroup:  _q.withCustomGroup.Clone(),
 		withSubscription: _q.withSubscription.Clone(),
 		// clone intermediate query.
@@ -449,6 +473,17 @@ func (_q *UsageLogQuery) WithGroup(opts ...func(*GroupQuery)) *UsageLogQuery {
 		opt(query)
 	}
 	_q.withGroup = query
+	return _q
+}
+
+// WithSourceGroup tells the query-builder to eager-load the nodes that are connected to
+// the "source_group" edge. The optional arguments are used to configure the query builder of the edge.
+func (_q *UsageLogQuery) WithSourceGroup(opts ...func(*GroupQuery)) *UsageLogQuery {
+	query := (&GroupClient{config: _q.config}).Query()
+	for _, opt := range opts {
+		opt(query)
+	}
+	_q.withSourceGroup = query
 	return _q
 }
 
@@ -552,11 +587,12 @@ func (_q *UsageLogQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*Usa
 	var (
 		nodes       = []*UsageLog{}
 		_spec       = _q.querySpec()
-		loadedTypes = [6]bool{
+		loadedTypes = [7]bool{
 			_q.withUser != nil,
 			_q.withAPIKey != nil,
 			_q.withAccount != nil,
 			_q.withGroup != nil,
+			_q.withSourceGroup != nil,
 			_q.withCustomGroup != nil,
 			_q.withSubscription != nil,
 		}
@@ -603,6 +639,12 @@ func (_q *UsageLogQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*Usa
 	if query := _q.withGroup; query != nil {
 		if err := _q.loadGroup(ctx, query, nodes, nil,
 			func(n *UsageLog, e *Group) { n.Edges.Group = e }); err != nil {
+			return nil, err
+		}
+	}
+	if query := _q.withSourceGroup; query != nil {
+		if err := _q.loadSourceGroup(ctx, query, nodes, nil,
+			func(n *UsageLog, e *Group) { n.Edges.SourceGroup = e }); err != nil {
 			return nil, err
 		}
 	}
@@ -740,6 +782,38 @@ func (_q *UsageLogQuery) loadGroup(ctx context.Context, query *GroupQuery, nodes
 	}
 	return nil
 }
+func (_q *UsageLogQuery) loadSourceGroup(ctx context.Context, query *GroupQuery, nodes []*UsageLog, init func(*UsageLog), assign func(*UsageLog, *Group)) error {
+	ids := make([]int64, 0, len(nodes))
+	nodeids := make(map[int64][]*UsageLog)
+	for i := range nodes {
+		if nodes[i].SourceGroupID == nil {
+			continue
+		}
+		fk := *nodes[i].SourceGroupID
+		if _, ok := nodeids[fk]; !ok {
+			ids = append(ids, fk)
+		}
+		nodeids[fk] = append(nodeids[fk], nodes[i])
+	}
+	if len(ids) == 0 {
+		return nil
+	}
+	query.Where(group.IDIn(ids...))
+	neighbors, err := query.All(ctx)
+	if err != nil {
+		return err
+	}
+	for _, n := range neighbors {
+		nodes, ok := nodeids[n.ID]
+		if !ok {
+			return fmt.Errorf(`unexpected foreign-key "source_group_id" returned %v`, n.ID)
+		}
+		for i := range nodes {
+			assign(nodes[i], n)
+		}
+	}
+	return nil
+}
 func (_q *UsageLogQuery) loadCustomGroup(ctx context.Context, query *UserCustomGroupQuery, nodes []*UsageLog, init func(*UsageLog), assign func(*UsageLog, *UserCustomGroup)) error {
 	ids := make([]int64, 0, len(nodes))
 	nodeids := make(map[int64][]*UsageLog)
@@ -844,6 +918,9 @@ func (_q *UsageLogQuery) querySpec() *sqlgraph.QuerySpec {
 		}
 		if _q.withGroup != nil {
 			_spec.Node.AddColumnOnce(usagelog.FieldGroupID)
+		}
+		if _q.withSourceGroup != nil {
+			_spec.Node.AddColumnOnce(usagelog.FieldSourceGroupID)
 		}
 		if _q.withCustomGroup != nil {
 			_spec.Node.AddColumnOnce(usagelog.FieldCustomGroupID)

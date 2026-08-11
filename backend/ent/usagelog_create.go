@@ -184,6 +184,20 @@ func (_c *UsageLogCreate) SetNillableGroupID(v *int64) *UsageLogCreate {
 	return _c
 }
 
+// SetSourceGroupID sets the "source_group_id" field.
+func (_c *UsageLogCreate) SetSourceGroupID(v int64) *UsageLogCreate {
+	_c.mutation.SetSourceGroupID(v)
+	return _c
+}
+
+// SetNillableSourceGroupID sets the "source_group_id" field if the given value is not nil.
+func (_c *UsageLogCreate) SetNillableSourceGroupID(v *int64) *UsageLogCreate {
+	if v != nil {
+		_c.SetSourceGroupID(*v)
+	}
+	return _c
+}
+
 // SetCustomGroupID sets the "custom_group_id" field.
 func (_c *UsageLogCreate) SetCustomGroupID(v int64) *UsageLogCreate {
 	_c.mutation.SetCustomGroupID(v)
@@ -684,6 +698,11 @@ func (_c *UsageLogCreate) SetAccount(v *Account) *UsageLogCreate {
 // SetGroup sets the "group" edge to the Group entity.
 func (_c *UsageLogCreate) SetGroup(v *Group) *UsageLogCreate {
 	return _c.SetGroupID(v.ID)
+}
+
+// SetSourceGroup sets the "source_group" edge to the Group entity.
+func (_c *UsageLogCreate) SetSourceGroup(v *Group) *UsageLogCreate {
+	return _c.SetSourceGroupID(v.ID)
 }
 
 // SetCustomGroup sets the "custom_group" edge to the UserCustomGroup entity.
@@ -1248,6 +1267,23 @@ func (_c *UsageLogCreate) createSpec() (*UsageLog, *sqlgraph.CreateSpec) {
 		_node.GroupID = &nodes[0]
 		_spec.Edges = append(_spec.Edges, edge)
 	}
+	if nodes := _c.mutation.SourceGroupIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: false,
+			Table:   usagelog.SourceGroupTable,
+			Columns: []string{usagelog.SourceGroupColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(group.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_node.SourceGroupID = &nodes[0]
+		_spec.Edges = append(_spec.Edges, edge)
+	}
 	if nodes := _c.mutation.CustomGroupIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.M2O,
@@ -1559,6 +1595,24 @@ func (u *UsageLogUpsert) UpdateGroupID() *UsageLogUpsert {
 // ClearGroupID clears the value of the "group_id" field.
 func (u *UsageLogUpsert) ClearGroupID() *UsageLogUpsert {
 	u.SetNull(usagelog.FieldGroupID)
+	return u
+}
+
+// SetSourceGroupID sets the "source_group_id" field.
+func (u *UsageLogUpsert) SetSourceGroupID(v int64) *UsageLogUpsert {
+	u.Set(usagelog.FieldSourceGroupID, v)
+	return u
+}
+
+// UpdateSourceGroupID sets the "source_group_id" field to the value that was provided on create.
+func (u *UsageLogUpsert) UpdateSourceGroupID() *UsageLogUpsert {
+	u.SetExcluded(usagelog.FieldSourceGroupID)
+	return u
+}
+
+// ClearSourceGroupID clears the value of the "source_group_id" field.
+func (u *UsageLogUpsert) ClearSourceGroupID() *UsageLogUpsert {
+	u.SetNull(usagelog.FieldSourceGroupID)
 	return u
 }
 
@@ -2488,6 +2542,27 @@ func (u *UsageLogUpsertOne) UpdateGroupID() *UsageLogUpsertOne {
 func (u *UsageLogUpsertOne) ClearGroupID() *UsageLogUpsertOne {
 	return u.Update(func(s *UsageLogUpsert) {
 		s.ClearGroupID()
+	})
+}
+
+// SetSourceGroupID sets the "source_group_id" field.
+func (u *UsageLogUpsertOne) SetSourceGroupID(v int64) *UsageLogUpsertOne {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.SetSourceGroupID(v)
+	})
+}
+
+// UpdateSourceGroupID sets the "source_group_id" field to the value that was provided on create.
+func (u *UsageLogUpsertOne) UpdateSourceGroupID() *UsageLogUpsertOne {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.UpdateSourceGroupID()
+	})
+}
+
+// ClearSourceGroupID clears the value of the "source_group_id" field.
+func (u *UsageLogUpsertOne) ClearSourceGroupID() *UsageLogUpsertOne {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.ClearSourceGroupID()
 	})
 }
 
@@ -3686,6 +3761,27 @@ func (u *UsageLogUpsertBulk) UpdateGroupID() *UsageLogUpsertBulk {
 func (u *UsageLogUpsertBulk) ClearGroupID() *UsageLogUpsertBulk {
 	return u.Update(func(s *UsageLogUpsert) {
 		s.ClearGroupID()
+	})
+}
+
+// SetSourceGroupID sets the "source_group_id" field.
+func (u *UsageLogUpsertBulk) SetSourceGroupID(v int64) *UsageLogUpsertBulk {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.SetSourceGroupID(v)
+	})
+}
+
+// UpdateSourceGroupID sets the "source_group_id" field to the value that was provided on create.
+func (u *UsageLogUpsertBulk) UpdateSourceGroupID() *UsageLogUpsertBulk {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.UpdateSourceGroupID()
+	})
+}
+
+// ClearSourceGroupID clears the value of the "source_group_id" field.
+func (u *UsageLogUpsertBulk) ClearSourceGroupID() *UsageLogUpsertBulk {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.ClearSourceGroupID()
 	})
 }
 

@@ -125,6 +125,11 @@ func GroupID(v int64) predicate.UsageLog {
 	return predicate.UsageLog(sql.FieldEQ(FieldGroupID, v))
 }
 
+// SourceGroupID applies equality check predicate on the "source_group_id" field. It's identical to SourceGroupIDEQ.
+func SourceGroupID(v int64) predicate.UsageLog {
+	return predicate.UsageLog(sql.FieldEQ(FieldSourceGroupID, v))
+}
+
 // CustomGroupID applies equality check predicate on the "custom_group_id" field. It's identical to CustomGroupIDEQ.
 func CustomGroupID(v int64) predicate.UsageLog {
 	return predicate.UsageLog(sql.FieldEQ(FieldCustomGroupID, v))
@@ -1033,6 +1038,36 @@ func GroupIDIsNil() predicate.UsageLog {
 // GroupIDNotNil applies the NotNil predicate on the "group_id" field.
 func GroupIDNotNil() predicate.UsageLog {
 	return predicate.UsageLog(sql.FieldNotNull(FieldGroupID))
+}
+
+// SourceGroupIDEQ applies the EQ predicate on the "source_group_id" field.
+func SourceGroupIDEQ(v int64) predicate.UsageLog {
+	return predicate.UsageLog(sql.FieldEQ(FieldSourceGroupID, v))
+}
+
+// SourceGroupIDNEQ applies the NEQ predicate on the "source_group_id" field.
+func SourceGroupIDNEQ(v int64) predicate.UsageLog {
+	return predicate.UsageLog(sql.FieldNEQ(FieldSourceGroupID, v))
+}
+
+// SourceGroupIDIn applies the In predicate on the "source_group_id" field.
+func SourceGroupIDIn(vs ...int64) predicate.UsageLog {
+	return predicate.UsageLog(sql.FieldIn(FieldSourceGroupID, vs...))
+}
+
+// SourceGroupIDNotIn applies the NotIn predicate on the "source_group_id" field.
+func SourceGroupIDNotIn(vs ...int64) predicate.UsageLog {
+	return predicate.UsageLog(sql.FieldNotIn(FieldSourceGroupID, vs...))
+}
+
+// SourceGroupIDIsNil applies the IsNil predicate on the "source_group_id" field.
+func SourceGroupIDIsNil() predicate.UsageLog {
+	return predicate.UsageLog(sql.FieldIsNull(FieldSourceGroupID))
+}
+
+// SourceGroupIDNotNil applies the NotNil predicate on the "source_group_id" field.
+func SourceGroupIDNotNil() predicate.UsageLog {
+	return predicate.UsageLog(sql.FieldNotNull(FieldSourceGroupID))
 }
 
 // CustomGroupIDEQ applies the EQ predicate on the "custom_group_id" field.
@@ -2664,6 +2699,29 @@ func HasGroup() predicate.UsageLog {
 func HasGroupWith(preds ...predicate.Group) predicate.UsageLog {
 	return predicate.UsageLog(func(s *sql.Selector) {
 		step := newGroupStep()
+		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
+			for _, p := range preds {
+				p(s)
+			}
+		})
+	})
+}
+
+// HasSourceGroup applies the HasEdge predicate on the "source_group" edge.
+func HasSourceGroup() predicate.UsageLog {
+	return predicate.UsageLog(func(s *sql.Selector) {
+		step := sqlgraph.NewStep(
+			sqlgraph.From(Table, FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, false, SourceGroupTable, SourceGroupColumn),
+		)
+		sqlgraph.HasNeighbors(s, step)
+	})
+}
+
+// HasSourceGroupWith applies the HasEdge predicate on the "source_group" edge with a given conditions (other predicates).
+func HasSourceGroupWith(preds ...predicate.Group) predicate.UsageLog {
+	return predicate.UsageLog(func(s *sql.Selector) {
+		step := newSourceGroupStep()
 		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
 			for _, p := range preds {
 				p(s)

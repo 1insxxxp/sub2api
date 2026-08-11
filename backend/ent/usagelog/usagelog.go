@@ -42,6 +42,8 @@ const (
 	FieldBillingMode = "billing_mode"
 	// FieldGroupID holds the string denoting the group_id field in the database.
 	FieldGroupID = "group_id"
+	// FieldSourceGroupID holds the string denoting the source_group_id field in the database.
+	FieldSourceGroupID = "source_group_id"
 	// FieldCustomGroupID holds the string denoting the custom_group_id field in the database.
 	FieldCustomGroupID = "custom_group_id"
 	// FieldSubscriptionID holds the string denoting the subscription_id field in the database.
@@ -120,6 +122,8 @@ const (
 	EdgeAccount = "account"
 	// EdgeGroup holds the string denoting the group edge name in mutations.
 	EdgeGroup = "group"
+	// EdgeSourceGroup holds the string denoting the source_group edge name in mutations.
+	EdgeSourceGroup = "source_group"
 	// EdgeCustomGroup holds the string denoting the custom_group edge name in mutations.
 	EdgeCustomGroup = "custom_group"
 	// EdgeSubscription holds the string denoting the subscription edge name in mutations.
@@ -154,6 +158,13 @@ const (
 	GroupInverseTable = "groups"
 	// GroupColumn is the table column denoting the group relation/edge.
 	GroupColumn = "group_id"
+	// SourceGroupTable is the table that holds the source_group relation/edge.
+	SourceGroupTable = "usage_logs"
+	// SourceGroupInverseTable is the table name for the Group entity.
+	// It exists in this package in order to avoid circular dependency with the "group" package.
+	SourceGroupInverseTable = "groups"
+	// SourceGroupColumn is the table column denoting the source_group relation/edge.
+	SourceGroupColumn = "source_group_id"
 	// CustomGroupTable is the table that holds the custom_group relation/edge.
 	CustomGroupTable = "usage_logs"
 	// CustomGroupInverseTable is the table name for the UserCustomGroup entity.
@@ -187,6 +198,7 @@ var Columns = []string{
 	FieldBillingTier,
 	FieldBillingMode,
 	FieldGroupID,
+	FieldSourceGroupID,
 	FieldCustomGroupID,
 	FieldSubscriptionID,
 	FieldInputTokens,
@@ -387,6 +399,11 @@ func ByGroupID(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldGroupID, opts...).ToFunc()
 }
 
+// BySourceGroupID orders the results by the source_group_id field.
+func BySourceGroupID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldSourceGroupID, opts...).ToFunc()
+}
+
 // ByCustomGroupID orders the results by the custom_group_id field.
 func ByCustomGroupID(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldCustomGroupID, opts...).ToFunc()
@@ -585,6 +602,13 @@ func ByGroupField(field string, opts ...sql.OrderTermOption) OrderOption {
 	}
 }
 
+// BySourceGroupField orders the results by source_group field.
+func BySourceGroupField(field string, opts ...sql.OrderTermOption) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborTerms(s, newSourceGroupStep(), sql.OrderByField(field, opts...))
+	}
+}
+
 // ByCustomGroupField orders the results by custom_group field.
 func ByCustomGroupField(field string, opts ...sql.OrderTermOption) OrderOption {
 	return func(s *sql.Selector) {
@@ -624,6 +648,13 @@ func newGroupStep() *sqlgraph.Step {
 		sqlgraph.From(Table, FieldID),
 		sqlgraph.To(GroupInverseTable, FieldID),
 		sqlgraph.Edge(sqlgraph.M2O, true, GroupTable, GroupColumn),
+	)
+}
+func newSourceGroupStep() *sqlgraph.Step {
+	return sqlgraph.NewStep(
+		sqlgraph.From(Table, FieldID),
+		sqlgraph.To(SourceGroupInverseTable, FieldID),
+		sqlgraph.Edge(sqlgraph.M2O, false, SourceGroupTable, SourceGroupColumn),
 	)
 }
 func newCustomGroupStep() *sqlgraph.Step {

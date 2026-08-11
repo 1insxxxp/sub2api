@@ -290,6 +290,26 @@ func (_u *UsageLogUpdate) ClearGroupID() *UsageLogUpdate {
 	return _u
 }
 
+// SetSourceGroupID sets the "source_group_id" field.
+func (_u *UsageLogUpdate) SetSourceGroupID(v int64) *UsageLogUpdate {
+	_u.mutation.SetSourceGroupID(v)
+	return _u
+}
+
+// SetNillableSourceGroupID sets the "source_group_id" field if the given value is not nil.
+func (_u *UsageLogUpdate) SetNillableSourceGroupID(v *int64) *UsageLogUpdate {
+	if v != nil {
+		_u.SetSourceGroupID(*v)
+	}
+	return _u
+}
+
+// ClearSourceGroupID clears the value of the "source_group_id" field.
+func (_u *UsageLogUpdate) ClearSourceGroupID() *UsageLogUpdate {
+	_u.mutation.ClearSourceGroupID()
+	return _u
+}
+
 // SetCustomGroupID sets the "custom_group_id" field.
 func (_u *UsageLogUpdate) SetCustomGroupID(v int64) *UsageLogUpdate {
 	_u.mutation.SetCustomGroupID(v)
@@ -1009,6 +1029,11 @@ func (_u *UsageLogUpdate) SetGroup(v *Group) *UsageLogUpdate {
 	return _u.SetGroupID(v.ID)
 }
 
+// SetSourceGroup sets the "source_group" edge to the Group entity.
+func (_u *UsageLogUpdate) SetSourceGroup(v *Group) *UsageLogUpdate {
+	return _u.SetSourceGroupID(v.ID)
+}
+
 // SetCustomGroup sets the "custom_group" edge to the UserCustomGroup entity.
 func (_u *UsageLogUpdate) SetCustomGroup(v *UserCustomGroup) *UsageLogUpdate {
 	return _u.SetCustomGroupID(v.ID)
@@ -1045,6 +1070,12 @@ func (_u *UsageLogUpdate) ClearAccount() *UsageLogUpdate {
 // ClearGroup clears the "group" edge to the Group entity.
 func (_u *UsageLogUpdate) ClearGroup() *UsageLogUpdate {
 	_u.mutation.ClearGroup()
+	return _u
+}
+
+// ClearSourceGroup clears the "source_group" edge to the Group entity.
+func (_u *UsageLogUpdate) ClearSourceGroup() *UsageLogUpdate {
+	_u.mutation.ClearSourceGroup()
 	return _u
 }
 
@@ -1556,6 +1587,35 @@ func (_u *UsageLogUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 		}
 		_spec.Edges.Add = append(_spec.Edges.Add, edge)
 	}
+	if _u.mutation.SourceGroupCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: false,
+			Table:   usagelog.SourceGroupTable,
+			Columns: []string{usagelog.SourceGroupColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(group.FieldID, field.TypeInt64),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.SourceGroupIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: false,
+			Table:   usagelog.SourceGroupTable,
+			Columns: []string{usagelog.SourceGroupColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(group.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
 	if _u.mutation.CustomGroupCleared() {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.M2O,
@@ -1888,6 +1948,26 @@ func (_u *UsageLogUpdateOne) SetNillableGroupID(v *int64) *UsageLogUpdateOne {
 // ClearGroupID clears the value of the "group_id" field.
 func (_u *UsageLogUpdateOne) ClearGroupID() *UsageLogUpdateOne {
 	_u.mutation.ClearGroupID()
+	return _u
+}
+
+// SetSourceGroupID sets the "source_group_id" field.
+func (_u *UsageLogUpdateOne) SetSourceGroupID(v int64) *UsageLogUpdateOne {
+	_u.mutation.SetSourceGroupID(v)
+	return _u
+}
+
+// SetNillableSourceGroupID sets the "source_group_id" field if the given value is not nil.
+func (_u *UsageLogUpdateOne) SetNillableSourceGroupID(v *int64) *UsageLogUpdateOne {
+	if v != nil {
+		_u.SetSourceGroupID(*v)
+	}
+	return _u
+}
+
+// ClearSourceGroupID clears the value of the "source_group_id" field.
+func (_u *UsageLogUpdateOne) ClearSourceGroupID() *UsageLogUpdateOne {
+	_u.mutation.ClearSourceGroupID()
 	return _u
 }
 
@@ -2610,6 +2690,11 @@ func (_u *UsageLogUpdateOne) SetGroup(v *Group) *UsageLogUpdateOne {
 	return _u.SetGroupID(v.ID)
 }
 
+// SetSourceGroup sets the "source_group" edge to the Group entity.
+func (_u *UsageLogUpdateOne) SetSourceGroup(v *Group) *UsageLogUpdateOne {
+	return _u.SetSourceGroupID(v.ID)
+}
+
 // SetCustomGroup sets the "custom_group" edge to the UserCustomGroup entity.
 func (_u *UsageLogUpdateOne) SetCustomGroup(v *UserCustomGroup) *UsageLogUpdateOne {
 	return _u.SetCustomGroupID(v.ID)
@@ -2646,6 +2731,12 @@ func (_u *UsageLogUpdateOne) ClearAccount() *UsageLogUpdateOne {
 // ClearGroup clears the "group" edge to the Group entity.
 func (_u *UsageLogUpdateOne) ClearGroup() *UsageLogUpdateOne {
 	_u.mutation.ClearGroup()
+	return _u
+}
+
+// ClearSourceGroup clears the "source_group" edge to the Group entity.
+func (_u *UsageLogUpdateOne) ClearSourceGroup() *UsageLogUpdateOne {
+	_u.mutation.ClearSourceGroup()
 	return _u
 }
 
@@ -3177,6 +3268,35 @@ func (_u *UsageLogUpdateOne) sqlSave(ctx context.Context) (_node *UsageLog, err 
 			Inverse: true,
 			Table:   usagelog.GroupTable,
 			Columns: []string{usagelog.GroupColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(group.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
+	if _u.mutation.SourceGroupCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: false,
+			Table:   usagelog.SourceGroupTable,
+			Columns: []string{usagelog.SourceGroupColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(group.FieldID, field.TypeInt64),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.SourceGroupIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: false,
+			Table:   usagelog.SourceGroupTable,
+			Columns: []string{usagelog.SourceGroupColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(group.FieldID, field.TypeInt64),

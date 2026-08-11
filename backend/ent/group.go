@@ -51,6 +51,8 @@ type Group struct {
 	Platform string `json:"platform,omitempty"`
 	// SubscriptionType holds the value of the "subscription_type" field.
 	SubscriptionType string `json:"subscription_type,omitempty"`
+	// 是否启用系统级自定义模型路由
+	SystemCustomRoutingEnabled bool `json:"system_custom_routing_enabled,omitempty"`
 	// DailyLimitUsd holds the value of the "daily_limit_usd" field.
 	DailyLimitUsd *float64 `json:"daily_limit_usd,omitempty"`
 	// WeeklyLimitUsd holds the value of the "weekly_limit_usd" field.
@@ -161,6 +163,10 @@ type GroupEdges struct {
 	UsageLogs []*UsageLog `json:"usage_logs,omitempty"`
 	// CustomModelRoutes holds the value of the custom_model_routes edge.
 	CustomModelRoutes []*UserCustomGroupModel `json:"custom_model_routes,omitempty"`
+	// SystemCustomRoutes holds the value of the system_custom_routes edge.
+	SystemCustomRoutes []*SystemCustomGroupModel `json:"system_custom_routes,omitempty"`
+	// SystemCustomSourceRoutes holds the value of the system_custom_source_routes edge.
+	SystemCustomSourceRoutes []*SystemCustomGroupModel `json:"system_custom_source_routes,omitempty"`
 	// Accounts holds the value of the accounts edge.
 	Accounts []*Account `json:"accounts,omitempty"`
 	// AllowedUsers holds the value of the allowed_users edge.
@@ -171,7 +177,7 @@ type GroupEdges struct {
 	UserAllowedGroups []*UserAllowedGroup `json:"user_allowed_groups,omitempty"`
 	// loadedTypes holds the information for reporting if a
 	// type was loaded (or requested) in eager-loading or not.
-	loadedTypes [9]bool
+	loadedTypes [11]bool
 }
 
 // APIKeysOrErr returns the APIKeys value or an error if the edge
@@ -219,10 +225,28 @@ func (e GroupEdges) CustomModelRoutesOrErr() ([]*UserCustomGroupModel, error) {
 	return nil, &NotLoadedError{edge: "custom_model_routes"}
 }
 
+// SystemCustomRoutesOrErr returns the SystemCustomRoutes value or an error if the edge
+// was not loaded in eager-loading.
+func (e GroupEdges) SystemCustomRoutesOrErr() ([]*SystemCustomGroupModel, error) {
+	if e.loadedTypes[5] {
+		return e.SystemCustomRoutes, nil
+	}
+	return nil, &NotLoadedError{edge: "system_custom_routes"}
+}
+
+// SystemCustomSourceRoutesOrErr returns the SystemCustomSourceRoutes value or an error if the edge
+// was not loaded in eager-loading.
+func (e GroupEdges) SystemCustomSourceRoutesOrErr() ([]*SystemCustomGroupModel, error) {
+	if e.loadedTypes[6] {
+		return e.SystemCustomSourceRoutes, nil
+	}
+	return nil, &NotLoadedError{edge: "system_custom_source_routes"}
+}
+
 // AccountsOrErr returns the Accounts value or an error if the edge
 // was not loaded in eager-loading.
 func (e GroupEdges) AccountsOrErr() ([]*Account, error) {
-	if e.loadedTypes[5] {
+	if e.loadedTypes[7] {
 		return e.Accounts, nil
 	}
 	return nil, &NotLoadedError{edge: "accounts"}
@@ -231,7 +255,7 @@ func (e GroupEdges) AccountsOrErr() ([]*Account, error) {
 // AllowedUsersOrErr returns the AllowedUsers value or an error if the edge
 // was not loaded in eager-loading.
 func (e GroupEdges) AllowedUsersOrErr() ([]*User, error) {
-	if e.loadedTypes[6] {
+	if e.loadedTypes[8] {
 		return e.AllowedUsers, nil
 	}
 	return nil, &NotLoadedError{edge: "allowed_users"}
@@ -240,7 +264,7 @@ func (e GroupEdges) AllowedUsersOrErr() ([]*User, error) {
 // AccountGroupsOrErr returns the AccountGroups value or an error if the edge
 // was not loaded in eager-loading.
 func (e GroupEdges) AccountGroupsOrErr() ([]*AccountGroup, error) {
-	if e.loadedTypes[7] {
+	if e.loadedTypes[9] {
 		return e.AccountGroups, nil
 	}
 	return nil, &NotLoadedError{edge: "account_groups"}
@@ -249,7 +273,7 @@ func (e GroupEdges) AccountGroupsOrErr() ([]*AccountGroup, error) {
 // UserAllowedGroupsOrErr returns the UserAllowedGroups value or an error if the edge
 // was not loaded in eager-loading.
 func (e GroupEdges) UserAllowedGroupsOrErr() ([]*UserAllowedGroup, error) {
-	if e.loadedTypes[8] {
+	if e.loadedTypes[10] {
 		return e.UserAllowedGroups, nil
 	}
 	return nil, &NotLoadedError{edge: "user_allowed_groups"}
@@ -262,7 +286,7 @@ func (*Group) scanValues(columns []string) ([]any, error) {
 		switch columns[i] {
 		case group.FieldVideoModelPrices, group.FieldModelRouting, group.FieldSupportedModelScopes, group.FieldMessagesDispatchModelConfig, group.FieldModelsListConfig, group.FieldReasoningEffortMappings:
 			values[i] = new([]byte)
-		case group.FieldEmptyResponseCompensationEnabled, group.FieldPeakRateEnabled, group.FieldIsExclusive, group.FieldAllowImageGeneration, group.FieldAllowBatchImageGeneration, group.FieldImageRateIndependent, group.FieldVideoRateIndependent, group.FieldClaudeCodeOnly, group.FieldModelRoutingEnabled, group.FieldMcpXMLInject, group.FieldAllowMessagesDispatch, group.FieldAllowLive, group.FieldRequireOauthOnly, group.FieldRequirePrivacySet, group.FieldProfitControlEnabled:
+		case group.FieldEmptyResponseCompensationEnabled, group.FieldPeakRateEnabled, group.FieldIsExclusive, group.FieldSystemCustomRoutingEnabled, group.FieldAllowImageGeneration, group.FieldAllowBatchImageGeneration, group.FieldImageRateIndependent, group.FieldVideoRateIndependent, group.FieldClaudeCodeOnly, group.FieldModelRoutingEnabled, group.FieldMcpXMLInject, group.FieldAllowMessagesDispatch, group.FieldAllowLive, group.FieldRequireOauthOnly, group.FieldRequirePrivacySet, group.FieldProfitControlEnabled:
 			values[i] = new(sql.NullBool)
 		case group.FieldRateMultiplier, group.FieldPeakRateMultiplier, group.FieldDailyLimitUsd, group.FieldWeeklyLimitUsd, group.FieldMonthlyLimitUsd, group.FieldImageRateMultiplier, group.FieldImagePrice1k, group.FieldImagePrice2k, group.FieldImagePrice4k, group.FieldBatchImageDiscountMultiplier, group.FieldBatchImageHoldMultiplier, group.FieldVideoRateMultiplier, group.FieldVideoPrice480p, group.FieldVideoPrice720p, group.FieldVideoPrice1080p, group.FieldWebSearchPricePerCall, group.FieldSearchPricePer1k, group.FieldAudioRealtimePricePerMin, group.FieldAudioTtsPricePerMillionChars, group.FieldAudioSttPricePerHour, group.FieldProfitMinMargin, group.FieldProfitSafetyBuffer:
 			values[i] = new(sql.NullFloat64)
@@ -391,6 +415,12 @@ func (_m *Group) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field subscription_type", values[i])
 			} else if value.Valid {
 				_m.SubscriptionType = value.String
+			}
+		case group.FieldSystemCustomRoutingEnabled:
+			if value, ok := values[i].(*sql.NullBool); !ok {
+				return fmt.Errorf("unexpected type %T for field system_custom_routing_enabled", values[i])
+			} else if value.Valid {
+				_m.SystemCustomRoutingEnabled = value.Bool
 			}
 		case group.FieldDailyLimitUsd:
 			if value, ok := values[i].(*sql.NullFloat64); !ok {
@@ -734,6 +764,16 @@ func (_m *Group) QueryCustomModelRoutes() *UserCustomGroupModelQuery {
 	return NewGroupClient(_m.config).QueryCustomModelRoutes(_m)
 }
 
+// QuerySystemCustomRoutes queries the "system_custom_routes" edge of the Group entity.
+func (_m *Group) QuerySystemCustomRoutes() *SystemCustomGroupModelQuery {
+	return NewGroupClient(_m.config).QuerySystemCustomRoutes(_m)
+}
+
+// QuerySystemCustomSourceRoutes queries the "system_custom_source_routes" edge of the Group entity.
+func (_m *Group) QuerySystemCustomSourceRoutes() *SystemCustomGroupModelQuery {
+	return NewGroupClient(_m.config).QuerySystemCustomSourceRoutes(_m)
+}
+
 // QueryAccounts queries the "accounts" edge of the Group entity.
 func (_m *Group) QueryAccounts() *AccountQuery {
 	return NewGroupClient(_m.config).QueryAccounts(_m)
@@ -830,6 +870,9 @@ func (_m *Group) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("subscription_type=")
 	builder.WriteString(_m.SubscriptionType)
+	builder.WriteString(", ")
+	builder.WriteString("system_custom_routing_enabled=")
+	builder.WriteString(fmt.Sprintf("%v", _m.SystemCustomRoutingEnabled))
 	builder.WriteString(", ")
 	if v := _m.DailyLimitUsd; v != nil {
 		builder.WriteString("daily_limit_usd=")

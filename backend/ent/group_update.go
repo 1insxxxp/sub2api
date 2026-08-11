@@ -17,6 +17,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/group"
 	"github.com/Wei-Shaw/sub2api/ent/predicate"
 	"github.com/Wei-Shaw/sub2api/ent/redeemcode"
+	"github.com/Wei-Shaw/sub2api/ent/systemcustomgroupmodel"
 	"github.com/Wei-Shaw/sub2api/ent/usagelog"
 	"github.com/Wei-Shaw/sub2api/ent/user"
 	"github.com/Wei-Shaw/sub2api/ent/usercustomgroupmodel"
@@ -247,6 +248,20 @@ func (_u *GroupUpdate) SetSubscriptionType(v string) *GroupUpdate {
 func (_u *GroupUpdate) SetNillableSubscriptionType(v *string) *GroupUpdate {
 	if v != nil {
 		_u.SetSubscriptionType(*v)
+	}
+	return _u
+}
+
+// SetSystemCustomRoutingEnabled sets the "system_custom_routing_enabled" field.
+func (_u *GroupUpdate) SetSystemCustomRoutingEnabled(v bool) *GroupUpdate {
+	_u.mutation.SetSystemCustomRoutingEnabled(v)
+	return _u
+}
+
+// SetNillableSystemCustomRoutingEnabled sets the "system_custom_routing_enabled" field if the given value is not nil.
+func (_u *GroupUpdate) SetNillableSystemCustomRoutingEnabled(v *bool) *GroupUpdate {
+	if v != nil {
+		_u.SetSystemCustomRoutingEnabled(*v)
 	}
 	return _u
 }
@@ -1233,6 +1248,36 @@ func (_u *GroupUpdate) AddCustomModelRoutes(v ...*UserCustomGroupModel) *GroupUp
 	return _u.AddCustomModelRouteIDs(ids...)
 }
 
+// AddSystemCustomRouteIDs adds the "system_custom_routes" edge to the SystemCustomGroupModel entity by IDs.
+func (_u *GroupUpdate) AddSystemCustomRouteIDs(ids ...int64) *GroupUpdate {
+	_u.mutation.AddSystemCustomRouteIDs(ids...)
+	return _u
+}
+
+// AddSystemCustomRoutes adds the "system_custom_routes" edges to the SystemCustomGroupModel entity.
+func (_u *GroupUpdate) AddSystemCustomRoutes(v ...*SystemCustomGroupModel) *GroupUpdate {
+	ids := make([]int64, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.AddSystemCustomRouteIDs(ids...)
+}
+
+// AddSystemCustomSourceRouteIDs adds the "system_custom_source_routes" edge to the SystemCustomGroupModel entity by IDs.
+func (_u *GroupUpdate) AddSystemCustomSourceRouteIDs(ids ...int64) *GroupUpdate {
+	_u.mutation.AddSystemCustomSourceRouteIDs(ids...)
+	return _u
+}
+
+// AddSystemCustomSourceRoutes adds the "system_custom_source_routes" edges to the SystemCustomGroupModel entity.
+func (_u *GroupUpdate) AddSystemCustomSourceRoutes(v ...*SystemCustomGroupModel) *GroupUpdate {
+	ids := make([]int64, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.AddSystemCustomSourceRouteIDs(ids...)
+}
+
 // AddAccountIDs adds the "accounts" edge to the Account entity by IDs.
 func (_u *GroupUpdate) AddAccountIDs(ids ...int64) *GroupUpdate {
 	_u.mutation.AddAccountIDs(ids...)
@@ -1371,6 +1416,48 @@ func (_u *GroupUpdate) RemoveCustomModelRoutes(v ...*UserCustomGroupModel) *Grou
 		ids[i] = v[i].ID
 	}
 	return _u.RemoveCustomModelRouteIDs(ids...)
+}
+
+// ClearSystemCustomRoutes clears all "system_custom_routes" edges to the SystemCustomGroupModel entity.
+func (_u *GroupUpdate) ClearSystemCustomRoutes() *GroupUpdate {
+	_u.mutation.ClearSystemCustomRoutes()
+	return _u
+}
+
+// RemoveSystemCustomRouteIDs removes the "system_custom_routes" edge to SystemCustomGroupModel entities by IDs.
+func (_u *GroupUpdate) RemoveSystemCustomRouteIDs(ids ...int64) *GroupUpdate {
+	_u.mutation.RemoveSystemCustomRouteIDs(ids...)
+	return _u
+}
+
+// RemoveSystemCustomRoutes removes "system_custom_routes" edges to SystemCustomGroupModel entities.
+func (_u *GroupUpdate) RemoveSystemCustomRoutes(v ...*SystemCustomGroupModel) *GroupUpdate {
+	ids := make([]int64, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.RemoveSystemCustomRouteIDs(ids...)
+}
+
+// ClearSystemCustomSourceRoutes clears all "system_custom_source_routes" edges to the SystemCustomGroupModel entity.
+func (_u *GroupUpdate) ClearSystemCustomSourceRoutes() *GroupUpdate {
+	_u.mutation.ClearSystemCustomSourceRoutes()
+	return _u
+}
+
+// RemoveSystemCustomSourceRouteIDs removes the "system_custom_source_routes" edge to SystemCustomGroupModel entities by IDs.
+func (_u *GroupUpdate) RemoveSystemCustomSourceRouteIDs(ids ...int64) *GroupUpdate {
+	_u.mutation.RemoveSystemCustomSourceRouteIDs(ids...)
+	return _u
+}
+
+// RemoveSystemCustomSourceRoutes removes "system_custom_source_routes" edges to SystemCustomGroupModel entities.
+func (_u *GroupUpdate) RemoveSystemCustomSourceRoutes(v ...*SystemCustomGroupModel) *GroupUpdate {
+	ids := make([]int64, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.RemoveSystemCustomSourceRouteIDs(ids...)
 }
 
 // ClearAccounts clears all "accounts" edges to the Account entity.
@@ -1595,6 +1682,9 @@ func (_u *GroupUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if value, ok := _u.mutation.SubscriptionType(); ok {
 		_spec.SetField(group.FieldSubscriptionType, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.SystemCustomRoutingEnabled(); ok {
+		_spec.SetField(group.FieldSystemCustomRoutingEnabled, field.TypeBool, value)
 	}
 	if value, ok := _u.mutation.DailyLimitUsd(); ok {
 		_spec.SetField(group.FieldDailyLimitUsd, field.TypeFloat64, value)
@@ -2098,6 +2188,96 @@ func (_u *GroupUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 		}
 		_spec.Edges.Add = append(_spec.Edges.Add, edge)
 	}
+	if _u.mutation.SystemCustomRoutesCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   group.SystemCustomRoutesTable,
+			Columns: []string{group.SystemCustomRoutesColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(systemcustomgroupmodel.FieldID, field.TypeInt64),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.RemovedSystemCustomRoutesIDs(); len(nodes) > 0 && !_u.mutation.SystemCustomRoutesCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   group.SystemCustomRoutesTable,
+			Columns: []string{group.SystemCustomRoutesColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(systemcustomgroupmodel.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.SystemCustomRoutesIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   group.SystemCustomRoutesTable,
+			Columns: []string{group.SystemCustomRoutesColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(systemcustomgroupmodel.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
+	if _u.mutation.SystemCustomSourceRoutesCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   group.SystemCustomSourceRoutesTable,
+			Columns: []string{group.SystemCustomSourceRoutesColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(systemcustomgroupmodel.FieldID, field.TypeInt64),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.RemovedSystemCustomSourceRoutesIDs(); len(nodes) > 0 && !_u.mutation.SystemCustomSourceRoutesCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   group.SystemCustomSourceRoutesTable,
+			Columns: []string{group.SystemCustomSourceRoutesColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(systemcustomgroupmodel.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.SystemCustomSourceRoutesIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   group.SystemCustomSourceRoutesTable,
+			Columns: []string{group.SystemCustomSourceRoutesColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(systemcustomgroupmodel.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
 	if _u.mutation.AccountsCleared() {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.M2M,
@@ -2442,6 +2622,20 @@ func (_u *GroupUpdateOne) SetSubscriptionType(v string) *GroupUpdateOne {
 func (_u *GroupUpdateOne) SetNillableSubscriptionType(v *string) *GroupUpdateOne {
 	if v != nil {
 		_u.SetSubscriptionType(*v)
+	}
+	return _u
+}
+
+// SetSystemCustomRoutingEnabled sets the "system_custom_routing_enabled" field.
+func (_u *GroupUpdateOne) SetSystemCustomRoutingEnabled(v bool) *GroupUpdateOne {
+	_u.mutation.SetSystemCustomRoutingEnabled(v)
+	return _u
+}
+
+// SetNillableSystemCustomRoutingEnabled sets the "system_custom_routing_enabled" field if the given value is not nil.
+func (_u *GroupUpdateOne) SetNillableSystemCustomRoutingEnabled(v *bool) *GroupUpdateOne {
+	if v != nil {
+		_u.SetSystemCustomRoutingEnabled(*v)
 	}
 	return _u
 }
@@ -3428,6 +3622,36 @@ func (_u *GroupUpdateOne) AddCustomModelRoutes(v ...*UserCustomGroupModel) *Grou
 	return _u.AddCustomModelRouteIDs(ids...)
 }
 
+// AddSystemCustomRouteIDs adds the "system_custom_routes" edge to the SystemCustomGroupModel entity by IDs.
+func (_u *GroupUpdateOne) AddSystemCustomRouteIDs(ids ...int64) *GroupUpdateOne {
+	_u.mutation.AddSystemCustomRouteIDs(ids...)
+	return _u
+}
+
+// AddSystemCustomRoutes adds the "system_custom_routes" edges to the SystemCustomGroupModel entity.
+func (_u *GroupUpdateOne) AddSystemCustomRoutes(v ...*SystemCustomGroupModel) *GroupUpdateOne {
+	ids := make([]int64, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.AddSystemCustomRouteIDs(ids...)
+}
+
+// AddSystemCustomSourceRouteIDs adds the "system_custom_source_routes" edge to the SystemCustomGroupModel entity by IDs.
+func (_u *GroupUpdateOne) AddSystemCustomSourceRouteIDs(ids ...int64) *GroupUpdateOne {
+	_u.mutation.AddSystemCustomSourceRouteIDs(ids...)
+	return _u
+}
+
+// AddSystemCustomSourceRoutes adds the "system_custom_source_routes" edges to the SystemCustomGroupModel entity.
+func (_u *GroupUpdateOne) AddSystemCustomSourceRoutes(v ...*SystemCustomGroupModel) *GroupUpdateOne {
+	ids := make([]int64, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.AddSystemCustomSourceRouteIDs(ids...)
+}
+
 // AddAccountIDs adds the "accounts" edge to the Account entity by IDs.
 func (_u *GroupUpdateOne) AddAccountIDs(ids ...int64) *GroupUpdateOne {
 	_u.mutation.AddAccountIDs(ids...)
@@ -3566,6 +3790,48 @@ func (_u *GroupUpdateOne) RemoveCustomModelRoutes(v ...*UserCustomGroupModel) *G
 		ids[i] = v[i].ID
 	}
 	return _u.RemoveCustomModelRouteIDs(ids...)
+}
+
+// ClearSystemCustomRoutes clears all "system_custom_routes" edges to the SystemCustomGroupModel entity.
+func (_u *GroupUpdateOne) ClearSystemCustomRoutes() *GroupUpdateOne {
+	_u.mutation.ClearSystemCustomRoutes()
+	return _u
+}
+
+// RemoveSystemCustomRouteIDs removes the "system_custom_routes" edge to SystemCustomGroupModel entities by IDs.
+func (_u *GroupUpdateOne) RemoveSystemCustomRouteIDs(ids ...int64) *GroupUpdateOne {
+	_u.mutation.RemoveSystemCustomRouteIDs(ids...)
+	return _u
+}
+
+// RemoveSystemCustomRoutes removes "system_custom_routes" edges to SystemCustomGroupModel entities.
+func (_u *GroupUpdateOne) RemoveSystemCustomRoutes(v ...*SystemCustomGroupModel) *GroupUpdateOne {
+	ids := make([]int64, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.RemoveSystemCustomRouteIDs(ids...)
+}
+
+// ClearSystemCustomSourceRoutes clears all "system_custom_source_routes" edges to the SystemCustomGroupModel entity.
+func (_u *GroupUpdateOne) ClearSystemCustomSourceRoutes() *GroupUpdateOne {
+	_u.mutation.ClearSystemCustomSourceRoutes()
+	return _u
+}
+
+// RemoveSystemCustomSourceRouteIDs removes the "system_custom_source_routes" edge to SystemCustomGroupModel entities by IDs.
+func (_u *GroupUpdateOne) RemoveSystemCustomSourceRouteIDs(ids ...int64) *GroupUpdateOne {
+	_u.mutation.RemoveSystemCustomSourceRouteIDs(ids...)
+	return _u
+}
+
+// RemoveSystemCustomSourceRoutes removes "system_custom_source_routes" edges to SystemCustomGroupModel entities.
+func (_u *GroupUpdateOne) RemoveSystemCustomSourceRoutes(v ...*SystemCustomGroupModel) *GroupUpdateOne {
+	ids := make([]int64, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.RemoveSystemCustomSourceRouteIDs(ids...)
 }
 
 // ClearAccounts clears all "accounts" edges to the Account entity.
@@ -3820,6 +4086,9 @@ func (_u *GroupUpdateOne) sqlSave(ctx context.Context) (_node *Group, err error)
 	}
 	if value, ok := _u.mutation.SubscriptionType(); ok {
 		_spec.SetField(group.FieldSubscriptionType, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.SystemCustomRoutingEnabled(); ok {
+		_spec.SetField(group.FieldSystemCustomRoutingEnabled, field.TypeBool, value)
 	}
 	if value, ok := _u.mutation.DailyLimitUsd(); ok {
 		_spec.SetField(group.FieldDailyLimitUsd, field.TypeFloat64, value)
@@ -4316,6 +4585,96 @@ func (_u *GroupUpdateOne) sqlSave(ctx context.Context) (_node *Group, err error)
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(usercustomgroupmodel.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
+	if _u.mutation.SystemCustomRoutesCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   group.SystemCustomRoutesTable,
+			Columns: []string{group.SystemCustomRoutesColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(systemcustomgroupmodel.FieldID, field.TypeInt64),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.RemovedSystemCustomRoutesIDs(); len(nodes) > 0 && !_u.mutation.SystemCustomRoutesCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   group.SystemCustomRoutesTable,
+			Columns: []string{group.SystemCustomRoutesColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(systemcustomgroupmodel.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.SystemCustomRoutesIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   group.SystemCustomRoutesTable,
+			Columns: []string{group.SystemCustomRoutesColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(systemcustomgroupmodel.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
+	if _u.mutation.SystemCustomSourceRoutesCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   group.SystemCustomSourceRoutesTable,
+			Columns: []string{group.SystemCustomSourceRoutesColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(systemcustomgroupmodel.FieldID, field.TypeInt64),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.RemovedSystemCustomSourceRoutesIDs(); len(nodes) > 0 && !_u.mutation.SystemCustomSourceRoutesCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   group.SystemCustomSourceRoutesTable,
+			Columns: []string{group.SystemCustomSourceRoutesColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(systemcustomgroupmodel.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.SystemCustomSourceRoutesIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   group.SystemCustomSourceRoutesTable,
+			Columns: []string{group.SystemCustomSourceRoutesColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(systemcustomgroupmodel.FieldID, field.TypeInt64),
 			},
 		}
 		for _, k := range nodes {

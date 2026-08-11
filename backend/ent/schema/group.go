@@ -83,6 +83,9 @@ func (Group) Fields() []ent.Field {
 		field.String("subscription_type").
 			MaxLen(20).
 			Default(domain.SubscriptionTypeStandard),
+		field.Bool("system_custom_routing_enabled").
+			Default(false).
+			Comment("是否启用系统级自定义模型路由"),
 		field.Float("daily_limit_usd").
 			Optional().
 			Nillable().
@@ -297,6 +300,10 @@ func (Group) Edges() []ent.Edge {
 		edge.To("subscriptions", UserSubscription.Type),
 		edge.To("usage_logs", UsageLog.Type),
 		edge.To("custom_model_routes", UserCustomGroupModel.Type),
+		edge.To("system_custom_routes", SystemCustomGroupModel.Type).
+			Annotations(entsql.OnDelete(entsql.Cascade)),
+		edge.To("system_custom_source_routes", SystemCustomGroupModel.Type).
+			Annotations(entsql.OnDelete(entsql.Restrict)),
 		edge.From("accounts", Account.Type).
 			Ref("groups").
 			Through("account_groups", AccountGroup.Type),

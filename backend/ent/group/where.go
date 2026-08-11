@@ -135,6 +135,11 @@ func SubscriptionType(v string) predicate.Group {
 	return predicate.Group(sql.FieldEQ(FieldSubscriptionType, v))
 }
 
+// SystemCustomRoutingEnabled applies equality check predicate on the "system_custom_routing_enabled" field. It's identical to SystemCustomRoutingEnabledEQ.
+func SystemCustomRoutingEnabled(v bool) predicate.Group {
+	return predicate.Group(sql.FieldEQ(FieldSystemCustomRoutingEnabled, v))
+}
+
 // DailyLimitUsd applies equality check predicate on the "daily_limit_usd" field. It's identical to DailyLimitUsdEQ.
 func DailyLimitUsd(v float64) predicate.Group {
 	return predicate.Group(sql.FieldEQ(FieldDailyLimitUsd, v))
@@ -1113,6 +1118,16 @@ func SubscriptionTypeEqualFold(v string) predicate.Group {
 // SubscriptionTypeContainsFold applies the ContainsFold predicate on the "subscription_type" field.
 func SubscriptionTypeContainsFold(v string) predicate.Group {
 	return predicate.Group(sql.FieldContainsFold(FieldSubscriptionType, v))
+}
+
+// SystemCustomRoutingEnabledEQ applies the EQ predicate on the "system_custom_routing_enabled" field.
+func SystemCustomRoutingEnabledEQ(v bool) predicate.Group {
+	return predicate.Group(sql.FieldEQ(FieldSystemCustomRoutingEnabled, v))
+}
+
+// SystemCustomRoutingEnabledNEQ applies the NEQ predicate on the "system_custom_routing_enabled" field.
+func SystemCustomRoutingEnabledNEQ(v bool) predicate.Group {
+	return predicate.Group(sql.FieldNEQ(FieldSystemCustomRoutingEnabled, v))
 }
 
 // DailyLimitUsdEQ applies the EQ predicate on the "daily_limit_usd" field.
@@ -2717,6 +2732,52 @@ func HasCustomModelRoutes() predicate.Group {
 func HasCustomModelRoutesWith(preds ...predicate.UserCustomGroupModel) predicate.Group {
 	return predicate.Group(func(s *sql.Selector) {
 		step := newCustomModelRoutesStep()
+		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
+			for _, p := range preds {
+				p(s)
+			}
+		})
+	})
+}
+
+// HasSystemCustomRoutes applies the HasEdge predicate on the "system_custom_routes" edge.
+func HasSystemCustomRoutes() predicate.Group {
+	return predicate.Group(func(s *sql.Selector) {
+		step := sqlgraph.NewStep(
+			sqlgraph.From(Table, FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, SystemCustomRoutesTable, SystemCustomRoutesColumn),
+		)
+		sqlgraph.HasNeighbors(s, step)
+	})
+}
+
+// HasSystemCustomRoutesWith applies the HasEdge predicate on the "system_custom_routes" edge with a given conditions (other predicates).
+func HasSystemCustomRoutesWith(preds ...predicate.SystemCustomGroupModel) predicate.Group {
+	return predicate.Group(func(s *sql.Selector) {
+		step := newSystemCustomRoutesStep()
+		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
+			for _, p := range preds {
+				p(s)
+			}
+		})
+	})
+}
+
+// HasSystemCustomSourceRoutes applies the HasEdge predicate on the "system_custom_source_routes" edge.
+func HasSystemCustomSourceRoutes() predicate.Group {
+	return predicate.Group(func(s *sql.Selector) {
+		step := sqlgraph.NewStep(
+			sqlgraph.From(Table, FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, SystemCustomSourceRoutesTable, SystemCustomSourceRoutesColumn),
+		)
+		sqlgraph.HasNeighbors(s, step)
+	})
+}
+
+// HasSystemCustomSourceRoutesWith applies the HasEdge predicate on the "system_custom_source_routes" edge with a given conditions (other predicates).
+func HasSystemCustomSourceRoutesWith(preds ...predicate.SystemCustomGroupModel) predicate.Group {
+	return predicate.Group(func(s *sql.Selector) {
+		step := newSystemCustomSourceRoutesStep()
 		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
 			for _, p := range preds {
 				p(s)

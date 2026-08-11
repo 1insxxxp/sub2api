@@ -48,6 +48,8 @@ const (
 	FieldPlatform = "platform"
 	// FieldSubscriptionType holds the string denoting the subscription_type field in the database.
 	FieldSubscriptionType = "subscription_type"
+	// FieldSystemCustomRoutingEnabled holds the string denoting the system_custom_routing_enabled field in the database.
+	FieldSystemCustomRoutingEnabled = "system_custom_routing_enabled"
 	// FieldDailyLimitUsd holds the string denoting the daily_limit_usd field in the database.
 	FieldDailyLimitUsd = "daily_limit_usd"
 	// FieldWeeklyLimitUsd holds the string denoting the weekly_limit_usd field in the database.
@@ -150,6 +152,10 @@ const (
 	EdgeUsageLogs = "usage_logs"
 	// EdgeCustomModelRoutes holds the string denoting the custom_model_routes edge name in mutations.
 	EdgeCustomModelRoutes = "custom_model_routes"
+	// EdgeSystemCustomRoutes holds the string denoting the system_custom_routes edge name in mutations.
+	EdgeSystemCustomRoutes = "system_custom_routes"
+	// EdgeSystemCustomSourceRoutes holds the string denoting the system_custom_source_routes edge name in mutations.
+	EdgeSystemCustomSourceRoutes = "system_custom_source_routes"
 	// EdgeAccounts holds the string denoting the accounts edge name in mutations.
 	EdgeAccounts = "accounts"
 	// EdgeAllowedUsers holds the string denoting the allowed_users edge name in mutations.
@@ -195,6 +201,20 @@ const (
 	CustomModelRoutesInverseTable = "user_custom_group_models"
 	// CustomModelRoutesColumn is the table column denoting the custom_model_routes relation/edge.
 	CustomModelRoutesColumn = "source_group_id"
+	// SystemCustomRoutesTable is the table that holds the system_custom_routes relation/edge.
+	SystemCustomRoutesTable = "system_custom_group_models"
+	// SystemCustomRoutesInverseTable is the table name for the SystemCustomGroupModel entity.
+	// It exists in this package in order to avoid circular dependency with the "systemcustomgroupmodel" package.
+	SystemCustomRoutesInverseTable = "system_custom_group_models"
+	// SystemCustomRoutesColumn is the table column denoting the system_custom_routes relation/edge.
+	SystemCustomRoutesColumn = "group_id"
+	// SystemCustomSourceRoutesTable is the table that holds the system_custom_source_routes relation/edge.
+	SystemCustomSourceRoutesTable = "system_custom_group_models"
+	// SystemCustomSourceRoutesInverseTable is the table name for the SystemCustomGroupModel entity.
+	// It exists in this package in order to avoid circular dependency with the "systemcustomgroupmodel" package.
+	SystemCustomSourceRoutesInverseTable = "system_custom_group_models"
+	// SystemCustomSourceRoutesColumn is the table column denoting the system_custom_source_routes relation/edge.
+	SystemCustomSourceRoutesColumn = "source_group_id"
 	// AccountsTable is the table that holds the accounts relation/edge. The primary key declared below.
 	AccountsTable = "account_groups"
 	// AccountsInverseTable is the table name for the Account entity.
@@ -240,6 +260,7 @@ var Columns = []string{
 	FieldDuplicateOperationID,
 	FieldPlatform,
 	FieldSubscriptionType,
+	FieldSystemCustomRoutingEnabled,
 	FieldDailyLimitUsd,
 	FieldWeeklyLimitUsd,
 	FieldMonthlyLimitUsd,
@@ -355,6 +376,8 @@ var (
 	DefaultSubscriptionType string
 	// SubscriptionTypeValidator is a validator for the "subscription_type" field. It is called by the builders before save.
 	SubscriptionTypeValidator func(string) error
+	// DefaultSystemCustomRoutingEnabled holds the default value on creation for the "system_custom_routing_enabled" field.
+	DefaultSystemCustomRoutingEnabled bool
 	// DefaultDefaultValidityDays holds the default value on creation for the "default_validity_days" field.
 	DefaultDefaultValidityDays int
 	// DefaultAllowImageGeneration holds the default value on creation for the "allow_image_generation" field.
@@ -513,6 +536,11 @@ func ByPlatform(opts ...sql.OrderTermOption) OrderOption {
 // BySubscriptionType orders the results by the subscription_type field.
 func BySubscriptionType(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldSubscriptionType, opts...).ToFunc()
+}
+
+// BySystemCustomRoutingEnabled orders the results by the system_custom_routing_enabled field.
+func BySystemCustomRoutingEnabled(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldSystemCustomRoutingEnabled, opts...).ToFunc()
 }
 
 // ByDailyLimitUsd orders the results by the daily_limit_usd field.
@@ -785,6 +813,34 @@ func ByCustomModelRoutes(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption
 	}
 }
 
+// BySystemCustomRoutesCount orders the results by system_custom_routes count.
+func BySystemCustomRoutesCount(opts ...sql.OrderTermOption) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborsCount(s, newSystemCustomRoutesStep(), opts...)
+	}
+}
+
+// BySystemCustomRoutes orders the results by system_custom_routes terms.
+func BySystemCustomRoutes(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborTerms(s, newSystemCustomRoutesStep(), append([]sql.OrderTerm{term}, terms...)...)
+	}
+}
+
+// BySystemCustomSourceRoutesCount orders the results by system_custom_source_routes count.
+func BySystemCustomSourceRoutesCount(opts ...sql.OrderTermOption) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborsCount(s, newSystemCustomSourceRoutesStep(), opts...)
+	}
+}
+
+// BySystemCustomSourceRoutes orders the results by system_custom_source_routes terms.
+func BySystemCustomSourceRoutes(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborTerms(s, newSystemCustomSourceRoutesStep(), append([]sql.OrderTerm{term}, terms...)...)
+	}
+}
+
 // ByAccountsCount orders the results by accounts count.
 func ByAccountsCount(opts ...sql.OrderTermOption) OrderOption {
 	return func(s *sql.Selector) {
@@ -873,6 +929,20 @@ func newCustomModelRoutesStep() *sqlgraph.Step {
 		sqlgraph.From(Table, FieldID),
 		sqlgraph.To(CustomModelRoutesInverseTable, FieldID),
 		sqlgraph.Edge(sqlgraph.O2M, false, CustomModelRoutesTable, CustomModelRoutesColumn),
+	)
+}
+func newSystemCustomRoutesStep() *sqlgraph.Step {
+	return sqlgraph.NewStep(
+		sqlgraph.From(Table, FieldID),
+		sqlgraph.To(SystemCustomRoutesInverseTable, FieldID),
+		sqlgraph.Edge(sqlgraph.O2M, false, SystemCustomRoutesTable, SystemCustomRoutesColumn),
+	)
+}
+func newSystemCustomSourceRoutesStep() *sqlgraph.Step {
+	return sqlgraph.NewStep(
+		sqlgraph.From(Table, FieldID),
+		sqlgraph.To(SystemCustomSourceRoutesInverseTable, FieldID),
+		sqlgraph.Edge(sqlgraph.O2M, false, SystemCustomSourceRoutesTable, SystemCustomSourceRoutesColumn),
 	)
 }
 func newAccountsStep() *sqlgraph.Step {

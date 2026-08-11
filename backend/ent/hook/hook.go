@@ -393,6 +393,18 @@ func (f SubscriptionPlanFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.V
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.SubscriptionPlanMutation", m)
 }
 
+// The SystemCustomGroupModelFunc type is an adapter to allow the use of ordinary
+// function as SystemCustomGroupModel mutator.
+type SystemCustomGroupModelFunc func(context.Context, *ent.SystemCustomGroupModelMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f SystemCustomGroupModelFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.SystemCustomGroupModelMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.SystemCustomGroupModelMutation", m)
+}
+
 // The TLSFingerprintProfileFunc type is an adapter to allow the use of ordinary
 // function as TLSFingerprintProfile mutator.
 type TLSFingerprintProfileFunc func(context.Context, *ent.TLSFingerprintProfileMutation) (ent.Value, error)

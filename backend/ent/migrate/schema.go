@@ -984,6 +984,7 @@ var (
 		{Name: "duplicate_operation_id", Type: field.TypeString, Nullable: true, Size: 64},
 		{Name: "platform", Type: field.TypeString, Size: 50, Default: "anthropic"},
 		{Name: "subscription_type", Type: field.TypeString, Size: 20, Default: "standard"},
+		{Name: "system_custom_routing_enabled", Type: field.TypeBool, Default: false},
 		{Name: "daily_limit_usd", Type: field.TypeFloat64, Nullable: true, SchemaType: map[string]string{"postgres": "decimal(20,8)"}},
 		{Name: "weekly_limit_usd", Type: field.TypeFloat64, Nullable: true, SchemaType: map[string]string{"postgres": "decimal(20,8)"}},
 		{Name: "monthly_limit_usd", Type: field.TypeFloat64, Nullable: true, SchemaType: map[string]string{"postgres": "decimal(20,8)"}},
@@ -1065,7 +1066,7 @@ var (
 			{
 				Name:    "group_sort_order",
 				Unique:  false,
-				Columns: []*schema.Column{GroupsColumns[49]},
+				Columns: []*schema.Column{GroupsColumns[50]},
 			},
 			{
 				Name:    "idx_groups_duplicate_operation_id_active",
@@ -1669,6 +1670,54 @@ var (
 			},
 		},
 	}
+	// SystemCustomGroupModelsColumns holds the columns for the "system_custom_group_models" table.
+	SystemCustomGroupModelsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt64, Increment: true},
+		{Name: "public_model", Type: field.TypeString, Size: 200},
+		{Name: "source_model", Type: field.TypeString, Size: 200},
+		{Name: "enabled", Type: field.TypeBool, Default: true},
+		{Name: "created_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
+		{Name: "updated_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
+		{Name: "group_id", Type: field.TypeInt64},
+		{Name: "source_group_id", Type: field.TypeInt64},
+	}
+	// SystemCustomGroupModelsTable holds the schema information for the "system_custom_group_models" table.
+	SystemCustomGroupModelsTable = &schema.Table{
+		Name:       "system_custom_group_models",
+		Columns:    SystemCustomGroupModelsColumns,
+		PrimaryKey: []*schema.Column{SystemCustomGroupModelsColumns[0]},
+		ForeignKeys: []*schema.ForeignKey{
+			{
+				Symbol:     "system_custom_group_models_groups_system_custom_routes",
+				Columns:    []*schema.Column{SystemCustomGroupModelsColumns[6]},
+				RefColumns: []*schema.Column{GroupsColumns[0]},
+				OnDelete:   schema.Cascade,
+			},
+			{
+				Symbol:     "system_custom_group_models_groups_system_custom_source_routes",
+				Columns:    []*schema.Column{SystemCustomGroupModelsColumns[7]},
+				RefColumns: []*schema.Column{GroupsColumns[0]},
+				OnDelete:   schema.Restrict,
+			},
+		},
+		Indexes: []*schema.Index{
+			{
+				Name:    "systemcustomgroupmodel_group_id_public_model",
+				Unique:  true,
+				Columns: []*schema.Column{SystemCustomGroupModelsColumns[6], SystemCustomGroupModelsColumns[1]},
+			},
+			{
+				Name:    "systemcustomgroupmodel_group_id_source_group_id_source_model",
+				Unique:  true,
+				Columns: []*schema.Column{SystemCustomGroupModelsColumns[6], SystemCustomGroupModelsColumns[7], SystemCustomGroupModelsColumns[2]},
+			},
+			{
+				Name:    "systemcustomgroupmodel_source_group_id",
+				Unique:  false,
+				Columns: []*schema.Column{SystemCustomGroupModelsColumns[7]},
+			},
+		},
+	}
 	// TLSFingerprintProfilesColumns holds the columns for the "tls_fingerprint_profiles" table.
 	TLSFingerprintProfilesColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeInt64, Increment: true},
@@ -1780,6 +1829,7 @@ var (
 		{Name: "api_key_id", Type: field.TypeInt64},
 		{Name: "account_id", Type: field.TypeInt64},
 		{Name: "group_id", Type: field.TypeInt64, Nullable: true},
+		{Name: "source_group_id", Type: field.TypeInt64, Nullable: true},
 		{Name: "user_id", Type: field.TypeInt64},
 		{Name: "custom_group_id", Type: field.TypeInt64, Nullable: true},
 		{Name: "subscription_id", Type: field.TypeInt64, Nullable: true},
@@ -1809,20 +1859,26 @@ var (
 				OnDelete:   schema.SetNull,
 			},
 			{
-				Symbol:     "usage_logs_users_usage_logs",
+				Symbol:     "usage_logs_groups_source_group",
 				Columns:    []*schema.Column{UsageLogsColumns[47]},
+				RefColumns: []*schema.Column{GroupsColumns[0]},
+				OnDelete:   schema.SetNull,
+			},
+			{
+				Symbol:     "usage_logs_users_usage_logs",
+				Columns:    []*schema.Column{UsageLogsColumns[48]},
 				RefColumns: []*schema.Column{UsersColumns[0]},
 				OnDelete:   schema.NoAction,
 			},
 			{
 				Symbol:     "usage_logs_user_custom_groups_usage_logs",
-				Columns:    []*schema.Column{UsageLogsColumns[48]},
+				Columns:    []*schema.Column{UsageLogsColumns[49]},
 				RefColumns: []*schema.Column{UserCustomGroupsColumns[0]},
 				OnDelete:   schema.SetNull,
 			},
 			{
 				Symbol:     "usage_logs_user_subscriptions_usage_logs",
-				Columns:    []*schema.Column{UsageLogsColumns[49]},
+				Columns:    []*schema.Column{UsageLogsColumns[50]},
 				RefColumns: []*schema.Column{UserSubscriptionsColumns[0]},
 				OnDelete:   schema.SetNull,
 			},
@@ -1831,7 +1887,7 @@ var (
 			{
 				Name:    "usagelog_user_id",
 				Unique:  false,
-				Columns: []*schema.Column{UsageLogsColumns[47]},
+				Columns: []*schema.Column{UsageLogsColumns[48]},
 			},
 			{
 				Name:    "usagelog_api_key_id",
@@ -1849,14 +1905,19 @@ var (
 				Columns: []*schema.Column{UsageLogsColumns[46]},
 			},
 			{
+				Name:    "usagelog_source_group_id",
+				Unique:  false,
+				Columns: []*schema.Column{UsageLogsColumns[47]},
+			},
+			{
 				Name:    "usagelog_custom_group_id",
 				Unique:  false,
-				Columns: []*schema.Column{UsageLogsColumns[48]},
+				Columns: []*schema.Column{UsageLogsColumns[49]},
 			},
 			{
 				Name:    "usagelog_subscription_id",
 				Unique:  false,
-				Columns: []*schema.Column{UsageLogsColumns[49]},
+				Columns: []*schema.Column{UsageLogsColumns[50]},
 			},
 			{
 				Name:    "usagelog_created_at",
@@ -1881,7 +1942,7 @@ var (
 			{
 				Name:    "usagelog_user_id_created_at",
 				Unique:  false,
-				Columns: []*schema.Column{UsageLogsColumns[47], UsageLogsColumns[43]},
+				Columns: []*schema.Column{UsageLogsColumns[48], UsageLogsColumns[43]},
 			},
 			{
 				Name:    "usagelog_api_key_id_created_at",
@@ -2598,6 +2659,7 @@ var (
 		SecuritySecretsTable,
 		SettingsTable,
 		SubscriptionPlansTable,
+		SystemCustomGroupModelsTable,
 		TLSFingerprintProfilesTable,
 		UsageCleanupTasksTable,
 		UsageLogsTable,
@@ -2738,6 +2800,14 @@ func init() {
 	SubscriptionPlansTable.Annotation = &entsql.Annotation{
 		Table: "subscription_plans",
 	}
+	SystemCustomGroupModelsTable.ForeignKeys[0].RefTable = GroupsTable
+	SystemCustomGroupModelsTable.ForeignKeys[1].RefTable = GroupsTable
+	SystemCustomGroupModelsTable.Annotation = &entsql.Annotation{
+		Table: "system_custom_group_models",
+	}
+	SystemCustomGroupModelsTable.Annotation.Checks = map[string]string{
+		"system_custom_group_models_no_self_reference": "group_id <> source_group_id",
+	}
 	TLSFingerprintProfilesTable.Annotation = &entsql.Annotation{
 		Table: "tls_fingerprint_profiles",
 	}
@@ -2747,9 +2817,10 @@ func init() {
 	UsageLogsTable.ForeignKeys[0].RefTable = APIKeysTable
 	UsageLogsTable.ForeignKeys[1].RefTable = AccountsTable
 	UsageLogsTable.ForeignKeys[2].RefTable = GroupsTable
-	UsageLogsTable.ForeignKeys[3].RefTable = UsersTable
-	UsageLogsTable.ForeignKeys[4].RefTable = UserCustomGroupsTable
-	UsageLogsTable.ForeignKeys[5].RefTable = UserSubscriptionsTable
+	UsageLogsTable.ForeignKeys[3].RefTable = GroupsTable
+	UsageLogsTable.ForeignKeys[4].RefTable = UsersTable
+	UsageLogsTable.ForeignKeys[5].RefTable = UserCustomGroupsTable
+	UsageLogsTable.ForeignKeys[6].RefTable = UserSubscriptionsTable
 	UsageLogsTable.Annotation = &entsql.Annotation{
 		Table: "usage_logs",
 	}

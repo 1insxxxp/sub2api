@@ -52,6 +52,8 @@ type UsageLog struct {
 	BillingMode *string `json:"billing_mode,omitempty"`
 	// GroupID holds the value of the "group_id" field.
 	GroupID *int64 `json:"group_id,omitempty"`
+	// SourceGroupID holds the value of the "source_group_id" field.
+	SourceGroupID *int64 `json:"source_group_id,omitempty"`
 	// CustomGroupID holds the value of the "custom_group_id" field.
 	CustomGroupID *int64 `json:"custom_group_id,omitempty"`
 	// SubscriptionID holds the value of the "subscription_id" field.
@@ -138,13 +140,15 @@ type UsageLogEdges struct {
 	Account *Account `json:"account,omitempty"`
 	// Group holds the value of the group edge.
 	Group *Group `json:"group,omitempty"`
+	// SourceGroup holds the value of the source_group edge.
+	SourceGroup *Group `json:"source_group,omitempty"`
 	// CustomGroup holds the value of the custom_group edge.
 	CustomGroup *UserCustomGroup `json:"custom_group,omitempty"`
 	// Subscription holds the value of the subscription edge.
 	Subscription *UserSubscription `json:"subscription,omitempty"`
 	// loadedTypes holds the information for reporting if a
 	// type was loaded (or requested) in eager-loading or not.
-	loadedTypes [6]bool
+	loadedTypes [7]bool
 }
 
 // UserOrErr returns the User value or an error if the edge
@@ -191,12 +195,23 @@ func (e UsageLogEdges) GroupOrErr() (*Group, error) {
 	return nil, &NotLoadedError{edge: "group"}
 }
 
+// SourceGroupOrErr returns the SourceGroup value or an error if the edge
+// was not loaded in eager-loading, or loaded but was not found.
+func (e UsageLogEdges) SourceGroupOrErr() (*Group, error) {
+	if e.SourceGroup != nil {
+		return e.SourceGroup, nil
+	} else if e.loadedTypes[4] {
+		return nil, &NotFoundError{label: group.Label}
+	}
+	return nil, &NotLoadedError{edge: "source_group"}
+}
+
 // CustomGroupOrErr returns the CustomGroup value or an error if the edge
 // was not loaded in eager-loading, or loaded but was not found.
 func (e UsageLogEdges) CustomGroupOrErr() (*UserCustomGroup, error) {
 	if e.CustomGroup != nil {
 		return e.CustomGroup, nil
-	} else if e.loadedTypes[4] {
+	} else if e.loadedTypes[5] {
 		return nil, &NotFoundError{label: usercustomgroup.Label}
 	}
 	return nil, &NotLoadedError{edge: "custom_group"}
@@ -207,7 +222,7 @@ func (e UsageLogEdges) CustomGroupOrErr() (*UserCustomGroup, error) {
 func (e UsageLogEdges) SubscriptionOrErr() (*UserSubscription, error) {
 	if e.Subscription != nil {
 		return e.Subscription, nil
-	} else if e.loadedTypes[5] {
+	} else if e.loadedTypes[6] {
 		return nil, &NotFoundError{label: usersubscription.Label}
 	}
 	return nil, &NotLoadedError{edge: "subscription"}
@@ -224,7 +239,7 @@ func (*UsageLog) scanValues(columns []string) ([]any, error) {
 			values[i] = new(sql.NullBool)
 		case usagelog.FieldInputCost, usagelog.FieldOutputCost, usagelog.FieldCacheCreationCost, usagelog.FieldCacheReadCost, usagelog.FieldTotalCost, usagelog.FieldActualCost, usagelog.FieldCompensatedCost, usagelog.FieldRateMultiplier, usagelog.FieldAccountRateMultiplier:
 			values[i] = new(sql.NullFloat64)
-		case usagelog.FieldID, usagelog.FieldUserID, usagelog.FieldAPIKeyID, usagelog.FieldAccountID, usagelog.FieldChannelID, usagelog.FieldGroupID, usagelog.FieldCustomGroupID, usagelog.FieldSubscriptionID, usagelog.FieldInputTokens, usagelog.FieldOutputTokens, usagelog.FieldCacheCreationTokens, usagelog.FieldCacheReadTokens, usagelog.FieldCacheCreation5mTokens, usagelog.FieldCacheCreation1hTokens, usagelog.FieldBillingType, usagelog.FieldDurationMs, usagelog.FieldFirstTokenMs, usagelog.FieldImageCount, usagelog.FieldVideoCount, usagelog.FieldVideoDurationSeconds:
+		case usagelog.FieldID, usagelog.FieldUserID, usagelog.FieldAPIKeyID, usagelog.FieldAccountID, usagelog.FieldChannelID, usagelog.FieldGroupID, usagelog.FieldSourceGroupID, usagelog.FieldCustomGroupID, usagelog.FieldSubscriptionID, usagelog.FieldInputTokens, usagelog.FieldOutputTokens, usagelog.FieldCacheCreationTokens, usagelog.FieldCacheReadTokens, usagelog.FieldCacheCreation5mTokens, usagelog.FieldCacheCreation1hTokens, usagelog.FieldBillingType, usagelog.FieldDurationMs, usagelog.FieldFirstTokenMs, usagelog.FieldImageCount, usagelog.FieldVideoCount, usagelog.FieldVideoDurationSeconds:
 			values[i] = new(sql.NullInt64)
 		case usagelog.FieldRequestID, usagelog.FieldModel, usagelog.FieldRequestedModel, usagelog.FieldUpstreamModel, usagelog.FieldUpstreamResponseModel, usagelog.FieldModelMappingChain, usagelog.FieldBillingTier, usagelog.FieldBillingMode, usagelog.FieldUserAgent, usagelog.FieldIPAddress, usagelog.FieldImageSize, usagelog.FieldImageInputSize, usagelog.FieldImageOutputSize, usagelog.FieldImageSizeSource, usagelog.FieldVideoResolution:
 			values[i] = new(sql.NullString)
@@ -343,6 +358,13 @@ func (_m *UsageLog) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				_m.GroupID = new(int64)
 				*_m.GroupID = value.Int64
+			}
+		case usagelog.FieldSourceGroupID:
+			if value, ok := values[i].(*sql.NullInt64); !ok {
+				return fmt.Errorf("unexpected type %T for field source_group_id", values[i])
+			} else if value.Valid {
+				_m.SourceGroupID = new(int64)
+				*_m.SourceGroupID = value.Int64
 			}
 		case usagelog.FieldCustomGroupID:
 			if value, ok := values[i].(*sql.NullInt64); !ok {
@@ -602,6 +624,11 @@ func (_m *UsageLog) QueryGroup() *GroupQuery {
 	return NewUsageLogClient(_m.config).QueryGroup(_m)
 }
 
+// QuerySourceGroup queries the "source_group" edge of the UsageLog entity.
+func (_m *UsageLog) QuerySourceGroup() *GroupQuery {
+	return NewUsageLogClient(_m.config).QuerySourceGroup(_m)
+}
+
 // QueryCustomGroup queries the "custom_group" edge of the UsageLog entity.
 func (_m *UsageLog) QueryCustomGroup() *UserCustomGroupQuery {
 	return NewUsageLogClient(_m.config).QueryCustomGroup(_m)
@@ -692,6 +719,11 @@ func (_m *UsageLog) String() string {
 	builder.WriteString(", ")
 	if v := _m.GroupID; v != nil {
 		builder.WriteString("group_id=")
+		builder.WriteString(fmt.Sprintf("%v", *v))
+	}
+	builder.WriteString(", ")
+	if v := _m.SourceGroupID; v != nil {
+		builder.WriteString("source_group_id=")
 		builder.WriteString(fmt.Sprintf("%v", *v))
 	}
 	builder.WriteString(", ")

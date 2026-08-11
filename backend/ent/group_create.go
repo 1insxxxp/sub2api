@@ -15,6 +15,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/apikey"
 	"github.com/Wei-Shaw/sub2api/ent/group"
 	"github.com/Wei-Shaw/sub2api/ent/redeemcode"
+	"github.com/Wei-Shaw/sub2api/ent/systemcustomgroupmodel"
 	"github.com/Wei-Shaw/sub2api/ent/usagelog"
 	"github.com/Wei-Shaw/sub2api/ent/user"
 	"github.com/Wei-Shaw/sub2api/ent/usercustomgroupmodel"
@@ -242,6 +243,20 @@ func (_c *GroupCreate) SetSubscriptionType(v string) *GroupCreate {
 func (_c *GroupCreate) SetNillableSubscriptionType(v *string) *GroupCreate {
 	if v != nil {
 		_c.SetSubscriptionType(*v)
+	}
+	return _c
+}
+
+// SetSystemCustomRoutingEnabled sets the "system_custom_routing_enabled" field.
+func (_c *GroupCreate) SetSystemCustomRoutingEnabled(v bool) *GroupCreate {
+	_c.mutation.SetSystemCustomRoutingEnabled(v)
+	return _c
+}
+
+// SetNillableSystemCustomRoutingEnabled sets the "system_custom_routing_enabled" field if the given value is not nil.
+func (_c *GroupCreate) SetNillableSystemCustomRoutingEnabled(v *bool) *GroupCreate {
+	if v != nil {
+		_c.SetSystemCustomRoutingEnabled(*v)
 	}
 	return _c
 }
@@ -933,6 +948,36 @@ func (_c *GroupCreate) AddCustomModelRoutes(v ...*UserCustomGroupModel) *GroupCr
 	return _c.AddCustomModelRouteIDs(ids...)
 }
 
+// AddSystemCustomRouteIDs adds the "system_custom_routes" edge to the SystemCustomGroupModel entity by IDs.
+func (_c *GroupCreate) AddSystemCustomRouteIDs(ids ...int64) *GroupCreate {
+	_c.mutation.AddSystemCustomRouteIDs(ids...)
+	return _c
+}
+
+// AddSystemCustomRoutes adds the "system_custom_routes" edges to the SystemCustomGroupModel entity.
+func (_c *GroupCreate) AddSystemCustomRoutes(v ...*SystemCustomGroupModel) *GroupCreate {
+	ids := make([]int64, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _c.AddSystemCustomRouteIDs(ids...)
+}
+
+// AddSystemCustomSourceRouteIDs adds the "system_custom_source_routes" edge to the SystemCustomGroupModel entity by IDs.
+func (_c *GroupCreate) AddSystemCustomSourceRouteIDs(ids ...int64) *GroupCreate {
+	_c.mutation.AddSystemCustomSourceRouteIDs(ids...)
+	return _c
+}
+
+// AddSystemCustomSourceRoutes adds the "system_custom_source_routes" edges to the SystemCustomGroupModel entity.
+func (_c *GroupCreate) AddSystemCustomSourceRoutes(v ...*SystemCustomGroupModel) *GroupCreate {
+	ids := make([]int64, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _c.AddSystemCustomSourceRouteIDs(ids...)
+}
+
 // AddAccountIDs adds the "accounts" edge to the Account entity by IDs.
 func (_c *GroupCreate) AddAccountIDs(ids ...int64) *GroupCreate {
 	_c.mutation.AddAccountIDs(ids...)
@@ -1053,6 +1098,10 @@ func (_c *GroupCreate) defaults() error {
 	if _, ok := _c.mutation.SubscriptionType(); !ok {
 		v := group.DefaultSubscriptionType
 		_c.mutation.SetSubscriptionType(v)
+	}
+	if _, ok := _c.mutation.SystemCustomRoutingEnabled(); !ok {
+		v := group.DefaultSystemCustomRoutingEnabled
+		_c.mutation.SetSystemCustomRoutingEnabled(v)
 	}
 	if _, ok := _c.mutation.DefaultValidityDays(); !ok {
 		v := group.DefaultDefaultValidityDays
@@ -1244,6 +1293,9 @@ func (_c *GroupCreate) check() error {
 		if err := group.SubscriptionTypeValidator(v); err != nil {
 			return &ValidationError{Name: "subscription_type", err: fmt.Errorf(`ent: validator failed for field "Group.subscription_type": %w`, err)}
 		}
+	}
+	if _, ok := _c.mutation.SystemCustomRoutingEnabled(); !ok {
+		return &ValidationError{Name: "system_custom_routing_enabled", err: errors.New(`ent: missing required field "Group.system_custom_routing_enabled"`)}
 	}
 	if _, ok := _c.mutation.DefaultValidityDays(); !ok {
 		return &ValidationError{Name: "default_validity_days", err: errors.New(`ent: missing required field "Group.default_validity_days"`)}
@@ -1454,6 +1506,10 @@ func (_c *GroupCreate) createSpec() (*Group, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.SubscriptionType(); ok {
 		_spec.SetField(group.FieldSubscriptionType, field.TypeString, value)
 		_node.SubscriptionType = value
+	}
+	if value, ok := _c.mutation.SystemCustomRoutingEnabled(); ok {
+		_spec.SetField(group.FieldSystemCustomRoutingEnabled, field.TypeBool, value)
+		_node.SystemCustomRoutingEnabled = value
 	}
 	if value, ok := _c.mutation.DailyLimitUsd(); ok {
 		_spec.SetField(group.FieldDailyLimitUsd, field.TypeFloat64, value)
@@ -1712,6 +1768,38 @@ func (_c *GroupCreate) createSpec() (*Group, *sqlgraph.CreateSpec) {
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(usercustomgroupmodel.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges = append(_spec.Edges, edge)
+	}
+	if nodes := _c.mutation.SystemCustomRoutesIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   group.SystemCustomRoutesTable,
+			Columns: []string{group.SystemCustomRoutesColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(systemcustomgroupmodel.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges = append(_spec.Edges, edge)
+	}
+	if nodes := _c.mutation.SystemCustomSourceRoutesIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   group.SystemCustomSourceRoutesTable,
+			Columns: []string{group.SystemCustomSourceRoutesColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(systemcustomgroupmodel.FieldID, field.TypeInt64),
 			},
 		}
 		for _, k := range nodes {
@@ -2000,6 +2088,18 @@ func (u *GroupUpsert) SetSubscriptionType(v string) *GroupUpsert {
 // UpdateSubscriptionType sets the "subscription_type" field to the value that was provided on create.
 func (u *GroupUpsert) UpdateSubscriptionType() *GroupUpsert {
 	u.SetExcluded(group.FieldSubscriptionType)
+	return u
+}
+
+// SetSystemCustomRoutingEnabled sets the "system_custom_routing_enabled" field.
+func (u *GroupUpsert) SetSystemCustomRoutingEnabled(v bool) *GroupUpsert {
+	u.Set(group.FieldSystemCustomRoutingEnabled, v)
+	return u
+}
+
+// UpdateSystemCustomRoutingEnabled sets the "system_custom_routing_enabled" field to the value that was provided on create.
+func (u *GroupUpsert) UpdateSystemCustomRoutingEnabled() *GroupUpsert {
+	u.SetExcluded(group.FieldSystemCustomRoutingEnabled)
 	return u
 }
 
@@ -3082,6 +3182,20 @@ func (u *GroupUpsertOne) SetSubscriptionType(v string) *GroupUpsertOne {
 func (u *GroupUpsertOne) UpdateSubscriptionType() *GroupUpsertOne {
 	return u.Update(func(s *GroupUpsert) {
 		s.UpdateSubscriptionType()
+	})
+}
+
+// SetSystemCustomRoutingEnabled sets the "system_custom_routing_enabled" field.
+func (u *GroupUpsertOne) SetSystemCustomRoutingEnabled(v bool) *GroupUpsertOne {
+	return u.Update(func(s *GroupUpsert) {
+		s.SetSystemCustomRoutingEnabled(v)
+	})
+}
+
+// UpdateSystemCustomRoutingEnabled sets the "system_custom_routing_enabled" field to the value that was provided on create.
+func (u *GroupUpsertOne) UpdateSystemCustomRoutingEnabled() *GroupUpsertOne {
+	return u.Update(func(s *GroupUpsert) {
+		s.UpdateSystemCustomRoutingEnabled()
 	})
 }
 
@@ -4465,6 +4579,20 @@ func (u *GroupUpsertBulk) SetSubscriptionType(v string) *GroupUpsertBulk {
 func (u *GroupUpsertBulk) UpdateSubscriptionType() *GroupUpsertBulk {
 	return u.Update(func(s *GroupUpsert) {
 		s.UpdateSubscriptionType()
+	})
+}
+
+// SetSystemCustomRoutingEnabled sets the "system_custom_routing_enabled" field.
+func (u *GroupUpsertBulk) SetSystemCustomRoutingEnabled(v bool) *GroupUpsertBulk {
+	return u.Update(func(s *GroupUpsert) {
+		s.SetSystemCustomRoutingEnabled(v)
+	})
+}
+
+// UpdateSystemCustomRoutingEnabled sets the "system_custom_routing_enabled" field to the value that was provided on create.
+func (u *GroupUpsertBulk) UpdateSystemCustomRoutingEnabled() *GroupUpsertBulk {
+	return u.Update(func(s *GroupUpsert) {
+		s.UpdateSystemCustomRoutingEnabled()
 	})
 }
 
