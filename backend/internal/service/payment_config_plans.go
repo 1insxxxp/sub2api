@@ -5,11 +5,13 @@ import (
 	"fmt"
 	"strings"
 
+	"entgo.io/ent/dialect"
 	dbent "github.com/Wei-Shaw/sub2api/ent"
 	"github.com/Wei-Shaw/sub2api/ent/group"
 	"github.com/Wei-Shaw/sub2api/ent/subscriptionplan"
 	"github.com/Wei-Shaw/sub2api/internal/payment"
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/groupref"
 )
 
 // normalizePlanCurrency validates and normalizes the display-only currency label.
@@ -140,15 +142,23 @@ func (s *PaymentConfigService) CreatePlan(ctx context.Context, req CreatePlanReq
 	if err != nil {
 		return nil, err
 	}
-	b := s.entClient.SubscriptionPlan.Create().
-		SetGroupID(req.GroupID).SetName(req.Name).SetDescription(req.Description).
-		SetPrice(req.Price).SetCurrency(currency).SetValidityDays(req.ValidityDays).SetValidityUnit(req.ValidityUnit).
-		SetFeatures(req.Features).SetProductName(req.ProductName).
-		SetForSale(req.ForSale).SetSortOrder(req.SortOrder)
-	if req.OriginalPrice != nil {
-		b.SetOriginalPrice(*req.OriginalPrice)
-	}
-	return b.Save(ctx)
+	return s.withPlanMutationTx(ctx, func(txCtx context.Context, tx *dbent.Tx) (*dbent.SubscriptionPlan, error) {
+		if err := groupref.LockGroupReferenceWrites(txCtx, tx, req.GroupID); err != nil {
+			return nil, err
+		}
+		if err := validatePlanReferenceGroup(txCtx, tx.Client(), req.GroupID); err != nil {
+			return nil, err
+		}
+		b := tx.Client().SubscriptionPlan.Create().
+			SetGroupID(req.GroupID).SetName(req.Name).SetDescription(req.Description).
+			SetPrice(req.Price).SetCurrency(currency).SetValidityDays(req.ValidityDays).SetValidityUnit(req.ValidityUnit).
+			SetFeatures(req.Features).SetProductName(req.ProductName).
+			SetForSale(req.ForSale).SetSortOrder(req.SortOrder)
+		if req.OriginalPrice != nil {
+			b.SetOriginalPrice(*req.OriginalPrice)
+		}
+		return b.Save(txCtx)
+	})
 }
 
 // UpdatePlan updates a subscription plan by ID (patch semantics).
@@ -158,7 +168,52 @@ func (s *PaymentConfigService) UpdatePlan(ctx context.Context, id int64, req Upd
 	if err := validatePlanPatch(req); err != nil {
 		return nil, err
 	}
-	u := s.entClient.SubscriptionPlan.UpdateOneID(id)
+	var currency *string
+	if req.Currency != nil {
+		normalized, err := normalizePlanCurrency(*req.Currency)
+		if err != nil {
+			return nil, err
+		}
+		currency = &normalized
+	}
+	return s.withPlanMutationTx(ctx, func(txCtx context.Context, tx *dbent.Tx) (*dbent.SubscriptionPlan, error) {
+		current, err := tx.Client().SubscriptionPlan.Get(txCtx, id)
+		if err != nil {
+			if dbent.IsNotFound(err) {
+				return nil, infraerrors.NotFound("PLAN_NOT_FOUND", "subscription plan not found").WithCause(err)
+			}
+			return nil, err
+		}
+		targetGroupID := current.GroupID
+		if req.GroupID != nil {
+			targetGroupID = *req.GroupID
+		}
+		if err := groupref.LockGroupReferenceWrites(txCtx, tx, current.GroupID, targetGroupID); err != nil {
+			return nil, err
+		}
+		lockedQuery := tx.Client().SubscriptionPlan.Query().Where(subscriptionplan.IDEQ(id))
+		if tx.Client().Driver().Dialect() == dialect.Postgres {
+			lockedQuery = lockedQuery.ForUpdate()
+		}
+		locked, err := lockedQuery.Only(txCtx)
+		if err != nil {
+			if dbent.IsNotFound(err) {
+				return nil, infraerrors.NotFound("PLAN_NOT_FOUND", "subscription plan not found").WithCause(err)
+			}
+			return nil, err
+		}
+		if locked.GroupID != current.GroupID {
+			return nil, infraerrors.Conflict("PLAN_CONCURRENTLY_MODIFIED", "subscription plan changed concurrently; retry the request")
+		}
+		if err := validatePlanReferenceGroup(txCtx, tx.Client(), targetGroupID); err != nil {
+			return nil, err
+		}
+		return applyPlanPatch(txCtx, tx.Client(), id, req, currency)
+	})
+}
+
+func applyPlanPatch(ctx context.Context, client *dbent.Client, id int64, req UpdatePlanRequest, currency *string) (*dbent.SubscriptionPlan, error) {
+	u := client.SubscriptionPlan.UpdateOneID(id)
 	if req.GroupID != nil {
 		u.SetGroupID(*req.GroupID)
 	}
@@ -174,12 +229,8 @@ func (s *PaymentConfigService) UpdatePlan(ctx context.Context, id int64, req Upd
 	if req.OriginalPrice != nil {
 		u.SetOriginalPrice(*req.OriginalPrice)
 	}
-	if req.Currency != nil {
-		currency, err := normalizePlanCurrency(*req.Currency)
-		if err != nil {
-			return nil, err
-		}
-		u.SetCurrency(currency)
+	if currency != nil {
+		u.SetCurrency(*currency)
 	}
 	if req.ValidityDays != nil {
 		u.SetValidityDays(*req.ValidityDays)
@@ -200,6 +251,49 @@ func (s *PaymentConfigService) UpdatePlan(ctx context.Context, id int64, req Upd
 		u.SetSortOrder(*req.SortOrder)
 	}
 	return u.Save(ctx)
+}
+
+func validatePlanReferenceGroup(ctx context.Context, client *dbent.Client, groupID int64) error {
+	referenceGroup, err := client.Group.Query().Where(group.IDEQ(groupID)).Only(ctx)
+	if err != nil {
+		if dbent.IsNotFound(err) {
+			return ErrGroupNotFound.WithCause(err)
+		}
+		return err
+	}
+	if referenceGroup.Status != StatusActive {
+		return ErrGroupDisabled
+	}
+	if referenceGroup.SubscriptionType != SubscriptionTypeSubscription {
+		return ErrGroupNotSubscriptionType
+	}
+	return nil
+}
+
+func (s *PaymentConfigService) withPlanMutationTx(
+	ctx context.Context,
+	mutate func(context.Context, *dbent.Tx) (*dbent.SubscriptionPlan, error),
+) (*dbent.SubscriptionPlan, error) {
+	if tx := dbent.TxFromContext(ctx); tx != nil {
+		return mutate(ctx, tx)
+	}
+	tx, err := s.entClient.Tx(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("begin subscription plan mutation: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+	txCtx := dbent.NewTxContext(ctx, tx)
+	plan, err := mutate(txCtx, tx)
+	if err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, fmt.Errorf("commit subscription plan mutation: %w", err)
+	}
+	if plan != nil {
+		plan.Unwrap()
+	}
+	return plan, nil
 }
 
 func (s *PaymentConfigService) DeletePlan(ctx context.Context, id int64) error {

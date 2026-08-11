@@ -2,14 +2,17 @@ package repository
 
 import (
 	"context"
+	"fmt"
 	"time"
 
+	"entgo.io/ent/dialect"
 	dbent "github.com/Wei-Shaw/sub2api/ent"
 	"github.com/Wei-Shaw/sub2api/ent/group"
 	"github.com/Wei-Shaw/sub2api/ent/predicate"
 	"github.com/Wei-Shaw/sub2api/ent/schema/mixins"
 	"github.com/Wei-Shaw/sub2api/ent/user"
 	"github.com/Wei-Shaw/sub2api/ent/usersubscription"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/groupref"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/pagination"
 	"github.com/Wei-Shaw/sub2api/internal/service"
 )
@@ -26,8 +29,29 @@ func (r *userSubscriptionRepository) Create(ctx context.Context, sub *service.Us
 	if sub == nil {
 		return service.ErrSubscriptionNilInput
 	}
+	if !isEffectiveActiveSubscription(sub.Status, sub.ExpiresAt, time.Now()) {
+		created, err := createUserSubscriptionEntity(ctx, clientFromContext(ctx, r.client), sub)
+		if err == nil {
+			applyUserSubscriptionEntityToService(sub, created)
+		}
+		return translatePersistenceError(err, nil, service.ErrSubscriptionAlreadyExists)
+	}
+	var created *dbent.UserSubscription
+	err := r.withGroupReferenceWriteTx(ctx, func(txCtx context.Context, tx *dbent.Tx) error {
+		if err := lockAndValidateSubscriptionReferenceGroup(txCtx, tx, sub.GroupID, sub.GroupID); err != nil {
+			return err
+		}
+		var err error
+		created, err = createUserSubscriptionEntity(txCtx, tx.Client(), sub)
+		return translatePersistenceError(err, nil, service.ErrSubscriptionAlreadyExists)
+	})
+	if err == nil {
+		applyUserSubscriptionEntityToService(sub, created)
+	}
+	return err
+}
 
-	client := clientFromContext(ctx, r.client)
+func createUserSubscriptionEntity(ctx context.Context, client *dbent.Client, sub *service.UserSubscription) (*dbent.UserSubscription, error) {
 	builder := client.UserSubscription.Create().
 		SetUserID(sub.UserID).
 		SetGroupID(sub.GroupID).
@@ -54,11 +78,7 @@ func (r *userSubscriptionRepository) Create(ctx context.Context, sub *service.Us
 	// Keep compatibility with historical behavior: always store notes as a string value.
 	builder.SetNotes(sub.Notes)
 
-	created, err := builder.Save(ctx)
-	if err == nil {
-		applyUserSubscriptionEntityToService(sub, created)
-	}
-	return translatePersistenceError(err, nil, service.ErrSubscriptionAlreadyExists)
+	return builder.Save(ctx)
 }
 
 func (r *userSubscriptionRepository) GetByID(ctx context.Context, id int64) (*service.UserSubscription, error) {
@@ -135,8 +155,41 @@ func (r *userSubscriptionRepository) Update(ctx context.Context, sub *service.Us
 	if sub == nil {
 		return service.ErrSubscriptionNilInput
 	}
+	if !isEffectiveActiveSubscription(sub.Status, sub.ExpiresAt, time.Now()) {
+		updated, err := updateUserSubscriptionEntity(ctx, clientFromContext(ctx, r.client), sub)
+		if err == nil {
+			applyUserSubscriptionEntityToService(sub, updated)
+			return nil
+		}
+		return translatePersistenceError(err, service.ErrSubscriptionNotFound, service.ErrSubscriptionAlreadyExists)
+	}
+	var updated *dbent.UserSubscription
+	err := r.withGroupReferenceWriteTx(ctx, func(txCtx context.Context, tx *dbent.Tx) error {
+		current, err := tx.Client().UserSubscription.Query().
+			Where(usersubscription.IDEQ(sub.ID)).
+			Only(txCtx)
+		if err != nil {
+			return translatePersistenceError(err, service.ErrSubscriptionNotFound, nil)
+		}
+		if err := lockAndValidateSubscriptionReferenceGroup(txCtx, tx, sub.GroupID, current.GroupID, sub.GroupID); err != nil {
+			return err
+		}
+		if _, err := tx.Client().UserSubscription.Query().
+			Where(usersubscription.IDEQ(sub.ID)).
+			ForUpdate().
+			Only(txCtx); err != nil {
+			return translatePersistenceError(err, service.ErrSubscriptionNotFound, nil)
+		}
+		updated, err = updateUserSubscriptionEntity(txCtx, tx.Client(), sub)
+		return translatePersistenceError(err, service.ErrSubscriptionNotFound, service.ErrSubscriptionAlreadyExists)
+	})
+	if err == nil {
+		applyUserSubscriptionEntityToService(sub, updated)
+	}
+	return err
+}
 
-	client := clientFromContext(ctx, r.client)
+func updateUserSubscriptionEntity(ctx context.Context, client *dbent.Client, sub *service.UserSubscription) (*dbent.UserSubscription, error) {
 	builder := client.UserSubscription.UpdateOneID(sub.ID).
 		SetUserID(sub.UserID).
 		SetGroupID(sub.GroupID).
@@ -153,12 +206,7 @@ func (r *userSubscriptionRepository) Update(ctx context.Context, sub *service.Us
 		SetAssignedAt(sub.AssignedAt).
 		SetNotes(sub.Notes)
 
-	updated, err := builder.Save(ctx)
-	if err == nil {
-		applyUserSubscriptionEntityToService(sub, updated)
-		return nil
-	}
-	return translatePersistenceError(err, service.ErrSubscriptionNotFound, service.ErrSubscriptionAlreadyExists)
+	return builder.Save(ctx)
 }
 
 func (r *userSubscriptionRepository) Delete(ctx context.Context, id int64) error {
@@ -169,7 +217,34 @@ func (r *userSubscriptionRepository) Delete(ctx context.Context, id int64) error
 }
 
 func (r *userSubscriptionRepository) Restore(ctx context.Context, subscriptionID int64, restoredStatus string) (*service.UserSubscription, error) {
-	client := clientFromContext(ctx, r.client)
+	state, err := loadUserSubscriptionReferenceState(ctx, clientFromContext(ctx, r.client), subscriptionID, true, false)
+	if err != nil {
+		return nil, translatePersistenceError(err, service.ErrSubscriptionNotFound, nil)
+	}
+	var restored *service.UserSubscription
+	err = r.withGroupReferenceWriteTx(ctx, func(txCtx context.Context, tx *dbent.Tx) error {
+		if err := groupref.LockGroupReferenceWrites(txCtx, tx, state.groupID); err != nil {
+			return err
+		}
+		locked, err := loadUserSubscriptionReferenceState(txCtx, tx.Client(), subscriptionID, true, true)
+		if err != nil {
+			return translatePersistenceError(err, service.ErrSubscriptionNotFound, nil)
+		}
+		if locked.groupID != state.groupID {
+			return fmt.Errorf("subscription group changed concurrently")
+		}
+		if isEffectiveActiveSubscription(restoredStatus, locked.expiresAt, time.Now()) {
+			if err := validateSubscriptionReferenceGroup(txCtx, tx.Client(), locked.groupID); err != nil {
+				return err
+			}
+		}
+		restored, err = r.restoreUserSubscription(txCtx, tx.Client(), subscriptionID, restoredStatus)
+		return err
+	})
+	return restored, err
+}
+
+func (r *userSubscriptionRepository) restoreUserSubscription(ctx context.Context, client *dbent.Client, subscriptionID int64, restoredStatus string) (*service.UserSubscription, error) {
 	queryCtx := mixins.SkipSoftDelete(ctx)
 	_, err := client.UserSubscription.UpdateOneID(subscriptionID).
 		SetStatus(restoredStatus).
@@ -179,7 +254,16 @@ func (r *userSubscriptionRepository) Restore(ctx context.Context, subscriptionID
 	if err != nil {
 		return nil, translatePersistenceError(err, service.ErrSubscriptionNotFound, service.ErrSubscriptionRestoreConflict)
 	}
-	return r.GetByID(ctx, subscriptionID)
+	m, err := client.UserSubscription.Query().
+		Where(usersubscription.IDEQ(subscriptionID)).
+		WithUser().
+		WithGroup().
+		WithAssignedByUser().
+		Only(ctx)
+	if err != nil {
+		return nil, translatePersistenceError(err, service.ErrSubscriptionNotFound, nil)
+	}
+	return userSubscriptionEntityToService(m), nil
 }
 
 func (r *userSubscriptionRepository) ListByUserID(ctx context.Context, userID int64) ([]service.UserSubscription, error) {
@@ -345,19 +429,144 @@ func (r *userSubscriptionRepository) ExistsActiveByUserIDAndGroupID(ctx context.
 }
 
 func (r *userSubscriptionRepository) ExtendExpiry(ctx context.Context, subscriptionID int64, newExpiresAt time.Time) error {
-	client := clientFromContext(ctx, r.client)
-	_, err := client.UserSubscription.UpdateOneID(subscriptionID).
-		SetExpiresAt(newExpiresAt).
-		Save(ctx)
-	return translatePersistenceError(err, service.ErrSubscriptionNotFound, nil)
+	state, err := loadUserSubscriptionReferenceState(ctx, clientFromContext(ctx, r.client), subscriptionID, false, false)
+	if err != nil {
+		return translatePersistenceError(err, service.ErrSubscriptionNotFound, nil)
+	}
+	return r.withGroupReferenceWriteTx(ctx, func(txCtx context.Context, tx *dbent.Tx) error {
+		if err := groupref.LockGroupReferenceWrites(txCtx, tx, state.groupID); err != nil {
+			return err
+		}
+		locked, err := loadUserSubscriptionReferenceState(txCtx, tx.Client(), subscriptionID, false, true)
+		if err != nil {
+			return translatePersistenceError(err, service.ErrSubscriptionNotFound, nil)
+		}
+		if locked.groupID != state.groupID {
+			return fmt.Errorf("subscription group changed concurrently")
+		}
+		if isEffectiveActiveSubscription(locked.status, newExpiresAt, time.Now()) {
+			if err := validateSubscriptionReferenceGroup(txCtx, tx.Client(), locked.groupID); err != nil {
+				return err
+			}
+		}
+		_, err = tx.Client().UserSubscription.UpdateOneID(subscriptionID).
+			SetExpiresAt(newExpiresAt).
+			Save(txCtx)
+		return translatePersistenceError(err, service.ErrSubscriptionNotFound, nil)
+	})
 }
 
 func (r *userSubscriptionRepository) UpdateStatus(ctx context.Context, subscriptionID int64, status string) error {
-	client := clientFromContext(ctx, r.client)
-	_, err := client.UserSubscription.UpdateOneID(subscriptionID).
-		SetStatus(status).
-		Save(ctx)
-	return translatePersistenceError(err, service.ErrSubscriptionNotFound, nil)
+	state, err := loadUserSubscriptionReferenceState(ctx, clientFromContext(ctx, r.client), subscriptionID, false, false)
+	if err != nil {
+		return translatePersistenceError(err, service.ErrSubscriptionNotFound, nil)
+	}
+	return r.withGroupReferenceWriteTx(ctx, func(txCtx context.Context, tx *dbent.Tx) error {
+		if err := groupref.LockGroupReferenceWrites(txCtx, tx, state.groupID); err != nil {
+			return err
+		}
+		locked, err := loadUserSubscriptionReferenceState(txCtx, tx.Client(), subscriptionID, false, true)
+		if err != nil {
+			return translatePersistenceError(err, service.ErrSubscriptionNotFound, nil)
+		}
+		if locked.groupID != state.groupID {
+			return fmt.Errorf("subscription group changed concurrently")
+		}
+		if isEffectiveActiveSubscription(status, locked.expiresAt, time.Now()) {
+			if err := validateSubscriptionReferenceGroup(txCtx, tx.Client(), locked.groupID); err != nil {
+				return err
+			}
+		}
+		_, err = tx.Client().UserSubscription.UpdateOneID(subscriptionID).
+			SetStatus(status).
+			Save(txCtx)
+		return translatePersistenceError(err, service.ErrSubscriptionNotFound, nil)
+	})
+}
+
+type userSubscriptionReferenceState struct {
+	groupID   int64
+	status    string
+	expiresAt time.Time
+}
+
+func loadUserSubscriptionReferenceState(
+	ctx context.Context,
+	client *dbent.Client,
+	subscriptionID int64,
+	includeDeleted bool,
+	forUpdate bool,
+) (*userSubscriptionReferenceState, error) {
+	query := client.UserSubscription.Query().Where(usersubscription.IDEQ(subscriptionID))
+	if forUpdate && client.Driver().Dialect() == dialect.Postgres {
+		query = query.ForUpdate()
+	}
+	queryCtx := ctx
+	if includeDeleted {
+		queryCtx = mixins.SkipSoftDelete(ctx)
+	}
+	subscription, err := query.Only(queryCtx)
+	if err != nil {
+		return nil, err
+	}
+	return &userSubscriptionReferenceState{
+		groupID: subscription.GroupID, status: subscription.Status, expiresAt: subscription.ExpiresAt,
+	}, nil
+}
+
+func isEffectiveActiveSubscription(status string, expiresAt, now time.Time) bool {
+	if status == "" {
+		status = service.SubscriptionStatusActive
+	}
+	return status == service.SubscriptionStatusActive && expiresAt.After(now)
+}
+
+func lockAndValidateSubscriptionReferenceGroup(
+	ctx context.Context,
+	tx *dbent.Tx,
+	targetGroupID int64,
+	lockGroupIDs ...int64,
+) error {
+	if err := groupref.LockGroupReferenceWrites(ctx, tx, lockGroupIDs...); err != nil {
+		return err
+	}
+	return validateSubscriptionReferenceGroup(ctx, tx.Client(), targetGroupID)
+}
+
+func validateSubscriptionReferenceGroup(ctx context.Context, client *dbent.Client, targetGroupID int64) error {
+	referenceGroup, err := client.Group.Query().Where(group.IDEQ(targetGroupID)).Only(ctx)
+	if err != nil {
+		if dbent.IsNotFound(err) {
+			return service.ErrGroupNotFound.WithCause(err)
+		}
+		return err
+	}
+	if referenceGroup.Status != service.StatusActive {
+		return service.ErrGroupDisabled
+	}
+	if referenceGroup.SubscriptionType != service.SubscriptionTypeSubscription {
+		return service.ErrGroupNotSubscriptionType
+	}
+	return nil
+}
+
+func (r *userSubscriptionRepository) withGroupReferenceWriteTx(ctx context.Context, mutate func(context.Context, *dbent.Tx) error) error {
+	if tx := dbent.TxFromContext(ctx); tx != nil {
+		return mutate(ctx, tx)
+	}
+	tx, err := r.client.Tx(ctx)
+	if err != nil {
+		return fmt.Errorf("begin user subscription reference write: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+	txCtx := dbent.NewTxContext(ctx, tx)
+	if err := mutate(txCtx, tx); err != nil {
+		return err
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("commit user subscription reference write: %w", err)
+	}
+	return nil
 }
 
 func (r *userSubscriptionRepository) UpdateNotes(ctx context.Context, subscriptionID int64, notes string) error {

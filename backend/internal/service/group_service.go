@@ -11,6 +11,7 @@ import (
 var (
 	ErrGroupNotFound = infraerrors.NotFound("GROUP_NOT_FOUND", "group not found")
 	ErrGroupExists   = infraerrors.Conflict("GROUP_EXISTS", "group name already exists")
+	ErrGroupDisabled = infraerrors.Forbidden("GROUP_DISABLED", "group is disabled")
 )
 
 type GroupRepository interface {

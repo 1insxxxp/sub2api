@@ -3,8 +3,11 @@
 package service
 
 import (
+	"context"
+	"fmt"
 	"testing"
 
+	dbent "github.com/Wei-Shaw/sub2api/ent"
 	"github.com/stretchr/testify/require"
 )
 
@@ -236,4 +239,149 @@ func TestNormalizePlanCurrency_NonLetter(t *testing.T) {
 	_, err := normalizePlanCurrency("N2D")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "currency")
+}
+
+func TestPaymentConfigCreatePlanRejectsUnavailableSubscriptionGroup(t *testing.T) {
+	tests := []struct {
+		name      string
+		configure func(context.Context, *dbent.Client, *dbent.Group)
+		wantErr   error
+	}{
+		{
+			name: "soft deleted",
+			configure: func(ctx context.Context, client *dbent.Client, group *dbent.Group) {
+				require.NoError(t, client.Group.DeleteOneID(group.ID).Exec(ctx))
+			},
+			wantErr: ErrGroupNotFound,
+		},
+		{
+			name: "disabled",
+			configure: func(ctx context.Context, client *dbent.Client, group *dbent.Group) {
+				_, err := client.Group.UpdateOneID(group.ID).SetStatus(StatusDisabled).Save(ctx)
+				require.NoError(t, err)
+			},
+			wantErr: ErrGroupDisabled,
+		},
+		{
+			name: "not subscription type",
+			configure: func(ctx context.Context, client *dbent.Client, group *dbent.Group) {
+				_, err := client.Group.UpdateOneID(group.ID).SetSubscriptionType(SubscriptionTypeStandard).Save(ctx)
+				require.NoError(t, err)
+			},
+			wantErr: ErrGroupNotSubscriptionType,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx := context.Background()
+			client := newPaymentConfigServiceTestClient(t)
+			group := createPaymentPlanTestGroup(t, ctx, client, "create-"+tc.name)
+			tc.configure(ctx, client, group)
+			svc := &PaymentConfigService{entClient: client}
+
+			plan, err := svc.CreatePlan(ctx, validCreatePlanRequest(group.ID))
+
+			require.Nil(t, plan)
+			require.ErrorIs(t, err, tc.wantErr)
+			count, countErr := client.SubscriptionPlan.Query().Count(ctx)
+			require.NoError(t, countErr)
+			require.Zero(t, count)
+		})
+	}
+}
+
+func TestPaymentConfigUpdatePlanRejectsUnavailableTargetSubscriptionGroup(t *testing.T) {
+	tests := []struct {
+		name      string
+		configure func(context.Context, *dbent.Client, *dbent.Group)
+		wantErr   error
+	}{
+		{
+			name: "soft deleted",
+			configure: func(ctx context.Context, client *dbent.Client, group *dbent.Group) {
+				require.NoError(t, client.Group.DeleteOneID(group.ID).Exec(ctx))
+			},
+			wantErr: ErrGroupNotFound,
+		},
+		{
+			name: "disabled",
+			configure: func(ctx context.Context, client *dbent.Client, group *dbent.Group) {
+				_, err := client.Group.UpdateOneID(group.ID).SetStatus(StatusDisabled).Save(ctx)
+				require.NoError(t, err)
+			},
+			wantErr: ErrGroupDisabled,
+		},
+		{
+			name: "not subscription type",
+			configure: func(ctx context.Context, client *dbent.Client, group *dbent.Group) {
+				_, err := client.Group.UpdateOneID(group.ID).SetSubscriptionType(SubscriptionTypeStandard).Save(ctx)
+				require.NoError(t, err)
+			},
+			wantErr: ErrGroupNotSubscriptionType,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx := context.Background()
+			client := newPaymentConfigServiceTestClient(t)
+			oldGroup := createPaymentPlanTestGroup(t, ctx, client, "old-"+tc.name)
+			targetGroup := createPaymentPlanTestGroup(t, ctx, client, "target-"+tc.name)
+			plan, err := client.SubscriptionPlan.Create().
+				SetGroupID(oldGroup.ID).
+				SetName("existing").
+				SetPrice(10).
+				SetValidityDays(30).
+				SetValidityUnit("day").
+				SetForSale(false).
+				Save(ctx)
+			require.NoError(t, err)
+			tc.configure(ctx, client, targetGroup)
+			svc := &PaymentConfigService{entClient: client}
+			forSale := true
+
+			updated, err := svc.UpdatePlan(ctx, plan.ID, UpdatePlanRequest{GroupID: &targetGroup.ID, ForSale: &forSale})
+
+			require.Nil(t, updated)
+			require.ErrorIs(t, err, tc.wantErr)
+			persisted, getErr := client.SubscriptionPlan.Get(ctx, plan.ID)
+			require.NoError(t, getErr)
+			require.Equal(t, oldGroup.ID, persisted.GroupID)
+			require.False(t, persisted.ForSale)
+		})
+	}
+}
+
+func TestPaymentConfigPlanMutationsAllowActiveSubscriptionGroup(t *testing.T) {
+	ctx := context.Background()
+	client := newPaymentConfigServiceTestClient(t)
+	group := createPaymentPlanTestGroup(t, ctx, client, "normal")
+	svc := &PaymentConfigService{entClient: client}
+
+	plan, err := svc.CreatePlan(ctx, validCreatePlanRequest(group.ID))
+	require.NoError(t, err)
+	require.Equal(t, group.ID, plan.GroupID)
+	name := "updated"
+	updated, err := svc.UpdatePlan(ctx, plan.ID, UpdatePlanRequest{Name: &name})
+	require.NoError(t, err)
+	require.Equal(t, name, updated.Name)
+}
+
+func createPaymentPlanTestGroup(t *testing.T, ctx context.Context, client *dbent.Client, suffix string) *dbent.Group {
+	t.Helper()
+	group, err := client.Group.Create().
+		SetName(fmt.Sprintf("payment-plan-%s", suffix)).
+		SetStatus(StatusActive).
+		SetSubscriptionType(SubscriptionTypeSubscription).
+		Save(ctx)
+	require.NoError(t, err)
+	return group
+}
+
+func validCreatePlanRequest(groupID int64) CreatePlanRequest {
+	return CreatePlanRequest{
+		GroupID: groupID, Name: "monthly", Price: 10, ValidityDays: 30,
+		ValidityUnit: "day", ForSale: true,
+	}
 }

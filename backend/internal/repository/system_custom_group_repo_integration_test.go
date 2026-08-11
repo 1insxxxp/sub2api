@@ -254,6 +254,140 @@ func TestSystemCustomGroupRepositoryDeleteLocksGroupBeforeReferencesWithoutBlock
 	}
 }
 
+func TestSystemCustomGroupRepositoryDeleteSerializesConcurrentPlanCreate(t *testing.T) {
+	ctx := context.Background()
+	repo := NewSystemCustomGroupRepository(integrationEntClient)
+	container, _ := createDeletableSystemCustomGroupForIntegration(t, repo, "race-plan-create")
+	t.Cleanup(func() {
+		_, _ = integrationDB.ExecContext(context.Background(), "DELETE FROM subscription_plans WHERE group_id = $1", container.ID)
+	})
+
+	blocker, err := integrationDB.BeginTx(ctx, nil)
+	require.NoError(t, err)
+	defer func() { _ = blocker.Rollback() }()
+	var lockedID int64
+	require.NoError(t, blocker.QueryRowContext(ctx, "SELECT id FROM groups WHERE id = $1 FOR UPDATE", container.ID).Scan(&lockedID))
+
+	deleteResult := make(chan error, 1)
+	deleteCtx, cancelDelete := context.WithTimeout(ctx, 5*time.Second)
+	defer cancelDelete()
+	go func() { deleteResult <- repo.Delete(deleteCtx, container.ID) }()
+	requireSystemCustomDeleteWaitingOnGroupRow(t, ctx)
+
+	type planResult struct {
+		plan *dbent.SubscriptionPlan
+		err  error
+	}
+	writerResult := make(chan planResult, 1)
+	writerCtx, cancelWriter := context.WithTimeout(ctx, 5*time.Second)
+	defer cancelWriter()
+	configService := service.NewPaymentConfigService(integrationEntClient, nil, nil)
+	go func() {
+		plan, err := configService.CreatePlan(writerCtx, service.CreatePlanRequest{
+			GroupID: container.ID, Name: "racing plan", Price: 10,
+			ValidityDays: 30, ValidityUnit: "day", ForSale: true,
+		})
+		writerResult <- planResult{plan: plan, err: err}
+	}()
+	requireGroupReferenceWriterWaiting(t, ctx)
+
+	require.NoError(t, blocker.Rollback())
+	require.NoError(t, <-deleteResult)
+	result := <-writerResult
+	require.Nil(t, result.plan)
+	require.ErrorIs(t, result.err, service.ErrGroupNotFound)
+	requireDeletedGroupHasNoEffectiveReferences(t, ctx, container.ID)
+}
+
+func TestSystemCustomGroupRepositoryDeleteSerializesConcurrentActiveSubscriptionCreate(t *testing.T) {
+	ctx := context.Background()
+	repo := NewSystemCustomGroupRepository(integrationEntClient)
+	container, _ := createDeletableSystemCustomGroupForIntegration(t, repo, "race-subscription-create")
+	t.Cleanup(func() {
+		_, _ = integrationDB.ExecContext(context.Background(), "DELETE FROM user_subscriptions WHERE group_id = $1", container.ID)
+	})
+	user := mustCreateUser(t, integrationEntClient, &service.User{})
+	t.Cleanup(func() {
+		_, _ = integrationDB.ExecContext(context.Background(), "DELETE FROM users WHERE id = $1", user.ID)
+	})
+
+	blocker, err := integrationDB.BeginTx(ctx, nil)
+	require.NoError(t, err)
+	defer func() { _ = blocker.Rollback() }()
+	var lockedID int64
+	require.NoError(t, blocker.QueryRowContext(ctx, "SELECT id FROM groups WHERE id = $1 FOR UPDATE", container.ID).Scan(&lockedID))
+
+	deleteResult := make(chan error, 1)
+	deleteCtx, cancelDelete := context.WithTimeout(ctx, 5*time.Second)
+	defer cancelDelete()
+	go func() { deleteResult <- repo.Delete(deleteCtx, container.ID) }()
+	requireSystemCustomDeleteWaitingOnGroupRow(t, ctx)
+
+	writerResult := make(chan error, 1)
+	writerCtx, cancelWriter := context.WithTimeout(ctx, 5*time.Second)
+	defer cancelWriter()
+	subRepo := NewUserSubscriptionRepository(integrationEntClient)
+	now := time.Now()
+	sub := &service.UserSubscription{
+		UserID: user.ID, GroupID: container.ID, StartsAt: now,
+		ExpiresAt: now.Add(time.Hour), Status: service.SubscriptionStatusActive,
+	}
+	go func() { writerResult <- subRepo.Create(writerCtx, sub) }()
+	requireGroupReferenceWriterWaiting(t, ctx)
+
+	require.NoError(t, blocker.Rollback())
+	require.NoError(t, <-deleteResult)
+	require.ErrorIs(t, <-writerResult, service.ErrGroupNotFound)
+	require.Zero(t, sub.ID)
+	requireDeletedGroupHasNoEffectiveReferences(t, ctx, container.ID)
+}
+
+func requireSystemCustomDeleteWaitingOnGroupRow(t *testing.T, ctx context.Context) {
+	t.Helper()
+	requirePostgresWaitingQuery(t, ctx, "%system_custom_routing_enabled%", "%FOR UPDATE%")
+}
+
+func requireGroupReferenceWriterWaiting(t *testing.T, ctx context.Context) {
+	t.Helper()
+	requirePostgresWaitingQuery(t, ctx, "%pg_advisory_xact_lock%")
+}
+
+func requirePostgresWaitingQuery(t *testing.T, ctx context.Context, patterns ...string) {
+	t.Helper()
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		query := `
+			SELECT COUNT(*)
+			FROM pg_stat_activity
+			WHERE datname = current_database()
+			  AND wait_event_type = 'Lock'
+		`
+		args := make([]any, 0, len(patterns))
+		for i, pattern := range patterns {
+			query += fmt.Sprintf(" AND query ILIKE $%d", i+1)
+			args = append(args, pattern)
+		}
+		var waiting int
+		require.NoError(t, integrationDB.QueryRowContext(ctx, query, args...).Scan(&waiting))
+		if waiting > 0 {
+			return
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	t.Fatalf("timed out waiting for PostgreSQL lock query matching %v", patterns)
+}
+
+func requireDeletedGroupHasNoEffectiveReferences(t *testing.T, ctx context.Context, groupID int64) {
+	t.Helper()
+	var deleted, plans, subscriptions int
+	require.NoError(t, integrationDB.QueryRowContext(ctx, "SELECT COUNT(*) FROM groups WHERE id = $1 AND deleted_at IS NOT NULL", groupID).Scan(&deleted))
+	require.NoError(t, integrationDB.QueryRowContext(ctx, "SELECT COUNT(*) FROM subscription_plans WHERE group_id = $1 AND for_sale = TRUE", groupID).Scan(&plans))
+	require.NoError(t, integrationDB.QueryRowContext(ctx, "SELECT COUNT(*) FROM user_subscriptions WHERE group_id = $1 AND deleted_at IS NULL AND status = 'active' AND expires_at > NOW()", groupID).Scan(&subscriptions))
+	require.Equal(t, 1, deleted)
+	require.Zero(t, plans)
+	require.Zero(t, subscriptions)
+}
+
 func TestSystemCustomGroupRepositoryDeleteUnreferencedGroupRetiresContainerAndPreservesHistoricalReferences(t *testing.T) {
 	ctx := context.Background()
 	repo := NewSystemCustomGroupRepository(integrationEntClient)

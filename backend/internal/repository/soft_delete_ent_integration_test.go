@@ -122,6 +122,7 @@ func createEntGroup(t *testing.T, ctx context.Context, client *dbent.Client, nam
 	g, err := client.Group.Create().
 		SetName(name).
 		SetStatus(service.StatusActive).
+		SetSubscriptionType(service.SubscriptionTypeSubscription).
 		Save(ctx)
 	require.NoError(t, err, "create ent group")
 	return g

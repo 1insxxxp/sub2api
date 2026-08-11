@@ -10,6 +10,7 @@ import (
 	dbent "github.com/Wei-Shaw/sub2api/ent"
 	"github.com/Wei-Shaw/sub2api/ent/group"
 	"github.com/Wei-Shaw/sub2api/ent/systemcustomgroupmodel"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/groupref"
 	"github.com/Wei-Shaw/sub2api/internal/service"
 	"github.com/lib/pq"
 )
@@ -96,6 +97,9 @@ func (r *systemCustomGroupRepository) DeleteWithImpact(ctx context.Context, grou
 	}
 	defer func() { _ = tx.Rollback() }()
 	client := tx.Client()
+	if err := groupref.LockGroupReferenceWrites(ctx, tx, groupID); err != nil {
+		return nil, systemCustomGroupDeleteTransactionError("lock system custom group references", err)
+	}
 
 	isSystemCustom, err := lockSystemCustomGroupForDelete(ctx, client, groupID)
 	if err != nil {

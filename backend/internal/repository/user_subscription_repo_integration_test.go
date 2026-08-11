@@ -55,6 +55,7 @@ func (s *UserSubscriptionRepoSuite) mustCreateGroup(name string) *service.Group 
 	g, err := s.client.Group.Create().
 		SetName(name).
 		SetStatus(service.StatusActive).
+		SetSubscriptionType(service.SubscriptionTypeSubscription).
 		Save(s.ctx)
 	s.Require().NoError(err, "create group")
 	return groupEntityToService(g)
@@ -894,6 +895,8 @@ func (s *UserSubscriptionRepoSuite) TestTxContext_RollbackIsolation() {
 
 	groupEnt, err := tx.Client().Group.Create().
 		SetName("tx-group-" + suffix).
+		SetStatus(service.StatusActive).
+		SetSubscriptionType(service.SubscriptionTypeSubscription).
 		Save(txCtx)
 	s.Require().NoError(err, "create group in tx")
 
