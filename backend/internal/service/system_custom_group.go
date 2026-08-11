@@ -19,6 +19,7 @@ var (
 	ErrSystemCustomGroupSelfReference        = infraerrors.BadRequest("SYSTEM_CUSTOM_GROUP_SELF_REFERENCE", "system custom group cannot route to itself")
 	ErrSystemCustomGroupInvalidRoute         = infraerrors.BadRequest("SYSTEM_CUSTOM_GROUP_INVALID_ROUTE", "system custom group model route is invalid")
 	ErrSystemCustomGroupInvalidInput         = infraerrors.BadRequest("SYSTEM_CUSTOM_GROUP_INVALID_INPUT", "system custom group input is invalid")
+	ErrSystemCustomGroupInUse                = infraerrors.Conflict("SYSTEM_CUSTOM_GROUP_IN_USE", "system custom group is in use")
 )
 
 // SystemCustomGroupRouteError preserves machine-readable error identity while

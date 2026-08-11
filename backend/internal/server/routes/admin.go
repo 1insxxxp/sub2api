@@ -39,6 +39,7 @@ func RegisterAdminRoutes(
 
 		// 分组管理
 		registerGroupRoutes(admin, h)
+		registerSystemCustomGroupRoutes(admin, h)
 
 		// 账号管理
 		registerAccountRoutes(admin, h, stepUpAuth)
@@ -124,6 +125,18 @@ func RegisterAdminRoutes(
 
 		// 操作审计日志
 		registerAuditLogRoutes(admin, h, stepUpAuth)
+	}
+}
+
+func registerSystemCustomGroupRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
+	groups := admin.Group("/system-custom-groups")
+	{
+		groups.GET("/candidates", h.Admin.SystemCustomGroup.Candidates)
+		groups.POST("", h.Admin.SystemCustomGroup.Create)
+		groups.GET("/:id", h.Admin.SystemCustomGroup.Get)
+		groups.PUT("/:id", h.Admin.SystemCustomGroup.Update)
+		groups.GET("/:id/sync-preview", h.Admin.SystemCustomGroup.SyncPreview)
+		groups.DELETE("/:id", h.Admin.SystemCustomGroup.Delete)
 	}
 }
 

@@ -15,6 +15,7 @@ type SystemCustomGroupRepository interface {
 	Get(ctx context.Context, groupID int64) (*SystemCustomGroup, error)
 	ListModels(ctx context.Context, groupID int64, enabledOnly bool) ([]SystemCustomGroupModel, error)
 	ResolveModel(ctx context.Context, groupID int64, publicModel string) (*SystemCustomGroupModel, error)
+	Delete(ctx context.Context, groupID int64) error
 }
 
 // SystemCustomGroupModelCatalog is deliberately the small subset of
@@ -138,6 +139,13 @@ func (s *SystemCustomGroupService) Get(ctx context.Context, groupID int64) (*Sys
 		return nil, fmt.Errorf("system custom group service is not configured")
 	}
 	return s.repo.Get(ctx, groupID)
+}
+
+func (s *SystemCustomGroupService) Delete(ctx context.Context, groupID int64) error {
+	if s == nil || s.repo == nil {
+		return fmt.Errorf("system custom group service is not configured")
+	}
+	return s.repo.Delete(ctx, groupID)
 }
 
 // ValidateRoutes normalizes route names in place and verifies the full route

@@ -15,6 +15,13 @@ type systemCustomGroupRepositoryStub struct {
 	updatedGroup  *Group
 	updatedModels []SystemCustomGroupModelInput
 	stored        *SystemCustomGroup
+	deletedID     int64
+	deleteErr     error
+}
+
+func (s *systemCustomGroupRepositoryStub) Delete(_ context.Context, groupID int64) error {
+	s.deletedID = groupID
+	return s.deleteErr
 }
 
 func (s *systemCustomGroupRepositoryStub) Update(_ context.Context, group *Group, models []SystemCustomGroupModelInput) error {
@@ -371,4 +378,20 @@ func TestSystemCustomGroupModelsAnthropicCustomListMergesDefaultsAndMappedModels
 			{PublicModel: model, SourceGroupID: 10, SourceModel: model, Enabled: true},
 		}))
 	}
+}
+
+func TestSystemCustomGroupServiceDeleteDelegatesProtectedRepositoryDelete(t *testing.T) {
+	repo := &systemCustomGroupRepositoryStub{}
+	svc := NewSystemCustomGroupService(repo, systemCustomSourceGroupRepositoryStub{}, systemCustomModelCatalogStub{})
+
+	require.NoError(t, svc.Delete(context.Background(), 42))
+	require.Equal(t, int64(42), repo.deletedID)
+}
+
+func TestSystemCustomGroupServiceDeletePreservesInUseError(t *testing.T) {
+	repo := &systemCustomGroupRepositoryStub{deleteErr: ErrSystemCustomGroupInUse}
+	svc := NewSystemCustomGroupService(repo, systemCustomSourceGroupRepositoryStub{}, systemCustomModelCatalogStub{})
+
+	err := svc.Delete(context.Background(), 42)
+	require.ErrorIs(t, err, ErrSystemCustomGroupInUse)
 }

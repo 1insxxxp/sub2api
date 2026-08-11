@@ -20,11 +20,44 @@ import (
 	"github.com/Wei-Shaw/sub2api/internal/pkg/pagination"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/usagestats"
 	"github.com/Wei-Shaw/sub2api/internal/server/middleware"
+	serverroutes "github.com/Wei-Shaw/sub2api/internal/server/routes"
 	"github.com/Wei-Shaw/sub2api/internal/service"
 
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
 )
+
+func TestSystemCustomGroupAPIContractRoutes(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	router := gin.New()
+	handlers := &handler.Handlers{Admin: &handler.AdminHandlers{SystemCustomGroup: &adminhandler.SystemCustomGroupHandler{}}}
+	pass := func(c *gin.Context) { c.Next() }
+	serverroutes.RegisterAdminRoutes(
+		router.Group("/api/v1"),
+		handlers,
+		middleware.AdminAuthMiddleware(pass),
+		middleware.AuditLogMiddleware(pass),
+		middleware.StepUpAuthMiddleware(pass),
+		nil,
+		nil,
+	)
+
+	registered := make(map[string]struct{}, len(router.Routes()))
+	for _, route := range router.Routes() {
+		registered[route.Method+" "+route.Path] = struct{}{}
+	}
+	for _, contract := range []string{
+		"GET /api/v1/admin/system-custom-groups/candidates",
+		"POST /api/v1/admin/system-custom-groups",
+		"GET /api/v1/admin/system-custom-groups/:id",
+		"PUT /api/v1/admin/system-custom-groups/:id",
+		"GET /api/v1/admin/system-custom-groups/:id/sync-preview",
+		"DELETE /api/v1/admin/system-custom-groups/:id",
+	} {
+		_, ok := registered[contract]
+		require.Truef(t, ok, "missing API contract route %s", contract)
+	}
+}
 
 func TestAPIContracts(t *testing.T) {
 	gin.SetMode(gin.TestMode)
