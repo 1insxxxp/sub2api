@@ -23,6 +23,7 @@ type SystemCustomGroupRepository interface {
 // schedulable-account model calculation.
 type SystemCustomGroupModelCatalog interface {
 	GetAvailableModels(ctx context.Context, groupID *int64, platform string) []string
+	HasSchedulableAccountsForGroupPlatform(ctx context.Context, groupID int64, platform string) bool
 }
 
 type SystemCustomGroupService struct {
@@ -327,39 +328,17 @@ func (s *SystemCustomGroupService) availableModelsForSource(ctx context.Context,
 	if s == nil || s.modelIndex == nil || group == nil {
 		return nil
 	}
-	raw := s.modelIndex.GetAvailableModels(ctx, &group.ID, group.Platform)
-	seen := make(map[string]struct{}, len(raw))
-	normalized := make([]string, 0, len(raw))
-	for _, model := range raw {
-		model = strings.TrimSpace(model)
-		key := strings.ToLower(model)
-		if model == "" {
-			continue
-		}
-		if _, exists := seen[key]; exists {
-			continue
-		}
-		seen[key] = struct{}{}
-		normalized = append(normalized, model)
+	available := s.modelIndex.GetAvailableModels(ctx, &group.ID, group.Platform)
+	if len(available) == 0 && !s.modelIndex.HasSchedulableAccountsForGroupPlatform(ctx, group.ID, group.Platform) {
+		return nil
 	}
 	if group.CustomModelsListEnabled() {
-		filtered := make([]string, 0, len(group.ModelsListConfig.Models))
-		filteredSeen := make(map[string]struct{}, len(group.ModelsListConfig.Models))
-		for _, configured := range group.ModelsListConfig.Models {
-			configured = strings.TrimSpace(configured)
-			key := strings.ToLower(configured)
-			if _, duplicate := filteredSeen[key]; duplicate {
-				continue
-			}
-			if _, exists := seen[key]; exists {
-				filtered = append(filtered, configured)
-				filteredSeen[key] = struct{}{}
-			}
-		}
-		normalized = filtered
+		return ResolveCustomModelsList(group.Platform, available, group.ModelsListConfig.Models)
 	}
-	sort.SliceStable(normalized, func(i, j int) bool { return strings.ToLower(normalized[i]) < strings.ToLower(normalized[j]) })
-	return normalized
+	if len(available) == 0 {
+		return DefaultModelIDsForPlatform(group.Platform)
+	}
+	return append([]string(nil), available...)
 }
 
 func isDirectSystemCustomSource(group *Group) bool {

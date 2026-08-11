@@ -75,7 +75,12 @@ func (s systemCustomSourceGroupRepositoryStub) ListActive(context.Context) ([]Gr
 }
 
 type systemCustomModelCatalogStub struct {
-	models map[int64][]string
+	models        map[int64][]string
+	unschedulable map[int64]bool
+}
+
+func (s systemCustomModelCatalogStub) HasSchedulableAccountsForGroupPlatform(_ context.Context, groupID int64, _ string) bool {
+	return !s.unschedulable[groupID]
 }
 
 func (s systemCustomModelCatalogStub) GetAvailableModels(_ context.Context, groupID *int64, _ string) []string {
@@ -295,7 +300,7 @@ func TestSystemCustomGroupCandidatesOnlyIncludeActiveDirectSourcesAndRespectCust
 			40: {ID: 40, Name: "nested", Status: StatusActive, Platform: PlatformAnthropic, SystemCustomRoutingEnabled: true},
 		}},
 		systemCustomModelCatalogStub{models: map[int64][]string{
-			10: {"model-a", "MODEL-B"}, 20: {"inactive-model"}, 30: {"composite-model"}, 40: {"nested-model"},
+			10: {"model-a", "model-b"}, 20: {"inactive-model"}, 30: {"composite-model"}, 40: {"nested-model"},
 		}},
 	)
 
@@ -305,4 +310,65 @@ func TestSystemCustomGroupCandidatesOnlyIncludeActiveDirectSourcesAndRespectCust
 	require.Len(t, candidates, 1)
 	require.Equal(t, int64(10), candidates[0].Group.ID)
 	require.Equal(t, []string{"model-b"}, candidates[0].Models)
+}
+
+func TestSystemCustomGroupModelsWildcardMappingAllowsConcreteSelectedModel(t *testing.T) {
+	source := activeDirectSystemCustomSource(10, PlatformAnthropic)
+	source.ModelsListConfig = GroupModelsListConfig{Enabled: true, Models: []string{"claude-sonnet-4-6"}}
+	svc := NewSystemCustomGroupService(
+		&systemCustomGroupRepositoryStub{},
+		systemCustomSourceGroupRepositoryStub{groups: map[int64]*Group{10: source}},
+		systemCustomModelCatalogStub{models: map[int64][]string{10: {"claude-*"}}},
+	)
+
+	candidates, err := svc.Candidates(context.Background())
+	require.NoError(t, err)
+	require.Len(t, candidates, 1)
+	require.Equal(t, []string{"claude-sonnet-4-6"}, candidates[0].Models)
+	require.NoError(t, svc.ValidateRoutes(context.Background(), 0, []SystemCustomGroupModelInput{
+		{PublicModel: "sonnet", SourceGroupID: 10, SourceModel: "claude-sonnet-4-6", Enabled: true},
+	}))
+}
+
+func TestSystemCustomGroupModelsEmptyMappingFallsBackToPlatformDefaultsAndFiltersSelection(t *testing.T) {
+	source := activeDirectSystemCustomSource(10, PlatformOpenAI)
+	source.ModelsListConfig = GroupModelsListConfig{Enabled: true, Models: []string{"gpt-5.5", "legacy-gpt-2024", "gpt-5.4"}}
+	withoutAccounts := activeDirectSystemCustomSource(20, PlatformOpenAI)
+	withoutAccounts.ModelsListConfig = source.ModelsListConfig
+	svc := NewSystemCustomGroupService(
+		&systemCustomGroupRepositoryStub{},
+		systemCustomSourceGroupRepositoryStub{groups: map[int64]*Group{10: source, 20: withoutAccounts}},
+		systemCustomModelCatalogStub{models: map[int64][]string{10: nil, 20: nil}, unschedulable: map[int64]bool{20: true}},
+	)
+
+	candidates, err := svc.Candidates(context.Background())
+	require.NoError(t, err)
+	require.Len(t, candidates, 1)
+	require.Equal(t, []string{"gpt-5.5", "gpt-5.4"}, candidates[0].Models)
+	require.NoError(t, svc.ValidateRoutes(context.Background(), 0, []SystemCustomGroupModelInput{
+		{PublicModel: "gpt", SourceGroupID: 10, SourceModel: "gpt-5.5", Enabled: true},
+	}))
+}
+
+func TestSystemCustomGroupModelsAnthropicCustomListMergesDefaultsAndMappedModels(t *testing.T) {
+	source := activeDirectSystemCustomSource(10, PlatformAnthropic)
+	source.ModelsListConfig = GroupModelsListConfig{
+		Enabled: true,
+		Models:  []string{"claude-fable-5", "claude-opus-4-8", "deepseek-v4-pro"},
+	}
+	svc := NewSystemCustomGroupService(
+		&systemCustomGroupRepositoryStub{},
+		systemCustomSourceGroupRepositoryStub{groups: map[int64]*Group{10: source}},
+		systemCustomModelCatalogStub{models: map[int64][]string{10: {"deepseek-v4-pro"}}},
+	)
+
+	candidates, err := svc.Candidates(context.Background())
+	require.NoError(t, err)
+	require.Len(t, candidates, 1)
+	require.Equal(t, []string{"claude-fable-5", "claude-opus-4-8", "deepseek-v4-pro"}, candidates[0].Models)
+	for _, model := range candidates[0].Models {
+		require.NoError(t, svc.ValidateRoutes(context.Background(), 0, []SystemCustomGroupModelInput{
+			{PublicModel: model, SourceGroupID: 10, SourceModel: model, Enabled: true},
+		}))
+	}
 }
