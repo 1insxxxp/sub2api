@@ -78,14 +78,14 @@
             <p v-if="metric.label" class="text-xs text-primary-700 dark:text-primary-200">
               {{ metric.label }}
             </p>
-            <template v-if="metric.value?.peakSite != null">
+            <template v-if="hasPeak(metric.value)">
               <p class="mt-0.5 text-xs font-medium text-primary-700 dark:text-primary-200">
                 {{ t(`${catalogKey}.regularPrice`) }}
               </p>
               <p
                 class="break-words font-mono text-sm font-bold tabular-nums text-primary-700 dark:text-primary-200"
               >
-                {{ formatCny(metric.value.site, metric.value.siteMax, metric.scale) }}
+                {{ formatCny(metric.value?.site, metric.value?.siteMax, metric.scale) }}
                 <span class="text-xs font-medium text-primary-700 dark:text-primary-200">{{ metric.unit }}</span>
               </p>
               <p class="mt-1.5 text-xs font-medium text-amber-700 dark:text-amber-300">
@@ -94,7 +94,7 @@
               <p
                 class="break-words font-mono text-sm font-bold tabular-nums text-amber-700 dark:text-amber-300"
               >
-                {{ formatCny(metric.value.peakSite, metric.value.peakSiteMax, metric.scale) }}
+                {{ formatCny(metric.value?.peakSite, metric.value?.peakSiteMax, metric.scale) }}
                 <span class="text-xs font-medium text-amber-700 dark:text-amber-300">{{ metric.unit }}</span>
               </p>
             </template>
@@ -185,18 +185,18 @@
                     <p class="text-xs text-primary-700 dark:text-primary-200">
                       {{ t(`${catalogKey}.sitePrice`) }}
                     </p>
-                    <template v-if="metric.value?.peakSite != null">
+                    <template v-if="hasPeak(metric.value)">
                       <p class="mt-1 text-xs text-primary-700 dark:text-primary-200">
                         {{ t(`${catalogKey}.regularPrice`) }}
                       </p>
                       <p class="break-words font-mono text-xs font-bold tabular-nums text-primary-700 dark:text-primary-200">
-                        {{ formatCny(metric.value.site, metric.value.siteMax, metric.scale) }} {{ metric.unit }}
+                        {{ formatCny(metric.value?.site, metric.value?.siteMax, metric.scale) }} {{ metric.unit }}
                       </p>
                       <p class="mt-1 text-xs text-amber-700 dark:text-amber-300">
                         {{ t(`${catalogKey}.peakPrice`) }}
                       </p>
                       <p class="break-words font-mono text-xs font-bold tabular-nums text-amber-700 dark:text-amber-300">
-                        {{ formatCny(metric.value.peakSite, metric.value.peakSiteMax, metric.scale) }} {{ metric.unit }}
+                        {{ formatCny(metric.value?.peakSite, metric.value?.peakSiteMax, metric.scale) }} {{ metric.unit }}
                       </p>
                     </template>
                     <p
@@ -292,6 +292,10 @@ function hasValue(value: CatalogPriceValue | null): boolean {
       || value.siteMax != null
       || value.peakSite != null
       || value.peakSiteMax != null)
+}
+
+function hasPeak(value: CatalogPriceValue | null): boolean {
+  return value != null && (value.peakSite != null || value.peakSiteMax != null)
 }
 
 function metricsForCollection(

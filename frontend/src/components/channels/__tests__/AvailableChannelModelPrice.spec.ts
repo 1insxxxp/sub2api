@@ -177,6 +177,40 @@ describe('AvailableChannelModelPrice', () => {
     expect(tiered.get('[data-testid="pricing-tier"]').text()).toContain('¥0.60–¥0.75 / 1M token')
   })
 
+  it.runIf(existsSync(componentPath))('preserves a max-only peak price in the headline comparison', async () => {
+    const wrapper = await mountPrice(makeModel({
+      prices: {
+        ...emptyPrices(),
+        input: price(0.000005, 0.0000006, null, 0.00000075, 0.000001125),
+      },
+    }))
+
+    const site = wrapper.get('[data-testid="site-price"]')
+    expect(site.text()).toContain('常规价格')
+    expect(site.text()).toContain('¥0.60–¥0.75 / 1M token')
+    expect(site.text()).toContain('高峰价格')
+    expect(site.text()).toContain('¥1.125 / 1M token')
+  })
+
+  it.runIf(existsSync(componentPath))('preserves a max-only peak price in expanded tier details', async () => {
+    const wrapper = await mountPrice(makeModel({
+      prices: emptyPrices(),
+      intervals: [{
+        key: 'peak-tier', minTokens: 0, maxTokens: null, tierLabel: 'Peak tier',
+        prices: {
+          ...emptyPrices(),
+          input: price(0.000005, 0.0000006, null, 0.00000075, 0.000001125),
+        },
+      }],
+    }), true)
+
+    const tier = wrapper.get('[data-testid="pricing-tier"]')
+    expect(tier.text()).toContain('常规价格')
+    expect(tier.text()).toContain('¥0.60–¥0.75 / 1M token')
+    expect(tier.text()).toContain('高峰价格')
+    expect(tier.text()).toContain('¥1.125 / 1M token')
+  })
+
   it.runIf(existsSync(componentPath))('morphs one price DOM into the shared five-column desktop row', async () => {
     const wrapper = await mountPrice(makeModel({
       prices: {
