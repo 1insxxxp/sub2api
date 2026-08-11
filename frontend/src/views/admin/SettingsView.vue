@@ -7160,12 +7160,13 @@
                   {{ t('admin.settings.features.availableChannels.priceCnyMultiplierHint') }}
                 </p>
                 <p
-                  v-if="Number(form.available_channels_price_cny_multiplier) > 0"
+                  v-if="availableChannelsPricePreviewValue"
+                  data-test="available-channels-price-preview"
                   class="mt-1 text-xs font-medium text-primary-600 dark:text-primary-400"
                 >
                   {{
                     t('admin.settings.features.availableChannels.priceCnyPreview', {
-                      value: (10 * Number(form.available_channels_price_cny_multiplier)).toFixed(2),
+                      value: availableChannelsPricePreviewValue,
                     })
                   }}
                 </p>
@@ -10206,6 +10207,26 @@ const availableChannelsPriceMultiplierMaxLoaded = ref(false);
 const availableChannelsPriceMultiplierMaxDirty = ref(false);
 const availableChannelsOfficialUSDToCNYRateLoaded = ref(false);
 const availableChannelsOfficialUSDToCNYRateDirty = ref(false);
+
+const availableChannelsPricePreviewValue = computed(() => {
+  const minMultiplier = Number(form.available_channels_price_cny_multiplier);
+  if (!Number.isFinite(minMultiplier) || minMultiplier <= 0) return "";
+
+  const parsedMax = Number(form.available_channels_price_cny_multiplier_max);
+  const maxMultiplier = Math.max(
+    minMultiplier,
+    Number.isFinite(parsedMax) && parsedMax >= 0 ? parsedMax : 0.2,
+  );
+  const minPrice = 10 * minMultiplier;
+  const calculatedMaxPrice = 10 * maxMultiplier;
+  if (!Number.isFinite(minPrice)) return "";
+  const maxPrice = Number.isFinite(calculatedMaxPrice)
+    ? calculatedMaxPrice
+    : minPrice;
+  const minText = minPrice.toFixed(2);
+  const maxText = maxPrice.toFixed(2);
+  return minText === maxText ? minText : `${minText}–¥${maxText}`;
+});
 
 function handleAvailableChannelsPriceMultiplierMaxInput(event: Event): void {
   form.available_channels_price_cny_multiplier_max = parseFloat(
