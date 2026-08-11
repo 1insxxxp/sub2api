@@ -1,5 +1,6 @@
 import { mount } from '@vue/test-utils'
 import { describe, expect, it, vi } from 'vitest'
+import Select from '@/components/common/Select.vue'
 
 const labels: Record<string, string> = {
   'availableChannels.searchPlaceholder': '搜索渠道或模型...',
@@ -50,7 +51,9 @@ describe('AvailableChannelsToolbar', () => {
     const wrapper = await mountToolbar()
 
     await wrapper.get('[data-testid="channel-search"]').setValue('claude')
-    await wrapper.get('[data-testid="platform-filter"]').setValue('anthropic')
+    const platformFilter = wrapper.getComponent(Select)
+    expect(platformFilter.props('modelValue')).toBe('')
+    await platformFilter.vm.$emit('update:modelValue', 'anthropic')
     await wrapper.get('[data-testid="priced-only-filter"]').setValue(true)
 
     expect(wrapper.emitted('update:search')).toEqual([['claude']])
@@ -89,8 +92,10 @@ describe('AvailableChannelsToolbar', () => {
     expect(refresh.attributes('aria-busy')).toBe('true')
   })
 
-  it('uses deterministic responsive rows and retains the all-platform option', async () => {
-    const wrapper = await mountToolbar({ platforms: [] })
+  it('uses the shared select with deterministic responsive rows and platform options', async () => {
+    const wrapper = await mountToolbar()
+    const platformFilter = wrapper.getComponent(Select)
+    const source = await import('../AvailableChannelsToolbar.vue?raw').then(module => module.default)
 
     expect(wrapper.get('[data-testid="channel-filter-row"]').classes()).toEqual(expect.arrayContaining([
       'grid-cols-[minmax(0,1fr)_auto_auto]',
@@ -98,6 +103,17 @@ describe('AvailableChannelsToolbar', () => {
     ]))
     expect(wrapper.get('[data-testid="channel-search-shell"]').classes()).toEqual(expect.arrayContaining(['col-span-3', 'sm:col-span-1']))
     expect(wrapper.get('[data-testid="channel-search"]').classes()).toEqual(expect.arrayContaining(['h-11', 'w-full', 'min-w-0']))
-    expect(wrapper.get('[data-testid="platform-filter"]').text()).toContain('全部平台')
+    expect(wrapper.find('select[data-testid="platform-filter"]').exists()).toBe(false)
+    expect(platformFilter.props('searchable')).toBe(false)
+    expect(platformFilter.props('ariaLabel')).toBe('平台筛选')
+    expect(platformFilter.props('options')).toEqual([
+      { value: '', label: '全部平台' },
+      { value: 'anthropic', label: 'anthropic' },
+      { value: 'openai', label: 'openai' },
+    ])
+    expect(wrapper.get('[data-testid="platform-filter"]').classes()).toEqual(expect.arrayContaining(['platform-filter', 'min-w-0']))
+    expect(source).not.toContain('<select')
+    expect(source).toContain('.platform-filter :deep(.select-trigger)')
+    expect(source).toContain('@apply h-11')
   })
 })

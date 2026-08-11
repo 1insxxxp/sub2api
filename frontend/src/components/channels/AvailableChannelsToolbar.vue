@@ -68,16 +68,15 @@
       />
     </div>
 
-    <select
+    <Select
       data-testid="platform-filter"
-      :value="platform"
-      class="input h-11 w-full min-w-0 rounded-xl border-slate-200 bg-white px-3 text-sm shadow-none transition-colors hover:border-slate-300 focus:border-primary-300 dark:border-dark-600 dark:bg-dark-800 dark:hover:border-dark-500"
+      class="platform-filter min-w-0"
+      :model-value="platform"
+      :options="platformOptions"
+      :searchable="false"
       :aria-label="t('availableChannels.catalog.platformFilter')"
-      @change="emit('update:platform', ($event.target as HTMLSelectElement).value)"
-    >
-      <option value="">{{ t('availableChannels.catalog.allPlatforms') }}</option>
-      <option v-for="item in platforms" :key="item" :value="item">{{ item }}</option>
-    </select>
+      @update:model-value="updatePlatform"
+    />
 
     <label
       class="group inline-flex min-h-11 shrink-0 cursor-pointer items-center gap-2 whitespace-nowrap rounded-xl border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-600 transition-colors hover:border-primary-200 hover:text-primary-700 focus-within:ring-2 focus-within:ring-primary-500/40 dark:border-dark-600 dark:bg-dark-800 dark:text-slate-300 dark:hover:border-primary-500/40 dark:hover:text-primary-300 sm:text-sm"
@@ -114,12 +113,14 @@
 </template>
 
 <script setup lang="ts">
+import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { GroupPlatform } from '@/types'
+import Select, { type SelectOption } from '@/components/common/Select.vue'
 import PlatformIcon from '@/components/common/PlatformIcon.vue'
 import Icon from '@/components/icons/Icon.vue'
 
-withDefaults(defineProps<{
+const props = withDefaults(defineProps<{
   search: string
   platform: string
   pricedOnly: boolean
@@ -150,7 +151,22 @@ const emit = defineEmits<{
 
 const { t } = useI18n()
 
+const platformOptions = computed<SelectOption[]>(() => [
+  { value: '', label: t('availableChannels.catalog.allPlatforms') },
+  ...props.platforms.map(value => ({ value, label: value })),
+])
+
+function updatePlatform(value: SelectOption['value']) {
+  emit('update:platform', typeof value === 'string' ? value : '')
+}
+
 function asPlatform(value: string): GroupPlatform {
   return value as GroupPlatform
 }
 </script>
+
+<style scoped>
+.platform-filter :deep(.select-trigger) {
+  @apply h-11 min-w-0 rounded-xl border-slate-200 bg-white px-3 shadow-none dark:border-dark-600 dark:bg-dark-800;
+}
+</style>
