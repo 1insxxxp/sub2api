@@ -972,7 +972,6 @@ describe("admin SettingsView available channels price range", () => {
   });
 
   it.each([
-    ["infinite", "1e309"],
     ["not-a-number", ""],
     ["negative", "-1"],
   ])("falls back to rate 7 for an explicitly edited %s official rate", async (_case, value) => {
@@ -988,6 +987,26 @@ describe("admin SettingsView available channels price range", () => {
     await wrapper
       .get('[data-test="available-channels-official-usd-to-cny-rate"]')
       .setValue(value);
+    await wrapper.find("form").trigger("submit.prevent");
+    await flushPromises();
+
+    expect(updateSettings.mock.calls.at(-1)?.[0]).toMatchObject({
+      available_channels_official_usd_to_cny_rate: 7,
+    });
+  });
+
+  it("falls back to rate 7 for an infinite official rate", async () => {
+    getSettings.mockResolvedValueOnce({
+      ...baseSettingsResponse,
+      available_channels_official_usd_to_cny_rate: 6.9,
+    });
+
+    const wrapper = mountView();
+    await flushPromises();
+    const setupState = wrapper.vm.$.setupState as {
+      form: { available_channels_official_usd_to_cny_rate: number };
+    };
+    setupState.form.available_channels_official_usd_to_cny_rate = Number.POSITIVE_INFINITY;
     await wrapper.find("form").trigger("submit.prevent");
     await flushPromises();
 
