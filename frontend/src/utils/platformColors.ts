@@ -18,6 +18,27 @@ const BADGE: Record<Platform, string> = {
 }
 const BADGE_DEFAULT = 'bg-slate-500/10 text-slate-600 border-slate-500/30 dark:text-slate-400'
 
+// ── API key group badge (normal and subscription states) ───────────
+const GROUP_BADGE: Record<Platform, string> = {
+  anthropic: 'bg-amber-50 text-amber-700 dark:bg-amber-900/20 dark:text-amber-400',
+  openai: 'bg-green-50 text-green-700 dark:bg-green-900/20 dark:text-green-400',
+  antigravity: 'bg-fuchsia-50 text-fuchsia-700 dark:bg-fuchsia-900/20 dark:text-fuchsia-400',
+  gemini: 'bg-sky-50 text-sky-700 dark:bg-sky-900/20 dark:text-sky-400',
+  grok: 'bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-200',
+  composite: 'bg-cyan-50 text-cyan-800 dark:bg-cyan-900/20 dark:text-cyan-300',
+}
+const GROUP_BADGE_DEFAULT = 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400'
+
+const GROUP_BADGE_SUBSCRIPTION: Record<Platform, string> = {
+  anthropic: 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400',
+  openai: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400',
+  antigravity: 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400',
+  gemini: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400',
+  grok: 'bg-zinc-200 text-zinc-800 dark:bg-zinc-700 dark:text-zinc-100',
+  composite: 'bg-cyan-100 text-cyan-800 dark:bg-cyan-900/30 dark:text-cyan-300',
+}
+const GROUP_BADGE_SUBSCRIPTION_DEFAULT = 'bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-400'
+
 // ── Light badge (softer bg, no border) ──────────────────────────────
 const BADGE_LIGHT: Record<Platform, string> = {
   anthropic: 'bg-orange-500/10 text-orange-600 dark:bg-orange-500/10 dark:text-orange-300',
@@ -157,6 +178,13 @@ function isPlatform(p: string): p is Platform {
 
 export function platformBadgeClass(p: string): string {
   return isPlatform(p) ? BADGE[p] : BADGE_DEFAULT
+}
+
+export function platformGroupBadgeClass(p?: string, isSubscription = false): string {
+  if (!p || !isPlatform(p)) {
+    return isSubscription ? GROUP_BADGE_SUBSCRIPTION_DEFAULT : GROUP_BADGE_DEFAULT
+  }
+  return isSubscription ? GROUP_BADGE_SUBSCRIPTION[p] : GROUP_BADGE[p]
 }
 
 export function platformBadgeLightClass(p: string): string {

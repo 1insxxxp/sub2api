@@ -4,7 +4,7 @@
 
 **Goal:** Make every available-channel model-card icon use the same platform logo and normal-state theme colors as API-key group badges.
 
-**Architecture:** Extract the platform badge theme resolver from `GroupBadge` into a small shared utility, then make both `GroupBadge` and `AvailableChannelBrandIcon` consume it. Replace the brand icon's private SVG set with the common `PlatformIcon`, while retaining the existing 44px card icon container and platform alias normalization.
+**Architecture:** Add the exact `GroupBadge` normal/subscription themes to the existing centralized `platformColors.ts`, then make both `GroupBadge` and `AvailableChannelBrandIcon` consume them. Replace the brand icon's private SVG set with the common `PlatformIcon`, while retaining the existing 44px card icon container and platform alias normalization.
 
 **Tech Stack:** Vue 3, TypeScript, Tailwind CSS, Vitest, Vue Test Utils.
 
@@ -13,13 +13,13 @@
 ### Task 1: Extract the shared platform theme
 
 **Files:**
-- Create: `frontend/src/components/common/platformVisual.ts`
+- Modify: `frontend/src/utils/platformColors.ts`
 - Modify: `frontend/src/components/common/GroupBadge.vue`
 - Modify: `frontend/src/components/common/__tests__/GroupBadge.spec.ts`
 
 **Step 1: Write the failing test**
 
-Add a table-driven test which mounts a normal `GroupBadge` for `anthropic`, `openai`, `gemini`, `antigravity`, `grok`, `composite`, and an unknown platform. Assert that every rendered badge contains the class string returned by `platformBadgeThemeClass(platform, false)`.
+Add a table-driven test which mounts a normal `GroupBadge` for `anthropic`, `openai`, `gemini`, `antigravity`, `grok`, `composite`, and an unknown platform. Assert that every rendered badge contains the class string returned by `platformGroupBadgeClass(platform, false)` from the centralized platform color module.
 
 **Step 2: Run the test to verify it fails**
 
@@ -30,15 +30,15 @@ cd frontend
 npx vitest run src/components/common/__tests__/GroupBadge.spec.ts
 ```
 
-Expected: FAIL because `platformVisual.ts` and `platformBadgeThemeClass` do not exist.
+Expected: FAIL because `platformGroupBadgeClass` and the corresponding `GroupBadge` import do not exist.
 
 **Step 3: Implement the shared theme resolver**
 
 Create:
 
 ```ts
-export function platformBadgeThemeClass(
-  platform?: GroupPlatform,
+export function platformGroupBadgeClass(
+  platform?: string,
   isSubscription = false,
 ): string {
   // Return the exact existing GroupBadge bg/text classes for each platform.
@@ -66,7 +66,7 @@ Extend the branding tests to assert:
 - Anthropic, OpenAI, Gemini, Antigravity, Grok, and Composite aliases resolve to the corresponding common platform key.
 - Unknown platforms resolve to the generic fallback.
 - `AvailableChannelBrandIcon` renders a `PlatformIcon` with `size="xl"` rather than private inline SVG artwork.
-- The large icon contains the same normal-state theme classes returned by `platformBadgeThemeClass`.
+- The large icon contains the same normal-state theme classes returned by `platformGroupBadgeClass`.
 - The outer container remains `size-11` with an accessible label.
 
 **Step 2: Run the test to verify it fails**
@@ -110,7 +110,7 @@ Expected: all tests pass.
 
 ```bash
 npm run typecheck
-npx eslint src/components/common/platformVisual.ts src/components/common/GroupBadge.vue src/components/common/PlatformIcon.vue src/components/common/__tests__/GroupBadge.spec.ts src/components/channels/availableChannelBrand.ts src/components/channels/AvailableChannelBrandIcon.vue src/components/channels/__tests__/AvailableChannelBrandIcon.spec.ts
+npx eslint src/utils/platformColors.ts src/components/common/GroupBadge.vue src/components/common/PlatformIcon.vue src/components/common/__tests__/GroupBadge.spec.ts src/components/channels/availableChannelBrand.ts src/components/channels/AvailableChannelBrandIcon.vue src/components/channels/__tests__/AvailableChannelBrandIcon.spec.ts
 npm run build
 git diff --check
 ```
@@ -120,6 +120,6 @@ Expected: all commands exit 0.
 **Step 3: Commit**
 
 ```bash
-git add frontend/src/components/common/platformVisual.ts frontend/src/components/common/GroupBadge.vue frontend/src/components/common/PlatformIcon.vue frontend/src/components/common/__tests__/GroupBadge.spec.ts frontend/src/components/channels/availableChannelBrand.ts frontend/src/components/channels/AvailableChannelBrandIcon.vue frontend/src/components/channels/__tests__/AvailableChannelBrandIcon.spec.ts
+git add frontend/src/utils/platformColors.ts frontend/src/components/common/GroupBadge.vue frontend/src/components/common/PlatformIcon.vue frontend/src/components/common/__tests__/GroupBadge.spec.ts frontend/src/components/channels/availableChannelBrand.ts frontend/src/components/channels/AvailableChannelBrandIcon.vue frontend/src/components/channels/__tests__/AvailableChannelBrandIcon.spec.ts
 git commit -m "fix: unify available channel brand icons"
 ```

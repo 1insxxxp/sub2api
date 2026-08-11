@@ -39,6 +39,7 @@ import type { SubscriptionType, GroupPlatform } from '@/types'
 import { formatVisibleRateMultiplier } from '@/utils/formatters'
 import { useAppStore } from '@/stores/app'
 import { formatPeakRateWindow, serverTimezoneLabel } from '@/utils/peak-rate'
+import { platformGroupBadgeClass } from '@/utils/platformColors'
 import PlatformIcon from './PlatformIcon.vue'
 
 interface Props {
@@ -182,42 +183,5 @@ const peakRateClass = computed(() => {
   return 'px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300'
 })
 
-// Badge color based on platform and subscription type
-const badgeClass = computed(() => {
-  if (props.platform === 'anthropic') {
-    // Claude: orange theme
-    return isSubscription.value
-      ? 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400'
-      : 'bg-amber-50 text-amber-700 dark:bg-amber-900/20 dark:text-amber-400'
-  } else if (props.platform === 'openai') {
-    // OpenAI: green theme
-    return isSubscription.value
-      ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400'
-      : 'bg-green-50 text-green-700 dark:bg-green-900/20 dark:text-green-400'
-  }
-  if (props.platform === 'gemini') {
-    return isSubscription.value
-      ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400'
-      : 'bg-sky-50 text-sky-700 dark:bg-sky-900/20 dark:text-sky-400'
-  }
-  if (props.platform === 'antigravity') {
-    return isSubscription.value
-      ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400'
-      : 'bg-fuchsia-50 text-fuchsia-700 dark:bg-fuchsia-900/20 dark:text-fuchsia-400'
-  }
-  if (props.platform === 'grok') {
-    return isSubscription.value
-      ? 'bg-zinc-200 text-zinc-800 dark:bg-zinc-700 dark:text-zinc-100'
-      : 'bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-200'
-  }
-  if (props.platform === 'composite') {
-    return isSubscription.value
-      ? 'bg-cyan-100 text-cyan-800 dark:bg-cyan-900/30 dark:text-cyan-300'
-      : 'bg-cyan-50 text-cyan-800 dark:bg-cyan-900/20 dark:text-cyan-300'
-  }
-  // Fallback: original colors
-  return isSubscription.value
-    ? 'bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-400'
-    : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400'
-})
+const badgeClass = computed(() => platformGroupBadgeClass(props.platform, isSubscription.value))
 </script>
