@@ -7130,34 +7130,79 @@
               </div>
               <Toggle v-model="form.available_channels_enabled" />
             </div>
+            <div class="grid gap-4 md:grid-cols-2">
+              <div>
+                <label class="input-label">
+                  {{ t('admin.settings.features.availableChannels.priceCnyMultiplier') }}
+                </label>
+                <input
+                  data-test="available-channels-price-cny-multiplier-min"
+                  :value="form.available_channels_price_cny_multiplier"
+                  @input="
+                    form.available_channels_price_cny_multiplier =
+                      parseFloat(($event.target as HTMLInputElement).value)
+                  "
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  class="input"
+                  placeholder="0.16"
+                />
+                <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                  {{ t('admin.settings.features.availableChannels.priceCnyMultiplierHint') }}
+                </p>
+                <p
+                  v-if="Number(form.available_channels_price_cny_multiplier) > 0"
+                  class="mt-1 text-xs font-medium text-primary-600 dark:text-primary-400"
+                >
+                  {{
+                    t('admin.settings.features.availableChannels.priceCnyPreview', {
+                      value: (10 * Number(form.available_channels_price_cny_multiplier)).toFixed(2),
+                    })
+                  }}
+                </p>
+              </div>
+              <div>
+                <label class="input-label">
+                  {{ t('admin.settings.features.availableChannels.priceCnyMultiplierMax') }}
+                </label>
+                <input
+                  data-test="available-channels-price-cny-multiplier-max"
+                  :value="form.available_channels_price_cny_multiplier_max"
+                  @input="
+                    form.available_channels_price_cny_multiplier_max =
+                      parseFloat(($event.target as HTMLInputElement).value)
+                  "
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  class="input"
+                  placeholder="0.20"
+                />
+                <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                  {{ t('admin.settings.features.availableChannels.priceCnyMultiplierMaxHint') }}
+                </p>
+              </div>
+            </div>
             <div>
               <label class="input-label">
-                {{ t('admin.settings.features.availableChannels.priceCnyMultiplier') }}
+                {{ t('admin.settings.features.availableChannels.officialUsdToCnyRate') }}
               </label>
               <input
-                :value="form.available_channels_price_cny_multiplier || ''"
+                data-test="available-channels-official-usd-to-cny-rate"
+                :value="form.available_channels_official_usd_to_cny_rate"
                 @input="
-                  form.available_channels_price_cny_multiplier =
-                    parseFloat(($event.target as HTMLInputElement).value) || 0
+                  form.available_channels_official_usd_to_cny_rate =
+                    Math.max(0, parseFloat(($event.target as HTMLInputElement).value) || 0)
                 "
                 type="number"
-                step="0.001"
+                step="0.01"
                 min="0"
                 class="input"
-                placeholder="0.16"
+                placeholder="7"
               />
               <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                {{ t('admin.settings.features.availableChannels.priceCnyMultiplierHint') }}
-              </p>
-              <p
-                v-if="Number(form.available_channels_price_cny_multiplier) > 0"
-                class="mt-1 text-xs font-medium text-primary-600 dark:text-primary-400"
-              >
-                {{
-                  t('admin.settings.features.availableChannels.priceCnyPreview', {
-                    value: (10 * Number(form.available_channels_price_cny_multiplier || 0)).toFixed(2),
-                  })
-                }}
+                {{ t('admin.settings.features.availableChannels.officialUsdToCnyRateHint') }}
               </p>
             </div>
           </div>
@@ -10127,6 +10172,8 @@ const form = reactive<SettingsForm>({
   // Available Channels feature switch
   available_channels_enabled: false,
   available_channels_price_cny_multiplier: 0,
+  available_channels_price_cny_multiplier_max: 0.2,
+  available_channels_official_usd_to_cny_rate: 7,
   // Model Plaza feature switches + description
   model_plaza_enabled: false,
   model_plaza_require_auth: false,
@@ -11540,6 +11587,24 @@ async function saveSettings() {
     form.claude_oauth_system_prompt_blocks =
       claudeOAuthSystemPromptBlocksJSON;
 
+    const parsedAvailableChannelsPriceMultiplier = Number(
+      form.available_channels_price_cny_multiplier,
+    );
+    const availableChannelsPriceMultiplier = Number.isFinite(
+      parsedAvailableChannelsPriceMultiplier,
+    )
+      ? Math.max(0, parsedAvailableChannelsPriceMultiplier)
+      : 0;
+    const parsedAvailableChannelsPriceMultiplierMax = Number(
+      form.available_channels_price_cny_multiplier_max,
+    );
+    const availableChannelsPriceMultiplierMax = Math.max(
+      availableChannelsPriceMultiplier,
+      Number.isFinite(parsedAvailableChannelsPriceMultiplierMax)
+        ? Math.max(0, parsedAvailableChannelsPriceMultiplierMax)
+        : 0.2,
+    );
+
     const payload: UpdateSettingsRequest = {
       registration_enabled: form.registration_enabled,
       email_verify_enabled: form.email_verify_enabled,
@@ -11854,7 +11919,11 @@ async function saveSettings() {
       // Available Channels feature switch
       available_channels_enabled: form.available_channels_enabled,
       available_channels_price_cny_multiplier:
-        Number(form.available_channels_price_cny_multiplier) || 0,
+        availableChannelsPriceMultiplier,
+      available_channels_price_cny_multiplier_max:
+        availableChannelsPriceMultiplierMax,
+      available_channels_official_usd_to_cny_rate:
+        Math.max(0, Number(form.available_channels_official_usd_to_cny_rate) || 0),
       // Model Plaza feature switches + description
       model_plaza_enabled: form.model_plaza_enabled,
       model_plaza_require_auth: form.model_plaza_require_auth,

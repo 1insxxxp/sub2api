@@ -734,6 +734,8 @@ export interface SystemSettings {
   // Available Channels feature switch
   available_channels_enabled: boolean;
   available_channels_price_cny_multiplier: number;
+  available_channels_price_cny_multiplier_max: number;
+  available_channels_official_usd_to_cny_rate: number;
 
   // Model Plaza feature switches + description
   model_plaza_enabled: boolean;
@@ -1042,6 +1044,8 @@ export interface UpdateSettingsRequest {
   // Available Channels feature switch
   available_channels_enabled?: boolean;
   available_channels_price_cny_multiplier?: number;
+  available_channels_price_cny_multiplier_max?: number;
+  available_channels_official_usd_to_cny_rate?: number;
 
   // Model Plaza feature switches + description
   model_plaza_enabled?: boolean;

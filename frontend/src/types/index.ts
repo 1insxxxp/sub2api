@@ -336,6 +336,8 @@ export interface PublicSettings {
   channel_monitor_hide_throughput?: boolean
   available_channels_enabled: boolean
   available_channels_price_cny_multiplier: number
+  available_channels_price_cny_multiplier_max?: number
+  available_channels_official_usd_to_cny_rate: number
   model_plaza_enabled: boolean
   model_plaza_require_auth: boolean
   service_quota_enabled: boolean
