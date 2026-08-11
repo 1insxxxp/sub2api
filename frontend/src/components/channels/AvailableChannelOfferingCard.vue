@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n'
 import type { CatalogModelOffering, CatalogPriceCollection, CatalogPriceValue, CatalogPricingInterval } from './availableChannelCatalog'
 import { formatCatalogMoney } from './availableChannelPriceDisplay'
 import { formatAvailableChannelRate } from './availableChannelRateDisplay'
+import AvailableChannelPlatformBadge from './AvailableChannelPlatformBadge.vue'
 
 const props = defineProps<{ offering: CatalogModelOffering }>()
 const { t } = useI18n()
@@ -44,7 +45,7 @@ const hasAnyPrice = computed(() => directMetrics.value.length > 0 || tiers.value
       <div class="min-w-0 flex-1">
         <div class="flex min-w-0 flex-wrap items-center gap-2">
           <strong class="break-words text-sm font-bold text-gray-900 [overflow-wrap:anywhere] dark:text-white">{{ offering.channelName }}</strong>
-          <span class="rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-medium text-gray-600 dark:bg-dark-700 dark:text-gray-300">{{ offering.platform }}</span>
+          <AvailableChannelPlatformBadge :platform="offering.platform" />
         </div>
         <p class="mt-1 break-words text-xs text-gray-500 [overflow-wrap:anywhere] dark:text-gray-400">{{ offering.groupName }}</p>
       </div>

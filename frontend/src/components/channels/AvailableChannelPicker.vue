@@ -13,10 +13,18 @@
       <span class="min-w-0">
         <span class="block text-xs font-medium text-gray-500 dark:text-gray-400">{{ t(`${catalogKey}.selectChannel`) }}</span>
         <span class="mt-0.5 block truncate text-sm font-semibold text-gray-900 dark:text-white">{{ selectedChannel?.name }}</span>
-        <span v-if="selectedChannel" class="mt-1 flex flex-wrap gap-x-2 gap-y-1 text-xs text-gray-500 dark:text-gray-400">
-          <span>{{ selectedChannel.platforms.join(' · ') }}</span>
-          <span>{{ t(`${catalogKey}.groupsCount`, { count: selectedChannel.groupCount }) }}</span>
-          <span>{{ t(`${catalogKey}.modelsCount`, { count: selectedChannel.modelCount }) }}</span>
+        <span v-if="selectedChannel" class="mt-1 block">
+          <span class="flex flex-wrap gap-1.5">
+            <AvailableChannelPlatformBadge
+              v-for="platform in selectedChannel.platforms"
+              :key="platform"
+              :platform="platform"
+            />
+          </span>
+          <span class="mt-1 flex flex-wrap gap-x-2 gap-y-1 text-xs text-gray-500 dark:text-gray-400">
+            <span>{{ t(`${catalogKey}.groupsCount`, { count: selectedChannel.groupCount }) }}</span>
+            <span>{{ t(`${catalogKey}.modelsCount`, { count: selectedChannel.modelCount }) }}</span>
+          </span>
         </span>
       </span>
       <svg class="h-5 w-5 shrink-0 text-gray-400" viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="m6 8 4 4 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" /></svg>
@@ -62,7 +70,13 @@
               @click="select(channel.key)"
             >
               <span class="block font-semibold text-gray-900 dark:text-white">{{ channel.name }}</span>
-              <span class="mt-1 block text-xs text-gray-500 dark:text-gray-400">{{ channel.platforms.join(' · ') }}</span>
+              <span class="mt-1 flex flex-wrap gap-1.5">
+                <AvailableChannelPlatformBadge
+                  v-for="platform in channel.platforms"
+                  :key="platform"
+                  :platform="platform"
+                />
+              </span>
               <span class="mt-1 flex gap-3 text-xs text-gray-500 dark:text-gray-400"><span>{{ t(`${catalogKey}.groupsCount`, { count: channel.groupCount }) }}</span><span>{{ t(`${catalogKey}.modelsCount`, { count: channel.modelCount }) }}</span></span>
             </button>
           </div>
@@ -76,6 +90,7 @@
 import { computed, getCurrentInstance, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { CatalogChannelEntry } from './availableChannelCatalog'
+import AvailableChannelPlatformBadge from './AvailableChannelPlatformBadge.vue'
 
 const catalogKey = 'availableChannels.catalog'
 const props = defineProps<{ channels: CatalogChannelEntry[]; modelValue: string | null }>()

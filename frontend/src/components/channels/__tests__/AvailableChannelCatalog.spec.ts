@@ -217,6 +217,10 @@ async function mountCatalog(
           props: ['platform'],
           template: '<i data-platform-icon :data-platform="platform" />',
         },
+        AvailableChannelPlatformBadge: {
+          props: ['platform'],
+          template: '<span data-platform-badge :data-platform="platform">{{ platform }}</span>',
+        },
         GroupBadge: {
           props: ['name', 'platform', 'subscriptionType', 'rateMultiplier', 'userRateMultiplier'],
           template:
@@ -284,11 +288,15 @@ describe('AvailableChannelCatalog', () => {
     expect(options[0].text()).toContain('Alpha channel')
     expect(options[0].text()).toContain('openai')
     expect(options[0].text()).toContain('anthropic')
+    expect(options[0].findAll('[data-platform-badge]')).toHaveLength(2)
+    expect(options[0].findAll('[data-platform-badge]').map(item => item.attributes('data-platform'))).toEqual(['openai', 'anthropic'])
     expect(options[0].text()).toContain('2 个分组')
     expect(options[0].text()).toContain('2 个模型')
     expect(options[1].text()).toContain('gemini')
+    expect(options[1].get('[data-platform-badge]').attributes('data-platform')).toBe('gemini')
     expect(options[1].text()).toContain('1 个分组')
     expect(options[1].text()).toContain('0 个模型')
+    expect(wrapper.get('[data-testid="channel-detail-summary"]').findAll('[data-platform-badge]')).toHaveLength(2)
   })
 
   it.runIf(existsSync(catalogPath))('preserves selection across cloned refreshes and unrelated insertions', async () => {

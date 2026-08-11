@@ -12,7 +12,8 @@ const labels: Record<string, string> = {
   'common.refresh': '刷新',
 }
 
-vi.mock('vue-i18n', () => ({
+vi.mock('vue-i18n', async () => ({
+  ...await vi.importActual<typeof import('vue-i18n')>('vue-i18n'),
   useI18n: () => ({ t: (key: string, params?: Record<string, string | number>) => {
     const value = labels[key] ?? key
     return Object.entries(params ?? {}).reduce(
@@ -41,6 +42,10 @@ async function mountToolbar(overrides: Record<string, unknown> = {}) {
     global: {
       stubs: {
         Icon: { template: '<i />' },
+        AvailableChannelPlatformBadge: {
+          props: ['platform'],
+          template: '<span data-platform-badge :data-platform="platform">{{ platform }}</span>',
+        },
       },
     },
   })
@@ -69,6 +74,7 @@ describe('AvailableChannelsToolbar', () => {
     expect(context.text()).toContain('Anthropic')
     expect(context.text()).toContain('官渠cc满血')
     expect(context.text()).toContain('anthropic')
+    expect(context.get('[data-platform-badge]').attributes('data-platform')).toBe('anthropic')
     expect(context.text()).toContain('1 个分组')
     expect(context.text()).toContain('13 个模型')
     expect(context.element.compareDocumentPosition(filters.element) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()

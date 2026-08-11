@@ -11,7 +11,10 @@ const labels: Record<string, string> = {
   'availableChannels.catalog.modelsCount': '{count} 个模型', 'common.close': '关闭',
   'availableChannels.catalog.channelPickerNoResults': '没有匹配的渠道',
 }
-vi.mock('vue-i18n', () => ({ useI18n: () => ({ t: (key: string, params?: Record<string, string | number>) => Object.entries(params ?? {}).reduce((result, [name, replacement]) => result.replace(`{${name}}`, String(replacement)), labels[key] ?? key) }) }))
+vi.mock('vue-i18n', async () => ({
+  ...await vi.importActual<typeof import('vue-i18n')>('vue-i18n'),
+  useI18n: () => ({ t: (key: string, params?: Record<string, string | number>) => Object.entries(params ?? {}).reduce((result, [name, replacement]) => result.replace(`{${name}}`, String(replacement)), labels[key] ?? key) }),
+}))
 
 const channels: CatalogChannelEntry[] = [
   { key: 'alpha', name: 'Alpha route', description: '', platforms: ['openai', 'anthropic'], groups: [], groupCount: 2, modelCount: 7 },
@@ -21,7 +24,15 @@ const mountedWrappers: VueWrapper[] = []
 afterEach(() => { mountedWrappers.splice(0).forEach(wrapper => wrapper.unmount()); document.body.style.overflow = ''; document.body.innerHTML = '' })
 async function mountPicker() {
   const component = (await import('../AvailableChannelPicker.vue')).default
-  const wrapper = mount(component, { attachTo: document.body, props: { channels, modelValue: 'alpha' }, global: { stubs: { PlatformIcon: { props: ['platform'], template: '<i data-platform :data-value="platform" />' } } } })
+  const wrapper = mount(component, {
+    attachTo: document.body,
+    props: { channels, modelValue: 'alpha' },
+    global: {
+      stubs: {
+        AvailableChannelPlatformBadge: { props: ['platform'], template: '<span data-platform-badge :data-platform="platform">{{ platform }}</span>' },
+      },
+    },
+  })
   mountedWrappers.push(wrapper)
   return wrapper
 }
@@ -31,6 +42,7 @@ describe('AvailableChannelPicker', () => {
     const wrapper = await mountPicker(); const trigger = wrapper.get('[data-testid="channel-picker-trigger"]')
     expect(trigger.element.tagName).toBe('BUTTON'); expect(trigger.classes()).toContain('min-h-11'); expect(trigger.classes()).toContain('xl:hidden')
     expect(trigger.text()).toContain('Alpha route'); expect(trigger.text()).toContain('openai'); expect(trigger.text()).toContain('2 个分组'); expect(trigger.text()).toContain('7 个模型')
+    expect(trigger.findAll('[data-platform-badge]')).toHaveLength(2)
   })
   it('opens a teleported modal sheet with local search and mobile-safe scrolling', async () => {
     const wrapper = await mountPicker(); await wrapper.get('[data-testid="channel-picker-trigger"]').trigger('click'); await flushPromises()
@@ -42,6 +54,7 @@ describe('AvailableChannelPicker', () => {
     const search = dialog.querySelector<HTMLInputElement>('[data-testid="channel-picker-search"]')!; expect(document.activeElement).toBe(search)
     search.value = 'gemini'; search.dispatchEvent(new Event('input')); await flushPromises()
     expect(dialog.textContent).toContain('Beta Gemini'); expect(dialog.textContent).not.toContain('Alpha route'); expect(wrapper.props('modelValue')).toBe('alpha')
+    expect(dialog.querySelectorAll('[data-platform-badge]')).toHaveLength(1)
     search.value = 'missing'; search.dispatchEvent(new Event('input')); await flushPromises()
     expect(dialog.textContent).toContain('没有匹配的渠道')
     expect(dialog.querySelector('[data-testid="channel-picker-options"]')!.getAttribute('role')).toBe('listbox')
@@ -63,5 +76,6 @@ describe('AvailableChannelPicker', () => {
     const wrapper = await mountPicker(); await wrapper.get('[data-testid="channel-picker-trigger"]').trigger('click'); await flushPromises(); wrapper.unmount(); expect(document.body.style.overflow).toBe('')
     const source = readFileSync(resolve(dirname(fileURLToPath(import.meta.url)), '../AvailableChannelPicker.vue'), 'utf8')
     expect(source).not.toMatch(/@\/api|fetch\(|axios|priceCnyMultiplier|buildAvailableChannelCatalog/); expect(source).toContain('motion-reduce:transition-none')
+    expect(source).not.toContain("platforms.join(' · ')")
   })
 })

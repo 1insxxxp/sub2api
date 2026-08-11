@@ -26,14 +26,11 @@
       </div>
 
       <div class="flex min-w-0 shrink-0 flex-wrap items-center gap-2 lg:justify-end">
-        <span
+        <AvailableChannelPlatformBadge
           v-for="item in channelPlatforms"
           :key="item"
-          class="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-medium text-slate-600 dark:border-dark-500 dark:bg-dark-700 dark:text-slate-300"
-        >
-          <PlatformIcon :platform="asPlatform(item)" size="sm" />
-          {{ item }}
-        </span>
+          :platform="item"
+        />
         <span class="h-4 w-px bg-slate-200 dark:bg-dark-500" aria-hidden="true" />
         <span class="rounded-lg bg-slate-100 px-2.5 py-1 text-xs font-medium tabular-nums text-slate-600 dark:bg-dark-700 dark:text-slate-300">
           {{ t('availableChannels.catalog.groupsCount', { count: groupCount }) }}
@@ -115,10 +112,9 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import type { GroupPlatform } from '@/types'
 import Select, { type SelectOption } from '@/components/common/Select.vue'
-import PlatformIcon from '@/components/common/PlatformIcon.vue'
 import Icon from '@/components/icons/Icon.vue'
+import AvailableChannelPlatformBadge from './AvailableChannelPlatformBadge.vue'
 
 const props = withDefaults(defineProps<{
   search: string
@@ -160,9 +156,6 @@ function updatePlatform(value: SelectOption['value']) {
   emit('update:platform', typeof value === 'string' ? value : '')
 }
 
-function asPlatform(value: string): GroupPlatform {
-  return value as GroupPlatform
-}
 </script>
 
 <style scoped>

@@ -3,6 +3,7 @@ import { computed, getCurrentInstance, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import AvailableChannelOfferingCard from './AvailableChannelOfferingCard.vue'
 import AvailableChannelBrandIcon from './AvailableChannelBrandIcon.vue'
+import AvailableChannelPlatformBadge from './AvailableChannelPlatformBadge.vue'
 import type { CatalogModelListEntry, CatalogModelOffering, CatalogPriceValue } from './availableChannelCatalog'
 import { compareOfferingPrice, formatCatalogMoney, summarizeOfferingPrice } from './availableChannelPriceDisplay'
 
@@ -75,7 +76,11 @@ watch(activeKeys, (keys) => { expanded.value = new Set([...expanded.value].filte
           <div class="min-w-0 flex-1">
             <component :is="headingLevel === 'h2' ? 'h3' : 'h4'" class="break-words text-[15px] font-bold leading-5 text-gray-950 [overflow-wrap:anywhere] dark:text-white">{{ entry.name }}</component>
             <div class="mt-1.5 flex min-w-0 flex-wrap items-center gap-1.5">
-              <span v-for="platformName in entry.platforms" :key="platformName" class="max-w-full break-words rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-medium text-gray-600 [overflow-wrap:anywhere] dark:bg-dark-700 dark:text-gray-300">{{ platformName }}</span>
+              <AvailableChannelPlatformBadge
+                v-for="platformName in entry.platforms"
+                :key="platformName"
+                :platform="platformName"
+              />
             </div>
           </div>
         </header>

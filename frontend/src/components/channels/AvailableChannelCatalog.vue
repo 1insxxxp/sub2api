@@ -145,14 +145,11 @@
               {{ channel.name }}
             </span>
             <span class="mt-1.5 flex flex-wrap gap-1.5">
-              <span
+              <AvailableChannelPlatformBadge
                 v-for="platform in channel.platforms"
                 :key="platform"
-                class="inline-flex items-center gap-1 rounded-md bg-gray-100 px-1.5 py-0.5 text-[11px] font-medium text-gray-600 dark:bg-dark-700 dark:text-gray-300"
-              >
-                <PlatformIcon :platform="asPlatform(platform)" size="xs" />
-                {{ platform }}
-              </span>
+                :platform="platform"
+              />
             </span>
             <span class="mt-1.5 flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-gray-500 dark:text-gray-400">
               <span>{{ t(`${catalogKey}.groupsCount`, { count: channel.groupCount }) }}</span>
@@ -192,14 +189,11 @@
               </p>
             </div>
             <div class="flex shrink-0 flex-wrap justify-end gap-2">
-              <span
+              <AvailableChannelPlatformBadge
                 v-for="platform in selectedChannel.platforms"
                 :key="platform"
-                class="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-gray-50 px-2.5 py-1 text-xs font-medium text-gray-600 dark:border-dark-500 dark:bg-dark-700 dark:text-gray-300"
-              >
-                <PlatformIcon :platform="asPlatform(platform)" size="sm" />
-                {{ platform }}
-              </span>
+                :platform="platform"
+              />
             </div>
           </div>
           <div v-if="selectedChannel" class="mt-4 flex flex-wrap gap-2">
@@ -232,11 +226,10 @@
 <script setup lang="ts">
 import { computed, getCurrentInstance, nextTick, ref, watch, type ComponentPublicInstance } from 'vue'
 import { useI18n } from 'vue-i18n'
-import type { GroupPlatform } from '@/types'
-import PlatformIcon from '@/components/common/PlatformIcon.vue'
 import AvailableChannelGroupSection from './AvailableChannelGroupSection.vue'
 import AvailableChannelPicker from './AvailableChannelPicker.vue'
 import AvailableChannelModelList from './AvailableChannelModelList.vue'
+import AvailableChannelPlatformBadge from './AvailableChannelPlatformBadge.vue'
 import { projectModelEntriesForChannel, type CatalogModelListEntry } from './availableChannelCatalog'
 import type { CatalogChannelEntry } from './availableChannelCatalog'
 
@@ -284,10 +277,6 @@ watch(
   },
   { immediate: true },
 )
-
-function asPlatform(value: string): GroupPlatform {
-  return value as GroupPlatform
-}
 
 function setNavButtonRef(
   key: string,

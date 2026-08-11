@@ -3,7 +3,9 @@ import { describe, expect, it, vi } from 'vitest'
 import AvailableChannelOfferingCard from '../AvailableChannelOfferingCard.vue'
 import type { CatalogModelOffering, CatalogPriceCollection } from '../availableChannelCatalog'
 
-vi.mock('vue-i18n', () => ({ useI18n: () => ({ t: (key: string, params?: Record<string, unknown>) => ({
+vi.mock('vue-i18n', async () => ({
+  ...await vi.importActual<typeof import('vue-i18n')>('vue-i18n'),
+  useI18n: () => ({ t: (key: string, params?: Record<string, unknown>) => ({
   'availableChannels.catalog.officialPrice': '官方价', 'availableChannels.catalog.sitePrice': '本站价',
   'availableChannels.catalog.effectiveRate': '实际倍率', 'availableChannels.catalog.input': '输入',
   'availableChannels.catalog.groupRate': '分组倍率',
@@ -14,7 +16,8 @@ vi.mock('vue-i18n', () => ({ useI18n: () => ({ t: (key: string, params?: Record<
   'availableChannels.catalog.perMillion': '/ 1M token', 'availableChannels.catalog.perRequest': '/ 次',
   'availableChannels.catalog.perImage': '/ 张', 'availableChannels.catalog.rangeBetween': `${params?.min}–${params?.max} token`,
   'availableChannels.catalog.rangeFrom': `${params?.min}+ token`,
-}[key] ?? key) }) }))
+  }[key] ?? key) }),
+}))
 
 const empty = (): CatalogPriceCollection => ({ input: null, output: null, cacheWrite: null, cacheRead: null, imageInput: null, imageOutput: null, request: null })
 const offering = (): CatalogModelOffering => {
@@ -22,13 +25,17 @@ const offering = (): CatalogModelOffering => {
   const model = { key: 'm', groupKey: 'g', name: 'claude-fable-5', platform: 'anthropic', billingMode: 'token' as const, hasPricing: true, normalRate: 7.5, effectiveRate: 1.239, defaultRate: 7.5, userRate: null, peakFactor: null, prices, intervals: [] }
   return { key: 'o', channelKey: 'c', channelName: 'Anthropic', groupKey: 'g', groupName: '余额 [claude max]', platform: 'anthropic', hasPricing: true, model, prices, intervals: [] }
 }
+const platformBadgeStub = {
+  AvailableChannelPlatformBadge: { props: ['platform'], template: '<span data-platform-badge :data-platform="platform">{{ platform }}</span>' },
+}
 
 describe('AvailableChannelOfferingCard', () => {
   it('renders one flat offering with compact metadata and price cells', () => {
-    const wrapper = mount(AvailableChannelOfferingCard, { props: { offering: offering() } })
+    const wrapper = mount(AvailableChannelOfferingCard, { props: { offering: offering() }, global: { stubs: platformBadgeStub } })
     expect(wrapper.get('[data-testid="flat-offering-card"]').classes()).not.toContain('xl:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(88px,0.5fr)_minmax(72px,0.4fr)]')
     expect(wrapper.text()).toContain('Anthropic')
     expect(wrapper.text()).toContain('余额 [claude max]')
+    expect(wrapper.get('[data-platform-badge]').attributes('data-platform')).toBe('anthropic')
     expect(wrapper.text()).toContain('7.50×')
     expect(wrapper.text()).toContain('分组倍率')
     expect(wrapper.text()).toContain('实际倍率')
@@ -45,12 +52,12 @@ describe('AvailableChannelOfferingCard', () => {
     tiered.prices = empty(); tiered.model.prices = tiered.prices
     tiered.intervals = [{ key: 'tier', minTokens: 0, maxTokens: 1000, tierLabel: null, prices: { ...empty(), input: { official: 0.000002, site: 0.000003, peakSite: null } } }]
     tiered.model.intervals = tiered.intervals
-    const wrapper = mount(AvailableChannelOfferingCard, { props: { offering: tiered } })
+    const wrapper = mount(AvailableChannelOfferingCard, { props: { offering: tiered }, global: { stubs: platformBadgeStub } })
     expect(wrapper.get('[data-testid="pricing-tier-flat"]').text()).toContain('0–1,000 token')
     expect(wrapper.text()).toContain('¥3.00')
 
     const none = offering(); none.prices = empty(); none.model.prices = none.prices; none.intervals = []; none.model.intervals = []; none.hasPricing = false
-    const emptyWrapper = mount(AvailableChannelOfferingCard, { props: { offering: none } })
+    const emptyWrapper = mount(AvailableChannelOfferingCard, { props: { offering: none }, global: { stubs: platformBadgeStub } })
     expect(emptyWrapper.get('[data-testid="offering-unpriced"]').text()).toContain('暂未定价')
   })
 

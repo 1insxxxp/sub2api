@@ -8,7 +8,9 @@ import zhDashboard from '@/i18n/locales/zh/dashboard'
 import AvailableChannelModelList from '../AvailableChannelModelList.vue'
 import type { CatalogModelListEntry, CatalogModelOffering, CatalogPriceCollection } from '../availableChannelCatalog'
 
-vi.mock('vue-i18n', () => ({ useI18n: () => ({ t: (key: string, params?: Record<string, number>) => ({
+vi.mock('vue-i18n', async () => ({
+  ...await vi.importActual<typeof import('vue-i18n')>('vue-i18n'),
+  useI18n: () => ({ t: (key: string, params?: Record<string, number>) => ({
   'availableChannels.catalog.modelColumn': '模型', 'availableChannels.catalog.officialPrice': '官方价',
   'availableChannels.catalog.sitePrice': '本站价', 'availableChannels.catalog.unpriced': '暂未定价',
   'availableChannels.catalog.moreOfferings': `还有 ${params?.count ?? 0} 个方案`,
@@ -24,7 +26,8 @@ vi.mock('vue-i18n', () => ({ useI18n: () => ({ t: (key: string, params?: Record<
   'availableChannels.catalog.input': '输入', 'availableChannels.catalog.output': '输出',
   'availableChannels.catalog.cacheWrite': '缓存写入', 'availableChannels.catalog.cacheRead': '缓存读取',
   'availableChannels.catalog.priceRequest': '按次', 'availableChannels.catalog.priceImage': '图片',
-}[key] ?? key) }) }))
+  }[key] ?? key) }),
+}))
 
 const prices = (official: number | null, site: number | null = official): CatalogPriceCollection => ({
   input: official == null && site == null ? null : { official, site, peakSite: null }, output: null,
@@ -53,7 +56,10 @@ function entry(key: string, offerings: CatalogModelOffering[]): CatalogModelList
     groupCount: new Set(offerings.map(x => x.groupKey)).size,
     platforms: ['gemini', 'openai-with-a-very-long-platform-name'], hasPricedOffering: offerings.some(x => x.hasPricing) }
 }
-const stubs = { AvailableChannelOfferingCard: { props: ['offering'], template: '<div data-testid="flat-offering">{{ offering.channelName }} {{ offering.groupName }}</div>' } }
+const stubs = {
+  AvailableChannelOfferingCard: { props: ['offering'], template: '<div data-testid="flat-offering">{{ offering.channelName }} {{ offering.groupName }}</div>' },
+  AvailableChannelPlatformBadge: { props: ['platform'], template: '<span data-platform-badge :data-platform="platform">{{ platform }}</span>' },
+}
 
 describe('AvailableChannelModelList', () => {
   it('shows metadata and representative prices before expansion', () => {
@@ -70,6 +76,7 @@ describe('AvailableChannelModelList', () => {
     const card = wrapper.get('[data-testid="model-card"]')
     expect(wrapper.get('[data-testid="model-card-grid"]').classes()).toContain('grid')
     expect(card.find('[data-testid="brand-icon"]').attributes('data-brand')).toBe('gemini')
+    expect(card.findAll('[data-platform-badge]').map(item => item.attributes('data-platform'))).toEqual(['gemini', 'openai-with-a-very-long-platform-name'])
     expect(card.get('[data-testid="primary-site-price"]').text()).toContain('¥4.00')
     expect(card.get('[data-testid="primary-official-price"]').text()).toContain('$10.00')
     expect(card.get('[data-testid="primary-official-price"]').classes()).toContain('line-through')
