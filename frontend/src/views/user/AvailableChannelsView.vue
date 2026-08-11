@@ -14,7 +14,6 @@
             <AvailableChannelsToolbar
               v-model:search="searchQuery"
               v-model:platform="platformFilter"
-              v-model:priced-only="pricedOnly"
               :platforms="availablePlatforms"
               :loading="loading"
               :channel-name="selectedChannel?.name"
@@ -53,7 +52,6 @@ const userGroupRates = ref<Record<number, number>>({})
 const loading = ref(false)
 const searchQuery = ref('')
 const platformFilter = ref('')
-const pricedOnly = ref(false)
 
 const priceCnyMultiplier = computed(() => {
   const value = Number(appStore.cachedPublicSettings?.available_channels_price_cny_multiplier)
@@ -72,7 +70,7 @@ const catalog = computed(() => buildAvailableChannelCatalog(channels.value, user
 const filteredCatalog = computed(() => filterAvailableChannelCatalog(catalog.value, {
   search: searchQuery.value,
   platform: platformFilter.value,
-  pricedOnly: pricedOnly.value,
+  pricedOnly: false,
 }))
 const modelEntries = computed(() => buildAvailableChannelModelList(filteredCatalog.value))
 const availablePlatforms = computed(() => [...new Set(catalog.value.flatMap(channel => channel.platforms))].sort())

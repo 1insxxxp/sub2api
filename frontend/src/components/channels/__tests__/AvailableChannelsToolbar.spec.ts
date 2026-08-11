@@ -6,7 +6,6 @@ const labels: Record<string, string> = {
   'availableChannels.searchPlaceholder': '搜索渠道或模型...',
   'availableChannels.catalog.platformFilter': '平台筛选',
   'availableChannels.catalog.allPlatforms': '全部平台',
-  'availableChannels.catalog.pricedOnly': '仅显示有价模型',
   'availableChannels.catalog.groupsCount': '{count} 个分组',
   'availableChannels.catalog.modelsCount': '{count} 个模型',
   'common.refresh': '刷新',
@@ -29,7 +28,6 @@ async function mountToolbar(overrides: Record<string, unknown> = {}) {
     props: {
       search: '',
       platform: '',
-      pricedOnly: false,
       platforms: ['anthropic', 'openai'],
       loading: false,
       channelName: 'Anthropic',
@@ -52,18 +50,18 @@ async function mountToolbar(overrides: Record<string, unknown> = {}) {
 }
 
 describe('AvailableChannelsToolbar', () => {
-  it('keeps search, platform, and priced-only values synchronized', async () => {
+  it('keeps search and platform values synchronized without a priced-only control', async () => {
     const wrapper = await mountToolbar()
 
     await wrapper.get('[data-testid="channel-search"]').setValue('claude')
     const platformFilter = wrapper.getComponent(Select)
     expect(platformFilter.props('modelValue')).toBe('')
     await platformFilter.vm.$emit('update:modelValue', 'anthropic')
-    await wrapper.get('[data-testid="priced-only-filter"]').setValue(true)
 
     expect(wrapper.emitted('update:search')).toEqual([['claude']])
     expect(wrapper.emitted('update:platform')).toEqual([['anthropic']])
-    expect(wrapper.emitted('update:pricedOnly')).toEqual([[true]])
+    expect(wrapper.find('[data-testid="priced-only-filter"]').exists()).toBe(false)
+    expect(wrapper.emitted('update:pricedOnly')).toBeUndefined()
   })
 
   it('places selected channel context before one aligned filter row', async () => {
@@ -104,10 +102,10 @@ describe('AvailableChannelsToolbar', () => {
     const source = await import('../AvailableChannelsToolbar.vue?raw').then(module => module.default)
 
     expect(wrapper.get('[data-testid="channel-filter-row"]').classes()).toEqual(expect.arrayContaining([
-      'grid-cols-[minmax(0,1fr)_auto_auto]',
-      'sm:grid-cols-[minmax(0,1fr)_minmax(10rem,13rem)_auto_auto]',
+      'grid-cols-[minmax(0,1fr)_auto]',
+      'sm:grid-cols-[minmax(0,1fr)_minmax(10rem,13rem)_auto]',
     ]))
-    expect(wrapper.get('[data-testid="channel-search-shell"]').classes()).toEqual(expect.arrayContaining(['col-span-3', 'sm:col-span-1']))
+    expect(wrapper.get('[data-testid="channel-search-shell"]').classes()).toEqual(expect.arrayContaining(['col-span-2', 'sm:col-span-1']))
     expect(wrapper.get('[data-testid="channel-search"]').classes()).toEqual(expect.arrayContaining(['h-11', 'w-full', 'min-w-0']))
     expect(wrapper.find('select[data-testid="platform-filter"]').exists()).toBe(false)
     expect(platformFilter.props('searchable')).toBe(false)
