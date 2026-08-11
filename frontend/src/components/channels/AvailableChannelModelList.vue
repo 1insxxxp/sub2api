@@ -5,7 +5,7 @@ import AvailableChannelOfferingCard from './AvailableChannelOfferingCard.vue'
 import AvailableChannelBrandIcon from './AvailableChannelBrandIcon.vue'
 import AvailableChannelPlatformBadge from './AvailableChannelPlatformBadge.vue'
 import type { CatalogModelListEntry, CatalogModelOffering, CatalogPriceValue } from './availableChannelCatalog'
-import { compareOfferingPrice, formatCatalogMoney, summarizeOfferingPrice } from './availableChannelPriceDisplay'
+import { compareOfferingPrice, formatCatalogMoney, formatCatalogMoneyRange, summarizeOfferingPrice } from './availableChannelPriceDisplay'
 
 const props = withDefaults(defineProps<{ entries: CatalogModelListEntry[]; headingLevel?: 'h2' | 'h3' }>(), { headingLevel: 'h2' })
 const { t } = useI18n()
@@ -26,14 +26,17 @@ function price(offering: CatalogModelOffering, currency: '$' | '¥') {
   const summary = summarizeOfferingPrice(offering)
   if (summary.kind === 'tiered') return t('availableChannels.catalog.tieredSummary')
   if (summary.kind === 'unpriced') return t('availableChannels.catalog.unpriced')
-  const value = currency === '$' ? summary.value?.official : summary.value?.site
-  const formatted = formatCatalogMoney(value ?? null, summary.scale, currency)
+  const formatted = currency === '$'
+    ? formatCatalogMoney(summary.value?.official ?? null, summary.scale, currency)
+    : formatCatalogMoneyRange(summary.value?.site, summary.value?.siteMax, summary.scale, currency)
   return formatted === '-' ? t('availableChannels.catalog.unpriced') : `${formatted} ${t(`availableChannels.catalog.${summary.unitKey}`)}`
 }
 function comparison(offering: CatalogModelOffering) { return compareOfferingPrice(offering) }
 function platform(entry: CatalogModelListEntry) { return entry.platforms[0] || 'AI' }
 function dimensionValue(value: CatalogPriceValue, currency: '$' | '¥', scale: number) {
-  return formatCatalogMoney(currency === '$' ? value.official : value.site, scale, currency)
+  return currency === '$'
+    ? formatCatalogMoney(value.official, scale, currency)
+    : formatCatalogMoneyRange(value.site, value.siteMax, scale, currency)
 }
 function priceDimensions(offering: CatalogModelOffering) {
   const tokenDimensions = [
@@ -42,9 +45,9 @@ function priceDimensions(offering: CatalogModelOffering) {
     ['imageInput', offering.prices.imageInput], ['imageOutput', offering.prices.imageOutput],
   ] as const
   const rows: Array<{ label: string; value: CatalogPriceValue; scale: number }> = tokenDimensions
-    .filter((entry): entry is [typeof entry[0], CatalogPriceValue] => entry[1] != null && (entry[1].official != null || entry[1].site != null))
+    .filter((entry): entry is [typeof entry[0], CatalogPriceValue] => entry[1] != null && (entry[1].official != null || entry[1].site != null || entry[1].siteMax != null))
     .map(([label, value]) => ({ label, value, scale: 1_000_000 }))
-  if (offering.prices.request && (offering.prices.request.official != null || offering.prices.request.site != null)) {
+  if (offering.prices.request && (offering.prices.request.official != null || offering.prices.request.site != null || offering.prices.request.siteMax != null)) {
     rows.push({ label: offering.model.billingMode === 'image' ? 'priceImage' : 'priceRequest', value: offering.prices.request, scale: 1 })
   }
   return rows.slice(0, 4)
@@ -92,11 +95,11 @@ watch(activeKeys, (keys) => { expanded.value = new Set([...expanded.value].filte
                 <span class="text-[11px] font-semibold uppercase tracking-wide text-emerald-700 dark:text-emerald-300">{{ t('availableChannels.catalog.sitePrice') }}</span>
                 <p data-testid="primary-site-price" class="mt-0.5 break-words font-mono text-xl font-black leading-tight tabular-nums text-emerald-700 [overflow-wrap:anywhere] dark:text-emerald-300">{{ price(representative(entry)!, '¥') }}</p>
               </div>
-              <span v-if="comparison(representative(entry)!).savingsPercent != null" data-testid="savings-badge" class="rounded-full bg-emerald-600 px-2.5 py-1 text-xs font-bold text-white shadow-sm">{{ t('availableChannels.catalog.savePercent', { count: comparison(representative(entry)!).savingsPercent! }) }}</span>
+              <span v-if="comparison(representative(entry)!).savingsText != null" data-testid="savings-badge" class="rounded-full bg-emerald-600 px-2.5 py-1 text-xs font-bold text-white shadow-sm">{{ t('availableChannels.catalog.savePercent', { count: comparison(representative(entry)!).savingsText! }) }}</span>
             </div>
             <div data-testid="representative-official" class="mt-2 flex flex-wrap items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
               <span>{{ t('availableChannels.catalog.officialPrice') }}</span>
-              <span data-testid="primary-official-price" class="font-mono tabular-nums" :class="comparison(representative(entry)!).savingsPercent != null ? 'line-through decoration-gray-400' : 'font-semibold text-gray-700 dark:text-gray-300'">{{ price(representative(entry)!, '$') }}</span>
+              <span data-testid="primary-official-price" class="font-mono tabular-nums" :class="comparison(representative(entry)!).savingsText != null ? 'line-through decoration-gray-400' : 'font-semibold text-gray-700 dark:text-gray-300'">{{ price(representative(entry)!, '$') }}</span>
               <span class="rounded-md bg-white/80 px-1.5 py-0.5 text-[10px] font-medium text-gray-500 shadow-sm dark:bg-dark-700">{{ t('availableChannels.catalog.representativePrice') }}</span>
             </div>
             <div v-if="priceDimensions(representative(entry)!).length" class="mt-3 space-y-1.5 border-t border-emerald-100 pt-3 text-xs dark:border-emerald-500/20">

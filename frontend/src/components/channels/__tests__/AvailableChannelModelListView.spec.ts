@@ -29,8 +29,14 @@ vi.mock('vue-i18n', async () => ({
   }[key] ?? key) }),
 }))
 
-const prices = (official: number | null, site: number | null = official): CatalogPriceCollection => ({
-  input: official == null && site == null ? null : { official, site, peakSite: null }, output: null,
+const priceValue = (
+  official: number | null,
+  site: number | null = official,
+  siteMax: number | null = site,
+  officialCny: number | null = official,
+) => ({ official, officialCny, site, siteMax, peakSite: null, peakSiteMax: null })
+const prices = (official: number | null, site: number | null = official, siteMax: number | null = site): CatalogPriceCollection => ({
+  input: official == null && site == null && siteMax == null ? null : priceValue(official, site, siteMax), output: null,
   cacheWrite: null, cacheRead: null, imageInput: null, imageOutput: null, request: null,
 })
 function offering(key: string, channel: string, group: string, official: number | null, site = official): CatalogModelOffering {
@@ -45,7 +51,7 @@ function offering(key: string, channel: string, group: string, official: number 
 function setBilling(offering: CatalogModelOffering, mode: string, field: keyof CatalogPriceCollection, official: number, site: number) {
   offering.model.billingMode = mode
   offering.prices.input = null
-  offering.prices[field] = { official, site, peakSite: null }
+  offering.prices[field] = priceValue(official, site)
   offering.model.prices = offering.prices
   offering.hasPricing = true
   offering.model.hasPricing = true
@@ -83,10 +89,72 @@ describe('AvailableChannelModelList', () => {
     expect(card.get('[data-testid="savings-badge"]').text()).toContain('60%')
     expect(card.text()).toContain('输入')
   })
+  it('compares savings after converting the official USD price to CNY', () => {
+    const converted = offering('a', 'Alpha', 'Retail', 0.000005, 0.0000006)
+    Object.assign(converted.prices.input!, { officialCny: 0.000035 })
+    converted.model.prices = converted.prices
+
+    const wrapper = mount(AvailableChannelModelList, {
+      props: { entries: [entry('claude-model', [converted])] },
+      global: { stubs },
+    })
+
+    expect(wrapper.get('[data-testid="primary-official-price"]').text()).toContain('$5.00')
+    expect(wrapper.get('[data-testid="primary-site-price"]').text()).toContain('¥0.60')
+    expect(wrapper.get('[data-testid="savings-badge"]').text()).toContain('98%')
+  })
+  it('renders a representative site-price and savings range in ascending order', () => {
+    const ranged = offering('a', 'Alpha', 'Retail', 0.000005, 0.0000006)
+    ranged.prices.input = priceValue(0.000005, 0.0000006, 0.00000075, 0.000025)
+    ranged.model.prices = ranged.prices
+
+    const wrapper = mount(AvailableChannelModelList, {
+      props: { entries: [entry('claude-model', [ranged])] },
+      global: { stubs },
+    })
+
+    expect(wrapper.get('[data-testid="primary-site-price"]').text()).toContain('¥0.60–¥0.75 / 1M token')
+    expect(wrapper.get('[data-testid="savings-badge"]').text()).toBe('省 97%–98%')
+  })
+  it('collapses equal formatted prices and keeps only positive savings endpoints', () => {
+    const ranged = offering('a', 'Alpha', 'Retail', 0.000001, 0.0000005)
+    ranged.prices.input = priceValue(0.000001, 0.0000005, 0.0000012, 0.000001)
+    ranged.model.prices = ranged.prices
+
+    const wrapper = mount(AvailableChannelModelList, {
+      props: { entries: [entry('model', [ranged])] },
+      global: { stubs },
+    })
+
+    expect(wrapper.get('[data-testid="savings-badge"]').text()).toBe('省 50%')
+    expect(wrapper.get('[data-testid="savings-badge"]').text()).not.toContain('–')
+    expect(wrapper.get('[data-testid="savings-badge"]').text()).not.toBe('省 0%')
+
+    ranged.prices.input = priceValue(0.000001, 0.0000006, 0.0000006000000000001, 0.000007)
+    ranged.model.prices = ranged.prices
+    const equal = mount(AvailableChannelModelList, {
+      props: { entries: [entry('equal', [ranged])] },
+      global: { stubs },
+    })
+    expect(equal.get('[data-testid="primary-site-price"]').text()).toContain('¥0.60 / 1M token')
+    expect(equal.get('[data-testid="primary-site-price"]').text()).not.toContain('–')
+  })
+  it('hides savings when the official CNY benchmark is disabled', () => {
+    const disabled = offering('a', 'Alpha', 'Retail', 0.000005, 0.0000006)
+    Object.assign(disabled.prices.input!, { officialCny: null })
+    disabled.model.prices = disabled.prices
+
+    const wrapper = mount(AvailableChannelModelList, {
+      props: { entries: [entry('claude-model', [disabled])] },
+      global: { stubs },
+    })
+
+    expect(wrapper.find('[data-testid="savings-badge"]').exists()).toBe(false)
+  })
   it('shows input, output and cache comparisons directly on the card', () => {
     const priced = offering('a', 'Alpha', 'Retail', 0.00001, 0.000004)
-    priced.prices.output = { official: 0.00002, site: 0.000008, peakSite: null }
-    priced.prices.cacheRead = { official: 0.000001, site: 0, peakSite: null }
+    priced.prices.output = priceValue(0.00002, 0.000008)
+    priced.prices.cacheRead = priceValue(0.000001, 0)
     priced.model.prices = priced.prices
     const wrapper = mount(AvailableChannelModelList, { props: { entries: [entry('gemini-pro', [priced])] }, global: { stubs } })
     const rows = wrapper.findAll('[data-testid="price-dimension-row"]')
@@ -159,13 +227,13 @@ describe('AvailableChannelModelList', () => {
     request.hasPricing = true
     request.model.billingMode = 'per_request'
     request.prices.input = null
-    request.prices.request = { official: 0.2, site: 0.4, peakSite: null }
+    request.prices.request = priceValue(0.2, 0.4)
     request.model.prices = request.prices
     const image = offering('image', 'B', 'G2', null)
     image.hasPricing = true
     image.model.billingMode = 'image'
     image.prices.input = null
-    image.prices.imageInput = { official: 0, site: 0, peakSite: null }
+    image.prices.imageInput = priceValue(0, 0)
     image.model.prices = image.prices
     const first = entry('a/b', [request])
     const second = entry('a?b', [image])

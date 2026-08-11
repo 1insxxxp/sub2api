@@ -74,8 +74,10 @@ function price(
   official: number | null,
   site: number | null,
   peakSite: number | null = null,
+  siteMax: number | null = site,
+  peakSiteMax: number | null = peakSite,
 ) {
-  return { official, site, peakSite }
+  return { official, officialCny: official, site, siteMax, peakSite, peakSiteMax }
 }
 
 function makeModel(overrides: Partial<CatalogModelEntry> = {}): CatalogModelEntry {
@@ -87,6 +89,8 @@ function makeModel(overrides: Partial<CatalogModelEntry> = {}): CatalogModelEntr
     billingMode: 'token',
     hasPricing: true,
     normalRate: 0.5,
+    effectiveRate: 0.5,
+    effectiveRateMax: 0.5,
     defaultRate: 0.5,
     userRate: null,
     peakFactor: null,
@@ -118,7 +122,7 @@ describe('AvailableChannelModelPrice', () => {
       expect(wrapper.text()).toContain('gpt-test')
       expect(wrapper.text()).toContain('按 Token')
       expect(wrapper.text()).toContain('实际倍率')
-      expect(wrapper.text()).toContain('0.5×')
+      expect(wrapper.text()).toContain('0.50×')
 
       const official = wrapper.get('[data-testid="official-price"]')
       const site = wrapper.get('[data-testid="site-price"]')
@@ -132,6 +136,46 @@ describe('AvailableChannelModelPrice', () => {
       expect(site.text()).toContain('¥28.00')
     },
   )
+
+  it.runIf(existsSync(componentPath))('renders direct, request, peak and interval site-price ranges without duplicating equal endpoints', async () => {
+    const wrapper = await mountPrice(makeModel({
+      effectiveRate: 0.12,
+      effectiveRateMax: 0.15,
+      prices: {
+        ...emptyPrices(),
+        input: price(0.000005, 0.0000006, 0.0000009, 0.00000075, 0.000001125),
+        output: price(0.00001, 0.0000012, null, 0.0000015),
+        cacheRead: price(0.000001, 0, null, 0),
+        imageInput: price(0.000002, 0.00000024, null, 0.0000003),
+      },
+    }))
+
+    expect(wrapper.get('[data-testid="effective-rate"]').text()).toContain('0.12×–0.15×')
+    expect(wrapper.get('[data-testid="site-price"]').text()).toContain('¥0.60–¥0.75 / 1M token')
+    expect(wrapper.get('[data-testid="site-price"]').text()).toContain('¥0.90–¥1.125 / 1M token')
+    expect(wrapper.get('[data-testid="site-price"]').text()).toContain('¥1.20–¥1.50 / 1M token')
+
+    await wrapper.get('[data-testid="price-detail-toggle"]').trigger('click')
+    const details = wrapper.get('[data-testid="price-details"]')
+    expect(details.text()).toContain('¥0.00 / 1M token')
+    expect(details.text()).not.toContain('¥0.00–¥0.00')
+    expect(details.text()).toContain('¥0.24–¥0.30 / 1M token')
+
+    const request = await mountPrice(makeModel({
+      billingMode: 'per_request',
+      prices: { ...emptyPrices(), request: price(0.5, 0.6, null, 0.75) },
+    }))
+    expect(request.get('[data-testid="site-price"]').text()).toContain('¥0.60–¥0.75 / 次')
+
+    const tiered = await mountPrice(makeModel({
+      prices: emptyPrices(),
+      intervals: [{
+        key: 'tier', minTokens: 0, maxTokens: null, tierLabel: null,
+        prices: { ...emptyPrices(), input: price(0.000005, 0.0000006, null, 0.00000075) },
+      }],
+    }), true)
+    expect(tiered.get('[data-testid="pricing-tier"]').text()).toContain('¥0.60–¥0.75 / 1M token')
+  })
 
   it.runIf(existsSync(componentPath))('morphs one price DOM into the shared five-column desktop row', async () => {
     const wrapper = await mountPrice(makeModel({
