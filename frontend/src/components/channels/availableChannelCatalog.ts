@@ -187,8 +187,17 @@ function maximumEffectiveRate(
   cnyMultiplier: number,
   cnyMultiplierMax: number,
 ): number | null {
-  if (effectiveRate(normalRate, cnyMultiplier) == null) return null
-  return effectiveRate(normalRate, cnyMultiplierMax)
+  const minimum = effectiveRate(normalRate, cnyMultiplier)
+  if (minimum == null) return null
+  const maximum = effectiveRate(normalRate, cnyMultiplierMax)
+  if (
+    maximum == null
+    || maximum < minimum
+    || !Number.isFinite(maximum * (1 + Number.EPSILON))
+  ) {
+    return minimum
+  }
+  return maximum
 }
 
 function priceValue(rawValue: number | null, context: PriceContext): CatalogPriceValue | null {
@@ -217,8 +226,7 @@ function priceValue(rawValue: number | null, context: PriceContext): CatalogPric
   }
 
   const site = rawValue * context.cnyMultiplier * context.normalRate
-  const siteMax = rawValue * context.cnyMultiplierMax * context.normalRate
-  if (!Number.isFinite(site) || !Number.isFinite(siteMax)) {
+  if (!Number.isFinite(site)) {
     return {
       official: rawValue,
       officialCny,
@@ -228,24 +236,37 @@ function priceValue(rawValue: number | null, context: PriceContext): CatalogPric
       peakSiteMax: null,
     }
   }
+  const maximumSiteCandidate = rawValue * context.cnyMultiplierMax * context.normalRate
+  const siteMax = Number.isFinite(maximumSiteCandidate) && maximumSiteCandidate >= site
+    ? maximumSiteCandidate
+    : site
 
-  const peakSite = context.peakFactor == null
-    || !Number.isFinite(context.peakFactor)
-    || context.peakFactor < 0
-    ? null
-    : site * context.peakFactor
-  const peakSiteMax = context.peakFactor == null
-    || !Number.isFinite(context.peakFactor)
-    || context.peakFactor < 0
-    ? null
-    : siteMax * context.peakFactor
+  const peakFactor = context.peakFactor != null
+    && Number.isFinite(context.peakFactor)
+    && context.peakFactor >= 0
+    ? context.peakFactor
+    : null
+  const minimumPeakCandidate = peakFactor != null
+    ? site * peakFactor
+    : null
+  const peakSite = minimumPeakCandidate != null && Number.isFinite(minimumPeakCandidate)
+    ? minimumPeakCandidate
+    : null
+  const maximumPeakCandidate = peakFactor != null
+    ? siteMax * peakFactor
+    : null
+  const peakSiteMax = maximumPeakCandidate != null
+    && Number.isFinite(maximumPeakCandidate)
+    && (peakSite == null || maximumPeakCandidate >= peakSite)
+    ? maximumPeakCandidate
+    : peakSite
   return {
     official: rawValue,
     officialCny,
     site,
     siteMax,
-    peakSite: peakSite != null && Number.isFinite(peakSite) ? peakSite : null,
-    peakSiteMax: peakSiteMax != null && Number.isFinite(peakSiteMax) ? peakSiteMax : null,
+    peakSite,
+    peakSiteMax,
   }
 }
 

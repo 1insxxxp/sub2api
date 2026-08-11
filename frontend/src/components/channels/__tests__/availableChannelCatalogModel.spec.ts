@@ -158,6 +158,35 @@ describe('buildAvailableChannelCatalog', () => {
     }
   })
 
+  it('preserves finite minimum endpoints when a finite maximum overflows downstream calculations', () => {
+    const source = channel('Overflowing range', [
+      group(73, 'Overflowing range group', {
+        rate_multiplier: 1,
+        peak_rate_enabled: true,
+        peak_rate_multiplier: 2,
+        supported_models: [model('overflowing-range-model', pricing({ input_price: 5 }))],
+      }),
+    ])
+
+    const catalogGroup = buildAvailableChannelCatalog(
+      [source],
+      {},
+      0.16,
+      7,
+      Number.MAX_VALUE,
+    )[0].groups[0]
+    const entry = catalogGroup.models[0]
+
+    expect(catalogGroup.effectiveRate).toBeCloseTo(0.16)
+    expect(catalogGroup.effectiveRateMax).toBeCloseTo(0.16)
+    expect(entry.effectiveRate).toBeCloseTo(0.16)
+    expect(entry.effectiveRateMax).toBeCloseTo(0.16)
+    expect(entry.prices.input?.site).toBeCloseTo(0.8)
+    expect(entry.prices.input?.siteMax).toBeCloseTo(0.8)
+    expect(entry.prices.input?.peakSite).toBeCloseTo(1.6)
+    expect(entry.prices.input?.peakSiteMax).toBeCloseTo(1.6)
+  })
+
   it('keeps site prices disabled when the minimum multiplier is zero even if maximum is positive', () => {
     const source = channel('Disabled range', [
       group(72, 'Disabled range group', {
