@@ -211,6 +211,37 @@ describe('AvailableChannelModelPrice', () => {
     expect(tier.text()).toContain('¥1.125 / 1M token')
   })
 
+  it.runIf(existsSync(componentPath))('does not substitute the group rate when the effective rate is unavailable', async () => {
+    const wrapper = await mountPrice(makeModel({
+      normalRate: 7.5,
+      effectiveRate: null,
+      effectiveRateMax: null,
+    }))
+
+    const effective = wrapper.get('[data-testid="effective-rate"]')
+    expect(effective.text()).toContain('实际倍率')
+    expect(effective.text()).toContain('-')
+    expect(effective.text()).not.toContain('7.50×')
+  })
+
+  it.runIf(existsSync(componentPath))('renders whichever single effective-rate endpoint is available', async () => {
+    const maximumOnly = await mountPrice(makeModel({
+      normalRate: 7.5,
+      effectiveRate: null,
+      effectiveRateMax: 0.159,
+    }))
+    expect(maximumOnly.get('[data-testid="effective-rate"]').text()).toContain('0.15×')
+    expect(maximumOnly.get('[data-testid="effective-rate"]').text()).not.toContain('7.50×')
+
+    const minimumOnly = await mountPrice(makeModel({
+      normalRate: 7.5,
+      effectiveRate: 0.129,
+      effectiveRateMax: null,
+    }))
+    expect(minimumOnly.get('[data-testid="effective-rate"]').text()).toContain('0.12×')
+    expect(minimumOnly.get('[data-testid="effective-rate"]').text()).not.toContain('7.50×')
+  })
+
   it.runIf(existsSync(componentPath))('morphs one price DOM into the shared five-column desktop row', async () => {
     const wrapper = await mountPrice(makeModel({
       prices: {

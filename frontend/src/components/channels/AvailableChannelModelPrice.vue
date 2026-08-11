@@ -392,11 +392,9 @@ function priceMetrics(prices: CatalogPriceCollection): PriceMetric[] {
 
 const expanded = ref(false)
 const effectiveRateRange = computed(() => {
-  const minimum = props.model.effectiveRate ?? props.model.normalRate
-  const maximum = props.model.effectiveRateMax ?? minimum
   return formatCatalogValueRange(
-    minimum,
-    maximum,
+    props.model.effectiveRate,
+    props.model.effectiveRateMax,
     value => `${formatAvailableChannelRate(value)}×`,
   )
 })
