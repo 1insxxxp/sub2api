@@ -10,6 +10,21 @@ import {
   buildAvailableChannelCatalog,
   filterAvailableChannelCatalog,
 } from '../availableChannelCatalog'
+import type { CatalogPriceValue } from '../availableChannelCatalog'
+
+function expectPriceRange(
+  actual: CatalogPriceValue | null,
+  expected: Pick<CatalogPriceValue, 'site' | 'siteMax' | 'peakSite' | 'peakSiteMax'>,
+): void {
+  expect(actual).not.toBeNull()
+  for (const key of ['site', 'siteMax', 'peakSite', 'peakSiteMax'] as const) {
+    if (expected[key] == null) {
+      expect(actual?.[key]).toBeNull()
+    } else {
+      expect(actual?.[key]).toBeCloseTo(expected[key])
+    }
+  }
+}
 
 function pricing(
   overrides: Partial<UserSupportedModelPricing> = {},
@@ -77,6 +92,96 @@ function channel(
 }
 
 describe('buildAvailableChannelCatalog', () => {
+  it('normalizes minimum and maximum site prices across every price dimension and interval', () => {
+    const source = channel('Range prices', [
+      group(70, 'Range group', {
+        rate_multiplier: 0.75,
+        peak_rate_enabled: true,
+        peak_start: '08:00',
+        peak_end: '10:00',
+        peak_rate_multiplier: 2,
+        supported_models: [model('range-model', pricing({
+          per_request_price: 3,
+          intervals: [
+            {
+              min_tokens: 0,
+              max_tokens: 100_000,
+              tier_label: 'Standard context',
+              input_price: 4,
+              output_price: 8,
+              cache_write_price: 1.5,
+              cache_read_price: 0.4,
+              per_request_price: 2.5,
+            },
+          ],
+        }))],
+      }),
+    ])
+
+    const catalogGroup = buildAvailableChannelCatalog([source], {}, 0.16, 7, 0.20)[0].groups[0]
+    const entry = catalogGroup.models[0]
+
+    expect(catalogGroup.effectiveRate).toBeCloseTo(0.12)
+    expect(catalogGroup.effectiveRateMax).toBeCloseTo(0.15)
+    expect(entry.effectiveRate).toBeCloseTo(0.12)
+    expect(entry.effectiveRateMax).toBeCloseTo(0.15)
+    expect(entry.prices.input).toMatchObject({ official: 5, officialCny: 35 })
+    expectPriceRange(entry.prices.input, { site: 0.6, siteMax: 0.75, peakSite: 1.2, peakSiteMax: 1.5 })
+    expectPriceRange(entry.prices.output, { site: 1.2, siteMax: 1.5, peakSite: 2.4, peakSiteMax: 3 })
+    expectPriceRange(entry.prices.cacheWrite, { site: 0.24, siteMax: 0.3, peakSite: 0.48, peakSiteMax: 0.6 })
+    expectPriceRange(entry.prices.cacheRead, { site: 0.12, siteMax: 0.15, peakSite: 0.24, peakSiteMax: 0.3 })
+    expectPriceRange(entry.prices.imageInput, { site: 0.06, siteMax: 0.075, peakSite: 0.12, peakSiteMax: 0.15 })
+    expectPriceRange(entry.prices.imageOutput, { site: 0.09, siteMax: 0.1125, peakSite: 0.18, peakSiteMax: 0.225 })
+    expectPriceRange(entry.prices.request, { site: 0.36, siteMax: 0.45, peakSite: null, peakSiteMax: null })
+    expectPriceRange(entry.intervals[0].prices.input, { site: 0.48, siteMax: 0.6, peakSite: 0.96, peakSiteMax: 1.2 })
+    expectPriceRange(entry.intervals[0].prices.output, { site: 0.96, siteMax: 1.2, peakSite: 1.92, peakSiteMax: 2.4 })
+    expectPriceRange(entry.intervals[0].prices.cacheWrite, { site: 0.18, siteMax: 0.225, peakSite: 0.36, peakSiteMax: 0.45 })
+    expectPriceRange(entry.intervals[0].prices.cacheRead, { site: 0.048, siteMax: 0.06, peakSite: 0.096, peakSiteMax: 0.12 })
+    expectPriceRange(entry.intervals[0].prices.request, { site: 0.3, siteMax: 0.375, peakSite: null, peakSiteMax: null })
+  })
+
+  it('normalizes equal, missing, invalid, and reversed maximum multipliers to one endpoint', () => {
+    const source = channel('Range normalization', [
+      group(71, 'Range normalization group', {
+        rate_multiplier: 0.75,
+        supported_models: [model('range-model', pricing({ input_price: 5 }))],
+      }),
+    ])
+
+    for (const maximum of [undefined, 0.16, 0.12, -1, Number.NaN, Number.POSITIVE_INFINITY]) {
+      const entry = buildAvailableChannelCatalog([source], {}, 0.16, 7, maximum)[0].groups[0].models[0]
+
+      expect(entry.effectiveRate).toBeCloseTo(0.12)
+      expect(entry.effectiveRateMax).toBeCloseTo(0.12)
+      expect(entry.prices.input?.site).toBeCloseTo(0.6)
+      expect(entry.prices.input?.siteMax).toBeCloseTo(0.6)
+    }
+  })
+
+  it('keeps site prices disabled when the minimum multiplier is zero even if maximum is positive', () => {
+    const source = channel('Disabled range', [
+      group(72, 'Disabled range group', {
+        rate_multiplier: 0.75,
+        peak_rate_enabled: true,
+        peak_rate_multiplier: 2,
+        supported_models: [model('range-model', pricing({ input_price: 5 }))],
+      }),
+    ])
+
+    const entry = buildAvailableChannelCatalog([source], {}, 0, 7, 0.20)[0].groups[0].models[0]
+
+    expect(entry.effectiveRate).toBeNull()
+    expect(entry.effectiveRateMax).toBeNull()
+    expect(entry.prices.input).toMatchObject({
+      official: 5,
+      officialCny: 35,
+      site: null,
+      siteMax: null,
+      peakSite: null,
+      peakSiteMax: null,
+    })
+  })
+
   it('normalizes token prices with user rate, peak prices, intervals, and group metadata', () => {
     const tokenPricing = pricing({
       per_request_price: 3,
@@ -106,7 +211,7 @@ describe('buildAvailableChannelCatalog', () => {
       }),
     ], { description: 'Fast premium route' })
 
-    const catalog = buildAvailableChannelCatalog([source], { 7: 0.5 }, 7.2)
+    const catalog = buildAvailableChannelCatalog([source], { 7: 0.5 }, 7.2, 7)
     const catalogChannel = catalog[0]
     const catalogGroup = catalogChannel.groups[0]
     const entry = catalogGroup.models[0]
@@ -142,8 +247,9 @@ describe('buildAvailableChannelCatalog', () => {
       peakFactor: 2,
     })
     expect(entry.groupKey).toBe(catalogGroup.key)
-    expect(entry.prices.input).toEqual({ official: 5, site: 18, peakSite: 36 })
-    expect(entry.prices.output).toEqual({ official: 10, site: 36, peakSite: 72 })
+    expect((entry.prices.input as unknown as { officialCny: number }).officialCny).toBe(35)
+    expect(entry.prices.input).toEqual({ official: 5, officialCny: 35, site: 18, siteMax: 18, peakSite: 36, peakSiteMax: 36 })
+    expect(entry.prices.output).toEqual({ official: 10, officialCny: 70, site: 36, siteMax: 36, peakSite: 72, peakSiteMax: 72 })
     expect(entry.prices.cacheWrite?.site).toBeCloseTo(7.2)
     expect(entry.prices.cacheWrite?.peakSite).toBeCloseTo(14.4)
     expect(entry.prices.cacheRead?.site).toBeCloseTo(3.6)
@@ -152,7 +258,7 @@ describe('buildAvailableChannelCatalog', () => {
     expect(entry.prices.imageInput?.peakSite).toBeCloseTo(3.6)
     expect(entry.prices.imageOutput?.site).toBeCloseTo(2.7)
     expect(entry.prices.imageOutput?.peakSite).toBeCloseTo(5.4)
-    expect(entry.prices.request).toEqual({ official: 3, site: 10.8, peakSite: null })
+    expect(entry.prices.request).toEqual({ official: 3, officialCny: 21, site: 10.8, siteMax: 10.8, peakSite: null, peakSiteMax: null })
     expect(entry.intervals[0]).toMatchObject({
       minTokens: 0,
       maxTokens: 100_000,
@@ -168,8 +274,11 @@ describe('buildAvailableChannelCatalog', () => {
     expect(entry.intervals[0].prices.cacheRead?.peakSite).toBeCloseTo(2.88)
     expect(entry.intervals[0].prices.request).toEqual({
       official: 2.5,
+      officialCny: 17.5,
       site: 9,
+      siteMax: 9,
       peakSite: null,
+      peakSiteMax: null,
     })
     expect(catalogChannel.key).toMatch(/^channel:/)
     expect(catalogGroup.channelKey).toBe(catalogChannel.key)
@@ -191,7 +300,7 @@ describe('buildAvailableChannelCatalog', () => {
 
     expect(entry.normalRate).toBe(0.25)
     expect(entry.userRate).toBeNull()
-    expect(entry.prices.input).toEqual({ official: 0, site: 0, peakSite: null })
+    expect(entry.prices.input).toEqual({ official: 0, officialCny: 0, site: 0, siteMax: 0, peakSite: null, peakSiteMax: null })
     expect(entry.prices.output).toBeNull()
   })
 
@@ -207,12 +316,15 @@ describe('buildAvailableChannelCatalog', () => {
     for (const multiplier of [0, Number.NaN, Number.POSITIVE_INFINITY]) {
       const entry = buildAvailableChannelCatalog([source], {}, multiplier)[0].groups[0].models[0]
 
-      expect(entry.prices.input).toEqual({ official: 5, site: null, peakSite: null })
-      expect(entry.prices.output).toEqual({ official: 0, site: null, peakSite: null })
+      expect(entry.prices.input).toEqual({ official: 5, officialCny: 35, site: null, siteMax: null, peakSite: null, peakSiteMax: null })
+      expect(entry.prices.output).toEqual({ official: 0, officialCny: 0, site: null, siteMax: null, peakSite: null, peakSiteMax: null })
     }
 
     const validEntry = buildAvailableChannelCatalog([source], {}, 7.2)[0].groups[0].models[0]
-    expect(validEntry.prices.output).toEqual({ official: 0, site: 0, peakSite: 0 })
+    expect(validEntry.prices.output).toEqual({ official: 0, officialCny: 0, site: 0, siteMax: 0, peakSite: 0, peakSiteMax: 0 })
+
+    const savingsDisabledEntry = buildAvailableChannelCatalog([source], {}, 7.2, 0)[0].groups[0].models[0]
+    expect(savingsDisabledEntry.prices.input).toEqual({ official: 5, officialCny: null, site: 36, siteMax: 36, peakSite: 72, peakSiteMax: 72 })
   })
 
   it('normalizes invalid prices and rates without exposing NaN or Infinity', () => {
@@ -245,8 +357,11 @@ describe('buildAvailableChannelCatalog', () => {
     expect(rawEntry.prices.output).toBeNull()
     expect(rawEntry.prices.cacheWrite).toEqual({
       official: Number.MAX_VALUE,
+      officialCny: null,
       site: null,
+      siteMax: null,
       peakSite: null,
+      peakSiteMax: null,
     })
     expect(rateGroups[0]).toMatchObject({ defaultRate: 0.25, userRate: null, normalRate: 0.25 })
     expect(rateGroups[0].peak).toMatchObject({ factor: 1 })
@@ -305,9 +420,9 @@ describe('buildAvailableChannelCatalog', () => {
     expect(imageEntry.prices.imageInput?.peakSite).toBeNull()
     expect(imageEntry.prices.imageOutput?.site).toBeCloseTo(2.88)
     expect(imageEntry.prices.imageOutput?.peakSite).toBeNull()
-    expect(imageEntry.prices.request).toEqual({ official: 1, site: 3.6, peakSite: null })
+    expect(imageEntry.prices.request).toEqual({ official: 1, officialCny: 7, site: 3.6, siteMax: 3.6, peakSite: null, peakSiteMax: null })
     expect(requestEntry.peakFactor).toBeNull()
-    expect(requestEntry.prices.request).toEqual({ official: 2, site: 7.2, peakSite: null })
+    expect(requestEntry.prices.request).toEqual({ official: 2, officialCny: 14, site: 7.2, siteMax: 7.2, peakSite: null, peakSiteMax: null })
     expect(requestEntry.intervals[0].prices.request?.official).toBe(1.5)
     expect(requestEntry.intervals[0].prices.request?.site).toBeCloseTo(5.4)
     expect(requestEntry.intervals[0].prices.request?.peakSite).toBeNull()

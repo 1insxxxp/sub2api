@@ -4,17 +4,72 @@ import AvailableChannelsView from '@/views/user/AvailableChannelsView.vue'
 import Select from '@/components/common/Select.vue'
 
 const api = vi.hoisted(() => ({ channels: vi.fn(), rates: vi.fn() }))
+const app = vi.hoisted(() => ({
+  settings: {
+    available_channels_price_cny_multiplier: 0.16,
+    available_channels_price_cny_multiplier_max: 0.20 as number | undefined,
+    available_channels_official_usd_to_cny_rate: 7,
+  },
+}))
 vi.mock('@/api/channels', () => ({ default: { getAvailable: api.channels } }))
 vi.mock('@/api/groups', () => ({ default: { getUserGroupRates: api.rates } }))
-vi.mock('@/stores/app', () => ({ useAppStore: () => ({ cachedPublicSettings: { available_channels_price_cny_multiplier: 7 }, showError: vi.fn() }) }))
+vi.mock('@/stores/app', () => ({ useAppStore: () => ({ cachedPublicSettings: app.settings, showError: vi.fn() }) }))
 vi.mock('vue-i18n', async (importOriginal) => ({ ...(await importOriginal<typeof import('vue-i18n')>()), useI18n: () => ({ t: (key: string, p?: { count?: number }) => p?.count == null ? key : `${key}:${p.count}` }) }))
 
 const channel = (name = 'Alpha', platform = 'openai', model = 'gpt-test', priced = true) => ({ name, description: 'test', platforms: [{ platform, groups: [{ id: name === 'Alpha' ? 1 : 2, name: 'public', platform, subscription_type: 'standard', rate_multiplier: 1, peak_rate_enabled: false, peak_start: '', peak_end: '', peak_rate_multiplier: 1, is_exclusive: false, supported_models: [{ name: model, platform, pricing: priced ? { billing_mode: 'token', input_price: 1, output_price: 2, cache_write_price: null, cache_read_price: null, image_input_price: null, image_output_price: null, per_request_price: null, intervals: [] } : null }] }], supported_models: [] }] })
 const stubs = { AppLayout: { template: '<div><slot /></div>' }, TablePageLayout: { template: '<div><slot name="filters"/><slot name="table"/></div>' }, Icon: { template: '<span />' }, AvailableChannelModelPrice: { template: '<div />' } }
 
 describe('AvailableChannelsView integration', () => {
-  beforeEach(() => { api.channels.mockReset(); api.rates.mockReset(); api.rates.mockResolvedValue({}) })
-  it('renders channel context and filters in one shared header', async () => { api.channels.mockResolvedValue([channel()]); const w = mount(AvailableChannelsView, { global: { stubs } }); await flushPromises(); expect(w.find('[data-testid="available-model-list"]').exists()).toBe(true); expect(w.text()).toContain('gpt-test'); const toolbar = w.get('[data-testid="channel-toolbar-region"]'); expect(toolbar.get('[data-testid="channel-context"]').text()).toContain('Alpha'); expect(toolbar.get('[data-testid="channel-filter-row"]').exists()).toBe(true); expect(toolbar.get('[data-testid="channel-search"]').exists()).toBe(true); expect(w.find('[data-testid="channel-detail-summary"]').exists()).toBe(false) })
+  beforeEach(() => {
+    api.channels.mockReset()
+    api.rates.mockReset()
+    api.rates.mockResolvedValue({})
+    app.settings.available_channels_price_cny_multiplier = 0.16
+    app.settings.available_channels_price_cny_multiplier_max = 0.20
+    app.settings.available_channels_official_usd_to_cny_rate = 7
+  })
+  it('renders channel context and filters in one shared header', async () => { app.settings.available_channels_price_cny_multiplier = 7; app.settings.available_channels_price_cny_multiplier_max = 7; app.settings.available_channels_official_usd_to_cny_rate = 10; api.channels.mockResolvedValue([channel()]); const w = mount(AvailableChannelsView, { global: { stubs } }); await flushPromises(); expect(w.find('[data-testid="available-model-list"]').exists()).toBe(true); expect(w.text()).toContain('gpt-test'); expect(w.get('[data-testid="savings-badge"]').text()).toContain('savePercent:30'); const toolbar = w.get('[data-testid="channel-toolbar-region"]'); expect(toolbar.get('[data-testid="channel-context"]').text()).toContain('Alpha'); expect(toolbar.get('[data-testid="channel-filter-row"]').exists()).toBe(true); expect(toolbar.get('[data-testid="channel-search"]').exists()).toBe(true); expect(w.find('[data-testid="channel-detail-summary"]').exists()).toBe(false) })
+  it('propagates the configured minimum and maximum multipliers into the catalog', async () => {
+    api.channels.mockResolvedValue([channel()])
+    api.rates.mockResolvedValue({ 1: 0.75 })
+    const w = mount(AvailableChannelsView, { global: { stubs } })
+    await flushPromises()
+
+    const catalog = w.getComponent({ name: 'AvailableChannelCatalog' }).props('channels') as Array<{
+      groups: Array<{
+        effectiveRate: number | null
+        effectiveRateMax: number | null
+        models: Array<{ prices: { input: { site: number | null; siteMax: number | null } } }>
+      }>
+    }>
+    const catalogGroup = catalog[0].groups[0]
+
+    expect(catalogGroup.effectiveRate).toBeCloseTo(0.12)
+    expect(catalogGroup.effectiveRateMax).toBeCloseTo(0.15)
+    expect(catalogGroup.models[0].prices.input.site).toBeCloseTo(0.12)
+    expect(catalogGroup.models[0].prices.input.siteMax).toBeCloseTo(0.15)
+  })
+  it('falls back to the minimum multiplier when an old backend omits the maximum', async () => {
+    app.settings.available_channels_price_cny_multiplier_max = undefined
+    api.channels.mockResolvedValue([channel()])
+    api.rates.mockResolvedValue({ 1: 0.75 })
+    const w = mount(AvailableChannelsView, { global: { stubs } })
+    await flushPromises()
+
+    const catalog = w.getComponent({ name: 'AvailableChannelCatalog' }).props('channels') as Array<{
+      groups: Array<{
+        effectiveRate: number | null
+        effectiveRateMax: number | null
+        models: Array<{ prices: { input: { site: number | null; siteMax: number | null } } }>
+      }>
+    }>
+    const catalogGroup = catalog[0].groups[0]
+
+    expect(catalogGroup.effectiveRate).toBeCloseTo(0.12)
+    expect(catalogGroup.effectiveRateMax).toBeCloseTo(0.12)
+    expect(catalogGroup.models[0].prices.input.site).toBeCloseTo(0.12)
+    expect(catalogGroup.models[0].prices.input.siteMax).toBeCloseTo(0.12)
+  })
   it('filters platform results and omits the priced-only control', async () => { api.channels.mockResolvedValue([channel(), channel('Beta', 'gemini', 'gemini-test', false)]); const w = mount(AvailableChannelsView, { global: { stubs } }); await flushPromises(); expect(w.findAll('[data-testid="model-card"]')).toHaveLength(1); await w.findAll('[data-testid="channel-nav-item"]')[1].trigger('click'); expect(w.text()).toContain('gemini-test'); await w.getComponent(Select).vm.$emit('update:modelValue', 'openai'); await flushPromises(); expect(w.text()).not.toContain('gemini-test'); expect(w.find('[data-testid="priced-only-filter"]').exists()).toBe(false) })
   it('keeps old content while refreshing and distinguishes empty states', async () => { let resolve!: (v: unknown) => void; api.channels.mockResolvedValueOnce([channel(), channel('Beta', 'gemini', 'gemini-test', false)]).mockReturnValueOnce(new Promise(r => { resolve = r })); const w = mount(AvailableChannelsView, { global: { stubs } }); await flushPromises(); const picker = w.get('[data-testid="channel-picker-trigger"]'); expect(picker.text()).toContain('Alpha'); expect(w.find('[data-testid="channel-nav-item"]').attributes('aria-selected')).toBe('true'); await w.get('[data-testid="channel-search"]').setValue('does-not-exist'); expect(w.find('[data-testid="catalog-empty"]').text()).toContain('noMatchingResults'); await w.get('[data-testid="channel-search"]').setValue(''); await w.get('[data-testid="channel-refresh"]').trigger('click'); expect(w.find('[data-testid="refreshing-indicator"]').exists()).toBe(true); expect(w.text()).toContain('gpt-test'); resolve([]); await flushPromises(); expect(w.find('[data-testid="catalog-empty"]').text()).toContain('noChannels') })
   it('shows rate fallback warning', async () => { api.channels.mockResolvedValue([channel()]); api.rates.mockRejectedValue(new Error('offline')); const w = mount(AvailableChannelsView, { global: { stubs } }); await flushPromises(); expect(w.find('[data-testid="rate-fallback-warning"]').exists()).toBe(true) })

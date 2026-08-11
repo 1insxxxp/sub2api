@@ -58,6 +58,21 @@ const priceCnyMultiplier = computed(() => {
   return Number.isFinite(value) && value > 0 ? value : 0
 })
 
+const priceCnyMultiplierMax = computed(() => {
+  const minimum = priceCnyMultiplier.value
+  const raw = appStore.cachedPublicSettings?.available_channels_price_cny_multiplier_max
+  if (raw == null) return minimum
+  const value = Number(raw)
+  return Number.isFinite(value) && value >= minimum ? value : minimum
+})
+
+const officialUsdToCnyRate = computed(() => {
+  const raw = appStore.cachedPublicSettings?.available_channels_official_usd_to_cny_rate
+  if (raw == null) return 7
+  const value = Number(raw)
+  return Number.isFinite(value) && value >= 0 ? value : 7
+})
+
 const rateFallback = ref(false)
 
 /**
@@ -66,7 +81,13 @@ const rateFallback = ref(false)
  * - 否则按 platform/group/model 维度在 sections 里过滤，保留有匹配的 section
  * - 所有 sections 都不匹配时，渠道本身被过滤掉
  */
-const catalog = computed(() => buildAvailableChannelCatalog(channels.value, userGroupRates.value, priceCnyMultiplier.value))
+const catalog = computed(() => buildAvailableChannelCatalog(
+  channels.value,
+  userGroupRates.value,
+  priceCnyMultiplier.value,
+  officialUsdToCnyRate.value,
+  priceCnyMultiplierMax.value,
+))
 const filteredCatalog = computed(() => filterAvailableChannelCatalog(catalog.value, {
   search: searchQuery.value,
   platform: platformFilter.value,

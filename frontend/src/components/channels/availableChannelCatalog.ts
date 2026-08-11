@@ -10,8 +10,11 @@ import { BILLING_MODE_TOKEN } from '@/constants/channel'
 
 export interface CatalogPriceValue {
   official: number | null
+  officialCny: number | null
   site: number | null
+  siteMax: number | null
   peakSite: number | null
+  peakSiteMax: number | null
 }
 
 export interface CatalogPriceCollection {
@@ -48,6 +51,7 @@ export interface CatalogModelEntry {
   hasPricing: boolean
   normalRate: number
   effectiveRate?: number | null
+  effectiveRateMax?: number | null
   defaultRate: number
   userRate: number | null
   peakFactor: number | null
@@ -65,6 +69,7 @@ export interface CatalogGroupEntry {
   isExclusive: boolean
   normalRate: number
   effectiveRate?: number | null
+  effectiveRateMax?: number | null
   defaultRate: number
   userRate: number | null
   peak: CatalogPeakMetadata | null
@@ -113,6 +118,8 @@ export interface AvailableChannelCatalogFilters {
 
 interface PriceContext {
   cnyMultiplier: number
+  cnyMultiplierMax: number
+  officialUsdToCnyRate: number
   normalRate: number
   peakFactor: number | null
 }
@@ -164,8 +171,34 @@ function effectiveRate(normalRate: number, cnyMultiplier: number): number | null
   return Number.isFinite(value) && value >= 0 && cnyMultiplier > 0 ? value : null
 }
 
+function normalizeCnyMultiplierMax(cnyMultiplier: number, cnyMultiplierMax: number | undefined): number {
+  if (
+    typeof cnyMultiplierMax !== 'number'
+    || !Number.isFinite(cnyMultiplierMax)
+    || cnyMultiplierMax < cnyMultiplier
+  ) {
+    return cnyMultiplier
+  }
+  return cnyMultiplierMax
+}
+
+function maximumEffectiveRate(
+  normalRate: number,
+  cnyMultiplier: number,
+  cnyMultiplierMax: number,
+): number | null {
+  if (effectiveRate(normalRate, cnyMultiplier) == null) return null
+  return effectiveRate(normalRate, cnyMultiplierMax)
+}
+
 function priceValue(rawValue: number | null, context: PriceContext): CatalogPriceValue | null {
   if (rawValue == null || !Number.isFinite(rawValue)) return null
+
+  const officialCny = Number.isFinite(context.officialUsdToCnyRate)
+    && context.officialUsdToCnyRate > 0
+    && Number.isFinite(rawValue * context.officialUsdToCnyRate)
+    ? rawValue * context.officialUsdToCnyRate
+    : null
 
   if (
     !Number.isFinite(context.cnyMultiplier)
@@ -173,12 +206,27 @@ function priceValue(rawValue: number | null, context: PriceContext): CatalogPric
     || !Number.isFinite(context.normalRate)
     || context.normalRate < 0
   ) {
-    return { official: rawValue, site: null, peakSite: null }
+    return {
+      official: rawValue,
+      officialCny,
+      site: null,
+      siteMax: null,
+      peakSite: null,
+      peakSiteMax: null,
+    }
   }
 
   const site = rawValue * context.cnyMultiplier * context.normalRate
-  if (!Number.isFinite(site)) {
-    return { official: rawValue, site: null, peakSite: null }
+  const siteMax = rawValue * context.cnyMultiplierMax * context.normalRate
+  if (!Number.isFinite(site) || !Number.isFinite(siteMax)) {
+    return {
+      official: rawValue,
+      officialCny,
+      site: null,
+      siteMax: null,
+      peakSite: null,
+      peakSiteMax: null,
+    }
   }
 
   const peakSite = context.peakFactor == null
@@ -186,10 +234,18 @@ function priceValue(rawValue: number | null, context: PriceContext): CatalogPric
     || context.peakFactor < 0
     ? null
     : site * context.peakFactor
+  const peakSiteMax = context.peakFactor == null
+    || !Number.isFinite(context.peakFactor)
+    || context.peakFactor < 0
+    ? null
+    : siteMax * context.peakFactor
   return {
     official: rawValue,
+    officialCny,
     site,
+    siteMax,
     peakSite: peakSite != null && Number.isFinite(peakSite) ? peakSite : null,
+    peakSiteMax: peakSiteMax != null && Number.isFinite(peakSiteMax) ? peakSiteMax : null,
   }
 }
 
@@ -304,6 +360,8 @@ function normalizeModel(
   groupKey: string,
   occurrence: number,
   cnyMultiplier: number,
+  cnyMultiplierMax: number,
+  officialUsdToCnyRate: number,
   defaultRate: number,
   userRate: number | null,
   normalRate: number,
@@ -316,7 +374,13 @@ function normalizeModel(
     billingMode === BILLING_MODE_TOKEN && group.peak_rate_enabled
       ? configuredPeakFactor
       : null
-  const context: PriceContext = { cnyMultiplier, normalRate, peakFactor }
+  const context: PriceContext = {
+    cnyMultiplier,
+    cnyMultiplierMax,
+    officialUsdToCnyRate,
+    normalRate,
+    peakFactor,
+  }
   const modelKey = `${groupKey}:model:${exactModelIdentity(source.name, resolvedModelPlatform)}:${occurrence}`
   const prices = source.pricing
     ? priceCollection(source.pricing, context)
@@ -341,6 +405,7 @@ function normalizeModel(
       || intervals.some((interval) => collectionHasPricing(interval.prices)),
     normalRate,
     effectiveRate: effectiveRate(normalRate, cnyMultiplier),
+    effectiveRateMax: maximumEffectiveRate(normalRate, cnyMultiplier, cnyMultiplierMax),
     defaultRate,
     userRate,
     peakFactor,
@@ -357,6 +422,8 @@ function normalizeGroup(
   resolvedPlatform: string,
   userGroupRates: Record<number, number>,
   cnyMultiplier: number,
+  cnyMultiplierMax: number,
+  officialUsdToCnyRate: number,
 ): CatalogGroupEntry {
   const defaultRate = finiteRate(source.rate_multiplier) ?? 1
   const userRate = finiteRate(userGroupRates[source.id])
@@ -378,6 +445,8 @@ function normalizeGroup(
       groupKey,
       occurrence,
       cnyMultiplier,
+      cnyMultiplierMax,
+      officialUsdToCnyRate,
       defaultRate,
       userRate,
       normalRate,
@@ -396,6 +465,7 @@ function normalizeGroup(
     isExclusive: source.is_exclusive,
     normalRate,
     effectiveRate: effectiveRate(normalRate, cnyMultiplier),
+    effectiveRateMax: maximumEffectiveRate(normalRate, cnyMultiplier, cnyMultiplierMax),
     defaultRate,
     userRate,
     peak: source.peak_rate_enabled
@@ -415,7 +485,10 @@ export function buildAvailableChannelCatalog(
   rows: UserAvailableChannel[],
   userGroupRates: Record<number, number>,
   cnyMultiplier: number,
+  officialUsdToCnyRate = 7,
+  cnyMultiplierMax?: number,
 ): CatalogChannelEntry[] {
+  const normalizedCnyMultiplierMax = normalizeCnyMultiplierMax(cnyMultiplier, cnyMultiplierMax)
   const channelOccurrences = new Map<string, number>()
   return rows.map((channel) => {
     // Database invariant: idx_channels_name is a case-sensitive UNIQUE index.
@@ -447,6 +520,8 @@ export function buildAvailableChannelCatalog(
           resolvedPlatform,
           userGroupRates,
           cnyMultiplier,
+          normalizedCnyMultiplierMax,
+          officialUsdToCnyRate,
         )
       })
     })
