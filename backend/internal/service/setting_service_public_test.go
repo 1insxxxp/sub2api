@@ -215,6 +215,19 @@ func TestSettingService_GetPublicSettings_ExposesAvailableChannelsPriceCNYMultip
 }
 
 func TestSettingService_GetPublicSettings_NormalizesAvailableChannelsPriceCNYMultiplierRange(t *testing.T) {
+	for _, raw := range []string{"NaN", "+Inf", "-Inf"} {
+		t.Run("normalizes a non-finite minimum "+raw, func(t *testing.T) {
+			svc := NewSettingService(&settingPublicRepoStub{values: map[string]string{
+				SettingKeyAvailableChannelsPriceCNYMultiplier: raw,
+			}}, &config.Config{})
+
+			settings, err := svc.GetPublicSettings(context.Background())
+			require.NoError(t, err)
+			require.Zero(t, settings.AvailableChannelsPriceCNYMultiplier)
+			require.InDelta(t, 0.20, settings.AvailableChannelsPriceCNYMultiplierMax, 1e-12)
+		})
+	}
+
 	t.Run("defaults a missing maximum to point two", func(t *testing.T) {
 		svc := NewSettingService(&settingPublicRepoStub{values: map[string]string{
 			SettingKeyAvailableChannelsPriceCNYMultiplier: "0.16",

@@ -424,10 +424,10 @@ func parseChannelMonitorInterval(raw string) int {
 
 func parseNonNegativeFloatSetting(raw string) float64 {
 	v, err := strconv.ParseFloat(strings.TrimSpace(raw), 64)
-	if err != nil || v < 0 {
+	if err != nil {
 		return 0
 	}
-	return v
+	return normalizeNonNegativeFiniteFloat(v, 0)
 }
 
 func parseAvailableChannelsPriceCNYMultiplierMax(raw string, minimum float64) float64 {
@@ -444,13 +444,18 @@ func parseAvailableChannelsPriceCNYMultiplierMax(raw string, minimum float64) fl
 }
 
 func normalizeAvailableChannelsPriceCNYMultiplierMax(maximum, minimum float64) float64 {
-	if maximum < 0 || math.IsNaN(maximum) || math.IsInf(maximum, 0) {
-		maximum = AvailableChannelsPriceCNYMultiplierMaxDefault
-	}
+	maximum = normalizeNonNegativeFiniteFloat(maximum, AvailableChannelsPriceCNYMultiplierMaxDefault)
 	if maximum < minimum {
 		return minimum
 	}
 	return maximum
+}
+
+func normalizeNonNegativeFiniteFloat(value, fallback float64) float64 {
+	if value < 0 || math.IsNaN(value) || math.IsInf(value, 0) {
+		return fallback
+	}
+	return value
 }
 
 func parseAvailableChannelsOfficialUSDToCNYRate(raw string) float64 {
@@ -459,10 +464,10 @@ func parseAvailableChannelsOfficialUSDToCNYRate(raw string) float64 {
 		return AvailableChannelsOfficialUSDToCNYRateDefault
 	}
 	value, err := strconv.ParseFloat(normalized, 64)
-	if err != nil || value < 0 || math.IsNaN(value) || math.IsInf(value, 0) {
+	if err != nil {
 		return AvailableChannelsOfficialUSDToCNYRateDefault
 	}
-	return value
+	return normalizeNonNegativeFiniteFloat(value, AvailableChannelsOfficialUSDToCNYRateDefault)
 }
 
 // clampChannelMonitorInterval clamps v to the allowed range. 0 means "not provided".

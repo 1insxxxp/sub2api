@@ -597,6 +597,15 @@ func diffSettings(before *service.SystemSettings, after *service.SystemSettings,
 	if before.AvailableChannelsEnabled != after.AvailableChannelsEnabled {
 		changed = append(changed, "available_channels_enabled")
 	}
+	if before.AvailableChannelsPriceCNYMultiplier != after.AvailableChannelsPriceCNYMultiplier {
+		changed = append(changed, service.SettingKeyAvailableChannelsPriceCNYMultiplier)
+	}
+	if before.AvailableChannelsPriceCNYMultiplierMax != after.AvailableChannelsPriceCNYMultiplierMax {
+		changed = append(changed, service.SettingKeyAvailableChannelsPriceCNYMultiplierMax)
+	}
+	if before.AvailableChannelsOfficialUSDToCNYRate != after.AvailableChannelsOfficialUSDToCNYRate {
+		changed = append(changed, service.SettingKeyAvailableChannelsOfficialUSDToCNYRate)
+	}
 	if before.ModelPlazaEnabled != after.ModelPlazaEnabled {
 		changed = append(changed, "model_plaza_enabled")
 	}

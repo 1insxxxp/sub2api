@@ -1528,23 +1528,8 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 	_, siteNameProvided := sentFields["site_name"]
 	_, siteLogoProvided := sentFields["site_logo"]
 	_, siteSubtitleProvided := sentFields["site_subtitle"]
-	availableChannelsPriceCNYMultiplier := previousSettings.AvailableChannelsPriceCNYMultiplier
-	if req.AvailableChannelsPriceCNYMultiplier != nil {
-		availableChannelsPriceCNYMultiplier = *req.AvailableChannelsPriceCNYMultiplier
-		if availableChannelsPriceCNYMultiplier < 0 || math.IsNaN(availableChannelsPriceCNYMultiplier) || math.IsInf(availableChannelsPriceCNYMultiplier, 0) {
-			availableChannelsPriceCNYMultiplier = 0
-		}
-	}
-	availableChannelsPriceCNYMultiplierMax := previousSettings.AvailableChannelsPriceCNYMultiplierMax
-	if req.AvailableChannelsPriceCNYMultiplierMax != nil {
-		availableChannelsPriceCNYMultiplierMax = *req.AvailableChannelsPriceCNYMultiplierMax
-	}
-	if availableChannelsPriceCNYMultiplierMax < 0 || math.IsNaN(availableChannelsPriceCNYMultiplierMax) || math.IsInf(availableChannelsPriceCNYMultiplierMax, 0) {
-		availableChannelsPriceCNYMultiplierMax = service.AvailableChannelsPriceCNYMultiplierMaxDefault
-	}
-	if availableChannelsPriceCNYMultiplierMax < availableChannelsPriceCNYMultiplier {
-		availableChannelsPriceCNYMultiplierMax = availableChannelsPriceCNYMultiplier
-	}
+	availableChannelsPriceCNYMultiplier, availableChannelsPriceCNYMultiplierMax :=
+		resolveAvailableChannelsPriceRangeUpdate(req, previousSettings)
 
 	settings := &service.SystemSettings{
 		// 系统全局 platform quota 默认值（整体替换语义）
@@ -1979,15 +1964,7 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 		}(),
 		AvailableChannelsPriceCNYMultiplier:    availableChannelsPriceCNYMultiplier,
 		AvailableChannelsPriceCNYMultiplierMax: availableChannelsPriceCNYMultiplierMax,
-		AvailableChannelsOfficialUSDToCNYRate: func() float64 {
-			if req.AvailableChannelsOfficialUSDToCNYRate != nil {
-				if *req.AvailableChannelsOfficialUSDToCNYRate < 0 {
-					return 0
-				}
-				return *req.AvailableChannelsOfficialUSDToCNYRate
-			}
-			return previousSettings.AvailableChannelsOfficialUSDToCNYRate
-		}(),
+		AvailableChannelsOfficialUSDToCNYRate:  resolveAvailableChannelsOfficialUSDToCNYRateUpdate(req, previousSettings),
 		ModelPlazaEnabled: func() bool {
 			if req.ModelPlazaEnabled != nil {
 				return *req.ModelPlazaEnabled
@@ -2469,6 +2446,39 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 		payload.DefaultPlatformQuotas = platformQuotas
 	}
 	response.Success(c, systemSettingsResponseData(payload, updatedAuthSourceDefaults))
+}
+
+func resolveAvailableChannelsPriceRangeUpdate(req UpdateSettingsRequest, previous *service.SystemSettings) (float64, float64) {
+	minimum := previous.AvailableChannelsPriceCNYMultiplier
+	if req.AvailableChannelsPriceCNYMultiplier != nil {
+		minimum = *req.AvailableChannelsPriceCNYMultiplier
+		if minimum < 0 || math.IsNaN(minimum) || math.IsInf(minimum, 0) {
+			minimum = 0
+		}
+	}
+
+	maximum := previous.AvailableChannelsPriceCNYMultiplierMax
+	if req.AvailableChannelsPriceCNYMultiplierMax != nil {
+		maximum = *req.AvailableChannelsPriceCNYMultiplierMax
+	}
+	if maximum < 0 || math.IsNaN(maximum) || math.IsInf(maximum, 0) {
+		maximum = service.AvailableChannelsPriceCNYMultiplierMaxDefault
+	}
+	if maximum < minimum {
+		maximum = minimum
+	}
+	return minimum, maximum
+}
+
+func resolveAvailableChannelsOfficialUSDToCNYRateUpdate(req UpdateSettingsRequest, previous *service.SystemSettings) float64 {
+	if req.AvailableChannelsOfficialUSDToCNYRate == nil {
+		return previous.AvailableChannelsOfficialUSDToCNYRate
+	}
+	value := *req.AvailableChannelsOfficialUSDToCNYRate
+	if value < 0 || math.IsNaN(value) || math.IsInf(value, 0) {
+		return service.AvailableChannelsOfficialUSDToCNYRateDefault
+	}
+	return value
 }
 
 // hasPaymentFields returns true if any payment-related field was explicitly provided.
