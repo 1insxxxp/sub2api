@@ -6,10 +6,12 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	dbent "github.com/Wei-Shaw/sub2api/ent"
 	"github.com/Wei-Shaw/sub2api/ent/group"
 	"github.com/Wei-Shaw/sub2api/ent/systemcustomgroupmodel"
+	"github.com/Wei-Shaw/sub2api/internal/payment"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/groupref"
 	"github.com/Wei-Shaw/sub2api/internal/service"
 	"github.com/lib/pq"
@@ -196,8 +198,18 @@ func systemCustomGroupReferencesExist(ctx context.Context, client *dbent.Client,
 		{label: "active subscription", sql: "SELECT EXISTS (SELECT 1 FROM user_subscriptions WHERE group_id = $1 AND deleted_at IS NULL AND status = 'active' AND expires_at > NOW())", args: []any{groupID}},
 		{
 			label: "fulfillable subscription order",
-			sql:   "SELECT EXISTS (SELECT 1 FROM payment_orders WHERE status IN ($2, $3, $4) AND (subscription_group_id = $1 OR plan_id IN (SELECT id FROM subscription_plans WHERE group_id = $1)))",
-			args:  []any{groupID, service.OrderStatusPending, service.OrderStatusPaid, service.OrderStatusRecharging},
+			sql: "SELECT EXISTS (SELECT 1 FROM payment_orders WHERE (subscription_group_id = $1 OR plan_id IN (SELECT id FROM subscription_plans WHERE group_id = $1)) AND " +
+				"(status IN ($2, $3, $4, $5) OR (status = $6 AND paid_at IS NOT NULL) OR (status = $7 AND updated_at >= $8)))",
+			args: []any{
+				groupID,
+				service.OrderStatusPending,
+				service.OrderStatusPaid,
+				service.OrderStatusRecharging,
+				service.OrderStatusCancelled,
+				service.OrderStatusFailed,
+				service.OrderStatusExpired,
+				time.Now().Add(-payment.PaymentRecoveryGracePeriod),
+			},
 		},
 	}
 	for _, query := range queries {

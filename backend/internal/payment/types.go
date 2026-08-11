@@ -2,7 +2,10 @@
 // registry, load balancing, and shared utilities for the payment subsystem.
 package payment
 
-import "context"
+import (
+	"context"
+	"time"
+)
 
 // PaymentType represents a supported payment method.
 type PaymentType = string
@@ -19,6 +22,10 @@ const (
 	TypeEasyPay      PaymentType = "easypay"
 	TypeAirwallex    PaymentType = "airwallex"
 )
+
+// PaymentRecoveryGracePeriod is the authoritative window during which an
+// expired order may still be recovered by a late successful payment callback.
+const PaymentRecoveryGracePeriod = 5 * time.Minute
 
 // Order status constants shared across payment and service layers.
 const (

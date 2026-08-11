@@ -172,14 +172,20 @@ func TestSystemCustomGroupRepositoryDeleteProtectsFulfillableSubscriptionOrders(
 		status     string
 		blocked    bool
 		planIDOnly bool
+		paid       bool
+		updatedAgo time.Duration
 	}{
 		{name: service.OrderStatusPending, status: service.OrderStatusPending, blocked: true},
 		{name: service.OrderStatusPaid, status: service.OrderStatusPaid, blocked: true},
 		{name: service.OrderStatusRecharging, status: service.OrderStatusRecharging, blocked: true},
 		{name: "PENDING_PLAN_ID_ONLY", status: service.OrderStatusPending, blocked: true, planIDOnly: true},
+		{name: service.OrderStatusCancelled, status: service.OrderStatusCancelled, blocked: true},
+		{name: "FAILED_PAID_PLAN_ID_ONLY", status: service.OrderStatusFailed, blocked: true, paid: true, planIDOnly: true},
+		{name: "FAILED_UNPAID", status: service.OrderStatusFailed, blocked: false},
+		{name: "EXPIRED_WITHIN_GRACE", status: service.OrderStatusExpired, blocked: true, updatedAgo: time.Minute},
+		{name: "EXPIRED_BEYOND_GRACE", status: service.OrderStatusExpired, blocked: false, updatedAgo: 10 * time.Minute},
 		{name: service.OrderStatusCompleted, status: service.OrderStatusCompleted, blocked: false},
-		{name: service.OrderStatusCancelled, status: service.OrderStatusCancelled, blocked: false},
-		{name: service.OrderStatusExpired, status: service.OrderStatusExpired, blocked: false},
+		{name: service.OrderStatusRefunded, status: service.OrderStatusRefunded, blocked: false},
 	}
 
 	for _, tc := range tests {
@@ -197,8 +203,12 @@ func TestSystemCustomGroupRepositoryDeleteProtectsFulfillableSubscriptionOrders(
 				Save(ctx)
 			require.NoError(t, err)
 			user := mustCreateUser(t, integrationEntClient, &service.User{})
-			order, err := createSystemCustomSubscriptionOrderForIntegration(ctx, user, plan, tc.status, tc.planIDOnly)
+			order, err := createSystemCustomSubscriptionOrderForIntegration(ctx, user, plan, tc.status, tc.planIDOnly, tc.paid)
 			require.NoError(t, err)
+			if tc.updatedAgo > 0 {
+				_, err = integrationDB.ExecContext(ctx, "UPDATE payment_orders SET updated_at = $2 WHERE id = $1", order.ID, time.Now().Add(-tc.updatedAgo))
+				require.NoError(t, err)
+			}
 			t.Cleanup(func() {
 				_, _ = integrationDB.ExecContext(context.Background(), "DELETE FROM payment_orders WHERE id = $1", order.ID)
 				_, _ = integrationDB.ExecContext(context.Background(), "DELETE FROM subscription_plans WHERE id = $1", plan.ID)
@@ -219,7 +229,7 @@ func TestSystemCustomGroupRepositoryDeleteProtectsFulfillableSubscriptionOrders(
 	}
 }
 
-func createSystemCustomSubscriptionOrderForIntegration(ctx context.Context, user *service.User, plan *dbent.SubscriptionPlan, status string, planIDOnly bool) (*dbent.PaymentOrder, error) {
+func createSystemCustomSubscriptionOrderForIntegration(ctx context.Context, user *service.User, plan *dbent.SubscriptionPlan, status string, planIDOnly, paid bool) (*dbent.PaymentOrder, error) {
 	builder := integrationEntClient.PaymentOrder.Create().
 		SetUserID(user.ID).
 		SetUserEmail(user.Email).
@@ -239,6 +249,9 @@ func createSystemCustomSubscriptionOrderForIntegration(ctx context.Context, user
 		SetSrcHost("test.local")
 	if !planIDOnly {
 		builder.SetSubscriptionGroupID(plan.GroupID)
+	}
+	if paid {
+		builder.SetPaidAt(time.Now())
 	}
 	return builder.Save(ctx)
 }
