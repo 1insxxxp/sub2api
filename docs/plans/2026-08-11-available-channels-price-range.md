@@ -27,7 +27,7 @@
 
 **Step 1: Write failing backend tests**
 
-Add tests proving that configured minimum `0.16` and maximum `0.20` are exposed by public settings and injection payloads, while a missing maximum falls back to the minimum. Cover explicit zero and a maximum below the minimum.
+Add tests proving that configured minimum `0.16` and maximum `0.20` are exposed by public settings and injection payloads, while a missing maximum defaults to `0.20`. Cover explicit zero and a maximum below the minimum.
 
 **Step 2: Run the focused tests and confirm RED**
 
@@ -50,13 +50,13 @@ Parse the pair with these invariants:
 
 ```go
 min := parseNonNegativeFloatSetting(rawMin)
-max := parseOptionalNonNegativeFloat(rawMax, min)
+max := parseOptionalNonNegativeFloat(rawMax, 0.20)
 if max < min {
     max = min
 }
 ```
 
-Thread `AvailableChannelsPriceCNYMultiplierMax` through service views, admin/public DTOs, handlers, update persistence, public-key loading, and injection payloads. Missing max resolves to min for blue/green compatibility.
+Thread `AvailableChannelsPriceCNYMultiplierMax` through service views, admin/public DTOs, handlers, update persistence, public-key loading, and injection payloads. Missing max resolves to `0.20`; the frontend separately falls back to min only when connected to an old backend that omits the field.
 
 **Step 4: Run focused and package tests**
 
