@@ -27,6 +27,13 @@ type SystemCustomGroupDeleteImpactRepository interface {
 	DeleteWithImpact(ctx context.Context, groupID int64) (*SystemCustomGroupDeleteImpact, error)
 }
 
+// systemCustomGroupAuthCacheInvalidator is the optional cache capability used
+// after a committed custom-group update. Keeping it narrow preserves legacy
+// constructor and test-double compatibility.
+type systemCustomGroupAuthCacheInvalidator interface {
+	InvalidateAuthCacheByGroupID(ctx context.Context, groupID int64)
+}
+
 // SystemCustomGroupModelCatalog is deliberately the small subset of
 // GatewayService needed by administration. Keeping this seam narrow makes the
 // validation rules testable while production still uses the gateway's exact
@@ -153,6 +160,9 @@ func (s *SystemCustomGroupService) Update(ctx context.Context, groupID int64, re
 	normalizeSystemCustomContainer(&group)
 	if err := s.repo.Update(ctx, &group, req.Models); err != nil {
 		return nil, fmt.Errorf("update system custom group: %w", err)
+	}
+	if invalidator, ok := any(s.authCacheInvalidator).(systemCustomGroupAuthCacheInvalidator); ok && invalidator != nil {
+		invalidator.InvalidateAuthCacheByGroupID(ctx, groupID)
 	}
 	updated, err := s.repo.Get(ctx, groupID)
 	if err != nil {

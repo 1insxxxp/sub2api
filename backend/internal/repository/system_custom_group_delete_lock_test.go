@@ -37,3 +37,29 @@ func TestSystemCustomGroupDeleteAcquiresReferenceAdvisoryLockBeforeGroupRow(t *t
 	require.ErrorIs(t, err, service.ErrSystemCustomGroupNotFound)
 	require.NoError(t, mock.ExpectationsWereMet())
 }
+
+func TestSystemCustomGroupUpdateAcquiresReferenceAdvisoryLockBeforeLiveGroupRow(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = db.Close() })
+	client := dbent.NewClient(dbent.Driver(entsql.OpenDB(dialect.Postgres, db)))
+	t.Cleanup(func() { _ = client.Close() })
+	repo := &systemCustomGroupRepository{client: client}
+
+	mock.ExpectBegin()
+	mock.ExpectQuery("SELECT pg_advisory_xact_lock").
+		WithArgs(sqlmock.AnyArg(), sqlmock.AnyArg()).
+		WillReturnRows(sqlmock.NewRows([]string{"pg_advisory_xact_lock"}).AddRow(nil))
+	mock.ExpectQuery("SELECT system_custom_routing_enabled").
+		WithArgs(int64(42)).
+		WillReturnRows(sqlmock.NewRows([]string{"system_custom_routing_enabled"}))
+	mock.ExpectRollback()
+
+	err = repo.Update(context.Background(), &service.Group{
+		ID: 42, Name: "custom group", Platform: service.PlatformComposite,
+		SubscriptionType: service.SubscriptionTypeSubscription, Status: service.StatusActive,
+	}, nil)
+
+	require.ErrorIs(t, err, service.ErrSystemCustomGroupNotFound)
+	require.NoError(t, mock.ExpectationsWereMet())
+}

@@ -11,11 +11,15 @@ import (
 	"strings"
 	"time"
 
+	"entgo.io/ent/dialect"
 	dbent "github.com/Wei-Shaw/sub2api/ent"
+	"github.com/Wei-Shaw/sub2api/ent/group"
 	"github.com/Wei-Shaw/sub2api/ent/paymentorder"
+	"github.com/Wei-Shaw/sub2api/ent/subscriptionplan"
 	"github.com/Wei-Shaw/sub2api/internal/payment"
 	"github.com/Wei-Shaw/sub2api/internal/payment/provider"
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/groupref"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/servertiming"
 	"github.com/shopspring/decimal"
 )
@@ -155,6 +159,12 @@ func (s *PaymentService) createOrderInTx(ctx context.Context, req CreateOrderReq
 		return nil, fmt.Errorf("begin transaction: %w", err)
 	}
 	defer func() { _ = tx.Rollback() }()
+	if plan != nil {
+		plan, err = LockAndRevalidateSubscriptionOrderPlan(ctx, tx, plan)
+		if err != nil {
+			return nil, err
+		}
+	}
 	if err := s.checkPendingLimit(ctx, tx, req.UserID, cfg.MaxPendingOrders); err != nil {
 		return nil, err
 	}
@@ -222,6 +232,48 @@ func (s *PaymentService) createOrderInTx(ctx context.Context, req CreateOrderReq
 		return nil, fmt.Errorf("commit order transaction: %w", err)
 	}
 	return order, nil
+}
+
+// LockAndRevalidateSubscriptionOrderPlan holds the group-reference lock and
+// verifies a transaction-external plan snapshot before a pending order is
+// inserted in the same transaction.
+func LockAndRevalidateSubscriptionOrderPlan(ctx context.Context, tx *dbent.Tx, snapshot *dbent.SubscriptionPlan) (*dbent.SubscriptionPlan, error) {
+	if snapshot == nil {
+		return nil, paymentPlanNotAvailableError()
+	}
+	if err := groupref.LockGroupReferenceWrites(ctx, tx, snapshot.GroupID); err != nil {
+		return nil, fmt.Errorf("lock subscription order group: %w", err)
+	}
+	query := tx.Client().SubscriptionPlan.Query().Where(subscriptionplan.IDEQ(snapshot.ID))
+	if tx.Client().Driver().Dialect() == dialect.Postgres {
+		query = query.ForUpdate()
+	}
+	locked, err := query.Only(ctx)
+	if err != nil {
+		if dbent.IsNotFound(err) {
+			return nil, paymentPlanNotAvailableError()
+		}
+		return nil, fmt.Errorf("reload subscription plan: %w", err)
+	}
+	if !locked.ForSale || locked.GroupID != snapshot.GroupID || locked.Price != snapshot.Price ||
+		locked.ValidityDays != snapshot.ValidityDays || locked.ValidityUnit != snapshot.ValidityUnit {
+		return nil, paymentPlanNotAvailableError()
+	}
+	referenceGroup, err := tx.Client().Group.Query().Where(group.IDEQ(locked.GroupID)).Only(ctx)
+	if err != nil {
+		if dbent.IsNotFound(err) {
+			return nil, paymentPlanNotAvailableError()
+		}
+		return nil, fmt.Errorf("reload subscription group: %w", err)
+	}
+	if referenceGroup.Status != StatusActive || referenceGroup.SubscriptionType != SubscriptionTypeSubscription {
+		return nil, paymentPlanNotAvailableError()
+	}
+	return locked, nil
+}
+
+func paymentPlanNotAvailableError() error {
+	return infraerrors.NotFound("PLAN_NOT_AVAILABLE", "plan not found or not for sale")
 }
 
 func (s *PaymentService) allocateOutTradeNo(ctx context.Context, tx *dbent.Tx) (string, error) {

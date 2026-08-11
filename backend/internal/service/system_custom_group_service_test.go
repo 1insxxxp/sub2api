@@ -16,6 +16,7 @@ type systemCustomGroupRepositoryStub struct {
 	createdModels []SystemCustomGroupModelInput
 	updatedGroup  *Group
 	updatedModels []SystemCustomGroupModelInput
+	updateErr     error
 	stored        *SystemCustomGroup
 	deletedID     int64
 	deleteErr     error
@@ -33,6 +34,9 @@ func (s *systemCustomGroupRepositoryStub) DeleteWithImpact(_ context.Context, gr
 }
 
 func (s *systemCustomGroupRepositoryStub) Update(_ context.Context, group *Group, models []SystemCustomGroupModelInput) error {
+	if s.updateErr != nil {
+		return s.updateErr
+	}
 	copy := *group
 	s.updatedGroup = &copy
 	s.updatedModels = append([]SystemCustomGroupModelInput(nil), models...)
@@ -174,6 +178,55 @@ func TestUpdateSystemCustomGroupNormalizesContainer(t *testing.T) {
 	require.Equal(t, 1.0, repo.updatedGroup.RateMultiplier)
 	require.True(t, repo.updatedGroup.SystemCustomRoutingEnabled)
 	require.Equal(t, "alias", repo.updatedModels[0].PublicModel)
+}
+
+func TestUpdateSystemCustomGroupInvalidatesGroupAuthCacheAfterRepositoryCommit(t *testing.T) {
+	repo := &systemCustomGroupRepositoryStub{stored: &SystemCustomGroup{Group: Group{
+		ID: 99, Name: "old", Platform: PlatformComposite, SubscriptionType: SubscriptionTypeSubscription,
+		SystemCustomRoutingEnabled: true, IsExclusive: true, RateMultiplier: 1, Status: StatusActive,
+	}}}
+	authCache := &authCacheInvalidatorStub{}
+	svc := NewSystemCustomGroupServiceWithCacheInvalidation(
+		repo,
+		systemCustomSourceGroupRepositoryStub{groups: map[int64]*Group{10: activeDirectSystemCustomSource(10, PlatformAnthropic)}},
+		systemCustomModelCatalogStub{models: map[int64][]string{10: {"model-a"}}},
+		authCache,
+		nil,
+	)
+
+	_, err := svc.Update(context.Background(), 99, UpdateSystemCustomGroupRequest{
+		Name: "changed", DefaultValidityDays: 30,
+		Models: []SystemCustomGroupModelInput{{PublicModel: "alias", SourceGroupID: 10, SourceModel: "model-a", Enabled: true}},
+	})
+
+	require.NoError(t, err)
+	require.Equal(t, []int64{99}, authCache.groupIDs)
+}
+
+func TestUpdateSystemCustomGroupDoesNotInvalidateGroupAuthCacheWhenRepositoryFails(t *testing.T) {
+	repo := &systemCustomGroupRepositoryStub{
+		stored: &SystemCustomGroup{Group: Group{
+			ID: 99, Name: "old", Platform: PlatformComposite, SubscriptionType: SubscriptionTypeSubscription,
+			SystemCustomRoutingEnabled: true, IsExclusive: true, RateMultiplier: 1, Status: StatusActive,
+		}},
+		updateErr: errors.New("write failed"),
+	}
+	authCache := &authCacheInvalidatorStub{}
+	svc := NewSystemCustomGroupServiceWithCacheInvalidation(
+		repo,
+		systemCustomSourceGroupRepositoryStub{groups: map[int64]*Group{10: activeDirectSystemCustomSource(10, PlatformAnthropic)}},
+		systemCustomModelCatalogStub{models: map[int64][]string{10: {"model-a"}}},
+		authCache,
+		nil,
+	)
+
+	_, err := svc.Update(context.Background(), 99, UpdateSystemCustomGroupRequest{
+		Name: "changed", DefaultValidityDays: 30,
+		Models: []SystemCustomGroupModelInput{{PublicModel: "alias", SourceGroupID: 10, SourceModel: "model-a", Enabled: true}},
+	})
+
+	require.Error(t, err)
+	require.Empty(t, authCache.groupIDs)
 }
 
 func TestValidateSystemCustomRoutesRejectsDuplicatePublicNameCaseInsensitive(t *testing.T) {

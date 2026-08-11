@@ -64,6 +64,16 @@ func (r *systemCustomGroupRepository) Update(ctx context.Context, groupIn *servi
 	}
 	defer func() { _ = tx.Rollback() }()
 	client := tx.Client()
+	if err := groupref.LockGroupReferenceWrites(ctx, tx, groupIn.ID); err != nil {
+		return fmt.Errorf("lock system custom group references for update: %w", err)
+	}
+	isSystemCustom, err := lockSystemCustomGroupForDelete(ctx, client, groupIn.ID)
+	if err != nil {
+		return err
+	}
+	if !isSystemCustom {
+		return service.ErrSystemCustomGroupNotFound
+	}
 	if err := updateSystemCustomGroupRecord(ctx, client, groupIn); err != nil {
 		return err
 	}
@@ -180,12 +190,18 @@ func systemCustomGroupReferencesExist(ctx context.Context, client *dbent.Client,
 	queries := []struct {
 		label string
 		sql   string
+		args  []any
 	}{
-		{label: "active plan", sql: "SELECT EXISTS (SELECT 1 FROM subscription_plans WHERE group_id = $1 AND for_sale = TRUE)"},
-		{label: "active subscription", sql: "SELECT EXISTS (SELECT 1 FROM user_subscriptions WHERE group_id = $1 AND deleted_at IS NULL AND status = 'active' AND expires_at > NOW())"},
+		{label: "active plan", sql: "SELECT EXISTS (SELECT 1 FROM subscription_plans WHERE group_id = $1 AND for_sale = TRUE)", args: []any{groupID}},
+		{label: "active subscription", sql: "SELECT EXISTS (SELECT 1 FROM user_subscriptions WHERE group_id = $1 AND deleted_at IS NULL AND status = 'active' AND expires_at > NOW())", args: []any{groupID}},
+		{
+			label: "fulfillable subscription order",
+			sql:   "SELECT EXISTS (SELECT 1 FROM payment_orders WHERE status IN ($2, $3, $4) AND (subscription_group_id = $1 OR plan_id IN (SELECT id FROM subscription_plans WHERE group_id = $1)))",
+			args:  []any{groupID, service.OrderStatusPending, service.OrderStatusPaid, service.OrderStatusRecharging},
+		},
 	}
 	for _, query := range queries {
-		rows, err := client.QueryContext(ctx, query.sql, groupID)
+		rows, err := client.QueryContext(ctx, query.sql, query.args...)
 		if err != nil {
 			return false, systemCustomGroupDeleteTransactionError("check system custom group "+query.label+" reference", err)
 		}
@@ -341,7 +357,7 @@ func createSystemCustomRouteSnapshot(ctx context.Context, client *dbent.Client, 
 
 func updateSystemCustomGroupRecord(ctx context.Context, client *dbent.Client, groupIn *service.Group) error {
 	builder := client.Group.Update().
-		Where(group.IDEQ(groupIn.ID), group.SystemCustomRoutingEnabledEQ(true)).
+		Where(group.IDEQ(groupIn.ID), group.DeletedAtIsNil(), group.SystemCustomRoutingEnabledEQ(true)).
 		SetName(groupIn.Name).
 		SetDescription(groupIn.Description).
 		SetPlatform(service.PlatformComposite).

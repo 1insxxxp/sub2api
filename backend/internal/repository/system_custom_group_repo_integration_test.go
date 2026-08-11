@@ -13,6 +13,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/apikey"
 	"github.com/Wei-Shaw/sub2api/ent/group"
 	"github.com/Wei-Shaw/sub2api/ent/systemcustomgroupmodel"
+	"github.com/Wei-Shaw/sub2api/internal/payment"
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
 	"github.com/Wei-Shaw/sub2api/internal/service"
 	"github.com/stretchr/testify/require"
@@ -163,6 +164,83 @@ func TestSystemCustomGroupRepositoryDeleteRejectsCurrentActiveSubscription(t *te
 	err := repo.Delete(ctx, container.ID)
 	require.ErrorIs(t, err, service.ErrSystemCustomGroupInUse)
 	requireSystemCustomContainerAndRouteExist(t, container.ID)
+}
+
+func TestSystemCustomGroupRepositoryDeleteProtectsFulfillableSubscriptionOrders(t *testing.T) {
+	tests := []struct {
+		name       string
+		status     string
+		blocked    bool
+		planIDOnly bool
+	}{
+		{name: service.OrderStatusPending, status: service.OrderStatusPending, blocked: true},
+		{name: service.OrderStatusPaid, status: service.OrderStatusPaid, blocked: true},
+		{name: service.OrderStatusRecharging, status: service.OrderStatusRecharging, blocked: true},
+		{name: "PENDING_PLAN_ID_ONLY", status: service.OrderStatusPending, blocked: true, planIDOnly: true},
+		{name: service.OrderStatusCompleted, status: service.OrderStatusCompleted, blocked: false},
+		{name: service.OrderStatusCancelled, status: service.OrderStatusCancelled, blocked: false},
+		{name: service.OrderStatusExpired, status: service.OrderStatusExpired, blocked: false},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx := context.Background()
+			repo := NewSystemCustomGroupRepository(integrationEntClient)
+			container, _ := createDeletableSystemCustomGroupForIntegration(t, repo, "order-"+tc.status)
+			plan, err := integrationEntClient.SubscriptionPlan.Create().
+				SetGroupID(container.ID).
+				SetName("retired plan").
+				SetPrice(10).
+				SetValidityDays(30).
+				SetValidityUnit("day").
+				SetForSale(false).
+				Save(ctx)
+			require.NoError(t, err)
+			user := mustCreateUser(t, integrationEntClient, &service.User{})
+			order, err := createSystemCustomSubscriptionOrderForIntegration(ctx, user, plan, tc.status, tc.planIDOnly)
+			require.NoError(t, err)
+			t.Cleanup(func() {
+				_, _ = integrationDB.ExecContext(context.Background(), "DELETE FROM payment_orders WHERE id = $1", order.ID)
+				_, _ = integrationDB.ExecContext(context.Background(), "DELETE FROM subscription_plans WHERE id = $1", plan.ID)
+				_, _ = integrationDB.ExecContext(context.Background(), "DELETE FROM users WHERE id = $1", user.ID)
+			})
+
+			err = repo.Delete(ctx, container.ID)
+			if tc.blocked {
+				require.ErrorIs(t, err, service.ErrSystemCustomGroupInUse)
+				requireSystemCustomContainerAndRouteExist(t, container.ID)
+				return
+			}
+			require.NoError(t, err)
+			var deleted int
+			require.NoError(t, integrationDB.QueryRowContext(ctx, "SELECT COUNT(*) FROM groups WHERE id = $1 AND deleted_at IS NOT NULL", container.ID).Scan(&deleted))
+			require.Equal(t, 1, deleted)
+		})
+	}
+}
+
+func createSystemCustomSubscriptionOrderForIntegration(ctx context.Context, user *service.User, plan *dbent.SubscriptionPlan, status string, planIDOnly bool) (*dbent.PaymentOrder, error) {
+	builder := integrationEntClient.PaymentOrder.Create().
+		SetUserID(user.ID).
+		SetUserEmail(user.Email).
+		SetUserName(user.Username).
+		SetAmount(plan.Price).
+		SetPayAmount(plan.Price).
+		SetRechargeCode(fmt.Sprintf("ORDER-%d", time.Now().UnixNano())).
+		SetOutTradeNo(fmt.Sprintf("TRADE-%d", time.Now().UnixNano())).
+		SetPaymentType(payment.TypeAlipay).
+		SetPaymentTradeNo("").
+		SetOrderType(payment.OrderTypeSubscription).
+		SetPlanID(plan.ID).
+		SetSubscriptionDays(30).
+		SetStatus(status).
+		SetExpiresAt(time.Now().Add(time.Hour)).
+		SetClientIP("127.0.0.1").
+		SetSrcHost("test.local")
+	if !planIDOnly {
+		builder.SetSubscriptionGroupID(plan.GroupID)
+	}
+	return builder.Save(ctx)
 }
 
 func TestSystemCustomGroupRepositoryDeleteRejectsActiveSubscriptionBeforeItsStartTime(t *testing.T) {
@@ -340,6 +418,140 @@ func TestSystemCustomGroupRepositoryDeleteSerializesConcurrentActiveSubscription
 	require.ErrorIs(t, <-writerResult, service.ErrGroupNotFound)
 	require.Zero(t, sub.ID)
 	requireDeletedGroupHasNoEffectiveReferences(t, ctx, container.ID)
+}
+
+func TestSystemCustomGroupRepositoryDeleteSerializesConcurrentSubscriptionOrderCreate(t *testing.T) {
+	ctx := context.Background()
+	repo := NewSystemCustomGroupRepository(integrationEntClient)
+	container, _ := createDeletableSystemCustomGroupForIntegration(t, repo, "race-order-create")
+	plan, err := integrationEntClient.SubscriptionPlan.Create().
+		SetGroupID(container.ID).
+		SetName("racing subscription plan").
+		SetPrice(10).
+		SetValidityDays(30).
+		SetValidityUnit("day").
+		SetForSale(true).
+		Save(ctx)
+	require.NoError(t, err)
+	user := mustCreateUser(t, integrationEntClient, &service.User{})
+	// Simulate a request that captured an available plan before an administrator
+	// retired it. Delete may now proceed, while the stale order snapshot must wait
+	// for the same group lock and fail after retirement commits.
+	_, err = integrationEntClient.SubscriptionPlan.UpdateOneID(plan.ID).SetForSale(false).Save(ctx)
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		_, _ = integrationDB.ExecContext(context.Background(), "DELETE FROM payment_orders WHERE subscription_group_id = $1", container.ID)
+		_, _ = integrationDB.ExecContext(context.Background(), "DELETE FROM subscription_plans WHERE id = $1", plan.ID)
+		_, _ = integrationDB.ExecContext(context.Background(), "DELETE FROM users WHERE id = $1", user.ID)
+	})
+
+	blocker, err := integrationDB.BeginTx(ctx, nil)
+	require.NoError(t, err)
+	defer func() { _ = blocker.Rollback() }()
+	var lockedID int64
+	require.NoError(t, blocker.QueryRowContext(ctx, "SELECT id FROM groups WHERE id = $1 FOR UPDATE", container.ID).Scan(&lockedID))
+
+	deleteResult := make(chan error, 1)
+	deleteCtx, cancelDelete := context.WithTimeout(ctx, 5*time.Second)
+	defer cancelDelete()
+	go func() { deleteResult <- repo.Delete(deleteCtx, container.ID) }()
+	requireSystemCustomDeleteWaitingOnGroupRow(t, ctx)
+
+	writerResult := make(chan error, 1)
+	writerCtx, cancelWriter := context.WithTimeout(ctx, 5*time.Second)
+	defer cancelWriter()
+	go func() { writerResult <- createPendingSubscriptionOrderWithProductionLock(writerCtx, user, plan) }()
+	requireGroupReferenceWriterWaiting(t, ctx)
+
+	require.NoError(t, blocker.Rollback())
+	require.NoError(t, <-deleteResult)
+	requirePaymentPlanUnavailableIntegrationError(t, <-writerResult)
+	var orders int
+	require.NoError(t, integrationDB.QueryRowContext(ctx, "SELECT COUNT(*) FROM payment_orders WHERE subscription_group_id = $1 AND status IN ('PENDING', 'PAID', 'RECHARGING')", container.ID).Scan(&orders))
+	require.Zero(t, orders)
+	requireDeletedGroupHasNoEffectiveReferences(t, ctx, container.ID)
+}
+
+func createPendingSubscriptionOrderWithProductionLock(ctx context.Context, user *service.User, snapshot *dbent.SubscriptionPlan) error {
+	tx, err := integrationEntClient.Tx(ctx)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+	locked, err := service.LockAndRevalidateSubscriptionOrderPlan(ctx, tx, snapshot)
+	if err != nil {
+		return err
+	}
+	_, err = tx.PaymentOrder.Create().
+		SetUserID(user.ID).
+		SetUserEmail(user.Email).
+		SetUserName(user.Username).
+		SetAmount(locked.Price).
+		SetPayAmount(locked.Price).
+		SetRechargeCode(fmt.Sprintf("RACE-ORDER-%d", time.Now().UnixNano())).
+		SetOutTradeNo(fmt.Sprintf("RACE-TRADE-%d", time.Now().UnixNano())).
+		SetPaymentType(payment.TypeAlipay).
+		SetPaymentTradeNo("").
+		SetOrderType(payment.OrderTypeSubscription).
+		SetPlanID(locked.ID).
+		SetSubscriptionGroupID(locked.GroupID).
+		SetSubscriptionDays(30).
+		SetStatus(service.OrderStatusPending).
+		SetExpiresAt(time.Now().Add(time.Hour)).
+		SetClientIP("127.0.0.1").
+		SetSrcHost("test.local").
+		Save(ctx)
+	if err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
+func requirePaymentPlanUnavailableIntegrationError(t *testing.T, err error) {
+	t.Helper()
+	require.Error(t, err)
+	var appErr *infraerrors.ApplicationError
+	require.True(t, errors.As(err, &appErr))
+	require.Equal(t, "PLAN_NOT_AVAILABLE", appErr.Reason)
+}
+
+func TestSystemCustomGroupRepositoryUpdateWaitsForDeleteAndCannotRecreateRoutes(t *testing.T) {
+	ctx := context.Background()
+	repo := NewSystemCustomGroupRepository(integrationEntClient)
+	container, source := createDeletableSystemCustomGroupForIntegration(t, repo, "race-update-delete")
+
+	blocker, err := integrationDB.BeginTx(ctx, nil)
+	require.NoError(t, err)
+	defer func() { _ = blocker.Rollback() }()
+	var lockedID int64
+	require.NoError(t, blocker.QueryRowContext(ctx, "SELECT id FROM groups WHERE id = $1 FOR UPDATE", container.ID).Scan(&lockedID))
+
+	deleteResult := make(chan error, 1)
+	deleteCtx, cancelDelete := context.WithTimeout(ctx, 5*time.Second)
+	defer cancelDelete()
+	go func() { deleteResult <- repo.Delete(deleteCtx, container.ID) }()
+	requireSystemCustomDeleteWaitingOnGroupRow(t, ctx)
+
+	updatedGroup := *container
+	updatedGroup.Name += "-updated"
+	updateResult := make(chan error, 1)
+	updateCtx, cancelUpdate := context.WithTimeout(ctx, 5*time.Second)
+	defer cancelUpdate()
+	go func() {
+		updateResult <- repo.Update(updateCtx, &updatedGroup, []service.SystemCustomGroupModelInput{
+			{PublicModel: "updated-alias", SourceGroupID: source.ID, SourceModel: "source-model", Enabled: true},
+		})
+	}()
+	requireGroupReferenceWriterWaiting(t, ctx)
+
+	require.NoError(t, blocker.Rollback())
+	require.NoError(t, <-deleteResult)
+	require.ErrorIs(t, <-updateResult, service.ErrSystemCustomGroupNotFound)
+	var routes, outbox int
+	require.NoError(t, integrationDB.QueryRowContext(ctx, "SELECT COUNT(*) FROM system_custom_group_models WHERE group_id = $1", container.ID).Scan(&routes))
+	require.NoError(t, integrationDB.QueryRowContext(ctx, "SELECT COUNT(*) FROM scheduler_outbox WHERE group_id = $1", container.ID).Scan(&outbox))
+	require.Zero(t, routes)
+	require.Equal(t, 1, outbox, "only the delete event may remain")
 }
 
 func requireSystemCustomDeleteWaitingOnGroupRow(t *testing.T, ctx context.Context) {
