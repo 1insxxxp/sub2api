@@ -165,7 +165,7 @@ func TestRecordCyberPolicyIfMarked_SystemCustomContextBillsSubscriptionAndLogsBo
 	resolution := service.SystemCustomGroupResolution{
 		BillingGroupID: billingGroupID,
 		SourceGroupID:  sourceGroupID,
-		PublicModel:    "tavern-gpt",
+		PublicModel:    "gpt-5.4-mini",
 		SourceModel:    "gpt-5.1",
 		SourcePlatform: service.PlatformOpenAI,
 	}
@@ -196,16 +196,26 @@ func TestRecordCyberPolicyIfMarked_SystemCustomContextBillsSubscriptionAndLogsBo
 	)
 	h := &OpenAIGatewayHandler{gatewayService: gatewayService}
 	user := &service.User{ID: userID}
-	sourceGroup := &service.Group{ID: sourceGroupID, Platform: service.PlatformOpenAI, RateMultiplier: 1}
+	sourceGroup := &service.Group{ID: sourceGroupID, Platform: service.PlatformOpenAI, RateMultiplier: 1.4}
 	billingGroup := &service.Group{ID: billingGroupID, Platform: service.PlatformComposite, SubscriptionType: service.SubscriptionTypeSubscription, SystemCustomRoutingEnabled: true}
 	keyGroupID := sourceGroupID
 	apiKey := &service.APIKey{ID: 11, UserID: userID, User: user, GroupID: &keyGroupID, Group: sourceGroup}
 	subscription := &service.UserSubscription{ID: subscriptionID, UserID: userID, GroupID: billingGroupID, Group: billingGroup}
 
+	channelFields := service.ChannelUsageFields{
+		ChannelID:          99,
+		OriginalModel:      resolution.PublicModel,
+		ChannelMappedModel: resolution.SourceModel,
+		BillingModelSource: service.BillingModelSourceRequested,
+		ModelMappingChain:  resolution.PublicModel + "→" + resolution.SourceModel,
+	}
 	h.recordCyberPolicyIfMarked(c, apiKey, &service.Account{ID: 33, Platform: service.PlatformOpenAI}, subscription,
-		resolution.SourceModel, true, "", service.ChannelUsageFields{}, "payload-hash")
-	expectedCost, err := billingService.CalculateCost(resolution.SourceModel, service.UsageTokens{InputTokens: 1000, OutputTokens: 100}, 1)
+		resolution.SourceModel, true, "", channelFields, "payload-hash")
+	expectedCost, err := billingService.CalculateCost(resolution.SourceModel, service.UsageTokens{InputTokens: 1000, OutputTokens: 100}, sourceGroup.RateMultiplier)
 	require.NoError(t, err)
+	publicCost, err := billingService.CalculateCost(resolution.PublicModel, service.UsageTokens{InputTokens: 1000, OutputTokens: 100}, sourceGroup.RateMultiplier)
+	require.NoError(t, err)
+	require.NotEqual(t, expectedCost.ActualCost, publicCost.ActualCost, "fixture must distinguish public alias and concrete source pricing")
 
 	select {
 	case cmd := <-billingRepo.commands:
@@ -225,6 +235,11 @@ func TestRecordCyberPolicyIfMarked_SystemCustomContextBillsSubscriptionAndLogsBo
 		require.Equal(t, resolution.SourceModel, log.Model)
 		require.Nil(t, log.UpstreamModel, "cyber mark has no separate upstream response model")
 		require.InDelta(t, expectedCost.ActualCost, log.ActualCost, 1e-12)
+		require.NotEqual(t, publicCost.ActualCost, log.ActualCost)
+		require.NotNil(t, log.ModelMappingChain)
+		require.Equal(t, channelFields.ModelMappingChain, *log.ModelMappingChain)
+		require.NotNil(t, log.ChannelID)
+		require.Equal(t, channelFields.ChannelID, *log.ChannelID)
 		require.NotNil(t, log.GroupID)
 		require.Equal(t, billingGroupID, *log.GroupID)
 		require.NotNil(t, log.SourceGroupID)

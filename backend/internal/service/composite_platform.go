@@ -140,6 +140,19 @@ func requestedModelForUsage(ctx context.Context, fallback string) string {
 	return fallback
 }
 
+// requestedModelForBilling keeps BillingModelSourceRequested semantics for
+// ordinary traffic while separating a system custom route's public display
+// alias from its concrete pricing identity. The alias remains available via
+// requestedModelForUsage; only the billing candidate is anchored here.
+func requestedModelForBilling(ctx context.Context, billingModelSource, originalModel string) string {
+	if billingModelSource == BillingModelSourceRequested {
+		if resolution, ok := SystemCustomGroupResolutionFromContext(ctx); ok {
+			return resolution.SourceModel
+		}
+	}
+	return strings.TrimSpace(originalModel)
+}
+
 func CompositeRouteSourceFromContext(ctx context.Context) (string, bool) {
 	if ctx == nil {
 		return "", false

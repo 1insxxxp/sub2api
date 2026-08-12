@@ -227,6 +227,92 @@ func TestGatewayServiceRecordUsage_SystemCustomRouteBillsSubscriptionAndPersists
 	require.Equal(t, sourceGroup.RateMultiplier, usageRepo.lastLog.RateMultiplier)
 }
 
+func TestGatewayServiceRecordUsage_SystemCustomRequestedBillingUsesConcreteSourcePricing(t *testing.T) {
+	const (
+		billingGroupID = int64(111)
+		sourceGroupID  = int64(212)
+		subscriptionID = int64(313)
+		publicModel    = "gpt-5.4-mini"
+	)
+	tests := []struct {
+		name           string
+		platform       string
+		sourceModel    string
+		upstreamModel  string
+		useLongContext bool
+	}{
+		{name: "anthropic", platform: PlatformAnthropic, sourceModel: "claude-sonnet-4", upstreamModel: "claude-sonnet-4-20250514"},
+		{name: "gemini", platform: PlatformGemini, sourceModel: "gemini-2.5-pro", upstreamModel: "gemini-2.5-pro-preview", useLongContext: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			usageRepo := &openAIRecordUsageLogRepoStub{inserted: true}
+			billingRepo := &openAIRecordUsageBillingRepoStub{result: &UsageBillingApplyResult{Applied: true}}
+			userRepo := &openAIRecordUsageUserRepoStub{}
+			svc := newGatewayRecordUsageServiceWithBillingRepoForTest(usageRepo, billingRepo, userRepo, &openAIRecordUsageSubRepoStub{})
+			svc.resolver = newOpenAITokenImageChannelPricingResolverForTest(t, sourceGroupID, tt.sourceModel)
+
+			user := &User{ID: 32}
+			sourceGroup := &Group{ID: sourceGroupID, Platform: tt.platform, RateMultiplier: 1.75}
+			billingGroup := &Group{ID: billingGroupID, Platform: PlatformComposite, SubscriptionType: SubscriptionTypeSubscription, SystemCustomRoutingEnabled: true}
+			subscription := &UserSubscription{ID: subscriptionID, UserID: user.ID, GroupID: billingGroupID, Group: billingGroup}
+			ctx := systemCustomUsageContext(billingGroupID, sourceGroupID, publicModel, tt.sourceModel, tt.platform)
+			result := &ForwardResult{
+				RequestID:     "system-custom-requested-" + tt.name,
+				Model:         tt.sourceModel,
+				UpstreamModel: tt.upstreamModel,
+				Usage:         ClaudeUsage{InputTokens: 1200, OutputTokens: 300},
+				Duration:      time.Second,
+			}
+			fields := ChannelUsageFields{
+				ChannelID:          77,
+				OriginalModel:      publicModel,
+				ChannelMappedModel: tt.sourceModel,
+				BillingModelSource: BillingModelSourceRequested,
+				ModelMappingChain:  publicModel + "→" + tt.sourceModel + "→" + tt.upstreamModel,
+			}
+			key := &APIKey{ID: 21, UserID: user.ID, User: user, GroupID: i64p(sourceGroupID), Group: sourceGroup}
+			account := &Account{ID: 43, Platform: tt.platform}
+
+			var err error
+			if tt.useLongContext {
+				err = svc.RecordUsageWithLongContext(ctx, &RecordUsageLongContextInput{
+					Result: result, APIKey: key, User: user, Account: account, Subscription: subscription,
+					LongContextThreshold: 200_000, LongContextMultiplier: 2, ChannelUsageFields: fields,
+				})
+			} else {
+				err = svc.RecordUsage(ctx, &RecordUsageInput{
+					Result: result, APIKey: key, User: user, Account: account, Subscription: subscription,
+					ChannelUsageFields: fields,
+				})
+			}
+			require.NoError(t, err)
+
+			// newOpenAITokenImageChannelPricingResolverForTest configures the source
+			// channel at $3/M input and $15/M output. The cloned source group's
+			// multiplier must still apply to the monthly subscription cost.
+			wantSourceCost := (1200*3e-6 + 300*15e-6) * sourceGroup.RateMultiplier
+			publicCost, calcErr := svc.billingService.CalculateCost(publicModel, UsageTokens{InputTokens: 1200, OutputTokens: 300}, sourceGroup.RateMultiplier)
+			require.NoError(t, calcErr)
+			require.NotEqual(t, wantSourceCost, publicCost.ActualCost, "fixture must distinguish public alias pricing from source channel pricing")
+
+			require.NotNil(t, billingRepo.lastCmd)
+			require.InDelta(t, wantSourceCost, billingRepo.lastCmd.SubscriptionCost, 1e-12)
+			require.Zero(t, billingRepo.lastCmd.BalanceCost)
+			require.NotNil(t, usageRepo.lastLog)
+			require.InDelta(t, wantSourceCost, usageRepo.lastLog.ActualCost, 1e-12)
+			require.NotEqual(t, publicCost.ActualCost, usageRepo.lastLog.ActualCost)
+			require.Equal(t, publicModel, usageRepo.lastLog.RequestedModel)
+			require.Equal(t, tt.sourceModel, usageRepo.lastLog.Model)
+			require.NotNil(t, usageRepo.lastLog.UpstreamModel)
+			require.Equal(t, tt.upstreamModel, *usageRepo.lastLog.UpstreamModel)
+			require.NotNil(t, usageRepo.lastLog.ModelMappingChain)
+			require.Equal(t, fields.ModelMappingChain, *usageRepo.lastLog.ModelMappingChain)
+		})
+	}
+}
+
 func TestOpenAIGatewayServiceRecordUsage_SystemCustomRouteBillsSameSubscriptionFromAnotherSource(t *testing.T) {
 	const (
 		billingGroupID = int64(101)
@@ -277,6 +363,69 @@ func TestOpenAIGatewayServiceRecordUsage_SystemCustomRouteBillsSameSubscriptionF
 	require.Equal(t, billingGroupID, *usageRepo.lastLog.GroupID)
 	require.Equal(t, sourceGroupID, *usageRepo.lastLog.SourceGroupID)
 	require.Equal(t, sourceGroup.RateMultiplier, usageRepo.lastLog.RateMultiplier)
+}
+
+func TestOpenAIGatewayServiceRecordUsage_SystemCustomRequestedBillingUsesConcreteSourcePricing(t *testing.T) {
+	const (
+		billingGroupID = int64(121)
+		sourceGroupID  = int64(224)
+		subscriptionID = int64(323)
+		publicModel    = "gpt-5.4-mini"
+		sourceModel    = "gpt-5.1"
+		upstreamModel  = "gpt-5.1-2026-01-01"
+	)
+	usageRepo := &openAIRecordUsageLogRepoStub{inserted: true}
+	billingRepo := &openAIRecordUsageBillingRepoStub{result: &UsageBillingApplyResult{Applied: true}}
+	userRepo := &openAIRecordUsageUserRepoStub{}
+	svc := newOpenAIRecordUsageServiceWithBillingRepoForTest(usageRepo, billingRepo, userRepo, &openAIRecordUsageSubRepoStub{}, nil)
+	svc.resolver = newOpenAITokenImageChannelPricingResolverForTest(t, sourceGroupID, sourceModel)
+
+	user := &User{ID: 42}
+	sourceGroup := &Group{ID: sourceGroupID, Platform: PlatformOpenAI, RateMultiplier: 1.6}
+	billingGroup := &Group{ID: billingGroupID, Platform: PlatformComposite, SubscriptionType: SubscriptionTypeSubscription, SystemCustomRoutingEnabled: true}
+	subscription := &UserSubscription{ID: subscriptionID, UserID: user.ID, GroupID: billingGroupID, Group: billingGroup}
+	ctx := systemCustomUsageContext(billingGroupID, sourceGroupID, publicModel, sourceModel, PlatformOpenAI)
+	fields := ChannelUsageFields{
+		ChannelID:          88,
+		OriginalModel:      publicModel,
+		ChannelMappedModel: sourceModel,
+		BillingModelSource: BillingModelSourceRequested,
+		ModelMappingChain:  publicModel + "→" + sourceModel + "→" + upstreamModel,
+	}
+
+	err := svc.RecordUsage(ctx, &OpenAIRecordUsageInput{
+		Result: &OpenAIForwardResult{
+			RequestID:     "system-custom-openai-requested",
+			Model:         sourceModel,
+			BillingModel:  sourceModel,
+			UpstreamModel: upstreamModel,
+			Usage:         OpenAIUsage{InputTokens: 1200, OutputTokens: 300},
+			Duration:      time.Second,
+		},
+		APIKey:  &APIKey{ID: 22, UserID: user.ID, User: user, GroupID: i64p(sourceGroupID), Group: sourceGroup},
+		User:    user,
+		Account: &Account{ID: 54, Platform: PlatformOpenAI}, Subscription: subscription,
+		ChannelUsageFields: fields,
+	})
+	require.NoError(t, err)
+
+	wantSourceCost := (1200*3e-6 + 300*15e-6) * sourceGroup.RateMultiplier
+	publicCost, calcErr := svc.billingService.CalculateCost(publicModel, UsageTokens{InputTokens: 1200, OutputTokens: 300}, sourceGroup.RateMultiplier)
+	require.NoError(t, calcErr)
+	require.NotEqual(t, wantSourceCost, publicCost.ActualCost, "fixture must distinguish public alias pricing from source channel pricing")
+
+	require.NotNil(t, billingRepo.lastCmd)
+	require.InDelta(t, wantSourceCost, billingRepo.lastCmd.SubscriptionCost, 1e-12)
+	require.Zero(t, billingRepo.lastCmd.BalanceCost)
+	require.NotNil(t, usageRepo.lastLog)
+	require.InDelta(t, wantSourceCost, usageRepo.lastLog.ActualCost, 1e-12)
+	require.NotEqual(t, publicCost.ActualCost, usageRepo.lastLog.ActualCost)
+	require.Equal(t, publicModel, usageRepo.lastLog.RequestedModel)
+	require.Equal(t, sourceModel, usageRepo.lastLog.Model)
+	require.NotNil(t, usageRepo.lastLog.UpstreamModel)
+	require.Equal(t, upstreamModel, *usageRepo.lastLog.UpstreamModel)
+	require.NotNil(t, usageRepo.lastLog.ModelMappingChain)
+	require.Equal(t, fields.ModelMappingChain, *usageRepo.lastLog.ModelMappingChain)
 }
 
 func TestOpenAIGatewayServiceRecordUsage_SystemCustomMissingPricingFailsClosed(t *testing.T) {
