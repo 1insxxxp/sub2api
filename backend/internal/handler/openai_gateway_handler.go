@@ -144,6 +144,13 @@ func usageRecordContext(parent context.Context, base context.Context) context.Co
 	if parent == nil {
 		return base
 	}
+	// Usage recording runs on a detached worker context. Preserve the complete
+	// system custom route identity as one value and let the service helper
+	// restore its public/upstream model projections together, avoiding drift
+	// between subscription billing and usage-log model attribution.
+	if resolution, ok := service.SystemCustomGroupResolutionFromContext(parent); ok {
+		base = service.WithSystemCustomGroupResolution(base, resolution)
+	}
 	if clientRequestID, _ := parent.Value(ctxkey.ClientRequestID).(string); strings.TrimSpace(clientRequestID) != "" {
 		base = context.WithValue(base, ctxkey.ClientRequestID, strings.TrimSpace(clientRequestID))
 	}
