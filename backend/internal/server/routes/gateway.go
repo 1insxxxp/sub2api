@@ -65,6 +65,17 @@ func RegisterGatewayRoutes(
 	isOpenAIGatewayPlatform := func(c *gin.Context) bool {
 		return getGroupPlatform(c) == service.PlatformOpenAI
 	}
+	isSystemCustomGroup := func(c *gin.Context) bool {
+		apiKey, ok := middleware.GetAPIKeyFromContext(c)
+		return ok && apiKey != nil && apiKey.Group != nil && apiKey.Group.IsSystemCustomRouteGroup()
+	}
+	codexModelsHandler := func(c *gin.Context) {
+		if isSystemCustomGroup(c) {
+			h.Gateway.SystemCustomCodexModels(c)
+			return
+		}
+		h.OpenAIGateway.CodexModels(c)
+	}
 	countTokensHandler := func(c *gin.Context) {
 		switch getGroupPlatform(c) {
 		case service.PlatformOpenAI:
@@ -76,8 +87,8 @@ func RegisterGatewayRoutes(
 		}
 	}
 	modelsHandler := func(c *gin.Context) {
-		if isOpenAIGatewayPlatform(c) && c.Query("client_version") != "" {
-			h.OpenAIGateway.CodexModels(c)
+		if c.Query("client_version") != "" && (isSystemCustomGroup(c) || isOpenAIGatewayPlatform(c)) {
+			codexModelsHandler(c)
 			return
 		}
 		h.Gateway.Models(c)
@@ -377,7 +388,7 @@ func RegisterGatewayRoutes(
 		codexDirect.GET("/responses", func(c *gin.Context) {
 			h.OpenAIGateway.ResponsesWebSocket(c)
 		})
-		codexDirect.GET("/models", h.OpenAIGateway.CodexModels)
+		codexDirect.GET("/models", codexModelsHandler)
 	}
 	// OpenAI Chat Completions API（不带v1前缀的别名）— auto-route based on group platform
 	r.POST("/chat/completions", bodyLimit, clientRequestID, opsErrorLogger, endpointNorm, gin.HandlerFunc(apiKeyAuth), systemTarget, customTarget, compositeTarget, requireGroupAnthropic, func(c *gin.Context) {

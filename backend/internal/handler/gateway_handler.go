@@ -1086,7 +1086,7 @@ func (h *GatewayHandler) Models(c *gin.Context) {
 			h.errorResponse(c, http.StatusServiceUnavailable, "service_unavailable_error", "System custom group is unavailable")
 			return
 		}
-		writeModelsList(c, service.PlatformComposite, models)
+		writeOpenAIModelsList(c, models)
 		return
 	}
 	if apiKey != nil && apiKey.CustomGroupID != nil {
@@ -1164,6 +1164,35 @@ func (h *GatewayHandler) Models(c *gin.Context) {
 		"object": "list",
 		"data":   claude.DefaultModels,
 	})
+}
+
+// SystemCustomCodexModels serves the local Codex manifest for a system custom
+// subscription key. The public aliases are authoritative, so this path never
+// asks a concrete source account for its upstream manifest.
+func (h *GatewayHandler) SystemCustomCodexModels(c *gin.Context) {
+	apiKey, ok := middleware2.GetAPIKeyFromContext(c)
+	if !ok || apiKey == nil || apiKey.Group == nil || !apiKey.Group.IsSystemCustomRouteGroup() {
+		h.errorResponse(c, http.StatusNotFound, "not_found_error", "Codex models manifest is only available for system custom subscription groups")
+		return
+	}
+	if h.apiKeyService == nil {
+		h.errorResponse(c, http.StatusServiceUnavailable, "service_unavailable_error", "System custom group is unavailable")
+		return
+	}
+	models, err := h.apiKeyService.ListSystemCustomGroupModels(c.Request.Context(), apiKey, "")
+	if err != nil {
+		h.errorResponse(c, http.StatusServiceUnavailable, "service_unavailable_error", "System custom group is unavailable")
+		return
+	}
+	type codexModel struct {
+		Slug        string `json:"slug"`
+		DisplayName string `json:"display_name"`
+	}
+	manifest := make([]codexModel, 0, len(models))
+	for _, model := range models {
+		manifest = append(manifest, codexModel{Slug: model, DisplayName: model})
+	}
+	c.JSON(http.StatusOK, gin.H{"models": manifest})
 }
 
 func (h *GatewayHandler) compositeAvailableModels(ctx context.Context, groupID *int64) []string {

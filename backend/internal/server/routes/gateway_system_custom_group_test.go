@@ -8,7 +8,6 @@ import (
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
-	"strings"
 	"testing"
 	"time"
 
@@ -258,27 +257,45 @@ func TestSystemCustomModelListsUseRealAuthSnapshotAndAliasesInRegisteredRouter(t
 	)
 
 	tests := []struct {
+		name string
 		path string
+		kind string
 		want []string
 	}{
-		{path: "/models", want: []string{"claude-monthly", "gemini-monthly"}},
-		{path: "/v1/models", want: []string{"claude-monthly", "gemini-monthly"}},
-		{path: "/v1/models?client_version=0.144.0", want: []string{"claude-monthly", "gemini-monthly"}},
-		{path: "/v1beta/models", want: []string{"models/gemini-monthly"}},
+		{name: "root standard", path: "/models", kind: "openai", want: []string{"claude-monthly", "gemini-monthly"}},
+		{name: "v1 standard", path: "/v1/models", kind: "openai", want: []string{"claude-monthly", "gemini-monthly"}},
+		{name: "root codex", path: "/models?client_version=0.144.0", kind: "codex", want: []string{"claude-monthly", "gemini-monthly"}},
+		{name: "v1 codex", path: "/v1/models?client_version=0.144.0", kind: "codex", want: []string{"claude-monthly", "gemini-monthly"}},
+		{name: "direct codex", path: "/backend-api/codex/models", kind: "codex", want: []string{"claude-monthly", "gemini-monthly"}},
+		{name: "gemini", path: "/v1beta/models", kind: "gemini", want: []string{"models/gemini-monthly"}},
 	}
 	for _, tt := range tests {
-		t.Run(tt.path, func(t *testing.T) {
+		t.Run(tt.name, func(t *testing.T) {
 			req := httptest.NewRequest(http.MethodGet, tt.path, nil)
 			req.Header.Set("Authorization", "Bearer "+apiKey.Key)
 			recorder := httptest.NewRecorder()
 			router.ServeHTTP(recorder, req)
 
 			require.Equal(t, http.StatusOK, recorder.Code, recorder.Body.String())
-			path := "data.#.id"
-			if strings.HasPrefix(tt.path, "/v1beta") {
-				path = "models.#.name"
+			resultPath := "data.#.id"
+			switch tt.kind {
+			case "codex":
+				resultPath = "models.#.slug"
+				require.False(t, gjson.Get(recorder.Body.String(), "object").Exists(), "Codex clients require a manifest, not the standard OpenAI list")
+			case "gemini":
+				resultPath = "models.#.name"
+			case "openai":
+				require.Equal(t, "list", gjson.Get(recorder.Body.String(), "object").String())
+				items := gjson.Get(recorder.Body.String(), "data").Array()
+				require.Len(t, items, len(tt.want))
+				for _, item := range items {
+					require.Equal(t, "model", item.Get("object").String())
+					require.Equal(t, gjson.Number, item.Get("created").Type)
+					require.Positive(t, item.Get("created").Int())
+					require.NotEmpty(t, item.Get("owned_by").String())
+				}
 			}
-			results := gjson.Get(recorder.Body.String(), path).Array()
+			results := gjson.Get(recorder.Body.String(), resultPath).Array()
 			got := make([]string, 0, len(results))
 			for _, result := range results {
 				got = append(got, result.String())

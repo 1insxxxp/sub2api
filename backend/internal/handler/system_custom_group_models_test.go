@@ -55,7 +55,7 @@ func (c systemCustomModelsCatalog) HasSchedulableAccountsForGroupPlatform(_ cont
 func TestSystemCustomGroupModelsExposesAvailableAliasesOnly(t *testing.T) {
 	handler, key := newSystemCustomModelsHandler(t)
 
-	for _, target := range []string{"/models", "/v1/models", "/v1/models?client_version=0.144.0"} {
+	for _, target := range []string{"/models", "/v1/models"} {
 		t.Run(target, func(t *testing.T) {
 			recorder, c := systemCustomModelsRequestContext(t, key, target)
 			handler.Models(c)
@@ -63,10 +63,30 @@ func TestSystemCustomGroupModelsExposesAvailableAliasesOnly(t *testing.T) {
 			require.Equal(t, http.StatusOK, recorder.Code)
 			require.Equal(t, "list", gjson.Get(recorder.Body.String(), "object").String())
 			require.Equal(t, []string{"claude-monthly", "gemini-monthly"}, gjsonStrings(recorder.Body.String(), "data.#.id"))
+			for _, item := range gjson.Get(recorder.Body.String(), "data").Array() {
+				require.Equal(t, "model", item.Get("object").String())
+				require.Equal(t, gjson.Number, item.Get("created").Type)
+				require.Positive(t, item.Get("created").Int())
+				require.NotEmpty(t, item.Get("owned_by").String())
+			}
 			require.NotContains(t, recorder.Body.String(), "claude-sonnet-4")
 			require.NotContains(t, recorder.Body.String(), "gemini-2.5-flash")
 		})
 	}
+}
+
+func TestSystemCustomCodexModelsExposesAliasManifestOnly(t *testing.T) {
+	handler, key := newSystemCustomModelsHandler(t)
+	recorder, c := systemCustomModelsRequestContext(t, key, "/v1/models?client_version=0.144.0")
+
+	handler.SystemCustomCodexModels(c)
+
+	require.Equal(t, http.StatusOK, recorder.Code)
+	require.Equal(t, []string{"claude-monthly", "gemini-monthly"}, gjsonStrings(recorder.Body.String(), "models.#.slug"))
+	require.Equal(t, []string{"claude-monthly", "gemini-monthly"}, gjsonStrings(recorder.Body.String(), "models.#.display_name"))
+	require.False(t, gjson.Get(recorder.Body.String(), "object").Exists())
+	require.NotContains(t, recorder.Body.String(), "claude-sonnet-4")
+	require.NotContains(t, recorder.Body.String(), "gemini-2.5-flash")
 }
 
 func gjsonStrings(body, path string) []string {
