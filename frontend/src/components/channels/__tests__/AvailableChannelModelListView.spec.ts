@@ -16,7 +16,7 @@ vi.mock('vue-i18n', async () => ({
   'availableChannels.catalog.moreOfferings': `还有 ${params?.count ?? 0} 个方案`,
   'availableChannels.catalog.channelsCount': `${params?.count ?? 0} 个渠道`,
   'availableChannels.catalog.groupsCount': `${params?.count ?? 0} 个分组`,
-  'availableChannels.catalog.showOfferings': '展开方案', 'availableChannels.catalog.hideOfferings': '收起方案',
+  'availableChannels.catalog.showOfferings': `查看渠道方案（${params?.count ?? 0}）`, 'availableChannels.catalog.hideOfferings': '收起渠道方案',
   'availableChannels.catalog.offeringsColumn': '方案', 'availableChannels.catalog.representativePrice': '代表价',
   'availableChannels.catalog.perMillion': '/ 1M token', 'availableChannels.catalog.perRequest': '/ 次',
   'availableChannels.catalog.perImage': '/ 张', 'availableChannels.catalog.tieredSummary': '阶梯价 · 展开查看',
@@ -77,7 +77,7 @@ describe('AvailableChannelModelList', () => {
     expect(wrapper.get('[data-testid="representative-official"]').text()).toContain('代表价')
     expect(wrapper.find('[data-testid="offering-details"]').exists()).toBe(false)
   })
-  it('renders a colorful card grid with immediate official/site savings comparison', () => {
+  it('renders a project-native card grid with immediate official/site savings comparison', () => {
     const wrapper = mount(AvailableChannelModelList, { props: { entries: [entry('gemini-pro', [offering('a', 'Alpha', 'Retail', 0.00001, 0.000004)])] }, global: { stubs } })
     const card = wrapper.get('[data-testid="model-card"]')
     expect(wrapper.get('[data-testid="model-card-grid"]').classes()).toContain('grid')
@@ -88,6 +88,10 @@ describe('AvailableChannelModelList', () => {
     expect(card.get('[data-testid="primary-official-price"]').classes()).toContain('line-through')
     expect(card.get('[data-testid="savings-badge"]').text()).toContain('60%')
     expect(card.text()).toContain('输入')
+    expect(card.classes()).toContain('model-card-surface')
+    expect(card.classes()).not.toContain('hover:-translate-y-0.5')
+    expect(card.find('.bg-gradient-to-r').exists()).toBe(false)
+    expect(card.get('[data-testid="model-price-summary"]').classes()).not.toContain('bg-gradient-to-br')
   })
   it('compares savings after converting the official USD price to CNY', () => {
     const converted = offering('a', 'Alpha', 'Retail', 0.000005, 0.0000006)
@@ -202,7 +206,7 @@ describe('AvailableChannelModelList', () => {
     const rows = wrapper.findAll('[data-testid="model-card"]')
     expect(rows[0].get('[data-testid="representative-official"]').text()).toContain('$0')
     expect(rows[0].get('[data-testid="representative-site"]').text()).toContain('¥0')
-    expect(rows[0].text()).toContain('还有 2 个方案'); expect(rows[1].text()).toContain('暂未定价')
+    expect(rows[0].text()).toContain('查看渠道方案（3）'); expect(rows[1].text()).toContain('暂未定价')
   })
   it('expands exact offerings by mouse and keyboard with unique aria', async () => {
     const wrapper = mount(AvailableChannelModelList, { props: { entries: [
@@ -220,6 +224,8 @@ describe('AvailableChannelModelList', () => {
     expect(source).toContain('<AvailableChannelOfferingCard')
     expect(source).toContain(':offering="offering"')
     expect(source).not.toContain('AvailableChannelModelPrice')
+    expect(toggles[0].text()).toContain('收起渠道方案')
+    expect(toggles[0].find('svg[aria-hidden="true"]').exists()).toBe(true)
     await toggles[0].trigger('keydown', { key: ' ' }); expect(wrapper.find('[data-testid="offering-details"]').exists()).toBe(false)
   })
   it('uses collision-safe details ids and summarizes request/image pricing', async () => {
@@ -257,6 +263,8 @@ describe('AvailableChannelModelList', () => {
     const source = readFileSync(resolve(dirname(fileURLToPath(import.meta.url)), '../AvailableChannelModelList.vue'), 'utf8')
     expect(source).toContain('md:grid-cols-2'); expect(source).toContain('2xl:grid-cols-3'); expect(source).toContain('min-h-11')
     expect(source).toContain('[overflow-wrap:anywhere]'); expect(source).toContain('motion-reduce:transition-none')
+    expect(source).toContain('content-visibility: auto')
+    expect(source).toContain('contain-intrinsic-size')
     expect(source).not.toMatch(/fetch\(|axios|\/api\//); expect(source.match(/v-for="entry in entries"/g)).toHaveLength(1)
     expect(source).not.toContain('Math.random')
   })
