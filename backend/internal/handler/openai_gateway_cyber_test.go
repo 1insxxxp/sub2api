@@ -1,10 +1,14 @@
 package handler
 
 import (
+	"context"
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/Wei-Shaw/sub2api/internal/config"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/ctxkey"
 	"github.com/Wei-Shaw/sub2api/internal/service"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
@@ -149,6 +153,85 @@ func TestRecordCyberPolicyIfMarked_BlockKeyPlumbed(t *testing.T) {
 	require.NotPanics(t, func() {
 		h.recordCyberPolicyIfMarked(c, nil, nil, nil, "gpt-5", true, "deadbeef", service.ChannelUsageFields{}, "")
 	})
+}
+
+func TestRecordCyberPolicyIfMarked_SystemCustomContextBillsSubscriptionAndLogsBothGroups(t *testing.T) {
+	const (
+		billingGroupID = int64(101)
+		sourceGroupID  = int64(202)
+		userID         = int64(22)
+		subscriptionID = int64(303)
+	)
+	resolution := service.SystemCustomGroupResolution{
+		BillingGroupID: billingGroupID,
+		SourceGroupID:  sourceGroupID,
+		PublicModel:    "tavern-gpt",
+		SourceModel:    "gpt-5.1",
+		SourcePlatform: service.PlatformOpenAI,
+	}
+	requestCtx := service.WithSystemCustomGroupResolution(context.Background(), resolution)
+	requestCtx = context.WithValue(requestCtx, ctxkey.ClientRequestID, "cyber-client")
+	requestCtx = context.WithValue(requestCtx, ctxkey.RequestID, "cyber-local")
+
+	c := newTestGinContext()
+	c.Request = httptest.NewRequest("POST", "/v1/responses", strings.NewReader(`{}`)).WithContext(requestCtx)
+	c.Writer.Header().Set("X-Request-Id", "cyber-upstream")
+	service.MarkOpsCyberPolicy(c, service.CyberPolicyMark{
+		Code:           "cyber_policy",
+		Message:        "blocked",
+		UpstreamStatus: 400,
+		UpstreamInTok:  1000,
+		UpstreamOutTok: 100,
+	})
+
+	usageRepo := &systemCustomHandlerUsageLogRepo{logs: make(chan *service.UsageLog, 1)}
+	billingRepo := &systemCustomHandlerBillingRepo{commands: make(chan *service.UsageBillingCommand, 1)}
+	cfg := &config.Config{}
+	cfg.Default.RateMultiplier = 1
+	billingService := service.NewBillingService(cfg, nil)
+	gatewayService := service.NewOpenAIGatewayService(
+		nil, usageRepo, billingRepo, nil, nil, nil, nil, cfg,
+		nil, nil, billingService, nil, &service.BillingCacheService{}, nil,
+		&service.DeferredService{}, nil, nil, nil, nil, nil, nil, nil,
+	)
+	h := &OpenAIGatewayHandler{gatewayService: gatewayService}
+	user := &service.User{ID: userID}
+	sourceGroup := &service.Group{ID: sourceGroupID, Platform: service.PlatformOpenAI, RateMultiplier: 1}
+	billingGroup := &service.Group{ID: billingGroupID, Platform: service.PlatformComposite, SubscriptionType: service.SubscriptionTypeSubscription, SystemCustomRoutingEnabled: true}
+	keyGroupID := sourceGroupID
+	apiKey := &service.APIKey{ID: 11, UserID: userID, User: user, GroupID: &keyGroupID, Group: sourceGroup}
+	subscription := &service.UserSubscription{ID: subscriptionID, UserID: userID, GroupID: billingGroupID, Group: billingGroup}
+
+	h.recordCyberPolicyIfMarked(c, apiKey, &service.Account{ID: 33, Platform: service.PlatformOpenAI}, subscription,
+		resolution.SourceModel, true, "", service.ChannelUsageFields{}, "payload-hash")
+	expectedCost, err := billingService.CalculateCost(resolution.SourceModel, service.UsageTokens{InputTokens: 1000, OutputTokens: 100}, 1)
+	require.NoError(t, err)
+
+	select {
+	case cmd := <-billingRepo.commands:
+		require.Greater(t, cmd.SubscriptionCost, 0.0)
+		require.InDelta(t, expectedCost.ActualCost, cmd.SubscriptionCost, 1e-12)
+		require.Zero(t, cmd.BalanceCost)
+		require.NotNil(t, cmd.SubscriptionID)
+		require.Equal(t, subscriptionID, *cmd.SubscriptionID)
+	case <-time.After(time.Second):
+		t.Fatal("cyber usage billing command not recorded")
+	}
+	select {
+	case log := <-usageRepo.logs:
+		require.Equal(t, service.BillingTypeSubscription, log.BillingType)
+		require.Equal(t, "client:cyber-client", log.RequestID)
+		require.Equal(t, resolution.PublicModel, log.RequestedModel)
+		require.Equal(t, resolution.SourceModel, log.Model)
+		require.Nil(t, log.UpstreamModel, "cyber mark has no separate upstream response model")
+		require.InDelta(t, expectedCost.ActualCost, log.ActualCost, 1e-12)
+		require.NotNil(t, log.GroupID)
+		require.Equal(t, billingGroupID, *log.GroupID)
+		require.NotNil(t, log.SourceGroupID)
+		require.Equal(t, sourceGroupID, *log.SourceGroupID)
+	case <-time.After(time.Second):
+		t.Fatal("cyber usage log not recorded")
+	}
 }
 
 // TestBuildCyberPolicyOpsErrorEntry_StatusCode verifies F6: the ops error log

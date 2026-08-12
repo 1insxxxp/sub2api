@@ -92,11 +92,25 @@ type postUsageBillingParams struct {
 // resolveRecordUsageBillingIdentity keeps system custom subscription billing
 // anchored to the monthly container while the API key clone continues to carry
 // the direct source group used for pricing and scheduling.
-func resolveRecordUsageBillingIdentity(ctx context.Context, apiKey *APIKey, subscription *UserSubscription) (bool, *SystemCustomGroupResolution, error) {
+func resolveRecordUsageBillingIdentity(ctx context.Context, apiKey *APIKey, user *User, subscription *UserSubscription) (bool, *SystemCustomGroupResolution, error) {
 	resolution, systemCustom := SystemCustomGroupResolutionFromContext(ctx)
+	if !systemCustom && ctx != nil && ctx.Value(ctxkey.SystemCustomGroupResolution) != nil {
+		return false, nil, ErrSystemCustomGroupSourceUnavailable
+	}
 	if systemCustom {
-		if subscription == nil || subscription.GroupID != resolution.BillingGroupID ||
-			(subscription.Group != nil && subscription.Group.ID != resolution.BillingGroupID) {
+		if resolution.BillingGroupID == resolution.SourceGroupID || apiKey == nil || apiKey.GroupID == nil ||
+			*apiKey.GroupID != resolution.SourceGroupID || apiKey.Group == nil ||
+			apiKey.Group.ID != resolution.SourceGroupID ||
+			!strings.EqualFold(strings.TrimSpace(apiKey.Group.Platform), strings.TrimSpace(resolution.SourcePlatform)) ||
+			strings.EqualFold(strings.TrimSpace(apiKey.Group.Platform), PlatformComposite) ||
+			apiKey.Group.SystemCustomRoutingEnabled {
+			return false, nil, ErrSystemCustomGroupSourceUnavailable
+		}
+		if user == nil || user.ID <= 0 || apiKey.UserID != user.ID || apiKey.User == nil || apiKey.User.ID != user.ID ||
+			subscription == nil || subscription.ID <= 0 || subscription.UserID != user.ID ||
+			subscription.GroupID != resolution.BillingGroupID || subscription.Group == nil ||
+			subscription.Group.ID != resolution.BillingGroupID || !subscription.Group.IsSystemCustomRouteGroup() ||
+			(subscription.User != nil && subscription.User.ID != user.ID) {
 			return false, nil, ErrSubscriptionInvalid
 		}
 		return true, &resolution, nil
@@ -832,7 +846,7 @@ func (s *GatewayService) recordUsageCore(ctx context.Context, input *recordUsage
 	user := input.User
 	account := input.Account
 	subscription := input.Subscription
-	isSubscriptionBilling, systemCustomResolution, err := resolveRecordUsageBillingIdentity(ctx, apiKey, subscription)
+	isSubscriptionBilling, systemCustomResolution, err := resolveRecordUsageBillingIdentity(ctx, apiKey, user, subscription)
 	if err != nil {
 		return err
 	}

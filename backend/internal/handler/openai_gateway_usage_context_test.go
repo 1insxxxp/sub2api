@@ -121,6 +121,7 @@ func TestGatewaySubmitUsageRecordTask_SystemCustomWorkerBillsSubscriptionAndLogs
 	pool := newUsageRecordTestPool(t)
 	h := &GatewayHandler{gatewayService: gatewayService, usageRecordWorkerPool: pool}
 	errCh := make(chan error, 1)
+	user := &service.User{ID: 22}
 
 	h.submitUsageRecordTask(parent, func(ctx context.Context) {
 		errCh <- h.gatewayService.RecordUsage(ctx, &service.RecordUsageInput{
@@ -132,16 +133,18 @@ func TestGatewaySubmitUsageRecordTask_SystemCustomWorkerBillsSubscriptionAndLogs
 			},
 			APIKey: &service.APIKey{
 				ID:      11,
+				UserID:  user.ID,
+				User:    user,
 				GroupID: &resolution.SourceGroupID,
 				Group: &service.Group{
 					ID: resolution.SourceGroupID, Platform: resolution.SourcePlatform, RateMultiplier: 1.25,
 				},
 			},
-			User:    &service.User{ID: 22},
+			User:    user,
 			Account: &service.Account{ID: 33, Platform: resolution.SourcePlatform},
 			Subscription: &service.UserSubscription{
 				ID: 303, UserID: 22, GroupID: resolution.BillingGroupID,
-				Group: &service.Group{ID: resolution.BillingGroupID, Platform: service.PlatformComposite, SubscriptionType: service.SubscriptionTypeSubscription},
+				Group: &service.Group{ID: resolution.BillingGroupID, Platform: service.PlatformComposite, SubscriptionType: service.SubscriptionTypeSubscription, SystemCustomRoutingEnabled: true},
 			},
 		})
 	})

@@ -143,7 +143,7 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 	user := input.User
 	account := input.Account
 	subscription := input.Subscription
-	isSubscriptionBilling, systemCustomResolution, err := resolveRecordUsageBillingIdentity(ctx, apiKey, subscription)
+	isSubscriptionBilling, systemCustomResolution, err := resolveRecordUsageBillingIdentity(ctx, apiKey, user, subscription)
 	if err != nil {
 		return err
 	}
