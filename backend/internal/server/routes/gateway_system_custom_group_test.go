@@ -219,7 +219,7 @@ func TestSystemCustomTargetMiddlewareRewritesMultipartWithoutDamagingOtherParts(
 func TestSystemCustomTargetMiddlewarePreservesExactSourceModelCasing(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	billingGroupID, sourceGroupID := int64(25), int64(42)
-	resolver := resolvedSystemCustomStub(billingGroupID, sourceGroupID, service.PlatformOpenAI, "GPT-5.4", "gpt-5.4")
+	resolver := resolvedSystemCustomStub(billingGroupID, sourceGroupID, service.PlatformOpenAI, "gpt-5.4", "gpt-5.4")
 	router := systemCustomTestRouter(systemCustomBillingGroup(billingGroupID), resolver)
 	router.POST("/v1/chat/completions", func(c *gin.Context) {
 		body, err := io.ReadAll(c.Request.Body)
@@ -234,6 +234,35 @@ func TestSystemCustomTargetMiddlewarePreservesExactSourceModelCasing(t *testing.
 
 	require.Equal(t, http.StatusOK, recorder.Code)
 	require.JSONEq(t, `{"model":"gpt-5.4"}`, recorder.Body.String())
+}
+
+func TestSystemCustomTargetMiddlewarePreservesExactSourceModelCasingInMultipart(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	billingGroupID, sourceGroupID := int64(25), int64(42)
+	resolver := resolvedSystemCustomStub(billingGroupID, sourceGroupID, service.PlatformOpenAI, "gpt-image-1", "gpt-image-1")
+	router := systemCustomTestRouter(systemCustomBillingGroup(billingGroupID), resolver)
+	router.POST("/v1/images/edits", func(c *gin.Context) {
+		body, err := io.ReadAll(c.Request.Body)
+		require.NoError(t, err)
+		mediaReader := multipart.NewReader(bytes.NewReader(body), multipartBoundary(t, c.GetHeader("Content-Type")))
+		form, err := mediaReader.ReadForm(1024)
+		require.NoError(t, err)
+		defer func() { require.NoError(t, form.RemoveAll()) }()
+		c.JSON(http.StatusOK, gin.H{"model": form.Value["model"][0]})
+	})
+
+	var body bytes.Buffer
+	writer := multipart.NewWriter(&body)
+	require.NoError(t, writer.WriteField("model", "GPT-IMAGE-1"))
+	require.NoError(t, writer.WriteField("prompt", "keep me"))
+	require.NoError(t, writer.Close())
+	req := httptest.NewRequest(http.MethodPost, "/v1/images/edits", bytes.NewReader(body.Bytes()))
+	req.Header.Set("Content-Type", writer.FormDataContentType())
+	recorder := httptest.NewRecorder()
+	router.ServeHTTP(recorder, req)
+
+	require.Equal(t, http.StatusOK, recorder.Code)
+	require.JSONEq(t, `{"model":"gpt-image-1"}`, recorder.Body.String())
 }
 
 func TestSystemCustomGeminiTargetMiddlewareRewritesPathAndPreservesContexts(t *testing.T) {
@@ -277,6 +306,64 @@ func TestSystemCustomGeminiTargetMiddlewareRewritesGetModelPath(t *testing.T) {
 
 	require.Equal(t, http.StatusOK, recorder.Code)
 	require.JSONEq(t, `{"path_model":"gemini-2.5-flash","public_model":"gemini-monthly","source_model":"gemini-2.5-flash","models_ok":true}`, recorder.Body.String())
+}
+
+func TestSystemCustomGeminiTargetMiddlewarePreservesExactSourceModelCasing(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	billingGroupID, sourceGroupID := int64(25), int64(42)
+	resolver := resolvedSystemCustomStub(billingGroupID, sourceGroupID, service.PlatformGemini, "gemini-2.5-flash", "gemini-2.5-flash")
+	router := systemCustomAuthTestRouter(systemCustomBillingGroup(billingGroupID))
+	router.Use(systemCustomGroupGeminiTargetMiddleware(resolver))
+	router.POST("/v1beta/models/*modelAction", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"model": compositeGeminiModelFromParams(c)})
+	})
+
+	req := httptest.NewRequest(http.MethodPost, "/v1beta/models/GEMINI-2.5-FLASH:generateContent", bytes.NewBufferString(`{"contents":[]}`))
+	recorder := httptest.NewRecorder()
+	router.ServeHTTP(recorder, req)
+
+	require.Equal(t, http.StatusOK, recorder.Code)
+	require.JSONEq(t, `{"model":"gemini-2.5-flash"}`, recorder.Body.String())
+}
+
+func TestSystemCustomTargetMiddlewareRejectsNonStringJSONModels(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	protocols := []struct {
+		name string
+		path string
+	}{
+		{name: "anthropic", path: "/v1/messages"},
+		{name: "openai", path: "/v1/chat/completions"},
+	}
+	values := []struct {
+		name string
+		body string
+	}{
+		{name: "number", body: `{"model":123}`},
+		{name: "boolean", body: `{"model":true}`},
+		{name: "object", body: `{"model":{"alias":"gpt-5.4"}}`},
+		{name: "array", body: `{"model":["gpt-5.4"]}`},
+		{name: "null", body: `{"model":null}`},
+		{name: "missing", body: `{}`},
+		{name: "malformed", body: `{"model":`},
+	}
+	for _, protocol := range protocols {
+		for _, value := range values {
+			t.Run(protocol.name+"/"+value.name, func(t *testing.T) {
+				resolver := &systemCustomGroupResolverStub{err: service.ErrSystemCustomGroupModelNotAllowed}
+				router := systemCustomTestRouter(systemCustomBillingGroup(25), resolver)
+				router.POST(protocol.path, func(c *gin.Context) { t.Fatal("handler must not run") })
+				req := httptest.NewRequest(http.MethodPost, protocol.path, bytes.NewBufferString(value.body))
+				req.Header.Set("Content-Type", "application/json")
+				recorder := httptest.NewRecorder()
+				router.ServeHTTP(recorder, req)
+
+				require.Equal(t, http.StatusBadRequest, recorder.Code)
+				require.Equal(t, "invalid_request_error", gjson.Get(recorder.Body.String(), "error.type").String())
+				require.Zero(t, resolver.calls, "invalid model types must be rejected before alias resolution")
+			})
+		}
+	}
 }
 
 func TestSystemCustomTargetMiddlewareFailsClosedWithProtocolErrors(t *testing.T) {

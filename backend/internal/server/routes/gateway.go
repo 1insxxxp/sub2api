@@ -586,7 +586,12 @@ func systemCustomGroupTargetMiddleware(apiKeys systemCustomGroupModelResolver) g
 			writeSystemCustomRootError(c, status, "invalid_request_error", "INVALID_REQUEST", message)
 			return
 		}
-		model := compositeRequestModelFromBody(c.GetHeader("Content-Type"), body)
+		model, modelErr := requestModelFromBody(c.GetHeader("Content-Type"), body)
+		if modelErr != nil {
+			resetRequestBody(c, body)
+			writeSystemCustomRootError(c, http.StatusBadRequest, "invalid_request_error", "INVALID_MODEL", "Model must be a string")
+			return
+		}
 		if model == "" {
 			resetRequestBody(c, body)
 			if !systemCustomRequestRequiresModel(c.Request.URL.Path) {
@@ -606,7 +611,7 @@ func systemCustomGroupTargetMiddleware(apiKeys systemCustomGroupModelResolver) g
 			writeSystemCustomResolutionError(c, service.ErrSystemCustomGroupSourceUnavailable, false)
 			return
 		}
-		rewrittenBody, err := rewriteCustomGroupRequestModel(c.GetHeader("Content-Type"), body, resolution.PublicModel, resolution.SourceModel)
+		rewrittenBody, err := rewriteCustomGroupRequestModel(c.GetHeader("Content-Type"), body, model, resolution.SourceModel)
 		if err != nil {
 			writeSystemCustomRootError(c, http.StatusBadRequest, "invalid_request_error", "MODEL_REWRITE_FAILED", "Failed to rewrite the system custom model alias")
 			return
@@ -770,7 +775,7 @@ func customGroupTargetMiddleware(apiKeys customGroupModelResolver) gin.HandlerFu
 			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": gin.H{"type": "permission_error", "message": "The selected model source group is unavailable"}})
 			return
 		}
-		rewrittenBody, err := rewriteCustomGroupRequestModel(c.GetHeader("Content-Type"), body, resolution.PublicModel, resolution.SourceModel)
+		rewrittenBody, err := rewriteCustomGroupRequestModel(c.GetHeader("Content-Type"), body, model, resolution.SourceModel)
 		if err != nil {
 			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": gin.H{"type": "invalid_request_error", "message": "Failed to rewrite the custom model alias"}})
 			return
@@ -782,13 +787,13 @@ func customGroupTargetMiddleware(apiKeys customGroupModelResolver) gin.HandlerFu
 	}
 }
 
-func rewriteCustomGroupRequestModel(contentType string, body []byte, publicModel, sourceModel string) ([]byte, error) {
-	publicModel = strings.TrimSpace(publicModel)
+func rewriteCustomGroupRequestModel(contentType string, body []byte, requestedModel, sourceModel string) ([]byte, error) {
+	requestedModel = strings.TrimSpace(requestedModel)
 	sourceModel = strings.TrimSpace(sourceModel)
 	if sourceModel == "" {
 		return nil, errors.New("custom group source model is empty")
 	}
-	if publicModel == sourceModel {
+	if requestedModel == sourceModel {
 		return body, nil
 	}
 	if gjson.ValidBytes(body) {
@@ -890,10 +895,24 @@ func customGroupGeminiTargetMiddleware(apiKeys customGroupModelResolver) gin.Han
 }
 
 func compositeRequestModelFromBody(contentType string, body []byte) string {
-	if model := strings.TrimSpace(gjson.GetBytes(body, "model").String()); model != "" {
-		return model
+	model, _ := requestModelFromBody(contentType, body)
+	return model
+}
+
+var errRequestModelNotString = errors.New("request model must be a string")
+
+func requestModelFromBody(contentType string, body []byte) (string, error) {
+	if gjson.ValidBytes(body) {
+		result := gjson.GetBytes(body, "model")
+		if !result.Exists() || result.Type == gjson.Null {
+			return "", nil
+		}
+		if result.Type != gjson.String {
+			return "", errRequestModelNotString
+		}
+		return strings.TrimSpace(result.String()), nil
 	}
-	return compositeMultipartModelFromBody(contentType, body)
+	return compositeMultipartModelFromBody(contentType, body), nil
 }
 
 func compositeMultipartModelFromBody(contentType string, body []byte) string {
