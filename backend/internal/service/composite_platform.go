@@ -140,17 +140,25 @@ func requestedModelForUsage(ctx context.Context, fallback string) string {
 	return fallback
 }
 
-// requestedModelForBilling keeps BillingModelSourceRequested semantics for
-// ordinary traffic while separating a system custom route's public display
-// alias from its concrete pricing identity. The alias remains available via
-// requestedModelForUsage; only the billing candidate is anchored here.
-func requestedModelForBilling(ctx context.Context, billingModelSource, originalModel string) string {
-	if billingModelSource == BillingModelSourceRequested {
-		if resolution, ok := SystemCustomGroupResolutionFromContext(ctx); ok {
-			return resolution.SourceModel
-		}
+// billingModelFromChannelUsage keeps ordinary channel billing semantics while
+// separating a system custom route's public display alias from its concrete
+// pricing identity. Requested mode is always anchored to the configured source;
+// channel_mapped mode only rewrites the no-op public alias, preserving a real
+// downstream channel mapping. The public alias remains available solely via
+// requestedModelForUsage for display and auditing.
+func billingModelFromChannelUsage(ctx context.Context, billingModelSource, model string) string {
+	model = strings.TrimSpace(model)
+	if billingModelSource != BillingModelSourceRequested && billingModelSource != BillingModelSourceChannelMapped {
+		return model
 	}
-	return strings.TrimSpace(originalModel)
+	resolution, ok := SystemCustomGroupResolutionFromContext(ctx)
+	if !ok {
+		return model
+	}
+	if billingModelSource == BillingModelSourceRequested || strings.EqualFold(model, resolution.PublicModel) {
+		return resolution.SourceModel
+	}
+	return model
 }
 
 func CompositeRouteSourceFromContext(ctx context.Context) (string, bool) {

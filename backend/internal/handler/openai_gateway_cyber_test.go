@@ -205,8 +205,8 @@ func TestRecordCyberPolicyIfMarked_SystemCustomContextBillsSubscriptionAndLogsBo
 	channelFields := service.ChannelUsageFields{
 		ChannelID:          99,
 		OriginalModel:      resolution.PublicModel,
-		ChannelMappedModel: resolution.SourceModel,
-		BillingModelSource: service.BillingModelSourceRequested,
+		ChannelMappedModel: resolution.PublicModel,
+		BillingModelSource: service.BillingModelSourceChannelMapped,
 		ModelMappingChain:  resolution.PublicModel + "→" + resolution.SourceModel,
 	}
 	h.recordCyberPolicyIfMarked(c, apiKey, &service.Account{ID: 33, Platform: service.PlatformOpenAI}, subscription,

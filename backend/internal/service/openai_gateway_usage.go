@@ -185,24 +185,27 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 	videoMultiplier := resolveVideoRateMultiplier(apiKey, baseMultiplier)
 
 	var cost *CostBreakdown
-	billingModel := forwardResultBillingModel(result.Model, result.UpstreamModel)
+	billingModel := billingModelFromChannelUsage(ctx, input.BillingModelSource,
+		forwardResultBillingModel(result.Model, result.UpstreamModel))
 	if result.BillingModel != "" {
-		billingModel = strings.TrimSpace(result.BillingModel)
+		billingModel = billingModelFromChannelUsage(ctx, input.BillingModelSource, result.BillingModel)
 	}
-	if input.BillingModelSource == BillingModelSourceChannelMapped && input.ChannelMappedModel != "" && input.ChannelMappedModel != input.OriginalModel {
-		billingModel = input.ChannelMappedModel
+	billingMappedModel := billingModelFromChannelUsage(ctx, input.BillingModelSource, input.ChannelMappedModel)
+	if input.BillingModelSource == BillingModelSourceChannelMapped && input.ChannelMappedModel != "" &&
+		(input.ChannelMappedModel != input.OriginalModel || !strings.EqualFold(billingMappedModel, strings.TrimSpace(input.ChannelMappedModel))) {
+		billingModel = billingMappedModel
 	}
-	billingRequestedModel := requestedModelForBilling(ctx, input.BillingModelSource, input.OriginalModel)
+	billingRequestedModel := billingModelFromChannelUsage(ctx, input.BillingModelSource, input.OriginalModel)
 	if input.BillingModelSource == BillingModelSourceRequested && billingRequestedModel != "" {
 		billingModel = billingRequestedModel
 	}
 	billingModels := usageBillingModelCandidates(
 		billingModel,
-		result.BillingModel,
-		input.ChannelMappedModel,
+		billingModelFromChannelUsage(ctx, input.BillingModelSource, result.BillingModel),
+		billingMappedModel,
 		billingRequestedModel,
-		result.UpstreamModel,
-		result.Model,
+		billingModelFromChannelUsage(ctx, input.BillingModelSource, result.UpstreamModel),
+		billingModelFromChannelUsage(ctx, input.BillingModelSource, result.Model),
 	)
 	serviceTier := ""
 	if result.ServiceTier != nil {

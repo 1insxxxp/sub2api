@@ -887,12 +887,13 @@ func (s *GatewayService) recordUsageCore(ctx context.Context, input *recordUsage
 	multiplier, imageMultiplier := computePeakAwareMultipliers(apiKey, multiplier, pricingAt)
 
 	// 确定计费模型
-	concreteBillingModel := forwardResultBillingModel(result.Model, result.UpstreamModel)
+	concreteBillingModel := billingModelFromChannelUsage(ctx, input.BillingModelSource,
+		forwardResultBillingModel(result.Model, result.UpstreamModel))
 	billingModel := concreteBillingModel
 	if input.BillingModelSource == BillingModelSourceChannelMapped && input.ChannelMappedModel != "" {
-		billingModel = input.ChannelMappedModel
+		billingModel = billingModelFromChannelUsage(ctx, input.BillingModelSource, input.ChannelMappedModel)
 	}
-	requestedBillingModel := requestedModelForBilling(ctx, input.BillingModelSource, input.OriginalModel)
+	requestedBillingModel := billingModelFromChannelUsage(ctx, input.BillingModelSource, input.OriginalModel)
 	if input.BillingModelSource == BillingModelSourceRequested && requestedBillingModel != "" {
 		billingModel = requestedBillingModel
 	}
@@ -905,7 +906,9 @@ func (s *GatewayService) recordUsageCore(ctx context.Context, input *recordUsage
 	}
 	// 通用兜底（与 OpenAI 路径的 usageBillingModelCandidates 语义对齐）：
 	// 选定模型查不到任何价格时回退到实际转发的具体模型。已定价流量不受影响。
-	billingModel = s.billableModelWithFallback(ctx, apiKey, billingModel, result.UpstreamModel, result.Model)
+	billingModel = s.billableModelWithFallback(ctx, apiKey, billingModel,
+		billingModelFromChannelUsage(ctx, input.BillingModelSource, result.UpstreamModel),
+		billingModelFromChannelUsage(ctx, input.BillingModelSource, result.Model))
 
 	// 确定 RequestedModel（渠道映射前的原始模型）
 	requestedModel := result.Model
