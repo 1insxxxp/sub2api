@@ -23,28 +23,17 @@ func systemCustomUsageContext(billingGroupID, sourceGroupID int64, publicModel, 
 	})
 }
 
-func TestBillingModelFromChannelUsage_SystemCustomOnlyRewritesPublicIdentity(t *testing.T) {
+func TestSystemCustomUsageFieldBillingModels_AreFieldAware(t *testing.T) {
 	ctx := systemCustomUsageContext(101, 202, "public-alias", "source-model", PlatformOpenAI)
-	tests := []struct {
-		name   string
-		ctx    context.Context
-		source string
-		model  string
-		want   string
-	}{
-		{name: "ordinary channel mapped unchanged", ctx: context.Background(), source: BillingModelSourceChannelMapped, model: "public-alias", want: "public-alias"},
-		{name: "system requested is source authoritative", ctx: ctx, source: BillingModelSourceRequested, model: "real-channel-target", want: "source-model"},
-		{name: "system default mapping rewrites public", ctx: ctx, source: BillingModelSourceChannelMapped, model: "public-alias", want: "source-model"},
-		{name: "system public match ignores case", ctx: ctx, source: BillingModelSourceChannelMapped, model: "PUBLIC-ALIAS", want: "source-model"},
-		{name: "system real channel mapping preserved", ctx: ctx, source: BillingModelSourceChannelMapped, model: "real-channel-target", want: "real-channel-target"},
-		{name: "response model behavior unchanged", ctx: ctx, source: BillingModelSourceResponse, model: "public-alias", want: "public-alias"},
-	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			require.Equal(t, tt.want, billingModelFromChannelUsage(tt.ctx, tt.source, tt.model))
-		})
-	}
+	require.Equal(t, "public-alias", billingModelFromOriginalUsageField(context.Background(), "public-alias"))
+	require.Equal(t, "source-model", billingModelFromOriginalUsageField(ctx, "public-alias"))
+	require.Equal(t, "source-model", billingModelFromOriginalUsageField(ctx, "real-channel-target"),
+		"OriginalModel is display identity in every billing mode")
+	require.Equal(t, "source-model", billingModelFromMappedUsageField(ctx, "public-alias"))
+	require.Equal(t, "source-model", billingModelFromMappedUsageField(ctx, "PUBLIC-ALIAS"))
+	require.Equal(t, "real-channel-target", billingModelFromMappedUsageField(ctx, "real-channel-target"))
+	require.Equal(t, "public-alias", billingModelFromMappedUsageField(context.Background(), "public-alias"))
 }
 
 func TestOpenAISystemCustomRecordUsage_RejectsEveryBillingIdentityMismatch(t *testing.T) {
@@ -550,6 +539,147 @@ func TestOpenAIGatewayServiceRecordUsage_SystemCustomDefaultChannelMappedNeverFa
 	require.Zero(t, billingRepo.calls)
 	require.Zero(t, usageRepo.calls)
 	require.Zero(t, userRepo.deductCalls)
+}
+
+func TestOpenAIGatewayServiceRecordUsage_SystemCustomDisplayAliasNeverFallbacksInResponseOrUpstreamMode(t *testing.T) {
+	const (
+		billingGroupID = int64(151)
+		sourceGroupID  = int64(254)
+		publicModel    = "gpt-5.4-mini"
+		sourceModel    = "unpriced-system-display-source"
+	)
+	for _, billingSource := range []string{BillingModelSourceResponse, BillingModelSourceUpstream} {
+		t.Run(billingSource, func(t *testing.T) {
+			usageRepo := &openAIRecordUsageLogRepoStub{inserted: true}
+			billingRepo := &openAIRecordUsageBillingRepoStub{result: &UsageBillingApplyResult{Applied: true}}
+			userRepo := &openAIRecordUsageUserRepoStub{}
+			svc := newOpenAIRecordUsageServiceWithBillingRepoForTest(usageRepo, billingRepo, userRepo, &openAIRecordUsageSubRepoStub{}, nil)
+			user := &User{ID: 72}
+			sourceGroup := &Group{ID: sourceGroupID, Platform: PlatformOpenAI, RateMultiplier: 1.2}
+			billingGroup := &Group{ID: billingGroupID, Platform: PlatformComposite, SubscriptionType: SubscriptionTypeSubscription, SystemCustomRoutingEnabled: true}
+			ctx := systemCustomUsageContext(billingGroupID, sourceGroupID, publicModel, sourceModel, PlatformOpenAI)
+
+			err := svc.RecordUsage(ctx, &OpenAIRecordUsageInput{
+				Result: &OpenAIForwardResult{
+					RequestID: "system-custom-display-alias-" + billingSource, Model: sourceModel,
+					BillingModel: sourceModel, UpstreamModel: sourceModel,
+					UpstreamResponseModel: "unpriced-upstream-response", Usage: OpenAIUsage{InputTokens: 1200, OutputTokens: 300}, Duration: time.Second,
+				},
+				APIKey:       &APIKey{ID: 25, UserID: user.ID, User: user, GroupID: i64p(sourceGroupID), Group: sourceGroup},
+				User:         user,
+				Account:      &Account{ID: 57, Platform: PlatformOpenAI},
+				Subscription: &UserSubscription{ID: 353, UserID: user.ID, GroupID: billingGroupID, Group: billingGroup},
+				ChannelUsageFields: ChannelUsageFields{
+					ChannelID: 91, OriginalModel: publicModel, ChannelMappedModel: publicModel,
+					BillingModelSource: billingSource, ModelMappingChain: publicModel + "→" + sourceModel,
+				},
+			})
+
+			require.Error(t, err)
+			require.Zero(t, billingRepo.calls)
+			require.Zero(t, usageRepo.calls)
+			require.Zero(t, userRepo.deductCalls)
+		})
+	}
+}
+
+func TestOpenAIGatewayServiceRecordUsage_SystemCustomResponseModelAdoptsRealResponsePrice(t *testing.T) {
+	const (
+		billingGroupID = int64(161)
+		sourceGroupID  = int64(264)
+		publicModel    = "gpt-5.6-sol"
+		sourceModel    = "gpt-5.4"
+		responseModel  = "gpt-5.4-mini"
+	)
+	usageRepo := &openAIRecordUsageLogRepoStub{inserted: true}
+	billingRepo := &openAIRecordUsageBillingRepoStub{result: &UsageBillingApplyResult{Applied: true}}
+	svc := newOpenAIRecordUsageServiceWithBillingRepoForTest(usageRepo, billingRepo, &openAIRecordUsageUserRepoStub{}, &openAIRecordUsageSubRepoStub{}, nil)
+	user := &User{ID: 82}
+	sourceGroup := &Group{ID: sourceGroupID, Platform: PlatformOpenAI, RateMultiplier: 1}
+	billingGroup := &Group{ID: billingGroupID, Platform: PlatformComposite, SubscriptionType: SubscriptionTypeSubscription, SystemCustomRoutingEnabled: true}
+	ctx := systemCustomUsageContext(billingGroupID, sourceGroupID, publicModel, sourceModel, PlatformOpenAI)
+	tokens := UsageTokens{InputTokens: 1200, OutputTokens: 300}
+	wantResponseCost, err := svc.billingService.CalculateCost(responseModel, tokens, sourceGroup.RateMultiplier)
+	require.NoError(t, err)
+	sourceCost, err := svc.billingService.CalculateCost(sourceModel, tokens, sourceGroup.RateMultiplier)
+	require.NoError(t, err)
+	require.Less(t, wantResponseCost.ActualCost, sourceCost.ActualCost)
+
+	err = svc.RecordUsage(ctx, &OpenAIRecordUsageInput{
+		Result: &OpenAIForwardResult{
+			RequestID: "system-custom-real-response", Model: sourceModel, BillingModel: sourceModel,
+			UpstreamModel: sourceModel, UpstreamResponseModel: responseModel,
+			Usage: OpenAIUsage{InputTokens: 1200, OutputTokens: 300}, Duration: time.Second,
+		},
+		APIKey:       &APIKey{ID: 26, UserID: user.ID, User: user, GroupID: i64p(sourceGroupID), Group: sourceGroup},
+		User:         user,
+		Account:      &Account{ID: 58, Platform: PlatformOpenAI},
+		Subscription: &UserSubscription{ID: 363, UserID: user.ID, GroupID: billingGroupID, Group: billingGroup},
+		ChannelUsageFields: ChannelUsageFields{
+			ChannelID: 92, OriginalModel: publicModel, ChannelMappedModel: publicModel,
+			BillingModelSource: BillingModelSourceResponse, ModelMappingChain: publicModel + "→" + sourceModel,
+		},
+	})
+	require.NoError(t, err)
+	require.NotNil(t, usageRepo.lastLog)
+	require.InDelta(t, wantResponseCost.ActualCost, usageRepo.lastLog.ActualCost, 1e-12)
+	require.NotNil(t, billingRepo.lastCmd)
+	require.InDelta(t, wantResponseCost.ActualCost, billingRepo.lastCmd.SubscriptionCost, 1e-12)
+	require.NotNil(t, usageRepo.lastLog.UpstreamResponseModel)
+	require.Equal(t, responseModel, *usageRepo.lastLog.UpstreamResponseModel)
+}
+
+func TestOpenAIGatewayServiceRecordUsage_SystemCustomKeepsActualAndDistinctMappedCandidates(t *testing.T) {
+	const (
+		billingGroupID = int64(171)
+		sourceGroupID  = int64(274)
+		publicModel    = "gpt-5.6-sol"
+		sourceModel    = "unpriced-system-actual-source"
+		pricedActual   = "gpt-5.4-mini"
+	)
+	tests := []struct {
+		name          string
+		resultModel   string
+		upstreamModel string
+		mappedModel   string
+	}{
+		{name: "actual result and upstream", resultModel: pricedActual, upstreamModel: pricedActual, mappedModel: publicModel},
+		{name: "distinct real channel mapping", resultModel: sourceModel, upstreamModel: sourceModel, mappedModel: pricedActual},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			usageRepo := &openAIRecordUsageLogRepoStub{inserted: true}
+			billingRepo := &openAIRecordUsageBillingRepoStub{result: &UsageBillingApplyResult{Applied: true}}
+			svc := newOpenAIRecordUsageServiceWithBillingRepoForTest(usageRepo, billingRepo, &openAIRecordUsageUserRepoStub{}, &openAIRecordUsageSubRepoStub{}, nil)
+			user := &User{ID: 92}
+			sourceGroup := &Group{ID: sourceGroupID, Platform: PlatformOpenAI, RateMultiplier: 1.1}
+			billingGroup := &Group{ID: billingGroupID, Platform: PlatformComposite, SubscriptionType: SubscriptionTypeSubscription, SystemCustomRoutingEnabled: true}
+			ctx := systemCustomUsageContext(billingGroupID, sourceGroupID, publicModel, sourceModel, PlatformOpenAI)
+			wantCost, err := svc.billingService.CalculateCost(pricedActual, UsageTokens{InputTokens: 1200, OutputTokens: 300}, sourceGroup.RateMultiplier)
+			require.NoError(t, err)
+
+			err = svc.RecordUsage(ctx, &OpenAIRecordUsageInput{
+				Result: &OpenAIForwardResult{
+					RequestID: "system-custom-actual-" + tt.name, Model: tt.resultModel,
+					BillingModel: tt.resultModel, UpstreamModel: tt.upstreamModel,
+					Usage: OpenAIUsage{InputTokens: 1200, OutputTokens: 300}, Duration: time.Second,
+				},
+				APIKey:       &APIKey{ID: 27, UserID: user.ID, User: user, GroupID: i64p(sourceGroupID), Group: sourceGroup},
+				User:         user,
+				Account:      &Account{ID: 59, Platform: PlatformOpenAI},
+				Subscription: &UserSubscription{ID: 373, UserID: user.ID, GroupID: billingGroupID, Group: billingGroup},
+				ChannelUsageFields: ChannelUsageFields{
+					ChannelID: 93, OriginalModel: publicModel, ChannelMappedModel: tt.mappedModel,
+					BillingModelSource: BillingModelSourceUpstream, ModelMappingChain: publicModel + "→" + tt.mappedModel,
+				},
+			})
+			require.NoError(t, err)
+			require.NotNil(t, usageRepo.lastLog)
+			require.InDelta(t, wantCost.ActualCost, usageRepo.lastLog.ActualCost, 1e-12)
+			require.NotNil(t, billingRepo.lastCmd)
+			require.InDelta(t, wantCost.ActualCost, billingRepo.lastCmd.SubscriptionCost, 1e-12)
+		})
+	}
 }
 
 func TestOpenAIGatewayServiceRecordUsage_SystemCustomMissingPricingFailsClosed(t *testing.T) {

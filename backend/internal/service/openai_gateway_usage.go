@@ -185,27 +185,26 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 	videoMultiplier := resolveVideoRateMultiplier(apiKey, baseMultiplier)
 
 	var cost *CostBreakdown
-	billingModel := billingModelFromChannelUsage(ctx, input.BillingModelSource,
-		forwardResultBillingModel(result.Model, result.UpstreamModel))
+	billingModel := forwardResultBillingModel(result.Model, result.UpstreamModel)
 	if result.BillingModel != "" {
-		billingModel = billingModelFromChannelUsage(ctx, input.BillingModelSource, result.BillingModel)
+		billingModel = strings.TrimSpace(result.BillingModel)
 	}
-	billingMappedModel := billingModelFromChannelUsage(ctx, input.BillingModelSource, input.ChannelMappedModel)
+	billingMappedModel := billingModelFromMappedUsageField(ctx, input.ChannelMappedModel)
 	if input.BillingModelSource == BillingModelSourceChannelMapped && input.ChannelMappedModel != "" &&
 		(input.ChannelMappedModel != input.OriginalModel || !strings.EqualFold(billingMappedModel, strings.TrimSpace(input.ChannelMappedModel))) {
 		billingModel = billingMappedModel
 	}
-	billingRequestedModel := billingModelFromChannelUsage(ctx, input.BillingModelSource, input.OriginalModel)
+	billingRequestedModel := billingModelFromOriginalUsageField(ctx, input.OriginalModel)
 	if input.BillingModelSource == BillingModelSourceRequested && billingRequestedModel != "" {
 		billingModel = billingRequestedModel
 	}
 	billingModels := usageBillingModelCandidates(
 		billingModel,
-		billingModelFromChannelUsage(ctx, input.BillingModelSource, result.BillingModel),
+		result.BillingModel,
 		billingMappedModel,
 		billingRequestedModel,
-		billingModelFromChannelUsage(ctx, input.BillingModelSource, result.UpstreamModel),
-		billingModelFromChannelUsage(ctx, input.BillingModelSource, result.Model),
+		result.UpstreamModel,
+		result.Model,
 	)
 	serviceTier := ""
 	if result.ServiceTier != nil {

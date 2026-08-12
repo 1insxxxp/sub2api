@@ -140,22 +140,25 @@ func requestedModelForUsage(ctx context.Context, fallback string) string {
 	return fallback
 }
 
-// billingModelFromChannelUsage keeps ordinary channel billing semantics while
-// separating a system custom route's public display alias from its concrete
-// pricing identity. Requested mode is always anchored to the configured source;
-// channel_mapped mode only rewrites the no-op public alias, preserving a real
-// downstream channel mapping. The public alias remains available solely via
-// requestedModelForUsage for display and auditing.
-func billingModelFromChannelUsage(ctx context.Context, billingModelSource, model string) string {
+// billingModelFromOriginalUsageField converts ChannelUsageFields.OriginalModel
+// from its display identity to the configured source identity for system custom
+// traffic. Actual result/upstream fields must not use this helper.
+func billingModelFromOriginalUsageField(ctx context.Context, model string) string {
 	model = strings.TrimSpace(model)
-	if billingModelSource != BillingModelSourceRequested && billingModelSource != BillingModelSourceChannelMapped {
-		return model
-	}
 	resolution, ok := SystemCustomGroupResolutionFromContext(ctx)
 	if !ok {
 		return model
 	}
-	if billingModelSource == BillingModelSourceRequested || strings.EqualFold(model, resolution.PublicModel) {
+	return resolution.SourceModel
+}
+
+// billingModelFromMappedUsageField removes the no-op public alias produced by
+// ToUsageFields when no downstream channel mapping occurred. A distinct mapped
+// model is an actual pricing candidate and remains unchanged.
+func billingModelFromMappedUsageField(ctx context.Context, model string) string {
+	model = strings.TrimSpace(model)
+	resolution, ok := SystemCustomGroupResolutionFromContext(ctx)
+	if ok && strings.EqualFold(model, resolution.PublicModel) {
 		return resolution.SourceModel
 	}
 	return model
