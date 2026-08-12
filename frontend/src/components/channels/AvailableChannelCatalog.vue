@@ -6,24 +6,22 @@
     <section
       v-if="loading && channels.length === 0"
       data-testid="catalog-loading"
-      class="space-y-4"
+      class="space-y-4 xl:grid xl:grid-cols-[240px_minmax(0,1fr)] xl:gap-4 xl:space-y-0"
       :aria-label="t(`${catalogKey}.loading`)"
       aria-busy="true"
     >
       <p class="sr-only">{{ t(`${catalogKey}.loading`) }}</p>
-      <div
-        data-testid="catalog-loading-tabs"
-        class="hidden overflow-hidden rounded-2xl border border-gray-200 bg-white p-3 dark:border-dark-600 dark:bg-dark-800 xl:block"
+      <aside
+        data-testid="catalog-loading-rail"
+        class="hidden space-y-3 rounded-2xl border border-gray-200 bg-white p-3 dark:border-dark-600 dark:bg-dark-800 xl:block"
       >
-        <div class="mb-2 h-5 w-32 animate-pulse rounded-md bg-gray-100 motion-reduce:animate-none dark:bg-dark-700" />
-        <div class="flex gap-2 overflow-hidden">
-          <div
-            v-for="item in 4"
-            :key="item"
-            class="h-[76px] w-64 shrink-0 animate-pulse rounded-xl bg-gray-100 motion-reduce:animate-none dark:bg-dark-700"
-          />
-        </div>
-      </div>
+        <div class="mb-1 h-10 animate-pulse rounded-xl bg-gray-100 motion-reduce:animate-none dark:bg-dark-700" />
+        <div
+          v-for="item in 5"
+          :key="item"
+          class="h-20 animate-pulse rounded-xl bg-gray-100 motion-reduce:animate-none dark:bg-dark-700"
+        />
+      </aside>
       <div data-testid="catalog-loading-detail" class="space-y-4">
         <div class="h-32 animate-pulse rounded-2xl bg-gray-100 motion-reduce:animate-none dark:bg-dark-700" />
         <div class="h-64 animate-pulse rounded-2xl bg-gray-100 motion-reduce:animate-none dark:bg-dark-700" />
@@ -34,48 +32,53 @@
       v-else-if="channels.length === 0"
       data-testid="catalog-empty-layout"
       class="min-w-0 space-y-4"
+      :class="$slots.toolbar ? 'xl:grid xl:grid-cols-[240px_minmax(0,1fr)] xl:items-start xl:gap-4 xl:space-y-0' : ''"
     >
-      <div
+      <aside
         v-if="$slots.toolbar"
-        data-testid="channel-tabs-shell"
-        class="hidden min-w-0 rounded-2xl border border-slate-200/90 bg-white px-4 py-3 shadow-sm dark:border-dark-600 dark:bg-dark-800 xl:block"
+        data-testid="channel-navigation-shell"
+        class="hidden min-w-0 overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-sm dark:border-dark-600 dark:bg-dark-800 xl:col-start-1 xl:block"
       >
-        <div class="flex items-center gap-3">
+        <div class="border-b border-slate-100 px-4 py-4 dark:border-dark-600">
           <h2 class="text-sm font-semibold text-slate-900 dark:text-white">
             {{ t(`${catalogKey}.channelNavigation`) }}
           </h2>
-          <p class="text-xs text-slate-500 dark:text-slate-400">
+          <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">
             {{ t(`${catalogKey}.channelsCount`, { count: 0 }) }}
           </p>
         </div>
-      </div>
+      </aside>
 
       <div
-        v-if="$slots.toolbar"
-        data-testid="channel-toolbar-region"
-        class="min-w-0"
+        :class="$slots.toolbar ? 'min-w-0 space-y-4 xl:col-start-2' : 'xl:col-span-2'"
       >
-        <slot name="toolbar" :selected-channel="null" :heading-id="detailHeadingId" />
-      </div>
+        <div
+          v-if="$slots.toolbar"
+          data-testid="channel-toolbar-region"
+          class="min-w-0"
+        >
+          <slot name="toolbar" :selected-channel="null" :heading-id="detailHeadingId" />
+        </div>
 
-      <div
-        data-testid="catalog-empty"
-        class="rounded-2xl border border-dashed border-gray-300 bg-white px-6 py-16 text-center text-sm text-gray-500 dark:border-dark-600 dark:bg-dark-800 dark:text-gray-400"
-      >
-        {{ t(emptyKind === 'no-results' ? `${catalogKey}.noMatchingResults` : `${catalogKey}.noChannels`) }}
+        <div
+          data-testid="catalog-empty"
+          class="rounded-2xl border border-dashed border-gray-300 bg-white px-6 py-16 text-center text-sm text-gray-500 dark:border-dark-600 dark:bg-dark-800 dark:text-gray-400"
+        >
+          {{ t(emptyKind === 'no-results' ? `${catalogKey}.noMatchingResults` : `${catalogKey}.noChannels`) }}
+        </div>
       </div>
     </section>
 
     <section
       v-else
       data-testid="channel-catalog-layout"
-      class="relative min-w-0 space-y-4"
+      class="relative min-w-0 space-y-4 xl:grid xl:grid-cols-[240px_minmax(0,1fr)] xl:items-start xl:gap-4 xl:space-y-0"
       :aria-busy="refreshing"
     >
       <div
         v-if="rateFallback"
         data-testid="rate-fallback-warning"
-        class="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-300"
+        class="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-300 xl:col-span-2"
         role="status"
       >
         {{ t(`${catalogKey}.rateFallback`) }}
@@ -91,27 +94,30 @@
         {{ t(`${catalogKey}.refreshing`) }}
       </div>
 
-      <div
-        data-testid="channel-tabs-shell"
-        class="hidden min-w-0 overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-sm dark:border-dark-600 dark:bg-dark-800 xl:block"
+      <aside
+        data-testid="channel-navigation-shell"
+        class="hidden min-w-0 overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-sm dark:border-dark-600 dark:bg-dark-800 xl:sticky xl:top-0 xl:col-start-1 xl:block"
       >
-        <header class="flex items-center gap-3 px-4 pt-3">
-          <div class="flex min-w-0 items-baseline gap-2">
+        <header class="border-b border-slate-100 px-4 py-4 dark:border-dark-600">
+          <div class="flex items-center justify-between gap-3">
             <h2 class="text-sm font-semibold text-slate-900 dark:text-white">
               {{ t(`${catalogKey}.channelNavigation`) }}
             </h2>
-            <p class="text-xs text-slate-500 dark:text-slate-400">
-              {{ t(`${catalogKey}.channelsCount`, { count: channels.length }) }}
-            </p>
+            <span class="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold tabular-nums text-slate-500 dark:bg-dark-700 dark:text-slate-300">
+              {{ channels.length }}
+            </span>
           </div>
+          <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">
+            {{ t(`${catalogKey}.channelsCount`, { count: channels.length }) }}
+          </p>
         </header>
         <div
           data-testid="channel-navigation"
           ref="channelListboxRef"
           role="listbox"
-          aria-orientation="horizontal"
+          aria-orientation="vertical"
           :aria-label="t(`${catalogKey}.channelNavigation`)"
-          class="flex min-w-0 gap-2 overflow-x-auto px-3 pb-3 pt-2"
+          class="flex min-w-0 flex-col gap-1 p-2"
         >
           <button
             v-for="channel in channels"
@@ -120,9 +126,9 @@
             type="button"
             role="option"
             data-testid="channel-nav-item"
-            class="relative min-h-[76px] w-64 shrink-0 overflow-hidden rounded-xl border px-3 py-2.5 text-left transition-colors motion-reduce:transition-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
+            class="relative w-full min-w-0 touch-manipulation overflow-hidden rounded-xl border px-3 py-3 text-left transition-colors motion-reduce:transition-none hover:border-primary-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2 dark:hover:border-primary-500/40 dark:focus-visible:ring-offset-dark-800"
             :class="channel.key === selectedChannelKey
-              ? 'border-primary-200 bg-primary-50/80 text-primary-800 after:absolute after:bottom-0 after:left-3 after:right-3 after:h-0.5 after:rounded-full after:bg-primary-500 dark:border-primary-500/30 dark:bg-primary-500/10 dark:text-primary-100'
+              ? 'border-primary-200 bg-primary-50/80 pl-4 text-primary-800 before:absolute before:bottom-3 before:left-1 before:top-3 before:w-0.5 before:rounded-full before:bg-primary-500 dark:border-primary-500/30 dark:bg-primary-500/10 dark:text-primary-100'
               : 'border-transparent text-gray-700 hover:border-gray-200 hover:bg-gray-50 dark:text-gray-200 dark:hover:border-dark-500 dark:hover:bg-dark-700'"
             :aria-selected="channel.key === selectedChannelKey"
             :tabindex="channel.key === selectedChannelKey ? 0 : -1"
@@ -130,47 +136,51 @@
             @click="selectedChannelKey = channel.key"
             @keydown="handleNavKeydown($event, channel.key)"
           >
-            <span class="block truncate text-sm font-semibold">
+            <span class="block min-w-0 break-words text-sm font-semibold [overflow-wrap:anywhere]">
               {{ channel.name }}
             </span>
-            <span class="mt-1.5 flex min-w-0 items-center justify-between gap-3">
-              <span class="flex min-w-0 gap-1.5 overflow-hidden">
+            <span class="mt-1.5 flex min-w-0 flex-wrap items-end justify-between gap-2">
+              <span class="flex min-w-0 flex-wrap gap-1.5">
                 <AvailableChannelPlatformBadge
                   v-for="platform in channel.platforms"
                   :key="platform"
                   :platform="platform"
                 />
               </span>
-              <span class="flex shrink-0 gap-2 text-[11px] text-gray-500 dark:text-gray-400">
+              <span class="flex shrink-0 gap-2 text-[11px] tabular-nums text-gray-500 dark:text-gray-400">
                 <span>{{ t(`${catalogKey}.groupsCount`, { count: channel.groupCount }) }}</span>
                 <span>{{ t(`${catalogKey}.modelsCount`, { count: channel.modelCount }) }}</span>
               </span>
             </span>
           </button>
         </div>
-      </div>
-
-      <AvailableChannelPicker v-model="selectedChannelKey" :channels="channels" />
+      </aside>
 
       <div
-        v-if="$slots.toolbar"
-        data-testid="channel-toolbar-region"
-        class="min-w-0"
+        data-testid="channel-content-column"
+        class="flex min-w-0 flex-col gap-4 xl:col-start-2"
       >
-        <slot
-          name="toolbar"
-          :selected-channel="selectedChannel"
-          :heading-id="detailHeadingId"
-        />
-      </div>
+        <AvailableChannelPicker v-model="selectedChannelKey" :channels="channels" />
 
-      <section
-        v-if="selectedChannel || modelEntries"
-        :id="detailRegionId"
-        data-testid="channel-detail"
-        class="min-w-0 space-y-4"
-        :aria-labelledby="detailHeadingId"
-      >
+        <div
+          v-if="$slots.toolbar"
+          data-testid="channel-toolbar-region"
+          class="min-w-0"
+        >
+          <slot
+            name="toolbar"
+            :selected-channel="selectedChannel"
+            :heading-id="detailHeadingId"
+          />
+        </div>
+
+        <section
+          v-if="selectedChannel || modelEntries"
+          :id="detailRegionId"
+          data-testid="channel-detail"
+          class="min-w-0 space-y-4"
+          :aria-labelledby="detailHeadingId"
+        >
         <header
           v-if="selectedChannel && !$slots.toolbar"
           data-testid="channel-detail-summary"
@@ -223,7 +233,8 @@
           :group="group"
           :default-expanded="index === 0"
         />
-      </section>
+        </section>
+      </div>
     </section>
   </div>
 </template>
@@ -308,10 +319,10 @@ function handleNavKeydown(event: KeyboardEvent, currentKey: string): void {
 
   let nextIndex: number | null = null
   switch (event.key) {
-    case 'ArrowRight':
+    case 'ArrowDown':
       nextIndex = Math.min(currentIndex + 1, props.channels.length - 1)
       break
-    case 'ArrowLeft':
+    case 'ArrowUp':
       nextIndex = Math.max(currentIndex - 1, 0)
       break
     case 'Home':
