@@ -16,10 +16,15 @@ import (
 type systemCustomModelsRouteRepo struct {
 	service.SystemCustomGroupRepository
 	routes []service.SystemCustomGroupModel
+	groups map[int64]*service.Group
 }
 
 func (r systemCustomModelsRouteRepo) ListModels(context.Context, int64, bool) ([]service.SystemCustomGroupModel, error) {
-	return append([]service.SystemCustomGroupModel(nil), r.routes...), nil
+	routes := append([]service.SystemCustomGroupModel(nil), r.routes...)
+	for i := range routes {
+		routes[i].SourceGroup = r.groups[routes[i].SourceGroupID]
+	}
+	return routes, nil
 }
 
 type systemCustomModelsGroupRepo struct {
@@ -50,6 +55,25 @@ func (c systemCustomModelsCatalog) GetAvailableModels(_ context.Context, groupID
 
 func (c systemCustomModelsCatalog) HasSchedulableAccountsForGroupPlatform(_ context.Context, groupID int64, _ string) bool {
 	return !c.unschedulable[groupID]
+}
+
+func (c systemCustomModelsCatalog) ListSystemCustomGroupModelAvailability(_ context.Context, sources []service.SystemCustomGroupModelListSource) (service.SystemCustomGroupModelAvailability, error) {
+	availability := make(service.SystemCustomGroupModelAvailability, len(sources))
+	for _, source := range sources {
+		if c.unschedulable[source.Group.ID] {
+			continue
+		}
+		available := make(map[string]bool, len(source.Models))
+		for _, sourceModel := range source.Models {
+			for _, model := range c.models[source.Group.ID] {
+				if model == sourceModel {
+					available[sourceModel] = true
+				}
+			}
+		}
+		availability[source.Group.ID] = available
+	}
+	return availability, nil
 }
 
 func TestSystemCustomGroupModelsExposesAvailableAliasesOnly(t *testing.T) {
@@ -101,17 +125,17 @@ func gjsonStrings(body, path string) []string {
 func newSystemCustomModelsHandler(t *testing.T) (*GatewayHandler, *service.APIKey) {
 	t.Helper()
 	billingGroupID := int64(25)
-	routeRepo := systemCustomModelsRouteRepo{routes: []service.SystemCustomGroupModel{
-		{GroupID: billingGroupID, PublicModel: "gemini-monthly", SourceGroupID: 20, SourceModel: "gemini-2.5-flash", Enabled: true},
-		{GroupID: billingGroupID, PublicModel: "claude-monthly", SourceGroupID: 10, SourceModel: "claude-sonnet-4", Enabled: true},
-		{GroupID: billingGroupID, PublicModel: "unavailable", SourceGroupID: 30, SourceModel: "gpt-5.6", Enabled: true},
-		{GroupID: billingGroupID, PublicModel: "disabled", SourceGroupID: 10, SourceModel: "claude-sonnet-4", Enabled: false},
-	}}
 	groupRepo := systemCustomModelsGroupRepo{groups: map[int64]*service.Group{
 		10: {ID: 10, Platform: service.PlatformAnthropic, Status: service.StatusActive, Hydrated: true},
 		20: {ID: 20, Platform: service.PlatformGemini, Status: service.StatusActive, Hydrated: true},
 		30: {ID: 30, Platform: service.PlatformOpenAI, Status: service.StatusActive, Hydrated: true},
 	}}
+	routeRepo := systemCustomModelsRouteRepo{routes: []service.SystemCustomGroupModel{
+		{GroupID: billingGroupID, PublicModel: "gemini-monthly", SourceGroupID: 20, SourceModel: "gemini-2.5-flash", Enabled: true},
+		{GroupID: billingGroupID, PublicModel: "claude-monthly", SourceGroupID: 10, SourceModel: "claude-sonnet-4", Enabled: true},
+		{GroupID: billingGroupID, PublicModel: "unavailable", SourceGroupID: 30, SourceModel: "gpt-5.6", Enabled: true},
+		{GroupID: billingGroupID, PublicModel: "disabled", SourceGroupID: 10, SourceModel: "claude-sonnet-4", Enabled: false},
+	}, groups: groupRepo.groups}
 	catalog := systemCustomModelsCatalog{
 		models: map[int64][]string{
 			10: {"claude-sonnet-4"},

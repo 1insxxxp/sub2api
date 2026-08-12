@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
@@ -11,15 +12,16 @@ import (
 
 type systemCustomRouteRepoStub struct {
 	SystemCustomGroupRepository
-	route       *SystemCustomGroupModel
-	models      []SystemCustomGroupModel
-	err         error
-	listErr     error
-	requestedID int64
-	requested   string
-	calls       int
-	listCalls   int
-	enabledOnly bool
+	route        *SystemCustomGroupModel
+	models       []SystemCustomGroupModel
+	err          error
+	listErr      error
+	requestedID  int64
+	requested    string
+	calls        int
+	listCalls    int
+	enabledOnly  bool
+	sourceGroups map[int64]*Group
 }
 
 func (s *systemCustomRouteRepoStub) ResolveModel(_ context.Context, groupID int64, publicModel string) (*SystemCustomGroupModel, error) {
@@ -33,7 +35,13 @@ func (s *systemCustomRouteRepoStub) ListModels(_ context.Context, groupID int64,
 	s.listCalls++
 	s.requestedID = groupID
 	s.enabledOnly = enabledOnly
-	return append([]SystemCustomGroupModel(nil), s.models...), s.listErr
+	models := append([]SystemCustomGroupModel(nil), s.models...)
+	for i := range models {
+		if models[i].SourceGroup == nil {
+			models[i].SourceGroup = s.sourceGroups[models[i].SourceGroupID]
+		}
+	}
+	return models, s.listErr
 }
 
 type systemCustomSourceRepoStub struct {
@@ -214,6 +222,13 @@ func TestResolveSystemCustomGroupModelTreatsRepositoryFailureAsUnavailable(t *te
 
 func TestListSystemCustomGroupModelsReturnsOnlyLiveEnabledAliases(t *testing.T) {
 	billingGroupID := int64(25)
+	sourceGroups := map[int64]*Group{
+		10: directSourceGroup(10, PlatformAnthropic),
+		20: directSourceGroup(20, PlatformGemini),
+		21: directSourceGroup(21, PlatformOpenAI),
+		30: {ID: 30, Platform: PlatformAnthropic, Status: StatusDisabled, Hydrated: true},
+		40: directSourceGroup(40, PlatformGemini),
+	}
 	routeRepo := &systemCustomRouteRepoStub{models: []SystemCustomGroupModel{
 		{GroupID: billingGroupID, PublicModel: "Zulu", SourceGroupID: 10, SourceModel: "claude-sonnet-4", Enabled: true},
 		{GroupID: billingGroupID, PublicModel: "alpha", SourceGroupID: 20, SourceModel: "gemini-2.5-flash", Enabled: true},
@@ -222,16 +237,10 @@ func TestListSystemCustomGroupModelsReturnsOnlyLiveEnabledAliases(t *testing.T) 
 		{GroupID: billingGroupID, PublicModel: "disabled-route", SourceGroupID: 10, SourceModel: "claude-sonnet-4", Enabled: false},
 		{GroupID: billingGroupID, PublicModel: "disabled-source", SourceGroupID: 30, SourceModel: "claude-sonnet-4", Enabled: true},
 		{GroupID: billingGroupID, PublicModel: "unschedulable", SourceGroupID: 40, SourceModel: "gemini-2.5-flash", Enabled: true},
-	}}
+	}, sourceGroups: sourceGroups}
 	svc := &APIKeyService{
 		systemCustomGroupRepo: routeRepo,
-		groupRepo: &systemCustomSourceRepoStub{groups: map[int64]*Group{
-			10: directSourceGroup(10, PlatformAnthropic),
-			20: directSourceGroup(20, PlatformGemini),
-			21: directSourceGroup(21, PlatformOpenAI),
-			30: {ID: 30, Platform: PlatformAnthropic, Status: StatusDisabled, Hydrated: true},
-			40: directSourceGroup(40, PlatformGemini),
-		}},
+		groupRepo:             &systemCustomSourceRepoStub{groups: sourceGroups},
 		systemCustomModelCatalog: systemCustomModelCatalogStub{
 			models: map[int64][]string{
 				10: {"claude-sonnet-4"},
@@ -254,16 +263,17 @@ func TestListSystemCustomGroupModelsReturnsOnlyLiveEnabledAliases(t *testing.T) 
 
 func TestListSystemCustomGroupModelsFiltersByLiveSourcePlatform(t *testing.T) {
 	billingGroupID := int64(25)
+	sourceGroups := map[int64]*Group{
+		10: directSourceGroup(10, PlatformAnthropic),
+		20: directSourceGroup(20, PlatformGemini),
+	}
 	routeRepo := &systemCustomRouteRepoStub{models: []SystemCustomGroupModel{
 		{GroupID: billingGroupID, PublicModel: "claude-monthly", SourceGroupID: 10, SourceModel: "claude-sonnet-4", Enabled: true},
 		{GroupID: billingGroupID, PublicModel: "gemini-monthly", SourceGroupID: 20, SourceModel: "gemini-2.5-flash", Enabled: true},
-	}}
+	}, sourceGroups: sourceGroups}
 	svc := &APIKeyService{
 		systemCustomGroupRepo: routeRepo,
-		groupRepo: &systemCustomSourceRepoStub{groups: map[int64]*Group{
-			10: directSourceGroup(10, PlatformAnthropic),
-			20: directSourceGroup(20, PlatformGemini),
-		}},
+		groupRepo:             &systemCustomSourceRepoStub{groups: sourceGroups},
 		systemCustomModelCatalog: systemCustomModelCatalogStub{models: map[int64][]string{
 			10: {"claude-sonnet-4"}, 20: {"gemini-2.5-flash"},
 		}},
@@ -284,12 +294,14 @@ func TestListSystemCustomGroupModelsUsesLiveDefaultAndCustomListSemantics(t *tes
 	}}
 	customGemini := directSourceGroup(60, PlatformGemini)
 	customGemini.ModelsListConfig = GroupModelsListConfig{Enabled: true, Models: []string{"gemini-2.5-pro"}}
+	sourceGroups := map[int64]*Group{
+		50: directSourceGroup(50, PlatformOpenAI),
+		60: customGemini,
+	}
+	routeRepo.sourceGroups = sourceGroups
 	svc := &APIKeyService{
 		systemCustomGroupRepo: routeRepo,
-		groupRepo: &systemCustomSourceRepoStub{groups: map[int64]*Group{
-			50: directSourceGroup(50, PlatformOpenAI),
-			60: customGemini,
-		}},
+		groupRepo:             &systemCustomSourceRepoStub{groups: sourceGroups},
 		systemCustomModelCatalog: systemCustomModelCatalogStub{models: map[int64][]string{
 			50: nil,
 			60: {"gemini-2.5-flash", "gemini-2.5-pro"},
@@ -300,6 +312,96 @@ func TestListSystemCustomGroupModelsUsesLiveDefaultAndCustomListSemantics(t *tes
 
 	require.NoError(t, err)
 	require.Equal(t, []string{"default-openai", "selected-gemini"}, models)
+}
+
+func TestListSystemCustomGroupModelsUsesSchedulerWildcardSupport(t *testing.T) {
+	billingGroupID := int64(25)
+	source := directSourceGroup(10, PlatformAnthropic)
+	routeRepo := &systemCustomRouteRepoStub{models: []SystemCustomGroupModel{
+		{GroupID: billingGroupID, PublicModel: "sonnet-monthly", SourceGroupID: source.ID, SourceModel: "claude-sonnet-4-6", SourceGroup: source, Enabled: true},
+	}}
+	svc := &APIKeyService{
+		systemCustomGroupRepo: routeRepo,
+		groupRepo:             &systemCustomSourceRepoStub{groups: map[int64]*Group{source.ID: source}},
+		systemCustomModelCatalog: systemCustomModelCatalogStub{models: map[int64][]string{
+			source.ID: {"claude-*"},
+		}},
+	}
+
+	models, err := svc.ListSystemCustomGroupModels(context.Background(), newSystemCustomAPIKey(billingGroupID), "")
+
+	require.NoError(t, err)
+	require.Equal(t, []string{"sonnet-monthly"}, models, "the model list must use the same wildcard support semantics as account scheduling")
+}
+
+func TestListSystemCustomGroupModelsLoadsAllSourcesInBoundedBatches(t *testing.T) {
+	const sourceCount = 50
+	billingGroupID := int64(25)
+	routes := make([]SystemCustomGroupModel, 0, sourceCount)
+	groups := make(map[int64]*Group, sourceCount)
+	modelsByGroup := make(map[int64][]string, sourceCount)
+	for i := 0; i < sourceCount; i++ {
+		sourceID := int64(1000 + i)
+		sourceModel := fmt.Sprintf("model-%03d", i)
+		source := directSourceGroup(sourceID, PlatformAnthropic)
+		groups[sourceID] = source
+		modelsByGroup[sourceID] = []string{sourceModel}
+		routes = append(routes, SystemCustomGroupModel{
+			GroupID: billingGroupID, PublicModel: fmt.Sprintf("alias-%03d", i),
+			SourceGroupID: sourceID, SourceModel: sourceModel, SourceGroup: source, Enabled: true,
+		})
+	}
+	routeRepo := &systemCustomRouteRepoStub{models: routes}
+	groupRepo := &systemCustomSourceRepoStub{groups: groups}
+	catalog := &countingSystemCustomModelCatalogStub{models: modelsByGroup}
+	svc := &APIKeyService{
+		systemCustomGroupRepo:    routeRepo,
+		groupRepo:                groupRepo,
+		systemCustomModelCatalog: catalog,
+	}
+
+	models, err := svc.ListSystemCustomGroupModels(context.Background(), newSystemCustomAPIKey(billingGroupID), "")
+
+	require.NoError(t, err)
+	require.Len(t, models, sourceCount)
+	require.Equal(t, 1, routeRepo.listCalls)
+	require.Zero(t, groupRepo.liteCalls, "source groups already attached to the route snapshot must not be reloaded one by one")
+	require.Equal(t, 1, catalog.batchCalls, "all source account/model availability must be loaded in one bounded batch")
+	require.Zero(t, catalog.hasCalls+catalog.getCalls, "the list path must not use per-source catalog calls")
+}
+
+type countingSystemCustomModelCatalogStub struct {
+	models     map[int64][]string
+	hasCalls   int
+	getCalls   int
+	batchCalls int
+}
+
+func (s *countingSystemCustomModelCatalogStub) HasSchedulableAccountsForGroupPlatform(_ context.Context, groupID int64, _ string) bool {
+	s.hasCalls++
+	_, ok := s.models[groupID]
+	return ok
+}
+
+func (s *countingSystemCustomModelCatalogStub) GetAvailableModels(_ context.Context, groupID *int64, _ string) []string {
+	s.getCalls++
+	if groupID == nil {
+		return nil
+	}
+	return append([]string(nil), s.models[*groupID]...)
+}
+
+func (s *countingSystemCustomModelCatalogStub) ListSystemCustomGroupModelAvailability(_ context.Context, sources []SystemCustomGroupModelListSource) (SystemCustomGroupModelAvailability, error) {
+	s.batchCalls++
+	availability := make(SystemCustomGroupModelAvailability, len(sources))
+	for _, source := range sources {
+		available := make(map[string]bool, len(source.Models))
+		for _, model := range source.Models {
+			available[model] = CustomModelsListAllowsModel(s.models[source.Group.ID], model)
+		}
+		availability[source.Group.ID] = available
+	}
+	return availability, nil
 }
 
 func TestListSystemCustomGroupModelsFailsClosedWhenContainerOrDependenciesAreInvalid(t *testing.T) {

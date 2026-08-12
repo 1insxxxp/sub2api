@@ -109,6 +109,27 @@ func (s systemCustomModelCatalogStub) GetAvailableModels(_ context.Context, grou
 	return append([]string(nil), s.models[*groupID]...)
 }
 
+func (s systemCustomModelCatalogStub) ListSystemCustomGroupModelAvailability(_ context.Context, sources []SystemCustomGroupModelListSource) (SystemCustomGroupModelAvailability, error) {
+	availability := make(SystemCustomGroupModelAvailability, len(sources))
+	for _, source := range sources {
+		if s.unschedulable[source.Group.ID] {
+			continue
+		}
+		patterns := s.models[source.Group.ID]
+		if source.Group.CustomModelsListEnabled() {
+			patterns = ResolveCustomModelsList(source.Group.Platform, patterns, source.Group.ModelsListConfig.Models)
+		} else if len(patterns) == 0 {
+			patterns = DefaultModelIDsForPlatform(source.Group.Platform)
+		}
+		available := make(map[string]bool, len(source.Models))
+		for _, model := range source.Models {
+			available[model] = CustomModelsListAllowsModel(patterns, model) || containsModelFold(patterns, model)
+		}
+		availability[source.Group.ID] = available
+	}
+	return availability, nil
+}
+
 func newSystemCustomGroupValidationService(groups map[int64]*Group, models map[int64][]string) *SystemCustomGroupService {
 	return NewSystemCustomGroupService(
 		&systemCustomGroupRepositoryStub{},

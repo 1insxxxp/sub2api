@@ -43,6 +43,36 @@ type SystemCustomGroupModelCatalog interface {
 	HasSchedulableAccountsForGroupPlatform(ctx context.Context, groupID int64, platform string) bool
 }
 
+// SystemCustomGroupModelListSource is one live source-group snapshot together
+// with the concrete source models whose public aliases may be advertised.
+// Runtime list generation deliberately receives the group snapshot loaded with
+// the routes so it does not re-query each source independently.
+type SystemCustomGroupModelListSource struct {
+	Group  Group
+	Models []string
+}
+
+// SystemCustomGroupModelAvailability is keyed by source group and then by the
+// exact source-model spelling supplied in SystemCustomGroupModelListSource.
+type SystemCustomGroupModelAvailability map[int64]map[string]bool
+
+// SystemCustomGroupModelListCatalog evaluates one complete route snapshot
+// against the same account support rules used by gateway scheduling.
+type SystemCustomGroupModelListCatalog interface {
+	ListSystemCustomGroupModelAvailability(ctx context.Context, sources []SystemCustomGroupModelListSource) (SystemCustomGroupModelAvailability, error)
+}
+
+// SystemCustomGroupSchedulableAccount preserves the source-group association
+// while loading all candidate accounts in one bounded repository operation.
+type SystemCustomGroupSchedulableAccount struct {
+	GroupID int64
+	Account Account
+}
+
+type systemCustomGroupSchedulableAccountRepository interface {
+	ListSchedulableByGroupIDs(ctx context.Context, groupIDs []int64) ([]SystemCustomGroupSchedulableAccount, error)
+}
+
 type SystemCustomGroupService struct {
 	repo                 SystemCustomGroupRepository
 	groupRepo            GroupRepository

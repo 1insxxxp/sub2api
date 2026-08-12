@@ -292,7 +292,7 @@ type APIKeyService struct {
 	groupRepo                 GroupRepository
 	customGroupRepo           UserCustomGroupRepository
 	systemCustomGroupRepo     SystemCustomGroupRepository
-	systemCustomModelCatalog  SystemCustomGroupModelCatalog
+	systemCustomModelCatalog  SystemCustomGroupModelListCatalog
 	userSubRepo               UserSubscriptionRepository
 	userGroupRateRepo         UserGroupRateRepository
 	cache                     APIKeyCache
@@ -384,7 +384,7 @@ func (s *APIKeyService) SetSystemCustomGroupRepository(repo SystemCustomGroupRep
 
 // SetSystemCustomGroupModelCatalog injects the live schedulable-account model
 // index used when exposing public aliases from a system custom group.
-func (s *APIKeyService) SetSystemCustomGroupModelCatalog(catalog SystemCustomGroupModelCatalog) {
+func (s *APIKeyService) SetSystemCustomGroupModelCatalog(catalog SystemCustomGroupModelListCatalog) {
 	s.systemCustomModelCatalog = catalog
 }
 
@@ -489,12 +489,6 @@ type SystemCustomGroupModelResolution struct {
 	SystemCustomGroupResolution
 }
 
-type systemCustomModelListSourceSnapshot struct {
-	group     *Group
-	available map[string]struct{}
-	usable    bool
-}
-
 // ResolveSystemCustomGroupModel resolves a public alias from a system-managed
 // subscription container to a live direct source group. Ordinary keys return
 // (nil, nil) so callers can preserve existing routing behavior.
@@ -581,9 +575,8 @@ func (s *APIKeyService) ListSystemCustomGroupModels(ctx context.Context, key *AP
 		return nil, ErrSystemCustomGroupSourceUnavailable.WithCause(err)
 	}
 
-	sources := make(map[int64]systemCustomModelListSourceSnapshot)
-	seenAliases := make(map[string]struct{}, len(routes))
-	aliases := make([]string, 0, len(routes))
+	sourcesByID := make(map[int64]*SystemCustomGroupModelListSource)
+	validRoutes := make([]SystemCustomGroupModel, 0, len(routes))
 	platform = strings.TrimSpace(platform)
 
 	for _, route := range routes {
@@ -593,15 +586,36 @@ func (s *APIKeyService) ListSystemCustomGroupModels(ctx context.Context, key *AP
 			continue
 		}
 
-		source, loaded := sources[route.SourceGroupID]
-		if !loaded {
-			source = s.loadSystemCustomModelListSource(ctx, route.SourceGroupID)
-			sources[route.SourceGroupID] = source
-		}
-		if !source.usable || (platform != "" && source.group.Platform != platform) {
+		sourceGroup := route.SourceGroup
+		if !isDirectSystemCustomSource(sourceGroup) || !IsGroupContextValid(sourceGroup) ||
+			(platform != "" && sourceGroup.Platform != platform) {
 			continue
 		}
-		if _, ok := source.available[strings.ToLower(sourceModel)]; !ok {
+		source := sourcesByID[route.SourceGroupID]
+		if source == nil {
+			source = &SystemCustomGroupModelListSource{Group: *sourceGroup}
+			sourcesByID[route.SourceGroupID] = source
+		}
+		source.Models = append(source.Models, sourceModel)
+		validRoutes = append(validRoutes, route)
+	}
+
+	sources := make([]SystemCustomGroupModelListSource, 0, len(sourcesByID))
+	for _, source := range sourcesByID {
+		sources = append(sources, *source)
+	}
+	sort.Slice(sources, func(i, j int) bool { return sources[i].Group.ID < sources[j].Group.ID })
+	availability, err := s.systemCustomModelCatalog.ListSystemCustomGroupModelAvailability(ctx, sources)
+	if err != nil {
+		return nil, ErrSystemCustomGroupSourceUnavailable.WithCause(err)
+	}
+
+	seenAliases := make(map[string]struct{}, len(validRoutes))
+	aliases := make([]string, 0, len(validRoutes))
+	for _, route := range validRoutes {
+		publicModel := strings.TrimSpace(route.PublicModel)
+		sourceModel := strings.TrimSpace(route.SourceModel)
+		if !availability[route.SourceGroupID][sourceModel] {
 			continue
 		}
 		aliasKey := strings.ToLower(publicModel)
@@ -620,33 +634,6 @@ func (s *APIKeyService) ListSystemCustomGroupModels(ctx context.Context, key *AP
 		return left < right
 	})
 	return aliases, nil
-}
-
-func (s *APIKeyService) loadSystemCustomModelListSource(ctx context.Context, sourceGroupID int64) systemCustomModelListSourceSnapshot {
-	result := systemCustomModelListSourceSnapshot{}
-	source, err := s.groupRepo.GetByIDLite(ctx, sourceGroupID)
-	if err != nil || !isDirectSystemCustomSource(source) || !IsGroupContextValid(source) {
-		return result
-	}
-	result.group = source
-	if !s.systemCustomModelCatalog.HasSchedulableAccountsForGroupPlatform(ctx, source.ID, source.Platform) {
-		return result
-	}
-	models := s.systemCustomModelCatalog.GetAvailableModels(ctx, &source.ID, source.Platform)
-	if source.CustomModelsListEnabled() {
-		models = ResolveCustomModelsList(source.Platform, models, source.ModelsListConfig.Models)
-	} else if len(models) == 0 {
-		models = DefaultModelIDsForPlatform(source.Platform)
-	}
-	result.available = make(map[string]struct{}, len(models))
-	for _, model := range models {
-		model = strings.TrimSpace(model)
-		if model != "" {
-			result.available[strings.ToLower(model)] = struct{}{}
-		}
-	}
-	result.usable = true
-	return result
 }
 
 // ResolveCustomGroupModel returns a per-request API key clone and the configured real model.

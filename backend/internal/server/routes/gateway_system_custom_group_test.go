@@ -35,10 +35,15 @@ type systemCustomUnsupportedAuthCache struct {
 type systemCustomModelsRouteRepository struct {
 	service.SystemCustomGroupRepository
 	routes []service.SystemCustomGroupModel
+	groups map[int64]*service.Group
 }
 
 func (r systemCustomModelsRouteRepository) ListModels(context.Context, int64, bool) ([]service.SystemCustomGroupModel, error) {
-	return append([]service.SystemCustomGroupModel(nil), r.routes...), nil
+	routes := append([]service.SystemCustomGroupModel(nil), r.routes...)
+	for i := range routes {
+		routes[i].SourceGroup = r.groups[routes[i].SourceGroupID]
+	}
+	return routes, nil
 }
 
 type systemCustomModelsGroupRepository struct {
@@ -68,6 +73,22 @@ func (c systemCustomModelsCatalog) GetAvailableModels(_ context.Context, groupID
 
 func (systemCustomModelsCatalog) HasSchedulableAccountsForGroupPlatform(context.Context, int64, string) bool {
 	return true
+}
+
+func (c systemCustomModelsCatalog) ListSystemCustomGroupModelAvailability(_ context.Context, sources []service.SystemCustomGroupModelListSource) (service.SystemCustomGroupModelAvailability, error) {
+	availability := make(service.SystemCustomGroupModelAvailability, len(sources))
+	for _, source := range sources {
+		available := make(map[string]bool, len(source.Models))
+		for _, sourceModel := range source.Models {
+			for _, model := range c.models[source.Group.ID] {
+				if model == sourceModel {
+					available[sourceModel] = true
+				}
+			}
+		}
+		availability[source.Group.ID] = available
+	}
+	return availability, nil
 }
 
 func (c *systemCustomUnsupportedAuthCache) GetAuthCache(context.Context, string) (*service.APIKeyAuthCacheEntry, error) {
@@ -232,7 +253,7 @@ func TestSystemCustomModelListsUseRealAuthSnapshotAndAliasesInRegisteredRouter(t
 	routeRepo := systemCustomModelsRouteRepository{routes: []service.SystemCustomGroupModel{
 		{GroupID: billingGroupID, PublicModel: "claude-monthly", SourceGroupID: 10, SourceModel: "claude-sonnet-4", Enabled: true},
 		{GroupID: billingGroupID, PublicModel: "gemini-monthly", SourceGroupID: 20, SourceModel: "gemini-2.5-flash", Enabled: true},
-	}}
+	}, groups: groupRepo.groups}
 	catalog := systemCustomModelsCatalog{models: map[int64][]string{10: {"claude-sonnet-4"}, 20: {"gemini-2.5-flash"}}}
 	cfg := &config.Config{
 		RunMode:    config.RunModeSimple,

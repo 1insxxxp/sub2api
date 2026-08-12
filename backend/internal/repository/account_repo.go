@@ -1888,6 +1888,54 @@ func (r *accountRepository) ListSchedulableByGroupID(ctx context.Context, groupI
 	})
 }
 
+// ListSchedulableByGroupIDs loads the complete schedulable account snapshot for
+// many groups with one association query plus Ent's one eager-load account
+// query. It intentionally returns the group association because the same
+// account may participate in more than one source group.
+func (r *accountRepository) ListSchedulableByGroupIDs(ctx context.Context, groupIDs []int64) ([]service.SystemCustomGroupSchedulableAccount, error) {
+	groupIDs = uniquePositiveInt64s(groupIDs)
+	if len(groupIDs) == 0 {
+		return []service.SystemCustomGroupSchedulableAccount{}, nil
+	}
+	now := time.Now()
+	rows, err := r.client.AccountGroup.Query().
+		Where(
+			dbaccountgroup.GroupIDIn(groupIDs...),
+			dbaccountgroup.HasAccountWith(
+				dbaccount.DeletedAtIsNil(),
+				dbaccount.StatusEQ(service.StatusActive),
+				dbaccount.SchedulableEQ(true),
+				tempUnschedulablePredicate(),
+				notExpiredPredicate(now),
+				dbaccount.Or(dbaccount.OverloadUntilIsNil(), dbaccount.OverloadUntilLTE(now)),
+				dbaccount.Or(dbaccount.RateLimitResetAtIsNil(), dbaccount.RateLimitResetAtLTE(now)),
+			),
+		).
+		Order(
+			dbent.Asc(dbaccountgroup.FieldGroupID),
+			dbaccountgroup.ByPriority(),
+			dbaccountgroup.ByAccountField(dbaccount.FieldPriority),
+		).
+		WithAccount().
+		All(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	out := make([]service.SystemCustomGroupSchedulableAccount, 0, len(rows))
+	for _, row := range rows {
+		account := accountEntityToService(row.Edges.Account)
+		if account == nil {
+			continue
+		}
+		out = append(out, service.SystemCustomGroupSchedulableAccount{
+			GroupID: row.GroupID,
+			Account: *account,
+		})
+	}
+	return out, nil
+}
+
 func (r *accountRepository) ListSchedulableCapacityByGroupIDs(ctx context.Context, groupIDs []int64) ([]service.GroupAccountCapacityRow, error) {
 	groupIDs = uniquePositiveInt64s(groupIDs)
 	if len(groupIDs) == 0 {
