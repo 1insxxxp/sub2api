@@ -40,7 +40,10 @@ const platformBadgeStub = {
 describe('AvailableChannelOfferingCard', () => {
   it('renders one flat offering with compact metadata and price cells', () => {
     const wrapper = mount(AvailableChannelOfferingCard, { props: { offering: offering() }, global: { stubs: platformBadgeStub } })
-    expect(wrapper.get('[data-testid="flat-offering-card"]').classes()).not.toContain('xl:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(88px,0.5fr)_minmax(72px,0.4fr)]')
+    const root = wrapper.get('[data-testid="flat-offering-card"]')
+    expect(root.classes()).toContain('offering-row')
+    expect(root.classes()).not.toContain('shadow-sm')
+    expect(root.classes()).not.toContain('rounded-2xl')
     expect(wrapper.text()).toContain('Anthropic')
     expect(wrapper.text()).toContain('余额 [claude max]')
     expect(wrapper.get('[data-platform-badge]').attributes('data-platform')).toBe('anthropic')
@@ -50,6 +53,9 @@ describe('AvailableChannelOfferingCard', () => {
     expect(wrapper.text()).toContain('1.23×')
     expect(wrapper.text()).not.toContain('1.239×')
     expect(wrapper.findAll('[data-testid="offering-price-cell"]')).toHaveLength(3)
+    expect(wrapper.get('[data-testid="offering-price-table"]').classes()).toContain('divide-y')
+    expect(wrapper.get('[data-testid="offering-price-heading"]').text()).toContain('官方价')
+    expect(wrapper.get('[data-testid="offering-price-heading"]').text()).toContain('本站价')
     expect(wrapper.text()).toContain('$10.00')
     expect(wrapper.text()).toContain('¥12.00')
     expect(wrapper.find('[data-testid="price-detail-toggle"]').exists()).toBe(false)
@@ -85,8 +91,8 @@ describe('AvailableChannelOfferingCard', () => {
 
   it('uses a responsive grid without nested model-price markup', async () => {
     const source = await import('../AvailableChannelOfferingCard.vue?raw').then(module => module.default)
-    expect(source).toContain('grid-cols-2')
-    expect(source).toContain('lg:grid-cols-4')
+    expect(source).toContain('sm:grid-cols-[minmax(0,1fr)_auto]')
+    expect(source).toContain('grid-cols-[minmax(0,1fr)_auto_auto]')
     expect(source).toContain('[overflow-wrap:anywhere]')
     expect(source).not.toContain('AvailableChannelModelPrice')
   })
