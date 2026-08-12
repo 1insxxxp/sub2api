@@ -120,4 +120,21 @@ describe('AvailableChannelsToolbar', () => {
     expect(source).toContain('.platform-filter :deep(.select-trigger)')
     expect(source).toContain('@apply h-11')
   })
+
+  it('exposes project-native search and focus affordances', async () => {
+    const wrapper = await mountToolbar()
+    const search = wrapper.get('[data-testid="channel-search"]')
+    const refresh = wrapper.get('[data-testid="channel-refresh"]')
+
+    expect(search.attributes()).toMatchObject({
+      'aria-label': '搜索渠道或模型...',
+      name: 'available-channel-search',
+      autocomplete: 'off',
+    })
+    expect(search.classes()).toEqual(expect.arrayContaining([
+      'focus-visible:ring-2',
+      'focus-visible:ring-primary-500/20',
+    ]))
+    expect(refresh.classes()).toContain('focus-visible:ring-offset-2')
+  })
 })
