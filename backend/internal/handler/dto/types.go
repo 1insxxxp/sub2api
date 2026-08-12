@@ -576,6 +576,10 @@ type UsageLog struct {
 type AdminUsageLog struct {
 	UsageLog
 
+	// SourceGroupID is the direct source group selected behind a system custom
+	// subscription route. Nil for ordinary and historical usage rows.
+	SourceGroupID *int64 `json:"source_group_id,omitempty"`
+
 	// UpstreamModel is the actual model sent to the upstream provider after mapping.
 	// Omitted when no mapping was applied (requested model was used as-is).
 	UpstreamModel *string `json:"upstream_model,omitempty"`

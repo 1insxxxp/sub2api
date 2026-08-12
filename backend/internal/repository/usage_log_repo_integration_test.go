@@ -87,6 +87,40 @@ func (s *UsageLogRepoSuite) TestCreate() {
 	s.Require().NotZero(log.ID)
 }
 
+func (s *UsageLogRepoSuite) TestCreateRoundTripsSystemCustomBillingAndSourceGroups() {
+	user := mustCreateUser(s.T(), s.client, &service.User{Email: "source-group-roundtrip@test.com"})
+	apiKey := mustCreateApiKey(s.T(), s.client, &service.APIKey{UserID: user.ID, Key: "sk-source-group-roundtrip", Name: "k"})
+	account := mustCreateAccount(s.T(), s.client, &service.Account{Name: "acc-source-group-roundtrip"})
+	billingGroup := mustCreateGroup(s.T(), s.client, &service.Group{Name: "billing-group-roundtrip", Platform: service.PlatformComposite})
+	sourceGroup := mustCreateGroup(s.T(), s.client, &service.Group{Name: "source-group-roundtrip", Platform: service.PlatformAnthropic})
+
+	log := &service.UsageLog{
+		UserID:         user.ID,
+		APIKeyID:       apiKey.ID,
+		AccountID:      account.ID,
+		RequestID:      uuid.NewString(),
+		Model:          "claude-sonnet-4",
+		RequestedModel: "tavern-sonnet",
+		GroupID:        &billingGroup.ID,
+		SourceGroupID:  &sourceGroup.ID,
+		InputTokens:    10,
+		OutputTokens:   20,
+		TotalCost:      0.5,
+		ActualCost:     0.4,
+		CreatedAt:      time.Now().UTC(),
+	}
+
+	inserted, err := s.repo.Create(s.ctx, log)
+	s.Require().NoError(err)
+	s.Require().True(inserted)
+	got, err := s.repo.GetByID(s.ctx, log.ID)
+	s.Require().NoError(err)
+	s.Require().NotNil(got.GroupID)
+	s.Require().Equal(billingGroup.ID, *got.GroupID)
+	s.Require().NotNil(got.SourceGroupID)
+	s.Require().Equal(sourceGroup.ID, *got.SourceGroupID)
+}
+
 func (s *UsageLogRepoSuite) TestUpsertResponseOutcomeIsIdempotentAndLinked() {
 	user := mustCreateUser(s.T(), s.client, &service.User{Email: "outcome-create@test.com"})
 	apiKey := mustCreateApiKey(s.T(), s.client, &service.APIKey{UserID: user.ID, Key: "sk-outcome-create", Name: "k"})

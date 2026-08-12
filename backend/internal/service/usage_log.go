@@ -140,6 +140,7 @@ type UsageLog struct {
 	UpstreamEndpoint *string
 
 	GroupID        *int64
+	SourceGroupID  *int64
 	CustomGroupID  *int64
 	SubscriptionID *int64
 

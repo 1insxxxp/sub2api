@@ -89,6 +89,22 @@ type postUsageBillingParams struct {
 	Platform              string // 来自 APIKey 关联 Group 的平台标识
 }
 
+// resolveRecordUsageBillingIdentity keeps system custom subscription billing
+// anchored to the monthly container while the API key clone continues to carry
+// the direct source group used for pricing and scheduling.
+func resolveRecordUsageBillingIdentity(ctx context.Context, apiKey *APIKey, subscription *UserSubscription) (bool, *SystemCustomGroupResolution, error) {
+	resolution, systemCustom := SystemCustomGroupResolutionFromContext(ctx)
+	if systemCustom {
+		if subscription == nil || subscription.GroupID != resolution.BillingGroupID ||
+			(subscription.Group != nil && subscription.Group.ID != resolution.BillingGroupID) {
+			return false, nil, ErrSubscriptionInvalid
+		}
+		return true, &resolution, nil
+	}
+
+	return subscription != nil && apiKey != nil && apiKey.Group != nil && apiKey.Group.IsSubscriptionType(), nil, nil
+}
+
 // PlatformFromAPIKey 从 APIKey 关联的 Group 推导 platform 名称。
 // apiKey 为 nil 或 Group 信息缺失时返回空串（调用方据此 short-circuit quota 累加）。
 // 导出供 handler 层调用。
@@ -376,8 +392,21 @@ func finalizePostUsageBilling(ctx context.Context, p *postUsageBillingParams, de
 	}
 
 	if p.IsSubscriptionBill {
-		if p.Cost.ActualCost > 0 && p.User != nil && p.APIKey != nil && p.APIKey.GroupID != nil {
-			deps.billingCacheService.QueueUpdateSubscriptionUsage(p.User.ID, *p.APIKey.GroupID, p.Cost.ActualCost)
+		if p.Cost.ActualCost > 0 && p.User != nil && p.Subscription != nil {
+			billingGroupID := p.Subscription.GroupID
+			if resolution, systemCustom := SystemCustomGroupResolutionFromContext(ctx); systemCustom {
+				if p.Subscription.GroupID != resolution.BillingGroupID ||
+					(p.Subscription.Group != nil && p.Subscription.Group.ID != resolution.BillingGroupID) {
+					return
+				}
+				billingGroupID = resolution.BillingGroupID
+			}
+			if billingGroupID <= 0 && p.APIKey != nil && p.APIKey.GroupID != nil {
+				billingGroupID = *p.APIKey.GroupID
+			}
+			if billingGroupID > 0 {
+				deps.billingCacheService.QueueUpdateSubscriptionUsage(p.User.ID, billingGroupID, p.Cost.ActualCost)
+			}
 		}
 	} else if p.Cost.ActualCost > 0 && p.User != nil {
 		syncBalanceCacheAfterDeduction(ctx, p, deps, result)
@@ -803,6 +832,10 @@ func (s *GatewayService) recordUsageCore(ctx context.Context, input *recordUsage
 	user := input.User
 	account := input.Account
 	subscription := input.Subscription
+	isSubscriptionBilling, systemCustomResolution, err := resolveRecordUsageBillingIdentity(ctx, apiKey, subscription)
+	if err != nil {
+		return err
+	}
 	ApplyForwardImageBillingResolution(result)
 
 	// 强制缓存计费：将 input_tokens 转为 cache_read_input_tokens
@@ -894,8 +927,8 @@ func (s *GatewayService) recordUsageCore(ctx context.Context, input *recordUsage
 		}
 	}
 
-	// 判断计费方式：订阅模式 vs 余额模式
-	isSubscriptionBilling := subscription != nil && apiKey.Group != nil && apiKey.Group.IsSubscriptionType()
+	// 判断计费方式：订阅模式 vs 余额模式。系统自定义月卡的 API key
+	// 已克隆成来源分组，因此必须使用上面的双重身份判定，不能再看来源分组类型。
 	billingType := BillingTypeBalance
 	if isSubscriptionBilling {
 		billingType = BillingTypeSubscription
@@ -905,6 +938,10 @@ func (s *GatewayService) recordUsageCore(ctx context.Context, input *recordUsage
 	accountRateMultiplier := account.BillingRateMultiplier()
 	usageLog := s.buildRecordUsageLog(ctx, input, result, apiKey, user, account, subscription,
 		requestedModel, multiplier, imageMultiplier, accountRateMultiplier, billingType, cacheTTLOverridden, cost, opts)
+	if systemCustomResolution != nil {
+		usageLog.GroupID = optionalInt64Ptr(systemCustomResolution.BillingGroupID)
+		usageLog.SourceGroupID = optionalInt64Ptr(systemCustomResolution.SourceGroupID)
+	}
 
 	// 计算账号统计定价费用（使用最终上游模型匹配自定义规则）
 	if apiKey.GroupID != nil {

@@ -143,6 +143,10 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 	user := input.User
 	account := input.Account
 	subscription := input.Subscription
+	isSubscriptionBilling, systemCustomResolution, err := resolveRecordUsageBillingIdentity(ctx, apiKey, subscription)
+	if err != nil {
+		return err
+	}
 	if !isGrokVideoUsageResult(result, nil) {
 		ApplyOpenAIImageBillingResolution(result)
 	}
@@ -181,7 +185,6 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 	videoMultiplier := resolveVideoRateMultiplier(apiKey, baseMultiplier)
 
 	var cost *CostBreakdown
-	var err error
 	billingModel := forwardResultBillingModel(result.Model, result.UpstreamModel)
 	if result.BillingModel != "" {
 		billingModel = strings.TrimSpace(result.BillingModel)
@@ -229,6 +232,12 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 		if !isUsagePricingUnavailableError(err) {
 			return err
 		}
+		// Ordinary OpenAI traffic preserves the historical zero-cost audit row
+		// behavior. System custom monthly routes must fail closed: accepting an
+		// unpriced configured source would consume no subscription quota.
+		if systemCustomResolution != nil {
+			return err
+		}
 		logger.L().With(
 			zap.String("component", "service.openai_gateway"),
 			zap.Strings("billing_models", billingModels),
@@ -271,8 +280,8 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 		}
 	}
 
-	// Determine billing type
-	isSubscriptionBilling := subscription != nil && apiKey.Group != nil && apiKey.Group.IsSubscriptionType()
+	// Determine billing type. A system custom monthly key carries the source
+	// group for pricing, so its subscription identity comes from the resolution.
 	billingType := BillingTypeBalance
 	if isSubscriptionBilling {
 		billingType = BillingTypeSubscription
@@ -412,6 +421,10 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 
 	if apiKey.GroupID != nil {
 		usageLog.GroupID = apiKey.GroupID
+	}
+	if systemCustomResolution != nil {
+		usageLog.GroupID = optionalInt64Ptr(systemCustomResolution.BillingGroupID)
+		usageLog.SourceGroupID = optionalInt64Ptr(systemCustomResolution.SourceGroupID)
 	}
 	if subscription != nil {
 		usageLog.SubscriptionID = &subscription.ID

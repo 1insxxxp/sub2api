@@ -28,6 +28,26 @@ func TestUsageLogFromService_IncludesOpenAIWSMode(t *testing.T) {
 	require.False(t, UsageLogFromServiceAdmin(httpLog).OpenAIWSMode)
 }
 
+func TestUsageLogFromServiceAdmin_IncludesSourceGroupID(t *testing.T) {
+	t.Parallel()
+
+	billingGroupID := int64(101)
+	sourceGroupID := int64(202)
+	log := &service.UsageLog{
+		RequestID:     "system-custom-usage",
+		Model:         "claude-sonnet-4",
+		GroupID:       &billingGroupID,
+		SourceGroupID: &sourceGroupID,
+	}
+
+	userDTO := UsageLogFromService(log)
+	adminDTO := UsageLogFromServiceAdmin(log)
+	require.Equal(t, billingGroupID, *userDTO.GroupID)
+	require.Equal(t, billingGroupID, *adminDTO.GroupID)
+	require.NotNil(t, adminDTO.SourceGroupID)
+	require.Equal(t, sourceGroupID, *adminDTO.SourceGroupID)
+}
+
 func TestUsageLogFromService_PrefersRequestTypeForLegacyFields(t *testing.T) {
 	t.Parallel()
 

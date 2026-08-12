@@ -18,7 +18,7 @@ func TestPrepareUsageLogInsert_CustomGroupIDArgWiring(t *testing.T) {
 	prepared := prepareUsageLogInsert(log)
 	require.Len(t, prepared.args, len(usageLogInsertArgTypes))
 
-	const customGroupArgIndex = 10
+	const customGroupArgIndex = 11
 	customGroupArg := prepared.args[customGroupArgIndex]
 	nullID, ok := customGroupArg.(sql.NullInt64)
 	require.True(t, ok, "custom_group_id arg should be sql.NullInt64, got %T", customGroupArg)
