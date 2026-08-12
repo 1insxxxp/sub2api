@@ -741,11 +741,23 @@ func (s *BillingCacheService) CheckBillingEligibility(ctx context.Context, user 
 		return ErrBillingServiceUnavailable
 	}
 
+	// 系统自定义月卡在路由解析后，apiKey.Group/group 已是实际来源分组，
+	// 但计费资格、订阅限额与 RPM 必须始终归属月卡容器。订阅对象由 auth
+	// 在解析前按容器加载；任一身份缺失/错配都 fail closed，绝不回退余额。
+	eligibilityGroup := group
+	if resolution, systemCustom := SystemCustomGroupResolutionFromContext(ctx); systemCustom {
+		if subscription == nil || subscription.Group == nil ||
+			subscription.GroupID != resolution.BillingGroupID || subscription.Group.ID != resolution.BillingGroupID {
+			return ErrSubscriptionInvalid
+		}
+		eligibilityGroup = subscription.Group
+	}
+
 	// 判断计费模式
-	isSubscriptionMode := group != nil && group.IsSubscriptionType() && subscription != nil
+	isSubscriptionMode := eligibilityGroup != nil && eligibilityGroup.IsSubscriptionType() && subscription != nil
 
 	if isSubscriptionMode {
-		if err := s.checkSubscriptionEligibility(ctx, user.ID, group, subscription); err != nil {
+		if err := s.checkSubscriptionEligibility(ctx, user.ID, eligibilityGroup, subscription); err != nil {
 			return err
 		}
 	} else {
@@ -769,7 +781,7 @@ func (s *BillingCacheService) CheckBillingEligibility(ctx context.Context, user 
 	}
 
 	// RPM 限流：级联回落（Override → Group → User），放在最后以避免为注定失败的请求增加计数。
-	if err := s.checkRPM(ctx, user, group); err != nil {
+	if err := s.checkRPM(ctx, user, eligibilityGroup); err != nil {
 		return err
 	}
 

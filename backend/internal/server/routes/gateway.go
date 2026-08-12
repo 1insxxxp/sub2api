@@ -46,6 +46,9 @@ func RegisterGatewayRoutes(
 	customTarget := customGroupTargetMiddleware(apiKeyService)
 	customGeminiTarget := customGroupGeminiTargetMiddleware(apiKeyService)
 	compositeGeminiTarget := compositeGeminiTargetPlatformMiddleware(compositeResolver)
+	systemUnsupportedOpenAI := systemCustomGroupUnsupportedEndpointMiddleware(systemCustomUnsupportedOpenAI, false)
+	systemUnsupportedAnthropic := systemCustomGroupUnsupportedEndpointMiddleware(systemCustomUnsupportedAnthropic, true)
+	systemUnsupportedGoogle := systemCustomGroupUnsupportedEndpointMiddleware(systemCustomUnsupportedGoogle, true)
 
 	// 未分组 Key 拦截中间件（按协议格式区分错误响应）
 	requireGroupAnthropic := middleware.RequireGroupAssignment(settingService, middleware.AnthropicErrorWriter)
@@ -186,6 +189,10 @@ func RegisterGatewayRoutes(
 	gateway.Use(endpointNorm)
 	gateway.Use(gin.HandlerFunc(apiKeyAuth))
 	gateway.GET("/sub2api/billing", h.Gateway.KeyBillingInfo)
+	// Live/WebSocket establish identity outside the JSON request model path and
+	// batch image settles directly against balance. Keep system custom monthly
+	// keys fail-closed until those flows have dedicated end-to-end support.
+	gateway.Use(systemUnsupportedOpenAI)
 	gateway.Use(systemTarget)
 	gateway.Use(customTarget)
 	gateway.Use(compositeTarget)
@@ -354,13 +361,13 @@ func RegisterGatewayRoutes(
 	r.POST("/responses", bodyLimit, clientRequestID, opsErrorLogger, endpointNorm, gin.HandlerFunc(apiKeyAuth), systemTarget, customTarget, compositeTarget, requireGroupAnthropic, responsesHandler)
 	r.POST("/responses/*subpath", bodyLimit, clientRequestID, opsErrorLogger, endpointNorm, gin.HandlerFunc(apiKeyAuth), systemTarget, customTarget, compositeTarget, requireGroupAnthropic, guardResponsesSubpath(responsesHandler))
 	r.POST("/alpha/search", textBodyLimit, clientRequestID, opsErrorLogger, endpointNorm, gin.HandlerFunc(apiKeyAuth), systemTarget, customTarget, compositeTarget, requireGroupAnthropic, h.OpenAIGateway.AlphaSearch)
-	r.GET("/responses", bodyLimit, clientRequestID, opsErrorLogger, endpointNorm, gin.HandlerFunc(apiKeyAuth), compositeTarget, requireGroupAnthropic, func(c *gin.Context) {
+	r.GET("/responses", bodyLimit, clientRequestID, opsErrorLogger, endpointNorm, gin.HandlerFunc(apiKeyAuth), systemUnsupportedOpenAI, compositeTarget, requireGroupAnthropic, func(c *gin.Context) {
 		h.OpenAIGateway.ResponsesWebSocket(c)
 	})
 	r.GET("/models", bodyLimit, clientRequestID, opsErrorLogger, endpointNorm, gin.HandlerFunc(apiKeyAuth), requireGroupAnthropic, modelsHandler)
 	r.POST("/messages/count_tokens", bodyLimit, clientRequestID, opsErrorLogger, endpointNorm, gin.HandlerFunc(apiKeyAuth), systemTarget, customTarget, compositeTarget, requireGroupAnthropic, countTokensHandler)
 	codexDirect := r.Group("/backend-api/codex")
-	codexDirect.Use(bodyLimit, clientRequestID, opsErrorLogger, endpointNorm, gin.HandlerFunc(apiKeyAuth), systemTarget, customTarget, compositeTarget, requireGroupAnthropic)
+	codexDirect.Use(bodyLimit, clientRequestID, opsErrorLogger, endpointNorm, gin.HandlerFunc(apiKeyAuth), systemUnsupportedOpenAI, systemTarget, customTarget, compositeTarget, requireGroupAnthropic)
 	{
 		codexDirect.POST("/realtime/calls", h.OpenAIGateway.Live)
 		codexDirect.GET("/:call_id", h.OpenAIGateway.LiveSideband)
@@ -455,7 +462,7 @@ func RegisterGatewayRoutes(
 	})
 
 	// Antigravity 模型列表
-	r.GET("/antigravity/models", gin.HandlerFunc(apiKeyAuth), requireGroupAnthropic, h.Gateway.AntigravityModels)
+	r.GET("/antigravity/models", gin.HandlerFunc(apiKeyAuth), systemUnsupportedAnthropic, requireGroupAnthropic, h.Gateway.AntigravityModels)
 
 	// Antigravity 专用路由（仅使用 antigravity 账户，不混合调度）
 	antigravityV1 := r.Group("/antigravity/v1")
@@ -465,6 +472,9 @@ func RegisterGatewayRoutes(
 	antigravityV1.Use(endpointNorm)
 	antigravityV1.Use(middleware.ForcePlatform(service.PlatformAntigravity))
 	antigravityV1.Use(gin.HandlerFunc(apiKeyAuth))
+	// Forced-platform routes ignore per-model source selection, so they cannot
+	// safely consume a system custom key before dedicated routing support exists.
+	antigravityV1.Use(systemUnsupportedAnthropic)
 	antigravityV1.Use(requireGroupAnthropic)
 	{
 		antigravityV1.POST("/messages", h.Gateway.Messages)
@@ -480,6 +490,7 @@ func RegisterGatewayRoutes(
 	antigravityV1Beta.Use(endpointNorm)
 	antigravityV1Beta.Use(middleware.ForcePlatform(service.PlatformAntigravity))
 	antigravityV1Beta.Use(middleware.APIKeyAuthWithSubscriptionGoogle(apiKeyService, subscriptionService, cfg))
+	antigravityV1Beta.Use(systemUnsupportedGoogle)
 	antigravityV1Beta.Use(requireGroupGoogle)
 	{
 		antigravityV1Beta.GET("/models", h.Gateway.GeminiV1BetaListModels)
@@ -560,6 +571,67 @@ type customGroupModelResolver interface {
 
 type systemCustomGroupModelResolver interface {
 	ResolveSystemCustomGroupModel(context.Context, *service.APIKey, string) (*service.SystemCustomGroupModelResolution, error)
+}
+
+type systemCustomUnsupportedProtocol uint8
+
+const (
+	systemCustomUnsupportedOpenAI systemCustomUnsupportedProtocol = iota
+	systemCustomUnsupportedAnthropic
+	systemCustomUnsupportedGoogle
+)
+
+// systemCustomGroupUnsupportedEndpointMiddleware rejects request shapes that
+// cannot yet preserve both the monthly billing identity and the selected
+// source identity end to end. WebSocket/Live need first-frame and sideband
+// identity propagation; batch image currently settles directly against the
+// user's balance; forced Antigravity routes bypass per-model source routing.
+func systemCustomGroupUnsupportedEndpointMiddleware(protocol systemCustomUnsupportedProtocol, allPaths bool) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		apiKey, ok := middleware.GetAPIKeyFromContext(c)
+		if !ok || apiKey == nil || apiKey.Group == nil || !apiKey.Group.IsSystemCustomRouteGroup() ||
+			(!allPaths && !isSystemCustomUnsupportedEndpoint(c)) {
+			c.Next()
+			return
+		}
+
+		const message = "This endpoint is not supported for system custom subscription groups"
+		service.MarkOpsClientBusinessLimited(c, service.OpsClientBusinessLimitedReasonLocalPolicyDenied)
+		switch protocol {
+		case systemCustomUnsupportedGoogle:
+			middleware.GoogleErrorWriter(c, http.StatusNotImplemented, message)
+			c.Abort()
+		case systemCustomUnsupportedAnthropic:
+			c.AbortWithStatusJSON(http.StatusNotImplemented, gin.H{
+				"type":  "error",
+				"error": gin.H{"type": "not_supported_error", "message": message},
+			})
+		default:
+			writeSystemCustomRootError(c, http.StatusNotImplemented, "not_supported_error", infraerrors.Reason(service.ErrSystemCustomGroupEndpointUnsupported), message)
+		}
+	}
+}
+
+func isSystemCustomUnsupportedEndpoint(c *gin.Context) bool {
+	if c == nil || c.Request == nil || c.Request.URL == nil {
+		return false
+	}
+	path := strings.TrimRight(c.Request.URL.Path, "/")
+	method := c.Request.Method
+	if path == "/v1/images/batches" || strings.HasPrefix(path, "/v1/images/batches/") {
+		return true
+	}
+	if method == http.MethodGet && (path == "/responses" || path == "/v1/responses" || path == "/backend-api/codex/responses") {
+		return true
+	}
+	if (method == http.MethodPost && path == "/v1/live") ||
+		(method == http.MethodGet && strings.HasPrefix(path, "/v1/live/")) ||
+		(method == http.MethodPost && path == "/backend-api/codex/realtime/calls") {
+		return true
+	}
+	// Use Gin's route template so static Codex routes such as /models cannot be
+	// mistaken for the Live sideband call-id endpoint.
+	return method == http.MethodGet && c.FullPath() == "/backend-api/codex/:call_id"
 }
 
 func systemCustomGroupTargetMiddleware(apiKeys systemCustomGroupModelResolver) gin.HandlerFunc {

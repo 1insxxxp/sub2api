@@ -125,6 +125,32 @@ func (s *APIKeyRepoSuite) TestGetByKeyForAuth_PreservesMessagesDispatchModelConf
 	s.Require().Equal("gpt-5.4-nano", got.Group.MessagesDispatchModelConfig.ExactModelMappings["claude-sonnet-4.5"])
 }
 
+func (s *APIKeyRepoSuite) TestGetByKeyForAuth_PreservesSystemCustomRoutingEnabled() {
+	user := s.mustCreateUser("getbykey-auth-system-custom@test.com")
+	group, err := s.client.Group.Create().
+		SetName("g-auth-system-custom").
+		SetPlatform(service.PlatformComposite).
+		SetStatus(service.StatusActive).
+		SetSubscriptionType(service.SubscriptionTypeSubscription).
+		SetRateMultiplier(1).
+		SetIsExclusive(true).
+		SetSystemCustomRoutingEnabled(true).
+		Save(s.ctx)
+	s.Require().NoError(err)
+
+	key := &service.APIKey{
+		UserID: user.ID, Key: "sk-getbykey-auth-system-custom", Name: "System Custom Key",
+		GroupID: &group.ID, Status: service.StatusActive,
+	}
+	s.Require().NoError(s.repo.Create(s.ctx, key))
+
+	got, err := s.repo.GetByKeyForAuth(s.ctx, key.Key)
+	s.Require().NoError(err)
+	s.Require().NotNil(got.Group)
+	s.Require().True(got.Group.SystemCustomRoutingEnabled)
+	s.Require().True(got.Group.IsSystemCustomRouteGroup())
+}
+
 // --- Update ---
 
 func (s *APIKeyRepoSuite) TestUpdate() {

@@ -339,7 +339,6 @@ func (r *systemCustomGroupRepository) ResolveModel(ctx context.Context, groupID 
 			systemcustomgroupmodel.PublicModelEqualFold(publicModel),
 			systemcustomgroupmodel.HasGroupWith(group.SystemCustomRoutingEnabledEQ(true)),
 		).
-		WithSourceGroup().
 		Only(ctx)
 	if dbent.IsNotFound(err) {
 		return nil, service.ErrSystemCustomGroupRouteNotFound

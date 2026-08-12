@@ -513,7 +513,10 @@ func (s *APIKeyService) ResolveSystemCustomGroupModel(ctx context.Context, key *
 		return nil, ErrSystemCustomGroupSourceUnavailable
 	}
 
-	sourceGroup, err := s.groupRepo.GetByID(ctx, route.SourceGroupID)
+	// The runtime resolver only needs routing/eligibility fields. Avoid the
+	// aggregate-heavy group lookup (account statistics, associations) on every
+	// model-bearing request.
+	sourceGroup, err := s.groupRepo.GetByIDLite(ctx, route.SourceGroupID)
 	if err != nil {
 		return nil, ErrSystemCustomGroupSourceUnavailable.WithCause(err)
 	}
@@ -523,10 +526,16 @@ func (s *APIKeyService) ResolveSystemCustomGroupModel(ctx context.Context, key *
 
 	clone := *key
 	sourceGroupID := sourceGroup.ID
+	// A system custom route is authoritative. Clone the live source before
+	// clearing fallbacks so neither ordinary nor invalid-request fallback can
+	// escape to an unconfigured group, while the repository object stays intact.
+	sourceGroupClone := *sourceGroup
+	sourceGroupClone.FallbackGroupID = nil
+	sourceGroupClone.FallbackGroupIDOnInvalidRequest = nil
 	clone.GroupID = &sourceGroupID
 	clone.CustomGroupID = nil
 	clone.CustomGroup = nil
-	clone.Group = sourceGroup
+	clone.Group = &sourceGroupClone
 	return &SystemCustomGroupModelResolution{
 		APIKey: &clone,
 		SystemCustomGroupResolution: SystemCustomGroupResolution{

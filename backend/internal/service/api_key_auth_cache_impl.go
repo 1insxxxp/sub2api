@@ -14,8 +14,9 @@ import (
 	"github.com/dgraph-io/ristretto"
 )
 
-// v19 includes both user custom-group bindings and group search/audio/video pricing fields.
-const apiKeyAuthSnapshotVersion = 19
+// v20 carries the system-custom routing bit; v19 snapshots must reload because
+// a missing JSON bool is indistinguishable from an explicitly disabled group.
+const apiKeyAuthSnapshotVersion = 20
 
 type apiKeyAuthCacheConfig struct {
 	l1Size        int
@@ -389,6 +390,7 @@ func (s *APIKeyService) snapshotFromAPIKey(ctx context.Context, apiKey *APIKey) 
 			IsExclusive:                     apiKey.Group.IsExclusive,
 			Status:                          apiKey.Group.Status,
 			SubscriptionType:                apiKey.Group.SubscriptionType,
+			SystemCustomRoutingEnabled:      apiKey.Group.SystemCustomRoutingEnabled,
 			RateMultiplier:                  apiKey.Group.RateMultiplier,
 			DailyLimitUSD:                   apiKey.Group.DailyLimitUSD,
 			WeeklyLimitUSD:                  apiKey.Group.WeeklyLimitUSD,
@@ -489,6 +491,7 @@ func (s *APIKeyService) snapshotToAPIKey(key string, snapshot *APIKeyAuthSnapsho
 			Status:                          snapshot.Group.Status,
 			Hydrated:                        true,
 			SubscriptionType:                snapshot.Group.SubscriptionType,
+			SystemCustomRoutingEnabled:      snapshot.Group.SystemCustomRoutingEnabled,
 			RateMultiplier:                  snapshot.Group.RateMultiplier,
 			DailyLimitUSD:                   snapshot.Group.DailyLimitUSD,
 			WeeklyLimitUSD:                  snapshot.Group.WeeklyLimitUSD,

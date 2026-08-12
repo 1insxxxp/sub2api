@@ -9,7 +9,10 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
+	"github.com/Wei-Shaw/sub2api/internal/config"
+	"github.com/Wei-Shaw/sub2api/internal/handler"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/ctxkey"
 	servermiddleware "github.com/Wei-Shaw/sub2api/internal/server/middleware"
 	"github.com/Wei-Shaw/sub2api/internal/service"
@@ -17,6 +20,158 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/tidwall/gjson"
 )
+
+type systemCustomUnsupportedAuthRepo struct {
+	service.APIKeyRepository
+	apiKey *service.APIKey
+	loads  int
+}
+
+type systemCustomUnsupportedAuthCache struct {
+	service.APIKeyCache
+	entry *service.APIKeyAuthCacheEntry
+}
+
+func (c *systemCustomUnsupportedAuthCache) GetAuthCache(context.Context, string) (*service.APIKeyAuthCacheEntry, error) {
+	if c.entry == nil {
+		return nil, errors.New("cache miss")
+	}
+	return c.entry, nil
+}
+
+func (c *systemCustomUnsupportedAuthCache) SetAuthCache(_ context.Context, _ string, entry *service.APIKeyAuthCacheEntry, _ time.Duration) error {
+	c.entry = entry
+	return nil
+}
+
+func (r *systemCustomUnsupportedAuthRepo) GetByKeyForAuth(_ context.Context, key string) (*service.APIKey, error) {
+	if r.apiKey == nil || key != r.apiKey.Key {
+		return nil, service.ErrAPIKeyNotFound
+	}
+	r.loads++
+	clone := *r.apiKey
+	groupClone := *r.apiKey.Group
+	clone.Group = &groupClone
+	return &clone, nil
+}
+
+func (r *systemCustomUnsupportedAuthRepo) UpdateLastUsed(context.Context, int64, time.Time) error {
+	return nil
+}
+
+func newSystemCustomUnsupportedGatewayRouter(t *testing.T) (*gin.Engine, string, *systemCustomUnsupportedAuthRepo) {
+	t.Helper()
+	gin.SetMode(gin.TestMode)
+	groupID := int64(25)
+	apiKey := &service.APIKey{
+		ID: 7, UserID: 9, Key: "system-custom-unsupported-key", Status: service.StatusActive,
+		GroupID: &groupID,
+		Group: &service.Group{
+			ID: groupID, Platform: service.PlatformComposite, Status: service.StatusActive, Hydrated: true,
+			SubscriptionType: service.SubscriptionTypeSubscription, SystemCustomRoutingEnabled: true,
+		},
+		User: &service.User{ID: 9, Role: service.RoleUser, Status: service.StatusActive},
+	}
+	cfg := &config.Config{
+		RunMode:    config.RunModeSimple,
+		Gateway:    config.GatewayConfig{MaxBodySize: 1024 * 1024, TextMaxBodySize: 1024 * 1024},
+		APIKeyAuth: config.APIKeyAuthCacheConfig{L2TTLSeconds: 60},
+	}
+	repo := &systemCustomUnsupportedAuthRepo{apiKey: apiKey}
+	cache := &systemCustomUnsupportedAuthCache{}
+	apiKeyService := service.NewAPIKeyService(repo, nil, nil, nil, nil, cache, cfg)
+	router := gin.New()
+	RegisterGatewayRoutes(
+		router,
+		&handler.Handlers{
+			Gateway: &handler.GatewayHandler{}, OpenAIGateway: &handler.OpenAIGatewayHandler{},
+			AsyncImage: &handler.AsyncImageHandler{}, BatchImage: &handler.BatchImageHandler{},
+		},
+		servermiddleware.NewAPIKeyAuthMiddleware(apiKeyService, nil, cfg), apiKeyService,
+		nil, nil, nil, nil, cfg,
+	)
+	return router, apiKey.Key, repo
+}
+
+func TestSystemCustomUnsupportedEndpointsFailClosedInRegisteredRouter(t *testing.T) {
+	router, key, repo := newSystemCustomUnsupportedGatewayRouter(t)
+	tests := []struct {
+		method, path string
+		google       bool
+		anthropic    bool
+	}{
+		{method: http.MethodGet, path: "/responses"},
+		{method: http.MethodGet, path: "/v1/responses"},
+		{method: http.MethodGet, path: "/backend-api/codex/responses"},
+		{method: http.MethodPost, path: "/v1/live"},
+		{method: http.MethodGet, path: "/v1/live/call-123"},
+		{method: http.MethodPost, path: "/backend-api/codex/realtime/calls"},
+		{method: http.MethodGet, path: "/backend-api/codex/call-123"},
+		{method: http.MethodPost, path: "/v1/images/batches"},
+		{method: http.MethodGet, path: "/v1/images/batches"},
+		{method: http.MethodGet, path: "/v1/images/batches/models"},
+		{method: http.MethodGet, path: "/v1/images/batches/123/items"},
+		{method: http.MethodGet, path: "/v1/images/batches/123/items/item-1/content"},
+		{method: http.MethodGet, path: "/v1/images/batches/123/download"},
+		{method: http.MethodPost, path: "/v1/images/batches/123/cancel"},
+		{method: http.MethodDelete, path: "/v1/images/batches/123"},
+		{method: http.MethodDelete, path: "/v1/images/batches/123/outputs"},
+		{method: http.MethodGet, path: "/antigravity/models", anthropic: true},
+		{method: http.MethodPost, path: "/antigravity/v1/messages", anthropic: true},
+		{method: http.MethodGet, path: "/antigravity/v1/models", anthropic: true},
+		{method: http.MethodGet, path: "/antigravity/v1/usage", anthropic: true},
+		{method: http.MethodGet, path: "/antigravity/v1beta/models", google: true},
+		{method: http.MethodGet, path: "/antigravity/v1beta/models/gemini-3", google: true},
+		{method: http.MethodPost, path: "/antigravity/v1beta/models/gemini-3:generateContent", google: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.method+" "+tt.path, func(t *testing.T) {
+			body := io.Reader(nil)
+			if tt.method == http.MethodPost {
+				body = bytes.NewBufferString(`{"model":"any"}`)
+			}
+			req := httptest.NewRequest(tt.method, tt.path, body)
+			req.Header.Set("Authorization", "Bearer "+key)
+			req.Header.Set("Content-Type", "application/json")
+			recorder := httptest.NewRecorder()
+
+			router.ServeHTTP(recorder, req)
+
+			require.Equal(t, http.StatusNotImplemented, recorder.Code)
+			if tt.google {
+				require.JSONEq(t, `{"error":{"code":501,"message":"This endpoint is not supported for system custom subscription groups","status":"INTERNAL"}}`, recorder.Body.String())
+			} else if tt.anthropic {
+				require.Contains(t, recorder.Body.String(), `"type":"not_supported_error"`)
+				require.NotContains(t, recorder.Body.String(), `"code":"SYSTEM_CUSTOM_GROUP_ENDPOINT_UNSUPPORTED"`)
+			} else {
+				require.Contains(t, recorder.Body.String(), `"code":"SYSTEM_CUSTOM_GROUP_ENDPOINT_UNSUPPORTED"`)
+				require.NotContains(t, recorder.Body.String(), "MODEL_REQUIRED")
+			}
+		})
+	}
+	require.Equal(t, 1, repo.loads, "the first request must load the auth snapshot and every later request must preserve the system marker from cache")
+}
+
+func TestSystemCustomUnsupportedEndpointMiddlewareAllowsOrdinaryKey(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	router := gin.New()
+	router.Use(func(c *gin.Context) {
+		c.Set(string(servermiddleware.ContextKeyAPIKey), &service.APIKey{
+			Group: &service.Group{
+				ID: 42, Platform: service.PlatformOpenAI, Status: service.StatusActive,
+				SubscriptionType: service.SubscriptionTypeStandard,
+			},
+		})
+		c.Next()
+	})
+	router.Use(systemCustomGroupUnsupportedEndpointMiddleware(systemCustomUnsupportedOpenAI, false))
+	router.GET("/v1/responses", func(c *gin.Context) { c.Status(http.StatusNoContent) })
+
+	recorder := httptest.NewRecorder()
+	router.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/v1/responses", nil))
+
+	require.Equal(t, http.StatusNoContent, recorder.Code)
+}
 
 type systemCustomGroupResolverStub struct {
 	resolution *service.SystemCustomGroupModelResolution

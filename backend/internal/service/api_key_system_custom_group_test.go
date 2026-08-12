@@ -27,13 +27,23 @@ func (s *systemCustomRouteRepoStub) ResolveModel(_ context.Context, groupID int6
 
 type systemCustomSourceRepoStub struct {
 	GroupRepository
-	groups map[int64]*Group
-	err    error
-	calls  int
+	groups    map[int64]*Group
+	err       error
+	calls     int
+	liteCalls int
 }
 
 func (s *systemCustomSourceRepoStub) GetByID(_ context.Context, id int64) (*Group, error) {
 	s.calls++
+	return s.get(id)
+}
+
+func (s *systemCustomSourceRepoStub) GetByIDLite(_ context.Context, id int64) (*Group, error) {
+	s.liteCalls++
+	return s.get(id)
+}
+
+func (s *systemCustomSourceRepoStub) get(id int64) (*Group, error) {
 	if s.err != nil {
 		return nil, s.err
 	}
@@ -55,6 +65,9 @@ func TestResolveSystemCustomGroupModelClonesKeyAndPreservesBillingIdentity(t *te
 		ID: sourceGroupID, Platform: PlatformAnthropic, Status: StatusActive, Hydrated: true,
 		IsExclusive: true,
 	}
+	fallbackID, invalidFallbackID := int64(77), int64(78)
+	sourceGroup.FallbackGroupID = &fallbackID
+	sourceGroup.FallbackGroupIDOnInvalidRequest = &invalidFallbackID
 	original := &APIKey{
 		ID: 7, UserID: 9, GroupID: &billingGroupID, CustomGroupID: &staleCustomGroupID, Group: billingGroup,
 		User: &User{ID: 9, AllowedGroups: []int64{999}},
@@ -73,7 +86,11 @@ func TestResolveSystemCustomGroupModelClonesKeyAndPreservesBillingIdentity(t *te
 	require.NotSame(t, original, resolution.APIKey)
 	require.Equal(t, sourceGroupID, requirePointerValue(t, resolution.APIKey.GroupID))
 	require.Nil(t, resolution.APIKey.CustomGroupID, "the authoritative system route must not be resolved again by user-custom middleware")
-	require.Same(t, sourceGroup, resolution.APIKey.Group)
+	require.NotSame(t, sourceGroup, resolution.APIKey.Group, "the live repository group must remain immutable")
+	require.Nil(t, resolution.APIKey.Group.FallbackGroupID, "system routes must never escape through the source group's normal fallback")
+	require.Nil(t, resolution.APIKey.Group.FallbackGroupIDOnInvalidRequest, "invalid requests must not escape through a fallback either")
+	require.Equal(t, fallbackID, requirePointerValue(t, sourceGroup.FallbackGroupID), "the repository entity must not be mutated")
+	require.Equal(t, invalidFallbackID, requirePointerValue(t, sourceGroup.FallbackGroupIDOnInvalidRequest), "the repository entity must not be mutated")
 	require.Equal(t, billingGroupID, requirePointerValue(t, original.GroupID))
 	require.Equal(t, staleCustomGroupID, requirePointerValue(t, original.CustomGroupID))
 	require.Same(t, billingGroup, original.Group)
@@ -84,7 +101,8 @@ func TestResolveSystemCustomGroupModelClonesKeyAndPreservesBillingIdentity(t *te
 	require.Equal(t, PlatformAnthropic, resolution.SourcePlatform)
 	require.Equal(t, billingGroupID, routeRepo.requestedID)
 	require.Equal(t, "claude-monthly", routeRepo.requested)
-	require.Equal(t, 1, groupRepo.calls)
+	require.Zero(t, groupRepo.calls, "the resolver must avoid the aggregate-heavy group lookup")
+	require.Equal(t, 1, groupRepo.liteCalls)
 }
 
 func TestResolveSystemCustomGroupModelReturnsUnhandledForOrdinaryKey(t *testing.T) {
@@ -100,6 +118,7 @@ func TestResolveSystemCustomGroupModelReturnsUnhandledForOrdinaryKey(t *testing.
 	require.Nil(t, resolution)
 	require.Zero(t, routeRepo.calls)
 	require.Zero(t, groupRepo.calls)
+	require.Zero(t, groupRepo.liteCalls)
 }
 
 func TestResolveSystemCustomGroupModelRejectsUnknownOrDisabledAlias(t *testing.T) {
@@ -125,6 +144,7 @@ func TestResolveSystemCustomGroupModelRejectsUnknownOrDisabledAlias(t *testing.T
 			require.ErrorIs(t, err, ErrSystemCustomGroupModelNotAllowed)
 			require.Equal(t, 403, infraerrors.Code(err))
 			require.Zero(t, groupRepo.calls, "a rejected alias must not try any source/fallback group")
+			require.Zero(t, groupRepo.liteCalls)
 		})
 	}
 }
@@ -161,7 +181,8 @@ func TestResolveSystemCustomGroupModelFailsClosedForUnavailableSources(t *testin
 			require.ErrorIs(t, err, ErrSystemCustomGroupSourceUnavailable)
 			require.Equal(t, 503, infraerrors.Code(err))
 			require.Equal(t, 1, routeRepo.calls)
-			require.Equal(t, 1, groupRepo.calls, "resolver must not try another source group")
+			require.Zero(t, groupRepo.calls)
+			require.Equal(t, 1, groupRepo.liteCalls, "resolver must not try another source group")
 		})
 	}
 }

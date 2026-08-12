@@ -278,6 +278,68 @@ func TestAPIKeyService_SnapshotRoundTrip_PreservesMessagesDispatchModelConfig(t 
 	require.Equal(t, apiKey.Group.MessagesDispatchModelConfig, roundTrip.Group.MessagesDispatchModelConfig)
 }
 
+func TestAPIKeyService_SnapshotRoundTrip_PreservesSystemCustomRouting(t *testing.T) {
+	svc := NewAPIKeyService(nil, nil, nil, nil, nil, nil, &config.Config{})
+	groupID := int64(25)
+	apiKey := &APIKey{
+		ID: 1, UserID: 2, GroupID: &groupID, Key: "k-system-custom", Status: StatusActive,
+		User: &User{ID: 2, Status: StatusActive, Role: RoleUser, Balance: 0, Concurrency: 3},
+		Group: &Group{
+			ID: groupID, Name: "system-monthly", Platform: PlatformComposite, Status: StatusActive,
+			Hydrated: true, SubscriptionType: SubscriptionTypeSubscription, RateMultiplier: 1,
+			SystemCustomRoutingEnabled: true,
+		},
+	}
+
+	snapshot := svc.snapshotFromAPIKey(context.Background(), apiKey)
+	require.NotNil(t, snapshot)
+	require.NotNil(t, snapshot.Group)
+	require.True(t, snapshot.Group.SystemCustomRoutingEnabled)
+	require.Equal(t, 20, snapshot.Version)
+
+	roundTrip := svc.snapshotToAPIKey(apiKey.Key, snapshot)
+	require.NotNil(t, roundTrip)
+	require.NotNil(t, roundTrip.Group)
+	require.True(t, roundTrip.Group.SystemCustomRoutingEnabled)
+	require.True(t, roundTrip.Group.IsSystemCustomRouteGroup())
+}
+
+func TestAPIKeyService_GetByKey_RejectsV19AndReloadsSystemCustomSnapshot(t *testing.T) {
+	cache := &authCacheStub{}
+	groupID := int64(25)
+	repoCalls := 0
+	repo := &authRepoStub{getByKeyForAuth: func(context.Context, string) (*APIKey, error) {
+		repoCalls++
+		return &APIKey{
+			ID: 1, UserID: 2, GroupID: &groupID, Status: StatusActive,
+			User: &User{ID: 2, Status: StatusActive, Role: RoleUser, Balance: 0, Concurrency: 3},
+			Group: &Group{
+				ID: groupID, Name: "system-monthly", Platform: PlatformComposite, Status: StatusActive,
+				Hydrated: true, SubscriptionType: SubscriptionTypeSubscription, RateMultiplier: 1,
+				SystemCustomRoutingEnabled: true,
+			},
+		}, nil
+	}}
+	cache.getAuthCache = func(context.Context, string) (*APIKeyAuthCacheEntry, error) {
+		return &APIKeyAuthCacheEntry{Snapshot: &APIKeyAuthSnapshot{
+			Version: 19, APIKeyID: 1, UserID: 2, GroupID: &groupID, Status: StatusActive,
+			User: APIKeyAuthUserSnapshot{ID: 2, Status: StatusActive, Role: RoleUser, Balance: 0, Concurrency: 3},
+			Group: &APIKeyAuthGroupSnapshot{
+				ID: groupID, Name: "legacy-container", Platform: PlatformComposite, Status: StatusActive,
+				SubscriptionType: SubscriptionTypeSubscription, RateMultiplier: 1,
+			},
+		}}, nil
+	}
+	svc := NewAPIKeyService(repo, nil, nil, nil, nil, cache, &config.Config{APIKeyAuth: config.APIKeyAuthCacheConfig{L2TTLSeconds: 60}})
+
+	key, err := svc.GetByKey(context.Background(), "k-system-custom")
+
+	require.NoError(t, err)
+	require.Equal(t, 1, repoCalls, "v19 lacks the system-routing bit and must be reloaded")
+	require.NotNil(t, key.Group)
+	require.True(t, key.Group.SystemCustomRoutingEnabled)
+}
+
 func TestAPIKeyService_SnapshotRoundTrip_PreservesReasoningEffortPolicy(t *testing.T) {
 	svc := NewAPIKeyService(nil, nil, nil, nil, nil, nil, &config.Config{})
 	groupID := int64(9)
