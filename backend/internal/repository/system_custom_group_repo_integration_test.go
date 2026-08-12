@@ -106,7 +106,7 @@ func TestSystemCustomGroupRepositoryResolveModelIsExactCaseInsensitiveAndEnabled
 	require.NoError(t, err)
 	require.Equal(t, "Claude-Premium", resolved.PublicModel)
 	require.Equal(t, source.ID, resolved.SourceGroupID)
-	require.NotNil(t, resolved.SourceGroup)
+	require.Nil(t, resolved.SourceGroup, "runtime resolution must not eager-load the source group aggregate")
 
 	_, err = repo.ResolveModel(ctx, container.ID, "Claude")
 	require.ErrorIs(t, err, service.ErrSystemCustomGroupRouteNotFound, "partial aliases must not match")
