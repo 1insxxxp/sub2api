@@ -77,6 +77,9 @@ func NewGatewayHandler(
 	cfg *config.Config,
 	settingService *service.SettingService,
 ) *GatewayHandler {
+	if apiKeyService != nil && gatewayService != nil {
+		apiKeyService.SetSystemCustomGroupModelCatalog(gatewayService)
+	}
 	pingInterval := time.Duration(0)
 	maxAccountSwitches := 10
 	maxAccountSwitchesGemini := 3
@@ -1073,6 +1076,19 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 // Falls back to default models if no whitelist is configured
 func (h *GatewayHandler) Models(c *gin.Context) {
 	apiKey, _ := middleware2.GetAPIKeyFromContext(c)
+	if apiKey != nil && apiKey.Group != nil && apiKey.Group.IsSystemCustomRouteGroup() {
+		if h.apiKeyService == nil {
+			h.errorResponse(c, http.StatusServiceUnavailable, "service_unavailable_error", "System custom group is unavailable")
+			return
+		}
+		models, err := h.apiKeyService.ListSystemCustomGroupModels(c.Request.Context(), apiKey, "")
+		if err != nil {
+			h.errorResponse(c, http.StatusServiceUnavailable, "service_unavailable_error", "System custom group is unavailable")
+			return
+		}
+		writeModelsList(c, service.PlatformComposite, models)
+		return
+	}
 	if apiKey != nil && apiKey.CustomGroupID != nil {
 		models, err := h.apiKeyService.ListCustomGroupModels(c.Request.Context(), apiKey)
 		if err != nil {

@@ -311,7 +311,6 @@ func (r *systemCustomGroupRepository) Get(ctx context.Context, groupID int64) (*
 func (r *systemCustomGroupRepository) ListModels(ctx context.Context, groupID int64, enabledOnly bool) ([]service.SystemCustomGroupModel, error) {
 	query := r.client.SystemCustomGroupModel.Query().
 		Where(systemcustomgroupmodel.GroupIDEQ(groupID)).
-		WithSourceGroup().
 		Order(dbent.Asc(systemcustomgroupmodel.FieldID))
 	if enabledOnly {
 		query = query.Where(systemcustomgroupmodel.EnabledEQ(true))

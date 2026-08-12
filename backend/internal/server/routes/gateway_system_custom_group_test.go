@@ -8,6 +8,7 @@ import (
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -30,6 +31,44 @@ type systemCustomUnsupportedAuthRepo struct {
 type systemCustomUnsupportedAuthCache struct {
 	service.APIKeyCache
 	entry *service.APIKeyAuthCacheEntry
+}
+
+type systemCustomModelsRouteRepository struct {
+	service.SystemCustomGroupRepository
+	routes []service.SystemCustomGroupModel
+}
+
+func (r systemCustomModelsRouteRepository) ListModels(context.Context, int64, bool) ([]service.SystemCustomGroupModel, error) {
+	return append([]service.SystemCustomGroupModel(nil), r.routes...), nil
+}
+
+type systemCustomModelsGroupRepository struct {
+	service.GroupRepository
+	groups map[int64]*service.Group
+}
+
+func (r systemCustomModelsGroupRepository) GetByIDLite(_ context.Context, id int64) (*service.Group, error) {
+	group, ok := r.groups[id]
+	if !ok {
+		return nil, service.ErrGroupNotFound
+	}
+	clone := *group
+	return &clone, nil
+}
+
+type systemCustomModelsCatalog struct {
+	models map[int64][]string
+}
+
+func (c systemCustomModelsCatalog) GetAvailableModels(_ context.Context, groupID *int64, _ string) []string {
+	if groupID == nil {
+		return nil
+	}
+	return append([]string(nil), c.models[*groupID]...)
+}
+
+func (systemCustomModelsCatalog) HasSchedulableAccountsForGroupPlatform(context.Context, int64, string) bool {
+	return true
 }
 
 func (c *systemCustomUnsupportedAuthCache) GetAuthCache(context.Context, string) (*service.APIKeyAuthCacheEntry, error) {
@@ -171,6 +210,85 @@ func TestSystemCustomUnsupportedEndpointMiddlewareAllowsOrdinaryKey(t *testing.T
 	router.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/v1/responses", nil))
 
 	require.Equal(t, http.StatusNoContent, recorder.Code)
+}
+
+func TestSystemCustomModelListsUseRealAuthSnapshotAndAliasesInRegisteredRouter(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	billingGroupID := int64(25)
+	apiKey := &service.APIKey{
+		ID: 7, UserID: 9, Key: "system-custom-model-list-key", Status: service.StatusActive,
+		GroupID: &billingGroupID,
+		Group: &service.Group{
+			ID: billingGroupID, Platform: service.PlatformComposite, Status: service.StatusActive, Hydrated: true,
+			SubscriptionType: service.SubscriptionTypeSubscription, SystemCustomRoutingEnabled: true,
+		},
+		User: &service.User{ID: 9, Role: service.RoleUser, Status: service.StatusActive},
+	}
+	authRepo := &systemCustomUnsupportedAuthRepo{apiKey: apiKey}
+	authCache := &systemCustomUnsupportedAuthCache{}
+	groupRepo := systemCustomModelsGroupRepository{groups: map[int64]*service.Group{
+		10: {ID: 10, Platform: service.PlatformAnthropic, Status: service.StatusActive, Hydrated: true},
+		20: {ID: 20, Platform: service.PlatformGemini, Status: service.StatusActive, Hydrated: true},
+	}}
+	routeRepo := systemCustomModelsRouteRepository{routes: []service.SystemCustomGroupModel{
+		{GroupID: billingGroupID, PublicModel: "claude-monthly", SourceGroupID: 10, SourceModel: "claude-sonnet-4", Enabled: true},
+		{GroupID: billingGroupID, PublicModel: "gemini-monthly", SourceGroupID: 20, SourceModel: "gemini-2.5-flash", Enabled: true},
+	}}
+	catalog := systemCustomModelsCatalog{models: map[int64][]string{10: {"claude-sonnet-4"}, 20: {"gemini-2.5-flash"}}}
+	cfg := &config.Config{
+		RunMode:    config.RunModeSimple,
+		Gateway:    config.GatewayConfig{MaxBodySize: 1024 * 1024, TextMaxBodySize: 1024 * 1024},
+		APIKeyAuth: config.APIKeyAuthCacheConfig{L2TTLSeconds: 60},
+	}
+	apiKeyService := service.NewAPIKeyService(authRepo, nil, groupRepo, nil, nil, authCache, cfg)
+	apiKeyService.SetSystemCustomGroupRepository(routeRepo)
+	apiKeyService.SetSystemCustomGroupModelCatalog(catalog)
+	gatewayHandler := handler.NewGatewayHandler(
+		nil, nil, nil, nil, nil, nil, nil, nil, apiKeyService, nil, nil, nil, nil, cfg, nil,
+	)
+	router := gin.New()
+	RegisterGatewayRoutes(
+		router,
+		&handler.Handlers{
+			Gateway: gatewayHandler, OpenAIGateway: &handler.OpenAIGatewayHandler{},
+			AsyncImage: &handler.AsyncImageHandler{}, BatchImage: &handler.BatchImageHandler{},
+		},
+		servermiddleware.NewAPIKeyAuthMiddleware(apiKeyService, nil, cfg), apiKeyService,
+		nil, nil, nil, nil, cfg,
+	)
+
+	tests := []struct {
+		path string
+		want []string
+	}{
+		{path: "/models", want: []string{"claude-monthly", "gemini-monthly"}},
+		{path: "/v1/models", want: []string{"claude-monthly", "gemini-monthly"}},
+		{path: "/v1/models?client_version=0.144.0", want: []string{"claude-monthly", "gemini-monthly"}},
+		{path: "/v1beta/models", want: []string{"models/gemini-monthly"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.path, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, tt.path, nil)
+			req.Header.Set("Authorization", "Bearer "+apiKey.Key)
+			recorder := httptest.NewRecorder()
+			router.ServeHTTP(recorder, req)
+
+			require.Equal(t, http.StatusOK, recorder.Code, recorder.Body.String())
+			path := "data.#.id"
+			if strings.HasPrefix(tt.path, "/v1beta") {
+				path = "models.#.name"
+			}
+			results := gjson.Get(recorder.Body.String(), path).Array()
+			got := make([]string, 0, len(results))
+			for _, result := range results {
+				got = append(got, result.String())
+			}
+			require.Equal(t, tt.want, got)
+			require.NotContains(t, recorder.Body.String(), "claude-sonnet-4")
+			require.NotContains(t, recorder.Body.String(), "gemini-2.5-flash")
+		})
+	}
+	require.Equal(t, 1, authRepo.loads, "all paths after the first must preserve the system custom marker through the auth cache")
 }
 
 type systemCustomGroupResolverStub struct {

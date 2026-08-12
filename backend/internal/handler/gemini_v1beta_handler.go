@@ -39,6 +39,19 @@ func (h *GatewayHandler) GeminiV1BetaListModels(c *gin.Context) {
 		googleError(c, http.StatusUnauthorized, "Invalid API key")
 		return
 	}
+	if apiKey.Group != nil && apiKey.Group.IsSystemCustomRouteGroup() {
+		if h.apiKeyService == nil {
+			googleError(c, http.StatusServiceUnavailable, "System custom group is unavailable")
+			return
+		}
+		models, err := h.apiKeyService.ListSystemCustomGroupModels(c.Request.Context(), apiKey, service.PlatformGemini)
+		if err != nil {
+			googleError(c, http.StatusServiceUnavailable, "System custom group is unavailable")
+			return
+		}
+		c.JSON(http.StatusOK, customGroupGeminiModels(models))
+		return
+	}
 	if apiKey.CustomGroupID != nil {
 		models, err := h.apiKeyService.ListCustomGroupModelsForPlatform(c.Request.Context(), apiKey, service.PlatformGemini)
 		if err != nil {
