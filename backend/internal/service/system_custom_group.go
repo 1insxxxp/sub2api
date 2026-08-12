@@ -24,6 +24,8 @@ var (
 	ErrSystemCustomGroupInUse                = infraerrors.Conflict("SYSTEM_CUSTOM_GROUP_IN_USE", "system custom group is in use")
 	ErrSystemCustomGroupManagedOnly          = infraerrors.Conflict("SYSTEM_CUSTOM_GROUP_MANAGED_ONLY", "system custom groups must be managed through the dedicated API")
 	ErrSystemCustomGroupRetryableConflict    = infraerrors.ServiceUnavailable("SYSTEM_CUSTOM_GROUP_RETRYABLE_CONFLICT", "system custom group changed concurrently; retry the request")
+	ErrSystemCustomGroupModelNotAllowed      = infraerrors.Forbidden("SYSTEM_CUSTOM_GROUP_MODEL_NOT_ALLOWED", "the requested model is not enabled for this subscription group")
+	ErrSystemCustomGroupSourceUnavailable    = infraerrors.ServiceUnavailable("SYSTEM_CUSTOM_GROUP_SOURCE_UNAVAILABLE", "the selected model source is temporarily unavailable")
 )
 
 // SystemCustomGroupRouteError preserves machine-readable error identity while

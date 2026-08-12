@@ -13,6 +13,7 @@ import (
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
 	"github.com/Wei-Shaw/sub2api/internal/handler"
+	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
 	pkghttputil "github.com/Wei-Shaw/sub2api/internal/pkg/httputil"
 	"github.com/Wei-Shaw/sub2api/internal/server/middleware"
 	"github.com/Wei-Shaw/sub2api/internal/service"
@@ -40,6 +41,8 @@ func RegisterGatewayRoutes(
 	opsErrorLogger := handler.OpsErrorLoggerMiddleware(opsService)
 	endpointNorm := handler.InboundEndpointMiddleware()
 	compositeTarget := compositeTargetPlatformMiddleware(compositeResolver)
+	systemTarget := systemCustomGroupTargetMiddleware(apiKeyService)
+	systemGeminiTarget := systemCustomGroupGeminiTargetMiddleware(apiKeyService)
 	customTarget := customGroupTargetMiddleware(apiKeyService)
 	customGeminiTarget := customGroupGeminiTargetMiddleware(apiKeyService)
 	compositeGeminiTarget := compositeGeminiTargetPlatformMiddleware(compositeResolver)
@@ -183,6 +186,7 @@ func RegisterGatewayRoutes(
 	gateway.Use(endpointNorm)
 	gateway.Use(gin.HandlerFunc(apiKeyAuth))
 	gateway.GET("/sub2api/billing", h.Gateway.KeyBillingInfo)
+	gateway.Use(systemTarget)
 	gateway.Use(customTarget)
 	gateway.Use(compositeTarget)
 	gateway.Use(requireGroupAnthropic)
@@ -328,6 +332,7 @@ func RegisterGatewayRoutes(
 	gemini.Use(opsErrorLogger)
 	gemini.Use(endpointNorm)
 	gemini.Use(middleware.APIKeyAuthWithSubscriptionGoogle(apiKeyService, subscriptionService, cfg))
+	gemini.Use(systemGeminiTarget)
 	gemini.Use(customGeminiTarget)
 	gemini.Use(compositeGeminiTarget)
 	gemini.Use(requireGroupGoogle)
@@ -346,16 +351,16 @@ func RegisterGatewayRoutes(
 		}
 		h.Gateway.Responses(c)
 	}
-	r.POST("/responses", bodyLimit, clientRequestID, opsErrorLogger, endpointNorm, gin.HandlerFunc(apiKeyAuth), customTarget, compositeTarget, requireGroupAnthropic, responsesHandler)
-	r.POST("/responses/*subpath", bodyLimit, clientRequestID, opsErrorLogger, endpointNorm, gin.HandlerFunc(apiKeyAuth), customTarget, compositeTarget, requireGroupAnthropic, guardResponsesSubpath(responsesHandler))
-	r.POST("/alpha/search", textBodyLimit, clientRequestID, opsErrorLogger, endpointNorm, gin.HandlerFunc(apiKeyAuth), customTarget, compositeTarget, requireGroupAnthropic, h.OpenAIGateway.AlphaSearch)
+	r.POST("/responses", bodyLimit, clientRequestID, opsErrorLogger, endpointNorm, gin.HandlerFunc(apiKeyAuth), systemTarget, customTarget, compositeTarget, requireGroupAnthropic, responsesHandler)
+	r.POST("/responses/*subpath", bodyLimit, clientRequestID, opsErrorLogger, endpointNorm, gin.HandlerFunc(apiKeyAuth), systemTarget, customTarget, compositeTarget, requireGroupAnthropic, guardResponsesSubpath(responsesHandler))
+	r.POST("/alpha/search", textBodyLimit, clientRequestID, opsErrorLogger, endpointNorm, gin.HandlerFunc(apiKeyAuth), systemTarget, customTarget, compositeTarget, requireGroupAnthropic, h.OpenAIGateway.AlphaSearch)
 	r.GET("/responses", bodyLimit, clientRequestID, opsErrorLogger, endpointNorm, gin.HandlerFunc(apiKeyAuth), compositeTarget, requireGroupAnthropic, func(c *gin.Context) {
 		h.OpenAIGateway.ResponsesWebSocket(c)
 	})
 	r.GET("/models", bodyLimit, clientRequestID, opsErrorLogger, endpointNorm, gin.HandlerFunc(apiKeyAuth), requireGroupAnthropic, modelsHandler)
-	r.POST("/messages/count_tokens", bodyLimit, clientRequestID, opsErrorLogger, endpointNorm, gin.HandlerFunc(apiKeyAuth), customTarget, compositeTarget, requireGroupAnthropic, countTokensHandler)
+	r.POST("/messages/count_tokens", bodyLimit, clientRequestID, opsErrorLogger, endpointNorm, gin.HandlerFunc(apiKeyAuth), systemTarget, customTarget, compositeTarget, requireGroupAnthropic, countTokensHandler)
 	codexDirect := r.Group("/backend-api/codex")
-	codexDirect.Use(bodyLimit, clientRequestID, opsErrorLogger, endpointNorm, gin.HandlerFunc(apiKeyAuth), customTarget, compositeTarget, requireGroupAnthropic)
+	codexDirect.Use(bodyLimit, clientRequestID, opsErrorLogger, endpointNorm, gin.HandlerFunc(apiKeyAuth), systemTarget, customTarget, compositeTarget, requireGroupAnthropic)
 	{
 		codexDirect.POST("/realtime/calls", h.OpenAIGateway.Live)
 		codexDirect.GET("/:call_id", h.OpenAIGateway.LiveSideband)
@@ -368,14 +373,14 @@ func RegisterGatewayRoutes(
 		codexDirect.GET("/models", h.OpenAIGateway.CodexModels)
 	}
 	// OpenAI Chat Completions API（不带v1前缀的别名）— auto-route based on group platform
-	r.POST("/chat/completions", bodyLimit, clientRequestID, opsErrorLogger, endpointNorm, gin.HandlerFunc(apiKeyAuth), customTarget, compositeTarget, requireGroupAnthropic, func(c *gin.Context) {
+	r.POST("/chat/completions", bodyLimit, clientRequestID, opsErrorLogger, endpointNorm, gin.HandlerFunc(apiKeyAuth), systemTarget, customTarget, compositeTarget, requireGroupAnthropic, func(c *gin.Context) {
 		if isOpenAIResponsesCompatibleGatewayPlatform(c) {
 			h.OpenAIGateway.ChatCompletions(c)
 			return
 		}
 		h.Gateway.ChatCompletions(c)
 	})
-	r.POST("/embeddings", textBodyLimit, clientRequestID, opsErrorLogger, endpointNorm, gin.HandlerFunc(apiKeyAuth), customTarget, compositeTarget, requireGroupAnthropic, func(c *gin.Context) {
+	r.POST("/embeddings", textBodyLimit, clientRequestID, opsErrorLogger, endpointNorm, gin.HandlerFunc(apiKeyAuth), systemTarget, customTarget, compositeTarget, requireGroupAnthropic, func(c *gin.Context) {
 		if !isOpenAIOnlyEndpointGatewayPlatform(c) {
 			service.MarkOpsClientBusinessLimited(c, service.OpsClientBusinessLimitedReasonLocalFeatureGate)
 			c.JSON(http.StatusNotFound, gin.H{
@@ -388,15 +393,15 @@ func RegisterGatewayRoutes(
 		}
 		h.OpenAIGateway.Embeddings(c)
 	})
-	r.POST("/images/generations", bodyLimit, clientRequestID, opsErrorLogger, endpointNorm, gin.HandlerFunc(apiKeyAuth), customTarget, compositeTarget, requireGroupAnthropic, imagesHandler)
-	r.POST("/images/edits", bodyLimit, clientRequestID, opsErrorLogger, endpointNorm, gin.HandlerFunc(apiKeyAuth), customTarget, compositeTarget, requireGroupAnthropic, imagesHandler)
-	r.POST("/images/generations/async", bodyLimit, clientRequestID, opsErrorLogger, endpointNorm, gin.HandlerFunc(apiKeyAuth), customTarget, compositeTarget, requireGroupAnthropic, h.AsyncImage.Submit)
-	r.POST("/images/edits/async", bodyLimit, clientRequestID, opsErrorLogger, endpointNorm, gin.HandlerFunc(apiKeyAuth), customTarget, compositeTarget, requireGroupAnthropic, h.AsyncImage.Submit)
+	r.POST("/images/generations", bodyLimit, clientRequestID, opsErrorLogger, endpointNorm, gin.HandlerFunc(apiKeyAuth), systemTarget, customTarget, compositeTarget, requireGroupAnthropic, imagesHandler)
+	r.POST("/images/edits", bodyLimit, clientRequestID, opsErrorLogger, endpointNorm, gin.HandlerFunc(apiKeyAuth), systemTarget, customTarget, compositeTarget, requireGroupAnthropic, imagesHandler)
+	r.POST("/images/generations/async", bodyLimit, clientRequestID, opsErrorLogger, endpointNorm, gin.HandlerFunc(apiKeyAuth), systemTarget, customTarget, compositeTarget, requireGroupAnthropic, h.AsyncImage.Submit)
+	r.POST("/images/edits/async", bodyLimit, clientRequestID, opsErrorLogger, endpointNorm, gin.HandlerFunc(apiKeyAuth), systemTarget, customTarget, compositeTarget, requireGroupAnthropic, h.AsyncImage.Submit)
 	r.GET("/images/tasks/:task_id", bodyLimit, clientRequestID, opsErrorLogger, endpointNorm, gin.HandlerFunc(apiKeyAuth), compositeTarget, requireGroupAnthropic, h.AsyncImage.Get)
-	r.POST("/videos/generations", bodyLimit, clientRequestID, opsErrorLogger, endpointNorm, gin.HandlerFunc(apiKeyAuth), customTarget, compositeTarget, requireGroupAnthropic, videoGenerationHandler)
-	r.POST("/videos/edits", bodyLimit, clientRequestID, opsErrorLogger, endpointNorm, gin.HandlerFunc(apiKeyAuth), customTarget, compositeTarget, requireGroupAnthropic, videoEditHandler)
-	r.POST("/videos/extensions", bodyLimit, clientRequestID, opsErrorLogger, endpointNorm, gin.HandlerFunc(apiKeyAuth), customTarget, compositeTarget, requireGroupAnthropic, videoExtensionHandler)
-	r.POST("/videos", bodyLimit, clientRequestID, opsErrorLogger, endpointNorm, gin.HandlerFunc(apiKeyAuth), customTarget, compositeTarget, requireGroupAnthropic, videoGenerationHandler)
+	r.POST("/videos/generations", bodyLimit, clientRequestID, opsErrorLogger, endpointNorm, gin.HandlerFunc(apiKeyAuth), systemTarget, customTarget, compositeTarget, requireGroupAnthropic, videoGenerationHandler)
+	r.POST("/videos/edits", bodyLimit, clientRequestID, opsErrorLogger, endpointNorm, gin.HandlerFunc(apiKeyAuth), systemTarget, customTarget, compositeTarget, requireGroupAnthropic, videoEditHandler)
+	r.POST("/videos/extensions", bodyLimit, clientRequestID, opsErrorLogger, endpointNorm, gin.HandlerFunc(apiKeyAuth), systemTarget, customTarget, compositeTarget, requireGroupAnthropic, videoExtensionHandler)
+	r.POST("/videos", bodyLimit, clientRequestID, opsErrorLogger, endpointNorm, gin.HandlerFunc(apiKeyAuth), systemTarget, customTarget, compositeTarget, requireGroupAnthropic, videoGenerationHandler)
 	r.GET("/videos/generations/:request_id/content", bodyLimit, clientRequestID, opsErrorLogger, endpointNorm, gin.HandlerFunc(apiKeyAuth), compositeTarget, requireGroupAnthropic, videoContentHandler)
 	r.GET("/videos/edits/:request_id/content", bodyLimit, clientRequestID, opsErrorLogger, endpointNorm, gin.HandlerFunc(apiKeyAuth), compositeTarget, requireGroupAnthropic, videoContentHandler)
 	r.GET("/videos/extensions/:request_id/content", bodyLimit, clientRequestID, opsErrorLogger, endpointNorm, gin.HandlerFunc(apiKeyAuth), compositeTarget, requireGroupAnthropic, videoContentHandler)
@@ -416,8 +421,8 @@ func RegisterGatewayRoutes(
 			h.OpenAIGateway.GrokVoice(c, endpoint)
 		}
 	}
-	r.POST("/tts", bodyLimit, clientRequestID, opsErrorLogger, endpointNorm, gin.HandlerFunc(apiKeyAuth), compositeTarget, requireGroupAnthropic, rootVoiceHandler("tts"))
-	r.POST("/stt", bodyLimit, clientRequestID, opsErrorLogger, endpointNorm, gin.HandlerFunc(apiKeyAuth), compositeTarget, requireGroupAnthropic, rootVoiceHandler("stt"))
+	r.POST("/tts", bodyLimit, clientRequestID, opsErrorLogger, endpointNorm, gin.HandlerFunc(apiKeyAuth), systemTarget, customTarget, compositeTarget, requireGroupAnthropic, rootVoiceHandler("tts"))
+	r.POST("/stt", bodyLimit, clientRequestID, opsErrorLogger, endpointNorm, gin.HandlerFunc(apiKeyAuth), systemTarget, customTarget, compositeTarget, requireGroupAnthropic, rootVoiceHandler("stt"))
 	r.POST("/custom-voices", bodyLimit, clientRequestID, opsErrorLogger, endpointNorm, gin.HandlerFunc(apiKeyAuth), compositeTarget, requireGroupAnthropic, rootVoiceHandler("custom-voices"))
 	rootCustomVoicePathHandler := func(c *gin.Context) {
 		if getGroupPlatform(c) != service.PlatformGrok {
@@ -440,7 +445,7 @@ func RegisterGatewayRoutes(
 		}
 		h.OpenAIGateway.GrokRealtime(c)
 	})
-	r.POST("/web_search", bodyLimit, clientRequestID, opsErrorLogger, endpointNorm, gin.HandlerFunc(apiKeyAuth), compositeTarget, requireGroupAnthropic, func(c *gin.Context) {
+	r.POST("/web_search", bodyLimit, clientRequestID, opsErrorLogger, endpointNorm, gin.HandlerFunc(apiKeyAuth), systemTarget, customTarget, compositeTarget, requireGroupAnthropic, func(c *gin.Context) {
 		if getGroupPlatform(c) != service.PlatformGrok {
 			service.MarkOpsClientBusinessLimited(c, service.OpsClientBusinessLimitedReasonLocalFeatureGate)
 			c.JSON(http.StatusNotFound, gin.H{"error": gin.H{"type": "not_found_error", "message": "Web Search API is not supported for this platform"}})
@@ -553,6 +558,192 @@ type customGroupModelResolver interface {
 	ResolveCustomGroupModel(context.Context, *service.APIKey, string) (*service.CustomGroupModelResolution, error)
 }
 
+type systemCustomGroupModelResolver interface {
+	ResolveSystemCustomGroupModel(context.Context, *service.APIKey, string) (*service.SystemCustomGroupModelResolution, error)
+}
+
+func systemCustomGroupTargetMiddleware(apiKeys systemCustomGroupModelResolver) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		apiKey, ok := middleware.GetAPIKeyFromContext(c)
+		if !ok || apiKey == nil || apiKey.Group == nil || !apiKey.Group.IsSystemCustomRouteGroup() {
+			c.Next()
+			return
+		}
+		if c.Request == nil || c.Request.Method == http.MethodGet {
+			c.Next()
+			return
+		}
+
+		body, err := pkghttputil.ReadRequestBodyWithPrealloc(c.Request)
+		if err != nil {
+			status := http.StatusBadRequest
+			message := "Failed to read request body"
+			var maxErr *http.MaxBytesError
+			if errors.As(err, &maxErr) {
+				status = http.StatusRequestEntityTooLarge
+				message = "Request body is too large"
+			}
+			writeSystemCustomRootError(c, status, "invalid_request_error", "INVALID_REQUEST", message)
+			return
+		}
+		model := compositeRequestModelFromBody(c.GetHeader("Content-Type"), body)
+		if model == "" {
+			resetRequestBody(c, body)
+			if !systemCustomRequestRequiresModel(c.Request.URL.Path) {
+				c.Next()
+				return
+			}
+			writeSystemCustomRootError(c, http.StatusBadRequest, "invalid_request_error", "MODEL_REQUIRED", "Model is required for a system custom subscription group")
+			return
+		}
+
+		resolution, err := apiKeys.ResolveSystemCustomGroupModel(c.Request.Context(), apiKey, model)
+		if err != nil {
+			writeSystemCustomResolutionError(c, err, false)
+			return
+		}
+		if !validSystemCustomGroupResolution(resolution, apiKey.Group.ID) {
+			writeSystemCustomResolutionError(c, service.ErrSystemCustomGroupSourceUnavailable, false)
+			return
+		}
+		rewrittenBody, err := rewriteCustomGroupRequestModel(c.GetHeader("Content-Type"), body, resolution.PublicModel, resolution.SourceModel)
+		if err != nil {
+			writeSystemCustomRootError(c, http.StatusBadRequest, "invalid_request_error", "MODEL_REWRITE_FAILED", "Failed to rewrite the system custom model alias")
+			return
+		}
+		ctx := service.WithSystemCustomGroupResolution(c.Request.Context(), resolution.SystemCustomGroupResolution)
+		c.Request = c.Request.WithContext(ctx)
+		resetRequestBody(c, rewrittenBody)
+		if !middleware.SetAPIKeyAndGroupContext(c, resolution.APIKey) {
+			writeSystemCustomResolutionError(c, service.ErrSystemCustomGroupSourceUnavailable, false)
+			return
+		}
+		c.Next()
+	}
+}
+
+func systemCustomGroupGeminiTargetMiddleware(apiKeys systemCustomGroupModelResolver) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		apiKey, ok := middleware.GetAPIKeyFromContext(c)
+		if !ok || apiKey == nil || apiKey.Group == nil || !apiKey.Group.IsSystemCustomRouteGroup() {
+			c.Next()
+			return
+		}
+		model := compositeGeminiModelFromParams(c)
+		if model == "" { // List/status endpoints without a model are not resolved here.
+			c.Next()
+			return
+		}
+		resolution, err := apiKeys.ResolveSystemCustomGroupModel(c.Request.Context(), apiKey, model)
+		if err != nil {
+			writeSystemCustomResolutionError(c, err, true)
+			return
+		}
+		if !validSystemCustomGroupResolution(resolution, apiKey.Group.ID) {
+			writeSystemCustomResolutionError(c, service.ErrSystemCustomGroupSourceUnavailable, true)
+			return
+		}
+		if resolution.SourcePlatform != service.PlatformGemini || resolution.APIKey.Group.Platform != service.PlatformGemini {
+			middleware.GoogleErrorWriter(c, http.StatusForbidden, "The selected model is not available through the Gemini API")
+			c.Abort()
+			return
+		}
+		for i := range c.Params {
+			switch c.Params[i].Key {
+			case "model":
+				c.Params[i].Value = resolution.SourceModel
+			case "modelAction":
+				value := strings.TrimPrefix(c.Params[i].Value, "/")
+				action := ""
+				if idx := strings.LastIndex(value, ":"); idx >= 0 {
+					action = value[idx:]
+				}
+				c.Params[i].Value = "/" + resolution.SourceModel + action
+			}
+		}
+		ctx := service.WithSystemCustomGroupResolution(c.Request.Context(), resolution.SystemCustomGroupResolution)
+		c.Request = c.Request.WithContext(ctx)
+		if !middleware.SetAPIKeyAndGroupContext(c, resolution.APIKey) {
+			writeSystemCustomResolutionError(c, service.ErrSystemCustomGroupSourceUnavailable, true)
+			return
+		}
+		c.Next()
+	}
+}
+
+func validSystemCustomGroupResolution(resolution *service.SystemCustomGroupModelResolution, billingGroupID int64) bool {
+	if resolution == nil || resolution.APIKey == nil || resolution.APIKey.Group == nil || resolution.APIKey.GroupID == nil {
+		return false
+	}
+	return billingGroupID > 0 && resolution.BillingGroupID == billingGroupID && resolution.SourceGroupID > 0 &&
+		*resolution.APIKey.GroupID == resolution.SourceGroupID && resolution.APIKey.Group.ID == resolution.SourceGroupID &&
+		strings.TrimSpace(resolution.PublicModel) != "" && strings.TrimSpace(resolution.SourceModel) != "" &&
+		strings.TrimSpace(resolution.SourcePlatform) != "" && resolution.SourcePlatform == resolution.APIKey.Group.Platform
+}
+
+func writeSystemCustomResolutionError(c *gin.Context, err error, google bool) {
+	status := infraerrors.Code(err)
+	errorType := "server_error"
+	code := infraerrors.Reason(err)
+	message := "Failed to resolve the system custom model route"
+	switch {
+	case errors.Is(err, service.ErrSystemCustomGroupModelNotAllowed):
+		status = http.StatusForbidden
+		errorType = "permission_error"
+		code = "SYSTEM_CUSTOM_GROUP_MODEL_NOT_ALLOWED"
+		message = "The requested model is not enabled for this subscription group"
+	case errors.Is(err, service.ErrSystemCustomGroupSourceUnavailable):
+		status = http.StatusServiceUnavailable
+		errorType = "service_unavailable_error"
+		code = "SYSTEM_CUSTOM_GROUP_SOURCE_UNAVAILABLE"
+		message = "The selected model source is temporarily unavailable"
+	default:
+		if status < 400 || status > 599 {
+			status = http.StatusInternalServerError
+		}
+		if code == "" {
+			code = "SYSTEM_CUSTOM_GROUP_RESOLUTION_FAILED"
+		}
+	}
+	if google {
+		middleware.GoogleErrorWriter(c, status, message)
+		c.Abort()
+		return
+	}
+	writeSystemCustomRootError(c, status, errorType, code, message)
+}
+
+func writeSystemCustomRootError(c *gin.Context, status int, errorType, code, message string) {
+	if systemCustomUsesAnthropicEnvelope(c.Request.URL.Path) {
+		c.AbortWithStatusJSON(status, gin.H{"type": "error", "error": gin.H{"type": errorType, "message": message}})
+		return
+	}
+	c.AbortWithStatusJSON(status, gin.H{"error": gin.H{"type": errorType, "message": message, "code": code}})
+}
+
+func systemCustomUsesAnthropicEnvelope(path string) bool {
+	path = strings.TrimRight(path, "/")
+	return path == "/v1/messages" || path == "/v1/messages/count_tokens" || path == "/messages/count_tokens"
+}
+
+func systemCustomRequestRequiresModel(path string) bool {
+	path = strings.TrimRight(path, "/")
+	switch path {
+	case "/v1/messages", "/v1/messages/count_tokens", "/messages/count_tokens",
+		"/v1/live", "/v1/responses", "/responses", "/v1/alpha/search", "/alpha/search",
+		"/v1/chat/completions", "/chat/completions", "/v1/embeddings", "/embeddings",
+		"/v1/images/generations", "/images/generations", "/v1/images/edits", "/images/edits",
+		"/v1/images/generations/async", "/images/generations/async", "/v1/images/edits/async", "/images/edits/async",
+		"/v1/videos", "/videos", "/v1/videos/generations", "/videos/generations",
+		"/v1/videos/edits", "/videos/edits", "/v1/videos/extensions", "/videos/extensions",
+		"/v1/tts", "/tts", "/v1/stt", "/stt", "/v1/web_search", "/web_search",
+		"/backend-api/codex/realtime/calls", "/backend-api/codex/responses", "/backend-api/codex/alpha/search":
+		return true
+	default:
+		return false
+	}
+}
+
 func customGroupTargetMiddleware(apiKeys customGroupModelResolver) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		apiKey, ok := middleware.GetAPIKeyFromContext(c)
@@ -597,7 +788,7 @@ func rewriteCustomGroupRequestModel(contentType string, body []byte, publicModel
 	if sourceModel == "" {
 		return nil, errors.New("custom group source model is empty")
 	}
-	if strings.EqualFold(publicModel, sourceModel) {
+	if publicModel == sourceModel {
 		return body, nil
 	}
 	if gjson.ValidBytes(body) {

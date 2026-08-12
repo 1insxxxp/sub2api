@@ -350,6 +350,21 @@ func GetAPIKeyFromContext(c *gin.Context) (*service.APIKey, bool) {
 	return apiKey, ok
 }
 
+// SetAPIKeyAndGroupContext replaces both Gin's request API key and the typed
+// request-context snapshots used by service-layer routing/pricing. It is used
+// after a request-scoped route resolver has cloned the authenticated key.
+func SetAPIKeyAndGroupContext(c *gin.Context, apiKey *service.APIKey) bool {
+	if c == nil || c.Request == nil || apiKey == nil || !service.IsGroupContextValid(apiKey.Group) ||
+		apiKey.GroupID == nil || *apiKey.GroupID != apiKey.Group.ID {
+		return false
+	}
+	c.Set(string(ContextKeyAPIKey), apiKey)
+	ctx := context.WithValue(c.Request.Context(), ctxkey.APIKey, apiKey)
+	ctx = context.WithValue(ctx, ctxkey.Group, apiKey.Group)
+	c.Request = c.Request.WithContext(ctx)
+	return true
+}
+
 // SetOpsFallbackAPIKey 记录已加载的 API Key，供 Ops 错误日志在鉴权早退时回退使用。
 // 与 ContextKeyAPIKey 区分：写入它不代表请求已通过鉴权，因此不影响 handler、
 // 审计日志等对“已鉴权”的判断。

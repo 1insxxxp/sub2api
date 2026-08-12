@@ -56,8 +56,16 @@ const (
 	// 用于区分"用错端点"与"端点用对了但账号没能力"。
 	OpenAIImagesEndpoint Key = "ctx_openai_images_endpoint"
 
-	// Group 认证后的分组信息，由 API Key 认证中间件设置
+	// Group 当前请求用于调度/定价的有效分组。认证中间件先写入 Key 分组，
+	// 请求级路由解析器可再替换为真实来源分组。
 	Group Key = "ctx_group"
+
+	// APIKey 当前请求实际用于调度的 API Key 快照。系统自定义分组解析后，
+	// 该值指向只在本请求内使用的来源分组克隆，不会修改认证缓存中的原 Key。
+	APIKey Key = "ctx_api_key"
+
+	// SystemCustomGroupResolution 保存系统自定义月卡容器与真实来源分组的双重身份。
+	SystemCustomGroupResolution Key = "ctx_system_custom_group_resolution"
 
 	// UserID 认证后的 Sub2API 用户 ID，由 API Key 认证中间件设置。
 	// 供 service 层执行用户级策略，不能使用客户端请求体中的 user 标识替代。

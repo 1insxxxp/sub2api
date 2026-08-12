@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"html"
 	"math"
@@ -290,6 +291,7 @@ type APIKeyService struct {
 	userRepo                  UserRepository
 	groupRepo                 GroupRepository
 	customGroupRepo           UserCustomGroupRepository
+	systemCustomGroupRepo     SystemCustomGroupRepository
 	userSubRepo               UserSubscriptionRepository
 	userGroupRateRepo         UserGroupRateRepository
 	cache                     APIKeyCache
@@ -371,6 +373,12 @@ func (s *APIKeyService) SetRateLimitCacheInvalidator(inv RateLimitCacheInvalidat
 
 func (s *APIKeyService) SetConcurrencyService(concurrencyService *ConcurrencyService) {
 	s.concurrencyService = concurrencyService
+}
+
+// SetSystemCustomGroupRepository injects the runtime system custom model
+// resolver without changing the legacy NewAPIKeyService constructor.
+func (s *APIKeyService) SetSystemCustomGroupRepository(repo SystemCustomGroupRepository) {
+	s.systemCustomGroupRepo = repo
 }
 
 func (s *APIKeyService) compileAPIKeyIPRules(apiKey *APIKey) {
@@ -465,6 +473,70 @@ type CustomGroupModelResolution struct {
 	APIKey      *APIKey
 	PublicModel string
 	SourceModel string
+}
+
+// SystemCustomGroupModelResolution contains the request-scoped API key clone
+// and the billing/source identities selected for one public model alias.
+type SystemCustomGroupModelResolution struct {
+	APIKey *APIKey
+	SystemCustomGroupResolution
+}
+
+// ResolveSystemCustomGroupModel resolves a public alias from a system-managed
+// subscription container to a live direct source group. Ordinary keys return
+// (nil, nil) so callers can preserve existing routing behavior.
+func (s *APIKeyService) ResolveSystemCustomGroupModel(ctx context.Context, key *APIKey, model string) (*SystemCustomGroupModelResolution, error) {
+	if key == nil || key.Group == nil || !key.Group.IsSystemCustomRouteGroup() {
+		return nil, nil
+	}
+	if s == nil || s.systemCustomGroupRepo == nil || s.groupRepo == nil {
+		return nil, ErrSystemCustomGroupSourceUnavailable
+	}
+
+	billingGroupID := key.Group.ID
+	requestedModel := strings.TrimSpace(model)
+	if billingGroupID <= 0 || requestedModel == "" {
+		return nil, ErrSystemCustomGroupModelNotAllowed
+	}
+	route, err := s.systemCustomGroupRepo.ResolveModel(ctx, billingGroupID, requestedModel)
+	if err != nil {
+		if errors.Is(err, ErrSystemCustomGroupRouteNotFound) {
+			return nil, ErrSystemCustomGroupModelNotAllowed
+		}
+		return nil, ErrSystemCustomGroupSourceUnavailable.WithCause(err)
+	}
+	if route == nil || !route.Enabled || route.GroupID != billingGroupID ||
+		!strings.EqualFold(strings.TrimSpace(route.PublicModel), requestedModel) {
+		return nil, ErrSystemCustomGroupModelNotAllowed
+	}
+	if route.SourceGroupID <= 0 || strings.TrimSpace(route.SourceModel) == "" {
+		return nil, ErrSystemCustomGroupSourceUnavailable
+	}
+
+	sourceGroup, err := s.groupRepo.GetByID(ctx, route.SourceGroupID)
+	if err != nil {
+		return nil, ErrSystemCustomGroupSourceUnavailable.WithCause(err)
+	}
+	if !isDirectSystemCustomSource(sourceGroup) || !IsGroupContextValid(sourceGroup) {
+		return nil, ErrSystemCustomGroupSourceUnavailable
+	}
+
+	clone := *key
+	sourceGroupID := sourceGroup.ID
+	clone.GroupID = &sourceGroupID
+	clone.CustomGroupID = nil
+	clone.CustomGroup = nil
+	clone.Group = sourceGroup
+	return &SystemCustomGroupModelResolution{
+		APIKey: &clone,
+		SystemCustomGroupResolution: SystemCustomGroupResolution{
+			BillingGroupID: billingGroupID,
+			SourceGroupID:  sourceGroup.ID,
+			PublicModel:    strings.TrimSpace(route.PublicModel),
+			SourceModel:    strings.TrimSpace(route.SourceModel),
+			SourcePlatform: strings.TrimSpace(sourceGroup.Platform),
+		},
+	}, nil
 }
 
 // ResolveCustomGroupModel returns a per-request API key clone and the configured real model.

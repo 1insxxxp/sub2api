@@ -7,6 +7,48 @@ import (
 	"github.com/Wei-Shaw/sub2api/internal/pkg/ctxkey"
 )
 
+// SystemCustomGroupResolution keeps the monthly subscription container used
+// for billing separate from the direct source group used by request routing.
+type SystemCustomGroupResolution struct {
+	BillingGroupID int64
+	SourceGroupID  int64
+	PublicModel    string
+	SourceModel    string
+	SourcePlatform string
+}
+
+// WithSystemCustomGroupResolution stores a complete system custom route and
+// also updates the shared public/upstream model context consumed by existing
+// logging and pricing code.
+func WithSystemCustomGroupResolution(ctx context.Context, resolution SystemCustomGroupResolution) context.Context {
+	if ctx == nil || resolution.BillingGroupID <= 0 || resolution.SourceGroupID <= 0 {
+		return ctx
+	}
+	resolution.PublicModel = strings.TrimSpace(resolution.PublicModel)
+	resolution.SourceModel = strings.TrimSpace(resolution.SourceModel)
+	resolution.SourcePlatform = strings.TrimSpace(resolution.SourcePlatform)
+	if resolution.PublicModel == "" || resolution.SourceModel == "" || resolution.SourcePlatform == "" {
+		return ctx
+	}
+	ctx = context.WithValue(ctx, ctxkey.SystemCustomGroupResolution, resolution)
+	return WithCustomGroupModelResolution(ctx, resolution.PublicModel, resolution.SourceModel)
+}
+
+// SystemCustomGroupResolutionFromContext returns the container/source route
+// selected for the current request.
+func SystemCustomGroupResolutionFromContext(ctx context.Context) (SystemCustomGroupResolution, bool) {
+	if ctx == nil {
+		return SystemCustomGroupResolution{}, false
+	}
+	resolution, ok := ctx.Value(ctxkey.SystemCustomGroupResolution).(SystemCustomGroupResolution)
+	if !ok || resolution.BillingGroupID <= 0 || resolution.SourceGroupID <= 0 ||
+		strings.TrimSpace(resolution.PublicModel) == "" || strings.TrimSpace(resolution.SourceModel) == "" ||
+		strings.TrimSpace(resolution.SourcePlatform) == "" {
+		return SystemCustomGroupResolution{}, false
+	}
+	return resolution, true
+}
+
 // WithResolvedTargetPlatform stores the concrete provider chosen for a request
 // made through a composite group.
 func WithResolvedTargetPlatform(ctx context.Context, platform string) context.Context {

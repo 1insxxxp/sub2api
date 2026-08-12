@@ -718,6 +718,7 @@ func ProvideAPIKeyService(
 	userRepo UserRepository,
 	groupRepo GroupRepository,
 	customGroupRepo UserCustomGroupRepository,
+	systemCustomGroupRepo SystemCustomGroupRepository,
 	userSubRepo UserSubscriptionRepository,
 	userGroupRateRepo UserGroupRateRepository,
 	cache APIKeyCache,
@@ -727,6 +728,7 @@ func ProvideAPIKeyService(
 ) *APIKeyService {
 	svc := NewAPIKeyService(apiKeyRepo, userRepo, groupRepo, userSubRepo, userGroupRateRepo, cache, cfg)
 	svc.customGroupRepo = customGroupRepo
+	svc.SetSystemCustomGroupRepository(systemCustomGroupRepo)
 	svc.SetRateLimitCacheInvalidator(billingCacheService)
 	svc.SetConcurrencyService(concurrencyService)
 	return svc
