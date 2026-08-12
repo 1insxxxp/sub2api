@@ -542,7 +542,7 @@ export default {
   availableChannels: {
     title: 'Available Channels',
     description: 'Channels you can access, along with their supported models and pricing',
-    searchPlaceholder: 'Search channels or models...',
+    searchPlaceholder: 'Search channels or models…',
     empty: 'No available channels',
     noModels: 'No models configured',
     noPricing: 'Pricing not configured',
@@ -625,7 +625,7 @@ export default {
       noMatchingResults: 'No matching channels or models',
       selectChannel: 'Select channel',
       channelPickerTitle: 'Select an available channel',
-      channelPickerSearch: 'Search channels or platforms',
+      channelPickerSearch: 'Search channels or platforms…',
       channelPickerNoResults: 'No matching channels',
       channelNavigation: 'Channel navigation',
       platformFilter: 'Platform filter',

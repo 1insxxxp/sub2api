@@ -45,6 +45,7 @@ describe('AvailableChannelOfferingCard', () => {
     expect(root.classes()).not.toContain('shadow-sm')
     expect(root.classes()).not.toContain('rounded-2xl')
     expect(wrapper.text()).toContain('Anthropic')
+    expect(wrapper.get('h4').text()).toBe('Anthropic')
     expect(wrapper.text()).toContain('余额 [claude max]')
     expect(wrapper.get('[data-platform-badge]').attributes('data-platform')).toBe('anthropic')
     expect(wrapper.text()).toContain('7.50×')

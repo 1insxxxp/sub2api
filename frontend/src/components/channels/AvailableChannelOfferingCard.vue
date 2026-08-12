@@ -60,7 +60,7 @@ const effectiveRateRange = computed(() => {
     <header class="grid min-w-0 gap-3 px-3 py-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
       <div class="min-w-0 flex-1">
         <div class="flex min-w-0 flex-wrap items-center gap-2">
-          <strong class="break-words text-sm font-bold text-gray-900 [overflow-wrap:anywhere] dark:text-white">{{ offering.channelName }}</strong>
+          <h4 class="break-words text-sm font-bold text-gray-900 [overflow-wrap:anywhere] dark:text-white">{{ offering.channelName }}</h4>
           <AvailableChannelPlatformBadge :platform="offering.platform" />
         </div>
         <p class="mt-1 break-words text-xs text-gray-500 [overflow-wrap:anywhere] dark:text-gray-400">{{ offering.groupName }}</p>

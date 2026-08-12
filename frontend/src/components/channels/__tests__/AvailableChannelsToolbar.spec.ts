@@ -1,9 +1,11 @@
 import { mount } from '@vue/test-utils'
 import { describe, expect, it, vi } from 'vitest'
 import Select from '@/components/common/Select.vue'
+import enDashboard from '@/i18n/locales/en/dashboard'
+import zhDashboard from '@/i18n/locales/zh/dashboard'
 
 const labels: Record<string, string> = {
-  'availableChannels.searchPlaceholder': '搜索渠道或模型...',
+  'availableChannels.searchPlaceholder': '搜索渠道或模型…',
   'availableChannels.catalog.platformFilter': '平台筛选',
   'availableChannels.catalog.allPlatforms': '全部平台',
   'availableChannels.catalog.groupsCount': '{count} 个分组',
@@ -127,7 +129,7 @@ describe('AvailableChannelsToolbar', () => {
     const refresh = wrapper.get('[data-testid="channel-refresh"]')
 
     expect(search.attributes()).toMatchObject({
-      'aria-label': '搜索渠道或模型...',
+      'aria-label': '搜索渠道或模型…',
       name: 'available-channel-search',
       autocomplete: 'off',
     })
@@ -136,5 +138,7 @@ describe('AvailableChannelsToolbar', () => {
       'focus-visible:ring-primary-500/20',
     ]))
     expect(refresh.classes()).toContain('focus-visible:ring-offset-2')
+    expect(zhDashboard.availableChannels.searchPlaceholder).toBe('搜索渠道或模型…')
+    expect(enDashboard.availableChannels.searchPlaceholder).toBe('Search channels or models…')
   })
 })

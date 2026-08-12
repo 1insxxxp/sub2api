@@ -547,7 +547,7 @@ export default {
   availableChannels: {
     title: '可用渠道',
     description: '查看您可访问的渠道与其支持的模型、定价',
-    searchPlaceholder: '搜索渠道或模型...',
+    searchPlaceholder: '搜索渠道或模型…',
     empty: '暂无可用渠道',
     noModels: '未配置模型',
     noPricing: '未配置定价',
@@ -630,7 +630,7 @@ export default {
       noMatchingResults: '没有匹配的渠道或模型',
       selectChannel: '选择渠道',
       channelPickerTitle: '选择可用渠道',
-      channelPickerSearch: '搜索渠道名称或平台',
+      channelPickerSearch: '搜索渠道名称或平台…',
       channelPickerNoResults: '没有匹配的渠道',
       channelNavigation: '渠道导航',
       platformFilter: '平台筛选',
