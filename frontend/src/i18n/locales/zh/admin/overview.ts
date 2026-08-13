@@ -967,6 +967,8 @@ export default {
         sourcesTitle: '来源分组',
         sourcesHint: '勾选需要管理的渠道；暂时取消不会丢失已编辑路由。',
         noSources: '暂无可用的直接来源分组',
+        sourceUnavailable: '来源已不可用，请移除或取消勾选相关路由',
+        unavailableSourceFallback: '不可用来源 #{source}',
         modelsTitle: '模型路由',
         modelsHint: '逐个选择公开模型；同名模型需手动设置唯一别名。',
         selectSourceFirst: '先在左侧选择来源分组',

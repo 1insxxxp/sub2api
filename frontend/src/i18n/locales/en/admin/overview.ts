@@ -956,6 +956,8 @@ export default {
         sourcesTitle: 'Source groups',
         sourcesHint: 'Select channels to manage. Temporarily hiding a source does not discard edited routes.',
         noSources: 'No eligible direct source groups',
+        sourceUnavailable: 'This source is unavailable. Remove or deselect its affected routes.',
+        unavailableSourceFallback: 'Unavailable source #{source}',
         modelsTitle: 'Model routes',
         modelsHint: 'Select public models explicitly. Models with duplicate names require a unique alias.',
         selectSourceFirst: 'Select a source group on the left first',

@@ -7,12 +7,14 @@
         : t('admin.groups.systemCustom.createTitle')
     "
     width="extra-wide"
-    @close="emit('close')"
+    @close="requestClose"
   >
     <div class="space-y-5">
       <div
         v-if="errorMessage"
         data-testid="system-custom-error"
+        role="alert"
+        aria-live="assertive"
         class="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm leading-6 text-red-700 dark:border-red-900/60 dark:bg-red-950/30 dark:text-red-300"
       >
         {{ errorMessage }}
@@ -33,6 +35,7 @@
           <span class="input-label">{{ t('admin.groups.subscription.defaultValidityDays') }}</span>
           <input
             v-model.number="form.default_validity_days"
+            data-testid="system-custom-validity-days"
             class="input"
             type="number"
             min="1"
@@ -139,6 +142,13 @@
                 <span class="mt-0.5 block text-xs text-slate-500 dark:text-slate-400">
                   {{ candidate.group.platform }} · {{ candidate.models.length }}
                 </span>
+                <span
+                  v-if="isUnavailableCandidate(candidate)"
+                  data-testid="system-custom-source-unavailable"
+                  class="mt-1 block text-[11px] font-medium text-amber-600 dark:text-amber-300"
+                >
+                  {{ t('admin.groups.systemCustom.sourceUnavailable') }}
+                </span>
               </span>
             </label>
           </div>
@@ -236,6 +246,8 @@
       <div
         v-if="conflictingPublicModels.length > 0"
         data-testid="system-custom-conflict"
+        role="alert"
+        aria-live="polite"
         class="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-300"
       >
         <p class="font-medium">{{ t('admin.groups.systemCustom.conflictTitle') }}</p>
@@ -258,7 +270,7 @@
             data-testid="system-custom-sync"
             class="btn btn-secondary"
             type="button"
-            :disabled="syncing"
+            :disabled="busy || confirmingDelete"
             @click="loadSyncPreview"
           >
             <Icon name="refresh" size="sm" :class="syncing ? 'animate-spin' : ''" />
@@ -278,7 +290,7 @@
               class="mt-3 flex cursor-pointer items-start gap-2 text-xs text-slate-700 dark:text-slate-200"
             >
               <input
-                :checked="syncAddedSelections.has(routeKey(added.source_group_id, added.source_model))"
+                :checked="isSyncAddedSelected(added)"
                 class="mt-0.5 h-4 w-4 rounded border-slate-300 text-primary-600"
                 type="checkbox"
                 @change="toggleSyncAdded(added, ($event.target as HTMLInputElement).checked)"
@@ -303,7 +315,7 @@
               class="mt-3 flex cursor-pointer items-start gap-2 text-xs text-slate-700 dark:text-slate-200"
             >
               <input
-                :checked="syncMissingDisableSelections.has(routeKey(missing.source_group_id, missing.source_model))"
+                :checked="isSyncMissingDisabled(missing)"
                 class="mt-0.5 h-4 w-4 rounded border-slate-300 text-amber-600"
                 type="checkbox"
                 @change="toggleSyncMissing(missing, ($event.target as HTMLInputElement).checked)"
@@ -316,7 +328,11 @@
               </span>
             </label>
           </div>
-          <div class="rounded-xl border border-red-200 bg-red-50/60 p-3 dark:border-red-900/50 dark:bg-red-950/20">
+          <div
+            class="rounded-xl border border-red-200 bg-red-50/60 p-3 dark:border-red-900/50 dark:bg-red-950/20"
+            role="alert"
+            aria-live="polite"
+          >
             <h5 class="text-xs font-semibold uppercase tracking-wide text-red-700 dark:text-red-300">
               {{ t('admin.groups.systemCustom.syncConflicting') }} · {{ syncPreview.conflicting.length }}
             </h5>
@@ -346,8 +362,8 @@
               data-testid="system-custom-delete"
               class="btn border border-red-200 bg-white text-red-600 hover:bg-red-50 dark:border-red-900/70 dark:bg-dark-800 dark:text-red-300 dark:hover:bg-red-950/30"
               type="button"
-              :disabled="saving || deleting"
-              @click="confirmingDelete = true"
+              :disabled="busy"
+              @click="beginDeleteConfirmation"
             >
               {{ t('admin.groups.systemCustom.deleteAction') }}
             </button>
@@ -382,7 +398,7 @@
           </p>
         </div>
         <div class="flex items-center gap-3">
-          <button class="btn btn-secondary" type="button" @click="emit('close')">
+          <button class="btn btn-secondary" type="button" :disabled="busy" @click="requestClose">
             {{ t('common.cancel') }}
           </button>
           <button
@@ -447,8 +463,8 @@ const deleting = ref(false)
 const confirmingDelete = ref(false)
 const errorMessage = ref('')
 const syncPreview = ref<SystemCustomGroupSyncPreview | null>(null)
-const syncAddedSelections = reactive(new Set<string>())
-const syncMissingDisableSelections = reactive(new Set<string>())
+let sessionGeneration = 0
+const syncMissingPreviousEnabled = new Map<string, boolean>()
 
 const form = reactive({
   name: '',
@@ -460,6 +476,10 @@ const form = reactive({
 })
 
 const isEditing = computed(() => props.groupId !== null)
+const busy = computed(() => loading.value || saving.value || syncing.value || deleting.value)
+const currentSession = (generation: number, targetID: number | null) =>
+  generation === sessionGeneration && props.show && props.groupId === targetID
+const beginSession = () => ++sessionGeneration
 
 const routeKey = (sourceGroupID: number, sourceModel: string) =>
   `${sourceGroupID}:${sourceModel.toLowerCase()}`
@@ -490,6 +510,10 @@ const ensureRoute = (
 }
 
 const reset = () => {
+  loading.value = false
+  saving.value = false
+  syncing.value = false
+  deleting.value = false
   form.name = ''
   form.description = ''
   form.daily_limit_usd = ''
@@ -500,32 +524,81 @@ const reset = () => {
   routes.clear()
   selectedSourceIDs.value = []
   syncPreview.value = null
-  syncAddedSelections.clear()
-  syncMissingDisableSelections.clear()
   errorMessage.value = ''
-  deleting.value = false
   confirmingDelete.value = false
+  syncMissingPreviousEnabled.clear()
 }
 
-const mergeCandidates = (items: SystemCustomGroupCandidate[]) => {
-  candidates.value = items
+const mergeCandidates = (
+  items: SystemCustomGroupCandidate[],
+  options: { replace?: boolean } = {}
+) => {
+  const unavailableDraftSources = options.replace
+    ? candidates.value.filter(
+        (candidate) =>
+          !items.some((fresh) => fresh.group.id === candidate.group.id) &&
+          (selectedSourceIDs.value.includes(candidate.group.id) ||
+            [...routes.values()].some(
+              (route) => route.source_group_id === candidate.group.id && route.selected
+            ))
+      )
+        .map((candidate) => ({
+          ...candidate,
+          group: { ...candidate.group, status: 'inactive' as const }
+        }))
+    : []
+  candidates.value = [...items, ...unavailableDraftSources]
   for (const candidate of items) {
     for (const model of candidate.models) ensureRoute(candidate.group.id, model)
   }
 }
 
+const isUnavailableCandidate = (candidate: SystemCustomGroupCandidate) =>
+  candidate.group.status !== 'active' || candidate.group.platform === undefined
+
+const addOrphanCandidates = (models: SystemCustomGroupModel[]) => {
+  const known = new Set(candidates.value.map((candidate) => candidate.group.id))
+  const orphans = new Map<number, SystemCustomGroupCandidate>()
+  for (const model of models) {
+    if (known.has(model.source_group_id)) continue
+    let candidate = orphans.get(model.source_group_id)
+    if (!candidate) {
+      candidate = {
+        group: {
+          id: model.source_group_id,
+          name:
+            model.source_group?.name ||
+            t('admin.groups.systemCustom.unavailableSourceFallback', {
+              source: model.source_group_id
+            }),
+          description: model.source_group?.description,
+          status: 'inactive'
+        },
+        models: []
+      }
+      orphans.set(model.source_group_id, candidate)
+    }
+    if (!candidate.models.includes(model.source_model)) candidate.models.push(model.source_model)
+  }
+  candidates.value = [...candidates.value, ...orphans.values()]
+}
+
 const load = async () => {
+  const generation = beginSession()
+  const targetID = props.groupId
   reset()
   loading.value = true
   try {
     const [candidateItems, detail] = await Promise.all([
       adminAPI.groups.getSystemCustomGroupCandidates(),
-      props.groupId === null
+      targetID === null
         ? Promise.resolve(null)
-        : adminAPI.groups.getSystemCustomGroup(props.groupId)
+        : adminAPI.groups.getSystemCustomGroup(targetID)
     ])
+    if (!currentSession(generation, targetID)) return
     mergeCandidates(candidateItems)
     if (detail) {
+      addOrphanCandidates(detail.models)
       form.name = detail.group.name
       form.description = detail.group.description || ''
       form.daily_limit_usd = detail.group.daily_limit_usd ?? ''
@@ -545,9 +618,11 @@ const load = async () => {
       selectedSourceIDs.value = [...sourceIDs]
     }
   } catch (error) {
-    errorMessage.value = formatApiError(error, t('admin.groups.systemCustom.loadFailed'))
+    if (currentSession(generation, targetID)) {
+      errorMessage.value = formatApiError(error, t('admin.groups.systemCustom.loadFailed'))
+    }
   } finally {
-    loading.value = false
+    if (currentSession(generation, targetID)) loading.value = false
   }
 }
 
@@ -555,11 +630,17 @@ watch(
   () => [props.show, props.groupId] as const,
   ([show]) => {
     if (show) void load()
+    else beginSession()
   },
   { immediate: true }
 )
 
 const isSourceSelected = (sourceID: number) => selectedSourceIDs.value.includes(sourceID)
+
+const beginDeleteConfirmation = () => {
+  if (busy.value) return
+  confirmingDelete.value = true
+}
 
 const toggleSource = (sourceID: number, selected: boolean) => {
   if (selected) {
@@ -575,8 +656,17 @@ const selectedCandidates = computed(() =>
   candidates.value.filter((candidate) => isSourceSelected(candidate.group.id))
 )
 
-const routesForSource = (sourceID: number) =>
-  [...routes.values()].filter((route) => route.source_group_id === sourceID)
+const routesBySource = computed(() => {
+  const grouped = new Map<number, RouteDraft[]>()
+  for (const route of routes.values()) {
+    const sourceRoutes = grouped.get(route.source_group_id) ?? []
+    sourceRoutes.push(route)
+    grouped.set(route.source_group_id, sourceRoutes)
+  }
+  return grouped
+})
+
+const routesForSource = (sourceID: number) => routesBySource.value.get(sourceID) ?? []
 
 const visibleRoutes = computed(() =>
   selectedCandidates.value.flatMap((candidate) => routesForSource(candidate.group.id))
@@ -615,8 +705,9 @@ const hasEmptyPublicModel = computed(() =>
 
 const saveDisabled = computed(
   () =>
-    loading.value ||
-    saving.value ||
+    busy.value ||
+    confirmingDelete.value ||
+    !numbersValid.value ||
     !form.name.trim() ||
     selectedRoutes.value.length === 0 ||
     duplicateSourceRoutes.value ||
@@ -629,6 +720,25 @@ const nullableNumber = (value: number | string | null) => {
   const parsed = Number(value)
   return Number.isFinite(parsed) ? parsed : null
 }
+
+const validNullableLimit = (value: number | string | null) => {
+  if (value === '' || value === null || value === undefined) return true
+  if (typeof value === 'string' && value.trim() === '') return false
+  const parsed = Number(value)
+  return Number.isFinite(parsed) && parsed >= 0
+}
+
+const numbersValid = computed(() => {
+  const validity = Number(form.default_validity_days)
+  return (
+    validNullableLimit(form.daily_limit_usd) &&
+    validNullableLimit(form.weekly_limit_usd) &&
+    validNullableLimit(form.monthly_limit_usd) &&
+    Number.isInteger(validity) &&
+    validity >= 1 &&
+    validity <= 3650
+  )
+})
 
 const snapshot = (): CreateSystemCustomGroupRequest => ({
   name: form.name.trim(),
@@ -647,41 +757,61 @@ const snapshot = (): CreateSystemCustomGroupRequest => ({
 
 const save = async () => {
   if (saveDisabled.value) return
+  const generation = sessionGeneration
+  const targetID = props.groupId
   saving.value = true
   errorMessage.value = ''
   try {
     const request = snapshot()
-    if (props.groupId === null) await adminAPI.groups.createSystemCustomGroup(request)
-    else await adminAPI.groups.updateSystemCustomGroup(props.groupId, request)
-    emit('saved')
+    if (targetID === null) await adminAPI.groups.createSystemCustomGroup(request)
+    else await adminAPI.groups.updateSystemCustomGroup(targetID, request)
+    if (currentSession(generation, targetID)) emit('saved')
   } catch (error) {
-    errorMessage.value = formatApiError(error, t('admin.groups.systemCustom.saveFailed'))
+    if (currentSession(generation, targetID)) {
+      errorMessage.value = formatApiError(error, t('admin.groups.systemCustom.saveFailed'))
+    }
   } finally {
-    saving.value = false
+    if (currentSession(generation, targetID)) saving.value = false
   }
 }
 
 const loadSyncPreview = async () => {
-  if (props.groupId === null) return
+  if (props.groupId === null || busy.value) return
+  const generation = sessionGeneration
+  const targetID = props.groupId
   syncing.value = true
   errorMessage.value = ''
   try {
-    syncPreview.value = await adminAPI.groups.getSystemCustomGroupSyncPreview(props.groupId)
-    syncAddedSelections.clear()
-    syncMissingDisableSelections.clear()
+    const [freshCandidates, preview] = await Promise.all([
+      adminAPI.groups.getSystemCustomGroupCandidates(),
+      adminAPI.groups.getSystemCustomGroupSyncPreview(targetID)
+    ])
+    if (!currentSession(generation, targetID)) return
+    mergeCandidates(freshCandidates, { replace: true })
+    syncPreview.value = preview
   } catch (error) {
-    errorMessage.value = formatApiError(error, t('admin.groups.systemCustom.syncFailed'))
+    if (currentSession(generation, targetID)) {
+      errorMessage.value = formatApiError(error, t('admin.groups.systemCustom.syncFailed'))
+    }
   } finally {
-    syncing.value = false
+    if (currentSession(generation, targetID)) syncing.value = false
   }
 }
+
+const routeFor = (sourceGroupID: number, sourceModel: string) =>
+  routes.get(routeKey(sourceGroupID, sourceModel))
+
+const isSyncAddedSelected = (added: SystemCustomGroupSyncAdded) =>
+  routeFor(added.source_group_id, added.source_model)?.selected === true
+
+const isSyncMissingDisabled = (missing: SystemCustomGroupModel) =>
+  routeFor(missing.source_group_id, missing.source_model)?.enabled === false
 
 const toggleSyncAdded = (added: SystemCustomGroupSyncAdded, selected: boolean) => {
   const key = routeKey(added.source_group_id, added.source_model)
   if (!selected) {
     const route = routes.get(key)
     if (route) route.selected = false
-    syncAddedSelections.delete(key)
     return
   }
   const candidate = candidates.value.find(
@@ -694,7 +824,6 @@ const toggleSyncAdded = (added: SystemCustomGroupSyncAdded, selected: boolean) =
       model: added.source_model,
       source: added.source_group_id
     })
-    syncAddedSelections.delete(key)
     return
   }
   errorMessage.value = ''
@@ -706,38 +835,69 @@ const toggleSyncAdded = (added: SystemCustomGroupSyncAdded, selected: boolean) =
   })
   route.selected = true
   route.enabled = true
-  syncAddedSelections.add(key)
 }
 
 const toggleSyncMissing = (missing: SystemCustomGroupModel, disable: boolean) => {
   const key = routeKey(missing.source_group_id, missing.source_model)
-  const route = ensureRoute(missing.source_group_id, missing.source_model, {
-    public_model: missing.public_model,
-    selected: true
-  })
-  route.enabled = disable ? false : route.originalEnabled
-  if (disable) syncMissingDisableSelections.add(key)
-  else syncMissingDisableSelections.delete(key)
+  const route = ensureRoute(missing.source_group_id, missing.source_model)
+  if (disable) {
+    if (!syncMissingPreviousEnabled.has(key)) {
+      syncMissingPreviousEnabled.set(key, route.enabled)
+    }
+    route.enabled = false
+    return
+  }
+  if (syncMissingPreviousEnabled.has(key)) {
+    route.enabled = syncMissingPreviousEnabled.get(key) ?? route.enabled
+    syncMissingPreviousEnabled.delete(key)
+  }
 }
 
 const asRecord = (value: unknown): Record<string, unknown> | null =>
   typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : null
 
 const formatMetadata = (metadata: unknown) => {
-  if (typeof metadata === 'string') return metadata
+  if (typeof metadata === 'string') return safeErrorText(metadata)
   const record = asRecord(metadata)
   if (!record) return ''
   return Object.entries(record)
-    .filter(([, value]) => ['string', 'number', 'boolean'].includes(typeof value))
-    .map(([key, value]) => `${key}: ${String(value)}`)
+    .map(([key, value]) => {
+      if (!/^[a-zA-Z0-9_.-]{1,64}$/.test(key)) return ''
+      if (typeof value === 'string') {
+        const safe = safeErrorText(value)
+        return safe ? `${key}: ${safe}` : ''
+      }
+      if (typeof value === 'number' || typeof value === 'boolean') {
+        return `${key}: ${String(value)}`
+      }
+      return ''
+    })
+    .filter(Boolean)
     .join(', ')
+}
+
+const unsafeErrorText = (value: string) => {
+  const normalized = value.trim().toLowerCase()
+  return (
+    normalized === '' ||
+    normalized === 'internal error' ||
+    /<\/?[a-z][\s\S]*>/i.test(value) ||
+    /^(?:(?:4\d\d|5\d\d)\s+)?(?:bad gateway|gateway timeout|internal server error|service unavailable)$/i.test(
+      value.trim()
+    )
+  )
+}
+
+const safeErrorText = (value: string) => {
+  const trimmed = value.trim()
+  return unsafeErrorText(trimmed) || trimmed.length > 500 ? '' : trimmed
 }
 
 const formatApiError = (error: unknown, fallback: string) => {
   const errorRecord = asRecord(error)
   const response = asRecord(errorRecord?.response)
   const rawData = response?.data
-  if (typeof rawData === 'string') return rawData
+  if (typeof rawData === 'string') return safeErrorText(rawData) || fallback
   const data = asRecord(rawData) ?? errorRecord
   const nestedError = asRecord(data?.error)
   const details = asRecord(nestedError?.details) ?? asRecord(data?.details)
@@ -748,8 +908,9 @@ const formatApiError = (error: unknown, fallback: string) => {
   for (const field of ['message', 'reason', 'detail'] as const) {
     for (const source of sources) {
       const value = source[field]
-      if (typeof value === 'string' && value.trim() && !parts.includes(value.trim())) {
-        parts.push(value.trim())
+      if (typeof value === 'string') {
+        const safe = safeErrorText(value)
+        if (safe && !parts.includes(safe)) parts.push(safe)
       }
     }
   }
@@ -757,22 +918,33 @@ const formatApiError = (error: unknown, fallback: string) => {
     const value = formatMetadata(source.metadata)
     if (value && !parts.includes(value)) parts.push(value)
   }
-  const specificParts = parts.filter((part) => part.toLowerCase() !== 'internal error')
-  return (specificParts.length > 0 ? specificParts : parts).join(' · ') || fallback
+  return parts.join(' · ') || fallback
 }
 
 const deleteGroup = async () => {
-  if (props.groupId === null || deleting.value) return
+  if (props.groupId === null || busy.value) return
+  const generation = sessionGeneration
+  const targetID = props.groupId
   deleting.value = true
   errorMessage.value = ''
   try {
-    await adminAPI.groups.deleteSystemCustomGroup(props.groupId)
-    confirmingDelete.value = false
-    emit('deleted')
+    await adminAPI.groups.deleteSystemCustomGroup(targetID)
+    if (currentSession(generation, targetID)) {
+      confirmingDelete.value = false
+      emit('deleted')
+    }
   } catch (error) {
-    errorMessage.value = formatApiError(error, t('admin.groups.systemCustom.deleteFailed'))
+    if (currentSession(generation, targetID)) {
+      errorMessage.value = formatApiError(error, t('admin.groups.systemCustom.deleteFailed'))
+    }
   } finally {
-    deleting.value = false
+    if (currentSession(generation, targetID)) deleting.value = false
   }
+}
+
+const requestClose = () => {
+  if (busy.value) return
+  beginSession()
+  emit('close')
 }
 </script>

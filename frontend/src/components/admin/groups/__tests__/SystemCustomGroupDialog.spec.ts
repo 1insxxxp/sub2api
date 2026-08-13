@@ -1,4 +1,5 @@
 import { flushPromises, mount } from '@vue/test-utils'
+import { nextTick } from 'vue'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import SystemCustomGroupDialog from '../SystemCustomGroupDialog.vue'
@@ -123,13 +124,31 @@ function mountDialog(props: Record<string, unknown> = {}) {
       stubs: {
         BaseDialog: {
           props: ['show'],
-          template: '<div v-if="show"><slot /><slot name="footer" /></div>'
+          emits: ['close'],
+          template:
+            '<div v-if="show"><button data-testid="base-dialog-close" @click="$emit(\'close\')"/><slot /><slot name="footer" /></div>'
         },
         Icon: true
       }
     }
   })
 }
+
+function deferred<T>() {
+  let resolve!: (value: T) => void
+  let reject!: (reason?: unknown) => void
+  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise
+    reject = rejectPromise
+  })
+  return { promise, resolve, reject }
+}
+
+const groupDetail = (id: number, name: string) => ({
+  ...existingGroup,
+  group: { ...existingGroup.group, id, name },
+  models: existingGroup.models.map((model) => ({ ...model, group_id: id }))
+})
 
 function sourceCheckbox(wrapper: ReturnType<typeof mountDialog>, sourceID: number) {
   return wrapper.get(`[data-testid="system-custom-source-select"][data-source-id="${sourceID}"]`)
@@ -482,5 +501,288 @@ describe('SystemCustomGroupDialog', () => {
     await wrapper.get('[data-testid="system-custom-save"]').trigger('click')
     await flushPromises()
     expect(wrapper.get('[data-testid="system-custom-error"]').text()).toContain('gpt-5-mini')
+  })
+
+  it('ignores stale out-of-order load responses after switching dialog sessions', async () => {
+    const candidatesA = deferred<typeof candidates>()
+    const detailA = deferred<ReturnType<typeof groupDetail>>()
+    const candidatesB = deferred<typeof candidates>()
+    const detailB = deferred<ReturnType<typeof groupDetail>>()
+    getSystemCustomGroupCandidates
+      .mockReturnValueOnce(candidatesA.promise)
+      .mockReturnValueOnce(candidatesB.promise)
+    getSystemCustomGroup
+      .mockReturnValueOnce(detailA.promise)
+      .mockReturnValueOnce(detailB.promise)
+
+    const wrapper = mountDialog({ groupId: 90 })
+    await wrapper.setProps({ groupId: 91 })
+    candidatesB.resolve(candidates)
+    detailB.resolve(groupDetail(91, 'session-B'))
+    await flushPromises()
+    expect(wrapper.get('[data-testid="system-custom-name"]').element).toHaveProperty(
+      'value',
+      'session-B'
+    )
+
+    candidatesA.resolve(candidates)
+    detailA.resolve(groupDetail(90, 'stale-session-A'))
+    await flushPromises()
+    expect(wrapper.get('[data-testid="system-custom-name"]').element).toHaveProperty(
+      'value',
+      'session-B'
+    )
+  })
+
+  it('ignores a stale sync preview after the dialog moves to another group', async () => {
+    const syncCandidates = deferred<typeof candidates>()
+    const syncPreview = deferred<{
+      added: Array<{
+        public_model: string
+        source_group_id: number
+        source_model: string
+        selected: boolean
+      }>
+      missing: never[]
+      conflicting: never[]
+    }>()
+    getSystemCustomGroupCandidates
+      .mockResolvedValueOnce(candidates)
+      .mockReturnValueOnce(syncCandidates.promise)
+    getSystemCustomGroupSyncPreview.mockReturnValueOnce(syncPreview.promise)
+    const wrapper = mountDialog({ groupId: 90 })
+    await flushPromises()
+    await wrapper.get('[data-testid="system-custom-sync"]').trigger('click')
+    await wrapper.setProps({ groupId: 91 })
+    await flushPromises()
+    syncCandidates.resolve(candidates)
+    syncPreview.resolve({
+      added: [
+        {
+          public_model: 'stale-sync-model',
+          source_group_id: 11,
+          source_model: 'stale-sync-model',
+          selected: false
+        }
+      ],
+      missing: [],
+      conflicting: []
+    })
+    await flushPromises()
+    expect(wrapper.text()).not.toContain('stale-sync-model')
+  })
+
+  it('does not let stale save or delete completions emit into a reopened session', async () => {
+    const saveResult = deferred<typeof existingGroup>()
+    updateSystemCustomGroup.mockReturnValueOnce(saveResult.promise)
+    const wrapper = mountDialog({ groupId: 90 })
+    await flushPromises()
+    await wrapper.get('[data-testid="system-custom-save"]').trigger('click')
+    await wrapper.setProps({ show: false })
+    await wrapper.setProps({ show: true, groupId: 91 })
+    await flushPromises()
+    saveResult.resolve(existingGroup)
+    await flushPromises()
+    expect(wrapper.emitted('saved')).toBeUndefined()
+    expect(wrapper.get('[data-testid="system-custom-name"]').element).toHaveProperty(
+      'value',
+      '酒馆综合月卡'
+    )
+
+    const deleteResult = deferred<{ id: number; deleted: boolean }>()
+    deleteSystemCustomGroup.mockReturnValueOnce(deleteResult.promise)
+    await wrapper.get('[data-testid="system-custom-delete"]').trigger('click')
+    await wrapper.get('[data-testid="system-custom-delete-confirm"]').trigger('click')
+    await wrapper.setProps({ show: false })
+    await wrapper.setProps({ show: true, groupId: 92 })
+    await flushPromises()
+    deleteResult.resolve({ id: 91, deleted: true })
+    await flushPromises()
+    expect(wrapper.emitted('deleted')).toBeUndefined()
+  })
+
+  it('refreshes candidates with sync so newly discovered models can enter the snapshot', async () => {
+    const initialCandidates = [
+      { ...candidates[0], models: ['claude-sonnet-4'] },
+      candidates[1]
+    ]
+    const freshCandidates = [
+      { ...candidates[0], models: ['claude-sonnet-4', 'brand-new-model'] },
+      candidates[1]
+    ]
+    getSystemCustomGroupCandidates
+      .mockResolvedValueOnce(initialCandidates)
+      .mockResolvedValueOnce(freshCandidates)
+    getSystemCustomGroupSyncPreview.mockResolvedValueOnce({
+      added: [
+        {
+          public_model: 'brand-new-model',
+          source_group_id: 11,
+          source_model: 'brand-new-model',
+          selected: false
+        }
+      ],
+      missing: [],
+      conflicting: []
+    })
+    const wrapper = mountDialog({ groupId: 90 })
+    await flushPromises()
+    expect(wrapper.text()).not.toContain('brand-new-model')
+    await wrapper.get('[data-testid="system-custom-sync"]').trigger('click')
+    await flushPromises()
+    expect(getSystemCustomGroupCandidates).toHaveBeenCalledTimes(2)
+    const added = wrapper.get('[data-testid="system-custom-sync-added"]')
+    await added.get('input[type="checkbox"]').setValue(true)
+    expect(modelRow(wrapper, 11, 'brand-new-model').text()).toContain('brand-new-model')
+    await wrapper.get('[data-testid="system-custom-save"]').trigger('click')
+    await flushPromises()
+    expect(updateSystemCustomGroup.mock.calls.at(-1)?.[1].models).toEqual(
+      expect.arrayContaining([expect.objectContaining({ source_model: 'brand-new-model' })])
+    )
+  })
+
+  it('uses route drafts as the single truth across sync and main model controls', async () => {
+    getSystemCustomGroupSyncPreview.mockResolvedValueOnce({
+      added: [
+        {
+          public_model: 'claude-haiku-4',
+          source_group_id: 11,
+          source_model: 'claude-haiku-4',
+          selected: false
+        }
+      ],
+      missing: [existingGroup.models[1]],
+      conflicting: []
+    })
+    const wrapper = mountDialog({ groupId: 90 })
+    await flushPromises()
+    await wrapper.get('[data-testid="system-custom-sync"]').trigger('click')
+    await flushPromises()
+    const added = wrapper.get('[data-testid="system-custom-sync-added"]')
+    await added.get('input[type="checkbox"]').setValue(true)
+    const addedMain = modelRow(wrapper, 11, 'claude-haiku-4')
+    await addedMain.get('[data-testid="system-custom-public-model"]').setValue('custom-haiku')
+    await addedMain.get('input[type="checkbox"]').setValue(false)
+    expect(added.get('input[type="checkbox"]').element).toHaveProperty('checked', false)
+    await addedMain.get('input[type="checkbox"]').setValue(true)
+    expect(added.get('input[type="checkbox"]').element).toHaveProperty('checked', true)
+    expect(addedMain.get('[data-testid="system-custom-public-model"]').element).toHaveProperty(
+      'value',
+      'custom-haiku'
+    )
+
+    const missing = wrapper.get('[data-testid="system-custom-sync-missing"]')
+    const missingMain = modelRow(wrapper, 11, 'legacy-haiku')
+    await missingMain.get('[data-testid="system-custom-public-model"]').setValue('legacy-alias')
+    await missing.get('input[type="checkbox"]').setValue(true)
+    expect(missingMain.get('[data-testid="system-custom-public-model"]').element).toHaveProperty(
+      'value',
+      'legacy-alias'
+    )
+    expect(missingMain.findAll('input[type="checkbox"]')[1].element).toHaveProperty(
+      'checked',
+      false
+    )
+  })
+
+  it.each([
+    ['daily', 'system-custom-daily-limit', '-1'],
+    ['validity fractional', 'system-custom-validity-days', '1.5'],
+    ['validity zero', 'system-custom-validity-days', '0'],
+    ['validity too high', 'system-custom-validity-days', '3651']
+  ])('blocks invalid numeric input: %s', async (_label, testID, value) => {
+    const wrapper = mountDialog()
+    await flushPromises()
+    await wrapper.get('[data-testid="system-custom-name"]').setValue('numeric-test')
+    await sourceCheckbox(wrapper, 11).setValue(true)
+    await modelRow(wrapper, 11, 'claude-sonnet-4')
+      .get('input[type="checkbox"]')
+      .setValue(true)
+    await wrapper.get(`[data-testid="${testID}"]`).setValue(value)
+    expect(wrapper.get('[data-testid="system-custom-save"]').attributes('disabled')).toBeDefined()
+    await wrapper.get('[data-testid="system-custom-save"]').trigger('click')
+    expect(createSystemCustomGroup).not.toHaveBeenCalled()
+  })
+
+  it.each([Infinity, Number.NaN, 'not-a-number', ' '])(
+    'blocks non-finite or non-numeric limit state: %j',
+    async (invalid) => {
+      const wrapper = mountDialog()
+      await flushPromises()
+      await wrapper.get('[data-testid="system-custom-name"]').setValue('numeric-state-test')
+      await sourceCheckbox(wrapper, 11).setValue(true)
+      await modelRow(wrapper, 11, 'claude-sonnet-4')
+        .get('input[type="checkbox"]')
+        .setValue(true)
+      ;(wrapper.vm as any).$.setupState.form.monthly_limit_usd = invalid
+      await nextTick()
+      expect(wrapper.get('[data-testid="system-custom-save"]').attributes('disabled')).toBeDefined()
+      await wrapper.get('[data-testid="system-custom-save"]').trigger('click')
+      expect(createSystemCustomGroup).not.toHaveBeenCalled()
+    }
+  )
+
+  it('makes mutations and close mutually exclusive for the active session', async () => {
+    const deleteResult = deferred<{ id: number; deleted: boolean }>()
+    deleteSystemCustomGroup.mockReturnValueOnce(deleteResult.promise)
+    const wrapper = mountDialog({ groupId: 90 })
+    await flushPromises()
+    await wrapper.get('[data-testid="system-custom-delete"]').trigger('click')
+    expect(wrapper.get('[data-testid="system-custom-save"]').attributes('disabled')).toBeDefined()
+    await wrapper.get('[data-testid="system-custom-delete-confirm"]').trigger('click')
+    expect(wrapper.get('[data-testid="system-custom-sync"]').attributes('disabled')).toBeDefined()
+    await wrapper.get('[data-testid="base-dialog-close"]').trigger('click')
+    expect(wrapper.emitted('close')).toBeUndefined()
+  })
+
+  it('renders orphaned existing sources so an admin can remove them from the snapshot', async () => {
+    const orphan = {
+      ...existingGroup.models[1],
+      id: 99,
+      source_group_id: 99,
+      source_model: 'orphan-model',
+      public_model: 'orphan-alias',
+      source_group: { id: 99, name: 'retired-source', status: 'inactive' as const }
+    }
+    getSystemCustomGroup.mockResolvedValueOnce({
+      ...existingGroup,
+      models: [existingGroup.models[0], orphan]
+    })
+    const wrapper = mountDialog({ groupId: 90 })
+    await flushPromises()
+    expect(sourceCheckbox(wrapper, 99).element.parentElement?.textContent).toContain(
+      'retired-source'
+    )
+    expect(wrapper.find('[data-testid="system-custom-source-unavailable"]').exists()).toBe(true)
+    expect(modelRow(wrapper, 99, 'orphan-model').text()).toContain('orphan-model')
+    await sourceCheckbox(wrapper, 99).setValue(false)
+    await wrapper.get('[data-testid="system-custom-save"]').trigger('click')
+    await flushPromises()
+    expect(updateSystemCustomGroup.mock.calls.at(-1)?.[1].models).not.toEqual(
+      expect.arrayContaining([expect.objectContaining({ source_group_id: 99 })])
+    )
+  })
+
+  it.each([
+    ['', 'admin.groups.systemCustom.saveFailed'],
+    ['   ', 'admin.groups.systemCustom.saveFailed'],
+    ['internal error', 'admin.groups.systemCustom.saveFailed'],
+    ['502 Bad Gateway', 'admin.groups.systemCustom.saveFailed'],
+    ['Bad Gateway', 'admin.groups.systemCustom.saveFailed'],
+    ['Internal Server Error', 'admin.groups.systemCustom.saveFailed'],
+    ['<html><body>proxy error</body></html>', 'admin.groups.systemCustom.saveFailed'],
+    ['safe upstream validation', 'safe upstream validation']
+  ])('sanitizes raw API string errors: %j', async (raw, expected) => {
+    createSystemCustomGroup.mockRejectedValueOnce({ response: { data: raw } })
+    const wrapper = mountDialog()
+    await flushPromises()
+    await wrapper.get('[data-testid="system-custom-name"]').setValue('error-test')
+    await sourceCheckbox(wrapper, 11).setValue(true)
+    await modelRow(wrapper, 11, 'claude-sonnet-4')
+      .get('input[type="checkbox"]')
+      .setValue(true)
+    await wrapper.get('[data-testid="system-custom-save"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.get('[data-testid="system-custom-error"]').text()).toBe(expected)
   })
 })
