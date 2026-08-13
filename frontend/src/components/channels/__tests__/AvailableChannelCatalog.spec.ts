@@ -399,6 +399,14 @@ describe('AvailableChannelCatalog', () => {
       'focus-visible:ring-2',
       'focus-visible:ring-offset-2',
     ]))
+    const platformRow = firstItem.get('[data-testid="channel-nav-platforms"]')
+    const countRow = firstItem.get('[data-testid="channel-nav-counts"]')
+    expect(platformRow.element.parentElement).toBe(firstItem.element)
+    expect(countRow.element.parentElement).toBe(firstItem.element)
+    expect(platformRow.element.nextElementSibling).toBe(countRow.element)
+    expect(platformRow.classes()).toEqual(expect.arrayContaining(['mt-1.5', 'flex', 'flex-wrap']))
+    expect(countRow.classes()).toEqual(expect.arrayContaining(['mt-2', 'flex', 'gap-2']))
+    expect(countRow.classes()).not.toContain('justify-between')
     expect(toolbar.classes()).toContain('min-w-0')
     expect(toolbar.text()).toContain('toolbar fixture')
     expect(navigation.element.parentElement).toBe(shell.element)

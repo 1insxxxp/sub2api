@@ -139,18 +139,22 @@
             <span class="block min-w-0 break-words text-sm font-semibold [overflow-wrap:anywhere]">
               {{ channel.name }}
             </span>
-            <span class="mt-1.5 flex min-w-0 flex-wrap items-end justify-between gap-2">
-              <span class="flex min-w-0 flex-wrap gap-1.5">
-                <AvailableChannelPlatformBadge
-                  v-for="platform in channel.platforms"
-                  :key="platform"
-                  :platform="platform"
-                />
-              </span>
-              <span class="flex shrink-0 gap-2 text-[11px] tabular-nums text-gray-500 dark:text-gray-400">
-                <span>{{ t(`${catalogKey}.groupsCount`, { count: channel.groupCount }) }}</span>
-                <span>{{ t(`${catalogKey}.modelsCount`, { count: channel.modelCount }) }}</span>
-              </span>
+            <span
+              data-testid="channel-nav-platforms"
+              class="mt-1.5 flex min-w-0 flex-wrap gap-1.5"
+            >
+              <AvailableChannelPlatformBadge
+                v-for="platform in channel.platforms"
+                :key="platform"
+                :platform="platform"
+              />
+            </span>
+            <span
+              data-testid="channel-nav-counts"
+              class="mt-2 flex gap-2 text-[11px] tabular-nums text-gray-500 dark:text-gray-400"
+            >
+              <span>{{ t(`${catalogKey}.groupsCount`, { count: channel.groupCount }) }}</span>
+              <span>{{ t(`${catalogKey}.modelsCount`, { count: channel.modelCount }) }}</span>
             </span>
           </button>
         </div>
