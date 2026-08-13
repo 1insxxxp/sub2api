@@ -190,6 +190,7 @@ func groupFromServiceBase(g *service.Group) Group {
 		IsExclusive:                      g.IsExclusive,
 		Status:                           g.Status,
 		SubscriptionType:                 g.SubscriptionType,
+		SystemCustomRoutingEnabled:       g.SystemCustomRoutingEnabled,
 		DailyLimitUSD:                    g.DailyLimitUSD,
 		WeeklyLimitUSD:                   g.WeeklyLimitUSD,
 		MonthlyLimitUSD:                  g.MonthlyLimitUSD,
