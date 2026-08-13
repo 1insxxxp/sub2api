@@ -128,6 +128,107 @@ func TestUsageBillingRepositoryApply_DeduplicatesSubscriptionBilling(t *testing.
 	require.InDelta(t, 2.5, dailyUsage, 0.000001)
 }
 
+func TestUsageBillingRepositoryApply_SystemCustomSharedSubscriptionAccumulatesAcrossSourceAccounts(t *testing.T) {
+	ctx := context.Background()
+	client := testEntClient(t)
+	repo := NewUsageBillingRepository(client, integrationDB)
+
+	user := mustCreateUser(t, client, &service.User{
+		Email:        fmt.Sprintf("usage-billing-system-custom-%s@example.com", uuid.NewString()),
+		PasswordHash: "hash",
+		Balance:      100,
+	})
+	billingGroup := mustCreateGroup(t, client, &service.Group{
+		Name:                       "usage-billing-system-custom-" + uuid.NewString(),
+		Platform:                   service.PlatformComposite,
+		SubscriptionType:           service.SubscriptionTypeSubscription,
+		SystemCustomRoutingEnabled: true,
+	})
+	apiKey := mustCreateApiKey(t, client, &service.APIKey{
+		UserID:    user.ID,
+		GroupID:   &billingGroup.ID,
+		Key:       "sk-usage-billing-system-custom-" + uuid.NewString(),
+		Name:      "system-custom-shared-subscription",
+		Quota:     50,
+		QuotaUsed: 3.25,
+	})
+	subscription := mustCreateSubscription(t, client, &service.UserSubscription{
+		UserID:  user.ID,
+		GroupID: billingGroup.ID,
+	})
+	sourceA := mustCreateAccount(t, client, &service.Account{
+		Name:     "usage-billing-source-a-" + uuid.NewString(),
+		Platform: service.PlatformAnthropic,
+		Type:     service.AccountTypeAPIKey,
+	})
+	sourceB := mustCreateAccount(t, client, &service.Account{
+		Name:     "usage-billing-source-b-" + uuid.NewString(),
+		Platform: service.PlatformOpenAI,
+		Type:     service.AccountTypeAPIKey,
+	})
+
+	commands := []*service.UsageBillingCommand{
+		{
+			RequestID:        uuid.NewString(),
+			APIKeyID:         apiKey.ID,
+			UserID:           user.ID,
+			AccountID:        sourceA.ID,
+			AccountType:      service.AccountTypeAPIKey,
+			SubscriptionID:   &subscription.ID,
+			SubscriptionCost: 0.14,
+		},
+		{
+			RequestID:        uuid.NewString(),
+			APIKeyID:         apiKey.ID,
+			UserID:           user.ID,
+			AccountID:        sourceB.ID,
+			AccountType:      service.AccountTypeAPIKey,
+			SubscriptionID:   &subscription.ID,
+			SubscriptionCost: 0.57,
+		},
+	}
+
+	// The production HTTP A/B route test proves both source requests emit these
+	// commands; this repository test completes the contract with real PostgreSQL
+	// persistence against their one shared billing subscription.
+	for _, command := range commands {
+		result, err := repo.Apply(ctx, command)
+		require.NoError(t, err)
+		require.True(t, result.Applied)
+	}
+
+	var dailyUsage, weeklyUsage, monthlyUsage float64
+	require.NoError(t, integrationDB.QueryRowContext(ctx, `
+		SELECT daily_usage_usd, weekly_usage_usd, monthly_usage_usd
+		FROM user_subscriptions
+		WHERE id = $1
+	`, subscription.ID).Scan(&dailyUsage, &weeklyUsage, &monthlyUsage))
+	require.InDelta(t, 0.71, dailyUsage, 0.00000001)
+	require.InDelta(t, 0.71, weeklyUsage, 0.00000001)
+	require.InDelta(t, 0.71, monthlyUsage, 0.00000001)
+
+	var balance float64
+	require.NoError(t, integrationDB.QueryRowContext(ctx, "SELECT balance FROM users WHERE id = $1", user.ID).Scan(&balance))
+	require.InDelta(t, 100, balance, 0.00000001)
+
+	var quotaUsed float64
+	require.NoError(t, integrationDB.QueryRowContext(ctx, "SELECT quota_used FROM api_keys WHERE id = $1", apiKey.ID).Scan(&quotaUsed))
+	require.InDelta(t, 3.25, quotaUsed, 0.00000001)
+
+	replayed, err := repo.Apply(ctx, commands[1])
+	require.NoError(t, err)
+	require.False(t, replayed.Applied)
+
+	require.NoError(t, integrationDB.QueryRowContext(ctx, `
+		SELECT daily_usage_usd, weekly_usage_usd, monthly_usage_usd
+		FROM user_subscriptions
+		WHERE id = $1
+	`, subscription.ID).Scan(&dailyUsage, &weeklyUsage, &monthlyUsage))
+	require.InDelta(t, 0.71, dailyUsage, 0.00000001)
+	require.InDelta(t, 0.71, weeklyUsage, 0.00000001)
+	require.InDelta(t, 0.71, monthlyUsage, 0.00000001)
+}
+
 func TestUsageBillingRepositoryApply_RequestFingerprintConflict(t *testing.T) {
 	ctx := context.Background()
 	client := testEntClient(t)

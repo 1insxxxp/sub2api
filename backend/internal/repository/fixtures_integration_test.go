@@ -88,6 +88,7 @@ func mustCreateGroup(t *testing.T, client *dbent.Client, g *service.Group) *serv
 		SetPlatform(g.Platform).
 		SetStatus(g.Status).
 		SetSubscriptionType(g.SubscriptionType).
+		SetSystemCustomRoutingEnabled(g.SystemCustomRoutingEnabled).
 		SetRateMultiplier(g.RateMultiplier).
 		SetIsExclusive(g.IsExclusive).
 		SetProfitControlEnabled(g.ProfitControlEnabled).
