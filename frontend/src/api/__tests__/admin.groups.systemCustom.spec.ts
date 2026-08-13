@@ -27,6 +27,7 @@ import {
 import type {
   CreateSystemCustomGroupRequest,
   SystemCustomGroup,
+  SystemCustomGroupApiError,
   SystemCustomGroupCandidate,
   SystemCustomGroupDeleteResponse,
   SystemCustomGroupSyncPreview,
@@ -48,12 +49,77 @@ const explicitModels = [
   }
 ]
 
+const systemCustomGroup = {
+  group: {
+    id: 90,
+    name: 'Tavern monthly card',
+    description: '',
+    platform: 'composite',
+    rate_multiplier: 1,
+    is_exclusive: false,
+    status: 'active',
+    subscription_type: 'subscription',
+    system_custom_routing_enabled: true,
+    daily_limit_usd: null,
+    weekly_limit_usd: null,
+    monthly_limit_usd: 300,
+    default_validity_days: 30,
+    created_at: '2026-08-13T00:00:00Z',
+    updated_at: '2026-08-13T00:00:00Z'
+  },
+  models: [
+    {
+      id: 901,
+      group_id: 90,
+      ...explicitModels[0],
+      source_group: {
+        id: 11,
+        name: 'Tavern A',
+        description: '',
+        platform: 'anthropic',
+        status: 'active',
+        subscription_type: 'standard'
+      },
+      created_at: '2026-08-13T00:00:00Z',
+      updated_at: '2026-08-13T00:00:00Z'
+    },
+    {
+      id: 902,
+      group_id: 90,
+      ...explicitModels[1],
+      created_at: '2026-08-13T00:00:00Z',
+      updated_at: '2026-08-13T00:00:00Z'
+    }
+  ]
+} satisfies SystemCustomGroup
+
 describe('admin system custom group API', () => {
   beforeEach(() => {
     get.mockReset()
     post.mockReset()
     put.mockReset()
     deleteRequest.mockReset()
+  })
+
+  it('models structured API errors and network errors without assuming status or code', () => {
+    const validationError = {
+      status: 400,
+      code: 'SYSTEM_CUSTOM_GROUP_DUPLICATE_PUBLIC_MODEL',
+      message: 'system custom group public model already exists',
+      reason: 'SYSTEM_CUSTOM_GROUP_DUPLICATE_PUBLIC_MODEL',
+      metadata: {
+        public_model: 'claude-sonnet',
+        source_group_id: '12',
+        source_model: 'claude-sonnet'
+      }
+    } satisfies SystemCustomGroupApiError
+    const networkError = {
+      message: 'Network Error'
+    } satisfies SystemCustomGroupApiError
+
+    expect(validationError.code).toBe('SYSTEM_CUSTOM_GROUP_DUPLICATE_PUBLIC_MODEL')
+    expect('status' in networkError).toBe(false)
+    expect('code' in networkError).toBe(false)
   })
 
   it('loads candidates from the dedicated endpoint and unwraps data', async () => {
@@ -85,7 +151,7 @@ describe('admin system custom group API', () => {
       default_validity_days: 30,
       models: explicitModels
     }
-    const created = { group: { id: 90 }, models: explicitModels } as SystemCustomGroup
+    const created: SystemCustomGroup = systemCustomGroup
     post.mockResolvedValueOnce({ data: created })
 
     await expect(createSystemCustomGroup(request)).resolves.toBe(created)
@@ -94,7 +160,7 @@ describe('admin system custom group API', () => {
   })
 
   it('loads one system custom group and unwraps data', async () => {
-    const group = { group: { id: 90 }, models: explicitModels } as SystemCustomGroup
+    const group: SystemCustomGroup = systemCustomGroup
     get.mockResolvedValueOnce({ data: group })
 
     await expect(getSystemCustomGroup(90)).resolves.toBe(group)
@@ -111,7 +177,17 @@ describe('admin system custom group API', () => {
       default_validity_days: 31,
       models: explicitModels
     }
-    const updated = { group: { id: 90 }, models: explicitModels } as SystemCustomGroup
+    const updated: SystemCustomGroup = {
+      ...systemCustomGroup,
+      group: {
+        ...systemCustomGroup.group,
+        description: 'Updated routes',
+        daily_limit_usd: 20,
+        weekly_limit_usd: 100,
+        default_validity_days: 31,
+        updated_at: '2026-08-13T01:00:00Z'
+      }
+    }
     put.mockResolvedValueOnce({ data: updated })
 
     await expect(updateSystemCustomGroup(90, request)).resolves.toBe(updated)

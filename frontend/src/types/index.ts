@@ -809,8 +809,8 @@ export type SystemCustomGroupErrorMetadata = Record<string, string> & {
 }
 
 export interface SystemCustomGroupApiError {
-  status: number
-  code: number
+  status?: number
+  code?: number | string
   message: string
   reason?: string
   metadata?: SystemCustomGroupErrorMetadata
