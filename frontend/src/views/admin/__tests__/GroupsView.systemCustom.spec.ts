@@ -149,6 +149,29 @@ describe('GroupsView system custom rows', () => {
     )
   })
 
+  it('keeps both create actions visible in the responsive toolbar', async () => {
+    const wrapper = mountView()
+    await flushPromises()
+
+    const toolbar = wrapper.get('[data-testid="groups-toolbar"]')
+    expect(toolbar.classes()).toEqual(
+      expect.arrayContaining(['lg:flex-col', 'lg:items-stretch', '2xl:flex-row', '2xl:items-center'])
+    )
+
+    const actions = wrapper.get('[data-testid="groups-toolbar-actions"]')
+    expect(actions.classes()).toEqual(
+      expect.arrayContaining(['lg:w-full', '2xl:w-auto', '2xl:flex-none'])
+    )
+
+    const createActions = wrapper.get('[data-testid="groups-create-actions"]')
+    expect(createActions.get('[data-testid="system-custom-create"]').classes()).toContain(
+      'whitespace-nowrap'
+    )
+    expect(createActions.get('[data-tour="groups-create-btn"]').classes()).toContain(
+      'whitespace-nowrap'
+    )
+  })
+
   it('opens the dedicated dialog and refreshes after saved, deleted, and close events', async () => {
     const wrapper = mountView()
     await flushPromises()

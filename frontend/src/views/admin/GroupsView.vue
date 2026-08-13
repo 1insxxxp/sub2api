@@ -3,9 +3,12 @@
     <div class="space-y-6">
       <TablePageLayout>
         <template #filters>
-        <div class="admin-toolbar">
+        <div
+          data-testid="groups-toolbar"
+          class="admin-toolbar lg:flex-col lg:items-stretch 2xl:flex-row 2xl:items-center"
+        >
           <!-- Left: fuzzy search + filters (can wrap to multiple lines) -->
-          <div class="admin-toolbar-group flex-1">
+          <div class="admin-toolbar-group w-full 2xl:flex-1">
             <div class="relative w-full sm:w-64">
               <Icon
                 name="search"
@@ -44,7 +47,10 @@
           </div>
 
           <!-- Right: actions -->
-          <div class="admin-toolbar-group w-full justify-end lg:w-auto lg:flex-none">
+          <div
+            data-testid="groups-toolbar-actions"
+            class="admin-toolbar-group w-full justify-end lg:w-full 2xl:w-auto 2xl:flex-none"
+          >
             <button
               @click="loadGroups"
               :disabled="loading"
@@ -97,22 +103,27 @@
               <Icon name="arrowsUpDown" size="md" class="mr-2" />
               {{ t("admin.groups.sortOrder") }}
             </button>
-            <button
-              data-testid="system-custom-create"
-              @click="openSystemCustomGroup(null)"
-              class="btn btn-secondary"
+            <div
+              data-testid="groups-create-actions"
+              class="ml-auto flex flex-wrap items-center justify-end gap-2.5"
             >
-              <Icon name="grid" size="md" class="mr-2" />
-              {{ t("admin.groups.systemCustom.createAction") }}
-            </button>
-            <button
-              @click="openCreateModal"
-              class="btn btn-primary"
-              data-tour="groups-create-btn"
-            >
-              <Icon name="plus" size="md" class="mr-2" />
-              {{ t("admin.groups.createGroup") }}
-            </button>
+              <button
+                data-testid="system-custom-create"
+                @click="openSystemCustomGroup(null)"
+                class="btn btn-secondary whitespace-nowrap"
+              >
+                <Icon name="grid" size="md" class="mr-2" />
+                {{ t("admin.groups.systemCustom.createAction") }}
+              </button>
+              <button
+                @click="openCreateModal"
+                class="btn btn-primary whitespace-nowrap"
+                data-tour="groups-create-btn"
+              >
+                <Icon name="plus" size="md" class="mr-2" />
+                {{ t("admin.groups.createGroup") }}
+              </button>
+            </div>
           </div>
         </div>
       </template>
