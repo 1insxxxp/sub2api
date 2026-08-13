@@ -5,6 +5,7 @@ import (
 	"errors"
 	"testing"
 
+	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
 	"github.com/stretchr/testify/require"
 )
 
@@ -29,6 +30,44 @@ type customGroupReadRepoStub struct {
 	UserCustomGroupRepository
 	groups []UserCustomGroup
 	group  *UserCustomGroup
+}
+
+type customGroupDeleteRepoStub struct {
+	UserCustomGroupRepository
+	boundCount       int
+	deleteCalls      int
+	forceDeleteCalls int
+	forceDeleteCount int
+}
+
+type customGroupDeleteAuthCacheStub struct {
+	invalidatedUserIDs []int64
+}
+
+func (*customGroupDeleteAuthCacheStub) InvalidateAuthCacheByKey(context.Context, string) {}
+
+func (s *customGroupDeleteAuthCacheStub) InvalidateAuthCacheByUserID(_ context.Context, userID int64) {
+	s.invalidatedUserIDs = append(s.invalidatedUserIDs, userID)
+}
+
+func (*customGroupDeleteAuthCacheStub) InvalidateAuthCacheByGroupID(context.Context, int64) {}
+
+func (s *customGroupDeleteRepoStub) GetOwned(context.Context, int64, int64) (*UserCustomGroup, error) {
+	return &UserCustomGroup{ID: 21, UserID: 9}, nil
+}
+
+func (s *customGroupDeleteRepoStub) CountBoundAPIKeys(context.Context, int64) (int, error) {
+	return s.boundCount, nil
+}
+
+func (s *customGroupDeleteRepoStub) Delete(context.Context, int64, int64) error {
+	s.deleteCalls++
+	return nil
+}
+
+func (s *customGroupDeleteRepoStub) DeleteAndUnbindAPIKeys(context.Context, int64, int64) (int, error) {
+	s.forceDeleteCalls++
+	return s.forceDeleteCount, nil
 }
 
 func (s customGroupReadRepoStub) ListByUserID(context.Context, int64) ([]UserCustomGroup, error) {
@@ -144,4 +183,31 @@ func TestUserCustomGroupServiceGetAnnotatesAllowedExclusiveSource(t *testing.T) 
 	require.NoError(t, err)
 	require.True(t, group.Models[0].SourceAvailable)
 	require.Empty(t, group.Models[0].SourceIssue)
+}
+
+func TestUserCustomGroupDeleteReturnsBoundKeyCount(t *testing.T) {
+	repo := &customGroupDeleteRepoStub{boundCount: 2}
+	svc := &UserCustomGroupService{repo: repo}
+
+	unboundCount, err := svc.Delete(context.Background(), 9, 21, false)
+
+	require.ErrorIs(t, err, ErrUserCustomGroupInUse)
+	require.Zero(t, unboundCount)
+	require.Equal(t, "2", infraerrors.FromError(err).Metadata["bound_api_key_count"])
+	require.Zero(t, repo.deleteCalls)
+	require.Zero(t, repo.forceDeleteCalls)
+}
+
+func TestUserCustomGroupForceDeleteUnbindsAtomically(t *testing.T) {
+	repo := &customGroupDeleteRepoStub{boundCount: 2, forceDeleteCount: 2}
+	cache := &customGroupDeleteAuthCacheStub{}
+	svc := &UserCustomGroupService{repo: repo, authCacheInvalidator: cache}
+
+	unboundCount, err := svc.Delete(context.Background(), 9, 21, true)
+
+	require.NoError(t, err)
+	require.Equal(t, 2, unboundCount)
+	require.Zero(t, repo.deleteCalls)
+	require.Equal(t, 1, repo.forceDeleteCalls)
+	require.Equal(t, []int64{9}, cache.invalidatedUserIDs)
 }

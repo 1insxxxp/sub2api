@@ -19,6 +19,7 @@ vi.mock('@/api/customGroups', () => ({
 }))
 
 import CustomGroupsManager from '../CustomGroupsManager.vue'
+import { useAppStore } from '@/stores/app'
 
 const currentDir = dirname(fileURLToPath(import.meta.url))
 const source = readFileSync(resolve(currentDir, '../CustomGroupsManager.vue'), 'utf8')
@@ -68,6 +69,12 @@ const mountManager = async () => {
   const wrapper = mount(CustomGroupsManager)
   await flushPromises()
   return wrapper
+}
+
+const deleteButton = (wrapper: Awaited<ReturnType<typeof mountManager>>) => {
+  const button = wrapper.findAll('button').find(candidate => candidate.text() === '删除')
+  if (!button) throw new Error('delete button not found')
+  return button
 }
 
 describe('CustomGroupsManager', () => {
@@ -196,5 +203,71 @@ describe('CustomGroupsManager', () => {
 
     expect(wrapper.get('[data-test="custom-group-stale-sources"]').text()).toContain('已无权使用该来源分组')
     expect(wrapper.get('[data-test="custom-group-stale-sources"]').text()).toContain('专属 Claude')
+  })
+
+  it('confirms the affected API keys before forcing a bound custom group deletion', async () => {
+    const confirm = vi.spyOn(window, 'confirm')
+      .mockReturnValueOnce(true)
+      .mockReturnValueOnce(true)
+    apiMocks.delete
+      .mockRejectedValueOnce({
+        status: 409,
+        code: 409,
+        reason: 'CUSTOM_GROUP_IN_USE',
+        metadata: { bound_api_key_count: '2' },
+        message: 'custom group is bound to one or more API keys',
+      })
+      .mockResolvedValueOnce({ deleted: true, unbound_api_key_count: 2 })
+    const wrapper = await mountManager()
+
+    await deleteButton(wrapper).trigger('click')
+    await flushPromises()
+
+    expect(confirm).toHaveBeenCalledTimes(2)
+    expect(confirm.mock.calls[1]?.[0]).toContain('2 个 API 密钥')
+    expect(confirm.mock.calls[1]?.[0]).toContain('恢复使用原分组')
+    expect(apiMocks.delete).toHaveBeenNthCalledWith(1, 21)
+    expect(apiMocks.delete).toHaveBeenNthCalledWith(2, 21, true)
+    expect(wrapper.emitted('changed')).toHaveLength(1)
+  })
+
+  it('does not force deletion when the affected-key confirmation is cancelled', async () => {
+    vi.spyOn(window, 'confirm')
+      .mockReturnValueOnce(true)
+      .mockReturnValueOnce(false)
+    apiMocks.delete.mockRejectedValueOnce({
+      status: 409,
+      code: 409,
+      reason: 'CUSTOM_GROUP_IN_USE',
+      metadata: { bound_api_key_count: '3' },
+    })
+    const wrapper = await mountManager()
+
+    await deleteButton(wrapper).trigger('click')
+    await flushPromises()
+
+    expect(apiMocks.delete).toHaveBeenCalledTimes(1)
+    expect(apiMocks.delete).toHaveBeenCalledWith(21)
+    expect(wrapper.emitted('changed')).toBeUndefined()
+  })
+
+  it('shows a forced deletion failure instead of reporting success', async () => {
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+    apiMocks.delete
+      .mockRejectedValueOnce({
+        status: 409,
+        code: 409,
+        reason: 'CUSTOM_GROUP_IN_USE',
+        metadata: { bound_api_key_count: '1' },
+      })
+      .mockRejectedValueOnce({ message: '解绑失败，请重试' })
+    const wrapper = await mountManager()
+
+    await deleteButton(wrapper).trigger('click')
+    await flushPromises()
+
+    const app = useAppStore()
+    expect(app.toasts.some(toast => toast.type === 'error' && toast.message === '解绑失败，请重试')).toBe(true)
+    expect(wrapper.emitted('changed')).toBeUndefined()
   })
 })

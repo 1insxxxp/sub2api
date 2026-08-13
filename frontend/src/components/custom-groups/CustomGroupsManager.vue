@@ -53,7 +53,7 @@
             <div class="mt-5 flex flex-wrap gap-2">
               <button :data-test="`custom-groups-edit-${group.id}`" class="btn btn-secondary btn-sm" type="button" @click="startEdit(group)">编辑</button>
               <button class="btn btn-secondary btn-sm" type="button" @click="toggle(group)">{{ group.status === 'active' ? '停用' : '启用' }}</button>
-              <button class="btn btn-danger btn-sm ml-auto" type="button" @click="remove(group)">删除</button>
+              <button :data-test="`custom-groups-delete-${group.id}`" class="btn btn-danger btn-sm ml-auto" type="button" @click="remove(group)">删除</button>
             </div>
           </article>
         </div>
@@ -282,8 +282,29 @@ const remove = async (group: UserCustomGroup) => {
     await customGroupsAPI.delete(group.id)
     await load()
     emit('changed')
+    app.showSuccess('自定义分组已删除')
   } catch (error: any) {
-    app.showError(error?.message || '仍有 API Key 绑定该分组，无法删除')
+    if (error?.reason !== 'CUSTOM_GROUP_IN_USE') {
+      app.showError(error?.message || '删除失败')
+      return
+    }
+
+    const rawCount = error?.metadata?.bound_api_key_count
+    const parsedCount = Number.parseInt(String(rawCount ?? ''), 10)
+    const affectedLabel = Number.isFinite(parsedCount) && parsedCount > 0
+      ? `${parsedCount} 个 API 密钥`
+      : '绑定该分组的 API 密钥'
+    if (!window.confirm(`该分组仍绑定 ${affectedLabel}。继续删除会解除这些绑定，密钥将恢复使用原分组。确定继续吗？`)) return
+
+    try {
+      const result = await customGroupsAPI.delete(group.id, true)
+      await load()
+      emit('changed')
+      const unboundCount = Number(result?.unbound_api_key_count) || parsedCount || 0
+      app.showSuccess(unboundCount > 0 ? `自定义分组已删除，已解除 ${unboundCount} 个密钥绑定` : '自定义分组已删除')
+    } catch (forceError: any) {
+      app.showError(forceError?.message || '删除失败，请重试')
+    }
   }
 }
 

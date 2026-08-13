@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"database/sql"
 	"time"
 
 	dbent "github.com/Wei-Shaw/sub2api/ent"
@@ -11,10 +12,13 @@ import (
 	"github.com/Wei-Shaw/sub2api/internal/service"
 )
 
-type userCustomGroupRepository struct{ client *dbent.Client }
+type userCustomGroupRepository struct {
+	client *dbent.Client
+	db     *sql.DB
+}
 
-func NewUserCustomGroupRepository(client *dbent.Client) service.UserCustomGroupRepository {
-	return &userCustomGroupRepository{client: client}
+func NewUserCustomGroupRepository(client *dbent.Client, db *sql.DB) service.UserCustomGroupRepository {
+	return &userCustomGroupRepository{client: client, db: db}
 }
 
 func (r *userCustomGroupRepository) ListByUserID(ctx context.Context, userID int64) ([]service.UserCustomGroup, error) {
@@ -98,6 +102,63 @@ func (r *userCustomGroupRepository) Delete(ctx context.Context, id, userID int64
 		return service.ErrUserCustomGroupNotFound
 	}
 	return nil
+}
+
+func (r *userCustomGroupRepository) DeleteAndUnbindAPIKeys(ctx context.Context, id, userID int64) (int, error) {
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return 0, err
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	var lockedID int64
+	if err := tx.QueryRowContext(ctx, `
+		SELECT id
+		FROM user_custom_groups
+		WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL
+		FOR UPDATE
+	`, id, userID).Scan(&lockedID); err != nil {
+		if err == sql.ErrNoRows {
+			return 0, service.ErrUserCustomGroupNotFound
+		}
+		return 0, err
+	}
+	if lockedID != id {
+		return 0, service.ErrUserCustomGroupNotFound
+	}
+
+	result, err := tx.ExecContext(ctx, `
+		UPDATE api_keys
+		SET custom_group_id = NULL, updated_at = NOW()
+		WHERE custom_group_id = $1 AND deleted_at IS NULL
+	`, id)
+	if err != nil {
+		return 0, err
+	}
+	unboundCount64, err := result.RowsAffected()
+	if err != nil {
+		return 0, err
+	}
+
+	result, err = tx.ExecContext(ctx, `
+		UPDATE user_custom_groups
+		SET deleted_at = NOW(), status = $3, updated_at = NOW()
+		WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL
+	`, id, userID, service.StatusDisabled)
+	if err != nil {
+		return 0, err
+	}
+	updated, err := result.RowsAffected()
+	if err != nil {
+		return 0, err
+	}
+	if updated != 1 {
+		return 0, service.ErrUserCustomGroupNotFound
+	}
+	if err := tx.Commit(); err != nil {
+		return 0, err
+	}
+	return int(unboundCount64), nil
 }
 
 func (r *userCustomGroupRepository) CountByUserID(ctx context.Context, userID int64) (int, error) {

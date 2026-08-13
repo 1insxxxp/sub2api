@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"strings"
 
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
@@ -22,20 +23,22 @@ type UserCustomGroupRepository interface {
 	Create(ctx context.Context, group *UserCustomGroup, models []UserCustomGroupModelInput) error
 	Update(ctx context.Context, group *UserCustomGroup, models *[]UserCustomGroupModelInput) error
 	Delete(ctx context.Context, id, userID int64) error
+	DeleteAndUnbindAPIKeys(ctx context.Context, id, userID int64) (int, error)
 	CountByUserID(ctx context.Context, userID int64) (int, error)
 	CountBoundAPIKeys(ctx context.Context, id int64) (int, error)
 	ResolveModel(ctx context.Context, id, userID int64, model string) (*UserCustomGroupModel, error)
 }
 
 type UserCustomGroupService struct {
-	repo      UserCustomGroupRepository
-	userRepo  UserRepository
-	groupRepo GroupRepository
-	gateway   *GatewayService
+	repo                 UserCustomGroupRepository
+	userRepo             UserRepository
+	groupRepo            GroupRepository
+	gateway              *GatewayService
+	authCacheInvalidator APIKeyAuthCacheInvalidator
 }
 
-func NewUserCustomGroupService(repo UserCustomGroupRepository, userRepo UserRepository, groupRepo GroupRepository, gateway *GatewayService) *UserCustomGroupService {
-	return &UserCustomGroupService{repo: repo, userRepo: userRepo, groupRepo: groupRepo, gateway: gateway}
+func NewUserCustomGroupService(repo UserCustomGroupRepository, userRepo UserRepository, groupRepo GroupRepository, gateway *GatewayService, authCacheInvalidator APIKeyAuthCacheInvalidator) *UserCustomGroupService {
+	return &UserCustomGroupService{repo: repo, userRepo: userRepo, groupRepo: groupRepo, gateway: gateway, authCacheInvalidator: authCacheInvalidator}
 }
 
 func (s *UserCustomGroupService) List(ctx context.Context, userID int64) ([]UserCustomGroup, error) {
@@ -137,18 +140,30 @@ func (s *UserCustomGroupService) annotateSourceAvailability(ctx context.Context,
 	return nil
 }
 
-func (s *UserCustomGroupService) Delete(ctx context.Context, userID, id int64) error {
+func (s *UserCustomGroupService) Delete(ctx context.Context, userID, id int64, force bool) (int, error) {
+	if force {
+		unboundCount, err := s.repo.DeleteAndUnbindAPIKeys(ctx, id, userID)
+		if err != nil {
+			return 0, err
+		}
+		if s.authCacheInvalidator != nil {
+			s.authCacheInvalidator.InvalidateAuthCacheByUserID(ctx, userID)
+		}
+		return unboundCount, nil
+	}
 	if _, err := s.repo.GetOwned(ctx, id, userID); err != nil {
-		return err
+		return 0, err
 	}
 	count, err := s.repo.CountBoundAPIKeys(ctx, id)
 	if err != nil {
-		return err
+		return 0, err
 	}
 	if count > 0 {
-		return ErrUserCustomGroupInUse
+		return 0, ErrUserCustomGroupInUse.WithMetadata(map[string]string{
+			"bound_api_key_count": strconv.Itoa(count),
+		})
 	}
-	return s.repo.Delete(ctx, id, userID)
+	return 0, s.repo.Delete(ctx, id, userID)
 }
 
 func (s *UserCustomGroupService) validateModels(ctx context.Context, userID int64, models []UserCustomGroupModelInput) error {
