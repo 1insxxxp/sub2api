@@ -206,7 +206,7 @@
                       :checked="route.selected"
                       class="mt-0.5 h-4 w-4 rounded border-slate-300 text-primary-600 focus:ring-primary-500"
                       type="checkbox"
-                      @change="route.selected = ($event.target as HTMLInputElement).checked"
+                      @change="toggleRouteSelected(route, ($event.target as HTMLInputElement).checked)"
                     />
                     <span class="min-w-0">
                       <span class="block break-all font-mono text-xs font-medium text-slate-800 dark:text-slate-200">
@@ -316,6 +316,7 @@
             >
               <input
                 :checked="isSyncMissingDisabled(missing)"
+                :disabled="isSyncMissingReadOnly(missing)"
                 class="mt-0.5 h-4 w-4 rounded border-slate-300 text-amber-600"
                 type="checkbox"
                 @change="toggleSyncMissing(missing, ($event.target as HTMLInputElement).checked)"
@@ -323,7 +324,11 @@
               <span class="min-w-0 break-all">
                 {{ missing.public_model }}
                 <span class="mt-0.5 block text-[11px] text-slate-500">
-                  {{ t('admin.groups.systemCustom.disableSuggestion') }}
+                  {{
+                    isSyncMissingReadOnly(missing)
+                      ? t('admin.groups.systemCustom.alreadyDisabled')
+                      : t('admin.groups.systemCustom.disableSuggestion')
+                  }}
                 </span>
               </span>
             </label>
@@ -447,6 +452,7 @@ interface RouteDraft extends SystemCustomGroupModelInput {
   key: string
   selected: boolean
   originalEnabled: boolean
+  draftInitialized: boolean
 }
 
 const props = withDefaults(defineProps<Props>(), { groupId: null })
@@ -503,6 +509,7 @@ const ensureRoute = (
     enabled: true,
     selected: false,
     originalEnabled: true,
+    draftInitialized: false,
     ...values
   })
   routes.set(key, route)
@@ -612,6 +619,7 @@ const load = async () => {
           public_model: model.public_model,
           enabled: model.enabled,
           originalEnabled: model.enabled,
+          draftInitialized: true,
           selected: true
         })
       }
@@ -650,6 +658,11 @@ const toggleSource = (sourceID: number, selected: boolean) => {
     return
   }
   selectedSourceIDs.value = selectedSourceIDs.value.filter((id) => id !== sourceID)
+}
+
+const toggleRouteSelected = (route: RouteDraft, selected: boolean) => {
+  route.selected = selected
+  if (selected) route.draftInitialized = true
 }
 
 const selectedCandidates = computed(() =>
@@ -807,6 +820,11 @@ const isSyncAddedSelected = (added: SystemCustomGroupSyncAdded) =>
 const isSyncMissingDisabled = (missing: SystemCustomGroupModel) =>
   routeFor(missing.source_group_id, missing.source_model)?.enabled === false
 
+const isSyncMissingReadOnly = (missing: SystemCustomGroupModel) => {
+  const key = routeKey(missing.source_group_id, missing.source_model)
+  return isSyncMissingDisabled(missing) && !syncMissingPreviousEnabled.has(key)
+}
+
 const toggleSyncAdded = (added: SystemCustomGroupSyncAdded, selected: boolean) => {
   const key = routeKey(added.source_group_id, added.source_model)
   if (!selected) {
@@ -830,11 +848,13 @@ const toggleSyncAdded = (added: SystemCustomGroupSyncAdded, selected: boolean) =
   if (!selectedSourceIDs.value.includes(added.source_group_id)) {
     selectedSourceIDs.value = [...selectedSourceIDs.value, added.source_group_id]
   }
-  const route = ensureRoute(added.source_group_id, added.source_model, {
-    public_model: added.public_model
-  })
+  const route = ensureRoute(added.source_group_id, added.source_model)
+  if (!route.draftInitialized) {
+    route.public_model = added.public_model
+    route.enabled = true
+    route.draftInitialized = true
+  }
   route.selected = true
-  route.enabled = true
 }
 
 const toggleSyncMissing = (missing: SystemCustomGroupModel, disable: boolean) => {

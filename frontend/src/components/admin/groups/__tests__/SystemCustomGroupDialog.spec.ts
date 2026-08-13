@@ -685,6 +685,99 @@ describe('SystemCustomGroupDialog', () => {
     )
   })
 
+  it('preserves an existing sync-added route draft when it is unchecked and selected again', async () => {
+    getSystemCustomGroupSyncPreview.mockResolvedValueOnce({
+      added: [
+        {
+          public_model: 'preview-haiku',
+          source_group_id: 11,
+          source_model: 'claude-haiku-4',
+          selected: false
+        }
+      ],
+      missing: [],
+      conflicting: []
+    })
+    const wrapper = mountDialog({ groupId: 90 })
+    await flushPromises()
+    await wrapper.get('[data-testid="system-custom-sync"]').trigger('click')
+    await flushPromises()
+
+    const added = wrapper.get('[data-testid="system-custom-sync-added"]')
+    await added.get('input[type="checkbox"]').setValue(true)
+    const main = modelRow(wrapper, 11, 'claude-haiku-4')
+    await main.get('[data-testid="system-custom-public-model"]').setValue('custom-haiku')
+    await main.findAll('input[type="checkbox"]')[1].setValue(false)
+    await added.get('input[type="checkbox"]').setValue(false)
+    await added.get('input[type="checkbox"]').setValue(true)
+
+    expect(main.get('[data-testid="system-custom-public-model"]').element).toHaveProperty(
+      'value',
+      'custom-haiku'
+    )
+    expect(main.findAll('input[type="checkbox"]')[1].element).toHaveProperty('checked', false)
+    await wrapper.get('[data-testid="system-custom-save"]').trigger('click')
+    await flushPromises()
+    expect(updateSystemCustomGroup.mock.calls.at(-1)?.[1].models).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          public_model: 'custom-haiku',
+          source_group_id: 11,
+          source_model: 'claude-haiku-4',
+          enabled: false
+        })
+      ])
+    )
+  })
+
+  it('renders already-disabled missing routes as an applied read-only suggestion', async () => {
+    getSystemCustomGroupSyncPreview.mockResolvedValueOnce({
+      added: [],
+      missing: [existingGroup.models[2]],
+      conflicting: []
+    })
+    const wrapper = mountDialog({ groupId: 90 })
+    await flushPromises()
+    await wrapper.get('[data-testid="system-custom-sync"]').trigger('click')
+    await flushPromises()
+
+    const missing = wrapper.get('[data-testid="system-custom-sync-missing"]')
+    expect(missing.get('input[type="checkbox"]').element).toHaveProperty('checked', true)
+    expect(missing.get('input[type="checkbox"]').attributes('disabled')).toBeDefined()
+    expect(missing.text()).toContain('admin.groups.systemCustom.alreadyDisabled')
+  })
+
+  it('lets an active missing suggestion be applied and undone without losing its route state', async () => {
+    getSystemCustomGroupSyncPreview.mockResolvedValueOnce({
+      added: [],
+      missing: [existingGroup.models[1]],
+      conflicting: []
+    })
+    const wrapper = mountDialog({ groupId: 90 })
+    await flushPromises()
+    await wrapper.get('[data-testid="system-custom-sync"]').trigger('click')
+    await flushPromises()
+
+    const missing = wrapper.get('[data-testid="system-custom-sync-missing"]')
+    const input = missing.get('input[type="checkbox"]')
+    expect(input.element).toHaveProperty('checked', false)
+    expect(input.attributes('disabled')).toBeUndefined()
+    await input.setValue(true)
+    expect(input.element).toHaveProperty('checked', true)
+    expect(input.attributes('disabled')).toBeUndefined()
+    await input.setValue(false)
+    expect(input.element).toHaveProperty('checked', false)
+    expect(modelRow(wrapper, 11, 'legacy-haiku').findAll('input[type="checkbox"]')[1].element).toHaveProperty(
+      'checked',
+      true
+    )
+
+    await modelRow(wrapper, 11, 'legacy-haiku').findAll('input[type="checkbox"]')[1].setValue(false)
+    expect(input.element).toHaveProperty('checked', true)
+    expect(input.attributes('disabled')).toBeDefined()
+    expect(missing.text()).toContain('admin.groups.systemCustom.alreadyDisabled')
+  })
+
   it.each([
     ['daily', 'system-custom-daily-limit', '-1'],
     ['validity fractional', 'system-custom-validity-days', '1.5'],

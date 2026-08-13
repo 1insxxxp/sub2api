@@ -984,6 +984,7 @@ export default {
         syncConflicting: '有冲突',
         addedUnselected: '默认不纳入',
         disableSuggestion: '勾选后停用该旧路由',
+        alreadyDisabled: '已停用',
         snapshotHint: '保存将整体替换当前路由快照。',
         saved: '自定义路由分组已保存',
         deleteAction: '删除自定义分组',

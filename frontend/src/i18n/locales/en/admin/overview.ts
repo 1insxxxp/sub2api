@@ -973,6 +973,7 @@ export default {
         syncConflicting: 'Conflicting',
         addedUnselected: 'Not imported by default',
         disableSuggestion: 'Select to disable this stale route',
+        alreadyDisabled: 'Already disabled',
         snapshotHint: 'Saving replaces the complete routing snapshot.',
         saved: 'Custom routing group saved',
         deleteAction: 'Delete custom group',
