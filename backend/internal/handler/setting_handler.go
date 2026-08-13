@@ -109,8 +109,10 @@ func (h *SettingHandler) GetPublicSettings(c *gin.Context) {
 		ChannelMonitorDefaultIntervalSeconds: settings.ChannelMonitorDefaultIntervalSeconds,
 		ChannelMonitorHideThroughput:         settings.ChannelMonitorHideThroughput,
 
-		AvailableChannelsEnabled:            settings.AvailableChannelsEnabled,
-		AvailableChannelsPriceCNYMultiplier: settings.AvailableChannelsPriceCNYMultiplier,
+		AvailableChannelsEnabled:               settings.AvailableChannelsEnabled,
+		AvailableChannelsPriceCNYMultiplier:    settings.AvailableChannelsPriceCNYMultiplier,
+		AvailableChannelsPriceCNYMultiplierMax: settings.AvailableChannelsPriceCNYMultiplierMax,
+		AvailableChannelsOfficialUSDToCNYRate:  settings.AvailableChannelsOfficialUSDToCNYRate,
 
 		ModelPlazaEnabled:     settings.ModelPlazaEnabled,
 		ModelPlazaRequireAuth: settings.ModelPlazaRequireAuth,

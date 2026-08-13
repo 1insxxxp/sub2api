@@ -228,6 +228,7 @@ vi.mock("vue-i18n", async () => {
     "admin.settings.openaiExperimentalScheduler.oauthRatePriorityDescription": "同一分组同时包含 API Key 和 OAuth 账号时，OAuth 账号按此倍率与已探测的 API Key 计费倍率一起排序。",
     "admin.settings.openaiExperimentalScheduler.oauthRateWeightedDescription": "同一分组同时包含 API Key 和 OAuth 账号时，计算“计费倍率”得分时，OAuth 账号按此倍率参与计算。",
     "admin.settings.openaiExperimentalScheduler.stickyWeightedTitle": "粘性加权",
+    "admin.settings.features.availableChannels.priceCnyPreview": "示例 ¥{value}",
     "admin.settings.openaiExperimentalScheduler.stickyWeightedDescription": "开启后 previous_response_id 和 session_hash 粘性进入高级调度打分；关闭时仍按旧逻辑硬命中粘性账号。",
     "admin.settings.openaiExperimentalScheduler.subscriptionPriorityTitle": "订阅优先",
     "admin.settings.openaiExperimentalScheduler.subscriptionPriorityDescription": "开启后先在 ChatGPT 订阅账号池中按权值选取；订阅池拿不到席位时再回退到非订阅账号池。",
@@ -709,6 +710,359 @@ async function openUsersTab(wrapper: ReturnType<typeof mountView>) {
   await usersTabButton?.trigger("click");
   await flushPromises();
 }
+
+async function openFeaturesTab(wrapper: ReturnType<typeof mountView>) {
+  const featuresTabButton = wrapper
+    .findAll("button")
+    .find((node) => node.text().includes("admin.settings.tabs.features"));
+
+  expect(featuresTabButton).toBeDefined();
+  await featuresTabButton?.trigger("click");
+  await flushPromises();
+}
+
+describe("admin SettingsView available channels currency benchmark", () => {
+  it("loads and submits the independent official USD to CNY rate", async () => {
+    getSettings.mockResolvedValueOnce({
+      ...baseSettingsResponse,
+      available_channels_official_usd_to_cny_rate: 7.15,
+    });
+
+    const wrapper = mountView();
+    await flushPromises();
+    await openFeaturesTab(wrapper);
+
+    const input = wrapper.get('[data-test="available-channels-official-usd-to-cny-rate"]');
+    expect((input.element as HTMLInputElement).value).toBe("7.15");
+
+    await wrapper.find("form").trigger("submit.prevent");
+    await flushPromises();
+
+    expect(updateSettings).toHaveBeenCalled();
+    expect(updateSettings.mock.calls.at(-1)?.[0]).toMatchObject({
+      available_channels_official_usd_to_cny_rate: 7.15,
+    });
+  });
+});
+
+describe("admin SettingsView available channels price range", () => {
+  it("explains that both range bounds affect display but not actual billing", () => {
+    expect(zhSettings.settings.features.availableChannels.priceCnyMultiplier).toBe(
+      "最低充值比例",
+    );
+    expect(zhSettings.settings.features.availableChannels.priceCnyMultiplierMax).toBe(
+      "最高充值比例",
+    );
+    expect(
+      zhSettings.settings.features.availableChannels.priceCnyMultiplierHint,
+    ).toContain("不影响真实扣费");
+    expect(
+      zhSettings.settings.features.availableChannels.priceCnyMultiplierMaxHint,
+    ).toContain("不影响真实扣费");
+    expect(
+      enSettings.settings.features.availableChannels.priceCnyMultiplierHint,
+    ).toContain("never actual billing");
+    expect(
+      enSettings.settings.features.availableChannels.priceCnyMultiplierMaxHint,
+    ).toContain("never actual billing");
+  });
+
+  it("loads and submits the minimum and maximum display multipliers", async () => {
+    getSettings.mockResolvedValueOnce({
+      ...baseSettingsResponse,
+      available_channels_price_cny_multiplier: 0.16,
+      available_channels_price_cny_multiplier_max: 0.2,
+    });
+
+    const wrapper = mountView();
+    await flushPromises();
+    await openFeaturesTab(wrapper);
+
+    const minimumInput = wrapper.get(
+      '[data-test="available-channels-price-cny-multiplier-min"]',
+    );
+    const maximumInput = wrapper.get(
+      '[data-test="available-channels-price-cny-multiplier-max"]',
+    );
+    expect((minimumInput.element as HTMLInputElement).value).toBe("0.16");
+    expect((maximumInput.element as HTMLInputElement).value).toBe("0.2");
+
+    await minimumInput.setValue("0.17");
+    await maximumInput.setValue("0.21");
+    await wrapper.find("form").trigger("submit.prevent");
+    await flushPromises();
+
+    expect(updateSettings.mock.calls.at(-1)?.[0]).toMatchObject({
+      available_channels_price_cny_multiplier: 0.17,
+      available_channels_price_cny_multiplier_max: 0.21,
+    });
+  });
+
+  it("previews the complete display range and collapses equal endpoints", async () => {
+    getSettings.mockResolvedValueOnce({
+      ...baseSettingsResponse,
+      available_channels_price_cny_multiplier: 0.16,
+      available_channels_price_cny_multiplier_max: 0.2,
+    });
+
+    const wrapper = mountView();
+    await flushPromises();
+    await openFeaturesTab(wrapper);
+
+    expect(wrapper.get('[data-test="available-channels-price-preview"]').text()).toContain(
+      "¥1.60–¥2.00",
+    );
+
+    await wrapper
+      .get('[data-test="available-channels-price-cny-multiplier-max"]')
+      .setValue("0.16");
+    expect(wrapper.get('[data-test="available-channels-price-preview"]').text()).toContain(
+      "¥1.60",
+    );
+    expect(wrapper.get('[data-test="available-channels-price-preview"]').text()).not.toContain(
+      "¥1.60–¥1.60",
+    );
+  });
+
+  it("omits new range settings when an old backend did not return them", async () => {
+    getSettings.mockResolvedValueOnce({
+      ...baseSettingsResponse,
+      available_channels_price_cny_multiplier: 0.16,
+    });
+
+    const wrapper = mountView();
+    await flushPromises();
+    await wrapper.find("form").trigger("submit.prevent");
+    await flushPromises();
+
+    const payload = updateSettings.mock.calls.at(-1)?.[0];
+    expect(payload).not.toHaveProperty(
+      "available_channels_price_cny_multiplier_max",
+    );
+    expect(payload).not.toHaveProperty(
+      "available_channels_official_usd_to_cny_rate",
+    );
+  });
+
+  it("submits new range settings when they are explicitly edited after an old-backend load", async () => {
+    getSettings.mockResolvedValueOnce({
+      ...baseSettingsResponse,
+      available_channels_price_cny_multiplier: 0.16,
+    });
+
+    const wrapper = mountView();
+    await flushPromises();
+    await openFeaturesTab(wrapper);
+
+    await wrapper
+      .get('[data-test="available-channels-price-cny-multiplier-max"]')
+      .setValue("0.25");
+    await wrapper
+      .get('[data-test="available-channels-official-usd-to-cny-rate"]')
+      .setValue("7.2");
+    await wrapper.find("form").trigger("submit.prevent");
+    await flushPromises();
+
+    expect(updateSettings.mock.calls.at(-1)?.[0]).toMatchObject({
+      available_channels_price_cny_multiplier: 0.16,
+      available_channels_price_cny_multiplier_max: 0.25,
+      available_channels_official_usd_to_cny_rate: 7.2,
+    });
+  });
+
+  it("associates each range label and hint with its input", async () => {
+    getSettings.mockResolvedValueOnce({
+      ...baseSettingsResponse,
+      available_channels_price_cny_multiplier: 0.16,
+      available_channels_price_cny_multiplier_max: 0.2,
+      available_channels_official_usd_to_cny_rate: 7,
+    });
+
+    const wrapper = mountView();
+    await flushPromises();
+    await openFeaturesTab(wrapper);
+
+    for (const id of [
+      "available-channels-price-cny-multiplier-min",
+      "available-channels-price-cny-multiplier-max",
+      "available-channels-official-usd-to-cny-rate",
+    ]) {
+      expect(wrapper.get(`label[for="${id}"]`).exists()).toBe(true);
+      expect(wrapper.get(`#${id}`).attributes("aria-describedby")).toBe(
+        `${id}-hint`,
+      );
+      expect(wrapper.get(`#${id}-hint`).exists()).toBe(true);
+    }
+
+    expect(
+      wrapper.get('label[for="available-channels-price-cny-multiplier-min"]').text(),
+    ).toBe("admin.settings.features.availableChannels.priceCnyMultiplier");
+  });
+
+  it("normalizes the maximum display multiplier to at least the minimum", async () => {
+    getSettings.mockResolvedValueOnce({
+      ...baseSettingsResponse,
+      available_channels_price_cny_multiplier: 0.16,
+      available_channels_price_cny_multiplier_max: 0.2,
+    });
+
+    const wrapper = mountView();
+    await flushPromises();
+    await openFeaturesTab(wrapper);
+
+    await wrapper
+      .get('[data-test="available-channels-price-cny-multiplier-min"]')
+      .setValue("0.24");
+    await wrapper
+      .get('[data-test="available-channels-price-cny-multiplier-max"]')
+      .setValue("0.18");
+    await wrapper.find("form").trigger("submit.prevent");
+    await flushPromises();
+
+    expect(updateSettings.mock.calls.at(-1)?.[0]).toMatchObject({
+      available_channels_price_cny_multiplier: 0.24,
+      available_channels_price_cny_multiplier_max: 0.24,
+    });
+  });
+
+  it("clamps negative display multipliers to zero before submission", async () => {
+    getSettings.mockResolvedValueOnce({
+      ...baseSettingsResponse,
+      available_channels_price_cny_multiplier: 0.16,
+      available_channels_price_cny_multiplier_max: 0.2,
+    });
+
+    const wrapper = mountView();
+    await flushPromises();
+    await openFeaturesTab(wrapper);
+
+    await wrapper
+      .get('[data-test="available-channels-price-cny-multiplier-min"]')
+      .setValue("-0.16");
+    await wrapper
+      .get('[data-test="available-channels-price-cny-multiplier-max"]')
+      .setValue("-0.2");
+    await wrapper.find("form").trigger("submit.prevent");
+    await flushPromises();
+
+    expect(updateSettings.mock.calls.at(-1)?.[0]).toMatchObject({
+      available_channels_price_cny_multiplier: 0,
+      available_channels_price_cny_multiplier_max: 0,
+    });
+  });
+
+  it("falls back to 0.20 when the maximum display multiplier is invalid", async () => {
+    getSettings.mockResolvedValueOnce({
+      ...baseSettingsResponse,
+      available_channels_price_cny_multiplier: 0.16,
+      available_channels_price_cny_multiplier_max: 0.2,
+    });
+
+    const wrapper = mountView();
+    await flushPromises();
+    await openFeaturesTab(wrapper);
+
+    await wrapper
+      .get('[data-test="available-channels-price-cny-multiplier-max"]')
+      .setValue("");
+    await wrapper.find("form").trigger("submit.prevent");
+    await flushPromises();
+
+    expect(updateSettings.mock.calls.at(-1)?.[0]).toMatchObject({
+      available_channels_price_cny_multiplier: 0.16,
+      available_channels_price_cny_multiplier_max: 0.2,
+    });
+  });
+
+  it("preserves an explicit zero maximum instead of replacing it with the default", async () => {
+    getSettings.mockResolvedValueOnce({
+      ...baseSettingsResponse,
+      available_channels_price_cny_multiplier: 0,
+      available_channels_price_cny_multiplier_max: 0,
+    });
+
+    const wrapper = mountView();
+    await flushPromises();
+    await openFeaturesTab(wrapper);
+
+    const maximumInput = wrapper.get(
+      '[data-test="available-channels-price-cny-multiplier-max"]',
+    );
+    expect((maximumInput.element as HTMLInputElement).value).toBe("0");
+    await wrapper.find("form").trigger("submit.prevent");
+    await flushPromises();
+
+    expect(updateSettings.mock.calls.at(-1)?.[0]).toMatchObject({
+      available_channels_price_cny_multiplier: 0,
+      available_channels_price_cny_multiplier_max: 0,
+    });
+  });
+
+  it.each([
+    ["not-a-number", ""],
+    ["negative", "-1"],
+  ])("falls back to rate 7 for an explicitly edited %s official rate", async (_case, value) => {
+    getSettings.mockResolvedValueOnce({
+      ...baseSettingsResponse,
+      available_channels_official_usd_to_cny_rate: 6.9,
+    });
+
+    const wrapper = mountView();
+    await flushPromises();
+    await openFeaturesTab(wrapper);
+
+    await wrapper
+      .get('[data-test="available-channels-official-usd-to-cny-rate"]')
+      .setValue(value);
+    await wrapper.find("form").trigger("submit.prevent");
+    await flushPromises();
+
+    expect(updateSettings.mock.calls.at(-1)?.[0]).toMatchObject({
+      available_channels_official_usd_to_cny_rate: 7,
+    });
+  });
+
+  it("falls back to rate 7 for an infinite official rate", async () => {
+    getSettings.mockResolvedValueOnce({
+      ...baseSettingsResponse,
+      available_channels_official_usd_to_cny_rate: 6.9,
+    });
+
+    const wrapper = mountView();
+    await flushPromises();
+    const setupState = wrapper.vm.$.setupState as {
+      form: { available_channels_official_usd_to_cny_rate: number };
+    };
+    setupState.form.available_channels_official_usd_to_cny_rate = Number.POSITIVE_INFINITY;
+    await wrapper.find("form").trigger("submit.prevent");
+    await flushPromises();
+
+    expect(updateSettings.mock.calls.at(-1)?.[0]).toMatchObject({
+      available_channels_official_usd_to_cny_rate: 7,
+    });
+  });
+
+  it("preserves an explicitly edited zero official rate", async () => {
+    getSettings.mockResolvedValueOnce({
+      ...baseSettingsResponse,
+      available_channels_official_usd_to_cny_rate: 6.9,
+    });
+
+    const wrapper = mountView();
+    await flushPromises();
+    await openFeaturesTab(wrapper);
+
+    await wrapper
+      .get('[data-test="available-channels-official-usd-to-cny-rate"]')
+      .setValue("0");
+    await wrapper.find("form").trigger("submit.prevent");
+    await flushPromises();
+
+    expect(updateSettings.mock.calls.at(-1)?.[0]).toMatchObject({
+      available_channels_official_usd_to_cny_rate: 0,
+    });
+  });
+});
 
 describe("admin SettingsView email domain quota copy", () => {
   it("documents the email domain quota and empty-whitelist behavior in both locales", () => {

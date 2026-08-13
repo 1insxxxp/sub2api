@@ -273,6 +273,78 @@ func TestSettingService_UpdateSettings_PersistsCompactHomeEnabled(t *testing.T) 
 	require.Equal(t, "true", repo.updates[SettingKeyCompactHomeEnabled])
 }
 
+func TestSettingService_UpdateSettings_NormalizesNonFiniteAvailableChannelPriceSettings(t *testing.T) {
+	for _, tt := range []struct {
+		name         string
+		minimum      float64
+		maximum      float64
+		officialRate float64
+	}{
+		{name: "nan", minimum: math.NaN(), maximum: math.NaN(), officialRate: math.NaN()},
+		{name: "infinity", minimum: math.Inf(1), maximum: math.Inf(1), officialRate: math.Inf(-1)},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			repo := &settingUpdateRepoStub{}
+			svc := NewSettingService(repo, &config.Config{})
+
+			err := svc.UpdateSettings(context.Background(), &SystemSettings{
+				AvailableChannelsPriceCNYMultiplier:    tt.minimum,
+				AvailableChannelsPriceCNYMultiplierMax: tt.maximum,
+				AvailableChannelsOfficialUSDToCNYRate:  tt.officialRate,
+			})
+
+			require.NoError(t, err)
+			require.Equal(t, "0", repo.updates[SettingKeyAvailableChannelsPriceCNYMultiplier])
+			require.Equal(t, "0.2", repo.updates[SettingKeyAvailableChannelsPriceCNYMultiplierMax])
+			require.Equal(t, "7", repo.updates[SettingKeyAvailableChannelsOfficialUSDToCNYRate])
+			for _, key := range []string{
+				SettingKeyAvailableChannelsPriceCNYMultiplier,
+				SettingKeyAvailableChannelsPriceCNYMultiplierMax,
+				SettingKeyAvailableChannelsOfficialUSDToCNYRate,
+			} {
+				require.NotContains(t, repo.updates[key], "NaN")
+				require.NotContains(t, repo.updates[key], "Inf")
+			}
+		})
+	}
+}
+
+func TestSettingService_UpdateSettings_NormalizesAvailableChannelMaximumBeforePersistence(t *testing.T) {
+	repo := &settingUpdateRepoStub{}
+	svc := NewSettingService(repo, &config.Config{})
+	settings := &SystemSettings{
+		AvailableChannelsPriceCNYMultiplier:    0.20,
+		AvailableChannelsPriceCNYMultiplierMax: 0.16,
+	}
+
+	err := svc.UpdateSettings(context.Background(), settings)
+
+	require.NoError(t, err)
+	require.Equal(t, "0.2", repo.updates[SettingKeyAvailableChannelsPriceCNYMultiplier])
+	require.Equal(t, "0.2", repo.updates[SettingKeyAvailableChannelsPriceCNYMultiplierMax])
+	require.InDelta(t, 0.20, settings.AvailableChannelsPriceCNYMultiplierMax, 1e-12)
+}
+
+func TestSettingService_UpdateSettings_PersistsExplicitAvailableChannelPriceRange(t *testing.T) {
+	repo := &settingUpdateRepoStub{}
+	svc := NewSettingService(repo, &config.Config{})
+
+	err := svc.UpdateSettings(context.Background(), &SystemSettings{
+		AvailableChannelsPriceCNYMultiplier:    0.17,
+		AvailableChannelsPriceCNYMultiplierMax: 0.22,
+	})
+
+	require.NoError(t, err)
+	require.Equal(t, "0.17", repo.updates[SettingKeyAvailableChannelsPriceCNYMultiplier])
+	require.Equal(t, "0.22", repo.updates[SettingKeyAvailableChannelsPriceCNYMultiplierMax])
+}
+
+func TestFormatNonNegativeFloatSetting_RejectsNonFiniteValues(t *testing.T) {
+	for _, value := range []float64{math.NaN(), math.Inf(1), math.Inf(-1)} {
+		require.Equal(t, "0", formatNonNegativeFloatSetting(value))
+	}
+}
+
 func TestSettingService_UpdateSettings_DefaultSubscriptions_ValidGroup(t *testing.T) {
 	repo := &settingUpdateRepoStub{}
 	groupReader := &defaultSubGroupReaderStub{

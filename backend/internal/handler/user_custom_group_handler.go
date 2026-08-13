@@ -116,11 +116,21 @@ func (h *UserCustomGroupHandler) Delete(c *gin.Context) {
 	if !ok {
 		return
 	}
-	if err := h.service.Delete(c.Request.Context(), uid, id); err != nil {
+	force := false
+	if rawForce, exists := c.GetQuery("force"); exists {
+		parsedForce, err := strconv.ParseBool(rawForce)
+		if err != nil {
+			response.BadRequest(c, "Invalid force value")
+			return
+		}
+		force = parsedForce
+	}
+	unboundCount, err := h.service.Delete(c.Request.Context(), uid, id, force)
+	if err != nil {
 		response.ErrorFrom(c, err)
 		return
 	}
-	response.Success(c, gin.H{"deleted": true})
+	response.Success(c, gin.H{"deleted": true, "unbound_api_key_count": unboundCount})
 }
 
 type customGroupCandidate struct {
@@ -148,6 +158,9 @@ func (h *UserCustomGroupHandler) Candidates(c *gin.Context) {
 		models := h.gateway.GetAvailableModels(c.Request.Context(), &g.ID, g.Platform)
 		if g.CustomModelsListEnabled() {
 			models = filterModelsByCustomList(models, defaultModelIDsForPlatform(g.Platform), g.ModelsListConfig.Models)
+		}
+		if models == nil {
+			models = make([]string, 0)
 		}
 		out = append(out, customGroupCandidate{ID: g.ID, Name: g.Name, Platform: g.Platform, Models: models})
 	}

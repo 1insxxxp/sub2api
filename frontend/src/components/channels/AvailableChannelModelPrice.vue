@@ -31,7 +31,7 @@
           {{ t(`${catalogKey}.effectiveRate`) }}
         </p>
         <p class="font-mono text-sm font-semibold tabular-nums text-gray-800 dark:text-gray-100">
-          {{ formatRate(model.normalRate) }}×
+          {{ effectiveRateRange }}
         </p>
       </div>
     </header>
@@ -78,14 +78,14 @@
             <p v-if="metric.label" class="text-xs text-primary-700 dark:text-primary-200">
               {{ metric.label }}
             </p>
-            <template v-if="metric.value?.peakSite != null">
+            <template v-if="hasPeak(metric.value)">
               <p class="mt-0.5 text-xs font-medium text-primary-700 dark:text-primary-200">
                 {{ t(`${catalogKey}.regularPrice`) }}
               </p>
               <p
                 class="break-words font-mono text-sm font-bold tabular-nums text-primary-700 dark:text-primary-200"
               >
-                {{ formatCny(metric.value.site, metric.scale) }}
+                {{ formatCny(metric.value?.site, metric.value?.siteMax, metric.scale) }}
                 <span class="text-xs font-medium text-primary-700 dark:text-primary-200">{{ metric.unit }}</span>
               </p>
               <p class="mt-1.5 text-xs font-medium text-amber-700 dark:text-amber-300">
@@ -94,7 +94,7 @@
               <p
                 class="break-words font-mono text-sm font-bold tabular-nums text-amber-700 dark:text-amber-300"
               >
-                {{ formatCny(metric.value.peakSite, metric.scale) }}
+                {{ formatCny(metric.value?.peakSite, metric.value?.peakSiteMax, metric.scale) }}
                 <span class="text-xs font-medium text-amber-700 dark:text-amber-300">{{ metric.unit }}</span>
               </p>
             </template>
@@ -102,7 +102,7 @@
               v-else
               class="mt-0.5 break-words font-mono text-sm font-bold tabular-nums text-primary-700 dark:text-primary-200"
             >
-              {{ formatCny(metric.value?.site ?? null, metric.scale) }}
+              {{ formatCny(metric.value?.site, metric.value?.siteMax, metric.scale) }}
               <span class="text-xs font-medium text-primary-700 dark:text-primary-200">{{ metric.unit }}</span>
             </p>
           </div>
@@ -185,25 +185,25 @@
                     <p class="text-xs text-primary-700 dark:text-primary-200">
                       {{ t(`${catalogKey}.sitePrice`) }}
                     </p>
-                    <template v-if="metric.value?.peakSite != null">
+                    <template v-if="hasPeak(metric.value)">
                       <p class="mt-1 text-xs text-primary-700 dark:text-primary-200">
                         {{ t(`${catalogKey}.regularPrice`) }}
                       </p>
                       <p class="break-words font-mono text-xs font-bold tabular-nums text-primary-700 dark:text-primary-200">
-                        {{ formatCny(metric.value.site, metric.scale) }} {{ metric.unit }}
+                        {{ formatCny(metric.value?.site, metric.value?.siteMax, metric.scale) }} {{ metric.unit }}
                       </p>
                       <p class="mt-1 text-xs text-amber-700 dark:text-amber-300">
                         {{ t(`${catalogKey}.peakPrice`) }}
                       </p>
                       <p class="break-words font-mono text-xs font-bold tabular-nums text-amber-700 dark:text-amber-300">
-                        {{ formatCny(metric.value.peakSite, metric.scale) }} {{ metric.unit }}
+                        {{ formatCny(metric.value?.peakSite, metric.value?.peakSiteMax, metric.scale) }} {{ metric.unit }}
                       </p>
                     </template>
                     <p
                       v-else
                       class="mt-0.5 break-words font-mono text-xs font-bold tabular-nums text-primary-700 dark:text-primary-200"
                     >
-                      {{ formatCny(metric.value?.site ?? null, metric.scale) }} {{ metric.unit }}
+                      {{ formatCny(metric.value?.site, metric.value?.siteMax, metric.scale) }} {{ metric.unit }}
                     </p>
                   </div>
                 </div>
@@ -238,7 +238,8 @@ import type {
   CatalogPriceValue,
   CatalogPricingInterval,
 } from './availableChannelCatalog'
-import { formatCatalogMoney } from './availableChannelPriceDisplay'
+import { formatAvailableChannelRate } from './availableChannelRateDisplay'
+import { formatCatalogMoney, formatCatalogMoneyRange, formatCatalogValueRange } from './availableChannelPriceDisplay'
 
 const catalogKey = 'availableChannels.catalog'
 const perMillion = 1_000_000
@@ -258,17 +259,16 @@ interface PriceMetric {
   unit: string
 }
 
-function formatCny(value: number | null, scale: number): string {
-  return formatCatalogMoney(value, scale, '¥')
+function formatCny(
+  value: number | null | undefined,
+  maximum: number | null | undefined,
+  scale: number,
+): string {
+  return formatCatalogMoneyRange(value, maximum, scale, '¥')
 }
 
 function formatOfficial(value: number | null, scale: number): string {
   return formatCatalogMoney(value, scale, '$')
-}
-
-function formatRate(value: number): string {
-  if (!Number.isFinite(value)) return '-'
-  return Number(value.toPrecision(6)).toString()
 }
 
 function safeId(value: string): string {
@@ -287,7 +287,15 @@ function safeId(value: string): string {
 
 function hasValue(value: CatalogPriceValue | null): boolean {
   return value != null
-    && (value.official != null || value.site != null || value.peakSite != null)
+    && (value.official != null
+      || value.site != null
+      || value.siteMax != null
+      || value.peakSite != null
+      || value.peakSiteMax != null)
+}
+
+function hasPeak(value: CatalogPriceValue | null): boolean {
+  return value != null && (value.peakSite != null || value.peakSiteMax != null)
 }
 
 function metricsForCollection(
@@ -383,6 +391,13 @@ function priceMetrics(prices: CatalogPriceCollection): PriceMetric[] {
 }
 
 const expanded = ref(false)
+const effectiveRateRange = computed(() => {
+  return formatCatalogValueRange(
+    props.model.effectiveRate,
+    props.model.effectiveRateMax,
+    value => `${formatAvailableChannelRate(value)}×`,
+  )
+})
 const detailsOpen = computed(() => props.detailsExpanded || expanded.value)
 const detailRegionId = computed(() => `${safeId(props.model.key)}-${instanceUid.toString(36)}`)
 const primaryMetrics = computed<PriceMetric[]>(() => {

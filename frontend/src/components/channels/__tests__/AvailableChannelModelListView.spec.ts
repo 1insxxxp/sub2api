@@ -16,7 +16,7 @@ vi.mock('vue-i18n', async () => ({
   'availableChannels.catalog.moreOfferings': `还有 ${params?.count ?? 0} 个方案`,
   'availableChannels.catalog.channelsCount': `${params?.count ?? 0} 个渠道`,
   'availableChannels.catalog.groupsCount': `${params?.count ?? 0} 个分组`,
-  'availableChannels.catalog.showOfferings': '展开方案', 'availableChannels.catalog.hideOfferings': '收起方案',
+  'availableChannels.catalog.showOfferings': `查看渠道方案（${params?.count ?? 0}）`, 'availableChannels.catalog.hideOfferings': '收起渠道方案',
   'availableChannels.catalog.offeringsColumn': '方案', 'availableChannels.catalog.representativePrice': '代表价',
   'availableChannels.catalog.perMillion': '/ 1M token', 'availableChannels.catalog.perRequest': '/ 次',
   'availableChannels.catalog.perImage': '/ 张', 'availableChannels.catalog.tieredSummary': '阶梯价 · 展开查看',
@@ -29,8 +29,14 @@ vi.mock('vue-i18n', async () => ({
   }[key] ?? key) }),
 }))
 
-const prices = (official: number | null, site: number | null = official): CatalogPriceCollection => ({
-  input: official == null && site == null ? null : { official, site, peakSite: null }, output: null,
+const priceValue = (
+  official: number | null,
+  site: number | null = official,
+  siteMax: number | null = site,
+  officialCny: number | null = official,
+) => ({ official, officialCny, site, siteMax, peakSite: null, peakSiteMax: null })
+const prices = (official: number | null, site: number | null = official, siteMax: number | null = site): CatalogPriceCollection => ({
+  input: official == null && site == null && siteMax == null ? null : priceValue(official, site, siteMax), output: null,
   cacheWrite: null, cacheRead: null, imageInput: null, imageOutput: null, request: null,
 })
 function offering(key: string, channel: string, group: string, official: number | null, site = official): CatalogModelOffering {
@@ -45,7 +51,7 @@ function offering(key: string, channel: string, group: string, official: number 
 function setBilling(offering: CatalogModelOffering, mode: string, field: keyof CatalogPriceCollection, official: number, site: number) {
   offering.model.billingMode = mode
   offering.prices.input = null
-  offering.prices[field] = { official, site, peakSite: null }
+  offering.prices[field] = priceValue(official, site)
   offering.model.prices = offering.prices
   offering.hasPricing = true
   offering.model.hasPricing = true
@@ -71,7 +77,7 @@ describe('AvailableChannelModelList', () => {
     expect(wrapper.get('[data-testid="representative-official"]').text()).toContain('代表价')
     expect(wrapper.find('[data-testid="offering-details"]').exists()).toBe(false)
   })
-  it('renders a colorful card grid with immediate official/site savings comparison', () => {
+  it('renders a project-native card grid with immediate official/site savings comparison', () => {
     const wrapper = mount(AvailableChannelModelList, { props: { entries: [entry('gemini-pro', [offering('a', 'Alpha', 'Retail', 0.00001, 0.000004)])] }, global: { stubs } })
     const card = wrapper.get('[data-testid="model-card"]')
     expect(wrapper.get('[data-testid="model-card-grid"]').classes()).toContain('grid')
@@ -82,11 +88,77 @@ describe('AvailableChannelModelList', () => {
     expect(card.get('[data-testid="primary-official-price"]').classes()).toContain('line-through')
     expect(card.get('[data-testid="savings-badge"]').text()).toContain('60%')
     expect(card.text()).toContain('输入')
+    expect(card.classes()).toContain('model-card-surface')
+    expect(card.classes()).not.toContain('hover:-translate-y-0.5')
+    expect(card.find('.bg-gradient-to-r').exists()).toBe(false)
+    expect(card.get('[data-testid="model-price-summary"]').classes()).not.toContain('bg-gradient-to-br')
+  })
+  it('compares savings after converting the official USD price to CNY', () => {
+    const converted = offering('a', 'Alpha', 'Retail', 0.000005, 0.0000006)
+    Object.assign(converted.prices.input!, { officialCny: 0.000035 })
+    converted.model.prices = converted.prices
+
+    const wrapper = mount(AvailableChannelModelList, {
+      props: { entries: [entry('claude-model', [converted])] },
+      global: { stubs },
+    })
+
+    expect(wrapper.get('[data-testid="primary-official-price"]').text()).toContain('$5.00')
+    expect(wrapper.get('[data-testid="primary-site-price"]').text()).toContain('¥0.60')
+    expect(wrapper.get('[data-testid="savings-badge"]').text()).toContain('98%')
+  })
+  it('renders a representative site-price and savings range in ascending order', () => {
+    const ranged = offering('a', 'Alpha', 'Retail', 0.000005, 0.0000006)
+    ranged.prices.input = priceValue(0.000005, 0.0000006, 0.00000075, 0.000025)
+    ranged.model.prices = ranged.prices
+
+    const wrapper = mount(AvailableChannelModelList, {
+      props: { entries: [entry('claude-model', [ranged])] },
+      global: { stubs },
+    })
+
+    expect(wrapper.get('[data-testid="primary-site-price"]').text()).toContain('¥0.60–¥0.75 / 1M token')
+    expect(wrapper.get('[data-testid="savings-badge"]').text()).toBe('省 97%–98%')
+  })
+  it('collapses equal formatted prices and keeps only positive savings endpoints', () => {
+    const ranged = offering('a', 'Alpha', 'Retail', 0.000001, 0.0000005)
+    ranged.prices.input = priceValue(0.000001, 0.0000005, 0.0000012, 0.000001)
+    ranged.model.prices = ranged.prices
+
+    const wrapper = mount(AvailableChannelModelList, {
+      props: { entries: [entry('model', [ranged])] },
+      global: { stubs },
+    })
+
+    expect(wrapper.get('[data-testid="savings-badge"]').text()).toBe('省 50%')
+    expect(wrapper.get('[data-testid="savings-badge"]').text()).not.toContain('–')
+    expect(wrapper.get('[data-testid="savings-badge"]').text()).not.toBe('省 0%')
+
+    ranged.prices.input = priceValue(0.000001, 0.0000006, 0.0000006000000000001, 0.000007)
+    ranged.model.prices = ranged.prices
+    const equal = mount(AvailableChannelModelList, {
+      props: { entries: [entry('equal', [ranged])] },
+      global: { stubs },
+    })
+    expect(equal.get('[data-testid="primary-site-price"]').text()).toContain('¥0.60 / 1M token')
+    expect(equal.get('[data-testid="primary-site-price"]').text()).not.toContain('–')
+  })
+  it('hides savings when the official CNY benchmark is disabled', () => {
+    const disabled = offering('a', 'Alpha', 'Retail', 0.000005, 0.0000006)
+    Object.assign(disabled.prices.input!, { officialCny: null })
+    disabled.model.prices = disabled.prices
+
+    const wrapper = mount(AvailableChannelModelList, {
+      props: { entries: [entry('claude-model', [disabled])] },
+      global: { stubs },
+    })
+
+    expect(wrapper.find('[data-testid="savings-badge"]').exists()).toBe(false)
   })
   it('shows input, output and cache comparisons directly on the card', () => {
     const priced = offering('a', 'Alpha', 'Retail', 0.00001, 0.000004)
-    priced.prices.output = { official: 0.00002, site: 0.000008, peakSite: null }
-    priced.prices.cacheRead = { official: 0.000001, site: 0, peakSite: null }
+    priced.prices.output = priceValue(0.00002, 0.000008)
+    priced.prices.cacheRead = priceValue(0.000001, 0)
     priced.model.prices = priced.prices
     const wrapper = mount(AvailableChannelModelList, { props: { entries: [entry('gemini-pro', [priced])] }, global: { stubs } })
     const rows = wrapper.findAll('[data-testid="price-dimension-row"]')
@@ -134,7 +206,7 @@ describe('AvailableChannelModelList', () => {
     const rows = wrapper.findAll('[data-testid="model-card"]')
     expect(rows[0].get('[data-testid="representative-official"]').text()).toContain('$0')
     expect(rows[0].get('[data-testid="representative-site"]').text()).toContain('¥0')
-    expect(rows[0].text()).toContain('还有 2 个方案'); expect(rows[1].text()).toContain('暂未定价')
+    expect(rows[0].text()).toContain('查看渠道方案（3）'); expect(rows[1].text()).toContain('暂未定价')
   })
   it('expands exact offerings by mouse and keyboard with unique aria', async () => {
     const wrapper = mount(AvailableChannelModelList, { props: { entries: [
@@ -152,6 +224,8 @@ describe('AvailableChannelModelList', () => {
     expect(source).toContain('<AvailableChannelOfferingCard')
     expect(source).toContain(':offering="offering"')
     expect(source).not.toContain('AvailableChannelModelPrice')
+    expect(toggles[0].text()).toContain('收起渠道方案')
+    expect(toggles[0].find('svg[aria-hidden="true"]').exists()).toBe(true)
     await toggles[0].trigger('keydown', { key: ' ' }); expect(wrapper.find('[data-testid="offering-details"]').exists()).toBe(false)
   })
   it('uses collision-safe details ids and summarizes request/image pricing', async () => {
@@ -159,13 +233,13 @@ describe('AvailableChannelModelList', () => {
     request.hasPricing = true
     request.model.billingMode = 'per_request'
     request.prices.input = null
-    request.prices.request = { official: 0.2, site: 0.4, peakSite: null }
+    request.prices.request = priceValue(0.2, 0.4)
     request.model.prices = request.prices
     const image = offering('image', 'B', 'G2', null)
     image.hasPricing = true
     image.model.billingMode = 'image'
     image.prices.input = null
-    image.prices.imageInput = { official: 0, site: 0, peakSite: null }
+    image.prices.imageInput = priceValue(0, 0)
     image.model.prices = image.prices
     const first = entry('a/b', [request])
     const second = entry('a?b', [image])
@@ -189,6 +263,8 @@ describe('AvailableChannelModelList', () => {
     const source = readFileSync(resolve(dirname(fileURLToPath(import.meta.url)), '../AvailableChannelModelList.vue'), 'utf8')
     expect(source).toContain('md:grid-cols-2'); expect(source).toContain('2xl:grid-cols-3'); expect(source).toContain('min-h-11')
     expect(source).toContain('[overflow-wrap:anywhere]'); expect(source).toContain('motion-reduce:transition-none')
+    expect(source).toContain('content-visibility: auto')
+    expect(source).toContain('contain-intrinsic-size')
     expect(source).not.toMatch(/fetch\(|axios|\/api\//); expect(source.match(/v-for="entry in entries"/g)).toHaveLength(1)
     expect(source).not.toContain('Math.random')
   })

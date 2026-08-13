@@ -1,9 +1,11 @@
 import { mount } from '@vue/test-utils'
 import { describe, expect, it, vi } from 'vitest'
 import Select from '@/components/common/Select.vue'
+import enDashboard from '@/i18n/locales/en/dashboard'
+import zhDashboard from '@/i18n/locales/zh/dashboard'
 
 const labels: Record<string, string> = {
-  'availableChannels.searchPlaceholder': '搜索渠道或模型...',
+  'availableChannels.searchPlaceholder': '搜索渠道或模型…',
   'availableChannels.catalog.platformFilter': '平台筛选',
   'availableChannels.catalog.allPlatforms': '全部平台',
   'availableChannels.catalog.groupsCount': '{count} 个分组',
@@ -119,5 +121,24 @@ describe('AvailableChannelsToolbar', () => {
     expect(source).not.toContain('<select')
     expect(source).toContain('.platform-filter :deep(.select-trigger)')
     expect(source).toContain('@apply h-11')
+  })
+
+  it('exposes project-native search and focus affordances', async () => {
+    const wrapper = await mountToolbar()
+    const search = wrapper.get('[data-testid="channel-search"]')
+    const refresh = wrapper.get('[data-testid="channel-refresh"]')
+
+    expect(search.attributes()).toMatchObject({
+      'aria-label': '搜索渠道或模型…',
+      name: 'available-channel-search',
+      autocomplete: 'off',
+    })
+    expect(search.classes()).toEqual(expect.arrayContaining([
+      'focus-visible:ring-2',
+      'focus-visible:ring-primary-500/20',
+    ]))
+    expect(refresh.classes()).toContain('focus-visible:ring-offset-2')
+    expect(zhDashboard.availableChannels.searchPlaceholder).toBe('搜索渠道或模型…')
+    expect(enDashboard.availableChannels.searchPlaceholder).toBe('Search channels or models…')
   })
 })

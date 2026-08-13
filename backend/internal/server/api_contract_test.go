@@ -466,6 +466,7 @@ func TestAPIContracts(t *testing.T) {
 						"daily_limit_usd": null,
 						"weekly_limit_usd": null,
 						"monthly_limit_usd": null,
+						"long_context_pricing_enabled": false,
 						"image_price_1k": null,
 						"image_price_2k": null,
 						"image_price_4k": null,
@@ -1107,7 +1108,9 @@ func TestAPIContracts(t *testing.T) {
 					"channel_monitor_hide_throughput": true,
 					"channel_monitor_default_interval_seconds": 60,
 					"available_channels_enabled": false,
-					"available_channels_price_cny_multiplier": 0,
+					"available_channels_price_cny_multiplier":     0,
+					"available_channels_price_cny_multiplier_max": 0.2,
+					"available_channels_official_usd_to_cny_rate": 7,
 					"model_plaza_enabled": false,
 					"model_plaza_require_auth": false,
 					"model_plaza_description": "",
@@ -1427,7 +1430,9 @@ func TestAPIContracts(t *testing.T) {
 					"channel_monitor_hide_throughput": true,
 					"channel_monitor_default_interval_seconds": 60,
 					"available_channels_enabled": false,
-					"available_channels_price_cny_multiplier": 0,
+					"available_channels_price_cny_multiplier":     0,
+					"available_channels_price_cny_multiplier_max": 0.2,
+					"available_channels_official_usd_to_cny_rate": 7,
 					"model_plaza_enabled": false,
 					"model_plaza_require_auth": false,
 					"model_plaza_description": "",
@@ -1610,7 +1615,7 @@ func newContractDeps(t *testing.T) *contractDeps {
 	affiliateRepo := newStubAffiliateRepo(now, &customRate)
 	affiliateService := service.NewAffiliateService(affiliateRepo, settingService, nil, nil)
 
-	adminService := service.NewAdminService(userRepo, groupRepo, &accountRepo, proxyRepo, apiKeyRepo, redeemRepo, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
+	adminService := service.NewAdminService(userRepo, groupRepo, &accountRepo, proxyRepo, apiKeyRepo, redeemRepo, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
 	authHandler := handler.NewAuthHandler(cfg, nil, userService, settingService, nil, redeemService, nil, nil)
 	apiKeyHandler := handler.NewAPIKeyHandler(apiKeyService)
 	usageHandler := handler.NewUsageHandler(usageService, apiKeyService, nil, nil)
@@ -2038,6 +2043,10 @@ func (stubGroupRepo) FindByDuplicateOperationID(ctx context.Context, operationID
 
 func (stubGroupRepo) CreateFromSource(ctx context.Context, group *service.Group, sourceGroupID int64) error {
 	return errors.New("not implemented")
+}
+
+func (stubGroupRepo) CountCustomGroupModelReferences(ctx context.Context, sourceGroupID int64) (int, error) {
+	return 0, nil
 }
 
 type stubAccountRepo struct {

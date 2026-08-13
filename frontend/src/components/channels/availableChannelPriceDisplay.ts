@@ -18,13 +18,19 @@ export interface CatalogSummaryPrice {
 
 export interface CatalogPriceComparison extends CatalogSummaryPrice {
   savingsPercent: number | null
+  savingsPercentMax: number | null
+  savingsText: string | null
 }
 
 const perMillion = 1_000_000
 
 function hasValue(value: CatalogPriceValue | null): boolean {
   return value != null
-    && (value.official != null || value.site != null || value.peakSite != null)
+    && (value.official != null
+      || value.site != null
+      || value.siteMax != null
+      || value.peakSite != null
+      || value.peakSiteMax != null)
 }
 
 function firstMeaningful(prices: CatalogPriceCollection) {
@@ -65,15 +71,67 @@ export function summarizeOfferingPrice(offering: CatalogModelOffering): CatalogS
 
 export function compareOfferingPrice(offering: CatalogModelOffering): CatalogPriceComparison {
   const summary = summarizeOfferingPrice(offering)
-  const official = summary.value?.official
-  const site = summary.value?.site
-  const savingsPercent = summary.kind === 'price'
-    && official != null && site != null
-    && Number.isFinite(official) && Number.isFinite(site)
-    && official > 0 && site >= 0 && site < official
-    ? Math.round((1 - site / official) * 100)
-    : null
-  return { ...summary, savingsPercent }
+  const officialCny = summary.value?.officialCny
+  const savings = summary.kind === 'price'
+    ? [summary.value?.site, summary.value?.siteMax]
+      .map(site => savingsAt(officialCny, site))
+      .filter((value): value is number => value != null)
+      .sort((left, right) => left - right)
+    : []
+  const uniqueSavings = [...new Set(savings)]
+  const savingsPercent = uniqueSavings[0] ?? null
+  const savingsPercentMax = uniqueSavings.at(-1) ?? null
+  const savingsText = savingsPercent == null
+    ? null
+    : formatCatalogSavingsRange(savingsPercent, savingsPercentMax)
+  return { ...summary, savingsPercent, savingsPercentMax, savingsText }
+}
+
+export function formatCatalogSavingsRange(
+  minimum: number,
+  maximum: number | null | undefined,
+): string {
+  const formatted = formatCatalogValueRange(minimum, maximum, value => String(value), '')
+  return formatted.replace('–', '%–')
+}
+
+function savingsAt(officialCny: number | null | undefined, site: number | null | undefined): number | null {
+  if (officialCny == null || site == null
+    || !Number.isFinite(officialCny) || !Number.isFinite(site)
+    || officialCny <= 0 || site < 0 || site >= officialCny) {
+    return null
+  }
+  const savings = Math.round((1 - site / officialCny) * 100)
+  return savings > 0 ? savings : null
+}
+
+export function formatCatalogValueRange(
+  first: number | null | undefined,
+  second: number | null | undefined,
+  formatter: (value: number) => string,
+  unavailable = '-',
+): string {
+  const values = [first, second]
+    .filter((value): value is number => value != null && Number.isFinite(value))
+    .sort((left, right) => left - right)
+  const formatted = [...new Set(values.map(formatter).filter(value => value !== unavailable))]
+  if (formatted.length === 0) return unavailable
+  if (formatted.length === 1) return formatted[0]
+  return `${formatted[0]}–${formatted.at(-1)}`
+}
+
+export function formatCatalogMoneyRange(
+  first: number | null | undefined,
+  second: number | null | undefined,
+  scale: number,
+  symbol: '$' | '¥',
+  minimumFractionDigits = 2,
+): string {
+  return formatCatalogValueRange(
+    first,
+    second,
+    value => formatCatalogMoney(value, scale, symbol, minimumFractionDigits),
+  )
 }
 
 export function formatCatalogMoney(

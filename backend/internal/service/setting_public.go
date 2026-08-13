@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"math"
 	"net/url"
 	"strconv"
 	"strings"
@@ -235,6 +236,8 @@ func (s *SettingService) GetPublicSettings(ctx context.Context) (*PublicSettings
 		SettingKeyChannelMonitorHideThroughput,
 		SettingKeyAvailableChannelsEnabled,
 		SettingKeyAvailableChannelsPriceCNYMultiplier,
+		SettingKeyAvailableChannelsPriceCNYMultiplierMax,
+		SettingKeyAvailableChannelsOfficialUSDToCNYRate,
 		SettingKeyModelPlazaEnabled,
 		SettingKeyModelPlazaRequireAuth,
 		SettingKeyAffiliateEnabled,
@@ -297,6 +300,13 @@ func (s *SettingService) GetPublicSettings(ctx context.Context) (*PublicSettings
 	if v, err := strconv.ParseFloat(settings[SettingKeyBalanceLowNotifyThreshold], 64); err == nil && v >= 0 {
 		balanceLowNotifyThreshold = v
 	}
+	availableChannelsPriceCNYMultiplier := parseNonNegativeFloatSetting(
+		settings[SettingKeyAvailableChannelsPriceCNYMultiplier],
+	)
+	availableChannelsPriceCNYMultiplierMax := parseAvailableChannelsPriceCNYMultiplierMax(
+		settings[SettingKeyAvailableChannelsPriceCNYMultiplierMax],
+		availableChannelsPriceCNYMultiplier,
+	)
 
 	return &PublicSettings{
 		RegistrationEnabled:                  settings[SettingKeyRegistrationEnabled] == "true",
@@ -361,8 +371,12 @@ func (s *SettingService) GetPublicSettings(ctx context.Context) (*PublicSettings
 		ChannelMonitorDefaultIntervalSeconds: parseChannelMonitorInterval(settings[SettingKeyChannelMonitorDefaultIntervalSeconds]),
 		ChannelMonitorHideThroughput:         !isFalseSettingValue(settings[SettingKeyChannelMonitorHideThroughput]),
 
-		AvailableChannelsEnabled:            settings[SettingKeyAvailableChannelsEnabled] == "true",
-		AvailableChannelsPriceCNYMultiplier: parseNonNegativeFloatSetting(settings[SettingKeyAvailableChannelsPriceCNYMultiplier]),
+		AvailableChannelsEnabled:               settings[SettingKeyAvailableChannelsEnabled] == "true",
+		AvailableChannelsPriceCNYMultiplier:    availableChannelsPriceCNYMultiplier,
+		AvailableChannelsPriceCNYMultiplierMax: availableChannelsPriceCNYMultiplierMax,
+		AvailableChannelsOfficialUSDToCNYRate: parseAvailableChannelsOfficialUSDToCNYRate(
+			settings[SettingKeyAvailableChannelsOfficialUSDToCNYRate],
+		),
 
 		ModelPlazaEnabled:     settings[SettingKeyModelPlazaEnabled] == "true",
 		ModelPlazaRequireAuth: settings[SettingKeyModelPlazaRequireAuth] == "true",
@@ -410,10 +424,50 @@ func parseChannelMonitorInterval(raw string) int {
 
 func parseNonNegativeFloatSetting(raw string) float64 {
 	v, err := strconv.ParseFloat(strings.TrimSpace(raw), 64)
-	if err != nil || v < 0 {
+	if err != nil {
 		return 0
 	}
-	return v
+	return normalizeNonNegativeFiniteFloat(v, 0)
+}
+
+func parseAvailableChannelsPriceCNYMultiplierMax(raw string, minimum float64) float64 {
+	normalized := strings.TrimSpace(raw)
+	maximum := AvailableChannelsPriceCNYMultiplierMaxDefault
+	if normalized != "" {
+		value, err := strconv.ParseFloat(normalized, 64)
+		if err != nil {
+			return normalizeAvailableChannelsPriceCNYMultiplierMax(maximum, minimum)
+		}
+		maximum = value
+	}
+	return normalizeAvailableChannelsPriceCNYMultiplierMax(maximum, minimum)
+}
+
+func normalizeAvailableChannelsPriceCNYMultiplierMax(maximum, minimum float64) float64 {
+	maximum = normalizeNonNegativeFiniteFloat(maximum, AvailableChannelsPriceCNYMultiplierMaxDefault)
+	if maximum < minimum {
+		return minimum
+	}
+	return maximum
+}
+
+func normalizeNonNegativeFiniteFloat(value, fallback float64) float64 {
+	if value < 0 || math.IsNaN(value) || math.IsInf(value, 0) {
+		return fallback
+	}
+	return value
+}
+
+func parseAvailableChannelsOfficialUSDToCNYRate(raw string) float64 {
+	normalized := strings.TrimSpace(raw)
+	if normalized == "" {
+		return AvailableChannelsOfficialUSDToCNYRateDefault
+	}
+	value, err := strconv.ParseFloat(normalized, 64)
+	if err != nil {
+		return AvailableChannelsOfficialUSDToCNYRateDefault
+	}
+	return normalizeNonNegativeFiniteFloat(value, AvailableChannelsOfficialUSDToCNYRateDefault)
 }
 
 // clampChannelMonitorInterval clamps v to the allowed range. 0 means "not provided".
@@ -619,18 +673,20 @@ type PublicSettingsInjectionPayload struct {
 	// Feature flags — MUST match the opt-in/opt-out registry in
 	// frontend/src/utils/featureFlags.ts. Missing a field here is the bug
 	// that hid the "可用渠道" menu on page refresh.
-	ChannelMonitorEnabled                bool    `json:"channel_monitor_enabled"`
-	ChannelMonitorMode                   string  `json:"channel_monitor_mode"`
-	ChannelMonitorDefaultIntervalSeconds int     `json:"channel_monitor_default_interval_seconds"`
-	ChannelMonitorHideThroughput         bool    `json:"channel_monitor_hide_throughput"`
-	AvailableChannelsEnabled             bool    `json:"available_channels_enabled"`
-	AvailableChannelsPriceCNYMultiplier  float64 `json:"available_channels_price_cny_multiplier"`
-	ModelPlazaEnabled                    bool    `json:"model_plaza_enabled"`
-	ModelPlazaRequireAuth                bool    `json:"model_plaza_require_auth"`
-	AffiliateEnabled                     bool    `json:"affiliate_enabled"`
-	RiskControlEnabled                   bool    `json:"risk_control_enabled"`
-	ImageStudioEnabled                   bool    `json:"image_studio_enabled"`
-	AllowUserViewErrorRequests           bool    `json:"allow_user_view_error_requests"`
+	ChannelMonitorEnabled                  bool    `json:"channel_monitor_enabled"`
+	ChannelMonitorMode                     string  `json:"channel_monitor_mode"`
+	ChannelMonitorDefaultIntervalSeconds   int     `json:"channel_monitor_default_interval_seconds"`
+	ChannelMonitorHideThroughput           bool    `json:"channel_monitor_hide_throughput"`
+	AvailableChannelsEnabled               bool    `json:"available_channels_enabled"`
+	AvailableChannelsPriceCNYMultiplier    float64 `json:"available_channels_price_cny_multiplier"`
+	AvailableChannelsPriceCNYMultiplierMax float64 `json:"available_channels_price_cny_multiplier_max"`
+	AvailableChannelsOfficialUSDToCNYRate  float64 `json:"available_channels_official_usd_to_cny_rate"`
+	ModelPlazaEnabled                      bool    `json:"model_plaza_enabled"`
+	ModelPlazaRequireAuth                  bool    `json:"model_plaza_require_auth"`
+	AffiliateEnabled                       bool    `json:"affiliate_enabled"`
+	RiskControlEnabled                     bool    `json:"risk_control_enabled"`
+	ImageStudioEnabled                     bool    `json:"image_studio_enabled"`
+	AllowUserViewErrorRequests             bool    `json:"allow_user_view_error_requests"`
 }
 
 const publicSettingsInlineAssetMaxBytes = 8 * 1024
@@ -659,78 +715,80 @@ func (s *SettingService) GetPublicSettingsForInjection(ctx context.Context) (any
 	siteLogoDark, siteLogoDarkDeferred := deferLargeInjectedDataURL(settings.SiteLogoDark)
 
 	return &PublicSettingsInjectionPayload{
-		Partial:                              siteLogoDeferred || siteLogoLightDeferred || siteLogoDarkDeferred,
-		RegistrationEnabled:                  settings.RegistrationEnabled,
-		EmailVerifyEnabled:                   settings.EmailVerifyEnabled,
-		RegistrationEmailSuffixWhitelist:     settings.RegistrationEmailSuffixWhitelist,
-		RegistrationEmailDomainQuotaEnabled:  settings.RegistrationEmailDomainQuotaEnabled,
-		PromoCodeEnabled:                     settings.PromoCodeEnabled,
-		PasswordResetEnabled:                 settings.PasswordResetEnabled,
-		InvitationCodeEnabled:                settings.InvitationCodeEnabled,
-		TotpEnabled:                          settings.TotpEnabled,
-		PasskeyEnabled:                       settings.PasskeyEnabled,
-		LoginAgreementEnabled:                settings.LoginAgreementEnabled,
-		LoginAgreementMode:                   settings.LoginAgreementMode,
-		LoginAgreementUpdatedAt:              settings.LoginAgreementUpdatedAt,
-		LoginAgreementRevision:               settings.LoginAgreementRevision,
-		LoginAgreementDocuments:              settings.LoginAgreementDocuments,
-		TurnstileEnabled:                     settings.TurnstileEnabled,
-		TurnstileSiteKey:                     settings.TurnstileSiteKey,
-		TencentCaptchaEnabled:                settings.TencentCaptchaEnabled,
-		TencentCaptchaAppID:                  settings.TencentCaptchaAppID,
-		TencentCaptchaRegion:                 settings.TencentCaptchaRegion,
-		AliyunCaptchaEnabled:                 settings.AliyunCaptchaEnabled,
-		AliyunCaptchaSceneID:                 settings.AliyunCaptchaSceneID,
-		AliyunCaptchaPrefix:                  settings.AliyunCaptchaPrefix,
-		AliyunCaptchaRegion:                  settings.AliyunCaptchaRegion,
-		SiteName:                             settings.SiteName,
-		SiteLogo:                             siteLogo,
-		SiteLogoLight:                        siteLogoLight,
-		SiteLogoDark:                         siteLogoDark,
-		SiteSubtitle:                         settings.SiteSubtitle,
-		APIBaseURL:                           settings.APIBaseURL,
-		ContactInfo:                          settings.ContactInfo,
-		DocURL:                               settings.DocURL,
-		HomeContent:                          settings.HomeContent,
-		CompactHomeEnabled:                   settings.CompactHomeEnabled,
-		HideCcsImportButton:                  settings.HideCcsImportButton,
-		PurchaseSubscriptionEnabled:          settings.PurchaseSubscriptionEnabled,
-		PurchaseSubscriptionURL:              settings.PurchaseSubscriptionURL,
-		TableDefaultPageSize:                 settings.TableDefaultPageSize,
-		TablePageSizeOptions:                 settings.TablePageSizeOptions,
-		CustomMenuItems:                      filterUserVisibleMenuItems(settings.CustomMenuItems),
-		CustomEndpoints:                      safeRawJSONArray(settings.CustomEndpoints),
-		LinuxDoOAuthEnabled:                  settings.LinuxDoOAuthEnabled,
-		DingTalkOAuthEnabled:                 settings.DingTalkOAuthEnabled,
-		WeChatOAuthEnabled:                   settings.WeChatOAuthEnabled,
-		WeChatOAuthOpenEnabled:               settings.WeChatOAuthOpenEnabled,
-		WeChatOAuthMPEnabled:                 settings.WeChatOAuthMPEnabled,
-		WeChatOAuthMobileEnabled:             settings.WeChatOAuthMobileEnabled,
-		OIDCOAuthEnabled:                     settings.OIDCOAuthEnabled,
-		OIDCOAuthProviderName:                settings.OIDCOAuthProviderName,
-		GitHubOAuthEnabled:                   settings.GitHubOAuthEnabled,
-		GoogleOAuthEnabled:                   settings.GoogleOAuthEnabled,
-		BackendModeEnabled:                   settings.BackendModeEnabled,
-		PaymentEnabled:                       settings.PaymentEnabled,
-		Version:                              s.version,
-		ServerTimezone:                       timezone.Name(),
-		ServerUTCOffset:                      timezone.UTCOffset(),
-		BalanceLowNotifyEnabled:              settings.BalanceLowNotifyEnabled,
-		AccountQuotaNotifyEnabled:            settings.AccountQuotaNotifyEnabled,
-		BalanceLowNotifyThreshold:            settings.BalanceLowNotifyThreshold,
-		BalanceLowNotifyRechargeURL:          settings.BalanceLowNotifyRechargeURL,
-		ChannelMonitorEnabled:                settings.ChannelMonitorEnabled,
-		ChannelMonitorMode:                   settings.ChannelMonitorMode,
-		ChannelMonitorDefaultIntervalSeconds: settings.ChannelMonitorDefaultIntervalSeconds,
-		ChannelMonitorHideThroughput:         settings.ChannelMonitorHideThroughput,
-		AvailableChannelsEnabled:             settings.AvailableChannelsEnabled,
-		AvailableChannelsPriceCNYMultiplier:  settings.AvailableChannelsPriceCNYMultiplier,
-		ModelPlazaEnabled:                    settings.ModelPlazaEnabled,
-		ModelPlazaRequireAuth:                settings.ModelPlazaRequireAuth,
-		AffiliateEnabled:                     settings.AffiliateEnabled,
-		RiskControlEnabled:                   settings.RiskControlEnabled,
-		ImageStudioEnabled:                   settings.ImageStudioEnabled,
-		AllowUserViewErrorRequests:           settings.AllowUserViewErrorRequests,
+		Partial:                                siteLogoDeferred || siteLogoLightDeferred || siteLogoDarkDeferred,
+		RegistrationEnabled:                    settings.RegistrationEnabled,
+		EmailVerifyEnabled:                     settings.EmailVerifyEnabled,
+		RegistrationEmailSuffixWhitelist:       settings.RegistrationEmailSuffixWhitelist,
+		RegistrationEmailDomainQuotaEnabled:    settings.RegistrationEmailDomainQuotaEnabled,
+		PromoCodeEnabled:                       settings.PromoCodeEnabled,
+		PasswordResetEnabled:                   settings.PasswordResetEnabled,
+		InvitationCodeEnabled:                  settings.InvitationCodeEnabled,
+		TotpEnabled:                            settings.TotpEnabled,
+		PasskeyEnabled:                         settings.PasskeyEnabled,
+		LoginAgreementEnabled:                  settings.LoginAgreementEnabled,
+		LoginAgreementMode:                     settings.LoginAgreementMode,
+		LoginAgreementUpdatedAt:                settings.LoginAgreementUpdatedAt,
+		LoginAgreementRevision:                 settings.LoginAgreementRevision,
+		LoginAgreementDocuments:                settings.LoginAgreementDocuments,
+		TurnstileEnabled:                       settings.TurnstileEnabled,
+		TurnstileSiteKey:                       settings.TurnstileSiteKey,
+		TencentCaptchaEnabled:                  settings.TencentCaptchaEnabled,
+		TencentCaptchaAppID:                    settings.TencentCaptchaAppID,
+		TencentCaptchaRegion:                   settings.TencentCaptchaRegion,
+		AliyunCaptchaEnabled:                   settings.AliyunCaptchaEnabled,
+		AliyunCaptchaSceneID:                   settings.AliyunCaptchaSceneID,
+		AliyunCaptchaPrefix:                    settings.AliyunCaptchaPrefix,
+		AliyunCaptchaRegion:                    settings.AliyunCaptchaRegion,
+		SiteName:                               settings.SiteName,
+		SiteLogo:                               siteLogo,
+		SiteLogoLight:                          siteLogoLight,
+		SiteLogoDark:                           siteLogoDark,
+		SiteSubtitle:                           settings.SiteSubtitle,
+		APIBaseURL:                             settings.APIBaseURL,
+		ContactInfo:                            settings.ContactInfo,
+		DocURL:                                 settings.DocURL,
+		HomeContent:                            settings.HomeContent,
+		CompactHomeEnabled:                     settings.CompactHomeEnabled,
+		HideCcsImportButton:                    settings.HideCcsImportButton,
+		PurchaseSubscriptionEnabled:            settings.PurchaseSubscriptionEnabled,
+		PurchaseSubscriptionURL:                settings.PurchaseSubscriptionURL,
+		TableDefaultPageSize:                   settings.TableDefaultPageSize,
+		TablePageSizeOptions:                   settings.TablePageSizeOptions,
+		CustomMenuItems:                        filterUserVisibleMenuItems(settings.CustomMenuItems),
+		CustomEndpoints:                        safeRawJSONArray(settings.CustomEndpoints),
+		LinuxDoOAuthEnabled:                    settings.LinuxDoOAuthEnabled,
+		DingTalkOAuthEnabled:                   settings.DingTalkOAuthEnabled,
+		WeChatOAuthEnabled:                     settings.WeChatOAuthEnabled,
+		WeChatOAuthOpenEnabled:                 settings.WeChatOAuthOpenEnabled,
+		WeChatOAuthMPEnabled:                   settings.WeChatOAuthMPEnabled,
+		WeChatOAuthMobileEnabled:               settings.WeChatOAuthMobileEnabled,
+		OIDCOAuthEnabled:                       settings.OIDCOAuthEnabled,
+		OIDCOAuthProviderName:                  settings.OIDCOAuthProviderName,
+		GitHubOAuthEnabled:                     settings.GitHubOAuthEnabled,
+		GoogleOAuthEnabled:                     settings.GoogleOAuthEnabled,
+		BackendModeEnabled:                     settings.BackendModeEnabled,
+		PaymentEnabled:                         settings.PaymentEnabled,
+		Version:                                s.version,
+		ServerTimezone:                         timezone.Name(),
+		ServerUTCOffset:                        timezone.UTCOffset(),
+		BalanceLowNotifyEnabled:                settings.BalanceLowNotifyEnabled,
+		AccountQuotaNotifyEnabled:              settings.AccountQuotaNotifyEnabled,
+		BalanceLowNotifyThreshold:              settings.BalanceLowNotifyThreshold,
+		BalanceLowNotifyRechargeURL:            settings.BalanceLowNotifyRechargeURL,
+		ChannelMonitorEnabled:                  settings.ChannelMonitorEnabled,
+		ChannelMonitorMode:                     settings.ChannelMonitorMode,
+		ChannelMonitorDefaultIntervalSeconds:   settings.ChannelMonitorDefaultIntervalSeconds,
+		ChannelMonitorHideThroughput:           settings.ChannelMonitorHideThroughput,
+		AvailableChannelsEnabled:               settings.AvailableChannelsEnabled,
+		AvailableChannelsPriceCNYMultiplier:    settings.AvailableChannelsPriceCNYMultiplier,
+		AvailableChannelsPriceCNYMultiplierMax: settings.AvailableChannelsPriceCNYMultiplierMax,
+		AvailableChannelsOfficialUSDToCNYRate:  settings.AvailableChannelsOfficialUSDToCNYRate,
+		ModelPlazaEnabled:                      settings.ModelPlazaEnabled,
+		ModelPlazaRequireAuth:                  settings.ModelPlazaRequireAuth,
+		AffiliateEnabled:                       settings.AffiliateEnabled,
+		RiskControlEnabled:                     settings.RiskControlEnabled,
+		ImageStudioEnabled:                     settings.ImageStudioEnabled,
+		AllowUserViewErrorRequests:             settings.AllowUserViewErrorRequests,
 	}, nil
 }
 

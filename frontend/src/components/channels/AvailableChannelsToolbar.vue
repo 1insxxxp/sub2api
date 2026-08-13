@@ -59,8 +59,11 @@
         data-testid="channel-search"
         :value="search"
         type="search"
+        name="available-channel-search"
+        autocomplete="off"
+        :aria-label="t('availableChannels.searchPlaceholder')"
         :placeholder="t('availableChannels.searchPlaceholder')"
-        class="input h-11 w-full min-w-0 rounded-xl border-slate-200 bg-white pl-10 pr-3 text-sm shadow-none transition-colors placeholder:text-slate-400 hover:border-slate-300 focus:border-primary-300 dark:border-dark-600 dark:bg-dark-800 dark:hover:border-dark-500"
+        class="input h-11 w-full min-w-0 rounded-xl border-slate-200 bg-white pl-10 pr-3 text-sm shadow-none transition-colors placeholder:text-slate-400 hover:border-slate-300 focus:border-primary-300 focus-visible:ring-2 focus-visible:ring-primary-500/20 dark:border-dark-600 dark:bg-dark-800 dark:hover:border-dark-500"
         @input="emit('update:search', ($event.target as HTMLInputElement).value)"
       />
     </div>
@@ -78,7 +81,7 @@
     <button
       data-testid="channel-refresh"
       type="button"
-      class="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 shadow-sm transition-colors hover:border-primary-200 hover:bg-primary-50 hover:text-primary-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 disabled:cursor-not-allowed disabled:opacity-60 motion-reduce:transition-none dark:border-dark-600 dark:bg-dark-800 dark:text-slate-300 dark:hover:border-primary-500/40 dark:hover:bg-primary-500/10 dark:hover:text-primary-300"
+      class="inline-flex h-11 w-11 shrink-0 touch-manipulation items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 shadow-sm transition-colors hover:border-primary-200 hover:bg-primary-50 hover:text-primary-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60 motion-reduce:transition-none dark:border-dark-600 dark:bg-dark-800 dark:text-slate-300 dark:hover:border-primary-500/40 dark:hover:bg-primary-500/10 dark:hover:text-primary-300 dark:focus-visible:ring-offset-dark-800"
       :disabled="loading"
       :title="t('common.refresh', 'Refresh')"
       :aria-label="t('common.refresh', 'Refresh')"

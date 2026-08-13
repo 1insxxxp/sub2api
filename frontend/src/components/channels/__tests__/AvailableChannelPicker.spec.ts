@@ -4,10 +4,12 @@ import { fileURLToPath } from 'node:url'
 import { flushPromises, mount, type VueWrapper } from '@vue/test-utils'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { CatalogChannelEntry } from '../availableChannelCatalog'
+import enDashboard from '@/i18n/locales/en/dashboard'
+import zhDashboard from '@/i18n/locales/zh/dashboard'
 
 const labels: Record<string, string> = {
   'availableChannels.catalog.selectChannel': '选择渠道', 'availableChannels.catalog.channelPickerTitle': '选择可用渠道',
-  'availableChannels.catalog.channelPickerSearch': '搜索渠道', 'availableChannels.catalog.groupsCount': '{count} 个分组',
+  'availableChannels.catalog.channelPickerSearch': '搜索渠道名称或平台…', 'availableChannels.catalog.groupsCount': '{count} 个分组',
   'availableChannels.catalog.modelsCount': '{count} 个模型', 'common.close': '关闭',
   'availableChannels.catalog.channelPickerNoResults': '没有匹配的渠道',
 }
@@ -41,6 +43,7 @@ describe('AvailableChannelPicker', () => {
   it('shows a mobile-only 44px trigger with selected metadata', async () => {
     const wrapper = await mountPicker(); const trigger = wrapper.get('[data-testid="channel-picker-trigger"]')
     expect(trigger.element.tagName).toBe('BUTTON'); expect(trigger.classes()).toContain('min-h-11'); expect(trigger.classes()).toContain('xl:hidden')
+    expect(trigger.classes()).toEqual(expect.arrayContaining(['hover:border-primary-200', 'focus-visible:ring-2', 'focus-visible:ring-offset-2']))
     expect(trigger.text()).toContain('Alpha route'); expect(trigger.text()).toContain('openai'); expect(trigger.text()).toContain('2 个分组'); expect(trigger.text()).toContain('7 个模型')
     expect(trigger.findAll('[data-platform-badge]')).toHaveLength(2)
   })
@@ -49,9 +52,17 @@ describe('AvailableChannelPicker', () => {
     const dialog = document.body.querySelector<HTMLElement>('[data-testid="channel-picker-dialog"]')!
     expect(dialog.parentElement).toBe(document.body); expect(dialog.getAttribute('role')).toBe('dialog'); expect(dialog.getAttribute('aria-modal')).toBe('true'); expect(dialog.className).toContain('z-[70]')
     const panel = dialog.querySelector<HTMLElement>('[data-testid="channel-picker-panel"]')!
-    expect(panel.className).toContain('max-h-[calc(100dvh-3rem)]'); expect(panel.className).toContain('rounded-t-3xl'); expect(panel.className).toContain('pb-[max(1rem,env(safe-area-inset-bottom))]')
-    expect(dialog.querySelector('[data-testid="channel-picker-header"]')!.className).toContain('sticky'); expect(dialog.querySelector('[data-testid="channel-picker-options"]')!.className).toContain('overflow-y-auto')
+    expect(panel.className).toContain('max-h-[calc(100dvh-3rem)]'); expect(panel.className).toContain('rounded-t-3xl'); expect(panel.className).toContain('pb-[max(1rem,env(safe-area-inset-bottom))]'); expect(panel.className).toContain('overscroll-contain')
+    expect(dialog.querySelector('[data-testid="channel-picker-header"]')!.className).toContain('sticky'); expect(dialog.querySelector('[data-testid="channel-picker-options"]')!.className).toContain('overflow-y-auto'); expect(dialog.querySelector('[data-testid="channel-picker-options"]')!.className).toContain('overscroll-contain')
     const search = dialog.querySelector<HTMLInputElement>('[data-testid="channel-picker-search"]')!; expect(document.activeElement).toBe(search)
+    expect(search.getAttribute('aria-label')).toBe('搜索渠道名称或平台…')
+    expect(search.getAttribute('name')).toBe('available-channel-picker-search')
+    expect(search.getAttribute('autocomplete')).toBe('off')
+    expect(zhDashboard.availableChannels.catalog.channelPickerSearch).toBe('搜索渠道名称或平台…')
+    expect(enDashboard.availableChannels.catalog.channelPickerSearch).toBe('Search channels or platforms…')
+    const option = dialog.querySelector<HTMLElement>('[data-testid="channel-picker-option"]')!
+    expect(option.className).toContain('hover:border-primary-200')
+    expect(option.className).toContain('focus-visible:ring-2')
     search.value = 'gemini'; search.dispatchEvent(new Event('input')); await flushPromises()
     expect(dialog.textContent).toContain('Beta Gemini'); expect(dialog.textContent).not.toContain('Alpha route'); expect(wrapper.props('modelValue')).toBe('alpha')
     expect(dialog.querySelectorAll('[data-platform-badge]')).toHaveLength(1)

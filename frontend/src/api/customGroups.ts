@@ -3,6 +3,11 @@ import type { CustomGroupCandidate, UserCustomGroup, UserCustomGroupModel } from
 
 export type CustomGroupModelInput = Pick<UserCustomGroupModel, 'public_model' | 'source_group_id' | 'source_model'>
 
+export interface DeleteCustomGroupResult {
+  deleted: boolean
+  unbound_api_key_count: number
+}
+
 export const customGroupsAPI = {
   async list(): Promise<UserCustomGroup[]> {
     const { data } = await apiClient.get<UserCustomGroup[]>('/custom-groups')
@@ -20,7 +25,10 @@ export const customGroupsAPI = {
     const { data } = await apiClient.put<UserCustomGroup>(`/custom-groups/${id}`, payload)
     return data
   },
-  async delete(id: number): Promise<void> {
-    await apiClient.delete(`/custom-groups/${id}`)
+  async delete(id: number, force = false): Promise<DeleteCustomGroupResult> {
+    const { data } = await apiClient.delete<DeleteCustomGroupResult>(`/custom-groups/${id}`, {
+      params: force ? { force: true } : undefined,
+    })
+    return data
   }
 }

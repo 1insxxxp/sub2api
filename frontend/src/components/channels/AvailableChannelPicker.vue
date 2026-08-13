@@ -4,7 +4,7 @@
       ref="triggerRef"
       type="button"
       data-testid="channel-picker-trigger"
-      class="flex min-h-11 w-full min-w-0 items-center justify-between gap-3 rounded-2xl border border-gray-200 bg-white px-4 py-3 text-left shadow-sm transition-colors motion-reduce:transition-none dark:border-dark-600 dark:bg-dark-800 xl:hidden"
+      class="flex min-h-11 w-full min-w-0 touch-manipulation items-center justify-between gap-3 rounded-2xl border border-gray-200 bg-white px-4 py-3 text-left shadow-sm transition-colors motion-reduce:transition-none hover:border-primary-200 hover:bg-primary-50/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2 dark:border-dark-600 dark:bg-dark-800 dark:hover:border-primary-500/40 dark:hover:bg-primary-500/10 dark:focus-visible:ring-offset-dark-900 xl:hidden"
       :aria-expanded="open"
       :aria-controls="dialogId"
       aria-haspopup="dialog"
@@ -41,7 +41,7 @@
         :aria-labelledby="titleId"
         @click.self="closePicker"
       >
-        <section data-testid="channel-picker-panel" class="flex max-h-[calc(100dvh-3rem)] w-full flex-col rounded-t-3xl bg-white pb-[max(1rem,env(safe-area-inset-bottom))] shadow-2xl dark:bg-dark-800">
+        <section data-testid="channel-picker-panel" class="flex max-h-[calc(100dvh-3rem)] w-full flex-col overscroll-contain rounded-t-3xl bg-white pb-[max(1rem,env(safe-area-inset-bottom))] shadow-2xl dark:bg-dark-800">
           <header data-testid="channel-picker-header" class="sticky top-0 z-10 rounded-t-3xl border-b border-gray-100 bg-white p-4 dark:border-dark-600 dark:bg-dark-800">
             <div class="flex items-center justify-between gap-3">
               <h2 :id="titleId" class="text-base font-semibold text-gray-900 dark:text-white">{{ t(`${catalogKey}.channelPickerTitle`) }}</h2>
@@ -52,11 +52,14 @@
               v-model="query"
               data-testid="channel-picker-search"
               type="search"
-              class="mt-3 h-11 w-full rounded-xl border border-gray-200 bg-gray-50 px-3 text-sm text-gray-900 outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 dark:border-dark-500 dark:bg-dark-700 dark:text-white"
+              name="available-channel-picker-search"
+              autocomplete="off"
+              :aria-label="t(`${catalogKey}.channelPickerSearch`)"
+              class="mt-3 h-11 w-full rounded-xl border border-gray-200 bg-gray-50 px-3 text-sm text-gray-900 outline-none transition-colors focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 motion-reduce:transition-none dark:border-dark-500 dark:bg-dark-700 dark:text-white"
               :placeholder="t(`${catalogKey}.channelPickerSearch`)"
             >
           </header>
-          <div data-testid="channel-picker-options" class="min-h-0 flex-1 overflow-y-auto p-3" role="listbox" :aria-label="t(`${catalogKey}.channelPickerTitle`)">
+          <div data-testid="channel-picker-options" class="min-h-0 flex-1 overscroll-contain overflow-y-auto p-3" role="listbox" :aria-label="t(`${catalogKey}.channelPickerTitle`)">
             <p v-if="filteredChannels.length === 0" class="px-3 py-10 text-center text-sm text-gray-500 dark:text-gray-400">{{ t(`${catalogKey}.channelPickerNoResults`) }}</p>
             <button
               v-for="channel in filteredChannels"
@@ -64,7 +67,7 @@
               type="button"
               role="option"
               data-testid="channel-picker-option"
-              class="mb-2 min-h-11 w-full rounded-xl border px-3 py-3 text-left transition-colors motion-reduce:transition-none"
+              class="mb-2 min-h-11 w-full touch-manipulation rounded-xl border px-3 py-3 text-left transition-colors motion-reduce:transition-none hover:border-primary-200 hover:bg-primary-50/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2 dark:hover:border-primary-500/40 dark:hover:bg-primary-500/10 dark:focus-visible:ring-offset-dark-800"
               :class="channel.key === modelValue ? 'border-primary-300 bg-primary-50 dark:border-primary-500/40 dark:bg-primary-500/10' : 'border-gray-200 dark:border-dark-600'"
               :aria-selected="channel.key === modelValue"
               @click="select(channel.key)"

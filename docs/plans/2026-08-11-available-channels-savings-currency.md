@@ -81,4 +81,3 @@
 **Step 3:** Run frontend ESLint and `vue-tsc --noEmit`.
 
 **Step 4:** Run `git diff --check`, inspect the final diff, and verify the local frontend/backend health endpoints.
-

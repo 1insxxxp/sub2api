@@ -206,6 +206,12 @@ func (s *SettingService) InitializeDefaultSettings(ctx context.Context) error {
 		// Available channels feature (default disabled; opt-in)
 		SettingKeyAvailableChannelsEnabled:            "false",
 		SettingKeyAvailableChannelsPriceCNYMultiplier: "0",
+		SettingKeyAvailableChannelsPriceCNYMultiplierMax: strconv.FormatFloat(
+			AvailableChannelsPriceCNYMultiplierMaxDefault, 'f', -1, 64,
+		),
+		SettingKeyAvailableChannelsOfficialUSDToCNYRate: strconv.FormatFloat(
+			AvailableChannelsOfficialUSDToCNYRateDefault, 'f', -1, 64,
+		),
 
 		// Model plaza feature (default disabled; opt-in, public unless require_auth)
 		SettingKeyModelPlazaEnabled:     "false",
@@ -824,6 +830,13 @@ func (s *SettingService) parseSettings(settings map[string]string) *SystemSettin
 	// Available channels feature (default: disabled; strict true)
 	result.AvailableChannelsEnabled = settings[SettingKeyAvailableChannelsEnabled] == "true"
 	result.AvailableChannelsPriceCNYMultiplier = parseNonNegativeFloatSetting(settings[SettingKeyAvailableChannelsPriceCNYMultiplier])
+	result.AvailableChannelsPriceCNYMultiplierMax = parseAvailableChannelsPriceCNYMultiplierMax(
+		settings[SettingKeyAvailableChannelsPriceCNYMultiplierMax],
+		result.AvailableChannelsPriceCNYMultiplier,
+	)
+	result.AvailableChannelsOfficialUSDToCNYRate = parseAvailableChannelsOfficialUSDToCNYRate(
+		settings[SettingKeyAvailableChannelsOfficialUSDToCNYRate],
+	)
 
 	// Model plaza feature (default: disabled; strict true)
 	result.ModelPlazaEnabled = settings[SettingKeyModelPlazaEnabled] == "true"

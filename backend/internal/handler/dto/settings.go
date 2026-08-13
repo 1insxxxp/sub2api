@@ -321,8 +321,10 @@ type SystemSettings struct {
 	GrokDefaultBaseURLMode         string `json:"grok_default_base_url_mode"`
 
 	// Available Channels feature switch (user-facing aggregate view)
-	AvailableChannelsEnabled            bool    `json:"available_channels_enabled"`
-	AvailableChannelsPriceCNYMultiplier float64 `json:"available_channels_price_cny_multiplier"`
+	AvailableChannelsEnabled               bool    `json:"available_channels_enabled"`
+	AvailableChannelsPriceCNYMultiplier    float64 `json:"available_channels_price_cny_multiplier"`
+	AvailableChannelsPriceCNYMultiplierMax float64 `json:"available_channels_price_cny_multiplier_max"`
+	AvailableChannelsOfficialUSDToCNYRate  float64 `json:"available_channels_official_usd_to_cny_rate"`
 
 	// Model Plaza feature (public group/model pricing showcase)
 	ModelPlazaEnabled     bool   `json:"model_plaza_enabled"`
@@ -427,8 +429,10 @@ type PublicSettings struct {
 	ChannelMonitorDefaultIntervalSeconds int    `json:"channel_monitor_default_interval_seconds"`
 	ChannelMonitorHideThroughput         bool   `json:"channel_monitor_hide_throughput"`
 
-	AvailableChannelsEnabled            bool    `json:"available_channels_enabled"`
-	AvailableChannelsPriceCNYMultiplier float64 `json:"available_channels_price_cny_multiplier"`
+	AvailableChannelsEnabled               bool    `json:"available_channels_enabled"`
+	AvailableChannelsPriceCNYMultiplier    float64 `json:"available_channels_price_cny_multiplier"`
+	AvailableChannelsPriceCNYMultiplierMax float64 `json:"available_channels_price_cny_multiplier_max"`
+	AvailableChannelsOfficialUSDToCNYRate  float64 `json:"available_channels_official_usd_to_cny_rate"`
 
 	ModelPlazaEnabled     bool `json:"model_plaza_enabled"`
 	ModelPlazaRequireAuth bool `json:"model_plaza_require_auth"`

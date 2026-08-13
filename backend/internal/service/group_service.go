@@ -9,9 +9,10 @@ import (
 )
 
 var (
-	ErrGroupNotFound = infraerrors.NotFound("GROUP_NOT_FOUND", "group not found")
-	ErrGroupExists   = infraerrors.Conflict("GROUP_EXISTS", "group name already exists")
-	ErrGroupDisabled = infraerrors.Forbidden("GROUP_DISABLED", "group is disabled")
+	ErrGroupNotFound               = infraerrors.NotFound("GROUP_NOT_FOUND", "group not found")
+	ErrGroupExists                 = infraerrors.Conflict("GROUP_EXISTS", "group name already exists")
+	ErrGroupDisabled               = infraerrors.Forbidden("GROUP_DISABLED", "group is disabled")
+	ErrGroupCustomGroupSourceInUse = infraerrors.Conflict("CUSTOM_GROUP_SOURCE_IN_USE", "group is referenced by one or more custom group models")
 )
 
 type GroupRepository interface {
@@ -47,11 +48,18 @@ type GroupDuplicateRepository interface {
 	CreateFromSource(ctx context.Context, group *Group, sourceGroupID int64) error
 }
 
+// GroupCustomSourceReferenceRepository guards source groups that are still
+// referenced by non-deleted user custom groups.
+type GroupCustomSourceReferenceRepository interface {
+	CountCustomGroupModelReferences(ctx context.Context, sourceGroupID int64) (int, error)
+}
+
 // AdminGroupRepository makes the group-duplication write capability an explicit
 // admin-service dependency without widening gateway-only group test doubles.
 type AdminGroupRepository interface {
 	GroupRepository
 	GroupDuplicateRepository
+	GroupCustomSourceReferenceRepository
 }
 
 // GroupSortOrderUpdate 分组排序更新

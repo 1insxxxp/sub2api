@@ -27,11 +27,25 @@
               <div class="min-w-0">
                 <h3 class="truncate font-semibold text-gray-900 dark:text-white">{{ group.name }}</h3>
                 <p class="mt-1 text-xs text-gray-500">{{ group.models.length }} 个模型</p>
+                <p v-if="staleSourceCount(group) > 0" :data-test="`custom-group-stale-summary-${group.id}`" class="mt-1 text-xs font-semibold text-red-600 dark:text-red-400">
+                  {{ staleSourceCount(group) }} 个来源失效，请编辑修复
+                </p>
               </div>
               <span :class="group.status === 'active' ? 'badge badge-success' : 'badge'">{{ group.status === 'active' ? '启用' : '停用' }}</span>
             </div>
             <div class="mt-4 flex max-h-24 flex-wrap gap-2 overflow-hidden">
-              <span v-for="model in group.models.slice(0, 8)" :key="model.id" class="max-w-full truncate rounded-lg bg-gray-100 px-2.5 py-1 text-xs text-gray-700 dark:bg-dark-700 dark:text-gray-200" :title="model.source_group?.name">
+              <span
+                v-for="model in group.models.slice(0, 8)"
+                :key="model.id"
+                :data-test="model.source_available === false ? `custom-group-stale-model-${model.id}` : undefined"
+                :class="[
+                  'max-w-full truncate rounded-lg px-2.5 py-1 text-xs',
+                  model.source_available === false
+                    ? 'border border-red-200 bg-red-50 font-semibold text-red-700 dark:border-red-900/60 dark:bg-red-950/30 dark:text-red-300'
+                    : 'bg-gray-100 text-gray-700 dark:bg-dark-700 dark:text-gray-200',
+                ]"
+                :title="model.source_available === false ? '来源分组已失效' : model.source_group?.name"
+              >
                 {{ model.public_model }}
               </span>
               <span v-if="group.models.length > 8" class="px-2 py-1 text-xs text-gray-500">+{{ group.models.length - 8 }}</span>
@@ -39,7 +53,7 @@
             <div class="mt-5 flex flex-wrap gap-2">
               <button :data-test="`custom-groups-edit-${group.id}`" class="btn btn-secondary btn-sm" type="button" @click="startEdit(group)">编辑</button>
               <button class="btn btn-secondary btn-sm" type="button" @click="toggle(group)">{{ group.status === 'active' ? '停用' : '启用' }}</button>
-              <button class="btn btn-danger btn-sm ml-auto" type="button" @click="remove(group)">删除</button>
+              <button :data-test="`custom-groups-delete-${group.id}`" class="btn btn-danger btn-sm ml-auto" type="button" @click="remove(group)">删除</button>
             </div>
           </article>
         </div>
@@ -72,6 +86,25 @@
               <span class="shrink-0 rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-700 dark:bg-amber-900/30 dark:text-amber-300">已选 {{ selected.size }}</span>
             </div>
           </div>
+          <section v-if="staleSelectedModels.length > 0" data-test="custom-group-stale-sources" role="alert" class="mb-4 rounded-2xl border border-red-200 bg-red-50/80 p-4 dark:border-red-900/60 dark:bg-red-950/20">
+            <div class="flex items-start gap-3">
+              <Icon name="exclamationTriangle" size="md" class="mt-0.5 shrink-0 text-red-600 dark:text-red-400" />
+              <div class="min-w-0 flex-1">
+                <p class="text-sm font-semibold text-red-800 dark:text-red-200">存在失效来源线路</p>
+                <p class="mt-1 text-xs leading-5 text-red-700 dark:text-red-300">这些线路已无法调度。为避免错误转发，移除后请从下方重新选择可用来源。</p>
+              </div>
+            </div>
+            <div class="mt-3 space-y-2">
+              <div v-for="model in staleSelectedModels" :key="model.id" class="flex flex-col gap-3 rounded-xl border border-red-100 bg-white/80 p-3 sm:flex-row sm:items-center sm:justify-between dark:border-red-900/50 dark:bg-dark-800/70">
+                <div class="min-w-0 text-xs">
+                  <p class="break-all font-mono font-semibold text-gray-900 dark:text-white">{{ model.public_model }}</p>
+                  <p class="mt-1 font-semibold text-red-700 dark:text-red-300">{{ sourceIssueLabel(model) }}</p>
+                  <p class="mt-1 break-all text-gray-500 dark:text-gray-400">真实模型：{{ model.source_model }} · 来源分组：{{ model.source_group?.name || `#${model.source_group_id}` }}</p>
+                </div>
+                <button :data-test="`custom-group-remove-stale-${model.id}`" class="btn btn-danger min-h-11 w-full shrink-0 sm:w-auto" type="button" @click="removeStaleModel(model)">移除失效线路</button>
+              </div>
+            </div>
+          </section>
           <div class="space-y-4">
             <section v-for="source in candidates" :key="source.id" class="overflow-hidden rounded-2xl border border-gray-200 bg-white transition-colors dark:border-dark-600 dark:bg-dark-800">
               <button
@@ -121,7 +154,7 @@
         </div>
         <div class="flex shrink-0 flex-col-reverse gap-3 border-t border-gray-100 bg-white pt-4 sm:flex-row sm:justify-end dark:border-dark-700 dark:bg-dark-900">
           <button class="btn btn-secondary min-h-11 w-full sm:w-auto" type="button" @click="backToList">取消</button>
-          <button class="btn btn-primary min-h-11 w-full sm:w-auto" type="submit" :disabled="saving || selected.size === 0 || aliasErrors.size > 0">{{ saving ? '保存中…' : '保存' }}</button>
+          <button class="btn btn-primary min-h-11 w-full sm:w-auto" type="submit" :disabled="saving || selected.size === 0 || aliasErrors.size > 0 || staleSelectedModels.length > 0">{{ saving ? '保存中…' : '保存' }}</button>
         </div>
       </form>
     </template>
@@ -132,7 +165,7 @@
 import { computed, onMounted, ref } from 'vue'
 import Icon from '@/components/icons/Icon.vue'
 import { customGroupsAPI, type CustomGroupModelInput } from '@/api/customGroups'
-import type { CustomGroupCandidate, UserCustomGroup } from '@/types'
+import type { CustomGroupCandidate, UserCustomGroup, UserCustomGroupModel } from '@/types'
 import { useAppStore } from '@/stores/app'
 import { sourceMappingKey, suggestCallName, validateCallNames } from './modelAliases'
 
@@ -149,13 +182,20 @@ const selected = ref(new Map<string, CustomGroupModelInput>())
 const expandedSourceIds = ref(new Set<number>())
 const aliasErrors = computed(() => validateCallNames([...selected.value.entries()].map(([key, item]) => ({ key, callName: item.public_model }))))
 const allSourcesExpanded = computed(() => candidates.value.length > 0 && candidates.value.every(source => expandedSourceIds.value.has(source.id)))
+const staleSelectedModels = computed(() => {
+  if (!editing.value) return []
+  return editing.value.models.filter(model => model.source_available === false && selected.value.has(sourceMappingKey(model.source_group_id, model.source_model)))
+})
 
 const load = async () => {
   loading.value = true
   try {
     const [loadedGroups, loadedCandidates] = await Promise.all([customGroupsAPI.list(), customGroupsAPI.candidates()])
     groups.value = loadedGroups
-    candidates.value = loadedCandidates
+    candidates.value = loadedCandidates.map(source => ({
+      ...source,
+      models: Array.isArray(source.models) ? source.models : [],
+    }))
   } finally {
     loading.value = false
   }
@@ -186,6 +226,8 @@ const toggleSource = (sourceId: number) => {
 const expandAllSources = () => { expandedSourceIds.value = new Set(candidates.value.map(source => source.id)) }
 const collapseAllSources = () => { expandedSourceIds.value = new Set() }
 const selectedCountForSource = (sourceId: number) => [...selected.value.values()].filter(item => item.source_group_id === sourceId).length
+const staleSourceCount = (group: UserCustomGroup) => group.models.filter(model => model.source_available === false).length
+const sourceIssueLabel = (model: UserCustomGroupModel) => model.source_issue === 'source_group_not_allowed' ? '已无权使用该来源分组' : '来源分组已下架或停用'
 const selectedItem = (sourceId: number, model: string) => selected.value.get(sourceMappingKey(sourceId, model))
 const isSelected = (sourceId: number, model: string) => selected.value.has(sourceMappingKey(sourceId, model))
 const selectModel = (sourceId: number, model: string, sourceName: string) => {
@@ -203,11 +245,20 @@ const updateCallName = (sourceId: number, model: string, publicModel: string) =>
   next.set(key, { ...item, public_model: publicModel })
   selected.value = next
 }
+const removeStaleModel = (model: UserCustomGroupModel) => {
+  const next = new Map(selected.value)
+  next.delete(sourceMappingKey(model.source_group_id, model.source_model))
+  selected.value = next
+}
 const save = async () => {
-	if (aliasErrors.value.size > 0) {
-		app.showError('请先修正调用名称')
-		return
-	}
+  if (staleSelectedModels.value.length > 0) {
+    app.showError('请先移除失效的来源线路')
+    return
+  }
+  if (aliasErrors.value.size > 0) {
+    app.showError('请先修正调用名称')
+    return
+  }
   saving.value = true
   try {
     const models = [...selected.value.values()]
@@ -234,8 +285,29 @@ const remove = async (group: UserCustomGroup) => {
     await customGroupsAPI.delete(group.id)
     await load()
     emit('changed')
+    app.showSuccess('自定义分组已删除')
   } catch (error: any) {
-    app.showError(error?.message || '仍有 API Key 绑定该分组，无法删除')
+    if (error?.reason !== 'CUSTOM_GROUP_IN_USE') {
+      app.showError(error?.message || '删除失败')
+      return
+    }
+
+    const rawCount = error?.metadata?.bound_api_key_count
+    const parsedCount = Number.parseInt(String(rawCount ?? ''), 10)
+    const affectedLabel = Number.isFinite(parsedCount) && parsedCount > 0
+      ? `${parsedCount} 个 API 密钥`
+      : '绑定该分组的 API 密钥'
+    if (!window.confirm(`该分组仍绑定 ${affectedLabel}。继续删除会解除这些绑定，密钥将恢复使用原分组。确定继续吗？`)) return
+
+    try {
+      const result = await customGroupsAPI.delete(group.id, true)
+      await load()
+      emit('changed')
+      const unboundCount = Number(result?.unbound_api_key_count) || parsedCount || 0
+      app.showSuccess(unboundCount > 0 ? `自定义分组已删除，已解除 ${unboundCount} 个密钥绑定` : '自定义分组已删除')
+    } catch (forceError: any) {
+      app.showError(forceError?.message || '删除失败，请重试')
+    }
   }
 }
 

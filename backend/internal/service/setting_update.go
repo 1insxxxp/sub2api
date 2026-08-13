@@ -461,7 +461,21 @@ func (s *SettingService) buildSystemSettingsUpdates(ctx context.Context, setting
 
 	// Available channels feature switch
 	updates[SettingKeyAvailableChannelsEnabled] = strconv.FormatBool(settings.AvailableChannelsEnabled)
+	settings.AvailableChannelsPriceCNYMultiplier = normalizeNonNegativeFiniteFloat(
+		settings.AvailableChannelsPriceCNYMultiplier,
+		0,
+	)
 	updates[SettingKeyAvailableChannelsPriceCNYMultiplier] = formatNonNegativeFloatSetting(settings.AvailableChannelsPriceCNYMultiplier)
+	settings.AvailableChannelsPriceCNYMultiplierMax = normalizeAvailableChannelsPriceCNYMultiplierMax(
+		settings.AvailableChannelsPriceCNYMultiplierMax,
+		settings.AvailableChannelsPriceCNYMultiplier,
+	)
+	updates[SettingKeyAvailableChannelsPriceCNYMultiplierMax] = formatNonNegativeFloatSetting(settings.AvailableChannelsPriceCNYMultiplierMax)
+	settings.AvailableChannelsOfficialUSDToCNYRate = normalizeNonNegativeFiniteFloat(
+		settings.AvailableChannelsOfficialUSDToCNYRate,
+		AvailableChannelsOfficialUSDToCNYRateDefault,
+	)
+	updates[SettingKeyAvailableChannelsOfficialUSDToCNYRate] = formatNonNegativeFloatSetting(settings.AvailableChannelsOfficialUSDToCNYRate)
 
 	// Model plaza feature switches + description
 	updates[SettingKeyModelPlazaEnabled] = strconv.FormatBool(settings.ModelPlazaEnabled)
@@ -914,8 +928,6 @@ func (s *SettingService) validateDefaultSubscriptionGroups(ctx context.Context, 
 }
 
 func formatNonNegativeFloatSetting(value float64) string {
-	if value < 0 {
-		value = 0
-	}
+	value = normalizeNonNegativeFiniteFloat(value, 0)
 	return strconv.FormatFloat(value, 'f', -1, 64)
 }
