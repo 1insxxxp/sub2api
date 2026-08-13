@@ -98,6 +98,14 @@
               {{ t("admin.groups.sortOrder") }}
             </button>
             <button
+              data-testid="system-custom-create"
+              @click="openSystemCustomGroup(null)"
+              class="btn btn-secondary"
+            >
+              <Icon name="grid" size="md" class="mr-2" />
+              {{ t("admin.groups.systemCustom.createAction") }}
+            </button>
+            <button
               @click="openCreateModal"
               class="btn btn-primary"
               data-tour="groups-create-btn"
@@ -153,6 +161,13 @@
 
           <template #cell-billing_type="{ row }">
             <div class="space-y-1">
+              <span
+                v-if="isSystemCustomGroup(row)"
+                data-testid="system-custom-type-badge"
+                class="inline-flex items-center rounded-full border border-cyan-200 bg-cyan-50 px-2 py-0.5 text-xs font-medium text-cyan-700 dark:border-cyan-800/70 dark:bg-cyan-950/30 dark:text-cyan-300"
+              >
+                {{ t("admin.groups.systemCustom.typeBadge") }}
+              </span>
               <!-- Type Badge -->
               <span
                 :class="[
@@ -357,6 +372,7 @@
           <template #cell-actions="{ row }">
             <div class="flex items-center gap-1">
               <button
+                v-if="!isSystemCustomGroup(row)"
                 @click="handleEdit(row)"
                 class="admin-inline-action"
               >
@@ -364,6 +380,7 @@
                 <span class="text-xs">{{ t("common.edit") }}</span>
               </button>
               <button
+                v-if="!isSystemCustomGroup(row)"
                 data-testid="group-duplicate"
                 :title="
                   duplicatingGroupIds.has(row.id)
@@ -384,13 +401,24 @@
                 </span>
               </button>
               <button
-                v-if="row.platform === 'composite'"
+                v-if="row.platform === 'composite' && !isSystemCustomGroup(row)"
                 @click="handleCompositeRoutes(row)"
                 class="admin-inline-action"
               >
                 <Icon name="swap" size="sm" />
                 <span class="text-xs">{{
                   t("admin.groups.compositeRoutes.action")
+                }}</span>
+              </button>
+              <button
+                v-if="isSystemCustomGroup(row)"
+                data-testid="system-custom-manage"
+                @click="openSystemCustomGroup(row.id)"
+                class="admin-inline-action"
+              >
+                <Icon name="swap" size="sm" />
+                <span class="text-xs">{{
+                  t("admin.groups.systemCustom.manageAction")
                 }}</span>
               </button>
               <button
@@ -412,6 +440,7 @@
                 }}</span>
               </button>
               <button
+                v-if="!isSystemCustomGroup(row)"
                 @click="handleDelete(row)"
                 class="admin-inline-action admin-inline-action-danger"
               >
@@ -444,6 +473,13 @@
       </template>
       </TablePageLayout>
     </div>
+
+    <SystemCustomGroupDialog
+      :show="showSystemCustomDialog"
+      :group-id="systemCustomGroupID"
+      @close="closeSystemCustomGroup"
+      @saved="handleSystemCustomSaved"
+    />
 
     <!-- Create Group Modal -->
     <BaseDialog
@@ -4431,6 +4467,7 @@ import GroupRateMultipliersModal from "@/components/admin/group/GroupRateMultipl
 import GroupRPMOverridesModal from "@/components/admin/group/GroupRPMOverridesModal.vue";
 import GroupCapacityBadge from "@/components/common/GroupCapacityBadge.vue";
 import ReasoningEffortPolicyFields from "@/components/admin/group/ReasoningEffortPolicyFields.vue";
+import SystemCustomGroupDialog from "@/components/admin/groups/SystemCustomGroupDialog.vue";
 import { VueDraggable } from "vue-draggable-plus";
 import { createStableObjectKeyResolver } from "@/utils/stableObjectKey";
 import { extractApiErrorMessage } from "@/utils/apiError";
@@ -4892,6 +4929,8 @@ let abortController: AbortController | null = null;
 
 const showCreateModal = ref(false);
 const showEditModal = ref(false);
+const showSystemCustomDialog = ref(false);
+const systemCustomGroupID = ref<number | null>(null);
 const showDeleteDialog = ref(false);
 const pendingLiveForm = ref<"create" | "edit" | null>(null);
 const showUnsupportedLiveConfirm = computed(
@@ -5778,6 +5817,25 @@ const handleSort = (key: string, order: 'asc' | 'desc') => {
 const openCreateModal = () => {
   showCreateModal.value = true;
   loadModelsListCandidates("create", 0, createForm.platform);
+};
+
+const isSystemCustomGroup = (group: AdminGroup) =>
+  group.system_custom_routing_enabled === true;
+
+const openSystemCustomGroup = (groupID: number | null) => {
+  systemCustomGroupID.value = groupID;
+  showSystemCustomDialog.value = true;
+};
+
+const closeSystemCustomGroup = async () => {
+  showSystemCustomDialog.value = false;
+  systemCustomGroupID.value = null;
+  await loadGroups();
+};
+
+const handleSystemCustomSaved = async () => {
+  appStore.showSuccess(t("admin.groups.systemCustom.saved"));
+  await closeSystemCustomGroup();
 };
 
 const closeCreateModal = () => {

@@ -23,4 +23,22 @@ describe("admin GroupsView layout", () => {
     expect(groupsViewSource).toContain('v-model="editForm.empty_response_compensation_enabled"');
     expect(groupsViewSource).toContain("admin.groups.emptyResponseCompensation.hint");
   });
+
+  it("keeps system custom group orchestration thin and visible in the group list", () => {
+    expect(groupsViewSource).toContain('data-testid="system-custom-create"');
+    expect(groupsViewSource).toContain("SystemCustomGroupDialog");
+    expect(groupsViewSource).toContain('data-testid="system-custom-type-badge"');
+    expect(groupsViewSource).toContain('data-testid="system-custom-manage"');
+    expect(groupsViewSource).toContain("isSystemCustomGroup(row)");
+    expect(groupsViewSource).toContain('@saved="handleSystemCustomSaved"');
+    expect(groupsViewSource).toContain("await loadGroups()");
+  });
+
+  it("does not expose ordinary edit, composite route, or delete controls for system groups", () => {
+    expect(groupsViewSource).toContain('v-if="!isSystemCustomGroup(row)"');
+    expect(groupsViewSource).toContain(
+      'row.platform === \'composite\' && !isSystemCustomGroup(row)',
+    );
+    expect(groupsViewSource).toContain("openSystemCustomGroup(row.id)");
+  });
 });

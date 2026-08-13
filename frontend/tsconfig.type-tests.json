@@ -5,7 +5,8 @@
   },
   "include": [
     "src/**/*.d.ts",
-    "src/api/__tests__/admin.groups.systemCustom.spec.ts"
+    "src/api/__tests__/admin.groups.systemCustom.spec.ts",
+    "src/components/admin/groups/__tests__/SystemCustomGroupDialog.spec.ts"
   ],
   "exclude": []
 }
