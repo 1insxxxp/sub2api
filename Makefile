@@ -35,6 +35,7 @@ test-backend:
 test-frontend:
 	@pnpm --dir frontend run lint:check
 	@pnpm --dir frontend run typecheck
+	@pnpm --dir frontend run typecheck:tests
 	@$(MAKE) test-frontend-critical
 
 test-frontend-critical:

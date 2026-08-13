@@ -10,6 +10,7 @@
     "lint": "eslint . --ext .vue,.js,.jsx,.cjs,.mjs,.ts,.tsx,.cts,.mts --fix",
     "lint:check": "eslint . --ext .vue,.js,.jsx,.cjs,.mjs,.ts,.tsx,.cts,.mts",
     "typecheck": "vue-tsc --noEmit",
+    "typecheck:tests": "vue-tsc --noEmit -p tsconfig.type-tests.json",
     "test": "vitest",
     "test:run": "vitest run",
     "test:coverage": "vitest run --coverage"
