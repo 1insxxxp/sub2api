@@ -119,6 +119,24 @@ describe('CustomGroupsManager', () => {
     expect(wrapper.find('[data-test="custom-group-source-models-12"]').exists()).toBe(false)
   })
 
+  it('keeps create and edit forms renderable when an older backend returns null models', async () => {
+    apiMocks.candidates.mockResolvedValue([
+      { id: 13, name: '暂无可用模型', platform: 'anthropic', models: null },
+    ])
+    const wrapper = await mountManager()
+
+    await wrapper.get('[data-test="custom-groups-create"]').trigger('click')
+
+    expect(wrapper.get('input[placeholder="例如：酒馆统一模型"]').exists()).toBe(true)
+    expect(wrapper.get('[data-test="custom-group-source-toggle-13"]').text()).toContain('0 个模型')
+
+    await wrapper.get('[data-test="custom-groups-back"]').trigger('click')
+    await wrapper.get('[data-test="custom-groups-edit-21"]').trigger('click')
+
+    expect((wrapper.get('input[placeholder="例如：酒馆统一模型"]').element as HTMLInputElement).value).toBe('酒馆统一模型')
+    expect(wrapper.get('[data-test="custom-group-source-toggle-13"]').text()).toContain('0 个模型')
+  })
+
   it('expands and collapses all source groups from one mobile-friendly control', async () => {
     const wrapper = await mountManager()
 

@@ -159,6 +159,9 @@ func (h *UserCustomGroupHandler) Candidates(c *gin.Context) {
 		if g.CustomModelsListEnabled() {
 			models = filterModelsByCustomList(models, defaultModelIDsForPlatform(g.Platform), g.ModelsListConfig.Models)
 		}
+		if models == nil {
+			models = make([]string, 0)
+		}
 		out = append(out, customGroupCandidate{ID: g.ID, Name: g.Name, Platform: g.Platform, Models: models})
 	}
 	response.Success(c, out)

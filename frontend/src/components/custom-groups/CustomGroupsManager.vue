@@ -192,7 +192,10 @@ const load = async () => {
   try {
     const [loadedGroups, loadedCandidates] = await Promise.all([customGroupsAPI.list(), customGroupsAPI.candidates()])
     groups.value = loadedGroups
-    candidates.value = loadedCandidates
+    candidates.value = loadedCandidates.map(source => ({
+      ...source,
+      models: Array.isArray(source.models) ? source.models : [],
+    }))
   } finally {
     loading.value = false
   }
