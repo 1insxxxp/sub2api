@@ -270,6 +270,99 @@ func TestSimpleModeBypassesQuotaCheck(t *testing.T) {
 	})
 }
 
+func TestAPIKeyAuthSystemCustomSubscriptionQuotaFailsBeforeRouting(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	const (
+		billingGroupID = int64(25)
+		userID         = int64(7)
+		subscriptionID = int64(55)
+	)
+	now := time.Now()
+	limit := 10.0
+	baseGroup := &service.Group{
+		ID:                         billingGroupID,
+		Name:                       "tavern monthly",
+		Platform:                   service.PlatformComposite,
+		Status:                     service.StatusActive,
+		Hydrated:                   true,
+		SubscriptionType:           service.SubscriptionTypeSubscription,
+		SystemCustomRoutingEnabled: true,
+	}
+	user := &service.User{ID: userID, Role: service.RoleUser, Status: service.StatusActive, Balance: 999, Concurrency: 3}
+	apiKey := &service.APIKey{
+		ID: 100, UserID: userID, Key: "system-custom-quota-key", Status: service.StatusActive,
+		GroupID: &baseGroup.ID, Group: baseGroup, User: user,
+	}
+	tests := []struct {
+		name  string
+		apply func(*service.Group, *service.UserSubscription)
+	}{
+		{name: "daily", apply: func(group *service.Group, sub *service.UserSubscription) {
+			group.DailyLimitUSD = &limit
+			sub.DailyUsageUSD = limit + 0.01
+		}},
+		{name: "monthly", apply: func(group *service.Group, sub *service.UserSubscription) {
+			group.MonthlyLimitUSD = &limit
+			sub.MonthlyUsageUSD = limit + 0.01
+		}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			group := *baseGroup
+			sub := &service.UserSubscription{
+				ID: subscriptionID, UserID: userID, GroupID: billingGroupID, Group: &group,
+				Status: service.SubscriptionStatusActive, StartsAt: now.Add(-24 * time.Hour), ExpiresAt: now.Add(24 * time.Hour),
+				DailyWindowStart: &now, WeeklyWindowStart: &now, MonthlyWindowStart: &now,
+			}
+			tt.apply(&group, sub)
+			apiKeyRepo := &stubApiKeyRepo{getByKey: func(_ context.Context, key string) (*service.APIKey, error) {
+				if key != apiKey.Key {
+					return nil, service.ErrAPIKeyNotFound
+				}
+				clone := *apiKey
+				groupClone := group
+				clone.Group = &groupClone
+				return &clone, nil
+			}}
+
+			var subscriptionLoads atomic.Int32
+			subscriptionRepo := &stubUserSubscriptionRepo{
+				getActive: func(_ context.Context, gotUserID, gotGroupID int64) (*service.UserSubscription, error) {
+					subscriptionLoads.Add(1)
+					require.Equal(t, userID, gotUserID)
+					require.Equal(t, billingGroupID, gotGroupID, "auth must load quota by the billing container")
+					clone := *sub
+					return &clone, nil
+				},
+			}
+			cfg := &config.Config{RunMode: config.RunModeStandard}
+			apiKeyService := service.NewAPIKeyService(apiKeyRepo, nil, nil, nil, nil, nil, cfg)
+			subscriptionService := service.NewSubscriptionService(nil, subscriptionRepo, nil, nil, cfg)
+
+			var downstreamCalls atomic.Int32
+			router := gin.New()
+			router.Use(gin.HandlerFunc(NewAPIKeyAuthMiddleware(apiKeyService, subscriptionService, cfg)))
+			router.POST("/v1/chat/completions", func(c *gin.Context) {
+				downstreamCalls.Add(1)
+				c.Status(http.StatusNoContent)
+			})
+
+			recorder := httptest.NewRecorder()
+			req := httptest.NewRequest(http.MethodPost, "/v1/chat/completions", strings.NewReader(`{"model":"tavern-gpt"}`))
+			req.Header.Set("Authorization", "Bearer "+apiKey.Key)
+			router.ServeHTTP(recorder, req)
+
+			require.Equal(t, http.StatusTooManyRequests, recorder.Code)
+			requireAPIKeyAuthError(t, recorder, "USAGE_LIMIT_EXCEEDED", map[string]string{
+				"daily": service.ErrDailyLimitExceeded.Error(), "monthly": service.ErrMonthlyLimitExceeded.Error(),
+			}[tt.name])
+			require.Equal(t, int32(1), subscriptionLoads.Load())
+			require.Zero(t, downstreamCalls.Load(), "quota exhaustion must stop before system routing, scheduling, usage and wallet boundaries")
+		})
+	}
+}
+
 func TestAPIKeyAuthSetsGroupContext(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 

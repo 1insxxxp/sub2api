@@ -240,6 +240,111 @@ func TestGatewayServiceRecordUsage_SystemCustomRouteBillsSubscriptionAndPersists
 	require.Equal(t, sourceGroup.RateMultiplier, usageRepo.lastLog.RateMultiplier)
 }
 
+type systemCustomAccumulatingBillingRepo struct {
+	UsageBillingRepository
+	commands []*UsageBillingCommand
+	total    float64
+}
+
+func (r *systemCustomAccumulatingBillingRepo) Apply(_ context.Context, cmd *UsageBillingCommand) (*UsageBillingApplyResult, error) {
+	copy := *cmd
+	r.commands = append(r.commands, &copy)
+	r.total += cmd.SubscriptionCost
+	return &UsageBillingApplyResult{Applied: true}, nil
+}
+
+type systemCustomUsageLogCapture struct {
+	UsageLogRepository
+	logs []*UsageLog
+}
+
+func (r *systemCustomUsageLogCapture) Create(_ context.Context, log *UsageLog) (bool, error) {
+	copy := *log
+	r.logs = append(r.logs, &copy)
+	return true, nil
+}
+
+func TestOpenAIRecordUsage_SystemCustomRoutesShareOneSubscriptionAcrossSources(t *testing.T) {
+	const (
+		billingGroupID = int64(101)
+		subscriptionID = int64(303)
+		userID         = int64(22)
+		apiKeyID       = int64(11)
+	)
+	billingRepo := &systemCustomAccumulatingBillingRepo{}
+	usageRepo := &systemCustomUsageLogCapture{}
+	userRepo := &openAIRecordUsageUserRepoStub{}
+	svc := newOpenAIRecordUsageServiceWithBillingRepoForTest(usageRepo, billingRepo, userRepo, &openAIRecordUsageSubRepoStub{}, nil)
+	billingGroup := &Group{
+		ID: billingGroupID, Platform: PlatformComposite,
+		SubscriptionType: SubscriptionTypeSubscription, SystemCustomRoutingEnabled: true,
+	}
+	subscription := &UserSubscription{ID: subscriptionID, UserID: userID, GroupID: billingGroupID, Group: billingGroup}
+	user := &User{ID: userID}
+
+	routes := []struct {
+		requestID    string
+		publicModel  string
+		sourceModel  string
+		upstream     string
+		sourceGroup  int64
+		multiplier   float64
+		inputTokens  int
+		outputTokens int
+	}{
+		{requestID: "shared-sub-source-a", publicModel: "tavern-fast", sourceModel: "gpt-5.4-mini", upstream: "gpt-5.4-mini-20260801", sourceGroup: 201, multiplier: 0.8, inputTokens: 1200, outputTokens: 200},
+		{requestID: "shared-sub-source-b", publicModel: "tavern-pro", sourceModel: "gpt-5.4", upstream: "gpt-5.4-20260801", sourceGroup: 202, multiplier: 1.7, inputTokens: 800, outputTokens: 300},
+	}
+	var expectedTotal float64
+	for _, route := range routes {
+		expected, err := svc.billingService.CalculateCost(route.sourceModel, UsageTokens{InputTokens: route.inputTokens, OutputTokens: route.outputTokens}, route.multiplier)
+		require.NoError(t, err)
+		expectedTotal += expected.ActualCost
+
+		ctx := systemCustomUsageContext(billingGroupID, route.sourceGroup, route.publicModel, route.sourceModel, PlatformOpenAI)
+		err = svc.RecordUsage(ctx, &OpenAIRecordUsageInput{
+			Result: &OpenAIForwardResult{
+				RequestID: route.requestID, Model: route.sourceModel, BillingModel: route.sourceModel,
+				UpstreamModel: route.upstream,
+				Usage:         OpenAIUsage{InputTokens: route.inputTokens, OutputTokens: route.outputTokens}, Duration: time.Second,
+			},
+			APIKey: &APIKey{
+				ID: apiKeyID, UserID: userID, User: user, GroupID: i64p(route.sourceGroup),
+				Group: &Group{ID: route.sourceGroup, Platform: PlatformOpenAI, RateMultiplier: route.multiplier},
+			},
+			User: user, Account: &Account{ID: route.sourceGroup + 1000, Platform: PlatformOpenAI}, Subscription: subscription,
+			ChannelUsageFields: ChannelUsageFields{
+				OriginalModel: route.publicModel, ChannelMappedModel: route.sourceModel,
+				BillingModelSource: BillingModelSourceRequested,
+				ModelMappingChain:  route.publicModel + "→" + route.sourceModel + "→" + route.upstream,
+			},
+		})
+		require.NoError(t, err)
+	}
+
+	require.Len(t, billingRepo.commands, 2)
+	require.Len(t, usageRepo.logs, 2)
+	require.InDelta(t, expectedTotal, billingRepo.total, 1e-12)
+	require.Zero(t, userRepo.deductCalls, "both source routes must stay on the shared subscription and never use wallet balance")
+	for index, route := range routes {
+		cmd := billingRepo.commands[index]
+		require.NotNil(t, cmd.SubscriptionID)
+		require.Equal(t, subscriptionID, *cmd.SubscriptionID)
+		require.Zero(t, cmd.BalanceCost)
+
+		log := usageRepo.logs[index]
+		require.Equal(t, billingGroupID, requirePointerValue(t, log.GroupID))
+		require.Equal(t, route.sourceGroup, requirePointerValue(t, log.SourceGroupID))
+		require.Equal(t, route.publicModel, log.RequestedModel)
+		require.Equal(t, route.sourceModel, log.Model)
+		require.NotNil(t, log.UpstreamModel)
+		require.Equal(t, route.upstream, *log.UpstreamModel)
+		require.NotNil(t, log.ModelMappingChain)
+		require.Equal(t, route.publicModel+"→"+route.sourceModel+"→"+route.upstream, *log.ModelMappingChain)
+		require.InDelta(t, cmd.SubscriptionCost, log.ActualCost, 1e-12)
+	}
+}
+
 func TestGatewayServiceRecordUsage_SystemCustomRequestedBillingUsesConcreteSourcePricing(t *testing.T) {
 	const (
 		billingGroupID = int64(111)

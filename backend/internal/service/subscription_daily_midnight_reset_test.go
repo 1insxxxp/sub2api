@@ -14,11 +14,13 @@ type dailyMidnightResetRepo struct {
 	userSubRepoNoop
 
 	resetCalled    bool
+	resetID        int64
 	newWindowStart time.Time
 }
 
-func (r *dailyMidnightResetRepo) ResetDailyUsage(_ context.Context, _ int64, _ *time.Time, newWindowStart time.Time) error {
+func (r *dailyMidnightResetRepo) ResetDailyUsage(_ context.Context, id int64, _ *time.Time, newWindowStart time.Time) error {
 	r.resetCalled = true
+	r.resetID = id
 	r.newWindowStart = newWindowStart
 	return nil
 }
@@ -159,4 +161,42 @@ func TestCheckAndResetWindows_OneTimeDailyCardStillExemptFromMidnightReset(t *te
 
 	require.False(t, repo.resetCalled, "日卡为一次性配额，跨 0 点不应重置")
 	require.Equal(t, 10.0, sub.DailyUsageUSD)
+}
+
+func TestSystemCustomSubscriptionDailyWindowUsesSharedBillingSubscriptionAtMidnight(t *testing.T) {
+	const (
+		billingGroupID = int64(25)
+		subscriptionID = int64(77)
+	)
+	base := midnightTestBase()
+	stale := base.AddDate(0, 0, -1).Add(16*time.Hour + 49*time.Minute)
+	now := base.Add(5 * time.Minute)
+	limit := 10.0
+	group := &Group{
+		ID: billingGroupID, Platform: PlatformComposite,
+		SubscriptionType: SubscriptionTypeSubscription, SystemCustomRoutingEnabled: true,
+		DailyLimitUSD: &limit,
+	}
+	sub := newMidnightTestSub(stale, base)
+	sub.ID = subscriptionID
+	sub.GroupID = billingGroupID
+	sub.Group = group
+	sub.DailyUsageUSD = limit + 1
+
+	repo := &dailyMidnightResetRepo{}
+	svc := NewSubscriptionService(groupRepoNoop{}, repo, nil, nil, nil)
+	svc.now = func() time.Time { return now }
+
+	needsMaintenance, err := svc.ValidateAndCheckLimits(sub, group)
+	require.NoError(t, err, "stale daily usage must not reject before the midnight reset is persisted")
+	require.True(t, needsMaintenance)
+	require.Zero(t, sub.DailyUsageUSD)
+	require.Equal(t, billingGroupID, sub.GroupID)
+	require.True(t, sub.Group.IsSystemCustomRouteGroup())
+
+	require.NoError(t, svc.CheckAndResetWindows(context.Background(), sub))
+	require.True(t, repo.resetCalled)
+	require.Equal(t, subscriptionID, repo.resetID, "the shared billing subscription, not a source group, owns the reset")
+	require.Equal(t, base, repo.newWindowStart)
+	require.Equal(t, billingGroupID, sub.GroupID)
 }

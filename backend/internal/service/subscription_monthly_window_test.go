@@ -21,11 +21,13 @@ type activateWindowUserSubRepo struct {
 type monthlyResetUserSubRepo struct {
 	userSubRepoNoop
 	resetCalled bool
+	resetID     int64
 	resetAt     time.Time
 }
 
-func (r *monthlyResetUserSubRepo) ResetMonthlyUsage(_ context.Context, _ int64, _ *time.Time, resetAt time.Time) error {
+func (r *monthlyResetUserSubRepo) ResetMonthlyUsage(_ context.Context, id int64, _ *time.Time, resetAt time.Time) error {
 	r.resetCalled = true
+	r.resetID = id
 	r.resetAt = resetAt
 	return nil
 }
@@ -193,6 +195,44 @@ func TestValidateAndCheckLimitsResetsMonthlyUsageWithPartialFinalPeriod(t *testi
 	require.NoError(t, err)
 	require.True(t, needsMaintenance)
 	require.Zero(t, sub.MonthlyUsageUSD)
+}
+
+func TestSystemCustomSubscriptionMonthlyWindowUsesSharedBillingSubscription(t *testing.T) {
+	const (
+		billingGroupID = int64(25)
+		subscriptionID = int64(78)
+	)
+	startsAt := time.Date(2026, 7, 1, 23, 30, 0, 0, time.UTC)
+	legacyWindowStart := startsAt.Add(-23*time.Hour - 30*time.Minute)
+	now := startsAt.Add(30 * 24 * time.Hour)
+	limit := 10.0
+	group := &Group{
+		ID: billingGroupID, Platform: PlatformComposite,
+		SubscriptionType: SubscriptionTypeSubscription, SystemCustomRoutingEnabled: true,
+		MonthlyLimitUSD: &limit,
+	}
+	sub := &UserSubscription{
+		ID: subscriptionID, UserID: 10, GroupID: billingGroupID, Group: group,
+		Status: SubscriptionStatusActive, StartsAt: startsAt, ExpiresAt: startsAt.Add(45 * 24 * time.Hour),
+		DailyWindowStart: &now, WeeklyWindowStart: &now,
+		MonthlyWindowStart: &legacyWindowStart, MonthlyUsageUSD: limit + 1,
+	}
+	repo := &monthlyResetUserSubRepo{}
+	svc := NewSubscriptionService(groupRepoNoop{}, repo, nil, nil, nil)
+	svc.now = func() time.Time { return now }
+
+	needsMaintenance, err := svc.ValidateAndCheckLimits(sub, group)
+	require.NoError(t, err)
+	require.True(t, needsMaintenance)
+	require.Zero(t, sub.MonthlyUsageUSD)
+	require.Equal(t, billingGroupID, sub.GroupID)
+	require.True(t, sub.Group.IsSystemCustomRouteGroup())
+
+	require.NoError(t, svc.CheckAndResetWindows(context.Background(), sub))
+	require.True(t, repo.resetCalled)
+	require.Equal(t, subscriptionID, repo.resetID, "source routes must share the billing container's monthly window")
+	require.Equal(t, startsAt.Add(30*24*time.Hour), repo.resetAt)
+	require.Equal(t, billingGroupID, sub.GroupID)
 }
 
 func TestValidateAndCheckLimitsRejectsExactExpiry(t *testing.T) {
