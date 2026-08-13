@@ -129,4 +129,3 @@ Run the focused Vitest file, `npm run lint:check`, `npx vue-tsc --noEmit`, and `
 **Step 3: Diff check and commit**
 
 Run `git diff --check`, inspect staged files, and commit as `fix: allow safe custom group deletion`. Keep root `package.json` and `package-lock.json` untracked and untouched.
-

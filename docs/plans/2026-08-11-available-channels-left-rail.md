@@ -91,4 +91,3 @@ Expected: all commands exit 0.
 
 - Confirm `http://127.0.0.1:3000` returns HTTP 200.
 - Confirm Vite applies the layout without a rebuild.
-

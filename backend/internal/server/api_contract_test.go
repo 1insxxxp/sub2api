@@ -2011,6 +2011,10 @@ func (stubGroupRepo) CreateFromSource(ctx context.Context, group *service.Group,
 	return errors.New("not implemented")
 }
 
+func (stubGroupRepo) CountCustomGroupModelReferences(ctx context.Context, sourceGroupID int64) (int, error) {
+	return 0, nil
+}
+
 type stubAccountRepo struct {
 	bulkUpdateIDs []int64
 }
