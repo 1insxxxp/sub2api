@@ -123,7 +123,7 @@ func (s systemCustomModelCatalogStub) ListSystemCustomGroupModelAvailability(_ c
 		}
 		available := make(map[string]bool, len(source.Models))
 		for _, model := range source.Models {
-			available[model] = CustomModelsListAllowsModel(patterns, model) || containsModelFold(patterns, model)
+			available[model] = CustomModelsListAllowsModel(patterns, model)
 		}
 		availability[source.Group.ID] = available
 	}
