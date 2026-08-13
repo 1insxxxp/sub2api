@@ -13,7 +13,13 @@ import type {
   CompositeRouteDecision,
   CreateGroupRequest,
   UpdateGroupRequest,
-  PaginatedResponse
+  PaginatedResponse,
+  CreateSystemCustomGroupRequest,
+  UpdateSystemCustomGroupRequest,
+  SystemCustomGroup,
+  SystemCustomGroupCandidate,
+  SystemCustomGroupDeleteResponse,
+  SystemCustomGroupSyncPreview
 } from '@/types'
 
 export interface LiveCapability {
@@ -117,6 +123,60 @@ export async function getModelsListCandidates(
     }
   )
   return data.models || []
+}
+
+/** List direct source groups and their live model candidates. */
+export async function getSystemCustomGroupCandidates(): Promise<SystemCustomGroupCandidate[]> {
+  const { data } = await apiClient.get<SystemCustomGroupCandidate[]>(
+    '/admin/system-custom-groups/candidates'
+  )
+  return data
+}
+
+/** Create an administrator-owned system custom subscription group. */
+export async function createSystemCustomGroup(
+  request: CreateSystemCustomGroupRequest
+): Promise<SystemCustomGroup> {
+  const { data } = await apiClient.post<SystemCustomGroup>('/admin/system-custom-groups', request)
+  return data
+}
+
+/** Load a system custom group and its complete route snapshot. */
+export async function getSystemCustomGroup(id: number): Promise<SystemCustomGroup> {
+  const { data } = await apiClient.get<SystemCustomGroup>(`/admin/system-custom-groups/${id}`)
+  return data
+}
+
+/** Replace a system custom group's configuration and complete route snapshot. */
+export async function updateSystemCustomGroup(
+  id: number,
+  request: UpdateSystemCustomGroupRequest
+): Promise<SystemCustomGroup> {
+  const { data } = await apiClient.put<SystemCustomGroup>(
+    `/admin/system-custom-groups/${id}`,
+    request
+  )
+  return data
+}
+
+/** Preview source model changes without mutating the stored route snapshot. */
+export async function getSystemCustomGroupSyncPreview(
+  id: number
+): Promise<SystemCustomGroupSyncPreview> {
+  const { data } = await apiClient.get<SystemCustomGroupSyncPreview>(
+    `/admin/system-custom-groups/${id}/sync-preview`
+  )
+  return data
+}
+
+/** Delete a system custom group that is not currently in use. */
+export async function deleteSystemCustomGroup(
+  id: number
+): Promise<SystemCustomGroupDeleteResponse> {
+  const { data } = await apiClient.delete<SystemCustomGroupDeleteResponse>(
+    `/admin/system-custom-groups/${id}`
+  )
+  return data
 }
 
 /**
@@ -481,6 +541,12 @@ export const groupsAPI = {
   getLiveCapability,
   getById,
   getModelsListCandidates,
+  getSystemCustomGroupCandidates,
+  createSystemCustomGroup,
+  getSystemCustomGroup,
+  updateSystemCustomGroup,
+  getSystemCustomGroupSyncPreview,
+  deleteSystemCustomGroup,
   create,
   duplicate,
   update,

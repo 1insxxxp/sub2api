@@ -627,6 +627,7 @@ export interface Group {
   is_exclusive: boolean
   status: 'active' | 'inactive'
   subscription_type: SubscriptionType
+  system_custom_routing_enabled: boolean
   daily_limit_usd: number | null
   weekly_limit_usd: number | null
   monthly_limit_usd: number | null
@@ -710,6 +711,109 @@ export interface AdminGroup extends Group {
 export interface ModelsListConfig {
   enabled: boolean
   models: string[]
+}
+
+export interface SystemCustomGroupModelInput {
+  public_model: string
+  source_group_id: number
+  source_model: string
+  enabled: boolean
+}
+
+export interface CreateSystemCustomGroupRequest {
+  name: string
+  description: string | null
+  daily_limit_usd: number | null
+  weekly_limit_usd: number | null
+  monthly_limit_usd: number | null
+  default_validity_days: number
+  models: SystemCustomGroupModelInput[]
+}
+
+export type UpdateSystemCustomGroupRequest = CreateSystemCustomGroupRequest
+
+export interface SystemCustomGroupContainer {
+  id: number
+  name: string
+  description: string
+  platform: 'composite'
+  rate_multiplier: number
+  is_exclusive: boolean
+  status: 'active' | 'inactive'
+  subscription_type: 'subscription'
+  system_custom_routing_enabled: true
+  daily_limit_usd: number | null
+  weekly_limit_usd: number | null
+  monthly_limit_usd: number | null
+  default_validity_days: number
+  created_at: string
+  updated_at: string
+}
+
+export interface SystemCustomGroupSource {
+  id: number
+  name: string
+  description?: string
+  platform?: Exclude<GroupPlatform, 'composite'>
+  status?: 'active' | 'inactive'
+  subscription_type?: SubscriptionType
+}
+
+export interface SystemCustomGroupModel extends SystemCustomGroupModelInput {
+  id: number
+  group_id: number
+  source_group?: SystemCustomGroupSource
+  created_at: string
+  updated_at: string
+}
+
+export interface SystemCustomGroup {
+  group: SystemCustomGroupContainer
+  models: SystemCustomGroupModel[]
+}
+
+export interface SystemCustomGroupCandidate {
+  group: SystemCustomGroupSource
+  models: string[]
+}
+
+export interface SystemCustomGroupSyncAdded {
+  public_model: string
+  source_group_id: number
+  source_model: string
+  selected: boolean
+}
+
+export interface SystemCustomGroupSyncConflict {
+  public_model: string
+  source_group_id: number
+  source_model: string
+  reason: string
+}
+
+export interface SystemCustomGroupSyncPreview {
+  added: SystemCustomGroupSyncAdded[]
+  missing: SystemCustomGroupModel[]
+  conflicting: SystemCustomGroupSyncConflict[]
+}
+
+export interface SystemCustomGroupDeleteResponse {
+  id: number
+  deleted: boolean
+}
+
+export type SystemCustomGroupErrorMetadata = Record<string, string> & {
+  public_model?: string
+  source_group_id?: string
+  source_model?: string
+}
+
+export interface SystemCustomGroupApiError {
+  status: number
+  code: number
+  message: string
+  reason?: string
+  metadata?: SystemCustomGroupErrorMetadata
 }
 
 export type CompositeRouteMatchType = 'exact' | 'prefix'
