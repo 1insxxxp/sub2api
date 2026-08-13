@@ -1000,6 +1000,7 @@ export default {
         syncSourceUnavailable: '无法纳入模型 {model}：来源分组 {source} 已不可用或模型已失效',
         loadFailed: '加载自定义路由失败',
         saveFailed: '保存自定义路由失败',
+        groupExists: '分组名称已存在，请修改名称或编辑已有分组',
         syncFailed: '获取同步预览失败'
       },
       rateMultipliers: '专属倍率',

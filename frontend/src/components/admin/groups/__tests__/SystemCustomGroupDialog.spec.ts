@@ -786,6 +786,29 @@ describe('SystemCustomGroupDialog', () => {
     expect(wrapper.get('[data-testid="system-custom-error"]').text()).toContain('gpt-5-mini')
   })
 
+  it('localizes duplicate group names instead of exposing the backend English error', async () => {
+    createSystemCustomGroup.mockRejectedValueOnce({
+      status: 409,
+      code: 'GROUP_EXISTS',
+      message: 'group name already exists · GROUP_EXISTS'
+    })
+    const wrapper = mountDialog()
+    await flushPromises()
+    await wrapper.get('[data-testid="system-custom-name"]').setValue('酒馆综合月卡')
+    await sourceCheckbox(wrapper, 11).setValue(true)
+    await modelRow(wrapper, 11, 'claude-haiku-4')
+      .get('input[type="checkbox"]')
+      .setValue(true)
+
+    await wrapper.get('[data-testid="system-custom-save"]').trigger('click')
+    await flushPromises()
+
+    const error = wrapper.get('[data-testid="system-custom-error"]').text()
+    expect(error).toBe('admin.groups.systemCustom.groupExists')
+    expect(error).not.toContain('group name already exists')
+    expect(error).not.toContain('GROUP_EXISTS')
+  })
+
   it('ignores stale out-of-order load responses after switching dialog sessions', async () => {
     const candidatesA = deferred<typeof candidates>()
     const detailA = deferred<ReturnType<typeof groupDetail>>()

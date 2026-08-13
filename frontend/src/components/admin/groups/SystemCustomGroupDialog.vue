@@ -1191,6 +1191,12 @@ const formatApiError = (error: unknown, fallback: string) => {
   const sources = [nestedError, details, data, errorRecord].filter(
     (source): source is Record<string, unknown> => source !== null
   )
+  const businessCode = sources
+    .map((source) => source.code)
+    .find((code): code is string => typeof code === 'string')
+  if (businessCode === 'GROUP_EXISTS') {
+    return t('admin.groups.systemCustom.groupExists')
+  }
   const parts: string[] = []
   for (const field of ['message', 'reason', 'detail'] as const) {
     for (const source of sources) {

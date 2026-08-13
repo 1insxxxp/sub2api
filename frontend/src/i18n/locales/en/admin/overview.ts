@@ -989,6 +989,7 @@ export default {
         syncSourceUnavailable: 'Cannot add {model}: source group {source} is unavailable or the model is no longer valid.',
         loadFailed: 'Failed to load custom routes',
         saveFailed: 'Failed to save custom routes',
+        groupExists: 'A group with this name already exists. Rename it or edit the existing group.',
         syncFailed: 'Failed to load sync preview'
       },
       rateMultipliers: 'Rate Multipliers',
