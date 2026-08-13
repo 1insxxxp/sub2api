@@ -637,6 +637,35 @@ func TestSystemCustomGeminiTargetMiddlewarePreservesExactSourceModelCasing(t *te
 	require.JSONEq(t, `{"model":"gemini-2.5-flash"}`, recorder.Body.String())
 }
 
+func TestSystemCustomGeminiTargetMiddlewareRejectsNonGeminiSource(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	billingGroupID, sourceGroupID := int64(25), int64(42)
+	resolver := resolvedSystemCustomStub(
+		billingGroupID,
+		sourceGroupID,
+		service.PlatformAnthropic,
+		"claude-monthly",
+		"claude-sonnet-4",
+	)
+	router := systemCustomAuthTestRouter(systemCustomBillingGroup(billingGroupID))
+	router.Use(systemCustomGroupGeminiTargetMiddleware(resolver))
+	router.POST("/v1beta/models/*modelAction", func(c *gin.Context) {
+		t.Fatal("native Gemini handler must not run for an Anthropic source")
+	})
+
+	req := httptest.NewRequest(
+		http.MethodPost,
+		"/v1beta/models/claude-monthly:generateContent",
+		bytes.NewBufferString(`{"contents":[]}`),
+	)
+	recorder := httptest.NewRecorder()
+	router.ServeHTTP(recorder, req)
+
+	require.Equal(t, http.StatusForbidden, recorder.Code)
+	require.Equal(t, "PERMISSION_DENIED", gjson.Get(recorder.Body.String(), "error.status").String())
+	require.Contains(t, gjson.Get(recorder.Body.String(), "error.message").String(), "Gemini API")
+}
+
 func TestSystemCustomTargetMiddlewareRejectsNonStringJSONModels(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	protocols := []struct {

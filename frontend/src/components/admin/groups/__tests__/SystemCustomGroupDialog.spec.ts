@@ -123,10 +123,10 @@ function mountDialog(props: Record<string, unknown> = {}) {
     global: {
       stubs: {
         BaseDialog: {
-          props: ['show'],
+          props: ['show', 'width'],
           emits: ['close'],
           template:
-            '<div v-if="show"><button data-testid="base-dialog-close" @click="$emit(\'close\')"/><slot /><slot name="footer" /></div>'
+            '<div v-if="show" :data-dialog-width="width"><button data-testid="base-dialog-close" @click="$emit(\'close\')"/><slot /><slot name="footer" /></div>'
         },
         Icon: true
       }
@@ -348,6 +348,89 @@ describe('SystemCustomGroupDialog', () => {
     for (const row of wrapper.findAll('[data-testid="system-custom-model-row"]')) {
       expect(row.get('input[type="checkbox"]').element).toHaveProperty('checked', false)
     }
+  })
+
+  it('selects routes independently for each source with a tri-state group control', async () => {
+    const wrapper = mountDialog()
+    await flushPromises()
+
+    await sourceCheckbox(wrapper, 11).setValue(true)
+    await sourceCheckbox(wrapper, 22).setValue(true)
+
+    const sourceSelectAll = (sourceID: number) =>
+      wrapper.get(
+        `[data-testid="system-custom-source-select-all"][data-source-id="${sourceID}"]`
+      )
+    const sourceACheckbox = sourceSelectAll(11)
+    const sourceBCheckbox = sourceSelectAll(22)
+
+    await sourceACheckbox.setValue(true)
+    expect(
+      modelRow(wrapper, 11, 'claude-sonnet-4').get('input[type="checkbox"]').element
+    ).toHaveProperty('checked', true)
+    expect(
+      modelRow(wrapper, 11, 'claude-haiku-4').get('input[type="checkbox"]').element
+    ).toHaveProperty('checked', true)
+    expect(
+      modelRow(wrapper, 22, 'gpt-5').get('input[type="checkbox"]').element
+    ).toHaveProperty('checked', false)
+    expect(sourceBCheckbox.element).toHaveProperty('checked', false)
+
+    await modelRow(wrapper, 11, 'claude-haiku-4')
+      .get('input[type="checkbox"]')
+      .setValue(false)
+    expect(sourceACheckbox.element).toHaveProperty('indeterminate', true)
+    expect(sourceACheckbox.attributes('aria-checked')).toBe('mixed')
+
+    await sourceACheckbox.setValue(true)
+    await sourceACheckbox.setValue(false)
+    expect(
+      modelRow(wrapper, 11, 'claude-sonnet-4').get('input[type="checkbox"]').element
+    ).toHaveProperty('checked', false)
+    expect(
+      modelRow(wrapper, 22, 'gpt-5').get('input[type="checkbox"]').element
+    ).toHaveProperty('checked', false)
+  })
+
+  it('prioritizes the route workspace and collapses optional settings on create', async () => {
+    const wrapper = mountDialog()
+    await flushPromises()
+
+    expect(wrapper.attributes('data-dialog-width')).toBe('full')
+    expect(wrapper.get('[data-testid="system-custom-route-workspace"]').classes()).toContain(
+      'lg:h-[min(64vh,46rem)]'
+    )
+    expect(
+      wrapper.get('[data-testid="system-custom-advanced-settings"]').attributes('style')
+    ).toContain('display: none')
+
+    const advancedToggle = wrapper.get('[data-testid="system-custom-advanced-toggle"]')
+    expect(advancedToggle.attributes('aria-expanded')).toBe('false')
+    await advancedToggle.trigger('click')
+    expect(advancedToggle.attributes('aria-expanded')).toBe('true')
+    expect(
+      wrapper.get('[data-testid="system-custom-advanced-settings"]').attributes('style') ?? ''
+    ).not.toContain('display: none')
+  })
+
+  it('warns when selected sources use different protocols', async () => {
+    const wrapper = mountDialog()
+    await flushPromises()
+
+    await sourceCheckbox(wrapper, 11).setValue(true)
+    expect(wrapper.find('[data-testid="system-custom-cross-protocol-warning"]').exists()).toBe(
+      false
+    )
+
+    await sourceCheckbox(wrapper, 22).setValue(true)
+    expect(wrapper.get('[data-testid="system-custom-cross-protocol-warning"]').text()).toContain(
+      'admin.groups.systemCustom.crossProtocolHint'
+    )
+
+    await sourceCheckbox(wrapper, 22).setValue(false)
+    expect(wrapper.find('[data-testid="system-custom-cross-protocol-warning"]').exists()).toBe(
+      false
+    )
   })
 
   it('navigates inside the model column without changing the selected sources', async () => {

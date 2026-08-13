@@ -6,10 +6,10 @@
         ? t('admin.groups.systemCustom.editTitle')
         : t('admin.groups.systemCustom.createTitle')
     "
-    width="extra-wide"
+    width="full"
     @close="requestClose"
   >
-    <div class="space-y-5">
+    <div class="space-y-3">
       <div
         v-if="errorMessage"
         data-testid="system-custom-error"
@@ -20,7 +20,7 @@
         {{ errorMessage }}
       </div>
 
-      <div class="grid gap-4 md:grid-cols-2">
+      <div class="grid gap-3 md:grid-cols-[minmax(0,1fr)_18rem_auto] md:items-end">
         <label class="block">
           <span class="input-label">{{ t('admin.groups.form.name') }}</span>
           <input
@@ -42,65 +42,89 @@
             step="1"
           />
         </label>
-        <label class="block md:col-span-2">
-          <span class="input-label">{{ t('admin.groups.form.description') }}</span>
-          <textarea
-            v-model="form.description"
-            class="input min-h-20 resize-y"
-            :placeholder="t('admin.groups.optionalDescription')"
-          />
-        </label>
+        <button
+          data-testid="system-custom-advanced-toggle"
+          class="btn btn-secondary h-10 justify-center"
+          type="button"
+          :aria-expanded="advancedSettingsOpen"
+          @click="advancedSettingsOpen = !advancedSettingsOpen"
+        >
+          {{
+            advancedSettingsOpen
+              ? t('admin.groups.systemCustom.hideAdvancedSettings')
+              : t('admin.groups.systemCustom.showAdvancedSettings')
+          }}
+        </button>
       </div>
 
-      <section class="rounded-2xl border border-slate-200 bg-slate-50/70 p-4 dark:border-dark-700 dark:bg-dark-900/30">
-        <div class="mb-3">
-          <h4 class="text-sm font-semibold text-slate-900 dark:text-slate-100">
-            {{ t('admin.groups.systemCustom.quotaTitle') }}
-          </h4>
-          <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">
-            {{ t('admin.groups.systemCustom.quotaHint') }}
-          </p>
-        </div>
-        <div class="grid gap-3 sm:grid-cols-3">
+      <section
+        v-show="advancedSettingsOpen"
+        data-testid="system-custom-advanced-settings"
+        class="rounded-2xl border border-slate-200 bg-slate-50/70 p-4 dark:border-dark-700 dark:bg-dark-900/30"
+      >
+        <div class="grid gap-4 lg:grid-cols-[minmax(16rem,1fr)_2fr]">
           <label class="block">
-            <span class="input-label">{{ t('admin.groups.subscription.dailyLimit') }}</span>
-            <input
-              v-model="form.daily_limit_usd"
-              data-testid="system-custom-daily-limit"
-              class="input"
-              type="number"
-              min="0"
-              step="0.01"
-              :placeholder="t('admin.groups.subscription.noLimit')"
+            <span class="input-label">{{ t('admin.groups.form.description') }}</span>
+            <textarea
+              v-model="form.description"
+              class="input min-h-20 resize-y"
+              :placeholder="t('admin.groups.optionalDescription')"
             />
           </label>
-          <label class="block">
-            <span class="input-label">{{ t('admin.groups.subscription.weeklyLimit') }}</span>
-            <input
-              v-model="form.weekly_limit_usd"
-              class="input"
-              type="number"
-              min="0"
-              step="0.01"
-              :placeholder="t('admin.groups.subscription.noLimit')"
-            />
-          </label>
-          <label class="block">
-            <span class="input-label">{{ t('admin.groups.subscription.monthlyLimit') }}</span>
-            <input
-              v-model="form.monthly_limit_usd"
-              data-testid="system-custom-monthly-limit"
-              class="input"
-              type="number"
-              min="0"
-              step="0.01"
-              :placeholder="t('admin.groups.subscription.noLimit')"
-            />
-          </label>
+          <div>
+            <div class="mb-3">
+              <h4 class="text-sm font-semibold text-slate-900 dark:text-slate-100">
+                {{ t('admin.groups.systemCustom.quotaTitle') }}
+              </h4>
+              <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                {{ t('admin.groups.systemCustom.quotaHint') }}
+              </p>
+            </div>
+            <div class="grid gap-3 sm:grid-cols-3">
+              <label class="block">
+                <span class="input-label">{{ t('admin.groups.subscription.dailyLimit') }}</span>
+                <input
+                  v-model="form.daily_limit_usd"
+                  data-testid="system-custom-daily-limit"
+                  class="input"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  :placeholder="t('admin.groups.subscription.noLimit')"
+                />
+              </label>
+              <label class="block">
+                <span class="input-label">{{ t('admin.groups.subscription.weeklyLimit') }}</span>
+                <input
+                  v-model="form.weekly_limit_usd"
+                  class="input"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  :placeholder="t('admin.groups.subscription.noLimit')"
+                />
+              </label>
+              <label class="block">
+                <span class="input-label">{{ t('admin.groups.subscription.monthlyLimit') }}</span>
+                <input
+                  v-model="form.monthly_limit_usd"
+                  data-testid="system-custom-monthly-limit"
+                  class="input"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  :placeholder="t('admin.groups.subscription.noLimit')"
+                />
+              </label>
+            </div>
+          </div>
         </div>
       </section>
 
-      <div class="grid min-h-[24rem] gap-4 lg:h-[34rem] lg:min-h-0 lg:grid-cols-[15rem_minmax(0,1fr)]">
+      <div
+        data-testid="system-custom-route-workspace"
+        class="grid min-h-[28rem] gap-4 lg:h-[min(64vh,46rem)] lg:min-h-0 lg:grid-cols-[16rem_minmax(0,1fr)]"
+      >
         <aside class="rounded-2xl border border-slate-200 bg-white p-3 dark:border-dark-700 dark:bg-dark-800 lg:flex lg:min-h-0 lg:flex-col lg:overflow-hidden">
           <div class="mb-3 px-1 lg:flex-shrink-0">
             <h4 class="text-sm font-semibold text-slate-900 dark:text-slate-100">
@@ -190,12 +214,22 @@
                   :disabled="visibleRoutes.length === 0"
                   @change="toggleAllVisibleRoutes(($event.target as HTMLInputElement).checked)"
                 />
-                {{ t('common.selectAll') }}
+                {{ t('admin.groups.systemCustom.selectAllAll') }}
               </label>
               <span class="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-600 dark:bg-dark-700 dark:text-slate-300">
                 {{ selectedRoutes.length }} / {{ visibleRoutes.length }}
               </span>
             </div>
+          </div>
+
+          <div
+            v-if="isCrossProtocolSelection"
+            data-testid="system-custom-cross-protocol-warning"
+            role="status"
+            class="flex gap-2 border-b border-amber-200 bg-amber-50 px-4 py-2.5 text-xs leading-5 text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-200 lg:flex-shrink-0"
+          >
+            <Icon name="infoCircle" size="sm" class="mt-0.5 flex-none" />
+            <span>{{ t('admin.groups.systemCustom.crossProtocolHint') }}</span>
           </div>
 
           <div
@@ -242,14 +276,50 @@
               >
                 <div
                   data-testid="system-custom-source-section-header"
-                  class="flex items-center gap-2 border-b border-slate-200 bg-slate-50/80 px-3 py-2.5 dark:border-dark-700 dark:bg-dark-700/50"
+                  class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 bg-slate-50/80 px-3 py-2.5 dark:border-dark-700 dark:bg-dark-700/50"
                 >
-                  <span class="text-sm font-semibold text-slate-800 dark:text-slate-100">
-                    {{ candidate.group.name }}
-                  </span>
-                  <span class="rounded-md bg-slate-100 px-1.5 py-0.5 text-[11px] text-slate-500 dark:bg-dark-700 dark:text-slate-400">
-                    {{ candidate.group.platform }}
-                  </span>
+                  <div class="flex min-w-0 items-center gap-2">
+                    <span class="truncate text-sm font-semibold text-slate-800 dark:text-slate-100">
+                      {{ candidate.group.name }}
+                    </span>
+                    <span class="flex-none rounded-md bg-slate-100 px-1.5 py-0.5 text-[11px] text-slate-500 dark:bg-dark-700 dark:text-slate-400">
+                      {{ candidate.group.platform }}
+                    </span>
+                  </div>
+                  <div class="flex flex-none items-center gap-3">
+                    <label class="inline-flex cursor-pointer select-none items-center gap-2 text-xs font-medium text-slate-600 dark:text-slate-300">
+                      <input
+                        data-testid="system-custom-source-select-all"
+                        :data-source-id="candidate.group.id"
+                        class="h-4 w-4 rounded border-slate-300 text-primary-600 focus:ring-primary-500"
+                        type="checkbox"
+                        :checked="allRoutesForSourceSelected(candidate.group.id)"
+                        :indeterminate="
+                          someRoutesForSourceSelected(candidate.group.id) &&
+                          !allRoutesForSourceSelected(candidate.group.id)
+                        "
+                        :aria-checked="
+                          someRoutesForSourceSelected(candidate.group.id) &&
+                          !allRoutesForSourceSelected(candidate.group.id)
+                            ? 'mixed'
+                            : allRoutesForSourceSelected(candidate.group.id)
+                              ? 'true'
+                              : 'false'
+                        "
+                        @change="
+                          toggleAllRoutesForSource(
+                            candidate.group.id,
+                            ($event.target as HTMLInputElement).checked
+                          )
+                        "
+                      />
+                      {{ t('admin.groups.systemCustom.selectAllSource') }}
+                    </label>
+                    <span class="rounded-full bg-white px-2 py-0.5 text-[11px] font-medium text-slate-500 shadow-sm dark:bg-dark-800 dark:text-slate-400">
+                      {{ selectedRouteCountForSource(candidate.group.id) }} /
+                      {{ routesForSource(candidate.group.id).length }}
+                    </span>
+                  </div>
                 </div>
                 <div class="space-y-2 p-3">
                   <div
@@ -535,6 +605,7 @@ const saving = ref(false)
 const syncing = ref(false)
 const deleting = ref(false)
 const confirmingDelete = ref(false)
+const advancedSettingsOpen = ref(false)
 const errorMessage = ref('')
 const syncPreview = ref<SystemCustomGroupSyncPreview | null>(null)
 let sessionGeneration = 0
@@ -589,6 +660,7 @@ const reset = () => {
   saving.value = false
   syncing.value = false
   deleting.value = false
+  advancedSettingsOpen.value = false
   form.name = ''
   form.description = ''
   form.daily_limit_usd = ''
@@ -681,6 +753,12 @@ const load = async () => {
       form.weekly_limit_usd = detail.group.weekly_limit_usd ?? ''
       form.monthly_limit_usd = detail.group.monthly_limit_usd ?? ''
       form.default_validity_days = detail.group.default_validity_days
+      advancedSettingsOpen.value = Boolean(
+        detail.group.description ||
+          detail.group.daily_limit_usd !== null ||
+          detail.group.weekly_limit_usd !== null ||
+          detail.group.monthly_limit_usd !== null
+      )
       const sourceIDs = new Set<number>()
       for (const model of detail.models) {
         sourceIDs.add(model.source_group_id)
@@ -764,6 +842,15 @@ const selectedCandidates = computed(() =>
   candidates.value.filter((candidate) => isSourceSelected(candidate.group.id))
 )
 
+const isCrossProtocolSelection = computed(
+  () =>
+    new Set(
+      selectedCandidates.value
+        .map((candidate) => candidate.group.platform)
+        .filter((platform): platform is NonNullable<typeof platform> => Boolean(platform))
+    ).size > 1
+)
+
 const routesBySource = computed(() => {
   const grouped = new Map<number, RouteDraft[]>()
   for (const route of routes.values()) {
@@ -775,6 +862,24 @@ const routesBySource = computed(() => {
 })
 
 const routesForSource = (sourceID: number) => routesBySource.value.get(sourceID) ?? []
+
+const selectedRouteCountForSource = (sourceID: number) =>
+  routesForSource(sourceID).filter((route) => route.selected).length
+
+const allRoutesForSourceSelected = (sourceID: number) => {
+  const sourceRoutes = routesForSource(sourceID)
+  return sourceRoutes.length > 0 && sourceRoutes.every((route) => route.selected)
+}
+
+const someRoutesForSourceSelected = (sourceID: number) =>
+  routesForSource(sourceID).some((route) => route.selected)
+
+const toggleAllRoutesForSource = (sourceID: number, selected: boolean) => {
+  for (const route of routesForSource(sourceID)) {
+    route.selected = selected
+    if (selected) route.draftInitialized = true
+  }
+}
 
 const visibleRoutes = computed(() =>
   selectedCandidates.value.flatMap((candidate) => routesForSource(candidate.group.id))

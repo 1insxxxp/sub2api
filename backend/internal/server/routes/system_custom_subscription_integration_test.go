@@ -107,6 +107,17 @@ type systemCustomProductionGroupRepo struct {
 	calls  []int64
 }
 
+func (r *systemCustomProductionGroupRepo) GetByID(_ context.Context, id int64) (*service.Group, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	group := r.groups[id]
+	if group == nil {
+		return nil, service.ErrGroupNotFound
+	}
+	copy := *group
+	return &copy, nil
+}
+
 func (r *systemCustomProductionGroupRepo) GetByIDLite(_ context.Context, id int64) (*service.Group, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -139,6 +150,23 @@ func (r *systemCustomProductionAccountRepo) ListSchedulableByGroupIDAndPlatform(
 	var result []service.Account
 	for _, account := range r.accounts[groupID] {
 		if account.Platform == platform && account.IsSchedulable() {
+			result = append(result, account)
+		}
+	}
+	return result, nil
+}
+
+func (r *systemCustomProductionAccountRepo) ListSchedulableByGroupIDAndPlatforms(_ context.Context, groupID int64, platforms []string) ([]service.Account, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.listIDs = append(r.listIDs, groupID)
+	allowed := make(map[string]bool, len(platforms))
+	for _, platform := range platforms {
+		allowed[platform] = true
+	}
+	var result []service.Account
+	for _, account := range r.accounts[groupID] {
+		if allowed[account.Platform] && account.IsSchedulable() {
 			result = append(result, account)
 		}
 	}
@@ -214,6 +242,65 @@ type systemCustomProductionUpstream struct {
 	mu         sync.Mutex
 	accountIDs []int64
 	models     []string
+}
+
+type systemCustomGeminiMessagesUpstream struct {
+	mu         sync.Mutex
+	accountIDs []int64
+	models     []string
+	url        string
+	body       string
+}
+
+func (u *systemCustomGeminiMessagesUpstream) Do(req *http.Request, _ string, accountID int64, _ int) (*http.Response, error) {
+	body, err := io.ReadAll(req.Body)
+	if err != nil {
+		return nil, err
+	}
+	model := ""
+	const marker = "/models/"
+	if start := bytes.Index([]byte(req.URL.Path), []byte(marker)); start >= 0 {
+		model = req.URL.Path[start+len(marker):]
+		if end := bytes.IndexByte([]byte(model), ':'); end >= 0 {
+			model = model[:end]
+		}
+	}
+	u.mu.Lock()
+	u.accountIDs = append(u.accountIDs, accountID)
+	u.models = append(u.models, model)
+	u.url = req.URL.String()
+	u.body = string(body)
+	u.mu.Unlock()
+
+	responseBody := `{"candidates":[{"content":{"role":"model","parts":[{"text":"hello from gemini"}]},"finishReason":"STOP"}],"usageMetadata":{"promptTokenCount":12,"candidatesTokenCount":4,"totalTokenCount":16}}`
+	return &http.Response{
+		StatusCode: http.StatusOK,
+		Header:     http.Header{"Content-Type": []string{"application/json"}, "x-request-id": []string{"upstream-gemini"}},
+		Body:       io.NopCloser(bytes.NewBufferString(responseBody)),
+		Request:    req,
+	}, nil
+}
+
+func (u *systemCustomGeminiMessagesUpstream) DoWithTLS(req *http.Request, proxyURL string, accountID int64, accountConcurrency int, _ *tlsfingerprint.Profile) (*http.Response, error) {
+	return u.Do(req, proxyURL, accountID, accountConcurrency)
+}
+
+func (u *systemCustomGeminiMessagesUpstream) calls() ([]int64, []string) {
+	u.mu.Lock()
+	defer u.mu.Unlock()
+	return append([]int64(nil), u.accountIDs...), append([]string(nil), u.models...)
+}
+
+func (u *systemCustomGeminiMessagesUpstream) lastURL() string {
+	u.mu.Lock()
+	defer u.mu.Unlock()
+	return u.url
+}
+
+func (u *systemCustomGeminiMessagesUpstream) lastBody() string {
+	u.mu.Lock()
+	defer u.mu.Unlock()
+	return u.body
 }
 
 func (u *systemCustomProductionUpstream) Do(req *http.Request, _ string, accountID int64, _ int) (*http.Response, error) {
@@ -303,6 +390,18 @@ type systemCustomProductionHarness struct {
 	upstream     *systemCustomProductionUpstream
 }
 
+type systemCustomGeminiMessagesProductionHarness struct {
+	router       *gin.Engine
+	key          string
+	billingCache *service.BillingCacheService
+	routeRepo    *systemCustomProductionRouteRepo
+	accountRepo  *systemCustomProductionAccountRepo
+	usageRepo    *systemCustomProductionUsageRepo
+	billingRepo  *systemCustomProductionBillingRepo
+	userRepo     *systemCustomIntegrationUserRepo
+	upstream     *systemCustomGeminiMessagesUpstream
+}
+
 func newSystemCustomProductionHarness(t *testing.T) *systemCustomProductionHarness {
 	t.Helper()
 	const (
@@ -379,6 +478,95 @@ func newSystemCustomProductionHarness(t *testing.T) *systemCustomProductionHarne
 	}
 }
 
+func newSystemCustomGeminiMessagesProductionHarness(t *testing.T) *systemCustomGeminiMessagesProductionHarness {
+	t.Helper()
+	const (
+		billingGroupID = int64(25)
+		sourceGroupID  = int64(42)
+		userID         = int64(9)
+	)
+	inputPrice, outputPrice := 0.001, 0.002
+	sourceGroup := &service.Group{
+		ID: sourceGroupID, Name: "gemini-source", Platform: service.PlatformGemini,
+		Status: service.StatusActive, Hydrated: true, RateMultiplier: 1,
+	}
+	billingGroup := &service.Group{
+		ID: billingGroupID, Name: "tavern monthly", Platform: service.PlatformComposite,
+		Status: service.StatusActive, Hydrated: true, RateMultiplier: 1,
+		SubscriptionType: service.SubscriptionTypeSubscription, SystemCustomRoutingEnabled: true,
+	}
+	routeRepo := &systemCustomProductionRouteRepo{routes: map[string]*service.SystemCustomGroupModel{
+		"tavern-gemini": {
+			GroupID: billingGroupID, PublicModel: "tavern-gemini", SourceGroupID: sourceGroupID,
+			SourceModel: "gemini-2.5-flash", Enabled: true,
+		},
+	}}
+	groupRepo := &systemCustomProductionGroupRepo{groups: map[int64]*service.Group{sourceGroupID: sourceGroup}}
+	accountRepo := &systemCustomProductionAccountRepo{accounts: map[int64][]service.Account{
+		sourceGroupID: {newSystemCustomGeminiProductionAccount(601, sourceGroupID, "gemini-2.5-flash")},
+	}}
+	channelRepo := &systemCustomProductionChannelRepo{
+		channels: []service.Channel{{
+			ID: 2001, Status: service.StatusActive, GroupIDs: []int64{sourceGroupID},
+			ModelPricing: []service.ChannelModelPricing{{
+				Platform: service.PlatformGemini, Models: []string{"gemini-2.5-flash"},
+				BillingMode: service.BillingModeToken, InputPrice: &inputPrice, OutputPrice: &outputPrice,
+			}},
+		}},
+		platforms: map[int64]string{sourceGroupID: service.PlatformGemini},
+	}
+	now := time.Now()
+	subscription := &service.UserSubscription{
+		ID: 88, UserID: userID, GroupID: billingGroupID, Group: billingGroup,
+		Status: service.SubscriptionStatusActive, StartsAt: now.Add(-24 * time.Hour), ExpiresAt: now.Add(24 * time.Hour),
+		DailyWindowStart: &now, WeeklyWindowStart: &now, MonthlyWindowStart: &now,
+	}
+	user := &service.User{ID: userID, Role: service.RoleUser, Status: service.StatusActive, Balance: 999}
+	apiKey := &service.APIKey{
+		ID: 7, UserID: userID, Key: "system-custom-gemini-messages-key", Status: service.StatusActive,
+		GroupID: &billingGroup.ID, Group: billingGroup, User: user,
+	}
+	authRepo := &systemCustomUnsupportedAuthRepo{apiKey: apiKey}
+	subRepo := &systemCustomIntegrationSubscriptionRepo{sub: subscription}
+	usageRepo := &systemCustomProductionUsageRepo{}
+	billingRepo := &systemCustomProductionBillingRepo{}
+	userRepo := &systemCustomIntegrationUserRepo{user: user}
+	upstream := &systemCustomGeminiMessagesUpstream{}
+	cfg := &config.Config{RunMode: config.RunModeStandard}
+	cfg.Default.RateMultiplier = 1
+	cfg.Gateway.MaxBodySize = 1024 * 1024
+	cfg.Gateway.TextMaxBodySize = 1024 * 1024
+	apiKeyService := service.NewAPIKeyService(authRepo, nil, groupRepo, nil, nil, nil, cfg)
+	apiKeyService.SetSystemCustomGroupRepository(routeRepo)
+	subscriptionService := service.NewSubscriptionService(nil, subRepo, nil, nil, cfg)
+	billingCache := service.NewBillingCacheService(nil, userRepo, subRepo, authRepo, nil, nil, cfg, nil)
+	concurrencyService := service.NewConcurrencyService(&systemCustomProductionConcurrencyCache{})
+	billingService := service.NewBillingService(cfg, nil)
+	channelService := service.NewChannelService(channelRepo, groupRepo, nil, nil)
+	pricingResolver := service.NewModelPricingResolver(channelService, billingService)
+	gateway := service.NewGatewayService(
+		accountRepo, groupRepo, usageRepo, billingRepo, userRepo, subRepo, nil, nil, cfg, nil,
+		concurrencyService, billingService, nil, billingCache, nil, upstream, &service.DeferredService{},
+		nil, nil, nil, nil, nil, nil, channelService, pricingResolver, nil, nil, nil,
+	)
+	geminiCompat := service.NewGeminiMessagesCompatService(
+		accountRepo, groupRepo, nil, nil, nil, nil, upstream, nil, cfg,
+	)
+	gatewayHandler := handler.NewGatewayHandler(
+		gateway, nil, geminiCompat, nil, nil, concurrencyService, billingCache, nil,
+		apiKeyService, nil, nil, nil, nil, cfg, nil,
+	)
+	router := gin.New()
+	router.Use(gin.HandlerFunc(servermiddleware.NewAPIKeyAuthMiddleware(apiKeyService, subscriptionService, cfg)))
+	router.Use(systemCustomGroupTargetMiddleware(apiKeyService))
+	router.POST("/v1/messages", gatewayHandler.Messages)
+	return &systemCustomGeminiMessagesProductionHarness{
+		router: router, key: apiKey.Key, billingCache: billingCache, routeRepo: routeRepo,
+		accountRepo: accountRepo, usageRepo: usageRepo, billingRepo: billingRepo,
+		userRepo: userRepo, upstream: upstream,
+	}
+}
+
 func newSystemCustomProductionAccount(id, groupID int64, model string) service.Account {
 	return service.Account{
 		ID: id, Name: model, Platform: service.PlatformOpenAI, Type: service.AccountTypeAPIKey,
@@ -388,7 +576,25 @@ func newSystemCustomProductionAccount(id, groupID int64, model string) service.A
 	}
 }
 
+func newSystemCustomGeminiProductionAccount(id, groupID int64, model string) service.Account {
+	return service.Account{
+		ID: id, Name: model, Platform: service.PlatformGemini, Type: service.AccountTypeAPIKey,
+		Status: service.StatusActive, Schedulable: true, GroupIDs: []int64{groupID},
+		RateMultiplier: float64Pointer(1), Concurrency: 1,
+		Credentials: map[string]any{
+			"api_key": "gemini-upstream-key", "base_url": "https://gemini.invalid",
+			"model_mapping": map[string]any{model: model},
+		},
+	}
+}
+
 func (h *systemCustomProductionHarness) close() {
+	if h != nil && h.billingCache != nil {
+		h.billingCache.Stop()
+	}
+}
+
+func (h *systemCustomGeminiMessagesProductionHarness) close() {
 	if h != nil && h.billingCache != nil {
 		h.billingCache.Stop()
 	}
@@ -448,6 +654,53 @@ func TestSystemCustomSubscriptionOpenAIProductionChainBillsTwoSources(t *testing
 		require.InDelta(t, wantCosts[i], logs[i].ActualCost, 1e-9)
 	}
 	require.InDelta(t, 0.71, appliedTotal, 1e-9)
+	require.Zero(t, harness.userRepo.walletCalls.Load())
+}
+
+func TestSystemCustomSubscriptionClaudeMessagesRoutesToGeminiSource(t *testing.T) {
+	harness := newSystemCustomGeminiMessagesProductionHarness(t)
+	defer harness.close()
+
+	recorder := httptest.NewRecorder()
+	req := httptest.NewRequest(
+		http.MethodPost,
+		"/v1/messages",
+		bytes.NewBufferString(`{"model":"tavern-gemini","max_tokens":64,"messages":[{"role":"user","content":"hello"}]}`),
+	)
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+harness.key)
+	harness.router.ServeHTTP(recorder, req)
+
+	require.Equal(t, http.StatusOK, recorder.Code, recorder.Body.String())
+	require.Equal(t, "message", gjson.Get(recorder.Body.String(), "type").String())
+	require.Equal(t, "hello from gemini", gjson.Get(recorder.Body.String(), "content.0.text").String())
+	require.Equal(t, []string{"tavern-gemini"}, harness.routeRepo.resolvedModels())
+	selectedGroupIDs := harness.accountRepo.selectedGroupIDs()
+	require.NotEmpty(t, selectedGroupIDs)
+	for _, groupID := range selectedGroupIDs {
+		require.Equal(t, int64(42), groupID, "every scheduler lookup must stay inside the resolved Gemini source")
+	}
+
+	accountIDs, upstreamModels := harness.upstream.calls()
+	require.Equal(t, []int64{601}, accountIDs)
+	require.Equal(t, []string{"gemini-2.5-flash"}, upstreamModels)
+	require.Contains(t, harness.upstream.lastURL(), "/models/gemini-2.5-flash:generateContent")
+	require.Contains(t, harness.upstream.lastBody(), `"contents"`)
+
+	commands := harness.billingRepo.commands()
+	logs := harness.usageRepo.logs()
+	require.Len(t, commands, 1)
+	require.Len(t, logs, 1)
+	require.NotNil(t, commands[0].SubscriptionID)
+	require.Equal(t, int64(88), *commands[0].SubscriptionID)
+	require.Zero(t, commands[0].BalanceCost)
+	require.Positive(t, commands[0].SubscriptionCost)
+	require.NotNil(t, logs[0].GroupID)
+	require.Equal(t, int64(25), *logs[0].GroupID)
+	require.NotNil(t, logs[0].SourceGroupID)
+	require.Equal(t, int64(42), *logs[0].SourceGroupID)
+	require.Equal(t, "tavern-gemini", logs[0].RequestedModel)
+	require.Equal(t, "gemini-2.5-flash", logs[0].Model)
 	require.Zero(t, harness.userRepo.walletCalls.Load())
 }
 
