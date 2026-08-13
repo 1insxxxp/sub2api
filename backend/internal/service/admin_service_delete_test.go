@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/pagination"
 	"github.com/stretchr/testify/require"
 )
@@ -247,6 +248,17 @@ type groupRepoStub struct {
 	affectedUserIDs []int64
 	deleteErr       error
 	deleteCalls     []int64
+}
+
+type groupCustomSourceReferenceCounterStub struct {
+	count int
+	err   error
+	calls []int64
+}
+
+func (s *groupCustomSourceReferenceCounterStub) CountCustomGroupModelReferences(_ context.Context, sourceGroupID int64) (int, error) {
+	s.calls = append(s.calls, sourceGroupID)
+	return s.count, s.err
 }
 
 func (s *groupRepoStub) Create(ctx context.Context, group *Group) error {
@@ -701,6 +713,55 @@ func TestAdminService_DeleteGroup_Error(t *testing.T) {
 
 	err := svc.DeleteGroup(context.Background(), 42)
 	require.ErrorIs(t, err, deleteErr)
+}
+
+func TestAdminService_DeleteGroup_BlocksCustomGroupSourceInUse(t *testing.T) {
+	repo := &groupRepoStub{}
+	references := &groupCustomSourceReferenceCounterStub{count: 7}
+	svc := &adminServiceImpl{
+		groupRepo:          repo,
+		groupSourceRefRepo: references,
+	}
+
+	err := svc.DeleteGroup(context.Background(), 42)
+
+	require.Error(t, err)
+	require.Equal(t, "CUSTOM_GROUP_SOURCE_IN_USE", infraerrors.Reason(err))
+	status := infraerrors.FromError(err)
+	require.Equal(t, "7", status.Metadata["reference_count"])
+	require.Equal(t, []int64{42}, references.calls)
+	require.Empty(t, repo.deleteCalls)
+}
+
+func TestAdminService_DeleteGroup_CustomGroupSourceReferenceQueryError(t *testing.T) {
+	queryErr := errors.New("count references failed")
+	repo := &groupRepoStub{}
+	references := &groupCustomSourceReferenceCounterStub{err: queryErr}
+	svc := &adminServiceImpl{
+		groupRepo:          repo,
+		groupSourceRefRepo: references,
+	}
+
+	err := svc.DeleteGroup(context.Background(), 42)
+
+	require.ErrorIs(t, err, queryErr)
+	require.Equal(t, []int64{42}, references.calls)
+	require.Empty(t, repo.deleteCalls)
+}
+
+func TestAdminService_DeleteGroup_CustomGroupSourceUnused(t *testing.T) {
+	repo := &groupRepoStub{}
+	references := &groupCustomSourceReferenceCounterStub{}
+	svc := &adminServiceImpl{
+		groupRepo:          repo,
+		groupSourceRefRepo: references,
+	}
+
+	err := svc.DeleteGroup(context.Background(), 42)
+
+	require.NoError(t, err)
+	require.Equal(t, []int64{42}, references.calls)
+	require.Equal(t, []int64{42}, repo.deleteCalls)
 }
 
 func TestAdminService_DeleteProxy_Success(t *testing.T) {

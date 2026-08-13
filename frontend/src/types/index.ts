@@ -844,6 +844,8 @@ export interface UserCustomGroupModel {
   source_group_id: number
   source_model: string
   source_group?: Group
+  source_available?: boolean
+  source_issue?: 'source_group_unavailable' | 'source_group_not_allowed'
 }
 
 export interface UserCustomGroup {

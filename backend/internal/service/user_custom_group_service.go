@@ -39,11 +39,26 @@ func NewUserCustomGroupService(repo UserCustomGroupRepository, userRepo UserRepo
 }
 
 func (s *UserCustomGroupService) List(ctx context.Context, userID int64) ([]UserCustomGroup, error) {
-	return s.repo.ListByUserID(ctx, userID)
+	groups, err := s.repo.ListByUserID(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.annotateSourceAvailability(ctx, userID, groups); err != nil {
+		return nil, err
+	}
+	return groups, nil
 }
 
 func (s *UserCustomGroupService) Get(ctx context.Context, userID, id int64) (*UserCustomGroup, error) {
-	return s.repo.GetOwned(ctx, id, userID)
+	group, err := s.repo.GetOwned(ctx, id, userID)
+	if err != nil {
+		return nil, err
+	}
+	annotated := []UserCustomGroup{*group}
+	if err := s.annotateSourceAvailability(ctx, userID, annotated); err != nil {
+		return nil, err
+	}
+	return &annotated[0], nil
 }
 
 func (s *UserCustomGroupService) Create(ctx context.Context, userID int64, req CreateUserCustomGroupRequest) (*UserCustomGroup, error) {
@@ -65,7 +80,7 @@ func (s *UserCustomGroupService) Create(ctx context.Context, userID int64, req C
 	if err := s.repo.Create(ctx, g, req.Models); err != nil {
 		return nil, err
 	}
-	return s.repo.GetOwned(ctx, g.ID, userID)
+	return s.Get(ctx, userID, g.ID)
 }
 
 func (s *UserCustomGroupService) Update(ctx context.Context, userID, id int64, req UpdateUserCustomGroupRequest) (*UserCustomGroup, error) {
@@ -94,7 +109,32 @@ func (s *UserCustomGroupService) Update(ctx context.Context, userID, id int64, r
 	if err := s.repo.Update(ctx, g, req.Models); err != nil {
 		return nil, err
 	}
-	return s.repo.GetOwned(ctx, id, userID)
+	return s.Get(ctx, userID, id)
+}
+
+func (s *UserCustomGroupService) annotateSourceAvailability(ctx context.Context, userID int64, groups []UserCustomGroup) error {
+	user, err := s.userRepo.GetByID(ctx, userID)
+	if err != nil {
+		return err
+	}
+	for groupIndex := range groups {
+		for modelIndex := range groups[groupIndex].Models {
+			model := &groups[groupIndex].Models[modelIndex]
+			model.SourceAvailable = false
+			model.SourceIssue = UserCustomGroupSourceIssueUnavailable
+			source := model.SourceGroup
+			if source == nil || source.Status != StatusActive || source.Platform == PlatformComposite {
+				continue
+			}
+			if !user.CanBindGroup(source.ID, source.IsExclusive) {
+				model.SourceIssue = UserCustomGroupSourceIssueNotAllowed
+				continue
+			}
+			model.SourceAvailable = true
+			model.SourceIssue = ""
+		}
+	}
+	return nil
 }
 
 func (s *UserCustomGroupService) Delete(ctx context.Context, userID, id int64) error {

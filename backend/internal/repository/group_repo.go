@@ -802,6 +802,21 @@ func (r *groupRepository) DeleteAccountGroupsByGroupID(ctx context.Context, grou
 	return affected, nil
 }
 
+func (r *groupRepository) CountCustomGroupModelReferences(ctx context.Context, sourceGroupID int64) (int, error) {
+	return countCustomGroupModelReferences(ctx, r.sql, sourceGroupID)
+}
+
+func countCustomGroupModelReferences(ctx context.Context, queryer sqlQueryer, sourceGroupID int64) (int, error) {
+	var count int
+	err := scanSingleRow(ctx, queryer, `
+		SELECT COUNT(*)
+		FROM user_custom_group_models AS model
+		JOIN user_custom_groups AS custom_group ON custom_group.id = model.custom_group_id
+		WHERE model.source_group_id = $1
+		  AND custom_group.deleted_at IS NULL`, []any{sourceGroupID}, &count)
+	return count, err
+}
+
 func (r *groupRepository) DeleteCascade(ctx context.Context, id int64) ([]int64, error) {
 	g, err := r.client.Group.Query().Where(group.IDEQ(id)).Only(ctx)
 	if err != nil {
@@ -845,6 +860,19 @@ func (r *groupRepository) DeleteCascade(ctx context.Context, id int64) ([]int64,
 	}
 	if lockedID == 0 {
 		return nil, service.ErrGroupNotFound
+	}
+
+	// Recheck while holding the source group row lock. The service-level check
+	// provides a fast, user-friendly rejection; this transactional check closes
+	// the race with a concurrent custom-group mapping insert.
+	customGroupReferenceCount, err := countCustomGroupModelReferences(ctx, exec, id)
+	if err != nil {
+		return nil, err
+	}
+	if customGroupReferenceCount > 0 {
+		return nil, service.ErrGroupCustomGroupSourceInUse.WithMetadata(map[string]string{
+			"reference_count": fmt.Sprintf("%d", customGroupReferenceCount),
+		})
 	}
 
 	var affectedUserIDs []int64

@@ -25,6 +25,20 @@ type customGroupValidationGroupRepoStub struct {
 	groups map[int64]*Group
 }
 
+type customGroupReadRepoStub struct {
+	UserCustomGroupRepository
+	groups []UserCustomGroup
+	group  *UserCustomGroup
+}
+
+func (s customGroupReadRepoStub) ListByUserID(context.Context, int64) ([]UserCustomGroup, error) {
+	return s.groups, nil
+}
+
+func (s customGroupReadRepoStub) GetOwned(context.Context, int64, int64) (*UserCustomGroup, error) {
+	return s.group, nil
+}
+
 func (s customGroupValidationGroupRepoStub) GetByIDLite(_ context.Context, id int64) (*Group, error) {
 	group, ok := s.groups[id]
 	if !ok {
@@ -74,4 +88,60 @@ func TestUserCustomGroupValidateModelsRejectsDuplicateSourceMapping(t *testing.T
 	}
 
 	require.ErrorIs(t, svc.validateModels(context.Background(), 9, models), ErrUserCustomGroupInvalidModel)
+}
+
+func TestUserCustomGroupServiceListAnnotatesSourceAvailability(t *testing.T) {
+	repo := customGroupReadRepoStub{groups: []UserCustomGroup{{
+		ID:     70,
+		UserID: 9,
+		Models: []UserCustomGroupModel{
+			{ID: 1, SourceGroupID: 10, SourceGroup: &Group{ID: 10, Status: StatusActive, Platform: PlatformAnthropic}},
+			{ID: 2, SourceGroupID: 20},
+			{ID: 3, SourceGroupID: 30, SourceGroup: &Group{ID: 30, Status: StatusDisabled, Platform: PlatformAnthropic}},
+			{ID: 4, SourceGroupID: 40, SourceGroup: &Group{ID: 40, Status: StatusActive, Platform: PlatformComposite}},
+			{ID: 5, SourceGroupID: 50, SourceGroup: &Group{ID: 50, Status: StatusActive, Platform: PlatformAnthropic, IsExclusive: true}},
+		},
+	}}}
+	svc := &UserCustomGroupService{
+		repo:     repo,
+		userRepo: customGroupValidationUserRepoStub{user: &User{ID: 9, Status: StatusActive}},
+	}
+
+	groups, err := svc.List(context.Background(), 9)
+
+	require.NoError(t, err)
+	require.Len(t, groups, 1)
+	models := groups[0].Models
+	require.True(t, models[0].SourceAvailable)
+	require.Empty(t, models[0].SourceIssue)
+	require.False(t, models[1].SourceAvailable)
+	require.Equal(t, UserCustomGroupSourceIssueUnavailable, models[1].SourceIssue)
+	require.False(t, models[2].SourceAvailable)
+	require.Equal(t, UserCustomGroupSourceIssueUnavailable, models[2].SourceIssue)
+	require.False(t, models[3].SourceAvailable)
+	require.Equal(t, UserCustomGroupSourceIssueUnavailable, models[3].SourceIssue)
+	require.False(t, models[4].SourceAvailable)
+	require.Equal(t, UserCustomGroupSourceIssueNotAllowed, models[4].SourceIssue)
+}
+
+func TestUserCustomGroupServiceGetAnnotatesAllowedExclusiveSource(t *testing.T) {
+	repo := customGroupReadRepoStub{group: &UserCustomGroup{
+		ID:     70,
+		UserID: 9,
+		Models: []UserCustomGroupModel{{
+			ID:            1,
+			SourceGroupID: 50,
+			SourceGroup:   &Group{ID: 50, Status: StatusActive, Platform: PlatformAnthropic, IsExclusive: true},
+		}},
+	}}
+	svc := &UserCustomGroupService{
+		repo:     repo,
+		userRepo: customGroupValidationUserRepoStub{user: &User{ID: 9, Status: StatusActive, AllowedGroups: []int64{50}}},
+	}
+
+	group, err := svc.Get(context.Background(), 9, 70)
+
+	require.NoError(t, err)
+	require.True(t, group.Models[0].SourceAvailable)
+	require.Empty(t, group.Models[0].SourceIssue)
 }

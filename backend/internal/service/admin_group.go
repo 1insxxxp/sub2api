@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -1027,6 +1028,18 @@ func normalizeGroupModelPricing(platform string, pricing []ChannelModelPricing) 
 }
 
 func (s *adminServiceImpl) DeleteGroup(ctx context.Context, id int64) error {
+	if s.groupSourceRefRepo != nil {
+		referenceCount, err := s.groupSourceRefRepo.CountCustomGroupModelReferences(ctx, id)
+		if err != nil {
+			return err
+		}
+		if referenceCount > 0 {
+			return ErrGroupCustomGroupSourceInUse.WithMetadata(map[string]string{
+				"reference_count": strconv.Itoa(referenceCount),
+			})
+		}
+	}
+
 	var groupKeys []string
 	if s.authCacheInvalidator != nil {
 		keys, err := s.apiKeyRepo.ListKeysByGroupID(ctx, id)

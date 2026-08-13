@@ -5,15 +5,22 @@ import "time"
 const MaxUserCustomGroups = 20
 const MaxUserCustomGroupModels = 200
 
+const (
+	UserCustomGroupSourceIssueUnavailable = "source_group_unavailable"
+	UserCustomGroupSourceIssueNotAllowed  = "source_group_not_allowed"
+)
+
 type UserCustomGroupModel struct {
-	ID            int64     `json:"id"`
-	CustomGroupID int64     `json:"custom_group_id"`
-	PublicModel   string    `json:"public_model"`
-	SourceGroupID int64     `json:"source_group_id"`
-	SourceModel   string    `json:"source_model"`
-	SourceGroup   *Group    `json:"source_group,omitempty"`
-	CreatedAt     time.Time `json:"created_at"`
-	UpdatedAt     time.Time `json:"updated_at"`
+	ID              int64     `json:"id"`
+	CustomGroupID   int64     `json:"custom_group_id"`
+	PublicModel     string    `json:"public_model"`
+	SourceGroupID   int64     `json:"source_group_id"`
+	SourceModel     string    `json:"source_model"`
+	SourceGroup     *Group    `json:"source_group,omitempty"`
+	SourceAvailable bool      `json:"source_available"`
+	SourceIssue     string    `json:"source_issue,omitempty"`
+	CreatedAt       time.Time `json:"created_at"`
+	UpdatedAt       time.Time `json:"updated_at"`
 }
 
 type UserCustomGroup struct {

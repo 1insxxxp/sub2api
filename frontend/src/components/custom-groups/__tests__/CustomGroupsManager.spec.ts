@@ -44,6 +44,26 @@ const groups = [{
   updated_at: '2026-08-08T00:00:00Z',
 }]
 
+const groupsWithStaleSource = [{
+  ...groups[0],
+  models: [
+    {
+      ...groups[0].models[0],
+      source_available: true,
+      source_group: { id: 11, name: 'Claude 满血', status: 'active', platform: 'anthropic' },
+    },
+    {
+      id: 32,
+      custom_group_id: 21,
+      public_model: 'claude-opus-backup',
+      source_group_id: 98,
+      source_model: 'claude-opus-4-6',
+      source_available: false,
+      source_issue: 'source_group_unavailable',
+    },
+  ],
+}]
+
 const mountManager = async () => {
   const wrapper = mount(CustomGroupsManager)
   await flushPromises()
@@ -120,5 +140,61 @@ describe('CustomGroupsManager', () => {
     expect(claudeToggle.attributes('aria-expanded')).toBe('false')
     expect(claudeToggle.text()).toContain('已选 1')
     expect(wrapper.find('[data-test="custom-group-source-models-11"]').exists()).toBe(false)
+  })
+
+  it('marks stale source mappings in the group list', async () => {
+    apiMocks.list.mockResolvedValue(groupsWithStaleSource)
+
+    const wrapper = await mountManager()
+
+    expect(wrapper.get('[data-test="custom-group-stale-summary-21"]').text()).toContain('1 个来源失效')
+    const staleModel = wrapper.get('[data-test="custom-group-stale-model-32"]')
+    expect(staleModel.text()).toContain('claude-opus-backup')
+    expect(staleModel.classes()).toContain('text-red-700')
+  })
+
+  it('shows stale mappings in edit mode and requires removal before saving', async () => {
+    apiMocks.list.mockResolvedValue(groupsWithStaleSource)
+    const wrapper = await mountManager()
+
+    await wrapper.get('[data-test="custom-groups-edit-21"]').trigger('click')
+
+    const warning = wrapper.get('[data-test="custom-group-stale-sources"]')
+    expect(warning.text()).toContain('存在失效来源线路')
+    expect(warning.text()).toContain('来源分组已下架或停用')
+    expect(warning.text()).toContain('claude-opus-backup')
+    expect(wrapper.get('button[type="submit"]').attributes('disabled')).toBeDefined()
+
+    await wrapper.get('[data-test="custom-group-remove-stale-32"]').trigger('click')
+
+    expect(wrapper.find('[data-test="custom-group-stale-sources"]').exists()).toBe(false)
+    expect(wrapper.get('button[type="submit"]').attributes('disabled')).toBeUndefined()
+  })
+
+  it('treats omitted source availability from an old backend as valid', async () => {
+    const wrapper = await mountManager()
+
+    expect(wrapper.find('[data-test="custom-group-stale-summary-21"]').exists()).toBe(false)
+    await wrapper.get('[data-test="custom-groups-edit-21"]').trigger('click')
+    expect(wrapper.find('[data-test="custom-group-stale-sources"]').exists()).toBe(false)
+    expect(wrapper.get('button[type="submit"]').attributes('disabled')).toBeUndefined()
+  })
+
+  it('distinguishes a source permission loss from a removed source group', async () => {
+    const deniedModel = {
+      ...groupsWithStaleSource[0].models[1],
+      source_issue: 'source_group_not_allowed',
+      source_group: { id: 98, name: '专属 Claude', status: 'active', platform: 'anthropic' },
+    }
+    apiMocks.list.mockResolvedValue([{
+      ...groupsWithStaleSource[0],
+      models: [groupsWithStaleSource[0].models[0], deniedModel],
+    }])
+    const wrapper = await mountManager()
+
+    await wrapper.get('[data-test="custom-groups-edit-21"]').trigger('click')
+
+    expect(wrapper.get('[data-test="custom-group-stale-sources"]').text()).toContain('已无权使用该来源分组')
+    expect(wrapper.get('[data-test="custom-group-stale-sources"]').text()).toContain('专属 Claude')
   })
 })
