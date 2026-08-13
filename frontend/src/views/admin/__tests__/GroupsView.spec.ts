@@ -31,6 +31,7 @@ describe("admin GroupsView layout", () => {
     expect(groupsViewSource).toContain('data-testid="system-custom-manage"');
     expect(groupsViewSource).toContain("isSystemCustomGroup(row)");
     expect(groupsViewSource).toContain('@saved="handleSystemCustomSaved"');
+    expect(groupsViewSource).toContain('@deleted="handleSystemCustomDeleted"');
     expect(groupsViewSource).toContain("await loadGroups()");
   });
 

@@ -479,6 +479,7 @@
       :group-id="systemCustomGroupID"
       @close="closeSystemCustomGroup"
       @saved="handleSystemCustomSaved"
+      @deleted="handleSystemCustomDeleted"
     />
 
     <!-- Create Group Modal -->
@@ -5835,6 +5836,11 @@ const closeSystemCustomGroup = async () => {
 
 const handleSystemCustomSaved = async () => {
   appStore.showSuccess(t("admin.groups.systemCustom.saved"));
+  await closeSystemCustomGroup();
+};
+
+const handleSystemCustomDeleted = async () => {
+  appStore.showSuccess(t("admin.groups.systemCustom.deleted"));
   await closeSystemCustomGroup();
 };
 

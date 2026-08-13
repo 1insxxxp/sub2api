@@ -339,9 +339,48 @@
 
     <template #footer>
       <div class="flex w-full flex-wrap items-center justify-between gap-3">
-        <p class="text-xs text-slate-500 dark:text-slate-400">
-          {{ t('admin.groups.systemCustom.snapshotHint') }}
-        </p>
+        <div class="flex min-w-0 flex-wrap items-center gap-2">
+          <template v-if="isEditing">
+            <button
+              v-if="!confirmingDelete"
+              data-testid="system-custom-delete"
+              class="btn border border-red-200 bg-white text-red-600 hover:bg-red-50 dark:border-red-900/70 dark:bg-dark-800 dark:text-red-300 dark:hover:bg-red-950/30"
+              type="button"
+              :disabled="saving || deleting"
+              @click="confirmingDelete = true"
+            >
+              {{ t('admin.groups.systemCustom.deleteAction') }}
+            </button>
+            <div
+              v-else
+              class="flex flex-wrap items-center gap-2 rounded-xl border border-red-200 bg-red-50 px-3 py-2 dark:border-red-900/60 dark:bg-red-950/30"
+            >
+              <span class="text-xs font-medium text-red-700 dark:text-red-300">
+                {{ t('admin.groups.systemCustom.deleteConfirm') }}
+              </span>
+              <button
+                data-testid="system-custom-delete-confirm"
+                class="rounded-lg bg-red-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-red-700 disabled:opacity-50"
+                type="button"
+                :disabled="deleting"
+                @click="deleteGroup"
+              >
+                {{ deleting ? t('admin.groups.systemCustom.deleting') : t('common.confirm') }}
+              </button>
+              <button
+                class="rounded-lg px-2 py-1.5 text-xs font-medium text-slate-600 hover:bg-white dark:text-slate-300 dark:hover:bg-dark-700"
+                type="button"
+                :disabled="deleting"
+                @click="confirmingDelete = false"
+              >
+                {{ t('common.cancel') }}
+              </button>
+            </div>
+          </template>
+          <p v-else class="text-xs text-slate-500 dark:text-slate-400">
+            {{ t('admin.groups.systemCustom.snapshotHint') }}
+          </p>
+        </div>
         <div class="flex items-center gap-3">
           <button class="btn btn-secondary" type="button" @click="emit('close')">
             {{ t('common.cancel') }}
@@ -385,6 +424,7 @@ interface Props {
 interface Emits {
   (event: 'close'): void
   (event: 'saved'): void
+  (event: 'deleted'): void
 }
 
 interface RouteDraft extends SystemCustomGroupModelInput {
@@ -403,6 +443,8 @@ const selectedSourceIDs = ref<number[]>([])
 const loading = ref(false)
 const saving = ref(false)
 const syncing = ref(false)
+const deleting = ref(false)
+const confirmingDelete = ref(false)
 const errorMessage = ref('')
 const syncPreview = ref<SystemCustomGroupSyncPreview | null>(null)
 const syncAddedSelections = reactive(new Set<string>())
@@ -420,7 +462,7 @@ const form = reactive({
 const isEditing = computed(() => props.groupId !== null)
 
 const routeKey = (sourceGroupID: number, sourceModel: string) =>
-  `${sourceGroupID}:${sourceModel.toLocaleLowerCase()}`
+  `${sourceGroupID}:${sourceModel.toLowerCase()}`
 
 const ensureRoute = (
   sourceGroupID: number,
@@ -461,6 +503,8 @@ const reset = () => {
   syncAddedSelections.clear()
   syncMissingDisableSelections.clear()
   errorMessage.value = ''
+  deleting.value = false
+  confirmingDelete.value = false
 }
 
 const mergeCandidates = (items: SystemCustomGroupCandidate[]) => {
@@ -538,7 +582,11 @@ const visibleRoutes = computed(() =>
   selectedCandidates.value.flatMap((candidate) => routesForSource(candidate.group.id))
 )
 
-const selectedRoutes = computed(() => [...routes.values()].filter((route) => route.selected))
+const selectedRoutes = computed(() =>
+  [...routes.values()].filter(
+    (route) => route.selected && selectedSourceIDs.value.includes(route.source_group_id)
+  )
+)
 
 const duplicateSourceRoutes = computed(() => {
   const counts = new Map<string, number>()
@@ -554,7 +602,7 @@ const conflictingPublicModels = computed(() => {
   for (const route of selectedRoutes.value) {
     const display = route.public_model.trim()
     if (!display) continue
-    const key = display.toLocaleLowerCase()
+    const key = display.toLowerCase()
     const current = counts.get(key)
     counts.set(key, { count: (current?.count ?? 0) + 1, display: current?.display ?? display })
   }
@@ -630,13 +678,35 @@ const loadSyncPreview = async () => {
 
 const toggleSyncAdded = (added: SystemCustomGroupSyncAdded, selected: boolean) => {
   const key = routeKey(added.source_group_id, added.source_model)
+  if (!selected) {
+    const route = routes.get(key)
+    if (route) route.selected = false
+    syncAddedSelections.delete(key)
+    return
+  }
+  const candidate = candidates.value.find(
+    (item) =>
+      item.group.id === added.source_group_id &&
+      item.models.some((model) => model.toLowerCase() === added.source_model.toLowerCase())
+  )
+  if (!candidate) {
+    errorMessage.value = t('admin.groups.systemCustom.syncSourceUnavailable', {
+      model: added.source_model,
+      source: added.source_group_id
+    })
+    syncAddedSelections.delete(key)
+    return
+  }
+  errorMessage.value = ''
+  if (!selectedSourceIDs.value.includes(added.source_group_id)) {
+    selectedSourceIDs.value = [...selectedSourceIDs.value, added.source_group_id]
+  }
   const route = ensureRoute(added.source_group_id, added.source_model, {
     public_model: added.public_model
   })
-  route.selected = selected
+  route.selected = true
   route.enabled = true
-  if (selected) syncAddedSelections.add(key)
-  else syncAddedSelections.delete(key)
+  syncAddedSelections.add(key)
 }
 
 const toggleSyncMissing = (missing: SystemCustomGroupModel, disable: boolean) => {
@@ -687,7 +757,22 @@ const formatApiError = (error: unknown, fallback: string) => {
     const value = formatMetadata(source.metadata)
     if (value && !parts.includes(value)) parts.push(value)
   }
-  const specificParts = parts.filter((part) => part.toLocaleLowerCase() !== 'internal error')
+  const specificParts = parts.filter((part) => part.toLowerCase() !== 'internal error')
   return (specificParts.length > 0 ? specificParts : parts).join(' · ') || fallback
+}
+
+const deleteGroup = async () => {
+  if (props.groupId === null || deleting.value) return
+  deleting.value = true
+  errorMessage.value = ''
+  try {
+    await adminAPI.groups.deleteSystemCustomGroup(props.groupId)
+    confirmingDelete.value = false
+    emit('deleted')
+  } catch (error) {
+    errorMessage.value = formatApiError(error, t('admin.groups.systemCustom.deleteFailed'))
+  } finally {
+    deleting.value = false
+  }
 }
 </script>

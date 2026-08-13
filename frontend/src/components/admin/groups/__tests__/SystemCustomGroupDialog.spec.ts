@@ -5,12 +5,14 @@ import SystemCustomGroupDialog from '../SystemCustomGroupDialog.vue'
 
 const {
   createSystemCustomGroup,
+  deleteSystemCustomGroup,
   getSystemCustomGroup,
   getSystemCustomGroupCandidates,
   getSystemCustomGroupSyncPreview,
   updateSystemCustomGroup
 } = vi.hoisted(() => ({
   createSystemCustomGroup: vi.fn(),
+  deleteSystemCustomGroup: vi.fn(),
   getSystemCustomGroup: vi.fn(),
   getSystemCustomGroupCandidates: vi.fn(),
   getSystemCustomGroupSyncPreview: vi.fn(),
@@ -21,6 +23,7 @@ vi.mock('@/api/admin', () => ({
   adminAPI: {
     groups: {
       createSystemCustomGroup,
+      deleteSystemCustomGroup,
       getSystemCustomGroup,
       getSystemCustomGroupCandidates,
       getSystemCustomGroupSyncPreview,
@@ -149,6 +152,7 @@ describe('SystemCustomGroupDialog', () => {
     getSystemCustomGroup.mockResolvedValue(existingGroup)
     createSystemCustomGroup.mockResolvedValue(existingGroup)
     updateSystemCustomGroup.mockResolvedValue(existingGroup)
+    deleteSystemCustomGroup.mockResolvedValue({ id: 90, deleted: true })
   })
 
   it('loads candidates, keeps unique names and sends the complete selected route snapshot', async () => {
@@ -262,6 +266,66 @@ describe('SystemCustomGroupDialog', () => {
     )
   })
 
+  it('keeps hidden source drafts but excludes them from conflicts and the saved snapshot', async () => {
+    const wrapper = mountDialog()
+    await flushPromises()
+    await wrapper.get('[data-testid="system-custom-name"]').setValue('酒馆综合月卡')
+    await sourceCheckbox(wrapper, 11).setValue(true)
+    await sourceCheckbox(wrapper, 22).setValue(true)
+
+    const routeA = modelRow(wrapper, 11, 'claude-sonnet-4')
+    const routeB = modelRow(wrapper, 22, 'claude-sonnet-4')
+    await routeA.get('input[type="checkbox"]').setValue(true)
+    await routeB.get('input[type="checkbox"]').setValue(true)
+    expect(wrapper.find('[data-testid="system-custom-conflict"]').exists()).toBe(true)
+
+    await sourceCheckbox(wrapper, 22).setValue(false)
+    expect(wrapper.find('[data-testid="system-custom-conflict"]').exists()).toBe(false)
+    await wrapper.get('[data-testid="system-custom-save"]').trigger('click')
+    await flushPromises()
+    expect(createSystemCustomGroup.mock.calls.at(-1)?.[0].models).toEqual([
+      {
+        public_model: 'claude-sonnet-4',
+        source_group_id: 11,
+        source_model: 'claude-sonnet-4',
+        enabled: true
+      }
+    ])
+
+    await sourceCheckbox(wrapper, 22).setValue(true)
+    expect(
+      modelRow(wrapper, 22, 'claude-sonnet-4')
+        .get('[data-testid="system-custom-public-model"]')
+        .element
+    ).toHaveProperty('value', 'claude-sonnet-4')
+    expect(wrapper.find('[data-testid="system-custom-conflict"]').exists()).toBe(true)
+  })
+
+  it('normalizes route identity without locale-sensitive casing', async () => {
+    const localeLower = vi
+      .spyOn(String.prototype, 'toLocaleLowerCase')
+      .mockImplementation(() => {
+        throw new Error('locale-sensitive casing must not be used')
+      })
+    try {
+      const wrapper = mountDialog()
+      await flushPromises()
+      await sourceCheckbox(wrapper, 11).setValue(true)
+      await sourceCheckbox(wrapper, 22).setValue(true)
+      await modelRow(wrapper, 11, 'claude-sonnet-4')
+        .get('input[type="checkbox"]')
+        .setValue(true)
+      await modelRow(wrapper, 22, 'claude-sonnet-4')
+        .get('input[type="checkbox"]')
+        .setValue(true)
+      expect(wrapper.get('[data-testid="system-custom-conflict"]').text()).toContain(
+        'claude-sonnet-4'
+      )
+    } finally {
+      localeLower.mockRestore()
+    }
+  })
+
   it('previews added, missing and conflicting routes without silently applying them', async () => {
     getSystemCustomGroupSyncPreview.mockResolvedValue({
       added: [
@@ -310,6 +374,76 @@ describe('SystemCustomGroupDialog', () => {
         expect.objectContaining({ source_model: 'claude-haiku-4', enabled: true }),
         expect.objectContaining({ source_model: 'legacy-haiku', enabled: false })
       ])
+    )
+  })
+
+  it('selecting a sync-added route activates its valid source and rejects removed sources', async () => {
+    getSystemCustomGroup.mockResolvedValueOnce({
+      ...existingGroup,
+      models: [existingGroup.models[0]]
+    })
+    getSystemCustomGroupSyncPreview.mockResolvedValueOnce({
+      added: [
+        {
+          public_model: 'gpt-5',
+          source_group_id: 22,
+          source_model: 'gpt-5',
+          selected: false
+        },
+        {
+          public_model: 'retired-model',
+          source_group_id: 99,
+          source_model: 'retired-model',
+          selected: false
+        }
+      ],
+      missing: [],
+      conflicting: []
+    })
+    const wrapper = mountDialog({ groupId: 90 })
+    await flushPromises()
+    expect(sourceCheckbox(wrapper, 22).element).toHaveProperty('checked', false)
+    await wrapper.get('[data-testid="system-custom-sync"]').trigger('click')
+    await flushPromises()
+
+    const addedRows = wrapper.findAll('[data-testid="system-custom-sync-added"]')
+    await addedRows[0].get('input[type="checkbox"]').setValue(true)
+    expect(sourceCheckbox(wrapper, 22).element).toHaveProperty('checked', true)
+    expect(modelRow(wrapper, 22, 'gpt-5').text()).toContain('gpt-5')
+
+    await addedRows[1].get('input[type="checkbox"]').setValue(true)
+    expect(wrapper.get('[data-testid="system-custom-error"]').text()).toContain('retired-model')
+    await wrapper.get('[data-testid="system-custom-save"]').trigger('click')
+    await flushPromises()
+    expect(updateSystemCustomGroup.mock.calls.at(-1)?.[1].models).not.toEqual(
+      expect.arrayContaining([expect.objectContaining({ source_group_id: 99 })])
+    )
+  })
+
+  it('deletes edit groups only after explicit confirmation and reports backend details', async () => {
+    const wrapper = mountDialog({ groupId: 90 })
+    await flushPromises()
+
+    await wrapper.get('[data-testid="system-custom-delete"]').trigger('click')
+    expect(deleteSystemCustomGroup).not.toHaveBeenCalled()
+    await wrapper.get('[data-testid="system-custom-delete-confirm"]').trigger('click')
+    await flushPromises()
+    expect(deleteSystemCustomGroup).toHaveBeenCalledWith(90)
+    expect(wrapper.emitted('deleted')).toHaveLength(1)
+
+    deleteSystemCustomGroup.mockRejectedValueOnce({
+      response: {
+        data: {
+          message: 'system custom group is in use',
+          metadata: { public_model: 'claude-sonnet-4' }
+        }
+      }
+    })
+    await wrapper.get('[data-testid="system-custom-delete"]').trigger('click')
+    await wrapper.get('[data-testid="system-custom-delete-confirm"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.get('[data-testid="system-custom-error"]').text()).toContain(
+      'claude-sonnet-4'
     )
   })
 
