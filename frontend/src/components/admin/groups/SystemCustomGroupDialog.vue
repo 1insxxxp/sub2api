@@ -276,16 +276,40 @@
               >
                 <div
                   data-testid="system-custom-source-section-header"
-                  class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 bg-slate-50/80 px-3 py-2.5 dark:border-dark-700 dark:bg-dark-700/50"
+                  :class="[
+                    'flex flex-wrap items-center justify-between gap-3 bg-slate-50/80 px-3 py-2.5 dark:bg-dark-700/50',
+                    isSourceExpanded(candidate.group.id)
+                      ? 'border-b border-slate-200 dark:border-dark-700'
+                      : ''
+                  ]"
                 >
-                  <div class="flex min-w-0 items-center gap-2">
+                  <button
+                    data-testid="system-custom-source-collapse"
+                    :data-source-id="candidate.group.id"
+                    class="group flex min-w-0 flex-1 items-center gap-2 rounded-lg text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/30"
+                    type="button"
+                    :aria-expanded="isSourceExpanded(candidate.group.id)"
+                    :aria-controls="sourceModelsID(candidate.group.id)"
+                    :aria-label="`${isSourceExpanded(candidate.group.id) ? t('common.collapse') : t('common.expand')} ${candidate.group.name}`"
+                    @click="toggleSourceExpanded(candidate.group.id)"
+                  >
+                    <span class="flex h-7 w-7 flex-none items-center justify-center rounded-lg text-slate-400 transition-colors group-hover:bg-white group-hover:text-primary-600 dark:group-hover:bg-dark-800 dark:group-hover:text-primary-300">
+                      <Icon
+                        name="chevronDown"
+                        size="sm"
+                        :class="[
+                          'transition-transform duration-200 motion-reduce:transition-none',
+                          isSourceExpanded(candidate.group.id) ? 'rotate-180' : ''
+                        ]"
+                      />
+                    </span>
                     <span class="truncate text-sm font-semibold text-slate-800 dark:text-slate-100">
                       {{ candidate.group.name }}
                     </span>
                     <span class="flex-none rounded-md bg-slate-100 px-1.5 py-0.5 text-[11px] text-slate-500 dark:bg-dark-700 dark:text-slate-400">
                       {{ candidate.group.platform }}
                     </span>
-                  </div>
+                  </button>
                   <div class="flex flex-none items-center gap-3">
                     <label class="inline-flex cursor-pointer select-none items-center gap-2 text-xs font-medium text-slate-600 dark:text-slate-300">
                       <input
@@ -321,7 +345,13 @@
                     </span>
                   </div>
                 </div>
-                <div class="space-y-2 p-3">
+                <div
+                  v-show="isSourceExpanded(candidate.group.id)"
+                  :id="sourceModelsID(candidate.group.id)"
+                  data-testid="system-custom-source-models"
+                  :data-source-id="candidate.group.id"
+                  class="space-y-2 p-3"
+                >
                   <div
                     v-for="route in routesForSource(candidate.group.id)"
                     :key="route.key"
@@ -557,7 +587,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, reactive, ref, watch } from 'vue'
+import { computed, nextTick, reactive, ref, watch } from 'vue'
 import type { ComponentPublicInstance } from 'vue'
 import { useI18n } from 'vue-i18n'
 
@@ -598,6 +628,7 @@ const { t } = useI18n()
 const candidates = ref<SystemCustomGroupCandidate[]>([])
 const routes = reactive(new Map<string, RouteDraft>())
 const selectedSourceIDs = ref<number[]>([])
+const collapsedSourceIDs = ref(new Set<number>())
 const modelScrollRef = ref<HTMLElement | null>(null)
 const sourceSectionRefs = new Map<number, HTMLElement>()
 const loading = ref(false)
@@ -670,6 +701,7 @@ const reset = () => {
   candidates.value = []
   routes.clear()
   selectedSourceIDs.value = []
+  collapsedSourceIDs.value = new Set()
   sourceSectionRefs.clear()
   syncPreview.value = null
   errorMessage.value = ''
@@ -803,7 +835,27 @@ const setSourceSectionRef = (
   sourceSectionRefs.delete(sourceID)
 }
 
-const scrollToSource = (sourceID: number) => {
+const isSourceExpanded = (sourceID: number) => !collapsedSourceIDs.value.has(sourceID)
+
+const sourceModelsID = (sourceID: number) => `system-custom-source-models-${sourceID}`
+
+const toggleSourceExpanded = (sourceID: number) => {
+  const next = new Set(collapsedSourceIDs.value)
+  if (next.has(sourceID)) next.delete(sourceID)
+  else next.add(sourceID)
+  collapsedSourceIDs.value = next
+}
+
+const expandSource = (sourceID: number) => {
+  if (!collapsedSourceIDs.value.has(sourceID)) return
+  const next = new Set(collapsedSourceIDs.value)
+  next.delete(sourceID)
+  collapsedSourceIDs.value = next
+}
+
+const scrollToSource = async (sourceID: number) => {
+  expandSource(sourceID)
+  await nextTick()
   const container = modelScrollRef.value
   const section = sourceSectionRefs.get(sourceID)
   if (!container || !section) return

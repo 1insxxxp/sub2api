@@ -392,6 +392,56 @@ describe('SystemCustomGroupDialog', () => {
     ).toHaveProperty('checked', false)
   })
 
+  it('collapses each source independently without changing its route draft', async () => {
+    const wrapper = mountDialog()
+    await flushPromises()
+
+    await sourceCheckbox(wrapper, 11).setValue(true)
+    await sourceCheckbox(wrapper, 22).setValue(true)
+    await modelRow(wrapper, 11, 'claude-sonnet-4')
+      .get('input[type="checkbox"]')
+      .setValue(true)
+
+    const sourceToggle = (sourceID: number) =>
+      wrapper.get(
+        `[data-testid="system-custom-source-collapse"][data-source-id="${sourceID}"]`
+      )
+    const sourceModels = (sourceID: number) =>
+      wrapper.get(
+        `[data-testid="system-custom-source-models"][data-source-id="${sourceID}"]`
+      )
+
+    expect(sourceToggle(11).attributes('aria-expanded')).toBe('true')
+    expect(sourceToggle(22).attributes('aria-expanded')).toBe('true')
+
+    await sourceToggle(11).trigger('click')
+    expect(sourceToggle(11).attributes('aria-expanded')).toBe('false')
+    expect(sourceModels(11).attributes('style')).toContain('display: none')
+    expect(sourceToggle(22).attributes('aria-expanded')).toBe('true')
+    expect(sourceModels(22).attributes('style') ?? '').not.toContain('display: none')
+    expect(
+      wrapper
+        .get('[data-testid="system-custom-source-section"][data-source-id="11"]')
+        .text()
+    ).toContain('1 / 2')
+
+    await sourceToggle(11).trigger('click')
+    expect(sourceToggle(11).attributes('aria-expanded')).toBe('true')
+    expect(
+      modelRow(wrapper, 11, 'claude-sonnet-4').get('input[type="checkbox"]').element
+    ).toHaveProperty('checked', true)
+
+    await sourceToggle(11).trigger('click')
+    const modelScroll = wrapper.get('[data-testid="system-custom-model-scroll"]')
+      .element as HTMLElement
+    modelScroll.scrollTo = vi.fn()
+    await wrapper
+      .get('[data-testid="system-custom-source-nav"][data-source-id="11"]')
+      .trigger('click')
+    await flushPromises()
+    expect(sourceToggle(11).attributes('aria-expanded')).toBe('true')
+  })
+
   it('prioritizes the route workspace and collapses optional settings on create', async () => {
     const wrapper = mountDialog()
     await flushPromises()
