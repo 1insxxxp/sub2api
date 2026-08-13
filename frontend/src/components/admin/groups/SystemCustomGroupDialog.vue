@@ -100,9 +100,9 @@
         </div>
       </section>
 
-      <div class="grid min-h-[24rem] gap-4 lg:grid-cols-[15rem_minmax(0,1fr)]">
-        <aside class="rounded-2xl border border-slate-200 bg-white p-3 dark:border-dark-700 dark:bg-dark-800">
-          <div class="mb-3 px-1">
+      <div class="grid min-h-[24rem] gap-4 lg:h-[34rem] lg:min-h-0 lg:grid-cols-[15rem_minmax(0,1fr)]">
+        <aside class="rounded-2xl border border-slate-200 bg-white p-3 dark:border-dark-700 dark:bg-dark-800 lg:flex lg:min-h-0 lg:flex-col lg:overflow-hidden">
+          <div class="mb-3 px-1 lg:flex-shrink-0">
             <h4 class="text-sm font-semibold text-slate-900 dark:text-slate-100">
               {{ t('admin.groups.systemCustom.sourcesTitle') }}
             </h4>
@@ -110,52 +110,57 @@
               {{ t('admin.groups.systemCustom.sourcesHint') }}
             </p>
           </div>
-          <p v-if="loading" class="px-1 py-3 text-xs text-slate-500">
-            {{ t('common.loading') }}
-          </p>
-          <p v-else-if="candidates.length === 0" class="px-1 py-3 text-xs text-slate-500">
-            {{ t('admin.groups.systemCustom.noSources') }}
-          </p>
-          <div v-else class="space-y-1.5">
-            <label
-              v-for="candidate in candidates"
-              :key="candidate.group.id"
-              :class="[
-                'flex cursor-pointer items-start gap-3 rounded-xl border px-3 py-2.5 transition-colors',
-                isSourceSelected(candidate.group.id)
-                  ? 'border-primary-200 bg-primary-50/80 dark:border-primary-500/30 dark:bg-primary-500/10'
-                  : 'border-transparent hover:border-slate-200 hover:bg-slate-50 dark:hover:border-dark-600 dark:hover:bg-dark-700/70'
-              ]"
-            >
-              <input
-                :checked="isSourceSelected(candidate.group.id)"
-                :data-source-id="candidate.group.id"
-                data-testid="system-custom-source-select"
-                class="mt-0.5 h-4 w-4 rounded border-slate-300 text-primary-600 focus:ring-primary-500"
-                type="checkbox"
-                @change="toggleSource(candidate.group.id, ($event.target as HTMLInputElement).checked)"
-              />
-              <span class="min-w-0">
-                <span class="block truncate text-sm font-medium text-slate-800 dark:text-slate-100">
-                  {{ candidate.group.name }}
+          <div
+            data-testid="system-custom-source-scroll"
+            class="lg:min-h-0 lg:flex-1 lg:overflow-y-auto lg:overscroll-contain lg:pr-1"
+          >
+            <p v-if="loading" class="px-1 py-3 text-xs text-slate-500">
+              {{ t('common.loading') }}
+            </p>
+            <p v-else-if="candidates.length === 0" class="px-1 py-3 text-xs text-slate-500">
+              {{ t('admin.groups.systemCustom.noSources') }}
+            </p>
+            <div v-else class="space-y-1.5">
+              <label
+                v-for="candidate in candidates"
+                :key="candidate.group.id"
+                :class="[
+                  'flex cursor-pointer items-start gap-3 rounded-xl border px-3 py-2.5 transition-colors',
+                  isSourceSelected(candidate.group.id)
+                    ? 'border-primary-200 bg-primary-50/80 dark:border-primary-500/30 dark:bg-primary-500/10'
+                    : 'border-transparent hover:border-slate-200 hover:bg-slate-50 dark:hover:border-dark-600 dark:hover:bg-dark-700/70'
+                ]"
+              >
+                <input
+                  :checked="isSourceSelected(candidate.group.id)"
+                  :data-source-id="candidate.group.id"
+                  data-testid="system-custom-source-select"
+                  class="mt-0.5 h-4 w-4 rounded border-slate-300 text-primary-600 focus:ring-primary-500"
+                  type="checkbox"
+                  @change="toggleSource(candidate.group.id, ($event.target as HTMLInputElement).checked)"
+                />
+                <span class="min-w-0">
+                  <span class="block truncate text-sm font-medium text-slate-800 dark:text-slate-100">
+                    {{ candidate.group.name }}
+                  </span>
+                  <span class="mt-0.5 block text-xs text-slate-500 dark:text-slate-400">
+                    {{ candidate.group.platform }} · {{ candidate.models.length }}
+                  </span>
+                  <span
+                    v-if="isUnavailableCandidate(candidate)"
+                    data-testid="system-custom-source-unavailable"
+                    class="mt-1 block text-[11px] font-medium text-amber-600 dark:text-amber-300"
+                  >
+                    {{ t('admin.groups.systemCustom.sourceUnavailable') }}
+                  </span>
                 </span>
-                <span class="mt-0.5 block text-xs text-slate-500 dark:text-slate-400">
-                  {{ candidate.group.platform }} · {{ candidate.models.length }}
-                </span>
-                <span
-                  v-if="isUnavailableCandidate(candidate)"
-                  data-testid="system-custom-source-unavailable"
-                  class="mt-1 block text-[11px] font-medium text-amber-600 dark:text-amber-300"
-                >
-                  {{ t('admin.groups.systemCustom.sourceUnavailable') }}
-                </span>
-              </span>
-            </label>
+              </label>
+            </div>
           </div>
         </aside>
 
-        <section class="min-w-0 rounded-2xl border border-slate-200 bg-white dark:border-dark-700 dark:bg-dark-800">
-          <div class="flex flex-wrap items-start justify-between gap-3 border-b border-slate-200 px-4 py-3 dark:border-dark-700">
+        <section class="min-w-0 rounded-2xl border border-slate-200 bg-white dark:border-dark-700 dark:bg-dark-800 lg:flex lg:min-h-0 lg:flex-col lg:overflow-hidden">
+          <div class="flex flex-wrap items-start justify-between gap-3 border-b border-slate-200 px-4 py-3 dark:border-dark-700 lg:flex-shrink-0">
             <div>
               <h4 class="text-sm font-semibold text-slate-900 dark:text-slate-100">
                 {{ t('admin.groups.systemCustom.modelsTitle') }}
@@ -169,76 +174,108 @@
             </span>
           </div>
 
-          <div v-if="selectedCandidates.length === 0" class="flex min-h-64 items-center justify-center p-8 text-center">
-            <div>
-              <Icon name="grid" size="lg" class="mx-auto text-slate-300 dark:text-dark-500" />
-              <p class="mt-3 text-sm text-slate-500 dark:text-slate-400">
-                {{ t('admin.groups.systemCustom.selectSourceFirst') }}
-              </p>
-            </div>
+          <div
+            v-if="selectedCandidates.length > 0"
+            class="flex gap-2 overflow-x-auto border-b border-slate-200 px-4 py-2.5 dark:border-dark-700 lg:flex-shrink-0"
+          >
+            <button
+              v-for="candidate in selectedCandidates"
+              :key="candidate.group.id"
+              :data-source-id="candidate.group.id"
+              data-testid="system-custom-source-nav"
+              class="inline-flex flex-none items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-xs font-medium text-slate-700 transition-colors hover:border-primary-200 hover:bg-primary-50 hover:text-primary-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/30 dark:border-dark-600 dark:bg-dark-700 dark:text-slate-200 dark:hover:border-primary-500/30 dark:hover:bg-primary-500/10 dark:hover:text-primary-300"
+              type="button"
+              @click="scrollToSource(candidate.group.id)"
+            >
+              <span class="max-w-40 truncate">{{ candidate.group.name }}</span>
+              <span class="text-[11px] text-slate-400 dark:text-slate-500">
+                {{ routesForSource(candidate.group.id).length }}
+              </span>
+            </button>
           </div>
-          <div v-else class="max-h-[34rem] space-y-5 overflow-y-auto p-4">
-            <section v-for="candidate in selectedCandidates" :key="candidate.group.id">
-              <div class="mb-2 flex items-center gap-2">
-                <span class="text-sm font-semibold text-slate-800 dark:text-slate-100">
-                  {{ candidate.group.name }}
-                </span>
-                <span class="rounded-md bg-slate-100 px-1.5 py-0.5 text-[11px] text-slate-500 dark:bg-dark-700 dark:text-slate-400">
-                  {{ candidate.group.platform }}
-                </span>
+
+          <div
+            ref="modelScrollRef"
+            data-testid="system-custom-model-scroll"
+            class="space-y-5 p-4 lg:min-h-0 lg:flex-1 lg:overflow-y-auto lg:overscroll-contain"
+          >
+            <div v-if="selectedCandidates.length === 0" class="flex min-h-64 items-center justify-center p-8 text-center">
+              <div>
+                <Icon name="grid" size="lg" class="mx-auto text-slate-300 dark:text-dark-500" />
+                <p class="mt-3 text-sm text-slate-500 dark:text-slate-400">
+                  {{ t('admin.groups.systemCustom.selectSourceFirst') }}
+                </p>
               </div>
-              <div class="space-y-2">
-                <div
-                  v-for="route in routesForSource(candidate.group.id)"
-                  :key="route.key"
-                  :data-source-id="route.source_group_id"
-                  :data-source-model="route.source_model"
-                  data-testid="system-custom-model-row"
-                  :class="[
-                    'grid gap-3 rounded-xl border p-3 sm:grid-cols-[minmax(0,1fr)_minmax(12rem,1fr)_auto] sm:items-center',
-                    route.selected
-                      ? 'border-primary-200 bg-primary-50/40 dark:border-primary-500/25 dark:bg-primary-500/5'
-                      : 'border-slate-200 dark:border-dark-700'
-                  ]"
-                >
-                  <label class="flex min-w-0 cursor-pointer items-start gap-3">
-                    <input
-                      :checked="route.selected"
-                      class="mt-0.5 h-4 w-4 rounded border-slate-300 text-primary-600 focus:ring-primary-500"
-                      type="checkbox"
-                      @change="toggleRouteSelected(route, ($event.target as HTMLInputElement).checked)"
-                    />
-                    <span class="min-w-0">
-                      <span class="block break-all font-mono text-xs font-medium text-slate-800 dark:text-slate-200">
-                        {{ route.source_model }}
-                      </span>
-                      <span class="mt-1 block text-[11px] text-slate-500 dark:text-slate-400">
-                        {{ t('admin.groups.systemCustom.sourceModel') }}
-                      </span>
-                    </span>
-                  </label>
-                  <label class="block min-w-0">
-                    <span class="sr-only">{{ t('admin.groups.systemCustom.publicModel') }}</span>
-                    <input
-                      v-model="route.public_model"
-                      data-testid="system-custom-public-model"
-                      :disabled="!route.selected"
-                      class="input font-mono text-xs"
-                      type="text"
-                      :placeholder="t('admin.groups.systemCustom.publicModel')"
-                    />
-                  </label>
-                  <label v-if="route.selected" class="flex items-center gap-2 text-xs text-slate-600 dark:text-slate-300">
-                    <input
-                      v-model="route.enabled"
-                      class="h-4 w-4 rounded border-slate-300 text-primary-600 focus:ring-primary-500"
-                      type="checkbox"
-                    />
-                    {{ t('common.enabled') }}
-                  </label>
+            </div>
+            <template v-else>
+              <section
+                v-for="candidate in selectedCandidates"
+                :key="candidate.group.id"
+                :ref="(element) => setSourceSectionRef(candidate.group.id, element)"
+                :data-source-id="candidate.group.id"
+                data-testid="system-custom-source-section"
+              >
+                <div class="sticky top-0 z-10 -mx-1 mb-2 flex items-center gap-2 bg-white/95 px-1 py-2 backdrop-blur dark:bg-dark-800/95">
+                  <span class="text-sm font-semibold text-slate-800 dark:text-slate-100">
+                    {{ candidate.group.name }}
+                  </span>
+                  <span class="rounded-md bg-slate-100 px-1.5 py-0.5 text-[11px] text-slate-500 dark:bg-dark-700 dark:text-slate-400">
+                    {{ candidate.group.platform }}
+                  </span>
                 </div>
-              </div>
-            </section>
+                <div class="space-y-2">
+                  <div
+                    v-for="route in routesForSource(candidate.group.id)"
+                    :key="route.key"
+                    :data-source-id="route.source_group_id"
+                    :data-source-model="route.source_model"
+                    data-testid="system-custom-model-row"
+                    :class="[
+                      'grid gap-3 rounded-xl border p-3 sm:grid-cols-[minmax(0,1fr)_minmax(12rem,1fr)_auto] sm:items-center',
+                      route.selected
+                        ? 'border-primary-200 bg-primary-50/40 dark:border-primary-500/25 dark:bg-primary-500/5'
+                        : 'border-slate-200 dark:border-dark-700'
+                    ]"
+                  >
+                    <label class="flex min-w-0 cursor-pointer items-start gap-3">
+                      <input
+                        :checked="route.selected"
+                        class="mt-0.5 h-4 w-4 rounded border-slate-300 text-primary-600 focus:ring-primary-500"
+                        type="checkbox"
+                        @change="toggleRouteSelected(route, ($event.target as HTMLInputElement).checked)"
+                      />
+                      <span class="min-w-0">
+                        <span class="block break-all font-mono text-xs font-medium text-slate-800 dark:text-slate-200">
+                          {{ route.source_model }}
+                        </span>
+                        <span class="mt-1 block text-[11px] text-slate-500 dark:text-slate-400">
+                          {{ t('admin.groups.systemCustom.sourceModel') }}
+                        </span>
+                      </span>
+                    </label>
+                    <label class="block min-w-0">
+                      <span class="sr-only">{{ t('admin.groups.systemCustom.publicModel') }}</span>
+                      <input
+                        v-model="route.public_model"
+                        data-testid="system-custom-public-model"
+                        :disabled="!route.selected"
+                        class="input font-mono text-xs"
+                        type="text"
+                        :placeholder="t('admin.groups.systemCustom.publicModel')"
+                      />
+                    </label>
+                    <label v-if="route.selected" class="flex items-center gap-2 text-xs text-slate-600 dark:text-slate-300">
+                      <input
+                        v-model="route.enabled"
+                        class="h-4 w-4 rounded border-slate-300 text-primary-600 focus:ring-primary-500"
+                        type="checkbox"
+                      />
+                      {{ t('common.enabled') }}
+                    </label>
+                  </div>
+                </div>
+              </section>
+            </template>
           </div>
         </section>
       </div>
@@ -423,6 +460,7 @@
 
 <script setup lang="ts">
 import { computed, reactive, ref, watch } from 'vue'
+import type { ComponentPublicInstance } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import { adminAPI } from '@/api/admin'
@@ -462,6 +500,8 @@ const { t } = useI18n()
 const candidates = ref<SystemCustomGroupCandidate[]>([])
 const routes = reactive(new Map<string, RouteDraft>())
 const selectedSourceIDs = ref<number[]>([])
+const modelScrollRef = ref<HTMLElement | null>(null)
+const sourceSectionRefs = new Map<number, HTMLElement>()
 const loading = ref(false)
 const saving = ref(false)
 const syncing = ref(false)
@@ -530,6 +570,7 @@ const reset = () => {
   candidates.value = []
   routes.clear()
   selectedSourceIDs.value = []
+  sourceSectionRefs.clear()
   syncPreview.value = null
   errorMessage.value = ''
   confirmingDelete.value = false
@@ -644,6 +685,32 @@ watch(
 )
 
 const isSourceSelected = (sourceID: number) => selectedSourceIDs.value.includes(sourceID)
+
+const setSourceSectionRef = (
+  sourceID: number,
+  element: Element | ComponentPublicInstance | null
+) => {
+  if (element instanceof HTMLElement) {
+    sourceSectionRefs.set(sourceID, element)
+    return
+  }
+  sourceSectionRefs.delete(sourceID)
+}
+
+const scrollToSource = (sourceID: number) => {
+  const container = modelScrollRef.value
+  const section = sourceSectionRefs.get(sourceID)
+  if (!container || !section) return
+  const containerRect = container.getBoundingClientRect()
+  const sectionRect = section.getBoundingClientRect()
+  const reducedMotion =
+    typeof window.matchMedia !== 'function' ||
+    window.matchMedia('(prefers-reduced-motion: reduce)').matches
+  container.scrollTo({
+    top: Math.max(0, container.scrollTop + sectionRect.top - containerRect.top),
+    behavior: reducedMotion ? 'auto' : 'smooth'
+  })
+}
 
 const beginDeleteConfirmation = () => {
   if (busy.value) return

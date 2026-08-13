@@ -253,6 +253,94 @@ describe('SystemCustomGroupDialog', () => {
     expect(wrapper.emitted('saved')).toHaveLength(1)
   })
 
+  it('scrolls source and model columns independently while rendering every selected source', async () => {
+    const wrapper = mountDialog()
+    await flushPromises()
+
+    await sourceCheckbox(wrapper, 11).setValue(true)
+    await sourceCheckbox(wrapper, 22).setValue(true)
+
+    const sourceScroll = wrapper.get('[data-testid="system-custom-source-scroll"]')
+    const modelScroll = wrapper.get('[data-testid="system-custom-model-scroll"]')
+    expect(sourceScroll.classes()).toEqual(
+      expect.arrayContaining(['lg:overflow-y-auto', 'lg:overscroll-contain'])
+    )
+    expect(modelScroll.classes()).toEqual(
+      expect.arrayContaining(['lg:overflow-y-auto', 'lg:overscroll-contain'])
+    )
+
+    const sourceSections = wrapper.findAll('[data-testid="system-custom-source-section"]')
+    expect(sourceSections).toHaveLength(2)
+    expect(sourceSections.map((section) => section.attributes('data-source-id'))).toEqual([
+      '11',
+      '22'
+    ])
+    expect(sourceSections[0].text()).toContain('酒馆甲')
+    expect(sourceSections[0].text()).toContain('claude-haiku-4')
+    expect(sourceSections[1].text()).toContain('酒馆乙')
+    expect(sourceSections[1].text()).toContain('gpt-5')
+
+    const sourceNavigation = wrapper.findAll('[data-testid="system-custom-source-nav"]')
+    expect(sourceNavigation).toHaveLength(2)
+    expect(sourceNavigation.map((button) => button.attributes('data-source-id'))).toEqual([
+      '11',
+      '22'
+    ])
+  })
+
+  it('navigates inside the model column without changing the selected sources', async () => {
+    const wrapper = mountDialog()
+    await flushPromises()
+
+    await sourceCheckbox(wrapper, 11).setValue(true)
+    await sourceCheckbox(wrapper, 22).setValue(true)
+
+    const sourceScroll = wrapper.get('[data-testid="system-custom-source-scroll"]')
+      .element as HTMLElement
+    const modelScroll = wrapper.get('[data-testid="system-custom-model-scroll"]')
+      .element as HTMLElement
+    const targetSection = wrapper.get(
+      '[data-testid="system-custom-source-section"][data-source-id="22"]'
+    ).element as HTMLElement
+    const sourceScrollTo = vi.fn()
+    const modelScrollTo = vi.fn()
+    sourceScroll.scrollTo = sourceScrollTo
+    modelScroll.scrollTo = modelScrollTo
+    Object.defineProperty(modelScroll, 'scrollTop', { configurable: true, value: 40 })
+    vi.spyOn(modelScroll, 'getBoundingClientRect').mockReturnValue({
+      top: 100,
+      bottom: 500,
+      left: 0,
+      right: 800,
+      width: 800,
+      height: 400,
+      x: 0,
+      y: 100,
+      toJSON: () => ({})
+    })
+    vi.spyOn(targetSection, 'getBoundingClientRect').mockReturnValue({
+      top: 320,
+      bottom: 520,
+      left: 0,
+      right: 800,
+      width: 800,
+      height: 200,
+      x: 0,
+      y: 320,
+      toJSON: () => ({})
+    })
+
+    await wrapper
+      .get('[data-testid="system-custom-source-nav"][data-source-id="22"]')
+      .trigger('click')
+
+    expect(modelScrollTo).toHaveBeenCalledWith({ top: 260, behavior: 'auto' })
+    expect(sourceScrollTo).not.toHaveBeenCalled()
+    expect(sourceCheckbox(wrapper, 11).element).toHaveProperty('checked', true)
+    expect(sourceCheckbox(wrapper, 22).element).toHaveProperty('checked', true)
+    expect(wrapper.findAll('[data-testid="system-custom-source-section"]')).toHaveLength(2)
+  })
+
   it('loads edit details and preserves enabled flags in an update snapshot', async () => {
     const wrapper = mountDialog({ groupId: 90 })
     await flushPromises()
