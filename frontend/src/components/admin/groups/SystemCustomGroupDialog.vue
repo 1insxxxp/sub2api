@@ -169,9 +169,33 @@
                 {{ t('admin.groups.systemCustom.modelsHint') }}
               </p>
             </div>
-            <span class="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-600 dark:bg-dark-700 dark:text-slate-300">
-              {{ selectedRoutes.length }} / {{ visibleRoutes.length }}
-            </span>
+            <div class="flex items-center gap-3">
+              <label
+                class="inline-flex select-none items-center gap-2 text-xs font-medium text-slate-600 dark:text-slate-300"
+                :class="visibleRoutes.length === 0 ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'"
+              >
+                <input
+                  data-testid="system-custom-model-select-all"
+                  class="h-4 w-4 rounded border-slate-300 text-primary-600 focus:ring-primary-500"
+                  type="checkbox"
+                  :checked="allVisibleRoutesSelected"
+                  :indeterminate="someVisibleRoutesSelected && !allVisibleRoutesSelected"
+                  :aria-checked="
+                    someVisibleRoutesSelected && !allVisibleRoutesSelected
+                      ? 'mixed'
+                      : allVisibleRoutesSelected
+                        ? 'true'
+                        : 'false'
+                  "
+                  :disabled="visibleRoutes.length === 0"
+                  @change="toggleAllVisibleRoutes(($event.target as HTMLInputElement).checked)"
+                />
+                {{ t('common.selectAll') }}
+              </label>
+              <span class="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-600 dark:bg-dark-700 dark:text-slate-300">
+                {{ selectedRoutes.length }} / {{ visibleRoutes.length }}
+              </span>
+            </div>
           </div>
 
           <div
@@ -197,7 +221,7 @@
           <div
             ref="modelScrollRef"
             data-testid="system-custom-model-scroll"
-            class="space-y-5 p-4 lg:min-h-0 lg:flex-1 lg:overflow-y-auto lg:overscroll-contain"
+            class="space-y-5 p-4 [overflow-anchor:none] lg:min-h-0 lg:flex-1 lg:overflow-y-auto lg:overscroll-contain"
           >
             <div v-if="selectedCandidates.length === 0" class="flex min-h-64 items-center justify-center p-8 text-center">
               <div>
@@ -214,8 +238,12 @@
                 :ref="(element) => setSourceSectionRef(candidate.group.id, element)"
                 :data-source-id="candidate.group.id"
                 data-testid="system-custom-source-section"
+                class="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm dark:border-dark-700 dark:bg-dark-800"
               >
-                <div class="sticky top-0 z-10 -mx-1 mb-2 flex items-center gap-2 bg-white/95 px-1 py-2 backdrop-blur dark:bg-dark-800/95">
+                <div
+                  data-testid="system-custom-source-section-header"
+                  class="flex items-center gap-2 border-b border-slate-200 bg-slate-50/80 px-3 py-2.5 dark:border-dark-700 dark:bg-dark-700/50"
+                >
                   <span class="text-sm font-semibold text-slate-800 dark:text-slate-100">
                     {{ candidate.group.name }}
                   </span>
@@ -223,7 +251,7 @@
                     {{ candidate.group.platform }}
                   </span>
                 </div>
-                <div class="space-y-2">
+                <div class="space-y-2 p-3">
                   <div
                     v-for="route in routesForSource(candidate.group.id)"
                     :key="route.key"
@@ -757,6 +785,21 @@ const selectedRoutes = computed(() =>
     (route) => route.selected && selectedSourceIDs.value.includes(route.source_group_id)
   )
 )
+
+const allVisibleRoutesSelected = computed(
+  () => visibleRoutes.value.length > 0 && visibleRoutes.value.every((route) => route.selected)
+)
+
+const someVisibleRoutesSelected = computed(() =>
+  visibleRoutes.value.some((route) => route.selected)
+)
+
+const toggleAllVisibleRoutes = (selected: boolean) => {
+  for (const route of visibleRoutes.value) {
+    route.selected = selected
+    if (selected) route.draftInitialized = true
+  }
+}
 
 const duplicateSourceRoutes = computed(() => {
   const counts = new Map<string, number>()

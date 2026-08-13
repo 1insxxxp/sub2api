@@ -288,6 +288,68 @@ describe('SystemCustomGroupDialog', () => {
     ])
   })
 
+  it('renders every selected source as a normal-flow route card', async () => {
+    const wrapper = mountDialog()
+    await flushPromises()
+
+    await sourceCheckbox(wrapper, 11).setValue(true)
+    await sourceCheckbox(wrapper, 22).setValue(true)
+
+    expect(wrapper.get('[data-testid="system-custom-model-scroll"]').classes()).toContain(
+      '[overflow-anchor:none]'
+    )
+    const sourceSections = wrapper.findAll('[data-testid="system-custom-source-section"]')
+    expect(sourceSections).toHaveLength(2)
+    for (const section of sourceSections) {
+      expect(section.classes()).toEqual(
+        expect.arrayContaining(['overflow-hidden', 'rounded-xl', 'border'])
+      )
+      expect(section.get('[data-testid="system-custom-source-section-header"]').classes()).not.toContain(
+        'sticky'
+      )
+    }
+  })
+
+  it('selects all visible model routes and exposes a mixed state', async () => {
+    const wrapper = mountDialog()
+    await flushPromises()
+
+    const selectAll = wrapper.get('[data-testid="system-custom-model-select-all"]')
+    expect(selectAll.attributes('disabled')).toBeDefined()
+
+    await sourceCheckbox(wrapper, 11).setValue(true)
+    expect(selectAll.attributes('disabled')).toBeUndefined()
+    await selectAll.setValue(true)
+
+    expect(
+      modelRow(wrapper, 11, 'claude-sonnet-4').get('input[type="checkbox"]').element
+    ).toHaveProperty('checked', true)
+    expect(
+      modelRow(wrapper, 11, 'claude-haiku-4').get('input[type="checkbox"]').element
+    ).toHaveProperty('checked', true)
+
+    await sourceCheckbox(wrapper, 22).setValue(true)
+    expect(
+      modelRow(wrapper, 22, 'claude-sonnet-4').get('input[type="checkbox"]').element
+    ).toHaveProperty('checked', false)
+    expect(selectAll.element).toHaveProperty('indeterminate', true)
+    expect(selectAll.attributes('aria-checked')).toBe('mixed')
+
+    await selectAll.setValue(true)
+    for (const row of wrapper.findAll('[data-testid="system-custom-model-row"]')) {
+      expect(row.get('input[type="checkbox"]').element).toHaveProperty('checked', true)
+    }
+
+    await modelRow(wrapper, 22, 'gpt-5').get('input[type="checkbox"]').setValue(false)
+    expect(selectAll.element).toHaveProperty('indeterminate', true)
+
+    await selectAll.setValue(true)
+    await selectAll.setValue(false)
+    for (const row of wrapper.findAll('[data-testid="system-custom-model-row"]')) {
+      expect(row.get('input[type="checkbox"]').element).toHaveProperty('checked', false)
+    }
+  })
+
   it('navigates inside the model column without changing the selected sources', async () => {
     const wrapper = mountDialog()
     await flushPromises()
