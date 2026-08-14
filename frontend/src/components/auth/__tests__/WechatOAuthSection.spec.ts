@@ -101,6 +101,7 @@ describe('WechatOAuthSection', () => {
     pinia = createPinia()
     setActivePinia(pinia)
     routeState.query = { redirect: '/billing?plan=pro' }
+    window.sessionStorage.clear()
     Object.defineProperty(window.navigator, 'userAgent', {
       configurable: true,
       value: 'Mozilla/5.0',
@@ -130,6 +131,23 @@ describe('WechatOAuthSection', () => {
       provider: 'wechat',
       params: { mode: 'open', redirect: '/billing?plan=pro' }
     })
+  })
+
+  it('keeps a locked referral code out of the WeChat client session', async () => {
+    routeState.query = { redirect: '/billing?plan=pro', aff: 'ROUTE123' }
+    window.sessionStorage.setItem('oauth_aff_code', 'STALE')
+    seedPublicSettings({
+      wechat_oauth_open_enabled: true,
+      wechat_oauth_mp_enabled: false,
+    })
+    const wrapper = mount(WechatOAuthSection, {
+      props: { affCode: 'CLIENT123', affiliateReferralLocked: true },
+      global: { plugins: [pinia] },
+    })
+
+    await wrapper.get('button').trigger('click')
+
+    expect(window.sessionStorage.getItem('oauth_aff_code')).toBeNull()
   })
 
   it('uses mp mode inside the WeChat browser when mp mode is configured', async () => {

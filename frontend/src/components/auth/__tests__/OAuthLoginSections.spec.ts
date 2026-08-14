@@ -41,4 +41,19 @@ describe('OAuth login sections', () => {
     expect(window.sessionStorage.getItem('oauth_aff_code')).toBe('AFF456')
     expect(window.location.href).toBe(originalHref)
   })
+
+  it.each([
+    ['linuxdo', LinuxDoOAuthSection],
+    ['dingtalk', DingTalkOAuthSection],
+    ['oidc', OidcOAuthSection]
+  ] as const)('keeps locked referral codes out of the %s client session', async (_provider, component) => {
+    window.sessionStorage.setItem('oauth_aff_code', 'STALE')
+    const wrapper = mount(component, {
+      props: { affCode: 'CLIENT123', affiliateReferralLocked: true }
+    })
+
+    await wrapper.get('button').trigger('click')
+
+    expect(window.sessionStorage.getItem('oauth_aff_code')).toBeNull()
+  })
 })

@@ -250,6 +250,7 @@ const initialTencentCaptchaRandstr = ref<string>('')
 const promoCode = ref<string>('')
 const invitationCode = ref<string>('')
 const affCode = ref<string>('')
+const affiliateReferralLocked = ref<boolean>(false)
 const pendingAuthToken = ref<string>('')
 const pendingAuthTokenField = ref<PendingAuthTokenField>('pending_auth_token')
 const pendingProvider = ref<string>('')
@@ -338,7 +339,13 @@ onMounted(async () => {
       initialTencentCaptchaRandstr.value = registerData.tencent_captcha_randstr || ''
       promoCode.value = registerData.promo_code || ''
       invitationCode.value = registerData.invitation_code || ''
-      affCode.value = registerData.aff_code || loadAffiliateReferralCode()
+      affiliateReferralLocked.value = registerData.affiliate_referral_locked === true
+      affCode.value = affiliateReferralLocked.value
+        ? ''
+        : registerData.aff_code || loadAffiliateReferralCode()
+      if (affiliateReferralLocked.value) {
+        clearAllAffiliateReferralCodes()
+      }
       pendingAuthToken.value = registerData.pending_auth_token || activePendingSession?.token || ''
       pendingAuthTokenField.value = registerData.pending_auth_token_field || activePendingSession?.token_field || 'pending_auth_token'
       pendingProvider.value = registerData.pending_provider || activePendingSession?.provider || ''
@@ -688,7 +695,9 @@ async function handleVerify(): Promise<void> {
               tencent_captcha_randstr: createAccountTencentCaptchaRandstr.value
           }
           : {}),
-        ...oauthAffiliatePayload(affCode.value || loadAffiliateReferralCode()),
+        ...oauthAffiliatePayload(
+          affiliateReferralLocked.value ? '' : affCode.value || loadAffiliateReferralCode()
+        ),
       }
       if (invitationCode.value) {
         payload.invitation_code = invitationCode.value
@@ -731,7 +740,7 @@ async function handleVerify(): Promise<void> {
         tencent_captcha_randstr: tencentCaptchaEnabled.value ? initialTencentCaptchaRandstr.value || undefined : undefined,
         promo_code: promoCode.value || undefined,
         invitation_code: invitationCode.value || undefined,
-        ...(affCode.value ? { aff_code: affCode.value } : {})
+        ...(!affiliateReferralLocked.value && affCode.value ? { aff_code: affCode.value } : {})
       })
     }
 

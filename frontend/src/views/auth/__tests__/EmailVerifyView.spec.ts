@@ -607,6 +607,43 @@ describe('EmailVerifyView', () => {
     expect(registerMock).not.toHaveBeenCalled()
   })
 
+  it('does not submit a raw affiliate code when the server referral lock is active', async () => {
+    sessionStorage.setItem(
+      'register_data',
+      JSON.stringify({
+        email: 'locked@example.com',
+        password: 'secret-123',
+        affiliate_referral_locked: true,
+        aff_code: 'CLIENT123',
+      })
+    )
+    localStorage.setItem(
+      'affiliate_referral_code',
+      JSON.stringify({ code: 'PERSISTED', expiresAt: Date.now() + 60_000 })
+    )
+    registerMock.mockResolvedValue({})
+
+    const wrapper = mount(EmailVerifyView, {
+      global: {
+        stubs: {
+          AuthLayout: { template: '<div><slot /><slot name="footer" /></div>' },
+          Icon: true,
+          TurnstileWidget: true,
+          transition: false,
+        },
+      },
+    })
+
+    await flushPromises()
+    await wrapper.get('#code').setValue('123456')
+    await wrapper.get('form').trigger('submit.prevent')
+    await flushPromises()
+
+    expect(registerMock).toHaveBeenCalledWith(
+      expect.not.objectContaining({ aff_code: expect.anything() })
+    )
+  })
+
   it('requires and submits a fresh turnstile token for pending oauth account creation', async () => {
     authStoreState.pendingAuthSession = {
       token: 'pending-token-3',

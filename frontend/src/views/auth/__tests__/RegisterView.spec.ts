@@ -137,6 +137,30 @@ describe('RegisterView invitation layout', () => {
     )
   })
 
+  it('hands only the lock state to email verification', async () => {
+    routeQuery.aff = 'AFF123'
+    getPublicSettingsMock.mockResolvedValueOnce({
+      ...publicSettings,
+      email_verify_enabled: true,
+      turnstile_enabled: false
+    })
+
+    const wrapper = mountRegister()
+    await flushPromises()
+    await wrapper.get('#email').setValue('verify@example.com')
+    await wrapper.get('#password').setValue('secret-123')
+    await wrapper.get('form').trigger('submit.prevent')
+    await flushPromises()
+
+    expect(JSON.parse(sessionStorage.getItem('register_data') || '{}')).toEqual(
+      expect.objectContaining({
+        email: 'verify@example.com',
+        affiliate_referral_locked: true
+      })
+    )
+    expect(sessionStorage.getItem('register_data')).not.toContain('AFF123')
+  })
+
   it('lets the last valid affiliate link replace the previous server lock', async () => {
     routeQuery.aff = 'FIRST123'
     const first = mountRegister()

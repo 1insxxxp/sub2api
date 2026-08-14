@@ -78,6 +78,32 @@ describe('EmailOAuthButtons', () => {
     expect(window.location.href).toBe(originalHref)
   })
 
+  it('does not expose a route or prop affiliate code when the server referral is locked', async () => {
+    window.sessionStorage.setItem('oauth_aff_code', 'STALE')
+    const wrapper = mount(EmailOAuthButtons, {
+      props: {
+        affCode: 'CLIENT123',
+        affiliateReferralLocked: true,
+        githubEnabled: true,
+        googleEnabled: false,
+      },
+      global: {
+        stubs: {
+          GitHubMark: true,
+          GoogleMark: true,
+        },
+      },
+    })
+
+    await wrapper.get('button').trigger('click')
+
+    expect(wrapper.emitted('start')?.[0]?.[0]).toEqual({
+      provider: 'github',
+      params: { redirect: '/billing?plan=pro' }
+    })
+    expect(window.sessionStorage.getItem('oauth_aff_code')).toBeNull()
+  })
+
   it('uses a full-width descriptive button when only GitHub is enabled', () => {
     const wrapper = mount(EmailOAuthButtons, {
       props: {

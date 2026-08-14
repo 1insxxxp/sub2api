@@ -311,6 +311,8 @@
         <EmailOAuthButtons
           :disabled="registrationActionDisabled"
           :aff-code="formData.aff_code"
+          :affiliate-referral-locked="affiliateReferralLocked"
+          :allow-route-affiliate-fallback="affiliateReferralLegacyFallback"
           :github-enabled="githubOAuthEnabled"
           :google-enabled="googleOAuthEnabled"
           :show-divider="false"
@@ -321,6 +323,8 @@
           v-if="linuxdoOAuthEnabled"
           :disabled="registrationActionDisabled"
           :aff-code="formData.aff_code"
+          :affiliate-referral-locked="affiliateReferralLocked"
+          :allow-route-affiliate-fallback="affiliateReferralLegacyFallback"
           :show-divider="false"
           @start="handleOAuthStart"
         />
@@ -328,6 +332,8 @@
           v-if="wechatOAuthEnabled"
           :disabled="registrationActionDisabled"
           :aff-code="formData.aff_code"
+          :affiliate-referral-locked="affiliateReferralLocked"
+          :allow-route-affiliate-fallback="affiliateReferralLegacyFallback"
           :show-divider="false"
           @start="handleOAuthStart"
         />
@@ -336,6 +342,8 @@
           :disabled="registrationActionDisabled"
           :provider-name="oidcOAuthProviderName"
           :aff-code="formData.aff_code"
+          :affiliate-referral-locked="affiliateReferralLocked"
+          :allow-route-affiliate-fallback="affiliateReferralLegacyFallback"
           :show-divider="false"
           @start="handleOAuthStart"
         />
@@ -1139,6 +1147,7 @@ async function handleRegister(): Promise<void> {
           tencent_captcha_randstr: tencentCaptchaEnabled.value ? tencentCaptchaRandstr.value : undefined,
           promo_code: formData.promo_code || undefined,
           invitation_code: formData.invitation_code || undefined,
+          affiliate_referral_locked: affiliateReferralLocked.value,
           ...(affCode ? { aff_code: affCode } : {})
         })
       )

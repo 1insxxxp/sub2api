@@ -127,6 +127,19 @@ export function clearAllAffiliateReferralCodes(): void {
   clearAffiliateReferralCode()
 }
 
+export function prepareOAuthAffiliateCode(
+  referralLocked: boolean,
+  ...values: unknown[]
+): string {
+  if (referralLocked) {
+    clearOAuthAffiliateCode()
+    return ''
+  }
+  const code = resolveAffiliateReferralCode(...values)
+  storeOAuthAffiliateCode(code)
+  return code
+}
+
 export function confirmAffiliateReferralLock(status: { locked: boolean }): boolean {
   if (status.locked !== true) {
     return false
