@@ -452,7 +452,7 @@ describe('user KeysView column settings', () => {
 
     await trigger.trigger('click')
 
-    expect(wrapper.get('.fixed.z-\\[100000020\\]').attributes('style')).toContain('left: 636px')
+    expect(wrapper.get('.fixed.z-\\[100000020\\]').attributes('style')).toContain('left: 536px')
     expect(wrapper.find('[data-test="group-selector-backdrop"]').exists()).toBe(false)
     wrapper.unmount()
   })

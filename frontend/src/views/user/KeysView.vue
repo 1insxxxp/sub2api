@@ -1165,7 +1165,7 @@
           'animate-in fade-in fixed z-[100000020] overflow-hidden rounded-xl bg-white shadow-lg ring-1 ring-black/5 duration-200 dark:bg-dark-800 dark:ring-white/10',
           isMobileGroupSelector
             ? 'inset-x-2 bottom-2 max-h-[calc(100dvh-16px)] w-auto slide-in-from-bottom-2'
-            : 'w-[380px] slide-in-from-top-2'
+            : 'w-[480px] slide-in-from-top-2'
         ]"
         style="pointer-events: auto !important;"
         :style="isMobileGroupSelector ? undefined : {
@@ -1746,7 +1746,7 @@ const openGroupSelector = (key: ApiKey) => {
     if (buttonEl) {
       const rect = buttonEl.getBoundingClientRect()
       const dropdownEstHeight = 400 // estimated max dropdown height
-      const dropdownEstWidth = Math.min(380, window.innerWidth - dropdownViewportPadding * 2)
+      const dropdownEstWidth = Math.min(480, window.innerWidth - dropdownViewportPadding * 2)
       const spaceBelow = window.innerHeight - rect.bottom
       const spaceAbove = rect.top
       // 夹取 left，避免窄屏下浮层超出视口右缘

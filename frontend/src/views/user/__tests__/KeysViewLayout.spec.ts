@@ -49,6 +49,12 @@ describe('KeysView toolbar layout', () => {
     expect(keysViewSource).toContain('max-w-full min-w-0 flex-wrap')
   })
 
+  it('uses a wider desktop group selector with matching viewport clamping', () => {
+    expect(keysViewSource).toContain("'w-[480px] slide-in-from-top-2'")
+    expect(keysViewSource).toContain('const dropdownEstWidth = Math.min(480,')
+    expect(keysViewSource).not.toContain("'w-[380px] slide-in-from-top-2'")
+  })
+
   it('closes the group selector when the viewport size changes', () => {
     expect(keysViewSource).toContain("window.addEventListener('resize', closeGroupSelector)")
     expect(keysViewSource).toContain("window.removeEventListener('resize', closeGroupSelector)")
