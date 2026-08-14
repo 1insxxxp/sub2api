@@ -614,6 +614,34 @@ func (s *AffiliateService) BindInviterByCode(ctx context.Context, userID int64, 
 	return nil
 }
 
+// ResolveValidCode validates an affiliate code without creating or binding any
+// affiliate state. It is used before registration to establish trusted browser
+// attribution.
+func (s *AffiliateService) ResolveValidCode(ctx context.Context, rawCode string) (string, error) {
+	code := strings.ToUpper(strings.TrimSpace(rawCode))
+	if code == "" || !isValidAffiliateCodeFormat(code) {
+		return "", ErrAffiliateCodeInvalid
+	}
+	if s == nil || s.repo == nil {
+		return "", infraerrors.ServiceUnavailable("SERVICE_UNAVAILABLE", "affiliate service unavailable")
+	}
+	if !s.IsEnabled(ctx) {
+		return "", ErrAffiliateCodeInvalid
+	}
+
+	summary, err := s.repo.GetAffiliateByCode(ctx, code)
+	if err != nil {
+		if errors.Is(err, ErrAffiliateProfileNotFound) {
+			return "", ErrAffiliateCodeInvalid
+		}
+		return "", err
+	}
+	if summary == nil || summary.UserID <= 0 {
+		return "", ErrAffiliateCodeInvalid
+	}
+	return code, nil
+}
+
 func (s *AffiliateService) AccrueInviteRebate(ctx context.Context, inviteeUserID int64, baseRechargeAmount float64) (float64, error) {
 	return s.AccrueInviteRebateForOrder(ctx, inviteeUserID, baseRechargeAmount, nil)
 }

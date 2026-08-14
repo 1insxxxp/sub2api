@@ -20,6 +20,25 @@ type settingRepoStub struct {
 	getMultipleCalls int
 }
 
+func TestAuthServiceResolveAffiliateReferralCode(t *testing.T) {
+	settings := newAffiliateTierServiceSettingRepo()
+	settings.values[SettingKeyAffiliateEnabled] = "true"
+	repo := &affiliateTierServiceRepoStub{
+		affiliateCodeSummary: &AffiliateSummary{UserID: 42, AffCode: "ABC123"},
+	}
+	affiliateService := NewAffiliateService(repo, NewSettingService(settings, nil), nil, nil)
+	authService := &AuthService{affiliateService: affiliateService}
+
+	code, err := authService.ResolveAffiliateReferralCode(context.Background(), " abc123 ")
+
+	require.NoError(t, err)
+	require.Equal(t, "ABC123", code)
+
+	_, err = (&AuthService{}).ResolveAffiliateReferralCode(context.Background(), "ABC123")
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "affiliate service unavailable")
+}
+
 func (s *settingRepoStub) Get(ctx context.Context, key string) (*Setting, error) {
 	panic("unexpected Get call")
 }

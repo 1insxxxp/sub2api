@@ -38,6 +38,64 @@ func TestAffiliateService_ResolveTierAwareRateCustomPriority(t *testing.T) {
 	require.Equal(t, 12.0, got, "clearing custom rate must restore automatic tier")
 }
 
+func TestAffiliateServiceResolveValidCode(t *testing.T) {
+	newEnabledService := func(repo AffiliateRepository) *AffiliateService {
+		settings := newAffiliateTierServiceSettingRepo()
+		settings.values[SettingKeyAffiliateEnabled] = "true"
+		return NewAffiliateService(repo, NewSettingService(settings, nil), nil, nil)
+	}
+
+	t.Run("normalizes a valid code without mutating affiliate state", func(t *testing.T) {
+		repo := &affiliateTierServiceRepoStub{
+			affiliateCodeSummary: &AffiliateSummary{UserID: 42, AffCode: "ABC123"},
+		}
+
+		code, err := newEnabledService(repo).ResolveValidCode(context.Background(), "  abc123  ")
+
+		require.NoError(t, err)
+		require.Equal(t, "ABC123", code)
+		require.Equal(t, 1, repo.affiliateCodeLookupCalls)
+		require.Equal(t, "ABC123", repo.lastAffiliateCodeLookup)
+		require.Equal(t, 0, repo.ensureAffiliateCalls)
+	})
+
+	t.Run("rejects malformed code", func(t *testing.T) {
+		repo := &affiliateTierServiceRepoStub{}
+
+		_, err := newEnabledService(repo).ResolveValidCode(context.Background(), "not valid!")
+
+		require.ErrorIs(t, err, ErrAffiliateCodeInvalid)
+		require.Zero(t, repo.affiliateCodeLookupCalls)
+	})
+
+	t.Run("rejects unknown code", func(t *testing.T) {
+		repo := &affiliateTierServiceRepoStub{affiliateCodeLookupErr: ErrAffiliateProfileNotFound}
+
+		_, err := newEnabledService(repo).ResolveValidCode(context.Background(), "ABC123")
+
+		require.ErrorIs(t, err, ErrAffiliateCodeInvalid)
+	})
+
+	t.Run("rejects when affiliate feature is disabled", func(t *testing.T) {
+		settings := newAffiliateTierServiceSettingRepo()
+		settings.values[SettingKeyAffiliateEnabled] = "false"
+		repo := &affiliateTierServiceRepoStub{affiliateCodeSummary: &AffiliateSummary{UserID: 42}}
+		svc := NewAffiliateService(repo, NewSettingService(settings, nil), nil, nil)
+
+		_, err := svc.ResolveValidCode(context.Background(), "ABC123")
+
+		require.ErrorIs(t, err, ErrAffiliateCodeInvalid)
+		require.Zero(t, repo.affiliateCodeLookupCalls)
+	})
+
+	t.Run("returns unavailable without repository", func(t *testing.T) {
+		_, err := newEnabledService(nil).ResolveValidCode(context.Background(), "ABC123")
+
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "affiliate service unavailable")
+	})
+}
+
 func TestAffiliateService_TierSnapshotBoundaries(t *testing.T) {
 	tests := []struct {
 		count     int
@@ -753,45 +811,50 @@ func TestAffiliateService_QualificationReconcileDatabaseLockCoordinatesInstances
 
 type affiliateTierServiceRepoStub struct {
 	AffiliateRepository
-	mu                     sync.Mutex
-	qualifiedCount         int
-	countThreshold         float64
-	reconcileCalls         int
-	reconcileErr           error
-	reconcileInviteeErr    error
-	reconcileInviteeCalls  int
-	reconcileStarted       chan struct{}
-	releaseReconcile       chan struct{}
-	reconcileFinished      bool
-	countCalls             int
-	inviteeSummary         *AffiliateSummary
-	inviterSummary         *AffiliateSummary
-	accruedAmount          float64
-	advisoryLockHeld       bool
-	reconcileRequired      bool
-	generation             int64
-	duringReconcile        func()
-	markReconcileErr       error
-	readSnapshotErr        error
-	clearReconcileErr      error
-	dirtyEvents            []AffiliateQualificationDirtyEvent
-	deletedDirtyEvents     []AffiliateQualificationDirtyEvent
-	failedDirtyEvents      []AffiliateQualificationDirtyEvent
-	invitees               []AffiliateInvitee
-	listInviteesThreshold  float64
-	overview               *AffiliateUserOverview
-	inviteRecords          []AffiliateInviteRecord
-	listRecordsThreshold   float64
-	listRecordsCalls       int
-	reconcileInviterCalls  int
-	reconcileInviteesCalls int
-	reconcileInvitersCalls int
-	reconcileInviter       func(threshold float64)
-	reconcileInvitees      func(userIDs []int64, threshold float64)
-	rewardRules            []AffiliateRewardRule
-	rewardClaims           []AffiliateRewardClaim
-	createdRewardCodes     []RedeemCode
-	createdRewardClaims    []AffiliateRewardClaim
+	mu                       sync.Mutex
+	qualifiedCount           int
+	countThreshold           float64
+	reconcileCalls           int
+	reconcileErr             error
+	reconcileInviteeErr      error
+	reconcileInviteeCalls    int
+	reconcileStarted         chan struct{}
+	releaseReconcile         chan struct{}
+	reconcileFinished        bool
+	countCalls               int
+	inviteeSummary           *AffiliateSummary
+	inviterSummary           *AffiliateSummary
+	accruedAmount            float64
+	advisoryLockHeld         bool
+	reconcileRequired        bool
+	generation               int64
+	duringReconcile          func()
+	markReconcileErr         error
+	readSnapshotErr          error
+	clearReconcileErr        error
+	dirtyEvents              []AffiliateQualificationDirtyEvent
+	deletedDirtyEvents       []AffiliateQualificationDirtyEvent
+	failedDirtyEvents        []AffiliateQualificationDirtyEvent
+	invitees                 []AffiliateInvitee
+	listInviteesThreshold    float64
+	overview                 *AffiliateUserOverview
+	inviteRecords            []AffiliateInviteRecord
+	listRecordsThreshold     float64
+	listRecordsCalls         int
+	reconcileInviterCalls    int
+	reconcileInviteesCalls   int
+	reconcileInvitersCalls   int
+	reconcileInviter         func(threshold float64)
+	reconcileInvitees        func(userIDs []int64, threshold float64)
+	rewardRules              []AffiliateRewardRule
+	rewardClaims             []AffiliateRewardClaim
+	createdRewardCodes       []RedeemCode
+	createdRewardClaims      []AffiliateRewardClaim
+	affiliateCodeSummary     *AffiliateSummary
+	affiliateCodeLookupErr   error
+	affiliateCodeLookupCalls int
+	lastAffiliateCodeLookup  string
+	ensureAffiliateCalls     int
 }
 
 func (r *affiliateTierServiceRepoStub) CountQualifiedInvitees(_ context.Context, _ int64, threshold float64) (int, error) {
@@ -916,6 +979,7 @@ func (r *affiliateTierServiceRepoStub) MarkAffiliateQualificationDirtyEventFaile
 }
 
 func (r *affiliateTierServiceRepoStub) EnsureUserAffiliate(_ context.Context, userID int64) (*AffiliateSummary, error) {
+	r.ensureAffiliateCalls++
 	if r.inviteeSummary != nil && r.inviteeSummary.UserID == userID {
 		return r.inviteeSummary, nil
 	}
@@ -923,6 +987,15 @@ func (r *affiliateTierServiceRepoStub) EnsureUserAffiliate(_ context.Context, us
 		return r.inviterSummary, nil
 	}
 	return &AffiliateSummary{UserID: userID}, nil
+}
+
+func (r *affiliateTierServiceRepoStub) GetAffiliateByCode(_ context.Context, code string) (*AffiliateSummary, error) {
+	r.affiliateCodeLookupCalls++
+	r.lastAffiliateCodeLookup = code
+	if r.affiliateCodeLookupErr != nil {
+		return nil, r.affiliateCodeLookupErr
+	}
+	return r.affiliateCodeSummary, nil
 }
 
 func (r *affiliateTierServiceRepoStub) AccrueQuota(_ context.Context, _, _ int64, amount float64, _ int, _ *int64) (bool, error) {
