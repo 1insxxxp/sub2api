@@ -8,6 +8,7 @@ import (
 	"math"
 	"net/http"
 	"strconv"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -495,6 +496,11 @@ type recordingCheckinSettingRepo struct {
 	fail   error
 }
 
+func (r *recordingCheckinSettingRepo) GetMultiple(ctx context.Context, keys []string) (map[string]string, error) {
+	*r.events = append(*r.events, "settings_read")
+	return r.SettingRepository.GetMultiple(ctx, keys)
+}
+
 func (r *recordingCheckinSettingRepo) SetMultiple(ctx context.Context, values map[string]string) error {
 	*r.events = append(*r.events, "settings_write")
 	if r.fail != nil {
@@ -557,6 +563,34 @@ func TestUpdateConfigUsesSharedTransactionForCampaignQueryAndSettingWrite(t *tes
 	})
 	require.NoError(t, err)
 	require.Equal(t, []string{"tx_begin", "advisory_lock", "campaign_query", "settings_write", "tx_commit"}, txRepo.events)
+}
+
+func TestCheckinRewardCampaignEnableUsesAdvisoryBaselineRowLockOrder(t *testing.T) {
+	txClient := newCheckinServiceTestClient(t)
+	ctx := context.Background()
+	baseRepo := newCheckinSettingRepoStub()
+	txRepo := &checkinCampaignTxRepoStub{SettingRepository: baseRepo, client: txClient}
+	svc := NewCheckinService(newPostgresDialectCheckinClient(t), nil, nil)
+	svc.SetSettingRepository(txRepo)
+	svc.now = func() time.Time { return time.Date(2026, 8, 15, 12, 0, 0, 0, svc.beijingLocation) }
+	draft := createCheckinRewardCampaignForResolverTest(
+		t, ctx, svc, txClient, "锁顺序", domain.CheckinRewardCampaignStatusDraft,
+		"2026-08-20", "2026-08-21", []domain.CheckinRewardTier{{Amount: 2, Probability: 100}},
+	)
+	txClient.CheckinRewardCampaign.Intercept(dbent.InterceptFunc(func(next dbent.Querier) dbent.Querier {
+		return dbent.QuerierFunc(func(ctx context.Context, query dbent.Query) (dbent.Value, error) {
+			txRepo.events = append(txRepo.events, "campaign_query")
+			return next.Query(ctx, query)
+		})
+	}))
+
+	enabled, err := svc.EnableRewardCampaign(ctx, draft.ID, 77)
+	require.NoError(t, err)
+	require.Equal(t, domain.CheckinRewardCampaignStatusEnabled, enabled.Status)
+	require.Equal(t, int64(77), *enabled.UpdatedBy)
+	require.Equal(t, []string{
+		"tx_begin", "advisory_lock", "settings_read", "campaign_query", "campaign_query", "tx_commit",
+	}, txRepo.events)
 }
 
 func TestUpdateConfigPostgresFailsClosedWithoutSharedTransactionRepository(t *testing.T) {
@@ -644,4 +678,206 @@ func TestGetCheckinConfigFromRepositoryUsesProvidedTransactionRepository(t *test
 	require.True(t, config.Enabled)
 	require.Equal(t, 12.0, config.MinTotalUsageUSD)
 	require.Equal(t, 2.0, config.Tiers[0].Amount)
+}
+
+func newCheckinRewardCampaignLifecycleService(t *testing.T, now string) (*CheckinService, *dbent.Client) {
+	t.Helper()
+	client := newCheckinServiceTestClient(t)
+	svc := NewCheckinService(client, nil, nil)
+	svc.SetSettingRepository(newCheckinSettingRepoStub())
+	parsed := checkinCampaignTestDate(t, svc, now)
+	svc.now = func() time.Time { return parsed.Add(12 * time.Hour) }
+	return svc, client
+}
+
+func validCheckinRewardCampaignInput(name, startDate, endDate string) CreateCheckinRewardCampaignInput {
+	return CreateCheckinRewardCampaignInput{
+		Name: name, StartDate: startDate, EndDate: endDate, AdminID: 41,
+		RewardTiers: []CheckinRewardTier{
+			{Amount: 5, Probability: 25, SortOrder: 9},
+			{Amount: 2, Probability: 75, SortOrder: 3},
+		},
+	}
+}
+
+func TestCheckinRewardCampaignCreateCopiesNormalizedTiers(t *testing.T) {
+	svc, _ := newCheckinRewardCampaignLifecycleService(t, "2026-08-15")
+	input := validCheckinRewardCampaignInput("  周末加奖  ", "2026-08-20", "2026-08-22")
+
+	created, err := svc.CreateRewardCampaign(context.Background(), input)
+	require.NoError(t, err)
+	require.Equal(t, "周末加奖", created.Name)
+	require.Equal(t, domain.CheckinRewardCampaignStatusDraft, created.Status)
+	require.Equal(t, CheckinRewardCampaignLifecycleDraft, created.LifecycleStatus)
+	require.Equal(t, []CheckinRewardTier{
+		{Amount: 2, Probability: 75, SortOrder: 1},
+		{Amount: 5, Probability: 25, SortOrder: 2},
+	}, created.RewardTiers)
+	require.Equal(t, int64(41), *created.CreatedBy)
+	require.Equal(t, int64(41), *created.UpdatedBy)
+
+	input.RewardTiers[0].Amount = 99
+	require.Equal(t, 5.0, created.RewardTiers[1].Amount)
+}
+
+func TestCheckinRewardCampaignUpdateAllowsDraftOnly(t *testing.T) {
+	svc, client := newCheckinRewardCampaignLifecycleService(t, "2026-08-15")
+	draft, err := svc.CreateRewardCampaign(context.Background(), validCheckinRewardCampaignInput("草稿", "2026-08-20", "2026-08-22"))
+	require.NoError(t, err)
+
+	updated, err := svc.UpdateRewardCampaign(context.Background(), draft.ID, UpdateCheckinRewardCampaignInput{
+		Name: " 新名称 ", StartDate: "2026-08-21", EndDate: "2026-08-23", AdminID: 42,
+		RewardTiers: []CheckinRewardTier{{Amount: 3, Probability: 100}},
+	})
+	require.NoError(t, err)
+	require.Equal(t, "新名称", updated.Name)
+	require.Equal(t, int64(42), *updated.UpdatedBy)
+
+	_, err = client.CheckinRewardCampaign.UpdateOneID(draft.ID).SetStatus(domain.CheckinRewardCampaignStatusEnabled).Save(context.Background())
+	require.NoError(t, err)
+	_, err = svc.UpdateRewardCampaign(context.Background(), draft.ID, UpdateCheckinRewardCampaignInput{
+		Name: "不能修改", StartDate: "2026-08-21", EndDate: "2026-08-23",
+		RewardTiers: []CheckinRewardTier{{Amount: 3, Probability: 100}},
+	})
+	require.Equal(t, "CHECKIN_REWARD_CAMPAIGN_INVALID_STATE_TRANSITION", infraerrors.Reason(err))
+}
+
+func TestCheckinRewardCampaignEnableRejectsOverlap(t *testing.T) {
+	svc, client := newCheckinRewardCampaignLifecycleService(t, "2026-08-15")
+	conflict := createCheckinRewardCampaignForResolverTest(t, context.Background(), svc, client, "已启用活动", domain.CheckinRewardCampaignStatusEnabled, "2026-08-20", "2026-08-25", []domain.CheckinRewardTier{{Amount: 2, Probability: 100}})
+	draft, err := svc.CreateRewardCampaign(context.Background(), validCheckinRewardCampaignInput("冲突草稿", "2026-08-25", "2026-08-28"))
+	require.NoError(t, err)
+
+	_, err = svc.EnableRewardCampaign(context.Background(), draft.ID, 99)
+	require.Equal(t, "CHECKIN_REWARD_CAMPAIGN_OVERLAP", infraerrors.Reason(err))
+	require.Equal(t, map[string]string{
+		"conflict_campaign_id":   strconv.FormatInt(conflict.ID, 10),
+		"conflict_campaign_name": "已启用活动",
+		"conflict_start_date":    "2026-08-20",
+		"conflict_end_date":      "2026-08-25",
+	}, infraerrors.FromError(err).Metadata)
+}
+
+func TestCheckinRewardCampaignEnableRejectsInvalidProbability(t *testing.T) {
+	svc, client := newCheckinRewardCampaignLifecycleService(t, "2026-08-15")
+	draft := createCheckinRewardCampaignForResolverTest(t, context.Background(), svc, client, "损坏草稿", domain.CheckinRewardCampaignStatusDraft, "2026-08-20", "2026-08-21", []domain.CheckinRewardTier{{Amount: 2, Probability: 90}})
+
+	_, err := svc.EnableRewardCampaign(context.Background(), draft.ID, 99)
+	require.Equal(t, "CHECKIN_REWARD_CONFIG_INVALID_TOTAL", infraerrors.Reason(err))
+}
+
+func TestCheckinRewardCampaignEnableRejectsBaselineIncompatibility(t *testing.T) {
+	svc, _ := newCheckinRewardCampaignLifecycleService(t, "2026-08-15")
+	repo := newCheckinSettingRepoStub()
+	repo.values[SettingKeyCheckinRewardConfig] = `{"tiers":[{"amount":1,"probability":100}],"usage_rebate_enabled":true,"usage_rebate_rate_percent":5,"usage_rebate_cap":1,"total_reward_cap":2}`
+	svc.SetSettingRepository(repo)
+	input := validCheckinRewardCampaignInput("高额草稿", "2026-08-20", "2026-08-21")
+	input.RewardTiers = []CheckinRewardTier{{Amount: 3, Probability: 100}}
+	draft, err := svc.CreateRewardCampaign(context.Background(), input)
+	require.NoError(t, err)
+
+	_, err = svc.EnableRewardCampaign(context.Background(), draft.ID, 99)
+	require.Equal(t, "CHECKIN_CAMPAIGN_INCOMPATIBLE_WITH_CONFIG", infraerrors.Reason(err))
+}
+
+func TestCheckinRewardCampaignDisableFallsBackImmediately(t *testing.T) {
+	svc, client := newCheckinRewardCampaignLifecycleService(t, "2026-08-15")
+	enabled := createCheckinRewardCampaignForResolverTest(t, context.Background(), svc, client, "当前活动", domain.CheckinRewardCampaignStatusEnabled, "2026-08-15", "2026-08-20", []domain.CheckinRewardTier{{Amount: 2, Probability: 100}})
+
+	disabled, err := svc.DisableRewardCampaign(context.Background(), enabled.ID, 91)
+	require.NoError(t, err)
+	require.Equal(t, domain.CheckinRewardCampaignStatusDisabled, disabled.Status)
+	require.Equal(t, CheckinRewardCampaignLifecycleDisabled, disabled.LifecycleStatus)
+	require.Equal(t, int64(91), *disabled.UpdatedBy)
+	effective, err := svc.resolveEffectiveCheckinConfig(context.Background(), client, "2026-08-15", checkinCampaignBaselineConfig())
+	require.NoError(t, err)
+	require.Nil(t, effective.Campaign)
+}
+
+func TestCheckinRewardCampaignCopyCreatesDraft(t *testing.T) {
+	svc, client := newCheckinRewardCampaignLifecycleService(t, "2026-08-15")
+	source := createCheckinRewardCampaignForResolverTest(t, context.Background(), svc, client, "来源", domain.CheckinRewardCampaignStatusEnabled, "2026-08-20", "2026-08-22", []domain.CheckinRewardTier{{Amount: 2, Probability: 100}})
+
+	copied, err := svc.CopyRewardCampaign(context.Background(), source.ID, " 来源副本 ", 88)
+	require.NoError(t, err)
+	require.NotEqual(t, source.ID, copied.ID)
+	require.Equal(t, domain.CheckinRewardCampaignStatusDraft, copied.Status)
+	require.Equal(t, "来源副本", copied.Name)
+	require.Equal(t, "2026-08-20", copied.StartDate)
+	require.Equal(t, []CheckinRewardTier{{Amount: 2, Probability: 100, SortOrder: 1}}, copied.RewardTiers)
+	require.Equal(t, int64(88), *copied.CreatedBy)
+	require.Equal(t, int64(88), *copied.UpdatedBy)
+}
+
+func TestCheckinRewardCampaignDeleteAllowsUnreferencedDraftOnly(t *testing.T) {
+	svc, client := newCheckinRewardCampaignLifecycleService(t, "2026-08-15")
+	draft, err := svc.CreateRewardCampaign(context.Background(), validCheckinRewardCampaignInput("可删除", "2026-08-20", "2026-08-21"))
+	require.NoError(t, err)
+	require.NoError(t, svc.DeleteRewardCampaign(context.Background(), draft.ID))
+	_, err = svc.GetRewardCampaign(context.Background(), draft.ID)
+	require.Equal(t, "CHECKIN_REWARD_CAMPAIGN_NOT_FOUND", infraerrors.Reason(err))
+
+	referenced := createCheckinRewardCampaignForResolverTest(t, context.Background(), svc, client, "被引用", domain.CheckinRewardCampaignStatusDraft, "2026-08-20", "2026-08-21", []domain.CheckinRewardTier{{Amount: 2, Probability: 100}})
+	user, err := client.User.Create().SetEmail("campaign-delete@test.local").SetPasswordHash("x").SetUsername("campaign-delete").Save(context.Background())
+	require.NoError(t, err)
+	_, err = client.UserCheckin.Create().SetUserID(user.ID).SetCheckinDate("2026-08-15").SetRewardCampaignID(referenced.ID).Save(context.Background())
+	require.NoError(t, err)
+	err = svc.DeleteRewardCampaign(context.Background(), referenced.ID)
+	require.Equal(t, "CHECKIN_REWARD_CAMPAIGN_REFERENCED", infraerrors.Reason(err))
+
+	enabled := createCheckinRewardCampaignForResolverTest(t, context.Background(), svc, client, "启用不可删除", domain.CheckinRewardCampaignStatusEnabled, "2026-08-20", "2026-08-21", []domain.CheckinRewardTier{{Amount: 2, Probability: 100}})
+	err = svc.DeleteRewardCampaign(context.Background(), enabled.ID)
+	require.Equal(t, "CHECKIN_REWARD_CAMPAIGN_INVALID_STATE_TRANSITION", infraerrors.Reason(err))
+}
+
+func TestCheckinRewardCampaignListDerivesLifecycle(t *testing.T) {
+	svc, client := newCheckinRewardCampaignLifecycleService(t, "2026-08-15")
+	ctx := context.Background()
+	createCheckinRewardCampaignForResolverTest(t, ctx, svc, client, "草稿", domain.CheckinRewardCampaignStatusDraft, "2026-08-30", "2026-08-31", []domain.CheckinRewardTier{{Amount: 1, Probability: 100}})
+	createCheckinRewardCampaignForResolverTest(t, ctx, svc, client, "未来", domain.CheckinRewardCampaignStatusEnabled, "2026-08-20", "2026-08-21", []domain.CheckinRewardTier{{Amount: 1, Probability: 100}})
+	createCheckinRewardCampaignForResolverTest(t, ctx, svc, client, "当前", domain.CheckinRewardCampaignStatusEnabled, "2026-08-15", "2026-08-16", []domain.CheckinRewardTier{{Amount: 1, Probability: 100}})
+	createCheckinRewardCampaignForResolverTest(t, ctx, svc, client, "结束", domain.CheckinRewardCampaignStatusEnabled, "2026-08-10", "2026-08-14", []domain.CheckinRewardTier{{Amount: 1, Probability: 100}})
+	createCheckinRewardCampaignForResolverTest(t, ctx, svc, client, "停用", domain.CheckinRewardCampaignStatusDisabled, "2026-08-25", "2026-08-26", []domain.CheckinRewardTier{{Amount: 1, Probability: 100}})
+
+	all, err := svc.ListRewardCampaigns(ctx, "all")
+	require.NoError(t, err)
+	require.Len(t, all, 5)
+	require.Equal(t, []string{"草稿", "停用", "未来", "当前", "结束"}, []string{all[0].Name, all[1].Name, all[2].Name, all[3].Name, all[4].Name})
+	unfiltered, err := svc.ListRewardCampaigns(ctx, "")
+	require.NoError(t, err)
+	require.Equal(t, all, unfiltered)
+	for lifecycle := range map[string]struct{}{"draft": {}, "upcoming": {}, "active": {}, "ended": {}, "disabled": {}} {
+		rows, filterErr := svc.ListRewardCampaigns(ctx, lifecycle)
+		require.NoError(t, filterErr)
+		require.Len(t, rows, 1)
+		require.Equal(t, lifecycle, rows[0].LifecycleStatus)
+	}
+	_, err = svc.ListRewardCampaigns(ctx, "unknown")
+	require.Equal(t, "CHECKIN_REWARD_CAMPAIGN_INVALID_LIFECYCLE_FILTER", infraerrors.Reason(err))
+}
+
+func TestCheckinRewardCampaignValidationAndReadProtection(t *testing.T) {
+	svc, client := newCheckinRewardCampaignLifecycleService(t, "2026-08-15")
+	ctx := context.Background()
+	for _, input := range []CreateCheckinRewardCampaignInput{
+		validCheckinRewardCampaignInput("   ", "2026-08-20", "2026-08-21"),
+		validCheckinRewardCampaignInput(strings.Repeat("长", 121), "2026-08-20", "2026-08-21"),
+		validCheckinRewardCampaignInput("bad date", "2026-8-20", "2026-08-21"),
+		validCheckinRewardCampaignInput("bad range", "2026-08-22", "2026-08-21"),
+	} {
+		_, err := svc.CreateRewardCampaign(ctx, input)
+		require.Error(t, err)
+	}
+	_, err := svc.GetRewardCampaign(ctx, 99999)
+	require.Equal(t, "CHECKIN_REWARD_CAMPAIGN_NOT_FOUND", infraerrors.Reason(err))
+
+	ended := createCheckinRewardCampaignForResolverTest(t, ctx, svc, client, "已结束", domain.CheckinRewardCampaignStatusEnabled, "2026-08-10", "2026-08-14", []domain.CheckinRewardTier{{Amount: 1, Probability: 100}})
+	_, err = svc.DisableRewardCampaign(ctx, ended.ID, 7)
+	require.Equal(t, "CHECKIN_REWARD_CAMPAIGN_HISTORY_PROTECTED", infraerrors.Reason(err))
+	_, err = svc.EnableRewardCampaign(ctx, ended.ID, 7)
+	require.Equal(t, "CHECKIN_REWARD_CAMPAIGN_INVALID_STATE_TRANSITION", infraerrors.Reason(err))
+
+	endedDraft := createCheckinRewardCampaignForResolverTest(t, ctx, svc, client, "已过期草稿", domain.CheckinRewardCampaignStatusDraft, "2026-08-10", "2026-08-14", []domain.CheckinRewardTier{{Amount: 1, Probability: 100}})
+	_, err = svc.EnableRewardCampaign(ctx, endedDraft.ID, 7)
+	require.Equal(t, "CHECKIN_REWARD_CAMPAIGN_INVALID_STATE_TRANSITION", infraerrors.Reason(err))
 }
