@@ -245,7 +245,9 @@ func (s *CheckinService) EnableRewardCampaign(ctx context.Context, id, adminID i
 			return err
 		}
 		lifecycle := deriveCheckinRewardCampaignLifecycle(campaign.Status, campaign.StartDate, campaign.EndDate, currentDay)
-		if campaign.EndDate.Before(currentDay) || (lifecycle != CheckinRewardCampaignLifecycleDraft && !(lifecycle == CheckinRewardCampaignLifecycleDisabled && campaign.StartDate.After(currentDay))) {
+		campaignEnded := compareCheckinCampaignCalendarDate(campaign.EndDate, currentDay) < 0
+		campaignStartsAfterToday := compareCheckinCampaignCalendarDate(campaign.StartDate, currentDay) > 0
+		if campaignEnded || (lifecycle != CheckinRewardCampaignLifecycleDraft && !(lifecycle == CheckinRewardCampaignLifecycleDisabled && campaignStartsAfterToday)) {
 			return ErrCheckinRewardCampaignInvalidStateTransition.WithMetadata(checkinCampaignMetadata(campaign, s.beijingLocation))
 		}
 		tiers, err := normalizeCheckinRewardTiers(campaign.RewardTiers)
@@ -342,14 +344,42 @@ func (s *CheckinService) DisableRewardCampaign(ctx context.Context, id, adminID 
 }
 
 func (s *CheckinService) CopyRewardCampaign(ctx context.Context, id int64, name string, adminID int64) (*CheckinRewardCampaign, error) {
-	source, err := s.entClient.CheckinRewardCampaign.Get(ctx, id)
+	name, err := normalizeCheckinRewardCampaignName(name)
 	if err != nil {
-		return nil, checkinRewardCampaignLookupError(err, id)
+		return nil, err
 	}
-	return s.CreateRewardCampaign(ctx, CreateCheckinRewardCampaignInput{
-		Name: name, StartDate: formatCheckinCampaignDate(source.StartDate, s.beijingLocation), EndDate: formatCheckinCampaignDate(source.EndDate, s.beijingLocation),
-		RewardTiers: append([]CheckinRewardTier(nil), source.RewardTiers...), AdminID: adminID,
+	var copied *dbent.CheckinRewardCampaign
+	err = s.withCheckinRewardCampaignStorageTx(ctx, func(client *dbent.Client) error {
+		source, getErr := getCheckinRewardCampaignForMutation(ctx, client, id)
+		if getErr != nil {
+			return checkinRewardCampaignLookupError(getErr, id)
+		}
+		tiers, normalizeErr := normalizeCheckinRewardTiers(source.RewardTiers)
+		if normalizeErr != nil {
+			return ErrCheckinCampaignDataIntegrity.
+				WithMetadata(checkinCampaignMetadata(source, s.beijingLocation)).
+				WithCause(normalizeErr)
+		}
+		create := client.CheckinRewardCampaign.Create().
+			SetName(name).
+			SetStatus(domain.CheckinRewardCampaignStatusDraft).
+			SetStartDate(source.StartDate).
+			SetEndDate(source.EndDate).
+			SetRewardTiers(tiers)
+		if adminID > 0 {
+			create.SetCreatedBy(adminID).SetUpdatedBy(adminID)
+		}
+		var createErr error
+		copied, createErr = create.Save(ctx)
+		return createErr
 	})
+	if err != nil {
+		if infraerrors.Reason(err) != "" {
+			return nil, err
+		}
+		return nil, campaignStorageError("CHECKIN_REWARD_CAMPAIGN_COPY_FAILED", "failed to copy check-in reward campaign", err)
+	}
+	return s.mapCheckinRewardCampaignForToday(copied)
 }
 
 func (s *CheckinService) DeleteRewardCampaign(ctx context.Context, id int64) error {
@@ -399,11 +429,12 @@ func (s *CheckinService) resolveEffectiveCheckinConfig(
 		return nil, ErrCheckinCampaignDataIntegrity
 	}
 
+	storageDay := checkinCampaignQueryDate(client, day)
 	rows, err := client.CheckinRewardCampaign.Query().
 		Where(
 			checkinrewardcampaign.StatusEQ(domain.CheckinRewardCampaignStatusEnabled),
-			checkinrewardcampaign.StartDateLTE(day),
-			checkinrewardcampaign.EndDateGTE(day),
+			checkinrewardcampaign.StartDateLTE(storageDay),
+			checkinrewardcampaign.EndDateGTE(storageDay),
 		).
 		Limit(2).
 		All(ctx)
@@ -483,11 +514,10 @@ func deriveCheckinRewardCampaignLifecycle(status string, startDate, endDate, cur
 	case domain.CheckinRewardCampaignStatusDisabled:
 		return CheckinRewardCampaignLifecycleDisabled
 	case domain.CheckinRewardCampaignStatusEnabled:
-		day := currentDay.Format("2006-01-02")
-		if day < startDate.Format("2006-01-02") {
+		if compareCheckinCampaignCalendarDate(currentDay, startDate) < 0 {
 			return CheckinRewardCampaignLifecycleUpcoming
 		}
-		if day > endDate.Format("2006-01-02") {
+		if compareCheckinCampaignCalendarDate(currentDay, endDate) > 0 {
 			return CheckinRewardCampaignLifecycleEnded
 		}
 		return CheckinRewardCampaignLifecycleActive
@@ -504,11 +534,8 @@ func cloneOptionalInt64(value *int64) *int64 {
 	return &cloned
 }
 
-func formatCheckinCampaignDate(value time.Time, loc *time.Location) string {
-	if loc != nil {
-		value = value.In(loc)
-	}
-	return value.Format("2006-01-02")
+func formatCheckinCampaignDate(value time.Time, _ *time.Location) string {
+	return checkinCampaignCalendarDate(value)
 }
 
 func checkinCampaignMetadata(entity *dbent.CheckinRewardCampaign, loc *time.Location) map[string]string {
@@ -555,7 +582,7 @@ func (s *CheckinService) validateConfigAgainstEnabledCampaigns(ctx context.Conte
 	campaigns, err := client.CheckinRewardCampaign.Query().
 		Where(
 			checkinrewardcampaign.StatusEQ(domain.CheckinRewardCampaignStatusEnabled),
-			checkinrewardcampaign.EndDateGTE(day),
+			checkinrewardcampaign.EndDateGTE(checkinCampaignQueryDate(client, day)),
 		).
 		All(ctx)
 	if err != nil {
@@ -615,9 +642,9 @@ func (s *CheckinService) normalizeCheckinRewardCampaignInput(
 	name, startDateValue, endDateValue string,
 	tiers []CheckinRewardTier,
 ) (string, time.Time, time.Time, []CheckinRewardTier, error) {
-	name = strings.TrimSpace(name)
-	if name == "" || utf8.RuneCountInString(name) > 120 {
-		return "", time.Time{}, time.Time{}, nil, ErrCheckinRewardCampaignInvalidName
+	name, err := normalizeCheckinRewardCampaignName(name)
+	if err != nil {
+		return "", time.Time{}, time.Time{}, nil, err
 	}
 	startDate, err := s.parseRewardCampaignDate("start_date", startDateValue)
 	if err != nil {
@@ -638,6 +665,34 @@ func (s *CheckinService) normalizeCheckinRewardCampaignInput(
 		return "", time.Time{}, time.Time{}, nil, err
 	}
 	return name, startDate, endDate, normalizedTiers, nil
+}
+
+func normalizeCheckinRewardCampaignName(name string) (string, error) {
+	name = strings.TrimSpace(name)
+	if name == "" || utf8.RuneCountInString(name) > 120 {
+		return "", ErrCheckinRewardCampaignInvalidName
+	}
+	return name, nil
+}
+
+func checkinCampaignCalendarDate(value time.Time) string {
+	return value.Format("2006-01-02")
+}
+
+func compareCheckinCampaignCalendarDate(left, right time.Time) int {
+	return strings.Compare(checkinCampaignCalendarDate(left), checkinCampaignCalendarDate(right))
+}
+
+func checkinCampaignStorageDate(value time.Time) time.Time {
+	year, month, day := value.Date()
+	return time.Date(year, month, day, 0, 0, 0, 0, time.UTC)
+}
+
+func checkinCampaignQueryDate(client *dbent.Client, value time.Time) time.Time {
+	if client != nil && client.Driver().Dialect() == dialect.Postgres {
+		return checkinCampaignStorageDate(value)
+	}
+	return value
 }
 
 func (s *CheckinService) parseRewardCampaignDate(field, value string) (time.Time, error) {

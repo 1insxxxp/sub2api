@@ -17,8 +17,10 @@ import (
 	dbent "github.com/Wei-Shaw/sub2api/ent"
 	"github.com/Wei-Shaw/sub2api/internal/domain"
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
+	"github.com/lib/pq"
 	"github.com/stretchr/testify/require"
 
+	coreent "entgo.io/ent"
 	"entgo.io/ent/dialect"
 	entsql "entgo.io/ent/dialect/sql"
 )
@@ -593,6 +595,32 @@ func TestCheckinRewardCampaignEnableUsesAdvisoryBaselineRowLockOrder(t *testing.
 	}, txRepo.events)
 }
 
+func TestCheckinRewardCampaignEnableTranslatesPostgresExclusionViolation(t *testing.T) {
+	txClient := newCheckinServiceTestClient(t)
+	ctx := context.Background()
+	baseRepo := newCheckinSettingRepoStub()
+	txRepo := &checkinCampaignTxRepoStub{SettingRepository: baseRepo, client: txClient}
+	svc := NewCheckinService(newPostgresDialectCheckinClient(t), nil, nil)
+	svc.SetSettingRepository(txRepo)
+	svc.now = func() time.Time { return time.Date(2026, 8, 15, 12, 0, 0, 0, svc.beijingLocation) }
+	draft := createCheckinRewardCampaignForResolverTest(
+		t, ctx, svc, txClient, "约束冲突", domain.CheckinRewardCampaignStatusDraft,
+		"2026-08-20", "2026-08-21", []domain.CheckinRewardTier{{Amount: 2, Probability: 100}},
+	)
+	txClient.Use(func(next dbent.Mutator) dbent.Mutator {
+		return dbent.MutateFunc(func(ctx context.Context, mutation dbent.Mutation) (dbent.Value, error) {
+			if mutation.Type() == "CheckinRewardCampaign" && mutation.Op().Is(coreent.OpUpdateOne) {
+				return nil, &pq.Error{Code: "23P01", Constraint: "checkin_reward_campaigns_enabled_dates_excl"}
+			}
+			return next.Mutate(ctx, mutation)
+		})
+	})
+
+	_, err := svc.EnableRewardCampaign(ctx, draft.ID, 77)
+	require.Equal(t, "CHECKIN_REWARD_CAMPAIGN_OVERLAP", infraerrors.Reason(err))
+	require.Equal(t, strconv.FormatInt(draft.ID, 10), infraerrors.FromError(err).Metadata["campaign_id"])
+}
+
 func TestUpdateConfigPostgresFailsClosedWithoutSharedTransactionRepository(t *testing.T) {
 	svc := NewCheckinService(newPostgresDialectCheckinClient(t), nil, nil)
 	svc.SetSettingRepository(newCheckinSettingRepoStub())
@@ -880,4 +908,81 @@ func TestCheckinRewardCampaignValidationAndReadProtection(t *testing.T) {
 	endedDraft := createCheckinRewardCampaignForResolverTest(t, ctx, svc, client, "已过期草稿", domain.CheckinRewardCampaignStatusDraft, "2026-08-10", "2026-08-14", []domain.CheckinRewardTier{{Amount: 1, Probability: 100}})
 	_, err = svc.EnableRewardCampaign(ctx, endedDraft.ID, 7)
 	require.Equal(t, "CHECKIN_REWARD_CAMPAIGN_INVALID_STATE_TRANSITION", infraerrors.Reason(err))
+}
+
+func TestCheckinRewardCampaignDisabledTodayUTCDateIsNotFuture(t *testing.T) {
+	client := newCheckinServiceTestClient(t)
+	svc := NewCheckinService(client, nil, nil)
+	svc.SetSettingRepository(newCheckinSettingRepoStub())
+	svc.now = func() time.Time {
+		return time.Date(2026, 8, 15, 12, 0, 0, 0, svc.beijingLocation)
+	}
+	campaign, err := client.CheckinRewardCampaign.Create().
+		SetName("UTC DATE 当天停用").
+		SetStatus(domain.CheckinRewardCampaignStatusDisabled).
+		SetStartDate(time.Date(2026, 8, 15, 0, 0, 0, 0, time.UTC)).
+		SetEndDate(time.Date(2026, 8, 16, 0, 0, 0, 0, time.UTC)).
+		SetRewardTiers([]domain.CheckinRewardTier{{Amount: 2, Probability: 100}}).
+		Save(context.Background())
+	require.NoError(t, err)
+
+	_, err = svc.EnableRewardCampaign(context.Background(), campaign.ID, 7)
+	require.Equal(t, "CHECKIN_REWARD_CAMPAIGN_INVALID_STATE_TRANSITION", infraerrors.Reason(err))
+	require.Equal(t, CheckinRewardCampaignLifecycleDisabled, deriveCheckinRewardCampaignLifecycle(
+		domain.CheckinRewardCampaignStatusDisabled,
+		campaign.StartDate,
+		campaign.EndDate,
+		time.Date(2026, 8, 15, 0, 0, 0, 0, svc.beijingLocation),
+	))
+}
+
+func TestCheckinRewardCampaignCopyUsesSingleTransactionAndRollsBack(t *testing.T) {
+	columns := []string{"id", "name", "status", "start_date", "end_date", "reward_tiers", "created_by", "updated_by", "created_at", "updated_at"}
+	startDate := time.Date(2026, 8, 20, 0, 0, 0, 0, time.UTC)
+	endDate := time.Date(2026, 8, 21, 0, 0, 0, 0, time.UTC)
+	createdAt := time.Date(2026, 8, 1, 0, 0, 0, 0, time.UTC)
+	tiersJSON := `[{"amount":2,"probability":100,"sort_order":1}]`
+
+	t.Run("source lock and draft insert share one transaction", func(t *testing.T) {
+		db, mock, err := sqlmock.New()
+		require.NoError(t, err)
+		t.Cleanup(func() { _ = db.Close() })
+		client := dbent.NewClient(dbent.Driver(entsql.OpenDB(dialect.Postgres, db)))
+		t.Cleanup(func() { _ = client.Close() })
+		svc := NewCheckinService(client, nil, nil)
+		svc.now = func() time.Time { return time.Date(2026, 8, 15, 12, 0, 0, 0, svc.beijingLocation) }
+
+		mock.ExpectBegin()
+		mock.ExpectQuery(`SELECT .*FROM "checkin_reward_campaigns".*FOR UPDATE`).
+			WillReturnRows(sqlmock.NewRows(columns).AddRow(7, "来源", "enabled", startDate, endDate, tiersJSON, 1, 2, createdAt, createdAt))
+		mock.ExpectQuery(`INSERT INTO "checkin_reward_campaigns"`).
+			WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(8))
+		mock.ExpectCommit()
+
+		copied, copyErr := svc.CopyRewardCampaign(context.Background(), 7, "来源副本", 9)
+		require.NoError(t, copyErr)
+		require.Equal(t, int64(8), copied.ID)
+		require.Equal(t, domain.CheckinRewardCampaignStatusDraft, copied.Status)
+		require.NoError(t, mock.ExpectationsWereMet())
+	})
+
+	t.Run("insert failure rolls the source transaction back", func(t *testing.T) {
+		db, mock, err := sqlmock.New()
+		require.NoError(t, err)
+		t.Cleanup(func() { _ = db.Close() })
+		client := dbent.NewClient(dbent.Driver(entsql.OpenDB(dialect.Postgres, db)))
+		t.Cleanup(func() { _ = client.Close() })
+		svc := NewCheckinService(client, nil, nil)
+		sentinel := errors.New("copy insert failed")
+
+		mock.ExpectBegin()
+		mock.ExpectQuery(`SELECT .*FROM "checkin_reward_campaigns".*FOR UPDATE`).
+			WillReturnRows(sqlmock.NewRows(columns).AddRow(7, "来源", "enabled", startDate, endDate, tiersJSON, 1, 2, createdAt, createdAt))
+		mock.ExpectQuery(`INSERT INTO "checkin_reward_campaigns"`).WillReturnError(sentinel)
+		mock.ExpectRollback()
+
+		_, copyErr := svc.CopyRewardCampaign(context.Background(), 7, "来源副本", 9)
+		require.ErrorIs(t, copyErr, sentinel)
+		require.NoError(t, mock.ExpectationsWereMet())
+	})
 }
