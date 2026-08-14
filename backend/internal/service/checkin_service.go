@@ -13,7 +13,6 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 
 	dbent "github.com/Wei-Shaw/sub2api/ent"
@@ -183,7 +182,6 @@ type CheckinService struct {
 	now                  func() time.Time
 	rewardRoll           func() float64
 	beijingLocation      *time.Location
-	checkinCampaignMu    sync.Mutex
 }
 
 func NewCheckinService(

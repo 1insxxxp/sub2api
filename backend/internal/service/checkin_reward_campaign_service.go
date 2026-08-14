@@ -5,6 +5,7 @@ import (
 	"errors"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 	"unicode/utf8"
 
@@ -71,7 +72,13 @@ var (
 		"CHECKIN_REWARD_CAMPAIGN_INVALID_LIFECYCLE_FILTER",
 		"invalid check-in reward campaign lifecycle filter",
 	)
+	ErrCheckinRewardCampaignInvalidActor = infraerrors.BadRequest(
+		"CHECKIN_REWARD_CAMPAIGN_INVALID_ACTOR",
+		"a valid administrator id is required for check-in reward campaign mutations",
+	)
 )
+
+var nonPostgresCheckinCampaignConfigMu sync.Mutex
 
 const (
 	CheckinRewardCampaignLifecycleDraft    = "draft"
@@ -133,7 +140,31 @@ func (s *CheckinService) ListRewardCampaigns(ctx context.Context, lifecycle stri
 	if err != nil {
 		return nil, err
 	}
-	entities, err := s.entClient.CheckinRewardCampaign.Query().
+	query := s.entClient.CheckinRewardCampaign.Query()
+	queryDay := checkinCampaignQueryDate(s.entClient, currentDay)
+	switch filter {
+	case CheckinRewardCampaignLifecycleDraft:
+		query.Where(checkinrewardcampaign.StatusEQ(domain.CheckinRewardCampaignStatusDraft))
+	case CheckinRewardCampaignLifecycleDisabled:
+		query.Where(checkinrewardcampaign.StatusEQ(domain.CheckinRewardCampaignStatusDisabled))
+	case CheckinRewardCampaignLifecycleUpcoming:
+		query.Where(
+			checkinrewardcampaign.StatusEQ(domain.CheckinRewardCampaignStatusEnabled),
+			checkinrewardcampaign.StartDateGT(queryDay),
+		)
+	case CheckinRewardCampaignLifecycleActive:
+		query.Where(
+			checkinrewardcampaign.StatusEQ(domain.CheckinRewardCampaignStatusEnabled),
+			checkinrewardcampaign.StartDateLTE(queryDay),
+			checkinrewardcampaign.EndDateGTE(queryDay),
+		)
+	case CheckinRewardCampaignLifecycleEnded:
+		query.Where(
+			checkinrewardcampaign.StatusEQ(domain.CheckinRewardCampaignStatusEnabled),
+			checkinrewardcampaign.EndDateLT(queryDay),
+		)
+	}
+	entities, err := query.
 		Order(dbent.Desc(checkinrewardcampaign.FieldStartDate), dbent.Desc(checkinrewardcampaign.FieldID)).
 		All(ctx)
 	if err != nil {
@@ -161,6 +192,9 @@ func (s *CheckinService) GetRewardCampaign(ctx context.Context, id int64) (*Chec
 }
 
 func (s *CheckinService) CreateRewardCampaign(ctx context.Context, input CreateCheckinRewardCampaignInput) (*CheckinRewardCampaign, error) {
+	if err := validateCheckinRewardCampaignActor(input.AdminID); err != nil {
+		return nil, err
+	}
 	name, startDate, endDate, tiers, err := s.normalizeCheckinRewardCampaignInput(input.Name, input.StartDate, input.EndDate, input.RewardTiers)
 	if err != nil {
 		return nil, err
@@ -173,9 +207,7 @@ func (s *CheckinService) CreateRewardCampaign(ctx context.Context, input CreateC
 			SetStartDate(startDate).
 			SetEndDate(endDate).
 			SetRewardTiers(tiers)
-		if input.AdminID > 0 {
-			create.SetCreatedBy(input.AdminID).SetUpdatedBy(input.AdminID)
-		}
+		create.SetCreatedBy(input.AdminID).SetUpdatedBy(input.AdminID)
 		var saveErr error
 		created, saveErr = create.Save(ctx)
 		return saveErr
@@ -187,6 +219,9 @@ func (s *CheckinService) CreateRewardCampaign(ctx context.Context, input CreateC
 }
 
 func (s *CheckinService) UpdateRewardCampaign(ctx context.Context, id int64, input UpdateCheckinRewardCampaignInput) (*CheckinRewardCampaign, error) {
+	if err := validateCheckinRewardCampaignActor(input.AdminID); err != nil {
+		return nil, err
+	}
 	name, startDate, endDate, tiers, err := s.normalizeCheckinRewardCampaignInput(input.Name, input.StartDate, input.EndDate, input.RewardTiers)
 	if err != nil {
 		return nil, err
@@ -206,9 +241,7 @@ func (s *CheckinService) UpdateRewardCampaign(ctx context.Context, id int64, inp
 			SetStartDate(startDate).
 			SetEndDate(endDate).
 			SetRewardTiers(tiers)
-		if input.AdminID > 0 {
-			update.SetUpdatedBy(input.AdminID)
-		}
+		update.SetUpdatedBy(input.AdminID)
 		var saveErr error
 		updated, saveErr = update.Save(ctx)
 		return saveErr
@@ -226,6 +259,9 @@ func (s *CheckinService) UpdateRewardCampaign(ctx context.Context, id int64, inp
 }
 
 func (s *CheckinService) EnableRewardCampaign(ctx context.Context, id, adminID int64) (*CheckinRewardCampaign, error) {
+	if err := validateCheckinRewardCampaignActor(adminID); err != nil {
+		return nil, err
+	}
 	var updated *dbent.CheckinRewardCampaign
 	var exclusionCampaign *dbent.CheckinRewardCampaign
 	err := s.withCheckinCampaignConfigTx(ctx, func(client *dbent.Client, repo SettingRepository) error {
@@ -270,9 +306,7 @@ func (s *CheckinService) EnableRewardCampaign(ctx context.Context, id, adminID i
 			Where(checkinrewardcampaign.StatusEQ(campaign.Status)).
 			SetStatus(domain.CheckinRewardCampaignStatusEnabled).
 			SetRewardTiers(tiers)
-		if adminID > 0 {
-			update.SetUpdatedBy(adminID)
-		}
+		update.SetUpdatedBy(adminID)
 		updated, err = update.Save(ctx)
 		if err != nil {
 			if isCheckinRewardCampaignExclusionError(err) {
@@ -300,12 +334,13 @@ func (s *CheckinService) EnableRewardCampaign(ctx context.Context, id, adminID i
 }
 
 func (s *CheckinService) DisableRewardCampaign(ctx context.Context, id, adminID int64) (*CheckinRewardCampaign, error) {
+	if err := validateCheckinRewardCampaignActor(adminID); err != nil {
+		return nil, err
+	}
 	var updated *dbent.CheckinRewardCampaign
-	err := s.withCheckinCampaignConfigTx(ctx, func(client *dbent.Client, repo SettingRepository) error {
-		// Keep the same advisory -> baseline -> campaign row order as Enable and UpdateConfig.
-		if _, err := s.getCheckinConfigFromRepository(ctx, repo); err != nil {
-			return err
-		}
+	err := s.withCheckinCampaignConfigTx(ctx, func(client *dbent.Client, _ SettingRepository) error {
+		// The shared transaction supplies the advisory lock; disabling does not
+		// depend on the baseline configuration and must remain available for recovery.
 		campaign, err := getCheckinRewardCampaignForMutation(ctx, client, id)
 		if err != nil {
 			return checkinRewardCampaignLookupError(err, id)
@@ -325,9 +360,7 @@ func (s *CheckinService) DisableRewardCampaign(ctx context.Context, id, adminID 
 		update := client.CheckinRewardCampaign.UpdateOneID(campaign.ID).
 			Where(checkinrewardcampaign.StatusEQ(domain.CheckinRewardCampaignStatusEnabled)).
 			SetStatus(domain.CheckinRewardCampaignStatusDisabled)
-		if adminID > 0 {
-			update.SetUpdatedBy(adminID)
-		}
+		update.SetUpdatedBy(adminID)
 		updated, err = update.Save(ctx)
 		if err != nil {
 			if dbent.IsNotFound(err) {
@@ -344,6 +377,9 @@ func (s *CheckinService) DisableRewardCampaign(ctx context.Context, id, adminID 
 }
 
 func (s *CheckinService) CopyRewardCampaign(ctx context.Context, id int64, name string, adminID int64) (*CheckinRewardCampaign, error) {
+	if err := validateCheckinRewardCampaignActor(adminID); err != nil {
+		return nil, err
+	}
 	name, err := normalizeCheckinRewardCampaignName(name)
 	if err != nil {
 		return nil, err
@@ -366,9 +402,7 @@ func (s *CheckinService) CopyRewardCampaign(ctx context.Context, id int64, name 
 			SetStartDate(source.StartDate).
 			SetEndDate(source.EndDate).
 			SetRewardTiers(tiers)
-		if adminID > 0 {
-			create.SetCreatedBy(adminID).SetUpdatedBy(adminID)
-		}
+		create.SetCreatedBy(adminID).SetUpdatedBy(adminID)
 		var createErr error
 		copied, createErr = create.Save(ctx)
 		return createErr
@@ -562,9 +596,17 @@ func (s *CheckinService) withCheckinCampaignConfigTx(
 		return txRepo.WithCheckinCampaignConfigTx(ctx, fn)
 	}
 
-	s.checkinCampaignMu.Lock()
-	defer s.checkinCampaignMu.Unlock()
-	return fn(s.entClient, s.settingRepo)
+	nonPostgresCheckinCampaignConfigMu.Lock()
+	defer nonPostgresCheckinCampaignConfigMu.Unlock()
+	tx, err := s.entClient.Tx(ctx)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+	if err := fn(tx.Client(), s.settingRepo); err != nil {
+		return err
+	}
+	return tx.Commit()
 }
 
 func (s *CheckinService) validateConfigAgainstEnabledCampaigns(ctx context.Context, client *dbent.Client, baseline *CheckinConfig) error {
@@ -673,6 +715,15 @@ func normalizeCheckinRewardCampaignName(name string) (string, error) {
 		return "", ErrCheckinRewardCampaignInvalidName
 	}
 	return name, nil
+}
+
+func validateCheckinRewardCampaignActor(adminID int64) error {
+	if adminID <= 0 {
+		return ErrCheckinRewardCampaignInvalidActor.WithMetadata(map[string]string{
+			"admin_id": strconv.FormatInt(adminID, 10),
+		})
+	}
+	return nil
 }
 
 func checkinCampaignCalendarDate(value time.Time) string {
