@@ -1210,4 +1210,3 @@ function buildRegistrationErrorMessage(error: unknown, fallback: string): string
   transform: translateY(-8px);
 }
 </style>
-  resolveAffiliateReferral,

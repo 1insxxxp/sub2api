@@ -338,8 +338,8 @@ func (h *AuthHandler) LinuxDoOAuthCallback(c *gin.Context) {
 			c.Request.Context(),
 			email,
 			username,
-			h.oauthAffiliateCodeForRequest(c, "", pendingSessionStringValue(upstreamClaims, "aff_code")),
 			"",
+			h.oauthAffiliateCodeForRequest(c, "", pendingSessionStringValue(upstreamClaims, "aff_code")),
 			readOAuthPromoCode(c),
 			"linuxdo",
 		)

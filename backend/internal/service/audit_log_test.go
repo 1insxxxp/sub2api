@@ -76,6 +76,20 @@ func TestRedactAuditBody_BareSessionKeyRedacted(t *testing.T) {
 	}
 }
 
+func TestRedactAuditBody_AffiliateReferralCodeRedacted(t *testing.T) {
+	raw := []byte(`{"aff_code":"AFFILIATE-CANARY","affCode":"SECOND-CANARY","name":"registration"}`)
+	out := RedactAuditBody(raw, "application/json")
+
+	for _, secret := range []string{"AFFILIATE-CANARY", "SECOND-CANARY"} {
+		if strings.Contains(out, secret) {
+			t.Fatalf("redacted body still contains affiliate referral code %q: %s", secret, out)
+		}
+	}
+	if !strings.Contains(out, "registration") {
+		t.Fatalf("non-sensitive registration metadata should be preserved: %s", out)
+	}
+}
+
 // TestRedactAuditBody_AuthoritativeTablesSynced 覆盖曾经漏网的凭证字段：
 // 账号 credentials 敏感子键、支付渠道无分隔符密钥、字符串值内嵌凭证的 proxy_key / custom_key，
 // 以及 camelCase 等命名变体（归一化比对）。

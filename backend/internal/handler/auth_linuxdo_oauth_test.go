@@ -257,6 +257,58 @@ func TestLinuxDoOAuthCallbackAllowsMissingVerifierWhenPKCEDisabled(t *testing.T)
 	require.Positive(t, identity.UserID)
 }
 
+func TestLinuxDoOAuthCallbackFastRegistrationUsesLockedAffiliateReferral(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/token":
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"access_token":"linuxdo-access","token_type":"Bearer","expires_in":3600}`))
+		case "/userinfo":
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"id":"affiliate-fast-subject","username":"affiliate_fast_user","name":"Affiliate Fast User"}`))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer upstream.Close()
+
+	handler, client, affiliateRepo := newAffiliateReferralOAuthHandler(t, map[string]int64{"LOCK123": 101})
+	configureLinuxDoOAuthTestHandler(handler, config.LinuxDoConnectConfig{
+		Enabled:             true,
+		ClientID:            "linuxdo-client",
+		ClientSecret:        "linuxdo-secret",
+		AuthorizeURL:        upstream.URL + "/authorize",
+		TokenURL:            upstream.URL + "/token",
+		UserInfoURL:         upstream.URL + "/userinfo",
+		Scopes:              "read",
+		RedirectURL:         "https://api.example.com/api/v1/auth/oauth/linuxdo/callback",
+		FrontendRedirectURL: "/auth/linuxdo/callback",
+		TokenAuthMethod:     "client_secret_post",
+		UsePKCE:             false,
+	})
+	t.Cleanup(func() { _ = client.Close() })
+
+	recorder := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(recorder)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/auth/oauth/linuxdo/callback?code=linuxdo-code&state=state-affiliate", nil)
+	req.AddCookie(encodedCookie(linuxDoOAuthStateCookieName, "state-affiliate"))
+	req.AddCookie(encodedCookie(linuxDoOAuthRedirectCookie, "/dashboard"))
+	req.AddCookie(encodedCookie(linuxDoOAuthIntentCookieName, oauthIntentLogin))
+	req.AddCookie(encodedCookie(oauthPendingBrowserCookieName, "browser-affiliate"))
+	req.AddCookie(lockedAffiliateCookie(t, handler, "LOCK123"))
+	c.Request = req
+
+	handler.LinuxDoOAuthCallback(c)
+
+	require.Equal(t, http.StatusFound, recorder.Code)
+	userEntity, err := client.User.Query().
+		Where(dbuser.EmailEQ(linuxDoSyntheticEmail("affiliate-fast-subject"))).
+		Only(context.Background())
+	require.NoError(t, err)
+	require.Equal(t, []oauthEmailAffiliateBindCall{{userID: userEntity.ID, inviterID: 101}}, affiliateRepo.bindCalls)
+	requireAffiliateLockCleared(t, recorder)
+}
+
 func TestLinuxDoOAuthBindStartAcceptsAccessTokenCookie(t *testing.T) {
 	handler, client := newLinuxDoOAuthHandlerAndClient(t, false, config.LinuxDoConnectConfig{
 		Enabled:             true,
