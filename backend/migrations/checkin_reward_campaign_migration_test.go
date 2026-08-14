@@ -1,6 +1,7 @@
 package migrations
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -19,4 +20,8 @@ func TestCheckinRewardCampaignMigrationContract(t *testing.T) {
 	require.Contains(t, sql, "ADD COLUMN IF NOT EXISTS reward_campaign_id")
 	require.Contains(t, sql, "ADD COLUMN IF NOT EXISTS reward_campaign_name")
 	require.Contains(t, sql, "ADD COLUMN IF NOT EXISTS reward_campaign_tiers_snapshot")
+
+	normalizedSQL := strings.Join(strings.Fields(sql), " ")
+	require.Contains(t, normalizedSQL,
+		"CREATE INDEX IF NOT EXISTS user_checkins_reward_campaign_id_idx ON user_checkins (reward_campaign_id)")
 }

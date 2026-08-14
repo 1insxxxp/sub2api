@@ -1,6 +1,7 @@
 package schema
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/domain"
@@ -22,7 +23,13 @@ type CheckinRewardCampaign struct {
 
 func (CheckinRewardCampaign) Annotations() []schema.Annotation {
 	return []schema.Annotation{
-		entsql.Annotation{Table: "checkin_reward_campaigns"},
+		entsql.Annotation{
+			Table: "checkin_reward_campaigns",
+			Checks: map[string]string{
+				"checkin_reward_campaigns_status_check":     "status IN ('draft', 'enabled', 'disabled')",
+				"checkin_reward_campaigns_date_order_check": "start_date <= end_date",
+			},
+		},
 	}
 }
 
@@ -33,7 +40,8 @@ func (CheckinRewardCampaign) Fields() []ent.Field {
 			NotEmpty(),
 		field.String("status").
 			MaxLen(20).
-			Default(domain.CheckinRewardCampaignStatusDraft),
+			Default(domain.CheckinRewardCampaignStatusDraft).
+			Validate(validateCheckinRewardCampaignStatus),
 		field.Time("start_date").
 			SchemaType(map[string]string{dialect.Postgres: "date"}),
 		field.Time("end_date").
@@ -55,6 +63,17 @@ func (CheckinRewardCampaign) Fields() []ent.Field {
 			Default(time.Now).
 			UpdateDefault(time.Now).
 			SchemaType(map[string]string{dialect.Postgres: "timestamptz"}),
+	}
+}
+
+func validateCheckinRewardCampaignStatus(status string) error {
+	switch status {
+	case domain.CheckinRewardCampaignStatusDraft,
+		domain.CheckinRewardCampaignStatusEnabled,
+		domain.CheckinRewardCampaignStatusDisabled:
+		return nil
+	default:
+		return fmt.Errorf("unsupported check-in reward campaign status %q", status)
 	}
 }
 

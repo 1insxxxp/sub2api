@@ -95,5 +95,7 @@ func (UserCheckin) Indexes() []ent.Index {
 		index.Fields("user_id", "checkin_date").Unique(),
 		index.Fields("checkin_date"),
 		index.Fields("user_id"),
+		index.Fields("reward_campaign_id").
+			StorageKey("user_checkins_reward_campaign_id_idx"),
 	}
 }

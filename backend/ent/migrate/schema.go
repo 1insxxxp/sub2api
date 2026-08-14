@@ -2265,6 +2265,11 @@ var (
 				Unique:  false,
 				Columns: []*schema.Column{UserCheckinsColumns[16]},
 			},
+			{
+				Name:    "user_checkins_reward_campaign_id_idx",
+				Unique:  false,
+				Columns: []*schema.Column{UserCheckinsColumns[15]},
+			},
 		},
 	}
 	// UserCheckinBlacklistColumns holds the columns for the "user_checkin_blacklist" table.
@@ -2776,6 +2781,10 @@ func init() {
 	}
 	CheckinRewardCampaignsTable.Annotation = &entsql.Annotation{
 		Table: "checkin_reward_campaigns",
+	}
+	CheckinRewardCampaignsTable.Annotation.Checks = map[string]string{
+		"checkin_reward_campaigns_date_order_check": "start_date <= end_date",
+		"checkin_reward_campaigns_status_check":     "status IN ('draft', 'enabled', 'disabled')",
 	}
 	CompositeModelRoutesTable.ForeignKeys[0].RefTable = GroupsTable
 	CompositeModelRoutesTable.Annotation = &entsql.Annotation{

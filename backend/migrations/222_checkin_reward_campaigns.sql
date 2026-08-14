@@ -39,6 +39,9 @@ ALTER TABLE user_checkins
     ADD COLUMN IF NOT EXISTS reward_campaign_name VARCHAR(120) NOT NULL DEFAULT '',
     ADD COLUMN IF NOT EXISTS reward_campaign_tiers_snapshot JSONB NOT NULL DEFAULT '[]'::jsonb;
 
+CREATE INDEX IF NOT EXISTS user_checkins_reward_campaign_id_idx
+    ON user_checkins (reward_campaign_id);
+
 DO $$
 BEGIN
     IF NOT EXISTS (

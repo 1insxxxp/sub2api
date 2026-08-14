@@ -910,7 +910,21 @@ func init() {
 	// checkinrewardcampaign.DefaultStatus holds the default value on creation for the status field.
 	checkinrewardcampaign.DefaultStatus = checkinrewardcampaignDescStatus.Default.(string)
 	// checkinrewardcampaign.StatusValidator is a validator for the "status" field. It is called by the builders before save.
-	checkinrewardcampaign.StatusValidator = checkinrewardcampaignDescStatus.Validators[0].(func(string) error)
+	checkinrewardcampaign.StatusValidator = func() func(string) error {
+		validators := checkinrewardcampaignDescStatus.Validators
+		fns := [...]func(string) error{
+			validators[0].(func(string) error),
+			validators[1].(func(string) error),
+		}
+		return func(status string) error {
+			for _, fn := range fns {
+				if err := fn(status); err != nil {
+					return err
+				}
+			}
+			return nil
+		}
+	}()
 	// checkinrewardcampaignDescRewardTiers is the schema descriptor for reward_tiers field.
 	checkinrewardcampaignDescRewardTiers := checkinrewardcampaignFields[4].Descriptor()
 	// checkinrewardcampaign.DefaultRewardTiers holds the default value on creation for the reward_tiers field.
