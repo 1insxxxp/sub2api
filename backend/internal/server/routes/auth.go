@@ -69,6 +69,12 @@ func RegisterAuthRoutes(
 		auth.POST("/validate-invitation-code", rateLimiter.LimitWithOptions("validate-invitation", 10, time.Minute, middleware.RateLimitOptions{
 			FailureMode: middleware.RateLimitFailClose,
 		}), h.Auth.ValidateInvitationCode)
+		auth.POST("/affiliate-referral/resolve", rateLimiter.LimitWithOptions("affiliate-referral-resolve", 10, time.Minute, middleware.RateLimitOptions{
+			FailureMode: middleware.RateLimitFailClose,
+		}), h.Auth.ResolveAffiliateReferral)
+		auth.GET("/affiliate-referral/status", rateLimiter.LimitWithOptions("affiliate-referral-status", 30, time.Minute, middleware.RateLimitOptions{
+			FailureMode: middleware.RateLimitFailClose,
+		}), h.Auth.GetAffiliateReferralStatus)
 		// 忘记密码接口添加速率限制：每分钟最多 5 次（Redis 故障时 fail-close）
 		auth.POST("/forgot-password", rateLimiter.LimitWithOptions("forgot-password", 5, time.Minute, middleware.RateLimitOptions{
 			FailureMode: middleware.RateLimitFailClose,
