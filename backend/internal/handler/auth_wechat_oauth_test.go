@@ -945,7 +945,7 @@ func TestCompleteWeChatOAuthRegistrationAfterInvitationPendingSessionReturnsPend
 }
 
 func TestCompleteWeChatOAuthRegistrationBindsIdentityWithoutAdoptionFlags(t *testing.T) {
-	handler, client := newOAuthPendingFlowTestHandler(t, false)
+	handler, client, affiliateRepo := newAffiliateReferralOAuthHandler(t, map[string]int64{"LOCK123": 101, "MANUAL12": 202})
 	ctx := context.Background()
 
 	session, err := client.PendingAuthSession.Create().
@@ -969,13 +969,14 @@ func TestCompleteWeChatOAuthRegistrationBindsIdentityWithoutAdoptionFlags(t *tes
 		Save(ctx)
 	require.NoError(t, err)
 
-	body := bytes.NewBufferString(`{"invitation_code":"invite-1"}`)
+	body := bytes.NewBufferString(`{"invitation_code":"invite-1","aff_code":"MANUAL12"}`)
 	recorder := httptest.NewRecorder()
 	completeCtx, _ := gin.CreateTestContext(recorder)
 	completeReq := httptest.NewRequest(http.MethodPost, "/api/v1/auth/oauth/wechat/complete-registration", body)
 	completeReq.Header.Set("Content-Type", "application/json")
 	completeReq.AddCookie(&http.Cookie{Name: oauthPendingSessionCookieName, Value: encodeCookieValue(session.SessionToken)})
 	completeReq.AddCookie(&http.Cookie{Name: oauthPendingBrowserCookieName, Value: encodeCookieValue("wechat-browser-no-adoption")})
+	completeReq.AddCookie(lockedAffiliateCookie(t, handler, "LOCK123"))
 	completeCtx.Request = completeReq
 
 	handler.CompleteWeChatOAuthRegistration(completeCtx)
@@ -1009,6 +1010,8 @@ func TestCompleteWeChatOAuthRegistrationBindsIdentityWithoutAdoptionFlags(t *tes
 	require.Equal(t, identity.ID, *decision.IdentityID)
 	require.False(t, decision.AdoptDisplayName)
 	require.False(t, decision.AdoptAvatar)
+	require.Equal(t, []oauthEmailAffiliateBindCall{{userID: userEntity.ID, inviterID: 101}}, affiliateRepo.bindCalls)
+	requireAffiliateLockCleared(t, recorder)
 }
 
 func TestWeChatOAuthCallbackRepairsLegacyOpenIDOnlyIdentity(t *testing.T) {

@@ -82,7 +82,7 @@ func (h *AuthHandler) emailOAuthStart(c *gin.Context, provider string) {
 	emailOAuthSetCookie(c, emailOAuthRedirectCookie, encodeCookieValue(redirectTo), secureCookie)
 	emailOAuthSetCookie(c, emailOAuthProviderCookie, encodeCookieValue(provider), secureCookie)
 	captureOAuthPromoCode(c, secureCookie)
-	if affCode := strings.TrimSpace(firstNonEmpty(c.Query("aff_code"), c.Query("aff"))); affCode != "" {
+	if affCode := h.oauthAffiliateCodeForRequest(c, firstNonEmpty(c.Query("aff_code"), c.Query("aff")), ""); affCode != "" {
 		emailOAuthSetCookie(c, emailOAuthAffiliateCookie, encodeCookieValue(affCode), secureCookie)
 	} else {
 		emailOAuthClearCookie(c, emailOAuthAffiliateCookie, secureCookie)
@@ -216,6 +216,7 @@ func (h *AuthHandler) emailOAuthCallbackWithProfile(
 	fragment.Set("expires_in", fmt.Sprintf("%d", tokenPair.ExpiresIn))
 	fragment.Set("token_type", "Bearer")
 	fragment.Set("redirect", redirectTo)
+	h.clearAffiliateReferralLock(c)
 	redirectWithFragment(c, frontendCallback, fragment)
 }
 
@@ -252,10 +253,11 @@ func (h *AuthHandler) emailOAuthAffiliateCode(c *gin.Context) string {
 	if c == nil {
 		return ""
 	}
+	captured := ""
 	if code, err := readCookieDecoded(c, emailOAuthAffiliateCookie); err == nil {
-		return strings.TrimSpace(code)
+		captured = code
 	}
-	return ""
+	return h.oauthAffiliateCodeForRequest(c, "", captured)
 }
 
 func (h *AuthHandler) createEmailOAuthRegistrationPendingSession(
@@ -367,10 +369,11 @@ func (h *AuthHandler) completeEmailOAuthRegistration(c *gin.Context, provider st
 		return
 	}
 
-	affiliateCode := strings.TrimSpace(req.AffCode)
-	if affiliateCode == "" {
-		affiliateCode = pendingSessionStringValue(session.UpstreamIdentityClaims, "aff_code")
-	}
+	affiliateCode := h.oauthAffiliateCodeForRequest(
+		c,
+		req.AffCode,
+		pendingSessionStringValue(session.UpstreamIdentityClaims, "aff_code"),
+	)
 
 	tokenPair, user, err := h.authService.RegisterVerifiedOAuthEmailAccount(
 		c.Request.Context(),
@@ -441,7 +444,7 @@ func (h *AuthHandler) completeEmailOAuthRegistration(c *gin.Context, provider st
 	h.authService.ApplyOAuthSignupPromoCode(c.Request.Context(), user.ID, pendingOAuthPromoCode(session))
 	h.authService.RecordSuccessfulLogin(c.Request.Context(), user.ID)
 	clearCookies()
-	writeOAuthTokenPairResponse(c, tokenPair)
+	h.writeOAuthTokenPairResponse(c, tokenPair)
 }
 
 func (h *AuthHandler) getEmailOAuthConfig(ctx context.Context, provider string) (config.EmailOAuthProviderConfig, error) {

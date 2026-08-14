@@ -190,6 +190,20 @@ func (h *AuthHandler) affiliateCodeForRequest(c *gin.Context, submitted string) 
 	return strings.TrimSpace(submitted), false
 }
 
+// oauthAffiliateCodeForRequest keeps referral attribution stable across OAuth
+// redirects. A live, signed referral lock is authoritative; otherwise the code
+// captured by the server at OAuth start wins over a value submitted later by
+// the browser.
+func (h *AuthHandler) oauthAffiliateCodeForRequest(c *gin.Context, submitted string, captured string) string {
+	if code, present, err := h.readAffiliateReferralLock(c); present && err == nil {
+		return code
+	}
+	if code := strings.TrimSpace(captured); code != "" {
+		return code
+	}
+	return strings.TrimSpace(submitted)
+}
+
 func (h *AuthHandler) ResolveAffiliateReferral(c *gin.Context) {
 	var req affiliateReferralResolveRequest
 	if err := c.ShouldBindJSON(&req); err != nil {

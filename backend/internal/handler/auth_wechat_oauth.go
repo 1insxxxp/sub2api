@@ -558,7 +558,7 @@ func (h *AuthHandler) CompleteWeChatOAuthRegistration(c *gin.Context) {
 		email,
 		username,
 		req.InvitationCode,
-		req.AffCode,
+		h.oauthAffiliateCodeForRequest(c, req.AffCode, pendingSessionStringValue(session.UpstreamIdentityClaims, "aff_code")),
 		pendingOAuthPromoCode(session),
 		"wechat",
 	)
@@ -587,6 +587,7 @@ func (h *AuthHandler) CompleteWeChatOAuthRegistration(c *gin.Context) {
 	}
 	clearOAuthPendingSessionCookie(c, secureCookie)
 	clearOAuthPendingBrowserCookie(c, secureCookie)
+	h.clearAffiliateReferralLock(c)
 
 	c.JSON(http.StatusOK, gin.H{
 		"access_token":  tokenPair.AccessToken,

@@ -1611,7 +1611,8 @@ func (h *AuthHandler) transitionPendingOAuthAccountToChoiceState(
 	return session, nil
 }
 
-func writeOAuthTokenPairResponse(c *gin.Context, tokenPair *service.TokenPair) {
+func (h *AuthHandler) writeOAuthTokenPairResponse(c *gin.Context, tokenPair *service.TokenPair) {
+	h.clearAffiliateReferralLock(c)
 	c.JSON(http.StatusOK, gin.H{
 		"access_token":  tokenPair.AccessToken,
 		"refresh_token": tokenPair.RefreshToken,
@@ -1695,7 +1696,7 @@ func (h *AuthHandler) bindPendingOAuthLogin(c *gin.Context, provider string) {
 	}
 
 	clearCookies()
-	writeOAuthTokenPairResponse(c, tokenPair)
+	h.writeOAuthTokenPairResponse(c, tokenPair)
 }
 
 func respondPendingOAuthBindingApplyError(c *gin.Context, err error) {
@@ -1846,7 +1847,7 @@ func (h *AuthHandler) createPendingOAuthAccount(c *gin.Context, provider string)
 		user,
 		strings.TrimSpace(req.InvitationCode),
 		strings.TrimSpace(session.ProviderType),
-		strings.TrimSpace(req.AffCode),
+		h.oauthAffiliateCodeForRequest(c, req.AffCode, pendingSessionStringValue(session.UpstreamIdentityClaims, "aff_code")),
 	); err != nil {
 		_ = tx.Rollback()
 		if rollbackCreatedUser(err) {
@@ -1890,7 +1891,7 @@ func (h *AuthHandler) createPendingOAuthAccount(c *gin.Context, provider string)
 	// createPendingOAuthAccount = 注册新账户，需要把钉钉昵称同步到 users.username 作为初始值
 	h.maybeSyncDingTalkAfterRegistration(c.Request.Context(), session, user.ID)
 	clearCookies()
-	writeOAuthTokenPairResponse(c, tokenPair)
+	h.writeOAuthTokenPairResponse(c, tokenPair)
 }
 
 // ExchangePendingOAuthCompletion redeems a pending OAuth browser session into a frontend-safe payload.
@@ -2059,6 +2060,7 @@ func (h *AuthHandler) ExchangePendingOAuthCompletion(c *gin.Context) {
 		payload["refresh_token"] = tokenPair.RefreshToken
 		payload["expires_in"] = tokenPair.ExpiresIn
 		payload["token_type"] = "Bearer"
+		h.clearAffiliateReferralLock(c)
 	}
 
 	clearCookies()

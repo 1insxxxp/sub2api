@@ -22,8 +22,17 @@ func newAffiliateReferralRegistrationHandler(
 	codeOwners map[string]int64,
 ) (*AuthHandler, *oauthEmailAffiliateRepoStub) {
 	t.Helper()
+	handler, _, affiliateRepo := newAffiliateReferralOAuthHandler(t, codeOwners)
+	return handler, affiliateRepo
+}
+
+func newAffiliateReferralOAuthHandler(
+	t *testing.T,
+	codeOwners map[string]int64,
+) (*AuthHandler, *dbent.Client, *oauthEmailAffiliateRepoStub) {
+	t.Helper()
 	affiliateRepo := newOAuthEmailAffiliateRepoStub(codeOwners)
-	handler, _ := newOAuthPendingFlowTestHandlerWithDependencies(t, oauthPendingFlowTestHandlerOptions{
+	handler, client := newOAuthPendingFlowTestHandlerWithDependencies(t, oauthPendingFlowTestHandlerOptions{
 		settingValues: map[string]string{
 			service.SettingKeyAffiliateEnabled: "true",
 		},
@@ -32,7 +41,7 @@ func newAffiliateReferralRegistrationHandler(
 		},
 	})
 	handler.cfg = &config.Config{JWT: config.JWTConfig{Secret: strings.Repeat("r", 32)}}
-	return handler, affiliateRepo
+	return handler, client, affiliateRepo
 }
 
 func performAffiliateAuthRequest(

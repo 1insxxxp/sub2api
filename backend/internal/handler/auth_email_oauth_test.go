@@ -84,6 +84,7 @@ func TestEmailOAuthCallbackRequiresPendingRegistrationWhenInvitationEnabled(t *t
 
 func TestEmailOAuthCallbackExistingEmailLogsInWhenInvitationEnabled(t *testing.T) {
 	handler, client := newOAuthPendingFlowTestHandler(t, true)
+	handler.cfg = &config.Config{JWT: config.JWTConfig{Secret: strings.Repeat("r", 32)}}
 	ctx := context.Background()
 
 	user, err := client.User.Create().
@@ -98,6 +99,7 @@ func TestEmailOAuthCallbackExistingEmailLogsInWhenInvitationEnabled(t *testing.T
 	recorder := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(recorder)
 	c.Request = httptest.NewRequest(http.MethodGet, "/api/v1/auth/oauth/google/callback", nil)
+	c.Request.AddCookie(lockedAffiliateCookie(t, handler, "LOCK123"))
 
 	handler.emailOAuthCallbackWithProfile(c, "google", config.EmailOAuthProviderConfig{
 		Enabled:             true,
@@ -127,6 +129,7 @@ func TestEmailOAuthCallbackExistingEmailLogsInWhenInvitationEnabled(t *testing.T
 	).Count(ctx)
 	require.NoError(t, err)
 	require.Equal(t, 1, identityCount)
+	requireAffiliateLockCleared(t, recorder)
 	_ = user
 }
 
@@ -227,8 +230,32 @@ func TestEmailOAuthStartPreservesPromoCodeInPendingSession(t *testing.T) {
 	require.Equal(t, "WELCOME2024", pendingOAuthPromoCode(session))
 }
 
+func TestEmailOAuthStartUsesLockedAffiliateReferral(t *testing.T) {
+	handler, _ := newOAuthPendingFlowTestHandlerWithDependencies(t, oauthPendingFlowTestHandlerOptions{
+		settingValues: map[string]string{
+			service.SettingKeyGitHubOAuthEnabled:      "true",
+			service.SettingKeyGitHubOAuthClientID:     "github-client",
+			service.SettingKeyGitHubOAuthClientSecret: "github-secret",
+			service.SettingKeyGitHubOAuthRedirectURL:  "https://app.example/api/v1/auth/oauth/github/callback",
+		},
+	})
+	handler.cfg = &config.Config{JWT: config.JWTConfig{Secret: strings.Repeat("r", 32)}}
+	recorder := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(recorder)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/auth/oauth/github/start?aff_code=MANUAL12", nil)
+	req.AddCookie(lockedAffiliateCookie(t, handler, "LOCK123"))
+	c.Request = req
+
+	handler.GitHubOAuthStart(c)
+
+	require.Equal(t, http.StatusFound, recorder.Code)
+	affiliateCookie := findCookie(recorder.Result().Cookies(), emailOAuthAffiliateCookie)
+	require.NotNil(t, affiliateCookie)
+	require.Equal(t, "LOCK123", decodeCookieValueForTest(t, affiliateCookie.Value))
+}
+
 func TestCompleteEmailOAuthRegistrationUsesAffiliateCodeFromPendingSession(t *testing.T) {
-	affiliateRepo := newOAuthEmailAffiliateRepoStub(map[string]int64{"AFF456": 2002})
+	affiliateRepo := newOAuthEmailAffiliateRepoStub(map[string]int64{"AFF456": 2002, "LOCK123": 2003})
 	handler, client := newOAuthPendingFlowTestHandlerWithDependencies(t, oauthPendingFlowTestHandlerOptions{
 		invitationEnabled: true,
 		settingValues: map[string]string{
@@ -238,6 +265,7 @@ func TestCompleteEmailOAuthRegistrationUsesAffiliateCodeFromPendingSession(t *te
 			return service.NewAffiliateService(affiliateRepo, settingSvc, nil, nil)
 		},
 	})
+	handler.cfg = &config.Config{JWT: config.JWTConfig{Secret: strings.Repeat("r", 32)}}
 	ctx := context.Background()
 	invitation, err := client.RedeemCode.Create().
 		SetCode("INVITE456").
@@ -279,6 +307,7 @@ func TestCompleteEmailOAuthRegistrationUsesAffiliateCodeFromPendingSession(t *te
 	req.Header.Set("Content-Type", "application/json")
 	req.AddCookie(&http.Cookie{Name: oauthPendingSessionCookieName, Value: encodeCookieValue(session.SessionToken)})
 	req.AddCookie(&http.Cookie{Name: oauthPendingBrowserCookieName, Value: encodeCookieValue("browser-aff-key")})
+	req.AddCookie(lockedAffiliateCookie(t, handler, "LOCK123"))
 	c.Request = req
 
 	handler.completeEmailOAuthRegistration(c, "google")
@@ -291,7 +320,8 @@ func TestCompleteEmailOAuthRegistrationUsesAffiliateCodeFromPendingSession(t *te
 	tamperedCount, err := client.User.Query().Where(dbuser.EmailEQ("tampered@example.com")).Count(ctx)
 	require.NoError(t, err)
 	require.Zero(t, tamperedCount)
-	require.Equal(t, []oauthEmailAffiliateBindCall{{userID: user.ID, inviterID: 2002}}, affiliateRepo.bindCalls)
+	require.Equal(t, []oauthEmailAffiliateBindCall{{userID: user.ID, inviterID: 2003}}, affiliateRepo.bindCalls)
+	requireAffiliateLockCleared(t, recorder)
 	storedInvitation, err := client.RedeemCode.Query().Where(redeemcode.IDEQ(invitation.ID)).Only(ctx)
 	require.NoError(t, err)
 	require.NotNil(t, storedInvitation.UsedBy)
@@ -300,6 +330,7 @@ func TestCompleteEmailOAuthRegistrationUsesAffiliateCodeFromPendingSession(t *te
 
 func TestCompleteEmailOAuthRegistrationRequiresPassword(t *testing.T) {
 	handler, client := newOAuthPendingFlowTestHandler(t, false)
+	handler.cfg = &config.Config{JWT: config.JWTConfig{Secret: strings.Repeat("r", 32)}}
 	ctx := context.Background()
 
 	session, err := client.PendingAuthSession.Create().
@@ -333,6 +364,7 @@ func TestCompleteEmailOAuthRegistrationRequiresPassword(t *testing.T) {
 	req.Header.Set("Content-Type", "application/json")
 	req.AddCookie(&http.Cookie{Name: oauthPendingSessionCookieName, Value: encodeCookieValue(session.SessionToken)})
 	req.AddCookie(&http.Cookie{Name: oauthPendingBrowserCookieName, Value: encodeCookieValue("browser-password-key")})
+	req.AddCookie(lockedAffiliateCookie(t, handler, "LOCK123"))
 	c.Request = req
 
 	handler.completeEmailOAuthRegistration(c, "github")
@@ -341,6 +373,7 @@ func TestCompleteEmailOAuthRegistrationRequiresPassword(t *testing.T) {
 	userCount, err := client.User.Query().Where(dbuser.EmailEQ("password-required@example.com")).Count(ctx)
 	require.NoError(t, err)
 	require.Zero(t, userCount)
+	require.Nil(t, findCookie(recorder.Result().Cookies(), affiliateReferralLockCookieName), "failed OAuth registration must retain the referral lock")
 }
 
 func TestParseGitHubOAuthProfileRejectsPublicEmailWhenEmailsEndpointFails(t *testing.T) {

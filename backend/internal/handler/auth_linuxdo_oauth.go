@@ -338,7 +338,7 @@ func (h *AuthHandler) LinuxDoOAuthCallback(c *gin.Context) {
 			c.Request.Context(),
 			email,
 			username,
-			"",
+			h.oauthAffiliateCodeForRequest(c, "", pendingSessionStringValue(upstreamClaims, "aff_code")),
 			"",
 			readOAuthPromoCode(c),
 			"linuxdo",
@@ -368,7 +368,7 @@ func (h *AuthHandler) LinuxDoOAuthCallback(c *gin.Context) {
 			h.authService.RecordSuccessfulLogin(c.Request.Context(), user.ID)
 			clearOAuthPendingSessionCookie(c, secureCookie)
 			clearOAuthPendingBrowserCookie(c, secureCookie)
-			redirectOAuthTokenPair(c, frontendCallback, tokenPair, redirectTo)
+			h.redirectOAuthTokenPair(c, frontendCallback, tokenPair, redirectTo)
 			return
 		}
 		if !errors.Is(err, service.ErrOAuthInvitationRequired) {
@@ -592,7 +592,7 @@ func (h *AuthHandler) CompleteLinuxDoOAuthRegistration(c *gin.Context) {
 		email,
 		username,
 		req.InvitationCode,
-		req.AffCode,
+		h.oauthAffiliateCodeForRequest(c, req.AffCode, pendingSessionStringValue(session.UpstreamIdentityClaims, "aff_code")),
 		pendingOAuthPromoCode(session),
 		"linuxdo",
 	)
@@ -607,6 +607,7 @@ func (h *AuthHandler) CompleteLinuxDoOAuthRegistration(c *gin.Context) {
 	h.authService.RecordSuccessfulLogin(c.Request.Context(), user.ID)
 	clearOAuthPendingSessionCookie(c, secureCookie)
 	clearOAuthPendingBrowserCookie(c, secureCookie)
+	h.clearAffiliateReferralLock(c)
 
 	c.JSON(http.StatusOK, gin.H{
 		"access_token":  tokenPair.AccessToken,
@@ -819,7 +820,7 @@ func redirectOAuthError(c *gin.Context, frontendCallback string, code string, me
 	redirectWithFragment(c, frontendCallback, fragment)
 }
 
-func redirectOAuthTokenPair(c *gin.Context, frontendCallback string, tokenPair *service.TokenPair, redirectTo string) {
+func (h *AuthHandler) redirectOAuthTokenPair(c *gin.Context, frontendCallback string, tokenPair *service.TokenPair, redirectTo string) {
 	fragment := url.Values{}
 	if tokenPair != nil {
 		fragment.Set("access_token", truncateFragmentValue(tokenPair.AccessToken))
@@ -845,6 +846,7 @@ func redirectOAuthTokenPair(c *gin.Context, frontendCallback string, tokenPair *
 		}
 		fragment.Set("redirect", truncateFragmentValue(redirect))
 	}
+	h.clearAffiliateReferralLock(c)
 	redirectWithFragment(c, frontendCallback, fragment)
 }
 

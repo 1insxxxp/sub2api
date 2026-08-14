@@ -616,7 +616,7 @@ func TestOIDCOAuthCallbackCreatesBindPendingSessionForCurrentUser(t *testing.T) 
 }
 
 func TestCompleteOIDCOAuthRegistrationAppliesPendingAdoptionDecision(t *testing.T) {
-	handler, client := newOAuthPendingFlowTestHandler(t, false)
+	handler, client, affiliateRepo := newAffiliateReferralOAuthHandler(t, map[string]int64{"LOCK123": 101, "MANUAL12": 202})
 	ctx := context.Background()
 
 	session, err := client.PendingAuthSession.Create().
@@ -643,13 +643,14 @@ func TestCompleteOIDCOAuthRegistrationAppliesPendingAdoptionDecision(t *testing.
 	})
 	require.NoError(t, err)
 
-	body := bytes.NewBufferString(`{"invitation_code":"invite-1","adopt_display_name":true}`)
+	body := bytes.NewBufferString(`{"invitation_code":"invite-1","aff_code":"MANUAL12","adopt_display_name":true}`)
 	recorder := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(recorder)
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/oauth/oidc/complete-registration", body)
 	req.Header.Set("Content-Type", "application/json")
 	req.AddCookie(&http.Cookie{Name: oauthPendingSessionCookieName, Value: encodeCookieValue(session.SessionToken)})
 	req.AddCookie(&http.Cookie{Name: oauthPendingBrowserCookieName, Value: encodeCookieValue("oidc-browser")})
+	req.AddCookie(lockedAffiliateCookie(t, handler, "LOCK123"))
 	c.Request = req
 
 	handler.CompleteOIDCOAuthRegistration(c)
@@ -690,6 +691,8 @@ func TestCompleteOIDCOAuthRegistrationAppliesPendingAdoptionDecision(t *testing.
 		Only(ctx)
 	require.NoError(t, err)
 	require.NotNil(t, consumed.ConsumedAt)
+	require.Equal(t, []oauthEmailAffiliateBindCall{{userID: userEntity.ID, inviterID: 101}}, affiliateRepo.bindCalls)
+	requireAffiliateLockCleared(t, recorder)
 }
 
 func TestCompleteOIDCOAuthRegistrationRejectsAdoptExistingUserSession(t *testing.T) {

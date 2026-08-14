@@ -789,7 +789,7 @@ func (h *AuthHandler) CompleteDingTalkOAuthRegistration(c *gin.Context) {
 		email,
 		username,
 		req.InvitationCode,
-		req.AffCode,
+		h.oauthAffiliateCodeForRequest(c, req.AffCode, pendingSessionStringValue(session.UpstreamIdentityClaims, "aff_code")),
 		pendingOAuthPromoCode(session),
 		"dingtalk",
 	)
@@ -813,6 +813,7 @@ func (h *AuthHandler) CompleteDingTalkOAuthRegistration(c *gin.Context) {
 	h.authService.RecordSuccessfulLogin(c.Request.Context(), user.ID)
 	clearOAuthPendingSessionCookie(c, secureCookie)
 	clearOAuthPendingBrowserCookie(c, secureCookie)
+	h.clearAffiliateReferralLock(c)
 
 	c.JSON(http.StatusOK, gin.H{
 		"access_token":  tokenPair.AccessToken,

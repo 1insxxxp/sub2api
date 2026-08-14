@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -11,9 +12,44 @@ import (
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
+	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+func TestCompleteDingTalkOAuthRegistrationUsesLockedAffiliateReferral(t *testing.T) {
+	handler, client, affiliateRepo := newAffiliateReferralOAuthHandler(t, map[string]int64{"LOCK123": 101, "MANUAL12": 202})
+	ctx := context.Background()
+
+	session, err := client.PendingAuthSession.Create().
+		SetSessionToken("dingtalk-affiliate-session").
+		SetIntent("login").
+		SetProviderType("dingtalk").
+		SetProviderKey("dingtalk").
+		SetProviderSubject("dingtalk-affiliate-subject").
+		SetResolvedEmail("dingtalk-affiliate@dingtalk-connect.invalid").
+		SetBrowserSessionKey("dingtalk-affiliate-browser").
+		SetUpstreamIdentityClaims(map[string]any{"username": "dingtalk_affiliate"}).
+		SetExpiresAt(time.Now().UTC().Add(10 * time.Minute)).
+		Save(ctx)
+	require.NoError(t, err)
+
+	recorder := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(recorder)
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/oauth/dingtalk/complete-registration", bytes.NewBufferString(`{"invitation_code":"invite-1","aff_code":"MANUAL12"}`))
+	req.Header.Set("Content-Type", "application/json")
+	req.AddCookie(&http.Cookie{Name: oauthPendingSessionCookieName, Value: encodeCookieValue(session.SessionToken)})
+	req.AddCookie(&http.Cookie{Name: oauthPendingBrowserCookieName, Value: encodeCookieValue(session.BrowserSessionKey)})
+	req.AddCookie(lockedAffiliateCookie(t, handler, "LOCK123"))
+	c.Request = req
+
+	handler.CompleteDingTalkOAuthRegistration(c)
+
+	require.Equal(t, http.StatusOK, recorder.Code)
+	require.Len(t, affiliateRepo.bindCalls, 1)
+	require.Equal(t, int64(101), affiliateRepo.bindCalls[0].inviterID)
+	requireAffiliateLockCleared(t, recorder)
+}
 
 // TestDingTalkOAuthStart_Disabled は sentinel テスト。
 // TODO(task-1.10): newTestAuthHandlerWithDingTalk helper が追加されたら t.Skip を外す。

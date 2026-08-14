@@ -221,3 +221,26 @@ func TestResolveAffiliateReferralPropagatesServiceFailure(t *testing.T) {
 
 	require.Equal(t, http.StatusServiceUnavailable, recorder.Code)
 }
+
+func TestOAuthAffiliateReferralLockPrecedence(t *testing.T) {
+	providers := []string{"github", "google", "linuxdo", "wechat", "oidc", "dingtalk"}
+	for _, provider := range providers {
+		t.Run(provider, func(t *testing.T) {
+			h := newAffiliateReferralTestHandler(t)
+			value, err := encodeAffiliateReferralLock(h.cfg.JWT.Secret, "LOCK123", time.Now().Add(-time.Minute), time.Now().Add(time.Hour))
+			require.NoError(t, err)
+			ctx, _ := gin.CreateTestContext(httptest.NewRecorder())
+			req := httptest.NewRequest(http.MethodPost, "/oauth/complete", nil)
+			req.AddCookie(&http.Cookie{Name: affiliateReferralLockCookieName, Value: value})
+			ctx.Request = req
+
+			require.Equal(t, "LOCK123", h.oauthAffiliateCodeForRequest(ctx, "MANUAL12", "CAPTURED1"))
+		})
+	}
+
+	h := newAffiliateReferralTestHandler(t)
+	ctx, _ := gin.CreateTestContext(httptest.NewRecorder())
+	ctx.Request = httptest.NewRequest(http.MethodPost, "/oauth/complete", nil)
+	require.Equal(t, "CAPTURED1", h.oauthAffiliateCodeForRequest(ctx, "MANUAL12", "CAPTURED1"))
+	require.Equal(t, "MANUAL12", h.oauthAffiliateCodeForRequest(ctx, "MANUAL12", ""))
+}

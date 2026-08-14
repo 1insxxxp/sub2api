@@ -695,7 +695,7 @@ func (h *AuthHandler) CompleteOIDCOAuthRegistration(c *gin.Context) {
 		email,
 		username,
 		req.InvitationCode,
-		req.AffCode,
+		h.oauthAffiliateCodeForRequest(c, req.AffCode, pendingSessionStringValue(session.UpstreamIdentityClaims, "aff_code")),
 		pendingOAuthPromoCode(session),
 		"oidc",
 	)
@@ -710,6 +710,7 @@ func (h *AuthHandler) CompleteOIDCOAuthRegistration(c *gin.Context) {
 	h.authService.RecordSuccessfulLogin(c.Request.Context(), user.ID)
 	clearOAuthPendingSessionCookie(c, secureCookie)
 	clearOAuthPendingBrowserCookie(c, secureCookie)
+	h.clearAffiliateReferralLock(c)
 
 	c.JSON(http.StatusOK, gin.H{
 		"access_token":  tokenPair.AccessToken,
@@ -1275,7 +1276,7 @@ func (h *AuthHandler) tryOIDCVerifiedEmailFastPath(
 		ctx,
 		input,
 		"",
-		"",
+		h.oauthAffiliateCodeForRequest(c, "", pendingSessionStringValue(upstreamClaims, "aff_code")),
 		readOAuthPromoCode(c),
 	)
 	if err != nil {
@@ -1291,6 +1292,7 @@ func (h *AuthHandler) tryOIDCVerifiedEmailFastPath(
 	fragment.Set("redirect", redirectTo)
 	clearOAuthPendingSessionCookie(c, isRequestHTTPS(c))
 	clearOAuthPendingBrowserCookie(c, isRequestHTTPS(c))
+	h.clearAffiliateReferralLock(c)
 	redirectWithFragment(c, frontendCallback, fragment)
 	return true
 }
