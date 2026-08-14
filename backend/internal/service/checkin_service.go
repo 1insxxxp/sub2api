@@ -20,6 +20,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/user"
 	"github.com/Wei-Shaw/sub2api/ent/usercheckin"
 	"github.com/Wei-Shaw/sub2api/ent/usercheckinblacklist"
+	"github.com/Wei-Shaw/sub2api/internal/domain"
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/pagination"
 )
@@ -60,11 +61,7 @@ type CheckinConfig struct {
 	Preview                CheckinRewardPreview `json:"preview"`
 }
 
-type CheckinRewardTier struct {
-	Amount      float64 `json:"amount"`
-	Probability float64 `json:"probability"`
-	SortOrder   int     `json:"sort_order"`
-}
+type CheckinRewardTier = domain.CheckinRewardTier
 
 type CheckinStreakRule struct {
 	Day              int     `json:"day"`
@@ -724,6 +721,9 @@ func (s *CheckinService) UpdateConfig(ctx context.Context, cfg CheckinConfig) (*
 	if err != nil {
 		return nil, err
 	}
+	if err := s.validateConfigAgainstEnabledCampaigns(ctx, normalized); err != nil {
+		return nil, err
+	}
 	if err := s.settingRepo.SetMultiple(ctx, map[string]string{
 		SettingKeyCheckinEnabled:             strconv.FormatBool(normalized.Enabled),
 		SettingKeyCheckinMinTotalUsageUSD:    strconv.FormatFloat(normalized.MinTotalUsageUSD, 'f', -1, 64),
@@ -824,7 +824,6 @@ func checkinIneligibleReason(cfg CheckinConfig) string {
 
 func normalizeRewardRules(cfg CheckinConfig) (*CheckinConfig, error) {
 	normalized := &CheckinConfig{
-		Tiers:                  make([]CheckinRewardTier, 0, len(cfg.Tiers)),
 		StreakEnabled:          cfg.StreakEnabled,
 		StreakRules:            make([]CheckinStreakRule, 0, len(cfg.StreakRules)),
 		UsageRebateEnabled:     cfg.UsageRebateEnabled,
@@ -832,65 +831,12 @@ func normalizeRewardRules(cfg CheckinConfig) (*CheckinConfig, error) {
 		UsageRebateCap:         cfg.UsageRebateCap,
 		TotalRewardCap:         cfg.TotalRewardCap,
 	}
-	if len(cfg.Tiers) == 0 {
-		return nil, infraerrors.BadRequest("CHECKIN_REWARD_CONFIG_EMPTY", "at least one reward tier is required")
+	tiers, err := normalizeCheckinRewardTiers(cfg.Tiers)
+	if err != nil {
+		return nil, err
 	}
-	if len(cfg.Tiers) > checkinRewardMaxTiers {
-		return nil, infraerrors.BadRequest("CHECKIN_REWARD_CONFIG_TOO_MANY_TIERS", fmt.Sprintf("at most %d reward tiers are allowed", checkinRewardMaxTiers))
-	}
+	normalized.Tiers = tiers
 
-	type tierWithIndex struct {
-		CheckinRewardTier
-		index int
-	}
-	tiers := make([]tierWithIndex, 0, len(cfg.Tiers))
-	for index, tier := range cfg.Tiers {
-		sortOrder := tier.SortOrder
-		if sortOrder <= 0 {
-			sortOrder = index + 1
-		}
-		tiers = append(tiers, tierWithIndex{
-			CheckinRewardTier: CheckinRewardTier{
-				Amount:      tier.Amount,
-				Probability: tier.Probability,
-				SortOrder:   sortOrder,
-			},
-			index: index,
-		})
-	}
-	sort.SliceStable(tiers, func(i, j int) bool {
-		if tiers[i].SortOrder == tiers[j].SortOrder {
-			return tiers[i].index < tiers[j].index
-		}
-		return tiers[i].SortOrder < tiers[j].SortOrder
-	})
-
-	seenAmounts := make(map[int64]struct{}, len(tiers))
-	var probabilityTotal int64
-	for index, tier := range tiers {
-		amountCents, err := scaledCheckinMoney(tier.Amount)
-		if err != nil {
-			return nil, infraerrors.BadRequest("CHECKIN_REWARD_CONFIG_INVALID_AMOUNT", fmt.Sprintf("tier %d: %s", index+1, err.Error()))
-		}
-		if _, exists := seenAmounts[amountCents]; exists {
-			return nil, infraerrors.BadRequest("CHECKIN_REWARD_CONFIG_DUPLICATE_AMOUNT", "reward amounts must be unique")
-		}
-		seenAmounts[amountCents] = struct{}{}
-
-		probabilityScaled, err := scaledCheckinProbability(tier.Probability)
-		if err != nil {
-			return nil, infraerrors.BadRequest("CHECKIN_REWARD_CONFIG_INVALID_PROBABILITY", fmt.Sprintf("tier %d: %s", index+1, err.Error()))
-		}
-		probabilityTotal += probabilityScaled
-		normalized.Tiers = append(normalized.Tiers, CheckinRewardTier{
-			Amount:      float64(amountCents) / 100,
-			Probability: float64(probabilityScaled) / checkinRewardProbabilityScale,
-			SortOrder:   index + 1,
-		})
-	}
-	if probabilityTotal != checkinRewardProbabilityTotal {
-		return nil, infraerrors.BadRequest("CHECKIN_REWARD_CONFIG_INVALID_TOTAL", "reward probabilities must add up to exactly 100")
-	}
 	if math.IsNaN(cfg.UsageRebateRatePercent) || math.IsInf(cfg.UsageRebateRatePercent, 0) || cfg.UsageRebateRatePercent < 0 || cfg.UsageRebateRatePercent > 100 {
 		return nil, infraerrors.BadRequest("CHECKIN_USAGE_REBATE_CONFIG_INVALID_RATE", "usage rebate rate must be between 0 and 100")
 	}
@@ -941,6 +887,70 @@ func normalizeRewardRules(cfg CheckinConfig) (*CheckinConfig, error) {
 	sort.SliceStable(normalized.StreakRules, func(i, j int) bool {
 		return normalized.StreakRules[i].Day < normalized.StreakRules[j].Day
 	})
+	return normalized, nil
+}
+
+func normalizeCheckinRewardTiers(input []CheckinRewardTier) ([]CheckinRewardTier, error) {
+	if len(input) == 0 {
+		return nil, infraerrors.BadRequest("CHECKIN_REWARD_CONFIG_EMPTY", "at least one reward tier is required")
+	}
+	if len(input) > checkinRewardMaxTiers {
+		return nil, infraerrors.BadRequest("CHECKIN_REWARD_CONFIG_TOO_MANY_TIERS", fmt.Sprintf("at most %d reward tiers are allowed", checkinRewardMaxTiers))
+	}
+
+	type tierWithIndex struct {
+		CheckinRewardTier
+		index int
+	}
+	tiers := make([]tierWithIndex, 0, len(input))
+	for index, tier := range input {
+		sortOrder := tier.SortOrder
+		if sortOrder <= 0 {
+			sortOrder = index + 1
+		}
+		tiers = append(tiers, tierWithIndex{
+			CheckinRewardTier: CheckinRewardTier{
+				Amount:      tier.Amount,
+				Probability: tier.Probability,
+				SortOrder:   sortOrder,
+			},
+			index: index,
+		})
+	}
+	sort.SliceStable(tiers, func(i, j int) bool {
+		if tiers[i].SortOrder == tiers[j].SortOrder {
+			return tiers[i].index < tiers[j].index
+		}
+		return tiers[i].SortOrder < tiers[j].SortOrder
+	})
+
+	normalized := make([]CheckinRewardTier, 0, len(tiers))
+	seenAmounts := make(map[int64]struct{}, len(tiers))
+	var probabilityTotal int64
+	for index, tier := range tiers {
+		amountCents, err := scaledCheckinMoney(tier.Amount)
+		if err != nil {
+			return nil, infraerrors.BadRequest("CHECKIN_REWARD_CONFIG_INVALID_AMOUNT", fmt.Sprintf("tier %d: %s", index+1, err.Error()))
+		}
+		if _, exists := seenAmounts[amountCents]; exists {
+			return nil, infraerrors.BadRequest("CHECKIN_REWARD_CONFIG_DUPLICATE_AMOUNT", "reward amounts must be unique")
+		}
+		seenAmounts[amountCents] = struct{}{}
+
+		probabilityScaled, err := scaledCheckinProbability(tier.Probability)
+		if err != nil {
+			return nil, infraerrors.BadRequest("CHECKIN_REWARD_CONFIG_INVALID_PROBABILITY", fmt.Sprintf("tier %d: %s", index+1, err.Error()))
+		}
+		probabilityTotal += probabilityScaled
+		normalized = append(normalized, CheckinRewardTier{
+			Amount:      float64(amountCents) / 100,
+			Probability: float64(probabilityScaled) / checkinRewardProbabilityScale,
+			SortOrder:   index + 1,
+		})
+	}
+	if probabilityTotal != checkinRewardProbabilityTotal {
+		return nil, infraerrors.BadRequest("CHECKIN_REWARD_CONFIG_INVALID_TOTAL", "reward probabilities must add up to exactly 100")
+	}
 	return normalized, nil
 }
 
