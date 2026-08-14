@@ -127,6 +127,14 @@ export function clearAllAffiliateReferralCodes(): void {
   clearAffiliateReferralCode()
 }
 
+export function confirmAffiliateReferralLock(status: { locked: boolean }): boolean {
+  if (status.locked !== true) {
+    return false
+  }
+  clearAllAffiliateReferralCodes()
+  return true
+}
+
 export function oauthAffiliatePayload(value?: unknown): { aff_code?: string } {
   const code = normalizeOAuthAffiliateCode(value)
   return code ? { aff_code: code } : {}

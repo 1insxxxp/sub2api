@@ -41,6 +41,34 @@ export interface OAuthLoginStartResponse {
   authorize_url: string
 }
 
+export interface AffiliateReferralLockStatus {
+  locked: boolean
+}
+
+export interface AffiliateReferralResolveResult extends AffiliateReferralLockStatus {
+  valid: boolean
+}
+
+export async function resolveAffiliateReferral(
+  affiliateCode: string
+): Promise<AffiliateReferralResolveResult> {
+  const { data } = await apiClient.post<AffiliateReferralResolveResult>(
+    '/auth/affiliate-referral/resolve',
+    { aff_code: affiliateCode.trim() }
+  )
+  return {
+    valid: data.valid === true,
+    locked: data.locked === true
+  }
+}
+
+export async function getAffiliateReferralStatus(): Promise<AffiliateReferralLockStatus> {
+  const { data } = await apiClient.get<AffiliateReferralLockStatus>(
+    '/auth/affiliate-referral/status'
+  )
+  return { locked: data.locked === true }
+}
+
 export function buildOAuthLoginStartURL(request: OAuthLoginStart): string {
   const apiBase = (import.meta.env.VITE_API_BASE_URL as string | undefined) || '/api/v1'
   const normalized = apiBase.replace(/\/$/, '')

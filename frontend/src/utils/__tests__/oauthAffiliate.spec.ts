@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
+  confirmAffiliateReferralLock,
   clearAffiliateReferralCode,
   clearOAuthAffiliateCode,
   loadAffiliateReferralCode,
@@ -44,5 +45,18 @@ describe('oauthAffiliate', () => {
 
     clearAffiliateReferralCode()
     expect(loadAffiliateReferralCode()).toBe('')
+  })
+
+  it('clears all legacy raw codes only after the server confirms a lock', () => {
+    storeAffiliateReferralCode('PERSISTED')
+    storeOAuthAffiliateCode('OAUTH')
+
+    expect(confirmAffiliateReferralLock({ locked: false })).toBe(false)
+    expect(loadAffiliateReferralCode()).toBe('PERSISTED')
+    expect(loadOAuthAffiliateCode()).toBe('OAUTH')
+
+    expect(confirmAffiliateReferralLock({ locked: true })).toBe(true)
+    expect(loadAffiliateReferralCode()).toBe('')
+    expect(loadOAuthAffiliateCode()).toBe('')
   })
 })
