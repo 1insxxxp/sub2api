@@ -121,9 +121,10 @@ describe('RegisterView invitation layout', () => {
 
     expect(resolveAffiliateReferralMock).toHaveBeenCalledWith('AFF123')
     expect(wrapper.find('[data-testid="affiliate-invitation-field"]').exists()).toBe(false)
-    expect(wrapper.get('[data-testid="affiliate-referral-locked"]').text()).toContain(
-      'auth.affiliateReferralLocked'
-    )
+    expect(wrapper.find('[data-testid="affiliate-referral-locked"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="affiliate-referral-resolving"]').exists()).toBe(false)
+    expect(wrapper.text()).not.toContain('auth.affiliateReferralLocked')
+    expect(wrapper.text()).not.toContain('auth.affiliateReferralResolving')
     expect(localStorage.getItem('affiliate_referral_code')).toBeNull()
     expect(sessionStorage.getItem('oauth_aff_code')).toBeNull()
 
@@ -199,7 +200,8 @@ describe('RegisterView invitation layout', () => {
     await flushPromises()
 
     expect(wrapper.find('[data-testid="affiliate-invitation-field"]').exists()).toBe(false)
-    expect(wrapper.get('[data-testid="affiliate-referral-locked"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="affiliate-referral-locked"]').exists()).toBe(false)
+    expect(wrapper.text()).not.toContain('auth.affiliateReferralLocked')
     expect(wrapper.find('[data-testid="affiliate-referral-error"]').exists()).toBe(false)
   })
 
@@ -254,7 +256,10 @@ describe('RegisterView invitation layout', () => {
     await flushPromises()
 
     expect(wrapper.find('#affiliate_code').exists()).toBe(false)
-    expect(wrapper.get('[data-testid="affiliate-referral-resolving"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="affiliate-referral-resolving"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="affiliate-referral-locked"]').exists()).toBe(false)
+    expect(wrapper.text()).not.toContain('auth.affiliateReferralResolving')
+    expect(wrapper.text()).not.toContain('auth.affiliateReferralLocked')
 
     resolveStatus?.({ locked: false })
     await flushPromises()
