@@ -2,9 +2,19 @@ import { flushPromises, mount } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import RegisterView from '@/views/auth/RegisterView.vue'
 
-const { getPublicSettingsMock, registerMock, showErrorMock } = vi.hoisted(() => ({
+const {
+  getPublicSettingsMock,
+  getAffiliateReferralStatusMock,
+  resolveAffiliateReferralMock,
+  registerMock,
+  routeQuery,
+  showErrorMock
+} = vi.hoisted(() => ({
   getPublicSettingsMock: vi.fn(),
+  getAffiliateReferralStatusMock: vi.fn(),
+  resolveAffiliateReferralMock: vi.fn(),
   registerMock: vi.fn(),
+  routeQuery: {} as Record<string, string | undefined>,
   showErrorMock: vi.fn()
 }))
 
@@ -27,7 +37,7 @@ const publicSettings = {
 
 vi.mock('vue-router', () => ({
   useRouter: () => ({ push: vi.fn() }),
-  useRoute: () => ({ query: {} })
+  useRoute: () => ({ query: routeQuery })
 }))
 
 vi.mock('vue-i18n', () => ({
@@ -58,7 +68,9 @@ vi.mock('@/api/auth', async () => {
   const actual = await vi.importActual<typeof import('@/api/auth')>('@/api/auth')
   return {
     ...actual,
-    getPublicSettings: (...args: unknown[]) => getPublicSettingsMock(...args)
+    getPublicSettings: (...args: unknown[]) => getPublicSettingsMock(...args),
+    getAffiliateReferralStatus: (...args: unknown[]) => getAffiliateReferralStatusMock(...args),
+    resolveAffiliateReferral: (...args: unknown[]) => resolveAffiliateReferralMock(...args)
   }
 })
 
@@ -84,10 +96,145 @@ function mountRegister() {
 describe('RegisterView invitation layout', () => {
   beforeEach(() => {
     getPublicSettingsMock.mockReset()
+    getAffiliateReferralStatusMock.mockReset()
+    resolveAffiliateReferralMock.mockReset()
     registerMock.mockReset()
     showErrorMock.mockReset()
+    delete routeQuery.aff
+    delete routeQuery.aff_code
+    localStorage.clear()
+    sessionStorage.clear()
     getPublicSettingsMock.mockResolvedValue(publicSettings)
+    getAffiliateReferralStatusMock.mockResolvedValue({ locked: false })
+    resolveAffiliateReferralMock.mockResolvedValue({ valid: true, locked: true })
     registerMock.mockResolvedValue({})
+  })
+
+  it('hides a validated affiliate link and never submits or stores its raw code', async () => {
+    routeQuery.aff = 'AFF123'
+    localStorage.setItem('affiliate_referral_code', JSON.stringify({ code: 'OLD', expiresAt: Date.now() + 60_000 }))
+    sessionStorage.setItem('oauth_aff_code', 'OLD')
+    getPublicSettingsMock.mockResolvedValueOnce({ ...publicSettings, turnstile_enabled: false })
+
+    const wrapper = mountRegister()
+    await flushPromises()
+
+    expect(resolveAffiliateReferralMock).toHaveBeenCalledWith('AFF123')
+    expect(wrapper.find('[data-testid="affiliate-invitation-field"]').exists()).toBe(false)
+    expect(wrapper.get('[data-testid="affiliate-referral-locked"]').text()).toContain(
+      'auth.affiliateReferralLocked'
+    )
+    expect(localStorage.getItem('affiliate_referral_code')).toBeNull()
+    expect(sessionStorage.getItem('oauth_aff_code')).toBeNull()
+
+    await wrapper.get('#email').setValue('locked@example.com')
+    await wrapper.get('#password').setValue('secret-123')
+    await wrapper.get('form').trigger('submit.prevent')
+    await flushPromises()
+
+    expect(registerMock).toHaveBeenCalledWith(
+      expect.not.objectContaining({ aff_code: expect.anything() })
+    )
+  })
+
+  it('lets the last valid affiliate link replace the previous server lock', async () => {
+    routeQuery.aff = 'FIRST123'
+    const first = mountRegister()
+    await flushPromises()
+    first.unmount()
+
+    routeQuery.aff = 'LATEST456'
+    const latest = mountRegister()
+    await flushPromises()
+
+    expect(resolveAffiliateReferralMock).toHaveBeenNthCalledWith(1, 'FIRST123')
+    expect(resolveAffiliateReferralMock).toHaveBeenNthCalledWith(2, 'LATEST456')
+    expect(latest.find('[data-testid="affiliate-invitation-field"]').exists()).toBe(false)
+  })
+
+  it('keeps manual entry available when a link is invalid and no lock exists', async () => {
+    routeQuery.aff_code = 'INVALID'
+    resolveAffiliateReferralMock.mockRejectedValueOnce({ status: 400 })
+
+    const wrapper = mountRegister()
+    await flushPromises()
+
+    expect(getAffiliateReferralStatusMock).toHaveBeenCalledTimes(1)
+    expect(wrapper.get('[data-testid="affiliate-invitation-field"]').exists()).toBe(true)
+    expect(wrapper.get('[data-testid="affiliate-referral-error"]').text()).toContain(
+      'auth.affiliateReferralInvalid'
+    )
+  })
+
+  it('does not let an invalid link replace an existing valid lock', async () => {
+    routeQuery.aff = 'INVALID'
+    resolveAffiliateReferralMock.mockRejectedValueOnce({ status: 400 })
+    getAffiliateReferralStatusMock.mockResolvedValueOnce({ locked: true })
+
+    const wrapper = mountRegister()
+    await flushPromises()
+
+    expect(wrapper.find('[data-testid="affiliate-invitation-field"]').exists()).toBe(false)
+    expect(wrapper.get('[data-testid="affiliate-referral-locked"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="affiliate-referral-error"]').exists()).toBe(false)
+  })
+
+  it('queries status on refresh and keeps an existing browser lock hidden', async () => {
+    getAffiliateReferralStatusMock.mockResolvedValueOnce({ locked: true })
+
+    const wrapper = mountRegister()
+    await flushPromises()
+
+    expect(resolveAffiliateReferralMock).not.toHaveBeenCalled()
+    expect(getAffiliateReferralStatusMock).toHaveBeenCalledTimes(1)
+    expect(wrapper.find('#affiliate_code').exists()).toBe(false)
+  })
+
+  it('preserves direct manual affiliate registration when no lock exists', async () => {
+    getPublicSettingsMock.mockResolvedValueOnce({ ...publicSettings, turnstile_enabled: false })
+    const wrapper = mountRegister()
+    await flushPromises()
+
+    await wrapper.get('#affiliate_code').setValue('MANUAL12')
+    await wrapper.get('#email').setValue('manual@example.com')
+    await wrapper.get('#password').setValue('secret-123')
+    await wrapper.get('form').trigger('submit.prevent')
+    await flushPromises()
+
+    expect(registerMock).toHaveBeenCalledWith(
+      expect.objectContaining({ aff_code: 'MANUAL12' })
+    )
+  })
+
+  it.each([404, 405])('falls back to the editable legacy flow on resolver %s', async (status) => {
+    routeQuery.aff = 'LEGACY12'
+    resolveAffiliateReferralMock.mockRejectedValueOnce({ status })
+    getPublicSettingsMock.mockResolvedValueOnce({ ...publicSettings, turnstile_enabled: false })
+
+    const wrapper = mountRegister()
+    await flushPromises()
+
+    expect((wrapper.get('#affiliate_code').element as HTMLInputElement).value).toBe('LEGACY12')
+    expect(localStorage.getItem('affiliate_referral_code')).toContain('LEGACY12')
+  })
+
+  it('does not flash an editable field while lock status is resolving', async () => {
+    let resolveStatus: ((value: { locked: boolean }) => void) | undefined
+    getAffiliateReferralStatusMock.mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolveStatus = resolve
+      })
+    )
+
+    const wrapper = mountRegister()
+    await flushPromises()
+
+    expect(wrapper.find('#affiliate_code').exists()).toBe(false)
+    expect(wrapper.get('[data-testid="affiliate-referral-resolving"]').exists()).toBe(true)
+
+    resolveStatus?.({ locked: false })
+    await flushPromises()
+    expect(wrapper.get('#affiliate_code').exists()).toBe(true)
   })
 
   it('keeps the optional affiliate invitation field before Turnstile', async () => {

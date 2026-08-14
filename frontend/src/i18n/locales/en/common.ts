@@ -301,6 +301,9 @@ export default {
     invitationCodeInvalid: 'Invalid or used invitation code',
     invitationCodeValidating: 'Validating invitation code...',
     invitationCodeInvalidCannotRegister: 'Invalid invitation code. Please check and try again',
+    affiliateReferralResolving: 'Confirming your referral…',
+    affiliateReferralLocked: 'Referral confirmed. No invitation code entry is needed.',
+    affiliateReferralInvalid: 'This referral link is invalid. You can still enter a code manually.',
     oauthOrContinue: 'or continue with others',
     linuxdo: {
       signIn: 'Continue with Linux.do',

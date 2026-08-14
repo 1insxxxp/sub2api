@@ -301,6 +301,9 @@ export default {
     invitationCodeInvalid: '邀请码无效或已被使用',
     invitationCodeValidating: '正在验证邀请码...',
     invitationCodeInvalidCannotRegister: '邀请码无效，请检查后重试',
+    affiliateReferralResolving: '正在确认邀请关系…',
+    affiliateReferralLocked: '邀请关系已确认，无需手动填写邀请码',
+    affiliateReferralInvalid: '邀请链接无效，您仍可手动填写邀请码',
     oauthOrContinue: '或使用其他继续',
     linuxdo: {
       signIn: '使用 Linux.do 登录',

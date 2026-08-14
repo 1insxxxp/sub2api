@@ -135,6 +135,25 @@
         </div>
 
         <!-- Affiliate Invitation Code Input (Optional) -->
+        <div
+          v-else-if="affiliateEnabled && affiliateReferralResolving"
+          data-testid="affiliate-referral-resolving"
+          class="flex min-h-11 items-center gap-2 rounded-xl border border-blue-100 bg-blue-50/60 px-3.5 text-sm text-slate-500 dark:border-blue-400/15 dark:bg-blue-400/5 dark:text-dark-300"
+          role="status"
+          aria-live="polite"
+        >
+          <span class="h-4 w-4 animate-spin rounded-full border-2 border-blue-200 border-t-blue-600 motion-reduce:animate-none dark:border-blue-400/20 dark:border-t-blue-300"></span>
+          {{ t('auth.affiliateReferralResolving') }}
+        </div>
+        <div
+          v-else-if="affiliateEnabled && affiliateReferralLocked"
+          data-testid="affiliate-referral-locked"
+          class="flex min-h-11 items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3.5 text-sm font-medium text-emerald-700 dark:border-emerald-500/25 dark:bg-emerald-500/10 dark:text-emerald-300"
+          role="status"
+        >
+          <Icon name="checkCircle" size="md" class="shrink-0" />
+          {{ t('auth.affiliateReferralLocked') }}
+        </div>
         <div v-else-if="affiliateEnabled" data-testid="affiliate-invitation-field">
           <label for="affiliate_code" class="input-label">
             {{ t('auth.invitationCodeLabel') }}
@@ -153,6 +172,14 @@
               :placeholder="t('auth.invitationCodePlaceholder')"
             />
           </div>
+          <p
+            v-if="affiliateReferralError"
+            data-testid="affiliate-referral-error"
+            class="mt-2 text-sm leading-5 text-red-600 dark:text-red-400"
+            role="alert"
+          >
+            {{ affiliateReferralError }}
+          </p>
         </div>
 
         <!-- Promo Code Input (Optional) -->
@@ -345,8 +372,10 @@ import TurnstileWidget from '@/components/CaptchaChallenge.vue'
 import { useAuthStore, useAppStore } from '@/stores'
 import {
   buildOAuthLoginStartURL,
+  getAffiliateReferralStatus,
   getPublicSettings,
   isWeChatWebOAuthEnabled,
+  resolveAffiliateReferral,
   startOAuthLogin,
   type OAuthLoginStart,
   validatePromoCode,
@@ -361,7 +390,9 @@ import {
 } from '@/utils/registrationEmailPolicy'
 import {
   clearAffiliateReferralCode,
+  confirmAffiliateReferralLock,
   loadAffiliateReferralCode,
+  pickOAuthAffiliateCode,
   resolveAffiliateReferralCode
 } from '@/utils/oauthAffiliate'
 import type { LoginAgreementDocument } from '@/types'
@@ -382,6 +413,11 @@ const isLoading = ref<boolean>(false)
 const settingsLoaded = ref<boolean>(false)
 const errorMessage = ref<string>('')
 const showPassword = ref<boolean>(false)
+const affiliateReferralLocked = ref<boolean>(false)
+const affiliateReferralResolving = ref<boolean>(true)
+const affiliateReferralError = ref<string>('')
+const affiliateReferralLegacyFallback = ref<boolean>(false)
+let affiliateReferralRequestGeneration = 0
 
 // Public settings
 const registrationEnabled = ref<boolean>(true)
@@ -495,7 +531,11 @@ const agreementGateActive = computed(
 )
 
 const registrationActionDisabled = computed(
-  () => isLoading.value || !settingsLoaded.value || agreementGateActive.value
+  () =>
+    isLoading.value ||
+    !settingsLoaded.value ||
+    affiliateReferralResolving.value ||
+    agreementGateActive.value
 )
 
 watch(validationToastMessage, (value, previousValue) => {
@@ -512,10 +552,96 @@ function syncAffiliateReferralCode(): string {
   return code
 }
 
+function isLegacyAffiliateReferralEndpointError(error: unknown): boolean {
+  const status = Number((error as { status?: unknown } | null)?.status)
+  return status === 404 || status === 405
+}
+
+function applyConfirmedAffiliateReferralLock(locked: boolean): void {
+  affiliateReferralLocked.value = confirmAffiliateReferralLock({ locked })
+  if (affiliateReferralLocked.value) {
+    formData.aff_code = ''
+    affiliateReferralError.value = ''
+  }
+}
+
+function enableLegacyAffiliateReferralFallback(): void {
+  affiliateReferralLegacyFallback.value = true
+  affiliateReferralLocked.value = false
+  affiliateReferralError.value = ''
+  syncAffiliateReferralCode()
+}
+
+async function refreshAffiliateReferralLock(): Promise<void> {
+  const generation = ++affiliateReferralRequestGeneration
+  affiliateReferralResolving.value = true
+  affiliateReferralError.value = ''
+  affiliateReferralLegacyFallback.value = false
+  const queryCode = pickOAuthAffiliateCode(route.query.aff, route.query.aff_code)
+
+  try {
+    if (queryCode) {
+      try {
+        const result = await resolveAffiliateReferral(queryCode)
+        if (generation !== affiliateReferralRequestGeneration) return
+        applyConfirmedAffiliateReferralLock(result.valid && result.locked)
+        if (!affiliateReferralLocked.value) {
+          affiliateReferralError.value = t('auth.affiliateReferralInvalid')
+        }
+        return
+      } catch (error) {
+        if (generation !== affiliateReferralRequestGeneration) return
+        if (isLegacyAffiliateReferralEndpointError(error)) {
+          enableLegacyAffiliateReferralFallback()
+          return
+        }
+
+        // Invalid links must not replace a valid lock that is already present.
+        try {
+          const status = await getAffiliateReferralStatus()
+          if (generation !== affiliateReferralRequestGeneration) return
+          applyConfirmedAffiliateReferralLock(status.locked)
+          if (!affiliateReferralLocked.value) {
+            affiliateReferralError.value = t('auth.affiliateReferralInvalid')
+          }
+          return
+        } catch (statusError) {
+          if (generation !== affiliateReferralRequestGeneration) return
+          if (isLegacyAffiliateReferralEndpointError(statusError)) {
+            enableLegacyAffiliateReferralFallback()
+            return
+          }
+          affiliateReferralLocked.value = false
+          affiliateReferralError.value = t('auth.affiliateReferralInvalid')
+          return
+        }
+      }
+    }
+
+    try {
+      const status = await getAffiliateReferralStatus()
+      if (generation !== affiliateReferralRequestGeneration) return
+      applyConfirmedAffiliateReferralLock(status.locked)
+    } catch (error) {
+      if (generation !== affiliateReferralRequestGeneration) return
+      if (isLegacyAffiliateReferralEndpointError(error)) {
+        enableLegacyAffiliateReferralFallback()
+      } else {
+        // A transient status failure must not block direct registration.
+        affiliateReferralLocked.value = false
+      }
+    }
+  } finally {
+    if (generation === affiliateReferralRequestGeneration) {
+      affiliateReferralResolving.value = false
+    }
+  }
+}
+
 // ==================== Lifecycle ====================
 
 onMounted(async () => {
-  syncAffiliateReferralCode()
+  void refreshAffiliateReferralLock()
 
   try {
     const settings = await getPublicSettings()
@@ -555,7 +681,6 @@ onMounted(async () => {
         await validatePromoCodeDebounced(promoParam)
       }
     }
-    syncAffiliateReferralCode()
   } catch (error) {
     console.error('Failed to load public settings:', error)
     loginAgreementEnabled.value = false
@@ -568,7 +693,7 @@ onMounted(async () => {
 watch(
   () => [route.query.aff, route.query.aff_code],
   () => {
-    syncAffiliateReferralCode()
+    void refreshAffiliateReferralLock()
   }
 )
 
@@ -993,7 +1118,9 @@ async function handleRegister(): Promise<void> {
   isLoading.value = true
 
   try {
-    const affCode = formData.aff_code.trim() || loadAffiliateReferralCode()
+    const affCode = affiliateReferralLocked.value
+      ? ''
+      : formData.aff_code.trim() || loadAffiliateReferralCode()
     if (affCode) {
       formData.aff_code = affCode
     }
@@ -1074,3 +1201,4 @@ function buildRegistrationErrorMessage(error: unknown, fallback: string): string
   transform: translateY(-8px);
 }
 </style>
+  resolveAffiliateReferral,
