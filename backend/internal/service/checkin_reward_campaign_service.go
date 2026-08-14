@@ -9,6 +9,8 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/checkinrewardcampaign"
 	"github.com/Wei-Shaw/sub2api/internal/domain"
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
+
+	"entgo.io/ent/dialect"
 )
 
 var (
@@ -24,6 +26,18 @@ var (
 		"CHECKIN_CAMPAIGN_INCOMPATIBLE_WITH_CONFIG",
 		"check-in configuration is incompatible with an enabled reward campaign",
 	)
+	ErrCheckinCampaignTransactionUnavailable = infraerrors.InternalServer(
+		"CHECKIN_CAMPAIGN_TRANSACTION_UNAVAILABLE",
+		"check-in campaign configuration transaction is unavailable",
+	)
+)
+
+const (
+	CheckinRewardCampaignLifecycleDraft    = "draft"
+	CheckinRewardCampaignLifecycleUpcoming = "upcoming"
+	CheckinRewardCampaignLifecycleActive   = "active"
+	CheckinRewardCampaignLifecycleEnded    = "ended"
+	CheckinRewardCampaignLifecycleDisabled = "disabled"
 )
 
 // CheckinRewardCampaign is the service-facing representation of a scheduled
@@ -97,7 +111,7 @@ func (s *CheckinService) resolveEffectiveCheckinConfig(
 
 	result := &EffectiveCheckinConfig{Config: normalized}
 	if len(rows) == 1 {
-		result.Campaign = checkinRewardCampaignFromEntity(rows[0], normalized.Tiers, s.beijingLocation)
+		result.Campaign = checkinRewardCampaignFromEntity(rows[0], normalized.Tiers, day, s.beijingLocation)
 	}
 	return result, nil
 }
@@ -120,23 +134,52 @@ func cloneCheckinConfig(cfg CheckinConfig) CheckinConfig {
 func checkinRewardCampaignFromEntity(
 	entity *dbent.CheckinRewardCampaign,
 	tiers []CheckinRewardTier,
+	currentDay time.Time,
 	loc *time.Location,
 ) *CheckinRewardCampaign {
 	return &CheckinRewardCampaign{
 		ID:               entity.ID,
 		Name:             entity.Name,
 		Status:           entity.Status,
-		LifecycleStatus:  entity.Status,
+		LifecycleStatus:  deriveCheckinRewardCampaignLifecycle(entity.Status, entity.StartDate, entity.EndDate, currentDay),
 		StartDate:        formatCheckinCampaignDate(entity.StartDate, loc),
 		EndDate:          formatCheckinCampaignDate(entity.EndDate, loc),
 		RewardTiers:      append([]CheckinRewardTier(nil), tiers...),
 		ProbabilityTotal: checkinProbabilityTotal(tiers),
 		Preview:          checkinRewardPreview(tiers),
-		CreatedBy:        entity.CreatedBy,
-		UpdatedBy:        entity.UpdatedBy,
+		CreatedBy:        cloneOptionalInt64(entity.CreatedBy),
+		UpdatedBy:        cloneOptionalInt64(entity.UpdatedBy),
 		CreatedAt:        entity.CreatedAt,
 		UpdatedAt:        entity.UpdatedAt,
 	}
+}
+
+func deriveCheckinRewardCampaignLifecycle(status string, startDate, endDate, currentDay time.Time) string {
+	switch status {
+	case domain.CheckinRewardCampaignStatusDraft:
+		return CheckinRewardCampaignLifecycleDraft
+	case domain.CheckinRewardCampaignStatusDisabled:
+		return CheckinRewardCampaignLifecycleDisabled
+	case domain.CheckinRewardCampaignStatusEnabled:
+		day := currentDay.Format("2006-01-02")
+		if day < startDate.Format("2006-01-02") {
+			return CheckinRewardCampaignLifecycleUpcoming
+		}
+		if day > endDate.Format("2006-01-02") {
+			return CheckinRewardCampaignLifecycleEnded
+		}
+		return CheckinRewardCampaignLifecycleActive
+	default:
+		return status
+	}
+}
+
+func cloneOptionalInt64(value *int64) *int64 {
+	if value == nil {
+		return nil
+	}
+	cloned := *value
+	return &cloned
 }
 
 func formatCheckinCampaignDate(value time.Time, loc *time.Location) string {
@@ -155,8 +198,28 @@ func checkinCampaignMetadata(entity *dbent.CheckinRewardCampaign, loc *time.Loca
 	}
 }
 
-func (s *CheckinService) validateConfigAgainstEnabledCampaigns(ctx context.Context, baseline *CheckinConfig) error {
-	if s.entClient == nil {
+func (s *CheckinService) withCheckinCampaignConfigTx(
+	ctx context.Context,
+	fn func(client *dbent.Client, repo SettingRepository) error,
+) error {
+	if s == nil || s.entClient == nil || s.settingRepo == nil || fn == nil {
+		return ErrCheckinCampaignTransactionUnavailable
+	}
+	if s.entClient.Driver().Dialect() == dialect.Postgres {
+		txRepo, ok := s.settingRepo.(CheckinCampaignConfigTransactionRepository)
+		if !ok {
+			return ErrCheckinCampaignTransactionUnavailable
+		}
+		return txRepo.WithCheckinCampaignConfigTx(ctx, fn)
+	}
+
+	s.checkinCampaignMu.Lock()
+	defer s.checkinCampaignMu.Unlock()
+	return fn(s.entClient, s.settingRepo)
+}
+
+func (s *CheckinService) validateConfigAgainstEnabledCampaigns(ctx context.Context, client *dbent.Client, baseline *CheckinConfig) error {
+	if client == nil {
 		return infraerrors.InternalServer(
 			"CHECKIN_CAMPAIGN_COMPATIBILITY_CHECK_FAILED",
 			"check-in campaign storage is not configured",
@@ -167,7 +230,7 @@ func (s *CheckinService) validateConfigAgainstEnabledCampaigns(ctx context.Conte
 	if err != nil {
 		return err
 	}
-	campaigns, err := s.entClient.CheckinRewardCampaign.Query().
+	campaigns, err := client.CheckinRewardCampaign.Query().
 		Where(
 			checkinrewardcampaign.StatusEQ(domain.CheckinRewardCampaignStatusEnabled),
 			checkinrewardcampaign.EndDateGTE(day),
@@ -181,8 +244,14 @@ func (s *CheckinService) validateConfigAgainstEnabledCampaigns(ctx context.Conte
 	}
 
 	for _, campaign := range campaigns {
+		normalizedTiers, normalizeTiersErr := normalizeCheckinRewardTiers(campaign.RewardTiers)
+		if normalizeTiersErr != nil {
+			return ErrCheckinCampaignDataIntegrity.
+				WithMetadata(checkinCampaignMetadata(campaign, s.beijingLocation)).
+				WithCause(normalizeTiersErr)
+		}
 		merged := cloneCheckinConfig(*baseline)
-		merged.Tiers = append([]CheckinRewardTier(nil), campaign.RewardTiers...)
+		merged.Tiers = normalizedTiers
 		if _, normalizeErr := normalizeCheckinConfig(merged); normalizeErr != nil {
 			return ErrCheckinCampaignIncompatibleWithConfig.
 				WithMetadata(checkinCampaignMetadata(campaign, s.beijingLocation)).

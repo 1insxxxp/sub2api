@@ -13,6 +13,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	dbent "github.com/Wei-Shaw/sub2api/ent"
@@ -182,6 +183,7 @@ type CheckinService struct {
 	now                  func() time.Time
 	rewardRoll           func() float64
 	beijingLocation      *time.Location
+	checkinCampaignMu    sync.Mutex
 }
 
 func NewCheckinService(
@@ -656,11 +658,15 @@ func (s *CheckinService) RemoveBlacklist(ctx context.Context, userID, removedBy 
 }
 
 func (s *CheckinService) GetConfig(ctx context.Context) (*CheckinConfig, error) {
+	return s.getCheckinConfigFromRepository(ctx, s.settingRepo)
+}
+
+func (s *CheckinService) getCheckinConfigFromRepository(ctx context.Context, repo SettingRepository) (*CheckinConfig, error) {
 	cfg := DefaultCheckinConfig()
-	if s.settingRepo == nil {
+	if repo == nil {
 		return cfg, nil
 	}
-	values, err := s.settingRepo.GetMultiple(ctx, []string{
+	values, err := repo.GetMultiple(ctx, []string{
 		SettingKeyCheckinEnabled,
 		SettingKeyCheckinMinTotalUsageUSD,
 		SettingKeyCheckinMinTotalRechargeUSD,
@@ -721,18 +727,27 @@ func (s *CheckinService) UpdateConfig(ctx context.Context, cfg CheckinConfig) (*
 	if err != nil {
 		return nil, err
 	}
-	if err := s.validateConfigAgainstEnabledCampaigns(ctx, normalized); err != nil {
+	if err := s.withCheckinCampaignConfigTx(ctx, func(client *dbent.Client, repo SettingRepository) error {
+		if err := s.validateConfigAgainstEnabledCampaigns(ctx, client, normalized); err != nil {
+			return err
+		}
+		return persistCheckinConfig(ctx, repo, normalized)
+	}); err != nil {
 		return nil, err
 	}
-	if err := s.settingRepo.SetMultiple(ctx, map[string]string{
+	return normalized, nil
+}
+
+func persistCheckinConfig(ctx context.Context, repo SettingRepository, normalized *CheckinConfig) error {
+	if err := repo.SetMultiple(ctx, map[string]string{
 		SettingKeyCheckinEnabled:             strconv.FormatBool(normalized.Enabled),
 		SettingKeyCheckinMinTotalUsageUSD:    strconv.FormatFloat(normalized.MinTotalUsageUSD, 'f', -1, 64),
 		SettingKeyCheckinMinTotalRechargeUSD: strconv.FormatFloat(normalized.MinTotalRechargeUSD, 'f', -1, 64),
 		SettingKeyCheckinRewardConfig:        mustMarshalCheckinRewardConfig(*normalized),
 	}); err != nil {
-		return nil, fmt.Errorf("update check-in config: %w", err)
+		return fmt.Errorf("update check-in config: %w", err)
 	}
-	return normalized, nil
+	return nil
 }
 
 func (s *CheckinService) currentBeijingDay() (string, time.Time) {
