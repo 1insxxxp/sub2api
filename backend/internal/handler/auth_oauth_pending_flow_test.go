@@ -3103,6 +3103,10 @@ type oauthPendingFlowUserRepoOptions struct {
 }
 
 func (r *oauthPendingFlowUserRepo) Create(ctx context.Context, user *service.User) error {
+	signupSource := strings.TrimSpace(user.SignupSource)
+	if signupSource == "" {
+		signupSource = "email"
+	}
 	entity, err := r.client.User.Create().
 		SetEmail(user.Email).
 		SetUsername(user.Username).
@@ -3116,7 +3120,7 @@ func (r *oauthPendingFlowUserRepo) Create(ctx context.Context, user *service.Use
 		SetTotpEnabled(user.TotpEnabled).
 		SetNillableTotpEnabledAt(user.TotpEnabledAt).
 		SetTotalRecharged(user.TotalRecharged).
-		SetSignupSource(user.SignupSource).
+		SetSignupSource(signupSource).
 		SetNillableLastLoginAt(user.LastLoginAt).
 		SetNillableLastActiveAt(user.LastActiveAt).
 		Save(ctx)

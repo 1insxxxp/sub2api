@@ -139,6 +139,7 @@ func respondWithTokenPair(c *gin.Context, authService *service.AuthService, user
 			response.InternalError(c, "Failed to generate token")
 			return
 		}
+		clearAffiliateReferralLockCookie(c)
 		response.Success(c, AuthResponse{
 			AccessToken: token,
 			TokenType:   "Bearer",
@@ -146,6 +147,7 @@ func respondWithTokenPair(c *gin.Context, authService *service.AuthService, user
 		})
 		return
 	}
+	clearAffiliateReferralLockCookie(c)
 	response.Success(c, AuthResponse{
 		AccessToken:  tokenPair.AccessToken,
 		RefreshToken: tokenPair.RefreshToken,
@@ -248,6 +250,7 @@ func (h *AuthHandler) Register(c *gin.Context) {
 		return
 	}
 
+	affiliateCode, _ := h.affiliateCodeForRequest(c, req.AffCode)
 	_, user, err := h.authService.RegisterWithVerificationAndMetadata(
 		c.Request.Context(),
 		req.Email,
@@ -255,7 +258,7 @@ func (h *AuthHandler) Register(c *gin.Context) {
 		req.VerifyCode,
 		req.PromoCode,
 		req.InvitationCode,
-		req.AffCode,
+		affiliateCode,
 		authSourceMetadataFromContext(c),
 	)
 	if err != nil {

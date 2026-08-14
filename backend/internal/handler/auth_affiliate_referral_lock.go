@@ -164,6 +164,10 @@ func (h *AuthHandler) setAffiliateReferralLock(c *gin.Context, code string) erro
 }
 
 func (h *AuthHandler) clearAffiliateReferralLock(c *gin.Context) {
+	clearAffiliateReferralLockCookie(c)
+}
+
+func clearAffiliateReferralLockCookie(c *gin.Context) {
 	if c == nil {
 		return
 	}
