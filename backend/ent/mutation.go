@@ -26,6 +26,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/channelmonitordailyrollup"
 	"github.com/Wei-Shaw/sub2api/ent/channelmonitorhistory"
 	"github.com/Wei-Shaw/sub2api/ent/channelmonitorrequesttemplate"
+	"github.com/Wei-Shaw/sub2api/ent/checkinrewardcampaign"
 	"github.com/Wei-Shaw/sub2api/ent/compositemodelroute"
 	"github.com/Wei-Shaw/sub2api/ent/emptyresponseclaim"
 	"github.com/Wei-Shaw/sub2api/ent/errorpassthroughrule"
@@ -88,6 +89,7 @@ const (
 	TypeChannelMonitorDailyRollup     = "ChannelMonitorDailyRollup"
 	TypeChannelMonitorHistory         = "ChannelMonitorHistory"
 	TypeChannelMonitorRequestTemplate = "ChannelMonitorRequestTemplate"
+	TypeCheckinRewardCampaign         = "CheckinRewardCampaign"
 	TypeCompositeModelRoute           = "CompositeModelRoute"
 	TypeEmptyResponseClaim            = "EmptyResponseClaim"
 	TypeErrorPassthroughRule          = "ErrorPassthroughRule"
@@ -19715,6 +19717,985 @@ func (m *ChannelMonitorRequestTemplateMutation) ResetEdge(name string) error {
 		return nil
 	}
 	return fmt.Errorf("unknown ChannelMonitorRequestTemplate edge %s", name)
+}
+
+// CheckinRewardCampaignMutation represents an operation that mutates the CheckinRewardCampaign nodes in the graph.
+type CheckinRewardCampaignMutation struct {
+	config
+	op                 Op
+	typ                string
+	id                 *int64
+	name               *string
+	status             *string
+	start_date         *time.Time
+	end_date           *time.Time
+	reward_tiers       *[]domain.CheckinRewardTier
+	appendreward_tiers []domain.CheckinRewardTier
+	created_by         *int64
+	addcreated_by      *int64
+	updated_by         *int64
+	addupdated_by      *int64
+	created_at         *time.Time
+	updated_at         *time.Time
+	clearedFields      map[string]struct{}
+	checkins           map[int64]struct{}
+	removedcheckins    map[int64]struct{}
+	clearedcheckins    bool
+	done               bool
+	oldValue           func(context.Context) (*CheckinRewardCampaign, error)
+	predicates         []predicate.CheckinRewardCampaign
+}
+
+var _ ent.Mutation = (*CheckinRewardCampaignMutation)(nil)
+
+// checkinrewardcampaignOption allows management of the mutation configuration using functional options.
+type checkinrewardcampaignOption func(*CheckinRewardCampaignMutation)
+
+// newCheckinRewardCampaignMutation creates new mutation for the CheckinRewardCampaign entity.
+func newCheckinRewardCampaignMutation(c config, op Op, opts ...checkinrewardcampaignOption) *CheckinRewardCampaignMutation {
+	m := &CheckinRewardCampaignMutation{
+		config:        c,
+		op:            op,
+		typ:           TypeCheckinRewardCampaign,
+		clearedFields: make(map[string]struct{}),
+	}
+	for _, opt := range opts {
+		opt(m)
+	}
+	return m
+}
+
+// withCheckinRewardCampaignID sets the ID field of the mutation.
+func withCheckinRewardCampaignID(id int64) checkinrewardcampaignOption {
+	return func(m *CheckinRewardCampaignMutation) {
+		var (
+			err   error
+			once  sync.Once
+			value *CheckinRewardCampaign
+		)
+		m.oldValue = func(ctx context.Context) (*CheckinRewardCampaign, error) {
+			once.Do(func() {
+				if m.done {
+					err = errors.New("querying old values post mutation is not allowed")
+				} else {
+					value, err = m.Client().CheckinRewardCampaign.Get(ctx, id)
+				}
+			})
+			return value, err
+		}
+		m.id = &id
+	}
+}
+
+// withCheckinRewardCampaign sets the old CheckinRewardCampaign of the mutation.
+func withCheckinRewardCampaign(node *CheckinRewardCampaign) checkinrewardcampaignOption {
+	return func(m *CheckinRewardCampaignMutation) {
+		m.oldValue = func(context.Context) (*CheckinRewardCampaign, error) {
+			return node, nil
+		}
+		m.id = &node.ID
+	}
+}
+
+// Client returns a new `ent.Client` from the mutation. If the mutation was
+// executed in a transaction (ent.Tx), a transactional client is returned.
+func (m CheckinRewardCampaignMutation) Client() *Client {
+	client := &Client{config: m.config}
+	client.init()
+	return client
+}
+
+// Tx returns an `ent.Tx` for mutations that were executed in transactions;
+// it returns an error otherwise.
+func (m CheckinRewardCampaignMutation) Tx() (*Tx, error) {
+	if _, ok := m.driver.(*txDriver); !ok {
+		return nil, errors.New("ent: mutation is not running in a transaction")
+	}
+	tx := &Tx{config: m.config}
+	tx.init()
+	return tx, nil
+}
+
+// ID returns the ID value in the mutation. Note that the ID is only available
+// if it was provided to the builder or after it was returned from the database.
+func (m *CheckinRewardCampaignMutation) ID() (id int64, exists bool) {
+	if m.id == nil {
+		return
+	}
+	return *m.id, true
+}
+
+// IDs queries the database and returns the entity ids that match the mutation's predicate.
+// That means, if the mutation is applied within a transaction with an isolation level such
+// as sql.LevelSerializable, the returned ids match the ids of the rows that will be updated
+// or updated by the mutation.
+func (m *CheckinRewardCampaignMutation) IDs(ctx context.Context) ([]int64, error) {
+	switch {
+	case m.op.Is(OpUpdateOne | OpDeleteOne):
+		id, exists := m.ID()
+		if exists {
+			return []int64{id}, nil
+		}
+		fallthrough
+	case m.op.Is(OpUpdate | OpDelete):
+		return m.Client().CheckinRewardCampaign.Query().Where(m.predicates...).IDs(ctx)
+	default:
+		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
+	}
+}
+
+// SetName sets the "name" field.
+func (m *CheckinRewardCampaignMutation) SetName(s string) {
+	m.name = &s
+}
+
+// Name returns the value of the "name" field in the mutation.
+func (m *CheckinRewardCampaignMutation) Name() (r string, exists bool) {
+	v := m.name
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldName returns the old "name" field's value of the CheckinRewardCampaign entity.
+// If the CheckinRewardCampaign object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CheckinRewardCampaignMutation) OldName(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldName is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldName requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldName: %w", err)
+	}
+	return oldValue.Name, nil
+}
+
+// ResetName resets all changes to the "name" field.
+func (m *CheckinRewardCampaignMutation) ResetName() {
+	m.name = nil
+}
+
+// SetStatus sets the "status" field.
+func (m *CheckinRewardCampaignMutation) SetStatus(s string) {
+	m.status = &s
+}
+
+// Status returns the value of the "status" field in the mutation.
+func (m *CheckinRewardCampaignMutation) Status() (r string, exists bool) {
+	v := m.status
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldStatus returns the old "status" field's value of the CheckinRewardCampaign entity.
+// If the CheckinRewardCampaign object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CheckinRewardCampaignMutation) OldStatus(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldStatus is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldStatus requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldStatus: %w", err)
+	}
+	return oldValue.Status, nil
+}
+
+// ResetStatus resets all changes to the "status" field.
+func (m *CheckinRewardCampaignMutation) ResetStatus() {
+	m.status = nil
+}
+
+// SetStartDate sets the "start_date" field.
+func (m *CheckinRewardCampaignMutation) SetStartDate(t time.Time) {
+	m.start_date = &t
+}
+
+// StartDate returns the value of the "start_date" field in the mutation.
+func (m *CheckinRewardCampaignMutation) StartDate() (r time.Time, exists bool) {
+	v := m.start_date
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldStartDate returns the old "start_date" field's value of the CheckinRewardCampaign entity.
+// If the CheckinRewardCampaign object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CheckinRewardCampaignMutation) OldStartDate(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldStartDate is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldStartDate requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldStartDate: %w", err)
+	}
+	return oldValue.StartDate, nil
+}
+
+// ResetStartDate resets all changes to the "start_date" field.
+func (m *CheckinRewardCampaignMutation) ResetStartDate() {
+	m.start_date = nil
+}
+
+// SetEndDate sets the "end_date" field.
+func (m *CheckinRewardCampaignMutation) SetEndDate(t time.Time) {
+	m.end_date = &t
+}
+
+// EndDate returns the value of the "end_date" field in the mutation.
+func (m *CheckinRewardCampaignMutation) EndDate() (r time.Time, exists bool) {
+	v := m.end_date
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldEndDate returns the old "end_date" field's value of the CheckinRewardCampaign entity.
+// If the CheckinRewardCampaign object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CheckinRewardCampaignMutation) OldEndDate(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldEndDate is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldEndDate requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldEndDate: %w", err)
+	}
+	return oldValue.EndDate, nil
+}
+
+// ResetEndDate resets all changes to the "end_date" field.
+func (m *CheckinRewardCampaignMutation) ResetEndDate() {
+	m.end_date = nil
+}
+
+// SetRewardTiers sets the "reward_tiers" field.
+func (m *CheckinRewardCampaignMutation) SetRewardTiers(drt []domain.CheckinRewardTier) {
+	m.reward_tiers = &drt
+	m.appendreward_tiers = nil
+}
+
+// RewardTiers returns the value of the "reward_tiers" field in the mutation.
+func (m *CheckinRewardCampaignMutation) RewardTiers() (r []domain.CheckinRewardTier, exists bool) {
+	v := m.reward_tiers
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldRewardTiers returns the old "reward_tiers" field's value of the CheckinRewardCampaign entity.
+// If the CheckinRewardCampaign object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CheckinRewardCampaignMutation) OldRewardTiers(ctx context.Context) (v []domain.CheckinRewardTier, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldRewardTiers is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldRewardTiers requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldRewardTiers: %w", err)
+	}
+	return oldValue.RewardTiers, nil
+}
+
+// AppendRewardTiers adds drt to the "reward_tiers" field.
+func (m *CheckinRewardCampaignMutation) AppendRewardTiers(drt []domain.CheckinRewardTier) {
+	m.appendreward_tiers = append(m.appendreward_tiers, drt...)
+}
+
+// AppendedRewardTiers returns the list of values that were appended to the "reward_tiers" field in this mutation.
+func (m *CheckinRewardCampaignMutation) AppendedRewardTiers() ([]domain.CheckinRewardTier, bool) {
+	if len(m.appendreward_tiers) == 0 {
+		return nil, false
+	}
+	return m.appendreward_tiers, true
+}
+
+// ResetRewardTiers resets all changes to the "reward_tiers" field.
+func (m *CheckinRewardCampaignMutation) ResetRewardTiers() {
+	m.reward_tiers = nil
+	m.appendreward_tiers = nil
+}
+
+// SetCreatedBy sets the "created_by" field.
+func (m *CheckinRewardCampaignMutation) SetCreatedBy(i int64) {
+	m.created_by = &i
+	m.addcreated_by = nil
+}
+
+// CreatedBy returns the value of the "created_by" field in the mutation.
+func (m *CheckinRewardCampaignMutation) CreatedBy() (r int64, exists bool) {
+	v := m.created_by
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCreatedBy returns the old "created_by" field's value of the CheckinRewardCampaign entity.
+// If the CheckinRewardCampaign object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CheckinRewardCampaignMutation) OldCreatedBy(ctx context.Context) (v *int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCreatedBy is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCreatedBy requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCreatedBy: %w", err)
+	}
+	return oldValue.CreatedBy, nil
+}
+
+// AddCreatedBy adds i to the "created_by" field.
+func (m *CheckinRewardCampaignMutation) AddCreatedBy(i int64) {
+	if m.addcreated_by != nil {
+		*m.addcreated_by += i
+	} else {
+		m.addcreated_by = &i
+	}
+}
+
+// AddedCreatedBy returns the value that was added to the "created_by" field in this mutation.
+func (m *CheckinRewardCampaignMutation) AddedCreatedBy() (r int64, exists bool) {
+	v := m.addcreated_by
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ClearCreatedBy clears the value of the "created_by" field.
+func (m *CheckinRewardCampaignMutation) ClearCreatedBy() {
+	m.created_by = nil
+	m.addcreated_by = nil
+	m.clearedFields[checkinrewardcampaign.FieldCreatedBy] = struct{}{}
+}
+
+// CreatedByCleared returns if the "created_by" field was cleared in this mutation.
+func (m *CheckinRewardCampaignMutation) CreatedByCleared() bool {
+	_, ok := m.clearedFields[checkinrewardcampaign.FieldCreatedBy]
+	return ok
+}
+
+// ResetCreatedBy resets all changes to the "created_by" field.
+func (m *CheckinRewardCampaignMutation) ResetCreatedBy() {
+	m.created_by = nil
+	m.addcreated_by = nil
+	delete(m.clearedFields, checkinrewardcampaign.FieldCreatedBy)
+}
+
+// SetUpdatedBy sets the "updated_by" field.
+func (m *CheckinRewardCampaignMutation) SetUpdatedBy(i int64) {
+	m.updated_by = &i
+	m.addupdated_by = nil
+}
+
+// UpdatedBy returns the value of the "updated_by" field in the mutation.
+func (m *CheckinRewardCampaignMutation) UpdatedBy() (r int64, exists bool) {
+	v := m.updated_by
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUpdatedBy returns the old "updated_by" field's value of the CheckinRewardCampaign entity.
+// If the CheckinRewardCampaign object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CheckinRewardCampaignMutation) OldUpdatedBy(ctx context.Context) (v *int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUpdatedBy is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUpdatedBy requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUpdatedBy: %w", err)
+	}
+	return oldValue.UpdatedBy, nil
+}
+
+// AddUpdatedBy adds i to the "updated_by" field.
+func (m *CheckinRewardCampaignMutation) AddUpdatedBy(i int64) {
+	if m.addupdated_by != nil {
+		*m.addupdated_by += i
+	} else {
+		m.addupdated_by = &i
+	}
+}
+
+// AddedUpdatedBy returns the value that was added to the "updated_by" field in this mutation.
+func (m *CheckinRewardCampaignMutation) AddedUpdatedBy() (r int64, exists bool) {
+	v := m.addupdated_by
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ClearUpdatedBy clears the value of the "updated_by" field.
+func (m *CheckinRewardCampaignMutation) ClearUpdatedBy() {
+	m.updated_by = nil
+	m.addupdated_by = nil
+	m.clearedFields[checkinrewardcampaign.FieldUpdatedBy] = struct{}{}
+}
+
+// UpdatedByCleared returns if the "updated_by" field was cleared in this mutation.
+func (m *CheckinRewardCampaignMutation) UpdatedByCleared() bool {
+	_, ok := m.clearedFields[checkinrewardcampaign.FieldUpdatedBy]
+	return ok
+}
+
+// ResetUpdatedBy resets all changes to the "updated_by" field.
+func (m *CheckinRewardCampaignMutation) ResetUpdatedBy() {
+	m.updated_by = nil
+	m.addupdated_by = nil
+	delete(m.clearedFields, checkinrewardcampaign.FieldUpdatedBy)
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (m *CheckinRewardCampaignMutation) SetCreatedAt(t time.Time) {
+	m.created_at = &t
+}
+
+// CreatedAt returns the value of the "created_at" field in the mutation.
+func (m *CheckinRewardCampaignMutation) CreatedAt() (r time.Time, exists bool) {
+	v := m.created_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCreatedAt returns the old "created_at" field's value of the CheckinRewardCampaign entity.
+// If the CheckinRewardCampaign object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CheckinRewardCampaignMutation) OldCreatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCreatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCreatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCreatedAt: %w", err)
+	}
+	return oldValue.CreatedAt, nil
+}
+
+// ResetCreatedAt resets all changes to the "created_at" field.
+func (m *CheckinRewardCampaignMutation) ResetCreatedAt() {
+	m.created_at = nil
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (m *CheckinRewardCampaignMutation) SetUpdatedAt(t time.Time) {
+	m.updated_at = &t
+}
+
+// UpdatedAt returns the value of the "updated_at" field in the mutation.
+func (m *CheckinRewardCampaignMutation) UpdatedAt() (r time.Time, exists bool) {
+	v := m.updated_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUpdatedAt returns the old "updated_at" field's value of the CheckinRewardCampaign entity.
+// If the CheckinRewardCampaign object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CheckinRewardCampaignMutation) OldUpdatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUpdatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUpdatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUpdatedAt: %w", err)
+	}
+	return oldValue.UpdatedAt, nil
+}
+
+// ResetUpdatedAt resets all changes to the "updated_at" field.
+func (m *CheckinRewardCampaignMutation) ResetUpdatedAt() {
+	m.updated_at = nil
+}
+
+// AddCheckinIDs adds the "checkins" edge to the UserCheckin entity by ids.
+func (m *CheckinRewardCampaignMutation) AddCheckinIDs(ids ...int64) {
+	if m.checkins == nil {
+		m.checkins = make(map[int64]struct{})
+	}
+	for i := range ids {
+		m.checkins[ids[i]] = struct{}{}
+	}
+}
+
+// ClearCheckins clears the "checkins" edge to the UserCheckin entity.
+func (m *CheckinRewardCampaignMutation) ClearCheckins() {
+	m.clearedcheckins = true
+}
+
+// CheckinsCleared reports if the "checkins" edge to the UserCheckin entity was cleared.
+func (m *CheckinRewardCampaignMutation) CheckinsCleared() bool {
+	return m.clearedcheckins
+}
+
+// RemoveCheckinIDs removes the "checkins" edge to the UserCheckin entity by IDs.
+func (m *CheckinRewardCampaignMutation) RemoveCheckinIDs(ids ...int64) {
+	if m.removedcheckins == nil {
+		m.removedcheckins = make(map[int64]struct{})
+	}
+	for i := range ids {
+		delete(m.checkins, ids[i])
+		m.removedcheckins[ids[i]] = struct{}{}
+	}
+}
+
+// RemovedCheckins returns the removed IDs of the "checkins" edge to the UserCheckin entity.
+func (m *CheckinRewardCampaignMutation) RemovedCheckinsIDs() (ids []int64) {
+	for id := range m.removedcheckins {
+		ids = append(ids, id)
+	}
+	return
+}
+
+// CheckinsIDs returns the "checkins" edge IDs in the mutation.
+func (m *CheckinRewardCampaignMutation) CheckinsIDs() (ids []int64) {
+	for id := range m.checkins {
+		ids = append(ids, id)
+	}
+	return
+}
+
+// ResetCheckins resets all changes to the "checkins" edge.
+func (m *CheckinRewardCampaignMutation) ResetCheckins() {
+	m.checkins = nil
+	m.clearedcheckins = false
+	m.removedcheckins = nil
+}
+
+// Where appends a list predicates to the CheckinRewardCampaignMutation builder.
+func (m *CheckinRewardCampaignMutation) Where(ps ...predicate.CheckinRewardCampaign) {
+	m.predicates = append(m.predicates, ps...)
+}
+
+// WhereP appends storage-level predicates to the CheckinRewardCampaignMutation builder. Using this method,
+// users can use type-assertion to append predicates that do not depend on any generated package.
+func (m *CheckinRewardCampaignMutation) WhereP(ps ...func(*sql.Selector)) {
+	p := make([]predicate.CheckinRewardCampaign, len(ps))
+	for i := range ps {
+		p[i] = ps[i]
+	}
+	m.Where(p...)
+}
+
+// Op returns the operation name.
+func (m *CheckinRewardCampaignMutation) Op() Op {
+	return m.op
+}
+
+// SetOp allows setting the mutation operation.
+func (m *CheckinRewardCampaignMutation) SetOp(op Op) {
+	m.op = op
+}
+
+// Type returns the node type of this mutation (CheckinRewardCampaign).
+func (m *CheckinRewardCampaignMutation) Type() string {
+	return m.typ
+}
+
+// Fields returns all fields that were changed during this mutation. Note that in
+// order to get all numeric fields that were incremented/decremented, call
+// AddedFields().
+func (m *CheckinRewardCampaignMutation) Fields() []string {
+	fields := make([]string, 0, 9)
+	if m.name != nil {
+		fields = append(fields, checkinrewardcampaign.FieldName)
+	}
+	if m.status != nil {
+		fields = append(fields, checkinrewardcampaign.FieldStatus)
+	}
+	if m.start_date != nil {
+		fields = append(fields, checkinrewardcampaign.FieldStartDate)
+	}
+	if m.end_date != nil {
+		fields = append(fields, checkinrewardcampaign.FieldEndDate)
+	}
+	if m.reward_tiers != nil {
+		fields = append(fields, checkinrewardcampaign.FieldRewardTiers)
+	}
+	if m.created_by != nil {
+		fields = append(fields, checkinrewardcampaign.FieldCreatedBy)
+	}
+	if m.updated_by != nil {
+		fields = append(fields, checkinrewardcampaign.FieldUpdatedBy)
+	}
+	if m.created_at != nil {
+		fields = append(fields, checkinrewardcampaign.FieldCreatedAt)
+	}
+	if m.updated_at != nil {
+		fields = append(fields, checkinrewardcampaign.FieldUpdatedAt)
+	}
+	return fields
+}
+
+// Field returns the value of a field with the given name. The second boolean
+// return value indicates that this field was not set, or was not defined in the
+// schema.
+func (m *CheckinRewardCampaignMutation) Field(name string) (ent.Value, bool) {
+	switch name {
+	case checkinrewardcampaign.FieldName:
+		return m.Name()
+	case checkinrewardcampaign.FieldStatus:
+		return m.Status()
+	case checkinrewardcampaign.FieldStartDate:
+		return m.StartDate()
+	case checkinrewardcampaign.FieldEndDate:
+		return m.EndDate()
+	case checkinrewardcampaign.FieldRewardTiers:
+		return m.RewardTiers()
+	case checkinrewardcampaign.FieldCreatedBy:
+		return m.CreatedBy()
+	case checkinrewardcampaign.FieldUpdatedBy:
+		return m.UpdatedBy()
+	case checkinrewardcampaign.FieldCreatedAt:
+		return m.CreatedAt()
+	case checkinrewardcampaign.FieldUpdatedAt:
+		return m.UpdatedAt()
+	}
+	return nil, false
+}
+
+// OldField returns the old value of the field from the database. An error is
+// returned if the mutation operation is not UpdateOne, or the query to the
+// database failed.
+func (m *CheckinRewardCampaignMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
+	switch name {
+	case checkinrewardcampaign.FieldName:
+		return m.OldName(ctx)
+	case checkinrewardcampaign.FieldStatus:
+		return m.OldStatus(ctx)
+	case checkinrewardcampaign.FieldStartDate:
+		return m.OldStartDate(ctx)
+	case checkinrewardcampaign.FieldEndDate:
+		return m.OldEndDate(ctx)
+	case checkinrewardcampaign.FieldRewardTiers:
+		return m.OldRewardTiers(ctx)
+	case checkinrewardcampaign.FieldCreatedBy:
+		return m.OldCreatedBy(ctx)
+	case checkinrewardcampaign.FieldUpdatedBy:
+		return m.OldUpdatedBy(ctx)
+	case checkinrewardcampaign.FieldCreatedAt:
+		return m.OldCreatedAt(ctx)
+	case checkinrewardcampaign.FieldUpdatedAt:
+		return m.OldUpdatedAt(ctx)
+	}
+	return nil, fmt.Errorf("unknown CheckinRewardCampaign field %s", name)
+}
+
+// SetField sets the value of a field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *CheckinRewardCampaignMutation) SetField(name string, value ent.Value) error {
+	switch name {
+	case checkinrewardcampaign.FieldName:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetName(v)
+		return nil
+	case checkinrewardcampaign.FieldStatus:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetStatus(v)
+		return nil
+	case checkinrewardcampaign.FieldStartDate:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetStartDate(v)
+		return nil
+	case checkinrewardcampaign.FieldEndDate:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetEndDate(v)
+		return nil
+	case checkinrewardcampaign.FieldRewardTiers:
+		v, ok := value.([]domain.CheckinRewardTier)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetRewardTiers(v)
+		return nil
+	case checkinrewardcampaign.FieldCreatedBy:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCreatedBy(v)
+		return nil
+	case checkinrewardcampaign.FieldUpdatedBy:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUpdatedBy(v)
+		return nil
+	case checkinrewardcampaign.FieldCreatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCreatedAt(v)
+		return nil
+	case checkinrewardcampaign.FieldUpdatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUpdatedAt(v)
+		return nil
+	}
+	return fmt.Errorf("unknown CheckinRewardCampaign field %s", name)
+}
+
+// AddedFields returns all numeric fields that were incremented/decremented during
+// this mutation.
+func (m *CheckinRewardCampaignMutation) AddedFields() []string {
+	var fields []string
+	if m.addcreated_by != nil {
+		fields = append(fields, checkinrewardcampaign.FieldCreatedBy)
+	}
+	if m.addupdated_by != nil {
+		fields = append(fields, checkinrewardcampaign.FieldUpdatedBy)
+	}
+	return fields
+}
+
+// AddedField returns the numeric value that was incremented/decremented on a field
+// with the given name. The second boolean return value indicates that this field
+// was not set, or was not defined in the schema.
+func (m *CheckinRewardCampaignMutation) AddedField(name string) (ent.Value, bool) {
+	switch name {
+	case checkinrewardcampaign.FieldCreatedBy:
+		return m.AddedCreatedBy()
+	case checkinrewardcampaign.FieldUpdatedBy:
+		return m.AddedUpdatedBy()
+	}
+	return nil, false
+}
+
+// AddField adds the value to the field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *CheckinRewardCampaignMutation) AddField(name string, value ent.Value) error {
+	switch name {
+	case checkinrewardcampaign.FieldCreatedBy:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddCreatedBy(v)
+		return nil
+	case checkinrewardcampaign.FieldUpdatedBy:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddUpdatedBy(v)
+		return nil
+	}
+	return fmt.Errorf("unknown CheckinRewardCampaign numeric field %s", name)
+}
+
+// ClearedFields returns all nullable fields that were cleared during this
+// mutation.
+func (m *CheckinRewardCampaignMutation) ClearedFields() []string {
+	var fields []string
+	if m.FieldCleared(checkinrewardcampaign.FieldCreatedBy) {
+		fields = append(fields, checkinrewardcampaign.FieldCreatedBy)
+	}
+	if m.FieldCleared(checkinrewardcampaign.FieldUpdatedBy) {
+		fields = append(fields, checkinrewardcampaign.FieldUpdatedBy)
+	}
+	return fields
+}
+
+// FieldCleared returns a boolean indicating if a field with the given name was
+// cleared in this mutation.
+func (m *CheckinRewardCampaignMutation) FieldCleared(name string) bool {
+	_, ok := m.clearedFields[name]
+	return ok
+}
+
+// ClearField clears the value of the field with the given name. It returns an
+// error if the field is not defined in the schema.
+func (m *CheckinRewardCampaignMutation) ClearField(name string) error {
+	switch name {
+	case checkinrewardcampaign.FieldCreatedBy:
+		m.ClearCreatedBy()
+		return nil
+	case checkinrewardcampaign.FieldUpdatedBy:
+		m.ClearUpdatedBy()
+		return nil
+	}
+	return fmt.Errorf("unknown CheckinRewardCampaign nullable field %s", name)
+}
+
+// ResetField resets all changes in the mutation for the field with the given name.
+// It returns an error if the field is not defined in the schema.
+func (m *CheckinRewardCampaignMutation) ResetField(name string) error {
+	switch name {
+	case checkinrewardcampaign.FieldName:
+		m.ResetName()
+		return nil
+	case checkinrewardcampaign.FieldStatus:
+		m.ResetStatus()
+		return nil
+	case checkinrewardcampaign.FieldStartDate:
+		m.ResetStartDate()
+		return nil
+	case checkinrewardcampaign.FieldEndDate:
+		m.ResetEndDate()
+		return nil
+	case checkinrewardcampaign.FieldRewardTiers:
+		m.ResetRewardTiers()
+		return nil
+	case checkinrewardcampaign.FieldCreatedBy:
+		m.ResetCreatedBy()
+		return nil
+	case checkinrewardcampaign.FieldUpdatedBy:
+		m.ResetUpdatedBy()
+		return nil
+	case checkinrewardcampaign.FieldCreatedAt:
+		m.ResetCreatedAt()
+		return nil
+	case checkinrewardcampaign.FieldUpdatedAt:
+		m.ResetUpdatedAt()
+		return nil
+	}
+	return fmt.Errorf("unknown CheckinRewardCampaign field %s", name)
+}
+
+// AddedEdges returns all edge names that were set/added in this mutation.
+func (m *CheckinRewardCampaignMutation) AddedEdges() []string {
+	edges := make([]string, 0, 1)
+	if m.checkins != nil {
+		edges = append(edges, checkinrewardcampaign.EdgeCheckins)
+	}
+	return edges
+}
+
+// AddedIDs returns all IDs (to other nodes) that were added for the given edge
+// name in this mutation.
+func (m *CheckinRewardCampaignMutation) AddedIDs(name string) []ent.Value {
+	switch name {
+	case checkinrewardcampaign.EdgeCheckins:
+		ids := make([]ent.Value, 0, len(m.checkins))
+		for id := range m.checkins {
+			ids = append(ids, id)
+		}
+		return ids
+	}
+	return nil
+}
+
+// RemovedEdges returns all edge names that were removed in this mutation.
+func (m *CheckinRewardCampaignMutation) RemovedEdges() []string {
+	edges := make([]string, 0, 1)
+	if m.removedcheckins != nil {
+		edges = append(edges, checkinrewardcampaign.EdgeCheckins)
+	}
+	return edges
+}
+
+// RemovedIDs returns all IDs (to other nodes) that were removed for the edge with
+// the given name in this mutation.
+func (m *CheckinRewardCampaignMutation) RemovedIDs(name string) []ent.Value {
+	switch name {
+	case checkinrewardcampaign.EdgeCheckins:
+		ids := make([]ent.Value, 0, len(m.removedcheckins))
+		for id := range m.removedcheckins {
+			ids = append(ids, id)
+		}
+		return ids
+	}
+	return nil
+}
+
+// ClearedEdges returns all edge names that were cleared in this mutation.
+func (m *CheckinRewardCampaignMutation) ClearedEdges() []string {
+	edges := make([]string, 0, 1)
+	if m.clearedcheckins {
+		edges = append(edges, checkinrewardcampaign.EdgeCheckins)
+	}
+	return edges
+}
+
+// EdgeCleared returns a boolean which indicates if the edge with the given name
+// was cleared in this mutation.
+func (m *CheckinRewardCampaignMutation) EdgeCleared(name string) bool {
+	switch name {
+	case checkinrewardcampaign.EdgeCheckins:
+		return m.clearedcheckins
+	}
+	return false
+}
+
+// ClearEdge clears the value of the edge with the given name. It returns an error
+// if that edge is not defined in the schema.
+func (m *CheckinRewardCampaignMutation) ClearEdge(name string) error {
+	switch name {
+	}
+	return fmt.Errorf("unknown CheckinRewardCampaign unique edge %s", name)
+}
+
+// ResetEdge resets all changes to the edge with the given name in this mutation.
+// It returns an error if the edge is not defined in the schema.
+func (m *CheckinRewardCampaignMutation) ResetEdge(name string) error {
+	switch name {
+	case checkinrewardcampaign.EdgeCheckins:
+		m.ResetCheckins()
+		return nil
+	}
+	return fmt.Errorf("unknown CheckinRewardCampaign edge %s", name)
 }
 
 // CompositeModelRouteMutation represents an operation that mutates the CompositeModelRoute nodes in the graph.
@@ -60113,37 +61094,42 @@ func (m *UserAttributeValueMutation) ResetEdge(name string) error {
 // UserCheckinMutation represents an operation that mutates the UserCheckin nodes in the graph.
 type UserCheckinMutation struct {
 	config
-	op                           Op
-	typ                          string
-	id                           *int64
-	checkin_date                 *string
-	reward_amount                *float64
-	addreward_amount             *float64
-	balance_before               *float64
-	addbalance_before            *float64
-	balance_after                *float64
-	addbalance_after             *float64
-	created_at                   *time.Time
-	streak_day                   *int
-	addstreak_day                *int
-	base_reward_amount           *float64
-	addbase_reward_amount        *float64
-	bonus_reward_amount          *float64
-	addbonus_reward_amount       *float64
-	total_reward_amount          *float64
-	addtotal_reward_amount       *float64
-	previous_day_usage_amount    *float64
-	addprevious_day_usage_amount *float64
-	usage_rebate_amount          *float64
-	addusage_rebate_amount       *float64
-	reward_cap_adjustment        *float64
-	addreward_cap_adjustment     *float64
-	clearedFields                map[string]struct{}
-	user                         *int64
-	cleareduser                  bool
-	done                         bool
-	oldValue                     func(context.Context) (*UserCheckin, error)
-	predicates                   []predicate.UserCheckin
+	op                                   Op
+	typ                                  string
+	id                                   *int64
+	checkin_date                         *string
+	reward_amount                        *float64
+	addreward_amount                     *float64
+	balance_before                       *float64
+	addbalance_before                    *float64
+	balance_after                        *float64
+	addbalance_after                     *float64
+	created_at                           *time.Time
+	streak_day                           *int
+	addstreak_day                        *int
+	base_reward_amount                   *float64
+	addbase_reward_amount                *float64
+	bonus_reward_amount                  *float64
+	addbonus_reward_amount               *float64
+	total_reward_amount                  *float64
+	addtotal_reward_amount               *float64
+	previous_day_usage_amount            *float64
+	addprevious_day_usage_amount         *float64
+	usage_rebate_amount                  *float64
+	addusage_rebate_amount               *float64
+	reward_cap_adjustment                *float64
+	addreward_cap_adjustment             *float64
+	reward_campaign_name                 *string
+	reward_campaign_tiers_snapshot       *[]domain.CheckinRewardTier
+	appendreward_campaign_tiers_snapshot []domain.CheckinRewardTier
+	clearedFields                        map[string]struct{}
+	user                                 *int64
+	cleareduser                          bool
+	reward_campaign                      *int64
+	clearedreward_campaign               bool
+	done                                 bool
+	oldValue                             func(context.Context) (*UserCheckin, error)
+	predicates                           []predicate.UserCheckin
 }
 
 var _ ent.Mutation = (*UserCheckinMutation)(nil)
@@ -60912,6 +61898,142 @@ func (m *UserCheckinMutation) ResetRewardCapAdjustment() {
 	m.addreward_cap_adjustment = nil
 }
 
+// SetRewardCampaignID sets the "reward_campaign_id" field.
+func (m *UserCheckinMutation) SetRewardCampaignID(i int64) {
+	m.reward_campaign = &i
+}
+
+// RewardCampaignID returns the value of the "reward_campaign_id" field in the mutation.
+func (m *UserCheckinMutation) RewardCampaignID() (r int64, exists bool) {
+	v := m.reward_campaign
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldRewardCampaignID returns the old "reward_campaign_id" field's value of the UserCheckin entity.
+// If the UserCheckin object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *UserCheckinMutation) OldRewardCampaignID(ctx context.Context) (v *int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldRewardCampaignID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldRewardCampaignID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldRewardCampaignID: %w", err)
+	}
+	return oldValue.RewardCampaignID, nil
+}
+
+// ClearRewardCampaignID clears the value of the "reward_campaign_id" field.
+func (m *UserCheckinMutation) ClearRewardCampaignID() {
+	m.reward_campaign = nil
+	m.clearedFields[usercheckin.FieldRewardCampaignID] = struct{}{}
+}
+
+// RewardCampaignIDCleared returns if the "reward_campaign_id" field was cleared in this mutation.
+func (m *UserCheckinMutation) RewardCampaignIDCleared() bool {
+	_, ok := m.clearedFields[usercheckin.FieldRewardCampaignID]
+	return ok
+}
+
+// ResetRewardCampaignID resets all changes to the "reward_campaign_id" field.
+func (m *UserCheckinMutation) ResetRewardCampaignID() {
+	m.reward_campaign = nil
+	delete(m.clearedFields, usercheckin.FieldRewardCampaignID)
+}
+
+// SetRewardCampaignName sets the "reward_campaign_name" field.
+func (m *UserCheckinMutation) SetRewardCampaignName(s string) {
+	m.reward_campaign_name = &s
+}
+
+// RewardCampaignName returns the value of the "reward_campaign_name" field in the mutation.
+func (m *UserCheckinMutation) RewardCampaignName() (r string, exists bool) {
+	v := m.reward_campaign_name
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldRewardCampaignName returns the old "reward_campaign_name" field's value of the UserCheckin entity.
+// If the UserCheckin object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *UserCheckinMutation) OldRewardCampaignName(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldRewardCampaignName is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldRewardCampaignName requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldRewardCampaignName: %w", err)
+	}
+	return oldValue.RewardCampaignName, nil
+}
+
+// ResetRewardCampaignName resets all changes to the "reward_campaign_name" field.
+func (m *UserCheckinMutation) ResetRewardCampaignName() {
+	m.reward_campaign_name = nil
+}
+
+// SetRewardCampaignTiersSnapshot sets the "reward_campaign_tiers_snapshot" field.
+func (m *UserCheckinMutation) SetRewardCampaignTiersSnapshot(drt []domain.CheckinRewardTier) {
+	m.reward_campaign_tiers_snapshot = &drt
+	m.appendreward_campaign_tiers_snapshot = nil
+}
+
+// RewardCampaignTiersSnapshot returns the value of the "reward_campaign_tiers_snapshot" field in the mutation.
+func (m *UserCheckinMutation) RewardCampaignTiersSnapshot() (r []domain.CheckinRewardTier, exists bool) {
+	v := m.reward_campaign_tiers_snapshot
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldRewardCampaignTiersSnapshot returns the old "reward_campaign_tiers_snapshot" field's value of the UserCheckin entity.
+// If the UserCheckin object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *UserCheckinMutation) OldRewardCampaignTiersSnapshot(ctx context.Context) (v []domain.CheckinRewardTier, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldRewardCampaignTiersSnapshot is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldRewardCampaignTiersSnapshot requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldRewardCampaignTiersSnapshot: %w", err)
+	}
+	return oldValue.RewardCampaignTiersSnapshot, nil
+}
+
+// AppendRewardCampaignTiersSnapshot adds drt to the "reward_campaign_tiers_snapshot" field.
+func (m *UserCheckinMutation) AppendRewardCampaignTiersSnapshot(drt []domain.CheckinRewardTier) {
+	m.appendreward_campaign_tiers_snapshot = append(m.appendreward_campaign_tiers_snapshot, drt...)
+}
+
+// AppendedRewardCampaignTiersSnapshot returns the list of values that were appended to the "reward_campaign_tiers_snapshot" field in this mutation.
+func (m *UserCheckinMutation) AppendedRewardCampaignTiersSnapshot() ([]domain.CheckinRewardTier, bool) {
+	if len(m.appendreward_campaign_tiers_snapshot) == 0 {
+		return nil, false
+	}
+	return m.appendreward_campaign_tiers_snapshot, true
+}
+
+// ResetRewardCampaignTiersSnapshot resets all changes to the "reward_campaign_tiers_snapshot" field.
+func (m *UserCheckinMutation) ResetRewardCampaignTiersSnapshot() {
+	m.reward_campaign_tiers_snapshot = nil
+	m.appendreward_campaign_tiers_snapshot = nil
+}
+
 // ClearUser clears the "user" edge to the User entity.
 func (m *UserCheckinMutation) ClearUser() {
 	m.cleareduser = true
@@ -60937,6 +62059,33 @@ func (m *UserCheckinMutation) UserIDs() (ids []int64) {
 func (m *UserCheckinMutation) ResetUser() {
 	m.user = nil
 	m.cleareduser = false
+}
+
+// ClearRewardCampaign clears the "reward_campaign" edge to the CheckinRewardCampaign entity.
+func (m *UserCheckinMutation) ClearRewardCampaign() {
+	m.clearedreward_campaign = true
+	m.clearedFields[usercheckin.FieldRewardCampaignID] = struct{}{}
+}
+
+// RewardCampaignCleared reports if the "reward_campaign" edge to the CheckinRewardCampaign entity was cleared.
+func (m *UserCheckinMutation) RewardCampaignCleared() bool {
+	return m.RewardCampaignIDCleared() || m.clearedreward_campaign
+}
+
+// RewardCampaignIDs returns the "reward_campaign" edge IDs in the mutation.
+// Note that IDs always returns len(IDs) <= 1 for unique edges, and you should use
+// RewardCampaignID instead. It exists only for internal usage by the builders.
+func (m *UserCheckinMutation) RewardCampaignIDs() (ids []int64) {
+	if id := m.reward_campaign; id != nil {
+		ids = append(ids, *id)
+	}
+	return
+}
+
+// ResetRewardCampaign resets all changes to the "reward_campaign" edge.
+func (m *UserCheckinMutation) ResetRewardCampaign() {
+	m.reward_campaign = nil
+	m.clearedreward_campaign = false
 }
 
 // Where appends a list predicates to the UserCheckinMutation builder.
@@ -60973,7 +62122,7 @@ func (m *UserCheckinMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *UserCheckinMutation) Fields() []string {
-	fields := make([]string, 0, 13)
+	fields := make([]string, 0, 16)
 	if m.user != nil {
 		fields = append(fields, usercheckin.FieldUserID)
 	}
@@ -61013,6 +62162,15 @@ func (m *UserCheckinMutation) Fields() []string {
 	if m.reward_cap_adjustment != nil {
 		fields = append(fields, usercheckin.FieldRewardCapAdjustment)
 	}
+	if m.reward_campaign != nil {
+		fields = append(fields, usercheckin.FieldRewardCampaignID)
+	}
+	if m.reward_campaign_name != nil {
+		fields = append(fields, usercheckin.FieldRewardCampaignName)
+	}
+	if m.reward_campaign_tiers_snapshot != nil {
+		fields = append(fields, usercheckin.FieldRewardCampaignTiersSnapshot)
+	}
 	return fields
 }
 
@@ -61047,6 +62205,12 @@ func (m *UserCheckinMutation) Field(name string) (ent.Value, bool) {
 		return m.UsageRebateAmount()
 	case usercheckin.FieldRewardCapAdjustment:
 		return m.RewardCapAdjustment()
+	case usercheckin.FieldRewardCampaignID:
+		return m.RewardCampaignID()
+	case usercheckin.FieldRewardCampaignName:
+		return m.RewardCampaignName()
+	case usercheckin.FieldRewardCampaignTiersSnapshot:
+		return m.RewardCampaignTiersSnapshot()
 	}
 	return nil, false
 }
@@ -61082,6 +62246,12 @@ func (m *UserCheckinMutation) OldField(ctx context.Context, name string) (ent.Va
 		return m.OldUsageRebateAmount(ctx)
 	case usercheckin.FieldRewardCapAdjustment:
 		return m.OldRewardCapAdjustment(ctx)
+	case usercheckin.FieldRewardCampaignID:
+		return m.OldRewardCampaignID(ctx)
+	case usercheckin.FieldRewardCampaignName:
+		return m.OldRewardCampaignName(ctx)
+	case usercheckin.FieldRewardCampaignTiersSnapshot:
+		return m.OldRewardCampaignTiersSnapshot(ctx)
 	}
 	return nil, fmt.Errorf("unknown UserCheckin field %s", name)
 }
@@ -61181,6 +62351,27 @@ func (m *UserCheckinMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetRewardCapAdjustment(v)
+		return nil
+	case usercheckin.FieldRewardCampaignID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetRewardCampaignID(v)
+		return nil
+	case usercheckin.FieldRewardCampaignName:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetRewardCampaignName(v)
+		return nil
+	case usercheckin.FieldRewardCampaignTiersSnapshot:
+		v, ok := value.([]domain.CheckinRewardTier)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetRewardCampaignTiersSnapshot(v)
 		return nil
 	}
 	return fmt.Errorf("unknown UserCheckin field %s", name)
@@ -61334,7 +62525,11 @@ func (m *UserCheckinMutation) AddField(name string, value ent.Value) error {
 // ClearedFields returns all nullable fields that were cleared during this
 // mutation.
 func (m *UserCheckinMutation) ClearedFields() []string {
-	return nil
+	var fields []string
+	if m.FieldCleared(usercheckin.FieldRewardCampaignID) {
+		fields = append(fields, usercheckin.FieldRewardCampaignID)
+	}
+	return fields
 }
 
 // FieldCleared returns a boolean indicating if a field with the given name was
@@ -61347,6 +62542,11 @@ func (m *UserCheckinMutation) FieldCleared(name string) bool {
 // ClearField clears the value of the field with the given name. It returns an
 // error if the field is not defined in the schema.
 func (m *UserCheckinMutation) ClearField(name string) error {
+	switch name {
+	case usercheckin.FieldRewardCampaignID:
+		m.ClearRewardCampaignID()
+		return nil
+	}
 	return fmt.Errorf("unknown UserCheckin nullable field %s", name)
 }
 
@@ -61393,15 +62593,27 @@ func (m *UserCheckinMutation) ResetField(name string) error {
 	case usercheckin.FieldRewardCapAdjustment:
 		m.ResetRewardCapAdjustment()
 		return nil
+	case usercheckin.FieldRewardCampaignID:
+		m.ResetRewardCampaignID()
+		return nil
+	case usercheckin.FieldRewardCampaignName:
+		m.ResetRewardCampaignName()
+		return nil
+	case usercheckin.FieldRewardCampaignTiersSnapshot:
+		m.ResetRewardCampaignTiersSnapshot()
+		return nil
 	}
 	return fmt.Errorf("unknown UserCheckin field %s", name)
 }
 
 // AddedEdges returns all edge names that were set/added in this mutation.
 func (m *UserCheckinMutation) AddedEdges() []string {
-	edges := make([]string, 0, 1)
+	edges := make([]string, 0, 2)
 	if m.user != nil {
 		edges = append(edges, usercheckin.EdgeUser)
+	}
+	if m.reward_campaign != nil {
+		edges = append(edges, usercheckin.EdgeRewardCampaign)
 	}
 	return edges
 }
@@ -61414,13 +62626,17 @@ func (m *UserCheckinMutation) AddedIDs(name string) []ent.Value {
 		if id := m.user; id != nil {
 			return []ent.Value{*id}
 		}
+	case usercheckin.EdgeRewardCampaign:
+		if id := m.reward_campaign; id != nil {
+			return []ent.Value{*id}
+		}
 	}
 	return nil
 }
 
 // RemovedEdges returns all edge names that were removed in this mutation.
 func (m *UserCheckinMutation) RemovedEdges() []string {
-	edges := make([]string, 0, 1)
+	edges := make([]string, 0, 2)
 	return edges
 }
 
@@ -61432,9 +62648,12 @@ func (m *UserCheckinMutation) RemovedIDs(name string) []ent.Value {
 
 // ClearedEdges returns all edge names that were cleared in this mutation.
 func (m *UserCheckinMutation) ClearedEdges() []string {
-	edges := make([]string, 0, 1)
+	edges := make([]string, 0, 2)
 	if m.cleareduser {
 		edges = append(edges, usercheckin.EdgeUser)
+	}
+	if m.clearedreward_campaign {
+		edges = append(edges, usercheckin.EdgeRewardCampaign)
 	}
 	return edges
 }
@@ -61445,6 +62664,8 @@ func (m *UserCheckinMutation) EdgeCleared(name string) bool {
 	switch name {
 	case usercheckin.EdgeUser:
 		return m.cleareduser
+	case usercheckin.EdgeRewardCampaign:
+		return m.clearedreward_campaign
 	}
 	return false
 }
@@ -61456,6 +62677,9 @@ func (m *UserCheckinMutation) ClearEdge(name string) error {
 	case usercheckin.EdgeUser:
 		m.ClearUser()
 		return nil
+	case usercheckin.EdgeRewardCampaign:
+		m.ClearRewardCampaign()
+		return nil
 	}
 	return fmt.Errorf("unknown UserCheckin unique edge %s", name)
 }
@@ -61466,6 +62690,9 @@ func (m *UserCheckinMutation) ResetEdge(name string) error {
 	switch name {
 	case usercheckin.EdgeUser:
 		m.ResetUser()
+		return nil
+	case usercheckin.EdgeRewardCampaign:
+		m.ResetRewardCampaign()
 		return nil
 	}
 	return fmt.Errorf("unknown UserCheckin edge %s", name)

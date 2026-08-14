@@ -29,6 +29,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/channelmonitordailyrollup"
 	"github.com/Wei-Shaw/sub2api/ent/channelmonitorhistory"
 	"github.com/Wei-Shaw/sub2api/ent/channelmonitorrequesttemplate"
+	"github.com/Wei-Shaw/sub2api/ent/checkinrewardcampaign"
 	"github.com/Wei-Shaw/sub2api/ent/compositemodelroute"
 	"github.com/Wei-Shaw/sub2api/ent/emptyresponseclaim"
 	"github.com/Wei-Shaw/sub2api/ent/errorpassthroughrule"
@@ -101,6 +102,8 @@ type Client struct {
 	ChannelMonitorHistory *ChannelMonitorHistoryClient
 	// ChannelMonitorRequestTemplate is the client for interacting with the ChannelMonitorRequestTemplate builders.
 	ChannelMonitorRequestTemplate *ChannelMonitorRequestTemplateClient
+	// CheckinRewardCampaign is the client for interacting with the CheckinRewardCampaign builders.
+	CheckinRewardCampaign *CheckinRewardCampaignClient
 	// CompositeModelRoute is the client for interacting with the CompositeModelRoute builders.
 	CompositeModelRoute *CompositeModelRouteClient
 	// EmptyResponseClaim is the client for interacting with the EmptyResponseClaim builders.
@@ -196,6 +199,7 @@ func (c *Client) init() {
 	c.ChannelMonitorDailyRollup = NewChannelMonitorDailyRollupClient(c.config)
 	c.ChannelMonitorHistory = NewChannelMonitorHistoryClient(c.config)
 	c.ChannelMonitorRequestTemplate = NewChannelMonitorRequestTemplateClient(c.config)
+	c.CheckinRewardCampaign = NewCheckinRewardCampaignClient(c.config)
 	c.CompositeModelRoute = NewCompositeModelRouteClient(c.config)
 	c.EmptyResponseClaim = NewEmptyResponseClaimClient(c.config)
 	c.ErrorPassthroughRule = NewErrorPassthroughRuleClient(c.config)
@@ -337,6 +341,7 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 		ChannelMonitorDailyRollup:     NewChannelMonitorDailyRollupClient(cfg),
 		ChannelMonitorHistory:         NewChannelMonitorHistoryClient(cfg),
 		ChannelMonitorRequestTemplate: NewChannelMonitorRequestTemplateClient(cfg),
+		CheckinRewardCampaign:         NewCheckinRewardCampaignClient(cfg),
 		CompositeModelRoute:           NewCompositeModelRouteClient(cfg),
 		EmptyResponseClaim:            NewEmptyResponseClaimClient(cfg),
 		ErrorPassthroughRule:          NewErrorPassthroughRuleClient(cfg),
@@ -405,6 +410,7 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 		ChannelMonitorDailyRollup:     NewChannelMonitorDailyRollupClient(cfg),
 		ChannelMonitorHistory:         NewChannelMonitorHistoryClient(cfg),
 		ChannelMonitorRequestTemplate: NewChannelMonitorRequestTemplateClient(cfg),
+		CheckinRewardCampaign:         NewCheckinRewardCampaignClient(cfg),
 		CompositeModelRoute:           NewCompositeModelRouteClient(cfg),
 		EmptyResponseClaim:            NewEmptyResponseClaimClient(cfg),
 		ErrorPassthroughRule:          NewErrorPassthroughRuleClient(cfg),
@@ -473,14 +479,15 @@ func (c *Client) Use(hooks ...Hook) {
 		c.AuthIdentity, c.AuthIdentityChannel, c.BatchImageEvent, c.BatchImageItem,
 		c.BatchImageJob, c.ChannelMonitor, c.ChannelMonitorDailyRollup,
 		c.ChannelMonitorHistory, c.ChannelMonitorRequestTemplate,
-		c.CompositeModelRoute, c.EmptyResponseClaim, c.ErrorPassthroughRule, c.Group,
-		c.IdempotencyRecord, c.IdentityAdoptionDecision, c.PaymentAuditLog,
-		c.PaymentOrder, c.PaymentProviderInstance, c.PendingAuthSession, c.PromoCode,
-		c.PromoCodeUsage, c.Proxy, c.RedeemBatchClaim, c.RedeemCode, c.SecuritySecret,
-		c.Setting, c.SubscriptionPlan, c.SystemCustomGroupModel,
-		c.TLSFingerprintProfile, c.UsageCleanupTask, c.UsageLog,
-		c.UsageResponseOutcome, c.User, c.UserAllowedGroup, c.UserAttributeDefinition,
-		c.UserAttributeValue, c.UserCheckin, c.UserCheckinBlacklist, c.UserCustomGroup,
+		c.CheckinRewardCampaign, c.CompositeModelRoute, c.EmptyResponseClaim,
+		c.ErrorPassthroughRule, c.Group, c.IdempotencyRecord,
+		c.IdentityAdoptionDecision, c.PaymentAuditLog, c.PaymentOrder,
+		c.PaymentProviderInstance, c.PendingAuthSession, c.PromoCode, c.PromoCodeUsage,
+		c.Proxy, c.RedeemBatchClaim, c.RedeemCode, c.SecuritySecret, c.Setting,
+		c.SubscriptionPlan, c.SystemCustomGroupModel, c.TLSFingerprintProfile,
+		c.UsageCleanupTask, c.UsageLog, c.UsageResponseOutcome, c.User,
+		c.UserAllowedGroup, c.UserAttributeDefinition, c.UserAttributeValue,
+		c.UserCheckin, c.UserCheckinBlacklist, c.UserCustomGroup,
 		c.UserCustomGroupModel, c.UserImage, c.UserImageTask, c.UserPlatformQuota,
 		c.UserSubscription,
 	} {
@@ -496,14 +503,15 @@ func (c *Client) Intercept(interceptors ...Interceptor) {
 		c.AuthIdentity, c.AuthIdentityChannel, c.BatchImageEvent, c.BatchImageItem,
 		c.BatchImageJob, c.ChannelMonitor, c.ChannelMonitorDailyRollup,
 		c.ChannelMonitorHistory, c.ChannelMonitorRequestTemplate,
-		c.CompositeModelRoute, c.EmptyResponseClaim, c.ErrorPassthroughRule, c.Group,
-		c.IdempotencyRecord, c.IdentityAdoptionDecision, c.PaymentAuditLog,
-		c.PaymentOrder, c.PaymentProviderInstance, c.PendingAuthSession, c.PromoCode,
-		c.PromoCodeUsage, c.Proxy, c.RedeemBatchClaim, c.RedeemCode, c.SecuritySecret,
-		c.Setting, c.SubscriptionPlan, c.SystemCustomGroupModel,
-		c.TLSFingerprintProfile, c.UsageCleanupTask, c.UsageLog,
-		c.UsageResponseOutcome, c.User, c.UserAllowedGroup, c.UserAttributeDefinition,
-		c.UserAttributeValue, c.UserCheckin, c.UserCheckinBlacklist, c.UserCustomGroup,
+		c.CheckinRewardCampaign, c.CompositeModelRoute, c.EmptyResponseClaim,
+		c.ErrorPassthroughRule, c.Group, c.IdempotencyRecord,
+		c.IdentityAdoptionDecision, c.PaymentAuditLog, c.PaymentOrder,
+		c.PaymentProviderInstance, c.PendingAuthSession, c.PromoCode, c.PromoCodeUsage,
+		c.Proxy, c.RedeemBatchClaim, c.RedeemCode, c.SecuritySecret, c.Setting,
+		c.SubscriptionPlan, c.SystemCustomGroupModel, c.TLSFingerprintProfile,
+		c.UsageCleanupTask, c.UsageLog, c.UsageResponseOutcome, c.User,
+		c.UserAllowedGroup, c.UserAttributeDefinition, c.UserAttributeValue,
+		c.UserCheckin, c.UserCheckinBlacklist, c.UserCustomGroup,
 		c.UserCustomGroupModel, c.UserImage, c.UserImageTask, c.UserPlatformQuota,
 		c.UserSubscription,
 	} {
@@ -542,6 +550,8 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.ChannelMonitorHistory.mutate(ctx, m)
 	case *ChannelMonitorRequestTemplateMutation:
 		return c.ChannelMonitorRequestTemplate.mutate(ctx, m)
+	case *CheckinRewardCampaignMutation:
+		return c.CheckinRewardCampaign.mutate(ctx, m)
 	case *CompositeModelRouteMutation:
 		return c.CompositeModelRoute.mutate(ctx, m)
 	case *EmptyResponseClaimMutation:
@@ -2831,6 +2841,155 @@ func (c *ChannelMonitorRequestTemplateClient) mutate(ctx context.Context, m *Cha
 		return (&ChannelMonitorRequestTemplateDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
 	default:
 		return nil, fmt.Errorf("ent: unknown ChannelMonitorRequestTemplate mutation op: %q", m.Op())
+	}
+}
+
+// CheckinRewardCampaignClient is a client for the CheckinRewardCampaign schema.
+type CheckinRewardCampaignClient struct {
+	config
+}
+
+// NewCheckinRewardCampaignClient returns a client for the CheckinRewardCampaign from the given config.
+func NewCheckinRewardCampaignClient(c config) *CheckinRewardCampaignClient {
+	return &CheckinRewardCampaignClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `checkinrewardcampaign.Hooks(f(g(h())))`.
+func (c *CheckinRewardCampaignClient) Use(hooks ...Hook) {
+	c.hooks.CheckinRewardCampaign = append(c.hooks.CheckinRewardCampaign, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `checkinrewardcampaign.Intercept(f(g(h())))`.
+func (c *CheckinRewardCampaignClient) Intercept(interceptors ...Interceptor) {
+	c.inters.CheckinRewardCampaign = append(c.inters.CheckinRewardCampaign, interceptors...)
+}
+
+// Create returns a builder for creating a CheckinRewardCampaign entity.
+func (c *CheckinRewardCampaignClient) Create() *CheckinRewardCampaignCreate {
+	mutation := newCheckinRewardCampaignMutation(c.config, OpCreate)
+	return &CheckinRewardCampaignCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of CheckinRewardCampaign entities.
+func (c *CheckinRewardCampaignClient) CreateBulk(builders ...*CheckinRewardCampaignCreate) *CheckinRewardCampaignCreateBulk {
+	return &CheckinRewardCampaignCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *CheckinRewardCampaignClient) MapCreateBulk(slice any, setFunc func(*CheckinRewardCampaignCreate, int)) *CheckinRewardCampaignCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &CheckinRewardCampaignCreateBulk{err: fmt.Errorf("calling to CheckinRewardCampaignClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*CheckinRewardCampaignCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &CheckinRewardCampaignCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for CheckinRewardCampaign.
+func (c *CheckinRewardCampaignClient) Update() *CheckinRewardCampaignUpdate {
+	mutation := newCheckinRewardCampaignMutation(c.config, OpUpdate)
+	return &CheckinRewardCampaignUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *CheckinRewardCampaignClient) UpdateOne(_m *CheckinRewardCampaign) *CheckinRewardCampaignUpdateOne {
+	mutation := newCheckinRewardCampaignMutation(c.config, OpUpdateOne, withCheckinRewardCampaign(_m))
+	return &CheckinRewardCampaignUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *CheckinRewardCampaignClient) UpdateOneID(id int64) *CheckinRewardCampaignUpdateOne {
+	mutation := newCheckinRewardCampaignMutation(c.config, OpUpdateOne, withCheckinRewardCampaignID(id))
+	return &CheckinRewardCampaignUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for CheckinRewardCampaign.
+func (c *CheckinRewardCampaignClient) Delete() *CheckinRewardCampaignDelete {
+	mutation := newCheckinRewardCampaignMutation(c.config, OpDelete)
+	return &CheckinRewardCampaignDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *CheckinRewardCampaignClient) DeleteOne(_m *CheckinRewardCampaign) *CheckinRewardCampaignDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *CheckinRewardCampaignClient) DeleteOneID(id int64) *CheckinRewardCampaignDeleteOne {
+	builder := c.Delete().Where(checkinrewardcampaign.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &CheckinRewardCampaignDeleteOne{builder}
+}
+
+// Query returns a query builder for CheckinRewardCampaign.
+func (c *CheckinRewardCampaignClient) Query() *CheckinRewardCampaignQuery {
+	return &CheckinRewardCampaignQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeCheckinRewardCampaign},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a CheckinRewardCampaign entity by its id.
+func (c *CheckinRewardCampaignClient) Get(ctx context.Context, id int64) (*CheckinRewardCampaign, error) {
+	return c.Query().Where(checkinrewardcampaign.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *CheckinRewardCampaignClient) GetX(ctx context.Context, id int64) *CheckinRewardCampaign {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// QueryCheckins queries the checkins edge of a CheckinRewardCampaign.
+func (c *CheckinRewardCampaignClient) QueryCheckins(_m *CheckinRewardCampaign) *UserCheckinQuery {
+	query := (&UserCheckinClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(checkinrewardcampaign.Table, checkinrewardcampaign.FieldID, id),
+			sqlgraph.To(usercheckin.Table, usercheckin.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, checkinrewardcampaign.CheckinsTable, checkinrewardcampaign.CheckinsColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// Hooks returns the client hooks.
+func (c *CheckinRewardCampaignClient) Hooks() []Hook {
+	return c.hooks.CheckinRewardCampaign
+}
+
+// Interceptors returns the client interceptors.
+func (c *CheckinRewardCampaignClient) Interceptors() []Interceptor {
+	return c.inters.CheckinRewardCampaign
+}
+
+func (c *CheckinRewardCampaignClient) mutate(ctx context.Context, m *CheckinRewardCampaignMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&CheckinRewardCampaignCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&CheckinRewardCampaignUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&CheckinRewardCampaignUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&CheckinRewardCampaignDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown CheckinRewardCampaign mutation op: %q", m.Op())
 	}
 }
 
@@ -7422,6 +7581,22 @@ func (c *UserCheckinClient) QueryUser(_m *UserCheckin) *UserQuery {
 	return query
 }
 
+// QueryRewardCampaign queries the reward_campaign edge of a UserCheckin.
+func (c *UserCheckinClient) QueryRewardCampaign(_m *UserCheckin) *CheckinRewardCampaignQuery {
+	query := (&CheckinRewardCampaignClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(usercheckin.Table, usercheckin.FieldID, id),
+			sqlgraph.To(checkinrewardcampaign.Table, checkinrewardcampaign.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, usercheckin.RewardCampaignTable, usercheckin.RewardCampaignColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
 // Hooks returns the client hooks.
 func (c *UserCheckinClient) Hooks() []Hook {
 	return c.hooks.UserCheckin
@@ -8646,29 +8821,31 @@ type (
 		APIKey, Account, AccountGroup, Announcement, AnnouncementRead, AuthIdentity,
 		AuthIdentityChannel, BatchImageEvent, BatchImageItem, BatchImageJob,
 		ChannelMonitor, ChannelMonitorDailyRollup, ChannelMonitorHistory,
-		ChannelMonitorRequestTemplate, CompositeModelRoute, EmptyResponseClaim,
-		ErrorPassthroughRule, Group, IdempotencyRecord, IdentityAdoptionDecision,
-		PaymentAuditLog, PaymentOrder, PaymentProviderInstance, PendingAuthSession,
-		PromoCode, PromoCodeUsage, Proxy, RedeemBatchClaim, RedeemCode, SecuritySecret,
-		Setting, SubscriptionPlan, SystemCustomGroupModel, TLSFingerprintProfile,
-		UsageCleanupTask, UsageLog, UsageResponseOutcome, User, UserAllowedGroup,
-		UserAttributeDefinition, UserAttributeValue, UserCheckin, UserCheckinBlacklist,
-		UserCustomGroup, UserCustomGroupModel, UserImage, UserImageTask,
-		UserPlatformQuota, UserSubscription []ent.Hook
+		ChannelMonitorRequestTemplate, CheckinRewardCampaign, CompositeModelRoute,
+		EmptyResponseClaim, ErrorPassthroughRule, Group, IdempotencyRecord,
+		IdentityAdoptionDecision, PaymentAuditLog, PaymentOrder,
+		PaymentProviderInstance, PendingAuthSession, PromoCode, PromoCodeUsage, Proxy,
+		RedeemBatchClaim, RedeemCode, SecuritySecret, Setting, SubscriptionPlan,
+		SystemCustomGroupModel, TLSFingerprintProfile, UsageCleanupTask, UsageLog,
+		UsageResponseOutcome, User, UserAllowedGroup, UserAttributeDefinition,
+		UserAttributeValue, UserCheckin, UserCheckinBlacklist, UserCustomGroup,
+		UserCustomGroupModel, UserImage, UserImageTask, UserPlatformQuota,
+		UserSubscription []ent.Hook
 	}
 	inters struct {
 		APIKey, Account, AccountGroup, Announcement, AnnouncementRead, AuthIdentity,
 		AuthIdentityChannel, BatchImageEvent, BatchImageItem, BatchImageJob,
 		ChannelMonitor, ChannelMonitorDailyRollup, ChannelMonitorHistory,
-		ChannelMonitorRequestTemplate, CompositeModelRoute, EmptyResponseClaim,
-		ErrorPassthroughRule, Group, IdempotencyRecord, IdentityAdoptionDecision,
-		PaymentAuditLog, PaymentOrder, PaymentProviderInstance, PendingAuthSession,
-		PromoCode, PromoCodeUsage, Proxy, RedeemBatchClaim, RedeemCode, SecuritySecret,
-		Setting, SubscriptionPlan, SystemCustomGroupModel, TLSFingerprintProfile,
-		UsageCleanupTask, UsageLog, UsageResponseOutcome, User, UserAllowedGroup,
-		UserAttributeDefinition, UserAttributeValue, UserCheckin, UserCheckinBlacklist,
-		UserCustomGroup, UserCustomGroupModel, UserImage, UserImageTask,
-		UserPlatformQuota, UserSubscription []ent.Interceptor
+		ChannelMonitorRequestTemplate, CheckinRewardCampaign, CompositeModelRoute,
+		EmptyResponseClaim, ErrorPassthroughRule, Group, IdempotencyRecord,
+		IdentityAdoptionDecision, PaymentAuditLog, PaymentOrder,
+		PaymentProviderInstance, PendingAuthSession, PromoCode, PromoCodeUsage, Proxy,
+		RedeemBatchClaim, RedeemCode, SecuritySecret, Setting, SubscriptionPlan,
+		SystemCustomGroupModel, TLSFingerprintProfile, UsageCleanupTask, UsageLog,
+		UsageResponseOutcome, User, UserAllowedGroup, UserAttributeDefinition,
+		UserAttributeValue, UserCheckin, UserCheckinBlacklist, UserCustomGroup,
+		UserCustomGroupModel, UserImage, UserImageTask, UserPlatformQuota,
+		UserSubscription []ent.Interceptor
 	}
 )
 

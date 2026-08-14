@@ -4,6 +4,7 @@ package ent
 
 import (
 	"context"
+	"database/sql/driver"
 	"fmt"
 	"math"
 
@@ -14,59 +15,57 @@ import (
 	"entgo.io/ent/schema/field"
 	"github.com/Wei-Shaw/sub2api/ent/checkinrewardcampaign"
 	"github.com/Wei-Shaw/sub2api/ent/predicate"
-	"github.com/Wei-Shaw/sub2api/ent/user"
 	"github.com/Wei-Shaw/sub2api/ent/usercheckin"
 )
 
-// UserCheckinQuery is the builder for querying UserCheckin entities.
-type UserCheckinQuery struct {
+// CheckinRewardCampaignQuery is the builder for querying CheckinRewardCampaign entities.
+type CheckinRewardCampaignQuery struct {
 	config
-	ctx                *QueryContext
-	order              []usercheckin.OrderOption
-	inters             []Interceptor
-	predicates         []predicate.UserCheckin
-	withUser           *UserQuery
-	withRewardCampaign *CheckinRewardCampaignQuery
-	modifiers          []func(*sql.Selector)
+	ctx          *QueryContext
+	order        []checkinrewardcampaign.OrderOption
+	inters       []Interceptor
+	predicates   []predicate.CheckinRewardCampaign
+	withCheckins *UserCheckinQuery
+	modifiers    []func(*sql.Selector)
 	// intermediate query (i.e. traversal path).
 	sql  *sql.Selector
 	path func(context.Context) (*sql.Selector, error)
 }
 
-// Where adds a new predicate for the UserCheckinQuery builder.
-func (_q *UserCheckinQuery) Where(ps ...predicate.UserCheckin) *UserCheckinQuery {
+// Where adds a new predicate for the CheckinRewardCampaignQuery builder.
+func (_q *CheckinRewardCampaignQuery) Where(ps ...predicate.CheckinRewardCampaign) *CheckinRewardCampaignQuery {
 	_q.predicates = append(_q.predicates, ps...)
 	return _q
 }
 
 // Limit the number of records to be returned by this query.
-func (_q *UserCheckinQuery) Limit(limit int) *UserCheckinQuery {
+func (_q *CheckinRewardCampaignQuery) Limit(limit int) *CheckinRewardCampaignQuery {
 	_q.ctx.Limit = &limit
 	return _q
 }
 
 // Offset to start from.
-func (_q *UserCheckinQuery) Offset(offset int) *UserCheckinQuery {
+func (_q *CheckinRewardCampaignQuery) Offset(offset int) *CheckinRewardCampaignQuery {
 	_q.ctx.Offset = &offset
 	return _q
 }
 
 // Unique configures the query builder to filter duplicate records on query.
 // By default, unique is set to true, and can be disabled using this method.
-func (_q *UserCheckinQuery) Unique(unique bool) *UserCheckinQuery {
+func (_q *CheckinRewardCampaignQuery) Unique(unique bool) *CheckinRewardCampaignQuery {
 	_q.ctx.Unique = &unique
 	return _q
 }
 
 // Order specifies how the records should be ordered.
-func (_q *UserCheckinQuery) Order(o ...usercheckin.OrderOption) *UserCheckinQuery {
+func (_q *CheckinRewardCampaignQuery) Order(o ...checkinrewardcampaign.OrderOption) *CheckinRewardCampaignQuery {
 	_q.order = append(_q.order, o...)
 	return _q
 }
 
-// QueryUser chains the current query on the "user" edge.
-func (_q *UserCheckinQuery) QueryUser() *UserQuery {
-	query := (&UserClient{config: _q.config}).Query()
+// QueryCheckins chains the current query on the "checkins" edge.
+func (_q *CheckinRewardCampaignQuery) QueryCheckins() *UserCheckinQuery {
+	query := (&UserCheckinClient{config: _q.config}).Query()
 	query.path = func(ctx context.Context) (fromU *sql.Selector, err error) {
 		if err := _q.prepareQuery(ctx); err != nil {
 			return nil, err
@@ -76,9 +75,9 @@ func (_q *UserCheckinQuery) QueryUser() *UserQuery {
 			return nil, err
 		}
 		step := sqlgraph.NewStep(
-			sqlgraph.From(usercheckin.Table, usercheckin.FieldID, selector),
-			sqlgraph.To(user.Table, user.FieldID),
-			sqlgraph.Edge(sqlgraph.M2O, true, usercheckin.UserTable, usercheckin.UserColumn),
+			sqlgraph.From(checkinrewardcampaign.Table, checkinrewardcampaign.FieldID, selector),
+			sqlgraph.To(usercheckin.Table, usercheckin.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, checkinrewardcampaign.CheckinsTable, checkinrewardcampaign.CheckinsColumn),
 		)
 		fromU = sqlgraph.SetNeighbors(_q.driver.Dialect(), step)
 		return fromU, nil
@@ -86,43 +85,21 @@ func (_q *UserCheckinQuery) QueryUser() *UserQuery {
 	return query
 }
 
-// QueryRewardCampaign chains the current query on the "reward_campaign" edge.
-func (_q *UserCheckinQuery) QueryRewardCampaign() *CheckinRewardCampaignQuery {
-	query := (&CheckinRewardCampaignClient{config: _q.config}).Query()
-	query.path = func(ctx context.Context) (fromU *sql.Selector, err error) {
-		if err := _q.prepareQuery(ctx); err != nil {
-			return nil, err
-		}
-		selector := _q.sqlQuery(ctx)
-		if err := selector.Err(); err != nil {
-			return nil, err
-		}
-		step := sqlgraph.NewStep(
-			sqlgraph.From(usercheckin.Table, usercheckin.FieldID, selector),
-			sqlgraph.To(checkinrewardcampaign.Table, checkinrewardcampaign.FieldID),
-			sqlgraph.Edge(sqlgraph.M2O, true, usercheckin.RewardCampaignTable, usercheckin.RewardCampaignColumn),
-		)
-		fromU = sqlgraph.SetNeighbors(_q.driver.Dialect(), step)
-		return fromU, nil
-	}
-	return query
-}
-
-// First returns the first UserCheckin entity from the query.
-// Returns a *NotFoundError when no UserCheckin was found.
-func (_q *UserCheckinQuery) First(ctx context.Context) (*UserCheckin, error) {
+// First returns the first CheckinRewardCampaign entity from the query.
+// Returns a *NotFoundError when no CheckinRewardCampaign was found.
+func (_q *CheckinRewardCampaignQuery) First(ctx context.Context) (*CheckinRewardCampaign, error) {
 	nodes, err := _q.Limit(1).All(setContextOp(ctx, _q.ctx, ent.OpQueryFirst))
 	if err != nil {
 		return nil, err
 	}
 	if len(nodes) == 0 {
-		return nil, &NotFoundError{usercheckin.Label}
+		return nil, &NotFoundError{checkinrewardcampaign.Label}
 	}
 	return nodes[0], nil
 }
 
 // FirstX is like First, but panics if an error occurs.
-func (_q *UserCheckinQuery) FirstX(ctx context.Context) *UserCheckin {
+func (_q *CheckinRewardCampaignQuery) FirstX(ctx context.Context) *CheckinRewardCampaign {
 	node, err := _q.First(ctx)
 	if err != nil && !IsNotFound(err) {
 		panic(err)
@@ -130,22 +107,22 @@ func (_q *UserCheckinQuery) FirstX(ctx context.Context) *UserCheckin {
 	return node
 }
 
-// FirstID returns the first UserCheckin ID from the query.
-// Returns a *NotFoundError when no UserCheckin ID was found.
-func (_q *UserCheckinQuery) FirstID(ctx context.Context) (id int64, err error) {
+// FirstID returns the first CheckinRewardCampaign ID from the query.
+// Returns a *NotFoundError when no CheckinRewardCampaign ID was found.
+func (_q *CheckinRewardCampaignQuery) FirstID(ctx context.Context) (id int64, err error) {
 	var ids []int64
 	if ids, err = _q.Limit(1).IDs(setContextOp(ctx, _q.ctx, ent.OpQueryFirstID)); err != nil {
 		return
 	}
 	if len(ids) == 0 {
-		err = &NotFoundError{usercheckin.Label}
+		err = &NotFoundError{checkinrewardcampaign.Label}
 		return
 	}
 	return ids[0], nil
 }
 
 // FirstIDX is like FirstID, but panics if an error occurs.
-func (_q *UserCheckinQuery) FirstIDX(ctx context.Context) int64 {
+func (_q *CheckinRewardCampaignQuery) FirstIDX(ctx context.Context) int64 {
 	id, err := _q.FirstID(ctx)
 	if err != nil && !IsNotFound(err) {
 		panic(err)
@@ -153,10 +130,10 @@ func (_q *UserCheckinQuery) FirstIDX(ctx context.Context) int64 {
 	return id
 }
 
-// Only returns a single UserCheckin entity found by the query, ensuring it only returns one.
-// Returns a *NotSingularError when more than one UserCheckin entity is found.
-// Returns a *NotFoundError when no UserCheckin entities are found.
-func (_q *UserCheckinQuery) Only(ctx context.Context) (*UserCheckin, error) {
+// Only returns a single CheckinRewardCampaign entity found by the query, ensuring it only returns one.
+// Returns a *NotSingularError when more than one CheckinRewardCampaign entity is found.
+// Returns a *NotFoundError when no CheckinRewardCampaign entities are found.
+func (_q *CheckinRewardCampaignQuery) Only(ctx context.Context) (*CheckinRewardCampaign, error) {
 	nodes, err := _q.Limit(2).All(setContextOp(ctx, _q.ctx, ent.OpQueryOnly))
 	if err != nil {
 		return nil, err
@@ -165,14 +142,14 @@ func (_q *UserCheckinQuery) Only(ctx context.Context) (*UserCheckin, error) {
 	case 1:
 		return nodes[0], nil
 	case 0:
-		return nil, &NotFoundError{usercheckin.Label}
+		return nil, &NotFoundError{checkinrewardcampaign.Label}
 	default:
-		return nil, &NotSingularError{usercheckin.Label}
+		return nil, &NotSingularError{checkinrewardcampaign.Label}
 	}
 }
 
 // OnlyX is like Only, but panics if an error occurs.
-func (_q *UserCheckinQuery) OnlyX(ctx context.Context) *UserCheckin {
+func (_q *CheckinRewardCampaignQuery) OnlyX(ctx context.Context) *CheckinRewardCampaign {
 	node, err := _q.Only(ctx)
 	if err != nil {
 		panic(err)
@@ -180,10 +157,10 @@ func (_q *UserCheckinQuery) OnlyX(ctx context.Context) *UserCheckin {
 	return node
 }
 
-// OnlyID is like Only, but returns the only UserCheckin ID in the query.
-// Returns a *NotSingularError when more than one UserCheckin ID is found.
+// OnlyID is like Only, but returns the only CheckinRewardCampaign ID in the query.
+// Returns a *NotSingularError when more than one CheckinRewardCampaign ID is found.
 // Returns a *NotFoundError when no entities are found.
-func (_q *UserCheckinQuery) OnlyID(ctx context.Context) (id int64, err error) {
+func (_q *CheckinRewardCampaignQuery) OnlyID(ctx context.Context) (id int64, err error) {
 	var ids []int64
 	if ids, err = _q.Limit(2).IDs(setContextOp(ctx, _q.ctx, ent.OpQueryOnlyID)); err != nil {
 		return
@@ -192,15 +169,15 @@ func (_q *UserCheckinQuery) OnlyID(ctx context.Context) (id int64, err error) {
 	case 1:
 		id = ids[0]
 	case 0:
-		err = &NotFoundError{usercheckin.Label}
+		err = &NotFoundError{checkinrewardcampaign.Label}
 	default:
-		err = &NotSingularError{usercheckin.Label}
+		err = &NotSingularError{checkinrewardcampaign.Label}
 	}
 	return
 }
 
 // OnlyIDX is like OnlyID, but panics if an error occurs.
-func (_q *UserCheckinQuery) OnlyIDX(ctx context.Context) int64 {
+func (_q *CheckinRewardCampaignQuery) OnlyIDX(ctx context.Context) int64 {
 	id, err := _q.OnlyID(ctx)
 	if err != nil {
 		panic(err)
@@ -208,18 +185,18 @@ func (_q *UserCheckinQuery) OnlyIDX(ctx context.Context) int64 {
 	return id
 }
 
-// All executes the query and returns a list of UserCheckins.
-func (_q *UserCheckinQuery) All(ctx context.Context) ([]*UserCheckin, error) {
+// All executes the query and returns a list of CheckinRewardCampaigns.
+func (_q *CheckinRewardCampaignQuery) All(ctx context.Context) ([]*CheckinRewardCampaign, error) {
 	ctx = setContextOp(ctx, _q.ctx, ent.OpQueryAll)
 	if err := _q.prepareQuery(ctx); err != nil {
 		return nil, err
 	}
-	qr := querierAll[[]*UserCheckin, *UserCheckinQuery]()
-	return withInterceptors[[]*UserCheckin](ctx, _q, qr, _q.inters)
+	qr := querierAll[[]*CheckinRewardCampaign, *CheckinRewardCampaignQuery]()
+	return withInterceptors[[]*CheckinRewardCampaign](ctx, _q, qr, _q.inters)
 }
 
 // AllX is like All, but panics if an error occurs.
-func (_q *UserCheckinQuery) AllX(ctx context.Context) []*UserCheckin {
+func (_q *CheckinRewardCampaignQuery) AllX(ctx context.Context) []*CheckinRewardCampaign {
 	nodes, err := _q.All(ctx)
 	if err != nil {
 		panic(err)
@@ -227,20 +204,20 @@ func (_q *UserCheckinQuery) AllX(ctx context.Context) []*UserCheckin {
 	return nodes
 }
 
-// IDs executes the query and returns a list of UserCheckin IDs.
-func (_q *UserCheckinQuery) IDs(ctx context.Context) (ids []int64, err error) {
+// IDs executes the query and returns a list of CheckinRewardCampaign IDs.
+func (_q *CheckinRewardCampaignQuery) IDs(ctx context.Context) (ids []int64, err error) {
 	if _q.ctx.Unique == nil && _q.path != nil {
 		_q.Unique(true)
 	}
 	ctx = setContextOp(ctx, _q.ctx, ent.OpQueryIDs)
-	if err = _q.Select(usercheckin.FieldID).Scan(ctx, &ids); err != nil {
+	if err = _q.Select(checkinrewardcampaign.FieldID).Scan(ctx, &ids); err != nil {
 		return nil, err
 	}
 	return ids, nil
 }
 
 // IDsX is like IDs, but panics if an error occurs.
-func (_q *UserCheckinQuery) IDsX(ctx context.Context) []int64 {
+func (_q *CheckinRewardCampaignQuery) IDsX(ctx context.Context) []int64 {
 	ids, err := _q.IDs(ctx)
 	if err != nil {
 		panic(err)
@@ -249,16 +226,16 @@ func (_q *UserCheckinQuery) IDsX(ctx context.Context) []int64 {
 }
 
 // Count returns the count of the given query.
-func (_q *UserCheckinQuery) Count(ctx context.Context) (int, error) {
+func (_q *CheckinRewardCampaignQuery) Count(ctx context.Context) (int, error) {
 	ctx = setContextOp(ctx, _q.ctx, ent.OpQueryCount)
 	if err := _q.prepareQuery(ctx); err != nil {
 		return 0, err
 	}
-	return withInterceptors[int](ctx, _q, querierCount[*UserCheckinQuery](), _q.inters)
+	return withInterceptors[int](ctx, _q, querierCount[*CheckinRewardCampaignQuery](), _q.inters)
 }
 
 // CountX is like Count, but panics if an error occurs.
-func (_q *UserCheckinQuery) CountX(ctx context.Context) int {
+func (_q *CheckinRewardCampaignQuery) CountX(ctx context.Context) int {
 	count, err := _q.Count(ctx)
 	if err != nil {
 		panic(err)
@@ -267,7 +244,7 @@ func (_q *UserCheckinQuery) CountX(ctx context.Context) int {
 }
 
 // Exist returns true if the query has elements in the graph.
-func (_q *UserCheckinQuery) Exist(ctx context.Context) (bool, error) {
+func (_q *CheckinRewardCampaignQuery) Exist(ctx context.Context) (bool, error) {
 	ctx = setContextOp(ctx, _q.ctx, ent.OpQueryExist)
 	switch _, err := _q.FirstID(ctx); {
 	case IsNotFound(err):
@@ -280,7 +257,7 @@ func (_q *UserCheckinQuery) Exist(ctx context.Context) (bool, error) {
 }
 
 // ExistX is like Exist, but panics if an error occurs.
-func (_q *UserCheckinQuery) ExistX(ctx context.Context) bool {
+func (_q *CheckinRewardCampaignQuery) ExistX(ctx context.Context) bool {
 	exist, err := _q.Exist(ctx)
 	if err != nil {
 		panic(err)
@@ -288,45 +265,33 @@ func (_q *UserCheckinQuery) ExistX(ctx context.Context) bool {
 	return exist
 }
 
-// Clone returns a duplicate of the UserCheckinQuery builder, including all associated steps. It can be
+// Clone returns a duplicate of the CheckinRewardCampaignQuery builder, including all associated steps. It can be
 // used to prepare common query builders and use them differently after the clone is made.
-func (_q *UserCheckinQuery) Clone() *UserCheckinQuery {
+func (_q *CheckinRewardCampaignQuery) Clone() *CheckinRewardCampaignQuery {
 	if _q == nil {
 		return nil
 	}
-	return &UserCheckinQuery{
-		config:             _q.config,
-		ctx:                _q.ctx.Clone(),
-		order:              append([]usercheckin.OrderOption{}, _q.order...),
-		inters:             append([]Interceptor{}, _q.inters...),
-		predicates:         append([]predicate.UserCheckin{}, _q.predicates...),
-		withUser:           _q.withUser.Clone(),
-		withRewardCampaign: _q.withRewardCampaign.Clone(),
+	return &CheckinRewardCampaignQuery{
+		config:       _q.config,
+		ctx:          _q.ctx.Clone(),
+		order:        append([]checkinrewardcampaign.OrderOption{}, _q.order...),
+		inters:       append([]Interceptor{}, _q.inters...),
+		predicates:   append([]predicate.CheckinRewardCampaign{}, _q.predicates...),
+		withCheckins: _q.withCheckins.Clone(),
 		// clone intermediate query.
 		sql:  _q.sql.Clone(),
 		path: _q.path,
 	}
 }
 
-// WithUser tells the query-builder to eager-load the nodes that are connected to
-// the "user" edge. The optional arguments are used to configure the query builder of the edge.
-func (_q *UserCheckinQuery) WithUser(opts ...func(*UserQuery)) *UserCheckinQuery {
-	query := (&UserClient{config: _q.config}).Query()
+// WithCheckins tells the query-builder to eager-load the nodes that are connected to
+// the "checkins" edge. The optional arguments are used to configure the query builder of the edge.
+func (_q *CheckinRewardCampaignQuery) WithCheckins(opts ...func(*UserCheckinQuery)) *CheckinRewardCampaignQuery {
+	query := (&UserCheckinClient{config: _q.config}).Query()
 	for _, opt := range opts {
 		opt(query)
 	}
-	_q.withUser = query
-	return _q
-}
-
-// WithRewardCampaign tells the query-builder to eager-load the nodes that are connected to
-// the "reward_campaign" edge. The optional arguments are used to configure the query builder of the edge.
-func (_q *UserCheckinQuery) WithRewardCampaign(opts ...func(*CheckinRewardCampaignQuery)) *UserCheckinQuery {
-	query := (&CheckinRewardCampaignClient{config: _q.config}).Query()
-	for _, opt := range opts {
-		opt(query)
-	}
-	_q.withRewardCampaign = query
+	_q.withCheckins = query
 	return _q
 }
 
@@ -336,19 +301,19 @@ func (_q *UserCheckinQuery) WithRewardCampaign(opts ...func(*CheckinRewardCampai
 // Example:
 //
 //	var v []struct {
-//		UserID int64 `json:"user_id,omitempty"`
+//		Name string `json:"name,omitempty"`
 //		Count int `json:"count,omitempty"`
 //	}
 //
-//	client.UserCheckin.Query().
-//		GroupBy(usercheckin.FieldUserID).
+//	client.CheckinRewardCampaign.Query().
+//		GroupBy(checkinrewardcampaign.FieldName).
 //		Aggregate(ent.Count()).
 //		Scan(ctx, &v)
-func (_q *UserCheckinQuery) GroupBy(field string, fields ...string) *UserCheckinGroupBy {
+func (_q *CheckinRewardCampaignQuery) GroupBy(field string, fields ...string) *CheckinRewardCampaignGroupBy {
 	_q.ctx.Fields = append([]string{field}, fields...)
-	grbuild := &UserCheckinGroupBy{build: _q}
+	grbuild := &CheckinRewardCampaignGroupBy{build: _q}
 	grbuild.flds = &_q.ctx.Fields
-	grbuild.label = usercheckin.Label
+	grbuild.label = checkinrewardcampaign.Label
 	grbuild.scan = grbuild.Scan
 	return grbuild
 }
@@ -359,26 +324,26 @@ func (_q *UserCheckinQuery) GroupBy(field string, fields ...string) *UserCheckin
 // Example:
 //
 //	var v []struct {
-//		UserID int64 `json:"user_id,omitempty"`
+//		Name string `json:"name,omitempty"`
 //	}
 //
-//	client.UserCheckin.Query().
-//		Select(usercheckin.FieldUserID).
+//	client.CheckinRewardCampaign.Query().
+//		Select(checkinrewardcampaign.FieldName).
 //		Scan(ctx, &v)
-func (_q *UserCheckinQuery) Select(fields ...string) *UserCheckinSelect {
+func (_q *CheckinRewardCampaignQuery) Select(fields ...string) *CheckinRewardCampaignSelect {
 	_q.ctx.Fields = append(_q.ctx.Fields, fields...)
-	sbuild := &UserCheckinSelect{UserCheckinQuery: _q}
-	sbuild.label = usercheckin.Label
+	sbuild := &CheckinRewardCampaignSelect{CheckinRewardCampaignQuery: _q}
+	sbuild.label = checkinrewardcampaign.Label
 	sbuild.flds, sbuild.scan = &_q.ctx.Fields, sbuild.Scan
 	return sbuild
 }
 
-// Aggregate returns a UserCheckinSelect configured with the given aggregations.
-func (_q *UserCheckinQuery) Aggregate(fns ...AggregateFunc) *UserCheckinSelect {
+// Aggregate returns a CheckinRewardCampaignSelect configured with the given aggregations.
+func (_q *CheckinRewardCampaignQuery) Aggregate(fns ...AggregateFunc) *CheckinRewardCampaignSelect {
 	return _q.Select().Aggregate(fns...)
 }
 
-func (_q *UserCheckinQuery) prepareQuery(ctx context.Context) error {
+func (_q *CheckinRewardCampaignQuery) prepareQuery(ctx context.Context) error {
 	for _, inter := range _q.inters {
 		if inter == nil {
 			return fmt.Errorf("ent: uninitialized interceptor (forgotten import ent/runtime?)")
@@ -390,7 +355,7 @@ func (_q *UserCheckinQuery) prepareQuery(ctx context.Context) error {
 		}
 	}
 	for _, f := range _q.ctx.Fields {
-		if !usercheckin.ValidColumn(f) {
+		if !checkinrewardcampaign.ValidColumn(f) {
 			return &ValidationError{Name: f, err: fmt.Errorf("ent: invalid field %q for query", f)}
 		}
 	}
@@ -404,20 +369,19 @@ func (_q *UserCheckinQuery) prepareQuery(ctx context.Context) error {
 	return nil
 }
 
-func (_q *UserCheckinQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*UserCheckin, error) {
+func (_q *CheckinRewardCampaignQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*CheckinRewardCampaign, error) {
 	var (
-		nodes       = []*UserCheckin{}
+		nodes       = []*CheckinRewardCampaign{}
 		_spec       = _q.querySpec()
-		loadedTypes = [2]bool{
-			_q.withUser != nil,
-			_q.withRewardCampaign != nil,
+		loadedTypes = [1]bool{
+			_q.withCheckins != nil,
 		}
 	)
 	_spec.ScanValues = func(columns []string) ([]any, error) {
-		return (*UserCheckin).scanValues(nil, columns)
+		return (*CheckinRewardCampaign).scanValues(nil, columns)
 	}
 	_spec.Assign = func(columns []string, values []any) error {
-		node := &UserCheckin{config: _q.config}
+		node := &CheckinRewardCampaign{config: _q.config}
 		nodes = append(nodes, node)
 		node.Edges.loadedTypes = loadedTypes
 		return node.assignValues(columns, values)
@@ -434,84 +398,51 @@ func (_q *UserCheckinQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*
 	if len(nodes) == 0 {
 		return nodes, nil
 	}
-	if query := _q.withUser; query != nil {
-		if err := _q.loadUser(ctx, query, nodes, nil,
-			func(n *UserCheckin, e *User) { n.Edges.User = e }); err != nil {
-			return nil, err
-		}
-	}
-	if query := _q.withRewardCampaign; query != nil {
-		if err := _q.loadRewardCampaign(ctx, query, nodes, nil,
-			func(n *UserCheckin, e *CheckinRewardCampaign) { n.Edges.RewardCampaign = e }); err != nil {
+	if query := _q.withCheckins; query != nil {
+		if err := _q.loadCheckins(ctx, query, nodes,
+			func(n *CheckinRewardCampaign) { n.Edges.Checkins = []*UserCheckin{} },
+			func(n *CheckinRewardCampaign, e *UserCheckin) { n.Edges.Checkins = append(n.Edges.Checkins, e) }); err != nil {
 			return nil, err
 		}
 	}
 	return nodes, nil
 }
 
-func (_q *UserCheckinQuery) loadUser(ctx context.Context, query *UserQuery, nodes []*UserCheckin, init func(*UserCheckin), assign func(*UserCheckin, *User)) error {
-	ids := make([]int64, 0, len(nodes))
-	nodeids := make(map[int64][]*UserCheckin)
+func (_q *CheckinRewardCampaignQuery) loadCheckins(ctx context.Context, query *UserCheckinQuery, nodes []*CheckinRewardCampaign, init func(*CheckinRewardCampaign), assign func(*CheckinRewardCampaign, *UserCheckin)) error {
+	fks := make([]driver.Value, 0, len(nodes))
+	nodeids := make(map[int64]*CheckinRewardCampaign)
 	for i := range nodes {
-		fk := nodes[i].UserID
-		if _, ok := nodeids[fk]; !ok {
-			ids = append(ids, fk)
+		fks = append(fks, nodes[i].ID)
+		nodeids[nodes[i].ID] = nodes[i]
+		if init != nil {
+			init(nodes[i])
 		}
-		nodeids[fk] = append(nodeids[fk], nodes[i])
 	}
-	if len(ids) == 0 {
-		return nil
+	if len(query.ctx.Fields) > 0 {
+		query.ctx.AppendFieldOnce(usercheckin.FieldRewardCampaignID)
 	}
-	query.Where(user.IDIn(ids...))
+	query.Where(predicate.UserCheckin(func(s *sql.Selector) {
+		s.Where(sql.InValues(s.C(checkinrewardcampaign.CheckinsColumn), fks...))
+	}))
 	neighbors, err := query.All(ctx)
 	if err != nil {
 		return err
 	}
 	for _, n := range neighbors {
-		nodes, ok := nodeids[n.ID]
+		fk := n.RewardCampaignID
+		if fk == nil {
+			return fmt.Errorf(`foreign-key "reward_campaign_id" is nil for node %v`, n.ID)
+		}
+		node, ok := nodeids[*fk]
 		if !ok {
-			return fmt.Errorf(`unexpected foreign-key "user_id" returned %v`, n.ID)
+			return fmt.Errorf(`unexpected referenced foreign-key "reward_campaign_id" returned %v for node %v`, *fk, n.ID)
 		}
-		for i := range nodes {
-			assign(nodes[i], n)
-		}
-	}
-	return nil
-}
-func (_q *UserCheckinQuery) loadRewardCampaign(ctx context.Context, query *CheckinRewardCampaignQuery, nodes []*UserCheckin, init func(*UserCheckin), assign func(*UserCheckin, *CheckinRewardCampaign)) error {
-	ids := make([]int64, 0, len(nodes))
-	nodeids := make(map[int64][]*UserCheckin)
-	for i := range nodes {
-		if nodes[i].RewardCampaignID == nil {
-			continue
-		}
-		fk := *nodes[i].RewardCampaignID
-		if _, ok := nodeids[fk]; !ok {
-			ids = append(ids, fk)
-		}
-		nodeids[fk] = append(nodeids[fk], nodes[i])
-	}
-	if len(ids) == 0 {
-		return nil
-	}
-	query.Where(checkinrewardcampaign.IDIn(ids...))
-	neighbors, err := query.All(ctx)
-	if err != nil {
-		return err
-	}
-	for _, n := range neighbors {
-		nodes, ok := nodeids[n.ID]
-		if !ok {
-			return fmt.Errorf(`unexpected foreign-key "reward_campaign_id" returned %v`, n.ID)
-		}
-		for i := range nodes {
-			assign(nodes[i], n)
-		}
+		assign(node, n)
 	}
 	return nil
 }
 
-func (_q *UserCheckinQuery) sqlCount(ctx context.Context) (int, error) {
+func (_q *CheckinRewardCampaignQuery) sqlCount(ctx context.Context) (int, error) {
 	_spec := _q.querySpec()
 	if len(_q.modifiers) > 0 {
 		_spec.Modifiers = _q.modifiers
@@ -523,8 +454,8 @@ func (_q *UserCheckinQuery) sqlCount(ctx context.Context) (int, error) {
 	return sqlgraph.CountNodes(ctx, _q.driver, _spec)
 }
 
-func (_q *UserCheckinQuery) querySpec() *sqlgraph.QuerySpec {
-	_spec := sqlgraph.NewQuerySpec(usercheckin.Table, usercheckin.Columns, sqlgraph.NewFieldSpec(usercheckin.FieldID, field.TypeInt64))
+func (_q *CheckinRewardCampaignQuery) querySpec() *sqlgraph.QuerySpec {
+	_spec := sqlgraph.NewQuerySpec(checkinrewardcampaign.Table, checkinrewardcampaign.Columns, sqlgraph.NewFieldSpec(checkinrewardcampaign.FieldID, field.TypeInt64))
 	_spec.From = _q.sql
 	if unique := _q.ctx.Unique; unique != nil {
 		_spec.Unique = *unique
@@ -533,17 +464,11 @@ func (_q *UserCheckinQuery) querySpec() *sqlgraph.QuerySpec {
 	}
 	if fields := _q.ctx.Fields; len(fields) > 0 {
 		_spec.Node.Columns = make([]string, 0, len(fields))
-		_spec.Node.Columns = append(_spec.Node.Columns, usercheckin.FieldID)
+		_spec.Node.Columns = append(_spec.Node.Columns, checkinrewardcampaign.FieldID)
 		for i := range fields {
-			if fields[i] != usercheckin.FieldID {
+			if fields[i] != checkinrewardcampaign.FieldID {
 				_spec.Node.Columns = append(_spec.Node.Columns, fields[i])
 			}
-		}
-		if _q.withUser != nil {
-			_spec.Node.AddColumnOnce(usercheckin.FieldUserID)
-		}
-		if _q.withRewardCampaign != nil {
-			_spec.Node.AddColumnOnce(usercheckin.FieldRewardCampaignID)
 		}
 	}
 	if ps := _q.predicates; len(ps) > 0 {
@@ -569,12 +494,12 @@ func (_q *UserCheckinQuery) querySpec() *sqlgraph.QuerySpec {
 	return _spec
 }
 
-func (_q *UserCheckinQuery) sqlQuery(ctx context.Context) *sql.Selector {
+func (_q *CheckinRewardCampaignQuery) sqlQuery(ctx context.Context) *sql.Selector {
 	builder := sql.Dialect(_q.driver.Dialect())
-	t1 := builder.Table(usercheckin.Table)
+	t1 := builder.Table(checkinrewardcampaign.Table)
 	columns := _q.ctx.Fields
 	if len(columns) == 0 {
-		columns = usercheckin.Columns
+		columns = checkinrewardcampaign.Columns
 	}
 	selector := builder.Select(t1.Columns(columns...)...).From(t1)
 	if _q.sql != nil {
@@ -607,7 +532,7 @@ func (_q *UserCheckinQuery) sqlQuery(ctx context.Context) *sql.Selector {
 // ForUpdate locks the selected rows against concurrent updates, and prevent them from being
 // updated, deleted or "selected ... for update" by other sessions, until the transaction is
 // either committed or rolled-back.
-func (_q *UserCheckinQuery) ForUpdate(opts ...sql.LockOption) *UserCheckinQuery {
+func (_q *CheckinRewardCampaignQuery) ForUpdate(opts ...sql.LockOption) *CheckinRewardCampaignQuery {
 	if _q.driver.Dialect() == dialect.Postgres {
 		_q.Unique(false)
 	}
@@ -620,7 +545,7 @@ func (_q *UserCheckinQuery) ForUpdate(opts ...sql.LockOption) *UserCheckinQuery 
 // ForShare behaves similarly to ForUpdate, except that it acquires a shared mode lock
 // on any rows that are read. Other sessions can read the rows, but cannot modify them
 // until your transaction commits.
-func (_q *UserCheckinQuery) ForShare(opts ...sql.LockOption) *UserCheckinQuery {
+func (_q *CheckinRewardCampaignQuery) ForShare(opts ...sql.LockOption) *CheckinRewardCampaignQuery {
 	if _q.driver.Dialect() == dialect.Postgres {
 		_q.Unique(false)
 	}
@@ -630,28 +555,28 @@ func (_q *UserCheckinQuery) ForShare(opts ...sql.LockOption) *UserCheckinQuery {
 	return _q
 }
 
-// UserCheckinGroupBy is the group-by builder for UserCheckin entities.
-type UserCheckinGroupBy struct {
+// CheckinRewardCampaignGroupBy is the group-by builder for CheckinRewardCampaign entities.
+type CheckinRewardCampaignGroupBy struct {
 	selector
-	build *UserCheckinQuery
+	build *CheckinRewardCampaignQuery
 }
 
 // Aggregate adds the given aggregation functions to the group-by query.
-func (_g *UserCheckinGroupBy) Aggregate(fns ...AggregateFunc) *UserCheckinGroupBy {
+func (_g *CheckinRewardCampaignGroupBy) Aggregate(fns ...AggregateFunc) *CheckinRewardCampaignGroupBy {
 	_g.fns = append(_g.fns, fns...)
 	return _g
 }
 
 // Scan applies the selector query and scans the result into the given value.
-func (_g *UserCheckinGroupBy) Scan(ctx context.Context, v any) error {
+func (_g *CheckinRewardCampaignGroupBy) Scan(ctx context.Context, v any) error {
 	ctx = setContextOp(ctx, _g.build.ctx, ent.OpQueryGroupBy)
 	if err := _g.build.prepareQuery(ctx); err != nil {
 		return err
 	}
-	return scanWithInterceptors[*UserCheckinQuery, *UserCheckinGroupBy](ctx, _g.build, _g, _g.build.inters, v)
+	return scanWithInterceptors[*CheckinRewardCampaignQuery, *CheckinRewardCampaignGroupBy](ctx, _g.build, _g, _g.build.inters, v)
 }
 
-func (_g *UserCheckinGroupBy) sqlScan(ctx context.Context, root *UserCheckinQuery, v any) error {
+func (_g *CheckinRewardCampaignGroupBy) sqlScan(ctx context.Context, root *CheckinRewardCampaignQuery, v any) error {
 	selector := root.sqlQuery(ctx).Select()
 	aggregation := make([]string, 0, len(_g.fns))
 	for _, fn := range _g.fns {
@@ -678,28 +603,28 @@ func (_g *UserCheckinGroupBy) sqlScan(ctx context.Context, root *UserCheckinQuer
 	return sql.ScanSlice(rows, v)
 }
 
-// UserCheckinSelect is the builder for selecting fields of UserCheckin entities.
-type UserCheckinSelect struct {
-	*UserCheckinQuery
+// CheckinRewardCampaignSelect is the builder for selecting fields of CheckinRewardCampaign entities.
+type CheckinRewardCampaignSelect struct {
+	*CheckinRewardCampaignQuery
 	selector
 }
 
 // Aggregate adds the given aggregation functions to the selector query.
-func (_s *UserCheckinSelect) Aggregate(fns ...AggregateFunc) *UserCheckinSelect {
+func (_s *CheckinRewardCampaignSelect) Aggregate(fns ...AggregateFunc) *CheckinRewardCampaignSelect {
 	_s.fns = append(_s.fns, fns...)
 	return _s
 }
 
 // Scan applies the selector query and scans the result into the given value.
-func (_s *UserCheckinSelect) Scan(ctx context.Context, v any) error {
+func (_s *CheckinRewardCampaignSelect) Scan(ctx context.Context, v any) error {
 	ctx = setContextOp(ctx, _s.ctx, ent.OpQuerySelect)
 	if err := _s.prepareQuery(ctx); err != nil {
 		return err
 	}
-	return scanWithInterceptors[*UserCheckinQuery, *UserCheckinSelect](ctx, _s.UserCheckinQuery, _s, _s.inters, v)
+	return scanWithInterceptors[*CheckinRewardCampaignQuery, *CheckinRewardCampaignSelect](ctx, _s.CheckinRewardCampaignQuery, _s, _s.inters, v)
 }
 
-func (_s *UserCheckinSelect) sqlScan(ctx context.Context, root *UserCheckinQuery, v any) error {
+func (_s *CheckinRewardCampaignSelect) sqlScan(ctx context.Context, root *CheckinRewardCampaignQuery, v any) error {
 	selector := root.sqlQuery(ctx)
 	aggregation := make([]string, 0, len(_s.fns))
 	for _, fn := range _s.fns {

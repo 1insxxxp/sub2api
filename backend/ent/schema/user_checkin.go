@@ -3,6 +3,8 @@ package schema
 import (
 	"time"
 
+	"github.com/Wei-Shaw/sub2api/internal/domain"
+
 	"entgo.io/ent"
 	"entgo.io/ent/dialect"
 	"entgo.io/ent/dialect/entsql"
@@ -62,6 +64,15 @@ func (UserCheckin) Fields() []ent.Field {
 		field.Float("reward_cap_adjustment").
 			SchemaType(map[string]string{dialect.Postgres: "decimal(20,8)"}).
 			Default(0),
+		field.Int64("reward_campaign_id").
+			Optional().
+			Nillable(),
+		field.String("reward_campaign_name").
+			MaxLen(120).
+			Default(""),
+		field.JSON("reward_campaign_tiers_snapshot", []domain.CheckinRewardTier{}).
+			Default([]domain.CheckinRewardTier{}).
+			SchemaType(map[string]string{dialect.Postgres: "jsonb"}),
 	}
 }
 
@@ -72,6 +83,10 @@ func (UserCheckin) Edges() []ent.Edge {
 			Field("user_id").
 			Unique().
 			Required(),
+		edge.From("reward_campaign", CheckinRewardCampaign.Type).
+			Ref("checkins").
+			Field("reward_campaign_id").
+			Unique(),
 	}
 }
 

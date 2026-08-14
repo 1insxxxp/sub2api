@@ -3,14 +3,17 @@
 package ent
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
 
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/sql"
+	"github.com/Wei-Shaw/sub2api/ent/checkinrewardcampaign"
 	"github.com/Wei-Shaw/sub2api/ent/user"
 	"github.com/Wei-Shaw/sub2api/ent/usercheckin"
+	"github.com/Wei-Shaw/sub2api/internal/domain"
 )
 
 // UserCheckin is the model entity for the UserCheckin schema.
@@ -44,6 +47,12 @@ type UserCheckin struct {
 	UsageRebateAmount float64 `json:"usage_rebate_amount,omitempty"`
 	// RewardCapAdjustment holds the value of the "reward_cap_adjustment" field.
 	RewardCapAdjustment float64 `json:"reward_cap_adjustment,omitempty"`
+	// RewardCampaignID holds the value of the "reward_campaign_id" field.
+	RewardCampaignID *int64 `json:"reward_campaign_id,omitempty"`
+	// RewardCampaignName holds the value of the "reward_campaign_name" field.
+	RewardCampaignName string `json:"reward_campaign_name,omitempty"`
+	// RewardCampaignTiersSnapshot holds the value of the "reward_campaign_tiers_snapshot" field.
+	RewardCampaignTiersSnapshot []domain.CheckinRewardTier `json:"reward_campaign_tiers_snapshot,omitempty"`
 	// Edges holds the relations/edges for other nodes in the graph.
 	// The values are being populated by the UserCheckinQuery when eager-loading is set.
 	Edges        UserCheckinEdges `json:"edges"`
@@ -54,9 +63,11 @@ type UserCheckin struct {
 type UserCheckinEdges struct {
 	// User holds the value of the user edge.
 	User *User `json:"user,omitempty"`
+	// RewardCampaign holds the value of the reward_campaign edge.
+	RewardCampaign *CheckinRewardCampaign `json:"reward_campaign,omitempty"`
 	// loadedTypes holds the information for reporting if a
 	// type was loaded (or requested) in eager-loading or not.
-	loadedTypes [1]bool
+	loadedTypes [2]bool
 }
 
 // UserOrErr returns the User value or an error if the edge
@@ -70,16 +81,29 @@ func (e UserCheckinEdges) UserOrErr() (*User, error) {
 	return nil, &NotLoadedError{edge: "user"}
 }
 
+// RewardCampaignOrErr returns the RewardCampaign value or an error if the edge
+// was not loaded in eager-loading, or loaded but was not found.
+func (e UserCheckinEdges) RewardCampaignOrErr() (*CheckinRewardCampaign, error) {
+	if e.RewardCampaign != nil {
+		return e.RewardCampaign, nil
+	} else if e.loadedTypes[1] {
+		return nil, &NotFoundError{label: checkinrewardcampaign.Label}
+	}
+	return nil, &NotLoadedError{edge: "reward_campaign"}
+}
+
 // scanValues returns the types for scanning values from sql.Rows.
 func (*UserCheckin) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
+		case usercheckin.FieldRewardCampaignTiersSnapshot:
+			values[i] = new([]byte)
 		case usercheckin.FieldRewardAmount, usercheckin.FieldBalanceBefore, usercheckin.FieldBalanceAfter, usercheckin.FieldBaseRewardAmount, usercheckin.FieldBonusRewardAmount, usercheckin.FieldTotalRewardAmount, usercheckin.FieldPreviousDayUsageAmount, usercheckin.FieldUsageRebateAmount, usercheckin.FieldRewardCapAdjustment:
 			values[i] = new(sql.NullFloat64)
-		case usercheckin.FieldID, usercheckin.FieldUserID, usercheckin.FieldStreakDay:
+		case usercheckin.FieldID, usercheckin.FieldUserID, usercheckin.FieldStreakDay, usercheckin.FieldRewardCampaignID:
 			values[i] = new(sql.NullInt64)
-		case usercheckin.FieldCheckinDate:
+		case usercheckin.FieldCheckinDate, usercheckin.FieldRewardCampaignName:
 			values[i] = new(sql.NullString)
 		case usercheckin.FieldCreatedAt:
 			values[i] = new(sql.NullTime)
@@ -182,6 +206,27 @@ func (_m *UserCheckin) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				_m.RewardCapAdjustment = value.Float64
 			}
+		case usercheckin.FieldRewardCampaignID:
+			if value, ok := values[i].(*sql.NullInt64); !ok {
+				return fmt.Errorf("unexpected type %T for field reward_campaign_id", values[i])
+			} else if value.Valid {
+				_m.RewardCampaignID = new(int64)
+				*_m.RewardCampaignID = value.Int64
+			}
+		case usercheckin.FieldRewardCampaignName:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field reward_campaign_name", values[i])
+			} else if value.Valid {
+				_m.RewardCampaignName = value.String
+			}
+		case usercheckin.FieldRewardCampaignTiersSnapshot:
+			if value, ok := values[i].(*[]byte); !ok {
+				return fmt.Errorf("unexpected type %T for field reward_campaign_tiers_snapshot", values[i])
+			} else if value != nil && len(*value) > 0 {
+				if err := json.Unmarshal(*value, &_m.RewardCampaignTiersSnapshot); err != nil {
+					return fmt.Errorf("unmarshal field reward_campaign_tiers_snapshot: %w", err)
+				}
+			}
 		default:
 			_m.selectValues.Set(columns[i], values[i])
 		}
@@ -198,6 +243,11 @@ func (_m *UserCheckin) Value(name string) (ent.Value, error) {
 // QueryUser queries the "user" edge of the UserCheckin entity.
 func (_m *UserCheckin) QueryUser() *UserQuery {
 	return NewUserCheckinClient(_m.config).QueryUser(_m)
+}
+
+// QueryRewardCampaign queries the "reward_campaign" edge of the UserCheckin entity.
+func (_m *UserCheckin) QueryRewardCampaign() *CheckinRewardCampaignQuery {
+	return NewUserCheckinClient(_m.config).QueryRewardCampaign(_m)
 }
 
 // Update returns a builder for updating this UserCheckin.
@@ -261,6 +311,17 @@ func (_m *UserCheckin) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("reward_cap_adjustment=")
 	builder.WriteString(fmt.Sprintf("%v", _m.RewardCapAdjustment))
+	builder.WriteString(", ")
+	if v := _m.RewardCampaignID; v != nil {
+		builder.WriteString("reward_campaign_id=")
+		builder.WriteString(fmt.Sprintf("%v", *v))
+	}
+	builder.WriteString(", ")
+	builder.WriteString("reward_campaign_name=")
+	builder.WriteString(_m.RewardCampaignName)
+	builder.WriteString(", ")
+	builder.WriteString("reward_campaign_tiers_snapshot=")
+	builder.WriteString(fmt.Sprintf("%v", _m.RewardCampaignTiersSnapshot))
 	builder.WriteByte(')')
 	return builder.String()
 }

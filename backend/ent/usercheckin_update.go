@@ -9,10 +9,13 @@ import (
 
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
+	"entgo.io/ent/dialect/sql/sqljson"
 	"entgo.io/ent/schema/field"
+	"github.com/Wei-Shaw/sub2api/ent/checkinrewardcampaign"
 	"github.com/Wei-Shaw/sub2api/ent/predicate"
 	"github.com/Wei-Shaw/sub2api/ent/user"
 	"github.com/Wei-Shaw/sub2api/ent/usercheckin"
+	"github.com/Wei-Shaw/sub2api/internal/domain"
 )
 
 // UserCheckinUpdate is the builder for updating UserCheckin entities.
@@ -266,9 +269,60 @@ func (_u *UserCheckinUpdate) AddRewardCapAdjustment(v float64) *UserCheckinUpdat
 	return _u
 }
 
+// SetRewardCampaignID sets the "reward_campaign_id" field.
+func (_u *UserCheckinUpdate) SetRewardCampaignID(v int64) *UserCheckinUpdate {
+	_u.mutation.SetRewardCampaignID(v)
+	return _u
+}
+
+// SetNillableRewardCampaignID sets the "reward_campaign_id" field if the given value is not nil.
+func (_u *UserCheckinUpdate) SetNillableRewardCampaignID(v *int64) *UserCheckinUpdate {
+	if v != nil {
+		_u.SetRewardCampaignID(*v)
+	}
+	return _u
+}
+
+// ClearRewardCampaignID clears the value of the "reward_campaign_id" field.
+func (_u *UserCheckinUpdate) ClearRewardCampaignID() *UserCheckinUpdate {
+	_u.mutation.ClearRewardCampaignID()
+	return _u
+}
+
+// SetRewardCampaignName sets the "reward_campaign_name" field.
+func (_u *UserCheckinUpdate) SetRewardCampaignName(v string) *UserCheckinUpdate {
+	_u.mutation.SetRewardCampaignName(v)
+	return _u
+}
+
+// SetNillableRewardCampaignName sets the "reward_campaign_name" field if the given value is not nil.
+func (_u *UserCheckinUpdate) SetNillableRewardCampaignName(v *string) *UserCheckinUpdate {
+	if v != nil {
+		_u.SetRewardCampaignName(*v)
+	}
+	return _u
+}
+
+// SetRewardCampaignTiersSnapshot sets the "reward_campaign_tiers_snapshot" field.
+func (_u *UserCheckinUpdate) SetRewardCampaignTiersSnapshot(v []domain.CheckinRewardTier) *UserCheckinUpdate {
+	_u.mutation.SetRewardCampaignTiersSnapshot(v)
+	return _u
+}
+
+// AppendRewardCampaignTiersSnapshot appends value to the "reward_campaign_tiers_snapshot" field.
+func (_u *UserCheckinUpdate) AppendRewardCampaignTiersSnapshot(v []domain.CheckinRewardTier) *UserCheckinUpdate {
+	_u.mutation.AppendRewardCampaignTiersSnapshot(v)
+	return _u
+}
+
 // SetUser sets the "user" edge to the User entity.
 func (_u *UserCheckinUpdate) SetUser(v *User) *UserCheckinUpdate {
 	return _u.SetUserID(v.ID)
+}
+
+// SetRewardCampaign sets the "reward_campaign" edge to the CheckinRewardCampaign entity.
+func (_u *UserCheckinUpdate) SetRewardCampaign(v *CheckinRewardCampaign) *UserCheckinUpdate {
+	return _u.SetRewardCampaignID(v.ID)
 }
 
 // Mutation returns the UserCheckinMutation object of the builder.
@@ -279,6 +333,12 @@ func (_u *UserCheckinUpdate) Mutation() *UserCheckinMutation {
 // ClearUser clears the "user" edge to the User entity.
 func (_u *UserCheckinUpdate) ClearUser() *UserCheckinUpdate {
 	_u.mutation.ClearUser()
+	return _u
+}
+
+// ClearRewardCampaign clears the "reward_campaign" edge to the CheckinRewardCampaign entity.
+func (_u *UserCheckinUpdate) ClearRewardCampaign() *UserCheckinUpdate {
+	_u.mutation.ClearRewardCampaign()
 	return _u
 }
 
@@ -314,6 +374,11 @@ func (_u *UserCheckinUpdate) check() error {
 	if v, ok := _u.mutation.CheckinDate(); ok {
 		if err := usercheckin.CheckinDateValidator(v); err != nil {
 			return &ValidationError{Name: "checkin_date", err: fmt.Errorf(`ent: validator failed for field "UserCheckin.checkin_date": %w`, err)}
+		}
+	}
+	if v, ok := _u.mutation.RewardCampaignName(); ok {
+		if err := usercheckin.RewardCampaignNameValidator(v); err != nil {
+			return &ValidationError{Name: "reward_campaign_name", err: fmt.Errorf(`ent: validator failed for field "UserCheckin.reward_campaign_name": %w`, err)}
 		}
 	}
 	if _u.mutation.UserCleared() && len(_u.mutation.UserIDs()) > 0 {
@@ -397,6 +462,17 @@ func (_u *UserCheckinUpdate) sqlSave(ctx context.Context) (_node int, err error)
 	if value, ok := _u.mutation.AddedRewardCapAdjustment(); ok {
 		_spec.AddField(usercheckin.FieldRewardCapAdjustment, field.TypeFloat64, value)
 	}
+	if value, ok := _u.mutation.RewardCampaignName(); ok {
+		_spec.SetField(usercheckin.FieldRewardCampaignName, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.RewardCampaignTiersSnapshot(); ok {
+		_spec.SetField(usercheckin.FieldRewardCampaignTiersSnapshot, field.TypeJSON, value)
+	}
+	if value, ok := _u.mutation.AppendedRewardCampaignTiersSnapshot(); ok {
+		_spec.AddModifier(func(u *sql.UpdateBuilder) {
+			sqljson.Append(u, usercheckin.FieldRewardCampaignTiersSnapshot, value)
+		})
+	}
 	if _u.mutation.UserCleared() {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.M2O,
@@ -419,6 +495,35 @@ func (_u *UserCheckinUpdate) sqlSave(ctx context.Context) (_node int, err error)
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(user.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
+	if _u.mutation.RewardCampaignCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: true,
+			Table:   usercheckin.RewardCampaignTable,
+			Columns: []string{usercheckin.RewardCampaignColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(checkinrewardcampaign.FieldID, field.TypeInt64),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.RewardCampaignIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: true,
+			Table:   usercheckin.RewardCampaignTable,
+			Columns: []string{usercheckin.RewardCampaignColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(checkinrewardcampaign.FieldID, field.TypeInt64),
 			},
 		}
 		for _, k := range nodes {
@@ -684,9 +789,60 @@ func (_u *UserCheckinUpdateOne) AddRewardCapAdjustment(v float64) *UserCheckinUp
 	return _u
 }
 
+// SetRewardCampaignID sets the "reward_campaign_id" field.
+func (_u *UserCheckinUpdateOne) SetRewardCampaignID(v int64) *UserCheckinUpdateOne {
+	_u.mutation.SetRewardCampaignID(v)
+	return _u
+}
+
+// SetNillableRewardCampaignID sets the "reward_campaign_id" field if the given value is not nil.
+func (_u *UserCheckinUpdateOne) SetNillableRewardCampaignID(v *int64) *UserCheckinUpdateOne {
+	if v != nil {
+		_u.SetRewardCampaignID(*v)
+	}
+	return _u
+}
+
+// ClearRewardCampaignID clears the value of the "reward_campaign_id" field.
+func (_u *UserCheckinUpdateOne) ClearRewardCampaignID() *UserCheckinUpdateOne {
+	_u.mutation.ClearRewardCampaignID()
+	return _u
+}
+
+// SetRewardCampaignName sets the "reward_campaign_name" field.
+func (_u *UserCheckinUpdateOne) SetRewardCampaignName(v string) *UserCheckinUpdateOne {
+	_u.mutation.SetRewardCampaignName(v)
+	return _u
+}
+
+// SetNillableRewardCampaignName sets the "reward_campaign_name" field if the given value is not nil.
+func (_u *UserCheckinUpdateOne) SetNillableRewardCampaignName(v *string) *UserCheckinUpdateOne {
+	if v != nil {
+		_u.SetRewardCampaignName(*v)
+	}
+	return _u
+}
+
+// SetRewardCampaignTiersSnapshot sets the "reward_campaign_tiers_snapshot" field.
+func (_u *UserCheckinUpdateOne) SetRewardCampaignTiersSnapshot(v []domain.CheckinRewardTier) *UserCheckinUpdateOne {
+	_u.mutation.SetRewardCampaignTiersSnapshot(v)
+	return _u
+}
+
+// AppendRewardCampaignTiersSnapshot appends value to the "reward_campaign_tiers_snapshot" field.
+func (_u *UserCheckinUpdateOne) AppendRewardCampaignTiersSnapshot(v []domain.CheckinRewardTier) *UserCheckinUpdateOne {
+	_u.mutation.AppendRewardCampaignTiersSnapshot(v)
+	return _u
+}
+
 // SetUser sets the "user" edge to the User entity.
 func (_u *UserCheckinUpdateOne) SetUser(v *User) *UserCheckinUpdateOne {
 	return _u.SetUserID(v.ID)
+}
+
+// SetRewardCampaign sets the "reward_campaign" edge to the CheckinRewardCampaign entity.
+func (_u *UserCheckinUpdateOne) SetRewardCampaign(v *CheckinRewardCampaign) *UserCheckinUpdateOne {
+	return _u.SetRewardCampaignID(v.ID)
 }
 
 // Mutation returns the UserCheckinMutation object of the builder.
@@ -697,6 +853,12 @@ func (_u *UserCheckinUpdateOne) Mutation() *UserCheckinMutation {
 // ClearUser clears the "user" edge to the User entity.
 func (_u *UserCheckinUpdateOne) ClearUser() *UserCheckinUpdateOne {
 	_u.mutation.ClearUser()
+	return _u
+}
+
+// ClearRewardCampaign clears the "reward_campaign" edge to the CheckinRewardCampaign entity.
+func (_u *UserCheckinUpdateOne) ClearRewardCampaign() *UserCheckinUpdateOne {
+	_u.mutation.ClearRewardCampaign()
 	return _u
 }
 
@@ -745,6 +907,11 @@ func (_u *UserCheckinUpdateOne) check() error {
 	if v, ok := _u.mutation.CheckinDate(); ok {
 		if err := usercheckin.CheckinDateValidator(v); err != nil {
 			return &ValidationError{Name: "checkin_date", err: fmt.Errorf(`ent: validator failed for field "UserCheckin.checkin_date": %w`, err)}
+		}
+	}
+	if v, ok := _u.mutation.RewardCampaignName(); ok {
+		if err := usercheckin.RewardCampaignNameValidator(v); err != nil {
+			return &ValidationError{Name: "reward_campaign_name", err: fmt.Errorf(`ent: validator failed for field "UserCheckin.reward_campaign_name": %w`, err)}
 		}
 	}
 	if _u.mutation.UserCleared() && len(_u.mutation.UserIDs()) > 0 {
@@ -845,6 +1012,17 @@ func (_u *UserCheckinUpdateOne) sqlSave(ctx context.Context) (_node *UserCheckin
 	if value, ok := _u.mutation.AddedRewardCapAdjustment(); ok {
 		_spec.AddField(usercheckin.FieldRewardCapAdjustment, field.TypeFloat64, value)
 	}
+	if value, ok := _u.mutation.RewardCampaignName(); ok {
+		_spec.SetField(usercheckin.FieldRewardCampaignName, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.RewardCampaignTiersSnapshot(); ok {
+		_spec.SetField(usercheckin.FieldRewardCampaignTiersSnapshot, field.TypeJSON, value)
+	}
+	if value, ok := _u.mutation.AppendedRewardCampaignTiersSnapshot(); ok {
+		_spec.AddModifier(func(u *sql.UpdateBuilder) {
+			sqljson.Append(u, usercheckin.FieldRewardCampaignTiersSnapshot, value)
+		})
+	}
 	if _u.mutation.UserCleared() {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.M2O,
@@ -867,6 +1045,35 @@ func (_u *UserCheckinUpdateOne) sqlSave(ctx context.Context) (_node *UserCheckin
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(user.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
+	if _u.mutation.RewardCampaignCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: true,
+			Table:   usercheckin.RewardCampaignTable,
+			Columns: []string{usercheckin.RewardCampaignColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(checkinrewardcampaign.FieldID, field.TypeInt64),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.RewardCampaignIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: true,
+			Table:   usercheckin.RewardCampaignTable,
+			Columns: []string{usercheckin.RewardCampaignColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(checkinrewardcampaign.FieldID, field.TypeInt64),
 			},
 		}
 		for _, k := range nodes {
