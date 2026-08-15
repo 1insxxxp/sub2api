@@ -9,6 +9,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
@@ -252,6 +253,191 @@ func TestCheckinCampaignHandlerRejectsInvalidIDsAndJSON(t *testing.T) {
 			require.Equal(t, http.StatusBadRequest, recorder.Code)
 			envelope := decodeCheckinCampaignEnvelope(t, recorder)
 			require.Equal(t, tt.reason, envelope.Reason)
+		})
+	}
+}
+
+func TestCheckinCampaignHandlerStrictJSONRejectsBeforeServiceCall(t *testing.T) {
+	validUpsert := `{"name":"Campaign","start_date":"2026-08-16","end_date":"2026-08-18","reward_tiers":[{"amount":1,"probability":100}]}`
+	validCopy := `{"name":"Campaign copy"}`
+
+	tests := []struct {
+		name     string
+		method   string
+		path     string
+		body     string
+		setCount func(*checkinCampaignAdminServiceStub, *int)
+	}{
+		{
+			name: "create rejects unknown field", method: http.MethodPost, path: "/",
+			body: strings.TrimSuffix(validUpsert, "}") + `,"unknown":true}`,
+			setCount: func(svc *checkinCampaignAdminServiceStub, calls *int) {
+				svc.createFn = func(context.Context, service.CreateCheckinRewardCampaignInput) (*service.CheckinRewardCampaign, error) {
+					(*calls)++
+					return nil, nil
+				}
+			},
+		},
+		{
+			name: "create rejects second document", method: http.MethodPost, path: "/",
+			body: validUpsert + `{}`,
+			setCount: func(svc *checkinCampaignAdminServiceStub, calls *int) {
+				svc.createFn = func(context.Context, service.CreateCheckinRewardCampaignInput) (*service.CheckinRewardCampaign, error) {
+					(*calls)++
+					return nil, nil
+				}
+			},
+		},
+		{
+			name: "create rejects over limit", method: http.MethodPost, path: "/",
+			body: validUpsert + strings.Repeat(" ", (1<<20)-len(validUpsert)+1),
+			setCount: func(svc *checkinCampaignAdminServiceStub, calls *int) {
+				svc.createFn = func(context.Context, service.CreateCheckinRewardCampaignInput) (*service.CheckinRewardCampaign, error) {
+					(*calls)++
+					return nil, nil
+				}
+			},
+		},
+		{
+			name: "update rejects unknown field", method: http.MethodPut, path: "/42",
+			body: strings.TrimSuffix(validUpsert, "}") + `,"unknown":true}`,
+			setCount: func(svc *checkinCampaignAdminServiceStub, calls *int) {
+				svc.updateFn = func(context.Context, int64, service.UpdateCheckinRewardCampaignInput) (*service.CheckinRewardCampaign, error) {
+					(*calls)++
+					return nil, nil
+				}
+			},
+		},
+		{
+			name: "update rejects second document", method: http.MethodPut, path: "/42",
+			body: validUpsert + `{}`,
+			setCount: func(svc *checkinCampaignAdminServiceStub, calls *int) {
+				svc.updateFn = func(context.Context, int64, service.UpdateCheckinRewardCampaignInput) (*service.CheckinRewardCampaign, error) {
+					(*calls)++
+					return nil, nil
+				}
+			},
+		},
+		{
+			name: "update rejects over limit", method: http.MethodPut, path: "/42",
+			body: validUpsert + strings.Repeat(" ", (1<<20)-len(validUpsert)+1),
+			setCount: func(svc *checkinCampaignAdminServiceStub, calls *int) {
+				svc.updateFn = func(context.Context, int64, service.UpdateCheckinRewardCampaignInput) (*service.CheckinRewardCampaign, error) {
+					(*calls)++
+					return nil, nil
+				}
+			},
+		},
+		{
+			name: "copy rejects unknown field", method: http.MethodPost, path: "/42/copy",
+			body: strings.TrimSuffix(validCopy, "}") + `,"unknown":true}`,
+			setCount: func(svc *checkinCampaignAdminServiceStub, calls *int) {
+				svc.copyFn = func(context.Context, int64, string, int64) (*service.CheckinRewardCampaign, error) {
+					(*calls)++
+					return nil, nil
+				}
+			},
+		},
+		{
+			name: "copy rejects second document", method: http.MethodPost, path: "/42/copy",
+			body: validCopy + `{}`,
+			setCount: func(svc *checkinCampaignAdminServiceStub, calls *int) {
+				svc.copyFn = func(context.Context, int64, string, int64) (*service.CheckinRewardCampaign, error) {
+					(*calls)++
+					return nil, nil
+				}
+			},
+		},
+		{
+			name: "copy rejects over limit", method: http.MethodPost, path: "/42/copy",
+			body: validCopy + strings.Repeat(" ", (1<<20)-len(validCopy)+1),
+			setCount: func(svc *checkinCampaignAdminServiceStub, calls *int) {
+				svc.copyFn = func(context.Context, int64, string, int64) (*service.CheckinRewardCampaign, error) {
+					(*calls)++
+					return nil, nil
+				}
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			svc := completeCheckinCampaignAdminServiceStub()
+			calls := 0
+			tt.setCount(svc, &calls)
+
+			recorder := performCheckinCampaignRequest(t, newCheckinCampaignHandlerTestRouter(svc), tt.method, tt.path, tt.body)
+
+			require.Equal(t, http.StatusBadRequest, recorder.Code)
+			envelope := decodeCheckinCampaignEnvelope(t, recorder)
+			require.Equal(t, "CHECKIN_REWARD_CAMPAIGN_INVALID_REQUEST", envelope.Reason)
+			require.Zero(t, calls, "invalid request must not reach campaign service")
+		})
+	}
+}
+
+func TestCheckinCampaignHandlerStrictJSONAllowsTrailingWhitespace(t *testing.T) {
+	svc := completeCheckinCampaignAdminServiceStub()
+	calls := 0
+	svc.createFn = func(context.Context, service.CreateCheckinRewardCampaignInput) (*service.CheckinRewardCampaign, error) {
+		calls++
+		return &service.CheckinRewardCampaign{ID: 42}, nil
+	}
+	body := `{"name":"Campaign","start_date":"2026-08-16","end_date":"2026-08-18","reward_tiers":[{"amount":1,"probability":100}]}` + " \n\t"
+
+	recorder := performCheckinCampaignRequest(t, newCheckinCampaignHandlerTestRouter(svc), http.MethodPost, "/", body)
+
+	require.Equal(t, http.StatusCreated, recorder.Code)
+	require.Equal(t, 1, calls)
+}
+
+func TestCheckinCampaignHandlerStrictJSONPreservesRequiredValidation(t *testing.T) {
+	tests := []struct {
+		name     string
+		method   string
+		path     string
+		setCount func(*checkinCampaignAdminServiceStub, *int)
+	}{
+		{
+			name: "create", method: http.MethodPost, path: "/",
+			setCount: func(svc *checkinCampaignAdminServiceStub, calls *int) {
+				svc.createFn = func(context.Context, service.CreateCheckinRewardCampaignInput) (*service.CheckinRewardCampaign, error) {
+					(*calls)++
+					return nil, nil
+				}
+			},
+		},
+		{
+			name: "update", method: http.MethodPut, path: "/42",
+			setCount: func(svc *checkinCampaignAdminServiceStub, calls *int) {
+				svc.updateFn = func(context.Context, int64, service.UpdateCheckinRewardCampaignInput) (*service.CheckinRewardCampaign, error) {
+					(*calls)++
+					return nil, nil
+				}
+			},
+		},
+		{
+			name: "copy", method: http.MethodPost, path: "/42/copy",
+			setCount: func(svc *checkinCampaignAdminServiceStub, calls *int) {
+				svc.copyFn = func(context.Context, int64, string, int64) (*service.CheckinRewardCampaign, error) {
+					(*calls)++
+					return nil, nil
+				}
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			svc := completeCheckinCampaignAdminServiceStub()
+			calls := 0
+			tt.setCount(svc, &calls)
+			recorder := performCheckinCampaignRequest(t, newCheckinCampaignHandlerTestRouter(svc), tt.method, tt.path, `{}`)
+
+			require.Equal(t, http.StatusBadRequest, recorder.Code)
+			envelope := decodeCheckinCampaignEnvelope(t, recorder)
+			require.Equal(t, "CHECKIN_REWARD_CAMPAIGN_INVALID_REQUEST", envelope.Reason)
+			require.Zero(t, calls)
 		})
 	}
 }

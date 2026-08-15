@@ -2,6 +2,9 @@ package admin
 
 import (
 	"context"
+	"encoding/json"
+	"io"
+	"net/http"
 	"strconv"
 	"strings"
 
@@ -11,7 +14,10 @@ import (
 	"github.com/Wei-Shaw/sub2api/internal/service"
 
 	"github.com/gin-gonic/gin"
+	"github.com/gin-gonic/gin/binding"
 )
+
+const checkinRewardCampaignBodyMaxBytes = 1 << 20
 
 // CheckinHandler handles admin check-in management APIs.
 type CheckinHandler struct {
@@ -210,8 +216,7 @@ func (h *CheckinHandler) ListCampaigns(c *gin.Context) {
 
 func (h *CheckinHandler) CreateCampaign(c *gin.Context) {
 	var req UpsertCheckinRewardCampaignRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		response.ErrorFrom(c, errCheckinRewardCampaignInvalidRequest)
+	if !decodeCheckinRewardCampaignBody(c, &req) {
 		return
 	}
 	campaign, err := h.campaignService.CreateRewardCampaign(c.Request.Context(), service.CreateCheckinRewardCampaignInput{
@@ -244,8 +249,7 @@ func (h *CheckinHandler) UpdateCampaign(c *gin.Context) {
 		return
 	}
 	var req UpsertCheckinRewardCampaignRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		response.ErrorFrom(c, errCheckinRewardCampaignInvalidRequest)
+	if !decodeCheckinRewardCampaignBody(c, &req) {
 		return
 	}
 	campaign, err := h.campaignService.UpdateRewardCampaign(c.Request.Context(), id, service.UpdateCheckinRewardCampaignInput{
@@ -286,8 +290,7 @@ func (h *CheckinHandler) CopyCampaign(c *gin.Context) {
 		return
 	}
 	var req CopyCheckinRewardCampaignRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		response.ErrorFrom(c, errCheckinRewardCampaignInvalidRequest)
+	if !decodeCheckinRewardCampaignBody(c, &req) {
 		return
 	}
 	campaign, err := h.campaignService.CopyRewardCampaign(c.Request.Context(), id, req.Name, checkinCampaignAdminID(c))
@@ -324,4 +327,23 @@ func checkinCampaignAdminID(c *gin.Context) int64 {
 		return subject.UserID
 	}
 	return 0
+}
+
+func decodeCheckinRewardCampaignBody(c *gin.Context, dst any) bool {
+	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, checkinRewardCampaignBodyMaxBytes)
+	decoder := json.NewDecoder(c.Request.Body)
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(dst); err != nil {
+		response.ErrorFrom(c, errCheckinRewardCampaignInvalidRequest)
+		return false
+	}
+	if err := binding.Validator.ValidateStruct(dst); err != nil {
+		response.ErrorFrom(c, errCheckinRewardCampaignInvalidRequest)
+		return false
+	}
+	if err := decoder.Decode(&struct{}{}); err != io.EOF {
+		response.ErrorFrom(c, errCheckinRewardCampaignInvalidRequest)
+		return false
+	}
+	return true
 }
