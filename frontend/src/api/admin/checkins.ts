@@ -49,6 +49,54 @@ export interface CheckinRewardPreview {
   average_reward: number
 }
 
+export type CheckinRewardCampaignStatus = 'draft' | 'enabled' | 'disabled'
+
+export type CheckinRewardCampaignLifecycle =
+  | 'draft'
+  | 'upcoming'
+  | 'active'
+  | 'ended'
+  | 'disabled'
+
+export interface AdminCheckinRewardCampaign {
+  id: number
+  name: string
+  status: CheckinRewardCampaignStatus
+  lifecycle_status: CheckinRewardCampaignLifecycle
+  start_date: string
+  end_date: string
+  reward_tiers: CheckinRewardTier[]
+  probability_total: number
+  preview: CheckinRewardPreview
+  created_by?: number | null
+  updated_by?: number | null
+  created_at: string
+  updated_at: string
+}
+
+export interface CreateCheckinRewardCampaignRequest {
+  name: string
+  start_date: string
+  end_date: string
+  reward_tiers: CheckinRewardTier[]
+}
+
+export interface UpdateCheckinRewardCampaignRequest {
+  name: string
+  start_date: string
+  end_date: string
+  reward_tiers: CheckinRewardTier[]
+}
+
+export interface CopyCheckinRewardCampaignRequest {
+  name: string
+}
+
+export interface DeleteCheckinRewardCampaignResponse {
+  id: number
+  deleted: boolean
+}
+
 export interface AdminCheckinRecord {
   id: number
   user_id: number
@@ -114,6 +162,86 @@ export async function updateConfig(
   return data
 }
 
+export async function listCampaigns(
+  lifecycle?: CheckinRewardCampaignLifecycle | 'all',
+  options?: { signal?: AbortSignal }
+): Promise<AdminCheckinRewardCampaign[]> {
+  const { data } = await apiClient.get<AdminCheckinRewardCampaign[]>(
+    '/admin/checkins/campaigns',
+    {
+      params: { lifecycle },
+      signal: options?.signal,
+    }
+  )
+  return data
+}
+
+export async function getCampaign(
+  id: number,
+  options?: { signal?: AbortSignal }
+): Promise<AdminCheckinRewardCampaign> {
+  const { data } = await apiClient.get<AdminCheckinRewardCampaign>(
+    `/admin/checkins/campaigns/${id}`,
+    { signal: options?.signal }
+  )
+  return data
+}
+
+export async function createCampaign(
+  request: CreateCheckinRewardCampaignRequest
+): Promise<AdminCheckinRewardCampaign> {
+  const { data } = await apiClient.post<AdminCheckinRewardCampaign>(
+    '/admin/checkins/campaigns',
+    request
+  )
+  return data
+}
+
+export async function updateCampaign(
+  id: number,
+  request: UpdateCheckinRewardCampaignRequest
+): Promise<AdminCheckinRewardCampaign> {
+  const { data } = await apiClient.put<AdminCheckinRewardCampaign>(
+    `/admin/checkins/campaigns/${id}`,
+    request
+  )
+  return data
+}
+
+export async function enableCampaign(id: number): Promise<AdminCheckinRewardCampaign> {
+  const { data } = await apiClient.post<AdminCheckinRewardCampaign>(
+    `/admin/checkins/campaigns/${id}/enable`
+  )
+  return data
+}
+
+export async function disableCampaign(id: number): Promise<AdminCheckinRewardCampaign> {
+  const { data } = await apiClient.post<AdminCheckinRewardCampaign>(
+    `/admin/checkins/campaigns/${id}/disable`
+  )
+  return data
+}
+
+export async function copyCampaign(
+  id: number,
+  request: CopyCheckinRewardCampaignRequest
+): Promise<AdminCheckinRewardCampaign> {
+  const { data } = await apiClient.post<AdminCheckinRewardCampaign>(
+    `/admin/checkins/campaigns/${id}/copy`,
+    request
+  )
+  return data
+}
+
+export async function deleteCampaign(
+  id: number
+): Promise<DeleteCheckinRewardCampaignResponse> {
+  const { data } = await apiClient.delete<DeleteCheckinRewardCampaignResponse>(
+    `/admin/checkins/campaigns/${id}`
+  )
+  return data
+}
+
 export async function listRecords(
   page: number = 1,
   pageSize: number = 20,
@@ -167,6 +295,14 @@ export const checkinsAPI = {
   getConfig,
   updateConfig,
   getStats,
+  listCampaigns,
+  getCampaign,
+  createCampaign,
+  updateCampaign,
+  enableCampaign,
+  disableCampaign,
+  copyCampaign,
+  deleteCampaign,
   listRecords,
   listBlacklist,
   addBlacklist,
