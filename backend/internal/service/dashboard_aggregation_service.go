@@ -97,7 +97,9 @@ func (s *DashboardAggregationService) Start() {
 		logger.LegacyPrintf("service.dashboard_aggregation", "[DashboardAggregation] 聚合作业已禁用")
 		return
 	}
-	go s.runStartupGroupUsageSync()
+	if s.cfg.GroupUsageRollupsEnabled {
+		go s.runStartupGroupUsageSync()
+	}
 
 	interval := time.Duration(s.cfg.IntervalSeconds) * time.Second
 	if interval <= 0 {
@@ -232,7 +234,9 @@ func (s *DashboardAggregationService) runScheduledAggregation() {
 		return
 	}
 	defer release()
-	defer s.runScheduledGroupUsageSync()
+	if s.cfg.GroupUsageRollupsEnabled {
+		defer s.runScheduledGroupUsageSync()
+	}
 
 	now := time.Now().UTC()
 	last, err := s.repo.GetAggregationWatermark(ctx)

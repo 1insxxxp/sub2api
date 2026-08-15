@@ -97,6 +97,7 @@ func TestEnsureResponseOutcomeCollectorAcceptsNilContextWithRequestCollector(t *
 	requestContext, collector := WithResponseOutcomeCollector(context.Background(), http.StatusOK, http.StatusOK)
 	c.Request = httptest.NewRequest(http.MethodPost, "/", nil).WithContext(requestContext)
 
+	//nolint:staticcheck // Exercise compatibility with callers that pass a nil context.
 	ctx, ensured := EnsureResponseOutcomeCollector(nil, c, http.StatusOK, http.StatusOK)
 
 	require.NotNil(t, ctx)

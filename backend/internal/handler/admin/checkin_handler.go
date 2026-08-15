@@ -40,10 +40,6 @@ type checkinCampaignAdminService interface {
 	DeleteRewardCampaign(context.Context, int64) error
 }
 
-func newCheckinHandlerForCampaignService(campaignService checkinCampaignAdminService) *CheckinHandler {
-	return &CheckinHandler{campaignService: campaignService}
-}
-
 var (
 	errCheckinRewardCampaignInvalidID = infraerrors.BadRequest(
 		"CHECKIN_REWARD_CAMPAIGN_INVALID_ID",

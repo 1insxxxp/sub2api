@@ -118,9 +118,10 @@ func TestDashboardAggregationService_RunScheduledAggregationSyncsGroupUsageRollu
 	svc := &DashboardAggregationService{
 		repo: repo,
 		cfg: config.DashboardAggregationConfig{
-			Enabled:         true,
-			IntervalSeconds: 60,
-			LookbackSeconds: 120,
+			Enabled:                  true,
+			IntervalSeconds:          60,
+			LookbackSeconds:          120,
+			GroupUsageRollupsEnabled: true,
 			Retention: config.DashboardAggregationRetentionConfig{
 				UsageLogsDays:         1,
 				UsageBillingDedupDays: 2,
@@ -138,6 +139,29 @@ func TestDashboardAggregationService_RunScheduledAggregationSyncsGroupUsageRollu
 	require.Contains(t, []time.Time{before, after}, repo.groupRollupAt)
 }
 
+func TestDashboardAggregationService_RunScheduledAggregationSkipsGroupUsageRollupsByDefault(t *testing.T) {
+	baseRepo := &dashboardAggregationRepoTestStub{watermark: time.Now().UTC()}
+	repo := &dashboardAggregationRollupRepoTestStub{dashboardAggregationRepoTestStub: baseRepo}
+	svc := &DashboardAggregationService{
+		repo: repo,
+		cfg: config.DashboardAggregationConfig{
+			Enabled:         true,
+			IntervalSeconds: 60,
+			LookbackSeconds: 120,
+			Retention: config.DashboardAggregationRetentionConfig{
+				UsageLogsDays:         1,
+				UsageBillingDedupDays: 2,
+				HourlyDays:            1,
+				DailyDays:             1,
+			},
+		},
+	}
+
+	svc.runScheduledAggregation()
+
+	require.Equal(t, 0, repo.groupRollupCalls)
+}
+
 func TestDashboardAggregationService_RunScheduledAggregationSyncsGroupAfterDashboardEarlyReturn(t *testing.T) {
 	events := make([]string, 0, 2)
 	baseRepo := &dashboardAggregationRepoTestStub{
@@ -152,7 +176,8 @@ func TestDashboardAggregationService_RunScheduledAggregationSyncsGroupAfterDashb
 	svc := &DashboardAggregationService{
 		repo: repo,
 		cfg: config.DashboardAggregationConfig{
-			LookbackSeconds: 120,
+			LookbackSeconds:          120,
+			GroupUsageRollupsEnabled: true,
 			Retention: config.DashboardAggregationRetentionConfig{
 				UsageLogsDays: 1,
 			},
@@ -195,7 +220,10 @@ func TestDashboardAggregationService_StartupGroupSyncUsesIndependentLongLivedLea
 	cache := &dashboardAggregationLeaderLockRecordingCache{delegate: delegate}
 	repo := &dashboardAggregationRollupRepoTestStub{dashboardAggregationRepoTestStub: &dashboardAggregationRepoTestStub{}}
 	svc := &DashboardAggregationService{
-		repo:       repo,
+		repo: repo,
+		cfg: config.DashboardAggregationConfig{
+			GroupUsageRollupsEnabled: true,
+		},
 		lockCache:  cache,
 		instanceID: "startup-instance",
 	}

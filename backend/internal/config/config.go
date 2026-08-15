@@ -1652,6 +1652,8 @@ type DashboardAggregationConfig struct {
 	BackfillEnabled bool `mapstructure:"backfill_enabled"`
 	// BackfillMaxDays: 回填最大跨度（天）
 	BackfillMaxDays int `mapstructure:"backfill_max_days"`
+	// GroupUsageRollupsEnabled: 是否自动维护分组用量日汇总。
+	GroupUsageRollupsEnabled bool `mapstructure:"group_usage_rollups_enabled"`
 	// Retention: 各表保留窗口（天）
 	Retention DashboardAggregationRetentionConfig `mapstructure:"retention"`
 	// RecomputeDays: 启动时重算最近 N 天
@@ -2245,6 +2247,7 @@ func setDefaults() {
 	viper.SetDefault("dashboard_aggregation.lookback_seconds", 120)
 	viper.SetDefault("dashboard_aggregation.backfill_enabled", false)
 	viper.SetDefault("dashboard_aggregation.backfill_max_days", 31)
+	viper.SetDefault("dashboard_aggregation.group_usage_rollups_enabled", false)
 	viper.SetDefault("dashboard_aggregation.retention.usage_logs_days", 90)
 	viper.SetDefault("dashboard_aggregation.retention.usage_billing_dedup_days", 365)
 	viper.SetDefault("dashboard_aggregation.retention.hourly_days", 180)

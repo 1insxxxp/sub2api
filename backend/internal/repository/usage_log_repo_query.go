@@ -181,7 +181,7 @@ func (r *usageLogRepository) ListWithFilters(ctx context.Context, params paginat
 	return logs, page, nil
 }
 
-func (r *usageLogRepository) hydrateUsageLogCompensation(ctx context.Context, logs []service.UsageLog) error {
+func (r *usageLogRepository) hydrateUsageLogCompensation(ctx context.Context, logs []service.UsageLog) (err error) {
 	if len(logs) == 0 {
 		return nil
 	}
@@ -205,7 +205,11 @@ func (r *usageLogRepository) hydrateUsageLogCompensation(ctx context.Context, lo
 	if err != nil {
 		return fmt.Errorf("load usage compensation projection: %w", err)
 	}
-	defer rows.Close()
+	defer func() {
+		if closeErr := rows.Close(); closeErr != nil && err == nil {
+			err = closeErr
+		}
+	}()
 	for rows.Next() {
 		var usageID int64
 		var claimID, httpStatus, upstreamStatus, outputBytes, eventCount, collectorVersion sql.NullInt64

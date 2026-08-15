@@ -1092,6 +1092,9 @@ func TestLoadDefaultDashboardAggregationConfig(t *testing.T) {
 	if cfg.DashboardAgg.BackfillEnabled {
 		t.Fatalf("DashboardAgg.BackfillEnabled = true, want false")
 	}
+	if cfg.DashboardAgg.GroupUsageRollupsEnabled {
+		t.Fatalf("DashboardAgg.GroupUsageRollupsEnabled = true, want false")
+	}
 	if cfg.DashboardAgg.BackfillMaxDays != 31 {
 		t.Fatalf("DashboardAgg.BackfillMaxDays = %d, want 31", cfg.DashboardAgg.BackfillMaxDays)
 	}

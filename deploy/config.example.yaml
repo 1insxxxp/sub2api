@@ -859,6 +859,10 @@ dashboard_aggregation:
   # Backfill max range (days)
   # 回填最大跨度（天）
   backfill_max_days: 31
+  # Enable group usage rollup sync. Keep disabled by default on high-traffic installs;
+  # enable only after migrations are applied and lock impact has been reviewed.
+  # 启用分组用量汇总同步。高流量实例默认关闭；确认迁移完成并评估锁影响后再开启。
+  group_usage_rollups_enabled: false
   # Recompute recent N days on startup
   # 启动时重算最近 N 天
   recompute_days: 2

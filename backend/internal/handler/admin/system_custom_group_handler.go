@@ -87,10 +87,6 @@ func NewSystemCustomGroupHandler(service *service.SystemCustomGroupService) *Sys
 	return &SystemCustomGroupHandler{service: service}
 }
 
-func newSystemCustomGroupHandlerForService(service systemCustomGroupAdminService) *SystemCustomGroupHandler {
-	return &SystemCustomGroupHandler{service: service}
-}
-
 func (h *SystemCustomGroupHandler) Candidates(c *gin.Context) {
 	candidates, err := h.service.Candidates(c.Request.Context())
 	if err != nil {

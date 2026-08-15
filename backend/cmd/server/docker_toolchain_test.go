@@ -24,7 +24,7 @@ func TestRootDockerfileGoImageMatchesModuleDirective(t *testing.T) {
 		t.Fatal("backend/go.mod must contain a full go patch version")
 	}
 	dockerVersionPattern := regexp.MustCompile(`(?m)^(?:ARG GOLANG_IMAGE=|FROM )golang:([0-9]+\.[0-9]+\.[0-9]+)-alpine\s*$`)
-	for _, relativePath := range []string{"Dockerfile", "backend/Dockerfile"} {
+	for _, relativePath := range []string{"Dockerfile", "backend/Dockerfile", "deploy/Dockerfile"} {
 		dockerfile, err := os.ReadFile(filepath.Join(repoRoot, relativePath))
 		if err != nil {
 			t.Fatalf("read %s: %v", relativePath, err)

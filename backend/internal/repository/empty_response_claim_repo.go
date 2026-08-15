@@ -203,7 +203,7 @@ func (r *emptyResponseClaimRepository) scanClaim(ctx context.Context, query stri
 	return claim, nil
 }
 
-func (r *emptyResponseClaimRepository) List(ctx context.Context, params pagination.PaginationParams, filters service.EmptyResponseClaimListFilters) ([]service.EmptyResponseClaim, *pagination.PaginationResult, error) {
+func (r *emptyResponseClaimRepository) List(ctx context.Context, params pagination.PaginationParams, filters service.EmptyResponseClaimListFilters) (claims []service.EmptyResponseClaim, paginationResult *pagination.PaginationResult, err error) {
 	where := []string{"1=1"}
 	args := make([]any, 0, 8)
 	add := func(condition string, value any) {
@@ -258,8 +258,14 @@ func (r *emptyResponseClaimRepository) List(ctx context.Context, params paginati
 	if err != nil {
 		return nil, nil, fmt.Errorf("list empty response claims: %w", err)
 	}
-	defer rows.Close()
-	claims := make([]service.EmptyResponseClaim, 0, limit)
+	defer func() {
+		if closeErr := rows.Close(); closeErr != nil && err == nil {
+			err = closeErr
+			claims = nil
+			paginationResult = nil
+		}
+	}()
+	claims = make([]service.EmptyResponseClaim, 0, limit)
 	for rows.Next() {
 		claim, scanErr := scanEmptyResponseClaimRow(rows, true)
 		if scanErr != nil {
@@ -277,7 +283,7 @@ func (r *emptyResponseClaimRepository) List(ctx context.Context, params paginati
 	return claims, &pagination.PaginationResult{Total: total, Page: params.Page, PageSize: limit, Pages: pages}, nil
 }
 
-func (r *emptyResponseClaimRepository) GetAdminByID(ctx context.Context, id int64) (*service.EmptyResponseClaim, error) {
+func (r *emptyResponseClaimRepository) GetAdminByID(ctx context.Context, id int64) (claim *service.EmptyResponseClaim, err error) {
 	query := `
 		SELECT ` + prefixedEmptyResponseClaimSelectColumns("erc") + `,
 			ul.model, COALESCE(u.email, ''), COALESCE(a.name, ''), COALESCE(g.name, ''),
@@ -296,14 +302,19 @@ func (r *emptyResponseClaimRepository) GetAdminByID(ctx context.Context, id int6
 	if err != nil {
 		return nil, fmt.Errorf("get admin empty response claim: %w", err)
 	}
-	defer rows.Close()
+	defer func() {
+		if closeErr := rows.Close(); closeErr != nil && err == nil {
+			err = closeErr
+			claim = nil
+		}
+	}()
 	if !rows.Next() {
 		if err := rows.Err(); err != nil {
 			return nil, fmt.Errorf("get admin empty response claim: %w", err)
 		}
 		return nil, service.ErrEmptyResponseClaimNotFound
 	}
-	claim, err := scanEmptyResponseClaimRow(rows, true)
+	claim, err = scanEmptyResponseClaimRow(rows, true)
 	if err != nil {
 		return nil, fmt.Errorf("scan admin empty response claim: %w", err)
 	}

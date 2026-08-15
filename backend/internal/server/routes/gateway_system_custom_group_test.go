@@ -585,7 +585,8 @@ func TestSystemCustomGeminiTargetMiddlewareRewritesPathAndPreservesContexts(t *t
 	router.POST("/v1beta/models/*modelAction", func(c *gin.Context) {
 		resolution, ok := service.SystemCustomGroupResolutionFromContext(c.Request.Context())
 		require.True(t, ok)
-		group := c.Request.Context().Value(ctxkey.Group).(*service.Group)
+		group, ok := c.Request.Context().Value(ctxkey.Group).(*service.Group)
+		require.True(t, ok)
 		c.JSON(http.StatusOK, gin.H{"model": compositeGeminiModelFromParams(c), "group": group.ID, "billing": resolution.BillingGroupID})
 	})
 

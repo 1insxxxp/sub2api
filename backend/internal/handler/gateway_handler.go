@@ -1346,10 +1346,6 @@ func filterModelsByCustomList(availableModels, fallbackModels, selectedModels []
 	return service.FilterModelsByCustomList(availableModels, fallbackModels, selectedModels)
 }
 
-func customModelsListAllowsModel(availablePatterns []string, model string) bool {
-	return service.CustomModelsListAllowsModel(availablePatterns, model)
-}
-
 func defaultModelIDsForPlatform(platform string) []string {
 	return service.DefaultModelIDsForPlatform(platform)
 }

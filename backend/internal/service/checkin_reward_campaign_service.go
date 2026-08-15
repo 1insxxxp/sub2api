@@ -283,7 +283,7 @@ func (s *CheckinService) EnableRewardCampaign(ctx context.Context, id, adminID i
 		lifecycle := deriveCheckinRewardCampaignLifecycle(campaign.Status, campaign.StartDate, campaign.EndDate, currentDay)
 		campaignEnded := compareCheckinCampaignCalendarDate(campaign.EndDate, currentDay) < 0
 		campaignStartsAfterToday := compareCheckinCampaignCalendarDate(campaign.StartDate, currentDay) > 0
-		if campaignEnded || (lifecycle != CheckinRewardCampaignLifecycleDraft && !(lifecycle == CheckinRewardCampaignLifecycleDisabled && campaignStartsAfterToday)) {
+		if campaignEnded || (lifecycle != CheckinRewardCampaignLifecycleDraft && (lifecycle != CheckinRewardCampaignLifecycleDisabled || !campaignStartsAfterToday)) {
 			return ErrCheckinRewardCampaignInvalidStateTransition.WithMetadata(checkinCampaignMetadata(campaign, s.beijingLocation))
 		}
 		tiers, err := normalizeCheckinRewardTiers(campaign.RewardTiers)

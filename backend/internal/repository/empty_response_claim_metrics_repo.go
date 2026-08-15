@@ -95,7 +95,12 @@ func (r *emptyResponseClaimRepository) queryEmptyResponseClaimMetricDimensions(c
 	if err != nil {
 		return nil, fmt.Errorf("query empty response claim metric dimensions: %w", err)
 	}
-	defer rows.Close()
+	defer func() {
+		if closeErr := rows.Close(); closeErr != nil && err == nil {
+			err = closeErr
+			result = nil
+		}
+	}()
 	result = make([]service.EmptyResponseClaimMetricDimension, 0)
 	for rows.Next() {
 		var item service.EmptyResponseClaimMetricDimension
