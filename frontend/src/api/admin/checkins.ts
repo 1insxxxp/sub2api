@@ -111,6 +111,8 @@ export interface AdminCheckinRecord {
   reward_cap_adjustment: number
   total_reward_amount: number
   reward_amount: number
+  reward_campaign_id?: number | null
+  reward_campaign_name?: string | null
   balance_before: number
   balance_after: number
   created_at: string

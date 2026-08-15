@@ -2,6 +2,8 @@
 
 FRONTEND_CRITICAL_VITEST := \
 	src/api/__tests__/admin.checkins.spec.ts \
+	src/api/__tests__/checkin.campaign.spec.ts \
+	src/components/layout/__tests__/AppHeader.spec.ts \
 	src/components/admin/checkin/__tests__/CheckinRewardCampaignPanel.spec.ts \
 	src/components/admin/checkin/__tests__/CheckinRewardCampaignDialog.spec.ts \
 	src/api/__tests__/client.spec.ts \

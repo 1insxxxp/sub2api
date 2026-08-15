@@ -27,6 +27,7 @@ import checkinsAPI, {
   updateCampaign,
 } from '@/api/admin/checkins'
 import type {
+  AdminCheckinRecord,
   AdminCheckinRewardCampaign,
   CopyCheckinRewardCampaignRequest,
   CreateCheckinRewardCampaignRequest,
@@ -49,6 +50,25 @@ const campaign = {
   updated_at: '2026-08-15T01:02:03Z',
 } satisfies AdminCheckinRewardCampaign
 
+const campaignRecord = {
+  id: 7,
+  user_id: 99,
+  checkin_date: '2026-08-15',
+  streak_day: 2,
+  base_reward_amount: 1,
+  bonus_reward_amount: 0,
+  previous_day_usage_amount: 0,
+  usage_rebate_amount: 0,
+  reward_cap_adjustment: 0,
+  total_reward_amount: 1,
+  reward_amount: 1,
+  reward_campaign_id: 42,
+  reward_campaign_name: 'Summer bonus',
+  balance_before: 10,
+  balance_after: 11,
+  created_at: '2026-08-15T01:00:00Z',
+} satisfies AdminCheckinRecord
+
 describe('admin check-ins api', () => {
   beforeEach(() => {
     get.mockReset()
@@ -59,18 +79,19 @@ describe('admin check-ins api', () => {
 
   it('loads stats, records, blacklist and updates blacklist through backend endpoints', async () => {
     get.mockResolvedValueOnce({ data: { today_count: 1 } })
-    get.mockResolvedValueOnce({ data: { items: [], total: 0, page: 1, page_size: 20, pages: 0 } })
+    get.mockResolvedValueOnce({ data: { items: [campaignRecord], total: 1, page: 1, page_size: 20, pages: 1 } })
     get.mockResolvedValueOnce({ data: { items: [], total: 0, page: 1, page_size: 20, pages: 0 } })
     post.mockResolvedValueOnce({ data: { id: 7, user_id: 99 } })
     deleteRequest.mockResolvedValueOnce({ data: { message: 'ok' } })
 
     await checkinsAPI.getStats()
-    await checkinsAPI.listRecords(2, 50, { search: 'alice', date: '2026-06-05' })
+    const records = await checkinsAPI.listRecords(2, 50, { search: 'alice', date: '2026-06-05' })
     await checkinsAPI.listBlacklist(1, 20, { active_only: true, search: 'alice' })
     await checkinsAPI.addBlacklist({ user_id: 99, reason: 'abuse' })
     await checkinsAPI.removeBlacklist(99)
 
     expect(get).toHaveBeenNthCalledWith(1, '/admin/checkins/stats')
+    expect(records.items[0]).toBe(campaignRecord)
     expect(get).toHaveBeenNthCalledWith(2, '/admin/checkins/records', {
       params: { page: 2, page_size: 50, search: 'alice', date: '2026-06-05' },
       signal: undefined,

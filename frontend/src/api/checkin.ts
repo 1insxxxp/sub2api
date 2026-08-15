@@ -21,6 +21,8 @@ export interface CheckinStatus {
   estimated_usage_rebate?: number | null
   total_reward_amount?: number | null
   reward_amount?: number | null
+  reward_campaign_id?: number | null
+  reward_campaign_name?: string | null
   checked_in_at?: string | null
   next_reset_at?: string
   min_total_usage_usd: number
@@ -56,6 +58,8 @@ export interface CheckinRecord {
   reward_cap_adjustment: number
   total_reward_amount: number
   reward_amount: number
+  reward_campaign_id?: number | null
+  reward_campaign_name?: string | null
   balance_before: number
   balance_after: number
   created_at: string

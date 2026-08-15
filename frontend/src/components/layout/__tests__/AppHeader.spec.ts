@@ -92,6 +92,7 @@ vi.mock('vue-i18n', async () => {
     'checkin.rechargeCriterion': 'Cumulative recharge',
     'checkin.criterionProgress': '{current} / {min}',
     'checkin.rewardBreakdown': 'Reward breakdown',
+    'checkin.rewardCampaign': 'Reward campaign',
     'checkin.baseReward': 'Random reward',
     'checkin.previousDayUsage': "Yesterday's usage",
     'checkin.usageRebate': 'Usage rebate',
@@ -165,9 +166,9 @@ describe('AppHeader shared admin shell', () => {
     const wrapper = await mountHeader()
 
     expect(wrapper.get('header').classes()).toContain('app-header-shell')
-    expect(wrapper.get('.app-header-toolbar').exists()).toBe(true)
-    expect(wrapper.get('.app-header-actions').exists()).toBe(true)
-    expect(wrapper.get('[data-test="header-balance-pill"]').exists()).toBe(true)
+    expect(wrapper.find('.app-header-toolbar').exists()).toBe(true)
+    expect(wrapper.find('.app-header-actions').exists()).toBe(true)
+    expect(wrapper.find('[data-test="header-balance-pill"]').exists()).toBe(true)
   })
 
   it('uses the shared default avatar in the header when no custom avatar exists', async () => {
@@ -371,6 +372,35 @@ describe('AppHeader daily check-in entry', () => {
     expect(wrapper.get('[data-test="checkin-usage-rebate"]').text()).toContain('$4.00')
   })
 
+  it('shows the active reward campaign before check-in without replacing reward details', async () => {
+    getCheckinStatus.mockResolvedValue({
+      enabled: true,
+      eligible: true,
+      checked_in: false,
+      blacklisted: false,
+      checkin_date: '2026-08-16',
+      reward_campaign_id: 42,
+      reward_campaign_name: 'Summer surprise',
+      reward_amount: null,
+      current_streak: 2,
+      lifetime_checkin_days: 8,
+      previous_day_usage_amount: 25,
+      estimated_usage_rebate: 2,
+      min_total_usage_usd: 0,
+      total_usage_usd: 25,
+      min_total_recharge_usd: 0,
+      total_recharge_usd: 0,
+      recent_records: []
+    })
+
+    const wrapper = await mountHeader()
+
+    expect(wrapper.get('[data-test="checkin-reward-campaign"]').text()).toBe('Summer surprise')
+    expect(wrapper.get('[data-test="checkin-reward-campaign"]').attributes('title')).toBe('Reward campaign')
+    expect(wrapper.get('[data-test="checkin-base-reward"]').text()).toContain('checkin.randomReward')
+    expect(wrapper.get('[data-test="checkin-usage-rebate"]').text()).toContain('$2.00')
+  })
+
   it('shows the actual reward breakdown and credits the total reward after check-in', async () => {
     getCheckinStatus.mockResolvedValue({
       enabled: true,
@@ -469,6 +499,85 @@ describe('AppHeader daily check-in entry', () => {
     expect(wrapper.get('[data-test="recent-checkin-previous-day-usage"]').text()).toContain('$0.00')
     expect(wrapper.get('[data-test="recent-checkin-usage-rebate"]').text()).toContain('$0.00')
     expect(wrapper.get('[data-test="recent-checkin-total"]').text()).toContain('$0.50')
+  })
+
+  it('keeps the stored campaign name on historical rewards after check-in', async () => {
+    getCheckinStatus.mockResolvedValue({
+      enabled: true,
+      eligible: true,
+      checked_in: true,
+      blacklisted: false,
+      checkin_date: '2026-08-16',
+      reward_campaign_id: 52,
+      reward_campaign_name: 'Current snapshot',
+      reward_amount: 4.8,
+      base_reward_amount: 0.8,
+      previous_day_usage_amount: 50,
+      usage_rebate_amount: 3,
+      bonus_reward_amount: 1,
+      total_reward_amount: 4.8,
+      current_streak: 7,
+      lifetime_checkin_days: 12,
+      min_total_usage_usd: 0,
+      total_usage_usd: 50,
+      min_total_recharge_usd: 0,
+      total_recharge_usd: 0,
+      recent_records: [
+        {
+          id: 51,
+          user_id: 12,
+          checkin_date: '2026-08-15',
+          streak_day: 6,
+          base_reward_amount: 0.5,
+          previous_day_usage_amount: 25,
+          usage_rebate_amount: 2,
+          bonus_reward_amount: 0,
+          reward_cap_adjustment: 0,
+          total_reward_amount: 2.5,
+          reward_amount: 2.5,
+          reward_campaign_id: 41,
+          reward_campaign_name: 'Archived snapshot',
+          balance_before: 10,
+          balance_after: 12.5,
+          created_at: '2026-08-15T01:00:00Z'
+        }
+      ]
+    })
+
+    const wrapper = await mountHeader()
+
+    expect(wrapper.get('[data-test="checkin-reward-campaign"]').text()).toBe('Current snapshot')
+    expect(wrapper.get('[data-test="recent-checkin-reward-campaign"]').text()).toBe('Archived snapshot')
+    expect(wrapper.get('[data-test="checkin-base-reward"]').text()).toBe('$0.80')
+    expect(wrapper.get('[data-test="checkin-usage-rebate"]').text()).toBe('$3.00')
+    expect(wrapper.get('[data-test="checkin-streak-bonus"]').text()).toContain('$1.00')
+    expect(wrapper.get('[data-test="checkin-total-reward"]').text()).toBe('$4.80')
+    expect(wrapper.get('[data-test="recent-checkin-total"]').text()).toBe('+$2.50')
+  })
+
+  it('does not render empty campaign chips for baseline rewards', async () => {
+    getCheckinStatus.mockResolvedValue({
+      enabled: true,
+      eligible: true,
+      checked_in: true,
+      blacklisted: false,
+      checkin_date: '2026-08-16',
+      reward_campaign_id: null,
+      reward_campaign_name: '   ',
+      reward_amount: 1,
+      current_streak: 1,
+      lifetime_checkin_days: 1,
+      min_total_usage_usd: 0,
+      total_usage_usd: 0,
+      min_total_recharge_usd: 0,
+      total_recharge_usd: 0,
+      recent_records: []
+    })
+
+    const wrapper = await mountHeader()
+
+    expect(wrapper.find('[data-test="checkin-reward-campaign"]').exists()).toBe(false)
+    expect(wrapper.find('[data-test="recent-checkin-reward-campaign"]').exists()).toBe(false)
   })
 
   it('keeps the reward breakdown viewport-bound on narrow screens', () => {

@@ -477,6 +477,72 @@ describe('Admin CheckinsView', () => {
     }))
   })
 
+  it('shows the stored campaign origin beside an admin reward breakdown without changing amounts', async () => {
+    listRecords.mockResolvedValueOnce({
+      items: [
+        {
+          id: 2,
+          user_id: 99,
+          user_email: 'alice@example.com',
+          username: 'alice',
+          checkin_date: '2026-08-15',
+          reward_amount: 4.8,
+          base_reward_amount: 0.8,
+          previous_day_usage_amount: 50,
+          usage_rebate_amount: 3,
+          bonus_reward_amount: 1,
+          reward_cap_adjustment: 0,
+          total_reward_amount: 4.8,
+          reward_campaign_id: 42,
+          reward_campaign_name: 'Summer surprise',
+          balance_before: 10,
+          balance_after: 14.8,
+          created_at: '2026-08-15T01:00:00Z',
+        },
+      ],
+      total: 1,
+      page: 1,
+      page_size: 20,
+      pages: 1,
+    })
+
+    const wrapper = mount(CheckinsView, {
+      global: {
+        stubs: {
+          AppLayout: { template: '<div><slot /></div>' },
+          DataTable: DataTableStub,
+          Pagination: true,
+          Icon: true,
+        },
+      },
+    })
+
+    await flushPromises()
+
+    expect(wrapper.get('[data-test="record-reward-campaign"]').text()).toBe('Summer surprise')
+    expect(wrapper.get('[data-test="record-base-reward"]').text()).toBe('$0.80')
+    expect(wrapper.get('[data-test="record-usage-rebate"]').text()).toBe('$3.00')
+    expect(wrapper.get('[data-test="record-streak-bonus"]').text()).toBe('$1.00')
+    expect(wrapper.get('[data-test="record-total-reward"]').text()).toBe('$4.80')
+  })
+
+  it('does not render an empty campaign chip for baseline admin records', async () => {
+    const wrapper = mount(CheckinsView, {
+      global: {
+        stubs: {
+          AppLayout: { template: '<div><slot /></div>' },
+          DataTable: DataTableStub,
+          Pagination: true,
+          Icon: true,
+        },
+      },
+    })
+
+    await flushPromises()
+
+    expect(wrapper.find('[data-test="record-reward-campaign"]').exists()).toBe(false)
+  })
+
   it('keeps streak rewards as fixed amounts when usage rebates are enabled', async () => {
     getConfig.mockResolvedValueOnce({
       enabled: true,

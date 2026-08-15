@@ -486,7 +486,16 @@
             </span>
           </template>
           <template #cell-reward_detail="{ row }">
-            <dl class="grid min-w-56 grid-cols-[minmax(0,1fr),auto] gap-x-3 gap-y-1 text-xs text-gray-500 dark:text-dark-400">
+            <div class="min-w-56">
+              <span
+                v-if="normalizedCampaignName(row.reward_campaign_name)"
+                data-test="record-reward-campaign"
+                class="mb-2 inline-flex max-w-full truncate rounded-full border border-cyan-200 bg-cyan-50 px-2.5 py-1 text-[11px] font-semibold text-cyan-800 dark:border-cyan-400/25 dark:bg-cyan-400/10 dark:text-cyan-100"
+                :title="t('admin.checkins.rewardCampaign')"
+              >
+                {{ normalizedCampaignName(row.reward_campaign_name) }}
+              </span>
+              <dl class="grid grid-cols-[minmax(0,1fr),auto] gap-x-3 gap-y-1 text-xs text-gray-500 dark:text-dark-400">
               <dt>{{ t('admin.checkins.baseReward') }}</dt>
               <dd data-test="record-base-reward" class="text-right tabular-nums">{{ formatUsd(row.base_reward_amount || row.reward_amount) }}</dd>
               <dt>{{ t('admin.checkins.previousDayUsage') }}</dt>
@@ -498,8 +507,9 @@
               <dt>{{ t('admin.checkins.capAdjustment') }}</dt>
               <dd data-test="record-cap-adjustment" class="text-right tabular-nums">{{ formatUsd(row.reward_cap_adjustment) }}</dd>
               <dt class="font-semibold text-gray-700 dark:text-gray-200">{{ t('admin.checkins.totalReward') }}</dt>
-              <dd class="text-right font-semibold tabular-nums text-gray-900 dark:text-white">{{ formatUsd(row.total_reward_amount || row.reward_amount) }}</dd>
-            </dl>
+              <dd data-test="record-total-reward" class="text-right font-semibold tabular-nums text-gray-900 dark:text-white">{{ formatUsd(row.total_reward_amount || row.reward_amount) }}</dd>
+              </dl>
+            </div>
           </template>
           <template #cell-balance_before="{ value }">
             {{ formatUsd(value) }}
@@ -726,6 +736,10 @@ import CheckinRewardCampaignPanel from '@/components/admin/checkin/CheckinReward
 
 const { t } = useI18n()
 const appStore = useAppStore()
+
+function normalizedCampaignName(value?: string | null): string {
+  return value?.trim() ?? ''
+}
 
 const stats = ref<AdminCheckinStats | null>(null)
 const config = ref<AdminCheckinConfig | null>(null)
