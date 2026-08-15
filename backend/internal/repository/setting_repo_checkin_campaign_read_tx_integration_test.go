@@ -29,6 +29,65 @@ type blockingCheckinAwardRepository struct {
 	writeOnce    sync.Once
 }
 
+type duplicateCheckinBarrier struct {
+	mu      sync.Mutex
+	arrived int
+	ready   chan struct{}
+}
+
+func newDuplicateCheckinBarrier() *duplicateCheckinBarrier {
+	return &duplicateCheckinBarrier{ready: make(chan struct{})}
+}
+
+func (b *duplicateCheckinBarrier) wait(ctx context.Context) error {
+	b.mu.Lock()
+	b.arrived++
+	if b.arrived == 2 {
+		close(b.ready)
+	}
+	b.mu.Unlock()
+	select {
+	case <-b.ready:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
+type duplicateCheckinReadRepository struct {
+	service.SettingRepository
+	reader         service.CheckinCampaignConfigReadTransactionRepository
+	barrier        *duplicateCheckinBarrier
+	callbackErrors chan error
+}
+
+func (r *duplicateCheckinReadRepository) WithCheckinCampaignConfigReadTx(
+	ctx context.Context,
+	fn func(*dbent.Client, service.SettingRepository) error,
+) error {
+	return r.reader.WithCheckinCampaignConfigReadTx(ctx, func(client *dbent.Client, repo service.SettingRepository) error {
+		var firstCheckinQuery sync.Once
+		waitedForDuplicate := false
+		client.UserCheckin.Intercept(dbent.InterceptFunc(func(next dbent.Querier) dbent.Querier {
+			return dbent.QuerierFunc(func(queryCtx context.Context, query dbent.Query) (dbent.Value, error) {
+				value, err := next.Query(queryCtx, query)
+				if err == nil {
+					firstCheckinQuery.Do(func() {
+						waitedForDuplicate = true
+						err = r.barrier.wait(queryCtx)
+					})
+				}
+				return value, err
+			})
+		}))
+		err := fn(client, repo)
+		if waitedForDuplicate {
+			r.callbackErrors <- err
+		}
+		return err
+	})
+}
+
 func (r *blockingCheckinAwardRepository) WithCheckinCampaignConfigReadTx(
 	ctx context.Context,
 	fn func(*dbent.Client, service.SettingRepository) error,
@@ -289,6 +348,120 @@ func TestSettingRepositoryPostgresSharedCheckinReadersDoNotSerialize(t *testing.
 	close(release)
 	require.NoError(t, <-results)
 	require.NoError(t, <-results)
+}
+
+func TestCheckinPostgresConcurrentSameUserDateAwardsExactlyOnce(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	baseRepo := NewSettingRepository(integrationEntClient)
+	settingsKeys := []string{
+		service.SettingKeyCheckinEnabled,
+		service.SettingKeyCheckinMinTotalUsageUSD,
+		service.SettingKeyCheckinMinTotalRechargeUSD,
+		service.SettingKeyCheckinRewardConfig,
+	}
+	oldSettings, err := baseRepo.GetMultiple(ctx, settingsKeys)
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cleanupCancel()
+		for _, key := range settingsKeys {
+			if value, ok := oldSettings[key]; ok {
+				_ = baseRepo.Set(cleanupCtx, key, value)
+			} else {
+				_ = baseRepo.Delete(cleanupCtx, key)
+			}
+		}
+	})
+
+	svc := service.NewCheckinService(integrationEntClient, nil, nil)
+	svc.SetSettingRepository(baseRepo)
+	_, err = svc.UpdateConfig(ctx, service.CheckinConfig{
+		Enabled: true,
+		Tiers:   []service.CheckinRewardTier{{Amount: 1, Probability: 100}},
+	})
+	require.NoError(t, err)
+	user := createPostgresCheckinIntegrationUser(t, ctx, "same-user-date")
+	_, err = integrationEntClient.User.UpdateOneID(user.ID).SetBalance(10).Save(ctx)
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cleanupCancel()
+		_, _ = integrationDB.ExecContext(cleanupCtx, "DELETE FROM redeem_codes WHERE used_by = $1", user.ID)
+		_, _ = integrationDB.ExecContext(cleanupCtx, "DELETE FROM user_checkins WHERE user_id = $1", user.ID)
+		_, _ = integrationDB.ExecContext(cleanupCtx, "DELETE FROM users WHERE id = $1", user.ID)
+	})
+
+	barrier := newDuplicateCheckinBarrier()
+	callbackErrors := make(chan error, 2)
+	svc.SetSettingRepository(&duplicateCheckinReadRepository{
+		SettingRepository: baseRepo,
+		reader:            baseRepo.(service.CheckinCampaignConfigReadTransactionRepository),
+		barrier:           barrier,
+		callbackErrors:    callbackErrors,
+	})
+	type checkinOutcome struct {
+		result *service.CheckinResult
+		err    error
+	}
+	start := make(chan struct{})
+	outcomes := make(chan checkinOutcome, 2)
+	for index := 0; index < 2; index++ {
+		go func() {
+			<-start
+			result, checkinErr := svc.Checkin(ctx, user.ID)
+			outcomes <- checkinOutcome{result: result, err: checkinErr}
+		}()
+	}
+	close(start)
+
+	alreadyCheckedIn := 0
+	newAwards := 0
+	for index := 0; index < 2; index++ {
+		outcome := <-outcomes
+		require.NoError(t, outcome.err)
+		require.NotNil(t, outcome.result)
+		if outcome.result.AlreadyCheckedIn {
+			alreadyCheckedIn++
+		} else {
+			newAwards++
+		}
+	}
+	require.Equal(t, 1, newAwards)
+	require.Equal(t, 1, alreadyCheckedIn)
+
+	callbackErrorCount := 0
+	for index := 0; index < 2; index++ {
+		callbackErr := <-callbackErrors
+		if callbackErr != nil {
+			callbackErrorCount++
+			require.Equal(t, "check-in already recorded", callbackErr.Error())
+		}
+	}
+	require.Equal(t, 1, callbackErrorCount, "loser must roll back through the private duplicate sentinel")
+
+	storedUser, err := integrationEntClient.User.Get(ctx, user.ID)
+	require.NoError(t, err)
+	require.Equal(t, 11.0, storedUser.Balance)
+	var checkinCount, historyCount int
+	require.NoError(t, integrationDB.QueryRowContext(ctx, "SELECT count(*) FROM user_checkins WHERE user_id = $1", user.ID).Scan(&checkinCount))
+	require.NoError(t, integrationDB.QueryRowContext(ctx, "SELECT count(*) FROM redeem_codes WHERE used_by = $1 AND type = $2", user.ID, service.AdjustmentTypeCheckinReward).Scan(&historyCount))
+	require.Equal(t, 1, checkinCount)
+	require.Equal(t, 1, historyCount)
+
+	var (
+		indexIsUnique   bool
+		indexDefinition string
+	)
+	require.NoError(t, integrationDB.QueryRowContext(ctx, `
+		SELECT indexes.indisunique, pg_get_indexdef(indexes.indexrelid)
+		FROM pg_index AS indexes
+		JOIN pg_class AS index_relation ON index_relation.oid = indexes.indexrelid
+		WHERE indexes.indrelid = 'user_checkins'::regclass
+		  AND index_relation.relname = 'user_checkins_user_id_date_uq'
+	`).Scan(&indexIsUnique, &indexDefinition))
+	require.True(t, indexIsUnique)
+	require.Contains(t, indexDefinition, "(user_id, checkin_date)")
 }
 
 func createPostgresCheckinIntegrationUser(t *testing.T, ctx context.Context, suffix string) *dbent.User {

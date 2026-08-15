@@ -53,6 +53,55 @@ type sequencedCheckinSettingRepo struct {
 	reads     int
 }
 
+type barrierCheckinSettingRepo struct {
+	*checkinSettingRepoStub
+	mu               sync.Mutex
+	firstReadStarted chan struct{}
+	releaseFirstRead chan struct{}
+	firstRead        bool
+}
+
+func newBarrierCheckinSettingRepo(values map[string]string) *barrierCheckinSettingRepo {
+	return &barrierCheckinSettingRepo{
+		checkinSettingRepoStub: &checkinSettingRepoStub{values: values},
+		firstReadStarted:       make(chan struct{}),
+		releaseFirstRead:       make(chan struct{}),
+	}
+}
+
+func (r *barrierCheckinSettingRepo) GetMultiple(ctx context.Context, keys []string) (map[string]string, error) {
+	r.mu.Lock()
+	out := make(map[string]string, len(keys))
+	for _, key := range keys {
+		if value, ok := r.values[key]; ok {
+			out[key] = value
+		}
+	}
+	firstRead := !r.firstRead
+	if firstRead {
+		r.firstRead = true
+		close(r.firstReadStarted)
+	}
+	r.mu.Unlock()
+	if firstRead {
+		select {
+		case <-r.releaseFirstRead:
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		}
+	}
+	return out, nil
+}
+
+func (r *barrierCheckinSettingRepo) SetMultiple(_ context.Context, values map[string]string) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	for key, value := range values {
+		r.values[key] = value
+	}
+	return nil
+}
+
 func (r *sequencedCheckinSettingRepo) GetMultiple(_ context.Context, keys []string) (map[string]string, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -275,6 +324,140 @@ func TestCheckinStatusShowsActiveRewardCampaign(t *testing.T) {
 	require.Equal(t, 5.0, status.MinTotalUsageUSD, "campaigns must not change baseline eligibility")
 }
 
+func TestCheckinStatusUsesAtomicBaselineCampaignSnapshot(t *testing.T) {
+	client := newCheckinServiceTestClient(t)
+	ctx := context.Background()
+	user := createCheckinTestUser(t, ctx, client, "atomic-status-snapshot@example.com", 10)
+	repo := newBarrierCheckinSettingRepo(map[string]string{
+		SettingKeyCheckinEnabled: "true",
+		SettingKeyCheckinRewardConfig: `{
+			"tiers":[{"amount":1,"probability":100}],
+			"usage_rebate_enabled":true,
+			"usage_rebate_rate_percent":10,
+			"usage_rebate_cap":1,
+			"total_reward_cap":2
+		}`,
+	})
+	svc := NewCheckinService(client, nil, nil)
+	svc.SetSettingRepository(repo)
+	beijing := time.FixedZone("CST", 8*60*60)
+	svc.now = func() time.Time { return time.Date(2026, 8, 15, 9, 0, 0, 0, beijing) }
+	draft := createCheckinRewardCampaignForResolverTest(
+		t, ctx, svc, client, "原子状态快照", domain.CheckinRewardCampaignStatusDraft,
+		"2026-08-15", "2026-08-15", []domain.CheckinRewardTier{{Amount: 5, Probability: 100}},
+	)
+
+	statusResult := make(chan *CheckinStatus, 1)
+	statusErr := make(chan error, 1)
+	go func() {
+		status, err := svc.GetStatus(ctx, user.ID)
+		statusResult <- status
+		statusErr <- err
+	}()
+	<-repo.firstReadStarted
+
+	writerDone := make(chan error, 1)
+	go func() {
+		_, err := svc.UpdateConfig(ctx, CheckinConfig{
+			Enabled:                true,
+			Tiers:                  []CheckinRewardTier{{Amount: 1, Probability: 100}},
+			UsageRebateEnabled:     true,
+			UsageRebateRatePercent: 10,
+			UsageRebateCap:         1,
+			TotalRewardCap:         5,
+		})
+		if err == nil {
+			_, err = svc.EnableRewardCampaign(ctx, draft.ID, 99)
+		}
+		writerDone <- err
+	}()
+	var writerErr error
+	select {
+	case writerErr = <-writerDone:
+		close(repo.releaseFirstRead)
+	case <-time.After(50 * time.Millisecond):
+		close(repo.releaseFirstRead)
+		writerErr = <-writerDone
+	}
+	require.NoError(t, writerErr)
+
+	require.NoError(t, <-statusErr)
+	status := <-statusResult
+	require.NotNil(t, status)
+	require.Nil(t, status.RewardCampaignID, "status must expose a complete old or new snapshot, never old baseline plus new campaign")
+}
+
+func TestCheckinPreflightUsesAtomicBaselineCampaignSnapshot(t *testing.T) {
+	client := newCheckinServiceTestClient(t)
+	ctx := context.Background()
+	user := createCheckinTestUser(t, ctx, client, "atomic-preflight-snapshot@example.com", 10)
+	repo := newBarrierCheckinSettingRepo(map[string]string{
+		SettingKeyCheckinEnabled: "true",
+		SettingKeyCheckinRewardConfig: `{
+			"tiers":[{"amount":1,"probability":100}],
+			"usage_rebate_enabled":true,
+			"usage_rebate_rate_percent":10,
+			"usage_rebate_cap":1,
+			"total_reward_cap":2
+		}`,
+	})
+	svc := NewCheckinService(client, nil, nil)
+	svc.SetSettingRepository(repo)
+	beijing := time.FixedZone("CST", 8*60*60)
+	svc.now = func() time.Time { return time.Date(2026, 8, 15, 9, 0, 0, 0, beijing) }
+	svc.rewardRoll = func() float64 { return 0 }
+	draft := createCheckinRewardCampaignForResolverTest(
+		t, ctx, svc, client, "原子预检快照", domain.CheckinRewardCampaignStatusDraft,
+		"2026-08-15", "2026-08-15", []domain.CheckinRewardTier{{Amount: 5, Probability: 100}},
+	)
+
+	checkinResult := make(chan *CheckinResult, 1)
+	checkinErr := make(chan error, 1)
+	go func() {
+		result, err := svc.Checkin(ctx, user.ID)
+		checkinResult <- result
+		checkinErr <- err
+	}()
+	<-repo.firstReadStarted
+
+	writerDone := make(chan error, 1)
+	go func() {
+		_, err := svc.UpdateConfig(ctx, CheckinConfig{
+			Enabled:                true,
+			Tiers:                  []CheckinRewardTier{{Amount: 1, Probability: 100}},
+			UsageRebateEnabled:     true,
+			UsageRebateRatePercent: 10,
+			UsageRebateCap:         1,
+			TotalRewardCap:         5,
+		})
+		if err == nil {
+			_, err = svc.EnableRewardCampaign(ctx, draft.ID, 99)
+		}
+		writerDone <- err
+	}()
+	var writerErr error
+	select {
+	case writerErr = <-writerDone:
+		close(repo.releaseFirstRead)
+	case <-time.After(50 * time.Millisecond):
+		close(repo.releaseFirstRead)
+		writerErr = <-writerDone
+	}
+	require.NoError(t, writerErr)
+
+	require.NoError(t, <-checkinErr)
+	result := <-checkinResult
+	require.NotNil(t, result)
+	switch result.BaseRewardAmount {
+	case 1:
+		require.Nil(t, result.RewardCampaignID)
+	case 5:
+		require.NotNil(t, result.RewardCampaignID)
+	default:
+		t.Fatalf("check-in used a mixed preflight snapshot: base reward = %v", result.BaseRewardAmount)
+	}
+}
+
 func TestCheckinAwardsCampaignBaseButPreservesUsageAndStreakRewards(t *testing.T) {
 	client := newCheckinServiceTestClient(t)
 	ctx := context.Background()
@@ -417,23 +600,27 @@ func TestCheckinRechecksCampaignInsideTransaction(t *testing.T) {
 		t, ctx, svc, client, "发奖前停用", domain.CheckinRewardCampaignStatusEnabled,
 		"2026-08-15", "2026-08-15", []domain.CheckinRewardTier{{Amount: 5, Probability: 100}},
 	)
-	queryCount := 0
+	firstResolveFinished := make(chan struct{})
+	var firstResolve sync.Once
 	client.CheckinRewardCampaign.Intercept(dbent.InterceptFunc(func(next dbent.Querier) dbent.Querier {
 		return dbent.QuerierFunc(func(queryCtx context.Context, query dbent.Query) (dbent.Value, error) {
 			value, err := next.Query(queryCtx, query)
-			queryCount++
-			if err == nil && queryCount == 1 {
-				_, updateErr := client.CheckinRewardCampaign.UpdateOneID(campaign.ID).
-					SetStatus(domain.CheckinRewardCampaignStatusDisabled).
-					Save(queryCtx)
-				require.NoError(t, updateErr)
+			if err == nil {
+				firstResolve.Do(func() { close(firstResolveFinished) })
 			}
 			return value, err
 		})
 	}))
+	disableResult := make(chan error, 1)
+	go func() {
+		<-firstResolveFinished
+		_, disableErr := svc.DisableRewardCampaign(ctx, campaign.ID, 99)
+		disableResult <- disableErr
+	}()
 
 	result, err := svc.Checkin(ctx, user.ID)
 	require.NoError(t, err)
+	require.NoError(t, <-disableResult)
 	require.Equal(t, 1.0, result.BaseRewardAmount, "transaction-time disabled campaign must fall back to baseline")
 	require.Nil(t, result.RewardCampaignID)
 	require.Empty(t, result.RewardCampaignName)
@@ -566,6 +753,84 @@ func TestCheckinRetryAfterPolicyChangeReturnsStoredAward(t *testing.T) {
 	require.True(t, result.AlreadyCheckedIn)
 	require.Equal(t, 5.0, result.TotalRewardAmount)
 	require.Equal(t, 15.0, result.BalanceAfter)
+}
+
+func TestAlreadyCheckedInReflectsCurrentPolicyState(t *testing.T) {
+	testCases := []struct {
+		name              string
+		configure         func(t *testing.T, ctx context.Context, client *dbent.Client, repo *checkinSettingRepoStub, userID int64)
+		expectedEnabled   bool
+		expectedEligible  bool
+		expectedBlacklist bool
+		expectedReason    string
+	}{
+		{
+			name: "retry after disabled",
+			configure: func(_ *testing.T, _ context.Context, _ *dbent.Client, repo *checkinSettingRepoStub, _ int64) {
+				repo.values[SettingKeyCheckinEnabled] = "false"
+			},
+			expectedReason: CheckinIneligibleReasonDisabled,
+		},
+		{
+			name: "retry after blacklist",
+			configure: func(t *testing.T, ctx context.Context, client *dbent.Client, repo *checkinSettingRepoStub, userID int64) {
+				repo.values[SettingKeyCheckinEnabled] = "true"
+				_, err := client.UserCheckinBlacklist.Create().SetUserID(userID).SetReason("changed later").Save(ctx)
+				require.NoError(t, err)
+			},
+			expectedBlacklist: true,
+			expectedReason:    CheckinIneligibleReasonBlacklisted,
+		},
+		{
+			name: "retry after threshold increase",
+			configure: func(_ *testing.T, _ context.Context, _ *dbent.Client, repo *checkinSettingRepoStub, _ int64) {
+				repo.values[SettingKeyCheckinEnabled] = "true"
+				repo.values[SettingKeyCheckinMinTotalUsageUSD] = "100"
+			},
+			expectedEnabled: true,
+			expectedReason:  CheckinIneligibleReasonInsufficientSpend,
+		},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			client := newCheckinServiceTestClient(t)
+			ctx := context.Background()
+			user := createCheckinTestUser(t, ctx, client, "policy-state-"+strconv.FormatInt(time.Now().UnixNano(), 10)+"@example.com", 15)
+			rewardedAt := time.Date(2026, 8, 15, 9, 0, 0, 0, time.FixedZone("CST", 8*60*60))
+			_, err := client.UserCheckin.Create().
+				SetUserID(user.ID).
+				SetCheckinDate("2026-08-15").
+				SetBaseRewardAmount(5).
+				SetTotalRewardAmount(5).
+				SetRewardAmount(5).
+				SetBalanceBefore(10).
+				SetBalanceAfter(15).
+				SetCreatedAt(rewardedAt).
+				Save(ctx)
+			require.NoError(t, err)
+			repo := newCheckinSettingRepoStub()
+			testCase.configure(t, ctx, client, repo, user.ID)
+			svc := NewCheckinService(client, nil, nil)
+			svc.SetSettingRepository(repo)
+			svc.now = func() time.Time { return rewardedAt }
+
+			status, err := svc.GetStatus(ctx, user.ID)
+			require.NoError(t, err)
+			result, err := svc.Checkin(ctx, user.ID)
+			require.NoError(t, err)
+			require.True(t, result.AlreadyCheckedIn)
+			require.Equal(t, 5.0, result.TotalRewardAmount)
+			require.Equal(t, status.Enabled, result.Enabled)
+			require.Equal(t, status.Eligible, result.Eligible)
+			require.Equal(t, status.Blacklisted, result.Blacklisted)
+			require.Equal(t, status.IneligibleReason, result.IneligibleReason)
+			require.Equal(t, testCase.expectedEnabled, result.Enabled)
+			require.Equal(t, testCase.expectedEligible, result.Eligible)
+			require.Equal(t, testCase.expectedBlacklist, result.Blacklisted)
+			require.Equal(t, testCase.expectedReason, result.IneligibleReason)
+		})
+	}
 }
 
 func TestCheckinTransactionExistingRecordSkipsBalanceMutation(t *testing.T) {

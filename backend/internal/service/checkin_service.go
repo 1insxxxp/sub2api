@@ -123,6 +123,16 @@ type CheckinResult struct {
 	BalanceAfter     float64 `json:"balance_after"`
 }
 
+type checkinCurrentPolicyState struct {
+	Effective        *EffectiveCheckinConfig
+	Enabled          bool
+	Eligible         bool
+	Blacklisted      bool
+	IneligibleReason string
+	TotalUsageUSD    float64
+	TotalRechargeUSD float64
+}
+
 type CheckinRecord struct {
 	ID                     int64               `json:"id"`
 	UserID                 int64               `json:"user_id"`
@@ -227,34 +237,24 @@ func (s *CheckinService) SetSettingRepository(settingRepo SettingRepository) {
 
 func (s *CheckinService) GetStatus(ctx context.Context, userID int64) (*CheckinStatus, error) {
 	checkinDate, nextReset := s.currentBeijingDay()
-	baseline, err := s.GetConfig(ctx)
+	policy, err := s.currentCheckinPolicyState(ctx, userID, checkinDate)
 	if err != nil {
 		return nil, err
 	}
-	effective, err := s.resolveEffectiveCheckinConfig(ctx, s.entClient, checkinDate, baseline)
-	if err != nil {
-		return nil, err
-	}
+	effective := policy.Effective
 	cfg := effective.Config
-	totalUsage, err := s.totalUsageUSD(ctx, userID)
-	if err != nil {
-		return nil, err
-	}
-	totalRecharge, err := s.totalRechargeUSD(ctx, userID)
-	if err != nil {
-		return nil, err
-	}
 	base := CheckinStatus{
-		Enabled:             cfg.Enabled,
-		Eligible:            cfg.Enabled,
-		Blacklisted:         false,
+		Enabled:             policy.Enabled,
+		Eligible:            policy.Eligible,
+		Blacklisted:         policy.Blacklisted,
 		CheckedIn:           false,
 		CheckinDate:         checkinDate,
 		NextResetAt:         nextReset,
 		MinTotalUsageUSD:    cfg.MinTotalUsageUSD,
-		TotalUsageUSD:       totalUsage,
+		TotalUsageUSD:       policy.TotalUsageUSD,
 		MinTotalRechargeUSD: cfg.MinTotalRechargeUSD,
-		TotalRechargeUSD:    totalRecharge,
+		TotalRechargeUSD:    policy.TotalRechargeUSD,
+		IneligibleReason:    policy.IneligibleReason,
 	}
 	setCheckinStatusCampaign(&base, effective.Campaign)
 	if snapshot, snapshotErr := s.checkinHistorySnapshot(ctx, userID, checkinDate, cfg); snapshotErr != nil {
@@ -281,27 +281,66 @@ func (s *CheckinService) GetStatus(ctx context.Context, userID int64) (*CheckinS
 	if record != nil {
 		applyCheckinRecordToStatus(&status, record, cfg)
 	}
+	return &status, nil
+}
+
+func (s *CheckinService) effectiveCheckinConfigSnapshot(ctx context.Context, checkinDate string) (*EffectiveCheckinConfig, error) {
+	var effective *EffectiveCheckinConfig
+	err := s.withCheckinCampaignConfigReadTx(ctx, func(client *dbent.Client, repo SettingRepository) error {
+		baseline, err := s.getCheckinConfigFromRepository(ctx, repo)
+		if err != nil {
+			return err
+		}
+		effective, err = s.resolveEffectiveCheckinConfig(ctx, client, checkinDate, baseline)
+		return err
+	})
+	if err != nil {
+		return nil, err
+	}
+	return effective, nil
+}
+
+func (s *CheckinService) currentCheckinPolicyState(ctx context.Context, userID int64, checkinDate string) (*checkinCurrentPolicyState, error) {
+	effective, err := s.effectiveCheckinConfigSnapshot(ctx, checkinDate)
+	if err != nil {
+		return nil, err
+	}
+	totalUsage, err := s.totalUsageUSD(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	totalRecharge, err := s.totalRechargeUSD(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	cfg := effective.Config
+	state := &checkinCurrentPolicyState{
+		Effective:        effective,
+		Enabled:          cfg.Enabled,
+		Eligible:         cfg.Enabled,
+		TotalUsageUSD:    totalUsage,
+		TotalRechargeUSD: totalRecharge,
+	}
 	if !cfg.Enabled {
-		status.Eligible = false
-		status.IneligibleReason = CheckinIneligibleReasonDisabled
-		return &status, nil
+		state.IneligibleReason = CheckinIneligibleReasonDisabled
+		return state, nil
 	}
 	blacklisted, err := s.isBlacklisted(ctx, userID)
 	if err != nil {
 		return nil, err
 	}
 	if blacklisted {
-		status.Enabled = false
-		status.Eligible = false
-		status.Blacklisted = true
-		status.IneligibleReason = CheckinIneligibleReasonBlacklisted
-		return &status, nil
+		state.Enabled = false
+		state.Eligible = false
+		state.Blacklisted = true
+		state.IneligibleReason = CheckinIneligibleReasonBlacklisted
+		return state, nil
 	}
 	if !checkinSpendEligible(totalUsage, cfg.MinTotalUsageUSD, totalRecharge, cfg.MinTotalRechargeUSD) {
-		status.Eligible = false
-		status.IneligibleReason = checkinIneligibleReason(*cfg)
+		state.Eligible = false
+		state.IneligibleReason = checkinIneligibleReason(*cfg)
 	}
-	return &status, nil
+	return state, nil
 }
 
 func (s *CheckinService) Checkin(ctx context.Context, userID int64) (*CheckinResult, error) {
@@ -314,35 +353,19 @@ func (s *CheckinService) Checkin(ctx context.Context, userID int64) (*CheckinRes
 		return s.alreadyCheckedInResult(ctx, existing, nextReset)
 	}
 
-	baseline, err := s.GetConfig(ctx)
+	preflightPolicy, err := s.currentCheckinPolicyState(ctx, userID, checkinDate)
 	if err != nil {
 		return nil, err
 	}
-	preflightEffective, err := s.resolveEffectiveCheckinConfig(ctx, s.entClient, checkinDate, baseline)
-	if err != nil {
-		return nil, err
-	}
-	cfg := preflightEffective.Config
+	cfg := preflightPolicy.Effective.Config
 	if !cfg.Enabled {
 		return nil, ErrCheckinDisabled
 	}
-	totalUsage, err := s.totalUsageUSD(ctx, userID)
-	if err != nil {
-		return nil, err
-	}
-	totalRecharge, err := s.totalRechargeUSD(ctx, userID)
-	if err != nil {
-		return nil, err
-	}
-	if !checkinSpendEligible(totalUsage, cfg.MinTotalUsageUSD, totalRecharge, cfg.MinTotalRechargeUSD) {
-		return nil, checkinEligibilityError(*cfg)
-	}
-	blacklisted, err := s.isBlacklisted(ctx, userID)
-	if err != nil {
-		return nil, err
-	}
-	if blacklisted {
+	if preflightPolicy.Blacklisted {
 		return nil, ErrCheckinBlacklisted
+	}
+	if !preflightPolicy.Eligible {
+		return nil, checkinEligibilityError(*cfg)
 	}
 
 	var (
@@ -1124,21 +1147,16 @@ func (s *CheckinService) getCheckinByUserAndDateWithClient(
 
 func (s *CheckinService) alreadyCheckedInResult(ctx context.Context, record *CheckinRecord, nextReset time.Time) (*CheckinResult, error) {
 	latestBalance := record.BalanceAfter
-	totalRecharge := 0.0
 	if userEntity, err := s.entClient.User.Get(ctx, record.UserID); err == nil {
 		latestBalance = userEntity.Balance
-		totalRecharge = userEntity.TotalRecharged
 	} else if !dbent.IsNotFound(err) {
 		return nil, err
 	}
-	cfg, err := s.GetConfig(ctx)
+	policy, err := s.currentCheckinPolicyState(ctx, record.UserID, record.CheckinDate)
 	if err != nil {
 		return nil, err
 	}
-	totalUsage, err := s.totalUsageUSD(ctx, record.UserID)
-	if err != nil {
-		return nil, err
-	}
+	cfg := policy.Effective.Config
 	history, err := s.checkinHistorySnapshot(ctx, record.UserID, record.CheckinDate, cfg)
 	if err != nil {
 		return nil, err
@@ -1146,9 +1164,9 @@ func (s *CheckinService) alreadyCheckedInResult(ctx context.Context, record *Che
 	checkedInAt := record.CreatedAt
 	return &CheckinResult{
 		CheckinStatus: CheckinStatus{
-			Enabled:                cfg.Enabled,
-			Eligible:               cfg.Enabled && checkinSpendEligible(totalUsage, cfg.MinTotalUsageUSD, totalRecharge, cfg.MinTotalRechargeUSD),
-			Blacklisted:            false,
+			Enabled:                policy.Enabled,
+			Eligible:               policy.Eligible,
+			Blacklisted:            policy.Blacklisted,
 			CheckedIn:              true,
 			CheckinDate:            record.CheckinDate,
 			StreakDay:              record.StreakDay,
@@ -1167,9 +1185,10 @@ func (s *CheckinService) alreadyCheckedInResult(ctx context.Context, record *Che
 			CheckedInAt:            &checkedInAt,
 			NextResetAt:            nextReset,
 			MinTotalUsageUSD:       cfg.MinTotalUsageUSD,
-			TotalUsageUSD:          totalUsage,
+			TotalUsageUSD:          policy.TotalUsageUSD,
 			MinTotalRechargeUSD:    cfg.MinTotalRechargeUSD,
-			TotalRechargeUSD:       totalRecharge,
+			TotalRechargeUSD:       policy.TotalRechargeUSD,
+			IneligibleReason:       policy.IneligibleReason,
 			NextStreakRule:         nextCheckinStreakRule(cfg.StreakRules, record.StreakDay),
 			RecentRecords:          history.RecentRecords,
 		},
