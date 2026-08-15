@@ -93,6 +93,7 @@ vi.mock('vue-i18n', async () => {
     'checkin.criterionProgress': '{current} / {min}',
     'checkin.rewardBreakdown': 'Reward breakdown',
     'checkin.rewardCampaign': 'Reward campaign',
+    'checkin.rewardCampaignLabel': 'Reward campaign: {name}',
     'checkin.baseReward': 'Random reward',
     'checkin.previousDayUsage': "Yesterday's usage",
     'checkin.usageRebate': 'Usage rebate',
@@ -396,7 +397,7 @@ describe('AppHeader daily check-in entry', () => {
     const wrapper = await mountHeader()
 
     expect(wrapper.get('[data-test="checkin-reward-campaign"]').text()).toBe('Summer surprise')
-    expect(wrapper.get('[data-test="checkin-reward-campaign"]').attributes('title')).toBe('Reward campaign')
+    expect(wrapper.get('[data-test="checkin-reward-campaign"]').attributes('title')).toBe('Reward campaign: Summer surprise')
     expect(wrapper.get('[data-test="checkin-base-reward"]').text()).toContain('checkin.randomReward')
     expect(wrapper.get('[data-test="checkin-usage-rebate"]').text()).toContain('$2.00')
   })
@@ -553,6 +554,83 @@ describe('AppHeader daily check-in entry', () => {
     expect(wrapper.get('[data-test="checkin-streak-bonus"]').text()).toContain('$1.00')
     expect(wrapper.get('[data-test="checkin-total-reward"]').text()).toBe('$4.80')
     expect(wrapper.get('[data-test="recent-checkin-total"]').text()).toBe('+$2.50')
+  })
+
+  it('keeps 120-character current and historical campaign names visible and keyboard accessible in narrow cards', async () => {
+    const longCampaignName = 'C'.repeat(120)
+    expect(longCampaignName).toHaveLength(120)
+    getCheckinStatus.mockResolvedValue({
+      enabled: true,
+      eligible: true,
+      checked_in: true,
+      blacklisted: false,
+      checkin_date: '2026-08-16',
+      reward_campaign_id: 52,
+      reward_campaign_name: `  ${longCampaignName}  `,
+      reward_amount: 4.8,
+      base_reward_amount: 0.8,
+      previous_day_usage_amount: 50,
+      usage_rebate_amount: 3,
+      bonus_reward_amount: 1,
+      total_reward_amount: 4.8,
+      current_streak: 7,
+      lifetime_checkin_days: 12,
+      min_total_usage_usd: 0,
+      total_usage_usd: 50,
+      min_total_recharge_usd: 0,
+      total_recharge_usd: 0,
+      recent_records: [
+        {
+          id: 51,
+          user_id: 12,
+          checkin_date: '2026-08-15',
+          streak_day: 6,
+          base_reward_amount: 0.5,
+          previous_day_usage_amount: 25,
+          usage_rebate_amount: 2,
+          bonus_reward_amount: 0,
+          reward_cap_adjustment: 0,
+          total_reward_amount: 2.5,
+          reward_amount: 2.5,
+          reward_campaign_id: 41,
+          reward_campaign_name: `  ${longCampaignName}  `,
+          balance_before: 10,
+          balance_after: 12.5,
+          created_at: '2026-08-15T01:00:00Z'
+        }
+      ]
+    })
+
+    const wrapper = await mountHeader()
+    document.body.appendChild(wrapper.element)
+    const chips = [
+      wrapper.get('[data-test="checkin-reward-campaign"]'),
+      wrapper.get('[data-test="recent-checkin-reward-campaign"]')
+    ]
+
+    for (const chip of chips) {
+      chip.element.parentElement?.setAttribute('style', 'width: 8rem')
+      expect(chip.text()).toBe(longCampaignName)
+      expect(chip.attributes('title')).toBe(`Reward campaign: ${longCampaignName}`)
+      expect(chip.attributes('aria-label')).toBe(`Reward campaign: ${longCampaignName}`)
+      expect(chip.attributes('tabindex')).toBe('0')
+      expect(chip.attributes('role')).toBe('note')
+      expect(chip.classes()).toContain('max-w-full')
+      expect(chip.classes()).toContain('whitespace-normal')
+      expect(chip.classes()).toContain('break-words')
+      expect(chip.classes()).toContain('[overflow-wrap:anywhere]')
+      expect(chip.classes()).not.toContain('truncate')
+      expect(chip.element).toBeInstanceOf(HTMLElement)
+      if (chip.element instanceof HTMLElement) chip.element.focus()
+      expect(document.activeElement).toBe(chip.element)
+    }
+    expect(wrapper.get('[data-test="checkin-base-reward"]').text()).toBe('$0.80')
+    expect(wrapper.get('[data-test="checkin-usage-rebate"]').text()).toBe('$3.00')
+    expect(wrapper.get('[data-test="checkin-streak-bonus"]').text()).toContain('$1.00')
+    expect(wrapper.get('[data-test="checkin-total-reward"]').text()).toBe('$4.80')
+    expect(componentSource).not.toContain('dark:bg-cyan-400/12')
+    expect(componentSource).toContain('dark:bg-cyan-400/10')
+    wrapper.unmount()
   })
 
   it('does not render empty campaign chips for baseline rewards', async () => {

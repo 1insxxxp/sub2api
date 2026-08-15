@@ -252,8 +252,11 @@
                 <span
                   v-if="checkinRewardCampaignName"
                   data-test="checkin-reward-campaign"
-                  class="brand-floating-chip max-w-full truncate border border-cyan-200/80 bg-cyan-50/90 px-2.5 py-1 text-[11px] font-semibold text-cyan-800 dark:border-cyan-400/25 dark:bg-cyan-400/12 dark:text-cyan-100"
-                  :title="t('checkin.rewardCampaign')"
+                  class="brand-floating-chip min-w-0 max-w-full whitespace-normal break-words border border-cyan-200/80 bg-cyan-50/90 px-2.5 py-1 text-left text-[11px] font-semibold leading-4 text-cyan-800 [overflow-wrap:anywhere] focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500/40 dark:border-cyan-400/25 dark:bg-cyan-400/10 dark:text-cyan-100 dark:focus-visible:ring-cyan-300/50"
+                  :title="t('checkin.rewardCampaignLabel', { name: checkinRewardCampaignName })"
+                  :aria-label="t('checkin.rewardCampaignLabel', { name: checkinRewardCampaignName })"
+                  role="note"
+                  tabindex="0"
                 >
                   {{ checkinRewardCampaignName }}
                 </span>
@@ -308,8 +311,11 @@
                     <span
                       v-if="normalizedCampaignName(record.reward_campaign_name)"
                       data-test="recent-checkin-reward-campaign"
-                      class="mt-1 inline-flex max-w-full truncate rounded-full border border-cyan-200/80 bg-cyan-50/90 px-2 py-0.5 text-[10px] font-semibold text-cyan-800 dark:border-cyan-400/25 dark:bg-cyan-400/12 dark:text-cyan-100"
-                      :title="t('checkin.rewardCampaign')"
+                      class="mt-1 inline-flex min-w-0 max-w-full whitespace-normal break-words rounded-full border border-cyan-200/80 bg-cyan-50/90 px-2 py-0.5 text-left text-[10px] font-semibold leading-4 text-cyan-800 [overflow-wrap:anywhere] focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500/40 dark:border-cyan-400/25 dark:bg-cyan-400/10 dark:text-cyan-100 dark:focus-visible:ring-cyan-300/50"
+                      :title="t('checkin.rewardCampaignLabel', { name: normalizedCampaignName(record.reward_campaign_name) })"
+                      :aria-label="t('checkin.rewardCampaignLabel', { name: normalizedCampaignName(record.reward_campaign_name) })"
+                      role="note"
+                      tabindex="0"
                     >
                       {{ normalizedCampaignName(record.reward_campaign_name) }}
                     </span>
