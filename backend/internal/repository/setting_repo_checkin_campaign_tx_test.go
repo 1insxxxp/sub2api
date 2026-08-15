@@ -33,6 +33,13 @@ func expectCheckinCampaignAdvisoryTxBegin(mock sqlmock.Sqlmock) {
 		WillReturnRows(sqlmock.NewRows([]string{"pg_advisory_xact_lock"}).AddRow(nil))
 }
 
+func expectCheckinCampaignAdvisoryReadTxBegin(mock sqlmock.Sqlmock) {
+	mock.ExpectBegin()
+	mock.ExpectQuery("SELECT pg_advisory_xact_lock_shared").
+		WithArgs(checkinCampaignConfigAdvisoryLockKey).
+		WillReturnRows(sqlmock.NewRows([]string{"pg_advisory_xact_lock_shared"}).AddRow(nil))
+}
+
 func TestSettingRepositoryWithCheckinCampaignConfigTxCommitsAfterCallback(t *testing.T) {
 	repo, mock := newCheckinCampaignTxSettingRepositoryTest(t)
 	expectCheckinCampaignAdvisoryTxBegin(mock)
@@ -62,6 +69,38 @@ func TestSettingRepositoryWithCheckinCampaignConfigTxRollsBackSettingWriteFailur
 
 	err := repo.WithCheckinCampaignConfigTx(context.Background(), func(_ *dbent.Client, txRepo service.SettingRepository) error {
 		return txRepo.SetMultiple(context.Background(), map[string]string{"checkin.test": "value"})
+	})
+
+	require.ErrorIs(t, err, sentinel)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestSettingRepositoryWithCheckinCampaignConfigReadTxUsesSharedLockAndCommits(t *testing.T) {
+	repo, mock := newCheckinCampaignTxSettingRepositoryTest(t)
+	expectCheckinCampaignAdvisoryReadTxBegin(mock)
+	mock.ExpectCommit()
+
+	called := false
+	err := repo.WithCheckinCampaignConfigReadTx(context.Background(), func(client *dbent.Client, txRepo service.SettingRepository) error {
+		called = true
+		require.NotSame(t, repo.client, client)
+		require.NotSame(t, repo, txRepo)
+		return nil
+	})
+
+	require.NoError(t, err)
+	require.True(t, called)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestSettingRepositoryWithCheckinCampaignConfigReadTxRollsBackCallbackFailure(t *testing.T) {
+	repo, mock := newCheckinCampaignTxSettingRepositoryTest(t)
+	sentinel := errors.New("read callback failed")
+	expectCheckinCampaignAdvisoryReadTxBegin(mock)
+	mock.ExpectRollback()
+
+	err := repo.WithCheckinCampaignConfigReadTx(context.Background(), func(*dbent.Client, service.SettingRepository) error {
+		return sentinel
 	})
 
 	require.ErrorIs(t, err, sentinel)

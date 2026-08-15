@@ -118,6 +118,16 @@ type CheckinCampaignConfigTransactionRepository interface {
 	) error
 }
 
+// CheckinCampaignConfigReadTransactionRepository keeps one check-in award on
+// a transactionally consistent baseline/campaign snapshot. Implementations
+// must allow multiple readers while excluding configuration/lifecycle writers.
+type CheckinCampaignConfigReadTransactionRepository interface {
+	WithCheckinCampaignConfigReadTx(
+		ctx context.Context,
+		fn func(client *dbent.Client, repo SettingRepository) error,
+	) error
+}
+
 // AffiliateQualificationSettingRepository atomically compares the persisted
 // qualification amount and writes reconcile markers only when it changes.
 type AffiliateQualificationSettingRepository interface {

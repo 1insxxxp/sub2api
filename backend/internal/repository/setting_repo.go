@@ -26,6 +26,7 @@ func NewSettingRepository(client *ent.Client) service.SettingRepository {
 }
 
 var _ service.CheckinCampaignConfigTransactionRepository = (*settingRepository)(nil)
+var _ service.CheckinCampaignConfigReadTransactionRepository = (*settingRepository)(nil)
 
 func (r *settingRepository) WithCheckinCampaignConfigTx(
 	ctx context.Context,
@@ -62,6 +63,45 @@ func (r *settingRepository) WithCheckinCampaignConfigTx(
 	}
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("commit check-in campaign config transaction: %w", err)
+	}
+	return nil
+}
+
+func (r *settingRepository) WithCheckinCampaignConfigReadTx(
+	ctx context.Context,
+	fn func(client *ent.Client, repo service.SettingRepository) error,
+) error {
+	if r == nil || r.client == nil || r.client.Driver().Dialect() != dialect.Postgres {
+		return fmt.Errorf("check-in campaign config read transaction requires PostgreSQL")
+	}
+	if fn == nil {
+		return fmt.Errorf("check-in campaign config read transaction callback is nil")
+	}
+
+	tx, err := r.client.Tx(ctx)
+	if err != nil {
+		return fmt.Errorf("begin check-in campaign config read transaction: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	var rows entsql.Rows
+	if err := tx.Client().Driver().Query(
+		ctx,
+		"SELECT pg_advisory_xact_lock_shared($1)",
+		[]any{checkinCampaignConfigAdvisoryLockKey},
+		&rows,
+	); err != nil {
+		return fmt.Errorf("acquire shared check-in campaign config advisory lock: %w", err)
+	}
+	_ = rows.Close()
+
+	txClient := tx.Client()
+	txRepo := &settingRepository{client: txClient}
+	if err := fn(txClient, txRepo); err != nil {
+		return err
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("commit check-in campaign config read transaction: %w", err)
 	}
 	return nil
 }

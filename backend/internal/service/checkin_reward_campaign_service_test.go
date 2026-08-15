@@ -690,6 +690,81 @@ func TestCheckinCampaignConfigTransactionSQLiteFallbackSerializesCallbacks(t *te
 	require.NoError(t, <-secondResult)
 }
 
+func TestCheckinCampaignConfigReadTransactionSQLiteFallbackAllowsConcurrentReaders(t *testing.T) {
+	client := newCheckinServiceTestClient(t)
+	svc := NewCheckinService(client, nil, nil)
+	svc.SetSettingRepository(newCheckinSettingRepoStub())
+	firstEntered := make(chan struct{})
+	secondEntered := make(chan struct{})
+	release := make(chan struct{})
+	results := make(chan error, 2)
+
+	go func() {
+		results <- svc.withCheckinCampaignConfigReadTx(context.Background(), func(*dbent.Client, SettingRepository) error {
+			close(firstEntered)
+			<-release
+			return nil
+		})
+	}()
+	<-firstEntered
+	go func() {
+		results <- svc.withCheckinCampaignConfigReadTx(context.Background(), func(*dbent.Client, SettingRepository) error {
+			close(secondEntered)
+			<-release
+			return nil
+		})
+	}()
+
+	select {
+	case <-secondEntered:
+	case <-time.After(time.Second):
+		t.Fatal("second SQLite shared reader was serialized behind the first")
+	}
+	close(release)
+	require.NoError(t, <-results)
+	require.NoError(t, <-results)
+}
+
+func TestCheckinCampaignConfigReadTransactionSQLiteFallbackBlocksWriter(t *testing.T) {
+	client := newCheckinServiceTestClient(t)
+	svc := NewCheckinService(client, nil, nil)
+	svc.SetSettingRepository(newCheckinSettingRepoStub())
+	readerEntered := make(chan struct{})
+	writerEntered := make(chan struct{})
+	releaseReader := make(chan struct{})
+	readerResult := make(chan error, 1)
+	writerResult := make(chan error, 1)
+
+	go func() {
+		readerResult <- svc.withCheckinCampaignConfigReadTx(context.Background(), func(*dbent.Client, SettingRepository) error {
+			close(readerEntered)
+			<-releaseReader
+			return nil
+		})
+	}()
+	<-readerEntered
+	go func() {
+		writerResult <- svc.withCheckinCampaignConfigTx(context.Background(), func(*dbent.Client, SettingRepository) error {
+			close(writerEntered)
+			return nil
+		})
+	}()
+
+	select {
+	case <-writerEntered:
+		t.Fatal("SQLite writer entered while a shared reader held the campaign/config snapshot")
+	case <-time.After(50 * time.Millisecond):
+	}
+	close(releaseReader)
+	require.NoError(t, <-readerResult)
+	select {
+	case <-writerEntered:
+	case <-time.After(time.Second):
+		t.Fatal("SQLite writer did not enter after shared reader released")
+	}
+	require.NoError(t, <-writerResult)
+}
+
 func TestGetCheckinConfigFromRepositoryUsesProvidedTransactionRepository(t *testing.T) {
 	client := newCheckinServiceTestClient(t)
 	outerRepo := newCheckinSettingRepoStub()

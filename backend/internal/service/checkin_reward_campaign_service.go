@@ -78,7 +78,7 @@ var (
 	)
 )
 
-var nonPostgresCheckinCampaignConfigMu sync.Mutex
+var nonPostgresCheckinCampaignConfigMu sync.RWMutex
 
 const (
 	CheckinRewardCampaignLifecycleDraft    = "draft"
@@ -598,6 +598,37 @@ func (s *CheckinService) withCheckinCampaignConfigTx(
 
 	nonPostgresCheckinCampaignConfigMu.Lock()
 	defer nonPostgresCheckinCampaignConfigMu.Unlock()
+	tx, err := s.entClient.Tx(ctx)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+	if err := fn(tx.Client(), s.settingRepo); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
+func (s *CheckinService) withCheckinCampaignConfigReadTx(
+	ctx context.Context,
+	fn func(client *dbent.Client, repo SettingRepository) error,
+) error {
+	if s == nil || s.entClient == nil || fn == nil {
+		return ErrCheckinCampaignTransactionUnavailable
+	}
+	if s.entClient.Driver().Dialect() == dialect.Postgres {
+		if s.settingRepo == nil {
+			return ErrCheckinCampaignTransactionUnavailable
+		}
+		txRepo, ok := s.settingRepo.(CheckinCampaignConfigReadTransactionRepository)
+		if !ok {
+			return ErrCheckinCampaignTransactionUnavailable
+		}
+		return txRepo.WithCheckinCampaignConfigReadTx(ctx, fn)
+	}
+
+	nonPostgresCheckinCampaignConfigMu.RLock()
+	defer nonPostgresCheckinCampaignConfigMu.RUnlock()
 	tx, err := s.entClient.Tx(ctx)
 	if err != nil {
 		return err

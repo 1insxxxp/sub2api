@@ -5,8 +5,10 @@ package service
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"math"
 	"strconv"
+	"sync"
 	"testing"
 	"time"
 
@@ -15,8 +17,10 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/redeemcode"
 	"github.com/Wei-Shaw/sub2api/ent/usagelog"
 	"github.com/Wei-Shaw/sub2api/internal/domain"
+	"github.com/lib/pq"
 	"github.com/stretchr/testify/require"
 
+	coreent "entgo.io/ent"
 	"entgo.io/ent/dialect"
 	entsql "entgo.io/ent/dialect/sql"
 	_ "modernc.org/sqlite"
@@ -40,6 +44,33 @@ func newCheckinServiceTestClient(t *testing.T) *dbent.Client {
 
 type checkinSettingRepoStub struct {
 	values map[string]string
+}
+
+type sequencedCheckinSettingRepo struct {
+	*checkinSettingRepoStub
+	mu        sync.Mutex
+	snapshots []map[string]string
+	reads     int
+}
+
+func (r *sequencedCheckinSettingRepo) GetMultiple(_ context.Context, keys []string) (map[string]string, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	index := r.reads
+	if index >= len(r.snapshots) {
+		index = len(r.snapshots) - 1
+	}
+	r.reads++
+	out := make(map[string]string, len(keys))
+	if index < 0 {
+		return out, nil
+	}
+	for _, key := range keys {
+		if value, ok := r.snapshots[index][key]; ok {
+			out[key] = value
+		}
+	}
+	return out, nil
 }
 
 func newCheckinSettingRepoStub() *checkinSettingRepoStub {
@@ -278,6 +309,47 @@ func TestCheckinAwardsCampaignBaseButPreservesUsageAndStreakRewards(t *testing.T
 	require.NotNil(t, result.NextStreakRule)
 }
 
+func TestCheckinAuthorityReadsBaselineAndCampaignFromOneSharedSnapshot(t *testing.T) {
+	client := newCheckinServiceTestClient(t)
+	ctx := context.Background()
+	user := createCheckinTestUser(t, ctx, client, "campaign-shared-snapshot@example.com", 10)
+	oldSnapshot := map[string]string{
+		SettingKeyCheckinEnabled:      "true",
+		SettingKeyCheckinRewardConfig: `{"tiers":[{"amount":1,"probability":100,"sort_order":1}]}`,
+	}
+	newSnapshot := map[string]string{
+		SettingKeyCheckinEnabled: "true",
+		SettingKeyCheckinRewardConfig: `{
+			"tiers":[{"amount":1,"probability":100,"sort_order":1}],
+			"usage_rebate_enabled":true,
+			"usage_rebate_rate_percent":10,
+			"usage_rebate_cap":5,
+			"total_reward_cap":10
+		}`,
+	}
+	repo := &sequencedCheckinSettingRepo{
+		checkinSettingRepoStub: newCheckinSettingRepoStub(),
+		snapshots:              []map[string]string{oldSnapshot, newSnapshot},
+	}
+	svc := NewCheckinService(client, nil, nil)
+	svc.SetSettingRepository(repo)
+	beijing := time.FixedZone("CST", 8*60*60)
+	svc.now = func() time.Time { return time.Date(2026, 8, 15, 9, 0, 0, 0, beijing) }
+	svc.rewardRoll = func() float64 { return 0 }
+	createCheckinUsageAt(t, ctx, client, user.ID, "campaign-shared-snapshot-usage", 50, time.Date(2026, 8, 14, 12, 0, 0, 0, beijing))
+	createCheckinRewardCampaignForResolverTest(
+		t, ctx, svc, client, "共享快照", domain.CheckinRewardCampaignStatusEnabled,
+		"2026-08-15", "2026-08-15", []domain.CheckinRewardTier{{Amount: 5, Probability: 100}},
+	)
+
+	result, err := svc.Checkin(ctx, user.ID)
+	require.NoError(t, err)
+	require.Equal(t, 5.0, result.BaseRewardAmount)
+	require.Equal(t, 5.0, result.UsageRebateAmount)
+	require.Equal(t, 10.0, result.TotalRewardAmount)
+	require.Equal(t, 2, repo.reads, "preflight and authoritative transaction must read separate snapshots")
+}
+
 func TestCheckinPersistsCampaignAuditSnapshot(t *testing.T) {
 	client := newCheckinServiceTestClient(t)
 	ctx := context.Background()
@@ -318,7 +390,7 @@ func TestCheckinPersistsCampaignAuditSnapshot(t *testing.T) {
 	require.NotNil(t, history[0].RewardCampaignID)
 	require.Equal(t, campaign.ID, *history[0].RewardCampaignID)
 	require.Equal(t, "审计快照活动", history[0].RewardCampaignName)
-	require.Equal(t, normalizedTiers, history[0].RewardCampaignTiers)
+	require.Empty(t, history[0].RewardCampaignTiers)
 
 	adminRecords, total, err := svc.ListRecords(ctx, 1, 10, CheckinListFilters{UserID: user.ID})
 	require.NoError(t, err)
@@ -327,9 +399,7 @@ func TestCheckinPersistsCampaignAuditSnapshot(t *testing.T) {
 	require.Equal(t, normalizedTiers, adminRecords[0].RewardCampaignTiers)
 
 	*history[0].RewardCampaignID = 999
-	history[0].RewardCampaignTiers[0].Amount = 999
 	require.Equal(t, campaign.ID, *entity.RewardCampaignID, "DTO pointers must not alias entity storage")
-	require.Equal(t, 5.0, entity.RewardCampaignTiersSnapshot[0].Amount, "DTO slices must not alias entity storage")
 }
 
 func TestCheckinRechecksCampaignInsideTransaction(t *testing.T) {
@@ -465,6 +535,194 @@ func TestCheckinRecordFromEntityClonesCampaignAuditFields(t *testing.T) {
 	require.Nil(t, baseline.RewardCampaignID)
 	require.Empty(t, baseline.RewardCampaignName)
 	require.Empty(t, baseline.RewardCampaignTiers)
+}
+
+func TestCheckinRetryAfterPolicyChangeReturnsStoredAward(t *testing.T) {
+	client := newCheckinServiceTestClient(t)
+	ctx := context.Background()
+	user := createCheckinTestUser(t, ctx, client, "policy-changed-retry@example.com", 15)
+	rewardedAt := time.Date(2026, 8, 15, 9, 0, 0, 0, time.FixedZone("CST", 8*60*60))
+	_, err := client.UserCheckin.Create().
+		SetUserID(user.ID).
+		SetCheckinDate("2026-08-15").
+		SetBaseRewardAmount(5).
+		SetTotalRewardAmount(5).
+		SetRewardAmount(5).
+		SetBalanceBefore(10).
+		SetBalanceAfter(15).
+		SetCreatedAt(rewardedAt).
+		Save(ctx)
+	require.NoError(t, err)
+	_, err = client.UserCheckinBlacklist.Create().SetUserID(user.ID).SetReason("changed later").Save(ctx)
+	require.NoError(t, err)
+	repo := newCheckinSettingRepoStub()
+	repo.values[SettingKeyCheckinEnabled] = "false"
+	svc := NewCheckinService(client, nil, nil)
+	svc.SetSettingRepository(repo)
+	svc.now = func() time.Time { return rewardedAt }
+
+	result, err := svc.Checkin(ctx, user.ID)
+	require.NoError(t, err)
+	require.True(t, result.AlreadyCheckedIn)
+	require.Equal(t, 5.0, result.TotalRewardAmount)
+	require.Equal(t, 15.0, result.BalanceAfter)
+}
+
+func TestCheckinTransactionExistingRecordSkipsBalanceMutation(t *testing.T) {
+	client := newCheckinServiceTestClient(t)
+	ctx := context.Background()
+	user := createCheckinTestUser(t, ctx, client, "transaction-existing@example.com", 10)
+	svc := NewCheckinService(client, nil, nil)
+	rewardedAt := time.Date(2026, 8, 15, 9, 0, 0, 0, time.FixedZone("CST", 8*60*60))
+	svc.now = func() time.Time { return rewardedAt }
+	outerQueries := 0
+	client.UserCheckin.Intercept(dbent.InterceptFunc(func(next dbent.Querier) dbent.Querier {
+		return dbent.QuerierFunc(func(queryCtx context.Context, query dbent.Query) (dbent.Value, error) {
+			value, queryErr := next.Query(queryCtx, query)
+			outerQueries++
+			if queryErr == nil && outerQueries == 1 {
+				_, createErr := client.UserCheckin.Create().
+					SetUserID(user.ID).
+					SetCheckinDate("2026-08-15").
+					SetBaseRewardAmount(3).
+					SetTotalRewardAmount(3).
+					SetRewardAmount(3).
+					SetBalanceBefore(10).
+					SetBalanceAfter(13).
+					SetCreatedAt(rewardedAt).
+					Save(queryCtx)
+				require.NoError(t, createErr)
+			}
+			return value, queryErr
+		})
+	}))
+	userUpdates := 0
+	client.User.Use(func(next dbent.Mutator) dbent.Mutator {
+		return dbent.MutateFunc(func(mutationCtx context.Context, mutation dbent.Mutation) (dbent.Value, error) {
+			if mutation.Op().Is(coreent.OpUpdateOne) {
+				userUpdates++
+			}
+			return next.Mutate(mutationCtx, mutation)
+		})
+	})
+
+	result, err := svc.Checkin(ctx, user.ID)
+	require.NoError(t, err)
+	require.True(t, result.AlreadyCheckedIn)
+	require.Equal(t, 3.0, result.TotalRewardAmount)
+	require.Zero(t, userUpdates, "transaction must check idempotency before touching balance")
+}
+
+func TestCheckinHistorySnapshotProjectsDatesAndLimitsRecentPayload(t *testing.T) {
+	client := newCheckinServiceTestClient(t)
+	ctx := context.Background()
+	user := createCheckinTestUser(t, ctx, client, "history-projection@example.com", 10)
+	start := time.Date(2026, 7, 27, 9, 0, 0, 0, time.FixedZone("CST", 8*60*60))
+	campaign, err := client.CheckinRewardCampaign.Create().
+		SetName("large audit").
+		SetStatus(domain.CheckinRewardCampaignStatusEnabled).
+		SetStartDate(start).
+		SetEndDate(start.AddDate(0, 0, 19)).
+		SetRewardTiers([]domain.CheckinRewardTier{{Amount: 5, Probability: 100}}).
+		Save(ctx)
+	require.NoError(t, err)
+	for index := 0; index < 20; index++ {
+		_, err := client.UserCheckin.Create().
+			SetUserID(user.ID).
+			SetCheckinDate(start.AddDate(0, 0, index).Format("2006-01-02")).
+			SetRewardCampaignID(campaign.ID).
+			SetRewardCampaignName("large audit").
+			SetRewardCampaignTiersSnapshot([]domain.CheckinRewardTier{{Amount: 5, Probability: 100}}).
+			SetBaseRewardAmount(5).
+			SetTotalRewardAmount(5).
+			SetRewardAmount(5).
+			Save(ctx)
+		require.NoError(t, err)
+	}
+	type queryShape struct {
+		fields []string
+		limit  int
+	}
+	shapes := make([]queryShape, 0)
+	client.UserCheckin.Intercept(dbent.InterceptFunc(func(next dbent.Querier) dbent.Querier {
+		return dbent.QuerierFunc(func(queryCtx context.Context, query dbent.Query) (dbent.Value, error) {
+			if qc := coreent.QueryFromContext(queryCtx); qc != nil {
+				shape := queryShape{fields: append([]string(nil), qc.Fields...)}
+				if qc.Limit != nil {
+					shape.limit = *qc.Limit
+				}
+				shapes = append(shapes, shape)
+			}
+			return next.Query(queryCtx, query)
+		})
+	}))
+	svc := NewCheckinService(client, nil, nil)
+	cfg := DefaultCheckinConfig()
+
+	snapshot, err := svc.checkinHistorySnapshot(ctx, user.ID, "2026-08-15", cfg)
+	require.NoError(t, err)
+	require.Len(t, snapshot.RecentRecords, 7)
+	for _, record := range snapshot.RecentRecords {
+		require.Empty(t, record.RewardCampaignTiers, "user history must not expose campaign tier snapshots")
+	}
+	require.Contains(t, shapes, queryShape{fields: []string{"checkin_date"}, limit: checkinHistoryLookbackLimit(cfg)})
+	require.Contains(t, shapes, queryShape{limit: 7})
+}
+
+func TestUserCheckinDateUniqueConstraintClassifier(t *testing.T) {
+	require.True(t, isUserCheckinDateUniqueConstraintError(&pq.Error{
+		Code:       "23505",
+		Constraint: "user_checkins_user_id_date_uq",
+	}))
+	require.True(t, isUserCheckinDateUniqueConstraintError(errors.New(
+		"constraint failed: UNIQUE constraint failed: user_checkins.user_id, user_checkins.checkin_date",
+	)))
+	require.False(t, isUserCheckinDateUniqueConstraintError(&pq.Error{
+		Code:       "23505",
+		Constraint: "users_email_key",
+	}))
+	require.False(t, isUserCheckinDateUniqueConstraintError(&pq.Error{
+		Code:       "23503",
+		Constraint: "user_checkins_reward_campaign_id_fkey",
+	}))
+	require.False(t, isUserCheckinDateUniqueConstraintError(errors.New("constraint failed: FOREIGN KEY constraint failed")))
+	require.False(t, isUserCheckinDateUniqueConstraintError(errors.New(
+		"constraint failed: UNIQUE constraint failed: user_checkins.user_id, user_checkins.checkin_date, user_checkins.id",
+	)))
+
+	client := newCheckinServiceTestClient(t)
+	ctx := context.Background()
+	user := createCheckinTestUser(t, ctx, client, "sqlite-unique-classifier@example.com", 10)
+	create := func() error {
+		_, err := client.UserCheckin.Create().
+			SetUserID(user.ID).
+			SetCheckinDate("2026-08-15").
+			SetRewardAmount(1).
+			Save(ctx)
+		return err
+	}
+	require.NoError(t, create())
+	require.True(t, isUserCheckinDateUniqueConstraintError(create()))
+}
+
+func TestCheckinNonUniqueConstraintDoesNotBecomeNotFound(t *testing.T) {
+	client := newCheckinServiceTestClient(t)
+	ctx := context.Background()
+	user := createCheckinTestUser(t, ctx, client, "non-unique-constraint@example.com", 10)
+	svc := NewCheckinService(client, nil, nil)
+	client.UserCheckin.Use(func(next dbent.Mutator) dbent.Mutator {
+		return dbent.MutateFunc(func(mutationCtx context.Context, mutation dbent.Mutation) (dbent.Value, error) {
+			if mutation.Op().Is(coreent.OpCreate) {
+				return nil, errors.New("constraint failed: FOREIGN KEY constraint failed")
+			}
+			return next.Mutate(mutationCtx, mutation)
+		})
+	})
+
+	_, err := svc.Checkin(ctx, user.ID)
+	require.Error(t, err)
+	require.NotErrorIs(t, err, ErrCheckinNotFound)
+	require.ErrorContains(t, err, "create check-in record")
 }
 
 func TestCheckinRewardForRollUsesWeightedTiers(t *testing.T) {
