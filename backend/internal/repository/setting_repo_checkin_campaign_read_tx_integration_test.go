@@ -6,6 +6,7 @@ import (
 	"context"
 	"fmt"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -13,6 +14,9 @@ import (
 	"github.com/Wei-Shaw/sub2api/internal/service"
 	"github.com/lib/pq"
 	"github.com/stretchr/testify/require"
+
+	"entgo.io/ent/dialect"
+	entsql "entgo.io/ent/dialect/sql"
 )
 
 type blockingCheckinAwardRepository struct {
@@ -27,6 +31,23 @@ type blockingCheckinAwardRepository struct {
 	releaseRead  chan struct{}
 	readOnce     sync.Once
 	writeOnce    sync.Once
+}
+
+func TestCheckinPostgresFixtureUsesIsolatedInterceptorRegistries(t *testing.T) {
+	first := newIsolatedCheckinIntegrationClient()
+	second := newIsolatedCheckinIntegrationClient()
+	first.UserCheckin.Intercept(dbent.InterceptFunc(func(next dbent.Querier) dbent.Querier { return next }))
+	require.Len(t, first.UserCheckin.Interceptors(), 1)
+	require.Empty(t, second.UserCheckin.Interceptors())
+	tx, err := first.Tx(context.Background())
+	require.NoError(t, err)
+	require.Len(t, tx.Client().UserCheckin.Interceptors(), 1, "the isolated registry must be inherited by its transaction client")
+	require.NoError(t, tx.Rollback())
+}
+
+func newIsolatedCheckinIntegrationClient() *dbent.Client {
+	driver := entsql.OpenDB(dialect.Postgres, integrationDB)
+	return dbent.NewClient(dbent.Driver(driver))
 }
 
 type duplicateCheckinBarrier struct {
@@ -54,38 +75,58 @@ func (b *duplicateCheckinBarrier) wait(ctx context.Context) error {
 	}
 }
 
-type duplicateCheckinReadRepository struct {
-	service.SettingRepository
-	reader         service.CheckinCampaignConfigReadTransactionRepository
-	barrier        *duplicateCheckinBarrier
-	callbackErrors chan error
+type authoritativeCheckinQueryTrace struct {
+	queryCount         atomic.Int32
+	missingCount       atomic.Int32
+	earlyExistingCount atomic.Int32
 }
 
-func (r *duplicateCheckinReadRepository) WithCheckinCampaignConfigReadTx(
+func installAuthoritativeCheckinBarrier(
+	client *dbent.Client,
+	barrier *duplicateCheckinBarrier,
+	trace *authoritativeCheckinQueryTrace,
+) {
+	client.UserCheckin.Intercept(dbent.InterceptFunc(func(next dbent.Querier) dbent.Querier {
+		return dbent.QuerierFunc(func(queryCtx context.Context, query dbent.Query) (dbent.Value, error) {
+			queryNumber := trace.queryCount.Add(1)
+			value, err := next.Query(queryCtx, query)
+			if err != nil || queryNumber != 2 {
+				return value, err
+			}
+			records, ok := value.([]*dbent.UserCheckin)
+			if !ok {
+				return nil, fmt.Errorf("unexpected authoritative user check-in query result %T", value)
+			}
+			if len(records) == 0 {
+				trace.missingCount.Add(1)
+			} else {
+				trace.earlyExistingCount.Add(1)
+			}
+			if err := barrier.wait(queryCtx); err != nil {
+				return nil, err
+			}
+			return value, nil
+		})
+	}))
+}
+
+type tracedCheckinReadRepository struct {
+	service.SettingRepository
+	reader                      service.CheckinCampaignConfigReadTransactionRepository
+	readCalls                   atomic.Int32
+	authoritativeCallbackErrors chan error
+}
+
+func (r *tracedCheckinReadRepository) WithCheckinCampaignConfigReadTx(
 	ctx context.Context,
 	fn func(*dbent.Client, service.SettingRepository) error,
 ) error {
-	return r.reader.WithCheckinCampaignConfigReadTx(ctx, func(client *dbent.Client, repo service.SettingRepository) error {
-		var firstCheckinQuery sync.Once
-		waitedForDuplicate := false
-		client.UserCheckin.Intercept(dbent.InterceptFunc(func(next dbent.Querier) dbent.Querier {
-			return dbent.QuerierFunc(func(queryCtx context.Context, query dbent.Query) (dbent.Value, error) {
-				value, err := next.Query(queryCtx, query)
-				if err == nil {
-					firstCheckinQuery.Do(func() {
-						waitedForDuplicate = true
-						err = r.barrier.wait(queryCtx)
-					})
-				}
-				return value, err
-			})
-		}))
-		err := fn(client, repo)
-		if waitedForDuplicate {
-			r.callbackErrors <- err
-		}
-		return err
-	})
+	readCall := r.readCalls.Add(1)
+	err := r.reader.WithCheckinCampaignConfigReadTx(ctx, fn)
+	if readCall == 2 {
+		r.authoritativeCallbackErrors <- err
+	}
+	return err
 }
 
 func (r *blockingCheckinAwardRepository) WithCheckinCampaignConfigReadTx(
@@ -393,13 +434,24 @@ func TestCheckinPostgresConcurrentSameUserDateAwardsExactlyOnce(t *testing.T) {
 	})
 
 	barrier := newDuplicateCheckinBarrier()
-	callbackErrors := make(chan error, 2)
-	svc.SetSettingRepository(&duplicateCheckinReadRepository{
-		SettingRepository: baseRepo,
-		reader:            baseRepo.(service.CheckinCampaignConfigReadTransactionRepository),
-		barrier:           barrier,
-		callbackErrors:    callbackErrors,
-	})
+	authoritativeCallbackErrors := make(chan error, 2)
+	services := make([]*service.CheckinService, 0, 2)
+	traces := make([]*authoritativeCheckinQueryTrace, 0, 2)
+	for index := 0; index < 2; index++ {
+		isolatedClient := newIsolatedCheckinIntegrationClient()
+		trace := &authoritativeCheckinQueryTrace{}
+		installAuthoritativeCheckinBarrier(isolatedClient, barrier, trace)
+		isolatedRepo := NewSettingRepository(isolatedClient)
+		tracedRepo := &tracedCheckinReadRepository{
+			SettingRepository:           isolatedRepo,
+			reader:                      isolatedRepo.(service.CheckinCampaignConfigReadTransactionRepository),
+			authoritativeCallbackErrors: authoritativeCallbackErrors,
+		}
+		isolatedService := service.NewCheckinService(isolatedClient, nil, nil)
+		isolatedService.SetSettingRepository(tracedRepo)
+		services = append(services, isolatedService)
+		traces = append(traces, trace)
+	}
 	type checkinOutcome struct {
 		result *service.CheckinResult
 		err    error
@@ -407,9 +459,10 @@ func TestCheckinPostgresConcurrentSameUserDateAwardsExactlyOnce(t *testing.T) {
 	start := make(chan struct{})
 	outcomes := make(chan checkinOutcome, 2)
 	for index := 0; index < 2; index++ {
+		isolatedService := services[index]
 		go func() {
 			<-start
-			result, checkinErr := svc.Checkin(ctx, user.ID)
+			result, checkinErr := isolatedService.Checkin(ctx, user.ID)
 			outcomes <- checkinOutcome{result: result, err: checkinErr}
 		}()
 	}
@@ -429,16 +482,23 @@ func TestCheckinPostgresConcurrentSameUserDateAwardsExactlyOnce(t *testing.T) {
 	}
 	require.Equal(t, 1, newAwards)
 	require.Equal(t, 1, alreadyCheckedIn)
+	var authoritativeMissing, authoritativeEarlyExisting int32
+	for _, trace := range traces {
+		authoritativeMissing += trace.missingCount.Load()
+		authoritativeEarlyExisting += trace.earlyExistingCount.Load()
+	}
+	require.Equal(t, int32(2), authoritativeMissing, "both authoritative transactions must observe no existing check-in before the barrier releases")
+	require.Zero(t, authoritativeEarlyExisting, "the loser must reach the unique violation instead of the early-existing branch")
 
-	callbackErrorCount := 0
+	uniqueClassifierSentinelCount := 0
 	for index := 0; index < 2; index++ {
-		callbackErr := <-callbackErrors
+		callbackErr := <-authoritativeCallbackErrors
 		if callbackErr != nil {
-			callbackErrorCount++
+			uniqueClassifierSentinelCount++
 			require.Equal(t, "check-in already recorded", callbackErr.Error())
 		}
 	}
-	require.Equal(t, 1, callbackErrorCount, "loser must roll back through the private duplicate sentinel")
+	require.Equal(t, 1, uniqueClassifierSentinelCount, "the unique classifier must trigger exactly one private sentinel rollback")
 
 	storedUser, err := integrationEntClient.User.Get(ctx, user.ID)
 	require.NoError(t, err)
