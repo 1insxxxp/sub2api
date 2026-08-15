@@ -64,6 +64,44 @@ func TestOpenAINonStreamingResponseOutcomeRecognizesPureEmptyCompletion(t *testi
 	require.False(t, outcome.HasEffectiveOutput())
 }
 
+func TestOpenAINonStreamingSSEBridgePreservesOutcomeAndCodexTurnState(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	rec := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(rec)
+	ctx, collector := WithResponseOutcomeCollector(context.Background(), http.StatusOK, http.StatusOK)
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1/responses", nil).WithContext(ctx)
+	c.Request.Header.Set("session_id", "sess-sse-bridge")
+	c.Set("api_key", &APIKey{ID: 7})
+	body := strings.Join([]string{
+		`data: {"type":"response.output_text.delta","delta":"hello"}`,
+		``,
+		`data: {"type":"response.completed","response":{"id":"resp_sse_bridge","status":"completed","output":[],"usage":{"input_tokens":1,"output_tokens":1}}}`,
+		``,
+	}, "\n")
+	resp := &http.Response{
+		StatusCode: http.StatusOK,
+		Header: http.Header{
+			"Content-Type":       []string{"text/event-stream"},
+			"X-Codex-Turn-State": []string{"turn-state-sse-bridge"},
+		},
+		Body: io.NopCloser(strings.NewReader(body)),
+	}
+	svc := &OpenAIGatewayService{cfg: &config.Config{}}
+
+	result, err := svc.handleNonStreamingResponse(ctx, resp, c, &Account{ID: 42}, "model", "model")
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	require.Equal(t, "turn-state-sse-bridge", rec.Header().Get("X-Codex-Turn-State"))
+	outcome := collector.Snapshot()
+	require.True(t, outcome.HasText)
+	require.True(t, outcome.StreamCompleted)
+	raw, ok := svc.openaiCodexTurnStateOrigins.Load("7\x00sess-sse-bridge")
+	require.True(t, ok)
+	origin, ok := raw.(openAICodexTurnStateOrigin)
+	require.True(t, ok)
+	require.Equal(t, int64(42), origin.accountID)
+}
+
 func TestOpenAIImagesNonStreamingResponseOutcomeRecognizesMedia(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	rec := httptest.NewRecorder()
