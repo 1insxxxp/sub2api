@@ -258,6 +258,8 @@ export default {
         title: '定时签到活动',
         description: '按北京时间日期临时替换随机基础奖励，消费返利、连签奖励和资格门槛保持原规则。',
         beijingCalendar: '日期边界：北京时间 00:00，结束日当天有效',
+        defaultTiersLoading: '正在加载基础签到奖励，加载完成前不能新建活动。',
+        defaultTiersUnavailable: '基础签到奖励加载失败，暂时不能新建活动。',
         empty: '当前筛选条件下暂无活动',
         emptyHint: '新建草稿后可配置日期与随机奖励档位，再手动启用。',
         dateRange: '{start} 至 {end}',

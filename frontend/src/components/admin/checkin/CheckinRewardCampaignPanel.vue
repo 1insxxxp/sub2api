@@ -22,13 +22,24 @@
           type="button"
           data-test="campaign-create"
           class="btn btn-primary inline-flex items-center gap-2"
-          :disabled="mutationBusy"
+          :disabled="mutationBusy || createUnavailable"
+          :aria-disabled="createUnavailable ? 'true' : undefined"
+          :aria-busy="props.defaultTiersLoading ? 'true' : undefined"
           @click="openCreate"
         >
           <Icon name="plus" size="sm" />
           {{ t('admin.checkins.campaigns.actions.create') }}
         </button>
       </div>
+      <p
+        v-if="createUnavailable"
+        data-test="campaign-create-status"
+        role="status"
+        aria-live="polite"
+        class="mt-3 text-xs text-slate-500 dark:text-dark-400"
+      >
+        {{ props.defaultTiersLoading ? t('admin.checkins.campaigns.defaultTiersLoading') : t('admin.checkins.campaigns.defaultTiersUnavailable') }}
+      </p>
     </div>
 
     <div class="border-b border-slate-200 px-4 py-3 dark:border-dark-700 sm:px-5">
@@ -252,9 +263,16 @@ interface OverlapConflict {
 
 interface Props {
   defaultTiers: CheckinRewardTier[]
+  defaultTiersReady?: boolean
+  createDisabled?: boolean
+  defaultTiersLoading?: boolean
 }
 
-defineProps<Props>()
+const props = withDefaults(defineProps<Props>(), {
+  defaultTiersReady: true,
+  createDisabled: false,
+  defaultTiersLoading: false,
+})
 const { t } = useI18n()
 const appStore = useAppStore()
 
@@ -280,6 +298,9 @@ let listGeneration = 0
 let listController: AbortController | null = null
 
 const mutationBusy = computed(() => mutationState.value !== null)
+const createUnavailable = computed(() => {
+  return props.createDisabled || !props.defaultTiersReady || props.defaultTiers.length === 0
+})
 const confirmTitle = computed(() => {
   if (!confirmTarget.value) return ''
   return t(`admin.checkins.campaigns.confirm.${confirmTarget.value.action}Title`)
@@ -322,7 +343,7 @@ function isAbortError(error: unknown): boolean {
 }
 
 function openCreate(): void {
-  if (mutationBusy.value) return
+  if (mutationBusy.value || createUnavailable.value) return
   dialogMode.value = 'create'
   dialogCampaignId.value = undefined
   dialogOpen.value = true
@@ -388,8 +409,9 @@ function parseOverlapConflict(error: unknown): OverlapConflict | null {
 }
 
 function canEnable(campaign: AdminCheckinRewardCampaign): boolean {
-  if (campaign.lifecycle_status === 'draft') return true
-  return campaign.lifecycle_status === 'disabled' && campaign.start_date > beijingToday()
+  const today = beijingToday()
+  if (campaign.lifecycle_status === 'draft') return campaign.end_date >= today
+  return campaign.lifecycle_status === 'disabled' && campaign.start_date > today
 }
 
 function canDisable(campaign: AdminCheckinRewardCampaign): boolean {

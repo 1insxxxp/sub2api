@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
 
 import CheckinRewardCampaignPanel from '../CheckinRewardCampaignPanel.vue'
-import type { AdminCheckinRewardCampaign } from '@/api/admin'
+import type { AdminCheckinRewardCampaign, CheckinRewardTier } from '@/api/admin'
 
 const {
   listCampaigns,
@@ -99,10 +99,21 @@ function deferred<T>() {
   return { promise, resolve }
 }
 
-function mountPanel() {
+function addCalendarDays(date: string, days: number): string {
+  const [year, month, day] = date.split('-').map(Number)
+  return new Date(Date.UTC(year, month - 1, day + days)).toISOString().slice(0, 10)
+}
+
+function mountPanel(overrides: {
+  defaultTiers?: CheckinRewardTier[]
+  defaultTiersReady?: boolean
+  createDisabled?: boolean
+  defaultTiersLoading?: boolean
+} = {}) {
   return mount(CheckinRewardCampaignPanel, {
     props: {
       defaultTiers: [{ amount: 1, probability: 100, sort_order: 1 }],
+      ...overrides,
     },
     global: {
       stubs: {
@@ -180,6 +191,69 @@ describe('CheckinRewardCampaignPanel', () => {
 
     await wrapper.get('[data-test="campaign-copy-1"]').trigger('click')
     expect(wrapper.get('[data-test="campaign-dialog-stub"]').attributes('data-mode')).toBe('copy')
+  })
+
+  it('does not offer enable for an expired draft, while a draft ending today remains enableable', async () => {
+    const today = new Intl.DateTimeFormat('en', {
+      timeZone: 'Asia/Shanghai',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).formatToParts(new Date()).reduce<Record<string, string>>((parts, part) => {
+      if (part.type !== 'literal') parts[part.type] = part.value
+      return parts
+    }, {})
+    const beijingToday = `${today.year}-${today.month}-${today.day}`
+    listCampaigns.mockResolvedValue([
+      campaign(6, 'draft', { start_date: '2000-01-01', end_date: '2000-01-02' }),
+      campaign(7, 'draft', { start_date: beijingToday, end_date: beijingToday }),
+    ])
+
+    const wrapper = mountPanel()
+    await flushPromises()
+
+    expect(wrapper.find('[data-test="campaign-enable-6"]').exists()).toBe(false)
+    expect(wrapper.find('[data-test="campaign-enable-7"]').exists()).toBe(true)
+  })
+
+  it('only offers re-enable for disabled campaigns that start after today', async () => {
+    const today = new Intl.DateTimeFormat('en', {
+      timeZone: 'Asia/Shanghai',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).formatToParts(new Date()).reduce<Record<string, string>>((parts, part) => {
+      if (part.type !== 'literal') parts[part.type] = part.value
+      return parts
+    }, {})
+    const beijingToday = `${today.year}-${today.month}-${today.day}`
+    const tomorrow = addCalendarDays(beijingToday, 1)
+    listCampaigns.mockResolvedValue([
+      campaign(8, 'disabled', { start_date: beijingToday, end_date: tomorrow }),
+      campaign(9, 'disabled', { start_date: tomorrow, end_date: tomorrow }),
+    ])
+
+    const wrapper = mountPanel()
+    await flushPromises()
+
+    expect(wrapper.find('[data-test="campaign-enable-8"]').exists()).toBe(false)
+    expect(wrapper.find('[data-test="campaign-enable-9"]').exists()).toBe(true)
+  })
+
+  it('communicates baseline reward loading and blocks empty-default campaign drafts', async () => {
+    const wrapper = mountPanel({
+      defaultTiers: [],
+      defaultTiersReady: false,
+      createDisabled: true,
+      defaultTiersLoading: true,
+    })
+    await flushPromises()
+
+    const createButton = wrapper.get('[data-test="campaign-create"]')
+    expect(createButton.attributes('disabled')).toBeDefined()
+    expect(createButton.attributes('aria-disabled')).toBe('true')
+    expect(createButton.attributes('aria-busy')).toBe('true')
+    expect(wrapper.get('[data-test="campaign-create-status"]').attributes('role')).toBe('status')
   })
 
   it('requires confirmation before enabling and disabling', async () => {

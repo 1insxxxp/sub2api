@@ -404,7 +404,12 @@
         </div>
       </section>
 
-      <CheckinRewardCampaignPanel :default-tiers="campaignDefaultTiers" />
+      <CheckinRewardCampaignPanel
+        :default-tiers="campaignDefaultTiers"
+        :default-tiers-ready="campaignDefaultTiersReady"
+        :create-disabled="configLoading || !campaignDefaultTiersReady"
+        :default-tiers-loading="configLoading"
+      />
 
       <section data-test="checkin-records-section" class="admin-surface checkins-table-card rounded-2xl">
         <div class="admin-panel-header">
@@ -732,6 +737,8 @@ const selectedBlacklistUser = ref<AdminUser | null>(null)
 const statsLoading = ref(false)
 const configLoading = ref(false)
 const configSaving = ref(false)
+const campaignDefaultTiersReady = ref(false)
+let configGeneration = 0
 const recordsLoading = ref(false)
 const blacklistLoading = ref(false)
 const userSearchLoading = ref(false)
@@ -896,23 +903,29 @@ async function loadStats() {
 }
 
 async function loadConfig() {
+  const generation = ++configGeneration
   configLoading.value = true
+  campaignDefaultTiersReady.value = false
   try {
-    config.value = await adminAPI.checkins.getConfig()
-    configForm.enabled = config.value.enabled
-    configForm.min_total_usage_usd = config.value.min_total_usage_usd
-    configForm.min_total_recharge_usd = config.value.min_total_recharge_usd
-    configForm.tiers = cloneTiers(config.value.tiers)
-    configForm.streak_enabled = config.value.streak_enabled
-    configForm.streak_rules = cloneStreakRules(config.value.streak_rules)
-    configForm.usage_rebate_enabled = config.value.usage_rebate_enabled
-    configForm.usage_rebate_rate_percent = safeNumber(config.value.usage_rebate_rate_percent)
-    configForm.usage_rebate_cap = safeNumber(config.value.usage_rebate_cap)
-    configForm.total_reward_cap = safeNumber(config.value.total_reward_cap)
+    const nextConfig = await adminAPI.checkins.getConfig()
+    if (generation !== configGeneration) return
+    config.value = nextConfig
+    configForm.enabled = nextConfig.enabled
+    configForm.min_total_usage_usd = nextConfig.min_total_usage_usd
+    configForm.min_total_recharge_usd = nextConfig.min_total_recharge_usd
+    configForm.tiers = cloneTiers(nextConfig.tiers)
+    configForm.streak_enabled = nextConfig.streak_enabled
+    configForm.streak_rules = cloneStreakRules(nextConfig.streak_rules)
+    configForm.usage_rebate_enabled = nextConfig.usage_rebate_enabled
+    configForm.usage_rebate_rate_percent = safeNumber(nextConfig.usage_rebate_rate_percent)
+    configForm.usage_rebate_cap = safeNumber(nextConfig.usage_rebate_cap)
+    configForm.total_reward_cap = safeNumber(nextConfig.total_reward_cap)
+    campaignDefaultTiersReady.value = configForm.tiers.length > 0
   } catch (error) {
+    if (generation !== configGeneration) return
     appStore.showError(extractApiErrorMessage(error, t('admin.checkins.failedToLoadConfig')))
   } finally {
-    configLoading.value = false
+    if (generation === configGeneration) configLoading.value = false
   }
 }
 
@@ -958,6 +971,7 @@ async function handleSaveConfig() {
     configForm.min_total_usage_usd = config.value.min_total_usage_usd
     configForm.min_total_recharge_usd = config.value.min_total_recharge_usd
     configForm.tiers = cloneTiers(config.value.tiers)
+    campaignDefaultTiersReady.value = configForm.tiers.length > 0
     configForm.streak_enabled = config.value.streak_enabled
     configForm.streak_rules = cloneStreakRules(config.value.streak_rules)
     configForm.usage_rebate_enabled = config.value.usage_rebate_enabled
@@ -1210,6 +1224,7 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
+  configGeneration += 1
   clearTimeout(recordSearchTimeout)
   clearTimeout(blacklistSearchTimeout)
 })

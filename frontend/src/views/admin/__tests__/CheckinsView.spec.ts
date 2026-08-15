@@ -90,6 +90,14 @@ const DataTableStub = {
   `,
 }
 
+function deferred<T>() {
+  let resolve!: (value: T) => void
+  const promise = new Promise<T>((resolvePromise) => {
+    resolve = resolvePromise
+  })
+  return { promise, resolve }
+}
+
 describe('Admin CheckinsView', () => {
   beforeEach(() => {
     getConfig.mockReset()
@@ -281,6 +289,94 @@ describe('Admin CheckinsView', () => {
     expect(campaigns.compareDocumentPosition(records) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
     expect(wrapper.get('[data-test="campaign-panel-stub"]').text()).toBe('1')
     expect(updateConfig).not.toHaveBeenCalled()
+  })
+
+  it('keeps campaign creation unavailable until baseline tiers finish loading', async () => {
+    const configRequest = deferred<{
+      enabled: boolean
+      min_total_usage_usd: number
+      min_total_recharge_usd: number
+      tiers: Array<{ amount: number; probability: number; sort_order: number }>
+      streak_enabled: boolean
+      streak_rules: Array<{ day: number; bonus_amount: number; bonus_rate_percent?: number }>
+      usage_rebate_enabled: boolean
+      usage_rebate_rate_percent: number
+      usage_rebate_cap: number
+      total_reward_cap: number
+      probability_total: number
+      preview: { min_reward: number; max_reward: number; average_reward: number }
+    }>()
+    getConfig.mockReturnValueOnce(configRequest.promise)
+
+    const wrapper = mount(CheckinsView, {
+      global: {
+        stubs: {
+          AppLayout: { template: '<div><slot /></div>' },
+          DataTable: DataTableStub,
+          Pagination: true,
+          Icon: true,
+        },
+      },
+    })
+
+    await flushPromises()
+    const createButton = wrapper.get('[data-test="campaign-create"]')
+    expect(createButton.attributes('disabled')).toBeDefined()
+    expect(createButton.attributes('aria-busy')).toBe('true')
+    expect(document.body.querySelector('[data-test="campaign-dialog"]')).toBeNull()
+    await createButton.trigger('click')
+    expect(document.body.querySelector('[data-test="campaign-dialog"]')).toBeNull()
+
+    configRequest.resolve({
+      enabled: true,
+      min_total_usage_usd: 5,
+      min_total_recharge_usd: 20,
+      tiers: [
+        { amount: 2.5, probability: 60, sort_order: 1 },
+        { amount: 4, probability: 40, sort_order: 2 },
+      ],
+      streak_enabled: false,
+      streak_rules: [],
+      usage_rebate_enabled: false,
+      usage_rebate_rate_percent: 0,
+      usage_rebate_cap: 0,
+      total_reward_cap: 0,
+      probability_total: 100,
+      preview: { min_reward: 2.5, max_reward: 4, average_reward: 3.1 },
+    })
+    await flushPromises()
+
+    expect(createButton.attributes('disabled')).toBeUndefined()
+    expect(createButton.attributes('aria-busy')).toBeUndefined()
+    await createButton.trigger('click')
+    await flushPromises()
+    expect(document.body.querySelector('[data-test="campaign-dialog"]')).not.toBeNull()
+    const firstAmount = document.body.querySelector<HTMLInputElement>('[data-test="campaign-tier-amount-0"]')
+    const secondAmount = document.body.querySelector<HTMLInputElement>('[data-test="campaign-tier-amount-1"]')
+    expect(firstAmount?.value).toBe('2.5')
+    expect(secondAmount?.value).toBe('4')
+  })
+
+  it('keeps campaign creation disabled when baseline config loading fails', async () => {
+    getConfig.mockRejectedValueOnce(new Error('baseline unavailable'))
+    const wrapper = mount(CheckinsView, {
+      global: {
+        stubs: {
+          AppLayout: { template: '<div><slot /></div>' },
+          DataTable: DataTableStub,
+          Pagination: true,
+          Icon: true,
+        },
+      },
+    })
+
+    await flushPromises()
+
+    const createButton = wrapper.get('[data-test="campaign-create"]')
+    expect(createButton.attributes('disabled')).toBeDefined()
+    expect(wrapper.get('[data-test="campaign-create-status"]').text()).toContain(
+      'admin.checkins.campaigns.defaultTiersUnavailable'
+    )
   })
 
   it('keeps check-in settings panels and picker rows on shared admin styles', () => {

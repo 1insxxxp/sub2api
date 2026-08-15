@@ -261,6 +261,8 @@ export default {
         title: 'Scheduled Check-in Campaigns',
         description: 'Temporarily replace the random base reward by Beijing date while keeping rebates, streak bonuses, and eligibility unchanged.',
         beijingCalendar: 'Date boundary: 00:00 Beijing time; the end date is inclusive',
+        defaultTiersLoading: 'Loading baseline check-in rewards. New campaigns will be available when loading completes.',
+        defaultTiersUnavailable: 'Baseline check-in rewards are unavailable, so new campaigns are temporarily disabled.',
         empty: 'No campaigns match this filter',
         emptyHint: 'Create a draft, configure its dates and random reward tiers, then enable it manually.',
         dateRange: '{start} to {end}',
