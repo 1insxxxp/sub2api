@@ -59,6 +59,40 @@ func TestSystemCustomGroupAPIContractRoutes(t *testing.T) {
 	}
 }
 
+func TestCheckinCampaignAPIContractRoutes(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	router := gin.New()
+	handlers := &handler.Handlers{Admin: &handler.AdminHandlers{Checkin: &adminhandler.CheckinHandler{}}}
+	pass := func(c *gin.Context) { c.Next() }
+	serverroutes.RegisterAdminRoutes(
+		router.Group("/api/v1"),
+		handlers,
+		middleware.AdminAuthMiddleware(pass),
+		middleware.AuditLogMiddleware(pass),
+		middleware.StepUpAuthMiddleware(pass),
+		nil,
+		nil,
+	)
+
+	registered := make(map[string]struct{}, len(router.Routes()))
+	for _, route := range router.Routes() {
+		registered[route.Method+" "+route.Path] = struct{}{}
+	}
+	for _, contract := range []string{
+		"GET /api/v1/admin/checkins/campaigns",
+		"POST /api/v1/admin/checkins/campaigns",
+		"GET /api/v1/admin/checkins/campaigns/:id",
+		"PUT /api/v1/admin/checkins/campaigns/:id",
+		"POST /api/v1/admin/checkins/campaigns/:id/enable",
+		"POST /api/v1/admin/checkins/campaigns/:id/disable",
+		"POST /api/v1/admin/checkins/campaigns/:id/copy",
+		"DELETE /api/v1/admin/checkins/campaigns/:id",
+	} {
+		_, ok := registered[contract]
+		require.Truef(t, ok, "missing API contract route %s", contract)
+	}
+}
+
 func TestAPIContracts(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 

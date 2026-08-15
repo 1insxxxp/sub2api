@@ -150,6 +150,14 @@ func registerCheckinRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 		checkins.GET("/blacklist", h.Admin.Checkin.ListBlacklist)
 		checkins.POST("/blacklist", h.Admin.Checkin.AddBlacklist)
 		checkins.DELETE("/blacklist/:user_id", h.Admin.Checkin.RemoveBlacklist)
+		checkins.GET("/campaigns", h.Admin.Checkin.ListCampaigns)
+		checkins.POST("/campaigns", h.Admin.Checkin.CreateCampaign)
+		checkins.GET("/campaigns/:id", h.Admin.Checkin.GetCampaign)
+		checkins.PUT("/campaigns/:id", h.Admin.Checkin.UpdateCampaign)
+		checkins.POST("/campaigns/:id/enable", h.Admin.Checkin.EnableCampaign)
+		checkins.POST("/campaigns/:id/disable", h.Admin.Checkin.DisableCampaign)
+		checkins.POST("/campaigns/:id/copy", h.Admin.Checkin.CopyCampaign)
+		checkins.DELETE("/campaigns/:id", h.Admin.Checkin.DeleteCampaign)
 	}
 }
 
