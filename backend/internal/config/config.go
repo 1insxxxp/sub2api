@@ -886,7 +886,7 @@ const (
 // GatewayConfig API网关相关配置
 type GatewayConfig struct {
 	// BillingProbeEnabled allows API-key holders to query their effective billing multiplier.
-	// Disabled by default to avoid exposing rate information to downstream services.
+	// Enabled by default for Sub2API relay deployments that need upstream billing probes.
 	BillingProbeEnabled bool `mapstructure:"billing_probe_enabled"`
 	// 等待上游响应头的超时时间（秒），0表示无超时
 	// 注意：这不影响流式数据传输，只控制等待响应头的时间
@@ -2272,7 +2272,7 @@ func setDefaults() {
 	viper.SetDefault("idempotency.cleanup_batch_size", 500)
 
 	// Gateway
-	viper.SetDefault("gateway.billing_probe_enabled", false)
+	viper.SetDefault("gateway.billing_probe_enabled", true)
 	viper.SetDefault("gateway.response_header_timeout", 600) // 600秒(10分钟)等待上游响应头，LLM高负载时可能排队较久
 	viper.SetDefault("gateway.openai_response_header_timeout", 0)
 	viper.SetDefault("gateway.openai_first_output_timeout_seconds", 0)

@@ -72,6 +72,14 @@ func TestLoadServerTimingConfig(t *testing.T) {
 	})
 }
 
+func TestLoadGatewayBillingProbeDefaultEnabled(t *testing.T) {
+	resetViperWithJWTSecret(t)
+
+	cfg, err := Load()
+	require.NoError(t, err)
+	require.True(t, cfg.Gateway.BillingProbeEnabled)
+}
+
 func TestLoadRedisUsernameFromEnvironment(t *testing.T) {
 	resetViperWithJWTSecret(t)
 	t.Setenv("REDIS_USERNAME", "app-user")

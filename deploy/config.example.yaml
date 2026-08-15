@@ -198,9 +198,9 @@ security:
 # 网关配置
 # =============================================================================
 gateway:
-  # Allow API key holders to query their effective billing multiplier (default: false).
-  # 允许 API Key 持有者查询其实际计费倍率（默认关闭；开启后会向下游暴露倍率）。
-  billing_probe_enabled: false
+  # Allow API key holders to query their effective billing multiplier (default: true).
+  # 允许 API Key 持有者查询其实际计费倍率（默认开启；关闭后上游计费探测不可用）。
+  billing_probe_enabled: true
   # Timeout for waiting upstream response headers (seconds)
   # 等待上游响应头超时时间（秒）
   response_header_timeout: 600
