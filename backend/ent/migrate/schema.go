@@ -807,6 +807,32 @@ var (
 			},
 		},
 	}
+	// CheckinRewardCampaignsColumns holds the columns for the "checkin_reward_campaigns" table.
+	CheckinRewardCampaignsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt64, Increment: true},
+		{Name: "name", Type: field.TypeString, Size: 120},
+		{Name: "status", Type: field.TypeString, Size: 20, Default: "draft"},
+		{Name: "start_date", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "date"}},
+		{Name: "end_date", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "date"}},
+		{Name: "reward_tiers", Type: field.TypeJSON, SchemaType: map[string]string{"postgres": "jsonb"}},
+		{Name: "created_by", Type: field.TypeInt64, Nullable: true},
+		{Name: "updated_by", Type: field.TypeInt64, Nullable: true},
+		{Name: "created_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
+		{Name: "updated_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
+	}
+	// CheckinRewardCampaignsTable holds the schema information for the "checkin_reward_campaigns" table.
+	CheckinRewardCampaignsTable = &schema.Table{
+		Name:       "checkin_reward_campaigns",
+		Columns:    CheckinRewardCampaignsColumns,
+		PrimaryKey: []*schema.Column{CheckinRewardCampaignsColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "checkin_reward_campaigns_status_dates_idx",
+				Unique:  false,
+				Columns: []*schema.Column{CheckinRewardCampaignsColumns[2], CheckinRewardCampaignsColumns[3], CheckinRewardCampaignsColumns[4]},
+			},
+		},
+	}
 	// CompositeModelRoutesColumns holds the columns for the "composite_model_routes" table.
 	CompositeModelRoutesColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeInt64, Increment: true},
@@ -2199,6 +2225,9 @@ var (
 		{Name: "previous_day_usage_amount", Type: field.TypeFloat64, Default: 0, SchemaType: map[string]string{"postgres": "decimal(20,8)"}},
 		{Name: "usage_rebate_amount", Type: field.TypeFloat64, Default: 0, SchemaType: map[string]string{"postgres": "decimal(20,8)"}},
 		{Name: "reward_cap_adjustment", Type: field.TypeFloat64, Default: 0, SchemaType: map[string]string{"postgres": "decimal(20,8)"}},
+		{Name: "reward_campaign_name", Type: field.TypeString, Size: 120, Default: ""},
+		{Name: "reward_campaign_tiers_snapshot", Type: field.TypeJSON, SchemaType: map[string]string{"postgres": "jsonb"}},
+		{Name: "reward_campaign_id", Type: field.TypeInt64, Nullable: true},
 		{Name: "user_id", Type: field.TypeInt64},
 	}
 	// UserCheckinsTable holds the schema information for the "user_checkins" table.
@@ -2208,8 +2237,14 @@ var (
 		PrimaryKey: []*schema.Column{UserCheckinsColumns[0]},
 		ForeignKeys: []*schema.ForeignKey{
 			{
+				Symbol:     "user_checkins_checkin_reward_campaigns_checkins",
+				Columns:    []*schema.Column{UserCheckinsColumns[15]},
+				RefColumns: []*schema.Column{CheckinRewardCampaignsColumns[0]},
+				OnDelete:   schema.Restrict,
+			},
+			{
 				Symbol:     "user_checkins_users_checkins",
-				Columns:    []*schema.Column{UserCheckinsColumns[13]},
+				Columns:    []*schema.Column{UserCheckinsColumns[16]},
 				RefColumns: []*schema.Column{UsersColumns[0]},
 				OnDelete:   schema.NoAction,
 			},
@@ -2218,7 +2253,7 @@ var (
 			{
 				Name:    "usercheckin_user_id_checkin_date",
 				Unique:  true,
-				Columns: []*schema.Column{UserCheckinsColumns[13], UserCheckinsColumns[1]},
+				Columns: []*schema.Column{UserCheckinsColumns[16], UserCheckinsColumns[1]},
 			},
 			{
 				Name:    "usercheckin_checkin_date",
@@ -2228,7 +2263,12 @@ var (
 			{
 				Name:    "usercheckin_user_id",
 				Unique:  false,
-				Columns: []*schema.Column{UserCheckinsColumns[13]},
+				Columns: []*schema.Column{UserCheckinsColumns[16]},
+			},
+			{
+				Name:    "user_checkins_reward_campaign_id_idx",
+				Unique:  false,
+				Columns: []*schema.Column{UserCheckinsColumns[15]},
 			},
 		},
 	}
@@ -2643,6 +2683,7 @@ var (
 		ChannelMonitorDailyRollupsTable,
 		ChannelMonitorHistoriesTable,
 		ChannelMonitorRequestTemplatesTable,
+		CheckinRewardCampaignsTable,
 		CompositeModelRoutesTable,
 		EmptyResponseClaimsTable,
 		ErrorPassthroughRulesTable,
@@ -2737,6 +2778,13 @@ func init() {
 	}
 	ChannelMonitorRequestTemplatesTable.Annotation = &entsql.Annotation{
 		Table: "channel_monitor_request_templates",
+	}
+	CheckinRewardCampaignsTable.Annotation = &entsql.Annotation{
+		Table: "checkin_reward_campaigns",
+	}
+	CheckinRewardCampaignsTable.Annotation.Checks = map[string]string{
+		"checkin_reward_campaigns_date_order_check": "start_date <= end_date",
+		"checkin_reward_campaigns_status_check":     "status IN ('draft', 'enabled', 'disabled')",
 	}
 	CompositeModelRoutesTable.ForeignKeys[0].RefTable = GroupsTable
 	CompositeModelRoutesTable.Annotation = &entsql.Annotation{
@@ -2845,7 +2893,8 @@ func init() {
 	UserAttributeValuesTable.Annotation = &entsql.Annotation{
 		Table: "user_attribute_values",
 	}
-	UserCheckinsTable.ForeignKeys[0].RefTable = UsersTable
+	UserCheckinsTable.ForeignKeys[0].RefTable = CheckinRewardCampaignsTable
+	UserCheckinsTable.ForeignKeys[1].RefTable = UsersTable
 	UserCheckinsTable.Annotation = &entsql.Annotation{
 		Table: "user_checkins",
 	}

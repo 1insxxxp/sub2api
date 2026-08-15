@@ -1,6 +1,11 @@
 .PHONY: build build-backend build-frontend test test-backend test-frontend test-frontend-critical
 
 FRONTEND_CRITICAL_VITEST := \
+	src/api/__tests__/admin.checkins.spec.ts \
+	src/api/__tests__/checkin.campaign.spec.ts \
+	src/components/layout/__tests__/AppHeader.spec.ts \
+	src/components/admin/checkin/__tests__/CheckinRewardCampaignPanel.spec.ts \
+	src/components/admin/checkin/__tests__/CheckinRewardCampaignDialog.spec.ts \
 	src/api/__tests__/client.spec.ts \
 	src/api/__tests__/tokenRefresh.spec.ts \
 	src/api/__tests__/channelMonitorV2.spec.ts \
@@ -11,6 +16,7 @@ FRONTEND_CRITICAL_VITEST := \
 	src/views/user/__tests__/ChannelStatusView.mode.spec.ts \
 	src/components/user/profile/__tests__/ProfileInfoCard.spec.ts \
 	src/views/admin/__tests__/SettingsView.spec.ts \
+	src/views/admin/__tests__/CheckinsView.spec.ts \
 	src/features/channel-monitor-v2/__tests__/designSystem.structure.spec.ts \
 	src/features/channel-monitor-v2/__tests__/monitorFormat.spec.ts \
 	src/features/channel-monitor-v2/__tests__/monitorZoom.spec.ts

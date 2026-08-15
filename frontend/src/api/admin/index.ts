@@ -124,6 +124,14 @@ export type {
   AdminCheckinRecord,
   AdminCheckinBlacklistEntry,
   AddCheckinBlacklistRequest,
+  AdminCheckinRewardCampaign,
+  CheckinRewardCampaignStatus,
+  CheckinRewardCampaignLifecycle,
+  CreateCheckinRewardCampaignRequest,
+  UpdateCheckinRewardCampaignRequest,
+  CopyCheckinRewardCampaignRequest,
+  DeleteCheckinRewardCampaignResponse,
   CheckinRewardTier,
-  CheckinStreakRule
+  CheckinStreakRule,
+  CheckinRewardPreview
 } from './checkins'

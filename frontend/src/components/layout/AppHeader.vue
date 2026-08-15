@@ -245,10 +245,21 @@
                 </div>
               </div>
 
-              <div class="mt-4">
+              <div class="mt-4 flex flex-wrap items-center justify-between gap-2">
                 <p class="text-xs font-semibold text-slate-700 dark:text-slate-200">
                   {{ t('checkin.rewardBreakdown') }}
                 </p>
+                <span
+                  v-if="checkinRewardCampaignName"
+                  data-test="checkin-reward-campaign"
+                  class="brand-floating-chip min-w-0 max-w-full whitespace-normal break-words border border-cyan-200/80 bg-cyan-50/90 px-2.5 py-1 text-left text-[11px] font-semibold leading-4 text-cyan-800 [overflow-wrap:anywhere] focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500/40 dark:border-cyan-400/25 dark:bg-cyan-400/10 dark:text-cyan-100 dark:focus-visible:ring-cyan-300/50"
+                  :title="t('checkin.rewardCampaignLabel', { name: checkinRewardCampaignName })"
+                  :aria-label="t('checkin.rewardCampaignLabel', { name: checkinRewardCampaignName })"
+                  role="note"
+                  tabindex="0"
+                >
+                  {{ checkinRewardCampaignName }}
+                </span>
               </div>
 
               <dl class="brand-floating-card mt-2 grid grid-cols-[minmax(0,1fr),auto] gap-x-3 gap-y-2 px-3 py-3 text-xs">
@@ -297,6 +308,17 @@
                     <p class="text-slate-500 dark:text-slate-400">
                       {{ t('checkin.streakDay', { day: record.streak_day || 1 }) }}
                     </p>
+                    <span
+                      v-if="normalizedCampaignName(record.reward_campaign_name)"
+                      data-test="recent-checkin-reward-campaign"
+                      class="mt-1 inline-flex min-w-0 max-w-full whitespace-normal break-words rounded-full border border-cyan-200/80 bg-cyan-50/90 px-2 py-0.5 text-left text-[10px] font-semibold leading-4 text-cyan-800 [overflow-wrap:anywhere] focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500/40 dark:border-cyan-400/25 dark:bg-cyan-400/10 dark:text-cyan-100 dark:focus-visible:ring-cyan-300/50"
+                      :title="t('checkin.rewardCampaignLabel', { name: normalizedCampaignName(record.reward_campaign_name) })"
+                      :aria-label="t('checkin.rewardCampaignLabel', { name: normalizedCampaignName(record.reward_campaign_name) })"
+                      role="note"
+                      tabindex="0"
+                    >
+                      {{ normalizedCampaignName(record.reward_campaign_name) }}
+                    </span>
                     </div>
                     <span data-test="recent-checkin-total" class="shrink-0 font-semibold tabular-nums text-emerald-600 dark:text-emerald-300">
                       +{{ formatUsd(record.total_reward_amount ?? record.reward_amount ?? 0) }}
@@ -691,6 +713,14 @@ const nextStreakBonusMessage = computed(() => {
 
 const recentCheckinRecords = computed(() => {
   return checkinStatus.value?.recent_records?.slice(0, 3) ?? []
+})
+
+function normalizedCampaignName(value?: string | null): string {
+  return value?.trim() ?? ''
+}
+
+const checkinRewardCampaignName = computed(() => {
+  return normalizedCampaignName(checkinStatus.value?.reward_campaign_name)
 })
 
 // Only show the onboarding replay button for admins in standard mode.

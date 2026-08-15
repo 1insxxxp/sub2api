@@ -7,6 +7,7 @@ import (
 
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
+	"github.com/Wei-Shaw/sub2api/internal/domain"
 )
 
 const (
@@ -40,8 +41,16 @@ const (
 	FieldUsageRebateAmount = "usage_rebate_amount"
 	// FieldRewardCapAdjustment holds the string denoting the reward_cap_adjustment field in the database.
 	FieldRewardCapAdjustment = "reward_cap_adjustment"
+	// FieldRewardCampaignID holds the string denoting the reward_campaign_id field in the database.
+	FieldRewardCampaignID = "reward_campaign_id"
+	// FieldRewardCampaignName holds the string denoting the reward_campaign_name field in the database.
+	FieldRewardCampaignName = "reward_campaign_name"
+	// FieldRewardCampaignTiersSnapshot holds the string denoting the reward_campaign_tiers_snapshot field in the database.
+	FieldRewardCampaignTiersSnapshot = "reward_campaign_tiers_snapshot"
 	// EdgeUser holds the string denoting the user edge name in mutations.
 	EdgeUser = "user"
+	// EdgeRewardCampaign holds the string denoting the reward_campaign edge name in mutations.
+	EdgeRewardCampaign = "reward_campaign"
 	// Table holds the table name of the usercheckin in the database.
 	Table = "user_checkins"
 	// UserTable is the table that holds the user relation/edge.
@@ -51,6 +60,13 @@ const (
 	UserInverseTable = "users"
 	// UserColumn is the table column denoting the user relation/edge.
 	UserColumn = "user_id"
+	// RewardCampaignTable is the table that holds the reward_campaign relation/edge.
+	RewardCampaignTable = "user_checkins"
+	// RewardCampaignInverseTable is the table name for the CheckinRewardCampaign entity.
+	// It exists in this package in order to avoid circular dependency with the "checkinrewardcampaign" package.
+	RewardCampaignInverseTable = "checkin_reward_campaigns"
+	// RewardCampaignColumn is the table column denoting the reward_campaign relation/edge.
+	RewardCampaignColumn = "reward_campaign_id"
 )
 
 // Columns holds all SQL columns for usercheckin fields.
@@ -69,6 +85,9 @@ var Columns = []string{
 	FieldPreviousDayUsageAmount,
 	FieldUsageRebateAmount,
 	FieldRewardCapAdjustment,
+	FieldRewardCampaignID,
+	FieldRewardCampaignName,
+	FieldRewardCampaignTiersSnapshot,
 }
 
 // ValidColumn reports if the column name is valid (part of the table columns).
@@ -106,6 +125,12 @@ var (
 	DefaultUsageRebateAmount float64
 	// DefaultRewardCapAdjustment holds the default value on creation for the "reward_cap_adjustment" field.
 	DefaultRewardCapAdjustment float64
+	// DefaultRewardCampaignName holds the default value on creation for the "reward_campaign_name" field.
+	DefaultRewardCampaignName string
+	// RewardCampaignNameValidator is a validator for the "reward_campaign_name" field. It is called by the builders before save.
+	RewardCampaignNameValidator func(string) error
+	// DefaultRewardCampaignTiersSnapshot holds the default value on creation for the "reward_campaign_tiers_snapshot" field.
+	DefaultRewardCampaignTiersSnapshot []domain.CheckinRewardTier
 )
 
 // OrderOption defines the ordering options for the UserCheckin queries.
@@ -181,10 +206,27 @@ func ByRewardCapAdjustment(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldRewardCapAdjustment, opts...).ToFunc()
 }
 
+// ByRewardCampaignID orders the results by the reward_campaign_id field.
+func ByRewardCampaignID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldRewardCampaignID, opts...).ToFunc()
+}
+
+// ByRewardCampaignName orders the results by the reward_campaign_name field.
+func ByRewardCampaignName(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldRewardCampaignName, opts...).ToFunc()
+}
+
 // ByUserField orders the results by user field.
 func ByUserField(field string, opts ...sql.OrderTermOption) OrderOption {
 	return func(s *sql.Selector) {
 		sqlgraph.OrderByNeighborTerms(s, newUserStep(), sql.OrderByField(field, opts...))
+	}
+}
+
+// ByRewardCampaignField orders the results by reward_campaign field.
+func ByRewardCampaignField(field string, opts ...sql.OrderTermOption) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborTerms(s, newRewardCampaignStep(), sql.OrderByField(field, opts...))
 	}
 }
 func newUserStep() *sqlgraph.Step {
@@ -192,5 +234,12 @@ func newUserStep() *sqlgraph.Step {
 		sqlgraph.From(Table, FieldID),
 		sqlgraph.To(UserInverseTable, FieldID),
 		sqlgraph.Edge(sqlgraph.M2O, true, UserTable, UserColumn),
+	)
+}
+func newRewardCampaignStep() *sqlgraph.Step {
+	return sqlgraph.NewStep(
+		sqlgraph.From(Table, FieldID),
+		sqlgraph.To(RewardCampaignInverseTable, FieldID),
+		sqlgraph.Edge(sqlgraph.M2O, true, RewardCampaignTable, RewardCampaignColumn),
 	)
 }

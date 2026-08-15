@@ -15,6 +15,7 @@ const {
   getStats,
   listRecords,
   listBlacklist,
+  listCampaigns,
   addBlacklist,
   removeBlacklist,
   listUsers,
@@ -26,6 +27,7 @@ const {
   getStats: vi.fn(),
   listRecords: vi.fn(),
   listBlacklist: vi.fn(),
+  listCampaigns: vi.fn(),
   addBlacklist: vi.fn(),
   removeBlacklist: vi.fn(),
   listUsers: vi.fn(),
@@ -41,6 +43,7 @@ vi.mock('@/api/admin', () => ({
       getStats,
       listRecords,
       listBlacklist,
+      listCampaigns,
       addBlacklist,
       removeBlacklist,
     },
@@ -64,6 +67,7 @@ vi.mock('vue-i18n', async () => {
     useI18n: () => ({
       t: (key: string, params?: Record<string, unknown>) => {
         if (key === 'admin.checkins.userId') return `User #${params?.id}`
+        if (key === 'admin.checkins.rewardCampaignLabel') return `Reward campaign: ${params?.name}`
         return key
       },
     }),
@@ -87,6 +91,14 @@ const DataTableStub = {
   `,
 }
 
+function deferred<T>() {
+  let resolve!: (value: T) => void
+  const promise = new Promise<T>((resolvePromise) => {
+    resolve = resolvePromise
+  })
+  return { promise, resolve }
+}
+
 describe('Admin CheckinsView', () => {
   beforeEach(() => {
     getConfig.mockReset()
@@ -94,6 +106,7 @@ describe('Admin CheckinsView', () => {
     getStats.mockReset()
     listRecords.mockReset()
     listBlacklist.mockReset()
+    listCampaigns.mockReset()
     addBlacklist.mockReset()
     removeBlacklist.mockReset()
     listUsers.mockReset()
@@ -172,6 +185,7 @@ describe('Admin CheckinsView', () => {
       page_size: 20,
       pages: 1,
     })
+    listCampaigns.mockResolvedValue([])
     listUsers.mockResolvedValue({
       items: [
         {
@@ -249,6 +263,121 @@ describe('Admin CheckinsView', () => {
     expect(wrapper.findAll('.checkins-stat-card').length).toBeGreaterThan(0)
     expect(wrapper.findAll('.admin-toolbar-surface').length).toBeGreaterThan(0)
     expect(wrapper.findAll('.admin-panel-header').length).toBeGreaterThan(0)
+  })
+
+  it('mounts campaign management between baseline settings and records without coupling mutations to config saving', async () => {
+    const wrapper = mount(CheckinsView, {
+      global: {
+        stubs: {
+          AppLayout: { template: '<div><slot /></div>' },
+          DataTable: DataTableStub,
+          Pagination: true,
+          Icon: true,
+          CheckinRewardCampaignPanel: {
+            props: ['defaultTiers'],
+            template: '<section data-test="campaign-panel-stub">{{ defaultTiers.length }}</section>',
+          },
+        },
+      },
+    })
+
+    await flushPromises()
+
+    const baseline = wrapper.get('.checkins-editor-card').element
+    const campaigns = wrapper.get('[data-test="campaign-panel-stub"]').element
+    const records = wrapper.get('[data-test="checkin-records-section"]').element
+    expect(baseline.compareDocumentPosition(campaigns) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(campaigns.compareDocumentPosition(records) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(wrapper.get('[data-test="campaign-panel-stub"]').text()).toBe('1')
+    expect(updateConfig).not.toHaveBeenCalled()
+  })
+
+  it('keeps campaign creation unavailable until baseline tiers finish loading', async () => {
+    const configRequest = deferred<{
+      enabled: boolean
+      min_total_usage_usd: number
+      min_total_recharge_usd: number
+      tiers: Array<{ amount: number; probability: number; sort_order: number }>
+      streak_enabled: boolean
+      streak_rules: Array<{ day: number; bonus_amount: number; bonus_rate_percent?: number }>
+      usage_rebate_enabled: boolean
+      usage_rebate_rate_percent: number
+      usage_rebate_cap: number
+      total_reward_cap: number
+      probability_total: number
+      preview: { min_reward: number; max_reward: number; average_reward: number }
+    }>()
+    getConfig.mockReturnValueOnce(configRequest.promise)
+
+    const wrapper = mount(CheckinsView, {
+      global: {
+        stubs: {
+          AppLayout: { template: '<div><slot /></div>' },
+          DataTable: DataTableStub,
+          Pagination: true,
+          Icon: true,
+        },
+      },
+    })
+
+    await flushPromises()
+    const createButton = wrapper.get('[data-test="campaign-create"]')
+    expect(createButton.attributes('disabled')).toBeDefined()
+    expect(createButton.attributes('aria-busy')).toBe('true')
+    expect(document.body.querySelector('[data-test="campaign-dialog"]')).toBeNull()
+    await createButton.trigger('click')
+    expect(document.body.querySelector('[data-test="campaign-dialog"]')).toBeNull()
+
+    configRequest.resolve({
+      enabled: true,
+      min_total_usage_usd: 5,
+      min_total_recharge_usd: 20,
+      tiers: [
+        { amount: 2.5, probability: 60, sort_order: 1 },
+        { amount: 4, probability: 40, sort_order: 2 },
+      ],
+      streak_enabled: false,
+      streak_rules: [],
+      usage_rebate_enabled: false,
+      usage_rebate_rate_percent: 0,
+      usage_rebate_cap: 0,
+      total_reward_cap: 0,
+      probability_total: 100,
+      preview: { min_reward: 2.5, max_reward: 4, average_reward: 3.1 },
+    })
+    await flushPromises()
+
+    expect(createButton.attributes('disabled')).toBeUndefined()
+    expect(createButton.attributes('aria-busy')).toBeUndefined()
+    await createButton.trigger('click')
+    await flushPromises()
+    expect(document.body.querySelector('[data-test="campaign-dialog"]')).not.toBeNull()
+    const firstAmount = document.body.querySelector<HTMLInputElement>('[data-test="campaign-tier-amount-0"]')
+    const secondAmount = document.body.querySelector<HTMLInputElement>('[data-test="campaign-tier-amount-1"]')
+    expect(firstAmount?.value).toBe('2.5')
+    expect(secondAmount?.value).toBe('4')
+  })
+
+  it('keeps campaign creation disabled when baseline config loading fails', async () => {
+    getConfig.mockRejectedValueOnce(new Error('baseline unavailable'))
+    const wrapper = mount(CheckinsView, {
+      global: {
+        stubs: {
+          AppLayout: { template: '<div><slot /></div>' },
+          DataTable: DataTableStub,
+          Pagination: true,
+          Icon: true,
+        },
+      },
+    })
+
+    await flushPromises()
+
+    const createButton = wrapper.get('[data-test="campaign-create"]')
+    expect(createButton.attributes('disabled')).toBeDefined()
+    expect(wrapper.get('[data-test="campaign-create-status"]').text()).toContain(
+      'admin.checkins.campaigns.defaultTiersUnavailable'
+    )
   })
 
   it('keeps check-in settings panels and picker rows on shared admin styles', () => {
@@ -347,6 +476,90 @@ describe('Admin CheckinsView', () => {
       usage_rebate_cap: 8,
       total_reward_cap: 10,
     }))
+  })
+
+  it('shows the stored campaign origin beside an admin reward breakdown without changing amounts', async () => {
+    const longCampaignName = 'C'.repeat(120)
+    expect(longCampaignName).toHaveLength(120)
+    listRecords.mockResolvedValueOnce({
+      items: [
+        {
+          id: 2,
+          user_id: 99,
+          user_email: 'alice@example.com',
+          username: 'alice',
+          checkin_date: '2026-08-15',
+          reward_amount: 4.8,
+          base_reward_amount: 0.8,
+          previous_day_usage_amount: 50,
+          usage_rebate_amount: 3,
+          bonus_reward_amount: 1,
+          reward_cap_adjustment: 0,
+          total_reward_amount: 4.8,
+          reward_campaign_id: 42,
+          reward_campaign_name: `  ${longCampaignName}  `,
+          balance_before: 10,
+          balance_after: 14.8,
+          created_at: '2026-08-15T01:00:00Z',
+        },
+      ],
+      total: 1,
+      page: 1,
+      page_size: 20,
+      pages: 1,
+    })
+
+    const wrapper = mount(CheckinsView, {
+      global: {
+        stubs: {
+          AppLayout: { template: '<div><slot /></div>' },
+          DataTable: DataTableStub,
+          Pagination: true,
+          Icon: true,
+        },
+      },
+    })
+
+    await flushPromises()
+    document.body.appendChild(wrapper.element)
+
+    const campaignChip = wrapper.get('[data-test="record-reward-campaign"]')
+    campaignChip.element.parentElement?.setAttribute('style', 'width: 8rem')
+    expect(campaignChip.text()).toBe(longCampaignName)
+    expect(campaignChip.attributes('title')).toBe(`Reward campaign: ${longCampaignName}`)
+    expect(campaignChip.attributes('aria-label')).toBe(`Reward campaign: ${longCampaignName}`)
+    expect(campaignChip.attributes('tabindex')).toBe('0')
+    expect(campaignChip.attributes('role')).toBe('note')
+    expect(campaignChip.classes()).toContain('max-w-full')
+    expect(campaignChip.classes()).toContain('whitespace-normal')
+    expect(campaignChip.classes()).toContain('break-words')
+    expect(campaignChip.classes()).toContain('[overflow-wrap:anywhere]')
+    expect(campaignChip.classes()).not.toContain('truncate')
+    expect(campaignChip.element).toBeInstanceOf(HTMLElement)
+    if (campaignChip.element instanceof HTMLElement) campaignChip.element.focus()
+    expect(document.activeElement).toBe(campaignChip.element)
+    expect(wrapper.get('[data-test="record-base-reward"]').text()).toBe('$0.80')
+    expect(wrapper.get('[data-test="record-usage-rebate"]').text()).toBe('$3.00')
+    expect(wrapper.get('[data-test="record-streak-bonus"]').text()).toBe('$1.00')
+    expect(wrapper.get('[data-test="record-total-reward"]').text()).toBe('$4.80')
+    wrapper.unmount()
+  })
+
+  it('does not render an empty campaign chip for baseline admin records', async () => {
+    const wrapper = mount(CheckinsView, {
+      global: {
+        stubs: {
+          AppLayout: { template: '<div><slot /></div>' },
+          DataTable: DataTableStub,
+          Pagination: true,
+          Icon: true,
+        },
+      },
+    })
+
+    await flushPromises()
+
+    expect(wrapper.find('[data-test="record-reward-campaign"]').exists()).toBe(false)
   })
 
   it('keeps streak rewards as fixed amounts when usage rebates are enabled', async () => {

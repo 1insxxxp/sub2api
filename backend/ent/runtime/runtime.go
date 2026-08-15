@@ -19,6 +19,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/channelmonitordailyrollup"
 	"github.com/Wei-Shaw/sub2api/ent/channelmonitorhistory"
 	"github.com/Wei-Shaw/sub2api/ent/channelmonitorrequesttemplate"
+	"github.com/Wei-Shaw/sub2api/ent/checkinrewardcampaign"
 	"github.com/Wei-Shaw/sub2api/ent/compositemodelroute"
 	"github.com/Wei-Shaw/sub2api/ent/emptyresponseclaim"
 	"github.com/Wei-Shaw/sub2api/ent/errorpassthroughrule"
@@ -884,6 +885,60 @@ func init() {
 	channelmonitorrequesttemplate.DefaultBodyOverrideMode = channelmonitorrequesttemplateDescBodyOverrideMode.Default.(string)
 	// channelmonitorrequesttemplate.BodyOverrideModeValidator is a validator for the "body_override_mode" field. It is called by the builders before save.
 	channelmonitorrequesttemplate.BodyOverrideModeValidator = channelmonitorrequesttemplateDescBodyOverrideMode.Validators[0].(func(string) error)
+	checkinrewardcampaignFields := schema.CheckinRewardCampaign{}.Fields()
+	_ = checkinrewardcampaignFields
+	// checkinrewardcampaignDescName is the schema descriptor for name field.
+	checkinrewardcampaignDescName := checkinrewardcampaignFields[0].Descriptor()
+	// checkinrewardcampaign.NameValidator is a validator for the "name" field. It is called by the builders before save.
+	checkinrewardcampaign.NameValidator = func() func(string) error {
+		validators := checkinrewardcampaignDescName.Validators
+		fns := [...]func(string) error{
+			validators[0].(func(string) error),
+			validators[1].(func(string) error),
+		}
+		return func(name string) error {
+			for _, fn := range fns {
+				if err := fn(name); err != nil {
+					return err
+				}
+			}
+			return nil
+		}
+	}()
+	// checkinrewardcampaignDescStatus is the schema descriptor for status field.
+	checkinrewardcampaignDescStatus := checkinrewardcampaignFields[1].Descriptor()
+	// checkinrewardcampaign.DefaultStatus holds the default value on creation for the status field.
+	checkinrewardcampaign.DefaultStatus = checkinrewardcampaignDescStatus.Default.(string)
+	// checkinrewardcampaign.StatusValidator is a validator for the "status" field. It is called by the builders before save.
+	checkinrewardcampaign.StatusValidator = func() func(string) error {
+		validators := checkinrewardcampaignDescStatus.Validators
+		fns := [...]func(string) error{
+			validators[0].(func(string) error),
+			validators[1].(func(string) error),
+		}
+		return func(status string) error {
+			for _, fn := range fns {
+				if err := fn(status); err != nil {
+					return err
+				}
+			}
+			return nil
+		}
+	}()
+	// checkinrewardcampaignDescRewardTiers is the schema descriptor for reward_tiers field.
+	checkinrewardcampaignDescRewardTiers := checkinrewardcampaignFields[4].Descriptor()
+	// checkinrewardcampaign.DefaultRewardTiers holds the default value on creation for the reward_tiers field.
+	checkinrewardcampaign.DefaultRewardTiers = checkinrewardcampaignDescRewardTiers.Default.([]domain.CheckinRewardTier)
+	// checkinrewardcampaignDescCreatedAt is the schema descriptor for created_at field.
+	checkinrewardcampaignDescCreatedAt := checkinrewardcampaignFields[7].Descriptor()
+	// checkinrewardcampaign.DefaultCreatedAt holds the default value on creation for the created_at field.
+	checkinrewardcampaign.DefaultCreatedAt = checkinrewardcampaignDescCreatedAt.Default.(func() time.Time)
+	// checkinrewardcampaignDescUpdatedAt is the schema descriptor for updated_at field.
+	checkinrewardcampaignDescUpdatedAt := checkinrewardcampaignFields[8].Descriptor()
+	// checkinrewardcampaign.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	checkinrewardcampaign.DefaultUpdatedAt = checkinrewardcampaignDescUpdatedAt.Default.(func() time.Time)
+	// checkinrewardcampaign.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
+	checkinrewardcampaign.UpdateDefaultUpdatedAt = checkinrewardcampaignDescUpdatedAt.UpdateDefault.(func() time.Time)
 	compositemodelrouteMixin := schema.CompositeModelRoute{}.Mixin()
 	compositemodelrouteMixinHooks1 := compositemodelrouteMixin[1].Hooks()
 	compositemodelroute.Hooks[0] = compositemodelrouteMixinHooks1[0]
@@ -2709,6 +2764,16 @@ func init() {
 	usercheckinDescRewardCapAdjustment := usercheckinFields[12].Descriptor()
 	// usercheckin.DefaultRewardCapAdjustment holds the default value on creation for the reward_cap_adjustment field.
 	usercheckin.DefaultRewardCapAdjustment = usercheckinDescRewardCapAdjustment.Default.(float64)
+	// usercheckinDescRewardCampaignName is the schema descriptor for reward_campaign_name field.
+	usercheckinDescRewardCampaignName := usercheckinFields[14].Descriptor()
+	// usercheckin.DefaultRewardCampaignName holds the default value on creation for the reward_campaign_name field.
+	usercheckin.DefaultRewardCampaignName = usercheckinDescRewardCampaignName.Default.(string)
+	// usercheckin.RewardCampaignNameValidator is a validator for the "reward_campaign_name" field. It is called by the builders before save.
+	usercheckin.RewardCampaignNameValidator = usercheckinDescRewardCampaignName.Validators[0].(func(string) error)
+	// usercheckinDescRewardCampaignTiersSnapshot is the schema descriptor for reward_campaign_tiers_snapshot field.
+	usercheckinDescRewardCampaignTiersSnapshot := usercheckinFields[15].Descriptor()
+	// usercheckin.DefaultRewardCampaignTiersSnapshot holds the default value on creation for the reward_campaign_tiers_snapshot field.
+	usercheckin.DefaultRewardCampaignTiersSnapshot = usercheckinDescRewardCampaignTiersSnapshot.Default.([]domain.CheckinRewardTier)
 	usercheckinblacklistMixin := schema.UserCheckinBlacklist{}.Mixin()
 	usercheckinblacklistMixinFields0 := usercheckinblacklistMixin[0].Fields()
 	_ = usercheckinblacklistMixinFields0

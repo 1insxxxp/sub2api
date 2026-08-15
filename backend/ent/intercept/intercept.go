@@ -22,6 +22,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/channelmonitordailyrollup"
 	"github.com/Wei-Shaw/sub2api/ent/channelmonitorhistory"
 	"github.com/Wei-Shaw/sub2api/ent/channelmonitorrequesttemplate"
+	"github.com/Wei-Shaw/sub2api/ent/checkinrewardcampaign"
 	"github.com/Wei-Shaw/sub2api/ent/compositemodelroute"
 	"github.com/Wei-Shaw/sub2api/ent/emptyresponseclaim"
 	"github.com/Wei-Shaw/sub2api/ent/errorpassthroughrule"
@@ -492,6 +493,33 @@ func (f TraverseChannelMonitorRequestTemplate) Traverse(ctx context.Context, q e
 		return f(ctx, q)
 	}
 	return fmt.Errorf("unexpected query type %T. expect *ent.ChannelMonitorRequestTemplateQuery", q)
+}
+
+// The CheckinRewardCampaignFunc type is an adapter to allow the use of ordinary function as a Querier.
+type CheckinRewardCampaignFunc func(context.Context, *ent.CheckinRewardCampaignQuery) (ent.Value, error)
+
+// Query calls f(ctx, q).
+func (f CheckinRewardCampaignFunc) Query(ctx context.Context, q ent.Query) (ent.Value, error) {
+	if q, ok := q.(*ent.CheckinRewardCampaignQuery); ok {
+		return f(ctx, q)
+	}
+	return nil, fmt.Errorf("unexpected query type %T. expect *ent.CheckinRewardCampaignQuery", q)
+}
+
+// The TraverseCheckinRewardCampaign type is an adapter to allow the use of ordinary function as Traverser.
+type TraverseCheckinRewardCampaign func(context.Context, *ent.CheckinRewardCampaignQuery) error
+
+// Intercept is a dummy implementation of Intercept that returns the next Querier in the pipeline.
+func (f TraverseCheckinRewardCampaign) Intercept(next ent.Querier) ent.Querier {
+	return next
+}
+
+// Traverse calls f(ctx, q).
+func (f TraverseCheckinRewardCampaign) Traverse(ctx context.Context, q ent.Query) error {
+	if q, ok := q.(*ent.CheckinRewardCampaignQuery); ok {
+		return f(ctx, q)
+	}
+	return fmt.Errorf("unexpected query type %T. expect *ent.CheckinRewardCampaignQuery", q)
 }
 
 // The CompositeModelRouteFunc type is an adapter to allow the use of ordinary function as a Querier.
@@ -1470,6 +1498,8 @@ func NewQuery(q ent.Query) (Query, error) {
 		return &query[*ent.ChannelMonitorHistoryQuery, predicate.ChannelMonitorHistory, channelmonitorhistory.OrderOption]{typ: ent.TypeChannelMonitorHistory, tq: q}, nil
 	case *ent.ChannelMonitorRequestTemplateQuery:
 		return &query[*ent.ChannelMonitorRequestTemplateQuery, predicate.ChannelMonitorRequestTemplate, channelmonitorrequesttemplate.OrderOption]{typ: ent.TypeChannelMonitorRequestTemplate, tq: q}, nil
+	case *ent.CheckinRewardCampaignQuery:
+		return &query[*ent.CheckinRewardCampaignQuery, predicate.CheckinRewardCampaign, checkinrewardcampaign.OrderOption]{typ: ent.TypeCheckinRewardCampaign, tq: q}, nil
 	case *ent.CompositeModelRouteQuery:
 		return &query[*ent.CompositeModelRouteQuery, predicate.CompositeModelRoute, compositemodelroute.OrderOption]{typ: ent.TypeCompositeModelRoute, tq: q}, nil
 	case *ent.EmptyResponseClaimQuery:

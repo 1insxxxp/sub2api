@@ -16,7 +16,58 @@ vi.mock('@/api/client', () => ({
   },
 }))
 
-import checkinsAPI from '@/api/admin/checkins'
+import checkinsAPI, {
+  copyCampaign,
+  createCampaign,
+  deleteCampaign,
+  disableCampaign,
+  enableCampaign,
+  getCampaign,
+  listCampaigns,
+  updateCampaign,
+} from '@/api/admin/checkins'
+import type {
+  AdminCheckinRecord,
+  AdminCheckinRewardCampaign,
+  CopyCheckinRewardCampaignRequest,
+  CreateCheckinRewardCampaignRequest,
+  UpdateCheckinRewardCampaignRequest,
+} from '@/api/admin'
+
+const campaign = {
+  id: 42,
+  name: 'Summer bonus',
+  status: 'draft',
+  lifecycle_status: 'draft',
+  start_date: '2026-08-16',
+  end_date: '2026-08-18',
+  reward_tiers: [{ amount: 1, probability: 100, sort_order: 1 }],
+  probability_total: 100,
+  preview: { min_reward: 1, max_reward: 1, average_reward: 1 },
+  created_by: 7,
+  updated_by: null,
+  created_at: '2026-08-15T01:02:03Z',
+  updated_at: '2026-08-15T01:02:03Z',
+} satisfies AdminCheckinRewardCampaign
+
+const campaignRecord = {
+  id: 7,
+  user_id: 99,
+  checkin_date: '2026-08-15',
+  streak_day: 2,
+  base_reward_amount: 1,
+  bonus_reward_amount: 0,
+  previous_day_usage_amount: 0,
+  usage_rebate_amount: 0,
+  reward_cap_adjustment: 0,
+  total_reward_amount: 1,
+  reward_amount: 1,
+  reward_campaign_id: 42,
+  reward_campaign_name: 'Summer bonus',
+  balance_before: 10,
+  balance_after: 11,
+  created_at: '2026-08-15T01:00:00Z',
+} satisfies AdminCheckinRecord
 
 describe('admin check-ins api', () => {
   beforeEach(() => {
@@ -28,18 +79,19 @@ describe('admin check-ins api', () => {
 
   it('loads stats, records, blacklist and updates blacklist through backend endpoints', async () => {
     get.mockResolvedValueOnce({ data: { today_count: 1 } })
-    get.mockResolvedValueOnce({ data: { items: [], total: 0, page: 1, page_size: 20, pages: 0 } })
+    get.mockResolvedValueOnce({ data: { items: [campaignRecord], total: 1, page: 1, page_size: 20, pages: 1 } })
     get.mockResolvedValueOnce({ data: { items: [], total: 0, page: 1, page_size: 20, pages: 0 } })
     post.mockResolvedValueOnce({ data: { id: 7, user_id: 99 } })
     deleteRequest.mockResolvedValueOnce({ data: { message: 'ok' } })
 
     await checkinsAPI.getStats()
-    await checkinsAPI.listRecords(2, 50, { search: 'alice', date: '2026-06-05' })
+    const records = await checkinsAPI.listRecords(2, 50, { search: 'alice', date: '2026-06-05' })
     await checkinsAPI.listBlacklist(1, 20, { active_only: true, search: 'alice' })
     await checkinsAPI.addBlacklist({ user_id: 99, reason: 'abuse' })
     await checkinsAPI.removeBlacklist(99)
 
     expect(get).toHaveBeenNthCalledWith(1, '/admin/checkins/stats')
+    expect(records.items[0]).toBe(campaignRecord)
     expect(get).toHaveBeenNthCalledWith(2, '/admin/checkins/records', {
       params: { page: 2, page_size: 50, search: 'alice', date: '2026-06-05' },
       signal: undefined,
@@ -78,5 +130,105 @@ describe('admin check-ins api', () => {
 
     expect(get).toHaveBeenCalledWith('/admin/checkins/config')
     expect(put).toHaveBeenCalledWith('/admin/checkins/config', config)
+  })
+
+  it('lists campaigns with a lifecycle filter and abort signal', async () => {
+    const controller = new AbortController()
+    get.mockResolvedValueOnce({ data: [campaign] })
+
+    await expect(listCampaigns('active', { signal: controller.signal })).resolves.toEqual([
+      campaign,
+    ])
+
+    expect(get).toHaveBeenCalledWith('/admin/checkins/campaigns', {
+      params: { lifecycle: 'active' },
+      signal: controller.signal,
+    })
+  })
+
+  it('gets one campaign with an abort signal', async () => {
+    const controller = new AbortController()
+    get.mockResolvedValueOnce({ data: campaign })
+
+    await expect(getCampaign(42, { signal: controller.signal })).resolves.toBe(campaign)
+
+    expect(get).toHaveBeenCalledWith('/admin/checkins/campaigns/42', {
+      signal: controller.signal,
+    })
+  })
+
+  it('creates a campaign with the exact backend request body', async () => {
+    const request: CreateCheckinRewardCampaignRequest = {
+      name: 'Summer bonus',
+      start_date: '2026-08-16',
+      end_date: '2026-08-18',
+      reward_tiers: [{ amount: 1, probability: 100, sort_order: 1 }],
+    }
+    post.mockResolvedValueOnce({ data: campaign })
+
+    await expect(createCampaign(request)).resolves.toBe(campaign)
+
+    expect(post).toHaveBeenCalledWith('/admin/checkins/campaigns', request)
+  })
+
+  it('updates a campaign with the exact backend request body', async () => {
+    const request: UpdateCheckinRewardCampaignRequest = {
+      name: 'Extended summer bonus',
+      start_date: '2026-08-16',
+      end_date: '2026-08-20',
+      reward_tiers: [{ amount: 2, probability: 100, sort_order: 1 }],
+    }
+    put.mockResolvedValueOnce({ data: campaign })
+
+    await expect(updateCampaign(42, request)).resolves.toBe(campaign)
+
+    expect(put).toHaveBeenCalledWith('/admin/checkins/campaigns/42', request)
+  })
+
+  it('enables a campaign without sending a request body', async () => {
+    post.mockResolvedValueOnce({ data: campaign })
+
+    await expect(enableCampaign(42)).resolves.toBe(campaign)
+
+    expect(post).toHaveBeenCalledWith('/admin/checkins/campaigns/42/enable')
+  })
+
+  it('disables a campaign without sending a request body', async () => {
+    post.mockResolvedValueOnce({ data: campaign })
+
+    await expect(disableCampaign(42)).resolves.toBe(campaign)
+
+    expect(post).toHaveBeenCalledWith('/admin/checkins/campaigns/42/disable')
+  })
+
+  it('copies a campaign with the exact backend request body', async () => {
+    const request: CopyCheckinRewardCampaignRequest = { name: 'Summer bonus copy' }
+    post.mockResolvedValueOnce({ data: campaign })
+
+    await expect(copyCampaign(42, request)).resolves.toBe(campaign)
+
+    expect(post).toHaveBeenCalledWith('/admin/checkins/campaigns/42/copy', request)
+  })
+
+  it('deletes a campaign and returns the stable deletion payload', async () => {
+    const deleted = { id: 42, deleted: true }
+    deleteRequest.mockResolvedValueOnce({ data: deleted })
+
+    await expect(deleteCampaign(42)).resolves.toEqual(deleted)
+
+    expect(deleteRequest).toHaveBeenCalledWith('/admin/checkins/campaigns/42')
+  })
+
+  it('exposes every campaign method through the check-ins API object', () => {
+    expect(checkinsAPI).toMatchObject({
+      listCampaigns,
+      getCampaign,
+      createCampaign,
+      updateCampaign,
+      enableCampaign,
+      disableCampaign,
+      copyCampaign,
+      deleteCampaign,
+    })
   })
 })

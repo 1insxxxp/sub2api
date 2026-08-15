@@ -6,13 +6,14 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"sync"
 	"sync/atomic"
 
+	dbent "github.com/Wei-Shaw/sub2api/ent"
 	"github.com/Wei-Shaw/sub2api/internal/config"
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/xai"
 	"golang.org/x/sync/singleflight"
-	"sync"
 )
 
 const (
@@ -104,6 +105,27 @@ type SettingRepository interface {
 	SetMultiple(ctx context.Context, settings map[string]string) error
 	GetAll(ctx context.Context) (map[string]string, error)
 	Delete(ctx context.Context, key string) error
+}
+
+// CheckinCampaignConfigTransactionRepository serializes baseline check-in
+// configuration changes with reward-campaign lifecycle changes. Implementations
+// must invoke fn with an Ent client and setting repository bound to the same
+// transaction and commit only when fn succeeds.
+type CheckinCampaignConfigTransactionRepository interface {
+	WithCheckinCampaignConfigTx(
+		ctx context.Context,
+		fn func(client *dbent.Client, repo SettingRepository) error,
+	) error
+}
+
+// CheckinCampaignConfigReadTransactionRepository keeps one check-in award on
+// a transactionally consistent baseline/campaign snapshot. Implementations
+// must allow multiple readers while excluding configuration/lifecycle writers.
+type CheckinCampaignConfigReadTransactionRepository interface {
+	WithCheckinCampaignConfigReadTx(
+		ctx context.Context,
+		fn func(client *dbent.Client, repo SettingRepository) error,
+	) error
 }
 
 // AffiliateQualificationSettingRepository atomically compares the persisted

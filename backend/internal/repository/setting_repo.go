@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"fmt"
 	"math"
 	"strconv"
 	"time"
@@ -9,7 +10,12 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent"
 	"github.com/Wei-Shaw/sub2api/ent/setting"
 	"github.com/Wei-Shaw/sub2api/internal/service"
+
+	"entgo.io/ent/dialect"
+	entsql "entgo.io/ent/dialect/sql"
 )
+
+const checkinCampaignConfigAdvisoryLockKey int64 = 0x43484b43414d50
 
 type settingRepository struct {
 	client *ent.Client
@@ -17,6 +23,87 @@ type settingRepository struct {
 
 func NewSettingRepository(client *ent.Client) service.SettingRepository {
 	return &settingRepository{client: client}
+}
+
+var _ service.CheckinCampaignConfigTransactionRepository = (*settingRepository)(nil)
+var _ service.CheckinCampaignConfigReadTransactionRepository = (*settingRepository)(nil)
+
+func (r *settingRepository) WithCheckinCampaignConfigTx(
+	ctx context.Context,
+	fn func(client *ent.Client, repo service.SettingRepository) error,
+) error {
+	if r == nil || r.client == nil || r.client.Driver().Dialect() != dialect.Postgres {
+		return fmt.Errorf("check-in campaign config transaction requires PostgreSQL")
+	}
+	if fn == nil {
+		return fmt.Errorf("check-in campaign config transaction callback is nil")
+	}
+
+	tx, err := r.client.Tx(ctx)
+	if err != nil {
+		return fmt.Errorf("begin check-in campaign config transaction: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	var rows entsql.Rows
+	if err := tx.Client().Driver().Query(
+		ctx,
+		"SELECT pg_advisory_xact_lock($1)",
+		[]any{checkinCampaignConfigAdvisoryLockKey},
+		&rows,
+	); err != nil {
+		return fmt.Errorf("acquire check-in campaign config advisory lock: %w", err)
+	}
+	_ = rows.Close()
+
+	txClient := tx.Client()
+	txRepo := &settingRepository{client: txClient}
+	if err := fn(txClient, txRepo); err != nil {
+		return err
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("commit check-in campaign config transaction: %w", err)
+	}
+	return nil
+}
+
+func (r *settingRepository) WithCheckinCampaignConfigReadTx(
+	ctx context.Context,
+	fn func(client *ent.Client, repo service.SettingRepository) error,
+) error {
+	if r == nil || r.client == nil || r.client.Driver().Dialect() != dialect.Postgres {
+		return fmt.Errorf("check-in campaign config read transaction requires PostgreSQL")
+	}
+	if fn == nil {
+		return fmt.Errorf("check-in campaign config read transaction callback is nil")
+	}
+
+	tx, err := r.client.Tx(ctx)
+	if err != nil {
+		return fmt.Errorf("begin check-in campaign config read transaction: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	var rows entsql.Rows
+	if err := tx.Client().Driver().Query(
+		ctx,
+		"SELECT pg_advisory_xact_lock_shared($1)",
+		[]any{checkinCampaignConfigAdvisoryLockKey},
+		&rows,
+	); err != nil {
+		return fmt.Errorf("acquire shared check-in campaign config advisory lock: %w", err)
+	}
+	_ = rows.Close()
+
+	txClient := tx.Client()
+	txRepo := &settingRepository{client: txClient}
+	if err := fn(txClient, txRepo); err != nil {
+		return err
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("commit check-in campaign config read transaction: %w", err)
+	}
+	return nil
 }
 
 func (r *settingRepository) Get(ctx context.Context, key string) (*service.Setting, error) {

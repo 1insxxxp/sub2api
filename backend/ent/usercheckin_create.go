@@ -11,8 +11,10 @@ import (
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
+	"github.com/Wei-Shaw/sub2api/ent/checkinrewardcampaign"
 	"github.com/Wei-Shaw/sub2api/ent/user"
 	"github.com/Wei-Shaw/sub2api/ent/usercheckin"
+	"github.com/Wei-Shaw/sub2api/internal/domain"
 )
 
 // UserCheckinCreate is the builder for creating a UserCheckin entity.
@@ -189,9 +191,48 @@ func (_c *UserCheckinCreate) SetNillableRewardCapAdjustment(v *float64) *UserChe
 	return _c
 }
 
+// SetRewardCampaignID sets the "reward_campaign_id" field.
+func (_c *UserCheckinCreate) SetRewardCampaignID(v int64) *UserCheckinCreate {
+	_c.mutation.SetRewardCampaignID(v)
+	return _c
+}
+
+// SetNillableRewardCampaignID sets the "reward_campaign_id" field if the given value is not nil.
+func (_c *UserCheckinCreate) SetNillableRewardCampaignID(v *int64) *UserCheckinCreate {
+	if v != nil {
+		_c.SetRewardCampaignID(*v)
+	}
+	return _c
+}
+
+// SetRewardCampaignName sets the "reward_campaign_name" field.
+func (_c *UserCheckinCreate) SetRewardCampaignName(v string) *UserCheckinCreate {
+	_c.mutation.SetRewardCampaignName(v)
+	return _c
+}
+
+// SetNillableRewardCampaignName sets the "reward_campaign_name" field if the given value is not nil.
+func (_c *UserCheckinCreate) SetNillableRewardCampaignName(v *string) *UserCheckinCreate {
+	if v != nil {
+		_c.SetRewardCampaignName(*v)
+	}
+	return _c
+}
+
+// SetRewardCampaignTiersSnapshot sets the "reward_campaign_tiers_snapshot" field.
+func (_c *UserCheckinCreate) SetRewardCampaignTiersSnapshot(v []domain.CheckinRewardTier) *UserCheckinCreate {
+	_c.mutation.SetRewardCampaignTiersSnapshot(v)
+	return _c
+}
+
 // SetUser sets the "user" edge to the User entity.
 func (_c *UserCheckinCreate) SetUser(v *User) *UserCheckinCreate {
 	return _c.SetUserID(v.ID)
+}
+
+// SetRewardCampaign sets the "reward_campaign" edge to the CheckinRewardCampaign entity.
+func (_c *UserCheckinCreate) SetRewardCampaign(v *CheckinRewardCampaign) *UserCheckinCreate {
+	return _c.SetRewardCampaignID(v.ID)
 }
 
 // Mutation returns the UserCheckinMutation object of the builder.
@@ -273,6 +314,14 @@ func (_c *UserCheckinCreate) defaults() {
 		v := usercheckin.DefaultRewardCapAdjustment
 		_c.mutation.SetRewardCapAdjustment(v)
 	}
+	if _, ok := _c.mutation.RewardCampaignName(); !ok {
+		v := usercheckin.DefaultRewardCampaignName
+		_c.mutation.SetRewardCampaignName(v)
+	}
+	if _, ok := _c.mutation.RewardCampaignTiersSnapshot(); !ok {
+		v := usercheckin.DefaultRewardCampaignTiersSnapshot
+		_c.mutation.SetRewardCampaignTiersSnapshot(v)
+	}
 }
 
 // check runs all checks and user-defined validators on the builder.
@@ -320,6 +369,17 @@ func (_c *UserCheckinCreate) check() error {
 	}
 	if _, ok := _c.mutation.RewardCapAdjustment(); !ok {
 		return &ValidationError{Name: "reward_cap_adjustment", err: errors.New(`ent: missing required field "UserCheckin.reward_cap_adjustment"`)}
+	}
+	if _, ok := _c.mutation.RewardCampaignName(); !ok {
+		return &ValidationError{Name: "reward_campaign_name", err: errors.New(`ent: missing required field "UserCheckin.reward_campaign_name"`)}
+	}
+	if v, ok := _c.mutation.RewardCampaignName(); ok {
+		if err := usercheckin.RewardCampaignNameValidator(v); err != nil {
+			return &ValidationError{Name: "reward_campaign_name", err: fmt.Errorf(`ent: validator failed for field "UserCheckin.reward_campaign_name": %w`, err)}
+		}
+	}
+	if _, ok := _c.mutation.RewardCampaignTiersSnapshot(); !ok {
+		return &ValidationError{Name: "reward_campaign_tiers_snapshot", err: errors.New(`ent: missing required field "UserCheckin.reward_campaign_tiers_snapshot"`)}
 	}
 	if len(_c.mutation.UserIDs()) == 0 {
 		return &ValidationError{Name: "user", err: errors.New(`ent: missing required edge "UserCheckin.user"`)}
@@ -399,6 +459,14 @@ func (_c *UserCheckinCreate) createSpec() (*UserCheckin, *sqlgraph.CreateSpec) {
 		_spec.SetField(usercheckin.FieldRewardCapAdjustment, field.TypeFloat64, value)
 		_node.RewardCapAdjustment = value
 	}
+	if value, ok := _c.mutation.RewardCampaignName(); ok {
+		_spec.SetField(usercheckin.FieldRewardCampaignName, field.TypeString, value)
+		_node.RewardCampaignName = value
+	}
+	if value, ok := _c.mutation.RewardCampaignTiersSnapshot(); ok {
+		_spec.SetField(usercheckin.FieldRewardCampaignTiersSnapshot, field.TypeJSON, value)
+		_node.RewardCampaignTiersSnapshot = value
+	}
 	if nodes := _c.mutation.UserIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.M2O,
@@ -414,6 +482,23 @@ func (_c *UserCheckinCreate) createSpec() (*UserCheckin, *sqlgraph.CreateSpec) {
 			edge.Target.Nodes = append(edge.Target.Nodes, k)
 		}
 		_node.UserID = nodes[0]
+		_spec.Edges = append(_spec.Edges, edge)
+	}
+	if nodes := _c.mutation.RewardCampaignIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: true,
+			Table:   usercheckin.RewardCampaignTable,
+			Columns: []string{usercheckin.RewardCampaignColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(checkinrewardcampaign.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_node.RewardCampaignID = &nodes[0]
 		_spec.Edges = append(_spec.Edges, edge)
 	}
 	return _node, _spec
@@ -669,6 +754,48 @@ func (u *UserCheckinUpsert) UpdateRewardCapAdjustment() *UserCheckinUpsert {
 // AddRewardCapAdjustment adds v to the "reward_cap_adjustment" field.
 func (u *UserCheckinUpsert) AddRewardCapAdjustment(v float64) *UserCheckinUpsert {
 	u.Add(usercheckin.FieldRewardCapAdjustment, v)
+	return u
+}
+
+// SetRewardCampaignID sets the "reward_campaign_id" field.
+func (u *UserCheckinUpsert) SetRewardCampaignID(v int64) *UserCheckinUpsert {
+	u.Set(usercheckin.FieldRewardCampaignID, v)
+	return u
+}
+
+// UpdateRewardCampaignID sets the "reward_campaign_id" field to the value that was provided on create.
+func (u *UserCheckinUpsert) UpdateRewardCampaignID() *UserCheckinUpsert {
+	u.SetExcluded(usercheckin.FieldRewardCampaignID)
+	return u
+}
+
+// ClearRewardCampaignID clears the value of the "reward_campaign_id" field.
+func (u *UserCheckinUpsert) ClearRewardCampaignID() *UserCheckinUpsert {
+	u.SetNull(usercheckin.FieldRewardCampaignID)
+	return u
+}
+
+// SetRewardCampaignName sets the "reward_campaign_name" field.
+func (u *UserCheckinUpsert) SetRewardCampaignName(v string) *UserCheckinUpsert {
+	u.Set(usercheckin.FieldRewardCampaignName, v)
+	return u
+}
+
+// UpdateRewardCampaignName sets the "reward_campaign_name" field to the value that was provided on create.
+func (u *UserCheckinUpsert) UpdateRewardCampaignName() *UserCheckinUpsert {
+	u.SetExcluded(usercheckin.FieldRewardCampaignName)
+	return u
+}
+
+// SetRewardCampaignTiersSnapshot sets the "reward_campaign_tiers_snapshot" field.
+func (u *UserCheckinUpsert) SetRewardCampaignTiersSnapshot(v []domain.CheckinRewardTier) *UserCheckinUpsert {
+	u.Set(usercheckin.FieldRewardCampaignTiersSnapshot, v)
+	return u
+}
+
+// UpdateRewardCampaignTiersSnapshot sets the "reward_campaign_tiers_snapshot" field to the value that was provided on create.
+func (u *UserCheckinUpsert) UpdateRewardCampaignTiersSnapshot() *UserCheckinUpsert {
+	u.SetExcluded(usercheckin.FieldRewardCampaignTiersSnapshot)
 	return u
 }
 
@@ -952,6 +1079,55 @@ func (u *UserCheckinUpsertOne) AddRewardCapAdjustment(v float64) *UserCheckinUps
 func (u *UserCheckinUpsertOne) UpdateRewardCapAdjustment() *UserCheckinUpsertOne {
 	return u.Update(func(s *UserCheckinUpsert) {
 		s.UpdateRewardCapAdjustment()
+	})
+}
+
+// SetRewardCampaignID sets the "reward_campaign_id" field.
+func (u *UserCheckinUpsertOne) SetRewardCampaignID(v int64) *UserCheckinUpsertOne {
+	return u.Update(func(s *UserCheckinUpsert) {
+		s.SetRewardCampaignID(v)
+	})
+}
+
+// UpdateRewardCampaignID sets the "reward_campaign_id" field to the value that was provided on create.
+func (u *UserCheckinUpsertOne) UpdateRewardCampaignID() *UserCheckinUpsertOne {
+	return u.Update(func(s *UserCheckinUpsert) {
+		s.UpdateRewardCampaignID()
+	})
+}
+
+// ClearRewardCampaignID clears the value of the "reward_campaign_id" field.
+func (u *UserCheckinUpsertOne) ClearRewardCampaignID() *UserCheckinUpsertOne {
+	return u.Update(func(s *UserCheckinUpsert) {
+		s.ClearRewardCampaignID()
+	})
+}
+
+// SetRewardCampaignName sets the "reward_campaign_name" field.
+func (u *UserCheckinUpsertOne) SetRewardCampaignName(v string) *UserCheckinUpsertOne {
+	return u.Update(func(s *UserCheckinUpsert) {
+		s.SetRewardCampaignName(v)
+	})
+}
+
+// UpdateRewardCampaignName sets the "reward_campaign_name" field to the value that was provided on create.
+func (u *UserCheckinUpsertOne) UpdateRewardCampaignName() *UserCheckinUpsertOne {
+	return u.Update(func(s *UserCheckinUpsert) {
+		s.UpdateRewardCampaignName()
+	})
+}
+
+// SetRewardCampaignTiersSnapshot sets the "reward_campaign_tiers_snapshot" field.
+func (u *UserCheckinUpsertOne) SetRewardCampaignTiersSnapshot(v []domain.CheckinRewardTier) *UserCheckinUpsertOne {
+	return u.Update(func(s *UserCheckinUpsert) {
+		s.SetRewardCampaignTiersSnapshot(v)
+	})
+}
+
+// UpdateRewardCampaignTiersSnapshot sets the "reward_campaign_tiers_snapshot" field to the value that was provided on create.
+func (u *UserCheckinUpsertOne) UpdateRewardCampaignTiersSnapshot() *UserCheckinUpsertOne {
+	return u.Update(func(s *UserCheckinUpsert) {
+		s.UpdateRewardCampaignTiersSnapshot()
 	})
 }
 
@@ -1401,6 +1577,55 @@ func (u *UserCheckinUpsertBulk) AddRewardCapAdjustment(v float64) *UserCheckinUp
 func (u *UserCheckinUpsertBulk) UpdateRewardCapAdjustment() *UserCheckinUpsertBulk {
 	return u.Update(func(s *UserCheckinUpsert) {
 		s.UpdateRewardCapAdjustment()
+	})
+}
+
+// SetRewardCampaignID sets the "reward_campaign_id" field.
+func (u *UserCheckinUpsertBulk) SetRewardCampaignID(v int64) *UserCheckinUpsertBulk {
+	return u.Update(func(s *UserCheckinUpsert) {
+		s.SetRewardCampaignID(v)
+	})
+}
+
+// UpdateRewardCampaignID sets the "reward_campaign_id" field to the value that was provided on create.
+func (u *UserCheckinUpsertBulk) UpdateRewardCampaignID() *UserCheckinUpsertBulk {
+	return u.Update(func(s *UserCheckinUpsert) {
+		s.UpdateRewardCampaignID()
+	})
+}
+
+// ClearRewardCampaignID clears the value of the "reward_campaign_id" field.
+func (u *UserCheckinUpsertBulk) ClearRewardCampaignID() *UserCheckinUpsertBulk {
+	return u.Update(func(s *UserCheckinUpsert) {
+		s.ClearRewardCampaignID()
+	})
+}
+
+// SetRewardCampaignName sets the "reward_campaign_name" field.
+func (u *UserCheckinUpsertBulk) SetRewardCampaignName(v string) *UserCheckinUpsertBulk {
+	return u.Update(func(s *UserCheckinUpsert) {
+		s.SetRewardCampaignName(v)
+	})
+}
+
+// UpdateRewardCampaignName sets the "reward_campaign_name" field to the value that was provided on create.
+func (u *UserCheckinUpsertBulk) UpdateRewardCampaignName() *UserCheckinUpsertBulk {
+	return u.Update(func(s *UserCheckinUpsert) {
+		s.UpdateRewardCampaignName()
+	})
+}
+
+// SetRewardCampaignTiersSnapshot sets the "reward_campaign_tiers_snapshot" field.
+func (u *UserCheckinUpsertBulk) SetRewardCampaignTiersSnapshot(v []domain.CheckinRewardTier) *UserCheckinUpsertBulk {
+	return u.Update(func(s *UserCheckinUpsert) {
+		s.SetRewardCampaignTiersSnapshot(v)
+	})
+}
+
+// UpdateRewardCampaignTiersSnapshot sets the "reward_campaign_tiers_snapshot" field to the value that was provided on create.
+func (u *UserCheckinUpsertBulk) UpdateRewardCampaignTiersSnapshot() *UserCheckinUpsertBulk {
+	return u.Update(func(s *UserCheckinUpsert) {
+		s.UpdateRewardCampaignTiersSnapshot()
 	})
 }
 

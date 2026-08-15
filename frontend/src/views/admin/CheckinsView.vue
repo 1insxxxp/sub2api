@@ -404,7 +404,14 @@
         </div>
       </section>
 
-      <section class="admin-surface checkins-table-card rounded-2xl">
+      <CheckinRewardCampaignPanel
+        :default-tiers="campaignDefaultTiers"
+        :default-tiers-ready="campaignDefaultTiersReady"
+        :create-disabled="configLoading || !campaignDefaultTiersReady"
+        :default-tiers-loading="configLoading"
+      />
+
+      <section data-test="checkin-records-section" class="admin-surface checkins-table-card rounded-2xl">
         <div class="admin-panel-header">
           <div>
             <h3 class="text-base font-semibold text-gray-900 dark:text-white">
@@ -479,7 +486,19 @@
             </span>
           </template>
           <template #cell-reward_detail="{ row }">
-            <dl class="grid min-w-56 grid-cols-[minmax(0,1fr),auto] gap-x-3 gap-y-1 text-xs text-gray-500 dark:text-dark-400">
+            <div class="min-w-56">
+              <span
+                v-if="normalizedCampaignName(row.reward_campaign_name)"
+                data-test="record-reward-campaign"
+                class="mb-2 inline-flex min-w-0 max-w-full whitespace-normal break-words rounded-full border border-cyan-200 bg-cyan-50 px-2.5 py-1 text-left text-[11px] font-semibold leading-4 text-cyan-800 [overflow-wrap:anywhere] focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500/40 dark:border-cyan-400/25 dark:bg-cyan-400/10 dark:text-cyan-100 dark:focus-visible:ring-cyan-300/50"
+                :title="t('admin.checkins.rewardCampaignLabel', { name: normalizedCampaignName(row.reward_campaign_name) })"
+                :aria-label="t('admin.checkins.rewardCampaignLabel', { name: normalizedCampaignName(row.reward_campaign_name) })"
+                role="note"
+                tabindex="0"
+              >
+                {{ normalizedCampaignName(row.reward_campaign_name) }}
+              </span>
+              <dl class="grid grid-cols-[minmax(0,1fr),auto] gap-x-3 gap-y-1 text-xs text-gray-500 dark:text-dark-400">
               <dt>{{ t('admin.checkins.baseReward') }}</dt>
               <dd data-test="record-base-reward" class="text-right tabular-nums">{{ formatUsd(row.base_reward_amount || row.reward_amount) }}</dd>
               <dt>{{ t('admin.checkins.previousDayUsage') }}</dt>
@@ -491,8 +510,9 @@
               <dt>{{ t('admin.checkins.capAdjustment') }}</dt>
               <dd data-test="record-cap-adjustment" class="text-right tabular-nums">{{ formatUsd(row.reward_cap_adjustment) }}</dd>
               <dt class="font-semibold text-gray-700 dark:text-gray-200">{{ t('admin.checkins.totalReward') }}</dt>
-              <dd class="text-right font-semibold tabular-nums text-gray-900 dark:text-white">{{ formatUsd(row.total_reward_amount || row.reward_amount) }}</dd>
-            </dl>
+              <dd data-test="record-total-reward" class="text-right font-semibold tabular-nums text-gray-900 dark:text-white">{{ formatUsd(row.total_reward_amount || row.reward_amount) }}</dd>
+              </dl>
+            </div>
           </template>
           <template #cell-balance_before="{ value }">
             {{ formatUsd(value) }}
@@ -715,9 +735,14 @@ import AppLayout from '@/components/layout/AppLayout.vue'
 import DataTable from '@/components/common/DataTable.vue'
 import Pagination from '@/components/common/Pagination.vue'
 import Icon from '@/components/icons/Icon.vue'
+import CheckinRewardCampaignPanel from '@/components/admin/checkin/CheckinRewardCampaignPanel.vue'
 
 const { t } = useI18n()
 const appStore = useAppStore()
+
+function normalizedCampaignName(value?: string | null): string {
+  return value?.trim() ?? ''
+}
 
 const stats = ref<AdminCheckinStats | null>(null)
 const config = ref<AdminCheckinConfig | null>(null)
@@ -729,6 +754,8 @@ const selectedBlacklistUser = ref<AdminUser | null>(null)
 const statsLoading = ref(false)
 const configLoading = ref(false)
 const configSaving = ref(false)
+const campaignDefaultTiersReady = ref(false)
+let configGeneration = 0
 const recordsLoading = ref(false)
 const blacklistLoading = ref(false)
 const userSearchLoading = ref(false)
@@ -839,6 +866,8 @@ const estimatedAverageReward = computed(() => {
   }, 0)
 })
 
+const campaignDefaultTiers = computed(() => cloneTiers(configForm.tiers))
+
 function previewUsageRebate(usage: number): number {
   const rawRebate = usage * safeNumber(configForm.usage_rebate_rate_percent) / 100
   return Math.max(0, Math.min(rawRebate, safeNumber(configForm.usage_rebate_cap)))
@@ -891,23 +920,29 @@ async function loadStats() {
 }
 
 async function loadConfig() {
+  const generation = ++configGeneration
   configLoading.value = true
+  campaignDefaultTiersReady.value = false
   try {
-    config.value = await adminAPI.checkins.getConfig()
-    configForm.enabled = config.value.enabled
-    configForm.min_total_usage_usd = config.value.min_total_usage_usd
-    configForm.min_total_recharge_usd = config.value.min_total_recharge_usd
-    configForm.tiers = cloneTiers(config.value.tiers)
-    configForm.streak_enabled = config.value.streak_enabled
-    configForm.streak_rules = cloneStreakRules(config.value.streak_rules)
-    configForm.usage_rebate_enabled = config.value.usage_rebate_enabled
-    configForm.usage_rebate_rate_percent = safeNumber(config.value.usage_rebate_rate_percent)
-    configForm.usage_rebate_cap = safeNumber(config.value.usage_rebate_cap)
-    configForm.total_reward_cap = safeNumber(config.value.total_reward_cap)
+    const nextConfig = await adminAPI.checkins.getConfig()
+    if (generation !== configGeneration) return
+    config.value = nextConfig
+    configForm.enabled = nextConfig.enabled
+    configForm.min_total_usage_usd = nextConfig.min_total_usage_usd
+    configForm.min_total_recharge_usd = nextConfig.min_total_recharge_usd
+    configForm.tiers = cloneTiers(nextConfig.tiers)
+    configForm.streak_enabled = nextConfig.streak_enabled
+    configForm.streak_rules = cloneStreakRules(nextConfig.streak_rules)
+    configForm.usage_rebate_enabled = nextConfig.usage_rebate_enabled
+    configForm.usage_rebate_rate_percent = safeNumber(nextConfig.usage_rebate_rate_percent)
+    configForm.usage_rebate_cap = safeNumber(nextConfig.usage_rebate_cap)
+    configForm.total_reward_cap = safeNumber(nextConfig.total_reward_cap)
+    campaignDefaultTiersReady.value = configForm.tiers.length > 0
   } catch (error) {
+    if (generation !== configGeneration) return
     appStore.showError(extractApiErrorMessage(error, t('admin.checkins.failedToLoadConfig')))
   } finally {
-    configLoading.value = false
+    if (generation === configGeneration) configLoading.value = false
   }
 }
 
@@ -953,6 +988,7 @@ async function handleSaveConfig() {
     configForm.min_total_usage_usd = config.value.min_total_usage_usd
     configForm.min_total_recharge_usd = config.value.min_total_recharge_usd
     configForm.tiers = cloneTiers(config.value.tiers)
+    campaignDefaultTiersReady.value = configForm.tiers.length > 0
     configForm.streak_enabled = config.value.streak_enabled
     configForm.streak_rules = cloneStreakRules(config.value.streak_rules)
     configForm.usage_rebate_enabled = config.value.usage_rebate_enabled
@@ -1205,6 +1241,7 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
+  configGeneration += 1
   clearTimeout(recordSearchTimeout)
   clearTimeout(blacklistSearchTimeout)
 })

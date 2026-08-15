@@ -20,8 +20,10 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/user"
 	"github.com/Wei-Shaw/sub2api/ent/usercheckin"
 	"github.com/Wei-Shaw/sub2api/ent/usercheckinblacklist"
+	"github.com/Wei-Shaw/sub2api/internal/domain"
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/pagination"
+	"github.com/lib/pq"
 )
 
 var (
@@ -30,6 +32,7 @@ var (
 	ErrCheckinInsufficientEligibility = infraerrors.New(http.StatusForbidden, "CHECKIN_INSUFFICIENT_USAGE_OR_RECHARGE", "minimum cumulative usage or recharge is required before check-in")
 	ErrCheckinInsufficientSpend       = infraerrors.New(http.StatusForbidden, "CHECKIN_INSUFFICIENT_SPEND", "minimum cumulative spend is required before check-in")
 	ErrCheckinNotFound                = infraerrors.NotFound("CHECKIN_NOT_FOUND", "check-in record not found")
+	errCheckinAlreadyRecorded         = errors.New("check-in already recorded")
 )
 
 const (
@@ -60,11 +63,7 @@ type CheckinConfig struct {
 	Preview                CheckinRewardPreview `json:"preview"`
 }
 
-type CheckinRewardTier struct {
-	Amount      float64 `json:"amount"`
-	Probability float64 `json:"probability"`
-	SortOrder   int     `json:"sort_order"`
-}
+type CheckinRewardTier = domain.CheckinRewardTier
 
 type CheckinStreakRule struct {
 	Day              int     `json:"day"`
@@ -104,6 +103,8 @@ type CheckinStatus struct {
 	BonusRewardAmount      float64            `json:"bonus_reward_amount,omitempty"`
 	TotalRewardAmount      float64            `json:"total_reward_amount,omitempty"`
 	RewardAmount           float64            `json:"reward_amount,omitempty"`
+	RewardCampaignID       *int64             `json:"reward_campaign_id,omitempty"`
+	RewardCampaignName     string             `json:"reward_campaign_name,omitempty"`
 	CheckedInAt            *time.Time         `json:"checked_in_at,omitempty"`
 	NextResetAt            time.Time          `json:"next_reset_at"`
 	MinTotalUsageUSD       float64            `json:"min_total_usage_usd"`
@@ -122,23 +123,36 @@ type CheckinResult struct {
 	BalanceAfter     float64 `json:"balance_after"`
 }
 
+type checkinCurrentPolicyState struct {
+	Effective        *EffectiveCheckinConfig
+	Enabled          bool
+	Eligible         bool
+	Blacklisted      bool
+	IneligibleReason string
+	TotalUsageUSD    float64
+	TotalRechargeUSD float64
+}
+
 type CheckinRecord struct {
-	ID                     int64     `json:"id"`
-	UserID                 int64     `json:"user_id"`
-	UserEmail              string    `json:"user_email,omitempty"`
-	Username               string    `json:"username,omitempty"`
-	CheckinDate            string    `json:"checkin_date"`
-	StreakDay              int       `json:"streak_day"`
-	BaseRewardAmount       float64   `json:"base_reward_amount"`
-	PreviousDayUsageAmount float64   `json:"previous_day_usage_amount"`
-	UsageRebateAmount      float64   `json:"usage_rebate_amount"`
-	RewardCapAdjustment    float64   `json:"reward_cap_adjustment"`
-	BonusRewardAmount      float64   `json:"bonus_reward_amount"`
-	TotalRewardAmount      float64   `json:"total_reward_amount"`
-	RewardAmount           float64   `json:"reward_amount"`
-	BalanceBefore          float64   `json:"balance_before"`
-	BalanceAfter           float64   `json:"balance_after"`
-	CreatedAt              time.Time `json:"created_at"`
+	ID                     int64               `json:"id"`
+	UserID                 int64               `json:"user_id"`
+	UserEmail              string              `json:"user_email,omitempty"`
+	Username               string              `json:"username,omitempty"`
+	CheckinDate            string              `json:"checkin_date"`
+	StreakDay              int                 `json:"streak_day"`
+	BaseRewardAmount       float64             `json:"base_reward_amount"`
+	PreviousDayUsageAmount float64             `json:"previous_day_usage_amount"`
+	UsageRebateAmount      float64             `json:"usage_rebate_amount"`
+	RewardCapAdjustment    float64             `json:"reward_cap_adjustment"`
+	BonusRewardAmount      float64             `json:"bonus_reward_amount"`
+	TotalRewardAmount      float64             `json:"total_reward_amount"`
+	RewardAmount           float64             `json:"reward_amount"`
+	RewardCampaignID       *int64              `json:"reward_campaign_id,omitempty"`
+	RewardCampaignName     string              `json:"reward_campaign_name,omitempty"`
+	RewardCampaignTiers    []CheckinRewardTier `json:"reward_campaign_tiers,omitempty"`
+	BalanceBefore          float64             `json:"balance_before"`
+	BalanceAfter           float64             `json:"balance_after"`
+	CreatedAt              time.Time           `json:"created_at"`
 }
 
 type CheckinBlacklistEntry struct {
@@ -223,30 +237,26 @@ func (s *CheckinService) SetSettingRepository(settingRepo SettingRepository) {
 
 func (s *CheckinService) GetStatus(ctx context.Context, userID int64) (*CheckinStatus, error) {
 	checkinDate, nextReset := s.currentBeijingDay()
-	cfg, err := s.GetConfig(ctx)
+	policy, err := s.currentCheckinPolicyState(ctx, userID, checkinDate)
 	if err != nil {
 		return nil, err
 	}
-	totalUsage, err := s.totalUsageUSD(ctx, userID)
-	if err != nil {
-		return nil, err
-	}
-	totalRecharge, err := s.totalRechargeUSD(ctx, userID)
-	if err != nil {
-		return nil, err
-	}
+	effective := policy.Effective
+	cfg := effective.Config
 	base := CheckinStatus{
-		Enabled:             cfg.Enabled,
-		Eligible:            cfg.Enabled,
-		Blacklisted:         false,
+		Enabled:             policy.Enabled,
+		Eligible:            policy.Eligible,
+		Blacklisted:         policy.Blacklisted,
 		CheckedIn:           false,
 		CheckinDate:         checkinDate,
 		NextResetAt:         nextReset,
 		MinTotalUsageUSD:    cfg.MinTotalUsageUSD,
-		TotalUsageUSD:       totalUsage,
+		TotalUsageUSD:       policy.TotalUsageUSD,
 		MinTotalRechargeUSD: cfg.MinTotalRechargeUSD,
-		TotalRechargeUSD:    totalRecharge,
+		TotalRechargeUSD:    policy.TotalRechargeUSD,
+		IneligibleReason:    policy.IneligibleReason,
 	}
+	setCheckinStatusCampaign(&base, effective.Campaign)
 	if snapshot, snapshotErr := s.checkinHistorySnapshot(ctx, userID, checkinDate, cfg); snapshotErr != nil {
 		return nil, snapshotErr
 	} else {
@@ -263,57 +273,37 @@ func (s *CheckinService) GetStatus(ctx context.Context, userID int64) (*CheckinS
 		base.PreviousDayUsageAmount = previousDayUsage
 		base.EstimatedUsageRebate = calculateUsageLinkedCheckinReward(*cfg, previousDayUsage, 0, 0).UsageRebate
 	}
-	if !cfg.Enabled {
-		base.Eligible = false
-		base.IneligibleReason = CheckinIneligibleReasonDisabled
-		return &base, nil
-	}
-	blacklisted, err := s.isBlacklisted(ctx, userID)
-	if err != nil {
-		return nil, err
-	}
-	if blacklisted {
-		base.Enabled = false
-		base.Eligible = false
-		base.Blacklisted = true
-		base.IneligibleReason = CheckinIneligibleReasonBlacklisted
-		return &base, nil
-	}
-	if !checkinSpendEligible(totalUsage, cfg.MinTotalUsageUSD, totalRecharge, cfg.MinTotalRechargeUSD) {
-		base.Eligible = false
-		base.IneligibleReason = checkinIneligibleReason(*cfg)
-	}
 	record, err := s.getCheckinByUserAndDate(ctx, userID, checkinDate)
 	if err != nil {
 		return nil, err
 	}
 	status := base
-	status.CheckedIn = record != nil
 	if record != nil {
-		status.StreakDay = record.StreakDay
-		status.CurrentStreak = record.StreakDay
-		status.BaseRewardAmount = record.BaseRewardAmount
-		status.PreviousDayUsageAmount = record.PreviousDayUsageAmount
-		status.UsageRebateAmount = record.UsageRebateAmount
-		status.RewardCapAdjustment = record.RewardCapAdjustment
-		status.EstimatedUsageRebate = record.UsageRebateAmount
-		status.BonusRewardAmount = record.BonusRewardAmount
-		status.TotalRewardAmount = record.TotalRewardAmount
-		status.RewardAmount = record.RewardAmount
-		status.CheckedInAt = &record.CreatedAt
-		status.NextStreakRule = nextCheckinStreakRule(cfg.StreakRules, record.StreakDay)
+		applyCheckinRecordToStatus(&status, record, cfg)
 	}
 	return &status, nil
 }
 
-func (s *CheckinService) Checkin(ctx context.Context, userID int64) (*CheckinResult, error) {
-	checkinDate, nextReset := s.currentBeijingDay()
-	cfg, err := s.GetConfig(ctx)
+func (s *CheckinService) effectiveCheckinConfigSnapshot(ctx context.Context, checkinDate string) (*EffectiveCheckinConfig, error) {
+	var effective *EffectiveCheckinConfig
+	err := s.withCheckinCampaignConfigReadTx(ctx, func(client *dbent.Client, repo SettingRepository) error {
+		baseline, err := s.getCheckinConfigFromRepository(ctx, repo)
+		if err != nil {
+			return err
+		}
+		effective, err = s.resolveEffectiveCheckinConfig(ctx, client, checkinDate, baseline)
+		return err
+	})
 	if err != nil {
 		return nil, err
 	}
-	if !cfg.Enabled {
-		return nil, ErrCheckinDisabled
+	return effective, nil
+}
+
+func (s *CheckinService) currentCheckinPolicyState(ctx context.Context, userID int64, checkinDate string) (*checkinCurrentPolicyState, error) {
+	effective, err := s.effectiveCheckinConfigSnapshot(ctx, checkinDate)
+	if err != nil {
+		return nil, err
 	}
 	totalUsage, err := s.totalUsageUSD(ctx, userID)
 	if err != nil {
@@ -323,17 +313,38 @@ func (s *CheckinService) Checkin(ctx context.Context, userID int64) (*CheckinRes
 	if err != nil {
 		return nil, err
 	}
-	if !checkinSpendEligible(totalUsage, cfg.MinTotalUsageUSD, totalRecharge, cfg.MinTotalRechargeUSD) {
-		return nil, checkinEligibilityError(*cfg)
+	cfg := effective.Config
+	state := &checkinCurrentPolicyState{
+		Effective:        effective,
+		Enabled:          cfg.Enabled,
+		Eligible:         cfg.Enabled,
+		TotalUsageUSD:    totalUsage,
+		TotalRechargeUSD: totalRecharge,
+	}
+	if !cfg.Enabled {
+		state.IneligibleReason = CheckinIneligibleReasonDisabled
+		return state, nil
 	}
 	blacklisted, err := s.isBlacklisted(ctx, userID)
 	if err != nil {
 		return nil, err
 	}
 	if blacklisted {
-		return nil, ErrCheckinBlacklisted
+		state.Enabled = false
+		state.Eligible = false
+		state.Blacklisted = true
+		state.IneligibleReason = CheckinIneligibleReasonBlacklisted
+		return state, nil
 	}
+	if !checkinSpendEligible(totalUsage, cfg.MinTotalUsageUSD, totalRecharge, cfg.MinTotalRechargeUSD) {
+		state.Eligible = false
+		state.IneligibleReason = checkinIneligibleReason(*cfg)
+	}
+	return state, nil
+}
 
+func (s *CheckinService) Checkin(ctx context.Context, userID int64) (*CheckinResult, error) {
+	checkinDate, nextReset := s.currentBeijingDay()
 	existing, err := s.getCheckinByUserAndDate(ctx, userID, checkinDate)
 	if err != nil {
 		return nil, err
@@ -342,135 +353,196 @@ func (s *CheckinService) Checkin(ctx context.Context, userID int64) (*CheckinRes
 		return s.alreadyCheckedInResult(ctx, existing, nextReset)
 	}
 
-	tx, err := s.entClient.Tx(ctx)
+	preflightPolicy, err := s.currentCheckinPolicyState(ctx, userID, checkinDate)
 	if err != nil {
-		return nil, fmt.Errorf("begin check-in transaction: %w", err)
+		return nil, err
 	}
-	defer func() { _ = tx.Rollback() }()
-	txCtx := dbent.NewTxContext(ctx, tx)
-	client := tx.Client()
-
-	if active, err := client.UserCheckinBlacklist.Query().
-		Where(
-			usercheckinblacklist.UserIDEQ(userID),
-			usercheckinblacklist.RemovedAtIsNil(),
-		).
-		Exist(txCtx); err != nil {
-		return nil, fmt.Errorf("check blacklist: %w", err)
-	} else if active {
+	cfg := preflightPolicy.Effective.Config
+	if !cfg.Enabled {
+		return nil, ErrCheckinDisabled
+	}
+	if preflightPolicy.Blacklisted {
 		return nil, ErrCheckinBlacklisted
 	}
-
-	txTotalUsage, err := s.totalUsageUSDWithClient(txCtx, client, userID)
-	if err != nil {
-		return nil, err
-	}
-	txTotalRecharge, err := s.totalRechargeUSDWithClient(txCtx, client, userID)
-	if err != nil {
-		return nil, err
-	}
-	if !checkinSpendEligible(txTotalUsage, cfg.MinTotalUsageUSD, txTotalRecharge, cfg.MinTotalRechargeUSD) {
+	if !preflightPolicy.Eligible {
 		return nil, checkinEligibilityError(*cfg)
 	}
 
-	streakDay, lifetimeDays, err := s.nextCheckinCounters(txCtx, client, userID, checkinDate, cfg)
-	if err != nil {
-		return nil, fmt.Errorf("compute check-in streak: %w", err)
-	}
-	baseReward := selectCheckinReward(*cfg, s.rewardRoll())
-	previousDayUsage := 0.0
-	if cfg.UsageRebateEnabled {
-		previousDayUsage, err = s.previousBeijingDayUsageUSDWithClient(txCtx, client, userID, checkinDate)
-		if err != nil {
-			return nil, err
+	var (
+		authoritative   *EffectiveCheckinConfig
+		createdRecord   *dbent.UserCheckin
+		calculation     checkinRewardCalculation
+		streakDay       int
+		lifetimeDays    int
+		txTotalUsage    float64
+		txTotalRecharge float64
+		balanceBefore   float64
+		balanceAfter    float64
+		reward          float64
+	)
+	err = s.withCheckinCampaignConfigReadTx(ctx, func(client *dbent.Client, txRepo SettingRepository) error {
+		txExisting, getErr := s.getCheckinByUserAndDateWithClient(ctx, client, userID, checkinDate)
+		if getErr != nil {
+			return getErr
 		}
-	}
-	calculation := calculateUsageLinkedCheckinReward(*cfg, previousDayUsage, baseReward, streakDay)
-	reward := calculation.TotalReward
-	updatedUser, err := client.User.UpdateOneID(userID).
-		AddBalance(reward).
-		Save(txCtx)
-	if err != nil {
-		if dbent.IsNotFound(err) {
-			return nil, ErrUserNotFound.WithCause(err)
+		if txExisting != nil {
+			return errCheckinAlreadyRecorded
 		}
-		return nil, fmt.Errorf("update balance for check-in: %w", err)
-	}
 
-	balanceAfter := updatedUser.Balance
-	balanceBefore := balanceAfter - reward
-	createdRecord, err := client.UserCheckin.Create().
-		SetUserID(userID).
-		SetCheckinDate(checkinDate).
-		SetStreakDay(streakDay).
-		SetBaseRewardAmount(calculation.BaseReward).
-		SetPreviousDayUsageAmount(calculation.PreviousDayUsage).
-		SetUsageRebateAmount(calculation.UsageRebate).
-		SetRewardCapAdjustment(calculation.CapAdjustment).
-		SetBonusRewardAmount(calculation.StreakBonus).
-		SetTotalRewardAmount(reward).
-		SetRewardAmount(reward).
-		SetBalanceBefore(balanceBefore).
-		SetBalanceAfter(balanceAfter).
-		Save(txCtx)
-	if err != nil {
-		if isUniqueConstraintError(err) {
-			return s.rollbackAndLoadExisting(ctx, tx, userID, checkinDate, nextReset)
+		txBaseline, configErr := s.getCheckinConfigFromRepository(ctx, txRepo)
+		if configErr != nil {
+			return configErr
 		}
-		return nil, fmt.Errorf("create check-in record: %w", err)
-	}
+		authoritative, configErr = s.resolveEffectiveCheckinConfig(ctx, client, checkinDate, txBaseline)
+		if configErr != nil {
+			return configErr
+		}
+		cfg = authoritative.Config
+		if !cfg.Enabled {
+			return ErrCheckinDisabled
+		}
 
-	code, err := GenerateRedeemCode()
+		active, blacklistErr := client.UserCheckinBlacklist.Query().
+			Where(
+				usercheckinblacklist.UserIDEQ(userID),
+				usercheckinblacklist.RemovedAtIsNil(),
+			).
+			Exist(ctx)
+		if blacklistErr != nil {
+			return fmt.Errorf("check blacklist: %w", blacklistErr)
+		}
+		if active {
+			return ErrCheckinBlacklisted
+		}
+
+		txTotalUsage, configErr = s.totalUsageUSDWithClient(ctx, client, userID)
+		if configErr != nil {
+			return configErr
+		}
+		txTotalRecharge, configErr = s.totalRechargeUSDWithClient(ctx, client, userID)
+		if configErr != nil {
+			return configErr
+		}
+		if !checkinSpendEligible(txTotalUsage, cfg.MinTotalUsageUSD, txTotalRecharge, cfg.MinTotalRechargeUSD) {
+			return checkinEligibilityError(*cfg)
+		}
+
+		streakDay, lifetimeDays, configErr = s.nextCheckinCounters(ctx, client, userID, checkinDate, cfg)
+		if configErr != nil {
+			return fmt.Errorf("compute check-in streak: %w", configErr)
+		}
+		baseReward := selectCheckinReward(*cfg, s.rewardRoll())
+		previousDayUsage := 0.0
+		if cfg.UsageRebateEnabled {
+			previousDayUsage, configErr = s.previousBeijingDayUsageUSDWithClient(ctx, client, userID, checkinDate)
+			if configErr != nil {
+				return configErr
+			}
+		}
+		calculation = calculateUsageLinkedCheckinReward(*cfg, previousDayUsage, baseReward, streakDay)
+		reward = calculation.TotalReward
+		updatedUser, updateErr := client.User.UpdateOneID(userID).
+			AddBalance(reward).
+			Save(ctx)
+		if updateErr != nil {
+			if dbent.IsNotFound(updateErr) {
+				return ErrUserNotFound.WithCause(updateErr)
+			}
+			return fmt.Errorf("update balance for check-in: %w", updateErr)
+		}
+
+		balanceAfter = updatedUser.Balance
+		balanceBefore = balanceAfter - reward
+		createRecord := client.UserCheckin.Create().
+			SetUserID(userID).
+			SetCheckinDate(checkinDate).
+			SetStreakDay(streakDay).
+			SetBaseRewardAmount(calculation.BaseReward).
+			SetPreviousDayUsageAmount(calculation.PreviousDayUsage).
+			SetUsageRebateAmount(calculation.UsageRebate).
+			SetRewardCapAdjustment(calculation.CapAdjustment).
+			SetBonusRewardAmount(calculation.StreakBonus).
+			SetTotalRewardAmount(reward).
+			SetRewardAmount(reward).
+			SetBalanceBefore(balanceBefore).
+			SetBalanceAfter(balanceAfter)
+		if authoritative.Campaign != nil {
+			createRecord.
+				SetRewardCampaignID(authoritative.Campaign.ID).
+				SetRewardCampaignName(authoritative.Campaign.Name).
+				SetRewardCampaignTiersSnapshot(append([]CheckinRewardTier(nil), authoritative.Campaign.RewardTiers...))
+		}
+		createdRecord, configErr = createRecord.Save(ctx)
+		if configErr != nil {
+			if isUserCheckinDateUniqueConstraintError(configErr) {
+				return errCheckinAlreadyRecorded
+			}
+			return fmt.Errorf("create check-in record: %w", configErr)
+		}
+
+		code, generateErr := GenerateRedeemCode()
+		if generateErr != nil {
+			return fmt.Errorf("generate check-in history code: %w", generateErr)
+		}
+		if _, historyErr := client.RedeemCode.Create().
+			SetCode(code).
+			SetType(AdjustmentTypeCheckinReward).
+			SetValue(reward).
+			SetStatus(StatusUsed).
+			SetUsedBy(userID).
+			SetUsedAt(s.now()).
+			SetNotes(fmt.Sprintf("daily check-in reward %s", checkinDate)).
+			Save(ctx); historyErr != nil {
+			return fmt.Errorf("create check-in balance history: %w", historyErr)
+		}
+		return nil
+	})
+	if errors.Is(err, errCheckinAlreadyRecorded) {
+		existing, loadErr := s.getCheckinByUserAndDate(ctx, userID, checkinDate)
+		if loadErr != nil {
+			return nil, loadErr
+		}
+		if existing == nil {
+			return nil, ErrCheckinNotFound
+		}
+		return s.alreadyCheckedInResult(ctx, existing, nextReset)
+	}
 	if err != nil {
-		return nil, fmt.Errorf("generate check-in history code: %w", err)
-	}
-	now := s.now()
-	if _, err := client.RedeemCode.Create().
-		SetCode(code).
-		SetType(AdjustmentTypeCheckinReward).
-		SetValue(reward).
-		SetStatus(StatusUsed).
-		SetUsedBy(userID).
-		SetUsedAt(now).
-		SetNotes(fmt.Sprintf("daily check-in reward %s", checkinDate)).
-		Save(txCtx); err != nil {
-		return nil, fmt.Errorf("create check-in balance history: %w", err)
-	}
-
-	if err := tx.Commit(); err != nil {
-		return nil, fmt.Errorf("commit check-in transaction: %w", err)
+		return nil, err
 	}
 	s.invalidateBalanceCaches(ctx, userID)
 
 	checkedInAt := createdRecord.CreatedAt
 	recentRecords, _ := s.ListHistoryForUser(ctx, userID, 7)
+	resultStatus := CheckinStatus{
+		Enabled:                true,
+		Eligible:               true,
+		Blacklisted:            false,
+		CheckedIn:              true,
+		CheckinDate:            checkinDate,
+		StreakDay:              streakDay,
+		CurrentStreak:          streakDay,
+		LifetimeDays:           lifetimeDays,
+		BaseRewardAmount:       calculation.BaseReward,
+		PreviousDayUsageAmount: calculation.PreviousDayUsage,
+		UsageRebateAmount:      calculation.UsageRebate,
+		RewardCapAdjustment:    calculation.CapAdjustment,
+		EstimatedUsageRebate:   calculation.UsageRebate,
+		BonusRewardAmount:      calculation.StreakBonus,
+		TotalRewardAmount:      reward,
+		RewardAmount:           reward,
+		CheckedInAt:            &checkedInAt,
+		NextResetAt:            nextReset,
+		MinTotalUsageUSD:       cfg.MinTotalUsageUSD,
+		TotalUsageUSD:          txTotalUsage,
+		MinTotalRechargeUSD:    cfg.MinTotalRechargeUSD,
+		TotalRechargeUSD:       txTotalRecharge,
+		NextStreakRule:         nextCheckinStreakRule(cfg.StreakRules, streakDay),
+		RecentRecords:          recentRecords,
+	}
+	setCheckinStatusCampaign(&resultStatus, authoritative.Campaign)
 	return &CheckinResult{
-		CheckinStatus: CheckinStatus{
-			Enabled:                true,
-			Eligible:               true,
-			Blacklisted:            false,
-			CheckedIn:              true,
-			CheckinDate:            checkinDate,
-			StreakDay:              streakDay,
-			CurrentStreak:          streakDay,
-			LifetimeDays:           lifetimeDays,
-			BaseRewardAmount:       calculation.BaseReward,
-			PreviousDayUsageAmount: calculation.PreviousDayUsage,
-			UsageRebateAmount:      calculation.UsageRebate,
-			RewardCapAdjustment:    calculation.CapAdjustment,
-			EstimatedUsageRebate:   calculation.UsageRebate,
-			BonusRewardAmount:      calculation.StreakBonus,
-			TotalRewardAmount:      reward,
-			RewardAmount:           reward,
-			CheckedInAt:            &checkedInAt,
-			NextResetAt:            nextReset,
-			MinTotalUsageUSD:       cfg.MinTotalUsageUSD,
-			TotalUsageUSD:          txTotalUsage,
-			MinTotalRechargeUSD:    cfg.MinTotalRechargeUSD,
-			TotalRechargeUSD:       txTotalRecharge,
-			NextStreakRule:         nextCheckinStreakRule(cfg.StreakRules, streakDay),
-			RecentRecords:          recentRecords,
-		},
+		CheckinStatus:    resultStatus,
 		AlreadyCheckedIn: false,
 		BalanceBefore:    balanceBefore,
 		BalanceAfter:     balanceAfter,
@@ -659,11 +731,15 @@ func (s *CheckinService) RemoveBlacklist(ctx context.Context, userID, removedBy 
 }
 
 func (s *CheckinService) GetConfig(ctx context.Context) (*CheckinConfig, error) {
+	return s.getCheckinConfigFromRepository(ctx, s.settingRepo)
+}
+
+func (s *CheckinService) getCheckinConfigFromRepository(ctx context.Context, repo SettingRepository) (*CheckinConfig, error) {
 	cfg := DefaultCheckinConfig()
-	if s.settingRepo == nil {
+	if repo == nil {
 		return cfg, nil
 	}
-	values, err := s.settingRepo.GetMultiple(ctx, []string{
+	values, err := repo.GetMultiple(ctx, []string{
 		SettingKeyCheckinEnabled,
 		SettingKeyCheckinMinTotalUsageUSD,
 		SettingKeyCheckinMinTotalRechargeUSD,
@@ -724,15 +800,27 @@ func (s *CheckinService) UpdateConfig(ctx context.Context, cfg CheckinConfig) (*
 	if err != nil {
 		return nil, err
 	}
-	if err := s.settingRepo.SetMultiple(ctx, map[string]string{
+	if err := s.withCheckinCampaignConfigTx(ctx, func(client *dbent.Client, repo SettingRepository) error {
+		if err := s.validateConfigAgainstEnabledCampaigns(ctx, client, normalized); err != nil {
+			return err
+		}
+		return persistCheckinConfig(ctx, repo, normalized)
+	}); err != nil {
+		return nil, err
+	}
+	return normalized, nil
+}
+
+func persistCheckinConfig(ctx context.Context, repo SettingRepository, normalized *CheckinConfig) error {
+	if err := repo.SetMultiple(ctx, map[string]string{
 		SettingKeyCheckinEnabled:             strconv.FormatBool(normalized.Enabled),
 		SettingKeyCheckinMinTotalUsageUSD:    strconv.FormatFloat(normalized.MinTotalUsageUSD, 'f', -1, 64),
 		SettingKeyCheckinMinTotalRechargeUSD: strconv.FormatFloat(normalized.MinTotalRechargeUSD, 'f', -1, 64),
 		SettingKeyCheckinRewardConfig:        mustMarshalCheckinRewardConfig(*normalized),
 	}); err != nil {
-		return nil, fmt.Errorf("update check-in config: %w", err)
+		return fmt.Errorf("update check-in config: %w", err)
 	}
-	return normalized, nil
+	return nil
 }
 
 func (s *CheckinService) currentBeijingDay() (string, time.Time) {
@@ -824,7 +912,6 @@ func checkinIneligibleReason(cfg CheckinConfig) string {
 
 func normalizeRewardRules(cfg CheckinConfig) (*CheckinConfig, error) {
 	normalized := &CheckinConfig{
-		Tiers:                  make([]CheckinRewardTier, 0, len(cfg.Tiers)),
 		StreakEnabled:          cfg.StreakEnabled,
 		StreakRules:            make([]CheckinStreakRule, 0, len(cfg.StreakRules)),
 		UsageRebateEnabled:     cfg.UsageRebateEnabled,
@@ -832,65 +919,12 @@ func normalizeRewardRules(cfg CheckinConfig) (*CheckinConfig, error) {
 		UsageRebateCap:         cfg.UsageRebateCap,
 		TotalRewardCap:         cfg.TotalRewardCap,
 	}
-	if len(cfg.Tiers) == 0 {
-		return nil, infraerrors.BadRequest("CHECKIN_REWARD_CONFIG_EMPTY", "at least one reward tier is required")
+	tiers, err := normalizeCheckinRewardTiers(cfg.Tiers)
+	if err != nil {
+		return nil, err
 	}
-	if len(cfg.Tiers) > checkinRewardMaxTiers {
-		return nil, infraerrors.BadRequest("CHECKIN_REWARD_CONFIG_TOO_MANY_TIERS", fmt.Sprintf("at most %d reward tiers are allowed", checkinRewardMaxTiers))
-	}
+	normalized.Tiers = tiers
 
-	type tierWithIndex struct {
-		CheckinRewardTier
-		index int
-	}
-	tiers := make([]tierWithIndex, 0, len(cfg.Tiers))
-	for index, tier := range cfg.Tiers {
-		sortOrder := tier.SortOrder
-		if sortOrder <= 0 {
-			sortOrder = index + 1
-		}
-		tiers = append(tiers, tierWithIndex{
-			CheckinRewardTier: CheckinRewardTier{
-				Amount:      tier.Amount,
-				Probability: tier.Probability,
-				SortOrder:   sortOrder,
-			},
-			index: index,
-		})
-	}
-	sort.SliceStable(tiers, func(i, j int) bool {
-		if tiers[i].SortOrder == tiers[j].SortOrder {
-			return tiers[i].index < tiers[j].index
-		}
-		return tiers[i].SortOrder < tiers[j].SortOrder
-	})
-
-	seenAmounts := make(map[int64]struct{}, len(tiers))
-	var probabilityTotal int64
-	for index, tier := range tiers {
-		amountCents, err := scaledCheckinMoney(tier.Amount)
-		if err != nil {
-			return nil, infraerrors.BadRequest("CHECKIN_REWARD_CONFIG_INVALID_AMOUNT", fmt.Sprintf("tier %d: %s", index+1, err.Error()))
-		}
-		if _, exists := seenAmounts[amountCents]; exists {
-			return nil, infraerrors.BadRequest("CHECKIN_REWARD_CONFIG_DUPLICATE_AMOUNT", "reward amounts must be unique")
-		}
-		seenAmounts[amountCents] = struct{}{}
-
-		probabilityScaled, err := scaledCheckinProbability(tier.Probability)
-		if err != nil {
-			return nil, infraerrors.BadRequest("CHECKIN_REWARD_CONFIG_INVALID_PROBABILITY", fmt.Sprintf("tier %d: %s", index+1, err.Error()))
-		}
-		probabilityTotal += probabilityScaled
-		normalized.Tiers = append(normalized.Tiers, CheckinRewardTier{
-			Amount:      float64(amountCents) / 100,
-			Probability: float64(probabilityScaled) / checkinRewardProbabilityScale,
-			SortOrder:   index + 1,
-		})
-	}
-	if probabilityTotal != checkinRewardProbabilityTotal {
-		return nil, infraerrors.BadRequest("CHECKIN_REWARD_CONFIG_INVALID_TOTAL", "reward probabilities must add up to exactly 100")
-	}
 	if math.IsNaN(cfg.UsageRebateRatePercent) || math.IsInf(cfg.UsageRebateRatePercent, 0) || cfg.UsageRebateRatePercent < 0 || cfg.UsageRebateRatePercent > 100 {
 		return nil, infraerrors.BadRequest("CHECKIN_USAGE_REBATE_CONFIG_INVALID_RATE", "usage rebate rate must be between 0 and 100")
 	}
@@ -941,6 +975,70 @@ func normalizeRewardRules(cfg CheckinConfig) (*CheckinConfig, error) {
 	sort.SliceStable(normalized.StreakRules, func(i, j int) bool {
 		return normalized.StreakRules[i].Day < normalized.StreakRules[j].Day
 	})
+	return normalized, nil
+}
+
+func normalizeCheckinRewardTiers(input []CheckinRewardTier) ([]CheckinRewardTier, error) {
+	if len(input) == 0 {
+		return nil, infraerrors.BadRequest("CHECKIN_REWARD_CONFIG_EMPTY", "at least one reward tier is required")
+	}
+	if len(input) > checkinRewardMaxTiers {
+		return nil, infraerrors.BadRequest("CHECKIN_REWARD_CONFIG_TOO_MANY_TIERS", fmt.Sprintf("at most %d reward tiers are allowed", checkinRewardMaxTiers))
+	}
+
+	type tierWithIndex struct {
+		CheckinRewardTier
+		index int
+	}
+	tiers := make([]tierWithIndex, 0, len(input))
+	for index, tier := range input {
+		sortOrder := tier.SortOrder
+		if sortOrder <= 0 {
+			sortOrder = index + 1
+		}
+		tiers = append(tiers, tierWithIndex{
+			CheckinRewardTier: CheckinRewardTier{
+				Amount:      tier.Amount,
+				Probability: tier.Probability,
+				SortOrder:   sortOrder,
+			},
+			index: index,
+		})
+	}
+	sort.SliceStable(tiers, func(i, j int) bool {
+		if tiers[i].SortOrder == tiers[j].SortOrder {
+			return tiers[i].index < tiers[j].index
+		}
+		return tiers[i].SortOrder < tiers[j].SortOrder
+	})
+
+	normalized := make([]CheckinRewardTier, 0, len(tiers))
+	seenAmounts := make(map[int64]struct{}, len(tiers))
+	var probabilityTotal int64
+	for index, tier := range tiers {
+		amountCents, err := scaledCheckinMoney(tier.Amount)
+		if err != nil {
+			return nil, infraerrors.BadRequest("CHECKIN_REWARD_CONFIG_INVALID_AMOUNT", fmt.Sprintf("tier %d: %s", index+1, err.Error()))
+		}
+		if _, exists := seenAmounts[amountCents]; exists {
+			return nil, infraerrors.BadRequest("CHECKIN_REWARD_CONFIG_DUPLICATE_AMOUNT", "reward amounts must be unique")
+		}
+		seenAmounts[amountCents] = struct{}{}
+
+		probabilityScaled, err := scaledCheckinProbability(tier.Probability)
+		if err != nil {
+			return nil, infraerrors.BadRequest("CHECKIN_REWARD_CONFIG_INVALID_PROBABILITY", fmt.Sprintf("tier %d: %s", index+1, err.Error()))
+		}
+		probabilityTotal += probabilityScaled
+		normalized = append(normalized, CheckinRewardTier{
+			Amount:      float64(amountCents) / 100,
+			Probability: float64(probabilityScaled) / checkinRewardProbabilityScale,
+			SortOrder:   index + 1,
+		})
+	}
+	if probabilityTotal != checkinRewardProbabilityTotal {
+		return nil, infraerrors.BadRequest("CHECKIN_REWARD_CONFIG_INVALID_TOTAL", "reward probabilities must add up to exactly 100")
+	}
 	return normalized, nil
 }
 
@@ -1019,7 +1117,19 @@ func (s *CheckinService) isBlacklisted(ctx context.Context, userID int64) (bool,
 }
 
 func (s *CheckinService) getCheckinByUserAndDate(ctx context.Context, userID int64, checkinDate string) (*CheckinRecord, error) {
-	record, err := s.entClient.UserCheckin.Query().
+	return s.getCheckinByUserAndDateWithClient(ctx, s.entClient, userID, checkinDate)
+}
+
+func (s *CheckinService) getCheckinByUserAndDateWithClient(
+	ctx context.Context,
+	client *dbent.Client,
+	userID int64,
+	checkinDate string,
+) (*CheckinRecord, error) {
+	if client == nil {
+		return nil, fmt.Errorf("check-in storage is not configured")
+	}
+	record, err := client.UserCheckin.Query().
 		Where(
 			usercheckin.UserIDEQ(userID),
 			usercheckin.CheckinDateEQ(checkinDate),
@@ -1037,21 +1147,16 @@ func (s *CheckinService) getCheckinByUserAndDate(ctx context.Context, userID int
 
 func (s *CheckinService) alreadyCheckedInResult(ctx context.Context, record *CheckinRecord, nextReset time.Time) (*CheckinResult, error) {
 	latestBalance := record.BalanceAfter
-	totalRecharge := 0.0
 	if userEntity, err := s.entClient.User.Get(ctx, record.UserID); err == nil {
 		latestBalance = userEntity.Balance
-		totalRecharge = userEntity.TotalRecharged
 	} else if !dbent.IsNotFound(err) {
 		return nil, err
 	}
-	cfg, err := s.GetConfig(ctx)
+	policy, err := s.currentCheckinPolicyState(ctx, record.UserID, record.CheckinDate)
 	if err != nil {
 		return nil, err
 	}
-	totalUsage, err := s.totalUsageUSD(ctx, record.UserID)
-	if err != nil {
-		return nil, err
-	}
+	cfg := policy.Effective.Config
 	history, err := s.checkinHistorySnapshot(ctx, record.UserID, record.CheckinDate, cfg)
 	if err != nil {
 		return nil, err
@@ -1059,9 +1164,9 @@ func (s *CheckinService) alreadyCheckedInResult(ctx context.Context, record *Che
 	checkedInAt := record.CreatedAt
 	return &CheckinResult{
 		CheckinStatus: CheckinStatus{
-			Enabled:                cfg.Enabled,
-			Eligible:               cfg.Enabled && checkinSpendEligible(totalUsage, cfg.MinTotalUsageUSD, totalRecharge, cfg.MinTotalRechargeUSD),
-			Blacklisted:            false,
+			Enabled:                policy.Enabled,
+			Eligible:               policy.Eligible,
+			Blacklisted:            policy.Blacklisted,
 			CheckedIn:              true,
 			CheckinDate:            record.CheckinDate,
 			StreakDay:              record.StreakDay,
@@ -1075,12 +1180,15 @@ func (s *CheckinService) alreadyCheckedInResult(ctx context.Context, record *Che
 			BonusRewardAmount:      record.BonusRewardAmount,
 			TotalRewardAmount:      record.TotalRewardAmount,
 			RewardAmount:           record.RewardAmount,
+			RewardCampaignID:       cloneOptionalInt64(record.RewardCampaignID),
+			RewardCampaignName:     record.RewardCampaignName,
 			CheckedInAt:            &checkedInAt,
 			NextResetAt:            nextReset,
 			MinTotalUsageUSD:       cfg.MinTotalUsageUSD,
-			TotalUsageUSD:          totalUsage,
+			TotalUsageUSD:          policy.TotalUsageUSD,
 			MinTotalRechargeUSD:    cfg.MinTotalRechargeUSD,
-			TotalRechargeUSD:       totalRecharge,
+			TotalRechargeUSD:       policy.TotalRechargeUSD,
+			IneligibleReason:       policy.IneligibleReason,
 			NextStreakRule:         nextCheckinStreakRule(cfg.StreakRules, record.StreakDay),
 			RecentRecords:          history.RecentRecords,
 		},
@@ -1166,7 +1274,7 @@ type checkinHistorySnapshotResult struct {
 }
 
 func (s *CheckinService) checkinHistorySnapshot(ctx context.Context, userID int64, checkinDate string, cfg *CheckinConfig) (*checkinHistorySnapshotResult, error) {
-	records, err := s.ListHistoryForUser(ctx, userID, checkinHistoryLookbackLimit(cfg))
+	dates, err := listCheckinDatesWithClient(ctx, s.entClient, userID, checkinHistoryLookbackLimit(cfg))
 	if err != nil {
 		return nil, err
 	}
@@ -1174,19 +1282,19 @@ func (s *CheckinService) checkinHistorySnapshot(ctx context.Context, userID int6
 	if err != nil {
 		return nil, err
 	}
-	currentStreak := 0
-	if len(records) > 0 {
-		currentStreak = computeCurrentStreak(records, checkinDate, s.beijingLocation)
+	recentRecords, err := s.ListHistoryForUser(ctx, userID, 7)
+	if err != nil {
+		return nil, err
 	}
 	return &checkinHistorySnapshotResult{
-		CurrentStreak: currentStreak,
+		CurrentStreak: computeCurrentStreakDates(dates, checkinDate, s.beijingLocation),
 		LifetimeDays:  lifetimeDays,
-		RecentRecords: firstCheckinRecords(records, 7),
+		RecentRecords: recentRecords,
 	}, nil
 }
 
 func (s *CheckinService) nextCheckinCounters(ctx context.Context, client *dbent.Client, userID int64, checkinDate string, cfg *CheckinConfig) (int, int, error) {
-	records, err := listCheckinRecordsWithClient(ctx, client, userID, checkinHistoryLookbackLimit(cfg))
+	dates, err := listCheckinDatesWithClient(ctx, client, userID, checkinHistoryLookbackLimit(cfg))
 	if err != nil {
 		return 0, 0, err
 	}
@@ -1194,7 +1302,7 @@ func (s *CheckinService) nextCheckinCounters(ctx context.Context, client *dbent.
 	if err != nil {
 		return 0, 0, err
 	}
-	currentStreak := computeCurrentStreak(records, previousBeijingDate(checkinDate, s.beijingLocation), s.beijingLocation)
+	currentStreak := computeCurrentStreakDates(dates, previousBeijingDate(checkinDate, s.beijingLocation), s.beijingLocation)
 	if currentStreak <= 0 {
 		currentStreak = 0
 	}
@@ -1205,18 +1313,6 @@ func (s *CheckinService) countCheckinsForUser(ctx context.Context, client *dbent
 	return client.UserCheckin.Query().
 		Where(usercheckin.UserIDEQ(userID)).
 		Count(ctx)
-}
-
-func (s *CheckinService) rollbackAndLoadExisting(ctx context.Context, tx *dbent.Tx, userID int64, checkinDate string, nextReset time.Time) (*CheckinResult, error) {
-	_ = tx.Rollback()
-	existing, err := s.getCheckinByUserAndDate(ctx, userID, checkinDate)
-	if err != nil {
-		return nil, err
-	}
-	if existing == nil {
-		return nil, ErrCheckinNotFound
-	}
-	return s.alreadyCheckedInResult(ctx, existing, nextReset)
 }
 
 func (s *CheckinService) invalidateBalanceCaches(ctx context.Context, userID int64) {
@@ -1378,13 +1474,13 @@ func isFinitePositive(value float64) bool {
 	return !math.IsNaN(value) && !math.IsInf(value, 0) && value > 0
 }
 
-func computeCurrentStreak(records []CheckinRecord, endDate string, loc *time.Location) int {
-	if len(records) == 0 || strings.TrimSpace(endDate) == "" {
+func computeCurrentStreakDates(dates []string, endDate string, loc *time.Location) int {
+	if len(dates) == 0 || strings.TrimSpace(endDate) == "" {
 		return 0
 	}
-	dateSet := make(map[string]struct{}, len(records))
-	for _, record := range records {
-		dateSet[record.CheckinDate] = struct{}{}
+	dateSet := make(map[string]struct{}, len(dates))
+	for _, date := range dates {
+		dateSet[date] = struct{}{}
 	}
 	current, err := time.ParseInLocation("2006-01-02", endDate, loc)
 	if err != nil {
@@ -1408,13 +1504,6 @@ func previousBeijingDate(date string, loc *time.Location) string {
 	return parsed.AddDate(0, 0, -1).Format("2006-01-02")
 }
 
-func firstCheckinRecords(records []CheckinRecord, limit int) []CheckinRecord {
-	if limit <= 0 || len(records) <= limit {
-		return records
-	}
-	return records[:limit]
-}
-
 func listCheckinRecordsWithClient(ctx context.Context, client *dbent.Client, userID int64, limit int) ([]CheckinRecord, error) {
 	if limit <= 0 {
 		limit = 10
@@ -1429,9 +1518,28 @@ func listCheckinRecordsWithClient(ctx context.Context, client *dbent.Client, use
 	}
 	out := make([]CheckinRecord, 0, len(entities))
 	for _, entity := range entities {
-		out = append(out, checkinRecordFromEntity(entity))
+		record := checkinRecordFromEntity(entity)
+		record.RewardCampaignTiers = nil
+		out = append(out, record)
 	}
 	return out, nil
+}
+
+func listCheckinDatesWithClient(ctx context.Context, client *dbent.Client, userID int64, limit int) ([]string, error) {
+	if limit <= 0 {
+		limit = 10
+	}
+	var dates []string
+	err := client.UserCheckin.Query().
+		Where(usercheckin.UserIDEQ(userID)).
+		Order(dbent.Desc(usercheckin.FieldCheckinDate), dbent.Desc(usercheckin.FieldID)).
+		Limit(limit).
+		Select(usercheckin.FieldCheckinDate).
+		Scan(ctx, &dates)
+	if err != nil {
+		return nil, err
+	}
+	return dates, nil
 }
 
 func checkinRecordFromEntity(entity *dbent.UserCheckin) CheckinRecord {
@@ -1455,6 +1563,9 @@ func checkinRecordFromEntity(entity *dbent.UserCheckin) CheckinRecord {
 		BonusRewardAmount:      entity.BonusRewardAmount,
 		TotalRewardAmount:      totalReward,
 		RewardAmount:           totalReward,
+		RewardCampaignID:       cloneOptionalInt64(entity.RewardCampaignID),
+		RewardCampaignName:     entity.RewardCampaignName,
+		RewardCampaignTiers:    append([]CheckinRewardTier(nil), entity.RewardCampaignTiersSnapshot...),
 		BalanceBefore:          entity.BalanceBefore,
 		BalanceAfter:           entity.BalanceAfter,
 		CreatedAt:              entity.CreatedAt,
@@ -1467,6 +1578,38 @@ func checkinRecordFromEntity(entity *dbent.UserCheckin) CheckinRecord {
 		out.Username = entity.Edges.User.Username
 	}
 	return out
+}
+
+func setCheckinStatusCampaign(status *CheckinStatus, campaign *CheckinRewardCampaign) {
+	if status == nil || campaign == nil {
+		return
+	}
+	status.RewardCampaignID = cloneOptionalInt64(&campaign.ID)
+	status.RewardCampaignName = campaign.Name
+}
+
+func applyCheckinRecordToStatus(status *CheckinStatus, record *CheckinRecord, cfg *CheckinConfig) {
+	if status == nil || record == nil {
+		return
+	}
+	status.CheckedIn = true
+	status.StreakDay = record.StreakDay
+	status.CurrentStreak = record.StreakDay
+	status.BaseRewardAmount = record.BaseRewardAmount
+	status.PreviousDayUsageAmount = record.PreviousDayUsageAmount
+	status.UsageRebateAmount = record.UsageRebateAmount
+	status.RewardCapAdjustment = record.RewardCapAdjustment
+	status.EstimatedUsageRebate = record.UsageRebateAmount
+	status.BonusRewardAmount = record.BonusRewardAmount
+	status.TotalRewardAmount = record.TotalRewardAmount
+	status.RewardAmount = record.RewardAmount
+	status.RewardCampaignID = cloneOptionalInt64(record.RewardCampaignID)
+	status.RewardCampaignName = record.RewardCampaignName
+	checkedInAt := record.CreatedAt
+	status.CheckedInAt = &checkedInAt
+	if cfg != nil {
+		status.NextStreakRule = nextCheckinStreakRule(cfg.StreakRules, record.StreakDay)
+	}
 }
 
 func checkinBlacklistEntryFromEntity(entity *dbent.UserCheckinBlacklist) CheckinBlacklistEntry {
@@ -1500,6 +1643,31 @@ func isUniqueConstraintError(err error) bool {
 	return strings.Contains(msg, "unique constraint") ||
 		strings.Contains(msg, "duplicate key") ||
 		strings.Contains(msg, "constraint failed")
+}
+
+func isUserCheckinDateUniqueConstraintError(err error) bool {
+	if err == nil {
+		return false
+	}
+	var pqErr *pq.Error
+	if errors.As(err, &pqErr) {
+		return pqErr.Code == "23505" && pqErr.Constraint == "user_checkins_user_id_date_uq"
+	}
+	const sqliteSignature = "unique constraint failed: user_checkins.user_id, user_checkins.checkin_date"
+	message := strings.ToLower(err.Error())
+	index := strings.LastIndex(message, sqliteSignature)
+	if index < 0 {
+		return false
+	}
+	suffix := strings.TrimSpace(message[index+len(sqliteSignature):])
+	if suffix == "" {
+		return true
+	}
+	if len(suffix) < 3 || suffix[0] != '(' || suffix[len(suffix)-1] != ')' {
+		return false
+	}
+	_, parseErr := strconv.Atoi(strings.TrimSpace(suffix[1 : len(suffix)-1]))
+	return parseErr == nil
 }
 
 func (s *CheckinService) ListHistoryForUser(ctx context.Context, userID int64, limit int) ([]CheckinRecord, error) {

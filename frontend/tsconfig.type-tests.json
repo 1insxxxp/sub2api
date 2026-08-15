@@ -5,6 +5,12 @@
   },
   "include": [
     "src/**/*.d.ts",
+    "src/api/__tests__/admin.checkins.spec.ts",
+    "src/api/__tests__/checkin.campaign.spec.ts",
+    "src/components/layout/__tests__/AppHeader.spec.ts",
+    "src/components/admin/checkin/__tests__/CheckinRewardCampaignPanel.spec.ts",
+    "src/components/admin/checkin/__tests__/CheckinRewardCampaignDialog.spec.ts",
+    "src/views/admin/__tests__/CheckinsView.spec.ts",
     "src/api/__tests__/admin.groups.systemCustom.spec.ts",
     "src/components/admin/groups/__tests__/SystemCustomGroupDialog.spec.ts",
     "src/views/admin/__tests__/GroupsView.systemCustom.spec.ts"

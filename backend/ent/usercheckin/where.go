@@ -120,6 +120,16 @@ func RewardCapAdjustment(v float64) predicate.UserCheckin {
 	return predicate.UserCheckin(sql.FieldEQ(FieldRewardCapAdjustment, v))
 }
 
+// RewardCampaignID applies equality check predicate on the "reward_campaign_id" field. It's identical to RewardCampaignIDEQ.
+func RewardCampaignID(v int64) predicate.UserCheckin {
+	return predicate.UserCheckin(sql.FieldEQ(FieldRewardCampaignID, v))
+}
+
+// RewardCampaignName applies equality check predicate on the "reward_campaign_name" field. It's identical to RewardCampaignNameEQ.
+func RewardCampaignName(v string) predicate.UserCheckin {
+	return predicate.UserCheckin(sql.FieldEQ(FieldRewardCampaignName, v))
+}
+
 // UserIDEQ applies the EQ predicate on the "user_id" field.
 func UserIDEQ(v int64) predicate.UserCheckin {
 	return predicate.UserCheckin(sql.FieldEQ(FieldUserID, v))
@@ -645,6 +655,101 @@ func RewardCapAdjustmentLTE(v float64) predicate.UserCheckin {
 	return predicate.UserCheckin(sql.FieldLTE(FieldRewardCapAdjustment, v))
 }
 
+// RewardCampaignIDEQ applies the EQ predicate on the "reward_campaign_id" field.
+func RewardCampaignIDEQ(v int64) predicate.UserCheckin {
+	return predicate.UserCheckin(sql.FieldEQ(FieldRewardCampaignID, v))
+}
+
+// RewardCampaignIDNEQ applies the NEQ predicate on the "reward_campaign_id" field.
+func RewardCampaignIDNEQ(v int64) predicate.UserCheckin {
+	return predicate.UserCheckin(sql.FieldNEQ(FieldRewardCampaignID, v))
+}
+
+// RewardCampaignIDIn applies the In predicate on the "reward_campaign_id" field.
+func RewardCampaignIDIn(vs ...int64) predicate.UserCheckin {
+	return predicate.UserCheckin(sql.FieldIn(FieldRewardCampaignID, vs...))
+}
+
+// RewardCampaignIDNotIn applies the NotIn predicate on the "reward_campaign_id" field.
+func RewardCampaignIDNotIn(vs ...int64) predicate.UserCheckin {
+	return predicate.UserCheckin(sql.FieldNotIn(FieldRewardCampaignID, vs...))
+}
+
+// RewardCampaignIDIsNil applies the IsNil predicate on the "reward_campaign_id" field.
+func RewardCampaignIDIsNil() predicate.UserCheckin {
+	return predicate.UserCheckin(sql.FieldIsNull(FieldRewardCampaignID))
+}
+
+// RewardCampaignIDNotNil applies the NotNil predicate on the "reward_campaign_id" field.
+func RewardCampaignIDNotNil() predicate.UserCheckin {
+	return predicate.UserCheckin(sql.FieldNotNull(FieldRewardCampaignID))
+}
+
+// RewardCampaignNameEQ applies the EQ predicate on the "reward_campaign_name" field.
+func RewardCampaignNameEQ(v string) predicate.UserCheckin {
+	return predicate.UserCheckin(sql.FieldEQ(FieldRewardCampaignName, v))
+}
+
+// RewardCampaignNameNEQ applies the NEQ predicate on the "reward_campaign_name" field.
+func RewardCampaignNameNEQ(v string) predicate.UserCheckin {
+	return predicate.UserCheckin(sql.FieldNEQ(FieldRewardCampaignName, v))
+}
+
+// RewardCampaignNameIn applies the In predicate on the "reward_campaign_name" field.
+func RewardCampaignNameIn(vs ...string) predicate.UserCheckin {
+	return predicate.UserCheckin(sql.FieldIn(FieldRewardCampaignName, vs...))
+}
+
+// RewardCampaignNameNotIn applies the NotIn predicate on the "reward_campaign_name" field.
+func RewardCampaignNameNotIn(vs ...string) predicate.UserCheckin {
+	return predicate.UserCheckin(sql.FieldNotIn(FieldRewardCampaignName, vs...))
+}
+
+// RewardCampaignNameGT applies the GT predicate on the "reward_campaign_name" field.
+func RewardCampaignNameGT(v string) predicate.UserCheckin {
+	return predicate.UserCheckin(sql.FieldGT(FieldRewardCampaignName, v))
+}
+
+// RewardCampaignNameGTE applies the GTE predicate on the "reward_campaign_name" field.
+func RewardCampaignNameGTE(v string) predicate.UserCheckin {
+	return predicate.UserCheckin(sql.FieldGTE(FieldRewardCampaignName, v))
+}
+
+// RewardCampaignNameLT applies the LT predicate on the "reward_campaign_name" field.
+func RewardCampaignNameLT(v string) predicate.UserCheckin {
+	return predicate.UserCheckin(sql.FieldLT(FieldRewardCampaignName, v))
+}
+
+// RewardCampaignNameLTE applies the LTE predicate on the "reward_campaign_name" field.
+func RewardCampaignNameLTE(v string) predicate.UserCheckin {
+	return predicate.UserCheckin(sql.FieldLTE(FieldRewardCampaignName, v))
+}
+
+// RewardCampaignNameContains applies the Contains predicate on the "reward_campaign_name" field.
+func RewardCampaignNameContains(v string) predicate.UserCheckin {
+	return predicate.UserCheckin(sql.FieldContains(FieldRewardCampaignName, v))
+}
+
+// RewardCampaignNameHasPrefix applies the HasPrefix predicate on the "reward_campaign_name" field.
+func RewardCampaignNameHasPrefix(v string) predicate.UserCheckin {
+	return predicate.UserCheckin(sql.FieldHasPrefix(FieldRewardCampaignName, v))
+}
+
+// RewardCampaignNameHasSuffix applies the HasSuffix predicate on the "reward_campaign_name" field.
+func RewardCampaignNameHasSuffix(v string) predicate.UserCheckin {
+	return predicate.UserCheckin(sql.FieldHasSuffix(FieldRewardCampaignName, v))
+}
+
+// RewardCampaignNameEqualFold applies the EqualFold predicate on the "reward_campaign_name" field.
+func RewardCampaignNameEqualFold(v string) predicate.UserCheckin {
+	return predicate.UserCheckin(sql.FieldEqualFold(FieldRewardCampaignName, v))
+}
+
+// RewardCampaignNameContainsFold applies the ContainsFold predicate on the "reward_campaign_name" field.
+func RewardCampaignNameContainsFold(v string) predicate.UserCheckin {
+	return predicate.UserCheckin(sql.FieldContainsFold(FieldRewardCampaignName, v))
+}
+
 // HasUser applies the HasEdge predicate on the "user" edge.
 func HasUser() predicate.UserCheckin {
 	return predicate.UserCheckin(func(s *sql.Selector) {
@@ -660,6 +765,29 @@ func HasUser() predicate.UserCheckin {
 func HasUserWith(preds ...predicate.User) predicate.UserCheckin {
 	return predicate.UserCheckin(func(s *sql.Selector) {
 		step := newUserStep()
+		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
+			for _, p := range preds {
+				p(s)
+			}
+		})
+	})
+}
+
+// HasRewardCampaign applies the HasEdge predicate on the "reward_campaign" edge.
+func HasRewardCampaign() predicate.UserCheckin {
+	return predicate.UserCheckin(func(s *sql.Selector) {
+		step := sqlgraph.NewStep(
+			sqlgraph.From(Table, FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, RewardCampaignTable, RewardCampaignColumn),
+		)
+		sqlgraph.HasNeighbors(s, step)
+	})
+}
+
+// HasRewardCampaignWith applies the HasEdge predicate on the "reward_campaign" edge with a given conditions (other predicates).
+func HasRewardCampaignWith(preds ...predicate.CheckinRewardCampaign) predicate.UserCheckin {
+	return predicate.UserCheckin(func(s *sql.Selector) {
+		step := newRewardCampaignStep()
 		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
 			for _, p := range preds {
 				p(s)
