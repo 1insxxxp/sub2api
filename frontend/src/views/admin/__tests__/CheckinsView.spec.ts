@@ -15,6 +15,7 @@ const {
   getStats,
   listRecords,
   listBlacklist,
+  listCampaigns,
   addBlacklist,
   removeBlacklist,
   listUsers,
@@ -26,6 +27,7 @@ const {
   getStats: vi.fn(),
   listRecords: vi.fn(),
   listBlacklist: vi.fn(),
+  listCampaigns: vi.fn(),
   addBlacklist: vi.fn(),
   removeBlacklist: vi.fn(),
   listUsers: vi.fn(),
@@ -41,6 +43,7 @@ vi.mock('@/api/admin', () => ({
       getStats,
       listRecords,
       listBlacklist,
+      listCampaigns,
       addBlacklist,
       removeBlacklist,
     },
@@ -94,6 +97,7 @@ describe('Admin CheckinsView', () => {
     getStats.mockReset()
     listRecords.mockReset()
     listBlacklist.mockReset()
+    listCampaigns.mockReset()
     addBlacklist.mockReset()
     removeBlacklist.mockReset()
     listUsers.mockReset()
@@ -172,6 +176,7 @@ describe('Admin CheckinsView', () => {
       page_size: 20,
       pages: 1,
     })
+    listCampaigns.mockResolvedValue([])
     listUsers.mockResolvedValue({
       items: [
         {
@@ -249,6 +254,33 @@ describe('Admin CheckinsView', () => {
     expect(wrapper.findAll('.checkins-stat-card').length).toBeGreaterThan(0)
     expect(wrapper.findAll('.admin-toolbar-surface').length).toBeGreaterThan(0)
     expect(wrapper.findAll('.admin-panel-header').length).toBeGreaterThan(0)
+  })
+
+  it('mounts campaign management between baseline settings and records without coupling mutations to config saving', async () => {
+    const wrapper = mount(CheckinsView, {
+      global: {
+        stubs: {
+          AppLayout: { template: '<div><slot /></div>' },
+          DataTable: DataTableStub,
+          Pagination: true,
+          Icon: true,
+          CheckinRewardCampaignPanel: {
+            props: ['defaultTiers'],
+            template: '<section data-test="campaign-panel-stub">{{ defaultTiers.length }}</section>',
+          },
+        },
+      },
+    })
+
+    await flushPromises()
+
+    const baseline = wrapper.get('.checkins-editor-card').element
+    const campaigns = wrapper.get('[data-test="campaign-panel-stub"]').element
+    const records = wrapper.get('[data-test="checkin-records-section"]').element
+    expect(baseline.compareDocumentPosition(campaigns) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(campaigns.compareDocumentPosition(records) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(wrapper.get('[data-test="campaign-panel-stub"]').text()).toBe('1')
+    expect(updateConfig).not.toHaveBeenCalled()
   })
 
   it('keeps check-in settings panels and picker rows on shared admin styles', () => {

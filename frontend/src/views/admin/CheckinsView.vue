@@ -404,7 +404,9 @@
         </div>
       </section>
 
-      <section class="admin-surface checkins-table-card rounded-2xl">
+      <CheckinRewardCampaignPanel :default-tiers="campaignDefaultTiers" />
+
+      <section data-test="checkin-records-section" class="admin-surface checkins-table-card rounded-2xl">
         <div class="admin-panel-header">
           <div>
             <h3 class="text-base font-semibold text-gray-900 dark:text-white">
@@ -715,6 +717,7 @@ import AppLayout from '@/components/layout/AppLayout.vue'
 import DataTable from '@/components/common/DataTable.vue'
 import Pagination from '@/components/common/Pagination.vue'
 import Icon from '@/components/icons/Icon.vue'
+import CheckinRewardCampaignPanel from '@/components/admin/checkin/CheckinRewardCampaignPanel.vue'
 
 const { t } = useI18n()
 const appStore = useAppStore()
@@ -838,6 +841,8 @@ const estimatedAverageReward = computed(() => {
     return sum + safeNumber(tier.amount) * safeNumber(tier.probability) / 100
   }, 0)
 })
+
+const campaignDefaultTiers = computed(() => cloneTiers(configForm.tiers))
 
 function previewUsageRebate(usage: number): number {
   const rawRebate = usage * safeNumber(configForm.usage_rebate_rate_percent) / 100

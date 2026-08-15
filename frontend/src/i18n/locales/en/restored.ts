@@ -257,6 +257,93 @@ export default {
       failedToAddBlacklist: 'Failed to add blacklist entry',
       failedToRemoveBlacklist: 'Failed to remove blacklist entry',
       userId: 'User #{id}',
+      campaigns: {
+        title: 'Scheduled Check-in Campaigns',
+        description: 'Temporarily replace the random base reward by Beijing date while keeping rebates, streak bonuses, and eligibility unchanged.',
+        beijingCalendar: 'Date boundary: 00:00 Beijing time; the end date is inclusive',
+        empty: 'No campaigns match this filter',
+        emptyHint: 'Create a draft, configure its dates and random reward tiers, then enable it manually.',
+        dateRange: '{start} to {end}',
+        tierCount: '{count} random tiers',
+        probabilityTotal: 'Total {total}%',
+        rewardTiers: 'Random Base Reward Tiers',
+        rewardTiersHint: 'Only this part is replaced during the campaign. Amounts must be unique and probabilities must total exactly 100%.',
+        readOnly: 'This campaign cannot be edited in its current lifecycle. You can still review it or copy it into a new draft.',
+        copyName: '{name} - Copy',
+        overlapDetail: 'Dates overlap enabled campaign “{name}” ({start} to {end}). Adjust the range and try again.',
+        filters: {
+          label: 'Campaign status filters',
+          all: 'All'
+        },
+        lifecycle: {
+          active: 'Active',
+          upcoming: 'Upcoming',
+          ended: 'Ended',
+          draft: 'Draft',
+          disabled: 'Disabled'
+        },
+        actions: {
+          create: 'New Campaign',
+          copy: 'Copy',
+          createCopy: 'Create Copy',
+          enable: 'Enable',
+          disable: 'Disable',
+          addTier: 'Add Tier',
+          removeTier: 'Remove Tier'
+        },
+        dialog: {
+          createTitle: 'New Scheduled Check-in Campaign',
+          editTitle: 'Edit Scheduled Check-in Campaign',
+          viewTitle: 'Scheduled Check-in Campaign Details',
+          copyTitle: 'Copy to a New Campaign'
+        },
+        fields: {
+          name: 'Campaign Name',
+          namePlaceholder: 'For example: Anniversary Bonus',
+          startDate: 'Start Date (Beijing)',
+          endDate: 'End Date (Beijing)',
+          amount: 'Reward Amount (USD)',
+          probability: 'Probability (%)'
+        },
+        preview: {
+          minimum: 'Minimum Random Reward',
+          maximum: 'Maximum Random Reward',
+          average: 'Estimated Average'
+        },
+        validation: {
+          nameRequired: 'Enter a campaign name',
+          datesRequired: 'Select both start and end dates',
+          dateRange: 'The end date cannot be earlier than the start date',
+          tierRequired: 'Add at least one random reward tier',
+          maximumTiers: 'No more than {count} random reward tiers are allowed',
+          positiveValues: 'Reward amounts and probabilities must be greater than 0',
+          twoDecimals: 'Reward amounts and probabilities may have at most two decimal places',
+          uniqueAmounts: 'Reward amounts must be unique',
+          probabilityTotal: 'Reward probabilities must total exactly 100%'
+        },
+        confirm: {
+          enableTitle: 'Enable Campaign',
+          enableMessage: 'Enabling “{name}” applies these random base rewards throughout its date range.',
+          disableTitle: 'Disable Campaign',
+          disableMessage: 'Disabling “{name}” restores the baseline random reward for future check-ins.',
+          deleteTitle: 'Delete Draft',
+          deleteMessage: 'Deleting “{name}” cannot be undone.'
+        },
+        success: {
+          saved: 'Check-in campaign saved',
+          enable: 'Check-in campaign enabled',
+          disable: 'Check-in campaign disabled',
+          delete: 'Check-in campaign draft deleted'
+        },
+        errors: {
+          invalidCampaign: 'Campaign information is invalid. Close the dialog and try again.',
+          load: 'Failed to load check-in campaigns',
+          save: 'Failed to save check-in campaign',
+          enable: 'Failed to enable check-in campaign',
+          disable: 'Failed to disable check-in campaign',
+          delete: 'Failed to delete check-in campaign'
+        }
+      },
       columns: {
         user: 'User',
         checkinDate: 'Date',

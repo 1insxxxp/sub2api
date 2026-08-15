@@ -254,6 +254,93 @@ export default {
       failedToAddBlacklist: '加入黑名单失败',
       failedToRemoveBlacklist: '解除黑名单失败',
       userId: '用户 #{id}',
+      campaigns: {
+        title: '定时签到活动',
+        description: '按北京时间日期临时替换随机基础奖励，消费返利、连签奖励和资格门槛保持原规则。',
+        beijingCalendar: '日期边界：北京时间 00:00，结束日当天有效',
+        empty: '当前筛选条件下暂无活动',
+        emptyHint: '新建草稿后可配置日期与随机奖励档位，再手动启用。',
+        dateRange: '{start} 至 {end}',
+        tierCount: '{count} 个随机档位',
+        probabilityTotal: '合计 {total}%',
+        rewardTiers: '随机基础奖励档位',
+        rewardTiersHint: '活动期间只替换这一部分；奖励金额需唯一，概率合计必须严格等于 100%。',
+        readOnly: '该活动所处生命周期不允许修改。你仍可查看详情或复制为新草稿。',
+        copyName: '{name} - 副本',
+        overlapDetail: '与已启用活动“{name}”（{start} 至 {end}）时间重叠，请调整日期后重试。',
+        filters: {
+          label: '活动状态筛选',
+          all: '全部'
+        },
+        lifecycle: {
+          active: '进行中',
+          upcoming: '待开始',
+          ended: '已结束',
+          draft: '草稿',
+          disabled: '已停用'
+        },
+        actions: {
+          create: '新建活动',
+          copy: '复制',
+          createCopy: '创建副本',
+          enable: '启用',
+          disable: '停用',
+          addTier: '新增档位',
+          removeTier: '移除档位'
+        },
+        dialog: {
+          createTitle: '新建定时签到活动',
+          editTitle: '编辑定时签到活动',
+          viewTitle: '查看定时签到活动',
+          copyTitle: '复制为新活动'
+        },
+        fields: {
+          name: '活动名称',
+          namePlaceholder: '例如：周年签到加码',
+          startDate: '开始日期（北京时间）',
+          endDate: '结束日期（北京时间）',
+          amount: '奖励金额（USD）',
+          probability: '概率（%）'
+        },
+        preview: {
+          minimum: '最低随机奖励',
+          maximum: '最高随机奖励',
+          average: '预计平均奖励'
+        },
+        validation: {
+          nameRequired: '请输入活动名称',
+          datesRequired: '请选择开始和结束日期',
+          dateRange: '结束日期不能早于开始日期',
+          tierRequired: '至少需要一个随机奖励档位',
+          maximumTiers: '随机奖励档位最多 {count} 个',
+          positiveValues: '奖励金额和概率必须大于 0',
+          twoDecimals: '奖励金额和概率最多保留两位小数',
+          uniqueAmounts: '奖励金额不能重复',
+          probabilityTotal: '奖励概率合计必须严格等于 100%'
+        },
+        confirm: {
+          enableTitle: '确认启用活动',
+          enableMessage: '启用“{name}”后，该日期范围内的签到会采用这套随机基础奖励。',
+          disableTitle: '确认停用活动',
+          disableMessage: '停用“{name}”后，后续签到会恢复基础随机奖励规则。',
+          deleteTitle: '确认删除草稿',
+          deleteMessage: '删除“{name}”后无法恢复。'
+        },
+        success: {
+          saved: '签到活动已保存',
+          enable: '签到活动已启用',
+          disable: '签到活动已停用',
+          delete: '签到活动草稿已删除'
+        },
+        errors: {
+          invalidCampaign: '活动信息无效，请关闭后重试',
+          load: '加载签到活动失败',
+          save: '保存签到活动失败',
+          enable: '启用签到活动失败',
+          disable: '停用签到活动失败',
+          delete: '删除签到活动失败'
+        }
+      },
       columns: {
         user: '用户',
         checkinDate: '签到日期',
