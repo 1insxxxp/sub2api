@@ -397,7 +397,10 @@ function removeTier(index: number): void {
 }
 
 function hasAtMostTwoDecimals(value: number): boolean {
-  return Number.isInteger(Math.round(value * 100000000) / 1000000)
+  if (!Number.isFinite(value)) return false
+  const scaled = value * 100
+  const rounded = Math.round(scaled)
+  return Number.isFinite(scaled) && Math.abs(scaled - rounded) <= 1e-9
 }
 
 function probabilityBasisPoints(): number {

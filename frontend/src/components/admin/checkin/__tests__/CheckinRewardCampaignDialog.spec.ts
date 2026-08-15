@@ -153,7 +153,11 @@ describe('CheckinRewardCampaignDialog', () => {
   it.each([
     ['non-positive amount', '0', '25', 'admin.checkins.campaigns.validation.positiveValues'],
     ['amount precision', '1.001', '25', 'admin.checkins.campaigns.validation.twoDecimals'],
+    ['amount tiny extra precision', '1.000000004', '25', 'admin.checkins.campaigns.validation.twoDecimals'],
     ['probability precision', '1', '25.001', 'admin.checkins.campaigns.validation.twoDecimals'],
+    ['probability tiny extra precision', '1', '25.000000004', 'admin.checkins.campaigns.validation.twoDecimals'],
+    ['non-finite amount', 'Infinity', '25', 'admin.checkins.campaigns.validation.positiveValues'],
+    ['non-finite probability', '1', 'NaN', 'admin.checkins.campaigns.validation.positiveValues'],
     ['duplicate amount', '3', '25', 'admin.checkins.campaigns.validation.uniqueAmounts'],
   ])('rejects %s', async (_label, amount, probability, expectedKey) => {
     const wrapper = mountDialog()
@@ -166,6 +170,21 @@ describe('CheckinRewardCampaignDialog', () => {
 
     expect(createCampaign).not.toHaveBeenCalled()
     expect(wrapper.get('[data-test="campaign-validation-error"]').text()).toContain(expectedKey)
+  })
+
+  it('accepts legitimate floating point noise around a two-decimal value', async () => {
+    const wrapper = mountDialog()
+    await wrapper.get('[data-test="campaign-name"]').setValue('Campaign')
+    await wrapper.get('[data-test="campaign-start-date"]').setValue('2026-08-16')
+    await wrapper.get('[data-test="campaign-end-date"]').setValue('2026-08-18')
+    await wrapper.get('[data-test="campaign-tier-amount-0"]').setValue('0.30000000000000004')
+    await wrapper.get('[data-test="campaign-tier-probability-0"]').setValue('25.000000000000004')
+    createCampaign.mockResolvedValue(campaign())
+    await wrapper.get('[data-test="campaign-submit"]').trigger('click')
+    await flushPromises()
+
+    expect(createCampaign).toHaveBeenCalledOnce()
+    expect(wrapper.find('[data-test="campaign-validation-error"]').exists()).toBe(false)
   })
 
   it('requires probabilities to total exactly 100 percent', async () => {
