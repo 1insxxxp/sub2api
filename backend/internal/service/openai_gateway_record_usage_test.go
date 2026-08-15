@@ -1785,6 +1785,56 @@ func TestOpenAIGatewayServiceRecordUsage_RequestedModelPerRequestReplacesTokenCo
 	require.InDelta(t, requestPrice*1.1, userRepo.lastAmount, 1e-12)
 }
 
+func TestOpenAIGatewayServiceRecordUsage_ExplicitRequestedPerRequestPricingBeatsMappedTokenFallback(t *testing.T) {
+	const (
+		groupID        = int64(1538)
+		requestedModel = "次[0.03/次]gemini-3.1-pro-preview"
+		mappedModel    = "[mx]gemini-3.1-pro-preview-c"
+		requestPrice   = 0.1875
+	)
+	usageRepo := &openAIRecordUsageLogRepoStub{inserted: true}
+	userRepo := &openAIRecordUsageUserRepoStub{}
+	svc := newOpenAIRecordUsageServiceForTest(usageRepo, userRepo, &openAIRecordUsageSubRepoStub{}, nil)
+	svc.resolver = newOpenAITextChannelPricingResolverForTest(t, groupID, requestedModel, requestPrice)
+
+	err := svc.RecordUsage(context.Background(), &OpenAIRecordUsageInput{
+		Result: &OpenAIForwardResult{
+			RequestID:     "resp_requested_per_request_beats_mapped_fallback",
+			Model:         requestedModel,
+			BillingModel:  mappedModel,
+			UpstreamModel: mappedModel,
+			Usage: OpenAIUsage{
+				InputTokens:  44081,
+				OutputTokens: 9454,
+			},
+			Duration: time.Second,
+		},
+		APIKey: &APIKey{
+			ID:      502,
+			GroupID: i64p(groupID),
+			Group:   &Group{ID: groupID, RateMultiplier: 1},
+		},
+		User:    &User{ID: 602},
+		Account: &Account{ID: 702, Platform: PlatformOpenAI},
+		ChannelUsageFields: ChannelUsageFields{
+			OriginalModel:      requestedModel,
+			ChannelMappedModel: requestedModel,
+			BillingModelSource: BillingModelSourceChannelMapped,
+		},
+	})
+
+	require.NoError(t, err)
+	require.NotNil(t, usageRepo.lastLog)
+	require.Equal(t, requestedModel, usageRepo.lastLog.Model)
+	require.NotNil(t, usageRepo.lastLog.UpstreamModel)
+	require.Equal(t, mappedModel, *usageRepo.lastLog.UpstreamModel)
+	require.NotNil(t, usageRepo.lastLog.BillingMode)
+	require.Equal(t, string(BillingModePerRequest), *usageRepo.lastLog.BillingMode)
+	require.InDelta(t, requestPrice, usageRepo.lastLog.TotalCost, 1e-12)
+	require.InDelta(t, requestPrice, usageRepo.lastLog.ActualCost, 1e-12)
+	require.InDelta(t, requestPrice, userRepo.lastAmount, 1e-12)
+}
+
 func TestOpenAIGatewayServiceRecordUsage_BillsCompactOpenAIModelAlias(t *testing.T) {
 	usageRepo := &openAIRecordUsageLogRepoStub{inserted: true}
 	userRepo := &openAIRecordUsageUserRepoStub{}

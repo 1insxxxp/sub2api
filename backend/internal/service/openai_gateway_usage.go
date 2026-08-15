@@ -206,6 +206,10 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 		result.UpstreamModel,
 		result.Model,
 	)
+	// 映射后的上游模型可能先命中模糊 token 兜底价，从而抢在公开请求模型的
+	// 明确渠道按次价之前完成结算。管理员显式配置的分组/渠道价格必须优先于
+	// LiteLLM/系列兜底；显式候选之间、兜底候选之间仍保持原有计费源顺序。
+	billingModels = s.preferConfiguredOpenAIBillingModels(ctx, apiKey, billingModels)
 	serviceTier := ""
 	if result.ServiceTier != nil {
 		serviceTier = strings.TrimSpace(*result.ServiceTier)
@@ -479,6 +483,26 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 	writeUsageLogBestEffort(ctx, s.usageLogRepo, usageLog, "service.openai_gateway")
 
 	return nil
+}
+
+func (s *OpenAIGatewayService) preferConfiguredOpenAIBillingModels(ctx context.Context, apiKey *APIKey, candidates []string) []string {
+	if len(candidates) < 2 || s == nil || s.resolver == nil || apiKey == nil || apiKey.Group == nil {
+		return candidates
+	}
+
+	configured := make([]string, 0, len(candidates))
+	fallback := make([]string, 0, len(candidates))
+	for _, candidate := range candidates {
+		if s.resolveOpenAIChannelPricing(ctx, candidate, apiKey) != nil {
+			configured = append(configured, candidate)
+			continue
+		}
+		fallback = append(fallback, candidate)
+	}
+	if len(configured) == 0 {
+		return candidates
+	}
+	return append(configured, fallback...)
 }
 
 // hasIdentifiedOpenAIResponsePricing 判断上游自报的响应模型是否可以作为计费基准，
