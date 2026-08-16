@@ -96,3 +96,56 @@ func TestUserCustomGroupRepositoryDeleteAndUnbindAPIKeys(t *testing.T) {
 	require.NoError(t, err)
 	require.Nil(t, unrelatedKey.CustomGroupID)
 }
+
+func TestUserCustomGroupRepositoryListTreatsSoftDeletedSourceGroupAsUnavailable(t *testing.T) {
+	ctx := context.Background()
+	client := testEntClient(t)
+	suffix := fmt.Sprintf("%d", time.Now().UnixNano())
+
+	owner, err := client.User.Create().
+		SetEmail("custom-group-stale-source-owner-" + suffix + "@test.local").
+		SetPasswordHash("test").
+		Save(ctx)
+	require.NoError(t, err)
+
+	source, err := client.Group.Create().
+		SetName("custom-group-stale-source-" + suffix).
+		SetPlatform(service.PlatformOpenAI).
+		SetStatus(service.StatusActive).
+		Save(ctx)
+	require.NoError(t, err)
+
+	customGroup, err := client.UserCustomGroup.Create().
+		SetUserID(owner.ID).
+		SetName("custom-group-stale-source-" + suffix).
+		SetStatus(service.StatusActive).
+		Save(ctx)
+	require.NoError(t, err)
+
+	_, err = client.UserCustomGroupModel.Create().
+		SetCustomGroupID(customGroup.ID).
+		SetPublicModel("gpt-public").
+		SetSourceGroupID(source.ID).
+		SetSourceModel("gpt-source").
+		Save(ctx)
+	require.NoError(t, err)
+
+	_, err = client.Group.UpdateOneID(source.ID).
+		SetDeletedAt(time.Now()).
+		Save(mixins.SkipSoftDelete(ctx))
+	require.NoError(t, err)
+
+	t.Cleanup(func() {
+		_, _ = integrationDB.ExecContext(ctx, "DELETE FROM user_custom_group_models WHERE custom_group_id = $1", customGroup.ID)
+		_, _ = integrationDB.ExecContext(ctx, "DELETE FROM user_custom_groups WHERE id = $1", customGroup.ID)
+		_, _ = integrationDB.ExecContext(ctx, "DELETE FROM users WHERE id = $1", owner.ID)
+		_, _ = integrationDB.ExecContext(ctx, "DELETE FROM groups WHERE id = $1", source.ID)
+	})
+
+	repo := &userCustomGroupRepository{client: client, db: integrationDB}
+	groups, err := repo.ListByUserID(ctx, owner.ID)
+	require.NoError(t, err)
+	require.Len(t, groups, 1)
+	require.Len(t, groups[0].Models, 1)
+	require.Nil(t, groups[0].Models[0].SourceGroup)
+}

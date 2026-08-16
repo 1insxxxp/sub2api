@@ -91,7 +91,7 @@
               <Icon name="exclamationTriangle" size="md" class="mt-0.5 shrink-0 text-red-600 dark:text-red-400" />
               <div class="min-w-0 flex-1">
                 <p class="text-sm font-semibold text-red-800 dark:text-red-200">存在失效来源线路</p>
-                <p class="mt-1 text-xs leading-5 text-red-700 dark:text-red-300">这些线路已无法调度。为避免错误转发，移除后请从下方重新选择可用来源。</p>
+                <p class="mt-1 text-xs leading-5 text-red-700 dark:text-red-300">这些线路已无法调度。保存时会移除失效线路，请从下方重新选择可用来源。</p>
               </div>
             </div>
             <div class="mt-3 space-y-2">
@@ -154,7 +154,7 @@
         </div>
         <div class="flex shrink-0 flex-col-reverse gap-3 border-t border-gray-100 bg-white pt-4 sm:flex-row sm:justify-end dark:border-dark-700 dark:bg-dark-900">
           <button class="btn btn-secondary min-h-11 w-full sm:w-auto" type="button" @click="backToList">取消</button>
-          <button class="btn btn-primary min-h-11 w-full sm:w-auto" type="submit" :disabled="saving || selected.size === 0 || aliasErrors.size > 0 || staleSelectedModels.length > 0">{{ saving ? '保存中…' : '保存' }}</button>
+          <button class="btn btn-primary min-h-11 w-full sm:w-auto" type="submit" :disabled="saving || saveableModels.length === 0 || aliasErrors.size > 0">{{ saving ? '保存中…' : '保存' }}</button>
         </div>
       </form>
     </template>
@@ -180,12 +180,16 @@ const editing = ref<UserCustomGroup | null>(null)
 const name = ref('')
 const selected = ref(new Map<string, CustomGroupModelInput>())
 const expandedSourceIds = ref(new Set<number>())
-const aliasErrors = computed(() => validateCallNames([...selected.value.entries()].map(([key, item]) => ({ key, callName: item.public_model }))))
-const allSourcesExpanded = computed(() => candidates.value.length > 0 && candidates.value.every(source => expandedSourceIds.value.has(source.id)))
+const selectedEntries = computed(() => [...selected.value.entries()])
 const staleSelectedModels = computed(() => {
   if (!editing.value) return []
   return editing.value.models.filter(model => model.source_available === false && selected.value.has(sourceMappingKey(model.source_group_id, model.source_model)))
 })
+const staleSelectedKeys = computed(() => new Set(staleSelectedModels.value.map(model => sourceMappingKey(model.source_group_id, model.source_model))))
+const saveableModelEntries = computed(() => selectedEntries.value.filter(([key]) => !staleSelectedKeys.value.has(key)))
+const saveableModels = computed(() => saveableModelEntries.value.map(([, item]) => item))
+const aliasErrors = computed(() => validateCallNames(saveableModelEntries.value.map(([key, item]) => ({ key, callName: item.public_model }))))
+const allSourcesExpanded = computed(() => candidates.value.length > 0 && candidates.value.every(source => expandedSourceIds.value.has(source.id)))
 
 const load = async () => {
   loading.value = true
@@ -251,23 +255,24 @@ const removeStaleModel = (model: UserCustomGroupModel) => {
   selected.value = next
 }
 const save = async () => {
-  if (staleSelectedModels.value.length > 0) {
-    app.showError('请先移除失效的来源线路')
+  const models = saveableModels.value
+  if (models.length === 0) {
+    app.showError('请选择至少一个可用来源模型')
     return
   }
   if (aliasErrors.value.size > 0) {
     app.showError('请先修正调用名称')
     return
   }
+  const removedStaleCount = staleSelectedModels.value.length
   saving.value = true
   try {
-    const models = [...selected.value.values()]
     if (editing.value) await customGroupsAPI.update(editing.value.id, { name: name.value, models })
     else await customGroupsAPI.create(name.value, models)
     await load()
     mode.value = 'list'
     emit('changed')
-    app.showSuccess('自定义分组已保存')
+    app.showSuccess(removedStaleCount > 0 ? `自定义分组已保存，已移除 ${removedStaleCount} 个失效线路` : '自定义分组已保存')
   } catch (error: any) {
     app.showError(error?.message || '保存失败')
   } finally {

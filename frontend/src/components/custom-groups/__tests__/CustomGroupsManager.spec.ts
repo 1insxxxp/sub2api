@@ -178,9 +178,13 @@ describe('CustomGroupsManager', () => {
     expect(staleModel.classes()).toContain('text-red-700')
   })
 
-  it('shows stale mappings in edit mode and requires removal before saving', async () => {
-    apiMocks.list.mockResolvedValue(groupsWithStaleSource)
+  it('saves valid mappings while automatically dropping stale source mappings', async () => {
+    apiMocks.list
+      .mockResolvedValueOnce(groupsWithStaleSource)
+      .mockResolvedValueOnce(groups)
     const wrapper = await mountManager()
+    const app = useAppStore()
+    const showSuccess = vi.spyOn(app, 'showSuccess')
 
     await wrapper.get('[data-test="custom-groups-edit-21"]').trigger('click')
 
@@ -188,12 +192,20 @@ describe('CustomGroupsManager', () => {
     expect(warning.text()).toContain('存在失效来源线路')
     expect(warning.text()).toContain('来源分组已下架或停用')
     expect(warning.text()).toContain('claude-opus-backup')
-    expect(wrapper.get('button[type="submit"]').attributes('disabled')).toBeDefined()
-
-    await wrapper.get('[data-test="custom-group-remove-stale-32"]').trigger('click')
-
-    expect(wrapper.find('[data-test="custom-group-stale-sources"]').exists()).toBe(false)
     expect(wrapper.get('button[type="submit"]').attributes('disabled')).toBeUndefined()
+
+    await wrapper.get('form').trigger('submit.prevent')
+    await flushPromises()
+
+    expect(apiMocks.update).toHaveBeenCalledWith(21, {
+      name: '酒馆统一模型',
+      models: [{
+        public_model: 'claude-sonnet-4-6',
+        source_group_id: 11,
+        source_model: 'claude-sonnet-4-6',
+      }],
+    })
+    expect(showSuccess).toHaveBeenCalledWith(expect.stringContaining('已移除 1 个失效线路'))
   })
 
   it('treats omitted source availability from an old backend as valid', async () => {
