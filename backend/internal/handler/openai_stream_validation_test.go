@@ -171,6 +171,53 @@ func TestOpenAICompatibleRelayStreamModeCoercesStreamBeforeHandlerValidation(t *
 	}
 }
 
+func TestGatewayRelayStreamModeSetsRequestTypeForNonOpenAICompatiblePath(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	tests := []struct {
+		name       string
+		path       string
+		body       string
+		mode       openAICompatibleRelayStreamMode
+		run        func(*gin.Context)
+		wantStream bool
+	}{
+		{
+			name:       "chat_completions_force_stream",
+			path:       "/relay-stream/v1/chat/completions",
+			body:       `{"model":"gemini-2.5-flash","stream":false,"messages":[{"role":"user","content":"hello"}]}`,
+			mode:       openAICompatibleRelayStreamModeForceStream,
+			run:        (&GatewayHandler{gatewayService: &service.GatewayService{}}).ChatCompletions,
+			wantStream: true,
+		},
+		{
+			name:       "responses_force_non_stream",
+			path:       "/relay-nonstream/v1/responses",
+			body:       `{"model":"gemini-2.5-flash","stream":true,"input":"hello"}`,
+			mode:       openAICompatibleRelayStreamModeForceNonStream,
+			run:        (&GatewayHandler{gatewayService: &service.GatewayService{}}).Responses,
+			wantStream: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			c, rec := newOpenAICompatibleStreamValidationContext(tt.path, tt.body, true)
+			markOpenAICompatibleRelayStreamMode(c, tt.mode)
+
+			tt.run(c)
+
+			require.Equal(t, http.StatusForbidden, rec.Code)
+			gotStream, ok := c.Get(opsStreamKey)
+			require.True(t, ok)
+			require.Equal(t, tt.wantStream, gotStream)
+			gotRequestType, ok := c.Get(opsRequestTypeKey)
+			require.True(t, ok)
+			require.Equal(t, int16(service.RequestTypeFromLegacy(tt.wantStream, false)), gotRequestType)
+		})
+	}
+}
+
 func newOpenAICompatibleStreamValidationContext(path, body string, claudeCodeOnly bool) (*gin.Context, *httptest.ResponseRecorder) {
 	rec := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(rec)

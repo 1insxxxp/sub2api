@@ -68,6 +68,13 @@ func (h *GatewayHandler) Responses(c *gin.Context) {
 		h.responsesErrorResponse(c, http.StatusBadRequest, "invalid_request_error", "Failed to parse request body")
 		return
 	}
+	if rewritten, changed, err := applyOpenAICompatibleRelayStreamMode(c, body); err != nil {
+		logRequestBodyParseFailure(reqLog, body, err)
+		h.responsesErrorResponse(c, http.StatusBadRequest, "invalid_request_error", "Failed to parse request body")
+		return
+	} else if changed {
+		body = rewritten
+	}
 
 	// Extract model and stream using gjson (like OpenAI handler)
 	modelResult := gjson.GetBytes(body, "model")
