@@ -87,7 +87,7 @@
                 :key="slot.start"
                 class="pulse-cell relative rounded-sm border-0 p-0 outline-offset-1"
                 :class="[
-                  slot.bucket ? cellClass(slot.bucket.health, slot.bucket.metrics.request_count) : 'health-unknown',
+                  slot.bucket ? cellClass(slot.bucket.health, slot.bucket.metrics.request_count) : 'health-no-traffic',
                   slot.bucket ? 'has-data' : 'is-empty',
                 ]"
                 tabindex="0"
@@ -104,6 +104,9 @@
                   <template v-if="slot.bucket">
                     <span class="pulse-tooltip-line pulse-tooltip-title">{{ formatBucketRange(slot.start) }}</span>
                     <span class="pulse-tooltip-line">{{ t('channelMonitorV2.matrix.scoreLine', { score: formatScore(slot.bucket.health) }) }}</span>
+                    <span v-if="slot.bucket.health.low_sample" class="pulse-tooltip-line pulse-tooltip-note">
+                      {{ t('channelMonitorV2.matrix.lowSample') }}
+                    </span>
                     <span class="pulse-tooltip-line">{{ t('channelMonitorV2.metrics.successRateValue', { value: successRate(slot.bucket.metrics) }) }}</span>
                     <span class="pulse-tooltip-line">{{ t('channelMonitorV2.metrics.ttftValue', { value: latencyPrivacy(slot.bucket.metrics.ttft) }) }}</span>
                     <span v-if="showThroughput" class="pulse-tooltip-line">{{ t('channelMonitorV2.metrics.tpsValue', { value: formatTps(slot.bucket.metrics.tpm) }) }}</span>
@@ -139,7 +142,8 @@
           <span class="inline-flex items-center gap-1.5"><i class="status-dot health-score10"></i>{{ t('channelMonitorV2.matrix.healthyLegend') }}</span>
           <span class="inline-flex items-center gap-1.5"><i class="status-dot health-score6"></i>{{ t('channelMonitorV2.matrix.warningLegend') }}</span>
           <span class="inline-flex items-center gap-1.5"><i class="status-dot health-score2"></i>{{ t('channelMonitorV2.matrix.criticalLegend') }}</span>
-          <span class="inline-flex items-center gap-1.5"><i class="status-dot health-unknown"></i>{{ t('channelMonitorV2.matrix.unknownLegend') }}</span>
+          <span class="inline-flex items-center gap-1.5"><i class="status-dot health-insufficient"></i>{{ t('channelMonitorV2.matrix.insufficientLegend') }}</span>
+          <span class="inline-flex items-center gap-1.5"><i class="status-dot health-no-traffic"></i>{{ t('channelMonitorV2.matrix.noTrafficLegend') }}</span>
         </div>
       </div>
     </div>
@@ -382,9 +386,14 @@ function bucketTooltipLines(bucket: MonitorMatrixBucket): string[] {
   const lines = [
     formatBucketRange(bucket.bucket_start),
     t('channelMonitorV2.matrix.scoreLine', { score: formatScore(bucket.health) }),
+  ]
+  if (bucket.health.low_sample) {
+    lines.push(t('channelMonitorV2.matrix.lowSample'))
+  }
+  lines.push(
     t('channelMonitorV2.metrics.successRateValue', { value: successRate(metrics) }),
     t('channelMonitorV2.metrics.ttftValue', { value: latencyPrivacy(metrics.ttft) }),
-  ]
+  )
   if (props.showThroughput) {
     lines.push(t('channelMonitorV2.metrics.tpsValue', { value: formatTps(metrics.tpm) }))
   }
@@ -524,6 +533,8 @@ function formatBucketRange(value: string) {
 .health-warning  { background: #f59e0b; }
 .health-critical { background: #ef4444; }
 .health-unknown  { background: #9ca3af; }
+.health-insufficient { background: #94a3b8; }
+.health-no-traffic { background: #d1d5db; }
 
 .score-legend {
   background: linear-gradient(
@@ -597,6 +608,10 @@ function formatBucketRange(value: string) {
   margin-bottom: 0.2rem;
   font-weight: 600;
   color: rgb(17 24 39);
+}
+.pulse-tooltip-note {
+  color: #b45309;
+  font-weight: 600;
 }
 :global(.dark) .pulse-tooltip-title {
   color: rgb(243 244 246);

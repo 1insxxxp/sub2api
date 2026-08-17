@@ -115,7 +115,8 @@ export function healthScoreClass(
 ): string {
   const score = healthModeScore(health, mode)
   if (score == null) {
-    if (requestCount <= 0) return 'health-unknown'
+    if (health.low_sample) return 'health-insufficient'
+    if (requestCount <= 0) return 'health-no-traffic'
     // Fall back to coarse state when score is absent (older payloads).
     const coarse =
       mode === 'success'

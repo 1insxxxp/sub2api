@@ -118,6 +118,9 @@ type ChannelMonitorV2Health struct {
 	ErrorRate string `json:"error_rate"`
 	TTFT      string `json:"ttft"`
 	Cache     string `json:"cache"`
+	// LowSample reports real traffic below MinimumSample without exposing its
+	// absolute volume to redacted viewers.
+	LowSample bool `json:"low_sample"`
 	// Score is 0–100 when samples are sufficient; omitted/null when unknown.
 	// Overall blends error-rate, TTFT p50, and cache rate (weights in Thresholds).
 	Score          *float64                         `json:"score,omitempty"`
@@ -943,6 +946,7 @@ func ChannelMonitorV2HealthForWithThresholds(metrics ChannelMonitorV2Metric, thr
 		Overall: "unknown", ErrorRate: "unknown", TTFT: "unknown", Cache: "unknown",
 		MinimumSample: thresholds.MinimumSample, Thresholds: thresholds,
 	}
+	result.LowSample = metrics.RequestCount > 0 && metrics.RequestCount < result.MinimumSample
 
 	type scored struct {
 		score  float64
@@ -951,7 +955,8 @@ func ChannelMonitorV2HealthForWithThresholds(metrics ChannelMonitorV2Metric, thr
 	}
 	parts := make([]scored, 0, 3)
 
-	if metrics.RequestCount >= result.MinimumSample {
+	if metrics.RequestCount >= result.MinimumSample ||
+		(result.LowSample && metrics.ErrorRate >= thresholds.WarningErrorRate) {
 		s := errorRateScore(metrics.ErrorRate, thresholds.CriticalErrorRate)
 		result.ErrorRateScore = &s
 		result.ErrorRate = healthBand(metrics.ErrorRate, thresholds.WarningErrorRate, thresholds.CriticalErrorRate)
@@ -972,13 +977,11 @@ func ChannelMonitorV2HealthForWithThresholds(metrics ChannelMonitorV2Metric, thr
 			parts = append(parts, scored{score: s, weight: thresholds.TTFTWeight, band: result.TTFT})
 		}
 	}
-	// Cache: need a meaningful denominator; higher rate is better.
-	if metrics.CacheRateDenominator >= result.MinimumSample {
+	// Cache: zero/zero thresholds disable this signal entirely. A disabled
+	// signal must not become a synthetic perfect score for sparse buckets.
+	cacheScoringEnabled := thresholds.WarningCacheRate > 0 || thresholds.CriticalCacheRate > 0
+	if cacheScoringEnabled && metrics.CacheRateDenominator >= result.MinimumSample {
 		s := cacheRateScore(metrics.CacheRate)
-		if thresholds.WarningCacheRate <= 0 && thresholds.CriticalCacheRate <= 0 {
-			// A zero/zero cache threshold means "do not penalize cache misses".
-			s = 100
-		}
 		result.CacheScore = &s
 		// Invert for healthBand (lower is worse): use (1 - rate) against warning/critical floors.
 		result.Cache = cacheRateBand(metrics.CacheRate, thresholds.WarningCacheRate, thresholds.CriticalCacheRate)

@@ -21,13 +21,15 @@ const i18nT = (key: string, params?: Record<string, unknown>) => {
     'channelMonitorV2.metrics.cacheRateValue': '缓存率 {value}',
     'channelMonitorV2.matrix.noTrafficAt': '{time} 无流量',
     'channelMonitorV2.matrix.noTraffic': '无流量',
+    'channelMonitorV2.matrix.lowSample': '样本较少，按真实错误率预警',
     'channelMonitorV2.matrix.legendAria': '图例',
     'channelMonitorV2.matrix.bad': '差',
     'channelMonitorV2.matrix.good': '好',
     'channelMonitorV2.matrix.healthyLegend': '健康',
     'channelMonitorV2.matrix.warningLegend': '警告',
     'channelMonitorV2.matrix.criticalLegend': '异常',
-    'channelMonitorV2.matrix.unknownLegend': '未知',
+    'channelMonitorV2.matrix.insufficientLegend': '样本不足',
+    'channelMonitorV2.matrix.noTrafficLegend': '无流量',
   }
   const template = map[key] || key
   return template.replace(/\{(\w+)\}/g, (_, name) => String(params?.[name] ?? ''))
@@ -134,11 +136,71 @@ describe('RelayPulseMatrix', () => {
     expect(cells[0].classes().some((c) => c.startsWith('health-score'))).toBe(true)
     // Redacted user payloads may have request_count=0 but still include score.
     expect(cells[1].classes().some((c) => c.startsWith('health-score'))).toBe(true)
-    expect(cells[2].classes()).toContain('health-unknown')
+    expect(cells[2].classes()).toContain('health-no-traffic')
 
     // No click-to-open modal
     await cells[0].trigger('click')
     expect(wrapper.find('[role="dialog"]').exists()).toBe(false)
+  })
+
+  it('distinguishes sparse failures, sparse neutral traffic, and no traffic', () => {
+    const sparseCritical: MonitorHealth = {
+      ...health,
+      overall: 'critical',
+      error_rate: 'critical',
+      score: 0,
+      error_rate_score: 0,
+      ttft_score: null,
+      cache_score: null,
+      low_sample: true,
+    }
+    const sparseUnknown: MonitorHealth = {
+      ...health,
+      overall: 'unknown',
+      error_rate: 'unknown',
+      ttft: 'unknown',
+      cache: 'unknown',
+      score: null,
+      error_rate_score: null,
+      ttft_score: null,
+      cache_score: null,
+      low_sample: true,
+    }
+    const failedMetrics = { ...metrics(2), success_requests: 0, error_requests: 2, error_rate: 1 }
+    const wrapper = mount(RelayPulseMatrix, {
+      props: {
+        rows: [{
+          platform: 'anthropic',
+          group_id: 44,
+          group_name: '无缓存版',
+          metrics: failedMetrics,
+          health: sparseCritical,
+          buckets: [
+            { bucket_start: '2026-08-01T00:00:00Z', metrics: failedMetrics, health: sparseCritical },
+            { bucket_start: '2026-08-01T00:01:00Z', metrics: metrics(2), health: sparseUnknown },
+          ],
+        }],
+        coverage: {
+          requested_start: '2026-08-01T00:00:00Z',
+          requested_end: '2026-08-01T00:03:00Z',
+          coverage_start: '2026-08-01T00:00:00Z',
+          data_through: '2026-08-01T00:03:00Z',
+          computed_at: '2026-08-01T00:03:00Z',
+          aggregation_lag_seconds: 0,
+          coverage_complete: true,
+          bucket_seconds: 60,
+        },
+        healthMode: 'overall',
+      },
+    })
+
+    const cells = wrapper.findAll('.pulse-cell')
+    expect(cells[0].classes()).toContain('health-score0')
+    expect(cells[0].text()).toContain('样本较少')
+    expect(cells[1].classes()).toContain('health-insufficient')
+    expect(cells[2].classes()).toContain('health-no-traffic')
+    expect(wrapper.text()).toContain('样本不足')
+    expect(wrapper.text()).toContain('无流量')
   })
 })
 

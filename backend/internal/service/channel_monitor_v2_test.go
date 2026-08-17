@@ -248,6 +248,43 @@ func TestChannelMonitorV2HealthBlendsErrorTTFTAndCache(t *testing.T) {
 
 	// Small samples stay unknown
 	health = ChannelMonitorV2HealthFor(ChannelMonitorV2Metric{RequestCount: 2})
+	require.True(t, health.LowSample)
+	require.Equal(t, "unknown", health.Overall)
+	require.Nil(t, health.Score)
+}
+
+func TestChannelMonitorV2SparseCountedFailuresCannotBeHealthy(t *testing.T) {
+	health := ChannelMonitorV2HealthFor(ChannelMonitorV2Metric{
+		RequestCount:         3,
+		ErrorRate:            2.0 / 3.0,
+		CacheRateDenominator: 204341,
+	})
+
+	require.True(t, health.LowSample)
+	require.Equal(t, "critical", health.ErrorRate)
+	require.Equal(t, "critical", health.Overall)
+	require.NotNil(t, health.ErrorRateScore)
+	require.InDelta(t, 0.0, *health.ErrorRateScore, 0.001)
+	require.Nil(t, health.CacheScore)
+}
+
+func TestChannelMonitorV2SparseIgnoredFailuresRemainUnknown(t *testing.T) {
+	// Repository classification has already removed ignored errors from ErrorRate.
+	health := ChannelMonitorV2HealthFor(ChannelMonitorV2Metric{
+		RequestCount: 6,
+		ErrorRate:    0,
+	})
+
+	require.True(t, health.LowSample)
+	require.Equal(t, "unknown", health.ErrorRate)
+	require.Equal(t, "unknown", health.Overall)
+	require.Nil(t, health.Score)
+}
+
+func TestChannelMonitorV2ZeroTrafficIsNotLowSample(t *testing.T) {
+	health := ChannelMonitorV2HealthFor(ChannelMonitorV2Metric{})
+
+	require.False(t, health.LowSample)
 	require.Equal(t, "unknown", health.Overall)
 	require.Nil(t, health.Score)
 }
@@ -263,10 +300,9 @@ func TestChannelMonitorV2DefaultHealthThresholdsAreTolerant(t *testing.T) {
 	})
 	require.Equal(t, "healthy", health.ErrorRate)
 	require.Equal(t, "healthy", health.TTFT)
-	require.Equal(t, "healthy", health.Cache)
+	require.Equal(t, "unknown", health.Cache)
 	require.Equal(t, "healthy", health.Overall)
-	require.NotNil(t, health.CacheScore)
-	require.InDelta(t, 100.0, *health.CacheScore, 0.01)
+	require.Nil(t, health.CacheScore)
 }
 
 func TestErrorRateTTFTAndCacheScoreHelpers(t *testing.T) {

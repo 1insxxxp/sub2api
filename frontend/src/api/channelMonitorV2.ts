@@ -55,6 +55,8 @@ export interface MonitorHealth {
   error_rate: HealthState
   ttft: HealthState
   cache?: HealthState
+  /** Real traffic exists, but request volume is below minimum_sample. */
+  low_sample?: boolean
   /** 0–100 blended score when samples are sufficient. */
   score?: number | null
   error_rate_score?: number | null
