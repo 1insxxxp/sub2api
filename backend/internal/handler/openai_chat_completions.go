@@ -84,6 +84,13 @@ func (h *OpenAIGatewayHandler) ChatCompletions(c *gin.Context) {
 	if cappedBody, changed := applyOpenAIReasoningEffortPolicyForRequest(c, apiKey, body); changed {
 		body = cappedBody
 	}
+	if rewritten, changed, err := applyOpenAICompatibleRelayStreamMode(c, body); err != nil {
+		logRequestBodyParseFailure(reqLog, body, err)
+		h.errorResponse(c, http.StatusBadRequest, "invalid_request_error", "Failed to parse request body")
+		return
+	} else if changed {
+		body = rewritten
+	}
 	reqStream, ok := parseOpenAICompatibleStream(body)
 	if !ok {
 		h.errorResponse(c, http.StatusBadRequest, "invalid_request_error", invalidStreamFieldTypeMessage)

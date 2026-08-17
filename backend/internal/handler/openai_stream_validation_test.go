@@ -124,6 +124,53 @@ func TestGatewayOpenAICompatibleHandlersAllowBooleanStreamToContinue(t *testing.
 	}
 }
 
+func TestOpenAICompatibleRelayStreamModeCoercesStreamBeforeHandlerValidation(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	tests := []struct {
+		name        string
+		path        string
+		body        string
+		mode        openAICompatibleRelayStreamMode
+		run         func(*gin.Context)
+		wantMessage string
+	}{
+		{
+			name: "chat_completions_force_stream_replaces_invalid_string_stream",
+			path: "/relay-stream/v1/chat/completions",
+			body: `{"model":"gpt-image-1","stream":"false","messages":[{"role":"user","content":"draw"}]}`,
+			mode: openAICompatibleRelayStreamModeForceStream,
+			run: func(c *gin.Context) {
+				newOpenAIHandlerForPreviousResponseIDValidation(t, nil).ChatCompletions(c)
+			},
+			wantMessage: "This model is not supported on the Chat Completions endpoint",
+		},
+		{
+			name: "responses_force_non_stream_replaces_invalid_string_stream",
+			path: "/relay-nonstream/v1/responses",
+			body: `{"model":"gpt-5","stream":"true","previous_response_id":"msg_123","input":"hello"}`,
+			mode: openAICompatibleRelayStreamModeForceNonStream,
+			run: func(c *gin.Context) {
+				newOpenAIHandlerForPreviousResponseIDValidation(t, nil).Responses(c)
+			},
+			wantMessage: "previous_response_id must be a response.id (resp_*), not a message id",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			c, rec := newOpenAICompatibleStreamValidationContext(tt.path, tt.body, false)
+			markOpenAICompatibleRelayStreamMode(c, tt.mode)
+
+			tt.run(c)
+
+			require.Equal(t, http.StatusBadRequest, rec.Code)
+			require.Equal(t, tt.wantMessage, gjson.GetBytes(rec.Body.Bytes(), "error.message").String())
+			require.NotContains(t, rec.Body.String(), invalidStreamFieldTypeMessage)
+		})
+	}
+}
+
 func newOpenAICompatibleStreamValidationContext(path, body string, claudeCodeOnly bool) (*gin.Context, *httptest.ResponseRecorder) {
 	rec := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(rec)

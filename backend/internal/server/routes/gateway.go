@@ -351,6 +351,45 @@ func RegisterGatewayRoutes(
 		})
 	}
 
+	registerOpenAICompatibleRelayRoutes := func(prefix string, relayMode gin.HandlerFunc) {
+		relay := r.Group(prefix)
+		relay.Use(bodyLimit)
+		relay.Use(clientRequestID)
+		relay.Use(opsErrorLogger)
+		relay.Use(endpointNorm)
+		relay.Use(relayMode)
+		relay.Use(gin.HandlerFunc(apiKeyAuth))
+		relay.Use(systemUnsupportedOpenAI)
+		relay.Use(systemTarget)
+		relay.Use(customTarget)
+		relay.Use(compositeTarget)
+		relay.Use(requireGroupAnthropic)
+		relay.GET("/models", modelsHandler)
+		relay.POST("/responses", func(c *gin.Context) {
+			if isOpenAIResponsesCompatibleGatewayPlatform(c) {
+				h.OpenAIGateway.Responses(c)
+				return
+			}
+			h.Gateway.Responses(c)
+		})
+		relay.POST("/responses/*subpath", guardResponsesSubpath(func(c *gin.Context) {
+			if isOpenAIResponsesCompatibleGatewayPlatform(c) {
+				h.OpenAIGateway.Responses(c)
+				return
+			}
+			h.Gateway.Responses(c)
+		}))
+		relay.POST("/chat/completions", func(c *gin.Context) {
+			if isOpenAIResponsesCompatibleGatewayPlatform(c) {
+				h.OpenAIGateway.ChatCompletions(c)
+				return
+			}
+			h.Gateway.ChatCompletions(c)
+		})
+	}
+	registerOpenAICompatibleRelayRoutes("/relay-stream/v1", handler.OpenAICompatibleRelayForceStreamMiddleware())
+	registerOpenAICompatibleRelayRoutes("/relay-nonstream/v1", handler.OpenAICompatibleRelayForceNonStreamMiddleware())
+
 	// Gemini 原生 API 兼容层（Gemini SDK/CLI 直连）
 	gemini := r.Group("/v1beta")
 	gemini.Use(bodyLimit)

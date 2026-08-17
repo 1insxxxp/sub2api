@@ -94,6 +94,32 @@ func TestGatewayRoutesOpenAIAlphaSearchPathsAreRegistered(t *testing.T) {
 	}
 }
 
+func TestGatewayRoutesOpenAICompatibleRelayStreamModePathsAreRegistered(t *testing.T) {
+	router := newGatewayRoutesTestRouter()
+	registered := make(map[string]bool)
+	for _, route := range router.Routes() {
+		registered[route.Method+" "+route.Path] = true
+	}
+
+	for _, path := range []string{
+		"/relay-stream/v1/chat/completions",
+		"/relay-stream/v1/responses",
+		"/relay-stream/v1/responses/*subpath",
+		"/relay-nonstream/v1/chat/completions",
+		"/relay-nonstream/v1/responses",
+		"/relay-nonstream/v1/responses/*subpath",
+	} {
+		require.True(t, registered[http.MethodPost+" "+path], "POST %s should be registered", path)
+	}
+
+	for _, path := range []string{
+		"/relay-stream/v1/models",
+		"/relay-nonstream/v1/models",
+	} {
+		require.True(t, registered[http.MethodGet+" "+path], "GET %s should be registered", path)
+	}
+}
+
 func TestGatewayRoutesAlphaSearchRejectsNonOpenAIGroup(t *testing.T) {
 	router := newGatewayRoutesTestRouter(service.PlatformGrok)
 	req := httptest.NewRequest(http.MethodPost, "/v1/alpha/search", strings.NewReader(`{"model":"gpt-5.6-sol"}`))
