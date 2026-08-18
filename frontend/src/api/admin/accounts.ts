@@ -197,6 +197,38 @@ export async function update(id: number, updates: UpdateAccountRequest): Promise
   return data
 }
 
+export interface AccountModelAliasRenameInput {
+  old_model: string
+  new_model: string
+}
+
+export interface AccountModelAliasRenameSkipItem {
+  scope: string
+  owner_id?: number
+  old_model: string
+  new_model: string
+  reason: string
+}
+
+export interface AccountModelAliasRenameCascadeResult {
+  channel_pricing_updated: number
+  channel_mappings_updated: number
+  user_custom_routes_updated: number
+  system_custom_routes_updated: number
+  skipped: AccountModelAliasRenameSkipItem[]
+}
+
+export async function cascadeModelAliasRenames(
+  id: number,
+  renames: AccountModelAliasRenameInput[]
+): Promise<AccountModelAliasRenameCascadeResult> {
+  const { data } = await apiClient.post<AccountModelAliasRenameCascadeResult>(
+    `/admin/accounts/${id}/model-alias-renames`,
+    { renames }
+  )
+  return data
+}
+
 /**
  * Check mixed-channel risk for account-group binding.
  */
@@ -992,6 +1024,7 @@ export const accountsAPI = {
   create,
   duplicate,
   update,
+  cascadeModelAliasRenames,
   checkMixedChannelRisk,
   delete: deleteAccount,
   toggleStatus,

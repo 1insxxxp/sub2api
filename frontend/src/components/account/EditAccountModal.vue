@@ -2801,6 +2801,10 @@ import { useI18n } from 'vue-i18n'
 import { useAppStore } from '@/stores/app'
 import { useAuthStore } from '@/stores/auth'
 import { adminAPI } from '@/api/admin'
+import type {
+  AccountModelAliasRenameCascadeResult,
+  AccountModelAliasRenameInput
+} from '@/api/admin/accounts'
 import { useQuotaNotifyState } from '@/composables/useQuotaNotifyState'
 import type {
   Account,
@@ -3086,6 +3090,7 @@ const antigravityProjectId = ref('')
 const antigravityModelRestrictionMode = ref<'whitelist' | 'mapping'>('whitelist')
 const antigravityWhitelistModels = ref<string[]>([])
 const antigravityModelMappings = ref<ModelMapping[]>([])
+let originalAntigravityModelMappingRows = new WeakMap<ModelMapping, ModelMapping>()
 const isSyncingAntigravityUpstream = ref(false)
 const tempUnschedEnabled = ref(false)
 const accountSchedulingThresholdOverrideEnabled = ref(false)
@@ -3770,6 +3775,7 @@ const syncFormFromAccount = (newAccount: Account | null) => {
     antigravityWhitelistModels.value = []
     antigravityModelMappings.value = []
   }
+  snapshotOriginalAntigravityModelMappings()
 
   // Load quota control settings (Anthropic OAuth/SetupToken only)
   loadQuotaControlSettings(newAccount)
@@ -4009,6 +4015,72 @@ const addAntigravityPresetMapping = (from: string, to: string) => {
     return
   }
   antigravityModelMappings.value.push({ from, to })
+}
+
+function snapshotOriginalAntigravityModelMappings() {
+  originalAntigravityModelMappingRows = new WeakMap()
+  for (const mapping of antigravityModelMappings.value) {
+    originalAntigravityModelMappingRows.set(mapping, { from: mapping.from, to: mapping.to })
+  }
+}
+
+function detectAntigravityModelAliasRenames(): AccountModelAliasRenameInput[] {
+  if (props.account?.platform !== 'antigravity') {
+    return []
+  }
+
+  const renames: AccountModelAliasRenameInput[] = []
+  const seen = new Set<string>()
+  for (const current of antigravityModelMappings.value) {
+    const original = originalAntigravityModelMappingRows.get(current)
+    if (!original) continue
+
+    const oldModel = original.from.trim()
+    const newModel = current.from.trim()
+    if (!oldModel || !newModel || oldModel === newModel) continue
+    if (original.to.trim() !== current.to.trim()) continue
+
+    const key = `${oldModel.toLowerCase()}\0${newModel.toLowerCase()}`
+    if (seen.has(key)) continue
+    seen.add(key)
+    renames.push({ old_model: oldModel, new_model: newModel })
+  }
+  return renames
+}
+
+function modelAliasRenameCascadeUpdateCount(result: AccountModelAliasRenameCascadeResult): number {
+  return (
+    result.channel_pricing_updated +
+    result.channel_mappings_updated +
+    result.user_custom_routes_updated +
+    result.system_custom_routes_updated
+  )
+}
+
+function showModelAliasRenameCascadeResult(result: AccountModelAliasRenameCascadeResult) {
+  const updated = modelAliasRenameCascadeUpdateCount(result)
+  const skipped = result.skipped?.length ?? 0
+  if (skipped > 0) {
+    appStore.showWarning(t('admin.accounts.modelAliasRenameCascadePartial', { count: updated, skipped }))
+  } else if (updated > 0) {
+    appStore.showInfo(t('admin.accounts.modelAliasRenameCascadeSuccess', { count: updated }))
+  }
+}
+
+async function cascadeAntigravityModelAliasRenames(accountID: number) {
+  const renames = detectAntigravityModelAliasRenames()
+  if (renames.length === 0) return
+
+  try {
+    const result = await adminAPI.accounts.cascadeModelAliasRenames(accountID, renames)
+    showModelAliasRenameCascadeResult(result)
+  } catch (error: any) {
+    appStore.showWarning(
+      t('admin.accounts.modelAliasRenameCascadeFailed', {
+        message: error?.message || t('admin.accounts.failedToUpdate')
+      })
+    )
+  }
 }
 
 const syncAntigravityUpstreamModels = async () => {
@@ -4458,6 +4530,7 @@ const submitUpdateAccount = async (accountID: number, updatePayload: Record<stri
   submitting.value = true
   try {
     const updatedAccount = await adminAPI.accounts.update(accountID, withAntigravityConfirmFlag(updatePayload))
+    await cascadeAntigravityModelAliasRenames(accountID)
     appStore.showSuccess(t('admin.accounts.accountUpdated'))
     emit('updated', updatedAccount)
     handleClose()

@@ -1,10 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { defineComponent } from 'vue'
-import { mount } from '@vue/test-utils'
+import { flushPromises, mount } from '@vue/test-utils'
+import type { VueWrapper } from '@vue/test-utils'
 
-const { updateAccountMock, checkMixedChannelRiskMock, authIsSimpleMode } = vi.hoisted(() => ({
+const { updateAccountMock, checkMixedChannelRiskMock, cascadeModelAliasRenamesMock, authIsSimpleMode } = vi.hoisted(() => ({
   updateAccountMock: vi.fn(),
   checkMixedChannelRiskMock: vi.fn(),
+  cascadeModelAliasRenamesMock: vi.fn(),
   authIsSimpleMode: { value: true }
 }))
 
@@ -12,7 +14,8 @@ vi.mock('@/stores/app', () => ({
   useAppStore: () => ({
     showError: vi.fn(),
     showSuccess: vi.fn(),
-    showInfo: vi.fn()
+    showInfo: vi.fn(),
+    showWarning: vi.fn()
   })
 }))
 
@@ -28,7 +31,8 @@ vi.mock('@/api/admin', () => ({
   adminAPI: {
     accounts: {
       update: updateAccountMock,
-      checkMixedChannelRisk: checkMixedChannelRiskMock
+      checkMixedChannelRisk: checkMixedChannelRiskMock,
+      cascadeModelAliasRenames: cascadeModelAliasRenamesMock
     },
     settings: {
       getWebSearchEmulationConfig: vi.fn().mockResolvedValue({ enabled: false, providers: [] }),
@@ -311,9 +315,25 @@ function mountModal(account = buildAccount()) {
   })
 }
 
+function inputWithValue(wrapper: VueWrapper, value: string) {
+  const input = wrapper
+    .findAll('input')
+    .find((input) => (input.element as HTMLInputElement).value === value)
+  expect(input).toBeTruthy()
+  return input!
+}
+
 describe('EditAccountModal', () => {
   beforeEach(() => {
     authIsSimpleMode.value = true
+    cascadeModelAliasRenamesMock.mockReset()
+    cascadeModelAliasRenamesMock.mockResolvedValue({
+      channel_pricing_updated: 0,
+      channel_mappings_updated: 0,
+      user_custom_routes_updated: 0,
+      system_custom_routes_updated: 0,
+      skipped: []
+    })
   })
 
   it('edits and submits model system prompts for the selected account', async () => {
@@ -1177,6 +1197,95 @@ describe('EditAccountModal', () => {
     expect(updateAccountMock.mock.calls[0]?.[1]?.credentials?.antigravity_project_id).toBe(
       'updated-project'
     )
+  })
+
+  it('cascades Antigravity left-side model alias renames after account update', async () => {
+    const account = buildAntigravityAccount('configured-project')
+    account.credentials.model_mapping = {
+      'gemini-old': 'gemini-target'
+    }
+    updateAccountMock.mockReset()
+    checkMixedChannelRiskMock.mockReset()
+    checkMixedChannelRiskMock.mockResolvedValue({ has_risk: false })
+    updateAccountMock.mockResolvedValue(account)
+
+    const wrapper = mountModal(account)
+
+    await inputWithValue(wrapper, 'gemini-old').setValue(' gemini-new ')
+    await wrapper.get('form#edit-account-form').trigger('submit.prevent')
+    await flushPromises()
+
+    expect(updateAccountMock).toHaveBeenCalledTimes(1)
+    expect(cascadeModelAliasRenamesMock).toHaveBeenCalledTimes(1)
+    expect(cascadeModelAliasRenamesMock).toHaveBeenCalledWith(3, [
+      { old_model: 'gemini-old', new_model: 'gemini-new' }
+    ])
+    expect(updateAccountMock.mock.invocationCallOrder[0]).toBeLessThan(
+      cascadeModelAliasRenamesMock.mock.invocationCallOrder[0]
+    )
+  })
+
+  it('does not cascade Antigravity mapping edits when only the right-side target changes', async () => {
+    const account = buildAntigravityAccount('configured-project')
+    account.credentials.model_mapping = {
+      'gemini-public': 'gemini-target'
+    }
+    updateAccountMock.mockReset()
+    checkMixedChannelRiskMock.mockReset()
+    checkMixedChannelRiskMock.mockResolvedValue({ has_risk: false })
+    updateAccountMock.mockResolvedValue(account)
+
+    const wrapper = mountModal(account)
+
+    await inputWithValue(wrapper, 'gemini-target').setValue('gemini-target-v2')
+    await wrapper.get('form#edit-account-form').trigger('submit.prevent')
+    await flushPromises()
+
+    expect(updateAccountMock).toHaveBeenCalledTimes(1)
+    expect(cascadeModelAliasRenamesMock).not.toHaveBeenCalled()
+  })
+
+  it('does not cascade rename-like edits for non-Antigravity accounts', async () => {
+    const account = buildAccount()
+    account.credentials.model_mapping = {
+      'gpt-public-old': 'gpt-upstream'
+    }
+    updateAccountMock.mockReset()
+    checkMixedChannelRiskMock.mockReset()
+    checkMixedChannelRiskMock.mockResolvedValue({ has_risk: false })
+    updateAccountMock.mockResolvedValue(account)
+
+    const wrapper = mountModal(account)
+
+    await inputWithValue(wrapper, 'gpt-public-old').setValue('gpt-public-new')
+    await wrapper.get('form#edit-account-form').trigger('submit.prevent')
+    await flushPromises()
+
+    expect(updateAccountMock).toHaveBeenCalledTimes(1)
+    expect(cascadeModelAliasRenamesMock).not.toHaveBeenCalled()
+  })
+
+  it('keeps the account update flow successful when Antigravity alias cascade fails', async () => {
+    const account = buildAntigravityAccount('configured-project')
+    account.credentials.model_mapping = {
+      'gemini-old': 'gemini-target'
+    }
+    updateAccountMock.mockReset()
+    checkMixedChannelRiskMock.mockReset()
+    checkMixedChannelRiskMock.mockResolvedValue({ has_risk: false })
+    updateAccountMock.mockResolvedValue(account)
+    cascadeModelAliasRenamesMock.mockRejectedValue(new Error('cascade unavailable'))
+
+    const wrapper = mountModal(account)
+
+    await inputWithValue(wrapper, 'gemini-old').setValue('gemini-new')
+    await wrapper.get('form#edit-account-form').trigger('submit.prevent')
+    await flushPromises()
+
+    expect(updateAccountMock).toHaveBeenCalledTimes(1)
+    expect(cascadeModelAliasRenamesMock).toHaveBeenCalledTimes(1)
+    expect(wrapper.emitted('updated')?.[0]).toEqual([account])
+    expect(wrapper.emitted('close')).toBeTruthy()
   })
 
   it('clears Antigravity configured project fallback when input is empty', async () => {
