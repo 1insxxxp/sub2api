@@ -140,6 +140,7 @@ docs/*
 !docs/legal/*.md
 .serena/
 .codex/
+.worktrees/
 .codex-card-migration/
 .codex-passionapi-root/
 tmp-vendor-misc.js
