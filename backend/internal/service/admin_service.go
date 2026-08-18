@@ -103,6 +103,7 @@ type AdminService interface {
 	ForceAntigravityPrivacy(ctx context.Context, account *Account) string
 	SetAccountSchedulable(ctx context.Context, id int64, schedulable bool) (*Account, error)
 	BulkUpdateAccounts(ctx context.Context, input *BulkUpdateAccountsInput) (*BulkUpdateAccountsResult, error)
+	CascadeAccountModelAliasRenames(ctx context.Context, accountID int64, input []AccountModelAliasRenameInput) (*AccountModelAliasRenameCascadeResult, error)
 	CheckMixedChannelRisk(ctx context.Context, currentAccountID int64, currentAccountPlatform string, groupIDs []int64) error
 	// RevertAccountProxyFallback 将账号的 proxy_id 切回 proxy_fallback_origin_id，并清空 origin 字段。
 	// 若账号不存在返回 ErrAccountNotFound；若账号存在但不在 fallback 状态，返回 ErrAccountNotInFallback。
@@ -652,31 +653,34 @@ var ErrRPMStatusUnavailable = infraerrors.New(http.StatusNotImplemented, "RPM_ST
 
 // adminServiceImpl implements AdminService
 type adminServiceImpl struct {
-	userRepo             UserRepository
-	groupRepo            GroupRepository
-	groupDuplicateRepo   GroupDuplicateRepository
-	groupSourceRefRepo   GroupCustomSourceReferenceRepository
-	accountRepo          AccountRepository
-	accountDuplicateRepo AccountDuplicateRepository
-	accountBillingRepo   AccountBillingSettingsRepository
-	proxyRepo            ProxyRepository
-	apiKeyRepo           APIKeyRepository
-	redeemCodeRepo       RedeemCodeRepository
-	userGroupRateRepo    UserGroupRateRepository
-	userRPMCache         UserRPMCache
-	billingCacheService  *BillingCacheService
-	proxyProber          ProxyExitInfoProber
-	proxyLatencyCache    ProxyLatencyCache
-	authCacheInvalidator APIKeyAuthCacheInvalidator
-	entClient            *dbent.Client // 用于开启数据库事务
-	settingService       *SettingService
-	defaultSubAssigner   DefaultSubscriptionAssigner
-	userSubRepo          UserSubscriptionRepository
-	privacyClientFactory PrivacyClientFactory
-	runtimeBlocker       AccountRuntimeBlocker
-	affiliateService     adminRechargeAffiliateAccruer
-	compositeRouteRepo   CompositeModelRouteRepository
-	compositeResolver    *CompositeRouteResolver
+	userRepo              UserRepository
+	groupRepo             GroupRepository
+	groupDuplicateRepo    GroupDuplicateRepository
+	groupSourceRefRepo    GroupCustomSourceReferenceRepository
+	accountRepo           AccountRepository
+	accountDuplicateRepo  AccountDuplicateRepository
+	accountBillingRepo    AccountBillingSettingsRepository
+	channelRepo           accountModelAliasRenameCascadeRepository
+	userCustomGroupRepo   accountModelAliasRenameCascadeRepository
+	systemCustomGroupRepo accountModelAliasRenameCascadeRepository
+	proxyRepo             ProxyRepository
+	apiKeyRepo            APIKeyRepository
+	redeemCodeRepo        RedeemCodeRepository
+	userGroupRateRepo     UserGroupRateRepository
+	userRPMCache          UserRPMCache
+	billingCacheService   *BillingCacheService
+	proxyProber           ProxyExitInfoProber
+	proxyLatencyCache     ProxyLatencyCache
+	authCacheInvalidator  APIKeyAuthCacheInvalidator
+	entClient             *dbent.Client // 用于开启数据库事务
+	settingService        *SettingService
+	defaultSubAssigner    DefaultSubscriptionAssigner
+	userSubRepo           UserSubscriptionRepository
+	privacyClientFactory  PrivacyClientFactory
+	runtimeBlocker        AccountRuntimeBlocker
+	affiliateService      adminRechargeAffiliateAccruer
+	compositeRouteRepo    CompositeModelRouteRepository
+	compositeResolver     *CompositeRouteResolver
 	// 分组平台变更后用来失效渠道缓存；可为 nil（缓存会在 TTL 到期后自然重建）
 	channelCacheInvalidator ChannelCacheInvalidator
 }
