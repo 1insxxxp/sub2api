@@ -98,6 +98,109 @@ func TestChannelRepositoryModelAliasRenameSkipsPricingAndMappingConflicts(t *tes
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 
+func TestChannelRepositoryModelAliasRenameSkipsPricingSemanticConflicts(t *testing.T) {
+	tests := []struct {
+		name     string
+		models   []string
+		newModel string
+	}{
+		{
+			name:     "case insensitive new model",
+			models:   []string{"old-model", "NEW-MODEL"},
+			newModel: "new-model",
+		},
+		{
+			name:     "wildcard new model",
+			models:   []string{"old-model", "new-*"},
+			newModel: "new-model",
+		},
+		{
+			name:     "claude dot hyphen normalized",
+			models:   []string{"old-model", "claude-sonnet-4.5"},
+			newModel: "claude-sonnet-4-5",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			db, mock, err := sqlmock.New()
+			require.NoError(t, err)
+			defer func() { _ = db.Close() }()
+
+			repo := &channelRepository{db: db}
+			ctx := context.Background()
+			modelsJSON, err := json.Marshal(tt.models)
+			require.NoError(t, err)
+
+			mock.ExpectBegin()
+			expectChannelAliasRenameCandidates(mock, []byte(`{}`))
+			mock.ExpectQuery(`(?s)SELECT id, channel_id, models.*FROM channel_model_pricing.*platform = \$2.*FOR UPDATE`).
+				WithArgs(sqlmock.AnyArg(), service.PlatformAntigravity).
+				WillReturnRows(sqlmock.NewRows([]string{"id", "channel_id", "models"}).
+					AddRow(int64(901), int64(77), modelsJSON))
+			mock.ExpectCommit()
+
+			got, err := repo.CascadeAccountModelAliasRenames(ctx, 12, []int64{101}, []service.AccountModelAliasRename{
+				{OldModel: "old-model", NewModel: tt.newModel},
+			})
+
+			require.NoError(t, err)
+			require.Zero(t, got.ChannelPricingUpdated)
+			skipped := skipByScope(t, got.Skipped, "channel_pricing")
+			require.Equal(t, int64(77), skipped.OwnerID)
+			require.Equal(t, tt.newModel, skipped.NewModel)
+			require.NoError(t, mock.ExpectationsWereMet())
+		})
+	}
+}
+
+func TestChannelRepositoryModelAliasRenameSkipsMappingSemanticConflicts(t *testing.T) {
+	tests := []struct {
+		name       string
+		mappingKey string
+	}{
+		{name: "wildcard new model", mappingKey: "new-*"},
+		{name: "case insensitive new model", mappingKey: "NEW-MODEL"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			db, mock, err := sqlmock.New()
+			require.NoError(t, err)
+			defer func() { _ = db.Close() }()
+
+			repo := &channelRepository{db: db}
+			ctx := context.Background()
+			modelMapping := map[string]map[string]string{
+				service.PlatformAntigravity: {
+					"old-model":   "upstream-old",
+					tt.mappingKey: "upstream-new",
+				},
+			}
+			modelMappingJSON, err := json.Marshal(modelMapping)
+			require.NoError(t, err)
+
+			mock.ExpectBegin()
+			expectChannelAliasRenameCandidates(mock, modelMappingJSON)
+			mock.ExpectQuery(`(?s)SELECT id, channel_id, models.*FROM channel_model_pricing.*platform = \$2.*FOR UPDATE`).
+				WithArgs(sqlmock.AnyArg(), service.PlatformAntigravity).
+				WillReturnRows(sqlmock.NewRows([]string{"id", "channel_id", "models"}))
+			mock.ExpectCommit()
+
+			got, err := repo.CascadeAccountModelAliasRenames(ctx, 12, []int64{101}, []service.AccountModelAliasRename{
+				{OldModel: "old-model", NewModel: "new-model"},
+			})
+
+			require.NoError(t, err)
+			require.Zero(t, got.ChannelMappingsUpdated)
+			skipped := skipByScope(t, got.Skipped, "channel_mapping")
+			require.Equal(t, int64(77), skipped.OwnerID)
+			require.Equal(t, "new-model", skipped.NewModel)
+			require.NoError(t, mock.ExpectationsWereMet())
+		})
+	}
+}
+
 func TestUserCustomGroupRepositoryModelAliasRenameUpdatesRoutesAndSkipsCollisions(t *testing.T) {
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)
@@ -147,17 +250,23 @@ func TestSystemCustomGroupRepositoryModelAliasRenameUpdatesRoutesAndSkipsCollisi
 	ctx := context.Background()
 
 	mock.ExpectBegin()
+	mock.ExpectQuery(`(?s)SELECT DISTINCT m\.group_id.*FROM system_custom_group_models AS m.*groups AS g.*g\.system_custom_routing_enabled = TRUE.*m\.source_group_id = ANY\(\$1\).*LOWER\(m\.source_model\) = LOWER\(\$2\).*ORDER BY m\.group_id`).
+		WithArgs(sqlmock.AnyArg(), "old-model").
+		WillReturnRows(sqlmock.NewRows([]string{"group_id"}).
+			AddRow(int64(501)).
+			AddRow(int64(502)).
+			AddRow(int64(503)))
+	expectGroupReferenceAliasRenameLock(mock, 10)
+	expectGroupReferenceAliasRenameLock(mock, 20)
+	expectGroupReferenceAliasRenameLock(mock, 501)
+	expectGroupReferenceAliasRenameLock(mock, 502)
+	expectGroupReferenceAliasRenameLock(mock, 503)
 	mock.ExpectQuery(`(?s)SELECT m\.id, m\.group_id, m\.public_model, m\.source_group_id, m\.source_model.*FROM system_custom_group_models AS m.*groups AS g.*g\.system_custom_routing_enabled = TRUE.*m\.source_group_id = ANY\(\$1\).*LOWER\(m\.source_model\) = LOWER\(\$2\).*FOR UPDATE`).
 		WithArgs(sqlmock.AnyArg(), "old-model").
 		WillReturnRows(sqlmock.NewRows([]string{"id", "group_id", "public_model", "source_group_id", "source_model"}).
 			AddRow(int64(301), int64(501), "old-model", int64(10), "old-model").
 			AddRow(int64(302), int64(502), "OLD-MODEL", int64(20), "old-model").
 			AddRow(int64(303), int64(503), "old-model", int64(10), "old-model"))
-	expectGroupReferenceAliasRenameLock(mock, 10)
-	expectGroupReferenceAliasRenameLock(mock, 20)
-	expectGroupReferenceAliasRenameLock(mock, 501)
-	expectGroupReferenceAliasRenameLock(mock, 502)
-	expectGroupReferenceAliasRenameLock(mock, 503)
 	expectSystemAliasSourceConflict(mock, 501, 10, "new-model", 301, false)
 	expectSystemAliasPublicConflict(mock, 501, "new-model", 301, false)
 	expectSystemAliasUpdate(mock, 301, "new-model", true)
@@ -257,6 +366,13 @@ func expectUserAliasSourceConflict(mock sqlmock.Sqlmock, customGroupID, sourceGr
 	mock.ExpectQuery(`(?s)SELECT EXISTS.*FROM user_custom_group_models AS conflict.*conflict\.custom_group_id = \$1.*conflict\.source_group_id = \$2.*LOWER\(conflict\.source_model\) = LOWER\(\$3\).*conflict\.id <> \$4`).
 		WithArgs(customGroupID, sourceGroupID, newModel, routeID).
 		WillReturnRows(sqlmock.NewRows([]string{"exists"}).AddRow(exists))
+}
+
+func expectChannelAliasRenameCandidates(mock sqlmock.Sqlmock, modelMapping []byte) {
+	mock.ExpectQuery(`(?s)SELECT c\.id, c\.model_mapping.*FROM channels AS c.*channel_groups.*group_id = ANY\(\$1\).*FOR UPDATE`).
+		WithArgs(sqlmock.AnyArg()).
+		WillReturnRows(sqlmock.NewRows([]string{"id", "model_mapping"}).
+			AddRow(int64(77), modelMapping))
 }
 
 func expectUserAliasPublicConflict(mock sqlmock.Sqlmock, customGroupID int64, newModel string, routeID int64, exists bool) {

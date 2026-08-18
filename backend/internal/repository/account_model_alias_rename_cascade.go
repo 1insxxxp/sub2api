@@ -48,6 +48,7 @@ type accountModelAliasRenameRoute struct {
 }
 
 type accountModelAliasRenameRouteQueries struct {
+	lockCandidatesSQL string
 	candidatesSQL     string
 	sourceConflictSQL string
 	publicConflictSQL string
@@ -156,16 +157,29 @@ func (r *systemCustomGroupRepository) CascadeAccountModelAliasRenames(ctx contex
 	defer func() { _ = tx.Rollback() }()
 	client := tx.Client()
 
-	changedGroups := make(map[int64]struct{})
+	queries := accountModelAliasRenameSystemRouteQueries()
+	lockGroupIDs := make(map[int64]struct{}, len(groupIDs))
+	for _, groupID := range groupIDs {
+		lockGroupIDs[groupID] = struct{}{}
+	}
 	for _, rename := range renames {
-		queries := accountModelAliasRenameSystemRouteQueries()
-		routes, err := loadAccountModelAliasRenameRoutes(ctx, client, queries.candidatesSQL, groupIDs, rename.OldModel)
+		ownerIDs, err := loadAccountModelAliasRenameSystemRouteOwnerIDs(ctx, client, queries.lockCandidatesSQL, groupIDs, rename.OldModel)
 		if err != nil {
 			return nil, err
 		}
-		lockGroupIDs := accountModelAliasRenameSystemLockGroupIDs(groupIDs, routes)
-		if err := groupref.LockGroupReferenceWrites(ctx, tx, lockGroupIDs...); err != nil {
-			return nil, fmt.Errorf("lock system custom group alias rename references: %w", err)
+		for _, ownerID := range ownerIDs {
+			lockGroupIDs[ownerID] = struct{}{}
+		}
+	}
+	if err := groupref.LockGroupReferenceWrites(ctx, tx, sortedInt64Keys(lockGroupIDs)...); err != nil {
+		return nil, fmt.Errorf("lock system custom group alias rename references: %w", err)
+	}
+
+	changedGroups := make(map[int64]struct{})
+	for _, rename := range renames {
+		routes, err := loadAccountModelAliasRenameRoutes(ctx, client, queries.candidatesSQL, groupIDs, rename.OldModel)
+		if err != nil {
+			return nil, err
 		}
 		updated, skipped, err := processAccountModelAliasRenameRoutes(ctx, client, queries, routes, rename, changedGroups)
 		if err != nil {
@@ -273,7 +287,7 @@ func cascadeAccountModelAliasRenameChannelPricing(ctx context.Context, exec dbEx
 		oldRows := []*accountModelAliasRenamePricingRow{}
 		newExists := false
 		for _, row := range rows {
-			if containsExactString(row.models, rename.NewModel) {
+			if accountModelAliasRenamePricingModelsConflict(row.models, rename.NewModel) {
 				newExists = true
 			}
 			if containsExactString(row.models, rename.OldModel) {
@@ -316,7 +330,7 @@ func cascadeAccountModelAliasRenameChannelMappings(ctx context.Context, exec dbE
 		if !ok {
 			continue
 		}
-		if _, exists := platformMapping[rename.NewModel]; exists {
+		if accountModelAliasRenameMappingModelsConflict(platformMapping, rename.NewModel) {
 			skipped = append(skipped, service.AccountModelAliasRenameSkipItem{
 				Scope:    accountModelAliasRenameChannelMappingScope,
 				OwnerID:  channels[i].id,
@@ -438,15 +452,6 @@ func processAccountModelAliasRenameRoutes(
 	return updated, skipped, nil
 }
 
-func accountModelAliasRenameSystemLockGroupIDs(sourceGroupIDs []int64, routes []accountModelAliasRenameRoute) []int64 {
-	groupIDs := make([]int64, 0, len(sourceGroupIDs)+len(routes))
-	groupIDs = append(groupIDs, sourceGroupIDs...)
-	for _, route := range routes {
-		groupIDs = append(groupIDs, route.ownerID)
-	}
-	return groupIDs
-}
-
 func loadAccountModelAliasRenameRoutes(ctx context.Context, exec sqlExecutor, query string, groupIDs []int64, oldModel string) ([]accountModelAliasRenameRoute, error) {
 	rows, err := exec.QueryContext(ctx, query, pq.Array(groupIDs), oldModel)
 	if err != nil {
@@ -466,6 +471,27 @@ func loadAccountModelAliasRenameRoutes(ctx context.Context, exec sqlExecutor, qu
 		return nil, fmt.Errorf("iterate custom route alias rename candidates: %w", err)
 	}
 	return routes, nil
+}
+
+func loadAccountModelAliasRenameSystemRouteOwnerIDs(ctx context.Context, exec sqlExecutor, query string, groupIDs []int64, oldModel string) ([]int64, error) {
+	rows, err := exec.QueryContext(ctx, query, pq.Array(groupIDs), oldModel)
+	if err != nil {
+		return nil, fmt.Errorf("load system custom route alias rename lock candidates: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	ownerIDs := []int64{}
+	for rows.Next() {
+		var ownerID int64
+		if err := rows.Scan(&ownerID); err != nil {
+			return nil, fmt.Errorf("scan system custom route alias rename lock candidate: %w", err)
+		}
+		ownerIDs = append(ownerIDs, ownerID)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate system custom route alias rename lock candidates: %w", err)
+	}
+	return ownerIDs, nil
 }
 
 func accountModelAliasRenameExists(ctx context.Context, exec sqlExecutor, query string, args ...any) (bool, error) {
@@ -544,6 +570,16 @@ WHERE id = $3`,
 
 func accountModelAliasRenameSystemRouteQueries() accountModelAliasRenameRouteQueries {
 	return accountModelAliasRenameRouteQueries{
+		lockCandidatesSQL: `
+SELECT DISTINCT m.group_id
+FROM system_custom_group_models AS m
+JOIN groups AS g ON g.id = m.group_id
+WHERE g.deleted_at IS NULL
+  AND g.system_custom_routing_enabled = TRUE
+  AND m.source_group_id = ANY($1)
+  AND LOWER(m.source_model) = LOWER($2)
+ORDER BY m.group_id
+`,
 		candidatesSQL: `
 SELECT m.id, m.group_id, m.public_model, m.source_group_id, m.source_model
 FROM system_custom_group_models AS m
@@ -626,6 +662,66 @@ func containsExactString(values []string, want string) bool {
 		}
 	}
 	return false
+}
+
+type accountModelAliasRenameModelEntry struct {
+	prefix   string
+	wildcard bool
+}
+
+func accountModelAliasRenamePricingModelsConflict(models []string, model string) bool {
+	target := accountModelAliasRenamePricingModelEntry(model)
+	for _, existing := range models {
+		if accountModelAliasRenameModelsConflict(accountModelAliasRenamePricingModelEntry(existing), target) {
+			return true
+		}
+	}
+	return false
+}
+
+func accountModelAliasRenameMappingModelsConflict(mapping map[string]string, model string) bool {
+	target := accountModelAliasRenameMappingModelEntry(model)
+	for existing := range mapping {
+		if accountModelAliasRenameModelsConflict(accountModelAliasRenameMappingModelEntry(existing), target) {
+			return true
+		}
+	}
+	return false
+}
+
+func accountModelAliasRenamePricingModelEntry(pattern string) accountModelAliasRenameModelEntry {
+	prefix, wildcard := accountModelAliasRenameSplitWildcardSuffix(pattern)
+	prefix = strings.ToLower(strings.TrimSpace(prefix))
+	if strings.HasPrefix(prefix, "claude-") {
+		prefix = strings.ReplaceAll(prefix, ".", "-")
+	}
+	return accountModelAliasRenameModelEntry{prefix: prefix, wildcard: wildcard}
+}
+
+func accountModelAliasRenameMappingModelEntry(pattern string) accountModelAliasRenameModelEntry {
+	prefix, wildcard := accountModelAliasRenameSplitWildcardSuffix(strings.ToLower(pattern))
+	return accountModelAliasRenameModelEntry{prefix: prefix, wildcard: wildcard}
+}
+
+func accountModelAliasRenameSplitWildcardSuffix(pattern string) (string, bool) {
+	if strings.HasSuffix(pattern, "*") {
+		return strings.TrimSuffix(pattern, "*"), true
+	}
+	return pattern, false
+}
+
+func accountModelAliasRenameModelsConflict(a, b accountModelAliasRenameModelEntry) bool {
+	switch {
+	case !a.wildcard && !b.wildcard:
+		return a.prefix == b.prefix
+	case a.wildcard && !b.wildcard:
+		return strings.HasPrefix(b.prefix, a.prefix)
+	case !a.wildcard && b.wildcard:
+		return strings.HasPrefix(a.prefix, b.prefix)
+	default:
+		return strings.HasPrefix(a.prefix, b.prefix) ||
+			strings.HasPrefix(b.prefix, a.prefix)
+	}
 }
 
 func sortedInt64Keys(values map[int64]struct{}) []int64 {
