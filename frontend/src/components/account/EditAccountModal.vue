@@ -4024,8 +4024,19 @@ function snapshotOriginalAntigravityModelMappings() {
   }
 }
 
-function detectAntigravityModelAliasRenames(): AccountModelAliasRenameInput[] {
-  if (props.account?.platform !== 'antigravity') {
+function readSavedAntigravityModelMapping(updatePayload: Record<string, unknown>): Record<string, string> | null {
+  const credentials = updatePayload.credentials as Record<string, unknown> | undefined
+  const mapping = credentials?.model_mapping
+  if (!mapping || typeof mapping !== 'object' || Array.isArray(mapping)) {
+    return null
+  }
+  return mapping as Record<string, string>
+}
+
+function detectAntigravityModelAliasRenames(
+  savedModelMapping: Record<string, string> | null
+): AccountModelAliasRenameInput[] {
+  if (props.account?.platform !== 'antigravity' || !savedModelMapping) {
     return []
   }
 
@@ -4037,8 +4048,10 @@ function detectAntigravityModelAliasRenames(): AccountModelAliasRenameInput[] {
 
     const oldModel = original.from.trim()
     const newModel = current.from.trim()
+    const targetModel = current.to.trim()
     if (!oldModel || !newModel || oldModel === newModel) continue
-    if (original.to.trim() !== current.to.trim()) continue
+    if (original.to.trim() !== targetModel) continue
+    if (savedModelMapping[newModel] !== targetModel) continue
 
     const key = `${oldModel.toLowerCase()}\0${newModel.toLowerCase()}`
     if (seen.has(key)) continue
@@ -4067,8 +4080,8 @@ function showModelAliasRenameCascadeResult(result: AccountModelAliasRenameCascad
   }
 }
 
-async function cascadeAntigravityModelAliasRenames(accountID: number) {
-  const renames = detectAntigravityModelAliasRenames()
+async function cascadeAntigravityModelAliasRenames(accountID: number, updatePayload: Record<string, unknown>) {
+  const renames = detectAntigravityModelAliasRenames(readSavedAntigravityModelMapping(updatePayload))
   if (renames.length === 0) return
 
   try {
@@ -4530,7 +4543,7 @@ const submitUpdateAccount = async (accountID: number, updatePayload: Record<stri
   submitting.value = true
   try {
     const updatedAccount = await adminAPI.accounts.update(accountID, withAntigravityConfirmFlag(updatePayload))
-    await cascadeAntigravityModelAliasRenames(accountID)
+    await cascadeAntigravityModelAliasRenames(accountID, updatePayload)
     appStore.showSuccess(t('admin.accounts.accountUpdated'))
     emit('updated', updatedAccount)
     handleClose()

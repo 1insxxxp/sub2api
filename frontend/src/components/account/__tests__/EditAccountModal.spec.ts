@@ -1245,6 +1245,52 @@ describe('EditAccountModal', () => {
     expect(cascadeModelAliasRenamesMock).not.toHaveBeenCalled()
   })
 
+  it('does not cascade Antigravity left-side renames pruned from the saved mapping', async () => {
+    const account = buildAntigravityAccount('configured-project')
+    account.credentials.model_mapping = {
+      'gemini-old': 'gemini-target'
+    }
+    updateAccountMock.mockReset()
+    checkMixedChannelRiskMock.mockReset()
+    checkMixedChannelRiskMock.mockResolvedValue({ has_risk: false })
+    updateAccountMock.mockResolvedValue(account)
+
+    const wrapper = mountModal(account)
+
+    await inputWithValue(wrapper, 'gemini-old').setValue('gem*ini')
+    await wrapper.get('form#edit-account-form').trigger('submit.prevent')
+    await flushPromises()
+
+    expect(updateAccountMock).toHaveBeenCalledTimes(1)
+    expect(updateAccountMock.mock.calls[0]?.[1]?.credentials).not.toHaveProperty('model_mapping')
+    expect(cascadeModelAliasRenamesMock).not.toHaveBeenCalled()
+    expect(wrapper.emitted('updated')?.[0]).toEqual([account])
+    expect(wrapper.emitted('close')).toBeTruthy()
+  })
+
+  it('does not cascade Antigravity left-side renames when the target wildcard row is pruned', async () => {
+    const account = buildAntigravityAccount('configured-project')
+    account.credentials.model_mapping = {
+      'gemini-old': 'gemini-*'
+    }
+    updateAccountMock.mockReset()
+    checkMixedChannelRiskMock.mockReset()
+    checkMixedChannelRiskMock.mockResolvedValue({ has_risk: false })
+    updateAccountMock.mockResolvedValue(account)
+
+    const wrapper = mountModal(account)
+
+    await inputWithValue(wrapper, 'gemini-old').setValue('gemini-new')
+    await wrapper.get('form#edit-account-form').trigger('submit.prevent')
+    await flushPromises()
+
+    expect(updateAccountMock).toHaveBeenCalledTimes(1)
+    expect(updateAccountMock.mock.calls[0]?.[1]?.credentials).not.toHaveProperty('model_mapping')
+    expect(cascadeModelAliasRenamesMock).not.toHaveBeenCalled()
+    expect(wrapper.emitted('updated')?.[0]).toEqual([account])
+    expect(wrapper.emitted('close')).toBeTruthy()
+  })
+
   it('does not cascade rename-like edits for non-Antigravity accounts', async () => {
     const account = buildAccount()
     account.credentials.model_mapping = {
