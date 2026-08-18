@@ -189,6 +189,10 @@ type CheckMixedChannelRequest struct {
 	AccountID *int64  `json:"account_id"`
 }
 
+type CascadeAccountModelAliasRenamesRequest struct {
+	Renames []service.AccountModelAliasRenameInput `json:"renames"`
+}
+
 // AccountWithConcurrency extends Account with real-time concurrency info
 type AccountWithConcurrency struct {
 	*dto.Account
@@ -2750,6 +2754,30 @@ func (h *AccountHandler) GetAvailableModels(c *gin.Context) {
 	}
 
 	response.Success(c, models)
+}
+
+// CascadeAccountModelAliasRenames handles cascading detected account model alias renames.
+// POST /api/v1/admin/accounts/:id/model-alias-renames
+func (h *AccountHandler) CascadeAccountModelAliasRenames(c *gin.Context) {
+	accountID, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil {
+		response.BadRequest(c, "Invalid account ID")
+		return
+	}
+
+	var req CascadeAccountModelAliasRenamesRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.BadRequest(c, "Invalid request: "+err.Error())
+		return
+	}
+
+	result, err := h.adminService.CascadeAccountModelAliasRenames(c.Request.Context(), accountID, req.Renames)
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+
+	response.Success(c, result)
 }
 
 // SyncUpstreamModels handles syncing live supported models from an account's upstream.

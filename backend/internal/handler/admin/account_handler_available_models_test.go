@@ -71,6 +71,14 @@ func setupSyncUpstreamModelsRouter(adminSvc service.AdminService, upstream servi
 	return router
 }
 
+func setupModelAliasRenameRouter(adminSvc service.AdminService) *gin.Engine {
+	gin.SetMode(gin.TestMode)
+	router := gin.New()
+	handler := NewAccountHandler(adminSvc, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
+	router.POST("/api/v1/admin/accounts/:id/model-alias-renames", handler.CascadeAccountModelAliasRenames)
+	return router
+}
+
 func TestAccountHandlerGetAvailableModels_GrokUsesXAIModels(t *testing.T) {
 	svc := &availableModelsAdminService{
 		stubAdminService: newStubAdminService(),
@@ -340,4 +348,78 @@ func TestAccountHandlerSyncUpstreamModels_UpstreamErrorDoesNotExposeBody(t *test
 	require.Equal(t, http.StatusBadGateway, rec.Code)
 	require.Contains(t, rec.Body.String(), "Upstream model list request failed with HTTP 502")
 	require.NotContains(t, rec.Body.String(), "SECRET_TOKEN")
+}
+
+func TestAccountHandlerCascadeAccountModelAliasRenames_PassesThroughRenames(t *testing.T) {
+	svc := newStubAdminService()
+	svc.cascadeModelAliasRenameResult = &service.AccountModelAliasRenameCascadeResult{
+		ChannelPricingUpdated:     2,
+		ChannelMappingsUpdated:    1,
+		UserCustomRoutesUpdated:   3,
+		SystemCustomRoutesUpdated: 4,
+		Skipped: []service.AccountModelAliasRenameSkipItem{{
+			Scope:    "channel_pricing",
+			OwnerID:  9,
+			OldModel: "gemini-old",
+			NewModel: "gemini-new",
+			Reason:   "conflict",
+		}},
+	}
+	router := setupModelAliasRenameRouter(svc)
+
+	body := `{"renames":[{"old_model":"gemini-old","new_model":"gemini-new"},{"old_model":"claude-old","new_model":"claude-new"}]}`
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/admin/accounts/44/model-alias-renames", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	router.ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusOK, rec.Code)
+	require.Equal(t, 1, svc.cascadeModelAliasRenameCalls)
+	require.Equal(t, int64(44), svc.lastCascadeModelAliasRenameAccount)
+	require.Equal(t, []service.AccountModelAliasRenameInput{
+		{OldModel: "gemini-old", NewModel: "gemini-new"},
+		{OldModel: "claude-old", NewModel: "claude-new"},
+	}, svc.lastCascadeModelAliasRenameInput)
+
+	var resp struct {
+		Code    int                                          `json:"code"`
+		Message string                                       `json:"message"`
+		Data    service.AccountModelAliasRenameCascadeResult `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+	require.Equal(t, 0, resp.Code)
+	require.Equal(t, "success", resp.Message)
+	require.Equal(t, 2, resp.Data.ChannelPricingUpdated)
+	require.Equal(t, 1, resp.Data.ChannelMappingsUpdated)
+	require.Equal(t, 3, resp.Data.UserCustomRoutesUpdated)
+	require.Equal(t, 4, resp.Data.SystemCustomRoutesUpdated)
+	require.Len(t, resp.Data.Skipped, 1)
+}
+
+func TestAccountHandlerCascadeAccountModelAliasRenames_InvalidIDReturnsBadRequest(t *testing.T) {
+	svc := newStubAdminService()
+	router := setupModelAliasRenameRouter(svc)
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/admin/accounts/not-an-id/model-alias-renames", strings.NewReader(`{"renames":[]}`))
+	req.Header.Set("Content-Type", "application/json")
+	router.ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusBadRequest, rec.Code)
+	require.Equal(t, 0, svc.cascadeModelAliasRenameCalls)
+	require.Contains(t, rec.Body.String(), "Invalid account ID")
+}
+
+func TestAccountHandlerCascadeAccountModelAliasRenames_MalformedBodyReturnsBadRequest(t *testing.T) {
+	svc := newStubAdminService()
+	router := setupModelAliasRenameRouter(svc)
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/admin/accounts/44/model-alias-renames", strings.NewReader(`{"renames":[`))
+	req.Header.Set("Content-Type", "application/json")
+	router.ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusBadRequest, rec.Code)
+	require.Equal(t, 0, svc.cascadeModelAliasRenameCalls)
+	require.Contains(t, rec.Body.String(), "Invalid request")
 }

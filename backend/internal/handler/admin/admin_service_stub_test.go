@@ -35,6 +35,11 @@ type stubAdminService struct {
 	lastUpdateAccountInput              *service.UpdateAccountInput
 	bulkUpdateAccountErr                error
 	lastBulkUpdateAccountInput          *service.BulkUpdateAccountsInput
+	cascadeModelAliasRenameResult       *service.AccountModelAliasRenameCascadeResult
+	cascadeModelAliasRenameErr          error
+	cascadeModelAliasRenameCalls        int
+	lastCascadeModelAliasRenameAccount  int64
+	lastCascadeModelAliasRenameInput    []service.AccountModelAliasRenameInput
 	getAccountResult                    *service.Account
 	updateAccountCalls                  int
 	updateAccountExtraCalls             int
@@ -545,6 +550,19 @@ func (s *stubAdminService) BulkUpdateAccounts(ctx context.Context, input *servic
 		return nil, s.bulkUpdateAccountErr
 	}
 	return &service.BulkUpdateAccountsResult{Success: len(input.AccountIDs), Failed: 0, SuccessIDs: input.AccountIDs}, nil
+}
+
+func (s *stubAdminService) CascadeAccountModelAliasRenames(ctx context.Context, accountID int64, input []service.AccountModelAliasRenameInput) (*service.AccountModelAliasRenameCascadeResult, error) {
+	s.cascadeModelAliasRenameCalls++
+	s.lastCascadeModelAliasRenameAccount = accountID
+	s.lastCascadeModelAliasRenameInput = append([]service.AccountModelAliasRenameInput(nil), input...)
+	if s.cascadeModelAliasRenameErr != nil {
+		return nil, s.cascadeModelAliasRenameErr
+	}
+	if s.cascadeModelAliasRenameResult != nil {
+		return s.cascadeModelAliasRenameResult, nil
+	}
+	return &service.AccountModelAliasRenameCascadeResult{}, nil
 }
 
 func (s *stubAdminService) CheckMixedChannelRisk(ctx context.Context, currentAccountID int64, currentAccountPlatform string, groupIDs []int64) error {
