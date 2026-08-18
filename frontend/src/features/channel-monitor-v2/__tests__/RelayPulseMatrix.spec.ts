@@ -202,6 +202,42 @@ describe('RelayPulseMatrix', () => {
     expect(wrapper.text()).toContain('样本不足')
     expect(wrapper.text()).toContain('无流量')
   })
+
+  it('renders a complete mobile card label, metric labels, and pulse axis', () => {
+    const longGroupName = '余额【claude 特价无缓存版】综合低至 ¥0.1 / 刀'
+    const wrapper = mount(RelayPulseMatrix, {
+      props: {
+        rows: [{
+          platform: 'anthropic',
+          group_id: 44,
+          group_name: longGroupName,
+          model: 'claude-opus-4-6',
+          metrics: metrics(10),
+          health,
+          buckets: [
+            { bucket_start: '2026-08-01T00:00:00Z', metrics: metrics(10), health },
+          ],
+        }],
+        coverage: {
+          requested_start: '2026-08-01T00:00:00Z',
+          requested_end: '2026-08-01T00:03:00Z',
+          coverage_start: '2026-08-01T00:00:00Z',
+          data_through: '2026-08-01T00:03:00Z',
+          computed_at: '2026-08-01T00:03:00Z',
+          aggregation_lag_seconds: 0,
+          coverage_complete: true,
+          bucket_seconds: 60,
+        },
+        healthMode: 'overall',
+      },
+    })
+
+    expect(wrapper.find('.dimension-label').text()).toContain(longGroupName)
+    expect(wrapper.findAll('.summary-value').map((node) => node.attributes('data-mobile-label')))
+      .toEqual(['成功率', '首 Token', '每秒 Token', '缓存率'])
+    expect(wrapper.find('.mobile-pulse-axis').text()).toContain('08/01')
+    expect(wrapper.find('.pulse-track-shell').exists()).toBe(true)
+  })
 })
 
 describe('RelayPulseMatrix axis range', () => {

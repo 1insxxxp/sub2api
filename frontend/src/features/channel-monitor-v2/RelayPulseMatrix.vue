@@ -1,6 +1,6 @@
 <template>
   <section
-    class="card flex min-h-[360px] flex-col overflow-visible !rounded-3xl !border-0 !p-6 shadow-sm ring-1 ring-gray-900/5 dark:!bg-dark-800 dark:ring-dark-700"
+    class="monitor-matrix-card card flex min-h-[360px] flex-col overflow-visible !rounded-3xl !border-0 !p-6 shadow-sm ring-1 ring-gray-900/5 dark:!bg-dark-800 dark:ring-dark-700"
   >
     <div class="card-header mb-4 flex shrink-0 flex-wrap items-start justify-between gap-3 !border-0 !p-0">
       <div class="min-w-0">
@@ -58,13 +58,17 @@
           >
             <div class="dimension-cell flex min-w-0 items-center gap-2 bg-white dark:bg-dark-800" :title="rowLabel(entry.row)">
               <span :class="['status-dot', cellClass(entry.row.health, entry.row.metrics.request_count)]"></span>
-              <strong class="truncate text-xs font-semibold text-gray-800 dark:text-gray-100">{{ rowLabel(entry.row) }}</strong>
+              <strong class="dimension-label truncate text-xs font-semibold text-gray-800 dark:text-gray-100">{{ rowLabel(entry.row) }}</strong>
             </div>
-            <strong class="summary-value bg-white text-xs font-medium tabular-nums text-gray-600 dark:bg-dark-800 dark:text-gray-300">
+            <strong
+              class="summary-value bg-white text-xs font-medium tabular-nums text-gray-600 dark:bg-dark-800 dark:text-gray-300"
+              :data-mobile-label="t('channelMonitorV2.metrics.successRate')"
+            >
               {{ successRate(entry.row.metrics) }}
             </strong>
             <strong
               class="summary-value bg-white text-xs font-medium tabular-nums text-gray-600 dark:bg-dark-800 dark:text-gray-300"
+              :data-mobile-label="t('channelMonitorV2.metrics.ttft')"
               :title="latencyPrivacy(entry.row.metrics.ttft)"
             >
               {{ formatMs(entry.row.metrics.ttft.p50_ms) }}
@@ -72,55 +76,63 @@
             <strong
               v-if="showThroughput"
               class="summary-value bg-white text-xs font-medium tabular-nums text-gray-600 dark:bg-dark-800 dark:text-gray-300"
+              :data-mobile-label="t('channelMonitorV2.metrics.tps')"
               :title="exactTps(entry.row.metrics.tpm)"
             >
               {{ formatTps(entry.row.metrics.tpm) }}
             </strong>
             <strong
               class="summary-value bg-white text-xs font-medium tabular-nums text-gray-600 dark:bg-dark-800 dark:text-gray-300"
+              :data-mobile-label="t('channelMonitorV2.metrics.cacheRate')"
             >
               {{ formatPercent(entry.row.metrics.cache_rate) }}
             </strong>
-            <div class="pulse-track grid items-stretch" :style="pulseStyle">
-              <span
-                v-for="slot in entry.slots"
-                :key="slot.start"
-                class="pulse-cell relative rounded-sm border-0 p-0 outline-offset-1"
-                :class="[
-                  slot.bucket ? cellClass(slot.bucket.health, slot.bucket.metrics.request_count) : 'health-no-traffic',
-                  slot.bucket ? 'has-data' : 'is-empty',
-                ]"
-                tabindex="0"
-                role="img"
-                :title="slot.bucket ? bucketTooltip(slot.bucket) : t('channelMonitorV2.matrix.noTrafficAt', { time: formatBucketRange(slot.start) })"
-                :aria-label="slot.bucket ? bucketTooltip(slot.bucket) : t('channelMonitorV2.matrix.noTrafficAt', { time: formatBucketRange(slot.start) })"
-                @mouseenter="showTooltip($event, slot)"
-                @mousemove="moveTooltip($event)"
-                @mouseleave="hideTooltip"
-                @focus="showTooltip($event, slot)"
-                @blur="hideTooltip"
-              >
-                <span class="pulse-tooltip" role="tooltip">
-                  <template v-if="slot.bucket">
-                    <span class="pulse-tooltip-line pulse-tooltip-title">{{ formatBucketRange(slot.start) }}</span>
-                    <span class="pulse-tooltip-line">{{ t('channelMonitorV2.matrix.scoreLine', { score: formatScore(slot.bucket.health) }) }}</span>
-                    <span v-if="slot.bucket.health.low_sample" class="pulse-tooltip-line pulse-tooltip-note">
-                      {{ t('channelMonitorV2.matrix.lowSample') }}
-                    </span>
-                    <span class="pulse-tooltip-line">{{ t('channelMonitorV2.metrics.successRateValue', { value: successRate(slot.bucket.metrics) }) }}</span>
-                    <span class="pulse-tooltip-line">{{ t('channelMonitorV2.metrics.ttftValue', { value: latencyPrivacy(slot.bucket.metrics.ttft) }) }}</span>
-                    <span v-if="showThroughput" class="pulse-tooltip-line">{{ t('channelMonitorV2.metrics.tpsValue', { value: formatTps(slot.bucket.metrics.tpm) }) }}</span>
-                    <span class="pulse-tooltip-line">{{ t('channelMonitorV2.metrics.cacheRateValue', { value: formatPercent(slot.bucket.metrics.cache_rate) }) }}</span>
-                    <span class="pulse-tooltip-line">{{ t('channelMonitorV2.metrics.errorRateValue', { value: formatPercent(slot.bucket.metrics.error_rate) }) }}</span>
-                    <span v-if="showThroughput" class="pulse-tooltip-line">{{ t('channelMonitorV2.metrics.rpmValue', { value: formatRate(slot.bucket.metrics.rpm) }) }}</span>
-                    <span class="pulse-tooltip-line">{{ t('channelMonitorV2.metrics.durationValue', { value: latencyPrivacy(slot.bucket.metrics.duration) }) }}</span>
-                  </template>
-                  <template v-else>
-                    <span class="pulse-tooltip-line pulse-tooltip-title">{{ formatBucketRange(slot.start) }}</span>
-                    <span class="pulse-tooltip-line">{{ t('channelMonitorV2.matrix.noTraffic') }}</span>
-                  </template>
+            <div class="mobile-pulse-axis" aria-hidden="true">
+              <i class="not-italic">{{ axisStart }}</i>
+              <i class="not-italic">{{ axisEnd }}</i>
+            </div>
+            <div class="pulse-track-shell">
+              <div class="pulse-track grid items-stretch" :style="pulseStyle">
+                <span
+                  v-for="slot in entry.slots"
+                  :key="slot.start"
+                  class="pulse-cell relative rounded-sm border-0 p-0 outline-offset-1"
+                  :class="[
+                    slot.bucket ? cellClass(slot.bucket.health, slot.bucket.metrics.request_count) : 'health-no-traffic',
+                    slot.bucket ? 'has-data' : 'is-empty',
+                  ]"
+                  tabindex="0"
+                  role="img"
+                  :title="slot.bucket ? bucketTooltip(slot.bucket) : t('channelMonitorV2.matrix.noTrafficAt', { time: formatBucketRange(slot.start) })"
+                  :aria-label="slot.bucket ? bucketTooltip(slot.bucket) : t('channelMonitorV2.matrix.noTrafficAt', { time: formatBucketRange(slot.start) })"
+                  @mouseenter="showTooltip($event, slot)"
+                  @mousemove="moveTooltip($event)"
+                  @mouseleave="hideTooltip"
+                  @focus="showTooltip($event, slot)"
+                  @blur="hideTooltip"
+                >
+                  <span class="pulse-tooltip" role="tooltip">
+                    <template v-if="slot.bucket">
+                      <span class="pulse-tooltip-line pulse-tooltip-title">{{ formatBucketRange(slot.start) }}</span>
+                      <span class="pulse-tooltip-line">{{ t('channelMonitorV2.matrix.scoreLine', { score: formatScore(slot.bucket.health) }) }}</span>
+                      <span v-if="slot.bucket.health.low_sample" class="pulse-tooltip-line pulse-tooltip-note">
+                        {{ t('channelMonitorV2.matrix.lowSample') }}
+                      </span>
+                      <span class="pulse-tooltip-line">{{ t('channelMonitorV2.metrics.successRateValue', { value: successRate(slot.bucket.metrics) }) }}</span>
+                      <span class="pulse-tooltip-line">{{ t('channelMonitorV2.metrics.ttftValue', { value: latencyPrivacy(slot.bucket.metrics.ttft) }) }}</span>
+                      <span v-if="showThroughput" class="pulse-tooltip-line">{{ t('channelMonitorV2.metrics.tpsValue', { value: formatTps(slot.bucket.metrics.tpm) }) }}</span>
+                      <span class="pulse-tooltip-line">{{ t('channelMonitorV2.metrics.cacheRateValue', { value: formatPercent(slot.bucket.metrics.cache_rate) }) }}</span>
+                      <span class="pulse-tooltip-line">{{ t('channelMonitorV2.metrics.errorRateValue', { value: formatPercent(slot.bucket.metrics.error_rate) }) }}</span>
+                      <span v-if="showThroughput" class="pulse-tooltip-line">{{ t('channelMonitorV2.metrics.rpmValue', { value: formatRate(slot.bucket.metrics.rpm) }) }}</span>
+                      <span class="pulse-tooltip-line">{{ t('channelMonitorV2.metrics.durationValue', { value: latencyPrivacy(slot.bucket.metrics.duration) }) }}</span>
+                    </template>
+                    <template v-else>
+                      <span class="pulse-tooltip-line pulse-tooltip-title">{{ formatBucketRange(slot.start) }}</span>
+                      <span class="pulse-tooltip-line">{{ t('channelMonitorV2.matrix.noTraffic') }}</span>
+                    </template>
+                  </span>
                 </span>
-              </span>
+              </div>
             </div>
           </div>
         </div>
@@ -508,6 +520,12 @@ function formatBucketRange(value: string) {
 .pulse-track {
   min-width: 0;
 }
+.pulse-track-shell {
+  min-width: 0;
+}
+.mobile-pulse-axis {
+  display: none;
+}
 .status-dot {
   display: inline-block;
   height: 0.5rem;
@@ -665,15 +683,118 @@ function formatBucketRange(value: string) {
 }
 
 @media (max-width: 640px) {
-  .matrix-row {
-    grid-template-columns: minmax(88px, 1fr) minmax(48px, 0.45fr) minmax(54px, 0.5fr) minmax(96px, 2.6fr);
-    gap: 0.35rem;
+  .monitor-matrix-card {
+    padding: 1rem !important;
   }
-  .matrix-row > :nth-child(2) {
-    left: 0;
+
+  .matrix-scroll {
+    overflow-x: hidden;
+    padding: 0.25rem;
+    background: transparent;
   }
-  .matrix-row > :nth-child(3) {
-    left: 0;
+
+  .matrix-table {
+    min-width: 0 !important;
+  }
+
+  .matrix-header {
+    display: none;
+  }
+
+  .matrix-row:not(.matrix-header),
+  .matrix-row--with-tps:not(.matrix-header) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.5rem;
+    min-height: 0;
+    margin-bottom: 0.75rem;
+    padding: 0.75rem;
+    border: 1px solid rgb(229 231 235 / 0.9);
+    border-radius: 0.875rem;
+    background: rgb(255 255 255 / 0.92);
+    box-shadow: 0 1px 2px rgb(15 23 42 / 0.04);
+  }
+
+  :global(.dark) .matrix-row:not(.matrix-header),
+  :global(.dark) .matrix-row--with-tps:not(.matrix-header) {
+    border-color: rgb(55 65 81 / 0.85);
+    background: rgb(31 41 55 / 0.72);
+  }
+
+  .dimension-cell,
+  .mobile-pulse-axis,
+  .pulse-track-shell {
+    grid-column: 1 / -1;
+  }
+
+  .dimension-cell {
+    align-items: flex-start;
+    padding-bottom: 0.125rem;
+    background: transparent;
+  }
+
+  .dimension-label {
+    min-width: 0;
+    overflow: visible;
+    white-space: normal;
+    text-overflow: clip;
+    overflow-wrap: anywhere;
+    line-height: 1.45;
+  }
+
+  .summary-value {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+    gap: 0.125rem;
+    padding: 0.5rem 0.625rem;
+    border: 1px solid rgb(229 231 235 / 0.8);
+    border-radius: 0.625rem;
+    background: rgb(249 250 251 / 0.9);
+    color: rgb(31 41 55);
+  }
+
+  .summary-value::before {
+    content: attr(data-mobile-label);
+    overflow: hidden;
+    color: rgb(107 114 128);
+    font-size: 0.625rem;
+    font-weight: 500;
+    line-height: 1rem;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  :global(.dark) .summary-value {
+    border-color: rgb(55 65 81 / 0.85);
+    background: rgb(17 24 39 / 0.58);
+    color: rgb(229 231 235);
+  }
+
+  :global(.dark) .summary-value::before {
+    color: rgb(156 163 175);
+  }
+
+  .mobile-pulse-axis {
+    display: flex;
+    justify-content: space-between;
+    gap: 0.75rem;
+    margin-top: 0.125rem;
+    color: rgb(107 114 128);
+    font-size: 0.625rem;
+    line-height: 1rem;
+  }
+
+  .pulse-track-shell {
+    max-width: 100%;
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding-bottom: 0.25rem;
+    overscroll-behavior-inline: contain;
+    scrollbar-width: thin;
+  }
+
+  .pulse-track {
+    width: 100%;
   }
 }
 </style>
