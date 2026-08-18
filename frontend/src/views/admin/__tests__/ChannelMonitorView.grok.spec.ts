@@ -10,9 +10,11 @@ import {
   PROVIDER_GROK,
 } from '@/constants/channelMonitor'
 
-const { createMonitor, listTemplates } = vi.hoisted(() => ({
+const { createMonitor, listTemplates, accountsList, accountsGetById } = vi.hoisted(() => ({
   createMonitor: vi.fn(),
   listTemplates: vi.fn(),
+  accountsList: vi.fn(),
+  accountsGetById: vi.fn(),
 }))
 
 
@@ -34,6 +36,10 @@ vi.mock('@/api/admin', () => ({
     },
     channelMonitorTemplate: {
       list: listTemplates,
+    },
+    accounts: {
+      list: (...args: unknown[]) => accountsList(...args),
+      getById: (...args: unknown[]) => accountsGetById(...args),
     },
   },
 }))
@@ -87,6 +93,8 @@ describe('channel monitor Grok provider', () => {
   beforeEach(() => {
     createMonitor.mockReset().mockResolvedValue({})
     listTemplates.mockReset().mockResolvedValue({ items: [] })
+    accountsList.mockReset().mockResolvedValue({ items: [] })
+    accountsGetById.mockReset()
   })
 
   it('submits a display model mapped to its upstream request model', async () => {
@@ -113,7 +121,7 @@ describe('channel monitor Grok provider', () => {
 
     expect(PROVIDERS).toContain(PROVIDER_GROK)
     const providerButtons = wrapper.findAll('[data-testid^="monitor-provider-"]')
-    expect(providerButtons).toHaveLength(4)
+    expect(providerButtons).toHaveLength(8)
     expect(providerButtons[0].element.parentElement?.className).toContain('grid-cols-2')
     expect(providerButtons[0].element.parentElement?.className).toContain('sm:grid-cols-4')
 

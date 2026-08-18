@@ -5,6 +5,7 @@ package service
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
 	"github.com/stretchr/testify/require"
@@ -153,6 +154,7 @@ func TestGatewayRecordUsageRejectsUnexpectedPricingMiss(t *testing.T) {
 		"vendor-unknown-model",
 		1,
 		1,
+		time.Now(),
 		&recordUsageOpts{},
 	)
 

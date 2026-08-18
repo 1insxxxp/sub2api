@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
 	"github.com/stretchr/testify/require"
@@ -62,6 +63,7 @@ func TestGatewayCalculateRecordUsageCost_PerRequestReplacesTokenCost(t *testing.
 		model,
 		1.25,
 		1,
+		time.Time{},
 		nil,
 	)
 
