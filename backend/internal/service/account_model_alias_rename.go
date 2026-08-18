@@ -37,6 +37,11 @@ type accountModelAliasRenameCascadeRepository interface {
 	CascadeAccountModelAliasRenames(ctx context.Context, accountID int64, groupIDs []int64, renames []AccountModelAliasRename) (*AccountModelAliasRenameCascadeResult, error)
 }
 
+func accountModelAliasRenameCascadeRepositoryFrom(repo any) accountModelAliasRenameCascadeRepository {
+	cascadeRepo, _ := repo.(accountModelAliasRenameCascadeRepository)
+	return cascadeRepo
+}
+
 func normalizeAccountModelAliasRenames(input []AccountModelAliasRenameInput) []AccountModelAliasRename {
 	renames := make([]AccountModelAliasRename, 0, len(input))
 	seen := make(map[string]struct{}, len(input))

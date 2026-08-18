@@ -723,8 +723,11 @@ func NewAdminService(
 	compositeRouteRepo CompositeModelRouteRepository,
 	compositeResolver *CompositeRouteResolver,
 	channelCacheInvalidator ChannelCacheInvalidator,
+	channelRepo ChannelRepository,
+	userCustomGroupRepo UserCustomGroupRepository,
+	systemCustomGroupRepo SystemCustomGroupRepository,
 ) AdminService {
-	return &adminServiceImpl{
+	service := &adminServiceImpl{
 		userRepo:             userRepo,
 		groupRepo:            groupRepo,
 		groupDuplicateRepo:   groupRepo,
@@ -753,4 +756,8 @@ func NewAdminService(
 
 		channelCacheInvalidator: channelCacheInvalidator,
 	}
+	service.channelRepo = accountModelAliasRenameCascadeRepositoryFrom(channelRepo)
+	service.userCustomGroupRepo = accountModelAliasRenameCascadeRepositoryFrom(userCustomGroupRepo)
+	service.systemCustomGroupRepo = accountModelAliasRenameCascadeRepositoryFrom(systemCustomGroupRepo)
+	return service
 }

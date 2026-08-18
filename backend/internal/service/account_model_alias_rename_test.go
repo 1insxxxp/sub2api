@@ -139,6 +139,45 @@ func TestAdminService_CascadeAccountModelAliasRenames(t *testing.T) {
 	})
 }
 
+func TestNewAdminServiceWiresAliasCascadeRepositories(t *testing.T) {
+	channelRepo := &accountAliasRenameChannelRepoWithCascade{}
+	userCustomGroupRepo := &accountAliasRenameUserCustomGroupRepoWithCascade{}
+	systemCustomGroupRepo := &accountAliasRenameSystemCustomGroupRepoWithCascade{}
+
+	svc := NewAdminService(
+		nil,
+		nil,
+		nil,
+		nil,
+		nil,
+		nil,
+		nil,
+		nil,
+		nil,
+		nil,
+		nil,
+		nil,
+		nil,
+		nil,
+		nil,
+		nil,
+		nil,
+		nil,
+		nil,
+		nil,
+		nil,
+		nil,
+		channelRepo,
+		userCustomGroupRepo,
+		systemCustomGroupRepo,
+	)
+
+	impl := svc.(*adminServiceImpl)
+	require.Same(t, channelRepo, impl.channelRepo)
+	require.Same(t, userCustomGroupRepo, impl.userCustomGroupRepo)
+	require.Same(t, systemCustomGroupRepo, impl.systemCustomGroupRepo)
+}
+
 type accountAliasRenameAccountRepoStub struct {
 	AccountRepository
 	account *Account
@@ -189,4 +228,19 @@ func (s *accountAliasRenameCascadeRepoStub) CascadeAccountModelAliasRenames(ctx 
 		return nil, s.err
 	}
 	return &s.result, nil
+}
+
+type accountAliasRenameChannelRepoWithCascade struct {
+	ChannelRepository
+	accountAliasRenameCascadeRepoStub
+}
+
+type accountAliasRenameUserCustomGroupRepoWithCascade struct {
+	UserCustomGroupRepository
+	accountAliasRenameCascadeRepoStub
+}
+
+type accountAliasRenameSystemCustomGroupRepoWithCascade struct {
+	SystemCustomGroupRepository
+	accountAliasRenameCascadeRepoStub
 }
