@@ -981,7 +981,8 @@ function apiPricingToFormEntry(pricing: ChannelModelPricing): PricingFormEntry {
     image_input_price: perTokenToMTok(pricing.image_input_price),
     image_output_price: perTokenToMTok(pricing.image_output_price),
     per_request_price: pricing.per_request_price,
-    intervals: apiIntervalsToForm(pricing.intervals || [])
+    intervals: apiIntervalsToForm(pricing.intervals || []),
+    time_pricing: apiTimePricingToForm(pricing.time_pricing)
   }
 }
 

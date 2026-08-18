@@ -16,6 +16,9 @@ describe('available channel platform branding', () => {
     ['antigravity', 'antigravity'],
     ['grok', 'grok'],
     ['xAI', 'grok'],
+    ['Kimi', 'kimi'],
+    ['Zhipu', 'zhipu'],
+    ['DeepSeek', 'deepseek'],
     ['composite', 'composite'],
   ])('maps %s to the %s brand', (platform, brand) => {
     expect(resolveAvailableChannelBrand(platform).key).toBe(brand)

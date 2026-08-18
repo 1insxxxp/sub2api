@@ -12,6 +12,9 @@ const brands: Record<AvailableChannelBrand['key'], AvailableChannelBrand> = {
   gemini: { key: 'gemini', label: 'Gemini', platform: 'gemini' },
   antigravity: { key: 'antigravity', label: 'Antigravity', platform: 'antigravity' },
   grok: { key: 'grok', label: 'Grok', platform: 'grok' },
+  kimi: { key: 'kimi', label: 'Kimi', platform: 'kimi' },
+  zhipu: { key: 'zhipu', label: 'Zhipu', platform: 'zhipu' },
+  deepseek: { key: 'deepseek', label: 'DeepSeek', platform: 'deepseek' },
   composite: { key: 'composite', label: 'Composite', platform: 'composite' },
   generic: { key: 'generic', label: 'AI' },
 }
@@ -23,6 +26,9 @@ export function resolveAvailableChannelBrand(platform: string): AvailableChannel
   if (value.includes('gemini') || value.includes('google')) return brands.gemini
   if (value.includes('antigravity')) return brands.antigravity
   if (value.includes('grok') || value.includes('xai')) return brands.grok
+  if (value.includes('kimi') || value.includes('moonshot')) return brands.kimi
+  if (value.includes('zhipu') || value.includes('glm')) return brands.zhipu
+  if (value.includes('deepseek')) return brands.deepseek
   if (value.includes('composite')) return brands.composite
   return brands.generic
 }
