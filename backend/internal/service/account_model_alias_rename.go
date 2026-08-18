@@ -74,17 +74,9 @@ func (s *adminServiceImpl) CascadeAccountModelAliasRenames(ctx context.Context, 
 		return &AccountModelAliasRenameCascadeResult{}, nil
 	}
 
-	groups, err := s.groupRepo.ListActiveByPlatform(ctx, PlatformAntigravity)
-	if err != nil {
-		return nil, err
-	}
-	if len(groups) == 0 {
+	groupIDs := normalizeAccountModelAliasRenameGroupIDs(account.GroupIDs)
+	if len(groupIDs) == 0 {
 		return &AccountModelAliasRenameCascadeResult{}, nil
-	}
-
-	groupIDs := make([]int64, 0, len(groups))
-	for _, group := range groups {
-		groupIDs = append(groupIDs, group.ID)
 	}
 
 	result := &AccountModelAliasRenameCascadeResult{}
@@ -115,4 +107,20 @@ func mergeAccountModelAliasRenameCascadeResult(dst, src *AccountModelAliasRename
 	dst.UserCustomRoutesUpdated += src.UserCustomRoutesUpdated
 	dst.SystemCustomRoutesUpdated += src.SystemCustomRoutesUpdated
 	dst.Skipped = append(dst.Skipped, src.Skipped...)
+}
+
+func normalizeAccountModelAliasRenameGroupIDs(groupIDs []int64) []int64 {
+	normalized := make([]int64, 0, len(groupIDs))
+	seen := make(map[int64]struct{}, len(groupIDs))
+	for _, groupID := range groupIDs {
+		if groupID <= 0 {
+			continue
+		}
+		if _, ok := seen[groupID]; ok {
+			continue
+		}
+		seen[groupID] = struct{}{}
+		normalized = append(normalized, groupID)
+	}
+	return normalized
 }

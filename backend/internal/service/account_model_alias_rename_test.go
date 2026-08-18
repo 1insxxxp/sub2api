@@ -31,9 +31,9 @@ func TestNormalizeAccountModelAliasRenames(t *testing.T) {
 func TestAdminService_CascadeAccountModelAliasRenames(t *testing.T) {
 	ctx := context.Background()
 
-	t.Run("returns zero result when no active antigravity groups", func(t *testing.T) {
+	t.Run("returns zero result when account has no bound groups", func(t *testing.T) {
 		accountRepo := &accountAliasRenameAccountRepoStub{account: &Account{ID: 7, Platform: PlatformAntigravity}}
-		groupRepo := &accountAliasRenameGroupRepoStub{}
+		groupRepo := &accountAliasRenameGroupRepoStub{groups: []Group{{ID: 99, Platform: PlatformAntigravity}}}
 		cascadeRepo := &accountAliasRenameCascadeRepoStub{}
 		svc := &adminServiceImpl{accountRepo: accountRepo, groupRepo: groupRepo, channelRepo: cascadeRepo}
 
@@ -43,12 +43,12 @@ func TestAdminService_CascadeAccountModelAliasRenames(t *testing.T) {
 
 		require.NoError(t, err)
 		require.Equal(t, &AccountModelAliasRenameCascadeResult{}, got)
-		require.Equal(t, []string{PlatformAntigravity}, groupRepo.platforms)
+		require.Empty(t, groupRepo.platforms)
 		require.Empty(t, cascadeRepo.calls)
 	})
 
 	t.Run("returns zero result when renames normalize to no-ops", func(t *testing.T) {
-		accountRepo := &accountAliasRenameAccountRepoStub{account: &Account{ID: 7, Platform: PlatformAntigravity}}
+		accountRepo := &accountAliasRenameAccountRepoStub{account: &Account{ID: 7, Platform: PlatformAntigravity, GroupIDs: []int64{1}}}
 		groupRepo := &accountAliasRenameGroupRepoStub{groups: []Group{{ID: 1, Platform: PlatformAntigravity}}}
 		cascadeRepo := &accountAliasRenameCascadeRepoStub{}
 		svc := &adminServiceImpl{accountRepo: accountRepo, groupRepo: groupRepo, channelRepo: cascadeRepo}
@@ -60,6 +60,7 @@ func TestAdminService_CascadeAccountModelAliasRenames(t *testing.T) {
 
 		require.NoError(t, err)
 		require.Equal(t, &AccountModelAliasRenameCascadeResult{}, got)
+		require.Empty(t, groupRepo.platforms)
 		require.Empty(t, cascadeRepo.calls)
 	})
 
@@ -81,10 +82,10 @@ func TestAdminService_CascadeAccountModelAliasRenames(t *testing.T) {
 	})
 
 	t.Run("delegates to optional repositories and merges counts", func(t *testing.T) {
-		accountRepo := &accountAliasRenameAccountRepoStub{account: &Account{ID: 7, Platform: PlatformAntigravity}}
+		accountRepo := &accountAliasRenameAccountRepoStub{account: &Account{ID: 7, Platform: PlatformAntigravity, GroupIDs: []int64{2, 1, 2, 0}}}
 		groupRepo := &accountAliasRenameGroupRepoStub{groups: []Group{
-			{ID: 1, Platform: PlatformAntigravity},
-			{ID: 2, Platform: PlatformAntigravity},
+			{ID: 99, Platform: PlatformAntigravity},
+			{ID: 100, Platform: PlatformAntigravity},
 		}}
 		channelRepo := &accountAliasRenameCascadeRepoStub{
 			result: AccountModelAliasRenameCascadeResult{
@@ -130,10 +131,11 @@ func TestAdminService_CascadeAccountModelAliasRenames(t *testing.T) {
 			{OldModel: "claude-sonnet-4-5", NewModel: "claude-sonnet-4-5-latest"},
 			{OldModel: "claude-opus-4-1", NewModel: "claude-opus-4-1-latest"},
 		}
-		wantGroupIDs := []int64{1, 2}
+		wantGroupIDs := []int64{2, 1}
 		require.Equal(t, []accountAliasRenameCascadeCall{{accountID: 7, groupIDs: wantGroupIDs, renames: wantRenames}}, channelRepo.calls)
 		require.Equal(t, channelRepo.calls, userRouteRepo.calls)
 		require.Equal(t, channelRepo.calls, systemRouteRepo.calls)
+		require.Empty(t, groupRepo.platforms)
 	})
 }
 
