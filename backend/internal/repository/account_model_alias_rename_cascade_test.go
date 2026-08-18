@@ -153,6 +153,11 @@ func TestSystemCustomGroupRepositoryModelAliasRenameUpdatesRoutesAndSkipsCollisi
 			AddRow(int64(301), int64(501), "old-model", int64(10), "old-model").
 			AddRow(int64(302), int64(502), "OLD-MODEL", int64(20), "old-model").
 			AddRow(int64(303), int64(503), "old-model", int64(10), "old-model"))
+	expectGroupReferenceAliasRenameLock(mock, 10)
+	expectGroupReferenceAliasRenameLock(mock, 20)
+	expectGroupReferenceAliasRenameLock(mock, 501)
+	expectGroupReferenceAliasRenameLock(mock, 502)
+	expectGroupReferenceAliasRenameLock(mock, 503)
 	expectSystemAliasSourceConflict(mock, 501, 10, "new-model", 301, false)
 	expectSystemAliasPublicConflict(mock, 501, "new-model", 301, false)
 	expectSystemAliasUpdate(mock, 301, "new-model", true)
@@ -290,6 +295,17 @@ SET source_model = $1,
 WHERE id = $3`)).
 		WithArgs(newModel, updatePublic, routeID).
 		WillReturnResult(sqlmock.NewResult(0, 1))
+}
+
+func expectGroupReferenceAliasRenameLock(mock sqlmock.Sqlmock, groupID int64) {
+	mock.ExpectQuery("SELECT pg_advisory_xact_lock").
+		WithArgs(int32(0x53554232), accountAliasRenameGroupReferenceLockKey(groupID)).
+		WillReturnRows(sqlmock.NewRows([]string{"pg_advisory_xact_lock"}).AddRow(nil))
+}
+
+func accountAliasRenameGroupReferenceLockKey(groupID int64) int32 {
+	unsigned := uint64(groupID)
+	return int32(uint32(unsigned) ^ uint32(unsigned>>32))
 }
 
 func expectSchedulerGroupChanged(mock sqlmock.Sqlmock, groupID int64) {

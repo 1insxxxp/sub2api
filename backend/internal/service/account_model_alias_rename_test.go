@@ -137,6 +137,97 @@ func TestAdminService_CascadeAccountModelAliasRenames(t *testing.T) {
 		require.Equal(t, channelRepo.calls, systemRouteRepo.calls)
 		require.Empty(t, groupRepo.platforms)
 	})
+
+	t.Run("invalidates channel cache immediately after successful channel updates", func(t *testing.T) {
+		accountRepo := &accountAliasRenameAccountRepoStub{account: &Account{ID: 7, Platform: PlatformAntigravity, GroupIDs: []int64{1}}}
+		spy := &accountAliasRenameChannelCacheInvalidatorSpy{}
+		channelRepo := &accountAliasRenameCascadeRepoStub{
+			result: AccountModelAliasRenameCascadeResult{ChannelPricingUpdated: 1},
+			event:  "channel",
+			events: &spy.events,
+		}
+		userRouteRepo := &accountAliasRenameCascadeRepoStub{
+			result: AccountModelAliasRenameCascadeResult{UserCustomRoutesUpdated: 1},
+			event:  "user",
+			events: &spy.events,
+		}
+		svc := &adminServiceImpl{
+			accountRepo:             accountRepo,
+			channelRepo:             channelRepo,
+			userCustomGroupRepo:     userRouteRepo,
+			channelCacheInvalidator: spy,
+		}
+
+		got, err := svc.CascadeAccountModelAliasRenames(ctx, 7, []AccountModelAliasRenameInput{
+			{OldModel: "old-model", NewModel: "new-model"},
+		})
+
+		require.NoError(t, err)
+		require.Equal(t, 1, got.ChannelPricingUpdated)
+		require.Equal(t, 1, got.UserCustomRoutesUpdated)
+		require.Equal(t, []string{"channel", "invalidate", "user"}, spy.events)
+	})
+
+	t.Run("invalidates channel cache for mapping updates", func(t *testing.T) {
+		accountRepo := &accountAliasRenameAccountRepoStub{account: &Account{ID: 7, Platform: PlatformAntigravity, GroupIDs: []int64{1}}}
+		spy := &accountAliasRenameChannelCacheInvalidatorSpy{}
+		channelRepo := &accountAliasRenameCascadeRepoStub{
+			result: AccountModelAliasRenameCascadeResult{ChannelMappingsUpdated: 1},
+			event:  "channel",
+			events: &spy.events,
+		}
+		svc := &adminServiceImpl{
+			accountRepo:             accountRepo,
+			channelRepo:             channelRepo,
+			channelCacheInvalidator: spy,
+		}
+
+		got, err := svc.CascadeAccountModelAliasRenames(ctx, 7, []AccountModelAliasRenameInput{
+			{OldModel: "old-model", NewModel: "new-model"},
+		})
+
+		require.NoError(t, err)
+		require.Equal(t, 1, got.ChannelMappingsUpdated)
+		require.Equal(t, []string{"channel", "invalidate"}, spy.events)
+	})
+
+	t.Run("does not invalidate channel cache when channel delegate has no updates", func(t *testing.T) {
+		accountRepo := &accountAliasRenameAccountRepoStub{account: &Account{ID: 7, Platform: PlatformAntigravity, GroupIDs: []int64{1}}}
+		spy := &accountAliasRenameChannelCacheInvalidatorSpy{}
+		channelRepo := &accountAliasRenameCascadeRepoStub{event: "channel", events: &spy.events}
+		svc := &adminServiceImpl{
+			accountRepo:             accountRepo,
+			channelRepo:             channelRepo,
+			channelCacheInvalidator: spy,
+		}
+
+		got, err := svc.CascadeAccountModelAliasRenames(ctx, 7, []AccountModelAliasRenameInput{
+			{OldModel: "old-model", NewModel: "new-model"},
+		})
+
+		require.NoError(t, err)
+		require.Equal(t, &AccountModelAliasRenameCascadeResult{}, got)
+		require.Equal(t, []string{"channel"}, spy.events)
+	})
+
+	t.Run("does not invalidate channel cache when channel delegate errors", func(t *testing.T) {
+		accountRepo := &accountAliasRenameAccountRepoStub{account: &Account{ID: 7, Platform: PlatformAntigravity, GroupIDs: []int64{1}}}
+		spy := &accountAliasRenameChannelCacheInvalidatorSpy{}
+		channelRepo := &accountAliasRenameCascadeRepoStub{err: errors.New("channel cascade failed"), event: "channel", events: &spy.events}
+		svc := &adminServiceImpl{
+			accountRepo:             accountRepo,
+			channelRepo:             channelRepo,
+			channelCacheInvalidator: spy,
+		}
+
+		got, err := svc.CascadeAccountModelAliasRenames(ctx, 7, []AccountModelAliasRenameInput{
+			{OldModel: "old-model", NewModel: "new-model"},
+		})
+
+		require.Nil(t, got)
+		require.ErrorContains(t, err, "channel cascade failed")
+		require.Equal(t, []string{"channel"}, spy.events)
+	})
 }
 
 func TestNewAdminServiceWiresAliasCascadeRepositories(t *testing.T) {
@@ -216,9 +307,14 @@ type accountAliasRenameCascadeRepoStub struct {
 	result AccountModelAliasRenameCascadeResult
 	err    error
 	calls  []accountAliasRenameCascadeCall
+	event  string
+	events *[]string
 }
 
 func (s *accountAliasRenameCascadeRepoStub) CascadeAccountModelAliasRenames(ctx context.Context, accountID int64, groupIDs []int64, renames []AccountModelAliasRename) (*AccountModelAliasRenameCascadeResult, error) {
+	if s.events != nil && s.event != "" {
+		*s.events = append(*s.events, s.event)
+	}
 	s.calls = append(s.calls, accountAliasRenameCascadeCall{
 		accountID: accountID,
 		groupIDs:  append([]int64(nil), groupIDs...),
@@ -243,4 +339,12 @@ type accountAliasRenameUserCustomGroupRepoWithCascade struct {
 type accountAliasRenameSystemCustomGroupRepoWithCascade struct {
 	SystemCustomGroupRepository
 	accountAliasRenameCascadeRepoStub
+}
+
+type accountAliasRenameChannelCacheInvalidatorSpy struct {
+	events []string
+}
+
+func (s *accountAliasRenameChannelCacheInvalidatorSpy) InvalidateCache() {
+	s.events = append(s.events, "invalidate")
 }

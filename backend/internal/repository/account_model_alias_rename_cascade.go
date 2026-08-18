@@ -9,6 +9,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/Wei-Shaw/sub2api/internal/pkg/groupref"
 	"github.com/Wei-Shaw/sub2api/internal/service"
 	"github.com/lib/pq"
 )
@@ -157,7 +158,16 @@ func (r *systemCustomGroupRepository) CascadeAccountModelAliasRenames(ctx contex
 
 	changedGroups := make(map[int64]struct{})
 	for _, rename := range renames {
-		updated, skipped, err := cascadeAccountModelAliasRenameRoutes(ctx, client, accountModelAliasRenameSystemRouteQueries(), groupIDs, rename, changedGroups)
+		queries := accountModelAliasRenameSystemRouteQueries()
+		routes, err := loadAccountModelAliasRenameRoutes(ctx, client, queries.candidatesSQL, groupIDs, rename.OldModel)
+		if err != nil {
+			return nil, err
+		}
+		lockGroupIDs := accountModelAliasRenameSystemLockGroupIDs(groupIDs, routes)
+		if err := groupref.LockGroupReferenceWrites(ctx, tx, lockGroupIDs...); err != nil {
+			return nil, fmt.Errorf("lock system custom group alias rename references: %w", err)
+		}
+		updated, skipped, err := processAccountModelAliasRenameRoutes(ctx, client, queries, routes, rename, changedGroups)
 		if err != nil {
 			return nil, err
 		}
@@ -367,7 +377,17 @@ func cascadeAccountModelAliasRenameRoutes(
 	if err != nil {
 		return 0, nil, err
 	}
+	return processAccountModelAliasRenameRoutes(ctx, exec, queries, routes, rename, changedOwners)
+}
 
+func processAccountModelAliasRenameRoutes(
+	ctx context.Context,
+	exec sqlExecutor,
+	queries accountModelAliasRenameRouteQueries,
+	routes []accountModelAliasRenameRoute,
+	rename service.AccountModelAliasRename,
+	changedOwners map[int64]struct{},
+) (int, []service.AccountModelAliasRenameSkipItem, error) {
 	updated := 0
 	skipped := []service.AccountModelAliasRenameSkipItem{}
 	for _, route := range routes {
@@ -416,6 +436,15 @@ func cascadeAccountModelAliasRenameRoutes(
 		changedOwners[route.ownerID] = struct{}{}
 	}
 	return updated, skipped, nil
+}
+
+func accountModelAliasRenameSystemLockGroupIDs(sourceGroupIDs []int64, routes []accountModelAliasRenameRoute) []int64 {
+	groupIDs := make([]int64, 0, len(sourceGroupIDs)+len(routes))
+	groupIDs = append(groupIDs, sourceGroupIDs...)
+	for _, route := range routes {
+		groupIDs = append(groupIDs, route.ownerID)
+	}
+	return groupIDs
 }
 
 func loadAccountModelAliasRenameRoutes(ctx context.Context, exec sqlExecutor, query string, groupIDs []int64, oldModel string) ([]accountModelAliasRenameRoute, error) {

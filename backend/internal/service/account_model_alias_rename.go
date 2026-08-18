@@ -85,11 +85,17 @@ func (s *adminServiceImpl) CascadeAccountModelAliasRenames(ctx context.Context, 
 	}
 
 	result := &AccountModelAliasRenameCascadeResult{}
-	for _, repo := range []accountModelAliasRenameCascadeRepository{
-		s.channelRepo,
-		s.userCustomGroupRepo,
-		s.systemCustomGroupRepo,
-	} {
+	if s.channelRepo != nil {
+		partial, err := s.channelRepo.CascadeAccountModelAliasRenames(ctx, accountID, groupIDs, renames)
+		if err != nil {
+			return nil, err
+		}
+		mergeAccountModelAliasRenameCascadeResult(result, partial)
+		if s.channelCacheInvalidator != nil && accountModelAliasRenameCascadeUpdatedChannels(partial) {
+			s.channelCacheInvalidator.InvalidateCache()
+		}
+	}
+	for _, repo := range []accountModelAliasRenameCascadeRepository{s.userCustomGroupRepo, s.systemCustomGroupRepo} {
 		if repo == nil {
 			continue
 		}
@@ -101,6 +107,10 @@ func (s *adminServiceImpl) CascadeAccountModelAliasRenames(ctx context.Context, 
 	}
 
 	return result, nil
+}
+
+func accountModelAliasRenameCascadeUpdatedChannels(result *AccountModelAliasRenameCascadeResult) bool {
+	return result != nil && (result.ChannelPricingUpdated > 0 || result.ChannelMappingsUpdated > 0)
 }
 
 func mergeAccountModelAliasRenameCascadeResult(dst, src *AccountModelAliasRenameCascadeResult) {
