@@ -17,6 +17,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/Wei-Shaw/sub2api/internal/pkg/apicompat"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
 	"github.com/Wei-Shaw/sub2api/internal/util/responseheaders"
 	"github.com/tidwall/gjson"
@@ -316,6 +317,11 @@ func (s *GatewayService) buildUpstreamRequestAnthropicAPIKeyPassthrough(
 	token string,
 ) (*http.Request, []byte, error) {
 	body = stripDeferredToolCacheControl(body)
+	if adaptedBody, changed, err := adaptAnthropicPassthroughClientTools(body); err != nil {
+		return nil, nil, err
+	} else if changed {
+		body = adaptedBody
+	}
 	targetURL := claudeAPIURL
 	baseURL := account.GetBaseURL()
 	if baseURL != "" {
@@ -377,6 +383,147 @@ func (s *GatewayService) buildUpstreamRequestAnthropicAPIKeyPassthrough(
 	account.ApplyHeaderOverrides(req.Header)
 
 	return req, body, nil
+}
+
+func adaptAnthropicPassthroughClientTools(body []byte) ([]byte, bool, error) {
+	if len(body) == 0 {
+		return body, false, nil
+	}
+	var req map[string]any
+	if err := json.Unmarshal(body, &req); err != nil {
+		return body, false, nil
+	}
+	tools, ok := req["tools"].([]any)
+	if !ok || len(tools) == 0 {
+		return body, false, nil
+	}
+
+	changed := false
+	if _, flattened, err := apicompat.FlattenResponsesNamespaces(req); err != nil {
+		return nil, false, err
+	} else if flattened {
+		changed = true
+	}
+
+	tools, _ = req["tools"].([]any)
+	converted := make([]any, 0, len(tools))
+	for _, raw := range tools {
+		tool, ok := raw.(map[string]any)
+		if !ok {
+			converted = append(converted, raw)
+			continue
+		}
+		switch strings.TrimSpace(anthropicPassthroughString(tool["type"])) {
+		case "function":
+			if name := strings.TrimSpace(anthropicPassthroughString(tool["name"])); name != "" {
+				converted = append(converted, anthropicPassthroughFunctionTool(tool, name))
+				changed = true
+				continue
+			}
+		case "tool_search":
+			converted = append(converted, anthropicPassthroughToolSearchTool())
+			changed = true
+			continue
+		}
+		converted = append(converted, raw)
+	}
+	if changed {
+		req["tools"] = converted
+		if normalizeAnthropicPassthroughToolChoice(req) {
+			changed = true
+		}
+		var rebuilt bytes.Buffer
+		encoder := json.NewEncoder(&rebuilt)
+		encoder.SetEscapeHTML(false)
+		if err := encoder.Encode(req); err != nil {
+			return nil, false, err
+		}
+		return bytes.TrimSuffix(rebuilt.Bytes(), []byte("\n")), true, nil
+	}
+	return body, false, nil
+}
+
+func anthropicPassthroughFunctionTool(tool map[string]any, name string) map[string]any {
+	out := map[string]any{
+		"name":         name,
+		"input_schema": anthropicPassthroughInputSchema(tool),
+	}
+	if description := strings.TrimSpace(anthropicPassthroughString(tool["description"])); description != "" {
+		out["description"] = description
+	}
+	if cacheControl, ok := tool["cache_control"]; ok {
+		out["cache_control"] = cacheControl
+	}
+	return out
+}
+
+func anthropicPassthroughToolSearchTool() map[string]any {
+	return map[string]any{
+		"name":        "tool_search",
+		"description": "Search and load Codex tools, plugins, connectors, and MCP namespaces for the current task.",
+		"input_schema": map[string]any{
+			"type": "object",
+			"properties": map[string]any{
+				"query": map[string]any{"type": "string"},
+			},
+			"required": []any{"query"},
+		},
+	}
+}
+
+func anthropicPassthroughInputSchema(tool map[string]any) any {
+	if schema, ok := tool["input_schema"]; ok && schema != nil {
+		return schema
+	}
+	if schema, ok := tool["parameters"]; ok && schema != nil {
+		return schema
+	}
+	return map[string]any{
+		"type":       "object",
+		"properties": map[string]any{},
+	}
+}
+
+func normalizeAnthropicPassthroughToolChoice(req map[string]any) bool {
+	choice, ok := req["tool_choice"].(map[string]any)
+	if !ok {
+		switch strings.TrimSpace(anthropicPassthroughString(req["tool_choice"])) {
+		case "auto":
+			req["tool_choice"] = map[string]any{"type": "auto"}
+			return true
+		case "required":
+			req["tool_choice"] = map[string]any{"type": "any"}
+			return true
+		case "none":
+			req["tool_choice"] = map[string]any{"type": "none"}
+			return true
+		}
+		return false
+	}
+	typ := strings.TrimSpace(anthropicPassthroughString(choice["type"]))
+	switch typ {
+	case "function":
+		name := strings.TrimSpace(anthropicPassthroughString(choice["name"]))
+		if name == "" {
+			if fn, ok := choice["function"].(map[string]any); ok {
+				name = strings.TrimSpace(anthropicPassthroughString(fn["name"]))
+			}
+		}
+		if name == "" {
+			return false
+		}
+		req["tool_choice"] = map[string]any{"type": "tool", "name": name}
+		return true
+	case "namespace":
+		req["tool_choice"] = map[string]any{"type": "auto"}
+		return true
+	}
+	return false
+}
+
+func anthropicPassthroughString(value any) string {
+	text, _ := value.(string)
+	return text
 }
 
 func (s *GatewayService) handleStreamingResponseAnthropicAPIKeyPassthrough(

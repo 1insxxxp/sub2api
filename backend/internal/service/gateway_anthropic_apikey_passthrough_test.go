@@ -311,6 +311,74 @@ func TestGatewayService_AnthropicAPIKeyPassthrough_BearerAuthScheme(t *testing.T
 	require.Empty(t, getHeaderRaw(countReq.Header, "cookie"))
 }
 
+func TestGatewayService_AnthropicAPIKeyPassthrough_FlattensNamespaceClientTools(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	rec := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(rec)
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1/messages", nil)
+
+	svc := &GatewayService{
+		cfg: &config.Config{
+			Security: config.SecurityConfig{
+				URLAllowlist: config.URLAllowlistConfig{Enabled: false},
+			},
+		},
+	}
+	account := newAnthropicAPIKeyAccountForTest()
+
+	body := []byte(`{
+		"model":"claude-opus-5",
+		"messages":[{"role":"user","content":[{"type":"text","text":"use the browser"}]}],
+		"tools":[
+			{"type":"namespace","name":"browser","tools":[
+				{"type":"function","name":"open","description":"Open a URL","parameters":{"type":"object","properties":{"url":{"type":"string"}},"required":["url"]}}
+			]}
+		],
+		"tool_choice":{"type":"function","name":"open","namespace":"browser"}
+	}`)
+
+	_, wireBody, err := svc.buildUpstreamRequestAnthropicAPIKeyPassthrough(context.Background(), c, account, body, "upstream-anthropic-key")
+	require.NoError(t, err)
+
+	require.Equal(t, "browser__open", gjson.GetBytes(wireBody, "tools.0.name").String())
+	require.False(t, gjson.GetBytes(wireBody, "tools.0.type").Exists(), "Anthropic upstream must not receive Responses namespace/function tool tags")
+	require.False(t, gjson.GetBytes(wireBody, "tools.0.parameters").Exists(), "Responses parameters must be renamed to Anthropic input_schema")
+	require.Equal(t, "object", gjson.GetBytes(wireBody, "tools.0.input_schema.type").String())
+	require.Equal(t, "string", gjson.GetBytes(wireBody, "tools.0.input_schema.properties.url.type").String())
+	require.Equal(t, "tool", gjson.GetBytes(wireBody, "tool_choice.type").String())
+	require.Equal(t, "browser__open", gjson.GetBytes(wireBody, "tool_choice.name").String())
+}
+
+func TestGatewayService_AnthropicAPIKeyPassthrough_PreservesNativeCustomTools(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	rec := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(rec)
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1/messages", nil)
+
+	svc := &GatewayService{
+		cfg: &config.Config{
+			Security: config.SecurityConfig{
+				URLAllowlist: config.URLAllowlistConfig{Enabled: false},
+			},
+		},
+	}
+	account := newAnthropicAPIKeyAccountForTest()
+
+	body := []byte(`{
+		"model":"claude-opus-5",
+		"messages":[{"role":"user","content":[{"type":"text","text":"run shell"}]}],
+		"tools":[{"type":"custom","name":"shell","description":"Run shell commands"}],
+		"tool_choice":{"type":"tool","name":"shell"}
+	}`)
+
+	_, wireBody, err := svc.buildUpstreamRequestAnthropicAPIKeyPassthrough(context.Background(), c, account, body, "upstream-anthropic-key")
+	require.NoError(t, err)
+
+	require.JSONEq(t, string(body), string(wireBody))
+}
+
 // TestGatewayService_AnthropicAPIKeyPassthrough_ModelMappingEdgeCases 覆盖透传模式下模型映射的各种边界情况
 func TestGatewayService_AnthropicAPIKeyPassthrough_ModelMappingEdgeCases(t *testing.T) {
 	gin.SetMode(gin.TestMode)

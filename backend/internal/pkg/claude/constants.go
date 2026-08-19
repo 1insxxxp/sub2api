@@ -43,7 +43,7 @@ const DefaultBetaHeader = BetaClaudeCode + "," + BetaOAuth + "," + BetaInterleav
 const MessageBetaHeaderNoTools = BetaClaudeCode + "," + BetaOAuth + "," + BetaInterleavedThinking
 
 // MessageBetaHeaderWithTools /v1/messages 在有工具时的 beta header
-const MessageBetaHeaderWithTools = BetaClaudeCode + "," + BetaOAuth + "," + BetaInterleavedThinking
+const MessageBetaHeaderWithTools = BetaClaudeCode + "," + BetaOAuth + "," + BetaInterleavedThinking + "," + BetaFineGrainedToolStreaming
 
 // CountTokensBetaHeader count_tokens 请求使用的 anthropic-beta header
 const CountTokensBetaHeader = BetaClaudeCode + "," + BetaOAuth + "," + BetaInterleavedThinking + "," + BetaTokenCounting
@@ -82,6 +82,7 @@ func FullClaudeCodeMimicryBetas() []string {
 		BetaClaudeCode,
 		BetaOAuth,
 		BetaInterleavedThinking,
+		BetaFineGrainedToolStreaming,
 		BetaPromptCachingScope,
 		BetaEffort,
 		BetaContextManagement,
