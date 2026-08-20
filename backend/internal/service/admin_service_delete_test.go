@@ -76,6 +76,13 @@ func (s *userRepoStub) Create(ctx context.Context, user *User) error {
 
 func (s *userRepoStub) CreateWithEmailAliasGuard(ctx context.Context, user *User) error {
 	s.guardedCreates++
+	if s.deletedIdentityErr != nil || s.deletedIdentityExists {
+		s.deletedIdentityChecks = append(s.deletedIdentityChecks, user.Email)
+		if s.deletedIdentityErr != nil {
+			return s.deletedIdentityErr
+		}
+		return ErrEmailExists
+	}
 	if s.aliasErr != nil {
 		return s.aliasErr
 	}

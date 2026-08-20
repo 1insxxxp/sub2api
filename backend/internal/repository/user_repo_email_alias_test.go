@@ -172,6 +172,24 @@ func TestUserRepositoryCreateWithEmailAliasGuardRejectsDeletedEmailIdentity(t *t
 	})
 }
 
+func TestUserRepositoryCreateAllowsDeletedEmailIdentityWithoutRegistrationGuard(t *testing.T) {
+	repo, _ := newUserEntRepo(t)
+	ctx := context.Background()
+	deleted := createUserForAliasTest(t, repo, "deleted-create-reuse@example.com")
+	require.NoError(t, repo.Delete(ctx, deleted.ID))
+
+	recreated := &service.User{
+		Email:        "deleted-create-reuse@example.com",
+		Username:     "deleted-create-reused",
+		PasswordHash: "hash",
+		Role:         service.RoleUser,
+		Status:       service.StatusActive,
+	}
+	require.NoError(t, repo.Create(ctx, recreated))
+	require.NotZero(t, recreated.ID)
+	require.NotEqual(t, deleted.ID, recreated.ID)
+}
+
 func TestUserRepositoryCountUsersByEmailDomain(t *testing.T) {
 	repo, _ := newUserEntRepo(t)
 	ctx := context.Background()

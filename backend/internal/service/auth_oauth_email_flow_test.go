@@ -294,6 +294,50 @@ func TestSendPendingOAuthVerifyCode_NonWhitelistDomainRejectedWhenQuotaDisabled(
 	require.ErrorIs(t, err, ErrEmailSuffixNotAllowed)
 }
 
+func TestSendPendingOAuthVerifyCode_BlocksDeletedEmailIdentity(t *testing.T) {
+	userRepo := &userRepoStub{deletedIdentityExists: true}
+	emailCache := &emailCacheStub{}
+	authService := newOAuthEmailFlowAuthService(
+		userRepo,
+		nil,
+		nil,
+		map[string]string{
+			SettingKeyRegistrationEnabled: "true",
+		},
+		emailCache,
+		nil,
+	)
+
+	result, err := authService.SendPendingOAuthVerifyCode(context.Background(), "deleted@example.com")
+
+	require.Nil(t, result)
+	require.ErrorIs(t, err, ErrEmailExists)
+	require.Equal(t, []string{"deleted@example.com"}, userRepo.deletedIdentityChecks)
+	require.Empty(t, emailCache.setEmails)
+}
+
+func TestSendPendingOAuthVerifyCode_BlocksDeletedAliasIdentity(t *testing.T) {
+	userRepo := &userRepoStub{deletedIdentityExists: true}
+	emailCache := &emailCacheStub{}
+	authService := newOAuthEmailFlowAuthService(
+		userRepo,
+		nil,
+		nil,
+		map[string]string{
+			SettingKeyRegistrationEnabled: "true",
+		},
+		emailCache,
+		nil,
+	)
+
+	result, err := authService.SendPendingOAuthVerifyCode(context.Background(), "some.one+again@gmail.com")
+
+	require.Nil(t, result)
+	require.ErrorIs(t, err, ErrEmailExists)
+	require.Equal(t, []string{"some.one+again@gmail.com"}, userRepo.deletedIdentityChecks)
+	require.Empty(t, emailCache.setEmails)
+}
+
 func TestSendPendingOAuthVerifyCode_NilServiceReturnsUnavailable(t *testing.T) {
 	var authService *AuthService
 

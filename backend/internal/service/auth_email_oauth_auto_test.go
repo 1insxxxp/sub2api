@@ -60,7 +60,7 @@ func TestEmailOAuthAuto_SnapshotsPlatformQuotaDefaults(t *testing.T) {
 		quotaRepo,
 	)
 
-	user, err := svc.createEmailOAuthUser(
+	user, created, err := svc.createEmailOAuthUser(
 		context.Background(),
 		"newoauth@example.com",
 		"newoauth",
@@ -70,6 +70,7 @@ func TestEmailOAuthAuto_SnapshotsPlatformQuotaDefaults(t *testing.T) {
 	)
 	require.NoError(t, err)
 	require.NotNil(t, user)
+	require.True(t, created)
 	require.Equal(t, int64(88), user.ID)
 
 	require.Len(t, quotaRepo.bulkInsertCalls, 1, "createEmailOAuthUser must snapshot platform quotas via BulkInsertInitial")
@@ -85,4 +86,69 @@ func TestEmailOAuthAuto_SnapshotsPlatformQuotaDefaults(t *testing.T) {
 	require.NotNil(t, geminiRecord, "expected gemini platform record")
 	require.NotNil(t, geminiRecord.MonthlyLimitUSD)
 	require.InDelta(t, 100.0, *geminiRecord.MonthlyLimitUSD, 0.0001)
+}
+
+func TestEmailOAuthAuto_BlocksDeletedEmailIdentity(t *testing.T) {
+	userRepo := &userRepoStub{deletedIdentityExists: true}
+	svc := newEmailOAuthAutoAuthService(
+		userRepo,
+		map[string]string{
+			SettingKeyRegistrationEnabled: "true",
+		},
+		nil,
+	)
+
+	user, created, err := svc.createEmailOAuthUser(
+		context.Background(),
+		"deleted@example.com",
+		"deleted",
+		"github",
+		"",
+		"",
+	)
+
+	require.Nil(t, user)
+	require.False(t, created)
+	require.ErrorIs(t, err, ErrEmailExists)
+	require.Empty(t, userRepo.created)
+	require.Equal(t, []string{"deleted@example.com"}, userRepo.deletedIdentityChecks)
+}
+
+func TestEmailOAuthAuto_ReusesConcurrentActiveCreate(t *testing.T) {
+	existing := &User{
+		ID:           93,
+		Email:        "race-verified@example.com",
+		Username:     "race-verified-winner",
+		Role:         RoleUser,
+		Status:       StatusActive,
+		TokenVersion: 4,
+	}
+	userRepo := &userRepoStub{
+		usersByEmail: map[string]*User{existing.Email: existing},
+		createErr:    ErrEmailExists,
+	}
+	quotaRepo := &userPlatformQuotaRepoStub{}
+	svc := newEmailOAuthAutoAuthService(
+		userRepo,
+		map[string]string{
+			SettingKeyRegistrationEnabled:   "true",
+			SettingKeyDefaultPlatformQuotas: `{"gemini": {"monthly": 100.0}}`,
+		},
+		quotaRepo,
+	)
+
+	user, created, err := svc.createEmailOAuthUser(
+		context.Background(),
+		existing.Email,
+		"race-verified",
+		"github",
+		"",
+		"",
+	)
+
+	require.NoError(t, err)
+	require.Equal(t, existing, user)
+	require.False(t, created)
+	require.Empty(t, userRepo.created)
+	require.Empty(t, quotaRepo.bulkInsertCalls)
 }

@@ -91,8 +91,9 @@ func (s *settingRepoStub) Delete(ctx context.Context, key string) error {
 }
 
 type emailCacheStub struct {
-	data *VerificationCodeData
-	err  error
+	data      *VerificationCodeData
+	err       error
+	setEmails []string
 }
 
 type defaultSubscriptionAssignerStub struct {
@@ -196,6 +197,7 @@ func (s *emailCacheStub) GetVerificationCode(ctx context.Context, email string) 
 }
 
 func (s *emailCacheStub) SetVerificationCode(ctx context.Context, email string, data *VerificationCodeData, ttl time.Duration) error {
+	s.setEmails = append(s.setEmails, email)
 	return nil
 }
 
@@ -925,6 +927,92 @@ func TestAuthService_LoginOrRegisterOAuthWithTokenPair_UsesLinuxDoAuthSourceDefa
 	require.Len(t, assigner.calls, 1)
 	require.Equal(t, int64(22), assigner.calls[0].GroupID)
 	require.Equal(t, 14, assigner.calls[0].ValidityDays)
+}
+
+func TestAuthService_LoginOrRegisterOAuth_BlocksDeletedEmailIdentity(t *testing.T) {
+	repo := &userRepoStub{deletedIdentityExists: true}
+	service := newAuthService(repo, map[string]string{
+		SettingKeyRegistrationEnabled: "true",
+	}, nil, nil)
+
+	token, user, err := service.LoginOrRegisterOAuth(context.Background(), "deleted@example.com", "oauth_user")
+
+	require.Empty(t, token)
+	require.Nil(t, user)
+	require.ErrorIs(t, err, ErrEmailExists)
+	require.Empty(t, repo.created)
+	require.Equal(t, []string{"deleted@example.com"}, repo.deletedIdentityChecks)
+}
+
+func TestAuthService_LoginOrRegisterOAuth_ReusesConcurrentActiveCreate(t *testing.T) {
+	existing := &User{
+		ID:           71,
+		Email:        "race@example.com",
+		Username:     "race-winner",
+		Role:         RoleUser,
+		Status:       StatusActive,
+		TokenVersion: 2,
+	}
+	repo := &userRepoStub{
+		usersByEmail:     map[string]*User{existing.Email: existing},
+		getByEmailMisses: 1,
+		exists:           true,
+		createErr:        ErrEmailExists,
+	}
+	service := newAuthService(repo, map[string]string{
+		SettingKeyRegistrationEnabled: "true",
+	}, nil, nil)
+
+	token, user, err := service.LoginOrRegisterOAuth(context.Background(), existing.Email, "oauth_user")
+
+	require.NoError(t, err)
+	require.NotEmpty(t, token)
+	require.Equal(t, existing, user)
+	require.Empty(t, repo.created)
+}
+
+func TestAuthService_LoginOrRegisterOAuthWithTokenPair_BlocksDeletedEmailIdentity(t *testing.T) {
+	repo := &userRepoStub{deletedIdentityExists: true}
+	service := newAuthService(repo, map[string]string{
+		SettingKeyRegistrationEnabled: "true",
+	}, nil, nil)
+	service.refreshTokenCache = &refreshTokenCacheStub{}
+
+	tokenPair, user, err := service.LoginOrRegisterOAuthWithTokenPair(context.Background(), "deleted@example.com", "oauth_user", "", "", "google")
+
+	require.Nil(t, tokenPair)
+	require.Nil(t, user)
+	require.ErrorIs(t, err, ErrEmailExists)
+	require.Empty(t, repo.created)
+	require.Equal(t, []string{"deleted@example.com"}, repo.deletedIdentityChecks)
+}
+
+func TestAuthService_LoginOrRegisterOAuthWithTokenPair_ReusesConcurrentActiveCreate(t *testing.T) {
+	existing := &User{
+		ID:           72,
+		Email:        "race-token@example.com",
+		Username:     "race-token-winner",
+		Role:         RoleUser,
+		Status:       StatusActive,
+		TokenVersion: 3,
+	}
+	repo := &userRepoStub{
+		usersByEmail:     map[string]*User{existing.Email: existing},
+		getByEmailMisses: 1,
+		exists:           true,
+		createErr:        ErrEmailExists,
+	}
+	service := newAuthService(repo, map[string]string{
+		SettingKeyRegistrationEnabled: "true",
+	}, nil, nil)
+	service.refreshTokenCache = &refreshTokenCacheStub{}
+
+	tokenPair, user, err := service.LoginOrRegisterOAuthWithTokenPair(context.Background(), existing.Email, "oauth_user", "", "", "google")
+
+	require.NoError(t, err)
+	require.NotNil(t, tokenPair)
+	require.Equal(t, existing, user)
+	require.Empty(t, repo.created)
 }
 
 func TestAuthService_LoginOrRegisterOAuthWithTokenPair_ExistingUserDoesNotGrantAgain(t *testing.T) {

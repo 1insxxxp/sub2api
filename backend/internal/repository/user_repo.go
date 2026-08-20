@@ -126,13 +126,16 @@ func (r *userRepository) create(ctx context.Context, userIn *service.User, guard
 		}
 	}
 
-	registrationLookupCtx := mixins.SkipSoftDelete(txCtx)
-	if err := ensureNormalizedEmailAvailableWithClient(registrationLookupCtx, txClient, 0, userIn.Email); err != nil {
+	lookupCtx := txCtx
+	if guardEmailAlias {
+		lookupCtx = mixins.SkipSoftDelete(txCtx)
+	}
+	if err := ensureNormalizedEmailAvailableWithClient(lookupCtx, txClient, 0, userIn.Email); err != nil {
 		return err
 	}
 
 	if guardEmailAlias {
-		aliasExists, err := existsByEmailAliasWithClient(registrationLookupCtx, txClient, userIn.Email)
+		aliasExists, err := existsByEmailAliasWithClient(lookupCtx, txClient, userIn.Email)
 		if err != nil {
 			return err
 		}
