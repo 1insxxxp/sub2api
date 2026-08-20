@@ -162,6 +162,7 @@ func RegisterUserRoutes(
 			redeem.POST("", h.Redeem.Redeem)
 			redeem.POST("/generate", h.Redeem.GenerateBalanceTransferCode)
 			redeem.GET("/generated", h.Redeem.GetGenerated)
+			redeem.DELETE("/generated/:id", h.Redeem.DeleteGenerated)
 			redeem.GET("/history", h.Redeem.GetHistory)
 		}
 

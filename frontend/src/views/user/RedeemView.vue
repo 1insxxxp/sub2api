@@ -126,7 +126,7 @@
             class="redeem-transfer-form"
             @submit.prevent="handleGenerateBalanceTransferCode"
           >
-            <div class="grid grid-cols-1 gap-3 sm:grid-cols-[minmax(0,1fr)_9.5rem]">
+            <div class="grid grid-cols-1 gap-3 sm:grid-cols-[minmax(0,1fr)_7.5rem_9.5rem]">
               <div>
                 <label for="balance-transfer-amount" class="redeem-transfer-label">
                   {{ t('redeem.balanceTransfer.amount') }}
@@ -141,6 +141,22 @@
                   inputmode="decimal"
                   class="redeem-transfer-field"
                   :placeholder="t('redeem.balanceTransfer.amountPlaceholder')"
+                  :disabled="generatingTransferCode"
+                />
+              </div>
+              <div>
+                <label for="balance-transfer-count" class="redeem-transfer-label">
+                  {{ t('redeem.balanceTransfer.count') }}
+                </label>
+                <input
+                  id="balance-transfer-count"
+                  v-model.number="transferForm.count"
+                  data-test="balance-transfer-count"
+                  type="number"
+                  min="1"
+                  max="100"
+                  step="1"
+                  class="redeem-transfer-field"
                   :disabled="generatingTransferCode"
                 />
               </div>
@@ -177,6 +193,19 @@
                 :disabled="generatingTransferCode"
               />
             </div>
+
+            <label class="redeem-transfer-toggle">
+              <input
+                v-model="transferForm.single_use_per_user"
+                data-test="balance-transfer-single-use"
+                type="checkbox"
+                :disabled="generatingTransferCode"
+              />
+              <span>
+                <strong>{{ t('redeem.balanceTransfer.singleUsePerUser') }}</strong>
+                <small>{{ t('redeem.balanceTransfer.singleUsePerUserHint') }}</small>
+              </span>
+            </label>
 
             <p
               v-if="transferErrorMessage"
@@ -240,6 +269,12 @@
                 >
                   {{ generatedCodeResult.code }}
                 </p>
+                <span
+                  v-if="generatedCodeResult.single_use_per_user"
+                  class="mt-2 inline-flex items-center rounded-md bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-700 dark:bg-amber-900/30 dark:text-amber-300"
+                >
+                  {{ t('redeem.balanceTransfer.singleUseBadge') }}
+                </span>
               </div>
               <button
                 type="button"
@@ -299,6 +334,12 @@
                     <span :class="getGeneratedStatusClass(item.status)">
                       {{ getGeneratedStatusLabel(item.status) }}
                     </span>
+                    <span
+                      v-if="item.single_use_per_user"
+                      class="inline-flex items-center rounded-md bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-700 dark:bg-amber-900/30 dark:text-amber-300"
+                    >
+                      {{ t('redeem.balanceTransfer.singleUseBadge') }}
+                    </span>
                   </div>
                   <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">
                     ${{ item.value.toFixed(2) }} ·
@@ -306,13 +347,25 @@
                     {{ formatGeneratedExpiry(item) }}
                   </p>
                 </div>
-                <button
-                  type="button"
-                  class="btn btn-secondary shrink-0 px-3 py-2"
-                  @click="copyTransferCode(item.code)"
-                >
-                  <Icon name="copy" size="sm" />
-                </button>
+                <div class="redeem-generated-actions">
+                  <button
+                    type="button"
+                    class="btn btn-secondary shrink-0 px-3 py-2"
+                    @click="copyTransferCode(item.code)"
+                  >
+                    <Icon name="copy" size="sm" />
+                  </button>
+                  <button
+                    v-if="canDeleteGeneratedCode(item)"
+                    type="button"
+                    class="btn btn-secondary shrink-0 px-3 py-2 text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
+                    :data-test="`delete-generated-code-${item.id}`"
+                    :disabled="isDeletingGeneratedCode(item.id)"
+                    @click="handleDeleteGeneratedCode(item)"
+                  >
+                    <Icon name="xCircle" size="sm" />
+                  </button>
+                </div>
               </div>
             </div>
 
@@ -627,13 +680,16 @@ const contactInfo = ref('')
 
 const transferForm = reactive({
   amount: '',
+  count: 1,
   expires_in_days: 30,
-  notes: ''
+  notes: '',
+  single_use_per_user: false
 })
 const generatingTransferCode = ref(false)
 const generatedCodeResult = ref<GeneratedRedeemCode | null>(null)
 const generatedCodes = ref<GeneratedRedeemCode[]>([])
 const loadingGeneratedCodes = ref(false)
+const deletingGeneratedCodeIds = ref<number[]>([])
 const transferErrorMessage = ref('')
 
 // Helper functions for history display
@@ -711,6 +767,7 @@ const fetchGeneratedCodes = async () => {
 
 const handleGenerateBalanceTransferCode = async () => {
   const amount = Number(transferForm.amount)
+  const count = Number(transferForm.count)
   const expiresInDays = Number(transferForm.expires_in_days)
   transferErrorMessage.value = ''
 
@@ -720,7 +777,13 @@ const handleGenerateBalanceTransferCode = async () => {
     appStore.showError(message)
     return
   }
-  if (amount > availableBalance.value) {
+  if (!Number.isInteger(count) || count < 1 || count > 100) {
+    const message = t('redeem.balanceTransfer.invalidCount')
+    transferErrorMessage.value = message
+    appStore.showError(message)
+    return
+  }
+  if (amount * count > availableBalance.value) {
     const message = t('redeem.balanceTransfer.insufficientBalance')
     transferErrorMessage.value = message
     appStore.showError(message)
@@ -735,12 +798,14 @@ const handleGenerateBalanceTransferCode = async () => {
 
   generatingTransferCode.value = true
   try {
-    const code = await redeemAPI.generateBalanceTransferCode({
+    const codes = await redeemAPI.generateBalanceTransferCodes({
       amount,
+      count,
       expires_in_days: expiresInDays,
-      notes: transferForm.notes.trim()
+      notes: transferForm.notes.trim(),
+      single_use_per_user: transferForm.single_use_per_user
     })
-    generatedCodeResult.value = code
+    generatedCodeResult.value = codes[0] ?? null
     transferForm.amount = ''
     transferForm.notes = ''
     await authStore.refreshUser()
@@ -752,6 +817,39 @@ const handleGenerateBalanceTransferCode = async () => {
     appStore.showError(message)
   } finally {
     generatingTransferCode.value = false
+  }
+}
+
+const canDeleteGeneratedCode = (item: GeneratedRedeemCode) => {
+  return item.used_by == null && (item.status === 'unused' || item.status === 'expired')
+}
+
+const isDeletingGeneratedCode = (id: number) => {
+  return deletingGeneratedCodeIds.value.includes(id)
+}
+
+const handleDeleteGeneratedCode = async (item: GeneratedRedeemCode) => {
+  if (!canDeleteGeneratedCode(item) || isDeletingGeneratedCode(item.id)) {
+    return
+  }
+  if (!window.confirm(t('redeem.balanceTransfer.deleteConfirm'))) {
+    return
+  }
+
+  deletingGeneratedCodeIds.value = [...deletingGeneratedCodeIds.value, item.id]
+  try {
+    await redeemAPI.deleteGenerated(item.id)
+    await authStore.refreshUser()
+    await fetchGeneratedCodes()
+    if (generatedCodeResult.value?.id === item.id) {
+      generatedCodeResult.value = null
+    }
+    appStore.showSuccess(t('redeem.balanceTransfer.deleted'))
+  } catch (error: any) {
+    const message = extractApiErrorMessage(error, t('redeem.balanceTransfer.failedToDelete'))
+    appStore.showError(message)
+  } finally {
+    deletingGeneratedCodeIds.value = deletingGeneratedCodeIds.value.filter((id) => id !== item.id)
   }
 }
 
@@ -1160,6 +1258,43 @@ watch(canGenerateBalanceTransferCodes, (enabled) => {
     0 12px 28px rgba(37, 99, 235, 0.08);
 }
 
+.redeem-transfer-toggle {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  border-radius: 0.9rem;
+  border: 1px solid rgba(191, 219, 254, 0.76);
+  background: rgba(248, 250, 252, 0.78);
+  padding: 0.8rem 0.9rem;
+  color: rgb(71, 85, 105);
+}
+
+.redeem-transfer-toggle input {
+  margin-top: 0.2rem;
+  height: 1rem;
+  width: 1rem;
+  flex-shrink: 0;
+  accent-color: var(--brand-600);
+}
+
+.redeem-transfer-toggle strong,
+.redeem-transfer-toggle small {
+  display: block;
+}
+
+.redeem-transfer-toggle strong {
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: rgb(30, 41, 59);
+}
+
+.redeem-transfer-toggle small {
+  margin-top: 0.15rem;
+  font-size: 0.78rem;
+  line-height: 1.35;
+  color: rgb(100, 116, 139);
+}
+
 .redeem-transfer-field:disabled {
   cursor: not-allowed;
   opacity: 0.72;
@@ -1201,6 +1336,13 @@ watch(canGenerateBalanceTransferCodes, (enabled) => {
     linear-gradient(135deg, rgba(255, 255, 255, 0.96), rgba(248, 250, 252, 0.9)),
     white;
   padding: 0.8rem 0.9rem;
+}
+
+.redeem-generated-actions {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 0.5rem;
 }
 
 .redeem-info-icon {
@@ -1320,6 +1462,20 @@ watch(canGenerateBalanceTransferCodes, (enabled) => {
 
 .dark .redeem-transfer-field::placeholder {
   color: rgb(100, 116, 139);
+}
+
+.dark .redeem-transfer-toggle {
+  border-color: rgba(96, 165, 250, 0.2);
+  background: rgba(15, 23, 42, 0.74);
+  color: rgb(148, 163, 184);
+}
+
+.dark .redeem-transfer-toggle strong {
+  color: rgb(226, 232, 240);
+}
+
+.dark .redeem-transfer-toggle small {
+  color: rgb(148, 163, 184);
 }
 
 .dark .redeem-transfer-ready {
@@ -1450,6 +1606,11 @@ watch(canGenerateBalanceTransferCodes, (enabled) => {
   .redeem-generated-row {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .redeem-generated-actions {
+    width: 100%;
+    justify-content: flex-end;
   }
 }
 

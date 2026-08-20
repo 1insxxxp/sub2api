@@ -582,7 +582,7 @@ func RedeemCodeFromService(rc *service.RedeemCode) *RedeemCode {
 	if rc == nil {
 		return nil
 	}
-	out := redeemCodeFromServiceBase(rc)
+	out := redeemCodeFromServiceBase(rc, false)
 	return &out
 }
 
@@ -593,31 +593,34 @@ func RedeemCodeFromServiceAdmin(rc *service.RedeemCode) *AdminRedeemCode {
 		return nil
 	}
 	return &AdminRedeemCode{
-		RedeemCode:       redeemCodeFromServiceBase(rc),
+		RedeemCode:       redeemCodeFromServiceBase(rc, true),
 		Notes:            rc.Notes,
 		BatchID:          rc.BatchID,
 		SingleUsePerUser: rc.BatchID != nil && strings.TrimSpace(*rc.BatchID) != "",
 	}
 }
 
-func redeemCodeFromServiceBase(rc *service.RedeemCode) RedeemCode {
+func redeemCodeFromServiceBase(rc *service.RedeemCode, includeRelatedUsers bool) RedeemCode {
 	out := RedeemCode{
-		ID:           rc.ID,
-		Code:         rc.Code,
-		Type:         rc.Type,
-		Value:        rc.Value,
-		Status:       rc.Status,
-		UsedBy:       rc.UsedBy,
-		UsedAt:       rc.UsedAt,
-		CreatedBy:    rc.CreatedBy,
-		Source:       rc.Source,
-		CreatedAt:    rc.CreatedAt,
-		ExpiresAt:    rc.ExpiresAt,
-		GroupID:      rc.GroupID,
-		ValidityDays: rc.ValidityDays,
-		User:         UserFromServiceShallow(rc.User),
-		Creator:      UserFromServiceShallow(rc.Creator),
-		Group:        GroupFromServiceShallow(rc.Group),
+		ID:               rc.ID,
+		Code:             rc.Code,
+		Type:             rc.Type,
+		Value:            rc.Value,
+		Status:           rc.Status,
+		UsedBy:           rc.UsedBy,
+		UsedAt:           rc.UsedAt,
+		CreatedBy:        rc.CreatedBy,
+		Source:           rc.Source,
+		CreatedAt:        rc.CreatedAt,
+		ExpiresAt:        rc.ExpiresAt,
+		SingleUsePerUser: rc.BatchID != nil && strings.TrimSpace(*rc.BatchID) != "",
+		GroupID:          rc.GroupID,
+		ValidityDays:     rc.ValidityDays,
+		Group:            GroupFromServiceShallow(rc.Group),
+	}
+	if includeRelatedUsers {
+		out.User = UserFromServiceShallow(rc.User)
+		out.Creator = UserFromServiceShallow(rc.Creator)
 	}
 	if rc.IsExpired() {
 		out.Status = service.StatusExpired

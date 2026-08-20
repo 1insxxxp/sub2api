@@ -5,6 +5,7 @@ package server_test
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"io"
 	"math"
@@ -1629,6 +1630,7 @@ type contractDeps struct {
 	usageRepo     *stubUsageLogRepo
 	settingRepo   *stubSettingRepo
 	redeemRepo    *stubRedeemCodeRepo
+	userRepo      *stubUserRepo
 	affiliateRepo *stubAffiliateRepo
 }
 
@@ -1750,6 +1752,7 @@ func newContractDeps(t *testing.T) *contractDeps {
 
 	v1Redeem := v1.Group("")
 	v1Redeem.Use(jwtAuth)
+	v1Redeem.POST("/redeem/generate", redeemHandler.GenerateBalanceTransferCode)
 	v1Redeem.GET("/redeem/history", redeemHandler.GetHistory)
 	v1Redeem.GET("/redeem/generated", redeemHandler.GetGenerated)
 
@@ -1770,8 +1773,46 @@ func newContractDeps(t *testing.T) *contractDeps {
 		usageRepo:     usageRepo,
 		settingRepo:   settingRepo,
 		redeemRepo:    redeemRepo,
+		userRepo:      userRepo,
 		affiliateRepo: affiliateRepo,
 	}
+}
+
+func TestRedeemGenerateAPIResponseShape(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	deps := newContractDeps(t)
+	deps.userRepo.users[1].Balance = 50
+	deps.userRepo.users[1].BalanceRedeemCodeEnabled = true
+
+	status, body := doRequest(
+		t,
+		deps.router,
+		http.MethodPost,
+		"/api/v1/redeem/generate",
+		`{"amount":5}`,
+		map[string]string{"Content-Type": "application/json"},
+	)
+	require.Equal(t, http.StatusOK, status)
+	var single struct {
+		Data any `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal([]byte(body), &single))
+	require.IsType(t, map[string]any{}, single.Data)
+
+	status, body = doRequest(
+		t,
+		deps.router,
+		http.MethodPost,
+		"/api/v1/redeem/generate",
+		`{"amount":5,"count":2}`,
+		map[string]string{"Content-Type": "application/json"},
+	)
+	require.Equal(t, http.StatusOK, status)
+	var batch struct {
+		Data any `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal([]byte(body), &batch))
+	require.IsType(t, []any{}, batch.Data)
 }
 
 type stubAffiliateRepo struct {
@@ -1927,7 +1968,17 @@ func (r *stubUserRepo) DeductBalance(ctx context.Context, id int64, amount float
 }
 
 func (r *stubUserRepo) AdjustBalance(ctx context.Context, id int64, delta float64) (service.BalanceChange, error) {
-	return service.BalanceChange{}, errors.New("not implemented")
+	user, ok := r.users[id]
+	if !ok {
+		return service.BalanceChange{}, service.ErrUserNotFound
+	}
+	old := user.Balance
+	next := old + delta
+	if next < 0 {
+		return service.BalanceChange{Old: old, New: next}, service.ErrBalanceNegative
+	}
+	user.Balance = next
+	return service.BalanceChange{Old: old, New: next}, nil
 }
 
 func (r *stubUserRepo) SetBalance(ctx context.Context, id int64, value float64) (service.BalanceChange, error) {
@@ -2417,6 +2468,7 @@ func (stubProxyRepo) CountExpiringSoon(ctx context.Context, now time.Time) (int6
 type stubRedeemCodeRepo struct {
 	byUser    map[int64][]service.RedeemCode
 	byCreator map[int64][]service.RedeemCode
+	created   []service.RedeemCode
 }
 
 func (r *stubRedeemCodeRepo) SetByUser(userID int64, codes []service.RedeemCode) {
@@ -2433,8 +2485,16 @@ func (r *stubRedeemCodeRepo) SetByCreator(userID int64, codes []service.RedeemCo
 	r.byCreator[userID] = append([]service.RedeemCode(nil), codes...)
 }
 
-func (stubRedeemCodeRepo) Create(ctx context.Context, code *service.RedeemCode) error {
-	return errors.New("not implemented")
+func (r *stubRedeemCodeRepo) Create(ctx context.Context, code *service.RedeemCode) error {
+	if code.ID == 0 {
+		code.ID = int64(len(r.created) + 1)
+	}
+	if code.CreatedAt.IsZero() {
+		code.CreatedAt = time.Date(2025, 1, 2, 3, 4, 5, 0, time.UTC)
+	}
+	clone := *code
+	r.created = append(r.created, clone)
+	return nil
 }
 
 func (stubRedeemCodeRepo) CreateBatch(ctx context.Context, codes []service.RedeemCode) error {

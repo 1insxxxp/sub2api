@@ -102,6 +102,47 @@ func (r *redeemCodeRepository) Delete(ctx context.Context, id int64) error {
 	return err
 }
 
+func (r *redeemCodeRepository) DeleteUnusedBalanceTransferByCreator(ctx context.Context, userID, codeID int64) (*service.RedeemCode, error) {
+	client := clientFromContext(ctx, r.client)
+	m, err := client.RedeemCode.Query().
+		Where(
+			redeemcode.IDEQ(codeID),
+			redeemcode.CreatedByEQ(userID),
+			redeemcode.SourceEQ(service.RedeemCodeSourceUserBalanceTransfer),
+			redeemcode.TypeEQ(service.RedeemTypeBalance),
+		).
+		ForUpdate().
+		Only(ctx)
+	if err != nil {
+		if dbent.IsNotFound(err) {
+			return nil, service.ErrBalanceTransferRedeemCodeNotFound
+		}
+		return nil, err
+	}
+	out := redeemCodeEntityToService(m)
+	if out.Status == service.StatusUsed || out.UsedBy != nil {
+		return nil, service.ErrBalanceTransferRedeemCodeUsed
+	}
+
+	affected, err := client.RedeemCode.Delete().
+		Where(
+			redeemcode.IDEQ(codeID),
+			redeemcode.CreatedByEQ(userID),
+			redeemcode.SourceEQ(service.RedeemCodeSourceUserBalanceTransfer),
+			redeemcode.TypeEQ(service.RedeemTypeBalance),
+			redeemcode.StatusNEQ(service.StatusUsed),
+			redeemcode.UsedByIsNil(),
+		).
+		Exec(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if affected == 0 {
+		return nil, service.ErrBalanceTransferRedeemCodeUsed
+	}
+	return out, nil
+}
+
 func (r *redeemCodeRepository) List(ctx context.Context, params pagination.PaginationParams) ([]service.RedeemCode, *pagination.PaginationResult, error) {
 	return r.ListWithFilters(ctx, params, "", "", "")
 }

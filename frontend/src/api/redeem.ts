@@ -27,8 +27,10 @@ export interface RedeemHistoryItem {
 
 export interface GenerateBalanceTransferCodeRequest {
   amount: number
+  count?: number
   expires_in_days?: number
   notes?: string
+  single_use_per_user?: boolean
 }
 
 export type GeneratedRedeemCode = RedeemCode
@@ -70,8 +72,18 @@ export async function getHistory(): Promise<RedeemHistoryItem[]> {
 export async function generateBalanceTransferCode(
   payload: GenerateBalanceTransferCodeRequest
 ): Promise<GeneratedRedeemCode> {
-  const { data } = await apiClient.post<GeneratedRedeemCode>('/redeem/generate', payload)
-  return data
+  const codes = await generateBalanceTransferCodes(payload)
+  return codes[0]
+}
+
+export async function generateBalanceTransferCodes(
+  payload: GenerateBalanceTransferCodeRequest
+): Promise<GeneratedRedeemCode[]> {
+  const { data } = await apiClient.post<GeneratedRedeemCode[] | GeneratedRedeemCode>(
+    '/redeem/generate',
+    payload
+  )
+  return Array.isArray(data) ? data : [data]
 }
 
 export async function getGenerated(): Promise<GeneratedRedeemCode[]> {
@@ -79,10 +91,17 @@ export async function getGenerated(): Promise<GeneratedRedeemCode[]> {
   return data
 }
 
+export async function deleteGenerated(id: number): Promise<GeneratedRedeemCode> {
+  const { data } = await apiClient.delete<GeneratedRedeemCode>(`/redeem/generated/${id}`)
+  return data
+}
+
 export const redeemAPI = {
   redeem,
   getHistory,
   generateBalanceTransferCode,
+  generateBalanceTransferCodes,
+  deleteGenerated,
   getGenerated
 }
 
