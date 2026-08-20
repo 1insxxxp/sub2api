@@ -146,6 +146,21 @@ func TestAPIContracts(t *testing.T) {
 			}`,
 		},
 		{
+			name:   "DELETE /api/v1/user/account deletes the current user account",
+			method: http.MethodDelete,
+			path:   "/api/v1/user/account",
+			body:   `{"password":"current-password"}`,
+			headers: map[string]string{
+				"Content-Type": "application/json",
+			},
+			wantStatus: http.StatusOK,
+			wantJSON: `{
+				"code":0,
+				"message":"success",
+				"data":{"message":"Account deleted successfully"}
+			}`,
+		},
+		{
 			name:       "GET /api/v1/admin/affiliates/users/1/overview separates automatic and custom rates",
 			method:     http.MethodGet,
 			path:       "/api/v1/admin/affiliates/users/1/overview",
@@ -1656,6 +1671,7 @@ func newContractDeps(t *testing.T) *contractDeps {
 			},
 		},
 	}
+	require.NoError(t, userRepo.users[1].SetPassword("current-password"))
 
 	apiKeyRepo := newStubApiKeyRepo(now)
 	apiKeyCache := stubApiKeyCache{}
@@ -1673,6 +1689,7 @@ func newContractDeps(t *testing.T) *contractDeps {
 	}
 
 	userService := service.NewUserService(userRepo, nil, nil, nil)
+	userService.SetAccountDeletionAPIKeyRepository(apiKeyRepo)
 	apiKeyService := service.NewAPIKeyService(apiKeyRepo, userRepo, groupRepo, userSubRepo, nil, apiKeyCache, cfg)
 
 	usageRepo := newStubUsageLogRepo()
@@ -1745,6 +1762,7 @@ func newContractDeps(t *testing.T) *contractDeps {
 	v1Usage.GET("/usage", usageHandler.List)
 	v1Usage.GET("/usage/stats", usageHandler.Stats)
 	v1Usage.GET("/user/aff", userHandler.GetAffiliate)
+	v1Usage.DELETE("/user/account", userHandler.DeleteOwnAccount)
 
 	v1Subs := v1.Group("")
 	v1Subs.Use(jwtAuth)
@@ -1936,7 +1954,11 @@ func (r *stubUserRepo) Update(ctx context.Context, user *service.User, fields se
 }
 
 func (r *stubUserRepo) Delete(ctx context.Context, id int64) error {
-	return errors.New("not implemented")
+	if _, ok := r.users[id]; !ok {
+		return service.ErrUserNotFound
+	}
+	delete(r.users, id)
+	return nil
 }
 
 func (r *stubUserRepo) GetUserAvatar(ctx context.Context, userID int64) (*service.UserAvatar, error) {

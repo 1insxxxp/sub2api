@@ -4,7 +4,7 @@
 
 **Goal:** Let a signed-in user permanently cancel their own account through a password-confirmed self-service flow.
 
-**Architecture:** Add a user-domain deletion service that verifies the current password, rejects admin self-deletion, deletes owned API keys, soft-deletes the user, and invalidates auth caches. Expose it through `DELETE /api/v1/user/account`, revoke sessions in the handler, and add a restrained danger-zone UI on the profile page.
+**Architecture:** Add a user-domain deletion service that verifies the current password, rejects admin self-deletion, deletes owned API keys, soft-deletes the user, and invalidates auth caches. Expose it through `DELETE /api/v1/user/account`, revoke refresh sessions in the handler, and add a restrained danger-zone UI on the profile page.
 
 **Tech Stack:** Go/Gin service and handler tests, Vue 3/Pinia/Vitest frontend tests, existing i18n and profile card patterns.
 
@@ -57,11 +57,11 @@ Expected: PASS.
 
 Add tests for:
 - missing/empty password returns 400,
-- successful delete calls service and revokes all user tokens through `AuthService`.
+- successful delete calls service and revokes refresh sessions through `AuthService`.
 
 **Step 2: Run test to verify it fails**
 
-Run: `go test ./internal/handler -run 'TestUserHandlerDeleteOwnAccount' -count=1`
+Run: `go test -tags=unit ./internal/handler -run 'TestUserHandlerDeleteOwnAccount' -count=1`
 
 Expected: FAIL because the handler method does not exist.
 
@@ -76,7 +76,7 @@ Add:
 **Step 4: Run route/handler checks**
 
 Run:
-- `go test ./internal/handler -run 'TestUserHandlerDeleteOwnAccount' -count=1`
+- `go test -tags=unit ./internal/handler -run 'TestUserHandlerDeleteOwnAccount' -count=1`
 - `go test ./internal/server/routes -run 'UserRoutes' -count=1`
 
 Expected: PASS.
@@ -152,7 +152,7 @@ Expected: PASS.
 
 Run:
 - `go test -tags=unit ./internal/service -run 'TestDeleteOwnAccount' -count=1`
-- `go test ./internal/handler ./internal/server/routes -run 'DeleteOwnAccount|UserRoutes' -count=1`
+- `go test -tags=unit ./internal/handler ./internal/server -run 'DeleteOwnAccount|TestAPIContracts/DELETE_/api/v1/user/account' -count=1`
 - `go build ./internal/service ./internal/handler ./internal/server/routes ./cmd/server`
 
 **Step 2: Frontend verification**

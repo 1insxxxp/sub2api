@@ -8,7 +8,7 @@ Users can edit their profile, change their password, unlink sign-in providers, d
 
 ### Recommended: Dedicated User-Service Deletion Flow
 
-Add a user-facing account deletion method in `UserService`. The flow verifies the current password, rejects admin self-deletion, lists and deletes the user's API keys, soft-deletes the user through the existing repository path, invalidates API key auth cache, and lets the handler revoke all refresh/access token sessions through `AuthService`.
+Add a user-facing account deletion method in `UserService`. The flow verifies the current password, rejects admin self-deletion, lists and deletes the user's API keys, soft-deletes the user through the existing repository path, invalidates API key auth cache, and lets the handler revoke refresh sessions through `AuthService`.
 
 This keeps user-specific safeguards out of the admin service, reuses existing repository soft-delete behavior, and gives the frontend a clear endpoint for self-service cancellation.
 
@@ -30,7 +30,7 @@ The handler:
 - reads the authenticated subject,
 - validates the JSON body,
 - calls `UserService.DeleteOwnAccount`,
-- calls `AuthService.RevokeAllUserTokens` when auth service is configured,
+- calls `AuthService.RevokeAllUserSessions` as best-effort cleanup when auth service is configured,
 - returns a success message.
 
 The service:
@@ -54,7 +54,7 @@ Use the existing profile styling and translation system instead of adding a new 
 
 ### Data And Safety
 
-Deletion remains a soft delete through `deleted_at`. Balances, orders, usage logs, and historical records remain for audit and accounting. Users lose access immediately because the row is soft-deleted from normal lookups, refresh tokens are revoked, and owned API keys are deleted.
+Deletion remains a soft delete through `deleted_at`. Balances, orders, usage logs, and historical records remain for audit and accounting. Users lose access immediately because the row is soft-deleted from normal lookups, refresh sessions are revoked, existing access tokens stop resolving to an active user, and owned API keys are deleted.
 
 Admin accounts cannot self-delete. Admin deletion remains available from the admin panel.
 

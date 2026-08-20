@@ -63,6 +63,13 @@ export async function changePassword(
   return data
 }
 
+export async function deleteOwnAccount(password: string): Promise<{ message: string }> {
+  const { data } = await apiClient.delete<{ message: string }>('/user/account', {
+    data: { password }
+  })
+  return data
+}
+
 /**
  * Send verification code for adding a notify email
  * @param email - Email address to verify
@@ -206,6 +213,7 @@ export const userAPI = {
   getProfile,
   updateProfile,
   changePassword,
+  deleteOwnAccount,
   sendNotifyEmailCode,
   verifyNotifyEmail,
   removeNotifyEmail,

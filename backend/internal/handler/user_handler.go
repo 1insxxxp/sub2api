@@ -76,6 +76,10 @@ type ChangePasswordRequest struct {
 	NewPassword string `json:"new_password" binding:"required,min=6"`
 }
 
+type DeleteOwnAccountRequest struct {
+	Password string `json:"password" binding:"required"`
+}
+
 // UpdateProfileRequest represents the update profile request payload
 type UpdateProfileRequest struct {
 	Username               *string  `json:"username"`
@@ -157,6 +161,31 @@ func (h *UserHandler) ChangePassword(c *gin.Context) {
 	}
 
 	response.Success(c, gin.H{"message": "Password changed successfully"})
+}
+
+func (h *UserHandler) DeleteOwnAccount(c *gin.Context) {
+	subject, ok := middleware2.GetAuthSubjectFromContext(c)
+	if !ok {
+		response.Unauthorized(c, "User not authenticated")
+		return
+	}
+
+	var req DeleteOwnAccountRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.BadRequest(c, "Invalid request: "+err.Error())
+		return
+	}
+
+	if err := h.userService.DeleteOwnAccount(c.Request.Context(), subject.UserID, req.Password); err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	if h.authService != nil {
+		// Soft-deleted users cannot refresh into an active session; Redis cleanup is best effort.
+		_ = h.authService.RevokeAllUserSessions(c.Request.Context(), subject.UserID)
+	}
+
+	response.Success(c, gin.H{"message": "Account deleted successfully"})
 }
 
 // UpdateProfile handles updating user profile

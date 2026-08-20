@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -23,6 +24,8 @@ type userHandlerRepoStub struct {
 	user       *service.User
 	identities []service.UserAuthIdentityRecord
 	unbound    []string
+	deletedIDs []int64
+	deleted    bool
 }
 
 func (s *userHandlerRepoStub) Create(context.Context, *service.User) error { return nil }
@@ -30,6 +33,9 @@ func (s *userHandlerRepoStub) CreateWithEmailAliasGuard(context.Context, *servic
 	return nil
 }
 func (s *userHandlerRepoStub) GetByID(context.Context, int64) (*service.User, error) {
+	if s.deleted {
+		return nil, service.ErrUserNotFound
+	}
 	cloned := *s.user
 	return &cloned, nil
 }
@@ -46,7 +52,11 @@ func (s *userHandlerRepoStub) Update(_ context.Context, user *service.User, _ se
 	s.user = &cloned
 	return nil
 }
-func (s *userHandlerRepoStub) Delete(context.Context, int64) error { return nil }
+func (s *userHandlerRepoStub) Delete(_ context.Context, id int64) error {
+	s.deletedIDs = append(s.deletedIDs, id)
+	s.deleted = true
+	return nil
+}
 func (s *userHandlerRepoStub) GetUserAvatar(context.Context, int64) (*service.UserAvatar, error) {
 	if s.user == nil || s.user.AvatarURL == "" {
 		return nil, nil
@@ -416,6 +426,7 @@ type userHandlerEmailCacheStub struct {
 
 type userHandlerRefreshTokenCacheStub struct {
 	revokedUserIDs []int64
+	revokeErr      error
 }
 
 func (s *userHandlerRefreshTokenCacheStub) StoreRefreshToken(context.Context, string, *service.RefreshTokenData, time.Duration) error {
@@ -432,7 +443,7 @@ func (s *userHandlerRefreshTokenCacheStub) DeleteRefreshToken(context.Context, s
 
 func (s *userHandlerRefreshTokenCacheStub) DeleteUserRefreshTokens(_ context.Context, userID int64) error {
 	s.revokedUserIDs = append(s.revokedUserIDs, userID)
-	return nil
+	return s.revokeErr
 }
 
 func (s *userHandlerRefreshTokenCacheStub) DeleteTokenFamily(context.Context, string) error {
@@ -509,6 +520,86 @@ func (s *userHandlerEmailCacheStub) GetNotifyCodeUserRate(context.Context, int64
 
 func (s *userHandlerEmailCacheStub) IncrNotifyCodeUserRate(context.Context, int64, time.Duration) (int64, error) {
 	return 0, nil
+}
+
+func TestUserHandlerDeleteOwnAccountRequiresPassword(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	user := &service.User{ID: 31, Email: "delete@example.com", Role: service.RoleUser, Status: service.StatusActive}
+	require.NoError(t, user.SetPassword("current-password"))
+	repo := &userHandlerRepoStub{user: user}
+	handler := NewUserHandler(service.NewUserService(repo, nil, nil, nil), nil, nil, nil, nil, nil)
+
+	recorder := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(recorder)
+	c.Request = httptest.NewRequest(http.MethodDelete, "/api/v1/user/account", bytes.NewReader([]byte(`{}`)))
+	c.Request.Header.Set("Content-Type", "application/json")
+	c.Set(string(middleware2.ContextKeyUser), middleware2.AuthSubject{UserID: 31})
+
+	handler.DeleteOwnAccount(c)
+
+	require.Equal(t, http.StatusBadRequest, recorder.Code)
+	require.Empty(t, repo.deletedIDs)
+}
+
+func TestUserHandlerDeleteOwnAccountRevokesRefreshSessionsAfterSoftDelete(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	user := &service.User{ID: 32, Email: "delete@example.com", Role: service.RoleUser, Status: service.StatusActive}
+	require.NoError(t, user.SetPassword("current-password"))
+	repo := &userHandlerRepoStub{user: user}
+	refreshTokenCache := &userHandlerRefreshTokenCacheStub{}
+	cfg := &config.Config{
+		JWT: config.JWTConfig{
+			Secret:     "test-secret",
+			ExpireHour: 1,
+		},
+	}
+	authService := service.NewAuthService(nil, repo, nil, refreshTokenCache, cfg, nil, nil, nil, nil, nil, nil, nil, nil)
+	handler := NewUserHandler(service.NewUserService(repo, nil, nil, nil), authService, nil, nil, nil, nil)
+
+	body := []byte(`{"password":"current-password"}`)
+	recorder := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(recorder)
+	c.Request = httptest.NewRequest(http.MethodDelete, "/api/v1/user/account", bytes.NewReader(body))
+	c.Request.Header.Set("Content-Type", "application/json")
+	c.Set(string(middleware2.ContextKeyUser), middleware2.AuthSubject{UserID: 32})
+
+	handler.DeleteOwnAccount(c)
+
+	require.Equal(t, http.StatusOK, recorder.Code)
+	require.Equal(t, []int64{32}, repo.deletedIDs)
+	require.Equal(t, []int64{32}, refreshTokenCache.revokedUserIDs)
+}
+
+func TestUserHandlerDeleteOwnAccountSucceedsWhenRefreshSessionRevokeFails(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	user := &service.User{ID: 33, Email: "delete@example.com", Role: service.RoleUser, Status: service.StatusActive}
+	require.NoError(t, user.SetPassword("current-password"))
+	repo := &userHandlerRepoStub{user: user}
+	refreshTokenCache := &userHandlerRefreshTokenCacheStub{revokeErr: errors.New("redis unavailable")}
+	cfg := &config.Config{
+		JWT: config.JWTConfig{
+			Secret:     "test-secret",
+			ExpireHour: 1,
+		},
+	}
+	authService := service.NewAuthService(nil, repo, nil, refreshTokenCache, cfg, nil, nil, nil, nil, nil, nil, nil, nil)
+	handler := NewUserHandler(service.NewUserService(repo, nil, nil, nil), authService, nil, nil, nil, nil)
+
+	body := []byte(`{"password":"current-password"}`)
+	recorder := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(recorder)
+	c.Request = httptest.NewRequest(http.MethodDelete, "/api/v1/user/account", bytes.NewReader(body))
+	c.Request.Header.Set("Content-Type", "application/json")
+	c.Set(string(middleware2.ContextKeyUser), middleware2.AuthSubject{UserID: 33})
+
+	handler.DeleteOwnAccount(c)
+
+	require.Equal(t, http.StatusOK, recorder.Code)
+	require.Equal(t, []int64{33}, repo.deletedIDs)
+	require.Equal(t, []int64{33}, refreshTokenCache.revokedUserIDs)
 }
 
 func TestUserHandlerBindEmailIdentityReturnsProfileResponse(t *testing.T) {

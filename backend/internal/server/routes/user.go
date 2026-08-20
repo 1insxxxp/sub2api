@@ -35,6 +35,7 @@ func RegisterUserRoutes(
 		{
 			user.GET("/profile", h.User.GetProfile)
 			user.PUT("/password", h.User.ChangePassword)
+			user.DELETE("/account", h.User.DeleteOwnAccount)
 			user.PUT("", h.User.UpdateProfile)
 			user.GET("/aff", h.User.GetAffiliate)
 			user.POST("/aff/transfer", h.User.TransferAffiliateQuota)

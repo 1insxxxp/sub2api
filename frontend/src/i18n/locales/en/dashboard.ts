@@ -977,6 +977,18 @@ export default {
     passwordTooShort: 'Password must be at least 8 characters long',
     passwordChangeSuccess: 'Password changed successfully',
     passwordChangeFailed: 'Failed to change password',
+    accountDeletion: {
+      title: 'Delete account',
+      description: 'After deletion you can no longer sign in, and all API keys under this account stop working immediately.',
+      summary: 'This removes access to the current account while keeping historical billing records for administrator audit.',
+      open: 'Delete account',
+      confirmHint: 'Enter your current password to confirm deletion. You will be signed out after submitting.',
+      passwordPlaceholder: 'Enter current password',
+      passwordRequired: 'Please enter your current password',
+      confirm: 'Confirm deletion',
+      success: 'Account deleted',
+      failed: 'Failed to delete account'
+    },
     // TOTP 2FA
     totp: {
       title: 'Two-Factor Authentication (2FA)',

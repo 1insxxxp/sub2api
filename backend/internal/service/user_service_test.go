@@ -38,6 +38,8 @@ type mockUserRepo struct {
 	updateFn                 func(ctx context.Context, user *User) error
 	updateCalls              int
 	updateFields             []UserUpdateFields
+	deleteErr                error
+	deletedIDs               []int64
 	upsertAvatarFn           func(ctx context.Context, userID int64, input UpsertUserAvatarInput) (*UserAvatar, error)
 	upsertAvatarArgs         []UpsertUserAvatarInput
 	deleteAvatarFn           func(ctx context.Context, userID int64) error
@@ -118,7 +120,10 @@ func (m *mockUserRepo) Update(ctx context.Context, user *User, fields UserUpdate
 	}
 	return nil
 }
-func (m *mockUserRepo) Delete(context.Context, int64) error { return nil }
+func (m *mockUserRepo) Delete(_ context.Context, id int64) error {
+	m.deletedIDs = append(m.deletedIDs, id)
+	return m.deleteErr
+}
 func (m *mockUserRepo) GetUserAvatar(ctx context.Context, userID int64) (*UserAvatar, error) {
 	if m.getAvatarFn != nil {
 		return m.getAvatarFn(ctx, userID)
@@ -295,11 +300,16 @@ func (m *mockUserRepo) WithUserProfileIdentityTx(ctx context.Context, fn func(tx
 
 type mockAuthCacheInvalidator struct {
 	invalidatedUserIDs []int64
+	invalidatedKeys    []string
 	mu                 sync.Mutex
 }
 
-func (m *mockAuthCacheInvalidator) InvalidateAuthCacheByKey(context.Context, string)    {}
 func (m *mockAuthCacheInvalidator) InvalidateAuthCacheByGroupID(context.Context, int64) {}
+func (m *mockAuthCacheInvalidator) InvalidateAuthCacheByKey(_ context.Context, key string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.invalidatedKeys = append(m.invalidatedKeys, key)
+}
 func (m *mockAuthCacheInvalidator) InvalidateAuthCacheByUserID(_ context.Context, userID int64) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -378,7 +388,91 @@ func (m *mockBillingCache) BatchGetUserPlatformQuotaCache(context.Context, []Use
 	return nil, nil
 }
 
+type mockAccountDeletionAPIKeyRepo struct {
+	listByUserIDCalls []int64
+	keys              []APIKey
+	deletedIDs        []int64
+}
+
+func (m *mockAccountDeletionAPIKeyRepo) ListByUserID(
+	_ context.Context,
+	userID int64,
+	_ pagination.PaginationParams,
+	_ APIKeyListFilters,
+) ([]APIKey, *pagination.PaginationResult, error) {
+	m.listByUserIDCalls = append(m.listByUserIDCalls, userID)
+	out := append([]APIKey(nil), m.keys...)
+	return out, &pagination.PaginationResult{Total: int64(len(out))}, nil
+}
+
+func (m *mockAccountDeletionAPIKeyRepo) DeleteWithAudit(_ context.Context, id int64) error {
+	m.deletedIDs = append(m.deletedIDs, id)
+	return nil
+}
+
 // --- 测试 ---
+
+func TestDeleteOwnAccountRejectsWrongPassword(t *testing.T) {
+	user := &User{ID: 7, Role: RoleUser}
+	require.NoError(t, user.SetPassword("correct-password"))
+	repo := &mockUserRepo{getByIDUser: user}
+	apiKeyRepo := &mockAccountDeletionAPIKeyRepo{
+		keys: []APIKey{{ID: 11, UserID: 7, Key: "sk-user-1"}},
+	}
+	invalidator := &mockAuthCacheInvalidator{}
+	svc := NewUserService(repo, nil, invalidator, nil)
+	svc.SetAccountDeletionAPIKeyRepository(apiKeyRepo)
+
+	err := svc.DeleteOwnAccount(context.Background(), 7, "wrong-password")
+
+	require.ErrorIs(t, err, ErrPasswordIncorrect)
+	require.Empty(t, repo.deletedIDs)
+	require.Empty(t, apiKeyRepo.listByUserIDCalls)
+	require.Empty(t, apiKeyRepo.deletedIDs)
+	require.Empty(t, invalidator.invalidatedKeys)
+	require.Empty(t, invalidator.invalidatedUserIDs)
+}
+
+func TestDeleteOwnAccountRejectsAdminUser(t *testing.T) {
+	user := &User{ID: 1, Role: RoleAdmin}
+	require.NoError(t, user.SetPassword("current-password"))
+	repo := &mockUserRepo{getByIDUser: user}
+	apiKeyRepo := &mockAccountDeletionAPIKeyRepo{}
+	svc := NewUserService(repo, nil, nil, nil)
+	svc.SetAccountDeletionAPIKeyRepository(apiKeyRepo)
+
+	err := svc.DeleteOwnAccount(context.Background(), 1, "current-password")
+
+	require.ErrorIs(t, err, ErrAccountDeletionForbidden)
+	require.Empty(t, repo.deletedIDs)
+	require.Empty(t, apiKeyRepo.listByUserIDCalls)
+	require.Empty(t, apiKeyRepo.deletedIDs)
+}
+
+func TestDeleteOwnAccountDeletesUserAPIKeysAndInvalidatesCaches(t *testing.T) {
+	user := &User{ID: 7, Role: RoleUser}
+	require.NoError(t, user.SetPassword("current-password"))
+	repo := &mockUserRepo{getByIDUser: user}
+	apiKeyRepo := &mockAccountDeletionAPIKeyRepo{
+		keys: []APIKey{
+			{ID: 11, UserID: 7, Key: "sk-user-1"},
+			{ID: 12, UserID: 7, Key: "sk-user-2"},
+		},
+	}
+	invalidator := &mockAuthCacheInvalidator{}
+	svc := NewUserService(repo, nil, invalidator, nil)
+	svc.SetAccountDeletionAPIKeyRepository(apiKeyRepo)
+
+	err := svc.DeleteOwnAccount(context.Background(), 7, "current-password")
+
+	require.NoError(t, err)
+	require.Equal(t, []int64{7}, apiKeyRepo.listByUserIDCalls)
+	require.Equal(t, []int64{11, 12}, apiKeyRepo.deletedIDs)
+	require.Equal(t, []int64{7}, repo.deletedIDs)
+	require.Equal(t, 1, repo.txCalls)
+	require.ElementsMatch(t, []string{"sk-user-1", "sk-user-2"}, invalidator.invalidatedKeys)
+	require.Equal(t, []int64{7}, invalidator.invalidatedUserIDs)
+}
 
 func TestUpdateBalance_Success(t *testing.T) {
 	repo := &mockUserRepo{}
