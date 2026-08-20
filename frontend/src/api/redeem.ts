@@ -4,7 +4,7 @@
  */
 
 import { apiClient } from './client'
-import type { RedeemCodeRequest } from '@/types'
+import type { RedeemCode, RedeemCodeRequest } from '@/types'
 
 export interface RedeemHistoryItem {
   id: number
@@ -24,6 +24,14 @@ export interface RedeemHistoryItem {
     name: string
   }
 }
+
+export interface GenerateBalanceTransferCodeRequest {
+  amount: number
+  expires_in_days?: number
+  notes?: string
+}
+
+export type GeneratedRedeemCode = RedeemCode
 
 /**
  * Redeem a code
@@ -59,9 +67,23 @@ export async function getHistory(): Promise<RedeemHistoryItem[]> {
   return data
 }
 
+export async function generateBalanceTransferCode(
+  payload: GenerateBalanceTransferCodeRequest
+): Promise<GeneratedRedeemCode> {
+  const { data } = await apiClient.post<GeneratedRedeemCode>('/redeem/generate', payload)
+  return data
+}
+
+export async function getGenerated(): Promise<GeneratedRedeemCode[]> {
+  const { data } = await apiClient.get<GeneratedRedeemCode[]>('/redeem/generated')
+  return data
+}
+
 export const redeemAPI = {
   redeem,
-  getHistory
+  getHistory,
+  generateBalanceTransferCode,
+  getGenerated
 }
 
 export default redeemAPI

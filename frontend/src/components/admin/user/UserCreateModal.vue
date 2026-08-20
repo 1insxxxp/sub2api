@@ -54,6 +54,24 @@
         />
         <p class="input-hint">{{ t('admin.users.form.rpmLimitHint') }}</p>
       </div>
+      <div>
+        <label class="flex items-start gap-3 rounded-lg border border-gray-200 bg-white/70 p-3 dark:border-dark-700 dark:bg-dark-900/40">
+          <input
+            v-model="form.balance_redeem_code_enabled"
+            data-test="balance-redeem-code-toggle"
+            type="checkbox"
+            class="mt-0.5 h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+          />
+          <span class="min-w-0">
+            <span class="block text-sm font-medium text-gray-900 dark:text-white">
+              {{ t('admin.users.form.balanceRedeemCodeEnabled') }}
+            </span>
+            <span class="mt-1 block text-xs leading-5 text-gray-500 dark:text-dark-400">
+              {{ t('admin.users.form.balanceRedeemCodeEnabledHint') }}
+            </span>
+          </span>
+        </label>
+      </div>
     </form>
     <template #footer>
       <div class="flex justify-end gap-3">
@@ -82,7 +100,7 @@ const props = defineProps<{ show: boolean }>()
 const emit = defineEmits(['close', 'success']); const { t } = useI18n()
 const appStore = useAppStore()
 
-const form = reactive({ email: '', password: '', username: '', notes: '', role: 'user' as 'user' | 'admin', balance: '', concurrency: 1, rpm_limit: 0 })
+const form = reactive({ email: '', password: '', username: '', notes: '', role: 'user' as 'user' | 'admin', balance: '', concurrency: 1, rpm_limit: 0, balance_redeem_code_enabled: false })
 
 const stepUp = useStepUp()
 const loading = ref(false)
@@ -116,7 +134,7 @@ const submit = async () => {
   } finally { loading.value = false }
 }
 
-watch(() => props.show, (v) => { if(v) Object.assign(form, { email: '', password: '', username: '', notes: '', role: 'user', balance: '', concurrency: 1, rpm_limit: 0 }) })
+watch(() => props.show, (v) => { if(v) Object.assign(form, { email: '', password: '', username: '', notes: '', role: 'user', balance: '', concurrency: 1, rpm_limit: 0, balance_redeem_code_enabled: false }) })
 
 const generateRandomPassword = () => {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789!@#$%^&*'

@@ -89,6 +89,7 @@ export interface User {
   frozen_balance?: number // Balance currently held by async batch jobs
   concurrency: number // Allowed concurrent requests
   rpm_limit?: number // User-level RPM cap (0 = unlimited); effective as fallback when group has no rpm_limit
+  balance_redeem_code_enabled?: boolean // Whether the user can convert balance into redeem codes
   status: 'active' | 'disabled' // Account status
   allowed_groups: number[] | null // Allowed group IDs (null = all non-exclusive groups)
   balance_notify_enabled: boolean
@@ -1995,7 +1996,10 @@ export interface RedeemCode {
   validity_days?: number // 订阅类型专用
   batch_id?: string | null
   single_use_per_user?: boolean
+  created_by?: number | null
+  source?: string
   user?: User
+  creator?: User
   group?: Group // 关联的分组
 }
 
@@ -2203,6 +2207,7 @@ export interface UpdateUserRequest {
   balance?: number
   concurrency?: number
   rpm_limit?: number
+  balance_redeem_code_enabled?: boolean
   status?: 'active' | 'disabled'
   allowed_groups?: number[] | null
   // 用户专属分组倍率配置 (group_id -> rate_multiplier | null)
