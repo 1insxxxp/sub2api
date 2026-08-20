@@ -14,9 +14,11 @@ import (
 type rpmUserRepoStub struct {
 	*userRepoStub
 	lastUpdated *User
+	lastFields  UserUpdateFields
 }
 
-func (s *rpmUserRepoStub) Update(_ context.Context, user *User, _ UserUpdateFields) error {
+func (s *rpmUserRepoStub) Update(_ context.Context, user *User, fields UserUpdateFields) error {
+	s.lastFields = fields
 	if user == nil {
 		return nil
 	}
@@ -66,4 +68,23 @@ func TestAdminService_UpdateUser_NoInvalidateWhenRPMLimitUnchanged(t *testing.T)
 	})
 	require.NoError(t, err)
 	require.Empty(t, invalidator.userIDs, "只改 username 不应触发认证缓存失效")
+}
+
+func TestAdminService_UpdateUser_BalanceRedeemCodeEnabled(t *testing.T) {
+	base := &userRepoStub{user: &User{ID: 42, Email: "u@example.com", BalanceRedeemCodeEnabled: false}}
+	repo := &rpmUserRepoStub{userRepoStub: base}
+	svc := &adminServiceImpl{
+		userRepo:       repo,
+		redeemCodeRepo: &redeemRepoStub{},
+	}
+
+	enabled := true
+	updated, err := svc.UpdateUser(context.Background(), 42, &UpdateUserInput{
+		BalanceRedeemCodeEnabled: &enabled,
+	})
+	require.NoError(t, err)
+	require.NotNil(t, updated)
+	require.True(t, updated.BalanceRedeemCodeEnabled)
+	require.True(t, repo.lastUpdated.BalanceRedeemCodeEnabled)
+	require.True(t, repo.lastFields.BalanceRedeemCodeEnabled)
 }

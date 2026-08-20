@@ -17,13 +17,14 @@ func TestAdminService_CreateUser_Success(t *testing.T) {
 	balance := 12.5
 
 	input := &CreateUserInput{
-		Email:         "user@test.com",
-		Password:      "strong-pass",
-		Username:      "tester",
-		Notes:         "note",
-		Balance:       &balance,
-		Concurrency:   7,
-		AllowedGroups: []int64{3, 5},
+		Email:                    "user@test.com",
+		Password:                 "strong-pass",
+		Username:                 "tester",
+		Notes:                    "note",
+		Balance:                  &balance,
+		Concurrency:              7,
+		AllowedGroups:            []int64{3, 5},
+		BalanceRedeemCodeEnabled: true,
 	}
 
 	user, err := svc.CreateUser(context.Background(), input)
@@ -36,11 +37,13 @@ func TestAdminService_CreateUser_Success(t *testing.T) {
 	require.Equal(t, balance, user.Balance)
 	require.Equal(t, input.Concurrency, user.Concurrency)
 	require.Equal(t, input.AllowedGroups, user.AllowedGroups)
+	require.True(t, user.BalanceRedeemCodeEnabled)
 	require.Equal(t, RoleUser, user.Role)
 	require.Equal(t, StatusActive, user.Status)
 	require.True(t, user.CheckPassword(input.Password))
 	require.Len(t, repo.created, 1)
 	require.Equal(t, user, repo.created[0])
+	require.True(t, repo.created[0].BalanceRedeemCodeEnabled)
 }
 
 func TestAdminService_CreateUser_UsesDefaultBalanceWhenBalanceOmitted(t *testing.T) {

@@ -53,3 +53,16 @@ func TestUserFromServiceAdmin_MapsAuthSourceMetadata(t *testing.T) {
 	require.Equal(t, "202.8.9.242", out.LastLoginIP)
 	require.Equal(t, "login-agent", out.LastLoginUserAgent)
 }
+
+func TestUserFromServiceShallow_MapsBalanceRedeemCodeEnabled(t *testing.T) {
+	t.Parallel()
+
+	out := UserFromServiceShallow(&service.User{
+		ID:                       42,
+		Email:                    "transfer@example.com",
+		BalanceRedeemCodeEnabled: true,
+	})
+
+	require.NotNil(t, out)
+	require.True(t, out.BalanceRedeemCodeEnabled)
+}

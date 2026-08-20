@@ -134,15 +134,16 @@ func (s *adminServiceImpl) CreateUser(ctx context.Context, input *CreateUserInpu
 	}
 
 	user := &User{
-		Email:         input.Email,
-		Username:      input.Username,
-		Notes:         input.Notes,
-		Role:          role,
-		Balance:       balance,
-		Concurrency:   input.Concurrency,
-		RPMLimit:      input.RPMLimit,
-		Status:        StatusActive,
-		AllowedGroups: input.AllowedGroups,
+		Email:                    input.Email,
+		Username:                 input.Username,
+		Notes:                    input.Notes,
+		Role:                     role,
+		Balance:                  balance,
+		Concurrency:              input.Concurrency,
+		RPMLimit:                 input.RPMLimit,
+		Status:                   StatusActive,
+		BalanceRedeemCodeEnabled: input.BalanceRedeemCodeEnabled,
+		AllowedGroups:            input.AllowedGroups,
 	}
 	if err := user.SetPassword(input.Password); err != nil {
 		return nil, err
@@ -279,6 +280,10 @@ func (s *adminServiceImpl) UpdateUser(ctx context.Context, id int64, input *Upda
 	if input.AllowedGroups != nil {
 		user.AllowedGroups = *input.AllowedGroups
 		fields.AllowedGroups = true
+	}
+	if input.BalanceRedeemCodeEnabled != nil {
+		user.BalanceRedeemCodeEnabled = *input.BalanceRedeemCodeEnabled
+		fields.BalanceRedeemCodeEnabled = true
 	}
 
 	if err := s.userRepo.Update(ctx, user, fields); err != nil {
