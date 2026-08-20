@@ -14,27 +14,30 @@ import (
 )
 
 type userRepoStub struct {
-	user                 *User
-	usersByID            map[int64]*User
-	getErr               error
-	createErr            error
-	deleteErr            error
-	exists               bool
-	existsErr            error
-	aliasExists          bool
-	aliasErr             error
-	guardedCreates       int
-	nextID               int64
-	created              []*User
-	updated              []*User
-	deletedIDs           []int64
-	usersByEmail         map[string]*User
-	getByEmailErr        error
-	getByEmailMisses     int
-	domainCounts         map[string]int
-	domainCountErr       error
-	domainLimitErr       error
-	domainLimitedCreates int
+	user                  *User
+	usersByID             map[int64]*User
+	getErr                error
+	createErr             error
+	deleteErr             error
+	exists                bool
+	existsErr             error
+	aliasExists           bool
+	aliasErr              error
+	deletedIdentityExists bool
+	deletedIdentityErr    error
+	deletedIdentityChecks []string
+	guardedCreates        int
+	nextID                int64
+	created               []*User
+	updated               []*User
+	deletedIDs            []int64
+	usersByEmail          map[string]*User
+	getByEmailErr         error
+	getByEmailMisses      int
+	domainCounts          map[string]int
+	domainCountErr        error
+	domainLimitErr        error
+	domainLimitedCreates  int
 }
 
 func (s *userRepoStub) CountUsersByEmailDomain(_ context.Context, domain string) (int, error) {
@@ -206,6 +209,21 @@ func (s *userRepoStub) ExistsByEmailAlias(ctx context.Context, email string) (bo
 		return false, s.aliasErr
 	}
 	return s.aliasExists, nil
+}
+
+func (s *userRepoStub) ExistsByEmailOrAliasIncludeDeleted(ctx context.Context, email string) (bool, error) {
+	s.deletedIdentityChecks = append(s.deletedIdentityChecks, email)
+	if s.deletedIdentityErr != nil {
+		return false, s.deletedIdentityErr
+	}
+	if s.deletedIdentityExists {
+		return true, nil
+	}
+	exists, err := s.ExistsByEmail(ctx, email)
+	if err != nil || exists {
+		return exists, err
+	}
+	return s.ExistsByEmailAlias(ctx, email)
 }
 
 func (s *userRepoStub) RemoveGroupFromAllowedGroups(ctx context.Context, groupID int64) (int64, error) {

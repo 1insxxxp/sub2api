@@ -405,6 +405,30 @@ func TestAuthService_Register_AliasDuplicateRejected(t *testing.T) {
 	require.Empty(t, repo.created)
 }
 
+func TestAuthService_Register_BlocksDeletedEmailIdentity(t *testing.T) {
+	repo := &userRepoStub{deletedIdentityExists: true}
+	service := newAuthService(repo, map[string]string{
+		SettingKeyRegistrationEnabled: "true",
+	}, nil, nil)
+
+	_, _, err := service.Register(context.Background(), "deleted@example.com", "password")
+	require.ErrorIs(t, err, ErrEmailExists)
+	require.Empty(t, repo.created)
+	require.Equal(t, []string{"deleted@example.com"}, repo.deletedIdentityChecks)
+}
+
+func TestAuthService_Register_BlocksDeletedAliasIdentity(t *testing.T) {
+	repo := &userRepoStub{deletedIdentityExists: true}
+	service := newAuthService(repo, map[string]string{
+		SettingKeyRegistrationEnabled: "true",
+	}, nil, nil)
+
+	_, _, err := service.Register(context.Background(), "some.one+again@gmail.com", "password")
+	require.ErrorIs(t, err, ErrEmailExists)
+	require.Empty(t, repo.created)
+	require.Equal(t, []string{"some.one+again@gmail.com"}, repo.deletedIdentityChecks)
+}
+
 func TestAuthService_Register_UsesAliasGuardedCreate(t *testing.T) {
 	// 注册必须走带别名兜底的创建路径：服务层前置查重与写入之间存在竞态窗口。
 	repo := &userRepoStub{nextID: 91}
@@ -580,6 +604,18 @@ func TestAuthService_SendVerifyCode_EmailSuffixNotAllowed(t *testing.T) {
 	require.ErrorIs(t, err, ErrEmailDomainRegistrationLimit)
 	appErr := infraerrors.FromError(err)
 	require.Equal(t, "EMAIL_DOMAIN_REGISTRATION_LIMIT", appErr.Reason)
+}
+
+func TestAuthService_SendVerifyCode_BlocksDeletedEmailIdentity(t *testing.T) {
+	repo := &userRepoStub{deletedIdentityExists: true}
+	cache := &emailCacheStub{}
+	service := newAuthService(repo, map[string]string{
+		SettingKeyRegistrationEnabled: "true",
+	}, cache, nil)
+
+	err := service.SendVerifyCode(context.Background(), "deleted@example.com")
+	require.ErrorIs(t, err, ErrEmailExists)
+	require.Equal(t, []string{"deleted@example.com"}, repo.deletedIdentityChecks)
 }
 
 func TestAuthService_SendVerifyCode_NonWhitelistDomainLimit(t *testing.T) {

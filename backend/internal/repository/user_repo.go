@@ -126,12 +126,13 @@ func (r *userRepository) create(ctx context.Context, userIn *service.User, guard
 		}
 	}
 
-	if err := ensureNormalizedEmailAvailableWithClient(txCtx, txClient, 0, userIn.Email); err != nil {
+	registrationLookupCtx := mixins.SkipSoftDelete(txCtx)
+	if err := ensureNormalizedEmailAvailableWithClient(registrationLookupCtx, txClient, 0, userIn.Email); err != nil {
 		return err
 	}
 
 	if guardEmailAlias {
-		aliasExists, err := existsByEmailAliasWithClient(txCtx, txClient, userIn.Email)
+		aliasExists, err := existsByEmailAliasWithClient(registrationLookupCtx, txClient, userIn.Email)
 		if err != nil {
 			return err
 		}
@@ -1147,6 +1148,11 @@ func (r *userRepository) ExistsByEmail(ctx context.Context, email string) (bool,
 	return r.client.User.Query().Where(userEmailLookupPredicate(email)).Exist(ctx)
 }
 
+func (r *userRepository) ExistsByEmailOrAliasIncludeDeleted(ctx context.Context, email string) (bool, error) {
+	includeDeletedCtx := mixins.SkipSoftDelete(ctx)
+	return existsByEmailOrAliasWithClient(includeDeletedCtx, clientFromContext(includeDeletedCtx, r.client), email)
+}
+
 // emailAliasCandidateLimit 限制一次别名查重最多取回的候选行数。探针都以去点后的
 // 本地部分为前缀锚定（见 dotStrippedEmailExpr），正常收件箱的变体只有个位数；
 // 上限只是兜底，避免公开未鉴权的注册/发码端点把大表整张读进内存。
@@ -1191,6 +1197,18 @@ func existsByEmailAliasWithClient(ctx context.Context, client *dbent.Client, ema
 		}
 	}
 	return false, nil
+}
+
+func existsByEmailOrAliasWithClient(ctx context.Context, client *dbent.Client, email string) (bool, error) {
+	client = clientFromContext(ctx, client)
+	if client == nil {
+		return false, nil
+	}
+	exists, err := client.User.Query().Where(userEmailLookupPredicate(email)).Exist(ctx)
+	if err != nil || exists {
+		return exists, err
+	}
+	return existsByEmailAliasWithClient(ctx, client, email)
 }
 
 // dotStrippedEmailExpr 渲染下面的表达式：去掉存量邮箱的大小写、首尾空白（与

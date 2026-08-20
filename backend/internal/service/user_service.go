@@ -192,6 +192,13 @@ type RegistrationEmailDomainRepository interface {
 	CreateWithEmailAliasGuardAndDomainLimit(ctx context.Context, user *User, domain string) error
 }
 
+// RegistrationEmailIdentityRepository is an optional production capability used
+// only by registration. It includes soft-deleted users so account cancellation
+// does not free an email identity for fresh signup.
+type RegistrationEmailIdentityRepository interface {
+	ExistsByEmailOrAliasIncludeDeleted(ctx context.Context, email string) (bool, error)
+}
+
 // RedeemUserAdjustmentRepository provides the atomic, floor-at-zero updates
 // used by negative-value redeem codes. It is intentionally narrower than
 // UserRepository because normal usage billing is allowed to overdraw.
