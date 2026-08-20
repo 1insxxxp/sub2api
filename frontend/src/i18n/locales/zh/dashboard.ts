@@ -900,7 +900,40 @@ export default {
     failedToRedeem: '兑换失败，请检查兑换码后重试。',
     batchSingleUse: '活动兑换码一人限用一次',
     subscriptionRefreshFailed: '兑换成功，但订阅状态刷新失败。',
-    pleaseEnterCode: '请输入兑换码'
+    pleaseEnterCode: '请输入兑换码',
+    balanceTransfer: {
+      title: '生成余额兑换码',
+      subtitle: '把自己的余额转成一次性兑换码，发给其他用户兑换。',
+      amount: '兑换金额',
+      amountPlaceholder: '输入金额',
+      expiresInDays: '有效天数',
+      notes: '备注',
+      notesPlaceholder: '选填，便于自己识别用途',
+      availableBalance: '可用余额',
+      generate: '生成兑换码',
+      generating: '生成中...',
+      latestCode: '最新生成',
+      copy: '复制',
+      copied: '兑换码已复制',
+      copyFailed: '复制失败',
+      generated: '兑换码已生成',
+      listTitle: '我生成的兑换码',
+      empty: '暂无生成记录',
+      expiresAt: '过期时间',
+      neverExpires: '永不过期',
+      failedToLoad: '加载生成记录失败',
+      failedToGenerate: '生成兑换码失败',
+      invalidAmount: '请输入大于 0 的金额',
+      insufficientBalance: '余额不足',
+      invalidExpiry: '有效天数必须在 1 到 3650 之间',
+      status: {
+        unused: '未使用',
+        used: '已使用',
+        expired: '已过期',
+        disabled: '已禁用',
+        active: '可用'
+      }
+    }
   },
 
   // Profile
