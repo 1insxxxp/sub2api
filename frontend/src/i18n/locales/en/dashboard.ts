@@ -892,7 +892,40 @@ export default {
     failedToRedeem: 'Failed to redeem code. Please check the code and try again.',
     batchSingleUse: 'Each account may use only one code from this promotion.',
     subscriptionRefreshFailed: 'Redeemed successfully, but failed to refresh subscription status.',
-    pleaseEnterCode: 'Please enter a redeem code'
+    pleaseEnterCode: 'Please enter a redeem code',
+    balanceTransfer: {
+      title: 'Generate Balance Redeem Code',
+      subtitle: 'Convert your own balance into a one-use redeem code for another user.',
+      amount: 'Amount',
+      amountPlaceholder: 'Enter amount',
+      expiresInDays: 'Valid days',
+      notes: 'Notes',
+      notesPlaceholder: 'Optional label for your own reference',
+      availableBalance: 'Available balance',
+      generate: 'Generate Code',
+      generating: 'Generating...',
+      latestCode: 'Latest code',
+      copy: 'Copy',
+      copied: 'Redeem code copied',
+      copyFailed: 'Failed to copy',
+      generated: 'Redeem code generated',
+      listTitle: 'Codes You Generated',
+      empty: 'No generated codes yet',
+      expiresAt: 'Expires',
+      neverExpires: 'Never',
+      failedToLoad: 'Failed to load generated codes',
+      failedToGenerate: 'Failed to generate redeem code',
+      invalidAmount: 'Enter an amount greater than 0',
+      insufficientBalance: 'Insufficient balance',
+      invalidExpiry: 'Valid days must be between 1 and 3650',
+      status: {
+        unused: 'Unused',
+        used: 'Used',
+        expired: 'Expired',
+        disabled: 'Disabled',
+        active: 'Available'
+      }
+    }
   },
 
   // Profile

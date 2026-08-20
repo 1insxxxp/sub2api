@@ -100,6 +100,229 @@
         </div>
       </section>
 
+      <!-- Balance Transfer Code Generator -->
+      <section
+        v-if="canGenerateBalanceTransferCodes"
+        data-test="balance-transfer-panel"
+        class="brand-surface redeem-transfer-panel"
+      >
+        <div class="p-5 sm:p-6">
+          <div class="redeem-panel-header">
+            <div class="brand-floating-icon redeem-panel-icon">
+              <Icon name="swap" size="md" />
+            </div>
+            <div class="min-w-0">
+              <h2 class="text-base font-semibold text-slate-950 dark:text-white">
+                {{ t('redeem.balanceTransfer.title') }}
+              </h2>
+              <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                {{ t('redeem.balanceTransfer.subtitle') }}
+              </p>
+            </div>
+          </div>
+
+          <form
+            data-test="balance-transfer-form"
+            class="redeem-transfer-form"
+            @submit.prevent="handleGenerateBalanceTransferCode"
+          >
+            <div class="grid grid-cols-1 gap-3 sm:grid-cols-[minmax(0,1fr)_9.5rem]">
+              <div>
+                <label for="balance-transfer-amount" class="redeem-transfer-label">
+                  {{ t('redeem.balanceTransfer.amount') }}
+                </label>
+                <input
+                  id="balance-transfer-amount"
+                  v-model="transferForm.amount"
+                  data-test="balance-transfer-amount"
+                  type="number"
+                  min="0.01"
+                  step="0.01"
+                  inputmode="decimal"
+                  class="redeem-transfer-field"
+                  :placeholder="t('redeem.balanceTransfer.amountPlaceholder')"
+                  :disabled="generatingTransferCode"
+                />
+              </div>
+              <div>
+                <label for="balance-transfer-expiry" class="redeem-transfer-label">
+                  {{ t('redeem.balanceTransfer.expiresInDays') }}
+                </label>
+                <input
+                  id="balance-transfer-expiry"
+                  v-model.number="transferForm.expires_in_days"
+                  data-test="balance-transfer-expiry"
+                  type="number"
+                  min="1"
+                  max="3650"
+                  step="1"
+                  class="redeem-transfer-field"
+                  :disabled="generatingTransferCode"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label for="balance-transfer-notes" class="redeem-transfer-label">
+                {{ t('redeem.balanceTransfer.notes') }}
+              </label>
+              <input
+                id="balance-transfer-notes"
+                v-model="transferForm.notes"
+                data-test="balance-transfer-notes"
+                type="text"
+                maxlength="120"
+                class="redeem-transfer-field"
+                :placeholder="t('redeem.balanceTransfer.notesPlaceholder')"
+                :disabled="generatingTransferCode"
+              />
+            </div>
+
+            <p
+              v-if="transferErrorMessage"
+              data-test="balance-transfer-error"
+              class="text-sm font-medium text-red-600 dark:text-red-400"
+            >
+              {{ transferErrorMessage }}
+            </p>
+
+            <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <p class="text-sm text-slate-500 dark:text-slate-400">
+                {{ t('redeem.balanceTransfer.availableBalance') }}:
+                <span class="font-semibold text-slate-700 dark:text-slate-200">
+                  ${{ availableBalance.toFixed(2) }}
+                </span>
+              </p>
+              <button
+                type="submit"
+                class="btn btn-primary redeem-transfer-submit"
+                :disabled="generatingTransferCode"
+              >
+                <svg
+                  v-if="generatingTransferCode"
+                  class="-ml-1 mr-2 h-5 w-5 animate-spin"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                >
+                  <circle
+                    class="opacity-25"
+                    cx="12"
+                    cy="12"
+                    r="10"
+                    stroke="currentColor"
+                    stroke-width="4"
+                  ></circle>
+                  <path
+                    class="opacity-75"
+                    fill="currentColor"
+                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                  ></path>
+                </svg>
+                <Icon v-else name="gift" size="md" class="mr-2" />
+                {{
+                  generatingTransferCode
+                    ? t('redeem.balanceTransfer.generating')
+                    : t('redeem.balanceTransfer.generate')
+                }}
+              </button>
+            </div>
+          </form>
+
+          <transition name="fade">
+            <div v-if="generatedCodeResult" class="redeem-transfer-ready">
+              <div class="min-w-0">
+                <p class="redeem-transfer-label">
+                  {{ t('redeem.balanceTransfer.latestCode') }}
+                </p>
+                <p
+                  data-test="generated-code-value"
+                  class="mt-1 break-all font-mono text-base font-semibold text-slate-950 dark:text-white"
+                >
+                  {{ generatedCodeResult.code }}
+                </p>
+              </div>
+              <button
+                type="button"
+                class="btn btn-secondary shrink-0"
+                @click="copyTransferCode(generatedCodeResult.code)"
+              >
+                <Icon name="copy" size="sm" class="mr-2" />
+                {{ t('redeem.balanceTransfer.copy') }}
+              </button>
+            </div>
+          </transition>
+
+          <div class="redeem-generated-list">
+            <div class="flex items-center justify-between gap-3">
+              <h3 class="text-sm font-semibold text-slate-900 dark:text-white">
+                {{ t('redeem.balanceTransfer.listTitle') }}
+              </h3>
+              <button
+                type="button"
+                class="btn btn-secondary px-3 py-2"
+                :disabled="loadingGeneratedCodes"
+                @click="fetchGeneratedCodes"
+              >
+                <Icon name="refresh" size="sm" />
+              </button>
+            </div>
+
+            <div v-if="loadingGeneratedCodes" class="flex items-center justify-center py-6">
+              <svg class="h-5 w-5 animate-spin text-primary-500" fill="none" viewBox="0 0 24 24">
+                <circle
+                  class="opacity-25"
+                  cx="12"
+                  cy="12"
+                  r="10"
+                  stroke="currentColor"
+                  stroke-width="4"
+                ></circle>
+                <path
+                  class="opacity-75"
+                  fill="currentColor"
+                  d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                ></path>
+              </svg>
+            </div>
+
+            <div v-else-if="generatedCodes.length > 0" class="mt-3 space-y-3">
+              <div
+                v-for="item in generatedCodes"
+                :key="item.id"
+                class="redeem-generated-row"
+              >
+                <div class="min-w-0">
+                  <div class="flex flex-wrap items-center gap-2">
+                    <span class="break-all font-mono text-sm font-semibold text-slate-950 dark:text-white">
+                      {{ item.code }}
+                    </span>
+                    <span :class="getGeneratedStatusClass(item.status)">
+                      {{ getGeneratedStatusLabel(item.status) }}
+                    </span>
+                  </div>
+                  <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                    ${{ item.value.toFixed(2) }} ·
+                    {{ t('redeem.balanceTransfer.expiresAt') }}:
+                    {{ formatGeneratedExpiry(item) }}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  class="btn btn-secondary shrink-0 px-3 py-2"
+                  @click="copyTransferCode(item.code)"
+                >
+                  <Icon name="copy" size="sm" />
+                </button>
+              </div>
+            </div>
+
+            <p v-else class="py-5 text-center text-sm text-slate-500 dark:text-slate-400">
+              {{ t('redeem.balanceTransfer.empty') }}
+            </p>
+          </div>
+        </div>
+      </section>
+
       <!-- Success Message -->
       <transition name="fade">
         <div
@@ -362,12 +585,12 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '@/stores/auth'
 import { useAppStore } from '@/stores/app'
 import { useSubscriptionStore } from '@/stores/subscriptions'
-import { redeemAPI, authAPI, type RedeemHistoryItem } from '@/api'
+import { redeemAPI, authAPI, type GeneratedRedeemCode, type RedeemHistoryItem } from '@/api'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import Icon from '@/components/icons/Icon.vue'
 import { formatDateTime } from '@/utils/format'
@@ -379,6 +602,10 @@ const appStore = useAppStore()
 const subscriptionStore = useSubscriptionStore()
 
 const user = computed(() => authStore.user)
+const availableBalance = computed(() => user.value?.balance || 0)
+const canGenerateBalanceTransferCodes = computed(
+  () => user.value?.balance_redeem_code_enabled === true
+)
 
 const redeemCode = ref('')
 const submitting = ref(false)
@@ -397,6 +624,17 @@ const errorMessage = ref('')
 const history = ref<RedeemHistoryItem[]>([])
 const loadingHistory = ref(false)
 const contactInfo = ref('')
+
+const transferForm = reactive({
+  amount: '',
+  expires_in_days: 30,
+  notes: ''
+})
+const generatingTransferCode = ref(false)
+const generatedCodeResult = ref<GeneratedRedeemCode | null>(null)
+const generatedCodes = ref<GeneratedRedeemCode[]>([])
+const loadingGeneratedCodes = ref(false)
+const transferErrorMessage = ref('')
 
 // Helper functions for history display
 const isBalanceType = (type: string) => {
@@ -454,6 +692,106 @@ const fetchHistory = async () => {
   }
 }
 
+const fetchGeneratedCodes = async () => {
+  if (!canGenerateBalanceTransferCodes.value) {
+    generatedCodes.value = []
+    return
+  }
+
+  loadingGeneratedCodes.value = true
+  try {
+    generatedCodes.value = await redeemAPI.getGenerated()
+  } catch (error) {
+    console.error('Failed to fetch generated redeem codes:', error)
+    appStore.showError(t('redeem.balanceTransfer.failedToLoad'))
+  } finally {
+    loadingGeneratedCodes.value = false
+  }
+}
+
+const handleGenerateBalanceTransferCode = async () => {
+  const amount = Number(transferForm.amount)
+  const expiresInDays = Number(transferForm.expires_in_days)
+  transferErrorMessage.value = ''
+
+  if (!Number.isFinite(amount) || amount <= 0) {
+    const message = t('redeem.balanceTransfer.invalidAmount')
+    transferErrorMessage.value = message
+    appStore.showError(message)
+    return
+  }
+  if (amount > availableBalance.value) {
+    const message = t('redeem.balanceTransfer.insufficientBalance')
+    transferErrorMessage.value = message
+    appStore.showError(message)
+    return
+  }
+  if (!Number.isInteger(expiresInDays) || expiresInDays < 1 || expiresInDays > 3650) {
+    const message = t('redeem.balanceTransfer.invalidExpiry')
+    transferErrorMessage.value = message
+    appStore.showError(message)
+    return
+  }
+
+  generatingTransferCode.value = true
+  try {
+    const code = await redeemAPI.generateBalanceTransferCode({
+      amount,
+      expires_in_days: expiresInDays,
+      notes: transferForm.notes.trim()
+    })
+    generatedCodeResult.value = code
+    transferForm.amount = ''
+    transferForm.notes = ''
+    await authStore.refreshUser()
+    await fetchGeneratedCodes()
+    appStore.showSuccess(t('redeem.balanceTransfer.generated'))
+  } catch (error: any) {
+    const message = extractApiErrorMessage(error, t('redeem.balanceTransfer.failedToGenerate'))
+    transferErrorMessage.value = message
+    appStore.showError(message)
+  } finally {
+    generatingTransferCode.value = false
+  }
+}
+
+const copyTransferCode = async (code: string) => {
+  try {
+    await navigator.clipboard.writeText(code)
+    appStore.showSuccess(t('redeem.balanceTransfer.copied'))
+  } catch (error) {
+    console.error('Failed to copy generated redeem code:', error)
+    appStore.showError(t('redeem.balanceTransfer.copyFailed'))
+  }
+}
+
+const getGeneratedStatusLabel = (status: string) => {
+  const labels: Record<string, string> = {
+    unused: t('redeem.balanceTransfer.status.unused'),
+    used: t('redeem.balanceTransfer.status.used'),
+    expired: t('redeem.balanceTransfer.status.expired'),
+    disabled: t('redeem.balanceTransfer.status.disabled'),
+    active: t('redeem.balanceTransfer.status.active')
+  }
+  return labels[status] || status
+}
+
+const getGeneratedStatusClass = (status: string) => {
+  const base =
+    'inline-flex items-center rounded-md px-2 py-0.5 text-xs font-semibold'
+  if (status === 'unused' || status === 'active') {
+    return `${base} bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300`
+  }
+  if (status === 'used') {
+    return `${base} bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300`
+  }
+  return `${base} bg-slate-100 text-slate-600 dark:bg-dark-800 dark:text-dark-300`
+}
+
+const formatGeneratedExpiry = (item: GeneratedRedeemCode) => {
+  return item.expires_at ? formatDateTime(item.expires_at) : t('redeem.balanceTransfer.neverExpires')
+}
+
 const handleRedeem = async () => {
   if (!redeemCode.value.trim()) {
     appStore.showError(t('redeem.pleaseEnterCode'))
@@ -504,11 +842,23 @@ const handleRedeem = async () => {
 
 onMounted(async () => {
   fetchHistory()
+  if (canGenerateBalanceTransferCodes.value) {
+    fetchGeneratedCodes()
+  }
   try {
     const settings = await authAPI.getPublicSettings()
     contactInfo.value = settings.contact_info || ''
   } catch (error) {
     console.error('Failed to load contact info:', error)
+  }
+})
+
+watch(canGenerateBalanceTransferCodes, (enabled) => {
+  if (enabled) {
+    fetchGeneratedCodes()
+  } else {
+    generatedCodes.value = []
+    generatedCodeResult.value = null
   }
 })
 </script>
@@ -763,6 +1113,96 @@ onMounted(async () => {
   border-radius: 1rem;
 }
 
+.redeem-transfer-panel {
+  border-radius: 1.25rem;
+}
+
+.redeem-transfer-form {
+  margin-top: 1.25rem;
+  display: grid;
+  gap: 1rem;
+}
+
+.redeem-transfer-label {
+  display: block;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: rgb(71, 85, 105);
+}
+
+.redeem-transfer-field {
+  width: 100%;
+  border-radius: 0.9rem;
+  border: 1px solid rgba(191, 219, 254, 0.88);
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.96), rgba(248, 250, 252, 0.88)),
+    white;
+  padding: 0.78rem 0.9rem;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: rgb(15, 23, 42);
+  outline: none;
+  transition:
+    border-color 180ms ease,
+    box-shadow 180ms ease,
+    background-color 180ms ease;
+}
+
+.redeem-transfer-field::placeholder {
+  color: rgb(148, 163, 184);
+  font-weight: 500;
+}
+
+.redeem-transfer-field:focus {
+  border-color: rgba(var(--brand-rgb), 0.58);
+  box-shadow:
+    0 0 0 3px rgba(var(--brand-rgb), 0.12),
+    0 12px 28px rgba(37, 99, 235, 0.08);
+}
+
+.redeem-transfer-field:disabled {
+  cursor: not-allowed;
+  opacity: 0.72;
+}
+
+.redeem-transfer-submit {
+  min-height: 2.75rem;
+  border-radius: 0.9rem;
+}
+
+.redeem-transfer-ready {
+  margin-top: 1.1rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  border-radius: 1rem;
+  border: 1px solid rgba(16, 185, 129, 0.24);
+  background:
+    linear-gradient(135deg, rgba(236, 253, 245, 0.92), rgba(240, 253, 250, 0.78)),
+    white;
+  padding: 0.9rem 1rem;
+}
+
+.redeem-generated-list {
+  margin-top: 1.25rem;
+  border-top: 1px solid rgba(191, 219, 254, 0.48);
+  padding-top: 1rem;
+}
+
+.redeem-generated-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  border: 1px solid rgba(191, 219, 254, 0.82);
+  border-radius: 0.95rem;
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.96), rgba(248, 250, 252, 0.9)),
+    white;
+  padding: 0.8rem 0.9rem;
+}
+
 .redeem-info-icon {
   display: flex;
   height: 2.75rem;
@@ -864,6 +1304,40 @@ onMounted(async () => {
 
 .dark .redeem-input::placeholder {
   color: rgb(100, 116, 139);
+}
+
+.dark .redeem-transfer-label {
+  color: rgb(203, 213, 225);
+}
+
+.dark .redeem-transfer-field {
+  border-color: rgba(96, 165, 250, 0.22);
+  background:
+    linear-gradient(135deg, rgba(15, 23, 42, 0.94), rgba(8, 13, 28, 0.9)),
+    rgba(15, 23, 42, 0.86);
+  color: white;
+}
+
+.dark .redeem-transfer-field::placeholder {
+  color: rgb(100, 116, 139);
+}
+
+.dark .redeem-transfer-ready {
+  border-color: rgba(52, 211, 153, 0.22);
+  background:
+    linear-gradient(135deg, rgba(6, 78, 59, 0.28), rgba(15, 23, 42, 0.88)),
+    rgba(15, 23, 42, 0.86);
+}
+
+.dark .redeem-generated-list {
+  border-color: rgba(96, 165, 250, 0.16);
+}
+
+.dark .redeem-generated-row {
+  border-color: rgba(96, 165, 250, 0.22);
+  background:
+    linear-gradient(135deg, rgba(15, 23, 42, 0.9), rgba(8, 13, 28, 0.84)),
+    rgba(15, 23, 42, 0.86);
 }
 
 .dark .redeem-info-icon {
@@ -970,6 +1444,12 @@ onMounted(async () => {
 
   .redeem-history-card {
     align-items: flex-start;
+  }
+
+  .redeem-transfer-ready,
+  .redeem-generated-row {
+    align-items: stretch;
+    flex-direction: column;
   }
 }
 
