@@ -29,6 +29,8 @@ type RedeemCode struct {
 	Status string `json:"status,omitempty"`
 	// UsedBy holds the value of the "used_by" field.
 	UsedBy *int64 `json:"used_by,omitempty"`
+	// CreatedBy holds the value of the "created_by" field.
+	CreatedBy *int64 `json:"created_by,omitempty"`
 	// UsedAt holds the value of the "used_at" field.
 	UsedAt *time.Time `json:"used_at,omitempty"`
 	// Notes holds the value of the "notes" field.
@@ -43,6 +45,8 @@ type RedeemCode struct {
 	ValidityDays int `json:"validity_days,omitempty"`
 	// BatchID holds the value of the "batch_id" field.
 	BatchID *string `json:"batch_id,omitempty"`
+	// Source holds the value of the "source" field.
+	Source string `json:"source,omitempty"`
 	// Edges holds the relations/edges for other nodes in the graph.
 	// The values are being populated by the RedeemCodeQuery when eager-loading is set.
 	Edges        RedeemCodeEdges `json:"edges"`
@@ -53,11 +57,13 @@ type RedeemCode struct {
 type RedeemCodeEdges struct {
 	// User holds the value of the user edge.
 	User *User `json:"user,omitempty"`
+	// Creator holds the value of the creator edge.
+	Creator *User `json:"creator,omitempty"`
 	// Group holds the value of the group edge.
 	Group *Group `json:"group,omitempty"`
 	// loadedTypes holds the information for reporting if a
 	// type was loaded (or requested) in eager-loading or not.
-	loadedTypes [2]bool
+	loadedTypes [3]bool
 }
 
 // UserOrErr returns the User value or an error if the edge
@@ -71,12 +77,23 @@ func (e RedeemCodeEdges) UserOrErr() (*User, error) {
 	return nil, &NotLoadedError{edge: "user"}
 }
 
+// CreatorOrErr returns the Creator value or an error if the edge
+// was not loaded in eager-loading, or loaded but was not found.
+func (e RedeemCodeEdges) CreatorOrErr() (*User, error) {
+	if e.Creator != nil {
+		return e.Creator, nil
+	} else if e.loadedTypes[1] {
+		return nil, &NotFoundError{label: user.Label}
+	}
+	return nil, &NotLoadedError{edge: "creator"}
+}
+
 // GroupOrErr returns the Group value or an error if the edge
 // was not loaded in eager-loading, or loaded but was not found.
 func (e RedeemCodeEdges) GroupOrErr() (*Group, error) {
 	if e.Group != nil {
 		return e.Group, nil
-	} else if e.loadedTypes[1] {
+	} else if e.loadedTypes[2] {
 		return nil, &NotFoundError{label: group.Label}
 	}
 	return nil, &NotLoadedError{edge: "group"}
@@ -89,9 +106,9 @@ func (*RedeemCode) scanValues(columns []string) ([]any, error) {
 		switch columns[i] {
 		case redeemcode.FieldValue:
 			values[i] = new(sql.NullFloat64)
-		case redeemcode.FieldID, redeemcode.FieldUsedBy, redeemcode.FieldGroupID, redeemcode.FieldValidityDays:
+		case redeemcode.FieldID, redeemcode.FieldUsedBy, redeemcode.FieldCreatedBy, redeemcode.FieldGroupID, redeemcode.FieldValidityDays:
 			values[i] = new(sql.NullInt64)
-		case redeemcode.FieldCode, redeemcode.FieldType, redeemcode.FieldStatus, redeemcode.FieldNotes, redeemcode.FieldBatchID:
+		case redeemcode.FieldCode, redeemcode.FieldType, redeemcode.FieldStatus, redeemcode.FieldNotes, redeemcode.FieldBatchID, redeemcode.FieldSource:
 			values[i] = new(sql.NullString)
 		case redeemcode.FieldUsedAt, redeemcode.FieldCreatedAt, redeemcode.FieldExpiresAt:
 			values[i] = new(sql.NullTime)
@@ -147,6 +164,13 @@ func (_m *RedeemCode) assignValues(columns []string, values []any) error {
 				_m.UsedBy = new(int64)
 				*_m.UsedBy = value.Int64
 			}
+		case redeemcode.FieldCreatedBy:
+			if value, ok := values[i].(*sql.NullInt64); !ok {
+				return fmt.Errorf("unexpected type %T for field created_by", values[i])
+			} else if value.Valid {
+				_m.CreatedBy = new(int64)
+				*_m.CreatedBy = value.Int64
+			}
 		case redeemcode.FieldUsedAt:
 			if value, ok := values[i].(*sql.NullTime); !ok {
 				return fmt.Errorf("unexpected type %T for field used_at", values[i])
@@ -194,6 +218,12 @@ func (_m *RedeemCode) assignValues(columns []string, values []any) error {
 				_m.BatchID = new(string)
 				*_m.BatchID = value.String
 			}
+		case redeemcode.FieldSource:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field source", values[i])
+			} else if value.Valid {
+				_m.Source = value.String
+			}
 		default:
 			_m.selectValues.Set(columns[i], values[i])
 		}
@@ -210,6 +240,11 @@ func (_m *RedeemCode) GetValue(name string) (ent.Value, error) {
 // QueryUser queries the "user" edge of the RedeemCode entity.
 func (_m *RedeemCode) QueryUser() *UserQuery {
 	return NewRedeemCodeClient(_m.config).QueryUser(_m)
+}
+
+// QueryCreator queries the "creator" edge of the RedeemCode entity.
+func (_m *RedeemCode) QueryCreator() *UserQuery {
+	return NewRedeemCodeClient(_m.config).QueryCreator(_m)
 }
 
 // QueryGroup queries the "group" edge of the RedeemCode entity.
@@ -257,6 +292,11 @@ func (_m *RedeemCode) String() string {
 		builder.WriteString(fmt.Sprintf("%v", *v))
 	}
 	builder.WriteString(", ")
+	if v := _m.CreatedBy; v != nil {
+		builder.WriteString("created_by=")
+		builder.WriteString(fmt.Sprintf("%v", *v))
+	}
+	builder.WriteString(", ")
 	if v := _m.UsedAt; v != nil {
 		builder.WriteString("used_at=")
 		builder.WriteString(v.Format(time.ANSIC))
@@ -287,6 +327,9 @@ func (_m *RedeemCode) String() string {
 		builder.WriteString("batch_id=")
 		builder.WriteString(*v)
 	}
+	builder.WriteString(", ")
+	builder.WriteString("source=")
+	builder.WriteString(_m.Source)
 	builder.WriteByte(')')
 	return builder.String()
 }

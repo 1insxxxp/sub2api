@@ -195,6 +195,11 @@ func RpmLimit(v int) predicate.User {
 	return predicate.User(sql.FieldEQ(FieldRpmLimit, v))
 }
 
+// BalanceRedeemCodeEnabled applies equality check predicate on the "balance_redeem_code_enabled" field. It's identical to BalanceRedeemCodeEnabledEQ.
+func BalanceRedeemCodeEnabled(v bool) predicate.User {
+	return predicate.User(sql.FieldEQ(FieldBalanceRedeemCodeEnabled, v))
+}
+
 // CreatedAtEQ applies the EQ predicate on the "created_at" field.
 func CreatedAtEQ(v time.Time) predicate.User {
 	return predicate.User(sql.FieldEQ(FieldCreatedAt, v))
@@ -1665,6 +1670,16 @@ func RpmLimitLTE(v int) predicate.User {
 	return predicate.User(sql.FieldLTE(FieldRpmLimit, v))
 }
 
+// BalanceRedeemCodeEnabledEQ applies the EQ predicate on the "balance_redeem_code_enabled" field.
+func BalanceRedeemCodeEnabledEQ(v bool) predicate.User {
+	return predicate.User(sql.FieldEQ(FieldBalanceRedeemCodeEnabled, v))
+}
+
+// BalanceRedeemCodeEnabledNEQ applies the NEQ predicate on the "balance_redeem_code_enabled" field.
+func BalanceRedeemCodeEnabledNEQ(v bool) predicate.User {
+	return predicate.User(sql.FieldNEQ(FieldBalanceRedeemCodeEnabled, v))
+}
+
 // HasAPIKeys applies the HasEdge predicate on the "api_keys" edge.
 func HasAPIKeys() predicate.User {
 	return predicate.User(func(s *sql.Selector) {
@@ -1726,6 +1741,29 @@ func HasRedeemCodes() predicate.User {
 func HasRedeemCodesWith(preds ...predicate.RedeemCode) predicate.User {
 	return predicate.User(func(s *sql.Selector) {
 		step := newRedeemCodesStep()
+		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
+			for _, p := range preds {
+				p(s)
+			}
+		})
+	})
+}
+
+// HasCreatedRedeemCodes applies the HasEdge predicate on the "created_redeem_codes" edge.
+func HasCreatedRedeemCodes() predicate.User {
+	return predicate.User(func(s *sql.Selector) {
+		step := sqlgraph.NewStep(
+			sqlgraph.From(Table, FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, CreatedRedeemCodesTable, CreatedRedeemCodesColumn),
+		)
+		sqlgraph.HasNeighbors(s, step)
+	})
+}
+
+// HasCreatedRedeemCodesWith applies the HasEdge predicate on the "created_redeem_codes" edge with a given conditions (other predicates).
+func HasCreatedRedeemCodesWith(preds ...predicate.RedeemCode) predicate.User {
+	return predicate.User(func(s *sql.Selector) {
+		step := newCreatedRedeemCodesStep()
 		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
 			for _, p := range preds {
 				p(s)

@@ -64,6 +64,12 @@ const (
 	RedeemTypeInvitation   = "invitation"
 )
 
+// Redeem code source constants
+const (
+	RedeemCodeSourceAdmin               = "admin"
+	RedeemCodeSourceUserBalanceTransfer = "user_balance_transfer"
+)
+
 // PromoCode status constants
 const (
 	PromoCodeStatusActive   = "active"

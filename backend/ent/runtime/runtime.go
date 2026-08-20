@@ -1901,17 +1901,23 @@ func init() {
 	// redeemcode.StatusValidator is a validator for the "status" field. It is called by the builders before save.
 	redeemcode.StatusValidator = redeemcodeDescStatus.Validators[0].(func(string) error)
 	// redeemcodeDescCreatedAt is the schema descriptor for created_at field.
-	redeemcodeDescCreatedAt := redeemcodeFields[7].Descriptor()
+	redeemcodeDescCreatedAt := redeemcodeFields[8].Descriptor()
 	// redeemcode.DefaultCreatedAt holds the default value on creation for the created_at field.
 	redeemcode.DefaultCreatedAt = redeemcodeDescCreatedAt.Default.(func() time.Time)
 	// redeemcodeDescValidityDays is the schema descriptor for validity_days field.
-	redeemcodeDescValidityDays := redeemcodeFields[10].Descriptor()
+	redeemcodeDescValidityDays := redeemcodeFields[11].Descriptor()
 	// redeemcode.DefaultValidityDays holds the default value on creation for the validity_days field.
 	redeemcode.DefaultValidityDays = redeemcodeDescValidityDays.Default.(int)
 	// redeemcodeDescBatchID is the schema descriptor for batch_id field.
-	redeemcodeDescBatchID := redeemcodeFields[11].Descriptor()
+	redeemcodeDescBatchID := redeemcodeFields[12].Descriptor()
 	// redeemcode.BatchIDValidator is a validator for the "batch_id" field. It is called by the builders before save.
 	redeemcode.BatchIDValidator = redeemcodeDescBatchID.Validators[0].(func(string) error)
+	// redeemcodeDescSource is the schema descriptor for source field.
+	redeemcodeDescSource := redeemcodeFields[13].Descriptor()
+	// redeemcode.DefaultSource holds the default value on creation for the source field.
+	redeemcode.DefaultSource = redeemcodeDescSource.Default.(string)
+	// redeemcode.SourceValidator is a validator for the "source" field. It is called by the builders before save.
+	redeemcode.SourceValidator = redeemcodeDescSource.Validators[0].(func(string) error)
 	securitysecretMixin := schema.SecuritySecret{}.Mixin()
 	securitysecretMixinFields0 := securitysecretMixin[0].Fields()
 	_ = securitysecretMixinFields0
@@ -2564,6 +2570,10 @@ func init() {
 	userDescRpmLimit := userFields[24].Descriptor()
 	// user.DefaultRpmLimit holds the default value on creation for the rpm_limit field.
 	user.DefaultRpmLimit = userDescRpmLimit.Default.(int)
+	// userDescBalanceRedeemCodeEnabled is the schema descriptor for balance_redeem_code_enabled field.
+	userDescBalanceRedeemCodeEnabled := userFields[25].Descriptor()
+	// user.DefaultBalanceRedeemCodeEnabled holds the default value on creation for the balance_redeem_code_enabled field.
+	user.DefaultBalanceRedeemCodeEnabled = userDescBalanceRedeemCodeEnabled.Default.(bool)
 	userallowedgroupFields := schema.UserAllowedGroup{}.Fields()
 	_ = userallowedgroupFields
 	// userallowedgroupDescCreatedAt is the schema descriptor for created_at field.
