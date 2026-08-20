@@ -310,16 +310,18 @@ describe('SystemCustomGroupDialog', () => {
     }
   })
 
-  it('selects all visible model routes and exposes a mixed state', async () => {
+  it('selects and clears all visible model routes from a button-style toolbar control', async () => {
     const wrapper = mountDialog()
     await flushPromises()
 
-    const selectAll = wrapper.get('[data-testid="system-custom-model-select-all"]')
+    const selectAll = wrapper.get('[data-testid="system-custom-model-select-all-button"]')
+    expect(selectAll.classes()).toEqual(expect.arrayContaining(['btn', 'btn-secondary']))
+    expect(selectAll.text()).toContain('admin.groups.systemCustom.selectAll')
     expect(selectAll.attributes('disabled')).toBeDefined()
 
     await sourceCheckbox(wrapper, 11).setValue(true)
     expect(selectAll.attributes('disabled')).toBeUndefined()
-    await selectAll.setValue(true)
+    await selectAll.trigger('click')
 
     expect(
       modelRow(wrapper, 11, 'claude-sonnet-4').get('input[type="checkbox"]').element
@@ -327,27 +329,30 @@ describe('SystemCustomGroupDialog', () => {
     expect(
       modelRow(wrapper, 11, 'claude-haiku-4').get('input[type="checkbox"]').element
     ).toHaveProperty('checked', true)
+    expect(selectAll.text()).toContain('admin.groups.systemCustom.deselectAll')
+    expect(selectAll.attributes('data-selection-state')).toBe('all')
 
     await sourceCheckbox(wrapper, 22).setValue(true)
     expect(
       modelRow(wrapper, 22, 'claude-sonnet-4').get('input[type="checkbox"]').element
     ).toHaveProperty('checked', false)
-    expect(selectAll.element).toHaveProperty('indeterminate', true)
-    expect(selectAll.attributes('aria-checked')).toBe('mixed')
+    expect(selectAll.text()).toContain('admin.groups.systemCustom.selectAll')
+    expect(selectAll.attributes('data-selection-state')).toBe('mixed')
 
-    await selectAll.setValue(true)
+    await selectAll.trigger('click')
     for (const row of wrapper.findAll('[data-testid="system-custom-model-row"]')) {
       expect(row.get('input[type="checkbox"]').element).toHaveProperty('checked', true)
     }
 
     await modelRow(wrapper, 22, 'gpt-5').get('input[type="checkbox"]').setValue(false)
-    expect(selectAll.element).toHaveProperty('indeterminate', true)
+    expect(selectAll.attributes('data-selection-state')).toBe('mixed')
 
-    await selectAll.setValue(true)
-    await selectAll.setValue(false)
+    await selectAll.trigger('click')
+    await selectAll.trigger('click')
     for (const row of wrapper.findAll('[data-testid="system-custom-model-row"]')) {
       expect(row.get('input[type="checkbox"]').element).toHaveProperty('checked', false)
     }
+    expect(selectAll.attributes('data-selection-state')).toBe('none')
   })
 
   it('selects routes independently for each source with a tri-state group control', async () => {

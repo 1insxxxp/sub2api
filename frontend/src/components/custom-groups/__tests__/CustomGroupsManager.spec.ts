@@ -156,6 +156,66 @@ describe('CustomGroupsManager', () => {
     expect(wrapper.find('[data-test="custom-group-source-models-12"]').exists()).toBe(false)
   })
 
+  it('selects and clears all available source models from the form toolbar', async () => {
+    const wrapper = await mountManager()
+
+    await wrapper.get('[data-test="custom-groups-edit-21"]').trigger('click')
+    const selectAll = wrapper.get('[data-test="custom-group-sources-select-all"]')
+    expect(selectAll.text()).toContain('全选')
+    expect(wrapper.text()).toContain('已选 1')
+
+    await selectAll.trigger('click')
+
+    expect(wrapper.text()).toContain('已选 3')
+    expect(selectAll.text()).toContain('取消全选')
+    await wrapper.get('form').trigger('submit.prevent')
+    await flushPromises()
+
+    expect(apiMocks.update).toHaveBeenCalledWith(21, {
+      name: '酒馆统一模型',
+      models: expect.arrayContaining([
+        { public_model: 'claude-sonnet-4-6', source_group_id: 11, source_model: 'claude-sonnet-4-6' },
+        { public_model: expect.any(String), source_group_id: 11, source_model: 'claude-opus-4-6' },
+        { public_model: expect.any(String), source_group_id: 12, source_model: 'gemini-3.1-pro-preview' },
+      ]),
+    })
+
+    await wrapper.get('[data-test="custom-groups-edit-21"]').trigger('click')
+    await wrapper.get('[data-test="custom-group-sources-select-all"]').trigger('click')
+    await wrapper.get('[data-test="custom-group-sources-select-all"]').trigger('click')
+
+    expect(wrapper.text()).toContain('已选 0')
+    expect(wrapper.get('button[type="submit"]').attributes('disabled')).toBeDefined()
+  })
+
+  it('selects and clears models independently from each source group header', async () => {
+    const wrapper = await mountManager()
+
+    await wrapper.get('[data-test="custom-groups-create"]').trigger('click')
+
+    const claudeSelectAll = wrapper.get('[data-test="custom-group-source-select-all-11"]')
+    const geminiSelectAll = wrapper.get('[data-test="custom-group-source-select-all-12"]')
+    expect(claudeSelectAll.text()).toContain('全选')
+
+    await claudeSelectAll.trigger('click')
+
+    expect(wrapper.text()).toContain('已选 2')
+    expect(claudeSelectAll.text()).toContain('取消全选')
+    expect(geminiSelectAll.text()).toContain('全选')
+    expect(wrapper.find('[data-test="custom-group-source-models-11"]').exists()).toBe(false)
+
+    await geminiSelectAll.trigger('click')
+
+    expect(wrapper.text()).toContain('已选 3')
+    expect(geminiSelectAll.text()).toContain('取消全选')
+
+    await claudeSelectAll.trigger('click')
+
+    expect(wrapper.text()).toContain('已选 1')
+    expect(claudeSelectAll.text()).toContain('全选')
+    expect(geminiSelectAll.text()).toContain('取消全选')
+  })
+
   it('shows selected counts while keeping edit mode collapsed', async () => {
     const wrapper = await mountManager()
 

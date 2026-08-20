@@ -961,6 +961,8 @@ export default {
         unavailableSourceFallback: 'Unavailable source #{source}',
         modelsTitle: 'Model routes',
         modelsHint: 'Select public models explicitly. Models with duplicate names require a unique alias.',
+        selectAll: 'Select all',
+        deselectAll: 'Deselect all',
         selectAllAll: 'Select all groups',
         selectAllSource: 'Select this group',
         showAdvancedSettings: 'More settings',

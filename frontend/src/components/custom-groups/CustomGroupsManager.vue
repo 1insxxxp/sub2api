@@ -80,6 +80,9 @@
           <div class="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <label class="input-label mb-0">选择模型及来源</label>
             <div class="flex items-center justify-between gap-2 sm:justify-end">
+              <button data-test="custom-group-sources-select-all" class="btn btn-secondary min-h-11 px-3 text-xs sm:min-h-9" type="button" :disabled="totalSelectableModelCount === 0" @click="toggleAllModels">
+                {{ allSelectableModelsSelected ? '取消全选' : '全选' }}
+              </button>
               <button data-test="custom-group-sources-toggle-all" class="btn btn-secondary min-h-11 px-3 text-xs sm:min-h-9" type="button" :disabled="candidates.length === 0" @click="allSourcesExpanded ? collapseAllSources() : expandAllSources()">
                 {{ allSourcesExpanded ? '全部折叠' : '全部展开' }}
               </button>
@@ -107,22 +110,33 @@
           </section>
           <div class="space-y-4">
             <section v-for="source in candidates" :key="source.id" class="overflow-hidden rounded-2xl border border-gray-200 bg-white transition-colors dark:border-dark-600 dark:bg-dark-800">
-              <button
-                :data-test="`custom-group-source-toggle-${source.id}`"
-                class="flex min-h-12 w-full items-center justify-between gap-3 px-4 py-3 text-left transition hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500 dark:hover:bg-dark-700/60"
-                type="button"
-                :aria-expanded="isSourceExpanded(source.id)"
-                :aria-controls="`custom-group-source-models-${source.id}`"
-                @click="toggleSource(source.id)"
-              >
-                <span class="flex min-w-0 flex-1 flex-wrap items-center gap-2">
-                  <strong class="min-w-0 break-words text-sm text-gray-900 dark:text-white">{{ source.name }}</strong>
-                  <span class="badge">{{ source.platform }}</span>
-                  <span class="text-xs text-gray-500 dark:text-gray-400">{{ source.models.length }} 个模型</span>
-                  <span v-if="selectedCountForSource(source.id) > 0" class="rounded-full bg-blue-50 px-2.5 py-1 text-xs font-semibold text-blue-700 dark:bg-blue-950/40 dark:text-blue-300">已选 {{ selectedCountForSource(source.id) }}</span>
-                </span>
-                <Icon name="chevronDown" size="sm" :class="['shrink-0 text-gray-400 transition-transform duration-200', isSourceExpanded(source.id) ? 'rotate-180' : '']" />
-              </button>
+              <div class="flex min-h-12 items-center gap-2 px-4 py-3 transition hover:bg-gray-50 dark:hover:bg-dark-700/60">
+                <button
+                  :data-test="`custom-group-source-toggle-${source.id}`"
+                  class="flex min-w-0 flex-1 items-center justify-between gap-3 rounded-lg text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                  type="button"
+                  :aria-expanded="isSourceExpanded(source.id)"
+                  :aria-controls="`custom-group-source-models-${source.id}`"
+                  @click="toggleSource(source.id)"
+                >
+                  <span class="flex min-w-0 flex-1 flex-wrap items-center gap-2">
+                    <strong class="min-w-0 break-words text-sm text-gray-900 dark:text-white">{{ source.name }}</strong>
+                    <span class="badge">{{ source.platform }}</span>
+                    <span class="text-xs text-gray-500 dark:text-gray-400">{{ source.models.length }} 个模型</span>
+                    <span v-if="selectedCountForSource(source.id) > 0" class="rounded-full bg-blue-50 px-2.5 py-1 text-xs font-semibold text-blue-700 dark:bg-blue-950/40 dark:text-blue-300">已选 {{ selectedCountForSource(source.id) }}</span>
+                  </span>
+                  <Icon name="chevronDown" size="sm" :class="['shrink-0 text-gray-400 transition-transform duration-200', isSourceExpanded(source.id) ? 'rotate-180' : '']" />
+                </button>
+                <button
+                  :data-test="`custom-group-source-select-all-${source.id}`"
+                  class="btn btn-secondary min-h-9 shrink-0 px-3 text-xs"
+                  type="button"
+                  :disabled="source.models.length === 0"
+                  @click="toggleAllModelsForSource(source)"
+                >
+                  {{ allModelsForSourceSelected(source) ? '取消全选' : '全选' }}
+                </button>
+              </div>
               <div
                 v-if="isSourceExpanded(source.id)"
                 :id="`custom-group-source-models-${source.id}`"
@@ -190,6 +204,11 @@ const saveableModelEntries = computed(() => selectedEntries.value.filter(([key])
 const saveableModels = computed(() => saveableModelEntries.value.map(([, item]) => item))
 const aliasErrors = computed(() => validateCallNames(saveableModelEntries.value.map(([key, item]) => ({ key, callName: item.public_model }))))
 const allSourcesExpanded = computed(() => candidates.value.length > 0 && candidates.value.every(source => expandedSourceIds.value.has(source.id)))
+const selectableModelEntries = computed(() => candidates.value.flatMap(source =>
+  source.models.map(model => ({ key: sourceMappingKey(source.id, model), sourceId: source.id, sourceName: source.name, model }))
+))
+const totalSelectableModelCount = computed(() => selectableModelEntries.value.length)
+const allSelectableModelsSelected = computed(() => totalSelectableModelCount.value > 0 && selectableModelEntries.value.every(entry => selected.value.has(entry.key)))
 
 const load = async () => {
   loading.value = true
@@ -229,6 +248,44 @@ const toggleSource = (sourceId: number) => {
 }
 const expandAllSources = () => { expandedSourceIds.value = new Set(candidates.value.map(source => source.id)) }
 const collapseAllSources = () => { expandedSourceIds.value = new Set() }
+const toggleAllModels = () => {
+  if (allSelectableModelsSelected.value) {
+    selected.value = new Map()
+    return
+  }
+  const next = new Map(selected.value)
+  for (const entry of selectableModelEntries.value) {
+    if (next.has(entry.key)) continue
+    next.set(entry.key, {
+      public_model: suggestCallName(entry.model, entry.sourceName, [...next.values()].map(item => item.public_model)),
+      source_group_id: entry.sourceId,
+      source_model: entry.model,
+    })
+  }
+  selected.value = next
+}
+const allModelsForSourceSelected = (source: CustomGroupCandidate) =>
+  source.models.length > 0 && source.models.every(model => selected.value.has(sourceMappingKey(source.id, model)))
+const toggleAllModelsForSource = (source: CustomGroupCandidate) => {
+  const next = new Map(selected.value)
+  if (allModelsForSourceSelected(source)) {
+    for (const model of source.models) {
+      next.delete(sourceMappingKey(source.id, model))
+    }
+    selected.value = next
+    return
+  }
+  for (const model of source.models) {
+    const key = sourceMappingKey(source.id, model)
+    if (next.has(key)) continue
+    next.set(key, {
+      public_model: suggestCallName(model, source.name, [...next.values()].map(item => item.public_model)),
+      source_group_id: source.id,
+      source_model: model,
+    })
+  }
+  selected.value = next
+}
 const selectedCountForSource = (sourceId: number) => [...selected.value.values()].filter(item => item.source_group_id === sourceId).length
 const staleSourceCount = (group: UserCustomGroup) => group.models.filter(model => model.source_available === false).length
 const sourceIssueLabel = (model: UserCustomGroupModel) => model.source_issue === 'source_group_not_allowed' ? '已无权使用该来源分组' : '来源分组已下架或停用'
