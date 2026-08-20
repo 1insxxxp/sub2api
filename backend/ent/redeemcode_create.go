@@ -86,6 +86,20 @@ func (_c *RedeemCodeCreate) SetNillableUsedBy(v *int64) *RedeemCodeCreate {
 	return _c
 }
 
+// SetCreatedBy sets the "created_by" field.
+func (_c *RedeemCodeCreate) SetCreatedBy(v int64) *RedeemCodeCreate {
+	_c.mutation.SetCreatedBy(v)
+	return _c
+}
+
+// SetNillableCreatedBy sets the "created_by" field if the given value is not nil.
+func (_c *RedeemCodeCreate) SetNillableCreatedBy(v *int64) *RedeemCodeCreate {
+	if v != nil {
+		_c.SetCreatedBy(*v)
+	}
+	return _c
+}
+
 // SetUsedAt sets the "used_at" field.
 func (_c *RedeemCodeCreate) SetUsedAt(v time.Time) *RedeemCodeCreate {
 	_c.mutation.SetUsedAt(v)
@@ -184,6 +198,20 @@ func (_c *RedeemCodeCreate) SetNillableBatchID(v *string) *RedeemCodeCreate {
 	return _c
 }
 
+// SetSource sets the "source" field.
+func (_c *RedeemCodeCreate) SetSource(v string) *RedeemCodeCreate {
+	_c.mutation.SetSource(v)
+	return _c
+}
+
+// SetNillableSource sets the "source" field if the given value is not nil.
+func (_c *RedeemCodeCreate) SetNillableSource(v *string) *RedeemCodeCreate {
+	if v != nil {
+		_c.SetSource(*v)
+	}
+	return _c
+}
+
 // SetUserID sets the "user" edge to the User entity by ID.
 func (_c *RedeemCodeCreate) SetUserID(id int64) *RedeemCodeCreate {
 	_c.mutation.SetUserID(id)
@@ -201,6 +229,25 @@ func (_c *RedeemCodeCreate) SetNillableUserID(id *int64) *RedeemCodeCreate {
 // SetUser sets the "user" edge to the User entity.
 func (_c *RedeemCodeCreate) SetUser(v *User) *RedeemCodeCreate {
 	return _c.SetUserID(v.ID)
+}
+
+// SetCreatorID sets the "creator" edge to the User entity by ID.
+func (_c *RedeemCodeCreate) SetCreatorID(id int64) *RedeemCodeCreate {
+	_c.mutation.SetCreatorID(id)
+	return _c
+}
+
+// SetNillableCreatorID sets the "creator" edge to the User entity by ID if the given value is not nil.
+func (_c *RedeemCodeCreate) SetNillableCreatorID(id *int64) *RedeemCodeCreate {
+	if id != nil {
+		_c = _c.SetCreatorID(*id)
+	}
+	return _c
+}
+
+// SetCreator sets the "creator" edge to the User entity.
+func (_c *RedeemCodeCreate) SetCreator(v *User) *RedeemCodeCreate {
+	return _c.SetCreatorID(v.ID)
 }
 
 // SetGroup sets the "group" edge to the Group entity.
@@ -263,6 +310,10 @@ func (_c *RedeemCodeCreate) defaults() {
 		v := redeemcode.DefaultValidityDays
 		_c.mutation.SetValidityDays(v)
 	}
+	if _, ok := _c.mutation.Source(); !ok {
+		v := redeemcode.DefaultSource
+		_c.mutation.SetSource(v)
+	}
 }
 
 // check runs all checks and user-defined validators on the builder.
@@ -303,6 +354,14 @@ func (_c *RedeemCodeCreate) check() error {
 	if v, ok := _c.mutation.BatchID(); ok {
 		if err := redeemcode.BatchIDValidator(v); err != nil {
 			return &ValidationError{Name: "batch_id", err: fmt.Errorf(`ent: validator failed for field "RedeemCode.batch_id": %w`, err)}
+		}
+	}
+	if _, ok := _c.mutation.Source(); !ok {
+		return &ValidationError{Name: "source", err: errors.New(`ent: missing required field "RedeemCode.source"`)}
+	}
+	if v, ok := _c.mutation.Source(); ok {
+		if err := redeemcode.SourceValidator(v); err != nil {
+			return &ValidationError{Name: "source", err: fmt.Errorf(`ent: validator failed for field "RedeemCode.source": %w`, err)}
 		}
 	}
 	return nil
@@ -372,6 +431,10 @@ func (_c *RedeemCodeCreate) createSpec() (*RedeemCode, *sqlgraph.CreateSpec) {
 		_spec.SetField(redeemcode.FieldBatchID, field.TypeString, value)
 		_node.BatchID = &value
 	}
+	if value, ok := _c.mutation.Source(); ok {
+		_spec.SetField(redeemcode.FieldSource, field.TypeString, value)
+		_node.Source = value
+	}
 	if nodes := _c.mutation.UserIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.M2O,
@@ -387,6 +450,23 @@ func (_c *RedeemCodeCreate) createSpec() (*RedeemCode, *sqlgraph.CreateSpec) {
 			edge.Target.Nodes = append(edge.Target.Nodes, k)
 		}
 		_node.UsedBy = &nodes[0]
+		_spec.Edges = append(_spec.Edges, edge)
+	}
+	if nodes := _c.mutation.CreatorIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: true,
+			Table:   redeemcode.CreatorTable,
+			Columns: []string{redeemcode.CreatorColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(user.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_node.CreatedBy = &nodes[0]
 		_spec.Edges = append(_spec.Edges, edge)
 	}
 	if nodes := _c.mutation.GroupIDs(); len(nodes) > 0 {
@@ -530,6 +610,24 @@ func (u *RedeemCodeUpsert) ClearUsedBy() *RedeemCodeUpsert {
 	return u
 }
 
+// SetCreatedBy sets the "created_by" field.
+func (u *RedeemCodeUpsert) SetCreatedBy(v int64) *RedeemCodeUpsert {
+	u.Set(redeemcode.FieldCreatedBy, v)
+	return u
+}
+
+// UpdateCreatedBy sets the "created_by" field to the value that was provided on create.
+func (u *RedeemCodeUpsert) UpdateCreatedBy() *RedeemCodeUpsert {
+	u.SetExcluded(redeemcode.FieldCreatedBy)
+	return u
+}
+
+// ClearCreatedBy clears the value of the "created_by" field.
+func (u *RedeemCodeUpsert) ClearCreatedBy() *RedeemCodeUpsert {
+	u.SetNull(redeemcode.FieldCreatedBy)
+	return u
+}
+
 // SetUsedAt sets the "used_at" field.
 func (u *RedeemCodeUpsert) SetUsedAt(v time.Time) *RedeemCodeUpsert {
 	u.Set(redeemcode.FieldUsedAt, v)
@@ -635,6 +733,18 @@ func (u *RedeemCodeUpsert) UpdateBatchID() *RedeemCodeUpsert {
 // ClearBatchID clears the value of the "batch_id" field.
 func (u *RedeemCodeUpsert) ClearBatchID() *RedeemCodeUpsert {
 	u.SetNull(redeemcode.FieldBatchID)
+	return u
+}
+
+// SetSource sets the "source" field.
+func (u *RedeemCodeUpsert) SetSource(v string) *RedeemCodeUpsert {
+	u.Set(redeemcode.FieldSource, v)
+	return u
+}
+
+// UpdateSource sets the "source" field to the value that was provided on create.
+func (u *RedeemCodeUpsert) UpdateSource() *RedeemCodeUpsert {
+	u.SetExcluded(redeemcode.FieldSource)
 	return u
 }
 
@@ -767,6 +877,27 @@ func (u *RedeemCodeUpsertOne) ClearUsedBy() *RedeemCodeUpsertOne {
 	})
 }
 
+// SetCreatedBy sets the "created_by" field.
+func (u *RedeemCodeUpsertOne) SetCreatedBy(v int64) *RedeemCodeUpsertOne {
+	return u.Update(func(s *RedeemCodeUpsert) {
+		s.SetCreatedBy(v)
+	})
+}
+
+// UpdateCreatedBy sets the "created_by" field to the value that was provided on create.
+func (u *RedeemCodeUpsertOne) UpdateCreatedBy() *RedeemCodeUpsertOne {
+	return u.Update(func(s *RedeemCodeUpsert) {
+		s.UpdateCreatedBy()
+	})
+}
+
+// ClearCreatedBy clears the value of the "created_by" field.
+func (u *RedeemCodeUpsertOne) ClearCreatedBy() *RedeemCodeUpsertOne {
+	return u.Update(func(s *RedeemCodeUpsert) {
+		s.ClearCreatedBy()
+	})
+}
+
 // SetUsedAt sets the "used_at" field.
 func (u *RedeemCodeUpsertOne) SetUsedAt(v time.Time) *RedeemCodeUpsertOne {
 	return u.Update(func(s *RedeemCodeUpsert) {
@@ -890,6 +1021,20 @@ func (u *RedeemCodeUpsertOne) UpdateBatchID() *RedeemCodeUpsertOne {
 func (u *RedeemCodeUpsertOne) ClearBatchID() *RedeemCodeUpsertOne {
 	return u.Update(func(s *RedeemCodeUpsert) {
 		s.ClearBatchID()
+	})
+}
+
+// SetSource sets the "source" field.
+func (u *RedeemCodeUpsertOne) SetSource(v string) *RedeemCodeUpsertOne {
+	return u.Update(func(s *RedeemCodeUpsert) {
+		s.SetSource(v)
+	})
+}
+
+// UpdateSource sets the "source" field to the value that was provided on create.
+func (u *RedeemCodeUpsertOne) UpdateSource() *RedeemCodeUpsertOne {
+	return u.Update(func(s *RedeemCodeUpsert) {
+		s.UpdateSource()
 	})
 }
 
@@ -1188,6 +1333,27 @@ func (u *RedeemCodeUpsertBulk) ClearUsedBy() *RedeemCodeUpsertBulk {
 	})
 }
 
+// SetCreatedBy sets the "created_by" field.
+func (u *RedeemCodeUpsertBulk) SetCreatedBy(v int64) *RedeemCodeUpsertBulk {
+	return u.Update(func(s *RedeemCodeUpsert) {
+		s.SetCreatedBy(v)
+	})
+}
+
+// UpdateCreatedBy sets the "created_by" field to the value that was provided on create.
+func (u *RedeemCodeUpsertBulk) UpdateCreatedBy() *RedeemCodeUpsertBulk {
+	return u.Update(func(s *RedeemCodeUpsert) {
+		s.UpdateCreatedBy()
+	})
+}
+
+// ClearCreatedBy clears the value of the "created_by" field.
+func (u *RedeemCodeUpsertBulk) ClearCreatedBy() *RedeemCodeUpsertBulk {
+	return u.Update(func(s *RedeemCodeUpsert) {
+		s.ClearCreatedBy()
+	})
+}
+
 // SetUsedAt sets the "used_at" field.
 func (u *RedeemCodeUpsertBulk) SetUsedAt(v time.Time) *RedeemCodeUpsertBulk {
 	return u.Update(func(s *RedeemCodeUpsert) {
@@ -1311,6 +1477,20 @@ func (u *RedeemCodeUpsertBulk) UpdateBatchID() *RedeemCodeUpsertBulk {
 func (u *RedeemCodeUpsertBulk) ClearBatchID() *RedeemCodeUpsertBulk {
 	return u.Update(func(s *RedeemCodeUpsert) {
 		s.ClearBatchID()
+	})
+}
+
+// SetSource sets the "source" field.
+func (u *RedeemCodeUpsertBulk) SetSource(v string) *RedeemCodeUpsertBulk {
+	return u.Update(func(s *RedeemCodeUpsert) {
+		s.SetSource(v)
+	})
+}
+
+// UpdateSource sets the "source" field to the value that was provided on create.
+func (u *RedeemCodeUpsertBulk) UpdateSource() *RedeemCodeUpsertBulk {
+	return u.Update(func(s *RedeemCodeUpsert) {
+		s.UpdateSource()
 	})
 }
 

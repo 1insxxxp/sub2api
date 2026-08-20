@@ -5337,6 +5337,22 @@ func (c *RedeemCodeClient) QueryUser(_m *RedeemCode) *UserQuery {
 	return query
 }
 
+// QueryCreator queries the creator edge of a RedeemCode.
+func (c *RedeemCodeClient) QueryCreator(_m *RedeemCode) *UserQuery {
+	query := (&UserClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(redeemcode.Table, redeemcode.FieldID, id),
+			sqlgraph.To(user.Table, user.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, redeemcode.CreatorTable, redeemcode.CreatorColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
 // QueryGroup queries the group edge of a RedeemCode.
 func (c *RedeemCodeClient) QueryGroup(_m *RedeemCode) *GroupQuery {
 	query := (&GroupClient{config: c.config}).Query()
@@ -6735,6 +6751,22 @@ func (c *UserClient) QueryRedeemCodes(_m *User) *RedeemCodeQuery {
 			sqlgraph.From(user.Table, user.FieldID, id),
 			sqlgraph.To(redeemcode.Table, redeemcode.FieldID),
 			sqlgraph.Edge(sqlgraph.O2M, false, user.RedeemCodesTable, user.RedeemCodesColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryCreatedRedeemCodes queries the created_redeem_codes edge of a User.
+func (c *UserClient) QueryCreatedRedeemCodes(_m *User) *RedeemCodeQuery {
+	query := (&RedeemCodeClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(user.Table, user.FieldID, id),
+			sqlgraph.To(redeemcode.Table, redeemcode.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, user.CreatedRedeemCodesTable, user.CreatedRedeemCodesColumn),
 		)
 		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
 		return fromV, nil

@@ -113,6 +113,26 @@ func (_u *RedeemCodeUpdate) ClearUsedBy() *RedeemCodeUpdate {
 	return _u
 }
 
+// SetCreatedBy sets the "created_by" field.
+func (_u *RedeemCodeUpdate) SetCreatedBy(v int64) *RedeemCodeUpdate {
+	_u.mutation.SetCreatedBy(v)
+	return _u
+}
+
+// SetNillableCreatedBy sets the "created_by" field if the given value is not nil.
+func (_u *RedeemCodeUpdate) SetNillableCreatedBy(v *int64) *RedeemCodeUpdate {
+	if v != nil {
+		_u.SetCreatedBy(*v)
+	}
+	return _u
+}
+
+// ClearCreatedBy clears the value of the "created_by" field.
+func (_u *RedeemCodeUpdate) ClearCreatedBy() *RedeemCodeUpdate {
+	_u.mutation.ClearCreatedBy()
+	return _u
+}
+
 // SetUsedAt sets the "used_at" field.
 func (_u *RedeemCodeUpdate) SetUsedAt(v time.Time) *RedeemCodeUpdate {
 	_u.mutation.SetUsedAt(v)
@@ -234,6 +254,20 @@ func (_u *RedeemCodeUpdate) ClearBatchID() *RedeemCodeUpdate {
 	return _u
 }
 
+// SetSource sets the "source" field.
+func (_u *RedeemCodeUpdate) SetSource(v string) *RedeemCodeUpdate {
+	_u.mutation.SetSource(v)
+	return _u
+}
+
+// SetNillableSource sets the "source" field if the given value is not nil.
+func (_u *RedeemCodeUpdate) SetNillableSource(v *string) *RedeemCodeUpdate {
+	if v != nil {
+		_u.SetSource(*v)
+	}
+	return _u
+}
+
 // SetUserID sets the "user" edge to the User entity by ID.
 func (_u *RedeemCodeUpdate) SetUserID(id int64) *RedeemCodeUpdate {
 	_u.mutation.SetUserID(id)
@@ -253,6 +287,25 @@ func (_u *RedeemCodeUpdate) SetUser(v *User) *RedeemCodeUpdate {
 	return _u.SetUserID(v.ID)
 }
 
+// SetCreatorID sets the "creator" edge to the User entity by ID.
+func (_u *RedeemCodeUpdate) SetCreatorID(id int64) *RedeemCodeUpdate {
+	_u.mutation.SetCreatorID(id)
+	return _u
+}
+
+// SetNillableCreatorID sets the "creator" edge to the User entity by ID if the given value is not nil.
+func (_u *RedeemCodeUpdate) SetNillableCreatorID(id *int64) *RedeemCodeUpdate {
+	if id != nil {
+		_u = _u.SetCreatorID(*id)
+	}
+	return _u
+}
+
+// SetCreator sets the "creator" edge to the User entity.
+func (_u *RedeemCodeUpdate) SetCreator(v *User) *RedeemCodeUpdate {
+	return _u.SetCreatorID(v.ID)
+}
+
 // SetGroup sets the "group" edge to the Group entity.
 func (_u *RedeemCodeUpdate) SetGroup(v *Group) *RedeemCodeUpdate {
 	return _u.SetGroupID(v.ID)
@@ -266,6 +319,12 @@ func (_u *RedeemCodeUpdate) Mutation() *RedeemCodeMutation {
 // ClearUser clears the "user" edge to the User entity.
 func (_u *RedeemCodeUpdate) ClearUser() *RedeemCodeUpdate {
 	_u.mutation.ClearUser()
+	return _u
+}
+
+// ClearCreator clears the "creator" edge to the User entity.
+func (_u *RedeemCodeUpdate) ClearCreator() *RedeemCodeUpdate {
+	_u.mutation.ClearCreator()
 	return _u
 }
 
@@ -322,6 +381,11 @@ func (_u *RedeemCodeUpdate) check() error {
 	if v, ok := _u.mutation.BatchID(); ok {
 		if err := redeemcode.BatchIDValidator(v); err != nil {
 			return &ValidationError{Name: "batch_id", err: fmt.Errorf(`ent: validator failed for field "RedeemCode.batch_id": %w`, err)}
+		}
+	}
+	if v, ok := _u.mutation.Source(); ok {
+		if err := redeemcode.SourceValidator(v); err != nil {
+			return &ValidationError{Name: "source", err: fmt.Errorf(`ent: validator failed for field "RedeemCode.source": %w`, err)}
 		}
 	}
 	return nil
@@ -384,6 +448,9 @@ func (_u *RedeemCodeUpdate) sqlSave(ctx context.Context) (_node int, err error) 
 	if _u.mutation.BatchIDCleared() {
 		_spec.ClearField(redeemcode.FieldBatchID, field.TypeString)
 	}
+	if value, ok := _u.mutation.Source(); ok {
+		_spec.SetField(redeemcode.FieldSource, field.TypeString, value)
+	}
 	if _u.mutation.UserCleared() {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.M2O,
@@ -403,6 +470,35 @@ func (_u *RedeemCodeUpdate) sqlSave(ctx context.Context) (_node int, err error) 
 			Inverse: true,
 			Table:   redeemcode.UserTable,
 			Columns: []string{redeemcode.UserColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(user.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
+	if _u.mutation.CreatorCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: true,
+			Table:   redeemcode.CreatorTable,
+			Columns: []string{redeemcode.CreatorColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(user.FieldID, field.TypeInt64),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.CreatorIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: true,
+			Table:   redeemcode.CreatorTable,
+			Columns: []string{redeemcode.CreatorColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(user.FieldID, field.TypeInt64),
@@ -545,6 +641,26 @@ func (_u *RedeemCodeUpdateOne) ClearUsedBy() *RedeemCodeUpdateOne {
 	return _u
 }
 
+// SetCreatedBy sets the "created_by" field.
+func (_u *RedeemCodeUpdateOne) SetCreatedBy(v int64) *RedeemCodeUpdateOne {
+	_u.mutation.SetCreatedBy(v)
+	return _u
+}
+
+// SetNillableCreatedBy sets the "created_by" field if the given value is not nil.
+func (_u *RedeemCodeUpdateOne) SetNillableCreatedBy(v *int64) *RedeemCodeUpdateOne {
+	if v != nil {
+		_u.SetCreatedBy(*v)
+	}
+	return _u
+}
+
+// ClearCreatedBy clears the value of the "created_by" field.
+func (_u *RedeemCodeUpdateOne) ClearCreatedBy() *RedeemCodeUpdateOne {
+	_u.mutation.ClearCreatedBy()
+	return _u
+}
+
 // SetUsedAt sets the "used_at" field.
 func (_u *RedeemCodeUpdateOne) SetUsedAt(v time.Time) *RedeemCodeUpdateOne {
 	_u.mutation.SetUsedAt(v)
@@ -666,6 +782,20 @@ func (_u *RedeemCodeUpdateOne) ClearBatchID() *RedeemCodeUpdateOne {
 	return _u
 }
 
+// SetSource sets the "source" field.
+func (_u *RedeemCodeUpdateOne) SetSource(v string) *RedeemCodeUpdateOne {
+	_u.mutation.SetSource(v)
+	return _u
+}
+
+// SetNillableSource sets the "source" field if the given value is not nil.
+func (_u *RedeemCodeUpdateOne) SetNillableSource(v *string) *RedeemCodeUpdateOne {
+	if v != nil {
+		_u.SetSource(*v)
+	}
+	return _u
+}
+
 // SetUserID sets the "user" edge to the User entity by ID.
 func (_u *RedeemCodeUpdateOne) SetUserID(id int64) *RedeemCodeUpdateOne {
 	_u.mutation.SetUserID(id)
@@ -685,6 +815,25 @@ func (_u *RedeemCodeUpdateOne) SetUser(v *User) *RedeemCodeUpdateOne {
 	return _u.SetUserID(v.ID)
 }
 
+// SetCreatorID sets the "creator" edge to the User entity by ID.
+func (_u *RedeemCodeUpdateOne) SetCreatorID(id int64) *RedeemCodeUpdateOne {
+	_u.mutation.SetCreatorID(id)
+	return _u
+}
+
+// SetNillableCreatorID sets the "creator" edge to the User entity by ID if the given value is not nil.
+func (_u *RedeemCodeUpdateOne) SetNillableCreatorID(id *int64) *RedeemCodeUpdateOne {
+	if id != nil {
+		_u = _u.SetCreatorID(*id)
+	}
+	return _u
+}
+
+// SetCreator sets the "creator" edge to the User entity.
+func (_u *RedeemCodeUpdateOne) SetCreator(v *User) *RedeemCodeUpdateOne {
+	return _u.SetCreatorID(v.ID)
+}
+
 // SetGroup sets the "group" edge to the Group entity.
 func (_u *RedeemCodeUpdateOne) SetGroup(v *Group) *RedeemCodeUpdateOne {
 	return _u.SetGroupID(v.ID)
@@ -698,6 +847,12 @@ func (_u *RedeemCodeUpdateOne) Mutation() *RedeemCodeMutation {
 // ClearUser clears the "user" edge to the User entity.
 func (_u *RedeemCodeUpdateOne) ClearUser() *RedeemCodeUpdateOne {
 	_u.mutation.ClearUser()
+	return _u
+}
+
+// ClearCreator clears the "creator" edge to the User entity.
+func (_u *RedeemCodeUpdateOne) ClearCreator() *RedeemCodeUpdateOne {
+	_u.mutation.ClearCreator()
 	return _u
 }
 
@@ -767,6 +922,11 @@ func (_u *RedeemCodeUpdateOne) check() error {
 	if v, ok := _u.mutation.BatchID(); ok {
 		if err := redeemcode.BatchIDValidator(v); err != nil {
 			return &ValidationError{Name: "batch_id", err: fmt.Errorf(`ent: validator failed for field "RedeemCode.batch_id": %w`, err)}
+		}
+	}
+	if v, ok := _u.mutation.Source(); ok {
+		if err := redeemcode.SourceValidator(v); err != nil {
+			return &ValidationError{Name: "source", err: fmt.Errorf(`ent: validator failed for field "RedeemCode.source": %w`, err)}
 		}
 	}
 	return nil
@@ -846,6 +1006,9 @@ func (_u *RedeemCodeUpdateOne) sqlSave(ctx context.Context) (_node *RedeemCode, 
 	if _u.mutation.BatchIDCleared() {
 		_spec.ClearField(redeemcode.FieldBatchID, field.TypeString)
 	}
+	if value, ok := _u.mutation.Source(); ok {
+		_spec.SetField(redeemcode.FieldSource, field.TypeString, value)
+	}
 	if _u.mutation.UserCleared() {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.M2O,
@@ -865,6 +1028,35 @@ func (_u *RedeemCodeUpdateOne) sqlSave(ctx context.Context) (_node *RedeemCode, 
 			Inverse: true,
 			Table:   redeemcode.UserTable,
 			Columns: []string{redeemcode.UserColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(user.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
+	if _u.mutation.CreatorCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: true,
+			Table:   redeemcode.CreatorTable,
+			Columns: []string{redeemcode.CreatorColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(user.FieldID, field.TypeInt64),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.CreatorIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: true,
+			Table:   redeemcode.CreatorTable,
+			Columns: []string{redeemcode.CreatorColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(user.FieldID, field.TypeInt64),

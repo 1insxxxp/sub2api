@@ -71,12 +71,16 @@ const (
 	FieldTotalRecharged = "total_recharged"
 	// FieldRpmLimit holds the string denoting the rpm_limit field in the database.
 	FieldRpmLimit = "rpm_limit"
+	// FieldBalanceRedeemCodeEnabled holds the string denoting the balance_redeem_code_enabled field in the database.
+	FieldBalanceRedeemCodeEnabled = "balance_redeem_code_enabled"
 	// EdgeAPIKeys holds the string denoting the api_keys edge name in mutations.
 	EdgeAPIKeys = "api_keys"
 	// EdgeCustomGroups holds the string denoting the custom_groups edge name in mutations.
 	EdgeCustomGroups = "custom_groups"
 	// EdgeRedeemCodes holds the string denoting the redeem_codes edge name in mutations.
 	EdgeRedeemCodes = "redeem_codes"
+	// EdgeCreatedRedeemCodes holds the string denoting the created_redeem_codes edge name in mutations.
+	EdgeCreatedRedeemCodes = "created_redeem_codes"
 	// EdgeSubscriptions holds the string denoting the subscriptions edge name in mutations.
 	EdgeSubscriptions = "subscriptions"
 	// EdgeAssignedSubscriptions holds the string denoting the assigned_subscriptions edge name in mutations.
@@ -132,6 +136,13 @@ const (
 	RedeemCodesInverseTable = "redeem_codes"
 	// RedeemCodesColumn is the table column denoting the redeem_codes relation/edge.
 	RedeemCodesColumn = "used_by"
+	// CreatedRedeemCodesTable is the table that holds the created_redeem_codes relation/edge.
+	CreatedRedeemCodesTable = "redeem_codes"
+	// CreatedRedeemCodesInverseTable is the table name for the RedeemCode entity.
+	// It exists in this package in order to avoid circular dependency with the "redeemcode" package.
+	CreatedRedeemCodesInverseTable = "redeem_codes"
+	// CreatedRedeemCodesColumn is the table column denoting the created_redeem_codes relation/edge.
+	CreatedRedeemCodesColumn = "created_by"
 	// SubscriptionsTable is the table that holds the subscriptions relation/edge.
 	SubscriptionsTable = "user_subscriptions"
 	// SubscriptionsInverseTable is the table name for the UserSubscription entity.
@@ -275,6 +286,7 @@ var Columns = []string{
 	FieldBalanceNotifyExtraEmails,
 	FieldTotalRecharged,
 	FieldRpmLimit,
+	FieldBalanceRedeemCodeEnabled,
 }
 
 var (
@@ -359,6 +371,8 @@ var (
 	DefaultTotalRecharged float64
 	// DefaultRpmLimit holds the default value on creation for the "rpm_limit" field.
 	DefaultRpmLimit int
+	// DefaultBalanceRedeemCodeEnabled holds the default value on creation for the "balance_redeem_code_enabled" field.
+	DefaultBalanceRedeemCodeEnabled bool
 )
 
 // OrderOption defines the ordering options for the User queries.
@@ -509,6 +523,11 @@ func ByRpmLimit(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldRpmLimit, opts...).ToFunc()
 }
 
+// ByBalanceRedeemCodeEnabled orders the results by the balance_redeem_code_enabled field.
+func ByBalanceRedeemCodeEnabled(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldBalanceRedeemCodeEnabled, opts...).ToFunc()
+}
+
 // ByAPIKeysCount orders the results by api_keys count.
 func ByAPIKeysCount(opts ...sql.OrderTermOption) OrderOption {
 	return func(s *sql.Selector) {
@@ -548,6 +567,20 @@ func ByRedeemCodesCount(opts ...sql.OrderTermOption) OrderOption {
 func ByRedeemCodes(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
 	return func(s *sql.Selector) {
 		sqlgraph.OrderByNeighborTerms(s, newRedeemCodesStep(), append([]sql.OrderTerm{term}, terms...)...)
+	}
+}
+
+// ByCreatedRedeemCodesCount orders the results by created_redeem_codes count.
+func ByCreatedRedeemCodesCount(opts ...sql.OrderTermOption) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborsCount(s, newCreatedRedeemCodesStep(), opts...)
+	}
+}
+
+// ByCreatedRedeemCodes orders the results by created_redeem_codes terms.
+func ByCreatedRedeemCodes(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborTerms(s, newCreatedRedeemCodesStep(), append([]sql.OrderTerm{term}, terms...)...)
 	}
 }
 
@@ -793,6 +826,13 @@ func newRedeemCodesStep() *sqlgraph.Step {
 		sqlgraph.From(Table, FieldID),
 		sqlgraph.To(RedeemCodesInverseTable, FieldID),
 		sqlgraph.Edge(sqlgraph.O2M, false, RedeemCodesTable, RedeemCodesColumn),
+	)
+}
+func newCreatedRedeemCodesStep() *sqlgraph.Step {
+	return sqlgraph.NewStep(
+		sqlgraph.From(Table, FieldID),
+		sqlgraph.To(CreatedRedeemCodesInverseTable, FieldID),
+		sqlgraph.Edge(sqlgraph.O2M, false, CreatedRedeemCodesTable, CreatedRedeemCodesColumn),
 	)
 }
 func newSubscriptionsStep() *sqlgraph.Step {

@@ -493,6 +493,20 @@ func (_u *UserUpdate) AddRpmLimit(v int) *UserUpdate {
 	return _u
 }
 
+// SetBalanceRedeemCodeEnabled sets the "balance_redeem_code_enabled" field.
+func (_u *UserUpdate) SetBalanceRedeemCodeEnabled(v bool) *UserUpdate {
+	_u.mutation.SetBalanceRedeemCodeEnabled(v)
+	return _u
+}
+
+// SetNillableBalanceRedeemCodeEnabled sets the "balance_redeem_code_enabled" field if the given value is not nil.
+func (_u *UserUpdate) SetNillableBalanceRedeemCodeEnabled(v *bool) *UserUpdate {
+	if v != nil {
+		_u.SetBalanceRedeemCodeEnabled(*v)
+	}
+	return _u
+}
+
 // AddAPIKeyIDs adds the "api_keys" edge to the APIKey entity by IDs.
 func (_u *UserUpdate) AddAPIKeyIDs(ids ...int64) *UserUpdate {
 	_u.mutation.AddAPIKeyIDs(ids...)
@@ -536,6 +550,21 @@ func (_u *UserUpdate) AddRedeemCodes(v ...*RedeemCode) *UserUpdate {
 		ids[i] = v[i].ID
 	}
 	return _u.AddRedeemCodeIDs(ids...)
+}
+
+// AddCreatedRedeemCodeIDs adds the "created_redeem_codes" edge to the RedeemCode entity by IDs.
+func (_u *UserUpdate) AddCreatedRedeemCodeIDs(ids ...int64) *UserUpdate {
+	_u.mutation.AddCreatedRedeemCodeIDs(ids...)
+	return _u
+}
+
+// AddCreatedRedeemCodes adds the "created_redeem_codes" edges to the RedeemCode entity.
+func (_u *UserUpdate) AddCreatedRedeemCodes(v ...*RedeemCode) *UserUpdate {
+	ids := make([]int64, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.AddCreatedRedeemCodeIDs(ids...)
 }
 
 // AddSubscriptionIDs adds the "subscriptions" edge to the UserSubscription entity by IDs.
@@ -829,6 +858,27 @@ func (_u *UserUpdate) RemoveRedeemCodes(v ...*RedeemCode) *UserUpdate {
 		ids[i] = v[i].ID
 	}
 	return _u.RemoveRedeemCodeIDs(ids...)
+}
+
+// ClearCreatedRedeemCodes clears all "created_redeem_codes" edges to the RedeemCode entity.
+func (_u *UserUpdate) ClearCreatedRedeemCodes() *UserUpdate {
+	_u.mutation.ClearCreatedRedeemCodes()
+	return _u
+}
+
+// RemoveCreatedRedeemCodeIDs removes the "created_redeem_codes" edge to RedeemCode entities by IDs.
+func (_u *UserUpdate) RemoveCreatedRedeemCodeIDs(ids ...int64) *UserUpdate {
+	_u.mutation.RemoveCreatedRedeemCodeIDs(ids...)
+	return _u
+}
+
+// RemoveCreatedRedeemCodes removes "created_redeem_codes" edges to RedeemCode entities.
+func (_u *UserUpdate) RemoveCreatedRedeemCodes(v ...*RedeemCode) *UserUpdate {
+	ids := make([]int64, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.RemoveCreatedRedeemCodeIDs(ids...)
 }
 
 // ClearSubscriptions clears all "subscriptions" edges to the UserSubscription entity.
@@ -1362,6 +1412,9 @@ func (_u *UserUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	if value, ok := _u.mutation.AddedRpmLimit(); ok {
 		_spec.AddField(user.FieldRpmLimit, field.TypeInt, value)
 	}
+	if value, ok := _u.mutation.BalanceRedeemCodeEnabled(); ok {
+		_spec.SetField(user.FieldBalanceRedeemCodeEnabled, field.TypeBool, value)
+	}
 	if _u.mutation.APIKeysCleared() {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.O2M,
@@ -1487,6 +1540,51 @@ func (_u *UserUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 			Inverse: false,
 			Table:   user.RedeemCodesTable,
 			Columns: []string{user.RedeemCodesColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(redeemcode.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
+	if _u.mutation.CreatedRedeemCodesCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   user.CreatedRedeemCodesTable,
+			Columns: []string{user.CreatedRedeemCodesColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(redeemcode.FieldID, field.TypeInt64),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.RemovedCreatedRedeemCodesIDs(); len(nodes) > 0 && !_u.mutation.CreatedRedeemCodesCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   user.CreatedRedeemCodesTable,
+			Columns: []string{user.CreatedRedeemCodesColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(redeemcode.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.CreatedRedeemCodesIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   user.CreatedRedeemCodesTable,
+			Columns: []string{user.CreatedRedeemCodesColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(redeemcode.FieldID, field.TypeInt64),
@@ -2652,6 +2750,20 @@ func (_u *UserUpdateOne) AddRpmLimit(v int) *UserUpdateOne {
 	return _u
 }
 
+// SetBalanceRedeemCodeEnabled sets the "balance_redeem_code_enabled" field.
+func (_u *UserUpdateOne) SetBalanceRedeemCodeEnabled(v bool) *UserUpdateOne {
+	_u.mutation.SetBalanceRedeemCodeEnabled(v)
+	return _u
+}
+
+// SetNillableBalanceRedeemCodeEnabled sets the "balance_redeem_code_enabled" field if the given value is not nil.
+func (_u *UserUpdateOne) SetNillableBalanceRedeemCodeEnabled(v *bool) *UserUpdateOne {
+	if v != nil {
+		_u.SetBalanceRedeemCodeEnabled(*v)
+	}
+	return _u
+}
+
 // AddAPIKeyIDs adds the "api_keys" edge to the APIKey entity by IDs.
 func (_u *UserUpdateOne) AddAPIKeyIDs(ids ...int64) *UserUpdateOne {
 	_u.mutation.AddAPIKeyIDs(ids...)
@@ -2695,6 +2807,21 @@ func (_u *UserUpdateOne) AddRedeemCodes(v ...*RedeemCode) *UserUpdateOne {
 		ids[i] = v[i].ID
 	}
 	return _u.AddRedeemCodeIDs(ids...)
+}
+
+// AddCreatedRedeemCodeIDs adds the "created_redeem_codes" edge to the RedeemCode entity by IDs.
+func (_u *UserUpdateOne) AddCreatedRedeemCodeIDs(ids ...int64) *UserUpdateOne {
+	_u.mutation.AddCreatedRedeemCodeIDs(ids...)
+	return _u
+}
+
+// AddCreatedRedeemCodes adds the "created_redeem_codes" edges to the RedeemCode entity.
+func (_u *UserUpdateOne) AddCreatedRedeemCodes(v ...*RedeemCode) *UserUpdateOne {
+	ids := make([]int64, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.AddCreatedRedeemCodeIDs(ids...)
 }
 
 // AddSubscriptionIDs adds the "subscriptions" edge to the UserSubscription entity by IDs.
@@ -2988,6 +3115,27 @@ func (_u *UserUpdateOne) RemoveRedeemCodes(v ...*RedeemCode) *UserUpdateOne {
 		ids[i] = v[i].ID
 	}
 	return _u.RemoveRedeemCodeIDs(ids...)
+}
+
+// ClearCreatedRedeemCodes clears all "created_redeem_codes" edges to the RedeemCode entity.
+func (_u *UserUpdateOne) ClearCreatedRedeemCodes() *UserUpdateOne {
+	_u.mutation.ClearCreatedRedeemCodes()
+	return _u
+}
+
+// RemoveCreatedRedeemCodeIDs removes the "created_redeem_codes" edge to RedeemCode entities by IDs.
+func (_u *UserUpdateOne) RemoveCreatedRedeemCodeIDs(ids ...int64) *UserUpdateOne {
+	_u.mutation.RemoveCreatedRedeemCodeIDs(ids...)
+	return _u
+}
+
+// RemoveCreatedRedeemCodes removes "created_redeem_codes" edges to RedeemCode entities.
+func (_u *UserUpdateOne) RemoveCreatedRedeemCodes(v ...*RedeemCode) *UserUpdateOne {
+	ids := make([]int64, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.RemoveCreatedRedeemCodeIDs(ids...)
 }
 
 // ClearSubscriptions clears all "subscriptions" edges to the UserSubscription entity.
@@ -3551,6 +3699,9 @@ func (_u *UserUpdateOne) sqlSave(ctx context.Context) (_node *User, err error) {
 	if value, ok := _u.mutation.AddedRpmLimit(); ok {
 		_spec.AddField(user.FieldRpmLimit, field.TypeInt, value)
 	}
+	if value, ok := _u.mutation.BalanceRedeemCodeEnabled(); ok {
+		_spec.SetField(user.FieldBalanceRedeemCodeEnabled, field.TypeBool, value)
+	}
 	if _u.mutation.APIKeysCleared() {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.O2M,
@@ -3676,6 +3827,51 @@ func (_u *UserUpdateOne) sqlSave(ctx context.Context) (_node *User, err error) {
 			Inverse: false,
 			Table:   user.RedeemCodesTable,
 			Columns: []string{user.RedeemCodesColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(redeemcode.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
+	if _u.mutation.CreatedRedeemCodesCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   user.CreatedRedeemCodesTable,
+			Columns: []string{user.CreatedRedeemCodesColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(redeemcode.FieldID, field.TypeInt64),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.RemovedCreatedRedeemCodesIDs(); len(nodes) > 0 && !_u.mutation.CreatedRedeemCodesCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   user.CreatedRedeemCodesTable,
+			Columns: []string{user.CreatedRedeemCodesColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(redeemcode.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.CreatedRedeemCodesIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   user.CreatedRedeemCodesTable,
+			Columns: []string{user.CreatedRedeemCodesColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(redeemcode.FieldID, field.TypeInt64),

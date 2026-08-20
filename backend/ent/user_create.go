@@ -415,6 +415,20 @@ func (_c *UserCreate) SetNillableRpmLimit(v *int) *UserCreate {
 	return _c
 }
 
+// SetBalanceRedeemCodeEnabled sets the "balance_redeem_code_enabled" field.
+func (_c *UserCreate) SetBalanceRedeemCodeEnabled(v bool) *UserCreate {
+	_c.mutation.SetBalanceRedeemCodeEnabled(v)
+	return _c
+}
+
+// SetNillableBalanceRedeemCodeEnabled sets the "balance_redeem_code_enabled" field if the given value is not nil.
+func (_c *UserCreate) SetNillableBalanceRedeemCodeEnabled(v *bool) *UserCreate {
+	if v != nil {
+		_c.SetBalanceRedeemCodeEnabled(*v)
+	}
+	return _c
+}
+
 // AddAPIKeyIDs adds the "api_keys" edge to the APIKey entity by IDs.
 func (_c *UserCreate) AddAPIKeyIDs(ids ...int64) *UserCreate {
 	_c.mutation.AddAPIKeyIDs(ids...)
@@ -458,6 +472,21 @@ func (_c *UserCreate) AddRedeemCodes(v ...*RedeemCode) *UserCreate {
 		ids[i] = v[i].ID
 	}
 	return _c.AddRedeemCodeIDs(ids...)
+}
+
+// AddCreatedRedeemCodeIDs adds the "created_redeem_codes" edge to the RedeemCode entity by IDs.
+func (_c *UserCreate) AddCreatedRedeemCodeIDs(ids ...int64) *UserCreate {
+	_c.mutation.AddCreatedRedeemCodeIDs(ids...)
+	return _c
+}
+
+// AddCreatedRedeemCodes adds the "created_redeem_codes" edges to the RedeemCode entity.
+func (_c *UserCreate) AddCreatedRedeemCodes(v ...*RedeemCode) *UserCreate {
+	ids := make([]int64, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _c.AddCreatedRedeemCodeIDs(ids...)
 }
 
 // AddSubscriptionIDs adds the "subscriptions" edge to the UserSubscription entity by IDs.
@@ -808,6 +837,10 @@ func (_c *UserCreate) defaults() error {
 		v := user.DefaultRpmLimit
 		_c.mutation.SetRpmLimit(v)
 	}
+	if _, ok := _c.mutation.BalanceRedeemCodeEnabled(); !ok {
+		v := user.DefaultBalanceRedeemCodeEnabled
+		_c.mutation.SetBalanceRedeemCodeEnabled(v)
+	}
 	return nil
 }
 
@@ -918,6 +951,9 @@ func (_c *UserCreate) check() error {
 	}
 	if _, ok := _c.mutation.RpmLimit(); !ok {
 		return &ValidationError{Name: "rpm_limit", err: errors.New(`ent: missing required field "User.rpm_limit"`)}
+	}
+	if _, ok := _c.mutation.BalanceRedeemCodeEnabled(); !ok {
+		return &ValidationError{Name: "balance_redeem_code_enabled", err: errors.New(`ent: missing required field "User.balance_redeem_code_enabled"`)}
 	}
 	return nil
 }
@@ -1058,6 +1094,10 @@ func (_c *UserCreate) createSpec() (*User, *sqlgraph.CreateSpec) {
 		_spec.SetField(user.FieldRpmLimit, field.TypeInt, value)
 		_node.RpmLimit = value
 	}
+	if value, ok := _c.mutation.BalanceRedeemCodeEnabled(); ok {
+		_spec.SetField(user.FieldBalanceRedeemCodeEnabled, field.TypeBool, value)
+		_node.BalanceRedeemCodeEnabled = value
+	}
 	if nodes := _c.mutation.APIKeysIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.O2M,
@@ -1096,6 +1136,22 @@ func (_c *UserCreate) createSpec() (*User, *sqlgraph.CreateSpec) {
 			Inverse: false,
 			Table:   user.RedeemCodesTable,
 			Columns: []string{user.RedeemCodesColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(redeemcode.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges = append(_spec.Edges, edge)
+	}
+	if nodes := _c.mutation.CreatedRedeemCodesIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   user.CreatedRedeemCodesTable,
+			Columns: []string{user.CreatedRedeemCodesColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(redeemcode.FieldID, field.TypeInt64),
@@ -1798,6 +1854,18 @@ func (u *UserUpsert) AddRpmLimit(v int) *UserUpsert {
 	return u
 }
 
+// SetBalanceRedeemCodeEnabled sets the "balance_redeem_code_enabled" field.
+func (u *UserUpsert) SetBalanceRedeemCodeEnabled(v bool) *UserUpsert {
+	u.Set(user.FieldBalanceRedeemCodeEnabled, v)
+	return u
+}
+
+// UpdateBalanceRedeemCodeEnabled sets the "balance_redeem_code_enabled" field to the value that was provided on create.
+func (u *UserUpsert) UpdateBalanceRedeemCodeEnabled() *UserUpsert {
+	u.SetExcluded(user.FieldBalanceRedeemCodeEnabled)
+	return u
+}
+
 // UpdateNewValues updates the mutable fields using the new values that were set on create.
 // Using this option is equivalent to using:
 //
@@ -2302,6 +2370,20 @@ func (u *UserUpsertOne) AddRpmLimit(v int) *UserUpsertOne {
 func (u *UserUpsertOne) UpdateRpmLimit() *UserUpsertOne {
 	return u.Update(func(s *UserUpsert) {
 		s.UpdateRpmLimit()
+	})
+}
+
+// SetBalanceRedeemCodeEnabled sets the "balance_redeem_code_enabled" field.
+func (u *UserUpsertOne) SetBalanceRedeemCodeEnabled(v bool) *UserUpsertOne {
+	return u.Update(func(s *UserUpsert) {
+		s.SetBalanceRedeemCodeEnabled(v)
+	})
+}
+
+// UpdateBalanceRedeemCodeEnabled sets the "balance_redeem_code_enabled" field to the value that was provided on create.
+func (u *UserUpsertOne) UpdateBalanceRedeemCodeEnabled() *UserUpsertOne {
+	return u.Update(func(s *UserUpsert) {
+		s.UpdateBalanceRedeemCodeEnabled()
 	})
 }
 
@@ -2975,6 +3057,20 @@ func (u *UserUpsertBulk) AddRpmLimit(v int) *UserUpsertBulk {
 func (u *UserUpsertBulk) UpdateRpmLimit() *UserUpsertBulk {
 	return u.Update(func(s *UserUpsert) {
 		s.UpdateRpmLimit()
+	})
+}
+
+// SetBalanceRedeemCodeEnabled sets the "balance_redeem_code_enabled" field.
+func (u *UserUpsertBulk) SetBalanceRedeemCodeEnabled(v bool) *UserUpsertBulk {
+	return u.Update(func(s *UserUpsert) {
+		s.SetBalanceRedeemCodeEnabled(v)
+	})
+}
+
+// UpdateBalanceRedeemCodeEnabled sets the "balance_redeem_code_enabled" field to the value that was provided on create.
+func (u *UserUpsertBulk) UpdateBalanceRedeemCodeEnabled() *UserUpsertBulk {
+	return u.Update(func(s *UserUpsert) {
+		s.UpdateBalanceRedeemCodeEnabled()
 	})
 }
 
