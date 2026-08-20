@@ -14,7 +14,9 @@ type RedeemCode struct {
 	Status    string
 	UsedBy    *int64
 	UsedAt    *time.Time
+	CreatedBy *int64
 	Notes     string
+	Source    string
 	CreatedAt time.Time
 	ExpiresAt *time.Time
 	BatchID   *string
@@ -22,8 +24,9 @@ type RedeemCode struct {
 	GroupID      *int64
 	ValidityDays int
 
-	User  *User
-	Group *Group
+	User    *User
+	Creator *User
+	Group   *Group
 }
 
 func (r *RedeemCode) IsUsed() bool {

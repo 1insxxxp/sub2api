@@ -201,6 +201,24 @@ func (s *UserRepoSuite) TestUpdate() {
 	s.Require().Equal("updated", updated.Username)
 }
 
+func (s *UserRepoSuite) TestBalanceRedeemCodeEnabledPersists() {
+	user := s.mustCreateUser(&service.User{
+		Email:                    "balance-transfer-enabled@test.com",
+		BalanceRedeemCodeEnabled: true,
+	})
+
+	got, err := s.repo.GetByID(s.ctx, user.ID)
+	s.Require().NoError(err)
+	s.Require().True(got.BalanceRedeemCodeEnabled)
+
+	got.BalanceRedeemCodeEnabled = false
+	s.Require().NoError(s.repo.Update(s.ctx, got, service.UserUpdateFields{BalanceRedeemCodeEnabled: true}))
+
+	updated, err := s.repo.GetByID(s.ctx, user.ID)
+	s.Require().NoError(err)
+	s.Require().False(updated.BalanceRedeemCodeEnabled)
+}
+
 func (s *UserRepoSuite) TestBatchUpdateLimitsUpdatesOnlyProvidedFields() {
 	user := s.mustCreateUser(&service.User{
 		Email:       "batch-limits-one-field@test.com",

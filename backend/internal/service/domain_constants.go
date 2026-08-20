@@ -203,6 +203,12 @@ const (
 	RedeemTypeAffiliateBalance = "affiliate_balance"
 )
 
+// Redeem code source constants
+const (
+	RedeemCodeSourceAdmin               = domain.RedeemCodeSourceAdmin
+	RedeemCodeSourceUserBalanceTransfer = domain.RedeemCodeSourceUserBalanceTransfer
+)
+
 // PromoCode status constants
 const (
 	PromoCodeStatusActive   = domain.PromoCodeStatusActive

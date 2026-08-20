@@ -72,6 +72,34 @@ func (s *RedeemCodeRepoSuite) TestCreate() {
 	s.Require().WithinDuration(expiresAt, *got.ExpiresAt, time.Second)
 }
 
+func (s *RedeemCodeRepoSuite) TestCreatePersistsBalanceTransferAuditMetadata() {
+	creator := s.createUser(uniqueTestValue(s.T(), "creator") + "@example.com")
+	redeemer := s.createUser(uniqueTestValue(s.T(), "redeemer") + "@example.com")
+	usedAt := time.Now().UTC()
+	code := &service.RedeemCode{
+		Code:      "TRANSFER-AUDIT",
+		Type:      service.RedeemTypeBalance,
+		Value:     12.5,
+		Status:    service.StatusUsed,
+		UsedBy:    &redeemer.ID,
+		UsedAt:    &usedAt,
+		CreatedBy: &creator.ID,
+		Source:    service.RedeemCodeSourceUserBalanceTransfer,
+	}
+
+	s.Require().NoError(s.repo.Create(s.ctx, code))
+
+	got, err := s.repo.GetByCode(s.ctx, "TRANSFER-AUDIT")
+	s.Require().NoError(err)
+	s.Require().NotNil(got.CreatedBy)
+	s.Require().Equal(creator.ID, *got.CreatedBy)
+	s.Require().Equal(service.RedeemCodeSourceUserBalanceTransfer, got.Source)
+	s.Require().NotNil(got.Creator)
+	s.Require().Equal(creator.ID, got.Creator.ID)
+	s.Require().NotNil(got.User)
+	s.Require().Equal(redeemer.ID, got.User.ID)
+}
+
 func (s *RedeemCodeRepoSuite) TestCreateBatch() {
 	codes := []service.RedeemCode{
 		{Code: "BATCH-1", Type: service.RedeemTypeBalance, Value: 10, Status: service.StatusUnused},

@@ -150,6 +150,7 @@ func (r *userRepository) create(ctx context.Context, userIn *service.User, guard
 		SetConcurrency(userIn.Concurrency).
 		SetStatus(userIn.Status).
 		SetSignupSource(userSignupSourceOrDefault(userIn.SignupSource)).
+		SetBalanceRedeemCodeEnabled(userIn.BalanceRedeemCodeEnabled).
 		SetRegistrationIP(strings.TrimSpace(userIn.RegistrationIP)).
 		SetRegistrationUserAgent(strings.TrimSpace(userIn.RegistrationUserAgent)).
 		SetLastLoginIP(strings.TrimSpace(userIn.LastLoginIP)).
@@ -316,6 +317,9 @@ func (r *userRepository) Update(ctx context.Context, userIn *service.User, field
 	}
 	if fields.RPMLimit {
 		updateOp = updateOp.SetRpmLimit(userIn.RPMLimit)
+	}
+	if fields.BalanceRedeemCodeEnabled {
+		updateOp = updateOp.SetBalanceRedeemCodeEnabled(userIn.BalanceRedeemCodeEnabled)
 	}
 	if fields.Status {
 		updateOp = updateOp.SetStatus(userIn.Status)
@@ -1477,6 +1481,7 @@ func applyUserEntityToService(dst *service.User, src *dbent.User) {
 	dst.LastLoginUserAgent = src.LastLoginUserAgent
 	dst.LastLoginAt = src.LastLoginAt
 	dst.LastActiveAt = src.LastActiveAt
+	dst.BalanceRedeemCodeEnabled = src.BalanceRedeemCodeEnabled
 	dst.CreatedAt = src.CreatedAt
 	dst.UpdatedAt = src.UpdatedAt
 }

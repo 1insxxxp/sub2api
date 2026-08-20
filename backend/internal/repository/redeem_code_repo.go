@@ -22,23 +22,33 @@ func NewRedeemCodeRepository(client *dbent.Client) service.RedeemCodeRepository 
 	return &redeemCodeRepository{client: client}
 }
 
+func redeemCodeSourceOrDefault(source string) string {
+	if strings.TrimSpace(source) == "" {
+		return service.RedeemCodeSourceAdmin
+	}
+	return strings.TrimSpace(source)
+}
+
 func (r *redeemCodeRepository) Create(ctx context.Context, code *service.RedeemCode) error {
 	created, err := r.client.RedeemCode.Create().
 		SetCode(code.Code).
 		SetType(code.Type).
 		SetValue(code.Value).
 		SetStatus(code.Status).
+		SetSource(redeemCodeSourceOrDefault(code.Source)).
 		SetNotes(code.Notes).
 		SetValidityDays(code.ValidityDays).
 		SetNillableExpiresAt(code.ExpiresAt).
 		SetNillableUsedBy(code.UsedBy).
 		SetNillableUsedAt(code.UsedAt).
+		SetNillableCreatedBy(code.CreatedBy).
 		SetNillableGroupID(code.GroupID).
 		SetNillableBatchID(code.BatchID).
 		Save(ctx)
 	if err == nil {
 		code.ID = created.ID
 		code.CreatedAt = created.CreatedAt
+		code.Source = created.Source
 	}
 	return err
 }
@@ -56,11 +66,13 @@ func (r *redeemCodeRepository) CreateBatch(ctx context.Context, codes []service.
 			SetType(c.Type).
 			SetValue(c.Value).
 			SetStatus(c.Status).
+			SetSource(redeemCodeSourceOrDefault(c.Source)).
 			SetNotes(c.Notes).
 			SetValidityDays(c.ValidityDays).
 			SetNillableExpiresAt(c.ExpiresAt).
 			SetNillableUsedBy(c.UsedBy).
 			SetNillableUsedAt(c.UsedAt).
+			SetNillableCreatedBy(c.CreatedBy).
 			SetNillableGroupID(c.GroupID).
 			SetNillableBatchID(c.BatchID)
 		builders = append(builders, b)
@@ -72,6 +84,9 @@ func (r *redeemCodeRepository) CreateBatch(ctx context.Context, codes []service.
 func (r *redeemCodeRepository) GetByID(ctx context.Context, id int64) (*service.RedeemCode, error) {
 	m, err := r.client.RedeemCode.Query().
 		Where(redeemcode.IDEQ(id)).
+		WithUser().
+		WithCreator().
+		WithGroup().
 		Only(ctx)
 	if err != nil {
 		if dbent.IsNotFound(err) {
@@ -85,6 +100,9 @@ func (r *redeemCodeRepository) GetByID(ctx context.Context, id int64) (*service.
 func (r *redeemCodeRepository) GetByCode(ctx context.Context, code string) (*service.RedeemCode, error) {
 	m, err := r.client.RedeemCode.Query().
 		Where(redeemcode.CodeEQ(code)).
+		WithUser().
+		WithCreator().
+		WithGroup().
 		Only(ctx)
 	if err != nil {
 		if dbent.IsNotFound(err) {
@@ -150,6 +168,7 @@ func (r *redeemCodeRepository) ListWithFilters(ctx context.Context, params pagin
 
 	codesQuery := q.
 		WithUser().
+		WithCreator().
 		WithGroup().
 		Offset(params.Offset()).
 		Limit(params.Limit())
@@ -203,6 +222,7 @@ func (r *redeemCodeRepository) Update(ctx context.Context, code *service.RedeemC
 		SetType(code.Type).
 		SetValue(code.Value).
 		SetStatus(code.Status).
+		SetSource(redeemCodeSourceOrDefault(code.Source)).
 		SetNotes(code.Notes).
 		SetValidityDays(code.ValidityDays)
 
@@ -215,6 +235,11 @@ func (r *redeemCodeRepository) Update(ctx context.Context, code *service.RedeemC
 		up.SetUsedAt(*code.UsedAt)
 	} else {
 		up.ClearUsedAt()
+	}
+	if code.CreatedBy != nil {
+		up.SetCreatedBy(*code.CreatedBy)
+	} else {
+		up.ClearCreatedBy()
 	}
 	if code.GroupID != nil {
 		up.SetGroupID(*code.GroupID)
@@ -353,6 +378,7 @@ func (r *redeemCodeRepository) ListByUser(ctx context.Context, userID int64, lim
 
 	codes, err := r.client.RedeemCode.Query().
 		Where(redeemcode.UsedByEQ(userID)).
+		WithCreator().
 		WithGroup().
 		Order(dbent.Desc(redeemcode.FieldUsedAt)).
 		Limit(limit).
@@ -381,6 +407,7 @@ func (r *redeemCodeRepository) ListByUserPaginated(ctx context.Context, userID i
 	}
 
 	codes, err := q.
+		WithCreator().
 		WithGroup().
 		Offset(params.Offset()).
 		Limit(params.Limit()).
@@ -427,7 +454,9 @@ func redeemCodeEntityToService(m *dbent.RedeemCode) *service.RedeemCode {
 		Status:       m.Status,
 		UsedBy:       m.UsedBy,
 		UsedAt:       m.UsedAt,
+		CreatedBy:    m.CreatedBy,
 		Notes:        derefString(m.Notes),
+		Source:       redeemCodeSourceOrDefault(m.Source),
 		CreatedAt:    m.CreatedAt,
 		ExpiresAt:    m.ExpiresAt,
 		BatchID:      m.BatchID,
@@ -436,6 +465,9 @@ func redeemCodeEntityToService(m *dbent.RedeemCode) *service.RedeemCode {
 	}
 	if m.Edges.User != nil {
 		out.User = userEntityToService(m.Edges.User)
+	}
+	if m.Edges.Creator != nil {
+		out.Creator = userEntityToService(m.Edges.Creator)
 	}
 	if m.Edges.Group != nil {
 		out.Group = groupEntityToService(m.Edges.Group)
