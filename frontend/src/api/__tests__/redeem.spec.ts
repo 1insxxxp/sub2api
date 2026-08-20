@@ -1,19 +1,23 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { get, post } = vi.hoisted(() => ({
+const { del, get, post } = vi.hoisted(() => ({
+  del: vi.fn(),
   get: vi.fn(),
   post: vi.fn()
 }))
 
 vi.mock('@/api/client', () => ({
   apiClient: {
+    delete: del,
     get,
     post
   }
 }))
 
 import {
+  deleteGenerated,
   generateBalanceTransferCode,
+  generateBalanceTransferCodes,
   getGenerated,
   type GenerateBalanceTransferCodeRequest,
   type GeneratedRedeemCode
@@ -21,15 +25,17 @@ import {
 
 describe('redeem api balance transfer codes', () => {
   beforeEach(() => {
+    del.mockReset()
     get.mockReset()
     post.mockReset()
   })
 
-  it('posts the current user balance transfer redeem code payload', async () => {
+  it('posts the current user balance transfer redeem code payload and returns the first code', async () => {
     const request: GenerateBalanceTransferCodeRequest = {
       amount: 12.5,
       expires_in_days: 14,
-      notes: 'for teammate'
+      notes: 'for teammate',
+      count: 1
     }
     const response: GeneratedRedeemCode = {
       id: 18,
@@ -47,6 +53,37 @@ describe('redeem api balance transfer codes', () => {
     post.mockResolvedValue({ data: response })
 
     const result = await generateBalanceTransferCode(request)
+
+    expect(post).toHaveBeenCalledWith('/redeem/generate', request)
+    expect(result).toEqual(response)
+  })
+
+  it('posts batch balance transfer redeem code payload', async () => {
+    const request: GenerateBalanceTransferCodeRequest = {
+      amount: 5,
+      count: 3,
+      expires_in_days: 14,
+      notes: 'team drop',
+      single_use_per_user: true
+    }
+    const response: GeneratedRedeemCode[] = [
+      {
+        id: 18,
+        code: 'A',
+        type: 'balance',
+        value: 5,
+        status: 'unused',
+        used_by: null,
+        used_at: null,
+        created_at: '2026-08-20T12:00:00Z',
+        created_by: 7,
+        source: 'user_balance_transfer',
+        single_use_per_user: true
+      }
+    ]
+    post.mockResolvedValue({ data: response })
+
+    const result = await generateBalanceTransferCodes(request)
 
     expect(post).toHaveBeenCalledWith('/redeem/generate', request)
     expect(result).toEqual(response)
@@ -72,6 +109,27 @@ describe('redeem api balance transfer codes', () => {
     const result = await getGenerated()
 
     expect(get).toHaveBeenCalledWith('/redeem/generated')
+    expect(result).toEqual(response)
+  })
+
+  it('deletes a generated balance transfer redeem code', async () => {
+    const response: GeneratedRedeemCode = {
+      id: 18,
+      code: 'ABCD-EFGH',
+      type: 'balance',
+      value: 12.5,
+      status: 'unused',
+      used_by: null,
+      used_at: null,
+      created_at: '2026-08-20T12:00:00Z',
+      created_by: 7,
+      source: 'user_balance_transfer'
+    }
+    del.mockResolvedValue({ data: response })
+
+    const result = await deleteGenerated(18)
+
+    expect(del).toHaveBeenCalledWith('/redeem/generated/18')
     expect(result).toEqual(response)
   })
 })

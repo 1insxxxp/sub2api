@@ -8,6 +8,8 @@ const {
   getHistory,
   getGenerated,
   generateBalanceTransferCode,
+  generateBalanceTransferCodes,
+  deleteGenerated,
   getPublicSettings,
   refreshUser,
   showError,
@@ -25,6 +27,8 @@ const {
   getHistory: vi.fn(),
   getGenerated: vi.fn(),
   generateBalanceTransferCode: vi.fn(),
+  generateBalanceTransferCodes: vi.fn(),
+  deleteGenerated: vi.fn(),
   getPublicSettings: vi.fn(),
   refreshUser: vi.fn(),
   showError: vi.fn(),
@@ -32,7 +36,14 @@ const {
 }))
 
 vi.mock('@/api', () => ({
-  redeemAPI: { getHistory, getGenerated, generateBalanceTransferCode, redeem: vi.fn() },
+  redeemAPI: {
+    getHistory,
+    getGenerated,
+    generateBalanceTransferCode,
+    generateBalanceTransferCodes,
+    deleteGenerated,
+    redeem: vi.fn()
+  },
   authAPI: { getPublicSettings }
 }))
 
@@ -91,6 +102,8 @@ describe('user RedeemView balance transfer code generator', () => {
     getHistory.mockReset()
     getGenerated.mockReset()
     generateBalanceTransferCode.mockReset()
+    generateBalanceTransferCodes.mockReset()
+    deleteGenerated.mockReset()
     getPublicSettings.mockReset()
     refreshUser.mockReset()
     showError.mockReset()
@@ -110,7 +123,7 @@ describe('user RedeemView balance transfer code generator', () => {
     expect(getGenerated).not.toHaveBeenCalled()
   })
 
-  it('generates a balance redeem code and refreshes the account state', async () => {
+  it('batch-generates balance redeem codes and refreshes the account state', async () => {
     authState.user = {
       id: 1,
       email: 'user@example.com',
@@ -132,36 +145,97 @@ describe('user RedeemView balance transfer code generator', () => {
         created_by: 1
       }
     ])
-    generateBalanceTransferCode.mockResolvedValue({
-      id: 88,
-      code: 'SEND-THIS-CODE',
-      type: 'balance',
-      value: 7.5,
-      status: 'unused',
-      used_by: null,
-      used_at: null,
-      created_at: '2026-08-20T12:00:00Z',
-      source: 'user_balance_transfer',
-      created_by: 1
-    })
+    generateBalanceTransferCodes.mockResolvedValue([
+      {
+        id: 88,
+        code: 'SEND-THIS-CODE',
+        type: 'balance',
+        value: 7.5,
+        status: 'unused',
+        used_by: null,
+        used_at: null,
+        created_at: '2026-08-20T12:00:00Z',
+        source: 'user_balance_transfer',
+        created_by: 1,
+        single_use_per_user: true
+      },
+      {
+        id: 89,
+        code: 'SEND-SECOND-CODE',
+        type: 'balance',
+        value: 7.5,
+        status: 'unused',
+        used_by: null,
+        used_at: null,
+        created_at: '2026-08-20T12:00:00Z',
+        source: 'user_balance_transfer',
+        created_by: 1,
+        single_use_per_user: true
+      }
+    ])
 
     const wrapper = mountRedeemView()
     await flushPromises()
 
     await wrapper.get('[data-test="balance-transfer-amount"]').setValue('7.5')
+    await wrapper.get('[data-test="balance-transfer-count"]').setValue('2')
     await wrapper.get('[data-test="balance-transfer-expiry"]').setValue('14')
     await wrapper.get('[data-test="balance-transfer-notes"]').setValue('for teammate')
+    await wrapper.get('[data-test="balance-transfer-single-use"]').setValue(true)
     await wrapper.get('[data-test="balance-transfer-form"]').trigger('submit')
     await flushPromises()
 
-    expect(generateBalanceTransferCode).toHaveBeenCalledWith({
+    expect(generateBalanceTransferCodes).toHaveBeenCalledWith({
       amount: 7.5,
+      count: 2,
       expires_in_days: 14,
-      notes: 'for teammate'
+      notes: 'for teammate',
+      single_use_per_user: true
     })
     expect(refreshUser).toHaveBeenCalled()
     expect(getGenerated).toHaveBeenCalledTimes(2)
     expect(wrapper.text()).toContain('SEND-THIS-CODE')
+    expect(wrapper.text()).toContain('redeem.balanceTransfer.singleUseBadge')
     expect(showSuccess).toHaveBeenCalledWith('redeem.balanceTransfer.generated')
+  })
+
+  it('deletes an unused generated code and refreshes balance state', async () => {
+    authState.user = {
+      id: 1,
+      email: 'user@example.com',
+      balance: 20,
+      concurrency: 5,
+      balance_redeem_code_enabled: true
+    }
+    getGenerated.mockResolvedValueOnce([
+      {
+        id: 88,
+        code: 'DELETE-THIS-CODE',
+        type: 'balance',
+        value: 7.5,
+        status: 'unused',
+        used_by: null,
+        used_at: null,
+        created_at: '2026-08-20T12:00:00Z',
+        source: 'user_balance_transfer',
+        created_by: 1
+      }
+    ]).mockResolvedValueOnce([])
+    deleteGenerated.mockResolvedValue({ message: 'deleted' })
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true)
+
+    const wrapper = mountRedeemView()
+    await flushPromises()
+
+    await wrapper.get('[data-test="delete-generated-code-88"]').trigger('click')
+    await flushPromises()
+
+    expect(confirmSpy).toHaveBeenCalledWith('redeem.balanceTransfer.deleteConfirm')
+    expect(deleteGenerated).toHaveBeenCalledWith(88)
+    expect(refreshUser).toHaveBeenCalled()
+    expect(getGenerated).toHaveBeenCalledTimes(2)
+    expect(showSuccess).toHaveBeenCalledWith('redeem.balanceTransfer.deleted')
+
+    confirmSpy.mockRestore()
   })
 })

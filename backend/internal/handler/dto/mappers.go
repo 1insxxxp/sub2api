@@ -603,20 +603,21 @@ func RedeemCodeFromServiceAdmin(rc *service.RedeemCode) *AdminRedeemCode {
 
 func redeemCodeFromServiceBase(rc *service.RedeemCode, includeRelatedUsers bool) RedeemCode {
 	out := RedeemCode{
-		ID:           rc.ID,
-		Code:         rc.Code,
-		Type:         rc.Type,
-		Value:        rc.Value,
-		Status:       rc.Status,
-		UsedBy:       rc.UsedBy,
-		UsedAt:       rc.UsedAt,
-		CreatedBy:    rc.CreatedBy,
-		Source:       rc.Source,
-		CreatedAt:    rc.CreatedAt,
-		ExpiresAt:    rc.ExpiresAt,
-		GroupID:      rc.GroupID,
-		ValidityDays: rc.ValidityDays,
-		Group:        GroupFromServiceShallow(rc.Group),
+		ID:               rc.ID,
+		Code:             rc.Code,
+		Type:             rc.Type,
+		Value:            rc.Value,
+		Status:           rc.Status,
+		UsedBy:           rc.UsedBy,
+		UsedAt:           rc.UsedAt,
+		CreatedBy:        rc.CreatedBy,
+		Source:           rc.Source,
+		CreatedAt:        rc.CreatedAt,
+		ExpiresAt:        rc.ExpiresAt,
+		SingleUsePerUser: rc.BatchID != nil && strings.TrimSpace(*rc.BatchID) != "",
+		GroupID:          rc.GroupID,
+		ValidityDays:     rc.ValidityDays,
+		Group:            GroupFromServiceShallow(rc.Group),
 	}
 	if includeRelatedUsers {
 		out.User = UserFromServiceShallow(rc.User)

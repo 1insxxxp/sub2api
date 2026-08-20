@@ -32,9 +32,13 @@ func (r *balanceTransferUserRepo) AdjustBalance(_ context.Context, id int64, del
 
 type balanceTransferRedeemRepo struct {
 	*redeemRejectRepo
-	nextID    int64
-	created   []*RedeemCode
-	generated []RedeemCode
+	codes               map[int64]*RedeemCode
+	nextID              int64
+	created             []*RedeemCode
+	deleted             []int64
+	generated           []RedeemCode
+	atomicDeleteErr     error
+	requireAtomicDelete bool
 }
 
 func (r *balanceTransferRedeemRepo) Create(_ context.Context, code *RedeemCode) error {
@@ -48,7 +52,53 @@ func (r *balanceTransferRedeemRepo) Create(_ context.Context, code *RedeemCode) 
 	}
 	clone := *code
 	r.created = append(r.created, &clone)
+	if r.codes == nil {
+		r.codes = make(map[int64]*RedeemCode)
+	}
+	stored := clone
+	r.codes[clone.ID] = &stored
 	return nil
+}
+
+func (r *balanceTransferRedeemRepo) GetByID(_ context.Context, id int64) (*RedeemCode, error) {
+	if r.codes != nil {
+		if code, ok := r.codes[id]; ok {
+			clone := *code
+			return &clone, nil
+		}
+	}
+	return nil, ErrRedeemCodeNotFound
+}
+
+func (r *balanceTransferRedeemRepo) Delete(_ context.Context, id int64) error {
+	if r.requireAtomicDelete {
+		panic("Delete called instead of atomic balance transfer delete")
+	}
+	r.deleted = append(r.deleted, id)
+	delete(r.codes, id)
+	return nil
+}
+
+func (r *balanceTransferRedeemRepo) DeleteUnusedBalanceTransferByCreator(_ context.Context, userID, codeID int64) (*RedeemCode, error) {
+	if r.atomicDeleteErr != nil {
+		return nil, r.atomicDeleteErr
+	}
+	code, err := r.GetByID(context.Background(), codeID)
+	if err != nil {
+		return nil, ErrBalanceTransferRedeemCodeNotFound
+	}
+	if code.Source != RedeemCodeSourceUserBalanceTransfer ||
+		code.Type != RedeemTypeBalance ||
+		code.CreatedBy == nil ||
+		*code.CreatedBy != userID {
+		return nil, ErrBalanceTransferRedeemCodeNotFound
+	}
+	if code.Status == StatusUsed || code.UsedBy != nil {
+		return nil, ErrBalanceTransferRedeemCodeUsed
+	}
+	r.deleted = append(r.deleted, codeID)
+	delete(r.codes, codeID)
+	return code, nil
 }
 
 func (r *balanceTransferRedeemRepo) ListByCreator(_ context.Context, userID int64, limit int) ([]RedeemCode, error) {
@@ -138,6 +188,186 @@ func TestRedeemServiceBalanceTransferCreatesCodeAndDeductsBalance(t *testing.T) 
 	require.Equal(t, []float64{-12.5}, userRepo.adjustCalls)
 	require.Equal(t, 37.5, userRepo.balance)
 	require.Len(t, redeemRepo.created, 1)
+}
+
+func TestRedeemServiceBalanceTransferBatchCreatesCodesAndDeductsTotal(t *testing.T) {
+	ctx := context.Background()
+	userID := int64(7)
+	userRepo := &balanceTransferUserRepo{
+		userRepoStub: &userRepoStub{user: &User{ID: userID, Status: StatusActive, Balance: 50, BalanceRedeemCodeEnabled: true}},
+		balance:      50,
+	}
+	redeemRepo := &balanceTransferRedeemRepo{redeemRejectRepo: &redeemRejectRepo{}}
+	svc := NewRedeemService(redeemRepo, userRepo, nil, nil, nil, nil, nil, nil)
+
+	got, err := svc.GenerateBalanceTransferCodes(ctx, userID, GenerateBalanceTransferCodeInput{
+		Amount:           5,
+		Count:            3,
+		ExpiresInDays:    14,
+		Notes:            "team drop",
+		SingleUsePerUser: true,
+	})
+
+	require.NoError(t, err)
+	require.Len(t, got, 3)
+	require.Equal(t, []float64{-15}, userRepo.adjustCalls)
+	require.Equal(t, 35.0, userRepo.balance)
+	require.Len(t, redeemRepo.created, 3)
+	require.NotNil(t, got[0].BatchID)
+	require.NotEmpty(t, *got[0].BatchID)
+	for _, code := range got {
+		require.Equal(t, RedeemTypeBalance, code.Type)
+		require.Equal(t, 5.0, code.Value)
+		require.Equal(t, StatusUnused, code.Status)
+		require.NotNil(t, code.CreatedBy)
+		require.Equal(t, userID, *code.CreatedBy)
+		require.Equal(t, RedeemCodeSourceUserBalanceTransfer, code.Source)
+		require.Equal(t, "team drop", code.Notes)
+		require.NotNil(t, code.BatchID)
+		require.Equal(t, *got[0].BatchID, *code.BatchID)
+	}
+}
+
+func TestRedeemServiceBalanceTransferBatchRejectsInvalidCount(t *testing.T) {
+	ctx := context.Background()
+	userID := int64(7)
+	userRepo := &balanceTransferUserRepo{
+		userRepoStub: &userRepoStub{user: &User{ID: userID, Status: StatusActive, Balance: 500, BalanceRedeemCodeEnabled: true}},
+		balance:      500,
+	}
+	redeemRepo := &balanceTransferRedeemRepo{redeemRejectRepo: &redeemRejectRepo{}}
+	svc := NewRedeemService(redeemRepo, userRepo, nil, nil, nil, nil, nil, nil)
+
+	got, err := svc.GenerateBalanceTransferCodes(ctx, userID, GenerateBalanceTransferCodeInput{Amount: 1, Count: 0})
+	require.Nil(t, got)
+	require.Error(t, err)
+	require.Equal(t, "BALANCE_TRANSFER_COUNT_INVALID", infraerrors.Reason(err))
+
+	got, err = svc.GenerateBalanceTransferCodes(ctx, userID, GenerateBalanceTransferCodeInput{Amount: 1, Count: 101})
+	require.Nil(t, got)
+	require.Error(t, err)
+	require.Equal(t, "BALANCE_TRANSFER_COUNT_INVALID", infraerrors.Reason(err))
+	require.Empty(t, userRepo.adjustCalls)
+	require.Empty(t, redeemRepo.created)
+}
+
+func TestRedeemServiceBalanceTransferDeleteUnusedCodeRefundsCreator(t *testing.T) {
+	ctx := context.Background()
+	userID := int64(7)
+	createdBy := userID
+	userRepo := &balanceTransferUserRepo{
+		userRepoStub: &userRepoStub{user: &User{ID: userID, Status: StatusActive, Balance: 35, BalanceRedeemCodeEnabled: true}},
+		balance:      35,
+	}
+	redeemRepo := &balanceTransferRedeemRepo{
+		redeemRejectRepo: &redeemRejectRepo{},
+		codes: map[int64]*RedeemCode{
+			88: {
+				ID:        88,
+				Code:      "DELETE-ME",
+				Type:      RedeemTypeBalance,
+				Value:     12.5,
+				Status:    StatusUnused,
+				CreatedBy: &createdBy,
+				Source:    RedeemCodeSourceUserBalanceTransfer,
+			},
+		},
+	}
+	svc := NewRedeemService(redeemRepo, userRepo, nil, nil, nil, nil, nil, nil)
+
+	deleted, err := svc.DeleteGeneratedBalanceTransferCode(ctx, userID, 88)
+
+	require.NoError(t, err)
+	require.NotNil(t, deleted)
+	require.Equal(t, int64(88), deleted.ID)
+	require.Equal(t, []float64{12.5}, userRepo.adjustCalls)
+	require.Equal(t, 47.5, userRepo.balance)
+	require.Equal(t, []int64{88}, redeemRepo.deleted)
+	require.Empty(t, redeemRepo.codes)
+}
+
+func TestRedeemServiceBalanceTransferDeleteDoesNotRefundWhenAtomicDeleteLosesRace(t *testing.T) {
+	ctx := context.Background()
+	userID := int64(7)
+	createdBy := userID
+	userRepo := &balanceTransferUserRepo{
+		userRepoStub: &userRepoStub{user: &User{ID: userID, Status: StatusActive, Balance: 35, BalanceRedeemCodeEnabled: true}},
+		balance:      35,
+	}
+	redeemRepo := &balanceTransferRedeemRepo{
+		redeemRejectRepo:    &redeemRejectRepo{},
+		atomicDeleteErr:     ErrBalanceTransferRedeemCodeUsed,
+		requireAtomicDelete: true,
+		codes: map[int64]*RedeemCode{
+			88: {
+				ID:        88,
+				Code:      "DELETE-ME",
+				Type:      RedeemTypeBalance,
+				Value:     12.5,
+				Status:    StatusUnused,
+				CreatedBy: &createdBy,
+				Source:    RedeemCodeSourceUserBalanceTransfer,
+			},
+		},
+	}
+	svc := NewRedeemService(redeemRepo, userRepo, nil, nil, nil, nil, nil, nil)
+
+	deleted, err := svc.DeleteGeneratedBalanceTransferCode(ctx, userID, 88)
+
+	require.Nil(t, deleted)
+	require.ErrorIs(t, err, ErrBalanceTransferRedeemCodeUsed)
+	require.Empty(t, userRepo.adjustCalls)
+	require.Equal(t, 35.0, userRepo.balance)
+	require.Empty(t, redeemRepo.deleted)
+}
+
+func TestRedeemServiceBalanceTransferDeleteRejectsUsedOrNonOwnerCode(t *testing.T) {
+	ctx := context.Background()
+	userID := int64(7)
+	otherID := int64(8)
+	usedBy := int64(9)
+	userRepo := &balanceTransferUserRepo{
+		userRepoStub: &userRepoStub{user: &User{ID: userID, Status: StatusActive, Balance: 35, BalanceRedeemCodeEnabled: true}},
+		balance:      35,
+	}
+	redeemRepo := &balanceTransferRedeemRepo{
+		redeemRejectRepo: &redeemRejectRepo{},
+		codes: map[int64]*RedeemCode{
+			88: {
+				ID:        88,
+				Code:      "USED",
+				Type:      RedeemTypeBalance,
+				Value:     12.5,
+				Status:    StatusUsed,
+				UsedBy:    &usedBy,
+				CreatedBy: &userID,
+				Source:    RedeemCodeSourceUserBalanceTransfer,
+			},
+			89: {
+				ID:        89,
+				Code:      "NOT-MINE",
+				Type:      RedeemTypeBalance,
+				Value:     12.5,
+				Status:    StatusUnused,
+				CreatedBy: &otherID,
+				Source:    RedeemCodeSourceUserBalanceTransfer,
+			},
+		},
+	}
+	svc := NewRedeemService(redeemRepo, userRepo, nil, nil, nil, nil, nil, nil)
+
+	deleted, err := svc.DeleteGeneratedBalanceTransferCode(ctx, userID, 88)
+	require.Nil(t, deleted)
+	require.Error(t, err)
+	require.Equal(t, "BALANCE_TRANSFER_REDEEM_CODE_USED", infraerrors.Reason(err))
+
+	deleted, err = svc.DeleteGeneratedBalanceTransferCode(ctx, userID, 89)
+	require.Nil(t, deleted)
+	require.Error(t, err)
+	require.Equal(t, "BALANCE_TRANSFER_REDEEM_CODE_NOT_FOUND", infraerrors.Reason(err))
+	require.Empty(t, userRepo.adjustCalls)
+	require.Empty(t, redeemRepo.deleted)
+	require.Equal(t, 35.0, userRepo.balance)
 }
 
 func TestRedeemServiceBalanceTransferListsOnlyCreatorCodes(t *testing.T) {

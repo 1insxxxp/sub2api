@@ -406,17 +406,18 @@ type ProxyAccountSummary struct {
 }
 
 type RedeemCode struct {
-	ID        int64      `json:"id"`
-	Code      string     `json:"code"`
-	Type      string     `json:"type"`
-	Value     float64    `json:"value"`
-	Status    string     `json:"status"`
-	UsedBy    *int64     `json:"used_by"`
-	UsedAt    *time.Time `json:"used_at"`
-	CreatedBy *int64     `json:"created_by,omitempty"`
-	Source    string     `json:"source,omitempty"`
-	CreatedAt time.Time  `json:"created_at"`
-	ExpiresAt *time.Time `json:"expires_at,omitempty"`
+	ID               int64      `json:"id"`
+	Code             string     `json:"code"`
+	Type             string     `json:"type"`
+	Value            float64    `json:"value"`
+	Status           string     `json:"status"`
+	UsedBy           *int64     `json:"used_by"`
+	UsedAt           *time.Time `json:"used_at"`
+	CreatedBy        *int64     `json:"created_by,omitempty"`
+	Source           string     `json:"source,omitempty"`
+	CreatedAt        time.Time  `json:"created_at"`
+	ExpiresAt        *time.Time `json:"expires_at,omitempty"`
+	SingleUsePerUser bool       `json:"single_use_per_user,omitempty"`
 
 	GroupID      *int64 `json:"group_id"`
 	ValidityDays int    `json:"validity_days"`
