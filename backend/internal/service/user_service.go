@@ -96,16 +96,17 @@ type UserListFilters struct {
 // 注意这里没有 balance / total_recharged：余额只能经由 AdjustBalance、
 // SetBalance、UpdateBalance、DeductBalance 等原子接口修改，Update 永远不碰它们。
 type UserUpdateFields struct {
-	Email        bool
-	Username     bool
-	Notes        bool
-	PasswordHash bool
-	Role         bool
-	Status       bool
-	Concurrency  bool
-	RPMLimit     bool
-	SignupSource bool
-	LastLoginAt  bool
+	Email                    bool
+	Username                 bool
+	Notes                    bool
+	PasswordHash             bool
+	Role                     bool
+	Status                   bool
+	Concurrency              bool
+	RPMLimit                 bool
+	BalanceRedeemCodeEnabled bool
+	SignupSource             bool
+	LastLoginAt              bool
 	// LoginMetadata covers last_login_ip and last_login_user_agent.
 	LoginMetadata bool
 	LastActiveAt  bool

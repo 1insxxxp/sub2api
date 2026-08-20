@@ -945,6 +945,7 @@ func userEntityToService(u *dbent.User) *service.User {
 		FrozenBalance:              u.FrozenBalance,
 		Concurrency:                u.Concurrency,
 		Status:                     u.Status,
+		BalanceRedeemCodeEnabled:   u.BalanceRedeemCodeEnabled,
 		SignupSource:               u.SignupSource,
 		RegistrationIP:             u.RegistrationIP,
 		RegistrationUserAgent:      u.RegistrationUserAgent,

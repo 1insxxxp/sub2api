@@ -22,8 +22,10 @@ type User struct {
 	FrozenBalance  float64
 	Concurrency    int
 	Status         string
-	AllowedGroups  []int64
-	TokenVersion   int64 // Incremented on password change to invalidate existing tokens
+	// BalanceRedeemCodeEnabled allows the user to convert their own balance into redeem codes.
+	BalanceRedeemCodeEnabled bool
+	AllowedGroups            []int64
+	TokenVersion             int64 // Incremented on password change to invalidate existing tokens
 	// TokenVersionResolved indicates TokenVersion already contains the fingerprint-derived
 	// value expected in JWT claims and refresh-token state.
 	TokenVersionResolved  bool
