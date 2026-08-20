@@ -489,6 +489,45 @@ func (s *RedeemCodeRepoSuite) TestListByUser_WithGroupPreload() {
 	s.Require().Equal(group.ID, codes[0].Group.ID)
 }
 
+func (s *RedeemCodeRepoSuite) TestListByCreatorReturnsOnlyBalanceTransferCodes() {
+	creator := s.createUser(uniqueTestValue(s.T(), "creator-list") + "@example.com")
+	other := s.createUser(uniqueTestValue(s.T(), "creator-other") + "@example.com")
+	createdBy := creator.ID
+	otherCreatedBy := other.ID
+
+	s.Require().NoError(s.repo.Create(s.ctx, &service.RedeemCode{
+		Code:      "CREATED-OWN",
+		Type:      service.RedeemTypeBalance,
+		Value:     5,
+		Status:    service.StatusUnused,
+		CreatedBy: &createdBy,
+		Source:    service.RedeemCodeSourceUserBalanceTransfer,
+	}))
+	s.Require().NoError(s.repo.Create(s.ctx, &service.RedeemCode{
+		Code:      "CREATED-ADMIN",
+		Type:      service.RedeemTypeBalance,
+		Value:     5,
+		Status:    service.StatusUnused,
+		CreatedBy: &createdBy,
+		Source:    service.RedeemCodeSourceAdmin,
+	}))
+	s.Require().NoError(s.repo.Create(s.ctx, &service.RedeemCode{
+		Code:      "CREATED-OTHER",
+		Type:      service.RedeemTypeBalance,
+		Value:     5,
+		Status:    service.StatusUnused,
+		CreatedBy: &otherCreatedBy,
+		Source:    service.RedeemCodeSourceUserBalanceTransfer,
+	}))
+
+	codes, err := s.repo.ListByCreator(s.ctx, creator.ID, 25)
+	s.Require().NoError(err)
+	s.Require().Len(codes, 1)
+	s.Require().Equal("CREATED-OWN", codes[0].Code)
+	s.Require().NotNil(codes[0].Creator)
+	s.Require().Equal(creator.ID, codes[0].Creator.ID)
+}
+
 func (s *RedeemCodeRepoSuite) TestListByUser_DefaultLimit() {
 	user := s.createUser(uniqueTestValue(s.T(), "deflimit") + "@example.com")
 	_, err := s.client.RedeemCode.Create().
