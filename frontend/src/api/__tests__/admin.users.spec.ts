@@ -1,18 +1,22 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { post } = vi.hoisted(() => ({
+const { post, put } = vi.hoisted(() => ({
   post: vi.fn(),
+  put: vi.fn()
 }))
 
 vi.mock('@/api/client', () => ({
   apiClient: {
     post,
+    put
   },
 }))
 
 import {
   batchUpdateLimits,
   bindUserAuthIdentity,
+  create,
+  update,
   type AdminBindAuthIdentityRequest,
   type AdminBoundAuthIdentity,
   type BatchUpdateUserLimitsRequest,
@@ -84,6 +88,7 @@ const batchResponseContractExact: Assert<
 describe('admin users api auth identity binding', () => {
   beforeEach(() => {
     post.mockReset()
+    put.mockReset()
   })
 
   it('posts the backend-compatible auth identity bind payload and returns the backend response shape', async () => {
@@ -146,5 +151,63 @@ describe('admin users api auth identity binding', () => {
     expect(result).toEqual({ affected: 2 })
     expect(batchRequestContractExact).toBe(true)
     expect(batchResponseContractExact).toBe(true)
+  })
+
+  it('passes balance redeem code permission while creating a user', async () => {
+    const response = {
+      id: 5,
+      email: 'transfer@example.com',
+      username: 'transfer',
+      role: 'user',
+      balance: 20,
+      concurrency: 1,
+      status: 'active',
+      allowed_groups: null,
+      balance_notify_enabled: false,
+      balance_notify_threshold: null,
+      balance_notify_extra_emails: [],
+      balance_redeem_code_enabled: true,
+      created_at: '2026-08-20T12:00:00Z',
+      updated_at: '2026-08-20T12:00:00Z',
+      notes: ''
+    }
+    const payload = {
+      email: 'transfer@example.com',
+      password: 'secret123',
+      balance_redeem_code_enabled: true
+    }
+    post.mockResolvedValue({ data: response })
+
+    const result = await create(payload)
+
+    expect(post).toHaveBeenCalledWith('/admin/users', payload)
+    expect(result).toEqual(response)
+  })
+
+  it('passes balance redeem code permission while updating a user', async () => {
+    const response = {
+      id: 5,
+      email: 'transfer@example.com',
+      username: 'transfer',
+      role: 'user',
+      balance: 20,
+      concurrency: 1,
+      status: 'active',
+      allowed_groups: null,
+      balance_notify_enabled: false,
+      balance_notify_threshold: null,
+      balance_notify_extra_emails: [],
+      balance_redeem_code_enabled: false,
+      created_at: '2026-08-20T12:00:00Z',
+      updated_at: '2026-08-20T12:10:00Z',
+      notes: ''
+    }
+    const payload = { balance_redeem_code_enabled: false }
+    put.mockResolvedValue({ data: response })
+
+    const result = await update(5, payload)
+
+    expect(put).toHaveBeenCalledWith('/admin/users/5', payload)
+    expect(result).toEqual(response)
   })
 })

@@ -56,6 +56,24 @@
         />
         <p class="input-hint">{{ t('admin.users.form.rpmLimitHint') }}</p>
       </div>
+      <div class="admin-form-section">
+        <label class="flex items-start gap-3 rounded-lg border border-gray-200 bg-white/70 p-3 dark:border-dark-700 dark:bg-dark-900/40">
+          <input
+            v-model="form.balance_redeem_code_enabled"
+            data-test="balance-redeem-code-toggle"
+            type="checkbox"
+            class="mt-0.5 h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+          />
+          <span class="min-w-0">
+            <span class="block text-sm font-medium text-gray-900 dark:text-white">
+              {{ t('admin.users.form.balanceRedeemCodeEnabled') }}
+            </span>
+            <span class="mt-1 block text-xs leading-5 text-gray-500 dark:text-dark-400">
+              {{ t('admin.users.form.balanceRedeemCodeEnabledHint') }}
+            </span>
+          </span>
+        </label>
+      </div>
       <UserAttributeForm v-model="form.customAttributes" :user-id="user?.id" />
     </form>
     <template #footer>
@@ -90,11 +108,11 @@ const emit = defineEmits(['close', 'success'])
 const { t } = useI18n(); const appStore = useAppStore(); const { copyToClipboard } = useClipboard()
 
 const submitting = ref(false); const passwordCopied = ref(false)
-const form = reactive({ email: '', password: '', username: '', notes: '', role: 'user', concurrency: 1, rpm_limit: 0, customAttributes: {} as UserAttributeValuesMap })
+const form = reactive({ email: '', password: '', username: '', notes: '', role: 'user', concurrency: 1, rpm_limit: 0, balance_redeem_code_enabled: false, customAttributes: {} as UserAttributeValuesMap })
 
 watch(() => props.user, (u) => {
   if (u) {
-    Object.assign(form, { email: u.email, password: '', username: u.username || '', notes: u.notes || '', role: u.role || 'user', concurrency: u.concurrency, rpm_limit: u.rpm_limit ?? 0, customAttributes: {} })
+    Object.assign(form, { email: u.email, password: '', username: u.username || '', notes: u.notes || '', role: u.role || 'user', concurrency: u.concurrency, rpm_limit: u.rpm_limit ?? 0, balance_redeem_code_enabled: u.balance_redeem_code_enabled === true, customAttributes: {} })
     passwordCopied.value = false
   }
 }, { immediate: true })
@@ -124,7 +142,7 @@ const handleUpdateUser = async () => {
   const userId = props.user.id
   submitting.value = true
   try {
-    const data: any = { email: form.email, username: form.username, notes: form.notes, role: form.role, concurrency: form.concurrency, rpm_limit: form.rpm_limit }
+    const data: any = { email: form.email, username: form.username, notes: form.notes, role: form.role, concurrency: form.concurrency, rpm_limit: form.rpm_limit, balance_redeem_code_enabled: form.balance_redeem_code_enabled }
     if (form.password.trim()) data.password = form.password.trim()
     // 提升为管理员属敏感操作：后端返回 STEP_UP_REQUIRED 时弹 TOTP 验证并重试
     await stepUp.run(() => adminAPI.users.update(userId, data))
