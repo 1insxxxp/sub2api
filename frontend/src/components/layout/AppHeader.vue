@@ -42,10 +42,14 @@
         <router-link
           v-if="user && modelPlazaEnabled"
           :to="{ path: '/model-plaza', query: { embedded: '1' } }"
-          class="hidden items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-sm font-medium text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-900 dark:text-dark-400 dark:hover:bg-dark-800 dark:hover:text-white sm:flex"
+          data-test="header-model-plaza-link"
+          :aria-label="t('nav.modelPlaza')"
+          :title="t('nav.modelPlaza')"
+          class="flex h-9 min-w-[3.5rem] items-center justify-center gap-1 rounded-xl border border-blue-200/70 bg-blue-50/90 px-2 text-xs font-semibold text-blue-700 shadow-sm shadow-blue-600/5 transition-colors hover:bg-blue-100 hover:text-blue-900 dark:border-blue-400/20 dark:bg-blue-500/10 dark:text-blue-200 dark:hover:bg-blue-500/15 dark:hover:text-white sm:min-w-0 sm:w-auto sm:gap-1.5 sm:px-2.5 sm:py-1.5 sm:text-sm sm:font-medium"
         >
           <Icon name="grid" size="sm" />
-          <span class="hidden sm:inline">{{ t('nav.modelPlaza') }}</span>
+          <span data-test="header-model-plaza-mobile-label" class="inline sm:hidden">{{ t('nav.modelPlazaShort') }}</span>
+          <span data-test="header-model-plaza-label" class="hidden sm:inline">{{ t('nav.modelPlaza') }}</span>
         </router-link>
 
         <!-- Language Switcher -->

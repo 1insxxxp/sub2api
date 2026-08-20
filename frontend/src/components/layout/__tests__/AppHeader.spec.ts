@@ -42,24 +42,30 @@ const authStore = reactive({
   refreshUser
 })
 
+const appStore = reactive({
+  contactInfo: '',
+  docUrl: '',
+  cachedPublicSettings: null as Record<string, unknown> | null,
+  toggleMobileSidebar: vi.fn(),
+  showSuccess,
+  showError
+})
+
 vi.mock('@/api/checkin', () => ({
   getCheckinStatus,
   submitCheckin
 }))
 
 vi.mock('@/stores', () => ({
-  useAppStore: () => ({
-    contactInfo: '',
-    docUrl: '',
-    cachedPublicSettings: null,
-    toggleMobileSidebar: vi.fn(),
-    showSuccess,
-    showError
-  }),
+  useAppStore: () => appStore,
   useAuthStore: () => authStore,
   useOnboardingStore: () => ({
     replay: vi.fn()
   })
+}))
+
+vi.mock('@/stores/app', () => ({
+  useAppStore: () => appStore
 }))
 
 vi.mock('@/stores/adminSettings', () => ({
@@ -103,6 +109,8 @@ vi.mock('vue-i18n', async () => {
     'checkin.noStreakBonusToday': 'No streak bonus today',
     'checkin.streakBonusTitle': 'Streak bonus rules',
     'checkin.nextStreakBonus': 'Streak day {day} earns an extra {amount}',
+    'nav.modelPlaza': '模型广场',
+    'nav.modelPlazaShort': '广场',
     'dashboard.title': 'Dashboard',
     'dashboard.welcomeMessage': 'Welcome'
   }
@@ -161,6 +169,7 @@ describe('AppHeader shared admin shell', () => {
       checkin_date: '2026-06-17',
       reward_amount: null
     })
+    appStore.cachedPublicSettings = null
   })
 
   it('renders the unified header toolbar chrome and balance pill hook', async () => {
@@ -199,6 +208,45 @@ describe('AppHeader shared admin shell', () => {
   })
 })
 
+describe('AppHeader model plaza entry', () => {
+  beforeEach(() => {
+    getCheckinStatus.mockReset()
+    getCheckinStatus.mockResolvedValue({
+      enabled: false,
+      checked_in: false,
+      blacklisted: false,
+      checkin_date: '2026-06-17',
+      reward_amount: null
+    })
+    appStore.cachedPublicSettings = { model_plaza_enabled: true }
+    authStore.user = {
+      id: 12,
+      username: 'alice',
+      email: 'alice@example.com',
+      role: 'user',
+      balance: 10,
+      avatar_url: ''
+    }
+  })
+
+  it('keeps the model plaza entry visible as a compact action on mobile', async () => {
+    const wrapper = await mountHeader()
+    const link = wrapper.get('[data-test="header-model-plaza-link"]')
+    const mobileLabel = link.get('[data-test="header-model-plaza-mobile-label"]')
+    const desktopLabel = link.get('[data-test="header-model-plaza-label"]')
+
+    expect(link.classes()).toContain('flex')
+    expect(link.classes()).not.toContain('hidden')
+    expect(link.classes()).not.toContain('sm:flex')
+    expect(link.classes()).not.toContain('w-9')
+    expect(link.attributes('aria-label')).toBe('模型广场')
+    expect(mobileLabel.text()).toBe('广场')
+    expect(mobileLabel.classes()).toContain('sm:hidden')
+    expect(mobileLabel.classes()).not.toContain('hidden')
+    expect(desktopLabel.classes()).toContain('hidden')
+  })
+})
+
 describe('AppHeader daily check-in entry', () => {
   beforeEach(() => {
     getCheckinStatus.mockReset()
@@ -206,6 +254,7 @@ describe('AppHeader daily check-in entry', () => {
     showSuccess.mockReset()
     showError.mockReset()
     refreshUser.mockReset()
+    appStore.cachedPublicSettings = null
     authStore.user = {
       id: 12,
       username: 'alice',
