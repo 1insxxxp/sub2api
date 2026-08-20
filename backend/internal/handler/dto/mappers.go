@@ -609,11 +609,14 @@ func redeemCodeFromServiceBase(rc *service.RedeemCode) RedeemCode {
 		Status:       rc.Status,
 		UsedBy:       rc.UsedBy,
 		UsedAt:       rc.UsedAt,
+		CreatedBy:    rc.CreatedBy,
+		Source:       rc.Source,
 		CreatedAt:    rc.CreatedAt,
 		ExpiresAt:    rc.ExpiresAt,
 		GroupID:      rc.GroupID,
 		ValidityDays: rc.ValidityDays,
 		User:         UserFromServiceShallow(rc.User),
+		Creator:      UserFromServiceShallow(rc.Creator),
 		Group:        GroupFromServiceShallow(rc.Group),
 	}
 	if rc.IsExpired() {

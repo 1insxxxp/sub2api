@@ -197,6 +197,7 @@ func TestAPIContracts(t *testing.T) {
 					"balance_notify_threshold_type": "",
 					"balance_notify_threshold": null,
 					"balance_notify_extra_emails": null,
+					"balance_redeem_code_enabled": false,
 					"total_recharged": 0,
 					"linuxdo_bound": false,
 					"oidc_bound": false,
@@ -622,6 +623,52 @@ func TestAPIContracts(t *testing.T) {
 						"used_by": 1,
 						"used_at": "2025-01-02T03:04:05Z",
 						"created_at": "2025-01-02T03:04:05Z",
+						"group_id": null,
+						"validity_days": 0
+					}
+				]
+			}`,
+		},
+		{
+			name: "GET /api/v1/redeem/generated",
+			setup: func(t *testing.T, deps *contractDeps) {
+				t.Helper()
+				expiresAt := deps.now.Add(30 * 24 * time.Hour)
+				deps.redeemRepo.SetByCreator(1, []service.RedeemCode{
+					{
+						ID:        901,
+						Code:      "TRANSFER-123",
+						Type:      service.RedeemTypeBalance,
+						Value:     2.75,
+						Status:    service.StatusUsed,
+						UsedBy:    ptr(int64(2)),
+						UsedAt:    ptr(deps.now),
+						CreatedBy: ptr(int64(1)),
+						Source:    service.RedeemCodeSourceUserBalanceTransfer,
+						CreatedAt: deps.now,
+						ExpiresAt: &expiresAt,
+					},
+				})
+			},
+			method:     http.MethodGet,
+			path:       "/api/v1/redeem/generated",
+			wantStatus: http.StatusOK,
+			wantJSON: `{
+				"code": 0,
+				"message": "success",
+				"data": [
+					{
+						"id": 901,
+						"code": "TRANSFER-123",
+						"type": "balance",
+						"value": 2.75,
+						"status": "used",
+						"used_by": 2,
+						"used_at": "2025-01-02T03:04:05Z",
+						"created_by": 1,
+						"source": "user_balance_transfer",
+						"created_at": "2025-01-02T03:04:05Z",
+						"expires_at": "2025-02-01T03:04:05Z",
 						"group_id": null,
 						"validity_days": 0
 					}
@@ -1704,6 +1751,7 @@ func newContractDeps(t *testing.T) *contractDeps {
 	v1Redeem := v1.Group("")
 	v1Redeem.Use(jwtAuth)
 	v1Redeem.GET("/redeem/history", redeemHandler.GetHistory)
+	v1Redeem.GET("/redeem/generated", redeemHandler.GetGenerated)
 
 	v1Admin := v1.Group("/admin")
 	v1Admin.Use(adminAuth)
@@ -2367,7 +2415,8 @@ func (stubProxyRepo) CountExpiringSoon(ctx context.Context, now time.Time) (int6
 }
 
 type stubRedeemCodeRepo struct {
-	byUser map[int64][]service.RedeemCode
+	byUser    map[int64][]service.RedeemCode
+	byCreator map[int64][]service.RedeemCode
 }
 
 func (r *stubRedeemCodeRepo) SetByUser(userID int64, codes []service.RedeemCode) {
@@ -2375,6 +2424,13 @@ func (r *stubRedeemCodeRepo) SetByUser(userID int64, codes []service.RedeemCode)
 		r.byUser = make(map[int64][]service.RedeemCode)
 	}
 	r.byUser[userID] = append([]service.RedeemCode(nil), codes...)
+}
+
+func (r *stubRedeemCodeRepo) SetByCreator(userID int64, codes []service.RedeemCode) {
+	if r.byCreator == nil {
+		r.byCreator = make(map[int64][]service.RedeemCode)
+	}
+	r.byCreator[userID] = append([]service.RedeemCode(nil), codes...)
 }
 
 func (stubRedeemCodeRepo) Create(ctx context.Context, code *service.RedeemCode) error {
@@ -2430,6 +2486,17 @@ func (r *stubRedeemCodeRepo) ListByUser(ctx context.Context, userID int64, limit
 
 func (stubRedeemCodeRepo) ListByUserPaginated(ctx context.Context, userID int64, params pagination.PaginationParams, codeType string) ([]service.RedeemCode, *pagination.PaginationResult, error) {
 	return nil, nil, errors.New("not implemented")
+}
+
+func (r *stubRedeemCodeRepo) ListByCreator(ctx context.Context, userID int64, limit int) ([]service.RedeemCode, error) {
+	if r.byCreator == nil {
+		return nil, nil
+	}
+	codes := r.byCreator[userID]
+	if limit > 0 && len(codes) > limit {
+		codes = codes[:limit]
+	}
+	return append([]service.RedeemCode(nil), codes...), nil
 }
 
 func (stubRedeemCodeRepo) SumPositiveBalanceByUser(ctx context.Context, userID int64) (float64, error) {

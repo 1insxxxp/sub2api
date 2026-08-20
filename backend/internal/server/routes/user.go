@@ -160,6 +160,8 @@ func RegisterUserRoutes(
 		redeem := authenticated.Group("/redeem")
 		{
 			redeem.POST("", h.Redeem.Redeem)
+			redeem.POST("/generate", h.Redeem.GenerateBalanceTransferCode)
+			redeem.GET("/generated", h.Redeem.GetGenerated)
 			redeem.GET("/history", h.Redeem.GetHistory)
 		}
 

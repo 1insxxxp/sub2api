@@ -16,13 +16,14 @@ import (
 )
 
 var (
-	ErrRedeemCodeNotFound   = infraerrors.NotFound("REDEEM_CODE_NOT_FOUND", "redeem code not found")
-	ErrRedeemCodeUsed       = infraerrors.Conflict("REDEEM_CODE_USED", "redeem code already used")
-	ErrRedeemCodeExpired    = infraerrors.Conflict("REDEEM_CODE_EXPIRED", "redeem code expired")
-	ErrInsufficientBalance  = infraerrors.BadRequest("INSUFFICIENT_BALANCE", "insufficient balance")
-	ErrRedeemRateLimited    = infraerrors.TooManyRequests("REDEEM_RATE_LIMITED", "too many failed attempts, please try again later")
-	ErrRedeemCodeLocked     = infraerrors.Conflict("REDEEM_CODE_LOCKED", "redeem code is being processed, please try again")
-	ErrRedeemBatchUserLimit = infraerrors.Conflict("REDEEM_BATCH_USER_LIMIT", "activity redeem codes are limited to one per user")
+	ErrRedeemCodeNotFound              = infraerrors.NotFound("REDEEM_CODE_NOT_FOUND", "redeem code not found")
+	ErrRedeemCodeUsed                  = infraerrors.Conflict("REDEEM_CODE_USED", "redeem code already used")
+	ErrRedeemCodeExpired               = infraerrors.Conflict("REDEEM_CODE_EXPIRED", "redeem code expired")
+	ErrInsufficientBalance             = infraerrors.BadRequest("INSUFFICIENT_BALANCE", "insufficient balance")
+	ErrRedeemRateLimited               = infraerrors.TooManyRequests("REDEEM_RATE_LIMITED", "too many failed attempts, please try again later")
+	ErrRedeemCodeLocked                = infraerrors.Conflict("REDEEM_CODE_LOCKED", "redeem code is being processed, please try again")
+	ErrRedeemBatchUserLimit            = infraerrors.Conflict("REDEEM_BATCH_USER_LIMIT", "activity redeem codes are limited to one per user")
+	ErrBalanceTransferRedeemNotAllowed = infraerrors.Forbidden("BALANCE_TRANSFER_REDEEM_NOT_ALLOWED", "user is not allowed to generate balance redeem codes")
 )
 
 const (
@@ -69,11 +70,21 @@ type RedeemCodeRepository interface {
 	SumPositiveBalanceByUser(ctx context.Context, userID int64) (float64, error)
 }
 
+type RedeemCodeCreatorRepository interface {
+	ListByCreator(ctx context.Context, userID int64, limit int) ([]RedeemCode, error)
+}
+
 // GenerateCodesRequest 生成兑换码请求
 type GenerateCodesRequest struct {
 	Count int     `json:"count"`
 	Value float64 `json:"value"`
 	Type  string  `json:"type"`
+}
+
+type GenerateBalanceTransferCodeInput struct {
+	Amount        float64
+	ExpiresInDays int
+	Notes         string
 }
 
 // RedeemCodeResponse 兑换码响应
@@ -269,6 +280,115 @@ func (s *RedeemService) CreateCode(ctx context.Context, code *RedeemCode) error 
 		return fmt.Errorf("create redeem code: %w", err)
 	}
 	return nil
+}
+
+func (s *RedeemService) GenerateBalanceTransferCode(ctx context.Context, userID int64, input GenerateBalanceTransferCodeInput) (*RedeemCode, error) {
+	if input.Amount <= 0 {
+		return nil, infraerrors.BadRequest("BALANCE_TRANSFER_AMOUNT_INVALID", "amount must be greater than 0")
+	}
+	expiresInDays := input.ExpiresInDays
+	if expiresInDays == 0 {
+		expiresInDays = 30
+	}
+	if expiresInDays < 0 || expiresInDays > 3650 {
+		return nil, infraerrors.BadRequest("BALANCE_TRANSFER_EXPIRY_INVALID", "expires_in_days must be between 1 and 3650")
+	}
+	if s.userRepo == nil || s.redeemRepo == nil {
+		return nil, errors.New("redeem service repositories are not configured")
+	}
+
+	create := func(opCtx context.Context) (*RedeemCode, error) {
+		user, err := s.userRepo.GetByID(opCtx, userID)
+		if err != nil {
+			return nil, err
+		}
+		if !user.IsActive() {
+			return nil, ErrUserNotActive
+		}
+		if !user.BalanceRedeemCodeEnabled {
+			return nil, ErrBalanceTransferRedeemNotAllowed
+		}
+
+		if _, err := s.userRepo.AdjustBalance(opCtx, userID, -input.Amount); err != nil {
+			if errors.Is(err, ErrBalanceNegative) {
+				return nil, ErrInsufficientBalance
+			}
+			return nil, fmt.Errorf("deduct user balance: %w", err)
+		}
+
+		codeValue, err := GenerateRedeemCode()
+		if err != nil {
+			return nil, fmt.Errorf("generate redeem code: %w", err)
+		}
+		expiresAt := time.Now().UTC().AddDate(0, 0, expiresInDays)
+		createdBy := userID
+		code := &RedeemCode{
+			Code:         codeValue,
+			Type:         RedeemTypeBalance,
+			Value:        input.Amount,
+			Status:       StatusUnused,
+			CreatedBy:    &createdBy,
+			Notes:        strings.TrimSpace(input.Notes),
+			Source:       RedeemCodeSourceUserBalanceTransfer,
+			ExpiresAt:    &expiresAt,
+			ValidityDays: expiresInDays,
+		}
+		if err := s.redeemRepo.Create(opCtx, code); err != nil {
+			return nil, fmt.Errorf("create balance transfer redeem code: %w", err)
+		}
+		return code, nil
+	}
+
+	var (
+		code *RedeemCode
+		err  error
+	)
+	if s.entClient != nil {
+		tx, txErr := s.entClient.Tx(ctx)
+		if txErr != nil {
+			return nil, fmt.Errorf("begin transaction: %w", txErr)
+		}
+		txCtx := dbent.NewTxContext(ctx, tx)
+		defer func() { _ = tx.Rollback() }()
+
+		code, err = create(txCtx)
+		if err != nil {
+			return nil, err
+		}
+		if err := tx.Commit(); err != nil {
+			return nil, fmt.Errorf("commit transaction: %w", err)
+		}
+	} else {
+		code, err = create(ctx)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	s.invalidateBalanceTransferCreatorCaches(ctx, userID)
+	return code, nil
+}
+
+func (s *RedeemService) ListGeneratedBalanceTransferCodes(ctx context.Context, userID int64, limit int) ([]RedeemCode, error) {
+	repo, ok := s.redeemRepo.(RedeemCodeCreatorRepository)
+	if !ok {
+		return nil, errors.New("redeem code repository does not support creator listing")
+	}
+	return repo.ListByCreator(ctx, userID, limit)
+}
+
+func (s *RedeemService) invalidateBalanceTransferCreatorCaches(ctx context.Context, userID int64) {
+	if s.authCacheInvalidator != nil {
+		s.authCacheInvalidator.InvalidateAuthCacheByUserID(ctx, userID)
+	}
+	if s.billingCacheService == nil {
+		return
+	}
+	go func() {
+		cacheCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		_ = s.billingCacheService.InvalidateUserBalance(cacheCtx, userID)
+	}()
 }
 
 func (s *RedeemService) BatchUpdate(ctx context.Context, input *RedeemCodeBatchUpdateInput) (*RedeemCodeBatchUpdateResult, error) {
@@ -532,8 +652,9 @@ func (s *RedeemService) Redeem(ctx context.Context, userID int64, code string) (
 	// 事务提交成功后失效缓存
 	s.invalidateRedeemCaches(ctx, userID, redeemCode)
 
-	// 余额类正数兑换码触发邀请返利（best-effort，失败不影响兑换结果）
-	if redeemCode.Type == RedeemTypeBalance && redeemCode.Value > 0 {
+	// 余额类正数兑换码触发邀请返利（best-effort，失败不影响兑换结果）。
+	// 用户余额转赠码来自其他用户已扣除的余额，不能再次产生邀请返佣。
+	if redeemCode.Type == RedeemTypeBalance && redeemCode.Value > 0 && redeemCode.Source != RedeemCodeSourceUserBalanceTransfer {
 		tierAware := s.tryPrepareTierAwareAffiliateRebateForRedeem(ctx, userID)
 		s.tryAccrueAffiliateRebateForRedeem(ctx, userID, redeemCode.Value, tierAware)
 	}

@@ -23,7 +23,8 @@ func NewRedeemCodeRepository(client *dbent.Client) service.RedeemCodeRepository 
 }
 
 func (r *redeemCodeRepository) Create(ctx context.Context, code *service.RedeemCode) error {
-	created, err := r.client.RedeemCode.Create().
+	client := clientFromContext(ctx, r.client)
+	created, err := client.RedeemCode.Create().
 		SetCode(code.Code).
 		SetType(code.Type).
 		SetValue(code.Value).
@@ -48,10 +49,11 @@ func (r *redeemCodeRepository) CreateBatch(ctx context.Context, codes []service.
 		return nil
 	}
 
+	client := clientFromContext(ctx, r.client)
 	builders := make([]*dbent.RedeemCodeCreate, 0, len(codes))
 	for i := range codes {
 		c := &codes[i]
-		b := r.client.RedeemCode.Create().
+		b := client.RedeemCode.Create().
 			SetCode(c.Code).
 			SetType(c.Type).
 			SetValue(c.Value).
@@ -66,11 +68,11 @@ func (r *redeemCodeRepository) CreateBatch(ctx context.Context, codes []service.
 		builders = append(builders, b)
 	}
 
-	return r.client.RedeemCode.CreateBulk(builders...).Exec(ctx)
+	return client.RedeemCode.CreateBulk(builders...).Exec(ctx)
 }
 
 func (r *redeemCodeRepository) GetByID(ctx context.Context, id int64) (*service.RedeemCode, error) {
-	m, err := r.client.RedeemCode.Query().
+	m, err := clientFromContext(ctx, r.client).RedeemCode.Query().
 		Where(redeemcode.IDEQ(id)).
 		Only(ctx)
 	if err != nil {
@@ -83,7 +85,7 @@ func (r *redeemCodeRepository) GetByID(ctx context.Context, id int64) (*service.
 }
 
 func (r *redeemCodeRepository) GetByCode(ctx context.Context, code string) (*service.RedeemCode, error) {
-	m, err := r.client.RedeemCode.Query().
+	m, err := clientFromContext(ctx, r.client).RedeemCode.Query().
 		Where(redeemcode.CodeEQ(code)).
 		Only(ctx)
 	if err != nil {
@@ -96,7 +98,7 @@ func (r *redeemCodeRepository) GetByCode(ctx context.Context, code string) (*ser
 }
 
 func (r *redeemCodeRepository) Delete(ctx context.Context, id int64) error {
-	_, err := r.client.RedeemCode.Delete().Where(redeemcode.IDEQ(id)).Exec(ctx)
+	_, err := clientFromContext(ctx, r.client).RedeemCode.Delete().Where(redeemcode.IDEQ(id)).Exec(ctx)
 	return err
 }
 
@@ -105,7 +107,7 @@ func (r *redeemCodeRepository) List(ctx context.Context, params pagination.Pagin
 }
 
 func (r *redeemCodeRepository) ListWithFilters(ctx context.Context, params pagination.PaginationParams, codeType, status, search string) ([]service.RedeemCode, *pagination.PaginationResult, error) {
-	q := r.client.RedeemCode.Query()
+	q := clientFromContext(ctx, r.client).RedeemCode.Query()
 
 	if codeType != "" {
 		q = q.Where(redeemcode.TypeEQ(codeType))
@@ -198,7 +200,7 @@ func redeemCodeListOrder(params pagination.PaginationParams) []func(*entsql.Sele
 }
 
 func (r *redeemCodeRepository) Update(ctx context.Context, code *service.RedeemCode) error {
-	up := r.client.RedeemCode.UpdateOneID(code.ID).
+	up := clientFromContext(ctx, r.client).RedeemCode.UpdateOneID(code.ID).
 		SetCode(code.Code).
 		SetType(code.Type).
 		SetValue(code.Value).
@@ -351,7 +353,7 @@ func (r *redeemCodeRepository) ListByUser(ctx context.Context, userID int64, lim
 		limit = 10
 	}
 
-	codes, err := r.client.RedeemCode.Query().
+	codes, err := clientFromContext(ctx, r.client).RedeemCode.Query().
 		Where(redeemcode.UsedByEQ(userID)).
 		WithGroup().
 		Order(dbent.Desc(redeemcode.FieldUsedAt)).
@@ -367,7 +369,7 @@ func (r *redeemCodeRepository) ListByUser(ctx context.Context, userID int64, lim
 // ListByUserPaginated returns paginated balance/concurrency history for a user.
 // Supports optional type filter (e.g. "balance", "admin_balance", "concurrency", "admin_concurrency", "subscription").
 func (r *redeemCodeRepository) ListByUserPaginated(ctx context.Context, userID int64, params pagination.PaginationParams, codeType string) ([]service.RedeemCode, *pagination.PaginationResult, error) {
-	q := r.client.RedeemCode.Query().
+	q := clientFromContext(ctx, r.client).RedeemCode.Query().
 		Where(redeemcode.UsedByEQ(userID))
 
 	// Optional type filter
@@ -398,7 +400,7 @@ func (r *redeemCodeRepository) SumPositiveBalanceByUser(ctx context.Context, use
 	var result []struct {
 		Sum float64 `json:"sum"`
 	}
-	err := r.client.RedeemCode.Query().
+	err := clientFromContext(ctx, r.client).RedeemCode.Query().
 		Where(
 			redeemcode.UsedByEQ(userID),
 			redeemcode.ValueGT(0),
@@ -413,6 +415,27 @@ func (r *redeemCodeRepository) SumPositiveBalanceByUser(ctx context.Context, use
 		return 0, nil
 	}
 	return result[0].Sum, nil
+}
+
+func (r *redeemCodeRepository) ListByCreator(ctx context.Context, userID int64, limit int) ([]service.RedeemCode, error) {
+	if limit <= 0 {
+		limit = 25
+	}
+	codes, err := clientFromContext(ctx, r.client).RedeemCode.Query().
+		Where(
+			redeemcode.CreatedByEQ(userID),
+			redeemcode.SourceEQ(service.RedeemCodeSourceUserBalanceTransfer),
+		).
+		WithUser().
+		WithCreator().
+		WithGroup().
+		Order(dbent.Desc(redeemcode.FieldCreatedAt), dbent.Desc(redeemcode.FieldID)).
+		Limit(limit).
+		All(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return redeemCodeEntitiesToService(codes), nil
 }
 
 func redeemCodeEntityToService(m *dbent.RedeemCode) *service.RedeemCode {

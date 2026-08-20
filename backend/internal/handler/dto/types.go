@@ -412,6 +412,8 @@ type RedeemCode struct {
 	Status    string     `json:"status"`
 	UsedBy    *int64     `json:"used_by"`
 	UsedAt    *time.Time `json:"used_at"`
+	CreatedBy *int64     `json:"created_by,omitempty"`
+	Source    string     `json:"source,omitempty"`
 	CreatedAt time.Time  `json:"created_at"`
 	ExpiresAt *time.Time `json:"expires_at,omitempty"`
 
@@ -422,8 +424,9 @@ type RedeemCode struct {
 	// so users can see why they were charged or credited
 	Notes *string `json:"notes,omitempty"`
 
-	User  *User  `json:"user,omitempty"`
-	Group *Group `json:"group,omitempty"`
+	User    *User  `json:"user,omitempty"`
+	Creator *User  `json:"creator,omitempty"`
+	Group   *Group `json:"group,omitempty"`
 }
 
 // AdminRedeemCode 是管理员接口使用的 redeem code DTO（包含 notes 等字段）。
