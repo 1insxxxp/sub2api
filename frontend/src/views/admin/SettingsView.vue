@@ -6789,7 +6789,35 @@
                       :placeholder="
                         t('admin.settings.customMenu.urlPlaceholder')
                       "
+                      @input="normalizeMarkdownMenuOpenMode(item)"
                     />
+                  </div>
+
+                  <!-- Open mode (full width) -->
+                  <div class="sm:col-span-2">
+                    <label
+                      class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400"
+                    >
+                      {{ t("admin.settings.customMenu.openMode") }}
+                    </label>
+                    <select v-model="item.open_mode" class="input text-sm">
+                      <option value="embedded">
+                        {{ t("admin.settings.customMenu.openModeEmbedded") }}
+                      </option>
+                      <option
+                        value="new_tab"
+                        :disabled="isMarkdownMenuItem(item)"
+                      >
+                        {{ t("admin.settings.customMenu.openModeNewTab") }}
+                      </option>
+                    </select>
+                    <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                      {{
+                        isMarkdownMenuItem(item)
+                          ? t("admin.settings.customMenu.openModeMarkdownHint")
+                          : t("admin.settings.customMenu.openModeHint")
+                      }}
+                    </p>
                   </div>
 
                   <!-- SVG Icon (full width) -->
@@ -10055,6 +10083,7 @@ const form = reactive<SettingsForm>({
     label: string;
     icon_svg: string;
     url: string;
+    open_mode: "embedded" | "new_tab";
     visibility: "user" | "admin";
     sort_order: number;
   }>,
@@ -11067,9 +11096,43 @@ function addMenuItem() {
     label: "",
     icon_svg: "",
     url: "",
+    open_mode: "embedded",
     visibility: "user",
     sort_order: form.custom_menu_items.length,
   });
+}
+
+function isMarkdownMenuItem(item: { url: string }): boolean {
+  return item.url.trim().startsWith("md:");
+}
+
+function normalizeMarkdownMenuOpenMode(item: {
+  url: string;
+  open_mode?: "embedded" | "new_tab";
+}) {
+  if (isMarkdownMenuItem(item)) {
+    item.open_mode = "embedded";
+  }
+}
+
+function normalizeCustomMenuItems(
+  items: Array<{
+    id: string;
+    label: string;
+    icon_svg: string;
+    url: string;
+    open_mode?: "embedded" | "new_tab";
+    visibility: "user" | "admin";
+    sort_order: number;
+  }>,
+) {
+  return items.map((item) => ({
+    ...item,
+    open_mode:
+      !isMarkdownMenuItem(item) && item.open_mode === "new_tab"
+        ? ("new_tab" as const)
+        : ("embedded" as const),
+  }));
 }
 
 function removeMenuItem(index: number) {
@@ -11279,6 +11342,7 @@ async function loadSettings() {
         (form as Record<string, unknown>)[key] = value;
       }
     }
+    form.custom_menu_items = normalizeCustomMenuItems(form.custom_menu_items);
     syncCaptchaProviderSelection();
     if (!form.claude_oauth_system_prompt_blocks?.trim()) {
       form.claude_oauth_system_prompt_blocks =
@@ -11807,7 +11871,7 @@ async function saveSettings() {
       hide_ccs_import_button: form.hide_ccs_import_button,
       table_default_page_size: form.table_default_page_size,
       table_page_size_options: form.table_page_size_options,
-      custom_menu_items: form.custom_menu_items,
+      custom_menu_items: normalizeCustomMenuItems(form.custom_menu_items),
       custom_endpoints: form.custom_endpoints,
       frontend_url: form.frontend_url,
       smtp_host: form.smtp_host,

@@ -91,3 +91,12 @@ describe('AppSidebar admin entries', () => {
     )
   })
 })
+
+describe('AppSidebar custom menu external links', () => {
+  it('renders selected custom menus as safe new-tab links', () => {
+    expect(componentSource).toContain('item.externalUrl')
+    expect(componentSource).toContain('target="_blank"')
+    expect(componentSource).toContain('rel="noopener noreferrer"')
+    expect(componentSource).toContain('resolveCustomMenuNavigation')
+  })
+})
