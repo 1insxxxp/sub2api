@@ -35,6 +35,17 @@ type RedeemResponse struct {
 	NewConcurrency *int     `json:"new_concurrency,omitempty"`
 }
 
+type ConvertBalanceToRedeemCodesRequest struct {
+	Value float64 `json:"value" binding:"required,gt=0"`
+	Count int     `json:"count" binding:"required,min=1,max=100"`
+}
+
+type ConvertBalanceToRedeemCodesResponse struct {
+	Codes      []dto.RedeemCode `json:"codes"`
+	TotalValue float64          `json:"total_value"`
+	NewBalance float64          `json:"new_balance"`
+}
+
 // Redeem handles redeeming a code
 // POST /api/v1/redeem
 func (h *RedeemHandler) Redeem(c *gin.Context) {
@@ -82,4 +93,41 @@ func (h *RedeemHandler) GetHistory(c *gin.Context) {
 		out = append(out, *dto.RedeemCodeFromService(&codes[i]))
 	}
 	response.Success(c, out)
+}
+
+// ConvertBalanceToRedeemCodes converts the authenticated user's balance into
+// unused balance redeem codes. It is exposed only through manager-page routes.
+// POST /api/v1/manager/redeem-codes/convert-balance
+func (h *RedeemHandler) ConvertBalanceToRedeemCodes(c *gin.Context) {
+	subject, ok := middleware2.GetAuthSubjectFromContext(c)
+	if !ok {
+		response.Unauthorized(c, "User not authenticated")
+		return
+	}
+
+	var req ConvertBalanceToRedeemCodesRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.BadRequest(c, "Invalid request: "+err.Error())
+		return
+	}
+
+	result, err := h.redeemService.ConvertBalanceToRedeemCodes(c.Request.Context(), subject.UserID, service.ConvertBalanceToRedeemCodesInput{
+		Value: req.Value,
+		Count: req.Count,
+	})
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+
+	codes := make([]dto.RedeemCode, 0, len(result.Codes))
+	for i := range result.Codes {
+		codes = append(codes, *dto.RedeemCodeFromService(&result.Codes[i]))
+	}
+
+	response.Success(c, ConvertBalanceToRedeemCodesResponse{
+		Codes:      codes,
+		TotalValue: result.TotalValue,
+		NewBalance: result.NewBalance,
+	})
 }

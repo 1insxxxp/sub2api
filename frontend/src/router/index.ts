@@ -282,6 +282,19 @@ const routes: RouteRecordRaw[] = [
     }
   },
 
+  {
+    path: '/manager',
+    name: 'Manager',
+    component: () => import('@/views/manager/ManagerView.vue'),
+    meta: {
+      requiresAuth: true,
+      requiresManager: true,
+      title: 'Manager Page',
+      titleKey: 'manager.title',
+      descriptionKey: 'manager.description'
+    }
+  },
+
   // ==================== Admin Routes ====================
   {
     path: '/admin',
@@ -555,19 +568,20 @@ router.beforeEach((to, _from, next) => {
   // Check if route requires authentication
   const requiresAuth = to.meta.requiresAuth !== false // Default to true
   const requiresAdmin = to.meta.requiresAdmin === true
+  const requiresManager = to.meta.requiresManager === true
 
   // If route doesn't require auth, allow access
   if (!requiresAuth) {
     // If already authenticated and trying to access login/register, redirect to appropriate dashboard
     if (authStore.isAuthenticated && (to.path === '/login' || to.path === '/register')) {
-      // In backend mode, non-admin users should NOT be redirected away from login
+      // In backend mode, users without manager access should NOT be redirected away from login
       // (they are blocked from all protected routes, so redirecting would cause a loop)
-      if (appStore.backendModeEnabled && !authStore.isAdmin) {
+      if (appStore.backendModeEnabled && !authStore.canAccessManagerPage) {
         next()
         return
       }
-      // Admin users go to admin dashboard, regular users go to user dashboard
-      next(authStore.isAdmin ? '/admin/dashboard' : '/dashboard')
+      // Admin users go to admin dashboard, secondary admins go to manager page, regular users go to user dashboard
+      next(authStore.isAdmin ? '/admin/dashboard' : authStore.canAccessManagerPage ? '/manager' : '/dashboard')
       return
     }
     // Backend mode: block public pages for unauthenticated users (except login, key-usage, setup)
@@ -594,7 +608,12 @@ router.beforeEach((to, _from, next) => {
 
   // Check admin requirement
   if (requiresAdmin && !authStore.isAdmin) {
-    // User is authenticated but not admin, redirect to user dashboard
+    // User is authenticated but not full admin.
+    next(appStore.backendModeEnabled && authStore.canAccessManagerPage ? '/manager' : '/dashboard')
+    return
+  }
+
+  if (requiresManager && !authStore.canAccessManagerPage) {
     next('/dashboard')
     return
   }
@@ -604,7 +623,7 @@ router.beforeEach((to, _from, next) => {
   if (to.meta.requiresPayment) {
     const paymentEnabled = appStore.cachedPublicSettings?.payment_enabled
     if (!paymentEnabled) {
-      next(authStore.isAdmin ? '/admin/dashboard' : '/dashboard')
+      next(authStore.isAdmin ? '/admin/dashboard' : authStore.canAccessManagerPage ? '/manager' : '/dashboard')
       return
     }
   }
@@ -626,10 +645,18 @@ router.beforeEach((to, _from, next) => {
     }
   }
 
-  // Backend mode: admin gets full access, non-admin blocked
+  // Backend mode: full admins get full access; secondary admins get only the manager page.
   if (appStore.backendModeEnabled) {
     if (authStore.isAuthenticated && authStore.isAdmin) {
       next()
+      return
+    }
+    if (authStore.isAuthenticated && authStore.canAccessManagerPage) {
+      if (requiresManager || to.path.startsWith('/manager')) {
+        next()
+        return
+      }
+      next('/manager')
       return
     }
     const isAllowed = BACKEND_MODE_ALLOWED_PATHS.some((p) => to.path === p || to.path.startsWith(p))

@@ -14,8 +14,9 @@ const (
 
 // Role constants
 const (
-	RoleAdmin = domain.RoleAdmin
-	RoleUser  = domain.RoleUser
+	RoleAdmin    = domain.RoleAdmin
+	RoleSubAdmin = domain.RoleSubAdmin
+	RoleUser     = domain.RoleUser
 )
 
 // Platform constants

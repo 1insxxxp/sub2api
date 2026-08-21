@@ -6,13 +6,16 @@ import (
 	"context"
 	"testing"
 
+	"github.com/Wei-Shaw/sub2api/internal/pkg/pagination"
 	"github.com/stretchr/testify/require"
 )
 
 type balanceUserRepoStub struct {
 	*userRepoStub
-	updateErr error
-	updated   []*User
+	updateErr        error
+	activeAdminTotal int64
+	listFilters      []UserListFilters
+	updated          []*User
 }
 
 func (s *balanceUserRepoStub) Update(ctx context.Context, user *User) error {
@@ -28,6 +31,16 @@ func (s *balanceUserRepoStub) Update(ctx context.Context, user *User) error {
 		s.userRepoStub.user = &clone
 	}
 	return nil
+}
+
+func (s *balanceUserRepoStub) ListWithFilters(ctx context.Context, params pagination.PaginationParams, filters UserListFilters) ([]User, *pagination.PaginationResult, error) {
+	s.listFilters = append(s.listFilters, filters)
+	return nil, &pagination.PaginationResult{
+		Total:    s.activeAdminTotal,
+		Page:     params.Page,
+		PageSize: params.PageSize,
+		Pages:    1,
+	}, nil
 }
 
 type balanceRedeemRepoStub struct {
@@ -94,4 +107,48 @@ func TestAdminService_UpdateUserBalance_NoChangeNoInvalidate(t *testing.T) {
 	require.NoError(t, err)
 	require.Empty(t, invalidator.userIDs)
 	require.Empty(t, redeemRepo.created)
+}
+
+func TestAdminService_UpdateUserRole_ToSubAdminInvalidatesAuthCache(t *testing.T) {
+	baseRepo := &userRepoStub{user: &User{ID: 7, Role: RoleUser, Status: StatusActive, Concurrency: 1}}
+	repo := &balanceUserRepoStub{userRepoStub: baseRepo}
+	invalidator := &authCacheInvalidatorStub{}
+	svc := &adminServiceImpl{
+		userRepo:             repo,
+		authCacheInvalidator: invalidator,
+	}
+
+	user, err := svc.UpdateUser(context.Background(), 7, &UpdateUserInput{Role: RoleSubAdmin})
+
+	require.NoError(t, err)
+	require.Equal(t, RoleSubAdmin, user.Role)
+	require.Equal(t, []int64{7}, invalidator.userIDs)
+	require.Len(t, repo.updated, 1)
+}
+
+func TestAdminService_UpdateUserRole_RejectsDowngradingLastActiveAdmin(t *testing.T) {
+	baseRepo := &userRepoStub{user: &User{ID: 7, Role: RoleAdmin, Status: StatusActive, Concurrency: 1}}
+	repo := &balanceUserRepoStub{userRepoStub: baseRepo, activeAdminTotal: 1}
+	svc := &adminServiceImpl{userRepo: repo}
+
+	_, err := svc.UpdateUser(context.Background(), 7, &UpdateUserInput{Role: RoleSubAdmin})
+
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "cannot downgrade the last active admin user")
+	require.Empty(t, repo.updated)
+	require.Len(t, repo.listFilters, 1)
+	require.Equal(t, RoleAdmin, repo.listFilters[0].Role)
+	require.Equal(t, StatusActive, repo.listFilters[0].Status)
+}
+
+func TestAdminService_UpdateUserRole_AllowsDowngradingWhenAnotherActiveAdminExists(t *testing.T) {
+	baseRepo := &userRepoStub{user: &User{ID: 7, Role: RoleAdmin, Status: StatusActive, Concurrency: 1}}
+	repo := &balanceUserRepoStub{userRepoStub: baseRepo, activeAdminTotal: 2}
+	svc := &adminServiceImpl{userRepo: repo}
+
+	user, err := svc.UpdateUser(context.Background(), 7, &UpdateUserInput{Role: RoleSubAdmin})
+
+	require.NoError(t, err)
+	require.Equal(t, RoleSubAdmin, user.Role)
+	require.Len(t, repo.updated, 1)
 }

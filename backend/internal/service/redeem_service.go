@@ -10,6 +10,7 @@ import (
 	"time"
 
 	dbent "github.com/Wei-Shaw/sub2api/ent"
+	dbuser "github.com/Wei-Shaw/sub2api/ent/user"
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/pagination"
 )
@@ -69,6 +70,17 @@ type RedeemCodeResponse struct {
 	Value     float64   `json:"value"`
 	Status    string    `json:"status"`
 	CreatedAt time.Time `json:"created_at"`
+}
+
+type ConvertBalanceToRedeemCodesInput struct {
+	Value float64
+	Count int
+}
+
+type ConvertBalanceToRedeemCodesResult struct {
+	Codes      []RedeemCode
+	TotalValue float64
+	NewBalance float64
 }
 
 // RedeemService 兑换码服务
@@ -172,6 +184,98 @@ func (s *RedeemService) GenerateCodes(ctx context.Context, req GenerateCodesRequ
 	}
 
 	return codes, nil
+}
+
+// ConvertBalanceToRedeemCodes deducts the current user's balance and creates
+// unused balance redeem codes for the same total value.
+func (s *RedeemService) ConvertBalanceToRedeemCodes(ctx context.Context, userID int64, input ConvertBalanceToRedeemCodesInput) (*ConvertBalanceToRedeemCodesResult, error) {
+	if input.Count <= 0 {
+		return nil, errors.New("count must be greater than 0")
+	}
+	if input.Count > 100 {
+		return nil, errors.New("cannot generate more than 100 codes at once")
+	}
+	if input.Value <= 0 {
+		return nil, errors.New("value must be greater than 0")
+	}
+
+	total := input.Value * float64(input.Count)
+	codes := make([]RedeemCode, 0, input.Count)
+	for i := 0; i < input.Count; i++ {
+		code, err := s.GenerateRandomCode()
+		if err != nil {
+			return nil, fmt.Errorf("generate code: %w", err)
+		}
+		codes = append(codes, RedeemCode{
+			Code:   code,
+			Type:   RedeemTypeBalance,
+			Value:  input.Value,
+			Status: StatusUnused,
+			Notes:  fmt.Sprintf("converted from user balance by user %d", userID),
+		})
+	}
+
+	var newBalance float64
+	if s.entClient != nil {
+		tx, err := s.entClient.Tx(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("begin transaction: %w", err)
+		}
+		defer func() { _ = tx.Rollback() }()
+
+		txCtx := dbent.NewTxContext(ctx, tx)
+		updated, err := tx.Client().User.Update().
+			Where(dbuser.IDEQ(userID), dbuser.BalanceGTE(total)).
+			AddBalance(-total).
+			Save(txCtx)
+		if err != nil {
+			return nil, fmt.Errorf("deduct user balance: %w", err)
+		}
+		if updated == 0 {
+			if exists, err := tx.Client().User.Query().Where(dbuser.IDEQ(userID)).Exist(txCtx); err != nil {
+				return nil, fmt.Errorf("check user exists: %w", err)
+			} else if !exists {
+				return nil, ErrUserNotFound
+			}
+			return nil, ErrInsufficientBalance
+		}
+		if err := s.redeemRepo.CreateBatch(txCtx, codes); err != nil {
+			return nil, fmt.Errorf("create balance redeem codes: %w", err)
+		}
+		user, err := tx.Client().User.Get(txCtx, userID)
+		if err != nil {
+			return nil, fmt.Errorf("get updated user: %w", err)
+		}
+		newBalance = user.Balance
+		if err := tx.Commit(); err != nil {
+			return nil, fmt.Errorf("commit transaction: %w", err)
+		}
+	} else {
+		user, err := s.userRepo.GetByID(ctx, userID)
+		if err != nil {
+			return nil, fmt.Errorf("get user: %w", err)
+		}
+		originalBalance := user.Balance
+		if user.Balance < total {
+			return nil, ErrInsufficientBalance
+		}
+		if err := s.redeemRepo.CreateBatch(ctx, codes); err != nil {
+			return nil, fmt.Errorf("create balance redeem codes: %w", err)
+		}
+		if err := s.userRepo.DeductBalance(ctx, userID, total); err != nil {
+			return nil, fmt.Errorf("deduct user balance: %w", err)
+		}
+		newBalance = originalBalance - total
+	}
+
+	resultCode := &RedeemCode{Type: RedeemTypeBalance}
+	s.invalidateRedeemCaches(ctx, userID, resultCode)
+
+	return &ConvertBalanceToRedeemCodesResult{
+		Codes:      codes,
+		TotalValue: total,
+		NewBalance: newBalance,
+	}, nil
 }
 
 // CreateCode creates a redeem code with caller-provided code value.

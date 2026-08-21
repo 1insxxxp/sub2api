@@ -120,6 +120,7 @@ type UpdateUserInput struct {
 	Notes         *string
 	Balance       *float64 // 使用指针区分"未提供"和"设置为0"
 	Concurrency   *int     // 使用指针区分"未提供"和"设置为0"
+	Role          string
 	Status        string
 	AllowedGroups *[]int64 // 使用指针区分"未提供"和"设置为空数组"
 	// GroupRates 用户专属分组倍率配置
@@ -620,6 +621,19 @@ func (s *adminServiceImpl) UpdateUser(ctx context.Context, id int64, input *Upda
 		user.Status = input.Status
 	}
 
+	if input.Role != "" {
+		if oldRole == RoleAdmin && input.Role != RoleAdmin {
+			activeFullAdminCount, err := s.countActiveFullAdmins(ctx)
+			if err != nil {
+				return nil, fmt.Errorf("count active admins: %w", err)
+			}
+			if activeFullAdminCount <= 1 {
+				return nil, errors.New("cannot downgrade the last active admin user")
+			}
+		}
+		user.Role = input.Role
+	}
+
 	if input.Concurrency != nil {
 		user.Concurrency = *input.Concurrency
 	}
@@ -667,6 +681,25 @@ func (s *adminServiceImpl) UpdateUser(ctx context.Context, id int64, input *Upda
 	}
 
 	return user, nil
+}
+
+func (s *adminServiceImpl) countActiveFullAdmins(ctx context.Context) (int64, error) {
+	includeSubscriptions := false
+	_, result, err := s.userRepo.ListWithFilters(ctx, pagination.PaginationParams{
+		Page:     1,
+		PageSize: 1,
+	}, UserListFilters{
+		Role:                 RoleAdmin,
+		Status:               StatusActive,
+		IncludeSubscriptions: &includeSubscriptions,
+	})
+	if err != nil {
+		return 0, err
+	}
+	if result == nil {
+		return 0, nil
+	}
+	return result.Total, nil
 }
 
 func (s *adminServiceImpl) DeleteUser(ctx context.Context, id int64) error {

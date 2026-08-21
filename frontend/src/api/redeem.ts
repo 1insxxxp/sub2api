@@ -4,7 +4,7 @@
  */
 
 import { apiClient } from './client'
-import type { RedeemCodeRequest } from '@/types'
+import type { RedeemCode, RedeemCodeRequest } from '@/types'
 
 export interface RedeemHistoryItem {
   id: number
@@ -59,9 +59,23 @@ export async function getHistory(): Promise<RedeemHistoryItem[]> {
   return data
 }
 
+export async function convertBalanceToRedeemCodes(value: number, count: number): Promise<{
+  codes: RedeemCode[]
+  total_value: number
+  new_balance: number
+}> {
+  const { data } = await apiClient.post<{
+    codes: RedeemCode[]
+    total_value: number
+    new_balance: number
+  }>('/manager/redeem-codes/convert-balance', { value, count })
+  return data
+}
+
 export const redeemAPI = {
   redeem,
-  getHistory
+  getHistory,
+  convertBalanceToRedeemCodes
 }
 
 export default redeemAPI

@@ -50,6 +50,7 @@ vi.mock('@/api/auth', () => ({
 interface MockAuthState {
   isAuthenticated: boolean
   isAdmin: boolean
+  canAccessManagerPage?: boolean
   isSimpleMode: boolean
   backendModeEnabled: boolean
 }
@@ -64,6 +65,8 @@ function simulateGuard(
 ): string | null {
   const requiresAuth = toMeta.requiresAuth !== false
   const requiresAdmin = toMeta.requiresAdmin === true
+  const requiresManager = toMeta.requiresManager === true
+  const canAccessManagerPage = authState.canAccessManagerPage ?? authState.isAdmin
 
   // 不需要认证的路由
   if (!requiresAuth) {
@@ -71,10 +74,10 @@ function simulateGuard(
       authState.isAuthenticated &&
       (toPath === '/login' || toPath === '/register')
     ) {
-      if (authState.backendModeEnabled && !authState.isAdmin) {
+      if (authState.backendModeEnabled && !canAccessManagerPage) {
         return null
       }
-      return authState.isAdmin ? '/admin/dashboard' : '/dashboard'
+      return authState.isAdmin ? '/admin/dashboard' : canAccessManagerPage ? '/manager' : '/dashboard'
     }
     if (authState.backendModeEnabled && !authState.isAuthenticated) {
       const allowed = ['/login', '/key-usage', '/setup']
@@ -92,6 +95,10 @@ function simulateGuard(
 
   // 需要管理员但不是管理员
   if (requiresAdmin && !authState.isAdmin) {
+    return authState.backendModeEnabled && canAccessManagerPage ? '/manager' : '/dashboard'
+  }
+
+  if (requiresManager && !canAccessManagerPage) {
     return '/dashboard'
   }
 
@@ -109,10 +116,16 @@ function simulateGuard(
     }
   }
 
-  // Backend mode: admin gets full access, non-admin blocked
+  // Backend mode: full admins get full access; secondary admins get only the manager page.
   if (authState.backendModeEnabled) {
     if (authState.isAuthenticated && authState.isAdmin) {
       return null
+    }
+    if (authState.isAuthenticated && canAccessManagerPage) {
+      if (requiresManager || toPath.startsWith('/manager')) {
+        return null
+      }
+      return '/manager'
     }
     const allowed = ['/login', '/key-usage', '/setup']
     if (!allowed.some((path) => toPath === path || toPath.startsWith(path))) {
@@ -218,6 +231,31 @@ describe('路由守卫逻辑', () => {
     it('访问用户页面允许通过', () => {
       const redirect = simulateGuard('/dashboard', {}, authState)
       expect(redirect).toBeNull()
+    })
+  })
+
+  describe('已认证二级管理员', () => {
+    const authState: MockAuthState = {
+      isAuthenticated: true,
+      isAdmin: false,
+      canAccessManagerPage: true,
+      isSimpleMode: false,
+      backendModeEnabled: false,
+    }
+
+    it('访问 /manager 被允许', () => {
+      const redirect = simulateGuard('/manager', { requiresManager: true }, authState)
+      expect(redirect).toBeNull()
+    })
+
+    it('访问完整后台仍重定向到 /dashboard', () => {
+      const redirect = simulateGuard('/admin/users', { requiresAdmin: true }, authState)
+      expect(redirect).toBe('/dashboard')
+    })
+
+    it('访问 /login 重定向到 /manager', () => {
+      const redirect = simulateGuard('/login', { requiresAuth: false }, authState)
+      expect(redirect).toBe('/manager')
     })
   })
 
@@ -393,6 +431,54 @@ describe('路由守卫逻辑', () => {
       }
       const redirect = simulateGuard('/key-usage', { requiresAuth: false }, authState)
       expect(redirect).toBeNull()
+    })
+
+    it('secondary admin: /manager is allowed', () => {
+      const authState: MockAuthState = {
+        isAuthenticated: true,
+        isAdmin: false,
+        canAccessManagerPage: true,
+        isSimpleMode: false,
+        backendModeEnabled: true,
+      }
+      const redirect = simulateGuard('/manager', { requiresManager: true }, authState)
+      expect(redirect).toBeNull()
+    })
+
+    it('secondary admin: /dashboard redirects to /manager', () => {
+      const authState: MockAuthState = {
+        isAuthenticated: true,
+        isAdmin: false,
+        canAccessManagerPage: true,
+        isSimpleMode: false,
+        backendModeEnabled: true,
+      }
+      const redirect = simulateGuard('/dashboard', {}, authState)
+      expect(redirect).toBe('/manager')
+    })
+
+    it('secondary admin: /admin/users redirects to /manager', () => {
+      const authState: MockAuthState = {
+        isAuthenticated: true,
+        isAdmin: false,
+        canAccessManagerPage: true,
+        isSimpleMode: false,
+        backendModeEnabled: true,
+      }
+      const redirect = simulateGuard('/admin/users', { requiresAdmin: true }, authState)
+      expect(redirect).toBe('/manager')
+    })
+
+    it('secondary admin: /login redirects to /manager', () => {
+      const authState: MockAuthState = {
+        isAuthenticated: true,
+        isAdmin: false,
+        canAccessManagerPage: true,
+        isSimpleMode: false,
+        backendModeEnabled: true,
+      }
+      const redirect = simulateGuard('/login', { requiresAuth: false }, authState)
+      expect(redirect).toBe('/manager')
     })
   })
 })

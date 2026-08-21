@@ -38,6 +38,14 @@ func (u *User) IsAdmin() bool {
 	return u.Role == RoleAdmin
 }
 
+func (u *User) IsSubAdmin() bool {
+	return u.Role == RoleSubAdmin
+}
+
+func (u *User) CanAccessManagerPage() bool {
+	return u.IsAdmin() || u.IsSubAdmin()
+}
+
 func (u *User) IsActive() bool {
 	return u.Status == StatusActive
 }

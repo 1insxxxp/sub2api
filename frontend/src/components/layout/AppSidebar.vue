@@ -119,7 +119,7 @@
       </template>
 
       <!-- Regular User View -->
-      <template v-else-if="!appStore.backendModeEnabled">
+      <template v-else-if="!appStore.backendModeEnabled || authStore.canAccessManagerPage">
         <div class="sidebar-section">
           <router-link
             v-for="item in userNavItems"
@@ -289,6 +289,21 @@ const UserIcon = {
           'stroke-linecap': 'round',
           'stroke-linejoin': 'round',
           d: 'M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z'
+        })
+      ]
+    )
+}
+
+const ManagerIcon = {
+  render: () =>
+    h(
+      'svg',
+      { fill: 'none', viewBox: '0 0 24 24', stroke: 'currentColor', 'stroke-width': '1.5' },
+      [
+        h('path', {
+          'stroke-linecap': 'round',
+          'stroke-linejoin': 'round',
+          d: 'M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z'
         })
       ]
     )
@@ -566,7 +581,15 @@ const ChevronDownIcon = {
 
 // User navigation items (for regular users)
 const userNavItems = computed((): NavItem[] => {
+  const managerItems: NavItem[] = authStore.canAccessManagerPage
+    ? [{ path: '/manager', label: t('nav.manager'), icon: ManagerIcon }]
+    : []
+  if (appStore.backendModeEnabled) {
+    return managerItems
+  }
+
   const items: NavItem[] = [
+    ...managerItems,
     { path: '/dashboard', label: t('nav.dashboard'), icon: DashboardIcon },
     { path: '/keys', label: t('nav.apiKeys'), icon: KeyIcon },
     { path: '/usage', label: t('nav.usage'), icon: ChartIcon, hideInSimpleMode: true },
@@ -659,6 +682,7 @@ const customMenuItemsForAdmin = computed(() => {
 const adminNavItems = computed((): NavItem[] => {
   const baseItems: NavItem[] = [
     { path: '/admin/dashboard', label: t('nav.dashboard'), icon: DashboardIcon },
+    { path: '/manager', label: t('nav.manager'), icon: ManagerIcon },
     ...(adminSettingsStore.opsMonitoringEnabled
       ? [{ path: '/admin/ops', label: t('nav.ops'), icon: ChartIcon }]
       : []),

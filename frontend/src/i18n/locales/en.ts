@@ -334,6 +334,7 @@ export default {
     apiKeys: 'API Keys',
     usage: 'Usage',
     redeem: 'Redeem',
+    manager: 'Manager Page',
     profile: 'Profile',
     users: 'Users',
     groups: 'Groups',
@@ -834,6 +835,29 @@ export default {
     failedToRedeem: 'Failed to redeem code. Please check the code and try again.',
     subscriptionRefreshFailed: 'Redeemed successfully, but failed to refresh subscription status.',
     pleaseEnterCode: 'Please enter a redeem code'
+  },
+
+  manager: {
+    title: 'Manager Page',
+    description: 'Manage delegated helper tools',
+    balanceToCodes: 'Balance to Redeem Codes',
+    balanceToCodesDesc: 'Deduct from the current account balance and generate matching balance redeem codes.',
+    currentBalance: 'Current Balance',
+    singleValue: 'Value Per Code',
+    count: 'Code Count',
+    totalValue: 'Total Deduction',
+    remainingBalance: 'Balance After Generation',
+    generate: 'Generate Codes',
+    generating: 'Generating...',
+    generatedCodes: 'Generated Codes',
+    copied: 'Copied',
+    copyAll: 'Copy All',
+    noCodes: 'Generated codes will appear here',
+    amountRequired: 'Enter a valid amount',
+    countRequired: 'Enter a valid count',
+    insufficientBalance: 'Insufficient balance',
+    generateSuccess: 'Redeem codes generated',
+    generateFailed: 'Failed to generate redeem codes'
   },
 
   // Profile
@@ -1462,6 +1486,7 @@ export default {
       totalRecharged: 'Total Recharged',
       roles: {
         admin: 'Admin',
+        sub_admin: 'Secondary Admin',
         user: 'User'
       },
       // Settings Dropdowns

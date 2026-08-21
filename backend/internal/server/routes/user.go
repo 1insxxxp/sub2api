@@ -82,6 +82,13 @@ func RegisterUserRoutes(
 			redeem.GET("/history", h.Redeem.GetHistory)
 		}
 
+		// 管理员页面（完整管理员 + 二级管理员）
+		manager := authenticated.Group("/manager")
+		manager.Use(middleware.ManagerPageOnly())
+		{
+			manager.POST("/redeem-codes/convert-balance", h.Redeem.ConvertBalanceToRedeemCodes)
+		}
+
 		// 用户订阅
 		subscriptions := authenticated.Group("/subscriptions")
 		{

@@ -24,11 +24,13 @@ export interface FetchOptions {
 
 // ==================== User & Auth Types ====================
 
+export type UserRole = 'admin' | 'sub_admin' | 'user'
+
 export interface User {
   id: number
   username: string
   email: string
-  role: 'admin' | 'user' // User role for authorization
+  role: UserRole // User role for authorization
   balance: number // User balance for API usage
   concurrency: number // Allowed concurrent requests
   status: 'active' | 'disabled' // Account status
@@ -1273,7 +1275,7 @@ export interface UpdateUserRequest {
   password?: string
   username?: string
   notes?: string
-  role?: 'admin' | 'user'
+  role?: UserRole
   balance?: number
   concurrency?: number
   status?: 'active' | 'disabled'

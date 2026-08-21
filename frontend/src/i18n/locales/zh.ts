@@ -334,6 +334,7 @@ export default {
     apiKeys: 'API 密钥',
     usage: '使用记录',
     redeem: '兑换',
+    manager: '管理员页面',
     profile: '个人资料',
     users: '用户管理',
     groups: '分组管理',
@@ -838,6 +839,29 @@ export default {
     failedToRedeem: '兑换失败，请检查兑换码后重试。',
     subscriptionRefreshFailed: '兑换成功，但订阅状态刷新失败。',
     pleaseEnterCode: '请输入兑换码'
+  },
+
+  manager: {
+    title: '管理员页面',
+    description: '管理可授权的辅助功能',
+    balanceToCodes: '余额转兑换码',
+    balanceToCodesDesc: '从当前账户余额扣除指定金额，并生成等额余额兑换码。',
+    currentBalance: '当前余额',
+    singleValue: '单码金额',
+    count: '生成数量',
+    totalValue: '扣除合计',
+    remainingBalance: '生成后余额',
+    generate: '生成兑换码',
+    generating: '生成中...',
+    generatedCodes: '生成的兑换码',
+    copied: '已复制',
+    copyAll: '复制全部',
+    noCodes: '生成后的兑换码会显示在这里',
+    amountRequired: '请输入有效金额',
+    countRequired: '请输入有效数量',
+    insufficientBalance: '余额不足',
+    generateSuccess: '兑换码生成成功',
+    generateFailed: '生成兑换码失败'
   },
 
   // Profile
@@ -1419,6 +1443,7 @@ export default {
       deleteConfirm: "确定要删除用户 '{email}' 吗？此操作无法撤销。",
       roles: {
         admin: '管理员',
+        sub_admin: '二级管理员',
         user: '用户'
       },
       form: {

@@ -194,9 +194,9 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		return
 	}
 
-	// Backend mode: only admin can login
-	if h.settingSvc.IsBackendModeEnabled(c.Request.Context()) && !user.IsAdmin() {
-		response.Forbidden(c, "Backend mode is active. Only admin login is allowed.")
+	// Backend mode: only manager-page-capable users can login.
+	if h.settingSvc.IsBackendModeEnabled(c.Request.Context()) && !user.CanAccessManagerPage() {
+		response.Forbidden(c, "Backend mode is active. Only manager users can login.")
 		return
 	}
 
@@ -263,9 +263,9 @@ func (h *AuthHandler) Login2FA(c *gin.Context) {
 		return
 	}
 
-	// Backend mode: only admin can login (check BEFORE deleting session)
-	if h.settingSvc.IsBackendModeEnabled(c.Request.Context()) && !user.IsAdmin() {
-		response.Forbidden(c, "Backend mode is active. Only admin login is allowed.")
+	// Backend mode: only manager-page-capable users can login (check BEFORE deleting session)
+	if h.settingSvc.IsBackendModeEnabled(c.Request.Context()) && !user.CanAccessManagerPage() {
+		response.Forbidden(c, "Backend mode is active. Only manager users can login.")
 		return
 	}
 
@@ -540,9 +540,9 @@ func (h *AuthHandler) RefreshToken(c *gin.Context) {
 		return
 	}
 
-	// Backend mode: block non-admin token refresh
-	if h.settingSvc.IsBackendModeEnabled(c.Request.Context()) && result.UserRole != "admin" {
-		response.Forbidden(c, "Backend mode is active. Only admin login is allowed.")
+	// Backend mode: block token refresh for users without manager-page access.
+	if h.settingSvc.IsBackendModeEnabled(c.Request.Context()) && result.UserRole != service.RoleAdmin && result.UserRole != service.RoleSubAdmin {
+		response.Forbidden(c, "Backend mode is active. Only manager users can login.")
 		return
 	}
 
