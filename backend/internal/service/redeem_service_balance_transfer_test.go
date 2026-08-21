@@ -2,10 +2,12 @@ package service
 
 import (
 	"context"
+	"math"
 	"testing"
 	"time"
 
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/pagination"
 	"github.com/stretchr/testify/require"
 )
 
@@ -37,6 +39,7 @@ type balanceTransferRedeemRepo struct {
 	created             []*RedeemCode
 	deleted             []int64
 	generated           []RedeemCode
+	history             []RedeemCode
 	atomicDeleteErr     error
 	requireAtomicDelete bool
 }
@@ -116,6 +119,57 @@ func (r *balanceTransferRedeemRepo) ListByCreator(_ context.Context, userID int6
 		}
 	}
 	return out, nil
+}
+
+func (r *balanceTransferRedeemRepo) ListByCreatorPaginated(_ context.Context, userID int64, params pagination.PaginationParams) ([]RedeemCode, *pagination.PaginationResult, error) {
+	out := make([]RedeemCode, 0)
+	for _, code := range r.generated {
+		if code.CreatedBy == nil || *code.CreatedBy != userID {
+			continue
+		}
+		if code.Source != "" && code.Source != RedeemCodeSourceUserBalanceTransfer {
+			continue
+		}
+		out = append(out, code)
+	}
+	return paginateRedeemCodeTestSlice(out, params), redeemCodeTestPaginationResult(len(out), params), nil
+}
+
+func (r *balanceTransferRedeemRepo) ListByUserPaginated(_ context.Context, userID int64, params pagination.PaginationParams, codeType string) ([]RedeemCode, *pagination.PaginationResult, error) {
+	out := make([]RedeemCode, 0)
+	for _, code := range r.history {
+		if code.UsedBy == nil || *code.UsedBy != userID {
+			continue
+		}
+		if codeType != "" && code.Type != codeType {
+			continue
+		}
+		out = append(out, code)
+	}
+	return paginateRedeemCodeTestSlice(out, params), redeemCodeTestPaginationResult(len(out), params), nil
+}
+
+func paginateRedeemCodeTestSlice(codes []RedeemCode, params pagination.PaginationParams) []RedeemCode {
+	offset := params.Offset()
+	if offset >= len(codes) {
+		return []RedeemCode{}
+	}
+	end := offset + params.Limit()
+	if end > len(codes) {
+		end = len(codes)
+	}
+	return codes[offset:end]
+}
+
+func redeemCodeTestPaginationResult(total int, params pagination.PaginationParams) *pagination.PaginationResult {
+	pageSize := params.Limit()
+	pages := int(math.Ceil(float64(total) / float64(pageSize)))
+	return &pagination.PaginationResult{
+		Total:    int64(total),
+		Page:     params.Page,
+		PageSize: pageSize,
+		Pages:    pages,
+	}
 }
 
 func TestRedeemServiceBalanceTransferRejectsUnauthorizedUser(t *testing.T) {
@@ -388,4 +442,56 @@ func TestRedeemServiceBalanceTransferListsOnlyCreatorCodes(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, codes, 1)
 	require.Equal(t, "OWN", codes[0].Code)
+}
+
+func TestRedeemServiceUserHistoryPaginated(t *testing.T) {
+	ctx := context.Background()
+	userID := int64(7)
+	otherID := int64(8)
+	redeemRepo := &balanceTransferRedeemRepo{
+		redeemRejectRepo: &redeemRejectRepo{},
+		history: []RedeemCode{
+			{ID: 1, Code: "OWN-1", Type: RedeemTypeBalance, UsedBy: &userID},
+			{ID: 2, Code: "OTHER", Type: RedeemTypeBalance, UsedBy: &otherID},
+			{ID: 3, Code: "OWN-2", Type: RedeemTypeConcurrency, UsedBy: &userID},
+			{ID: 4, Code: "OWN-3", Type: RedeemTypeBalance, UsedBy: &userID},
+		},
+	}
+	svc := NewRedeemService(redeemRepo, &balanceTransferUserRepo{userRepoStub: &userRepoStub{}}, nil, nil, nil, nil, nil, nil)
+
+	codes, page, err := svc.GetUserHistoryPaginated(ctx, userID, pagination.PaginationParams{Page: 2, PageSize: 2})
+
+	require.NoError(t, err)
+	require.Len(t, codes, 1)
+	require.Equal(t, "OWN-3", codes[0].Code)
+	require.Equal(t, int64(3), page.Total)
+	require.Equal(t, 2, page.Page)
+	require.Equal(t, 2, page.PageSize)
+	require.Equal(t, 2, page.Pages)
+}
+
+func TestRedeemServiceGeneratedBalanceTransferCodesPaginated(t *testing.T) {
+	ctx := context.Background()
+	userID := int64(7)
+	otherID := int64(8)
+	redeemRepo := &balanceTransferRedeemRepo{
+		redeemRejectRepo: &redeemRejectRepo{},
+		generated: []RedeemCode{
+			{ID: 1, Code: "OWN-1", CreatedBy: &userID, Source: RedeemCodeSourceUserBalanceTransfer},
+			{ID: 2, Code: "OTHER", CreatedBy: &otherID, Source: RedeemCodeSourceUserBalanceTransfer},
+			{ID: 3, Code: "OWN-2", CreatedBy: &userID, Source: RedeemCodeSourceUserBalanceTransfer},
+			{ID: 4, Code: "OWN-3", CreatedBy: &userID, Source: RedeemCodeSourceUserBalanceTransfer},
+		},
+	}
+	svc := NewRedeemService(redeemRepo, &balanceTransferUserRepo{userRepoStub: &userRepoStub{}}, nil, nil, nil, nil, nil, nil)
+
+	codes, page, err := svc.ListGeneratedBalanceTransferCodesPaginated(ctx, userID, pagination.PaginationParams{Page: 2, PageSize: 2})
+
+	require.NoError(t, err)
+	require.Len(t, codes, 1)
+	require.Equal(t, "OWN-3", codes[0].Code)
+	require.Equal(t, int64(3), page.Total)
+	require.Equal(t, 2, page.Page)
+	require.Equal(t, 2, page.PageSize)
+	require.Equal(t, 2, page.Pages)
 }

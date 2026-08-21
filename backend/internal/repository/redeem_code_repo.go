@@ -506,6 +506,34 @@ func (r *redeemCodeRepository) ListByCreator(ctx context.Context, userID int64, 
 	return redeemCodeEntitiesToService(codes), nil
 }
 
+func (r *redeemCodeRepository) ListByCreatorPaginated(ctx context.Context, userID int64, params pagination.PaginationParams) ([]service.RedeemCode, *pagination.PaginationResult, error) {
+	q := clientFromContext(ctx, r.client).RedeemCode.Query().
+		Where(
+			redeemcode.CreatedByEQ(userID),
+			redeemcode.SourceEQ(service.RedeemCodeSourceUserBalanceTransfer),
+			redeemcode.TypeEQ(service.RedeemTypeBalance),
+		)
+
+	total, err := q.Count(ctx)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	codes, err := q.
+		WithUser().
+		WithCreator().
+		WithGroup().
+		Order(dbent.Desc(redeemcode.FieldCreatedAt), dbent.Desc(redeemcode.FieldID)).
+		Offset(params.Offset()).
+		Limit(params.Limit()).
+		All(ctx)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return redeemCodeEntitiesToService(codes), paginationResultFromTotal(int64(total), params), nil
+}
+
 func redeemCodeEntityToService(m *dbent.RedeemCode) *service.RedeemCode {
 	if m == nil {
 		return nil

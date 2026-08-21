@@ -79,6 +79,7 @@ type RedeemCodeRepository interface {
 
 type RedeemCodeCreatorRepository interface {
 	ListByCreator(ctx context.Context, userID int64, limit int) ([]RedeemCode, error)
+	ListByCreatorPaginated(ctx context.Context, userID int64, params pagination.PaginationParams) ([]RedeemCode, *pagination.PaginationResult, error)
 }
 
 type BalanceTransferRedeemCodeDeleteRepository interface {
@@ -419,6 +420,14 @@ func (s *RedeemService) ListGeneratedBalanceTransferCodes(ctx context.Context, u
 		return nil, errors.New("redeem code repository does not support creator listing")
 	}
 	return repo.ListByCreator(ctx, userID, limit)
+}
+
+func (s *RedeemService) ListGeneratedBalanceTransferCodesPaginated(ctx context.Context, userID int64, params pagination.PaginationParams) ([]RedeemCode, *pagination.PaginationResult, error) {
+	repo, ok := s.redeemRepo.(RedeemCodeCreatorRepository)
+	if !ok {
+		return nil, nil, errors.New("redeem code repository does not support creator listing")
+	}
+	return repo.ListByCreatorPaginated(ctx, userID, params)
 }
 
 func (s *RedeemService) DeleteGeneratedBalanceTransferCode(ctx context.Context, userID, codeID int64) (*RedeemCode, error) {
@@ -933,6 +942,14 @@ func (s *RedeemService) GetUserHistory(ctx context.Context, userID int64, limit 
 		return nil, fmt.Errorf("get user redeem history: %w", err)
 	}
 	return codes, nil
+}
+
+func (s *RedeemService) GetUserHistoryPaginated(ctx context.Context, userID int64, params pagination.PaginationParams) ([]RedeemCode, *pagination.PaginationResult, error) {
+	codes, result, err := s.redeemRepo.ListByUserPaginated(ctx, userID, params, "")
+	if err != nil {
+		return nil, nil, fmt.Errorf("get user redeem history: %w", err)
+	}
+	return codes, result, nil
 }
 
 // reduceOrCancelSubscription 缩短订阅天数，剩余天数 <= 0 时取消订阅
