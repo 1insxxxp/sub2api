@@ -244,12 +244,12 @@ func (r *emptyResponseClaimRepository) Create(ctx context.Context, input *servic
 
 	query := `
 		WITH claim_lock AS (
-			SELECT pg_advisory_xact_lock(hashtextextended($3::text || ':' || to_char(NOW() AT TIME ZONE 'Asia/Shanghai', 'YYYY-MM-DD'), 0))
+			SELECT pg_advisory_xact_lock(hashtextextended(($3::bigint)::text || ':' || to_char(NOW() AT TIME ZONE 'Asia/Shanghai', 'YYYY-MM-DD'), 0))
 		),
 		daily_claims AS (
 			SELECT COUNT(*) AS claim_count
 			FROM empty_response_claims, claim_lock
-			WHERE user_id = $3
+			WHERE user_id = $3::bigint
 				AND created_at >= (date_trunc('day', NOW() AT TIME ZONE 'Asia/Shanghai') AT TIME ZONE 'Asia/Shanghai')
 				AND created_at < ((date_trunc('day', NOW() AT TIME ZONE 'Asia/Shanghai') + INTERVAL '1 day') AT TIME ZONE 'Asia/Shanghai')
 		)
@@ -258,7 +258,7 @@ func (r *emptyResponseClaimRepository) Create(ctx context.Context, input *servic
 			status, reason_code, user_reason, original_actual_cost, evidence, rule_version
 		)
 		SELECT
-			$1, $2, $3, $4, $5, $6, $7,
+			$1, $2, $3::bigint, $4, $5, $6, $7,
 			$8, $9, $10, $11, $12::jsonb, $13
 		FROM daily_claims
 		WHERE claim_count < $14
