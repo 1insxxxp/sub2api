@@ -160,10 +160,6 @@ func RegisterUserRoutes(
 		redeem := authenticated.Group("/redeem")
 		{
 			redeem.POST("", h.Redeem.Redeem)
-			redeem.POST("/generate", h.Redeem.GenerateBalanceTransferCode)
-			redeem.GET("/generated", h.Redeem.GetGenerated)
-			redeem.POST("/generated/batch-delete", h.Redeem.DeleteGeneratedBatch)
-			redeem.DELETE("/generated/:id", h.Redeem.DeleteGenerated)
 			redeem.GET("/history", h.Redeem.GetHistory)
 		}
 

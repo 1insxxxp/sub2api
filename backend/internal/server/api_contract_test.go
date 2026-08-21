@@ -37,6 +37,7 @@ func TestSystemCustomGroupAPIContractRoutes(t *testing.T) {
 		router.Group("/api/v1"),
 		handlers,
 		middleware.AdminAuthMiddleware(pass),
+		middleware.AdminWorkbenchAuthMiddleware(pass),
 		middleware.AuditLogMiddleware(pass),
 		middleware.StepUpAuthMiddleware(pass),
 		nil,
@@ -69,6 +70,7 @@ func TestCheckinCampaignAPIContractRoutes(t *testing.T) {
 		router.Group("/api/v1"),
 		handlers,
 		middleware.AdminAuthMiddleware(pass),
+		middleware.AdminWorkbenchAuthMiddleware(pass),
 		middleware.AuditLogMiddleware(pass),
 		middleware.StepUpAuthMiddleware(pass),
 		nil,
@@ -88,6 +90,37 @@ func TestCheckinCampaignAPIContractRoutes(t *testing.T) {
 		"POST /api/v1/admin/checkins/campaigns/:id/disable",
 		"POST /api/v1/admin/checkins/campaigns/:id/copy",
 		"DELETE /api/v1/admin/checkins/campaigns/:id",
+	} {
+		_, ok := registered[contract]
+		require.Truef(t, ok, "missing API contract route %s", contract)
+	}
+}
+
+func TestAdminWorkbenchAPIContractRoutes(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	router := gin.New()
+	handlers := &handler.Handlers{Redeem: handler.NewRedeemHandler(nil)}
+	pass := func(c *gin.Context) { c.Next() }
+	serverroutes.RegisterAdminRoutes(
+		router.Group("/api/v1"),
+		handlers,
+		middleware.AdminAuthMiddleware(pass),
+		middleware.AdminWorkbenchAuthMiddleware(pass),
+		middleware.AuditLogMiddleware(pass),
+		middleware.StepUpAuthMiddleware(pass),
+		nil,
+		nil,
+	)
+
+	registered := make(map[string]struct{}, len(router.Routes()))
+	for _, route := range router.Routes() {
+		registered[route.Method+" "+route.Path] = struct{}{}
+	}
+	for _, contract := range []string{
+		"POST /api/v1/admin/workbench/redeem/generated",
+		"GET /api/v1/admin/workbench/redeem/generated",
+		"POST /api/v1/admin/workbench/redeem/generated/batch-delete",
+		"DELETE /api/v1/admin/workbench/redeem/generated/:id",
 	} {
 		_, ok := registered[contract]
 		require.Truef(t, ok, "missing API contract route %s", contract)
@@ -696,7 +729,7 @@ func TestAPIContracts(t *testing.T) {
 			}`,
 		},
 		{
-			name: "GET /api/v1/redeem/generated",
+			name: "GET /api/v1/admin/workbench/redeem/generated",
 			setup: func(t *testing.T, deps *contractDeps) {
 				t.Helper()
 				expiresAt := deps.now.Add(30 * 24 * time.Hour)
@@ -717,7 +750,7 @@ func TestAPIContracts(t *testing.T) {
 				})
 			},
 			method:     http.MethodGet,
-			path:       "/api/v1/redeem/generated",
+			path:       "/api/v1/admin/workbench/redeem/generated",
 			wantStatus: http.StatusOK,
 			wantJSON: `{
 				"code": 0,
@@ -740,7 +773,7 @@ func TestAPIContracts(t *testing.T) {
 			}`,
 		},
 		{
-			name: "GET /api/v1/redeem/generated paginated",
+			name: "GET /api/v1/admin/workbench/redeem/generated paginated",
 			setup: func(t *testing.T, deps *contractDeps) {
 				t.Helper()
 				deps.redeemRepo.SetByCreator(1, []service.RedeemCode{
@@ -777,7 +810,7 @@ func TestAPIContracts(t *testing.T) {
 				})
 			},
 			method:     http.MethodGet,
-			path:       "/api/v1/redeem/generated?page=2&page_size=2",
+			path:       "/api/v1/admin/workbench/redeem/generated?page=2&page_size=2",
 			wantStatus: http.StatusOK,
 			wantJSON: `{
 				"code": 0,
@@ -805,7 +838,7 @@ func TestAPIContracts(t *testing.T) {
 			}`,
 		},
 		{
-			name: "POST /api/v1/redeem/generated/batch-delete",
+			name: "POST /api/v1/admin/workbench/redeem/generated/batch-delete",
 			setup: func(t *testing.T, deps *contractDeps) {
 				t.Helper()
 				deps.redeemRepo.SetByCreator(1, []service.RedeemCode{
@@ -832,7 +865,7 @@ func TestAPIContracts(t *testing.T) {
 				})
 			},
 			method:     http.MethodPost,
-			path:       "/api/v1/redeem/generated/batch-delete",
+			path:       "/api/v1/admin/workbench/redeem/generated/batch-delete",
 			body:       `{"ids":[902,903]}`,
 			wantStatus: http.StatusOK,
 			wantJSON: `{
@@ -1915,6 +1948,14 @@ func newContractDeps(t *testing.T) *contractDeps {
 		c.Set(string(middleware.ContextKeyUserRole), service.RoleAdmin)
 		c.Next()
 	}
+	adminWorkbenchAuth := func(c *gin.Context) {
+		c.Set(string(middleware.ContextKeyUser), middleware.AuthSubject{
+			UserID:      1,
+			Concurrency: 5,
+		})
+		c.Set(string(middleware.ContextKeyUserRole), service.RoleSubAdmin)
+		c.Next()
+	}
 
 	r := gin.New()
 
@@ -1942,10 +1983,7 @@ func newContractDeps(t *testing.T) *contractDeps {
 
 	v1Redeem := v1.Group("")
 	v1Redeem.Use(jwtAuth)
-	v1Redeem.POST("/redeem/generate", redeemHandler.GenerateBalanceTransferCode)
 	v1Redeem.GET("/redeem/history", redeemHandler.GetHistory)
-	v1Redeem.GET("/redeem/generated", redeemHandler.GetGenerated)
-	v1Redeem.POST("/redeem/generated/batch-delete", redeemHandler.DeleteGeneratedBatch)
 
 	v1Admin := v1.Group("/admin")
 	v1Admin.Use(adminAuth)
@@ -1953,6 +1991,13 @@ func newContractDeps(t *testing.T) *contractDeps {
 	v1Admin.POST("/accounts/bulk-update", adminAccountHandler.BulkUpdate)
 	v1Admin.GET("/affiliates/users/:user_id/overview", adminAffiliateHandler.GetUserOverview)
 	v1Admin.GET("/affiliates/invites", adminAffiliateHandler.ListInviteRecords)
+
+	v1Workbench := v1.Group("/admin/workbench")
+	v1Workbench.Use(adminWorkbenchAuth)
+	v1Workbench.POST("/redeem/generated", redeemHandler.GenerateBalanceTransferCode)
+	v1Workbench.GET("/redeem/generated", redeemHandler.GetGenerated)
+	v1Workbench.POST("/redeem/generated/batch-delete", redeemHandler.DeleteGeneratedBatch)
+	v1Workbench.DELETE("/redeem/generated/:id", redeemHandler.DeleteGenerated)
 
 	return &contractDeps{
 		now:           now,
@@ -1973,13 +2018,13 @@ func TestRedeemGenerateAPIResponseShape(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	deps := newContractDeps(t)
 	deps.userRepo.users[1].Balance = 50
-	deps.userRepo.users[1].BalanceRedeemCodeEnabled = true
+	deps.userRepo.users[1].Role = service.RoleSubAdmin
 
 	status, body := doRequest(
 		t,
 		deps.router,
 		http.MethodPost,
-		"/api/v1/redeem/generate",
+		"/api/v1/admin/workbench/redeem/generated",
 		`{"amount":5}`,
 		map[string]string{"Content-Type": "application/json"},
 	)
@@ -1994,7 +2039,7 @@ func TestRedeemGenerateAPIResponseShape(t *testing.T) {
 		t,
 		deps.router,
 		http.MethodPost,
-		"/api/v1/redeem/generate",
+		"/api/v1/admin/workbench/redeem/generated",
 		`{"amount":5,"count":2}`,
 		map[string]string{"Content-Type": "application/json"},
 	)
@@ -2004,6 +2049,22 @@ func TestRedeemGenerateAPIResponseShape(t *testing.T) {
 	}
 	require.NoError(t, json.Unmarshal([]byte(body), &batch))
 	require.IsType(t, []any{}, batch.Data)
+}
+
+func TestRedeemGenerateUserRouteUnavailable(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	deps := newContractDeps(t)
+
+	status, _ := doRequest(
+		t,
+		deps.router,
+		http.MethodPost,
+		"/api/v1/redeem/generate",
+		`{"amount":5}`,
+		map[string]string{"Content-Type": "application/json"},
+	)
+
+	require.Equal(t, http.StatusNotFound, status)
 }
 
 type stubAffiliateRepo struct {
