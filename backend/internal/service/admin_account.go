@@ -595,6 +595,10 @@ func (s *adminServiceImpl) UpdateAccount(ctx context.Context, id int64, input *U
 		}
 	}
 	wasOveragesEnabled := account.IsOveragesEnabled()
+	previousAntigravityModelMapping := map[string]string(nil)
+	if account.Platform == PlatformAntigravity {
+		previousAntigravityModelMapping = maps.Clone(account.GetModelMapping())
+	}
 
 	if input.Name != "" {
 		account.Name = input.Name
@@ -865,7 +869,25 @@ func (s *adminServiceImpl) UpdateAccount(ctx context.Context, id int64, input *U
 	if err != nil {
 		return nil, err
 	}
+	s.cascadeAntigravityModelAliasRenamesAfterAccountUpdate(ctx, updated, previousAntigravityModelMapping)
 	return updated, nil
+}
+
+func (s *adminServiceImpl) cascadeAntigravityModelAliasRenamesAfterAccountUpdate(ctx context.Context, updated *Account, previousMapping map[string]string) {
+	if s == nil || updated == nil || updated.Platform != PlatformAntigravity || len(previousMapping) == 0 {
+		return
+	}
+	renames := detectAccountModelAliasRenamesFromMappings(previousMapping, updated.GetModelMapping())
+	if len(renames) == 0 {
+		return
+	}
+	if _, err := s.CascadeAccountModelAliasRenames(ctx, updated.ID, renames); err != nil {
+		slog.Warn("account_model_alias_rename_cascade_after_update_failed",
+			"account_id", updated.ID,
+			"rename_count", len(renames),
+			"error", err,
+		)
+	}
 }
 
 // UpdateAccountExtra 仅对 Extra JSONB 做 key 级合并，避免覆盖其它运行态键

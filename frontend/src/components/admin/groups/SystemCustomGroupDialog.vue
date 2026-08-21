@@ -193,29 +193,22 @@
                 {{ t('admin.groups.systemCustom.modelsHint') }}
               </p>
             </div>
-            <div class="flex items-center gap-3">
-              <label
-                class="inline-flex select-none items-center gap-2 text-xs font-medium text-slate-600 dark:text-slate-300"
-                :class="visibleRoutes.length === 0 ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'"
+            <div class="flex items-center gap-2">
+              <button
+                data-testid="system-custom-model-select-all-button"
+                class="btn btn-secondary min-h-10 px-3 text-xs sm:min-h-9"
+                type="button"
+                :disabled="visibleRoutes.length === 0"
+                :aria-pressed="allVisibleRoutesSelected ? 'true' : 'false'"
+                :data-selection-state="visibleRouteSelectionState"
+                @click="toggleAllVisibleRoutes(!allVisibleRoutesSelected)"
               >
-                <input
-                  data-testid="system-custom-model-select-all"
-                  class="h-4 w-4 rounded border-slate-300 text-primary-600 focus:ring-primary-500"
-                  type="checkbox"
-                  :checked="allVisibleRoutesSelected"
-                  :indeterminate="someVisibleRoutesSelected && !allVisibleRoutesSelected"
-                  :aria-checked="
-                    someVisibleRoutesSelected && !allVisibleRoutesSelected
-                      ? 'mixed'
-                      : allVisibleRoutesSelected
-                        ? 'true'
-                        : 'false'
-                  "
-                  :disabled="visibleRoutes.length === 0"
-                  @change="toggleAllVisibleRoutes(($event.target as HTMLInputElement).checked)"
-                />
-                {{ t('admin.groups.systemCustom.selectAllAll') }}
-              </label>
+                {{
+                  allVisibleRoutesSelected
+                    ? t('admin.groups.systemCustom.deselectAll')
+                    : t('admin.groups.systemCustom.selectAll')
+                }}
+              </button>
               <span class="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-600 dark:bg-dark-700 dark:text-slate-300">
                 {{ selectedRoutes.length }} / {{ visibleRoutes.length }}
               </span>
@@ -950,6 +943,12 @@ const allVisibleRoutesSelected = computed(
 const someVisibleRoutesSelected = computed(() =>
   visibleRoutes.value.some((route) => route.selected)
 )
+
+const visibleRouteSelectionState = computed(() => {
+  if (allVisibleRoutesSelected.value) return 'all'
+  if (someVisibleRoutesSelected.value) return 'mixed'
+  return 'none'
+})
 
 const toggleAllVisibleRoutes = (selected: boolean) => {
   for (const route of visibleRoutes.value) {

@@ -66,6 +66,8 @@ const messages: Record<string, string> = {
 	'usage.upstreamResponseModel': 'Upstream response',
 	'usage.modelVariant': 'Possible version variant',
 	'usage.modelMismatch': 'Different model',
+  'usage.emptyResponse.action': 'Claim low-output/empty response',
+  'usage.emptyResponse.actionHint': 'Applies to empty replies or responses with 10 output tokens or fewer',
 }
 
 vi.mock('vue-i18n', async () => {
@@ -254,6 +256,51 @@ describe('admin UsageTable tooltip', () => {
     const text = wrapper.text()
     expect(text).toContain('claude-sonnet-4')
     expect(text).toContain('claude-sonnet-4-20250514')
+  })
+
+  it('shows a low-output compensation action and emits the selected row', async () => {
+    const row = {
+      request_id: 'req-low-output',
+      model: 'gemini-2.5-pro',
+      actual_cost: 0.09375,
+      total_cost: 0.09375,
+      compensated_cost: 0,
+      net_actual_cost: 0.09375,
+      account_rate_multiplier: 1,
+      rate_multiplier: 1,
+      input_cost: 0,
+      output_cost: 0,
+      cache_creation_cost: 0,
+      cache_read_cost: 0,
+      input_tokens: 66219,
+      output_tokens: 10,
+      compensation_eligible: true,
+      compensation_eligibility: 'eligible',
+    }
+
+    const wrapper = mount(UsageTable, {
+      props: {
+        data: [row],
+        loading: false,
+        columns: [],
+        showCompensationAction: true,
+      },
+      global: {
+        stubs: {
+          DataTable: DataTableStub,
+          EmptyState: true,
+          Icon: true,
+          Teleport: true,
+        },
+      },
+    })
+
+    const button = wrapper.get('button[title="Applies to empty replies or responses with 10 output tokens or fewer"]')
+    expect(button.text()).toBe('Claim low-output/empty response')
+
+    await button.trigger('click')
+
+    expect(wrapper.emitted('compensationClaim')?.[0]).toEqual([row])
   })
 
 	it.each([

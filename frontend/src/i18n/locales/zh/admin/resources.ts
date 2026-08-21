@@ -600,9 +600,9 @@ export default {
         }
       },
       emptyResponseClaims: {
-        tab: '空回申请',
-        rate: '空回申请率',
-        warning: '当前空回申请率为 {rate}，已达到 1% 关注阈值，请优先检查高排名账号和模型。',
+        tab: '空回/低输出申请',
+        rate: '补偿申请率',
+        warning: '当前补偿申请率为 {rate}，已达到 1% 关注阈值，请优先检查高排名账号和模型。',
         claims: '申请数',
         refunded: '已补金额',
         pending: '待人工审核',
@@ -613,7 +613,7 @@ export default {
         batchApprove: '批量批准',
         batchReject: '批量拒绝',
         viewDetails: '查看详情',
-        detailTitle: '空回申请详情',
+        detailTitle: '补偿申请详情',
         closeDetail: '关闭详情',
         approve: '批准',
         reject: '拒绝',
@@ -621,8 +621,8 @@ export default {
         evidence: '结构化证据',
         refund: '预计补偿',
         statusLabel: '状态',
-        empty: '当前条件下暂无空回申请',
-        loadFailed: '加载空回申请失败',
+        empty: '当前条件下暂无补偿申请',
+        loadFailed: '加载补偿申请失败',
         reviewSuccess: '审核操作已完成',
         reviewFailed: '审核操作失败，请刷新后重试',
         batchSelected: '已选择 {count} 条申请',
@@ -646,6 +646,7 @@ export default {
         disconnect: '断开 / 上游错误',
         userReason: '用户说明',
         missingEvidenceWarning: '缺少服务端响应证据，只能依据用量与其他结构化信息人工判断。',
+        lowOutputNotice: '该申请命中低输出规则：输出 Token 不超过 10，可结合请求时长、状态码和用户说明快速复核。',
         privacyNotice: '仅展示结构化元数据，不读取或保存请求正文、响应正文和工具参数。',
         source: {
           automatic: '系统自动补偿',
@@ -664,9 +665,9 @@ export default {
           none: '无有效输出'
         },
         rankings: {
-          group: '分组空回排行',
-          account: '账号空回排行',
-          model: '模型空回排行'
+          group: '分组补偿排行',
+          account: '账号补偿排行',
+          model: '模型补偿排行'
         },
         evidenceSummary: 'HTTP {http} · 上游 {upstream} · {events} 个事件 · {completion}',
         complete: '完整结束',

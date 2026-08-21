@@ -230,6 +230,51 @@ func TestAdminService_CascadeAccountModelAliasRenames(t *testing.T) {
 	})
 }
 
+func TestUpdateAccountCascadesAntigravityModelAliasRenames(t *testing.T) {
+	accountID := int64(7)
+	accountRepo := &accountAliasRenameUpdateAccountRepoStub{account: &Account{
+		ID:       accountID,
+		Platform: PlatformAntigravity,
+		Type:     AccountTypeAPIKey,
+		Status:   StatusActive,
+		GroupIDs: []int64{99},
+		Credentials: map[string]any{
+			"model_mapping": map[string]any{
+				"old-public-model": "upstream-model",
+				"stable-model":     "stable-upstream",
+			},
+		},
+	}}
+	userRouteRepo := &accountAliasRenameCascadeRepoStub{
+		result: AccountModelAliasRenameCascadeResult{UserCustomRoutesUpdated: 1},
+	}
+	svc := &adminServiceImpl{
+		accountRepo:         accountRepo,
+		userCustomGroupRepo: userRouteRepo,
+	}
+
+	updated, err := svc.UpdateAccount(context.Background(), accountID, &UpdateAccountInput{
+		Credentials: map[string]any{
+			"model_mapping": map[string]any{
+				"new-public-model": "upstream-model",
+				"stable-model":     "stable-upstream",
+			},
+		},
+	})
+
+	require.NoError(t, err)
+	require.NotNil(t, updated)
+	require.Len(t, userRouteRepo.calls, 1)
+	require.Equal(t, accountAliasRenameCascadeCall{
+		accountID: accountID,
+		groupIDs:  []int64{99},
+		renames: []AccountModelAliasRename{{
+			OldModel: "old-public-model",
+			NewModel: "new-public-model",
+		}},
+	}, userRouteRepo.calls[0])
+}
+
 func TestNewAdminServiceWiresAliasCascadeRepositories(t *testing.T) {
 	channelRepo := &accountAliasRenameChannelRepoWithCascade{}
 	userCustomGroupRepo := &accountAliasRenameUserCustomGroupRepoWithCascade{}
@@ -283,6 +328,48 @@ func (s *accountAliasRenameAccountRepoStub) GetByID(_ context.Context, id int64)
 		return nil, errors.New("account not found")
 	}
 	return s.account, nil
+}
+
+type accountAliasRenameUpdateAccountRepoStub struct {
+	AccountRepository
+	account     *Account
+	updateCalls int
+}
+
+func (s *accountAliasRenameUpdateAccountRepoStub) GetByID(_ context.Context, id int64) (*Account, error) {
+	if s.account == nil || s.account.ID != id {
+		return nil, errors.New("account not found")
+	}
+	return cloneAliasRenameTestAccount(s.account), nil
+}
+
+func (s *accountAliasRenameUpdateAccountRepoStub) Update(_ context.Context, account *Account) error {
+	s.account = cloneAliasRenameTestAccount(account)
+	s.updateCalls++
+	return nil
+}
+
+func (s *accountAliasRenameUpdateAccountRepoStub) BindGroups(_ context.Context, accountID int64, groupIDs []int64) error {
+	if s.account == nil || s.account.ID != accountID {
+		return errors.New("account not found")
+	}
+	s.account.GroupIDs = append([]int64(nil), groupIDs...)
+	return nil
+}
+
+func (s *accountAliasRenameUpdateAccountRepoStub) ListShadowsByParent(context.Context, int64) ([]*Account, error) {
+	return nil, nil
+}
+
+func cloneAliasRenameTestAccount(account *Account) *Account {
+	if account == nil {
+		return nil
+	}
+	clone := *account
+	clone.GroupIDs = append([]int64(nil), account.GroupIDs...)
+	clone.Credentials = mergeMap(nil, account.Credentials)
+	clone.Extra = mergeMap(nil, account.Extra)
+	return &clone
 }
 
 type accountAliasRenameGroupRepoStub struct {

@@ -13,6 +13,7 @@ const log = {
   model: 'claude-opus-4-6',
   created_at: '2026-08-07T01:00:00Z',
   actual_cost: 1.25,
+  output_tokens: 10,
   compensated_cost: 0,
   net_actual_cost: 1.25,
   compensation_eligible: true,
@@ -31,6 +32,9 @@ describe('EmptyResponseClaimDialog', () => {
     expect(panel.classes()).toContain('max-sm:w-full')
     expect(wrapper.text()).toContain('claude-opus-4-6')
     expect(wrapper.text()).toContain('$1.250000')
+    expect(wrapper.text()).toContain('usage.emptyResponse.outputTokens')
+    expect(wrapper.text()).toContain('10')
+    expect(wrapper.text()).toContain('usage.emptyResponse.rules')
   })
 
   it('emits only a human reason and never accepts a client refund amount', async () => {

@@ -3,7 +3,7 @@ package service
 import "time"
 
 const MaxUserCustomGroups = 20
-const MaxUserCustomGroupModels = 200
+const MaxUserCustomGroupModels = 500
 
 const (
 	UserCustomGroupSourceIssueUnavailable = "source_group_unavailable"

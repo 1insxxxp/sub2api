@@ -975,6 +975,8 @@ export default {
         unavailableSourceFallback: '不可用来源 #{source}',
         modelsTitle: '模型路由',
         modelsHint: '逐个选择公开模型；同名模型需手动设置唯一别名。',
+        selectAll: '全选',
+        deselectAll: '取消全选',
         selectAllAll: '全选全部',
         selectAllSource: '全选本组',
         showAdvancedSettings: '更多设置',

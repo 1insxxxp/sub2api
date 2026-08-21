@@ -2,6 +2,7 @@ package service
 
 import (
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 )
@@ -109,4 +110,53 @@ func TestUsageLogSyncRequestTypeAndLegacyFieldsNilReceiver(t *testing.T) {
 
 	var log *UsageLog
 	log.SyncRequestTypeAndLegacyFields()
+}
+
+func TestProjectUsageLogCompensationMarksLowOutputWithinSevenDaysEligible(t *testing.T) {
+	t.Parallel()
+
+	now := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	log := &UsageLog{
+		ActualCost:   1.25,
+		OutputTokens: EmptyResponseClaimLowOutputTokenLimit,
+		CreatedAt:    now.Add(-6 * 24 * time.Hour),
+		Group:        &Group{EmptyResponseCompensationEnabled: true},
+		Outcome: &ResponseOutcome{
+			HTTPStatus:       200,
+			UpstreamStatus:   200,
+			HasText:          true,
+			StreamCompleted:  true,
+			CollectorVersion: ResponseOutcomeCollectorVersion,
+		},
+	}
+
+	projectUsageLogCompensation(log, now)
+
+	require.True(t, log.CompensationEligible)
+	require.Equal(t, UsageCompensationEligible, log.CompensationEligibility)
+	require.Equal(t, EmptyResponseReasonLowOutput, log.CompensationReasonCode)
+}
+
+func TestProjectUsageLogCompensationExpiresAfterSevenDays(t *testing.T) {
+	t.Parallel()
+
+	now := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	log := &UsageLog{
+		ActualCost:   1.25,
+		OutputTokens: 0,
+		CreatedAt:    now.Add(-EmptyResponseClaimWindow - time.Second),
+		Group:        &Group{EmptyResponseCompensationEnabled: true},
+		Outcome: &ResponseOutcome{
+			HTTPStatus:       200,
+			UpstreamStatus:   200,
+			StreamCompleted:  true,
+			CollectorVersion: ResponseOutcomeCollectorVersion,
+		},
+	}
+
+	projectUsageLogCompensation(log, now)
+
+	require.False(t, log.CompensationEligible)
+	require.Equal(t, UsageCompensationUnavailable, log.CompensationEligibility)
+	require.Equal(t, EmptyResponseReasonWindowExpired, log.CompensationReasonCode)
 }

@@ -41,7 +41,11 @@
               <p class="mt-3 text-xs text-slate-500 dark:text-slate-400">{{ formatDate(log.created_at) }}</p>
             </div>
 
-            <div class="grid grid-cols-2 gap-3">
+            <div class="grid grid-cols-1 gap-3 sm:grid-cols-3">
+              <div class="rounded-2xl border border-slate-200 p-3 dark:border-dark-600">
+                <p class="text-xs text-slate-500 dark:text-slate-400">{{ t('usage.emptyResponse.outputTokens') }}</p>
+                <p class="mt-1 font-mono text-base font-semibold text-slate-900 dark:text-white">{{ (log.output_tokens ?? 0).toLocaleString() }}</p>
+              </div>
               <div class="rounded-2xl border border-slate-200 p-3 dark:border-dark-600">
                 <p class="text-xs text-slate-500 dark:text-slate-400">{{ t('usage.emptyResponse.originalCharge') }}</p>
                 <p class="mt-1 font-mono text-base font-semibold text-slate-900 dark:text-white">${{ log.actual_cost.toFixed(6) }}</p>

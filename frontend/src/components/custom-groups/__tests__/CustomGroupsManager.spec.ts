@@ -156,6 +156,106 @@ describe('CustomGroupsManager', () => {
     expect(wrapper.find('[data-test="custom-group-source-models-12"]').exists()).toBe(false)
   })
 
+  it('renders global and per-source bulk selectors as checkboxes for mobile use', async () => {
+    const wrapper = await mountManager()
+
+    await wrapper.get('[data-test="custom-groups-create"]').trigger('click')
+
+    const globalSelectAll = wrapper.get('[data-test="custom-group-sources-select-all"]')
+    expect(globalSelectAll.find('input[type="checkbox"]').exists()).toBe(true)
+    expect(globalSelectAll.text()).toContain('全选全部')
+
+    const claudeSelectAll = wrapper.get('[data-test="custom-group-source-select-all-11"]')
+    expect(claudeSelectAll.find('input[type="checkbox"]').exists()).toBe(true)
+    expect(claudeSelectAll.text()).toContain('全选本组')
+  })
+
+  it('selects and clears all available source models from the form toolbar', async () => {
+    const wrapper = await mountManager()
+
+    await wrapper.get('[data-test="custom-groups-edit-21"]').trigger('click')
+    const selectAll = wrapper.get('[data-test="custom-group-sources-select-all"] input[type="checkbox"]')
+    expect((selectAll.element as HTMLInputElement).checked).toBe(false)
+    expect(wrapper.text()).toContain('已选 1')
+
+    await selectAll.setValue(true)
+
+    expect(wrapper.text()).toContain('已选 3')
+    expect((selectAll.element as HTMLInputElement).checked).toBe(true)
+    await wrapper.get('form').trigger('submit.prevent')
+    await flushPromises()
+
+    expect(apiMocks.update).toHaveBeenCalledWith(21, {
+      name: '酒馆统一模型',
+      models: expect.arrayContaining([
+        { public_model: 'claude-sonnet-4-6', source_group_id: 11, source_model: 'claude-sonnet-4-6' },
+        { public_model: expect.any(String), source_group_id: 11, source_model: 'claude-opus-4-6' },
+        { public_model: expect.any(String), source_group_id: 12, source_model: 'gemini-3.1-pro-preview' },
+      ]),
+    })
+
+    await wrapper.get('[data-test="custom-groups-edit-21"]').trigger('click')
+    await wrapper.get('[data-test="custom-group-sources-select-all"] input[type="checkbox"]').setValue(true)
+    await wrapper.get('[data-test="custom-group-sources-select-all"] input[type="checkbox"]').setValue(false)
+
+    expect(wrapper.text()).toContain('已选 0')
+    expect(wrapper.get('button[type="submit"]').attributes('disabled')).toBeDefined()
+  })
+
+  it('blocks saving with a clear message when bulk selection exceeds the model limit', async () => {
+    apiMocks.list.mockResolvedValue([])
+    apiMocks.candidates.mockResolvedValue([
+      {
+        id: 18,
+        name: '超大模型池',
+        platform: 'openai',
+        models: Array.from({ length: 501 }, (_, index) => `bulk-model-${index}`),
+      },
+    ])
+    const wrapper = await mountManager()
+    const app = useAppStore()
+    const showError = vi.spyOn(app, 'showError')
+
+    await wrapper.get('[data-test="custom-groups-create"]').trigger('click')
+    await wrapper.get('input[placeholder="例如：酒馆统一模型"]').setValue('全选测试')
+    await wrapper.get('[data-test="custom-group-sources-select-all"] input[type="checkbox"]').setValue(true)
+    expect(wrapper.text()).toContain('已选 501')
+
+    await wrapper.get('form').trigger('submit.prevent')
+    await flushPromises()
+
+    expect(showError).toHaveBeenCalledWith('一个自定义分组最多选择 500 个模型，请先取消部分模型')
+    expect(apiMocks.create).not.toHaveBeenCalled()
+  })
+
+  it('selects and clears models independently from each source group header', async () => {
+    const wrapper = await mountManager()
+
+    await wrapper.get('[data-test="custom-groups-create"]').trigger('click')
+
+    const claudeSelectAll = wrapper.get('[data-test="custom-group-source-select-all-11"] input[type="checkbox"]')
+    const geminiSelectAll = wrapper.get('[data-test="custom-group-source-select-all-12"] input[type="checkbox"]')
+    expect((claudeSelectAll.element as HTMLInputElement).checked).toBe(false)
+
+    await claudeSelectAll.setValue(true)
+
+    expect(wrapper.text()).toContain('已选 2')
+    expect((claudeSelectAll.element as HTMLInputElement).checked).toBe(true)
+    expect((geminiSelectAll.element as HTMLInputElement).checked).toBe(false)
+    expect(wrapper.find('[data-test="custom-group-source-models-11"]').exists()).toBe(false)
+
+    await geminiSelectAll.setValue(true)
+
+    expect(wrapper.text()).toContain('已选 3')
+    expect((geminiSelectAll.element as HTMLInputElement).checked).toBe(true)
+
+    await claudeSelectAll.setValue(false)
+
+    expect(wrapper.text()).toContain('已选 1')
+    expect((claudeSelectAll.element as HTMLInputElement).checked).toBe(false)
+    expect((geminiSelectAll.element as HTMLInputElement).checked).toBe(true)
+  })
+
   it('shows selected counts while keeping edit mode collapsed', async () => {
     const wrapper = await mountManager()
 

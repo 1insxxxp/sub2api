@@ -219,6 +219,7 @@
               v-if="showCompensationAction && row.compensation_eligible"
               type="button"
               class="mt-1.5 rounded-lg bg-primary-50 px-2 py-1 text-[11px] font-semibold text-primary-700 transition-colors hover:bg-primary-100 dark:bg-primary-500/10 dark:text-primary-300 dark:hover:bg-primary-500/20"
+              :title="t('usage.emptyResponse.actionHint')"
               @click="emit('compensationClaim', row)"
             >
               {{ t('usage.emptyResponse.action') }}

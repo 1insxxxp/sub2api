@@ -603,9 +603,9 @@ export default {
         }
       },
       emptyResponseClaims: {
-        tab: 'Empty-response claims',
-        rate: 'Empty-response claim rate',
-        warning: 'The empty-response claim rate is {rate}, above the 1% review threshold. Check the highest-ranked accounts and models first.',
+        tab: 'Empty or low-output claims',
+        rate: 'Compensation claim rate',
+        warning: 'The compensation claim rate is {rate}, above the 1% review threshold. Check the highest-ranked accounts and models first.',
         claims: 'Claims',
         refunded: 'Refunded amount',
         pending: 'Manual review',
@@ -616,7 +616,7 @@ export default {
         batchApprove: 'Approve selected',
         batchReject: 'Reject selected',
         viewDetails: 'View details',
-        detailTitle: 'Empty-response claim details',
+        detailTitle: 'Compensation claim details',
         closeDetail: 'Close details',
         approve: 'Approve',
         reject: 'Reject',
@@ -624,8 +624,8 @@ export default {
         evidence: 'Structured evidence',
         refund: 'Estimated refund',
         statusLabel: 'Status',
-        empty: 'No empty-response claims match these filters',
-        loadFailed: 'Failed to load empty-response claims',
+        empty: 'No compensation claims match these filters',
+        loadFailed: 'Failed to load compensation claims',
         reviewSuccess: 'Review completed',
         reviewFailed: 'Review failed. Refresh and try again.',
         batchSelected: '{count} claims selected',
@@ -649,6 +649,7 @@ export default {
         disconnect: 'Disconnect / upstream error',
         userReason: 'User explanation',
         missingEvidenceWarning: 'Server-side response evidence is missing; review must rely on usage and other structured metadata.',
+        lowOutputNotice: 'This claim matched the low-output rule: 10 output tokens or fewer. Use duration, status codes, and the user note for quick review.',
         privacyNotice: 'Only structured metadata is shown. Request/response bodies and tool arguments are never read or stored.',
         source: {
           automatic: 'Automatic refund',
@@ -667,9 +668,9 @@ export default {
           none: 'no effective output'
         },
         rankings: {
-          group: 'Groups by empty responses',
-          account: 'Accounts by empty responses',
-          model: 'Models by empty responses'
+          group: 'Groups by compensation claims',
+          account: 'Accounts by compensation claims',
+          model: 'Models by compensation claims'
         },
         evidenceSummary: 'HTTP {http} · upstream {upstream} · {events} events · {completion}',
         complete: 'complete',
