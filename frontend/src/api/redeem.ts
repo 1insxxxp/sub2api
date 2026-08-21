@@ -4,7 +4,7 @@
  */
 
 import { apiClient } from './client'
-import type { RedeemCode, RedeemCodeRequest } from '@/types'
+import type { PaginatedResponse, RedeemCode, RedeemCodeRequest } from '@/types'
 
 export interface RedeemHistoryItem {
   id: number
@@ -35,6 +35,11 @@ export interface GenerateBalanceTransferCodeRequest {
 
 export type GeneratedRedeemCode = RedeemCode
 
+export interface RedeemListParams {
+  page: number
+  page_size: number
+}
+
 /**
  * Redeem a code
  * @param code - Redeem code string
@@ -64,8 +69,12 @@ export async function redeem(code: string): Promise<{
  * Get user's redemption history
  * @returns List of redeemed codes
  */
-export async function getHistory(): Promise<RedeemHistoryItem[]> {
-  const { data } = await apiClient.get<RedeemHistoryItem[]>('/redeem/history')
+export async function getHistory(
+  params: RedeemListParams
+): Promise<PaginatedResponse<RedeemHistoryItem>> {
+  const { data } = await apiClient.get<PaginatedResponse<RedeemHistoryItem>>('/redeem/history', {
+    params
+  })
   return data
 }
 
@@ -86,8 +95,12 @@ export async function generateBalanceTransferCodes(
   return Array.isArray(data) ? data : [data]
 }
 
-export async function getGenerated(): Promise<GeneratedRedeemCode[]> {
-  const { data } = await apiClient.get<GeneratedRedeemCode[]>('/redeem/generated')
+export async function getGenerated(
+  params: RedeemListParams
+): Promise<PaginatedResponse<GeneratedRedeemCode>> {
+  const { data } = await apiClient.get<PaginatedResponse<GeneratedRedeemCode>>('/redeem/generated', {
+    params
+  })
   return data
 }
 
