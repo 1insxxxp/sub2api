@@ -62,6 +62,9 @@ const messages: Record<string, string> = {
   'usage.preparingExport': 'Preparing export',
   'usage.exportSuccess': 'Export success',
   'usage.exportFailed': 'Export failed',
+  'usage.tabs.usage': 'Usage',
+  'usage.tabs.errors': 'Error Requests',
+  'usage.tabs.emptyResponses': 'Empty responses',
   'common.refresh': 'Refresh',
   'common.reset': 'Reset',
 }
@@ -217,6 +220,24 @@ describe('user UsageView', () => {
     }))
     expect(list).toHaveBeenCalledWith(1, 100)
     expect(getAvailable).toHaveBeenCalled()
+  })
+
+  it('shows the empty response list tab and queries compensation candidates', async () => {
+    const wrapper = mountUsageView()
+    await flushPromises()
+
+    const emptyResponseTab = wrapper.findAll('button.tab').find((button) => button.text() === 'Empty responses')
+    expect(emptyResponseTab).toBeTruthy()
+
+    await emptyResponseTab!.trigger('click')
+    await flushPromises()
+
+    expect(query).toHaveBeenLastCalledWith(expect.objectContaining({
+      page: 1,
+      sort_by: 'created_at',
+      sort_order: 'desc',
+      compensation: 'empty_response',
+    }), expect.any(Object))
   })
 
   it('exports csv with current filters and without admin-only fields', async () => {

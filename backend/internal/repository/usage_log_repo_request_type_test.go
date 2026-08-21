@@ -347,6 +347,20 @@ func TestAppendUsageLogBillingModeQueryFilter(t *testing.T) {
 	require.Equal(t, []any{int64(42), string(service.BillingModeToken)}, args)
 }
 
+func TestAppendUsageLogCompensationWhereConditionEmptyResponse(t *testing.T) {
+	conditions, args := appendUsageLogCompensationWhereCondition(
+		[]string{"user_id = $1"},
+		[]any{int64(42)},
+		usagestats.UsageCompensationFilterEmptyResponse,
+	)
+
+	require.Len(t, conditions, 2)
+	require.Contains(t, conditions[1], "empty_response_claims")
+	require.Contains(t, conditions[1], "output_tokens <= $2")
+	require.Contains(t, conditions[1], "empty_response_compensation_enabled = TRUE")
+	require.Equal(t, []any{int64(42), service.EmptyResponseClaimLowOutputTokenLimit}, args)
+}
+
 func anySliceToDriverValues(values []any) []driver.Value {
 	out := make([]driver.Value, 0, len(values))
 	for _, value := range values {

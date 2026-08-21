@@ -150,6 +150,12 @@ func (h *UsageHandler) parseUserUsageFilters(c *gin.Context, requireRange bool) 
 		return nil, false
 	}
 
+	compensationFilter := strings.TrimSpace(c.Query("compensation"))
+	if compensationFilter != "" && compensationFilter != usagestats.UsageCompensationFilterEmptyResponse {
+		response.BadRequest(c, "Invalid compensation")
+		return nil, false
+	}
+
 	userTZ := c.Query("timezone")
 	now := timezone.NowInUserLocation(userTZ)
 	var startTime, endTime time.Time
@@ -202,17 +208,18 @@ func (h *UsageHandler) parseUserUsageFilters(c *gin.Context, requireRange bool) 
 
 	return &userUsageFilters{
 		Filters: usagestats.UsageLogFilters{
-			UserID:            subject.UserID,
-			APIKeyID:          apiKeyID,
-			GroupID:           groupID,
-			Model:             strings.TrimSpace(c.Query("model")),
-			ModelFilterSource: usagestats.ModelSourceRequested,
-			RequestType:       requestType,
-			Stream:            stream,
-			BillingType:       billingType,
-			BillingMode:       billingMode,
-			StartTime:         startPtr,
-			EndTime:           endPtr,
+			UserID:             subject.UserID,
+			APIKeyID:           apiKeyID,
+			GroupID:            groupID,
+			Model:              strings.TrimSpace(c.Query("model")),
+			ModelFilterSource:  usagestats.ModelSourceRequested,
+			RequestType:        requestType,
+			Stream:             stream,
+			BillingType:        billingType,
+			BillingMode:        billingMode,
+			CompensationFilter: compensationFilter,
+			StartTime:          startPtr,
+			EndTime:            endPtr,
 		},
 		StartTime: derefTime(startPtr),
 		EndTime:   derefTime(endPtr),

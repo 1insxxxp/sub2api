@@ -148,6 +148,7 @@ func (r *usageLogRepository) ListWithFilters(ctx context.Context, params paginat
 	if filters.UpstreamModelMismatch != nil {
 		conditions = append(conditions, upstreamModelMismatchCondition("upstream_model_mismatch", *filters.UpstreamModelMismatch))
 	}
+	conditions, args = appendUsageLogCompensationWhereCondition(conditions, args, filters.CompensationFilter)
 	if filters.StartTime != nil {
 		conditions = append(conditions, fmt.Sprintf("created_at >= $%d", len(args)+1))
 		args = append(args, *filters.StartTime)
@@ -258,6 +259,32 @@ func upstreamModelMismatchCondition(column string, mismatch bool) string {
 		return column + " IS TRUE"
 	}
 	return column + " IS FALSE"
+}
+
+func appendUsageLogCompensationWhereCondition(conditions []string, args []any, filter string) ([]string, []any) {
+	if strings.TrimSpace(filter) != usagestats.UsageCompensationFilterEmptyResponse {
+		return conditions, args
+	}
+	limitPos := len(args) + 1
+	conditions = append(conditions, fmt.Sprintf(`(
+		EXISTS (
+			SELECT 1 FROM empty_response_claims erc
+			WHERE erc.usage_log_id = usage_logs.id
+		)
+		OR (
+			actual_cost > 0
+			AND COALESCE(compensated_cost, 0) <= 0
+			AND output_tokens <= $%d
+			AND group_id IS NOT NULL
+			AND EXISTS (
+				SELECT 1 FROM groups g
+				WHERE g.id = usage_logs.group_id
+					AND g.empty_response_compensation_enabled = TRUE
+			)
+		)
+	)`, limitPos))
+	args = append(args, service.EmptyResponseClaimLowOutputTokenLimit)
+	return conditions, args
 }
 
 func shouldUseFastUsageLogTotal(filters UsageLogFilters) bool {

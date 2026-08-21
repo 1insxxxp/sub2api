@@ -9,6 +9,10 @@ const (
 	ModelSourceMapping   = "mapping"
 )
 
+const (
+	UsageCompensationFilterEmptyResponse = "empty_response"
+)
+
 func IsValidModelSource(source string) bool {
 	switch source {
 	case ModelSourceRequested, ModelSourceUpstream, ModelSourceMapping:
@@ -286,6 +290,7 @@ type UsageLogFilters struct {
 	BillingType           *int8
 	BillingMode           string
 	UpstreamModelMismatch *bool
+	CompensationFilter    string
 	StartTime             *time.Time
 	EndTime               *time.Time
 	// ExactTotal requests exact COUNT(*) for pagination. Default false for fast large-table paging.

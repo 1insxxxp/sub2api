@@ -161,16 +161,24 @@
         </div>
       </div>
 
-      <div v-if="errorViewEnabled" class="flex gap-2 border-b border-gray-200 dark:border-dark-700">
-        <button class="tab" :class="{ 'tab-active': activeTab === 'usage' }" @click="activeTab = 'usage'">
+      <div class="flex gap-2 overflow-x-auto border-b border-gray-200 dark:border-dark-700">
+        <button class="tab whitespace-nowrap" :class="{ 'tab-active': activeTab === 'usage' }" @click="switchToUsage">
           {{ t('usage.tabs.usage') }}
         </button>
-        <button class="tab" :class="{ 'tab-active': activeTab === 'errors' }" @click="switchToErrors">
+        <button
+          v-if="errorViewEnabled"
+          class="tab whitespace-nowrap"
+          :class="{ 'tab-active': activeTab === 'errors' }"
+          @click="switchToErrors"
+        >
           {{ t('usage.tabs.errors') }}
+        </button>
+        <button class="tab whitespace-nowrap" :class="{ 'tab-active': activeTab === 'emptyResponses' }" @click="switchToEmptyResponses">
+          {{ t('usage.tabs.emptyResponses') }}
         </button>
       </div>
 
-      <template v-if="activeTab === 'usage'">
+      <template v-if="activeTab !== 'errors'">
         <UsageTable
           :data="usageLogs"
           :loading="loading"
@@ -346,6 +354,12 @@ const getLast24HoursRangeDates = () => {
   return { start: formatLocalDate(start), end: formatLocalDate(end) }
 }
 
+const getEmptyResponseRangeDates = () => {
+  const end = new Date()
+  const start = new Date(end.getTime() - 7 * 24 * 60 * 60 * 1000)
+  return { start: formatLocalDate(start), end: formatLocalDate(end) }
+}
+
 const getGranularityForRange = (start: string, end: string): 'day' | 'hour' => {
   const startTime = new Date(`${start}T00:00:00`).getTime()
   const endTime = new Date(`${end}T00:00:00`).getTime()
@@ -361,7 +375,7 @@ const modelDistributionMetric = ref<DistributionMetric>('tokens')
 const groupDistributionMetric = ref<DistributionMetric>('tokens')
 const endpointDistributionMetric = ref<DistributionMetric>('tokens')
 const endpointDistributionSource = ref<EndpointSource>('inbound')
-const activeTab = ref<'usage' | 'errors'>('usage')
+const activeTab = ref<'usage' | 'errors' | 'emptyResponses'>('usage')
 const errorViewEnabled = computed(() => appStore.cachedPublicSettings?.allow_user_view_error_requests ?? false)
 
 const filters = ref<UsageQueryParams>({
@@ -434,13 +448,19 @@ const normalizedFilters = computed<UsageQueryParams>(() => {
   }
 })
 
-const buildUsageListParams = (page: number, pageSize: number): UsageQueryParams => ({
-  page,
-  page_size: pageSize,
-  ...normalizedFilters.value,
-  sort_by: sortState.sort_by,
-  sort_order: sortState.sort_order,
-})
+const buildUsageListParams = (page: number, pageSize: number): UsageQueryParams => {
+  const params: UsageQueryParams = {
+    page,
+    page_size: pageSize,
+    ...normalizedFilters.value,
+    sort_by: sortState.sort_by,
+    sort_order: sortState.sort_order,
+  }
+  if (activeTab.value === 'emptyResponses') {
+    params.compensation = 'empty_response'
+  }
+  return params
+}
 
 const loadLogs = async () => {
   abortController?.abort()
@@ -579,15 +599,18 @@ const applyFilters = () => {
 }
 
 const refreshData = () => {
-  void loadLogs()
+  if (activeTab.value === 'errors') {
+    void loadErrors()
+  } else {
+    void loadLogs()
+  }
   void loadStats()
   void loadModelStats()
   void loadChartData()
-  if (activeTab.value === 'errors') void loadErrors()
 }
 
 const resetFilters = () => {
-  const range = getLast24HoursRangeDates()
+  const range = activeTab.value === 'emptyResponses' ? getEmptyResponseRangeDates() : getLast24HoursRangeDates()
   startDate.value = range.start
   endDate.value = range.end
   filters.value = {
@@ -908,9 +931,34 @@ const onErrorPageSize = (pageSize: number) => {
   void loadErrors()
 }
 
+const applyEmptyResponseRange = () => {
+  const range = getEmptyResponseRangeDates()
+  startDate.value = range.start
+  endDate.value = range.end
+  filters.value.start_date = range.start
+  filters.value.end_date = range.end
+  granularity.value = getGranularityForRange(range.start, range.end)
+}
+
+const switchToUsage = () => {
+  activeTab.value = 'usage'
+  pagination.page = 1
+  void loadLogs()
+}
+
 const switchToErrors = () => {
   activeTab.value = 'errors'
   if (errorRows.value.length === 0) void loadErrors()
+}
+
+const switchToEmptyResponses = () => {
+  activeTab.value = 'emptyResponses'
+  applyEmptyResponseRange()
+  pagination.page = 1
+  void loadLogs()
+  void loadStats()
+  void loadModelStats()
+  void loadChartData()
 }
 
 onMounted(() => {

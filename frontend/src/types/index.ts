@@ -2329,6 +2329,7 @@ export interface UsageQueryParams {
   stream?: boolean
   billing_type?: number | null
   billing_mode?: string | null
+  compensation?: 'empty_response'
   start_date?: string
   end_date?: string
   timezone?: string

@@ -442,7 +442,7 @@ export default {
         already_claimed: 'A claim already exists for this request'
       }
     },
-    tabs: { usage: 'Usage', errors: 'Error Requests', ranking: 'User Ranking' },
+    tabs: { usage: 'Usage', errors: 'Error Requests', emptyResponses: 'Empty responses', ranking: 'User Ranking' },
     errors: {
       time: 'Time', model: 'Model', endpoint: 'Endpoint', status: 'Status',
       category: 'Category', platform: 'Platform', message: 'Message',
