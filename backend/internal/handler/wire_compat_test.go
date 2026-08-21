@@ -24,6 +24,7 @@ func TestProvideAdminHandlersPreservesLegacyConstructor(t *testing.T) {
 	geminiOAuthHandler := &admin.GeminiOAuthHandler{}
 	antigravityOAuthHandler := &admin.AntigravityOAuthHandler{}
 	grokOAuthHandler := &admin.GrokOAuthHandler{}
+	cnProviderHandler := &admin.CNProviderHandler{}
 	proxyHandler := &admin.ProxyHandler{}
 	redeemHandler := &admin.RedeemHandler{}
 	promoHandler := &admin.PromoHandler{}
@@ -63,6 +64,7 @@ func TestProvideAdminHandlersPreservesLegacyConstructor(t *testing.T) {
 		geminiOAuthHandler,
 		antigravityOAuthHandler,
 		grokOAuthHandler,
+		cnProviderHandler,
 		proxyHandler,
 		redeemHandler,
 		promoHandler,
@@ -103,6 +105,7 @@ func TestProvideAdminHandlersPreservesLegacyConstructor(t *testing.T) {
 	require.Same(t, geminiOAuthHandler, got.GeminiOAuth)
 	require.Same(t, antigravityOAuthHandler, got.AntigravityOAuth)
 	require.Same(t, grokOAuthHandler, got.GrokOAuth)
+	require.Same(t, cnProviderHandler, got.CNProvider)
 	require.Same(t, proxyHandler, got.Proxy)
 	require.Same(t, redeemHandler, got.Redeem)
 	require.Same(t, promoHandler, got.Promo)
@@ -141,6 +144,7 @@ func TestProvideAdminHandlersPreservesLegacyConstructor(t *testing.T) {
 		geminiOAuthHandler,
 		antigravityOAuthHandler,
 		grokOAuthHandler,
+		cnProviderHandler,
 		proxyHandler,
 		redeemHandler,
 		promoHandler,
