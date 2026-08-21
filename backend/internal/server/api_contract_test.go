@@ -631,6 +631,71 @@ func TestAPIContracts(t *testing.T) {
 			}`,
 		},
 		{
+			name: "GET /api/v1/redeem/history paginated",
+			setup: func(t *testing.T, deps *contractDeps) {
+				t.Helper()
+				deps.redeemRepo.SetByUser(1, []service.RedeemCode{
+					{
+						ID:        900,
+						Code:      "CODE-1",
+						Type:      service.RedeemTypeBalance,
+						Value:     1.25,
+						Status:    service.StatusUsed,
+						UsedBy:    ptr(int64(1)),
+						UsedAt:    ptr(deps.now),
+						CreatedAt: deps.now,
+					},
+					{
+						ID:        901,
+						Code:      "CODE-2",
+						Type:      service.RedeemTypeBalance,
+						Value:     2.5,
+						Status:    service.StatusUsed,
+						UsedBy:    ptr(int64(1)),
+						UsedAt:    ptr(deps.now),
+						CreatedAt: deps.now,
+					},
+					{
+						ID:        902,
+						Code:      "CODE-3",
+						Type:      service.RedeemTypeConcurrency,
+						Value:     3,
+						Status:    service.StatusUsed,
+						UsedBy:    ptr(int64(1)),
+						UsedAt:    ptr(deps.now),
+						CreatedAt: deps.now,
+					},
+				})
+			},
+			method:     http.MethodGet,
+			path:       "/api/v1/redeem/history?page=2&page_size=2",
+			wantStatus: http.StatusOK,
+			wantJSON: `{
+				"code": 0,
+				"message": "success",
+				"data": {
+					"items": [
+						{
+							"id": 902,
+							"code": "CODE-3",
+							"type": "concurrency",
+							"value": 3,
+							"status": "used",
+							"used_by": 1,
+							"used_at": "2025-01-02T03:04:05Z",
+							"created_at": "2025-01-02T03:04:05Z",
+							"group_id": null,
+							"validity_days": 0
+						}
+					],
+					"total": 3,
+					"page": 2,
+					"page_size": 2,
+					"pages": 2
+				}
+			}`,
+		},
+		{
 			name: "GET /api/v1/redeem/generated",
 			setup: func(t *testing.T, deps *contractDeps) {
 				t.Helper()
@@ -674,6 +739,73 @@ func TestAPIContracts(t *testing.T) {
 						"validity_days": 0
 					}
 				]
+			}`,
+		},
+		{
+			name: "GET /api/v1/redeem/generated paginated",
+			setup: func(t *testing.T, deps *contractDeps) {
+				t.Helper()
+				deps.redeemRepo.SetByCreator(1, []service.RedeemCode{
+					{
+						ID:        901,
+						Code:      "TRANSFER-1",
+						Type:      service.RedeemTypeBalance,
+						Value:     1,
+						Status:    service.StatusUnused,
+						CreatedBy: ptr(int64(1)),
+						Source:    service.RedeemCodeSourceUserBalanceTransfer,
+						CreatedAt: deps.now,
+					},
+					{
+						ID:        902,
+						Code:      "TRANSFER-2",
+						Type:      service.RedeemTypeBalance,
+						Value:     2,
+						Status:    service.StatusUnused,
+						CreatedBy: ptr(int64(1)),
+						Source:    service.RedeemCodeSourceUserBalanceTransfer,
+						CreatedAt: deps.now,
+					},
+					{
+						ID:        903,
+						Code:      "TRANSFER-3",
+						Type:      service.RedeemTypeBalance,
+						Value:     3,
+						Status:    service.StatusUsed,
+						CreatedBy: ptr(int64(1)),
+						Source:    service.RedeemCodeSourceUserBalanceTransfer,
+						CreatedAt: deps.now,
+					},
+				})
+			},
+			method:     http.MethodGet,
+			path:       "/api/v1/redeem/generated?page=2&page_size=2",
+			wantStatus: http.StatusOK,
+			wantJSON: `{
+				"code": 0,
+				"message": "success",
+				"data": {
+					"items": [
+						{
+							"id": 903,
+							"code": "TRANSFER-3",
+							"type": "balance",
+							"value": 3,
+							"status": "used",
+							"used_by": null,
+							"used_at": null,
+							"created_by": 1,
+							"source": "user_balance_transfer",
+							"created_at": "2025-01-02T03:04:05Z",
+							"group_id": null,
+							"validity_days": 0
+						}
+					],
+					"total": 3,
+					"page": 2,
+					"page_size": 2,
+					"pages": 2
+				}
 			}`,
 		},
 		{
@@ -2544,8 +2676,21 @@ func (r *stubRedeemCodeRepo) ListByUser(ctx context.Context, userID int64, limit
 	return append([]service.RedeemCode(nil), codes...), nil
 }
 
-func (stubRedeemCodeRepo) ListByUserPaginated(ctx context.Context, userID int64, params pagination.PaginationParams, codeType string) ([]service.RedeemCode, *pagination.PaginationResult, error) {
-	return nil, nil, errors.New("not implemented")
+func (r *stubRedeemCodeRepo) ListByUserPaginated(ctx context.Context, userID int64, params pagination.PaginationParams, codeType string) ([]service.RedeemCode, *pagination.PaginationResult, error) {
+	if r.byUser == nil {
+		return []service.RedeemCode{}, paginationResult(0, params), nil
+	}
+	codes := r.byUser[userID]
+	if codeType != "" {
+		filtered := make([]service.RedeemCode, 0, len(codes))
+		for _, code := range codes {
+			if code.Type == codeType {
+				filtered = append(filtered, code)
+			}
+		}
+		codes = filtered
+	}
+	return paginateRedeemCodes(codes, params), paginationResult(int64(len(codes)), params), nil
 }
 
 func (r *stubRedeemCodeRepo) ListByCreator(ctx context.Context, userID int64, limit int) ([]service.RedeemCode, error) {
@@ -2557,6 +2702,14 @@ func (r *stubRedeemCodeRepo) ListByCreator(ctx context.Context, userID int64, li
 		codes = codes[:limit]
 	}
 	return append([]service.RedeemCode(nil), codes...), nil
+}
+
+func (r *stubRedeemCodeRepo) ListByCreatorPaginated(ctx context.Context, userID int64, params pagination.PaginationParams) ([]service.RedeemCode, *pagination.PaginationResult, error) {
+	if r.byCreator == nil {
+		return []service.RedeemCode{}, paginationResult(0, params), nil
+	}
+	codes := r.byCreator[userID]
+	return paginateRedeemCodes(codes, params), paginationResult(int64(len(codes)), params), nil
 }
 
 func (stubRedeemCodeRepo) SumPositiveBalanceByUser(ctx context.Context, userID int64) (float64, error) {
@@ -3287,6 +3440,20 @@ func paginateLogs(logs []service.UsageLog, params pagination.PaginationParams) [
 	}
 	out := make([]service.UsageLog, 0, end-start)
 	out = append(out, logs[start:end]...)
+	return out
+}
+
+func paginateRedeemCodes(codes []service.RedeemCode, params pagination.PaginationParams) []service.RedeemCode {
+	start := params.Offset()
+	if start > len(codes) {
+		start = len(codes)
+	}
+	end := start + params.Limit()
+	if end > len(codes) {
+		end = len(codes)
+	}
+	out := make([]service.RedeemCode, 0, end-start)
+	out = append(out, codes[start:end]...)
 	return out
 }
 
