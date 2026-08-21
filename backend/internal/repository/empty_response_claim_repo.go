@@ -125,7 +125,7 @@ func (r *emptyResponseClaimRepository) ListRecentEvaluations(ctx context.Context
 			COALESCE(NULLIF(ul.requested_model, ''), ul.model), ul.actual_cost::float8,
 			ul.compensated_cost::float8, ul.billing_type, COALESCE(ul.inbound_endpoint, ''), ul.created_at,
 			ul.input_tokens, ul.output_tokens, ul.cache_creation_tokens, ul.cache_read_tokens,
-			COALESCE(ak.name, ''), COALESCE(g.name, ''),
+			COALESCE(ak.name, ''), COALESCE(g.name, ''), COALESCE(g.empty_response_compensation_enabled, FALSE),
 			uro.id, uro.http_status, uro.upstream_status, uro.has_text, uro.has_tool_call,
 			uro.has_reasoning, uro.has_media, uro.output_bytes, uro.event_count,
 			uro.stream_completed, uro.finish_reason, uro.disconnect_source,
@@ -140,6 +140,7 @@ func (r *emptyResponseClaimRepository) ListRecentEvaluations(ctx context.Context
 		WHERE ul.user_id = $1
 			AND ul.created_at >= $2
 			AND ul.created_at < $3
+			AND COALESCE(g.empty_response_compensation_enabled, FALSE) = TRUE
 			AND ul.output_tokens >= 0
 			AND ul.output_tokens <= $4
 		ORDER BY ul.created_at DESC, ul.id DESC
@@ -156,6 +157,7 @@ func (r *emptyResponseClaimRepository) ListRecentEvaluations(ctx context.Context
 		var candidate service.EmptyResponseRecentCandidate
 		var usage service.UsageLog
 		var groupID, subscriptionID, outcomeID, claimID sql.NullInt64
+		var groupEnabled bool
 		var inputTokens, outputTokens, cacheCreationTokens, cacheReadTokens int
 		var httpStatus, upstreamStatus, outputBytes, eventCount, collectorVersion sql.NullInt64
 		var hasText, hasToolCall, hasReasoning, hasMedia, streamCompleted sql.NullBool
@@ -165,7 +167,7 @@ func (r *emptyResponseClaimRepository) ListRecentEvaluations(ctx context.Context
 			&usage.ID, &usage.UserID, &usage.APIKeyID, &usage.AccountID, &groupID, &subscriptionID,
 			&usage.Model, &usage.ActualCost, &usage.CompensatedCost, &usage.BillingType, &inboundEndpoint, &usage.CreatedAt,
 			&inputTokens, &outputTokens, &cacheCreationTokens, &cacheReadTokens,
-			&candidate.APIKeyName, &candidate.GroupName,
+			&candidate.APIKeyName, &candidate.GroupName, &groupEnabled,
 			&outcomeID, &httpStatus, &upstreamStatus, &hasText, &hasToolCall,
 			&hasReasoning, &hasMedia, &outputBytes, &eventCount, &streamCompleted,
 			&finishReason, &disconnectSource, &upstreamErrorKind, &collectorVersion,
@@ -191,6 +193,7 @@ func (r *emptyResponseClaimRepository) ListRecentEvaluations(ctx context.Context
 			candidate.Evaluation.OutcomeID = &outcomeID.Int64
 		}
 		candidate.Evaluation.Usage = usage
+		candidate.Evaluation.Group.EmptyResponseCompensationEnabled = groupEnabled
 		candidate.Evaluation.Outcome = &service.ResponseOutcome{
 			HTTPStatus:        int(httpStatus.Int64),
 			UpstreamStatus:    int(upstreamStatus.Int64),

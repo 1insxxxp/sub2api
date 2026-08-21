@@ -382,14 +382,14 @@ func EvaluateEmptyResponseClaim(now time.Time, usage UsageLog, outcome *Response
 	if usage.OutputTokens > EmptyResponseClaimMaxOutputTokens {
 		return decision(EmptyResponseClaimRejected, EmptyResponseReasonEffectiveOutput)
 	}
+	if !group.EmptyResponseCompensationEnabled {
+		return decision(EmptyResponseClaimRejected, EmptyResponseReasonGroupDisabled)
+	}
 	if isPureEmptyResponse(outcome) {
 		return decision(EmptyResponseClaimApproved, EmptyResponseReasonPureEmpty)
 	}
 	if isLowOutputCompensable(usage) {
 		return decision(EmptyResponseClaimApproved, EmptyResponseReasonLowOutput)
-	}
-	if !group.EmptyResponseCompensationEnabled {
-		return decision(EmptyResponseClaimRejected, EmptyResponseReasonGroupDisabled)
 	}
 	if outcome != nil && outcome.CollectorVersion > 0 {
 		if outcome.DisconnectSource == DisconnectSourceClient {
