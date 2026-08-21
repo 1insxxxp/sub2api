@@ -100,6 +100,49 @@ func (s *RedeemCodeRepoSuite) TestCreatePersistsBalanceTransferAuditMetadata() {
 	s.Require().Equal(redeemer.ID, got.User.ID)
 }
 
+func (s *RedeemCodeRepoSuite) TestListByCreatorFiltersToBalanceTransferCodes() {
+	creator := s.createUser(uniqueTestValue(s.T(), "creator-list") + "@example.com")
+	other := s.createUser(uniqueTestValue(s.T(), "other-list") + "@example.com")
+
+	s.Require().NoError(s.repo.Create(s.ctx, &service.RedeemCode{
+		Code:      "CREATOR-BALANCE",
+		Type:      service.RedeemTypeBalance,
+		Value:     1,
+		Status:    service.StatusUnused,
+		CreatedBy: &creator.ID,
+		Source:    service.RedeemCodeSourceUserBalanceTransfer,
+	}))
+	s.Require().NoError(s.repo.Create(s.ctx, &service.RedeemCode{
+		Code:      "CREATOR-NON-BALANCE",
+		Type:      service.RedeemTypeConcurrency,
+		Value:     1,
+		Status:    service.StatusUnused,
+		CreatedBy: &creator.ID,
+		Source:    service.RedeemCodeSourceUserBalanceTransfer,
+	}))
+	s.Require().NoError(s.repo.Create(s.ctx, &service.RedeemCode{
+		Code:      "CREATOR-OTHER-SOURCE",
+		Type:      service.RedeemTypeBalance,
+		Value:     1,
+		Status:    service.StatusUnused,
+		CreatedBy: &creator.ID,
+		Source:    "admin",
+	}))
+	s.Require().NoError(s.repo.Create(s.ctx, &service.RedeemCode{
+		Code:      "OTHER-CREATOR",
+		Type:      service.RedeemTypeBalance,
+		Value:     1,
+		Status:    service.StatusUnused,
+		CreatedBy: &other.ID,
+		Source:    service.RedeemCodeSourceUserBalanceTransfer,
+	}))
+
+	codes, err := s.repo.ListByCreator(s.ctx, creator.ID, 25)
+	s.Require().NoError(err)
+	s.Require().Len(codes, 1)
+	s.Require().Equal("CREATOR-BALANCE", codes[0].Code)
+}
+
 func (s *RedeemCodeRepoSuite) TestCreateBatch() {
 	codes := []service.RedeemCode{
 		{Code: "BATCH-1", Type: service.RedeemTypeBalance, Value: 10, Status: service.StatusUnused},

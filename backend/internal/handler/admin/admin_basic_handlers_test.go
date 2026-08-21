@@ -138,6 +138,38 @@ func TestUserHandlerEndpoints(t *testing.T) {
 	require.Equal(t, http.StatusOK, rec.Code)
 }
 
+func TestUserHandlerMapsBalanceRedeemCodePermission(t *testing.T) {
+	router, adminSvc := setupAdminRouter()
+
+	body, err := json.Marshal(map[string]any{
+		"email":                       "new-balance-redeem@example.com",
+		"password":                    "pass123",
+		"balance_redeem_code_enabled": true,
+	})
+	require.NoError(t, err)
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/admin/users", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	router.ServeHTTP(rec, req)
+	require.Equal(t, http.StatusOK, rec.Code)
+	require.NotNil(t, adminSvc.lastCreateUserInput)
+	require.True(t, adminSvc.lastCreateUserInput.BalanceRedeemCodeEnabled)
+
+	body, err = json.Marshal(map[string]any{
+		"balance_redeem_code_enabled": false,
+	})
+	require.NoError(t, err)
+	rec = httptest.NewRecorder()
+	req = httptest.NewRequest(http.MethodPut, "/api/v1/admin/users/100", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	router.ServeHTTP(rec, req)
+	require.Equal(t, http.StatusOK, rec.Code)
+	require.NotNil(t, adminSvc.lastUpdateUserInput)
+	require.NotNil(t, adminSvc.lastUpdateUserInput.BalanceRedeemCodeEnabled)
+	require.False(t, *adminSvc.lastUpdateUserInput.BalanceRedeemCodeEnabled)
+}
+
 func TestUserHandlerBindAuthIdentityMapsRequest(t *testing.T) {
 	router, adminSvc := setupAdminRouter()
 

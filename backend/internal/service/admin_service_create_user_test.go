@@ -43,6 +43,22 @@ func TestAdminService_CreateUser_Success(t *testing.T) {
 	require.Equal(t, user, repo.created[0])
 }
 
+func TestAdminService_CreateUser_PersistsBalanceRedeemCodePermission(t *testing.T) {
+	repo := &userRepoStub{nextID: 13}
+	svc := &adminServiceImpl{userRepo: repo}
+
+	user, err := svc.CreateUser(context.Background(), &CreateUserInput{
+		Email:                    "balance-redeem-enabled@test.com",
+		Password:                 "strong-pass",
+		BalanceRedeemCodeEnabled: true,
+	})
+
+	require.NoError(t, err)
+	require.True(t, user.BalanceRedeemCodeEnabled)
+	require.Len(t, repo.created, 1)
+	require.True(t, repo.created[0].BalanceRedeemCodeEnabled)
+}
+
 func TestAdminService_CreateUser_UsesDefaultBalanceWhenBalanceOmitted(t *testing.T) {
 	repo := &userRepoStub{nextID: 11}
 	cfg := &config.Config{

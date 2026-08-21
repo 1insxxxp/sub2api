@@ -731,8 +731,6 @@ func TestAPIContracts(t *testing.T) {
 						"status": "used",
 						"used_by": 2,
 						"used_at": "2025-01-02T03:04:05Z",
-						"created_by": 1,
-						"source": "user_balance_transfer",
 						"created_at": "2025-01-02T03:04:05Z",
 						"expires_at": "2025-02-01T03:04:05Z",
 						"group_id": null,
@@ -794,8 +792,6 @@ func TestAPIContracts(t *testing.T) {
 							"status": "used",
 							"used_by": null,
 							"used_at": null,
-							"created_by": 1,
-							"source": "user_balance_transfer",
 							"created_at": "2025-01-02T03:04:05Z",
 							"group_id": null,
 							"validity_days": 0

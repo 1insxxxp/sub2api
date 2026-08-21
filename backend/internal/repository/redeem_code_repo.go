@@ -493,6 +493,7 @@ func (r *redeemCodeRepository) ListByCreator(ctx context.Context, userID int64, 
 		Where(
 			redeemcode.CreatedByEQ(userID),
 			redeemcode.SourceEQ(service.RedeemCodeSourceUserBalanceTransfer),
+			redeemcode.TypeEQ(service.RedeemTypeBalance),
 		).
 		WithUser().
 		WithCreator().

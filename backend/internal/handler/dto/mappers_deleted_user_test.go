@@ -18,3 +18,32 @@ func TestUserFromServiceShallow_MapsDeletedAt(t *testing.T) {
 	active := UserFromServiceShallow(&service.User{ID: 2, Email: "a@test.com"})
 	require.Nil(t, active.DeletedAt, "active user must have nil DeletedAt")
 }
+
+func TestRedeemCodeFromService_HidesUserBalanceTransferAuditFields(t *testing.T) {
+	creatorID := int64(9)
+
+	userDTO := RedeemCodeFromService(&service.RedeemCode{
+		ID:        1,
+		Code:      "AUDIT-HIDDEN",
+		Type:      service.RedeemTypeBalance,
+		Status:    service.StatusUnused,
+		CreatedBy: &creatorID,
+		Source:    service.RedeemCodeSourceUserBalanceTransfer,
+	})
+
+	require.Nil(t, userDTO.CreatedBy)
+	require.Empty(t, userDTO.Source)
+
+	adminDTO := RedeemCodeFromServiceAdmin(&service.RedeemCode{
+		ID:        1,
+		Code:      "AUDIT-VISIBLE",
+		Type:      service.RedeemTypeBalance,
+		Status:    service.StatusUnused,
+		CreatedBy: &creatorID,
+		Source:    service.RedeemCodeSourceUserBalanceTransfer,
+	})
+
+	require.NotNil(t, adminDTO.CreatedBy)
+	require.Equal(t, creatorID, *adminDTO.CreatedBy)
+	require.Equal(t, service.RedeemCodeSourceUserBalanceTransfer, adminDTO.Source)
+}
