@@ -79,27 +79,43 @@
               </div>
             </template>
             <!-- Normal item (no children) -->
-            <router-link
-              v-else
-              :to="item.path"
-              class="sidebar-link mb-1"
-              :class="{ 'sidebar-link-active': isActive(item.path), 'sidebar-link-collapsed': sidebarCollapsed }"
-              :title="sidebarCollapsed ? item.label : undefined"
-              :id="
-                item.path === '/admin/accounts'
-                  ? 'sidebar-channel-manage'
-                  : item.path === '/admin/groups'
-                    ? 'sidebar-group-manage'
-                    : item.path === '/admin/redeem'
-                      ? 'sidebar-wallet'
-                      : undefined
-              "
-              @click="handleMenuItemClick(item.path)"
-            >
-              <span v-if="item.iconSvg" class="h-5 w-5 flex-shrink-0 sidebar-svg-icon" v-html="sanitizeSvg(item.iconSvg)"></span>
-              <component v-else :is="item.icon" class="h-5 w-5 flex-shrink-0" />
-              <span class="sidebar-label" :class="{ 'sidebar-label-collapsed': sidebarCollapsed }" :aria-hidden="sidebarCollapsed ? 'true' : 'false'">{{ item.label }}</span>
-            </router-link>
+            <template v-else>
+              <a
+                v-if="item.externalUrl"
+                :href="item.externalUrl"
+                target="_blank"
+                rel="noopener noreferrer"
+                class="sidebar-link mb-1"
+                :class="{ 'sidebar-link-collapsed': sidebarCollapsed }"
+                :title="sidebarCollapsed ? item.label : undefined"
+                @click="handleMenuItemClick(item.path)"
+              >
+                <span v-if="item.iconSvg" class="h-5 w-5 flex-shrink-0 sidebar-svg-icon" v-html="sanitizeSvg(item.iconSvg)"></span>
+                <component v-else :is="item.icon" class="h-5 w-5 flex-shrink-0" />
+                <span class="sidebar-label" :class="{ 'sidebar-label-collapsed': sidebarCollapsed }" :aria-hidden="sidebarCollapsed ? 'true' : 'false'">{{ item.label }}</span>
+              </a>
+              <router-link
+                v-else
+                :to="item.path"
+                class="sidebar-link mb-1"
+                :class="{ 'sidebar-link-active': isActive(item.path), 'sidebar-link-collapsed': sidebarCollapsed }"
+                :title="sidebarCollapsed ? item.label : undefined"
+                :id="
+                  item.path === '/admin/accounts'
+                    ? 'sidebar-channel-manage'
+                    : item.path === '/admin/groups'
+                      ? 'sidebar-group-manage'
+                      : item.path === '/admin/redeem'
+                        ? 'sidebar-wallet'
+                        : undefined
+                "
+                @click="handleMenuItemClick(item.path)"
+              >
+                <span v-if="item.iconSvg" class="h-5 w-5 flex-shrink-0 sidebar-svg-icon" v-html="sanitizeSvg(item.iconSvg)"></span>
+                <component v-else :is="item.icon" class="h-5 w-5 flex-shrink-0" />
+                <span class="sidebar-label" :class="{ 'sidebar-label-collapsed': sidebarCollapsed }" :aria-hidden="sidebarCollapsed ? 'true' : 'false'">{{ item.label }}</span>
+              </router-link>
+            </template>
           </template>
         </div>
 
@@ -111,40 +127,70 @@
             </span>
           </div>
 
-          <router-link
-            v-for="item in personalNavItems"
-            :key="item.path"
-            :to="item.path"
-            class="sidebar-link mb-1"
-            :class="{ 'sidebar-link-active': isActive(item.path), 'sidebar-link-collapsed': sidebarCollapsed }"
-            :title="sidebarCollapsed ? item.label : undefined"
-            :data-tour="item.path === '/keys' ? 'sidebar-my-keys' : undefined"
-            @click="handleMenuItemClick(item.path)"
-          >
-            <span v-if="item.iconSvg" class="h-5 w-5 flex-shrink-0 sidebar-svg-icon" v-html="sanitizeSvg(item.iconSvg)"></span>
-            <component v-else :is="item.icon" class="h-5 w-5 flex-shrink-0" />
-            <span class="sidebar-label" :class="{ 'sidebar-label-collapsed': sidebarCollapsed }" :aria-hidden="sidebarCollapsed ? 'true' : 'false'">{{ item.label }}</span>
-          </router-link>
+          <template v-for="item in personalNavItems" :key="item.path">
+            <a
+              v-if="item.externalUrl"
+              :href="item.externalUrl"
+              target="_blank"
+              rel="noopener noreferrer"
+              class="sidebar-link mb-1"
+              :class="{ 'sidebar-link-collapsed': sidebarCollapsed }"
+              :title="sidebarCollapsed ? item.label : undefined"
+              @click="handleMenuItemClick(item.path)"
+            >
+              <span v-if="item.iconSvg" class="h-5 w-5 flex-shrink-0 sidebar-svg-icon" v-html="sanitizeSvg(item.iconSvg)"></span>
+              <component v-else :is="item.icon" class="h-5 w-5 flex-shrink-0" />
+              <span class="sidebar-label" :class="{ 'sidebar-label-collapsed': sidebarCollapsed }" :aria-hidden="sidebarCollapsed ? 'true' : 'false'">{{ item.label }}</span>
+            </a>
+            <router-link
+              v-else
+              :to="item.path"
+              class="sidebar-link mb-1"
+              :class="{ 'sidebar-link-active': isActive(item.path), 'sidebar-link-collapsed': sidebarCollapsed }"
+              :title="sidebarCollapsed ? item.label : undefined"
+              :data-tour="item.path === '/keys' ? 'sidebar-my-keys' : undefined"
+              @click="handleMenuItemClick(item.path)"
+            >
+              <span v-if="item.iconSvg" class="h-5 w-5 flex-shrink-0 sidebar-svg-icon" v-html="sanitizeSvg(item.iconSvg)"></span>
+              <component v-else :is="item.icon" class="h-5 w-5 flex-shrink-0" />
+              <span class="sidebar-label" :class="{ 'sidebar-label-collapsed': sidebarCollapsed }" :aria-hidden="sidebarCollapsed ? 'true' : 'false'">{{ item.label }}</span>
+            </router-link>
+          </template>
         </div>
       </template>
 
       <!-- Regular User View -->
       <template v-else-if="!appStore.backendModeEnabled">
         <div class="sidebar-section">
-          <router-link
-            v-for="item in userNavItems"
-            :key="item.path"
-            :to="item.path"
-            class="sidebar-link mb-1"
-            :class="{ 'sidebar-link-active': isActive(item.path), 'sidebar-link-collapsed': sidebarCollapsed }"
-            :title="sidebarCollapsed ? item.label : undefined"
-            :data-tour="item.path === '/keys' ? 'sidebar-my-keys' : undefined"
-            @click="handleMenuItemClick(item.path)"
-          >
-            <span v-if="item.iconSvg" class="h-5 w-5 flex-shrink-0 sidebar-svg-icon" v-html="sanitizeSvg(item.iconSvg)"></span>
-            <component v-else :is="item.icon" class="h-5 w-5 flex-shrink-0" />
-            <span class="sidebar-label" :class="{ 'sidebar-label-collapsed': sidebarCollapsed }" :aria-hidden="sidebarCollapsed ? 'true' : 'false'">{{ item.label }}</span>
-          </router-link>
+          <template v-for="item in userNavItems" :key="item.path">
+            <a
+              v-if="item.externalUrl"
+              :href="item.externalUrl"
+              target="_blank"
+              rel="noopener noreferrer"
+              class="sidebar-link mb-1"
+              :class="{ 'sidebar-link-collapsed': sidebarCollapsed }"
+              :title="sidebarCollapsed ? item.label : undefined"
+              @click="handleMenuItemClick(item.path)"
+            >
+              <span v-if="item.iconSvg" class="h-5 w-5 flex-shrink-0 sidebar-svg-icon" v-html="sanitizeSvg(item.iconSvg)"></span>
+              <component v-else :is="item.icon" class="h-5 w-5 flex-shrink-0" />
+              <span class="sidebar-label" :class="{ 'sidebar-label-collapsed': sidebarCollapsed }" :aria-hidden="sidebarCollapsed ? 'true' : 'false'">{{ item.label }}</span>
+            </a>
+            <router-link
+              v-else
+              :to="item.path"
+              class="sidebar-link mb-1"
+              :class="{ 'sidebar-link-active': isActive(item.path), 'sidebar-link-collapsed': sidebarCollapsed }"
+              :title="sidebarCollapsed ? item.label : undefined"
+              :data-tour="item.path === '/keys' ? 'sidebar-my-keys' : undefined"
+              @click="handleMenuItemClick(item.path)"
+            >
+              <span v-if="item.iconSvg" class="h-5 w-5 flex-shrink-0 sidebar-svg-icon" v-html="sanitizeSvg(item.iconSvg)"></span>
+              <component v-else :is="item.icon" class="h-5 w-5 flex-shrink-0" />
+              <span class="sidebar-label" :class="{ 'sidebar-label-collapsed': sidebarCollapsed }" :aria-hidden="sidebarCollapsed ? 'true' : 'false'">{{ item.label }}</span>
+            </router-link>
+          </template>
         </div>
       </template>
     </nav>
@@ -197,11 +243,13 @@ import { useAdminSettingsStore, useAppStore, useAuthStore, useOnboardingStore } 
 import VersionBadge from '@/components/common/VersionBadge.vue'
 import { sanitizeSvg } from '@/utils/sanitize'
 import { sanitizeUrl } from '@/utils/url'
+import { resolveCustomMenuNavigation } from '@/utils/custom-menu-navigation'
 import { FeatureFlags, makeSidebarFlag } from '@/utils/featureFlags'
 import { useBatchImageAccess } from '@/composables/useBatchImageAccess'
 
 interface NavItem {
   path: string
+  externalUrl?: string
   label: string
   icon: unknown
   iconSvg?: string
@@ -731,7 +779,7 @@ function buildSelfNavItems(withDashboard: boolean): NavItem[] {
     { path: '/affiliate', label: t('nav.affiliate'), icon: UsersIcon, hideInSimpleMode: true, featureFlag: flagAffiliate },
     { path: '/profile', label: t('nav.profile'), icon: UserIcon },
     ...customMenuItemsForUser.value.map((item): NavItem => ({
-      path: `/custom/${item.id}`,
+      ...resolveCustomMenuNavigation(item),
       label: item.label,
       icon: null,
       iconSvg: item.icon_svg,
@@ -842,14 +890,14 @@ const adminNavItems = computed((): NavItem[] => {
     filtered.push({ path: '/keys', label: t('nav.apiKeys'), icon: KeyIcon })
     filtered.push({ path: '/admin/settings', label: t('nav.settings'), icon: CogIcon })
     for (const cm of customMenuItemsForAdmin.value) {
-      filtered.push({ path: `/custom/${cm.id}`, label: cm.label, icon: null, iconSvg: cm.icon_svg })
+      filtered.push({ ...resolveCustomMenuNavigation(cm), label: cm.label, icon: null, iconSvg: cm.icon_svg })
     }
     return filtered
   }
 
   visible.push({ path: '/admin/settings', label: t('nav.settings'), icon: CogIcon })
   for (const cm of customMenuItemsForAdmin.value) {
-    visible.push({ path: `/custom/${cm.id}`, label: cm.label, icon: null, iconSvg: cm.icon_svg })
+    visible.push({ ...resolveCustomMenuNavigation(cm), label: cm.label, icon: null, iconSvg: cm.icon_svg })
   }
   return visible
 })
