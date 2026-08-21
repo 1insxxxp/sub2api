@@ -86,6 +86,10 @@ type BalanceTransferRedeemCodeDeleteRepository interface {
 	DeleteUnusedBalanceTransferByCreator(ctx context.Context, userID, codeID int64) (*RedeemCode, error)
 }
 
+type BalanceTransferRedeemCodeBatchDeleteRepository interface {
+	DeleteUnusedBalanceTransfersByCreator(ctx context.Context, userID int64, codeIDs []int64) ([]RedeemCode, error)
+}
+
 // GenerateCodesRequest 生成兑换码请求
 type GenerateCodesRequest struct {
 	Count int     `json:"count"`
@@ -485,6 +489,98 @@ func (s *RedeemService) DeleteGeneratedBalanceTransferCode(ctx context.Context, 
 
 	s.invalidateBalanceTransferCreatorCaches(ctx, userID)
 	return deleted, nil
+}
+
+func (s *RedeemService) DeleteGeneratedBalanceTransferCodes(ctx context.Context, userID int64, codeIDs []int64) ([]RedeemCode, error) {
+	ids, err := normalizeBalanceTransferRedeemCodeIDs(codeIDs)
+	if err != nil {
+		return nil, err
+	}
+	if s.userRepo == nil || s.redeemRepo == nil {
+		return nil, errors.New("redeem service repositories are not configured")
+	}
+	deleteRepo, ok := s.redeemRepo.(BalanceTransferRedeemCodeBatchDeleteRepository)
+	if !ok {
+		return nil, errors.New("redeem code repository does not support atomic balance transfer batch deletion")
+	}
+
+	deleteCodes := func(opCtx context.Context) ([]RedeemCode, error) {
+		codes, err := deleteRepo.DeleteUnusedBalanceTransfersByCreator(opCtx, userID, ids)
+		if err != nil {
+			return nil, err
+		}
+		if len(codes) != len(ids) {
+			return nil, ErrBalanceTransferRedeemCodeNotFound
+		}
+
+		var totalRefund float64
+		for _, code := range codes {
+			if code.Value <= 0 {
+				return nil, infraerrors.Conflict("BALANCE_TRANSFER_REDEEM_CODE_INVALID", "balance transfer redeem code value is invalid")
+			}
+			totalRefund += code.Value
+		}
+
+		if _, err := s.userRepo.AdjustBalance(opCtx, userID, totalRefund); err != nil {
+			return nil, fmt.Errorf("refund balance transfer redeem codes: %w", err)
+		}
+		return codes, nil
+	}
+
+	var deleted []RedeemCode
+	if s.entClient != nil {
+		tx, txErr := s.entClient.Tx(ctx)
+		if txErr != nil {
+			return nil, fmt.Errorf("begin transaction: %w", txErr)
+		}
+		txCtx := dbent.NewTxContext(ctx, tx)
+		defer func() { _ = tx.Rollback() }()
+
+		deleted, err = deleteCodes(txCtx)
+		if err != nil {
+			return nil, err
+		}
+		if err := tx.Commit(); err != nil {
+			return nil, fmt.Errorf("commit transaction: %w", err)
+		}
+	} else {
+		deleted, err = deleteCodes(ctx)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	s.invalidateBalanceTransferCreatorCaches(ctx, userID)
+	return deleted, nil
+}
+
+func normalizeBalanceTransferRedeemCodeIDs(codeIDs []int64) ([]int64, error) {
+	if len(codeIDs) == 0 {
+		return nil, infraerrors.BadRequest("BALANCE_TRANSFER_REDEEM_CODE_IDS_REQUIRED", "redeem code ids are required")
+	}
+	if len(codeIDs) > balanceTransferRedeemMaxBatchCount {
+		return nil, infraerrors.BadRequest(
+			"BALANCE_TRANSFER_REDEEM_CODE_IDS_INVALID",
+			fmt.Sprintf("cannot delete more than %d redeem codes at once", balanceTransferRedeemMaxBatchCount),
+		)
+	}
+
+	seen := make(map[int64]struct{}, len(codeIDs))
+	ids := make([]int64, 0, len(codeIDs))
+	for _, id := range codeIDs {
+		if id <= 0 {
+			return nil, infraerrors.BadRequest("BALANCE_TRANSFER_REDEEM_CODE_ID_INVALID", "redeem code id must be positive")
+		}
+		if _, ok := seen[id]; ok {
+			continue
+		}
+		seen[id] = struct{}{}
+		ids = append(ids, id)
+	}
+	if len(ids) == 0 {
+		return nil, infraerrors.BadRequest("BALANCE_TRANSFER_REDEEM_CODE_IDS_REQUIRED", "redeem code ids are required")
+	}
+	return ids, nil
 }
 
 func (s *RedeemService) invalidateBalanceTransferCreatorCaches(ctx context.Context, userID int64) {

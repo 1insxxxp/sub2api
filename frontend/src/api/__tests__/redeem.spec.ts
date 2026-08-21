@@ -15,6 +15,7 @@ vi.mock('@/api/client', () => ({
 }))
 
 import {
+  deleteGeneratedBatch,
   deleteGenerated,
   generateBalanceTransferCode,
   generateBalanceTransferCodes,
@@ -163,6 +164,41 @@ describe('redeem api balance transfer codes', () => {
     const result = await deleteGenerated(18)
 
     expect(del).toHaveBeenCalledWith('/redeem/generated/18')
+    expect(result).toEqual(response)
+  })
+
+  it('batch deletes generated balance transfer redeem codes', async () => {
+    const response: GeneratedRedeemCode[] = [
+      {
+        id: 18,
+        code: 'ABCD-EFGH',
+        type: 'balance',
+        value: 12.5,
+        status: 'unused',
+        used_by: null,
+        used_at: null,
+        created_at: '2026-08-20T12:00:00Z',
+        created_by: 7,
+        source: 'user_balance_transfer'
+      },
+      {
+        id: 19,
+        code: 'IJKL-MNOP',
+        type: 'balance',
+        value: 5,
+        status: 'unused',
+        used_by: null,
+        used_at: null,
+        created_at: '2026-08-20T12:00:00Z',
+        created_by: 7,
+        source: 'user_balance_transfer'
+      }
+    ]
+    post.mockResolvedValue({ data: response })
+
+    const result = await deleteGeneratedBatch([18, 19])
+
+    expect(post).toHaveBeenCalledWith('/redeem/generated/batch-delete', { ids: [18, 19] })
     expect(result).toEqual(response)
   })
 })

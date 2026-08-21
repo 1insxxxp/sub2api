@@ -805,6 +805,68 @@ func TestAPIContracts(t *testing.T) {
 			}`,
 		},
 		{
+			name: "POST /api/v1/redeem/generated/batch-delete",
+			setup: func(t *testing.T, deps *contractDeps) {
+				t.Helper()
+				deps.redeemRepo.SetByCreator(1, []service.RedeemCode{
+					{
+						ID:        902,
+						Code:      "TRANSFER-A",
+						Type:      service.RedeemTypeBalance,
+						Value:     1.25,
+						Status:    service.StatusUnused,
+						CreatedBy: ptr(int64(1)),
+						Source:    service.RedeemCodeSourceUserBalanceTransfer,
+						CreatedAt: deps.now,
+					},
+					{
+						ID:        903,
+						Code:      "TRANSFER-B",
+						Type:      service.RedeemTypeBalance,
+						Value:     2.5,
+						Status:    service.StatusUnused,
+						CreatedBy: ptr(int64(1)),
+						Source:    service.RedeemCodeSourceUserBalanceTransfer,
+						CreatedAt: deps.now,
+					},
+				})
+			},
+			method:     http.MethodPost,
+			path:       "/api/v1/redeem/generated/batch-delete",
+			body:       `{"ids":[902,903]}`,
+			wantStatus: http.StatusOK,
+			wantJSON: `{
+				"code": 0,
+				"message": "success",
+				"data": [
+					{
+						"id": 902,
+						"code": "TRANSFER-A",
+						"type": "balance",
+						"value": 1.25,
+						"status": "unused",
+						"used_by": null,
+						"used_at": null,
+						"created_at": "2025-01-02T03:04:05Z",
+						"group_id": null,
+						"validity_days": 0
+					},
+					{
+						"id": 903,
+						"code": "TRANSFER-B",
+						"type": "balance",
+						"value": 2.5,
+						"status": "unused",
+						"used_by": null,
+						"used_at": null,
+						"created_at": "2025-01-02T03:04:05Z",
+						"group_id": null,
+						"validity_days": 0
+					}
+				]
+			}`,
+		},
+		{
 			name: "GET /api/v1/usage/stats",
 			setup: func(t *testing.T, deps *contractDeps) {
 				t.Helper()
@@ -1883,6 +1945,7 @@ func newContractDeps(t *testing.T) *contractDeps {
 	v1Redeem.POST("/redeem/generate", redeemHandler.GenerateBalanceTransferCode)
 	v1Redeem.GET("/redeem/history", redeemHandler.GetHistory)
 	v1Redeem.GET("/redeem/generated", redeemHandler.GetGenerated)
+	v1Redeem.POST("/redeem/generated/batch-delete", redeemHandler.DeleteGeneratedBatch)
 
 	v1Admin := v1.Group("/admin")
 	v1Admin.Use(adminAuth)
@@ -2647,6 +2710,50 @@ func (stubRedeemCodeRepo) BatchUpdate(ctx context.Context, ids []int64, fields s
 
 func (stubRedeemCodeRepo) Delete(ctx context.Context, id int64) error {
 	return errors.New("not implemented")
+}
+
+func (r *stubRedeemCodeRepo) DeleteUnusedBalanceTransferByCreator(ctx context.Context, userID, codeID int64) (*service.RedeemCode, error) {
+	codes, err := r.DeleteUnusedBalanceTransfersByCreator(ctx, userID, []int64{codeID})
+	if err != nil {
+		return nil, err
+	}
+	if len(codes) == 0 {
+		return nil, service.ErrBalanceTransferRedeemCodeNotFound
+	}
+	return &codes[0], nil
+}
+
+func (r *stubRedeemCodeRepo) DeleteUnusedBalanceTransfersByCreator(ctx context.Context, userID int64, codeIDs []int64) ([]service.RedeemCode, error) {
+	codes := r.byCreator[userID]
+	byID := make(map[int64]service.RedeemCode, len(codes))
+	for _, code := range codes {
+		byID[code.ID] = code
+	}
+
+	deleted := make([]service.RedeemCode, 0, len(codeIDs))
+	deletedIDs := make(map[int64]struct{}, len(codeIDs))
+	for _, id := range codeIDs {
+		code, ok := byID[id]
+		if !ok || code.CreatedBy == nil || *code.CreatedBy != userID ||
+			code.Source != service.RedeemCodeSourceUserBalanceTransfer ||
+			code.Type != service.RedeemTypeBalance {
+			return nil, service.ErrBalanceTransferRedeemCodeNotFound
+		}
+		if code.Status == service.StatusUsed || code.UsedBy != nil {
+			return nil, service.ErrBalanceTransferRedeemCodeUsed
+		}
+		deleted = append(deleted, code)
+		deletedIDs[id] = struct{}{}
+	}
+
+	remaining := make([]service.RedeemCode, 0, len(codes)-len(deletedIDs))
+	for _, code := range codes {
+		if _, ok := deletedIDs[code.ID]; !ok {
+			remaining = append(remaining, code)
+		}
+	}
+	r.byCreator[userID] = remaining
+	return deleted, nil
 }
 
 func (stubRedeemCodeRepo) Use(ctx context.Context, id, userID int64) error {

@@ -109,12 +109,20 @@ export async function deleteGenerated(id: number): Promise<GeneratedRedeemCode> 
   return data
 }
 
+export async function deleteGeneratedBatch(ids: number[]): Promise<GeneratedRedeemCode[]> {
+  const { data } = await apiClient.post<GeneratedRedeemCode[]>('/redeem/generated/batch-delete', {
+    ids
+  })
+  return data
+}
+
 export const redeemAPI = {
   redeem,
   getHistory,
   generateBalanceTransferCode,
   generateBalanceTransferCodes,
   deleteGenerated,
+  deleteGeneratedBatch,
   getGenerated
 }
 

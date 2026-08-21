@@ -121,30 +121,55 @@ func (r *redeemCodeRepository) Delete(ctx context.Context, id int64) error {
 }
 
 func (r *redeemCodeRepository) DeleteUnusedBalanceTransferByCreator(ctx context.Context, userID, codeID int64) (*service.RedeemCode, error) {
+	codes, err := r.DeleteUnusedBalanceTransfersByCreator(ctx, userID, []int64{codeID})
+	if err != nil {
+		return nil, err
+	}
+	if len(codes) == 0 {
+		return nil, service.ErrBalanceTransferRedeemCodeNotFound
+	}
+	return &codes[0], nil
+}
+
+func (r *redeemCodeRepository) DeleteUnusedBalanceTransfersByCreator(ctx context.Context, userID int64, codeIDs []int64) ([]service.RedeemCode, error) {
+	if len(codeIDs) == 0 {
+		return []service.RedeemCode{}, nil
+	}
+
 	client := clientFromContext(ctx, r.client)
-	m, err := client.RedeemCode.Query().
+	rows, err := client.RedeemCode.Query().
 		Where(
-			redeemcode.IDEQ(codeID),
+			redeemcode.IDIn(codeIDs...),
 			redeemcode.CreatedByEQ(userID),
 			redeemcode.SourceEQ(service.RedeemCodeSourceUserBalanceTransfer),
 			redeemcode.TypeEQ(service.RedeemTypeBalance),
 		).
 		ForUpdate().
-		Only(ctx)
+		All(ctx)
 	if err != nil {
-		if dbent.IsNotFound(err) {
-			return nil, service.ErrBalanceTransferRedeemCodeNotFound
-		}
 		return nil, err
 	}
-	out := redeemCodeEntityToService(m)
-	if out.Status == service.StatusUsed || out.UsedBy != nil {
-		return nil, service.ErrBalanceTransferRedeemCodeUsed
+
+	byID := make(map[int64]service.RedeemCode, len(rows))
+	for _, row := range rows {
+		byID[row.ID] = *redeemCodeEntityToService(row)
+	}
+
+	out := make([]service.RedeemCode, 0, len(codeIDs))
+	for _, id := range codeIDs {
+		code, ok := byID[id]
+		if !ok {
+			return nil, service.ErrBalanceTransferRedeemCodeNotFound
+		}
+		if code.Status == service.StatusUsed || code.UsedBy != nil {
+			return nil, service.ErrBalanceTransferRedeemCodeUsed
+		}
+		out = append(out, code)
 	}
 
 	affected, err := client.RedeemCode.Delete().
 		Where(
-			redeemcode.IDEQ(codeID),
+			redeemcode.IDIn(codeIDs...),
 			redeemcode.CreatedByEQ(userID),
 			redeemcode.SourceEQ(service.RedeemCodeSourceUserBalanceTransfer),
 			redeemcode.TypeEQ(service.RedeemTypeBalance),
@@ -155,7 +180,7 @@ func (r *redeemCodeRepository) DeleteUnusedBalanceTransferByCreator(ctx context.
 	if err != nil {
 		return nil, err
 	}
-	if affected == 0 {
+	if affected != len(codeIDs) {
 		return nil, service.ErrBalanceTransferRedeemCodeUsed
 	}
 	return out, nil

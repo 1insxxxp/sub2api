@@ -257,49 +257,60 @@
             </div>
           </form>
 
-          <transition name="fade">
-            <div v-if="generatedCodeResult" class="redeem-transfer-ready">
-              <div class="min-w-0">
-                <p class="redeem-transfer-label">
-                  {{ t('redeem.balanceTransfer.latestCode') }}
-                </p>
-                <p
-                  data-test="generated-code-value"
-                  class="mt-1 break-all font-mono text-base font-semibold text-slate-950 dark:text-white"
-                >
-                  {{ generatedCodeResult.code }}
-                </p>
-                <span
-                  v-if="generatedCodeResult.single_use_per_user"
-                  class="mt-2 inline-flex items-center rounded-md bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-700 dark:bg-amber-900/30 dark:text-amber-300"
-                >
-                  {{ t('redeem.balanceTransfer.singleUseBadge') }}
-                </span>
-              </div>
-              <button
-                type="button"
-                class="btn btn-secondary shrink-0"
-                @click="copyTransferCode(generatedCodeResult.code)"
-              >
-                <Icon name="copy" size="sm" class="mr-2" />
-                {{ t('redeem.balanceTransfer.copy') }}
-              </button>
-            </div>
-          </transition>
-
           <div class="redeem-generated-list">
-            <div class="flex items-center justify-between gap-3">
-              <h3 class="text-sm font-semibold text-slate-900 dark:text-white">
-                {{ t('redeem.balanceTransfer.listTitle') }}
-              </h3>
-              <button
-                type="button"
-                class="btn btn-secondary px-3 py-2"
-                :disabled="loadingGeneratedCodes"
-                @click="fetchGeneratedCodes"
-              >
-                <Icon name="refresh" size="sm" />
-              </button>
+            <div class="redeem-generated-toolbar">
+              <div class="min-w-0">
+                <h3 class="text-sm font-semibold text-slate-900 dark:text-white">
+                  {{ t('redeem.balanceTransfer.listTitle') }}
+                </h3>
+                <p
+                  v-if="selectedGeneratedCodeIds.length > 0"
+                  class="mt-1 text-xs text-slate-500 dark:text-slate-400"
+                >
+                  {{
+                    t('redeem.balanceTransfer.selectedCount', {
+                      count: selectedGeneratedCodeIds.length
+                    })
+                  }}
+                </p>
+              </div>
+              <div class="redeem-generated-toolbar-actions">
+                <label
+                  v-if="deletableGeneratedCodes.length > 0"
+                  class="redeem-generated-select-all"
+                >
+                  <input
+                    data-test="select-all-generated-codes"
+                    type="checkbox"
+                    :checked="allDeletableGeneratedCodesSelected"
+                    :disabled="batchDeletingGeneratedCodes"
+                    @change="handleSelectAllGeneratedCodes"
+                  />
+                  <span>{{ t('redeem.balanceTransfer.selectAll') }}</span>
+                </label>
+                <button
+                  type="button"
+                  data-test="delete-selected-generated-codes"
+                  class="btn btn-secondary flex items-center gap-2 px-3 py-2 text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
+                  :disabled="selectedGeneratedCodeIds.length === 0 || batchDeletingGeneratedCodes"
+                  @click="handleDeleteSelectedGeneratedCodes"
+                >
+                  <Icon
+                    :name="batchDeletingGeneratedCodes ? 'refresh' : 'trash'"
+                    size="sm"
+                    :class="batchDeletingGeneratedCodes ? 'animate-spin' : ''"
+                  />
+                  <span>{{ t('redeem.balanceTransfer.batchDelete') }}</span>
+                </button>
+                <button
+                  type="button"
+                  class="btn btn-secondary px-3 py-2"
+                  :disabled="loadingGeneratedCodes"
+                  @click="fetchGeneratedCodes"
+                >
+                  <Icon name="refresh" size="sm" />
+                </button>
+              </div>
             </div>
 
             <div v-if="loadingGeneratedCodes" class="flex items-center justify-center py-6">
@@ -326,7 +337,20 @@
                 :key="item.id"
                 class="redeem-generated-row"
               >
-                <div class="min-w-0">
+                <label
+                  v-if="canDeleteGeneratedCode(item)"
+                  class="redeem-generated-row-select"
+                >
+                  <input
+                    v-model="selectedGeneratedCodeIds"
+                    :value="item.id"
+                    type="checkbox"
+                    :data-test="`select-generated-code-${item.id}`"
+                    :disabled="isDeletingGeneratedCode(item.id) || batchDeletingGeneratedCodes"
+                  />
+                </label>
+                <span v-else class="redeem-generated-row-select-spacer"></span>
+                <div class="min-w-0 flex-1">
                   <div class="flex flex-wrap items-center gap-2">
                     <span class="break-all font-mono text-sm font-semibold text-slate-950 dark:text-white">
                       {{ item.code }}
@@ -386,6 +410,85 @@
           </div>
         </div>
       </section>
+
+      <transition name="fade">
+        <div
+          v-if="showGeneratedCodesModal"
+          data-test="generated-codes-modal"
+          class="redeem-generated-modal-backdrop"
+        >
+          <div class="redeem-generated-modal" role="dialog" aria-modal="true">
+            <div class="redeem-generated-modal-header">
+              <div class="flex items-center gap-3">
+                <div class="redeem-generated-modal-icon">
+                  <Icon name="check" size="md" />
+                </div>
+                <div class="min-w-0">
+                  <h2 class="text-base font-semibold text-slate-950 dark:text-white">
+                    {{ t('redeem.balanceTransfer.generatedModalTitle') }}
+                  </h2>
+                  <p class="mt-0.5 text-sm text-slate-500 dark:text-slate-400">
+                    {{
+                      t('redeem.balanceTransfer.generatedModalSubtitle', {
+                        count: generatedCodeResults.length
+                      })
+                    }}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                class="redeem-generated-modal-close"
+                :aria-label="t('common.close')"
+                @click="closeGeneratedCodesModal"
+              >
+                <Icon name="x" size="md" />
+              </button>
+            </div>
+
+            <div class="redeem-generated-modal-body">
+              <div class="redeem-generated-modal-code-list">
+                <div
+                  v-for="item in generatedCodeResults"
+                  :key="item.id"
+                  class="redeem-generated-modal-code-row"
+                >
+                  <span class="break-all font-mono text-sm font-semibold text-slate-950 dark:text-white">
+                    {{ item.code }}
+                  </span>
+                  <span
+                    v-if="item.single_use_per_user"
+                    class="inline-flex shrink-0 items-center rounded-md bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-700 dark:bg-amber-900/30 dark:text-amber-300"
+                  >
+                    {{ t('redeem.balanceTransfer.singleUseBadge') }}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <div class="redeem-generated-modal-footer">
+              <button
+                type="button"
+                data-test="generated-codes-copy-all"
+                class="btn btn-secondary flex items-center"
+                @click="copyGeneratedCodeResults"
+              >
+                <Icon name="copy" size="sm" class="mr-2" />
+                {{ t('redeem.balanceTransfer.copyAll') }}
+              </button>
+              <button
+                type="button"
+                data-test="generated-codes-download"
+                class="btn btn-primary flex items-center"
+                @click="downloadGeneratedCodeResults"
+              >
+                <Icon name="download" size="sm" class="mr-2" />
+                {{ t('redeem.balanceTransfer.download') }}
+              </button>
+            </div>
+          </div>
+        </div>
+      </transition>
 
       <!-- Success Message -->
       <transition name="fade">
@@ -715,10 +818,13 @@ const transferForm = reactive({
   single_use_per_user: false
 })
 const generatingTransferCode = ref(false)
-const generatedCodeResult = ref<GeneratedRedeemCode | null>(null)
+const generatedCodeResults = ref<GeneratedRedeemCode[]>([])
+const showGeneratedCodesModal = ref(false)
 const generatedCodes = ref<GeneratedRedeemCode[]>([])
 const loadingGeneratedCodes = ref(false)
 const deletingGeneratedCodeIds = ref<number[]>([])
+const selectedGeneratedCodeIds = ref<number[]>([])
+const batchDeletingGeneratedCodes = ref(false)
 const transferErrorMessage = ref('')
 const generatedPagination = reactive({
   page: 1,
@@ -877,7 +983,8 @@ const handleGenerateBalanceTransferCode = async () => {
       notes: transferForm.notes.trim(),
       single_use_per_user: transferForm.single_use_per_user
     })
-    generatedCodeResult.value = codes[0] ?? null
+    generatedCodeResults.value = codes
+    showGeneratedCodesModal.value = codes.length > 0
     transferForm.amount = ''
     transferForm.notes = ''
     await authStore.refreshUser()
@@ -897,6 +1004,20 @@ const canDeleteGeneratedCode = (item: GeneratedRedeemCode) => {
   return item.used_by == null && (item.status === 'unused' || item.status === 'expired')
 }
 
+const deletableGeneratedCodes = computed(() => generatedCodes.value.filter(canDeleteGeneratedCode))
+
+const allDeletableGeneratedCodesSelected = computed(() => {
+  if (deletableGeneratedCodes.value.length === 0) {
+    return false
+  }
+  const selected = new Set(selectedGeneratedCodeIds.value)
+  return deletableGeneratedCodes.value.every((item) => selected.has(item.id))
+})
+
+const generatedCodeResultsText = computed(() => {
+  return generatedCodeResults.value.map((item) => item.code).join('\n')
+})
+
 const isDeletingGeneratedCode = (id: number) => {
   return deletingGeneratedCodeIds.value.includes(id)
 }
@@ -915,15 +1036,48 @@ const handleDeleteGeneratedCode = async (item: GeneratedRedeemCode) => {
     await authStore.refreshUser()
     generatedPagination.page = 1
     await fetchGeneratedCodes()
-    if (generatedCodeResult.value?.id === item.id) {
-      generatedCodeResult.value = null
-    }
+    selectedGeneratedCodeIds.value = selectedGeneratedCodeIds.value.filter((id) => id !== item.id)
     appStore.showSuccess(t('redeem.balanceTransfer.deleted'))
   } catch (error: any) {
     const message = extractApiErrorMessage(error, t('redeem.balanceTransfer.failedToDelete'))
     appStore.showError(message)
   } finally {
     deletingGeneratedCodeIds.value = deletingGeneratedCodeIds.value.filter((id) => id !== item.id)
+  }
+}
+
+const handleSelectAllGeneratedCodes = (event: Event) => {
+  const checked = (event.target as HTMLInputElement).checked
+  if (!checked) {
+    selectedGeneratedCodeIds.value = []
+    return
+  }
+  selectedGeneratedCodeIds.value = deletableGeneratedCodes.value.map((item) => item.id)
+}
+
+const handleDeleteSelectedGeneratedCodes = async () => {
+  const deletableIDSet = new Set(deletableGeneratedCodes.value.map((item) => item.id))
+  const ids = selectedGeneratedCodeIds.value.filter((id) => deletableIDSet.has(id))
+  if (ids.length === 0 || batchDeletingGeneratedCodes.value) {
+    return
+  }
+  if (!window.confirm(t('redeem.balanceTransfer.batchDeleteConfirm'))) {
+    return
+  }
+
+  batchDeletingGeneratedCodes.value = true
+  try {
+    await redeemAPI.deleteGeneratedBatch(ids)
+    selectedGeneratedCodeIds.value = []
+    await authStore.refreshUser()
+    generatedPagination.page = 1
+    await fetchGeneratedCodes()
+    appStore.showSuccess(t('redeem.balanceTransfer.batchDeleted'))
+  } catch (error: any) {
+    const message = extractApiErrorMessage(error, t('redeem.balanceTransfer.failedToBatchDelete'))
+    appStore.showError(message)
+  } finally {
+    batchDeletingGeneratedCodes.value = false
   }
 }
 
@@ -935,6 +1089,32 @@ const copyTransferCode = async (code: string) => {
     console.error('Failed to copy generated redeem code:', error)
     appStore.showError(t('redeem.balanceTransfer.copyFailed'))
   }
+}
+
+const closeGeneratedCodesModal = () => {
+  showGeneratedCodesModal.value = false
+}
+
+const copyGeneratedCodeResults = async () => {
+  try {
+    await navigator.clipboard.writeText(generatedCodeResultsText.value)
+    appStore.showSuccess(t('redeem.balanceTransfer.copied'))
+  } catch (error) {
+    console.error('Failed to copy generated redeem codes:', error)
+    appStore.showError(t('redeem.balanceTransfer.copyFailed'))
+  }
+}
+
+const downloadGeneratedCodeResults = () => {
+  const blob = new Blob([generatedCodeResultsText.value], { type: 'text/plain' })
+  const url = window.URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = `redeem-codes-${new Date().toISOString().split('T')[0]}.txt`
+  document.body.appendChild(link)
+  link.click()
+  document.body.removeChild(link)
+  window.URL.revokeObjectURL(url)
 }
 
 const getGeneratedStatusLabel = (status: string) => {
@@ -1032,10 +1212,17 @@ watch(canGenerateBalanceTransferCodes, (enabled) => {
     fetchGeneratedCodes()
   } else {
     generatedCodes.value = []
-    generatedCodeResult.value = null
     generatedPagination.total = 0
     generatedPagination.page = 1
+    generatedCodeResults.value = []
+    showGeneratedCodesModal.value = false
+    selectedGeneratedCodeIds.value = []
   }
+})
+
+watch(generatedCodes, (codes) => {
+  const availableIds = new Set(codes.filter(canDeleteGeneratedCode).map((item) => item.id))
+  selectedGeneratedCodeIds.value = selectedGeneratedCodeIds.value.filter((id) => availableIds.has(id))
 })
 </script>
 
@@ -1383,31 +1570,54 @@ watch(canGenerateBalanceTransferCodes, (enabled) => {
   border-radius: 0.9rem;
 }
 
-.redeem-transfer-ready {
-  margin-top: 1.1rem;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
-  border-radius: 1rem;
-  border: 1px solid rgba(16, 185, 129, 0.24);
-  background:
-    linear-gradient(135deg, rgba(236, 253, 245, 0.92), rgba(240, 253, 250, 0.78)),
-    white;
-  padding: 0.9rem 1rem;
-}
-
 .redeem-generated-list {
   margin-top: 1.25rem;
   border-top: 1px solid rgba(191, 219, 254, 0.48);
   padding-top: 1rem;
 }
 
-.redeem-generated-row {
+.redeem-generated-toolbar {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 1rem;
+  gap: 0.75rem;
+}
+
+.redeem-generated-toolbar-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}
+
+.redeem-generated-select-all {
+  display: inline-flex;
+  min-height: 2.5rem;
+  align-items: center;
+  gap: 0.45rem;
+  border: 1px solid rgba(191, 219, 254, 0.86);
+  border-radius: 0.85rem;
+  background: rgba(248, 250, 252, 0.92);
+  padding: 0 0.75rem;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: rgb(51, 65, 85);
+}
+
+.redeem-generated-select-all input,
+.redeem-generated-row-select input {
+  height: 1rem;
+  width: 1rem;
+  flex-shrink: 0;
+  accent-color: var(--brand-500);
+}
+
+.redeem-generated-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
   border: 1px solid rgba(191, 219, 254, 0.82);
   border-radius: 0.95rem;
   background:
@@ -1416,11 +1626,107 @@ watch(canGenerateBalanceTransferCodes, (enabled) => {
   padding: 0.8rem 0.9rem;
 }
 
+.redeem-generated-row-select,
+.redeem-generated-row-select-spacer {
+  display: flex;
+  width: 1rem;
+  flex-shrink: 0;
+  justify-content: center;
+  padding-top: 0.15rem;
+}
+
 .redeem-generated-actions {
   display: flex;
   flex-shrink: 0;
   align-items: center;
   gap: 0.5rem;
+}
+
+.redeem-generated-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(15, 23, 42, 0.46);
+  padding: 1rem;
+  backdrop-filter: blur(10px);
+}
+
+.redeem-generated-modal {
+  width: min(100%, 36rem);
+  overflow: hidden;
+  border: 1px solid rgba(191, 219, 254, 0.86);
+  border-radius: 1.25rem;
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.98), rgba(239, 246, 255, 0.96)),
+    white;
+  box-shadow:
+    0 28px 64px rgba(15, 23, 42, 0.2),
+    0 1px 0 rgba(255, 255, 255, 0.9) inset;
+}
+
+.redeem-generated-modal-header,
+.redeem-generated-modal-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1rem 1.15rem;
+}
+
+.redeem-generated-modal-header {
+  border-bottom: 1px solid rgba(191, 219, 254, 0.62);
+}
+
+.redeem-generated-modal-footer {
+  justify-content: flex-end;
+  border-top: 1px solid rgba(191, 219, 254, 0.62);
+}
+
+.redeem-generated-modal-icon,
+.redeem-generated-modal-close {
+  display: flex;
+  height: 2.75rem;
+  width: 2.75rem;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  border-radius: 1rem;
+}
+
+.redeem-generated-modal-icon {
+  background: linear-gradient(135deg, var(--brand-500), var(--brand-cyan-500));
+  color: white;
+}
+
+.redeem-generated-modal-close {
+  border: 1px solid rgba(191, 219, 254, 0.72);
+  background: rgba(255, 255, 255, 0.82);
+  color: rgb(71, 85, 105);
+}
+
+.redeem-generated-modal-body {
+  padding: 1rem 1.15rem;
+}
+
+.redeem-generated-modal-code-list {
+  display: grid;
+  max-height: min(42vh, 18rem);
+  gap: 0.55rem;
+  overflow-y: auto;
+}
+
+.redeem-generated-modal-code-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  border: 1px solid rgba(191, 219, 254, 0.78);
+  border-radius: 0.85rem;
+  background: rgba(255, 255, 255, 0.84);
+  padding: 0.75rem 0.85rem;
 }
 
 .redeem-info-icon {
@@ -1556,15 +1862,14 @@ watch(canGenerateBalanceTransferCodes, (enabled) => {
   color: rgb(148, 163, 184);
 }
 
-.dark .redeem-transfer-ready {
-  border-color: rgba(52, 211, 153, 0.22);
-  background:
-    linear-gradient(135deg, rgba(6, 78, 59, 0.28), rgba(15, 23, 42, 0.88)),
-    rgba(15, 23, 42, 0.86);
-}
-
 .dark .redeem-generated-list {
   border-color: rgba(96, 165, 250, 0.16);
+}
+
+.dark .redeem-generated-select-all {
+  border-color: rgba(96, 165, 250, 0.22);
+  background: rgba(15, 23, 42, 0.76);
+  color: rgb(203, 213, 225);
 }
 
 .dark .redeem-generated-row {
@@ -1572,6 +1877,29 @@ watch(canGenerateBalanceTransferCodes, (enabled) => {
   background:
     linear-gradient(135deg, rgba(15, 23, 42, 0.9), rgba(8, 13, 28, 0.84)),
     rgba(15, 23, 42, 0.86);
+}
+
+.dark .redeem-generated-modal {
+  border-color: rgba(96, 165, 250, 0.24);
+  background:
+    linear-gradient(135deg, rgba(15, 23, 42, 0.98), rgba(8, 13, 28, 0.96)),
+    rgb(15, 23, 42);
+  box-shadow: 0 28px 64px rgba(0, 0, 0, 0.42);
+}
+
+.dark .redeem-generated-modal-header,
+.dark .redeem-generated-modal-footer {
+  border-color: rgba(96, 165, 250, 0.16);
+}
+
+.dark .redeem-generated-modal-close,
+.dark .redeem-generated-modal-code-row {
+  border-color: rgba(96, 165, 250, 0.22);
+  background: rgba(15, 23, 42, 0.72);
+}
+
+.dark .redeem-generated-modal-close {
+  color: rgb(203, 213, 225);
 }
 
 .dark .redeem-info-icon {
@@ -1680,15 +2008,40 @@ watch(canGenerateBalanceTransferCodes, (enabled) => {
     align-items: flex-start;
   }
 
-  .redeem-transfer-ready,
-  .redeem-generated-row {
-    align-items: stretch;
+  .redeem-generated-toolbar {
+    align-items: flex-start;
     flex-direction: column;
   }
 
+  .redeem-generated-toolbar-actions {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .redeem-generated-row {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: start;
+  }
+
   .redeem-generated-actions {
+    grid-column: 2;
     width: 100%;
     justify-content: flex-end;
+  }
+
+  .redeem-generated-modal {
+    max-height: calc(100vh - 2rem);
+  }
+
+  .redeem-generated-modal-footer {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .redeem-generated-modal-footer .btn {
+    width: 100%;
+    justify-content: center;
   }
 }
 
