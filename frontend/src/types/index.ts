@@ -252,6 +252,7 @@ export interface CustomMenuItem {
   icon_svg: string
   url: string
   page_slug?: string
+  open_mode?: 'embedded' | 'new_tab'
   visibility: 'user' | 'admin'
   sort_order: number
 }
