@@ -311,10 +311,11 @@
                 </td>
                 <td class="px-4 py-3 text-right">
                   <button
+                    v-if="canClaimEmptyResponseRow(row)"
                     type="button"
                     :data-testid="`claim-empty-response-${row.usage_log_id}`"
                     class="btn btn-primary btn-sm min-w-[72px] justify-center whitespace-nowrap"
-                    :disabled="!canClaimEmptyResponseRow(row) || emptyResponseClaimingRowId === row.usage_log_id"
+                    :disabled="emptyResponseClaimingRowId === row.usage_log_id"
                     @click="claimEmptyResponseRow(row)"
                   >
                     {{ emptyResponseClaimingRowId === row.usage_log_id ? t('usage.emptyResponse.claimingOne') : t('usage.emptyResponse.claimOne') }}

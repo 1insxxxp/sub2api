@@ -154,6 +154,30 @@ func TestEmptyResponseClaimServiceCreatesServerEvaluatedClaimAndCompensatesAppro
 	require.Equal(t, repo.dayStart.AddDate(0, 0, 1), repo.dayEnd)
 }
 
+func TestEmptyResponseClaimServiceSubmitRejectsNonClaimableUsageWithoutCreatingClaim(t *testing.T) {
+	now := time.Date(2026, 8, 7, 12, 0, 0, 0, time.UTC)
+	repo := &emptyResponseClaimRepoStub{
+		evaluation: &EmptyResponseClaimEvaluation{
+			Usage: UsageLog{
+				ID: 100, UserID: 7, APIKeyID: 8, AccountID: 9,
+				ActualCost: 1.5, OutputTokens: EmptyResponseClaimMaxOutputTokens + 1,
+				CreatedAt: now.Add(-time.Hour),
+			},
+			Outcome: &ResponseOutcome{HTTPStatus: 200, UpstreamStatus: 200, HasText: true, StreamCompleted: true, CollectorVersion: 1},
+		},
+	}
+	compensator := &emptyResponseClaimCompensatorStub{}
+	svc := NewEmptyResponseClaimService(repo, compensator)
+	svc.now = func() time.Time { return now }
+
+	claim, err := svc.Submit(context.Background(), EmptyResponseClaimSubmitInput{UserID: 7, UsageLogID: 100})
+
+	require.Nil(t, claim)
+	require.ErrorIs(t, err, ErrEmptyResponseClaimNotFound)
+	require.Nil(t, repo.createIn)
+	require.Zero(t, compensator.claimID)
+}
+
 func TestEmptyResponseClaimServiceSubmitStopsAtDailyLimitWithoutCreatingReviewClaim(t *testing.T) {
 	now := time.Date(2026, 8, 7, 12, 0, 0, 0, time.UTC)
 	repo := &emptyResponseClaimRepoStub{

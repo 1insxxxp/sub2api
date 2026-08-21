@@ -500,4 +500,51 @@ describe('user UsageView', () => {
       refunded_amount: 1.25,
     })
   })
+
+  it('does not render claim buttons for rows that are no longer claimable', async () => {
+    listRecentEmptyResponses.mockResolvedValueOnce([
+      {
+        usage_log_id: 77,
+        claim_id: 701,
+        model: 'claude-opus-4-6',
+        api_key_name: 'cli',
+        group_name: 'cc',
+        inbound_endpoint: '/v1/messages',
+        actual_cost: 1.25,
+        input_tokens: 1234,
+        output_tokens: 0,
+        cache_tokens: 46,
+        total_tokens: 1280,
+        refunded_amount: 1.25,
+        status: 'compensated',
+        reason_code: 'pure_empty',
+        created_at: '2026-03-08T00:00:00Z',
+      },
+      {
+        usage_log_id: 78,
+        model: 'claude-opus-4-6',
+        api_key_name: 'cli',
+        group_name: 'cc',
+        inbound_endpoint: '/v1/messages',
+        actual_cost: 1.25,
+        input_tokens: 1234,
+        output_tokens: 0,
+        cache_tokens: 46,
+        total_tokens: 1280,
+        refunded_amount: 0,
+        status: 'daily_limited',
+        reason_code: 'daily_limit_manual_review',
+        created_at: '2026-03-08T00:00:00Z',
+      },
+    ])
+    const wrapper = mountUsageView()
+    await flushPromises()
+
+    await wrapper.find('[data-testid="empty-response-tab"]').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.find('[data-testid="claim-empty-response-77"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="claim-empty-response-78"]').exists()).toBe(false)
+    expect(submitEmptyResponseClaim).not.toHaveBeenCalled()
+  })
 })

@@ -244,6 +244,9 @@ func (s *EmptyResponseClaimService) Submit(ctx context.Context, input EmptyRespo
 	if decision.ReasonCode == EmptyResponseReasonDailyLimit {
 		return nil, ErrEmptyResponseClaimDailyLimitExceeded
 	}
+	if decision.Status != EmptyResponseClaimApproved {
+		return nil, ErrEmptyResponseClaimNotFound
+	}
 	createInput := &EmptyResponseClaimCreateInput{
 		Evaluation:         *evaluation,
 		Decision:           decision,
