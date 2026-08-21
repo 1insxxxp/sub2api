@@ -1341,6 +1341,10 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 				response.BadRequest(c, "Custom menu item icon SVG is too large (max 10KB)")
 				return
 			}
+			if err := normalizeCustomMenuOpenMode(&items[i]); err != nil {
+				response.BadRequest(c, err.Error())
+				return
+			}
 			// Auto-generate ID if missing
 			if strings.TrimSpace(item.ID) == "" {
 				id, err := generateMenuItemID()
@@ -2454,6 +2458,20 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 		payload.DefaultPlatformQuotas = platformQuotas
 	}
 	response.Success(c, systemSettingsResponseData(payload, updatedAuthSourceDefaults))
+}
+
+func normalizeCustomMenuOpenMode(item *dto.CustomMenuItem) error {
+	item.OpenMode = strings.TrimSpace(item.OpenMode)
+	if item.OpenMode == "" {
+		item.OpenMode = "embedded"
+	}
+	if item.OpenMode != "embedded" && item.OpenMode != "new_tab" {
+		return errors.New("custom menu item open mode must be 'embedded' or 'new_tab'")
+	}
+	if strings.HasPrefix(strings.TrimSpace(item.URL), "md:") && item.OpenMode != "embedded" {
+		return errors.New("custom menu markdown pages must use embedded mode")
+	}
+	return nil
 }
 
 func resolveAvailableChannelsPriceRangeUpdate(req UpdateSettingsRequest, previous *service.SystemSettings) (float64, float64) {
