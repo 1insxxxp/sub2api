@@ -16,6 +16,9 @@
     <div v-if="claim.reason_code === 'missing_evidence'" class="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200">
       {{ t('admin.usage.emptyResponseClaims.missingEvidenceWarning') }}
     </div>
+    <div v-if="claim.reason_code === 'low_output'" class="rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-900 dark:border-sky-500/30 dark:bg-sky-500/10 dark:text-sky-100">
+      {{ t('admin.usage.emptyResponseClaims.lowOutputNotice') }}
+    </div>
     <div class="grid gap-3 sm:grid-cols-2">
       <div class="review-card"><span>{{ t('admin.usage.emptyResponseClaims.request') }}</span><strong class="break-all font-mono">{{ claim.request_id || '—' }}</strong></div>
       <div class="review-card"><span>{{ t('admin.usage.emptyResponseClaims.usageTime') }}</span><strong>{{ formatDate(claim.usage_created_at) }}</strong></div>

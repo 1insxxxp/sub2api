@@ -19,8 +19,11 @@ const (
 	EmptyResponseClaimRuleVersion     = 1
 	EmptyResponseClaimDailyLimit      = 15
 	EmptyResponseClaimMaxOutputTokens = 10
-	EmptyResponseClaimWindow          = 7 * 24 * time.Hour
-	EmptyResponseRecentListLimit      = 500
+	// Keep the production low-output rule name available while sharing the
+	// same threshold used by the newer empty-response list.
+	EmptyResponseClaimLowOutputTokenLimit = EmptyResponseClaimMaxOutputTokens
+	EmptyResponseClaimWindow              = 7 * 24 * time.Hour
+	EmptyResponseRecentListLimit          = 500
 )
 
 var (
@@ -32,6 +35,7 @@ var (
 
 const (
 	EmptyResponseReasonPureEmpty           = "pure_empty"
+	EmptyResponseReasonLowOutput           = "low_output"
 	EmptyResponseReasonUpstreamHTTP5xx     = "upstream_http_5xx"
 	EmptyResponseReasonUpstreamTimeout     = "upstream_timeout"
 	EmptyResponseReasonUpstreamInterrupted = "upstream_interrupted"
@@ -322,7 +326,7 @@ func emptyResponseRecordFromCandidate(now time.Time, candidate EmptyResponseRece
 
 func emptyResponseReasonIsVisible(reason string) bool {
 	switch reason {
-	case EmptyResponseReasonPureEmpty, EmptyResponseReasonUpstreamHTTP5xx, EmptyResponseReasonUpstreamTimeout, EmptyResponseReasonUpstreamInterrupted, EmptyResponseReasonDailyLimit:
+	case EmptyResponseReasonPureEmpty, EmptyResponseReasonLowOutput, EmptyResponseReasonUpstreamHTTP5xx, EmptyResponseReasonUpstreamTimeout, EmptyResponseReasonUpstreamInterrupted, EmptyResponseReasonDailyLimit:
 		return true
 	default:
 		return false
@@ -366,8 +370,8 @@ func EvaluateEmptyResponseClaim(now time.Time, usage UsageLog, outcome *Response
 	if usage.CompensatedCost > 0 {
 		return decision(EmptyResponseClaimRejected, EmptyResponseReasonAlreadyCompensated)
 	}
-	if usage.OutputTokens > EmptyResponseClaimMaxOutputTokens {
-		return decision(EmptyResponseClaimRejected, EmptyResponseReasonEffectiveOutput)
+	if !group.EmptyResponseCompensationEnabled {
+		return decision(EmptyResponseClaimRejected, EmptyResponseReasonGroupDisabled)
 	}
 	if usage.CreatedAt.IsZero() || now.Before(usage.CreatedAt) {
 		return decision(EmptyResponseClaimManualReview, EmptyResponseReasonConflictingEvidence)
@@ -375,32 +379,57 @@ func EvaluateEmptyResponseClaim(now time.Time, usage UsageLog, outcome *Response
 	if now.Sub(usage.CreatedAt) > EmptyResponseClaimWindow {
 		return decision(EmptyResponseClaimRejected, EmptyResponseReasonWindowExpired)
 	}
+	if dailyCount >= EmptyResponseClaimDailyLimit {
+		return decision(EmptyResponseClaimManualReview, EmptyResponseReasonDailyLimit)
+	}
+	if usage.OutputTokens > EmptyResponseClaimMaxOutputTokens {
+		return decision(EmptyResponseClaimRejected, EmptyResponseReasonEffectiveOutput)
+	}
+	if isPureEmptyResponse(outcome) {
+		return decision(EmptyResponseClaimApproved, EmptyResponseReasonPureEmpty)
+	}
+	if outcome != nil && outcome.CollectorVersion > 0 {
+		if outcome.DisconnectSource == DisconnectSourceClient {
+			return decision(EmptyResponseClaimRejected, EmptyResponseReasonClientCancelled)
+		}
+		if outcome.StreamCompleted && (outcome.DisconnectSource != "" && outcome.DisconnectSource != DisconnectSourceNone || outcome.UpstreamErrorKind != "" && outcome.UpstreamErrorKind != UpstreamErrorNone) {
+			return decision(EmptyResponseClaimManualReview, EmptyResponseReasonConflictingEvidence)
+		}
+		if outcome.UpstreamErrorKind == UpstreamErrorTimeout {
+			return decision(EmptyResponseClaimApproved, EmptyResponseReasonUpstreamTimeout)
+		}
+		if outcome.UpstreamStatus >= 500 || outcome.HTTPStatus >= 500 || outcome.UpstreamErrorKind == UpstreamErrorHTTP5xx {
+			return decision(EmptyResponseClaimApproved, EmptyResponseReasonUpstreamHTTP5xx)
+		}
+		if outcome.DisconnectSource == DisconnectSourceUpstream || outcome.UpstreamErrorKind == UpstreamErrorProtocol {
+			return decision(EmptyResponseClaimApproved, EmptyResponseReasonUpstreamInterrupted)
+		}
+	}
+	if isLowOutputCompensable(usage) {
+		return decision(EmptyResponseClaimApproved, EmptyResponseReasonLowOutput)
+	}
 	if outcome == nil || outcome.CollectorVersion <= 0 {
 		return decision(EmptyResponseClaimManualReview, EmptyResponseReasonMissingEvidence)
-	}
-	if outcome.DisconnectSource == DisconnectSourceClient {
-		return decision(EmptyResponseClaimRejected, EmptyResponseReasonClientCancelled)
 	}
 	if outcome.HasEffectiveOutput() {
 		return decision(EmptyResponseClaimRejected, EmptyResponseReasonEffectiveOutput)
 	}
-	if outcome.StreamCompleted && (outcome.DisconnectSource != "" && outcome.DisconnectSource != DisconnectSourceNone || outcome.UpstreamErrorKind != "" && outcome.UpstreamErrorKind != UpstreamErrorNone) {
-		return decision(EmptyResponseClaimManualReview, EmptyResponseReasonConflictingEvidence)
-	}
-	if dailyCount >= EmptyResponseClaimDailyLimit {
-		return decision(EmptyResponseClaimManualReview, EmptyResponseReasonDailyLimit)
-	}
-	if outcome.UpstreamErrorKind == UpstreamErrorTimeout {
-		return decision(EmptyResponseClaimApproved, EmptyResponseReasonUpstreamTimeout)
-	}
-	if outcome.UpstreamStatus >= 500 || outcome.HTTPStatus >= 500 || outcome.UpstreamErrorKind == UpstreamErrorHTTP5xx {
-		return decision(EmptyResponseClaimApproved, EmptyResponseReasonUpstreamHTTP5xx)
-	}
-	if outcome.DisconnectSource == DisconnectSourceUpstream || outcome.UpstreamErrorKind == UpstreamErrorProtocol {
-		return decision(EmptyResponseClaimApproved, EmptyResponseReasonUpstreamInterrupted)
-	}
-	if outcome.StreamCompleted && outcome.HTTPStatus >= 200 && outcome.HTTPStatus < 300 && outcome.UpstreamStatus >= 200 && outcome.UpstreamStatus < 300 {
-		return decision(EmptyResponseClaimApproved, EmptyResponseReasonPureEmpty)
-	}
 	return decision(EmptyResponseClaimManualReview, EmptyResponseReasonConflictingEvidence)
+}
+
+func isLowOutputCompensable(usage UsageLog) bool {
+	return usage.OutputTokens >= 0 && usage.OutputTokens <= EmptyResponseClaimLowOutputTokenLimit
+}
+
+func isPureEmptyResponse(outcome *ResponseOutcome) bool {
+	if outcome == nil || outcome.CollectorVersion <= 0 || outcome.HasEffectiveOutput() {
+		return false
+	}
+	disconnectSource := outcome.DisconnectSource
+	upstreamErrorKind := outcome.UpstreamErrorKind
+	return outcome.StreamCompleted &&
+		outcome.HTTPStatus >= 200 && outcome.HTTPStatus < 300 &&
+		outcome.UpstreamStatus >= 200 && outcome.UpstreamStatus < 300 &&
+		(disconnectSource == "" || disconnectSource == DisconnectSourceNone) &&
+		(upstreamErrorKind == "" || upstreamErrorKind == UpstreamErrorNone)
 }

@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"sort"
 	"strings"
 
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
@@ -63,6 +64,72 @@ func normalizeAccountModelAliasRenames(input []AccountModelAliasRenameInput) []A
 		})
 	}
 	return renames
+}
+
+func detectAccountModelAliasRenamesFromMappings(before, after map[string]string) []AccountModelAliasRenameInput {
+	if len(before) == 0 || len(after) == 0 {
+		return nil
+	}
+
+	beforeKeys := foldedModelKeySet(before)
+	afterKeys := foldedModelKeySet(after)
+	removedByTarget := make(map[string][]string)
+	addedByTarget := make(map[string][]string)
+
+	for model, target := range before {
+		model = strings.TrimSpace(model)
+		target = strings.TrimSpace(target)
+		if model == "" || target == "" {
+			continue
+		}
+		if _, stillExists := afterKeys[strings.ToLower(model)]; stillExists {
+			continue
+		}
+		removedByTarget[target] = append(removedByTarget[target], model)
+	}
+	for model, target := range after {
+		model = strings.TrimSpace(model)
+		target = strings.TrimSpace(target)
+		if model == "" || target == "" {
+			continue
+		}
+		if _, alreadyExisted := beforeKeys[strings.ToLower(model)]; alreadyExisted {
+			continue
+		}
+		addedByTarget[target] = append(addedByTarget[target], model)
+	}
+
+	targets := make([]string, 0, len(removedByTarget))
+	for target := range removedByTarget {
+		targets = append(targets, target)
+	}
+	sort.Strings(targets)
+
+	renames := make([]AccountModelAliasRenameInput, 0, len(targets))
+	for _, target := range targets {
+		removed := removedByTarget[target]
+		added := addedByTarget[target]
+		if len(removed) != 1 || len(added) != 1 {
+			continue
+		}
+		renames = append(renames, AccountModelAliasRenameInput{
+			OldModel: removed[0],
+			NewModel: added[0],
+		})
+	}
+	return renames
+}
+
+func foldedModelKeySet(mapping map[string]string) map[string]struct{} {
+	keys := make(map[string]struct{}, len(mapping))
+	for model := range mapping {
+		model = strings.TrimSpace(model)
+		if model == "" {
+			continue
+		}
+		keys[strings.ToLower(model)] = struct{}{}
+	}
+	return keys
 }
 
 func (s *adminServiceImpl) CascadeAccountModelAliasRenames(ctx context.Context, accountID int64, input []AccountModelAliasRenameInput) (*AccountModelAliasRenameCascadeResult, error) {

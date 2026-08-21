@@ -79,10 +79,25 @@
           </div>
           <div class="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <label class="input-label mb-0">选择模型及来源</label>
-            <div class="flex items-center justify-between gap-2 sm:justify-end">
-              <button data-test="custom-group-sources-select-all" class="btn btn-secondary min-h-11 px-3 text-xs sm:min-h-9" type="button" :disabled="totalSelectableModelCount === 0" @click="toggleAllModels">
-                {{ allSelectableModelsSelected ? '取消全选' : '全选' }}
-              </button>
+            <div class="flex flex-wrap items-center gap-2 sm:justify-end">
+              <label
+                data-test="custom-group-sources-select-all"
+                :class="[
+                  'inline-flex min-h-11 items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 text-xs font-semibold text-gray-700 shadow-sm transition sm:min-h-9 dark:border-dark-600 dark:bg-dark-800 dark:text-gray-200',
+                  totalSelectableModelCount === 0 ? 'cursor-not-allowed opacity-60' : 'cursor-pointer hover:border-blue-200 hover:bg-blue-50 dark:hover:border-blue-800 dark:hover:bg-blue-950/30',
+                ]"
+              >
+                <input
+                  type="checkbox"
+                  class="checkbox h-4 w-4 shrink-0"
+                  :checked="allSelectableModelsSelected"
+                  :indeterminate="someSelectableModelsSelected"
+                  :disabled="totalSelectableModelCount === 0"
+                  aria-label="全选全部模型"
+                  @change="toggleAllModels"
+                />
+                <span>全选全部</span>
+              </label>
               <button data-test="custom-group-sources-toggle-all" class="btn btn-secondary min-h-11 px-3 text-xs sm:min-h-9" type="button" :disabled="candidates.length === 0" @click="allSourcesExpanded ? collapseAllSources() : expandAllSources()">
                 {{ allSourcesExpanded ? '全部折叠' : '全部展开' }}
               </button>
@@ -110,10 +125,29 @@
           </section>
           <div class="space-y-4">
             <section v-for="source in candidates" :key="source.id" class="overflow-hidden rounded-2xl border border-gray-200 bg-white transition-colors dark:border-dark-600 dark:bg-dark-800">
-              <div class="flex min-h-12 items-center gap-2 px-4 py-3 transition hover:bg-gray-50 dark:hover:bg-dark-700/60">
+              <div class="flex min-h-12 flex-col gap-3 px-4 py-3 transition hover:bg-gray-50 sm:flex-row sm:items-center dark:hover:bg-dark-700/60">
+                <label
+                  :data-test="`custom-group-source-select-all-${source.id}`"
+                  :class="[
+                    'inline-flex min-h-8 shrink-0 items-center gap-2 rounded-lg border border-gray-200 bg-white px-2.5 text-xs font-semibold text-gray-700 shadow-sm transition dark:border-dark-600 dark:bg-dark-800 dark:text-gray-200',
+                    source.models.length === 0 ? 'cursor-not-allowed opacity-60' : 'cursor-pointer hover:border-blue-200 hover:bg-blue-50 dark:hover:border-blue-800 dark:hover:bg-blue-950/30',
+                  ]"
+                  @click.stop
+                >
+                  <input
+                    type="checkbox"
+                    class="checkbox h-4 w-4 shrink-0"
+                    :checked="allModelsForSourceSelected(source)"
+                    :indeterminate="someModelsForSourceSelected(source)"
+                    :disabled="source.models.length === 0"
+                    :aria-label="`全选 ${source.name} 的模型`"
+                    @change="toggleAllModelsForSource(source)"
+                  />
+                  <span>全选本组</span>
+                </label>
                 <button
                   :data-test="`custom-group-source-toggle-${source.id}`"
-                  class="flex min-w-0 flex-1 items-center justify-between gap-3 rounded-lg text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                  class="flex w-full min-w-0 flex-1 items-start justify-between gap-3 rounded-lg text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 sm:items-center"
                   type="button"
                   :aria-expanded="isSourceExpanded(source.id)"
                   :aria-controls="`custom-group-source-models-${source.id}`"
@@ -126,15 +160,6 @@
                     <span v-if="selectedCountForSource(source.id) > 0" class="rounded-full bg-blue-50 px-2.5 py-1 text-xs font-semibold text-blue-700 dark:bg-blue-950/40 dark:text-blue-300">已选 {{ selectedCountForSource(source.id) }}</span>
                   </span>
                   <Icon name="chevronDown" size="sm" :class="['shrink-0 text-gray-400 transition-transform duration-200', isSourceExpanded(source.id) ? 'rotate-180' : '']" />
-                </button>
-                <button
-                  :data-test="`custom-group-source-select-all-${source.id}`"
-                  class="btn btn-secondary min-h-9 shrink-0 px-3 text-xs"
-                  type="button"
-                  :disabled="source.models.length === 0"
-                  @click="toggleAllModelsForSource(source)"
-                >
-                  {{ allModelsForSourceSelected(source) ? '取消全选' : '全选' }}
                 </button>
               </div>
               <div
@@ -183,6 +208,7 @@ import type { CustomGroupCandidate, UserCustomGroup, UserCustomGroupModel } from
 import { useAppStore } from '@/stores/app'
 import { sourceMappingKey, suggestCallName, validateCallNames } from './modelAliases'
 
+const MAX_CUSTOM_GROUP_MODELS = 500
 const emit = defineEmits<{ (e: 'changed'): void }>()
 const app = useAppStore()
 const mode = ref<'list' | 'form'>('list')
@@ -208,7 +234,9 @@ const selectableModelEntries = computed(() => candidates.value.flatMap(source =>
   source.models.map(model => ({ key: sourceMappingKey(source.id, model), sourceId: source.id, sourceName: source.name, model }))
 ))
 const totalSelectableModelCount = computed(() => selectableModelEntries.value.length)
+const selectedSelectableModelCount = computed(() => selectableModelEntries.value.filter(entry => selected.value.has(entry.key)).length)
 const allSelectableModelsSelected = computed(() => totalSelectableModelCount.value > 0 && selectableModelEntries.value.every(entry => selected.value.has(entry.key)))
+const someSelectableModelsSelected = computed(() => selectedSelectableModelCount.value > 0 && !allSelectableModelsSelected.value)
 
 const load = async () => {
   loading.value = true
@@ -266,6 +294,8 @@ const toggleAllModels = () => {
 }
 const allModelsForSourceSelected = (source: CustomGroupCandidate) =>
   source.models.length > 0 && source.models.every(model => selected.value.has(sourceMappingKey(source.id, model)))
+const someModelsForSourceSelected = (source: CustomGroupCandidate) =>
+  selectedCountForSource(source.id) > 0 && !allModelsForSourceSelected(source)
 const toggleAllModelsForSource = (source: CustomGroupCandidate) => {
   const next = new Map(selected.value)
   if (allModelsForSourceSelected(source)) {
@@ -319,6 +349,10 @@ const save = async () => {
   }
   if (aliasErrors.value.size > 0) {
     app.showError('请先修正调用名称')
+    return
+  }
+  if (models.length > MAX_CUSTOM_GROUP_MODELS) {
+    app.showError(`一个自定义分组最多选择 ${MAX_CUSTOM_GROUP_MODELS} 个模型，请先取消部分模型`)
     return
   }
   const removedStaleCount = staleSelectedModels.value.length

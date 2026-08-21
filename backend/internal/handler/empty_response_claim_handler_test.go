@@ -136,6 +136,7 @@ func TestListRecentEmptyResponsesUsesAuthenticatedOwner(t *testing.T) {
 				ActualCost: 1.25, CreatedAt: now.Add(-time.Hour),
 			},
 			Outcome: &service.ResponseOutcome{HTTPStatus: 200, UpstreamStatus: 200, StreamCompleted: true, CollectorVersion: 1},
+			Group:   service.Group{EmptyResponseCompensationEnabled: true},
 		},
 		APIKeyName:      "cli",
 		GroupName:       "cc",

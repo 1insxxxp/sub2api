@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"errors"
+	"strconv"
 	"testing"
 
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
@@ -107,6 +108,21 @@ func TestUserCustomGroupValidateModelsAllowsAliasesForSameRealModelAcrossGroups(
 
 	require.NoError(t, err)
 	require.Equal(t, "claude-opus-4-6-balance", models[0].PublicModel)
+}
+
+func TestUserCustomGroupValidateModelsAllowsBulkSelectAboveFormerLimit(t *testing.T) {
+	svc := newCustomGroupValidationService()
+	models := make([]UserCustomGroupModelInput, 209)
+	for i := range models {
+		model := "bulk-model-" + strconv.Itoa(i)
+		models[i] = UserCustomGroupModelInput{
+			PublicModel:   model,
+			SourceGroupID: 10,
+			SourceModel:   model,
+		}
+	}
+
+	require.NoError(t, svc.validateModels(context.Background(), 9, models))
 }
 
 func TestUserCustomGroupValidateModelsRejectsCaseInsensitiveCallNameConflict(t *testing.T) {
