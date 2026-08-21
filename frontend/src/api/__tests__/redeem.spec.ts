@@ -58,7 +58,7 @@ describe('redeem api balance transfer codes', () => {
 
     const result = await generateBalanceTransferCode(request)
 
-    expect(post).toHaveBeenCalledWith('/redeem/generate', request)
+    expect(post).toHaveBeenCalledWith('/admin/workbench/redeem/generated', request)
     expect(result).toEqual(response)
   })
 
@@ -89,7 +89,7 @@ describe('redeem api balance transfer codes', () => {
 
     const result = await generateBalanceTransferCodes(request)
 
-    expect(post).toHaveBeenCalledWith('/redeem/generate', request)
+    expect(post).toHaveBeenCalledWith('/admin/workbench/redeem/generated', request)
     expect(result).toEqual(response)
   })
 
@@ -142,7 +142,7 @@ describe('redeem api balance transfer codes', () => {
 
     const result = await getGenerated({ page: 1, page_size: 10 })
 
-    expect(get).toHaveBeenCalledWith('/redeem/generated', { params: { page: 1, page_size: 10 } })
+    expect(get).toHaveBeenCalledWith('/admin/workbench/redeem/generated', { params: { page: 1, page_size: 10 } })
     expect(result).toEqual(response)
   })
 
@@ -163,7 +163,7 @@ describe('redeem api balance transfer codes', () => {
 
     const result = await deleteGenerated(18)
 
-    expect(del).toHaveBeenCalledWith('/redeem/generated/18')
+    expect(del).toHaveBeenCalledWith('/admin/workbench/redeem/generated/18')
     expect(result).toEqual(response)
   })
 
@@ -198,7 +198,7 @@ describe('redeem api balance transfer codes', () => {
 
     const result = await deleteGeneratedBatch([18, 19])
 
-    expect(post).toHaveBeenCalledWith('/redeem/generated/batch-delete', { ids: [18, 19] })
+    expect(post).toHaveBeenCalledWith('/admin/workbench/redeem/generated/batch-delete', { ids: [18, 19] })
     expect(result).toEqual(response)
   })
 })

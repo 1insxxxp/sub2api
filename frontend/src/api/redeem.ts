@@ -89,7 +89,7 @@ export async function generateBalanceTransferCodes(
   payload: GenerateBalanceTransferCodeRequest
 ): Promise<GeneratedRedeemCode[]> {
   const { data } = await apiClient.post<GeneratedRedeemCode[] | GeneratedRedeemCode>(
-    '/redeem/generate',
+    '/admin/workbench/redeem/generated',
     payload
   )
   return Array.isArray(data) ? data : [data]
@@ -98,21 +98,25 @@ export async function generateBalanceTransferCodes(
 export async function getGenerated(
   params: RedeemListParams
 ): Promise<PaginatedResponse<GeneratedRedeemCode>> {
-  const { data } = await apiClient.get<PaginatedResponse<GeneratedRedeemCode>>('/redeem/generated', {
-    params
-  })
+  const { data } = await apiClient.get<PaginatedResponse<GeneratedRedeemCode>>(
+    '/admin/workbench/redeem/generated',
+    { params }
+  )
   return data
 }
 
 export async function deleteGenerated(id: number): Promise<GeneratedRedeemCode> {
-  const { data } = await apiClient.delete<GeneratedRedeemCode>(`/redeem/generated/${id}`)
+  const { data } = await apiClient.delete<GeneratedRedeemCode>(
+    `/admin/workbench/redeem/generated/${id}`
+  )
   return data
 }
 
 export async function deleteGeneratedBatch(ids: number[]): Promise<GeneratedRedeemCode[]> {
-  const { data } = await apiClient.post<GeneratedRedeemCode[]>('/redeem/generated/batch-delete', {
-    ids
-  })
+  const { data } = await apiClient.post<GeneratedRedeemCode[]>(
+    '/admin/workbench/redeem/generated/batch-delete',
+    { ids }
+  )
   return data
 }
 

@@ -160,7 +160,7 @@
       </template>
 
       <!-- Regular User View -->
-      <template v-else-if="!appStore.backendModeEnabled">
+      <template v-else-if="!appStore.backendModeEnabled || authStore.canAccessAdminWorkbench">
         <div class="sidebar-section">
           <template v-for="item in userNavItems" :key="item.path">
             <a
@@ -297,10 +297,13 @@ const { canUseBatchImage, refreshBatchImageAccess } = useBatchImageAccess()
 const sidebarCollapsed = computed(() => appStore.sidebarCollapsed)
 const mobileOpen = computed(() => appStore.mobileOpen)
 const isAdmin = computed(() => authStore.isAdmin)
+const canAccessAdminWorkbench = computed(() => authStore.canAccessAdminWorkbench)
 const sidebarNavRef = ref<HTMLElement | null>(null)
 const isDark = ref(document.documentElement.classList.contains('dark'))
 
-const homePath = computed(() => (isAdmin.value ? '/admin/dashboard' : '/dashboard'))
+const homePath = computed(() => (
+  isAdmin.value ? '/admin/dashboard' : canAccessAdminWorkbench.value ? '/admin/workbench' : '/dashboard'
+))
 
 // Track which parent nav groups are expanded
 const expandedGroups = ref<Set<string>>(new Set())
@@ -762,6 +765,12 @@ const flagBatchImageAccess = () => canUseBatchImage.value
 // 可用渠道紧挨渠道状态之上，让用户"先看自己能用什么、再看对应状态"。
 function buildSelfNavItems(withDashboard: boolean): NavItem[] {
   const items: NavItem[] = []
+  if (appStore.backendModeEnabled && canAccessAdminWorkbench.value) {
+    return [{ path: '/admin/workbench', label: t('nav.adminWorkbench'), icon: ShieldIcon }]
+  }
+  if (canAccessAdminWorkbench.value) {
+    items.push({ path: '/admin/workbench', label: t('nav.adminWorkbench'), icon: ShieldIcon })
+  }
   if (withDashboard) {
     items.push({ path: '/dashboard', label: t('nav.dashboard'), icon: DashboardIcon })
   }
@@ -820,6 +829,7 @@ const customMenuItemsForAdmin = computed(() => {
 const adminNavItems = computed((): NavItem[] => {
   const baseItems: NavItem[] = [
     { path: '/admin/dashboard', label: t('nav.dashboard'), icon: DashboardIcon },
+    { path: '/admin/workbench', label: t('nav.adminWorkbench'), icon: ShieldIcon },
     { path: '/admin/ops', label: t('nav.ops'), icon: ChartIcon, featureFlag: flagOpsMonitoring },
     { path: '/admin/users', label: t('nav.users'), icon: UsersIcon, hideInSimpleMode: true },
     { path: '/admin/groups', label: t('nav.groups'), icon: FolderIcon, hideInSimpleMode: true },

@@ -415,6 +415,20 @@ const routes: RouteRecordRaw[] = [
     }
   },
 
+  // ==================== Admin Workbench Routes ====================
+  {
+    path: '/admin/workbench',
+    name: 'AdminWorkbench',
+    component: () => import('@/views/admin/AdminWorkbenchView.vue'),
+    meta: {
+      requiresAuth: true,
+      requiresAdminWorkbench: true,
+      title: 'Admin Workbench',
+      titleKey: 'adminWorkbench.title',
+      descriptionKey: 'adminWorkbench.description'
+    }
+  },
+
   // ==================== Admin Routes ====================
   {
     path: '/admin',
@@ -821,6 +835,7 @@ router.beforeEach(async (to, _from, next) => {
   // Check if route requires authentication
   const requiresAuth = to.meta.requiresAuth !== false // Default to true
   const requiresAdmin = to.meta.requiresAdmin === true
+  const requiresAdminWorkbench = to.meta.requiresAdminWorkbench === true
 
   if (to.path === '/setup') {
     try {
@@ -838,14 +853,18 @@ router.beforeEach(async (to, _from, next) => {
   if (!requiresAuth) {
     // If already authenticated and trying to access login/register, redirect to appropriate dashboard
     if (authStore.isAuthenticated && (to.path === '/login' || to.path === '/register')) {
-      // In backend mode, non-admin users should NOT be redirected away from login
-      // (they are blocked from all protected routes, so redirecting would cause a loop)
-      if (appStore.backendModeEnabled && !authStore.isAdmin) {
+      // In backend mode, users without workbench access should stay on login.
+      if (appStore.backendModeEnabled && !authStore.canAccessAdminWorkbench) {
         next()
         return
       }
-      // Admin users go to admin dashboard, regular users go to user dashboard
-      next(authStore.isAdmin ? '/admin/dashboard' : '/dashboard')
+      next(
+        authStore.isAdmin
+          ? '/admin/dashboard'
+          : authStore.canAccessAdminWorkbench
+            ? '/admin/workbench'
+            : '/dashboard'
+      )
       return
     }
     // Model Plaza:公开路由但受「启用开关 + 可选强制登录」双重控制(后端同口径 fail-closed)
@@ -875,7 +894,7 @@ router.beforeEach(async (to, _from, next) => {
       }
       // Backend mode:登录的非管理员也不可见(匿名由下方公共拦截处理,广场不在白名单)
       if (appStore.backendModeEnabled && authStore.isAuthenticated && !authStore.isAdmin) {
-        next('/login')
+        next(authStore.canAccessAdminWorkbench ? '/admin/workbench' : '/login')
         return
       }
     }
@@ -904,11 +923,16 @@ router.beforeEach(async (to, _from, next) => {
   // Check admin requirement
   if (requiresAdmin && !authStore.isAdmin) {
     // User is authenticated but not admin, redirect to user dashboard
+    next(appStore.backendModeEnabled && authStore.canAccessAdminWorkbench ? '/admin/workbench' : '/dashboard')
+    return
+  }
+
+  if (requiresAdminWorkbench && !authStore.canAccessAdminWorkbench) {
     next('/dashboard')
     return
   }
 
-  if (requiresAdmin && authStore.isAdmin) {
+  if ((requiresAdmin || requiresAdminWorkbench) && authStore.canAccessAdminWorkbench) {
     const adminComplianceStore = useAdminComplianceStore()
     if (!adminComplianceStore.initialized) {
       try {
@@ -983,10 +1007,18 @@ router.beforeEach(async (to, _from, next) => {
     }
   }
 
-  // Backend mode: admin gets full access, non-admin blocked
+  // Backend mode: admin gets full access, sub-admin only gets the admin workbench.
   if (appStore.backendModeEnabled) {
     if (authStore.isAuthenticated && authStore.isAdmin) {
       next()
+      return
+    }
+    if (authStore.isAuthenticated && authStore.canAccessAdminWorkbench) {
+      if (requiresAdminWorkbench || to.path.startsWith('/admin/workbench')) {
+        next()
+        return
+      }
+      next('/admin/workbench')
       return
     }
     const isAllowed = isBackendModePublicRouteAllowed(to.path, authStore.hasPendingAuthSession)

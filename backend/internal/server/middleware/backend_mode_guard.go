@@ -18,13 +18,22 @@ func BackendModeUserGuard(settingService *service.SettingService) gin.HandlerFun
 			return
 		}
 		role, _ := GetUserRoleFromContext(c)
-		if role == "admin" {
+		if role == service.RoleAdmin {
+			c.Next()
+			return
+		}
+		if role == service.RoleSubAdmin && backendModeSubAdminAllowedUserPath(c.Request.URL.Path) {
 			c.Next()
 			return
 		}
 		response.Forbidden(c, "Backend mode is active. User self-service is disabled.")
 		c.Abort()
 	}
+}
+
+func backendModeSubAdminAllowedUserPath(path string) bool {
+	path = strings.ToLower(strings.TrimSpace(path))
+	return strings.HasSuffix(path, "/auth/me")
 }
 
 func backendModeAllowsAuthPath(path string) bool {

@@ -782,9 +782,7 @@ const subscriptionStore = useSubscriptionStore()
 
 const user = computed(() => authStore.user)
 const availableBalance = computed(() => user.value?.balance || 0)
-const canGenerateBalanceTransferCodes = computed(
-  () => user.value?.balance_redeem_code_enabled === true
-)
+const canGenerateBalanceTransferCodes = computed(() => false)
 
 const redeemCode = ref('')
 const submitting = ref(false)

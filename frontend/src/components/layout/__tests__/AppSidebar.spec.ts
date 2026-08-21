@@ -85,10 +85,23 @@ describe('AppSidebar image studio entry', () => {
 })
 
 describe('AppSidebar admin entries', () => {
+  it('exposes the admin workbench entry from the admin sidebar', () => {
+    expect(componentSource).toMatch(
+      /\{ path: '\/admin\/workbench', label: t\('nav\.adminWorkbench'\), icon: [A-Za-z]+Icon \}/,
+    )
+  })
+
   it('keeps the check-in management route visible from the admin sidebar', () => {
     expect(componentSource).toMatch(
       /\{ path: '\/admin\/checkins', label: t\('nav\.checkins'\), icon: [A-Za-z]+Icon, hideInSimpleMode: true \}/,
     )
+  })
+})
+
+describe('AppSidebar sub-admin entries', () => {
+  it('uses admin workbench access instead of full admin access for the regular view', () => {
+    expect(componentSource).toContain("v-else-if=\"!appStore.backendModeEnabled || authStore.canAccessAdminWorkbench\"")
+    expect(componentSource).toContain('const canAccessAdminWorkbench = computed(() => authStore.canAccessAdminWorkbench)')
   })
 })
 

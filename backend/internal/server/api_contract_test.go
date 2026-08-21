@@ -1036,7 +1036,7 @@ func TestAPIContracts(t *testing.T) {
 							"net_actual_cost": 0.5,
 							"compensation_eligible": false,
 							"compensation_eligibility": "unavailable",
-							"compensation_reason_code": "group_disabled",
+							"compensation_reason_code": "claim_window_expired",
 							"created_at": "2025-01-02T03:04:05Z",
 							"user_agent": null
 						}

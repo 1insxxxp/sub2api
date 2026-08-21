@@ -43,6 +43,14 @@ const fakeAdminUser = {
   role: 'admin' as const,
 }
 
+const fakeSubAdminUser = {
+  ...fakeUser,
+  id: 3,
+  username: 'subadmin',
+  email: 'subadmin@example.com',
+  role: 'sub_admin' as const,
+}
+
 const fakeAuthResponse = {
   access_token: 'test-token-123',
   refresh_token: 'refresh-token-456',
@@ -102,6 +110,22 @@ describe('useAuthStore', () => {
       expect(result).toEqual(twoFAResponse)
       expect(store.token).toBeNull()
       expect(store.isAuthenticated).toBe(false)
+    })
+  })
+
+  describe('role permissions', () => {
+    it('treats sub-admin as admin workbench capable but not full admin', async () => {
+      mockLogin.mockResolvedValue({
+        ...fakeAuthResponse,
+        user: fakeSubAdminUser,
+      })
+      const store = useAuthStore()
+
+      await store.login({ email: 'subadmin@example.com', password: '123456' })
+
+      expect(store.isAdmin).toBe(false)
+      expect(store.isSubAdmin).toBe(true)
+      expect(store.canAccessAdminWorkbench).toBe(true)
     })
   })
 

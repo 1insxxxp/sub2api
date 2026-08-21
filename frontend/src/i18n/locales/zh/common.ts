@@ -165,6 +165,7 @@ export default {
   // Navigation
   nav: {
     dashboard: '仪表盘',
+    adminWorkbench: '管理员页面',
     announcements: '公告',
     apiKeys: 'API 密钥',
     customGroups: '自定义分组',
@@ -213,6 +214,45 @@ export default {
     contentModeration: '内容审核',
     promptAudit: '提示词审计',
     auditLogs: '操作日志',
+  },
+
+  adminWorkbench: {
+    title: '管理员页面',
+    description: '面向二级管理员的轻量管理入口。',
+    currentBalance: '当前余额',
+    balanceTransfer: {
+      title: '余额兑换码',
+      subtitle: '将当前账号余额生成一次性兑换码。',
+      amount: '单个金额',
+      amountPlaceholder: '输入金额',
+      count: '数量',
+      expiresInDays: '有效天数',
+      totalValue: '合计金额',
+      notes: '备注',
+      notesPlaceholder: '可选备注',
+      singleUsePerUser: '每个用户仅可使用一次',
+      singleUsePerUserHint: '适合活动码，避免同一用户重复兑换。',
+      generate: '生成兑换码',
+      generating: '生成中...',
+      generated: '兑换码已生成',
+      generatedNow: '本次生成',
+      generatedNowHint: '生成后可直接复制给用户。',
+      noGeneratedNow: '暂无本次生成结果',
+      generatedList: '我生成的兑换码',
+      generatedListHint: '仅展示当前账号生成的余额兑换码。',
+      empty: '暂无生成记录',
+      singleUseBadge: '单用户一次',
+      expiresAt: '过期',
+      invalidAmount: '请输入有效金额',
+      invalidCount: '数量必须在 1 到 100 之间',
+      invalidExpiry: '有效期必须在 1 到 3650 天之间',
+      insufficientBalance: '余额不足',
+      failedToLoad: '加载兑换码失败',
+      failedToGenerate: '生成兑换码失败',
+      deleteConfirm: '确定删除这个未使用的兑换码吗？',
+      deleted: '兑换码已删除',
+      failedToDelete: '删除兑换码失败'
+    }
   },
 
   // Auth
