@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
 
 import RedeemView from '../RedeemView.vue'
+import type { GeneratedRedeemCode, RedeemHistoryItem } from '@/api/redeem'
 
 const {
   authState,
@@ -85,10 +86,22 @@ const mountRedeemView = () =>
     global: {
       stubs: {
         AppLayout: { template: '<div><slot /></div>' },
-        Icon: true
+        Icon: true,
+        Pagination: {
+          props: ['page', 'total', 'pageSize'],
+          template: '<div data-test="redeem-pagination">{{ page }} / {{ total }} / {{ pageSize }}</div>'
+        }
       }
     }
   })
+
+const paginated = <T,>(items: T[], total = items.length, page = 1, pageSize = 10) => ({
+  items,
+  total,
+  page,
+  page_size: pageSize,
+  pages: Math.max(1, Math.ceil(total / pageSize))
+})
 
 describe('user RedeemView balance transfer code generator', () => {
   beforeEach(() => {
@@ -109,8 +122,8 @@ describe('user RedeemView balance transfer code generator', () => {
     showError.mockReset()
     showSuccess.mockReset()
 
-    getHistory.mockResolvedValue([])
-    getGenerated.mockResolvedValue([])
+    getHistory.mockResolvedValue(paginated<RedeemHistoryItem>([]))
+    getGenerated.mockResolvedValue(paginated<GeneratedRedeemCode>([]))
     getPublicSettings.mockResolvedValue({ contact_info: '' })
     refreshUser.mockResolvedValue(undefined)
   })
@@ -121,9 +134,10 @@ describe('user RedeemView balance transfer code generator', () => {
 
     expect(wrapper.find('[data-test="balance-transfer-panel"]').exists()).toBe(false)
     expect(getGenerated).not.toHaveBeenCalled()
+    expect(getHistory).toHaveBeenCalledWith({ page: 1, page_size: 10 })
   })
 
-  it('batch-generates balance redeem codes and refreshes the account state', async () => {
+  it('loads generated codes and recent activity with independent pagination', async () => {
     authState.user = {
       id: 1,
       email: 'user@example.com',
@@ -131,7 +145,18 @@ describe('user RedeemView balance transfer code generator', () => {
       concurrency: 5,
       balance_redeem_code_enabled: true
     }
-    getGenerated.mockResolvedValueOnce([]).mockResolvedValueOnce([
+    getHistory.mockResolvedValue(paginated<RedeemHistoryItem>([
+      {
+        id: 33,
+        code: 'HISTORY-CODE',
+        type: 'balance',
+        value: 1,
+        status: 'used',
+        used_at: '2026-08-20T12:00:00Z',
+        created_at: '2026-08-20T12:00:00Z'
+      }
+    ], 21))
+    getGenerated.mockResolvedValue(paginated<GeneratedRedeemCode>([
       {
         id: 88,
         code: 'SEND-THIS-CODE',
@@ -144,7 +169,40 @@ describe('user RedeemView balance transfer code generator', () => {
         source: 'user_balance_transfer',
         created_by: 1
       }
-    ])
+    ], 12))
+
+    const wrapper = mountRedeemView()
+    await flushPromises()
+
+    expect(getHistory).toHaveBeenCalledWith({ page: 1, page_size: 10 })
+    expect(getGenerated).toHaveBeenCalledWith({ page: 1, page_size: 10 })
+    expect(wrapper.findAll('[data-test="redeem-pagination"]')).toHaveLength(2)
+  })
+
+  it('batch-generates balance redeem codes and refreshes the account state', async () => {
+    authState.user = {
+      id: 1,
+      email: 'user@example.com',
+      balance: 20,
+      concurrency: 5,
+      balance_redeem_code_enabled: true
+    }
+    getGenerated.mockResolvedValueOnce(paginated<GeneratedRedeemCode>([])).mockResolvedValueOnce(
+      paginated<GeneratedRedeemCode>([
+        {
+          id: 88,
+          code: 'SEND-THIS-CODE',
+          type: 'balance',
+          value: 7.5,
+          status: 'unused',
+          used_by: null,
+          used_at: null,
+          created_at: '2026-08-20T12:00:00Z',
+          source: 'user_balance_transfer',
+          created_by: 1
+        }
+      ])
+    )
     generateBalanceTransferCodes.mockResolvedValue([
       {
         id: 88,
@@ -194,6 +252,8 @@ describe('user RedeemView balance transfer code generator', () => {
     })
     expect(refreshUser).toHaveBeenCalled()
     expect(getGenerated).toHaveBeenCalledTimes(2)
+    expect(getGenerated).toHaveBeenNthCalledWith(1, { page: 1, page_size: 10 })
+    expect(getGenerated).toHaveBeenNthCalledWith(2, { page: 1, page_size: 10 })
     expect(wrapper.text()).toContain('SEND-THIS-CODE')
     expect(wrapper.text()).toContain('redeem.balanceTransfer.singleUseBadge')
     expect(showSuccess).toHaveBeenCalledWith('redeem.balanceTransfer.generated')
@@ -207,20 +267,22 @@ describe('user RedeemView balance transfer code generator', () => {
       concurrency: 5,
       balance_redeem_code_enabled: true
     }
-    getGenerated.mockResolvedValueOnce([
-      {
-        id: 88,
-        code: 'DELETE-THIS-CODE',
-        type: 'balance',
-        value: 7.5,
-        status: 'unused',
-        used_by: null,
-        used_at: null,
-        created_at: '2026-08-20T12:00:00Z',
-        source: 'user_balance_transfer',
-        created_by: 1
-      }
-    ]).mockResolvedValueOnce([])
+    getGenerated.mockResolvedValueOnce(
+      paginated<GeneratedRedeemCode>([
+        {
+          id: 88,
+          code: 'DELETE-THIS-CODE',
+          type: 'balance',
+          value: 7.5,
+          status: 'unused',
+          used_by: null,
+          used_at: null,
+          created_at: '2026-08-20T12:00:00Z',
+          source: 'user_balance_transfer',
+          created_by: 1
+        }
+      ])
+    ).mockResolvedValueOnce(paginated<GeneratedRedeemCode>([]))
     deleteGenerated.mockResolvedValue({ message: 'deleted' })
     const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true)
 
@@ -234,6 +296,8 @@ describe('user RedeemView balance transfer code generator', () => {
     expect(deleteGenerated).toHaveBeenCalledWith(88)
     expect(refreshUser).toHaveBeenCalled()
     expect(getGenerated).toHaveBeenCalledTimes(2)
+    expect(getGenerated).toHaveBeenNthCalledWith(1, { page: 1, page_size: 10 })
+    expect(getGenerated).toHaveBeenNthCalledWith(2, { page: 1, page_size: 10 })
     expect(showSuccess).toHaveBeenCalledWith('redeem.balanceTransfer.deleted')
 
     confirmSpy.mockRestore()

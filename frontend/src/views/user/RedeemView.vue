@@ -372,6 +372,17 @@
             <p v-else class="py-5 text-center text-sm text-slate-500 dark:text-slate-400">
               {{ t('redeem.balanceTransfer.empty') }}
             </p>
+
+            <Pagination
+              v-if="!loadingGeneratedCodes && generatedPagination.total > generatedPagination.page_size"
+              class="mt-3 overflow-hidden rounded-lg border border-slate-200 dark:border-dark-700"
+              :page="generatedPagination.page"
+              :total="generatedPagination.total"
+              :page-size="generatedPagination.page_size"
+              :page-size-options="redeemPageSizeOptions"
+              @update:page="handleGeneratedPageChange"
+              @update:pageSize="handleGeneratedPageSizeChange"
+            />
           </div>
         </div>
       </section>
@@ -631,6 +642,17 @@
               {{ t('redeem.historyWillAppear') }}
             </p>
           </div>
+
+          <Pagination
+            v-if="!loadingHistory && historyPagination.total > historyPagination.page_size"
+            class="mt-4 overflow-hidden rounded-lg border border-slate-200 dark:border-dark-700"
+            :page="historyPagination.page"
+            :total="historyPagination.total"
+            :page-size="historyPagination.page_size"
+            :page-size-options="redeemPageSizeOptions"
+            @update:page="handleHistoryPageChange"
+            @update:pageSize="handleHistoryPageSizeChange"
+          />
         </div>
       </section>
     </div>
@@ -645,6 +667,7 @@ import { useAppStore } from '@/stores/app'
 import { useSubscriptionStore } from '@/stores/subscriptions'
 import { redeemAPI, authAPI, type GeneratedRedeemCode, type RedeemHistoryItem } from '@/api'
 import AppLayout from '@/components/layout/AppLayout.vue'
+import Pagination from '@/components/common/Pagination.vue'
 import Icon from '@/components/icons/Icon.vue'
 import { formatDateTime } from '@/utils/format'
 import { extractApiErrorCode, extractApiErrorMessage } from '@/utils/apiError'
@@ -677,6 +700,12 @@ const errorMessage = ref('')
 const history = ref<RedeemHistoryItem[]>([])
 const loadingHistory = ref(false)
 const contactInfo = ref('')
+const redeemPageSizeOptions = [10, 20, 50]
+const historyPagination = reactive({
+  page: 1,
+  page_size: 10,
+  total: 0
+})
 
 const transferForm = reactive({
   amount: '',
@@ -691,6 +720,11 @@ const generatedCodes = ref<GeneratedRedeemCode[]>([])
 const loadingGeneratedCodes = ref(false)
 const deletingGeneratedCodeIds = ref<number[]>([])
 const transferErrorMessage = ref('')
+const generatedPagination = reactive({
+  page: 1,
+  page_size: 10,
+  total: 0
+})
 
 // Helper functions for history display
 const isBalanceType = (type: string) => {
@@ -740,7 +774,14 @@ const formatHistoryValue = (item: RedeemHistoryItem) => {
 const fetchHistory = async () => {
   loadingHistory.value = true
   try {
-    history.value = await redeemAPI.getHistory()
+    const response = await redeemAPI.getHistory({
+      page: historyPagination.page,
+      page_size: historyPagination.page_size
+    })
+    history.value = response.items
+    historyPagination.total = response.total
+    historyPagination.page = response.page
+    historyPagination.page_size = response.page_size
   } catch (error) {
     console.error('Failed to fetch history:', error)
   } finally {
@@ -748,21 +789,52 @@ const fetchHistory = async () => {
   }
 }
 
+const handleHistoryPageChange = (page: number) => {
+  historyPagination.page = page
+  fetchHistory()
+}
+
+const handleHistoryPageSizeChange = (pageSize: number) => {
+  historyPagination.page_size = pageSize
+  historyPagination.page = 1
+  fetchHistory()
+}
+
 const fetchGeneratedCodes = async () => {
   if (!canGenerateBalanceTransferCodes.value) {
     generatedCodes.value = []
+    generatedPagination.total = 0
+    generatedPagination.page = 1
     return
   }
 
   loadingGeneratedCodes.value = true
   try {
-    generatedCodes.value = await redeemAPI.getGenerated()
+    const response = await redeemAPI.getGenerated({
+      page: generatedPagination.page,
+      page_size: generatedPagination.page_size
+    })
+    generatedCodes.value = response.items
+    generatedPagination.total = response.total
+    generatedPagination.page = response.page
+    generatedPagination.page_size = response.page_size
   } catch (error) {
     console.error('Failed to fetch generated redeem codes:', error)
     appStore.showError(t('redeem.balanceTransfer.failedToLoad'))
   } finally {
     loadingGeneratedCodes.value = false
   }
+}
+
+const handleGeneratedPageChange = (page: number) => {
+  generatedPagination.page = page
+  fetchGeneratedCodes()
+}
+
+const handleGeneratedPageSizeChange = (pageSize: number) => {
+  generatedPagination.page_size = pageSize
+  generatedPagination.page = 1
+  fetchGeneratedCodes()
 }
 
 const handleGenerateBalanceTransferCode = async () => {
@@ -809,6 +881,7 @@ const handleGenerateBalanceTransferCode = async () => {
     transferForm.amount = ''
     transferForm.notes = ''
     await authStore.refreshUser()
+    generatedPagination.page = 1
     await fetchGeneratedCodes()
     appStore.showSuccess(t('redeem.balanceTransfer.generated'))
   } catch (error: any) {
@@ -840,6 +913,7 @@ const handleDeleteGeneratedCode = async (item: GeneratedRedeemCode) => {
   try {
     await redeemAPI.deleteGenerated(item.id)
     await authStore.refreshUser()
+    generatedPagination.page = 1
     await fetchGeneratedCodes()
     if (generatedCodeResult.value?.id === item.id) {
       generatedCodeResult.value = null
@@ -922,6 +996,7 @@ const handleRedeem = async () => {
     redeemCode.value = ''
 
     // Refresh history
+    historyPagination.page = 1
     await fetchHistory()
 
     // Show success toast
@@ -953,10 +1028,13 @@ onMounted(async () => {
 
 watch(canGenerateBalanceTransferCodes, (enabled) => {
   if (enabled) {
+    generatedPagination.page = 1
     fetchGeneratedCodes()
   } else {
     generatedCodes.value = []
     generatedCodeResult.value = null
+    generatedPagination.total = 0
+    generatedPagination.page = 1
   }
 })
 </script>
