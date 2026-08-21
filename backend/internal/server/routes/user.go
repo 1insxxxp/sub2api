@@ -139,6 +139,7 @@ func RegisterUserRoutes(
 			usage.GET("", h.Usage.List)
 			usage.GET("/errors", h.Usage.ListErrors)
 			usage.GET("/errors/:id", h.Usage.GetErrorDetail)
+			usage.GET("/empty-responses", h.Usage.ListRecentEmptyResponses)
 			usage.POST("/:id/empty-response-claim", h.Usage.SubmitEmptyResponseClaim)
 			usage.GET("/:id", h.Usage.GetByID)
 			usage.GET("/stats", h.Usage.Stats)

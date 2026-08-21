@@ -460,23 +460,9 @@ func projectUsageLogCompensation(log *UsageLog, now time.Time) {
 		log.CompensationEligibility = UsageCompensationClaimed
 		return
 	}
-	group := Group{}
-	if log.Group != nil {
-		group = *log.Group
-	}
-	decision := EvaluateEmptyResponseClaim(now, *log, log.Outcome, group, 0)
-	log.CompensationReasonCode = decision.ReasonCode
-	switch decision.Status {
-	case EmptyResponseClaimApproved:
-		log.CompensationEligible = true
-		log.CompensationEligibility = UsageCompensationEligible
-	case EmptyResponseClaimManualReview:
-		log.CompensationEligible = true
-		log.CompensationEligibility = UsageCompensationManualReview
-	default:
-		log.CompensationEligible = false
-		log.CompensationEligibility = UsageCompensationUnavailable
-	}
+	log.CompensationEligible = false
+	log.CompensationEligibility = UsageCompensationUnavailable
+	log.CompensationReasonCode = ""
 }
 
 // GetGlobalStats returns global usage stats for a time range.

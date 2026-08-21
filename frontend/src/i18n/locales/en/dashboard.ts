@@ -413,14 +413,38 @@ export default {
       refunded: 'Refunded',
       netCharge: 'Net charge',
       action: 'Claim empty response',
+      claimOne: 'Claim',
+      claimingOne: 'Claiming...',
       submitSuccess: 'Empty-response claim submitted',
+      singleClaimSuccess: 'Empty response compensated',
       submitFailed: 'Failed to submit empty-response claim',
+      dailyLimitReached: 'Daily empty-response compensation limit reached',
+      statusLabel: 'Status',
+      tokens: 'Tokens',
+      tokenDetail: 'In {input} / Out {output} / Cache {cache} / Total {total}',
+      claimRules: {
+        dailyLimit: 'Up to 15 automatic compensations per day',
+        tokenLimit: 'Output Token must be 10 or less'
+      },
+      bulk: {
+        title: 'Recent empty responses',
+        subtitle: 'Shows empty responses detected in the last 7 days',
+        action: 'Claim empty responses',
+        claiming: 'Claiming...',
+        empty: 'No claimable empty responses in the last 7 days',
+        loadFailed: 'Failed to load empty responses',
+        claimSuccess: 'Compensated {count}, skipped {skipped}',
+        claimFailed: 'Failed to claim empty responses',
+        dailyRemaining: '{count} claims left today'
+      },
       status: {
+        claimable: 'Claimable',
         evaluating: 'Evaluating',
         manual_review: 'Manual review',
         approved: 'Approved',
         rejected: 'Rejected',
-        compensated: 'Compensated'
+        compensated: 'Compensated',
+        daily_limited: 'Daily limit'
       },
       reasonCode: {
         pure_empty: 'Successful response with no effective output',
@@ -432,14 +456,14 @@ export default {
         not_charged: 'The request was not charged',
         already_compensated: 'The request was already compensated',
         group_disabled: 'Self-service compensation is disabled for this group',
-        claim_window_expired: 'The 24-hour claim window has expired',
+        claim_window_expired: 'The 7-day claim window has expired',
         missing_evidence: 'Structured response evidence is missing',
         conflicting_evidence: 'Response evidence is conflicting',
-        daily_limit_manual_review: 'Daily automatic-review limit reached',
+        daily_limit_manual_review: 'Daily automatic compensation limit of 15 reached; try again tomorrow',
         already_claimed: 'A claim already exists for this request'
       }
     },
-    tabs: { usage: 'Usage', errors: 'Error Requests', ranking: 'User Ranking' },
+    tabs: { usage: 'Usage', errors: 'Error Requests', emptyResponses: 'Empty responses', ranking: 'User Ranking' },
     errors: {
       time: 'Time', model: 'Model', endpoint: 'Endpoint', status: 'Status',
       category: 'Category', platform: 'Platform', message: 'Message',

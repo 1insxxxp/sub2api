@@ -13,6 +13,7 @@ import (
 
 type emptyResponseClaimRepoStub struct {
 	evaluation *EmptyResponseClaimEvaluation
+	recent     []EmptyResponseRecentCandidate
 	loadErr    error
 	dailyCount int
 	claim      *EmptyResponseClaim
@@ -27,6 +28,10 @@ func (s *emptyResponseClaimRepoStub) LoadEvaluation(_ context.Context, _, _ int6
 	return s.evaluation, s.loadErr
 }
 
+func (s *emptyResponseClaimRepoStub) ListRecentEvaluations(_ context.Context, _ int64, _, _ time.Time, _ int) ([]EmptyResponseRecentCandidate, error) {
+	return s.recent, s.loadErr
+}
+
 func (s *emptyResponseClaimRepoStub) CountUserClaims(_ context.Context, _ int64, start, end time.Time) (int, error) {
 	s.dayStart = start
 	s.dayEnd = end
@@ -35,7 +40,19 @@ func (s *emptyResponseClaimRepoStub) CountUserClaims(_ context.Context, _ int64,
 
 func (s *emptyResponseClaimRepoStub) Create(_ context.Context, input *EmptyResponseClaimCreateInput) (*EmptyResponseClaim, bool, error) {
 	s.createIn = input
-	return s.claim, s.created, s.createErr
+	if s.claim != nil || s.createErr != nil {
+		return s.claim, s.created, s.createErr
+	}
+	return &EmptyResponseClaim{
+		ID:                 input.Evaluation.Usage.ID + 1000,
+		UsageLogID:         input.Evaluation.Usage.ID,
+		UserID:             input.Evaluation.Usage.UserID,
+		APIKeyID:           input.Evaluation.Usage.APIKeyID,
+		AccountID:          input.Evaluation.Usage.AccountID,
+		Status:             input.Decision.Status,
+		ReasonCode:         input.Decision.ReasonCode,
+		OriginalActualCost: input.Evaluation.Usage.ActualCost,
+	}, true, nil
 }
 
 type emptyResponseClaimCompensatorStub struct {
@@ -83,12 +100,15 @@ func TestEvaluateEmptyResponseClaimDecisionTable(t *testing.T) {
 		{name: "media output", usage: baseUsage, group: baseGroup, outcome: &ResponseOutcome{HTTPStatus: 200, UpstreamStatus: 200, HasMedia: true, StreamCompleted: true, CollectorVersion: 1}, status: EmptyResponseClaimRejected, reason: EmptyResponseReasonEffectiveOutput},
 		{name: "no charge", usage: UsageLog{ActualCost: 0, CreatedAt: baseUsage.CreatedAt}, group: baseGroup, outcome: pureEmpty, status: EmptyResponseClaimRejected, reason: EmptyResponseReasonNotCharged},
 		{name: "already compensated", usage: UsageLog{ActualCost: 1, CompensatedCost: 1, CreatedAt: baseUsage.CreatedAt}, group: baseGroup, outcome: pureEmpty, status: EmptyResponseClaimRejected, reason: EmptyResponseReasonAlreadyCompensated},
-		{name: "group disabled", usage: baseUsage, group: Group{}, outcome: pureEmpty, status: EmptyResponseClaimRejected, reason: EmptyResponseReasonGroupDisabled},
-		{name: "older than 24 hours", usage: UsageLog{ActualCost: 1, CreatedAt: now.Add(-24*time.Hour - time.Second)}, group: baseGroup, outcome: pureEmpty, status: EmptyResponseClaimRejected, reason: EmptyResponseReasonWindowExpired},
-		{name: "exactly 24 hours remains eligible", usage: UsageLog{ActualCost: 1, CreatedAt: now.Add(-24 * time.Hour)}, group: baseGroup, outcome: pureEmpty, status: EmptyResponseClaimApproved, reason: EmptyResponseReasonPureEmpty},
+		{name: "output tokens over empty threshold", usage: UsageLog{ActualCost: 1, OutputTokens: 11, CreatedAt: baseUsage.CreatedAt}, group: baseGroup, outcome: pureEmpty, status: EmptyResponseClaimRejected, reason: EmptyResponseReasonEffectiveOutput},
+		{name: "output tokens at empty threshold", usage: UsageLog{ActualCost: 1, OutputTokens: 10, CreatedAt: baseUsage.CreatedAt}, group: baseGroup, outcome: pureEmpty, status: EmptyResponseClaimApproved, reason: EmptyResponseReasonPureEmpty},
+		{name: "group switch no longer gates compensation", usage: baseUsage, group: Group{}, outcome: pureEmpty, status: EmptyResponseClaimApproved, reason: EmptyResponseReasonPureEmpty},
+		{name: "older than seven days", usage: UsageLog{ActualCost: 1, CreatedAt: now.Add(-7*24*time.Hour - time.Second)}, group: baseGroup, outcome: pureEmpty, status: EmptyResponseClaimRejected, reason: EmptyResponseReasonWindowExpired},
+		{name: "exactly seven days remains eligible", usage: UsageLog{ActualCost: 1, CreatedAt: now.Add(-7 * 24 * time.Hour)}, group: baseGroup, outcome: pureEmpty, status: EmptyResponseClaimApproved, reason: EmptyResponseReasonPureEmpty},
 		{name: "missing evidence", usage: baseUsage, group: baseGroup, outcome: nil, status: EmptyResponseClaimManualReview, reason: EmptyResponseReasonMissingEvidence},
 		{name: "conflicting evidence", usage: baseUsage, group: baseGroup, outcome: &ResponseOutcome{HTTPStatus: 200, UpstreamStatus: 200, StreamCompleted: true, DisconnectSource: DisconnectSourceUpstream, UpstreamErrorKind: UpstreamErrorProtocol, CollectorVersion: 1}, status: EmptyResponseClaimManualReview, reason: EmptyResponseReasonConflictingEvidence},
-		{name: "claim eleven today", usage: baseUsage, group: baseGroup, outcome: pureEmpty, dailyCount: 10, status: EmptyResponseClaimManualReview, reason: EmptyResponseReasonDailyLimit},
+		{name: "claim fifteen today still eligible", usage: baseUsage, group: baseGroup, outcome: pureEmpty, dailyCount: 14, status: EmptyResponseClaimApproved, reason: EmptyResponseReasonPureEmpty},
+		{name: "claim sixteen today", usage: baseUsage, group: baseGroup, outcome: pureEmpty, dailyCount: 15, status: EmptyResponseClaimManualReview, reason: EmptyResponseReasonDailyLimit},
 		{name: "historical row without outcome", usage: UsageLog{ActualCost: 1, CreatedAt: now.Add(-23 * time.Hour)}, group: baseGroup, outcome: nil, status: EmptyResponseClaimManualReview, reason: EmptyResponseReasonMissingEvidence},
 	}
 
@@ -132,6 +152,104 @@ func TestEmptyResponseClaimServiceCreatesServerEvaluatedClaimAndCompensatesAppro
 	require.NoError(t, loadErr)
 	require.Equal(t, time.Date(2026, 8, 7, 0, 0, 0, 0, shanghai), repo.dayStart)
 	require.Equal(t, repo.dayStart.AddDate(0, 0, 1), repo.dayEnd)
+}
+
+func TestEmptyResponseClaimServiceSubmitStopsAtDailyLimitWithoutCreatingReviewClaim(t *testing.T) {
+	now := time.Date(2026, 8, 7, 12, 0, 0, 0, time.UTC)
+	repo := &emptyResponseClaimRepoStub{
+		dailyCount: EmptyResponseClaimDailyLimit,
+		evaluation: &EmptyResponseClaimEvaluation{
+			Usage: UsageLog{
+				ID: 100, UserID: 7, APIKeyID: 8, AccountID: 9,
+				ActualCost: 1.5, OutputTokens: 0, CreatedAt: now.Add(-time.Hour),
+			},
+			Outcome: &ResponseOutcome{HTTPStatus: 200, UpstreamStatus: 200, StreamCompleted: true, CollectorVersion: 1},
+		},
+	}
+	compensator := &emptyResponseClaimCompensatorStub{}
+	svc := NewEmptyResponseClaimService(repo, compensator)
+	svc.now = func() time.Time { return now }
+
+	claim, err := svc.Submit(context.Background(), EmptyResponseClaimSubmitInput{UserID: 7, UsageLogID: 100})
+
+	require.Nil(t, claim)
+	require.ErrorIs(t, err, ErrEmptyResponseClaimDailyLimitExceeded)
+	require.Nil(t, repo.createIn)
+	require.Zero(t, compensator.claimID)
+}
+
+func TestEmptyResponseClaimServiceSubmitStopsAtDailyLimitBeforeRejectedDecision(t *testing.T) {
+	now := time.Date(2026, 8, 7, 12, 0, 0, 0, time.UTC)
+	repo := &emptyResponseClaimRepoStub{
+		dailyCount: EmptyResponseClaimDailyLimit,
+		evaluation: &EmptyResponseClaimEvaluation{
+			Usage: UsageLog{
+				ID: 100, UserID: 7, APIKeyID: 8, AccountID: 9,
+				ActualCost: 1.5, OutputTokens: EmptyResponseClaimMaxOutputTokens + 1, CreatedAt: now.Add(-time.Hour),
+			},
+			Outcome: &ResponseOutcome{HTTPStatus: 200, UpstreamStatus: 200, HasText: true, StreamCompleted: true, CollectorVersion: 1},
+		},
+	}
+	svc := NewEmptyResponseClaimService(repo, &emptyResponseClaimCompensatorStub{})
+	svc.now = func() time.Time { return now }
+
+	claim, err := svc.Submit(context.Background(), EmptyResponseClaimSubmitInput{UserID: 7, UsageLogID: 100})
+
+	require.Nil(t, claim)
+	require.ErrorIs(t, err, ErrEmptyResponseClaimDailyLimitExceeded)
+	require.Nil(t, repo.createIn)
+}
+
+func TestEmptyResponseClaimServiceReportsSubscriptionCompensationAsBalanceRefund(t *testing.T) {
+	now := time.Date(2026, 8, 7, 12, 0, 0, 0, time.UTC)
+	subscriptionID := int64(20)
+	repo := &emptyResponseClaimRepoStub{
+		evaluation: &EmptyResponseClaimEvaluation{
+			Usage: UsageLog{
+				ID: 100, UserID: 7, APIKeyID: 8, AccountID: 9, ActualCost: 1.5,
+				BillingType: BillingTypeSubscription, SubscriptionID: &subscriptionID, CreatedAt: now.Add(-time.Hour),
+			},
+			Outcome: &ResponseOutcome{HTTPStatus: 200, UpstreamStatus: 200, StreamCompleted: true, CollectorVersion: 1},
+		},
+		claim:   &EmptyResponseClaim{ID: 200, Status: EmptyResponseClaimApproved, OriginalActualCost: 1.5},
+		created: true,
+	}
+	compensator := &emptyResponseClaimCompensatorStub{}
+	svc := NewEmptyResponseClaimService(repo, compensator)
+	svc.now = func() time.Time { return now }
+
+	claim, err := svc.Submit(context.Background(), EmptyResponseClaimSubmitInput{UserID: 7, UsageLogID: 100})
+
+	require.NoError(t, err)
+	require.Equal(t, EmptyResponseClaimCompensated, claim.Status)
+	require.Equal(t, 1.5, claim.BalanceRefund)
+	require.Zero(t, claim.SubscriptionRefund)
+	require.Equal(t, 1.5, claim.APIKeyQuotaRefund)
+}
+
+func TestEmptyResponseClaimServiceListRecentMarksClaimableRowsDailyLimitedWhenCapReached(t *testing.T) {
+	now := time.Date(2026, 8, 7, 12, 0, 0, 0, time.UTC)
+	repo := &emptyResponseClaimRepoStub{
+		dailyCount: EmptyResponseClaimDailyLimit,
+		recent: []EmptyResponseRecentCandidate{{
+			Evaluation: EmptyResponseClaimEvaluation{
+				Usage: UsageLog{
+					ID: 101, UserID: 7, APIKeyID: 8, AccountID: 9,
+					ActualCost: 1.25, OutputTokens: 0, CreatedAt: now.Add(-time.Hour),
+				},
+				Outcome: &ResponseOutcome{HTTPStatus: 200, UpstreamStatus: 200, StreamCompleted: true, CollectorVersion: 1},
+			},
+		}},
+	}
+	svc := NewEmptyResponseClaimService(repo, nil)
+	svc.now = func() time.Time { return now }
+
+	records, err := svc.ListRecent(context.Background(), 7)
+
+	require.NoError(t, err)
+	require.Len(t, records, 1)
+	require.Equal(t, EmptyResponseClaimDailyLimited, records[0].Status)
+	require.Equal(t, EmptyResponseReasonDailyLimit, records[0].ReasonCode)
 }
 
 func TestEmptyResponseClaimServiceRejectsExistingClaimWithoutCompensatingAgain(t *testing.T) {

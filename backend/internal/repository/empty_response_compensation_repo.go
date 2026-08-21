@@ -85,19 +85,6 @@ func (r *emptyResponseCompensationRepository) Compensate(ctx context.Context, cl
 	if err = scanSingleRow(ctx, tx, "SELECT key, quota_used::float8 FROM api_keys WHERE id = $1 FOR UPDATE", []any{state.apiKeyID}, &state.apiKey, &quotaUsed); err != nil {
 		return nil, fmt.Errorf("lock compensated api key: %w", err)
 	}
-	if state.subscriptionID.Valid {
-		var startsAt, expiresAt time.Time
-		var dailyWindowStart, weeklyWindowStart, monthlyWindowStart sql.NullTime
-		if err = scanSingleRow(ctx, tx, `
-			SELECT starts_at, expires_at, daily_window_start, weekly_window_start, monthly_window_start
-			FROM user_subscriptions
-			WHERE id = $1
-			FOR UPDATE
-		`, []any{state.subscriptionID.Int64}, &startsAt, &expiresAt, &dailyWindowStart, &weeklyWindowStart, &monthlyWindowStart); err != nil {
-			return nil, fmt.Errorf("lock compensated subscription: %w", err)
-		}
-	}
-
 	result = compensationResultFromState(claimID, state)
 	if state.status == service.EmptyResponseClaimCompensated {
 		if err = tx.Commit(); err != nil {
@@ -111,40 +98,15 @@ func (r *emptyResponseCompensationRepository) Compensate(ctx context.Context, cl
 
 	refund := state.originalActualCost
 	switch state.billingType {
-	case service.BillingTypeBalance:
-		var update sql.Result
-		if update, err = tx.ExecContext(ctx, "UPDATE users SET balance = balance + $1, updated_at = NOW() WHERE id = $2", refund, state.userID); err != nil {
-			return nil, fmt.Errorf("refund user balance: %w", err)
-		}
-		if affected, rowsErr := update.RowsAffected(); rowsErr != nil || affected != 1 {
-			return nil, service.ErrEmptyResponseCompensationInvalidState
-		}
-	case service.BillingTypeSubscription:
-		if !state.subscriptionID.Valid {
-			return nil, service.ErrEmptyResponseCompensationInvalidState
-		}
-		update, updateErr := tx.ExecContext(ctx, `
-			UPDATE user_subscriptions SET
-				daily_usage_usd = CASE
-					WHEN daily_window_start IS NOT NULL AND $2 >= daily_window_start AND $2 < daily_window_start + INTERVAL '24 hours'
-					THEN GREATEST(daily_usage_usd - $1, 0) ELSE daily_usage_usd END,
-				weekly_usage_usd = CASE
-					WHEN weekly_window_start IS NOT NULL AND $2 >= weekly_window_start AND $2 < weekly_window_start + INTERVAL '7 days'
-					THEN GREATEST(weekly_usage_usd - $1, 0) ELSE weekly_usage_usd END,
-				monthly_usage_usd = CASE
-					WHEN monthly_window_start IS NOT NULL AND $2 >= monthly_window_start AND $2 < monthly_window_start + INTERVAL '30 days'
-					THEN GREATEST(monthly_usage_usd - $1, 0) ELSE monthly_usage_usd END,
-				updated_at = NOW()
-			WHERE id = $3 AND starts_at <= $2 AND expires_at > $2
-		`, refund, state.usageCreatedAt, state.subscriptionID.Int64)
-		if updateErr != nil {
-			err = updateErr
-			return nil, fmt.Errorf("refund subscription usage: %w", err)
-		}
-		if affected, rowsErr := update.RowsAffected(); rowsErr != nil || affected != 1 {
-			return nil, service.ErrEmptyResponseCompensationInvalidState
-		}
+	case service.BillingTypeBalance, service.BillingTypeSubscription:
 	default:
+		return nil, service.ErrEmptyResponseCompensationInvalidState
+	}
+	var update sql.Result
+	if update, err = tx.ExecContext(ctx, "UPDATE users SET balance = balance + $1, updated_at = NOW() WHERE id = $2", refund, state.userID); err != nil {
+		return nil, fmt.Errorf("refund user balance: %w", err)
+	}
+	if affected, rowsErr := update.RowsAffected(); rowsErr != nil || affected != 1 {
 		return nil, service.ErrEmptyResponseCompensationInvalidState
 	}
 
@@ -176,18 +138,6 @@ func (r *emptyResponseCompensationRepository) Compensate(ctx context.Context, cl
 			updated_at = NOW()
 		WHERE id = $3 AND status = $4
 	`
-	if state.billingType == service.BillingTypeSubscription {
-		claimQuery = `
-			UPDATE empty_response_claims SET
-				status = $1,
-				balance_refund = 0,
-				subscription_refund = $2,
-				api_key_quota_refund = $2,
-				compensated_at = NOW(),
-				updated_at = NOW()
-			WHERE id = $3 AND status = $4
-		`
-	}
 	claimUpdate, err := tx.ExecContext(ctx, claimQuery, service.EmptyResponseClaimCompensated, refund, claimID, service.EmptyResponseClaimApproved)
 	if err != nil {
 		return nil, fmt.Errorf("mark empty response claim compensated: %w", err)

@@ -418,14 +418,38 @@ export default {
       refunded: '已补偿',
       netCharge: '净扣费',
       action: '申请补空回',
+      claimOne: '申请',
+      claimingOne: '申请中...',
       submitSuccess: '空回申请已提交',
+      singleClaimSuccess: '空回已补偿到余额',
       submitFailed: '提交空回申请失败',
+      dailyLimitReached: '今日空回自动补偿已达上限',
+      statusLabel: '状态',
+      tokens: 'Token',
+      tokenDetail: '入 {input} / 出 {output} / 缓存 {cache} / 总 {total}',
+      claimRules: {
+        dailyLimit: '每天最多自动补偿 15 条',
+        tokenLimit: '输出 Token 小于等于 10 才可申请'
+      },
+      bulk: {
+        title: '最近空回记录',
+        subtitle: '展示最近 7 天系统识别到的空回记录',
+        action: '申请空回',
+        claiming: '申请中...',
+        empty: '最近 7 天暂无可申请空回',
+        loadFailed: '加载空回列表失败',
+        claimSuccess: '已补偿 {count} 条，跳过 {skipped} 条',
+        claimFailed: '申请空回失败',
+        dailyRemaining: '今日还可申请 {count} 条'
+      },
       status: {
+        claimable: '可申请',
         evaluating: '判定中',
         manual_review: '待人工审核',
         approved: '已批准',
         rejected: '已拒绝',
-        compensated: '已补偿'
+        compensated: '已补偿',
+        daily_limited: '今日上限'
       },
       reasonCode: {
         pure_empty: '成功响应但无有效输出',
@@ -437,14 +461,14 @@ export default {
         not_charged: '该请求未扣费',
         already_compensated: '该请求已补偿',
         group_disabled: '所在分组未开启自助补空回',
-        claim_window_expired: '已超过 24 小时申请期限',
+        claim_window_expired: '已超过 7 天申请期限',
         missing_evidence: '缺少结构化响应证据',
         conflicting_evidence: '响应证据存在冲突',
-        daily_limit_manual_review: '达到当日自动处理上限',
+        daily_limit_manual_review: '今日自动补偿已达 15 条上限，明天可继续申请',
         already_claimed: '该请求已提交过申请'
       }
     },
-    tabs: { usage: '用量明细', errors: '错误请求', ranking: '用户排行' },
+    tabs: { usage: '用量明细', errors: '错误请求', emptyResponses: '空回列表', ranking: '用户排行' },
     errors: {
       time: '时间', model: '模型', endpoint: '端点', status: '状态码',
       category: '分类', platform: '平台', message: '错误信息',

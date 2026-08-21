@@ -18,6 +18,28 @@ type submitEmptyResponseClaimRequest struct {
 	Reason string `json:"reason"`
 }
 
+func (h *UsageHandler) ListRecentEmptyResponses(c *gin.Context) {
+	subject, ok := middleware2.GetAuthSubjectFromContext(c)
+	if !ok {
+		response.Unauthorized(c, "User not authenticated")
+		return
+	}
+	if h.emptyResponseClaimService == nil {
+		response.InternalError(c, "Empty response claim service not available")
+		return
+	}
+	records, err := h.emptyResponseClaimService.ListRecent(c.Request.Context(), subject.UserID)
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	out := make([]*dto.EmptyResponseRecord, 0, len(records))
+	for i := range records {
+		out = append(out, dto.EmptyResponseRecordFromService(&records[i]))
+	}
+	response.Success(c, out)
+}
+
 func (h *UsageHandler) SubmitEmptyResponseClaim(c *gin.Context) {
 	subject, ok := middleware2.GetAuthSubjectFromContext(c)
 	if !ok {

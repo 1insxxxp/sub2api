@@ -47,7 +47,7 @@ func TestEmptyResponseCompensationBalanceTransactionRefundsExactlyOnce(t *testin
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 
-func TestEmptyResponseCompensationSubscriptionOnlyReversesContainingWindows(t *testing.T) {
+func TestEmptyResponseCompensationSubscriptionRefundsToBalance(t *testing.T) {
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)
 	defer db.Close()
@@ -59,11 +59,10 @@ func TestEmptyResponseCompensationSubscriptionOnlyReversesContainingWindows(t *t
 	mock.ExpectQuery("SELECT actual_cost.*FROM usage_logs.*FOR UPDATE").WillReturnRows(sqlmock.NewRows([]string{"actual_cost", "compensated_cost", "billing_type", "created_at"}).AddRow(0.75, 0, service.BillingTypeSubscription, createdAt))
 	mock.ExpectQuery("SELECT balance.*FROM users.*FOR UPDATE").WillReturnRows(sqlmock.NewRows([]string{"balance"}).AddRow(3.0))
 	mock.ExpectQuery("SELECT key, quota_used.*FROM api_keys.*FOR UPDATE").WillReturnRows(sqlmock.NewRows([]string{"key", "quota_used"}).AddRow("sk-test", 2.0))
-	mock.ExpectQuery("SELECT starts_at, expires_at.*FROM user_subscriptions.*FOR UPDATE").WithArgs(int64(10)).WillReturnRows(sqlmock.NewRows([]string{"starts_at", "expires_at", "daily_window_start", "weekly_window_start", "monthly_window_start"}).AddRow(createdAt.Add(-time.Hour), createdAt.Add(time.Hour), createdAt.Add(-time.Hour), createdAt.Add(-8*24*time.Hour), createdAt.Add(-time.Hour)))
-	mock.ExpectExec("UPDATE user_subscriptions SET.*daily_usage_usd = CASE.*weekly_usage_usd = CASE.*monthly_usage_usd = CASE").WithArgs(0.75, createdAt, int64(10)).WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectExec(regexp.QuoteMeta("UPDATE users SET balance = balance + $1, updated_at = NOW() WHERE id = $2")).WithArgs(0.75, int64(7)).WillReturnResult(sqlmock.NewResult(0, 1))
 	mock.ExpectExec("UPDATE api_keys SET quota_used").WillReturnResult(sqlmock.NewResult(0, 1))
 	mock.ExpectExec("UPDATE usage_logs SET compensated_cost").WillReturnResult(sqlmock.NewResult(0, 1))
-	mock.ExpectExec("UPDATE empty_response_claims.*subscription_refund = \\$2").WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectExec("UPDATE empty_response_claims.*balance_refund = \\$2.*subscription_refund = 0.*api_key_quota_refund = \\$2").WillReturnResult(sqlmock.NewResult(0, 1))
 	mock.ExpectCommit()
 
 	result, err := repo.Compensate(context.Background(), 50)
