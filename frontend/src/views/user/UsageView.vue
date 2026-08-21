@@ -94,7 +94,7 @@
               <Select v-model="errorFilter.status_code" :options="errorStatusOptions" @change="applyErrorFilters" />
             </div>
           </div>
-          <div v-else class="flex flex-1 flex-wrap items-end gap-4">
+          <div v-else-if="activeTab === 'usage'" class="flex flex-1 flex-wrap items-end gap-4">
             <div class="w-full sm:w-auto sm:min-w-[220px]">
               <label class="input-label">{{ t('usage.apiKeyFilter') }}</label>
               <Select v-model="filters.api_key_id" :options="apiKeyOptions" @change="applyFilters" />
@@ -120,15 +120,32 @@
               <Select v-model="filters.billing_mode" :options="billingModeOptions" @change="applyFilters" />
             </div>
           </div>
+          <div v-else class="flex flex-1 flex-col gap-1">
+            <h3 class="text-sm font-semibold text-gray-900 dark:text-gray-100">{{ t('usage.emptyResponse.bulk.title') }}</h3>
+            <p class="text-xs text-gray-500 dark:text-gray-400">
+              {{ t('usage.emptyResponse.bulk.subtitle') }}
+              <span v-if="emptyResponseDailyRemaining !== null" class="ml-2 font-medium text-primary-600 dark:text-primary-400">
+                {{ t('usage.emptyResponse.bulk.dailyRemaining', { count: emptyResponseDailyRemaining }) }}
+              </span>
+            </p>
+            <div class="mt-2 flex flex-wrap gap-2 text-[11px] font-medium">
+              <span class="rounded border border-primary-100 bg-primary-50 px-2 py-1 text-primary-700 dark:border-primary-500/20 dark:bg-primary-500/10 dark:text-primary-300">
+                {{ t('usage.emptyResponse.claimRules.dailyLimit') }}
+              </span>
+              <span class="rounded border border-emerald-100 bg-emerald-50 px-2 py-1 text-emerald-700 dark:border-emerald-500/20 dark:bg-emerald-500/10 dark:text-emerald-300">
+                {{ t('usage.emptyResponse.claimRules.tokenLimit') }}
+              </span>
+            </div>
+          </div>
 
           <div class="flex w-full flex-wrap items-center justify-end gap-3 sm:w-auto">
-            <button type="button" @click="refreshData" :disabled="activeTab === 'errors' ? errorLoading : loading" class="btn btn-secondary">
+            <button type="button" @click="refreshData" :disabled="currentPrimaryLoading" class="btn btn-secondary">
               {{ t('common.refresh') }}
             </button>
-            <button type="button" @click="resetFilters" class="btn btn-secondary">
+            <button v-if="activeTab !== 'emptyResponses'" type="button" @click="resetFilters" class="btn btn-secondary">
               {{ t('common.reset') }}
             </button>
-            <div class="relative" ref="columnDropdownRef">
+            <div v-if="activeTab !== 'emptyResponses'" class="relative" ref="columnDropdownRef">
               <button
                 type="button"
                 @click="showColumnDropdown = !showColumnDropdown"
@@ -154,31 +171,26 @@
                 </button>
               </div>
             </div>
-            <button v-if="activeTab !== 'errors'" type="button" @click="exportToCSV" :disabled="exporting" class="btn btn-primary">
+            <button v-if="activeTab === 'usage'" type="button" @click="exportToCSV" :disabled="exporting" class="btn btn-primary">
               {{ exporting ? t('usage.exporting') : t('usage.exportCsv') }}
             </button>
           </div>
         </div>
       </div>
 
-      <div class="flex gap-2 overflow-x-auto border-b border-gray-200 dark:border-dark-700">
-        <button class="tab whitespace-nowrap" :class="{ 'tab-active': activeTab === 'usage' }" @click="switchToUsage">
+      <div class="flex gap-2 border-b border-gray-200 dark:border-dark-700">
+        <button class="tab" :class="{ 'tab-active': activeTab === 'usage' }" @click="activeTab = 'usage'">
           {{ t('usage.tabs.usage') }}
         </button>
-        <button
-          v-if="errorViewEnabled"
-          class="tab whitespace-nowrap"
-          :class="{ 'tab-active': activeTab === 'errors' }"
-          @click="switchToErrors"
-        >
+        <button v-if="errorViewEnabled" class="tab" :class="{ 'tab-active': activeTab === 'errors' }" @click="switchToErrors">
           {{ t('usage.tabs.errors') }}
         </button>
-        <button class="tab whitespace-nowrap" :class="{ 'tab-active': activeTab === 'emptyResponses' }" @click="switchToEmptyResponses">
+        <button data-testid="empty-response-tab" class="tab" :class="{ 'tab-active': activeTab === 'emptyResponses' }" @click="switchToEmptyResponses">
           {{ t('usage.tabs.emptyResponses') }}
         </button>
       </div>
 
-      <template v-if="activeTab !== 'errors'">
+      <template v-if="activeTab === 'usage'">
         <UsageTable
           :data="usageLogs"
           :loading="loading"
@@ -186,7 +198,7 @@
           :server-side-sort="true"
           :show-account-billing="false"
           :show-upstream-endpoint="false"
-          :show-compensation-action="true"
+          :show-compensation-action="false"
           default-sort-key="created_at"
           default-sort-order="desc"
           @sort="handleSort"
@@ -204,8 +216,119 @@
         />
       </template>
 
+      <div v-else-if="activeTab === 'emptyResponses'" class="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm dark:border-dark-700 dark:bg-dark-800">
+        <div v-if="emptyResponseLoading" class="empty-state py-12 text-sm text-gray-400">
+          {{ t('common.loading') }}
+        </div>
+        <div v-else-if="emptyResponseRows.length === 0" class="empty-state py-12 text-sm text-gray-400">
+          {{ t('usage.emptyResponse.bulk.empty') }}
+        </div>
+        <div v-else data-testid="empty-response-table-scroll" class="overflow-x-auto overscroll-x-contain touch-pan-x">
+          <table data-testid="empty-response-table" class="w-full min-w-[1280px] table-fixed divide-y divide-gray-200 text-sm dark:divide-dark-700">
+            <colgroup>
+              <col class="w-[150px]" />
+              <col class="w-[88px]" />
+              <col class="w-[190px]" />
+              <col class="w-[210px]" />
+              <col class="w-[180px]" />
+              <col class="w-[200px]" />
+              <col class="w-[112px]" />
+              <col class="w-[112px]" />
+              <col class="w-[108px]" />
+              <col class="w-[88px]" />
+            </colgroup>
+            <thead class="bg-gray-50 text-xs uppercase tracking-wider text-gray-500 dark:bg-dark-900/60 dark:text-gray-400">
+              <tr>
+                <th class="whitespace-nowrap px-4 py-3 text-left font-medium">{{ t('usage.time') }}</th>
+                <th class="whitespace-nowrap px-4 py-3 text-left font-medium">{{ t('usage.apiKeyFilter') }}</th>
+                <th class="whitespace-nowrap px-4 py-3 text-left font-medium">{{ t('usage.model') }}</th>
+                <th class="whitespace-nowrap px-4 py-3 text-left font-medium">{{ t('admin.usage.group') }}</th>
+                <th class="whitespace-nowrap px-4 py-3 text-left font-medium">{{ t('usage.endpoint') }}</th>
+                <th class="whitespace-nowrap px-4 py-3 text-left font-medium">{{ t('usage.emptyResponse.tokens') }}</th>
+                <th class="whitespace-nowrap px-4 py-3 text-left font-medium">{{ t('usage.emptyResponse.originalCharge') }}</th>
+                <th class="whitespace-nowrap px-4 py-3 text-left font-medium">{{ t('usage.emptyResponse.refunded') }}</th>
+                <th class="whitespace-nowrap px-4 py-3 text-left font-medium">{{ t('usage.emptyResponse.statusLabel') }}</th>
+                <th class="whitespace-nowrap px-4 py-3 text-right font-medium">{{ t('common.actions') }}</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-gray-100 dark:divide-dark-700">
+              <tr v-for="row in emptyResponseRows" :key="row.usage_log_id" class="hover:bg-gray-50/80 dark:hover:bg-dark-700/40">
+                <td class="whitespace-nowrap px-4 py-3 text-gray-600 dark:text-gray-300">{{ formatDateTime(row.created_at) }}</td>
+                <td class="px-4 py-3 font-medium text-gray-800 dark:text-gray-100">
+                  <span class="block truncate" :title="row.api_key_name || '-'">{{ row.api_key_name || '-' }}</span>
+                </td>
+                <td class="px-4 py-3 font-mono text-xs text-gray-800 dark:text-gray-100">
+                  <span :data-testid="`empty-response-model-${row.usage_log_id}`" class="block truncate font-medium" :title="row.model">{{ row.model }}</span>
+                  <span class="mt-1 block truncate text-[11px] text-gray-400" :title="t(`usage.emptyResponse.reasonCode.${row.reason_code}`)">{{ t(`usage.emptyResponse.reasonCode.${row.reason_code}`) }}</span>
+                </td>
+                <td class="px-4 py-3 text-gray-600 dark:text-gray-300">
+                  <span
+                    v-if="row.group_name"
+                    class="inline-flex max-w-full items-center truncate rounded bg-indigo-100 px-2 py-0.5 text-xs font-medium text-indigo-800 dark:bg-indigo-900 dark:text-indigo-200"
+                    :title="row.group_name"
+                  >
+                    {{ row.group_name }}
+                  </span>
+                  <span v-else class="text-gray-400 dark:text-gray-500">-</span>
+                </td>
+                <td class="px-4 py-3 font-mono text-xs text-gray-500 dark:text-gray-400">
+                  <span class="block truncate" :title="row.inbound_endpoint || '-'">{{ row.inbound_endpoint || '-' }}</span>
+                </td>
+                <td
+                  :data-testid="`empty-response-token-${row.usage_log_id}`"
+                  class="px-4 py-3 font-mono text-xs text-gray-600 dark:text-gray-300"
+                  :title="t('usage.emptyResponse.tokenDetail', {
+                    input: formatTokenCount(row.input_tokens),
+                    output: formatTokenCount(row.output_tokens),
+                    cache: formatTokenCount(row.cache_tokens),
+                    total: formatTokenCount(row.total_tokens),
+                  })"
+                >
+                  <div class="grid grid-cols-[max-content_max-content] items-center gap-x-3 gap-y-1 whitespace-nowrap">
+                    <span class="inline-flex items-center gap-1">
+                      <Icon name="arrowDown" size="sm" class="h-3.5 w-3.5 text-emerald-500" />
+                      <span class="font-medium text-gray-900 dark:text-white">{{ formatTokenCount(row.input_tokens) }}</span>
+                    </span>
+                    <span class="inline-flex items-center gap-1">
+                      <Icon name="arrowUp" size="sm" class="h-3.5 w-3.5 text-violet-500" />
+                      <span class="font-medium text-gray-900 dark:text-white">{{ formatTokenCount(row.output_tokens) }}</span>
+                    </span>
+                    <span class="inline-flex items-center gap-1 text-sky-600 dark:text-sky-400">
+                      <Icon name="database" size="sm" class="h-3.5 w-3.5" />
+                      <span class="font-medium">{{ formatTokenCount(row.cache_tokens) }}</span>
+                    </span>
+                    <span class="font-semibold text-primary-600 dark:text-primary-300">
+                      {{ formatTokenCount(row.total_tokens) }}
+                    </span>
+                  </div>
+                </td>
+                <td class="whitespace-nowrap px-4 py-3 font-mono font-semibold text-gray-800 dark:text-gray-100">{{ formatMoney(row.actual_cost) }}</td>
+                <td class="whitespace-nowrap px-4 py-3 font-mono font-semibold text-emerald-600 dark:text-emerald-300">{{ formatMoney(row.refunded_amount) }}</td>
+                <td class="px-4 py-3">
+                  <span class="inline-flex whitespace-nowrap rounded-full bg-primary-50 px-2.5 py-1 text-xs font-semibold text-primary-700 dark:bg-primary-500/10 dark:text-primary-300">
+                    {{ t(`usage.emptyResponse.status.${row.status}`) }}
+                  </span>
+                </td>
+                <td class="px-4 py-3 text-right">
+                  <button
+                    v-if="canClaimEmptyResponseRow(row)"
+                    type="button"
+                    :data-testid="`claim-empty-response-${row.usage_log_id}`"
+                    class="btn btn-primary btn-sm min-w-[72px] justify-center whitespace-nowrap"
+                    :disabled="emptyResponseClaimingRowId === row.usage_log_id"
+                    @click="claimEmptyResponseRow(row)"
+                  >
+                    {{ emptyResponseClaimingRowId === row.usage_log_id ? t('usage.emptyResponse.claimingOne') : t('usage.emptyResponse.claimOne') }}
+                  </button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
       <UserErrorRequestsTable
-        v-else-if="errorViewEnabled"
+        v-else-if="activeTab === 'errors' && errorViewEnabled"
         :rows="errorRows"
         :total="errorTotal"
         :loading="errorLoading"
@@ -263,6 +386,7 @@ import type {
   UsageQueryParams,
   UsageStatsResponse,
   UserErrorRequest,
+  EmptyResponseRecord,
 } from '@/types'
 import type { Column } from '@/components/common/types'
 import { COMMON_ERROR_STATUS_CODES } from '@/utils/errorBadges'
@@ -272,6 +396,7 @@ const appStore = useAppStore()
 
 type DistributionMetric = 'tokens' | 'actual_cost'
 type EndpointSource = 'inbound' | 'upstream' | 'path'
+type UsageTab = 'usage' | 'errors' | 'emptyResponses'
 
 const usageStats = ref<UsageStatsResponse | null>(null)
 const usageLogs = ref<UsageLog[]>([])
@@ -291,6 +416,10 @@ const endpointStatsLoading = ref(false)
 const exporting = ref(false)
 const errorRows = ref<UserErrorRequest[]>([])
 const errorLoading = ref(false)
+const emptyResponseRows = ref<EmptyResponseRecord[]>([])
+const emptyResponseLoading = ref(false)
+const emptyResponseClaimingRowId = ref<number | null>(null)
+const emptyResponseDailyRemaining = ref<number | null>(null)
 const errorPage = ref(1)
 const errorPageSize = ref(20)
 const errorSortBy = ref('created_at')
@@ -354,12 +483,6 @@ const getLast24HoursRangeDates = () => {
   return { start: formatLocalDate(start), end: formatLocalDate(end) }
 }
 
-const getEmptyResponseRangeDates = () => {
-  const end = new Date()
-  const start = new Date(end.getTime() - 7 * 24 * 60 * 60 * 1000)
-  return { start: formatLocalDate(start), end: formatLocalDate(end) }
-}
-
 const getGranularityForRange = (start: string, end: string): 'day' | 'hour' => {
   const startTime = new Date(`${start}T00:00:00`).getTime()
   const endTime = new Date(`${end}T00:00:00`).getTime()
@@ -375,8 +498,13 @@ const modelDistributionMetric = ref<DistributionMetric>('tokens')
 const groupDistributionMetric = ref<DistributionMetric>('tokens')
 const endpointDistributionMetric = ref<DistributionMetric>('tokens')
 const endpointDistributionSource = ref<EndpointSource>('inbound')
-const activeTab = ref<'usage' | 'errors' | 'emptyResponses'>('usage')
+const activeTab = ref<UsageTab>('usage')
 const errorViewEnabled = computed(() => appStore.cachedPublicSettings?.allow_user_view_error_requests ?? false)
+const currentPrimaryLoading = computed(() => {
+  if (activeTab.value === 'errors') return errorLoading.value
+  if (activeTab.value === 'emptyResponses') return emptyResponseLoading.value || emptyResponseClaimingRowId.value !== null
+  return loading.value
+})
 
 const filters = ref<UsageQueryParams>({
   start_date: startDate.value,
@@ -448,19 +576,13 @@ const normalizedFilters = computed<UsageQueryParams>(() => {
   }
 })
 
-const buildUsageListParams = (page: number, pageSize: number): UsageQueryParams => {
-  const params: UsageQueryParams = {
-    page,
-    page_size: pageSize,
-    ...normalizedFilters.value,
-    sort_by: sortState.sort_by,
-    sort_order: sortState.sort_order,
-  }
-  if (activeTab.value === 'emptyResponses') {
-    params.compensation = 'empty_response'
-  }
-  return params
-}
+const buildUsageListParams = (page: number, pageSize: number): UsageQueryParams => ({
+  page,
+  page_size: pageSize,
+  ...normalizedFilters.value,
+  sort_by: sortState.sort_by,
+  sort_order: sortState.sort_order,
+})
 
 const loadLogs = async () => {
   abortController?.abort()
@@ -481,6 +603,53 @@ const loadLogs = async () => {
     }
   } finally {
     if (abortController === controller) loading.value = false
+  }
+}
+
+const loadEmptyResponses = async () => {
+  emptyResponseLoading.value = true
+  try {
+    emptyResponseRows.value = await usageAPI.listRecentEmptyResponses()
+  } catch (error) {
+    console.error('[UsageView] loadEmptyResponses failed:', error)
+    appStore.showError(t('usage.emptyResponse.bulk.loadFailed'))
+  } finally {
+    emptyResponseLoading.value = false
+  }
+}
+
+const canClaimEmptyResponseRow = (row: EmptyResponseRecord) =>
+  row.status === 'claimable' && emptyResponseDailyRemaining.value !== 0
+
+const markEmptyResponseRowDailyLimited = (row: EmptyResponseRecord) => {
+  row.status = 'daily_limited'
+  row.reason_code = 'daily_limit_manual_review'
+  emptyResponseDailyRemaining.value = 0
+}
+
+const claimEmptyResponseRow = async (row: EmptyResponseRecord) => {
+  if (!canClaimEmptyResponseRow(row) || emptyResponseClaimingRowId.value !== null) return
+  emptyResponseClaimingRowId.value = row.usage_log_id
+  try {
+    const claim = await usageAPI.submitEmptyResponseClaim(row.usage_log_id, { reason: '' })
+    row.claim_id = claim.id
+    row.status = claim.status
+    row.reason_code = claim.reason_code
+    row.refunded_amount = claim.refunded_amount
+    if (emptyResponseDailyRemaining.value !== null) {
+      emptyResponseDailyRemaining.value = Math.max(0, emptyResponseDailyRemaining.value - 1)
+    }
+    appStore.showSuccess(t('usage.emptyResponse.singleClaimSuccess'))
+  } catch (error: any) {
+    console.error('[UsageView] claimEmptyResponseRow failed:', error)
+    if (error?.status === 429 || error?.reason === 'EMPTY_RESPONSE_CLAIM_DAILY_LIMIT_EXCEEDED') {
+      markEmptyResponseRowDailyLimited(row)
+      appStore.showWarning(t('usage.emptyResponse.dailyLimitReached'))
+    } else {
+      appStore.showError(t('usage.emptyResponse.submitFailed'))
+    }
+  } finally {
+    emptyResponseClaimingRowId.value = null
   }
 }
 
@@ -599,18 +768,16 @@ const applyFilters = () => {
 }
 
 const refreshData = () => {
-  if (activeTab.value === 'errors') {
-    void loadErrors()
-  } else {
-    void loadLogs()
-  }
+  void loadLogs()
   void loadStats()
   void loadModelStats()
   void loadChartData()
+  if (activeTab.value === 'errors') void loadErrors()
+  if (activeTab.value === 'emptyResponses') void loadEmptyResponses()
 }
 
 const resetFilters = () => {
-  const range = activeTab.value === 'emptyResponses' ? getEmptyResponseRangeDates() : getLast24HoursRangeDates()
+  const range = getLast24HoursRangeDates()
   startDate.value = range.start
   endDate.value = range.end
   filters.value = {
@@ -848,13 +1015,13 @@ const loadSavedErrColumns = () => {
 
 // 列设置下拉按当前 tab 分发
 const currentToggleableColumns = computed(() =>
-  activeTab.value === 'errors' ? errToggleableColumns.value : toggleableColumns.value
+  activeTab.value === 'errors' ? errToggleableColumns.value : activeTab.value === 'usage' ? toggleableColumns.value : []
 )
 const isCurrentColumnVisible = (key: string) =>
-  activeTab.value === 'errors' ? isErrColumnVisible(key) : isColumnVisible(key)
+  activeTab.value === 'errors' ? isErrColumnVisible(key) : activeTab.value === 'usage' ? isColumnVisible(key) : false
 const toggleCurrentColumn = (key: string) => {
   if (activeTab.value === 'errors') toggleErrColumn(key)
-  else toggleColumn(key)
+  else if (activeTab.value === 'usage') toggleColumn(key)
 }
 
 const showColumnDropdown = ref(false)
@@ -931,21 +1098,6 @@ const onErrorPageSize = (pageSize: number) => {
   void loadErrors()
 }
 
-const applyEmptyResponseRange = () => {
-  const range = getEmptyResponseRangeDates()
-  startDate.value = range.start
-  endDate.value = range.end
-  filters.value.start_date = range.start
-  filters.value.end_date = range.end
-  granularity.value = getGranularityForRange(range.start, range.end)
-}
-
-const switchToUsage = () => {
-  activeTab.value = 'usage'
-  pagination.page = 1
-  void loadLogs()
-}
-
 const switchToErrors = () => {
   activeTab.value = 'errors'
   if (errorRows.value.length === 0) void loadErrors()
@@ -953,13 +1105,12 @@ const switchToErrors = () => {
 
 const switchToEmptyResponses = () => {
   activeTab.value = 'emptyResponses'
-  applyEmptyResponseRange()
-  pagination.page = 1
-  void loadLogs()
-  void loadStats()
-  void loadModelStats()
-  void loadChartData()
+  if (emptyResponseRows.value.length === 0) void loadEmptyResponses()
 }
+
+const formatMoney = (value: number) => `$${Number(value || 0).toFixed(6)}`
+const formatTokenCount = (value: number) => Number(value || 0).toLocaleString()
+const formatDateTime = (value: string) => new Date(value).toLocaleString()
 
 onMounted(() => {
   loadSavedColumns()

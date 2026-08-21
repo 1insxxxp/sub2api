@@ -1928,6 +1928,24 @@ export interface EmptyResponseClaim {
   compensated_at?: string | null
 }
 
+export interface EmptyResponseRecord {
+  usage_log_id: number
+  claim_id?: number | null
+  model: string
+  api_key_name: string
+  group_name: string
+  inbound_endpoint: string
+  actual_cost: number
+  input_tokens: number
+  output_tokens: number
+  cache_tokens: number
+  total_tokens: number
+  refunded_amount: number
+  status: 'claimable' | 'daily_limited' | EmptyResponseClaim['status']
+  reason_code: string
+  created_at: string
+}
+
 export interface UsageLogAccountSummary {
   id: number
   name: string

@@ -770,6 +770,29 @@ func EmptyResponseClaimFromService(claim *service.EmptyResponseClaim) *EmptyResp
 	}
 }
 
+func EmptyResponseRecordFromService(record *service.EmptyResponseRecord) *EmptyResponseRecord {
+	if record == nil {
+		return nil
+	}
+	return &EmptyResponseRecord{
+		UsageLogID:      record.UsageLogID,
+		ClaimID:         record.ClaimID,
+		Model:           record.Model,
+		APIKeyName:      record.APIKeyName,
+		GroupName:       record.GroupName,
+		InboundEndpoint: record.InboundEndpoint,
+		ActualCost:      record.ActualCost,
+		InputTokens:     record.InputTokens,
+		OutputTokens:    record.OutputTokens,
+		CacheTokens:     record.CacheTokens,
+		TotalTokens:     record.TotalTokens,
+		RefundedAmount:  record.RefundedAmount,
+		Status:          record.Status,
+		ReasonCode:      record.ReasonCode,
+		CreatedAt:       record.CreatedAt,
+	}
+}
+
 func EmptyResponseClaimFromServiceAdmin(claim *service.EmptyResponseClaim) *AdminEmptyResponseClaim {
 	if claim == nil {
 		return nil

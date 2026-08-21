@@ -406,23 +406,47 @@ export default {
       outputTokens: 'Output tokens',
       originalCharge: 'Original charge',
       expectedRefund: 'Estimated refund',
-      rules: 'Charged requests from the last 7 days with 10 output tokens or fewer can be claimed. The first 15 claims per day are handled by rule; overflow or conflicting evidence goes to manual review. Response content is never read or stored.',
+      rules: 'Only charged records from the last 7 days with 10 output tokens or fewer can be claimed. Up to 15 claims per day are compensated automatically. Response content is never read or stored.',
       reason: 'Additional context (optional)',
-      reasonPlaceholder: 'For example: the client received a blank or very short reply and retrying worked',
+      reasonPlaceholder: 'For example: the client received a blank reply and retrying worked',
       submitting: 'Submitting...',
       submit: 'Submit claim',
       refunded: 'Refunded',
       netCharge: 'Net charge',
-      action: 'Claim refund',
+      action: 'Claim empty response',
       actionHint: 'Applies to blank replies or responses with 10 output tokens or fewer',
-      submitSuccess: 'Compensation claim submitted',
-      submitFailed: 'Failed to submit compensation claim',
+      claimOne: 'Claim',
+      claimingOne: 'Claiming...',
+      submitSuccess: 'Empty-response claim submitted',
+      singleClaimSuccess: 'Empty response compensated',
+      submitFailed: 'Failed to submit empty-response claim',
+      dailyLimitReached: 'Daily empty-response compensation limit reached',
+      statusLabel: 'Status',
+      tokens: 'Tokens',
+      tokenDetail: 'In {input} / Out {output} / Cache {cache} / Total {total}',
+      claimRules: {
+        dailyLimit: 'Up to 15 automatic compensations per day',
+        tokenLimit: 'Output Token must be 10 or less'
+      },
+      bulk: {
+        title: 'Recent empty responses',
+        subtitle: 'Shows empty responses detected in the last 7 days',
+        action: 'Claim empty responses',
+        claiming: 'Claiming...',
+        empty: 'No claimable empty responses in the last 7 days',
+        loadFailed: 'Failed to load empty responses',
+        claimSuccess: 'Compensated {count}, skipped {skipped}',
+        claimFailed: 'Failed to claim empty responses',
+        dailyRemaining: '{count} claims left today'
+      },
       status: {
+        claimable: 'Claimable',
         evaluating: 'Evaluating',
         manual_review: 'Manual review',
         approved: 'Approved',
         rejected: 'Rejected',
-        compensated: 'Compensated'
+        compensated: 'Compensated',
+        daily_limited: 'Daily limit'
       },
       reasonCode: {
         pure_empty: 'Successful response with no effective output',
@@ -438,7 +462,7 @@ export default {
         claim_window_expired: 'The 7-day claim window has expired',
         missing_evidence: 'Structured response evidence is missing',
         conflicting_evidence: 'Response evidence is conflicting',
-        daily_limit_manual_review: 'Daily automatic-review limit reached',
+        daily_limit_manual_review: 'Daily automatic compensation limit of 15 reached; try again tomorrow',
         already_claimed: 'A claim already exists for this request'
       }
     },

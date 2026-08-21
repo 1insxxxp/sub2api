@@ -19,6 +19,8 @@ import (
 type claimHandlerRepositoryStub struct {
 	seenUserID int64
 	seenUsage  int64
+	recent     []service.EmptyResponseRecentCandidate
+	dailyCount int
 	claim      *service.EmptyResponseClaim
 	err        error
 }
@@ -37,8 +39,13 @@ func (s *claimHandlerRepositoryStub) LoadEvaluation(_ context.Context, userID, u
 	}, nil
 }
 
+func (s *claimHandlerRepositoryStub) ListRecentEvaluations(_ context.Context, userID int64, _, _ time.Time, _ int) ([]service.EmptyResponseRecentCandidate, error) {
+	s.seenUserID = userID
+	return s.recent, s.err
+}
+
 func (s *claimHandlerRepositoryStub) CountUserClaims(context.Context, int64, time.Time, time.Time) (int, error) {
-	return 0, nil
+	return s.dailyCount, nil
 }
 
 func (s *claimHandlerRepositoryStub) Create(_ context.Context, input *service.EmptyResponseClaimCreateInput) (*service.EmptyResponseClaim, bool, error) {
@@ -62,6 +69,7 @@ func newClaimHandlerTestRouter(repo *claimHandlerRepositoryStub) *gin.Engine {
 		c.Set(string(middleware2.ContextKeyUser), middleware2.AuthSubject{UserID: 42})
 		c.Next()
 	})
+	router.GET("/usage/empty-responses", handler.ListRecentEmptyResponses)
 	router.POST("/usage/:id/empty-response-claim", handler.SubmitEmptyResponseClaim)
 	return router
 }
@@ -103,4 +111,37 @@ func TestSubmitEmptyResponseClaimCannotClaimAnotherUsersRecord(t *testing.T) {
 
 	require.Equal(t, http.StatusNotFound, recorder.Code)
 	require.Equal(t, int64(42), repo.seenUserID)
+}
+
+func TestListRecentEmptyResponsesUsesAuthenticatedOwner(t *testing.T) {
+	now := time.Now().UTC()
+	repo := &claimHandlerRepositoryStub{recent: []service.EmptyResponseRecentCandidate{{
+		Evaluation: service.EmptyResponseClaimEvaluation{
+			Usage: service.UsageLog{
+				ID: 99, UserID: 42, APIKeyID: 8, AccountID: 9, Model: "claude-opus-4-6",
+				InputTokens: 1234, OutputTokens: 0, CacheCreationTokens: 12, CacheReadTokens: 34,
+				ActualCost: 1.25, CreatedAt: now.Add(-time.Hour),
+			},
+			Outcome: &service.ResponseOutcome{HTTPStatus: 200, UpstreamStatus: 200, StreamCompleted: true, CollectorVersion: 1},
+			Group:   service.Group{EmptyResponseCompensationEnabled: true},
+		},
+		APIKeyName:      "cli",
+		GroupName:       "cc",
+		InboundEndpoint: "/v1/messages",
+	}}}
+	router := newClaimHandlerTestRouter(repo)
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodGet, "/usage/empty-responses", nil)
+
+	router.ServeHTTP(recorder, request)
+
+	require.Equal(t, http.StatusOK, recorder.Code)
+	require.Equal(t, int64(42), repo.seenUserID)
+	require.Contains(t, recorder.Body.String(), `"usage_log_id":99`)
+	require.Contains(t, recorder.Body.String(), `"status":"claimable"`)
+	require.Contains(t, recorder.Body.String(), `"api_key_name":"cli"`)
+	require.Contains(t, recorder.Body.String(), `"input_tokens":1234`)
+	require.Contains(t, recorder.Body.String(), `"output_tokens":0`)
+	require.Contains(t, recorder.Body.String(), `"total_tokens":1280`)
+	require.NotContains(t, recorder.Body.String(), "evidence")
 }

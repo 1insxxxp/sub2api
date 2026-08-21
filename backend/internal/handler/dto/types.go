@@ -628,6 +628,24 @@ type EmptyResponseClaim struct {
 	CompensatedAt   *time.Time `json:"compensated_at,omitempty"`
 }
 
+type EmptyResponseRecord struct {
+	UsageLogID      int64     `json:"usage_log_id"`
+	ClaimID         *int64    `json:"claim_id,omitempty"`
+	Model           string    `json:"model"`
+	APIKeyName      string    `json:"api_key_name"`
+	GroupName       string    `json:"group_name"`
+	InboundEndpoint string    `json:"inbound_endpoint"`
+	ActualCost      float64   `json:"actual_cost"`
+	InputTokens     int       `json:"input_tokens"`
+	OutputTokens    int       `json:"output_tokens"`
+	CacheTokens     int       `json:"cache_tokens"`
+	TotalTokens     int       `json:"total_tokens"`
+	RefundedAmount  float64   `json:"refunded_amount"`
+	Status          string    `json:"status"`
+	ReasonCode      string    `json:"reason_code"`
+	CreatedAt       time.Time `json:"created_at"`
+}
+
 type EmptyResponseOutcomeEvidence struct {
 	HTTPStatus        int    `json:"http_status"`
 	UpstreamStatus    int    `json:"upstream_status"`

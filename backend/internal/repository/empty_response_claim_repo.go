@@ -30,6 +30,7 @@ func (r *emptyResponseClaimRepository) LoadEvaluation(ctx context.Context, userI
 		SELECT
 			ul.id, ul.user_id, ul.api_key_id, ul.account_id, ul.group_id, ul.subscription_id,
 			ul.actual_cost::float8, ul.compensated_cost::float8, ul.created_at,
+			ul.input_tokens, ul.output_tokens, ul.cache_creation_tokens, ul.cache_read_tokens,
 			COALESCE(g.empty_response_compensation_enabled, FALSE),
 			uro.id, uro.http_status, uro.upstream_status, uro.has_text, uro.has_tool_call,
 			uro.has_reasoning, uro.has_media, uro.output_bytes, uro.event_count,
@@ -45,13 +46,16 @@ func (r *emptyResponseClaimRepository) LoadEvaluation(ctx context.Context, userI
 	var usage service.UsageLog
 	var groupID, subscriptionID, outcomeID sql.NullInt64
 	var groupEnabled bool
+	var inputTokens, outputTokens, cacheCreationTokens, cacheReadTokens int
 	var httpStatus, upstreamStatus, eventCount, collectorVersion sql.NullInt64
 	var hasText, hasToolCall, hasReasoning, hasMedia, streamCompleted sql.NullBool
 	var outputBytes sql.NullInt64
 	var finishReason, disconnectSource, upstreamErrorKind sql.NullString
 	err := scanSingleRow(ctx, r.sql, query, []any{userID, usageLogID},
 		&usage.ID, &usage.UserID, &usage.APIKeyID, &usage.AccountID, &groupID, &subscriptionID,
-		&usage.ActualCost, &usage.CompensatedCost, &usage.CreatedAt, &groupEnabled,
+		&usage.ActualCost, &usage.CompensatedCost, &usage.CreatedAt,
+		&inputTokens, &outputTokens, &cacheCreationTokens, &cacheReadTokens,
+		&groupEnabled,
 		&outcomeID, &httpStatus, &upstreamStatus, &hasText, &hasToolCall,
 		&hasReasoning, &hasMedia, &outputBytes, &eventCount, &streamCompleted,
 		&finishReason, &disconnectSource, &upstreamErrorKind, &collectorVersion,
@@ -65,6 +69,10 @@ func (r *emptyResponseClaimRepository) LoadEvaluation(ctx context.Context, userI
 	if groupID.Valid {
 		usage.GroupID = &groupID.Int64
 	}
+	usage.InputTokens = inputTokens
+	usage.OutputTokens = outputTokens
+	usage.CacheCreationTokens = cacheCreationTokens
+	usage.CacheReadTokens = cacheReadTokens
 	if subscriptionID.Valid {
 		usage.SubscriptionID = &subscriptionID.Int64
 	}
@@ -107,6 +115,113 @@ func (r *emptyResponseClaimRepository) CountUserClaims(ctx context.Context, user
 	return count, nil
 }
 
+func (r *emptyResponseClaimRepository) ListRecentEvaluations(ctx context.Context, userID int64, start, end time.Time, limit int) ([]service.EmptyResponseRecentCandidate, error) {
+	if limit <= 0 {
+		limit = service.EmptyResponseRecentListLimit
+	}
+	query := `
+		SELECT
+			ul.id, ul.user_id, ul.api_key_id, ul.account_id, ul.group_id, ul.subscription_id,
+			COALESCE(NULLIF(ul.requested_model, ''), ul.model), ul.actual_cost::float8,
+			ul.compensated_cost::float8, ul.billing_type, COALESCE(ul.inbound_endpoint, ''), ul.created_at,
+			ul.input_tokens, ul.output_tokens, ul.cache_creation_tokens, ul.cache_read_tokens,
+			COALESCE(ak.name, ''), COALESCE(g.name, ''), COALESCE(g.empty_response_compensation_enabled, FALSE),
+			uro.id, uro.http_status, uro.upstream_status, uro.has_text, uro.has_tool_call,
+			uro.has_reasoning, uro.has_media, uro.output_bytes, uro.event_count,
+			uro.stream_completed, uro.finish_reason, uro.disconnect_source,
+			uro.upstream_error_kind, uro.collector_version,
+			erc.id, erc.status, erc.reason_code,
+			COALESCE(erc.balance_refund + erc.subscription_refund, 0)::float8
+		FROM usage_logs ul
+		LEFT JOIN usage_response_outcomes uro ON uro.usage_log_id = ul.id
+		LEFT JOIN empty_response_claims erc ON erc.usage_log_id = ul.id
+		LEFT JOIN api_keys ak ON ak.id = ul.api_key_id
+		LEFT JOIN groups g ON g.id = ul.group_id
+		WHERE ul.user_id = $1
+			AND ul.created_at >= $2
+			AND ul.created_at < $3
+			AND COALESCE(g.empty_response_compensation_enabled, FALSE) = TRUE
+			AND ul.output_tokens >= 0
+			AND ul.output_tokens <= $4
+		ORDER BY ul.created_at DESC, ul.id DESC
+		LIMIT $5
+	`
+	rows, err := r.sql.QueryContext(ctx, query, userID, start, end, service.EmptyResponseClaimLowOutputTokenLimit, limit)
+	if err != nil {
+		return nil, fmt.Errorf("list recent empty response evaluations: %w", err)
+	}
+	defer rows.Close()
+
+	candidates := make([]service.EmptyResponseRecentCandidate, 0)
+	for rows.Next() {
+		var candidate service.EmptyResponseRecentCandidate
+		var usage service.UsageLog
+		var groupID, subscriptionID, outcomeID, claimID sql.NullInt64
+		var groupEnabled bool
+		var inputTokens, outputTokens, cacheCreationTokens, cacheReadTokens int
+		var httpStatus, upstreamStatus, outputBytes, eventCount, collectorVersion sql.NullInt64
+		var hasText, hasToolCall, hasReasoning, hasMedia, streamCompleted sql.NullBool
+		var finishReason, disconnectSource, upstreamErrorKind, claimStatus, claimReasonCode sql.NullString
+		var inboundEndpoint sql.NullString
+		if err := rows.Scan(
+			&usage.ID, &usage.UserID, &usage.APIKeyID, &usage.AccountID, &groupID, &subscriptionID,
+			&usage.Model, &usage.ActualCost, &usage.CompensatedCost, &usage.BillingType, &inboundEndpoint, &usage.CreatedAt,
+			&inputTokens, &outputTokens, &cacheCreationTokens, &cacheReadTokens,
+			&candidate.APIKeyName, &candidate.GroupName, &groupEnabled,
+			&outcomeID, &httpStatus, &upstreamStatus, &hasText, &hasToolCall,
+			&hasReasoning, &hasMedia, &outputBytes, &eventCount, &streamCompleted,
+			&finishReason, &disconnectSource, &upstreamErrorKind, &collectorVersion,
+			&claimID, &claimStatus, &claimReasonCode, &candidate.RefundedAmount,
+		); err != nil {
+			return nil, fmt.Errorf("scan recent empty response evaluation: %w", err)
+		}
+		if groupID.Valid {
+			usage.GroupID = &groupID.Int64
+			candidate.Evaluation.Group.ID = groupID.Int64
+		}
+		usage.InputTokens = inputTokens
+		usage.OutputTokens = outputTokens
+		usage.CacheCreationTokens = cacheCreationTokens
+		usage.CacheReadTokens = cacheReadTokens
+		if subscriptionID.Valid {
+			usage.SubscriptionID = &subscriptionID.Int64
+		}
+		if inboundEndpoint.Valid {
+			candidate.InboundEndpoint = inboundEndpoint.String
+		}
+		if outcomeID.Valid {
+			candidate.Evaluation.OutcomeID = &outcomeID.Int64
+		}
+		candidate.Evaluation.Usage = usage
+		candidate.Evaluation.Group.EmptyResponseCompensationEnabled = groupEnabled
+		candidate.Evaluation.Outcome = &service.ResponseOutcome{
+			HTTPStatus:        int(httpStatus.Int64),
+			UpstreamStatus:    int(upstreamStatus.Int64),
+			HasText:           hasText.Bool,
+			HasToolCall:       hasToolCall.Bool,
+			HasReasoning:      hasReasoning.Bool,
+			HasMedia:          hasMedia.Bool,
+			OutputBytes:       outputBytes.Int64,
+			EventCount:        int(eventCount.Int64),
+			StreamCompleted:   streamCompleted.Bool,
+			FinishReason:      finishReason.String,
+			DisconnectSource:  service.DisconnectSource(disconnectSource.String),
+			UpstreamErrorKind: service.UpstreamErrorKind(upstreamErrorKind.String),
+			CollectorVersion:  int(collectorVersion.Int64),
+		}
+		if claimID.Valid {
+			candidate.ClaimID = &claimID.Int64
+			candidate.ClaimStatus = claimStatus.String
+			candidate.ClaimReasonCode = claimReasonCode.String
+		}
+		candidates = append(candidates, candidate)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate recent empty response evaluations: %w", err)
+	}
+	return candidates, nil
+}
+
 func (r *emptyResponseClaimRepository) Create(ctx context.Context, input *service.EmptyResponseClaimCreateInput) (*service.EmptyResponseClaim, bool, error) {
 	if input == nil {
 		return nil, false, service.ErrEmptyResponseClaimInvalidInput
@@ -128,18 +243,31 @@ func (r *emptyResponseClaimRepository) Create(ctx context.Context, input *servic
 	}
 
 	query := `
+		WITH claim_lock AS (
+			SELECT pg_advisory_xact_lock(hashtextextended($3::text || ':' || to_char(NOW() AT TIME ZONE 'Asia/Shanghai', 'YYYY-MM-DD'), 0))
+		),
+		daily_claims AS (
+			SELECT COUNT(*) AS claim_count
+			FROM empty_response_claims, claim_lock
+			WHERE user_id = $3
+				AND created_at >= (date_trunc('day', NOW() AT TIME ZONE 'Asia/Shanghai') AT TIME ZONE 'Asia/Shanghai')
+				AND created_at < ((date_trunc('day', NOW() AT TIME ZONE 'Asia/Shanghai') + INTERVAL '1 day') AT TIME ZONE 'Asia/Shanghai')
+		)
 		INSERT INTO empty_response_claims (
 			usage_log_id, outcome_id, user_id, api_key_id, account_id, group_id, subscription_id,
 			status, reason_code, user_reason, original_actual_cost, evidence, rule_version
-		) VALUES (
+		)
+		SELECT
 			$1, $2, $3, $4, $5, $6, $7,
 			$8, $9, $10, $11, $12::jsonb, $13
-		)
+		FROM daily_claims
+		WHERE claim_count < $14
 		ON CONFLICT (usage_log_id) DO NOTHING
 		RETURNING ` + emptyResponseClaimSelectColumns
 	claim, err := r.scanClaim(ctx, query, []any{
 		usage.ID, evaluation.OutcomeID, usage.UserID, usage.APIKeyID, usage.AccountID, groupID, usage.SubscriptionID,
 		input.Decision.Status, input.Decision.ReasonCode, input.UserReason, usage.ActualCost, evidence, input.Decision.RuleVersion,
+		service.EmptyResponseClaimDailyLimit,
 	})
 	if err == nil {
 		return claim, true, nil
@@ -151,6 +279,9 @@ func (r *emptyResponseClaimRepository) Create(ctx context.Context, input *servic
 		"SELECT "+emptyResponseClaimSelectColumns+" FROM empty_response_claims WHERE usage_log_id = $1",
 		[]any{usage.ID})
 	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, false, service.ErrEmptyResponseClaimDailyLimitExceeded
+		}
 		return nil, false, fmt.Errorf("load existing empty response claim: %w", err)
 	}
 	return claim, false, nil

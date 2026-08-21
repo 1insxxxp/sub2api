@@ -13,6 +13,7 @@ import (
 
 type emptyResponseClaimRepoStub struct {
 	evaluation *EmptyResponseClaimEvaluation
+	recent     []EmptyResponseRecentCandidate
 	loadErr    error
 	dailyCount int
 	claim      *EmptyResponseClaim
@@ -25,6 +26,10 @@ type emptyResponseClaimRepoStub struct {
 
 func (s *emptyResponseClaimRepoStub) LoadEvaluation(_ context.Context, _, _ int64) (*EmptyResponseClaimEvaluation, error) {
 	return s.evaluation, s.loadErr
+}
+
+func (s *emptyResponseClaimRepoStub) ListRecentEvaluations(_ context.Context, _ int64, _, _ time.Time, _ int) ([]EmptyResponseRecentCandidate, error) {
+	return s.recent, s.loadErr
 }
 
 func (s *emptyResponseClaimRepoStub) CountUserClaims(_ context.Context, _ int64, start, end time.Time) (int, error) {
@@ -72,11 +77,11 @@ func TestEvaluateEmptyResponseClaimDecisionTable(t *testing.T) {
 		reason     string
 	}{
 		{name: "pure 200 empty response", usage: baseUsage, group: baseGroup, outcome: pureEmpty, status: EmptyResponseClaimApproved, reason: EmptyResponseReasonPureEmpty},
-		{name: "charged upstream 5xx", usage: aboveLowOutputLimitUsage, group: baseGroup, outcome: &ResponseOutcome{HTTPStatus: 502, UpstreamStatus: 502, UpstreamErrorKind: UpstreamErrorHTTP5xx, CollectorVersion: 1}, status: EmptyResponseClaimApproved, reason: EmptyResponseReasonUpstreamHTTP5xx},
-		{name: "charged upstream timeout", usage: aboveLowOutputLimitUsage, group: baseGroup, outcome: &ResponseOutcome{HTTPStatus: 504, UpstreamStatus: 504, DisconnectSource: DisconnectSourceUpstream, UpstreamErrorKind: UpstreamErrorTimeout, CollectorVersion: 1}, status: EmptyResponseClaimApproved, reason: EmptyResponseReasonUpstreamTimeout},
-		{name: "charged interrupted stream", usage: aboveLowOutputLimitUsage, group: baseGroup, outcome: &ResponseOutcome{HTTPStatus: 200, UpstreamStatus: 200, DisconnectSource: DisconnectSourceUpstream, UpstreamErrorKind: UpstreamErrorProtocol, CollectorVersion: 1}, status: EmptyResponseClaimApproved, reason: EmptyResponseReasonUpstreamInterrupted},
-		{name: "client cancellation above low output limit", usage: aboveLowOutputLimitUsage, group: baseGroup, outcome: &ResponseOutcome{HTTPStatus: 200, UpstreamStatus: 200, DisconnectSource: DisconnectSourceClient, CollectorVersion: 1}, status: EmptyResponseClaimRejected, reason: EmptyResponseReasonClientCancelled},
-		{name: "client cancellation after terminal signal above low output limit", usage: aboveLowOutputLimitUsage, group: baseGroup, outcome: &ResponseOutcome{HTTPStatus: 200, UpstreamStatus: 200, StreamCompleted: true, DisconnectSource: DisconnectSourceClient, CollectorVersion: 1}, status: EmptyResponseClaimRejected, reason: EmptyResponseReasonClientCancelled},
+		{name: "low output ignores upstream 5xx", usage: baseUsage, group: baseGroup, outcome: &ResponseOutcome{HTTPStatus: 502, UpstreamStatus: 502, UpstreamErrorKind: UpstreamErrorHTTP5xx, CollectorVersion: 1}, status: EmptyResponseClaimApproved, reason: EmptyResponseReasonLowOutput},
+		{name: "low output ignores upstream timeout", usage: baseUsage, group: baseGroup, outcome: &ResponseOutcome{HTTPStatus: 504, UpstreamStatus: 504, DisconnectSource: DisconnectSourceUpstream, UpstreamErrorKind: UpstreamErrorTimeout, CollectorVersion: 1}, status: EmptyResponseClaimApproved, reason: EmptyResponseReasonLowOutput},
+		{name: "low output ignores interrupted stream", usage: baseUsage, group: baseGroup, outcome: &ResponseOutcome{HTTPStatus: 200, UpstreamStatus: 200, DisconnectSource: DisconnectSourceUpstream, UpstreamErrorKind: UpstreamErrorProtocol, CollectorVersion: 1}, status: EmptyResponseClaimApproved, reason: EmptyResponseReasonLowOutput},
+		{name: "low output ignores client cancellation", usage: baseUsage, group: baseGroup, outcome: &ResponseOutcome{HTTPStatus: 200, UpstreamStatus: 200, DisconnectSource: DisconnectSourceClient, CollectorVersion: 1}, status: EmptyResponseClaimApproved, reason: EmptyResponseReasonLowOutput},
+		{name: "low output ignores client cancellation after terminal signal", usage: baseUsage, group: baseGroup, outcome: &ResponseOutcome{HTTPStatus: 200, UpstreamStatus: 200, StreamCompleted: true, DisconnectSource: DisconnectSourceClient, CollectorVersion: 1}, status: EmptyResponseClaimApproved, reason: EmptyResponseReasonLowOutput},
 		{name: "low text output", usage: UsageLog{ActualCost: 1.25, OutputTokens: 10, CreatedAt: baseUsage.CreatedAt}, group: baseGroup, outcome: &ResponseOutcome{HTTPStatus: 200, UpstreamStatus: 200, HasText: true, StreamCompleted: true, CollectorVersion: 1}, status: EmptyResponseClaimApproved, reason: EmptyResponseReasonLowOutput},
 		{name: "low output without response evidence", usage: UsageLog{ActualCost: 1.25, OutputTokens: 10, CreatedAt: baseUsage.CreatedAt}, group: baseGroup, outcome: nil, status: EmptyResponseClaimApproved, reason: EmptyResponseReasonLowOutput},
 		{name: "zero output is low output", usage: UsageLog{ActualCost: 1.25, OutputTokens: 0, CreatedAt: baseUsage.CreatedAt}, group: baseGroup, outcome: nil, status: EmptyResponseClaimApproved, reason: EmptyResponseReasonLowOutput},
@@ -88,13 +93,16 @@ func TestEvaluateEmptyResponseClaimDecisionTable(t *testing.T) {
 		{name: "media output above low output limit", usage: aboveLowOutputLimitUsage, group: baseGroup, outcome: &ResponseOutcome{HTTPStatus: 200, UpstreamStatus: 200, HasMedia: true, StreamCompleted: true, CollectorVersion: 1}, status: EmptyResponseClaimRejected, reason: EmptyResponseReasonEffectiveOutput},
 		{name: "no charge", usage: UsageLog{ActualCost: 0, CreatedAt: baseUsage.CreatedAt}, group: baseGroup, outcome: pureEmpty, status: EmptyResponseClaimRejected, reason: EmptyResponseReasonNotCharged},
 		{name: "already compensated", usage: UsageLog{ActualCost: 1, CompensatedCost: 1, CreatedAt: baseUsage.CreatedAt}, group: baseGroup, outcome: pureEmpty, status: EmptyResponseClaimRejected, reason: EmptyResponseReasonAlreadyCompensated},
-		{name: "group disabled", usage: baseUsage, group: Group{}, outcome: pureEmpty, status: EmptyResponseClaimRejected, reason: EmptyResponseReasonGroupDisabled},
-		{name: "older than claim window", usage: UsageLog{ActualCost: 1, CreatedAt: now.Add(-EmptyResponseClaimWindow - time.Second)}, group: baseGroup, outcome: pureEmpty, status: EmptyResponseClaimRejected, reason: EmptyResponseReasonWindowExpired},
-		{name: "exactly claim window remains eligible", usage: UsageLog{ActualCost: 1, CreatedAt: now.Add(-EmptyResponseClaimWindow)}, group: baseGroup, outcome: pureEmpty, status: EmptyResponseClaimApproved, reason: EmptyResponseReasonPureEmpty},
-		{name: "missing evidence above low output limit", usage: UsageLog{ActualCost: 1.25, OutputTokens: 11, CreatedAt: baseUsage.CreatedAt}, group: baseGroup, outcome: nil, status: EmptyResponseClaimManualReview, reason: EmptyResponseReasonMissingEvidence},
-		{name: "conflicting evidence above low output limit", usage: aboveLowOutputLimitUsage, group: baseGroup, outcome: &ResponseOutcome{HTTPStatus: 200, UpstreamStatus: 200, StreamCompleted: true, DisconnectSource: DisconnectSourceUpstream, UpstreamErrorKind: UpstreamErrorProtocol, CollectorVersion: 1}, status: EmptyResponseClaimManualReview, reason: EmptyResponseReasonConflictingEvidence},
-		{name: "claim sixteen today", usage: baseUsage, group: baseGroup, outcome: pureEmpty, dailyCount: EmptyResponseClaimDailyLimit, status: EmptyResponseClaimManualReview, reason: EmptyResponseReasonDailyLimit},
-		{name: "historical row without outcome above low output limit", usage: UsageLog{ActualCost: 1, OutputTokens: 11, CreatedAt: now.Add(-23 * time.Hour)}, group: baseGroup, outcome: nil, status: EmptyResponseClaimManualReview, reason: EmptyResponseReasonMissingEvidence},
+		{name: "output tokens over empty threshold", usage: UsageLog{ActualCost: 1, OutputTokens: EmptyResponseClaimLowOutputTokenLimit + 1, CreatedAt: baseUsage.CreatedAt}, group: baseGroup, outcome: pureEmpty, status: EmptyResponseClaimRejected, reason: EmptyResponseReasonEffectiveOutput},
+		{name: "output tokens at empty threshold", usage: UsageLog{ActualCost: 1, OutputTokens: 10, CreatedAt: baseUsage.CreatedAt}, group: baseGroup, outcome: pureEmpty, status: EmptyResponseClaimApproved, reason: EmptyResponseReasonPureEmpty},
+		{name: "low output requires group enabled", usage: baseUsage, group: Group{}, outcome: pureEmpty, status: EmptyResponseClaimRejected, reason: EmptyResponseReasonGroupDisabled},
+		{name: "older than seven days", usage: UsageLog{ActualCost: 1, CreatedAt: now.Add(-7*24*time.Hour - time.Second)}, group: baseGroup, outcome: pureEmpty, status: EmptyResponseClaimRejected, reason: EmptyResponseReasonWindowExpired},
+		{name: "exactly seven days remains eligible", usage: UsageLog{ActualCost: 1, CreatedAt: now.Add(-7 * 24 * time.Hour)}, group: baseGroup, outcome: pureEmpty, status: EmptyResponseClaimApproved, reason: EmptyResponseReasonPureEmpty},
+		{name: "missing evidence with invalid token count", usage: UsageLog{ActualCost: 1, OutputTokens: -1, CreatedAt: baseUsage.CreatedAt}, group: baseGroup, outcome: nil, status: EmptyResponseClaimManualReview, reason: EmptyResponseReasonMissingEvidence},
+		{name: "low output ignores conflicting evidence", usage: baseUsage, group: baseGroup, outcome: &ResponseOutcome{HTTPStatus: 200, UpstreamStatus: 200, StreamCompleted: true, DisconnectSource: DisconnectSourceUpstream, UpstreamErrorKind: UpstreamErrorProtocol, CollectorVersion: 1}, status: EmptyResponseClaimApproved, reason: EmptyResponseReasonLowOutput},
+		{name: "claim fifteen today still eligible", usage: baseUsage, group: baseGroup, outcome: pureEmpty, dailyCount: 14, status: EmptyResponseClaimApproved, reason: EmptyResponseReasonPureEmpty},
+		{name: "claim sixteen today", usage: baseUsage, group: baseGroup, outcome: pureEmpty, dailyCount: 15, status: EmptyResponseClaimManualReview, reason: EmptyResponseReasonDailyLimit},
+		{name: "historical row without outcome under token limit", usage: UsageLog{ActualCost: 1, CreatedAt: now.Add(-23 * time.Hour)}, group: baseGroup, outcome: nil, status: EmptyResponseClaimApproved, reason: EmptyResponseReasonLowOutput},
 	}
 
 	require.Equal(t, 7*24*time.Hour, EmptyResponseClaimWindow)

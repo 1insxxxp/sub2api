@@ -15,7 +15,8 @@ import type {
   UsageRequestType,
   UserErrorRequest,
   UserErrorRequestDetail,
-  UserErrorListParams
+  UserErrorListParams,
+  EmptyResponseRecord
 } from '@/types'
 import type { EmptyResponseClaim } from '@/types'
 
@@ -380,6 +381,11 @@ export async function submitEmptyResponseClaim(
   return data
 }
 
+export async function listRecentEmptyResponses(): Promise<EmptyResponseRecord[]> {
+  const { data } = await apiClient.get<EmptyResponseRecord[]>('/usage/empty-responses')
+  return data
+}
+
 export const usageAPI = {
   list,
   query,
@@ -397,7 +403,8 @@ export const usageAPI = {
   // Error requests
   listMyErrorRequests,
   getMyErrorDetail,
-  submitEmptyResponseClaim
+  submitEmptyResponseClaim,
+  listRecentEmptyResponses
 }
 
 export default usageAPI
