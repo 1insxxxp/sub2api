@@ -370,9 +370,6 @@ func EvaluateEmptyResponseClaim(now time.Time, usage UsageLog, outcome *Response
 	if usage.CompensatedCost > 0 {
 		return decision(EmptyResponseClaimRejected, EmptyResponseReasonAlreadyCompensated)
 	}
-	if !group.EmptyResponseCompensationEnabled {
-		return decision(EmptyResponseClaimRejected, EmptyResponseReasonGroupDisabled)
-	}
 	if usage.CreatedAt.IsZero() || now.Before(usage.CreatedAt) {
 		return decision(EmptyResponseClaimManualReview, EmptyResponseReasonConflictingEvidence)
 	}
@@ -387,6 +384,12 @@ func EvaluateEmptyResponseClaim(now time.Time, usage UsageLog, outcome *Response
 	}
 	if isPureEmptyResponse(outcome) {
 		return decision(EmptyResponseClaimApproved, EmptyResponseReasonPureEmpty)
+	}
+	if isLowOutputCompensable(usage) {
+		return decision(EmptyResponseClaimApproved, EmptyResponseReasonLowOutput)
+	}
+	if !group.EmptyResponseCompensationEnabled {
+		return decision(EmptyResponseClaimRejected, EmptyResponseReasonGroupDisabled)
 	}
 	if outcome != nil && outcome.CollectorVersion > 0 {
 		if outcome.DisconnectSource == DisconnectSourceClient {
@@ -404,9 +407,6 @@ func EvaluateEmptyResponseClaim(now time.Time, usage UsageLog, outcome *Response
 		if outcome.DisconnectSource == DisconnectSourceUpstream || outcome.UpstreamErrorKind == UpstreamErrorProtocol {
 			return decision(EmptyResponseClaimApproved, EmptyResponseReasonUpstreamInterrupted)
 		}
-	}
-	if isLowOutputCompensable(usage) {
-		return decision(EmptyResponseClaimApproved, EmptyResponseReasonLowOutput)
 	}
 	if outcome == nil || outcome.CollectorVersion <= 0 {
 		return decision(EmptyResponseClaimManualReview, EmptyResponseReasonMissingEvidence)

@@ -169,8 +169,8 @@ func TestEmptyResponseClaimRepositoryListsRecentEvaluationsWithExistingClaimStat
 	now := time.Now().UTC()
 	start := now.Add(-7 * 24 * time.Hour)
 
-	mock.ExpectQuery(`(?s)`+regexp.QuoteMeta("FROM usage_logs ul")+`.*`+regexp.QuoteMeta("JOIN usage_response_outcomes uro ON uro.usage_log_id = ul.id")+`.*`+regexp.QuoteMeta("LEFT JOIN empty_response_claims erc ON erc.usage_log_id = ul.id")+`.*`+regexp.QuoteMeta("WHERE ul.user_id = $1")).
-		WithArgs(int64(7), start, now, 50).
+	mock.ExpectQuery(`(?s)`+regexp.QuoteMeta("FROM usage_logs ul")+`.*`+regexp.QuoteMeta("LEFT JOIN usage_response_outcomes uro ON uro.usage_log_id = ul.id")+`.*`+regexp.QuoteMeta("LEFT JOIN empty_response_claims erc ON erc.usage_log_id = ul.id")+`.*`+regexp.QuoteMeta("AND ul.output_tokens <= $4")).
+		WithArgs(int64(7), start, now, service.EmptyResponseClaimLowOutputTokenLimit, 50).
 		WillReturnRows(sqlmock.NewRows([]string{
 			"usage_log_id", "user_id", "api_key_id", "account_id", "group_id", "subscription_id",
 			"model", "actual_cost", "compensated_cost", "billing_type", "inbound_endpoint", "created_at",
@@ -187,11 +187,19 @@ func TestEmptyResponseClaimRepositoryListsRecentEvaluationsWithExistingClaimStat
 			false, false, false, 0, 1,
 			true, "stop", "none", "none", 1,
 			201, service.EmptyResponseClaimCompensated, service.EmptyResponseReasonPureEmpty, 1.25,
+		).AddRow(
+			101, 7, 8, 9, nil, nil,
+			"claude-opus-4-6", 0.75, 0, service.BillingTypeBalance, "/v1/messages", now.Add(-2*time.Hour),
+			10, service.EmptyResponseClaimLowOutputTokenLimit, 0, 0,
+			"cli", "", nil, nil, nil, nil,
+			nil, nil, nil, nil, nil,
+			nil, nil, nil, nil, nil,
+			nil, nil, nil, 0,
 		))
 
 	candidates, err := repo.ListRecentEvaluations(context.Background(), 7, start, now, 50)
 	require.NoError(t, err)
-	require.Len(t, candidates, 1)
+	require.Len(t, candidates, 2)
 	got := candidates[0]
 	require.Equal(t, int64(100), got.Evaluation.Usage.ID)
 	require.Equal(t, "claude-opus-4-6", got.Evaluation.Usage.Model)
@@ -208,6 +216,10 @@ func TestEmptyResponseClaimRepositoryListsRecentEvaluationsWithExistingClaimStat
 	require.Equal(t, 1.25, got.RefundedAmount)
 	require.NotNil(t, got.Evaluation.Outcome)
 	require.True(t, got.Evaluation.Outcome.StreamCompleted)
+	withoutOutcome := candidates[1]
+	require.Equal(t, int64(101), withoutOutcome.Evaluation.Usage.ID)
+	require.Equal(t, service.EmptyResponseClaimLowOutputTokenLimit, withoutOutcome.Evaluation.Usage.OutputTokens)
+	require.Nil(t, withoutOutcome.Evaluation.OutcomeID)
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 

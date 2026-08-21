@@ -133,18 +133,19 @@ func (r *emptyResponseClaimRepository) ListRecentEvaluations(ctx context.Context
 			erc.id, erc.status, erc.reason_code,
 			COALESCE(erc.balance_refund + erc.subscription_refund, 0)::float8
 		FROM usage_logs ul
-		JOIN usage_response_outcomes uro ON uro.usage_log_id = ul.id
+		LEFT JOIN usage_response_outcomes uro ON uro.usage_log_id = ul.id
 		LEFT JOIN empty_response_claims erc ON erc.usage_log_id = ul.id
 		LEFT JOIN api_keys ak ON ak.id = ul.api_key_id
 		LEFT JOIN groups g ON g.id = ul.group_id
 		WHERE ul.user_id = $1
 			AND ul.created_at >= $2
 			AND ul.created_at < $3
-			AND ul.actual_cost > 0
+			AND ul.output_tokens >= 0
+			AND ul.output_tokens <= $4
 		ORDER BY ul.created_at DESC, ul.id DESC
-		LIMIT $4
+		LIMIT $5
 	`
-	rows, err := r.sql.QueryContext(ctx, query, userID, start, end, limit)
+	rows, err := r.sql.QueryContext(ctx, query, userID, start, end, service.EmptyResponseClaimLowOutputTokenLimit, limit)
 	if err != nil {
 		return nil, fmt.Errorf("list recent empty response evaluations: %w", err)
 	}
