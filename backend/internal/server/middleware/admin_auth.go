@@ -21,6 +21,17 @@ func NewAdminAuthMiddleware(
 	return AdminAuthMiddleware(adminAuth(authService, userService, settingService, auditService))
 }
 
+// NewAdminWorkbenchAuthMiddleware 创建管理员页面认证中间件。
+// JWT 用户允许完整管理员和二级管理员；Admin API Key 仍以完整管理员身份通过。
+func NewAdminWorkbenchAuthMiddleware(
+	authService *service.AuthService,
+	userService *service.UserService,
+	settingService *service.SettingService,
+	auditService *service.AuditLogService,
+) AdminWorkbenchAuthMiddleware {
+	return AdminWorkbenchAuthMiddleware(adminWorkbenchAuth(authService, userService, settingService, auditService))
+}
+
 // adminAuth 管理员认证中间件实现
 // 支持两种认证方式（通过不同的 header 区分）：
 // 1. Admin API Key: x-api-key: <admin-api-key>
@@ -31,6 +42,34 @@ func adminAuth(
 	settingService *service.SettingService,
 	auditService *service.AuditLogService,
 ) gin.HandlerFunc {
+	return privilegedAdminAuth(authService, userService, settingService, auditService, validateJWTForAdmin)
+}
+
+func adminWorkbenchAuth(
+	authService *service.AuthService,
+	userService *service.UserService,
+	settingService *service.SettingService,
+	auditService *service.AuditLogService,
+) gin.HandlerFunc {
+	return privilegedAdminAuth(authService, userService, settingService, auditService, validateJWTForAdminWorkbench)
+}
+
+type adminJWTValidator func(
+	c *gin.Context,
+	token string,
+	authService *service.AuthService,
+	userService *service.UserService,
+	settingService *service.SettingService,
+	auditService *service.AuditLogService,
+) bool
+
+func privilegedAdminAuth(
+	authService *service.AuthService,
+	userService *service.UserService,
+	settingService *service.SettingService,
+	auditService *service.AuditLogService,
+	validateJWT adminJWTValidator,
+) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// WebSocket upgrade requests cannot set Authorization headers in browsers.
 		// For admin WebSocket endpoints (e.g. Ops realtime), allow passing the JWT via
@@ -38,7 +77,7 @@ func adminAuth(
 		//   Sec-WebSocket-Protocol: sub2api-admin, jwt.<token>
 		if isWebSocketUpgradeRequest(c) {
 			if token := extractJWTFromWebSocketSubprotocol(c); token != "" {
-				if !validateJWTForAdmin(c, token, authService, userService, settingService, auditService) {
+				if !validateJWT(c, token, authService, userService, settingService, auditService) {
 					return
 				}
 				c.Next()
@@ -66,7 +105,7 @@ func adminAuth(
 					AbortWithError(c, 401, "UNAUTHORIZED", "Authorization required")
 					return
 				}
-				if !validateJWTForAdmin(c, token, authService, userService, settingService, auditService) {
+				if !validateJWT(c, token, authService, userService, settingService, auditService) {
 					return
 				}
 				c.Next()
@@ -162,6 +201,48 @@ func validateJWTForAdmin(
 	settingService *service.SettingService,
 	auditService *service.AuditLogService,
 ) bool {
+	return validateJWTForRole(
+		c,
+		token,
+		authService,
+		userService,
+		settingService,
+		auditService,
+		func(user *service.User) bool { return user.IsAdmin() },
+		"Admin access required",
+	)
+}
+
+func validateJWTForAdminWorkbench(
+	c *gin.Context,
+	token string,
+	authService *service.AuthService,
+	userService *service.UserService,
+	settingService *service.SettingService,
+	auditService *service.AuditLogService,
+) bool {
+	return validateJWTForRole(
+		c,
+		token,
+		authService,
+		userService,
+		settingService,
+		auditService,
+		func(user *service.User) bool { return user.CanAccessAdminWorkbench() },
+		"Admin workbench access required",
+	)
+}
+
+func validateJWTForRole(
+	c *gin.Context,
+	token string,
+	authService *service.AuthService,
+	userService *service.UserService,
+	settingService *service.SettingService,
+	auditService *service.AuditLogService,
+	allowRole func(*service.User) bool,
+	forbiddenMessage string,
+) bool {
 	// 验证 JWT token
 	claims, err := authService.ValidateToken(token)
 	if err != nil {
@@ -197,9 +278,8 @@ func validateJWTForAdmin(
 		return false
 	}
 
-	// 检查管理员权限
-	if !user.IsAdmin() {
-		AbortWithError(c, 403, "FORBIDDEN", "Admin access required")
+	if !allowRole(user) {
+		AbortWithError(c, 403, "FORBIDDEN", forbiddenMessage)
 		return false
 	}
 

@@ -23,6 +23,21 @@ func TestAdminService_CreateUser_WithAdminRole(t *testing.T) {
 	require.Equal(t, RoleAdmin, user.Role)
 }
 
+func TestAdminService_CreateUser_WithSubAdminRole(t *testing.T) {
+	repo := &userRepoStub{nextID: 33}
+	svc := &adminServiceImpl{userRepo: repo}
+
+	user, err := svc.CreateUser(context.Background(), &CreateUserInput{
+		Email:    "sub-admin@test.com",
+		Password: "strong-pass",
+		Role:     RoleSubAdmin,
+	})
+	require.NoError(t, err)
+	require.Equal(t, RoleSubAdmin, user.Role)
+	require.Len(t, repo.created, 1)
+	require.Equal(t, RoleSubAdmin, repo.created[0].Role)
+}
+
 func TestAdminService_CreateUser_DefaultsToUserRole(t *testing.T) {
 	repo := &userRepoStub{nextID: 31}
 	svc := &adminServiceImpl{userRepo: repo}
@@ -62,6 +77,25 @@ func TestAdminService_UpdateUser_PromoteToAdmin(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, RoleAdmin, updated.Role)
 	require.Equal(t, []int64{42}, invalidator.userIDs, "角色变更应失效认证缓存")
+}
+
+func TestAdminService_UpdateUser_PromoteToSubAdminRole(t *testing.T) {
+	base := &userRepoStub{user: &User{ID: 43, Email: "u@example.com", Role: RoleUser}}
+	repo := &rpmUserRepoStub{userRepoStub: base}
+	invalidator := &authCacheInvalidatorStub{}
+	svc := &adminServiceImpl{
+		userRepo:             repo,
+		redeemCodeRepo:       &redeemRepoStub{},
+		authCacheInvalidator: invalidator,
+	}
+
+	updated, err := svc.UpdateUser(context.Background(), 43, &UpdateUserInput{Role: RoleSubAdmin})
+	require.NoError(t, err)
+	require.Equal(t, RoleSubAdmin, updated.Role)
+	require.NotNil(t, repo.lastUpdated)
+	require.Equal(t, RoleSubAdmin, repo.lastUpdated.Role)
+	require.True(t, repo.lastFields.Role)
+	require.Equal(t, []int64{43}, invalidator.userIDs, "角色变更应失效认证缓存")
 }
 
 func TestAdminService_UpdateUser_RoleOmittedKeepsExisting(t *testing.T) {
@@ -110,6 +144,18 @@ func TestAdminService_UpdateUser_DemoteLastAdminRejected(t *testing.T) {
 	require.Equal(t, 1, repo.listCalls, "降级路径应触发管理员计数")
 }
 
+func TestAdminService_UpdateUser_DemoteLastAdminToSubAdminRoleRejected(t *testing.T) {
+	base := &userRepoStub{user: &User{ID: 42, Email: "a@example.com", Role: RoleAdmin}}
+	repo := &roleGuardUserRepoStub{rpmUserRepoStub: &rpmUserRepoStub{userRepoStub: base}, adminTotal: 1}
+	svc := &adminServiceImpl{userRepo: repo, redeemCodeRepo: &redeemRepoStub{}}
+
+	_, err := svc.UpdateUser(context.Background(), 42, &UpdateUserInput{Role: RoleSubAdmin})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "last admin")
+	require.Nil(t, repo.lastUpdated, "最后一个管理员不应被降级为 sub-admin 持久化")
+	require.Equal(t, 1, repo.listCalls, "降级为非完整管理员也应触发管理员计数")
+}
+
 func TestAdminService_UpdateUser_DemoteAdminAllowedWhenOthersExist(t *testing.T) {
 	base := &userRepoStub{user: &User{ID: 42, Email: "a@example.com", Role: RoleAdmin}}
 	repo := &roleGuardUserRepoStub{rpmUserRepoStub: &rpmUserRepoStub{userRepoStub: base}, adminTotal: 2}
@@ -140,4 +186,45 @@ func TestAdminService_UpdateUser_PromoteDoesNotCountAdmins(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, RoleAdmin, updated.Role)
 	require.Equal(t, 0, repo.listCalls, "升级路径不应触发管理员计数")
+}
+
+func TestUser_AdminAndWorkbenchHelpers(t *testing.T) {
+	tests := []struct {
+		name          string
+		role          string
+		wantAdmin     bool
+		wantSubAdmin  bool
+		wantWorkbench bool
+	}{
+		{
+			name:          "admin",
+			role:          RoleAdmin,
+			wantAdmin:     true,
+			wantWorkbench: true,
+		},
+		{
+			name:          "sub admin",
+			role:          RoleSubAdmin,
+			wantSubAdmin:  true,
+			wantWorkbench: true,
+		},
+		{
+			name: "user",
+			role: RoleUser,
+		},
+		{
+			name: "unknown",
+			role: "root",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			user := &User{Role: tt.role}
+
+			require.Equal(t, tt.wantAdmin, user.IsAdmin())
+			require.Equal(t, tt.wantSubAdmin, user.IsSubAdmin())
+			require.Equal(t, tt.wantWorkbench, user.CanAccessAdminWorkbench())
+		})
+	}
 }

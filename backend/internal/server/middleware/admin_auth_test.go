@@ -123,6 +123,130 @@ func TestAdminAuthJWTValidatesTokenVersion(t *testing.T) {
 	})
 }
 
+func TestAdminWorkbenchAuthAllowsSubAdminJWT(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	cfg := &config.Config{JWT: config.JWTConfig{Secret: "test-secret", ExpireHour: 1}}
+	authService := service.NewAuthService(nil, nil, nil, nil, cfg, nil, nil, nil, nil, nil, nil, nil, nil)
+	subAdmin := &service.User{
+		ID:           2,
+		Email:        "sub-admin@example.com",
+		Role:         service.RoleSubAdmin,
+		Status:       service.StatusActive,
+		TokenVersion: 3,
+		Concurrency:  1,
+	}
+	userService := service.NewUserService(&stubUserRepo{
+		getByID: func(ctx context.Context, id int64) (*service.User, error) {
+			if id != subAdmin.ID {
+				return nil, service.ErrUserNotFound
+			}
+			clone := *subAdmin
+			return &clone, nil
+		},
+	}, nil, nil, nil)
+
+	router := gin.New()
+	router.Use(gin.HandlerFunc(NewAdminWorkbenchAuthMiddleware(authService, userService, nil, nil)))
+	router.GET("/workbench", func(c *gin.Context) {
+		role, _ := GetUserRoleFromContext(c)
+		c.JSON(http.StatusOK, gin.H{"role": role})
+	})
+
+	token, err := authService.GenerateToken(context.Background(), subAdmin)
+	require.NoError(t, err)
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/workbench", nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	router.ServeHTTP(w, req)
+
+	require.Equal(t, http.StatusOK, w.Code)
+	require.Contains(t, w.Body.String(), service.RoleSubAdmin)
+}
+
+func TestAdminWorkbenchAuthRejectsRegularUserJWT(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	cfg := &config.Config{JWT: config.JWTConfig{Secret: "test-secret", ExpireHour: 1}}
+	authService := service.NewAuthService(nil, nil, nil, nil, cfg, nil, nil, nil, nil, nil, nil, nil, nil)
+	regularUser := &service.User{
+		ID:           3,
+		Email:        "user@example.com",
+		Role:         service.RoleUser,
+		Status:       service.StatusActive,
+		TokenVersion: 1,
+		Concurrency:  1,
+	}
+	userService := service.NewUserService(&stubUserRepo{
+		getByID: func(ctx context.Context, id int64) (*service.User, error) {
+			if id != regularUser.ID {
+				return nil, service.ErrUserNotFound
+			}
+			clone := *regularUser
+			return &clone, nil
+		},
+	}, nil, nil, nil)
+
+	router := gin.New()
+	router.Use(gin.HandlerFunc(NewAdminWorkbenchAuthMiddleware(authService, userService, nil, nil)))
+	router.GET("/workbench", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"ok": true})
+	})
+
+	token, err := authService.GenerateToken(context.Background(), regularUser)
+	require.NoError(t, err)
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/workbench", nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	router.ServeHTTP(w, req)
+
+	require.Equal(t, http.StatusForbidden, w.Code)
+	require.Contains(t, w.Body.String(), "FORBIDDEN")
+}
+
+func TestAdminAuthRejectsSubAdminForFullAdminJWT(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	cfg := &config.Config{JWT: config.JWTConfig{Secret: "test-secret", ExpireHour: 1}}
+	authService := service.NewAuthService(nil, nil, nil, nil, cfg, nil, nil, nil, nil, nil, nil, nil, nil)
+	subAdmin := &service.User{
+		ID:           4,
+		Email:        "sub-admin@example.com",
+		Role:         service.RoleSubAdmin,
+		Status:       service.StatusActive,
+		TokenVersion: 1,
+		Concurrency:  1,
+	}
+	userService := service.NewUserService(&stubUserRepo{
+		getByID: func(ctx context.Context, id int64) (*service.User, error) {
+			if id != subAdmin.ID {
+				return nil, service.ErrUserNotFound
+			}
+			clone := *subAdmin
+			return &clone, nil
+		},
+	}, nil, nil, nil)
+
+	router := gin.New()
+	router.Use(gin.HandlerFunc(NewAdminAuthMiddleware(authService, userService, nil, nil)))
+	router.GET("/admin", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"ok": true})
+	})
+
+	token, err := authService.GenerateToken(context.Background(), subAdmin)
+	require.NoError(t, err)
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/admin", nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	router.ServeHTTP(w, req)
+
+	require.Equal(t, http.StatusForbidden, w.Code)
+	require.Contains(t, w.Body.String(), "Admin access required")
+}
+
 type stubUserRepo struct {
 	getByID func(ctx context.Context, id int64) (*service.User, error)
 }
