@@ -20,7 +20,7 @@ The user options API should expose Gemini image models only for Gemini groups an
 
 ## Supported Models
 
-The first pass should recognize Gemini image model IDs already used elsewhere in the repo:
+The first pass should recognize the Gemini image model IDs already accepted by the shared Gemini image classifier:
 
 - `gemini-2.5-flash-image`
 - `gemini-2.5-flash-image-preview`
@@ -28,11 +28,8 @@ The first pass should recognize Gemini image model IDs already used elsewhere in
 - `gemini-3-pro-image-preview`
 - `gemini-3.1-flash-image`
 - `gemini-3.1-flash-image-preview`
-- `gemini-3.1-flash-lite-image`
-- `gemini-2.0-flash-exp-image-generation`
-- `gemini-2.0-flash-preview-image-generation`
 
-The classifier should also accept `models/<id>` by normalizing the prefix away.
+The classifier accepts `models/<id>` when detecting model type. The execution path should strip that prefix before building the Gemini upstream URL because the upstream URL helper deliberately rejects slash-containing model path segments.
 
 ## Data Flow
 

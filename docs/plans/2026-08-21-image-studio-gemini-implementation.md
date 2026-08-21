@@ -14,8 +14,6 @@
 
 **Files:**
 - Modify: `backend/internal/service/image_studio_service.go`
-- Modify: `backend/internal/service/openai_images.go`
-- Modify: `backend/internal/service/antigravity_image_test.go`
 - Modify: `backend/internal/service/image_studio_service_test.go`
 
 **Step 1: Write failing tests**
@@ -33,7 +31,7 @@ Expected: FAIL because Image Studio filters only `isOpenAIImageGenerationModel`.
 
 **Step 2: Implement classifier**
 
-Add a helper that checks the group platform before deciding whether a model is valid for Image Studio. Reuse existing Gemini `isImageGenerationModel` for Gemini/Antigravity-style image IDs and the existing OpenAI/Grok helpers for those platforms.
+Add a helper that checks the group platform before deciding whether a model is valid for Image Studio. Reuse existing Gemini `isImageGenerationModel` for Gemini image IDs and the existing OpenAI/Grok helpers for those platforms.
 
 **Step 3: Verify**
 
@@ -66,7 +64,7 @@ Expected: FAIL because no Gemini branch exists.
 
 **Step 2: Implement minimal Gemini branch**
 
-Route `ImageStudioGatewayExecutor.Generate` to Gemini when the selected key's group/account platform is Gemini. Use the existing API key resolution and billing check. Add a narrow gateway interface method if needed, or implement the branch using existing Gemini token/base URL helpers in the service layer.
+Route `ImageStudioGatewayExecutor.Generate` and `Edit` through a Gemini branch when the selected key's group platform is Gemini and the requested model is a Gemini image model. Use the existing API key resolution and billing check. Inject the existing Gemini compat service through a narrow interface so the branch can reuse `ForwardNative` and existing Gemini API Key/OAuth/ServiceAccount handling.
 
 **Step 3: Verify**
 
@@ -93,17 +91,15 @@ Expected: PASS after Tasks 1 and 2.
 
 ### Task 4: Regression Verification
 
-Run:
+Run the focused Image Studio service tests plus a server compile check:
 
 ```bash
 cd backend
-go test -tags unit ./internal/service -run 'ImageStudio|Gemini|OpenAIImages' -count=1
-go test -tags unit ./internal/handler -run ImageStudio -count=1
-cd ../frontend
-npm test -- --run src/views/user/__tests__/ImageStudioView.spec.ts src/api/__tests__/settings.imageStudio.spec.ts
+go test -tags=unit ./internal/service -run 'TestImageStudio|TestExtractImageStudio|TestImageStudioPrompt' -count=1
+go test ./cmd/server
 ```
 
-Expected: all selected tests PASS.
+Expected: all selected tests PASS. A full `go test -tags=unit ./internal/service` may currently expose unrelated pre-existing concurrent map access in the Image Studio task repository test stub.
 
 ### Task 5: Commit
 

@@ -681,17 +681,17 @@ func imageStudioModelsForGroup(group *Group, cfg *ImageStudioSettings) []string 
 	var models []string
 	if group != nil && group.CustomModelsListEnabled() {
 		for _, model := range group.ModelsListConfig.Models {
-			if isOpenAIImageGenerationModel(model) {
+			if imageStudioModelSupportedByGroup(group, model) {
 				models = append(models, model)
 			}
 		}
-		return dedupeImageStudioModels(models)
+		return dedupeImageStudioModelsForGroup(group, models)
 	}
 	if len(models) == 0 && cfg != nil {
 		models = append(models, cfg.AllowedModels...)
 	}
 	models = append(models, "gpt-image-2")
-	return dedupeImageStudioModels(models)
+	return dedupeImageStudioModelsForGroup(group, models)
 }
 
 func imageStudioModelOptions(models []string) []ImageStudioModelOption {
@@ -767,11 +767,21 @@ func normalizeImageStudioImageMultiplier(group *Group) float64 {
 }
 
 func dedupeImageStudioModels(models []string) []string {
+	return dedupeImageStudioModelsWithPredicate(models, imageStudioSupportedModel)
+}
+
+func dedupeImageStudioModelsForGroup(group *Group, models []string) []string {
+	return dedupeImageStudioModelsWithPredicate(models, func(model string) bool {
+		return imageStudioModelSupportedByGroup(group, model)
+	})
+}
+
+func dedupeImageStudioModelsWithPredicate(models []string, supported func(string) bool) []string {
 	seen := make(map[string]struct{}, len(models))
 	out := make([]string, 0, len(models))
 	for _, model := range models {
 		model = strings.TrimSpace(model)
-		if model == "" || !isOpenAIImageGenerationModel(model) {
+		if model == "" || (supported != nil && !supported(model)) {
 			continue
 		}
 		if _, ok := seen[model]; ok {
@@ -781,6 +791,30 @@ func dedupeImageStudioModels(models []string) []string {
 		out = append(out, model)
 	}
 	return out
+}
+
+func imageStudioSupportedModel(model string) bool {
+	return isOpenAIImageGenerationModel(model) || isImageGenerationModel(model)
+}
+
+func imageStudioModelSupportedByGroup(group *Group, model string) bool {
+	model = strings.TrimSpace(model)
+	if model == "" {
+		return false
+	}
+	if group == nil {
+		return isOpenAIImageGenerationModel(model)
+	}
+	switch strings.TrimSpace(group.Platform) {
+	case PlatformGemini:
+		return isImageGenerationModel(model)
+	case PlatformGrok:
+		return isGrokImageGenerationModel(model)
+	case PlatformOpenAI, "":
+		return IsGPTImageGenerationModel(model)
+	default:
+		return isOpenAIImageGenerationModel(model)
+	}
 }
 
 func (s *ImageStudioService) storeExecutionResult(

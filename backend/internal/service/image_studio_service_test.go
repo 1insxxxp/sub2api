@@ -497,6 +497,74 @@ func TestImageStudioServiceGetOptionsUsesOnlyGroupCustomImageModelsWhenEnabled(t
 	}}, options.Groups[0].Models)
 }
 
+func TestImageStudioServiceGetOptionsReturnsGeminiImageModelsForGeminiGroup(t *testing.T) {
+	settings := defaultImageStudioSettings()
+	settings.Enabled = true
+	settings.AllowedModels = []string{"gpt-image-2", "gemini-3.1-flash-image-preview"}
+	settings.DefaultModel = "gpt-image-2"
+
+	svc := NewImageStudioService(&imageStudioRepoStub{}, &imageStudioConfigReaderStub{cfg: settings})
+	svc.SetGroupResolver(&imageStudioGroupResolverStub{groups: []Group{
+		{
+			ID:                   2,
+			Name:                 "OpenAI Image",
+			Platform:             PlatformOpenAI,
+			Status:               StatusActive,
+			AllowImageGeneration: true,
+		},
+		{
+			ID:                   4,
+			Name:                 "Gemini Image",
+			Platform:             PlatformGemini,
+			Status:               StatusActive,
+			AllowImageGeneration: true,
+		},
+	}})
+
+	options, err := svc.GetOptions(context.Background(), 7)
+
+	require.NoError(t, err)
+	require.Len(t, options.Groups, 2)
+	require.Equal(t, []ImageStudioModelOption{
+		{Model: "gpt-image-2", Label: "gpt-image-2", Capabilities: []string{ImageStudioModeGeneration, ImageStudioModeEdit}},
+	}, options.Groups[0].Models)
+	require.Equal(t, []ImageStudioModelOption{
+		{Model: "gemini-3.1-flash-image-preview", Label: "gemini-3.1-flash-image-preview", Capabilities: []string{ImageStudioModeGeneration, ImageStudioModeEdit}},
+	}, options.Groups[1].Models)
+}
+
+func TestImageStudioServiceGetOptionsFiltersGeminiTextModelsFromCustomGroupList(t *testing.T) {
+	settings := defaultImageStudioSettings()
+	settings.Enabled = true
+	settings.AllowedModels = []string{"gpt-image-2"}
+	settings.DefaultModel = "gpt-image-2"
+
+	svc := NewImageStudioService(&imageStudioRepoStub{}, &imageStudioConfigReaderStub{cfg: settings})
+	svc.SetGroupResolver(&imageStudioGroupResolverStub{groups: []Group{
+		{
+			ID:                   4,
+			Name:                 "Gemini Image",
+			Platform:             PlatformGemini,
+			Status:               StatusActive,
+			AllowImageGeneration: true,
+			ModelsListConfig: GroupModelsListConfig{
+				Enabled: true,
+				Models:  []string{"gemini-2.5-pro", "gemini-3.1-flash-image-preview"},
+			},
+		},
+	}})
+
+	options, err := svc.GetOptions(context.Background(), 7)
+
+	require.NoError(t, err)
+	require.Len(t, options.Groups, 1)
+	require.Equal(t, []ImageStudioModelOption{{
+		Model:        "gemini-3.1-flash-image-preview",
+		Label:        "gemini-3.1-flash-image-preview",
+		Capabilities: []string{ImageStudioModeGeneration, ImageStudioModeEdit},
+	}}, options.Groups[0].Models)
+}
+
 func TestImageStudioServiceRejectsListWhenDisabled(t *testing.T) {
 	settings := defaultImageStudioSettings()
 	settings.Enabled = false
