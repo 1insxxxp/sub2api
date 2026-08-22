@@ -111,6 +111,7 @@ func ProvideAdminHandlersWithSystemCustomGroup(
 	cnProviderHandler *admin.CNProviderHandler,
 	proxyHandler *admin.ProxyHandler,
 	redeemHandler *admin.RedeemHandler,
+	subAdminCommissionHandler *admin.SubAdminCommissionHandler,
 	promoHandler *admin.PromoHandler,
 	settingHandler *admin.SettingHandler,
 	opsHandler *admin.OpsHandler,
@@ -177,6 +178,7 @@ func ProvideAdminHandlersWithSystemCustomGroup(
 		ollamaCloudUsage,
 	)
 	handlers.SystemCustomGroup = systemCustomGroupHandler
+	handlers.SubAdminCommission = subAdminCommissionHandler
 	return handlers
 }
 
@@ -388,6 +390,7 @@ var ProviderSet = wire.NewSet(
 	admin.NewCNProviderHandler,
 	admin.NewProxyHandler,
 	admin.NewRedeemHandler,
+	admin.NewSubAdminCommissionHandler,
 	admin.NewPromoHandler,
 	ProvideAdminSettingHandler,
 	admin.NewOpsHandler,

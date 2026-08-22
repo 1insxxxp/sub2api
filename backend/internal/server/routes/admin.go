@@ -26,7 +26,7 @@ func RegisterAdminRoutes(
 	workbench.Use(panelRateLimiter.Global())
 	workbench.Use(gin.HandlerFunc(auditLog))
 	workbench.Use(middleware.AdminComplianceGuard(settingService))
-	if h != nil && h.Redeem != nil {
+	if h != nil && (h.Redeem != nil || (h.Admin != nil && h.Admin.SubAdminCommission != nil)) {
 		registerAdminWorkbenchRoutes(workbench, h)
 	}
 
@@ -106,6 +106,11 @@ func RegisterAdminRoutes(
 		// 卡密管理
 		if adminHandlers.Redeem != nil {
 			registerRedeemCodeRoutes(admin, h)
+		}
+
+		// 二级管理员提成
+		if adminHandlers.SubAdminCommission != nil {
+			registerSubAdminCommissionRoutes(admin, h)
 		}
 
 		// 优惠码管理
@@ -214,12 +219,34 @@ func RegisterAdminRoutes(
 }
 
 func registerAdminWorkbenchRoutes(workbench *gin.RouterGroup, h *handler.Handlers) {
-	redeem := workbench.Group("/redeem")
+	if h.Redeem != nil {
+		redeem := workbench.Group("/redeem")
+		{
+			redeem.POST("/generated", h.Redeem.GenerateBalanceTransferCode)
+			redeem.GET("/generated", h.Redeem.GetGenerated)
+			redeem.POST("/generated/batch-delete", h.Redeem.DeleteGeneratedBatch)
+			redeem.DELETE("/generated/:id", h.Redeem.DeleteGenerated)
+		}
+	}
+
+	if h.Admin != nil && h.Admin.SubAdminCommission != nil {
+		commission := workbench.Group("/commission")
+		{
+			commission.GET("/grants", h.Admin.SubAdminCommission.GetWorkbenchGrants)
+			commission.GET("/calendar", h.Admin.SubAdminCommission.GetWorkbenchCalendar)
+			commission.GET("/days/:date/groups", h.Admin.SubAdminCommission.GetWorkbenchDayGroups)
+			commission.GET("/days/:date/groups/:group_id/logs", h.Admin.SubAdminCommission.GetWorkbenchDayGroupLogs)
+		}
+	}
+}
+
+func registerSubAdminCommissionRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
+	commissions := admin.Group("/sub-admin-commissions")
 	{
-		redeem.POST("/generated", h.Redeem.GenerateBalanceTransferCode)
-		redeem.GET("/generated", h.Redeem.GetGenerated)
-		redeem.POST("/generated/batch-delete", h.Redeem.DeleteGeneratedBatch)
-		redeem.DELETE("/generated/:id", h.Redeem.DeleteGenerated)
+		commissions.GET("/settings", h.Admin.SubAdminCommission.GetSettings)
+		commissions.PUT("/settings", h.Admin.SubAdminCommission.UpdateSettings)
+		commissions.GET("/grants", h.Admin.SubAdminCommission.ListGrants)
+		commissions.PUT("/grants/:sub_admin_id", h.Admin.SubAdminCommission.ReplaceGrants)
 	}
 }
 

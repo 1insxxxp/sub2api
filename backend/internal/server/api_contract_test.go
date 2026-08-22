@@ -99,7 +99,10 @@ func TestCheckinCampaignAPIContractRoutes(t *testing.T) {
 func TestAdminWorkbenchAPIContractRoutes(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	router := gin.New()
-	handlers := &handler.Handlers{Redeem: handler.NewRedeemHandler(nil)}
+	handlers := &handler.Handlers{
+		Redeem: handler.NewRedeemHandler(nil),
+		Admin:  &handler.AdminHandlers{SubAdminCommission: &adminhandler.SubAdminCommissionHandler{}},
+	}
 	pass := func(c *gin.Context) { c.Next() }
 	serverroutes.RegisterAdminRoutes(
 		router.Group("/api/v1"),
@@ -121,6 +124,41 @@ func TestAdminWorkbenchAPIContractRoutes(t *testing.T) {
 		"GET /api/v1/admin/workbench/redeem/generated",
 		"POST /api/v1/admin/workbench/redeem/generated/batch-delete",
 		"DELETE /api/v1/admin/workbench/redeem/generated/:id",
+		"GET /api/v1/admin/workbench/commission/grants",
+		"GET /api/v1/admin/workbench/commission/calendar",
+		"GET /api/v1/admin/workbench/commission/days/:date/groups",
+		"GET /api/v1/admin/workbench/commission/days/:date/groups/:group_id/logs",
+	} {
+		_, ok := registered[contract]
+		require.Truef(t, ok, "missing API contract route %s", contract)
+	}
+}
+
+func TestSubAdminCommissionAPIContractRoutes(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	router := gin.New()
+	handlers := &handler.Handlers{Admin: &handler.AdminHandlers{SubAdminCommission: &adminhandler.SubAdminCommissionHandler{}}}
+	pass := func(c *gin.Context) { c.Next() }
+	serverroutes.RegisterAdminRoutes(
+		router.Group("/api/v1"),
+		handlers,
+		middleware.AdminAuthMiddleware(pass),
+		middleware.AdminWorkbenchAuthMiddleware(pass),
+		middleware.AuditLogMiddleware(pass),
+		middleware.StepUpAuthMiddleware(pass),
+		nil,
+		nil,
+	)
+
+	registered := make(map[string]struct{}, len(router.Routes()))
+	for _, route := range router.Routes() {
+		registered[route.Method+" "+route.Path] = struct{}{}
+	}
+	for _, contract := range []string{
+		"GET /api/v1/admin/sub-admin-commissions/settings",
+		"PUT /api/v1/admin/sub-admin-commissions/settings",
+		"GET /api/v1/admin/sub-admin-commissions/grants",
+		"PUT /api/v1/admin/sub-admin-commissions/grants/:sub_admin_id",
 	} {
 		_, ok := registered[contract]
 		require.Truef(t, ok, "missing API contract route %s", contract)

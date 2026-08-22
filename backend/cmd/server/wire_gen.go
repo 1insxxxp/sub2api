@@ -231,6 +231,9 @@ func initializeApplication(buildInfo handler.BuildInfo) (*Application, error) {
 	cnProviderHandler := admin.NewCNProviderHandler(cnProviderQuotaService, cnProviderBalanceService)
 	proxyHandler := admin.NewProxyHandler(adminService)
 	adminRedeemHandler := admin.NewRedeemHandler(adminService, redeemService)
+	subAdminCommissionRepository := repository.NewSubAdminCommissionRepository(client, db)
+	subAdminCommissionService := service.NewSubAdminCommissionService(subAdminCommissionRepository, userRepository, settingService)
+	subAdminCommissionHandler := admin.NewSubAdminCommissionHandler(subAdminCommissionService)
 	promoHandler := admin.NewPromoHandler(promoService)
 	encryptionKey, err := payment.ProvideEncryptionKey(configConfig)
 	if err != nil {
@@ -293,7 +296,7 @@ func initializeApplication(buildInfo handler.BuildInfo) (*Application, error) {
 	ollamaCloudUsageService := service.ProvideOllamaCloudUsageService(accountRepository, httpUpstream, settingService, secretEncryptor, configConfig, leaderLockCache, db)
 	systemCustomGroupService := service.NewSystemCustomGroupServiceWithCacheInvalidation(systemCustomGroupRepository, groupRepository, gatewayService, apiKeyAuthCacheInvalidator, billingCacheService)
 	systemCustomGroupHandler := admin.NewSystemCustomGroupHandler(systemCustomGroupService)
-	adminHandlers := handler.ProvideAdminHandlersWithSystemCustomGroup(dashboardHandler, adminUserHandler, groupHandler, accountHandler, adminAnnouncementHandler, dataManagementHandler, backupHandler, oAuthHandler, openAIOAuthHandler, geminiOAuthHandler, antigravityOAuthHandler, grokOAuthHandler, cnProviderHandler, proxyHandler, adminRedeemHandler, promoHandler, settingHandler, opsHandler, systemHandler, adminSubscriptionHandler, adminUsageHandler, userAttributeHandler, errorPassthroughHandler, tlsFingerprintProfileHandler, adminAPIKeyHandler, scheduledTestHandler, channelHandler, channelMonitorHandler, channelMonitorRequestTemplateHandler, contentModerationHandler, promptAdminHandler, paymentHandler, affiliateHandler, complianceHandler, checkinHandler, auditLogHandler, upstreamBillingProbeService, ollamaCloudUsageService, systemCustomGroupHandler)
+	adminHandlers := handler.ProvideAdminHandlersWithSystemCustomGroup(dashboardHandler, adminUserHandler, groupHandler, accountHandler, adminAnnouncementHandler, dataManagementHandler, backupHandler, oAuthHandler, openAIOAuthHandler, geminiOAuthHandler, antigravityOAuthHandler, grokOAuthHandler, cnProviderHandler, proxyHandler, adminRedeemHandler, subAdminCommissionHandler, promoHandler, settingHandler, opsHandler, systemHandler, adminSubscriptionHandler, adminUsageHandler, userAttributeHandler, errorPassthroughHandler, tlsFingerprintProfileHandler, adminAPIKeyHandler, scheduledTestHandler, channelHandler, channelMonitorHandler, channelMonitorRequestTemplateHandler, contentModerationHandler, promptAdminHandler, paymentHandler, affiliateHandler, complianceHandler, checkinHandler, auditLogHandler, upstreamBillingProbeService, ollamaCloudUsageService, systemCustomGroupHandler)
 	usageRecordWorkerPool := service.NewUsageRecordWorkerPool(configConfig)
 	userMsgQueueCache := repository.NewUserMsgQueueCache(redisClient)
 	userMessageQueueService := service.ProvideUserMessageQueueService(userMsgQueueCache, rpmCache, configConfig)
