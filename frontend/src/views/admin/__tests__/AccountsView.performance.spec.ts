@@ -9,7 +9,7 @@ describe('AccountsView performance boundaries', () => {
       'utf8'
     )
 
-    expect(source).toContain('defineAsyncComponent')
+    expect(source).toContain("import { lazyAsyncComponent } from '@/utils/lazyAsyncComponent'")
     expect(source).not.toContain("from '@/components/account'")
 
     for (const component of [
@@ -26,7 +26,7 @@ describe('AccountsView performance boundaries', () => {
       'ErrorPassthroughRulesModal',
       'TLSFingerprintProfilesModal'
     ]) {
-      expect(source).toContain(`const ${component} = defineAsyncComponent`)
+      expect(source).toContain(`const ${component} = lazyAsyncComponent`)
     }
 
     for (const [tag, condition] of [
@@ -50,6 +50,7 @@ describe('AccountsView performance boundaries', () => {
   it('initializes show-driven lazy dialogs on first mount', () => {
     const dialogFiles = [
       '../../../components/account/CreateAccountModal.vue',
+      '../../../components/account/EditAccountModal.vue',
       '../../../components/account/SyncFromCrsModal.vue',
       '../../../components/account/TempUnschedStatusModal.vue',
       '../../../components/admin/account/ImportDataModal.vue',
