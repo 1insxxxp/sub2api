@@ -587,6 +587,20 @@ func RedeemCodeFromService(rc *service.RedeemCode) *RedeemCode {
 	return &out
 }
 
+// RedeemCodeFromServiceWorkbenchGenerated converts a caller-owned generated
+// redeem code for the admin workbench. It keeps ordinary user endpoints private
+// while letting the creator see the notes they entered.
+func RedeemCodeFromServiceWorkbenchGenerated(rc *service.RedeemCode) *RedeemCode {
+	if rc == nil {
+		return nil
+	}
+	out := redeemCodeFromServiceBase(rc, false)
+	if rc.Notes != "" {
+		out.Notes = &rc.Notes
+	}
+	return &out
+}
+
 // RedeemCodeFromServiceAdmin converts a service RedeemCode to DTO for admin users.
 // It includes notes - user-facing endpoints must not use this.
 func RedeemCodeFromServiceAdmin(rc *service.RedeemCode) *AdminRedeemCode {

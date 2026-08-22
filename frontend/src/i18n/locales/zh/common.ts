@@ -251,7 +251,13 @@ export default {
       failedToGenerate: '生成兑换码失败',
       deleteConfirm: '确定删除这个未使用的兑换码吗？',
       deleted: '兑换码已删除',
-      failedToDelete: '删除兑换码失败'
+      failedToDelete: '删除兑换码失败',
+      batchDelete: '批量删除',
+      batchDeleted: '已批量删除，额度已退回',
+      batchDeleteConfirm: '删除选中的未使用兑换码后会把额度退回余额，确认删除？',
+      failedToBatchDelete: '批量删除兑换码失败',
+      selectAll: '全选',
+      selectedCount: '已选择 {count} 个'
     }
   },
 

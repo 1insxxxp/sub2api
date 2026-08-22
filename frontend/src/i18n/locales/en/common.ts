@@ -250,7 +250,13 @@ export default {
       failedToGenerate: 'Failed to generate redeem codes',
       deleteConfirm: 'Delete this unused redeem code?',
       deleted: 'Redeem code deleted',
-      failedToDelete: 'Failed to delete redeem code'
+      failedToDelete: 'Failed to delete redeem code',
+      batchDelete: 'Batch delete',
+      batchDeleted: 'Redeem codes deleted and balance refunded',
+      batchDeleteConfirm: 'Delete the selected unused redeem codes and refund the balance?',
+      failedToBatchDelete: 'Failed to delete redeem codes',
+      selectAll: 'Select all',
+      selectedCount: '{count} selected'
     }
   },
 
