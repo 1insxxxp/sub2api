@@ -10,6 +10,16 @@ const {
   generateBalanceTransferCodes,
   deleteGenerated,
   deleteGeneratedBatch,
+  getCommissionSettings,
+  updateCommissionSettings,
+  listCommissionGrants,
+  replaceCommissionGrants,
+  getWorkbenchCommissionCalendar,
+  getWorkbenchCommissionDayGroups,
+  getWorkbenchCommissionDayGroupLogs,
+  getWorkbenchCommissionGrants,
+  listUsers,
+  getAllGroups,
   refreshUser,
   showError,
   showSuccess,
@@ -28,6 +38,16 @@ const {
   generateBalanceTransferCodes: vi.fn(),
   deleteGenerated: vi.fn(),
   deleteGeneratedBatch: vi.fn(),
+  getCommissionSettings: vi.fn(),
+  updateCommissionSettings: vi.fn(),
+  listCommissionGrants: vi.fn(),
+  replaceCommissionGrants: vi.fn(),
+  getWorkbenchCommissionCalendar: vi.fn(),
+  getWorkbenchCommissionDayGroups: vi.fn(),
+  getWorkbenchCommissionDayGroupLogs: vi.fn(),
+  getWorkbenchCommissionGrants: vi.fn(),
+  listUsers: vi.fn(),
+  getAllGroups: vi.fn(),
   refreshUser: vi.fn(),
   showError: vi.fn(),
   showSuccess: vi.fn(),
@@ -40,6 +60,27 @@ vi.mock('@/api', () => ({
     generateBalanceTransferCodes,
     deleteGenerated,
     deleteGeneratedBatch
+  }
+}))
+
+vi.mock('@/api/admin', () => ({
+  adminAPI: {
+    subAdminCommission: {
+      getSettings: getCommissionSettings,
+      updateSettings: updateCommissionSettings,
+      listGrants: listCommissionGrants,
+      replaceGrants: replaceCommissionGrants,
+      getWorkbenchCalendar: getWorkbenchCommissionCalendar,
+      getWorkbenchDayGroups: getWorkbenchCommissionDayGroups,
+      getWorkbenchDayGroupLogs: getWorkbenchCommissionDayGroupLogs,
+      getWorkbenchGrants: getWorkbenchCommissionGrants
+    },
+    users: {
+      list: listUsers
+    },
+    groups: {
+      getAll: getAllGroups
+    }
   }
 }))
 
@@ -111,15 +152,117 @@ function mockRect(height: number): DOMRect {
 
 describe('AdminWorkbenchView balance transfer codes', () => {
   beforeEach(() => {
+    authState.user = {
+      id: 7,
+      email: 'sub-admin@example.com',
+      role: 'sub_admin',
+      balance: 30,
+      concurrency: 5
+    }
     getGenerated.mockReset()
     generateBalanceTransferCodes.mockReset()
     deleteGenerated.mockReset()
     deleteGeneratedBatch.mockReset()
+    getCommissionSettings.mockReset()
+    updateCommissionSettings.mockReset()
+    listCommissionGrants.mockReset()
+    replaceCommissionGrants.mockReset()
+    getWorkbenchCommissionCalendar.mockReset()
+    getWorkbenchCommissionDayGroups.mockReset()
+    getWorkbenchCommissionDayGroupLogs.mockReset()
+    getWorkbenchCommissionGrants.mockReset()
+    listUsers.mockReset()
+    getAllGroups.mockReset()
     refreshUser.mockReset()
     showError.mockReset()
     showSuccess.mockReset()
     clipboardWriteText.mockReset()
     getGenerated.mockResolvedValue(paginated<GeneratedRedeemCode>([]))
+    getCommissionSettings.mockResolvedValue({ commission_rate: 0.12 })
+    updateCommissionSettings.mockResolvedValue({ commission_rate: 0.12 })
+    listCommissionGrants.mockResolvedValue([
+      {
+        id: 1,
+        sub_admin_id: 8,
+        sub_admin_email: 'manager@example.com',
+        group_id: 3,
+        group_name: 'Claude 特价',
+        granted_date: '2026-08-01',
+        enabled: true,
+        created_at: '2026-08-01T00:00:00Z',
+        updated_at: '2026-08-01T00:00:00Z'
+      }
+    ])
+    replaceCommissionGrants.mockResolvedValue([])
+    getWorkbenchCommissionGrants.mockResolvedValue([])
+    getWorkbenchCommissionCalendar.mockResolvedValue([
+      {
+        date: '2026-08-22',
+        enabled: true,
+        actual_cost: 12,
+        commission_amount: 1.44
+      }
+    ])
+    getWorkbenchCommissionDayGroups.mockResolvedValue([
+      {
+        group_id: 3,
+        group_name: 'Claude 特价',
+        requests: 2,
+        total_tokens: 1500,
+        actual_cost: 12,
+        commission_amount: 1.44
+      }
+    ])
+    getWorkbenchCommissionDayGroupLogs.mockResolvedValue(
+      paginated(
+        [
+          {
+            id: 99,
+            request_id: 'req-1',
+            created_at: '2026-08-22T08:00:00Z',
+            user_id: 41,
+            user_email: 'customer@example.com',
+            api_key_id: 71,
+            api_key_name: 'Main key',
+            group_id: 3,
+            group_name: 'Claude 特价',
+            model: 'claude-sonnet-4',
+            requested_model: 'claude-sonnet-4',
+            input_tokens: 1000,
+            output_tokens: 500,
+            cache_creation_tokens: 0,
+            cache_read_tokens: 0,
+            actual_cost: 12,
+            total_tokens: 1500
+          }
+        ],
+        1,
+        1,
+        10
+      )
+    )
+    listUsers.mockResolvedValue(
+      paginated([
+        {
+          id: 8,
+          email: 'manager@example.com',
+          username: 'manager',
+          role: 'sub_admin',
+          balance: 0,
+          frozen_balance: 0,
+          concurrency: 5,
+          rpm_limit: 0,
+          status: 'active',
+          allowed_groups: null,
+          created_at: '2026-08-01T00:00:00Z',
+          updated_at: '2026-08-01T00:00:00Z'
+        }
+      ])
+    )
+    getAllGroups.mockResolvedValue([
+      { id: 3, name: 'Claude 特价', platform: 'anthropic', status: 'active' },
+      { id: 4, name: 'Gemini 池', platform: 'gemini', status: 'active' }
+    ])
     refreshUser.mockResolvedValue(undefined)
     clipboardWriteText.mockResolvedValue(undefined)
     Object.defineProperty(navigator, 'clipboard', {
@@ -296,5 +439,62 @@ describe('AdminWorkbenchView balance transfer codes', () => {
     expect(refreshUser).toHaveBeenCalled()
     expect(getGenerated).toHaveBeenCalledTimes(2)
     expect(showSuccess).toHaveBeenCalledWith('adminWorkbench.balanceTransfer.batchDeleted')
+  })
+
+  it('renders commission management for full admins and saves assigned groups', async () => {
+    authState.user = {
+      id: 1,
+      email: 'admin@example.com',
+      role: 'admin',
+      balance: 100,
+      concurrency: 5
+    }
+
+    const wrapper = mountWorkbench()
+    await flushPromises()
+
+    expect(getCommissionSettings).toHaveBeenCalled()
+    expect(listUsers).toHaveBeenCalledWith(1, 50, { role: 'sub_admin' })
+    expect(getAllGroups).toHaveBeenCalled()
+    expect(listCommissionGrants).toHaveBeenCalled()
+    expect(wrapper.text()).toContain('manager@example.com')
+    expect(wrapper.text()).toContain('Claude 特价')
+
+    await wrapper.get('[data-test="sub-admin-commission-save-grants"]').trigger('click')
+    await flushPromises()
+
+    expect(replaceCommissionGrants).toHaveBeenCalledWith(8, { group_ids: [3] })
+  })
+
+  it('renders commission calendar for sub-admins and loads day details', async () => {
+    authState.user = {
+      id: 7,
+      email: 'sub-admin@example.com',
+      role: 'sub_admin',
+      balance: 30,
+      concurrency: 5
+    }
+
+    const wrapper = mountWorkbench()
+    await flushPromises()
+
+    expect(getWorkbenchCommissionCalendar).toHaveBeenCalled()
+    expect(wrapper.text()).toContain('2026-08-22')
+    expect(wrapper.text()).toContain('$12.00')
+
+    await wrapper.get('[data-test="commission-calendar-day-2026-08-22"]').trigger('click')
+    await flushPromises()
+
+    expect(getWorkbenchCommissionDayGroups).toHaveBeenCalledWith('2026-08-22')
+    expect(wrapper.text()).toContain('Claude 特价')
+
+    await wrapper.get('[data-test="commission-day-group-3-toggle"]').trigger('click')
+    await flushPromises()
+
+    expect(getWorkbenchCommissionDayGroupLogs).toHaveBeenCalledWith('2026-08-22', 3, {
+      page: 1,
+      page_size: 10
+    })
+    expect(wrapper.text()).toContain('req-1')
   })
 })

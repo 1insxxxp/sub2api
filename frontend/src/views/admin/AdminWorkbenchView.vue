@@ -20,6 +20,8 @@
         </div>
       </header>
 
+      <SubAdminCommissionPanel />
+
       <section class="grid gap-6 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
         <form
           ref="transferFormRef"
@@ -302,6 +304,7 @@ import { useAppStore } from '@/stores/app'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import Pagination from '@/components/common/Pagination.vue'
 import Icon from '@/components/icons/Icon.vue'
+import SubAdminCommissionPanel from '@/components/admin/workbench/SubAdminCommissionPanel.vue'
 import { formatDateTime } from '@/utils/format'
 import { extractApiErrorMessage } from '@/utils/apiError'
 
