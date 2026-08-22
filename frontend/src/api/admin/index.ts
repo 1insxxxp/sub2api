@@ -36,6 +36,7 @@ import riskControlAPI from './riskControl'
 import adminComplianceAPI from './compliance'
 import checkinsAPI from './checkins'
 import auditAPI from './audit'
+import subAdminCommissionAPI from './subAdminCommission'
 
 /**
  * Unified admin API object for convenient access
@@ -73,7 +74,8 @@ export const adminAPI = {
   riskControl: riskControlAPI,
   compliance: adminComplianceAPI,
   checkins: checkinsAPI,
-  audit: auditAPI
+  audit: auditAPI,
+  subAdminCommission: subAdminCommissionAPI
 }
 
 export {
@@ -109,13 +111,25 @@ export {
   riskControlAPI,
   adminComplianceAPI,
   checkinsAPI,
-  auditAPI
+  auditAPI,
+  subAdminCommissionAPI
 }
 
 export default adminAPI
 
 // Re-export types used by components
 export type { AuditLog, AuditLogQuery, AuditLogListResponse } from './audit'
+export type {
+  SubAdminCommissionSettings,
+  UpdateSubAdminCommissionSettingsRequest,
+  SubAdminCommissionGrant,
+  ReplaceSubAdminCommissionGrantsRequest,
+  SubAdminCommissionCalendarDay,
+  SubAdminCommissionDayGroup,
+  SubAdminCommissionUsageLog,
+  WorkbenchCommissionCalendarQuery,
+  WorkbenchCommissionLogsQuery
+} from './subAdminCommission'
 export type { BalanceHistoryItem } from './users'
 export type { ErrorPassthroughRule, CreateRuleRequest, UpdateRuleRequest } from './errorPassthrough'
 export type { BackupAgentHealth, DataManagementConfig } from './dataManagement'
