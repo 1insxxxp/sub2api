@@ -70,7 +70,9 @@ func (SubAdminCommissionGrant) Indexes() []ent.Index {
 			Unique().
 			StorageKey("idx_sub_admin_commission_grants_active_unique").
 			Annotations(entsql.IndexWhere("enabled = TRUE")),
-		index.Fields("sub_admin_user_id", "enabled", "granted_date"),
-		index.Fields("group_id", "enabled"),
+		index.Fields("sub_admin_user_id", "enabled", "granted_date").
+			StorageKey("idx_sub_admin_commission_grants_sub_admin_enabled"),
+		index.Fields("group_id", "enabled").
+			StorageKey("idx_sub_admin_commission_grants_group_enabled"),
 	}
 }

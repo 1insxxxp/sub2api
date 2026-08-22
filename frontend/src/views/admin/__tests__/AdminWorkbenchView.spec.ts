@@ -272,6 +272,7 @@ describe('AdminWorkbenchView balance transfer codes', () => {
   })
 
   afterEach(() => {
+    vi.useRealTimers()
     getBoundingClientRectSpy?.mockRestore()
     getBoundingClientRectSpy = undefined
     confirmSpy?.mockRestore()
@@ -528,6 +529,23 @@ describe('AdminWorkbenchView balance transfer codes', () => {
     expect(listUsers).toHaveBeenNthCalledWith(1, 1, 1000, { role: 'sub_admin' })
     expect(listUsers).toHaveBeenNthCalledWith(2, 2, 1000, { role: 'sub_admin' })
     expect(wrapper.text()).toContain('later-manager@example.com')
+  })
+
+  it('uses the local calendar month when loading commission data by default', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date(2026, 8, 1, 0, 30, 0))
+    authState.user = {
+      id: 7,
+      email: 'sub-admin@example.com',
+      role: 'sub_admin',
+      balance: 30,
+      concurrency: 5
+    }
+
+    mountWorkbench()
+    await flushPromises()
+
+    expect(getWorkbenchCommissionCalendar).toHaveBeenCalledWith({ month: '2026-09' })
   })
 
   it('renders commission calendar for sub-admins and loads day details', async () => {

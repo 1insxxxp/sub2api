@@ -211,10 +211,22 @@ func (r *subAdminCommissionRepository) ListCalendar(ctx context.Context, subAdmi
 }
 
 func (r *subAdminCommissionRepository) ListDayGroups(ctx context.Context, subAdminID int64, date string, commissionRate float64) ([]service.SubAdminCommissionDayGroup, error) {
+	date = strings.TrimSpace(date)
 	dayStart, err := service.ParseGroupUsageDate(strings.TrimSpace(date))
 	if err != nil {
 		return nil, err
 	}
+	todayStart, err := service.ParseGroupUsageDate(service.GroupUsageDate(time.Now()))
+	if err != nil {
+		return nil, err
+	}
+	if dayStart.Before(todayStart) {
+		return r.listHistoricalDayGroups(ctx, subAdminID, date, commissionRate)
+	}
+	return r.listLiveDayGroups(ctx, subAdminID, date, commissionRate, dayStart)
+}
+
+func (r *subAdminCommissionRepository) listLiveDayGroups(ctx context.Context, subAdminID int64, date string, commissionRate float64, dayStart time.Time) ([]service.SubAdminCommissionDayGroup, error) {
 	dayEnd := dayStart.AddDate(0, 0, 1)
 
 	rows, err := r.sql.QueryContext(ctx, `
@@ -233,6 +245,27 @@ func (r *subAdminCommissionRepository) ListDayGroups(ctx context.Context, subAdm
 	}
 	defer func() { _ = rows.Close() }()
 
+	return scanSubAdminCommissionDayGroups(rows, commissionRate)
+}
+
+func (r *subAdminCommissionRepository) listHistoricalDayGroups(ctx context.Context, subAdminID int64, date string, commissionRate float64) ([]service.SubAdminCommissionDayGroup, error) {
+	rows, err := r.sql.QueryContext(ctx, `
+		SELECT g.id, g.name, 0::bigint AS requests, 0::bigint AS total_tokens, COALESCE(r.actual_cost, 0) AS actual_cost
+		FROM sub_admin_commission_grants cg
+		JOIN groups g ON g.id = cg.group_id
+		LEFT JOIN usage_group_daily_rollups r ON r.group_id = cg.group_id AND r.bucket_date = $2::date
+		WHERE cg.sub_admin_user_id = $1 AND cg.enabled = TRUE AND $3::date >= cg.granted_date
+		ORDER BY g.name ASC, g.id ASC
+	`, subAdminID, date, date)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+
+	return scanSubAdminCommissionDayGroups(rows, commissionRate)
+}
+
+func scanSubAdminCommissionDayGroups(rows *sql.Rows, commissionRate float64) ([]service.SubAdminCommissionDayGroup, error) {
 	groups := make([]service.SubAdminCommissionDayGroup, 0)
 	for rows.Next() {
 		var item service.SubAdminCommissionDayGroup

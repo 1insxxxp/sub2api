@@ -79,12 +79,16 @@ const emit = defineEmits<{
 
 const { t } = useI18n()
 
-const month = ref(new Date().toISOString().slice(0, 7))
+const month = ref(formatLocalMonth(new Date()))
 const days = ref<SubAdminCommissionCalendarDay[]>([])
 const loading = ref(false)
 const errorMessage = ref('')
 
 const weekdays = ['日', '一', '二', '三', '四', '五', '六']
+
+function formatLocalMonth(value: Date) {
+  return `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, '0')}`
+}
 
 const dayByDate = computed(() => {
   const map = new Map<string, SubAdminCommissionCalendarDay>()

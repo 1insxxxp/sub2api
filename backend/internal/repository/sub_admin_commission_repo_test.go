@@ -56,13 +56,33 @@ func TestSubAdminCommissionRepositoryListCalendarUsesEnabledCurrentSubAdminGrant
 func TestSubAdminCommissionRepositoryListDayGroupsHidesDatesBeforeGrantedDate(t *testing.T) {
 	repo, mock := newSubAdminCommissionRepoMock(t)
 
-	mock.ExpectQuery(regexp.QuoteMeta("$4::date >= cg.granted_date")).
+	mock.ExpectQuery(regexp.QuoteMeta("$3::date >= cg.granted_date")).
 		WillReturnRows(sqlmock.NewRows([]string{"group_id", "group_name", "requests", "total_tokens", "actual_cost"}))
 
-	groups, err := repo.ListDayGroups(context.Background(), 17, "2026-08-19", 0.2)
+	groups, err := repo.ListDayGroups(context.Background(), 17, "2000-01-01", 0.2)
 
 	require.NoError(t, err)
 	require.Empty(t, groups)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestSubAdminCommissionRepositoryListDayGroupsUsesRollupsForHistoricalDates(t *testing.T) {
+	repo, mock := newSubAdminCommissionRepoMock(t)
+
+	mock.ExpectQuery(`(?s)FROM sub_admin_commission_grants cg.*LEFT JOIN usage_group_daily_rollups r.*r\.bucket_date = \$2::date.*\$3::date >= cg\.granted_date`).
+		WillReturnRows(sqlmock.NewRows([]string{"group_id", "group_name", "requests", "total_tokens", "actual_cost"}).
+			AddRow(int64(9), "Claude 特价", int64(0), int64(0), 12.5))
+
+	groups, err := repo.ListDayGroups(context.Background(), 17, "2000-01-02", 0.2)
+
+	require.NoError(t, err)
+	require.Len(t, groups, 1)
+	require.Equal(t, int64(9), groups[0].GroupID)
+	require.Equal(t, "Claude 特价", groups[0].GroupName)
+	require.Zero(t, groups[0].Requests)
+	require.Zero(t, groups[0].TotalTokens)
+	require.Equal(t, 12.5, groups[0].ActualCost)
+	require.Equal(t, 2.5, groups[0].CommissionAmount)
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 

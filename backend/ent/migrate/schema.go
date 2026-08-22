@@ -1734,12 +1734,12 @@ var (
 				},
 			},
 			{
-				Name:    "subadmincommissiongrant_sub_admin_user_id_enabled_granted_date",
+				Name:    "idx_sub_admin_commission_grants_sub_admin_enabled",
 				Unique:  false,
 				Columns: []*schema.Column{SubAdminCommissionGrantsColumns[5], SubAdminCommissionGrantsColumns[2], SubAdminCommissionGrantsColumns[1]},
 			},
 			{
-				Name:    "subadmincommissiongrant_group_id_enabled",
+				Name:    "idx_sub_admin_commission_grants_group_enabled",
 				Unique:  false,
 				Columns: []*schema.Column{SubAdminCommissionGrantsColumns[6], SubAdminCommissionGrantsColumns[2]},
 			},

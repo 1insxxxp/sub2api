@@ -4,6 +4,7 @@ import (
 	"os"
 	"testing"
 
+	entmigrate "github.com/Wei-Shaw/sub2api/ent/migrate"
 	"github.com/stretchr/testify/require"
 )
 
@@ -25,4 +26,20 @@ func TestSubAdminCommissionGrantsMigration(t *testing.T) {
 	require.Contains(t, body, "ON sub_admin_commission_grants (sub_admin_user_id, enabled, granted_date)")
 	require.Contains(t, body, "CREATE INDEX IF NOT EXISTS idx_sub_admin_commission_grants_group_enabled")
 	require.Contains(t, body, "ON sub_admin_commission_grants (group_id, enabled)")
+}
+
+func TestSubAdminCommissionGrantsMigrationIndexesMatchEntSchema(t *testing.T) {
+	indexNames := make(map[string]struct{}, len(entmigrate.SubAdminCommissionGrantsTable.Indexes))
+	for _, idx := range entmigrate.SubAdminCommissionGrantsTable.Indexes {
+		indexNames[idx.Name] = struct{}{}
+	}
+
+	for _, name := range []string{
+		"idx_sub_admin_commission_grants_active_unique",
+		"idx_sub_admin_commission_grants_sub_admin_enabled",
+		"idx_sub_admin_commission_grants_group_enabled",
+	} {
+		_, ok := indexNames[name]
+		require.Truef(t, ok, "Ent schema is missing index %s", name)
+	}
 }
