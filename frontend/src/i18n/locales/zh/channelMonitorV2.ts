@@ -8,7 +8,7 @@ export default {
     bootstrap: {
       title: '正在补齐历史监控数据',
       description:
-        '首次启用被动监控时，系统会在后台静默聚合 90 分钟、24 小时、7 天与 30 天窗口；完成后可切换全部时间范围。',
+        '首次启用被动监控时，系统会在后台静默聚合 15 分钟、90 分钟、24 小时、7 天与 30 天窗口；完成后可切换全部时间范围。',
       progress: '进度 {percent}%',
       working: '后台聚合中…',
     },
@@ -22,7 +22,7 @@ export default {
     otherModels: '其他模型',
     ignored: '忽略',
     currentUser: '当前用户',
-    ranges: { '90m': '90m', '24h': '24h', '7d': '7d', '30d': '30d' },
+    ranges: { '15m': '15min', '90m': '90m', '24h': '24h', '7d': '7d', '30d': '30d' },
     filters: {
       platform: '平台', allPlatforms: '全部', group: '分组', allGroups: '全部', model: '模型', allModels: '全部',
       empty: '暂无可选项', selectedCount: '{count} 项', labelValue: '{label}：{value}'

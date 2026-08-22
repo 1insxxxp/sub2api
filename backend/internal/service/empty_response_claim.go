@@ -6,6 +6,7 @@ import (
 	"time"
 
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/pagination"
 )
 
 const (
@@ -169,7 +170,7 @@ type EmptyResponseClaimSubmitInput struct {
 
 type EmptyResponseClaimRepository interface {
 	LoadEvaluation(ctx context.Context, userID, usageLogID int64) (*EmptyResponseClaimEvaluation, error)
-	ListRecentEvaluations(ctx context.Context, userID int64, start, end time.Time, limit int) ([]EmptyResponseRecentCandidate, error)
+	ListRecentEvaluations(ctx context.Context, userID int64, start, end time.Time, params pagination.PaginationParams) ([]EmptyResponseRecentCandidate, *pagination.PaginationResult, error)
 	CountUserClaims(ctx context.Context, userID int64, start, end time.Time) (int, error)
 	Create(ctx context.Context, input *EmptyResponseClaimCreateInput) (*EmptyResponseClaim, bool, error)
 }
@@ -188,22 +189,23 @@ func NewEmptyResponseClaimService(repo EmptyResponseClaimRepository, compensator
 	return &EmptyResponseClaimService{repo: repo, compensator: compensator, now: time.Now}
 }
 
-func (s *EmptyResponseClaimService) ListRecent(ctx context.Context, userID int64) ([]EmptyResponseRecord, error) {
+func (s *EmptyResponseClaimService) ListRecent(ctx context.Context, userID int64, params pagination.PaginationParams) ([]EmptyResponseRecord, *pagination.PaginationResult, error) {
 	if userID <= 0 {
-		return nil, ErrEmptyResponseClaimInvalidInput
+		return nil, nil, ErrEmptyResponseClaimInvalidInput
 	}
 	if s == nil || s.repo == nil {
-		return nil, ErrEmptyResponseClaimNotFound
+		return nil, nil, ErrEmptyResponseClaimNotFound
 	}
+	params = normalizeEmptyResponseListPagination(params)
 	now := s.currentTime()
-	candidates, err := s.repo.ListRecentEvaluations(ctx, userID, now.Add(-EmptyResponseClaimWindow), now, EmptyResponseRecentListLimit)
+	candidates, pageResult, err := s.repo.ListRecentEvaluations(ctx, userID, now.Add(-EmptyResponseClaimWindow), now, params)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	dayStart, dayEnd := emptyResponseClaimBusinessDay(now)
 	dailyCount, err := s.repo.CountUserClaims(ctx, userID, dayStart, dayEnd)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	dailyLimitReached := dailyCount >= EmptyResponseClaimDailyLimit
 	records := make([]EmptyResponseRecord, 0, len(candidates))
@@ -217,7 +219,32 @@ func (s *EmptyResponseClaimService) ListRecent(ctx context.Context, userID int64
 			records = append(records, record)
 		}
 	}
-	return records, nil
+	if pageResult == nil {
+		pageResult = &pagination.PaginationResult{Total: int64(len(records)), Page: params.Page, PageSize: params.PageSize, Pages: 1}
+	}
+	if pageResult.Page < 1 {
+		pageResult.Page = params.Page
+	}
+	if pageResult.PageSize < 1 {
+		pageResult.PageSize = params.PageSize
+	}
+	if pageResult.Pages < 1 {
+		pageResult.Pages = 1
+	}
+	return records, pageResult, nil
+}
+
+func normalizeEmptyResponseListPagination(params pagination.PaginationParams) pagination.PaginationParams {
+	if params.Page < 1 {
+		params.Page = 1
+	}
+	params.PageSize = params.Limit()
+	if params.PageSize > EmptyResponseRecentListLimit {
+		params.PageSize = EmptyResponseRecentListLimit
+	}
+	params.SortBy = "created_at"
+	params.SortOrder = pagination.SortOrderDesc
+	return params
 }
 
 func (s *EmptyResponseClaimService) Submit(ctx context.Context, input EmptyResponseClaimSubmitInput) (*EmptyResponseClaim, error) {

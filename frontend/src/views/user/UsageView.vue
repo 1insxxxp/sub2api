@@ -424,6 +424,15 @@
             </tbody>
           </table>
           </div>
+
+          <Pagination
+            v-if="emptyResponsePagination.total > 0"
+            :page="emptyResponsePagination.page"
+            :total="emptyResponsePagination.total"
+            :page-size="emptyResponsePagination.page_size"
+            @update:page="handleEmptyResponsePageChange"
+            @update:pageSize="handleEmptyResponsePageSizeChange"
+          />
         </div>
       </div>
 
@@ -619,6 +628,11 @@ const pagination = reactive({
   page_size: getPersistedPageSize(),
   total: 0,
 })
+const emptyResponsePagination = reactive({
+  page: 1,
+  page_size: getPersistedPageSize(),
+  total: 0,
+})
 const sortState = reactive({
   sort_by: 'created_at',
   sort_order: 'desc' as 'asc' | 'desc',
@@ -709,7 +723,14 @@ const loadLogs = async () => {
 const loadEmptyResponses = async () => {
   emptyResponseLoading.value = true
   try {
-    emptyResponseRows.value = await usageAPI.listRecentEmptyResponses()
+    const res = await usageAPI.listRecentEmptyResponses({
+      page: emptyResponsePagination.page,
+      page_size: emptyResponsePagination.page_size,
+    })
+    emptyResponseRows.value = res.items
+    emptyResponsePagination.total = res.total
+    emptyResponsePagination.page = res.page
+    emptyResponsePagination.page_size = res.page_size
   } catch (error) {
     console.error('[UsageView] loadEmptyResponses failed:', error)
     appStore.showError(t('usage.emptyResponse.bulk.loadFailed'))
@@ -913,6 +934,17 @@ const handlePageSizeChange = (pageSize: number) => {
   pagination.page_size = pageSize
   pagination.page = 1
   void loadLogs()
+}
+
+const handleEmptyResponsePageChange = (page: number) => {
+  emptyResponsePagination.page = page
+  void loadEmptyResponses()
+}
+
+const handleEmptyResponsePageSizeChange = (pageSize: number) => {
+  emptyResponsePagination.page_size = pageSize
+  emptyResponsePagination.page = 1
+  void loadEmptyResponses()
 }
 
 const handleSort = (key: string, order: 'asc' | 'desc') => {

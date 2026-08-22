@@ -2823,6 +2823,25 @@ func (r *stubRedeemCodeRepo) DeleteUnusedBalanceTransferByCreator(ctx context.Co
 }
 
 func (r *stubRedeemCodeRepo) DeleteUnusedBalanceTransfersByCreator(ctx context.Context, userID int64, codeIDs []int64) ([]service.RedeemCode, error) {
+	return r.deleteBalanceTransfersByCreator(userID, codeIDs, false)
+}
+
+func (r *stubRedeemCodeRepo) DeleteBalanceTransferByCreator(ctx context.Context, userID, codeID int64) (*service.RedeemCode, error) {
+	codes, err := r.DeleteBalanceTransfersByCreator(ctx, userID, []int64{codeID})
+	if err != nil {
+		return nil, err
+	}
+	if len(codes) == 0 {
+		return nil, service.ErrBalanceTransferRedeemCodeNotFound
+	}
+	return &codes[0], nil
+}
+
+func (r *stubRedeemCodeRepo) DeleteBalanceTransfersByCreator(ctx context.Context, userID int64, codeIDs []int64) ([]service.RedeemCode, error) {
+	return r.deleteBalanceTransfersByCreator(userID, codeIDs, true)
+}
+
+func (r *stubRedeemCodeRepo) deleteBalanceTransfersByCreator(userID int64, codeIDs []int64, allowUsed bool) ([]service.RedeemCode, error) {
 	codes := r.byCreator[userID]
 	byID := make(map[int64]service.RedeemCode, len(codes))
 	for _, code := range codes {
@@ -2838,7 +2857,7 @@ func (r *stubRedeemCodeRepo) DeleteUnusedBalanceTransfersByCreator(ctx context.C
 			code.Type != service.RedeemTypeBalance {
 			return nil, service.ErrBalanceTransferRedeemCodeNotFound
 		}
-		if code.Status == service.StatusUsed || code.UsedBy != nil {
+		if !allowUsed && (code.Status == service.StatusUsed || code.UsedBy != nil) {
 			return nil, service.ErrBalanceTransferRedeemCodeUsed
 		}
 		deleted = append(deleted, code)

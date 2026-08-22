@@ -28,6 +28,8 @@ describe('channel-monitor-v2 design system structure', () => {
     expect(src).toContain('clearFilters')
     expect(src).toContain('healthModeOptions')
     expect(src).toContain("'cache'")
+    expect(src).toContain("t('channelMonitorV2.ranges.15m')")
+    expect(src).toContain("['15m', '90m', '24h', '7d', '30d']")
     // Ops elevation: rounded-3xl + ring surfaces
     expect(src).toContain('rounded-3xl')
     expect(src).toContain('ring-1 ring-gray-900/5')

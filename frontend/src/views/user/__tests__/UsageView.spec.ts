@@ -146,6 +146,16 @@ const usageTableStub = {
     </div>
   `,
 }
+const paginationStub = {
+  props: ['page', 'pageSize', 'total'],
+  emits: ['update:page', 'update:pageSize'],
+  template: `
+    <div data-testid="pagination-stub" :data-page="page" :data-page-size="pageSize" :data-total="total">
+      <button data-testid="pagination-next" @click="$emit('update:page', page + 1)">next</button>
+      <button data-testid="pagination-size-10" @click="$emit('update:pageSize', 10)">size 10</button>
+    </div>
+  `,
+}
 
 const usageLog = {
   id: 1,
@@ -183,7 +193,7 @@ function mountUsageView() {
     global: {
       stubs: {
         AppLayout: simpleStub,
-        Pagination: true,
+        Pagination: paginationStub,
         Select: true,
         DateRangePicker: true,
         Icon: true,
@@ -240,24 +250,30 @@ describe('user UsageView', () => {
       trend: [],
       groups: [],
     })
-    listRecentEmptyResponses.mockResolvedValue([
-      {
-        usage_log_id: 77,
-        model: 'claude-opus-4-6',
-        api_key_name: 'cli',
-        group_name: 'cc',
-        inbound_endpoint: '/v1/messages',
-        actual_cost: 1.25,
-        input_tokens: 1234,
-        output_tokens: 0,
-        cache_tokens: 46,
-        total_tokens: 1280,
-        refunded_amount: 0,
-        status: 'claimable',
-        reason_code: 'pure_empty',
-        created_at: '2026-03-08T00:00:00Z',
-      },
-    ])
+    listRecentEmptyResponses.mockResolvedValue({
+      items: [
+        {
+          usage_log_id: 77,
+          model: 'claude-opus-4-6',
+          api_key_name: 'cli',
+          group_name: 'cc',
+          inbound_endpoint: '/v1/messages',
+          actual_cost: 1.25,
+          input_tokens: 1234,
+          output_tokens: 0,
+          cache_tokens: 46,
+          total_tokens: 1280,
+          refunded_amount: 0,
+          status: 'claimable',
+          reason_code: 'pure_empty',
+          created_at: '2026-03-08T00:00:00Z',
+        },
+      ],
+      total: 1,
+      page: 1,
+      page_size: 20,
+      pages: 1,
+    })
     list.mockResolvedValue({ items: [{ id: 1, name: 'demo-key' }] })
     getAvailable.mockResolvedValue([{ id: 1, name: 'default' }])
 		submitEmptyResponseClaim.mockResolvedValue({
@@ -456,6 +472,71 @@ describe('user UsageView', () => {
     expect(wrapper.find('[data-testid="claim-empty-responses"]').exists()).toBe(false)
   })
 
+  it('paginates the empty response list with server-side page parameters', async () => {
+    listRecentEmptyResponses.mockResolvedValueOnce({
+      items: [
+        {
+          usage_log_id: 77,
+          model: 'claude-opus-4-6',
+          api_key_name: 'cli',
+          group_name: 'cc',
+          inbound_endpoint: '/v1/messages',
+          actual_cost: 1.25,
+          input_tokens: 1234,
+          output_tokens: 0,
+          cache_tokens: 46,
+          total_tokens: 1280,
+          refunded_amount: 0,
+          status: 'claimable',
+          reason_code: 'pure_empty',
+          created_at: '2026-03-08T00:00:00Z',
+        },
+      ],
+      total: 40,
+      page: 1,
+      page_size: 20,
+      pages: 2,
+    })
+    const wrapper = mountUsageView()
+    await flushPromises()
+
+    await wrapper.find('[data-testid="empty-response-tab"]').trigger('click')
+    await flushPromises()
+
+    expect(listRecentEmptyResponses).toHaveBeenLastCalledWith(expect.objectContaining({ page: 1 }))
+    expect(wrapper.get('[data-testid="pagination-stub"]').attributes('data-total')).toBe('40')
+
+    listRecentEmptyResponses.mockResolvedValueOnce({
+      items: [
+        {
+          usage_log_id: 88,
+          model: 'claude-sonnet-4-6',
+          api_key_name: 'cli-2',
+          group_name: 'cc',
+          inbound_endpoint: '/v1/messages',
+          actual_cost: 0.5,
+          input_tokens: 10,
+          output_tokens: 0,
+          cache_tokens: 0,
+          total_tokens: 10,
+          refunded_amount: 0,
+          status: 'claimable',
+          reason_code: 'pure_empty',
+          created_at: '2026-03-08T00:00:00Z',
+        },
+      ],
+      total: 40,
+      page: 2,
+      page_size: 20,
+      pages: 2,
+    })
+    await wrapper.find('[data-testid="pagination-next"]').trigger('click')
+    await flushPromises()
+
+    expect(listRecentEmptyResponses).toHaveBeenLastCalledWith(expect.objectContaining({ page: 2 }))
+    expect(wrapper.text()).toContain('claude-sonnet-4-6')
+  })
+
   it('keeps the empty response table fixed-width and horizontally scrollable', async () => {
     const wrapper = mountUsageView()
     await flushPromises()
@@ -534,41 +615,47 @@ describe('user UsageView', () => {
   })
 
   it('does not render claim buttons for rows that are no longer claimable', async () => {
-    listRecentEmptyResponses.mockResolvedValueOnce([
-      {
-        usage_log_id: 77,
-        claim_id: 701,
-        model: 'claude-opus-4-6',
-        api_key_name: 'cli',
-        group_name: 'cc',
-        inbound_endpoint: '/v1/messages',
-        actual_cost: 1.25,
-        input_tokens: 1234,
-        output_tokens: 0,
-        cache_tokens: 46,
-        total_tokens: 1280,
-        refunded_amount: 1.25,
-        status: 'compensated',
-        reason_code: 'pure_empty',
-        created_at: '2026-03-08T00:00:00Z',
-      },
-      {
-        usage_log_id: 78,
-        model: 'claude-opus-4-6',
-        api_key_name: 'cli',
-        group_name: 'cc',
-        inbound_endpoint: '/v1/messages',
-        actual_cost: 1.25,
-        input_tokens: 1234,
-        output_tokens: 0,
-        cache_tokens: 46,
-        total_tokens: 1280,
-        refunded_amount: 0,
-        status: 'daily_limited',
-        reason_code: 'daily_limit_manual_review',
-        created_at: '2026-03-08T00:00:00Z',
-      },
-    ])
+    listRecentEmptyResponses.mockResolvedValueOnce({
+      items: [
+        {
+          usage_log_id: 77,
+          claim_id: 701,
+          model: 'claude-opus-4-6',
+          api_key_name: 'cli',
+          group_name: 'cc',
+          inbound_endpoint: '/v1/messages',
+          actual_cost: 1.25,
+          input_tokens: 1234,
+          output_tokens: 0,
+          cache_tokens: 46,
+          total_tokens: 1280,
+          refunded_amount: 1.25,
+          status: 'compensated',
+          reason_code: 'pure_empty',
+          created_at: '2026-03-08T00:00:00Z',
+        },
+        {
+          usage_log_id: 78,
+          model: 'claude-opus-4-6',
+          api_key_name: 'cli',
+          group_name: 'cc',
+          inbound_endpoint: '/v1/messages',
+          actual_cost: 1.25,
+          input_tokens: 1234,
+          output_tokens: 0,
+          cache_tokens: 46,
+          total_tokens: 1280,
+          refunded_amount: 0,
+          status: 'daily_limited',
+          reason_code: 'daily_limit_manual_review',
+          created_at: '2026-03-08T00:00:00Z',
+        },
+      ],
+      total: 2,
+      page: 1,
+      page_size: 20,
+      pages: 1,
+    })
     const wrapper = mountUsageView()
     await flushPromises()
 

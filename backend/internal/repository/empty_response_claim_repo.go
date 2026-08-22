@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"strings"
 	"time"
 
@@ -115,10 +116,49 @@ func (r *emptyResponseClaimRepository) CountUserClaims(ctx context.Context, user
 	return count, nil
 }
 
-func (r *emptyResponseClaimRepository) ListRecentEvaluations(ctx context.Context, userID int64, start, end time.Time, limit int) ([]service.EmptyResponseRecentCandidate, error) {
-	if limit <= 0 {
+func (r *emptyResponseClaimRepository) ListRecentEvaluations(ctx context.Context, userID int64, start, end time.Time, params pagination.PaginationParams) ([]service.EmptyResponseRecentCandidate, *pagination.PaginationResult, error) {
+	if params.Page < 1 {
+		params.Page = 1
+	}
+	limit := params.Limit()
+	if limit > service.EmptyResponseRecentListLimit {
 		limit = service.EmptyResponseRecentListLimit
 	}
+	params.PageSize = limit
+	offset := params.Offset()
+
+	whereSQL := `
+		ul.user_id = $1
+			AND ul.created_at >= $2
+			AND ul.created_at < $3
+			AND COALESCE(g.empty_response_compensation_enabled, FALSE) = TRUE
+			AND ul.output_tokens >= 0
+			AND ul.output_tokens <= $4
+			AND (erc.id IS NOT NULL OR (ul.actual_cost > 0 AND COALESCE(ul.compensated_cost, 0) <= 0))
+			AND (
+				erc.id IS NULL
+				OR erc.reason_code IN (
+					'pure_empty',
+					'low_output',
+					'upstream_http_5xx',
+					'upstream_timeout',
+					'upstream_interrupted',
+					'daily_limit_manual_review'
+				)
+			)
+	`
+	countQuery := `
+		SELECT COUNT(*)
+		FROM usage_logs ul
+		LEFT JOIN empty_response_claims erc ON erc.usage_log_id = ul.id
+		LEFT JOIN groups g ON g.id = ul.group_id
+		WHERE ` + whereSQL
+	queryArgs := []any{userID, start, end, service.EmptyResponseClaimLowOutputTokenLimit}
+	var total int64
+	if err := scanSingleRow(ctx, r.sql, countQuery, queryArgs, &total); err != nil {
+		return nil, nil, fmt.Errorf("count recent empty response evaluations: %w", err)
+	}
+
 	query := `
 		SELECT
 			ul.id, ul.user_id, ul.api_key_id, ul.account_id, ul.group_id, ul.subscription_id,
@@ -137,18 +177,13 @@ func (r *emptyResponseClaimRepository) ListRecentEvaluations(ctx context.Context
 		LEFT JOIN empty_response_claims erc ON erc.usage_log_id = ul.id
 		LEFT JOIN api_keys ak ON ak.id = ul.api_key_id
 		LEFT JOIN groups g ON g.id = ul.group_id
-		WHERE ul.user_id = $1
-			AND ul.created_at >= $2
-			AND ul.created_at < $3
-			AND COALESCE(g.empty_response_compensation_enabled, FALSE) = TRUE
-			AND ul.output_tokens >= 0
-			AND ul.output_tokens <= $4
+		WHERE ` + whereSQL + `
 		ORDER BY ul.created_at DESC, ul.id DESC
-		LIMIT $5
+		LIMIT $5 OFFSET $6
 	`
-	rows, err := r.sql.QueryContext(ctx, query, userID, start, end, service.EmptyResponseClaimLowOutputTokenLimit, limit)
+	rows, err := r.sql.QueryContext(ctx, query, append(queryArgs, limit, offset)...)
 	if err != nil {
-		return nil, fmt.Errorf("list recent empty response evaluations: %w", err)
+		return nil, nil, fmt.Errorf("list recent empty response evaluations: %w", err)
 	}
 	defer rows.Close()
 
@@ -173,7 +208,7 @@ func (r *emptyResponseClaimRepository) ListRecentEvaluations(ctx context.Context
 			&finishReason, &disconnectSource, &upstreamErrorKind, &collectorVersion,
 			&claimID, &claimStatus, &claimReasonCode, &candidate.RefundedAmount,
 		); err != nil {
-			return nil, fmt.Errorf("scan recent empty response evaluation: %w", err)
+			return nil, nil, fmt.Errorf("scan recent empty response evaluation: %w", err)
 		}
 		if groupID.Valid {
 			usage.GroupID = &groupID.Int64
@@ -217,9 +252,18 @@ func (r *emptyResponseClaimRepository) ListRecentEvaluations(ctx context.Context
 		candidates = append(candidates, candidate)
 	}
 	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("iterate recent empty response evaluations: %w", err)
+		return nil, nil, fmt.Errorf("iterate recent empty response evaluations: %w", err)
 	}
-	return candidates, nil
+	pages := int(math.Ceil(float64(total) / float64(limit)))
+	if pages < 1 {
+		pages = 1
+	}
+	return candidates, &pagination.PaginationResult{
+		Total:    total,
+		Page:     params.Page,
+		PageSize: limit,
+		Pages:    pages,
+	}, nil
 }
 
 func (r *emptyResponseClaimRepository) Create(ctx context.Context, input *service.EmptyResponseClaimCreateInput) (*service.EmptyResponseClaim, bool, error) {

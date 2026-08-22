@@ -8,28 +8,36 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Wei-Shaw/sub2api/internal/pkg/pagination"
 	"github.com/stretchr/testify/require"
 )
 
 type emptyResponseClaimRepoStub struct {
-	evaluation *EmptyResponseClaimEvaluation
-	recent     []EmptyResponseRecentCandidate
-	loadErr    error
-	dailyCount int
-	claim      *EmptyResponseClaim
-	created    bool
-	createErr  error
-	createIn   *EmptyResponseClaimCreateInput
-	dayStart   time.Time
-	dayEnd     time.Time
+	evaluation       *EmptyResponseClaimEvaluation
+	recent           []EmptyResponseRecentCandidate
+	recentPageResult *pagination.PaginationResult
+	recentParams     pagination.PaginationParams
+	loadErr          error
+	dailyCount       int
+	claim            *EmptyResponseClaim
+	created          bool
+	createErr        error
+	createIn         *EmptyResponseClaimCreateInput
+	dayStart         time.Time
+	dayEnd           time.Time
 }
 
 func (s *emptyResponseClaimRepoStub) LoadEvaluation(_ context.Context, _, _ int64) (*EmptyResponseClaimEvaluation, error) {
 	return s.evaluation, s.loadErr
 }
 
-func (s *emptyResponseClaimRepoStub) ListRecentEvaluations(_ context.Context, _ int64, _, _ time.Time, _ int) ([]EmptyResponseRecentCandidate, error) {
-	return s.recent, s.loadErr
+func (s *emptyResponseClaimRepoStub) ListRecentEvaluations(_ context.Context, _ int64, _, _ time.Time, params pagination.PaginationParams) ([]EmptyResponseRecentCandidate, *pagination.PaginationResult, error) {
+	s.recentParams = params
+	result := s.recentPageResult
+	if result == nil {
+		result = &pagination.PaginationResult{Total: int64(len(s.recent)), Page: params.Page, PageSize: params.PageSize, Pages: 1}
+	}
+	return s.recent, result, s.loadErr
 }
 
 func (s *emptyResponseClaimRepoStub) CountUserClaims(_ context.Context, _ int64, start, end time.Time) (int, error) {
@@ -117,6 +125,37 @@ func TestEvaluateEmptyResponseClaimDecisionTable(t *testing.T) {
 			require.Equal(t, EmptyResponseClaimRuleVersion, decision.RuleVersion)
 		})
 	}
+}
+
+func TestEmptyResponseClaimServiceListRecentReturnsPagination(t *testing.T) {
+	now := time.Date(2026, 8, 7, 12, 0, 0, 0, time.UTC)
+	repo := &emptyResponseClaimRepoStub{
+		recent: []EmptyResponseRecentCandidate{{
+			Evaluation: EmptyResponseClaimEvaluation{
+				Usage: UsageLog{
+					ID: 100, UserID: 7, APIKeyID: 8, AccountID: 9,
+					Model: "claude-opus-4-6", ActualCost: 1.25,
+					OutputTokens: 0, CreatedAt: now.Add(-time.Hour),
+				},
+				Outcome: &ResponseOutcome{HTTPStatus: 200, UpstreamStatus: 200, StreamCompleted: true, CollectorVersion: 1},
+				Group:   Group{EmptyResponseCompensationEnabled: true},
+			},
+		}},
+		recentPageResult: &pagination.PaginationResult{Total: 21, Page: 2, PageSize: 10, Pages: 3},
+	}
+	svc := NewEmptyResponseClaimService(repo, nil)
+	svc.now = func() time.Time { return now }
+
+	records, result, err := svc.ListRecent(context.Background(), 7, pagination.PaginationParams{Page: 2, PageSize: 10})
+
+	require.NoError(t, err)
+	require.Len(t, records, 1)
+	require.Equal(t, int64(21), result.Total)
+	require.Equal(t, 2, result.Page)
+	require.Equal(t, 10, result.PageSize)
+	require.Equal(t, 3, result.Pages)
+	require.Equal(t, 2, repo.recentParams.Page)
+	require.Equal(t, 10, repo.recentParams.PageSize)
 }
 
 func TestEmptyResponseClaimServiceCreatesServerEvaluatedClaimAndCompensatesApproval(t *testing.T) {
