@@ -474,6 +474,20 @@ describe('user UsageView', () => {
     expect(wrapper.find('[data-testid="claim-empty-response-77"]').classes()).toEqual(expect.arrayContaining(['min-w-[72px]', 'whitespace-nowrap']))
   })
 
+  it('puts empty response actions in the first column for mobile access', async () => {
+    const wrapper = mountUsageView()
+    await flushPromises()
+
+    await wrapper.find('[data-testid="empty-response-tab"]').trigger('click')
+    await flushPromises()
+
+    const headerCells = wrapper.findAll('[data-testid="empty-response-table"] thead th')
+    const firstBodyCells = wrapper.findAll('[data-testid="empty-response-table"] tbody tr:first-child td')
+
+    expect(headerCells[0]?.text()).toBe('Actions')
+    expect(firstBodyCells[0]?.find('[data-testid="claim-empty-response-77"]').exists()).toBe(true)
+  })
+
   it('claims a single empty response row and updates that row only', async () => {
     submitEmptyResponseClaim.mockResolvedValueOnce({
       id: 701,

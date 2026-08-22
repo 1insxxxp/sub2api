@@ -580,4 +580,21 @@ describe('AdminWorkbenchView balance transfer codes', () => {
     })
     expect(wrapper.text()).toContain('req-1')
   })
+
+  it('omits the commission explainer copy for sub-admins', async () => {
+    authState.user = {
+      id: 7,
+      email: 'sub-admin@example.com',
+      role: 'sub_admin',
+      balance: 30,
+      concurrency: 5
+    }
+
+    const wrapper = mountWorkbench()
+    await flushPromises()
+
+    expect(wrapper.find('[data-test="sub-admin-commission-panel"]').exists()).toBe(true)
+    expect(wrapper.text()).not.toContain('adminWorkbench.commission.title')
+    expect(wrapper.text()).not.toContain('adminWorkbench.commission.subtitle')
+  })
 })

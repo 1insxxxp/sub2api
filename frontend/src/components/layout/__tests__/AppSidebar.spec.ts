@@ -103,6 +103,16 @@ describe('AppSidebar sub-admin entries', () => {
     expect(componentSource).toContain("v-else-if=\"!appStore.backendModeEnabled || authStore.canAccessAdminWorkbench\"")
     expect(componentSource).toContain('const canAccessAdminWorkbench = computed(() => authStore.canAccessAdminWorkbench)')
   })
+
+  it('keeps the workbench entry out of the full-admin personal menu', () => {
+    const buildSelfNav = componentSource.match(/function buildSelfNavItems[\s\S]*?return items\n}/)?.[0] ?? ''
+
+    expect(buildSelfNav).toContain('authStore.isSubAdmin')
+    expect(buildSelfNav).toContain('appStore.backendModeEnabled && authStore.isSubAdmin')
+    expect(buildSelfNav).toContain('if (authStore.isSubAdmin)')
+    expect(buildSelfNav).not.toContain('appStore.backendModeEnabled && canAccessAdminWorkbench.value')
+    expect(buildSelfNav).not.toContain('if (canAccessAdminWorkbench.value)')
+  })
 })
 
 describe('AppSidebar custom menu external links', () => {

@@ -765,10 +765,10 @@ const flagBatchImageAccess = () => canUseBatchImage.value
 // 可用渠道紧挨渠道状态之上，让用户"先看自己能用什么、再看对应状态"。
 function buildSelfNavItems(withDashboard: boolean): NavItem[] {
   const items: NavItem[] = []
-  if (appStore.backendModeEnabled && canAccessAdminWorkbench.value) {
+  if (appStore.backendModeEnabled && authStore.isSubAdmin) {
     return [{ path: '/admin/workbench', label: t('nav.adminWorkbench'), icon: ShieldIcon }]
   }
-  if (canAccessAdminWorkbench.value) {
+  if (authStore.isSubAdmin) {
     items.push({ path: '/admin/workbench', label: t('nav.adminWorkbench'), icon: ShieldIcon })
   }
   if (withDashboard) {

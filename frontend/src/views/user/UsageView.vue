@@ -226,6 +226,7 @@
         <div v-else data-testid="empty-response-table-scroll" class="overflow-x-auto overscroll-x-contain touch-pan-x">
           <table data-testid="empty-response-table" class="w-full min-w-[1280px] table-fixed divide-y divide-gray-200 text-sm dark:divide-dark-700">
             <colgroup>
+              <col class="w-[112px]" />
               <col class="w-[150px]" />
               <col class="w-[88px]" />
               <col class="w-[190px]" />
@@ -235,10 +236,10 @@
               <col class="w-[112px]" />
               <col class="w-[112px]" />
               <col class="w-[108px]" />
-              <col class="w-[88px]" />
             </colgroup>
             <thead class="bg-gray-50 text-xs uppercase tracking-wider text-gray-500 dark:bg-dark-900/60 dark:text-gray-400">
               <tr>
+                <th class="whitespace-nowrap px-4 py-3 text-left font-medium">{{ t('common.actions') }}</th>
                 <th class="whitespace-nowrap px-4 py-3 text-left font-medium">{{ t('usage.time') }}</th>
                 <th class="whitespace-nowrap px-4 py-3 text-left font-medium">{{ t('usage.apiKeyFilter') }}</th>
                 <th class="whitespace-nowrap px-4 py-3 text-left font-medium">{{ t('usage.model') }}</th>
@@ -248,11 +249,22 @@
                 <th class="whitespace-nowrap px-4 py-3 text-left font-medium">{{ t('usage.emptyResponse.originalCharge') }}</th>
                 <th class="whitespace-nowrap px-4 py-3 text-left font-medium">{{ t('usage.emptyResponse.refunded') }}</th>
                 <th class="whitespace-nowrap px-4 py-3 text-left font-medium">{{ t('usage.emptyResponse.statusLabel') }}</th>
-                <th class="whitespace-nowrap px-4 py-3 text-right font-medium">{{ t('common.actions') }}</th>
               </tr>
             </thead>
             <tbody class="divide-y divide-gray-100 dark:divide-dark-700">
               <tr v-for="row in emptyResponseRows" :key="row.usage_log_id" class="hover:bg-gray-50/80 dark:hover:bg-dark-700/40">
+                <td class="px-4 py-3 text-left">
+                  <button
+                    v-if="canClaimEmptyResponseRow(row)"
+                    type="button"
+                    :data-testid="`claim-empty-response-${row.usage_log_id}`"
+                    class="btn btn-primary btn-sm min-w-[72px] justify-center whitespace-nowrap"
+                    :disabled="emptyResponseClaimingRowId === row.usage_log_id"
+                    @click="claimEmptyResponseRow(row)"
+                  >
+                    {{ emptyResponseClaimingRowId === row.usage_log_id ? t('usage.emptyResponse.claimingOne') : t('usage.emptyResponse.claimOne') }}
+                  </button>
+                </td>
                 <td class="whitespace-nowrap px-4 py-3 text-gray-600 dark:text-gray-300">{{ formatDateTime(row.created_at) }}</td>
                 <td class="px-4 py-3 font-medium text-gray-800 dark:text-gray-100">
                   <span class="block truncate" :title="row.api_key_name || '-'">{{ row.api_key_name || '-' }}</span>
@@ -308,18 +320,6 @@
                   <span class="inline-flex whitespace-nowrap rounded-full bg-primary-50 px-2.5 py-1 text-xs font-semibold text-primary-700 dark:bg-primary-500/10 dark:text-primary-300">
                     {{ t(`usage.emptyResponse.status.${row.status}`) }}
                   </span>
-                </td>
-                <td class="px-4 py-3 text-right">
-                  <button
-                    v-if="canClaimEmptyResponseRow(row)"
-                    type="button"
-                    :data-testid="`claim-empty-response-${row.usage_log_id}`"
-                    class="btn btn-primary btn-sm min-w-[72px] justify-center whitespace-nowrap"
-                    :disabled="emptyResponseClaimingRowId === row.usage_log_id"
-                    @click="claimEmptyResponseRow(row)"
-                  >
-                    {{ emptyResponseClaimingRowId === row.usage_log_id ? t('usage.emptyResponse.claimingOne') : t('usage.emptyResponse.claimOne') }}
-                  </button>
                 </td>
               </tr>
             </tbody>
