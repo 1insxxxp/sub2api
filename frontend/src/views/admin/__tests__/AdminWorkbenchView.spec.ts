@@ -391,7 +391,7 @@ describe('AdminWorkbenchView balance transfer codes', () => {
     expect(wrapper.text()).toContain('BATCH-CODE-25')
   })
 
-  it('batch deletes selected deletable generated codes', async () => {
+  it('batch deletes selected generated codes including used codes', async () => {
     const unusedCode: GeneratedRedeemCode = {
       id: 101,
       code: 'UNUSED-CODE',
@@ -417,7 +417,7 @@ describe('AdminWorkbenchView balance transfer codes', () => {
       source: 'user_balance_transfer'
     }
     getGenerated.mockResolvedValueOnce(paginated<GeneratedRedeemCode>([unusedCode, usedCode]))
-    deleteGeneratedBatch.mockResolvedValueOnce([unusedCode])
+    deleteGeneratedBatch.mockResolvedValueOnce([unusedCode, usedCode])
     confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true)
 
     const wrapper = mountWorkbench()
@@ -426,9 +426,10 @@ describe('AdminWorkbenchView balance transfer codes', () => {
     const batchDeleteButton = wrapper.get('[data-test="delete-selected-generated-codes"]')
     expect(batchDeleteButton.attributes('disabled')).toBeDefined()
     expect(wrapper.find('[data-test="select-generated-code-101"]').exists()).toBe(true)
-    expect(wrapper.find('[data-test="select-generated-code-102"]').exists()).toBe(false)
+    expect(wrapper.find('[data-test="select-generated-code-102"]').exists()).toBe(true)
 
     await wrapper.get('[data-test="select-generated-code-101"]').setValue(true)
+    await wrapper.get('[data-test="select-generated-code-102"]').setValue(true)
     expect(wrapper.text()).toContain('adminWorkbench.balanceTransfer.selectedCount')
     expect(batchDeleteButton.attributes('disabled')).toBeUndefined()
 
@@ -436,7 +437,7 @@ describe('AdminWorkbenchView balance transfer codes', () => {
     await flushPromises()
 
     expect(confirmSpy).toHaveBeenCalledWith('adminWorkbench.balanceTransfer.batchDeleteConfirm')
-    expect(deleteGeneratedBatch).toHaveBeenCalledWith([101])
+    expect(deleteGeneratedBatch).toHaveBeenCalledWith([101, 102])
     expect(refreshUser).toHaveBeenCalled()
     expect(getGenerated).toHaveBeenCalledTimes(2)
     expect(showSuccess).toHaveBeenCalledWith('adminWorkbench.balanceTransfer.batchDeleted')

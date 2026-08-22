@@ -448,7 +448,7 @@ async function handleGenerate() {
 }
 
 function canDeleteGeneratedCode(item: GeneratedRedeemCode): boolean {
-  return item.used_by == null && (item.status === 'unused' || item.status === 'expired')
+  return item.source === 'user_balance_transfer' && item.type === 'balance'
 }
 
 async function copyText(text: string) {

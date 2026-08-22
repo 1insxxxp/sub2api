@@ -143,6 +143,33 @@ func (s *RedeemCodeRepoSuite) TestListByCreatorFiltersToBalanceTransferCodes() {
 	s.Require().Equal("CREATOR-BALANCE", codes[0].Code)
 }
 
+func (s *RedeemCodeRepoSuite) TestDeleteBalanceTransferByCreatorAllowsUsedCodes() {
+	creator := s.createUser(uniqueTestValue(s.T(), "creator-delete-used") + "@example.com")
+	redeemer := s.createUser(uniqueTestValue(s.T(), "redeemer-delete-used") + "@example.com")
+	createdBy := creator.ID
+	usedBy := redeemer.ID
+	usedAt := time.Now().UTC()
+	code := &service.RedeemCode{
+		Code:      "DELETE-USED-BALANCE-TRANSFER",
+		Type:      service.RedeemTypeBalance,
+		Value:     5,
+		Status:    service.StatusUsed,
+		UsedBy:    &usedBy,
+		UsedAt:    &usedAt,
+		CreatedBy: &createdBy,
+		Source:    service.RedeemCodeSourceUserBalanceTransfer,
+	}
+	s.Require().NoError(s.repo.Create(s.ctx, code))
+
+	deleted, err := s.repo.DeleteBalanceTransferByCreator(s.ctx, creator.ID, code.ID)
+
+	s.Require().NoError(err)
+	s.Require().Equal(code.ID, deleted.ID)
+	s.Require().Equal(service.StatusUsed, deleted.Status)
+	_, err = s.repo.GetByID(s.ctx, code.ID)
+	s.Require().ErrorIs(err, service.ErrRedeemCodeNotFound)
+}
+
 func (s *RedeemCodeRepoSuite) TestCreateBatch() {
 	codes := []service.RedeemCode{
 		{Code: "BATCH-1", Type: service.RedeemTypeBalance, Value: 10, Status: service.StatusUnused},
