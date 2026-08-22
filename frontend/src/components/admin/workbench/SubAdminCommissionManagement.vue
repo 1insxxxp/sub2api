@@ -113,6 +113,7 @@ const assignedGroupIDs = ref<number[]>([])
 const loading = ref(false)
 const savingSettings = ref(false)
 const savingGrants = ref(false)
+const subAdminPageSize = 1000
 
 function syncSelectedGrants() {
   if (selectedSubAdminID.value == null) {
@@ -129,16 +130,16 @@ async function loadManagementData() {
   try {
     const [settings, usersResult, groupList, grantList] = await Promise.all([
       adminAPI.subAdminCommission.getSettings(),
-      adminAPI.users.list(1, 50, { role: 'sub_admin' }),
+      loadAllSubAdmins(),
       adminAPI.groups.getAll(),
       adminAPI.subAdminCommission.listGrants()
     ])
     commissionRate.value = settings.commission_rate
-    subAdmins.value = usersResult.items
+    subAdmins.value = usersResult
     groups.value = groupList
     grants.value = grantList
-    if (selectedSubAdminID.value == null && usersResult.items.length > 0) {
-      selectedSubAdminID.value = usersResult.items[0].id
+    if (selectedSubAdminID.value == null && usersResult.length > 0) {
+      selectedSubAdminID.value = usersResult[0].id
     }
     syncSelectedGrants()
   } catch (error: any) {
@@ -146,6 +147,16 @@ async function loadManagementData() {
   } finally {
     loading.value = false
   }
+}
+
+async function loadAllSubAdmins(): Promise<AdminUser[]> {
+  const firstPage = await adminAPI.users.list(1, subAdminPageSize, { role: 'sub_admin' })
+  const users = [...firstPage.items]
+  for (let page = firstPage.page + 1; page <= firstPage.pages; page += 1) {
+    const nextPage = await adminAPI.users.list(page, subAdminPageSize, { role: 'sub_admin' })
+    users.push(...nextPage.items)
+  }
+  return users
 }
 
 async function saveSettings() {
