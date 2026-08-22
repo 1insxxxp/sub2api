@@ -932,7 +932,7 @@ router.beforeEach(async (to, _from, next) => {
     return
   }
 
-  if ((requiresAdmin || requiresAdminWorkbench) && authStore.canAccessAdminWorkbench) {
+  if ((requiresAdmin || requiresAdminWorkbench) && authStore.isAdmin) {
     const adminComplianceStore = useAdminComplianceStore()
     if (!adminComplianceStore.initialized) {
       try {

@@ -22,8 +22,15 @@ const authStore = vi.hoisted(() => ({
   checkAuth: vi.fn(),
   isAuthenticated: true,
   isAdmin: false,
+  canAccessAdminWorkbench: false,
   isSimpleMode: false,
   hasPendingAuthSession: false,
+}))
+
+const adminComplianceStore = vi.hoisted(() => ({
+  initialized: false,
+  fetchStatus: vi.fn(),
+  requireAcknowledgement: vi.fn(),
 }))
 
 const appStore = vi.hoisted(() => ({
@@ -63,11 +70,7 @@ vi.mock('@/stores/adminSettings', () => ({
 }))
 
 vi.mock('@/stores/adminCompliance', () => ({
-  useAdminComplianceStore: () => ({
-    initialized: true,
-    fetchStatus: vi.fn(),
-    requireAcknowledgement: vi.fn(),
-  }),
+  useAdminComplianceStore: () => adminComplianceStore,
 }))
 
 vi.mock('@/composables/useNavigationLoading', () => ({
@@ -122,10 +125,14 @@ describe('feature route guard', () => {
   beforeEach(() => {
     authStore.isAuthenticated = true
     authStore.isAdmin = false
+    authStore.canAccessAdminWorkbench = false
     authStore.isSimpleMode = false
     appStore.publicSettingsLoaded = false
     appStore.cachedPublicSettings = null
     appStore.fetchPublicSettings.mockReset()
+    adminComplianceStore.initialized = false
+    adminComplianceStore.fetchStatus.mockReset()
+    adminComplianceStore.requireAcknowledgement.mockReset()
   })
 
   it('marks the image studio route as feature protected', () => {
@@ -190,5 +197,17 @@ describe('feature route guard', () => {
     expect(appStore.fetchPublicSettings).not.toHaveBeenCalled()
     expect(next).toHaveBeenCalledOnce()
     expect(next).toHaveBeenCalledWith(target)
+  })
+
+  it('does not request admin compliance status for sub-admin workbench access', async () => {
+    authStore.isAdmin = false
+    authStore.canAccessAdminWorkbench = true
+
+    const { navigation, next } = runGuard({ requiresAdminWorkbench: true }, '/admin/workbench')
+    await navigation
+
+    expect(adminComplianceStore.fetchStatus).not.toHaveBeenCalled()
+    expect(next).toHaveBeenCalledOnce()
+    expect(next).toHaveBeenCalledWith()
   })
 })
