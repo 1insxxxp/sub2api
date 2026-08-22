@@ -41,6 +41,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/redeemcode"
 	"github.com/Wei-Shaw/sub2api/ent/securitysecret"
 	"github.com/Wei-Shaw/sub2api/ent/setting"
+	"github.com/Wei-Shaw/sub2api/ent/subadmincommissiongrant"
 	"github.com/Wei-Shaw/sub2api/ent/subscriptionplan"
 	"github.com/Wei-Shaw/sub2api/ent/systemcustomgroupmodel"
 	"github.com/Wei-Shaw/sub2api/ent/tlsfingerprintprofile"
@@ -981,6 +982,33 @@ func (f TraverseSetting) Traverse(ctx context.Context, q ent.Query) error {
 	return fmt.Errorf("unexpected query type %T. expect *ent.SettingQuery", q)
 }
 
+// The SubAdminCommissionGrantFunc type is an adapter to allow the use of ordinary function as a Querier.
+type SubAdminCommissionGrantFunc func(context.Context, *ent.SubAdminCommissionGrantQuery) (ent.Value, error)
+
+// Query calls f(ctx, q).
+func (f SubAdminCommissionGrantFunc) Query(ctx context.Context, q ent.Query) (ent.Value, error) {
+	if q, ok := q.(*ent.SubAdminCommissionGrantQuery); ok {
+		return f(ctx, q)
+	}
+	return nil, fmt.Errorf("unexpected query type %T. expect *ent.SubAdminCommissionGrantQuery", q)
+}
+
+// The TraverseSubAdminCommissionGrant type is an adapter to allow the use of ordinary function as Traverser.
+type TraverseSubAdminCommissionGrant func(context.Context, *ent.SubAdminCommissionGrantQuery) error
+
+// Intercept is a dummy implementation of Intercept that returns the next Querier in the pipeline.
+func (f TraverseSubAdminCommissionGrant) Intercept(next ent.Querier) ent.Querier {
+	return next
+}
+
+// Traverse calls f(ctx, q).
+func (f TraverseSubAdminCommissionGrant) Traverse(ctx context.Context, q ent.Query) error {
+	if q, ok := q.(*ent.SubAdminCommissionGrantQuery); ok {
+		return f(ctx, q)
+	}
+	return fmt.Errorf("unexpected query type %T. expect *ent.SubAdminCommissionGrantQuery", q)
+}
+
 // The SubscriptionPlanFunc type is an adapter to allow the use of ordinary function as a Querier.
 type SubscriptionPlanFunc func(context.Context, *ent.SubscriptionPlanQuery) (ent.Value, error)
 
@@ -1534,6 +1562,8 @@ func NewQuery(q ent.Query) (Query, error) {
 		return &query[*ent.SecuritySecretQuery, predicate.SecuritySecret, securitysecret.OrderOption]{typ: ent.TypeSecuritySecret, tq: q}, nil
 	case *ent.SettingQuery:
 		return &query[*ent.SettingQuery, predicate.Setting, setting.OrderOption]{typ: ent.TypeSetting, tq: q}, nil
+	case *ent.SubAdminCommissionGrantQuery:
+		return &query[*ent.SubAdminCommissionGrantQuery, predicate.SubAdminCommissionGrant, subadmincommissiongrant.OrderOption]{typ: ent.TypeSubAdminCommissionGrant, tq: q}, nil
 	case *ent.SubscriptionPlanQuery:
 		return &query[*ent.SubscriptionPlanQuery, predicate.SubscriptionPlan, subscriptionplan.OrderOption]{typ: ent.TypeSubscriptionPlan, tq: q}, nil
 	case *ent.SystemCustomGroupModelQuery:

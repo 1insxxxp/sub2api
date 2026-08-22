@@ -47,6 +47,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/redeemcode"
 	"github.com/Wei-Shaw/sub2api/ent/securitysecret"
 	"github.com/Wei-Shaw/sub2api/ent/setting"
+	"github.com/Wei-Shaw/sub2api/ent/subadmincommissiongrant"
 	"github.com/Wei-Shaw/sub2api/ent/subscriptionplan"
 	"github.com/Wei-Shaw/sub2api/ent/systemcustomgroupmodel"
 	"github.com/Wei-Shaw/sub2api/ent/tlsfingerprintprofile"
@@ -138,6 +139,8 @@ type Client struct {
 	SecuritySecret *SecuritySecretClient
 	// Setting is the client for interacting with the Setting builders.
 	Setting *SettingClient
+	// SubAdminCommissionGrant is the client for interacting with the SubAdminCommissionGrant builders.
+	SubAdminCommissionGrant *SubAdminCommissionGrantClient
 	// SubscriptionPlan is the client for interacting with the SubscriptionPlan builders.
 	SubscriptionPlan *SubscriptionPlanClient
 	// SystemCustomGroupModel is the client for interacting with the SystemCustomGroupModel builders.
@@ -217,6 +220,7 @@ func (c *Client) init() {
 	c.RedeemCode = NewRedeemCodeClient(c.config)
 	c.SecuritySecret = NewSecuritySecretClient(c.config)
 	c.Setting = NewSettingClient(c.config)
+	c.SubAdminCommissionGrant = NewSubAdminCommissionGrantClient(c.config)
 	c.SubscriptionPlan = NewSubscriptionPlanClient(c.config)
 	c.SystemCustomGroupModel = NewSystemCustomGroupModelClient(c.config)
 	c.TLSFingerprintProfile = NewTLSFingerprintProfileClient(c.config)
@@ -359,6 +363,7 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 		RedeemCode:                    NewRedeemCodeClient(cfg),
 		SecuritySecret:                NewSecuritySecretClient(cfg),
 		Setting:                       NewSettingClient(cfg),
+		SubAdminCommissionGrant:       NewSubAdminCommissionGrantClient(cfg),
 		SubscriptionPlan:              NewSubscriptionPlanClient(cfg),
 		SystemCustomGroupModel:        NewSystemCustomGroupModelClient(cfg),
 		TLSFingerprintProfile:         NewTLSFingerprintProfileClient(cfg),
@@ -428,6 +433,7 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 		RedeemCode:                    NewRedeemCodeClient(cfg),
 		SecuritySecret:                NewSecuritySecretClient(cfg),
 		Setting:                       NewSettingClient(cfg),
+		SubAdminCommissionGrant:       NewSubAdminCommissionGrantClient(cfg),
 		SubscriptionPlan:              NewSubscriptionPlanClient(cfg),
 		SystemCustomGroupModel:        NewSystemCustomGroupModelClient(cfg),
 		TLSFingerprintProfile:         NewTLSFingerprintProfileClient(cfg),
@@ -484,10 +490,10 @@ func (c *Client) Use(hooks ...Hook) {
 		c.IdentityAdoptionDecision, c.PaymentAuditLog, c.PaymentOrder,
 		c.PaymentProviderInstance, c.PendingAuthSession, c.PromoCode, c.PromoCodeUsage,
 		c.Proxy, c.RedeemBatchClaim, c.RedeemCode, c.SecuritySecret, c.Setting,
-		c.SubscriptionPlan, c.SystemCustomGroupModel, c.TLSFingerprintProfile,
-		c.UsageCleanupTask, c.UsageLog, c.UsageResponseOutcome, c.User,
-		c.UserAllowedGroup, c.UserAttributeDefinition, c.UserAttributeValue,
-		c.UserCheckin, c.UserCheckinBlacklist, c.UserCustomGroup,
+		c.SubAdminCommissionGrant, c.SubscriptionPlan, c.SystemCustomGroupModel,
+		c.TLSFingerprintProfile, c.UsageCleanupTask, c.UsageLog,
+		c.UsageResponseOutcome, c.User, c.UserAllowedGroup, c.UserAttributeDefinition,
+		c.UserAttributeValue, c.UserCheckin, c.UserCheckinBlacklist, c.UserCustomGroup,
 		c.UserCustomGroupModel, c.UserImage, c.UserImageTask, c.UserPlatformQuota,
 		c.UserSubscription,
 	} {
@@ -508,10 +514,10 @@ func (c *Client) Intercept(interceptors ...Interceptor) {
 		c.IdentityAdoptionDecision, c.PaymentAuditLog, c.PaymentOrder,
 		c.PaymentProviderInstance, c.PendingAuthSession, c.PromoCode, c.PromoCodeUsage,
 		c.Proxy, c.RedeemBatchClaim, c.RedeemCode, c.SecuritySecret, c.Setting,
-		c.SubscriptionPlan, c.SystemCustomGroupModel, c.TLSFingerprintProfile,
-		c.UsageCleanupTask, c.UsageLog, c.UsageResponseOutcome, c.User,
-		c.UserAllowedGroup, c.UserAttributeDefinition, c.UserAttributeValue,
-		c.UserCheckin, c.UserCheckinBlacklist, c.UserCustomGroup,
+		c.SubAdminCommissionGrant, c.SubscriptionPlan, c.SystemCustomGroupModel,
+		c.TLSFingerprintProfile, c.UsageCleanupTask, c.UsageLog,
+		c.UsageResponseOutcome, c.User, c.UserAllowedGroup, c.UserAttributeDefinition,
+		c.UserAttributeValue, c.UserCheckin, c.UserCheckinBlacklist, c.UserCustomGroup,
 		c.UserCustomGroupModel, c.UserImage, c.UserImageTask, c.UserPlatformQuota,
 		c.UserSubscription,
 	} {
@@ -586,6 +592,8 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.SecuritySecret.mutate(ctx, m)
 	case *SettingMutation:
 		return c.Setting.mutate(ctx, m)
+	case *SubAdminCommissionGrantMutation:
+		return c.SubAdminCommissionGrant.mutate(ctx, m)
 	case *SubscriptionPlanMutation:
 		return c.SubscriptionPlan.mutate(ctx, m)
 	case *SystemCustomGroupModelMutation:
@@ -5660,6 +5668,187 @@ func (c *SettingClient) mutate(ctx context.Context, m *SettingMutation) (Value, 
 	}
 }
 
+// SubAdminCommissionGrantClient is a client for the SubAdminCommissionGrant schema.
+type SubAdminCommissionGrantClient struct {
+	config
+}
+
+// NewSubAdminCommissionGrantClient returns a client for the SubAdminCommissionGrant from the given config.
+func NewSubAdminCommissionGrantClient(c config) *SubAdminCommissionGrantClient {
+	return &SubAdminCommissionGrantClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `subadmincommissiongrant.Hooks(f(g(h())))`.
+func (c *SubAdminCommissionGrantClient) Use(hooks ...Hook) {
+	c.hooks.SubAdminCommissionGrant = append(c.hooks.SubAdminCommissionGrant, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `subadmincommissiongrant.Intercept(f(g(h())))`.
+func (c *SubAdminCommissionGrantClient) Intercept(interceptors ...Interceptor) {
+	c.inters.SubAdminCommissionGrant = append(c.inters.SubAdminCommissionGrant, interceptors...)
+}
+
+// Create returns a builder for creating a SubAdminCommissionGrant entity.
+func (c *SubAdminCommissionGrantClient) Create() *SubAdminCommissionGrantCreate {
+	mutation := newSubAdminCommissionGrantMutation(c.config, OpCreate)
+	return &SubAdminCommissionGrantCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of SubAdminCommissionGrant entities.
+func (c *SubAdminCommissionGrantClient) CreateBulk(builders ...*SubAdminCommissionGrantCreate) *SubAdminCommissionGrantCreateBulk {
+	return &SubAdminCommissionGrantCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *SubAdminCommissionGrantClient) MapCreateBulk(slice any, setFunc func(*SubAdminCommissionGrantCreate, int)) *SubAdminCommissionGrantCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &SubAdminCommissionGrantCreateBulk{err: fmt.Errorf("calling to SubAdminCommissionGrantClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*SubAdminCommissionGrantCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &SubAdminCommissionGrantCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for SubAdminCommissionGrant.
+func (c *SubAdminCommissionGrantClient) Update() *SubAdminCommissionGrantUpdate {
+	mutation := newSubAdminCommissionGrantMutation(c.config, OpUpdate)
+	return &SubAdminCommissionGrantUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *SubAdminCommissionGrantClient) UpdateOne(_m *SubAdminCommissionGrant) *SubAdminCommissionGrantUpdateOne {
+	mutation := newSubAdminCommissionGrantMutation(c.config, OpUpdateOne, withSubAdminCommissionGrant(_m))
+	return &SubAdminCommissionGrantUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *SubAdminCommissionGrantClient) UpdateOneID(id int64) *SubAdminCommissionGrantUpdateOne {
+	mutation := newSubAdminCommissionGrantMutation(c.config, OpUpdateOne, withSubAdminCommissionGrantID(id))
+	return &SubAdminCommissionGrantUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for SubAdminCommissionGrant.
+func (c *SubAdminCommissionGrantClient) Delete() *SubAdminCommissionGrantDelete {
+	mutation := newSubAdminCommissionGrantMutation(c.config, OpDelete)
+	return &SubAdminCommissionGrantDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *SubAdminCommissionGrantClient) DeleteOne(_m *SubAdminCommissionGrant) *SubAdminCommissionGrantDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *SubAdminCommissionGrantClient) DeleteOneID(id int64) *SubAdminCommissionGrantDeleteOne {
+	builder := c.Delete().Where(subadmincommissiongrant.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &SubAdminCommissionGrantDeleteOne{builder}
+}
+
+// Query returns a query builder for SubAdminCommissionGrant.
+func (c *SubAdminCommissionGrantClient) Query() *SubAdminCommissionGrantQuery {
+	return &SubAdminCommissionGrantQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeSubAdminCommissionGrant},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a SubAdminCommissionGrant entity by its id.
+func (c *SubAdminCommissionGrantClient) Get(ctx context.Context, id int64) (*SubAdminCommissionGrant, error) {
+	return c.Query().Where(subadmincommissiongrant.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *SubAdminCommissionGrantClient) GetX(ctx context.Context, id int64) *SubAdminCommissionGrant {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// QuerySubAdmin queries the sub_admin edge of a SubAdminCommissionGrant.
+func (c *SubAdminCommissionGrantClient) QuerySubAdmin(_m *SubAdminCommissionGrant) *UserQuery {
+	query := (&UserClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(subadmincommissiongrant.Table, subadmincommissiongrant.FieldID, id),
+			sqlgraph.To(user.Table, user.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, false, subadmincommissiongrant.SubAdminTable, subadmincommissiongrant.SubAdminColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryGroup queries the group edge of a SubAdminCommissionGrant.
+func (c *SubAdminCommissionGrantClient) QueryGroup(_m *SubAdminCommissionGrant) *GroupQuery {
+	query := (&GroupClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(subadmincommissiongrant.Table, subadmincommissiongrant.FieldID, id),
+			sqlgraph.To(group.Table, group.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, false, subadmincommissiongrant.GroupTable, subadmincommissiongrant.GroupColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryCreator queries the creator edge of a SubAdminCommissionGrant.
+func (c *SubAdminCommissionGrantClient) QueryCreator(_m *SubAdminCommissionGrant) *UserQuery {
+	query := (&UserClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(subadmincommissiongrant.Table, subadmincommissiongrant.FieldID, id),
+			sqlgraph.To(user.Table, user.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, false, subadmincommissiongrant.CreatorTable, subadmincommissiongrant.CreatorColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// Hooks returns the client hooks.
+func (c *SubAdminCommissionGrantClient) Hooks() []Hook {
+	return c.hooks.SubAdminCommissionGrant
+}
+
+// Interceptors returns the client interceptors.
+func (c *SubAdminCommissionGrantClient) Interceptors() []Interceptor {
+	return c.inters.SubAdminCommissionGrant
+}
+
+func (c *SubAdminCommissionGrantClient) mutate(ctx context.Context, m *SubAdminCommissionGrantMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&SubAdminCommissionGrantCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&SubAdminCommissionGrantUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&SubAdminCommissionGrantUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&SubAdminCommissionGrantDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown SubAdminCommissionGrant mutation op: %q", m.Op())
+	}
+}
+
 // SubscriptionPlanClient is a client for the SubscriptionPlan schema.
 type SubscriptionPlanClient struct {
 	config
@@ -8857,12 +9046,12 @@ type (
 		EmptyResponseClaim, ErrorPassthroughRule, Group, IdempotencyRecord,
 		IdentityAdoptionDecision, PaymentAuditLog, PaymentOrder,
 		PaymentProviderInstance, PendingAuthSession, PromoCode, PromoCodeUsage, Proxy,
-		RedeemBatchClaim, RedeemCode, SecuritySecret, Setting, SubscriptionPlan,
-		SystemCustomGroupModel, TLSFingerprintProfile, UsageCleanupTask, UsageLog,
-		UsageResponseOutcome, User, UserAllowedGroup, UserAttributeDefinition,
-		UserAttributeValue, UserCheckin, UserCheckinBlacklist, UserCustomGroup,
-		UserCustomGroupModel, UserImage, UserImageTask, UserPlatformQuota,
-		UserSubscription []ent.Hook
+		RedeemBatchClaim, RedeemCode, SecuritySecret, Setting, SubAdminCommissionGrant,
+		SubscriptionPlan, SystemCustomGroupModel, TLSFingerprintProfile,
+		UsageCleanupTask, UsageLog, UsageResponseOutcome, User, UserAllowedGroup,
+		UserAttributeDefinition, UserAttributeValue, UserCheckin, UserCheckinBlacklist,
+		UserCustomGroup, UserCustomGroupModel, UserImage, UserImageTask,
+		UserPlatformQuota, UserSubscription []ent.Hook
 	}
 	inters struct {
 		APIKey, Account, AccountGroup, Announcement, AnnouncementRead, AuthIdentity,
@@ -8872,12 +9061,12 @@ type (
 		EmptyResponseClaim, ErrorPassthroughRule, Group, IdempotencyRecord,
 		IdentityAdoptionDecision, PaymentAuditLog, PaymentOrder,
 		PaymentProviderInstance, PendingAuthSession, PromoCode, PromoCodeUsage, Proxy,
-		RedeemBatchClaim, RedeemCode, SecuritySecret, Setting, SubscriptionPlan,
-		SystemCustomGroupModel, TLSFingerprintProfile, UsageCleanupTask, UsageLog,
-		UsageResponseOutcome, User, UserAllowedGroup, UserAttributeDefinition,
-		UserAttributeValue, UserCheckin, UserCheckinBlacklist, UserCustomGroup,
-		UserCustomGroupModel, UserImage, UserImageTask, UserPlatformQuota,
-		UserSubscription []ent.Interceptor
+		RedeemBatchClaim, RedeemCode, SecuritySecret, Setting, SubAdminCommissionGrant,
+		SubscriptionPlan, SystemCustomGroupModel, TLSFingerprintProfile,
+		UsageCleanupTask, UsageLog, UsageResponseOutcome, User, UserAllowedGroup,
+		UserAttributeDefinition, UserAttributeValue, UserCheckin, UserCheckinBlacklist,
+		UserCustomGroup, UserCustomGroupModel, UserImage, UserImageTask,
+		UserPlatformQuota, UserSubscription []ent.Interceptor
 	}
 )
 

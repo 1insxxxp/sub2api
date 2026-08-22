@@ -1688,6 +1688,63 @@ var (
 		Columns:    SettingsColumns,
 		PrimaryKey: []*schema.Column{SettingsColumns[0]},
 	}
+	// SubAdminCommissionGrantsColumns holds the columns for the "sub_admin_commission_grants" table.
+	SubAdminCommissionGrantsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt64, Increment: true},
+		{Name: "granted_date", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "date"}},
+		{Name: "enabled", Type: field.TypeBool, Default: true},
+		{Name: "created_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
+		{Name: "updated_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
+		{Name: "sub_admin_user_id", Type: field.TypeInt64},
+		{Name: "group_id", Type: field.TypeInt64},
+		{Name: "created_by", Type: field.TypeInt64, Nullable: true},
+	}
+	// SubAdminCommissionGrantsTable holds the schema information for the "sub_admin_commission_grants" table.
+	SubAdminCommissionGrantsTable = &schema.Table{
+		Name:       "sub_admin_commission_grants",
+		Columns:    SubAdminCommissionGrantsColumns,
+		PrimaryKey: []*schema.Column{SubAdminCommissionGrantsColumns[0]},
+		ForeignKeys: []*schema.ForeignKey{
+			{
+				Symbol:     "sub_admin_commission_grants_users_sub_admin",
+				Columns:    []*schema.Column{SubAdminCommissionGrantsColumns[5]},
+				RefColumns: []*schema.Column{UsersColumns[0]},
+				OnDelete:   schema.Cascade,
+			},
+			{
+				Symbol:     "sub_admin_commission_grants_groups_group",
+				Columns:    []*schema.Column{SubAdminCommissionGrantsColumns[6]},
+				RefColumns: []*schema.Column{GroupsColumns[0]},
+				OnDelete:   schema.Cascade,
+			},
+			{
+				Symbol:     "sub_admin_commission_grants_users_creator",
+				Columns:    []*schema.Column{SubAdminCommissionGrantsColumns[7]},
+				RefColumns: []*schema.Column{UsersColumns[0]},
+				OnDelete:   schema.SetNull,
+			},
+		},
+		Indexes: []*schema.Index{
+			{
+				Name:    "idx_sub_admin_commission_grants_active_unique",
+				Unique:  true,
+				Columns: []*schema.Column{SubAdminCommissionGrantsColumns[5], SubAdminCommissionGrantsColumns[6]},
+				Annotation: &entsql.IndexAnnotation{
+					Where: "enabled = TRUE",
+				},
+			},
+			{
+				Name:    "subadmincommissiongrant_sub_admin_user_id_enabled_granted_date",
+				Unique:  false,
+				Columns: []*schema.Column{SubAdminCommissionGrantsColumns[5], SubAdminCommissionGrantsColumns[2], SubAdminCommissionGrantsColumns[1]},
+			},
+			{
+				Name:    "subadmincommissiongrant_group_id_enabled",
+				Unique:  false,
+				Columns: []*schema.Column{SubAdminCommissionGrantsColumns[6], SubAdminCommissionGrantsColumns[2]},
+			},
+		},
+	}
 	// SubscriptionPlansColumns holds the columns for the "subscription_plans" table.
 	SubscriptionPlansColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeInt64, Increment: true},
@@ -2728,6 +2785,7 @@ var (
 		RedeemCodesTable,
 		SecuritySecretsTable,
 		SettingsTable,
+		SubAdminCommissionGrantsTable,
 		SubscriptionPlansTable,
 		SystemCustomGroupModelsTable,
 		TLSFingerprintProfilesTable,
@@ -2874,6 +2932,12 @@ func init() {
 	}
 	SettingsTable.Annotation = &entsql.Annotation{
 		Table: "settings",
+	}
+	SubAdminCommissionGrantsTable.ForeignKeys[0].RefTable = UsersTable
+	SubAdminCommissionGrantsTable.ForeignKeys[1].RefTable = GroupsTable
+	SubAdminCommissionGrantsTable.ForeignKeys[2].RefTable = UsersTable
+	SubAdminCommissionGrantsTable.Annotation = &entsql.Annotation{
+		Table: "sub_admin_commission_grants",
 	}
 	SubscriptionPlansTable.Annotation = &entsql.Annotation{
 		Table: "subscription_plans",

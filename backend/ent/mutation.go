@@ -45,6 +45,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/redeemcode"
 	"github.com/Wei-Shaw/sub2api/ent/securitysecret"
 	"github.com/Wei-Shaw/sub2api/ent/setting"
+	"github.com/Wei-Shaw/sub2api/ent/subadmincommissiongrant"
 	"github.com/Wei-Shaw/sub2api/ent/subscriptionplan"
 	"github.com/Wei-Shaw/sub2api/ent/systemcustomgroupmodel"
 	"github.com/Wei-Shaw/sub2api/ent/tlsfingerprintprofile"
@@ -107,6 +108,7 @@ const (
 	TypeRedeemCode                    = "RedeemCode"
 	TypeSecuritySecret                = "SecuritySecret"
 	TypeSetting                       = "Setting"
+	TypeSubAdminCommissionGrant       = "SubAdminCommissionGrant"
 	TypeSubscriptionPlan              = "SubscriptionPlan"
 	TypeSystemCustomGroupModel        = "SystemCustomGroupModel"
 	TypeTLSFingerprintProfile         = "TLSFingerprintProfile"
@@ -45034,6 +45036,853 @@ func (m *SettingMutation) ClearEdge(name string) error {
 // It returns an error if the edge is not defined in the schema.
 func (m *SettingMutation) ResetEdge(name string) error {
 	return fmt.Errorf("unknown Setting edge %s", name)
+}
+
+// SubAdminCommissionGrantMutation represents an operation that mutates the SubAdminCommissionGrant nodes in the graph.
+type SubAdminCommissionGrantMutation struct {
+	config
+	op               Op
+	typ              string
+	id               *int64
+	granted_date     *time.Time
+	enabled          *bool
+	created_at       *time.Time
+	updated_at       *time.Time
+	clearedFields    map[string]struct{}
+	sub_admin        *int64
+	clearedsub_admin bool
+	group            *int64
+	clearedgroup     bool
+	creator          *int64
+	clearedcreator   bool
+	done             bool
+	oldValue         func(context.Context) (*SubAdminCommissionGrant, error)
+	predicates       []predicate.SubAdminCommissionGrant
+}
+
+var _ ent.Mutation = (*SubAdminCommissionGrantMutation)(nil)
+
+// subadmincommissiongrantOption allows management of the mutation configuration using functional options.
+type subadmincommissiongrantOption func(*SubAdminCommissionGrantMutation)
+
+// newSubAdminCommissionGrantMutation creates new mutation for the SubAdminCommissionGrant entity.
+func newSubAdminCommissionGrantMutation(c config, op Op, opts ...subadmincommissiongrantOption) *SubAdminCommissionGrantMutation {
+	m := &SubAdminCommissionGrantMutation{
+		config:        c,
+		op:            op,
+		typ:           TypeSubAdminCommissionGrant,
+		clearedFields: make(map[string]struct{}),
+	}
+	for _, opt := range opts {
+		opt(m)
+	}
+	return m
+}
+
+// withSubAdminCommissionGrantID sets the ID field of the mutation.
+func withSubAdminCommissionGrantID(id int64) subadmincommissiongrantOption {
+	return func(m *SubAdminCommissionGrantMutation) {
+		var (
+			err   error
+			once  sync.Once
+			value *SubAdminCommissionGrant
+		)
+		m.oldValue = func(ctx context.Context) (*SubAdminCommissionGrant, error) {
+			once.Do(func() {
+				if m.done {
+					err = errors.New("querying old values post mutation is not allowed")
+				} else {
+					value, err = m.Client().SubAdminCommissionGrant.Get(ctx, id)
+				}
+			})
+			return value, err
+		}
+		m.id = &id
+	}
+}
+
+// withSubAdminCommissionGrant sets the old SubAdminCommissionGrant of the mutation.
+func withSubAdminCommissionGrant(node *SubAdminCommissionGrant) subadmincommissiongrantOption {
+	return func(m *SubAdminCommissionGrantMutation) {
+		m.oldValue = func(context.Context) (*SubAdminCommissionGrant, error) {
+			return node, nil
+		}
+		m.id = &node.ID
+	}
+}
+
+// Client returns a new `ent.Client` from the mutation. If the mutation was
+// executed in a transaction (ent.Tx), a transactional client is returned.
+func (m SubAdminCommissionGrantMutation) Client() *Client {
+	client := &Client{config: m.config}
+	client.init()
+	return client
+}
+
+// Tx returns an `ent.Tx` for mutations that were executed in transactions;
+// it returns an error otherwise.
+func (m SubAdminCommissionGrantMutation) Tx() (*Tx, error) {
+	if _, ok := m.driver.(*txDriver); !ok {
+		return nil, errors.New("ent: mutation is not running in a transaction")
+	}
+	tx := &Tx{config: m.config}
+	tx.init()
+	return tx, nil
+}
+
+// ID returns the ID value in the mutation. Note that the ID is only available
+// if it was provided to the builder or after it was returned from the database.
+func (m *SubAdminCommissionGrantMutation) ID() (id int64, exists bool) {
+	if m.id == nil {
+		return
+	}
+	return *m.id, true
+}
+
+// IDs queries the database and returns the entity ids that match the mutation's predicate.
+// That means, if the mutation is applied within a transaction with an isolation level such
+// as sql.LevelSerializable, the returned ids match the ids of the rows that will be updated
+// or updated by the mutation.
+func (m *SubAdminCommissionGrantMutation) IDs(ctx context.Context) ([]int64, error) {
+	switch {
+	case m.op.Is(OpUpdateOne | OpDeleteOne):
+		id, exists := m.ID()
+		if exists {
+			return []int64{id}, nil
+		}
+		fallthrough
+	case m.op.Is(OpUpdate | OpDelete):
+		return m.Client().SubAdminCommissionGrant.Query().Where(m.predicates...).IDs(ctx)
+	default:
+		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
+	}
+}
+
+// SetSubAdminUserID sets the "sub_admin_user_id" field.
+func (m *SubAdminCommissionGrantMutation) SetSubAdminUserID(i int64) {
+	m.sub_admin = &i
+}
+
+// SubAdminUserID returns the value of the "sub_admin_user_id" field in the mutation.
+func (m *SubAdminCommissionGrantMutation) SubAdminUserID() (r int64, exists bool) {
+	v := m.sub_admin
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldSubAdminUserID returns the old "sub_admin_user_id" field's value of the SubAdminCommissionGrant entity.
+// If the SubAdminCommissionGrant object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SubAdminCommissionGrantMutation) OldSubAdminUserID(ctx context.Context) (v int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldSubAdminUserID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldSubAdminUserID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldSubAdminUserID: %w", err)
+	}
+	return oldValue.SubAdminUserID, nil
+}
+
+// ResetSubAdminUserID resets all changes to the "sub_admin_user_id" field.
+func (m *SubAdminCommissionGrantMutation) ResetSubAdminUserID() {
+	m.sub_admin = nil
+}
+
+// SetGroupID sets the "group_id" field.
+func (m *SubAdminCommissionGrantMutation) SetGroupID(i int64) {
+	m.group = &i
+}
+
+// GroupID returns the value of the "group_id" field in the mutation.
+func (m *SubAdminCommissionGrantMutation) GroupID() (r int64, exists bool) {
+	v := m.group
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldGroupID returns the old "group_id" field's value of the SubAdminCommissionGrant entity.
+// If the SubAdminCommissionGrant object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SubAdminCommissionGrantMutation) OldGroupID(ctx context.Context) (v int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldGroupID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldGroupID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldGroupID: %w", err)
+	}
+	return oldValue.GroupID, nil
+}
+
+// ResetGroupID resets all changes to the "group_id" field.
+func (m *SubAdminCommissionGrantMutation) ResetGroupID() {
+	m.group = nil
+}
+
+// SetGrantedDate sets the "granted_date" field.
+func (m *SubAdminCommissionGrantMutation) SetGrantedDate(t time.Time) {
+	m.granted_date = &t
+}
+
+// GrantedDate returns the value of the "granted_date" field in the mutation.
+func (m *SubAdminCommissionGrantMutation) GrantedDate() (r time.Time, exists bool) {
+	v := m.granted_date
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldGrantedDate returns the old "granted_date" field's value of the SubAdminCommissionGrant entity.
+// If the SubAdminCommissionGrant object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SubAdminCommissionGrantMutation) OldGrantedDate(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldGrantedDate is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldGrantedDate requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldGrantedDate: %w", err)
+	}
+	return oldValue.GrantedDate, nil
+}
+
+// ResetGrantedDate resets all changes to the "granted_date" field.
+func (m *SubAdminCommissionGrantMutation) ResetGrantedDate() {
+	m.granted_date = nil
+}
+
+// SetEnabled sets the "enabled" field.
+func (m *SubAdminCommissionGrantMutation) SetEnabled(b bool) {
+	m.enabled = &b
+}
+
+// Enabled returns the value of the "enabled" field in the mutation.
+func (m *SubAdminCommissionGrantMutation) Enabled() (r bool, exists bool) {
+	v := m.enabled
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldEnabled returns the old "enabled" field's value of the SubAdminCommissionGrant entity.
+// If the SubAdminCommissionGrant object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SubAdminCommissionGrantMutation) OldEnabled(ctx context.Context) (v bool, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldEnabled is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldEnabled requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldEnabled: %w", err)
+	}
+	return oldValue.Enabled, nil
+}
+
+// ResetEnabled resets all changes to the "enabled" field.
+func (m *SubAdminCommissionGrantMutation) ResetEnabled() {
+	m.enabled = nil
+}
+
+// SetCreatedBy sets the "created_by" field.
+func (m *SubAdminCommissionGrantMutation) SetCreatedBy(i int64) {
+	m.creator = &i
+}
+
+// CreatedBy returns the value of the "created_by" field in the mutation.
+func (m *SubAdminCommissionGrantMutation) CreatedBy() (r int64, exists bool) {
+	v := m.creator
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCreatedBy returns the old "created_by" field's value of the SubAdminCommissionGrant entity.
+// If the SubAdminCommissionGrant object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SubAdminCommissionGrantMutation) OldCreatedBy(ctx context.Context) (v *int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCreatedBy is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCreatedBy requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCreatedBy: %w", err)
+	}
+	return oldValue.CreatedBy, nil
+}
+
+// ClearCreatedBy clears the value of the "created_by" field.
+func (m *SubAdminCommissionGrantMutation) ClearCreatedBy() {
+	m.creator = nil
+	m.clearedFields[subadmincommissiongrant.FieldCreatedBy] = struct{}{}
+}
+
+// CreatedByCleared returns if the "created_by" field was cleared in this mutation.
+func (m *SubAdminCommissionGrantMutation) CreatedByCleared() bool {
+	_, ok := m.clearedFields[subadmincommissiongrant.FieldCreatedBy]
+	return ok
+}
+
+// ResetCreatedBy resets all changes to the "created_by" field.
+func (m *SubAdminCommissionGrantMutation) ResetCreatedBy() {
+	m.creator = nil
+	delete(m.clearedFields, subadmincommissiongrant.FieldCreatedBy)
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (m *SubAdminCommissionGrantMutation) SetCreatedAt(t time.Time) {
+	m.created_at = &t
+}
+
+// CreatedAt returns the value of the "created_at" field in the mutation.
+func (m *SubAdminCommissionGrantMutation) CreatedAt() (r time.Time, exists bool) {
+	v := m.created_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCreatedAt returns the old "created_at" field's value of the SubAdminCommissionGrant entity.
+// If the SubAdminCommissionGrant object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SubAdminCommissionGrantMutation) OldCreatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCreatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCreatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCreatedAt: %w", err)
+	}
+	return oldValue.CreatedAt, nil
+}
+
+// ResetCreatedAt resets all changes to the "created_at" field.
+func (m *SubAdminCommissionGrantMutation) ResetCreatedAt() {
+	m.created_at = nil
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (m *SubAdminCommissionGrantMutation) SetUpdatedAt(t time.Time) {
+	m.updated_at = &t
+}
+
+// UpdatedAt returns the value of the "updated_at" field in the mutation.
+func (m *SubAdminCommissionGrantMutation) UpdatedAt() (r time.Time, exists bool) {
+	v := m.updated_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUpdatedAt returns the old "updated_at" field's value of the SubAdminCommissionGrant entity.
+// If the SubAdminCommissionGrant object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SubAdminCommissionGrantMutation) OldUpdatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUpdatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUpdatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUpdatedAt: %w", err)
+	}
+	return oldValue.UpdatedAt, nil
+}
+
+// ResetUpdatedAt resets all changes to the "updated_at" field.
+func (m *SubAdminCommissionGrantMutation) ResetUpdatedAt() {
+	m.updated_at = nil
+}
+
+// SetSubAdminID sets the "sub_admin" edge to the User entity by id.
+func (m *SubAdminCommissionGrantMutation) SetSubAdminID(id int64) {
+	m.sub_admin = &id
+}
+
+// ClearSubAdmin clears the "sub_admin" edge to the User entity.
+func (m *SubAdminCommissionGrantMutation) ClearSubAdmin() {
+	m.clearedsub_admin = true
+	m.clearedFields[subadmincommissiongrant.FieldSubAdminUserID] = struct{}{}
+}
+
+// SubAdminCleared reports if the "sub_admin" edge to the User entity was cleared.
+func (m *SubAdminCommissionGrantMutation) SubAdminCleared() bool {
+	return m.clearedsub_admin
+}
+
+// SubAdminID returns the "sub_admin" edge ID in the mutation.
+func (m *SubAdminCommissionGrantMutation) SubAdminID() (id int64, exists bool) {
+	if m.sub_admin != nil {
+		return *m.sub_admin, true
+	}
+	return
+}
+
+// SubAdminIDs returns the "sub_admin" edge IDs in the mutation.
+// Note that IDs always returns len(IDs) <= 1 for unique edges, and you should use
+// SubAdminID instead. It exists only for internal usage by the builders.
+func (m *SubAdminCommissionGrantMutation) SubAdminIDs() (ids []int64) {
+	if id := m.sub_admin; id != nil {
+		ids = append(ids, *id)
+	}
+	return
+}
+
+// ResetSubAdmin resets all changes to the "sub_admin" edge.
+func (m *SubAdminCommissionGrantMutation) ResetSubAdmin() {
+	m.sub_admin = nil
+	m.clearedsub_admin = false
+}
+
+// ClearGroup clears the "group" edge to the Group entity.
+func (m *SubAdminCommissionGrantMutation) ClearGroup() {
+	m.clearedgroup = true
+	m.clearedFields[subadmincommissiongrant.FieldGroupID] = struct{}{}
+}
+
+// GroupCleared reports if the "group" edge to the Group entity was cleared.
+func (m *SubAdminCommissionGrantMutation) GroupCleared() bool {
+	return m.clearedgroup
+}
+
+// GroupIDs returns the "group" edge IDs in the mutation.
+// Note that IDs always returns len(IDs) <= 1 for unique edges, and you should use
+// GroupID instead. It exists only for internal usage by the builders.
+func (m *SubAdminCommissionGrantMutation) GroupIDs() (ids []int64) {
+	if id := m.group; id != nil {
+		ids = append(ids, *id)
+	}
+	return
+}
+
+// ResetGroup resets all changes to the "group" edge.
+func (m *SubAdminCommissionGrantMutation) ResetGroup() {
+	m.group = nil
+	m.clearedgroup = false
+}
+
+// SetCreatorID sets the "creator" edge to the User entity by id.
+func (m *SubAdminCommissionGrantMutation) SetCreatorID(id int64) {
+	m.creator = &id
+}
+
+// ClearCreator clears the "creator" edge to the User entity.
+func (m *SubAdminCommissionGrantMutation) ClearCreator() {
+	m.clearedcreator = true
+	m.clearedFields[subadmincommissiongrant.FieldCreatedBy] = struct{}{}
+}
+
+// CreatorCleared reports if the "creator" edge to the User entity was cleared.
+func (m *SubAdminCommissionGrantMutation) CreatorCleared() bool {
+	return m.CreatedByCleared() || m.clearedcreator
+}
+
+// CreatorID returns the "creator" edge ID in the mutation.
+func (m *SubAdminCommissionGrantMutation) CreatorID() (id int64, exists bool) {
+	if m.creator != nil {
+		return *m.creator, true
+	}
+	return
+}
+
+// CreatorIDs returns the "creator" edge IDs in the mutation.
+// Note that IDs always returns len(IDs) <= 1 for unique edges, and you should use
+// CreatorID instead. It exists only for internal usage by the builders.
+func (m *SubAdminCommissionGrantMutation) CreatorIDs() (ids []int64) {
+	if id := m.creator; id != nil {
+		ids = append(ids, *id)
+	}
+	return
+}
+
+// ResetCreator resets all changes to the "creator" edge.
+func (m *SubAdminCommissionGrantMutation) ResetCreator() {
+	m.creator = nil
+	m.clearedcreator = false
+}
+
+// Where appends a list predicates to the SubAdminCommissionGrantMutation builder.
+func (m *SubAdminCommissionGrantMutation) Where(ps ...predicate.SubAdminCommissionGrant) {
+	m.predicates = append(m.predicates, ps...)
+}
+
+// WhereP appends storage-level predicates to the SubAdminCommissionGrantMutation builder. Using this method,
+// users can use type-assertion to append predicates that do not depend on any generated package.
+func (m *SubAdminCommissionGrantMutation) WhereP(ps ...func(*sql.Selector)) {
+	p := make([]predicate.SubAdminCommissionGrant, len(ps))
+	for i := range ps {
+		p[i] = ps[i]
+	}
+	m.Where(p...)
+}
+
+// Op returns the operation name.
+func (m *SubAdminCommissionGrantMutation) Op() Op {
+	return m.op
+}
+
+// SetOp allows setting the mutation operation.
+func (m *SubAdminCommissionGrantMutation) SetOp(op Op) {
+	m.op = op
+}
+
+// Type returns the node type of this mutation (SubAdminCommissionGrant).
+func (m *SubAdminCommissionGrantMutation) Type() string {
+	return m.typ
+}
+
+// Fields returns all fields that were changed during this mutation. Note that in
+// order to get all numeric fields that were incremented/decremented, call
+// AddedFields().
+func (m *SubAdminCommissionGrantMutation) Fields() []string {
+	fields := make([]string, 0, 7)
+	if m.sub_admin != nil {
+		fields = append(fields, subadmincommissiongrant.FieldSubAdminUserID)
+	}
+	if m.group != nil {
+		fields = append(fields, subadmincommissiongrant.FieldGroupID)
+	}
+	if m.granted_date != nil {
+		fields = append(fields, subadmincommissiongrant.FieldGrantedDate)
+	}
+	if m.enabled != nil {
+		fields = append(fields, subadmincommissiongrant.FieldEnabled)
+	}
+	if m.creator != nil {
+		fields = append(fields, subadmincommissiongrant.FieldCreatedBy)
+	}
+	if m.created_at != nil {
+		fields = append(fields, subadmincommissiongrant.FieldCreatedAt)
+	}
+	if m.updated_at != nil {
+		fields = append(fields, subadmincommissiongrant.FieldUpdatedAt)
+	}
+	return fields
+}
+
+// Field returns the value of a field with the given name. The second boolean
+// return value indicates that this field was not set, or was not defined in the
+// schema.
+func (m *SubAdminCommissionGrantMutation) Field(name string) (ent.Value, bool) {
+	switch name {
+	case subadmincommissiongrant.FieldSubAdminUserID:
+		return m.SubAdminUserID()
+	case subadmincommissiongrant.FieldGroupID:
+		return m.GroupID()
+	case subadmincommissiongrant.FieldGrantedDate:
+		return m.GrantedDate()
+	case subadmincommissiongrant.FieldEnabled:
+		return m.Enabled()
+	case subadmincommissiongrant.FieldCreatedBy:
+		return m.CreatedBy()
+	case subadmincommissiongrant.FieldCreatedAt:
+		return m.CreatedAt()
+	case subadmincommissiongrant.FieldUpdatedAt:
+		return m.UpdatedAt()
+	}
+	return nil, false
+}
+
+// OldField returns the old value of the field from the database. An error is
+// returned if the mutation operation is not UpdateOne, or the query to the
+// database failed.
+func (m *SubAdminCommissionGrantMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
+	switch name {
+	case subadmincommissiongrant.FieldSubAdminUserID:
+		return m.OldSubAdminUserID(ctx)
+	case subadmincommissiongrant.FieldGroupID:
+		return m.OldGroupID(ctx)
+	case subadmincommissiongrant.FieldGrantedDate:
+		return m.OldGrantedDate(ctx)
+	case subadmincommissiongrant.FieldEnabled:
+		return m.OldEnabled(ctx)
+	case subadmincommissiongrant.FieldCreatedBy:
+		return m.OldCreatedBy(ctx)
+	case subadmincommissiongrant.FieldCreatedAt:
+		return m.OldCreatedAt(ctx)
+	case subadmincommissiongrant.FieldUpdatedAt:
+		return m.OldUpdatedAt(ctx)
+	}
+	return nil, fmt.Errorf("unknown SubAdminCommissionGrant field %s", name)
+}
+
+// SetField sets the value of a field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *SubAdminCommissionGrantMutation) SetField(name string, value ent.Value) error {
+	switch name {
+	case subadmincommissiongrant.FieldSubAdminUserID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetSubAdminUserID(v)
+		return nil
+	case subadmincommissiongrant.FieldGroupID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetGroupID(v)
+		return nil
+	case subadmincommissiongrant.FieldGrantedDate:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetGrantedDate(v)
+		return nil
+	case subadmincommissiongrant.FieldEnabled:
+		v, ok := value.(bool)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetEnabled(v)
+		return nil
+	case subadmincommissiongrant.FieldCreatedBy:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCreatedBy(v)
+		return nil
+	case subadmincommissiongrant.FieldCreatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCreatedAt(v)
+		return nil
+	case subadmincommissiongrant.FieldUpdatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUpdatedAt(v)
+		return nil
+	}
+	return fmt.Errorf("unknown SubAdminCommissionGrant field %s", name)
+}
+
+// AddedFields returns all numeric fields that were incremented/decremented during
+// this mutation.
+func (m *SubAdminCommissionGrantMutation) AddedFields() []string {
+	var fields []string
+	return fields
+}
+
+// AddedField returns the numeric value that was incremented/decremented on a field
+// with the given name. The second boolean return value indicates that this field
+// was not set, or was not defined in the schema.
+func (m *SubAdminCommissionGrantMutation) AddedField(name string) (ent.Value, bool) {
+	switch name {
+	}
+	return nil, false
+}
+
+// AddField adds the value to the field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *SubAdminCommissionGrantMutation) AddField(name string, value ent.Value) error {
+	switch name {
+	}
+	return fmt.Errorf("unknown SubAdminCommissionGrant numeric field %s", name)
+}
+
+// ClearedFields returns all nullable fields that were cleared during this
+// mutation.
+func (m *SubAdminCommissionGrantMutation) ClearedFields() []string {
+	var fields []string
+	if m.FieldCleared(subadmincommissiongrant.FieldCreatedBy) {
+		fields = append(fields, subadmincommissiongrant.FieldCreatedBy)
+	}
+	return fields
+}
+
+// FieldCleared returns a boolean indicating if a field with the given name was
+// cleared in this mutation.
+func (m *SubAdminCommissionGrantMutation) FieldCleared(name string) bool {
+	_, ok := m.clearedFields[name]
+	return ok
+}
+
+// ClearField clears the value of the field with the given name. It returns an
+// error if the field is not defined in the schema.
+func (m *SubAdminCommissionGrantMutation) ClearField(name string) error {
+	switch name {
+	case subadmincommissiongrant.FieldCreatedBy:
+		m.ClearCreatedBy()
+		return nil
+	}
+	return fmt.Errorf("unknown SubAdminCommissionGrant nullable field %s", name)
+}
+
+// ResetField resets all changes in the mutation for the field with the given name.
+// It returns an error if the field is not defined in the schema.
+func (m *SubAdminCommissionGrantMutation) ResetField(name string) error {
+	switch name {
+	case subadmincommissiongrant.FieldSubAdminUserID:
+		m.ResetSubAdminUserID()
+		return nil
+	case subadmincommissiongrant.FieldGroupID:
+		m.ResetGroupID()
+		return nil
+	case subadmincommissiongrant.FieldGrantedDate:
+		m.ResetGrantedDate()
+		return nil
+	case subadmincommissiongrant.FieldEnabled:
+		m.ResetEnabled()
+		return nil
+	case subadmincommissiongrant.FieldCreatedBy:
+		m.ResetCreatedBy()
+		return nil
+	case subadmincommissiongrant.FieldCreatedAt:
+		m.ResetCreatedAt()
+		return nil
+	case subadmincommissiongrant.FieldUpdatedAt:
+		m.ResetUpdatedAt()
+		return nil
+	}
+	return fmt.Errorf("unknown SubAdminCommissionGrant field %s", name)
+}
+
+// AddedEdges returns all edge names that were set/added in this mutation.
+func (m *SubAdminCommissionGrantMutation) AddedEdges() []string {
+	edges := make([]string, 0, 3)
+	if m.sub_admin != nil {
+		edges = append(edges, subadmincommissiongrant.EdgeSubAdmin)
+	}
+	if m.group != nil {
+		edges = append(edges, subadmincommissiongrant.EdgeGroup)
+	}
+	if m.creator != nil {
+		edges = append(edges, subadmincommissiongrant.EdgeCreator)
+	}
+	return edges
+}
+
+// AddedIDs returns all IDs (to other nodes) that were added for the given edge
+// name in this mutation.
+func (m *SubAdminCommissionGrantMutation) AddedIDs(name string) []ent.Value {
+	switch name {
+	case subadmincommissiongrant.EdgeSubAdmin:
+		if id := m.sub_admin; id != nil {
+			return []ent.Value{*id}
+		}
+	case subadmincommissiongrant.EdgeGroup:
+		if id := m.group; id != nil {
+			return []ent.Value{*id}
+		}
+	case subadmincommissiongrant.EdgeCreator:
+		if id := m.creator; id != nil {
+			return []ent.Value{*id}
+		}
+	}
+	return nil
+}
+
+// RemovedEdges returns all edge names that were removed in this mutation.
+func (m *SubAdminCommissionGrantMutation) RemovedEdges() []string {
+	edges := make([]string, 0, 3)
+	return edges
+}
+
+// RemovedIDs returns all IDs (to other nodes) that were removed for the edge with
+// the given name in this mutation.
+func (m *SubAdminCommissionGrantMutation) RemovedIDs(name string) []ent.Value {
+	return nil
+}
+
+// ClearedEdges returns all edge names that were cleared in this mutation.
+func (m *SubAdminCommissionGrantMutation) ClearedEdges() []string {
+	edges := make([]string, 0, 3)
+	if m.clearedsub_admin {
+		edges = append(edges, subadmincommissiongrant.EdgeSubAdmin)
+	}
+	if m.clearedgroup {
+		edges = append(edges, subadmincommissiongrant.EdgeGroup)
+	}
+	if m.clearedcreator {
+		edges = append(edges, subadmincommissiongrant.EdgeCreator)
+	}
+	return edges
+}
+
+// EdgeCleared returns a boolean which indicates if the edge with the given name
+// was cleared in this mutation.
+func (m *SubAdminCommissionGrantMutation) EdgeCleared(name string) bool {
+	switch name {
+	case subadmincommissiongrant.EdgeSubAdmin:
+		return m.clearedsub_admin
+	case subadmincommissiongrant.EdgeGroup:
+		return m.clearedgroup
+	case subadmincommissiongrant.EdgeCreator:
+		return m.clearedcreator
+	}
+	return false
+}
+
+// ClearEdge clears the value of the edge with the given name. It returns an error
+// if that edge is not defined in the schema.
+func (m *SubAdminCommissionGrantMutation) ClearEdge(name string) error {
+	switch name {
+	case subadmincommissiongrant.EdgeSubAdmin:
+		m.ClearSubAdmin()
+		return nil
+	case subadmincommissiongrant.EdgeGroup:
+		m.ClearGroup()
+		return nil
+	case subadmincommissiongrant.EdgeCreator:
+		m.ClearCreator()
+		return nil
+	}
+	return fmt.Errorf("unknown SubAdminCommissionGrant unique edge %s", name)
+}
+
+// ResetEdge resets all changes to the edge with the given name in this mutation.
+// It returns an error if the edge is not defined in the schema.
+func (m *SubAdminCommissionGrantMutation) ResetEdge(name string) error {
+	switch name {
+	case subadmincommissiongrant.EdgeSubAdmin:
+		m.ResetSubAdmin()
+		return nil
+	case subadmincommissiongrant.EdgeGroup:
+		m.ResetGroup()
+		return nil
+	case subadmincommissiongrant.EdgeCreator:
+		m.ResetCreator()
+		return nil
+	}
+	return fmt.Errorf("unknown SubAdminCommissionGrant edge %s", name)
 }
 
 // SubscriptionPlanMutation represents an operation that mutates the SubscriptionPlan nodes in the graph.

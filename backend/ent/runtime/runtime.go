@@ -38,6 +38,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/schema"
 	"github.com/Wei-Shaw/sub2api/ent/securitysecret"
 	"github.com/Wei-Shaw/sub2api/ent/setting"
+	"github.com/Wei-Shaw/sub2api/ent/subadmincommissiongrant"
 	"github.com/Wei-Shaw/sub2api/ent/subscriptionplan"
 	"github.com/Wei-Shaw/sub2api/ent/systemcustomgroupmodel"
 	"github.com/Wei-Shaw/sub2api/ent/tlsfingerprintprofile"
@@ -1981,6 +1982,22 @@ func init() {
 	setting.DefaultUpdatedAt = settingDescUpdatedAt.Default.(func() time.Time)
 	// setting.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
 	setting.UpdateDefaultUpdatedAt = settingDescUpdatedAt.UpdateDefault.(func() time.Time)
+	subadmincommissiongrantFields := schema.SubAdminCommissionGrant{}.Fields()
+	_ = subadmincommissiongrantFields
+	// subadmincommissiongrantDescEnabled is the schema descriptor for enabled field.
+	subadmincommissiongrantDescEnabled := subadmincommissiongrantFields[3].Descriptor()
+	// subadmincommissiongrant.DefaultEnabled holds the default value on creation for the enabled field.
+	subadmincommissiongrant.DefaultEnabled = subadmincommissiongrantDescEnabled.Default.(bool)
+	// subadmincommissiongrantDescCreatedAt is the schema descriptor for created_at field.
+	subadmincommissiongrantDescCreatedAt := subadmincommissiongrantFields[5].Descriptor()
+	// subadmincommissiongrant.DefaultCreatedAt holds the default value on creation for the created_at field.
+	subadmincommissiongrant.DefaultCreatedAt = subadmincommissiongrantDescCreatedAt.Default.(func() time.Time)
+	// subadmincommissiongrantDescUpdatedAt is the schema descriptor for updated_at field.
+	subadmincommissiongrantDescUpdatedAt := subadmincommissiongrantFields[6].Descriptor()
+	// subadmincommissiongrant.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	subadmincommissiongrant.DefaultUpdatedAt = subadmincommissiongrantDescUpdatedAt.Default.(func() time.Time)
+	// subadmincommissiongrant.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
+	subadmincommissiongrant.UpdateDefaultUpdatedAt = subadmincommissiongrantDescUpdatedAt.UpdateDefault.(func() time.Time)
 	subscriptionplanFields := schema.SubscriptionPlan{}.Fields()
 	_ = subscriptionplanFields
 	// subscriptionplanDescName is the schema descriptor for name field.
