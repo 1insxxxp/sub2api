@@ -448,7 +448,8 @@ async function handleGenerate() {
 }
 
 function canDeleteGeneratedCode(item: GeneratedRedeemCode): boolean {
-  return item.source === 'user_balance_transfer' && item.type === 'balance'
+  const source = item.source?.trim()
+  return item.type === 'balance' && (!source || source === 'user_balance_transfer')
 }
 
 async function copyText(text: string) {

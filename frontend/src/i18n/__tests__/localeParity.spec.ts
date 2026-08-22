@@ -153,4 +153,16 @@ describe('locale parity', () => {
     const missing = requiredEmptyResponseKeys.filter((key) => !messages.has(key))
     expect(missing).toEqual([])
   })
+
+  it('describes the empty-response daily limit as a self-service claim limit, not automatic compensation', () => {
+    expect(zhMessages.get('usage.emptyResponse.claimRules.dailyLimit')).toBe('每天最多可申请补偿 15 条')
+    expect(zhMessages.get('usage.emptyResponse.rules')).not.toContain('自动补偿')
+    expect(zhMessages.get('usage.emptyResponse.dailyLimitReached')).toBe('今日空回补偿申请已达上限')
+    expect(zhMessages.get('usage.emptyResponse.reasonCode.daily_limit_manual_review')).toBe('今日补偿申请已达 15 条上限，明天可继续申请')
+
+    expect(enMessages.get('usage.emptyResponse.claimRules.dailyLimit')).toBe('Up to 15 compensation claims per day')
+    expect(enMessages.get('usage.emptyResponse.rules')).not.toContain('compensated automatically')
+    expect(enMessages.get('usage.emptyResponse.dailyLimitReached')).toBe('Daily empty-response claim limit reached')
+    expect(enMessages.get('usage.emptyResponse.reasonCode.daily_limit_manual_review')).toBe('Daily claim limit of 15 reached; try again tomorrow')
+  })
 })

@@ -411,7 +411,7 @@ export default {
       outputTokens: '输出 Token',
       originalCharge: '原扣费',
       expectedRefund: '预计补偿',
-      rules: '仅支持 7 天内、已扣费且输出 Token ≤ 10 的记录申请；每天最多自动补偿 15 条。系统只使用结构化信号，不读取或保存响应正文。',
+      rules: '仅支持 7 天内、已扣费且输出 Token ≤ 10 的记录申请；每天最多可申请补偿 15 条。系统只使用结构化信号，不读取或保存响应正文。',
       reason: '补充说明（可选）',
       reasonPlaceholder: '例如：酒馆收到空白回复，重试后恢复正常',
       submitting: '提交中...',
@@ -425,12 +425,12 @@ export default {
       submitSuccess: '空回申请已提交',
       singleClaimSuccess: '空回已补偿到余额',
       submitFailed: '提交空回申请失败',
-      dailyLimitReached: '今日空回自动补偿已达上限',
+      dailyLimitReached: '今日空回补偿申请已达上限',
       statusLabel: '状态',
       tokens: 'Token',
       tokenDetail: '入 {input} / 出 {output} / 缓存 {cache} / 总 {total}',
       claimRules: {
-        dailyLimit: '每天最多自动补偿 15 条',
+        dailyLimit: '每天最多可申请补偿 15 条',
         tokenLimit: '输出 Token 小于等于 10 才可申请'
       },
       bulk: {
@@ -467,7 +467,7 @@ export default {
         claim_window_expired: '已超过 7 天申请期限',
         missing_evidence: '缺少结构化响应证据',
         conflicting_evidence: '响应证据存在冲突',
-        daily_limit_manual_review: '今日自动补偿已达 15 条上限，明天可继续申请',
+        daily_limit_manual_review: '今日补偿申请已达 15 条上限，明天可继续申请',
         already_claimed: '该请求已提交过申请'
       }
     },

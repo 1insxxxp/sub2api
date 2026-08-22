@@ -82,7 +82,7 @@ const messages: Record<string, string> = {
   'usage.emptyResponse.claimingOne': 'Claiming...',
   'usage.emptyResponse.singleClaimSuccess': 'Empty response compensated',
   'usage.emptyResponse.dailyLimitReached': 'Daily limit reached',
-  'usage.emptyResponse.claimRules.dailyLimit': 'Up to 15 automatic compensations per day',
+  'usage.emptyResponse.claimRules.dailyLimit': 'Up to 15 compensation claims per day',
   'usage.emptyResponse.claimRules.tokenLimit': 'Output Token must be 10 or less',
   'usage.emptyResponse.reasonCode.pure_empty': 'Empty output',
   'usage.emptyResponse.reasonCode.daily_limit_manual_review': 'Daily limit reached',
@@ -444,7 +444,7 @@ describe('user UsageView', () => {
 
     expect(listRecentEmptyResponses).toHaveBeenCalledTimes(1)
     expect(wrapper.text()).toContain('Recent empty responses')
-    expect(wrapper.text()).toContain('Up to 15 automatic compensations per day')
+    expect(wrapper.text()).toContain('Up to 15 compensation claims per day')
     expect(wrapper.text()).toContain('Output Token must be 10 or less')
     expect(wrapper.text()).toContain('claude-opus-4-6')
     expect(wrapper.text()).toContain('cli')
@@ -467,11 +467,11 @@ describe('user UsageView', () => {
     const table = wrapper.find('[data-testid="empty-response-table"]')
 
     expect(scroll.exists()).toBe(true)
-    expect(scroll.classes()).toEqual(expect.arrayContaining(['overflow-x-auto', 'touch-pan-x', 'overscroll-x-contain']))
+    expect(scroll.classes()).toEqual(expect.arrayContaining(['hidden', 'overflow-x-auto', 'touch-pan-x', 'overscroll-x-contain', 'md:block']))
     expect(table.exists()).toBe(true)
     expect(table.classes()).toEqual(expect.arrayContaining(['table-fixed', 'min-w-[1280px]']))
     expect(wrapper.find('[data-testid="empty-response-model-77"]').classes()).toContain('truncate')
-    expect(wrapper.find('[data-testid="claim-empty-response-77"]').classes()).toEqual(expect.arrayContaining(['min-w-[72px]', 'whitespace-nowrap']))
+    expect(wrapper.find('[data-testid="claim-empty-response-desktop-77"]').classes()).toEqual(expect.arrayContaining(['min-w-[72px]', 'whitespace-nowrap']))
   })
 
   it('puts empty response actions in the first column for mobile access', async () => {
@@ -485,7 +485,25 @@ describe('user UsageView', () => {
     const firstBodyCells = wrapper.findAll('[data-testid="empty-response-table"] tbody tr:first-child td')
 
     expect(headerCells[0]?.text()).toBe('Actions')
-    expect(firstBodyCells[0]?.find('[data-testid="claim-empty-response-77"]').exists()).toBe(true)
+    expect(firstBodyCells[0]?.find('[data-testid="claim-empty-response-desktop-77"]').exists()).toBe(true)
+  })
+
+  it('renders empty response rows as mobile cards with the claim action at the top', async () => {
+    const wrapper = mountUsageView()
+    await flushPromises()
+
+    await wrapper.find('[data-testid="empty-response-tab"]').trigger('click')
+    await flushPromises()
+
+    const mobileList = wrapper.get('[data-testid="empty-response-mobile-list"]')
+    const card = wrapper.get('[data-testid="empty-response-mobile-card-77"]')
+
+    expect(mobileList.classes()).toEqual(expect.arrayContaining(['md:hidden']))
+    expect(card.text()).toContain('claude-opus-4-6')
+    expect(card.text()).toContain('cli')
+    expect(card.text()).toContain('$1.250000')
+    expect(card.text()).toContain('Claimable')
+    expect(card.find('[data-testid="claim-empty-response-mobile-77"]').exists()).toBe(true)
   })
 
   it('claims a single empty response row and updates that row only', async () => {
@@ -502,7 +520,7 @@ describe('user UsageView', () => {
 
     await wrapper.find('[data-testid="empty-response-tab"]').trigger('click')
     await flushPromises()
-    await wrapper.find('[data-testid="claim-empty-response-77"]').trigger('click')
+    await wrapper.find('[data-testid="claim-empty-response-mobile-77"]').trigger('click')
     await flushPromises()
 
     expect(submitEmptyResponseClaim).toHaveBeenCalledWith(77, { reason: '' })
@@ -557,8 +575,10 @@ describe('user UsageView', () => {
     await wrapper.find('[data-testid="empty-response-tab"]').trigger('click')
     await flushPromises()
 
-    expect(wrapper.find('[data-testid="claim-empty-response-77"]').exists()).toBe(false)
-    expect(wrapper.find('[data-testid="claim-empty-response-78"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="claim-empty-response-desktop-77"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="claim-empty-response-mobile-77"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="claim-empty-response-desktop-78"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="claim-empty-response-mobile-78"]').exists()).toBe(false)
     expect(submitEmptyResponseClaim).not.toHaveBeenCalled()
   })
 })

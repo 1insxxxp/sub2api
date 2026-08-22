@@ -223,7 +223,106 @@
         <div v-else-if="emptyResponseRows.length === 0" class="empty-state py-12 text-sm text-gray-400">
           {{ t('usage.emptyResponse.bulk.empty') }}
         </div>
-        <div v-else data-testid="empty-response-table-scroll" class="overflow-x-auto overscroll-x-contain touch-pan-x">
+        <div v-else>
+          <div data-testid="empty-response-mobile-list" class="space-y-3 p-3 md:hidden">
+            <article
+              v-for="row in emptyResponseRows"
+              :key="`mobile-${row.usage_log_id}`"
+              :data-testid="`empty-response-mobile-card-${row.usage_log_id}`"
+              class="rounded-lg border border-gray-200 bg-white p-3 shadow-sm dark:border-dark-700 dark:bg-dark-800"
+            >
+              <div class="flex items-start gap-3">
+                <div class="min-w-0 flex-1">
+                  <div class="flex min-w-0 items-center gap-2">
+                    <span class="inline-flex shrink-0 whitespace-nowrap rounded-full bg-primary-50 px-2 py-1 text-[11px] font-semibold text-primary-700 dark:bg-primary-500/10 dark:text-primary-300">
+                      {{ t(`usage.emptyResponse.status.${row.status}`) }}
+                    </span>
+                    <span
+                      :data-testid="`empty-response-mobile-model-${row.usage_log_id}`"
+                      class="min-w-0 truncate font-mono text-sm font-semibold text-gray-900 dark:text-white"
+                      :title="row.model"
+                    >
+                      {{ row.model }}
+                    </span>
+                  </div>
+                  <div class="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-gray-500 dark:text-gray-400">
+                    <span>{{ formatDateTime(row.created_at) }}</span>
+                    <span class="text-gray-300 dark:text-dark-500">/</span>
+                    <span class="truncate" :title="row.api_key_name || '-'">{{ row.api_key_name || '-' }}</span>
+                  </div>
+                </div>
+                <button
+                  v-if="canClaimEmptyResponseRow(row)"
+                  type="button"
+                  :data-testid="`claim-empty-response-mobile-${row.usage_log_id}`"
+                  class="btn btn-primary btn-sm min-w-[72px] shrink-0 justify-center whitespace-nowrap"
+                  :disabled="emptyResponseClaimingRowId === row.usage_log_id"
+                  @click="claimEmptyResponseRow(row)"
+                >
+                  {{ emptyResponseClaimingRowId === row.usage_log_id ? t('usage.emptyResponse.claimingOne') : t('usage.emptyResponse.claimOne') }}
+                </button>
+              </div>
+
+              <div class="mt-3 grid grid-cols-2 gap-2 text-xs">
+                <div class="rounded-md bg-gray-50 px-2.5 py-2 dark:bg-dark-900/60">
+                  <p class="text-gray-500 dark:text-gray-400">{{ t('usage.emptyResponse.originalCharge') }}</p>
+                  <p class="mt-1 font-mono font-semibold text-gray-900 dark:text-white">{{ formatMoney(row.actual_cost) }}</p>
+                </div>
+                <div class="rounded-md bg-emerald-50 px-2.5 py-2 dark:bg-emerald-500/10">
+                  <p class="text-emerald-700 dark:text-emerald-300">{{ t('usage.emptyResponse.refunded') }}</p>
+                  <p class="mt-1 font-mono font-semibold text-emerald-700 dark:text-emerald-300">{{ formatMoney(row.refunded_amount) }}</p>
+                </div>
+              </div>
+
+              <div
+                :data-testid="`empty-response-mobile-token-${row.usage_log_id}`"
+                class="mt-3 grid grid-cols-2 gap-2 text-xs"
+                :title="t('usage.emptyResponse.tokenDetail', {
+                  input: formatTokenCount(row.input_tokens),
+                  output: formatTokenCount(row.output_tokens),
+                  cache: formatTokenCount(row.cache_tokens),
+                  total: formatTokenCount(row.total_tokens),
+                })"
+              >
+                <span class="inline-flex items-center gap-1 rounded-md bg-gray-50 px-2.5 py-2 dark:bg-dark-900/60">
+                  <Icon name="arrowDown" size="sm" class="h-3.5 w-3.5 text-emerald-500" />
+                  <span class="text-gray-500 dark:text-gray-400">In</span>
+                  <span class="ml-auto font-mono font-semibold text-gray-900 dark:text-white">{{ formatTokenCount(row.input_tokens) }}</span>
+                </span>
+                <span class="inline-flex items-center gap-1 rounded-md bg-gray-50 px-2.5 py-2 dark:bg-dark-900/60">
+                  <Icon name="arrowUp" size="sm" class="h-3.5 w-3.5 text-violet-500" />
+                  <span class="text-gray-500 dark:text-gray-400">Out</span>
+                  <span class="ml-auto font-mono font-semibold text-gray-900 dark:text-white">{{ formatTokenCount(row.output_tokens) }}</span>
+                </span>
+                <span class="inline-flex items-center gap-1 rounded-md bg-gray-50 px-2.5 py-2 dark:bg-dark-900/60">
+                  <Icon name="database" size="sm" class="h-3.5 w-3.5 text-sky-500" />
+                  <span class="text-gray-500 dark:text-gray-400">Cache</span>
+                  <span class="ml-auto font-mono font-semibold text-gray-900 dark:text-white">{{ formatTokenCount(row.cache_tokens) }}</span>
+                </span>
+                <span class="inline-flex items-center gap-1 rounded-md bg-primary-50 px-2.5 py-2 text-primary-700 dark:bg-primary-500/10 dark:text-primary-300">
+                  <span>{{ t('usage.totalTokens') }}</span>
+                  <span class="ml-auto font-mono font-semibold">{{ formatTokenCount(row.total_tokens) }}</span>
+                </span>
+              </div>
+
+              <div class="mt-3 space-y-1 text-xs text-gray-500 dark:text-gray-400">
+                <div class="flex min-w-0 items-center gap-2">
+                  <span class="shrink-0 text-gray-400">{{ t('admin.usage.group') }}</span>
+                  <span class="min-w-0 truncate text-gray-700 dark:text-gray-200" :title="row.group_name || '-'">{{ row.group_name || '-' }}</span>
+                </div>
+                <div class="flex min-w-0 items-center gap-2">
+                  <span class="shrink-0 text-gray-400">{{ t('usage.endpoint') }}</span>
+                  <span class="min-w-0 truncate font-mono text-gray-700 dark:text-gray-200" :title="row.inbound_endpoint || '-'">{{ row.inbound_endpoint || '-' }}</span>
+                </div>
+                <div class="flex min-w-0 items-center gap-2">
+                  <span class="shrink-0 text-gray-400">{{ t('usage.emptyResponse.reason') }}</span>
+                  <span class="min-w-0 truncate text-gray-700 dark:text-gray-200" :title="t(`usage.emptyResponse.reasonCode.${row.reason_code}`)">{{ t(`usage.emptyResponse.reasonCode.${row.reason_code}`) }}</span>
+                </div>
+              </div>
+            </article>
+          </div>
+
+          <div data-testid="empty-response-table-scroll" class="hidden overflow-x-auto overscroll-x-contain touch-pan-x md:block">
           <table data-testid="empty-response-table" class="w-full min-w-[1280px] table-fixed divide-y divide-gray-200 text-sm dark:divide-dark-700">
             <colgroup>
               <col class="w-[112px]" />
@@ -257,7 +356,7 @@
                   <button
                     v-if="canClaimEmptyResponseRow(row)"
                     type="button"
-                    :data-testid="`claim-empty-response-${row.usage_log_id}`"
+                    :data-testid="`claim-empty-response-desktop-${row.usage_log_id}`"
                     class="btn btn-primary btn-sm min-w-[72px] justify-center whitespace-nowrap"
                     :disabled="emptyResponseClaimingRowId === row.usage_log_id"
                     @click="claimEmptyResponseRow(row)"
@@ -324,6 +423,7 @@
               </tr>
             </tbody>
           </table>
+          </div>
         </div>
       </div>
 

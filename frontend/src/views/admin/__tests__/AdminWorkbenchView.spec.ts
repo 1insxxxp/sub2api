@@ -443,6 +443,31 @@ describe('AdminWorkbenchView balance transfer codes', () => {
     expect(showSuccess).toHaveBeenCalledWith('adminWorkbench.balanceTransfer.batchDeleted')
   })
 
+  it('shows generated-code selection when workbench list omits the source field', async () => {
+    const codeWithoutSource = {
+      id: 103,
+      code: 'LEGACY-CODE',
+      type: 'balance',
+      value: 5,
+      status: 'unused',
+      used_by: null,
+      used_at: null,
+      created_at: '2026-08-20T12:00:00Z',
+      created_by: 7
+    } as GeneratedRedeemCode
+    getGenerated.mockResolvedValueOnce(paginated<GeneratedRedeemCode>([codeWithoutSource]))
+
+    const wrapper = mountWorkbench()
+    await flushPromises()
+
+    expect(wrapper.find('[data-test="select-generated-code-103"]').exists()).toBe(true)
+    expect(wrapper.get('[data-test="delete-selected-generated-codes"]').attributes('disabled')).toBeDefined()
+
+    await wrapper.get('[data-test="select-generated-code-103"]').setValue(true)
+
+    expect(wrapper.get('[data-test="delete-selected-generated-codes"]').attributes('disabled')).toBeUndefined()
+  })
+
   it('renders commission management for full admins and saves assigned groups', async () => {
     authState.user = {
       id: 1,
