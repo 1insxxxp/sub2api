@@ -603,10 +603,10 @@ export default {
         }
       },
       emptyResponseClaims: {
-        tab: 'Empty or low-output claims',
-        rate: 'Compensation claim rate',
-        warning: 'The compensation claim rate is {rate}, above the 1% review threshold. Check the highest-ranked accounts and models first.',
-        claims: 'Claims',
+        tab: 'Empty response compensation list',
+        rate: 'Empty response compensation rate',
+        warning: 'The empty response compensation rate is {rate}, above the 1% review threshold. Check the highest-ranked accounts and models first.',
+        claims: 'Compensation records',
         refunded: 'Refunded amount',
         pending: 'Manual review',
         allStatuses: 'All statuses',
@@ -616,7 +616,7 @@ export default {
         batchApprove: 'Approve selected',
         batchReject: 'Reject selected',
         viewDetails: 'View details',
-        detailTitle: 'Compensation claim details',
+        detailTitle: 'Empty response compensation details',
         closeDetail: 'Close details',
         approve: 'Approve',
         reject: 'Reject',
@@ -624,13 +624,13 @@ export default {
         evidence: 'Structured evidence',
         refund: 'Estimated refund',
         statusLabel: 'Status',
-        empty: 'No compensation claims match these filters',
-        loadFailed: 'Failed to load compensation claims',
+        empty: 'No empty response compensation records match these filters',
+        loadFailed: 'Failed to load empty response compensation records',
         reviewSuccess: 'Review completed',
         reviewFailed: 'Review failed. Refresh and try again.',
-        batchSelected: '{count} claims selected',
+        batchSelected: '{count} compensation records selected',
         batchEstimatedRefund: 'Estimated total refund: ${amount}',
-        batchReviewItems: 'Selected claim details',
+        batchReviewItems: 'Selected compensation record details',
         expandDetails: 'Expand details',
         collapseDetails: 'Collapse details',
         batchResult: 'Batch complete: {succeeded} succeeded, {failed} failed',
@@ -649,7 +649,7 @@ export default {
         disconnect: 'Disconnect / upstream error',
         userReason: 'User explanation',
         missingEvidenceWarning: 'Server-side response evidence is missing; review must rely on usage and other structured metadata.',
-        lowOutputNotice: 'This claim matched the low-output rule: 10 output tokens or fewer. Use duration, status codes, and the user note for quick review.',
+        lowOutputNotice: 'This record matched the low-output rule: 10 output tokens or fewer. Use duration, status codes, and the user note for quick review.',
         privacyNotice: 'Only structured metadata is shown. Request/response bodies and tool arguments are never read or stored.',
         source: {
           automatic: 'Automatic refund',
@@ -668,9 +668,9 @@ export default {
           none: 'no effective output'
         },
         rankings: {
-          group: 'Groups by compensation claims',
-          account: 'Accounts by compensation claims',
-          model: 'Models by compensation claims'
+          group: 'Groups by compensation records',
+          account: 'Accounts by compensation records',
+          model: 'Models by compensation records'
         },
         evidenceSummary: 'HTTP {http} · upstream {upstream} · {events} events · {completion}',
         complete: 'complete',

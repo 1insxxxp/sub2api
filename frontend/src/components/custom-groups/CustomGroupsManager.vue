@@ -318,7 +318,11 @@ const toggleAllModelsForSource = (source: CustomGroupCandidate) => {
 }
 const selectedCountForSource = (sourceId: number) => [...selected.value.values()].filter(item => item.source_group_id === sourceId).length
 const staleSourceCount = (group: UserCustomGroup) => group.models.filter(model => model.source_available === false).length
-const sourceIssueLabel = (model: UserCustomGroupModel) => model.source_issue === 'source_group_not_allowed' ? '已无权使用该来源分组' : '来源分组已下架或停用'
+const sourceIssueLabel = (model: UserCustomGroupModel) => {
+  if (model.source_issue === 'source_group_not_allowed') return '已无权使用该来源分组'
+  if (model.source_issue === 'source_model_unavailable') return '来源模型已下架或改名'
+  return '来源分组已下架或停用'
+}
 const selectedItem = (sourceId: number, model: string) => selected.value.get(sourceMappingKey(sourceId, model))
 const isSelected = (sourceId: number, model: string) => selected.value.has(sourceMappingKey(sourceId, model))
 const selectModel = (sourceId: number, model: string, sourceName: string) => {

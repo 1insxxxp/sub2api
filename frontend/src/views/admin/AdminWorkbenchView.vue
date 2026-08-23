@@ -250,6 +250,9 @@
                   <span class="rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300">
                     ${{ item.value.toFixed(2) }}
                   </span>
+                  <span :class="getGeneratedStatusClass(item.status)">
+                    {{ getGeneratedStatusLabel(item.status) }}
+                  </span>
                   <span v-if="item.single_use_per_user" class="rounded-full bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700 dark:bg-amber-500/10 dark:text-amber-300">
                     {{ t('adminWorkbench.balanceTransfer.singleUseBadge') }}
                   </span>
@@ -257,6 +260,7 @@
                 <p class="mt-1 text-xs text-gray-500 dark:text-dark-400">
                   {{ formatDateTime(item.created_at) }}
                   <span v-if="item.expires_at"> · {{ t('adminWorkbench.balanceTransfer.expiresAt') }} {{ formatDateTime(item.expires_at) }}</span>
+                  <span v-if="item.used_at"> · {{ t('adminWorkbench.balanceTransfer.usedAt') }} {{ formatDateTime(item.used_at) }}</span>
                 </p>
                 <p v-if="item.notes" class="mt-2 break-words rounded-md bg-gray-50 px-2 py-1 text-xs leading-5 text-gray-600 dark:bg-dark-800/70 dark:text-dark-300">
                   {{ t('adminWorkbench.balanceTransfer.notes') }}: {{ item.notes }}
@@ -450,6 +454,31 @@ async function handleGenerate() {
 function canDeleteGeneratedCode(item: GeneratedRedeemCode): boolean {
   const source = item.source?.trim()
   return item.type === 'balance' && (!source || source === 'user_balance_transfer')
+}
+
+function getGeneratedStatusLabel(status: GeneratedRedeemCode['status'] | string): string {
+  const labels: Record<string, string> = {
+    unused: t('adminWorkbench.balanceTransfer.status.unused'),
+    used: t('adminWorkbench.balanceTransfer.status.used'),
+    expired: t('adminWorkbench.balanceTransfer.status.expired'),
+    disabled: t('adminWorkbench.balanceTransfer.status.disabled'),
+    active: t('adminWorkbench.balanceTransfer.status.active')
+  }
+  return labels[status] || status
+}
+
+function getGeneratedStatusClass(status: GeneratedRedeemCode['status'] | string): string {
+  const base = 'rounded-full px-2 py-0.5 text-xs font-medium'
+  if (status === 'unused' || status === 'active') {
+    return `${base} bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300`
+  }
+  if (status === 'used') {
+    return `${base} bg-blue-50 text-blue-700 dark:bg-blue-500/10 dark:text-blue-300`
+  }
+  if (status === 'expired') {
+    return `${base} bg-amber-50 text-amber-700 dark:bg-amber-500/10 dark:text-amber-300`
+  }
+  return `${base} bg-gray-100 text-gray-600 dark:bg-dark-800 dark:text-dark-300`
 }
 
 async function copyText(text: string) {

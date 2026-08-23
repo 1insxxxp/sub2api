@@ -53,6 +53,36 @@ func TestSubAdminCommissionRepositoryListCalendarUsesEnabledCurrentSubAdminGrant
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 
+func TestSubAdminCommissionRepositoryListCalendarUsesLiveLogsForYesterday(t *testing.T) {
+	repo, mock := newSubAdminCommissionRepoMock(t)
+	todayStart, err := service.ParseGroupUsageDate("2026-08-23")
+	require.NoError(t, err)
+	yesterdayStart, err := service.ParseGroupUsageDate("2026-08-22")
+	require.NoError(t, err)
+	now := todayStart.Add(10 * time.Hour)
+
+	mock.ExpectQuery(`(?s)SELECT .*group_id.*granted_date.*FROM sub_admin_commission_grants.*sub_admin_user_id = \$1.*enabled = TRUE`).
+		WithArgs(int64(17)).
+		WillReturnRows(sqlmock.NewRows([]string{"group_id", "granted_date"}).
+			AddRow(int64(9), "2026-08-20"))
+	mock.ExpectQuery(`(?s)FROM usage_group_daily_rollups r.*JOIN sub_admin_commission_grants cg.*cg.sub_admin_user_id = \$1.*cg.enabled = TRUE`).
+		WithArgs(int64(17), "2026-08-01", "2026-08-22").
+		WillReturnRows(sqlmock.NewRows([]string{"date", "actual_cost"}))
+	mock.ExpectQuery(`(?s)FROM usage_logs ul.*JOIN sub_admin_commission_grants cg.*cg.sub_admin_user_id = \$1.*cg.enabled = TRUE`).
+		WithArgs(int64(17), yesterdayStart.UTC(), todayStart.AddDate(0, 0, 1).UTC(), service.GroupUsageTimezoneName()).
+		WillReturnRows(sqlmock.NewRows([]string{"date", "actual_cost"}).
+			AddRow("2026-08-22", 9.5))
+
+	days, err := repo.ListCalendar(context.Background(), 17, "2026-08", 0.1, now)
+
+	require.NoError(t, err)
+	require.Len(t, days, 4)
+	require.Equal(t, "2026-08-22", days[2].Date)
+	require.Equal(t, 9.5, days[2].ActualCost)
+	require.InDelta(t, 0.95, days[2].CommissionAmount, 0.0000001)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
 func TestSubAdminCommissionRepositoryListDayGroupsHidesDatesBeforeGrantedDate(t *testing.T) {
 	repo, mock := newSubAdminCommissionRepoMock(t)
 
@@ -81,6 +111,30 @@ func TestSubAdminCommissionRepositoryListDayGroupsUsesRollupsForHistoricalDates(
 	require.Equal(t, "Claude 特价", groups[0].GroupName)
 	require.Zero(t, groups[0].Requests)
 	require.Zero(t, groups[0].TotalTokens)
+	require.Equal(t, 12.5, groups[0].ActualCost)
+	require.Equal(t, 2.5, groups[0].CommissionAmount)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestSubAdminCommissionRepositoryListDayGroupsUsesLiveLogsForYesterday(t *testing.T) {
+	repo, mock := newSubAdminCommissionRepoMock(t)
+	todayStart, err := service.ParseGroupUsageDate(service.GroupUsageDate(time.Now()))
+	require.NoError(t, err)
+	yesterdayStart := todayStart.AddDate(0, 0, -1)
+	yesterday := service.GroupUsageDate(yesterdayStart)
+
+	mock.ExpectQuery(`(?s)FROM sub_admin_commission_grants cg.*JOIN groups g.*LEFT JOIN usage_logs ul.*ul\.created_at >= \$2.*ul\.created_at < \$3.*\$4::date >= cg\.granted_date`).
+		WithArgs(int64(17), yesterdayStart.UTC(), todayStart.UTC(), yesterday).
+		WillReturnRows(sqlmock.NewRows([]string{"group_id", "group_name", "requests", "total_tokens", "actual_cost"}).
+			AddRow(int64(9), "Claude 特价", int64(3), int64(4200), 12.5))
+
+	groups, err := repo.ListDayGroups(context.Background(), 17, yesterday, 0.2)
+
+	require.NoError(t, err)
+	require.Len(t, groups, 1)
+	require.Equal(t, int64(9), groups[0].GroupID)
+	require.Equal(t, int64(3), groups[0].Requests)
+	require.Equal(t, int64(4200), groups[0].TotalTokens)
 	require.Equal(t, 12.5, groups[0].ActualCost)
 	require.Equal(t, 2.5, groups[0].CommissionAmount)
 	require.NoError(t, mock.ExpectationsWereMet())

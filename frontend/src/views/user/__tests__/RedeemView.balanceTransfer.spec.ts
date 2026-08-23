@@ -51,6 +51,12 @@ vi.mock('@/stores/subscriptions', () => ({
   })
 }))
 
+vi.mock('vue-router', () => ({
+  useRouter: () => ({
+    push: vi.fn()
+  })
+}))
+
 vi.mock('vue-i18n', async () => {
   const actual = await vi.importActual<typeof import('vue-i18n')>('vue-i18n')
   return {
@@ -96,5 +102,29 @@ describe('user RedeemView balance transfer migration', () => {
     expect(wrapper.find('[data-test="balance-transfer-panel"]').exists()).toBe(false)
     expect(getGenerated).not.toHaveBeenCalled()
     expect(getHistory).toHaveBeenCalledWith({ page: 1, page_size: 10 })
+  })
+
+  it('renders empty-response compensation as balance activity', async () => {
+    getHistory.mockResolvedValueOnce(
+      paginated<RedeemHistoryItem>([
+        {
+          id: 901,
+          code: 'EMPTY-COMP-50',
+          type: 'empty_response',
+          value: 1.25,
+          status: 'used',
+          used_at: '2026-08-22T10:00:00Z',
+          created_at: '2026-08-22T10:00:00Z'
+        }
+      ])
+    )
+
+    const wrapper = mountRedeemView()
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('redeem.emptyResponseRefund')
+    expect(wrapper.text()).toContain('+$1.25')
+    expect(wrapper.text()).toContain('redeem.emptyResponseRefundDetail')
+    expect(wrapper.text()).not.toContain('EMPTY-CO...')
   })
 })

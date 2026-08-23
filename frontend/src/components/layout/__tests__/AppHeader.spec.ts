@@ -27,6 +27,15 @@ const routeState = reactive({
   params: {}
 })
 
+const appStoreState = reactive({
+  contactInfo: '',
+  docUrl: '',
+  cachedPublicSettings: null as null | Record<string, unknown>,
+  toggleMobileSidebar: vi.fn(),
+  showSuccess,
+  showError
+})
+
 const authStore = reactive({
   user: {
     id: 12,
@@ -48,18 +57,15 @@ vi.mock('@/api/checkin', () => ({
 }))
 
 vi.mock('@/stores', () => ({
-  useAppStore: () => ({
-    contactInfo: '',
-    docUrl: '',
-    cachedPublicSettings: null,
-    toggleMobileSidebar: vi.fn(),
-    showSuccess,
-    showError
-  }),
+  useAppStore: () => appStoreState,
   useAuthStore: () => authStore,
   useOnboardingStore: () => ({
     replay: vi.fn()
   })
+}))
+
+vi.mock('@/stores/app', () => ({
+  useAppStore: () => appStoreState
 }))
 
 vi.mock('@/stores/adminSettings', () => ({
@@ -153,6 +159,12 @@ describe('AppHeader available token estimate', () => {
 
 describe('AppHeader shared admin shell', () => {
   beforeEach(() => {
+    appStoreState.contactInfo = ''
+    appStoreState.docUrl = ''
+    appStoreState.cachedPublicSettings = null
+    appStoreState.toggleMobileSidebar.mockReset()
+    showSuccess.mockReset()
+    showError.mockReset()
     getCheckinStatus.mockReset()
     getCheckinStatus.mockResolvedValue({
       enabled: false,
@@ -170,6 +182,25 @@ describe('AppHeader shared admin shell', () => {
     expect(wrapper.find('.app-header-toolbar').exists()).toBe(true)
     expect(wrapper.find('.app-header-actions').exists()).toBe(true)
     expect(wrapper.find('[data-test="header-balance-pill"]').exists()).toBe(true)
+  })
+
+  it('keeps model plaza available as a compact mobile header action', async () => {
+    appStoreState.cachedPublicSettings = {
+      model_plaza_enabled: true
+    }
+
+    const wrapper = await mountHeader()
+    const link = wrapper.get('[data-test="header-model-plaza-link"]')
+
+    expect(link.attributes('aria-label')).toBe('nav.modelPlaza')
+    expect(link.attributes('title')).toBe('nav.modelPlaza')
+    expect(link.classes()).toContain('inline-flex')
+    expect(link.classes()).not.toContain('hidden')
+    expect(link.classes()).not.toContain('sm:flex')
+    expect(link.classes()).toContain('h-9')
+    expect(link.classes()).toContain('w-9')
+    expect(link.classes()).toContain('sm:w-auto')
+    expect(link.text()).toContain('nav.modelPlaza')
   })
 
   it('uses the shared default avatar in the header when no custom avatar exists', async () => {

@@ -201,13 +201,15 @@ const (
 	RedeemTypeConcurrency      = domain.RedeemTypeConcurrency
 	RedeemTypeSubscription     = domain.RedeemTypeSubscription
 	RedeemTypeInvitation       = domain.RedeemTypeInvitation
+	RedeemTypeEmptyResponse    = domain.RedeemTypeEmptyResponse
 	RedeemTypeAffiliateBalance = "affiliate_balance"
 )
 
 // Redeem code source constants
 const (
-	RedeemCodeSourceAdmin               = domain.RedeemCodeSourceAdmin
-	RedeemCodeSourceUserBalanceTransfer = domain.RedeemCodeSourceUserBalanceTransfer
+	RedeemCodeSourceAdmin                     = domain.RedeemCodeSourceAdmin
+	RedeemCodeSourceUserBalanceTransfer       = domain.RedeemCodeSourceUserBalanceTransfer
+	RedeemCodeSourceEmptyResponseCompensation = domain.RedeemCodeSourceEmptyResponseCompensation
 )
 
 // PromoCode status constants

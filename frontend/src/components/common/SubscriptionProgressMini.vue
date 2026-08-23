@@ -40,8 +40,8 @@
         v-if="tooltipOpen"
         data-test="subscription-progress-sheet"
         :class="isMobileTooltip
-          ? 'fixed inset-x-2 bottom-2 z-[100000020] mb-[env(safe-area-inset-bottom)] flex max-h-[calc(100dvh-1rem-env(safe-area-inset-top)-env(safe-area-inset-bottom))] flex-col overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-2xl dark:border-dark-700 dark:bg-dark-800'
-          : 'absolute right-0 z-50 mt-2 w-[340px] overflow-hidden rounded-xl border border-gray-200 bg-white shadow-xl dark:border-dark-700 dark:bg-dark-800'"
+          ? 'subscription-progress-mobile-panel fixed left-1/2 top-1/2 z-[100000020] flex max-h-[calc(100dvh-2rem-env(safe-area-inset-top)-env(safe-area-inset-bottom))] w-[calc(100vw-2rem)] max-w-md -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-2xl dark:border-dark-700 dark:bg-dark-800'
+          : 'subscription-progress-desktop-panel absolute right-0 z-50 mt-2 w-[340px] overflow-hidden rounded-xl border border-gray-200 bg-white shadow-xl dark:border-dark-700 dark:bg-dark-800'"
       >
         <div class="flex items-start justify-between border-b border-gray-100 p-3 dark:border-dark-700">
           <div>
@@ -354,6 +354,15 @@ onBeforeUnmount(() => {
 .dropdown-enter-from,
 .dropdown-leave-to {
   opacity: 0;
+}
+
+.subscription-progress-desktop-panel.dropdown-enter-from,
+.subscription-progress-desktop-panel.dropdown-leave-to {
   transform: scale(0.95) translateY(-4px);
+}
+
+.subscription-progress-mobile-panel.dropdown-enter-from,
+.subscription-progress-mobile-panel.dropdown-leave-to {
+  transform: translate(-50%, -50%) scale(0.96);
 }
 </style>

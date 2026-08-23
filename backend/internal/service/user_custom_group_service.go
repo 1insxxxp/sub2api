@@ -133,6 +133,10 @@ func (s *UserCustomGroupService) annotateSourceAvailability(ctx context.Context,
 				model.SourceIssue = UserCustomGroupSourceIssueNotAllowed
 				continue
 			}
+			if s.gateway != nil && !s.sourceModelAvailable(ctx, source, model.SourceModel) {
+				model.SourceIssue = UserCustomGroupSourceIssueModelUnavailable
+				continue
+			}
 			model.SourceAvailable = true
 			model.SourceIssue = ""
 		}
@@ -197,19 +201,25 @@ func (s *UserCustomGroupService) validateModels(ctx context.Context, userID int6
 		if err != nil || group.Status != StatusActive || group.Platform == PlatformComposite || !user.CanBindGroup(group.ID, group.IsExclusive) {
 			return ErrGroupNotAllowed
 		}
-		if s.gateway != nil {
-			available := s.gateway.GetAvailableModels(ctx, &group.ID, group.Platform)
-			found := false
-			for _, candidate := range available {
-				if strings.EqualFold(candidate, m.SourceModel) {
-					found = true
-					break
-				}
-			}
-			if !found {
-				return ErrUserCustomGroupInvalidModel
-			}
+		if s.gateway != nil && !s.sourceModelAvailable(ctx, group, m.SourceModel) {
+			return ErrUserCustomGroupInvalidModel
 		}
 	}
 	return nil
+}
+
+func (s *UserCustomGroupService) sourceModelAvailable(ctx context.Context, group *Group, sourceModel string) bool {
+	if s.gateway == nil || group == nil {
+		return true
+	}
+	available := s.gateway.GetAvailableModels(ctx, &group.ID, group.Platform)
+	if group.CustomModelsListEnabled() {
+		available = ResolveCustomModelsList(group.Platform, available, group.ModelsListConfig.Models)
+	}
+	for _, candidate := range available {
+		if strings.EqualFold(candidate, sourceModel) {
+			return true
+		}
+	}
+	return false
 }

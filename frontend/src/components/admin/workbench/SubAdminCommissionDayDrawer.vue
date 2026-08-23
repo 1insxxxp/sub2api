@@ -72,21 +72,33 @@
             <div
               v-for="log in logs"
               :key="log.id"
-              class="grid gap-2 rounded-lg bg-gray-50 px-3 py-2 text-sm dark:bg-dark-800/70 md:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)_auto]"
+              :data-test="`commission-log-${log.id}`"
+              class="grid gap-3 rounded-lg bg-gray-50 p-3 text-sm dark:bg-dark-800/70 sm:gap-2 md:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)_auto]"
             >
               <div class="min-w-0">
-                <p class="truncate font-mono font-semibold text-gray-950 dark:text-white">
+                <p
+                  :data-test="`commission-log-request-${log.id}`"
+                  class="break-all font-mono font-semibold text-gray-950 dark:text-white sm:truncate"
+                >
                   {{ log.request_id }}
                 </p>
-                <p class="truncate text-xs text-gray-500 dark:text-dark-400">
+                <p
+                  :data-test="`commission-log-user-${log.id}`"
+                  class="break-all text-xs text-gray-500 dark:text-dark-400 sm:truncate"
+                >
                   {{ log.user_email }} · {{ log.api_key_name }}
                 </p>
               </div>
               <div class="min-w-0 text-xs text-gray-600 dark:text-dark-300">
-                <p class="truncate">{{ log.requested_model || log.model }}</p>
+                <p
+                  :data-test="`commission-log-model-${log.id}`"
+                  class="break-all sm:truncate"
+                >
+                  {{ log.requested_model || log.model }}
+                </p>
                 <p class="tabular-nums">{{ log.total_tokens }} tokens</p>
               </div>
-              <div class="text-right font-semibold tabular-nums text-gray-950 dark:text-white">
+              <div class="text-left font-semibold tabular-nums text-gray-950 dark:text-white md:text-right">
                 ${{ log.actual_cost.toFixed(2) }}
               </div>
             </div>

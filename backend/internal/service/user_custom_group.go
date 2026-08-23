@@ -6,8 +6,9 @@ const MaxUserCustomGroups = 20
 const MaxUserCustomGroupModels = 500
 
 const (
-	UserCustomGroupSourceIssueUnavailable = "source_group_unavailable"
-	UserCustomGroupSourceIssueNotAllowed  = "source_group_not_allowed"
+	UserCustomGroupSourceIssueUnavailable      = "source_group_unavailable"
+	UserCustomGroupSourceIssueNotAllowed       = "source_group_not_allowed"
+	UserCustomGroupSourceIssueModelUnavailable = "source_model_unavailable"
 )
 
 type UserCustomGroupModel struct {

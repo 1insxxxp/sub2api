@@ -261,8 +261,16 @@ export default {
       generatedList: '我生成的兑换码',
       generatedListHint: '仅展示当前账号生成的余额兑换码。',
       empty: '暂无生成记录',
+      status: {
+        unused: '未使用',
+        used: '已使用',
+        expired: '已过期',
+        disabled: '已禁用',
+        active: '可用'
+      },
       singleUseBadge: '单用户一次',
       expiresAt: '过期',
+      usedAt: '使用',
       invalidAmount: '请输入有效金额',
       invalidCount: '数量必须在 1 到 100 之间',
       invalidExpiry: '有效期必须在 1 到 3650 天之间',

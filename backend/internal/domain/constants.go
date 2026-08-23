@@ -59,16 +59,18 @@ const (
 
 // Redeem type constants
 const (
-	RedeemTypeBalance      = "balance"
-	RedeemTypeConcurrency  = "concurrency"
-	RedeemTypeSubscription = "subscription"
-	RedeemTypeInvitation   = "invitation"
+	RedeemTypeBalance       = "balance"
+	RedeemTypeConcurrency   = "concurrency"
+	RedeemTypeSubscription  = "subscription"
+	RedeemTypeInvitation    = "invitation"
+	RedeemTypeEmptyResponse = "empty_response"
 )
 
 // Redeem code source constants
 const (
-	RedeemCodeSourceAdmin               = "admin"
-	RedeemCodeSourceUserBalanceTransfer = "user_balance_transfer"
+	RedeemCodeSourceAdmin                     = "admin"
+	RedeemCodeSourceUserBalanceTransfer       = "user_balance_transfer"
+	RedeemCodeSourceEmptyResponseCompensation = "empty_response_compensation"
 )
 
 // PromoCode status constants

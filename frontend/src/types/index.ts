@@ -955,7 +955,7 @@ export interface UserCustomGroupModel {
   source_model: string
   source_group?: Group
   source_available?: boolean
-  source_issue?: 'source_group_unavailable' | 'source_group_not_allowed'
+  source_issue?: 'source_group_unavailable' | 'source_group_not_allowed' | 'source_model_unavailable'
 }
 
 export interface UserCustomGroup {
@@ -1841,6 +1841,7 @@ export type RedeemCodeType =
   | 'subscription'
   | 'invitation'
   | 'checkin_reward'
+  | 'empty_response'
 export type UsageRequestType = 'unknown' | 'sync' | 'stream' | 'ws_v2' | 'cyber' | 'live'
 export type ImageSizeSource = 'output' | 'input' | 'default' | 'legacy'
 export type ImageSizeBreakdown = Record<string, number>

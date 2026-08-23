@@ -178,14 +178,17 @@ func (r *subAdminCommissionRepository) ListCalendar(ctx context.Context, subAdmi
 	}
 
 	costs := make(map[string]float64)
-	historicalEnd := minCommissionTime(monthEnd, todayStart)
+	liveStart := todayStart.AddDate(0, 0, -1)
+	historicalEnd := minCommissionTime(monthEnd, liveStart)
 	if historicalEnd.After(monthStart) {
 		if err := r.loadCalendarRollupCosts(ctx, subAdminID, monthStart, historicalEnd, costs); err != nil {
 			return nil, err
 		}
 	}
-	if !todayStart.Before(monthStart) && todayStart.Before(monthEnd) {
-		if err := r.loadCalendarLiveCosts(ctx, subAdminID, todayStart, costs); err != nil {
+	liveRangeStart := maxCommissionTime(monthStart, liveStart)
+	liveRangeEnd := minCommissionTime(monthEnd, todayStart.AddDate(0, 0, 1))
+	if liveRangeStart.Before(liveRangeEnd) {
+		if err := r.loadCalendarLiveCosts(ctx, subAdminID, liveRangeStart, liveRangeEnd, costs); err != nil {
 			return nil, err
 		}
 	}
@@ -220,7 +223,7 @@ func (r *subAdminCommissionRepository) ListDayGroups(ctx context.Context, subAdm
 	if err != nil {
 		return nil, err
 	}
-	if dayStart.Before(todayStart) {
+	if dayStart.Before(todayStart.AddDate(0, 0, -1)) {
 		return r.listHistoricalDayGroups(ctx, subAdminID, date, commissionRate)
 	}
 	return r.listLiveDayGroups(ctx, subAdminID, date, commissionRate, dayStart)
@@ -413,7 +416,7 @@ func (r *subAdminCommissionRepository) loadCalendarRollupCosts(ctx context.Conte
 	return scanCommissionCostRows(rows, costs)
 }
 
-func (r *subAdminCommissionRepository) loadCalendarLiveCosts(ctx context.Context, subAdminID int64, todayStart time.Time, costs map[string]float64) error {
+func (r *subAdminCommissionRepository) loadCalendarLiveCosts(ctx context.Context, subAdminID int64, start, end time.Time, costs map[string]float64) error {
 	timezone := service.GroupUsageTimezoneName()
 	rows, err := r.sql.QueryContext(ctx, `
 		SELECT (ul.created_at AT TIME ZONE $4)::date::text AS date, COALESCE(SUM(ul.actual_cost), 0) AS actual_cost
@@ -423,7 +426,7 @@ func (r *subAdminCommissionRepository) loadCalendarLiveCosts(ctx context.Context
 			AND (ul.created_at AT TIME ZONE $4)::date >= cg.granted_date
 			AND ul.created_at >= $2 AND ul.created_at < $3
 		GROUP BY 1
-	`, subAdminID, todayStart.UTC(), todayStart.AddDate(0, 0, 1).UTC(), timezone)
+	`, subAdminID, start.UTC(), end.UTC(), timezone)
 	if err != nil {
 		return err
 	}

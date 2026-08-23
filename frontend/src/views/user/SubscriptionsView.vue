@@ -33,16 +33,17 @@
         >
           <!-- Header -->
           <div
-            class="flex items-center justify-between border-b border-gray-100 p-4 dark:border-dark-700"
+            data-test="subscription-card-header"
+            class="flex flex-col gap-3 border-b border-gray-100 p-4 dark:border-dark-700 sm:flex-row sm:items-start sm:justify-between"
           >
-            <div class="flex items-center gap-3">
+            <div class="flex min-w-0 flex-1 items-start gap-3">
               <div :class="['h-1.5 w-1.5 shrink-0 rounded-full', platformAccentDotClass(subscription.group?.platform || '')]" />
-              <div>
-                <div class="flex items-center gap-2">
-                  <h3 class="font-semibold text-gray-900 dark:text-white">
+              <div class="min-w-0 flex-1">
+                <div data-test="subscription-card-title-row" class="flex min-w-0 flex-col gap-2 sm:flex-row sm:items-start">
+                  <h3 class="min-w-0 break-words font-semibold leading-6 text-gray-900 dark:text-white">
                     {{ subscription.group?.name || `Group #${subscription.group_id}` }}
                   </h3>
-                  <span :class="['rounded-md border px-2 py-0.5 text-[11px] font-medium', platformBadgeClass(subscription.group?.platform || '')]">
+                  <span :class="['w-fit shrink-0 whitespace-nowrap rounded-md border px-2 py-0.5 text-[11px] font-medium', platformBadgeClass(subscription.group?.platform || '')]">
                     {{ platformLabel(subscription.group?.platform || '') }}
                   </span>
                 </div>
@@ -57,10 +58,10 @@
                 </div>
               </div>
             </div>
-            <div class="flex items-center gap-2">
+            <div data-test="subscription-card-actions" class="flex w-full justify-between gap-2 sm:w-auto sm:justify-end">
               <span
                 :class="[
-                  'rounded-full px-2 py-0.5 text-xs font-medium',
+                  'shrink-0 whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-medium',
                   subscription.status === 'active'
                     ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300'
                     : subscription.status === 'expired'
@@ -72,7 +73,7 @@
               </span>
               <button
                 v-if="subscription.status === 'active'"
-                :class="['rounded-lg px-3 py-1.5 text-xs font-semibold text-white transition-colors', platformButtonClass(subscription.group?.platform || '')]"
+                :class="['shrink-0 whitespace-nowrap rounded-lg px-3 py-1.5 text-xs font-semibold text-white transition-colors', platformButtonClass(subscription.group?.platform || '')]"
                 @click="router.push({ path: '/purchase', query: { tab: 'subscription', group: String(subscription.group_id) } })"
               >
                 {{ t('payment.renewNow') }}
@@ -83,19 +84,27 @@
           <!-- Usage Progress -->
           <div class="space-y-4 p-4">
             <!-- Expiration Info -->
-            <div v-if="subscription.expires_at" class="flex items-center justify-between text-sm">
+            <div
+              v-if="subscription.expires_at"
+              data-test="subscription-expiration-row"
+              class="flex flex-col gap-1 text-sm sm:flex-row sm:items-center sm:justify-between"
+            >
               <span class="text-gray-500 dark:text-dark-400">{{
                 t('userSubscriptions.expires')
               }}</span>
-              <span :class="getExpirationClass(subscription.expires_at)">
+              <span :class="['break-words text-right', getExpirationClass(subscription.expires_at)]">
                 {{ formatExpirationDate(subscription.expires_at) }}
               </span>
             </div>
-            <div v-else class="flex items-center justify-between text-sm">
+            <div
+              v-else
+              data-test="subscription-expiration-row"
+              class="flex flex-col gap-1 text-sm sm:flex-row sm:items-center sm:justify-between"
+            >
               <span class="text-gray-500 dark:text-dark-400">{{
                 t('userSubscriptions.expires')
               }}</span>
-              <span class="text-gray-700 dark:text-gray-300">{{
+              <span class="break-words text-right text-gray-700 dark:text-gray-300">{{
                 t('userSubscriptions.noExpiration')
               }}</span>
             </div>

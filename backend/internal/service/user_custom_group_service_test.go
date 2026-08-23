@@ -33,6 +33,23 @@ type customGroupReadRepoStub struct {
 	group  *UserCustomGroup
 }
 
+type customGroupAvailabilityAccountRepoStub struct {
+	AccountRepository
+	accountsByGroupID map[int64][]Account
+}
+
+func (s customGroupAvailabilityAccountRepoStub) ListSchedulableByGroupID(_ context.Context, groupID int64) ([]Account, error) {
+	return append([]Account(nil), s.accountsByGroupID[groupID]...), nil
+}
+
+func (s customGroupAvailabilityAccountRepoStub) ListSchedulable(_ context.Context) ([]Account, error) {
+	var accounts []Account
+	for _, groupAccounts := range s.accountsByGroupID {
+		accounts = append(accounts, groupAccounts...)
+	}
+	return accounts, nil
+}
+
 type customGroupDeleteRepoStub struct {
 	UserCustomGroupRepository
 	boundCount       int
@@ -177,6 +194,43 @@ func TestUserCustomGroupServiceListAnnotatesSourceAvailability(t *testing.T) {
 	require.Equal(t, UserCustomGroupSourceIssueUnavailable, models[3].SourceIssue)
 	require.False(t, models[4].SourceAvailable)
 	require.Equal(t, UserCustomGroupSourceIssueNotAllowed, models[4].SourceIssue)
+}
+
+func TestUserCustomGroupServiceListAnnotatesMissingSourceModelsAsUnavailable(t *testing.T) {
+	repo := customGroupReadRepoStub{groups: []UserCustomGroup{{
+		ID:     70,
+		UserID: 9,
+		Models: []UserCustomGroupModel{{
+			ID:            1,
+			PublicModel:   "claude-old",
+			SourceGroupID: 10,
+			SourceModel:   "claude-old",
+			SourceGroup:   &Group{ID: 10, Status: StatusActive, Platform: PlatformAnthropic},
+		}},
+	}}}
+	gateway := &GatewayService{accountRepo: customGroupAvailabilityAccountRepoStub{
+		accountsByGroupID: map[int64][]Account{
+			10: {{
+				ID:       100,
+				Platform: PlatformAnthropic,
+				Credentials: map[string]any{
+					"model_mapping": map[string]any{"claude-new": "claude-new"},
+				},
+			}},
+		},
+	}}
+	svc := &UserCustomGroupService{
+		repo:     repo,
+		userRepo: customGroupValidationUserRepoStub{user: &User{ID: 9, Status: StatusActive}},
+		gateway:  gateway,
+	}
+
+	groups, err := svc.List(context.Background(), 9)
+
+	require.NoError(t, err)
+	require.Len(t, groups, 1)
+	require.False(t, groups[0].Models[0].SourceAvailable)
+	require.Equal(t, "source_model_unavailable", groups[0].Models[0].SourceIssue)
 }
 
 func TestUserCustomGroupServiceGetAnnotatesAllowedExclusiveSource(t *testing.T) {

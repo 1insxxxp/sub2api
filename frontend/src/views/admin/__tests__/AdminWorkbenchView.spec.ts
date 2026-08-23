@@ -298,6 +298,18 @@ describe('AdminWorkbenchView balance transfer codes', () => {
           created_by: 7,
           source: 'user_balance_transfer',
           notes: 'customer campaign A'
+        },
+        {
+          id: 89,
+          code: 'WORKBENCH-USED-CODE',
+          type: 'balance',
+          value: 9,
+          status: 'used',
+          used_by: 22,
+          used_at: '2026-08-20T13:00:00Z',
+          created_at: '2026-08-20T12:00:00Z',
+          created_by: 7,
+          source: 'user_balance_transfer'
         }
       ])
     )
@@ -308,6 +320,8 @@ describe('AdminWorkbenchView balance transfer codes', () => {
     expect(getGenerated).toHaveBeenCalledWith({ page: 1, page_size: 10 })
     expect(wrapper.text()).toContain('WORKBENCH-CODE')
     expect(wrapper.text()).toContain('customer campaign A')
+    expect(wrapper.text()).toContain('adminWorkbench.balanceTransfer.status.unused')
+    expect(wrapper.text()).toContain('adminWorkbench.balanceTransfer.status.used')
   })
 
   it('generates balance redeem codes and refreshes account state', async () => {
@@ -604,6 +618,93 @@ describe('AdminWorkbenchView balance transfer codes', () => {
       page_size: 10
     })
     expect(wrapper.text()).toContain('req-1')
+  })
+
+  it('keeps commission calendar amounts inside mobile day cells', async () => {
+    Object.defineProperty(window, 'innerWidth', {
+      value: 390,
+      configurable: true
+    })
+    getWorkbenchCommissionCalendar.mockResolvedValueOnce([
+      {
+        date: '2026-08-22',
+        enabled: true,
+        actual_cost: 3828.41,
+        commission_amount: 459.4092
+      }
+    ])
+
+    const wrapper = mountWorkbench()
+    await flushPromises()
+
+    const dayCell = wrapper.get('[data-test="commission-calendar-day-2026-08-22"]')
+    const actualCost = wrapper.get('[data-test="commission-calendar-actual-cost-2026-08-22"]')
+    const commission = wrapper.get('[data-test="commission-calendar-commission-2026-08-22"]')
+
+    expect(dayCell.classes()).toEqual(expect.arrayContaining(['min-w-0', 'overflow-hidden']))
+    expect(actualCost.classes()).toEqual(expect.arrayContaining(['min-w-0', 'max-w-full', 'truncate']))
+    expect(actualCost.attributes('title')).toBe('$3828.41')
+    expect(actualCost.text()).toContain('$3.8K')
+    expect(commission.classes()).toEqual(expect.arrayContaining(['min-w-0', 'max-w-full', 'truncate']))
+    expect(commission.attributes('title')).toBe('$459.41')
+  })
+
+  it('shows commission days as full mobile-readable rows', async () => {
+    Object.defineProperty(window, 'innerWidth', {
+      value: 390,
+      configurable: true
+    })
+    getWorkbenchCommissionCalendar.mockResolvedValueOnce([
+      {
+        date: '2026-08-22',
+        enabled: true,
+        actual_cost: 3828.41,
+        commission_amount: 459.4092
+      }
+    ])
+
+    const wrapper = mountWorkbench()
+    await flushPromises()
+
+    const row = wrapper.get('[data-test="commission-mobile-day-row-2026-08-22"]')
+    expect(row.classes()).toContain('sm:hidden')
+    expect(row.text()).toContain('2026-08-22')
+    expect(row.text()).toContain('$3828.41')
+    expect(row.text()).toContain('$459.41')
+  })
+
+  it('keeps commission day request logs readable on mobile', async () => {
+    Object.defineProperty(window, 'innerWidth', {
+      value: 390,
+      configurable: true
+    })
+    authState.user = {
+      id: 7,
+      email: 'sub-admin@example.com',
+      role: 'sub_admin',
+      balance: 30,
+      concurrency: 5
+    }
+
+    const wrapper = mountWorkbench()
+    await flushPromises()
+    await wrapper.get('[data-test="commission-calendar-day-2026-08-22"]').trigger('click')
+    await flushPromises()
+    await wrapper.get('[data-test="commission-day-group-3-toggle"]').trigger('click')
+    await flushPromises()
+
+    const logCard = wrapper.get('[data-test="commission-log-99"]')
+    const requestID = wrapper.get('[data-test="commission-log-request-99"]')
+    const userLine = wrapper.get('[data-test="commission-log-user-99"]')
+    const modelLine = wrapper.get('[data-test="commission-log-model-99"]')
+
+    expect(logCard.classes()).toEqual(expect.arrayContaining(['rounded-lg', 'p-3']))
+    expect(requestID.classes()).toEqual(expect.arrayContaining(['break-all', 'sm:truncate']))
+    expect(userLine.classes()).toEqual(expect.arrayContaining(['break-all', 'sm:truncate']))
+    expect(modelLine.classes()).toEqual(expect.arrayContaining(['break-all', 'sm:truncate']))
+    expect(logCard.text()).toContain('customer@example.com')
+    expect(logCard.text()).toContain('claude-sonnet-4')
+    expect(logCard.text()).toContain('$12.00')
   })
 
   it('omits the commission explainer copy for sub-admins', async () => {
