@@ -505,7 +505,15 @@
             <div class="redeem-subscription-guide-header">
               <div class="redeem-subscription-guide-hero">
                 <div class="redeem-subscription-guide-icon">
-                  <Icon name="badge" size="lg" />
+                  <img
+                    v-if="showSubscriptionGuideLogo"
+                    :src="subscriptionGuideLogoSrc"
+                    alt=""
+                    aria-hidden="true"
+                    class="redeem-subscription-guide-logo"
+                    @error="handleSubscriptionGuideLogoError"
+                  />
+                  <Icon v-else name="badge" size="lg" :stroke-width="2" />
                 </div>
                 <div class="min-w-0">
                   <p class="redeem-subscription-guide-eyebrow">
@@ -882,6 +890,7 @@ import Pagination from '@/components/common/Pagination.vue'
 import Icon from '@/components/icons/Icon.vue'
 import { formatDateTime } from '@/utils/format'
 import { extractApiErrorCode, extractApiErrorMessage } from '@/utils/apiError'
+import { sanitizeUrl } from '@/utils/url'
 
 const { t } = useI18n()
 const router = useRouter()
@@ -907,6 +916,7 @@ const redeemResult = ref<{
 const errorMessage = ref('')
 const subscriptionRedeemGuideStoragePrefix = 'passionapi.subscriptionRedeemGuideSeen'
 const showSubscriptionRedeemGuide = ref(false)
+const subscriptionGuideLogoLoadFailed = ref(false)
 const subscriptionGuideContext = ref<{
   groupName?: string
   validityDays?: number
@@ -919,6 +929,17 @@ const subscriptionGuideGroupName = computed(() => {
 })
 const subscriptionGuideValidityDays = computed(() => {
   return subscriptionGuideContext.value?.validityDays || 0
+})
+const subscriptionGuideLogoSrc = computed(() => {
+  const configuredLogo = appStore.effectiveSiteLogo || appStore.siteLogo || '/logo.svg'
+  return sanitizeUrl(configuredLogo, { allowRelative: true, allowDataUrl: true }) || '/logo.svg'
+})
+const showSubscriptionGuideLogo = computed(() => {
+  return !subscriptionGuideLogoLoadFailed.value && Boolean(subscriptionGuideLogoSrc.value)
+})
+
+watch(subscriptionGuideLogoSrc, () => {
+  subscriptionGuideLogoLoadFailed.value = false
 })
 
 // History data
@@ -1341,6 +1362,10 @@ const closeSubscriptionRedeemGuide = () => {
 const goToApiKeysFromSubscriptionGuide = () => {
   closeSubscriptionRedeemGuide()
   router.push('/keys')
+}
+
+const handleSubscriptionGuideLogoError = () => {
+  subscriptionGuideLogoLoadFailed.value = true
 }
 
 const handleRedeem = async () => {
@@ -1947,10 +1972,25 @@ watch(generatedCodes, (codes) => {
   flex-shrink: 0;
   align-items: center;
   justify-content: center;
+  overflow: hidden;
   border-radius: 1.05rem;
   color: white;
-  background: linear-gradient(135deg, var(--brand-600), var(--brand-cyan-500));
+  border: 1px solid rgba(147, 197, 253, 0.7);
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.94), rgba(239, 246, 255, 0.88)),
+    linear-gradient(135deg, var(--brand-600, #2563eb), var(--brand-cyan-500, #06b6d4));
   box-shadow: 0 14px 30px rgba(37, 99, 235, 0.2);
+}
+
+.redeem-subscription-guide-icon > svg {
+  color: rgb(37, 99, 235);
+}
+
+.redeem-subscription-guide-logo {
+  height: 100%;
+  width: 100%;
+  object-fit: contain;
+  padding: 0.32rem;
 }
 
 .redeem-subscription-guide-eyebrow {

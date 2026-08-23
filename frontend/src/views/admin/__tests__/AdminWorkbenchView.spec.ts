@@ -620,7 +620,7 @@ describe('AdminWorkbenchView balance transfer codes', () => {
     expect(wrapper.text()).toContain('req-1')
   })
 
-  it('keeps commission calendar amounts inside mobile day cells', async () => {
+  it('keeps mobile commission calendar cells compact and shows one selected day card', async () => {
     Object.defineProperty(window, 'innerWidth', {
       value: 390,
       configurable: true
@@ -631,6 +631,12 @@ describe('AdminWorkbenchView balance transfer codes', () => {
         enabled: true,
         actual_cost: 3828.41,
         commission_amount: 459.4092
+      },
+      {
+        date: '2026-08-23',
+        enabled: true,
+        actual_cost: 12.34,
+        commission_amount: 1.23
       }
     ])
 
@@ -639,17 +645,36 @@ describe('AdminWorkbenchView balance transfer codes', () => {
 
     const dayCell = wrapper.get('[data-test="commission-calendar-day-2026-08-22"]')
     const actualCost = wrapper.get('[data-test="commission-calendar-actual-cost-2026-08-22"]')
-    const commission = wrapper.get('[data-test="commission-calendar-commission-2026-08-22"]')
+    const desktopAmounts = wrapper.get('[data-test="commission-calendar-desktop-amounts-2026-08-22"]')
+    const dayStrip = wrapper.get('[data-test="commission-mobile-day-strip"]')
+    const selectedCard = wrapper.get('[data-test="commission-mobile-selected-day-card"]')
 
-    expect(dayCell.classes()).toEqual(expect.arrayContaining(['min-w-0', 'overflow-hidden']))
-    expect(actualCost.classes()).toEqual(expect.arrayContaining(['min-w-0', 'max-w-full', 'truncate']))
+    expect(dayCell.classes()).toEqual(expect.arrayContaining(['commission-calendar-compact-cell', 'min-h-12']))
+    expect(desktopAmounts.classes()).toEqual(expect.arrayContaining(['hidden', 'sm:block']))
+    expect(actualCost.classes()).toEqual(expect.arrayContaining(['commission-calendar-primary-amount', 'tabular-nums']))
     expect(actualCost.attributes('title')).toBe('$3828.41')
-    expect(actualCost.text()).toContain('$3.8K')
-    expect(commission.classes()).toEqual(expect.arrayContaining(['min-w-0', 'max-w-full', 'truncate']))
-    expect(commission.attributes('title')).toBe('$459.41')
+    expect(actualCost.text()).toContain('$3828.41')
+    expect(actualCost.text()).not.toContain('$3.8K')
+    expect(dayStrip.classes()).toEqual(expect.arrayContaining(['overflow-x-auto', 'sm:hidden']))
+    expect(dayStrip.text()).toContain('22')
+    expect(dayStrip.text()).toContain('23')
+    expect(wrapper.findAll('[data-test="commission-mobile-selected-day-card"]')).toHaveLength(1)
+    expect(selectedCard.classes()).toEqual(expect.arrayContaining(['commission-mobile-ledger-card', 'sm:hidden']))
+    expect(selectedCard.text()).toContain('2026-08-23')
+    expect(selectedCard.text()).toContain('$12.34')
+    expect(selectedCard.text()).toContain('$1.23')
+    expect(selectedCard.text()).not.toContain('$3828.41')
+
+    await wrapper.get('[data-test="commission-mobile-day-chip-2026-08-22"]').trigger('click')
+    await flushPromises()
+
+    const switchedCard = wrapper.get('[data-test="commission-mobile-selected-day-card"]')
+    expect(switchedCard.text()).toContain('2026-08-22')
+    expect(switchedCard.text()).toContain('$3828.41')
+    expect(switchedCard.text()).toContain('$459.41')
   })
 
-  it('shows commission days as full mobile-readable rows', async () => {
+  it('shows the selected commission day as a full mobile-readable card', async () => {
     Object.defineProperty(window, 'innerWidth', {
       value: 390,
       configurable: true
@@ -666,7 +691,7 @@ describe('AdminWorkbenchView balance transfer codes', () => {
     const wrapper = mountWorkbench()
     await flushPromises()
 
-    const row = wrapper.get('[data-test="commission-mobile-day-row-2026-08-22"]')
+    const row = wrapper.get('[data-test="commission-mobile-selected-day-card"]')
     expect(row.classes()).toContain('sm:hidden')
     expect(row.text()).toContain('2026-08-22')
     expect(row.text()).toContain('$3828.41')

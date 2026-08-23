@@ -48,7 +48,7 @@ var (
 const (
 	maxNotifyEmails      = 3 // Maximum number of notification emails per user
 	maxInlineAvatarBytes = 100 * 1024
-	targetAvatarBytes    = 20 * 1024
+	targetAvatarBytes    = 100 * 1024
 
 	// User-level rate limiting for notify email verification codes
 	notifyCodeUserRateLimit  = 5
