@@ -82,6 +82,7 @@ type Config struct {
 	WeChat                  WeChatConnectConfig           `mapstructure:"wechat_connect"`
 	OIDC                    OIDCConnectConfig             `mapstructure:"oidc_connect"`
 	DingTalk                DingTalkConnectConfig         `mapstructure:"dingtalk_connect"`
+	DujiaoLogin             DujiaoLoginConfig             `mapstructure:"dujiao_login"`
 	GitHubOAuth             EmailOAuthProviderConfig      `mapstructure:"github_oauth"`
 	GoogleOAuth             EmailOAuthProviderConfig      `mapstructure:"google_oauth"`
 	Default                 DefaultConfig                 `mapstructure:"default"`
@@ -386,6 +387,11 @@ type DingTalkConnectConfig struct {
 	EnableAttributeSync          bool     `mapstructure:"enable_attribute_sync"`
 	AttributeSyncFields          []string `mapstructure:"attribute_sync_fields"`
 	AttributeSyncOverwritePolicy string   `mapstructure:"attribute_sync_overwrite_policy"`
+}
+
+type DujiaoLoginConfig struct {
+	Enabled      bool   `mapstructure:"enabled"`
+	SharedSecret string `mapstructure:"shared_secret"`
 }
 
 type EmailOAuthProviderConfig struct {
@@ -1814,6 +1820,7 @@ func load(allowMissingJWTSecret bool) (*Config, error) {
 	cfg.OIDC.UserInfoUsernamePath = strings.TrimSpace(cfg.OIDC.UserInfoUsernamePath)
 	cfg.OIDC.UsePKCEExplicit = hasExplicitConfigOrEnv("oidc_connect.use_pkce", "OIDC_CONNECT_USE_PKCE")
 	cfg.OIDC.ValidateIDTokenExplicit = hasExplicitConfigOrEnv("oidc_connect.validate_id_token", "OIDC_CONNECT_VALIDATE_ID_TOKEN")
+	cfg.DujiaoLogin.SharedSecret = strings.TrimSpace(cfg.DujiaoLogin.SharedSecret)
 	cfg.Dashboard.KeyPrefix = strings.TrimSpace(cfg.Dashboard.KeyPrefix)
 	cfg.CORS.AllowedOrigins = normalizeStringSlice(cfg.CORS.AllowedOrigins)
 	cfg.Security.ResponseHeaders.AdditionalAllowed = normalizeStringSlice(cfg.Security.ResponseHeaders.AdditionalAllowed)
@@ -2089,6 +2096,9 @@ func setDefaults() {
 	viper.SetDefault("dingtalk_connect.corp_restriction_policy", "none")
 	viper.SetDefault("dingtalk_connect.require_email", true)
 	viper.SetDefault("dingtalk_connect.username_overwrite_policy", "if_empty")
+
+	viper.SetDefault("dujiao_login.enabled", false)
+	viper.SetDefault("dujiao_login.shared_secret", "")
 
 	// Database
 	viper.SetDefault("database.host", "localhost")
@@ -2631,6 +2641,9 @@ func (c *Config) Validate() error {
 	// 选择 bytes 而不是 rune 计数，确保二进制/随机串的长度语义更接近“熵”而非“字符数”。
 	if len([]byte(jwtSecret)) < 32 {
 		return fmt.Errorf("jwt.secret must be at least 32 bytes")
+	}
+	if c.DujiaoLogin.Enabled && len([]byte(strings.TrimSpace(c.DujiaoLogin.SharedSecret))) < 32 {
+		return fmt.Errorf("dujiao_login.shared_secret must be at least 32 bytes when dujiao_login.enabled is true")
 	}
 	switch c.Log.Level {
 	case "debug", "info", "warn", "error":
