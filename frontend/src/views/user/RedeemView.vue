@@ -1,6 +1,9 @@
 <template>
   <AppLayout>
-    <div class="redeem-shell mx-auto w-full max-w-4xl space-y-5 sm:space-y-6">
+    <div
+      class="redeem-shell mx-auto w-full max-w-4xl space-y-5 sm:space-y-6"
+      data-redeem-build="assets-404-hotfix-20260823"
+    >
       <!-- Current Balance Card -->
       <section class="redeem-balance-card">
         <div class="redeem-balance-orbit"></div>

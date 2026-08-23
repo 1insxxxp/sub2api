@@ -1,6 +1,6 @@
 <template>
   <AppLayout>
-    <div class="space-y-6">
+    <div class="space-y-6" data-redeem-build="assets-404-hotfix-20260823">
       <TablePageLayout>
       <template #filters>
         <div class="admin-toolbar">
