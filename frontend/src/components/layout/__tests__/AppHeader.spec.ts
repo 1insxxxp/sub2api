@@ -216,7 +216,7 @@ describe('AppHeader shared admin shell', () => {
     expect(styleSource).toMatch(/\.app-header-actions\s*\{[^}]*flex-nowrap/)
   })
 
-  it('uses one 36px blue-cyan mobile action style for primary header controls', async () => {
+  it('uses one flat 36px mobile action style for primary header controls', async () => {
     appStoreState.cachedPublicSettings = {
       model_plaza_enabled: true
     }
@@ -238,6 +238,9 @@ describe('AppHeader shared admin shell', () => {
     const mobileHeaderCss = styleSource.match(/@media \(max-width: 639px\) \{([\s\S]*?)\n {2}\}\n\n {2}\.app-header-balance-pill/)?.[1]
     const mobileToolbarRule = mobileHeaderCss?.match(/\.app-header-toolbar\s*\{([^}]*)\}/)?.[1]
     const compactActionRule = mobileHeaderCss?.match(/\.app-header-mobile-action\s*\{([^}]*)\}/)?.[1]
+    const compactHoverRule = mobileHeaderCss?.match(/\.app-header-mobile-action:hover:not\(:disabled\)\s*\{([^}]*)\}/)?.[1]
+    const compactActiveRule = mobileHeaderCss?.match(/\.app-header-mobile-action:active:not\(:disabled\)\s*\{([^}]*)\}/)?.[1]
+    const compactFocusRule = mobileHeaderCss?.match(/\.app-header-mobile-action:focus-visible\s*\{([^}]*)\}/)?.[1]
 
     controls.forEach((control) => {
       expect(control.classes()).toContain('app-header-mobile-action')
@@ -245,8 +248,12 @@ describe('AppHeader shared admin shell', () => {
     expect(mobileToolbarRule).toContain('--app-header-mobile-control-size: 2.25rem')
     expect(compactActionRule).toContain('width: var(--app-header-mobile-control-size)')
     expect(compactActionRule).toContain('height: var(--app-header-mobile-control-size)')
-    expect(compactActionRule).toContain('var(--brand-rgb)')
-    expect(compactActionRule).toContain('var(--brand-cyan-rgb)')
+    expect(compactActionRule).toContain('border-color: transparent')
+    expect(compactActionRule).toContain('background: transparent')
+    expect(compactActionRule).toContain('box-shadow: none')
+    expect(compactHoverRule).toContain('background: rgb(var(--brand-rgb) / 0.08)')
+    expect(compactActiveRule).toContain('background: rgb(var(--brand-rgb) / 0.14)')
+    expect(compactFocusRule).toContain('rgb(var(--brand-rgb) / 0.2)')
   })
 
   it('uses valid custom-property color syntax for mobile header theme surfaces', () => {
@@ -260,13 +267,13 @@ describe('AppHeader shared admin shell', () => {
     const subscriptionFocusRule = mobileHeaderCss.match(/\.app-header-actions \.subscription-progress-trigger:focus-visible\s*\{([^}]*)\}/)?.[1]
     const subscriptionDarkRule = mobileHeaderCss.match(/\.dark \.app-header-actions \.subscription-progress-trigger\s*\{([^}]*)\}/)?.[1]
 
-    for (const rule of [compactActionRule, subscriptionRule]) {
+    for (const rule of [subscriptionRule]) {
       expect(rule).toContain('rgb(var(--brand-rgb) / 0.34)')
       expect(rule).toContain('rgb(var(--brand-rgb) / 0.09)')
       expect(rule).toContain('rgb(var(--brand-cyan-rgb) / 0.08)')
       expect(rule).toContain('rgb(var(--brand-rgb) / 0.08)')
     }
-    for (const rule of [compactHoverRule, subscriptionHoverRule]) {
+    for (const rule of [subscriptionHoverRule]) {
       expect(rule).toContain('rgb(var(--brand-cyan-rgb) / 0.48)')
       expect(rule).toContain('rgb(var(--brand-rgb) / 0.14)')
       expect(rule).toContain('rgb(var(--brand-cyan-rgb) / 0.13)')
@@ -274,13 +281,32 @@ describe('AppHeader shared admin shell', () => {
     for (const rule of [compactFocusRule, subscriptionFocusRule]) {
       expect(rule).toContain('rgb(var(--brand-rgb) / 0.2)')
     }
-    for (const rule of [compactDarkRule, subscriptionDarkRule]) {
+    for (const rule of [subscriptionDarkRule]) {
       expect(rule).toContain('rgb(var(--brand-cyan-rgb) / 0.28)')
       expect(rule).toContain('rgb(var(--brand-rgb) / 0.2)')
       expect(rule).toContain('rgb(var(--brand-cyan-rgb) / 0.12)')
     }
+    expect(compactActionRule).toContain('background: transparent')
+    expect(compactHoverRule).toContain('background: rgb(var(--brand-rgb) / 0.08)')
+    expect(compactDarkRule).toContain('background: transparent')
     expect(mobileHeaderCss).not.toContain('rgba(var(--brand-rgb),')
     expect(mobileHeaderCss).not.toContain('rgba(var(--brand-cyan-rgb),')
+  })
+
+  it('renders the mobile user avatar without a decorative frame', async () => {
+    const wrapper = await mountHeader()
+    const trigger = wrapper.get('button[aria-label="User Menu"]')
+    const avatar = wrapper.get('[data-test="header-user-avatar"]')
+    const mobileHeaderCss = styleSource.match(/@media \(max-width: 639px\) \{([\s\S]*?)\n {2}\}\n\n {2}\.app-header-balance-pill/)?.[1] ?? ''
+    const triggerRule = mobileHeaderCss.match(/\.app-header-user-trigger\s*\{([^}]*)\}/)?.[1]
+    const avatarRule = mobileHeaderCss.match(/\.app-header-user-avatar\s*\{([^}]*)\}/)?.[1]
+
+    expect(trigger.classes()).toContain('app-header-user-trigger')
+    expect(avatar.classes()).toContain('app-header-user-avatar')
+    expect(triggerRule).toContain('border-color: transparent')
+    expect(triggerRule).toContain('background: transparent')
+    expect(triggerRule).toContain('box-shadow: none')
+    expect(avatarRule).toContain('box-shadow: none')
   })
 
   it('keeps the worst-case mobile toolbar budget within 320px using its CSS constants', () => {

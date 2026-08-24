@@ -350,14 +350,14 @@
         <div v-if="user" class="relative shrink-0" ref="dropdownRef">
           <button
             @click="toggleDropdown"
-            class="app-header-mobile-action group flex items-center gap-2 rounded-xl border border-transparent p-1.5 transition-all duration-200 hover:border-blue-200/70 hover:bg-blue-50/80 hover:shadow-sm hover:shadow-blue-600/10 focus:outline-none focus:ring-2 focus:ring-blue-500/25 dark:hover:border-blue-400/20 dark:hover:bg-blue-500/10"
+            class="app-header-mobile-action app-header-user-trigger group flex items-center gap-2 rounded-xl border border-transparent p-1.5 transition-all duration-200 hover:border-blue-200/70 hover:bg-blue-50/80 hover:shadow-sm hover:shadow-blue-600/10 focus:outline-none focus:ring-2 focus:ring-blue-500/25 dark:hover:border-blue-400/20 dark:hover:bg-blue-500/10"
             aria-label="User Menu"
             aria-haspopup="menu"
             :aria-expanded="dropdownOpen"
           >
             <div
               data-test="header-user-avatar"
-              class="flex h-8 w-8 items-center justify-center overflow-hidden rounded-xl bg-[linear-gradient(135deg,#2563eb,#3b82f6,#06b6d4)] text-sm font-semibold text-white shadow-sm shadow-blue-600/25 ring-1 ring-blue-300/40"
+              class="app-header-user-avatar flex h-8 w-8 items-center justify-center overflow-hidden rounded-xl bg-[linear-gradient(135deg,#2563eb,#3b82f6,#06b6d4)] text-sm font-semibold text-white shadow-sm shadow-blue-600/25 ring-1 ring-blue-300/40"
             >
               <img
                 v-if="avatarUrl"

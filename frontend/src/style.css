@@ -616,42 +616,76 @@
       justify-content: center;
       gap: 0 !important;
       padding: 0 !important;
-      border: 1px solid rgb(var(--brand-rgb) / 0.34) !important;
+      border-color: transparent !important;
       border-radius: 0.5rem !important;
       color: var(--brand-700) !important;
-      background: linear-gradient(135deg, rgb(var(--brand-rgb) / 0.09), rgb(var(--brand-cyan-rgb) / 0.08)) !important;
-      box-shadow: 0 1px 0 rgba(255, 255, 255, 0.8) inset, 0 4px 12px rgb(var(--brand-rgb) / 0.08);
+      background: transparent !important;
+      box-shadow: none;
     }
 
     .app-header-mobile-action:hover:not(:disabled) {
-      border-color: rgb(var(--brand-cyan-rgb) / 0.48) !important;
+      border-color: transparent !important;
       color: var(--brand-700) !important;
-      background: linear-gradient(135deg, rgb(var(--brand-rgb) / 0.14), rgb(var(--brand-cyan-rgb) / 0.13)) !important;
+      background: rgb(var(--brand-rgb) / 0.08) !important;
+      box-shadow: none;
+    }
+
+    .app-header-mobile-action:active:not(:disabled) {
+      background: rgb(var(--brand-rgb) / 0.14) !important;
     }
 
     .app-header-mobile-action:focus-visible {
       outline: none;
+      background: rgb(var(--brand-rgb) / 0.08) !important;
       box-shadow: 0 0 0 3px rgb(var(--brand-rgb) / 0.2);
     }
 
     .app-header-mobile-action:disabled {
-      border-color: rgba(148, 163, 184, 0.32) !important;
+      border-color: transparent !important;
       color: rgb(148 163 184) !important;
-      background: rgba(241, 245, 249, 0.84) !important;
+      background: transparent !important;
       box-shadow: none;
     }
 
     .dark .app-header-mobile-action {
-      border-color: rgb(var(--brand-cyan-rgb) / 0.28) !important;
+      border-color: transparent !important;
       color: rgb(165 243 252) !important;
-      background: linear-gradient(135deg, rgb(var(--brand-rgb) / 0.2), rgb(var(--brand-cyan-rgb) / 0.12)) !important;
-      box-shadow: 0 1px 0 rgba(255, 255, 255, 0.05) inset;
+      background: transparent !important;
+      box-shadow: none;
+    }
+
+    .dark .app-header-mobile-action:hover:not(:disabled),
+    .dark .app-header-mobile-action:focus-visible {
+      background: rgb(var(--brand-cyan-rgb) / 0.1) !important;
     }
 
     .dark .app-header-mobile-action:disabled {
-      border-color: rgba(71, 85, 105, 0.7) !important;
+      border-color: transparent !important;
       color: rgb(100 116 139) !important;
-      background: rgba(30, 41, 59, 0.72) !important;
+      background: transparent !important;
+    }
+
+    .app-header-user-trigger {
+      border-color: transparent !important;
+      background: transparent !important;
+      box-shadow: none;
+    }
+
+    .app-header-user-trigger:hover:not(:disabled),
+    .dark .app-header-user-trigger,
+    .dark .app-header-user-trigger:hover:not(:disabled) {
+      border-color: transparent !important;
+      background: transparent !important;
+      box-shadow: none;
+    }
+
+    .app-header-user-trigger:focus-visible {
+      box-shadow: 0 0 0 3px rgb(var(--brand-rgb) / 0.2) !important;
+    }
+
+    .app-header-user-avatar {
+      background: transparent !important;
+      box-shadow: none !important;
     }
 
     .app-header-actions .subscription-progress-trigger {
