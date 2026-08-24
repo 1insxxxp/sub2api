@@ -595,6 +595,8 @@ describe('AdminWorkbenchView balance transfer codes', () => {
     expect(dayCell.text()).toContain('22')
     expect(amounts.text()).toContain('$3.83K')
     expect(amounts.text()).toContain('$459.41')
+    expect(amounts.text()).not.toContain('actualCostShort')
+    expect(amounts.text()).not.toContain('commissionAmountShort')
     expect(monthSummary.classes()).toEqual(expect.arrayContaining(['grid-cols-1', 'min-[480px]:grid-cols-2']))
     expect(monthSummary.text()).toContain('$3840.75')
     expect(monthSummary.text()).toContain('$460.64')

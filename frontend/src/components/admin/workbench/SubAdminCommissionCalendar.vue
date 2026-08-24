@@ -76,10 +76,10 @@
               class="mt-0.5 min-w-0 space-y-0.5 text-[9px] font-medium leading-tight tabular-nums sm:text-[11px]"
             >
               <span class="block truncate text-blue-700 dark:text-blue-200" :title="`${t('adminWorkbench.commission.actualCost')} ${formatCurrency(cell.day.actual_cost)}`">
-                <span class="mr-0.5 font-normal opacity-75">{{ t('adminWorkbench.commission.actualCostShort') }}</span>{{ compactCurrency(cell.day.actual_cost) }}
+                {{ compactCurrency(cell.day.actual_cost) }}
               </span>
               <span class="block truncate text-emerald-700 dark:text-emerald-300" :title="`${t('adminWorkbench.commission.commissionAmount')} ${formatCurrency(cell.day.commission_amount)}`">
-                <span class="mr-0.5 font-normal opacity-75">{{ t('adminWorkbench.commission.commissionAmountShort') }}</span>{{ compactCurrency(cell.day.commission_amount) }}
+                {{ compactCurrency(cell.day.commission_amount) }}
               </span>
             </span>
           </span>
