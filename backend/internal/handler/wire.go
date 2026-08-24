@@ -321,11 +321,13 @@ func ProvideHandlers(
 	modelPlazaHandler *ModelPlazaHandler,
 	asyncImageHandler *AsyncImageHandler,
 	batchImageHandler *BatchImageHandler,
+	lotteryHandler *LotteryHandler,
+	adminLotteryHandler *admin.LotteryHandler,
 	_ *service.IdempotencyCoordinator,
 	_ *service.IdempotencyCleanupService,
 	_ *service.OpenAIQuotaAutoResetService,
 ) *Handlers {
-	return &Handlers{
+	handlers := &Handlers{
 		Auth:             authHandler,
 		User:             userHandler,
 		APIKey:           apiKeyHandler,
@@ -350,7 +352,12 @@ func ProvideHandlers(
 		ModelPlaza:       modelPlazaHandler,
 		AsyncImage:       asyncImageHandler,
 		BatchImage:       batchImageHandler,
+		Lottery:          lotteryHandler,
 	}
+	if handlers.Admin != nil {
+		handlers.Admin.Lottery = adminLotteryHandler
+	}
+	return handlers
 }
 
 // ProviderSet is the Wire provider set for all handlers
@@ -379,6 +386,8 @@ var ProviderSet = wire.NewSet(
 	NewModelPlazaHandler,
 	NewAsyncImageHandler,
 	ProvideBatchImageHandler,
+	NewLotteryHandler,
+	admin.NewLotteryHandler,
 
 	// Admin handlers
 	admin.NewDashboardHandler,
