@@ -654,7 +654,7 @@
       background: rgba(30, 41, 59, 0.72) !important;
     }
 
-    .subscription-progress-trigger {
+    .app-header-actions .subscription-progress-trigger {
       width: var(--app-header-mobile-subscription-width);
       height: var(--app-header-mobile-control-size);
       min-width: var(--app-header-mobile-subscription-width);
@@ -669,42 +669,42 @@
       box-shadow: 0 1px 0 rgba(255, 255, 255, 0.8) inset, 0 4px 12px rgba(var(--brand-rgb), 0.08);
     }
 
-    .subscription-progress-trigger:hover {
+    .app-header-actions .subscription-progress-trigger:hover {
       border-color: rgba(var(--brand-cyan-rgb), 0.48) !important;
       background: linear-gradient(135deg, rgba(var(--brand-rgb), 0.14), rgba(var(--brand-cyan-rgb), 0.13)) !important;
     }
 
-    .subscription-progress-trigger:focus-visible {
+    .app-header-actions .subscription-progress-trigger:focus-visible {
       outline: none;
       box-shadow: 0 0 0 3px rgba(var(--brand-rgb), 0.2);
     }
 
-    .subscription-progress-trigger-status {
+    .app-header-actions .subscription-progress-trigger-status {
       min-width: 0;
       gap: 0.25rem !important;
     }
 
-    .subscription-progress-trigger-icon {
+    .app-header-actions .subscription-progress-trigger-icon {
       flex-shrink: 0;
       color: var(--brand-600) !important;
     }
 
-    .subscription-progress-trigger-count {
+    .app-header-actions .subscription-progress-trigger-count {
       color: var(--brand-700) !important;
     }
 
-    .dark .subscription-progress-trigger {
+    .dark .app-header-actions .subscription-progress-trigger {
       border-color: rgba(var(--brand-cyan-rgb), 0.28) !important;
       color: rgb(191 219 254) !important;
       background: linear-gradient(135deg, rgba(var(--brand-rgb), 0.2), rgba(var(--brand-cyan-rgb), 0.12)) !important;
       box-shadow: 0 1px 0 rgba(255, 255, 255, 0.05) inset;
     }
 
-    .dark .subscription-progress-trigger-icon {
+    .dark .app-header-actions .subscription-progress-trigger-icon {
       color: rgb(103 232 249) !important;
     }
 
-    .dark .subscription-progress-trigger-count {
+    .dark .app-header-actions .subscription-progress-trigger-count {
       color: rgb(191 219 254) !important;
     }
   }

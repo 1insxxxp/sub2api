@@ -254,7 +254,7 @@ describe('AppHeader shared admin shell', () => {
     const toolbarRule = mobileHeaderCss.match(/\.app-header-toolbar\s*\{([^}]*)\}/)?.[1]
     const actionsRule = mobileHeaderCss.match(/\.app-header-actions\s*\{([^}]*)\}/)?.[1]
     const compactActionRule = mobileHeaderCss.match(/\.app-header-mobile-action\s*\{([^}]*)\}/)?.[1]
-    const subscriptionRule = mobileHeaderCss.match(/\.subscription-progress-trigger\s*\{([^}]*)\}/)?.[1]
+    const subscriptionRule = mobileHeaderCss.match(/\.app-header-actions \.subscription-progress-trigger\s*\{([^}]*)\}/)?.[1]
     const readRemPropertyInPx = (name: string) => {
       const match = toolbarRule?.match(new RegExp(`--${name}:\\s*([0-9.]+)rem`))
       expect(match).not.toBeNull()

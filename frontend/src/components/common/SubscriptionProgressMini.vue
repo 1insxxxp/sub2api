@@ -6,6 +6,9 @@
       data-test="subscription-progress-trigger"
       class="subscription-progress-trigger flex cursor-pointer items-center gap-2 rounded-xl bg-purple-50 px-3 py-1.5 transition-colors hover:bg-purple-100 dark:bg-purple-900/20 dark:hover:bg-purple-900/30"
       :title="t('subscriptionProgress.viewDetails')"
+      :aria-label="t('subscriptionProgress.viewDetails')"
+      :aria-expanded="tooltipOpen"
+      aria-controls="subscription-progress-panel"
     >
       <Icon name="creditCard" size="sm" class="subscription-progress-trigger-icon text-purple-600 dark:text-purple-400" />
       <div class="subscription-progress-trigger-status flex items-center gap-1.5">
@@ -14,11 +17,12 @@
           <div
             v-for="(sub, index) in displaySubscriptions.slice(0, 3)"
             :key="index"
+            data-test="subscription-progress-dot"
             class="h-2 w-2 rounded-full"
             :class="getProgressDotClass(sub)"
           ></div>
         </div>
-        <span class="subscription-progress-trigger-count text-xs font-medium text-purple-700 dark:text-purple-300">
+        <span data-test="subscription-progress-count" class="subscription-progress-trigger-count text-xs font-medium text-purple-700 dark:text-purple-300">
           {{ activeSubscriptions.length }}
         </span>
       </div>
@@ -39,6 +43,7 @@
     <transition name="dropdown">
       <div
         v-if="tooltipOpen"
+        id="subscription-progress-panel"
         data-test="subscription-progress-sheet"
         :class="isMobileTooltip
           ? 'subscription-progress-mobile-panel fixed left-1/2 top-1/2 z-[100000020] flex max-h-[calc(100dvh-2rem-env(safe-area-inset-top)-env(safe-area-inset-bottom))] w-[calc(100vw-2rem)] max-w-md -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-2xl dark:border-dark-700 dark:bg-dark-800'
