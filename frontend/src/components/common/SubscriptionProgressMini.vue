@@ -4,11 +4,11 @@
     <button
       @click="toggleTooltip"
       data-test="subscription-progress-trigger"
-      class="subscription-progress-trigger flex h-9 shrink-0 cursor-pointer items-center gap-1 rounded-lg border border-blue-200/80 bg-blue-50/90 px-2 text-blue-700 shadow-sm shadow-blue-950/5 transition-colors hover:border-cyan-300/80 hover:bg-cyan-50/80 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/30 sm:gap-2 sm:rounded-xl sm:px-3 dark:border-blue-400/20 dark:bg-blue-500/10 dark:text-blue-200 dark:hover:border-cyan-300/30 dark:hover:bg-cyan-400/10 dark:focus-visible:ring-cyan-300/35"
+      class="subscription-progress-trigger flex cursor-pointer items-center gap-2 rounded-xl bg-purple-50 px-3 py-1.5 transition-colors hover:bg-purple-100 dark:bg-purple-900/20 dark:hover:bg-purple-900/30"
       :title="t('subscriptionProgress.viewDetails')"
     >
-      <Icon name="creditCard" size="sm" class="text-blue-600 dark:text-cyan-300" />
-      <div class="flex items-center gap-1.5">
+      <Icon name="creditCard" size="sm" class="subscription-progress-trigger-icon text-purple-600 dark:text-purple-400" />
+      <div class="subscription-progress-trigger-status flex items-center gap-1.5">
         <!-- Combined progress indicator -->
         <div class="flex items-center gap-0.5">
           <div
@@ -18,7 +18,7 @@
             :class="getProgressDotClass(sub)"
           ></div>
         </div>
-        <span class="text-xs font-medium text-blue-700 dark:text-blue-200">
+        <span class="subscription-progress-trigger-count text-xs font-medium text-purple-700 dark:text-purple-300">
           {{ activeSubscriptions.length }}
         </span>
       </div>

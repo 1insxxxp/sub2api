@@ -593,11 +593,24 @@
   }
 
   @media (max-width: 639px) {
+    .app-header-toolbar {
+      --app-header-mobile-control-size: 2.25rem;
+      --app-header-mobile-subscription-width: 4.75rem;
+      --app-header-mobile-gap: 0.25rem;
+      --app-header-mobile-inline-padding: 0.5rem;
+      gap: var(--app-header-mobile-gap);
+      padding-inline: var(--app-header-mobile-inline-padding);
+    }
+
+    .app-header-actions {
+      gap: var(--app-header-mobile-gap);
+    }
+
     .app-header-mobile-action {
       display: inline-flex;
-      width: 2.25rem !important;
-      height: 2.25rem !important;
-      min-width: 2.25rem;
+      width: var(--app-header-mobile-control-size) !important;
+      height: var(--app-header-mobile-control-size) !important;
+      min-width: var(--app-header-mobile-control-size);
       flex-shrink: 0;
       align-items: center;
       justify-content: center;
@@ -639,6 +652,60 @@
       border-color: rgba(71, 85, 105, 0.7) !important;
       color: rgb(100 116 139) !important;
       background: rgba(30, 41, 59, 0.72) !important;
+    }
+
+    .subscription-progress-trigger {
+      width: var(--app-header-mobile-subscription-width);
+      height: var(--app-header-mobile-control-size);
+      min-width: var(--app-header-mobile-subscription-width);
+      flex-shrink: 0;
+      gap: 0.25rem !important;
+      overflow: hidden;
+      padding: 0 0.25rem !important;
+      border: 1px solid rgba(var(--brand-rgb), 0.34) !important;
+      border-radius: 0.5rem !important;
+      color: var(--brand-700) !important;
+      background: linear-gradient(135deg, rgba(var(--brand-rgb), 0.09), rgba(var(--brand-cyan-rgb), 0.08)) !important;
+      box-shadow: 0 1px 0 rgba(255, 255, 255, 0.8) inset, 0 4px 12px rgba(var(--brand-rgb), 0.08);
+    }
+
+    .subscription-progress-trigger:hover {
+      border-color: rgba(var(--brand-cyan-rgb), 0.48) !important;
+      background: linear-gradient(135deg, rgba(var(--brand-rgb), 0.14), rgba(var(--brand-cyan-rgb), 0.13)) !important;
+    }
+
+    .subscription-progress-trigger:focus-visible {
+      outline: none;
+      box-shadow: 0 0 0 3px rgba(var(--brand-rgb), 0.2);
+    }
+
+    .subscription-progress-trigger-status {
+      min-width: 0;
+      gap: 0.25rem !important;
+    }
+
+    .subscription-progress-trigger-icon {
+      flex-shrink: 0;
+      color: var(--brand-600) !important;
+    }
+
+    .subscription-progress-trigger-count {
+      color: var(--brand-700) !important;
+    }
+
+    .dark .subscription-progress-trigger {
+      border-color: rgba(var(--brand-cyan-rgb), 0.28) !important;
+      color: rgb(191 219 254) !important;
+      background: linear-gradient(135deg, rgba(var(--brand-rgb), 0.2), rgba(var(--brand-cyan-rgb), 0.12)) !important;
+      box-shadow: 0 1px 0 rgba(255, 255, 255, 0.05) inset;
+    }
+
+    .dark .subscription-progress-trigger-icon {
+      color: rgb(103 232 249) !important;
+    }
+
+    .dark .subscription-progress-trigger-count {
+      color: rgb(191 219 254) !important;
     }
   }
 

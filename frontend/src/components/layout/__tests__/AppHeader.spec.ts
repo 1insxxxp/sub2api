@@ -235,15 +235,49 @@ describe('AppHeader shared admin shell', () => {
       wrapper.get('[data-test="daily-checkin-button"]'),
       wrapper.get('button[aria-label="User Menu"]')
     ]
-    const compactActionRule = styleSource.match(/\.app-header-mobile-action\s*\{([^}]*)\}/)?.[1]
+    const mobileHeaderCss = styleSource.match(/@media \(max-width: 639px\) \{([\s\S]*?)\n {2}\}\n\n {2}\.app-header-balance-pill/)?.[1]
+    const mobileToolbarRule = mobileHeaderCss?.match(/\.app-header-toolbar\s*\{([^}]*)\}/)?.[1]
+    const compactActionRule = mobileHeaderCss?.match(/\.app-header-mobile-action\s*\{([^}]*)\}/)?.[1]
 
     controls.forEach((control) => {
       expect(control.classes()).toContain('app-header-mobile-action')
     })
-    expect(compactActionRule).toContain('width: 2.25rem')
-    expect(compactActionRule).toContain('height: 2.25rem')
+    expect(mobileToolbarRule).toContain('--app-header-mobile-control-size: 2.25rem')
+    expect(compactActionRule).toContain('width: var(--app-header-mobile-control-size)')
+    expect(compactActionRule).toContain('height: var(--app-header-mobile-control-size)')
     expect(compactActionRule).toContain('var(--brand-rgb)')
     expect(compactActionRule).toContain('var(--brand-cyan-rgb)')
+  })
+
+  it('keeps the worst-case mobile toolbar budget within 320px using its CSS constants', () => {
+    const mobileHeaderCss = styleSource.match(/@media \(max-width: 639px\) \{([\s\S]*?)\n {2}\}\n\n {2}\.app-header-balance-pill/)?.[1] ?? ''
+    const toolbarRule = mobileHeaderCss.match(/\.app-header-toolbar\s*\{([^}]*)\}/)?.[1]
+    const actionsRule = mobileHeaderCss.match(/\.app-header-actions\s*\{([^}]*)\}/)?.[1]
+    const compactActionRule = mobileHeaderCss.match(/\.app-header-mobile-action\s*\{([^}]*)\}/)?.[1]
+    const subscriptionRule = mobileHeaderCss.match(/\.subscription-progress-trigger\s*\{([^}]*)\}/)?.[1]
+    const readRemPropertyInPx = (name: string) => {
+      const match = toolbarRule?.match(new RegExp(`--${name}:\\s*([0-9.]+)rem`))
+      expect(match).not.toBeNull()
+      return Number(match?.[1] ?? Number.NaN) * 16
+    }
+    const announcementTrigger = announcementBellSource.match(/<button\s+[\s\S]*?<\/button>/)?.[0] ?? ''
+    const fixedControlCount = (componentSource.match(/app-header-mobile-action/g) ?? []).length
+      + (announcementTrigger.includes('app-header-mobile-action') ? 1 : 0)
+
+    expect(fixedControlCount).toBe(5)
+    expect(toolbarRule).toContain('gap: var(--app-header-mobile-gap)')
+    expect(toolbarRule).toContain('padding-inline: var(--app-header-mobile-inline-padding)')
+    expect(actionsRule).toContain('gap: var(--app-header-mobile-gap)')
+    expect(compactActionRule).toContain('width: var(--app-header-mobile-control-size)')
+    expect(subscriptionRule).toContain('width: var(--app-header-mobile-subscription-width)')
+
+    const budgetPx = fixedControlCount * readRemPropertyInPx('app-header-mobile-control-size')
+      + readRemPropertyInPx('app-header-mobile-subscription-width')
+      + fixedControlCount * readRemPropertyInPx('app-header-mobile-gap')
+      + 2 * readRemPropertyInPx('app-header-mobile-inline-padding')
+
+    expect(budgetPx).toBe(292)
+    expect(budgetPx).toBeLessThanOrEqual(320)
   })
 
   it('applies the shared compact mobile action style to the announcement trigger', () => {
