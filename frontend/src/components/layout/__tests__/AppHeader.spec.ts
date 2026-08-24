@@ -9,6 +9,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const componentPath = resolve(dirname(fileURLToPath(import.meta.url)), '../AppHeader.vue')
 const componentSource = readFileSync(componentPath, 'utf8')
+const stylePath = resolve(dirname(fileURLToPath(import.meta.url)), '../../../style.css')
+const styleSource = readFileSync(stylePath, 'utf8')
+const announcementBellPath = resolve(dirname(fileURLToPath(import.meta.url)), '../../common/AnnouncementBell.vue')
+const announcementBellSource = readFileSync(announcementBellPath, 'utf8')
 
 const { getCheckinStatus, submitCheckin, showSuccess, showError, refreshUser } = vi.hoisted(() => ({
   getCheckinStatus: vi.fn(),
@@ -203,6 +207,51 @@ describe('AppHeader shared admin shell', () => {
     expect(link.text()).toContain('nav.modelPlaza')
   })
 
+  it('hides the locale switcher until sm and keeps the mobile action row on one line', async () => {
+    const wrapper = await mountHeader()
+    const locale = wrapper.get('[data-test="header-locale-switcher"]')
+
+    expect(locale.classes()).toContain('hidden')
+    expect(locale.classes()).toContain('sm:block')
+    expect(styleSource).toMatch(/\.app-header-actions\s*\{[^}]*flex-nowrap/)
+  })
+
+  it('uses one 36px blue-cyan mobile action style for primary header controls', async () => {
+    appStoreState.cachedPublicSettings = {
+      model_plaza_enabled: true
+    }
+    getCheckinStatus.mockResolvedValue({
+      enabled: true,
+      checked_in: false,
+      blacklisted: false,
+      checkin_date: '2026-06-17',
+      reward_amount: null
+    })
+
+    const wrapper = await mountHeader()
+    const controls = [
+      wrapper.get('button[aria-label="Toggle Menu"]'),
+      wrapper.get('[data-test="header-model-plaza-link"]'),
+      wrapper.get('[data-test="daily-checkin-button"]'),
+      wrapper.get('button[aria-label="User Menu"]')
+    ]
+    const compactActionRule = styleSource.match(/\.app-header-mobile-action\s*\{([^}]*)\}/)?.[1]
+
+    controls.forEach((control) => {
+      expect(control.classes()).toContain('app-header-mobile-action')
+    })
+    expect(compactActionRule).toContain('width: 2.25rem')
+    expect(compactActionRule).toContain('height: 2.25rem')
+    expect(compactActionRule).toContain('var(--brand-rgb)')
+    expect(compactActionRule).toContain('var(--brand-cyan-rgb)')
+  })
+
+  it('applies the shared compact mobile action style to the announcement trigger', () => {
+    const announcementTrigger = announcementBellSource.match(/<button\s+[\s\S]*?<\/button>/)?.[0]
+
+    expect(announcementTrigger).toContain('app-header-mobile-action')
+  })
+
   it('uses the shared default avatar in the header when no custom avatar exists', async () => {
     authStore.user = {
       id: 12,
@@ -322,7 +371,7 @@ describe('AppHeader daily check-in entry', () => {
     expect(buttonWrapper?.classList.contains('inline-flex')).toBe(true)
   })
 
-  it('compacts the check-in label below 360px without hiding the action', async () => {
+  it('hides the check-in label until sm without removing its accessible name', async () => {
     getCheckinStatus.mockResolvedValue({
       enabled: true,
       checked_in: false,
@@ -336,8 +385,10 @@ describe('AppHeader daily check-in entry', () => {
     const label = button.get('[data-test="daily-checkin-label"]')
 
     expect(button.attributes('aria-label')).toBe('签到')
+    expect(button.attributes('title')).toBe('签到')
     expect(label.classes()).toContain('hidden')
-    expect(label.classes()).toContain('min-[360px]:inline')
+    expect(label.classes()).toContain('sm:inline')
+    expect(label.classes()).not.toContain('min-[360px]:inline')
   })
 
   it('explains eligibility and streak rewards in the hover panel', async () => {

@@ -3,7 +3,7 @@
     <!-- 铃铛按钮 -->
     <button
       @click="openModal"
-      class="relative flex h-9 w-9 items-center justify-center rounded-xl border border-transparent text-gray-600 transition-all duration-200 hover:border-blue-200/70 hover:bg-blue-50/80 hover:text-blue-600 hover:shadow-sm hover:shadow-blue-600/10 dark:text-gray-400 dark:hover:border-blue-400/20 dark:hover:bg-blue-500/10 dark:hover:text-blue-300"
+      class="app-header-mobile-action relative flex h-9 w-9 items-center justify-center rounded-xl border border-transparent text-gray-600 transition-all duration-200 hover:border-blue-200/70 hover:bg-blue-50/80 hover:text-blue-600 hover:shadow-sm hover:shadow-blue-600/10 dark:text-gray-400 dark:hover:border-blue-400/20 dark:hover:bg-blue-500/10 dark:hover:text-blue-300"
       :class="{ 'text-blue-600 dark:text-blue-400': unreadCount > 0 }"
       :aria-label="t('announcements.title')"
     >

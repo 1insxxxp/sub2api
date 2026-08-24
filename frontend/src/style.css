@@ -585,11 +585,61 @@
   }
 
   .app-header-actions {
-    @apply flex min-w-0 items-center gap-1 sm:gap-2 md:gap-3;
+    @apply flex min-w-0 flex-nowrap items-center gap-1 sm:gap-2 md:gap-3;
   }
 
   .app-header-actions > * {
     @apply shrink-0;
+  }
+
+  @media (max-width: 639px) {
+    .app-header-mobile-action {
+      display: inline-flex;
+      width: 2.25rem !important;
+      height: 2.25rem !important;
+      min-width: 2.25rem;
+      flex-shrink: 0;
+      align-items: center;
+      justify-content: center;
+      gap: 0 !important;
+      padding: 0 !important;
+      border: 1px solid rgba(var(--brand-rgb), 0.34) !important;
+      border-radius: 0.5rem !important;
+      color: var(--brand-700) !important;
+      background: linear-gradient(135deg, rgba(var(--brand-rgb), 0.09), rgba(var(--brand-cyan-rgb), 0.08)) !important;
+      box-shadow: 0 1px 0 rgba(255, 255, 255, 0.8) inset, 0 4px 12px rgba(var(--brand-rgb), 0.08);
+    }
+
+    .app-header-mobile-action:hover:not(:disabled) {
+      border-color: rgba(var(--brand-cyan-rgb), 0.48) !important;
+      color: var(--brand-700) !important;
+      background: linear-gradient(135deg, rgba(var(--brand-rgb), 0.14), rgba(var(--brand-cyan-rgb), 0.13)) !important;
+    }
+
+    .app-header-mobile-action:focus-visible {
+      outline: none;
+      box-shadow: 0 0 0 3px rgba(var(--brand-rgb), 0.2);
+    }
+
+    .app-header-mobile-action:disabled {
+      border-color: rgba(148, 163, 184, 0.32) !important;
+      color: rgb(148 163 184) !important;
+      background: rgba(241, 245, 249, 0.84) !important;
+      box-shadow: none;
+    }
+
+    .dark .app-header-mobile-action {
+      border-color: rgba(var(--brand-cyan-rgb), 0.28) !important;
+      color: rgb(165 243 252) !important;
+      background: linear-gradient(135deg, rgba(var(--brand-rgb), 0.2), rgba(var(--brand-cyan-rgb), 0.12)) !important;
+      box-shadow: 0 1px 0 rgba(255, 255, 255, 0.05) inset;
+    }
+
+    .dark .app-header-mobile-action:disabled {
+      border-color: rgba(71, 85, 105, 0.7) !important;
+      color: rgb(100 116 139) !important;
+      background: rgba(30, 41, 59, 0.72) !important;
+    }
   }
 
   .app-header-balance-pill {
