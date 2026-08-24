@@ -142,11 +142,12 @@ func (s *GatewayService) ForwardAsResponses(
 
 	// 10. Build upstream request
 	upstreamCtx, releaseUpstreamCtx := detachStreamUpstreamContext(ctx, reqStream)
-	upstreamReq, _, err := s.buildUpstreamRequest(upstreamCtx, c, account, anthropicBody, token, tokenType, mappedModel, reqStream, shouldMimicClaudeCode)
+	upstreamReq, wireBody, err := s.buildUpstreamRequest(upstreamCtx, c, account, anthropicBody, token, tokenType, mappedModel, reqStream, shouldMimicClaudeCode)
 	releaseUpstreamCtx()
 	if err != nil {
 		return nil, fmt.Errorf("build upstream request: %w", err)
 	}
+	cacheCreationTTLTarget, _ := cacheTTLTargetFromAnthropicRequestBody(wireBody)
 
 	// 11. Send request
 	resp, err := s.httpUpstream.DoWithTLS(upstreamReq, proxyURL, account.ID, account.Concurrency, s.tlsFPProfileService.ResolveTLSProfile(account))
@@ -211,9 +212,9 @@ func (s *GatewayService) ForwardAsResponses(
 		reasoningEffort = groupDefaultReasoningEffort
 	}
 	if clientStream {
-		result, handleErr = s.handleResponsesStreamingResponse(resp, c, originalModel, mappedModel, reasoningEffort, startTime, clientToolMapping)
+		result, handleErr = s.handleResponsesStreamingResponse(resp, c, originalModel, mappedModel, cacheCreationTTLTarget, reasoningEffort, startTime, clientToolMapping)
 	} else {
-		result, handleErr = s.handleResponsesBufferedStreamingResponse(resp, c, originalModel, mappedModel, reasoningEffort, startTime, clientToolMapping)
+		result, handleErr = s.handleResponsesBufferedStreamingResponse(resp, c, originalModel, mappedModel, cacheCreationTTLTarget, reasoningEffort, startTime, clientToolMapping)
 	}
 
 	return result, handleErr
@@ -359,6 +360,7 @@ func (s *GatewayService) handleResponsesBufferedStreamingResponse(
 	c *gin.Context,
 	originalModel string,
 	mappedModel string,
+	cacheCreationTTLTarget string,
 	reasoningEffort *string,
 	startTime time.Time,
 	clientToolMapping apicompat.ResponsesClientToolMapping,
@@ -493,14 +495,15 @@ func (s *GatewayService) handleResponsesBufferedStreamingResponse(
 
 	outcome := outcomeCollector.Snapshot()
 	return &ForwardResult{
-		RequestID:       requestID,
-		Usage:           usage,
-		Model:           originalModel,
-		UpstreamModel:   mappedModel,
-		ReasoningEffort: reasoningEffort,
-		Stream:          false,
-		Duration:        time.Since(startTime),
-		Outcome:         &outcome,
+		RequestID:              requestID,
+		Usage:                  usage,
+		Model:                  originalModel,
+		CacheCreationTTLTarget: cacheCreationTTLTarget,
+		UpstreamModel:          mappedModel,
+		ReasoningEffort:        reasoningEffort,
+		Stream:                 false,
+		Duration:               time.Since(startTime),
+		Outcome:                &outcome,
 	}, nil
 }
 
@@ -511,6 +514,7 @@ func (s *GatewayService) handleResponsesStreamingResponse(
 	c *gin.Context,
 	originalModel string,
 	mappedModel string,
+	cacheCreationTTLTarget string,
 	reasoningEffort *string,
 	startTime time.Time,
 	clientToolMapping apicompat.ResponsesClientToolMapping,
@@ -544,15 +548,16 @@ func (s *GatewayService) handleResponsesStreamingResponse(
 	resultWithUsage := func() *ForwardResult {
 		outcome := outcomeCollector.Snapshot()
 		return &ForwardResult{
-			RequestID:       requestID,
-			Usage:           usage,
-			Model:           originalModel,
-			UpstreamModel:   mappedModel,
-			ReasoningEffort: reasoningEffort,
-			Stream:          true,
-			Duration:        time.Since(startTime),
-			FirstTokenMs:    firstTokenMs,
-			Outcome:         &outcome,
+			RequestID:              requestID,
+			Usage:                  usage,
+			Model:                  originalModel,
+			CacheCreationTTLTarget: cacheCreationTTLTarget,
+			UpstreamModel:          mappedModel,
+			ReasoningEffort:        reasoningEffort,
+			Stream:                 true,
+			Duration:               time.Since(startTime),
+			FirstTokenMs:           firstTokenMs,
+			Outcome:                &outcome,
 		}
 	}
 

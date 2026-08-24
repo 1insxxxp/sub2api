@@ -222,10 +222,10 @@ export default {
     description: '面向二级管理员的轻量管理入口。',
     currentBalance: '当前余额',
     commission: {
-      title: '二级管理员提成',
-      subtitle: '查看授权分组的每日余额消耗，并按全局比例计算提成。',
-      settings: '提成设置',
-      commissionRate: '提成比例',
+      title: '二级管理员收益',
+      subtitle: '查看授权分组的每日余额消耗，并按全局比例计算收益。',
+      settings: '收益设置',
+      commissionRate: '收益比例',
       saveSettings: '保存比例',
       selectSubAdmin: '选择二级管理员',
       assignedGroups: '授权分组',
@@ -233,14 +233,14 @@ export default {
       saveGrants: '保存授权',
       calendar: '消耗日历',
       actualCost: '余额消耗',
-      commissionAmount: '提成金额',
+      commissionAmount: '收益金额',
       monthTotal: '本月合计',
       emptyGrants: '暂无可查看的授权日期',
       dayDetails: '日期明细',
       requestLogs: '请求流水',
-      loadFailed: '加载提成数据失败',
-      saveSuccess: '提成设置已保存',
-      saveFailed: '保存提成设置失败'
+      loadFailed: '加载收益数据失败',
+      saveSuccess: '收益设置已保存',
+      saveFailed: '保存收益设置失败'
     },
     balanceTransfer: {
       title: '余额兑换码',

@@ -1124,6 +1124,71 @@ func injectAnthropicCacheControlTTL1h(body []byte) []byte {
 	return forceEphemeralCacheControlTTL(body, cacheTTLTarget1h)
 }
 
+func cacheTTLTargetFromAnthropicRequestBody(body []byte) (string, bool) {
+	if len(body) == 0 {
+		return "", false
+	}
+
+	target := ""
+	visitCacheControl := func(cc gjson.Result) bool {
+		if !cc.Exists() || cc.Get("type").String() != "ephemeral" {
+			return true
+		}
+		ttl := strings.ToLower(strings.TrimSpace(cc.Get("ttl").String()))
+		if ttl == cacheTTLTarget1h {
+			target = cacheTTLTarget1h
+			return false
+		}
+		if target == "" {
+			target = cacheTTLTarget5m
+		}
+		return true
+	}
+	visitBlock := func(block gjson.Result) bool {
+		return visitCacheControl(block.Get("cache_control"))
+	}
+	visitBlockArray := func(items gjson.Result) bool {
+		if !items.IsArray() {
+			return visitBlock(items)
+		}
+		keepGoing := true
+		items.ForEach(func(_, item gjson.Result) bool {
+			keepGoing = visitBlock(item)
+			return keepGoing
+		})
+		return keepGoing
+	}
+
+	if !visitCacheControl(gjson.GetBytes(body, "cache_control")) {
+		return target, true
+	}
+	if !visitBlockArray(gjson.GetBytes(body, "system")) {
+		return target, true
+	}
+
+	messages := gjson.GetBytes(body, "messages")
+	if messages.IsArray() {
+		keepGoing := true
+		messages.ForEach(func(_, msg gjson.Result) bool {
+			content := msg.Get("content")
+			if content.IsArray() {
+				keepGoing = visitBlockArray(content)
+			} else {
+				keepGoing = visitBlock(content)
+			}
+			return keepGoing
+		})
+		if !keepGoing {
+			return target, true
+		}
+	}
+
+	if !visitBlockArray(gjson.GetBytes(body, "tools")) {
+		return target, true
+	}
+	return target, target != ""
+}
+
 func forceEphemeralCacheControlTTL(body []byte, ttl string) []byte {
 	if len(body) == 0 || ttl == "" {
 		return body
@@ -1195,9 +1260,6 @@ func forceEphemeralCacheControlTTL(body []byte, ttl string) []byte {
 func (s *GatewayService) shouldInjectAnthropicCacheTTL1h(ctx context.Context, account *Account) bool {
 	if account == nil {
 		return false
-	}
-	if account.IsKiroAnthropicCacheTTL1hAccount() {
-		return true
 	}
 	if !account.IsAnthropicOAuthOrSetupToken() || s == nil || s.settingService == nil {
 		return false

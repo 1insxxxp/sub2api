@@ -666,7 +666,7 @@ func (u *ClaudeUsage) hasObservedTokens() bool {
 //
 // 不变式：UpstreamFailoverError 必须保持 result=nil——failover 重试成功后按成功请求
 // 计费，若同时返回部分 usage 会造成双重计费，此处显式拦截兜底。
-func partialStreamUsageResult(c *gin.Context, resp *http.Response, streamResult *streamingResult, model, upstreamModel string, startTime time.Time, err error) *ForwardResult {
+func partialStreamUsageResult(c *gin.Context, resp *http.Response, streamResult *streamingResult, model, upstreamModel, cacheCreationTTLTarget string, startTime time.Time, err error) *ForwardResult {
 	if streamResult == nil || !streamResult.usage.hasObservedTokens() {
 		return nil
 	}
@@ -678,6 +678,7 @@ func partialStreamUsageResult(c *gin.Context, resp *http.Response, streamResult 
 		RequestID:                     resp.Header.Get("x-request-id"),
 		Usage:                         *streamResult.usage,
 		Model:                         model,
+		CacheCreationTTLTarget:        cacheCreationTTLTarget,
 		UpstreamModel:                 upstreamModel,
 		UpstreamResponseModel:         observedUpstreamResponseModel(c),
 		UpstreamResponseModelConflict: observedUpstreamResponseModelConflict(c),
@@ -1348,6 +1349,25 @@ func applyCacheTTLOverride(usage *ClaudeUsage, target string) bool {
 	return true
 }
 
+func applyCacheTTLHintForAggregateCreation(usage *ClaudeUsage, target string) bool {
+	if usage == nil || usage.CacheCreationInputTokens <= 0 {
+		return false
+	}
+	if usage.CacheCreation5mTokens > 0 || usage.CacheCreation1hTokens > 0 {
+		return false
+	}
+
+	switch target {
+	case cacheTTLTarget1h:
+		usage.CacheCreation1hTokens = usage.CacheCreationInputTokens
+	case cacheTTLTarget5m:
+		usage.CacheCreation5mTokens = usage.CacheCreationInputTokens
+	default:
+		return false
+	}
+	return true
+}
+
 // rewriteCacheCreationJSON 在 JSON usage 对象中重写 cache_creation 嵌套对象的 TTL 分类。
 // usageObj 是 usage JSON 对象（map[string]any）。
 func rewriteCacheCreationJSON(usageObj map[string]any, target string) bool {
@@ -1384,9 +1404,6 @@ func (s *GatewayService) resolveCacheTTLUsageOverrideTarget(ctx context.Context,
 	}
 	if account.IsCacheTTLOverrideEnabled() {
 		return account.GetCacheTTLOverrideTarget(), true
-	}
-	if account.IsKiroAnthropicCacheTTL1hAccount() {
-		return cacheTTLTarget1h, true
 	}
 	if account.IsAnthropicOAuthOrSetupToken() && s != nil && s.settingService != nil && s.settingService.IsAnthropicCacheTTL1hInjectionEnabled(ctx) {
 		return cacheTTLTarget5m, true

@@ -117,12 +117,6 @@ func (s *GatewayService) ForwardCountTokens(ctx context.Context, c *gin.Context,
 		}
 	}
 
-	if account.IsKiroAnthropicCacheTTL1hAccount() {
-		if err := replaceBody(injectAnthropicCacheControlTTL1h(body)); err != nil {
-			return err
-		}
-	}
-
 	// 获取凭证
 	token, tokenType, err := s.GetAccessToken(ctx, account)
 	if err != nil {
@@ -395,9 +389,6 @@ func (s *GatewayService) buildCountTokensRequestAnthropicAPIKeyPassthrough(
 	}
 	if sanitized, changed := sanitizeAnthropicBodyForBetaTokens(body, clientBeta); changed {
 		body = sanitized
-	}
-	if account.IsKiroAnthropicCacheTTL1hAccount() {
-		body = injectAnthropicCacheControlTTL1h(body)
 	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, targetURL, bytes.NewReader(body))

@@ -129,11 +129,12 @@ func (s *GatewayService) ForwardAsChatCompletions(
 
 	// 10. Build upstream request
 	upstreamCtx, releaseUpstreamCtx := detachStreamUpstreamContext(ctx, reqStream)
-	upstreamReq, _, err := s.buildUpstreamRequest(upstreamCtx, c, account, anthropicBody, token, tokenType, mappedModel, reqStream, shouldMimicClaudeCode)
+	upstreamReq, wireBody, err := s.buildUpstreamRequest(upstreamCtx, c, account, anthropicBody, token, tokenType, mappedModel, reqStream, shouldMimicClaudeCode)
 	releaseUpstreamCtx()
 	if err != nil {
 		return nil, fmt.Errorf("build upstream request: %w", err)
 	}
+	cacheCreationTTLTarget, _ := cacheTTLTargetFromAnthropicRequestBody(wireBody)
 
 	// 11. Send request
 	resp, err := s.httpUpstream.DoWithTLS(upstreamReq, proxyURL, account.ID, account.Concurrency, s.tlsFPProfileService.ResolveTLSProfile(account))
@@ -205,9 +206,9 @@ func (s *GatewayService) ForwardAsChatCompletions(
 	var result *ForwardResult
 	var handleErr error
 	if clientStream {
-		result, handleErr = s.handleCCStreamingFromAnthropic(resp, c, originalModel, mappedModel, reasoningEffort, startTime, includeUsage)
+		result, handleErr = s.handleCCStreamingFromAnthropic(resp, c, originalModel, mappedModel, cacheCreationTTLTarget, reasoningEffort, startTime, includeUsage)
 	} else {
-		result, handleErr = s.handleCCBufferedFromAnthropic(resp, c, originalModel, mappedModel, reasoningEffort, startTime)
+		result, handleErr = s.handleCCBufferedFromAnthropic(resp, c, originalModel, mappedModel, cacheCreationTTLTarget, reasoningEffort, startTime)
 	}
 
 	return result, handleErr
@@ -242,6 +243,7 @@ func (s *GatewayService) handleCCBufferedFromAnthropic(
 	c *gin.Context,
 	originalModel string,
 	mappedModel string,
+	cacheCreationTTLTarget string,
 	reasoningEffort *string,
 	startTime time.Time,
 ) (*ForwardResult, error) {
@@ -364,14 +366,15 @@ func (s *GatewayService) handleCCBufferedFromAnthropic(
 
 	outcome := outcomeCollector.Snapshot()
 	return &ForwardResult{
-		RequestID:       requestID,
-		Usage:           usage,
-		Model:           originalModel,
-		UpstreamModel:   mappedModel,
-		ReasoningEffort: reasoningEffort,
-		Stream:          false,
-		Duration:        time.Since(startTime),
-		Outcome:         &outcome,
+		RequestID:              requestID,
+		Usage:                  usage,
+		Model:                  originalModel,
+		CacheCreationTTLTarget: cacheCreationTTLTarget,
+		UpstreamModel:          mappedModel,
+		ReasoningEffort:        reasoningEffort,
+		Stream:                 false,
+		Duration:               time.Since(startTime),
+		Outcome:                &outcome,
 	}, nil
 }
 
@@ -382,6 +385,7 @@ func (s *GatewayService) handleCCStreamingFromAnthropic(
 	c *gin.Context,
 	originalModel string,
 	mappedModel string,
+	cacheCreationTTLTarget string,
 	reasoningEffort *string,
 	startTime time.Time,
 	includeUsage bool,
@@ -419,15 +423,16 @@ func (s *GatewayService) handleCCStreamingFromAnthropic(
 	resultWithUsage := func() *ForwardResult {
 		outcome := outcomeCollector.Snapshot()
 		return &ForwardResult{
-			RequestID:       requestID,
-			Usage:           usage,
-			Model:           originalModel,
-			UpstreamModel:   mappedModel,
-			ReasoningEffort: reasoningEffort,
-			Stream:          true,
-			Duration:        time.Since(startTime),
-			FirstTokenMs:    firstTokenMs,
-			Outcome:         &outcome,
+			RequestID:              requestID,
+			Usage:                  usage,
+			Model:                  originalModel,
+			CacheCreationTTLTarget: cacheCreationTTLTarget,
+			UpstreamModel:          mappedModel,
+			ReasoningEffort:        reasoningEffort,
+			Stream:                 true,
+			Duration:               time.Since(startTime),
+			FirstTokenMs:           firstTokenMs,
+			Outcome:                &outcome,
 		}
 	}
 

@@ -180,6 +180,52 @@ func TestInjectAnthropicCacheControlTTL1h_OnlyUpdatesExistingEphemeralCacheContr
 	require.Equal(t, "1h", gjson.GetBytes(result, "tools.0.cache_control.ttl").String())
 }
 
+func TestCacheTTLTargetFromAnthropicRequestBody_FollowsClientTTL(t *testing.T) {
+	t.Run("explicit 1h wins", func(t *testing.T) {
+		body := []byte(`{"system":[{"type":"text","text":"sys","cache_control":{"type":"ephemeral","ttl":"5m"}}],"messages":[{"role":"user","content":[{"type":"text","text":"hi","cache_control":{"type":"ephemeral","ttl":"1h"}}]}]}`)
+		target, ok := cacheTTLTargetFromAnthropicRequestBody(body)
+		require.True(t, ok)
+		require.Equal(t, cacheTTLTarget1h, target)
+	})
+
+	t.Run("explicit 5m stays 5m", func(t *testing.T) {
+		body := []byte(`{"system":[{"type":"text","text":"sys","cache_control":{"type":"ephemeral","ttl":"5m"}}]}`)
+		target, ok := cacheTTLTargetFromAnthropicRequestBody(body)
+		require.True(t, ok)
+		require.Equal(t, cacheTTLTarget5m, target)
+	})
+
+	t.Run("missing ttl defaults to 5m", func(t *testing.T) {
+		body := []byte(`{"tools":[{"name":"a","input_schema":{},"cache_control":{"type":"ephemeral"}}]}`)
+		target, ok := cacheTTLTargetFromAnthropicRequestBody(body)
+		require.True(t, ok)
+		require.Equal(t, cacheTTLTarget5m, target)
+	})
+
+	t.Run("no cache control has no target", func(t *testing.T) {
+		target, ok := cacheTTLTargetFromAnthropicRequestBody([]byte(`{"messages":[]}`))
+		require.False(t, ok)
+		require.Empty(t, target)
+	})
+}
+
+func TestApplyCacheTTLHintForAggregateCreation(t *testing.T) {
+	usage := ClaudeUsage{CacheCreationInputTokens: 42}
+	require.True(t, applyCacheTTLHintForAggregateCreation(&usage, cacheTTLTarget1h))
+	require.Equal(t, 0, usage.CacheCreation5mTokens)
+	require.Equal(t, 42, usage.CacheCreation1hTokens)
+
+	usage = ClaudeUsage{CacheCreationInputTokens: 42}
+	require.True(t, applyCacheTTLHintForAggregateCreation(&usage, cacheTTLTarget5m))
+	require.Equal(t, 42, usage.CacheCreation5mTokens)
+	require.Equal(t, 0, usage.CacheCreation1hTokens)
+
+	usage = ClaudeUsage{CacheCreationInputTokens: 42, CacheCreation5mTokens: 12, CacheCreation1hTokens: 30}
+	require.False(t, applyCacheTTLHintForAggregateCreation(&usage, cacheTTLTarget5m))
+	require.Equal(t, 12, usage.CacheCreation5mTokens)
+	require.Equal(t, 30, usage.CacheCreation1hTokens)
+}
+
 func TestGatewayCacheTTLGlobalSetting_TargetResolution(t *testing.T) {
 	repo := &gatewayTTLSettingRepo{data: map[string]string{
 		SettingKeyEnableAnthropicCacheTTL1hInjection: "true",
@@ -204,8 +250,8 @@ func TestGatewayCacheTTLGlobalSetting_TargetResolution(t *testing.T) {
 
 	kiroAccount := &Account{Platform: PlatformAnthropic, Type: AccountTypeAPIKey, Name: "kiro-full-score"}
 	target, ok = svc.resolveCacheTTLUsageOverrideTarget(context.Background(), kiroAccount)
-	require.True(t, ok)
-	require.Equal(t, cacheTTLTarget1h, target)
+	require.False(t, ok)
+	require.Empty(t, target)
 }
 
 func TestGatewayCacheTTLGlobalSetting_RequestInjectionScope(t *testing.T) {
@@ -219,7 +265,7 @@ func TestGatewayCacheTTLGlobalSetting_RequestInjectionScope(t *testing.T) {
 
 	require.True(t, svc.shouldInjectAnthropicCacheTTL1h(context.Background(), &Account{Platform: PlatformAnthropic, Type: AccountTypeOAuth}))
 	require.True(t, svc.shouldInjectAnthropicCacheTTL1h(context.Background(), &Account{Platform: PlatformAnthropic, Type: AccountTypeSetupToken}))
-	require.True(t, svc.shouldInjectAnthropicCacheTTL1h(context.Background(), &Account{Platform: PlatformAnthropic, Type: AccountTypeAPIKey, Name: "kiro-full-score"}))
+	require.False(t, svc.shouldInjectAnthropicCacheTTL1h(context.Background(), &Account{Platform: PlatformAnthropic, Type: AccountTypeAPIKey, Name: "kiro-full-score"}))
 	require.False(t, svc.shouldInjectAnthropicCacheTTL1h(context.Background(), &Account{Platform: PlatformAnthropic, Type: AccountTypeAPIKey}))
 	require.False(t, svc.shouldInjectAnthropicCacheTTL1h(context.Background(), &Account{Platform: PlatformOpenAI, Type: AccountTypeOAuth}))
 

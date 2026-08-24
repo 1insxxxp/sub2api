@@ -311,7 +311,7 @@ func TestGatewayService_AnthropicAPIKeyPassthrough_BearerAuthScheme(t *testing.T
 	require.Empty(t, getHeaderRaw(countReq.Header, "cookie"))
 }
 
-func TestGatewayService_AnthropicAPIKeyPassthrough_KiroInjectsCacheTTL1h(t *testing.T) {
+func TestGatewayService_AnthropicAPIKeyPassthrough_KiroPreservesClientCacheTTL(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	rec := httptest.NewRecorder()
@@ -346,11 +346,11 @@ func TestGatewayService_AnthropicAPIKeyPassthrough_KiroInjectsCacheTTL1h(t *test
 
 	_, wireBody, err := svc.buildUpstreamRequestAnthropicAPIKeyPassthrough(context.Background(), c, account, body, "upstream-anthropic-key")
 	require.NoError(t, err)
-	require.Equal(t, "1h", gjson.GetBytes(wireBody, "system.0.cache_control.ttl").String())
-	require.Equal(t, "1h", gjson.GetBytes(wireBody, "messages.0.content.0.cache_control.ttl").String())
+	require.Equal(t, "5m", gjson.GetBytes(wireBody, "system.0.cache_control.ttl").String())
+	require.False(t, gjson.GetBytes(wireBody, "messages.0.content.0.cache_control.ttl").Exists())
 }
 
-func TestGatewayService_AnthropicAPIKeyPassthrough_KiroInjectsCacheTTL1hOnCountTokens(t *testing.T) {
+func TestGatewayService_AnthropicAPIKeyPassthrough_KiroPreservesClientCacheTTLOnCountTokens(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	rec := httptest.NewRecorder()
@@ -387,11 +387,11 @@ func TestGatewayService_AnthropicAPIKeyPassthrough_KiroInjectsCacheTTL1hOnCountT
 	require.NoError(t, err)
 	wireBody, err := io.ReadAll(req.Body)
 	require.NoError(t, err)
-	require.Equal(t, "1h", gjson.GetBytes(wireBody, "system.0.cache_control.ttl").String())
-	require.Equal(t, "1h", gjson.GetBytes(wireBody, "messages.0.content.0.cache_control.ttl").String())
+	require.Equal(t, "5m", gjson.GetBytes(wireBody, "system.0.cache_control.ttl").String())
+	require.False(t, gjson.GetBytes(wireBody, "messages.0.content.0.cache_control.ttl").Exists())
 }
 
-func TestGatewayService_AnthropicCountTokens_KiroInjectsCacheTTL1h(t *testing.T) {
+func TestGatewayService_AnthropicCountTokens_KiroPreservesClientCacheTTL(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	rec := httptest.NewRecorder()
@@ -438,8 +438,8 @@ func TestGatewayService_AnthropicCountTokens_KiroInjectsCacheTTL1h(t *testing.T)
 
 	err := svc.ForwardCountTokens(context.Background(), c, account, parsed)
 	require.NoError(t, err)
-	require.Equal(t, "1h", gjson.GetBytes(upstream.lastBody, "system.0.cache_control.ttl").String())
-	require.Equal(t, "1h", gjson.GetBytes(upstream.lastBody, "messages.0.content.0.cache_control.ttl").String())
+	require.Equal(t, "5m", gjson.GetBytes(upstream.lastBody, "system.0.cache_control.ttl").String())
+	require.False(t, gjson.GetBytes(upstream.lastBody, "messages.0.content.0.cache_control.ttl").Exists())
 }
 
 func TestGatewayService_AnthropicAPIKeyPassthrough_FlattensNamespaceClientTools(t *testing.T) {

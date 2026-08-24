@@ -644,6 +644,12 @@ func (s *OpenAIGatewayService) handleStreamingResponseWithReasoning(ctx context.
 				line = "data: " + data
 				eventType = effectiveOpenAISSEEventType(dataBytes, eventType)
 			}
+			if normalizedData, normalized := normalizeResponsesStreamingTerminalUsage(dataBytes); normalized {
+				dataBytes = normalizedData
+				data = string(normalizedData)
+				line = "data: " + data
+				eventType = effectiveOpenAISSEEventType(dataBytes, eventType)
+			}
 			restoredData, restoreErr := restoreGrokResponsesClientToolPayload(c, dataBytes)
 			if restoreErr != nil {
 				streamEarlyErr = fmt.Errorf("restore Grok Responses client tool response: %w", restoreErr)
@@ -2127,6 +2133,52 @@ func normalizeResponsesStreamingTerminalOutput(data []byte, acc *apicompat.Buffe
 		return data, false
 	}
 	return updated, true
+}
+
+func normalizeResponsesStreamingTerminalUsage(data []byte) ([]byte, bool) {
+	eventType := strings.TrimSpace(gjson.GetBytes(data, "type").String())
+	switch eventType {
+	case "response.completed", "response.done", "response.incomplete", "response.cancelled", "response.canceled":
+	default:
+		return data, false
+	}
+	if !bytes.Contains(data, []byte(`"usage"`)) || !gjson.ValidBytes(data) {
+		return data, false
+	}
+
+	updated := data
+	changed := false
+	for _, usagePath := range []string{"response.usage", "usage"} {
+		usage := gjson.GetBytes(updated, usagePath)
+		if !usage.Exists() || !usage.IsObject() || usage.Get("output_tokens_details").Exists() {
+			continue
+		}
+		details := responsesOutputTokenDetailsCompatRaw(usage)
+		next, err := sjson.SetRawBytes(updated, usagePath+".output_tokens_details", []byte(details))
+		if err != nil {
+			continue
+		}
+		updated = next
+		changed = true
+	}
+	return updated, changed
+}
+
+func responsesOutputTokenDetailsCompatRaw(usage gjson.Result) string {
+	for _, details := range []gjson.Result{
+		usage.Get("completion_tokens_details"),
+		usage.Get("outputTokensDetails"),
+	} {
+		if details.Exists() && details.IsObject() {
+			return details.Raw
+		}
+	}
+	reasoningTokens := max(int(firstPositiveGJSONInt(
+		usage.Get("reasoning_tokens"),
+		usage.Get("reasoningTokens"),
+		usage.Get("completion_tokens_details.reasoning_tokens"),
+	)), 0)
+	return fmt.Sprintf(`{"reasoning_tokens":%d}`, reasoningTokens)
 }
 
 func responsesStreamEventMayContributeToOutput(eventType string) bool {

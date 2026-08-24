@@ -221,10 +221,10 @@ export default {
     description: 'A focused management surface for secondary admins.',
     currentBalance: 'Current balance',
     commission: {
-      title: 'Secondary Admin Commission',
-      subtitle: 'Review authorized group balance spend by day and calculate commission with one global rate.',
-      settings: 'Commission Settings',
-      commissionRate: 'Commission rate',
+      title: 'Secondary Admin Earnings',
+      subtitle: 'Review authorized group balance spend by day and calculate earnings with one global rate.',
+      settings: 'Earnings Settings',
+      commissionRate: 'Earnings rate',
       saveSettings: 'Save rate',
       selectSubAdmin: 'Select secondary admin',
       assignedGroups: 'Assigned groups',
@@ -232,14 +232,14 @@ export default {
       saveGrants: 'Save assignments',
       calendar: 'Spend calendar',
       actualCost: 'Balance spend',
-      commissionAmount: 'Commission',
+      commissionAmount: 'Earnings',
       monthTotal: 'Month total',
       emptyGrants: 'No authorized dates to show',
       dayDetails: 'Day details',
       requestLogs: 'Request logs',
-      loadFailed: 'Failed to load commission data',
-      saveSuccess: 'Commission settings saved',
-      saveFailed: 'Failed to save commission settings'
+      loadFailed: 'Failed to load earnings data',
+      saveSuccess: 'Earnings settings saved',
+      saveFailed: 'Failed to save earnings settings'
     },
     balanceTransfer: {
       title: 'Balance Redeem Codes',

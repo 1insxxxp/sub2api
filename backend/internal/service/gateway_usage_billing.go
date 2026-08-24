@@ -869,6 +869,9 @@ func (s *GatewayService) recordUsageCore(ctx context.Context, input *recordUsage
 		applyCacheTTLOverride(&result.Usage, overrideTarget)
 		cacheTTLOverridden = (result.Usage.CacheCreation5mTokens + result.Usage.CacheCreation1hTokens) > 0
 	}
+	if !cacheTTLOverridden && result.CacheCreationTTLTarget != "" {
+		applyCacheTTLHintForAggregateCreation(&result.Usage, result.CacheCreationTTLTarget)
+	}
 
 	// 获取费率倍数（优先级：用户专属 > 分组默认 > 系统默认）
 	multiplier := 1.0

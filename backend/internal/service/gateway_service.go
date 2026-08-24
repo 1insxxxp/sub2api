@@ -607,6 +607,10 @@ type ForwardResult struct {
 	RequestID string
 	Usage     ClaudeUsage
 	Model     string
+	// CacheCreationTTLTarget records the client's requested Anthropic prompt-cache TTL
+	// ("5m" or "1h") so billing can classify aggregate cache-creation usage when
+	// the upstream omits nested 5m/1h usage details.
+	CacheCreationTTLTarget string
 	// UpstreamModel is the actual upstream model after mapping.
 	// Prefer empty when it is identical to Model; persistence normalizes equal values away as no-op mappings.
 	UpstreamModel string
