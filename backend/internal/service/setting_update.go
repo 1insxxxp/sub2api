@@ -483,6 +483,7 @@ func (s *SettingService) buildSystemSettingsUpdates(ctx context.Context, setting
 	updates[SettingKeyModelPlazaRequireAuth] = strconv.FormatBool(settings.ModelPlazaRequireAuth)
 	updates[SettingKeyModelPlazaDescription] = settings.ModelPlazaDescription
 	updates[SettingKeyPluginManagementEnabled] = strconv.FormatBool(settings.PluginManagementEnabled)
+	updates[SettingKeyLotteryEnabled] = strconv.FormatBool(settings.LotteryEnabled)
 
 	// Affiliate (邀请返利) feature switch
 	updates[SettingKeyAffiliateEnabled] = strconv.FormatBool(settings.AffiliateEnabled)

@@ -65,6 +65,12 @@ export default {
           enabled: 'Show Plugin Management',
           enabledHint: 'Turning this off only hides the sidebar entry; loaded or running plugins are not stopped.',
         },
+        lottery: {
+          title: 'Lottery Activity',
+          description: 'Controls whether the user-facing lottery page is open. Prizes, attempts, and rules are configured separately.',
+          enabled: 'Enable Lottery Activity',
+          enabledHint: 'When enabled, signed-in users can access the lottery page; disabling it hides the entry and blocks lottery APIs.',
+        },
         riskControl: {
           title: 'Risk Control',
           description: 'Enable the content moderation menu and gateway audit entry point. Disabled by default.',
