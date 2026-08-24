@@ -593,7 +593,7 @@ describe('AdminWorkbenchView balance transfer codes', () => {
     const calendarGrid = wrapper.get('[data-test="commission-calendar-grid"]')
 
     expect(dayCell.classes()).toEqual(expect.arrayContaining(['commission-calendar-day-cell', 'min-h-12']))
-    expect(calendarGrid.classes()).toEqual(expect.arrayContaining(['grid-cols-2', 'sm:grid-cols-7']))
+    expect(calendarGrid.classes()).toEqual(expect.arrayContaining(['grid-cols-1', 'min-[360px]:grid-cols-2', 'sm:grid-cols-7']))
     expect(dayCell.text()).toContain('22')
     expect(amounts.text()).toContain('$3.83K')
     expect(amounts.text()).toContain('$459.41')

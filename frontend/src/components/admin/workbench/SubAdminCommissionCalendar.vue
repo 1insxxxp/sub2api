@@ -52,7 +52,7 @@
       </div>
       <div
         data-test="commission-calendar-grid"
-        class="commission-calendar-grid mt-2 grid grid-cols-2 gap-2 sm:grid-cols-7 sm:gap-2"
+        class="commission-calendar-grid mt-2 grid grid-cols-1 gap-2 min-[360px]:grid-cols-2 sm:grid-cols-7 sm:gap-2"
       >
         <button
           v-for="cell in calendarCells"
