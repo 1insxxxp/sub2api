@@ -121,8 +121,10 @@ const paginated = <T,>(items: T[], total = items.length, page = 1, pageSize = 10
   pages: Math.max(1, Math.ceil(total / pageSize))
 })
 
-const mountWorkbench = () =>
-  mount(AdminWorkbenchView, {
+const mountedWorkbenchWrappers: Array<ReturnType<typeof mount>> = []
+
+const mountWorkbench = () => {
+  const wrapper = mount(AdminWorkbenchView, {
     global: {
       stubs: {
         AppLayout: { template: '<div><slot /></div>' },
@@ -131,6 +133,9 @@ const mountWorkbench = () =>
       }
     }
   })
+  mountedWorkbenchWrappers.push(wrapper)
+  return wrapper
+}
 
 const defaultWindowInnerWidth = window.innerWidth
 let getBoundingClientRectSpy: ReturnType<typeof vi.spyOn> | undefined
@@ -272,6 +277,9 @@ describe('AdminWorkbenchView balance transfer codes', () => {
   })
 
   afterEach(() => {
+    for (const wrapper of mountedWorkbenchWrappers.splice(0)) {
+      wrapper.unmount()
+    }
     vi.useRealTimers()
     getBoundingClientRectSpy?.mockRestore()
     getBoundingClientRectSpy = undefined
@@ -536,13 +544,14 @@ describe('AdminWorkbenchView balance transfer codes', () => {
     await flushPromises()
 
     expect(getWorkbenchCommissionCalendar).toHaveBeenCalled()
-    expect(wrapper.text()).toContain('2026-08-22')
     expect(wrapper.text()).toContain('$12.00')
 
     await wrapper.get('[data-test="commission-calendar-day-2026-08-22"]').trigger('click')
     await flushPromises()
 
     expect(getWorkbenchCommissionDayGroups).toHaveBeenCalledWith('2026-08-22')
+    expect(wrapper.get('[data-test="commission-day-dialog"]').attributes('role')).toBe('dialog')
+    expect(wrapper.get('[data-test="commission-day-dialog"]').attributes('aria-modal')).toBe('true')
     expect(wrapper.text()).toContain('Claude 特价')
 
     await wrapper.get('[data-test="commission-day-group-3-toggle"]').trigger('click')
@@ -555,7 +564,7 @@ describe('AdminWorkbenchView balance transfer codes', () => {
     expect(wrapper.text()).toContain('req-1')
   })
 
-  it('keeps mobile commission calendar cells compact and shows one selected day card', async () => {
+  it('shows daily spend and commission inside compact mobile calendar cells', async () => {
     Object.defineProperty(window, 'innerWidth', {
       value: 390,
       configurable: true
@@ -580,35 +589,30 @@ describe('AdminWorkbenchView balance transfer codes', () => {
 
     const dayCell = wrapper.get('[data-test="commission-calendar-day-2026-08-22"]')
     const monthSummary = wrapper.get('[data-test="commission-calendar-month-summary"]')
-    const selectedCard = wrapper.get('[data-test="commission-calendar-selected-day-summary"]')
+    const amounts = wrapper.get('[data-test="commission-calendar-day-2026-08-22-amounts"]')
 
     expect(dayCell.classes()).toEqual(expect.arrayContaining(['commission-calendar-compact-cell', 'min-h-12']))
-    expect(dayCell.text()).toBe('22')
-    expect(wrapper.find('[data-test="commission-calendar-desktop-amounts-2026-08-22"]').exists()).toBe(false)
+    expect(dayCell.text()).toContain('22')
+    expect(amounts.text()).toContain('$3.83K')
+    expect(amounts.text()).toContain('$459.41')
     expect(monthSummary.classes()).toEqual(expect.arrayContaining(['grid-cols-1', 'min-[480px]:grid-cols-2']))
     expect(monthSummary.text()).toContain('$3840.75')
     expect(monthSummary.text()).toContain('$460.64')
     expect(dayCell.attributes('aria-label')).toContain('$3828.41')
     expect(dayCell.attributes('aria-label')).toContain('$459.41')
     expect(dayCell.attributes('aria-current')).toBeUndefined()
-    expect(wrapper.findAll('[data-test="commission-calendar-selected-day-summary"]')).toHaveLength(1)
-    expect(selectedCard.classes()).toEqual(expect.arrayContaining(['commission-calendar-day-summary']))
-    expect(selectedCard.text()).toContain('2026-08-23')
-    expect(selectedCard.text()).toContain('$12.34')
-    expect(selectedCard.text()).toContain('$1.23')
-    expect(selectedCard.text()).not.toContain('$3828.41')
 
     await dayCell.trigger('click')
     await flushPromises()
 
-    const switchedCard = wrapper.get('[data-test="commission-calendar-selected-day-summary"]')
+    const dialog = wrapper.get('[data-test="commission-day-dialog"]')
     expect(dayCell.attributes('aria-pressed')).toBe('true')
-    expect(switchedCard.text()).toContain('2026-08-22')
-    expect(switchedCard.text()).toContain('$3828.41')
-    expect(switchedCard.text()).toContain('$459.41')
+    expect(dialog.text()).toContain('2026-08-22')
+    expect(dialog.text()).toContain('$3828.41')
+    expect(dialog.text()).toContain('$459.41')
   })
 
-  it('shows the selected commission day as a full mobile-readable card', async () => {
+  it('opens and closes the commission day dialog on mobile', async () => {
     Object.defineProperty(window, 'innerWidth', {
       value: 390,
       configurable: true
@@ -625,14 +629,32 @@ describe('AdminWorkbenchView balance transfer codes', () => {
     const wrapper = mountWorkbench()
     await flushPromises()
 
-    const row = wrapper.get('[data-test="commission-calendar-selected-day-summary"]')
-    expect(row.classes()).toContain('commission-calendar-day-summary')
-    expect(row.text()).toContain('2026-08-22')
-    expect(row.text()).toContain('$3828.41')
-    expect(row.text()).toContain('$459.41')
+    await wrapper.get('[data-test="commission-calendar-day-2026-08-22"]').trigger('click')
+    await flushPromises()
+
+    const dialog = wrapper.get('[data-test="commission-day-dialog"]')
+    expect(dialog.classes()).toEqual(expect.arrayContaining(['items-end', 'sm:items-center']))
+    expect(dialog.get('[data-test="commission-day-dialog-close"]').attributes('aria-label')).toBe('common.close')
+
+    await dialog.get('[data-test="commission-day-dialog-close"]').trigger('click')
+    expect(wrapper.find('[data-test="commission-day-dialog"]').exists()).toBe(false)
   })
 
-  it('uses a balanced desktop split and stable day-detail card regions', async () => {
+  it('closes the commission day dialog with Escape and restores body scrolling', async () => {
+    const wrapper = mountWorkbench()
+    await flushPromises()
+    await wrapper.get('[data-test="commission-calendar-day-2026-08-22"]').trigger('click')
+    await flushPromises()
+
+    expect(document.body.style.overflow).toBe('hidden')
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
+    await flushPromises()
+
+    expect(wrapper.find('[data-test="commission-day-dialog"]').exists()).toBe(false)
+    expect(document.body.style.overflow).toBe('')
+  })
+
+  it('uses a responsive dialog and stable day-detail card regions', async () => {
     authState.user = {
       id: 7,
       email: 'sub-admin@example.com',
@@ -650,7 +672,9 @@ describe('AdminWorkbenchView balance transfer codes', () => {
     await wrapper.get('[data-test="commission-calendar-day-2026-08-22"]').trigger('click')
     await flushPromises()
 
-    expect(layout.classes()).toContain('xl:grid-cols-[minmax(0,3fr)_minmax(22rem,2fr)]')
+    expect(layout.classes()).toContain('commission-calendar-layout')
+    expect(layout.classes()).not.toContain('xl:grid-cols-[minmax(0,3fr)_minmax(22rem,2fr)]')
+    expect(wrapper.get('[data-test="commission-day-dialog"] > section').classes()).toContain('max-w-3xl')
     const groupCard = wrapper.get('[data-test="commission-day-group-3"]')
     expect(groupCard.classes()).toContain('commission-day-group-card')
     expect(groupCard.get('[data-test="commission-day-group-3-name"]').text()).toContain('Claude 特价')

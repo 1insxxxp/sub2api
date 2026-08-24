@@ -1,31 +1,53 @@
 <template>
-  <section
+  <div
     v-if="date"
-    data-test="sub-admin-commission-day-drawer"
-    class="min-w-0 rounded-lg border border-gray-200 bg-white p-4 shadow-sm dark:border-dark-700 dark:bg-dark-900 sm:p-5 xl:max-h-[calc(100vh-8rem)] xl:overflow-y-auto"
+    data-test="commission-day-dialog"
+    class="fixed inset-0 z-[80] flex items-end justify-center overflow-hidden bg-slate-950/55 px-0 pt-12 backdrop-blur-[2px] sm:items-center sm:px-4 sm:py-8"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="commission-day-dialog-title"
+    @click.self="emit('close')"
   >
-    <div class="mb-4 flex items-start justify-between gap-3">
-      <div>
-        <h2 class="text-base font-semibold text-gray-950 dark:text-white">
-          {{ t('adminWorkbench.commission.dayDetails') }}
-        </h2>
-        <p class="mt-1 text-sm text-gray-500 dark:text-dark-400">{{ date }}</p>
-      </div>
-      <button type="button" class="btn btn-secondary px-3" @click="emit('close')">
-        <Icon name="x" size="sm" />
-      </button>
-    </div>
+    <section class="flex max-h-[90dvh] w-full max-w-3xl min-w-0 flex-col overflow-hidden rounded-t-2xl border border-gray-200 bg-white shadow-2xl dark:border-dark-700 dark:bg-dark-900 sm:max-h-[calc(100vh-4rem)] sm:rounded-2xl">
+      <header class="flex shrink-0 items-start justify-between gap-3 border-b border-gray-100 bg-gradient-to-br from-blue-50 via-white to-cyan-50 px-4 py-4 dark:border-dark-700 dark:from-blue-500/15 dark:via-dark-900 dark:to-cyan-500/10 sm:px-6">
+        <div class="min-w-0">
+          <h2 id="commission-day-dialog-title" class="text-base font-semibold text-gray-950 dark:text-white">
+            {{ t('adminWorkbench.commission.dayDetails') }}
+          </h2>
+          <p class="mt-1 font-mono text-sm tabular-nums text-gray-500 dark:text-dark-400">{{ date }}</p>
+          <div v-if="day" class="mt-3 grid grid-cols-2 gap-2">
+            <span class="min-w-0 rounded-md bg-white/80 px-2.5 py-2 dark:bg-dark-900/70">
+              <span class="block text-[10px] font-medium text-blue-700 dark:text-blue-200">{{ t('adminWorkbench.commission.actualCost') }}</span>
+              <span class="mt-0.5 block truncate font-mono text-sm font-bold tabular-nums text-blue-950 dark:text-white" :title="formatCurrency(day.actual_cost)">{{ formatCurrency(day.actual_cost) }}</span>
+            </span>
+            <span class="min-w-0 rounded-md bg-emerald-50/90 px-2.5 py-2 dark:bg-emerald-500/10">
+              <span class="block text-[10px] font-medium text-emerald-700 dark:text-emerald-300">{{ t('adminWorkbench.commission.commissionAmount') }}</span>
+              <span class="mt-0.5 block truncate font-mono text-sm font-bold tabular-nums text-emerald-700 dark:text-emerald-200" :title="formatCurrency(day.commission_amount)">{{ formatCurrency(day.commission_amount) }}</span>
+            </span>
+          </div>
+        </div>
+        <button
+          type="button"
+          data-test="commission-day-dialog-close"
+          class="btn btn-secondary shrink-0 px-3"
+          :aria-label="t('common.close')"
+          @click="emit('close')"
+        >
+          <Icon name="x" size="sm" />
+        </button>
+      </header>
 
-    <div v-if="loadingGroups" class="py-8 text-center text-sm text-gray-500 dark:text-dark-400">
+      <div class="min-h-0 flex-1 overflow-y-auto px-4 py-4 sm:px-6 sm:py-5">
+      <div v-if="loadingGroups" class="py-8 text-center text-sm text-gray-500 dark:text-dark-400">
       {{ t('common.loading') }}
-    </div>
-    <div v-else-if="errorMessage" class="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-500/10 dark:text-red-300">
+      </div>
+      <div v-else-if="errorMessage" class="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-500/10 dark:text-red-300">
       {{ errorMessage }}
-    </div>
-    <div v-else-if="groups.length === 0" class="py-8 text-center text-sm text-gray-500 dark:text-dark-400">
+      </div>
+      <div v-else-if="groups.length === 0" class="py-8 text-center text-sm text-gray-500 dark:text-dark-400">
       {{ t('common.noData') }}
-    </div>
-    <div v-else class="space-y-3">
+      </div>
+      <div v-else class="space-y-3">
       <article
         v-for="group in groups"
         :key="group.group_id"
@@ -135,21 +157,24 @@
           />
         </div>
       </article>
-    </div>
-  </section>
+      </div>
+      </div>
+    </section>
+  </div>
 </template>
 
 <script setup lang="ts">
-import { reactive, ref, watch } from 'vue'
+import { onBeforeUnmount, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { adminAPI } from '@/api/admin'
-import type { SubAdminCommissionDayGroup, SubAdminCommissionUsageLog } from '@/api/admin'
+import type { SubAdminCommissionCalendarDay, SubAdminCommissionDayGroup, SubAdminCommissionUsageLog } from '@/api/admin'
 import { extractApiErrorMessage } from '@/utils/apiError'
 import Icon from '@/components/icons/Icon.vue'
 import Pagination from '@/components/common/Pagination.vue'
 
 const props = defineProps<{
   date: string | null
+  day: SubAdminCommissionCalendarDay | null
 }>()
 
 const emit = defineEmits<{
@@ -169,6 +194,34 @@ const pagination = reactive({
   page_size: 10,
   total: 0
 })
+
+let previousBodyOverflow = ''
+let bodyScrollLocked = false
+
+function formatCurrency(value: number) {
+  return `$${value.toFixed(2)}`
+}
+
+function handleEscape(event: KeyboardEvent) {
+  if (event.key === 'Escape' && props.date) {
+    emit('close')
+  }
+}
+
+function syncDialogSideEffects(open: boolean) {
+  if (open && !bodyScrollLocked) {
+    previousBodyOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    document.addEventListener('keydown', handleEscape)
+    bodyScrollLocked = true
+    return
+  }
+  if (!open && bodyScrollLocked) {
+    document.body.style.overflow = previousBodyOverflow
+    document.removeEventListener('keydown', handleEscape)
+    bodyScrollLocked = false
+  }
+}
 
 async function fetchGroups() {
   if (!props.date) {
@@ -241,4 +294,12 @@ watch(
   },
   { immediate: true }
 )
+
+watch(
+  () => Boolean(props.date),
+  syncDialogSideEffects,
+  { immediate: true }
+)
+
+onBeforeUnmount(() => syncDialogSideEffects(false))
 </script>

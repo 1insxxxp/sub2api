@@ -57,8 +57,8 @@
           type="button"
           :data-test="cell.date ? `commission-calendar-day-${cell.date}` : undefined"
           :aria-label="calendarCellAriaLabel(cell)"
-          :aria-pressed="cell.selectable ? cell.date === selectedMobileDay?.date : undefined"
-          class="commission-calendar-compact-cell relative flex min-h-12 min-w-0 items-start justify-start overflow-hidden rounded-md border p-2 text-left transition sm:min-h-[68px] sm:rounded-lg sm:p-2.5"
+          :aria-pressed="cell.selectable ? cell.date === selectedMobileDate : undefined"
+          class="commission-calendar-compact-cell relative flex min-h-12 min-w-0 items-start justify-start overflow-hidden rounded-md border p-1.5 text-left transition sm:min-h-[78px] sm:rounded-lg sm:p-2.5"
           :class="calendarCellClasses(cell)"
           :disabled="!cell.selectable"
           @click="cell.selectable && selectDay(cell.date)"
@@ -68,52 +68,23 @@
             class="absolute bottom-1.5 left-1/2 h-1 w-5 -translate-x-1/2 rounded-full bg-blue-500/80 dark:bg-cyan-300/80 sm:bottom-2 sm:left-2.5 sm:w-6 sm:translate-x-0"
             aria-hidden="true"
           />
-          <span class="block text-xs font-semibold tabular-nums sm:text-sm">{{ cell.label }}</span>
+          <span class="flex min-w-0 flex-col gap-0.5">
+            <span class="block text-xs font-semibold tabular-nums sm:text-sm">{{ cell.label }}</span>
+            <span
+              v-if="cell.day && (cell.day.actual_cost > 0 || cell.day.commission_amount > 0)"
+              :data-test="`commission-calendar-day-${cell.date}-amounts`"
+              class="mt-0.5 min-w-0 space-y-0.5 text-[9px] font-medium leading-tight tabular-nums sm:text-[11px]"
+            >
+              <span class="block truncate text-blue-700 dark:text-blue-200" :title="`${t('adminWorkbench.commission.actualCost')} ${formatCurrency(cell.day.actual_cost)}`">
+                <span class="mr-0.5 font-normal opacity-75">{{ t('adminWorkbench.commission.actualCostShort') }}</span>{{ compactCurrency(cell.day.actual_cost) }}
+              </span>
+              <span class="block truncate text-emerald-700 dark:text-emerald-300" :title="`${t('adminWorkbench.commission.commissionAmount')} ${formatCurrency(cell.day.commission_amount)}`">
+                <span class="mr-0.5 font-normal opacity-75">{{ t('adminWorkbench.commission.commissionAmountShort') }}</span>{{ compactCurrency(cell.day.commission_amount) }}
+              </span>
+            </span>
+          </span>
         </button>
       </div>
-
-      <button
-        v-if="selectedMobileDay"
-        :key="selectedMobileDay.date"
-        type="button"
-        data-test="commission-calendar-selected-day-summary"
-        class="commission-calendar-day-summary mt-4 grid w-full min-w-0 gap-3 rounded-lg border border-blue-200 bg-blue-50/60 p-3 text-left transition hover:border-blue-300 dark:border-blue-500/25 dark:bg-blue-500/10 dark:hover:border-blue-400/50 sm:grid-cols-[minmax(0,0.72fr)_minmax(0,1.28fr)] sm:items-center sm:p-4"
-        :disabled="!selectedMobileDay.enabled"
-        @click="selectedMobileDay.enabled && selectDay(selectedMobileDay.date)"
-      >
-        <span class="flex min-w-0 items-center justify-between gap-3 sm:block">
-          <span class="min-w-0">
-            <span class="block font-mono text-sm font-semibold tabular-nums text-blue-950 dark:text-blue-50 sm:text-base">
-              {{ selectedMobileDay.date }}
-            </span>
-            <span class="mt-1 block text-xs text-blue-700 dark:text-blue-200">
-              {{ t('adminWorkbench.commission.dayDetails') }}
-            </span>
-          </span>
-          <span class="h-2.5 w-2.5 shrink-0 rounded-full bg-blue-500 dark:bg-cyan-300 sm:mt-3 sm:block" aria-hidden="true" />
-        </span>
-        <span
-          data-test="commission-calendar-selected-day-amounts"
-          class="grid min-w-0 grid-cols-1 gap-2 min-[480px]:grid-cols-2"
-        >
-          <span class="min-w-0 rounded-md border border-blue-100 bg-white px-2.5 py-2 dark:border-blue-400/10 dark:bg-dark-900/60">
-            <span class="block text-[10px] font-medium text-gray-500 dark:text-dark-400 sm:text-xs">
-              {{ t('adminWorkbench.commission.actualCost') }}
-            </span>
-            <span class="mt-1 block overflow-x-auto whitespace-nowrap font-mono text-[13px] font-bold tabular-nums text-gray-950 [scrollbar-width:none] dark:text-white sm:text-base" :title="formatCurrency(selectedMobileDay.actual_cost)">
-              {{ formatCurrency(selectedMobileDay.actual_cost) }}
-            </span>
-          </span>
-          <span class="min-w-0 rounded-md border border-emerald-100 bg-emerald-50 px-2.5 py-2 dark:border-emerald-400/10 dark:bg-emerald-500/10">
-            <span class="block text-[10px] font-medium text-emerald-700 dark:text-emerald-300 sm:text-xs">
-              {{ t('adminWorkbench.commission.commissionAmount') }}
-            </span>
-            <span class="mt-1 block overflow-x-auto whitespace-nowrap font-mono text-[13px] font-bold tabular-nums text-emerald-700 [scrollbar-width:none] dark:text-emerald-200 sm:text-base" :title="formatCurrency(selectedMobileDay.commission_amount)">
-              {{ formatCurrency(selectedMobileDay.commission_amount) }}
-            </span>
-          </span>
-        </span>
-      </button>
       <p v-if="days.length === 0" class="mt-4 rounded-lg bg-gray-50 px-3 py-3 text-center text-sm text-gray-500 dark:bg-dark-800/70 dark:text-dark-400">
         {{ t('adminWorkbench.commission.emptyGrants') }}
       </p>
@@ -129,7 +100,7 @@ import { extractApiErrorMessage } from '@/utils/apiError'
 import type { SubAdminCommissionCalendarDay } from '@/api/admin'
 
 const emit = defineEmits<{
-  (event: 'select-day', date: string): void
+  (event: 'select-day', date: string, day: SubAdminCommissionCalendarDay): void
 }>()
 
 const { t } = useI18n()
@@ -167,18 +138,23 @@ const visibleDayRows = computed(() =>
     .sort((a, b) => a.date.localeCompare(b.date))
 )
 
-const selectedMobileDay = computed(() => {
-  if (visibleDayRows.value.length === 0) {
-    return null
-  }
-  return (
-    visibleDayRows.value.find((day) => day.date === selectedMobileDate.value) ??
-    visibleDayRows.value[visibleDayRows.value.length - 1]
-  )
-})
-
 function formatCurrency(value: number) {
   return `$${value.toFixed(2)}`
+}
+
+function compactCurrency(value: number) {
+  const absolute = Math.abs(value)
+  if (absolute >= 1_000_000) {
+    return `$${trimCompactNumber(value / 1_000_000)}M`
+  }
+  if (absolute >= 1_000) {
+    return `$${trimCompactNumber(value / 1_000)}K`
+  }
+  return formatCurrency(value)
+}
+
+function trimCompactNumber(value: number) {
+  return value.toFixed(2).replace(/\.00$/, '').replace(/(\.\d)0$/, '$1')
 }
 
 function calendarCellAriaLabel(cell: { date: string; day?: SubAdminCommissionCalendarDay }) {
@@ -220,7 +196,7 @@ const calendarCells = computed(() => {
       date: value,
       label: String(date),
       day,
-      selectable: Boolean(day?.enabled)
+      selectable: Boolean(day && (day.enabled || day.actual_cost > 0 || day.commission_amount > 0))
     })
   }
   return cells
@@ -233,15 +209,19 @@ function calendarCellClasses(cell: { date: string; day?: SubAdminCommissionCalen
   if (!cell.selectable) {
     return 'border-gray-100 bg-gray-50 text-gray-400 dark:border-dark-800 dark:bg-dark-950/50 dark:text-dark-500'
   }
-  if (cell.date === selectedMobileDay.value?.date) {
+  if (cell.date === selectedMobileDate.value) {
     return 'border-blue-500 bg-blue-50 text-blue-950 ring-2 ring-blue-500/10 dark:border-blue-400 dark:bg-blue-500/15 dark:text-blue-50'
   }
   return 'border-blue-200 bg-gradient-to-br from-blue-50 via-white to-cyan-50 text-blue-950 shadow-sm shadow-blue-900/5 hover:border-blue-400 dark:border-blue-500/20 dark:from-blue-500/15 dark:via-dark-900 dark:to-cyan-500/10 dark:text-blue-50 dark:hover:border-blue-400/60'
 }
 
 function selectDay(date: string) {
+  const day = dayByDate.value.get(date)
+  if (!day) {
+    return
+  }
   selectedMobileDate.value = date
-  emit('select-day', date)
+  emit('select-day', date, day)
 }
 
 async function fetchCalendar() {
@@ -266,7 +246,7 @@ watch(visibleDayRows, (rows) => {
     return
   }
   if (!rows.some((day) => day.date === selectedMobileDate.value)) {
-    selectedMobileDate.value = rows[rows.length - 1].date
+    selectedMobileDate.value = ''
   }
 }, { immediate: true })
 </script>
