@@ -2,7 +2,7 @@
   <section
     v-if="date"
     data-test="sub-admin-commission-day-drawer"
-    class="rounded-lg border border-gray-200 bg-white p-5 shadow-sm dark:border-dark-700 dark:bg-dark-900"
+    class="min-w-0 rounded-lg border border-gray-200 bg-white p-4 shadow-sm dark:border-dark-700 dark:bg-dark-900 sm:p-5 xl:max-h-[calc(100vh-8rem)] xl:overflow-y-auto"
   >
     <div class="mb-4 flex items-start justify-between gap-3">
       <div>
@@ -29,33 +29,53 @@
       <article
         v-for="group in groups"
         :key="group.group_id"
-        class="rounded-lg border border-gray-200 p-4 dark:border-dark-700"
+        :data-test="`commission-day-group-${group.group_id}`"
+        class="commission-day-group-card min-w-0 rounded-lg border border-gray-200 p-3 dark:border-dark-700 sm:p-4"
       >
-        <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <h3 class="text-sm font-semibold text-gray-950 dark:text-white">
+        <div class="grid min-w-0 gap-3">
+          <div class="min-w-0">
+            <h3
+              :data-test="`commission-day-group-${group.group_id}-name`"
+              class="break-words text-sm font-semibold leading-5 text-gray-950 dark:text-white"
+            >
               {{ group.group_name }}
             </h3>
-            <p class="mt-1 text-xs text-gray-500 dark:text-dark-400">
+            <p
+              :data-test="`commission-day-group-${group.group_id}-metrics`"
+              class="mt-1 text-xs tabular-nums text-gray-500 dark:text-dark-400"
+            >
               {{ group.requests }} req · {{ group.total_tokens }} tokens
             </p>
           </div>
-          <div class="flex flex-wrap items-center gap-2">
-            <span class="rounded-md bg-gray-50 px-2.5 py-1 text-sm font-semibold tabular-nums text-gray-900 dark:bg-dark-800 dark:text-white">
-              ${{ group.actual_cost.toFixed(2) }}
+          <div
+            :data-test="`commission-day-group-${group.group_id}-amounts`"
+            class="grid min-w-0 grid-cols-1 gap-2 min-[480px]:grid-cols-2"
+          >
+            <span class="min-w-0 rounded-md bg-gray-50 px-2.5 py-2 dark:bg-dark-800">
+              <span class="block text-[10px] font-medium text-gray-500 dark:text-dark-400">
+                {{ t('adminWorkbench.commission.actualCost') }}
+              </span>
+              <span class="mt-0.5 block overflow-x-auto whitespace-nowrap font-mono text-sm font-semibold tabular-nums text-gray-900 [scrollbar-width:none] dark:text-white" :title="`$${group.actual_cost.toFixed(2)}`">
+                ${{ group.actual_cost.toFixed(2) }}
+              </span>
             </span>
-            <span class="rounded-md bg-emerald-50 px-2.5 py-1 text-sm font-semibold tabular-nums text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300">
-              ${{ group.commission_amount.toFixed(2) }}
+            <span class="min-w-0 rounded-md bg-emerald-50 px-2.5 py-2 dark:bg-emerald-500/10">
+              <span class="block text-[10px] font-medium text-emerald-700 dark:text-emerald-300">
+                {{ t('adminWorkbench.commission.commissionAmount') }}
+              </span>
+              <span class="mt-0.5 block overflow-x-auto whitespace-nowrap font-mono text-sm font-semibold tabular-nums text-emerald-700 [scrollbar-width:none] dark:text-emerald-300" :title="`$${group.commission_amount.toFixed(2)}`">
+                ${{ group.commission_amount.toFixed(2) }}
+              </span>
             </span>
-            <button
-              type="button"
-              class="btn btn-secondary px-3"
-              :data-test="`commission-day-group-${group.group_id}-toggle`"
-              @click="toggleGroup(group.group_id)"
-            >
-              <span>{{ expandedGroupID === group.group_id ? t('common.collapse') : t('common.expand') }}</span>
-            </button>
           </div>
+          <button
+            type="button"
+            class="btn btn-secondary w-full justify-center px-3"
+            :data-test="`commission-day-group-${group.group_id}-toggle`"
+            @click="toggleGroup(group.group_id)"
+          >
+            <span>{{ expandedGroupID === group.group_id ? t('common.collapse') : t('common.expand') }}</span>
+          </button>
         </div>
 
         <div v-if="expandedGroupID === group.group_id" class="mt-4 border-t border-gray-100 pt-4 dark:border-dark-800">

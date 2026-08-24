@@ -6,7 +6,11 @@
   >
     <SubAdminCommissionManagement v-if="isAdmin" />
 
-    <div class="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(360px,0.48fr)]">
+    <div
+      data-test="commission-calendar-layout"
+      class="commission-calendar-layout grid items-start gap-4"
+      :class="{ 'xl:grid-cols-[minmax(0,3fr)_minmax(22rem,2fr)]': selectedDate }"
+    >
       <SubAdminCommissionCalendar @select-day="selectedDate = $event" />
       <SubAdminCommissionDayDrawer
         :date="selectedDate"
