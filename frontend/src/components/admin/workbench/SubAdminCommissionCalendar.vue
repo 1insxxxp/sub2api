@@ -45,12 +45,15 @@
       {{ errorMessage }}
     </div>
     <div v-else class="mt-5">
-      <div class="grid grid-cols-7 gap-1 text-center text-[11px] font-medium text-gray-500 dark:text-dark-400 sm:gap-2 sm:text-xs">
+      <div class="hidden grid-cols-7 gap-1 text-center text-[11px] font-medium text-gray-500 dark:text-dark-400 sm:grid sm:gap-2 sm:text-xs">
         <div v-for="day in weekdays" :key="day" class="py-1">
           {{ day }}
         </div>
       </div>
-      <div class="mt-2 grid grid-cols-7 gap-1 sm:gap-2">
+      <div
+        data-test="commission-calendar-grid"
+        class="commission-calendar-grid mt-2 grid grid-cols-2 gap-2 sm:grid-cols-7 sm:gap-2"
+      >
         <button
           v-for="cell in calendarCells"
           :key="cell.key"
@@ -58,8 +61,8 @@
           :data-test="cell.date ? `commission-calendar-day-${cell.date}` : undefined"
           :aria-label="calendarCellAriaLabel(cell)"
           :aria-pressed="cell.selectable ? cell.date === selectedMobileDate : undefined"
-          class="commission-calendar-compact-cell relative flex min-h-12 min-w-0 items-start justify-start overflow-hidden rounded-md border p-1.5 text-left transition sm:min-h-[78px] sm:rounded-lg sm:p-2.5"
-          :class="calendarCellClasses(cell)"
+          class="commission-calendar-day-cell commission-calendar-compact-cell relative flex min-h-12 min-w-0 items-start justify-start overflow-hidden rounded-xl border p-3 text-left transition sm:min-h-[78px] sm:rounded-lg sm:p-2.5"
+          :class="[calendarCellClasses(cell), !cell.date ? 'hidden sm:flex' : 'min-h-[94px] sm:min-h-[78px]']"
           :disabled="!cell.selectable"
           @click="cell.selectable && selectDay(cell.date)"
         >
@@ -68,18 +71,23 @@
             class="absolute bottom-1.5 left-1/2 h-1 w-5 -translate-x-1/2 rounded-full bg-blue-500/80 dark:bg-cyan-300/80 sm:bottom-2 sm:left-2.5 sm:w-6 sm:translate-x-0"
             aria-hidden="true"
           />
-          <span class="flex min-w-0 flex-col gap-0.5">
-            <span class="block text-xs font-semibold tabular-nums sm:text-sm">{{ cell.label }}</span>
+          <span class="flex w-full min-w-0 flex-col gap-1">
+            <span class="block text-base font-semibold leading-none tabular-nums sm:text-sm">{{ cell.label }}</span>
             <span
               v-if="cell.day && (cell.day.actual_cost > 0 || cell.day.commission_amount > 0)"
               :data-test="`commission-calendar-day-${cell.date}-amounts`"
-              class="mt-0.5 min-w-0 space-y-0.5 text-[9px] font-medium leading-tight tabular-nums sm:text-[11px]"
+              class="mt-1 min-w-0 space-y-1 text-sm font-semibold leading-tight tabular-nums sm:space-y-0.5 sm:text-[11px]"
+              aria-hidden="true"
             >
-              <span class="block truncate text-blue-700 dark:text-blue-200" :title="`${t('adminWorkbench.commission.actualCost')} ${formatCurrency(cell.day.actual_cost)}`">
-                {{ compactCurrency(cell.day.actual_cost) }}
+              <span class="flex min-w-0 items-center gap-1 whitespace-nowrap text-blue-700 dark:text-blue-200" :title="`${t('adminWorkbench.commission.actualCost')} ${formatCurrency(cell.day.actual_cost)}`">
+                <span class="text-xs font-bold text-blue-500 dark:text-cyan-300 sm:text-[10px]" aria-hidden="true">↓</span>
+                <span class="sm:hidden">{{ formatCurrency(cell.day.actual_cost) }}</span>
+                <span class="hidden sm:inline">{{ compactCurrency(cell.day.actual_cost) }}</span>
               </span>
-              <span class="block truncate text-emerald-700 dark:text-emerald-300" :title="`${t('adminWorkbench.commission.commissionAmount')} ${formatCurrency(cell.day.commission_amount)}`">
-                {{ compactCurrency(cell.day.commission_amount) }}
+              <span class="flex min-w-0 items-center gap-1 whitespace-nowrap text-emerald-700 dark:text-emerald-300" :title="`${t('adminWorkbench.commission.commissionAmount')} ${formatCurrency(cell.day.commission_amount)}`">
+                <span class="text-xs font-bold text-emerald-500 dark:text-emerald-300 sm:text-[10px]" aria-hidden="true">↑</span>
+                <span class="sm:hidden">{{ formatCurrency(cell.day.commission_amount) }}</span>
+                <span class="hidden sm:inline">{{ compactCurrency(cell.day.commission_amount) }}</span>
               </span>
             </span>
           </span>
