@@ -37,6 +37,7 @@ import adminComplianceAPI from './compliance'
 import checkinsAPI from './checkins'
 import auditAPI from './audit'
 import subAdminCommissionAPI from './subAdminCommission'
+import pluginsAPI from './plugins'
 
 /**
  * Unified admin API object for convenient access
@@ -75,7 +76,8 @@ export const adminAPI = {
   compliance: adminComplianceAPI,
   checkins: checkinsAPI,
   audit: auditAPI,
-  subAdminCommission: subAdminCommissionAPI
+  subAdminCommission: subAdminCommissionAPI,
+  plugins: pluginsAPI
 }
 
 export {
@@ -112,7 +114,8 @@ export {
   adminComplianceAPI,
   checkinsAPI,
   auditAPI,
-  subAdminCommissionAPI
+  subAdminCommissionAPI,
+  pluginsAPI
 }
 
 export default adminAPI
@@ -152,3 +155,9 @@ export type {
   CheckinStreakRule,
   CheckinRewardPreview
 } from './checkins'
+export type {
+  PluginInstallation,
+  PluginCompatibility,
+  PluginUISession,
+  PluginTestResult
+} from './plugins'

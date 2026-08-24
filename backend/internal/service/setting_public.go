@@ -241,6 +241,7 @@ func (s *SettingService) GetPublicSettings(ctx context.Context) (*PublicSettings
 		SettingKeyAvailableChannelsOfficialUSDToCNYRate,
 		SettingKeyModelPlazaEnabled,
 		SettingKeyModelPlazaRequireAuth,
+		SettingKeyPluginManagementEnabled,
 		SettingKeyAffiliateEnabled,
 		SettingKeyRiskControlEnabled,
 		SettingKeyImageStudioConfig,
@@ -380,8 +381,9 @@ func (s *SettingService) GetPublicSettings(ctx context.Context) (*PublicSettings
 			settings[SettingKeyAvailableChannelsOfficialUSDToCNYRate],
 		),
 
-		ModelPlazaEnabled:     settings[SettingKeyModelPlazaEnabled] == "true",
-		ModelPlazaRequireAuth: settings[SettingKeyModelPlazaRequireAuth] == "true",
+		ModelPlazaEnabled:       settings[SettingKeyModelPlazaEnabled] == "true",
+		ModelPlazaRequireAuth:   settings[SettingKeyModelPlazaRequireAuth] == "true",
+		PluginManagementEnabled: settings[SettingKeyPluginManagementEnabled] == "true",
 
 		AffiliateEnabled: settings[SettingKeyAffiliateEnabled] == "true",
 
@@ -696,6 +698,7 @@ type PublicSettingsInjectionPayload struct {
 	AvailableChannelsOfficialUSDToCNYRate  float64 `json:"available_channels_official_usd_to_cny_rate"`
 	ModelPlazaEnabled                      bool    `json:"model_plaza_enabled"`
 	ModelPlazaRequireAuth                  bool    `json:"model_plaza_require_auth"`
+	PluginManagementEnabled                bool    `json:"plugin_management_enabled"`
 	AffiliateEnabled                       bool    `json:"affiliate_enabled"`
 	RiskControlEnabled                     bool    `json:"risk_control_enabled"`
 	ImageStudioEnabled                     bool    `json:"image_studio_enabled"`
@@ -799,6 +802,7 @@ func (s *SettingService) GetPublicSettingsForInjection(ctx context.Context) (any
 		AvailableChannelsOfficialUSDToCNYRate:  settings.AvailableChannelsOfficialUSDToCNYRate,
 		ModelPlazaEnabled:                      settings.ModelPlazaEnabled,
 		ModelPlazaRequireAuth:                  settings.ModelPlazaRequireAuth,
+		PluginManagementEnabled:                settings.PluginManagementEnabled,
 		AffiliateEnabled:                       settings.AffiliateEnabled,
 		RiskControlEnabled:                     settings.RiskControlEnabled,
 		ImageStudioEnabled:                     settings.ImageStudioEnabled,
