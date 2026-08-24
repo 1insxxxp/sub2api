@@ -157,6 +157,14 @@ func RegisterUserRoutes(
 			announcements.POST("/:id/read", h.Announcement.MarkRead)
 		}
 
+		// 抽奖活动（用户可见）
+		lottery := authenticated.Group("/lottery")
+		{
+			lottery.GET("/state", h.Lottery.GetState)
+			lottery.POST("/draw", h.Lottery.Draw)
+			lottery.GET("/history", h.Lottery.History)
+		}
+
 		// 卡密兑换
 		redeem := authenticated.Group("/redeem")
 		{

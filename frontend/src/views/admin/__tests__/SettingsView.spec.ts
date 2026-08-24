@@ -29,6 +29,13 @@ describe("admin SettingsView custom menu open mode", () => {
   });
 });
 
+describe("admin SettingsView lottery feature switch", () => {
+  it("renders the lottery toggle and includes it in the settings payload", () => {
+    expect(settingsViewSource).toContain('v-model="form.lottery_enabled"');
+    expect(settingsViewSource).toContain("lottery_enabled: form.lottery_enabled");
+  });
+});
+
 const {
   getSettings,
   updateSettings,

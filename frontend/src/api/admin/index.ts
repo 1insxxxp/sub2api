@@ -38,6 +38,7 @@ import checkinsAPI from './checkins'
 import auditAPI from './audit'
 import subAdminCommissionAPI from './subAdminCommission'
 import pluginsAPI from './plugins'
+import lotteryAPI from './lottery'
 
 /**
  * Unified admin API object for convenient access
@@ -77,7 +78,8 @@ export const adminAPI = {
   checkins: checkinsAPI,
   audit: auditAPI,
   subAdminCommission: subAdminCommissionAPI,
-  plugins: pluginsAPI
+  plugins: pluginsAPI,
+  lottery: lotteryAPI
 }
 
 export {
@@ -115,7 +117,8 @@ export {
   checkinsAPI,
   auditAPI,
   subAdminCommissionAPI,
-  pluginsAPI
+  pluginsAPI,
+  lotteryAPI
 }
 
 export default adminAPI

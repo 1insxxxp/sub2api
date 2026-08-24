@@ -65,6 +65,12 @@ export default {
           enabled: '显示插件管理菜单',
           enabledHint: '关闭后仅隐藏侧边栏菜单；已加载或正在运行的插件不会因此停止。',
         },
+        lottery: {
+          title: '抽奖活动',
+          description: '控制用户侧抽奖页面是否开放。奖品、次数和活动规则将在抽奖管理页配置。',
+          enabled: '启用抽奖活动',
+          enabledHint: '开启后登录用户可以访问抽奖页面；关闭后入口和抽奖接口均不可用。',
+        },
         riskControl: {
           title: '风控中心',
           description: '启用内容审计菜单和全端点请求审核入口。默认关闭。',

@@ -219,6 +219,11 @@ func RegisterAdminRoutes(
 			registerCheckinRoutes(admin, h)
 		}
 
+		// 抽奖活动管理
+		if adminHandlers.Lottery != nil {
+			registerLotteryRoutes(admin, adminHandlers.Lottery)
+		}
+
 		// 操作审计日志
 		if adminHandlers.AuditLog != nil {
 			registerAuditLogRoutes(admin, h, stepUpAuth)

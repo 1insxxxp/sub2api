@@ -56,6 +56,14 @@ type Tx struct {
 	IdempotencyRecord *IdempotencyRecordClient
 	// IdentityAdoptionDecision is the client for interacting with the IdentityAdoptionDecision builders.
 	IdentityAdoptionDecision *IdentityAdoptionDecisionClient
+	// LotteryActivity is the client for interacting with the LotteryActivity builders.
+	LotteryActivity *LotteryActivityClient
+	// LotteryDraw is the client for interacting with the LotteryDraw builders.
+	LotteryDraw *LotteryDrawClient
+	// LotteryPrize is the client for interacting with the LotteryPrize builders.
+	LotteryPrize *LotteryPrizeClient
+	// LotteryPrizeItem is the client for interacting with the LotteryPrizeItem builders.
+	LotteryPrizeItem *LotteryPrizeItemClient
 	// PaymentAuditLog is the client for interacting with the PaymentAuditLog builders.
 	PaymentAuditLog *PaymentAuditLogClient
 	// PaymentOrder is the client for interacting with the PaymentOrder builders.
@@ -268,6 +276,10 @@ func (tx *Tx) init() {
 	tx.Group = NewGroupClient(tx.config)
 	tx.IdempotencyRecord = NewIdempotencyRecordClient(tx.config)
 	tx.IdentityAdoptionDecision = NewIdentityAdoptionDecisionClient(tx.config)
+	tx.LotteryActivity = NewLotteryActivityClient(tx.config)
+	tx.LotteryDraw = NewLotteryDrawClient(tx.config)
+	tx.LotteryPrize = NewLotteryPrizeClient(tx.config)
+	tx.LotteryPrizeItem = NewLotteryPrizeItemClient(tx.config)
 	tx.PaymentAuditLog = NewPaymentAuditLogClient(tx.config)
 	tx.PaymentOrder = NewPaymentOrderClient(tx.config)
 	tx.PaymentProviderInstance = NewPaymentProviderInstanceClient(tx.config)

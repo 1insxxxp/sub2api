@@ -82,6 +82,20 @@ func TestSettingService_GetPublicSettings_ExposesTablePreferences(t *testing.T) 
 	require.Equal(t, 50, settings.TableDefaultPageSize)
 	require.Equal(t, []int{20, 50, 100}, settings.TablePageSizeOptions)
 }
+
+func TestSettingService_GetPublicSettings_ExposesLotteryEnabled(t *testing.T) {
+	repo := &settingPublicRepoStub{
+		values: map[string]string{
+			SettingKeyLotteryEnabled: "true",
+		},
+	}
+	svc := NewSettingService(repo, &config.Config{})
+
+	settings, err := svc.GetPublicSettings(context.Background())
+	require.NoError(t, err)
+	require.True(t, settings.LotteryEnabled)
+}
+
 func TestSettingService_GetPublicSettings_DefaultBranding(t *testing.T) {
 	repo := &settingPublicRepoStub{values: map[string]string{}}
 	svc := NewSettingService(repo, &config.Config{})
