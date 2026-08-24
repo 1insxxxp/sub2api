@@ -616,22 +616,22 @@
       justify-content: center;
       gap: 0 !important;
       padding: 0 !important;
-      border: 1px solid rgba(var(--brand-rgb), 0.34) !important;
+      border: 1px solid rgb(var(--brand-rgb) / 0.34) !important;
       border-radius: 0.5rem !important;
       color: var(--brand-700) !important;
-      background: linear-gradient(135deg, rgba(var(--brand-rgb), 0.09), rgba(var(--brand-cyan-rgb), 0.08)) !important;
-      box-shadow: 0 1px 0 rgba(255, 255, 255, 0.8) inset, 0 4px 12px rgba(var(--brand-rgb), 0.08);
+      background: linear-gradient(135deg, rgb(var(--brand-rgb) / 0.09), rgb(var(--brand-cyan-rgb) / 0.08)) !important;
+      box-shadow: 0 1px 0 rgba(255, 255, 255, 0.8) inset, 0 4px 12px rgb(var(--brand-rgb) / 0.08);
     }
 
     .app-header-mobile-action:hover:not(:disabled) {
-      border-color: rgba(var(--brand-cyan-rgb), 0.48) !important;
+      border-color: rgb(var(--brand-cyan-rgb) / 0.48) !important;
       color: var(--brand-700) !important;
-      background: linear-gradient(135deg, rgba(var(--brand-rgb), 0.14), rgba(var(--brand-cyan-rgb), 0.13)) !important;
+      background: linear-gradient(135deg, rgb(var(--brand-rgb) / 0.14), rgb(var(--brand-cyan-rgb) / 0.13)) !important;
     }
 
     .app-header-mobile-action:focus-visible {
       outline: none;
-      box-shadow: 0 0 0 3px rgba(var(--brand-rgb), 0.2);
+      box-shadow: 0 0 0 3px rgb(var(--brand-rgb) / 0.2);
     }
 
     .app-header-mobile-action:disabled {
@@ -642,9 +642,9 @@
     }
 
     .dark .app-header-mobile-action {
-      border-color: rgba(var(--brand-cyan-rgb), 0.28) !important;
+      border-color: rgb(var(--brand-cyan-rgb) / 0.28) !important;
       color: rgb(165 243 252) !important;
-      background: linear-gradient(135deg, rgba(var(--brand-rgb), 0.2), rgba(var(--brand-cyan-rgb), 0.12)) !important;
+      background: linear-gradient(135deg, rgb(var(--brand-rgb) / 0.2), rgb(var(--brand-cyan-rgb) / 0.12)) !important;
       box-shadow: 0 1px 0 rgba(255, 255, 255, 0.05) inset;
     }
 
@@ -662,21 +662,21 @@
       gap: 0.25rem !important;
       overflow: hidden;
       padding: 0 0.25rem !important;
-      border: 1px solid rgba(var(--brand-rgb), 0.34) !important;
+      border: 1px solid rgb(var(--brand-rgb) / 0.34) !important;
       border-radius: 0.5rem !important;
       color: var(--brand-700) !important;
-      background: linear-gradient(135deg, rgba(var(--brand-rgb), 0.09), rgba(var(--brand-cyan-rgb), 0.08)) !important;
-      box-shadow: 0 1px 0 rgba(255, 255, 255, 0.8) inset, 0 4px 12px rgba(var(--brand-rgb), 0.08);
+      background: linear-gradient(135deg, rgb(var(--brand-rgb) / 0.09), rgb(var(--brand-cyan-rgb) / 0.08)) !important;
+      box-shadow: 0 1px 0 rgba(255, 255, 255, 0.8) inset, 0 4px 12px rgb(var(--brand-rgb) / 0.08);
     }
 
     .app-header-actions .subscription-progress-trigger:hover {
-      border-color: rgba(var(--brand-cyan-rgb), 0.48) !important;
-      background: linear-gradient(135deg, rgba(var(--brand-rgb), 0.14), rgba(var(--brand-cyan-rgb), 0.13)) !important;
+      border-color: rgb(var(--brand-cyan-rgb) / 0.48) !important;
+      background: linear-gradient(135deg, rgb(var(--brand-rgb) / 0.14), rgb(var(--brand-cyan-rgb) / 0.13)) !important;
     }
 
     .app-header-actions .subscription-progress-trigger:focus-visible {
       outline: none;
-      box-shadow: 0 0 0 3px rgba(var(--brand-rgb), 0.2);
+      box-shadow: 0 0 0 3px rgb(var(--brand-rgb) / 0.2);
     }
 
     .app-header-actions .subscription-progress-trigger-status {
@@ -694,9 +694,9 @@
     }
 
     .dark .app-header-actions .subscription-progress-trigger {
-      border-color: rgba(var(--brand-cyan-rgb), 0.28) !important;
+      border-color: rgb(var(--brand-cyan-rgb) / 0.28) !important;
       color: rgb(191 219 254) !important;
-      background: linear-gradient(135deg, rgba(var(--brand-rgb), 0.2), rgba(var(--brand-cyan-rgb), 0.12)) !important;
+      background: linear-gradient(135deg, rgb(var(--brand-rgb) / 0.2), rgb(var(--brand-cyan-rgb) / 0.12)) !important;
       box-shadow: 0 1px 0 rgba(255, 255, 255, 0.05) inset;
     }
 

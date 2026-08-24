@@ -249,6 +249,40 @@ describe('AppHeader shared admin shell', () => {
     expect(compactActionRule).toContain('var(--brand-cyan-rgb)')
   })
 
+  it('uses valid custom-property color syntax for mobile header theme surfaces', () => {
+    const mobileHeaderCss = styleSource.match(/@media \(max-width: 639px\) \{([\s\S]*?)\n {2}\}\n\n {2}\.app-header-balance-pill/)?.[1] ?? ''
+    const compactActionRule = mobileHeaderCss.match(/\.app-header-mobile-action\s*\{([^}]*)\}/)?.[1]
+    const compactHoverRule = mobileHeaderCss.match(/\.app-header-mobile-action:hover:not\(:disabled\)\s*\{([^}]*)\}/)?.[1]
+    const compactFocusRule = mobileHeaderCss.match(/\.app-header-mobile-action:focus-visible\s*\{([^}]*)\}/)?.[1]
+    const compactDarkRule = mobileHeaderCss.match(/\.dark \.app-header-mobile-action\s*\{([^}]*)\}/)?.[1]
+    const subscriptionRule = mobileHeaderCss.match(/\.app-header-actions \.subscription-progress-trigger\s*\{([^}]*)\}/)?.[1]
+    const subscriptionHoverRule = mobileHeaderCss.match(/\.app-header-actions \.subscription-progress-trigger:hover\s*\{([^}]*)\}/)?.[1]
+    const subscriptionFocusRule = mobileHeaderCss.match(/\.app-header-actions \.subscription-progress-trigger:focus-visible\s*\{([^}]*)\}/)?.[1]
+    const subscriptionDarkRule = mobileHeaderCss.match(/\.dark \.app-header-actions \.subscription-progress-trigger\s*\{([^}]*)\}/)?.[1]
+
+    for (const rule of [compactActionRule, subscriptionRule]) {
+      expect(rule).toContain('rgb(var(--brand-rgb) / 0.34)')
+      expect(rule).toContain('rgb(var(--brand-rgb) / 0.09)')
+      expect(rule).toContain('rgb(var(--brand-cyan-rgb) / 0.08)')
+      expect(rule).toContain('rgb(var(--brand-rgb) / 0.08)')
+    }
+    for (const rule of [compactHoverRule, subscriptionHoverRule]) {
+      expect(rule).toContain('rgb(var(--brand-cyan-rgb) / 0.48)')
+      expect(rule).toContain('rgb(var(--brand-rgb) / 0.14)')
+      expect(rule).toContain('rgb(var(--brand-cyan-rgb) / 0.13)')
+    }
+    for (const rule of [compactFocusRule, subscriptionFocusRule]) {
+      expect(rule).toContain('rgb(var(--brand-rgb) / 0.2)')
+    }
+    for (const rule of [compactDarkRule, subscriptionDarkRule]) {
+      expect(rule).toContain('rgb(var(--brand-cyan-rgb) / 0.28)')
+      expect(rule).toContain('rgb(var(--brand-rgb) / 0.2)')
+      expect(rule).toContain('rgb(var(--brand-cyan-rgb) / 0.12)')
+    }
+    expect(mobileHeaderCss).not.toContain('rgba(var(--brand-rgb),')
+    expect(mobileHeaderCss).not.toContain('rgba(var(--brand-cyan-rgb),')
+  })
+
   it('keeps the worst-case mobile toolbar budget within 320px using its CSS constants', () => {
     const mobileHeaderCss = styleSource.match(/@media \(max-width: 639px\) \{([\s\S]*?)\n {2}\}\n\n {2}\.app-header-balance-pill/)?.[1] ?? ''
     const toolbarRule = mobileHeaderCss.match(/\.app-header-toolbar\s*\{([^}]*)\}/)?.[1]
