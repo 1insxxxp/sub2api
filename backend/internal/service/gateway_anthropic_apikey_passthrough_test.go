@@ -311,6 +311,137 @@ func TestGatewayService_AnthropicAPIKeyPassthrough_BearerAuthScheme(t *testing.T
 	require.Empty(t, getHeaderRaw(countReq.Header, "cookie"))
 }
 
+func TestGatewayService_AnthropicAPIKeyPassthrough_KiroInjectsCacheTTL1h(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	rec := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(rec)
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1/messages", nil)
+
+	svc := &GatewayService{
+		cfg: &config.Config{
+			Security: config.SecurityConfig{
+				URLAllowlist: config.URLAllowlistConfig{Enabled: false},
+			},
+		},
+	}
+	account := &Account{
+		ID:          203,
+		Name:        "kiro-full-score",
+		Platform:    PlatformAnthropic,
+		Type:        AccountTypeAPIKey,
+		Concurrency: 1,
+		Credentials: map[string]any{
+			"api_key":  "upstream-anthropic-key",
+			"base_url": "https://api.anthropic.com",
+		},
+		Extra: map[string]any{
+			"anthropic_passthrough": true,
+		},
+		Status:      StatusActive,
+		Schedulable: true,
+	}
+
+	body := []byte(`{"model":"claude-3-7-sonnet-20250219","system":[{"type":"text","text":"sys","cache_control":{"type":"ephemeral","ttl":"5m"}}],"messages":[{"role":"user","content":[{"type":"text","text":"hello","cache_control":{"type":"ephemeral"}}]}]}`)
+
+	_, wireBody, err := svc.buildUpstreamRequestAnthropicAPIKeyPassthrough(context.Background(), c, account, body, "upstream-anthropic-key")
+	require.NoError(t, err)
+	require.Equal(t, "1h", gjson.GetBytes(wireBody, "system.0.cache_control.ttl").String())
+	require.Equal(t, "1h", gjson.GetBytes(wireBody, "messages.0.content.0.cache_control.ttl").String())
+}
+
+func TestGatewayService_AnthropicAPIKeyPassthrough_KiroInjectsCacheTTL1hOnCountTokens(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	rec := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(rec)
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1/messages/count_tokens", nil)
+
+	svc := &GatewayService{
+		cfg: &config.Config{
+			Security: config.SecurityConfig{
+				URLAllowlist: config.URLAllowlistConfig{Enabled: false},
+			},
+		},
+	}
+	account := &Account{
+		ID:          204,
+		Name:        "kiro-full-score",
+		Platform:    PlatformAnthropic,
+		Type:        AccountTypeAPIKey,
+		Concurrency: 1,
+		Credentials: map[string]any{
+			"api_key":  "upstream-anthropic-key",
+			"base_url": "https://api.anthropic.com",
+		},
+		Extra: map[string]any{
+			"anthropic_passthrough": true,
+		},
+		Status:      StatusActive,
+		Schedulable: true,
+	}
+
+	body := []byte(`{"model":"claude-3-7-sonnet-20250219","system":[{"type":"text","text":"sys","cache_control":{"type":"ephemeral","ttl":"5m"}}],"messages":[{"role":"user","content":[{"type":"text","text":"hello","cache_control":{"type":"ephemeral"}}]}]}`)
+
+	req, err := svc.buildCountTokensRequestAnthropicAPIKeyPassthrough(context.Background(), c, account, body, "upstream-anthropic-key")
+	require.NoError(t, err)
+	wireBody, err := io.ReadAll(req.Body)
+	require.NoError(t, err)
+	require.Equal(t, "1h", gjson.GetBytes(wireBody, "system.0.cache_control.ttl").String())
+	require.Equal(t, "1h", gjson.GetBytes(wireBody, "messages.0.content.0.cache_control.ttl").String())
+}
+
+func TestGatewayService_AnthropicCountTokens_KiroInjectsCacheTTL1h(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	rec := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(rec)
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1/messages/count_tokens", nil)
+
+	upstream := &anthropicHTTPUpstreamRecorder{
+		resp: &http.Response{
+			StatusCode: http.StatusOK,
+			Header: http.Header{
+				"Content-Type": []string{"application/json"},
+			},
+			Body: io.NopCloser(strings.NewReader(`{"input_tokens":1}`)),
+		},
+	}
+
+	cfg := &config.Config{
+		Gateway: config.GatewayConfig{
+			MaxLineSize: defaultMaxLineSize,
+		},
+	}
+	svc := &GatewayService{
+		cfg:                  cfg,
+		responseHeaderFilter: compileResponseHeaderFilter(cfg),
+		httpUpstream:         upstream,
+		rateLimitService:     &RateLimitService{},
+	}
+	account := &Account{
+		ID:          204,
+		Name:        "kiro-full-score",
+		Platform:    PlatformAnthropic,
+		Type:        AccountTypeAPIKey,
+		Concurrency: 1,
+		Credentials: map[string]any{
+			"api_key": "upstream-anthropic-key",
+		},
+		Status:      StatusActive,
+		Schedulable: true,
+	}
+	parsed := &ParsedRequest{
+		Body:  NewRequestBodyRef([]byte(`{"model":"claude-3-7-sonnet-20250219","system":[{"type":"text","text":"sys","cache_control":{"type":"ephemeral","ttl":"5m"}}],"messages":[{"role":"user","content":[{"type":"text","text":"hello","cache_control":{"type":"ephemeral"}}]}]}`)),
+		Model: "claude-3-7-sonnet-20250219",
+	}
+
+	err := svc.ForwardCountTokens(context.Background(), c, account, parsed)
+	require.NoError(t, err)
+	require.Equal(t, "1h", gjson.GetBytes(upstream.lastBody, "system.0.cache_control.ttl").String())
+	require.Equal(t, "1h", gjson.GetBytes(upstream.lastBody, "messages.0.content.0.cache_control.ttl").String())
+}
+
 func TestGatewayService_AnthropicAPIKeyPassthrough_FlattensNamespaceClientTools(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 

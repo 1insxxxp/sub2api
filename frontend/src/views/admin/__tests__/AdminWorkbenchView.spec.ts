@@ -495,80 +495,15 @@ describe('AdminWorkbenchView balance transfer codes', () => {
     await flushPromises()
 
     expect(getCommissionSettings).toHaveBeenCalled()
-    expect(listUsers).toHaveBeenCalledWith(1, 1000, { role: 'sub_admin' })
     expect(getAllGroups).toHaveBeenCalled()
     expect(listCommissionGrants).toHaveBeenCalled()
-    expect(wrapper.text()).toContain('manager@example.com')
+    expect(wrapper.text()).toContain('adminWorkbench.commission.sharedGrantsHint')
     expect(wrapper.text()).toContain('Claude 特价')
 
     await wrapper.get('[data-test="sub-admin-commission-save-grants"]').trigger('click')
     await flushPromises()
 
-    expect(replaceCommissionGrants).toHaveBeenCalledWith(8, { group_ids: [3] })
-  })
-
-  it('loads every page of secondary admins for commission management', async () => {
-    authState.user = {
-      id: 1,
-      email: 'admin@example.com',
-      role: 'admin',
-      balance: 100,
-      concurrency: 5
-    }
-    listUsers
-      .mockResolvedValueOnce(
-        paginated(
-          [
-            {
-              id: 8,
-              email: 'manager@example.com',
-              username: 'manager',
-              role: 'sub_admin',
-              balance: 0,
-              frozen_balance: 0,
-              concurrency: 5,
-              rpm_limit: 0,
-              status: 'active',
-              allowed_groups: null,
-              created_at: '2026-08-01T00:00:00Z',
-              updated_at: '2026-08-01T00:00:00Z'
-            }
-          ],
-          1001,
-          1,
-          1000
-        )
-      )
-      .mockResolvedValueOnce(
-        paginated(
-          [
-            {
-              id: 9,
-              email: 'later-manager@example.com',
-              username: 'later-manager',
-              role: 'sub_admin',
-              balance: 0,
-              frozen_balance: 0,
-              concurrency: 5,
-              rpm_limit: 0,
-              status: 'active',
-              allowed_groups: null,
-              created_at: '2026-08-01T00:00:00Z',
-              updated_at: '2026-08-01T00:00:00Z'
-            }
-          ],
-          1001,
-          2,
-          1000
-        )
-      )
-
-    const wrapper = mountWorkbench()
-    await flushPromises()
-
-    expect(listUsers).toHaveBeenNthCalledWith(1, 1, 1000, { role: 'sub_admin' })
-    expect(listUsers).toHaveBeenNthCalledWith(2, 2, 1000, { role: 'sub_admin' })
-    expect(wrapper.text()).toContain('later-manager@example.com')
+    expect(replaceCommissionGrants).toHaveBeenCalledWith({ group_ids: [3] })
   })
 
   it('uses the local calendar month when loading commission data by default', async () => {

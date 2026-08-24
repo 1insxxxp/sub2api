@@ -201,6 +201,11 @@ func TestGatewayCacheTTLGlobalSetting_TargetResolution(t *testing.T) {
 	target, ok = svc.resolveCacheTTLUsageOverrideTarget(context.Background(), account)
 	require.True(t, ok)
 	require.Equal(t, cacheTTLTarget1h, target)
+
+	kiroAccount := &Account{Platform: PlatformAnthropic, Type: AccountTypeAPIKey, Name: "kiro-full-score"}
+	target, ok = svc.resolveCacheTTLUsageOverrideTarget(context.Background(), kiroAccount)
+	require.True(t, ok)
+	require.Equal(t, cacheTTLTarget1h, target)
 }
 
 func TestGatewayCacheTTLGlobalSetting_RequestInjectionScope(t *testing.T) {
@@ -214,6 +219,7 @@ func TestGatewayCacheTTLGlobalSetting_RequestInjectionScope(t *testing.T) {
 
 	require.True(t, svc.shouldInjectAnthropicCacheTTL1h(context.Background(), &Account{Platform: PlatformAnthropic, Type: AccountTypeOAuth}))
 	require.True(t, svc.shouldInjectAnthropicCacheTTL1h(context.Background(), &Account{Platform: PlatformAnthropic, Type: AccountTypeSetupToken}))
+	require.True(t, svc.shouldInjectAnthropicCacheTTL1h(context.Background(), &Account{Platform: PlatformAnthropic, Type: AccountTypeAPIKey, Name: "kiro-full-score"}))
 	require.False(t, svc.shouldInjectAnthropicCacheTTL1h(context.Background(), &Account{Platform: PlatformAnthropic, Type: AccountTypeAPIKey}))
 	require.False(t, svc.shouldInjectAnthropicCacheTTL1h(context.Background(), &Account{Platform: PlatformOpenAI, Type: AccountTypeOAuth}))
 

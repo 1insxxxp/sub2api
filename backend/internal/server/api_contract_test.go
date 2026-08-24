@@ -158,7 +158,7 @@ func TestSubAdminCommissionAPIContractRoutes(t *testing.T) {
 		"GET /api/v1/admin/sub-admin-commissions/settings",
 		"PUT /api/v1/admin/sub-admin-commissions/settings",
 		"GET /api/v1/admin/sub-admin-commissions/grants",
-		"PUT /api/v1/admin/sub-admin-commissions/grants/:sub_admin_id",
+		"PUT /api/v1/admin/sub-admin-commissions/grants",
 	} {
 		_, ok := registered[contract]
 		require.Truef(t, ok, "missing API contract route %s", contract)

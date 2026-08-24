@@ -28,26 +28,24 @@ func NewSubAdminCommissionRepository(client *dbent.Client, sqlDB *sql.DB) servic
 
 func (r *subAdminCommissionRepository) ListAllGrants(ctx context.Context) ([]service.SubAdminCommissionGrant, error) {
 	return r.listGrants(ctx, `
-		SELECT cg.id, cg.sub_admin_user_id, COALESCE(u.email, ''), cg.group_id, COALESCE(g.name, ''),
-			cg.granted_date::text, cg.enabled, cg.created_at, cg.updated_at
-		FROM sub_admin_commission_grants cg
-		JOIN users u ON u.id = cg.sub_admin_user_id AND u.deleted_at IS NULL
-		JOIN groups g ON g.id = cg.group_id
-		WHERE cg.enabled = TRUE
-		ORDER BY u.email ASC, g.name ASC, cg.id ASC
+		WITH global_grants AS (
+			SELECT cg.group_id, MIN(cg.id) AS id, MIN(cg.granted_date) AS granted_date,
+				MIN(cg.created_at) AS created_at, MAX(cg.updated_at) AS updated_at
+			FROM sub_admin_commission_grants cg
+			JOIN users u ON u.id = cg.sub_admin_user_id AND u.deleted_at IS NULL AND u.role = 'sub_admin'
+			WHERE cg.enabled = TRUE
+			GROUP BY cg.group_id
+		)
+		SELECT gg.id, 0::bigint AS sub_admin_user_id, ''::text AS sub_admin_email, gg.group_id,
+			COALESCE(g.name, ''), gg.granted_date::text, TRUE AS enabled, gg.created_at, gg.updated_at
+		FROM global_grants gg
+		JOIN groups g ON g.id = gg.group_id
+		ORDER BY g.name ASC, g.id ASC
 	`, nil)
 }
 
 func (r *subAdminCommissionRepository) ListGrantsForSubAdmin(ctx context.Context, subAdminID int64) ([]service.SubAdminCommissionGrant, error) {
-	return r.listGrants(ctx, `
-		SELECT cg.id, cg.sub_admin_user_id, COALESCE(u.email, ''), cg.group_id, COALESCE(g.name, ''),
-			cg.granted_date::text, cg.enabled, cg.created_at, cg.updated_at
-		FROM sub_admin_commission_grants cg
-		JOIN users u ON u.id = cg.sub_admin_user_id AND u.deleted_at IS NULL
-		JOIN groups g ON g.id = cg.group_id
-		WHERE cg.sub_admin_user_id = $1 AND cg.enabled = TRUE
-		ORDER BY g.name ASC, cg.id ASC
-	`, []any{subAdminID})
+	return r.ListAllGrants(ctx)
 }
 
 func (r *subAdminCommissionRepository) ReplaceGrants(ctx context.Context, input service.ReplaceSubAdminCommissionGrantsInput, grantedDate string) ([]service.SubAdminCommissionGrant, error) {
@@ -75,23 +73,39 @@ func (r *subAdminCommissionRepository) ReplaceGrants(ctx context.Context, input 
 		if _, err := tx.ExecContext(ctx, `
 			UPDATE sub_admin_commission_grants
 			SET enabled = FALSE, updated_at = NOW()
-			WHERE sub_admin_user_id = $1 AND enabled = TRUE
-		`, input.SubAdminID); err != nil {
+			WHERE enabled = TRUE
+		`); err != nil {
 			return nil, err
 		}
 	} else {
+		groupGrantDates, err := loadGlobalGrantDatesForUpdate(ctx, tx, groupIDs)
+		if err != nil {
+			return nil, err
+		}
+
 		if _, err := tx.ExecContext(ctx, `
 			UPDATE sub_admin_commission_grants
 			SET enabled = FALSE, updated_at = NOW()
-			WHERE sub_admin_user_id = $1 AND enabled = TRUE AND NOT (group_id = ANY($2))
-		`, input.SubAdminID, pq.Array(groupIDs)); err != nil {
+			WHERE enabled = TRUE AND NOT (group_id = ANY($1))
+		`, pq.Array(groupIDs)); err != nil {
+			return nil, err
+		}
+
+		subAdminIDs, err := listCurrentSubAdminIDs(ctx, tx)
+		if err != nil {
 			return nil, err
 		}
 
 		createdBy := sql.NullInt64{Int64: input.OperatorID, Valid: input.OperatorID > 0}
 		for _, groupID := range groupIDs {
-			if err := upsertSubAdminCommissionGrant(ctx, tx, input.SubAdminID, groupID, grantedDate, createdBy); err != nil {
-				return nil, err
+			groupGrantedDate := grantedDate
+			if existingDate, ok := groupGrantDates[groupID]; ok {
+				groupGrantedDate = existingDate
+			}
+			for _, subAdminID := range subAdminIDs {
+				if err := upsertSubAdminCommissionGrant(ctx, tx, subAdminID, groupID, groupGrantedDate, createdBy); err != nil {
+					return nil, err
+				}
 			}
 		}
 	}
@@ -100,17 +114,17 @@ func (r *subAdminCommissionRepository) ReplaceGrants(ctx context.Context, input 
 		return nil, err
 	}
 	committed = true
-	return r.ListGrantsForSubAdmin(ctx, input.SubAdminID)
+	return r.ListAllGrants(ctx)
 }
 
 func upsertSubAdminCommissionGrant(ctx context.Context, tx *sql.Tx, subAdminID, groupID int64, grantedDate string, createdBy sql.NullInt64) error {
 	var existingID int64
 	err := scanSingleRow(ctx, tx, `
 		UPDATE sub_admin_commission_grants
-		SET updated_at = NOW()
+		SET granted_date = $3::date, updated_at = NOW()
 		WHERE sub_admin_user_id = $1 AND group_id = $2 AND enabled = TRUE
 		RETURNING id
-	`, []any{subAdminID, groupID}, &existingID)
+	`, []any{subAdminID, groupID, grantedDate}, &existingID)
 	if err == nil {
 		return nil
 	}
@@ -144,6 +158,54 @@ func upsertSubAdminCommissionGrant(ctx context.Context, tx *sql.Tx, subAdminID, 
 	return err
 }
 
+func loadGlobalGrantDatesForUpdate(ctx context.Context, tx *sql.Tx, groupIDs []int64) (map[int64]string, error) {
+	rows, err := tx.QueryContext(ctx, `
+		SELECT cg.group_id, MIN(cg.granted_date)::text AS granted_date
+		FROM sub_admin_commission_grants cg
+		JOIN users u ON u.id = cg.sub_admin_user_id AND u.deleted_at IS NULL AND u.role = 'sub_admin'
+		WHERE cg.enabled = TRUE AND cg.group_id = ANY($1)
+		GROUP BY cg.group_id
+	`, pq.Array(groupIDs))
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+
+	dates := make(map[int64]string, len(groupIDs))
+	for rows.Next() {
+		var groupID int64
+		var grantedDate string
+		if err := rows.Scan(&groupID, &grantedDate); err != nil {
+			return nil, err
+		}
+		dates[groupID] = grantedDate
+	}
+	return dates, rows.Err()
+}
+
+func listCurrentSubAdminIDs(ctx context.Context, tx *sql.Tx) ([]int64, error) {
+	rows, err := tx.QueryContext(ctx, `
+		SELECT id
+		FROM users
+		WHERE role = 'sub_admin' AND deleted_at IS NULL
+		ORDER BY id ASC
+	`)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+
+	ids := make([]int64, 0)
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		ids = append(ids, id)
+	}
+	return ids, rows.Err()
+}
+
 func (r *subAdminCommissionRepository) ListCalendar(ctx context.Context, subAdminID int64, month string, commissionRate float64, now time.Time) ([]service.SubAdminCommissionCalendarDay, error) {
 	if now.IsZero() {
 		now = time.Now()
@@ -162,7 +224,7 @@ func (r *subAdminCommissionRepository) ListCalendar(ctx context.Context, subAdmi
 		return nil, err
 	}
 
-	grants, err := r.listEnabledGrantDates(ctx, subAdminID)
+	grants, err := r.listEnabledGrantDates(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -181,14 +243,14 @@ func (r *subAdminCommissionRepository) ListCalendar(ctx context.Context, subAdmi
 	liveStart := todayStart.AddDate(0, 0, -1)
 	historicalEnd := minCommissionTime(monthEnd, liveStart)
 	if historicalEnd.After(monthStart) {
-		if err := r.loadCalendarRollupCosts(ctx, subAdminID, monthStart, historicalEnd, costs); err != nil {
+		if err := r.loadCalendarRollupCosts(ctx, monthStart, historicalEnd, costs); err != nil {
 			return nil, err
 		}
 	}
 	liveRangeStart := maxCommissionTime(monthStart, liveStart)
 	liveRangeEnd := minCommissionTime(monthEnd, todayStart.AddDate(0, 0, 1))
 	if liveRangeStart.Before(liveRangeEnd) {
-		if err := r.loadCalendarLiveCosts(ctx, subAdminID, liveRangeStart, liveRangeEnd, costs); err != nil {
+		if err := r.loadCalendarLiveCosts(ctx, liveRangeStart, liveRangeEnd, costs); err != nil {
 			return nil, err
 		}
 	}
@@ -233,16 +295,23 @@ func (r *subAdminCommissionRepository) listLiveDayGroups(ctx context.Context, su
 	dayEnd := dayStart.AddDate(0, 0, 1)
 
 	rows, err := r.sql.QueryContext(ctx, `
+		WITH global_grants AS (
+			SELECT cg.group_id, MIN(cg.granted_date) AS granted_date
+			FROM sub_admin_commission_grants cg
+			JOIN users u ON u.id = cg.sub_admin_user_id AND u.deleted_at IS NULL AND u.role = 'sub_admin'
+			WHERE cg.enabled = TRUE
+			GROUP BY cg.group_id
+		)
 		SELECT g.id, g.name, COUNT(ul.id) AS requests,
 			COALESCE(SUM(COALESCE(ul.input_tokens, 0) + COALESCE(ul.output_tokens, 0) + COALESCE(ul.cache_creation_tokens, 0) + COALESCE(ul.cache_read_tokens, 0)), 0) AS total_tokens,
 			COALESCE(SUM(ul.actual_cost), 0) AS actual_cost
-		FROM sub_admin_commission_grants cg
-		JOIN groups g ON g.id = cg.group_id
-		LEFT JOIN usage_logs ul ON ul.group_id = cg.group_id AND ul.created_at >= $2 AND ul.created_at < $3
-		WHERE cg.sub_admin_user_id = $1 AND cg.enabled = TRUE AND $4::date >= cg.granted_date
+		FROM global_grants gg
+		JOIN groups g ON g.id = gg.group_id
+		LEFT JOIN usage_logs ul ON ul.group_id = gg.group_id AND ul.created_at >= $1 AND ul.created_at < $2
+		WHERE $3::date >= gg.granted_date
 		GROUP BY g.id, g.name
 		ORDER BY g.name ASC, g.id ASC
-	`, subAdminID, dayStart.UTC(), dayEnd.UTC(), strings.TrimSpace(date))
+	`, dayStart.UTC(), dayEnd.UTC(), strings.TrimSpace(date))
 	if err != nil {
 		return nil, err
 	}
@@ -253,13 +322,20 @@ func (r *subAdminCommissionRepository) listLiveDayGroups(ctx context.Context, su
 
 func (r *subAdminCommissionRepository) listHistoricalDayGroups(ctx context.Context, subAdminID int64, date string, commissionRate float64) ([]service.SubAdminCommissionDayGroup, error) {
 	rows, err := r.sql.QueryContext(ctx, `
+		WITH global_grants AS (
+			SELECT cg.group_id, MIN(cg.granted_date) AS granted_date
+			FROM sub_admin_commission_grants cg
+			JOIN users u ON u.id = cg.sub_admin_user_id AND u.deleted_at IS NULL AND u.role = 'sub_admin'
+			WHERE cg.enabled = TRUE
+			GROUP BY cg.group_id
+		)
 		SELECT g.id, g.name, 0::bigint AS requests, 0::bigint AS total_tokens, COALESCE(r.actual_cost, 0) AS actual_cost
-		FROM sub_admin_commission_grants cg
-		JOIN groups g ON g.id = cg.group_id
-		LEFT JOIN usage_group_daily_rollups r ON r.group_id = cg.group_id AND r.bucket_date = $2::date
-		WHERE cg.sub_admin_user_id = $1 AND cg.enabled = TRUE AND $3::date >= cg.granted_date
+		FROM global_grants gg
+		JOIN groups g ON g.id = gg.group_id
+		LEFT JOIN usage_group_daily_rollups r ON r.group_id = gg.group_id AND r.bucket_date = $1::date
+		WHERE $2::date >= gg.granted_date
 		ORDER BY g.name ASC, g.id ASC
-	`, subAdminID, date, date)
+	`, date, date)
 	if err != nil {
 		return nil, err
 	}
@@ -295,11 +371,18 @@ func (r *subAdminCommissionRepository) ListDayGroupLogs(ctx context.Context, sub
 	var allowed bool
 	err = scanSingleRow(ctx, r.sql, `
 		SELECT EXISTS (
+			WITH global_grants AS (
+				SELECT cg.group_id, MIN(cg.granted_date) AS granted_date
+				FROM sub_admin_commission_grants cg
+				JOIN users u ON u.id = cg.sub_admin_user_id AND u.deleted_at IS NULL AND u.role = 'sub_admin'
+				WHERE cg.enabled = TRUE
+				GROUP BY cg.group_id
+			)
 			SELECT 1
-			FROM sub_admin_commission_grants
-			WHERE sub_admin_user_id = $1 AND group_id = $2 AND enabled = TRUE AND $3::date >= granted_date
+			FROM global_grants gg
+			WHERE gg.group_id = $1 AND $2::date >= gg.granted_date
 		)
-	`, []any{subAdminID, groupID, date}, &allowed)
+	`, []any{groupID, date}, &allowed)
 	if err != nil {
 		return nil, pagination.PaginationResult{}, err
 	}
@@ -307,14 +390,20 @@ func (r *subAdminCommissionRepository) ListDayGroupLogs(ctx context.Context, sub
 		return nil, pagination.PaginationResult{}, service.ErrSubAdminCommissionForbidden
 	}
 
-	baseArgs := []any{subAdminID, groupID, dayStart.UTC(), dayEnd.UTC()}
+	baseArgs := []any{groupID, dayStart.UTC(), dayEnd.UTC()}
 	baseFrom := `
 		FROM usage_logs ul
-		JOIN sub_admin_commission_grants cg ON cg.group_id = ul.group_id AND cg.sub_admin_user_id = $1 AND cg.group_id = $2 AND cg.enabled = TRUE
+		JOIN (
+			SELECT cg.group_id, MIN(cg.granted_date) AS granted_date
+			FROM sub_admin_commission_grants cg
+			JOIN users u ON u.id = cg.sub_admin_user_id AND u.deleted_at IS NULL AND u.role = 'sub_admin'
+			WHERE cg.enabled = TRUE
+			GROUP BY cg.group_id
+		) gg ON gg.group_id = ul.group_id AND gg.group_id = $1
 		LEFT JOIN users u ON u.id = ul.user_id
 		LEFT JOIN api_keys ak ON ak.id = ul.api_key_id
 		JOIN groups g ON g.id = ul.group_id
-		WHERE ul.group_id = $2 AND ul.created_at >= $3 AND ul.created_at < $4
+		WHERE ul.group_id = $1 AND ul.created_at >= $2 AND ul.created_at < $3
 	`
 
 	var total int64
@@ -330,7 +419,7 @@ func (r *subAdminCommissionRepository) ListDayGroupLogs(ctx context.Context, sub
 			ul.input_tokens, ul.output_tokens, ul.cache_creation_tokens, ul.cache_read_tokens, ul.actual_cost
 		`+baseFrom+`
 		ORDER BY ul.created_at DESC, ul.id DESC
-		LIMIT $5 OFFSET $6
+		LIMIT $4 OFFSET $5
 	`, listArgs...)
 	if err != nil {
 		return nil, pagination.PaginationResult{}, err
@@ -366,13 +455,19 @@ type subAdminCommissionGrantDate struct {
 	grantedStart time.Time
 }
 
-func (r *subAdminCommissionRepository) listEnabledGrantDates(ctx context.Context, subAdminID int64) ([]subAdminCommissionGrantDate, error) {
+func (r *subAdminCommissionRepository) listEnabledGrantDates(ctx context.Context) ([]subAdminCommissionGrantDate, error) {
 	rows, err := r.sql.QueryContext(ctx, `
+		WITH global_grants AS (
+			SELECT cg.group_id, MIN(cg.granted_date) AS granted_date
+			FROM sub_admin_commission_grants cg
+			JOIN users u ON u.id = cg.sub_admin_user_id AND u.deleted_at IS NULL AND u.role = 'sub_admin'
+			WHERE cg.enabled = TRUE
+			GROUP BY cg.group_id
+		)
 		SELECT group_id, granted_date::text
-		FROM sub_admin_commission_grants
-		WHERE sub_admin_user_id = $1 AND enabled = TRUE
+		FROM global_grants
 		ORDER BY granted_date ASC, group_id ASC
-	`, subAdminID)
+	`)
 	if err != nil {
 		return nil, err
 	}
@@ -397,18 +492,24 @@ func (r *subAdminCommissionRepository) listEnabledGrantDates(ctx context.Context
 	return grants, nil
 }
 
-func (r *subAdminCommissionRepository) loadCalendarRollupCosts(ctx context.Context, subAdminID int64, start, end time.Time, costs map[string]float64) error {
+func (r *subAdminCommissionRepository) loadCalendarRollupCosts(ctx context.Context, start, end time.Time, costs map[string]float64) error {
 	rows, err := r.sql.QueryContext(ctx, `
+		WITH global_grants AS (
+			SELECT cg.group_id, MIN(cg.granted_date) AS granted_date
+			FROM sub_admin_commission_grants cg
+			JOIN users u ON u.id = cg.sub_admin_user_id AND u.deleted_at IS NULL AND u.role = 'sub_admin'
+			WHERE cg.enabled = TRUE
+			GROUP BY cg.group_id
+		)
 		SELECT r.bucket_date::text AS date, COALESCE(SUM(r.actual_cost), 0) AS actual_cost
 		FROM usage_group_daily_rollups r
-		JOIN sub_admin_commission_grants cg ON cg.group_id = r.group_id
-		WHERE cg.sub_admin_user_id = $1 AND cg.enabled = TRUE
-			AND r.bucket_date >= cg.granted_date
-			AND r.bucket_date >= $2::date
-			AND r.bucket_date < $3::date
+		JOIN global_grants gg ON gg.group_id = r.group_id
+		WHERE r.bucket_date >= gg.granted_date
+			AND r.bucket_date >= $1::date
+			AND r.bucket_date < $2::date
 		GROUP BY r.bucket_date
 		ORDER BY r.bucket_date ASC
-	`, subAdminID, start.Format("2006-01-02"), end.Format("2006-01-02"))
+	`, start.Format("2006-01-02"), end.Format("2006-01-02"))
 	if err != nil {
 		return err
 	}
@@ -416,17 +517,23 @@ func (r *subAdminCommissionRepository) loadCalendarRollupCosts(ctx context.Conte
 	return scanCommissionCostRows(rows, costs)
 }
 
-func (r *subAdminCommissionRepository) loadCalendarLiveCosts(ctx context.Context, subAdminID int64, start, end time.Time, costs map[string]float64) error {
+func (r *subAdminCommissionRepository) loadCalendarLiveCosts(ctx context.Context, start, end time.Time, costs map[string]float64) error {
 	timezone := service.GroupUsageTimezoneName()
 	rows, err := r.sql.QueryContext(ctx, `
-		SELECT (ul.created_at AT TIME ZONE $4)::date::text AS date, COALESCE(SUM(ul.actual_cost), 0) AS actual_cost
+		WITH global_grants AS (
+			SELECT cg.group_id, MIN(cg.granted_date) AS granted_date
+			FROM sub_admin_commission_grants cg
+			JOIN users u ON u.id = cg.sub_admin_user_id AND u.deleted_at IS NULL AND u.role = 'sub_admin'
+			WHERE cg.enabled = TRUE
+			GROUP BY cg.group_id
+		)
+		SELECT (ul.created_at AT TIME ZONE $3)::date::text AS date, COALESCE(SUM(ul.actual_cost), 0) AS actual_cost
 		FROM usage_logs ul
-		JOIN sub_admin_commission_grants cg ON cg.group_id = ul.group_id
-		WHERE cg.sub_admin_user_id = $1 AND cg.enabled = TRUE
-			AND (ul.created_at AT TIME ZONE $4)::date >= cg.granted_date
-			AND ul.created_at >= $2 AND ul.created_at < $3
+		JOIN global_grants gg ON gg.group_id = ul.group_id
+		WHERE (ul.created_at AT TIME ZONE $3)::date >= gg.granted_date
+			AND ul.created_at >= $1 AND ul.created_at < $2
 		GROUP BY 1
-	`, subAdminID, start.UTC(), end.UTC(), timezone)
+	`, start.UTC(), end.UTC(), timezone)
 	if err != nil {
 		return err
 	}

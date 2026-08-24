@@ -77,6 +77,7 @@ func setupSubAdminCommissionHandlerRouter(stub *subAdminCommissionHandlerService
 
 	handler := &SubAdminCommissionHandler{service: stub}
 	router.PUT("/settings", handler.UpdateSettings)
+	router.PUT("/grants", handler.ReplaceGrants)
 	router.PUT("/grants/:sub_admin_id", handler.ReplaceGrants)
 	router.GET("/workbench/calendar", handler.GetWorkbenchCalendar)
 	router.GET("/workbench/days/:date/groups/:group_id/logs", handler.GetWorkbenchDayGroupLogs)
@@ -98,17 +99,17 @@ func TestSubAdminCommissionHandlerUpdateSettingsRejectsInvalidRate(t *testing.T)
 	}
 }
 
-func TestSubAdminCommissionHandlerReplaceGrantsUsesPathAndOperator(t *testing.T) {
+func TestSubAdminCommissionHandlerReplaceGrantsUsesBodyAndOperator(t *testing.T) {
 	stub := &subAdminCommissionHandlerServiceStub{}
 	router := setupSubAdminCommissionHandlerRouter(stub, 99)
 
 	rec := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodPut, "/grants/12", bytes.NewBufferString(`{"group_ids":[3,4]}`))
+	req := httptest.NewRequest(http.MethodPut, "/grants", bytes.NewBufferString(`{"group_ids":[3,4]}`))
 	req.Header.Set("Content-Type", "application/json")
 	router.ServeHTTP(rec, req)
 
 	require.Equal(t, http.StatusOK, rec.Code)
-	require.Equal(t, int64(12), stub.replaceInput.SubAdminID)
+	require.Zero(t, stub.replaceInput.SubAdminID)
 	require.Equal(t, []int64{3, 4}, stub.replaceInput.GroupIDs)
 	require.Equal(t, int64(99), stub.replaceInput.OperatorID)
 }

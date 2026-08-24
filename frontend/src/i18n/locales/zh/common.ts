@@ -228,6 +228,7 @@ export default {
       saveSettings: '保存比例',
       selectSubAdmin: '选择二级管理员',
       assignedGroups: '授权分组',
+      sharedGrantsHint: '这里配置的是全体二级管理员共享的授权分组，保存后所有二级管理员会看到同一份消耗日历。',
       saveGrants: '保存授权',
       calendar: '消耗日历',
       actualCost: '余额消耗',

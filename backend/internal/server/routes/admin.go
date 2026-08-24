@@ -246,6 +246,7 @@ func registerSubAdminCommissionRoutes(admin *gin.RouterGroup, h *handler.Handler
 		commissions.GET("/settings", h.Admin.SubAdminCommission.GetSettings)
 		commissions.PUT("/settings", h.Admin.SubAdminCommission.UpdateSettings)
 		commissions.GET("/grants", h.Admin.SubAdminCommission.ListGrants)
+		commissions.PUT("/grants", h.Admin.SubAdminCommission.ReplaceGrants)
 		commissions.PUT("/grants/:sub_admin_id", h.Admin.SubAdminCommission.ReplaceGrants)
 	}
 }

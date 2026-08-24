@@ -37,14 +37,9 @@
           <span>{{ t('adminWorkbench.commission.saveSettings') }}</span>
         </button>
 
-        <label class="block">
-          <span class="input-label">{{ t('adminWorkbench.commission.selectSubAdmin') }}</span>
-          <select v-model.number="selectedSubAdminID" class="input">
-            <option v-for="user in subAdmins" :key="user.id" :value="user.id">
-              {{ user.email }}
-            </option>
-          </select>
-        </label>
+        <p class="rounded-lg bg-blue-50 px-3 py-2 text-sm leading-6 text-blue-700 dark:bg-blue-500/10 dark:text-blue-200">
+          {{ t('adminWorkbench.commission.sharedGrantsHint') }}
+        </p>
       </div>
 
       <div class="rounded-lg border border-gray-100 p-4 dark:border-dark-800">
@@ -56,7 +51,7 @@
             type="button"
             data-test="sub-admin-commission-save-grants"
             class="btn btn-secondary"
-            :disabled="savingGrants || selectedSubAdminID == null"
+            :disabled="savingGrants"
             @click="saveGrants"
           >
             <Icon v-if="savingGrants" name="refresh" size="sm" class="animate-spin" />
@@ -92,10 +87,10 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref, watch } from 'vue'
+import { onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { adminAPI } from '@/api/admin'
-import type { AdminGroup, AdminUser } from '@/types'
+import type { AdminGroup } from '@/types'
 import type { SubAdminCommissionGrant } from '@/api/admin'
 import { useAppStore } from '@/stores/app'
 import { extractApiErrorMessage } from '@/utils/apiError'
@@ -105,58 +100,36 @@ const { t } = useI18n()
 const appStore = useAppStore()
 
 const commissionRate = ref(0)
-const subAdmins = ref<AdminUser[]>([])
 const groups = ref<AdminGroup[]>([])
 const grants = ref<SubAdminCommissionGrant[]>([])
-const selectedSubAdminID = ref<number | null>(null)
 const assignedGroupIDs = ref<number[]>([])
 const loading = ref(false)
 const savingSettings = ref(false)
 const savingGrants = ref(false)
-const subAdminPageSize = 1000
 
 function syncSelectedGrants() {
-  if (selectedSubAdminID.value == null) {
-    assignedGroupIDs.value = []
-    return
-  }
   assignedGroupIDs.value = grants.value
-    .filter((grant) => grant.sub_admin_id === selectedSubAdminID.value && grant.enabled)
+    .filter((grant) => grant.enabled)
     .map((grant) => grant.group_id)
 }
 
 async function loadManagementData() {
   loading.value = true
   try {
-    const [settings, usersResult, groupList, grantList] = await Promise.all([
+    const [settings, groupList, grantList] = await Promise.all([
       adminAPI.subAdminCommission.getSettings(),
-      loadAllSubAdmins(),
       adminAPI.groups.getAll(),
       adminAPI.subAdminCommission.listGrants()
     ])
     commissionRate.value = settings.commission_rate
-    subAdmins.value = usersResult
     groups.value = groupList
     grants.value = grantList
-    if (selectedSubAdminID.value == null && usersResult.length > 0) {
-      selectedSubAdminID.value = usersResult[0].id
-    }
     syncSelectedGrants()
   } catch (error: any) {
     appStore.showError(extractApiErrorMessage(error, t('adminWorkbench.commission.loadFailed')))
   } finally {
     loading.value = false
   }
-}
-
-async function loadAllSubAdmins(): Promise<AdminUser[]> {
-  const firstPage = await adminAPI.users.list(1, subAdminPageSize, { role: 'sub_admin' })
-  const users = [...firstPage.items]
-  for (let page = firstPage.page + 1; page <= firstPage.pages; page += 1) {
-    const nextPage = await adminAPI.users.list(page, subAdminPageSize, { role: 'sub_admin' })
-    users.push(...nextPage.items)
-  }
-  return users
 }
 
 async function saveSettings() {
@@ -175,18 +148,12 @@ async function saveSettings() {
 }
 
 async function saveGrants() {
-  if (selectedSubAdminID.value == null) {
-    return
-  }
   savingGrants.value = true
   try {
-    const updated = await adminAPI.subAdminCommission.replaceGrants(selectedSubAdminID.value, {
+    const updated = await adminAPI.subAdminCommission.replaceGrants({
       group_ids: [...assignedGroupIDs.value]
     })
-    grants.value = [
-      ...grants.value.filter((grant) => grant.sub_admin_id !== selectedSubAdminID.value),
-      ...updated
-    ]
+    grants.value = updated
     syncSelectedGrants()
     appStore.showSuccess(t('adminWorkbench.commission.saveSuccess'))
   } catch (error: any) {
@@ -195,8 +162,6 @@ async function saveGrants() {
     savingGrants.value = false
   }
 }
-
-watch(selectedSubAdminID, syncSelectedGrants)
 
 onMounted(() => {
   void loadManagementData()

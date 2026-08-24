@@ -128,16 +128,6 @@ func (s *SubAdminCommissionService) ReplaceGrants(ctx context.Context, input Rep
 	if s == nil || s.repo == nil {
 		return nil, ErrSubAdminCommissionRepoMissing
 	}
-	if s.userRepo == nil {
-		return nil, ErrSubAdminCommissionUserInvalid
-	}
-	user, err := s.userRepo.GetByID(ctx, input.SubAdminID)
-	if err != nil {
-		return nil, err
-	}
-	if user == nil || !user.IsSubAdmin() {
-		return nil, ErrSubAdminCommissionUserInvalid
-	}
 	now := input.Now
 	if now.IsZero() {
 		now = time.Now()

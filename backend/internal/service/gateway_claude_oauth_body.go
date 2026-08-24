@@ -1193,7 +1193,13 @@ func forceEphemeralCacheControlTTL(body []byte, ttl string) []byte {
 }
 
 func (s *GatewayService) shouldInjectAnthropicCacheTTL1h(ctx context.Context, account *Account) bool {
-	if account == nil || !account.IsAnthropicOAuthOrSetupToken() || s == nil || s.settingService == nil {
+	if account == nil {
+		return false
+	}
+	if account.IsKiroAnthropicCacheTTL1hAccount() {
+		return true
+	}
+	if !account.IsAnthropicOAuthOrSetupToken() || s == nil || s.settingService == nil {
 		return false
 	}
 	return s.settingService.IsAnthropicCacheTTL1hInjectionEnabled(ctx)

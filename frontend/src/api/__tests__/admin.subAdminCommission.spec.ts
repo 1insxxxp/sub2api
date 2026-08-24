@@ -31,12 +31,12 @@ describe('admin sub-admin commission api', () => {
     })
   })
 
-  it('replaces sub-admin group grants', async () => {
+  it('replaces shared commission grants', async () => {
     put.mockResolvedValueOnce({ data: [] })
 
-    await subAdminCommissionAPI.replaceGrants(12, { group_ids: [3, 4] })
+    await subAdminCommissionAPI.replaceGrants({ group_ids: [3, 4] })
 
-    expect(put).toHaveBeenCalledWith('/admin/sub-admin-commissions/grants/12', {
+    expect(put).toHaveBeenCalledWith('/admin/sub-admin-commissions/grants', {
       group_ids: [3, 4],
     })
   })

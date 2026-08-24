@@ -2177,6 +2177,43 @@ func (a *Account) IsAnthropicOAuthOrSetupToken() bool {
 	return a.Platform == PlatformAnthropic && (a.Type == AccountTypeOAuth || a.Type == AccountTypeSetupToken)
 }
 
+func containsKiroMarker(value string) bool {
+	return strings.Contains(strings.ToLower(strings.TrimSpace(value)), "kiro")
+}
+
+// IsKiroAnthropicCacheTTL1hAccount 报告是否为需要固定 1h cache_control 的 Kiro Anthropic API Key 账号。
+// 该规则用于修补线上 Kiro 满分分组的 API Key 透传链路：
+// 1) 仅限 Anthropic + API Key，避免影响 OAuth/SetupToken 的既有全局策略；
+// 2) 通过账号名、备注和已加载分组信息中的 kiro 标记识别，便于分组/账号改名后仍能命中。
+func (a *Account) IsKiroAnthropicCacheTTL1hAccount() bool {
+	if a == nil || a.Platform != PlatformAnthropic || a.Type != AccountTypeAPIKey {
+		return false
+	}
+	if containsKiroMarker(a.Name) {
+		return true
+	}
+	if a.Notes != nil && containsKiroMarker(*a.Notes) {
+		return true
+	}
+	for _, group := range a.Groups {
+		if group == nil {
+			continue
+		}
+		if containsKiroMarker(group.Name) || containsKiroMarker(group.Description) {
+			return true
+		}
+	}
+	for _, accountGroup := range a.AccountGroups {
+		if accountGroup.Group == nil {
+			continue
+		}
+		if containsKiroMarker(accountGroup.Group.Name) || containsKiroMarker(accountGroup.Group.Description) {
+			return true
+		}
+	}
+	return false
+}
+
 // IsTLSFingerprintEnabled 检查是否启用 TLS 指纹伪装
 // 仅适用于 Anthropic OAuth/SetupToken 类型账号
 // 启用后将模拟 Claude Code (Node.js) 客户端的 TLS 握手特征

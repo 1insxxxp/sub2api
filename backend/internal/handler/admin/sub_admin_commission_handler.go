@@ -143,10 +143,6 @@ func (h *SubAdminCommissionHandler) ReplaceGrants(c *gin.Context) {
 	if !h.ensureService(c) {
 		return
 	}
-	subAdminID, ok := parsePositiveInt64Param(c, "sub_admin_id")
-	if !ok {
-		return
-	}
 	subject, ok := middleware.GetAuthSubjectFromContext(c)
 	if !ok {
 		response.Unauthorized(c, "User not authenticated")
@@ -158,7 +154,6 @@ func (h *SubAdminCommissionHandler) ReplaceGrants(c *gin.Context) {
 		return
 	}
 	grants, err := h.service.ReplaceGrants(c.Request.Context(), service.ReplaceSubAdminCommissionGrantsInput{
-		SubAdminID: subAdminID,
 		GroupIDs:   req.GroupIDs,
 		OperatorID: subject.UserID,
 		Now:        time.Now(),

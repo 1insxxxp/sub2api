@@ -98,30 +98,12 @@ func TestSubAdminCommissionSetSettingsPersistsRate(t *testing.T) {
 	require.Equal(t, "0.075", repo.sets[SettingKeySubAdminCommissionRate])
 }
 
-func TestSubAdminCommissionReplaceGrantsRejectsNonSubAdmin(t *testing.T) {
-	svc := NewSubAdminCommissionService(
-		&subAdminCommissionRepoStub{},
-		&subAdminCommissionUserRepoStub{user: &User{ID: 12, Role: RoleUser}},
-		NewSettingService(&subAdminCommissionSettingRepoStub{}, nil),
-	)
-
-	_, err := svc.ReplaceGrants(context.Background(), ReplaceSubAdminCommissionGrantsInput{
-		SubAdminID: 12,
-		GroupIDs:   []int64{101},
-		OperatorID: 1,
-		Now:        time.Date(2026, 8, 22, 10, 30, 0, 0, time.UTC),
-	})
-
-	require.Error(t, err)
-	require.True(t, infraerrors.IsBadRequest(err))
-}
-
 func TestSubAdminCommissionReplaceGrantsUsesGroupUsageDate(t *testing.T) {
 	repo := &subAdminCommissionRepoStub{}
 	now := time.Date(2026, 8, 22, 2, 30, 0, 0, time.UTC)
 	svc := NewSubAdminCommissionService(
 		repo,
-		&subAdminCommissionUserRepoStub{user: &User{ID: 12, Role: RoleSubAdmin}},
+		nil,
 		NewSettingService(&subAdminCommissionSettingRepoStub{}, nil),
 	)
 

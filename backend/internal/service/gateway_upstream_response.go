@@ -1384,6 +1384,9 @@ func (s *GatewayService) resolveCacheTTLUsageOverrideTarget(ctx context.Context,
 	if account.IsCacheTTLOverrideEnabled() {
 		return account.GetCacheTTLOverrideTarget(), true
 	}
+	if account.IsKiroAnthropicCacheTTL1hAccount() {
+		return cacheTTLTarget1h, true
+	}
 	if account.IsAnthropicOAuthOrSetupToken() && s != nil && s.settingService != nil && s.settingService.IsAnthropicCacheTTL1hInjectionEnabled(ctx) {
 		return cacheTTLTarget5m, true
 	}

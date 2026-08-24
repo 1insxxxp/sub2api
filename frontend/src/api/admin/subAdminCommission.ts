@@ -95,11 +95,10 @@ export async function listGrants(): Promise<SubAdminCommissionGrant[]> {
 }
 
 export async function replaceGrants(
-  subAdminID: number,
   payload: ReplaceSubAdminCommissionGrantsRequest
 ): Promise<SubAdminCommissionGrant[]> {
   const { data } = await apiClient.put<SubAdminCommissionGrant[]>(
-    `/admin/sub-admin-commissions/grants/${subAdminID}`,
+    '/admin/sub-admin-commissions/grants',
     payload
   )
   return data

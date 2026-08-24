@@ -227,6 +227,7 @@ export default {
       saveSettings: 'Save rate',
       selectSubAdmin: 'Select secondary admin',
       assignedGroups: 'Assigned groups',
+      sharedGrantsHint: 'These assigned groups are shared by all secondary admins. After saving, every secondary admin sees the same spend calendar.',
       saveGrants: 'Save assignments',
       calendar: 'Spend calendar',
       actualCost: 'Balance spend',
