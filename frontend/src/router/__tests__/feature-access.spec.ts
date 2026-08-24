@@ -41,6 +41,7 @@ const appStore = vi.hoisted(() => ({
     payment_enabled?: boolean
     risk_control_enabled?: boolean
     image_studio_enabled?: boolean
+    lottery_enabled?: boolean
     custom_menu_items?: []
   },
   fetchPublicSettings: vi.fn(),
@@ -141,6 +142,12 @@ describe('feature route guard', () => {
     )
   })
 
+  it('marks the lottery route as feature protected', () => {
+    expect(routerSource).toMatch(
+      /path: '\/lottery',[\s\S]*?requiresLottery: true[\s\S]*?titleKey: 'lottery\.title'/,
+    )
+  })
+
   it('waits for the first public-settings request before deciding payment access', async () => {
     const deferred = createDeferred<{ payment_enabled: boolean }>()
     appStore.fetchPublicSettings.mockImplementation(async () => {
@@ -165,6 +172,7 @@ describe('feature route guard', () => {
     ['payment', { requiresPayment: true }, '/purchase'],
     ['risk control', { requiresRiskControl: true }, '/admin/risk-control'],
     ['image studio', { requiresImageStudio: true }, '/images'],
+    ['lottery', { requiresLottery: true }, '/lottery'],
   ])('does not treat a failed %s settings load as explicitly disabled', async (_name, meta, path) => {
     authStore.isAdmin = meta.requiresRiskControl === true
     appStore.fetchPublicSettings.mockResolvedValue(null)
@@ -186,6 +194,7 @@ describe('feature route guard', () => {
       '/admin/settings',
     ],
     ['image studio', { requiresImageStudio: true }, { image_studio_enabled: false }, '/dashboard'],
+    ['lottery', { requiresLottery: true }, { lottery_enabled: false }, '/dashboard'],
   ])('redirects when loaded settings explicitly disable %s', async (_name, meta, settings, target) => {
     authStore.isAdmin = meta.requiresRiskControl === true
     appStore.cachedPublicSettings = settings

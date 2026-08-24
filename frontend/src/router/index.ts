@@ -13,6 +13,7 @@ import { useRoutePrefetch } from '@/composables/useRoutePrefetch'
 import { getSetupStatus } from '@/api/setup'
 import { resolveCompletedSetupRedirectPath } from './setupRedirect'
 import { resolveRouteDocumentTitle } from './title'
+import { FeatureFlags, isFeatureFlagEnabled } from '@/utils/featureFlags'
 
 /**
  * Route definitions with lazy loading
@@ -281,6 +282,19 @@ const routes: RouteRecordRaw[] = [
       title: 'Affiliate',
       titleKey: 'affiliate.title',
       descriptionKey: 'affiliate.description'
+    }
+  },
+  {
+    path: '/lottery',
+    name: 'Lottery',
+    component: () => import('@/views/user/LotteryView.vue'),
+    meta: {
+      requiresAuth: true,
+      requiresAdmin: false,
+      requiresLottery: true,
+      title: 'Lottery',
+      titleKey: 'lottery.title',
+      descriptionKey: 'lottery.description'
     }
   },
   {
@@ -630,6 +644,18 @@ const routes: RouteRecordRaw[] = [
     }
   },
   {
+    path: '/admin/lottery',
+    name: 'AdminLottery',
+    component: () => import('@/views/admin/LotteryView.vue'),
+    meta: {
+      requiresAuth: true,
+      requiresAdmin: true,
+      title: 'Lottery Activity',
+      titleKey: 'lottery.admin.title',
+      descriptionKey: 'lottery.admin.description'
+    }
+  },
+  {
     path: '/admin/settings',
     name: 'AdminSettings',
     component: () => import('@/views/admin/SettingsView.vue'),
@@ -963,7 +989,7 @@ router.beforeEach(async (to, _from, next) => {
   // 无 __APP_CONFIG__ 注入）。此时 cachedPublicSettings 为空会把 payment/risk_control
   // 误判为“未启用”而错误拦截，故这里先确保设置加载完成。
   if (
-    (to.meta.requiresPayment || to.meta.requiresRiskControl || to.meta.requiresImageStudio) &&
+    (to.meta.requiresPayment || to.meta.requiresRiskControl || to.meta.requiresImageStudio || to.meta.requiresLottery) &&
     !appStore.publicSettingsLoaded
   ) {
     try {
@@ -999,6 +1025,15 @@ router.beforeEach(async (to, _from, next) => {
     appStore.cachedPublicSettings?.image_studio_enabled === false
   ) {
     next(authStore.isAdmin ? '/admin/dashboard' : '/dashboard')
+    return
+  }
+
+  if (
+    to.meta.requiresLottery &&
+    appStore.publicSettingsLoaded &&
+    !isFeatureFlagEnabled(FeatureFlags.lottery)
+  ) {
+    next(authStore.isAdmin ? '/admin/lottery' : '/dashboard')
     return
   }
 
