@@ -4,6 +4,7 @@ export default {
     description: '完成一次抽奖，奖励会自动发放到账户。',
     loading: '正在加载活动…',
     disabled: '当前没有开放中的抽奖活动。',
+    noActivity: '当前还没有配置启用中的抽奖活动，请联系管理员。',
     unavailable: '抽奖活动暂不可用，请稍后再试。',
     attempts: '剩余次数',
     attemptsUsed: '已使用 {count} 次',

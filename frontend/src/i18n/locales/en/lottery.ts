@@ -4,6 +4,7 @@ export default {
     description: 'Take a draw and receive the reward automatically.',
     loading: 'Loading activity…',
     disabled: 'There is no active lottery right now.',
+    noActivity: 'No active lottery has been configured yet. Please contact an administrator.',
     unavailable: 'The lottery is temporarily unavailable. Please try again later.',
     attempts: 'Attempts left',
     attemptsUsed: '{count} used',

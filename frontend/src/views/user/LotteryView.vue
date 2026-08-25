@@ -160,6 +160,11 @@ const history = ref({ items: [] as LotteryDrawResult['draw'][], total: 0, page: 
 const formatAmount = (value?: number | null) => `$${Number(value || 0).toFixed(2)}`
 const formatDate = (value: string) => new Intl.DateTimeFormat(locale.value, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value))
 const newAttemptKey = () => `${Date.now()}-${typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2)}`
+const lotteryErrorMessage = (error: any, fallback: string) => {
+  if (error?.code === 'LOTTERY_ACTIVITY_NOT_FOUND') return t('lottery.noActivity')
+  if (error?.code === 'LOTTERY_DISABLED') return t('lottery.disabled')
+  return error?.message || fallback
+}
 
 async function loadHistory(page = 1) {
   const data = await lotteryAPI.history({ page, page_size: 10 })
@@ -174,7 +179,7 @@ async function load() {
     state.value = await lotteryAPI.getState()
     await loadHistory()
   } catch (error: any) {
-    loadError.value = error?.message || t('lottery.unavailable')
+    loadError.value = lotteryErrorMessage(error, t('lottery.unavailable'))
   } finally {
     loading.value = false
   }
@@ -189,7 +194,7 @@ async function handleDraw() {
     state.value.attempts_used = result.value.attempts_used
     await loadHistory(1)
   } catch (error: any) {
-    appStore.showError(error?.message || t('lottery.unavailable'))
+    appStore.showError(lotteryErrorMessage(error, t('lottery.unavailable')))
   } finally {
     drawing.value = false
   }

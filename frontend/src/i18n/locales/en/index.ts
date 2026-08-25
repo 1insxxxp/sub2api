@@ -17,5 +17,5 @@ export default mergeMessages({
   ...batchImage,
   admin,
   ...misc,
-  lottery,
+  ...lottery,
 }, restored)
