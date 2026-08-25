@@ -45,50 +45,72 @@
           {{ loadError }}
         </div>
         <template v-if="state">
-          <section class="space-y-4">
-          <div class="flex flex-wrap items-end justify-between gap-3">
-            <div>
-              <h2 class="text-lg font-semibold text-slate-950 dark:text-white">{{ t('lottery.prizes') }}</h2>
-              <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">{{ t('lottery.description') }}</p>
+          <section class="lottery-draw-panel space-y-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-dark-700 dark:bg-dark-900 sm:p-6">
+            <LotterySlotMachine
+              :prizes="state.prizes"
+              :is-drawing="drawing"
+              :winner-id="winnerPrizeId"
+              :label="t('lottery.slotLabel')"
+              :kicker="t('lottery.slotKicker')"
+              :hint="t('lottery.slotHint')"
+              :spinning-label="t('lottery.slotDrawing')"
+              :winner-announcement="t('lottery.slotWinner')"
+              :balance-label="t('lottery.slotBalance')"
+              :product-label="t('lottery.slotProduct')"
+              @settled="handleSlotSettled"
+            />
+            <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <p class="text-sm font-semibold text-slate-950 dark:text-white">{{ t('lottery.prizes') }}</p>
+                <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">{{ t('lottery.description') }}</p>
+              </div>
+              <button
+                type="button"
+                class="lottery-draw-button inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-blue-600 to-cyan-500 px-7 text-sm font-semibold text-white shadow-lg shadow-blue-500/20 transition hover:from-blue-700 hover:to-cyan-600 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto sm:min-w-52"
+                :disabled="drawing || state.attempts_remaining <= 0 || state.prizes.length === 0"
+                @click="handleDraw"
+              >
+                <Icon name="gift" size="sm" />
+                {{ drawing ? t('lottery.drawing') : t('lottery.drawNow') }}
+              </button>
             </div>
-            <button
-              type="button"
-              class="lottery-draw-button inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-blue-600 px-7 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
-              :disabled="drawing || state.attempts_remaining <= 0 || state.prizes.length === 0"
-              @click="handleDraw"
-            >
-              <Icon name="gift" size="sm" />
-              {{ drawing ? t('lottery.drawing') : t('lottery.drawNow') }}
-            </button>
-          </div>
-          <div v-if="state.prizes.length" class="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-            <article
-              v-for="prize in state.prizes"
-              :key="prize.id"
-              class="lottery-prize-card rounded-xl border border-slate-200 bg-white p-5 shadow-sm dark:border-dark-700 dark:bg-dark-900"
-              :class="{ 'opacity-60': !prize.enabled || (prize.type === 'product' && prize.available_item_count <= 0) }"
-            >
-              <div class="flex items-start justify-between gap-3">
-                <span class="flex h-10 w-10 items-center justify-center rounded-lg" :class="prize.type === 'balance' ? 'bg-emerald-50 text-emerald-600 dark:bg-emerald-900/25 dark:text-emerald-300' : 'bg-violet-50 text-violet-600 dark:bg-violet-900/25 dark:text-violet-300'">
-                  <Icon :name="prize.type === 'balance' ? 'creditCard' : 'gift'" size="sm" />
-                </span>
-                <span class="rounded-full bg-slate-100 px-2 py-1 text-[11px] font-semibold text-slate-500 dark:bg-dark-700 dark:text-slate-300">
-                  {{ prize.type === 'balance' ? t('lottery.balancePrize') : t('lottery.productPrize') }}
-                </span>
+          </section>
+
+          <section v-if="state.prizes.length" class="space-y-4">
+            <div class="flex items-end justify-between gap-3">
+              <div>
+                <h2 class="text-lg font-semibold text-slate-950 dark:text-white">{{ t('lottery.prizeDetails') }}</h2>
+                <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">{{ t('lottery.description') }}</p>
               </div>
-              <h3 class="mt-4 break-words text-base font-semibold text-slate-950 dark:text-white">{{ prize.name }}</h3>
-              <p v-if="prize.description" class="mt-1 min-h-10 text-sm leading-5 text-slate-500 dark:text-slate-400">{{ prize.description }}</p>
-              <div class="mt-4 flex items-center justify-between gap-3 text-xs text-slate-500 dark:text-slate-400">
-                <strong v-if="prize.type === 'balance'" class="text-base text-emerald-600 dark:text-emerald-300">+{{ formatAmount(prize.balance_amount) }}</strong>
-                <span v-else>{{ prize.available_item_count > 0 ? t('lottery.inventory', { count: prize.available_item_count }) : t('lottery.noInventory') }}</span>
-                <span>{{ t('lottery.weight') }} {{ prize.weight }}</span>
-              </div>
-            </article>
-          </div>
+            </div>
+            <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+              <article
+                v-for="prize in state.prizes"
+                :key="prize.id"
+                class="lottery-prize-card rounded-xl border border-slate-200 bg-white p-5 shadow-sm dark:border-dark-700 dark:bg-dark-900"
+                :class="{ 'opacity-60': !prize.enabled || (prize.type === 'product' && prize.available_item_count <= 0) }"
+              >
+                <div class="flex items-start justify-between gap-3">
+                  <span class="flex h-10 w-10 items-center justify-center rounded-lg" :class="prize.type === 'balance' ? 'bg-emerald-50 text-emerald-600 dark:bg-emerald-900/25 dark:text-emerald-300' : 'bg-violet-50 text-violet-600 dark:bg-violet-900/25 dark:text-violet-300'">
+                    <Icon :name="prize.type === 'balance' ? 'creditCard' : 'gift'" size="sm" />
+                  </span>
+                  <span class="rounded-full bg-slate-100 px-2 py-1 text-[11px] font-semibold text-slate-500 dark:bg-dark-700 dark:text-slate-300">
+                    {{ prize.type === 'balance' ? t('lottery.balancePrize') : t('lottery.productPrize') }}
+                  </span>
+                </div>
+                <h3 class="mt-4 break-words text-base font-semibold text-slate-950 dark:text-white">{{ prize.name }}</h3>
+                <p v-if="prize.description" class="mt-1 min-h-10 text-sm leading-5 text-slate-500 dark:text-slate-400">{{ prize.description }}</p>
+                <div class="mt-4 flex items-center justify-between gap-3 text-xs text-slate-500 dark:text-slate-400">
+                  <strong v-if="prize.type === 'balance'" class="text-base text-emerald-600 dark:text-emerald-300">+{{ formatAmount(prize.balance_amount) }}</strong>
+                  <span v-else>{{ prize.available_item_count > 0 ? t('lottery.inventory', { count: prize.available_item_count }) : t('lottery.noInventory') }}</span>
+                  <span>{{ t('lottery.weight') }} {{ prize.weight }}</span>
+                </div>
+              </article>
+            </div>
+          </section>
           <div v-else class="rounded-xl border border-dashed border-slate-300 px-5 py-10 text-center text-sm text-slate-500 dark:border-dark-600 dark:text-slate-400">
             {{ t('lottery.noPrizes') }}
           </div>
-          </section>
         </template>
 
         <section class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-dark-700 dark:bg-dark-900 sm:p-6">
@@ -149,6 +171,7 @@ import { useI18n } from 'vue-i18n'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import Icon from '@/components/icons/Icon.vue'
 import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
+import LotterySlotMachine from '@/components/lottery/LotterySlotMachine.vue'
 import { lotteryAPI, type LotteryDrawResult, type LotteryPublicState } from '@/api/lottery'
 import { useAppStore } from '@/stores/app'
 
@@ -159,6 +182,8 @@ const drawing = ref(false)
 const loadError = ref('')
 const state = ref<LotteryPublicState | null>(null)
 const result = ref<LotteryDrawResult | null>(null)
+const pendingResult = ref<LotteryDrawResult | null>(null)
+const winnerPrizeId = ref<number | null>(null)
 const copied = ref(false)
 const historyError = ref('')
 const historyPage = ref(1)
@@ -189,6 +214,8 @@ async function load() {
   loading.value = true
   loadError.value = ''
   historyError.value = ''
+  winnerPrizeId.value = null
+  pendingResult.value = null
   try {
     state.value = await lotteryAPI.getState()
   } catch (error: any) {
@@ -198,18 +225,41 @@ async function load() {
   loading.value = false
 }
 
+function resolveWinnerPrizeId(draw: LotteryDrawResult['draw']) {
+  if (draw.prize_id) return draw.prize_id
+  return state.value?.prizes.find(prize => prize.name === draw.prize_name && prize.type === draw.prize_type)?.id ?? null
+}
+
+function handleSlotSettled() {
+  if (!pendingResult.value) return
+  result.value = pendingResult.value
+  pendingResult.value = null
+  drawing.value = false
+}
+
 async function handleDraw() {
-  if (!state.value || state.value.attempts_remaining <= 0) return
+  if (!state.value || state.value.attempts_remaining <= 0 || drawing.value) return
   drawing.value = true
+  winnerPrizeId.value = null
+  pendingResult.value = null
+  result.value = null
   try {
-    result.value = await lotteryAPI.draw(newAttemptKey())
-    state.value.attempts_remaining = result.value.attempts_remaining
-    state.value.attempts_used = result.value.attempts_used
-    await loadHistory(1)
+    const drawResult = await lotteryAPI.draw(newAttemptKey())
+    pendingResult.value = drawResult
+    state.value.attempts_remaining = drawResult.attempts_remaining
+    state.value.attempts_used = drawResult.attempts_used
+    winnerPrizeId.value = resolveWinnerPrizeId(drawResult.draw)
+    try { await loadHistory(1) } catch { /* historyError already contains the localized message */ }
+    if (winnerPrizeId.value === null) {
+      result.value = pendingResult.value
+      pendingResult.value = null
+      drawing.value = false
+    }
   } catch (error: any) {
-    appStore.showError(lotteryErrorMessage(error, t('lottery.unavailable')))
-  } finally {
+    pendingResult.value = null
+    winnerPrizeId.value = null
     drawing.value = false
+    appStore.showError(lotteryErrorMessage(error, t('lottery.unavailable')))
   }
 }
 
@@ -230,6 +280,8 @@ onMounted(load)
 .lottery-page { padding-bottom: 2rem; }
 .lottery-hero { background: linear-gradient(135deg, rgba(239,246,255,.92), rgba(255,255,255,.98) 58%, rgba(236,254,255,.86)); }
 .dark .lottery-hero { background: linear-gradient(135deg, rgba(15,23,42,.98), rgba(15,23,42,.98) 58%, rgba(8,47,73,.55)); }
+.lottery-draw-panel { background: linear-gradient(145deg, rgba(239,246,255,.72), rgba(255,255,255,.98) 55%, rgba(236,254,255,.66)); }
+.dark .lottery-draw-panel { background: linear-gradient(145deg, rgba(15,23,42,.98), rgba(15,23,42,.98) 55%, rgba(8,47,73,.45)); }
 .lottery-prize-card { transition: transform 160ms ease, box-shadow 160ms ease; }
 .lottery-prize-card:hover { transform: translateY(-2px); box-shadow: 0 12px 28px rgba(15,23,42,.08); }
 @media (max-width: 640px) { .lottery-draw-button { width: 100%; } }

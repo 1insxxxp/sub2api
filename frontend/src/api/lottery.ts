@@ -38,6 +38,7 @@ export interface LotteryPublicState {
 export interface LotteryDraw {
   id: number
   prize_name: string
+  prize_id?: number | null
   prize_type: LotteryPrizeType
   balance_amount?: number | null
   product_content?: string | null

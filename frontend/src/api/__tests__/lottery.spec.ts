@@ -24,12 +24,13 @@ describe('lottery API contracts', () => {
 
   it('loads the user state and submits an idempotent draw key', async () => {
     const state = { activity: { id: 1 }, prizes: [], attempts_used: 0, attempts_remaining: 1 }
-    const result = { draw: { id: 4, prize_name: 'Balance', prize_type: 'balance' }, attempts_used: 1, attempts_remaining: 0 }
+    const result = { draw: { id: 4, prize_id: 7, prize_name: 'Balance', prize_type: 'balance' }, attempts_used: 1, attempts_remaining: 0 }
     get.mockResolvedValueOnce({ data: state })
     post.mockResolvedValueOnce({ data: result })
 
     await expect(getLotteryState()).resolves.toBe(state)
     await expect(drawLottery('attempt-1')).resolves.toBe(result)
+    expect(result.draw.prize_id).toBe(7)
     expect(get).toHaveBeenCalledWith('/lottery/state')
     expect(post).toHaveBeenCalledWith('/lottery/draw', { attempt_key: 'attempt-1' })
   })
