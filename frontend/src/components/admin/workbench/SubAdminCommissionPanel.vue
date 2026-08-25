@@ -2,13 +2,13 @@
   <section
     v-if="canViewCommission"
     data-test="sub-admin-commission-panel"
-    class="space-y-4"
+    class="min-w-0 space-y-4"
   >
     <SubAdminCommissionManagement v-if="isAdmin" />
 
     <div
       data-test="commission-calendar-layout"
-      class="commission-calendar-layout grid items-start gap-4"
+      class="commission-calendar-layout grid min-w-0 items-start gap-4"
     >
       <SubAdminCommissionCalendar @select-day="handleDaySelect" />
       <SubAdminCommissionDayDrawer

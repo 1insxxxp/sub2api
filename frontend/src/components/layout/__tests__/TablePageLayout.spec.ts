@@ -32,6 +32,8 @@ describe('TablePageLayout', () => {
 
   it('sizes scrollable module pages from the shared app content rhythm', () => {
     expect(componentSource).toContain('var(--app-content-padding-total-y, 4rem)')
+    expect(componentSource).toContain('@media (max-width: 1023px)')
+    expect(componentSource).toContain('height: auto;')
   })
 
   it('does not disable the table horizontal scroll container in mobile mode', () => {

@@ -1,5 +1,5 @@
 <template>
-  <div class="admin-shell min-h-screen bg-slate-50 text-slate-900 dark:bg-dark-950 dark:text-slate-100">
+  <div class="admin-shell min-h-screen overflow-x-clip bg-slate-50 text-slate-900 dark:bg-dark-950 dark:text-slate-100">
     <div
       :class="{
         'app-shell-image-studio': route.path === '/images',
@@ -24,7 +24,7 @@
         <AppHeader />
 
         <!-- Main Content -->
-        <main class="app-shell-content">
+        <main class="app-shell-content mobile-page-shell">
           <slot />
         </main>
       </div>
@@ -67,6 +67,7 @@ defineExpose({ replayTour })
 .app-shell-main {
   margin-left: 0;
   min-width: 0;
+  overflow-x: clip;
   transition: margin-left 240ms ease-out;
 }
 
@@ -100,6 +101,7 @@ defineExpose({ replayTour })
   width: 100%;
   max-width: none;
   min-width: 0;
+  overflow-x: clip;
   padding: var(--app-content-padding-y) var(--app-content-padding-x);
   transition: padding 200ms ease;
 }

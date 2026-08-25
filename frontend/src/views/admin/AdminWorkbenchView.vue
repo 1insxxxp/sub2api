@@ -1,8 +1,8 @@
 <template>
   <AppLayout>
-    <div class="mx-auto max-w-6xl space-y-6 px-4 py-6 sm:px-6 lg:px-8">
-      <header class="flex flex-col gap-4 border-b border-gray-200 pb-5 dark:border-dark-700 sm:flex-row sm:items-end sm:justify-between">
-        <div>
+    <div class="admin-workbench-page mx-auto min-w-0 max-w-6xl space-y-6 px-4 py-6 sm:px-6 lg:px-8">
+      <header class="flex min-w-0 flex-col gap-4 border-b border-gray-200 pb-5 dark:border-dark-700 sm:flex-row sm:items-end sm:justify-between">
+        <div class="min-w-0 flex-1">
           <h1 class="text-2xl font-semibold text-gray-950 dark:text-white">
             {{ t('adminWorkbench.title') }}
           </h1>
@@ -10,7 +10,7 @@
             {{ t('adminWorkbench.description') }}
           </p>
         </div>
-        <div class="rounded-lg border border-blue-100 bg-blue-50 px-4 py-3 text-right dark:border-blue-500/20 dark:bg-blue-500/10">
+        <div class="w-full rounded-lg border border-blue-100 bg-blue-50 px-4 py-3 text-left dark:border-blue-500/20 dark:bg-blue-500/10 sm:w-auto sm:text-right">
           <p class="text-xs font-medium text-blue-600 dark:text-blue-300">
             {{ t('adminWorkbench.currentBalance') }}
           </p>
@@ -22,11 +22,11 @@
 
       <SubAdminCommissionPanel />
 
-      <section class="grid gap-6 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
+      <section class="grid min-w-0 gap-6 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
         <form
           ref="transferFormRef"
           data-test="workbench-transfer-form"
-          class="rounded-lg border border-gray-200 bg-white p-5 shadow-sm dark:border-dark-700 dark:bg-dark-900"
+          class="min-w-0 rounded-lg border border-gray-200 bg-white p-5 shadow-sm dark:border-dark-700 dark:bg-dark-900"
           @submit.prevent="handleGenerate"
         >
           <div class="mb-5">
@@ -129,11 +129,11 @@
 
         <section
           data-test="workbench-generated-now-card"
-          class="flex min-h-0 flex-col overflow-hidden rounded-lg border border-gray-200 bg-white p-5 shadow-sm dark:border-dark-700 dark:bg-dark-900"
+          class="admin-workbench-generated-now flex min-h-0 min-w-0 flex-col overflow-hidden rounded-lg border border-gray-200 bg-white p-5 shadow-sm dark:border-dark-700 dark:bg-dark-900"
           :style="generatedNowPanelStyle"
         >
           <div class="mb-4 flex shrink-0 items-center justify-between gap-3">
-            <div>
+            <div class="min-w-0">
               <h2 class="text-base font-semibold text-gray-950 dark:text-white">
                 {{ t('adminWorkbench.balanceTransfer.generatedNow') }}
               </h2>
@@ -155,7 +155,7 @@
           <div v-if="generatedResults.length === 0" class="flex min-h-44 flex-1 items-center justify-center rounded-lg bg-gray-50 text-sm text-gray-500 dark:bg-dark-800/70 dark:text-dark-400">
             {{ t('adminWorkbench.balanceTransfer.noGeneratedNow') }}
           </div>
-          <div v-else data-test="workbench-generated-results" class="min-h-0 flex-1 space-y-2 overflow-y-auto pr-1">
+          <div v-else data-test="workbench-generated-results" class="admin-workbench-generated-results min-h-0 flex-1 space-y-2 overflow-y-auto pr-1">
             <div
               v-for="item in generatedResults"
               :key="item.id"
@@ -171,7 +171,7 @@
         </section>
       </section>
 
-      <section class="rounded-lg border border-gray-200 bg-white p-5 shadow-sm dark:border-dark-700 dark:bg-dark-900">
+      <section class="min-w-0 rounded-lg border border-gray-200 bg-white p-5 shadow-sm dark:border-dark-700 dark:bg-dark-900">
         <div class="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h2 class="text-base font-semibold text-gray-950 dark:text-white">
@@ -267,7 +267,7 @@
                 </p>
               </div>
             </div>
-            <div class="flex shrink-0 items-center gap-2">
+            <div class="flex w-full shrink-0 items-center justify-end gap-2 sm:w-auto">
               <button type="button" class="btn btn-secondary px-3" @click="copyCode(item.code)">
                 <Icon name="copy" size="sm" />
               </button>

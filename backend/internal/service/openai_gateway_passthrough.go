@@ -1339,6 +1339,9 @@ func openAIStreamFailedEventSemanticStatus(payload []byte, message string) int {
 	if isOpenAIContextWindowError(message, payload) {
 		return http.StatusBadRequest
 	}
+	if isOpenAISensitiveWordsDetectedError(message, payload) {
+		return http.StatusForbidden
+	}
 
 	code := openAIStreamFailedEventErrorCode(payload)
 	errType := strings.ToLower(strings.TrimSpace(gjson.GetBytes(payload, "response.error.type").String()))
@@ -1384,6 +1387,19 @@ func openAIStreamFailureStatus(payload []byte, message string) int {
 		}
 	}
 	return http.StatusBadGateway
+}
+
+func isOpenAISensitiveWordsDetectedError(message string, payload []byte) bool {
+	combined := strings.ToLower(strings.TrimSpace(
+		message + " " +
+			gjson.GetBytes(payload, "response.error.code").String() + " " +
+			gjson.GetBytes(payload, "error.code").String() + " " +
+			gjson.GetBytes(payload, "code").String() + " " +
+			gjson.GetBytes(payload, "response.error.message").String() + " " +
+			gjson.GetBytes(payload, "error.message").String(),
+	))
+	return strings.Contains(combined, "sensitive_words_detected") ||
+		strings.Contains(combined, "sensitive words detected")
 }
 
 // openAIStreamCredentialAuthFailure distinguishes credential failures from
@@ -1499,6 +1515,9 @@ func openAIStreamFailedEventShouldFailover(payload []byte, message string) bool 
 	if isOpenAIContextWindowError(message, payload) {
 		return false
 	}
+	if isOpenAISensitiveWordsDetectedError(message, payload) {
+		return false
+	}
 	if isOpenAIUpstreamAccessStateError(message, payload) {
 		return true
 	}
@@ -1549,6 +1568,9 @@ func openAIStreamErrorEventShouldFailover(payload []byte, message string) bool {
 		return false
 	}
 	if isOpenAIContextWindowError(message, payload) {
+		return false
+	}
+	if isOpenAISensitiveWordsDetectedError(message, payload) {
 		return false
 	}
 	if isOpenAIUpstreamAccessStateError(message, payload) {
