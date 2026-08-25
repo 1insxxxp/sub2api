@@ -18,7 +18,7 @@
                 {{ state?.activity.description || t('lottery.description') }}
               </p>
             </div>
-            <div class="lottery-attempt-card rounded-xl border border-blue-100 bg-blue-50/80 px-5 py-4 dark:border-blue-900/50 dark:bg-blue-950/40">
+            <div v-if="state" class="lottery-attempt-card rounded-xl border border-blue-100 bg-blue-50/80 px-5 py-4 dark:border-blue-900/50 dark:bg-blue-950/40">
               <p class="text-xs font-medium text-blue-700 dark:text-blue-300">{{ t('lottery.attempts') }}</p>
               <div class="mt-1 flex items-end gap-2">
                 <strong class="text-4xl leading-none text-blue-700 dark:text-blue-200">{{ state?.attempts_remaining ?? 0 }}</strong>
@@ -30,6 +30,9 @@
                 {{ state?.activity.attempt_mode === 'daily' ? t('lottery.daily') : t('lottery.total') }} · {{ t('lottery.attemptsUsed', { count: state?.attempts_used ?? 0 }) }}
               </p>
             </div>
+            <div v-else class="lottery-attempt-card rounded-xl border border-amber-200 bg-amber-50/80 px-5 py-4 text-sm text-amber-800 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-200">
+              {{ t('lottery.noActivity') }}
+            </div>
           </div>
         </div>
       </section>
@@ -37,11 +40,12 @@
       <div v-if="loading" class="flex min-h-56 items-center justify-center rounded-2xl border border-slate-200 bg-white dark:border-dark-700 dark:bg-dark-900">
         <LoadingSpinner />
       </div>
-      <div v-else-if="loadError" class="rounded-2xl border border-amber-200 bg-amber-50 px-5 py-8 text-center text-sm text-amber-800 dark:border-amber-800/60 dark:bg-amber-950/20 dark:text-amber-200">
-        {{ loadError }}
-      </div>
-      <template v-else-if="state">
-        <section class="space-y-4">
+      <div v-else>
+        <div v-if="loadError" class="mb-6 rounded-2xl border border-amber-200 bg-amber-50 px-5 py-8 text-center text-sm text-amber-800 dark:border-amber-800/60 dark:bg-amber-950/20 dark:text-amber-200">
+          {{ loadError }}
+        </div>
+        <template v-if="state">
+          <section class="space-y-4">
           <div class="flex flex-wrap items-end justify-between gap-3">
             <div>
               <h2 class="text-lg font-semibold text-slate-950 dark:text-white">{{ t('lottery.prizes') }}</h2>
@@ -84,7 +88,8 @@
           <div v-else class="rounded-xl border border-dashed border-slate-300 px-5 py-10 text-center text-sm text-slate-500 dark:border-dark-600 dark:text-slate-400">
             {{ t('lottery.noPrizes') }}
           </div>
-        </section>
+          </section>
+        </template>
 
         <section class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-dark-700 dark:bg-dark-900 sm:p-6">
           <div class="flex flex-wrap items-end justify-between gap-3">
@@ -98,7 +103,8 @@
               <button type="button" class="btn btn-secondary btn-sm" :disabled="historyPage >= history.pages" @click="loadHistory(historyPage + 1)">{{ t('lottery.next') }}</button>
             </div>
           </div>
-          <div v-if="history.items.length" class="mt-5 divide-y divide-slate-100 dark:divide-dark-700">
+          <p v-if="historyError" class="mt-5 rounded-lg bg-amber-50 px-3 py-3 text-sm text-amber-800 dark:bg-amber-950/20 dark:text-amber-200">{{ historyError }}</p>
+          <div v-else-if="history.items.length" class="mt-5 divide-y divide-slate-100 dark:divide-dark-700">
             <div v-for="item in history.items" :key="item.id" class="flex flex-col gap-2 py-4 sm:flex-row sm:items-center sm:justify-between">
               <div class="min-w-0">
                 <p class="break-words text-sm font-semibold text-slate-900 dark:text-white">{{ item.prize_name }}</p>
@@ -115,7 +121,7 @@
           </div>
           <p v-else class="py-10 text-center text-sm text-slate-500 dark:text-slate-400">{{ t('lottery.historyEmpty') }}</p>
         </section>
-      </template>
+      </div>
 
       <div v-if="result" class="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4 backdrop-blur-sm" @click.self="result = null">
         <section class="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl dark:border-dark-700 dark:bg-dark-900">
@@ -154,6 +160,7 @@ const loadError = ref('')
 const state = ref<LotteryPublicState | null>(null)
 const result = ref<LotteryDrawResult | null>(null)
 const copied = ref(false)
+const historyError = ref('')
 const historyPage = ref(1)
 const history = ref({ items: [] as LotteryDrawResult['draw'][], total: 0, page: 1, page_size: 10, pages: 0 })
 
@@ -167,22 +174,28 @@ const lotteryErrorMessage = (error: any, fallback: string) => {
 }
 
 async function loadHistory(page = 1) {
-  const data = await lotteryAPI.history({ page, page_size: 10 })
-  history.value = data
-  historyPage.value = page
+  historyError.value = ''
+  try {
+    const data = await lotteryAPI.history({ page, page_size: 10 })
+    history.value = data
+    historyPage.value = page
+  } catch (error: any) {
+    historyError.value = lotteryErrorMessage(error, t('lottery.unavailable'))
+    throw error
+  }
 }
 
 async function load() {
   loading.value = true
   loadError.value = ''
+  historyError.value = ''
   try {
     state.value = await lotteryAPI.getState()
-    await loadHistory()
   } catch (error: any) {
     loadError.value = lotteryErrorMessage(error, t('lottery.unavailable'))
-  } finally {
-    loading.value = false
   }
+  try { await loadHistory() } catch { /* historyError already contains the localized message */ }
+  loading.value = false
 }
 
 async function handleDraw() {
