@@ -804,6 +804,13 @@ func TestForwardAsAnthropic_ReplaysWithoutContinuationWhenPreviousResponseMissin
 	require.Equal(t, "second", gjson.GetBytes(upstream.bodies[1], "input.3.content.0.text").String())
 }
 
+func TestOpenAICompatPreviousResponseInvalidIDIsRecoverable(t *testing.T) {
+	t.Parallel()
+
+	upstreamBody := []byte("{\"error\":{\"type\":\"invalid_request_error\",\"message\":\"Invalid `previous_response_id`.\"}}")
+	require.True(t, isOpenAICompatPreviousResponseNotFound(http.StatusBadRequest, "Invalid `previous_response_id`.", upstreamBody))
+}
+
 func TestForwardAsAnthropic_DisablesAPIKeyContinuationWhenUpstreamRequiresWebSocketV2(t *testing.T) {
 	t.Parallel()
 	gin.SetMode(gin.TestMode)
