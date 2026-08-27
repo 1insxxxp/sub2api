@@ -26,6 +26,7 @@ import (
 var (
 	ErrInvalidCredentials           = infraerrors.Unauthorized("INVALID_CREDENTIALS", "invalid email or password")
 	ErrUserNotActive                = infraerrors.Forbidden("USER_NOT_ACTIVE", "user is not active")
+	ErrExternalLogin2FARequired     = infraerrors.Forbidden("EXTERNAL_LOGIN_2FA_REQUIRED", "external login is not available for users with two-factor authentication enabled")
 	ErrEmailExists                  = infraerrors.Conflict("EMAIL_EXISTS", "email already exists")
 	ErrEmailReserved                = infraerrors.BadRequest("EMAIL_RESERVED", "email is reserved")
 	ErrInvalidToken                 = infraerrors.Unauthorized("INVALID_TOKEN", "invalid token")
@@ -61,6 +62,14 @@ const refreshTokenPrefix = "rt_"
 type AuthSourceMetadata struct {
 	IP        string
 	UserAgent string
+}
+
+type ExternalCredentialUser struct {
+	ID       int64  `json:"id"`
+	Email    string `json:"email"`
+	Username string `json:"username"`
+	Role     string `json:"role"`
+	Status   string `json:"status"`
 }
 
 func (m AuthSourceMetadata) Empty() bool {
@@ -587,6 +596,39 @@ func (s *AuthService) Login(ctx context.Context, email, password string) (string
 	}
 
 	return token, user, nil
+}
+
+func (s *AuthService) VerifyExternalCredential(ctx context.Context, email, password string) (*ExternalCredentialUser, error) {
+	email = strings.TrimSpace(email)
+
+	user, err := s.userRepo.GetByEmail(ctx, email)
+	if err != nil {
+		if errors.Is(err, ErrUserNotFound) {
+			return nil, ErrInvalidCredentials
+		}
+		logger.LegacyPrintf("service.auth", "[Auth] Database error during external credential verification: %v", err)
+		return nil, ErrServiceUnavailable
+	}
+
+	if !s.CheckPassword(password, user.PasswordHash) {
+		return nil, ErrInvalidCredentials
+	}
+
+	if !user.IsActive() {
+		return nil, ErrUserNotActive
+	}
+
+	if user.TotpEnabled {
+		return nil, ErrExternalLogin2FARequired
+	}
+
+	return &ExternalCredentialUser{
+		ID:       user.ID,
+		Email:    user.Email,
+		Username: user.Username,
+		Role:     user.Role,
+		Status:   user.Status,
+	}, nil
 }
 
 func (s *AuthService) LoginWithMetadata(ctx context.Context, email, password string, metadata AuthSourceMetadata) (string, *User, error) {

@@ -43,6 +43,7 @@ func initializeApplication(buildInfo handler.BuildInfo) (*Application, error) {
 		payment.ProviderSet,
 		middleware.ProviderSet,
 		handler.ProviderSet,
+		wire.Bind(new(handler.DujiaoCredentialVerifier), new(*service.AuthService)),
 
 		// Server layer ProviderSet
 		server.ProviderSet,
