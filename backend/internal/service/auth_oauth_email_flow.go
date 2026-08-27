@@ -36,10 +36,16 @@ func (s *AuthService) SendPendingOAuthVerifyCode(ctx context.Context, email stri
 	if _, err := mail.ParseAddress(email); err != nil {
 		return nil, ErrEmailVerifyRequired
 	}
+	if s == nil {
+		return nil, ErrServiceUnavailable
+	}
 	if isReservedEmail(email) {
 		return nil, ErrEmailReserved
 	}
-	if s == nil || s.emailService == nil {
+	if err := s.ensureOAuthRegistrationEmailAvailable(ctx, email); err != nil {
+		return nil, err
+	}
+	if s.emailService == nil {
 		return nil, ErrServiceUnavailable
 	}
 	if err := s.validateRegistrationEmailQuota(ctx, email); err != nil {

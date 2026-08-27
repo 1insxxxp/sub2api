@@ -134,6 +134,9 @@ func isGmailFamilyDomain(domain string) bool {
 // surfaced (fail-closed) so the registration path returns a service error instead
 // of letting an attacker bypass the check by inducing errors.
 func (s *AuthService) existsByEmailOrAlias(ctx context.Context, email string) (bool, error) {
+	if repo, ok := s.userRepo.(RegistrationEmailIdentityRepository); ok {
+		return repo.ExistsByEmailOrAliasIncludeDeleted(ctx, email)
+	}
 	exists, err := s.userRepo.ExistsByEmail(ctx, email)
 	if err != nil || exists {
 		return exists, err

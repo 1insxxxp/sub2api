@@ -71,14 +71,17 @@ func TestEmailAliasDedupProbes(t *testing.T) {
 // would panic, failing the test).
 type aliasDedupRepoStub struct {
 	UserRepository
-	exists      bool
-	existsErr   error
-	stored      []string
-	aliasErr    error
-	aliasChecks []string
+	exists               bool
+	existsErr            error
+	stored               []string
+	aliasErr             error
+	aliasChecks          []string
+	includeDeletedExists bool
+	includeDeletedErr    error
+	includeDeletedChecks []string
 }
 
-func (s *aliasDedupRepoStub) ExistsByEmail(context.Context, string) (bool, error) {
+func (s *aliasDedupRepoStub) ExistsByEmail(_ context.Context, _ string) (bool, error) {
 	return s.exists, s.existsErr
 }
 
@@ -94,6 +97,21 @@ func (s *aliasDedupRepoStub) ExistsByEmailAlias(_ context.Context, email string)
 		}
 	}
 	return false, nil
+}
+
+func (s *aliasDedupRepoStub) ExistsByEmailOrAliasIncludeDeleted(ctx context.Context, email string) (bool, error) {
+	s.includeDeletedChecks = append(s.includeDeletedChecks, email)
+	if s.includeDeletedErr != nil {
+		return false, s.includeDeletedErr
+	}
+	if s.includeDeletedExists {
+		return true, nil
+	}
+	exists, err := s.ExistsByEmail(ctx, email)
+	if err != nil || exists {
+		return exists, err
+	}
+	return s.ExistsByEmailAlias(ctx, email)
 }
 
 func TestExistsByEmailOrAlias(t *testing.T) {
@@ -160,5 +178,15 @@ func TestExistsByEmailOrAlias(t *testing.T) {
 		svc := &AuthService{userRepo: repo}
 		_, err := svc.existsByEmailOrAlias(ctx, "user@gmail.com")
 		require.Error(t, err)
+	})
+
+	t.Run("include deleted repository method is preferred", func(t *testing.T) {
+		repo := &aliasDedupRepoStub{includeDeletedExists: true}
+		svc := &AuthService{userRepo: repo}
+		got, err := svc.existsByEmailOrAlias(ctx, "deleted+again@gmail.com")
+		require.NoError(t, err)
+		require.True(t, got)
+		require.Equal(t, []string{"deleted+again@gmail.com"}, repo.includeDeletedChecks)
+		require.Empty(t, repo.aliasChecks)
 	})
 }
