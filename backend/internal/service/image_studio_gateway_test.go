@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/base64"
+	"encoding/json"
 	"io"
 	"mime"
 	"mime/multipart"
@@ -79,6 +80,65 @@ type imageStudioGatewayStub struct {
 	forwardResult    *OpenAIForwardResult
 	forwardError     error
 	recordCalls      int
+}
+
+type imageStudioGeminiGatewayStub struct {
+	selectedGroupID     *int64
+	selectedSessionHash string
+	selectedModel       string
+	forwardAccount      *Account
+	forwardBody         []byte
+	forwardModel        string
+	forwardAction       string
+	forwardStream       bool
+}
+
+func (s *imageStudioGeminiGatewayStub) SelectAccountForModelWithExclusions(ctx context.Context, groupID *int64, sessionHash string, requestedModel string, excludedIDs map[int64]struct{}) (*Account, error) {
+	if groupID != nil {
+		id := *groupID
+		s.selectedGroupID = &id
+	} else {
+		s.selectedGroupID = nil
+	}
+	s.selectedSessionHash = sessionHash
+	s.selectedModel = requestedModel
+	return &Account{ID: 44, Platform: PlatformGemini, Type: AccountTypeAPIKey, Status: StatusActive, Schedulable: true}, nil
+}
+
+func (s *imageStudioGeminiGatewayStub) ForwardNative(ctx context.Context, c *gin.Context, account *Account, originalModel string, action string, stream bool, body []byte) (*ForwardResult, error) {
+	s.forwardAccount = account
+	s.forwardBody = append([]byte(nil), body...)
+	s.forwardModel = originalModel
+	s.forwardAction = action
+	s.forwardStream = stream
+
+	c.JSON(http.StatusOK, gin.H{
+		"candidates": []gin.H{{
+			"content": gin.H{"parts": []gin.H{{
+				"inlineData": gin.H{
+					"mimeType": "image/png",
+					"data":     base64.StdEncoding.EncodeToString([]byte("gemini-image")),
+				},
+			}}},
+		}},
+		"usageMetadata": gin.H{
+			"promptTokenCount":     12,
+			"candidatesTokenCount": 4,
+			"candidatesTokensDetails": []gin.H{{
+				"modality":   "IMAGE",
+				"tokenCount": 7,
+			}},
+		},
+	})
+	return &ForwardResult{
+		RequestID:      "gemini-req",
+		Usage:          ClaudeUsage{InputTokens: 12, OutputTokens: 4, ImageOutputTokens: 7},
+		Model:          originalModel,
+		UpstreamModel:  originalModel,
+		ImageCount:     1,
+		ImageSize:      ImageBillingSize2K,
+		ImageInputSize: ImageBillingSize2K,
+	}, nil
 }
 
 func (s *imageStudioGatewayStub) ParseOpenAIImagesRequest(c *gin.Context, body []byte) (*OpenAIImagesRequest, error) {
@@ -207,6 +267,83 @@ func TestImageStudioGatewayExecutorGenerateBuildsOpenAIRequestAndDefersUsage(t *
 
 	require.NoError(t, result.CommitUsage(context.Background()))
 	require.Equal(t, 1, gateway.recordCalls)
+}
+
+func TestImageStudioGatewayExecutorGenerateUsesGeminiNativeForGeminiGroup(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	groupID := int64(4)
+	apiKey := &APIKey{
+		ID:      52,
+		UserID:  7,
+		Status:  StatusAPIKeyActive,
+		GroupID: &groupID,
+		User:    &User{ID: 7, Balance: 10},
+		Group:   &Group{ID: groupID, Platform: PlatformGemini, AllowImageGeneration: true},
+	}
+	openAIGateway := &imageStudioGatewayStub{}
+	geminiGateway := &imageStudioGeminiGatewayStub{}
+	executor := NewImageStudioGatewayExecutor(
+		&imageStudioAPIKeyProviderStub{apiKey: apiKey},
+		&imageStudioBillingCheckerStub{},
+		nil,
+		openAIGateway,
+		geminiGateway,
+	)
+
+	result, err := executor.Generate(context.Background(), ImageStudioGenerateInput{
+		UserID:       7,
+		Model:        "gemini-3.1-flash-image-preview",
+		Prompt:       "draw a moon gate",
+		AspectRatio:  "16:9",
+		Size:         "2048x1152",
+		BillingTier:  ImageBillingSize2K,
+		OutputFormat: "png",
+		UserAgent:    "studio-test",
+		IPAddress:    "127.0.0.1",
+	})
+
+	require.NoError(t, err)
+	require.Equal(t, []byte("gemini-image"), result.ImageBytes)
+	require.Equal(t, "image/png", result.MimeType)
+	require.Equal(t, 0, openAIGateway.recordCalls)
+	require.Empty(t, openAIGateway.parsedEndpoint)
+	require.NotNil(t, geminiGateway.selectedGroupID)
+	require.Equal(t, groupID, *geminiGateway.selectedGroupID)
+	require.Equal(t, "gemini-3.1-flash-image-preview", geminiGateway.selectedModel)
+	require.Equal(t, "gemini-3.1-flash-image-preview", geminiGateway.forwardModel)
+	require.Equal(t, "generateContent", geminiGateway.forwardAction)
+	require.False(t, geminiGateway.forwardStream)
+
+	var payload struct {
+		Contents []struct {
+			Role  string `json:"role"`
+			Parts []struct {
+				Text string `json:"text"`
+			} `json:"parts"`
+		} `json:"contents"`
+		GenerationConfig struct {
+			ResponseModalities []string `json:"responseModalities"`
+			ImageConfig        struct {
+				AspectRatio string `json:"aspectRatio"`
+				ImageSize   string `json:"imageSize"`
+			} `json:"imageConfig"`
+		} `json:"generationConfig"`
+	}
+	require.NoError(t, json.Unmarshal(geminiGateway.forwardBody, &payload))
+	require.Len(t, payload.Contents, 1)
+	require.Equal(t, "user", payload.Contents[0].Role)
+	require.Contains(t, payload.Contents[0].Parts[0].Text, "draw a moon gate")
+	require.Equal(t, []string{"TEXT", "IMAGE"}, payload.GenerationConfig.ResponseModalities)
+	require.Equal(t, "16:9", payload.GenerationConfig.ImageConfig.AspectRatio)
+	require.Equal(t, ImageBillingSize2K, payload.GenerationConfig.ImageConfig.ImageSize)
+
+	require.NoError(t, result.CommitUsage(context.Background()))
+	require.Equal(t, 1, openAIGateway.recordCalls)
+	require.NotNil(t, openAIGateway.usageInput)
+	require.Equal(t, int64(44), openAIGateway.usageInput.Account.ID)
+	require.Equal(t, PlatformGemini, openAIGateway.usageInput.Account.Platform)
+	require.Equal(t, 7, openAIGateway.usageInput.Result.Usage.ImageOutputTokens)
+	require.Equal(t, "/v1beta/models/gemini-3.1-flash-image-preview:generateContent", openAIGateway.usageInput.UpstreamEndpoint)
 }
 
 func TestImageStudioGatewayExecutorGenerateUsesSelectedGroupAPIKeyAndScheduler(t *testing.T) {

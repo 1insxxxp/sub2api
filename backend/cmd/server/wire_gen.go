@@ -324,7 +324,7 @@ func initializeApplication(buildInfo handler.BuildInfo) (*Application, error) {
 	handlerCheckinHandler := handler.NewCheckinHandler(checkinService)
 	userImageRepository := repository.NewUserImageRepository(client)
 	userImageTaskRepository := repository.NewUserImageTaskRepository(client)
-	imageStudioGatewayExecutor := service.NewImageStudioGatewayExecutor(apiKeyService, billingCacheService, userSubscriptionRepository, openAIGatewayService)
+	imageStudioGatewayExecutor := service.NewImageStudioGatewayExecutor(apiKeyService, billingCacheService, userSubscriptionRepository, openAIGatewayService, geminiMessagesCompatService)
 	imageStudioService := service.ProvideImageStudioService(userImageRepository, userImageTaskRepository, settingService, apiKeyService, imageStudioGatewayExecutor)
 	imageStudioHandler := handler.ProvideImageStudioHandler(imageStudioService)
 	modelPlazaService := service.NewModelPlazaService(channelRepository, groupRepository, pricingService, billingService, modelPricingResolver)
