@@ -64,17 +64,6 @@ func RegisterGatewayRoutes(
 			return false
 		}
 	}
-	isSystemCustomGroup := func(c *gin.Context) bool {
-		apiKey, ok := middleware.GetAPIKeyFromContext(c)
-		return ok && apiKey != nil && apiKey.Group != nil && apiKey.Group.IsSystemCustomRouteGroup()
-	}
-	codexModelsHandler := func(c *gin.Context) {
-		if isSystemCustomGroup(c) {
-			h.Gateway.SystemCustomCodexModels(c)
-			return
-		}
-		h.OpenAIGateway.CodexModels(c)
-	}
 	countTokensHandler := func(c *gin.Context) {
 		switch getGroupPlatform(c) {
 		case service.PlatformOpenAI, service.PlatformKimi, service.PlatformZhipu, service.PlatformDeepseek:
@@ -85,17 +74,18 @@ func RegisterGatewayRoutes(
 			h.Gateway.CountTokens(c)
 		}
 	}
+	codexModelsHandler := func(c *gin.Context) {
+		apiKey, ok := middleware.GetAPIKeyFromContext(c)
+		if ok && apiKey != nil && apiKey.Group != nil && apiKey.Group.IsSystemCustomRouteGroup() {
+			h.Gateway.SystemCustomCodexModels(c)
+			return
+		}
+		dispatchCodexModelsGateway(c, h.OpenAIGateway.CodexModels, h.Gateway.CodexModels)
+	}
 	modelsHandler := func(c *gin.Context) {
 		if c.Query("client_version") != "" {
-			if isSystemCustomGroup(c) {
-				codexModelsHandler(c)
-				return
-			}
-			switch getGroupPlatform(c) {
-			case service.PlatformOpenAI:
-				codexModelsHandler(c)
-				return
-			}
+			codexModelsHandler(c)
+			return
 		}
 		h.Gateway.Models(c)
 	}
@@ -577,6 +567,14 @@ func RegisterGatewayRoutes(
 		antigravityV1Beta.POST("/models/*modelAction", h.Gateway.GeminiV1BetaModels)
 	}
 
+}
+
+func dispatchCodexModelsGateway(c *gin.Context, openAIHandler, generatedHandler gin.HandlerFunc) {
+	if getGroupPlatform(c) == service.PlatformOpenAI {
+		openAIHandler(c)
+		return
+	}
+	generatedHandler(c)
 }
 
 // getGroupPlatform extracts the group platform from the API Key stored in context.

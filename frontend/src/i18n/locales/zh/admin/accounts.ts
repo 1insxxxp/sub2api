@@ -870,6 +870,7 @@ export default {
       modelAliasRenameCascadeSuccess: '已更新 {count} 个下游模型别名引用',
       modelAliasRenameCascadePartial: '已更新 {count} 个下游模型别名引用，跳过 {skipped} 个',
       modelAliasRenameCascadeFailed: '账号已保存，但下游模型别名级联更新失败：{message}',
+      syncUpstreamModelsMetadataIncomplete: '模型 ID 已同步，但能力元数据不完整，能力信息未更新。',
       clearAllModels: '清除所有模型',
       customModelName: '自定义模型名称',
       enterCustomModelName: '输入自定义模型名称',

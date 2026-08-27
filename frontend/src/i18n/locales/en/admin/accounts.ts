@@ -794,6 +794,8 @@ export default {
       modelAliasRenameCascadeSuccess: 'Updated {count} downstream model alias references',
       modelAliasRenameCascadePartial: 'Updated {count} downstream model alias references; skipped {skipped}',
       modelAliasRenameCascadeFailed: 'Account saved, but downstream model alias cascade failed: {message}',
+      syncUpstreamModelsMetadataIncomplete:
+        'Model IDs were synced, but capability metadata is incomplete and was not updated.',
       clearAllModels: 'Clear all models',
       customModelName: 'Custom model name',
       enterCustomModelName: 'Enter custom model name',
