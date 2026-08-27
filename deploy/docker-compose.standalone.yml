@@ -80,6 +80,8 @@ services:
       # =======================================================================
       - JWT_SECRET=${JWT_SECRET:-}
       - JWT_EXPIRE_HOUR=${JWT_EXPIRE_HOUR:-24}
+      - DUJIAO_LOGIN_ENABLED=${DUJIAO_LOGIN_ENABLED:-false}
+      - DUJIAO_LOGIN_SHARED_SECRET=${DUJIAO_LOGIN_SHARED_SECRET:-}
 
       # =======================================================================
       # Setup Configuration

@@ -111,6 +111,10 @@ services:
       # Generate a secure key: openssl rand -hex 32
       - TOTP_ENCRYPTION_KEY=${TOTP_ENCRYPTION_KEY:-}
 
+      # Optional Dujiao card-shop password login bridge
+      - DUJIAO_LOGIN_ENABLED=${DUJIAO_LOGIN_ENABLED:-false}
+      - DUJIAO_LOGIN_SHARED_SECRET=${DUJIAO_LOGIN_SHARED_SECRET:-}
+
       # =======================================================================
       # Timezone Configuration
       # This affects ALL time operations in the application:
