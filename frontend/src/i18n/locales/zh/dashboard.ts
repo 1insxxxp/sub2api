@@ -1075,6 +1075,18 @@ export default {
     passwordTooShort: '密码至少需要 8 个字符',
     passwordChangeSuccess: '密码修改成功',
     passwordChangeFailed: '密码修改失败',
+    accountDeletion: {
+      title: '注销账号',
+      description: '注销后将无法继续登录，账号下的 API Key 会立即失效。',
+      summary: '此操作会删除当前账号访问权限，并保留历史账务记录供管理员审计。',
+      open: '注销账号',
+      confirmHint: '请输入当前密码确认注销。提交后当前会话会退出登录。',
+      passwordPlaceholder: '输入当前密码',
+      passwordRequired: '请输入当前密码',
+      confirm: '确认注销',
+      success: '账号已注销',
+      failed: '账号注销失败'
+    },
     // TOTP 2FA
     totp: {
       title: '双因素认证 (2FA)',

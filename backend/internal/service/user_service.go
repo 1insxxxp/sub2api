@@ -39,6 +39,7 @@ var (
 	ErrAvatarNotImage           = infraerrors.BadRequest("AVATAR_NOT_IMAGE", "avatar content must be an image")
 	ErrIdentityProviderInvalid  = infraerrors.BadRequest("IDENTITY_PROVIDER_INVALID", "identity provider is invalid")
 	ErrIdentityRedirectInvalid  = infraerrors.BadRequest("IDENTITY_REDIRECT_INVALID", "identity redirect path is invalid")
+	ErrAccountDeletionForbidden = infraerrors.Forbidden("ACCOUNT_DELETION_FORBIDDEN", "admin accounts cannot delete themselves")
 	ErrIdentityUnbindLastMethod = infraerrors.Conflict(
 		"IDENTITY_UNBIND_LAST_METHOD",
 		"bind another sign-in method before unbinding this provider",
@@ -284,6 +285,11 @@ type userProfileIdentityTxRunner interface {
 	WithUserProfileIdentityTx(ctx context.Context, fn func(txCtx context.Context) error) error
 }
 
+type accountDeletionAPIKeyRepository interface {
+	ListByUserID(ctx context.Context, userID int64, params pagination.PaginationParams, filters APIKeyListFilters) ([]APIKey, *pagination.PaginationResult, error)
+	DeleteWithAudit(ctx context.Context, id int64) error
+}
+
 // ChangePasswordRequest 修改密码请求
 type ChangePasswordRequest struct {
 	CurrentPassword string `json:"current_password"`
@@ -294,6 +300,7 @@ type ChangePasswordRequest struct {
 type UserService struct {
 	userRepo             UserRepository
 	settingRepo          SettingRepository
+	accountDeletionKeys  accountDeletionAPIKeyRepository
 	authCacheInvalidator APIKeyAuthCacheInvalidator
 	billingCache         BillingCache
 	lastActiveTouchL1    sync.Map
@@ -308,6 +315,10 @@ func NewUserService(userRepo UserRepository, settingRepo SettingRepository, auth
 		authCacheInvalidator: authCacheInvalidator,
 		billingCache:         billingCache,
 	}
+}
+
+func (s *UserService) SetAccountDeletionAPIKeyRepository(repo accountDeletionAPIKeyRepository) {
+	s.accountDeletionKeys = repo
 }
 
 // GetFirstAdmin 获取首个管理员用户（用于 Admin API Key 认证）
@@ -1046,6 +1057,82 @@ func (s *UserService) ChangePassword(ctx context.Context, userID int64, req Chan
 	}
 
 	return nil
+}
+
+func (s *UserService) DeleteOwnAccount(ctx context.Context, userID int64, currentPassword string) error {
+	user, err := s.userRepo.GetByID(ctx, userID)
+	if err != nil {
+		return fmt.Errorf("get user: %w", err)
+	}
+	if !user.CheckPassword(currentPassword) {
+		return ErrPasswordIncorrect
+	}
+	if user.Role == RoleAdmin {
+		return ErrAccountDeletionForbidden
+	}
+
+	apiKeys, err := s.listAccountDeletionAPIKeys(ctx, userID)
+	if err != nil {
+		return err
+	}
+	deleteAccount := func(txCtx context.Context) error {
+		for _, key := range apiKeys {
+			if key.ID <= 0 || s.accountDeletionKeys == nil {
+				continue
+			}
+			if err := s.accountDeletionKeys.DeleteWithAudit(txCtx, key.ID); err != nil {
+				return fmt.Errorf("delete user api key %d: %w", key.ID, err)
+			}
+		}
+
+		if err := s.userRepo.Delete(txCtx, userID); err != nil {
+			return fmt.Errorf("delete user: %w", err)
+		}
+		return nil
+	}
+
+	if txRunner, ok := s.userRepo.(userProfileIdentityTxRunner); ok {
+		if err := txRunner.WithUserProfileIdentityTx(ctx, deleteAccount); err != nil {
+			return err
+		}
+	} else if err := deleteAccount(ctx); err != nil {
+		return err
+	}
+
+	if s.authCacheInvalidator != nil {
+		for _, key := range apiKeys {
+			if keyValue := strings.TrimSpace(key.Key); keyValue != "" {
+				s.authCacheInvalidator.InvalidateAuthCacheByKey(ctx, keyValue)
+			}
+		}
+		s.authCacheInvalidator.InvalidateAuthCacheByUserID(ctx, userID)
+	}
+	return nil
+}
+
+func (s *UserService) listAccountDeletionAPIKeys(ctx context.Context, userID int64) ([]APIKey, error) {
+	if s.accountDeletionKeys == nil {
+		return nil, nil
+	}
+
+	const pageSize = 1000
+	keys := make([]APIKey, 0)
+	for page := 1; ; page++ {
+		batch, result, err := s.accountDeletionKeys.ListByUserID(ctx, userID, pagination.PaginationParams{
+			Page:      page,
+			PageSize:  pageSize,
+			SortBy:    "id",
+			SortOrder: pagination.SortOrderAsc,
+		}, APIKeyListFilters{})
+		if err != nil {
+			return nil, fmt.Errorf("list user api keys: %w", err)
+		}
+		keys = append(keys, batch...)
+		if len(batch) == 0 || len(batch) < pageSize || result == nil || int64(len(keys)) >= result.Total {
+			break
+		}
+	}
+	return keys, nil
 }
 
 // GetByID 根据ID获取用户（管理员功能）
