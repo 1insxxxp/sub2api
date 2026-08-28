@@ -79,6 +79,7 @@ func UserFromServiceAdmin(u *service.User) *AdminUser {
 		LastLoginUserAgent:    u.LastLoginUserAgent,
 		LastUsedAt:            u.LastUsedAt,
 		GroupRates:            u.GroupRates,
+		RestrictPublicGroups:  u.RestrictPublicGroups,
 	}
 }
 
