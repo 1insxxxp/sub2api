@@ -38,6 +38,28 @@ func TestAffiliateService_ResolveTierAwareRateCustomPriority(t *testing.T) {
 	require.Equal(t, 12.0, got, "clearing custom rate must restore automatic tier")
 }
 
+func TestAffiliateService_AdminListInviterSummariesUsesConfiguredQualificationAmount(t *testing.T) {
+	repo := &affiliateTierServiceRepoStub{
+		inviterSummaries: []AffiliateInviterSummary{{InviterID: 42, InvitedCount: 3}},
+	}
+	settings := newAffiliateTierServiceSettingRepo()
+	settings.values[SettingKeyAffiliateQualificationAmount] = "88"
+	svc := NewAffiliateService(repo, NewSettingService(settings, nil), nil, nil)
+
+	startAt := time.Now().Add(-24 * time.Hour)
+	endAt := time.Now()
+	items, total, err := svc.AdminListInviterSummaries(context.Background(), AffiliateRecordFilter{
+		Page: 1, PageSize: 20, StartAt: &startAt, EndAt: &endAt,
+	})
+
+	require.NoError(t, err)
+	require.Equal(t, 88.0, repo.listSummaryThreshold)
+	require.Nil(t, repo.listSummaryFilter.StartAt)
+	require.Nil(t, repo.listSummaryFilter.EndAt)
+	require.Equal(t, int64(1), total)
+	require.Equal(t, int64(42), items[0].InviterID)
+}
+
 func TestAffiliateServiceResolveValidCode(t *testing.T) {
 	newEnabledService := func(repo AffiliateRepository) *AffiliateService {
 		settings := newAffiliateTierServiceSettingRepo()
@@ -839,7 +861,10 @@ type affiliateTierServiceRepoStub struct {
 	listInviteesThreshold    float64
 	overview                 *AffiliateUserOverview
 	inviteRecords            []AffiliateInviteRecord
+	inviterSummaries         []AffiliateInviterSummary
 	listRecordsThreshold     float64
+	listSummaryThreshold     float64
+	listSummaryFilter        AffiliateRecordFilter
 	listRecordsCalls         int
 	reconcileInviterCalls    int
 	reconcileInviteesCalls   int
@@ -1025,6 +1050,13 @@ func (r *affiliateTierServiceRepoStub) ListAffiliateInviteRecordsWithQualificati
 	r.listRecordsThreshold = threshold
 	r.listRecordsCalls++
 	items := append([]AffiliateInviteRecord(nil), r.inviteRecords...)
+	return items, int64(len(items)), nil
+}
+
+func (r *affiliateTierServiceRepoStub) ListAffiliateInviterSummaries(_ context.Context, filter AffiliateRecordFilter, threshold float64) ([]AffiliateInviterSummary, int64, error) {
+	r.listSummaryThreshold = threshold
+	r.listSummaryFilter = filter
+	items := append([]AffiliateInviterSummary(nil), r.inviterSummaries...)
 	return items, int64(len(items)), nil
 }
 

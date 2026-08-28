@@ -98,7 +98,7 @@ describe('SubscriptionProgressMini mobile layout', () => {
     wrapper.unmount()
   })
 
-  it('supplies the 36px blue-cyan trigger theme only from mobile CSS', () => {
+  it('supplies the 36px violet subscription theme only from mobile CSS', () => {
     const mobileHeaderCss = styleSource.match(/@media \(max-width: 639px\) \{([\s\S]*?)\n {2}\}\n\n {2}\.app-header-balance-pill/)?.[1]
     const subscriptionSelectors = [...(mobileHeaderCss?.matchAll(/^\s*([^{}\n]*\.subscription-progress-[^{\n]+)\s*\{/gm) ?? [])]
       .map((match) => match[1].trim())
@@ -110,10 +110,11 @@ describe('SubscriptionProgressMini mobile layout', () => {
     subscriptionSelectors.forEach((selector) => expect(selector).toContain('.app-header-actions '))
     expect(triggerRule).toContain('width: var(--app-header-mobile-subscription-width)')
     expect(triggerRule).toContain('height: var(--app-header-mobile-control-size)')
-    expect(triggerRule).toContain('var(--brand-rgb)')
-    expect(triggerRule).toContain('var(--brand-cyan-rgb)')
-    expect(iconRule).toContain('var(--brand-600)')
-    expect(countRule).toContain('var(--brand-700)')
+    expect(componentSource).toContain('app-header-action-subscription')
+    expect(triggerRule).toContain('--header-action-rgb: 124 58 237')
+    expect(triggerRule).toContain('rgb(var(--header-action-rgb) / 0.1)')
+    expect(iconRule).toContain('rgb(124 58 237)')
+    expect(countRule).toContain('rgb(109 40 217)')
   })
 
   it('uses a teleported, dismissible centered modal and coordinates with other header panels', () => {

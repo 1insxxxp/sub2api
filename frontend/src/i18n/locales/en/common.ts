@@ -174,6 +174,7 @@ export default {
     lottery: 'Lottery',
     affiliate: 'Affiliate Rebates',
     affiliateManagement: 'Affiliate Rebates',
+    affiliateSummary: 'Invite Summary',
     affiliateInviteRecords: 'Invite Records',
     affiliateRebateRecords: 'Rebate Records',
     affiliateTransferRecords: 'Transfer Records',

@@ -216,7 +216,7 @@ describe('AppHeader shared admin shell', () => {
     expect(styleSource).toMatch(/\.app-header-actions\s*\{[^}]*flex-nowrap/)
   })
 
-  it('uses one flat 36px mobile action style for primary header controls', async () => {
+  it('uses aligned 36px mobile actions with distinct functional palette hooks', async () => {
     appStoreState.cachedPublicSettings = {
       model_plaza_enabled: true
     }
@@ -229,12 +229,11 @@ describe('AppHeader shared admin shell', () => {
     })
 
     const wrapper = await mountHeader()
-    const controls = [
-      wrapper.get('button[aria-label="Toggle Menu"]'),
-      wrapper.get('[data-test="header-model-plaza-link"]'),
-      wrapper.get('[data-test="daily-checkin-button"]'),
-      wrapper.get('button[aria-label="User Menu"]')
-    ]
+    const menu = wrapper.get('button[aria-label="Toggle Menu"]')
+    const modelPlaza = wrapper.get('[data-test="header-model-plaza-link"]')
+    const checkin = wrapper.get('[data-test="daily-checkin-button"]')
+    const userMenu = wrapper.get('button[aria-label="User Menu"]')
+    const controls = [menu, modelPlaza, checkin, userMenu]
     const mobileHeaderCss = styleSource.match(/@media \(max-width: 639px\) \{([\s\S]*?)\n {2}\}\n\n {2}\.app-header-balance-pill/)?.[1]
     const mobileToolbarRule = mobileHeaderCss?.match(/\.app-header-toolbar\s*\{([^}]*)\}/)?.[1]
     const compactActionRule = mobileHeaderCss?.match(/\.app-header-mobile-action\s*\{([^}]*)\}/)?.[1]
@@ -245,15 +244,28 @@ describe('AppHeader shared admin shell', () => {
     controls.forEach((control) => {
       expect(control.classes()).toContain('app-header-mobile-action')
     })
+    expect(menu.classes()).toContain('app-header-action-navigation')
+    expect(modelPlaza.classes()).toContain('app-header-action-models')
+    expect(checkin.classes()).toContain('app-header-action-checkin')
+    expect(announcementBellSource).toContain('app-header-action-announcements')
     expect(mobileToolbarRule).toContain('--app-header-mobile-control-size: 2.25rem')
     expect(compactActionRule).toContain('width: var(--app-header-mobile-control-size)')
     expect(compactActionRule).toContain('height: var(--app-header-mobile-control-size)')
-    expect(compactActionRule).toContain('border-color: transparent')
-    expect(compactActionRule).toContain('background: transparent')
-    expect(compactActionRule).toContain('box-shadow: none')
-    expect(compactHoverRule).toContain('background: rgb(var(--brand-rgb) / 0.08)')
-    expect(compactActiveRule).toContain('background: rgb(var(--brand-rgb) / 0.14)')
-    expect(compactFocusRule).toContain('rgb(var(--brand-rgb) / 0.2)')
+    expect(compactActionRule).toContain('border-color: rgb(var(--header-action-rgb) / 0.2)')
+    expect(compactActionRule).toContain('background: rgb(var(--header-action-rgb) / 0.08)')
+    expect(compactHoverRule).toContain('background: rgb(var(--header-action-rgb) / 0.14)')
+    expect(compactActiveRule).toContain('background: rgb(var(--header-action-rgb) / 0.2)')
+    expect(compactFocusRule).toContain('rgb(var(--header-action-rgb) / 0.22)')
+  })
+
+  it('assigns restrained blue, amber, cyan, and emerald palettes to mobile actions', () => {
+    const mobileHeaderCss = styleSource.match(/@media \(max-width: 639px\) \{([\s\S]*?)\n {2}\}\n\n {2}\.app-header-balance-pill/)?.[1] ?? ''
+    const palette = (selector: string) => mobileHeaderCss.match(new RegExp(`\\.${selector}\\s*\\{([^}]*)\\}`))?.[1] ?? ''
+
+    expect(palette('app-header-action-navigation')).toContain('--header-action-rgb: 37 99 235')
+    expect(palette('app-header-action-announcements')).toContain('--header-action-rgb: 245 158 11')
+    expect(palette('app-header-action-models')).toContain('--header-action-rgb: 6 182 212')
+    expect(palette('app-header-action-checkin')).toContain('--header-action-rgb: 16 185 129')
   })
 
   it('uses valid custom-property color syntax for mobile header theme surfaces', () => {
@@ -267,28 +279,19 @@ describe('AppHeader shared admin shell', () => {
     const subscriptionFocusRule = mobileHeaderCss.match(/\.app-header-actions \.subscription-progress-trigger:focus-visible\s*\{([^}]*)\}/)?.[1]
     const subscriptionDarkRule = mobileHeaderCss.match(/\.dark \.app-header-actions \.subscription-progress-trigger\s*\{([^}]*)\}/)?.[1]
 
-    for (const rule of [subscriptionRule]) {
-      expect(rule).toContain('rgb(var(--brand-rgb) / 0.34)')
-      expect(rule).toContain('rgb(var(--brand-rgb) / 0.09)')
-      expect(rule).toContain('rgb(var(--brand-cyan-rgb) / 0.08)')
-      expect(rule).toContain('rgb(var(--brand-rgb) / 0.08)')
-    }
-    for (const rule of [subscriptionHoverRule]) {
-      expect(rule).toContain('rgb(var(--brand-cyan-rgb) / 0.48)')
-      expect(rule).toContain('rgb(var(--brand-rgb) / 0.14)')
-      expect(rule).toContain('rgb(var(--brand-cyan-rgb) / 0.13)')
-    }
+    expect(subscriptionRule).toContain('--header-action-rgb: 124 58 237')
+    expect(subscriptionRule).toContain('rgb(var(--header-action-rgb) / 0.24)')
+    expect(subscriptionRule).toContain('rgb(var(--header-action-rgb) / 0.1)')
+    expect(subscriptionHoverRule).toContain('rgb(var(--header-action-rgb) / 0.35)')
+    expect(subscriptionHoverRule).toContain('rgb(var(--header-action-rgb) / 0.16)')
     for (const rule of [compactFocusRule, subscriptionFocusRule]) {
-      expect(rule).toContain('rgb(var(--brand-rgb) / 0.2)')
+      expect(rule).toContain('rgb(var(--header-action-rgb) / 0.22)')
     }
-    for (const rule of [subscriptionDarkRule]) {
-      expect(rule).toContain('rgb(var(--brand-cyan-rgb) / 0.28)')
-      expect(rule).toContain('rgb(var(--brand-rgb) / 0.2)')
-      expect(rule).toContain('rgb(var(--brand-cyan-rgb) / 0.12)')
-    }
-    expect(compactActionRule).toContain('background: transparent')
-    expect(compactHoverRule).toContain('background: rgb(var(--brand-rgb) / 0.08)')
-    expect(compactDarkRule).toContain('background: transparent')
+    expect(subscriptionDarkRule).toContain('rgb(var(--header-action-rgb) / 0.3)')
+    expect(subscriptionDarkRule).toContain('rgb(var(--header-action-rgb) / 0.18)')
+    expect(compactActionRule).toContain('rgb(var(--header-action-rgb) / 0.08)')
+    expect(compactHoverRule).toContain('rgb(var(--header-action-rgb) / 0.14)')
+    expect(compactDarkRule).toContain('rgb(var(--header-action-rgb) / 0.16)')
     expect(mobileHeaderCss).not.toContain('rgba(var(--brand-rgb),')
     expect(mobileHeaderCss).not.toContain('rgba(var(--brand-cyan-rgb),')
   })

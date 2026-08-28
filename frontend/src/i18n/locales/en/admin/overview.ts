@@ -389,6 +389,7 @@ export default {
     },
 
     affiliates: {
+      summaryDescription: 'Review invitation and rebate totals by inviter',
       invitesDescription: 'View site-wide inviter and invitee relationships',
       rebatesDescription: 'View recharge orders that generated affiliate rebates',
       transfersDescription: 'View affiliate quota transfers into account balance',
@@ -400,6 +401,20 @@ export default {
         bronze: 'Pulse',
         silver: 'Orbit',
         gold: 'Core'
+      },
+      summary: {
+        searchPlaceholder: 'Search inviter email, username, user ID, or invite code',
+        sortHint: 'Sort a column to find users with the most or fewest invites',
+        inviter: 'Inviter',
+        invitedCount: 'Invited',
+        qualifiedCount: 'Valid Invites',
+        totalRebate: 'Total Rebate',
+        availableQuota: 'Available',
+        transferredAmount: 'Transferred',
+        rebateRecordCount: 'Rebate Records',
+        lastInvitedAt: 'Last Invite',
+        viewInvites: 'Invite Records',
+        viewRebates: 'Rebate Records'
       },
       records: {
         search: 'Search',
@@ -691,6 +706,8 @@ export default {
       typeBalance: 'Balance (Redeem)',
       typeAffiliateBalance: 'Balance (Affiliate Transfer)',
       typeAdminBalance: 'Balance (Admin)',
+      typeEmptyResponse: 'Empty Response Compensation',
+      emptyResponseUsageLog: 'Usage record #{id}',
       typeConcurrency: 'Concurrency (Redeem)',
       typeAdminConcurrency: 'Concurrency (Admin)',
       typeSubscription: 'Subscription',

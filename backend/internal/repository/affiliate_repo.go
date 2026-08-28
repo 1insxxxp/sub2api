@@ -313,6 +313,75 @@ LEFT JOIN page_records ON TRUE
 LEFT JOIN inviter_progress ON inviter_progress.user_id = page_records.inviter_id
 %[6]s`
 
+const affiliateInviterSummariesSQL = `
+WITH inviter_summaries AS MATERIALIZED (
+    SELECT inviter_aff.user_id AS inviter_id,
+           COALESCE(inviter.email, '') AS inviter_email,
+           COALESCE(inviter.username, '') AS inviter_username,
+           inviter_aff.aff_code,
+           COUNT(invitee_aff.user_id)::integer AS invited_count,
+           COUNT(invitee_aff.user_id) FILTER (
+               WHERE invitee_aff.qualifying_payment_amount >= %[1]s
+           )::integer AS qualified_invitee_count,
+           inviter_aff.aff_history_quota::double precision AS total_rebate,
+           (inviter_aff.aff_quota + COALESCE(matured.matured_frozen_quota, 0))::double precision AS available_quota,
+           COALESCE(transfers.transferred_amount, 0)::double precision AS transferred_amount,
+           COALESCE(rebates.rebate_record_count, 0)::integer AS rebate_record_count,
+           MAX(invitee_aff.created_at) AS last_invited_at
+    FROM user_affiliates inviter_aff
+    JOIN users inviter ON inviter.id = inviter_aff.user_id
+    JOIN user_affiliates invitee_aff ON invitee_aff.inviter_id = inviter_aff.user_id
+    LEFT JOIN (
+        SELECT user_id, COALESCE(SUM(amount), 0)::double precision AS matured_frozen_quota
+        FROM user_affiliate_ledger
+        WHERE action = 'accrue' AND frozen_until IS NOT NULL AND frozen_until <= NOW()
+        GROUP BY user_id
+    ) matured ON matured.user_id = inviter_aff.user_id
+    LEFT JOIN (
+        SELECT user_id, COALESCE(SUM(amount), 0)::double precision AS transferred_amount
+        FROM user_affiliate_ledger
+        WHERE action = 'transfer'
+        GROUP BY user_id
+    ) transfers ON transfers.user_id = inviter_aff.user_id
+    LEFT JOIN (
+        SELECT user_id, COUNT(*)::integer AS rebate_record_count
+        FROM user_affiliate_ledger
+        WHERE action = 'accrue'
+        GROUP BY user_id
+    ) rebates ON rebates.user_id = inviter_aff.user_id
+    GROUP BY inviter_aff.user_id, inviter.email, inviter.username, inviter_aff.aff_code,
+             inviter_aff.aff_history_quota, inviter_aff.aff_quota,
+             matured.matured_frozen_quota, transfers.transferred_amount, rebates.rebate_record_count
+),
+matched_records AS MATERIALIZED (
+    SELECT * FROM inviter_summaries
+    %[2]s
+),
+record_count AS (
+    SELECT COUNT(*)::bigint AS total_count FROM matched_records
+),
+page_records AS MATERIALIZED (
+    SELECT * FROM matched_records
+    %[3]s
+    LIMIT %[4]s OFFSET %[5]s
+)
+SELECT (page_records.inviter_id IS NOT NULL) AS has_record,
+       COALESCE(page_records.inviter_id, 0),
+       COALESCE(page_records.inviter_email, ''),
+       COALESCE(page_records.inviter_username, ''),
+       COALESCE(page_records.aff_code, ''),
+       COALESCE(page_records.invited_count, 0),
+       COALESCE(page_records.qualified_invitee_count, 0),
+       COALESCE(page_records.total_rebate, 0)::double precision,
+       COALESCE(page_records.available_quota, 0)::double precision,
+       COALESCE(page_records.transferred_amount, 0)::double precision,
+       COALESCE(page_records.rebate_record_count, 0),
+       page_records.last_invited_at,
+       record_count.total_count
+FROM record_count
+LEFT JOIN page_records ON TRUE
+%[6]s`
+
 type affiliateQueryExecer interface {
 	QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error)
 	ExecContext(ctx context.Context, query string, args ...any) (sql.Result, error)
@@ -1296,6 +1365,72 @@ LIMIT $2`, lastUserID, batchSize)
 
 func (r *affiliateRepository) ListAffiliateInviteRecords(ctx context.Context, filter service.AffiliateRecordFilter) ([]service.AffiliateInviteRecord, int64, error) {
 	return r.ListAffiliateInviteRecordsWithQualification(ctx, filter, service.AffiliateQualificationAmountDefault)
+}
+
+func (r *affiliateRepository) ListAffiliateInviterSummaries(ctx context.Context, filter service.AffiliateRecordFilter, qualificationAmount float64) ([]service.AffiliateInviterSummary, int64, error) {
+	client := clientFromContext(ctx, r.client)
+	where, args := buildAffiliateRecordWhere(filter, "", []string{
+		"inviter_email", "inviter_username", "inviter_id::text", "aff_code",
+	})
+	orderBy := buildAffiliateRecordOrderBy(filter, map[string]string{
+		"inviter":                 "matched_records.inviter_email",
+		"invited_count":           "matched_records.invited_count",
+		"qualified_invitee_count": "matched_records.qualified_invitee_count",
+		"total_rebate":            "matched_records.total_rebate",
+		"available_quota":         "matched_records.available_quota",
+		"transferred_amount":      "matched_records.transferred_amount",
+		"rebate_record_count":     "matched_records.rebate_record_count",
+		"last_invited_at":         "matched_records.last_invited_at",
+	}, "matched_records.invited_count", "matched_records.inviter_id")
+	resultOrderBy := strings.ReplaceAll(orderBy, "matched_records.", "page_records.")
+	args = append(args, qualificationAmount)
+	qualificationPlaceholder := "$" + fmt.Sprint(len(args))
+	args = append(args, filter.PageSize, (filter.Page-1)*filter.PageSize)
+	query := fmt.Sprintf(
+		affiliateInviterSummariesSQL,
+		qualificationPlaceholder,
+		where,
+		orderBy,
+		"$"+fmt.Sprint(len(args)-1),
+		"$"+fmt.Sprint(len(args)),
+		resultOrderBy,
+	)
+	rows, err := client.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer func() { _ = rows.Close() }()
+
+	items := make([]service.AffiliateInviterSummary, 0)
+	var total int64
+	for rows.Next() {
+		var item service.AffiliateInviterSummary
+		var hasRecord bool
+		if err := rows.Scan(
+			&hasRecord,
+			&item.InviterID,
+			&item.InviterEmail,
+			&item.InviterUsername,
+			&item.AffCode,
+			&item.InvitedCount,
+			&item.QualifiedInviteeCount,
+			&item.TotalRebate,
+			&item.AvailableQuota,
+			&item.TransferredAmount,
+			&item.RebateRecordCount,
+			&item.LastInvitedAt,
+			&total,
+		); err != nil {
+			return nil, 0, err
+		}
+		if hasRecord {
+			items = append(items, item)
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return nil, 0, err
+	}
+	return items, total, nil
 }
 
 func (r *affiliateRepository) ListAffiliateInviteRecordsWithQualification(ctx context.Context, filter service.AffiliateRecordFilter, qualificationAmount float64) ([]service.AffiliateInviteRecord, int64, error) {

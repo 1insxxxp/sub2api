@@ -421,9 +421,9 @@ func grokEncryptedContentStripRetried(ctx context.Context) bool {
 	return v
 }
 
-// stripAnthropicThinkingSignatures removes thinking.signature from Claude
-// history so a different Grok OAuth account can accept multi-turn tool
-// continuations after decrypt failures. Returns ok=false when nothing changed.
+// stripAnthropicThinkingSignatures removes provider-bound thinking.signature
+// values from Claude history so an account-switched upstream can accept the
+// remaining text and tool continuation. Returns ok=false when nothing changed.
 func stripAnthropicThinkingSignatures(body []byte) ([]byte, bool) {
 	if len(body) == 0 || !bytes.Contains(body, []byte(`"signature"`)) {
 		return body, false

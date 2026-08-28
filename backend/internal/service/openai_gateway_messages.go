@@ -439,6 +439,23 @@ func (s *OpenAIGatewayService) ForwardAsAnthropic(
 			}
 			return s.ForwardAsAnthropic(markAgentIdentityTaskRecoveryTried(ctx), c, account, body, promptCacheKey, defaultMappedModel)
 		}
+		// OpenAI encrypted reasoning is bound to the upstream account that created
+		// it. A pooled conversation can move to another OAuth/API-key account, at
+		// which point replaying an Anthropic thinking.signature returns 400. Retry
+		// once on the same account without the non-portable signature while keeping
+		// assistant text and tool-call history intact. This must run before custom
+		// error passthrough rules commit the recoverable 400 to the client.
+		if account.Platform == PlatformOpenAI &&
+			isOpenAICompatInvalidEncryptedContentResponse(resp.StatusCode, respBody) &&
+			!openAICompatEncryptedContentStripRetried(ctx) {
+			if strippedBody, ok := stripAnthropicThinkingSignatures(body); ok {
+				logger.L().Info("openai messages: retrying after stripping invalid encrypted reasoning",
+					zap.Int64("account_id", account.ID),
+					zap.String("upstream_model", upstreamModel),
+				)
+				return s.ForwardAsAnthropic(markOpenAICompatEncryptedContentStripRetried(ctx), c, account, strippedBody, promptCacheKey, defaultMappedModel)
+			}
+		}
 		if previousResponseID != "" && (isOpenAICompatPreviousResponseNotFound(resp.StatusCode, upstreamMsg, respBody) || isOpenAICompatPreviousResponseUnsupported(resp.StatusCode, upstreamMsg, respBody)) {
 			if isOpenAICompatPreviousResponseUnsupported(resp.StatusCode, upstreamMsg, respBody) {
 				s.disableOpenAICompatSessionContinuation(ctx, c, account, promptCacheKey)
@@ -531,6 +548,24 @@ func (s *OpenAIGatewayService) ForwardAsAnthropic(
 	}
 
 	return result, handleErr
+}
+
+type openAICompatEncryptedContentStripRetriedKey struct{}
+
+func markOpenAICompatEncryptedContentStripRetried(ctx context.Context) context.Context {
+	return context.WithValue(ctx, openAICompatEncryptedContentStripRetriedKey{}, true)
+}
+
+func openAICompatEncryptedContentStripRetried(ctx context.Context) bool {
+	retried, _ := ctx.Value(openAICompatEncryptedContentStripRetriedKey{}).(bool)
+	return retried
+}
+
+func isOpenAICompatInvalidEncryptedContentResponse(statusCode int, body []byte) bool {
+	if statusCode != http.StatusBadRequest {
+		return false
+	}
+	return strings.EqualFold(strings.TrimSpace(extractUpstreamErrorCode(body)), "invalid_encrypted_content")
 }
 
 func ensureCodexOAuthInstructionsField(reqBody map[string]any) {

@@ -389,6 +389,7 @@ export default {
     },
 
     affiliates: {
+      summaryDescription: '按邀请人查看邀请人数、有效邀请和返利汇总',
       invitesDescription: '查看全站邀请关系和被邀请用户累计返利',
       rebatesDescription: '查看每一笔产生返利的充值订单',
       transfersDescription: '查看返利额度转入账户余额的提取流水',
@@ -400,6 +401,20 @@ export default {
         bronze: '脉冲级',
         silver: '星环级',
         gold: '极核级'
+      },
+      summary: {
+        searchPlaceholder: '搜索邀请人邮箱、用户名、用户 ID 或邀请码',
+        sortHint: '点击列名可查看邀请最多或最少的用户',
+        inviter: '邀请人',
+        invitedCount: '邀请人数',
+        qualifiedCount: '有效邀请',
+        totalRebate: '累计返利',
+        availableQuota: '当前可用',
+        transferredAmount: '已转余额',
+        rebateRecordCount: '返利记录',
+        lastInvitedAt: '最近邀请',
+        viewInvites: '邀请记录',
+        viewRebates: '返利记录'
       },
       records: {
         search: '搜索',
@@ -693,6 +708,8 @@ export default {
       typeBalance: '余额（兑换码）',
       typeAffiliateBalance: '余额（返利转入）',
       typeAdminBalance: '余额（管理员调整）',
+      typeEmptyResponse: '空回补偿',
+      emptyResponseUsageLog: '使用记录 #{id}',
       typeConcurrency: '并发（兑换码）',
       typeAdminConcurrency: '并发（管理员调整）',
       typeSubscription: '订阅',

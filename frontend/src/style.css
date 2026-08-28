@@ -608,6 +608,9 @@
     }
 
     .app-header-mobile-action {
+      --header-action-rgb: 37 99 235;
+      --header-action-strong: rgb(29 78 216);
+      --header-action-strong-dark: rgb(147 197 253);
       display: inline-flex;
       width: var(--app-header-mobile-control-size) !important;
       height: var(--app-header-mobile-control-size) !important;
@@ -617,28 +620,28 @@
       justify-content: center;
       gap: 0 !important;
       padding: 0 !important;
-      border-color: transparent !important;
+      border-color: rgb(var(--header-action-rgb) / 0.2) !important;
       border-radius: 0.5rem !important;
-      color: var(--brand-700) !important;
-      background: transparent !important;
-      box-shadow: none;
+      color: var(--header-action-strong) !important;
+      background: rgb(var(--header-action-rgb) / 0.08) !important;
+      box-shadow: 0 1px 0 rgba(255, 255, 255, 0.74) inset;
     }
 
     .app-header-mobile-action:hover:not(:disabled) {
-      border-color: transparent !important;
-      color: var(--brand-700) !important;
-      background: rgb(var(--brand-rgb) / 0.08) !important;
-      box-shadow: none;
+      border-color: rgb(var(--header-action-rgb) / 0.3) !important;
+      color: var(--header-action-strong) !important;
+      background: rgb(var(--header-action-rgb) / 0.14) !important;
+      box-shadow: 0 1px 0 rgba(255, 255, 255, 0.82) inset;
     }
 
     .app-header-mobile-action:active:not(:disabled) {
-      background: rgb(var(--brand-rgb) / 0.14) !important;
+      background: rgb(var(--header-action-rgb) / 0.2) !important;
     }
 
     .app-header-mobile-action:focus-visible {
       outline: none;
-      background: rgb(var(--brand-rgb) / 0.08) !important;
-      box-shadow: 0 0 0 3px rgb(var(--brand-rgb) / 0.2);
+      background: rgb(var(--header-action-rgb) / 0.14) !important;
+      box-shadow: 0 0 0 3px rgb(var(--header-action-rgb) / 0.22);
     }
 
     .app-header-mobile-action:disabled {
@@ -649,21 +652,46 @@
     }
 
     .dark .app-header-mobile-action {
-      border-color: transparent !important;
-      color: rgb(165 243 252) !important;
-      background: transparent !important;
-      box-shadow: none;
+      border-color: rgb(var(--header-action-rgb) / 0.28) !important;
+      color: var(--header-action-strong-dark) !important;
+      background: rgb(var(--header-action-rgb) / 0.16) !important;
+      box-shadow: 0 1px 0 rgba(255, 255, 255, 0.05) inset;
     }
 
     .dark .app-header-mobile-action:hover:not(:disabled),
     .dark .app-header-mobile-action:focus-visible {
-      background: rgb(var(--brand-cyan-rgb) / 0.1) !important;
+      border-color: rgb(var(--header-action-rgb) / 0.38) !important;
+      background: rgb(var(--header-action-rgb) / 0.24) !important;
     }
 
     .dark .app-header-mobile-action:disabled {
       border-color: transparent !important;
       color: rgb(100 116 139) !important;
       background: transparent !important;
+    }
+
+    .app-header-action-navigation {
+      --header-action-rgb: 37 99 235;
+      --header-action-strong: rgb(29 78 216);
+      --header-action-strong-dark: rgb(147 197 253);
+    }
+
+    .app-header-action-announcements {
+      --header-action-rgb: 245 158 11;
+      --header-action-strong: rgb(180 83 9);
+      --header-action-strong-dark: rgb(253 230 138);
+    }
+
+    .app-header-action-models {
+      --header-action-rgb: 6 182 212;
+      --header-action-strong: rgb(14 116 144);
+      --header-action-strong-dark: rgb(103 232 249);
+    }
+
+    .app-header-action-checkin {
+      --header-action-rgb: 16 185 129;
+      --header-action-strong: rgb(4 120 87);
+      --header-action-strong-dark: rgb(110 231 183);
     }
 
     .app-header-user-trigger {
@@ -690,6 +718,7 @@
     }
 
     .app-header-actions .subscription-progress-trigger {
+      --header-action-rgb: 124 58 237;
       width: var(--app-header-mobile-subscription-width);
       height: var(--app-header-mobile-control-size);
       min-width: var(--app-header-mobile-subscription-width);
@@ -697,21 +726,21 @@
       gap: 0.25rem !important;
       overflow: hidden;
       padding: 0 0.25rem !important;
-      border: 1px solid rgb(var(--brand-rgb) / 0.34) !important;
+      border: 1px solid rgb(var(--header-action-rgb) / 0.24) !important;
       border-radius: 0.5rem !important;
-      color: var(--brand-700) !important;
-      background: linear-gradient(135deg, rgb(var(--brand-rgb) / 0.09), rgb(var(--brand-cyan-rgb) / 0.08)) !important;
-      box-shadow: 0 1px 0 rgba(255, 255, 255, 0.8) inset, 0 4px 12px rgb(var(--brand-rgb) / 0.08);
+      color: rgb(109 40 217) !important;
+      background: rgb(var(--header-action-rgb) / 0.1) !important;
+      box-shadow: 0 1px 0 rgba(255, 255, 255, 0.8) inset;
     }
 
     .app-header-actions .subscription-progress-trigger:hover {
-      border-color: rgb(var(--brand-cyan-rgb) / 0.48) !important;
-      background: linear-gradient(135deg, rgb(var(--brand-rgb) / 0.14), rgb(var(--brand-cyan-rgb) / 0.13)) !important;
+      border-color: rgb(var(--header-action-rgb) / 0.35) !important;
+      background: rgb(var(--header-action-rgb) / 0.16) !important;
     }
 
     .app-header-actions .subscription-progress-trigger:focus-visible {
       outline: none;
-      box-shadow: 0 0 0 3px rgb(var(--brand-rgb) / 0.2);
+      box-shadow: 0 0 0 3px rgb(var(--header-action-rgb) / 0.22);
     }
 
     .app-header-actions .subscription-progress-trigger-status {
@@ -721,26 +750,26 @@
 
     .app-header-actions .subscription-progress-trigger-icon {
       flex-shrink: 0;
-      color: var(--brand-600) !important;
+      color: rgb(124 58 237) !important;
     }
 
     .app-header-actions .subscription-progress-trigger-count {
-      color: var(--brand-700) !important;
+      color: rgb(109 40 217) !important;
     }
 
     .dark .app-header-actions .subscription-progress-trigger {
-      border-color: rgb(var(--brand-cyan-rgb) / 0.28) !important;
-      color: rgb(191 219 254) !important;
-      background: linear-gradient(135deg, rgb(var(--brand-rgb) / 0.2), rgb(var(--brand-cyan-rgb) / 0.12)) !important;
+      border-color: rgb(var(--header-action-rgb) / 0.3) !important;
+      color: rgb(221 214 254) !important;
+      background: rgb(var(--header-action-rgb) / 0.18) !important;
       box-shadow: 0 1px 0 rgba(255, 255, 255, 0.05) inset;
     }
 
     .dark .app-header-actions .subscription-progress-trigger-icon {
-      color: rgb(103 232 249) !important;
+      color: rgb(196 181 253) !important;
     }
 
     .dark .app-header-actions .subscription-progress-trigger-count {
-      color: rgb(191 219 254) !important;
+      color: rgb(221 214 254) !important;
     }
   }
 
