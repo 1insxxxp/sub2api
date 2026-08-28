@@ -502,22 +502,38 @@ func TestPricingService_AntigravityGeminiAliasesUseBasePricing(t *testing.T) {
 	gemini25Flash := &LiteLLMModelPricing{InputCostPerToken: 0.3e-6}
 	gemini3Flash := &LiteLLMModelPricing{InputCostPerToken: 0.5e-6}
 	gemini35Flash := &LiteLLMModelPricing{InputCostPerToken: 1.5e-6}
+	gemini37Flash := &LiteLLMModelPricing{InputCostPerToken: 0.75e-6}
 	gemini3Pro := &LiteLLMModelPricing{InputCostPerToken: 2e-6}
+	gemini31FlashImage := &LiteLLMModelPricing{InputCostPerToken: 0.5e-6}
+	gemini3ProImage := &LiteLLMModelPricing{InputCostPerToken: 2e-6}
 	svc := &PricingService{pricingData: map[string]*LiteLLMModelPricing{
-		"gemini-2.5-flash":     gemini25Flash,
-		"gemini-3-flash":       gemini3Flash,
-		"gemini-3.5-flash":     gemini35Flash,
-		"gemini-3-pro-preview": gemini3Pro,
+		"gemini-2.5-flash":       gemini25Flash,
+		"gemini-3-flash":         gemini3Flash,
+		"gemini-3.5-flash":       gemini35Flash,
+		"gemini-3.7-flash":       gemini37Flash,
+		"gemini-3-pro-preview":   gemini3Pro,
+		"gemini-3.1-flash-image": gemini31FlashImage,
+		"gemini-3-pro-image":     gemini3ProImage,
 	}}
 
 	tests := map[string]*LiteLLMModelPricing{
 		"gemini-2.5-flash-nothinking": gemini25Flash,
 		"gemini-3-flash-agent":        gemini3Flash,
+		"gemini-3-flash-thinking-128": gemini3Flash,
 		"gemini-3.5-flash-low":        gemini35Flash,
 		"gemini-3.5-flash-extra-low":  gemini35Flash,
+		"gemini-3.5-flash-high":       gemini35Flash,
+		"gemini-3.7-flash-high":       gemini37Flash,
+		"gemini-3.7-flash-low":        gemini37Flash,
+		"gemini-3.7-flash-medium":     gemini37Flash,
+		"gemini-3.7-flash-tiered":     gemini37Flash,
 		"gemini-3-pro-high":           gemini3Pro,
 		"gemini-3-pro-low":            gemini3Pro,
 		"gemini-pro-agent":            gemini3Pro,
+		"gemini-3.1-flash-image-2k":   gemini31FlashImage,
+		"gemini-3.1-flash-image-4k":   gemini31FlashImage,
+		"gemini-3-pro-image-2k":       gemini3ProImage,
+		"gemini-3-pro-image-4k":       gemini3ProImage,
 	}
 	for model, expected := range tests {
 		t.Run(model, func(t *testing.T) {

@@ -804,10 +804,14 @@ func normalizeGeminiPricingAlias(model string) string {
 	switch model {
 	case "gemini-2.5-flash-thinking", "gemini-2.5-flash-nothinking":
 		return "gemini-2.5-flash"
-	case "gemini-3-flash-agent":
+	case "gemini-3-flash-agent", "gemini-3-flash-thinking-128":
 		return "gemini-3-flash"
-	case "gemini-3.5-flash-low", "gemini-3.5-flash-extra-low":
+	case "gemini-3.5-flash-low", "gemini-3.5-flash-extra-low", "gemini-3.5-flash-high":
 		return "gemini-3.5-flash"
+	case "gemini-3.1-flash-image-2k", "gemini-3.1-flash-image-4k":
+		return "gemini-3.1-flash-image"
+	case "gemini-3-pro-image-2k", "gemini-3-pro-image-4k":
+		return "gemini-3-pro-image"
 	case "gemini-3-pro-high", "gemini-3-pro-low", "gemini-pro-agent":
 		return "gemini-3-pro-preview"
 	}
@@ -816,6 +820,13 @@ func normalizeGeminiPricingAlias(model string) string {
 	for _, tier := range []string{"-high", "-low", "-medium", "-tiered"} {
 		if model == baseModel+tier {
 			return baseModel
+		}
+	}
+
+	const gemini37BaseModel = "gemini-3.7-flash"
+	for _, tier := range []string{"-high", "-low", "-medium", "-tiered"} {
+		if model == gemini37BaseModel+tier {
+			return gemini37BaseModel
 		}
 	}
 	return model
