@@ -1715,6 +1715,9 @@ func (s *OpenAIGatewayService) handleSSEToJSON(resp *http.Response, c *gin.Conte
 		if compactErr := newOpenAICompactFallbackSignal(c, terminalPayload, msg); compactErr != nil {
 			return nil, compactErr
 		}
+		if failoverErr := s.nonStreamingTerminalFailureFailover(c, resp, account, false, terminalType, terminalPayload, msg); failoverErr != nil {
+			return nil, failoverErr
+		}
 		return nil, s.writeOpenAINonStreamingProtocolError(resp, c, msg)
 	}
 	if !outcomeCollector.Snapshot().StreamCompleted {

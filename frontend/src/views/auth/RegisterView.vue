@@ -297,6 +297,7 @@
           :aff-code="formData.aff_code"
           :affiliate-referral-locked="affiliateReferralLocked"
           :allow-route-affiliate-fallback="affiliateReferralLegacyFallback"
+          :promo-code="formData.promo_code"
           :github-enabled="githubOAuthEnabled"
           :google-enabled="googleOAuthEnabled"
           :show-divider="false"
@@ -309,6 +310,7 @@
           :aff-code="formData.aff_code"
           :affiliate-referral-locked="affiliateReferralLocked"
           :allow-route-affiliate-fallback="affiliateReferralLegacyFallback"
+          :promo-code="formData.promo_code"
           :show-divider="false"
           @start="handleOAuthStart"
         />
