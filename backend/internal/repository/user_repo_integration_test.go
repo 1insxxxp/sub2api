@@ -555,6 +555,20 @@ func (s *UserRepoSuite) TestUpdateBalance_Negative() {
 	s.Require().InDelta(7.0, got.Balance, 1e-6)
 }
 
+func (s *UserRepoSuite) TestUpdateBalance_NegativeClampsGiftBalance() {
+	user := s.mustCreateUser(&service.User{Email: "balneg-gift@test.com", Balance: 10})
+	s.Require().NoError(s.client.User.UpdateOneID(user.ID).SetGiftBalance(8).Exec(s.ctx))
+
+	err := s.repo.UpdateBalance(s.ctx, user.ID, -7)
+	s.Require().NoError(err)
+
+	got, err := s.repo.GetByID(s.ctx, user.ID)
+	s.Require().NoError(err)
+	s.Require().Equal(3.0, got.Balance)
+	s.Require().Equal(3.0, got.GiftBalance)
+	s.Require().LessOrEqual(got.GiftBalance, got.Balance)
+}
+
 func (s *UserRepoSuite) TestApplyRedeemBalanceAdjustment_ConcurrentNeverNegative() {
 	user := s.mustCreateUser(&service.User{Email: "redeem-bal-concurrent@test.com", Balance: 10})
 

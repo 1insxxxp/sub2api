@@ -850,20 +850,31 @@ func (r *userRepository) filterUsersByAttributes(ctx context.Context, attrs map[
 }
 
 func (r *userRepository) UpdateBalance(ctx context.Context, id int64, amount float64) error {
-	client := clientFromContext(ctx, r.client)
-	update := client.User.Update().Where(dbuser.IDEQ(id)).AddBalance(amount)
-	// Track cumulative recharge amount for percentage-based notifications
-	if amount > 0 {
-		update = update.AddTotalRecharged(amount)
-	}
-	n, err := update.Save(ctx)
+	const updateSQL = `
+		UPDATE users
+		SET balance = balance + $1,
+			gift_balance = LEAST(gift_balance, GREATEST(balance + $1, 0)),
+			total_recharged = total_recharged + CASE WHEN $1 > 0 THEN $1 ELSE 0 END,
+			updated_at = NOW()
+		WHERE id = $2 AND deleted_at IS NULL
+		RETURNING id
+	`
+	rows, err := clientFromContext(ctx, r.client).QueryContext(ctx, updateSQL, amount, id)
 	if err != nil {
 		return translatePersistenceError(err, service.ErrUserNotFound, nil)
 	}
-	if n == 0 {
+	defer rows.Close()
+	if !rows.Next() {
+		if rowsErr := rows.Err(); rowsErr != nil {
+			return rowsErr
+		}
 		return service.ErrUserNotFound
 	}
-	return nil
+	var updatedID int64
+	if err := rows.Scan(&updatedID); err != nil {
+		return err
+	}
+	return rows.Err()
 }
 
 // CreditGiftBalance atomically credits spendable and gift balances without

@@ -59,6 +59,33 @@ func TestBatchImageSettlementService_SettlesAndChargesSuccessfulImagesOnly(t *te
 	require.Equal(t, 1, usageLogs.calls)
 }
 
+func TestBatchImageSettlementService_UsesOneQuantizedActualCostEverywhere(t *testing.T) {
+	repo := newFakeBatchImageRepository()
+	job := testSettlingBatchImageJob("imgbatch_quantized_cost")
+	job.SuccessCount = 1
+	job.FailCount = 0
+	job.ItemCount = 1
+	repo.jobs[job.BatchID] = job
+	billing := &fakeBatchImageBillingRepo{captureResult: &BatchImageBalanceHoldResult{
+		Applied: true, ThresholdExemptCost: 0.00007813,
+	}}
+	usageLogs := &batchSettlementUsageLogRepo{}
+	svc := &BatchImageSettlementService{
+		Repo: repo, BillingRepo: billing, Pricing: &fakeBatchImagePricingResolver{unitPrice: 0.000078125},
+		UsageLogRepo: usageLogs,
+	}
+
+	result, err := svc.Settle(context.Background(), job.BatchID)
+	require.NoError(t, err)
+	require.Equal(t, 0.00007813, result.ActualCost)
+	require.Len(t, billing.captures, 1)
+	require.Equal(t, result.ActualCost, billing.captures[0].ActualAmount)
+	require.Equal(t, result.ActualCost, usageLogs.lastLog.ActualCost)
+	require.Equal(t, result.ActualCost, usageLogs.lastLog.ThresholdExemptCost)
+	require.NotNil(t, repo.jobs[job.BatchID].ActualCost)
+	require.Equal(t, result.ActualCost, *repo.jobs[job.BatchID].ActualCost)
+}
+
 type batchSettlementUsageLogRepo struct {
 	UsageLogRepository
 	lastLog   *UsageLog

@@ -157,13 +157,13 @@ func (r *usageBillingRepository) applyBatchImageBalanceHold(
 	if r == nil || r.db == nil {
 		return nil, errors.New("usage billing repository db is nil")
 	}
-	cmd.Normalize()
-	if cmd.RequestID == "" {
-		return nil, service.ErrUsageBillingRequestIDRequired
-	}
 	if math.IsNaN(cmd.HoldAmount) || math.IsInf(cmd.HoldAmount, 0) || cmd.HoldAmount < 0 ||
 		math.IsNaN(cmd.ActualAmount) || math.IsInf(cmd.ActualAmount, 0) || cmd.ActualAmount < 0 {
 		return nil, errors.New("batch image billing amounts must be finite and nonnegative")
+	}
+	cmd.Normalize()
+	if cmd.RequestID == "" {
+		return nil, service.ErrUsageBillingRequestIDRequired
 	}
 
 	tx, err := r.db.BeginTx(ctx, nil)

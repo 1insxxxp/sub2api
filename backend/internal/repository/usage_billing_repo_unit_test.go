@@ -66,6 +66,28 @@ func TestUsageBillingRepositoryApply_RejectsEveryNonFiniteMonetaryFieldBeforeTra
 	}
 }
 
+func TestUsageBillingRepositoryBatchHoldRejectsSubQuantumNegativeBeforeTransaction(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		set  func(*service.BatchImageBalanceHoldCommand)
+	}{
+		{name: "hold", set: func(cmd *service.BatchImageBalanceHoldCommand) { cmd.HoldAmount = -0.000000001 }},
+		{name: "actual", set: func(cmd *service.BatchImageBalanceHoldCommand) { cmd.ActualAmount = -0.000000001 }},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			db, mock, err := sqlmock.New()
+			require.NoError(t, err)
+			defer func() { _ = db.Close() }()
+			cmd := &service.BatchImageBalanceHoldCommand{RequestID: "negative-hold", APIKeyID: 2, UserID: 1}
+			tc.set(cmd)
+
+			_, err = (&usageBillingRepository{db: db}).ReserveBatchImageBalance(context.Background(), cmd)
+			require.ErrorContains(t, err, "finite and nonnegative")
+			require.NoError(t, mock.ExpectationsWereMet(), "the repository must reject before BEGIN")
+		})
+	}
+}
+
 func TestDeductUsageBillingBalance_PreservesRemainingGiftAcrossOverdraft(t *testing.T) {
 	ctx := context.Background()
 	db, mock, err := sqlmock.New()

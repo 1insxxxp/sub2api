@@ -176,6 +176,13 @@ func postUsageBilling(ctx context.Context, requestID string, usageLog *UsageLog,
 	if usageLog == nil || p == nil || p.Cost == nil || deps == nil || deps.usageLogRepo == nil {
 		return false, ErrUsageBillingTransactionRunnerRequired
 	}
+	// A cache-backed production instance must use the unified billing repository.
+	// Otherwise the database could commit before a Redis repair fails, leaving a
+	// stale eligibility decision with no durable retry. Cacheless lightweight
+	// callers retain the atomic legacy compatibility path below.
+	if deps.billingCacheService != nil && deps.billingCacheService.cache != nil {
+		return false, ErrUsageBillingSideEffectRepositoryRequired
+	}
 	if err := ValidateUsageBillingActualCost(p.Cost.ActualCost); err != nil {
 		return false, err
 	}
@@ -445,6 +452,9 @@ func applyUsageBilling(ctx context.Context, requestID string, usageLog *UsageLog
 	}
 
 	cmd := buildUsageBillingCommand(requestID, usageLog, p)
+	if p.Cost == nil {
+		return postUsageBilling(ctx, requestID, usageLog, p, deps)
+	}
 	// The fingerprint above is derived from the raw amount for replay compatibility.
 	// Persisted wallet and usage-log amounts use the same NUMERIC(20,8) value.
 	p.Cost.ActualCost = QuantizeUsageBillingAmount(p.Cost.ActualCost)

@@ -138,7 +138,7 @@ func (s *BatchImageSettlementService) Settle(ctx context.Context, batchID string
 		}
 		return nil, err
 	}
-	actualCost := float64(job.SuccessCount) * unitPrice
+	actualCost := QuantizeUsageBillingAmount(float64(job.SuccessCount) * unitPrice)
 	result.ActualCost = actualCost
 	holdAmount := job.EstimatedCost
 	if job.HoldAmount != nil {

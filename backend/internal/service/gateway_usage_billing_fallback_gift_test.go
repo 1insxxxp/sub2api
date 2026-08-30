@@ -266,7 +266,7 @@ func TestApplyUsageBilling_LegacyFallbackDuplicateRequestIsAtomicAndIdempotent(t
 	require.InDelta(t, 10, persisted.ThresholdExemptCost, 0.00000001)
 }
 
-func TestApplyUsageBilling_LegacySubscriptionUpdatesCacheAndReplayInvalidates(t *testing.T) {
+func TestApplyUsageBilling_LegacyFallbackFailsClosedWhenBillingCacheConfigured(t *testing.T) {
 	wallet := &transactionalFallbackWalletRepo{balance: 20, gift: 10}
 	usageRepo := newAtomicFallbackUsageRepo(wallet)
 	cache := &legacyBillingCacheStub{}
@@ -279,21 +279,14 @@ func TestApplyUsageBilling_LegacySubscriptionUpdatesCacheAndReplayInvalidates(t 
 		Subscription: &UserSubscription{ID: 4, GroupID: groupID}, IsSubscriptionBill: true,
 	}
 
-	first, err := applyUsageBilling(context.Background(), "legacy-subscription-cache", &UsageLog{APIKeyID: 2, ActualCost: 3}, params, deps, nil)
-	require.NoError(t, err)
-	require.True(t, first)
-	require.Equal(t, 1, cache.updateCalls)
-	require.Equal(t, int64(1), cache.updatedUserID)
-	require.Equal(t, groupID, cache.updatedGroupID)
-	require.Equal(t, 3.0, cache.updatedCost)
-
-	second, err := applyUsageBilling(context.Background(), "legacy-subscription-cache", &UsageLog{APIKeyID: 2, ActualCost: 3}, params, deps, nil)
-	require.NoError(t, err)
-	require.False(t, second)
-	require.Equal(t, 1, cache.updateCalls, "replay must not double-increment cached usage")
-	require.Equal(t, 1, cache.invalidateCalls)
-	require.Equal(t, int64(1), cache.invalidatedUserID)
-	require.Equal(t, groupID, cache.invalidatedGroupID)
+	applied, err := applyUsageBilling(context.Background(), "legacy-subscription-cache", &UsageLog{APIKeyID: 2, ActualCost: 3}, params, deps, nil)
+	require.ErrorIs(t, err, ErrUsageBillingSideEffectRepositoryRequired)
+	require.False(t, applied)
+	require.Zero(t, usageRepo.transactionCalls)
+	require.Zero(t, cache.updateCalls)
+	require.Zero(t, cache.invalidateCalls)
+	require.InDelta(t, 20, wallet.balance, 0.00000001)
+	require.InDelta(t, 10, wallet.gift, 0.00000001)
 }
 
 func TestApplyUsageBilling_LegacyFallbackRollsBackWalletAndLogOnAttributionFailure(t *testing.T) {

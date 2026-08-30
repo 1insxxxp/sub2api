@@ -86,6 +86,13 @@ func TestApplyUsageBilling_QuantizesUsageLogActualCostWithWalletCommand(t *testi
 	require.Equal(t, repo.lastCmd.BalanceCost, usageLog.ActualCost)
 }
 
+func TestApplyUsageBilling_NilCostReturnsErrorInsteadOfPanicking(t *testing.T) {
+	applied, err := applyUsageBilling(context.Background(), "nil-cost", &UsageLog{}, &postUsageBillingParams{}, &billingDeps{}, nil)
+
+	require.False(t, applied)
+	require.ErrorIs(t, err, ErrUsageBillingTransactionRunnerRequired)
+}
+
 func TestClampUsageBillingThresholdExemptCost_DoesNotExceedPersistedActualCost(t *testing.T) {
 	const (
 		actualCost = 0.000078125
