@@ -5,6 +5,7 @@ package repository
 import (
 	"context"
 	"database/sql"
+	"math"
 	"testing"
 
 	"github.com/DATA-DOG/go-sqlmock"
@@ -16,9 +17,9 @@ import (
 const (
 	lockedGiftBalanceDeductSQL = `(?s)WITH wallet AS \(.*SELECT.*balance.*gift_balance.*FROM users.*FOR UPDATE.*\).*UPDATE users.*SET balance =.*gift_balance =.*RETURNING.*balance.*sufficient.*gift_used`
 	exactGiftBalanceUpdateSQL  = `(?s)gift_balance = GREATEST\(wallet\.old_gift_balance - \$1, 0\),`
-	reserveBatchImageHoldSQL   = `(?s)UPDATE users\s+SET balance = balance - \$1,\s+frozen_balance = COALESCE\(frozen_balance, 0\) \+ \$1,\s+updated_at = NOW\(\)\s+WHERE id = \$2 AND deleted_at IS NULL AND balance >= \$1\s+RETURNING balance, frozen_balance`
-	captureBatchImageHoldSQL   = `(?s)UPDATE users\s+SET balance = balance\s+\+ CASE WHEN \$1 > \$2 THEN \$1 - \$2 ELSE 0 END\s+- CASE WHEN \$2 > \$1 THEN \$2 - \$1 ELSE 0 END,\s+frozen_balance = COALESCE\(frozen_balance, 0\) - \$1,\s+updated_at = NOW\(\)\s+WHERE id = \$3 AND deleted_at IS NULL AND COALESCE\(frozen_balance, 0\) >= \$1\s+RETURNING balance, frozen_balance`
-	releaseBatchImageHoldSQL   = `(?s)UPDATE users\s+SET balance = balance \+ \$1,\s+frozen_balance = COALESCE\(frozen_balance, 0\) - \$1,\s+updated_at = NOW\(\)\s+WHERE id = \$2 AND deleted_at IS NULL AND COALESCE\(frozen_balance, 0\) >= \$1\s+RETURNING balance, frozen_balance`
+	reserveBatchImageHoldSQL   = `(?s)WITH wallet_raw AS \(.*gift_balance.*frozen_balance.*frozen_gift_balance.*FOR UPDATE.*UPDATE users AS u.*gift_balance = wallet\.old_gift_balance - LEAST.*frozen_gift_balance = wallet\.old_frozen_gift_balance \+ LEAST.*RETURNING u\.balance, u\.frozen_balance`
+	captureBatchImageHoldSQL   = `(?s)WITH wallet_raw AS \(.*gift_balance.*frozen_balance.*frozen_gift_balance.*FOR UPDATE.*gift_in_hold.*gift_used.*UPDATE users AS u.*gift_balance = allocation\.old_gift_balance \+.*frozen_gift_balance = GREATEST.*RETURNING u\.balance, u\.frozen_balance, allocation\.gift_used`
+	releaseBatchImageHoldSQL   = `(?s)WITH wallet_raw AS \(.*gift_balance.*frozen_balance.*frozen_gift_balance.*FOR UPDATE.*gift_release.*UPDATE users AS u.*gift_balance = allocation\.old_gift_balance \+ allocation\.gift_release.*frozen_gift_balance = GREATEST.*RETURNING u\.balance, u\.frozen_balance`
 	userExistsForBillingSQL    = `(?s)SELECT 1\s+FROM users\s+WHERE id = \$1 AND deleted_at IS NULL`
 )
 
@@ -241,13 +242,14 @@ func TestCaptureUsageBillingBatchImageBalance_ReleasesRemainder(t *testing.T) {
 	require.NoError(t, err)
 	mock.ExpectQuery(captureBatchImageHoldSQL).
 		WithArgs(1.0, 0.25, int64(42)).
-		WillReturnRows(sqlmock.NewRows([]string{"balance", "frozen_balance"}).AddRow(9.75, 0.0))
+		WillReturnRows(sqlmock.NewRows([]string{"balance", "frozen_balance", "gift_used"}).AddRow(9.75, 0.0, 0.25))
 	mock.ExpectCommit()
 
 	result, err := captureUsageBillingBatchImageBalance(ctx, tx, &service.BatchImageBalanceHoldCommand{UserID: 42, HoldAmount: 1, ActualAmount: 0.25})
 	require.NoError(t, err)
 	require.InDelta(t, 9.75, *result.NewBalance, 0.000001)
 	require.InDelta(t, 0.0, *result.FrozenBalance, 0.000001)
+	require.InDelta(t, 0.25, result.ThresholdExemptCost, 0.000001)
 	require.NoError(t, tx.Commit())
 	require.NoError(t, mock.ExpectationsWereMet())
 }
@@ -319,4 +321,19 @@ func TestReleaseUsageBillingBatchImageBalance_SkipsWhenHoldNeverReserved(t *test
 	require.Nil(t, result.FrozenBalance)
 	require.NoError(t, tx.Commit())
 	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestUsageBillingRepositoryBatchImage_RejectsNonFiniteAmountsBeforeClaim(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer func() { _ = db.Close() }()
+	repo := &usageBillingRepository{db: db}
+
+	for _, amount := range []float64{math.NaN(), math.Inf(1), -1} {
+		_, err := repo.ReserveBatchImageBalance(context.Background(), &service.BatchImageBalanceHoldCommand{
+			RequestID: "invalid-batch-amount", APIKeyID: 1, UserID: 2, HoldAmount: amount,
+		})
+		require.Error(t, err)
+	}
+	require.NoError(t, mock.ExpectationsWereMet(), "invalid amounts must not claim an idempotency key")
 }

@@ -630,6 +630,66 @@ func (s *UserRepoSuite) TestDeductBalance_AllowsOverdraft() {
 	s.Require().InDelta(-5.0, got.Balance, 1e-6, "Balance should be -5.0 after overdraft")
 }
 
+func (s *UserRepoSuite) TestDeductBalanceWithGiftAllocation() {
+	tests := []struct {
+		name        string
+		balance     float64
+		gift        any
+		amount      float64
+		wantBalance float64
+		wantGift    float64
+		wantExempt  float64
+	}{
+		{name: "full gift", balance: 20, gift: 20.0, amount: 12, wantBalance: 8, wantGift: 8, wantExempt: 12},
+		{name: "mixed gift", balance: 20, gift: 10.0, amount: 12, wantBalance: 8, wantGift: 0, wantExempt: 10},
+		{name: "no gift", balance: 20, gift: 0.0, amount: 12, wantBalance: 8, wantGift: 0, wantExempt: 0},
+		{name: "overdraft", balance: 5, gift: 3.0, amount: 12, wantBalance: -7, wantGift: 0, wantExempt: 3},
+		{name: "transitional gift exceeds balance", balance: 5, gift: 10.0, amount: 7, wantBalance: -2, wantGift: 3, wantExempt: 7},
+		{name: "nan gift is sanitized", balance: 10, gift: "NaN", amount: 3, wantBalance: 7, wantGift: 0, wantExempt: 0},
+	}
+
+	for _, tt := range tests {
+		s.Run(tt.name, func() {
+			user := s.mustCreateUser(&service.User{Email: "deduct-gift-" + strings.ReplaceAll(tt.name, " ", "-") + "@test.com", Balance: tt.balance})
+			_, err := integrationDB.ExecContext(s.ctx, "UPDATE users SET gift_balance = $1 WHERE id = $2", tt.gift, user.ID)
+			s.Require().NoError(err)
+
+			result, err := s.repo.DeductBalanceWithGiftAllocation(s.ctx, user.ID, tt.amount)
+			s.Require().NoError(err)
+			s.Require().InDelta(tt.wantBalance, result.NewBalance, 0.00000001)
+			s.Require().InDelta(tt.wantExempt, result.ThresholdExemptCost, 0.00000001)
+
+			var balance, gift float64
+			s.Require().NoError(integrationDB.QueryRowContext(s.ctx,
+				"SELECT balance, gift_balance FROM users WHERE id = $1", user.ID,
+			).Scan(&balance, &gift))
+			s.Require().InDelta(tt.wantBalance, balance, 0.00000001)
+			s.Require().InDelta(tt.wantGift, gift, 0.00000001)
+		})
+	}
+}
+
+func (s *UserRepoSuite) TestDeductBalanceWithGiftAllocation_QuantizesAndRejectsInvalidAmounts() {
+	user := s.mustCreateUser(&service.User{Email: "deduct-gift-quantize@test.com", Balance: 10})
+	_, err := integrationDB.ExecContext(s.ctx, "UPDATE users SET gift_balance = 10 WHERE id = $1", user.ID)
+	s.Require().NoError(err)
+
+	result, err := s.repo.DeductBalanceWithGiftAllocation(s.ctx, user.ID, 0.123456789)
+	s.Require().NoError(err)
+	s.Require().Equal(0.12345679, result.ThresholdExemptCost)
+	s.Require().InDelta(9.87654321, result.NewBalance, 0.000000001)
+
+	for _, invalid := range []float64{-1, math.NaN(), math.Inf(1)} {
+		_, err := s.repo.DeductBalanceWithGiftAllocation(s.ctx, user.ID, invalid)
+		s.Require().Error(err)
+	}
+}
+
+func (s *UserRepoSuite) TestDeductBalanceWithGiftAllocation_NotFound() {
+	_, err := s.repo.DeductBalanceWithGiftAllocation(s.ctx, 9_000_000_000_000, 1)
+	s.Require().ErrorIs(err, service.ErrUserNotFound)
+}
+
 func (s *UserRepoSuite) TestDeductAvailableBalance_ClampsToNonnegativeBalance() {
 	for _, tc := range []struct {
 		name        string

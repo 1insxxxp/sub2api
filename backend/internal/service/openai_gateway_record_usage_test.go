@@ -71,7 +71,7 @@ func TestOpenAIGatewayServiceRecordUsage_RejectsNilInput(t *testing.T) {
 
 func TestRecordCyberPolicyUsageLog_BillsRealUpstreamTokens(t *testing.T) {
 	usageRepo := &openAIRecordUsageLogRepoStub{inserted: true}
-	userRepo := &openAIRecordUsageUserRepoStub{}
+	userRepo := &openAIRecordUsageUserRepoStub{thresholdExemptCost: 0.00000001}
 	subRepo := &openAIRecordUsageSubRepoStub{}
 	svc := newOpenAIRecordUsageServiceForTest(usageRepo, userRepo, subRepo, nil)
 	usage := OpenAIUsage{InputTokens: 1200, OutputTokens: 300}
@@ -101,6 +101,7 @@ func TestRecordCyberPolicyUsageLog_BillsRealUpstreamTokens(t *testing.T) {
 	require.InDelta(t, expected.ActualCost, usageRepo.lastLog.ActualCost, 1e-12)
 	require.Equal(t, 1, userRepo.deductCalls, "按真实 token 扣费，与 WS/正常请求一致")
 	require.InDelta(t, expected.ActualCost, userRepo.lastAmount, 1e-12)
+	require.InDelta(t, 0.00000001, usageRepo.lastLog.ThresholdExemptCost, 1e-12)
 }
 
 func TestRecordCyberPolicyUsageLog_NonStreamZeroTokensZeroCost(t *testing.T) {
@@ -141,10 +142,12 @@ func TestRecordCyberPolicyUsageLog_SkipsWhenIncomplete(t *testing.T) {
 type openAIRecordUsageUserRepoStub struct {
 	UserRepository
 
-	deductCalls int
-	deductErr   error
-	lastAmount  float64
-	lastCtxErr  error
+	deductCalls         int
+	deductErr           error
+	lastAmount          float64
+	lastCtxErr          error
+	newBalance          float64
+	thresholdExemptCost float64
 }
 
 func (s *openAIRecordUsageUserRepoStub) DeductBalance(ctx context.Context, id int64, amount float64) error {
@@ -152,6 +155,13 @@ func (s *openAIRecordUsageUserRepoStub) DeductBalance(ctx context.Context, id in
 	s.lastAmount = amount
 	s.lastCtxErr = ctx.Err()
 	return s.deductErr
+}
+
+func (s *openAIRecordUsageUserRepoStub) DeductBalanceWithGiftAllocation(ctx context.Context, id int64, amount float64) (BalanceDeductionResult, error) {
+	s.deductCalls++
+	s.lastAmount = amount
+	s.lastCtxErr = ctx.Err()
+	return BalanceDeductionResult{NewBalance: s.newBalance, ThresholdExemptCost: s.thresholdExemptCost}, s.deductErr
 }
 
 func (s *openAIRecordUsageUserRepoStub) AdjustBalance(ctx context.Context, id int64, delta float64) (BalanceChange, error) {

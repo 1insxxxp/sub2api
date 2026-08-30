@@ -167,6 +167,13 @@ func (r *usageLogRepository) Create(ctx context.Context, log *service.UsageLog) 
 	return r.createBatched(ctx, log)
 }
 
+func (r *usageLogRepository) UpdateThresholdExemptCost(ctx context.Context, usageLogID int64, amount float64) error {
+	_, err := clientFromContext(ctx, r.client).UsageLog.UpdateOneID(usageLogID).
+		SetThresholdExemptCost(amount).
+		Save(ctx)
+	return translatePersistenceError(err, service.ErrUsageLogNotFound, nil)
+}
+
 func (r *usageLogRepository) CreateBestEffort(ctx context.Context, log *service.UsageLog) error {
 	if log == nil {
 		return nil

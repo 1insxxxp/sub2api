@@ -33,6 +33,8 @@ type userRepository struct {
 	sql    sqlExecutor
 }
 
+var _ service.GiftAllocatingBalanceRepository = (*userRepository)(nil)
+
 var _ service.RedeemUserAdjustmentRepository = (*userRepository)(nil)
 var _ service.OrdinaryBalanceRepository = (*userRepository)(nil)
 var _ service.GiftBalanceRepository = (*userRepository)(nil)
@@ -952,6 +954,68 @@ func (r *userRepository) DeductBalance(ctx context.Context, id int64, amount flo
 		return service.ErrUserNotFound
 	}
 	return nil
+}
+
+// DeductBalanceWithGiftAllocation deducts balance with the same overdraft
+// semantics as DeductBalance while consuming gift balance first. The locked
+// wallet snapshot keeps the total deduction and its gift attribution atomic.
+func (r *userRepository) DeductBalanceWithGiftAllocation(ctx context.Context, id int64, amount float64) (service.BalanceDeductionResult, error) {
+	if math.IsNaN(amount) || math.IsInf(amount, 0) || amount < 0 {
+		return service.BalanceDeductionResult{}, errors.New("deduction amount must be finite and nonnegative")
+	}
+	amount = service.QuantizeUsageBillingAmount(amount)
+	const updateSQL = `
+		WITH wallet AS (
+			SELECT
+				id,
+				balance,
+				CASE
+					WHEN gift_balance IS NULL OR gift_balance::text = 'NaN' OR gift_balance < 0 THEN 0
+					ELSE gift_balance
+				END AS old_gift_balance
+			FROM users
+			WHERE id = $2 AND deleted_at IS NULL
+			FOR UPDATE
+		), updated AS (
+			UPDATE users AS u
+			SET
+				balance = wallet.balance - $1,
+				gift_balance = GREATEST(wallet.old_gift_balance - $1, 0),
+				updated_at = NOW()
+			FROM wallet
+			WHERE u.id = wallet.id
+			RETURNING
+				u.balance,
+				LEAST(wallet.old_gift_balance, $1) AS gift_used
+		)
+		SELECT balance, gift_used FROM updated
+	`
+	rows, err := clientFromContext(ctx, r.client).QueryContext(ctx, updateSQL, amount, id)
+	if err != nil {
+		return service.BalanceDeductionResult{}, err
+	}
+	defer rows.Close()
+	if !rows.Next() {
+		if rowsErr := rows.Err(); rowsErr != nil {
+			return service.BalanceDeductionResult{}, rowsErr
+		}
+		return service.BalanceDeductionResult{}, service.ErrUserNotFound
+	}
+	var result service.BalanceDeductionResult
+	if err := rows.Scan(&result.NewBalance, &result.ThresholdExemptCost); err != nil {
+		return service.BalanceDeductionResult{}, err
+	}
+	if err := rows.Err(); err != nil {
+		return service.BalanceDeductionResult{}, err
+	}
+	result.ThresholdExemptCost = service.QuantizeUsageBillingAmount(result.ThresholdExemptCost)
+	if result.ThresholdExemptCost < 0 {
+		result.ThresholdExemptCost = 0
+	}
+	if result.ThresholdExemptCost > amount {
+		result.ThresholdExemptCost = amount
+	}
+	return result, nil
 }
 
 // DeductAvailableBalance atomically deducts min(amount, max(balance, 0)).

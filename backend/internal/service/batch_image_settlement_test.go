@@ -20,8 +20,10 @@ func TestBatchImageSettlementService_SettlesAndChargesSuccessfulImagesOnly(t *te
 	job.ItemCount = 5
 	job.SessionID = batchImageStringPtr("batch-settlement-session")
 	repo.jobs[job.BatchID] = job
-	billing := &fakeBatchImageBillingRepo{}
-	usageLogs := &openAIRecordUsageLogRepoStub{}
+	billing := &fakeBatchImageBillingRepo{captureResult: &BatchImageBalanceHoldResult{
+		Applied: true, ThresholdExemptCost: 0.5,
+	}}
+	usageLogs := &batchSettlementUsageLogRepo{}
 	svc := &BatchImageSettlementService{
 		Repo: repo, BillingRepo: billing, Pricing: &fakeBatchImagePricingResolver{unitPrice: 0.25},
 		UsageLogRepo: usageLogs,
@@ -38,6 +40,8 @@ func TestBatchImageSettlementService_SettlesAndChargesSuccessfulImagesOnly(t *te
 	require.NotEmpty(t, batchImageDerefString(repo.jobs[job.BatchID].ManifestHash))
 	require.NotNil(t, repo.jobs[job.BatchID].SettledAt)
 	require.Equal(t, "batch-settlement-session", batchImageDerefString(usageLogs.lastLog.SessionID))
+	require.Equal(t, 0.75, usageLogs.lastLog.ActualCost)
+	require.Equal(t, 0.5, usageLogs.lastLog.ThresholdExemptCost)
 	require.Len(t, billing.captures, 1)
 	require.Equal(t, int64(321), billing.captures[0].APIKeyID)
 	require.Equal(t, job.UserID, billing.captures[0].UserID)
@@ -47,6 +51,30 @@ func TestBatchImageSettlementService_SettlesAndChargesSuccessfulImagesOnly(t *te
 	require.NotContains(t, fmt.Sprintf("%+v", billing.captures[0]), batchImageTestData)
 	require.NotContains(t, fmt.Sprintf("%+v", billing.captures[0]), "gs://")
 	require.NotContains(t, fmt.Sprintf("%+v", billing.captures[0]), "prompt")
+
+	duplicate, err := svc.Settle(context.Background(), job.BatchID)
+	require.NoError(t, err)
+	require.True(t, duplicate.AlreadySettled)
+	require.Len(t, billing.captures, 1)
+	require.Equal(t, 1, usageLogs.calls)
+}
+
+type batchSettlementUsageLogRepo struct {
+	UsageLogRepository
+	lastLog *UsageLog
+	calls   int
+}
+
+func (r *batchSettlementUsageLogRepo) Create(_ context.Context, log *UsageLog) (bool, error) {
+	r.calls++
+	r.lastLog = log
+	return true, nil
+}
+
+func (r *batchSettlementUsageLogRepo) CreateBestEffort(_ context.Context, log *UsageLog) error {
+	r.calls++
+	r.lastLog = log
+	return nil
 }
 
 func TestBatchImageSettlementService_ZeroSuccessCanComplete(t *testing.T) {
@@ -442,6 +470,7 @@ type fakeBatchImageBillingRepo struct {
 	reserveErr     error
 	captureErr     error
 	releaseErr     error
+	captureResult  *BatchImageBalanceHoldResult
 }
 
 func (r *fakeBatchImageBillingRepo) Apply(_ context.Context, cmd *UsageBillingCommand) (*UsageBillingApplyResult, error) {
@@ -477,7 +506,13 @@ func (r *fakeBatchImageBillingRepo) CaptureBatchImageBalance(_ context.Context, 
 		r.captures = append(r.captures, cmd)
 		return nil, r.captureErr
 	}
-	return r.applyHold(cmd, &r.captures)
+	result, err := r.applyHold(cmd, &r.captures)
+	if err == nil && result != nil && result.Applied && r.captureResult != nil {
+		copy := *r.captureResult
+		copy.Applied = true
+		return &copy, nil
+	}
+	return result, err
 }
 
 func (r *fakeBatchImageBillingRepo) ReleaseBatchImageBalance(_ context.Context, cmd *BatchImageBalanceHoldCommand) (*BatchImageBalanceHoldResult, error) {

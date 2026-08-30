@@ -150,6 +150,8 @@ type usageLogRepository struct {
 	bestEffortRecent    *gocache.Cache
 }
 
+var _ service.UsageLogThresholdExemptRepository = (*usageLogRepository)(nil)
+
 func NewUsageLogRepository(client *dbent.Client, sqlDB *sql.DB) service.UsageLogRepository {
 	return newUsageLogRepositoryWithSQL(client, sqlDB)
 }

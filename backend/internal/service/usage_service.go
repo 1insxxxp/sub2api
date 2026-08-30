@@ -121,12 +121,29 @@ func (s *UsageService) Create(ctx context.Context, req CreateUsageLogRequest) (*
 	if err != nil {
 		return nil, fmt.Errorf("create usage log: %w", err)
 	}
+	if !inserted {
+		return usageLog, nil
+	}
 
-	// 扣除用户余额
+	// 先完成幂等日志插入，再在同一事务内扣费并回写来源归因。这样即使
+	// UsageService 运行在调用方事务中，重复请求也不会先扣款后依赖内层回滚。
 	balanceUpdated := false
-	if inserted && req.ActualCost > 0 {
-		if err := s.userRepo.UpdateBalance(txCtx, req.UserID, -req.ActualCost); err != nil {
-			return nil, fmt.Errorf("update user balance: %w", err)
+	if req.ActualCost > 0 {
+		giftRepo, ok := s.userRepo.(GiftAllocatingBalanceRepository)
+		if !ok {
+			return nil, ErrGiftAllocatingBalanceRepositoryRequired
+		}
+		thresholdRepo, ok := s.usageRepo.(UsageLogThresholdExemptRepository)
+		if !ok {
+			return nil, ErrUsageLogThresholdExemptRepositoryRequired
+		}
+		result, err := giftRepo.DeductBalanceWithGiftAllocation(txCtx, req.UserID, req.ActualCost)
+		if err != nil {
+			return nil, fmt.Errorf("deduct user balance with gift allocation: %w", err)
+		}
+		usageLog.ThresholdExemptCost = clampUsageBillingThresholdExemptCost(result.ThresholdExemptCost, usageLog.ActualCost, false)
+		if err := thresholdRepo.UpdateThresholdExemptCost(txCtx, usageLog.ID, usageLog.ThresholdExemptCost); err != nil {
+			return nil, fmt.Errorf("update usage log threshold exempt cost: %w", err)
 		}
 		balanceUpdated = true
 	}

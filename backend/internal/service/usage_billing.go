@@ -14,6 +14,23 @@ import (
 
 var ErrUsageBillingRequestIDRequired = errors.New("usage billing request_id is required")
 var ErrUsageBillingRequestConflict = errors.New("usage billing request fingerprint conflict")
+var ErrGiftAllocatingBalanceRepositoryRequired = errors.New("gift allocating balance repository is required")
+var ErrUsageLogThresholdExemptRepositoryRequired = errors.New("usage log threshold exempt repository is required")
+
+type BalanceDeductionResult struct {
+	NewBalance          float64
+	ThresholdExemptCost float64
+}
+
+// GiftAllocatingBalanceRepository is an optional capability used by legacy
+// billing paths that still persist usage and wallet effects separately.
+type GiftAllocatingBalanceRepository interface {
+	DeductBalanceWithGiftAllocation(ctx context.Context, userID int64, amount float64) (BalanceDeductionResult, error)
+}
+
+type UsageLogThresholdExemptRepository interface {
+	UpdateThresholdExemptCost(ctx context.Context, usageLogID int64, amount float64) error
+}
 
 // UsageBillingCommand describes one billable request that must be applied at most once.
 type UsageBillingCommand struct {
@@ -192,6 +209,8 @@ func (c *BatchImageBalanceHoldCommand) Normalize() {
 	if strings.TrimSpace(c.RequestFingerprint) == "" {
 		c.RequestFingerprint = buildBatchImageBalanceHoldFingerprint(c)
 	}
+	c.HoldAmount = QuantizeUsageBillingAmount(c.HoldAmount)
+	c.ActualAmount = QuantizeUsageBillingAmount(c.ActualAmount)
 }
 
 func buildBatchImageBalanceHoldFingerprint(c *BatchImageBalanceHoldCommand) string {
@@ -214,9 +233,10 @@ func buildBatchImageBalanceHoldFingerprint(c *BatchImageBalanceHoldCommand) stri
 }
 
 type BatchImageBalanceHoldResult struct {
-	Applied       bool
-	NewBalance    *float64
-	FrozenBalance *float64
+	Applied             bool
+	NewBalance          *float64
+	FrozenBalance       *float64
+	ThresholdExemptCost float64
 }
 
 type UsageBillingRepository interface {

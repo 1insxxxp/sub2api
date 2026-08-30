@@ -168,7 +168,7 @@ func (p *postUsageBillingParams) shouldUpdateAccountQuota() bool {
 // postUsageBilling is the legacy fallback billing path used when the unified
 // billing repo is unavailable (nil). Production uses applyUsageBilling → repo.Apply
 // for atomic billing. This path only runs in tests or degraded mode.
-func postUsageBilling(ctx context.Context, p *postUsageBillingParams, deps *billingDeps) {
+func postUsageBilling(ctx context.Context, usageLog *UsageLog, p *postUsageBillingParams, deps *billingDeps) error {
 	billingCtx, cancel := detachedBillingContext(ctx)
 	defer cancel()
 
@@ -184,9 +184,20 @@ func postUsageBilling(ctx context.Context, p *postUsageBillingParams, deps *bill
 		}
 	} else {
 		if cost.ActualCost > 0 {
-			if err := deps.userRepo.DeductBalance(billingCtx, p.User.ID, cost.ActualCost); err != nil {
-				slog.Error("deduct balance failed", "user_id", p.User.ID, "error", err)
-			} else if deps.billingCacheService != nil {
+			giftRepo, ok := deps.userRepo.(GiftAllocatingBalanceRepository)
+			if !ok {
+				slog.Error("gift-aware legacy balance deduction is unavailable", "user_id", p.User.ID)
+				return ErrGiftAllocatingBalanceRepositoryRequired
+			}
+			result, err := giftRepo.DeductBalanceWithGiftAllocation(billingCtx, p.User.ID, cost.ActualCost)
+			if err != nil {
+				slog.Error("deduct balance with gift allocation failed", "user_id", p.User.ID, "error", err)
+				return err
+			}
+			if usageLog != nil {
+				usageLog.ThresholdExemptCost = clampUsageBillingThresholdExemptCost(result.ThresholdExemptCost, usageLog.ActualCost, false)
+			}
+			if deps.billingCacheService != nil {
 				if err := deps.billingCacheService.InvalidateUserBalance(billingCtx, p.User.ID); err != nil {
 					slog.Warn("invalidate balance cache after legacy deduction failed", "user_id", p.User.ID, "error", err)
 				}
@@ -237,6 +248,7 @@ func postUsageBilling(ctx context.Context, p *postUsageBillingParams, deps *bill
 	// cache updates. The legacy path does DB writes directly; the finalize path
 	// does cache queue + notifications. Notifications are dispatched separately
 	// by the caller after recording the usage log.
+	return nil
 }
 
 func resolveUsageBillingRequestID(ctx context.Context, upstreamRequestID string) string {
@@ -374,7 +386,9 @@ func applyUsageBilling(ctx context.Context, requestID string, usageLog *UsageLog
 
 	cmd := buildUsageBillingCommand(requestID, usageLog, p)
 	if cmd == nil || cmd.RequestID == "" || repo == nil {
-		postUsageBilling(ctx, p, deps)
+		if err := postUsageBilling(ctx, usageLog, p, deps); err != nil {
+			return false, err
+		}
 		return true, nil
 	}
 

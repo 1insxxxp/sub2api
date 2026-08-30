@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"math"
 	"strings"
 
 	dbent "github.com/Wei-Shaw/sub2api/ent"
@@ -135,6 +136,10 @@ func (r *usageBillingRepository) applyBatchImageBalanceHold(
 	cmd.Normalize()
 	if cmd.RequestID == "" {
 		return nil, service.ErrUsageBillingRequestIDRequired
+	}
+	if math.IsNaN(cmd.HoldAmount) || math.IsInf(cmd.HoldAmount, 0) || cmd.HoldAmount < 0 ||
+		math.IsNaN(cmd.ActualAmount) || math.IsInf(cmd.ActualAmount, 0) || cmd.ActualAmount < 0 {
+		return nil, errors.New("batch image billing amounts must be finite and nonnegative")
 	}
 
 	tx, err := r.db.BeginTx(ctx, nil)
@@ -298,12 +303,32 @@ func reserveUsageBillingBatchImageBalance(ctx context.Context, tx *sql.Tx, cmd *
 	}
 	var balance, frozen float64
 	err := tx.QueryRowContext(ctx, `
-		UPDATE users
-		SET balance = balance - $1,
-			frozen_balance = COALESCE(frozen_balance, 0) + $1,
-			updated_at = NOW()
-		WHERE id = $2 AND deleted_at IS NULL AND balance >= $1
-		RETURNING balance, frozen_balance
+		WITH wallet_raw AS (
+			SELECT
+				id,
+				balance,
+				CASE WHEN gift_balance IS NULL OR gift_balance::text = 'NaN' OR gift_balance < 0 THEN 0 ELSE gift_balance END AS old_gift_balance,
+				CASE WHEN frozen_balance IS NULL OR frozen_balance::text = 'NaN' OR frozen_balance < 0 THEN 0 ELSE frozen_balance END AS old_frozen_balance,
+				CASE WHEN frozen_gift_balance IS NULL OR frozen_gift_balance::text = 'NaN' OR frozen_gift_balance < 0 THEN 0 ELSE frozen_gift_balance END AS raw_frozen_gift_balance
+			FROM users
+			WHERE id = $2 AND deleted_at IS NULL
+			FOR UPDATE
+		), wallet AS (
+			SELECT *, LEAST(raw_frozen_gift_balance, old_frozen_balance) AS old_frozen_gift_balance
+			FROM wallet_raw
+		), updated AS (
+			UPDATE users AS u
+			SET
+				balance = wallet.balance - $1,
+				gift_balance = wallet.old_gift_balance - LEAST(wallet.old_gift_balance, $1),
+				frozen_balance = wallet.old_frozen_balance + $1,
+				frozen_gift_balance = wallet.old_frozen_gift_balance + LEAST(wallet.old_gift_balance, $1),
+				updated_at = NOW()
+			FROM wallet
+			WHERE u.id = wallet.id AND wallet.balance >= $1
+			RETURNING u.balance, u.frozen_balance
+		)
+		SELECT balance, frozen_balance FROM updated
 	`, cmd.HoldAmount, cmd.UserID).Scan(&balance, &frozen)
 	if err == nil {
 		return &service.BatchImageBalanceHoldResult{NewBalance: &balance, FrozenBalance: &frozen}, nil
@@ -323,22 +348,53 @@ func captureUsageBillingBatchImageBalance(ctx context.Context, tx *sql.Tx, cmd *
 	if cmd.HoldAmount <= 0 && cmd.ActualAmount <= 0 {
 		return &service.BatchImageBalanceHoldResult{}, nil
 	}
-	if cmd.ActualAmount-cmd.HoldAmount > 0.00000001 {
+	if cmd.ActualAmount > cmd.HoldAmount {
 		return nil, service.ErrBatchImageSettlementCostExceedsHold
 	}
-	var balance, frozen float64
+	var balance, frozen, giftUsed float64
 	err := tx.QueryRowContext(ctx, `
-		UPDATE users
-		SET balance = balance
-				+ CASE WHEN $1 > $2 THEN $1 - $2 ELSE 0 END
-				- CASE WHEN $2 > $1 THEN $2 - $1 ELSE 0 END,
-			frozen_balance = COALESCE(frozen_balance, 0) - $1,
-			updated_at = NOW()
-		WHERE id = $3 AND deleted_at IS NULL AND COALESCE(frozen_balance, 0) >= $1
-		RETURNING balance, frozen_balance
-	`, cmd.HoldAmount, cmd.ActualAmount, cmd.UserID).Scan(&balance, &frozen)
+		WITH wallet_raw AS (
+			SELECT
+				id,
+				balance,
+				CASE WHEN gift_balance IS NULL OR gift_balance::text = 'NaN' OR gift_balance < 0 THEN 0 ELSE gift_balance END AS old_gift_balance,
+				CASE WHEN frozen_balance IS NULL OR frozen_balance::text = 'NaN' OR frozen_balance < 0 THEN 0 ELSE frozen_balance END AS old_frozen_balance,
+				CASE WHEN frozen_gift_balance IS NULL OR frozen_gift_balance::text = 'NaN' OR frozen_gift_balance < 0 THEN 0 ELSE frozen_gift_balance END AS raw_frozen_gift_balance
+			FROM users
+			WHERE id = $3 AND deleted_at IS NULL
+			FOR UPDATE
+		), wallet AS (
+			SELECT *, LEAST(raw_frozen_gift_balance, old_frozen_balance) AS old_frozen_gift_balance
+			FROM wallet_raw
+		), allocation AS (
+			SELECT
+				*,
+				LEAST(old_frozen_gift_balance, $1) AS gift_in_hold,
+				LEAST(LEAST(old_frozen_gift_balance, $1), $2) AS gift_used
+			FROM wallet
+		), updated AS (
+			UPDATE users AS u
+			SET
+				balance = allocation.balance + ($1 - $2),
+				gift_balance = allocation.old_gift_balance + (allocation.gift_in_hold - allocation.gift_used),
+				frozen_balance = GREATEST(allocation.old_frozen_balance - $1, 0),
+				frozen_gift_balance = GREATEST(allocation.old_frozen_gift_balance - allocation.gift_in_hold, 0),
+				updated_at = NOW()
+			FROM allocation
+			WHERE u.id = allocation.id AND allocation.old_frozen_balance >= $1
+			RETURNING u.balance, u.frozen_balance, allocation.gift_used
+		)
+		SELECT balance, frozen_balance, gift_used FROM updated
+	`, cmd.HoldAmount, cmd.ActualAmount, cmd.UserID).Scan(&balance, &frozen, &giftUsed)
 	if err == nil {
-		return &service.BatchImageBalanceHoldResult{NewBalance: &balance, FrozenBalance: &frozen}, nil
+		giftUsed = service.QuantizeUsageBillingAmount(giftUsed)
+		if giftUsed < 0 {
+			giftUsed = 0
+		}
+		if giftUsed > cmd.ActualAmount {
+			giftUsed = cmd.ActualAmount
+		}
+		return &service.BatchImageBalanceHoldResult{NewBalance: &balance, FrozenBalance: &frozen, ThresholdExemptCost: giftUsed}, nil
 	}
 	if !errors.Is(err, sql.ErrNoRows) {
 		return nil, err
@@ -367,12 +423,35 @@ func releaseUsageBillingBatchImageBalance(ctx context.Context, tx *sql.Tx, cmd *
 	}
 	var balance, frozen float64
 	err := tx.QueryRowContext(ctx, `
-		UPDATE users
-		SET balance = balance + $1,
-			frozen_balance = COALESCE(frozen_balance, 0) - $1,
-			updated_at = NOW()
-		WHERE id = $2 AND deleted_at IS NULL AND COALESCE(frozen_balance, 0) >= $1
-		RETURNING balance, frozen_balance
+		WITH wallet_raw AS (
+			SELECT
+				id,
+				balance,
+				CASE WHEN gift_balance IS NULL OR gift_balance::text = 'NaN' OR gift_balance < 0 THEN 0 ELSE gift_balance END AS old_gift_balance,
+				CASE WHEN frozen_balance IS NULL OR frozen_balance::text = 'NaN' OR frozen_balance < 0 THEN 0 ELSE frozen_balance END AS old_frozen_balance,
+				CASE WHEN frozen_gift_balance IS NULL OR frozen_gift_balance::text = 'NaN' OR frozen_gift_balance < 0 THEN 0 ELSE frozen_gift_balance END AS raw_frozen_gift_balance
+			FROM users
+			WHERE id = $2 AND deleted_at IS NULL
+			FOR UPDATE
+		), wallet AS (
+			SELECT *, LEAST(raw_frozen_gift_balance, old_frozen_balance) AS old_frozen_gift_balance
+			FROM wallet_raw
+		), allocation AS (
+			SELECT *, LEAST(old_frozen_gift_balance, $1) AS gift_release
+			FROM wallet
+		), updated AS (
+			UPDATE users AS u
+			SET
+				balance = allocation.balance + $1,
+				gift_balance = allocation.old_gift_balance + allocation.gift_release,
+				frozen_balance = GREATEST(allocation.old_frozen_balance - $1, 0),
+				frozen_gift_balance = GREATEST(allocation.old_frozen_gift_balance - allocation.gift_release, 0),
+				updated_at = NOW()
+			FROM allocation
+			WHERE u.id = allocation.id AND allocation.old_frozen_balance >= $1
+			RETURNING u.balance, u.frozen_balance
+		)
+		SELECT balance, frozen_balance FROM updated
 	`, cmd.HoldAmount, cmd.UserID).Scan(&balance, &frozen)
 	if err == nil {
 		return &service.BatchImageBalanceHoldResult{NewBalance: &balance, FrozenBalance: &frozen}, nil
