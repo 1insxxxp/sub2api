@@ -104,11 +104,6 @@ WHERE conname = $1
 	}
 	_, err = db.ExecContext(ctx, "UPDATE users SET balance = 1, gift_balance = 2 WHERE id = 1")
 	require.NoError(t, err, "the published 232 migration did not yet enforce the relation")
-	_, err = db.ExecContext(ctx, `
-ALTER TABLE users
-ADD CONSTRAINT users_gift_balance_within_balance
-CHECK (gift_balance <= GREATEST(balance, 0)) NOT VALID`)
-	require.NoError(t, err, "simulate a database that applied the briefly modified 232 migration")
 
 	content234, err := FS.ReadFile("234_enforce_gift_balance_within_balance.sql")
 	require.NoError(t, err)
@@ -116,11 +111,24 @@ CHECK (gift_balance <= GREATEST(balance, 0)) NOT VALID`)
 		_, err = db.ExecContext(ctx, string(content234))
 		require.NoError(t, err)
 	}
+	var relationValidated bool
+	require.NoError(t, db.QueryRowContext(ctx, `
+SELECT convalidated
+FROM pg_constraint
+WHERE conname = 'users_gift_balance_within_balance'
+  AND conrelid = 'users'::regclass`).Scan(&relationValidated))
+	require.False(t, relationValidated, "234 must commit the short ACCESS EXCLUSIVE lock before validation")
+
+	content235, err := FS.ReadFile("235_repair_and_validate_gift_balance.sql")
+	require.NoError(t, err)
+	for range 2 {
+		_, err = db.ExecContext(ctx, string(content235))
+		require.NoError(t, err)
+	}
 
 	var repairedGiftBalance string
 	require.NoError(t, db.QueryRowContext(ctx, "SELECT gift_balance::text FROM users WHERE id = 1").Scan(&repairedGiftBalance))
 	require.Equal(t, "1.00000000", repairedGiftBalance)
-	var relationValidated bool
 	require.NoError(t, db.QueryRowContext(ctx, `
 SELECT convalidated
 FROM pg_constraint

@@ -38,12 +38,22 @@ func TestMigration232AddsGiftRedeemEligibilityAccounting(t *testing.T) {
 	require.NotContains(t, sql, "VALIDATE CONSTRAINT")
 }
 
-func TestMigration234RepairsAndConstrainsGiftBalance(t *testing.T) {
+func TestMigration234AddsGiftBalanceConstraintWithoutValidation(t *testing.T) {
 	content, err := FS.ReadFile("234_enforce_gift_balance_within_balance.sql")
 	require.NoError(t, err)
 
 	sql := strings.Join(strings.Fields(string(content)), " ")
-	require.Contains(t, sql, "UPDATE users SET gift_balance = LEAST(gift_balance, GREATEST(balance, 0))")
 	require.Contains(t, sql, "ADD CONSTRAINT users_gift_balance_within_balance CHECK (gift_balance <= GREATEST(balance, 0)) NOT VALID")
+	require.NotContains(t, sql, "UPDATE users")
+	require.NotContains(t, sql, "VALIDATE CONSTRAINT")
+}
+
+func TestMigration235RepairsAndValidatesGiftBalanceConstraint(t *testing.T) {
+	content, err := FS.ReadFile("235_repair_and_validate_gift_balance.sql")
+	require.NoError(t, err)
+
+	sql := strings.Join(strings.Fields(string(content)), " ")
+	require.Contains(t, sql, "UPDATE users SET gift_balance = LEAST(gift_balance, GREATEST(balance, 0))")
 	require.Contains(t, sql, "VALIDATE CONSTRAINT users_gift_balance_within_balance")
+	require.NotContains(t, sql, "ADD CONSTRAINT")
 }
