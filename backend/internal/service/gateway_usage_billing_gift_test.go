@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/shopspring/decimal"
 	"github.com/stretchr/testify/require"
 )
 
@@ -67,6 +68,21 @@ func TestApplyUsageBilling_ClampsThresholdExemptAllocationToActualCost(t *testin
 	require.True(t, applied)
 	require.InDelta(t, 12, usageLog.ActualCost, 0.00000001)
 	require.InDelta(t, 12, usageLog.ThresholdExemptCost, 0.00000001)
+}
+
+func TestClampUsageBillingThresholdExemptCost_DoesNotExceedPersistedActualCost(t *testing.T) {
+	const (
+		actualCost = 0.000078125
+		allocated  = 0.00007813
+	)
+
+	got := clampUsageBillingThresholdExemptCost(allocated, actualCost, false)
+	require.Equal(t, actualCost, got)
+
+	persistedActual := decimal.NewFromFloat(actualCost).Round(10)
+	persistedExempt := decimal.NewFromFloat(got).Round(10)
+	require.True(t, persistedExempt.LessThanOrEqual(persistedActual),
+		"persisted exempt cost %s exceeds persisted actual cost %s", persistedExempt, persistedActual)
 }
 
 func TestApplyUsageBilling_DoesNotAllocateOnFailureOrDedup(t *testing.T) {

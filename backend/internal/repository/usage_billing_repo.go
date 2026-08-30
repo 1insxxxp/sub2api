@@ -251,7 +251,10 @@ func deductUsageBillingBalance(ctx context.Context, tx *sql.Tx, userID int64, am
 			SELECT
 				id,
 				balance,
-				GREATEST(COALESCE(gift_balance, 0), 0) AS old_gift_balance
+				CASE
+					WHEN gift_balance IS NULL OR gift_balance::text = 'NaN' OR gift_balance < 0 THEN 0
+					ELSE gift_balance
+				END AS old_gift_balance
 			FROM users
 			WHERE id = $2 AND deleted_at IS NULL
 			FOR UPDATE

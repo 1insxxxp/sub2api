@@ -80,6 +80,33 @@ func TestUsageBillingRepositoryApply_AllocatesGiftBalance(t *testing.T) {
 	}
 }
 
+func TestUsageBillingRepositoryApply_SanitizesNumericNaNGiftBalance(t *testing.T) {
+	ctx := context.Background()
+	client := testEntClient(t)
+	repo := NewUsageBillingRepository(client, integrationDB)
+	user := mustCreateUser(t, client, &service.User{
+		Email: fmt.Sprintf("usage-billing-gift-nan-%s@example.com", uuid.NewString()), PasswordHash: "hash", Balance: 10,
+	})
+	_, err := integrationDB.ExecContext(ctx, "UPDATE users SET gift_balance = 'NaN'::numeric WHERE id = $1", user.ID)
+	require.NoError(t, err)
+	apiKey := mustCreateApiKey(t, client, &service.APIKey{UserID: user.ID, Key: "sk-gift-nan-" + uuid.NewString(), Name: "gift-nan"})
+
+	result, err := repo.Apply(ctx, &service.UsageBillingCommand{
+		RequestID: uuid.NewString(), APIKeyID: apiKey.ID, UserID: user.ID, BalanceCost: 3,
+	})
+	require.NoError(t, err)
+	require.True(t, result.Applied)
+	require.False(t, result.BalanceOverdrafted)
+	require.NotNil(t, result.NewBalance)
+	require.InDelta(t, 7, *result.NewBalance, 0.00000001)
+	require.Zero(t, result.ThresholdExemptCost)
+
+	var balance, giftBalance float64
+	require.NoError(t, integrationDB.QueryRowContext(ctx, "SELECT balance, gift_balance FROM users WHERE id = $1", user.ID).Scan(&balance, &giftBalance))
+	require.InDelta(t, 7, balance, 0.00000001)
+	require.Zero(t, giftBalance)
+}
+
 func TestUsageBillingRepositoryApply_GiftAllocationDeduplicates(t *testing.T) {
 	ctx := context.Background()
 	client := testEntClient(t)
@@ -151,15 +178,30 @@ func TestUsageBillingRepositoryApply_ConcurrentGiftAllocationCannotOverconsume(t
 	client := testEntClient(t)
 	repo := NewUsageBillingRepository(client, integrationDB)
 	user := mustCreateUser(t, client, &service.User{
-		Email: fmt.Sprintf("usage-billing-gift-race-%s@example.com", uuid.NewString()), PasswordHash: "hash", Balance: 30,
+		Email: fmt.Sprintf("usage-billing-gift-race-%s@example.com", uuid.NewString()), PasswordHash: "hash", Balance: 12,
 	})
 	_, err := integrationDB.ExecContext(ctx, "UPDATE users SET gift_balance = 10 WHERE id = $1", user.ID)
 	require.NoError(t, err)
 	apiKey := mustCreateApiKey(t, client, &service.APIKey{UserID: user.ID, Key: "sk-gift-race-" + uuid.NewString(), Name: "gift-race"})
 
+	lockTx, err := integrationDB.BeginTx(ctx, nil)
+	require.NoError(t, err)
+	lockReleased := false
+	defer func() {
+		if !lockReleased {
+			_ = lockTx.Rollback()
+		}
+	}()
+	var lockedUserID int64
+	require.NoError(t, lockTx.QueryRowContext(ctx, "SELECT id FROM users WHERE id = $1 FOR UPDATE", user.ID).Scan(&lockedUserID))
+	require.Equal(t, user.ID, lockedUserID)
+
 	start := make(chan struct{})
-	results := make(chan *service.UsageBillingApplyResult, 2)
-	errs := make(chan error, 2)
+	type applyOutcome struct {
+		result *service.UsageBillingApplyResult
+		err    error
+	}
+	outcomes := make(chan applyOutcome, 2)
 	var wg sync.WaitGroup
 	for range 2 {
 		wg.Add(1)
@@ -169,28 +211,63 @@ func TestUsageBillingRepositoryApply_ConcurrentGiftAllocationCannotOverconsume(t
 			result, applyErr := repo.Apply(ctx, &service.UsageBillingCommand{
 				RequestID: uuid.NewString(), APIKeyID: apiKey.ID, UserID: user.ID, BalanceCost: 8,
 			})
-			results <- result
-			errs <- applyErr
+			outcomes <- applyOutcome{result: result, err: applyErr}
 		}()
 	}
 	close(start)
-	wg.Wait()
-	close(results)
-	close(errs)
-	for applyErr := range errs {
-		require.NoError(t, applyErr)
+	waitForUsageBillingWalletLockWaiters(t, ctx, 2)
+	select {
+	case outcome := <-outcomes:
+		require.Failf(t, "billing completed while wallet lock was held", "result=%+v err=%v", outcome.result, outcome.err)
+	default:
 	}
+	require.NoError(t, lockTx.Commit())
+	lockReleased = true
+
+	wg.Wait()
+	close(outcomes)
 	var exemptTotal float64
-	for result := range results {
-		require.True(t, result.Applied)
-		exemptTotal += result.ThresholdExemptCost
+	overdrafts := 0
+	for outcome := range outcomes {
+		require.NoError(t, outcome.err)
+		require.NotNil(t, outcome.result)
+		require.True(t, outcome.result.Applied)
+		exemptTotal += outcome.result.ThresholdExemptCost
+		if outcome.result.BalanceOverdrafted {
+			overdrafts++
+		}
 	}
 	require.InDelta(t, 10, exemptTotal, 0.00000001)
+	require.Equal(t, 1, overdrafts)
 
 	var balance, giftBalance float64
 	require.NoError(t, integrationDB.QueryRowContext(ctx, "SELECT balance, gift_balance FROM users WHERE id = $1", user.ID).Scan(&balance, &giftBalance))
-	require.InDelta(t, 14, balance, 0.00000001)
+	require.InDelta(t, -4, balance, 0.00000001)
 	require.Zero(t, giftBalance)
+}
+
+func waitForUsageBillingWalletLockWaiters(t *testing.T, ctx context.Context, want int) {
+	t.Helper()
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) {
+		var waiting int
+		err := integrationDB.QueryRowContext(ctx, `
+			SELECT COUNT(*)
+			FROM pg_stat_activity
+			WHERE datname = current_database()
+				AND pid <> pg_backend_pid()
+				AND state = 'active'
+				AND wait_event_type = 'Lock'
+				AND query LIKE '%WITH wallet AS (%'
+				AND query LIKE '%old_gift_balance%'
+		`).Scan(&waiting)
+		require.NoError(t, err)
+		if waiting >= want {
+			return
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	require.Failf(t, "wallet lock waiters did not arrive", "wanted at least %d blocked billing queries", want)
 }
 
 func TestUsageBillingRepositoryApply_DeduplicatesBalanceBilling(t *testing.T) {

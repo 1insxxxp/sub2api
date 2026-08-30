@@ -408,7 +408,6 @@ func clampUsageBillingThresholdExemptCost(allocated, actualCost float64, subscri
 	if subscription || math.IsNaN(allocated) || math.IsInf(allocated, 0) {
 		return 0
 	}
-	actualCost = QuantizeUsageBillingAmount(actualCost)
 	if actualCost <= 0 || math.IsNaN(actualCost) || math.IsInf(actualCost, 0) {
 		return 0
 	}
