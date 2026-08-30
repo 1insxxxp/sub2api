@@ -300,7 +300,7 @@
             <TokenUsageTrend
               :trend-data="trendData"
               :loading="chartsLoading"
-              :latest-hours="shouldFillLatestHourlyBuckets ? 24 : undefined"
+              :latest-hours="latestHourlyBucketCount"
             />
           </div>
 
@@ -309,7 +309,7 @@
             <div data-test="dashboard-user-trend-header" class="admin-panel-header">
               <div>
                 <h3 class="text-sm font-semibold text-gray-900 dark:text-white">
-                  {{ t('admin.dashboard.recentUsage') }} (Top 12)
+                  {{ t('admin.dashboard.userUsageTrend') }}
                 </h3>
                 <p class="text-sm text-gray-500 dark:text-gray-400">
                   {{ startDate }} - {{ endDate }}
@@ -452,6 +452,36 @@ const shouldFillLatestHourlyBuckets = computed(
     )
 )
 
+const latestHourlyBucketCount = computed(() => {
+  if (!shouldFillLatestHourlyBuckets.value) return undefined
+  return isDefaultRollingRange.value ? 25 : 24
+})
+
+type DashboardRangeParams = {
+  start_date: string
+  end_date: string
+  start_time?: string
+  end_time?: string
+  granularity: 'day' | 'hour'
+}
+
+const createDashboardRangeParams = (): DashboardRangeParams => {
+  const params: DashboardRangeParams = {
+    start_date: startDate.value,
+    end_date: endDate.value,
+    granularity: granularity.value
+  }
+
+  if (isDefaultRollingRange.value) {
+    const end = new Date()
+    const start = new Date(end.getTime() - 24 * 60 * 60 * 1000)
+    params.start_time = start.toISOString()
+    params.end_time = end.toISOString()
+  }
+
+  return params
+}
+
 // Granularity options for Select component
 const granularityOptions = computed(() => [
   { value: 'day', label: t('admin.dashboard.day') },
@@ -561,8 +591,8 @@ const userTrendChartData = computed(() => {
     userGroups.get(key)!.data.set(point.date, point.tokens)
   })
 
-  const sortedDates = shouldFillLatestHourlyBuckets.value
-    ? getLatestHourlyBuckets(24)
+  const sortedDates = latestHourlyBucketCount.value
+    ? getLatestHourlyBuckets(latestHourlyBucketCount.value)
     : Array.from(allDates).sort()
   const colors = [
     '#2563eb',
@@ -657,7 +687,7 @@ const onDateRangeChange = (range: {
 }
 
 // Load data
-const loadDashboardSnapshot = async (includeStats: boolean) => {
+const loadDashboardSnapshot = async (includeStats: boolean, range: DashboardRangeParams) => {
   const currentSeq = ++chartLoadSeq
   if (includeStats && !stats.value) {
     loading.value = true
@@ -665,9 +695,7 @@ const loadDashboardSnapshot = async (includeStats: boolean) => {
   chartsLoading.value = true
   try {
     const response = await adminAPI.dashboard.getSnapshotV2({
-      start_date: startDate.value,
-      end_date: endDate.value,
-      granularity: granularity.value,
+      ...range,
       include_stats: includeStats,
       include_trend: true,
       include_model_stats: true,
@@ -692,14 +720,12 @@ const loadDashboardSnapshot = async (includeStats: boolean) => {
   }
 }
 
-const loadUsersTrend = async () => {
+const loadUsersTrend = async (range: DashboardRangeParams) => {
   const currentSeq = ++usersTrendLoadSeq
   userTrendLoading.value = true
   try {
     const response = await adminAPI.dashboard.getUserUsageTrend({
-      start_date: startDate.value,
-      end_date: endDate.value,
-      granularity: granularity.value,
+      ...range,
       limit: 12
     })
     if (currentSeq !== usersTrendLoadSeq) return
@@ -715,14 +741,13 @@ const loadUsersTrend = async () => {
   }
 }
 
-const loadUserSpendingRanking = async () => {
+const loadUserSpendingRanking = async (range: DashboardRangeParams) => {
   const currentSeq = ++rankingLoadSeq
   rankingLoading.value = true
   rankingError.value = false
   try {
     const response = await adminAPI.dashboard.getUserSpendingRanking({
-      start_date: startDate.value,
-      end_date: endDate.value,
+      ...range,
       limit: rankingLimit
     })
     if (currentSeq !== rankingLoadSeq) return
@@ -746,18 +771,20 @@ const loadUserSpendingRanking = async () => {
 }
 
 const loadDashboardStats = async () => {
+  const range = createDashboardRangeParams()
   await Promise.all([
-    loadDashboardSnapshot(true),
-    loadUsersTrend(),
-    loadUserSpendingRanking()
+    loadDashboardSnapshot(true, range),
+    loadUsersTrend(range),
+    loadUserSpendingRanking(range)
   ])
 }
 
 const loadChartData = async () => {
+  const range = createDashboardRangeParams()
   await Promise.all([
-    loadDashboardSnapshot(false),
-    loadUsersTrend(),
-    loadUserSpendingRanking()
+    loadDashboardSnapshot(false, range),
+    loadUsersTrend(range),
+    loadUserSpendingRanking(range)
   ])
 }
 

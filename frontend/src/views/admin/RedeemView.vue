@@ -1,6 +1,6 @@
 <template>
   <AppLayout>
-    <div class="space-y-6">
+    <div class="space-y-6" data-redeem-build="assets-404-hotfix-20260823">
       <TablePageLayout>
       <template #filters>
         <div class="admin-toolbar">
@@ -69,32 +69,14 @@
           :data="codes"
           :loading="loading"
           :server-side-sort="true"
+          :selectable="true"
+          row-key="id"
+          :selected-keys="selectedCodeKeyList"
           default-sort-key="id"
           default-sort-order="desc"
           @sort="handleSort"
+          @update:selectedKeys="handleSelectedCodeKeysChange"
         >
-          <template #header-select>
-            <input
-              data-test="select-all-codes"
-              type="checkbox"
-              class="h-4 w-4 cursor-pointer rounded border-gray-300 text-primary-600 focus:ring-primary-500"
-              :checked="allVisibleSelected"
-              @click.stop
-              @change="toggleSelectAllVisible($event)"
-            />
-          </template>
-
-          <template #cell-select="{ row }">
-            <input
-              data-test="select-code"
-              type="checkbox"
-              class="h-4 w-4 cursor-pointer rounded border-gray-300 text-primary-600 focus:ring-primary-500"
-              :checked="selectedCodeIds.has(row.id)"
-              @click.stop
-              @change="toggleSelectRow(row.id, $event)"
-            />
-          </template>
-
           <template #cell-code="{ value, row }">
             <div class="space-y-1.5">
               <div class="flex items-center space-x-2">
@@ -766,7 +748,6 @@ const downloadGeneratedCodes = () => {
 }
 
 const columns = computed<Column[]>(() => [
-  { key: 'select', label: '' },
   { key: 'code', label: t('admin.redeem.columns.code') },
   { key: 'type', label: t('admin.redeem.columns.type'), sortable: true },
   { key: 'value', label: t('admin.redeem.columns.value'), sortable: true },
@@ -840,12 +821,10 @@ const copiedCode = ref<string | null>(null)
 
 const {
   selectedSet: selectedCodeIds,
+  selectedIds: selectedCodeKeyList,
   selectedCount,
-  allVisibleSelected,
-  select,
-  deselect,
-  clear: clearSelectedCodes,
-  toggleVisible
+  setSelectedIds,
+  clear: clearSelectedCodes
 } = useTableSelection<RedeemCode>({
   rows: codes,
   getId: (code) => code.id
@@ -972,18 +951,12 @@ const handleSort = (key: string, order: 'asc' | 'desc') => {
   loadCodes()
 }
 
-const toggleSelectRow = (id: number, event: Event) => {
-  const target = event.target as HTMLInputElement
-  if (target.checked) {
-    select(id)
-    return
-  }
-  deselect(id)
-}
-
-const toggleSelectAllVisible = (event: Event) => {
-  const target = event.target as HTMLInputElement
-  toggleVisible(target.checked)
+const handleSelectedCodeKeysChange = (keys: Array<string | number>) => {
+  setSelectedIds(
+    keys
+      .map((key) => Number(key))
+      .filter((key) => Number.isFinite(key))
+  )
 }
 
 const getRedeemCodeExpiresInDays = () => {

@@ -381,8 +381,17 @@ export async function submitEmptyResponseClaim(
   return data
 }
 
-export async function listRecentEmptyResponses(): Promise<EmptyResponseRecord[]> {
-  const { data } = await apiClient.get<EmptyResponseRecord[]>('/usage/empty-responses')
+export interface EmptyResponseListParams {
+  page?: number
+  page_size?: number
+}
+
+export async function listRecentEmptyResponses(
+  params: EmptyResponseListParams = {}
+): Promise<PaginatedResponse<EmptyResponseRecord>> {
+  const { data } = await apiClient.get<PaginatedResponse<EmptyResponseRecord>>('/usage/empty-responses', {
+    params
+  })
   return data
 }
 

@@ -224,7 +224,10 @@ const { t } = useI18n()
 const appStore = useAppStore()
 const loading = ref(false)
 const records = ref<AffiliateRecord[]>([])
-const filters = reactive({ search: '', start_at: '', end_at: '' })
+const initialSearch = typeof window === 'undefined'
+  ? ''
+  : new URLSearchParams(window.location.search).get('search') || ''
+const filters = reactive({ search: initialSearch, start_at: '', end_at: '' })
 const pagination = reactive({ page: 1, page_size: 20, total: 0 })
 const overviewDialog = ref(false)
 const overviewLoading = ref(false)

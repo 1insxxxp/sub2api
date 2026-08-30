@@ -113,6 +113,22 @@ describe('useAuthStore', () => {
     })
   })
 
+  describe('role permissions', () => {
+    it('treats sub-admin as admin workbench capable but not full admin', async () => {
+      mockLogin.mockResolvedValue({
+        ...fakeAuthResponse,
+        user: fakeSubAdminUser,
+      })
+      const store = useAuthStore()
+
+      await store.login({ email: 'subadmin@example.com', password: '123456' })
+
+      expect(store.isAdmin).toBe(false)
+      expect(store.isSubAdmin).toBe(true)
+      expect(store.canAccessAdminWorkbench).toBe(true)
+    })
+  })
+
   // --- login2FA ---
 
   describe('login2FA', () => {

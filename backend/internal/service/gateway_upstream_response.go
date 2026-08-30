@@ -666,7 +666,7 @@ func (u *ClaudeUsage) hasObservedTokens() bool {
 //
 // 不变式：UpstreamFailoverError 必须保持 result=nil——failover 重试成功后按成功请求
 // 计费，若同时返回部分 usage 会造成双重计费，此处显式拦截兜底。
-func partialStreamUsageResult(c *gin.Context, resp *http.Response, streamResult *streamingResult, model, upstreamModel string, startTime time.Time, err error) *ForwardResult {
+func partialStreamUsageResult(c *gin.Context, resp *http.Response, streamResult *streamingResult, model, upstreamModel, cacheCreationTTLTarget string, startTime time.Time, err error) *ForwardResult {
 	if streamResult == nil || !streamResult.usage.hasObservedTokens() {
 		return nil
 	}
@@ -678,9 +678,11 @@ func partialStreamUsageResult(c *gin.Context, resp *http.Response, streamResult 
 		RequestID:                     resp.Header.Get("x-request-id"),
 		Usage:                         *streamResult.usage,
 		Model:                         model,
+		CacheCreationTTLTarget:        cacheCreationTTLTarget,
 		UpstreamModel:                 upstreamModel,
 		UpstreamResponseModel:         observedUpstreamResponseModel(c),
 		UpstreamResponseModelConflict: observedUpstreamResponseModelConflict(c),
+		UpstreamResponseServiceTier:   observedUpstreamResponseServiceTier(c),
 		Stream:                        true,
 		Duration:                      time.Since(startTime),
 		FirstTokenMs:                  streamResult.firstTokenMs,
@@ -1251,11 +1253,11 @@ func (s *GatewayService) extractSSEUsagePatch(event map[string]any) *sseUsagePat
 			patch.hasCacheReadInput = true
 		}
 		if cc, ok := usageObj["cache_creation"].(map[string]any); ok {
-			if v, exists := parseSSEUsageInt(cc["ephemeral_5m_input_tokens"]); exists && v > 0 {
+			if v, exists := parseSSEUsageInt(cc["ephemeral_5m_input_tokens"]); exists {
 				patch.cacheCreation5mTokens = v
 				patch.hasCacheCreation5m = true
 			}
-			if v, exists := parseSSEUsageInt(cc["ephemeral_1h_input_tokens"]); exists && v > 0 {
+			if v, exists := parseSSEUsageInt(cc["ephemeral_1h_input_tokens"]); exists {
 				patch.cacheCreation1hTokens = v
 				patch.hasCacheCreation1h = true
 			}
@@ -1343,6 +1345,25 @@ func applyCacheTTLOverride(usage *ClaudeUsage, target string) bool {
 		}
 		usage.CacheCreation5mTokens = total
 		usage.CacheCreation1hTokens = 0
+	}
+	return true
+}
+
+func applyCacheTTLHintForAggregateCreation(usage *ClaudeUsage, target string) bool {
+	if usage == nil || usage.CacheCreationInputTokens <= 0 {
+		return false
+	}
+	if usage.CacheCreation5mTokens > 0 || usage.CacheCreation1hTokens > 0 {
+		return false
+	}
+
+	switch target {
+	case cacheTTLTarget1h:
+		usage.CacheCreation1hTokens = usage.CacheCreationInputTokens
+	case cacheTTLTarget5m:
+		usage.CacheCreation5mTokens = usage.CacheCreationInputTokens
+	default:
+		return false
 	}
 	return true
 }

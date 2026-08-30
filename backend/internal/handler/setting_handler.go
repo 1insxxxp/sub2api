@@ -115,8 +115,10 @@ func (h *SettingHandler) GetPublicSettings(c *gin.Context) {
 		AvailableChannelsPriceCNYMultiplierMax: settings.AvailableChannelsPriceCNYMultiplierMax,
 		AvailableChannelsOfficialUSDToCNYRate:  settings.AvailableChannelsOfficialUSDToCNYRate,
 
-		ModelPlazaEnabled:     settings.ModelPlazaEnabled,
-		ModelPlazaRequireAuth: settings.ModelPlazaRequireAuth,
+		ModelPlazaEnabled:       settings.ModelPlazaEnabled,
+		ModelPlazaRequireAuth:   settings.ModelPlazaRequireAuth,
+		PluginManagementEnabled: settings.PluginManagementEnabled,
+		LotteryEnabled:          settings.LotteryEnabled,
 
 		AffiliateEnabled: settings.AffiliateEnabled,
 

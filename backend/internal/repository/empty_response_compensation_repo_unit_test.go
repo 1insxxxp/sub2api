@@ -32,6 +32,9 @@ func TestEmptyResponseCompensationBalanceTransactionRefundsExactlyOnce(t *testin
 	mock.ExpectQuery("SELECT key, quota_used.*FROM api_keys.*FOR UPDATE").WithArgs(int64(8)).
 		WillReturnRows(sqlmock.NewRows([]string{"key", "quota_used"}).AddRow("sk-test", 2.0))
 	mock.ExpectExec(regexp.QuoteMeta("UPDATE users SET balance = balance + $1, updated_at = NOW() WHERE id = $2")).WithArgs(1.25, int64(7)).WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectExec("INSERT INTO redeem_codes").
+		WithArgs("EMPTY-COMP-50", "empty_response", 1.25, service.StatusUsed, int64(7), "empty_response_compensation", "Empty response compensation for usage log #60").
+		WillReturnResult(sqlmock.NewResult(0, 1))
 	mock.ExpectExec(regexp.QuoteMeta("UPDATE api_keys SET quota_used = GREATEST(quota_used - $1, 0), updated_at = NOW() WHERE id = $2")).WithArgs(1.25, int64(8)).WillReturnResult(sqlmock.NewResult(0, 1))
 	mock.ExpectExec("UPDATE usage_logs SET compensated_cost = \\$1.*actual_cost = \\$2").WithArgs(1.25, 1.25, int64(60), float64(0)).WillReturnResult(sqlmock.NewResult(0, 1))
 	mock.ExpectExec("UPDATE empty_response_claims.*status = \\$1.*balance_refund = \\$2.*subscription_refund = 0.*api_key_quota_refund = \\$2").

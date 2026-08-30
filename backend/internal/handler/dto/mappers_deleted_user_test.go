@@ -47,3 +47,22 @@ func TestRedeemCodeFromService_HidesUserBalanceTransferAuditFields(t *testing.T)
 	require.Equal(t, creatorID, *adminDTO.CreatedBy)
 	require.Equal(t, service.RedeemCodeSourceUserBalanceTransfer, adminDTO.Source)
 }
+
+func TestRedeemCodeFromServiceWorkbenchGeneratedIncludesOwnerNotes(t *testing.T) {
+	creatorID := int64(9)
+
+	got := RedeemCodeFromServiceWorkbenchGenerated(&service.RedeemCode{
+		ID:        1,
+		Code:      "OWNER-NOTE",
+		Type:      service.RedeemTypeBalance,
+		Status:    service.StatusUnused,
+		CreatedBy: &creatorID,
+		Source:    service.RedeemCodeSourceUserBalanceTransfer,
+		Notes:     "send to partner A",
+	})
+
+	require.NotNil(t, got.Notes)
+	require.Equal(t, "send to partner A", *got.Notes)
+	require.Nil(t, got.CreatedBy)
+	require.Empty(t, got.Source)
+}

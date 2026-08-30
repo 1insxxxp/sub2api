@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Wei-Shaw/sub2api/internal/pkg/pagination"
 	middleware2 "github.com/Wei-Shaw/sub2api/internal/server/middleware"
 	"github.com/Wei-Shaw/sub2api/internal/service"
 	"github.com/gin-gonic/gin"
@@ -17,12 +18,13 @@ import (
 )
 
 type claimHandlerRepositoryStub struct {
-	seenUserID int64
-	seenUsage  int64
-	recent     []service.EmptyResponseRecentCandidate
-	dailyCount int
-	claim      *service.EmptyResponseClaim
-	err        error
+	seenUserID      int64
+	seenUsage       int64
+	recent          []service.EmptyResponseRecentCandidate
+	recentPageParam pagination.PaginationParams
+	dailyCount      int
+	claim           *service.EmptyResponseClaim
+	err             error
 }
 
 func (s *claimHandlerRepositoryStub) LoadEvaluation(_ context.Context, userID, usageLogID int64) (*service.EmptyResponseClaimEvaluation, error) {
@@ -39,9 +41,10 @@ func (s *claimHandlerRepositoryStub) LoadEvaluation(_ context.Context, userID, u
 	}, nil
 }
 
-func (s *claimHandlerRepositoryStub) ListRecentEvaluations(_ context.Context, userID int64, _, _ time.Time, _ int) ([]service.EmptyResponseRecentCandidate, error) {
+func (s *claimHandlerRepositoryStub) ListRecentEvaluations(_ context.Context, userID int64, _, _ time.Time, params pagination.PaginationParams) ([]service.EmptyResponseRecentCandidate, *pagination.PaginationResult, error) {
 	s.seenUserID = userID
-	return s.recent, s.err
+	s.recentPageParam = params
+	return s.recent, &pagination.PaginationResult{Total: int64(len(s.recent)), Page: params.Page, PageSize: params.PageSize, Pages: 1}, s.err
 }
 
 func (s *claimHandlerRepositoryStub) CountUserClaims(context.Context, int64, time.Time, time.Time) (int, error) {
@@ -131,12 +134,18 @@ func TestListRecentEmptyResponsesUsesAuthenticatedOwner(t *testing.T) {
 	}}}
 	router := newClaimHandlerTestRouter(repo)
 	recorder := httptest.NewRecorder()
-	request := httptest.NewRequest(http.MethodGet, "/usage/empty-responses", nil)
+	request := httptest.NewRequest(http.MethodGet, "/usage/empty-responses?page=2&page_size=10", nil)
 
 	router.ServeHTTP(recorder, request)
 
 	require.Equal(t, http.StatusOK, recorder.Code)
 	require.Equal(t, int64(42), repo.seenUserID)
+	require.Equal(t, 2, repo.recentPageParam.Page)
+	require.Equal(t, 10, repo.recentPageParam.PageSize)
+	require.Contains(t, recorder.Body.String(), `"items":[`)
+	require.Contains(t, recorder.Body.String(), `"total":1`)
+	require.Contains(t, recorder.Body.String(), `"page":2`)
+	require.Contains(t, recorder.Body.String(), `"page_size":10`)
 	require.Contains(t, recorder.Body.String(), `"usage_log_id":99`)
 	require.Contains(t, recorder.Body.String(), `"status":"claimable"`)
 	require.Contains(t, recorder.Body.String(), `"api_key_name":"cli"`)

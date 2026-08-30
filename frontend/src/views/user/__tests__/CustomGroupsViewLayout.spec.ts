@@ -13,5 +13,6 @@ describe('CustomGroupsView layout', () => {
     expect(source).toContain("import AppLayout from '@/components/layout/AppLayout.vue'")
     expect(source).toContain('<CustomGroupsManager')
     expect(source).toContain("import CustomGroupsManager from '@/components/custom-groups/CustomGroupsManager.vue'")
+    expect(source).toContain('min-w-0')
   })
 })

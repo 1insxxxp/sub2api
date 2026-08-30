@@ -119,6 +119,9 @@ func (r *emptyResponseCompensationRepository) Compensate(ctx context.Context, cl
 		if affected, rowsErr := update.RowsAffected(); rowsErr != nil || affected != 1 {
 			return nil, service.ErrEmptyResponseCompensationInvalidState
 		}
+		if err = insertEmptyResponseBalanceHistory(ctx, tx, claimID, state, refund); err != nil {
+			return nil, err
+		}
 	case service.BillingTypeSubscription:
 		if !state.subscriptionID.Valid {
 			return nil, service.ErrEmptyResponseCompensationInvalidState
@@ -218,4 +221,19 @@ func compensationResultFromState(claimID int64, state *emptyResponseCompensation
 		result.SubscriptionID = &state.subscriptionID.Int64
 	}
 	return result
+}
+
+func insertEmptyResponseBalanceHistory(ctx context.Context, tx *sql.Tx, claimID int64, state *emptyResponseCompensationState, refund float64) error {
+	notes := fmt.Sprintf("Empty response compensation for usage log #%d", state.usageLogID)
+	result, err := tx.ExecContext(ctx, `
+		INSERT INTO redeem_codes (code, type, value, status, used_by, used_at, created_at, source, notes)
+		VALUES ($1, $2, $3, $4, $5, NOW(), NOW(), $6, $7)
+	`, fmt.Sprintf("EMPTY-COMP-%d", claimID), service.RedeemTypeEmptyResponse, refund, service.StatusUsed, state.userID, service.RedeemCodeSourceEmptyResponseCompensation, notes)
+	if err != nil {
+		return fmt.Errorf("record empty response compensation history: %w", err)
+	}
+	if affected, rowsErr := result.RowsAffected(); rowsErr != nil || affected != 1 {
+		return service.ErrEmptyResponseCompensationInvalidState
+	}
+	return nil
 }

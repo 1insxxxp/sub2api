@@ -189,6 +189,32 @@ export default {
         codexNoteWindows:
           'Set $env:SUB2API_API_KEY, save config.toml under %USERPROFILE%\\.codex. Prefer env_key auth; do not commit secrets.',
       },
+      deepseek: {
+        description: 'Configure Claude Code, Codex, or OpenCode through the current DeepSeek group.',
+        codexDescription: 'Configure Codex with API key authentication through the current DeepSeek group.',
+        codexConfigTomlHint: 'Download the model catalog below, save both files under the Codex config directory, and restart Codex.',
+        codexNote: 'Export SUB2API_API_KEY before starting Codex. The downloaded catalog contains model metadata only, not your API key.',
+      },
+      composite: {
+        description: 'Configure supported clients through the current Composite routing group.',
+        codexDescription: 'Configure Codex with API key authentication and the complete model catalog for this Composite group.',
+        codexConfigTomlHint: 'Download the model catalog below, save both files under the Codex config directory, and restart Codex.',
+        codexNote: 'Export SUB2API_API_KEY before starting Codex. Model requests are routed by the selected catalog slug.',
+      },
+      routedCodex: {
+        description: 'Configure Codex with the complete model catalog for the current routed group.',
+        configTomlHint: 'Download the model catalog below, save both files under the Codex config directory, and restart Codex.',
+        note: 'Export SUB2API_API_KEY before starting Codex. The downloaded catalog contains model metadata only, not your API key.',
+      },
+      codexModelCatalog: {
+        title: 'Codex model catalog',
+        description: 'Fetch with this API key, then save the catalog at the path referenced by config.toml.',
+        fetch: 'Fetch catalog',
+        retry: 'Retry',
+        download: 'Download catalog',
+        modelsCount: '{count} models ready to download',
+        errorDescription: 'The catalog could not be fetched with this API key.',
+      },
       opencode: {
         title: 'OpenCode Example',
         subtitle: 'opencode.json',
@@ -310,6 +336,7 @@ export default {
 	  modelVariant: 'Possible version variant',
 	  modelMismatch: 'Different model',
     reasoningEffort: 'Reasoning Effort',
+    requestedReasoningEffort: 'Requested reasoning effort',
     endpoint: 'Endpoint',
     endpointDistribution: 'Endpoint Distribution',
     inbound: 'Inbound',
@@ -406,7 +433,7 @@ export default {
       outputTokens: 'Output tokens',
       originalCharge: 'Original charge',
       expectedRefund: 'Estimated refund',
-      rules: 'Only charged records from the last 7 days with 10 output tokens or fewer can be claimed. Up to 15 claims per day are compensated automatically. Response content is never read or stored.',
+      rules: 'Only charged records from the last 7 days with 10 output tokens or fewer can be claimed. Up to 15 compensation claims can be submitted per day. Response content is never read or stored.',
       reason: 'Additional context (optional)',
       reasonPlaceholder: 'For example: the client received a blank reply and retrying worked',
       submitting: 'Submitting...',
@@ -420,12 +447,12 @@ export default {
       submitSuccess: 'Empty-response claim submitted',
       singleClaimSuccess: 'Empty response compensated',
       submitFailed: 'Failed to submit empty-response claim',
-      dailyLimitReached: 'Daily empty-response compensation limit reached',
+      dailyLimitReached: 'Daily empty-response claim limit reached',
       statusLabel: 'Status',
       tokens: 'Tokens',
       tokenDetail: 'In {input} / Out {output} / Cache {cache} / Total {total}',
       claimRules: {
-        dailyLimit: 'Up to 15 automatic compensations per day',
+        dailyLimit: 'Up to 15 compensation claims per day',
         tokenLimit: 'Output Token must be 10 or less'
       },
       bulk: {
@@ -462,7 +489,7 @@ export default {
         claim_window_expired: 'The 7-day claim window has expired',
         missing_evidence: 'Structured response evidence is missing',
         conflicting_evidence: 'Response evidence is conflicting',
-        daily_limit_manual_review: 'Daily automatic compensation limit of 15 reached; try again tomorrow',
+        daily_limit_manual_review: 'Daily claim limit of 15 reached; try again tomorrow',
         already_claimed: 'A claim already exists for this request'
       }
     },
@@ -728,7 +755,8 @@ export default {
     detail: {
       noModels: 'No models configured for this group',
       noPricing: 'Pricing not configured',
-      peakNote: 'Peak hours {window}: billing rate ×{multiplier}'
+      peakNote: 'Peak hours {window}: billing rate ×{multiplier}',
+      longContextDisabledNote: 'Long-context tier pricing is disabled for this group: requests above the threshold are billed at the base tier; official tiers are for reference only'
     },
     table: {
       model: 'Model',
@@ -737,6 +765,18 @@ export default {
       cache: 'Cache',
       cacheWrite: 'Write',
       cacheRead: 'Read',
+      cacheWriteShort: 'W',
+      cacheReadShort: 'R',
+      tierHint: 'The whole request is billed at the tier matching its total context (input + cache write + cache read)',
+      tierHintMarginal: 'Only the portion above the threshold is billed at this tier; output is unaffected',
+      marginalBadge: 'excess-only tiers',
+      timePricingRowHint: 'Requests made within this period ({timezone} time) are billed at the prices in this row',
+      timePricingRowHintWeekdays:
+        'On weekdays (Mon–Fri) only, requests made within this period ({timezone} time) are billed at the prices in this row; weekends use the standard prices',
+      timePricingRowHintPeak:
+        '; prices in this row exclude the peak-hour rate — where this period overlaps the peak hours {window}, the overlapping portion is additionally multiplied by ×{multiplier}',
+      timePricingWeekdays: 'Weekdays',
+      timePricingRateHint: 'Effective rate {rate} × period multiplier {multiplier}',
       paidPrice: 'Your Price (Discounted)',
       officialPrice: 'Official Price',
       rate: 'Rate',
@@ -905,6 +945,8 @@ export default {
     historyWillAppear: 'Your redemption history will appear here',
     balanceAddedRedeem: 'Balance Added (Redeem)',
     balanceAddedAffiliate: 'Balance Added (Affiliate Transfer)',
+    emptyResponseRefund: 'Empty Response Compensation',
+    emptyResponseRefundDetail: 'Empty response refund',
     balanceAddedAdmin: 'Balance Added (Admin)',
     balanceDeductedAdmin: 'Balance Deducted (Admin)',
     concurrencyAddedRedeem: 'Concurrency Added (Redeem)',
@@ -920,6 +962,22 @@ export default {
     batchSingleUse: 'Each account may use only one code from this promotion.',
     subscriptionRefreshFailed: 'Redeemed successfully, but failed to refresh subscription status.',
     pleaseEnterCode: 'Please enter a redeem code',
+    subscriptionGuide: {
+      eyebrow: 'Subscription card activated',
+      title: 'How to use this subscription card',
+      subtitle: 'Your {group} has been redeemed. Switch the key group before using it.',
+      defaultGroup: 'subscription group',
+      groupLabel: 'Subscription group',
+      daysLabel: 'Valid days',
+      stepApiKeyTitle: 'Switch the API key group first',
+      stepApiKeyDesc: 'Go to the API Keys page and switch the key you will use to the matching subscription group. Until then, requests still use the old group.',
+      stepQuotaTitle: 'Daily quota resets by calendar day',
+      stepQuotaDesc: 'The daily limit resets at 00:00 every day. Once today’s quota is used up, wait for the next reset.',
+      stepUsageTitle: 'Keep using the same API URL and key',
+      stepUsageDesc: 'After switching the group, your client can continue using the current API endpoint and API key.',
+      acknowledge: 'Got it',
+      goToKeys: 'Go to API Keys'
+    },
     balanceTransfer: {
       title: 'Generate Balance Redeem Code',
       subtitle: 'Convert your own balance into a one-use redeem code for another user.',
@@ -1014,6 +1072,18 @@ export default {
     passwordTooShort: 'Password must be at least 8 characters long',
     passwordChangeSuccess: 'Password changed successfully',
     passwordChangeFailed: 'Failed to change password',
+    accountDeletion: {
+      title: 'Delete account',
+      description: 'After deletion you can no longer sign in, and all API keys under this account stop working immediately.',
+      summary: 'This removes access to the current account while keeping historical billing records for administrator audit.',
+      open: 'Delete account',
+      confirmHint: 'Enter your current password to confirm deletion. You will be signed out after submitting.',
+      passwordPlaceholder: 'Enter current password',
+      passwordRequired: 'Please enter your current password',
+      confirm: 'Confirm deletion',
+      success: 'Account deleted',
+      failed: 'Failed to delete account'
+    },
     // TOTP 2FA
     totp: {
       title: 'Two-Factor Authentication (2FA)',
@@ -1112,15 +1182,15 @@ export default {
     },
     avatar: {
       title: 'Profile Avatar',
-      description: 'Upload an avatar image. Static uploads are compressed to 20KB before saving.',
+      description: 'Upload an avatar image. Static uploads are compressed to 100KB before saving.',
       uploadAction: 'Upload image',
-      uploadHint: 'Static uploads are compressed to 20KB when possible. GIF uploads must already be within 20KB.',
+      uploadHint: 'Static uploads are compressed to 100KB when possible. GIF uploads must already be within 100KB.',
       uploadRequired: 'Upload an avatar image first',
       saveSuccess: 'Avatar updated',
       deleteSuccess: 'Avatar removed',
       invalidType: 'Please choose an image file',
-      gifTooLarge: 'GIF avatars must already be 20KB or smaller',
-      compressTooLarge: 'Unable to compress this image below 20KB. Try a smaller image.',
+      gifTooLarge: 'GIF avatars must already be 100KB or smaller',
+      compressTooLarge: 'Unable to compress this image below 100KB. Try a smaller image.',
       compressFailed: 'Failed to compress the selected image.',
       readFailed: 'Failed to read the selected image.',
       emptyDeleteHint: 'Avatar is already empty',

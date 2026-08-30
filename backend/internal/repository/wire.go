@@ -100,8 +100,10 @@ var ProviderSet = wire.NewSet(
 	NewUserAttributeValueRepository,
 	NewUserGroupRateRepository,
 	NewUserCustomGroupRepository,
+	NewSubAdminCommissionRepository,
 	NewErrorPassthroughRepository,
 	NewTLSFingerprintProfileRepository,
+	NewPluginRepository,
 	NewChannelRepository,
 	NewChannelMonitorRepository,
 	NewChannelMonitorV2Repository,
@@ -112,6 +114,7 @@ var ProviderSet = wire.NewSet(
 	NewUserImageTaskRepository,
 	NewUserPlatformQuotaRepository,     // T14: user × platform quota
 	NewUserPlatformQuotaServiceAdapter, // T14: adapter → service.UserPlatformQuotaRepository
+	NewLotteryRepository,
 
 	// Cache implementations
 	NewGatewayCache,

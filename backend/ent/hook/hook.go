@@ -261,6 +261,54 @@ func (f IdentityAdoptionDecisionFunc) Mutate(ctx context.Context, m ent.Mutation
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.IdentityAdoptionDecisionMutation", m)
 }
 
+// The LotteryActivityFunc type is an adapter to allow the use of ordinary
+// function as LotteryActivity mutator.
+type LotteryActivityFunc func(context.Context, *ent.LotteryActivityMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f LotteryActivityFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.LotteryActivityMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.LotteryActivityMutation", m)
+}
+
+// The LotteryDrawFunc type is an adapter to allow the use of ordinary
+// function as LotteryDraw mutator.
+type LotteryDrawFunc func(context.Context, *ent.LotteryDrawMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f LotteryDrawFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.LotteryDrawMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.LotteryDrawMutation", m)
+}
+
+// The LotteryPrizeFunc type is an adapter to allow the use of ordinary
+// function as LotteryPrize mutator.
+type LotteryPrizeFunc func(context.Context, *ent.LotteryPrizeMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f LotteryPrizeFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.LotteryPrizeMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.LotteryPrizeMutation", m)
+}
+
+// The LotteryPrizeItemFunc type is an adapter to allow the use of ordinary
+// function as LotteryPrizeItem mutator.
+type LotteryPrizeItemFunc func(context.Context, *ent.LotteryPrizeItemMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f LotteryPrizeItemFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.LotteryPrizeItemMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.LotteryPrizeItemMutation", m)
+}
+
 // The PaymentAuditLogFunc type is an adapter to allow the use of ordinary
 // function as PaymentAuditLog mutator.
 type PaymentAuditLogFunc func(context.Context, *ent.PaymentAuditLogMutation) (ent.Value, error)
@@ -391,6 +439,18 @@ func (f SettingFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, err
 		return f(ctx, mv)
 	}
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.SettingMutation", m)
+}
+
+// The SubAdminCommissionGrantFunc type is an adapter to allow the use of ordinary
+// function as SubAdminCommissionGrant mutator.
+type SubAdminCommissionGrantFunc func(context.Context, *ent.SubAdminCommissionGrantMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f SubAdminCommissionGrantFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.SubAdminCommissionGrantMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.SubAdminCommissionGrantMutation", m)
 }
 
 // The SubscriptionPlanFunc type is an adapter to allow the use of ordinary

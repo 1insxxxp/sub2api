@@ -12,6 +12,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
+	"github.com/tidwall/gjson"
 )
 
 // TestOpenAIResponsesEmptyCompletedFailsOver verifies that a Responses stream
@@ -111,6 +112,49 @@ func TestOpenAIResponsesEmptyCompletedWithUsageSucceeds(t *testing.T) {
 	require.NotNil(t, result)
 	require.NotNil(t, result.Usage)
 	require.Equal(t, 3, result.Usage.InputTokens)
+}
+
+func TestOpenAIResponsesStreamingAddsOutputTokenDetailsForGrokCompatUsage(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	upstream := &httpUpstreamRecorder{resp: &http.Response{
+		StatusCode: http.StatusOK,
+		Header:     http.Header{"Content-Type": []string{"text/event-stream"}},
+		Body: io.NopCloser(strings.NewReader(
+			"data: {\"type\":\"response.output_text.delta\",\"delta\":\"ok\"}\n\n" +
+				"data: {\"type\":\"response.completed\",\"response\":{\"id\":\"resp_grok_usage\",\"object\":\"response\",\"model\":\"grok-4.6\",\"status\":\"completed\",\"output\":[{\"type\":\"message\",\"id\":\"msg_1\",\"role\":\"assistant\",\"status\":\"completed\",\"content\":[{\"type\":\"output_text\",\"text\":\"ok\"}]}],\"usage\":{\"input_tokens\":14840,\"output_tokens\":795,\"total_tokens\":15635,\"input_tokens_details\":{\"cached_tokens\":4544},\"reasoning_tokens\":769}}}\n\n",
+		)),
+	}}
+	svc := newOpenAIImageGenerationControlTestService(upstream)
+	c, recorder := newOpenAIImageGenerationControlTestContext(true, "grok-shell/1.0.0 (macos; aarch64)")
+	account := newOpenAIImageGenerationControlTestAccount()
+	account.Extra = map[string]any{"openai_responses_supported": true}
+
+	body := []byte(`{
+		"model":"grok-4.6",
+		"stream":true,
+		"input":[{"type":"message","role":"user","content":[{"type":"input_text","text":"continue"}]}]
+	}`)
+
+	result, err := svc.Forward(context.Background(), c, account, body)
+	require.NoError(t, err)
+	require.NotNil(t, result)
+
+	completed := firstOpenAISSEDataPayloadWithType(recorder.Body.String(), "response.completed")
+	require.NotEmpty(t, completed)
+	require.True(t, gjson.Get(completed, "response.usage.output_tokens_details").Exists())
+	require.Equal(t, int64(769), gjson.Get(completed, "response.usage.output_tokens_details.reasoning_tokens").Int())
+}
+
+func firstOpenAISSEDataPayloadWithType(body string, eventType string) string {
+	for _, line := range strings.Split(body, "\n") {
+		data, ok := extractOpenAISSEDataLine(strings.TrimSpace(line))
+		if !ok || gjson.Get(data, "type").String() != eventType {
+			continue
+		}
+		return data
+	}
+	return ""
 }
 
 func TestOpenAIResponsesCompletedEventIsEmpty(t *testing.T) {

@@ -130,6 +130,9 @@ describe('admin DashboardView', () => {
   })
 
   it('uses the last 24 hours as the default dashboard range', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date(2026, 7, 5, 1, 30))
+
     mount(DashboardView, {
       global: {
         stubs: {
@@ -147,15 +150,22 @@ describe('admin DashboardView', () => {
 
     await flushPromises()
 
-    const now = new Date()
+    const now = new Date(2026, 7, 5, 1, 30)
     const yesterday = new Date(now.getTime() - 24 * 60 * 60 * 1000)
-
-    expect(getSnapshotV2).toHaveBeenCalledTimes(1)
-    expect(getSnapshotV2).toHaveBeenCalledWith(expect.objectContaining({
+    const expectedRange = expect.objectContaining({
       start_date: formatLocalDate(yesterday),
       end_date: formatLocalDate(now),
+      start_time: yesterday.toISOString(),
+      end_time: now.toISOString(),
       granularity: 'hour'
-    }))
+    })
+
+    expect(getSnapshotV2).toHaveBeenCalledTimes(1)
+    expect(getSnapshotV2).toHaveBeenCalledWith(expectedRange)
+    expect(getUserUsageTrend).toHaveBeenCalledWith(expectedRange)
+    expect(getUserSpendingRanking).toHaveBeenCalledWith(expectedRange)
+
+    vi.useRealTimers()
   })
 
   it('renders branded metric cards and dashboard controls without the redundant page hero', async () => {
@@ -183,9 +193,11 @@ describe('admin DashboardView', () => {
     expect(wrapper.find('.admin-page-hero').exists()).toBe(false)
     expect(wrapper.find('[data-test="dashboard-user-trend-surface"]').classes()).toContain('admin-surface')
     expect(wrapper.find('[data-test="dashboard-user-trend-header"]').classes()).toContain('admin-panel-header')
+    expect(wrapper.text()).toContain('admin.dashboard.userUsageTrend')
+    expect(wrapper.text()).not.toContain('admin.dashboard.recentUsage')
   })
 
-  it('fills the recent usage chart with the latest 24 hourly buckets', async () => {
+  it('covers a rolling 24-hour range with both partial-hour boundary buckets', async () => {
     vi.useFakeTimers()
     vi.setSystemTime(new Date(2026, 7, 5, 1, 30))
     getUserUsageTrend.mockResolvedValue({
@@ -209,11 +221,11 @@ describe('admin DashboardView', () => {
     await flushPromises()
 
     const chartData = lineCapture.props.data as any
-    expect(chartData.labels).toHaveLength(24)
-    expect(chartData.labels[0]).toBe('2026-08-04 02:00')
+    expect(chartData.labels).toHaveLength(25)
+    expect(chartData.labels[0]).toBe('2026-08-04 01:00')
     expect(chartData.labels.at(-1)).toBe('2026-08-05 01:00')
-    expect(chartData.datasets[0].data[16]).toBe(6200)
-    expect(chartData.datasets[0].data[17]).toBe(400)
+    expect(chartData.datasets[0].data[17]).toBe(6200)
+    expect(chartData.datasets[0].data[18]).toBe(400)
     expect(chartData.datasets[0].data[0]).toBe(0)
     vi.useRealTimers()
   })

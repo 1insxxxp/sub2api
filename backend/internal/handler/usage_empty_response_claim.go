@@ -8,6 +8,7 @@ import (
 	"strconv"
 
 	"github.com/Wei-Shaw/sub2api/internal/handler/dto"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/pagination"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/response"
 	middleware2 "github.com/Wei-Shaw/sub2api/internal/server/middleware"
 	"github.com/Wei-Shaw/sub2api/internal/service"
@@ -28,7 +29,13 @@ func (h *UsageHandler) ListRecentEmptyResponses(c *gin.Context) {
 		response.InternalError(c, "Empty response claim service not available")
 		return
 	}
-	records, err := h.emptyResponseClaimService.ListRecent(c.Request.Context(), subject.UserID)
+	page, pageSize := response.ParsePagination(c)
+	records, pageResult, err := h.emptyResponseClaimService.ListRecent(c.Request.Context(), subject.UserID, pagination.PaginationParams{
+		Page:      page,
+		PageSize:  pageSize,
+		SortBy:    "created_at",
+		SortOrder: pagination.SortOrderDesc,
+	})
 	if err != nil {
 		response.ErrorFrom(c, err)
 		return
@@ -37,7 +44,7 @@ func (h *UsageHandler) ListRecentEmptyResponses(c *gin.Context) {
 	for i := range records {
 		out = append(out, dto.EmptyResponseRecordFromService(&records[i]))
 	}
-	response.Success(c, out)
+	response.Paginated(c, out, pageResult.Total, pageResult.Page, pageResult.PageSize)
 }
 
 func (h *UsageHandler) SubmitEmptyResponseClaim(c *gin.Context) {

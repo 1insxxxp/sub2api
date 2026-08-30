@@ -64,6 +64,9 @@ const systemCustomGroupPublicModelCIIndex = "uq_system_custom_group_public_model
 const systemCustomGroupSourceModelCIIndex = "uq_system_custom_group_source_model_ci"
 const systemCustomGroupSourceGroupIDIndex = "idx_system_custom_group_models_source_group_id"
 const usageLogsSourceGroupIDIndex = "idx_usage_logs_source_group_id"
+const usageLogsEffectiveModelIndexesMigration = "226_add_usage_log_effective_model_indexes_notx.sql"
+const usageLogsEffectiveRequestedModelIndex = "idx_usage_logs_effective_requested_model_created"
+const usageLogsEffectiveUpstreamModelIndex = "idx_usage_logs_effective_upstream_model_created"
 
 type migrationChecksumCompatibilityRule struct {
 	fileChecksum       string
@@ -305,6 +308,13 @@ func prepareNonTransactionalMigration(ctx context.Context, db migrationConnectio
 		return dropInvalidIndexIfPresent(ctx, db, usageLogsUpstreamModelMismatchIndex)
 	case systemCustomGroupRouteIndexesMigration:
 		return prepareSystemCustomGroupRouteIndexes(ctx, db)
+	case usageLogsEffectiveModelIndexesMigration:
+		for _, indexName := range []string{usageLogsEffectiveRequestedModelIndex, usageLogsEffectiveUpstreamModelIndex} {
+			if err := dropInvalidIndexIfPresent(ctx, db, indexName); err != nil {
+				return err
+			}
+		}
+		return nil
 	default:
 		return nil
 	}

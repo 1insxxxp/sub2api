@@ -215,6 +215,10 @@ type AffiliateRepository interface {
 	GetAffiliateUserOverview(ctx context.Context, userID int64) (*AffiliateUserOverview, error)
 }
 
+type AffiliateInviterSummaryRepository interface {
+	ListAffiliateInviterSummaries(ctx context.Context, filter AffiliateRecordFilter, qualificationAmount float64) ([]AffiliateInviterSummary, int64, error)
+}
+
 type AffiliateRewardRepository interface {
 	ListAffiliateRewardRules(ctx context.Context, includeDisabled bool) ([]AffiliateRewardRule, error)
 	GetAffiliateRewardRule(ctx context.Context, ruleID int64) (*AffiliateRewardRule, error)
@@ -304,6 +308,21 @@ type AffiliateInviteRecord struct {
 	CustomRebateRatePercent    *float64      `json:"custom_rebate_rate_percent"`
 	EffectiveRebateRatePercent float64       `json:"effective_rebate_rate_percent"`
 	CreatedAt                  time.Time     `json:"created_at"`
+}
+
+type AffiliateInviterSummary struct {
+	InviterID             int64      `json:"inviter_id"`
+	InviterEmail          string     `json:"inviter_email"`
+	InviterUsername       string     `json:"inviter_username"`
+	InviterAvatarURL      string     `json:"inviter_avatar_url"`
+	AffCode               string     `json:"aff_code"`
+	InvitedCount          int        `json:"invited_count"`
+	QualifiedInviteeCount int        `json:"qualified_invitee_count"`
+	TotalRebate           float64    `json:"total_rebate"`
+	AvailableQuota        float64    `json:"available_quota"`
+	TransferredAmount     float64    `json:"transferred_amount"`
+	RebateRecordCount     int        `json:"rebate_record_count"`
+	LastInvitedAt         *time.Time `json:"last_invited_at"`
 }
 
 type AffiliateRebateRecord struct {
@@ -1306,6 +1325,26 @@ func (s *AffiliateService) AdminListInviteRecords(ctx context.Context, filter Af
 		items[i].EffectiveRebateRatePercent = effectiveAffiliateRebateRate(&AffiliateSummary{AffRebateRatePercent: items[i].CustomRebateRatePercent}, automaticRate)
 	}
 	return items, total, nil
+}
+
+func (s *AffiliateService) AdminListInviterSummaries(ctx context.Context, filter AffiliateRecordFilter) ([]AffiliateInviterSummary, int64, error) {
+	if s == nil || s.repo == nil {
+		return nil, 0, infraerrors.ServiceUnavailable("SERVICE_UNAVAILABLE", "affiliate service unavailable")
+	}
+	config, err := s.affiliateTierConfigStrict(ctx)
+	if err != nil {
+		return nil, 0, err
+	}
+	summaryRepo, ok := s.repo.(AffiliateInviterSummaryRepository)
+	if !ok {
+		return nil, 0, infraerrors.ServiceUnavailable("SERVICE_UNAVAILABLE", "affiliate summary service unavailable")
+	}
+	normalizedFilter := normalizeAffiliateRecordFilter(filter)
+	// Summary rows are lifetime totals. Date ranges belong to the underlying
+	// invite and rebate record views and must not silently change ranking totals.
+	normalizedFilter.StartAt = nil
+	normalizedFilter.EndAt = nil
+	return summaryRepo.ListAffiliateInviterSummaries(ctx, normalizedFilter, config.QualificationAmount)
 }
 
 func (s *AffiliateService) AdminListRebateRecords(ctx context.Context, filter AffiliateRecordFilter) ([]AffiliateRebateRecord, int64, error) {

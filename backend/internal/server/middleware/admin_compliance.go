@@ -22,6 +22,11 @@ func AdminComplianceGuard(settingService *service.SettingService) gin.HandlerFun
 			return
 		}
 
+		if role, ok := GetUserRoleFromContext(c); ok && role != service.RoleAdmin {
+			c.Next()
+			return
+		}
+
 		acknowledged, err := settingService.IsAdminComplianceAcknowledged(c.Request.Context(), subject.UserID)
 		if err != nil {
 			AbortWithError(c, http.StatusInternalServerError, "INTERNAL_ERROR", "Internal server error")

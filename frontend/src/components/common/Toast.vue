@@ -1,7 +1,7 @@
 <template>
   <Teleport to="body">
     <div
-      class="pointer-events-none fixed right-3 top-3 z-[9999] space-y-2 sm:right-4 sm:top-4"
+      class="toast-stack pointer-events-none fixed right-3 top-3 z-[9999] space-y-2 sm:right-4 sm:top-4"
       aria-live="polite"
       aria-atomic="true"
     >

@@ -24,8 +24,10 @@ func TestProvideAdminHandlersPreservesLegacyConstructor(t *testing.T) {
 	geminiOAuthHandler := &admin.GeminiOAuthHandler{}
 	antigravityOAuthHandler := &admin.AntigravityOAuthHandler{}
 	grokOAuthHandler := &admin.GrokOAuthHandler{}
+	cnProviderHandler := &admin.CNProviderHandler{}
 	proxyHandler := &admin.ProxyHandler{}
 	redeemHandler := &admin.RedeemHandler{}
+	subAdminCommissionHandler := &admin.SubAdminCommissionHandler{}
 	promoHandler := &admin.PromoHandler{}
 	settingHandler := &admin.SettingHandler{}
 	opsHandler := &admin.OpsHandler{}
@@ -35,6 +37,7 @@ func TestProvideAdminHandlersPreservesLegacyConstructor(t *testing.T) {
 	userAttributeHandler := &admin.UserAttributeHandler{}
 	errorPassthroughHandler := &admin.ErrorPassthroughHandler{}
 	tlsFingerprintProfileHandler := &admin.TLSFingerprintProfileHandler{}
+	pluginHandler := &admin.PluginHandler{}
 	apiKeyHandler := &admin.AdminAPIKeyHandler{}
 	scheduledTestHandler := &admin.ScheduledTestHandler{}
 	channelHandler := &admin.ChannelHandler{}
@@ -63,6 +66,7 @@ func TestProvideAdminHandlersPreservesLegacyConstructor(t *testing.T) {
 		geminiOAuthHandler,
 		antigravityOAuthHandler,
 		grokOAuthHandler,
+		cnProviderHandler,
 		proxyHandler,
 		redeemHandler,
 		promoHandler,
@@ -74,6 +78,7 @@ func TestProvideAdminHandlersPreservesLegacyConstructor(t *testing.T) {
 		userAttributeHandler,
 		errorPassthroughHandler,
 		tlsFingerprintProfileHandler,
+		pluginHandler,
 		apiKeyHandler,
 		scheduledTestHandler,
 		channelHandler,
@@ -103,8 +108,11 @@ func TestProvideAdminHandlersPreservesLegacyConstructor(t *testing.T) {
 	require.Same(t, geminiOAuthHandler, got.GeminiOAuth)
 	require.Same(t, antigravityOAuthHandler, got.AntigravityOAuth)
 	require.Same(t, grokOAuthHandler, got.GrokOAuth)
+	require.Same(t, cnProviderHandler, got.CNProvider)
 	require.Same(t, proxyHandler, got.Proxy)
+	require.Same(t, pluginHandler, got.Plugin)
 	require.Same(t, redeemHandler, got.Redeem)
+	require.Nil(t, got.SubAdminCommission)
 	require.Same(t, promoHandler, got.Promo)
 	require.Same(t, settingHandler, got.Setting)
 	require.Same(t, opsHandler, got.Ops)
@@ -141,8 +149,10 @@ func TestProvideAdminHandlersPreservesLegacyConstructor(t *testing.T) {
 		geminiOAuthHandler,
 		antigravityOAuthHandler,
 		grokOAuthHandler,
+		cnProviderHandler,
 		proxyHandler,
 		redeemHandler,
+		subAdminCommissionHandler,
 		promoHandler,
 		settingHandler,
 		opsHandler,
@@ -152,6 +162,7 @@ func TestProvideAdminHandlersPreservesLegacyConstructor(t *testing.T) {
 		userAttributeHandler,
 		errorPassthroughHandler,
 		tlsFingerprintProfileHandler,
+		pluginHandler,
 		apiKeyHandler,
 		scheduledTestHandler,
 		channelHandler,
@@ -169,6 +180,7 @@ func TestProvideAdminHandlersPreservesLegacyConstructor(t *testing.T) {
 		systemCustomGroupHandler,
 	)
 	require.Same(t, systemCustomGroupHandler, withSystemCustom.SystemCustomGroup)
+	require.Same(t, subAdminCommissionHandler, withSystemCustom.SubAdminCommission)
 	require.Same(t, dashboardHandler, withSystemCustom.Dashboard)
 	require.Same(t, accountHandler, withSystemCustom.Account)
 }

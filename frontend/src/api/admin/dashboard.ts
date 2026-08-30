@@ -47,6 +47,8 @@ export async function getRealtimeMetrics(): Promise<{
 export interface TrendParams {
   start_date?: string
   end_date?: string
+  start_time?: string
+  end_time?: string
   granularity?: 'day' | 'hour'
   user_id?: number
   api_key_id?: number
@@ -241,7 +243,7 @@ export interface UserTrendResponse {
 }
 
 export interface UserSpendingRankingParams
-  extends Pick<TrendParams, 'start_date' | 'end_date'> {
+  extends Pick<TrendParams, 'start_date' | 'end_date' | 'start_time' | 'end_time' | 'granularity'> {
   limit?: number
 }
 

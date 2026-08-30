@@ -82,7 +82,7 @@ const messages: Record<string, string> = {
   'usage.emptyResponse.claimingOne': 'Claiming...',
   'usage.emptyResponse.singleClaimSuccess': 'Empty response compensated',
   'usage.emptyResponse.dailyLimitReached': 'Daily limit reached',
-  'usage.emptyResponse.claimRules.dailyLimit': 'Up to 15 automatic compensations per day',
+  'usage.emptyResponse.claimRules.dailyLimit': 'Up to 15 compensation claims per day',
   'usage.emptyResponse.claimRules.tokenLimit': 'Output Token must be 10 or less',
   'usage.emptyResponse.reasonCode.pure_empty': 'Empty output',
   'usage.emptyResponse.reasonCode.daily_limit_manual_review': 'Daily limit reached',
@@ -146,6 +146,16 @@ const usageTableStub = {
     </div>
   `,
 }
+const paginationStub = {
+  props: ['page', 'pageSize', 'total'],
+  emits: ['update:page', 'update:pageSize'],
+  template: `
+    <div data-testid="pagination-stub" :data-page="page" :data-page-size="pageSize" :data-total="total">
+      <button data-testid="pagination-next" @click="$emit('update:page', page + 1)">next</button>
+      <button data-testid="pagination-size-10" @click="$emit('update:pageSize', 10)">size 10</button>
+    </div>
+  `,
+}
 
 const usageLog = {
   id: 1,
@@ -183,7 +193,7 @@ function mountUsageView() {
     global: {
       stubs: {
         AppLayout: simpleStub,
-        Pagination: true,
+        Pagination: paginationStub,
         Select: true,
         DateRangePicker: true,
         Icon: true,
@@ -240,24 +250,30 @@ describe('user UsageView', () => {
       trend: [],
       groups: [],
     })
-    listRecentEmptyResponses.mockResolvedValue([
-      {
-        usage_log_id: 77,
-        model: 'claude-opus-4-6',
-        api_key_name: 'cli',
-        group_name: 'cc',
-        inbound_endpoint: '/v1/messages',
-        actual_cost: 1.25,
-        input_tokens: 1234,
-        output_tokens: 0,
-        cache_tokens: 46,
-        total_tokens: 1280,
-        refunded_amount: 0,
-        status: 'claimable',
-        reason_code: 'pure_empty',
-        created_at: '2026-03-08T00:00:00Z',
-      },
-    ])
+    listRecentEmptyResponses.mockResolvedValue({
+      items: [
+        {
+          usage_log_id: 77,
+          model: 'claude-opus-4-6',
+          api_key_name: 'cli',
+          group_name: 'cc',
+          inbound_endpoint: '/v1/messages',
+          actual_cost: 1.25,
+          input_tokens: 1234,
+          output_tokens: 0,
+          cache_tokens: 46,
+          total_tokens: 1280,
+          refunded_amount: 0,
+          status: 'claimable',
+          reason_code: 'pure_empty',
+          created_at: '2026-03-08T00:00:00Z',
+        },
+      ],
+      total: 1,
+      page: 1,
+      page_size: 20,
+      pages: 1,
+    })
     list.mockResolvedValue({ items: [{ id: 1, name: 'demo-key' }] })
     getAvailable.mockResolvedValue([{ id: 1, name: 'default' }])
 		submitEmptyResponseClaim.mockResolvedValue({
@@ -444,7 +460,7 @@ describe('user UsageView', () => {
 
     expect(listRecentEmptyResponses).toHaveBeenCalledTimes(1)
     expect(wrapper.text()).toContain('Recent empty responses')
-    expect(wrapper.text()).toContain('Up to 15 automatic compensations per day')
+    expect(wrapper.text()).toContain('Up to 15 compensation claims per day')
     expect(wrapper.text()).toContain('Output Token must be 10 or less')
     expect(wrapper.text()).toContain('claude-opus-4-6')
     expect(wrapper.text()).toContain('cli')
@@ -454,6 +470,71 @@ describe('user UsageView', () => {
     expect(wrapper.find('[data-testid="empty-response-token-77"]').text()).toContain('46')
     expect(wrapper.find('[data-testid="empty-response-token-77"]').text()).toContain('1,280')
     expect(wrapper.find('[data-testid="claim-empty-responses"]').exists()).toBe(false)
+  })
+
+  it('paginates the empty response list with server-side page parameters', async () => {
+    listRecentEmptyResponses.mockResolvedValueOnce({
+      items: [
+        {
+          usage_log_id: 77,
+          model: 'claude-opus-4-6',
+          api_key_name: 'cli',
+          group_name: 'cc',
+          inbound_endpoint: '/v1/messages',
+          actual_cost: 1.25,
+          input_tokens: 1234,
+          output_tokens: 0,
+          cache_tokens: 46,
+          total_tokens: 1280,
+          refunded_amount: 0,
+          status: 'claimable',
+          reason_code: 'pure_empty',
+          created_at: '2026-03-08T00:00:00Z',
+        },
+      ],
+      total: 40,
+      page: 1,
+      page_size: 20,
+      pages: 2,
+    })
+    const wrapper = mountUsageView()
+    await flushPromises()
+
+    await wrapper.find('[data-testid="empty-response-tab"]').trigger('click')
+    await flushPromises()
+
+    expect(listRecentEmptyResponses).toHaveBeenLastCalledWith(expect.objectContaining({ page: 1 }))
+    expect(wrapper.get('[data-testid="pagination-stub"]').attributes('data-total')).toBe('40')
+
+    listRecentEmptyResponses.mockResolvedValueOnce({
+      items: [
+        {
+          usage_log_id: 88,
+          model: 'claude-sonnet-4-6',
+          api_key_name: 'cli-2',
+          group_name: 'cc',
+          inbound_endpoint: '/v1/messages',
+          actual_cost: 0.5,
+          input_tokens: 10,
+          output_tokens: 0,
+          cache_tokens: 0,
+          total_tokens: 10,
+          refunded_amount: 0,
+          status: 'claimable',
+          reason_code: 'pure_empty',
+          created_at: '2026-03-08T00:00:00Z',
+        },
+      ],
+      total: 40,
+      page: 2,
+      page_size: 20,
+      pages: 2,
+    })
+    await wrapper.find('[data-testid="pagination-next"]').trigger('click')
+    await flushPromises()
+
+    expect(listRecentEmptyResponses).toHaveBeenLastCalledWith(expect.objectContaining({ page: 2 }))
+    expect(wrapper.text()).toContain('claude-sonnet-4-6')
   })
 
   it('keeps the empty response table fixed-width and horizontally scrollable', async () => {
@@ -467,11 +548,43 @@ describe('user UsageView', () => {
     const table = wrapper.find('[data-testid="empty-response-table"]')
 
     expect(scroll.exists()).toBe(true)
-    expect(scroll.classes()).toEqual(expect.arrayContaining(['overflow-x-auto', 'touch-pan-x', 'overscroll-x-contain']))
+    expect(scroll.classes()).toEqual(expect.arrayContaining(['hidden', 'overflow-x-auto', 'touch-pan-x', 'overscroll-x-contain', 'md:block']))
     expect(table.exists()).toBe(true)
     expect(table.classes()).toEqual(expect.arrayContaining(['table-fixed', 'min-w-[1280px]']))
     expect(wrapper.find('[data-testid="empty-response-model-77"]').classes()).toContain('truncate')
-    expect(wrapper.find('[data-testid="claim-empty-response-77"]').classes()).toEqual(expect.arrayContaining(['min-w-[72px]', 'whitespace-nowrap']))
+    expect(wrapper.find('[data-testid="claim-empty-response-desktop-77"]').classes()).toEqual(expect.arrayContaining(['min-w-[72px]', 'whitespace-nowrap']))
+  })
+
+  it('puts empty response actions in the first column for mobile access', async () => {
+    const wrapper = mountUsageView()
+    await flushPromises()
+
+    await wrapper.find('[data-testid="empty-response-tab"]').trigger('click')
+    await flushPromises()
+
+    const headerCells = wrapper.findAll('[data-testid="empty-response-table"] thead th')
+    const firstBodyCells = wrapper.findAll('[data-testid="empty-response-table"] tbody tr:first-child td')
+
+    expect(headerCells[0]?.text()).toBe('Actions')
+    expect(firstBodyCells[0]?.find('[data-testid="claim-empty-response-desktop-77"]').exists()).toBe(true)
+  })
+
+  it('renders empty response rows as mobile cards with the claim action at the top', async () => {
+    const wrapper = mountUsageView()
+    await flushPromises()
+
+    await wrapper.find('[data-testid="empty-response-tab"]').trigger('click')
+    await flushPromises()
+
+    const mobileList = wrapper.get('[data-testid="empty-response-mobile-list"]')
+    const card = wrapper.get('[data-testid="empty-response-mobile-card-77"]')
+
+    expect(mobileList.classes()).toEqual(expect.arrayContaining(['md:hidden']))
+    expect(card.text()).toContain('claude-opus-4-6')
+    expect(card.text()).toContain('cli')
+    expect(card.text()).toContain('$1.250000')
+    expect(card.text()).toContain('Claimable')
+    expect(card.find('[data-testid="claim-empty-response-mobile-77"]').exists()).toBe(true)
   })
 
   it('claims a single empty response row and updates that row only', async () => {
@@ -488,7 +601,7 @@ describe('user UsageView', () => {
 
     await wrapper.find('[data-testid="empty-response-tab"]').trigger('click')
     await flushPromises()
-    await wrapper.find('[data-testid="claim-empty-response-77"]').trigger('click')
+    await wrapper.find('[data-testid="claim-empty-response-mobile-77"]').trigger('click')
     await flushPromises()
 
     expect(submitEmptyResponseClaim).toHaveBeenCalledWith(77, { reason: '' })
@@ -502,49 +615,57 @@ describe('user UsageView', () => {
   })
 
   it('does not render claim buttons for rows that are no longer claimable', async () => {
-    listRecentEmptyResponses.mockResolvedValueOnce([
-      {
-        usage_log_id: 77,
-        claim_id: 701,
-        model: 'claude-opus-4-6',
-        api_key_name: 'cli',
-        group_name: 'cc',
-        inbound_endpoint: '/v1/messages',
-        actual_cost: 1.25,
-        input_tokens: 1234,
-        output_tokens: 0,
-        cache_tokens: 46,
-        total_tokens: 1280,
-        refunded_amount: 1.25,
-        status: 'compensated',
-        reason_code: 'pure_empty',
-        created_at: '2026-03-08T00:00:00Z',
-      },
-      {
-        usage_log_id: 78,
-        model: 'claude-opus-4-6',
-        api_key_name: 'cli',
-        group_name: 'cc',
-        inbound_endpoint: '/v1/messages',
-        actual_cost: 1.25,
-        input_tokens: 1234,
-        output_tokens: 0,
-        cache_tokens: 46,
-        total_tokens: 1280,
-        refunded_amount: 0,
-        status: 'daily_limited',
-        reason_code: 'daily_limit_manual_review',
-        created_at: '2026-03-08T00:00:00Z',
-      },
-    ])
+    listRecentEmptyResponses.mockResolvedValueOnce({
+      items: [
+        {
+          usage_log_id: 77,
+          claim_id: 701,
+          model: 'claude-opus-4-6',
+          api_key_name: 'cli',
+          group_name: 'cc',
+          inbound_endpoint: '/v1/messages',
+          actual_cost: 1.25,
+          input_tokens: 1234,
+          output_tokens: 0,
+          cache_tokens: 46,
+          total_tokens: 1280,
+          refunded_amount: 1.25,
+          status: 'compensated',
+          reason_code: 'pure_empty',
+          created_at: '2026-03-08T00:00:00Z',
+        },
+        {
+          usage_log_id: 78,
+          model: 'claude-opus-4-6',
+          api_key_name: 'cli',
+          group_name: 'cc',
+          inbound_endpoint: '/v1/messages',
+          actual_cost: 1.25,
+          input_tokens: 1234,
+          output_tokens: 0,
+          cache_tokens: 46,
+          total_tokens: 1280,
+          refunded_amount: 0,
+          status: 'daily_limited',
+          reason_code: 'daily_limit_manual_review',
+          created_at: '2026-03-08T00:00:00Z',
+        },
+      ],
+      total: 2,
+      page: 1,
+      page_size: 20,
+      pages: 1,
+    })
     const wrapper = mountUsageView()
     await flushPromises()
 
     await wrapper.find('[data-testid="empty-response-tab"]').trigger('click')
     await flushPromises()
 
-    expect(wrapper.find('[data-testid="claim-empty-response-77"]').exists()).toBe(false)
-    expect(wrapper.find('[data-testid="claim-empty-response-78"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="claim-empty-response-desktop-77"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="claim-empty-response-mobile-77"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="claim-empty-response-desktop-78"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="claim-empty-response-mobile-78"]').exists()).toBe(false)
     expect(submitEmptyResponseClaim).not.toHaveBeenCalled()
   })
 })

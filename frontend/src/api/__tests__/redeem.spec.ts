@@ -19,6 +19,7 @@ import {
   deleteGenerated,
   generateBalanceTransferCode,
   generateBalanceTransferCodes,
+  generateUserBalanceTransferCodes,
   getGenerated,
   getHistory,
   type GenerateBalanceTransferCodeRequest,
@@ -58,7 +59,7 @@ describe('redeem api balance transfer codes', () => {
 
     const result = await generateBalanceTransferCode(request)
 
-    expect(post).toHaveBeenCalledWith('/redeem/generate', request)
+    expect(post).toHaveBeenCalledWith('/admin/workbench/redeem/generated', request)
     expect(result).toEqual(response)
   })
 
@@ -89,8 +90,31 @@ describe('redeem api balance transfer codes', () => {
 
     const result = await generateBalanceTransferCodes(request)
 
-    expect(post).toHaveBeenCalledWith('/redeem/generate', request)
+    expect(post).toHaveBeenCalledWith('/admin/workbench/redeem/generated', request)
     expect(result).toEqual(response)
+  })
+
+  it('keeps the explicitly enabled user balance transfer endpoint separate', async () => {
+    const request: GenerateBalanceTransferCodeRequest = { amount: 5, count: 1 }
+    const response: GeneratedRedeemCode[] = [
+      {
+        id: 19,
+        code: 'USER-CODE',
+        type: 'balance',
+        value: 5,
+        status: 'unused',
+        used_by: null,
+        used_at: null,
+        created_at: '2026-08-30T12:00:00Z',
+        expires_at: '2026-09-29T12:00:00Z',
+        created_by: 8,
+        source: 'user_balance_transfer'
+      }
+    ]
+    post.mockResolvedValue({ data: response })
+
+    await expect(generateUserBalanceTransferCodes(request)).resolves.toEqual(response)
+    expect(post).toHaveBeenCalledWith('/redeem/generate', request)
   })
 
   it('loads paginated redeem history for the current user', async () => {
@@ -142,7 +166,7 @@ describe('redeem api balance transfer codes', () => {
 
     const result = await getGenerated({ page: 1, page_size: 10 })
 
-    expect(get).toHaveBeenCalledWith('/redeem/generated', { params: { page: 1, page_size: 10 } })
+    expect(get).toHaveBeenCalledWith('/admin/workbench/redeem/generated', { params: { page: 1, page_size: 10 } })
     expect(result).toEqual(response)
   })
 
@@ -163,7 +187,7 @@ describe('redeem api balance transfer codes', () => {
 
     const result = await deleteGenerated(18)
 
-    expect(del).toHaveBeenCalledWith('/redeem/generated/18')
+    expect(del).toHaveBeenCalledWith('/admin/workbench/redeem/generated/18')
     expect(result).toEqual(response)
   })
 
@@ -198,7 +222,7 @@ describe('redeem api balance transfer codes', () => {
 
     const result = await deleteGeneratedBatch([18, 19])
 
-    expect(post).toHaveBeenCalledWith('/redeem/generated/batch-delete', { ids: [18, 19] })
+    expect(post).toHaveBeenCalledWith('/admin/workbench/redeem/generated/batch-delete', { ids: [18, 19] })
     expect(result).toEqual(response)
   })
 })

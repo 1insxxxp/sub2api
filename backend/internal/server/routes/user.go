@@ -35,6 +35,7 @@ func RegisterUserRoutes(
 		{
 			user.GET("/profile", h.User.GetProfile)
 			user.PUT("/password", h.User.ChangePassword)
+			user.DELETE("/account", h.User.DeleteOwnAccount)
 			user.PUT("", h.User.UpdateProfile)
 			user.GET("/aff", h.User.GetAffiliate)
 			user.POST("/aff/transfer", h.User.TransferAffiliateQuota)
@@ -155,6 +156,14 @@ func RegisterUserRoutes(
 		{
 			announcements.GET("", h.Announcement.List)
 			announcements.POST("/:id/read", h.Announcement.MarkRead)
+		}
+
+		// 抽奖活动（用户可见）
+		lottery := authenticated.Group("/lottery")
+		{
+			lottery.GET("/state", h.Lottery.GetState)
+			lottery.POST("/draw", h.Lottery.Draw)
+			lottery.GET("/history", h.Lottery.History)
 		}
 
 		// 卡密兑换

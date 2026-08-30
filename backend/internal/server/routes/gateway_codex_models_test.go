@@ -1,13 +1,13 @@
 package routes
 
 import (
+	"github.com/Wei-Shaw/sub2api/internal/server/middleware"
+	"github.com/Wei-Shaw/sub2api/internal/service"
+	"github.com/gin-gonic/gin"
+	"github.com/stretchr/testify/require"
 	"net/http"
 	"net/http/httptest"
 	"testing"
-
-	"github.com/Wei-Shaw/sub2api/internal/service"
-	"github.com/stretchr/testify/require"
-	"github.com/tidwall/gjson"
 )
 
 func TestGatewayRoutesCodexModelsManifestPathIsRegistered(t *testing.T) {
@@ -26,13 +26,38 @@ func TestGatewayRoutesCodexModelsManifestPathIsRegistered(t *testing.T) {
 	require.Equal(t, registered["/v1/models"], registered["/models"], "root alias should use the same platform-aware handler")
 }
 
-func TestGatewayRoutesClientVersionDoesNotTurnOrdinaryCompositeIntoSystemManifest(t *testing.T) {
-	router := newGatewayRoutesTestRouter(service.PlatformComposite)
-	recorder := httptest.NewRecorder()
+func TestDispatchCodexModelsGatewayKeepsOnlyOpenAIOnLiveManifestHandler(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	tests := []struct {
+		platform   string
+		wantOpenAI bool
+	}{
+		{platform: service.PlatformOpenAI, wantOpenAI: true},
+		{platform: service.PlatformComposite},
+		{platform: service.PlatformGrok},
+		{platform: service.PlatformDeepseek},
+	}
 
-	router.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/v1/models?client_version=0.144.0", nil))
+	for _, tt := range tests {
+		t.Run(tt.platform, func(t *testing.T) {
+			rec := httptest.NewRecorder()
+			c, _ := gin.CreateTestContext(rec)
+			c.Request = httptest.NewRequest(http.MethodGet, "/models?client_version=0.147.0", nil)
+			c.Set(string(middleware.ContextKeyAPIKey), &service.APIKey{
+				Group: &service.Group{Platform: tt.platform},
+			})
+			called := ""
 
-	require.Equal(t, http.StatusOK, recorder.Code)
-	require.Equal(t, "list", gjson.Get(recorder.Body.String(), "object").String())
-	require.False(t, gjson.Get(recorder.Body.String(), "models").Exists())
+			dispatchCodexModelsGateway(c,
+				func(c *gin.Context) { called = "openai" },
+				func(c *gin.Context) { called = "generated" },
+			)
+
+			if tt.wantOpenAI {
+				require.Equal(t, "openai", called)
+			} else {
+				require.Equal(t, "generated", called)
+			}
+		})
+	}
 }

@@ -16,7 +16,7 @@ func TestChatCompletionUsageSubmissionStaysAfterForwardErrorReturn(t *testing.T)
 		function string
 		submit   string
 	}{
-		{file: "openai_chat_completions.go", function: "ChatCompletions", submit: "submitOpenAIUsageRecordTask"},
+		{file: "openai_chat_completions.go", function: "ChatCompletions", submit: "submitChatUsage"},
 		{file: "gateway_handler_chat_completions.go", function: "ChatCompletions", submit: "submitUsageRecordTask"},
 	}
 
@@ -31,8 +31,11 @@ func TestChatCompletionUsageSubmissionStaysAfterForwardErrorReturn(t *testing.T)
 
 			var submitPos token.Pos
 			ast.Inspect(fn.Body, func(node ast.Node) bool {
+				if _, ok := node.(*ast.FuncLit); ok {
+					return false
+				}
 				call, ok := node.(*ast.CallExpr)
-				if ok && selectorName(call.Fun) == tt.submit {
+				if ok && callName(call.Fun) == tt.submit {
 					submitPos = call.Pos()
 					return false
 				}
@@ -42,6 +45,9 @@ func TestChatCompletionUsageSubmissionStaysAfterForwardErrorReturn(t *testing.T)
 
 			var errorReturnPositions []token.Pos
 			ast.Inspect(fn.Body, func(node ast.Node) bool {
+				if _, ok := node.(*ast.FuncLit); ok {
+					return false
+				}
 				ifStmt, ok := node.(*ast.IfStmt)
 				if !ok || !conditionChecksErr(ifStmt.Cond) || !blockHasReturn(ifStmt.Body) {
 					return true
@@ -68,12 +74,15 @@ func findHandlerFunction(file *ast.File, name string) *ast.FuncDecl {
 	return nil
 }
 
-func selectorName(expr ast.Expr) string {
-	selector, ok := expr.(*ast.SelectorExpr)
-	if !ok {
+func callName(expr ast.Expr) string {
+	switch call := expr.(type) {
+	case *ast.SelectorExpr:
+		return call.Sel.Name
+	case *ast.Ident:
+		return call.Name
+	default:
 		return ""
 	}
-	return selector.Sel.Name
 }
 
 func conditionChecksErr(expr ast.Expr) bool {

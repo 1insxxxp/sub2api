@@ -7,6 +7,7 @@ import batchImage from './batchImage'
 import admin from './admin'
 import misc from './misc'
 import restored from './restored'
+import lottery from './lottery'
 
 export default mergeMessages({
   ...landing,
@@ -16,4 +17,5 @@ export default mergeMessages({
   ...batchImage,
   admin,
   ...misc,
+  ...lottery,
 }, restored)

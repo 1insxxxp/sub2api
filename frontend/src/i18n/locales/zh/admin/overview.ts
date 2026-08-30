@@ -389,6 +389,7 @@ export default {
     },
 
     affiliates: {
+      summaryDescription: '按邀请人查看邀请人数、有效邀请和返利汇总',
       invitesDescription: '查看全站邀请关系和被邀请用户累计返利',
       rebatesDescription: '查看每一笔产生返利的充值订单',
       transfersDescription: '查看返利额度转入账户余额的提取流水',
@@ -400,6 +401,20 @@ export default {
         bronze: '脉冲级',
         silver: '星环级',
         gold: '极核级'
+      },
+      summary: {
+        searchPlaceholder: '搜索邀请人邮箱、用户名、用户 ID 或邀请码',
+        sortHint: '点击列名可查看邀请最多或最少的用户',
+        inviter: '邀请人',
+        invitedCount: '邀请人数',
+        qualifiedCount: '有效邀请',
+        totalRebate: '累计返利',
+        availableQuota: '当前可用',
+        transferredAmount: '已转余额',
+        rebateRecordCount: '返利记录',
+        lastInvitedAt: '最近邀请',
+        viewInvites: '邀请记录',
+        viewRebates: '返利记录'
       },
       records: {
         search: '搜索',
@@ -583,6 +598,7 @@ export default {
       deleteConfirm: "确定要删除用户 '{email}' 吗？此操作无法撤销。",
       roles: {
         admin: '管理员',
+        sub_admin: '二级管理员',
         user: '用户'
       },
       form: {
@@ -602,6 +618,8 @@ export default {
         statusLabel: '状态',
         selectStatus: '选择状态',
         rpmLimit: '每分钟请求数 (RPM)',
+        concurrencyPlaceholder: '0 表示不限制',
+        concurrencyHint: '该用户的最大并发请求数，0 = 不限制',
         rpmLimitPlaceholder: '0 表示不限制',
         rpmLimitHint: '该用户每分钟最大请求数，0 = 不限制；仅在所用分组未设置 rpm_limit 时作为兜底生效',
         balanceRedeemCodeEnabled: '允许生成余额兑换码',
@@ -624,9 +642,7 @@ export default {
       failedToSave: '保存用户失败',
       failedToAdjust: '调整失败',
       emailRequired: '请输入邮箱',
-      concurrencyMin: '并发数不能小于1',
-      soraStorageQuota: 'Sora 存储配额',
-      soraStorageQuotaHint: '单位 GB，0 表示使用分组或系统默认配额',
+      concurrencyNonNegative: '并发数不能为负数，0 表示不限制',
       amountRequired: '请输入有效金额',
       insufficientBalance: '余额不足',
       setAllowedGroups: '设置允许分组',
@@ -642,6 +658,9 @@ export default {
       groupConfigHint: '为用户 {email} 配置专属分组倍率（覆盖分组默认倍率）',
       exclusiveGroups: '专属分组',
       publicGroups: '公开分组（默认可用）',
+      restrictPublicGroups: '限制可访问的公开分组',
+      restrictPublicGroupsHint: '开启后，该用户仅能使用下方勾选的公开分组；关闭则可使用全部公开分组。',
+      publicGroupsRestricted: '公开分组（已限制）',
       defaultRate: '默认倍率',
       customRate: '专属倍率',
       useDefaultRate: '使用默认',
@@ -689,6 +708,8 @@ export default {
       typeBalance: '余额（兑换码）',
       typeAffiliateBalance: '余额（返利转入）',
       typeAdminBalance: '余额（管理员调整）',
+      typeEmptyResponse: '空回补偿',
+      emptyResponseUsageLog: '使用记录 #{id}',
       typeConcurrency: '并发（兑换码）',
       typeAdminConcurrency: '并发（管理员调整）',
       typeSubscription: '订阅',
@@ -1090,7 +1111,7 @@ export default {
         title: '分组逐模型定价',
         description: '匹配模型后覆盖渠道和内置价格。长上下文阶梯沿用官方/预设价卡，无需再手填区间。音频可用按次层级配置 realtime、tts、stt。',
         longContext: '启用长上下文阶梯定价',
-        longContextHint: '勾选后按官方/预设阶梯计费；关闭则始终按第一档基础价。',
+        longContextHint: '勾选后按渠道区间或官方预设阶梯计费；关闭后默认按第一档，账号显式开启时除外。',
         add: '添加模型价格'
       },
       voicePricing: {

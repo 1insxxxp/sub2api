@@ -13,9 +13,10 @@
             <div class="profile-avatar-frame">
               <img
                 v-if="avatarUrl"
+                data-testid="profile-overview-avatar-image"
                 :src="avatarUrl"
                 :alt="displayName"
-                class="h-full w-full object-cover"
+                class="profile-overview-avatar-image h-full w-full object-cover"
               >
               <DefaultUserAvatar v-else size="xl" />
             </div>
@@ -435,6 +436,7 @@ const sourceHints = computed(() => {
 
 .profile-overview-card {
   min-height: 13rem;
+  overflow: hidden;
 }
 
 .profile-overview-beam {
@@ -449,7 +451,9 @@ const sourceHints = computed(() => {
 
 .profile-avatar-plate {
   display: flex;
+  flex: 0 0 auto;
   min-width: 7.5rem;
+  max-width: 100%;
   flex-direction: column;
   align-items: center;
   justify-content: center;
@@ -465,8 +469,14 @@ const sourceHints = computed(() => {
 
 .profile-avatar-frame {
   display: flex;
+  flex: 0 0 5rem;
   height: 5rem;
   width: 5rem;
+  min-height: 5rem;
+  min-width: 5rem;
+  max-height: 5rem;
+  max-width: 5rem;
+  aspect-ratio: 1 / 1;
   align-items: center;
   justify-content: center;
   overflow: hidden;
@@ -478,6 +488,17 @@ const sourceHints = computed(() => {
   box-shadow:
     0 1px 0 rgba(255, 255, 255, 0.34) inset,
     0 18px 36px rgba(37, 99, 235, 0.2);
+}
+
+.profile-overview-avatar-image {
+  display: block;
+  height: 100%;
+  width: 100%;
+  min-height: 0;
+  min-width: 0;
+  max-height: 100%;
+  max-width: 100%;
+  object-fit: cover;
 }
 
 .profile-avatar-caption {
@@ -497,6 +518,7 @@ const sourceHints = computed(() => {
 .profile-metric-card {
   display: flex;
   min-height: 5rem;
+  min-width: 0;
   align-items: center;
   gap: 0.8rem;
 }
@@ -638,8 +660,13 @@ const sourceHints = computed(() => {
   }
 
   .profile-avatar-frame {
+    flex-basis: 4.25rem;
     height: 4.25rem;
     width: 4.25rem;
+    min-height: 4.25rem;
+    min-width: 4.25rem;
+    max-height: 4.25rem;
+    max-width: 4.25rem;
     border-radius: 1.1rem;
     font-size: 1.45rem;
   }

@@ -213,4 +213,25 @@ describe('ProfileInfoCard', () => {
     expect(wrapper.get('[data-testid="default-user-avatar"]').exists()).toBe(true)
     expect(wrapper.get('[data-testid="profile-overview-hero"]').text()).not.toContain('X')
   })
+
+  it('keeps custom overview avatars inside the fixed avatar frame', () => {
+    const wrapper = mount(ProfileInfoCard, {
+      props: {
+        user: createUser({
+          avatar_url: 'data:image/png;base64,' + Buffer.from('large-avatar').toString('base64')
+        })
+      },
+      global: {
+        stubs: {
+          Icon: true
+        }
+      }
+    })
+
+    const avatar = wrapper.get('[data-testid="profile-overview-avatar-image"]')
+    expect(avatar.classes()).toContain('profile-overview-avatar-image')
+    expect(avatar.classes()).toContain('h-full')
+    expect(avatar.classes()).toContain('w-full')
+    expect(avatar.classes()).toContain('object-cover')
+  })
 })

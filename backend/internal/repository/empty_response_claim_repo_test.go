@@ -102,6 +102,57 @@ func TestEmptyResponseClaimRepositoryCreateReturnsExistingClaimOnUniqueUsage(t *
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 
+func TestEmptyResponseClaimRepositoryCreateUsesBigintUserIDAcrossDailyGuard(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+	repo := newEmptyResponseClaimRepositoryWithSQL(db)
+	now := time.Now().UTC()
+	outcomeID := int64(55)
+	input := &service.EmptyResponseClaimCreateInput{
+		Evaluation: service.EmptyResponseClaimEvaluation{
+			Usage:     service.UsageLog{ID: 100, UserID: 7, APIKeyID: 8, AccountID: 9, ActualCost: 1.25},
+			OutcomeID: &outcomeID,
+			Outcome:   &service.ResponseOutcome{HTTPStatus: 200, UpstreamStatus: 200, CollectorVersion: 1},
+			Group:     service.Group{ID: 10, EmptyResponseCompensationEnabled: true},
+		},
+		Decision: service.ClaimDecision{
+			Status:      service.EmptyResponseClaimApproved,
+			ReasonCode:  service.EmptyResponseReasonPureEmpty,
+			RuleVersion: 1,
+		},
+		OriginalActualCost: 1.25,
+		UserReason:         "empty reply",
+	}
+	claimColumns := []string{
+		"id", "usage_log_id", "outcome_id", "user_id", "api_key_id", "account_id", "group_id", "subscription_id",
+		"status", "reason_code", "user_reason", "original_actual_cost", "balance_refund", "subscription_refund",
+		"api_key_quota_refund", "evidence", "rule_version", "admin_note", "reviewed_by", "reviewed_at", "compensated_at", "created_at", "updated_at",
+	}
+	typedUserIDQuery := `(?s)` +
+		regexp.QuoteMeta("hashtextextended(($3::bigint)::text") + `.*` +
+		regexp.QuoteMeta("WHERE user_id = $3::bigint") + `.*` +
+		regexp.QuoteMeta("$1, $2, $3::bigint")
+	mock.ExpectQuery(typedUserIDQuery).
+		WithArgs(
+			int64(100), &outcomeID, int64(7), int64(8), int64(9), sqlmock.AnyArg(), nil,
+			service.EmptyResponseClaimApproved, service.EmptyResponseReasonPureEmpty, "empty reply", 1.25,
+			sqlmock.AnyArg(), 1, service.EmptyResponseClaimDailyLimit,
+		).
+		WillReturnRows(sqlmock.NewRows(claimColumns).AddRow(
+			201, 100, 55, 7, 8, 9, 10, nil,
+			service.EmptyResponseClaimApproved, service.EmptyResponseReasonPureEmpty, "empty reply", 1.25, 0, 0, 0,
+			`{"http_status":200}`, 1, "", nil, nil, nil, now, now,
+		))
+
+	claim, created, err := repo.Create(context.Background(), input)
+
+	require.NoError(t, err)
+	require.True(t, created)
+	require.Equal(t, int64(201), claim.ID)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
 func TestEmptyResponseClaimRepositoryCountsShanghaiBusinessDayRange(t *testing.T) {
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)
@@ -128,8 +179,11 @@ func TestEmptyResponseClaimRepositoryListsRecentEvaluationsWithExistingClaimStat
 	now := time.Now().UTC()
 	start := now.Add(-7 * 24 * time.Hour)
 
+	mock.ExpectQuery(`(?s)`+regexp.QuoteMeta("SELECT COUNT(*)")+`.*`+regexp.QuoteMeta("FROM usage_logs ul")+`.*`+regexp.QuoteMeta("LEFT JOIN empty_response_claims erc ON erc.usage_log_id = ul.id")).
+		WithArgs(int64(7), start, now, service.EmptyResponseClaimLowOutputTokenLimit).
+		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(21))
 	mock.ExpectQuery(`(?s)`+regexp.QuoteMeta("FROM usage_logs ul")+`.*`+regexp.QuoteMeta("LEFT JOIN usage_response_outcomes uro ON uro.usage_log_id = ul.id")+`.*`+regexp.QuoteMeta("LEFT JOIN empty_response_claims erc ON erc.usage_log_id = ul.id")+`.*`+regexp.QuoteMeta("COALESCE(g.empty_response_compensation_enabled, FALSE) = TRUE")+`.*`+regexp.QuoteMeta("AND ul.output_tokens <= $4")).
-		WithArgs(int64(7), start, now, service.EmptyResponseClaimLowOutputTokenLimit, 50).
+		WithArgs(int64(7), start, now, service.EmptyResponseClaimLowOutputTokenLimit, 10, 10).
 		WillReturnRows(sqlmock.NewRows([]string{
 			"usage_log_id", "user_id", "api_key_id", "account_id", "group_id", "subscription_id",
 			"model", "actual_cost", "compensated_cost", "billing_type", "inbound_endpoint", "created_at",
@@ -156,9 +210,13 @@ func TestEmptyResponseClaimRepositoryListsRecentEvaluationsWithExistingClaimStat
 			nil, nil, nil, 0,
 		))
 
-	candidates, err := repo.ListRecentEvaluations(context.Background(), 7, start, now, 50)
+	candidates, result, err := repo.ListRecentEvaluations(context.Background(), 7, start, now, pagination.PaginationParams{Page: 2, PageSize: 10})
 	require.NoError(t, err)
 	require.Len(t, candidates, 2)
+	require.Equal(t, int64(21), result.Total)
+	require.Equal(t, 2, result.Page)
+	require.Equal(t, 10, result.PageSize)
+	require.Equal(t, 3, result.Pages)
 	got := candidates[0]
 	require.Equal(t, int64(100), got.Evaluation.Usage.ID)
 	require.Equal(t, "claude-opus-4-6", got.Evaluation.Usage.Model)

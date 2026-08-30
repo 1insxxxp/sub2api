@@ -83,6 +83,7 @@ describe('ProfileView', () => {
           ProfileBalanceNotifyCard: { template: '<div data-testid="profile-balance-notify-card" />' },
           ProfilePasswordForm: { template: '<div data-testid="profile-password-form" />' },
           ProfileTotpCard: { template: '<div data-testid="profile-totp-card" />' },
+          ProfileDangerZoneCard: { template: '<div data-testid="profile-danger-zone-card" />' },
           Icon: true
         }
       }
@@ -97,5 +98,6 @@ describe('ProfileView', () => {
     expect(shell.html()).toContain('profile-info-card')
     expect(shell.html()).toContain('profile-password-form')
     expect(shell.html()).toContain('profile-totp-card')
+    expect(shell.html()).toContain('profile-danger-zone-card')
   })
 })

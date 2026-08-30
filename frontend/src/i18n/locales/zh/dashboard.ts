@@ -193,6 +193,32 @@ export default {
         codexNoteWindows:
           '设置 $env:SUB2API_API_KEY，将 config.toml 保存到 %USERPROFILE%\\.codex。优先 env_key，勿提交密钥。'
       },
+      deepseek: {
+        description: '通过当前 DeepSeek 分组配置 Claude Code、Codex 或 OpenCode。',
+        codexDescription: '使用 API Key 配置 Codex，并通过当前 DeepSeek 分组发送请求。',
+        codexConfigTomlHint: '下载下方模型目录，将两个文件保存到 Codex 配置目录后重启 Codex。',
+        codexNote: '启动 Codex 前先导出 SUB2API_API_KEY。下载的目录只包含模型元数据，不包含 API Key。'
+      },
+      composite: {
+        description: '通过当前 Composite 路由分组配置受支持的客户端。',
+        codexDescription: '使用 API Key 和当前 Composite 分组的完整模型目录配置 Codex。',
+        codexConfigTomlHint: '下载下方模型目录，将两个文件保存到 Codex 配置目录后重启 Codex。',
+        codexNote: '启动 Codex 前先导出 SUB2API_API_KEY；分组会根据目录中选中的模型路由请求。'
+      },
+      routedCodex: {
+        description: '使用当前路由分组的完整模型目录配置 Codex。',
+        configTomlHint: '下载下方模型目录，将两个文件保存到 Codex 配置目录后重启 Codex。',
+        note: '启动 Codex 前先导出 SUB2API_API_KEY。下载的目录只包含模型元数据，不包含 API Key。'
+      },
+      codexModelCatalog: {
+        title: 'Codex 模型目录',
+        description: '使用当前 API Key 获取目录，并保存到 config.toml 引用的路径。',
+        fetch: '获取目录',
+        retry: '重试',
+        download: '下载目录',
+        modelsCount: '已获取 {count} 个模型',
+        errorDescription: '无法使用当前 API Key 获取模型目录。'
+      },
       opencode: {
         title: 'OpenCode 配置示例',
         subtitle: 'opencode.json',
@@ -315,6 +341,7 @@ export default {
 	  modelVariant: '疑似版本变体',
 	  modelMismatch: '模型不一致',
     reasoningEffort: '推理强度',
+    requestedReasoningEffort: '请求推理强度',
     endpoint: '端点',
     endpointDistribution: '端点分布',
     inbound: '入站',
@@ -411,7 +438,7 @@ export default {
       outputTokens: '输出 Token',
       originalCharge: '原扣费',
       expectedRefund: '预计补偿',
-      rules: '仅支持 7 天内、已扣费且输出 Token ≤ 10 的记录申请；每天最多自动补偿 15 条。系统只使用结构化信号，不读取或保存响应正文。',
+      rules: '仅支持 7 天内、已扣费且输出 Token ≤ 10 的记录申请；每天最多可申请补偿 15 条。系统只使用结构化信号，不读取或保存响应正文。',
       reason: '补充说明（可选）',
       reasonPlaceholder: '例如：酒馆收到空白回复，重试后恢复正常',
       submitting: '提交中...',
@@ -425,12 +452,12 @@ export default {
       submitSuccess: '空回申请已提交',
       singleClaimSuccess: '空回已补偿到余额',
       submitFailed: '提交空回申请失败',
-      dailyLimitReached: '今日空回自动补偿已达上限',
+      dailyLimitReached: '今日空回补偿申请已达上限',
       statusLabel: '状态',
       tokens: 'Token',
       tokenDetail: '入 {input} / 出 {output} / 缓存 {cache} / 总 {total}',
       claimRules: {
-        dailyLimit: '每天最多自动补偿 15 条',
+        dailyLimit: '每天最多可申请补偿 15 条',
         tokenLimit: '输出 Token 小于等于 10 才可申请'
       },
       bulk: {
@@ -467,7 +494,7 @@ export default {
         claim_window_expired: '已超过 7 天申请期限',
         missing_evidence: '缺少结构化响应证据',
         conflicting_evidence: '响应证据存在冲突',
-        daily_limit_manual_review: '今日自动补偿已达 15 条上限，明天可继续申请',
+        daily_limit_manual_review: '今日补偿申请已达 15 条上限，明天可继续申请',
         already_claimed: '该请求已提交过申请'
       }
     },
@@ -733,7 +760,8 @@ export default {
     detail: {
       noModels: '该分组暂未配置模型',
       noPricing: '未配置定价',
-      peakNote: '高峰时段 {window} 计费倍率 ×{multiplier}'
+      peakNote: '高峰时段 {window} 计费倍率 ×{multiplier}',
+      longContextDisabledNote: '该分组未启用长上下文阶梯计费，超阈值请求仍按基础档计费，官方阶梯仅供参考'
     },
     table: {
       model: '模型',
@@ -742,6 +770,17 @@ export default {
       cache: '缓存',
       cacheWrite: '写入',
       cacheRead: '读取',
+      cacheWriteShort: '写',
+      cacheReadShort: '读',
+      tierHint: '按单次请求的总上下文（输入 + 缓存写入 + 缓存读取）所在档位对整单计价',
+      tierHintMarginal: '仅超过阈值的部分按该档计价，输出不加价',
+      marginalBadge: '超出部分计价',
+      timePricingRowHint: '按 {timezone} 时间，在该时段内发起的请求按本行价格计费',
+      timePricingRowHintWeekdays:
+        '按 {timezone} 时间，仅工作日（周一至周五）在该时段内发起的请求按本行价格计费，周末全天按标准价',
+      timePricingRowHintPeak: '；本行价格未含高峰倍率，与高峰时段 {window} 重叠的部分实付再乘 ×{multiplier}',
+      timePricingWeekdays: '工作日',
+      timePricingRateHint: '生效倍率 {rate} × 时段倍率 {multiplier}',
       paidPrice: '实付价格(折后)',
       officialPrice: '官方价格',
       rate: '折扣倍率',
@@ -910,6 +949,8 @@ export default {
     historyWillAppear: '您的兑换历史将显示在这里',
     balanceAddedRedeem: '余额充值（兑换）',
     balanceAddedAffiliate: '余额充值（返利转入）',
+    emptyResponseRefund: '空回补偿',
+    emptyResponseRefundDetail: '空回补偿返还',
     balanceAddedAdmin: '余额充值（管理员）',
     balanceDeductedAdmin: '余额扣除（管理员）',
     concurrencyAddedRedeem: '并发增加（兑换）',
@@ -925,6 +966,22 @@ export default {
     batchSingleUse: '活动兑换码一人限用一次',
     subscriptionRefreshFailed: '兑换成功，但订阅状态刷新失败。',
     pleaseEnterCode: '请输入兑换码',
+    subscriptionGuide: {
+      eyebrow: '订阅卡已开通',
+      title: '订阅卡使用说明',
+      subtitle: '您的 {group} 已兑换成功，请先完成分组切换后再使用。',
+      defaultGroup: '订阅分组',
+      groupLabel: '订阅分组',
+      daysLabel: '有效天数',
+      stepApiKeyTitle: '先切换 API 密钥分组',
+      stepApiKeyDesc: '请到 API 密钥页面，将要使用的密钥切换至对应订阅分组；未切换前仍会走原分组。',
+      stepQuotaTitle: '每日限额按自然日刷新',
+      stepQuotaDesc: '订阅卡每日限额每天 0 点刷新，当日额度用完即止，次日刷新后继续使用。',
+      stepUsageTitle: '继续使用原 API 地址和密钥',
+      stepUsageDesc: '完成分组切换后，客户端无需更换接口地址，只需继续使用当前 API 密钥请求。',
+      acknowledge: '我知道了',
+      goToKeys: '去 API 密钥页面'
+    },
     balanceTransfer: {
       title: '生成余额兑换码',
       subtitle: '把自己的余额转成一次性兑换码，发给其他用户兑换。',
@@ -1019,6 +1076,18 @@ export default {
     passwordTooShort: '密码至少需要 8 个字符',
     passwordChangeSuccess: '密码修改成功',
     passwordChangeFailed: '密码修改失败',
+    accountDeletion: {
+      title: '注销账号',
+      description: '注销后将无法继续登录，账号下的 API Key 会立即失效。',
+      summary: '此操作会删除当前账号访问权限，并保留历史账务记录供管理员审计。',
+      open: '注销账号',
+      confirmHint: '请输入当前密码确认注销。提交后当前会话会退出登录。',
+      passwordPlaceholder: '输入当前密码',
+      passwordRequired: '请输入当前密码',
+      confirm: '确认注销',
+      success: '账号已注销',
+      failed: '账号注销失败'
+    },
     // TOTP 2FA
     totp: {
       title: '双因素认证 (2FA)',
@@ -1117,15 +1186,15 @@ export default {
     },
     avatar: {
       title: '资料头像',
-      description: '仅支持上传头像图片；静态图片会自动压缩到 20KB 以内后再保存。',
+      description: '仅支持上传头像图片；静态图片会自动压缩到 100KB 以内后再保存。',
       uploadAction: '上传图片',
-      uploadHint: '上传图片时会自动压缩静态图片到 20KB 以内，GIF 需自行控制在 20KB 以内',
+      uploadHint: '上传图片时会自动压缩静态图片到 100KB 以内，GIF 需自行控制在 100KB 以内',
       uploadRequired: '请先上传头像图片',
       saveSuccess: '头像已更新',
       deleteSuccess: '头像已删除',
       invalidType: '请选择图片文件',
-      gifTooLarge: 'GIF 头像必须在 20KB 以内',
-      compressTooLarge: '无法将图片压缩到 20KB 以内，请换一张更小的图片',
+      gifTooLarge: 'GIF 头像必须在 100KB 以内',
+      compressTooLarge: '无法将图片压缩到 100KB 以内，请换一张更小的图片',
       compressFailed: '压缩所选图片失败',
       readFailed: '读取所选图片失败',
       emptyDeleteHint: '当前没有可删除的头像',

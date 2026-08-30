@@ -167,7 +167,7 @@ func TestOpenAIResponsesChatFallbackResponseOutcomeCapturesChatDelta(t *testing.
 	resp := &http.Response{StatusCode: http.StatusOK, Header: http.Header{}, Body: io.NopCloser(strings.NewReader(body))}
 	svc := &OpenAIGatewayService{cfg: &config.Config{}}
 
-	result, err := svc.streamChatCompletionsAsResponses(c, resp, "model", nil, false, map[string]apicompat.NamespacedToolName{}, "model", "model", nil, nil, time.Now())
+	result, err := svc.streamChatCompletionsAsResponses(c, resp, "model", nil, nil, false, map[string]apicompat.NamespacedToolName{}, "model", "model", nil, nil, time.Now())
 	require.NoError(t, err)
 	require.NotNil(t, result)
 	require.NotNil(t, result.Outcome)

@@ -50,6 +50,7 @@ const props = withDefaults(defineProps<{
   affCode?: string
   affiliateReferralLocked?: boolean
   allowRouteAffiliateFallback?: boolean
+  promoCode?: string
   showDivider?: boolean
 }>(), {
   affiliateReferralLocked: false,
@@ -70,6 +71,11 @@ function startLogin(): void {
     props.affCode,
     ...(props.allowRouteAffiliateFallback ? [route.query.aff, route.query.aff_code] : [])
   )
-  emit('start', { provider: 'linuxdo', params: { redirect: redirectTo } })
+  const params: Record<string, string> = { redirect: redirectTo }
+  const promoCode = props.promoCode?.trim()
+  if (promoCode) {
+    params.promo_code = promoCode
+  }
+  emit('start', { provider: 'linuxdo', params })
 }
 </script>

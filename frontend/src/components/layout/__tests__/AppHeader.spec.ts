@@ -9,6 +9,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const componentPath = resolve(dirname(fileURLToPath(import.meta.url)), '../AppHeader.vue')
 const componentSource = readFileSync(componentPath, 'utf8')
+const stylePath = resolve(dirname(fileURLToPath(import.meta.url)), '../../../style.css')
+const styleSource = readFileSync(stylePath, 'utf8')
+const announcementBellPath = resolve(dirname(fileURLToPath(import.meta.url)), '../../common/AnnouncementBell.vue')
+const announcementBellSource = readFileSync(announcementBellPath, 'utf8')
 
 const { getCheckinStatus, submitCheckin, showSuccess, showError, refreshUser } = vi.hoisted(() => ({
   getCheckinStatus: vi.fn(),
@@ -25,6 +29,15 @@ const routeState = reactive({
     descriptionKey: 'dashboard.welcomeMessage'
   },
   params: {}
+})
+
+const appStoreState = reactive({
+  contactInfo: '',
+  docUrl: '',
+  cachedPublicSettings: null as null | Record<string, unknown>,
+  toggleMobileSidebar: vi.fn(),
+  showSuccess,
+  showError
 })
 
 const authStore = reactive({
@@ -48,18 +61,15 @@ vi.mock('@/api/checkin', () => ({
 }))
 
 vi.mock('@/stores', () => ({
-  useAppStore: () => ({
-    contactInfo: '',
-    docUrl: '',
-    cachedPublicSettings: null,
-    toggleMobileSidebar: vi.fn(),
-    showSuccess,
-    showError
-  }),
+  useAppStore: () => appStoreState,
   useAuthStore: () => authStore,
   useOnboardingStore: () => ({
     replay: vi.fn()
   })
+}))
+
+vi.mock('@/stores/app', () => ({
+  useAppStore: () => appStoreState
 }))
 
 vi.mock('@/stores/adminSettings', () => ({
@@ -153,6 +163,12 @@ describe('AppHeader available token estimate', () => {
 
 describe('AppHeader shared admin shell', () => {
   beforeEach(() => {
+    appStoreState.contactInfo = ''
+    appStoreState.docUrl = ''
+    appStoreState.cachedPublicSettings = null
+    appStoreState.toggleMobileSidebar.mockReset()
+    showSuccess.mockReset()
+    showError.mockReset()
     getCheckinStatus.mockReset()
     getCheckinStatus.mockResolvedValue({
       enabled: false,
@@ -170,6 +186,167 @@ describe('AppHeader shared admin shell', () => {
     expect(wrapper.find('.app-header-toolbar').exists()).toBe(true)
     expect(wrapper.find('.app-header-actions').exists()).toBe(true)
     expect(wrapper.find('[data-test="header-balance-pill"]').exists()).toBe(true)
+  })
+
+  it('keeps model plaza available as a compact mobile header action', async () => {
+    appStoreState.cachedPublicSettings = {
+      model_plaza_enabled: true
+    }
+
+    const wrapper = await mountHeader()
+    const link = wrapper.get('[data-test="header-model-plaza-link"]')
+
+    expect(link.attributes('aria-label')).toBe('nav.modelPlaza')
+    expect(link.attributes('title')).toBe('nav.modelPlaza')
+    expect(link.classes()).toContain('inline-flex')
+    expect(link.classes()).not.toContain('hidden')
+    expect(link.classes()).not.toContain('sm:flex')
+    expect(link.classes()).toContain('h-9')
+    expect(link.classes()).toContain('w-9')
+    expect(link.classes()).toContain('sm:w-auto')
+    expect(link.text()).toContain('nav.modelPlaza')
+  })
+
+  it('hides the locale switcher until sm and keeps the mobile action row on one line', async () => {
+    const wrapper = await mountHeader()
+    const locale = wrapper.get('[data-test="header-locale-switcher"]')
+
+    expect(locale.classes()).toContain('hidden')
+    expect(locale.classes()).toContain('sm:block')
+    expect(styleSource).toMatch(/\.app-header-actions\s*\{[^}]*flex-nowrap/)
+  })
+
+  it('uses aligned 36px mobile actions with distinct functional palette hooks', async () => {
+    appStoreState.cachedPublicSettings = {
+      model_plaza_enabled: true
+    }
+    getCheckinStatus.mockResolvedValue({
+      enabled: true,
+      checked_in: false,
+      blacklisted: false,
+      checkin_date: '2026-06-17',
+      reward_amount: null
+    })
+
+    const wrapper = await mountHeader()
+    const menu = wrapper.get('button[aria-label="Toggle Menu"]')
+    const modelPlaza = wrapper.get('[data-test="header-model-plaza-link"]')
+    const checkin = wrapper.get('[data-test="daily-checkin-button"]')
+    const userMenu = wrapper.get('button[aria-label="User Menu"]')
+    const controls = [menu, modelPlaza, checkin, userMenu]
+    const mobileHeaderCss = styleSource.match(/@media \(max-width: 639px\) \{([\s\S]*?)\n {2}\}\n\n {2}\.app-header-balance-pill/)?.[1]
+    const mobileToolbarRule = mobileHeaderCss?.match(/\.app-header-toolbar\s*\{([^}]*)\}/)?.[1]
+    const compactActionRule = mobileHeaderCss?.match(/\.app-header-mobile-action\s*\{([^}]*)\}/)?.[1]
+    const compactHoverRule = mobileHeaderCss?.match(/\.app-header-mobile-action:hover:not\(:disabled\)\s*\{([^}]*)\}/)?.[1]
+    const compactActiveRule = mobileHeaderCss?.match(/\.app-header-mobile-action:active:not\(:disabled\)\s*\{([^}]*)\}/)?.[1]
+    const compactFocusRule = mobileHeaderCss?.match(/\.app-header-mobile-action:focus-visible\s*\{([^}]*)\}/)?.[1]
+
+    controls.forEach((control) => {
+      expect(control.classes()).toContain('app-header-mobile-action')
+    })
+    expect(menu.classes()).toContain('app-header-action-navigation')
+    expect(modelPlaza.classes()).toContain('app-header-action-models')
+    expect(checkin.classes()).toContain('app-header-action-checkin')
+    expect(announcementBellSource).toContain('app-header-action-announcements')
+    expect(mobileToolbarRule).toContain('--app-header-mobile-control-size: 2.25rem')
+    expect(compactActionRule).toContain('width: var(--app-header-mobile-control-size)')
+    expect(compactActionRule).toContain('height: var(--app-header-mobile-control-size)')
+    expect(compactActionRule).toContain('border-color: rgb(var(--header-action-rgb) / 0.2)')
+    expect(compactActionRule).toContain('background: rgb(var(--header-action-rgb) / 0.08)')
+    expect(compactHoverRule).toContain('background: rgb(var(--header-action-rgb) / 0.14)')
+    expect(compactActiveRule).toContain('background: rgb(var(--header-action-rgb) / 0.2)')
+    expect(compactFocusRule).toContain('rgb(var(--header-action-rgb) / 0.22)')
+  })
+
+  it('assigns restrained blue, amber, cyan, and emerald palettes to mobile actions', () => {
+    const mobileHeaderCss = styleSource.match(/@media \(max-width: 639px\) \{([\s\S]*?)\n {2}\}\n\n {2}\.app-header-balance-pill/)?.[1] ?? ''
+    const palette = (selector: string) => mobileHeaderCss.match(new RegExp(`\\.${selector}\\s*\\{([^}]*)\\}`))?.[1] ?? ''
+
+    expect(palette('app-header-action-navigation')).toContain('--header-action-rgb: 37 99 235')
+    expect(palette('app-header-action-announcements')).toContain('--header-action-rgb: 245 158 11')
+    expect(palette('app-header-action-models')).toContain('--header-action-rgb: 6 182 212')
+    expect(palette('app-header-action-checkin')).toContain('--header-action-rgb: 16 185 129')
+  })
+
+  it('uses valid custom-property color syntax for mobile header theme surfaces', () => {
+    const mobileHeaderCss = styleSource.match(/@media \(max-width: 639px\) \{([\s\S]*?)\n {2}\}\n\n {2}\.app-header-balance-pill/)?.[1] ?? ''
+    const compactActionRule = mobileHeaderCss.match(/\.app-header-mobile-action\s*\{([^}]*)\}/)?.[1]
+    const compactHoverRule = mobileHeaderCss.match(/\.app-header-mobile-action:hover:not\(:disabled\)\s*\{([^}]*)\}/)?.[1]
+    const compactFocusRule = mobileHeaderCss.match(/\.app-header-mobile-action:focus-visible\s*\{([^}]*)\}/)?.[1]
+    const compactDarkRule = mobileHeaderCss.match(/\.dark \.app-header-mobile-action\s*\{([^}]*)\}/)?.[1]
+    const subscriptionRule = mobileHeaderCss.match(/\.app-header-actions \.subscription-progress-trigger\s*\{([^}]*)\}/)?.[1]
+    const subscriptionHoverRule = mobileHeaderCss.match(/\.app-header-actions \.subscription-progress-trigger:hover\s*\{([^}]*)\}/)?.[1]
+    const subscriptionFocusRule = mobileHeaderCss.match(/\.app-header-actions \.subscription-progress-trigger:focus-visible\s*\{([^}]*)\}/)?.[1]
+    const subscriptionDarkRule = mobileHeaderCss.match(/\.dark \.app-header-actions \.subscription-progress-trigger\s*\{([^}]*)\}/)?.[1]
+
+    expect(subscriptionRule).toContain('--header-action-rgb: 124 58 237')
+    expect(subscriptionRule).toContain('rgb(var(--header-action-rgb) / 0.24)')
+    expect(subscriptionRule).toContain('rgb(var(--header-action-rgb) / 0.1)')
+    expect(subscriptionHoverRule).toContain('rgb(var(--header-action-rgb) / 0.35)')
+    expect(subscriptionHoverRule).toContain('rgb(var(--header-action-rgb) / 0.16)')
+    for (const rule of [compactFocusRule, subscriptionFocusRule]) {
+      expect(rule).toContain('rgb(var(--header-action-rgb) / 0.22)')
+    }
+    expect(subscriptionDarkRule).toContain('rgb(var(--header-action-rgb) / 0.3)')
+    expect(subscriptionDarkRule).toContain('rgb(var(--header-action-rgb) / 0.18)')
+    expect(compactActionRule).toContain('rgb(var(--header-action-rgb) / 0.08)')
+    expect(compactHoverRule).toContain('rgb(var(--header-action-rgb) / 0.14)')
+    expect(compactDarkRule).toContain('rgb(var(--header-action-rgb) / 0.16)')
+    expect(mobileHeaderCss).not.toContain('rgba(var(--brand-rgb),')
+    expect(mobileHeaderCss).not.toContain('rgba(var(--brand-cyan-rgb),')
+  })
+
+  it('renders the mobile user avatar without a decorative frame', async () => {
+    const wrapper = await mountHeader()
+    const trigger = wrapper.get('button[aria-label="User Menu"]')
+    const avatar = wrapper.get('[data-test="header-user-avatar"]')
+    const mobileHeaderCss = styleSource.match(/@media \(max-width: 639px\) \{([\s\S]*?)\n {2}\}\n\n {2}\.app-header-balance-pill/)?.[1] ?? ''
+    const triggerRule = mobileHeaderCss.match(/\.app-header-user-trigger\s*\{([^}]*)\}/)?.[1]
+    const avatarRule = mobileHeaderCss.match(/\.app-header-user-avatar\s*\{([^}]*)\}/)?.[1]
+
+    expect(trigger.classes()).toContain('app-header-user-trigger')
+    expect(avatar.classes()).toContain('app-header-user-avatar')
+    expect(triggerRule).toContain('border-color: transparent')
+    expect(triggerRule).toContain('background: transparent')
+    expect(triggerRule).toContain('box-shadow: none')
+    expect(avatarRule).toContain('box-shadow: none')
+  })
+
+  it('keeps the worst-case mobile toolbar budget within 320px using its CSS constants', () => {
+    const mobileHeaderCss = styleSource.match(/@media \(max-width: 639px\) \{([\s\S]*?)\n {2}\}\n\n {2}\.app-header-balance-pill/)?.[1] ?? ''
+    const toolbarRule = mobileHeaderCss.match(/\.app-header-toolbar\s*\{([^}]*)\}/)?.[1]
+    const actionsRule = mobileHeaderCss.match(/\.app-header-actions\s*\{([^}]*)\}/)?.[1]
+    const compactActionRule = mobileHeaderCss.match(/\.app-header-mobile-action\s*\{([^}]*)\}/)?.[1]
+    const subscriptionRule = mobileHeaderCss.match(/\.app-header-actions \.subscription-progress-trigger\s*\{([^}]*)\}/)?.[1]
+    const readRemPropertyInPx = (name: string) => {
+      const match = toolbarRule?.match(new RegExp(`--${name}:\\s*([0-9.]+)rem`))
+      expect(match).not.toBeNull()
+      return Number(match?.[1] ?? Number.NaN) * 16
+    }
+    const announcementTrigger = announcementBellSource.match(/<button\s+[\s\S]*?<\/button>/)?.[0] ?? ''
+    const fixedControlCount = (componentSource.match(/app-header-mobile-action/g) ?? []).length
+      + (announcementTrigger.includes('app-header-mobile-action') ? 1 : 0)
+
+    expect(fixedControlCount).toBe(5)
+    expect(toolbarRule).toContain('gap: var(--app-header-mobile-gap)')
+    expect(toolbarRule).toContain('padding-inline: var(--app-header-mobile-inline-padding)')
+    expect(actionsRule).toContain('gap: var(--app-header-mobile-gap)')
+    expect(compactActionRule).toContain('width: var(--app-header-mobile-control-size)')
+    expect(subscriptionRule).toContain('width: var(--app-header-mobile-subscription-width)')
+
+    const budgetPx = fixedControlCount * readRemPropertyInPx('app-header-mobile-control-size')
+      + readRemPropertyInPx('app-header-mobile-subscription-width')
+      + fixedControlCount * readRemPropertyInPx('app-header-mobile-gap')
+      + 2 * readRemPropertyInPx('app-header-mobile-inline-padding')
+
+    expect(budgetPx).toBe(292)
+    expect(budgetPx).toBeLessThanOrEqual(320)
+  })
+
+  it('applies the shared compact mobile action style to the announcement trigger', () => {
+    const announcementTrigger = announcementBellSource.match(/<button\s+[\s\S]*?<\/button>/)?.[0]
+
+    expect(announcementTrigger).toContain('app-header-mobile-action')
   })
 
   it('uses the shared default avatar in the header when no custom avatar exists', async () => {
@@ -291,7 +468,7 @@ describe('AppHeader daily check-in entry', () => {
     expect(buttonWrapper?.classList.contains('inline-flex')).toBe(true)
   })
 
-  it('compacts the check-in label below 360px without hiding the action', async () => {
+  it('hides the check-in label until sm without removing its accessible name', async () => {
     getCheckinStatus.mockResolvedValue({
       enabled: true,
       checked_in: false,
@@ -305,8 +482,10 @@ describe('AppHeader daily check-in entry', () => {
     const label = button.get('[data-test="daily-checkin-label"]')
 
     expect(button.attributes('aria-label')).toBe('签到')
+    expect(button.attributes('title')).toBe('签到')
     expect(label.classes()).toContain('hidden')
-    expect(label.classes()).toContain('min-[360px]:inline')
+    expect(label.classes()).toContain('sm:inline')
+    expect(label.classes()).not.toContain('min-[360px]:inline')
   })
 
   it('explains eligibility and streak rewards in the hover panel', async () => {

@@ -112,13 +112,13 @@
                 <p class="text-sm font-medium text-gray-900 dark:text-white">
                   {{ getItemTitle(item) }}
                 </p>
-                <!-- Notes (admin adjustment reason) -->
+                <!-- Localized record detail -->
                 <p
-                  v-if="item.notes"
+                  v-if="getItemDescription(item)"
                   class="mt-0.5 text-xs text-gray-500 dark:text-dark-400"
-                  :title="item.notes"
+                  :title="getItemDescription(item)"
                 >
-                  {{ item.notes.length > 60 ? item.notes.substring(0, 55) + '...' : item.notes }}
+                  {{ getItemDescription(item) }}
                 </p>
                 <p class="mt-0.5 text-xs text-gray-400 dark:text-dark-500">
                   {{ formatDateTime(item.used_at || item.created_at) }}
@@ -135,6 +135,12 @@
                 class="text-xs text-gray-400 dark:text-dark-500"
               >
                 {{ t('redeem.adminAdjustment') }}
+              </p>
+              <p
+                v-else-if="isEmptyResponseType(item.type)"
+                class="text-xs text-gray-400 dark:text-dark-500"
+              >
+                {{ t('redeem.emptyResponseRefundDetail') }}
               </p>
               <p
                 v-else
@@ -202,6 +208,7 @@ const typeOptions = computed(() => [
   { value: 'affiliate_balance', label: t('admin.users.typeAffiliateBalance') },
   { value: 'admin_balance', label: t('admin.users.typeAdminBalance') },
   { value: 'checkin_reward', label: t('admin.users.typeCheckinReward') },
+  { value: 'empty_response', label: t('admin.users.typeEmptyResponse') },
   { value: 'concurrency', label: t('admin.users.typeConcurrency') },
   { value: 'admin_concurrency', label: t('admin.users.typeAdminConcurrency') },
   { value: 'subscription', label: t('admin.users.typeSubscription') }
@@ -239,18 +246,22 @@ const loadHistory = async (page: number) => {
 // Helper: check if admin type
 const isAdminType = (type: string) => type === 'admin_balance' || type === 'admin_concurrency'
 
+const isEmptyResponseType = (type: string) => type === 'empty_response'
+
 // Helper: check if balance type (includes admin/admin/affiliate/check-in balance changes)
 const isBalanceType = (type: string) =>
   type === 'balance' ||
   type === 'admin_balance' ||
   type === 'affiliate_balance' ||
-  type === 'checkin_reward'
+  type === 'checkin_reward' ||
+  isEmptyResponseType(type)
 
 // Helper: check if subscription type
 const isSubscriptionType = (type: string) => type === 'subscription'
 
 // Icon name based on type
 const getIconName = (item: BalanceHistoryItem) => {
+  if (isEmptyResponseType(item.type)) return 'refresh'
   if (isBalanceType(item.type)) return 'dollar'
   if (isSubscriptionType(item.type)) return 'badge'
   return 'bolt' // concurrency
@@ -306,6 +317,8 @@ const getItemTitle = (item: BalanceHistoryItem) => {
       return item.value >= 0 ? t('redeem.balanceAddedAdmin') : t('redeem.balanceDeductedAdmin')
     case 'checkin_reward':
       return t('redeem.checkinReward')
+    case 'empty_response':
+      return t('redeem.emptyResponseRefund')
     case 'concurrency':
       return t('redeem.concurrencyAddedRedeem')
     case 'admin_concurrency':
@@ -315,6 +328,18 @@ const getItemTitle = (item: BalanceHistoryItem) => {
     default:
       return t('common.unknown')
   }
+}
+
+const getItemDescription = (item: BalanceHistoryItem) => {
+  const notes = item.notes?.trim() || ''
+  if (!isEmptyResponseType(item.type)) {
+    return notes.length > 60 ? notes.substring(0, 55) + '...' : notes
+  }
+
+  const usageLogID = notes.match(/usage log\s*#(\d+)/i)?.[1]
+  return usageLogID
+    ? t('admin.users.emptyResponseUsageLog', { id: usageLogID })
+    : t('redeem.emptyResponseRefundDetail')
 }
 
 // Format display value

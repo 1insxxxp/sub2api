@@ -3,14 +3,11 @@
 package service
 
 import (
-	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
 	"errors"
-	"image"
-	"image/png"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -38,6 +35,8 @@ type mockUserRepo struct {
 	updateFn                 func(ctx context.Context, user *User) error
 	updateCalls              int
 	updateFields             []UserUpdateFields
+	deleteErr                error
+	deletedIDs               []int64
 	upsertAvatarFn           func(ctx context.Context, userID int64, input UpsertUserAvatarInput) (*UserAvatar, error)
 	upsertAvatarArgs         []UpsertUserAvatarInput
 	deleteAvatarFn           func(ctx context.Context, userID int64) error
@@ -118,7 +117,10 @@ func (m *mockUserRepo) Update(ctx context.Context, user *User, fields UserUpdate
 	}
 	return nil
 }
-func (m *mockUserRepo) Delete(context.Context, int64) error { return nil }
+func (m *mockUserRepo) Delete(_ context.Context, id int64) error {
+	m.deletedIDs = append(m.deletedIDs, id)
+	return m.deleteErr
+}
 func (m *mockUserRepo) GetUserAvatar(ctx context.Context, userID int64) (*UserAvatar, error) {
 	if m.getAvatarFn != nil {
 		return m.getAvatarFn(ctx, userID)
@@ -295,11 +297,16 @@ func (m *mockUserRepo) WithUserProfileIdentityTx(ctx context.Context, fn func(tx
 
 type mockAuthCacheInvalidator struct {
 	invalidatedUserIDs []int64
+	invalidatedKeys    []string
 	mu                 sync.Mutex
 }
 
-func (m *mockAuthCacheInvalidator) InvalidateAuthCacheByKey(context.Context, string)    {}
 func (m *mockAuthCacheInvalidator) InvalidateAuthCacheByGroupID(context.Context, int64) {}
+func (m *mockAuthCacheInvalidator) InvalidateAuthCacheByKey(_ context.Context, key string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.invalidatedKeys = append(m.invalidatedKeys, key)
+}
 func (m *mockAuthCacheInvalidator) InvalidateAuthCacheByUserID(_ context.Context, userID int64) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -378,7 +385,91 @@ func (m *mockBillingCache) BatchGetUserPlatformQuotaCache(context.Context, []Use
 	return nil, nil
 }
 
+type mockAccountDeletionAPIKeyRepo struct {
+	listByUserIDCalls []int64
+	keys              []APIKey
+	deletedIDs        []int64
+}
+
+func (m *mockAccountDeletionAPIKeyRepo) ListByUserID(
+	_ context.Context,
+	userID int64,
+	_ pagination.PaginationParams,
+	_ APIKeyListFilters,
+) ([]APIKey, *pagination.PaginationResult, error) {
+	m.listByUserIDCalls = append(m.listByUserIDCalls, userID)
+	out := append([]APIKey(nil), m.keys...)
+	return out, &pagination.PaginationResult{Total: int64(len(out))}, nil
+}
+
+func (m *mockAccountDeletionAPIKeyRepo) DeleteWithAudit(_ context.Context, id int64) error {
+	m.deletedIDs = append(m.deletedIDs, id)
+	return nil
+}
+
 // --- 测试 ---
+
+func TestDeleteOwnAccountRejectsWrongPassword(t *testing.T) {
+	user := &User{ID: 7, Role: RoleUser}
+	require.NoError(t, user.SetPassword("correct-password"))
+	repo := &mockUserRepo{getByIDUser: user}
+	apiKeyRepo := &mockAccountDeletionAPIKeyRepo{
+		keys: []APIKey{{ID: 11, UserID: 7, Key: "sk-user-1"}},
+	}
+	invalidator := &mockAuthCacheInvalidator{}
+	svc := NewUserService(repo, nil, invalidator, nil)
+	svc.SetAccountDeletionAPIKeyRepository(apiKeyRepo)
+
+	err := svc.DeleteOwnAccount(context.Background(), 7, "wrong-password")
+
+	require.ErrorIs(t, err, ErrPasswordIncorrect)
+	require.Empty(t, repo.deletedIDs)
+	require.Empty(t, apiKeyRepo.listByUserIDCalls)
+	require.Empty(t, apiKeyRepo.deletedIDs)
+	require.Empty(t, invalidator.invalidatedKeys)
+	require.Empty(t, invalidator.invalidatedUserIDs)
+}
+
+func TestDeleteOwnAccountRejectsAdminUser(t *testing.T) {
+	user := &User{ID: 1, Role: RoleAdmin}
+	require.NoError(t, user.SetPassword("current-password"))
+	repo := &mockUserRepo{getByIDUser: user}
+	apiKeyRepo := &mockAccountDeletionAPIKeyRepo{}
+	svc := NewUserService(repo, nil, nil, nil)
+	svc.SetAccountDeletionAPIKeyRepository(apiKeyRepo)
+
+	err := svc.DeleteOwnAccount(context.Background(), 1, "current-password")
+
+	require.ErrorIs(t, err, ErrAccountDeletionForbidden)
+	require.Empty(t, repo.deletedIDs)
+	require.Empty(t, apiKeyRepo.listByUserIDCalls)
+	require.Empty(t, apiKeyRepo.deletedIDs)
+}
+
+func TestDeleteOwnAccountDeletesUserAPIKeysAndInvalidatesCaches(t *testing.T) {
+	user := &User{ID: 7, Role: RoleUser}
+	require.NoError(t, user.SetPassword("current-password"))
+	repo := &mockUserRepo{getByIDUser: user}
+	apiKeyRepo := &mockAccountDeletionAPIKeyRepo{
+		keys: []APIKey{
+			{ID: 11, UserID: 7, Key: "sk-user-1"},
+			{ID: 12, UserID: 7, Key: "sk-user-2"},
+		},
+	}
+	invalidator := &mockAuthCacheInvalidator{}
+	svc := NewUserService(repo, nil, invalidator, nil)
+	svc.SetAccountDeletionAPIKeyRepository(apiKeyRepo)
+
+	err := svc.DeleteOwnAccount(context.Background(), 7, "current-password")
+
+	require.NoError(t, err)
+	require.Equal(t, []int64{7}, apiKeyRepo.listByUserIDCalls)
+	require.Equal(t, []int64{11, 12}, apiKeyRepo.deletedIDs)
+	require.Equal(t, []int64{7}, repo.deletedIDs)
+	require.Equal(t, 1, repo.txCalls)
+	require.ElementsMatch(t, []string{"sk-user-1", "sk-user-2"}, invalidator.invalidatedKeys)
+	require.Equal(t, []int64{7}, invalidator.invalidatedUserIDs)
+}
 
 func TestUpdateBalance_Success(t *testing.T) {
 	repo := &mockUserRepo{}
@@ -748,32 +839,13 @@ func TestUpdateProfile_StoresInlineAvatarWithinLimit(t *testing.T) {
 	require.Equal(t, hex.EncodeToString(expectedSum[:]), updated.AvatarSHA256)
 }
 
-func TestUpdateProfile_CompressesInlineAvatarToTwentyKilobytes(t *testing.T) {
-	var encoded bytes.Buffer
-	for _, size := range []int{192, 224, 256, 288} {
-		encoded.Reset()
-		var img image.RGBA
-		img.Rect = image.Rect(0, 0, size, size)
-		img.Stride = size * 4
-		img.Pix = make([]byte, size*size*4)
-		for y := 0; y < size; y++ {
-			for x := 0; x < size; x++ {
-				offset := y*img.Stride + x*4
-				img.Pix[offset] = uint8((x*x + y*17) % 255)
-				img.Pix[offset+1] = uint8((y*y + x*29) % 255)
-				img.Pix[offset+2] = uint8(((x * y) + x*13 + y*7) % 255)
-				img.Pix[offset+3] = 0xff
-			}
-		}
-		require.NoError(t, png.Encode(&encoded, &img))
-		if encoded.Len() > 20*1024 && encoded.Len() <= maxInlineAvatarBytes {
-			break
-		}
+func TestUpdateProfile_StoresInlineAvatarWithinHundredKilobyteLimit(t *testing.T) {
+	raw := make([]byte, 80*1024)
+	for i := range raw {
+		raw[i] = byte(i % 251)
 	}
-	require.Greater(t, encoded.Len(), 20*1024)
-	require.LessOrEqual(t, encoded.Len(), maxInlineAvatarBytes)
-
-	dataURL := "data:image/png;base64," + base64.StdEncoding.EncodeToString(encoded.Bytes())
+	dataURL := "data:image/png;base64," + base64.StdEncoding.EncodeToString(raw)
+	expectedSum := sha256.Sum256(raw)
 	repo := &mockUserRepo{
 		getByIDUser: &User{
 			ID:       17,
@@ -789,14 +861,15 @@ func TestUpdateProfile_CompressesInlineAvatarToTwentyKilobytes(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, repo.upsertAvatarArgs, 1)
 	require.Equal(t, "inline", repo.upsertAvatarArgs[0].StorageProvider)
-	require.LessOrEqual(t, repo.upsertAvatarArgs[0].ByteSize, 20*1024)
-	require.Equal(t, "image/jpeg", repo.upsertAvatarArgs[0].ContentType)
-	require.Contains(t, repo.upsertAvatarArgs[0].URL, "data:image/jpeg;base64,")
+	require.Equal(t, len(raw), repo.upsertAvatarArgs[0].ByteSize)
+	require.Equal(t, "image/png", repo.upsertAvatarArgs[0].ContentType)
+	require.Equal(t, hex.EncodeToString(expectedSum[:]), repo.upsertAvatarArgs[0].SHA256)
+	require.Equal(t, dataURL, repo.upsertAvatarArgs[0].URL)
 	require.Equal(t, "inline", updated.AvatarSource)
-	require.Equal(t, "image/jpeg", updated.AvatarMIME)
-	require.LessOrEqual(t, updated.AvatarByteSize, 20*1024)
-	require.Contains(t, updated.AvatarURL, "data:image/jpeg;base64,")
-	require.NotEmpty(t, updated.AvatarSHA256)
+	require.Equal(t, "image/png", updated.AvatarMIME)
+	require.Equal(t, len(raw), updated.AvatarByteSize)
+	require.Equal(t, dataURL, updated.AvatarURL)
+	require.Equal(t, hex.EncodeToString(expectedSum[:]), updated.AvatarSHA256)
 }
 
 func TestUpdateProfile_RejectsInlineAvatarOverLimit(t *testing.T) {

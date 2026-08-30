@@ -83,11 +83,11 @@ type RedeemCodeCreatorRepository interface {
 }
 
 type BalanceTransferRedeemCodeDeleteRepository interface {
-	DeleteUnusedBalanceTransferByCreator(ctx context.Context, userID, codeID int64) (*RedeemCode, error)
+	DeleteBalanceTransferByCreator(ctx context.Context, userID, codeID int64) (*RedeemCode, error)
 }
 
 type BalanceTransferRedeemCodeBatchDeleteRepository interface {
-	DeleteUnusedBalanceTransfersByCreator(ctx context.Context, userID int64, codeIDs []int64) ([]RedeemCode, error)
+	DeleteBalanceTransfersByCreator(ctx context.Context, userID int64, codeIDs []int64) ([]RedeemCode, error)
 }
 
 // GenerateCodesRequest 生成兑换码请求
@@ -103,6 +103,17 @@ type GenerateBalanceTransferCodeInput struct {
 	ExpiresInDays    int
 	Notes            string
 	SingleUsePerUser bool
+}
+
+type ConvertBalanceToRedeemCodesInput struct {
+	Value float64
+	Count int
+}
+
+type ConvertBalanceToRedeemCodesResult struct {
+	Codes      []RedeemCode
+	TotalValue float64
+	NewBalance float64
 }
 
 // RedeemCodeResponse 兑换码响应
@@ -342,7 +353,7 @@ func (s *RedeemService) GenerateBalanceTransferCodes(ctx context.Context, userID
 		if !user.IsActive() {
 			return nil, ErrUserNotActive
 		}
-		if !user.BalanceRedeemCodeEnabled && !user.CanAccessManagerPage() {
+		if !user.BalanceRedeemCodeEnabled && !user.CanAccessAdminWorkbench() {
 			return nil, ErrBalanceTransferRedeemNotAllowed
 		}
 
@@ -418,6 +429,27 @@ func (s *RedeemService) GenerateBalanceTransferCodes(ctx context.Context, userID
 	return codes, nil
 }
 
+func (s *RedeemService) ConvertBalanceToRedeemCodes(ctx context.Context, userID int64, input ConvertBalanceToRedeemCodesInput) (*ConvertBalanceToRedeemCodesResult, error) {
+	codes, err := s.GenerateBalanceTransferCodes(ctx, userID, GenerateBalanceTransferCodeInput{
+		Amount: input.Value,
+		Count:  input.Count,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	user, err := s.userRepo.GetByID(ctx, userID)
+	if err != nil {
+		return nil, fmt.Errorf("read balance after converting redeem codes: %w", err)
+	}
+
+	return &ConvertBalanceToRedeemCodesResult{
+		Codes:      codes,
+		TotalValue: input.Value * float64(input.Count),
+		NewBalance: user.Balance,
+	}, nil
+}
+
 func (s *RedeemService) ListGeneratedBalanceTransferCodes(ctx context.Context, userID int64, limit int) ([]RedeemCode, error) {
 	repo, ok := s.redeemRepo.(RedeemCodeCreatorRepository)
 	if !ok {
@@ -447,7 +479,7 @@ func (s *RedeemService) DeleteGeneratedBalanceTransferCode(ctx context.Context, 
 	}
 
 	deleteCode := func(opCtx context.Context) (*RedeemCode, error) {
-		code, err := deleteRepo.DeleteUnusedBalanceTransferByCreator(opCtx, userID, codeID)
+		code, err := deleteRepo.DeleteBalanceTransferByCreator(opCtx, userID, codeID)
 		if err != nil {
 			return nil, err
 		}
@@ -455,8 +487,10 @@ func (s *RedeemService) DeleteGeneratedBalanceTransferCode(ctx context.Context, 
 			return nil, infraerrors.Conflict("BALANCE_TRANSFER_REDEEM_CODE_INVALID", "balance transfer redeem code value is invalid")
 		}
 
-		if _, err := s.userRepo.AdjustBalance(opCtx, userID, code.Value); err != nil {
-			return nil, fmt.Errorf("refund balance transfer redeem code: %w", err)
+		if balanceTransferRedeemCodeShouldRefund(code) {
+			if _, err := s.userRepo.AdjustBalance(opCtx, userID, code.Value); err != nil {
+				return nil, fmt.Errorf("refund balance transfer redeem code: %w", err)
+			}
 		}
 		return code, nil
 	}
@@ -505,7 +539,7 @@ func (s *RedeemService) DeleteGeneratedBalanceTransferCodes(ctx context.Context,
 	}
 
 	deleteCodes := func(opCtx context.Context) ([]RedeemCode, error) {
-		codes, err := deleteRepo.DeleteUnusedBalanceTransfersByCreator(opCtx, userID, ids)
+		codes, err := deleteRepo.DeleteBalanceTransfersByCreator(opCtx, userID, ids)
 		if err != nil {
 			return nil, err
 		}
@@ -518,11 +552,15 @@ func (s *RedeemService) DeleteGeneratedBalanceTransferCodes(ctx context.Context,
 			if code.Value <= 0 {
 				return nil, infraerrors.Conflict("BALANCE_TRANSFER_REDEEM_CODE_INVALID", "balance transfer redeem code value is invalid")
 			}
-			totalRefund += code.Value
+			if balanceTransferRedeemCodeShouldRefund(&code) {
+				totalRefund += code.Value
+			}
 		}
 
-		if _, err := s.userRepo.AdjustBalance(opCtx, userID, totalRefund); err != nil {
-			return nil, fmt.Errorf("refund balance transfer redeem codes: %w", err)
+		if totalRefund > 0 {
+			if _, err := s.userRepo.AdjustBalance(opCtx, userID, totalRefund); err != nil {
+				return nil, fmt.Errorf("refund balance transfer redeem codes: %w", err)
+			}
 		}
 		return codes, nil
 	}
@@ -552,6 +590,10 @@ func (s *RedeemService) DeleteGeneratedBalanceTransferCodes(ctx context.Context,
 
 	s.invalidateBalanceTransferCreatorCaches(ctx, userID)
 	return deleted, nil
+}
+
+func balanceTransferRedeemCodeShouldRefund(code *RedeemCode) bool {
+	return code != nil && code.Status != StatusUsed && code.UsedBy == nil
 }
 
 func normalizeBalanceTransferRedeemCodeIDs(codeIDs []int64) ([]int64, error) {

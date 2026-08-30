@@ -335,6 +335,24 @@ describe('CustomGroupsManager', () => {
     expect(wrapper.get('[data-test="custom-group-stale-sources"]').text()).toContain('专属 Claude')
   })
 
+  it('explains source model rename or removal separately from a removed group', async () => {
+    const renamedModel = {
+      ...groupsWithStaleSource[0].models[1],
+      source_issue: 'source_model_unavailable',
+      source_group: { id: 98, name: '反重力 Gemini', status: 'active', platform: 'gemini' },
+    }
+    apiMocks.list.mockResolvedValue([{
+      ...groupsWithStaleSource[0],
+      models: [groupsWithStaleSource[0].models[0], renamedModel],
+    }])
+    const wrapper = await mountManager()
+
+    await wrapper.get('[data-test="custom-groups-edit-21"]').trigger('click')
+
+    expect(wrapper.get('[data-test="custom-group-stale-sources"]').text()).toContain('来源模型已下架或改名')
+    expect(wrapper.get('[data-test="custom-group-stale-sources"]').text()).toContain('反重力 Gemini')
+  })
+
   it('confirms the affected API keys before forcing a bound custom group deletion', async () => {
     const confirm = vi.spyOn(window, 'confirm')
       .mockReturnValueOnce(true)

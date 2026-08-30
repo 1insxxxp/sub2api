@@ -171,7 +171,7 @@ func TestGatewayChatCompletionsBridgeCapturesAnthropicOutcome(t *testing.T) {
 		}, "\n"))),
 	}
 
-	result, err := (&GatewayService{}).handleCCStreamingFromAnthropic(resp, c, "model", "model", nil, time.Now(), true)
+	result, err := (&GatewayService{}).handleCCStreamingFromAnthropic(resp, c, "model", "model", "", nil, time.Now(), true)
 	require.NoError(t, err)
 	require.NotNil(t, result)
 	require.NotNil(t, result.Outcome)
@@ -193,7 +193,7 @@ func TestGatewayResponsesBridgeMarksAnthropicMissingTerminal(t *testing.T) {
 		}, "\n"))),
 	}
 
-	result, err := (&GatewayService{}).handleResponsesBufferedStreamingResponse(resp, c, "model", "model", nil, time.Now(), apicompat.ResponsesClientToolMapping{})
+	result, err := (&GatewayService{}).handleResponsesBufferedStreamingResponse(resp, c, "model", "model", "", nil, time.Now(), apicompat.ResponsesClientToolMapping{})
 	require.NoError(t, err)
 	require.NotNil(t, result)
 	require.NotNil(t, result.Outcome)

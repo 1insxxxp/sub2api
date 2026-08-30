@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
 
 import RedeemView from '../RedeemView.vue'
+import DataTable from '@/components/common/DataTable.vue'
 
 const { listRedeemCodes, generateRedeemCodes, batchUpdateRedeemCodes, getAllGroups, showSuccess, showError, showInfo } =
   vi.hoisted(() => ({
@@ -55,11 +56,28 @@ vi.mock('vue-i18n', async () => {
 })
 
 const DataTableStub = {
-  props: ['columns', 'data'],
+  props: ['columns', 'data', 'selectable', 'selectedKeys', 'rowKey'],
+  emits: ['update:selectedKeys'],
+  methods: {
+    rowId(row: Record<string, unknown>) {
+      return this.rowKey ? row[this.rowKey] : row.id
+    },
+    updateRow(row: Record<string, unknown>, event: Event) {
+      const id = this.rowId(row)
+      const selected = new Set(this.selectedKeys ?? [])
+      if ((event.target as HTMLInputElement).checked) {
+        selected.add(id)
+      } else {
+        selected.delete(id)
+      }
+      this.$emit('update:selectedKeys', Array.from(selected))
+    }
+  },
   template: `
     <table>
       <thead>
         <tr>
+          <th v-if="selectable"><input data-test="select-all" type="checkbox" /></th>
           <th v-for="column in columns" :key="column.key">
             <slot :name="'header-' + column.key" :column="column">{{ column.label }}</slot>
           </th>
@@ -67,6 +85,14 @@ const DataTableStub = {
       </thead>
       <tbody>
         <tr v-for="row in data" :key="row.id">
+          <td v-if="selectable">
+            <input
+              data-test="select-row"
+              type="checkbox"
+              :checked="(selectedKeys || []).includes(rowId(row))"
+              @change="updateRow(row, $event)"
+            />
+          </td>
           <td v-for="column in columns" :key="column.key">
             <slot :name="'cell-' + column.key" :row="row" :value="row[column.key]">
               {{ row[column.key] }}
@@ -98,6 +124,23 @@ const SelectStub = {
       </option>
     </select>
   `
+}
+
+function stubMobileMatchMedia() {
+  Object.defineProperty(window, 'matchMedia', {
+    configurable: true,
+    writable: true,
+    value: vi.fn().mockImplementation((query: string) => ({
+      matches: query.includes('min-width') ? false : true,
+      media: query,
+      onchange: null,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      dispatchEvent: vi.fn()
+    }))
+  })
 }
 
 describe('admin RedeemView batch update', () => {
@@ -172,7 +215,7 @@ describe('admin RedeemView batch update', () => {
     })
 
     await flushPromises()
-    await wrapper.findAll('[data-test="select-code"]')[0].setValue(true)
+    await wrapper.findAll('[data-test="select-row"]')[0].setValue(true)
     await wrapper.get('[data-test="batch-update-open"]').trigger('click')
     await flushPromises()
 
@@ -221,6 +264,39 @@ describe('admin RedeemView batch update', () => {
     await flushPromises()
 
     expect(generateRedeemCodes).toHaveBeenCalledWith(1, 'balance', 10, undefined, undefined, undefined, true)
+  })
+
+  it('shows selection checkboxes in the mobile redeem-code card layout', async () => {
+    stubMobileMatchMedia()
+    const wrapper = mount(RedeemView, {
+      attachTo: document.body,
+      global: {
+        stubs: {
+          AppLayout: { template: '<div><slot /></div>' },
+          TablePageLayout: {
+            template: '<div><slot name="filters" /><slot name="table" /><slot name="pagination" /></div>'
+          },
+          DataTable,
+          Pagination: true,
+          ConfirmDialog: true,
+          Select: SelectStub,
+          GroupBadge: true,
+          GroupOptionItem: true,
+          Icon: true,
+          Teleport: true
+        }
+      }
+    })
+
+    await flushPromises()
+
+    const rowCheckboxes = wrapper.findAll<HTMLInputElement>('[data-test="select-row"]')
+    expect(rowCheckboxes).toHaveLength(2)
+
+    await rowCheckboxes[0].setValue(true)
+
+    expect(wrapper.text()).toContain('admin.redeem.selectedCount')
+    expect(wrapper.get('[data-test="batch-update-open"]').attributes('disabled')).toBeUndefined()
   })
 
   it('hides and resets the single-use option for invitation codes', async () => {

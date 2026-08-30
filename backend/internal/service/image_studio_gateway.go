@@ -13,6 +13,7 @@ import (
 	"net/textproto"
 	"strings"
 
+	"github.com/Wei-Shaw/sub2api/internal/pkg/ctxkey"
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
 	"github.com/gin-gonic/gin"
 	"github.com/tidwall/gjson"
@@ -36,11 +37,17 @@ type ImageStudioGateway interface {
 	RecordUsage(ctx context.Context, input *OpenAIRecordUsageInput) error
 }
 
+type ImageStudioGeminiGateway interface {
+	SelectAccountForModelWithExclusions(ctx context.Context, groupID *int64, sessionHash string, requestedModel string, excludedIDs map[int64]struct{}) (*Account, error)
+	ForwardNative(ctx context.Context, c *gin.Context, account *Account, originalModel string, action string, stream bool, body []byte) (*ForwardResult, error)
+}
+
 type ImageStudioGatewayExecutor struct {
 	apiKeys        ImageStudioAPIKeyProvider
 	billingChecker ImageStudioBillingChecker
 	subscriptions  UserSubscriptionRepository
 	gateway        ImageStudioGateway
+	geminiGateway  ImageStudioGeminiGateway
 }
 
 func NewImageStudioGatewayExecutor(
@@ -48,13 +55,18 @@ func NewImageStudioGatewayExecutor(
 	billingChecker ImageStudioBillingChecker,
 	subscriptions UserSubscriptionRepository,
 	gateway ImageStudioGateway,
+	geminiGateways ...ImageStudioGeminiGateway,
 ) *ImageStudioGatewayExecutor {
-	return &ImageStudioGatewayExecutor{
+	executor := &ImageStudioGatewayExecutor{
 		apiKeys:        apiKeys,
 		billingChecker: billingChecker,
 		subscriptions:  subscriptions,
 		gateway:        gateway,
 	}
+	if len(geminiGateways) > 0 {
+		executor.geminiGateway = geminiGateways[0]
+	}
+	return executor
 }
 
 func (e *ImageStudioGatewayExecutor) Generate(ctx context.Context, input ImageStudioGenerateInput) (*ImageStudioExecutionResult, error) {
@@ -71,6 +83,8 @@ func (e *ImageStudioGatewayExecutor) Generate(ctx context.Context, input ImageSt
 		BillingTier:      input.BillingTier,
 		OutputFormat:     input.OutputFormat,
 		Background:       input.Background,
+		Prompt:           input.Prompt,
+		AspectRatio:      input.AspectRatio,
 		UserAgent:        input.UserAgent,
 		IPAddress:        input.IPAddress,
 		Endpoint:         openAIImagesGenerationsEndpoint,
@@ -94,6 +108,9 @@ func (e *ImageStudioGatewayExecutor) Edit(ctx context.Context, input ImageStudio
 		BillingTier:      input.BillingTier,
 		OutputFormat:     input.OutputFormat,
 		Background:       input.Background,
+		Prompt:           input.Prompt,
+		AspectRatio:      input.AspectRatio,
+		ReferenceImages:  append([]ImageStudioReferenceImage(nil), input.ReferenceImages...),
 		UserAgent:        input.UserAgent,
 		IPAddress:        input.IPAddress,
 		Endpoint:         openAIImagesEditsEndpoint,
@@ -112,6 +129,9 @@ type imageStudioGatewayExecutionInput struct {
 	BillingTier      string
 	OutputFormat     string
 	Background       string
+	Prompt           string
+	AspectRatio      string
+	ReferenceImages  []ImageStudioReferenceImage
 	UserAgent        string
 	IPAddress        string
 	Endpoint         string
@@ -144,6 +164,10 @@ func (e *ImageStudioGatewayExecutor) execute(ctx context.Context, input imageStu
 		if err := e.billingChecker.CheckBillingEligibility(ctx, apiKey.User, apiKey, apiKey.Group, subscription, QuotaPlatform(ctx, apiKey)); err != nil {
 			return nil, err
 		}
+	}
+
+	if imageStudioShouldUseGeminiNative(apiKey.Group, input.Model) {
+		return e.executeGemini(ctx, apiKey, subscription, input)
 	}
 
 	ginCtx, recorder := newImageStudioGatewayGinContext(input.Endpoint, input.ContentType, input.Body, input.UserAgent, input.IPAddress)
@@ -214,6 +238,80 @@ func (e *ImageStudioGatewayExecutor) execute(ctx context.Context, input imageStu
 	}, nil
 }
 
+func (e *ImageStudioGatewayExecutor) executeGemini(ctx context.Context, apiKey *APIKey, subscription *UserSubscription, input imageStudioGatewayExecutionInput) (*ImageStudioExecutionResult, error) {
+	if e.geminiGateway == nil {
+		return nil, infraerrors.ServiceUnavailable("IMAGE_STUDIO_GEMINI_NOT_CONFIGURED", "gemini image studio gateway is not configured")
+	}
+	body, err := buildImageStudioGeminiGenerateContentBody(input)
+	if err != nil {
+		return nil, err
+	}
+	geminiCtx := context.WithValue(ctx, ctxkey.ForcePlatform, PlatformGemini)
+	if apiKey != nil && apiKey.Group != nil {
+		geminiCtx = context.WithValue(geminiCtx, ctxkey.Group, apiKey.Group)
+	}
+
+	requestedModel := imageStudioGeminiModelForUpstream(input.Model)
+	sessionHash := HashUsageRequestPayload(body)
+	account, err := e.geminiGateway.SelectAccountForModelWithExclusions(geminiCtx, apiKey.GroupID, sessionHash, requestedModel, nil)
+	if err != nil {
+		return nil, fmt.Errorf("select gemini image account: %w", err)
+	}
+	if account == nil {
+		return nil, ErrNoAvailableAccounts
+	}
+	if strings.TrimSpace(account.Platform) != PlatformGemini {
+		return nil, infraerrors.ServiceUnavailable("IMAGE_STUDIO_GEMINI_ACCOUNT_UNSUPPORTED", "selected account is not a Gemini account")
+	}
+
+	upstreamEndpoint := imageStudioGeminiUpstreamEndpoint(requestedModel)
+	ginCtx, recorder := newImageStudioGatewayGinContext(upstreamEndpoint, "application/json", body, input.UserAgent, input.IPAddress)
+	forwardResult, err := e.geminiGateway.ForwardNative(geminiCtx, ginCtx, account, requestedModel, "generateContent", false, body)
+	if err != nil {
+		return nil, fmt.Errorf("forward gemini image request: %w", err)
+	}
+	result := imageStudioOpenAIForwardResultFromGemini(forwardResult, upstreamEndpoint)
+	if result == nil {
+		return nil, infraerrors.ServiceUnavailable("IMAGE_GENERATION_EMPTY_RESULT", "image provider returned no image")
+	}
+	ApplyOpenAIImageBillingResolution(result)
+
+	imageBytes, mimeType, err := extractImageStudioBytesFromGatewayBody(recorder.Body.Bytes())
+	if err != nil {
+		return nil, err
+	}
+	usageInput := &OpenAIRecordUsageInput{
+		Result:             result,
+		APIKey:             apiKey,
+		User:               apiKey.User,
+		Account:            account,
+		Subscription:       subscription,
+		InboundEndpoint:    input.Endpoint,
+		UpstreamEndpoint:   upstreamEndpoint,
+		UserAgent:          input.UserAgent,
+		IPAddress:          input.IPAddress,
+		RequestPayloadHash: sessionHash,
+		ChannelUsageFields: ChannelUsageFields{
+			OriginalModel:      input.Model,
+			ChannelMappedModel: firstNonEmptyTrimmed(result.UpstreamModel, input.Model),
+			BillingModelSource: BillingModelSourceRequested,
+		},
+	}
+
+	return &ImageStudioExecutionResult{
+		ImageBytes:       imageBytes,
+		MimeType:         mimeType,
+		OutputFormat:     firstNonEmptyTrimmed(input.OutputFormat, imageStudioOutputFormatFromMIMEType(mimeType)),
+		Background:       input.Background,
+		Cost:             estimateImageStudioGatewayCost(apiKey, result),
+		RequestID:        result.RequestID,
+		SourceImageCount: input.SourceImageCount,
+		CommitUsage: func(commitCtx context.Context) error {
+			return e.gateway.RecordUsage(commitCtx, usageInput)
+		},
+	}, nil
+}
+
 func (e *ImageStudioGatewayExecutor) resolveAPIKey(ctx context.Context, userID int64, apiKeyID *int64, groupID *int64) (*APIKey, error) {
 	if apiKeyID != nil && *apiKeyID > 0 {
 		return e.apiKeys.GetImageStudioAPIKeyByID(ctx, userID, *apiKeyID)
@@ -246,6 +344,18 @@ func (e *ImageStudioGatewayExecutor) resolveSubscription(ctx context.Context, ap
 	return sub, nil
 }
 
+func imageStudioShouldUseGeminiNative(group *Group, model string) bool {
+	return group != nil && strings.TrimSpace(group.Platform) == PlatformGemini && isImageGenerationModel(model)
+}
+
+func imageStudioGeminiModelForUpstream(model string) string {
+	trimmed := strings.TrimSpace(model)
+	if strings.HasPrefix(strings.ToLower(trimmed), "models/") {
+		return strings.TrimSpace(trimmed[len("models/"):])
+	}
+	return trimmed
+}
+
 func buildImageStudioGenerateBody(input ImageStudioGenerateInput) ([]byte, error) {
 	body := map[string]any{
 		"model":           strings.TrimSpace(input.Model),
@@ -261,6 +371,59 @@ func buildImageStudioGenerateBody(input ImageStudioGenerateInput) ([]byte, error
 		body["background"] = background
 	}
 	return json.Marshal(body)
+}
+
+func buildImageStudioGeminiGenerateContentBody(input imageStudioGatewayExecutionInput) ([]byte, error) {
+	prompt := strings.TrimSpace(input.Prompt)
+	if prompt == "" {
+		return nil, infraerrors.BadRequest("IMAGE_PROMPT_REQUIRED", "image prompt is required")
+	}
+	parts := make([]map[string]any, 0, 1+len(input.ReferenceImages))
+	parts = append(parts, map[string]any{"text": prompt})
+	for _, image := range input.ReferenceImages {
+		if len(image.Data) == 0 {
+			continue
+		}
+		parts = append(parts, map[string]any{
+			"inlineData": map[string]any{
+				"mimeType": imageStudioReferenceImageMIMEType(image),
+				"data":     base64.StdEncoding.EncodeToString(image.Data),
+			},
+		})
+	}
+	body := map[string]any{
+		"contents": []map[string]any{{
+			"role":  "user",
+			"parts": parts,
+		}},
+		"generationConfig": map[string]any{
+			"responseModalities": []string{"TEXT", "IMAGE"},
+			"imageConfig": map[string]any{
+				"aspectRatio": firstNonEmptyTrimmed(input.AspectRatio, "1:1"),
+				"imageSize":   NormalizeImageBillingTierOrDefault(firstNonEmptyTrimmed(input.BillingTier, input.Size)),
+			},
+		},
+	}
+	return json.Marshal(body)
+}
+
+func imageStudioReferenceImageMIMEType(image ImageStudioReferenceImage) string {
+	contentType := strings.TrimSpace(image.ContentType)
+	if contentType == "" && len(image.Data) > 0 {
+		contentType = http.DetectContentType(image.Data)
+	}
+	if mediaType, _, ok := strings.Cut(contentType, ";"); ok {
+		contentType = strings.TrimSpace(mediaType)
+	}
+	if strings.HasPrefix(strings.ToLower(contentType), "image/") {
+		return contentType
+	}
+	if len(image.Data) > 0 {
+		if detected := http.DetectContentType(image.Data); strings.HasPrefix(strings.ToLower(detected), "image/") {
+			return detected
+		}
+	}
+	return "application/octet-stream"
 }
 
 func buildImageStudioEditBody(input ImageStudioEditInput) ([]byte, string, error) {
@@ -361,6 +524,12 @@ func extractImageStudioBytesFromGatewayBody(body []byte) ([]byte, string, error)
 		outputFormat, _ := extractImageStudioOutputMetadataFromGatewayBody(body)
 		return decoded, openAIImageOutputMIMEType(outputFormat), nil
 	}
+	if decoded, mimeType, ok, err := extractImageStudioGeminiInlineData(body); ok || err != nil {
+		if err != nil {
+			return nil, "", err
+		}
+		return decoded, firstNonEmptyTrimmed(mimeType, "image/png"), nil
+	}
 	for _, item := range collectOpenAIImageInlineAssets(body, "") {
 		if decoded, ok, err := decodeImageStudioBase64(item.B64JSON); ok || err != nil {
 			if err != nil {
@@ -377,6 +546,47 @@ func extractImageStudioBytesFromGatewayBody(body []byte) ([]byte, string, error)
 		}
 	}
 	return nil, "", infraerrors.ServiceUnavailable("IMAGE_GENERATION_EMPTY_RESULT", "image provider returned no inline image")
+}
+
+func extractImageStudioGeminiInlineData(body []byte) ([]byte, string, bool, error) {
+	if len(body) == 0 || !gjson.ValidBytes(body) {
+		return nil, "", false, nil
+	}
+	var decoded []byte
+	var mimeType string
+	var decodeErr error
+	found := false
+	gjson.GetBytes(body, "candidates").ForEach(func(_, candidate gjson.Result) bool {
+		candidate.Get("content.parts").ForEach(func(_, part gjson.Result) bool {
+			inline := part.Get("inlineData")
+			if !inline.Exists() {
+				inline = part.Get("inline_data")
+			}
+			if !inline.Exists() {
+				return true
+			}
+			mime := inline.Get("mimeType")
+			if !mime.Exists() {
+				mime = inline.Get("mime_type")
+			}
+			if !isGeminiInlineImageMIMEType(strings.ToLower(strings.TrimSpace(mime.String()))) {
+				return true
+			}
+			var ok bool
+			decoded, ok, decodeErr = decodeImageStudioBase64(inline.Get("data").String())
+			if decodeErr != nil {
+				return false
+			}
+			if !ok {
+				return true
+			}
+			mimeType = firstNonEmptyTrimmed(mime.String(), "image/png")
+			found = true
+			return false
+		})
+		return !found && decodeErr == nil
+	})
+	return decoded, mimeType, found, decodeErr
 }
 
 func extractImageStudioOutputMetadataFromGatewayBody(body []byte) (string, string) {
@@ -454,6 +664,39 @@ func imageStudioUpstreamEndpoint(inboundEndpoint string, platform string) string
 		return inboundEndpoint
 	}
 	return inboundEndpoint
+}
+
+func imageStudioGeminiUpstreamEndpoint(model string) string {
+	return fmt.Sprintf("/v1beta/models/%s:generateContent", strings.TrimSpace(model))
+}
+
+func imageStudioOpenAIForwardResultFromGemini(result *ForwardResult, upstreamEndpoint string) *OpenAIForwardResult {
+	if result == nil {
+		return nil
+	}
+	usage := claudeUsageToOpenAIUsage(&result.Usage)
+	usage.ImageOutputTokens = result.Usage.ImageOutputTokens
+	return &OpenAIForwardResult{
+		RequestID:                     result.RequestID,
+		Usage:                         usage,
+		Model:                         result.Model,
+		UpstreamModel:                 result.UpstreamModel,
+		UpstreamResponseModel:         result.UpstreamResponseModel,
+		UpstreamResponseModelConflict: result.UpstreamResponseModelConflict,
+		UpstreamEndpoint:              upstreamEndpoint,
+		Stream:                        result.Stream,
+		Duration:                      result.Duration,
+		FirstTokenMs:                  result.FirstTokenMs,
+		ClientDisconnect:              result.ClientDisconnect,
+		ImageCount:                    result.ImageCount,
+		ImageSize:                     result.ImageSize,
+		ImageInputSize:                result.ImageInputSize,
+		ImageOutputSize:               result.ImageOutputSize,
+		ImageOutputSizes:              append([]string(nil), result.ImageOutputSizes...),
+		ImageSizeSource:               result.ImageSizeSource,
+		ImageSizeBreakdown:            result.ImageSizeBreakdown,
+		Outcome:                       result.Outcome,
+	}
 }
 
 var _ = io.EOF

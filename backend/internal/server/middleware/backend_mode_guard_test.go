@@ -118,10 +118,10 @@ func TestBackendModeUserGuard(t *testing.T) {
 			wantStatus: http.StatusOK,
 		},
 		{
-			name:       "enabled_sub_admin_user_route_blocked",
+			name:       "enabled_sub_admin_regular_user_route_blocked",
 			enabled:    "true",
 			role:       stringPtr("sub_admin"),
-			path:       "/api/v1/keys",
+			path:       "/api/v1/user/profile",
 			wantStatus: http.StatusForbidden,
 		},
 		{
@@ -163,9 +163,13 @@ func TestBackendModeUserGuard(t *testing.T) {
 			}
 
 			r.Use(BackendModeUserGuard(svc))
-			r.Any("/*path", func(c *gin.Context) {
+			okHandler := func(c *gin.Context) {
 				c.JSON(http.StatusOK, gin.H{"ok": true})
-			})
+			}
+			r.GET("/test", okHandler)
+			r.GET("/api/v1/auth/me", okHandler)
+			r.GET("/api/v1/manager/redeem-codes/convert-balance", okHandler)
+			r.GET("/api/v1/user/profile", okHandler)
 
 			w := httptest.NewRecorder()
 			path := tc.path

@@ -26,6 +26,7 @@ import (
 var (
 	ErrInvalidCredentials           = infraerrors.Unauthorized("INVALID_CREDENTIALS", "invalid email or password")
 	ErrUserNotActive                = infraerrors.Forbidden("USER_NOT_ACTIVE", "user is not active")
+	ErrExternalLogin2FARequired     = infraerrors.Forbidden("EXTERNAL_LOGIN_2FA_REQUIRED", "external login is not available for users with two-factor authentication enabled")
 	ErrEmailExists                  = infraerrors.Conflict("EMAIL_EXISTS", "email already exists")
 	ErrEmailReserved                = infraerrors.BadRequest("EMAIL_RESERVED", "email is reserved")
 	ErrInvalidToken                 = infraerrors.Unauthorized("INVALID_TOKEN", "invalid token")
@@ -61,6 +62,14 @@ const refreshTokenPrefix = "rt_"
 type AuthSourceMetadata struct {
 	IP        string
 	UserAgent string
+}
+
+type ExternalCredentialUser struct {
+	ID       int64  `json:"id"`
+	Email    string `json:"email"`
+	Username string `json:"username"`
+	Role     string `json:"role"`
+	Status   string `json:"status"`
 }
 
 func (m AuthSourceMetadata) Empty() bool {
@@ -589,6 +598,39 @@ func (s *AuthService) Login(ctx context.Context, email, password string) (string
 	return token, user, nil
 }
 
+func (s *AuthService) VerifyExternalCredential(ctx context.Context, email, password string) (*ExternalCredentialUser, error) {
+	email = strings.TrimSpace(email)
+
+	user, err := s.userRepo.GetByEmail(ctx, email)
+	if err != nil {
+		if errors.Is(err, ErrUserNotFound) {
+			return nil, ErrInvalidCredentials
+		}
+		logger.LegacyPrintf("service.auth", "[Auth] Database error during external credential verification: %v", err)
+		return nil, ErrServiceUnavailable
+	}
+
+	if !s.CheckPassword(password, user.PasswordHash) {
+		return nil, ErrInvalidCredentials
+	}
+
+	if !user.IsActive() {
+		return nil, ErrUserNotActive
+	}
+
+	if user.TotpEnabled {
+		return nil, ErrExternalLogin2FARequired
+	}
+
+	return &ExternalCredentialUser{
+		ID:       user.ID,
+		Email:    user.Email,
+		Username: user.Username,
+		Role:     user.Role,
+		Status:   user.Status,
+	}, nil
+}
+
 func (s *AuthService) LoginWithMetadata(ctx context.Context, email, password string, metadata AuthSourceMetadata) (string, *User, error) {
 	token, user, err := s.Login(ctx, email, password)
 	if err != nil {
@@ -596,6 +638,36 @@ func (s *AuthService) LoginWithMetadata(ctx context.Context, email, password str
 	}
 	s.updateUserLoginMetadata(ctx, user, metadata)
 	return token, user, nil
+}
+
+func (s *AuthService) ensureOAuthRegistrationEmailAvailable(ctx context.Context, email string) error {
+	if s == nil || s.userRepo == nil {
+		return ErrServiceUnavailable
+	}
+	exists, err := s.existsByEmailOrAlias(ctx, email)
+	if err != nil {
+		logger.LegacyPrintf("service.auth", "[Auth] Database error checking oauth registration email: %v", err)
+		return ErrServiceUnavailable
+	}
+	if exists {
+		return ErrEmailExists
+	}
+	return nil
+}
+
+func (s *AuthService) recoverOAuthCreateEmailConflict(ctx context.Context, email string) (*User, error) {
+	if s == nil || s.userRepo == nil {
+		return nil, ErrServiceUnavailable
+	}
+	user, err := s.userRepo.GetByEmail(ctx, email)
+	if err == nil {
+		return user, nil
+	}
+	if errors.Is(err, ErrUserNotFound) {
+		return nil, ErrEmailExists
+	}
+	logger.LegacyPrintf("service.auth", "[Auth] Database error getting user after oauth email conflict: %v", err)
+	return nil, ErrServiceUnavailable
 }
 
 // LoginOrRegisterOAuth 用于第三方 OAuth/SSO 登录：
@@ -655,13 +727,12 @@ func (s *AuthService) LoginOrRegisterOAuth(ctx context.Context, email, username 
 				SignupSource: signupSource,
 			}
 
-			if err := s.userRepo.Create(ctx, newUser); err != nil {
+			if err := s.userRepo.CreateWithEmailAliasGuard(ctx, newUser); err != nil {
 				if errors.Is(err, ErrEmailExists) {
 					// 并发场景：GetByEmail 与 Create 之间用户被创建。
-					user, err = s.userRepo.GetByEmail(ctx, email)
+					user, err = s.recoverOAuthCreateEmailConflict(ctx, email)
 					if err != nil {
-						logger.LegacyPrintf("service.auth", "[Auth] Database error getting user after conflict: %v", err)
-						return "", nil, ErrServiceUnavailable
+						return "", nil, err
 					}
 				} else {
 					logger.LegacyPrintf("service.auth", "[Auth] Database error creating oauth user: %v", err)
@@ -813,12 +884,11 @@ func (s *AuthService) loginOrRegisterOAuthWithTokenPair(ctx context.Context, ema
 				defer func() { _ = tx.Rollback() }()
 				txCtx := dbent.NewTxContext(ctx, tx)
 
-				if err := s.userRepo.Create(txCtx, newUser); err != nil {
+				if err := s.userRepo.CreateWithEmailAliasGuard(txCtx, newUser); err != nil {
 					if errors.Is(err, ErrEmailExists) {
-						user, err = s.userRepo.GetByEmail(ctx, email)
+						user, err = s.recoverOAuthCreateEmailConflict(ctx, email)
 						if err != nil {
-							logger.LegacyPrintf("service.auth", "[Auth] Database error getting user after conflict: %v", err)
-							return nil, nil, ErrServiceUnavailable
+							return nil, nil, err
 						}
 					} else {
 						logger.LegacyPrintf("service.auth", "[Auth] Database error creating oauth user: %v", err)
@@ -841,12 +911,11 @@ func (s *AuthService) loginOrRegisterOAuthWithTokenPair(ctx context.Context, ema
 					s.bindOAuthAffiliate(ctx, user.ID, affiliateCode)
 				}
 			} else {
-				if err := s.userRepo.Create(ctx, newUser); err != nil {
+				if err := s.userRepo.CreateWithEmailAliasGuard(ctx, newUser); err != nil {
 					if errors.Is(err, ErrEmailExists) {
-						user, err = s.userRepo.GetByEmail(ctx, email)
+						user, err = s.recoverOAuthCreateEmailConflict(ctx, email)
 						if err != nil {
-							logger.LegacyPrintf("service.auth", "[Auth] Database error getting user after conflict: %v", err)
-							return nil, nil, ErrServiceUnavailable
+							return nil, nil, err
 						}
 					} else {
 						logger.LegacyPrintf("service.auth", "[Auth] Database error creating oauth user: %v", err)

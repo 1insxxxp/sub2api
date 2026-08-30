@@ -15,11 +15,26 @@ func RegisterAdminRoutes(
 	v1 *gin.RouterGroup,
 	h *handler.Handlers,
 	adminAuth middleware.AdminAuthMiddleware,
+	adminWorkbenchAuth middleware.AdminWorkbenchAuthMiddleware,
 	auditLog middleware.AuditLogMiddleware,
 	stepUpAuth middleware.StepUpAuthMiddleware,
 	settingService *service.SettingService,
 	panelRateLimiter *middleware.PanelRateLimiter,
 ) {
+	workbench := v1.Group("/admin/workbench")
+	workbench.Use(gin.HandlerFunc(adminWorkbenchAuth))
+	workbench.Use(panelRateLimiter.Global())
+	workbench.Use(gin.HandlerFunc(auditLog))
+	workbench.Use(middleware.AdminComplianceGuard(settingService))
+	if h != nil && (h.Redeem != nil || (h.Admin != nil && (h.Admin.SubAdminCommission != nil || h.Admin.Affiliate != nil))) {
+		registerAdminWorkbenchRoutes(workbench, h)
+	}
+
+	// 插件 UI 使用短时能力 URL，仅提供经过安装校验的静态资源。
+	if h != nil && h.Admin != nil && h.Admin.Plugin != nil {
+		v1.GET("/plugin-ui/:token/*path", h.Admin.Plugin.ServeUIAsset)
+	}
+
 	admin := v1.Group("/admin")
 	admin.Use(gin.HandlerFunc(adminAuth))
 	// 面板全局按用户限流（默认管理员豁免，可在系统设置中关闭豁免）
@@ -27,107 +42,230 @@ func RegisterAdminRoutes(
 	// 审计中间件挂在认证之后：所有管理面变更类操作 + 敏感读取入审计日志
 	admin.Use(gin.HandlerFunc(auditLog))
 	admin.Use(middleware.AdminComplianceGuard(settingService))
-	{
+	if h != nil && h.Admin != nil {
+		adminHandlers := h.Admin
+
 		// 部署与运营合规确认
-		registerAdminComplianceRoutes(admin, h)
+		if adminHandlers.Compliance != nil {
+			registerAdminComplianceRoutes(admin, h)
+		}
 
 		// 仪表盘
-		registerDashboardRoutes(admin, h)
+		if adminHandlers.Dashboard != nil {
+			registerDashboardRoutes(admin, h)
+		}
 
 		// 用户管理
-		registerUserManagementRoutes(admin, h)
+		if adminHandlers.User != nil {
+			registerUserManagementRoutes(admin, h)
+		}
 
 		// 分组管理
-		registerGroupRoutes(admin, h)
-		registerSystemCustomGroupRoutes(admin, h)
+		if adminHandlers.Group != nil {
+			registerGroupRoutes(admin, h)
+		}
+		if adminHandlers.SystemCustomGroup != nil {
+			registerSystemCustomGroupRoutes(admin, h)
+		}
 
 		// 账号管理
-		registerAccountRoutes(admin, h, stepUpAuth)
+		if adminHandlers.Account != nil {
+			registerAccountRoutes(admin, h, stepUpAuth)
+		}
 
 		// 公告管理
-		registerAnnouncementRoutes(admin, h)
+		if adminHandlers.Announcement != nil {
+			registerAnnouncementRoutes(admin, h)
+		}
 
 		// OpenAI OAuth
-		registerOpenAIOAuthRoutes(admin, h)
+		if adminHandlers.OpenAIOAuth != nil {
+			registerOpenAIOAuthRoutes(admin, h)
+		}
 
 		// Gemini OAuth
-		registerGeminiOAuthRoutes(admin, h)
+		if adminHandlers.GeminiOAuth != nil {
+			registerGeminiOAuthRoutes(admin, h)
+		}
 
 		// Antigravity OAuth
-		registerAntigravityOAuthRoutes(admin, h)
+		if adminHandlers.AntigravityOAuth != nil {
+			registerAntigravityOAuthRoutes(admin, h)
+		}
 
 		// Grok OAuth
-		registerGrokOAuthRoutes(admin, h)
+		if adminHandlers.GrokOAuth != nil {
+			registerGrokOAuthRoutes(admin, h)
+		}
 
 		// 国产供应商（kimi/zhipu/deepseek）额度与余额
-		registerCNProviderRoutes(admin, h)
+		if adminHandlers.CNProvider != nil {
+			registerCNProviderRoutes(admin, h)
+		}
 
 		// 代理管理
-		registerProxyRoutes(admin, h, stepUpAuth)
+		if adminHandlers.Proxy != nil {
+			registerProxyRoutes(admin, h, stepUpAuth)
+		}
 
 		// 卡密管理
-		registerRedeemCodeRoutes(admin, h)
+		if adminHandlers.Redeem != nil {
+			registerRedeemCodeRoutes(admin, h)
+		}
+
+		// 二级管理员提成
+		if adminHandlers.SubAdminCommission != nil {
+			registerSubAdminCommissionRoutes(admin, h)
+		}
 
 		// 优惠码管理
-		registerPromoCodeRoutes(admin, h)
+		if adminHandlers.Promo != nil {
+			registerPromoCodeRoutes(admin, h)
+		}
 
 		// 系统设置
-		registerSettingsRoutes(admin, h)
+		if adminHandlers.Setting != nil {
+			registerSettingsRoutes(admin, h)
+		}
 
 		// 数据管理
-		registerDataManagementRoutes(admin, h, stepUpAuth)
+		if adminHandlers.DataManagement != nil {
+			registerDataManagementRoutes(admin, h, stepUpAuth)
+		}
 
 		// 数据库备份恢复
-		registerBackupRoutes(admin, h, stepUpAuth)
+		if adminHandlers.Backup != nil {
+			registerBackupRoutes(admin, h, stepUpAuth)
+		}
 
 		// 运维监控（Ops）
-		registerOpsRoutes(admin, h)
+		if adminHandlers.Ops != nil {
+			registerOpsRoutes(admin, h)
+		}
 
 		// 系统管理
-		registerSystemRoutes(admin, h)
+		if adminHandlers.System != nil {
+			registerSystemRoutes(admin, h)
+		}
 
 		// 订阅管理
-		registerSubscriptionRoutes(admin, h)
+		if adminHandlers.Subscription != nil {
+			registerSubscriptionRoutes(admin, h)
+		}
 
 		// 使用记录管理
-		registerUsageRoutes(admin, h)
+		if adminHandlers.Usage != nil {
+			registerUsageRoutes(admin, h)
+		}
 
 		// 用户属性管理
-		registerUserAttributeRoutes(admin, h)
+		if adminHandlers.UserAttribute != nil {
+			registerUserAttributeRoutes(admin, h)
+		}
 
 		// 错误透传规则管理
-		registerErrorPassthroughRoutes(admin, h)
+		if adminHandlers.ErrorPassthrough != nil {
+			registerErrorPassthroughRoutes(admin, h)
+		}
 
 		// TLS 指纹模板管理
-		registerTLSFingerprintProfileRoutes(admin, h)
+		if adminHandlers.TLSFingerprintProfile != nil {
+			registerTLSFingerprintProfileRoutes(admin, h)
+		}
+
+		// 本地进程插件管理
+		registerPluginRoutes(admin, h, stepUpAuth)
 
 		// API Key 管理
-		registerAdminAPIKeyRoutes(admin, h)
+		if adminHandlers.APIKey != nil {
+			registerAdminAPIKeyRoutes(admin, h)
+		}
 
 		// 定时测试计划
-		registerScheduledTestRoutes(admin, h)
+		if adminHandlers.ScheduledTest != nil {
+			registerScheduledTestRoutes(admin, h)
+		}
 
 		// 渠道管理
-		registerChannelRoutes(admin, h)
+		if adminHandlers.Channel != nil {
+			registerChannelRoutes(admin, h)
+		}
 
 		// 渠道监控
-		registerChannelMonitorRoutes(admin, h, settingService)
-		registerChannelMonitorV2Routes(admin, h, settingService)
+		if adminHandlers.ChannelMonitor != nil || adminHandlers.ChannelMonitorTemplate != nil {
+			registerChannelMonitorRoutes(admin, h, settingService)
+		}
+		if h.ChannelMonitorV2 != nil {
+			registerChannelMonitorV2Routes(admin, h, settingService)
+		}
 
 		// 风控中心
-		registerContentModerationRoutes(admin, h)
+		if adminHandlers.ContentModeration != nil {
+			registerContentModerationRoutes(admin, h)
+		}
 
 		// 独立提示词输入审计
-		registerPromptAuditRoutes(admin, h)
+		if adminHandlers.PromptAudit != nil {
+			registerPromptAuditRoutes(admin, h)
+		}
 
 		// 邀请返利（专属用户管理）
-		registerAffiliateRoutes(admin, h)
+		if adminHandlers.Affiliate != nil {
+			registerAffiliateRoutes(admin, h)
+		}
 
 		// 签到管理
-		registerCheckinRoutes(admin, h)
+		if adminHandlers.Checkin != nil {
+			registerCheckinRoutes(admin, h)
+		}
+
+		// 抽奖活动管理
+		if adminHandlers.Lottery != nil {
+			registerLotteryRoutes(admin, adminHandlers.Lottery)
+		}
 
 		// 操作审计日志
-		registerAuditLogRoutes(admin, h, stepUpAuth)
+		if adminHandlers.AuditLog != nil {
+			registerAuditLogRoutes(admin, h, stepUpAuth)
+		}
+	}
+}
+
+func registerAdminWorkbenchRoutes(workbench *gin.RouterGroup, h *handler.Handlers) {
+	if h.Redeem != nil {
+		redeem := workbench.Group("/redeem")
+		{
+			redeem.POST("/generated", h.Redeem.GenerateBalanceTransferCode)
+			redeem.GET("/generated", h.Redeem.GetGenerated)
+			redeem.POST("/generated/batch-delete", h.Redeem.DeleteGeneratedBatch)
+			redeem.DELETE("/generated/:id", h.Redeem.DeleteGenerated)
+		}
+	}
+
+	if h.Admin != nil && h.Admin.SubAdminCommission != nil {
+		commission := workbench.Group("/commission")
+		{
+			commission.GET("/grants", h.Admin.SubAdminCommission.GetWorkbenchGrants)
+			commission.GET("/calendar", h.Admin.SubAdminCommission.GetWorkbenchCalendar)
+			commission.GET("/days/:date/groups", h.Admin.SubAdminCommission.GetWorkbenchDayGroups)
+			commission.GET("/days/:date/groups/:group_id/logs", h.Admin.SubAdminCommission.GetWorkbenchDayGroupLogs)
+		}
+	}
+
+	if h.Admin != nil && h.Admin.Affiliate != nil {
+		affiliates := workbench.Group("/affiliates")
+		affiliates.GET("/leaderboard", h.Admin.Affiliate.ListWorkbenchLeaderboard)
+	}
+}
+
+func registerSubAdminCommissionRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
+	commissions := admin.Group("/sub-admin-commissions")
+	{
+		commissions.GET("/settings", h.Admin.SubAdminCommission.GetSettings)
+		commissions.PUT("/settings", h.Admin.SubAdminCommission.UpdateSettings)
+		commissions.GET("/grants", h.Admin.SubAdminCommission.ListGrants)
+		commissions.PUT("/grants", h.Admin.SubAdminCommission.ReplaceGrants)
+		commissions.PUT("/grants/:sub_admin_id", h.Admin.SubAdminCommission.ReplaceGrants)
 	}
 }
 
@@ -390,6 +528,7 @@ func registerAccountRoutes(admin *gin.RouterGroup, h *handler.Handlers, stepUpAu
 	accounts := admin.Group("/accounts")
 	{
 		accounts.GET("", h.Admin.Account.List)
+		accounts.GET("/upstream-billing-rates", h.Admin.Account.GetUpstreamBillingRates)
 		accounts.GET("/upstream-billing-probe/settings", h.Admin.Account.GetUpstreamBillingProbeSettings)
 		accounts.PUT("/upstream-billing-probe/settings", h.Admin.Account.UpdateUpstreamBillingProbeSettings)
 		accounts.POST("/upstream-billing-probe/batch", h.Admin.Account.ProbeUpstreamBillingBatch)
@@ -787,6 +926,22 @@ func registerTLSFingerprintProfileRoutes(admin *gin.RouterGroup, h *handler.Hand
 	}
 }
 
+func registerPluginRoutes(admin *gin.RouterGroup, h *handler.Handlers, stepUpAuth middleware.StepUpAuthMiddleware) {
+	plugins := admin.Group("/plugins")
+	{
+		plugins.GET("", h.Admin.Plugin.List)
+		plugins.GET("/:id", h.Admin.Plugin.Get)
+		plugins.POST("/upload", gin.HandlerFunc(stepUpAuth), h.Admin.Plugin.Upload)
+		plugins.POST("/:id/enable", gin.HandlerFunc(stepUpAuth), h.Admin.Plugin.Enable)
+		plugins.POST("/:id/disable", gin.HandlerFunc(stepUpAuth), h.Admin.Plugin.Disable)
+		plugins.DELETE("/:id", gin.HandlerFunc(stepUpAuth), h.Admin.Plugin.Delete)
+		plugins.GET("/:id/config", h.Admin.Plugin.GetConfig)
+		plugins.PUT("/:id/config", gin.HandlerFunc(stepUpAuth), h.Admin.Plugin.SaveConfig)
+		plugins.POST("/:id/test", gin.HandlerFunc(stepUpAuth), h.Admin.Plugin.Test)
+		plugins.POST("/:id/ui-session", h.Admin.Plugin.CreateUISession)
+	}
+}
+
 func registerChannelRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 	channels := admin.Group("/channels")
 	{
@@ -833,6 +988,7 @@ func registerChannelMonitorRoutes(admin *gin.RouterGroup, h *handler.Handlers, s
 func registerAffiliateRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 	affiliates := admin.Group("/affiliates")
 	{
+		affiliates.GET("/summaries", h.Admin.Affiliate.ListInviterSummaries)
 		affiliates.GET("/invites", h.Admin.Affiliate.ListInviteRecords)
 		affiliates.GET("/rebates", h.Admin.Affiliate.ListRebateRecords)
 		affiliates.GET("/transfers", h.Admin.Affiliate.ListTransferRecords)

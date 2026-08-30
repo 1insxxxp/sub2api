@@ -2060,9 +2060,10 @@ func mapGeminiStatusToClaudeErrorType(status string) string {
 }
 
 type geminiStreamResult struct {
-	usage        *ClaudeUsage
-	firstTokenMs *int
-	outcome      ResponseOutcome
+	usage            *ClaudeUsage
+	firstTokenMs     *int
+	clientDisconnect bool
+	outcome          ResponseOutcome
 }
 
 func (s *GeminiMessagesCompatService) handleNonStreamingResponse(c *gin.Context, resp *http.Response, originalModel string) (*ClaudeUsage, error) {
@@ -2493,6 +2494,9 @@ func collectGeminiSSE(body io.Reader, isOAuth bool) (map[string]any, *ClaudeUsag
 							lastWithParts = parsed
 							// Collect text from each part for aggregation
 							for _, part := range parts {
+								if thought, _ := part["thought"].(bool); thought {
+									continue
+								}
 								if text, ok := part["text"].(string); ok && text != "" {
 									collectedTextParts = append(collectedTextParts, text)
 								}
@@ -2937,6 +2941,9 @@ func convertGeminiToClaudeMessage(geminiResp map[string]any, originalModel strin
 					for _, part := range parts {
 						pm, ok := part.(map[string]any)
 						if !ok {
+							continue
+						}
+						if thought, _ := pm["thought"].(bool); thought {
 							continue
 						}
 						if text, ok := pm["text"].(string); ok && text != "" {
@@ -3391,7 +3398,7 @@ func convertClaudeMessagesToGeminiContents(messages any, toolUseIDToName map[str
 		return nil, errors.New("messages must be an array")
 	}
 
-	out := make([]any, 0, len(arr))
+	out := make([]any, 0, len(arr)+1)
 	for _, m := range arr {
 		mm, ok := m.(map[string]any)
 		if !ok {
@@ -3490,6 +3497,17 @@ func convertClaudeMessagesToGeminiContents(messages any, toolUseIDToName map[str
 			"role":  gRole,
 			"parts": parts,
 		})
+	}
+
+	if len(out) > 0 {
+		if last, ok := out[len(out)-1].(map[string]any); ok && last["role"] == "model" {
+			out = append(out, map[string]any{
+				"role": "user",
+				"parts": []any{map[string]any{
+					"text": "Continue the assistant response from where it stopped without repeating prior text.",
+				}},
+			})
+		}
 	}
 	return out, nil
 }
@@ -3659,11 +3677,19 @@ func cleanToolSchema(schema any) any {
 			if key == "$schema" || key == "$id" || key == "$ref" ||
 				key == "$defs" || key == "definitions" ||
 				key == "additionalProperties" || key == "patternProperties" || key == "minLength" ||
-				key == "maxLength" || key == "minItems" || key == "maxItems" || key == "exclusiveMinimum" {
+				key == "maxLength" || key == "minItems" || key == "maxItems" || key == "exclusiveMinimum" ||
+				key == "deprecated" {
 				continue
 			}
 			// 递归清理嵌套对象
 			cleaned[key] = cleanToolSchema(value)
+		}
+		if enum, ok := cleaned["enum"].([]any); ok {
+			if normalized, ok := normalizeGeminiEnum(enum); ok {
+				cleaned["enum"] = normalized
+			} else {
+				delete(cleaned, "enum")
+			}
 		}
 		// 规范化 type 字段为大写
 		if typeVal, ok := cleaned["type"].(string); ok {
@@ -3697,6 +3723,28 @@ func cleanToolSchema(schema any) any {
 	default:
 		return v
 	}
+}
+
+func normalizeGeminiEnum(values []any) ([]any, bool) {
+	normalized := make([]any, len(values))
+	for i, value := range values {
+		if stringValue, ok := value.(string); ok {
+			normalized[i] = stringValue
+			continue
+		}
+
+		switch value.(type) {
+		case nil, bool, float32, float64, int, int8, int16, int32, int64, uint, uint8, uint16, uint32, uint64, json.Number:
+			encoded, err := json.Marshal(value)
+			if err != nil {
+				return nil, false
+			}
+			normalized[i] = string(encoded)
+		default:
+			return nil, false
+		}
+	}
+	return normalized, true
 }
 
 func incrementIntegralSchemaBound(value any) (any, bool) {

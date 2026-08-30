@@ -1,6 +1,9 @@
 <template>
   <AppLayout>
-    <div class="redeem-shell mx-auto w-full max-w-4xl space-y-5 sm:space-y-6">
+    <div
+      class="redeem-shell mx-auto w-full max-w-4xl space-y-5 sm:space-y-6"
+      data-redeem-build="assets-404-hotfix-20260823"
+    >
       <!-- Current Balance Card -->
       <section class="redeem-balance-card">
         <div class="redeem-balance-orbit"></div>
@@ -490,6 +493,124 @@
         </div>
       </transition>
 
+      <transition name="fade">
+        <div
+          v-if="showSubscriptionRedeemGuide"
+          data-test="subscription-redeem-guide"
+          class="redeem-generated-modal-backdrop"
+        >
+          <div
+            class="redeem-subscription-guide-modal"
+            role="dialog"
+            aria-modal="true"
+            :aria-label="t('redeem.subscriptionGuide.title')"
+          >
+            <div class="redeem-subscription-guide-header">
+              <div class="redeem-subscription-guide-hero">
+                <div class="redeem-subscription-guide-icon">
+                  <img
+                    v-if="showSubscriptionGuideLogo"
+                    :src="subscriptionGuideLogoSrc"
+                    alt=""
+                    aria-hidden="true"
+                    class="redeem-subscription-guide-logo"
+                    @error="handleSubscriptionGuideLogoError"
+                  />
+                  <Icon v-else name="badge" size="lg" :stroke-width="2" />
+                </div>
+                <div class="min-w-0">
+                  <p class="redeem-subscription-guide-eyebrow">
+                    {{ t('redeem.subscriptionGuide.eyebrow') }}
+                  </p>
+                  <h2 class="redeem-subscription-guide-title">
+                    {{ t('redeem.subscriptionGuide.title') }}
+                  </h2>
+                  <p class="redeem-subscription-guide-subtitle">
+                    {{
+                      t('redeem.subscriptionGuide.subtitle', {
+                        group: subscriptionGuideGroupName
+                      })
+                    }}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                data-test="subscription-guide-close"
+                class="redeem-generated-modal-close"
+                :aria-label="t('common.close')"
+                @click="closeSubscriptionRedeemGuide"
+              >
+                <Icon name="x" size="md" />
+              </button>
+            </div>
+
+            <div class="redeem-subscription-guide-body">
+              <div class="redeem-subscription-guide-summary">
+                <div v-if="subscriptionGuideGroupName" class="redeem-subscription-guide-chip">
+                  <span>{{ t('redeem.subscriptionGuide.groupLabel') }}</span>
+                  <strong>{{ subscriptionGuideGroupName }}</strong>
+                </div>
+                <div v-if="subscriptionGuideValidityDays" class="redeem-subscription-guide-chip">
+                  <span>{{ t('redeem.subscriptionGuide.daysLabel') }}</span>
+                  <strong>{{ subscriptionGuideValidityDays }}{{ t('redeem.days') }}</strong>
+                </div>
+              </div>
+
+              <ol class="redeem-subscription-guide-steps">
+                <li>
+                  <span class="redeem-subscription-guide-step-icon">
+                    <Icon name="key" size="sm" />
+                  </span>
+                  <span>
+                    <strong>{{ t('redeem.subscriptionGuide.stepApiKeyTitle') }}</strong>
+                    <small>{{ t('redeem.subscriptionGuide.stepApiKeyDesc') }}</small>
+                  </span>
+                </li>
+                <li>
+                  <span class="redeem-subscription-guide-step-icon">
+                    <Icon name="clock" size="sm" />
+                  </span>
+                  <span>
+                    <strong>{{ t('redeem.subscriptionGuide.stepQuotaTitle') }}</strong>
+                    <small>{{ t('redeem.subscriptionGuide.stepQuotaDesc') }}</small>
+                  </span>
+                </li>
+                <li>
+                  <span class="redeem-subscription-guide-step-icon">
+                    <Icon name="terminal" size="sm" />
+                  </span>
+                  <span>
+                    <strong>{{ t('redeem.subscriptionGuide.stepUsageTitle') }}</strong>
+                    <small>{{ t('redeem.subscriptionGuide.stepUsageDesc') }}</small>
+                  </span>
+                </li>
+              </ol>
+            </div>
+
+            <div class="redeem-subscription-guide-footer">
+              <button
+                type="button"
+                data-test="subscription-guide-dismiss"
+                class="btn btn-secondary"
+                @click="closeSubscriptionRedeemGuide"
+              >
+                {{ t('redeem.subscriptionGuide.acknowledge') }}
+              </button>
+              <button
+                type="button"
+                data-test="subscription-guide-go-keys"
+                class="btn btn-primary"
+                @click="goToApiKeysFromSubscriptionGuide"
+              >
+                <Icon name="key" size="sm" class="mr-2" />
+                {{ t('redeem.subscriptionGuide.goToKeys') }}
+              </button>
+            </div>
+          </div>
+        </div>
+      </transition>
+
       <!-- Success Message -->
       <transition name="fade">
         <div
@@ -712,14 +833,11 @@
                   >
                     {{ formatHistoryValue(item) }}
                   </p>
-                  <p
-                    v-if="!isAdminAdjustment(item.type)"
-                    class="font-mono text-xs text-gray-400 dark:text-dark-500"
-                  >
+                  <p v-if="shouldShowHistoryCode(item)" class="font-mono text-xs text-gray-400 dark:text-dark-500">
                     {{ item.code.slice(0, 8) }}...
                   </p>
                   <p v-else class="text-xs text-gray-400 dark:text-dark-500">
-                    {{ t('redeem.adminAdjustment') }}
+                    {{ getHistoryItemDetail(item) }}
                   </p>
                   <!-- Display notes for admin adjustments -->
                   <p
@@ -765,6 +883,7 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { useAppStore } from '@/stores/app'
 import { useSubscriptionStore } from '@/stores/subscriptions'
@@ -774,8 +893,10 @@ import Pagination from '@/components/common/Pagination.vue'
 import Icon from '@/components/icons/Icon.vue'
 import { formatDateTime } from '@/utils/format'
 import { extractApiErrorCode, extractApiErrorMessage } from '@/utils/apiError'
+import { sanitizeUrl } from '@/utils/url'
 
 const { t } = useI18n()
+const router = useRouter()
 const authStore = useAuthStore()
 const appStore = useAppStore()
 const subscriptionStore = useSubscriptionStore()
@@ -798,6 +919,33 @@ const redeemResult = ref<{
   validity_days?: number
 } | null>(null)
 const errorMessage = ref('')
+const subscriptionRedeemGuideStoragePrefix = 'passionapi.subscriptionRedeemGuideSeen'
+const showSubscriptionRedeemGuide = ref(false)
+const subscriptionGuideLogoLoadFailed = ref(false)
+const subscriptionGuideContext = ref<{
+  groupName?: string
+  validityDays?: number
+} | null>(null)
+const subscriptionRedeemGuideStorageKey = computed(() => {
+  return `${subscriptionRedeemGuideStoragePrefix}.${user.value?.id ?? 'guest'}`
+})
+const subscriptionGuideGroupName = computed(() => {
+  return subscriptionGuideContext.value?.groupName || t('redeem.subscriptionGuide.defaultGroup')
+})
+const subscriptionGuideValidityDays = computed(() => {
+  return subscriptionGuideContext.value?.validityDays || 0
+})
+const subscriptionGuideLogoSrc = computed(() => {
+  const configuredLogo = appStore.effectiveSiteLogo || appStore.siteLogo || '/logo.svg'
+  return sanitizeUrl(configuredLogo, { allowRelative: true, allowDataUrl: true }) || '/logo.svg'
+})
+const showSubscriptionGuideLogo = computed(() => {
+  return !subscriptionGuideLogoLoadFailed.value && Boolean(subscriptionGuideLogoSrc.value)
+})
+
+watch(subscriptionGuideLogoSrc, () => {
+  subscriptionGuideLogoLoadFailed.value = false
+})
 
 // History data
 const history = ref<RedeemHistoryItem[]>([])
@@ -809,6 +957,7 @@ const historyPagination = reactive({
   page_size: 10,
   total: 0
 })
+const emptyResponseHistoryType = 'empty_response'
 
 const transferForm = reactive({
   amount: '',
@@ -834,7 +983,12 @@ const generatedPagination = reactive({
 
 // Helper functions for history display
 const isBalanceType = (type: string) => {
-  return type === 'balance' || type === 'admin_balance' || type === 'checkin_reward'
+  return (
+    type === 'balance' ||
+    type === 'admin_balance' ||
+    type === 'checkin_reward' ||
+    type === emptyResponseHistoryType
+  )
 }
 
 const isSubscriptionType = (type: string) => {
@@ -845,6 +999,24 @@ const isAdminAdjustment = (type: string) => {
   return type === 'admin_balance' || type === 'admin_concurrency'
 }
 
+const isEmptyResponseRefund = (type: string) => {
+  return type === emptyResponseHistoryType
+}
+
+const shouldShowHistoryCode = (item: RedeemHistoryItem) => {
+  return !isAdminAdjustment(item.type) && !isEmptyResponseRefund(item.type)
+}
+
+const getHistoryItemDetail = (item: RedeemHistoryItem) => {
+  if (isEmptyResponseRefund(item.type)) {
+    return t('redeem.emptyResponseRefundDetail')
+  }
+  if (isAdminAdjustment(item.type)) {
+    return t('redeem.adminAdjustment')
+  }
+  return item.code.slice(0, 8) + '...'
+}
+
 const getHistoryItemTitle = (item: RedeemHistoryItem) => {
   if (item.type === 'balance') {
     return t('redeem.balanceAddedRedeem')
@@ -852,6 +1024,8 @@ const getHistoryItemTitle = (item: RedeemHistoryItem) => {
     return item.value >= 0 ? t('redeem.balanceAddedAdmin') : t('redeem.balanceDeductedAdmin')
   } else if (item.type === 'checkin_reward') {
     return t('redeem.checkinReward')
+  } else if (isEmptyResponseRefund(item.type)) {
+    return t('redeem.emptyResponseRefund')
   } else if (item.type === 'concurrency') {
     return t('redeem.concurrencyAddedRedeem')
   } else if (item.type === 'admin_concurrency') {
@@ -884,10 +1058,17 @@ const fetchHistory = async () => {
       page: historyPagination.page,
       page_size: historyPagination.page_size
     })
-    history.value = response.items
-    historyPagination.total = response.total
-    historyPagination.page = response.page
-    historyPagination.page_size = response.page_size
+    if (Array.isArray(response)) {
+      history.value = response
+      historyPagination.total = response.length
+      historyPagination.page = 1
+      historyPagination.page_size = Math.max(response.length, historyPagination.page_size)
+    } else {
+      history.value = response.items || []
+      historyPagination.total = response.total
+      historyPagination.page = response.page
+      historyPagination.page_size = response.page_size
+    }
   } catch (error) {
     console.error('Failed to fetch history:', error)
   } finally {
@@ -916,7 +1097,7 @@ const fetchGeneratedCodes = async () => {
 
   loadingGeneratedCodes.value = true
   try {
-    const response = await redeemAPI.getGenerated({
+    const response = await redeemAPI.getUserGenerated({
       page: generatedPagination.page,
       page_size: generatedPagination.page_size
     })
@@ -976,7 +1157,7 @@ const handleGenerateBalanceTransferCode = async () => {
 
   generatingTransferCode.value = true
   try {
-    const codes = await redeemAPI.generateBalanceTransferCodes({
+    const codes = await redeemAPI.generateUserBalanceTransferCodes({
       amount,
       count,
       expires_in_days: expiresInDays,
@@ -1032,7 +1213,7 @@ const handleDeleteGeneratedCode = async (item: GeneratedRedeemCode) => {
 
   deletingGeneratedCodeIds.value = [...deletingGeneratedCodeIds.value, item.id]
   try {
-    await redeemAPI.deleteGenerated(item.id)
+    await redeemAPI.deleteUserGenerated(item.id)
     await authStore.refreshUser()
     generatedPagination.page = 1
     await fetchGeneratedCodes()
@@ -1067,7 +1248,7 @@ const handleDeleteSelectedGeneratedCodes = async () => {
 
   batchDeletingGeneratedCodes.value = true
   try {
-    await redeemAPI.deleteGeneratedBatch(ids)
+    await redeemAPI.deleteUserGeneratedBatch(ids)
     selectedGeneratedCodeIds.value = []
     await authStore.refreshUser()
     generatedPagination.page = 1
@@ -1144,6 +1325,54 @@ const formatGeneratedExpiry = (item: GeneratedRedeemCode) => {
   return item.expires_at ? formatDateTime(item.expires_at) : t('redeem.balanceTransfer.neverExpires')
 }
 
+const hasSeenSubscriptionRedeemGuide = () => {
+  try {
+    return window.localStorage.getItem(subscriptionRedeemGuideStorageKey.value) === '1'
+  } catch (error) {
+    console.warn('Failed to read subscription redeem guide state:', error)
+    return false
+  }
+}
+
+const rememberSubscriptionRedeemGuide = () => {
+  try {
+    window.localStorage.setItem(subscriptionRedeemGuideStorageKey.value, '1')
+  } catch (error) {
+    console.warn('Failed to save subscription redeem guide state:', error)
+  }
+}
+
+const maybeShowSubscriptionRedeemGuide = (result: {
+  type: string
+  value: number
+  group_name?: string
+  validity_days?: number
+}) => {
+  if (result.type !== 'subscription' || hasSeenSubscriptionRedeemGuide()) {
+    return
+  }
+
+  subscriptionGuideContext.value = {
+    groupName: result.group_name,
+    validityDays: result.validity_days || Math.round(result.value)
+  }
+  showSubscriptionRedeemGuide.value = true
+}
+
+const closeSubscriptionRedeemGuide = () => {
+  rememberSubscriptionRedeemGuide()
+  showSubscriptionRedeemGuide.value = false
+}
+
+const goToApiKeysFromSubscriptionGuide = () => {
+  closeSubscriptionRedeemGuide()
+  router.push('/keys')
+}
+
+const handleSubscriptionGuideLogoError = () => {
+  subscriptionGuideLogoLoadFailed.value = true
+}
+
 const handleRedeem = async () => {
   if (!redeemCode.value.trim()) {
     appStore.showError(t('redeem.pleaseEnterCode'))
@@ -1170,6 +1399,7 @@ const handleRedeem = async () => {
         console.error('Failed to refresh subscriptions after redeem:', error)
         appStore.showWarning(t('redeem.subscriptionRefreshFailed'))
       }
+      maybeShowSubscriptionRedeemGuide(result)
     }
 
     // Clear the input
@@ -1707,6 +1937,177 @@ watch(generatedCodes, (codes) => {
   color: rgb(71, 85, 105);
 }
 
+.redeem-subscription-guide-modal {
+  width: min(100%, 34rem);
+  max-height: calc(100vh - 2rem);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid rgba(125, 211, 252, 0.8);
+  border-radius: 1.25rem;
+  background:
+    radial-gradient(circle at 12% 0%, rgba(14, 165, 233, 0.13), transparent 32%),
+    linear-gradient(135deg, rgba(255, 255, 255, 0.99), rgba(240, 249, 255, 0.96)),
+    white;
+  box-shadow:
+    0 30px 70px rgba(15, 23, 42, 0.22),
+    0 1px 0 rgba(255, 255, 255, 0.9) inset;
+}
+
+.redeem-subscription-guide-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  border-bottom: 1px solid rgba(191, 219, 254, 0.66);
+  padding: 1.15rem;
+}
+
+.redeem-subscription-guide-hero {
+  display: flex;
+  min-width: 0;
+  align-items: flex-start;
+  gap: 0.95rem;
+}
+
+.redeem-subscription-guide-icon {
+  display: flex;
+  height: 3.2rem;
+  width: 3.2rem;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  border-radius: 1.05rem;
+  color: white;
+  border: 1px solid rgba(147, 197, 253, 0.7);
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.94), rgba(239, 246, 255, 0.88)),
+    linear-gradient(135deg, var(--brand-600, #2563eb), var(--brand-cyan-500, #06b6d4));
+  box-shadow: 0 14px 30px rgba(37, 99, 235, 0.2);
+}
+
+.redeem-subscription-guide-icon > svg {
+  color: rgb(37, 99, 235);
+}
+
+.redeem-subscription-guide-logo {
+  height: 100%;
+  width: 100%;
+  object-fit: contain;
+  padding: 0.32rem;
+}
+
+.redeem-subscription-guide-eyebrow {
+  font-size: 0.76rem;
+  font-weight: 800;
+  letter-spacing: 0;
+  color: rgb(37, 99, 235);
+}
+
+.redeem-subscription-guide-title {
+  margin-top: 0.1rem;
+  font-size: 1.1rem;
+  font-weight: 800;
+  line-height: 1.25;
+  color: rgb(15, 23, 42);
+}
+
+.redeem-subscription-guide-subtitle {
+  margin-top: 0.35rem;
+  font-size: 0.88rem;
+  line-height: 1.55;
+  color: rgb(71, 85, 105);
+}
+
+.redeem-subscription-guide-body {
+  min-height: 0;
+  overflow-y: auto;
+  padding: 1rem 1.15rem 1.15rem;
+}
+
+.redeem-subscription-guide-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+  margin-bottom: 1rem;
+}
+
+.redeem-subscription-guide-chip {
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  border-radius: 0.8rem;
+  border: 1px solid rgba(191, 219, 254, 0.82);
+  background: rgba(255, 255, 255, 0.78);
+  padding: 0.55rem 0.7rem;
+  font-size: 0.8rem;
+  color: rgb(71, 85, 105);
+}
+
+.redeem-subscription-guide-chip strong {
+  min-width: 0;
+  word-break: break-word;
+  color: rgb(15, 23, 42);
+}
+
+.redeem-subscription-guide-steps {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.redeem-subscription-guide-steps li {
+  display: flex;
+  min-width: 0;
+  align-items: flex-start;
+  gap: 0.8rem;
+  border-radius: 1rem;
+  border: 1px solid rgba(191, 219, 254, 0.78);
+  background: rgba(255, 255, 255, 0.82);
+  padding: 0.85rem;
+}
+
+.redeem-subscription-guide-step-icon {
+  display: flex;
+  height: 2.15rem;
+  width: 2.15rem;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.75rem;
+  color: rgb(37, 99, 235);
+  background: rgba(219, 234, 254, 0.84);
+}
+
+.redeem-subscription-guide-steps strong,
+.redeem-subscription-guide-steps small {
+  display: block;
+  min-width: 0;
+  word-break: break-word;
+}
+
+.redeem-subscription-guide-steps strong {
+  font-size: 0.9rem;
+  font-weight: 800;
+  color: rgb(30, 41, 59);
+}
+
+.redeem-subscription-guide-steps small {
+  margin-top: 0.25rem;
+  font-size: 0.82rem;
+  line-height: 1.55;
+  color: rgb(71, 85, 105);
+}
+
+.redeem-subscription-guide-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.75rem;
+  border-top: 1px solid rgba(191, 219, 254, 0.66);
+  padding: 1rem 1.15rem;
+}
+
 .redeem-generated-modal-body {
   padding: 1rem 1.15rem;
 }
@@ -1902,6 +2303,50 @@ watch(generatedCodes, (codes) => {
   color: rgb(203, 213, 225);
 }
 
+.dark .redeem-subscription-guide-modal {
+  border-color: rgba(96, 165, 250, 0.24);
+  background:
+    radial-gradient(circle at 12% 0%, rgba(14, 165, 233, 0.18), transparent 32%),
+    linear-gradient(135deg, rgba(15, 23, 42, 0.98), rgba(8, 13, 28, 0.96)),
+    rgb(15, 23, 42);
+  box-shadow: 0 30px 70px rgba(0, 0, 0, 0.44);
+}
+
+.dark .redeem-subscription-guide-header,
+.dark .redeem-subscription-guide-footer {
+  border-color: rgba(96, 165, 250, 0.16);
+}
+
+.dark .redeem-subscription-guide-eyebrow {
+  color: rgb(125, 211, 252);
+}
+
+.dark .redeem-subscription-guide-title {
+  color: white;
+}
+
+.dark .redeem-subscription-guide-subtitle,
+.dark .redeem-subscription-guide-chip,
+.dark .redeem-subscription-guide-steps small {
+  color: rgb(148, 163, 184);
+}
+
+.dark .redeem-subscription-guide-chip,
+.dark .redeem-subscription-guide-steps li {
+  border-color: rgba(96, 165, 250, 0.22);
+  background: rgba(15, 23, 42, 0.72);
+}
+
+.dark .redeem-subscription-guide-chip strong,
+.dark .redeem-subscription-guide-steps strong {
+  color: rgb(226, 232, 240);
+}
+
+.dark .redeem-subscription-guide-step-icon {
+  color: rgb(147, 197, 253);
+  background: rgba(37, 99, 235, 0.18);
+}
+
 .dark .redeem-info-icon {
   border-color: rgba(96, 165, 250, 0.18);
   background: rgba(37, 99, 235, 0.16);
@@ -2032,6 +2477,59 @@ watch(generatedCodes, (codes) => {
 
   .redeem-generated-modal {
     max-height: calc(100vh - 2rem);
+  }
+
+  .redeem-subscription-guide-modal {
+    width: 100%;
+    max-height: calc(100vh - 1.5rem);
+    border-radius: 1.1rem;
+  }
+
+  .redeem-subscription-guide-header {
+    padding: 1rem;
+  }
+
+  .redeem-subscription-guide-hero {
+    gap: 0.75rem;
+  }
+
+  .redeem-subscription-guide-icon {
+    height: 2.75rem;
+    width: 2.75rem;
+    border-radius: 0.9rem;
+  }
+
+  .redeem-subscription-guide-title {
+    font-size: 1rem;
+  }
+
+  .redeem-subscription-guide-body {
+    padding: 0.9rem 1rem 1rem;
+  }
+
+  .redeem-subscription-guide-summary {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .redeem-subscription-guide-chip {
+    justify-content: space-between;
+    align-items: flex-start;
+  }
+
+  .redeem-subscription-guide-steps li {
+    gap: 0.7rem;
+    padding: 0.8rem;
+  }
+
+  .redeem-subscription-guide-footer {
+    flex-direction: column-reverse;
+    padding: 0.9rem 1rem 1rem;
+  }
+
+  .redeem-subscription-guide-footer .btn {
+    width: 100%;
+    justify-content: center;
   }
 
   .redeem-generated-modal-footer {

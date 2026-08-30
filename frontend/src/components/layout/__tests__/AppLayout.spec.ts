@@ -9,7 +9,9 @@ const componentSource = readFileSync(componentPath, 'utf8')
 
 describe('AppLayout workspace sizing', () => {
   it('keeps module content fluid inside the available workspace', () => {
-    expect(componentSource).toContain('class="app-shell-content"')
+    expect(componentSource).toContain('class="app-shell-content mobile-page-shell"')
+    expect(componentSource).toContain('mobile-page-shell')
+    expect(componentSource).toContain('overflow-x-clip')
     expect(componentSource).toContain('min-width: 0;')
     expect(componentSource).toContain('max-width: none;')
     expect(componentSource).toContain('--app-content-padding-y: clamp(')

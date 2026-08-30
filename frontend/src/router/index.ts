@@ -13,6 +13,7 @@ import { useRoutePrefetch } from '@/composables/useRoutePrefetch'
 import { getSetupStatus } from '@/api/setup'
 import { resolveCompletedSetupRedirectPath } from './setupRedirect'
 import { resolveRouteDocumentTitle } from './title'
+import { FeatureFlags, isFeatureFlagEnabled } from '@/utils/featureFlags'
 
 /**
  * Route definitions with lazy loading
@@ -284,6 +285,19 @@ const routes: RouteRecordRaw[] = [
     }
   },
   {
+    path: '/lottery',
+    name: 'Lottery',
+    component: () => import('@/views/user/LotteryView.vue'),
+    meta: {
+      requiresAuth: true,
+      requiresAdmin: false,
+      requiresLottery: true,
+      title: 'Lottery',
+      titleKey: 'lottery.title',
+      descriptionKey: 'lottery.description'
+    }
+  },
+  {
     path: '/available-channels',
     name: 'UserAvailableChannels',
     component: () => import('@/views/user/AvailableChannelsView.vue'),
@@ -428,6 +442,20 @@ const routes: RouteRecordRaw[] = [
     }
   },
 
+  // ==================== Admin Workbench Routes ====================
+  {
+    path: '/admin/workbench',
+    name: 'AdminWorkbench',
+    component: () => import('@/views/admin/AdminWorkbenchView.vue'),
+    meta: {
+      requiresAuth: true,
+      requiresAdminWorkbench: true,
+      title: 'Admin Workbench',
+      titleKey: 'adminWorkbench.title',
+      descriptionKey: 'adminWorkbench.description'
+    }
+  },
+
   // ==================== Admin Routes ====================
   {
     path: '/admin',
@@ -557,6 +585,18 @@ const routes: RouteRecordRaw[] = [
     }
   },
   {
+    path: '/admin/plugins',
+    name: 'AdminPlugins',
+    component: () => import('@/views/admin/PluginsView.vue'),
+    meta: {
+      requiresAuth: true,
+      requiresAdmin: true,
+      title: 'Plugin Management',
+      titleKey: 'admin.plugins.title',
+      descriptionKey: 'admin.plugins.description'
+    }
+  },
+  {
     path: '/admin/announcements',
     name: 'AdminAnnouncements',
     component: () => import('@/views/admin/AnnouncementsView.vue'),
@@ -617,6 +657,18 @@ const routes: RouteRecordRaw[] = [
     }
   },
   {
+    path: '/admin/lottery',
+    name: 'AdminLottery',
+    component: () => import('@/views/admin/LotteryView.vue'),
+    meta: {
+      requiresAuth: true,
+      requiresAdmin: true,
+      title: 'Lottery Activity',
+      titleKey: 'lottery.admin.title',
+      descriptionKey: 'lottery.admin.description'
+    }
+  },
+  {
     path: '/admin/settings',
     name: 'AdminSettings',
     component: () => import('@/views/admin/SettingsView.vue'),
@@ -669,6 +721,18 @@ const routes: RouteRecordRaw[] = [
   {
     path: '/admin/affiliates',
     redirect: '/admin/affiliates/invites'
+  },
+  {
+    path: '/admin/affiliates/summary',
+    name: 'AdminAffiliateSummary',
+    component: () => import('@/views/admin/affiliates/AdminAffiliateSummaryView.vue'),
+    meta: {
+      requiresAuth: true,
+      requiresAdmin: true,
+      title: 'Affiliate Summary',
+      titleKey: 'nav.affiliateSummary',
+      descriptionKey: 'admin.affiliates.summaryDescription'
+    }
   },
   {
     path: '/admin/affiliates/invites',
@@ -835,6 +899,7 @@ router.beforeEach(async (to, _from, next) => {
   const requiresAuth = to.meta.requiresAuth !== false // Default to true
   const requiresAdmin = to.meta.requiresAdmin === true
   const requiresManager = to.meta.requiresManager === true
+  const requiresAdminWorkbench = to.meta.requiresAdminWorkbench === true
 
   if (to.path === '/setup') {
     try {
@@ -852,14 +917,18 @@ router.beforeEach(async (to, _from, next) => {
   if (!requiresAuth) {
     // If already authenticated and trying to access login/register, redirect to appropriate dashboard
     if (authStore.isAuthenticated && (to.path === '/login' || to.path === '/register')) {
-      // In backend mode, users without manager access should NOT be redirected away from login
-      // (they are blocked from all protected routes, so redirecting would cause a loop)
-      if (appStore.backendModeEnabled && !authStore.canAccessManagerPage) {
+      // In backend mode, users without workbench access should stay on login.
+      if (appStore.backendModeEnabled && !authStore.canAccessAdminWorkbench) {
         next()
         return
       }
-      // Admin users go to admin dashboard, secondary admins go to manager page, regular users go to user dashboard
-      next(authStore.isAdmin ? '/admin/dashboard' : authStore.canAccessManagerPage ? '/manager' : '/dashboard')
+      next(
+        authStore.isAdmin
+          ? '/admin/dashboard'
+          : authStore.canAccessAdminWorkbench
+            ? '/admin/workbench'
+            : '/dashboard'
+      )
       return
     }
     // Model Plaza:公开路由但受「启用开关 + 可选强制登录」双重控制(后端同口径 fail-closed)
@@ -889,7 +958,7 @@ router.beforeEach(async (to, _from, next) => {
       }
       // Backend mode:登录的非管理员也不可见(匿名由下方公共拦截处理,广场不在白名单)
       if (appStore.backendModeEnabled && authStore.isAuthenticated && !authStore.isAdmin) {
-        next(authStore.canAccessManagerPage ? '/manager' : '/login')
+        next(authStore.canAccessAdminWorkbench ? '/admin/workbench' : '/login')
         return
       }
     }
@@ -917,8 +986,13 @@ router.beforeEach(async (to, _from, next) => {
 
   // Check admin requirement
   if (requiresAdmin && !authStore.isAdmin) {
-    // User is authenticated but not full admin.
-    next(appStore.backendModeEnabled && authStore.canAccessManagerPage ? '/manager' : '/dashboard')
+    // User is authenticated but not admin, redirect to user dashboard
+    next(appStore.backendModeEnabled && authStore.canAccessAdminWorkbench ? '/admin/workbench' : '/dashboard')
+    return
+  }
+
+  if (requiresAdminWorkbench && !authStore.canAccessAdminWorkbench) {
+    next('/dashboard')
     return
   }
 
@@ -927,7 +1001,7 @@ router.beforeEach(async (to, _from, next) => {
     return
   }
 
-  if (requiresAdmin && authStore.isAdmin) {
+  if ((requiresAdmin || requiresAdminWorkbench || requiresManager) && authStore.isAdmin) {
     const adminComplianceStore = useAdminComplianceStore()
     if (!adminComplianceStore.initialized) {
       try {
@@ -946,7 +1020,7 @@ router.beforeEach(async (to, _from, next) => {
   // 无 __APP_CONFIG__ 注入）。此时 cachedPublicSettings 为空会把 payment/risk_control
   // 误判为“未启用”而错误拦截，故这里先确保设置加载完成。
   if (
-    (to.meta.requiresPayment || to.meta.requiresRiskControl || to.meta.requiresImageStudio) &&
+    (to.meta.requiresPayment || to.meta.requiresRiskControl || to.meta.requiresImageStudio || to.meta.requiresLottery) &&
     !appStore.publicSettingsLoaded
   ) {
     try {
@@ -963,7 +1037,7 @@ router.beforeEach(async (to, _from, next) => {
     appStore.publicSettingsLoaded &&
     appStore.cachedPublicSettings?.payment_enabled === false
   ) {
-    next(authStore.isAdmin ? '/admin/dashboard' : authStore.canAccessManagerPage ? '/manager' : '/dashboard')
+    next(authStore.isAdmin ? '/admin/dashboard' : '/dashboard')
     return
   }
 
@@ -985,6 +1059,15 @@ router.beforeEach(async (to, _from, next) => {
     return
   }
 
+  if (
+    to.meta.requiresLottery &&
+    appStore.publicSettingsLoaded &&
+    !isFeatureFlagEnabled(FeatureFlags.lottery)
+  ) {
+    next(authStore.isAdmin ? '/admin/lottery' : '/dashboard')
+    return
+  }
+
   // 简易模式下限制访问某些页面
   if (authStore.isSimpleMode) {
     const restrictedPaths = [
@@ -1002,18 +1085,23 @@ router.beforeEach(async (to, _from, next) => {
     }
   }
 
-  // Backend mode: full admins get full access; secondary admins get only the manager page.
+  // Backend mode: admins get full access; sub-admins get the workbench and legacy manager page.
   if (appStore.backendModeEnabled) {
     if (authStore.isAuthenticated && authStore.isAdmin) {
       next()
       return
     }
-    if (authStore.isAuthenticated && authStore.canAccessManagerPage) {
-      if (requiresManager || to.path.startsWith('/manager')) {
+    if (authStore.isAuthenticated && authStore.canAccessAdminWorkbench) {
+      if (
+        requiresAdminWorkbench ||
+        requiresManager ||
+        to.path.startsWith('/admin/workbench') ||
+        to.path.startsWith('/manager')
+      ) {
         next()
         return
       }
-      next('/manager')
+      next('/admin/workbench')
       return
     }
     const isAllowed = isBackendModePublicRouteAllowed(to.path, authStore.hasPendingAuthSession)

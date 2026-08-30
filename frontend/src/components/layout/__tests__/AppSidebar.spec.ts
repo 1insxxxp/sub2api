@@ -85,9 +85,41 @@ describe('AppSidebar image studio entry', () => {
 })
 
 describe('AppSidebar admin entries', () => {
+  it('exposes the admin workbench entry from the admin sidebar', () => {
+    expect(componentSource).toMatch(
+      /\{ path: '\/admin\/workbench', label: t\('nav\.adminWorkbench'\), icon: [A-Za-z]+Icon \}/,
+    )
+  })
+
   it('keeps the check-in management route visible from the admin sidebar', () => {
     expect(componentSource).toMatch(
       /\{ path: '\/admin\/checkins', label: t\('nav\.checkins'\), icon: [A-Za-z]+Icon, hideInSimpleMode: true \}/,
     )
+  })
+})
+
+describe('AppSidebar sub-admin entries', () => {
+  it('uses admin workbench access instead of full admin access for the regular view', () => {
+    expect(componentSource).toContain("v-else-if=\"!appStore.backendModeEnabled || authStore.canAccessAdminWorkbench\"")
+    expect(componentSource).toContain('const canAccessAdminWorkbench = computed(() => authStore.canAccessAdminWorkbench)')
+  })
+
+  it('keeps the workbench entry out of the full-admin personal menu', () => {
+    const buildSelfNav = componentSource.match(/function buildSelfNavItems[\s\S]*?return items\n}/)?.[0] ?? ''
+
+    expect(buildSelfNav).toContain('authStore.isSubAdmin')
+    expect(buildSelfNav).toContain('appStore.backendModeEnabled && authStore.isSubAdmin')
+    expect(buildSelfNav).toContain('if (authStore.isSubAdmin)')
+    expect(buildSelfNav).not.toContain('appStore.backendModeEnabled && canAccessAdminWorkbench.value')
+    expect(buildSelfNav).not.toContain('if (canAccessAdminWorkbench.value)')
+  })
+})
+
+describe('AppSidebar custom menu external links', () => {
+  it('renders selected custom menus as safe new-tab links', () => {
+    expect(componentSource).toContain('item.externalUrl')
+    expect(componentSource).toContain('target="_blank"')
+    expect(componentSource).toContain('rel="noopener noreferrer"')
+    expect(componentSource).toContain('resolveCustomMenuNavigation')
   })
 })

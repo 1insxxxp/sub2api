@@ -391,6 +391,7 @@ func (s *GatewayService) applyClaudeCodeOAuthMimicryToBody(
 	systemPromptInjectionEnabled, systemPrompt, systemPromptBlocks := s.claudeOAuthSystemPromptInjectionSettings(ctx)
 	systemRewritten := false
 	if systemPromptInjectionEnabled {
+		systemPromptBlocks = claudeOAuthSystemPromptBlocksForModel(model, systemPromptBlocks)
 		body = rewriteSystemForNonClaudeCodeWithPromptBlocks(body, normalizeSystemParam(systemRaw), systemPrompt, systemPromptBlocks)
 		systemRewritten = true
 	}
@@ -696,6 +697,24 @@ type claudeOAuthSystemPromptBlockConfig struct {
 
 type claudeOAuthSystemPromptBlocksEnvelope struct {
 	Blocks []claudeOAuthSystemPromptBlockConfig `json:"blocks"`
+}
+
+// claudeFableOAuthSystemPromptBlocks keeps the Claude Code identity required by
+// OAuth credentials without the generic CLI expansion block. Fable 5 rejects
+// that expansion upstream with stop_reason=refusal and zero output tokens,
+// while the native billing + identity shape is accepted. Original client
+// system instructions are still migrated into the message history by
+// rewriteSystemForNonClaudeCodeWithPromptBlocks.
+const claudeFableOAuthSystemPromptBlocks = `[
+	{"type":"text","text":"{billing_header}"},
+	{"type":"text","text":"{claude_code_system_prompt}"}
+]`
+
+func claudeOAuthSystemPromptBlocksForModel(model, configured string) string {
+	if isAnthropicFableModel(model) {
+		return claudeFableOAuthSystemPromptBlocks
+	}
+	return configured
 }
 
 func defaultClaudeOAuthExpansionPrompt(expansionPrompt string) string {
@@ -1124,6 +1143,71 @@ func injectAnthropicCacheControlTTL1h(body []byte) []byte {
 	return forceEphemeralCacheControlTTL(body, cacheTTLTarget1h)
 }
 
+func cacheTTLTargetFromAnthropicRequestBody(body []byte) (string, bool) {
+	if len(body) == 0 {
+		return "", false
+	}
+
+	target := ""
+	visitCacheControl := func(cc gjson.Result) bool {
+		if !cc.Exists() || cc.Get("type").String() != "ephemeral" {
+			return true
+		}
+		ttl := strings.ToLower(strings.TrimSpace(cc.Get("ttl").String()))
+		if ttl == cacheTTLTarget1h {
+			target = cacheTTLTarget1h
+			return false
+		}
+		if target == "" {
+			target = cacheTTLTarget5m
+		}
+		return true
+	}
+	visitBlock := func(block gjson.Result) bool {
+		return visitCacheControl(block.Get("cache_control"))
+	}
+	visitBlockArray := func(items gjson.Result) bool {
+		if !items.IsArray() {
+			return visitBlock(items)
+		}
+		keepGoing := true
+		items.ForEach(func(_, item gjson.Result) bool {
+			keepGoing = visitBlock(item)
+			return keepGoing
+		})
+		return keepGoing
+	}
+
+	if !visitCacheControl(gjson.GetBytes(body, "cache_control")) {
+		return target, true
+	}
+	if !visitBlockArray(gjson.GetBytes(body, "system")) {
+		return target, true
+	}
+
+	messages := gjson.GetBytes(body, "messages")
+	if messages.IsArray() {
+		keepGoing := true
+		messages.ForEach(func(_, msg gjson.Result) bool {
+			content := msg.Get("content")
+			if content.IsArray() {
+				keepGoing = visitBlockArray(content)
+			} else {
+				keepGoing = visitBlock(content)
+			}
+			return keepGoing
+		})
+		if !keepGoing {
+			return target, true
+		}
+	}
+
+	if !visitBlockArray(gjson.GetBytes(body, "tools")) {
+		return target, true
+	}
+	return target, target != ""
+}
+
 func forceEphemeralCacheControlTTL(body []byte, ttl string) []byte {
 	if len(body) == 0 || ttl == "" {
 		return body
@@ -1193,7 +1277,10 @@ func forceEphemeralCacheControlTTL(body []byte, ttl string) []byte {
 }
 
 func (s *GatewayService) shouldInjectAnthropicCacheTTL1h(ctx context.Context, account *Account) bool {
-	if account == nil || !account.IsAnthropicOAuthOrSetupToken() || s == nil || s.settingService == nil {
+	if account == nil {
+		return false
+	}
+	if !account.IsAnthropicOAuthOrSetupToken() || s == nil || s.settingService == nil {
 		return false
 	}
 	return s.settingService.IsAnthropicCacheTTL1hInjectionEnabled(ctx)

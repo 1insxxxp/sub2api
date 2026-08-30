@@ -36,6 +36,9 @@ import riskControlAPI from './riskControl'
 import adminComplianceAPI from './compliance'
 import checkinsAPI from './checkins'
 import auditAPI from './audit'
+import subAdminCommissionAPI from './subAdminCommission'
+import pluginsAPI from './plugins'
+import lotteryAPI from './lottery'
 
 /**
  * Unified admin API object for convenient access
@@ -73,7 +76,10 @@ export const adminAPI = {
   riskControl: riskControlAPI,
   compliance: adminComplianceAPI,
   checkins: checkinsAPI,
-  audit: auditAPI
+  audit: auditAPI,
+  subAdminCommission: subAdminCommissionAPI,
+  plugins: pluginsAPI,
+  lottery: lotteryAPI
 }
 
 export {
@@ -109,13 +115,27 @@ export {
   riskControlAPI,
   adminComplianceAPI,
   checkinsAPI,
-  auditAPI
+  auditAPI,
+  subAdminCommissionAPI,
+  pluginsAPI,
+  lotteryAPI
 }
 
 export default adminAPI
 
 // Re-export types used by components
 export type { AuditLog, AuditLogQuery, AuditLogListResponse } from './audit'
+export type {
+  SubAdminCommissionSettings,
+  UpdateSubAdminCommissionSettingsRequest,
+  SubAdminCommissionGrant,
+  ReplaceSubAdminCommissionGrantsRequest,
+  SubAdminCommissionCalendarDay,
+  SubAdminCommissionDayGroup,
+  SubAdminCommissionUsageLog,
+  WorkbenchCommissionCalendarQuery,
+  WorkbenchCommissionLogsQuery
+} from './subAdminCommission'
 export type { BalanceHistoryItem } from './users'
 export type { ErrorPassthroughRule, CreateRuleRequest, UpdateRuleRequest } from './errorPassthrough'
 export type { BackupAgentHealth, DataManagementConfig } from './dataManagement'
@@ -138,3 +158,9 @@ export type {
   CheckinStreakRule,
   CheckinRewardPreview
 } from './checkins'
+export type {
+  PluginInstallation,
+  PluginCompatibility,
+  PluginUISession,
+  PluginTestResult
+} from './plugins'

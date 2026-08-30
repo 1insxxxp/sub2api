@@ -15,6 +15,27 @@ import SettingsView from "../SettingsView.vue";
 const currentDir = dirname(fileURLToPath(import.meta.url));
 const settingsViewSource = readFileSync(resolve(currentDir, "../SettingsView.vue"), "utf8");
 
+describe("admin SettingsView custom menu open mode", () => {
+  it("edits and defaults each custom menu open mode", () => {
+    expect(settingsViewSource).toContain('v-model="item.open_mode"');
+    expect(settingsViewSource).toContain('open_mode: "embedded"');
+    expect(settingsViewSource).toContain("isMarkdownMenuItem(item)");
+  });
+
+  it("keeps custom menu items in the settings payload", () => {
+    expect(settingsViewSource).toContain(
+      "custom_menu_items: normalizeCustomMenuItems(form.custom_menu_items)",
+    );
+  });
+});
+
+describe("admin SettingsView lottery feature switch", () => {
+  it("renders the lottery toggle and includes it in the settings payload", () => {
+    expect(settingsViewSource).toContain('v-model="form.lottery_enabled"');
+    expect(settingsViewSource).toContain("lottery_enabled: form.lottery_enabled");
+  });
+});
+
 const {
   getSettings,
   updateSettings,

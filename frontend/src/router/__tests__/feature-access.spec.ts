@@ -22,8 +22,15 @@ const authStore = vi.hoisted(() => ({
   checkAuth: vi.fn(),
   isAuthenticated: true,
   isAdmin: false,
+  canAccessAdminWorkbench: false,
   isSimpleMode: false,
   hasPendingAuthSession: false,
+}))
+
+const adminComplianceStore = vi.hoisted(() => ({
+  initialized: false,
+  fetchStatus: vi.fn(),
+  requireAcknowledgement: vi.fn(),
 }))
 
 const appStore = vi.hoisted(() => ({
@@ -34,6 +41,7 @@ const appStore = vi.hoisted(() => ({
     payment_enabled?: boolean
     risk_control_enabled?: boolean
     image_studio_enabled?: boolean
+    lottery_enabled?: boolean
     custom_menu_items?: []
   },
   fetchPublicSettings: vi.fn(),
@@ -63,11 +71,7 @@ vi.mock('@/stores/adminSettings', () => ({
 }))
 
 vi.mock('@/stores/adminCompliance', () => ({
-  useAdminComplianceStore: () => ({
-    initialized: true,
-    fetchStatus: vi.fn(),
-    requireAcknowledgement: vi.fn(),
-  }),
+  useAdminComplianceStore: () => adminComplianceStore,
 }))
 
 vi.mock('@/composables/useNavigationLoading', () => ({
@@ -122,15 +126,25 @@ describe('feature route guard', () => {
   beforeEach(() => {
     authStore.isAuthenticated = true
     authStore.isAdmin = false
+    authStore.canAccessAdminWorkbench = false
     authStore.isSimpleMode = false
     appStore.publicSettingsLoaded = false
     appStore.cachedPublicSettings = null
     appStore.fetchPublicSettings.mockReset()
+    adminComplianceStore.initialized = false
+    adminComplianceStore.fetchStatus.mockReset()
+    adminComplianceStore.requireAcknowledgement.mockReset()
   })
 
   it('marks the image studio route as feature protected', () => {
     expect(routerSource).toMatch(
       /path: '\/images',[\s\S]*?requiresImageStudio: true[\s\S]*?titleKey: 'imageStudio\.title'/,
+    )
+  })
+
+  it('marks the lottery route as feature protected', () => {
+    expect(routerSource).toMatch(
+      /path: '\/lottery',[\s\S]*?requiresLottery: true[\s\S]*?titleKey: 'lottery\.title'/,
     )
   })
 
@@ -158,6 +172,7 @@ describe('feature route guard', () => {
     ['payment', { requiresPayment: true }, '/purchase'],
     ['risk control', { requiresRiskControl: true }, '/admin/risk-control'],
     ['image studio', { requiresImageStudio: true }, '/images'],
+    ['lottery', { requiresLottery: true }, '/lottery'],
   ])('does not treat a failed %s settings load as explicitly disabled', async (_name, meta, path) => {
     authStore.isAdmin = meta.requiresRiskControl === true
     appStore.fetchPublicSettings.mockResolvedValue(null)
@@ -179,6 +194,7 @@ describe('feature route guard', () => {
       '/admin/settings',
     ],
     ['image studio', { requiresImageStudio: true }, { image_studio_enabled: false }, '/dashboard'],
+    ['lottery', { requiresLottery: true }, { lottery_enabled: false }, '/dashboard'],
   ])('redirects when loaded settings explicitly disable %s', async (_name, meta, settings, target) => {
     authStore.isAdmin = meta.requiresRiskControl === true
     appStore.cachedPublicSettings = settings
@@ -190,5 +206,17 @@ describe('feature route guard', () => {
     expect(appStore.fetchPublicSettings).not.toHaveBeenCalled()
     expect(next).toHaveBeenCalledOnce()
     expect(next).toHaveBeenCalledWith(target)
+  })
+
+  it('does not request admin compliance status for sub-admin workbench access', async () => {
+    authStore.isAdmin = false
+    authStore.canAccessAdminWorkbench = true
+
+    const { navigation, next } = runGuard({ requiresAdminWorkbench: true }, '/admin/workbench')
+    await navigation
+
+    expect(adminComplianceStore.fetchStatus).not.toHaveBeenCalled()
+    expect(next).toHaveBeenCalledOnce()
+    expect(next).toHaveBeenCalledWith()
   })
 })

@@ -23,6 +23,13 @@ func resetViperWithJWTSecret(t *testing.T) {
 	t.Setenv("JWT_SECRET", strings.Repeat("x", 32))
 }
 
+func TestLoadDefaultModelsListReadMaxBytes(t *testing.T) {
+	resetViperWithJWTSecret(t)
+	cfg, err := Load()
+	require.NoError(t, err)
+	require.Equal(t, DefaultModelsListReadMaxBytes, cfg.Gateway.ModelsListReadMaxBytes)
+}
+
 func TestLoadTimezonePrecedence(t *testing.T) {
 	tests := []struct {
 		name         string
@@ -78,6 +85,52 @@ func TestLoadGatewayBillingProbeDefaultEnabled(t *testing.T) {
 	cfg, err := Load()
 	require.NoError(t, err)
 	require.True(t, cfg.Gateway.BillingProbeEnabled)
+}
+
+func TestLoadDujiaoLoginDefaultsDisabled(t *testing.T) {
+	resetViperWithJWTSecret(t)
+
+	cfg, err := Load()
+	require.NoError(t, err)
+	require.False(t, cfg.DujiaoLogin.Enabled)
+	require.Empty(t, cfg.DujiaoLogin.SharedSecret)
+}
+
+func TestLoadDujiaoLoginFromEnvironment(t *testing.T) {
+	resetViperWithJWTSecret(t)
+	t.Setenv("DUJIAO_LOGIN_ENABLED", "true")
+	t.Setenv("DUJIAO_LOGIN_SHARED_SECRET", strings.Repeat("s", 32))
+
+	cfg, err := Load()
+	require.NoError(t, err)
+	require.True(t, cfg.DujiaoLogin.Enabled)
+	require.Equal(t, strings.Repeat("s", 32), cfg.DujiaoLogin.SharedSecret)
+}
+
+func TestValidateDujiaoLoginRequiresSharedSecretWhenEnabled(t *testing.T) {
+	resetViperWithJWTSecret(t)
+	cfg, err := Load()
+	require.NoError(t, err)
+
+	cfg.DujiaoLogin.Enabled = true
+	cfg.DujiaoLogin.SharedSecret = "  " + strings.Repeat("s", 31) + "  "
+	err = cfg.Validate()
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "dujiao_login.shared_secret")
+	require.Contains(t, err.Error(), "at least 32 bytes")
+
+	cfg.DujiaoLogin.SharedSecret = "  " + strings.Repeat("s", 32) + "  "
+	require.NoError(t, cfg.Validate())
+}
+
+func TestValidateDujiaoLoginAllowsEmptySharedSecretWhenDisabled(t *testing.T) {
+	resetViperWithJWTSecret(t)
+	cfg, err := Load()
+	require.NoError(t, err)
+
+	cfg.DujiaoLogin.Enabled = false
+	cfg.DujiaoLogin.SharedSecret = ""
+	require.NoError(t, cfg.Validate())
 }
 
 func TestLoadRedisUsernameFromEnvironment(t *testing.T) {
@@ -559,6 +612,15 @@ func TestLoadOpenAIWSClientFirstMessageTimeoutFromEnv(t *testing.T) {
 	cfg, err := Load()
 	require.NoError(t, err)
 	require.Equal(t, 120, cfg.Gateway.OpenAIWS.ClientFirstMessageTimeoutSeconds)
+}
+
+func TestLoadOpenAIWSForceHTTPFromEnv(t *testing.T) {
+	resetViperWithJWTSecret(t)
+	t.Setenv("GATEWAY_OPENAI_WS_FORCE_HTTP", "true")
+
+	cfg, err := Load()
+	require.NoError(t, err)
+	require.True(t, cfg.Gateway.OpenAIWS.ForceHTTP)
 }
 
 func TestLoadDefaultOpenAICompactModel(t *testing.T) {
@@ -1804,6 +1866,11 @@ func TestValidateConfigErrors(t *testing.T) {
 			name:    "gateway text body exceeds media body",
 			mutate:  func(c *Config) { c.Gateway.TextMaxBodySize = c.Gateway.MaxBodySize + 1 },
 			wantErr: "gateway.text_max_body_size",
+		},
+		{
+			name:    "gateway models list read limit",
+			mutate:  func(c *Config) { c.Gateway.ModelsListReadMaxBytes = 0 },
+			wantErr: "gateway.models_list_read_max_bytes",
 		},
 		{
 			name:    "gateway response header timeout",

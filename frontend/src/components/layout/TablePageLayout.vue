@@ -42,6 +42,7 @@ onUnmounted(() => {
 <style scoped>
 .table-page-layout {
   @apply flex flex-col gap-5;
+  min-width: 0;
   height: calc(100vh - 64px - var(--app-content-padding-total-y, 4rem));
 }
 
@@ -96,5 +97,12 @@ onUnmounted(() => {
   @apply flex-none;
   display: table;
   min-width: 100%;
+}
+
+@media (max-width: 1023px) {
+  .table-page-layout {
+    height: auto;
+    min-height: 0;
+  }
 }
 </style>

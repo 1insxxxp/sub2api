@@ -10,13 +10,20 @@ import (
 
 func seedUserForAliasTest(t *testing.T, repo *userRepository, email string) {
 	t.Helper()
-	require.NoError(t, repo.Create(context.Background(), &service.User{
+	createUserForAliasTest(t, repo, email)
+}
+
+func createUserForAliasTest(t *testing.T, repo *userRepository, email string) *service.User {
+	t.Helper()
+	user := &service.User{
 		Email:        email,
 		Username:     email,
 		PasswordHash: "hash",
 		Role:         service.RoleUser,
 		Status:       service.StatusActive,
-	}))
+	}
+	require.NoError(t, repo.Create(context.Background(), user))
+	return user
 }
 
 func TestUserRepositoryExistsByEmailAlias(t *testing.T) {
@@ -65,6 +72,38 @@ func TestUserRepositoryExistsByEmailAliasIgnoresMalformedInput(t *testing.T) {
 	require.False(t, got)
 }
 
+func TestUserRepositoryExistsByEmailOrAliasIncludeDeleted(t *testing.T) {
+	t.Run("exact email", func(t *testing.T) {
+		repo, _ := newUserEntRepo(t)
+		ctx := context.Background()
+		deleted := createUserForAliasTest(t, repo, "deleted.exact@example.com")
+		require.NoError(t, repo.Delete(ctx, deleted.ID))
+
+		activeOnly, err := repo.ExistsByEmail(ctx, " deleted.exact@example.com ")
+		require.NoError(t, err)
+		require.False(t, activeOnly)
+
+		got, err := repo.ExistsByEmailOrAliasIncludeDeleted(ctx, " deleted.exact@example.com ")
+		require.NoError(t, err)
+		require.True(t, got)
+	})
+
+	t.Run("gmail alias", func(t *testing.T) {
+		repo, _ := newUserEntRepo(t)
+		ctx := context.Background()
+		deleted := createUserForAliasTest(t, repo, "deleted.alias+old@gmail.com")
+		require.NoError(t, repo.Delete(ctx, deleted.ID))
+
+		activeOnly, err := repo.ExistsByEmailAlias(ctx, "deletedalias@gmail.com")
+		require.NoError(t, err)
+		require.False(t, activeOnly)
+
+		got, err := repo.ExistsByEmailOrAliasIncludeDeleted(ctx, "deleted.alias@gmail.com")
+		require.NoError(t, err)
+		require.True(t, got)
+	})
+}
+
 func TestUserRepositoryCreateWithEmailAliasGuard(t *testing.T) {
 	repo, _ := newUserEntRepo(t)
 	ctx := context.Background()
@@ -97,6 +136,58 @@ func TestUserRepositoryCreateWithEmailAliasGuard(t *testing.T) {
 		Role:         service.RoleUser,
 		Status:       service.StatusActive,
 	}))
+}
+
+func TestUserRepositoryCreateWithEmailAliasGuardRejectsDeletedEmailIdentity(t *testing.T) {
+	t.Run("exact email", func(t *testing.T) {
+		repo, _ := newUserEntRepo(t)
+		ctx := context.Background()
+		deleted := createUserForAliasTest(t, repo, "deleted-create@example.com")
+		require.NoError(t, repo.Delete(ctx, deleted.ID))
+
+		err := repo.CreateWithEmailAliasGuard(ctx, &service.User{
+			Email:        " deleted-create@example.com ",
+			Username:     "deleted-create-reregister",
+			PasswordHash: "hash",
+			Role:         service.RoleUser,
+			Status:       service.StatusActive,
+		})
+		require.ErrorIs(t, err, service.ErrEmailExists)
+	})
+
+	t.Run("gmail alias", func(t *testing.T) {
+		repo, _ := newUserEntRepo(t)
+		ctx := context.Background()
+		deleted := createUserForAliasTest(t, repo, "tomb.stone+old@gmail.com")
+		require.NoError(t, repo.Delete(ctx, deleted.ID))
+
+		err := repo.CreateWithEmailAliasGuard(ctx, &service.User{
+			Email:        "tom.bstone@gmail.com",
+			Username:     "tombstone-alias",
+			PasswordHash: "hash",
+			Role:         service.RoleUser,
+			Status:       service.StatusActive,
+		})
+		require.ErrorIs(t, err, service.ErrEmailExists)
+	})
+}
+
+func TestUserRepositoryCreateAllowsDeletedEmailIdentityWithoutRegistrationGuard(t *testing.T) {
+	repo, _ := newUserEntRepo(t)
+	ctx := context.Background()
+	deleted := createUserForAliasTest(t, repo, "deleted-create-reuse@example.com")
+	require.NoError(t, repo.Delete(ctx, deleted.ID))
+
+	recreated := &service.User{
+		Email:        "deleted-create-reuse@example.com",
+		Username:     "deleted-create-reused",
+		PasswordHash: "hash",
+		Role:         service.RoleUser,
+		Status:       service.StatusActive,
+	}
+	require.NoError(t, repo.Create(ctx, recreated))
+	require.NotZero(t, recreated.ID)
+	require.NotEqual(t, deleted.ID, recreated.ID)
 }
 
 func TestUserRepositoryCountUsersByEmailDomain(t *testing.T) {

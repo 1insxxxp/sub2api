@@ -5,7 +5,7 @@
       <div class="app-header-title-group">
         <button
           @click="toggleMobileSidebar"
-          class="btn-ghost btn-icon lg:hidden"
+          class="app-header-mobile-action app-header-action-navigation btn-ghost btn-icon lg:hidden"
           aria-label="Toggle Menu"
         >
           <Icon name="menu" size="md" />
@@ -42,14 +42,19 @@
         <router-link
           v-if="user && modelPlazaEnabled"
           :to="{ path: '/model-plaza', query: { embedded: '1' } }"
-          class="hidden items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-sm font-medium text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-900 dark:text-dark-400 dark:hover:bg-dark-800 dark:hover:text-white sm:flex"
+          data-test="header-model-plaza-link"
+          :aria-label="t('nav.modelPlaza')"
+          :title="t('nav.modelPlaza')"
+          class="app-header-mobile-action app-header-action-models inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-slate-200/80 bg-white/80 text-slate-600 shadow-sm shadow-slate-950/5 ring-1 ring-white/70 transition-colors hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-200 dark:ring-white/5 dark:hover:border-blue-400/25 dark:hover:bg-blue-500/10 dark:hover:text-blue-200 sm:h-auto sm:w-auto sm:gap-1.5 sm:px-2.5 sm:py-1.5 sm:text-sm sm:font-medium"
         >
           <Icon name="grid" size="sm" />
           <span class="hidden sm:inline">{{ t('nav.modelPlaza') }}</span>
         </router-link>
 
         <!-- Language Switcher -->
-        <LocaleSwitcher />
+        <div data-test="header-locale-switcher" class="hidden sm:block">
+          <LocaleSwitcher />
+        </div>
 
         <!-- Subscription Progress (for users with active subscriptions) -->
         <SubscriptionProgressMini v-if="user" />
@@ -121,7 +126,7 @@
             aria-controls="daily-checkin-popover"
             aria-haspopup="dialog"
             :aria-expanded="checkinPopoverOpen"
-            class="inline-flex items-center gap-1.5 rounded-lg border border-amber-200 bg-amber-50 px-2 py-1.5 text-sm font-semibold text-amber-700 shadow-sm shadow-amber-900/5 transition-colors hover:bg-amber-100 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400 min-[360px]:px-3 dark:border-amber-500/30 dark:bg-amber-900/20 dark:text-amber-200 dark:hover:bg-amber-900/30 dark:disabled:border-dark-700 dark:disabled:bg-dark-800 dark:disabled:text-dark-400"
+            class="app-header-mobile-action app-header-action-checkin inline-flex items-center gap-1.5 rounded-lg border border-amber-200 bg-amber-50 px-2 py-1.5 text-sm font-semibold text-amber-700 shadow-sm shadow-amber-900/5 transition-colors hover:bg-amber-100 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400 min-[360px]:px-3 dark:border-amber-500/30 dark:bg-amber-900/20 dark:text-amber-200 dark:hover:bg-amber-900/30 dark:disabled:border-dark-700 dark:disabled:bg-dark-800 dark:disabled:text-dark-400"
             @click.stop="handleCheckinButton"
           >
             <Icon
@@ -129,7 +134,7 @@
               size="sm"
               :class="checkinSubmitting ? 'animate-pulse' : ''"
             />
-            <span data-test="daily-checkin-label" class="hidden min-[360px]:inline">{{ checkinButtonLabel }}</span>
+            <span data-test="daily-checkin-label" class="hidden sm:inline">{{ checkinButtonLabel }}</span>
           </button>
 
           <Teleport to="body">
@@ -345,14 +350,14 @@
         <div v-if="user" class="relative shrink-0" ref="dropdownRef">
           <button
             @click="toggleDropdown"
-            class="group flex items-center gap-2 rounded-xl border border-transparent p-1.5 transition-all duration-200 hover:border-blue-200/70 hover:bg-blue-50/80 hover:shadow-sm hover:shadow-blue-600/10 focus:outline-none focus:ring-2 focus:ring-blue-500/25 dark:hover:border-blue-400/20 dark:hover:bg-blue-500/10"
+            class="app-header-mobile-action app-header-user-trigger group flex items-center gap-2 rounded-xl border border-transparent p-1.5 transition-all duration-200 hover:border-blue-200/70 hover:bg-blue-50/80 hover:shadow-sm hover:shadow-blue-600/10 focus:outline-none focus:ring-2 focus:ring-blue-500/25 dark:hover:border-blue-400/20 dark:hover:bg-blue-500/10"
             aria-label="User Menu"
             aria-haspopup="menu"
             :aria-expanded="dropdownOpen"
           >
             <div
               data-test="header-user-avatar"
-              class="flex h-8 w-8 items-center justify-center overflow-hidden rounded-xl bg-[linear-gradient(135deg,#2563eb,#3b82f6,#06b6d4)] text-sm font-semibold text-white shadow-sm shadow-blue-600/25 ring-1 ring-blue-300/40"
+              class="app-header-user-avatar flex h-8 w-8 items-center justify-center overflow-hidden rounded-xl bg-[linear-gradient(135deg,#2563eb,#3b82f6,#06b6d4)] text-sm font-semibold text-white shadow-sm shadow-blue-600/25 ring-1 ring-blue-300/40"
             >
               <img
                 v-if="avatarUrl"
