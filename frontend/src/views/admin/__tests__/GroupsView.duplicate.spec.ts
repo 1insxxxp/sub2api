@@ -135,7 +135,15 @@ const DataTableStub = defineComponent({
     columns: { type: Array, default: () => [] },
     loading: { type: Boolean, default: false }
   },
-  template: '<div><div v-for="row in data" :key="row.id"><slot name="cell-actions" :row="row" /></div></div>'
+  template: `
+    <div>
+      <div v-for="row in data" :key="row.id">
+        <span :data-testid="'group-name-' + row.id">{{ row.name }}</span>
+        <span :data-testid="'group-account-count-' + row.id">{{ row.account_count }}</span>
+        <slot name="cell-actions" :row="row" />
+      </div>
+    </div>
+  `
 })
 
 const BaseDialogStub = defineComponent({
@@ -300,6 +308,32 @@ describe('GroupsView duplicate action', () => {
 
     expect(updateGroup).toHaveBeenCalledTimes(1)
     expect(showError).toHaveBeenCalledWith('group name already exists')
+    wrapper.unmount()
+  })
+
+  it('updates the edited row in place without reloading the group list', async () => {
+    const updatedResponse: Partial<AdminGroup> = {
+      ...sourceGroup,
+      name: 'Updated Primary'
+    }
+    delete updatedResponse.account_count
+    delete updatedResponse.active_account_count
+    delete updatedResponse.rate_limited_account_count
+    updateGroup.mockResolvedValueOnce(updatedResponse as AdminGroup)
+    const wrapper = mountView()
+    await flushPromises()
+
+    const editButton = wrapper.findAll('button').find((button) => button.text() === 'common.edit')
+    expect(editButton).toBeTruthy()
+    await editButton!.trigger('click')
+    await flushPromises()
+    await wrapper.get('#edit-group-form').trigger('submit')
+    await flushPromises()
+
+    expect(updateGroup).toHaveBeenCalledTimes(1)
+    expect(listGroups).toHaveBeenCalledTimes(1)
+    expect(wrapper.get('[data-testid="group-name-42"]').text()).toBe('Updated Primary')
+    expect(wrapper.get('[data-testid="group-account-count-42"]').text()).toBe('1')
     wrapper.unmount()
   })
 })

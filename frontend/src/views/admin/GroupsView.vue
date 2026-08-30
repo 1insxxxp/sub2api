@@ -6500,10 +6500,15 @@ const handleUpdateGroup = async () => {
     payload.peak_rate_multiplier = normalizeRateMultiplier(
       editForm.peak_rate_multiplier,
     );
-    await adminAPI.groups.update(editingGroup.value.id, payload);
+    const updatedGroup = await adminAPI.groups.update(
+      editingGroup.value.id,
+      payload,
+    );
+    groups.value = groups.value.map((group) =>
+      group.id === updatedGroup.id ? { ...group, ...updatedGroup } : group,
+    );
     appStore.showSuccess(t("admin.groups.groupUpdated"));
     closeEditModal();
-    loadGroups();
   } catch (error: any) {
     appStore.showError(
       extractApiErrorMessage(error, t("admin.groups.failedToUpdate")),
