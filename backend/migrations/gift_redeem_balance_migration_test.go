@@ -44,7 +44,6 @@ func TestMigration234RepairsAndConstrainsGiftBalance(t *testing.T) {
 
 	sql := strings.Join(strings.Fields(string(content)), " ")
 	require.Contains(t, sql, "UPDATE users SET gift_balance = LEAST(gift_balance, GREATEST(balance, 0))")
-	require.Contains(t, sql, "ADD CONSTRAINT users_gift_balance_within_balance CHECK (gift_balance <= GREATEST(balance, 0))")
+	require.Contains(t, sql, "ADD CONSTRAINT users_gift_balance_within_balance CHECK (gift_balance <= GREATEST(balance, 0)) NOT VALID")
 	require.Contains(t, sql, "VALIDATE CONSTRAINT users_gift_balance_within_balance")
-	require.NotContains(t, sql, "NOT VALID")
 }
