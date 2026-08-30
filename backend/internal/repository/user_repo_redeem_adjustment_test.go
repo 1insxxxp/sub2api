@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"math"
 	"testing"
 
 	"github.com/DATA-DOG/go-sqlmock"
@@ -12,6 +13,57 @@ import (
 	"entgo.io/ent/dialect"
 	entsql "entgo.io/ent/dialect/sql"
 )
+
+func TestDeductOrdinaryBalanceUsesAtomicConditionalUpdate(t *testing.T) {
+	repo, mock := newRedeemAdjustmentRepoMock(t)
+	mock.ExpectQuery(`UPDATE users\s+SET balance = balance - \$1, updated_at = NOW\(\)\s+WHERE id = \$2 AND deleted_at IS NULL\s+AND balance - gift_balance >= \$1\s+RETURNING balance`).
+		WithArgs(6.0, int64(42)).
+		WillReturnRows(sqlmock.NewRows([]string{"balance"}).AddRow(14.0))
+
+	require.NoError(t, repo.DeductOrdinaryBalance(context.Background(), 42, 6))
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestDeductOrdinaryBalanceDistinguishesInsufficientOrdinaryBalance(t *testing.T) {
+	repo, mock := newRedeemAdjustmentRepoMock(t)
+	mock.ExpectQuery(`UPDATE users[\s\S]+AND balance - gift_balance >= \$1[\s\S]+RETURNING balance`).
+		WithArgs(6.0, int64(42)).
+		WillReturnRows(sqlmock.NewRows([]string{"balance"}))
+	mock.ExpectQuery(`SELECT balance, gift_balance FROM users WHERE id = \$1 AND deleted_at IS NULL`).
+		WithArgs(int64(42)).
+		WillReturnRows(sqlmock.NewRows([]string{"balance", "gift_balance"}).AddRow(20.0, 15.0))
+
+	err := repo.DeductOrdinaryBalance(context.Background(), 42, 6)
+
+	require.ErrorIs(t, err, service.ErrBalanceNegative)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestDeductOrdinaryBalanceDistinguishesMissingUser(t *testing.T) {
+	repo, mock := newRedeemAdjustmentRepoMock(t)
+	mock.ExpectQuery(`UPDATE users[\s\S]+AND balance - gift_balance >= \$1[\s\S]+RETURNING balance`).
+		WithArgs(1.0, int64(404)).
+		WillReturnRows(sqlmock.NewRows([]string{"balance"}))
+	mock.ExpectQuery(`SELECT balance, gift_balance FROM users WHERE id = \$1 AND deleted_at IS NULL`).
+		WithArgs(int64(404)).
+		WillReturnRows(sqlmock.NewRows([]string{"balance", "gift_balance"}))
+
+	err := repo.DeductOrdinaryBalance(context.Background(), 404, 1)
+
+	require.ErrorIs(t, err, service.ErrUserNotFound)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestDeductOrdinaryBalanceRejectsInvalidAmountsBeforeSQL(t *testing.T) {
+	for _, amount := range []float64{0, -1, math.NaN(), math.Inf(1), 0.000000001, 1_000_000_000_000} {
+		repo, mock := newRedeemAdjustmentRepoMock(t)
+
+		err := repo.DeductOrdinaryBalance(context.Background(), 42, amount)
+
+		require.ErrorIs(t, err, service.ErrBalanceNegative)
+		require.NoError(t, mock.ExpectationsWereMet())
+	}
+}
 
 func newRedeemAdjustmentRepoMock(t *testing.T) (*userRepository, sqlmock.Sqlmock) {
 	t.Helper()

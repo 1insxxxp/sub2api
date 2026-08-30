@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"math"
 	"sort"
 	"strings"
 	"time"
@@ -33,6 +34,7 @@ type userRepository struct {
 }
 
 var _ service.RedeemUserAdjustmentRepository = (*userRepository)(nil)
+var _ service.OrdinaryBalanceRepository = (*userRepository)(nil)
 
 func NewUserRepository(client *dbent.Client, sqlDB *sql.DB) service.UserRepository {
 	return newUserRepositoryWithSQL(client, sqlDB)
@@ -980,6 +982,55 @@ func (r *userRepository) AdjustBalance(ctx context.Context, id int64, delta floa
 	return service.BalanceChange{Old: current, New: current + delta}, service.ErrBalanceNegative
 }
 
+// DeductOrdinaryBalance atomically deducts only the non-gift portion of a
+// wallet. A conditional UPDATE keeps concurrent transfer generation from
+// spending the same ordinary balance twice.
+func (r *userRepository) DeductOrdinaryBalance(ctx context.Context, userID int64, amount float64) (err error) {
+	quantized := service.QuantizeUsageBillingAmount(amount)
+	if amount <= 0 || amount >= 1_000_000_000_000 || math.IsNaN(amount) || math.IsInf(amount, 0) || quantized != amount {
+		return service.ErrBalanceNegative
+	}
+
+	const updateSQL = `
+		UPDATE users
+		SET balance = balance - $1, updated_at = NOW()
+		WHERE id = $2 AND deleted_at IS NULL
+		  AND balance - gift_balance >= $1
+		RETURNING balance
+	`
+	rows, err := clientFromContext(ctx, r.client).QueryContext(ctx, updateSQL, amount, userID)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if closeErr := rows.Close(); closeErr != nil && err == nil {
+			err = closeErr
+		}
+	}()
+
+	if rows.Next() {
+		var remaining float64
+		if err := rows.Scan(&remaining); err != nil {
+			return err
+		}
+		return rows.Err()
+	}
+	if rowsErr := rows.Err(); rowsErr != nil {
+		return rowsErr
+	}
+	// Release the UPDATE result before issuing the distinguishing lookup. This
+	// matters inside an Ent transaction where both statements share one SQL
+	// connection.
+	if err := rows.Close(); err != nil {
+		return err
+	}
+
+	if _, _, err := r.currentOrdinaryBalance(ctx, userID); err != nil {
+		return err
+	}
+	return service.ErrBalanceNegative
+}
+
 // SetBalance 原子地把余额置为 value，并返回变更前后的值。
 func (r *userRepository) SetBalance(ctx context.Context, id int64, value float64) (service.BalanceChange, error) {
 	if value < 0 {
@@ -1029,6 +1080,29 @@ func (r *userRepository) currentBalance(ctx context.Context, id int64) (balance 
 		return 0, err
 	}
 	return balance, rows.Err()
+}
+
+func (r *userRepository) currentOrdinaryBalance(ctx context.Context, id int64) (balance, giftBalance float64, err error) {
+	rows, err := clientFromContext(ctx, r.client).QueryContext(ctx,
+		`SELECT balance, gift_balance FROM users WHERE id = $1 AND deleted_at IS NULL`, id)
+	if err != nil {
+		return 0, 0, err
+	}
+	defer func() {
+		if closeErr := rows.Close(); closeErr != nil && err == nil {
+			err = closeErr
+		}
+	}()
+	if !rows.Next() {
+		if rowsErr := rows.Err(); rowsErr != nil {
+			return 0, 0, rowsErr
+		}
+		return 0, 0, service.ErrUserNotFound
+	}
+	if err := rows.Scan(&balance, &giftBalance); err != nil {
+		return 0, 0, err
+	}
+	return balance, giftBalance, rows.Err()
 }
 
 // scanBalanceChange 执行一条 RETURNING 旧余额、新余额的语句。ok 为 false 表示语句未命中任何行。

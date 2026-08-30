@@ -3,6 +3,10 @@
 package repository
 
 import (
+	"context"
+	"errors"
+	"sync"
+
 	"github.com/Wei-Shaw/sub2api/internal/service"
 )
 
@@ -159,6 +163,42 @@ func (s *UserRepoSuite) TestAdjustBalance_RefusesNegativeResult() {
 func (s *UserRepoSuite) TestAdjustBalance_UserNotFound() {
 	_, err := s.repo.AdjustBalance(s.ctx, 99999999, 1)
 	s.Require().ErrorIs(err, service.ErrUserNotFound)
+}
+
+func (s *UserRepoSuite) TestDeductOrdinaryBalanceConcurrentCondition() {
+	user := s.mustCreateUser(&service.User{Email: "ordinary-balance-race@example.com", Balance: 10})
+	s.Require().NoError(s.client.User.UpdateOneID(user.ID).SetGiftBalance(4).Exec(s.ctx))
+
+	errCh := make(chan error, 2)
+	var wg sync.WaitGroup
+	for i := 0; i < 2; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			errCh <- s.repo.DeductOrdinaryBalance(context.Background(), user.ID, 4)
+		}()
+	}
+	wg.Wait()
+	close(errCh)
+
+	var succeeded, insufficient int
+	for err := range errCh {
+		switch {
+		case err == nil:
+			succeeded++
+		case errors.Is(err, service.ErrBalanceNegative):
+			insufficient++
+		default:
+			s.Require().NoError(err)
+		}
+	}
+	s.Require().Equal(1, succeeded)
+	s.Require().Equal(1, insufficient)
+
+	got, err := s.repo.GetByID(s.ctx, user.ID)
+	s.Require().NoError(err)
+	s.Require().InDelta(6, got.Balance, 1e-9)
+	s.Require().InDelta(4, got.GiftBalance, 1e-9)
 }
 
 func (s *UserRepoSuite) TestSetBalance_ReplacesValueAndReportsPrevious() {
