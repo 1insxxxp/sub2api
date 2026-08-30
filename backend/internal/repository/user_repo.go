@@ -35,6 +35,7 @@ type userRepository struct {
 
 var _ service.RedeemUserAdjustmentRepository = (*userRepository)(nil)
 var _ service.OrdinaryBalanceRepository = (*userRepository)(nil)
+var _ service.GiftBalanceRepository = (*userRepository)(nil)
 
 func NewUserRepository(client *dbent.Client, sqlDB *sql.DB) service.UserRepository {
 	return newUserRepositoryWithSQL(client, sqlDB)
@@ -861,6 +862,46 @@ func (r *userRepository) UpdateBalance(ctx context.Context, id int64, amount flo
 		return service.ErrUserNotFound
 	}
 	return nil
+}
+
+// CreditGiftBalance atomically credits spendable and gift balances without
+// changing total_recharged. The conditional update refuses pre-existing wallet
+// states where gift funds are not a subset of the available balance.
+func (r *userRepository) CreditGiftBalance(ctx context.Context, userID int64, amount float64) error {
+	quantized := service.QuantizeUsageBillingAmount(amount)
+	if amount <= 0 || amount >= 1_000_000_000_000 || math.IsNaN(amount) || math.IsInf(amount, 0) || quantized != amount {
+		return service.ErrRedeemCodeInvalidGiftBalance
+	}
+
+	const updateSQL = `
+		UPDATE users
+		SET balance = balance + $1,
+			gift_balance = gift_balance + $1,
+			updated_at = NOW()
+		WHERE id = $2 AND deleted_at IS NULL
+			AND gift_balance <= balance
+	`
+	client := clientFromContext(ctx, r.client)
+	result, err := client.ExecContext(ctx, updateSQL, amount, userID)
+	if err != nil {
+		return err
+	}
+	affected, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if affected > 0 {
+		return nil
+	}
+
+	exists, err := client.User.Query().Where(dbuser.IDEQ(userID)).Exist(ctx)
+	if err != nil {
+		return err
+	}
+	if !exists {
+		return service.ErrUserNotFound
+	}
+	return errors.New("gift balance exceeds available balance")
 }
 
 func (r *userRepository) ApplyRedeemBalanceAdjustment(ctx context.Context, id int64, delta float64) error {

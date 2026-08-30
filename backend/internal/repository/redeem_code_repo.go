@@ -495,6 +495,7 @@ func (r *redeemCodeRepository) SumPositiveBalanceByUser(ctx context.Context, use
 			redeemcode.UsedByEQ(userID),
 			redeemcode.ValueGT(0),
 			redeemcode.TypeIn("balance", "admin_balance"),
+			redeemcode.ThresholdExemptEQ(false),
 		).
 		Aggregate(dbent.As(dbent.Sum(redeemcode.FieldValue), "sum")).
 		Scan(ctx, &result)

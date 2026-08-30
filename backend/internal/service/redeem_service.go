@@ -25,6 +25,7 @@ var (
 	ErrRedeemRateLimited                 = infraerrors.TooManyRequests("REDEEM_RATE_LIMITED", "too many failed attempts, please try again later")
 	ErrRedeemCodeLocked                  = infraerrors.Conflict("REDEEM_CODE_LOCKED", "redeem code is being processed, please try again")
 	ErrRedeemBatchUserLimit              = infraerrors.Conflict("REDEEM_BATCH_USER_LIMIT", "activity redeem codes are limited to one per user")
+	ErrRedeemCodeInvalidGiftBalance      = infraerrors.BadRequest("REDEEM_THRESHOLD_EXEMPT_INVALID", "gift balance redeem code must have a positive persistable amount")
 	ErrBalanceTransferRedeemNotAllowed   = infraerrors.Forbidden("BALANCE_TRANSFER_REDEEM_NOT_ALLOWED", "user is not allowed to generate balance redeem codes")
 	ErrBalanceTransferRedeemCodeUsed     = infraerrors.Conflict("BALANCE_TRANSFER_REDEEM_CODE_USED", "used balance transfer redeem codes cannot be deleted")
 	ErrBalanceTransferRedeemCodeNotFound = infraerrors.NotFound(
@@ -97,6 +98,12 @@ type BalanceTransferRedeemCodeBatchDeleteRepository interface {
 // converted into transferable redeem codes.
 type OrdinaryBalanceRepository interface {
 	DeductOrdinaryBalance(ctx context.Context, userID int64, amount float64) error
+}
+
+// GiftBalanceRepository is the optional wallet capability used to credit gift
+// funds without increasing cumulative recharge.
+type GiftBalanceRepository interface {
+	CreditGiftBalance(ctx context.Context, userID int64, amount float64) error
 }
 
 // GenerateCodesRequest 生成兑换码请求
@@ -176,6 +183,7 @@ type RedeemService struct {
 	redeemRepo           RedeemCodeRepository
 	userRepo             UserRepository
 	redeemUserRepo       RedeemUserAdjustmentRepository
+	giftBalanceRepo      GiftBalanceRepository
 	subscriptionService  *SubscriptionService
 	cache                RedeemCache
 	billingCacheService  *BillingCacheService
@@ -196,10 +204,12 @@ func NewRedeemService(
 	affiliateService *AffiliateService,
 ) *RedeemService {
 	redeemUserRepo, _ := userRepo.(RedeemUserAdjustmentRepository)
+	giftBalanceRepo, _ := userRepo.(GiftBalanceRepository)
 	return &RedeemService{
 		redeemRepo:           redeemRepo,
 		userRepo:             userRepo,
 		redeemUserRepo:       redeemUserRepo,
+		giftBalanceRepo:      giftBalanceRepo,
 		subscriptionService:  subscriptionService,
 		cache:                cache,
 		billingCacheService:  billingCacheService,
@@ -788,6 +798,14 @@ func (s *RedeemService) Redeem(ctx context.Context, userID int64, code string) (
 	default:
 		return nil, unsupportedRedeemTypeError(redeemCode.Type)
 	}
+	if redeemCode.ThresholdExempt {
+		if redeemCode.Type != RedeemTypeBalance || !isPersistableGiftBalanceAmount(redeemCode.Value) {
+			return nil, ErrRedeemCodeInvalidGiftBalance
+		}
+		if s.giftBalanceRepo == nil {
+			return nil, errors.New("user repository does not support gift balance credit")
+		}
+	}
 
 	// 获取用户信息
 	_, err = s.userRepo.GetByID(ctx, userID)
@@ -833,7 +851,11 @@ func (s *RedeemService) Redeem(ctx context.Context, userID int64, code string) (
 	switch redeemCode.Type {
 	case RedeemTypeBalance:
 		amount := redeemCode.Value
-		if amount < 0 {
+		if redeemCode.ThresholdExempt {
+			if err := s.giftBalanceRepo.CreditGiftBalance(txCtx, userID, amount); err != nil {
+				return nil, fmt.Errorf("credit gift balance: %w", err)
+			}
+		} else if amount < 0 {
 			if s.redeemUserRepo == nil {
 				return nil, errors.New("user repository does not support atomic redeem balance adjustments")
 			}
@@ -906,6 +928,10 @@ func (s *RedeemService) Redeem(ctx context.Context, userID int64, code string) (
 	}
 
 	return redeemCode, nil
+}
+
+func isPersistableGiftBalanceAmount(amount float64) bool {
+	return isPersistablePositiveBalanceAmount(amount) && QuantizeUsageBillingAmount(amount) == amount
 }
 
 // invalidateRedeemCaches 失效兑换相关的缓存

@@ -5,6 +5,8 @@ package repository
 import (
 	"context"
 	"errors"
+	"fmt"
+	"math"
 	"strings"
 	"sync"
 	"testing"
@@ -453,6 +455,89 @@ func (s *UserRepoSuite) TestUpdateBalance() {
 	got, err := s.repo.GetByID(s.ctx, user.ID)
 	s.Require().NoError(err)
 	s.Require().InDelta(12.5, got.Balance, 1e-6)
+}
+
+func (s *UserRepoSuite) TestUpdateBalanceCreditsOrdinaryRechargeOnly() {
+	user := s.mustCreateUser(&service.User{
+		Email:          "ordinary-recharge@test.com",
+		Balance:        5,
+		GiftBalance:    2,
+		TotalRecharged: 3,
+	})
+	s.Require().NoError(s.client.User.UpdateOneID(user.ID).
+		SetGiftBalance(2).
+		SetTotalRecharged(3).
+		Exec(s.ctx))
+
+	s.Require().NoError(s.repo.UpdateBalance(s.ctx, user.ID, 10))
+
+	got, err := s.repo.GetByID(s.ctx, user.ID)
+	s.Require().NoError(err)
+	s.Require().Equal(15.0, got.Balance)
+	s.Require().Equal(2.0, got.GiftBalance)
+	s.Require().Equal(13.0, got.TotalRecharged)
+}
+
+func (s *UserRepoSuite) TestCreditGiftBalanceDoesNotIncreaseTotalRecharged() {
+	user := s.mustCreateUser(&service.User{
+		Email:          "gift-recharge@test.com",
+		Balance:        5,
+		GiftBalance:    2,
+		TotalRecharged: 3,
+	})
+	s.Require().NoError(s.client.User.UpdateOneID(user.ID).
+		SetGiftBalance(2).
+		SetTotalRecharged(3).
+		Exec(s.ctx))
+
+	s.Require().NoError(s.repo.CreditGiftBalance(s.ctx, user.ID, 10))
+
+	got, err := s.repo.GetByID(s.ctx, user.ID)
+	s.Require().NoError(err)
+	s.Require().Equal(15.0, got.Balance)
+	s.Require().Equal(12.0, got.GiftBalance)
+	s.Require().Equal(3.0, got.TotalRecharged)
+	s.Require().LessOrEqual(got.GiftBalance, got.Balance)
+}
+
+func (s *UserRepoSuite) TestCreditGiftBalanceRejectsUnpersistableAmounts() {
+	for i, amount := range []float64{0, -1, math.NaN(), math.Inf(1), 0.000000001, 1_000_000_000_000} {
+		user := s.mustCreateUser(&service.User{
+			Email:          fmt.Sprintf("invalid-gift-%d@test.com", i),
+			Balance:        5,
+			GiftBalance:    2,
+			TotalRecharged: 3,
+		})
+		s.Require().NoError(s.client.User.UpdateOneID(user.ID).
+			SetGiftBalance(2).
+			SetTotalRecharged(3).
+			Exec(s.ctx))
+
+		err := s.repo.CreditGiftBalance(s.ctx, user.ID, amount)
+
+		s.Require().Error(err)
+		got, getErr := s.repo.GetByID(s.ctx, user.ID)
+		s.Require().NoError(getErr)
+		s.Require().Equal(5.0, got.Balance)
+		s.Require().Equal(2.0, got.GiftBalance)
+		s.Require().Equal(3.0, got.TotalRecharged)
+	}
+}
+
+func (s *UserRepoSuite) TestCreditGiftBalanceRefusesInvalidWalletInvariant() {
+	user := s.mustCreateUser(&service.User{
+		Email:   "invalid-gift-invariant@test.com",
+		Balance: 5,
+	})
+	s.Require().NoError(s.client.User.UpdateOneID(user.ID).SetGiftBalance(6).Exec(s.ctx))
+
+	err := s.repo.CreditGiftBalance(s.ctx, user.ID, 10)
+
+	s.Require().Error(err)
+	got, getErr := s.repo.GetByID(s.ctx, user.ID)
+	s.Require().NoError(getErr)
+	s.Require().Equal(5.0, got.Balance)
+	s.Require().Equal(6.0, got.GiftBalance)
 }
 
 func (s *UserRepoSuite) TestUpdateBalance_Negative() {

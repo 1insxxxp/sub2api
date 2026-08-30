@@ -2,6 +2,8 @@ package service
 
 import (
 	"context"
+	"errors"
+	"math"
 	"testing"
 	"time"
 
@@ -9,6 +11,182 @@ import (
 	"github.com/Wei-Shaw/sub2api/internal/pkg/pagination"
 	"github.com/stretchr/testify/require"
 )
+
+type giftRedeemUserRepo struct {
+	*userRepoStub
+	updateAmounts []float64
+	giftAmounts   []float64
+	giftErr       error
+}
+
+func (r *giftRedeemUserRepo) UpdateBalance(_ context.Context, _ int64, amount float64) error {
+	r.updateAmounts = append(r.updateAmounts, amount)
+	return nil
+}
+
+func (r *giftRedeemUserRepo) CreditGiftBalance(_ context.Context, _ int64, amount float64) error {
+	r.giftAmounts = append(r.giftAmounts, amount)
+	return r.giftErr
+}
+
+type ordinaryOnlyRedeemUserRepo struct {
+	*userRepoStub
+	updateAmounts []float64
+}
+
+func (r *ordinaryOnlyRedeemUserRepo) UpdateBalance(_ context.Context, _ int64, amount float64) error {
+	r.updateAmounts = append(r.updateAmounts, amount)
+	return nil
+}
+
+type redeemAuthCacheInvalidator struct {
+	userIDs []int64
+}
+
+func (*redeemAuthCacheInvalidator) InvalidateAuthCacheByKey(context.Context, string) {}
+
+func (i *redeemAuthCacheInvalidator) InvalidateAuthCacheByUserID(_ context.Context, userID int64) {
+	i.userIDs = append(i.userIDs, userID)
+}
+
+func (*redeemAuthCacheInvalidator) InvalidateAuthCacheByGroupID(context.Context, int64) {}
+
+func redeemServiceForCode(
+	t *testing.T,
+	code RedeemCode,
+	userRepo UserRepository,
+	invalidator APIKeyAuthCacheInvalidator,
+) (*RedeemService, *batchRedeemRepo) {
+	t.Helper()
+	redeemRepo := &batchRedeemRepo{
+		redeemRejectRepo: &redeemRejectRepo{},
+		codes:            map[string]*RedeemCode{code.Code: &code},
+	}
+	return NewRedeemService(
+		redeemRepo,
+		userRepo,
+		nil,
+		nil,
+		nil,
+		newCheckinServiceTestClient(t),
+		invalidator,
+		nil,
+	), redeemRepo
+}
+
+func TestRedeemGiftBalanceUsesGiftCreditAndInvalidatesCache(t *testing.T) {
+	const userID int64 = 7
+	userRepo := &giftRedeemUserRepo{userRepoStub: &userRepoStub{user: &User{ID: userID}}}
+	invalidator := &redeemAuthCacheInvalidator{}
+	svc, _ := redeemServiceForCode(t, RedeemCode{
+		ID:              301,
+		Code:            "GIFT-10",
+		Type:            RedeemTypeBalance,
+		Value:           10,
+		Status:          StatusUnused,
+		ThresholdExempt: true,
+	}, userRepo, invalidator)
+
+	got, err := svc.Redeem(context.Background(), userID, "GIFT-10")
+
+	require.NoError(t, err)
+	require.Equal(t, "GIFT-10", got.Code)
+	require.Equal(t, []float64{10}, userRepo.giftAmounts)
+	require.Empty(t, userRepo.updateAmounts)
+	require.Equal(t, []int64{userID}, invalidator.userIDs)
+}
+
+func TestRedeemOrdinaryBalanceKeepsCumulativeCreditPath(t *testing.T) {
+	const userID int64 = 7
+	userRepo := &giftRedeemUserRepo{userRepoStub: &userRepoStub{user: &User{ID: userID}}}
+	svc, _ := redeemServiceForCode(t, RedeemCode{
+		ID:     302,
+		Code:   "ORDINARY-10",
+		Type:   RedeemTypeBalance,
+		Value:  10,
+		Status: StatusUnused,
+	}, userRepo, nil)
+
+	_, err := svc.Redeem(context.Background(), userID, "ORDINARY-10")
+
+	require.NoError(t, err)
+	require.Equal(t, []float64{10}, userRepo.updateAmounts)
+	require.Empty(t, userRepo.giftAmounts)
+}
+
+func TestRedeemGiftBalanceFailsWithoutGiftRepository(t *testing.T) {
+	const userID int64 = 7
+	userRepo := &ordinaryOnlyRedeemUserRepo{userRepoStub: &userRepoStub{user: &User{ID: userID}}}
+	svc, redeemRepo := redeemServiceForCode(t, RedeemCode{
+		ID:              303,
+		Code:            "GIFT-NO-CAPABILITY",
+		Type:            RedeemTypeBalance,
+		Value:           10,
+		Status:          StatusUnused,
+		ThresholdExempt: true,
+	}, userRepo, nil)
+
+	got, err := svc.Redeem(context.Background(), userID, "GIFT-NO-CAPABILITY")
+
+	require.Nil(t, got)
+	require.ErrorContains(t, err, "does not support gift balance credit")
+	require.Empty(t, userRepo.updateAmounts)
+	require.Equal(t, StatusUnused, redeemRepo.codes["GIFT-NO-CAPABILITY"].Status)
+}
+
+func TestRedeemRejectsCorruptGiftBalanceCodesBeforeUse(t *testing.T) {
+	for _, value := range []float64{0, -1, math.NaN(), math.Inf(1), 0.000000001, 1_000_000_000_000} {
+		t.Run("invalid_value", func(t *testing.T) {
+			const userID int64 = 7
+			userRepo := &giftRedeemUserRepo{userRepoStub: &userRepoStub{user: &User{ID: userID}}}
+			svc, redeemRepo := redeemServiceForCode(t, RedeemCode{
+				ID:              304,
+				Code:            "CORRUPT-GIFT",
+				Type:            RedeemTypeBalance,
+				Value:           value,
+				Status:          StatusUnused,
+				ThresholdExempt: true,
+			}, userRepo, nil)
+
+			got, err := svc.Redeem(context.Background(), userID, "CORRUPT-GIFT")
+
+			require.Nil(t, got)
+			require.Error(t, err)
+			require.True(t, errors.Is(err, ErrRedeemCodeInvalidGiftBalance))
+			require.Empty(t, userRepo.updateAmounts)
+			require.Empty(t, userRepo.giftAmounts)
+			require.Equal(t, StatusUnused, redeemRepo.codes["CORRUPT-GIFT"].Status)
+		})
+	}
+}
+
+func TestRedeemRejectsThresholdExemptNonBalanceCodesBeforeUse(t *testing.T) {
+	groupID := int64(11)
+	for _, code := range []RedeemCode{
+		{
+			ID: 305, Code: "CORRUPT-GIFT-CONCURRENCY", Type: RedeemTypeConcurrency,
+			Value: 1, Status: StatusUnused, ThresholdExempt: true,
+		},
+		{
+			ID: 306, Code: "CORRUPT-GIFT-SUBSCRIPTION", Type: RedeemTypeSubscription,
+			Value: 1, Status: StatusUnused, ThresholdExempt: true, GroupID: &groupID,
+		},
+	} {
+		t.Run(code.Type, func(t *testing.T) {
+			const userID int64 = 7
+			userRepo := &giftRedeemUserRepo{userRepoStub: &userRepoStub{user: &User{ID: userID}}}
+			svc, redeemRepo := redeemServiceForCode(t, code, userRepo, nil)
+
+			got, err := svc.Redeem(context.Background(), userID, code.Code)
+
+			require.Nil(t, got)
+			require.ErrorIs(t, err, ErrRedeemCodeInvalidGiftBalance)
+			require.Empty(t, userRepo.updateAmounts)
+			require.Empty(t, userRepo.giftAmounts)
+			require.Equal(t, StatusUnused, redeemRepo.codes[code.Code].Status)
+		})
+	}
+}
 
 type redeemRejectRepo struct {
 	code      RedeemCode

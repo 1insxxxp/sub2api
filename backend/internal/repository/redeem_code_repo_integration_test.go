@@ -87,6 +87,35 @@ func (s *RedeemCodeRepoSuite) TestCreateRoundTripsThresholdExempt() {
 	s.Require().True(got.ThresholdExempt)
 }
 
+func (s *RedeemCodeRepoSuite) TestSumPositiveBalanceByUserExcludesGiftCodes() {
+	user := s.createUser(uniqueTestValue(s.T(), "sum-gift") + "@example.com")
+	userID := user.ID
+	codes := []service.RedeemCode{
+		{
+			Code: "SUM-ORDINARY", Type: service.RedeemTypeBalance, Value: 10,
+			Status: service.StatusUsed, UsedBy: &userID,
+		},
+		{
+			Code: "SUM-GIFT", Type: service.RedeemTypeBalance, Value: 20,
+			Status: service.StatusUsed, UsedBy: &userID, ThresholdExempt: true,
+		},
+		{
+			Code: "SUM-ORDINARY-ADMIN", Type: "admin_balance", Value: 5,
+			Status: service.StatusUsed, UsedBy: &userID,
+		},
+		{
+			Code: "SUM-NEGATIVE", Type: service.RedeemTypeBalance, Value: -7,
+			Status: service.StatusUsed, UsedBy: &userID,
+		},
+	}
+	s.Require().NoError(s.repo.CreateBatch(s.ctx, codes))
+
+	total, err := s.repo.SumPositiveBalanceByUser(s.ctx, userID)
+
+	s.Require().NoError(err)
+	s.Require().Equal(15.0, total)
+}
+
 func (s *RedeemCodeRepoSuite) TestCreatePersistsBalanceTransferAuditMetadata() {
 	creator := s.createUser(uniqueTestValue(s.T(), "creator") + "@example.com")
 	redeemer := s.createUser(uniqueTestValue(s.T(), "redeemer") + "@example.com")
