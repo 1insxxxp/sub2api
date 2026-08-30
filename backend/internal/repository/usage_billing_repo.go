@@ -259,10 +259,7 @@ func deductUsageBillingBalance(ctx context.Context, tx *sql.Tx, userID int64, am
 			UPDATE users AS u
 			SET
 				balance = wallet.balance - $1,
-				gift_balance = LEAST(
-					GREATEST(wallet.old_gift_balance - $1, 0),
-					GREATEST(wallet.balance - $1, 0)
-				),
+				gift_balance = GREATEST(wallet.old_gift_balance - $1, 0),
 				updated_at = NOW()
 			FROM wallet
 			WHERE u.id = wallet.id

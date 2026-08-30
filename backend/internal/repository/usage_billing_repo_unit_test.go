@@ -15,11 +15,35 @@ import (
 
 const (
 	lockedGiftBalanceDeductSQL = `(?s)WITH wallet AS \(.*SELECT.*balance.*gift_balance.*FROM users.*FOR UPDATE.*\).*UPDATE users.*SET balance =.*gift_balance =.*RETURNING.*balance.*sufficient.*gift_used`
+	exactGiftBalanceUpdateSQL  = `(?s)gift_balance = GREATEST\(wallet\.old_gift_balance - \$1, 0\),`
 	reserveBatchImageHoldSQL   = `(?s)UPDATE users\s+SET balance = balance - \$1,\s+frozen_balance = COALESCE\(frozen_balance, 0\) \+ \$1,\s+updated_at = NOW\(\)\s+WHERE id = \$2 AND deleted_at IS NULL AND balance >= \$1\s+RETURNING balance, frozen_balance`
 	captureBatchImageHoldSQL   = `(?s)UPDATE users\s+SET balance = balance\s+\+ CASE WHEN \$1 > \$2 THEN \$1 - \$2 ELSE 0 END\s+- CASE WHEN \$2 > \$1 THEN \$2 - \$1 ELSE 0 END,\s+frozen_balance = COALESCE\(frozen_balance, 0\) - \$1,\s+updated_at = NOW\(\)\s+WHERE id = \$3 AND deleted_at IS NULL AND COALESCE\(frozen_balance, 0\) >= \$1\s+RETURNING balance, frozen_balance`
 	releaseBatchImageHoldSQL   = `(?s)UPDATE users\s+SET balance = balance \+ \$1,\s+frozen_balance = COALESCE\(frozen_balance, 0\) - \$1,\s+updated_at = NOW\(\)\s+WHERE id = \$2 AND deleted_at IS NULL AND COALESCE\(frozen_balance, 0\) >= \$1\s+RETURNING balance, frozen_balance`
 	userExistsForBillingSQL    = `(?s)SELECT 1\s+FROM users\s+WHERE id = \$1 AND deleted_at IS NULL`
 )
+
+func TestDeductUsageBillingBalance_PreservesRemainingGiftAcrossOverdraft(t *testing.T) {
+	ctx := context.Background()
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer func() { _ = db.Close() }()
+
+	mock.ExpectBegin()
+	tx, err := db.BeginTx(ctx, nil)
+	require.NoError(t, err)
+	mock.ExpectQuery(exactGiftBalanceUpdateSQL).
+		WithArgs(7.0, int64(42)).
+		WillReturnRows(sqlmock.NewRows([]string{"balance", "sufficient", "gift_used"}).AddRow(-2.0, false, 7.0))
+	mock.ExpectCommit()
+
+	newBalance, sufficient, giftUsed, err := deductUsageBillingBalance(ctx, tx, 42, 7)
+	require.NoError(t, err)
+	require.False(t, sufficient)
+	require.InDelta(t, -2.0, newBalance, 0.00000001)
+	require.InDelta(t, 7.0, giftUsed, 0.00000001)
+	require.NoError(t, tx.Commit())
+	require.NoError(t, mock.ExpectationsWereMet())
+}
 
 func TestDeductUsageBillingBalance_AllocatesGiftFirst(t *testing.T) {
 	ctx := context.Background()

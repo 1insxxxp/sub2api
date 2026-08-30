@@ -35,6 +35,7 @@ func TestUsageBillingRepositoryApply_AllocatesGiftBalance(t *testing.T) {
 		{name: "mixed gift and ordinary", balance: 20, giftBalance: 10, cost: 12, wantBalance: 8, wantGift: 0, wantExempt: 10},
 		{name: "no gift", balance: 20, giftBalance: 0, cost: 12, wantBalance: 8, wantGift: 0, wantExempt: 0},
 		{name: "overdraft", balance: 5, giftBalance: 3, cost: 12, wantBalance: -7, wantGift: 0, wantExempt: 3, wantOverdraft: true},
+		{name: "transitional overdraft preserves remaining gift", balance: 5, giftBalance: 10, cost: 7, wantBalance: -2, wantGift: 3, wantExempt: 7, wantOverdraft: true},
 	}
 
 	for _, tt := range tests {
