@@ -333,6 +333,67 @@ func TestGeminiForwardAsChatCompletions_StreamEmptyTerminalFailsOver(t *testing.
 	require.Empty(t, rec.Body.String())
 }
 
+func TestGeminiForwardAsChatCompletions_EmptyNonStreamingFailsOver(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	tests := []struct {
+		name        string
+		account     *Account
+		contentType string
+		body        string
+	}{
+		{
+			name: "api key json response",
+			account: &Account{
+				ID: 108, Platform: PlatformGemini, Type: AccountTypeAPIKey, Concurrency: 1,
+				Credentials: map[string]any{"api_key": "gemini-api-key"},
+			},
+			contentType: "application/json",
+			body:        `{"candidates":[{"content":{"parts":[{"text":"hidden","thought":true}]},"finishReason":"STOP"}],"usageMetadata":{"promptTokenCount":2,"candidatesTokenCount":4}}`,
+		},
+		{
+			name: "oauth collected sse response",
+			account: &Account{
+				ID: 109, Platform: PlatformGemini, Type: AccountTypeOAuth, Concurrency: 1,
+				Credentials: map[string]any{
+					"access_token": "ya29.test-token",
+					"project_id":   "project-1",
+				},
+			},
+			contentType: "text/event-stream",
+			body: `data: {"response":{"candidates":[{"content":{"parts":[{"text":"hidden","thought":true}]},"finishReason":"STOP"}],"usageMetadata":{"promptTokenCount":2,"candidatesTokenCount":4}}}` + "\n\n" +
+				"data: [DONE]\n\n",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			httpStub := &geminiCompatHTTPUpstreamStub{response: &http.Response{
+				StatusCode: http.StatusOK,
+				Header:     http.Header{"Content-Type": []string{tt.contentType}},
+				Body:       io.NopCloser(strings.NewReader(tt.body)),
+			}}
+			svc := &GeminiMessagesCompatService{
+				tokenProvider: &GeminiTokenProvider{},
+				httpUpstream:  httpStub,
+				cfg:           &config.Config{},
+			}
+			rec := httptest.NewRecorder()
+			c, _ := gin.CreateTestContext(rec)
+			body := []byte(`{"model":"gemini-2.5-flash","messages":[{"role":"user","content":"hi"}]}`)
+			c.Request = httptest.NewRequest(http.MethodPost, "/v1/chat/completions", bytes.NewReader(body))
+
+			result, err := svc.ForwardAsChatCompletions(context.Background(), c, tt.account, body)
+			require.Nil(t, result)
+			var failoverErr *UpstreamFailoverError
+			require.ErrorAs(t, err, &failoverErr)
+			require.Equal(t, http.StatusBadGateway, failoverErr.StatusCode)
+			require.False(t, c.Writer.Written())
+			require.Empty(t, rec.Body.String())
+		})
+	}
+}
+
 func TestGeminiForwardAsChatCompletions_FunctionNamedWebSearchStaysClientSide(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
