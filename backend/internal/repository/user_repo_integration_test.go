@@ -533,11 +533,19 @@ func (s *UserRepoSuite) TestCreditGiftBalanceRefusesInvalidWalletInvariant() {
 
 	err := s.repo.CreditGiftBalance(s.ctx, user.ID, 10)
 
-	s.Require().Error(err)
+	s.Require().EqualError(err, "gift balance exceeds available balance")
+	s.Require().NotErrorIs(err, service.ErrUserNotFound)
 	got, getErr := s.repo.GetByID(s.ctx, user.ID)
 	s.Require().NoError(getErr)
 	s.Require().Equal(5.0, got.Balance)
 	s.Require().Equal(6.0, got.GiftBalance)
+}
+
+func (s *UserRepoSuite) TestCreditGiftBalanceReturnsUserNotFoundForMissingUser() {
+	err := s.repo.CreditGiftBalance(s.ctx, 9_000_000_000_000, 10)
+
+	s.Require().ErrorIs(err, service.ErrUserNotFound)
+	s.Require().NotEqual("gift balance exceeds available balance", err.Error())
 }
 
 func (s *UserRepoSuite) TestUpdateBalance_Negative() {
