@@ -200,6 +200,11 @@ func ActualCost(v float64) predicate.UsageLog {
 	return predicate.UsageLog(sql.FieldEQ(FieldActualCost, v))
 }
 
+// ThresholdExemptCost applies equality check predicate on the "threshold_exempt_cost" field. It's identical to ThresholdExemptCostEQ.
+func ThresholdExemptCost(v float64) predicate.UsageLog {
+	return predicate.UsageLog(sql.FieldEQ(FieldThresholdExemptCost, v))
+}
+
 // CompensatedCost applies equality check predicate on the "compensated_cost" field. It's identical to CompensatedCostEQ.
 func CompensatedCost(v float64) predicate.UsageLog {
 	return predicate.UsageLog(sql.FieldEQ(FieldCompensatedCost, v))
@@ -1608,6 +1613,46 @@ func ActualCostLT(v float64) predicate.UsageLog {
 // ActualCostLTE applies the LTE predicate on the "actual_cost" field.
 func ActualCostLTE(v float64) predicate.UsageLog {
 	return predicate.UsageLog(sql.FieldLTE(FieldActualCost, v))
+}
+
+// ThresholdExemptCostEQ applies the EQ predicate on the "threshold_exempt_cost" field.
+func ThresholdExemptCostEQ(v float64) predicate.UsageLog {
+	return predicate.UsageLog(sql.FieldEQ(FieldThresholdExemptCost, v))
+}
+
+// ThresholdExemptCostNEQ applies the NEQ predicate on the "threshold_exempt_cost" field.
+func ThresholdExemptCostNEQ(v float64) predicate.UsageLog {
+	return predicate.UsageLog(sql.FieldNEQ(FieldThresholdExemptCost, v))
+}
+
+// ThresholdExemptCostIn applies the In predicate on the "threshold_exempt_cost" field.
+func ThresholdExemptCostIn(vs ...float64) predicate.UsageLog {
+	return predicate.UsageLog(sql.FieldIn(FieldThresholdExemptCost, vs...))
+}
+
+// ThresholdExemptCostNotIn applies the NotIn predicate on the "threshold_exempt_cost" field.
+func ThresholdExemptCostNotIn(vs ...float64) predicate.UsageLog {
+	return predicate.UsageLog(sql.FieldNotIn(FieldThresholdExemptCost, vs...))
+}
+
+// ThresholdExemptCostGT applies the GT predicate on the "threshold_exempt_cost" field.
+func ThresholdExemptCostGT(v float64) predicate.UsageLog {
+	return predicate.UsageLog(sql.FieldGT(FieldThresholdExemptCost, v))
+}
+
+// ThresholdExemptCostGTE applies the GTE predicate on the "threshold_exempt_cost" field.
+func ThresholdExemptCostGTE(v float64) predicate.UsageLog {
+	return predicate.UsageLog(sql.FieldGTE(FieldThresholdExemptCost, v))
+}
+
+// ThresholdExemptCostLT applies the LT predicate on the "threshold_exempt_cost" field.
+func ThresholdExemptCostLT(v float64) predicate.UsageLog {
+	return predicate.UsageLog(sql.FieldLT(FieldThresholdExemptCost, v))
+}
+
+// ThresholdExemptCostLTE applies the LTE predicate on the "threshold_exempt_cost" field.
+func ThresholdExemptCostLTE(v float64) predicate.UsageLog {
+	return predicate.UsageLog(sql.FieldLTE(FieldThresholdExemptCost, v))
 }
 
 // CompensatedCostEQ applies the EQ predicate on the "compensated_cost" field.

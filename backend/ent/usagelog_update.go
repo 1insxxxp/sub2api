@@ -602,6 +602,27 @@ func (_u *UsageLogUpdate) AddActualCost(v float64) *UsageLogUpdate {
 	return _u
 }
 
+// SetThresholdExemptCost sets the "threshold_exempt_cost" field.
+func (_u *UsageLogUpdate) SetThresholdExemptCost(v float64) *UsageLogUpdate {
+	_u.mutation.ResetThresholdExemptCost()
+	_u.mutation.SetThresholdExemptCost(v)
+	return _u
+}
+
+// SetNillableThresholdExemptCost sets the "threshold_exempt_cost" field if the given value is not nil.
+func (_u *UsageLogUpdate) SetNillableThresholdExemptCost(v *float64) *UsageLogUpdate {
+	if v != nil {
+		_u.SetThresholdExemptCost(*v)
+	}
+	return _u
+}
+
+// AddThresholdExemptCost adds value to the "threshold_exempt_cost" field.
+func (_u *UsageLogUpdate) AddThresholdExemptCost(v float64) *UsageLogUpdate {
+	_u.mutation.AddThresholdExemptCost(v)
+	return _u
+}
+
 // SetCompensatedCost sets the "compensated_cost" field.
 func (_u *UsageLogUpdate) SetCompensatedCost(v float64) *UsageLogUpdate {
 	_u.mutation.ResetCompensatedCost()
@@ -1347,6 +1368,12 @@ func (_u *UsageLogUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if value, ok := _u.mutation.AddedActualCost(); ok {
 		_spec.AddField(usagelog.FieldActualCost, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.ThresholdExemptCost(); ok {
+		_spec.SetField(usagelog.FieldThresholdExemptCost, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.AddedThresholdExemptCost(); ok {
+		_spec.AddField(usagelog.FieldThresholdExemptCost, field.TypeFloat64, value)
 	}
 	if value, ok := _u.mutation.CompensatedCost(); ok {
 		_spec.SetField(usagelog.FieldCompensatedCost, field.TypeFloat64, value)
@@ -2263,6 +2290,27 @@ func (_u *UsageLogUpdateOne) AddActualCost(v float64) *UsageLogUpdateOne {
 	return _u
 }
 
+// SetThresholdExemptCost sets the "threshold_exempt_cost" field.
+func (_u *UsageLogUpdateOne) SetThresholdExemptCost(v float64) *UsageLogUpdateOne {
+	_u.mutation.ResetThresholdExemptCost()
+	_u.mutation.SetThresholdExemptCost(v)
+	return _u
+}
+
+// SetNillableThresholdExemptCost sets the "threshold_exempt_cost" field if the given value is not nil.
+func (_u *UsageLogUpdateOne) SetNillableThresholdExemptCost(v *float64) *UsageLogUpdateOne {
+	if v != nil {
+		_u.SetThresholdExemptCost(*v)
+	}
+	return _u
+}
+
+// AddThresholdExemptCost adds value to the "threshold_exempt_cost" field.
+func (_u *UsageLogUpdateOne) AddThresholdExemptCost(v float64) *UsageLogUpdateOne {
+	_u.mutation.AddThresholdExemptCost(v)
+	return _u
+}
+
 // SetCompensatedCost sets the "compensated_cost" field.
 func (_u *UsageLogUpdateOne) SetCompensatedCost(v float64) *UsageLogUpdateOne {
 	_u.mutation.ResetCompensatedCost()
@@ -3038,6 +3086,12 @@ func (_u *UsageLogUpdateOne) sqlSave(ctx context.Context) (_node *UsageLog, err 
 	}
 	if value, ok := _u.mutation.AddedActualCost(); ok {
 		_spec.AddField(usagelog.FieldActualCost, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.ThresholdExemptCost(); ok {
+		_spec.SetField(usagelog.FieldThresholdExemptCost, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.AddedThresholdExemptCost(); ok {
+		_spec.AddField(usagelog.FieldThresholdExemptCost, field.TypeFloat64, value)
 	}
 	if value, ok := _u.mutation.CompensatedCost(); ok {
 		_spec.SetField(usagelog.FieldCompensatedCost, field.TypeFloat64, value)

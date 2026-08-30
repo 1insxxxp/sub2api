@@ -52,6 +52,14 @@ func (User) Fields() []ent.Field {
 		field.Float("frozen_balance").
 			SchemaType(map[string]string{dialect.Postgres: "decimal(20,8)"}).
 			Default(0),
+		field.Float("gift_balance").
+			SchemaType(map[string]string{dialect.Postgres: "decimal(20,8)"}).
+			Default(0).
+			Comment("Available balance excluded from eligibility thresholds"),
+		field.Float("frozen_gift_balance").
+			SchemaType(map[string]string{dialect.Postgres: "decimal(20,8)"}).
+			Default(0).
+			Comment("Gift balance reserved for asynchronous usage holds"),
 		field.Int("concurrency").
 			Default(5),
 		field.String("status").

@@ -20,6 +20,8 @@ const (
 	FieldType = "type"
 	// FieldValue holds the string denoting the value field in the database.
 	FieldValue = "value"
+	// FieldThresholdExempt holds the string denoting the threshold_exempt field in the database.
+	FieldThresholdExempt = "threshold_exempt"
 	// FieldStatus holds the string denoting the status field in the database.
 	FieldStatus = "status"
 	// FieldUsedBy holds the string denoting the used_by field in the database.
@@ -79,6 +81,7 @@ var Columns = []string{
 	FieldCode,
 	FieldType,
 	FieldValue,
+	FieldThresholdExempt,
 	FieldStatus,
 	FieldUsedBy,
 	FieldCreatedBy,
@@ -111,6 +114,8 @@ var (
 	TypeValidator func(string) error
 	// DefaultValue holds the default value on creation for the "value" field.
 	DefaultValue float64
+	// DefaultThresholdExempt holds the default value on creation for the "threshold_exempt" field.
+	DefaultThresholdExempt bool
 	// DefaultStatus holds the default value on creation for the "status" field.
 	DefaultStatus string
 	// StatusValidator is a validator for the "status" field. It is called by the builders before save.
@@ -148,6 +153,11 @@ func ByType(opts ...sql.OrderTermOption) OrderOption {
 // ByValue orders the results by the value field.
 func ByValue(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldValue, opts...).ToFunc()
+}
+
+// ByThresholdExempt orders the results by the threshold_exempt field.
+func ByThresholdExempt(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldThresholdExempt, opts...).ToFunc()
 }
 
 // ByStatus orders the results by the status field.

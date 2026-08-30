@@ -46741,6 +46741,7 @@ type RedeemCodeMutation struct {
 	_type            *string
 	value            *float64
 	addvalue         *float64
+	threshold_exempt *bool
 	status           *string
 	used_at          *time.Time
 	notes            *string
@@ -46986,6 +46987,42 @@ func (m *RedeemCodeMutation) AddedValue() (r float64, exists bool) {
 func (m *RedeemCodeMutation) ResetValue() {
 	m.value = nil
 	m.addvalue = nil
+}
+
+// SetThresholdExempt sets the "threshold_exempt" field.
+func (m *RedeemCodeMutation) SetThresholdExempt(b bool) {
+	m.threshold_exempt = &b
+}
+
+// ThresholdExempt returns the value of the "threshold_exempt" field in the mutation.
+func (m *RedeemCodeMutation) ThresholdExempt() (r bool, exists bool) {
+	v := m.threshold_exempt
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldThresholdExempt returns the old "threshold_exempt" field's value of the RedeemCode entity.
+// If the RedeemCode object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *RedeemCodeMutation) OldThresholdExempt(ctx context.Context) (v bool, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldThresholdExempt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldThresholdExempt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldThresholdExempt: %w", err)
+	}
+	return oldValue.ThresholdExempt, nil
+}
+
+// ResetThresholdExempt resets all changes to the "threshold_exempt" field.
+func (m *RedeemCodeMutation) ResetThresholdExempt() {
+	m.threshold_exempt = nil
 }
 
 // SetStatus sets the "status" field.
@@ -47636,7 +47673,7 @@ func (m *RedeemCodeMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *RedeemCodeMutation) Fields() []string {
-	fields := make([]string, 0, 14)
+	fields := make([]string, 0, 15)
 	if m.code != nil {
 		fields = append(fields, redeemcode.FieldCode)
 	}
@@ -47645,6 +47682,9 @@ func (m *RedeemCodeMutation) Fields() []string {
 	}
 	if m.value != nil {
 		fields = append(fields, redeemcode.FieldValue)
+	}
+	if m.threshold_exempt != nil {
+		fields = append(fields, redeemcode.FieldThresholdExempt)
 	}
 	if m.status != nil {
 		fields = append(fields, redeemcode.FieldStatus)
@@ -47693,6 +47733,8 @@ func (m *RedeemCodeMutation) Field(name string) (ent.Value, bool) {
 		return m.GetType()
 	case redeemcode.FieldValue:
 		return m.Value()
+	case redeemcode.FieldThresholdExempt:
+		return m.ThresholdExempt()
 	case redeemcode.FieldStatus:
 		return m.Status()
 	case redeemcode.FieldUsedBy:
@@ -47730,6 +47772,8 @@ func (m *RedeemCodeMutation) OldField(ctx context.Context, name string) (ent.Val
 		return m.OldType(ctx)
 	case redeemcode.FieldValue:
 		return m.OldValue(ctx)
+	case redeemcode.FieldThresholdExempt:
+		return m.OldThresholdExempt(ctx)
 	case redeemcode.FieldStatus:
 		return m.OldStatus(ctx)
 	case redeemcode.FieldUsedBy:
@@ -47781,6 +47825,13 @@ func (m *RedeemCodeMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetValue(v)
+		return nil
+	case redeemcode.FieldThresholdExempt:
+		v, ok := value.(bool)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetThresholdExempt(v)
 		return nil
 	case redeemcode.FieldStatus:
 		v, ok := value.(string)
@@ -47988,6 +48039,9 @@ func (m *RedeemCodeMutation) ResetField(name string) error {
 		return nil
 	case redeemcode.FieldValue:
 		m.ResetValue()
+		return nil
+	case redeemcode.FieldThresholdExempt:
+		m.ResetThresholdExempt()
 		return nil
 	case redeemcode.FieldStatus:
 		m.ResetStatus()
@@ -54375,6 +54429,8 @@ type UsageLogMutation struct {
 	addtotal_cost                *float64
 	actual_cost                  *float64
 	addactual_cost               *float64
+	threshold_exempt_cost        *float64
+	addthreshold_exempt_cost     *float64
 	compensated_cost             *float64
 	addcompensated_cost          *float64
 	rate_multiplier              *float64
@@ -55984,6 +56040,62 @@ func (m *UsageLogMutation) ResetActualCost() {
 	m.addactual_cost = nil
 }
 
+// SetThresholdExemptCost sets the "threshold_exempt_cost" field.
+func (m *UsageLogMutation) SetThresholdExemptCost(f float64) {
+	m.threshold_exempt_cost = &f
+	m.addthreshold_exempt_cost = nil
+}
+
+// ThresholdExemptCost returns the value of the "threshold_exempt_cost" field in the mutation.
+func (m *UsageLogMutation) ThresholdExemptCost() (r float64, exists bool) {
+	v := m.threshold_exempt_cost
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldThresholdExemptCost returns the old "threshold_exempt_cost" field's value of the UsageLog entity.
+// If the UsageLog object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *UsageLogMutation) OldThresholdExemptCost(ctx context.Context) (v float64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldThresholdExemptCost is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldThresholdExemptCost requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldThresholdExemptCost: %w", err)
+	}
+	return oldValue.ThresholdExemptCost, nil
+}
+
+// AddThresholdExemptCost adds f to the "threshold_exempt_cost" field.
+func (m *UsageLogMutation) AddThresholdExemptCost(f float64) {
+	if m.addthreshold_exempt_cost != nil {
+		*m.addthreshold_exempt_cost += f
+	} else {
+		m.addthreshold_exempt_cost = &f
+	}
+}
+
+// AddedThresholdExemptCost returns the value that was added to the "threshold_exempt_cost" field in this mutation.
+func (m *UsageLogMutation) AddedThresholdExemptCost() (r float64, exists bool) {
+	v := m.addthreshold_exempt_cost
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetThresholdExemptCost resets all changes to the "threshold_exempt_cost" field.
+func (m *UsageLogMutation) ResetThresholdExemptCost() {
+	m.threshold_exempt_cost = nil
+	m.addthreshold_exempt_cost = nil
+}
+
 // SetCompensatedCost sets the "compensated_cost" field.
 func (m *UsageLogMutation) SetCompensatedCost(f float64) {
 	m.compensated_cost = &f
@@ -57303,7 +57415,7 @@ func (m *UsageLogMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *UsageLogMutation) Fields() []string {
-	fields := make([]string, 0, 50)
+	fields := make([]string, 0, 51)
 	if m.user != nil {
 		fields = append(fields, usagelog.FieldUserID)
 	}
@@ -57390,6 +57502,9 @@ func (m *UsageLogMutation) Fields() []string {
 	}
 	if m.actual_cost != nil {
 		fields = append(fields, usagelog.FieldActualCost)
+	}
+	if m.threshold_exempt_cost != nil {
+		fields = append(fields, usagelog.FieldThresholdExemptCost)
 	}
 	if m.compensated_cost != nil {
 		fields = append(fields, usagelog.FieldCompensatedCost)
@@ -57520,6 +57635,8 @@ func (m *UsageLogMutation) Field(name string) (ent.Value, bool) {
 		return m.TotalCost()
 	case usagelog.FieldActualCost:
 		return m.ActualCost()
+	case usagelog.FieldThresholdExemptCost:
+		return m.ThresholdExemptCost()
 	case usagelog.FieldCompensatedCost:
 		return m.CompensatedCost()
 	case usagelog.FieldRateMultiplier:
@@ -57629,6 +57746,8 @@ func (m *UsageLogMutation) OldField(ctx context.Context, name string) (ent.Value
 		return m.OldTotalCost(ctx)
 	case usagelog.FieldActualCost:
 		return m.OldActualCost(ctx)
+	case usagelog.FieldThresholdExemptCost:
+		return m.OldThresholdExemptCost(ctx)
 	case usagelog.FieldCompensatedCost:
 		return m.OldCompensatedCost(ctx)
 	case usagelog.FieldRateMultiplier:
@@ -57883,6 +58002,13 @@ func (m *UsageLogMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetActualCost(v)
 		return nil
+	case usagelog.FieldThresholdExemptCost:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetThresholdExemptCost(v)
+		return nil
 	case usagelog.FieldCompensatedCost:
 		v, ok := value.(float64)
 		if !ok {
@@ -58077,6 +58203,9 @@ func (m *UsageLogMutation) AddedFields() []string {
 	if m.addactual_cost != nil {
 		fields = append(fields, usagelog.FieldActualCost)
 	}
+	if m.addthreshold_exempt_cost != nil {
+		fields = append(fields, usagelog.FieldThresholdExemptCost)
+	}
 	if m.addcompensated_cost != nil {
 		fields = append(fields, usagelog.FieldCompensatedCost)
 	}
@@ -58138,6 +58267,8 @@ func (m *UsageLogMutation) AddedField(name string) (ent.Value, bool) {
 		return m.AddedTotalCost()
 	case usagelog.FieldActualCost:
 		return m.AddedActualCost()
+	case usagelog.FieldThresholdExemptCost:
+		return m.AddedThresholdExemptCost()
 	case usagelog.FieldCompensatedCost:
 		return m.AddedCompensatedCost()
 	case usagelog.FieldRateMultiplier:
@@ -58255,6 +58386,13 @@ func (m *UsageLogMutation) AddField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.AddActualCost(v)
+		return nil
+	case usagelog.FieldThresholdExemptCost:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddThresholdExemptCost(v)
 		return nil
 	case usagelog.FieldCompensatedCost:
 		v, ok := value.(float64)
@@ -58579,6 +58717,9 @@ func (m *UsageLogMutation) ResetField(name string) error {
 		return nil
 	case usagelog.FieldActualCost:
 		m.ResetActualCost()
+		return nil
+	case usagelog.FieldThresholdExemptCost:
+		m.ResetThresholdExemptCost()
 		return nil
 	case usagelog.FieldCompensatedCost:
 		m.ResetCompensatedCost()
@@ -60573,6 +60714,10 @@ type UserMutation struct {
 	addbalance                       *float64
 	frozen_balance                   *float64
 	addfrozen_balance                *float64
+	gift_balance                     *float64
+	addgift_balance                  *float64
+	frozen_gift_balance              *float64
+	addfrozen_gift_balance           *float64
 	concurrency                      *int
 	addconcurrency                   *int
 	status                           *string
@@ -61099,6 +61244,118 @@ func (m *UserMutation) AddedFrozenBalance() (r float64, exists bool) {
 func (m *UserMutation) ResetFrozenBalance() {
 	m.frozen_balance = nil
 	m.addfrozen_balance = nil
+}
+
+// SetGiftBalance sets the "gift_balance" field.
+func (m *UserMutation) SetGiftBalance(f float64) {
+	m.gift_balance = &f
+	m.addgift_balance = nil
+}
+
+// GiftBalance returns the value of the "gift_balance" field in the mutation.
+func (m *UserMutation) GiftBalance() (r float64, exists bool) {
+	v := m.gift_balance
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldGiftBalance returns the old "gift_balance" field's value of the User entity.
+// If the User object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *UserMutation) OldGiftBalance(ctx context.Context) (v float64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldGiftBalance is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldGiftBalance requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldGiftBalance: %w", err)
+	}
+	return oldValue.GiftBalance, nil
+}
+
+// AddGiftBalance adds f to the "gift_balance" field.
+func (m *UserMutation) AddGiftBalance(f float64) {
+	if m.addgift_balance != nil {
+		*m.addgift_balance += f
+	} else {
+		m.addgift_balance = &f
+	}
+}
+
+// AddedGiftBalance returns the value that was added to the "gift_balance" field in this mutation.
+func (m *UserMutation) AddedGiftBalance() (r float64, exists bool) {
+	v := m.addgift_balance
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetGiftBalance resets all changes to the "gift_balance" field.
+func (m *UserMutation) ResetGiftBalance() {
+	m.gift_balance = nil
+	m.addgift_balance = nil
+}
+
+// SetFrozenGiftBalance sets the "frozen_gift_balance" field.
+func (m *UserMutation) SetFrozenGiftBalance(f float64) {
+	m.frozen_gift_balance = &f
+	m.addfrozen_gift_balance = nil
+}
+
+// FrozenGiftBalance returns the value of the "frozen_gift_balance" field in the mutation.
+func (m *UserMutation) FrozenGiftBalance() (r float64, exists bool) {
+	v := m.frozen_gift_balance
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldFrozenGiftBalance returns the old "frozen_gift_balance" field's value of the User entity.
+// If the User object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *UserMutation) OldFrozenGiftBalance(ctx context.Context) (v float64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldFrozenGiftBalance is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldFrozenGiftBalance requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldFrozenGiftBalance: %w", err)
+	}
+	return oldValue.FrozenGiftBalance, nil
+}
+
+// AddFrozenGiftBalance adds f to the "frozen_gift_balance" field.
+func (m *UserMutation) AddFrozenGiftBalance(f float64) {
+	if m.addfrozen_gift_balance != nil {
+		*m.addfrozen_gift_balance += f
+	} else {
+		m.addfrozen_gift_balance = &f
+	}
+}
+
+// AddedFrozenGiftBalance returns the value that was added to the "frozen_gift_balance" field in this mutation.
+func (m *UserMutation) AddedFrozenGiftBalance() (r float64, exists bool) {
+	v := m.addfrozen_gift_balance
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetFrozenGiftBalance resets all changes to the "frozen_gift_balance" field.
+func (m *UserMutation) ResetFrozenGiftBalance() {
+	m.frozen_gift_balance = nil
+	m.addfrozen_gift_balance = nil
 }
 
 // SetConcurrency sets the "concurrency" field.
@@ -63099,7 +63356,7 @@ func (m *UserMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *UserMutation) Fields() []string {
-	fields := make([]string, 0, 30)
+	fields := make([]string, 0, 32)
 	if m.created_at != nil {
 		fields = append(fields, user.FieldCreatedAt)
 	}
@@ -63123,6 +63380,12 @@ func (m *UserMutation) Fields() []string {
 	}
 	if m.frozen_balance != nil {
 		fields = append(fields, user.FieldFrozenBalance)
+	}
+	if m.gift_balance != nil {
+		fields = append(fields, user.FieldGiftBalance)
+	}
+	if m.frozen_gift_balance != nil {
+		fields = append(fields, user.FieldFrozenGiftBalance)
 	}
 	if m.concurrency != nil {
 		fields = append(fields, user.FieldConcurrency)
@@ -63214,6 +63477,10 @@ func (m *UserMutation) Field(name string) (ent.Value, bool) {
 		return m.Balance()
 	case user.FieldFrozenBalance:
 		return m.FrozenBalance()
+	case user.FieldGiftBalance:
+		return m.GiftBalance()
+	case user.FieldFrozenGiftBalance:
+		return m.FrozenGiftBalance()
 	case user.FieldConcurrency:
 		return m.Concurrency()
 	case user.FieldStatus:
@@ -63283,6 +63550,10 @@ func (m *UserMutation) OldField(ctx context.Context, name string) (ent.Value, er
 		return m.OldBalance(ctx)
 	case user.FieldFrozenBalance:
 		return m.OldFrozenBalance(ctx)
+	case user.FieldGiftBalance:
+		return m.OldGiftBalance(ctx)
+	case user.FieldFrozenGiftBalance:
+		return m.OldFrozenGiftBalance(ctx)
 	case user.FieldConcurrency:
 		return m.OldConcurrency(ctx)
 	case user.FieldStatus:
@@ -63391,6 +63662,20 @@ func (m *UserMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetFrozenBalance(v)
+		return nil
+	case user.FieldGiftBalance:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetGiftBalance(v)
+		return nil
+	case user.FieldFrozenGiftBalance:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetFrozenGiftBalance(v)
 		return nil
 	case user.FieldConcurrency:
 		v, ok := value.(int)
@@ -63560,6 +63845,12 @@ func (m *UserMutation) AddedFields() []string {
 	if m.addfrozen_balance != nil {
 		fields = append(fields, user.FieldFrozenBalance)
 	}
+	if m.addgift_balance != nil {
+		fields = append(fields, user.FieldGiftBalance)
+	}
+	if m.addfrozen_gift_balance != nil {
+		fields = append(fields, user.FieldFrozenGiftBalance)
+	}
 	if m.addconcurrency != nil {
 		fields = append(fields, user.FieldConcurrency)
 	}
@@ -63584,6 +63875,10 @@ func (m *UserMutation) AddedField(name string) (ent.Value, bool) {
 		return m.AddedBalance()
 	case user.FieldFrozenBalance:
 		return m.AddedFrozenBalance()
+	case user.FieldGiftBalance:
+		return m.AddedGiftBalance()
+	case user.FieldFrozenGiftBalance:
+		return m.AddedFrozenGiftBalance()
 	case user.FieldConcurrency:
 		return m.AddedConcurrency()
 	case user.FieldBalanceNotifyThreshold:
@@ -63614,6 +63909,20 @@ func (m *UserMutation) AddField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.AddFrozenBalance(v)
+		return nil
+	case user.FieldGiftBalance:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddGiftBalance(v)
+		return nil
+	case user.FieldFrozenGiftBalance:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddFrozenGiftBalance(v)
 		return nil
 	case user.FieldConcurrency:
 		v, ok := value.(int)
@@ -63732,6 +64041,12 @@ func (m *UserMutation) ResetField(name string) error {
 		return nil
 	case user.FieldFrozenBalance:
 		m.ResetFrozenBalance()
+		return nil
+	case user.FieldGiftBalance:
+		m.ResetGiftBalance()
+		return nil
+	case user.FieldFrozenGiftBalance:
+		m.ResetFrozenGiftBalance()
 		return nil
 	case user.FieldConcurrency:
 		m.ResetConcurrency()

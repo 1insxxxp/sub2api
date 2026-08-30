@@ -72,6 +72,8 @@ const (
 	FieldTotalCost = "total_cost"
 	// FieldActualCost holds the string denoting the actual_cost field in the database.
 	FieldActualCost = "actual_cost"
+	// FieldThresholdExemptCost holds the string denoting the threshold_exempt_cost field in the database.
+	FieldThresholdExemptCost = "threshold_exempt_cost"
 	// FieldCompensatedCost holds the string denoting the compensated_cost field in the database.
 	FieldCompensatedCost = "compensated_cost"
 	// FieldRateMultiplier holds the string denoting the rate_multiplier field in the database.
@@ -213,6 +215,7 @@ var Columns = []string{
 	FieldCacheReadCost,
 	FieldTotalCost,
 	FieldActualCost,
+	FieldThresholdExemptCost,
 	FieldCompensatedCost,
 	FieldRateMultiplier,
 	FieldLongContextBillingApplied,
@@ -287,6 +290,8 @@ var (
 	DefaultTotalCost float64
 	// DefaultActualCost holds the default value on creation for the "actual_cost" field.
 	DefaultActualCost float64
+	// DefaultThresholdExemptCost holds the default value on creation for the "threshold_exempt_cost" field.
+	DefaultThresholdExemptCost float64
 	// DefaultCompensatedCost holds the default value on creation for the "compensated_cost" field.
 	DefaultCompensatedCost float64
 	// DefaultRateMultiplier holds the default value on creation for the "rate_multiplier" field.
@@ -472,6 +477,11 @@ func ByTotalCost(opts ...sql.OrderTermOption) OrderOption {
 // ByActualCost orders the results by the actual_cost field.
 func ByActualCost(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldActualCost, opts...).ToFunc()
+}
+
+// ByThresholdExemptCost orders the results by the threshold_exempt_cost field.
+func ByThresholdExemptCost(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldThresholdExemptCost, opts...).ToFunc()
 }
 
 // ByCompensatedCost orders the results by the compensated_cost field.

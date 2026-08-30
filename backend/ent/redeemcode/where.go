@@ -70,6 +70,11 @@ func Value(v float64) predicate.RedeemCode {
 	return predicate.RedeemCode(sql.FieldEQ(FieldValue, v))
 }
 
+// ThresholdExempt applies equality check predicate on the "threshold_exempt" field. It's identical to ThresholdExemptEQ.
+func ThresholdExempt(v bool) predicate.RedeemCode {
+	return predicate.RedeemCode(sql.FieldEQ(FieldThresholdExempt, v))
+}
+
 // Status applies equality check predicate on the "status" field. It's identical to StatusEQ.
 func Status(v string) predicate.RedeemCode {
 	return predicate.RedeemCode(sql.FieldEQ(FieldStatus, v))
@@ -293,6 +298,16 @@ func ValueLT(v float64) predicate.RedeemCode {
 // ValueLTE applies the LTE predicate on the "value" field.
 func ValueLTE(v float64) predicate.RedeemCode {
 	return predicate.RedeemCode(sql.FieldLTE(FieldValue, v))
+}
+
+// ThresholdExemptEQ applies the EQ predicate on the "threshold_exempt" field.
+func ThresholdExemptEQ(v bool) predicate.RedeemCode {
+	return predicate.RedeemCode(sql.FieldEQ(FieldThresholdExempt, v))
+}
+
+// ThresholdExemptNEQ applies the NEQ predicate on the "threshold_exempt" field.
+func ThresholdExemptNEQ(v bool) predicate.RedeemCode {
+	return predicate.RedeemCode(sql.FieldNEQ(FieldThresholdExempt, v))
 }
 
 // StatusEQ applies the EQ predicate on the "status" field.

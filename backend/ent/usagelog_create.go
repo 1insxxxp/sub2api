@@ -394,6 +394,20 @@ func (_c *UsageLogCreate) SetNillableActualCost(v *float64) *UsageLogCreate {
 	return _c
 }
 
+// SetThresholdExemptCost sets the "threshold_exempt_cost" field.
+func (_c *UsageLogCreate) SetThresholdExemptCost(v float64) *UsageLogCreate {
+	_c.mutation.SetThresholdExemptCost(v)
+	return _c
+}
+
+// SetNillableThresholdExemptCost sets the "threshold_exempt_cost" field if the given value is not nil.
+func (_c *UsageLogCreate) SetNillableThresholdExemptCost(v *float64) *UsageLogCreate {
+	if v != nil {
+		_c.SetThresholdExemptCost(*v)
+	}
+	return _c
+}
+
 // SetCompensatedCost sets the "compensated_cost" field.
 func (_c *UsageLogCreate) SetCompensatedCost(v float64) *UsageLogCreate {
 	_c.mutation.SetCompensatedCost(v)
@@ -798,6 +812,10 @@ func (_c *UsageLogCreate) defaults() {
 		v := usagelog.DefaultActualCost
 		_c.mutation.SetActualCost(v)
 	}
+	if _, ok := _c.mutation.ThresholdExemptCost(); !ok {
+		v := usagelog.DefaultThresholdExemptCost
+		_c.mutation.SetThresholdExemptCost(v)
+	}
 	if _, ok := _c.mutation.CompensatedCost(); !ok {
 		v := usagelog.DefaultCompensatedCost
 		_c.mutation.SetCompensatedCost(v)
@@ -928,6 +946,9 @@ func (_c *UsageLogCreate) check() error {
 	}
 	if _, ok := _c.mutation.ActualCost(); !ok {
 		return &ValidationError{Name: "actual_cost", err: errors.New(`ent: missing required field "UsageLog.actual_cost"`)}
+	}
+	if _, ok := _c.mutation.ThresholdExemptCost(); !ok {
+		return &ValidationError{Name: "threshold_exempt_cost", err: errors.New(`ent: missing required field "UsageLog.threshold_exempt_cost"`)}
 	}
 	if _, ok := _c.mutation.CompensatedCost(); !ok {
 		return &ValidationError{Name: "compensated_cost", err: errors.New(`ent: missing required field "UsageLog.compensated_cost"`)}
@@ -1114,6 +1135,10 @@ func (_c *UsageLogCreate) createSpec() (*UsageLog, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.ActualCost(); ok {
 		_spec.SetField(usagelog.FieldActualCost, field.TypeFloat64, value)
 		_node.ActualCost = value
+	}
+	if value, ok := _c.mutation.ThresholdExemptCost(); ok {
+		_spec.SetField(usagelog.FieldThresholdExemptCost, field.TypeFloat64, value)
+		_node.ThresholdExemptCost = value
 	}
 	if value, ok := _c.mutation.CompensatedCost(); ok {
 		_spec.SetField(usagelog.FieldCompensatedCost, field.TypeFloat64, value)
@@ -1865,6 +1890,24 @@ func (u *UsageLogUpsert) UpdateActualCost() *UsageLogUpsert {
 // AddActualCost adds v to the "actual_cost" field.
 func (u *UsageLogUpsert) AddActualCost(v float64) *UsageLogUpsert {
 	u.Add(usagelog.FieldActualCost, v)
+	return u
+}
+
+// SetThresholdExemptCost sets the "threshold_exempt_cost" field.
+func (u *UsageLogUpsert) SetThresholdExemptCost(v float64) *UsageLogUpsert {
+	u.Set(usagelog.FieldThresholdExemptCost, v)
+	return u
+}
+
+// UpdateThresholdExemptCost sets the "threshold_exempt_cost" field to the value that was provided on create.
+func (u *UsageLogUpsert) UpdateThresholdExemptCost() *UsageLogUpsert {
+	u.SetExcluded(usagelog.FieldThresholdExemptCost)
+	return u
+}
+
+// AddThresholdExemptCost adds v to the "threshold_exempt_cost" field.
+func (u *UsageLogUpsert) AddThresholdExemptCost(v float64) *UsageLogUpsert {
+	u.Add(usagelog.FieldThresholdExemptCost, v)
 	return u
 }
 
@@ -2857,6 +2900,27 @@ func (u *UsageLogUpsertOne) AddActualCost(v float64) *UsageLogUpsertOne {
 func (u *UsageLogUpsertOne) UpdateActualCost() *UsageLogUpsertOne {
 	return u.Update(func(s *UsageLogUpsert) {
 		s.UpdateActualCost()
+	})
+}
+
+// SetThresholdExemptCost sets the "threshold_exempt_cost" field.
+func (u *UsageLogUpsertOne) SetThresholdExemptCost(v float64) *UsageLogUpsertOne {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.SetThresholdExemptCost(v)
+	})
+}
+
+// AddThresholdExemptCost adds v to the "threshold_exempt_cost" field.
+func (u *UsageLogUpsertOne) AddThresholdExemptCost(v float64) *UsageLogUpsertOne {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.AddThresholdExemptCost(v)
+	})
+}
+
+// UpdateThresholdExemptCost sets the "threshold_exempt_cost" field to the value that was provided on create.
+func (u *UsageLogUpsertOne) UpdateThresholdExemptCost() *UsageLogUpsertOne {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.UpdateThresholdExemptCost()
 	})
 }
 
@@ -4076,6 +4140,27 @@ func (u *UsageLogUpsertBulk) AddActualCost(v float64) *UsageLogUpsertBulk {
 func (u *UsageLogUpsertBulk) UpdateActualCost() *UsageLogUpsertBulk {
 	return u.Update(func(s *UsageLogUpsert) {
 		s.UpdateActualCost()
+	})
+}
+
+// SetThresholdExemptCost sets the "threshold_exempt_cost" field.
+func (u *UsageLogUpsertBulk) SetThresholdExemptCost(v float64) *UsageLogUpsertBulk {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.SetThresholdExemptCost(v)
+	})
+}
+
+// AddThresholdExemptCost adds v to the "threshold_exempt_cost" field.
+func (u *UsageLogUpsertBulk) AddThresholdExemptCost(v float64) *UsageLogUpsertBulk {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.AddThresholdExemptCost(v)
+	})
+}
+
+// UpdateThresholdExemptCost sets the "threshold_exempt_cost" field to the value that was provided on create.
+func (u *UsageLogUpsertBulk) UpdateThresholdExemptCost() *UsageLogUpsertBulk {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.UpdateThresholdExemptCost()
 	})
 }
 
