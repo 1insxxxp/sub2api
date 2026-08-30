@@ -71,6 +71,9 @@ describe('AdminAffiliateLeaderboardPanel', () => {
     expect(wrapper.findAll('[data-test="affiliate-leaderboard-avatar-image-42"]')).toHaveLength(2)
     expect(wrapper.findAll('[data-test="affiliate-leaderboard-avatar-fallback-7"]')).toHaveLength(2)
     expect(wrapper.get('[data-test="affiliate-leaderboard-avatar-fallback-7"]').text()).toBe('R')
+    expect(wrapper.get('[data-test="affiliate-leaderboard-mobile-identity-42"]').classes()).toContain('break-words')
+    expect(wrapper.get('[data-test="affiliate-leaderboard-mobile-metrics-42"]').classes()).toContain('grid-cols-2')
+    expect(wrapper.get('[data-test="affiliate-leaderboard-mobile-rebate-42"]').classes()).toContain('col-span-2')
     expect(wrapper.findAll('button')).toHaveLength(0)
     expect(wrapper.findAll('a')).toHaveLength(0)
 

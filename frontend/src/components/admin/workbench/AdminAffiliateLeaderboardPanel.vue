@@ -129,7 +129,7 @@
         <article
           v-for="(leader, index) in leaders"
           :key="leader.inviter_id"
-          class="rounded-lg border border-gray-200 bg-white p-4 shadow-sm dark:border-dark-700 dark:bg-dark-900"
+          class="rounded-lg border border-gray-200 bg-white p-3 shadow-sm dark:border-dark-700 dark:bg-dark-900 min-[360px]:p-4"
         >
           <div class="flex min-w-0 items-start gap-3">
             <span :class="rankClass(index)">{{ index + 1 }}</span>
@@ -152,7 +152,10 @@
                 {{ avatarInitial(leader) }}
               </span>
             </span>
-            <div class="min-w-0 flex-1">
+            <div
+              :data-test="`affiliate-leaderboard-mobile-identity-${leader.inviter_id}`"
+              class="min-w-0 flex-1 break-words"
+            >
               <p class="break-words text-sm font-semibold text-gray-950 dark:text-white">
                 {{ leader.inviter_email || '-' }}
               </p>
@@ -161,21 +164,27 @@
               </p>
             </div>
           </div>
-          <dl class="mt-4 grid grid-cols-3 gap-2 border-t border-gray-100 pt-3 dark:border-dark-700">
-            <div class="min-w-0">
+          <dl
+            :data-test="`affiliate-leaderboard-mobile-metrics-${leader.inviter_id}`"
+            class="mt-4 grid grid-cols-2 gap-2 border-t border-gray-100 pt-3 dark:border-dark-700"
+          >
+            <div class="min-w-0 rounded-md bg-primary-50/70 px-3 py-2 dark:bg-primary-500/10">
               <dt class="text-xs text-gray-500 dark:text-dark-400">{{ t('adminWorkbench.affiliateLeaderboard.invitedCount') }}</dt>
-              <dd class="mt-1 font-semibold tabular-nums text-primary-700 dark:text-primary-300">{{ leader.invited_count }}</dd>
+              <dd class="mt-1 whitespace-nowrap font-semibold tabular-nums text-primary-700 dark:text-primary-300">{{ leader.invited_count }}</dd>
             </div>
-            <div class="min-w-0">
+            <div class="min-w-0 rounded-md bg-emerald-50/70 px-3 py-2 dark:bg-emerald-500/10">
               <dt class="text-xs text-gray-500 dark:text-dark-400">{{ t('adminWorkbench.affiliateLeaderboard.qualifiedCount') }}</dt>
-              <dd class="mt-1 font-semibold tabular-nums text-emerald-700 dark:text-emerald-300">{{ leader.qualified_invitee_count }}</dd>
+              <dd class="mt-1 whitespace-nowrap font-semibold tabular-nums text-emerald-700 dark:text-emerald-300">{{ leader.qualified_invitee_count }}</dd>
             </div>
-            <div class="min-w-0">
+            <div
+              :data-test="`affiliate-leaderboard-mobile-rebate-${leader.inviter_id}`"
+              class="col-span-2 flex min-w-0 items-center justify-between gap-3 rounded-md bg-gray-50 px-3 py-2 dark:bg-dark-800/70"
+            >
               <dt class="text-xs text-gray-500 dark:text-dark-400">{{ t('adminWorkbench.affiliateLeaderboard.totalRebate') }}</dt>
-              <dd class="mt-1 truncate font-semibold tabular-nums text-gray-950 dark:text-white">{{ formatCurrency(leader.total_rebate) }}</dd>
+              <dd class="shrink-0 whitespace-nowrap font-semibold tabular-nums text-gray-950 dark:text-white">{{ formatCurrency(leader.total_rebate) }}</dd>
             </div>
           </dl>
-          <p class="mt-3 text-xs text-gray-500 dark:text-dark-400">
+          <p class="mt-3 break-words text-xs leading-5 text-gray-500 dark:text-dark-400">
             {{ t('adminWorkbench.affiliateLeaderboard.lastInvitedAt') }}: {{ formatLastInvite(leader.last_invited_at) }}
           </p>
         </article>

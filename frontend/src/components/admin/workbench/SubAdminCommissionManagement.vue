@@ -1,7 +1,7 @@
 <template>
   <section
     data-test="sub-admin-commission-management"
-    class="rounded-lg border border-gray-200 bg-white p-5 shadow-sm dark:border-dark-700 dark:bg-dark-900"
+    class="rounded-lg border border-gray-200 bg-white p-4 shadow-sm dark:border-dark-700 dark:bg-dark-900 sm:p-5"
   >
     <div class="mb-5">
       <h2 class="text-base font-semibold text-gray-950 dark:text-white">
@@ -43,14 +43,14 @@
       </div>
 
       <div class="rounded-lg border border-gray-100 p-4 dark:border-dark-800">
-        <div class="mb-3 flex items-center justify-between gap-3">
+        <div class="mb-3 flex flex-col gap-3 min-[420px]:flex-row min-[420px]:items-center min-[420px]:justify-between">
           <h3 class="text-sm font-semibold text-gray-950 dark:text-white">
             {{ t('adminWorkbench.commission.assignedGroups') }}
           </h3>
           <button
             type="button"
             data-test="sub-admin-commission-save-grants"
-            class="btn btn-secondary"
+            class="btn btn-secondary w-full justify-center min-[420px]:w-auto"
             :disabled="savingGrants"
             @click="saveGrants"
           >
@@ -78,7 +78,7 @@
               :value="group.id"
               :data-test="`sub-admin-commission-group-${group.id}`"
             />
-            <span class="truncate text-gray-900 dark:text-white">{{ group.name }}</span>
+            <span class="min-w-0 break-words text-gray-900 dark:text-white">{{ group.name }}</span>
           </label>
         </div>
       </div>

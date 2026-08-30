@@ -1,32 +1,35 @@
 <template>
   <div
     v-if="date"
+    ref="dialogRootRef"
     data-test="commission-day-dialog"
-    class="fixed inset-0 z-[80] flex items-end justify-center overflow-hidden bg-slate-950/55 px-0 pt-12 backdrop-blur-[2px] sm:items-center sm:px-4 sm:py-8"
+    class="fixed inset-0 z-[80] flex items-center justify-center overflow-hidden bg-slate-950/55 p-3 backdrop-blur-[2px] sm:px-4 sm:py-8"
     role="dialog"
+    tabindex="-1"
     aria-modal="true"
     aria-labelledby="commission-day-dialog-title"
     @click.self="emit('close')"
   >
-    <section class="flex max-h-[90dvh] w-full max-w-3xl min-w-0 flex-col overflow-hidden rounded-t-2xl border border-gray-200 bg-white shadow-2xl dark:border-dark-700 dark:bg-dark-900 sm:max-h-[calc(100vh-4rem)] sm:rounded-2xl">
+    <section class="flex max-h-[calc(100dvh-2rem)] w-full max-w-3xl min-w-0 flex-col overflow-hidden rounded-lg border border-gray-200 bg-white shadow-2xl dark:border-dark-700 dark:bg-dark-900 sm:max-h-[calc(100vh-4rem)]">
       <header class="flex shrink-0 items-start justify-between gap-3 border-b border-gray-100 bg-gradient-to-br from-blue-50 via-white to-cyan-50 px-4 py-4 dark:border-dark-700 dark:from-blue-500/15 dark:via-dark-900 dark:to-cyan-500/10 sm:px-6">
         <div class="min-w-0">
           <h2 id="commission-day-dialog-title" class="text-base font-semibold text-gray-950 dark:text-white">
             {{ t('adminWorkbench.commission.dayDetails') }}
           </h2>
           <p class="mt-1 font-mono text-sm tabular-nums text-gray-500 dark:text-dark-400">{{ date }}</p>
-          <div v-if="day" class="mt-3 grid grid-cols-2 gap-2">
+          <div v-if="day" class="mt-3 grid grid-cols-1 gap-2 min-[360px]:grid-cols-2">
             <span class="min-w-0 rounded-md bg-white/80 px-2.5 py-2 dark:bg-dark-900/70">
               <span class="block text-[10px] font-medium text-blue-700 dark:text-blue-200">{{ t('adminWorkbench.commission.actualCost') }}</span>
-              <span class="mt-0.5 block truncate font-mono text-sm font-bold tabular-nums text-blue-950 dark:text-white" :title="formatCurrency(day.actual_cost)">{{ formatCurrency(day.actual_cost) }}</span>
+              <span class="mt-0.5 block overflow-x-auto whitespace-nowrap font-mono text-sm font-bold tabular-nums text-blue-950 [scrollbar-width:none] dark:text-white" :title="formatCurrency(day.actual_cost)">{{ formatCurrency(day.actual_cost) }}</span>
             </span>
             <span class="min-w-0 rounded-md bg-emerald-50/90 px-2.5 py-2 dark:bg-emerald-500/10">
               <span class="block text-[10px] font-medium text-emerald-700 dark:text-emerald-300">{{ t('adminWorkbench.commission.commissionAmount') }}</span>
-              <span class="mt-0.5 block truncate font-mono text-sm font-bold tabular-nums text-emerald-700 dark:text-emerald-200" :title="formatCurrency(day.commission_amount)">{{ formatCurrency(day.commission_amount) }}</span>
+              <span class="mt-0.5 block overflow-x-auto whitespace-nowrap font-mono text-sm font-bold tabular-nums text-emerald-700 [scrollbar-width:none] dark:text-emerald-200" :title="formatCurrency(day.commission_amount)">{{ formatCurrency(day.commission_amount) }}</span>
             </span>
           </div>
         </div>
         <button
+          ref="closeButtonRef"
           type="button"
           data-test="commission-day-dialog-close"
           class="btn btn-secondary shrink-0 px-3"
@@ -71,7 +74,7 @@
           </div>
           <div
             :data-test="`commission-day-group-${group.group_id}-amounts`"
-            class="grid min-w-0 grid-cols-1 gap-2 min-[480px]:grid-cols-2"
+            class="grid min-w-0 grid-cols-1 gap-2 min-[360px]:grid-cols-2"
           >
             <span class="min-w-0 rounded-md bg-gray-50 px-2.5 py-2 dark:bg-dark-800">
               <span class="block text-[10px] font-medium text-gray-500 dark:text-dark-400">
@@ -164,7 +167,7 @@
 </template>
 
 <script setup lang="ts">
-import { onBeforeUnmount, reactive, ref, watch } from 'vue'
+import { nextTick, onBeforeUnmount, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { adminAPI } from '@/api/admin'
 import type { SubAdminCommissionCalendarDay, SubAdminCommissionDayGroup, SubAdminCommissionUsageLog } from '@/api/admin'
@@ -194,32 +197,79 @@ const pagination = reactive({
   page_size: 10,
   total: 0
 })
+const dialogRootRef = ref<HTMLElement | null>(null)
+const closeButtonRef = ref<HTMLButtonElement | null>(null)
 
 let previousBodyOverflow = ''
 let bodyScrollLocked = false
+let previouslyFocusedElement: HTMLElement | null = null
 
 function formatCurrency(value: number) {
   return `$${value.toFixed(2)}`
 }
 
-function handleEscape(event: KeyboardEvent) {
-  if (event.key === 'Escape' && props.date) {
+function getFocusableElements(): HTMLElement[] {
+  if (!dialogRootRef.value) {
+    return []
+  }
+  return Array.from(dialogRootRef.value.querySelectorAll<HTMLElement>(
+    'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+  ))
+}
+
+function handleDialogKeydown(event: KeyboardEvent) {
+  if (!props.date) {
+    return
+  }
+  if (event.key === 'Escape') {
     emit('close')
+    return
+  }
+  if (event.key !== 'Tab') {
+    return
+  }
+
+  const focusable = getFocusableElements()
+  if (focusable.length === 0) {
+    event.preventDefault()
+    dialogRootRef.value?.focus()
+    return
+  }
+
+  const first = focusable[0]
+  const last = focusable[focusable.length - 1]
+  const activeElement = document.activeElement
+  if (!dialogRootRef.value?.contains(activeElement)) {
+    event.preventDefault()
+    first.focus()
+  } else if (event.shiftKey && activeElement === first) {
+    event.preventDefault()
+    last.focus()
+  } else if (!event.shiftKey && activeElement === last) {
+    event.preventDefault()
+    first.focus()
   }
 }
 
 function syncDialogSideEffects(open: boolean) {
   if (open && !bodyScrollLocked) {
+    previouslyFocusedElement = document.activeElement instanceof HTMLElement
+      ? document.activeElement
+      : null
     previousBodyOverflow = document.body.style.overflow
     document.body.style.overflow = 'hidden'
-    document.addEventListener('keydown', handleEscape)
+    document.addEventListener('keydown', handleDialogKeydown)
     bodyScrollLocked = true
+    void nextTick(() => (closeButtonRef.value ?? dialogRootRef.value)?.focus())
     return
   }
   if (!open && bodyScrollLocked) {
     document.body.style.overflow = previousBodyOverflow
-    document.removeEventListener('keydown', handleEscape)
+    document.removeEventListener('keydown', handleDialogKeydown)
     bodyScrollLocked = false
+    const focusTarget = previouslyFocusedElement
+    previouslyFocusedElement = null
+    void nextTick(() => focusTarget?.focus())
   }
 }
 

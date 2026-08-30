@@ -1,9 +1,9 @@
 <template>
   <AppLayout>
-    <div class="admin-workbench-page mx-auto min-w-0 max-w-6xl space-y-6 px-4 py-6 sm:px-6 lg:px-8">
-      <header class="flex min-w-0 flex-col gap-4 border-b border-gray-200 pb-5 dark:border-dark-700 sm:flex-row sm:items-end sm:justify-between">
+    <div class="admin-workbench-page mx-auto min-w-0 max-w-6xl space-y-4 px-3 py-4 sm:space-y-6 sm:px-6 sm:py-6 lg:px-8">
+      <header class="flex min-w-0 flex-col gap-3 border-b border-gray-200 pb-4 dark:border-dark-700 sm:flex-row sm:items-end sm:justify-between sm:gap-4 sm:pb-5">
         <div class="min-w-0 flex-1">
-          <h1 class="text-2xl font-semibold text-gray-950 dark:text-white">
+          <h1 class="text-xl font-semibold text-gray-950 dark:text-white sm:text-2xl">
             {{ t('adminWorkbench.title') }}
           </h1>
           <p class="mt-1 text-sm text-gray-500 dark:text-dark-400">
@@ -24,7 +24,7 @@
         data-test="admin-workbench-tabs"
         role="tablist"
         :aria-label="t('adminWorkbench.tabs.label')"
-        class="flex min-w-0 gap-1 overflow-x-auto border-b border-gray-200 dark:border-dark-700"
+        class="grid min-w-0 grid-cols-3 gap-2 border-b border-gray-200 pb-2 dark:border-dark-700 sm:flex sm:gap-1 sm:overflow-x-auto sm:pb-0"
       >
         <button
           v-for="tab in workbenchTabs"
@@ -35,14 +35,16 @@
           :data-test="`workbench-tab-${tab.id}`"
           :aria-controls="`workbench-panel-${tab.id}`"
           :aria-selected="activeTab === tab.id"
-          class="-mb-px inline-flex shrink-0 items-center gap-2 border-b-2 px-4 py-3 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-dark-950"
+          :tabindex="activeTab === tab.id ? 0 : -1"
+          class="inline-flex min-h-16 min-w-0 flex-col items-center justify-center gap-1 rounded-lg border px-1 py-2 text-center text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-dark-950 sm:-mb-px sm:min-h-0 sm:shrink-0 sm:flex-row sm:gap-2 sm:rounded-none sm:border-x-0 sm:border-t-0 sm:border-b-2 sm:px-4 sm:py-3 sm:text-left sm:text-sm"
           :class="activeTab === tab.id
-            ? 'border-primary-600 text-primary-700 dark:border-primary-400 dark:text-primary-300'
-            : 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-800 dark:text-dark-400 dark:hover:border-dark-500 dark:hover:text-dark-200'"
+            ? 'border-primary-300 bg-primary-50 text-primary-700 dark:border-primary-500/40 dark:bg-primary-500/10 dark:text-primary-300 sm:border-x-transparent sm:border-t-transparent sm:border-b-primary-600 sm:bg-transparent dark:sm:border-b-primary-400'
+            : 'border-gray-200 bg-white text-gray-500 hover:border-gray-300 hover:text-gray-800 dark:border-dark-700 dark:bg-dark-900 dark:text-dark-400 dark:hover:border-dark-500 dark:hover:text-dark-200 sm:border-x-transparent sm:border-t-transparent sm:border-b-transparent sm:bg-transparent dark:sm:border-x-transparent dark:sm:border-t-transparent dark:sm:border-b-transparent'"
           @click="activeTab = tab.id"
+          @keydown="handleTabKeydown($event, tab.id)"
         >
           <Icon :name="tab.icon" size="sm" />
-          <span>{{ tab.label }}</span>
+          <span class="min-w-0 break-words leading-4">{{ tab.label }}</span>
         </button>
       </nav>
 
@@ -74,13 +76,13 @@
         data-test="workbench-balance-transfer-panel"
         role="tabpanel"
         aria-labelledby="workbench-tab-balance-transfer"
-        class="min-w-0 space-y-6"
+        class="min-w-0 space-y-4 sm:space-y-6"
       >
-        <section class="grid min-w-0 gap-6 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
+        <section class="grid min-w-0 gap-4 sm:gap-6 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
           <form
             ref="transferFormRef"
             data-test="workbench-transfer-form"
-            class="min-w-0 rounded-lg border border-gray-200 bg-white p-5 shadow-sm dark:border-dark-700 dark:bg-dark-900"
+            class="min-w-0 rounded-lg border border-gray-200 bg-white p-4 shadow-sm dark:border-dark-700 dark:bg-dark-900 sm:p-5"
             @submit.prevent="handleGenerate"
           >
             <div class="mb-5">
@@ -183,10 +185,10 @@
 
           <section
             data-test="workbench-generated-now-card"
-            class="admin-workbench-generated-now flex min-h-0 min-w-0 flex-col overflow-hidden rounded-lg border border-gray-200 bg-white p-5 shadow-sm dark:border-dark-700 dark:bg-dark-900"
+            class="admin-workbench-generated-now flex min-h-0 min-w-0 flex-col overflow-hidden rounded-lg border border-gray-200 bg-white p-4 shadow-sm dark:border-dark-700 dark:bg-dark-900 sm:p-5"
             :style="generatedNowPanelStyle"
           >
-            <div class="mb-4 flex shrink-0 items-center justify-between gap-3">
+            <div class="mb-4 flex shrink-0 flex-col items-stretch justify-between gap-3 min-[360px]:flex-row min-[360px]:items-center">
               <div class="min-w-0">
                 <h2 class="text-base font-semibold text-gray-950 dark:text-white">
                   {{ t('adminWorkbench.balanceTransfer.generatedNow') }}
@@ -197,7 +199,7 @@
               </div>
               <button
                 type="button"
-                class="btn btn-secondary"
+                class="btn btn-secondary w-full justify-center min-[360px]:w-auto"
                 :disabled="generatedResults.length === 0"
                 @click="copyGeneratedResults"
               >
@@ -209,7 +211,7 @@
             <div v-if="generatedResults.length === 0" class="flex min-h-44 flex-1 items-center justify-center rounded-lg bg-gray-50 text-sm text-gray-500 dark:bg-dark-800/70 dark:text-dark-400">
               {{ t('adminWorkbench.balanceTransfer.noGeneratedNow') }}
             </div>
-            <div v-else data-test="workbench-generated-results" class="admin-workbench-generated-results min-h-0 flex-1 space-y-2 overflow-y-auto pr-1">
+            <div v-else data-test="workbench-generated-results" class="admin-workbench-generated-results max-h-72 min-h-0 flex-1 space-y-2 overflow-y-auto pr-1 lg:max-h-none">
               <div
                 v-for="item in generatedResults"
                 :key="item.id"
@@ -225,7 +227,7 @@
           </section>
         </section>
 
-        <section class="min-w-0 rounded-lg border border-gray-200 bg-white p-5 shadow-sm dark:border-dark-700 dark:bg-dark-900">
+        <section class="min-w-0 rounded-lg border border-gray-200 bg-white p-4 shadow-sm dark:border-dark-700 dark:bg-dark-900 sm:p-5">
           <div class="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <h2 class="text-base font-semibold text-gray-950 dark:text-white">
@@ -238,10 +240,10 @@
                 {{ t('adminWorkbench.balanceTransfer.selectedCount', { count: selectedGeneratedCodeIds.length }) }}
               </p>
             </div>
-            <div class="flex flex-wrap items-center gap-2">
+            <div class="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:flex-wrap sm:items-center">
               <label
                 v-if="deletableGeneratedCodes.length > 0"
-                class="inline-flex h-10 items-center gap-2 rounded-lg border border-gray-200 px-3 text-sm text-gray-700 dark:border-dark-700 dark:text-dark-300"
+                class="inline-flex h-10 min-w-0 items-center justify-center gap-2 rounded-lg border border-gray-200 px-3 text-sm text-gray-700 dark:border-dark-700 dark:text-dark-300"
               >
                 <input
                   data-test="select-all-generated-codes"
@@ -256,7 +258,7 @@
               <button
                 type="button"
                 data-test="delete-selected-generated-codes"
-                class="btn btn-secondary text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
+                class="btn btn-secondary w-full justify-center text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 sm:w-auto"
                 :disabled="selectedGeneratedCodeIds.length === 0 || batchDeletingGeneratedCodes"
                 @click="handleDeleteSelectedGeneratedCodes"
               >
@@ -267,7 +269,7 @@
                 />
                 <span>{{ t('adminWorkbench.balanceTransfer.batchDelete') }}</span>
               </button>
-              <button type="button" class="btn btn-secondary" :disabled="loadingGenerated" @click="fetchGeneratedCodes">
+              <button type="button" class="btn btn-secondary col-span-2 w-full justify-center sm:w-auto" :disabled="loadingGenerated" @click="fetchGeneratedCodes">
                 <Icon name="refresh" size="sm" :class="{ 'animate-spin': loadingGenerated }" />
                 <span>{{ t('common.refresh') }}</span>
               </button>
@@ -284,7 +286,7 @@
             <article
               v-for="item in generatedCodes"
               :key="item.id"
-              class="flex flex-col gap-3 rounded-lg border border-gray-200 px-4 py-3 dark:border-dark-700 sm:flex-row sm:items-center sm:justify-between"
+              class="flex min-w-0 flex-col gap-3 rounded-lg border border-gray-200 p-3 dark:border-dark-700 sm:flex-row sm:items-center sm:justify-between sm:px-4"
             >
               <div class="flex min-w-0 flex-1 gap-3">
                 <label v-if="canDeleteGeneratedCode(item)" class="mt-1 shrink-0">
@@ -311,7 +313,7 @@
                       {{ t('adminWorkbench.balanceTransfer.singleUseBadge') }}
                     </span>
                   </div>
-                  <p class="mt-1 text-xs text-gray-500 dark:text-dark-400">
+                  <p class="mt-1 break-words text-xs leading-5 text-gray-500 dark:text-dark-400">
                     {{ formatDateTime(item.created_at) }}
                     <span v-if="item.expires_at"> · {{ t('adminWorkbench.balanceTransfer.expiresAt') }} {{ formatDateTime(item.expires_at) }}</span>
                     <span v-if="item.used_at"> · {{ t('adminWorkbench.balanceTransfer.usedAt') }} {{ formatDateTime(item.used_at) }}</span>
@@ -321,14 +323,22 @@
                   </p>
                 </div>
               </div>
-              <div class="flex w-full shrink-0 items-center justify-end gap-2 sm:w-auto">
-                <button type="button" class="btn btn-secondary px-3" @click="copyCode(item.code)">
+              <div class="grid w-full shrink-0 grid-cols-2 gap-2 sm:flex sm:w-auto">
+                <button
+                  type="button"
+                  :data-test="`generated-code-copy-${item.id}`"
+                  class="btn btn-secondary w-full justify-center px-3 sm:w-auto"
+                  :aria-label="t('common.copy')"
+                  @click="copyCode(item.code)"
+                >
                   <Icon name="copy" size="sm" />
                 </button>
                 <button
                   v-if="canDeleteGeneratedCode(item)"
                   type="button"
-                  class="btn btn-danger px-3"
+                  :data-test="`generated-code-delete-${item.id}`"
+                  class="btn btn-danger w-full justify-center px-3 sm:w-auto"
+                  :aria-label="t('common.delete')"
                   :disabled="deletingIds.includes(item.id)"
                   @click="handleDeleteGeneratedCode(item)"
                 >
@@ -355,7 +365,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { redeemAPI, type GeneratedRedeemCode } from '@/api'
 import { useAuthStore } from '@/stores/auth'
@@ -375,6 +385,7 @@ const appStore = useAppStore()
 type WorkbenchTab = 'balance-transfer' | 'commission' | 'affiliate-leaderboard'
 
 const activeTab = ref<WorkbenchTab>('balance-transfer')
+const workbenchTabIds: WorkbenchTab[] = ['balance-transfer', 'commission', 'affiliate-leaderboard']
 const workbenchTabs = computed<Array<{ id: WorkbenchTab; label: string; icon: 'gift' | 'chartBar' | 'users' }>>(() => [
   {
     id: 'balance-transfer',
@@ -394,6 +405,28 @@ const workbenchTabs = computed<Array<{ id: WorkbenchTab; label: string; icon: 'g
 ])
 
 const availableBalance = computed(() => authStore.user?.balance ?? 0)
+
+function handleTabKeydown(event: KeyboardEvent, currentTab: WorkbenchTab) {
+  const currentIndex = workbenchTabIds.indexOf(currentTab)
+  let nextIndex = currentIndex
+
+  if (event.key === 'ArrowRight') {
+    nextIndex = (currentIndex + 1) % workbenchTabIds.length
+  } else if (event.key === 'ArrowLeft') {
+    nextIndex = (currentIndex - 1 + workbenchTabIds.length) % workbenchTabIds.length
+  } else if (event.key === 'Home') {
+    nextIndex = 0
+  } else if (event.key === 'End') {
+    nextIndex = workbenchTabIds.length - 1
+  } else {
+    return
+  }
+
+  event.preventDefault()
+  const nextTab = workbenchTabIds[nextIndex]
+  activeTab.value = nextTab
+  void nextTick(() => document.getElementById(`workbench-tab-${nextTab}`)?.focus())
+}
 const form = reactive({
   amount: '',
   count: 1,

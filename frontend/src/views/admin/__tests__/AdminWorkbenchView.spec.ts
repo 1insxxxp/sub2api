@@ -337,6 +337,31 @@ describe('AdminWorkbenchView balance transfer codes', () => {
     expect(getWorkbenchCommissionCalendar).toHaveBeenCalled()
   })
 
+  it('supports standard keyboard navigation between workbench tabs', async () => {
+    const wrapper = mountWorkbench()
+    await flushPromises()
+
+    const balanceTab = wrapper.get('[data-test="workbench-tab-balance-transfer"]')
+    const commissionTab = wrapper.get('[data-test="workbench-tab-commission"]')
+    const leaderboardTab = wrapper.get('[data-test="workbench-tab-affiliate-leaderboard"]')
+
+    expect(balanceTab.attributes('tabindex')).toBe('0')
+    expect(commissionTab.attributes('tabindex')).toBe('-1')
+
+    await balanceTab.trigger('keydown', { key: 'ArrowRight' })
+    await flushPromises()
+    expect(commissionTab.attributes('aria-selected')).toBe('true')
+    expect(commissionTab.attributes('tabindex')).toBe('0')
+
+    await commissionTab.trigger('keydown', { key: 'End' })
+    await flushPromises()
+    expect(leaderboardTab.attributes('aria-selected')).toBe('true')
+
+    await leaderboardTab.trigger('keydown', { key: 'Home' })
+    await flushPromises()
+    expect(balanceTab.attributes('aria-selected')).toBe('true')
+  })
+
   it('loads generated codes for the workbench owner', async () => {
     getGenerated.mockResolvedValueOnce(
       paginated<GeneratedRedeemCode>([
@@ -376,6 +401,8 @@ describe('AdminWorkbenchView balance transfer codes', () => {
     expect(wrapper.text()).toContain('customer campaign A')
     expect(wrapper.text()).toContain('adminWorkbench.balanceTransfer.status.unused')
     expect(wrapper.text()).toContain('adminWorkbench.balanceTransfer.status.used')
+    expect(wrapper.get('[data-test="generated-code-copy-88"]').attributes('aria-label')).toBe('common.copy')
+    expect(wrapper.get('[data-test="generated-code-delete-88"]').attributes('aria-label')).toBe('common.delete')
   })
 
   it('generates balance redeem codes and refreshes account state', async () => {
@@ -610,7 +637,7 @@ describe('AdminWorkbenchView balance transfer codes', () => {
     expect(wrapper.text()).toContain('req-1')
   })
 
-  it('shows daily spend and commission inside compact mobile calendar cells', async () => {
+  it('uses compact mobile calendar cells and exposes full amounts through the day dialog', async () => {
     Object.defineProperty(window, 'innerWidth', {
       value: 390,
       configurable: true
@@ -638,16 +665,17 @@ describe('AdminWorkbenchView balance transfer codes', () => {
     const amounts = wrapper.get('[data-test="commission-calendar-day-2026-08-22-amounts"]')
     const calendarGrid = wrapper.get('[data-test="commission-calendar-grid"]')
 
-    expect(dayCell.classes()).toEqual(expect.arrayContaining(['commission-calendar-day-cell', 'min-h-12']))
-    expect(calendarGrid.classes()).toEqual(expect.arrayContaining(['grid-cols-1', 'min-[360px]:grid-cols-2', 'sm:grid-cols-7']))
+    expect(dayCell.classes()).toEqual(expect.arrayContaining(['commission-calendar-day-cell', 'aspect-square', 'sm:aspect-auto']))
+    expect(calendarGrid.classes()).toEqual(expect.arrayContaining(['grid-cols-7']))
     expect(dayCell.text()).toContain('22')
+    expect(amounts.classes()).toContain('hidden')
     expect(amounts.text()).toContain('$3.83K')
     expect(amounts.text()).toContain('$459.41')
     expect(amounts.text()).toContain('↓')
     expect(amounts.text()).toContain('↑')
     expect(amounts.text()).not.toContain('actualCostShort')
     expect(amounts.text()).not.toContain('commissionAmountShort')
-    expect(monthSummary.classes()).toEqual(expect.arrayContaining(['grid-cols-1', 'min-[480px]:grid-cols-2']))
+    expect(monthSummary.classes()).toEqual(expect.arrayContaining(['grid-cols-1', 'min-[360px]:grid-cols-2']))
     expect(monthSummary.text()).toContain('$3840.75')
     expect(monthSummary.text()).toContain('$460.64')
     expect(dayCell.attributes('aria-label')).toContain('$3828.41')
@@ -685,11 +713,62 @@ describe('AdminWorkbenchView balance transfer codes', () => {
     await flushPromises()
 
     const dialog = wrapper.get('[data-test="commission-day-dialog"]')
-    expect(dialog.classes()).toEqual(expect.arrayContaining(['items-end', 'sm:items-center']))
+    expect(dialog.classes()).toEqual(expect.arrayContaining(['items-center', 'justify-center']))
     expect(dialog.get('[data-test="commission-day-dialog-close"]').attributes('aria-label')).toBe('common.close')
 
     await dialog.get('[data-test="commission-day-dialog-close"]').trigger('click')
     expect(wrapper.find('[data-test="commission-day-dialog"]').exists()).toBe(false)
+  })
+
+  it('moves focus into the day dialog and restores it after closing', async () => {
+    const opener = document.createElement('button')
+    opener.type = 'button'
+    document.body.appendChild(opener)
+    opener.focus()
+
+    const wrapper = mount(AdminWorkbenchView, {
+      attachTo: document.body,
+      global: {
+        stubs: {
+          AppLayout: { template: '<div><slot /></div>' },
+          Icon: true,
+          Pagination: true,
+          AdminAffiliateLeaderboardPanel: {
+            template: '<div data-test="affiliate-leaderboard-panel-stub" />'
+          }
+        }
+      }
+    })
+    mountedWorkbenchWrappers.push(wrapper)
+
+    await openCommissionTab(wrapper)
+    await wrapper.get('[data-test="commission-calendar-day-2026-08-22"]').trigger('click')
+    await flushPromises()
+
+    const closeButton = wrapper.get('[data-test="commission-day-dialog-close"]')
+    const lastDialogControl = wrapper.get('[data-test="commission-day-group-3-toggle"]')
+    expect(document.activeElement).toBe(closeButton.element)
+
+    document.dispatchEvent(new KeyboardEvent('keydown', {
+      key: 'Tab',
+      shiftKey: true,
+      bubbles: true,
+      cancelable: true
+    }))
+    expect(document.activeElement).toBe(lastDialogControl.element)
+
+    document.dispatchEvent(new KeyboardEvent('keydown', {
+      key: 'Tab',
+      bubbles: true,
+      cancelable: true
+    }))
+    expect(document.activeElement).toBe(closeButton.element)
+
+    await closeButton.trigger('click')
+    await flushPromises()
+    expect(document.activeElement).toBe(opener)
+
+    opener.remove()
   })
 
   it('closes the commission day dialog with Escape and restores body scrolling', async () => {
@@ -734,7 +813,7 @@ describe('AdminWorkbenchView balance transfer codes', () => {
     expect(groupCard.get('[data-test="commission-day-group-3-amounts"]').text()).toContain('$12.00')
     expect(groupCard.get('[data-test="commission-day-group-3-amounts"]').text()).toContain('$1.44')
     expect(groupCard.get('[data-test="commission-day-group-3-amounts"]').classes()).toEqual(
-      expect.arrayContaining(['grid-cols-1', 'min-[480px]:grid-cols-2'])
+      expect.arrayContaining(['grid-cols-1', 'min-[360px]:grid-cols-2'])
     )
     expect(groupCard.get('[data-test="commission-day-group-3-toggle"]').classes()).toContain('w-full')
   })

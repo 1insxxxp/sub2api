@@ -1,7 +1,7 @@
 <template>
   <section
     data-test="sub-admin-commission-calendar"
-    class="rounded-lg border border-gray-200 bg-white p-4 shadow-sm dark:border-dark-700 dark:bg-dark-900 sm:p-5"
+    class="rounded-lg border border-gray-200 bg-white p-3 shadow-sm dark:border-dark-700 dark:bg-dark-900 min-[360px]:p-4 sm:p-5"
   >
     <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
       <div class="min-w-0">
@@ -18,7 +18,7 @@
 
     <div
       data-test="commission-calendar-month-summary"
-      class="mt-4 grid grid-cols-1 gap-2 min-[480px]:grid-cols-2 sm:gap-3"
+      class="mt-4 grid grid-cols-1 gap-2 min-[360px]:grid-cols-2 sm:gap-3"
     >
       <div class="min-w-0 rounded-lg border border-blue-100 bg-blue-50/70 px-3 py-2.5 dark:border-blue-500/20 dark:bg-blue-500/10">
         <span class="block text-[11px] font-medium text-blue-700 dark:text-blue-200 sm:text-xs">
@@ -45,14 +45,14 @@
       {{ errorMessage }}
     </div>
     <div v-else class="mt-5">
-      <div class="hidden grid-cols-7 gap-1 text-center text-[11px] font-medium text-gray-500 dark:text-dark-400 sm:grid sm:gap-2 sm:text-xs">
+      <div class="grid grid-cols-7 gap-1 text-center text-[10px] font-medium text-gray-500 dark:text-dark-400 sm:gap-2 sm:text-xs">
         <div v-for="day in weekdays" :key="day" class="py-1">
           {{ day }}
         </div>
       </div>
       <div
         data-test="commission-calendar-grid"
-        class="commission-calendar-grid mt-2 grid grid-cols-1 gap-2 min-[360px]:grid-cols-2 sm:grid-cols-7 sm:gap-2"
+        class="commission-calendar-grid mt-2 grid grid-cols-7 gap-1 sm:gap-2"
       >
         <button
           v-for="cell in calendarCells"
@@ -61,33 +61,36 @@
           :data-test="cell.date ? `commission-calendar-day-${cell.date}` : undefined"
           :aria-label="calendarCellAriaLabel(cell)"
           :aria-pressed="cell.selectable ? cell.date === selectedMobileDate : undefined"
-          class="commission-calendar-day-cell commission-calendar-compact-cell relative flex min-h-12 min-w-0 items-start justify-start overflow-hidden rounded-xl border p-3 text-left transition sm:min-h-[78px] sm:rounded-lg sm:p-2.5"
-          :class="[calendarCellClasses(cell), !cell.date ? 'hidden sm:flex' : 'min-h-[94px] sm:min-h-[78px]']"
+          class="commission-calendar-day-cell commission-calendar-compact-cell relative flex aspect-square min-w-0 items-start justify-start overflow-hidden rounded-md border p-1.5 text-left transition sm:min-h-[78px] sm:aspect-auto sm:rounded-lg sm:p-2.5"
+          :class="calendarCellClasses(cell)"
           :disabled="!cell.selectable"
           @click="cell.selectable && selectDay(cell.date)"
         >
           <span
             v-if="cell.day && (cell.day.actual_cost > 0 || cell.day.commission_amount > 0)"
-            class="absolute bottom-1.5 left-1/2 h-1 w-5 -translate-x-1/2 rounded-full bg-blue-500/80 dark:bg-cyan-300/80 sm:bottom-2 sm:left-2.5 sm:w-6 sm:translate-x-0"
+            class="absolute bottom-1.5 left-1/2 h-1.5 w-1.5 -translate-x-1/2 rounded-full bg-blue-500 dark:bg-cyan-300 sm:hidden"
+            aria-hidden="true"
+          />
+          <span
+            v-if="cell.day && (cell.day.actual_cost > 0 || cell.day.commission_amount > 0)"
+            class="absolute bottom-2 left-2.5 hidden h-1 w-6 rounded-full bg-blue-500/80 dark:bg-cyan-300/80 sm:block"
             aria-hidden="true"
           />
           <span class="flex w-full min-w-0 flex-col gap-1">
-            <span class="block text-base font-semibold leading-none tabular-nums sm:text-sm">{{ cell.label }}</span>
+            <span class="block text-[11px] font-semibold leading-none tabular-nums sm:text-sm">{{ cell.label }}</span>
             <span
               v-if="cell.day && (cell.day.actual_cost > 0 || cell.day.commission_amount > 0)"
               :data-test="`commission-calendar-day-${cell.date}-amounts`"
-              class="mt-1 min-w-0 space-y-1 text-sm font-semibold leading-tight tabular-nums sm:space-y-0.5 sm:text-[11px]"
+              class="mt-1 hidden min-w-0 space-y-0.5 text-[11px] font-semibold leading-tight tabular-nums sm:block"
               aria-hidden="true"
             >
               <span class="flex min-w-0 items-center gap-1 whitespace-nowrap text-blue-700 dark:text-blue-200" :title="`${t('adminWorkbench.commission.actualCost')} ${formatCurrency(cell.day.actual_cost)}`">
                 <span class="text-xs font-bold text-blue-500 dark:text-cyan-300 sm:text-[10px]" aria-hidden="true">↓</span>
-                <span class="sm:hidden">{{ formatCurrency(cell.day.actual_cost) }}</span>
-                <span class="hidden sm:inline">{{ compactCurrency(cell.day.actual_cost) }}</span>
+                <span>{{ compactCurrency(cell.day.actual_cost) }}</span>
               </span>
               <span class="flex min-w-0 items-center gap-1 whitespace-nowrap text-emerald-700 dark:text-emerald-300" :title="`${t('adminWorkbench.commission.commissionAmount')} ${formatCurrency(cell.day.commission_amount)}`">
                 <span class="text-xs font-bold text-emerald-500 dark:text-emerald-300 sm:text-[10px]" aria-hidden="true">↑</span>
-                <span class="sm:hidden">{{ formatCurrency(cell.day.commission_amount) }}</span>
-                <span class="hidden sm:inline">{{ compactCurrency(cell.day.commission_amount) }}</span>
+                <span>{{ compactCurrency(cell.day.commission_amount) }}</span>
               </span>
             </span>
           </span>
