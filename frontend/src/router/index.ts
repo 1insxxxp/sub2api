@@ -432,14 +432,7 @@ const routes: RouteRecordRaw[] = [
   {
     path: '/manager',
     name: 'Manager',
-    component: () => import('@/views/manager/ManagerView.vue'),
-    meta: {
-      requiresAuth: true,
-      requiresManager: true,
-      title: 'Manager Page',
-      titleKey: 'manager.title',
-      descriptionKey: 'manager.description'
-    }
+    redirect: '/admin/workbench'
   },
 
   // ==================== Admin Workbench Routes ====================

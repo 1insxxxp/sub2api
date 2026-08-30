@@ -426,21 +426,6 @@ const UserIcon = {
     )
 }
 
-const ManagerIcon = {
-  render: () =>
-    h(
-      'svg',
-      { fill: 'none', viewBox: '0 0 24 24', stroke: 'currentColor', 'stroke-width': '1.5' },
-      [
-        h('path', {
-          'stroke-linecap': 'round',
-          'stroke-linejoin': 'round',
-          d: 'M9 12.75 11.25 15 15 9.75m6-3.75A11.96 11.96 0 0 1 12 2.25 11.96 11.96 0 0 1 3 6c0 5.592 3.824 10.29 9 11.622C17.176 16.29 21 11.592 21 6Z'
-        })
-      ]
-    )
-}
-
 const UsersIcon = {
   render: () =>
     h(
@@ -790,12 +775,10 @@ function buildSelfNavItems(withDashboard: boolean): NavItem[] {
   if (appStore.backendModeEnabled && authStore.isSubAdmin) {
     return [
       { path: '/admin/workbench', label: t('nav.adminWorkbench'), icon: ShieldIcon },
-      { path: '/manager', label: t('nav.manager'), icon: ManagerIcon },
     ]
   }
   if (authStore.isSubAdmin) {
     items.push({ path: '/admin/workbench', label: t('nav.adminWorkbench'), icon: ShieldIcon })
-    items.push({ path: '/manager', label: t('nav.manager'), icon: ManagerIcon })
   }
   if (withDashboard) {
     items.push({ path: '/dashboard', label: t('nav.dashboard'), icon: DashboardIcon })
@@ -857,7 +840,6 @@ const adminNavItems = computed((): NavItem[] => {
   const baseItems: NavItem[] = [
     { path: '/admin/dashboard', label: t('nav.dashboard'), icon: DashboardIcon },
     { path: '/admin/workbench', label: t('nav.adminWorkbench'), icon: ShieldIcon },
-    { path: '/manager', label: t('nav.manager'), icon: ManagerIcon },
     { path: '/admin/ops', label: t('nav.ops'), icon: ChartIcon, featureFlag: flagOpsMonitoring },
     { path: '/admin/users', label: t('nav.users'), icon: UsersIcon, hideInSimpleMode: true },
     { path: '/admin/groups', label: t('nav.groups'), icon: FolderIcon, hideInSimpleMode: true },

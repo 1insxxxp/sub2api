@@ -20,4 +20,11 @@ describe('admin workbench route', () => {
     expect(routerSource).toContain("component: () => import('@/views/admin/AdminWorkbenchView.vue')")
     expect(routerSource).toContain('requiresAdminWorkbench: true')
   })
+
+  it('redirects the legacy manager route to the consolidated workbench', () => {
+    expect(routerSource).toMatch(
+      /path: '\/manager',[\s\S]*?redirect: '\/admin\/workbench'/,
+    )
+    expect(routerSource).not.toContain("component: () => import('@/views/manager/ManagerView.vue')")
+  })
 })

@@ -96,6 +96,14 @@ describe('AppSidebar admin entries', () => {
       /\{ path: '\/admin\/checkins', label: t\('nav\.checkins'\), icon: [A-Za-z]+Icon, hideInSimpleMode: true \}/,
     )
   })
+
+  it('does not expose the legacy manager page beside the workbench', () => {
+    const buildSelfNav = componentSource.match(/function buildSelfNavItems[\s\S]*?return items\n}/)?.[0] ?? ''
+    const adminNav = componentSource.match(/const adminNavItems = computed[\s\S]*?return finalizeNav\(baseItems\)\n}/)?.[0] ?? ''
+
+    expect(buildSelfNav).not.toContain("path: '/manager'")
+    expect(adminNav).not.toContain("path: '/manager'")
+  })
 })
 
 describe('AppSidebar sub-admin entries', () => {
