@@ -116,7 +116,7 @@ Expected: all tests PASS.
 **Step 2: Run type checking**
 
 ```bash
-pnpm type-check
+pnpm typecheck
 ```
 
 Expected: exit code 0.
