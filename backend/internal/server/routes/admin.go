@@ -26,7 +26,7 @@ func RegisterAdminRoutes(
 	workbench.Use(panelRateLimiter.Global())
 	workbench.Use(gin.HandlerFunc(auditLog))
 	workbench.Use(middleware.AdminComplianceGuard(settingService))
-	if h != nil && (h.Redeem != nil || (h.Admin != nil && h.Admin.SubAdminCommission != nil)) {
+	if h != nil && (h.Redeem != nil || (h.Admin != nil && (h.Admin.SubAdminCommission != nil || h.Admin.Affiliate != nil))) {
 		registerAdminWorkbenchRoutes(workbench, h)
 	}
 
@@ -250,6 +250,11 @@ func registerAdminWorkbenchRoutes(workbench *gin.RouterGroup, h *handler.Handler
 			commission.GET("/days/:date/groups", h.Admin.SubAdminCommission.GetWorkbenchDayGroups)
 			commission.GET("/days/:date/groups/:group_id/logs", h.Admin.SubAdminCommission.GetWorkbenchDayGroupLogs)
 		}
+	}
+
+	if h.Admin != nil && h.Admin.Affiliate != nil {
+		affiliates := workbench.Group("/affiliates")
+		affiliates.GET("/leaderboard", h.Admin.Affiliate.ListWorkbenchLeaderboard)
 	}
 }
 

@@ -222,6 +222,25 @@ export default {
     title: 'Manager Page',
     description: 'A focused management surface for secondary admins.',
     currentBalance: 'Current balance',
+    tabs: {
+      label: 'Manager tools',
+      balanceTransfer: 'Balance redeem codes',
+      commission: 'Earnings management',
+      affiliateLeaderboard: 'Invite leaderboard'
+    },
+    affiliateLeaderboard: {
+      title: 'Invite Leaderboard',
+      subtitle: 'Top 20 users by lifetime invite count. Read-only.',
+      rank: 'Rank',
+      user: 'User',
+      invitedCount: 'Total invites',
+      qualifiedCount: 'Qualified',
+      totalRebate: 'Total rebate',
+      lastInvitedAt: 'Latest invite',
+      noUsername: 'No username',
+      empty: 'No invite leaderboard data',
+      loadFailed: 'Failed to load invite leaderboard'
+    },
     commission: {
       title: 'Secondary Admin Earnings',
       subtitle: 'Review authorized group balance spend by day and calculate earnings with one global rate.',

@@ -223,6 +223,25 @@ export default {
     title: '管理员页面',
     description: '面向二级管理员的轻量管理入口。',
     currentBalance: '当前余额',
+    tabs: {
+      label: '管理员功能',
+      balanceTransfer: '额度转兑换码',
+      commission: '收益管理',
+      affiliateLeaderboard: '邀请排行榜'
+    },
+    affiliateLeaderboard: {
+      title: '邀请排行榜',
+      subtitle: '按历史累计邀请人数展示前 20 名，仅供查看。',
+      rank: '排名',
+      user: '用户',
+      invitedCount: '累计邀请',
+      qualifiedCount: '有效邀请',
+      totalRebate: '累计返利',
+      lastInvitedAt: '最近邀请',
+      noUsername: '未设置用户名',
+      empty: '暂无邀请排行数据',
+      loadFailed: '加载邀请排行榜失败'
+    },
     commission: {
       title: '二级管理员收益',
       subtitle: '查看授权分组的每日余额消耗，并按全局比例计算收益。',

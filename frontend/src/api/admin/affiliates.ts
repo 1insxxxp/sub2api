@@ -73,6 +73,20 @@ export interface AffiliateInviterSummary {
   last_invited_at: string | null
 }
 
+export interface WorkbenchAffiliateLeaderboardItem {
+  inviter_id: number
+  inviter_email: string
+  inviter_username: string
+  invited_count: number
+  qualified_invitee_count: number
+  total_rebate: number
+  last_invited_at: string | null
+}
+
+export interface WorkbenchAffiliateLeaderboardResponse {
+  items: WorkbenchAffiliateLeaderboardItem[]
+}
+
 export interface AffiliateRebateRecord {
   order_id: number
   out_trade_no: string
@@ -228,6 +242,13 @@ export async function listInviterSummaries(
   return data
 }
 
+export async function getWorkbenchLeaderboard(): Promise<WorkbenchAffiliateLeaderboardResponse> {
+  const { data } = await apiClient.get<WorkbenchAffiliateLeaderboardResponse>(
+    '/admin/workbench/affiliates/leaderboard',
+  )
+  return data
+}
+
 export async function listRebateRecords(
   params: ListAffiliateRecordsParams = {},
 ): Promise<PaginatedResponse<AffiliateRebateRecord>> {
@@ -298,6 +319,7 @@ export const affiliatesAPI = {
   updateUserSettings,
   clearUserSettings,
   batchSetRate,
+  getWorkbenchLeaderboard,
   listInviterSummaries,
   listInviteRecords,
   listRebateRecords,

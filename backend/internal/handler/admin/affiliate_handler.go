@@ -319,6 +319,49 @@ func (h *AffiliateHandler) ListInviterSummaries(c *gin.Context) {
 	response.Paginated(c, items, total, filter.Page, filter.PageSize)
 }
 
+type WorkbenchAffiliateLeaderboardItem struct {
+	InviterID             int64      `json:"inviter_id"`
+	InviterEmail          string     `json:"inviter_email"`
+	InviterUsername       string     `json:"inviter_username"`
+	InvitedCount          int        `json:"invited_count"`
+	QualifiedInviteeCount int        `json:"qualified_invitee_count"`
+	TotalRebate           float64    `json:"total_rebate"`
+	LastInvitedAt         *time.Time `json:"last_invited_at"`
+}
+
+type WorkbenchAffiliateLeaderboardResponse struct {
+	Items []WorkbenchAffiliateLeaderboardItem `json:"items"`
+}
+
+// ListWorkbenchLeaderboard returns a read-only lifetime invite leaderboard.
+// GET /api/v1/admin/workbench/affiliates/leaderboard
+func (h *AffiliateHandler) ListWorkbenchLeaderboard(c *gin.Context) {
+	items, _, err := h.affiliateService.AdminListInviterSummaries(c.Request.Context(), service.AffiliateRecordFilter{
+		Page:     1,
+		PageSize: 20,
+		SortBy:   "invited_count",
+		SortDesc: true,
+	})
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+
+	leaders := make([]WorkbenchAffiliateLeaderboardItem, len(items))
+	for i, item := range items {
+		leaders[i] = WorkbenchAffiliateLeaderboardItem{
+			InviterID:             item.InviterID,
+			InviterEmail:          item.InviterEmail,
+			InviterUsername:       item.InviterUsername,
+			InvitedCount:          item.InvitedCount,
+			QualifiedInviteeCount: item.QualifiedInviteeCount,
+			TotalRebate:           item.TotalRebate,
+			LastInvitedAt:         item.LastInvitedAt,
+		}
+	}
+	response.Success(c, WorkbenchAffiliateLeaderboardResponse{Items: leaders})
+}
+
 // ListRebateRecords returns all order-level affiliate rebate records.
 // GET /api/v1/admin/affiliates/rebates
 func (h *AffiliateHandler) ListRebateRecords(c *gin.Context) {

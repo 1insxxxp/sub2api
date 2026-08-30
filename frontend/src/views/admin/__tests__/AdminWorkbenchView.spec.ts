@@ -129,12 +129,20 @@ const mountWorkbench = () => {
       stubs: {
         AppLayout: { template: '<div><slot /></div>' },
         Icon: true,
-        Pagination: true
+        Pagination: true,
+        AdminAffiliateLeaderboardPanel: {
+          template: '<div data-test="affiliate-leaderboard-panel-stub" />'
+        }
       }
     }
   })
   mountedWorkbenchWrappers.push(wrapper)
   return wrapper
+}
+
+const openCommissionTab = async (wrapper: ReturnType<typeof mountWorkbench>) => {
+  await wrapper.get('[data-test="workbench-tab-commission"]').trigger('click')
+  await flushPromises()
 }
 
 const defaultWindowInnerWidth = window.innerWidth
@@ -289,6 +297,44 @@ describe('AdminWorkbenchView balance transfer codes', () => {
       value: defaultWindowInnerWidth,
       configurable: true
     })
+  })
+
+  it('separates workbench functions into tabs and mounts only the active panel', async () => {
+    const wrapper = mountWorkbench()
+    await flushPromises()
+
+    const balanceTab = wrapper.get('[data-test="workbench-tab-balance-transfer"]')
+    const commissionTab = wrapper.get('[data-test="workbench-tab-commission"]')
+    const leaderboardTab = wrapper.get('[data-test="workbench-tab-affiliate-leaderboard"]')
+
+    expect(wrapper.get('[data-test="admin-workbench-tabs"]').attributes('role')).toBe('tablist')
+    expect(balanceTab.attributes('aria-selected')).toBe('true')
+    expect(commissionTab.attributes('aria-selected')).toBe('false')
+    expect(leaderboardTab.attributes('aria-selected')).toBe('false')
+    expect(wrapper.find('[data-test="workbench-balance-transfer-panel"]').exists()).toBe(true)
+    expect(wrapper.find('[data-test="sub-admin-commission-panel"]').exists()).toBe(false)
+    expect(wrapper.find('[data-test="affiliate-leaderboard-panel-stub"]').exists()).toBe(false)
+    expect(getWorkbenchCommissionCalendar).not.toHaveBeenCalled()
+
+    await leaderboardTab.trigger('click')
+    await flushPromises()
+
+    expect(balanceTab.attributes('aria-selected')).toBe('false')
+    expect(commissionTab.attributes('aria-selected')).toBe('false')
+    expect(leaderboardTab.attributes('aria-selected')).toBe('true')
+    expect(wrapper.find('[data-test="workbench-balance-transfer-panel"]').exists()).toBe(false)
+    expect(wrapper.find('[data-test="sub-admin-commission-panel"]').exists()).toBe(false)
+    expect(wrapper.find('[data-test="affiliate-leaderboard-panel-stub"]').exists()).toBe(true)
+    expect(getWorkbenchCommissionCalendar).not.toHaveBeenCalled()
+
+    await commissionTab.trigger('click')
+    await flushPromises()
+
+    expect(balanceTab.attributes('aria-selected')).toBe('false')
+    expect(commissionTab.attributes('aria-selected')).toBe('true')
+    expect(wrapper.find('[data-test="workbench-balance-transfer-panel"]').exists()).toBe(false)
+    expect(wrapper.find('[data-test="sub-admin-commission-panel"]').exists()).toBe(true)
+    expect(getWorkbenchCommissionCalendar).toHaveBeenCalled()
   })
 
   it('loads generated codes for the workbench owner', async () => {
@@ -500,7 +546,7 @@ describe('AdminWorkbenchView balance transfer codes', () => {
     }
 
     const wrapper = mountWorkbench()
-    await flushPromises()
+    await openCommissionTab(wrapper)
 
     expect(getCommissionSettings).toHaveBeenCalled()
     expect(getAllGroups).toHaveBeenCalled()
@@ -525,8 +571,8 @@ describe('AdminWorkbenchView balance transfer codes', () => {
       concurrency: 5
     }
 
-    mountWorkbench()
-    await flushPromises()
+    const wrapper = mountWorkbench()
+    await openCommissionTab(wrapper)
 
     expect(getWorkbenchCommissionCalendar).toHaveBeenCalledWith({ month: '2026-09' })
   })
@@ -541,7 +587,7 @@ describe('AdminWorkbenchView balance transfer codes', () => {
     }
 
     const wrapper = mountWorkbench()
-    await flushPromises()
+    await openCommissionTab(wrapper)
 
     expect(getWorkbenchCommissionCalendar).toHaveBeenCalled()
     expect(wrapper.text()).toContain('$12.00')
@@ -585,7 +631,7 @@ describe('AdminWorkbenchView balance transfer codes', () => {
     ])
 
     const wrapper = mountWorkbench()
-    await flushPromises()
+    await openCommissionTab(wrapper)
 
     const dayCell = wrapper.get('[data-test="commission-calendar-day-2026-08-22"]')
     const monthSummary = wrapper.get('[data-test="commission-calendar-month-summary"]')
@@ -633,7 +679,7 @@ describe('AdminWorkbenchView balance transfer codes', () => {
     ])
 
     const wrapper = mountWorkbench()
-    await flushPromises()
+    await openCommissionTab(wrapper)
 
     await wrapper.get('[data-test="commission-calendar-day-2026-08-22"]').trigger('click')
     await flushPromises()
@@ -648,7 +694,7 @@ describe('AdminWorkbenchView balance transfer codes', () => {
 
   it('closes the commission day dialog with Escape and restores body scrolling', async () => {
     const wrapper = mountWorkbench()
-    await flushPromises()
+    await openCommissionTab(wrapper)
     await wrapper.get('[data-test="commission-calendar-day-2026-08-22"]').trigger('click')
     await flushPromises()
 
@@ -670,7 +716,7 @@ describe('AdminWorkbenchView balance transfer codes', () => {
     }
 
     const wrapper = mountWorkbench()
-    await flushPromises()
+    await openCommissionTab(wrapper)
 
     const layout = wrapper.get('[data-test="commission-calendar-layout"]')
     expect(layout.classes()).toContain('commission-calendar-layout')
@@ -707,7 +753,7 @@ describe('AdminWorkbenchView balance transfer codes', () => {
     }
 
     const wrapper = mountWorkbench()
-    await flushPromises()
+    await openCommissionTab(wrapper)
     await wrapper.get('[data-test="commission-calendar-day-2026-08-22"]').trigger('click')
     await flushPromises()
     await wrapper.get('[data-test="commission-day-group-3-toggle"]').trigger('click')
@@ -737,7 +783,7 @@ describe('AdminWorkbenchView balance transfer codes', () => {
     }
 
     const wrapper = mountWorkbench()
-    await flushPromises()
+    await openCommissionTab(wrapper)
 
     expect(wrapper.find('[data-test="sub-admin-commission-panel"]').exists()).toBe(true)
     expect(wrapper.text()).not.toContain('adminWorkbench.commission.title')
