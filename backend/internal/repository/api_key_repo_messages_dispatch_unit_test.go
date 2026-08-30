@@ -82,3 +82,32 @@ func TestAPIKeyRepository_GetByKeyForAuth_PreservesMessagesDispatchModelConfig_S
 	require.NotNil(t, got.Group)
 	require.Equal(t, group.MessagesDispatchModelConfig, got.Group.MessagesDispatchModelConfig)
 }
+
+func TestAPIKeyRepository_GetByKeyForAuth_PreservesUserGiftBalancesForAuthSnapshot_SQLite(t *testing.T) {
+	repo, client := newAPIKeyRepoSQLite(t)
+	ctx := context.Background()
+
+	user, err := client.User.Create().
+		SetEmail("getbykey-auth-gift-balance-unit@test.com").
+		SetPasswordHash("test-password-hash").
+		SetRole(service.RoleUser).
+		SetStatus(service.StatusActive).
+		SetGiftBalance(12.5).
+		SetFrozenGiftBalance(3.25).
+		Save(ctx)
+	require.NoError(t, err)
+
+	key := &service.APIKey{
+		UserID: user.ID,
+		Key:    "sk-getbykey-auth-gift-balance-unit",
+		Name:   "Gift Balance Key Unit",
+		Status: service.StatusActive,
+	}
+	require.NoError(t, repo.Create(ctx, key))
+
+	got, err := repo.GetByKeyForAuth(ctx, key.Key)
+	require.NoError(t, err)
+	require.NotNil(t, got.User)
+	require.Equal(t, 12.5, got.User.GiftBalance)
+	require.Equal(t, 3.25, got.User.FrozenGiftBalance)
+}
