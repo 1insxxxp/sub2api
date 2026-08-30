@@ -152,6 +152,65 @@ func TestUsageBillingRepositoryBatchImage_LegacyHoldDoesNotConsumeAvailableGift(
 	require.Equal(t, batchImageWalletState{Balance: 13, GiftBalance: 10}, readBatchImageWallet(t, user.ID))
 }
 
+func TestUsageBillingRepositoryBatchImage_NullLegacyHoldRecoversFrozenGiftAllocation(t *testing.T) {
+	for _, action := range []string{"capture", "release"} {
+		t.Run(action, func(t *testing.T) {
+			repo, user, apiKey := createBatchImageGiftWallet(t, 8, 0)
+			batchID := "batch-null-legacy-gift-" + uuid.NewString()
+			_, err := integrationDB.ExecContext(context.Background(), `
+				UPDATE users SET frozen_balance = 12, frozen_gift_balance = 10 WHERE id = $1
+			`, user.ID)
+			require.NoError(t, err)
+			_, err = integrationDB.ExecContext(context.Background(), `
+				INSERT INTO usage_billing_dedup (request_id, api_key_id, request_fingerprint, threshold_exempt_cost)
+				VALUES ($1, $2, 'legacy-null-hold', NULL)
+			`, service.BatchImageHoldRequestID(batchID), apiKey.ID)
+			require.NoError(t, err)
+
+			switch action {
+			case "capture":
+				result, err := repo.CaptureBatchImageBalance(context.Background(), &service.BatchImageBalanceHoldCommand{
+					RequestID: service.BatchImageCaptureRequestID(batchID), APIKeyID: apiKey.ID,
+					UserID: user.ID, BatchID: batchID, HoldAmount: 12, ActualAmount: 7,
+				})
+				require.NoError(t, err)
+				require.InDelta(t, 7, result.ThresholdExemptCost, 0.00000001)
+				require.Equal(t, batchImageWalletState{Balance: 13, GiftBalance: 3}, readBatchImageWallet(t, user.ID))
+			case "release":
+				_, err := repo.ReleaseBatchImageBalance(context.Background(), &service.BatchImageBalanceHoldCommand{
+					RequestID: service.BatchImageReleaseRequestID(batchID), APIKeyID: apiKey.ID,
+					UserID: user.ID, BatchID: batchID, HoldAmount: 12,
+				})
+				require.NoError(t, err)
+				require.Equal(t, batchImageWalletState{Balance: 20, GiftBalance: 10}, readBatchImageWallet(t, user.ID))
+			}
+		})
+	}
+}
+
+func TestUsageBillingRepositoryBatchImage_ExplicitZeroHoldDoesNotConsumeAnotherHoldsGift(t *testing.T) {
+	repo, user, apiKey := createBatchImageGiftWallet(t, 30, 8)
+	giftBatch := "batch-explicit-gift-" + uuid.NewString()
+	cashBatch := "batch-explicit-zero-" + uuid.NewString()
+	reserveBatchImageGift(t, repo, user, apiKey, giftBatch, 8)
+	reserveBatchImageGift(t, repo, user, apiKey, cashBatch, 8)
+	require.Equal(t, sql.NullFloat64{Float64: 8, Valid: true}, readBatchImageHoldGift(t, giftBatch, apiKey.ID))
+	require.Equal(t, sql.NullFloat64{Float64: 0, Valid: true}, readBatchImageHoldGift(t, cashBatch, apiKey.ID))
+
+	captured, err := repo.CaptureBatchImageBalance(context.Background(), &service.BatchImageBalanceHoldCommand{
+		RequestID: service.BatchImageCaptureRequestID(cashBatch), APIKeyID: apiKey.ID,
+		UserID: user.ID, BatchID: cashBatch, HoldAmount: 8, ActualAmount: 8,
+	})
+	require.NoError(t, err)
+	require.Zero(t, captured.ThresholdExemptCost)
+	_, err = repo.ReleaseBatchImageBalance(context.Background(), &service.BatchImageBalanceHoldCommand{
+		RequestID: service.BatchImageReleaseRequestID(giftBatch), APIKeyID: apiKey.ID,
+		UserID: user.ID, BatchID: giftBatch, HoldAmount: 8,
+	})
+	require.NoError(t, err)
+	require.Equal(t, batchImageWalletState{Balance: 22, GiftBalance: 8}, readBatchImageWallet(t, user.ID))
+}
+
 func TestUsageBillingRepositoryBatchImage_ReleaseReturnsFrozenGift(t *testing.T) {
 	repo, user, apiKey := createBatchImageGiftWallet(t, 20, 10)
 	batchID := "batch-release-gift-" + uuid.NewString()

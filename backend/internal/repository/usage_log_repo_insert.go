@@ -332,8 +332,8 @@ func (r *usageLogRepository) createSingle(ctx context.Context, sqlq sqlExecutor,
 
 	if err := scanSingleRow(ctx, sqlq, query, prepared.args, &log.ID, &log.CreatedAt); err != nil {
 		if errors.Is(err, sql.ErrNoRows) && prepared.requestID != "" {
-			selectQuery := "SELECT id, created_at FROM usage_logs WHERE request_id = $1 AND api_key_id = $2"
-			if err := scanSingleRow(ctx, sqlq, selectQuery, []any{prepared.requestID, log.APIKeyID}, &log.ID, &log.CreatedAt); err != nil {
+			selectQuery := "SELECT id, created_at, threshold_exempt_cost FROM usage_logs WHERE request_id = $1 AND api_key_id = $2"
+			if err := scanSingleRow(ctx, sqlq, selectQuery, []any{prepared.requestID, log.APIKeyID}, &log.ID, &log.CreatedAt, &log.ThresholdExemptCost); err != nil {
 				return false, err
 			}
 			log.RateMultiplier = prepared.rateMultiplier

@@ -824,7 +824,6 @@ func TestOpenAIGatewayServiceRecordUsage_LegacyUsageLogWriteErrorFailsClosed(t *
 	usageRepo := &openAIRecordUsageLogRepoStub{inserted: false, err: MarkUsageLogCreateNotPersisted(context.Canceled)}
 	userRepo := &openAIRecordUsageUserRepoStub{}
 	subRepo := &openAIRecordUsageSubRepoStub{}
-	quotaSvc := &openAIRecordUsageAPIKeyQuotaStub{}
 	svc := newOpenAIRecordUsageServiceForTest(usageRepo, userRepo, subRepo, nil)
 
 	err := svc.RecordUsage(context.Background(), &OpenAIRecordUsageInput{
@@ -837,20 +836,15 @@ func TestOpenAIGatewayServiceRecordUsage_LegacyUsageLogWriteErrorFailsClosed(t *
 			Model:    "gpt-5.1",
 			Duration: time.Second,
 		},
-		APIKey: &APIKey{
-			ID:    10043,
-			Quota: 100,
-		},
-		User:          &User{ID: 20043},
-		Account:       &Account{ID: 30043},
-		APIKeyService: quotaSvc,
+		APIKey:  &APIKey{ID: 10043},
+		User:    &User{ID: 20043},
+		Account: &Account{ID: 30043},
 	})
 
 	require.ErrorIs(t, err, context.Canceled)
 	require.Equal(t, 1, usageRepo.calls)
 	require.Zero(t, userRepo.deductCalls)
 	require.Equal(t, 0, subRepo.incrementCalls)
-	require.Zero(t, quotaSvc.quotaCalls)
 }
 
 func TestOpenAIGatewayServiceRecordUsage_BillingUsesDetachedContext(t *testing.T) {
@@ -858,7 +852,6 @@ func TestOpenAIGatewayServiceRecordUsage_BillingUsesDetachedContext(t *testing.T
 	usageRepo := &openAIRecordUsageLogRepoStub{inserted: true}
 	userRepo := &openAIRecordUsageUserRepoStub{}
 	subRepo := &openAIRecordUsageSubRepoStub{}
-	quotaSvc := &openAIRecordUsageAPIKeyQuotaStub{}
 	svc := newOpenAIRecordUsageServiceForTest(usageRepo, userRepo, subRepo, nil)
 
 	reqCtx, cancel := context.WithCancel(context.Background())
@@ -871,20 +864,14 @@ func TestOpenAIGatewayServiceRecordUsage_BillingUsesDetachedContext(t *testing.T
 			Model:     "gpt-5.1",
 			Duration:  time.Second,
 		},
-		APIKey: &APIKey{
-			ID:    10042,
-			Quota: 100,
-		},
-		User:          &User{ID: 20042},
-		Account:       &Account{ID: 30042},
-		APIKeyService: quotaSvc,
+		APIKey:  &APIKey{ID: 10042},
+		User:    &User{ID: 20042},
+		Account: &Account{ID: 30042},
 	})
 
 	require.NoError(t, err)
 	require.Equal(t, 1, userRepo.deductCalls)
 	require.NoError(t, userRepo.lastCtxErr)
-	require.Equal(t, 1, quotaSvc.quotaCalls)
-	require.NoError(t, quotaSvc.lastQuotaCtxErr)
 }
 
 func TestOpenAIGatewayServiceRecordUsage_BillingRepoUsesDetachedContext(t *testing.T) {
@@ -1103,10 +1090,11 @@ func TestOpenAIGatewayServiceRecordUsage_BillingErrorWritesUnsettledUsageLog(t *
 func TestOpenAIGatewayServiceRecordUsage_UpdatesAPIKeyQuotaWhenConfigured(t *testing.T) {
 	usage := OpenAIUsage{InputTokens: 10, OutputTokens: 6, CacheReadInputTokens: 2}
 	usageRepo := &openAIRecordUsageLogRepoStub{inserted: true}
+	billingRepo := &openAIRecordUsageBillingRepoStub{result: &UsageBillingApplyResult{Applied: true}}
 	userRepo := &openAIRecordUsageUserRepoStub{}
 	subRepo := &openAIRecordUsageSubRepoStub{}
 	quotaSvc := &openAIRecordUsageAPIKeyQuotaStub{}
-	svc := newOpenAIRecordUsageServiceForTest(usageRepo, userRepo, subRepo, nil)
+	svc := newOpenAIRecordUsageServiceWithBillingRepoForTest(usageRepo, billingRepo, userRepo, subRepo, nil)
 
 	err := svc.RecordUsage(context.Background(), &OpenAIRecordUsageInput{
 		Result: &OpenAIForwardResult{
@@ -1125,10 +1113,12 @@ func TestOpenAIGatewayServiceRecordUsage_UpdatesAPIKeyQuotaWhenConfigured(t *tes
 	})
 
 	require.NoError(t, err)
-	require.Equal(t, 1, quotaSvc.quotaCalls)
+	require.Equal(t, 1, billingRepo.calls)
+	require.NotNil(t, billingRepo.lastCmd)
+	require.Equal(t, 0, quotaSvc.quotaCalls, "unified billing persists quota in the same transaction")
 	require.Equal(t, 0, quotaSvc.rateLimitCalls)
 	expected := expectedOpenAICost(t, svc, "gpt-5.1", usage, 1.1)
-	require.InDelta(t, expected.ActualCost, quotaSvc.lastAmount, 1e-12)
+	require.InDelta(t, expected.ActualCost, billingRepo.lastCmd.APIKeyQuotaCost, 1e-12)
 }
 
 func TestOpenAIGatewayServiceRecordUsage_ClampsActualInputTokensToZero(t *testing.T) {

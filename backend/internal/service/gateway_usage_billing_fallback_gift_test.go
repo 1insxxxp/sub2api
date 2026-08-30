@@ -9,6 +9,7 @@ import (
 	"math"
 	"testing"
 
+	"github.com/Wei-Shaw/sub2api/internal/config"
 	"github.com/stretchr/testify/require"
 )
 
@@ -34,6 +35,25 @@ type giftFallbackSubscriptionRepo struct{ UserSubscriptionRepository }
 
 func (r *giftFallbackSubscriptionRepo) IncrementUsage(context.Context, int64, float64) error {
 	return nil
+}
+
+type fallbackPlatformQuotaRepoStub struct{ UserPlatformQuotaRepository }
+
+type failingFallbackAPIKeyUpdater struct {
+	quotaErr  error
+	rateErr   error
+	quotaCall int
+	rateCall  int
+}
+
+func (u *failingFallbackAPIKeyUpdater) UpdateQuotaUsed(context.Context, int64, float64) error {
+	u.quotaCall++
+	return u.quotaErr
+}
+
+func (u *failingFallbackAPIKeyUpdater) UpdateRateLimitUsage(context.Context, int64, float64) error {
+	u.rateCall++
+	return u.rateErr
 }
 
 type transactionalFallbackWalletRepo struct {
@@ -236,6 +256,86 @@ func TestApplyUsageBilling_LegacyFallbackRollsBackWalletAndLogOnAttributionFailu
 
 	require.ErrorIs(t, err, wantErr)
 	require.False(t, applied)
+	require.Empty(t, usageRepo.logs)
+	require.InDelta(t, 20, wallet.balance, 0.00000001)
+	require.InDelta(t, 10, wallet.gift, 0.00000001)
+}
+
+func TestApplyUsageBilling_LegacyFallbackFailsClosedBeforeAPIKeyQuotaMutation(t *testing.T) {
+	wallet := &transactionalFallbackWalletRepo{balance: 20, gift: 10}
+	usageRepo := newAtomicFallbackUsageRepo(wallet)
+	updater := &failingFallbackAPIKeyUpdater{}
+
+	applied, err := applyUsageBilling(context.Background(), "legacy-quota-rollback", &UsageLog{APIKeyID: 2, ActualCost: 12}, &postUsageBillingParams{
+		Cost: &CostBreakdown{ActualCost: 12, TotalCost: 12},
+		User: &User{ID: 1}, APIKey: &APIKey{ID: 2, Quota: 100}, Account: &Account{ID: 3},
+		APIKeyService: updater,
+	}, newLegacyFallbackDeps(wallet, usageRepo), nil)
+
+	require.ErrorIs(t, err, ErrUsageBillingSideEffectRepositoryRequired)
+	require.False(t, applied)
+	require.Zero(t, usageRepo.transactionCalls)
+	require.Zero(t, updater.quotaCall)
+	require.Empty(t, usageRepo.logs)
+	require.InDelta(t, 20, wallet.balance, 0.00000001)
+	require.InDelta(t, 10, wallet.gift, 0.00000001)
+}
+
+func TestApplyUsageBilling_LegacyFallbackFailsClosedBeforeRateLimitMutation(t *testing.T) {
+	wallet := &transactionalFallbackWalletRepo{balance: 20, gift: 10}
+	usageRepo := newAtomicFallbackUsageRepo(wallet)
+	updater := &failingFallbackAPIKeyUpdater{}
+
+	applied, err := applyUsageBilling(context.Background(), "legacy-rate-rollback", &UsageLog{APIKeyID: 2, ActualCost: 12}, &postUsageBillingParams{
+		Cost: &CostBreakdown{ActualCost: 12, TotalCost: 12},
+		User: &User{ID: 1}, APIKey: &APIKey{ID: 2, RateLimit5h: 100}, Account: &Account{ID: 3},
+		APIKeyService: updater,
+	}, newLegacyFallbackDeps(wallet, usageRepo), nil)
+
+	require.ErrorIs(t, err, ErrUsageBillingSideEffectRepositoryRequired)
+	require.False(t, applied)
+	require.Zero(t, usageRepo.transactionCalls)
+	require.Zero(t, updater.rateCall)
+	require.Empty(t, usageRepo.logs)
+	require.InDelta(t, 20, wallet.balance, 0.00000001)
+	require.InDelta(t, 10, wallet.gift, 0.00000001)
+}
+
+func TestApplyUsageBilling_LegacyFallbackFailsClosedBeforeAccountQuotaMutation(t *testing.T) {
+	wallet := &transactionalFallbackWalletRepo{balance: 20, gift: 10}
+	usageRepo := newAtomicFallbackUsageRepo(wallet)
+	deps := newLegacyFallbackDeps(wallet, usageRepo)
+
+	applied, err := applyUsageBilling(context.Background(), "legacy-account-rollback", &UsageLog{APIKeyID: 2, ActualCost: 12}, &postUsageBillingParams{
+		Cost: &CostBreakdown{ActualCost: 12, TotalCost: 12},
+		User: &User{ID: 1}, APIKey: &APIKey{ID: 2},
+		Account:               &Account{ID: 3, Type: AccountTypeAPIKey, Extra: map[string]any{"quota_limit": 100.0}},
+		AccountRateMultiplier: 1,
+	}, deps, nil)
+
+	require.ErrorIs(t, err, ErrUsageBillingSideEffectRepositoryRequired)
+	require.False(t, applied)
+	require.Zero(t, usageRepo.transactionCalls)
+	require.Empty(t, usageRepo.logs)
+	require.InDelta(t, 20, wallet.balance, 0.00000001)
+	require.InDelta(t, 10, wallet.gift, 0.00000001)
+}
+
+func TestApplyUsageBilling_LegacyFallbackFailsClosedBeforePlatformQuotaMutation(t *testing.T) {
+	wallet := &transactionalFallbackWalletRepo{balance: 20, gift: 10}
+	usageRepo := newAtomicFallbackUsageRepo(wallet)
+	deps := newLegacyFallbackDeps(wallet, usageRepo)
+	deps.billingCacheService = &BillingCacheService{cfg: &config.Config{}}
+	deps.userPlatformQuotaRepo = &fallbackPlatformQuotaRepoStub{}
+
+	applied, err := applyUsageBilling(context.Background(), "legacy-platform-rollback", &UsageLog{APIKeyID: 2, ActualCost: 12}, &postUsageBillingParams{
+		Cost: &CostBreakdown{ActualCost: 12, TotalCost: 12},
+		User: &User{ID: 1}, APIKey: &APIKey{ID: 2}, Account: &Account{ID: 3}, Platform: PlatformOpenAI,
+	}, deps, nil)
+
+	require.ErrorIs(t, err, ErrUsageBillingSideEffectRepositoryRequired)
+	require.False(t, applied)
+	require.Zero(t, usageRepo.transactionCalls)
 	require.Empty(t, usageRepo.logs)
 	require.InDelta(t, 20, wallet.balance, 0.00000001)
 	require.InDelta(t, 10, wallet.gift, 0.00000001)

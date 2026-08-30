@@ -37,6 +37,9 @@ func (r *usageBillingRepository) Apply(ctx context.Context, cmd *service.UsageBi
 	if r == nil || r.db == nil {
 		return nil, errors.New("usage billing repository db is nil")
 	}
+	if err := service.ValidateUsageBillingCommandAmounts(cmd); err != nil {
+		return nil, err
+	}
 
 	cmd.Normalize()
 	if cmd.RequestID == "" {
@@ -582,7 +585,11 @@ func lockBatchImageHoldGiftAllocation(ctx context.Context, tx *sql.Tx, cmd *serv
 		return 0, false, err
 	}
 	if !giftHeld.Valid {
-		return 0, true, nil
+		// Rolling-upgrade compatibility: predecessor reservations moved gift into
+		// frozen_gift_balance before the per-hold allocation column existed. Passing
+		// the hold amount lets the locked wallet SQL recover min(FG, H). A stored
+		// numeric zero remains an explicit cash-only allocation.
+		return cmd.HoldAmount, true, nil
 	}
 	return clampUsageBillingDedupThresholdExemptCost(giftHeld.Float64, cmd.HoldAmount), true, nil
 }

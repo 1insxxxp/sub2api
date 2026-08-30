@@ -14,10 +14,12 @@ import (
 
 var ErrUsageBillingRequestIDRequired = errors.New("usage billing request_id is required")
 var ErrUsageBillingRequestConflict = errors.New("usage billing request fingerprint conflict")
-var ErrUsageBillingNonFiniteAmount = errors.New("usage billing actual cost must be finite")
+var ErrUsageBillingNonFiniteAmount = errors.New("usage billing monetary amounts must be finite")
+var ErrUsageBillingNegativeAmount = errors.New("usage billing monetary amounts must be nonnegative")
 var ErrGiftAllocatingBalanceRepositoryRequired = errors.New("gift allocating balance repository is required")
 var ErrUsageLogThresholdExemptRepositoryRequired = errors.New("usage log threshold exempt repository is required")
 var ErrUsageBillingTransactionRunnerRequired = errors.New("usage billing transaction runner is required")
+var ErrUsageBillingSideEffectRepositoryRequired = errors.New("usage billing side-effect repository is required")
 
 type BalanceDeductionResult struct {
 	NewBalance          float64
@@ -43,6 +45,27 @@ type UsageBillingTransactionRunner interface {
 func ValidateUsageBillingActualCost(amount float64) error {
 	if math.IsNaN(amount) || math.IsInf(amount, 0) {
 		return ErrUsageBillingNonFiniteAmount
+	}
+	if amount < 0 {
+		return ErrUsageBillingNegativeAmount
+	}
+	return nil
+}
+
+func ValidateUsageBillingCommandAmounts(cmd *UsageBillingCommand) error {
+	if cmd == nil {
+		return nil
+	}
+	for _, amount := range []float64{
+		cmd.BalanceCost,
+		cmd.SubscriptionCost,
+		cmd.APIKeyQuotaCost,
+		cmd.APIKeyRateLimitCost,
+		cmd.AccountQuotaCost,
+	} {
+		if err := ValidateUsageBillingActualCost(amount); err != nil {
+			return err
+		}
 	}
 	return nil
 }

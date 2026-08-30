@@ -64,12 +64,16 @@ type batchSettlementUsageLogRepo struct {
 	lastLog   *UsageLog
 	calls     int
 	errOnce   error
+	errAlways error
 	persisted map[string]bool
 }
 
 func (r *batchSettlementUsageLogRepo) Create(_ context.Context, log *UsageLog) (bool, error) {
 	r.calls++
 	r.lastLog = log
+	if r.errAlways != nil {
+		return false, r.errAlways
+	}
 	if r.errOnce != nil {
 		err := r.errOnce
 		r.errOnce = nil
@@ -100,7 +104,7 @@ func TestBatchImageSettlementService_ZeroSuccessCanComplete(t *testing.T) {
 	job.ItemCount = 4
 	repo.jobs[job.BatchID] = job
 	billing := &fakeBatchImageBillingRepo{}
-	svc := &BatchImageSettlementService{Repo: repo, BillingRepo: billing, Pricing: &fakeBatchImagePricingResolver{unitPrice: 0.25}}
+	svc := &BatchImageSettlementService{Repo: repo, BillingRepo: billing, UsageLogRepo: &batchSettlementUsageLogRepo{}, Pricing: &fakeBatchImagePricingResolver{unitPrice: 0.25}}
 
 	result, err := svc.Settle(context.Background(), job.BatchID)
 	require.NoError(t, err)
@@ -118,7 +122,7 @@ func TestBatchImageSettlementService_CompletedJobReturnsAlreadySettledWithoutBil
 	job.ActualCost = &cost
 	repo.jobs[job.BatchID] = job
 	billing := &fakeBatchImageBillingRepo{}
-	svc := &BatchImageSettlementService{Repo: repo, BillingRepo: billing, Pricing: &fakeBatchImagePricingResolver{unitPrice: 0.25}}
+	svc := &BatchImageSettlementService{Repo: repo, BillingRepo: billing, UsageLogRepo: &batchSettlementUsageLogRepo{}, Pricing: &fakeBatchImagePricingResolver{unitPrice: 0.25}}
 
 	result, err := svc.Settle(context.Background(), job.BatchID)
 	require.NoError(t, err)
@@ -132,7 +136,7 @@ func TestBatchImageSettlementService_IdempotentAfterBillingCrash(t *testing.T) {
 	job := testSettlingBatchImageJob("imgbatch_crash")
 	repo.jobs[job.BatchID] = job
 	billing := &fakeBatchImageBillingRepo{alreadyApplied: map[string]bool{BatchImageCaptureRequestID(job.BatchID): true}}
-	svc := &BatchImageSettlementService{Repo: repo, BillingRepo: billing, Pricing: &fakeBatchImagePricingResolver{unitPrice: 0.25}}
+	svc := &BatchImageSettlementService{Repo: repo, BillingRepo: billing, UsageLogRepo: &batchSettlementUsageLogRepo{}, Pricing: &fakeBatchImagePricingResolver{unitPrice: 0.25}}
 
 	result, err := svc.Settle(context.Background(), job.BatchID)
 	require.NoError(t, err)
@@ -190,6 +194,8 @@ func TestBatchImageSettlementService_RetryRestoresCaptureGiftAttributionAfterUsa
 	_, err := svc.Settle(context.Background(), job.BatchID)
 	require.ErrorIs(t, err, logErr)
 	require.Equal(t, BatchImageJobStatusSettling, repo.jobs[job.BatchID].Status)
+	require.Equal(t, 1, repo.jobs[job.BatchID].RetryCount)
+	require.Equal(t, "SETTLEMENT_USAGE_LOG_FAILED", batchImageDerefString(repo.jobs[job.BatchID].LastErrorCode))
 	require.Len(t, billing.captures, 1)
 	require.Equal(t, 1, usageLogs.calls)
 
@@ -207,6 +213,80 @@ func TestBatchImageSettlementService_RetryRestoresCaptureGiftAttributionAfterUsa
 	require.True(t, duplicate.AlreadySettled)
 	require.Len(t, billing.captures, 2)
 	require.Equal(t, 2, usageLogs.calls)
+}
+
+func TestBatchImageSettlementService_MissingUsageLogRepositoryFailsBeforeCapture(t *testing.T) {
+	repo := newFakeBatchImageRepository()
+	job := testSettlingBatchImageJob("imgbatch_missing_usage_repo")
+	repo.jobs[job.BatchID] = job
+	billing := &fakeBatchImageBillingRepo{}
+	svc := &BatchImageSettlementService{
+		Repo: repo, BillingRepo: billing, Pricing: &fakeBatchImagePricingResolver{unitPrice: 0.25},
+	}
+
+	_, err := svc.Settle(context.Background(), job.BatchID)
+	require.ErrorIs(t, err, ErrBatchImageSettlementBillingFailed)
+	require.Empty(t, billing.captures)
+	require.Equal(t, BatchImageJobStatusSettling, repo.jobs[job.BatchID].Status)
+}
+
+func TestBatchImageSettlementService_UsageLogRetryExhaustionNeverRefundsCapturedHold(t *testing.T) {
+	repo := newFakeBatchImageRepository()
+	job := testSettlingBatchImageJob("imgbatch_usage_log_exhausted")
+	job.RetryCount = batchImageSettlementMaxRetries - 1
+	repo.jobs[job.BatchID] = job
+	billing := &fakeBatchImageBillingRepo{captureResult: &BatchImageBalanceHoldResult{ThresholdExemptCost: 0.4}}
+	usageLogs := &batchSettlementUsageLogRepo{errAlways: errors.New("usage log unavailable")}
+	svc := &BatchImageSettlementService{
+		Repo: repo, BillingRepo: billing, Pricing: &fakeBatchImagePricingResolver{unitPrice: 0.25}, UsageLogRepo: usageLogs,
+	}
+
+	_, err := svc.Settle(context.Background(), job.BatchID)
+	require.ErrorIs(t, err, ErrBatchImageSettlementBillingFailed)
+	require.Equal(t, BatchImageJobStatusFailed, repo.jobs[job.BatchID].Status)
+	require.Equal(t, "SETTLEMENT_USAGE_LOG_RETRY_EXHAUSTED", batchImageDerefString(repo.jobs[job.BatchID].LastErrorCode))
+	require.Len(t, billing.captures, 1)
+	require.Empty(t, billing.releases, "a captured hold is already charged and must never be refunded")
+}
+
+func TestBatchImageSettlementService_FinalizeRetryExhaustionNeverRefundsCapturedHold(t *testing.T) {
+	baseRepo := newFakeBatchImageRepository()
+	job := testSettlingBatchImageJob("imgbatch_finalize_exhausted")
+	job.RetryCount = batchImageSettlementMaxRetries - 1
+	baseRepo.jobs[job.BatchID] = job
+	repo := &failOnceMarkBatchImageRepository{fakeBatchImageRepository: baseRepo, err: errors.New("mark settled unavailable")}
+	billing := &fakeBatchImageBillingRepo{captureResult: &BatchImageBalanceHoldResult{ThresholdExemptCost: 0.4}}
+	svc := &BatchImageSettlementService{
+		Repo: repo, BillingRepo: billing, Pricing: &fakeBatchImagePricingResolver{unitPrice: 0.25},
+		UsageLogRepo: &batchSettlementUsageLogRepo{},
+	}
+
+	_, err := svc.Settle(context.Background(), job.BatchID)
+	require.ErrorIs(t, err, ErrBatchImageSettlementBillingFailed)
+	require.Equal(t, BatchImageJobStatusFailed, baseRepo.jobs[job.BatchID].Status)
+	require.Equal(t, "SETTLEMENT_FINALIZE_RETRY_EXHAUSTED", batchImageDerefString(baseRepo.jobs[job.BatchID].LastErrorCode))
+	require.Len(t, billing.captures, 1)
+	require.Empty(t, billing.releases, "a captured hold is already charged and must never be refunded")
+}
+
+func TestBatchImageSettlementService_PreviouslyExhaustedUsageLogFailureNeverRefunds(t *testing.T) {
+	repo := newFakeBatchImageRepository()
+	job := testSettlingBatchImageJob("imgbatch_usage_log_pre_exhausted")
+	job.RetryCount = batchImageSettlementMaxRetries
+	job.LastErrorCode = batchImageStringPtr("SETTLEMENT_USAGE_LOG_FAILED")
+	repo.jobs[job.BatchID] = job
+	billing := &fakeBatchImageBillingRepo{}
+	svc := &BatchImageSettlementService{
+		Repo: repo, BillingRepo: billing, Pricing: &fakeBatchImagePricingResolver{unitPrice: 0.25},
+		UsageLogRepo: &batchSettlementUsageLogRepo{},
+	}
+
+	_, err := svc.Settle(context.Background(), job.BatchID)
+	require.ErrorIs(t, err, ErrBatchImageSettlementBillingFailed)
+	require.Equal(t, BatchImageJobStatusFailed, repo.jobs[job.BatchID].Status)
+	require.Equal(t, "SETTLEMENT_USAGE_LOG_RETRY_EXHAUSTED", batchImageDerefString(repo.jobs[job.BatchID].LastErrorCode))
+	require.Empty(t, billing.captures)
+	require.Empty(t, billing.releases)
 }
 
 type failOnceMarkBatchImageRepository struct {
@@ -274,7 +354,7 @@ func TestBatchImageSettlementService_CostExceedingHoldDoesNotCharge(t *testing.T
 	job.EstimatedCost = holdAmount
 	repo.jobs[job.BatchID] = job
 	billing := &fakeBatchImageBillingRepo{}
-	svc := &BatchImageSettlementService{Repo: repo, BillingRepo: billing, Pricing: &fakeBatchImagePricingResolver{unitPrice: 0.50}}
+	svc := &BatchImageSettlementService{Repo: repo, BillingRepo: billing, UsageLogRepo: &batchSettlementUsageLogRepo{}, Pricing: &fakeBatchImagePricingResolver{unitPrice: 0.50}}
 
 	_, err := svc.Settle(context.Background(), job.BatchID)
 	require.ErrorIs(t, err, ErrBatchImageSettlementCostExceedsHold)
@@ -302,7 +382,7 @@ func TestBatchImageSettlementService_UsesSubmittedPricingSnapshot(t *testing.T) 
 	job.EstimatedCost = 0.5
 	repo.jobs[job.BatchID] = job
 	billing := &fakeBatchImageBillingRepo{}
-	svc := &BatchImageSettlementService{Repo: repo, BillingRepo: billing, Pricing: &fakeBatchImagePricingResolver{unitPrice: 0.50}}
+	svc := &BatchImageSettlementService{Repo: repo, BillingRepo: billing, UsageLogRepo: &batchSettlementUsageLogRepo{}, Pricing: &fakeBatchImagePricingResolver{unitPrice: 0.50}}
 
 	result, err := svc.Settle(context.Background(), job.BatchID)
 	require.NoError(t, err)
@@ -317,7 +397,7 @@ func TestBatchImageSettlementService_BillingFailureLeavesSettlingAndRecordsError
 	job := testSettlingBatchImageJob("imgbatch_billing_fail")
 	repo.jobs[job.BatchID] = job
 	billing := &fakeBatchImageBillingRepo{err: errors.New("temporary billing timeout with gs://hidden-output")}
-	svc := &BatchImageSettlementService{Repo: repo, BillingRepo: billing, Pricing: &fakeBatchImagePricingResolver{unitPrice: 0.25}}
+	svc := &BatchImageSettlementService{Repo: repo, BillingRepo: billing, UsageLogRepo: &batchSettlementUsageLogRepo{}, Pricing: &fakeBatchImagePricingResolver{unitPrice: 0.25}}
 
 	_, err := svc.Settle(context.Background(), job.BatchID)
 	require.ErrorIs(t, err, ErrBatchImageSettlementBillingFailed)
@@ -332,7 +412,7 @@ func TestBatchImagePipelineProcessor_SettlesQueuedSettlingJob(t *testing.T) {
 	job := testSettlingBatchImageJob("imgbatch_pipeline")
 	repo.jobs[job.BatchID] = job
 	billing := &fakeBatchImageBillingRepo{}
-	settlement := &BatchImageSettlementService{Repo: repo, BillingRepo: billing, Pricing: &fakeBatchImagePricingResolver{unitPrice: 0.25}}
+	settlement := &BatchImageSettlementService{Repo: repo, BillingRepo: billing, UsageLogRepo: &batchSettlementUsageLogRepo{}, Pricing: &fakeBatchImagePricingResolver{unitPrice: 0.25}}
 	processor := &BatchImagePipelineProcessor{
 		ProviderProcessor: &BatchImageProviderProcessor{Repo: repo, ProviderRegistry: NewBatchImageProviderRegistry(&fakeProcessorProvider{}), AccountResolver: &fakeBatchImageAccountResolver{account: &Account{}}},
 		SettlementService: settlement,
@@ -349,7 +429,7 @@ func TestBatchImagePipelineProcessor_RequeuesTransientSettlementFailure(t *testi
 	repo := newFakeBatchImageRepository()
 	job := testSettlingBatchImageJob("imgbatch_pipeline_retry")
 	repo.jobs[job.BatchID] = job
-	settlement := &BatchImageSettlementService{Repo: repo, BillingRepo: &fakeBatchImageBillingRepo{err: errors.New("temporary")}, Pricing: &fakeBatchImagePricingResolver{unitPrice: 0.25}}
+	settlement := &BatchImageSettlementService{Repo: repo, BillingRepo: &fakeBatchImageBillingRepo{err: errors.New("temporary")}, UsageLogRepo: &batchSettlementUsageLogRepo{}, Pricing: &fakeBatchImagePricingResolver{unitPrice: 0.25}}
 	processor := &BatchImagePipelineProcessor{
 		ProviderProcessor: &BatchImageProviderProcessor{Repo: repo, ProviderRegistry: NewBatchImageProviderRegistry(&fakeProcessorProvider{}), AccountResolver: &fakeBatchImageAccountResolver{account: &Account{}}},
 		SettlementService: settlement,
@@ -368,7 +448,7 @@ func TestBatchImagePipelineProcessor_FailsAndReleasesAfterSettlementRetryLimit(t
 	job.RetryCount = batchImageSettlementMaxRetries - 1
 	repo.jobs[job.BatchID] = job
 	billing := &fakeBatchImageBillingRepo{captureErr: errors.New("temporary billing timeout")}
-	settlement := &BatchImageSettlementService{Repo: repo, BillingRepo: billing, Pricing: &fakeBatchImagePricingResolver{unitPrice: 0.25}}
+	settlement := &BatchImageSettlementService{Repo: repo, BillingRepo: billing, UsageLogRepo: &batchSettlementUsageLogRepo{}, Pricing: &fakeBatchImagePricingResolver{unitPrice: 0.25}}
 	processor := &BatchImagePipelineProcessor{
 		ProviderProcessor: &BatchImageProviderProcessor{Repo: repo, ProviderRegistry: NewBatchImageProviderRegistry(&fakeProcessorProvider{}), AccountResolver: &fakeBatchImageAccountResolver{account: &Account{}}},
 		SettlementService: settlement,
@@ -392,7 +472,7 @@ func TestBatchImageSettlementRetryExhaustedReleaseIsIdempotentAfterTransitionFai
 	repo.jobs[job.BatchID] = job
 	repo.transitionErr = errors.New("temporary transition failure")
 	billing := &fakeBatchImageBillingRepo{}
-	svc := &BatchImageSettlementService{Repo: repo, BillingRepo: billing, Pricing: &fakeBatchImagePricingResolver{unitPrice: 0.25}}
+	svc := &BatchImageSettlementService{Repo: repo, BillingRepo: billing, UsageLogRepo: &batchSettlementUsageLogRepo{}, Pricing: &fakeBatchImagePricingResolver{unitPrice: 0.25}}
 
 	_, err := svc.Settle(context.Background(), job.BatchID)
 	require.ErrorContains(t, err, "temporary transition failure")
@@ -498,7 +578,7 @@ func TestBatchImageSettlementBillingRequestIDs(t *testing.T) {
 	repo.jobs[first.BatchID] = first
 	repo.jobs[second.BatchID] = second
 	billing := &fakeBatchImageBillingRepo{}
-	svc := &BatchImageSettlementService{Repo: repo, BillingRepo: billing, Pricing: &fakeBatchImagePricingResolver{unitPrice: 0.25}}
+	svc := &BatchImageSettlementService{Repo: repo, BillingRepo: billing, UsageLogRepo: &batchSettlementUsageLogRepo{}, Pricing: &fakeBatchImagePricingResolver{unitPrice: 0.25}}
 
 	_, err := svc.Settle(context.Background(), first.BatchID)
 	require.NoError(t, err)

@@ -27,6 +27,45 @@ const (
 	archivedRequestExistsSQL   = `(?s)SELECT 1\s+FROM usage_billing_dedup_archive\s+WHERE request_id = \$1 AND api_key_id = \$2`
 )
 
+func TestUsageBillingRepositoryApply_RejectsEveryNonFiniteMonetaryFieldBeforeTransaction(t *testing.T) {
+	fields := []struct {
+		name string
+		set  func(*service.UsageBillingCommand, float64)
+	}{
+		{name: "balance", set: func(cmd *service.UsageBillingCommand, value float64) { cmd.BalanceCost = value }},
+		{name: "subscription", set: func(cmd *service.UsageBillingCommand, value float64) { cmd.SubscriptionCost = value }},
+		{name: "api key quota", set: func(cmd *service.UsageBillingCommand, value float64) { cmd.APIKeyQuotaCost = value }},
+		{name: "api key rate limit", set: func(cmd *service.UsageBillingCommand, value float64) { cmd.APIKeyRateLimitCost = value }},
+		{name: "account quota", set: func(cmd *service.UsageBillingCommand, value float64) { cmd.AccountQuotaCost = value }},
+	}
+	values := []struct {
+		name  string
+		value float64
+		want  error
+	}{
+		{name: "nan", value: math.NaN(), want: service.ErrUsageBillingNonFiniteAmount},
+		{name: "positive infinity", value: math.Inf(1), want: service.ErrUsageBillingNonFiniteAmount},
+		{name: "negative infinity", value: math.Inf(-1), want: service.ErrUsageBillingNonFiniteAmount},
+		{name: "negative", value: -0.01, want: service.ErrUsageBillingNegativeAmount},
+	}
+
+	for _, field := range fields {
+		for _, value := range values {
+			t.Run(field.name+"/"+value.name, func(t *testing.T) {
+				db, mock, err := sqlmock.New()
+				require.NoError(t, err)
+				defer func() { _ = db.Close() }()
+				cmd := &service.UsageBillingCommand{RequestID: "non-finite", APIKeyID: 2, UserID: 1}
+				field.set(cmd, value.value)
+
+				_, err = (&usageBillingRepository{db: db}).Apply(context.Background(), cmd)
+				require.ErrorIs(t, err, value.want)
+				require.NoError(t, mock.ExpectationsWereMet(), "the repository must reject before BEGIN")
+			})
+		}
+	}
+}
+
 func TestDeductUsageBillingBalance_PreservesRemainingGiftAcrossOverdraft(t *testing.T) {
 	ctx := context.Background()
 	db, mock, err := sqlmock.New()

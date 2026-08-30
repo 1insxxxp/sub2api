@@ -63,9 +63,6 @@ func reserveBatchImageBalanceHold(ctx context.Context, repo UsageBillingReposito
 	if err != nil {
 		return err
 	}
-	if cmd.HoldAmount <= 0 {
-		return nil
-	}
 	if _, err := repo.ReserveBatchImageBalance(ctx, cmd); err != nil {
 		if errors.Is(err, ErrBatchImageInsufficientBalance) {
 			return ErrBatchImageInsufficientBalance
@@ -97,9 +94,6 @@ func releaseBatchImageBalanceHold(ctx context.Context, repo UsageBillingReposito
 	cmd, err := buildBatchImageHoldCommand(job, BatchImageReleaseRequestID(job.BatchID), 0, payloadHash)
 	if err != nil {
 		return err
-	}
-	if cmd.HoldAmount <= 0 {
-		return nil
 	}
 	if _, err := repo.ReleaseBatchImageBalance(ctx, cmd); err != nil {
 		// 同一 release request id 出现指纹冲突，说明此前已有一次携带不同

@@ -40,6 +40,7 @@ func TestUsageServiceCreate_PersistsGiftAllocationAndDeduplicates(t *testing.T) 
 	duplicate, err := svc.Create(ctx, req)
 	require.NoError(t, err)
 	require.NotNil(t, duplicate)
+	require.InDelta(t, 10, duplicate.ThresholdExemptCost, 0.00000001)
 
 	var balance, gift float64
 	require.NoError(t, integrationDB.QueryRowContext(ctx, "SELECT balance, gift_balance FROM users WHERE id = $1", user.ID).Scan(&balance, &gift))
@@ -53,6 +54,67 @@ func TestUsageServiceCreate_PersistsGiftAllocationAndDeduplicates(t *testing.T) 
 	).Scan(&count, &exempt))
 	require.Equal(t, 1, count)
 	require.InDelta(t, 10, exempt, 0.00000001)
+}
+
+func TestUsageServiceCreate_RejectsBlankRequestIDBeforeLogOrWalletMutation(t *testing.T) {
+	ctx := context.Background()
+	client := testEntClient(t)
+	userRepo := newUserRepositoryWithSQL(client, integrationDB)
+	usageRepo := NewUsageLogRepository(client, integrationDB)
+	user := mustCreateUser(t, client, &service.User{
+		Email: "usage-service-blank-" + uuid.NewString() + "@example.com", PasswordHash: "hash", Balance: 20,
+	})
+	_, err := integrationDB.ExecContext(ctx, "UPDATE users SET gift_balance = 10 WHERE id = $1", user.ID)
+	require.NoError(t, err)
+	apiKey := mustCreateApiKey(t, client, &service.APIKey{UserID: user.ID, Key: "sk-usage-blank-" + uuid.NewString(), Name: "usage-blank"})
+	account := mustCreateAccount(t, client, &service.Account{Name: "usage-blank-" + uuid.NewString(), Type: service.AccountTypeAPIKey})
+	svc := service.NewUsageService(usageRepo, userRepo, client, nil)
+
+	for i := 0; i < 2; i++ {
+		_, err := svc.Create(ctx, service.CreateUsageLogRequest{
+			UserID: user.ID, APIKeyID: apiKey.ID, AccountID: account.ID,
+			RequestID: "   ", Model: "test-model", ActualCost: 12, TotalCost: 12, RateMultiplier: 1,
+		})
+		require.ErrorIs(t, err, service.ErrUsageBillingRequestIDRequired)
+	}
+
+	var blankRows int
+	require.NoError(t, integrationDB.QueryRowContext(ctx,
+		"SELECT COUNT(*) FROM usage_logs WHERE api_key_id = $1 AND BTRIM(request_id) = ''", apiKey.ID,
+	).Scan(&blankRows))
+	require.Zero(t, blankRows)
+	require.Equal(t, batchImageWalletState{Balance: 20, GiftBalance: 10}, readBatchImageWallet(t, user.ID))
+}
+
+func TestUsageServiceCreate_UsesWalletQuantizedActualForGiftAttribution(t *testing.T) {
+	ctx := context.Background()
+	client := testEntClient(t)
+	userRepo := newUserRepositoryWithSQL(client, integrationDB)
+	usageRepo := NewUsageLogRepository(client, integrationDB)
+	user := mustCreateUser(t, client, &service.User{
+		Email: "usage-service-precision-" + uuid.NewString() + "@example.com", PasswordHash: "hash", Balance: 1,
+	})
+	_, err := integrationDB.ExecContext(ctx, "UPDATE users SET gift_balance = 1 WHERE id = $1", user.ID)
+	require.NoError(t, err)
+	apiKey := mustCreateApiKey(t, client, &service.APIKey{UserID: user.ID, Key: "sk-usage-precision-" + uuid.NewString(), Name: "usage-precision"})
+	account := mustCreateAccount(t, client, &service.Account{Name: "usage-precision-" + uuid.NewString(), Type: service.AccountTypeAPIKey})
+	svc := service.NewUsageService(usageRepo, userRepo, client, nil)
+
+	usageLog, err := svc.Create(ctx, service.CreateUsageLogRequest{
+		UserID: user.ID, APIKeyID: apiKey.ID, AccountID: account.ID,
+		RequestID: "usage-service-precision-" + uuid.NewString(), Model: "test-model",
+		ActualCost: 0.000078125, TotalCost: 0.000078125, RateMultiplier: 1,
+	})
+	require.NoError(t, err)
+	require.Equal(t, 0.00007813, usageLog.ActualCost)
+	require.Equal(t, usageLog.ActualCost, usageLog.ThresholdExemptCost)
+
+	var balance, gift float64
+	require.NoError(t, integrationDB.QueryRowContext(ctx,
+		"SELECT balance, gift_balance FROM users WHERE id = $1", user.ID,
+	).Scan(&balance, &gift))
+	require.InDelta(t, 0.00007813, 1-balance, 1e-12)
+	require.InDelta(t, usageLog.ThresholdExemptCost, 1-gift, 1e-12)
 }
 
 type failingUsageServiceGiftRepo struct {
