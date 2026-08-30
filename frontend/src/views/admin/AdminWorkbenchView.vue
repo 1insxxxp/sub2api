@@ -169,6 +169,26 @@
               </span>
             </label>
 
+            <label
+              data-test="workbench-transfer-threshold-exempt-option"
+              class="admin-form-section mt-3 flex w-full min-w-0 cursor-pointer items-start gap-3 !space-y-0 px-3 py-3"
+            >
+              <input
+                v-model="form.threshold_exempt"
+                data-test="workbench-transfer-threshold-exempt"
+                type="checkbox"
+                class="mt-0.5 h-4 w-4 shrink-0 rounded border-gray-300 text-teal-600 focus:ring-teal-500"
+              />
+              <span data-test="workbench-transfer-threshold-exempt-copy" class="min-w-0 flex-1">
+                <span class="block break-words text-sm font-medium leading-5 text-gray-900 dark:text-white">
+                  {{ t('adminWorkbench.balanceTransfer.giftCredit') }}
+                </span>
+                <span class="mt-1 block break-words text-xs leading-5 text-gray-500 dark:text-dark-400">
+                  {{ t('adminWorkbench.balanceTransfer.giftCreditHint') }}
+                </span>
+              </span>
+            </label>
+
             <p v-if="errorMessage" class="mt-4 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-500/10 dark:text-red-300">
               {{ errorMessage }}
             </p>
@@ -218,7 +238,16 @@
                 data-test="workbench-generated-code"
                 class="rounded-lg border border-blue-100 bg-blue-50/70 px-3 py-2 text-sm text-blue-950 dark:border-blue-500/20 dark:bg-blue-500/10 dark:text-blue-100"
               >
-                <div class="break-all font-mono">{{ item.code }}</div>
+                <div class="flex min-w-0 flex-wrap items-center gap-2">
+                  <span class="min-w-0 break-all font-mono">{{ item.code }}</span>
+                  <span
+                    v-if="item.threshold_exempt"
+                    :data-test="`generated-now-gift-badge-${item.id}`"
+                    class="inline-flex shrink-0 rounded bg-teal-100 px-1.5 py-0.5 text-[11px] font-medium text-teal-800 dark:bg-teal-500/15 dark:text-teal-200"
+                  >
+                    {{ t('adminWorkbench.balanceTransfer.giftBadge') }}
+                  </span>
+                </div>
                 <p v-if="item.notes" class="mt-1 break-words text-xs leading-5 text-blue-700 dark:text-blue-200">
                   {{ t('adminWorkbench.balanceTransfer.notes') }}: {{ item.notes }}
                 </p>
@@ -311,6 +340,13 @@
                     </span>
                     <span v-if="item.single_use_per_user" class="rounded-full bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700 dark:bg-amber-500/10 dark:text-amber-300">
                       {{ t('adminWorkbench.balanceTransfer.singleUseBadge') }}
+                    </span>
+                    <span
+                      v-if="item.threshold_exempt"
+                      :data-test="`generated-gift-badge-${item.id}`"
+                      class="rounded-full bg-teal-50 px-2 py-0.5 text-xs font-medium text-teal-700 dark:bg-teal-500/10 dark:text-teal-300"
+                    >
+                      {{ t('adminWorkbench.balanceTransfer.giftBadge') }}
                     </span>
                   </div>
                   <p class="mt-1 break-words text-xs leading-5 text-gray-500 dark:text-dark-400">
@@ -432,7 +468,8 @@ const form = reactive({
   count: 1,
   expires_in_days: 30,
   notes: '',
-  single_use_per_user: false
+  single_use_per_user: false,
+  threshold_exempt: false
 })
 
 const generatedResults = ref<GeneratedRedeemCode[]>([])
@@ -544,11 +581,13 @@ async function handleGenerate() {
       count,
       expires_in_days: expiresInDays,
       notes: form.notes.trim(),
-      single_use_per_user: form.single_use_per_user
+      single_use_per_user: form.single_use_per_user,
+      threshold_exempt: form.threshold_exempt
     })
     generatedResults.value = codes
     form.amount = ''
     form.notes = ''
+    form.threshold_exempt = false
     await authStore.refreshUser()
     generatedPagination.page = 1
     await fetchGeneratedCodes()

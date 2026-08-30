@@ -25,6 +25,7 @@ import {
   type GeneratedRedeemCode,
   type RedeemHistoryItem
 } from '@/api/redeem'
+import { generate as generateAdminRedeemCodes } from '@/api/admin/redeem'
 import type { PaginatedResponse } from '@/types'
 
 describe('redeem api balance transfer codes', () => {
@@ -68,7 +69,8 @@ describe('redeem api balance transfer codes', () => {
       count: 3,
       expires_in_days: 14,
       notes: 'team drop',
-      single_use_per_user: true
+      single_use_per_user: true,
+      threshold_exempt: true
     }
     const response: GeneratedRedeemCode[] = [
       {
@@ -91,6 +93,21 @@ describe('redeem api balance transfer codes', () => {
 
     expect(post).toHaveBeenCalledWith('/admin/workbench/redeem/generated', request)
     expect(result).toEqual(response)
+  })
+
+  it('serializes gift credit for super-admin balance code generation', async () => {
+    post.mockResolvedValue({ data: [] })
+
+    await generateAdminRedeemCodes(2, 'balance', 5, undefined, undefined, 30, false, true)
+
+    expect(post).toHaveBeenCalledWith('/admin/redeem-codes/generate', {
+      count: 2,
+      type: 'balance',
+      value: 5,
+      expires_in_days: 30,
+      single_use_per_user: false,
+      threshold_exempt: true
+    })
   })
 
   it('loads paginated redeem history for the current user', async () => {

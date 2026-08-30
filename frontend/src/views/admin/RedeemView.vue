@@ -102,13 +102,22 @@
                   </svg>
                 </button>
               </div>
-              <span
-                v-if="row.single_use_per_user"
-                data-test="single-use-badge"
-                class="inline-flex rounded bg-amber-50 px-1.5 py-0.5 text-[11px] font-medium text-amber-700 dark:bg-amber-500/10 dark:text-amber-200"
-              >
-                {{ t('admin.redeem.singleUseBadge') }}
-              </span>
+              <div v-if="row.single_use_per_user || row.threshold_exempt" class="flex flex-wrap gap-1.5">
+                <span
+                  v-if="row.single_use_per_user"
+                  data-test="single-use-badge"
+                  class="inline-flex rounded bg-amber-50 px-1.5 py-0.5 text-[11px] font-medium text-amber-700 dark:bg-amber-500/10 dark:text-amber-200"
+                >
+                  {{ t('admin.redeem.singleUseBadge') }}
+                </span>
+                <span
+                  v-if="row.threshold_exempt"
+                  data-test="gift-credit-badge"
+                  class="inline-flex rounded bg-teal-50 px-1.5 py-0.5 text-[11px] font-medium text-teal-700 dark:bg-teal-500/10 dark:text-teal-200"
+                >
+                  {{ t('admin.redeem.giftBadge') }}
+                </span>
+              </div>
             </div>
           </template>
 
@@ -387,6 +396,26 @@
                 </span>
               </span>
             </label>
+            <label
+              v-if="generateForm.type === 'balance'"
+              data-test="threshold-exempt-option"
+              class="admin-form-section flex w-full min-w-0 cursor-pointer items-start gap-3 !space-y-0 px-4 py-3"
+            >
+              <input
+                v-model="generateForm.threshold_exempt"
+                data-test="threshold-exempt"
+                type="checkbox"
+                class="mt-0.5 h-4 w-4 shrink-0 rounded border-gray-300 text-teal-600 focus:ring-teal-500"
+              />
+              <span data-test="threshold-exempt-copy" class="min-w-0 flex-1">
+                <span class="block break-words text-sm font-semibold leading-5 text-gray-900 dark:text-white">
+                  {{ t('admin.redeem.giftCredit') }}
+                </span>
+                <span class="mt-1 block break-words text-xs leading-5 text-gray-500 dark:text-dark-400">
+                  {{ t('admin.redeem.giftCreditHint') }}
+                </span>
+              </span>
+            </label>
             <div>
               <label class="input-label">{{ t('admin.redeem.codeExpiry') }}</label>
               <div class="grid grid-cols-2 gap-2 sm:grid-cols-5">
@@ -593,6 +622,13 @@
           </div>
           <!-- Content -->
           <div class="p-5">
+            <span
+              v-if="generatedHasGiftCredit"
+              data-test="generated-result-gift-badge"
+              class="mb-3 inline-flex rounded bg-teal-50 px-2 py-1 text-xs font-medium text-teal-700 dark:bg-teal-500/10 dark:text-teal-200"
+            >
+              {{ t('admin.redeem.giftBadge') }}
+            </span>
             <div class="relative">
               <textarea
                 readonly
@@ -702,6 +738,10 @@ const batchGroupOptions = computed(() => [
 
 const generatedCodesText = computed(() => {
   return generatedCodes.value.map((code) => code.code).join('\n')
+})
+
+const generatedHasGiftCredit = computed(() => {
+  return generatedCodes.value.some((code) => code.threshold_exempt)
 })
 
 const textareaHeight = computed(() => {
@@ -860,7 +900,8 @@ const generateForm = reactive({
   validity_days: 30,
   expiry_option: 'never' as RedeemCodeExpiryOption,
   custom_expiry_days: 7,
-  single_use_per_user: false
+  single_use_per_user: false,
+  threshold_exempt: false
 })
 
 // 监听类型变化，邀请码类型时自动设置 value 为 0
@@ -872,6 +913,9 @@ watch(
       generateForm.single_use_per_user = false
     } else if (generateForm.value === 0) {
       generateForm.value = 10
+    }
+    if (newType !== 'balance') {
+      generateForm.threshold_exempt = false
     }
   }
 )
@@ -1060,7 +1104,8 @@ const handleGenerateCodes = async () => {
       generateForm.type === 'subscription' ? generateForm.group_id : undefined,
       generateForm.type === 'subscription' ? generateForm.validity_days : undefined,
       expiresInDays,
-      generateForm.single_use_per_user
+      generateForm.single_use_per_user,
+      generateForm.threshold_exempt
     )
     showGenerateDialog.value = false
     generatedCodes.value = result
@@ -1071,6 +1116,7 @@ const handleGenerateCodes = async () => {
     generateForm.expiry_option = 'never'
     generateForm.custom_expiry_days = 7
     generateForm.single_use_per_user = false
+    generateForm.threshold_exempt = false
     loadCodes()
   } catch (error: any) {
     appStore.showError(error.response?.data?.detail || t('admin.redeem.failedToGenerate'))

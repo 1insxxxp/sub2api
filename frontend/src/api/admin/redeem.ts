@@ -62,6 +62,7 @@ export async function getById(id: number): Promise<RedeemCode> {
  * @param groupId - Group ID (required for subscription type)
  * @param validityDays - Validity days (for subscription type)
  * @param expiresInDays - Days before the code itself expires
+ * @param thresholdExempt - Whether the redeemed balance is excluded from activity thresholds
  * @returns Array of generated redeem codes
  */
 export async function generate(
@@ -71,7 +72,8 @@ export async function generate(
   groupId?: number | null,
   validityDays?: number,
   expiresInDays?: number | null,
-  singleUsePerUser: boolean = false
+  singleUsePerUser: boolean = false,
+  thresholdExempt: boolean = false
 ): Promise<RedeemCode[]> {
   const payload: GenerateRedeemCodesRequest = {
     count,
@@ -90,6 +92,7 @@ export async function generate(
     payload.expires_in_days = expiresInDays
   }
   payload.single_use_per_user = singleUsePerUser
+  payload.threshold_exempt = thresholdExempt
 
   const { data } = await apiClient.post<RedeemCode[]>('/admin/redeem-codes/generate', payload)
   return data

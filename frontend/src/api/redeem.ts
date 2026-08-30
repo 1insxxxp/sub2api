@@ -31,6 +31,7 @@ export interface GenerateBalanceTransferCodeRequest {
   expires_in_days?: number
   notes?: string
   single_use_per_user?: boolean
+  threshold_exempt?: boolean
 }
 
 export type GeneratedRedeemCode = RedeemCode

@@ -2049,6 +2049,7 @@ export interface RedeemCode {
   single_use_per_user?: boolean
   created_by?: number | null
   source?: string
+  threshold_exempt?: boolean
   user?: User
   creator?: User
   group?: Group // 关联的分组
@@ -2063,6 +2064,7 @@ export interface GenerateRedeemCodesRequest {
   expires_at?: string | null
   expires_in_days?: number
   single_use_per_user?: boolean
+  threshold_exempt?: boolean
 }
 
 export interface BatchUpdateRedeemCodeFields {
