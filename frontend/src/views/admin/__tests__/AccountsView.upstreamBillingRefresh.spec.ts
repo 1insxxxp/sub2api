@@ -8,15 +8,11 @@ const currentDir = dirname(fileURLToPath(import.meta.url))
 const source = readFileSync(resolve(currentDir, '../AccountsView.vue'), 'utf8')
 
 describe('AccountsView upstream billing refresh', () => {
-  it('refreshes compact upstream billing data after probe snapshots are patched', () => {
-    expect(source).toContain('const refreshUpstreamBillingRates = async (force = false) =>')
-    expect(source).toContain('await refreshUpstreamBillingSortedList(true)')
-    expect(source).toMatch(
-      /const refreshAccountsAfterUpstreamBillingProbe = async \(\) => \{[\s\S]*?await refreshUpstreamBillingSortedList\(true\)/,
-    )
+  it('keeps single and batch probe results in the current list without a follow-up refresh', () => {
+    expect(source).not.toContain('refreshAccountsAfterUpstreamBillingProbe')
   })
 
-  it('shares compact synchronization between single and batch probes', () => {
-    expect(source.match(/refreshAccountsAfterUpstreamBillingProbe\(\)/g)).toHaveLength(2)
+  it('patches successful single and batch probe snapshots into their account rows', () => {
+    expect(source.match(/patchUpstreamBillingSnapshot\([^)]*snapshot\)/g)?.length).toBeGreaterThanOrEqual(2)
   })
 })

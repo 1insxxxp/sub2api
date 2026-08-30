@@ -1361,11 +1361,6 @@ const refreshUpstreamBillingRates = async (force = false) => {
   }
 }
 
-const refreshUpstreamBillingSortedList = async (force = false) => {
-  if (!force && sortState.sort_by !== 'upstream_billing_rate') return
-  await refreshUpstreamBillingRates(force)
-}
-
 useIntervalFn(() => { void refreshUpstreamBillingRates() }, 5 * 60_000, { immediate: false })
 
 const debouncedReload = () => {
@@ -2024,14 +2019,11 @@ const handleBulkProbeUpstreamBilling = async () => {
   accountIDs.forEach(id => probingUpstreamBilling.add(id))
   try {
     const results = await adminAPI.accounts.probeUpstreamBillingBatch(accountIDs)
-    let patched = false
     results.forEach(result => {
       if (result.snapshot) {
         patchUpstreamBillingSnapshot(result.account_id, result.snapshot)
-        patched = true
       }
     })
-    if (patched) await refreshAccountsAfterUpstreamBillingProbe()
     const failed = results.filter(result => result.error).length
     if (failed > 0) {
       appStore.showError(t('admin.accounts.upstreamBilling.batchPartial', { success: results.length - failed, failed }))
@@ -2332,9 +2324,6 @@ const patchUpstreamBillingSnapshot = (accountID: number, snapshot: UpstreamBilli
     extra: { ...account.extra, upstream_billing_probe: snapshot }
   })
 }
-const refreshAccountsAfterUpstreamBillingProbe = async () => {
-  await refreshUpstreamBillingSortedList(true)
-}
 const handleProbeUpstreamBilling = async (account: Account) => {
   if (probingUpstreamBilling.has(account.id)) return
   probingUpstreamBilling.add(account.id)
@@ -2342,7 +2331,6 @@ const handleProbeUpstreamBilling = async (account: Account) => {
     const result = await adminAPI.accounts.probeUpstreamBilling(account.id)
     if (result.snapshot) {
       patchUpstreamBillingSnapshot(account.id, result.snapshot)
-      await refreshAccountsAfterUpstreamBillingProbe()
     }
   } catch (error) {
     console.error('Failed to probe upstream billing:', error)
