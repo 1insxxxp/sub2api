@@ -34,6 +34,16 @@ func NewDashboardHandler(dashboardService *service.DashboardService, aggregation
 // parseTimeRange parses start_date, end_date query parameters
 // Uses user's timezone if provided, otherwise falls back to server timezone
 func parseTimeRange(c *gin.Context) (time.Time, time.Time) {
+	startTimeRaw := strings.TrimSpace(c.Query("start_time"))
+	endTimeRaw := strings.TrimSpace(c.Query("end_time"))
+	if startTimeRaw != "" && endTimeRaw != "" {
+		startTime, startErr := time.Parse(time.RFC3339Nano, startTimeRaw)
+		endTime, endErr := time.Parse(time.RFC3339Nano, endTimeRaw)
+		if startErr == nil && endErr == nil && endTime.After(startTime) {
+			return startTime, endTime
+		}
+	}
+
 	userTZ := c.Query("timezone") // Get user's timezone from request
 	now := timezone.NowInUserLocation(userTZ)
 	startDate := c.Query("start_date")
