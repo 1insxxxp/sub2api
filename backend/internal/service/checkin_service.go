@@ -24,6 +24,8 @@ import (
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/pagination"
 	"github.com/lib/pq"
+
+	entsql "entgo.io/ent/dialect/sql"
 )
 
 var (
@@ -1223,7 +1225,7 @@ func (s *CheckinService) totalUsageUSDWithClient(ctx context.Context, client *db
 	}
 	err := client.UsageLog.Query().
 		Where(usagelog.UserIDEQ(userID)).
-		Aggregate(dbent.As(dbent.Sum(usagelog.FieldActualCost), "sum")).
+		Aggregate(dbent.As(checkinEligibilityUsageSum(), "sum")).
 		Scan(ctx, &result)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -1235,6 +1237,23 @@ func (s *CheckinService) totalUsageUSDWithClient(ctx context.Context, client *db
 		return 0, nil
 	}
 	return result[0].Sum, nil
+}
+
+// checkinEligibilityUsageSum returns the cumulative ordinary-funded portion
+// used only for check-in eligibility. CASE is the portable SQL equivalent of
+// GREATEST(actual_cost - threshold_exempt_cost, 0).
+func checkinEligibilityUsageSum() dbent.AggregateFunc {
+	return func(selector *entsql.Selector) string {
+		actualCost := selector.C(usagelog.FieldActualCost)
+		thresholdExemptCost := selector.C(usagelog.FieldThresholdExemptCost)
+		return fmt.Sprintf(
+			"COALESCE(SUM(CASE WHEN %s - %s > 0 THEN %s - %s ELSE 0 END), 0)",
+			actualCost,
+			thresholdExemptCost,
+			actualCost,
+			thresholdExemptCost,
+		)
+	}
 }
 
 func (s *CheckinService) previousBeijingDayUsageUSDWithClient(ctx context.Context, client *dbent.Client, userID int64, checkinDate string) (float64, error) {
