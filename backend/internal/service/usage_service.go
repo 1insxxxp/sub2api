@@ -75,6 +75,9 @@ func NewUsageService(usageRepo UsageLogRepository, userRepo UserRepository, entC
 
 // Create 创建使用日志
 func (s *UsageService) Create(ctx context.Context, req CreateUsageLogRequest) (*UsageLog, error) {
+	if err := ValidateUsageBillingActualCost(req.ActualCost); err != nil {
+		return nil, err
+	}
 	// 使用数据库事务保证「使用日志插入」与「扣费」的原子性，避免重复扣费或漏扣风险。
 	tx, err := s.entClient.Tx(ctx)
 	if err != nil && !errors.Is(err, dbent.ErrTxStarted) {

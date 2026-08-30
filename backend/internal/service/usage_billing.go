@@ -14,22 +14,37 @@ import (
 
 var ErrUsageBillingRequestIDRequired = errors.New("usage billing request_id is required")
 var ErrUsageBillingRequestConflict = errors.New("usage billing request fingerprint conflict")
+var ErrUsageBillingNonFiniteAmount = errors.New("usage billing actual cost must be finite")
 var ErrGiftAllocatingBalanceRepositoryRequired = errors.New("gift allocating balance repository is required")
 var ErrUsageLogThresholdExemptRepositoryRequired = errors.New("usage log threshold exempt repository is required")
+var ErrUsageBillingTransactionRunnerRequired = errors.New("usage billing transaction runner is required")
 
 type BalanceDeductionResult struct {
 	NewBalance          float64
 	ThresholdExemptCost float64
 }
 
-// GiftAllocatingBalanceRepository is an optional capability used by legacy
-// billing paths that still persist usage and wallet effects separately.
+// GiftAllocatingBalanceRepository is an optional transaction-aware capability
+// used by legacy billing paths to preserve gift-source attribution.
 type GiftAllocatingBalanceRepository interface {
 	DeductBalanceWithGiftAllocation(ctx context.Context, userID int64, amount float64) (BalanceDeductionResult, error)
 }
 
 type UsageLogThresholdExemptRepository interface {
 	UpdateThresholdExemptCost(ctx context.Context, usageLogID int64, amount float64) error
+}
+
+// UsageBillingTransactionRunner lets legacy billing join transaction-aware
+// repositories through the Ent transaction carried by context.
+type UsageBillingTransactionRunner interface {
+	RunUsageBillingTransaction(ctx context.Context, fn func(context.Context) error) error
+}
+
+func ValidateUsageBillingActualCost(amount float64) error {
+	if math.IsNaN(amount) || math.IsInf(amount, 0) {
+		return ErrUsageBillingNonFiniteAmount
+	}
+	return nil
 }
 
 // UsageBillingCommand describes one billable request that must be applied at most once.

@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"testing"
 
 	"github.com/google/uuid"
@@ -157,6 +158,76 @@ func TestUsageServiceCreate_RollsBackWalletWhenAttributionUpdateFails(t *testing
 	_, err = svc.Create(ctx, service.CreateUsageLogRequest{
 		UserID: user.ID, APIKeyID: apiKey.ID, AccountID: account.ID,
 		RequestID: requestID, Model: "test-model", ActualCost: 12, TotalCost: 12, RateMultiplier: 1,
+	})
+	require.ErrorIs(t, err, wantErr)
+
+	var count int
+	require.NoError(t, integrationDB.QueryRowContext(ctx,
+		"SELECT COUNT(*) FROM usage_logs WHERE request_id = $1 AND api_key_id = $2", requestID, apiKey.ID,
+	).Scan(&count))
+	require.Zero(t, count)
+	require.Equal(t, batchImageWalletState{Balance: 20, GiftBalance: 10}, readBatchImageWallet(t, user.ID))
+}
+
+func TestUsageServiceCreate_RejectsNonFiniteActualBeforeLogOrWalletMutation(t *testing.T) {
+	ctx := context.Background()
+	client := testEntClient(t)
+	userRepo := newUserRepositoryWithSQL(client, integrationDB)
+	usageRepo := NewUsageLogRepository(client, integrationDB)
+	user := mustCreateUser(t, client, &service.User{
+		Email: "usage-service-nan-" + uuid.NewString() + "@example.com", PasswordHash: "hash", Balance: 20,
+	})
+	_, err := integrationDB.ExecContext(ctx, "UPDATE users SET gift_balance = 10 WHERE id = $1", user.ID)
+	require.NoError(t, err)
+	apiKey := mustCreateApiKey(t, client, &service.APIKey{UserID: user.ID, Key: "sk-usage-nan-" + uuid.NewString(), Name: "usage-nan"})
+	account := mustCreateAccount(t, client, &service.Account{Name: "usage-nan-" + uuid.NewString(), Type: service.AccountTypeAPIKey})
+	requestID := "usage-service-nan-" + uuid.NewString()
+	svc := service.NewUsageService(usageRepo, userRepo, client, nil)
+
+	_, err = svc.Create(ctx, service.CreateUsageLogRequest{
+		UserID: user.ID, APIKeyID: apiKey.ID, AccountID: account.ID,
+		RequestID: requestID, Model: "test-model", ActualCost: math.NaN(), TotalCost: 1, RateMultiplier: 1,
+	})
+	require.ErrorIs(t, err, service.ErrUsageBillingNonFiniteAmount)
+
+	var count int
+	require.NoError(t, integrationDB.QueryRowContext(ctx,
+		"SELECT COUNT(*) FROM usage_logs WHERE request_id = $1 AND api_key_id = $2", requestID, apiKey.ID,
+	).Scan(&count))
+	require.Zero(t, count)
+	require.Equal(t, batchImageWalletState{Balance: 20, GiftBalance: 10}, readBatchImageWallet(t, user.ID))
+}
+
+func TestUsageLogRepository_LegacyBillingTransactionRollsBackWalletAndLog(t *testing.T) {
+	ctx := context.Background()
+	client := testEntClient(t)
+	userRepo := newUserRepositoryWithSQL(client, integrationDB)
+	usageRepo := NewUsageLogRepository(client, integrationDB)
+	runner := usageRepo.(service.UsageBillingTransactionRunner)
+	thresholdRepo := usageRepo.(service.UsageLogThresholdExemptRepository)
+	user := mustCreateUser(t, client, &service.User{
+		Email: "legacy-billing-runner-" + uuid.NewString() + "@example.com", PasswordHash: "hash", Balance: 20,
+	})
+	_, err := integrationDB.ExecContext(ctx, "UPDATE users SET gift_balance = 10 WHERE id = $1", user.ID)
+	require.NoError(t, err)
+	apiKey := mustCreateApiKey(t, client, &service.APIKey{UserID: user.ID, Key: "sk-legacy-runner-" + uuid.NewString(), Name: "legacy-runner"})
+	account := mustCreateAccount(t, client, &service.Account{Name: "legacy-runner-" + uuid.NewString(), Type: service.AccountTypeAPIKey})
+	requestID := "legacy-runner-" + uuid.NewString()
+	wantErr := errors.New("force transaction rollback")
+
+	err = runner.RunUsageBillingTransaction(ctx, func(txCtx context.Context) error {
+		usageLog := &service.UsageLog{
+			UserID: user.ID, APIKeyID: apiKey.ID, AccountID: account.ID,
+			RequestID: requestID, Model: "test-model", ActualCost: 12, TotalCost: 12,
+		}
+		inserted, err := usageRepo.Create(txCtx, usageLog)
+		require.NoError(t, err)
+		require.True(t, inserted)
+		result, err := userRepo.DeductBalanceWithGiftAllocation(txCtx, user.ID, 12)
+		require.NoError(t, err)
+		usageLog.ThresholdExemptCost = result.ThresholdExemptCost
+		require.NoError(t, thresholdRepo.UpdateThresholdExemptCost(txCtx, usageLog.ID, usageLog.ThresholdExemptCost))
+		return wantErr
 	})
 	require.ErrorIs(t, err, wantErr)
 

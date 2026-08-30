@@ -22,6 +22,45 @@ type openAIRecordUsageLogRepoStub struct {
 	lastCtxErr error
 }
 
+type transactionalUsageLogRepoForTest struct {
+	UsageLogRepository
+}
+
+func (r *transactionalUsageLogRepoForTest) RunUsageBillingTransaction(ctx context.Context, fn func(context.Context) error) error {
+	return fn(ctx)
+}
+
+func (r *transactionalUsageLogRepoForTest) UpdateThresholdExemptCost(ctx context.Context, usageLogID int64, amount float64) error {
+	if repo, ok := r.UsageLogRepository.(UsageLogThresholdExemptRepository); ok {
+		return repo.UpdateThresholdExemptCost(ctx, usageLogID, amount)
+	}
+	return nil
+}
+
+func (r *transactionalUsageLogRepoForTest) CreateBestEffort(ctx context.Context, log *UsageLog) error {
+	if repo, ok := r.UsageLogRepository.(usageLogBestEffortWriter); ok {
+		return repo.CreateBestEffort(ctx, log)
+	}
+	_, err := r.UsageLogRepository.Create(ctx, log)
+	return err
+}
+
+func (r *transactionalUsageLogRepoForTest) UpsertResponseOutcome(ctx context.Context, log *UsageLog) error {
+	if repo, ok := r.UsageLogRepository.(usageResponseOutcomeWriter); ok {
+		return repo.UpsertResponseOutcome(ctx, log)
+	}
+	return nil
+}
+
+func transactionalUsageLogRepo(usageRepo UsageLogRepository) UsageLogRepository {
+	if _, runnerOK := usageRepo.(UsageBillingTransactionRunner); runnerOK {
+		if _, thresholdOK := usageRepo.(UsageLogThresholdExemptRepository); thresholdOK {
+			return usageRepo
+		}
+	}
+	return &transactionalUsageLogRepoForTest{UsageLogRepository: usageRepo}
+}
+
 func (s *openAIRecordUsageLogRepoStub) Create(ctx context.Context, log *UsageLog) (bool, error) {
 	s.calls++
 	s.lastLog = log
@@ -234,7 +273,7 @@ func newOpenAIRecordUsageServiceForTest(usageRepo UsageLogRepository, userRepo U
 	cfg.Default.RateMultiplier = 1.1
 	svc := NewOpenAIGatewayService(
 		nil,
-		usageRepo,
+		transactionalUsageLogRepo(usageRepo),
 		nil,
 		userRepo,
 		subRepo,
@@ -755,9 +794,10 @@ func TestOpenAIGatewayServiceRecordUsage_DuplicateBillingKeySkipsBillingWithRepo
 	require.Equal(t, 0, quotaSvc.quotaCalls)
 }
 
-func TestOpenAIGatewayServiceRecordUsage_BillsWhenUsageLogCreateReturnsError(t *testing.T) {
+func TestOpenAIGatewayServiceRecordUsage_LegacyUsageLogCreateErrorFailsClosed(t *testing.T) {
 	usage := OpenAIUsage{InputTokens: 8, OutputTokens: 4}
-	usageRepo := &openAIRecordUsageLogRepoStub{inserted: false, err: errors.New("usage log batch state uncertain")}
+	wantErr := errors.New("usage log batch state uncertain")
+	usageRepo := &openAIRecordUsageLogRepoStub{inserted: false, err: wantErr}
 	userRepo := &openAIRecordUsageUserRepoStub{}
 	subRepo := &openAIRecordUsageSubRepoStub{}
 	svc := newOpenAIRecordUsageServiceForTest(usageRepo, userRepo, subRepo, nil)
@@ -774,13 +814,13 @@ func TestOpenAIGatewayServiceRecordUsage_BillsWhenUsageLogCreateReturnsError(t *
 		Account: &Account{ID: 30041},
 	})
 
-	require.NoError(t, err)
+	require.ErrorIs(t, err, wantErr)
 	require.Equal(t, 1, usageRepo.calls)
-	require.Equal(t, 1, userRepo.deductCalls)
+	require.Zero(t, userRepo.deductCalls)
 	require.Equal(t, 0, subRepo.incrementCalls)
 }
 
-func TestOpenAIGatewayServiceRecordUsage_UsageLogWriteErrorDoesNotSkipBilling(t *testing.T) {
+func TestOpenAIGatewayServiceRecordUsage_LegacyUsageLogWriteErrorFailsClosed(t *testing.T) {
 	usageRepo := &openAIRecordUsageLogRepoStub{inserted: false, err: MarkUsageLogCreateNotPersisted(context.Canceled)}
 	userRepo := &openAIRecordUsageUserRepoStub{}
 	subRepo := &openAIRecordUsageSubRepoStub{}
@@ -806,16 +846,16 @@ func TestOpenAIGatewayServiceRecordUsage_UsageLogWriteErrorDoesNotSkipBilling(t 
 		APIKeyService: quotaSvc,
 	})
 
-	require.NoError(t, err)
+	require.ErrorIs(t, err, context.Canceled)
 	require.Equal(t, 1, usageRepo.calls)
-	require.Equal(t, 1, userRepo.deductCalls)
+	require.Zero(t, userRepo.deductCalls)
 	require.Equal(t, 0, subRepo.incrementCalls)
-	require.Equal(t, 1, quotaSvc.quotaCalls)
+	require.Zero(t, quotaSvc.quotaCalls)
 }
 
 func TestOpenAIGatewayServiceRecordUsage_BillingUsesDetachedContext(t *testing.T) {
 	usage := OpenAIUsage{InputTokens: 10, OutputTokens: 6, CacheReadInputTokens: 2}
-	usageRepo := &openAIRecordUsageLogRepoStub{inserted: false, err: context.DeadlineExceeded}
+	usageRepo := &openAIRecordUsageLogRepoStub{inserted: true}
 	userRepo := &openAIRecordUsageUserRepoStub{}
 	subRepo := &openAIRecordUsageSubRepoStub{}
 	quotaSvc := &openAIRecordUsageAPIKeyQuotaStub{}

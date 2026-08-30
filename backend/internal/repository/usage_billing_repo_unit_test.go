@@ -21,6 +21,10 @@ const (
 	captureBatchImageHoldSQL   = `(?s)WITH wallet_raw AS \(.*gift_balance.*frozen_balance.*frozen_gift_balance.*FOR UPDATE.*gift_in_hold.*gift_used.*UPDATE users AS u.*gift_balance = allocation\.old_gift_balance \+.*frozen_gift_balance = GREATEST.*RETURNING u\.balance, u\.frozen_balance, allocation\.gift_used`
 	releaseBatchImageHoldSQL   = `(?s)WITH wallet_raw AS \(.*gift_balance.*frozen_balance.*frozen_gift_balance.*FOR UPDATE.*gift_release.*UPDATE users AS u.*gift_balance = allocation\.old_gift_balance \+ allocation\.gift_release.*frozen_gift_balance = GREATEST.*RETURNING u\.balance, u\.frozen_balance`
 	userExistsForBillingSQL    = `(?s)SELECT 1\s+FROM users\s+WHERE id = \$1 AND deleted_at IS NULL`
+	holdGiftAllocationSQL      = `(?s)SELECT threshold_exempt_cost\s+FROM usage_billing_dedup\s+WHERE request_id = \$1 AND api_key_id = \$2\s+FOR UPDATE`
+	archivedHoldGiftSQL        = `(?s)SELECT threshold_exempt_cost\s+FROM usage_billing_dedup_archive\s+WHERE request_id = \$1 AND api_key_id = \$2\s+FOR UPDATE`
+	billingRequestExistsSQL    = `(?s)SELECT 1\s+FROM usage_billing_dedup\s+WHERE request_id = \$1 AND api_key_id = \$2`
+	archivedRequestExistsSQL   = `(?s)SELECT 1\s+FROM usage_billing_dedup_archive\s+WHERE request_id = \$1 AND api_key_id = \$2`
 )
 
 func TestDeductUsageBillingBalance_PreservesRemainingGiftAcrossOverdraft(t *testing.T) {
@@ -195,10 +199,15 @@ func TestReserveUsageBillingBatchImageBalance_MovesAvailableToFrozen(t *testing.
 	require.NoError(t, err)
 	mock.ExpectQuery(reserveBatchImageHoldSQL).
 		WithArgs(2.5, int64(42)).
-		WillReturnRows(sqlmock.NewRows([]string{"balance", "frozen_balance"}).AddRow(7.5, 2.5))
+		WillReturnRows(sqlmock.NewRows([]string{"balance", "frozen_balance", "gift_held"}).AddRow(7.5, 2.5, 1.5))
+	mock.ExpectExec(`UPDATE usage_billing_dedup\s+SET threshold_exempt_cost = \$1`).
+		WithArgs(1.5, "batch_image_hold:test", int64(7)).
+		WillReturnResult(sqlmock.NewResult(0, 1))
 	mock.ExpectCommit()
 
-	result, err := reserveUsageBillingBatchImageBalance(ctx, tx, &service.BatchImageBalanceHoldCommand{UserID: 42, HoldAmount: 2.5})
+	result, err := reserveUsageBillingBatchImageBalance(ctx, tx, &service.BatchImageBalanceHoldCommand{
+		RequestID: "batch_image_hold:test", APIKeyID: 7, UserID: 42, HoldAmount: 2.5,
+	})
 	require.NoError(t, err)
 	require.NotNil(t, result.NewBalance)
 	require.NotNil(t, result.FrozenBalance)
@@ -240,12 +249,23 @@ func TestCaptureUsageBillingBatchImageBalance_ReleasesRemainder(t *testing.T) {
 	mock.ExpectBegin()
 	tx, err := db.BeginTx(ctx, nil)
 	require.NoError(t, err)
+	mock.ExpectQuery(holdGiftAllocationSQL).
+		WithArgs(service.BatchImageHoldRequestID("imgbatch_capture"), int64(7)).
+		WillReturnRows(sqlmock.NewRows([]string{"threshold_exempt_cost"}).AddRow(0.25))
+	mock.ExpectQuery(billingRequestExistsSQL).
+		WithArgs(service.BatchImageReleaseRequestID("imgbatch_capture"), int64(7)).
+		WillReturnError(sql.ErrNoRows)
+	mock.ExpectQuery(archivedRequestExistsSQL).
+		WithArgs(service.BatchImageReleaseRequestID("imgbatch_capture"), int64(7)).
+		WillReturnError(sql.ErrNoRows)
 	mock.ExpectQuery(captureBatchImageHoldSQL).
-		WithArgs(1.0, 0.25, int64(42)).
+		WithArgs(1.0, 0.25, int64(42), 0.25).
 		WillReturnRows(sqlmock.NewRows([]string{"balance", "frozen_balance", "gift_used"}).AddRow(9.75, 0.0, 0.25))
 	mock.ExpectCommit()
 
-	result, err := captureUsageBillingBatchImageBalance(ctx, tx, &service.BatchImageBalanceHoldCommand{UserID: 42, HoldAmount: 1, ActualAmount: 0.25})
+	result, err := captureUsageBillingBatchImageBalance(ctx, tx, &service.BatchImageBalanceHoldCommand{
+		UserID: 42, APIKeyID: 7, BatchID: "imgbatch_capture", HoldAmount: 1, ActualAmount: 0.25,
+	})
 	require.NoError(t, err)
 	require.InDelta(t, 9.75, *result.NewBalance, 0.000001)
 	require.InDelta(t, 0.0, *result.FrozenBalance, 0.000001)
@@ -280,11 +300,17 @@ func TestReleaseUsageBillingBatchImageBalance_ReturnsFrozenToAvailable(t *testin
 	mock.ExpectBegin()
 	tx, err := db.BeginTx(ctx, nil)
 	require.NoError(t, err)
-	mock.ExpectQuery(`SELECT 1\s+FROM usage_billing_dedup\s+WHERE request_id = \$1 AND api_key_id = \$2`).
+	mock.ExpectQuery(holdGiftAllocationSQL).
 		WithArgs(service.BatchImageHoldRequestID("imgbatch_release"), int64(7)).
-		WillReturnRows(sqlmock.NewRows([]string{"?column?"}).AddRow(1))
+		WillReturnRows(sqlmock.NewRows([]string{"threshold_exempt_cost"}).AddRow(1.0))
+	mock.ExpectQuery(billingRequestExistsSQL).
+		WithArgs(service.BatchImageCaptureRequestID("imgbatch_release"), int64(7)).
+		WillReturnError(sql.ErrNoRows)
+	mock.ExpectQuery(archivedRequestExistsSQL).
+		WithArgs(service.BatchImageCaptureRequestID("imgbatch_release"), int64(7)).
+		WillReturnError(sql.ErrNoRows)
 	mock.ExpectQuery(releaseBatchImageHoldSQL).
-		WithArgs(1.0, int64(42)).
+		WithArgs(1.0, int64(42), 1.0).
 		WillReturnRows(sqlmock.NewRows([]string{"balance", "frozen_balance"}).AddRow(10.0, 0.0))
 	mock.ExpectCommit()
 
@@ -307,19 +333,18 @@ func TestReleaseUsageBillingBatchImageBalance_SkipsWhenHoldNeverReserved(t *test
 	require.NoError(t, err)
 	// dedup 与归档表均无 hold claim：说明该 job 从未成功冻结，
 	// 释放必须跳过，不得从他人冻结资金池中凭空生成余额。
-	mock.ExpectQuery(`SELECT 1\s+FROM usage_billing_dedup\s+WHERE request_id = \$1 AND api_key_id = \$2`).
+	mock.ExpectQuery(holdGiftAllocationSQL).
 		WithArgs(service.BatchImageHoldRequestID("imgbatch_phantom"), int64(7)).
 		WillReturnError(sql.ErrNoRows)
-	mock.ExpectQuery(`SELECT 1\s+FROM usage_billing_dedup_archive\s+WHERE request_id = \$1 AND api_key_id = \$2`).
+	mock.ExpectQuery(archivedHoldGiftSQL).
 		WithArgs(service.BatchImageHoldRequestID("imgbatch_phantom"), int64(7)).
 		WillReturnError(sql.ErrNoRows)
-	mock.ExpectCommit()
+	mock.ExpectRollback()
 
 	result, err := releaseUsageBillingBatchImageBalance(ctx, tx, &service.BatchImageBalanceHoldCommand{UserID: 42, APIKeyID: 7, BatchID: "imgbatch_phantom", HoldAmount: 1})
-	require.NoError(t, err)
-	require.Nil(t, result.NewBalance)
-	require.Nil(t, result.FrozenBalance)
-	require.NoError(t, tx.Commit())
+	require.ErrorIs(t, err, errBatchImageReleaseHoldNotReserved)
+	require.Nil(t, result)
+	require.NoError(t, tx.Rollback())
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 

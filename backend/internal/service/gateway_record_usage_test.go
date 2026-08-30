@@ -20,7 +20,7 @@ func newGatewayRecordUsageServiceForTest(usageRepo UsageLogRepository, userRepo 
 	return NewGatewayService(
 		nil,
 		nil,
-		usageRepo,
+		transactionalUsageLogRepo(usageRepo),
 		nil,
 		userRepo,
 		subRepo,
@@ -118,7 +118,7 @@ func TestWriteUsageLogBestEffortPersistsUsageBeforeOutcomeAndRetriesEvidence(t *
 }
 
 func TestGatewayServiceRecordUsage_BillingUsesDetachedContextAndCarriesOutcome(t *testing.T) {
-	usageRepo := &openAIRecordUsageLogRepoStub{inserted: false, err: context.DeadlineExceeded}
+	usageRepo := &openAIRecordUsageLogRepoStub{inserted: true}
 	userRepo := &openAIRecordUsageUserRepoStub{}
 	subRepo := &openAIRecordUsageSubRepoStub{}
 	quotaSvc := &openAIRecordUsageAPIKeyQuotaStub{}
@@ -480,7 +480,7 @@ func TestGatewayServiceRecordUsage_UsesExplicitPricingAtForPeakRate(t *testing.T
 	}
 }
 
-func TestGatewayServiceRecordUsage_UsageLogWriteErrorDoesNotSkipBilling(t *testing.T) {
+func TestGatewayServiceRecordUsage_LegacyUsageLogWriteErrorFailsClosed(t *testing.T) {
 	usageRepo := &openAIRecordUsageLogRepoStub{inserted: false, err: MarkUsageLogCreateNotPersisted(context.Canceled)}
 	userRepo := &openAIRecordUsageUserRepoStub{}
 	subRepo := &openAIRecordUsageSubRepoStub{}
@@ -506,14 +506,14 @@ func TestGatewayServiceRecordUsage_UsageLogWriteErrorDoesNotSkipBilling(t *testi
 		APIKeyService: quotaSvc,
 	})
 
-	require.NoError(t, err)
+	require.ErrorIs(t, err, context.Canceled)
 	require.Equal(t, 1, usageRepo.calls)
-	require.Equal(t, 1, userRepo.deductCalls)
-	require.Equal(t, 1, quotaSvc.quotaCalls)
+	require.Zero(t, userRepo.deductCalls)
+	require.Zero(t, quotaSvc.quotaCalls)
 }
 
 func TestGatewayServiceRecordUsageWithLongContext_BillingUsesDetachedContext(t *testing.T) {
-	usageRepo := &openAIRecordUsageLogRepoStub{inserted: false, err: context.DeadlineExceeded}
+	usageRepo := &openAIRecordUsageLogRepoStub{inserted: true}
 	userRepo := &openAIRecordUsageUserRepoStub{}
 	subRepo := &openAIRecordUsageSubRepoStub{}
 	quotaSvc := &openAIRecordUsageAPIKeyQuotaStub{}

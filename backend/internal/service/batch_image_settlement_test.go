@@ -61,13 +61,28 @@ func TestBatchImageSettlementService_SettlesAndChargesSuccessfulImagesOnly(t *te
 
 type batchSettlementUsageLogRepo struct {
 	UsageLogRepository
-	lastLog *UsageLog
-	calls   int
+	lastLog   *UsageLog
+	calls     int
+	errOnce   error
+	persisted map[string]bool
 }
 
 func (r *batchSettlementUsageLogRepo) Create(_ context.Context, log *UsageLog) (bool, error) {
 	r.calls++
 	r.lastLog = log
+	if r.errOnce != nil {
+		err := r.errOnce
+		r.errOnce = nil
+		return false, err
+	}
+	if r.persisted == nil {
+		r.persisted = make(map[string]bool)
+	}
+	key := fmt.Sprintf("%s:%d", log.RequestID, log.APIKeyID)
+	if r.persisted[key] {
+		return false, nil
+	}
+	r.persisted[key] = true
 	return true, nil
 }
 
@@ -124,6 +139,88 @@ func TestBatchImageSettlementService_IdempotentAfterBillingCrash(t *testing.T) {
 	require.Equal(t, 0.5, result.ActualCost)
 	require.Equal(t, BatchImageJobStatusCompleted, repo.jobs[job.BatchID].Status)
 	require.Len(t, billing.captures, 1)
+}
+
+func TestBatchImageSettlementService_RetryRestoresCaptureGiftAttributionAfterMarkFailure(t *testing.T) {
+	baseRepo := newFakeBatchImageRepository()
+	job := testSettlingBatchImageJob("imgbatch_mark_retry_gift")
+	baseRepo.jobs[job.BatchID] = job
+	markErr := errors.New("mark settled failed")
+	repo := &failOnceMarkBatchImageRepository{fakeBatchImageRepository: baseRepo, err: markErr}
+	billing := &fakeBatchImageBillingRepo{captureResult: &BatchImageBalanceHoldResult{ThresholdExemptCost: 0.4}}
+	usageLogs := &batchSettlementUsageLogRepo{}
+	svc := &BatchImageSettlementService{
+		Repo: repo, BillingRepo: billing, Pricing: &fakeBatchImagePricingResolver{unitPrice: 0.25}, UsageLogRepo: usageLogs,
+	}
+
+	_, err := svc.Settle(context.Background(), job.BatchID)
+	require.ErrorIs(t, err, markErr)
+	require.Equal(t, BatchImageJobStatusSettling, baseRepo.jobs[job.BatchID].Status)
+	require.Len(t, billing.captures, 1)
+	require.Equal(t, 1, usageLogs.calls)
+	require.Equal(t, 0.4, usageLogs.lastLog.ThresholdExemptCost)
+
+	result, err := svc.Settle(context.Background(), job.BatchID)
+	require.NoError(t, err)
+	require.False(t, result.AlreadySettled)
+	require.Equal(t, BatchImageJobStatusCompleted, baseRepo.jobs[job.BatchID].Status)
+	require.Len(t, billing.captures, 2)
+	require.Equal(t, 2, usageLogs.calls)
+	require.Equal(t, 0.5, usageLogs.lastLog.ActualCost)
+	require.Equal(t, 0.4, usageLogs.lastLog.ThresholdExemptCost)
+
+	duplicate, err := svc.Settle(context.Background(), job.BatchID)
+	require.NoError(t, err)
+	require.True(t, duplicate.AlreadySettled)
+	require.Len(t, billing.captures, 2)
+	require.Equal(t, 2, usageLogs.calls)
+}
+
+func TestBatchImageSettlementService_RetryRestoresCaptureGiftAttributionAfterUsageLogFailure(t *testing.T) {
+	repo := newFakeBatchImageRepository()
+	job := testSettlingBatchImageJob("imgbatch_log_retry_gift")
+	repo.jobs[job.BatchID] = job
+	billing := &fakeBatchImageBillingRepo{captureResult: &BatchImageBalanceHoldResult{ThresholdExemptCost: 0.4}}
+	logErr := errors.New("usage log failed")
+	usageLogs := &batchSettlementUsageLogRepo{errOnce: logErr}
+	svc := &BatchImageSettlementService{
+		Repo: repo, BillingRepo: billing, Pricing: &fakeBatchImagePricingResolver{unitPrice: 0.25}, UsageLogRepo: usageLogs,
+	}
+
+	_, err := svc.Settle(context.Background(), job.BatchID)
+	require.ErrorIs(t, err, logErr)
+	require.Equal(t, BatchImageJobStatusSettling, repo.jobs[job.BatchID].Status)
+	require.Len(t, billing.captures, 1)
+	require.Equal(t, 1, usageLogs.calls)
+
+	result, err := svc.Settle(context.Background(), job.BatchID)
+	require.NoError(t, err)
+	require.False(t, result.AlreadySettled)
+	require.Equal(t, BatchImageJobStatusCompleted, repo.jobs[job.BatchID].Status)
+	require.Len(t, billing.captures, 2)
+	require.Equal(t, 2, usageLogs.calls)
+	require.Equal(t, 0.5, usageLogs.lastLog.ActualCost)
+	require.Equal(t, 0.4, usageLogs.lastLog.ThresholdExemptCost)
+
+	duplicate, err := svc.Settle(context.Background(), job.BatchID)
+	require.NoError(t, err)
+	require.True(t, duplicate.AlreadySettled)
+	require.Len(t, billing.captures, 2)
+	require.Equal(t, 2, usageLogs.calls)
+}
+
+type failOnceMarkBatchImageRepository struct {
+	*fakeBatchImageRepository
+	err error
+}
+
+func (r *failOnceMarkBatchImageRepository) MarkBatchImageJobSettled(ctx context.Context, params MarkBatchImageJobSettledParams) error {
+	if r.err != nil {
+		err := r.err
+		r.err = nil
+		return err
+	}
+	return r.fakeBatchImageRepository.MarkBatchImageJobSettled(ctx, params)
 }
 
 func TestBatchImageSettlementService_ValidationErrors(t *testing.T) {
@@ -471,6 +568,7 @@ type fakeBatchImageBillingRepo struct {
 	captureErr     error
 	releaseErr     error
 	captureResult  *BatchImageBalanceHoldResult
+	captureResults map[string]float64
 }
 
 func (r *fakeBatchImageBillingRepo) Apply(_ context.Context, cmd *UsageBillingCommand) (*UsageBillingApplyResult, error) {
@@ -507,10 +605,22 @@ func (r *fakeBatchImageBillingRepo) CaptureBatchImageBalance(_ context.Context, 
 		return nil, r.captureErr
 	}
 	result, err := r.applyHold(cmd, &r.captures)
-	if err == nil && result != nil && result.Applied && r.captureResult != nil {
+	if err != nil || result == nil {
+		return result, err
+	}
+	if result.Applied && r.captureResult != nil {
 		copy := *r.captureResult
 		copy.Applied = true
+		if r.captureResults == nil {
+			r.captureResults = make(map[string]float64)
+		}
+		if cmd != nil {
+			r.captureResults[cmd.RequestID] = copy.ThresholdExemptCost
+		}
 		return &copy, nil
+	}
+	if !result.Applied && cmd != nil {
+		result.ThresholdExemptCost = r.captureResults[cmd.RequestID]
 	}
 	return result, err
 }

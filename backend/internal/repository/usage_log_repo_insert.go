@@ -174,6 +174,27 @@ func (r *usageLogRepository) UpdateThresholdExemptCost(ctx context.Context, usag
 	return translatePersistenceError(err, service.ErrUsageLogNotFound, nil)
 }
 
+func (r *usageLogRepository) RunUsageBillingTransaction(ctx context.Context, fn func(context.Context) error) error {
+	if fn == nil {
+		return nil
+	}
+	if dbent.TxFromContext(ctx) != nil {
+		return fn(ctx)
+	}
+	if r == nil || r.client == nil {
+		return errors.New("usage log repository client is nil")
+	}
+	tx, err := r.client.Tx(ctx)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+	if err := fn(dbent.NewTxContext(ctx, tx)); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
 func (r *usageLogRepository) CreateBestEffort(ctx context.Context, log *service.UsageLog) error {
 	if log == nil {
 		return nil

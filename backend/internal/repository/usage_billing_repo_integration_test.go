@@ -126,7 +126,14 @@ func TestUsageBillingRepositoryApply_GiftAllocationDeduplicates(t *testing.T) {
 	duplicate, err := repo.Apply(ctx, cmd)
 	require.NoError(t, err)
 	require.False(t, duplicate.Applied)
-	require.Zero(t, duplicate.ThresholdExemptCost)
+	require.InDelta(t, 10, duplicate.ThresholdExemptCost, 0.00000001)
+
+	var persistedExempt float64
+	require.NoError(t, integrationDB.QueryRowContext(ctx, `
+		SELECT threshold_exempt_cost FROM usage_billing_dedup
+		WHERE request_id = $1 AND api_key_id = $2
+	`, cmd.RequestID, cmd.APIKeyID).Scan(&persistedExempt))
+	require.InDelta(t, 10, persistedExempt, 0.00000001)
 
 	var balance, giftBalance float64
 	require.NoError(t, integrationDB.QueryRowContext(ctx, "SELECT balance, gift_balance FROM users WHERE id = $1", user.ID).Scan(&balance, &giftBalance))
@@ -653,8 +660,8 @@ func TestDashboardAggregationRepositoryCleanupUsageBillingDedup_BatchDeletesOldR
 	newCreatedAt := time.Now().UTC().Add(-time.Hour)
 
 	_, err := integrationDB.ExecContext(ctx, `
-		INSERT INTO usage_billing_dedup (request_id, api_key_id, request_fingerprint, created_at)
-		VALUES ($1, 1, $2, $3), ($4, 1, $5, $6)
+		INSERT INTO usage_billing_dedup (request_id, api_key_id, request_fingerprint, threshold_exempt_cost, created_at)
+		VALUES ($1, 1, $2, 0.75, $3), ($4, 1, $5, NULL, $6)
 	`,
 		oldRequestID, strings.Repeat("a", 64), oldCreatedAt,
 		newRequestID, strings.Repeat("b", 64), newCreatedAt,
@@ -674,6 +681,11 @@ func TestDashboardAggregationRepositoryCleanupUsageBillingDedup_BatchDeletesOldR
 	var archivedCount int
 	require.NoError(t, integrationDB.QueryRowContext(ctx, "SELECT COUNT(*) FROM usage_billing_dedup_archive WHERE request_id = $1", oldRequestID).Scan(&archivedCount))
 	require.Equal(t, 1, archivedCount)
+	var archivedThresholdExemptCost float64
+	require.NoError(t, integrationDB.QueryRowContext(ctx,
+		"SELECT threshold_exempt_cost FROM usage_billing_dedup_archive WHERE request_id = $1", oldRequestID,
+	).Scan(&archivedThresholdExemptCost))
+	require.InDelta(t, 0.75, archivedThresholdExemptCost, 0.00000001)
 }
 
 func TestUsageBillingRepositoryApply_DeduplicatesAgainstArchivedKey(t *testing.T) {

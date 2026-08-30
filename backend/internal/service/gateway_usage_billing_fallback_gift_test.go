@@ -5,6 +5,8 @@ package service
 import (
 	"context"
 	"errors"
+	"fmt"
+	"math"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -34,6 +36,87 @@ func (r *giftFallbackSubscriptionRepo) IncrementUsage(context.Context, int64, fl
 	return nil
 }
 
+type transactionalFallbackWalletRepo struct {
+	UserRepository
+	balance float64
+	gift    float64
+	calls   int
+}
+
+func (r *transactionalFallbackWalletRepo) DeductBalanceWithGiftAllocation(_ context.Context, _ int64, amount float64) (BalanceDeductionResult, error) {
+	r.calls++
+	giftUsed := math.Min(r.gift, amount)
+	r.balance -= amount
+	r.gift -= giftUsed
+	return BalanceDeductionResult{NewBalance: r.balance, ThresholdExemptCost: giftUsed}, nil
+}
+
+type atomicFallbackUsageRepo struct {
+	UsageLogRepository
+	logs             map[string]UsageLog
+	wallet           *transactionalFallbackWalletRepo
+	failUpdate       error
+	transactionCalls int
+}
+
+func newAtomicFallbackUsageRepo(wallet *transactionalFallbackWalletRepo) *atomicFallbackUsageRepo {
+	return &atomicFallbackUsageRepo{logs: make(map[string]UsageLog), wallet: wallet}
+}
+
+func (r *atomicFallbackUsageRepo) RunUsageBillingTransaction(ctx context.Context, fn func(context.Context) error) error {
+	r.transactionCalls++
+	logsSnapshot := make(map[string]UsageLog, len(r.logs))
+	for key, log := range r.logs {
+		logsSnapshot[key] = log
+	}
+	var balanceSnapshot, giftSnapshot float64
+	if r.wallet != nil {
+		balanceSnapshot, giftSnapshot = r.wallet.balance, r.wallet.gift
+	}
+	if err := fn(ctx); err != nil {
+		r.logs = logsSnapshot
+		if r.wallet != nil {
+			r.wallet.balance, r.wallet.gift = balanceSnapshot, giftSnapshot
+		}
+		return err
+	}
+	return nil
+}
+
+func (r *atomicFallbackUsageRepo) Create(_ context.Context, log *UsageLog) (bool, error) {
+	key := fmt.Sprintf("%s:%d", log.RequestID, log.APIKeyID)
+	if _, exists := r.logs[key]; exists {
+		return false, nil
+	}
+	log.ID = int64(len(r.logs) + 1)
+	r.logs[key] = *log
+	return true, nil
+}
+
+func (r *atomicFallbackUsageRepo) UpdateThresholdExemptCost(_ context.Context, usageLogID int64, amount float64) error {
+	if r.failUpdate != nil {
+		return r.failUpdate
+	}
+	for key, log := range r.logs {
+		if log.ID == usageLogID {
+			log.ThresholdExemptCost = amount
+			r.logs[key] = log
+			return nil
+		}
+	}
+	return ErrUsageLogNotFound
+}
+
+func newLegacyFallbackDeps(userRepo UserRepository, usageRepo *atomicFallbackUsageRepo) *billingDeps {
+	return &billingDeps{
+		usageLogRepo:        usageRepo,
+		userRepo:            userRepo,
+		userSubRepo:         &giftFallbackSubscriptionRepo{},
+		billingCacheService: &BillingCacheService{},
+		deferredService:     &DeferredService{},
+	}
+}
+
 func TestApplyUsageBilling_LegacyFallbackPersistsGiftAllocation(t *testing.T) {
 	for _, tc := range []struct {
 		name       string
@@ -57,12 +140,7 @@ func TestApplyUsageBilling_LegacyFallbackPersistsGiftAllocation(t *testing.T) {
 				User:    &User{ID: 1},
 				APIKey:  &APIKey{ID: 2},
 				Account: &Account{ID: 3},
-			}, &billingDeps{
-				userRepo:            userRepo,
-				userSubRepo:         &giftFallbackSubscriptionRepo{},
-				billingCacheService: &BillingCacheService{},
-				deferredService:     &DeferredService{},
-			}, nil)
+			}, newLegacyFallbackDeps(userRepo, newAtomicFallbackUsageRepo(nil)), nil)
 
 			require.NoError(t, err)
 			require.True(t, applied)
@@ -82,12 +160,7 @@ func TestApplyUsageBilling_LegacyFallbackClampsGiftAllocation(t *testing.T) {
 		User:    &User{ID: 1},
 		APIKey:  &APIKey{ID: 2},
 		Account: &Account{ID: 3},
-	}, &billingDeps{
-		userRepo:            userRepo,
-		userSubRepo:         &giftFallbackSubscriptionRepo{},
-		billingCacheService: &BillingCacheService{},
-		deferredService:     &DeferredService{},
-	}, nil)
+	}, newLegacyFallbackDeps(userRepo, newAtomicFallbackUsageRepo(nil)), nil)
 
 	require.NoError(t, err)
 	require.Equal(t, usageLog.ActualCost, usageLog.ThresholdExemptCost)
@@ -101,12 +174,7 @@ func TestApplyUsageBilling_LegacyFallbackFailsWithoutGiftCapability(t *testing.T
 		User:    &User{ID: 1},
 		APIKey:  &APIKey{ID: 2},
 		Account: &Account{ID: 3},
-	}, &billingDeps{
-		userRepo:            &giftAllocatingBlindUserRepo{},
-		userSubRepo:         &giftFallbackSubscriptionRepo{},
-		billingCacheService: &BillingCacheService{},
-		deferredService:     &DeferredService{},
-	}, nil)
+	}, newLegacyFallbackDeps(&giftAllocatingBlindUserRepo{}, newAtomicFallbackUsageRepo(nil)), nil)
 
 	require.Error(t, err)
 	require.False(t, applied)
@@ -123,15 +191,86 @@ func TestApplyUsageBilling_LegacyFallbackPropagatesGiftDeductionError(t *testing
 		User:    &User{ID: 1},
 		APIKey:  &APIKey{ID: 2},
 		Account: &Account{ID: 3},
-	}, &billingDeps{
-		userRepo:            userRepo,
-		userSubRepo:         &giftFallbackSubscriptionRepo{},
-		billingCacheService: &BillingCacheService{},
-		deferredService:     &DeferredService{},
-	}, nil)
+	}, newLegacyFallbackDeps(userRepo, newAtomicFallbackUsageRepo(nil)), nil)
 
 	require.ErrorIs(t, err, wantErr)
 	require.False(t, applied)
+}
+
+func TestApplyUsageBilling_LegacyFallbackDuplicateRequestIsAtomicAndIdempotent(t *testing.T) {
+	wallet := &transactionalFallbackWalletRepo{balance: 20, gift: 10}
+	usageRepo := newAtomicFallbackUsageRepo(wallet)
+	deps := newLegacyFallbackDeps(wallet, usageRepo)
+	params := &postUsageBillingParams{
+		Cost: &CostBreakdown{ActualCost: 12, TotalCost: 12},
+		User: &User{ID: 1}, APIKey: &APIKey{ID: 2}, Account: &Account{ID: 3},
+	}
+
+	firstLog := &UsageLog{APIKeyID: 2, ActualCost: 12}
+	first, err := applyUsageBilling(context.Background(), "legacy-duplicate", firstLog, params, deps, nil)
+	require.NoError(t, err)
+	require.True(t, first)
+	secondLog := &UsageLog{APIKeyID: 2, ActualCost: 12}
+	second, err := applyUsageBilling(context.Background(), "legacy-duplicate", secondLog, params, deps, nil)
+	require.NoError(t, err)
+	require.False(t, second)
+
+	require.Equal(t, 1, wallet.calls)
+	require.InDelta(t, 8, wallet.balance, 0.00000001)
+	require.Zero(t, wallet.gift)
+	require.Len(t, usageRepo.logs, 1)
+	persisted := usageRepo.logs["legacy-duplicate:2"]
+	require.InDelta(t, 10, persisted.ThresholdExemptCost, 0.00000001)
+}
+
+func TestApplyUsageBilling_LegacyFallbackRollsBackWalletAndLogOnAttributionFailure(t *testing.T) {
+	wallet := &transactionalFallbackWalletRepo{balance: 20, gift: 10}
+	usageRepo := newAtomicFallbackUsageRepo(wallet)
+	wantErr := errors.New("attribution update failed")
+	usageRepo.failUpdate = wantErr
+
+	applied, err := applyUsageBilling(context.Background(), "legacy-rollback", &UsageLog{APIKeyID: 2, ActualCost: 12}, &postUsageBillingParams{
+		Cost: &CostBreakdown{ActualCost: 12, TotalCost: 12},
+		User: &User{ID: 1}, APIKey: &APIKey{ID: 2}, Account: &Account{ID: 3},
+	}, newLegacyFallbackDeps(wallet, usageRepo), nil)
+
+	require.ErrorIs(t, err, wantErr)
+	require.False(t, applied)
+	require.Empty(t, usageRepo.logs)
+	require.InDelta(t, 20, wallet.balance, 0.00000001)
+	require.InDelta(t, 10, wallet.gift, 0.00000001)
+}
+
+func TestApplyUsageBilling_LegacyFallbackRejectsNonFiniteActualBeforeMutation(t *testing.T) {
+	wallet := &transactionalFallbackWalletRepo{balance: 20, gift: 10}
+	usageRepo := newAtomicFallbackUsageRepo(wallet)
+
+	applied, err := applyUsageBilling(context.Background(), "legacy-nan", &UsageLog{APIKeyID: 2, ActualCost: math.NaN()}, &postUsageBillingParams{
+		Cost: &CostBreakdown{ActualCost: math.NaN(), TotalCost: 1},
+		User: &User{ID: 1}, APIKey: &APIKey{ID: 2}, Account: &Account{ID: 3},
+	}, newLegacyFallbackDeps(wallet, usageRepo), nil)
+
+	require.ErrorIs(t, err, ErrUsageBillingNonFiniteAmount)
+	require.False(t, applied)
+	require.Zero(t, usageRepo.transactionCalls)
+	require.Zero(t, wallet.calls)
+	require.Empty(t, usageRepo.logs)
+}
+
+func TestApplyUsageBilling_LegacyFallbackRequiresExplicitRequestID(t *testing.T) {
+	wallet := &transactionalFallbackWalletRepo{balance: 20, gift: 10}
+	usageRepo := newAtomicFallbackUsageRepo(wallet)
+
+	applied, err := applyUsageBilling(context.Background(), "", &UsageLog{APIKeyID: 2, ActualCost: 1}, &postUsageBillingParams{
+		Cost: &CostBreakdown{ActualCost: 1, TotalCost: 1},
+		User: &User{ID: 1}, APIKey: &APIKey{ID: 2}, Account: &Account{ID: 3},
+	}, newLegacyFallbackDeps(wallet, usageRepo), nil)
+
+	require.ErrorIs(t, err, ErrUsageBillingRequestIDRequired)
+	require.False(t, applied)
+	require.Zero(t, usageRepo.transactionCalls)
+	require.Zero(t, wallet.calls)
+	require.Empty(t, usageRepo.logs)
 }
 
 type giftAllocatingBlindUserRepo struct{ UserRepository }

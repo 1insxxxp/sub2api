@@ -161,6 +161,13 @@ func (s *BatchImageSettlementService) Settle(ctx context.Context, batchID string
 
 	now := time.Now()
 	outputExpiresAt := now.Add(s.outputRetentionAfterTerminal())
+	thresholdExemptCost := 0.0
+	if captureResult != nil {
+		thresholdExemptCost = clampUsageBillingThresholdExemptCost(captureResult.ThresholdExemptCost, actualCost, false)
+	}
+	if err := s.recordUsageLog(ctx, job, actualCost, thresholdExemptCost, result.RequestID, now); err != nil {
+		return nil, err
+	}
 	if err := s.Repo.MarkBatchImageJobSettled(ctx, MarkBatchImageJobSettledParams{
 		BatchID:         job.BatchID,
 		ActualCost:      actualCost,
@@ -178,11 +185,6 @@ func (s *BatchImageSettlementService) Settle(ctx context.Context, batchID string
 	}); err != nil {
 		return nil, err
 	}
-	thresholdExemptCost := 0.0
-	if captureResult != nil && captureResult.Applied {
-		thresholdExemptCost = clampUsageBillingThresholdExemptCost(captureResult.ThresholdExemptCost, actualCost, false)
-	}
-	s.recordUsageLog(ctx, job, actualCost, thresholdExemptCost, result.RequestID, now)
 
 	return result, nil
 }
@@ -254,9 +256,9 @@ func (s *BatchImageSettlementService) failExhaustedSettlement(ctx context.Contex
 	return ErrBatchImageSettlementBillingFailed
 }
 
-func (s *BatchImageSettlementService) recordUsageLog(ctx context.Context, job *BatchImageJob, actualCost, thresholdExemptCost float64, requestID string, createdAt time.Time) {
+func (s *BatchImageSettlementService) recordUsageLog(ctx context.Context, job *BatchImageJob, actualCost, thresholdExemptCost float64, requestID string, createdAt time.Time) error {
 	if s == nil || s.UsageLogRepo == nil || job == nil || job.APIKeyID == nil || job.AccountID == nil {
-		return
+		return nil
 	}
 	billingMode := string(BillingModeImage)
 	accountRateMultiplier := job.AccountRateMultiplier
@@ -286,7 +288,10 @@ func (s *BatchImageSettlementService) recordUsageLog(ctx context.Context, job *B
 		SessionID:             job.SessionID,
 		CreatedAt:             createdAt,
 	}
-	writeUsageLogBestEffort(ctx, s.UsageLogRepo, usageLog, "service.batch_image_settlement")
+	usageCtx, cancel := detachedBillingContext(ctx)
+	defer cancel()
+	_, err := s.UsageLogRepo.Create(usageCtx, usageLog)
+	return err
 }
 
 func (s *BatchImageSettlementService) invalidateAuthCache(ctx context.Context, userID int64) {

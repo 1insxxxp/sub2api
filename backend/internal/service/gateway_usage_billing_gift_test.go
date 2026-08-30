@@ -85,14 +85,15 @@ func TestClampUsageBillingThresholdExemptCost_DoesNotExceedPersistedActualCost(t
 		"persisted exempt cost %s exceeds persisted actual cost %s", persistedExempt, persistedActual)
 }
 
-func TestApplyUsageBilling_DoesNotAllocateOnFailureOrDedup(t *testing.T) {
+func TestApplyUsageBilling_OnlyPropagatesCommittedGiftAllocation(t *testing.T) {
 	for _, tc := range []struct {
-		name   string
-		result *UsageBillingApplyResult
-		err    error
+		name       string
+		result     *UsageBillingApplyResult
+		err        error
+		wantExempt float64
 	}{
 		{name: "billing failure", err: errors.New("billing failed")},
-		{name: "deduplicated", result: &UsageBillingApplyResult{Applied: false, ThresholdExemptCost: 10}},
+		{name: "deduplicated replay", result: &UsageBillingApplyResult{Applied: false, ThresholdExemptCost: 10}, wantExempt: 10},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			usageLog := &UsageLog{ActualCost: 12}
@@ -106,7 +107,7 @@ func TestApplyUsageBilling_DoesNotAllocateOnFailureOrDedup(t *testing.T) {
 				require.NoError(t, err)
 			}
 			require.False(t, applied)
-			require.Zero(t, usageLog.ThresholdExemptCost)
+			require.InDelta(t, tc.wantExempt, usageLog.ThresholdExemptCost, 0.00000001)
 		})
 	}
 }

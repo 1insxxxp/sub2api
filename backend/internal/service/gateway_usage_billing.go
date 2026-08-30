@@ -166,42 +166,76 @@ func (p *postUsageBillingParams) shouldUpdateAccountQuota() bool {
 }
 
 // postUsageBilling is the legacy fallback billing path used when the unified
-// billing repo is unavailable (nil). Production uses applyUsageBilling → repo.Apply
-// for atomic billing. This path only runs in tests or degraded mode.
-func postUsageBilling(ctx context.Context, usageLog *UsageLog, p *postUsageBillingParams, deps *billingDeps) error {
+// billing repo is unavailable. Its usage row, deduction, and gift attribution
+// commit together; the usage row is also the idempotency claim.
+func postUsageBilling(ctx context.Context, requestID string, usageLog *UsageLog, p *postUsageBillingParams, deps *billingDeps) (bool, error) {
+	requestID = strings.TrimSpace(requestID)
+	if requestID == "" {
+		return false, ErrUsageBillingRequestIDRequired
+	}
+	if usageLog == nil || p == nil || p.Cost == nil || deps == nil || deps.usageLogRepo == nil {
+		return false, ErrUsageBillingTransactionRunnerRequired
+	}
+	if err := ValidateUsageBillingActualCost(p.Cost.ActualCost); err != nil {
+		return false, err
+	}
+	runner, ok := deps.usageLogRepo.(UsageBillingTransactionRunner)
+	if !ok {
+		return false, ErrUsageBillingTransactionRunnerRequired
+	}
+
 	billingCtx, cancel := detachedBillingContext(ctx)
 	defer cancel()
 
 	cost := p.Cost
-
-	if p.IsSubscriptionBill {
-		// Subscription usage tracked by ActualCost so group rate multiplier
-		// consumes the quota at the expected speed.
-		if cost.ActualCost > 0 {
-			if err := deps.userSubRepo.IncrementUsage(billingCtx, p.Subscription.ID, cost.ActualCost); err != nil {
-				slog.Error("increment subscription usage failed", "subscription_id", p.Subscription.ID, "error", err)
-			}
+	var applied bool
+	err := runner.RunUsageBillingTransaction(billingCtx, func(txCtx context.Context) error {
+		usageLog.RequestID = requestID
+		inserted, err := deps.usageLogRepo.Create(txCtx, usageLog)
+		if err != nil {
+			return err
 		}
-	} else {
-		if cost.ActualCost > 0 {
-			giftRepo, ok := deps.userRepo.(GiftAllocatingBalanceRepository)
-			if !ok {
-				slog.Error("gift-aware legacy balance deduction is unavailable", "user_id", p.User.ID)
-				return ErrGiftAllocatingBalanceRepositoryRequired
-			}
-			result, err := giftRepo.DeductBalanceWithGiftAllocation(billingCtx, p.User.ID, cost.ActualCost)
-			if err != nil {
-				slog.Error("deduct balance with gift allocation failed", "user_id", p.User.ID, "error", err)
-				return err
-			}
-			if usageLog != nil {
-				usageLog.ThresholdExemptCost = clampUsageBillingThresholdExemptCost(result.ThresholdExemptCost, usageLog.ActualCost, false)
-			}
-			if deps.billingCacheService != nil {
-				if err := deps.billingCacheService.InvalidateUserBalance(billingCtx, p.User.ID); err != nil {
-					slog.Warn("invalidate balance cache after legacy deduction failed", "user_id", p.User.ID, "error", err)
+		if !inserted {
+			return nil
+		}
+		applied = true
+
+		if p.IsSubscriptionBill {
+			if cost.ActualCost > 0 {
+				if err := deps.userSubRepo.IncrementUsage(txCtx, p.Subscription.ID, cost.ActualCost); err != nil {
+					return err
 				}
 			}
+			return nil
+		}
+		if cost.ActualCost <= 0 {
+			return nil
+		}
+		giftRepo, ok := deps.userRepo.(GiftAllocatingBalanceRepository)
+		if !ok {
+			return ErrGiftAllocatingBalanceRepositoryRequired
+		}
+		thresholdRepo, ok := deps.usageLogRepo.(UsageLogThresholdExemptRepository)
+		if !ok {
+			return ErrUsageLogThresholdExemptRepositoryRequired
+		}
+		result, err := giftRepo.DeductBalanceWithGiftAllocation(txCtx, p.User.ID, cost.ActualCost)
+		if err != nil {
+			return err
+		}
+		usageLog.ThresholdExemptCost = clampUsageBillingThresholdExemptCost(result.ThresholdExemptCost, usageLog.ActualCost, false)
+		return thresholdRepo.UpdateThresholdExemptCost(txCtx, usageLog.ID, usageLog.ThresholdExemptCost)
+	})
+	if err != nil {
+		return false, err
+	}
+	if !applied {
+		return false, nil
+	}
+
+	if !p.IsSubscriptionBill && cost.ActualCost > 0 && deps.billingCacheService != nil {
+		if err := deps.billingCacheService.InvalidateUserBalance(billingCtx, p.User.ID); err != nil {
+			slog.Warn("invalidate balance cache after legacy deduction failed", "user_id", p.User.ID, "error", err)
 		}
 	}
 
@@ -248,7 +282,7 @@ func postUsageBilling(ctx context.Context, usageLog *UsageLog, p *postUsageBilli
 	// cache updates. The legacy path does DB writes directly; the finalize path
 	// does cache queue + notifications. Notifications are dispatched separately
 	// by the caller after recording the usage log.
-	return nil
+	return true, nil
 }
 
 func resolveUsageBillingRequestID(ctx context.Context, upstreamRequestID string) string {
@@ -383,13 +417,15 @@ func applyUsageBilling(ctx context.Context, requestID string, usageLog *UsageLog
 	if p == nil || deps == nil {
 		return false, nil
 	}
+	if p.Cost != nil {
+		if err := ValidateUsageBillingActualCost(p.Cost.ActualCost); err != nil {
+			return false, err
+		}
+	}
 
 	cmd := buildUsageBillingCommand(requestID, usageLog, p)
 	if cmd == nil || cmd.RequestID == "" || repo == nil {
-		if err := postUsageBilling(ctx, usageLog, p, deps); err != nil {
-			return false, err
-		}
-		return true, nil
+		return postUsageBilling(ctx, requestID, usageLog, p, deps)
 	}
 
 	billingCtx, cancel := detachedBillingContext(ctx)
@@ -400,12 +436,12 @@ func applyUsageBilling(ctx context.Context, requestID string, usageLog *UsageLog
 		return false, err
 	}
 
+	if result != nil && usageLog != nil {
+		usageLog.ThresholdExemptCost = clampUsageBillingThresholdExemptCost(result.ThresholdExemptCost, usageLog.ActualCost, p.IsSubscriptionBill)
+	}
 	if result == nil || !result.Applied {
 		deps.deferredService.ScheduleLastUsedUpdate(p.Account.ID)
 		return false, nil
-	}
-	if usageLog != nil {
-		usageLog.ThresholdExemptCost = clampUsageBillingThresholdExemptCost(result.ThresholdExemptCost, usageLog.ActualCost, p.IsSubscriptionBill)
 	}
 
 	if result.APIKeyQuotaExhausted {
@@ -625,6 +661,7 @@ func detachUpstreamContext(ctx context.Context) (context.Context, context.Cancel
 // billingDeps 扣费逻辑依赖的服务（由各 gateway service 提供）
 type billingDeps struct {
 	accountRepo           AccountRepository
+	usageLogRepo          UsageLogRepository
 	userRepo              UserRepository
 	userSubRepo           UserSubscriptionRepository
 	billingCacheService   *BillingCacheService
@@ -637,6 +674,7 @@ type billingDeps struct {
 func (s *GatewayService) billingDeps() *billingDeps {
 	return &billingDeps{
 		accountRepo:           s.accountRepo,
+		usageLogRepo:          s.usageLogRepo,
 		userRepo:              s.userRepo,
 		userSubRepo:           s.userSubRepo,
 		billingCacheService:   s.billingCacheService,
@@ -700,6 +738,17 @@ func writeResponseOutcome(ctx context.Context, repo UsageLogRepository, usageLog
 		return nil
 	}
 	return writer.UpsertResponseOutcome(ctx, usageLog)
+}
+
+func writeUsageOutcomeBestEffort(ctx context.Context, repo UsageLogRepository, usageLog *UsageLog, logKey string) {
+	if repo == nil || usageLog == nil || usageLog.Outcome == nil {
+		return
+	}
+	usageCtx, cancel := detachedBillingContext(ctx)
+	defer cancel()
+	if err := writeResponseOutcome(usageCtx, repo, usageLog); err != nil {
+		logger.LegacyPrintf(logKey, "Create usage response outcome failed: %v", err)
+	}
 }
 
 // recordUsageOpts 内部选项，参数化普通计费与长上下文计费的差异点。
@@ -980,6 +1029,9 @@ func (s *GatewayService) recordUsageCore(ctx context.Context, input *recordUsage
 			}
 		}
 	}
+	if err := ValidateUsageBillingActualCost(cost.ActualCost); err != nil {
+		return err
+	}
 
 	// 判断计费方式：订阅模式 vs 余额模式。系统自定义月卡的 API key
 	// 已克隆成来源分组，因此必须使用上面的双重身份判定，不能再看来源分组类型。
@@ -1046,9 +1098,15 @@ func (s *GatewayService) recordUsageCore(ctx context.Context, input *recordUsage
 	}, s.billingDeps(), s.usageBillingRepo)
 
 	if billingErr != nil {
-		usageLog.ActualCost = 0
-		writeUsageLogBestEffort(ctx, s.usageLogRepo, usageLog, "service.gateway")
+		if s.usageBillingRepo != nil {
+			usageLog.ActualCost = 0
+			writeUsageLogBestEffort(ctx, s.usageLogRepo, usageLog, "service.gateway")
+		}
 		return billingErr
+	}
+	if s.usageBillingRepo == nil {
+		writeUsageOutcomeBestEffort(ctx, s.usageLogRepo, usageLog, "service.gateway")
+		return nil
 	}
 	writeUsageLogBestEffort(ctx, s.usageLogRepo, usageLog, "service.gateway")
 
