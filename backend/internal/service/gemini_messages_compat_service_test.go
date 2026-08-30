@@ -30,6 +30,12 @@ type geminiCancelThenSuccessUpstreamStub struct {
 	calls int
 }
 
+type geminiUnexpectedEOFReader struct{}
+
+func (geminiUnexpectedEOFReader) Read([]byte) (int, error) {
+	return 0, io.ErrUnexpectedEOF
+}
+
 func (s *geminiCancelThenSuccessUpstreamStub) Do(req *http.Request, proxyURL string, accountID int64, accountConcurrency int) (*http.Response, error) {
 	s.calls++
 	if s.calls == 1 {
@@ -271,6 +277,9 @@ func TestGeminiForwardAsChatCompletions_StreamPrematureEOFBeforeOutputFailsOver(
 	var failoverErr *UpstreamFailoverError
 	require.ErrorAs(t, err, &failoverErr)
 	require.Equal(t, http.StatusBadGateway, failoverErr.StatusCode)
+	require.True(t, failoverErr.RetryableOnSameAccount)
+	require.Equal(t, 1, failoverErr.SameAccountRetryMax)
+	require.True(t, failoverErr.RequestScopedTransient)
 	require.False(t, c.Writer.Written())
 	require.Empty(t, rec.Body.String())
 }
@@ -278,7 +287,7 @@ func TestGeminiForwardAsChatCompletions_StreamPrematureEOFBeforeOutputFailsOver(
 func TestGeminiForwardAsChatCompletions_StreamPrematureEOFAfterOutputEmitsError(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
-	upstreamBody := `data: {"candidates":[{"content":{"parts":[{"text":"partial"}]}}]}` + "\n\n"
+	upstreamBody := `data: {"candidates":[{"content":{"parts":[{"text":"partial"}]}}],"usageMetadata":{"promptTokenCount":7,"candidatesTokenCount":3}}` + "\n\n"
 	httpStub := &geminiCompatHTTPUpstreamStub{response: &http.Response{
 		StatusCode: http.StatusOK,
 		Header:     http.Header{"Content-Type": []string{"text/event-stream"}},
@@ -295,13 +304,49 @@ func TestGeminiForwardAsChatCompletions_StreamPrematureEOFAfterOutputEmitsError(
 	c.Request = httptest.NewRequest(http.MethodPost, "/v1/chat/completions", bytes.NewReader(body))
 
 	result, err := svc.ForwardAsChatCompletions(context.Background(), c, account, body)
-	require.Nil(t, result)
+	require.NotNil(t, result)
 	require.Error(t, err)
+	require.Equal(t, 7, result.Usage.InputTokens)
+	require.Equal(t, 3, result.Usage.OutputTokens)
+	require.NotNil(t, result.Outcome)
+	require.True(t, result.Outcome.HasText)
+	require.False(t, result.Outcome.StreamCompleted)
+	require.Equal(t, UpstreamErrorProtocol, result.Outcome.UpstreamErrorKind)
 	require.True(t, c.Writer.Written())
 	out := rec.Body.String()
 	require.Contains(t, out, `"content":"partial"`)
 	require.Contains(t, out, `"code":"incomplete_stream"`)
 	require.NotContains(t, out, "data: [DONE]")
+	require.True(t, IsResponseCommitted(c), "handler must not append a second generic SSE error")
+}
+
+func TestGeminiForwardAsChatCompletions_StreamUnexpectedEOFBeforeOutputFailsOver(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	reader := io.MultiReader(
+		strings.NewReader(`data: {"usageMetadata":{"promptTokenCount":2}}`+"\n\n"),
+		geminiUnexpectedEOFReader{},
+	)
+	httpStub := &geminiCompatHTTPUpstreamStub{response: &http.Response{
+		StatusCode: http.StatusOK,
+		Header:     http.Header{"Content-Type": []string{"text/event-stream"}},
+		Body:       io.NopCloser(reader),
+	}}
+	svc := &GeminiMessagesCompatService{httpUpstream: httpStub, cfg: &config.Config{}}
+	account := &Account{
+		ID: 112, Platform: PlatformGemini, Type: AccountTypeAPIKey, Concurrency: 1,
+		Credentials: map[string]any{"api_key": "gemini-api-key"},
+	}
+	rec := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(rec)
+	body := []byte(`{"model":"gemini-2.5-flash","stream":true,"messages":[{"role":"user","content":"hi"}]}`)
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1/chat/completions", bytes.NewReader(body))
+
+	result, err := svc.ForwardAsChatCompletions(context.Background(), c, account, body)
+	require.Nil(t, result)
+	var failoverErr *UpstreamFailoverError
+	require.ErrorAs(t, err, &failoverErr)
+	require.False(t, c.Writer.Written())
 }
 
 func TestGeminiForwardAsChatCompletions_StreamEmptyTerminalFailsOver(t *testing.T) {
@@ -331,6 +376,122 @@ func TestGeminiForwardAsChatCompletions_StreamEmptyTerminalFailsOver(t *testing.
 	require.Equal(t, http.StatusBadGateway, failoverErr.StatusCode)
 	require.False(t, c.Writer.Written())
 	require.Empty(t, rec.Body.String())
+}
+
+func TestGeminiForwardAsChatCompletions_StreamSafetyTerminalReturnsExplicitError(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	upstreamBody := `data: {"candidates":[{"finishReason":"SAFETY"}],"usageMetadata":{"promptTokenCount":2,"candidatesTokenCount":0}}` + "\n\n" +
+		"data: [DONE]\n\n"
+	httpStub := &geminiCompatHTTPUpstreamStub{response: &http.Response{
+		StatusCode: http.StatusOK,
+		Header:     http.Header{"Content-Type": []string{"text/event-stream"}},
+		Body:       io.NopCloser(strings.NewReader(upstreamBody)),
+	}}
+	svc := &GeminiMessagesCompatService{httpUpstream: httpStub, cfg: &config.Config{}}
+	account := &Account{
+		ID: 113, Platform: PlatformGemini, Type: AccountTypeAPIKey, Concurrency: 1,
+		Credentials: map[string]any{"api_key": "gemini-api-key"},
+	}
+	rec := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(rec)
+	body := []byte(`{"model":"gemini-2.5-flash","stream":true,"messages":[{"role":"user","content":"hi"}]}`)
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1/chat/completions", bytes.NewReader(body))
+
+	result, err := svc.ForwardAsChatCompletions(context.Background(), c, account, body)
+	require.Nil(t, result)
+	require.Error(t, err)
+	var failoverErr *UpstreamFailoverError
+	require.NotErrorAs(t, err, &failoverErr)
+	require.True(t, c.Writer.Written())
+	require.Contains(t, rec.Body.String(), "content_filter")
+}
+
+func TestGeminiForwardAsChatCompletions_StreamWhitespaceOnlyTerminalFailsOver(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	upstreamBody := `data: {"candidates":[{"content":{"parts":[{"text":"  \n\t"}]},"finishReason":"STOP"}]}` + "\n\n" +
+		"data: [DONE]\n\n"
+	httpStub := &geminiCompatHTTPUpstreamStub{response: &http.Response{
+		StatusCode: http.StatusOK,
+		Header:     http.Header{"Content-Type": []string{"text/event-stream"}},
+		Body:       io.NopCloser(strings.NewReader(upstreamBody)),
+	}}
+	svc := &GeminiMessagesCompatService{httpUpstream: httpStub, cfg: &config.Config{}}
+	account := &Account{
+		ID: 110, Platform: PlatformGemini, Type: AccountTypeAPIKey, Concurrency: 1,
+		Credentials: map[string]any{"api_key": "gemini-api-key"},
+	}
+	rec := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(rec)
+	body := []byte(`{"model":"gemini-2.5-flash","stream":true,"messages":[{"role":"user","content":"hi"}]}`)
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1/chat/completions", bytes.NewReader(body))
+
+	result, err := svc.ForwardAsChatCompletions(context.Background(), c, account, body)
+	require.Nil(t, result)
+	var failoverErr *UpstreamFailoverError
+	require.ErrorAs(t, err, &failoverErr)
+	require.False(t, c.Writer.Written())
+}
+
+func TestGeminiForwardAsChatCompletions_StreamSkipsThoughtBeforeVisibleText(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	upstreamBody := `data: {"candidates":[{"content":{"parts":[{"text":"hidden reasoning","thought":true}]}}]}` + "\n\n" +
+		`data: {"candidates":[{"content":{"parts":[{"text":"visible answer"}]},"finishReason":"STOP"}]}` + "\n\n" +
+		"data: [DONE]\n\n"
+	httpStub := &geminiCompatHTTPUpstreamStub{response: &http.Response{
+		StatusCode: http.StatusOK,
+		Header:     http.Header{"Content-Type": []string{"text/event-stream"}},
+		Body:       io.NopCloser(strings.NewReader(upstreamBody)),
+	}}
+	svc := &GeminiMessagesCompatService{httpUpstream: httpStub, cfg: &config.Config{}}
+	account := &Account{
+		ID: 111, Platform: PlatformGemini, Type: AccountTypeAPIKey, Concurrency: 1,
+		Credentials: map[string]any{"api_key": "gemini-api-key"},
+	}
+	rec := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(rec)
+	body := []byte(`{"model":"gemini-2.5-flash","stream":true,"messages":[{"role":"user","content":"hi"}]}`)
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1/chat/completions", bytes.NewReader(body))
+
+	result, err := svc.ForwardAsChatCompletions(context.Background(), c, account, body)
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	out := rec.Body.String()
+	require.NotContains(t, out, "hidden reasoning")
+	require.Contains(t, out, `"content":"visible answer"`)
+	require.Contains(t, out, "data: [DONE]")
+}
+
+func TestGeminiForwardAsChatCompletions_StreamClientDisconnectIsNotUpstreamFailure(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	upstreamBody := `data: {"candidates":[{"content":{"parts":[{"text":"visible answer"}]},"finishReason":"STOP"}]}` + "\n\n" +
+		"data: [DONE]\n\n"
+	httpStub := &geminiCompatHTTPUpstreamStub{response: &http.Response{
+		StatusCode: http.StatusOK,
+		Header:     http.Header{"Content-Type": []string{"text/event-stream"}},
+		Body:       io.NopCloser(strings.NewReader(upstreamBody)),
+	}}
+	svc := &GeminiMessagesCompatService{httpUpstream: httpStub, cfg: &config.Config{}}
+	account := &Account{
+		ID: 117, Platform: PlatformGemini, Type: AccountTypeAPIKey, Concurrency: 1,
+		Credentials: map[string]any{"api_key": "gemini-api-key"},
+	}
+	rec := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(rec)
+	c.Writer = &failWriteResponseWriter{ResponseWriter: c.Writer}
+	body := []byte(`{"model":"gemini-2.5-flash","stream":true,"messages":[{"role":"user","content":"hi"}]}`)
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1/chat/completions", bytes.NewReader(body))
+
+	result, err := svc.ForwardAsChatCompletions(context.Background(), c, account, body)
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	require.True(t, result.ClientDisconnect)
+	require.NotNil(t, result.Outcome)
+	require.Equal(t, DisconnectSourceClient, result.Outcome.DisconnectSource)
+	require.Equal(t, UpstreamErrorNone, result.Outcome.UpstreamErrorKind)
 }
 
 func TestGeminiForwardAsChatCompletions_EmptyNonStreamingFailsOver(t *testing.T) {
@@ -388,10 +549,91 @@ func TestGeminiForwardAsChatCompletions_EmptyNonStreamingFailsOver(t *testing.T)
 			var failoverErr *UpstreamFailoverError
 			require.ErrorAs(t, err, &failoverErr)
 			require.Equal(t, http.StatusBadGateway, failoverErr.StatusCode)
+			require.True(t, failoverErr.RetryableOnSameAccount)
+			require.Equal(t, 1, failoverErr.SameAccountRetryMax)
 			require.False(t, c.Writer.Written())
 			require.Empty(t, rec.Body.String())
 		})
 	}
+}
+
+func TestGeminiForwardAsChatCompletions_IncompleteNonStreamingFailsOver(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	tests := []struct {
+		name        string
+		account     *Account
+		contentType string
+		body        string
+	}{
+		{
+			name: "api key json response",
+			account: &Account{
+				ID: 114, Platform: PlatformGemini, Type: AccountTypeAPIKey, Concurrency: 1,
+				Credentials: map[string]any{"api_key": "gemini-api-key"},
+			},
+			contentType: "application/json",
+			body:        `{"candidates":[{"content":{"parts":[{"text":"partial"}]}}],"usageMetadata":{"promptTokenCount":2,"candidatesTokenCount":1}}`,
+		},
+		{
+			name: "oauth collected sse response",
+			account: &Account{
+				ID: 115, Platform: PlatformGemini, Type: AccountTypeOAuth, Concurrency: 1,
+				Credentials: map[string]any{"access_token": "ya29.test-token", "project_id": "project-1"},
+			},
+			contentType: "text/event-stream",
+			body: `data: {"response":{"candidates":[{"content":{"parts":[{"text":"partial"}]}}],"usageMetadata":{"promptTokenCount":2,"candidatesTokenCount":1}}}` + "\n\n" +
+				"data: [DONE]\n\n",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			httpStub := &geminiCompatHTTPUpstreamStub{response: &http.Response{
+				StatusCode: http.StatusOK,
+				Header:     http.Header{"Content-Type": []string{tt.contentType}},
+				Body:       io.NopCloser(strings.NewReader(tt.body)),
+			}}
+			svc := &GeminiMessagesCompatService{tokenProvider: &GeminiTokenProvider{}, httpUpstream: httpStub, cfg: &config.Config{}}
+			rec := httptest.NewRecorder()
+			c, _ := gin.CreateTestContext(rec)
+			body := []byte(`{"model":"gemini-2.5-flash","messages":[{"role":"user","content":"hi"}]}`)
+			c.Request = httptest.NewRequest(http.MethodPost, "/v1/chat/completions", bytes.NewReader(body))
+
+			result, err := svc.ForwardAsChatCompletions(context.Background(), c, tt.account, body)
+			require.Nil(t, result)
+			var failoverErr *UpstreamFailoverError
+			require.ErrorAs(t, err, &failoverErr)
+			require.Equal(t, "incomplete_stream", gjson.GetBytes(failoverErr.ResponseBody, "error.code").String())
+			require.False(t, c.Writer.Written())
+		})
+	}
+}
+
+func TestGeminiForwardAsChatCompletions_NonStreamingSafetyReturnsExplicitError(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	httpStub := &geminiCompatHTTPUpstreamStub{response: &http.Response{
+		StatusCode: http.StatusOK,
+		Header:     http.Header{"Content-Type": []string{"application/json"}},
+		Body:       io.NopCloser(strings.NewReader(`{"candidates":[{"finishReason":"PROHIBITED_CONTENT"}]}`)),
+	}}
+	svc := &GeminiMessagesCompatService{httpUpstream: httpStub, cfg: &config.Config{}}
+	account := &Account{
+		ID: 116, Platform: PlatformGemini, Type: AccountTypeAPIKey, Concurrency: 1,
+		Credentials: map[string]any{"api_key": "gemini-api-key"},
+	}
+	rec := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(rec)
+	body := []byte(`{"model":"gemini-2.5-flash","messages":[{"role":"user","content":"hi"}]}`)
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1/chat/completions", bytes.NewReader(body))
+
+	result, err := svc.ForwardAsChatCompletions(context.Background(), c, account, body)
+	require.Nil(t, result)
+	require.Error(t, err)
+	var failoverErr *UpstreamFailoverError
+	require.NotErrorAs(t, err, &failoverErr)
+	require.Contains(t, rec.Body.String(), "content_filter")
 }
 
 func TestGeminiForwardAsChatCompletions_FunctionNamedWebSearchStaysClientSide(t *testing.T) {

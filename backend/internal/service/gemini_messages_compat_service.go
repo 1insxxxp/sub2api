@@ -2060,9 +2060,10 @@ func mapGeminiStatusToClaudeErrorType(status string) string {
 }
 
 type geminiStreamResult struct {
-	usage        *ClaudeUsage
-	firstTokenMs *int
-	outcome      ResponseOutcome
+	usage            *ClaudeUsage
+	firstTokenMs     *int
+	clientDisconnect bool
+	outcome          ResponseOutcome
 }
 
 func (s *GeminiMessagesCompatService) handleNonStreamingResponse(c *gin.Context, resp *http.Response, originalModel string) (*ClaudeUsage, error) {
@@ -2493,6 +2494,9 @@ func collectGeminiSSE(body io.Reader, isOAuth bool) (map[string]any, *ClaudeUsag
 							lastWithParts = parsed
 							// Collect text from each part for aggregation
 							for _, part := range parts {
+								if thought, _ := part["thought"].(bool); thought {
+									continue
+								}
 								if text, ok := part["text"].(string); ok && text != "" {
 									collectedTextParts = append(collectedTextParts, text)
 								}
