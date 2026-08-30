@@ -53,6 +53,7 @@ var usageLogInsertArgTypes = [...]string{
 	"numeric",     // cache_read_cost
 	"numeric",     // total_cost
 	"numeric",     // actual_cost
+	"numeric",     // threshold_exempt_cost
 	"numeric",     // rate_multiplier
 	"numeric",     // account_rate_multiplier
 	"smallint",    // billing_type
@@ -254,6 +255,7 @@ func (r *usageLogRepository) createSingle(ctx context.Context, sqlq sqlExecutor,
 			cache_read_cost,
 			total_cost,
 			actual_cost,
+			threshold_exempt_cost,
 			rate_multiplier,
 			account_rate_multiplier,
 			billing_type,
@@ -294,7 +296,7 @@ func (r *usageLogRepository) createSingle(ctx context.Context, sqlq sqlExecutor,
 			$31, $32, $33, $34, $35, $36, $37, $38, $39, $40,
 			$41, $42, $43, $44, $45, $46, $47, $48, $49, $50,
 			$51, $52, $53, $54, $55, $56, $57, $58, $59, $60,
-			$61, $62
+			$61, $62, $63
 		)
 		ON CONFLICT (request_id, api_key_id) DO NOTHING
 		RETURNING id, created_at
@@ -715,6 +717,7 @@ func buildUsageLogBatchInsertQuery(keys []string, preparedByKey map[string]usage
 			cache_read_cost,
 			total_cost,
 			actual_cost,
+			threshold_exempt_cost,
 			rate_multiplier,
 			account_rate_multiplier,
 			billing_type,
@@ -750,9 +753,9 @@ func buildUsageLogBatchInsertQuery(keys []string, preparedByKey map[string]usage
 			created_at
 		) AS (VALUES `)
 
-	// Each batch row prepends the synthetic input_index before the 62
+	// Each batch row prepends the synthetic input_index before the 63
 	// usage-log column values.
-	args := make([]any, 0, len(keys)*63)
+	args := make([]any, 0, len(keys)*64)
 	argPos := 1
 	for idx, key := range keys {
 		if idx > 0 {
@@ -810,6 +813,7 @@ func buildUsageLogBatchInsertQuery(keys []string, preparedByKey map[string]usage
 				cache_read_cost,
 				total_cost,
 				actual_cost,
+				threshold_exempt_cost,
 				rate_multiplier,
 				account_rate_multiplier,
 				billing_type,
@@ -874,6 +878,7 @@ func buildUsageLogBatchInsertQuery(keys []string, preparedByKey map[string]usage
 				cache_read_cost,
 				total_cost,
 				actual_cost,
+				threshold_exempt_cost,
 				rate_multiplier,
 				account_rate_multiplier,
 				billing_type,
@@ -978,6 +983,7 @@ func buildUsageLogBestEffortInsertQuery(preparedList []usageLogInsertPrepared) (
 			cache_read_cost,
 			total_cost,
 			actual_cost,
+			threshold_exempt_cost,
 			rate_multiplier,
 			account_rate_multiplier,
 			billing_type,
@@ -1013,7 +1019,7 @@ func buildUsageLogBestEffortInsertQuery(preparedList []usageLogInsertPrepared) (
 			created_at
 		) AS (VALUES `)
 
-	args := make([]any, 0, len(preparedList)*62)
+	args := make([]any, 0, len(preparedList)*63)
 	argPos := 1
 	for idx, prepared := range preparedList {
 		if idx > 0 {
@@ -1068,6 +1074,7 @@ func buildUsageLogBestEffortInsertQuery(preparedList []usageLogInsertPrepared) (
 			cache_read_cost,
 			total_cost,
 			actual_cost,
+			threshold_exempt_cost,
 			rate_multiplier,
 			account_rate_multiplier,
 			billing_type,
@@ -1132,6 +1139,7 @@ func buildUsageLogBestEffortInsertQuery(preparedList []usageLogInsertPrepared) (
 			cache_read_cost,
 			total_cost,
 			actual_cost,
+			threshold_exempt_cost,
 			rate_multiplier,
 			account_rate_multiplier,
 			billing_type,
@@ -1204,6 +1212,7 @@ func execUsageLogInsertNoResult(ctx context.Context, sqlq sqlExecutor, prepared 
 			cache_read_cost,
 			total_cost,
 			actual_cost,
+			threshold_exempt_cost,
 			rate_multiplier,
 			account_rate_multiplier,
 			billing_type,
@@ -1244,7 +1253,7 @@ func execUsageLogInsertNoResult(ctx context.Context, sqlq sqlExecutor, prepared 
 			$31, $32, $33, $34, $35, $36, $37, $38, $39, $40,
 			$41, $42, $43, $44, $45, $46, $47, $48, $49, $50,
 			$51, $52, $53, $54, $55, $56, $57, $58, $59, $60,
-			$61, $62
+			$61, $62, $63
 		)
 		ON CONFLICT (request_id, api_key_id) DO NOTHING
 	`, prepared.args...)
@@ -1337,6 +1346,7 @@ func prepareUsageLogInsert(log *service.UsageLog) usageLogInsertPrepared {
 			log.CacheReadCost,
 			log.TotalCost,
 			log.ActualCost,
+			log.ThresholdExemptCost,
 			rateMultiplier,
 			log.AccountRateMultiplier,
 			log.BillingType,

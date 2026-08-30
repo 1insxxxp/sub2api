@@ -3,10 +3,12 @@
 package repository
 
 import (
+	"context"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/Wei-Shaw/sub2api/internal/service"
 	"github.com/stretchr/testify/require"
 )
@@ -64,4 +66,46 @@ func TestBuildUsageLogBatchInsertQuery_UsesConflictDoNothing(t *testing.T) {
 
 	require.Contains(t, query, "ON CONFLICT (request_id, api_key_id) DO NOTHING")
 	require.NotContains(t, strings.ToUpper(query), "DO UPDATE")
+}
+
+func TestUsageLogInsert_ThresholdExemptCostWiring(t *testing.T) {
+	const thresholdExemptCostArgIndex = 29
+	createdAt := time.Date(2026, 8, 30, 12, 0, 0, 0, time.UTC)
+	log := &service.UsageLog{
+		UserID:              1,
+		APIKeyID:            2,
+		AccountID:           3,
+		RequestID:           "req-threshold-exempt-cost",
+		Model:               "gpt-5",
+		ActualCost:          1.25,
+		ThresholdExemptCost: 0.375,
+		CreatedAt:           createdAt,
+	}
+	prepared := prepareUsageLogInsert(log)
+
+	require.Len(t, prepared.args, len(usageLogInsertArgTypes))
+	require.Equal(t, "numeric", usageLogInsertArgTypes[thresholdExemptCostArgIndex])
+	require.Equal(t, 0.375, prepared.args[thresholdExemptCostArgIndex])
+	require.Contains(t, usageLogSelectColumns, "threshold_exempt_cost")
+
+	db, mock := newSQLMock(t)
+	mock.ExpectQuery("(?s)INSERT INTO usage_logs.*threshold_exempt_cost").
+		WithArgs(anySliceToDriverValues(prepared.args)...).
+		WillReturnRows(sqlmock.NewRows([]string{"id", "created_at"}).AddRow(int64(91), createdAt))
+	inserted, err := (&usageLogRepository{sql: db}).createSingle(context.Background(), db, log)
+	require.NoError(t, err)
+	require.True(t, inserted)
+	require.NoError(t, mock.ExpectationsWereMet())
+
+	key := usageLogBatchKey(log.RequestID, log.APIKeyID)
+	batchQuery, batchArgs := buildUsageLogBatchInsertQuery(
+		[]string{key},
+		map[string]usageLogInsertPrepared{key: prepared},
+	)
+	require.GreaterOrEqual(t, strings.Count(batchQuery, "threshold_exempt_cost"), 3)
+	require.Equal(t, 0.375, batchArgs[thresholdExemptCostArgIndex+1])
+
+	bestEffortQuery, bestEffortArgs := buildUsageLogBestEffortInsertQuery([]usageLogInsertPrepared{prepared})
+	require.GreaterOrEqual(t, strings.Count(bestEffortQuery, "threshold_exempt_cost"), 3)
+	require.Equal(t, 0.375, bestEffortArgs[thresholdExemptCostArgIndex])
 }

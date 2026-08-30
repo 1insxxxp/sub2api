@@ -7,19 +7,20 @@ import (
 )
 
 type RedeemCode struct {
-	ID        int64
-	Code      string
-	Type      string
-	Value     float64
-	Status    string
-	UsedBy    *int64
-	UsedAt    *time.Time
-	CreatedBy *int64
-	Notes     string
-	Source    string
-	CreatedAt time.Time
-	ExpiresAt *time.Time
-	BatchID   *string
+	ID              int64
+	Code            string
+	Type            string
+	Value           float64
+	ThresholdExempt bool
+	Status          string
+	UsedBy          *int64
+	UsedAt          *time.Time
+	CreatedBy       *int64
+	Notes           string
+	Source          string
+	CreatedAt       time.Time
+	ExpiresAt       *time.Time
+	BatchID         *string
 
 	GroupID      *int64
 	ValidityDays int

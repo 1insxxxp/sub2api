@@ -72,6 +72,21 @@ func (s *RedeemCodeRepoSuite) TestCreate() {
 	s.Require().WithinDuration(expiresAt, *got.ExpiresAt, time.Second)
 }
 
+func (s *RedeemCodeRepoSuite) TestCreateRoundTripsThresholdExempt() {
+	code := &service.RedeemCode{
+		Code:            "GIFT-CREATE",
+		Type:            service.RedeemTypeBalance,
+		Value:           25,
+		Status:          service.StatusUnused,
+		ThresholdExempt: true,
+	}
+
+	s.Require().NoError(s.repo.Create(s.ctx, code))
+	got, err := s.repo.GetByID(s.ctx, code.ID)
+	s.Require().NoError(err)
+	s.Require().True(got.ThresholdExempt)
+}
+
 func (s *RedeemCodeRepoSuite) TestCreatePersistsBalanceTransferAuditMetadata() {
 	creator := s.createUser(uniqueTestValue(s.T(), "creator") + "@example.com")
 	redeemer := s.createUser(uniqueTestValue(s.T(), "redeemer") + "@example.com")
@@ -186,6 +201,23 @@ func (s *RedeemCodeRepoSuite) TestCreateBatch() {
 	got2, err := s.repo.GetByCode(s.ctx, "BATCH-2")
 	s.Require().NoError(err)
 	s.Require().Equal(float64(20), got2.Value)
+}
+
+func (s *RedeemCodeRepoSuite) TestCreateBatchRoundTripsThresholdExempt() {
+	codes := []service.RedeemCode{
+		{Code: "GIFT-BATCH", Type: service.RedeemTypeBalance, Value: 10, Status: service.StatusUnused, ThresholdExempt: true},
+		{Code: "ORDINARY-BATCH", Type: service.RedeemTypeBalance, Value: 20, Status: service.StatusUnused},
+	}
+
+	s.Require().NoError(s.repo.CreateBatch(s.ctx, codes))
+
+	gift, err := s.repo.GetByCode(s.ctx, "GIFT-BATCH")
+	s.Require().NoError(err)
+	s.Require().True(gift.ThresholdExempt)
+
+	ordinary, err := s.repo.GetByCode(s.ctx, "ORDINARY-BATCH")
+	s.Require().NoError(err)
+	s.Require().False(ordinary.ThresholdExempt)
 }
 
 func (s *RedeemCodeRepoSuite) TestGetByID_NotFound() {

@@ -1574,6 +1574,8 @@ func applyUserEntityToService(dst *service.User, src *dbent.User) {
 	dst.LastLoginAt = src.LastLoginAt
 	dst.LastActiveAt = src.LastActiveAt
 	dst.BalanceRedeemCodeEnabled = src.BalanceRedeemCodeEnabled
+	dst.GiftBalance = src.GiftBalance
+	dst.FrozenGiftBalance = src.FrozenGiftBalance
 	dst.CreatedAt = src.CreatedAt
 	dst.UpdatedAt = src.UpdatedAt
 }

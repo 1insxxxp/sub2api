@@ -14,9 +14,9 @@ import (
 	"github.com/dgraph-io/ristretto"
 )
 
-// v20 carries the system-custom routing bit, group long-context settings, and
-// model pricing fields; older snapshots must reload to avoid missing group data.
-const apiKeyAuthSnapshotVersion = 20
+// v21 carries gift-balance accounting fields; older snapshots must reload to
+// avoid losing funding attribution on authenticated requests.
+const apiKeyAuthSnapshotVersion = 21
 
 type apiKeyAuthCacheConfig struct {
 	l1Size        int
@@ -358,6 +358,8 @@ func (s *APIKeyService) snapshotFromAPIKey(ctx context.Context, apiKey *APIKey) 
 			Status:                     apiKey.User.Status,
 			Role:                       apiKey.User.Role,
 			Balance:                    apiKey.User.Balance,
+			GiftBalance:                apiKey.User.GiftBalance,
+			FrozenGiftBalance:          apiKey.User.FrozenGiftBalance,
 			Concurrency:                apiKey.User.Concurrency,
 			AllowedGroups:              apiKey.User.AllowedGroups,
 			Email:                      apiKey.User.Email,
@@ -469,6 +471,8 @@ func (s *APIKeyService) snapshotToAPIKey(key string, snapshot *APIKeyAuthSnapsho
 			Status:                     snapshot.User.Status,
 			Role:                       snapshot.User.Role,
 			Balance:                    snapshot.User.Balance,
+			GiftBalance:                snapshot.User.GiftBalance,
+			FrozenGiftBalance:          snapshot.User.FrozenGiftBalance,
 			Concurrency:                snapshot.User.Concurrency,
 			AllowedGroups:              snapshot.User.AllowedGroups,
 			Email:                      snapshot.User.Email,

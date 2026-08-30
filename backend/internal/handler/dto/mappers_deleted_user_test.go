@@ -1,6 +1,7 @@
 package dto
 
 import (
+	"encoding/json"
 	"testing"
 	"time"
 
@@ -65,4 +66,32 @@ func TestRedeemCodeFromServiceWorkbenchGeneratedIncludesOwnerNotes(t *testing.T)
 	require.Equal(t, "send to partner A", *got.Notes)
 	require.Nil(t, got.CreatedBy)
 	require.Empty(t, got.Source)
+}
+
+func TestRedeemCodeFromService_ThresholdExemptVisibility(t *testing.T) {
+	rc := &service.RedeemCode{
+		ID:              1,
+		Code:            "GIFT-CODE",
+		Type:            service.RedeemTypeBalance,
+		Status:          service.StatusUnused,
+		ThresholdExempt: true,
+	}
+
+	ordinary := RedeemCodeFromService(rc)
+	require.False(t, ordinary.ThresholdExempt)
+	ordinaryJSON, err := json.Marshal(ordinary)
+	require.NoError(t, err)
+	require.NotContains(t, string(ordinaryJSON), "threshold_exempt")
+
+	workbench := RedeemCodeFromServiceWorkbenchGenerated(rc)
+	require.True(t, workbench.ThresholdExempt)
+	workbenchJSON, err := json.Marshal(workbench)
+	require.NoError(t, err)
+	require.Contains(t, string(workbenchJSON), `"threshold_exempt":true`)
+
+	admin := RedeemCodeFromServiceAdmin(rc)
+	require.True(t, admin.ThresholdExempt)
+	adminJSON, err := json.Marshal(admin)
+	require.NoError(t, err)
+	require.Contains(t, string(adminJSON), `"threshold_exempt":true`)
 }

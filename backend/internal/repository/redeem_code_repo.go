@@ -35,6 +35,7 @@ func (r *redeemCodeRepository) Create(ctx context.Context, code *service.RedeemC
 		SetCode(code.Code).
 		SetType(code.Type).
 		SetValue(code.Value).
+		SetThresholdExempt(code.ThresholdExempt).
 		SetStatus(code.Status).
 		SetSource(redeemCodeSourceOrDefault(code.Source)).
 		SetNotes(code.Notes).
@@ -67,6 +68,7 @@ func (r *redeemCodeRepository) CreateBatch(ctx context.Context, codes []service.
 			SetCode(c.Code).
 			SetType(c.Type).
 			SetValue(c.Value).
+			SetThresholdExempt(c.ThresholdExempt).
 			SetStatus(c.Status).
 			SetSource(redeemCodeSourceOrDefault(c.Source)).
 			SetNotes(c.Notes).
@@ -560,21 +562,22 @@ func redeemCodeEntityToService(m *dbent.RedeemCode) *service.RedeemCode {
 		return nil
 	}
 	out := &service.RedeemCode{
-		ID:           m.ID,
-		Code:         m.Code,
-		Type:         m.Type,
-		Value:        m.Value,
-		Status:       m.Status,
-		UsedBy:       m.UsedBy,
-		UsedAt:       m.UsedAt,
-		CreatedBy:    m.CreatedBy,
-		Notes:        derefString(m.Notes),
-		Source:       redeemCodeSourceOrDefault(m.Source),
-		CreatedAt:    m.CreatedAt,
-		ExpiresAt:    m.ExpiresAt,
-		BatchID:      m.BatchID,
-		GroupID:      m.GroupID,
-		ValidityDays: m.ValidityDays,
+		ID:              m.ID,
+		Code:            m.Code,
+		Type:            m.Type,
+		Value:           m.Value,
+		ThresholdExempt: m.ThresholdExempt,
+		Status:          m.Status,
+		UsedBy:          m.UsedBy,
+		UsedAt:          m.UsedAt,
+		CreatedBy:       m.CreatedBy,
+		Notes:           derefString(m.Notes),
+		Source:          redeemCodeSourceOrDefault(m.Source),
+		CreatedAt:       m.CreatedAt,
+		ExpiresAt:       m.ExpiresAt,
+		BatchID:         m.BatchID,
+		GroupID:         m.GroupID,
+		ValidityDays:    m.ValidityDays,
 	}
 	if m.Edges.User != nil {
 		out.User = userEntityToService(m.Edges.User)

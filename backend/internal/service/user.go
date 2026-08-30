@@ -7,21 +7,23 @@ import (
 )
 
 type User struct {
-	ID             int64
-	Email          string
-	Username       string
-	Notes          string
-	AvatarURL      string
-	AvatarSource   string
-	AvatarMIME     string
-	AvatarByteSize int
-	AvatarSHA256   string
-	PasswordHash   string
-	Role           string
-	Balance        float64
-	FrozenBalance  float64
-	Concurrency    int
-	Status         string
+	ID                int64
+	Email             string
+	Username          string
+	Notes             string
+	AvatarURL         string
+	AvatarSource      string
+	AvatarMIME        string
+	AvatarByteSize    int
+	AvatarSHA256      string
+	PasswordHash      string
+	Role              string
+	Balance           float64
+	FrozenBalance     float64
+	GiftBalance       float64
+	FrozenGiftBalance float64
+	Concurrency       int
+	Status            string
 	// BalanceRedeemCodeEnabled allows the user to convert their own balance into redeem codes.
 	BalanceRedeemCodeEnabled bool
 	AllowedGroups            []int64
