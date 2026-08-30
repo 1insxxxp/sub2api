@@ -86,6 +86,12 @@ func (u *User) CanAccessAdminWorkbench() bool {
 	return u.IsAdmin() || u.IsSubAdmin()
 }
 
+// CanAccessManagerPage keeps the legacy manager page permission aligned with
+// the newer admin workbench role policy.
+func (u *User) CanAccessManagerPage() bool {
+	return u.CanAccessAdminWorkbench()
+}
+
 func (u *User) IsActive() bool {
 	return u.Status == StatusActive
 }

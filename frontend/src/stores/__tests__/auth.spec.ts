@@ -366,6 +366,32 @@ describe('useAuthStore', () => {
     })
   })
 
+  // --- manager page role ---
+
+  describe('manager page role', () => {
+    it('二级管理员不是完整管理员，但可以访问管理员页面', async () => {
+      const subAdminResponse = { ...fakeAuthResponse, user: { ...fakeSubAdminUser } }
+      mockLogin.mockResolvedValue(subAdminResponse)
+      const store = useAuthStore()
+
+      await store.login({ email: 'subadmin@example.com', password: '123456' })
+
+      expect(store.isAdmin).toBe(false)
+      expect(store.isSubAdmin).toBe(true)
+      expect(store.canAccessManagerPage).toBe(true)
+    })
+
+    it('普通用户不能访问管理员页面', async () => {
+      mockLogin.mockResolvedValue(fakeAuthResponse)
+      const store = useAuthStore()
+
+      await store.login({ email: 'test@example.com', password: '123456' })
+
+      expect(store.isSubAdmin).toBe(false)
+      expect(store.canAccessManagerPage).toBe(false)
+    })
+  })
+
   // --- refreshUser ---
 
   describe('refreshUser', () => {

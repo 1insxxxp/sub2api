@@ -51,6 +51,7 @@ vi.mock('@/api/auth', () => ({
 interface MockAuthState {
   isAuthenticated: boolean
   isAdmin: boolean
+  canAccessManagerPage?: boolean
   canAccessAdminWorkbench?: boolean
   isSimpleMode: boolean
   backendModeEnabled: boolean
@@ -68,8 +69,11 @@ function simulateGuard(
 ): string | null {
   const requiresAuth = toMeta.requiresAuth !== false
   const requiresAdmin = toMeta.requiresAdmin === true
+  const requiresManager = toMeta.requiresManager === true
   const requiresAdminWorkbench = toMeta.requiresAdminWorkbench === true
-  const canAccessAdminWorkbench = authState.canAccessAdminWorkbench ?? authState.isAdmin
+  const canAccessAdminWorkbench =
+    authState.canAccessAdminWorkbench ?? authState.canAccessManagerPage ?? authState.isAdmin
+  const canAccessManagerPage = authState.canAccessManagerPage ?? canAccessAdminWorkbench
 
   if (toPath === '/setup' && authState.setupNeedsSetup === false) {
     return resolveCompletedSetupRedirectPath(authState.isAuthenticated, authState.isAdmin)
@@ -125,6 +129,10 @@ function simulateGuard(
     return '/dashboard'
   }
 
+  if (requiresManager && !canAccessManagerPage) {
+    return '/dashboard'
+  }
+
   // 简易模式限制
   if (authState.isSimpleMode) {
     const restrictedPaths = [
@@ -139,13 +147,16 @@ function simulateGuard(
     }
   }
 
-  // Backend mode: admin gets full access, sub-admin only gets the admin workbench
+  // Backend mode: sub-admins can access both the workbench and legacy manager page.
   if (authState.backendModeEnabled) {
     if (authState.isAuthenticated && authState.isAdmin) {
       return null
     }
     if (authState.isAuthenticated && canAccessAdminWorkbench) {
-      return requiresAdminWorkbench || toPath.startsWith('/admin/workbench')
+      return requiresAdminWorkbench ||
+        requiresManager ||
+        toPath.startsWith('/admin/workbench') ||
+        toPath.startsWith('/manager')
         ? null
         : '/admin/workbench'
     }
@@ -536,6 +547,58 @@ describe('路由守卫逻辑', () => {
       }
       const redirect = simulateGuard('/key-usage', { requiresAuth: false }, authState)
       expect(redirect).toBeNull()
+    })
+
+    it('secondary admin: /manager is allowed', () => {
+      const authState: MockAuthState = {
+        isAuthenticated: true,
+        isAdmin: false,
+        canAccessAdminWorkbench: true,
+        isSimpleMode: false,
+        backendModeEnabled: true,
+        hasPendingAuthSession: false,
+      }
+      const redirect = simulateGuard('/manager', { requiresManager: true }, authState)
+      expect(redirect).toBeNull()
+    })
+
+    it('secondary admin: /dashboard redirects to /admin/workbench', () => {
+      const authState: MockAuthState = {
+        isAuthenticated: true,
+        isAdmin: false,
+        canAccessAdminWorkbench: true,
+        isSimpleMode: false,
+        backendModeEnabled: true,
+        hasPendingAuthSession: false,
+      }
+      const redirect = simulateGuard('/dashboard', {}, authState)
+      expect(redirect).toBe('/admin/workbench')
+    })
+
+    it('secondary admin: /admin/users redirects to /admin/workbench', () => {
+      const authState: MockAuthState = {
+        isAuthenticated: true,
+        isAdmin: false,
+        canAccessAdminWorkbench: true,
+        isSimpleMode: false,
+        backendModeEnabled: true,
+        hasPendingAuthSession: false,
+      }
+      const redirect = simulateGuard('/admin/users', { requiresAdmin: true }, authState)
+      expect(redirect).toBe('/admin/workbench')
+    })
+
+    it('secondary admin: /login redirects to /admin/workbench', () => {
+      const authState: MockAuthState = {
+        isAuthenticated: true,
+        isAdmin: false,
+        canAccessAdminWorkbench: true,
+        isSimpleMode: false,
+        backendModeEnabled: true,
+        hasPendingAuthSession: false,
+      }
+      const redirect = simulateGuard('/login', { requiresAuth: false }, authState)
+      expect(redirect).toBe('/admin/workbench')
     })
 
     it('unauthenticated: callback routes are allowed', () => {

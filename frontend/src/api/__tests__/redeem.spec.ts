@@ -19,6 +19,7 @@ import {
   deleteGenerated,
   generateBalanceTransferCode,
   generateBalanceTransferCodes,
+  generateUserBalanceTransferCodes,
   getGenerated,
   getHistory,
   type GenerateBalanceTransferCodeRequest,
@@ -91,6 +92,29 @@ describe('redeem api balance transfer codes', () => {
 
     expect(post).toHaveBeenCalledWith('/admin/workbench/redeem/generated', request)
     expect(result).toEqual(response)
+  })
+
+  it('keeps the explicitly enabled user balance transfer endpoint separate', async () => {
+    const request: GenerateBalanceTransferCodeRequest = { amount: 5, count: 1 }
+    const response: GeneratedRedeemCode[] = [
+      {
+        id: 19,
+        code: 'USER-CODE',
+        type: 'balance',
+        value: 5,
+        status: 'unused',
+        used_by: null,
+        used_at: null,
+        created_at: '2026-08-30T12:00:00Z',
+        expires_at: '2026-09-29T12:00:00Z',
+        created_by: 8,
+        source: 'user_balance_transfer'
+      }
+    ]
+    post.mockResolvedValue({ data: response })
+
+    await expect(generateUserBalanceTransferCodes(request)).resolves.toEqual(response)
+    expect(post).toHaveBeenCalledWith('/redeem/generate', request)
   })
 
   it('loads paginated redeem history for the current user', async () => {

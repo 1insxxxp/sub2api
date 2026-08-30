@@ -104,6 +104,13 @@ func TestBackendModeUserGuard(t *testing.T) {
 			wantStatus: http.StatusOK,
 		},
 		{
+			name:       "enabled_sub_admin_manager_allowed",
+			enabled:    "true",
+			role:       stringPtr("sub_admin"),
+			path:       "/api/v1/manager/redeem-codes/convert-balance",
+			wantStatus: http.StatusOK,
+		},
+		{
 			name:       "enabled_sub_admin_auth_me_allowed",
 			enabled:    "true",
 			role:       stringPtr("sub_admin"),
@@ -161,6 +168,7 @@ func TestBackendModeUserGuard(t *testing.T) {
 			}
 			r.GET("/test", okHandler)
 			r.GET("/api/v1/auth/me", okHandler)
+			r.GET("/api/v1/manager/redeem-codes/convert-balance", okHandler)
 			r.GET("/api/v1/user/profile", okHandler)
 
 			w := httptest.NewRecorder()

@@ -2060,9 +2060,10 @@ func mapGeminiStatusToClaudeErrorType(status string) string {
 }
 
 type geminiStreamResult struct {
-	usage        *ClaudeUsage
-	firstTokenMs *int
-	outcome      ResponseOutcome
+	usage            *ClaudeUsage
+	firstTokenMs     *int
+	clientDisconnect bool
+	outcome          ResponseOutcome
 }
 
 func (s *GeminiMessagesCompatService) handleNonStreamingResponse(c *gin.Context, resp *http.Response, originalModel string) (*ClaudeUsage, error) {
@@ -2493,6 +2494,9 @@ func collectGeminiSSE(body io.Reader, isOAuth bool) (map[string]any, *ClaudeUsag
 							lastWithParts = parsed
 							// Collect text from each part for aggregation
 							for _, part := range parts {
+								if thought, _ := part["thought"].(bool); thought {
+									continue
+								}
 								if text, ok := part["text"].(string); ok && text != "" {
 									collectedTextParts = append(collectedTextParts, text)
 								}
@@ -2937,6 +2941,9 @@ func convertGeminiToClaudeMessage(geminiResp map[string]any, originalModel strin
 					for _, part := range parts {
 						pm, ok := part.(map[string]any)
 						if !ok {
+							continue
+						}
+						if thought, _ := pm["thought"].(bool); thought {
 							continue
 						}
 						if text, ok := pm["text"].(string); ok && text != "" {
@@ -3391,7 +3398,7 @@ func convertClaudeMessagesToGeminiContents(messages any, toolUseIDToName map[str
 		return nil, errors.New("messages must be an array")
 	}
 
-	out := make([]any, 0, len(arr))
+	out := make([]any, 0, len(arr)+1)
 	for _, m := range arr {
 		mm, ok := m.(map[string]any)
 		if !ok {
@@ -3490,6 +3497,17 @@ func convertClaudeMessagesToGeminiContents(messages any, toolUseIDToName map[str
 			"role":  gRole,
 			"parts": parts,
 		})
+	}
+
+	if len(out) > 0 {
+		if last, ok := out[len(out)-1].(map[string]any); ok && last["role"] == "model" {
+			out = append(out, map[string]any{
+				"role": "user",
+				"parts": []any{map[string]any{
+					"text": "Continue the assistant response from where it stopped without repeating prior text.",
+				}},
+			})
+		}
 	}
 	return out, nil
 }

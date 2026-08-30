@@ -168,7 +168,7 @@ func (s *adminServiceImpl) ensureNotLastAdmin(ctx context.Context) error {
 	noSubs := false
 	_, result, err := s.userRepo.ListWithFilters(ctx,
 		pagination.PaginationParams{Page: 1, PageSize: 1},
-		UserListFilters{Role: RoleAdmin, IncludeSubscriptions: &noSubs},
+		UserListFilters{Role: RoleAdmin, Status: StatusActive, IncludeSubscriptions: &noSubs},
 	)
 	if err != nil {
 		return fmt.Errorf("count admin users: %w", err)

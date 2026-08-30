@@ -2024,6 +2024,7 @@ func newContractDeps(t *testing.T) *contractDeps {
 	v1Redeem := v1.Group("")
 	v1Redeem.Use(jwtAuth)
 	v1Redeem.GET("/redeem/history", redeemHandler.GetHistory)
+	v1Redeem.POST("/redeem/generate", redeemHandler.GenerateBalanceTransferCode)
 
 	v1Admin := v1.Group("/admin")
 	v1Admin.Use(adminAuth)
@@ -2091,7 +2092,7 @@ func TestRedeemGenerateAPIResponseShape(t *testing.T) {
 	require.IsType(t, []any{}, batch.Data)
 }
 
-func TestRedeemGenerateUserRouteUnavailable(t *testing.T) {
+func TestRedeemGenerateUserRouteEnforcesPerUserPermission(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	deps := newContractDeps(t)
 
@@ -2104,7 +2105,7 @@ func TestRedeemGenerateUserRouteUnavailable(t *testing.T) {
 		map[string]string{"Content-Type": "application/json"},
 	)
 
-	require.Equal(t, http.StatusNotFound, status)
+	require.Equal(t, http.StatusForbidden, status)
 }
 
 type stubAffiliateRepo struct {

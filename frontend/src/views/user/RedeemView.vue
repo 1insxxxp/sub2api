@@ -903,7 +903,9 @@ const subscriptionStore = useSubscriptionStore()
 
 const user = computed(() => authStore.user)
 const availableBalance = computed(() => user.value?.balance || 0)
-const canGenerateBalanceTransferCodes = computed(() => false)
+const canGenerateBalanceTransferCodes = computed(
+  () => user.value?.balance_redeem_code_enabled === true
+)
 
 const redeemCode = ref('')
 const submitting = ref(false)
@@ -1095,7 +1097,7 @@ const fetchGeneratedCodes = async () => {
 
   loadingGeneratedCodes.value = true
   try {
-    const response = await redeemAPI.getGenerated({
+    const response = await redeemAPI.getUserGenerated({
       page: generatedPagination.page,
       page_size: generatedPagination.page_size
     })
@@ -1155,7 +1157,7 @@ const handleGenerateBalanceTransferCode = async () => {
 
   generatingTransferCode.value = true
   try {
-    const codes = await redeemAPI.generateBalanceTransferCodes({
+    const codes = await redeemAPI.generateUserBalanceTransferCodes({
       amount,
       count,
       expires_in_days: expiresInDays,
@@ -1211,7 +1213,7 @@ const handleDeleteGeneratedCode = async (item: GeneratedRedeemCode) => {
 
   deletingGeneratedCodeIds.value = [...deletingGeneratedCodeIds.value, item.id]
   try {
-    await redeemAPI.deleteGenerated(item.id)
+    await redeemAPI.deleteUserGenerated(item.id)
     await authStore.refreshUser()
     generatedPagination.page = 1
     await fetchGeneratedCodes()
@@ -1246,7 +1248,7 @@ const handleDeleteSelectedGeneratedCodes = async () => {
 
   batchDeletingGeneratedCodes.value = true
   try {
-    await redeemAPI.deleteGeneratedBatch(ids)
+    await redeemAPI.deleteUserGeneratedBatch(ids)
     selectedGeneratedCodeIds.value = []
     await authStore.refreshUser()
     generatedPagination.page = 1

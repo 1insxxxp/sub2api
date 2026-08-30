@@ -20,6 +20,12 @@ declare module 'vue-router' {
     requiresAdmin?: boolean
 
     /**
+     * Whether this route requires manager-page access
+     * @default false
+     */
+    requiresManager?: boolean
+
+    /**
      * Whether this route requires admin workbench access (admin or sub-admin)
      * @default false
      */

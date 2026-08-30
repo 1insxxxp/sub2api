@@ -105,6 +105,17 @@ type GenerateBalanceTransferCodeInput struct {
 	SingleUsePerUser bool
 }
 
+type ConvertBalanceToRedeemCodesInput struct {
+	Value float64
+	Count int
+}
+
+type ConvertBalanceToRedeemCodesResult struct {
+	Codes      []RedeemCode
+	TotalValue float64
+	NewBalance float64
+}
+
 // RedeemCodeResponse 兑换码响应
 type RedeemCodeResponse struct {
 	Code      string    `json:"code"`
@@ -342,7 +353,7 @@ func (s *RedeemService) GenerateBalanceTransferCodes(ctx context.Context, userID
 		if !user.IsActive() {
 			return nil, ErrUserNotActive
 		}
-		if !user.CanAccessAdminWorkbench() {
+		if !user.BalanceRedeemCodeEnabled && !user.CanAccessAdminWorkbench() {
 			return nil, ErrBalanceTransferRedeemNotAllowed
 		}
 
@@ -416,6 +427,27 @@ func (s *RedeemService) GenerateBalanceTransferCodes(ctx context.Context, userID
 
 	s.invalidateBalanceTransferCreatorCaches(ctx, userID)
 	return codes, nil
+}
+
+func (s *RedeemService) ConvertBalanceToRedeemCodes(ctx context.Context, userID int64, input ConvertBalanceToRedeemCodesInput) (*ConvertBalanceToRedeemCodesResult, error) {
+	codes, err := s.GenerateBalanceTransferCodes(ctx, userID, GenerateBalanceTransferCodeInput{
+		Amount: input.Value,
+		Count:  input.Count,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	user, err := s.userRepo.GetByID(ctx, userID)
+	if err != nil {
+		return nil, fmt.Errorf("read balance after converting redeem codes: %w", err)
+	}
+
+	return &ConvertBalanceToRedeemCodesResult{
+		Codes:      codes,
+		TotalValue: input.Value * float64(input.Count),
+		NewBalance: user.Balance,
+	}, nil
 }
 
 func (s *RedeemService) ListGeneratedBalanceTransferCodes(ctx context.Context, userID int64, limit int) ([]RedeemCode, error) {

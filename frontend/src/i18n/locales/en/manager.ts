@@ -1,0 +1,25 @@
+export default {
+  manager: {
+    title: 'Manager Page',
+    description: 'Manage delegated helper tools',
+    balanceToCodes: 'Balance to Redeem Codes',
+    balanceToCodesDesc:
+      'Deduct from the current account balance and generate matching balance redeem codes.',
+    currentBalance: 'Current Balance',
+    singleValue: 'Value Per Code',
+    count: 'Code Count',
+    totalValue: 'Total Deduction',
+    remainingBalance: 'Balance After Generation',
+    generate: 'Generate Codes',
+    generating: 'Generating...',
+    generatedCodes: 'Generated Codes',
+    copied: 'Copied',
+    copyAll: 'Copy All',
+    noCodes: 'Generated codes will appear here',
+    amountRequired: 'Enter a valid amount',
+    countRequired: 'Enter a valid count',
+    insufficientBalance: 'Insufficient balance',
+    generateSuccess: 'Redeem codes generated',
+    generateFailed: 'Failed to generate redeem codes',
+  },
+}

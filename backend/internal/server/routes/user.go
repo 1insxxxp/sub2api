@@ -170,7 +170,18 @@ func RegisterUserRoutes(
 		redeem := authenticated.Group("/redeem")
 		{
 			redeem.POST("", h.Redeem.Redeem)
+			redeem.POST("/generate", h.Redeem.GenerateBalanceTransferCode)
+			redeem.GET("/generated", h.Redeem.GetGenerated)
+			redeem.POST("/generated/batch-delete", h.Redeem.DeleteGeneratedBatch)
+			redeem.DELETE("/generated/:id", h.Redeem.DeleteGenerated)
 			redeem.GET("/history", h.Redeem.GetHistory)
+		}
+
+		// 管理员页面（完整管理员 + 二级管理员）
+		manager := authenticated.Group("/manager")
+		manager.Use(middleware.ManagerPageOnly())
+		{
+			manager.POST("/redeem-codes/convert-balance", h.Redeem.ConvertBalanceToRedeemCodes)
 		}
 
 		// 用户订阅

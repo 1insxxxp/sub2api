@@ -119,6 +119,50 @@ export async function deleteGeneratedBatch(ids: number[]): Promise<GeneratedRede
   return data
 }
 
+export async function generateUserBalanceTransferCodes(
+  payload: GenerateBalanceTransferCodeRequest
+): Promise<GeneratedRedeemCode[]> {
+  const { data } = await apiClient.post<GeneratedRedeemCode[] | GeneratedRedeemCode>(
+    '/redeem/generate',
+    payload
+  )
+  return Array.isArray(data) ? data : [data]
+}
+
+export async function getUserGenerated(
+  params: RedeemListParams
+): Promise<PaginatedResponse<GeneratedRedeemCode>> {
+  const { data } = await apiClient.get<PaginatedResponse<GeneratedRedeemCode>>('/redeem/generated', {
+    params
+  })
+  return data
+}
+
+export async function deleteUserGenerated(id: number): Promise<GeneratedRedeemCode> {
+  const { data } = await apiClient.delete<GeneratedRedeemCode>(`/redeem/generated/${id}`)
+  return data
+}
+
+export async function deleteUserGeneratedBatch(ids: number[]): Promise<GeneratedRedeemCode[]> {
+  const { data } = await apiClient.post<GeneratedRedeemCode[]>('/redeem/generated/batch-delete', {
+    ids
+  })
+  return data
+}
+
+export async function convertBalanceToRedeemCodes(value: number, count: number): Promise<{
+  codes: RedeemCode[]
+  total_value: number
+  new_balance: number
+}> {
+  const { data } = await apiClient.post<{
+    codes: RedeemCode[]
+    total_value: number
+    new_balance: number
+  }>('/manager/redeem-codes/convert-balance', { value, count })
+  return data
+}
+
 export const redeemAPI = {
   redeem,
   getHistory,
@@ -126,7 +170,12 @@ export const redeemAPI = {
   generateBalanceTransferCodes,
   deleteGenerated,
   deleteGeneratedBatch,
-  getGenerated
+  getGenerated,
+  generateUserBalanceTransferCodes,
+  getUserGenerated,
+  deleteUserGenerated,
+  deleteUserGeneratedBatch,
+  convertBalanceToRedeemCodes
 }
 
 export default redeemAPI

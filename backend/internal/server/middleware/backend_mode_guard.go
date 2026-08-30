@@ -9,7 +9,7 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// BackendModeUserGuard blocks non-admin users from accessing user routes when backend mode is enabled.
+// BackendModeUserGuard blocks regular users from accessing user routes when backend mode is enabled.
 // Must be placed AFTER JWT auth middleware so that the user role is available in context.
 func BackendModeUserGuard(settingService *service.SettingService) gin.HandlerFunc {
 	return func(c *gin.Context) {
@@ -33,7 +33,7 @@ func BackendModeUserGuard(settingService *service.SettingService) gin.HandlerFun
 
 func backendModeSubAdminAllowedUserPath(path string) bool {
 	path = strings.ToLower(strings.TrimSpace(path))
-	return strings.HasSuffix(path, "/auth/me")
+	return strings.HasSuffix(path, "/auth/me") || strings.HasPrefix(path, "/api/v1/manager")
 }
 
 func backendModeAllowsAuthPath(path string) bool {

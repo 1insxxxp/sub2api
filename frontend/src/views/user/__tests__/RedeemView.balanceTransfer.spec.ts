@@ -4,7 +4,7 @@ import { flushPromises, mount } from '@vue/test-utils'
 import RedeemView from '../RedeemView.vue'
 import type { RedeemHistoryItem } from '@/api/redeem'
 
-const { authState, getHistory, getGenerated, getPublicSettings } = vi.hoisted(() => ({
+const { authState, getHistory, getUserGenerated, getPublicSettings } = vi.hoisted(() => ({
   authState: {
     user: {
       id: 1,
@@ -15,14 +15,14 @@ const { authState, getHistory, getGenerated, getPublicSettings } = vi.hoisted(()
     } as Record<string, unknown>
   },
   getHistory: vi.fn(),
-  getGenerated: vi.fn(),
+  getUserGenerated: vi.fn(),
   getPublicSettings: vi.fn()
 }))
 
 vi.mock('@/api', () => ({
   redeemAPI: {
     getHistory,
-    getGenerated,
+    getUserGenerated,
     redeem: vi.fn()
   },
   authAPI: { getPublicSettings }
@@ -89,18 +89,19 @@ const mountRedeemView = () =>
 describe('user RedeemView balance transfer migration', () => {
   beforeEach(() => {
     getHistory.mockReset()
-    getGenerated.mockReset()
+    getUserGenerated.mockReset()
     getPublicSettings.mockReset()
     getHistory.mockResolvedValue(paginated<RedeemHistoryItem>([]))
+    getUserGenerated.mockResolvedValue(paginated([]))
     getPublicSettings.mockResolvedValue({ contact_info: '' })
   })
 
-  it('does not expose balance-to-code generation on the user redeem page', async () => {
+  it('exposes balance-to-code generation for an explicitly enabled user', async () => {
     const wrapper = mountRedeemView()
     await flushPromises()
 
-    expect(wrapper.find('[data-test="balance-transfer-panel"]').exists()).toBe(false)
-    expect(getGenerated).not.toHaveBeenCalled()
+    expect(wrapper.find('[data-test="balance-transfer-panel"]').exists()).toBe(true)
+    expect(getUserGenerated).toHaveBeenCalledWith({ page: 1, page_size: 10 })
     expect(getHistory).toHaveBeenCalledWith({ page: 1, page_size: 10 })
   })
 

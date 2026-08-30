@@ -429,6 +429,19 @@ const routes: RouteRecordRaw[] = [
     }
   },
 
+  {
+    path: '/manager',
+    name: 'Manager',
+    component: () => import('@/views/manager/ManagerView.vue'),
+    meta: {
+      requiresAuth: true,
+      requiresManager: true,
+      title: 'Manager Page',
+      titleKey: 'manager.title',
+      descriptionKey: 'manager.description'
+    }
+  },
+
   // ==================== Admin Workbench Routes ====================
   {
     path: '/admin/workbench',
@@ -885,6 +898,7 @@ router.beforeEach(async (to, _from, next) => {
   // Check if route requires authentication
   const requiresAuth = to.meta.requiresAuth !== false // Default to true
   const requiresAdmin = to.meta.requiresAdmin === true
+  const requiresManager = to.meta.requiresManager === true
   const requiresAdminWorkbench = to.meta.requiresAdminWorkbench === true
 
   if (to.path === '/setup') {
@@ -982,7 +996,12 @@ router.beforeEach(async (to, _from, next) => {
     return
   }
 
-  if ((requiresAdmin || requiresAdminWorkbench) && authStore.isAdmin) {
+  if (requiresManager && !authStore.canAccessManagerPage) {
+    next('/dashboard')
+    return
+  }
+
+  if ((requiresAdmin || requiresAdminWorkbench || requiresManager) && authStore.isAdmin) {
     const adminComplianceStore = useAdminComplianceStore()
     if (!adminComplianceStore.initialized) {
       try {
@@ -1066,14 +1085,19 @@ router.beforeEach(async (to, _from, next) => {
     }
   }
 
-  // Backend mode: admin gets full access, sub-admin only gets the admin workbench.
+  // Backend mode: admins get full access; sub-admins get the workbench and legacy manager page.
   if (appStore.backendModeEnabled) {
     if (authStore.isAuthenticated && authStore.isAdmin) {
       next()
       return
     }
     if (authStore.isAuthenticated && authStore.canAccessAdminWorkbench) {
-      if (requiresAdminWorkbench || to.path.startsWith('/admin/workbench')) {
+      if (
+        requiresAdminWorkbench ||
+        requiresManager ||
+        to.path.startsWith('/admin/workbench') ||
+        to.path.startsWith('/manager')
+      ) {
         next()
         return
       }

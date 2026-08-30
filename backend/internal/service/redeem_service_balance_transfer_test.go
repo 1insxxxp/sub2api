@@ -243,7 +243,7 @@ func TestRedeemServiceBalanceTransferAllowsSubAdminRole(t *testing.T) {
 	require.Equal(t, 40.0, userRepo.balance)
 }
 
-func TestRedeemServiceBalanceTransferRejectsRegularUserEvenWithLegacyPermission(t *testing.T) {
+func TestRedeemServiceBalanceTransferAllowsRegularUserWithExplicitPermission(t *testing.T) {
 	ctx := context.Background()
 	userRepo := &balanceTransferUserRepo{
 		userRepoStub: &userRepoStub{user: &User{ID: 7, Status: StatusActive, Role: RoleUser, Balance: 50, BalanceRedeemCodeEnabled: true}},
@@ -254,11 +254,31 @@ func TestRedeemServiceBalanceTransferRejectsRegularUserEvenWithLegacyPermission(
 
 	got, err := svc.GenerateBalanceTransferCodes(ctx, 7, GenerateBalanceTransferCodeInput{Amount: 10, Count: 1})
 
-	require.Nil(t, got)
-	require.ErrorIs(t, err, ErrBalanceTransferRedeemNotAllowed)
-	require.Empty(t, redeemRepo.created)
-	require.Empty(t, userRepo.adjustCalls)
-	require.Equal(t, 50.0, userRepo.balance)
+	require.NoError(t, err)
+	require.Len(t, got, 1)
+	require.Len(t, redeemRepo.created, 1)
+	require.Equal(t, []float64{-10}, userRepo.adjustCalls)
+	require.Equal(t, 40.0, userRepo.balance)
+}
+
+func TestRedeemServiceConvertBalanceToRedeemCodesReturnsUpdatedBalance(t *testing.T) {
+	ctx := context.Background()
+	userRepo := &balanceTransferUserRepo{
+		userRepoStub: &userRepoStub{user: &User{ID: 7, Status: StatusActive, Role: RoleSubAdmin, Balance: 50}},
+		balance:      50,
+	}
+	redeemRepo := &balanceTransferRedeemRepo{redeemRejectRepo: &redeemRejectRepo{}}
+	svc := NewRedeemService(redeemRepo, userRepo, nil, nil, nil, nil, nil, nil)
+
+	result, err := svc.ConvertBalanceToRedeemCodes(ctx, 7, ConvertBalanceToRedeemCodesInput{
+		Value: 10,
+		Count: 2,
+	})
+
+	require.NoError(t, err)
+	require.Len(t, result.Codes, 2)
+	require.Equal(t, 20.0, result.TotalValue)
+	require.Equal(t, 30.0, result.NewBalance)
 }
 
 func TestRedeemServiceBalanceTransferRejectsInsufficientBalance(t *testing.T) {

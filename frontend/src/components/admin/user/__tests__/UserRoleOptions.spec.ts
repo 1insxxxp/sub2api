@@ -11,6 +11,6 @@ const editSource = readFileSync(resolve(currentDir, '../UserEditModal.vue'), 'ut
 describe('admin user role options', () => {
   it('offers the secondary admin role in create and edit forms', () => {
     expect(createSource).toContain('<option value="sub_admin">{{ t(\'admin.users.roles.sub_admin\') }}</option>')
-    expect(editSource).toContain('<option value="sub_admin">{{ t(\'admin.users.roles.sub_admin\') }}</option>')
+    expect(editSource).toContain("{ value: 'sub_admin', label: t('admin.users.roles.sub_admin') }")
   })
 })
