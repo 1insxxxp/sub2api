@@ -314,6 +314,7 @@ type AffiliateInviterSummary struct {
 	InviterID             int64      `json:"inviter_id"`
 	InviterEmail          string     `json:"inviter_email"`
 	InviterUsername       string     `json:"inviter_username"`
+	InviterAvatarURL      string     `json:"inviter_avatar_url"`
 	AffCode               string     `json:"aff_code"`
 	InvitedCount          int        `json:"invited_count"`
 	QualifiedInviteeCount int        `json:"qualified_invitee_count"`

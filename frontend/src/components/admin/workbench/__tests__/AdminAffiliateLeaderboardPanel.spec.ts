@@ -35,6 +35,7 @@ describe('AdminAffiliateLeaderboardPanel', () => {
           inviter_id: 42,
           inviter_email: 'leader@example.com',
           inviter_username: 'leader',
+          inviter_avatar_url: 'https://cdn.example.com/leader.png',
           invited_count: 31,
           qualified_invitee_count: 18,
           total_rebate: 12.34,
@@ -44,6 +45,7 @@ describe('AdminAffiliateLeaderboardPanel', () => {
           inviter_id: 7,
           inviter_email: 'runner-up@example.com',
           inviter_username: '',
+          inviter_avatar_url: '',
           invited_count: 20,
           qualified_invitee_count: 9,
           total_rebate: 5,
@@ -66,8 +68,17 @@ describe('AdminAffiliateLeaderboardPanel', () => {
     expect(wrapper.text()).toContain('31')
     expect(wrapper.text()).toContain('18')
     expect(wrapper.text()).toContain('$12.34')
+    expect(wrapper.findAll('[data-test="affiliate-leaderboard-avatar-image-42"]')).toHaveLength(2)
+    expect(wrapper.findAll('[data-test="affiliate-leaderboard-avatar-fallback-7"]')).toHaveLength(2)
+    expect(wrapper.get('[data-test="affiliate-leaderboard-avatar-fallback-7"]').text()).toBe('R')
     expect(wrapper.findAll('button')).toHaveLength(0)
     expect(wrapper.findAll('a')).toHaveLength(0)
+
+    await wrapper.get('[data-test="affiliate-leaderboard-avatar-image-42"]').trigger('error')
+
+    expect(wrapper.findAll('[data-test="affiliate-leaderboard-avatar-image-42"]')).toHaveLength(0)
+    expect(wrapper.findAll('[data-test="affiliate-leaderboard-avatar-fallback-42"]')).toHaveLength(2)
+    expect(wrapper.get('[data-test="affiliate-leaderboard-avatar-fallback-42"]').text()).toBe('L')
   })
 
   it('shows a passive empty state when no invite data exists', async () => {

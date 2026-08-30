@@ -323,6 +323,7 @@ type WorkbenchAffiliateLeaderboardItem struct {
 	InviterID             int64      `json:"inviter_id"`
 	InviterEmail          string     `json:"inviter_email"`
 	InviterUsername       string     `json:"inviter_username"`
+	InviterAvatarURL      string     `json:"inviter_avatar_url"`
 	InvitedCount          int        `json:"invited_count"`
 	QualifiedInviteeCount int        `json:"qualified_invitee_count"`
 	TotalRebate           float64    `json:"total_rebate"`
@@ -353,6 +354,7 @@ func (h *AffiliateHandler) ListWorkbenchLeaderboard(c *gin.Context) {
 			InviterID:             item.InviterID,
 			InviterEmail:          item.InviterEmail,
 			InviterUsername:       item.InviterUsername,
+			InviterAvatarURL:      item.InviterAvatarURL,
 			InvitedCount:          item.InvitedCount,
 			QualifiedInviteeCount: item.QualifiedInviteeCount,
 			TotalRebate:           item.TotalRebate,

@@ -77,6 +77,7 @@ export interface WorkbenchAffiliateLeaderboardItem {
   inviter_id: number
   inviter_email: string
   inviter_username: string
+  inviter_avatar_url: string
   invited_count: number
   qualified_invitee_count: number
   total_rebate: number

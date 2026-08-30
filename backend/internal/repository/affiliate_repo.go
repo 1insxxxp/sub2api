@@ -369,6 +369,7 @@ SELECT (page_records.inviter_id IS NOT NULL) AS has_record,
        COALESCE(page_records.inviter_id, 0),
        COALESCE(page_records.inviter_email, ''),
        COALESCE(page_records.inviter_username, ''),
+       COALESCE(inviter_avatar.url, ''),
        COALESCE(page_records.aff_code, ''),
        COALESCE(page_records.invited_count, 0),
        COALESCE(page_records.qualified_invitee_count, 0),
@@ -380,6 +381,7 @@ SELECT (page_records.inviter_id IS NOT NULL) AS has_record,
        record_count.total_count
 FROM record_count
 LEFT JOIN page_records ON TRUE
+LEFT JOIN user_avatars inviter_avatar ON inviter_avatar.user_id = page_records.inviter_id
 %[6]s`
 
 type affiliateQueryExecer interface {
@@ -1411,6 +1413,7 @@ func (r *affiliateRepository) ListAffiliateInviterSummaries(ctx context.Context,
 			&item.InviterID,
 			&item.InviterEmail,
 			&item.InviterUsername,
+			&item.InviterAvatarURL,
 			&item.AffCode,
 			&item.InvitedCount,
 			&item.QualifiedInviteeCount,

@@ -34,22 +34,22 @@ func (s *workbenchAffiliateRepositoryStub) ListAffiliateInviterSummaries(
 func TestAffiliateHandlerListWorkbenchLeaderboard(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	lastInvitedAt := time.Date(2026, time.August, 29, 9, 30, 0, 0, time.UTC)
+	leader := service.AffiliateInviterSummary{
+		InviterID:             42,
+		InviterEmail:          "leader@example.com",
+		InviterUsername:       "leader",
+		InviterAvatarURL:      "https://cdn.example.com/leader.png",
+		AffCode:               "MUST_NOT_LEAK",
+		InvitedCount:          31,
+		QualifiedInviteeCount: 18,
+		TotalRebate:           12.34,
+		AvailableQuota:        99.99,
+		TransferredAmount:     20,
+		RebateRecordCount:     7,
+		LastInvitedAt:         &lastInvitedAt,
+	}
 	repo := &workbenchAffiliateRepositoryStub{
-		items: []service.AffiliateInviterSummary{
-			{
-				InviterID:             42,
-				InviterEmail:          "leader@example.com",
-				InviterUsername:       "leader",
-				AffCode:               "MUST_NOT_LEAK",
-				InvitedCount:          31,
-				QualifiedInviteeCount: 18,
-				TotalRebate:           12.34,
-				AvailableQuota:        99.99,
-				TransferredAmount:     20,
-				RebateRecordCount:     7,
-				LastInvitedAt:         &lastInvitedAt,
-			},
-		},
+		items: []service.AffiliateInviterSummary{leader},
 		total: 1,
 	}
 	handler := NewAffiliateHandler(service.NewAffiliateService(repo, nil, nil, nil), nil)
@@ -78,6 +78,7 @@ func TestAffiliateHandlerListWorkbenchLeaderboard(t *testing.T) {
 		"inviter_id":              float64(42),
 		"inviter_email":           "leader@example.com",
 		"inviter_username":        "leader",
+		"inviter_avatar_url":      "https://cdn.example.com/leader.png",
 		"invited_count":           float64(31),
 		"qualified_invitee_count": float64(18),
 		"total_rebate":            12.34,

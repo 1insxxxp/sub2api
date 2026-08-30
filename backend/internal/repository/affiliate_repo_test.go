@@ -108,6 +108,8 @@ func TestAffiliateInviterSummariesSQLOnlyIncludesUsersWithInvites(t *testing.T) 
 	query := strings.Join(strings.Fields(affiliateInviterSummariesSQL), " ")
 
 	require.Contains(t, query, "JOIN user_affiliates invitee_aff ON invitee_aff.inviter_id = inviter_aff.user_id")
+	require.Contains(t, query, "LEFT JOIN page_records ON TRUE LEFT JOIN user_avatars inviter_avatar ON inviter_avatar.user_id = page_records.inviter_id")
+	require.Contains(t, query, "COALESCE(inviter_avatar.url, '')")
 	require.Contains(t, query, "COUNT(invitee_aff.user_id)::integer AS invited_count")
 	require.Contains(t, query, "COUNT(invitee_aff.user_id) FILTER")
 	require.Contains(t, query, "inviter_aff.aff_history_quota::double precision AS total_rebate")
@@ -128,10 +130,10 @@ func TestAffiliateInviterSummariesReturnsTotalForEmptyOutOfRangePage(t *testing.
 	mock.ExpectQuery("(?s)WITH inviter_summaries AS MATERIALIZED.*record_count").
 		WithArgs(service.AffiliateQualificationAmountDefault, 20, 1980).
 		WillReturnRows(sqlmock.NewRows([]string{
-			"has_record", "inviter_id", "inviter_email", "inviter_username", "aff_code",
+			"has_record", "inviter_id", "inviter_email", "inviter_username", "inviter_avatar_url", "aff_code",
 			"invited_count", "qualified_invitee_count", "total_rebate", "available_quota",
 			"transferred_amount", "rebate_record_count", "last_invited_at", "total_count",
-		}).AddRow(false, int64(0), "", "", "", 0, 0, 0.0, 0.0, 0.0, 0, nil, int64(7)))
+		}).AddRow(false, int64(0), "", "", "", "", 0, 0, 0.0, 0.0, 0.0, 0, nil, int64(7)))
 
 	items, total, err := repo.ListAffiliateInviterSummaries(context.Background(), service.AffiliateRecordFilter{
 		Page:     100,

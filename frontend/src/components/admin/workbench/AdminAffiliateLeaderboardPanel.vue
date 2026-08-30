@@ -78,12 +78,35 @@
                 </span>
               </td>
               <td class="min-w-0 px-4 py-3.5">
-                <p class="truncate font-medium text-gray-950 dark:text-white" :title="leader.inviter_email || '-'">
-                  {{ leader.inviter_email || '-' }}
-                </p>
-                <p class="mt-0.5 truncate text-xs text-gray-500 dark:text-dark-400">
-                  {{ leader.inviter_username || t('adminWorkbench.affiliateLeaderboard.noUsername') }} · #{{ leader.inviter_id }}
-                </p>
+                <div class="flex min-w-0 items-center gap-3">
+                  <span
+                    class="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full bg-primary-50 text-sm font-semibold text-primary-700 ring-1 ring-primary-100 dark:bg-primary-500/10 dark:text-primary-200 dark:ring-primary-500/20"
+                    aria-hidden="true"
+                  >
+                    <img
+                      v-if="shouldShowAvatar(leader)"
+                      :data-test="`affiliate-leaderboard-avatar-image-${leader.inviter_id}`"
+                      :src="leader.inviter_avatar_url"
+                      alt=""
+                      class="h-full w-full object-cover"
+                      @error="markAvatarFailed(leader.inviter_id)"
+                    />
+                    <span
+                      v-else
+                      :data-test="`affiliate-leaderboard-avatar-fallback-${leader.inviter_id}`"
+                    >
+                      {{ avatarInitial(leader) }}
+                    </span>
+                  </span>
+                  <div class="min-w-0">
+                    <p class="truncate font-medium text-gray-950 dark:text-white" :title="leader.inviter_email || '-'">
+                      {{ leader.inviter_email || '-' }}
+                    </p>
+                    <p class="mt-0.5 truncate text-xs text-gray-500 dark:text-dark-400">
+                      {{ leader.inviter_username || t('adminWorkbench.affiliateLeaderboard.noUsername') }} · #{{ leader.inviter_id }}
+                    </p>
+                  </div>
+                </div>
               </td>
               <td class="px-4 py-3.5 text-right text-base font-semibold tabular-nums text-primary-700 dark:text-primary-300">
                 {{ leader.invited_count }}
@@ -110,6 +133,25 @@
         >
           <div class="flex min-w-0 items-start gap-3">
             <span :class="rankClass(index)">{{ index + 1 }}</span>
+            <span
+              class="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full bg-primary-50 text-sm font-semibold text-primary-700 ring-1 ring-primary-100 dark:bg-primary-500/10 dark:text-primary-200 dark:ring-primary-500/20"
+              aria-hidden="true"
+            >
+              <img
+                v-if="shouldShowAvatar(leader)"
+                :data-test="`affiliate-leaderboard-avatar-image-${leader.inviter_id}`"
+                :src="leader.inviter_avatar_url"
+                alt=""
+                class="h-full w-full object-cover"
+                @error="markAvatarFailed(leader.inviter_id)"
+              />
+              <span
+                v-else
+                :data-test="`affiliate-leaderboard-avatar-fallback-${leader.inviter_id}`"
+              >
+                {{ avatarInitial(leader) }}
+              </span>
+            </span>
             <div class="min-w-0 flex-1">
               <p class="break-words text-sm font-semibold text-gray-950 dark:text-white">
                 {{ leader.inviter_email || '-' }}
@@ -156,6 +198,20 @@ const appStore = useAppStore()
 const leaders = ref<WorkbenchAffiliateLeaderboardItem[]>([])
 const loading = ref(true)
 const errorMessage = ref('')
+const failedAvatarIds = ref<Set<number>>(new Set())
+
+function shouldShowAvatar(leader: WorkbenchAffiliateLeaderboardItem): boolean {
+  return Boolean(leader.inviter_avatar_url?.trim()) && !failedAvatarIds.value.has(leader.inviter_id)
+}
+
+function avatarInitial(leader: WorkbenchAffiliateLeaderboardItem): string {
+  const identity = leader.inviter_username?.trim() || leader.inviter_email?.trim() || String(leader.inviter_id)
+  return Array.from(identity)[0]?.toUpperCase() || '?'
+}
+
+function markAvatarFailed(inviterId: number): void {
+  failedAvatarIds.value = new Set(failedAvatarIds.value).add(inviterId)
+}
 
 function rankClass(index: number): string {
   const base = 'inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-sm font-bold tabular-nums'
