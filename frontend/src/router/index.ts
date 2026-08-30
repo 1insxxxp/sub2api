@@ -415,6 +415,19 @@ const routes: RouteRecordRaw[] = [
     }
   },
 
+  {
+    path: '/manager',
+    name: 'Manager',
+    component: () => import('@/views/manager/ManagerView.vue'),
+    meta: {
+      requiresAuth: true,
+      requiresManager: true,
+      title: 'Manager Page',
+      titleKey: 'manager.title',
+      descriptionKey: 'manager.description'
+    }
+  },
+
   // ==================== Admin Routes ====================
   {
     path: '/admin',
@@ -821,6 +834,7 @@ router.beforeEach(async (to, _from, next) => {
   // Check if route requires authentication
   const requiresAuth = to.meta.requiresAuth !== false // Default to true
   const requiresAdmin = to.meta.requiresAdmin === true
+  const requiresManager = to.meta.requiresManager === true
 
   if (to.path === '/setup') {
     try {
@@ -838,14 +852,14 @@ router.beforeEach(async (to, _from, next) => {
   if (!requiresAuth) {
     // If already authenticated and trying to access login/register, redirect to appropriate dashboard
     if (authStore.isAuthenticated && (to.path === '/login' || to.path === '/register')) {
-      // In backend mode, non-admin users should NOT be redirected away from login
+      // In backend mode, users without manager access should NOT be redirected away from login
       // (they are blocked from all protected routes, so redirecting would cause a loop)
-      if (appStore.backendModeEnabled && !authStore.isAdmin) {
+      if (appStore.backendModeEnabled && !authStore.canAccessManagerPage) {
         next()
         return
       }
-      // Admin users go to admin dashboard, regular users go to user dashboard
-      next(authStore.isAdmin ? '/admin/dashboard' : '/dashboard')
+      // Admin users go to admin dashboard, secondary admins go to manager page, regular users go to user dashboard
+      next(authStore.isAdmin ? '/admin/dashboard' : authStore.canAccessManagerPage ? '/manager' : '/dashboard')
       return
     }
     // Model Plaza:公开路由但受「启用开关 + 可选强制登录」双重控制(后端同口径 fail-closed)
@@ -875,7 +889,7 @@ router.beforeEach(async (to, _from, next) => {
       }
       // Backend mode:登录的非管理员也不可见(匿名由下方公共拦截处理,广场不在白名单)
       if (appStore.backendModeEnabled && authStore.isAuthenticated && !authStore.isAdmin) {
-        next('/login')
+        next(authStore.canAccessManagerPage ? '/manager' : '/login')
         return
       }
     }
@@ -903,7 +917,12 @@ router.beforeEach(async (to, _from, next) => {
 
   // Check admin requirement
   if (requiresAdmin && !authStore.isAdmin) {
-    // User is authenticated but not admin, redirect to user dashboard
+    // User is authenticated but not full admin.
+    next(appStore.backendModeEnabled && authStore.canAccessManagerPage ? '/manager' : '/dashboard')
+    return
+  }
+
+  if (requiresManager && !authStore.canAccessManagerPage) {
     next('/dashboard')
     return
   }
@@ -944,7 +963,7 @@ router.beforeEach(async (to, _from, next) => {
     appStore.publicSettingsLoaded &&
     appStore.cachedPublicSettings?.payment_enabled === false
   ) {
-    next(authStore.isAdmin ? '/admin/dashboard' : '/dashboard')
+    next(authStore.isAdmin ? '/admin/dashboard' : authStore.canAccessManagerPage ? '/manager' : '/dashboard')
     return
   }
 
@@ -983,10 +1002,18 @@ router.beforeEach(async (to, _from, next) => {
     }
   }
 
-  // Backend mode: admin gets full access, non-admin blocked
+  // Backend mode: full admins get full access; secondary admins get only the manager page.
   if (appStore.backendModeEnabled) {
     if (authStore.isAuthenticated && authStore.isAdmin) {
       next()
+      return
+    }
+    if (authStore.isAuthenticated && authStore.canAccessManagerPage) {
+      if (requiresManager || to.path.startsWith('/manager')) {
+        next()
+        return
+      }
+      next('/manager')
       return
     }
     const isAllowed = isBackendModePublicRouteAllowed(to.path, authStore.hasPendingAuthSession)

@@ -51,6 +51,7 @@ vi.mock('@/api/auth', () => ({
 interface MockAuthState {
   isAuthenticated: boolean
   isAdmin: boolean
+  canAccessManagerPage?: boolean
   isSimpleMode: boolean
   backendModeEnabled: boolean
   hasPendingAuthSession: boolean
@@ -67,6 +68,8 @@ function simulateGuard(
 ): string | null {
   const requiresAuth = toMeta.requiresAuth !== false
   const requiresAdmin = toMeta.requiresAdmin === true
+  const requiresManager = toMeta.requiresManager === true
+  const canAccessManagerPage = authState.canAccessManagerPage ?? authState.isAdmin
 
   if (toPath === '/setup' && authState.setupNeedsSetup === false) {
     return resolveCompletedSetupRedirectPath(authState.isAuthenticated, authState.isAdmin)
@@ -78,10 +81,10 @@ function simulateGuard(
       authState.isAuthenticated &&
       (toPath === '/login' || toPath === '/register')
     ) {
-      if (authState.backendModeEnabled && !authState.isAdmin) {
+      if (authState.backendModeEnabled && !canAccessManagerPage) {
         return null
       }
-      return authState.isAdmin ? '/admin/dashboard' : '/dashboard'
+      return authState.isAdmin ? '/admin/dashboard' : canAccessManagerPage ? '/manager' : '/dashboard'
     }
     if (authState.backendModeEnabled && !authState.isAuthenticated) {
       const allowed = ['/login', '/key-usage', '/setup', '/payment/result']
@@ -111,6 +114,10 @@ function simulateGuard(
 
   // 需要管理员但不是管理员
   if (requiresAdmin && !authState.isAdmin) {
+    return authState.backendModeEnabled && canAccessManagerPage ? '/manager' : '/dashboard'
+  }
+
+  if (requiresManager && !canAccessManagerPage) {
     return '/dashboard'
   }
 
@@ -128,10 +135,16 @@ function simulateGuard(
     }
   }
 
-  // Backend mode: admin gets full access, non-admin blocked
+  // Backend mode: full admins get full access; secondary admins get only the manager page.
   if (authState.backendModeEnabled) {
     if (authState.isAuthenticated && authState.isAdmin) {
       return null
+    }
+    if (authState.isAuthenticated && canAccessManagerPage) {
+      if (requiresManager || toPath.startsWith('/manager')) {
+        return null
+      }
+      return '/manager'
     }
     const allowed = ['/login', '/key-usage', '/setup', '/payment/result']
     const callbackPaths = [
@@ -468,6 +481,58 @@ describe('路由守卫逻辑', () => {
       }
       const redirect = simulateGuard('/key-usage', { requiresAuth: false }, authState)
       expect(redirect).toBeNull()
+    })
+
+    it('secondary admin: /manager is allowed', () => {
+      const authState: MockAuthState = {
+        isAuthenticated: true,
+        isAdmin: false,
+        canAccessManagerPage: true,
+        isSimpleMode: false,
+        backendModeEnabled: true,
+        hasPendingAuthSession: false,
+      }
+      const redirect = simulateGuard('/manager', { requiresManager: true }, authState)
+      expect(redirect).toBeNull()
+    })
+
+    it('secondary admin: /dashboard redirects to /manager', () => {
+      const authState: MockAuthState = {
+        isAuthenticated: true,
+        isAdmin: false,
+        canAccessManagerPage: true,
+        isSimpleMode: false,
+        backendModeEnabled: true,
+        hasPendingAuthSession: false,
+      }
+      const redirect = simulateGuard('/dashboard', {}, authState)
+      expect(redirect).toBe('/manager')
+    })
+
+    it('secondary admin: /admin/users redirects to /manager', () => {
+      const authState: MockAuthState = {
+        isAuthenticated: true,
+        isAdmin: false,
+        canAccessManagerPage: true,
+        isSimpleMode: false,
+        backendModeEnabled: true,
+        hasPendingAuthSession: false,
+      }
+      const redirect = simulateGuard('/admin/users', { requiresAdmin: true }, authState)
+      expect(redirect).toBe('/manager')
+    })
+
+    it('secondary admin: /login redirects to /manager', () => {
+      const authState: MockAuthState = {
+        isAuthenticated: true,
+        isAdmin: false,
+        canAccessManagerPage: true,
+        isSimpleMode: false,
+        backendModeEnabled: true,
+        hasPendingAuthSession: false,
+      }
+      const redirect = simulateGuard('/login', { requiresAuth: false }, authState)
+      expect(redirect).toBe('/manager')
     })
 
     it('unauthenticated: callback routes are allowed', () => {

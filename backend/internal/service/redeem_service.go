@@ -342,7 +342,7 @@ func (s *RedeemService) GenerateBalanceTransferCodes(ctx context.Context, userID
 		if !user.IsActive() {
 			return nil, ErrUserNotActive
 		}
-		if !user.BalanceRedeemCodeEnabled {
+		if !user.BalanceRedeemCodeEnabled && !user.CanAccessManagerPage() {
 			return nil, ErrBalanceTransferRedeemNotAllowed
 		}
 

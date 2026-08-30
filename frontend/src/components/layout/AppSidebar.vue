@@ -129,7 +129,7 @@
       </template>
 
       <!-- Regular User View -->
-      <template v-else-if="!appStore.backendModeEnabled">
+      <template v-else-if="!appStore.backendModeEnabled || authStore.canAccessManagerPage">
         <div class="sidebar-section">
           <router-link
             v-for="item in userNavItems"
@@ -369,6 +369,21 @@ const UserIcon = {
           'stroke-linecap': 'round',
           'stroke-linejoin': 'round',
           d: 'M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z'
+        })
+      ]
+    )
+}
+
+const ManagerIcon = {
+  render: () =>
+    h(
+      'svg',
+      { fill: 'none', viewBox: '0 0 24 24', stroke: 'currentColor', 'stroke-width': '1.5' },
+      [
+        h('path', {
+          'stroke-linecap': 'round',
+          'stroke-linejoin': 'round',
+          d: 'M9 12.75 11.25 15 15 9.75m6-3.75A11.96 11.96 0 0 1 12 2.25 11.96 11.96 0 0 1 3 6c0 5.592 3.824 10.29 9 11.622C17.176 16.29 21 11.592 21 6Z'
         })
       ]
     )
@@ -747,7 +762,15 @@ function finalizeNav(items: NavItem[]): NavItem[] {
 }
 
 // User navigation items (for regular users)
-const userNavItems = computed((): NavItem[] => finalizeNav(buildSelfNavItems(true)))
+const userNavItems = computed((): NavItem[] => {
+  const managerItems: NavItem[] = authStore.canAccessManagerPage
+    ? [{ path: '/manager', label: t('nav.manager'), icon: ManagerIcon }]
+    : []
+  if (appStore.backendModeEnabled) {
+    return managerItems
+  }
+  return finalizeNav([...managerItems, ...buildSelfNavItems(true)])
+})
 
 // Personal navigation items (for admin's "My Account" section, without Dashboard).
 // Admins access 可用渠道 from this section just like regular users — there is no
@@ -772,6 +795,7 @@ const customMenuItemsForAdmin = computed(() => {
 const adminNavItems = computed((): NavItem[] => {
   const baseItems: NavItem[] = [
     { path: '/admin/dashboard', label: t('nav.dashboard'), icon: DashboardIcon },
+    { path: '/manager', label: t('nav.manager'), icon: ManagerIcon },
     { path: '/admin/ops', label: t('nav.ops'), icon: ChartIcon, featureFlag: flagOpsMonitoring },
     { path: '/admin/users', label: t('nav.users'), icon: UsersIcon, hideInSimpleMode: true },
     { path: '/admin/groups', label: t('nav.groups'), icon: FolderIcon, hideInSimpleMode: true },

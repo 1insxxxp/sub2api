@@ -25,3 +25,22 @@ func AdminOnly() gin.HandlerFunc {
 		c.Next()
 	}
 }
+
+// ManagerPageOnly permits full admins and secondary admins to access the narrow
+// manager-page API surface. It must be used after JWTAuth.
+func ManagerPageOnly() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		role, ok := GetUserRoleFromContext(c)
+		if !ok {
+			AbortWithError(c, 401, "UNAUTHORIZED", "User not found in context")
+			return
+		}
+
+		if role != service.RoleAdmin && role != service.RoleSubAdmin {
+			AbortWithError(c, 403, "FORBIDDEN", "Manager page access required")
+			return
+		}
+
+		c.Next()
+	}
+}
