@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"math"
 	"strings"
 	"time"
 
@@ -389,6 +390,9 @@ func applyUsageBilling(ctx context.Context, requestID string, usageLog *UsageLog
 		deps.deferredService.ScheduleLastUsedUpdate(p.Account.ID)
 		return false, nil
 	}
+	if usageLog != nil {
+		usageLog.ThresholdExemptCost = clampUsageBillingThresholdExemptCost(result.ThresholdExemptCost, usageLog.ActualCost, p.IsSubscriptionBill)
+	}
 
 	if result.APIKeyQuotaExhausted {
 		if invalidator, ok := p.APIKeyService.(apiKeyAuthCacheInvalidator); ok && p.APIKey != nil && p.APIKey.Key != "" {
@@ -398,6 +402,24 @@ func applyUsageBilling(ctx context.Context, requestID string, usageLog *UsageLog
 
 	finalizePostUsageBilling(billingCtx, p, deps, result)
 	return true, nil
+}
+
+func clampUsageBillingThresholdExemptCost(allocated, actualCost float64, subscription bool) float64 {
+	if subscription || math.IsNaN(allocated) || math.IsInf(allocated, 0) {
+		return 0
+	}
+	actualCost = QuantizeUsageBillingAmount(actualCost)
+	if actualCost <= 0 || math.IsNaN(actualCost) || math.IsInf(actualCost, 0) {
+		return 0
+	}
+	allocated = QuantizeUsageBillingAmount(allocated)
+	if allocated <= 0 {
+		return 0
+	}
+	if allocated > actualCost {
+		return actualCost
+	}
+	return allocated
 }
 
 func finalizePostUsageBilling(ctx context.Context, p *postUsageBillingParams, deps *billingDeps, result *UsageBillingApplyResult) {

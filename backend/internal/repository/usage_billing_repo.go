@@ -179,12 +179,13 @@ func (r *usageBillingRepository) applyUsageBillingEffects(ctx context.Context, t
 	}
 
 	if cmd.BalanceCost > 0 {
-		newBalance, sufficient, err := deductUsageBillingBalance(ctx, tx, cmd.UserID, cmd.BalanceCost)
+		newBalance, sufficient, giftUsed, err := deductUsageBillingBalance(ctx, tx, cmd.UserID, cmd.BalanceCost)
 		if err != nil {
 			return err
 		}
 		result.NewBalance = &newBalance
 		result.BalanceOverdrafted = !sufficient
+		result.ThresholdExemptCost = giftUsed
 	}
 
 	if cmd.APIKeyQuotaCost > 0 {
@@ -240,36 +241,55 @@ func incrementUsageBillingSubscription(ctx context.Context, tx *sql.Tx, subscrip
 	return service.ErrSubscriptionNotFound
 }
 
-func deductUsageBillingBalance(ctx context.Context, tx *sql.Tx, userID int64, amount float64) (float64, bool, error) {
-	var newBalance float64
+// deductUsageBillingBalance locks the wallet row so total and gift balances are
+// allocated from the same pre-deduction snapshot, including the overdraft path.
+func deductUsageBillingBalance(ctx context.Context, tx *sql.Tx, userID int64, amount float64) (float64, bool, float64, error) {
+	var newBalance, giftUsed float64
+	var sufficient bool
 	err := tx.QueryRowContext(ctx, `
-		UPDATE users
-		SET balance = balance - $1,
-			updated_at = NOW()
-		WHERE id = $2 AND deleted_at IS NULL AND balance >= $1
-		RETURNING balance
-	`, amount, userID).Scan(&newBalance)
-	if err == nil {
-		return newBalance, true, nil
-	}
-	if !errors.Is(err, sql.ErrNoRows) {
-		return 0, false, err
-	}
-
-	err = tx.QueryRowContext(ctx, `
-		UPDATE users
-		SET balance = balance - $1,
-			updated_at = NOW()
-		WHERE id = $2 AND deleted_at IS NULL
-		RETURNING balance
-	`, amount, userID).Scan(&newBalance)
+		WITH wallet AS (
+			SELECT
+				id,
+				balance,
+				GREATEST(COALESCE(gift_balance, 0), 0) AS old_gift_balance
+			FROM users
+			WHERE id = $2 AND deleted_at IS NULL
+			FOR UPDATE
+		), updated AS (
+			UPDATE users AS u
+			SET
+				balance = wallet.balance - $1,
+				gift_balance = LEAST(
+					GREATEST(wallet.old_gift_balance - $1, 0),
+					GREATEST(wallet.balance - $1, 0)
+				),
+				updated_at = NOW()
+			FROM wallet
+			WHERE u.id = wallet.id
+			RETURNING
+				u.balance,
+				wallet.balance >= $1 AS sufficient,
+				LEAST(wallet.old_gift_balance, $1) AS gift_used
+		)
+		SELECT balance, sufficient, gift_used
+		FROM updated
+	`, amount, userID).Scan(&newBalance, &sufficient, &giftUsed)
 	if errors.Is(err, sql.ErrNoRows) {
-		return 0, false, service.ErrUserNotFound
+		return 0, false, 0, service.ErrUserNotFound
 	}
 	if err != nil {
-		return 0, false, err
+		return 0, false, 0, err
 	}
-	return newBalance, false, nil
+
+	giftUsed = service.QuantizeUsageBillingAmount(giftUsed)
+	if giftUsed < 0 {
+		giftUsed = 0
+	}
+	quantizedAmount := service.QuantizeUsageBillingAmount(amount)
+	if giftUsed > quantizedAmount {
+		giftUsed = quantizedAmount
+	}
+	return newBalance, sufficient, giftUsed, nil
 }
 
 func reserveUsageBillingBatchImageBalance(ctx context.Context, tx *sql.Tx, cmd *service.BatchImageBalanceHoldCommand) (*service.BatchImageBalanceHoldResult, error) {
