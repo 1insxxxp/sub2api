@@ -26,6 +26,28 @@ type geminiCompatHTTPUpstreamStub struct {
 	lastReq  *http.Request
 }
 
+type geminiCancelThenSuccessUpstreamStub struct {
+	calls int
+}
+
+func (s *geminiCancelThenSuccessUpstreamStub) Do(req *http.Request, proxyURL string, accountID int64, accountConcurrency int) (*http.Response, error) {
+	s.calls++
+	if s.calls == 1 {
+		return nil, context.Canceled
+	}
+	return &http.Response{
+		StatusCode: http.StatusOK,
+		Header:     http.Header{"Content-Type": []string{"application/json"}},
+		Body: io.NopCloser(strings.NewReader(
+			`{"candidates":[{"content":{"parts":[{"text":"unexpected retry"}]},"finishReason":"STOP"}]}`,
+		)),
+	}, nil
+}
+
+func (s *geminiCancelThenSuccessUpstreamStub) DoWithTLS(req *http.Request, proxyURL string, accountID int64, accountConcurrency int, profile *tlsfingerprint.Profile) (*http.Response, error) {
+	return s.Do(req, proxyURL, accountID, accountConcurrency)
+}
+
 func (s *geminiCompatHTTPUpstreamStub) Do(req *http.Request, proxyURL string, accountID int64, accountConcurrency int) (*http.Response, error) {
 	s.calls++
 	s.lastReq = req
@@ -116,6 +138,35 @@ func TestGeminiForwardAsChatCompletions_OAuthRoutesToGeminiAndReturnsChatFormat(
 	require.Equal(t, float64(7), usage["prompt_tokens"])
 	require.Equal(t, float64(3), usage["completion_tokens"])
 	require.Equal(t, float64(10), usage["total_tokens"])
+}
+
+func TestGeminiForwardAsChatCompletions_CanceledTransportDoesNotRetry(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	httpStub := &geminiCancelThenSuccessUpstreamStub{}
+	svc := &GeminiMessagesCompatService{
+		httpUpstream: httpStub,
+		cfg:          &config.Config{},
+	}
+	account := &Account{
+		ID:       104,
+		Platform: PlatformGemini,
+		Type:     AccountTypeAPIKey,
+		Credentials: map[string]any{
+			"api_key": "gemini-api-key",
+		},
+		Concurrency: 1,
+	}
+
+	rec := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(rec)
+	body := []byte(`{"model":"gemini-2.5-flash","messages":[{"role":"user","content":"hi"}]}`)
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1/chat/completions", bytes.NewReader(body))
+
+	result, err := svc.ForwardAsChatCompletions(context.Background(), c, account, body)
+	require.Nil(t, result)
+	require.ErrorIs(t, err, context.Canceled)
+	require.Equal(t, 1, httpStub.calls)
 }
 
 func TestGeminiForwardAsChatCompletionsPrependsMappedModelSystemPrompt(t *testing.T) {
@@ -729,6 +780,40 @@ func TestConvertClaudeMessagesToGeminiGenerateContent_AddsThoughtSignatureForToo
 	if !strings.Contains(s, "\"thoughtSignature\":\""+geminiDummyThoughtSignature+"\"") {
 		t.Fatalf("expected injected thoughtSignature %q, got: %s", geminiDummyThoughtSignature, s)
 	}
+}
+
+func TestConvertClaudeMessagesToGeminiGenerateContent_AppendsContinuationAfterAssistantPrefill(t *testing.T) {
+	claudeReq := map[string]any{
+		"model":      "claude-opus-4-6",
+		"max_tokens": 100,
+		"messages": []any{
+			map[string]any{"role": "user", "content": "Write a greeting."},
+			map[string]any{"role": "assistant", "content": "Hello"},
+		},
+	}
+	body, err := json.Marshal(claudeReq)
+	require.NoError(t, err)
+
+	out, err := convertClaudeMessagesToGeminiGenerateContent(body)
+	require.NoError(t, err)
+
+	var converted map[string]any
+	require.NoError(t, json.Unmarshal(out, &converted))
+	contents, ok := converted["contents"].([]any)
+	require.True(t, ok)
+	require.Len(t, contents, 3)
+
+	prefill, ok := contents[1].(map[string]any)
+	require.True(t, ok)
+	require.Equal(t, "model", prefill["role"])
+
+	continuation, ok := contents[2].(map[string]any)
+	require.True(t, ok)
+	require.Equal(t, "user", continuation["role"])
+	require.Equal(t,
+		"Continue the assistant response from where it stopped without repeating prior text.",
+		gjson.GetBytes(out, "contents.2.parts.0.text").String(),
+	)
 }
 
 func TestEnsureGeminiFunctionCallThoughtSignatures_InsertsWhenMissing(t *testing.T) {

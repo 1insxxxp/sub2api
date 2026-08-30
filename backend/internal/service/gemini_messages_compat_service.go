@@ -3391,7 +3391,7 @@ func convertClaudeMessagesToGeminiContents(messages any, toolUseIDToName map[str
 		return nil, errors.New("messages must be an array")
 	}
 
-	out := make([]any, 0, len(arr))
+	out := make([]any, 0, len(arr)+1)
 	for _, m := range arr {
 		mm, ok := m.(map[string]any)
 		if !ok {
@@ -3490,6 +3490,17 @@ func convertClaudeMessagesToGeminiContents(messages any, toolUseIDToName map[str
 			"role":  gRole,
 			"parts": parts,
 		})
+	}
+
+	if len(out) > 0 {
+		if last, ok := out[len(out)-1].(map[string]any); ok && last["role"] == "model" {
+			out = append(out, map[string]any{
+				"role": "user",
+				"parts": []any{map[string]any{
+					"text": "Continue the assistant response from where it stopped without repeating prior text.",
+				}},
+			})
+		}
 	}
 	return out, nil
 }
