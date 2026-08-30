@@ -28,6 +28,7 @@ func TestMigration232AddsGiftRedeemEligibilityAccounting(t *testing.T) {
 	}
 	for _, constraint := range constraints {
 		require.Contains(t, sql, "conname = '"+constraint.name+"' AND conrelid = '"+constraint.table+"'::regclass")
-		require.Contains(t, sql, "ADD CONSTRAINT "+constraint.name+" CHECK ("+constraint.column+" >= 0)")
+		require.Contains(t, sql, "ADD CONSTRAINT "+constraint.name+" CHECK ("+constraint.column+" >= 0) NOT VALID")
 	}
+	require.NotContains(t, sql, "VALIDATE CONSTRAINT")
 }
