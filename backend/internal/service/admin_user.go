@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"sort"
 	"strings"
 	"time"
@@ -1263,7 +1264,9 @@ func (s *adminServiceImpl) GenerateRedeemCodes(ctx context.Context, input *Gener
 	if input.ExpiresAt != nil && !input.ExpiresAt.After(time.Now()) {
 		return nil, ErrRedeemCodeExpired
 	}
-	if input.ThresholdExempt && (input.Type != RedeemTypeBalance || input.Value <= 0) {
+	if input.ThresholdExempt && (input.Type != RedeemTypeBalance ||
+		math.IsNaN(input.Value) || math.IsInf(input.Value, 0) ||
+		QuantizeUsageBillingAmount(input.Value) <= 0) {
 		return nil, infraerrors.BadRequest(
 			"REDEEM_THRESHOLD_EXEMPT_INVALID",
 			"gift credit is only supported for positive balance redeem codes",

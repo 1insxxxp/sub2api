@@ -205,3 +205,17 @@ func TestGenerateRedeemCodesPropagatesThresholdExempt(t *testing.T) {
 	require.NotNil(t, stub.lastGenerateRedeemCodes)
 	require.True(t, stub.lastGenerateRedeemCodes.ThresholdExempt)
 }
+
+func TestGenerateRedeemCodesRequestThresholdExemptSerialization(t *testing.T) {
+	var req GenerateRedeemCodesRequest
+	require.NoError(t, json.Unmarshal([]byte(`{"count":1,"type":"balance","value":10}`), &req))
+
+	legacyPayload, err := json.Marshal(req)
+	require.NoError(t, err)
+	require.NotContains(t, string(legacyPayload), `"threshold_exempt"`)
+
+	req.ThresholdExempt = true
+	giftPayload, err := json.Marshal(req)
+	require.NoError(t, err)
+	require.Contains(t, string(giftPayload), `"threshold_exempt":true`)
+}

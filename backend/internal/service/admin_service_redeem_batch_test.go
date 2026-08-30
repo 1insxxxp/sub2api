@@ -4,6 +4,7 @@ package service
 
 import (
 	"context"
+	"math"
 	"testing"
 
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
@@ -107,6 +108,10 @@ func TestGenerateRedeemCodesRejectsInvalidThresholdExemptCodes(t *testing.T) {
 		{name: "invitation", type_: RedeemTypeInvitation, value: 1},
 		{name: "zero balance", type_: RedeemTypeBalance, value: 0},
 		{name: "negative balance", type_: RedeemTypeBalance, value: -1},
+		{name: "nan balance", type_: RedeemTypeBalance, value: math.NaN()},
+		{name: "positive infinity balance", type_: RedeemTypeBalance, value: math.Inf(1)},
+		{name: "negative infinity balance", type_: RedeemTypeBalance, value: math.Inf(-1)},
+		{name: "subprecision balance", type_: RedeemTypeBalance, value: 1e-10},
 	}
 
 	for _, tt := range tests {
