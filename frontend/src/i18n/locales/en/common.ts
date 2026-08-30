@@ -165,6 +165,7 @@ export default {
   nav: {
     dashboard: 'Dashboard',
     adminWorkbench: 'Manager Page',
+    manager: 'Manager Page',
     announcements: 'Announcements',
     apiKeys: 'API Keys',
     customGroups: 'Custom Groups',

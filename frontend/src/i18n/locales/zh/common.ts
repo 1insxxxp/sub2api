@@ -166,6 +166,7 @@ export default {
   nav: {
     dashboard: '仪表盘',
     adminWorkbench: '管理员页面',
+    manager: '管理员页面',
     announcements: '公告',
     apiKeys: 'API 密钥',
     customGroups: '自定义分组',

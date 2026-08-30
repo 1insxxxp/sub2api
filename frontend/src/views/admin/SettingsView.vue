@@ -1160,7 +1160,7 @@
                     </span>
                     <span aria-hidden="true">→</span>
                     <span
-                      class="inline-flex items-center rounded bg-gray-100 px-2 py-0.5 font-medium text-gray-700 dark:bg-dark-600 dark:text-gray-300"
+                      class="badge badge-gray inline-flex items-center font-medium"
                     >
                       {{
                         openaiFastPolicyActionSummary(

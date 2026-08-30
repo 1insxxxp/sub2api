@@ -8,6 +8,7 @@ import admin from './admin'
 import misc from './misc'
 import restored from './restored'
 import lottery from './lottery'
+import manager from './manager'
 
 export default mergeMessages({
   ...landing,
@@ -18,4 +19,5 @@ export default mergeMessages({
   admin,
   ...misc,
   ...lottery,
+  ...manager,
 }, restored)

@@ -127,6 +127,19 @@ function mountPanel(overrides: {
 
 describe('CheckinRewardCampaignPanel', () => {
   beforeEach(() => {
+    const today = new Intl.DateTimeFormat('en', {
+      timeZone: 'Asia/Shanghai',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    })
+      .formatToParts(new Date())
+      .reduce<Record<string, string>>((parts, part) => {
+        parts[part.type] = part.value
+        return parts
+      }, {})
+    const beijingToday = `${today.year}-${today.month}-${today.day}`
+
     listCampaigns.mockReset()
     enableCampaign.mockReset()
     disableCampaign.mockReset()
@@ -137,7 +150,7 @@ describe('CheckinRewardCampaignPanel', () => {
       campaign(1, 'active'),
       campaign(2, 'upcoming'),
       campaign(3, 'ended'),
-      campaign(4, 'draft'),
+      campaign(4, 'draft', { start_date: beijingToday, end_date: beijingToday }),
       campaign(5, 'disabled'),
     ])
   })

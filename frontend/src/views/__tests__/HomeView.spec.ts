@@ -36,6 +36,10 @@ vi.mock('@/stores', () => ({
   useAuthStore: () => authStoreState,
 }))
 
+vi.mock('@/stores/app', () => ({
+  useAppStore: () => appStoreState,
+}))
+
 vi.mock('vue-i18n', async () => {
   const actual = await vi.importActual<typeof import('vue-i18n')>('vue-i18n')
   const messages: Record<string, string> = {
