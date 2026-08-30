@@ -30,5 +30,7 @@ func TestMigration232AddsGiftRedeemEligibilityAccounting(t *testing.T) {
 		require.Contains(t, sql, "conname = '"+constraint.name+"' AND conrelid = '"+constraint.table+"'::regclass")
 		require.Contains(t, sql, "ADD CONSTRAINT "+constraint.name+" CHECK ("+constraint.column+" >= 0) NOT VALID")
 	}
+	require.Contains(t, sql, "conname = 'users_gift_balance_within_balance' AND conrelid = 'users'::regclass")
+	require.Contains(t, sql, "ADD CONSTRAINT users_gift_balance_within_balance CHECK (gift_balance <= GREATEST(balance, 0)) NOT VALID")
 	require.NotContains(t, sql, "VALIDATE CONSTRAINT")
 }

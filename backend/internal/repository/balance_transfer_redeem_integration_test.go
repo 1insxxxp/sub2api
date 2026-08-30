@@ -148,6 +148,29 @@ func (s *UserRepoSuite) TestRedeemCreditsOrdinaryAndGiftBalancesWithDifferentRec
 	s.Require().Equal(10.0, afterGift.TotalRecharged)
 }
 
+func (s *UserRepoSuite) TestNegativeRedeemClampsGiftBalanceToRemainingSpendableBalance() {
+	user := s.mustCreateUser(&service.User{
+		Email:       "negative-redeem-gift-clamp@example.com",
+		Balance:     10,
+		GiftBalance: 10,
+	})
+	s.Require().NoError(s.client.User.UpdateOneID(user.ID).SetGiftBalance(10).Exec(s.ctx))
+	redeemRepo := NewRedeemCodeRepository(s.client)
+	code := &service.RedeemCode{
+		Code: "REDEEM-NEGATIVE-GIFT-CLAMP", Type: service.RedeemTypeBalance, Value: -7,
+		Status: service.StatusUnused,
+	}
+	s.Require().NoError(redeemRepo.Create(s.ctx, code))
+	redeemService := service.NewRedeemService(redeemRepo, s.repo, nil, nil, nil, s.client, nil, nil)
+
+	_, err := redeemService.Redeem(s.ctx, user.ID, code.Code)
+	s.Require().NoError(err)
+	got, err := s.repo.GetByID(s.ctx, user.ID)
+	s.Require().NoError(err)
+	s.Require().Equal(3.0, got.Balance)
+	s.Require().Equal(3.0, got.GiftBalance)
+}
+
 func (s *UserRepoSuite) TestRedeemGiftCreditFailureRollsBackCodeAndWallet() {
 	user := s.mustCreateUser(&service.User{
 		Email:          "gift-redeem-rollback@example.com",

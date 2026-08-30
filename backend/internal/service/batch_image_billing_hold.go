@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 
 	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
@@ -38,11 +39,15 @@ func buildBatchImageHoldCommand(job *BatchImageJob, requestID string, actualAmou
 	if job.HoldAmount != nil {
 		holdAmount = *job.HoldAmount
 	}
-	if holdAmount < 0 {
-		holdAmount = 0
+	if err := ValidateUsageBillingActualCost(holdAmount); err != nil {
+		base := ErrBatchImageBillingHoldFailed
+		if strings.HasPrefix(strings.TrimSpace(requestID), batchImageCaptureRequestPrefix) {
+			base = ErrBatchImageSettlementBillingFailed
+		}
+		return nil, base.WithCause(fmt.Errorf("invalid batch image hold amount: %w", err))
 	}
-	if actualAmount < 0 {
-		actualAmount = 0
+	if err := ValidateUsageBillingActualCost(actualAmount); err != nil {
+		return nil, ErrBatchImageSettlementBillingFailed.WithCause(fmt.Errorf("invalid batch image actual amount: %w", err))
 	}
 	return &BatchImageBalanceHoldCommand{
 		RequestID:          requestID,

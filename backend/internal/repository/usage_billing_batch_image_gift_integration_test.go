@@ -130,7 +130,7 @@ func TestUsageBillingRepositoryBatchImage_ReserveAndCaptureGiftAllocation(t *tes
 }
 
 func TestUsageBillingRepositoryBatchImage_LegacyHoldDoesNotConsumeAvailableGift(t *testing.T) {
-	repo, user, apiKey := createBatchImageGiftWallet(t, 8, 10)
+	repo, user, apiKey := createBatchImageGiftWallet(t, 10, 10)
 	batchID := "batch-legacy-" + uuid.NewString()
 	_, err := integrationDB.ExecContext(context.Background(), `
 		UPDATE users SET frozen_balance = 12, frozen_gift_balance = 0 WHERE id = $1
@@ -149,7 +149,7 @@ func TestUsageBillingRepositoryBatchImage_LegacyHoldDoesNotConsumeAvailableGift(
 	require.NoError(t, err)
 	require.True(t, result.Applied)
 	require.Zero(t, result.ThresholdExemptCost)
-	require.Equal(t, batchImageWalletState{Balance: 13, GiftBalance: 10}, readBatchImageWallet(t, user.ID))
+	require.Equal(t, batchImageWalletState{Balance: 15, GiftBalance: 10}, readBatchImageWallet(t, user.ID))
 }
 
 func TestUsageBillingRepositoryBatchImage_NullLegacyHoldRecoversFrozenGiftAllocation(t *testing.T) {
@@ -558,8 +558,8 @@ func TestUsageBillingRepositoryBatchImage_EarlyReleaseRacingReserveDoesNotPoison
 	require.Equal(t, 1, releaseClaims)
 }
 
-func TestUsageBillingRepositoryBatchImage_SanitizesCorruptNaNPools(t *testing.T) {
-	repo, user, apiKey := createBatchImageGiftWallet(t, 20, 0)
+func TestUsageBillingRepositoryBatchImage_DatabaseRejectsCorruptNaNPools(t *testing.T) {
+	_, user, _ := createBatchImageGiftWallet(t, 20, 0)
 	_, err := integrationDB.ExecContext(context.Background(), `
 		UPDATE users
 		SET gift_balance = 'NaN'::numeric,
@@ -567,8 +567,6 @@ func TestUsageBillingRepositoryBatchImage_SanitizesCorruptNaNPools(t *testing.T)
 			frozen_gift_balance = 'NaN'::numeric
 		WHERE id = $1
 	`, user.ID)
-	require.NoError(t, err)
-
-	reserveBatchImageGift(t, repo, user, apiKey, "batch-nan-"+uuid.NewString(), 5)
-	require.Equal(t, batchImageWalletState{Balance: 15, GiftBalance: 0, FrozenBalance: 5, FrozenGiftBalance: 0}, readBatchImageWallet(t, user.ID))
+	require.Error(t, err)
+	require.Equal(t, batchImageWalletState{Balance: 20}, readBatchImageWallet(t, user.ID))
 }

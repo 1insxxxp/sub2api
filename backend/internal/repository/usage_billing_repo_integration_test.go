@@ -35,7 +35,6 @@ func TestUsageBillingRepositoryApply_AllocatesGiftBalance(t *testing.T) {
 		{name: "mixed gift and ordinary", balance: 20, giftBalance: 10, cost: 12, wantBalance: 8, wantGift: 0, wantExempt: 10},
 		{name: "no gift", balance: 20, giftBalance: 0, cost: 12, wantBalance: 8, wantGift: 0, wantExempt: 0},
 		{name: "overdraft", balance: 5, giftBalance: 3, cost: 12, wantBalance: -7, wantGift: 0, wantExempt: 3, wantOverdraft: true},
-		{name: "transitional overdraft preserves remaining gift", balance: 5, giftBalance: 10, cost: 7, wantBalance: -2, wantGift: 3, wantExempt: 7, wantOverdraft: true},
 	}
 
 	for _, tt := range tests {
@@ -80,31 +79,14 @@ func TestUsageBillingRepositoryApply_AllocatesGiftBalance(t *testing.T) {
 	}
 }
 
-func TestUsageBillingRepositoryApply_SanitizesNumericNaNGiftBalance(t *testing.T) {
+func TestUsageBillingRepositoryApply_DatabaseRejectsNumericNaNGiftBalance(t *testing.T) {
 	ctx := context.Background()
 	client := testEntClient(t)
-	repo := NewUsageBillingRepository(client, integrationDB)
 	user := mustCreateUser(t, client, &service.User{
 		Email: fmt.Sprintf("usage-billing-gift-nan-%s@example.com", uuid.NewString()), PasswordHash: "hash", Balance: 10,
 	})
 	_, err := integrationDB.ExecContext(ctx, "UPDATE users SET gift_balance = 'NaN'::numeric WHERE id = $1", user.ID)
-	require.NoError(t, err)
-	apiKey := mustCreateApiKey(t, client, &service.APIKey{UserID: user.ID, Key: "sk-gift-nan-" + uuid.NewString(), Name: "gift-nan"})
-
-	result, err := repo.Apply(ctx, &service.UsageBillingCommand{
-		RequestID: uuid.NewString(), APIKeyID: apiKey.ID, UserID: user.ID, BalanceCost: 3,
-	})
-	require.NoError(t, err)
-	require.True(t, result.Applied)
-	require.False(t, result.BalanceOverdrafted)
-	require.NotNil(t, result.NewBalance)
-	require.InDelta(t, 7, *result.NewBalance, 0.00000001)
-	require.Zero(t, result.ThresholdExemptCost)
-
-	var balance, giftBalance float64
-	require.NoError(t, integrationDB.QueryRowContext(ctx, "SELECT balance, gift_balance FROM users WHERE id = $1", user.ID).Scan(&balance, &giftBalance))
-	require.InDelta(t, 7, balance, 0.00000001)
-	require.Zero(t, giftBalance)
+	require.Error(t, err)
 }
 
 func TestUsageBillingRepositoryApply_GiftAllocationDeduplicates(t *testing.T) {

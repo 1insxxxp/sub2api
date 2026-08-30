@@ -131,6 +131,40 @@ func TestBatchImageSettlementService_CompletedJobReturnsAlreadySettledWithoutBil
 	require.Empty(t, billing.captures)
 }
 
+type batchImageAlreadySettledOnFinalizeRepo struct {
+	*fakeBatchImageRepository
+	failureCalls int
+}
+
+func (r *batchImageAlreadySettledOnFinalizeRepo) MarkBatchImageJobSettled(_ context.Context, params MarkBatchImageJobSettledParams) error {
+	job := r.jobs[params.BatchID]
+	job.Status = BatchImageJobStatusCompleted
+	job.ActualCost = &params.ActualCost
+	return ErrBatchImageAlreadySettled
+}
+
+func (r *batchImageAlreadySettledOnFinalizeRepo) SetBatchImageJobSettlementFailed(ctx context.Context, batchID, code, message string) (int, error) {
+	r.failureCalls++
+	return r.fakeBatchImageRepository.SetBatchImageJobSettlementFailed(ctx, batchID, code, message)
+}
+
+func TestBatchImageSettlementService_ConcurrentFinalizeTreatsAlreadySettledAsSuccess(t *testing.T) {
+	base := newFakeBatchImageRepository()
+	job := testSettlingBatchImageJob("imgbatch_concurrent_finalize")
+	base.jobs[job.BatchID] = job
+	repo := &batchImageAlreadySettledOnFinalizeRepo{fakeBatchImageRepository: base}
+	svc := &BatchImageSettlementService{
+		Repo: repo, BillingRepo: &fakeBatchImageBillingRepo{}, UsageLogRepo: &batchSettlementUsageLogRepo{},
+		Pricing: &fakeBatchImagePricingResolver{unitPrice: 0.25},
+	}
+
+	result, err := svc.Settle(context.Background(), job.BatchID)
+	require.NoError(t, err)
+	require.True(t, result.AlreadySettled)
+	require.Equal(t, BatchImageJobStatusCompleted, base.jobs[job.BatchID].Status)
+	require.Zero(t, repo.failureCalls)
+}
+
 func TestBatchImageSettlementService_IdempotentAfterBillingCrash(t *testing.T) {
 	repo := newFakeBatchImageRepository()
 	job := testSettlingBatchImageJob("imgbatch_crash")

@@ -259,28 +259,30 @@ func TestUsageLogRepositoryCreate_BatchPathDuplicateRequestID(t *testing.T) {
 	requestID := uuid.NewString()
 
 	log1 := &service.UsageLog{
-		UserID:       user.ID,
-		APIKeyID:     apiKey.ID,
-		AccountID:    account.ID,
-		RequestID:    requestID,
-		Model:        "claude-3",
-		InputTokens:  10,
-		OutputTokens: 20,
-		TotalCost:    0.5,
-		ActualCost:   0.5,
-		CreatedAt:    time.Now().UTC(),
+		UserID:              user.ID,
+		APIKeyID:            apiKey.ID,
+		AccountID:           account.ID,
+		RequestID:           requestID,
+		Model:               "claude-3",
+		InputTokens:         10,
+		OutputTokens:        20,
+		TotalCost:           0.5,
+		ActualCost:          0.5,
+		ThresholdExemptCost: 0.25,
+		CreatedAt:           time.Now().UTC(),
 	}
 	log2 := &service.UsageLog{
-		UserID:       user.ID,
-		APIKeyID:     apiKey.ID,
-		AccountID:    account.ID,
-		RequestID:    requestID,
-		Model:        "claude-3",
-		InputTokens:  10,
-		OutputTokens: 20,
-		TotalCost:    0.5,
-		ActualCost:   0.5,
-		CreatedAt:    time.Now().UTC(),
+		UserID:              user.ID,
+		APIKeyID:            apiKey.ID,
+		AccountID:           account.ID,
+		RequestID:           requestID,
+		Model:               "claude-3",
+		InputTokens:         10,
+		OutputTokens:        20,
+		TotalCost:           0.5,
+		ActualCost:          0.5,
+		ThresholdExemptCost: 0,
+		CreatedAt:           time.Now().UTC(),
 	}
 
 	inserted1, err1 := repo.Create(ctx, log1)
@@ -290,6 +292,7 @@ func TestUsageLogRepositoryCreate_BatchPathDuplicateRequestID(t *testing.T) {
 	require.True(t, inserted1)
 	require.False(t, inserted2)
 	require.Equal(t, log1.ID, log2.ID)
+	require.Equal(t, 0.25, log2.ThresholdExemptCost)
 
 	var count int
 	require.NoError(t, integrationDB.QueryRowContext(ctx, "SELECT COUNT(*) FROM usage_logs WHERE request_id = $1 AND api_key_id = $2", requestID, apiKey.ID).Scan(&count))

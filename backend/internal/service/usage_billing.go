@@ -157,6 +157,14 @@ func QuantizeUsageBillingAmount(v float64) float64 {
 	return quantized
 }
 
+func quantizeUsageBillingAmountDown(v float64) float64 {
+	if v <= 0 || math.IsNaN(v) || math.IsInf(v, 0) {
+		return 0
+	}
+	quantized, _ := decimal.NewFromFloat(v).Truncate(UsageBillingMonetaryScale).Float64()
+	return quantized
+}
+
 func buildUsageBillingFingerprint(c *UsageBillingCommand) string {
 	if c == nil {
 		return ""

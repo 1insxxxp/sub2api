@@ -148,6 +148,19 @@ func (s *UserRepoSuite) TestAdjustBalance_AppliesDeltaAndReportsChange() {
 	s.Require().InDelta(10, got.Balance, 1e-9)
 }
 
+func (s *UserRepoSuite) TestAdjustBalance_ClampsGiftBalanceAfterSubtraction() {
+	user := s.mustCreateUser(&service.User{Email: "adjust-balance-gift-clamp@example.com", Balance: 10})
+	s.Require().NoError(s.client.User.UpdateOneID(user.ID).SetGiftBalance(8).Exec(s.ctx))
+
+	change, err := s.repo.AdjustBalance(s.ctx, user.ID, -6)
+	s.Require().NoError(err)
+	s.Require().InDelta(10, change.Old, 1e-9)
+	s.Require().InDelta(4, change.New, 1e-9)
+	got, err := s.repo.GetByID(s.ctx, user.ID)
+	s.Require().NoError(err)
+	s.Require().InDelta(4, got.GiftBalance, 1e-9)
+}
+
 func (s *UserRepoSuite) TestAdjustBalance_RefusesNegativeResult() {
 	user := s.mustCreateUser(&service.User{Email: "adjust-balance-negative@example.com", Balance: 3})
 
@@ -227,6 +240,7 @@ func (s *UserRepoSuite) TestDeductOrdinaryBalanceConcurrentCondition() {
 
 func (s *UserRepoSuite) TestSetBalance_ReplacesValueAndReportsPrevious() {
 	user := s.mustCreateUser(&service.User{Email: "set-balance@example.com", Balance: 7})
+	s.Require().NoError(s.client.User.UpdateOneID(user.ID).SetGiftBalance(5).Exec(s.ctx))
 
 	change, err := s.repo.SetBalance(s.ctx, user.ID, 2)
 	s.Require().NoError(err, "SetBalance")
@@ -236,6 +250,7 @@ func (s *UserRepoSuite) TestSetBalance_ReplacesValueAndReportsPrevious() {
 	got, err := s.repo.GetByID(s.ctx, user.ID)
 	s.Require().NoError(err, "GetByID")
 	s.Require().InDelta(2, got.Balance, 1e-9)
+	s.Require().InDelta(2, got.GiftBalance, 1e-9)
 }
 
 func (s *UserRepoSuite) TestSetBalance_RejectsNegativeValue() {

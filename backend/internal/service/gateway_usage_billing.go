@@ -258,13 +258,21 @@ func postUsageBilling(ctx context.Context, requestID string, usageLog *UsageLog,
 		return false, err
 	}
 	if !applied {
-		reconcileLegacyBillingReplayCaches(billingCtx, p, deps)
+		if err := reconcileLegacyBillingReplayCaches(billingCtx, p, deps); err != nil {
+			return false, err
+		}
 		return false, nil
 	}
 
-	if !p.IsSubscriptionBill && cost.ActualCost > 0 && deps.billingCacheService != nil {
+	if p.IsSubscriptionBill && cost.ActualCost > 0 && deps.billingCacheService != nil {
+		if billingGroupID, ok := resolveSubscriptionBillingGroupID(billingCtx, p); ok {
+			if err := deps.billingCacheService.UpdateSubscriptionUsage(billingCtx, p.User.ID, billingGroupID, cost.ActualCost); err != nil {
+				return true, fmt.Errorf("update subscription cache after legacy billing: %w", err)
+			}
+		}
+	} else if cost.ActualCost > 0 && deps.billingCacheService != nil {
 		if err := deps.billingCacheService.InvalidateUserBalance(billingCtx, p.User.ID); err != nil {
-			slog.Warn("invalidate balance cache after legacy deduction failed", "user_id", p.User.ID, "error", err)
+			return true, fmt.Errorf("invalidate balance cache after legacy billing: %w", err)
 		}
 	}
 
@@ -275,15 +283,27 @@ func postUsageBilling(ctx context.Context, requestID string, usageLog *UsageLog,
 	return true, nil
 }
 
-func reconcileLegacyBillingReplayCaches(ctx context.Context, p *postUsageBillingParams, deps *billingDeps) {
+func reconcileLegacyBillingReplayCaches(ctx context.Context, p *postUsageBillingParams, deps *billingDeps) error {
 	if p == nil || deps == nil {
-		return
+		return nil
 	}
-	if !p.IsSubscriptionBill && p.Cost != nil && p.Cost.ActualCost > 0 && p.User != nil && deps.billingCacheService != nil {
+	if p.Cost == nil || p.Cost.ActualCost <= 0 || p.User == nil || deps.billingCacheService == nil {
+		return nil
+	}
+	if p.IsSubscriptionBill {
+		if billingGroupID, ok := resolveSubscriptionBillingGroupID(ctx, p); ok {
+			if err := deps.billingCacheService.InvalidateSubscription(ctx, p.User.ID, billingGroupID); err != nil {
+				return fmt.Errorf("invalidate subscription cache after legacy replay: %w", err)
+			}
+		}
+		return nil
+	}
+	if p.Cost.ActualCost > 0 {
 		if err := deps.billingCacheService.InvalidateUserBalance(ctx, p.User.ID); err != nil {
-			slog.Warn("invalidate balance cache after legacy replay failed", "user_id", p.User.ID, "error", err)
+			return fmt.Errorf("invalidate balance cache after legacy replay: %w", err)
 		}
 	}
+	return nil
 }
 
 func resolveUsageBillingRequestID(ctx context.Context, upstreamRequestID string) string {
@@ -425,6 +445,12 @@ func applyUsageBilling(ctx context.Context, requestID string, usageLog *UsageLog
 	}
 
 	cmd := buildUsageBillingCommand(requestID, usageLog, p)
+	// The fingerprint above is derived from the raw amount for replay compatibility.
+	// Persisted wallet and usage-log amounts use the same NUMERIC(20,8) value.
+	p.Cost.ActualCost = QuantizeUsageBillingAmount(p.Cost.ActualCost)
+	if usageLog != nil {
+		usageLog.ActualCost = p.Cost.ActualCost
+	}
 	if cmd == nil || cmd.RequestID == "" || repo == nil {
 		return postUsageBilling(ctx, requestID, usageLog, p, deps)
 	}
@@ -467,7 +493,7 @@ func clampUsageBillingThresholdExemptCost(allocated, actualCost float64, subscri
 		return 0
 	}
 	if allocated > actualCost {
-		return actualCost
+		return quantizeUsageBillingAmountDown(actualCost)
 	}
 	return allocated
 }
@@ -479,18 +505,7 @@ func finalizePostUsageBilling(ctx context.Context, p *postUsageBillingParams, de
 
 	if p.IsSubscriptionBill {
 		if p.Cost.ActualCost > 0 && p.User != nil && p.Subscription != nil {
-			billingGroupID := p.Subscription.GroupID
-			if resolution, systemCustom := SystemCustomGroupResolutionFromContext(ctx); systemCustom {
-				if p.Subscription.GroupID != resolution.BillingGroupID ||
-					(p.Subscription.Group != nil && p.Subscription.Group.ID != resolution.BillingGroupID) {
-					return
-				}
-				billingGroupID = resolution.BillingGroupID
-			}
-			if billingGroupID <= 0 && p.APIKey != nil && p.APIKey.GroupID != nil {
-				billingGroupID = *p.APIKey.GroupID
-			}
-			if billingGroupID > 0 {
+			if billingGroupID, ok := resolveSubscriptionBillingGroupID(ctx, p); ok {
 				deps.billingCacheService.QueueUpdateSubscriptionUsage(p.User.ID, billingGroupID, p.Cost.ActualCost)
 			}
 		}
@@ -542,6 +557,24 @@ func finalizePostUsageBilling(ctx context.Context, p *postUsageBillingParams, de
 	// no dependency on the request context or upstream connection.
 	go notifyBalanceLow(p, deps, result)
 	go notifyAccountQuota(p, deps, result)
+}
+
+func resolveSubscriptionBillingGroupID(ctx context.Context, p *postUsageBillingParams) (int64, bool) {
+	if p == nil || p.Subscription == nil {
+		return 0, false
+	}
+	billingGroupID := p.Subscription.GroupID
+	if resolution, systemCustom := SystemCustomGroupResolutionFromContext(ctx); systemCustom {
+		if p.Subscription.GroupID != resolution.BillingGroupID ||
+			(p.Subscription.Group != nil && p.Subscription.Group.ID != resolution.BillingGroupID) {
+			return 0, false
+		}
+		billingGroupID = resolution.BillingGroupID
+	}
+	if billingGroupID <= 0 && p.APIKey != nil && p.APIKey.GroupID != nil {
+		billingGroupID = *p.APIKey.GroupID
+	}
+	return billingGroupID, billingGroupID > 0
 }
 
 func syncBalanceCacheAfterDeduction(ctx context.Context, p *postUsageBillingParams, deps *billingDeps, result *UsageBillingApplyResult) {

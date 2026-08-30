@@ -4,10 +4,29 @@ package service
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 )
+
+func TestBuildBatchImageHoldCommand_RejectsNegativeAmounts(t *testing.T) {
+	apiKeyID := int64(42)
+	negativeHold := -0.01
+
+	_, err := buildBatchImageHoldCommand(&BatchImageJob{
+		BatchID: "batch-negative-hold", UserID: 7, APIKeyID: &apiKeyID, HoldAmount: &negativeHold,
+	}, BatchImageHoldRequestID("batch-negative-hold"), 0, "payload")
+	require.Error(t, err)
+	require.True(t, errors.Is(err, ErrBatchImageBillingHoldFailed))
+
+	zeroHold := 0.0
+	_, err = buildBatchImageHoldCommand(&BatchImageJob{
+		BatchID: "batch-negative-actual", UserID: 7, APIKeyID: &apiKeyID, HoldAmount: &zeroHold,
+	}, BatchImageCaptureRequestID("batch-negative-actual"), -0.01, "payload")
+	require.Error(t, err)
+	require.True(t, errors.Is(err, ErrBatchImageSettlementBillingFailed))
+}
 
 func TestReserveBatchImageBalanceHold_PersistsZeroValueMarker(t *testing.T) {
 	holdAmount := 0.0

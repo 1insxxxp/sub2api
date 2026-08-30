@@ -195,6 +195,10 @@ func (s *BatchImageSettlementService) Settle(ctx context.Context, batchID string
 			"manifest_hash": manifestHash,
 		},
 	}); err != nil {
+		if errors.Is(err, ErrBatchImageAlreadySettled) {
+			result.AlreadySettled = true
+			return result, nil
+		}
 		if failErr := s.recordPostCaptureSettlementFailure(ctx, job, "SETTLEMENT_FINALIZE_FAILED", err.Error()); failErr != nil {
 			return nil, failErr
 		}

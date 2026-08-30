@@ -78,7 +78,7 @@ func newRedeemAdjustmentRepoMock(t *testing.T) (*userRepository, sqlmock.Sqlmock
 
 func TestApplyRedeemBalanceAdjustment_UsesAtomicFloor(t *testing.T) {
 	repo, mock := newRedeemAdjustmentRepoMock(t)
-	mock.ExpectExec(`UPDATE users SET balance = GREATEST\(balance \+ \$1, 0\), updated_at = NOW\(\) WHERE id = \$2 AND deleted_at IS NULL`).
+	mock.ExpectExec(`UPDATE users SET balance = GREATEST\(balance \+ \$1, 0\), gift_balance = LEAST\(gift_balance, GREATEST\(balance \+ \$1, 0\)\), updated_at = NOW\(\) WHERE id = \$2 AND deleted_at IS NULL`).
 		WithArgs(-7.0, int64(42)).
 		WillReturnResult(sqlmock.NewResult(0, 1))
 
@@ -98,7 +98,7 @@ func TestApplyRedeemConcurrencyAdjustment_UsesAtomicFloor(t *testing.T) {
 
 func TestApplyRedeemAdjustment_MissingUser(t *testing.T) {
 	repo, mock := newRedeemAdjustmentRepoMock(t)
-	mock.ExpectExec(`UPDATE users SET balance = GREATEST\(balance \+ \$1, 0\), updated_at = NOW\(\) WHERE id = \$2 AND deleted_at IS NULL`).
+	mock.ExpectExec(`UPDATE users SET balance = GREATEST\(balance \+ \$1, 0\), gift_balance = LEAST\(gift_balance, GREATEST\(balance \+ \$1, 0\)\), updated_at = NOW\(\) WHERE id = \$2 AND deleted_at IS NULL`).
 		WithArgs(-1.0, int64(404)).
 		WillReturnResult(sqlmock.NewResult(0, 0))
 

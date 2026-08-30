@@ -128,16 +128,18 @@ type usageLogInsertPrepared struct {
 }
 
 type usageLogBatchState struct {
-	ID        int64
-	CreatedAt time.Time
+	ID                  int64
+	CreatedAt           time.Time
+	ThresholdExemptCost float64
 }
 
 type usageLogBatchRow struct {
-	RequestID string    `json:"request_id"`
-	APIKeyID  int64     `json:"api_key_id"`
-	ID        int64     `json:"id"`
-	CreatedAt time.Time `json:"created_at"`
-	Inserted  bool      `json:"inserted"`
+	RequestID           string    `json:"request_id"`
+	APIKeyID            int64     `json:"api_key_id"`
+	ID                  int64     `json:"id"`
+	CreatedAt           time.Time `json:"created_at"`
+	ThresholdExemptCost float64   `json:"threshold_exempt_cost"`
+	Inserted            bool      `json:"inserted"`
 }
 
 type usageLogCreateShared struct {
@@ -536,6 +538,7 @@ func (r *usageLogRepository) flushCreateBatch(db *sql.DB, batch []usageLogCreate
 						if hasState {
 							req.log.ID = state.ID
 							req.log.CreatedAt = state.CreatedAt
+							req.log.ThresholdExemptCost = state.ThresholdExemptCost
 						}
 						switch {
 						case inserted && idx == 0:
@@ -568,6 +571,7 @@ func (r *usageLogRepository) flushCreateBatch(db *sql.DB, batch []usageLogCreate
 				for idx, req := range reqs {
 					req.log.ID = state.ID
 					req.log.CreatedAt = state.CreatedAt
+					req.log.ThresholdExemptCost = state.ThresholdExemptCost
 					req.log.RateMultiplier = preparedByKey[key].rateMultiplier
 					completeUsageLogCreateRequest(req, usageLogCreateResult{
 						inserted: idx == 0 && insertedMap[key],
@@ -701,8 +705,9 @@ func (r *usageLogRepository) batchInsertUsageLogs(db *sql.DB, keys []string, pre
 		key := usageLogBatchKey(row.RequestID, row.APIKeyID)
 		insertedMap[key] = row.Inserted
 		stateMap[key] = usageLogBatchState{
-			ID:        row.ID,
-			CreatedAt: row.CreatedAt,
+			ID:                  row.ID,
+			CreatedAt:           row.CreatedAt,
+			ThresholdExemptCost: row.ThresholdExemptCost,
 		}
 	}
 	if len(stateMap) != len(keys) {
@@ -942,7 +947,7 @@ func buildUsageLogBatchInsertQuery(keys []string, preparedByKey map[string]usage
 				created_at
 			FROM input
 			ON CONFLICT (request_id, api_key_id) DO NOTHING
-			RETURNING request_id, api_key_id, id, created_at
+			RETURNING request_id, api_key_id, id, created_at, threshold_exempt_cost
 		),
 		resolved AS (
 			SELECT
@@ -951,6 +956,7 @@ func buildUsageLogBatchInsertQuery(keys []string, preparedByKey map[string]usage
 				input.api_key_id,
 				COALESCE(inserted.id, existing.id) AS id,
 				COALESCE(inserted.created_at, existing.created_at) AS created_at,
+				COALESCE(inserted.threshold_exempt_cost, existing.threshold_exempt_cost) AS threshold_exempt_cost,
 				(inserted.id IS NOT NULL) AS inserted
 			FROM input
 			LEFT JOIN inserted
@@ -967,6 +973,7 @@ func buildUsageLogBatchInsertQuery(keys []string, preparedByKey map[string]usage
 					'api_key_id', resolved.api_key_id,
 					'id', resolved.id,
 					'created_at', resolved.created_at,
+					'threshold_exempt_cost', resolved.threshold_exempt_cost,
 					'inserted', resolved.inserted
 				)
 				ORDER BY resolved.input_idx

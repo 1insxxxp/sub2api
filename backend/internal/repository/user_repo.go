@@ -909,7 +909,9 @@ func (r *userRepository) CreditGiftBalance(ctx context.Context, userID int64, am
 func (r *userRepository) ApplyRedeemBalanceAdjustment(ctx context.Context, id int64, delta float64) error {
 	const updateSQL = `
 		UPDATE users
-		SET balance = GREATEST(balance + $1, 0), updated_at = NOW()
+		SET balance = GREATEST(balance + $1, 0),
+			gift_balance = LEAST(gift_balance, GREATEST(balance + $1, 0)),
+			updated_at = NOW()
 		WHERE id = $2 AND deleted_at IS NULL
 	`
 	client := clientFromContext(ctx, r.client)
@@ -931,29 +933,8 @@ func (r *userRepository) ApplyRedeemBalanceAdjustment(ctx context.Context, id in
 // 透支策略：允许余额变为负数，确保当前请求能够完成
 // 中间件会阻止余额 <= 0 的用户发起后续请求
 func (r *userRepository) DeductBalance(ctx context.Context, id int64, amount float64) error {
-	client := clientFromContext(ctx, r.client)
-	n, err := client.User.Update().
-		Where(dbuser.IDEQ(id), dbuser.BalanceGTE(amount)).
-		AddBalance(-amount).
-		Save(ctx)
-	if err != nil {
-		return err
-	}
-	if n > 0 {
-		return nil
-	}
-
-	n, err = client.User.Update().
-		Where(dbuser.IDEQ(id)).
-		AddBalance(-amount).
-		Save(ctx)
-	if err != nil {
-		return err
-	}
-	if n == 0 {
-		return service.ErrUserNotFound
-	}
-	return nil
+	_, err := r.DeductBalanceWithGiftAllocation(ctx, id, amount)
+	return err
 }
 
 // DeductBalanceWithGiftAllocation deducts balance with the same overdraft
@@ -1027,13 +1008,18 @@ func (r *userRepository) DeductAvailableBalance(ctx context.Context, id int64, a
 	}
 	const updateSQL = `
 		WITH target AS (
-			SELECT id, balance
+			SELECT id, balance, gift_balance
 			FROM users
 			WHERE id = $2 AND deleted_at IS NULL
 			FOR UPDATE
 		), updated AS (
 			UPDATE users AS u
-			SET balance = target.balance - LEAST($1, GREATEST(target.balance, 0)), updated_at = NOW()
+			SET balance = target.balance - LEAST($1, GREATEST(target.balance, 0)),
+				gift_balance = LEAST(
+					target.gift_balance,
+					GREATEST(target.balance - LEAST($1, GREATEST(target.balance, 0)), 0)
+				),
+				updated_at = NOW()
 			FROM target
 			WHERE u.id = target.id AND u.deleted_at IS NULL
 			RETURNING target.balance - u.balance AS deducted
@@ -1067,7 +1053,9 @@ func (r *userRepository) DeductAvailableBalance(ctx context.Context, id int64, a
 func (r *userRepository) AdjustBalance(ctx context.Context, id int64, delta float64) (service.BalanceChange, error) {
 	const updateSQL = `
 		UPDATE users
-		SET balance = balance + $1, updated_at = NOW()
+		SET balance = balance + $1,
+			gift_balance = LEAST(gift_balance, balance + $1),
+			updated_at = NOW()
 		WHERE id = $2 AND deleted_at IS NULL AND balance + $1 >= 0
 		RETURNING balance - $1, balance
 	`
@@ -1148,7 +1136,9 @@ func (r *userRepository) SetBalance(ctx context.Context, id int64, value float64
 	}
 	const updateSQL = `
 		UPDATE users AS u
-		SET balance = $1, updated_at = NOW()
+		SET balance = $1,
+			gift_balance = LEAST(u.gift_balance, $1),
+			updated_at = NOW()
 		FROM (SELECT id, balance FROM users WHERE id = $2 AND deleted_at IS NULL) AS prev
 		WHERE u.id = prev.id AND u.deleted_at IS NULL
 		RETURNING prev.balance, u.balance

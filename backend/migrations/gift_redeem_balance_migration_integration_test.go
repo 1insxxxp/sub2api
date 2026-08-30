@@ -25,7 +25,8 @@ func TestMigration232Postgres(t *testing.T) {
 
 	_, err := db.ExecContext(ctx, `
 CREATE TABLE users (
-    id BIGINT PRIMARY KEY
+    id BIGINT PRIMARY KEY,
+    balance NUMERIC(20,8) NOT NULL DEFAULT 0
 );
 
 CREATE TABLE redeem_codes (
@@ -80,6 +81,7 @@ WHERE id = 1`).Scan(&thresholdExemptCost))
 	}{
 		{"users", "users_gift_balance_nonnegative"},
 		{"users", "users_frozen_gift_balance_nonnegative"},
+		{"users", "users_gift_balance_within_balance"},
 		{"usage_logs", "usage_logs_threshold_exempt_cost_nonnegative"},
 	}
 	for _, constraint := range constraints {
@@ -101,6 +103,8 @@ WHERE conname = $1
 		_, err = db.ExecContext(ctx, query)
 		requireMigration232CheckViolation(t, err)
 	}
+	_, err = db.ExecContext(ctx, "UPDATE users SET balance = 1, gift_balance = 2 WHERE id = 1")
+	requireMigration232CheckViolation(t, err)
 }
 
 func requireMigration232Column(

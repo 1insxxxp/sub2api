@@ -37,6 +37,29 @@ func (r *giftFallbackSubscriptionRepo) IncrementUsage(context.Context, int64, fl
 	return nil
 }
 
+type legacyBillingCacheStub struct {
+	BillingCache
+	updatedUserID      int64
+	updatedGroupID     int64
+	updatedCost        float64
+	updateCalls        int
+	invalidatedUserID  int64
+	invalidatedGroupID int64
+	invalidateCalls    int
+}
+
+func (c *legacyBillingCacheStub) UpdateSubscriptionUsage(_ context.Context, userID, groupID int64, cost float64) error {
+	c.updatedUserID, c.updatedGroupID, c.updatedCost = userID, groupID, cost
+	c.updateCalls++
+	return nil
+}
+
+func (c *legacyBillingCacheStub) InvalidateSubscriptionCache(_ context.Context, userID, groupID int64) error {
+	c.invalidatedUserID, c.invalidatedGroupID = userID, groupID
+	c.invalidateCalls++
+	return nil
+}
+
 type fallbackPlatformQuotaRepoStub struct{ UserPlatformQuotaRepository }
 
 type failingFallbackAPIKeyUpdater struct {
@@ -241,6 +264,36 @@ func TestApplyUsageBilling_LegacyFallbackDuplicateRequestIsAtomicAndIdempotent(t
 	require.Len(t, usageRepo.logs, 1)
 	persisted := usageRepo.logs["legacy-duplicate:2"]
 	require.InDelta(t, 10, persisted.ThresholdExemptCost, 0.00000001)
+}
+
+func TestApplyUsageBilling_LegacySubscriptionUpdatesCacheAndReplayInvalidates(t *testing.T) {
+	wallet := &transactionalFallbackWalletRepo{balance: 20, gift: 10}
+	usageRepo := newAtomicFallbackUsageRepo(wallet)
+	cache := &legacyBillingCacheStub{}
+	deps := newLegacyFallbackDeps(wallet, usageRepo)
+	deps.billingCacheService = &BillingCacheService{cache: cache}
+	groupID := int64(9)
+	params := &postUsageBillingParams{
+		Cost: &CostBreakdown{ActualCost: 3, TotalCost: 3},
+		User: &User{ID: 1}, APIKey: &APIKey{ID: 2, GroupID: &groupID}, Account: &Account{ID: 3},
+		Subscription: &UserSubscription{ID: 4, GroupID: groupID}, IsSubscriptionBill: true,
+	}
+
+	first, err := applyUsageBilling(context.Background(), "legacy-subscription-cache", &UsageLog{APIKeyID: 2, ActualCost: 3}, params, deps, nil)
+	require.NoError(t, err)
+	require.True(t, first)
+	require.Equal(t, 1, cache.updateCalls)
+	require.Equal(t, int64(1), cache.updatedUserID)
+	require.Equal(t, groupID, cache.updatedGroupID)
+	require.Equal(t, 3.0, cache.updatedCost)
+
+	second, err := applyUsageBilling(context.Background(), "legacy-subscription-cache", &UsageLog{APIKeyID: 2, ActualCost: 3}, params, deps, nil)
+	require.NoError(t, err)
+	require.False(t, second)
+	require.Equal(t, 1, cache.updateCalls, "replay must not double-increment cached usage")
+	require.Equal(t, 1, cache.invalidateCalls)
+	require.Equal(t, int64(1), cache.invalidatedUserID)
+	require.Equal(t, groupID, cache.invalidatedGroupID)
 }
 
 func TestApplyUsageBilling_LegacyFallbackRollsBackWalletAndLogOnAttributionFailure(t *testing.T) {

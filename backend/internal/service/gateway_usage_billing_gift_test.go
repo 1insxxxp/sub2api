@@ -70,6 +70,22 @@ func TestApplyUsageBilling_ClampsThresholdExemptAllocationToActualCost(t *testin
 	require.InDelta(t, 12, usageLog.ThresholdExemptCost, 0.00000001)
 }
 
+func TestApplyUsageBilling_QuantizesUsageLogActualCostWithWalletCommand(t *testing.T) {
+	const raw = 0.000078125
+	usageLog := &UsageLog{ActualCost: raw}
+	repo := &openAIRecordUsageBillingRepoStub{result: &UsageBillingApplyResult{Applied: true}}
+
+	applied, err := applyUsageBilling(context.Background(), "quantized-actual-cost", usageLog, &postUsageBillingParams{
+		Cost: &CostBreakdown{ActualCost: raw, TotalCost: raw}, User: &User{ID: 1}, APIKey: &APIKey{ID: 2}, Account: &Account{ID: 3},
+	}, &billingDeps{billingCacheService: &BillingCacheService{}, deferredService: &DeferredService{}}, repo)
+
+	require.NoError(t, err)
+	require.True(t, applied)
+	require.Equal(t, 0.00007813, usageLog.ActualCost)
+	require.NotNil(t, repo.lastCmd)
+	require.Equal(t, repo.lastCmd.BalanceCost, usageLog.ActualCost)
+}
+
 func TestClampUsageBillingThresholdExemptCost_DoesNotExceedPersistedActualCost(t *testing.T) {
 	const (
 		actualCost = 0.000078125
@@ -77,7 +93,7 @@ func TestClampUsageBillingThresholdExemptCost_DoesNotExceedPersistedActualCost(t
 	)
 
 	got := clampUsageBillingThresholdExemptCost(allocated, actualCost, false)
-	require.Equal(t, actualCost, got)
+	require.Equal(t, 0.00007812, got)
 
 	persistedActual := decimal.NewFromFloat(actualCost).Round(10)
 	persistedExempt := decimal.NewFromFloat(got).Round(10)

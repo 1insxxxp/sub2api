@@ -524,21 +524,17 @@ func (s *UserRepoSuite) TestCreditGiftBalanceRejectsUnpersistableAmounts() {
 	}
 }
 
-func (s *UserRepoSuite) TestCreditGiftBalanceRefusesInvalidWalletInvariant() {
+func (s *UserRepoSuite) TestDatabaseRefusesInvalidGiftWalletInvariant() {
 	user := s.mustCreateUser(&service.User{
 		Email:   "invalid-gift-invariant@test.com",
 		Balance: 5,
 	})
-	s.Require().NoError(s.client.User.UpdateOneID(user.ID).SetGiftBalance(6).Exec(s.ctx))
-
-	err := s.repo.CreditGiftBalance(s.ctx, user.ID, 10)
-
-	s.Require().EqualError(err, "gift balance exceeds available balance")
-	s.Require().NotErrorIs(err, service.ErrUserNotFound)
+	err := s.client.User.UpdateOneID(user.ID).SetGiftBalance(6).Exec(s.ctx)
+	s.Require().Error(err)
 	got, getErr := s.repo.GetByID(s.ctx, user.ID)
 	s.Require().NoError(getErr)
 	s.Require().Equal(5.0, got.Balance)
-	s.Require().Equal(6.0, got.GiftBalance)
+	s.Require().Zero(got.GiftBalance)
 }
 
 func (s *UserRepoSuite) TestCreditGiftBalanceReturnsUserNotFoundForMissingUser() {
@@ -644,8 +640,6 @@ func (s *UserRepoSuite) TestDeductBalanceWithGiftAllocation() {
 		{name: "mixed gift", balance: 20, gift: 10.0, amount: 12, wantBalance: 8, wantGift: 0, wantExempt: 10},
 		{name: "no gift", balance: 20, gift: 0.0, amount: 12, wantBalance: 8, wantGift: 0, wantExempt: 0},
 		{name: "overdraft", balance: 5, gift: 3.0, amount: 12, wantBalance: -7, wantGift: 0, wantExempt: 3},
-		{name: "transitional gift exceeds balance", balance: 5, gift: 10.0, amount: 7, wantBalance: -2, wantGift: 3, wantExempt: 7},
-		{name: "nan gift is sanitized", balance: 10, gift: "NaN", amount: 3, wantBalance: 7, wantGift: 0, wantExempt: 0},
 	}
 
 	for _, tt := range tests {
@@ -667,6 +661,17 @@ func (s *UserRepoSuite) TestDeductBalanceWithGiftAllocation() {
 			s.Require().InDelta(tt.wantGift, gift, 0.00000001)
 		})
 	}
+}
+
+func (s *UserRepoSuite) TestDeductBalancePreservesGiftSubsetInvariant() {
+	user := s.mustCreateUser(&service.User{Email: "deduct-balance-gift-invariant@test.com", Balance: 10})
+	s.Require().NoError(s.client.User.UpdateOneID(user.ID).SetGiftBalance(8).Exec(s.ctx))
+
+	s.Require().NoError(s.repo.DeductBalance(s.ctx, user.ID, 4))
+	got, err := s.repo.GetByID(s.ctx, user.ID)
+	s.Require().NoError(err)
+	s.Require().Equal(6.0, got.Balance)
+	s.Require().Equal(4.0, got.GiftBalance)
 }
 
 func (s *UserRepoSuite) TestDeductBalanceWithGiftAllocation_QuantizesAndRejectsInvalidAmounts() {
@@ -712,6 +717,19 @@ func (s *UserRepoSuite) TestDeductAvailableBalance_ClampsToNonnegativeBalance() 
 			s.Require().InDelta(tc.wantBalance, got.Balance, 1e-6)
 		})
 	}
+}
+
+func (s *UserRepoSuite) TestDeductAvailableBalance_ClampsGiftBalanceToRemainingBalance() {
+	user := s.mustCreateUser(&service.User{Email: "available-gift-clamp@test.com", Balance: 10})
+	s.Require().NoError(s.client.User.UpdateOneID(user.ID).SetGiftBalance(8).Exec(s.ctx))
+
+	deducted, err := s.repo.DeductAvailableBalance(s.ctx, user.ID, 4)
+	s.Require().NoError(err)
+	s.Require().Equal(4.0, deducted)
+	got, err := s.repo.GetByID(s.ctx, user.ID)
+	s.Require().NoError(err)
+	s.Require().Equal(6.0, got.Balance)
+	s.Require().Equal(6.0, got.GiftBalance)
 }
 
 // --- Concurrency ---

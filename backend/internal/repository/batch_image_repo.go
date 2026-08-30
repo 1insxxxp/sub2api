@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"strconv"
 	"time"
 
@@ -345,9 +346,20 @@ SET last_error_code = $2,
     retry_count = retry_count + 1,
     updated_at = $4
 WHERE batch_id = $1
+  AND status = 'settling'
 RETURNING retry_count`, batchID, code, message, time.Now()).Scan(&retryCount)
 	if err != nil {
-		return 0, translatePersistenceError(err, service.ErrBatchImageJobNotFound, nil)
+		if !errors.Is(err, sql.ErrNoRows) {
+			return 0, err
+		}
+		job, getErr := r.GetBatchImageJobByBatchID(ctx, batchID)
+		if getErr != nil {
+			return 0, getErr
+		}
+		if job.Status == service.BatchImageJobStatusCompleted {
+			return 0, service.ErrBatchImageAlreadySettled
+		}
+		return 0, service.ErrBatchImageSettlementInvalidStatus
 	}
 	return retryCount, appendBatchImageEventWithSQL(ctx, r.sql, batchID, "settlement_failed", map[string]any{
 		"error_code": code,
