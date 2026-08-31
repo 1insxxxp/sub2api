@@ -532,6 +532,11 @@ func (s *adminServiceImpl) CreateGroup(ctx context.Context, input *CreateGroupIn
 		group.AllowLive = false
 	}
 	sanitizeGroupReasoningEffortPolicy(group)
+	if s.groupPricingCoverage != nil {
+		if err := s.groupPricingCoverage.ValidateNewlyPublished(ctx, nil, group); err != nil {
+			return nil, err
+		}
+	}
 	if err := s.groupRepo.Create(ctx, group); err != nil {
 		return nil, err
 	}
@@ -661,6 +666,8 @@ func (s *adminServiceImpl) UpdateGroup(ctx context.Context, id int64, input *Upd
 	if group.SystemCustomRoutingEnabled {
 		return nil, ErrSystemCustomGroupManagedOnly
 	}
+	previousGroup := *group
+	previousGroup.ModelsListConfig.Models = append([]string(nil), group.ModelsListConfig.Models...)
 
 	// 渠道缓存里存了 groupID → platform 的映射，改了平台要让它失效（见函数末尾）
 	previousPlatform := group.Platform
@@ -921,6 +928,11 @@ func (s *adminServiceImpl) UpdateGroup(ctx context.Context, id int64, input *Upd
 		group.AllowLive = false
 	}
 	sanitizeGroupReasoningEffortPolicy(group)
+	if s.groupPricingCoverage != nil {
+		if err := s.groupPricingCoverage.ValidateNewlyPublished(ctx, &previousGroup, group); err != nil {
+			return nil, err
+		}
+	}
 
 	if err := s.groupRepo.Update(ctx, group); err != nil {
 		return nil, err

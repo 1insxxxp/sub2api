@@ -33,6 +33,8 @@ type ResolvedPricing struct {
 
 	// 来源标识
 	Source string // "channel", "litellm", "fallback"
+	// BaseSource records the token catalog source before group/channel overrides.
+	BaseSource string
 
 	// 是否支持缓存细分
 	SupportsCacheBreakdown bool
@@ -105,12 +107,17 @@ func (r *ModelPricingResolver) Resolve(ctx context.Context, input PricingInput) 
 	}
 
 	// 1. 获取基础定价
-	basePricing, source := r.resolveBasePricing(input.Model)
+	basePricing, baseSource := r.resolveBasePricing(input.Model)
+	legacySource := PricingSourceFallback
+	if basePricing != nil {
+		legacySource = PricingSourceLiteLLM
+	}
 
 	resolved := &ResolvedPricing{
 		Mode:                   BillingModeToken,
 		BasePricing:            basePricing,
-		Source:                 source,
+		Source:                 legacySource,
+		BaseSource:             baseSource,
 		SupportsCacheBreakdown: basePricing != nil && basePricing.SupportsCacheBreakdown,
 	}
 	resolved.longContextPricingEnabled = longContextPricingEnabled
@@ -137,7 +144,7 @@ func (r *ModelPricingResolver) resolveConfiguredPricing(config *ChannelModelPric
 		r.applyRequestTierOverrides(config, resolved)
 		return resolved
 	}
-	resolved.BasePricing, _ = r.resolveBasePricing(model)
+	resolved.BasePricing, resolved.BaseSource = r.resolveBasePricing(model)
 	resolved.SupportsCacheBreakdown = resolved.BasePricing != nil && resolved.BasePricing.SupportsCacheBreakdown
 	r.applyTokenOverrides(config, resolved)
 	return resolved
@@ -168,13 +175,16 @@ func matchGroupModelPricing(group *Group, model string) *ChannelModelPricing {
 
 // resolveBasePricing 从 LiteLLM 或 Fallback 获取基础定价
 func (r *ModelPricingResolver) resolveBasePricing(model string) (*ModelPricing, string) {
-	pricing, err := r.billingService.GetModelPricing(model)
+	if r == nil || r.billingService == nil {
+		return nil, ""
+	}
+	pricing, source, err := r.billingService.getModelPricingWithSource(model)
 	if err != nil {
 		slog.Debug("failed to get model pricing from LiteLLM, using fallback",
 			"model", model, "error", err)
-		return nil, PricingSourceFallback
+		return nil, ""
 	}
-	return pricing, PricingSourceLiteLLM
+	return pricing, source
 }
 
 // lookupChannelPricingNormalized 查找渠道定价：先用字面模型名做精确/通配匹配，

@@ -111,19 +111,49 @@ func resolvedChannelPricingUsable(resolved *ResolvedPricing) bool {
 	if resolved == nil || resolved.Source != PricingSourceChannel {
 		return false
 	}
+	evaluation := evaluateEffectiveResolvedPricing(resolved)
+	return evaluation.usable && evaluation.source == PricingSourceChannel
+}
+
+type effectivePricingEvaluation struct {
+	usable      bool
+	source      string
+	billingMode BillingMode
+}
+
+func evaluateEffectiveResolvedPricing(resolved *ResolvedPricing) effectivePricingEvaluation {
+	if resolved == nil {
+		return effectivePricingEvaluation{}
+	}
+	mode := resolved.Mode
+	if mode == "" {
+		mode = BillingModeToken
+	}
 	pricing := resolved.channelPricing
-	switch resolved.Mode {
+	switch mode {
 	case BillingModeImage:
-		return pricing != nil && pricing.ImageOutputPrice != nil
+		return effectivePricingEvaluation{
+			usable:      pricing != nil && pricing.ImageOutputPrice != nil,
+			source:      resolved.Source,
+			billingMode: mode,
+		}
 	case BillingModePerRequest:
-		return pricing != nil && pricing.PerRequestPrice != nil
+		return effectivePricingEvaluation{
+			usable:      pricing != nil && pricing.PerRequestPrice != nil,
+			source:      resolved.Source,
+			billingMode: mode,
+		}
 	case BillingModeToken, "":
 		if channelTokenPricingConfigured(pricing) {
-			return true
+			return effectivePricingEvaluation{usable: true, source: resolved.Source, billingMode: mode}
 		}
-		return modelPricingHasUsableRate(resolved.BasePricing)
+		return effectivePricingEvaluation{
+			usable:      modelPricingHasUsableRate(resolved.BasePricing),
+			source:      resolved.BaseSource,
+			billingMode: mode,
+		}
 	default:
-		return false
+		return effectivePricingEvaluation{source: resolved.Source, billingMode: mode}
 	}
 }
 

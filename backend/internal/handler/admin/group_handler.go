@@ -24,6 +24,7 @@ type GroupHandler struct {
 	adminService         service.AdminService
 	dashboardService     *service.DashboardService
 	groupCapacityService *service.GroupCapacityService
+	pricingCoverage      *service.GroupPricingCoverageService
 }
 
 // GetLiveCapability 返回当前服务端是否具备生成 Live attestation 的运行环境。
@@ -86,12 +87,57 @@ func (f optionalLimitField) ToServiceInput() *float64 {
 }
 
 // NewGroupHandler creates a new admin group handler
-func NewGroupHandler(adminService service.AdminService, dashboardService *service.DashboardService, groupCapacityService *service.GroupCapacityService) *GroupHandler {
+func NewGroupHandler(adminService service.AdminService, dashboardService *service.DashboardService, groupCapacityService *service.GroupCapacityService, pricingCoverage *service.GroupPricingCoverageService) *GroupHandler {
 	return &GroupHandler{
 		adminService:         adminService,
 		dashboardService:     dashboardService,
 		groupCapacityService: groupCapacityService,
+		pricingCoverage:      pricingCoverage,
 	}
+}
+
+type GroupPricingCoverageRequest struct {
+	GroupID      *int64                         `json:"group_id"`
+	Platform     string                         `json:"platform" binding:"omitempty,oneof=anthropic openai gemini antigravity grok kimi zhipu deepseek composite"`
+	Models       []string                       `json:"models"`
+	ModelPricing *[]service.ChannelModelPricing `json:"model_pricing"`
+}
+
+func (h *GroupHandler) PricingCoverage(c *gin.Context) {
+	var req GroupPricingCoverageRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.BadRequest(c, "Invalid request: "+err.Error())
+		return
+	}
+	if h.pricingCoverage == nil {
+		response.ErrorFrom(c, infraerrors.New(500, "GROUP_PRICING_COVERAGE_UNAVAILABLE", "group pricing coverage is unavailable"))
+		return
+	}
+	var existing *service.Group
+	if req.GroupID != nil {
+		if *req.GroupID <= 0 {
+			response.BadRequest(c, "Invalid group ID")
+			return
+		}
+		if h.adminService == nil {
+			response.ErrorFrom(c, infraerrors.New(500, "ADMIN_SERVICE_UNAVAILABLE", "admin service is unavailable"))
+			return
+		}
+		group, err := h.adminService.GetGroup(c.Request.Context(), *req.GroupID)
+		if err != nil {
+			response.ErrorFrom(c, err)
+			return
+		}
+		existing = group
+	}
+	result := h.pricingCoverage.Preview(c.Request.Context(), service.GroupPricingCoverageInput{
+		GroupID:          req.GroupID,
+		Platform:         req.Platform,
+		Models:           req.Models,
+		ModelPricing:     req.ModelPricing,
+		ProspectiveGroup: existing,
+	})
+	response.Success(c, result)
 }
 
 // CreateGroupRequest represents create group request
