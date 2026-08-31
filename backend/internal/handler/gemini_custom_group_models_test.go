@@ -14,9 +14,8 @@ func TestGeminiSystemCustomGroupModelsExposesGeminiAliasesOnly(t *testing.T) {
 	handler.GeminiV1BetaListModels(c)
 
 	require.Equal(t, http.StatusOK, recorder.Code)
-	require.Equal(t, []string{"models/gemini-monthly"}, gjsonStrings(recorder.Body.String(), "models.#.name"))
-	require.NotContains(t, recorder.Body.String(), "gemini-2.5-flash")
-	require.NotContains(t, recorder.Body.String(), "claude-monthly")
+	require.Equal(t, []string{"models/gemini-2.5-flash"}, gjsonStrings(recorder.Body.String(), "models.#.name"))
+	require.NotContains(t, recorder.Body.String(), "claude-sonnet-4")
 }
 
 func TestCustomGroupGeminiModelsExposesAliasesOnly(t *testing.T) {

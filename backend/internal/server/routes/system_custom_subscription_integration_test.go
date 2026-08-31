@@ -69,35 +69,26 @@ func (r *systemCustomIntegrationUserRepo) DeductBalance(context.Context, int64, 
 
 type systemCustomProductionRouteRepo struct {
 	service.SystemCustomGroupRepository
-	mu     sync.Mutex
-	routes map[string]*service.SystemCustomGroupModel
-	calls  []string
-	groups []int64
+	mu        sync.Mutex
+	group     *service.SystemCustomGroup
+	getGroups []int64
 }
 
-func (r *systemCustomProductionRouteRepo) ResolveModel(_ context.Context, groupID int64, model string) (*service.SystemCustomGroupModel, error) {
+func (r *systemCustomProductionRouteRepo) Get(_ context.Context, groupID int64) (*service.SystemCustomGroup, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	r.calls = append(r.calls, model)
-	r.groups = append(r.groups, groupID)
-	route := r.routes[model]
-	if route == nil {
-		return nil, service.ErrSystemCustomGroupRouteNotFound
+	r.getGroups = append(r.getGroups, groupID)
+	if r.group == nil {
+		return nil, service.ErrSystemCustomGroupNotFound
 	}
-	copy := *route
+	copy := *r.group
 	return &copy, nil
-}
-
-func (r *systemCustomProductionRouteRepo) resolvedModels() []string {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	return append([]string(nil), r.calls...)
 }
 
 func (r *systemCustomProductionRouteRepo) resolvedGroupIDs() []int64 {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	return append([]int64(nil), r.groups...)
+	return append([]int64(nil), r.getGroups...)
 }
 
 type systemCustomProductionGroupRepo struct {
@@ -138,9 +129,25 @@ func (r *systemCustomProductionGroupRepo) loadedGroupIDs() []int64 {
 
 type systemCustomProductionAccountRepo struct {
 	service.AccountRepository
-	mu       sync.Mutex
-	accounts map[int64][]service.Account
-	listIDs  []int64
+	mu         sync.Mutex
+	accounts   map[int64][]service.Account
+	listIDs    []int64
+	batchCalls int
+}
+
+func (r *systemCustomProductionAccountRepo) ListSchedulableByGroupIDs(_ context.Context, groupIDs []int64) ([]service.SystemCustomGroupSchedulableAccount, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.batchCalls++
+	result := make([]service.SystemCustomGroupSchedulableAccount, 0)
+	for _, groupID := range groupIDs {
+		for _, account := range r.accounts[groupID] {
+			if account.IsSchedulable() {
+				result = append(result, service.SystemCustomGroupSchedulableAccount{GroupID: groupID, Account: account})
+			}
+		}
+	}
+	return result, nil
 }
 
 func (r *systemCustomProductionAccountRepo) ListSchedulableByGroupIDAndPlatform(_ context.Context, groupID int64, platform string) ([]service.Account, error) {
@@ -419,14 +426,18 @@ func newSystemCustomProductionHarness(t *testing.T) *systemCustomProductionHarne
 		Status: service.StatusActive, Hydrated: true, RateMultiplier: 1,
 		SubscriptionType: service.SubscriptionTypeSubscription, SystemCustomRoutingEnabled: true,
 	}
-	routeRepo := &systemCustomProductionRouteRepo{routes: map[string]*service.SystemCustomGroupModel{
-		"tavern-a": {GroupID: billingGroupID, PublicModel: "tavern-a", SourceGroupID: sourceAID, SourceModel: "source-a-model", Enabled: true},
-		"tavern-b": {GroupID: billingGroupID, PublicModel: "tavern-b", SourceGroupID: sourceBID, SourceModel: "source-b-model", Enabled: true},
+	routeRepo := &systemCustomProductionRouteRepo{group: &service.SystemCustomGroup{
+		Group: *billingGroup,
+		Sources: []service.SystemCustomGroupSource{
+			{SourceGroupID: sourceAID, Priority: 1, SourceGroup: groupA},
+			{SourceGroupID: sourceBID, Priority: 2, SourceGroup: groupB},
+		},
+		Models: []service.SystemCustomGroupModel{{PublicModel: "retained-static", Enabled: true}},
 	}}
 	groupRepo := &systemCustomProductionGroupRepo{groups: map[int64]*service.Group{sourceAID: groupA, sourceBID: groupB}}
 	accountRepo := &systemCustomProductionAccountRepo{accounts: map[int64][]service.Account{
-		sourceAID: {newSystemCustomProductionAccount(501, sourceAID, "source-a-model")},
-		sourceBID: {newSystemCustomProductionAccount(502, sourceBID, "source-b-model")},
+		sourceAID: {newSystemCustomProductionMappedAccount(501, sourceAID, "tavern-a", "source-a-model")},
+		sourceBID: {newSystemCustomProductionMappedAccount(502, sourceBID, "tavern-b", "source-b-model")},
 	}}
 	channelRepo := &systemCustomProductionChannelRepo{
 		channels: []service.Channel{
@@ -461,6 +472,12 @@ func newSystemCustomProductionHarness(t *testing.T) *systemCustomProductionHarne
 	billingService := service.NewBillingService(cfg, nil)
 	channelService := service.NewChannelService(channelRepo, groupRepo, nil, nil)
 	pricingResolver := service.NewModelPricingResolver(channelService, billingService)
+	catalogGateway := service.NewGatewayService(
+		accountRepo, groupRepo, nil, nil, nil, nil, nil, nil, cfg, nil,
+		concurrencyService, billingService, nil, billingCache, nil, nil, nil,
+		nil, nil, nil, nil, nil, nil, channelService, pricingResolver, nil, nil, nil,
+	)
+	apiKeyService.SetSystemCustomGroupModelCatalog(catalogGateway)
 	gateway := service.NewOpenAIGatewayService(
 		accountRepo, usageRepo, billingRepo, userRepo, subRepo, nil, nil, cfg, nil, concurrencyService,
 		billingService, nil, billingCache, upstream, &service.DeferredService{}, nil, nil,
@@ -495,15 +512,16 @@ func newSystemCustomGeminiMessagesProductionHarness(t *testing.T) *systemCustomG
 		Status: service.StatusActive, Hydrated: true, RateMultiplier: 1,
 		SubscriptionType: service.SubscriptionTypeSubscription, SystemCustomRoutingEnabled: true,
 	}
-	routeRepo := &systemCustomProductionRouteRepo{routes: map[string]*service.SystemCustomGroupModel{
-		"tavern-gemini": {
-			GroupID: billingGroupID, PublicModel: "tavern-gemini", SourceGroupID: sourceGroupID,
-			SourceModel: "gemini-2.5-flash", Enabled: true,
-		},
+	routeRepo := &systemCustomProductionRouteRepo{group: &service.SystemCustomGroup{
+		Group: *billingGroup,
+		Sources: []service.SystemCustomGroupSource{{
+			SourceGroupID: sourceGroupID, Priority: 1, SourceGroup: sourceGroup,
+		}},
+		Models: []service.SystemCustomGroupModel{{PublicModel: "retained-static", Enabled: true}},
 	}}
 	groupRepo := &systemCustomProductionGroupRepo{groups: map[int64]*service.Group{sourceGroupID: sourceGroup}}
 	accountRepo := &systemCustomProductionAccountRepo{accounts: map[int64][]service.Account{
-		sourceGroupID: {newSystemCustomGeminiProductionAccount(601, sourceGroupID, "gemini-2.5-flash")},
+		sourceGroupID: {newSystemCustomGeminiMappedProductionAccount(601, sourceGroupID, "tavern-gemini", "gemini-2.5-flash")},
 	}}
 	channelRepo := &systemCustomProductionChannelRepo{
 		channels: []service.Channel{{
@@ -549,6 +567,7 @@ func newSystemCustomGeminiMessagesProductionHarness(t *testing.T) *systemCustomG
 		concurrencyService, billingService, nil, billingCache, nil, upstream, &service.DeferredService{},
 		nil, nil, nil, nil, nil, nil, channelService, pricingResolver, nil, nil, nil,
 	)
+	apiKeyService.SetSystemCustomGroupModelCatalog(gateway)
 	geminiCompat := service.NewGeminiMessagesCompatService(
 		accountRepo, groupRepo, nil, nil, nil, nil, upstream, nil, cfg,
 	)
@@ -568,22 +587,30 @@ func newSystemCustomGeminiMessagesProductionHarness(t *testing.T) *systemCustomG
 }
 
 func newSystemCustomProductionAccount(id, groupID int64, model string) service.Account {
+	return newSystemCustomProductionMappedAccount(id, groupID, model, model)
+}
+
+func newSystemCustomProductionMappedAccount(id, groupID int64, publicModel, upstreamModel string) service.Account {
 	return service.Account{
-		ID: id, Name: model, Platform: service.PlatformOpenAI, Type: service.AccountTypeAPIKey,
+		ID: id, Name: publicModel, Platform: service.PlatformOpenAI, Type: service.AccountTypeAPIKey,
 		Status: service.StatusActive, Schedulable: true, GroupIDs: []int64{groupID}, RateMultiplier: float64Pointer(1),
-		Credentials: map[string]any{"api_key": "upstream-key", "base_url": "https://upstream.invalid", "model_mapping": map[string]any{model: model}},
+		Credentials: map[string]any{"api_key": "upstream-key", "base_url": "https://upstream.invalid", "model_mapping": map[string]any{publicModel: upstreamModel}},
 		Extra:       map[string]any{openai_compat.ExtraKeyResponsesSupported: false},
 	}
 }
 
 func newSystemCustomGeminiProductionAccount(id, groupID int64, model string) service.Account {
+	return newSystemCustomGeminiMappedProductionAccount(id, groupID, model, model)
+}
+
+func newSystemCustomGeminiMappedProductionAccount(id, groupID int64, publicModel, upstreamModel string) service.Account {
 	return service.Account{
-		ID: id, Name: model, Platform: service.PlatformGemini, Type: service.AccountTypeAPIKey,
+		ID: id, Name: publicModel, Platform: service.PlatformGemini, Type: service.AccountTypeAPIKey,
 		Status: service.StatusActive, Schedulable: true, GroupIDs: []int64{groupID},
 		RateMultiplier: float64Pointer(1), Concurrency: 1,
 		Credentials: map[string]any{
 			"api_key": "gemini-upstream-key", "base_url": "https://gemini.invalid",
-			"model_mapping": map[string]any{model: model},
+			"model_mapping": map[string]any{publicModel: upstreamModel},
 		},
 	}
 }
@@ -620,7 +647,6 @@ func TestSystemCustomSubscriptionOpenAIProductionChainBillsTwoSources(t *testing
 	logs := harness.usageRepo.logs()
 	require.Len(t, commands, 2)
 	require.Len(t, logs, 2)
-	require.Equal(t, publicModels, harness.routeRepo.resolvedModels())
 	require.Equal(t, []int64{25, 25}, harness.routeRepo.resolvedGroupIDs(), "public aliases must resolve inside the billing container")
 	requireSystemCustomSubscriptionLookups(t, harness.subRepo.subscriptionLookups())
 	require.Equal(t, []int64{42, 43}, harness.accountRepo.selectedGroupIDs(), "the production scheduler must select only inside each resolved source group")
@@ -646,7 +672,7 @@ func TestSystemCustomSubscriptionOpenAIProductionChainBillsTwoSources(t *testing
 		require.NotNil(t, logs[i].SubscriptionID)
 		require.Equal(t, int64(88), *logs[i].SubscriptionID)
 		require.Equal(t, publicModels[i], logs[i].RequestedModel)
-		require.Equal(t, wantSourceModels[i], logs[i].Model)
+		require.Equal(t, publicModels[i], logs[i].Model)
 		require.NotNil(t, logs[i].UpstreamModel)
 		require.Equal(t, wantSourceModels[i], *logs[i].UpstreamModel)
 		require.NotNil(t, logs[i].ModelMappingChain)
@@ -674,7 +700,7 @@ func TestSystemCustomSubscriptionClaudeMessagesRoutesToGeminiSource(t *testing.T
 	require.Equal(t, http.StatusOK, recorder.Code, recorder.Body.String())
 	require.Equal(t, "message", gjson.Get(recorder.Body.String(), "type").String())
 	require.Equal(t, "hello from gemini", gjson.Get(recorder.Body.String(), "content.0.text").String())
-	require.Equal(t, []string{"tavern-gemini"}, harness.routeRepo.resolvedModels())
+	require.Equal(t, []int64{25}, harness.routeRepo.resolvedGroupIDs())
 	selectedGroupIDs := harness.accountRepo.selectedGroupIDs()
 	require.NotEmpty(t, selectedGroupIDs)
 	for _, groupID := range selectedGroupIDs {
@@ -700,35 +726,33 @@ func TestSystemCustomSubscriptionClaudeMessagesRoutesToGeminiSource(t *testing.T
 	require.NotNil(t, logs[0].SourceGroupID)
 	require.Equal(t, int64(42), *logs[0].SourceGroupID)
 	require.Equal(t, "tavern-gemini", logs[0].RequestedModel)
-	require.Equal(t, "gemini-2.5-flash", logs[0].Model)
+	require.Equal(t, "tavern-gemini", logs[0].Model)
 	require.Zero(t, harness.userRepo.walletCalls.Load())
 }
 
 func TestSystemCustomSubscriptionClosedFailureTable(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	tests := []struct {
-		name           string
-		configure      func(*systemCustomProductionHarness)
-		wantStatus     int
-		wantType       string
-		wantCode       string
-		wantMessage    string
-		wantScheduling bool
+		name        string
+		model       string
+		configure   func(*systemCustomProductionHarness)
+		wantStatus  int
+		wantType    string
+		wantCode    string
+		wantMessage string
 	}{
-		{name: "unknown public alias", configure: func(h *systemCustomProductionHarness) { delete(h.routeRepo.routes, "tavern-a") }, wantStatus: http.StatusForbidden, wantType: "permission_error", wantCode: "SYSTEM_CUSTOM_GROUP_MODEL_NOT_ALLOWED", wantMessage: "The requested model is not enabled for this subscription group"},
-		{name: "disabled route", configure: func(h *systemCustomProductionHarness) { h.routeRepo.routes["tavern-a"].Enabled = false }, wantStatus: http.StatusForbidden, wantType: "permission_error", wantCode: "SYSTEM_CUSTOM_GROUP_MODEL_NOT_ALLOWED", wantMessage: "The requested model is not enabled for this subscription group"},
-		{name: "disabled source", configure: func(h *systemCustomProductionHarness) { h.groupRepo.groups[42].Status = service.StatusDisabled }, wantStatus: http.StatusServiceUnavailable, wantType: "service_unavailable_error", wantCode: "SYSTEM_CUSTOM_GROUP_SOURCE_UNAVAILABLE", wantMessage: "The selected model source is temporarily unavailable"},
-		{name: "deleted source", configure: func(h *systemCustomProductionHarness) { delete(h.groupRepo.groups, 42) }, wantStatus: http.StatusServiceUnavailable, wantType: "service_unavailable_error", wantCode: "SYSTEM_CUSTOM_GROUP_SOURCE_UNAVAILABLE", wantMessage: "The selected model source is temporarily unavailable"},
+		{name: "unknown public model", model: "unknown", configure: func(*systemCustomProductionHarness) {}, wantStatus: http.StatusForbidden, wantType: "permission_error", wantCode: "SYSTEM_CUSTOM_GROUP_MODEL_NOT_ALLOWED", wantMessage: "The requested model is not enabled for this subscription group"},
+		{name: "disabled source", model: "tavern-a", configure: func(h *systemCustomProductionHarness) { h.groupRepo.groups[42].Status = service.StatusDisabled }, wantStatus: http.StatusForbidden, wantType: "permission_error", wantCode: "SYSTEM_CUSTOM_GROUP_MODEL_NOT_ALLOWED", wantMessage: "The requested model is not enabled for this subscription group"},
+		{name: "deleted source reference", model: "tavern-a", configure: func(h *systemCustomProductionHarness) { h.routeRepo.group.Sources[0].SourceGroup = nil }, wantStatus: http.StatusForbidden, wantType: "permission_error", wantCode: "SYSTEM_CUSTOM_GROUP_MODEL_NOT_ALLOWED", wantMessage: "The requested model is not enabled for this subscription group"},
 		{name: "removed source model", configure: func(h *systemCustomProductionHarness) {
 			h.accountRepo.accounts[42] = []service.Account{newSystemCustomProductionAccount(501, 42, "another-model")}
-		}, wantStatus: http.StatusNotFound, wantType: "model_not_found", wantMessage: `Model "source-a-model" is not supported by any configured account in this group`, wantScheduling: true},
+		}, model: "tavern-a", wantStatus: http.StatusForbidden, wantType: "permission_error", wantCode: "SYSTEM_CUSTOM_GROUP_MODEL_NOT_ALLOWED", wantMessage: "The requested model is not enabled for this subscription group"},
 		{name: "no available account", configure: func(h *systemCustomProductionHarness) {
 			h.accountRepo.accounts[42] = nil
-		}, wantStatus: http.StatusServiceUnavailable, wantType: "api_error", wantMessage: "Service temporarily unavailable", wantScheduling: true},
+		}, model: "tavern-a", wantStatus: http.StatusForbidden, wantType: "permission_error", wantCode: "SYSTEM_CUSTOM_GROUP_MODEL_NOT_ALLOWED", wantMessage: "The requested model is not enabled for this subscription group"},
 		{name: "missing pricing", configure: func(h *systemCustomProductionHarness) {
-			h.routeRepo.routes["tavern-a"].SourceModel = "unpriced-system-custom-integration-model"
-			h.accountRepo.accounts[42] = []service.Account{newSystemCustomProductionAccount(501, 42, "unpriced-system-custom-integration-model")}
-		}, wantStatus: http.StatusServiceUnavailable, wantType: "api_error", wantMessage: "Service temporarily unavailable", wantScheduling: true},
+			h.accountRepo.accounts[42] = []service.Account{newSystemCustomProductionMappedAccount(501, 42, "tavern-a", "unpriced-system-custom-integration-model")}
+		}, model: "tavern-a", wantStatus: http.StatusServiceUnavailable, wantType: "service_unavailable_error", wantCode: "SYSTEM_CUSTOM_GROUP_SOURCE_UNAVAILABLE", wantMessage: "The selected model source is temporarily unavailable"},
 	}
 
 	for _, tt := range tests {
@@ -737,7 +761,7 @@ func TestSystemCustomSubscriptionClosedFailureTable(t *testing.T) {
 			defer harness.close()
 			tt.configure(harness)
 			recorder := httptest.NewRecorder()
-			req := httptest.NewRequest(http.MethodPost, "/v1/chat/completions", bytes.NewBufferString(`{"model":"tavern-a","messages":[{"role":"user","content":"hello"}]}`))
+			req := httptest.NewRequest(http.MethodPost, "/v1/chat/completions", bytes.NewBufferString(`{"model":"`+tt.model+`","messages":[{"role":"user","content":"hello"}]}`))
 			req.Header.Set("Content-Type", "application/json")
 			req.Header.Set("Authorization", "Bearer "+harness.key)
 			harness.router.ServeHTTP(recorder, req)
@@ -754,17 +778,9 @@ func TestSystemCustomSubscriptionClosedFailureTable(t *testing.T) {
 			require.Empty(t, harness.usageRepo.logs(), "failures must not create a zero-price usage row")
 			require.Empty(t, harness.billingRepo.commands(), "failures must not apply subscription or balance billing")
 			require.Zero(t, harness.userRepo.walletCalls.Load(), "system custom failures must never fall back to wallet balance")
-			require.Equal(t, []string{"tavern-a"}, harness.routeRepo.resolvedModels())
 			require.Equal(t, []int64{25}, harness.routeRepo.resolvedGroupIDs())
 			requireSystemCustomSubscriptionLookups(t, harness.subRepo.subscriptionLookups())
-			if tt.wantScheduling {
-				for _, groupID := range harness.accountRepo.selectedGroupIDs() {
-					require.Equal(t, int64(42), groupID, "scheduler must not switch away from the resolved source group")
-				}
-				require.NotEmpty(t, harness.accountRepo.selectedGroupIDs(), "failure must be produced by the real scheduler")
-			} else {
-				require.Empty(t, harness.accountRepo.selectedGroupIDs())
-			}
+			require.Empty(t, harness.accountRepo.selectedGroupIDs(), "catalog failures must stop before dispatch")
 		})
 	}
 }
@@ -800,7 +816,6 @@ func TestSystemCustomSubscriptionQuotaStopsBeforeResolverAndUpstream(t *testing.
 			require.Equal(t, http.StatusTooManyRequests, recorder.Code)
 			require.Equal(t, "USAGE_LIMIT_EXCEEDED", gjson.Get(recorder.Body.String(), "code").String())
 			require.Equal(t, tt.message, gjson.Get(recorder.Body.String(), "message").String())
-			require.Empty(t, harness.routeRepo.resolvedModels(), "auth quota must fail before the real system resolver middleware")
 			require.Empty(t, harness.routeRepo.resolvedGroupIDs())
 			require.Empty(t, harness.groupRepo.loadedGroupIDs())
 			require.Empty(t, harness.accountRepo.selectedGroupIDs())

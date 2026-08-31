@@ -62,6 +62,13 @@ type SystemCustomGroupModelListCatalog interface {
 	ListSystemCustomGroupModelAvailability(ctx context.Context, sources []SystemCustomGroupModelListSource) (SystemCustomGroupModelAvailability, error)
 }
 
+// SystemCustomGroupRuntimeModelCatalog derives a request-time model catalog
+// from live source references. The retained static route repository remains a
+// separate rollback-only API.
+type SystemCustomGroupRuntimeModelCatalog interface {
+	BuildSystemCustomGroupModelCatalog(ctx context.Context, sources []SystemCustomGroupSource, platform string) (*SystemCustomGroupRuntimeCatalog, error)
+}
+
 // SystemCustomGroupSchedulableAccount preserves the source-group association
 // while loading all candidate accounts in one bounded repository operation.
 type SystemCustomGroupSchedulableAccount struct {

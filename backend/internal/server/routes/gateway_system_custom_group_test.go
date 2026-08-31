@@ -34,16 +34,11 @@ type systemCustomUnsupportedAuthCache struct {
 
 type systemCustomModelsRouteRepository struct {
 	service.SystemCustomGroupRepository
-	routes []service.SystemCustomGroupModel
-	groups map[int64]*service.Group
+	group *service.SystemCustomGroup
 }
 
-func (r systemCustomModelsRouteRepository) ListModels(context.Context, int64, bool) ([]service.SystemCustomGroupModel, error) {
-	routes := append([]service.SystemCustomGroupModel(nil), r.routes...)
-	for i := range routes {
-		routes[i].SourceGroup = r.groups[routes[i].SourceGroupID]
-	}
-	return routes, nil
+func (r systemCustomModelsRouteRepository) Get(context.Context, int64) (*service.SystemCustomGroup, error) {
+	return r.group, nil
 }
 
 type systemCustomModelsGroupRepository struct {
@@ -89,6 +84,23 @@ func (c systemCustomModelsCatalog) ListSystemCustomGroupModelAvailability(_ cont
 		availability[source.Group.ID] = available
 	}
 	return availability, nil
+}
+
+func (c systemCustomModelsCatalog) BuildSystemCustomGroupModelCatalog(_ context.Context, sources []service.SystemCustomGroupSource, platform string) (*service.SystemCustomGroupRuntimeCatalog, error) {
+	candidates := make([]service.SystemCustomGroupRuntimeCandidate, 0)
+	advertised := make([]string, 0)
+	for _, source := range sources {
+		if source.SourceGroup == nil || (platform != "" && source.SourceGroup.Platform != platform) {
+			continue
+		}
+		for _, model := range c.models[source.SourceGroupID] {
+			advertised = append(advertised, model)
+			candidates = append(candidates, service.SystemCustomGroupRuntimeCandidate{
+				SourceGroup: *source.SourceGroup, PublicModel: model, SourceModel: model,
+			})
+		}
+	}
+	return service.NewSystemCustomGroupRuntimeCatalog(candidates, advertised), nil
 }
 
 func (c *systemCustomUnsupportedAuthCache) GetAuthCache(context.Context, string) (*service.APIKeyAuthCacheEntry, error) {
@@ -250,10 +262,14 @@ func TestSystemCustomModelListsUseRealAuthSnapshotAndAliasesInRegisteredRouter(t
 		10: {ID: 10, Platform: service.PlatformAnthropic, Status: service.StatusActive, Hydrated: true},
 		20: {ID: 20, Platform: service.PlatformGemini, Status: service.StatusActive, Hydrated: true},
 	}}
-	routeRepo := systemCustomModelsRouteRepository{routes: []service.SystemCustomGroupModel{
-		{GroupID: billingGroupID, PublicModel: "claude-monthly", SourceGroupID: 10, SourceModel: "claude-sonnet-4", Enabled: true},
-		{GroupID: billingGroupID, PublicModel: "gemini-monthly", SourceGroupID: 20, SourceModel: "gemini-2.5-flash", Enabled: true},
-	}, groups: groupRepo.groups}
+	routeRepo := systemCustomModelsRouteRepository{group: &service.SystemCustomGroup{
+		Group: *apiKey.Group,
+		Sources: []service.SystemCustomGroupSource{
+			{SourceGroupID: 10, Priority: 1, SourceGroup: groupRepo.groups[10]},
+			{SourceGroupID: 20, Priority: 2, SourceGroup: groupRepo.groups[20]},
+		},
+		Models: []service.SystemCustomGroupModel{{PublicModel: "retained-static", Enabled: true}},
+	}}
 	catalog := systemCustomModelsCatalog{models: map[int64][]string{10: {"claude-sonnet-4"}, 20: {"gemini-2.5-flash"}}}
 	cfg := &config.Config{
 		RunMode:    config.RunModeSimple,
@@ -283,12 +299,12 @@ func TestSystemCustomModelListsUseRealAuthSnapshotAndAliasesInRegisteredRouter(t
 		kind string
 		want []string
 	}{
-		{name: "root standard", path: "/models", kind: "openai", want: []string{"claude-monthly", "gemini-monthly"}},
-		{name: "v1 standard", path: "/v1/models", kind: "openai", want: []string{"claude-monthly", "gemini-monthly"}},
-		{name: "root codex", path: "/models?client_version=0.144.0", kind: "codex", want: []string{"claude-monthly", "gemini-monthly"}},
-		{name: "v1 codex", path: "/v1/models?client_version=0.144.0", kind: "codex", want: []string{"claude-monthly", "gemini-monthly"}},
-		{name: "direct codex", path: "/backend-api/codex/models", kind: "codex", want: []string{"claude-monthly", "gemini-monthly"}},
-		{name: "gemini", path: "/v1beta/models", kind: "gemini", want: []string{"models/gemini-monthly"}},
+		{name: "root standard", path: "/models", kind: "openai", want: []string{"claude-sonnet-4", "gemini-2.5-flash"}},
+		{name: "v1 standard", path: "/v1/models", kind: "openai", want: []string{"claude-sonnet-4", "gemini-2.5-flash"}},
+		{name: "root codex", path: "/models?client_version=0.144.0", kind: "codex", want: []string{"claude-sonnet-4", "gemini-2.5-flash"}},
+		{name: "v1 codex", path: "/v1/models?client_version=0.144.0", kind: "codex", want: []string{"claude-sonnet-4", "gemini-2.5-flash"}},
+		{name: "direct codex", path: "/backend-api/codex/models", kind: "codex", want: []string{"claude-sonnet-4", "gemini-2.5-flash"}},
+		{name: "gemini", path: "/v1beta/models", kind: "gemini", want: []string{"models/gemini-2.5-flash"}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -322,8 +338,7 @@ func TestSystemCustomModelListsUseRealAuthSnapshotAndAliasesInRegisteredRouter(t
 				got = append(got, result.String())
 			}
 			require.Equal(t, tt.want, got)
-			require.NotContains(t, recorder.Body.String(), "claude-sonnet-4")
-			require.NotContains(t, recorder.Body.String(), "gemini-2.5-flash")
+			require.NotContains(t, recorder.Body.String(), "retained-static")
 		})
 	}
 	require.Equal(t, 1, authRepo.loads, "all paths after the first must preserve the system custom marker through the auth cache")

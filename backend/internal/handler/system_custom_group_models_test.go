@@ -15,16 +15,11 @@ import (
 
 type systemCustomModelsRouteRepo struct {
 	service.SystemCustomGroupRepository
-	routes []service.SystemCustomGroupModel
-	groups map[int64]*service.Group
+	group *service.SystemCustomGroup
 }
 
-func (r systemCustomModelsRouteRepo) ListModels(context.Context, int64, bool) ([]service.SystemCustomGroupModel, error) {
-	routes := append([]service.SystemCustomGroupModel(nil), r.routes...)
-	for i := range routes {
-		routes[i].SourceGroup = r.groups[routes[i].SourceGroupID]
-	}
-	return routes, nil
+func (r systemCustomModelsRouteRepo) Get(context.Context, int64) (*service.SystemCustomGroup, error) {
+	return r.group, nil
 }
 
 type systemCustomModelsGroupRepo struct {
@@ -76,6 +71,24 @@ func (c systemCustomModelsCatalog) ListSystemCustomGroupModelAvailability(_ cont
 	return availability, nil
 }
 
+func (c systemCustomModelsCatalog) BuildSystemCustomGroupModelCatalog(_ context.Context, sources []service.SystemCustomGroupSource, platform string) (*service.SystemCustomGroupRuntimeCatalog, error) {
+	candidates := make([]service.SystemCustomGroupRuntimeCandidate, 0)
+	advertised := make([]string, 0)
+	for _, source := range sources {
+		if source.SourceGroup == nil || c.unschedulable[source.SourceGroupID] ||
+			(platform != "" && source.SourceGroup.Platform != platform) {
+			continue
+		}
+		for _, model := range c.models[source.SourceGroupID] {
+			advertised = append(advertised, model)
+			candidates = append(candidates, service.SystemCustomGroupRuntimeCandidate{
+				SourceGroup: *source.SourceGroup, PublicModel: model, SourceModel: model,
+			})
+		}
+	}
+	return service.NewSystemCustomGroupRuntimeCatalog(candidates, advertised), nil
+}
+
 func TestSystemCustomGroupModelsExposesAvailableAliasesOnly(t *testing.T) {
 	handler, key := newSystemCustomModelsHandler(t)
 
@@ -86,15 +99,14 @@ func TestSystemCustomGroupModelsExposesAvailableAliasesOnly(t *testing.T) {
 
 			require.Equal(t, http.StatusOK, recorder.Code)
 			require.Equal(t, "list", gjson.Get(recorder.Body.String(), "object").String())
-			require.Equal(t, []string{"claude-monthly", "gemini-monthly"}, gjsonStrings(recorder.Body.String(), "data.#.id"))
+			require.Equal(t, []string{"claude-sonnet-4", "gemini-2.5-flash"}, gjsonStrings(recorder.Body.String(), "data.#.id"))
 			for _, item := range gjson.Get(recorder.Body.String(), "data").Array() {
 				require.Equal(t, "model", item.Get("object").String())
 				require.Equal(t, gjson.Number, item.Get("created").Type)
 				require.Positive(t, item.Get("created").Int())
 				require.NotEmpty(t, item.Get("owned_by").String())
 			}
-			require.NotContains(t, recorder.Body.String(), "claude-sonnet-4")
-			require.NotContains(t, recorder.Body.String(), "gemini-2.5-flash")
+			require.NotContains(t, recorder.Body.String(), "retained-static")
 		})
 	}
 }
@@ -106,11 +118,10 @@ func TestSystemCustomCodexModelsExposesAliasManifestOnly(t *testing.T) {
 	handler.SystemCustomCodexModels(c)
 
 	require.Equal(t, http.StatusOK, recorder.Code)
-	require.Equal(t, []string{"claude-monthly", "gemini-monthly"}, gjsonStrings(recorder.Body.String(), "models.#.slug"))
-	require.Equal(t, []string{"claude-monthly", "gemini-monthly"}, gjsonStrings(recorder.Body.String(), "models.#.display_name"))
+	require.Equal(t, []string{"claude-sonnet-4", "gemini-2.5-flash"}, gjsonStrings(recorder.Body.String(), "models.#.slug"))
+	require.Equal(t, []string{"claude-sonnet-4", "gemini-2.5-flash"}, gjsonStrings(recorder.Body.String(), "models.#.display_name"))
 	require.False(t, gjson.Get(recorder.Body.String(), "object").Exists())
-	require.NotContains(t, recorder.Body.String(), "claude-sonnet-4")
-	require.NotContains(t, recorder.Body.String(), "gemini-2.5-flash")
+	require.NotContains(t, recorder.Body.String(), "retained-static")
 }
 
 func gjsonStrings(body, path string) []string {
@@ -130,12 +141,19 @@ func newSystemCustomModelsHandler(t *testing.T) (*GatewayHandler, *service.APIKe
 		20: {ID: 20, Platform: service.PlatformGemini, Status: service.StatusActive, Hydrated: true},
 		30: {ID: 30, Platform: service.PlatformOpenAI, Status: service.StatusActive, Hydrated: true},
 	}}
-	routeRepo := systemCustomModelsRouteRepo{routes: []service.SystemCustomGroupModel{
-		{GroupID: billingGroupID, PublicModel: "gemini-monthly", SourceGroupID: 20, SourceModel: "gemini-2.5-flash", Enabled: true},
-		{GroupID: billingGroupID, PublicModel: "claude-monthly", SourceGroupID: 10, SourceModel: "claude-sonnet-4", Enabled: true},
-		{GroupID: billingGroupID, PublicModel: "unavailable", SourceGroupID: 30, SourceModel: "gpt-5.6", Enabled: true},
-		{GroupID: billingGroupID, PublicModel: "disabled", SourceGroupID: 10, SourceModel: "claude-sonnet-4", Enabled: false},
-	}, groups: groupRepo.groups}
+	container := &service.Group{
+		ID: billingGroupID, Platform: service.PlatformComposite, Status: service.StatusActive, Hydrated: true,
+		SubscriptionType: service.SubscriptionTypeSubscription, SystemCustomRoutingEnabled: true,
+	}
+	routeRepo := systemCustomModelsRouteRepo{group: &service.SystemCustomGroup{
+		Group: *container,
+		Sources: []service.SystemCustomGroupSource{
+			{SourceGroupID: 20, Priority: 2, SourceGroup: groupRepo.groups[20]},
+			{SourceGroupID: 10, Priority: 1, SourceGroup: groupRepo.groups[10]},
+			{SourceGroupID: 30, Priority: 3, SourceGroup: groupRepo.groups[30]},
+		},
+		Models: []service.SystemCustomGroupModel{{PublicModel: "retained-static", Enabled: true}},
+	}}
 	catalog := systemCustomModelsCatalog{
 		models: map[int64][]string{
 			10: {"claude-sonnet-4"},
@@ -149,10 +167,7 @@ func newSystemCustomModelsHandler(t *testing.T) (*GatewayHandler, *service.APIKe
 	apiKeyService.SetSystemCustomGroupModelCatalog(catalog)
 	key := &service.APIKey{
 		GroupID: &billingGroupID,
-		Group: &service.Group{
-			ID: billingGroupID, Platform: service.PlatformComposite, Status: service.StatusActive, Hydrated: true,
-			SubscriptionType: service.SubscriptionTypeSubscription, SystemCustomRoutingEnabled: true,
-		},
+		Group:   container,
 	}
 	return &GatewayHandler{apiKeyService: apiKeyService}, key
 }
