@@ -65,7 +65,7 @@ describe('UsageStatsCards', () => {
     expect(text).toContain('22')
   })
 
-  it('allows the token stat tooltip to escape the card bounds', () => {
+  it('keeps the cache tooltip out of the layout while it is hidden', () => {
     const wrapper = mount(UsageStatsCards, {
       props: {
         stats,
@@ -79,13 +79,6 @@ describe('UsageStatsCards', () => {
 
     const tokenCard = wrapper.get('[data-test="usage-total-token-card"]')
     expect(tokenCard.classes()).toContain('overflow-visible')
-  })
-
-  it('uses narrow-screen-safe cards and keeps the token tooltip inside the viewport', () => {
-    const wrapper = mount(UsageStatsCards, {
-      props: { stats },
-      global: { stubs: { Icon: true } },
-    })
 
     expect(wrapper.get('[data-test="usage-stats-grid"]').classes()).toContain('min-[360px]:grid-cols-2')
     expect(wrapper.get('[data-test="usage-stat-value"]').classes()).toContain('!text-xl')
@@ -93,5 +86,7 @@ describe('UsageStatsCards', () => {
     const tooltip = wrapper.get('[data-test="usage-token-tooltip"]')
     expect(tooltip.classes()).toContain('right-0')
     expect(tooltip.classes()).toContain('sm:left-1/2')
+    expect(tooltip.classes()).toContain('hidden')
+    expect(tooltip.classes()).toContain('group-hover:block')
   })
 })
