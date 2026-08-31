@@ -80,6 +80,9 @@ func NewGatewayHandler(
 	if apiKeyService != nil && gatewayService != nil {
 		apiKeyService.SetSystemCustomGroupModelCatalog(gatewayService)
 	}
+	if gatewayService != nil && openAIGatewayService != nil {
+		gatewayService.SetSystemCustomOpenAIRuntimeEligibilityProbe(openAIGatewayService)
+	}
 	pingInterval := time.Duration(0)
 	maxAccountSwitches := 10
 	maxAccountSwitchesGemini := 3

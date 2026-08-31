@@ -24,6 +24,7 @@ type systemCustomRouteRepoStub struct {
 	calls        int
 	listCalls    int
 	getCalls     int
+	runtimeCalls int
 	enabledOnly  bool
 	sourceGroups map[int64]*Group
 }
@@ -38,6 +39,20 @@ func (s *systemCustomRouteRepoStub) Get(_ context.Context, groupID int64) (*Syst
 		return nil, ErrSystemCustomGroupNotFound
 	}
 	return s.group, nil
+}
+
+func (s *systemCustomRouteRepoStub) GetRuntime(_ context.Context, groupID int64) (*SystemCustomGroup, error) {
+	s.runtimeCalls++
+	s.requestedID = groupID
+	if s.err != nil {
+		return nil, s.err
+	}
+	if s.group == nil {
+		return nil, ErrSystemCustomGroupNotFound
+	}
+	clone := *s.group
+	clone.Models = nil
+	return &clone, nil
 }
 
 func (s *systemCustomRouteRepoStub) ResolveModel(_ context.Context, groupID int64, publicModel string) (*SystemCustomGroupModel, error) {
@@ -120,12 +135,14 @@ func TestResolveSystemCustomGroupModelTreatsRepositoryFailureAsUnavailable(t *te
 }
 
 type systemCustomRuntimeCatalogStub struct {
-	catalog  *SystemCustomGroupRuntimeCatalog
-	err      error
-	calls    int
-	sources  []SystemCustomGroupSource
-	platform string
-	priced   bool
+	catalog        *SystemCustomGroupRuntimeCatalog
+	err            error
+	calls          int
+	sources        []SystemCustomGroupSource
+	platform       string
+	priced         bool
+	resolveCalls   int
+	requestedModel string
 }
 
 func (s *systemCustomRuntimeCatalogStub) BuildSystemCustomGroupModelCatalog(ctx context.Context, sources []SystemCustomGroupSource, platform string) (*SystemCustomGroupRuntimeCatalog, error) {
@@ -134,6 +151,19 @@ func (s *systemCustomRuntimeCatalogStub) BuildSystemCustomGroupModelCatalog(ctx 
 	s.platform = platform
 	_, s.priced = gatewayTokenRequestPricingAtFromContext(ctx)
 	return s.catalog, s.err
+}
+
+func (s *systemCustomRuntimeCatalogStub) ResolveSystemCustomGroupModelCatalog(ctx context.Context, sources []SystemCustomGroupSource, platform, model string) ([]SystemCustomGroupRuntimeCandidate, bool, error) {
+	s.resolveCalls++
+	s.sources = append([]SystemCustomGroupSource(nil), sources...)
+	s.platform = platform
+	s.requestedModel = model
+	_, s.priced = gatewayTokenRequestPricingAtFromContext(ctx)
+	if s.err != nil {
+		return nil, false, s.err
+	}
+	candidates, advertised := s.catalog.Resolve(model)
+	return candidates, advertised, nil
 }
 
 func runtimeCatalogForTests(entries map[string][]SystemCustomGroupRuntimeCandidate, advertised ...string) *SystemCustomGroupRuntimeCatalog {
@@ -169,7 +199,10 @@ func TestResolveSystemCustomGroupModelUsesDynamicCatalogAndNeverStaticRoutes(t *
 	}
 	repo := &systemCustomRouteRepoStub{group: container}
 	catalog := &systemCustomRuntimeCatalogStub{catalog: runtimeCatalogForTests(map[string][]SystemCustomGroupRuntimeCandidate{
-		"Claude-Live": {{SourceGroup: *source, PublicModel: "Claude-Live", SourceModel: "Claude-Live"}},
+		"Claude-Live": {{
+			SourceGroup: *source, PublicModel: "Claude-Live", SourceModel: "Claude-Live",
+			AllowedAccounts: NewSystemCustomGroupAccountAllowlist([]int64{91, 92}),
+		}},
 	})}
 	svc := &APIKeyService{systemCustomGroupRepo: repo, systemCustomModelCatalog: catalog}
 
@@ -181,16 +214,20 @@ func TestResolveSystemCustomGroupModelUsesDynamicCatalogAndNeverStaticRoutes(t *
 	require.Equal(t, "Claude-Live", resolution.PublicModel)
 	require.Equal(t, "Claude-Live", resolution.SourceModel)
 	require.Equal(t, PlatformAnthropic, resolution.SourcePlatform)
+	require.Equal(t, []int64{91, 92}, resolution.AllowedAccounts.IDs())
 	require.Equal(t, int64(42), requirePointerValue(t, resolution.APIKey.GroupID))
 	require.Nil(t, resolution.APIKey.CustomGroupID)
 	require.Nil(t, resolution.APIKey.Group.FallbackGroupID)
 	require.Nil(t, resolution.APIKey.Group.FallbackGroupIDOnInvalidRequest)
 	require.Equal(t, fallbackID, requirePointerValue(t, source.FallbackGroupID))
 	require.Equal(t, invalidFallbackID, requirePointerValue(t, source.FallbackGroupIDOnInvalidRequest))
-	require.Equal(t, 1, repo.getCalls)
+	require.Equal(t, 1, repo.runtimeCalls)
+	require.Zero(t, repo.getCalls, "runtime resolution must not eager-load retained rollback routes")
 	require.Zero(t, repo.calls, "retained ResolveModel must remain rollback-only")
 	require.Zero(t, repo.listCalls, "retained ListModels must remain rollback-only")
-	require.Equal(t, 1, catalog.calls)
+	require.Zero(t, catalog.calls, "runtime resolution must not build the full model catalog")
+	require.Equal(t, 1, catalog.resolveCalls)
+	require.Equal(t, "claude-live", catalog.requestedModel)
 	require.True(t, catalog.priced, "runtime resolution must evaluate the same profit-control request context as dispatch")
 }
 
@@ -214,9 +251,11 @@ func TestResolveSystemCustomGroupModelDistinguishesAbsentFromUnavailable(t *test
 
 			require.Nil(t, resolution)
 			require.ErrorIs(t, err, tt.want)
-			require.Equal(t, 1, repo.getCalls)
+			require.Equal(t, 1, repo.runtimeCalls)
+			require.Zero(t, repo.getCalls)
 			require.Zero(t, repo.calls+repo.listCalls)
-			require.Equal(t, 1, catalog.calls)
+			require.Zero(t, catalog.calls)
+			require.Equal(t, 1, catalog.resolveCalls)
 		})
 	}
 }
@@ -241,7 +280,8 @@ func TestListSystemCustomGroupModelsUsesOneDynamicSnapshotAndPlatformFilter(t *t
 	require.Equal(t, []string{"gemini-live"}, models)
 	require.Equal(t, PlatformGemini, catalog.platform)
 	require.Equal(t, container.Sources, catalog.sources)
-	require.Equal(t, 1, repo.getCalls)
+	require.Equal(t, 1, repo.runtimeCalls)
+	require.Zero(t, repo.getCalls, "runtime listing must not eager-load retained rollback routes")
 	require.Zero(t, repo.calls+repo.listCalls)
 	require.Equal(t, 1, catalog.calls)
 	require.False(t, catalog.priced, "model listing is metadata and must not install token-request profit control")

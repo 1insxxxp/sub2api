@@ -75,6 +75,14 @@ type systemCustomProductionRouteRepo struct {
 }
 
 func (r *systemCustomProductionRouteRepo) Get(_ context.Context, groupID int64) (*service.SystemCustomGroup, error) {
+	return r.getRuntime(groupID)
+}
+
+func (r *systemCustomProductionRouteRepo) GetRuntime(_ context.Context, groupID int64) (*service.SystemCustomGroup, error) {
+	return r.getRuntime(groupID)
+}
+
+func (r *systemCustomProductionRouteRepo) getRuntime(groupID int64) (*service.SystemCustomGroup, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.getGroups = append(r.getGroups, groupID)

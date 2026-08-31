@@ -16,6 +16,7 @@ type SystemCustomGroupRepository interface {
 	Create(ctx context.Context, group *Group, sourceGroupIDs []int64, models []SystemCustomGroupModelInput) error
 	Update(ctx context.Context, group *Group, sourceGroupIDs []int64, models []SystemCustomGroupModelInput) error
 	Get(ctx context.Context, groupID int64) (*SystemCustomGroup, error)
+	GetRuntime(ctx context.Context, groupID int64) (*SystemCustomGroup, error)
 	ListModels(ctx context.Context, groupID int64, enabledOnly bool) ([]SystemCustomGroupModel, error)
 	ResolveModel(ctx context.Context, groupID int64, publicModel string) (*SystemCustomGroupModel, error)
 	Delete(ctx context.Context, groupID int64) error
@@ -43,30 +44,12 @@ type SystemCustomGroupModelCatalog interface {
 	HasSchedulableAccountsForGroupPlatform(ctx context.Context, groupID int64, platform string) bool
 }
 
-// SystemCustomGroupModelListSource is one live source-group snapshot together
-// with the concrete source models whose public aliases may be advertised.
-// Runtime list generation deliberately receives the group snapshot loaded with
-// the routes so it does not re-query each source independently.
-type SystemCustomGroupModelListSource struct {
-	Group  Group
-	Models []string
-}
-
-// SystemCustomGroupModelAvailability is keyed by source group and then by the
-// exact source-model spelling supplied in SystemCustomGroupModelListSource.
-type SystemCustomGroupModelAvailability map[int64]map[string]bool
-
-// SystemCustomGroupModelListCatalog evaluates one complete route snapshot
-// against the same account support rules used by gateway scheduling.
-type SystemCustomGroupModelListCatalog interface {
-	ListSystemCustomGroupModelAvailability(ctx context.Context, sources []SystemCustomGroupModelListSource) (SystemCustomGroupModelAvailability, error)
-}
-
 // SystemCustomGroupRuntimeModelCatalog derives a request-time model catalog
 // from live source references. The retained static route repository remains a
 // separate rollback-only API.
 type SystemCustomGroupRuntimeModelCatalog interface {
 	BuildSystemCustomGroupModelCatalog(ctx context.Context, sources []SystemCustomGroupSource, platform string) (*SystemCustomGroupRuntimeCatalog, error)
+	ResolveSystemCustomGroupModelCatalog(ctx context.Context, sources []SystemCustomGroupSource, platform, model string) ([]SystemCustomGroupRuntimeCandidate, bool, error)
 }
 
 // SystemCustomGroupSchedulableAccount preserves the source-group association

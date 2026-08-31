@@ -7,10 +7,23 @@ import (
 	"strings"
 )
 
+// SystemCustomOpenAIRuntimeEligibilityProbe exposes only the transient account
+// and account-model blocks owned by the OpenAI-compatible scheduler.
+type SystemCustomOpenAIRuntimeEligibilityProbe interface {
+	IsSystemCustomAccountRuntimeEligible(account *Account, requestedModel string) bool
+}
+
+func (s *GatewayService) SetSystemCustomOpenAIRuntimeEligibilityProbe(probe SystemCustomOpenAIRuntimeEligibilityProbe) {
+	if s != nil {
+		s.systemCustomOpenAIRuntimeProbe = probe
+	}
+}
+
 type SystemCustomGroupRuntimeCandidate struct {
-	SourceGroup Group
-	PublicModel string
-	SourceModel string
+	SourceGroup     Group
+	PublicModel     string
+	SourceModel     string
+	AllowedAccounts SystemCustomGroupAccountAllowlist
 }
 
 type SystemCustomGroupRuntimeCatalog struct {
@@ -36,6 +49,7 @@ func NewSystemCustomGroupRuntimeCatalog(candidates []SystemCustomGroupRuntimeCan
 		}
 	}
 	for _, candidate := range candidates {
+		candidate.AllowedAccounts = candidate.AllowedAccounts.clone()
 		model := strings.TrimSpace(candidate.PublicModel)
 		if model == "" {
 			continue
@@ -88,6 +102,36 @@ func (s *GatewayService) BuildSystemCustomGroupModelCatalog(
 	sources []SystemCustomGroupSource,
 	platform string,
 ) (*SystemCustomGroupRuntimeCatalog, error) {
+	return s.buildSystemCustomGroupModelCatalog(ctx, sources, platform, "")
+}
+
+// ResolveSystemCustomGroupModelCatalog evaluates only one requested public
+// model. It shares the same source/account snapshot and admission rules as the
+// full /models catalog without materializing or sorting unrelated models.
+func (s *GatewayService) ResolveSystemCustomGroupModelCatalog(
+	ctx context.Context,
+	sources []SystemCustomGroupSource,
+	platform string,
+	model string,
+) ([]SystemCustomGroupRuntimeCandidate, bool, error) {
+	model = strings.TrimSpace(model)
+	if model == "" {
+		return nil, false, nil
+	}
+	catalog, err := s.buildSystemCustomGroupModelCatalog(ctx, sources, platform, model)
+	if err != nil {
+		return nil, false, err
+	}
+	candidates, advertised := catalog.Resolve(model)
+	return candidates, advertised, nil
+}
+
+func (s *GatewayService) buildSystemCustomGroupModelCatalog(
+	ctx context.Context,
+	sources []SystemCustomGroupSource,
+	platform string,
+	requestedModel string,
+) (*SystemCustomGroupRuntimeCatalog, error) {
 	catalog := NewSystemCustomGroupRuntimeCatalog(nil, nil)
 	if s == nil || s.billingService == nil {
 		return nil, fmt.Errorf("system custom group model catalog pricing is not configured")
@@ -139,12 +183,23 @@ func (s *GatewayService) BuildSystemCustomGroupModelCatalog(
 			return nil, fmt.Errorf("list system custom group schedulable accounts: %w", err)
 		}
 	}
+	candidateSnapshot := accounts
+	if s.schedulerSnapshot != nil {
+		var err error
+		candidateSnapshot, err = s.schedulerSnapshot.IntersectSystemCustomGroupAccounts(ctx, ordered, accounts)
+		if err != nil {
+			return nil, fmt.Errorf("intersect system custom scheduler snapshot: %w", err)
+		}
+	}
 	accountsByGroup := make(map[int64][]Account, len(groupIDs))
-	uniqueAccountSnapshot := make([]Account, 0, len(accounts))
-	seenAccountIDs := make(map[int64]struct{}, len(accounts))
 	for i := range accounts {
 		entry := accounts[i]
 		accountsByGroup[entry.GroupID] = append(accountsByGroup[entry.GroupID], entry.Account)
+	}
+	uniqueAccountSnapshot := make([]Account, 0, len(candidateSnapshot))
+	seenAccountIDs := make(map[int64]struct{}, len(candidateSnapshot))
+	for i := range candidateSnapshot {
+		entry := candidateSnapshot[i]
 		if _, exists := seenAccountIDs[entry.Account.ID]; exists {
 			continue
 		}
@@ -180,8 +235,8 @@ func (s *GatewayService) BuildSystemCustomGroupModelCatalog(
 		accountSnapshot = append(accountSnapshot, account)
 	}
 	candidateAccountsByGroup := make(map[int64][]Account, len(groupIDs))
-	for i := range accounts {
-		entry := accounts[i]
+	for i := range candidateSnapshot {
+		entry := candidateSnapshot[i]
 		if account, eligible := eligibleByID[entry.Account.ID]; eligible {
 			candidateAccountsByGroup[entry.GroupID] = append(candidateAccountsByGroup[entry.GroupID], account)
 		}
@@ -202,7 +257,12 @@ func (s *GatewayService) BuildSystemCustomGroupModelCatalog(
 		seenGroups[group.ID] = struct{}{}
 
 		allGroupAccounts := systemCustomCatalogAccountsForPlatform(accountsByGroup[group.ID], group.Platform)
-		advertisedModels := systemCustomAdvertisedModels(group, allGroupAccounts)
+		var advertisedModels []string
+		if requestedModel == "" {
+			advertisedModels = systemCustomAdvertisedModels(group, allGroupAccounts)
+		} else if advertisedModel, advertised := systemCustomAdvertisedModel(group, allGroupAccounts, requestedModel); advertised {
+			advertisedModels = []string{advertisedModel}
+		}
 		validSource := isDirectSystemCustomSource(group) && IsGroupContextValid(group)
 		candidateAccounts := systemCustomAccountsForPlatform(candidateAccountsByGroup[group.ID], group.Platform)
 		sourceCtx := s.withGroupContext(ctx, group)
@@ -216,14 +276,18 @@ func (s *GatewayService) BuildSystemCustomGroupModelCatalog(
 			}
 			key := strings.ToLower(model)
 			catalog.advertised[key] = struct{}{}
-			if !validSource || s.checkChannelPricingRestriction(sourceCtx, &groupID, model) ||
-				!s.systemCustomModelHasPricedAccount(sourceCtx, group, candidateAccounts, model, checkUpstreamRestriction) {
+			if !validSource || s.checkChannelPricingRestriction(sourceCtx, &groupID, model) {
+				continue
+			}
+			allowedAccounts := s.systemCustomModelPricedAccounts(sourceCtx, group, candidateAccounts, model, checkUpstreamRestriction)
+			if allowedAccounts.Empty() {
 				continue
 			}
 			candidate := SystemCustomGroupRuntimeCandidate{
-				SourceGroup: *group,
-				PublicModel: model,
-				SourceModel: model,
+				SourceGroup:     *group,
+				PublicModel:     model,
+				SourceModel:     model,
+				AllowedAccounts: allowedAccounts,
 			}
 			catalog.candidates[key] = append(catalog.candidates[key], candidate)
 			if _, exists := catalog.availableModels[key]; !exists {
@@ -232,6 +296,85 @@ func (s *GatewayService) BuildSystemCustomGroupModelCatalog(
 		}
 	}
 	return catalog, nil
+}
+
+func systemCustomAdvertisedModel(group *Group, accounts []Account, requestedModel string) (string, bool) {
+	requestedModel = strings.TrimSpace(requestedModel)
+	if group == nil || requestedModel == "" {
+		return "", false
+	}
+	if len(accounts) == 0 {
+		models := DefaultModelIDsForPlatform(group.Platform)
+		if group.CustomModelsListEnabled() {
+			models = group.ModelsListConfig.Models
+		}
+		return equalFoldSystemCustomModel(models, requestedModel)
+	}
+
+	hasAnyMapping := false
+	useDefaults := false
+	mappedMatch := ""
+	customAllowedByMapping := false
+	selectedCustomModel := ""
+	if group.CustomModelsListEnabled() {
+		var selected bool
+		selectedCustomModel, selected = equalFoldSystemCustomModel(group.ModelsListConfig.Models, requestedModel)
+		if !selected {
+			return "", false
+		}
+	}
+	for i := range accounts {
+		account := &accounts[i]
+		if group.Platform == PlatformOpenAI && account.IsOpenAIPassthroughEnabled() {
+			useDefaults = true
+			break
+		}
+		mapping := account.GetModelMapping()
+		if len(mapping) == 0 {
+			continue
+		}
+		hasAnyMapping = true
+		for model := range mapping {
+			model = strings.TrimSpace(model)
+			if model == "" || shouldHideUnavailableProviderModel(account, model) {
+				continue
+			}
+			if mappedMatch == "" && strings.EqualFold(model, requestedModel) {
+				mappedMatch = model
+			}
+			if group.CustomModelsListEnabled() && CustomModelsListAllowsModel([]string{model}, selectedCustomModel) {
+				customAllowedByMapping = true
+			}
+		}
+	}
+
+	if group.CustomModelsListEnabled() {
+		if useDefaults || !hasAnyMapping {
+			_, allowed := equalFoldSystemCustomModel(DefaultModelIDsForPlatform(group.Platform), selectedCustomModel)
+			return selectedCustomModel, allowed
+		}
+		if group.Platform == PlatformAnthropic {
+			if _, allowed := equalFoldSystemCustomModel(DefaultModelIDsForPlatform(group.Platform), selectedCustomModel); allowed {
+				return selectedCustomModel, true
+			}
+		}
+		return selectedCustomModel, customAllowedByMapping
+	}
+
+	if useDefaults || !hasAnyMapping {
+		return equalFoldSystemCustomModel(DefaultModelIDsForPlatform(group.Platform), requestedModel)
+	}
+	return mappedMatch, mappedMatch != ""
+}
+
+func equalFoldSystemCustomModel(models []string, requestedModel string) (string, bool) {
+	for _, model := range models {
+		model = strings.TrimSpace(model)
+		if model != "" && strings.EqualFold(model, requestedModel) {
+			return model, true
+		}
+	}
+	return "", false
 }
 
 func cloneSystemCustomAccountMap(source map[string]any) map[string]any {
@@ -327,13 +470,14 @@ func normalizedSystemCustomDeclaredModels(models []string) []string {
 	return result
 }
 
-func (s *GatewayService) systemCustomModelHasPricedAccount(
+func (s *GatewayService) systemCustomModelPricedAccounts(
 	ctx context.Context,
 	group *Group,
 	accounts []Account,
 	model string,
 	checkUpstreamRestriction bool,
-) bool {
+) SystemCustomGroupAccountAllowlist {
+	accountIDs := make([]int64, 0, len(accounts))
 	for i := range accounts {
 		account := &accounts[i]
 		if !s.isSystemCustomSnapshotAccountEligible(ctx, group, account, model, checkUpstreamRestriction) {
@@ -343,9 +487,9 @@ func (s *GatewayService) systemCustomModelHasPricedAccount(
 		if err := s.validateSelectedAccountPricing(ctx, &groupID, model, account); err != nil {
 			continue
 		}
-		return true
+		accountIDs = append(accountIDs, account.ID)
 	}
-	return false
+	return NewSystemCustomGroupAccountAllowlist(accountIDs)
 }
 
 func (s *GatewayService) isSystemCustomSnapshotAccountEligible(
@@ -356,6 +500,10 @@ func (s *GatewayService) isSystemCustomSnapshotAccountEligible(
 	checkUpstreamRestriction bool,
 ) bool {
 	if group == nil || account == nil {
+		return false
+	}
+	if systemCustomUsesOpenAIGateway(group.Platform) && s.systemCustomOpenAIRuntimeProbe != nil &&
+		!s.systemCustomOpenAIRuntimeProbe.IsSystemCustomAccountRuntimeEligible(account, model) {
 		return false
 	}
 	useMixed := group.Platform == PlatformAnthropic || group.Platform == PlatformGemini
@@ -375,88 +523,13 @@ func (s *GatewayService) isSystemCustomSnapshotAccountEligible(
 	return !checkUpstreamRestriction || !s.isUpstreamModelRestrictedByChannel(ctx, group.ID, account, model)
 }
 
-// ListSystemCustomGroupModelAvailability evaluates a complete system-custom
-// route snapshot against one batched schedulable-account snapshot. Model
-// support is delegated to the gateway's real scheduler predicates so wildcard,
-// provider normalization, casing, Bedrock, and passthrough behavior cannot
-// drift from request routing.
-func (s *GatewayService) ListSystemCustomGroupModelAvailability(
-	ctx context.Context,
-	sources []SystemCustomGroupModelListSource,
-) (SystemCustomGroupModelAvailability, error) {
-	availability := make(SystemCustomGroupModelAvailability, len(sources))
-	if len(sources) == 0 {
-		return availability, nil
+func systemCustomUsesOpenAIGateway(platform string) bool {
+	switch platform {
+	case PlatformOpenAI, PlatformGrok, PlatformKimi, PlatformZhipu, PlatformDeepseek:
+		return true
+	default:
+		return false
 	}
-	if s == nil || s.accountRepo == nil {
-		return nil, fmt.Errorf("system custom group model catalog is not configured")
-	}
-	batchRepo, ok := s.accountRepo.(systemCustomGroupSchedulableAccountRepository)
-	if !ok {
-		return nil, fmt.Errorf("account repository does not support system custom group snapshots")
-	}
-
-	groupIDs := make([]int64, 0, len(sources))
-	seenGroupIDs := make(map[int64]struct{}, len(sources))
-	for i := range sources {
-		groupID := sources[i].Group.ID
-		if groupID <= 0 {
-			continue
-		}
-		if _, exists := seenGroupIDs[groupID]; exists {
-			continue
-		}
-		seenGroupIDs[groupID] = struct{}{}
-		groupIDs = append(groupIDs, groupID)
-	}
-	accounts, err := batchRepo.ListSchedulableByGroupIDs(ctx, groupIDs)
-	if err != nil {
-		return nil, fmt.Errorf("list system custom group schedulable accounts: %w", err)
-	}
-	accountsByGroup := make(map[int64][]Account, len(groupIDs))
-	for i := range accounts {
-		entry := accounts[i]
-		accountsByGroup[entry.GroupID] = append(accountsByGroup[entry.GroupID], entry.Account)
-	}
-
-	for i := range sources {
-		source := &sources[i]
-		group := &source.Group
-		if !isDirectSystemCustomSource(group) || !IsGroupContextValid(group) {
-			continue
-		}
-		groupAccounts := systemCustomAccountsForPlatform(accountsByGroup[group.ID], group.Platform)
-		if len(groupAccounts) == 0 {
-			continue
-		}
-		available := make(map[string]bool, len(source.Models))
-		availability[group.ID] = available
-		for _, sourceModel := range source.Models {
-			sourceModel = strings.TrimSpace(sourceModel)
-			if sourceModel == "" || available[sourceModel] {
-				continue
-			}
-			// A system route is already an explicit administrator-owned model
-			// enumeration. The source custom list remains an additional display
-			// whitelist when enabled, but account mapping catalogs must not replace
-			// the actual scheduler candidate set.
-			if group.CustomModelsListEnabled() &&
-				!CustomModelsListAllowsModel(group.ModelsListConfig.Models, sourceModel) {
-				continue
-			}
-			for j := range groupAccounts {
-				account := &groupAccounts[j]
-				if shouldHideUnavailableProviderModel(account, sourceModel) ||
-					!account.IsSchedulableForModelWithContext(ctx, sourceModel) ||
-					!s.isModelSupportedByAccountWithContext(ctx, account, sourceModel) {
-					continue
-				}
-				available[sourceModel] = true
-				break
-			}
-		}
-	}
-	return availability, nil
 }
 
 func systemCustomAccountsForPlatform(accounts []Account, platform string) []Account {

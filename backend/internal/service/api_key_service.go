@@ -504,7 +504,7 @@ func (s *APIKeyService) ResolveSystemCustomGroupModel(ctx context.Context, key *
 	if billingGroupID <= 0 || requestedModel == "" {
 		return nil, ErrSystemCustomGroupModelNotAllowed
 	}
-	container, err := s.systemCustomGroupRepo.Get(ctx, billingGroupID)
+	container, err := s.systemCustomGroupRepo.GetRuntime(ctx, billingGroupID)
 	if err != nil {
 		return nil, ErrSystemCustomGroupSourceUnavailable.WithCause(err)
 	}
@@ -516,11 +516,10 @@ func (s *APIKeyService) ResolveSystemCustomGroupModel(ctx context.Context, key *
 	if _, marked := gatewayTokenRequestPricingAtFromContext(catalogCtx); !marked {
 		catalogCtx, _ = WithGatewayTokenRequestPricing(catalogCtx)
 	}
-	catalog, err := s.systemCustomModelCatalog.BuildSystemCustomGroupModelCatalog(catalogCtx, container.Sources, "")
+	candidates, advertised, err := s.systemCustomModelCatalog.ResolveSystemCustomGroupModelCatalog(catalogCtx, container.Sources, "", requestedModel)
 	if err != nil {
 		return nil, ErrSystemCustomGroupSourceUnavailable.WithCause(err)
 	}
-	candidates, advertised := catalog.Resolve(requestedModel)
 	if !advertised {
 		return nil, ErrSystemCustomGroupModelNotAllowed
 	}
@@ -549,11 +548,12 @@ func (s *APIKeyService) ResolveSystemCustomGroupModel(ctx context.Context, key *
 	return &SystemCustomGroupModelResolution{
 		APIKey: &clone,
 		SystemCustomGroupResolution: SystemCustomGroupResolution{
-			BillingGroupID: billingGroupID,
-			SourceGroupID:  sourceGroup.ID,
-			PublicModel:    strings.TrimSpace(candidate.PublicModel),
-			SourceModel:    strings.TrimSpace(candidate.SourceModel),
-			SourcePlatform: strings.TrimSpace(sourceGroup.Platform),
+			BillingGroupID:  billingGroupID,
+			SourceGroupID:   sourceGroup.ID,
+			PublicModel:     strings.TrimSpace(candidate.PublicModel),
+			SourceModel:     strings.TrimSpace(candidate.SourceModel),
+			SourcePlatform:  strings.TrimSpace(sourceGroup.Platform),
+			AllowedAccounts: candidate.AllowedAccounts.clone(),
 		},
 	}, nil
 }
@@ -572,7 +572,7 @@ func (s *APIKeyService) ListSystemCustomGroupModels(ctx context.Context, key *AP
 		return nil, ErrSystemCustomGroupNotFound
 	}
 
-	container, err := s.systemCustomGroupRepo.Get(ctx, billingGroupID)
+	container, err := s.systemCustomGroupRepo.GetRuntime(ctx, billingGroupID)
 	if err != nil {
 		return nil, ErrSystemCustomGroupSourceUnavailable.WithCause(err)
 	}

@@ -477,6 +477,12 @@ func (s *OpenAIGatewayService) isOpenAIAccountRequestRuntimeBlocked(account *Acc
 	return s != nil && (s.isOpenAIAccountRuntimeBlocked(account) || s.isOpenAIAccountModelRuntimeBlocked(account, requestedModel))
 }
 
+// IsSystemCustomAccountRuntimeEligible lets the dynamic system-custom catalog
+// apply the same transient blocks as the OpenAI-compatible dispatch scheduler.
+func (s *OpenAIGatewayService) IsSystemCustomAccountRuntimeEligible(account *Account, requestedModel string) bool {
+	return s != nil && account != nil && !s.isOpenAIAccountRequestRuntimeBlocked(account, requestedModel)
+}
+
 func (s *OpenAIGatewayService) recordOpenAIOAuth429() {
 	if s == nil {
 		return

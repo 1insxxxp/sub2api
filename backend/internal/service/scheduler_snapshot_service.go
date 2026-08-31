@@ -271,6 +271,69 @@ func (s *SchedulerSnapshotService) ListSchedulableAccounts(ctx context.Context, 
 	return accounts, useMixed, nil
 }
 
+// IntersectSystemCustomGroupAccounts replaces repository candidates with the
+// scheduler-visible account state for each live source bucket. A cache miss
+// keeps the already-loaded repository rows because normal dispatch would use
+// its DB fallback; a cache hit is authoritative, including an empty bucket.
+// The method never queries the account repository and never mutates either
+// input snapshot.
+func (s *SchedulerSnapshotService) IntersectSystemCustomGroupAccounts(
+	ctx context.Context,
+	sources []SystemCustomGroupSource,
+	accounts []SystemCustomGroupSchedulableAccount,
+) ([]SystemCustomGroupSchedulableAccount, error) {
+	cloned := append([]SystemCustomGroupSchedulableAccount(nil), accounts...)
+	if s == nil || s.cache == nil || len(sources) == 0 || len(accounts) == 0 {
+		return cloned, nil
+	}
+	repositoryByGroup := make(map[int64]map[int64]struct{})
+	repositoryRowsByGroup := make(map[int64][]SystemCustomGroupSchedulableAccount)
+	for i := range accounts {
+		entry := accounts[i]
+		if repositoryByGroup[entry.GroupID] == nil {
+			repositoryByGroup[entry.GroupID] = make(map[int64]struct{})
+		}
+		repositoryByGroup[entry.GroupID][entry.Account.ID] = struct{}{}
+		repositoryRowsByGroup[entry.GroupID] = append(repositoryRowsByGroup[entry.GroupID], entry)
+	}
+
+	result := make([]SystemCustomGroupSchedulableAccount, 0, len(accounts))
+	seenGroups := make(map[int64]struct{}, len(sources))
+	for i := range sources {
+		source := &sources[i]
+		group := source.SourceGroup
+		if group == nil || group.ID != source.SourceGroupID {
+			continue
+		}
+		if _, seen := seenGroups[group.ID]; seen {
+			continue
+		}
+		seenGroups[group.ID] = struct{}{}
+		groupID := group.ID
+		bucket := s.bucketFor(&groupID, group.Platform, s.resolveMode(group.Platform, false))
+		visible, hit, err := s.cache.GetSnapshot(ctx, bucket)
+		if err != nil {
+			return nil, fmt.Errorf("read system custom scheduler bucket %s: %w", bucket.String(), err)
+		}
+		if !hit {
+			result = append(result, repositoryRowsByGroup[group.ID]...)
+			continue
+		}
+		allowed := repositoryByGroup[group.ID]
+		for _, account := range visible {
+			if account == nil {
+				continue
+			}
+			if _, exists := allowed[account.ID]; !exists {
+				continue
+			}
+			accountCopy := *account
+			result = append(result, SystemCustomGroupSchedulableAccount{GroupID: group.ID, Account: accountCopy})
+		}
+	}
+	return result, nil
+}
+
 func (s *SchedulerSnapshotService) GetAccount(ctx context.Context, accountID int64) (*Account, error) {
 	if accountID <= 0 {
 		return nil, nil

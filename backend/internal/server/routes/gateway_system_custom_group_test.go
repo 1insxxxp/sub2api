@@ -41,6 +41,12 @@ func (r systemCustomModelsRouteRepository) Get(context.Context, int64) (*service
 	return r.group, nil
 }
 
+func (r systemCustomModelsRouteRepository) GetRuntime(context.Context, int64) (*service.SystemCustomGroup, error) {
+	clone := *r.group
+	clone.Models = nil
+	return &clone, nil
+}
+
 type systemCustomModelsGroupRepository struct {
 	service.GroupRepository
 	groups map[int64]*service.Group
@@ -70,22 +76,6 @@ func (systemCustomModelsCatalog) HasSchedulableAccountsForGroupPlatform(context.
 	return true
 }
 
-func (c systemCustomModelsCatalog) ListSystemCustomGroupModelAvailability(_ context.Context, sources []service.SystemCustomGroupModelListSource) (service.SystemCustomGroupModelAvailability, error) {
-	availability := make(service.SystemCustomGroupModelAvailability, len(sources))
-	for _, source := range sources {
-		available := make(map[string]bool, len(source.Models))
-		for _, sourceModel := range source.Models {
-			for _, model := range c.models[source.Group.ID] {
-				if model == sourceModel {
-					available[sourceModel] = true
-				}
-			}
-		}
-		availability[source.Group.ID] = available
-	}
-	return availability, nil
-}
-
 func (c systemCustomModelsCatalog) BuildSystemCustomGroupModelCatalog(_ context.Context, sources []service.SystemCustomGroupSource, platform string) (*service.SystemCustomGroupRuntimeCatalog, error) {
 	candidates := make([]service.SystemCustomGroupRuntimeCandidate, 0)
 	advertised := make([]string, 0)
@@ -101,6 +91,15 @@ func (c systemCustomModelsCatalog) BuildSystemCustomGroupModelCatalog(_ context.
 		}
 	}
 	return service.NewSystemCustomGroupRuntimeCatalog(candidates, advertised), nil
+}
+
+func (c systemCustomModelsCatalog) ResolveSystemCustomGroupModelCatalog(_ context.Context, sources []service.SystemCustomGroupSource, platform, model string) ([]service.SystemCustomGroupRuntimeCandidate, bool, error) {
+	catalog, err := c.BuildSystemCustomGroupModelCatalog(context.Background(), sources, platform)
+	if err != nil {
+		return nil, false, err
+	}
+	candidates, advertised := catalog.Resolve(model)
+	return candidates, advertised, nil
 }
 
 func (c *systemCustomUnsupportedAuthCache) GetAuthCache(context.Context, string) (*service.APIKeyAuthCacheEntry, error) {

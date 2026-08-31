@@ -5,13 +5,24 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
+	"github.com/Wei-Shaw/sub2api/internal/config"
 	middleware2 "github.com/Wei-Shaw/sub2api/internal/server/middleware"
 	"github.com/Wei-Shaw/sub2api/internal/service"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
 	"github.com/tidwall/gjson"
 )
+
+type systemCustomRuntimeAccountRepo struct {
+	service.AccountRepository
+	accounts []service.SystemCustomGroupSchedulableAccount
+}
+
+func (r *systemCustomRuntimeAccountRepo) ListSchedulableByGroupIDs(_ context.Context, _ []int64) ([]service.SystemCustomGroupSchedulableAccount, error) {
+	return append([]service.SystemCustomGroupSchedulableAccount(nil), r.accounts...), nil
+}
 
 type systemCustomModelsRouteRepo struct {
 	service.SystemCustomGroupRepository
@@ -20,6 +31,12 @@ type systemCustomModelsRouteRepo struct {
 
 func (r systemCustomModelsRouteRepo) Get(context.Context, int64) (*service.SystemCustomGroup, error) {
 	return r.group, nil
+}
+
+func (r systemCustomModelsRouteRepo) GetRuntime(context.Context, int64) (*service.SystemCustomGroup, error) {
+	clone := *r.group
+	clone.Models = nil
+	return &clone, nil
 }
 
 type systemCustomModelsGroupRepo struct {
@@ -52,25 +69,6 @@ func (c systemCustomModelsCatalog) HasSchedulableAccountsForGroupPlatform(_ cont
 	return !c.unschedulable[groupID]
 }
 
-func (c systemCustomModelsCatalog) ListSystemCustomGroupModelAvailability(_ context.Context, sources []service.SystemCustomGroupModelListSource) (service.SystemCustomGroupModelAvailability, error) {
-	availability := make(service.SystemCustomGroupModelAvailability, len(sources))
-	for _, source := range sources {
-		if c.unschedulable[source.Group.ID] {
-			continue
-		}
-		available := make(map[string]bool, len(source.Models))
-		for _, sourceModel := range source.Models {
-			for _, model := range c.models[source.Group.ID] {
-				if model == sourceModel {
-					available[sourceModel] = true
-				}
-			}
-		}
-		availability[source.Group.ID] = available
-	}
-	return availability, nil
-}
-
 func (c systemCustomModelsCatalog) BuildSystemCustomGroupModelCatalog(_ context.Context, sources []service.SystemCustomGroupSource, platform string) (*service.SystemCustomGroupRuntimeCatalog, error) {
 	candidates := make([]service.SystemCustomGroupRuntimeCandidate, 0)
 	advertised := make([]string, 0)
@@ -87,6 +85,15 @@ func (c systemCustomModelsCatalog) BuildSystemCustomGroupModelCatalog(_ context.
 		}
 	}
 	return service.NewSystemCustomGroupRuntimeCatalog(candidates, advertised), nil
+}
+
+func (c systemCustomModelsCatalog) ResolveSystemCustomGroupModelCatalog(_ context.Context, sources []service.SystemCustomGroupSource, platform, model string) ([]service.SystemCustomGroupRuntimeCandidate, bool, error) {
+	catalog, err := c.BuildSystemCustomGroupModelCatalog(context.Background(), sources, platform)
+	if err != nil {
+		return nil, false, err
+	}
+	candidates, advertised := catalog.Resolve(model)
+	return candidates, advertised, nil
 }
 
 func TestSystemCustomGroupModelsExposesAvailableAliasesOnly(t *testing.T) {
@@ -122,6 +129,48 @@ func TestSystemCustomCodexModelsExposesAliasManifestOnly(t *testing.T) {
 	require.Equal(t, []string{"claude-sonnet-4", "gemini-2.5-flash"}, gjsonStrings(recorder.Body.String(), "models.#.display_name"))
 	require.False(t, gjson.Get(recorder.Body.String(), "object").Exists())
 	require.NotContains(t, recorder.Body.String(), "retained-static")
+}
+
+func TestNewGatewayHandlerWiresOpenAIRuntimeBlocksIntoDynamicCatalog(t *testing.T) {
+	firstGroup := &service.Group{ID: 10, Platform: service.PlatformOpenAI, Status: service.StatusActive, Hydrated: true}
+	secondGroup := &service.Group{ID: 20, Platform: service.PlatformOpenAI, Status: service.StatusActive, Hydrated: true}
+	firstAccount := service.Account{
+		ID: 101, Platform: service.PlatformOpenAI, Type: service.AccountTypeAPIKey,
+		Status: service.StatusActive, Schedulable: true,
+		Credentials: map[string]any{"model_mapping": map[string]any{"shared": "gpt-5.4"}},
+	}
+	secondAccount := service.Account{
+		ID: 201, Platform: service.PlatformOpenAI, Type: service.AccountTypeAPIKey,
+		Status: service.StatusActive, Schedulable: true,
+		Credentials: map[string]any{"model_mapping": map[string]any{"shared": "gpt-5.4"}},
+	}
+	repo := &systemCustomRuntimeAccountRepo{accounts: []service.SystemCustomGroupSchedulableAccount{
+		{GroupID: firstGroup.ID, Account: firstAccount},
+		{GroupID: secondGroup.ID, Account: secondAccount},
+	}}
+	cfg := &config.Config{}
+	billing := service.NewBillingService(cfg, nil)
+	gateway := service.NewGatewayService(
+		repo, nil, nil, nil, nil, nil, nil, nil, cfg,
+		nil, nil, billing, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil,
+	)
+	openAI := service.NewOpenAIGatewayService(
+		nil, nil, nil, nil, nil, nil, nil, cfg, nil, nil, nil, nil, nil,
+		nil, nil, nil, nil, nil, nil, nil, nil, nil,
+	)
+	openAI.BlockAccountScheduling(&firstAccount, time.Now().Add(time.Minute), "test")
+	NewGatewayHandler(gateway, openAI, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, cfg, nil)
+
+	catalog, err := gateway.BuildSystemCustomGroupModelCatalog(context.Background(), []service.SystemCustomGroupSource{
+		{SourceGroupID: firstGroup.ID, Priority: 1, SourceGroup: firstGroup},
+		{SourceGroupID: secondGroup.ID, Priority: 2, SourceGroup: secondGroup},
+	}, "")
+
+	require.NoError(t, err)
+	candidates, advertised := catalog.Resolve("shared")
+	require.True(t, advertised)
+	require.Len(t, candidates, 1)
+	require.Equal(t, secondGroup.ID, candidates[0].SourceGroup.ID)
 }
 
 func gjsonStrings(body, path string) []string {

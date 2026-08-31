@@ -327,6 +327,32 @@ func (r *systemCustomGroupRepository) Get(ctx context.Context, groupID int64) (*
 	return out, nil
 }
 
+// GetRuntime loads only the request-time container and its ordered live source
+// references. Retained static routes remain available through Get/ListModels/
+// ResolveModel for administration and rollback compatibility.
+func (r *systemCustomGroupRepository) GetRuntime(ctx context.Context, groupID int64) (*service.SystemCustomGroup, error) {
+	row, err := r.client.Group.Query().
+		Where(group.IDEQ(groupID), group.SystemCustomRoutingEnabledEQ(true)).
+		WithSystemCustomSources(func(query *dbent.SystemCustomGroupSourceQuery) {
+			query.WithSourceGroup().Order(dbent.Asc(systemcustomgroupsource.FieldPriority), dbent.Asc(systemcustomgroupsource.FieldID))
+		}).
+		Only(ctx)
+	if dbent.IsNotFound(err) {
+		return nil, service.ErrSystemCustomGroupNotFound
+	}
+	if err != nil {
+		return nil, err
+	}
+	out := &service.SystemCustomGroup{
+		Group:   *groupEntityToService(row),
+		Sources: make([]service.SystemCustomGroupSource, 0, len(row.Edges.SystemCustomSources)),
+	}
+	for _, source := range row.Edges.SystemCustomSources {
+		out.Sources = append(out.Sources, mapSystemCustomGroupSource(source))
+	}
+	return out, nil
+}
+
 func (r *systemCustomGroupRepository) ListModels(ctx context.Context, groupID int64, enabledOnly bool) ([]service.SystemCustomGroupModel, error) {
 	query := r.client.SystemCustomGroupModel.Query().
 		Where(systemcustomgroupmodel.GroupIDEQ(groupID)).

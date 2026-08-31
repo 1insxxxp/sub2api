@@ -2,19 +2,62 @@ package service
 
 import (
 	"context"
+	"sort"
 	"strings"
 
 	"github.com/Wei-Shaw/sub2api/internal/pkg/ctxkey"
 )
 
+// SystemCustomGroupAccountAllowlist is an immutable-by-construction sorted set
+// of account IDs admitted by the dynamic catalog for one source/model pair.
+// The backing slice is never exposed directly.
+type SystemCustomGroupAccountAllowlist struct {
+	ids []int64
+}
+
+func NewSystemCustomGroupAccountAllowlist(accountIDs []int64) SystemCustomGroupAccountAllowlist {
+	seen := make(map[int64]struct{}, len(accountIDs))
+	ids := make([]int64, 0, len(accountIDs))
+	for _, accountID := range accountIDs {
+		if accountID <= 0 {
+			continue
+		}
+		if _, exists := seen[accountID]; exists {
+			continue
+		}
+		seen[accountID] = struct{}{}
+		ids = append(ids, accountID)
+	}
+	sort.Slice(ids, func(i, j int) bool { return ids[i] < ids[j] })
+	return SystemCustomGroupAccountAllowlist{ids: ids}
+}
+
+func (a SystemCustomGroupAccountAllowlist) IDs() []int64 {
+	return append([]int64(nil), a.ids...)
+}
+
+func (a SystemCustomGroupAccountAllowlist) Allows(accountID int64) bool {
+	index := sort.Search(len(a.ids), func(i int) bool { return a.ids[i] >= accountID })
+	return index < len(a.ids) && a.ids[index] == accountID
+}
+
+func (a SystemCustomGroupAccountAllowlist) Empty() bool {
+	return len(a.ids) == 0
+}
+
+func (a SystemCustomGroupAccountAllowlist) clone() SystemCustomGroupAccountAllowlist {
+	return SystemCustomGroupAccountAllowlist{ids: append([]int64(nil), a.ids...)}
+}
+
 // SystemCustomGroupResolution keeps the monthly subscription container used
 // for billing separate from the direct source group used by request routing.
 type SystemCustomGroupResolution struct {
-	BillingGroupID int64
-	SourceGroupID  int64
-	PublicModel    string
-	SourceModel    string
-	SourcePlatform string
+	BillingGroupID  int64
+	SourceGroupID   int64
+	PublicModel     string
+	SourceModel     string
+	SourcePlatform  string
+	AllowedAccounts SystemCustomGroupAccountAllowlist
 }
 
 // WithSystemCustomGroupResolution stores a complete system custom route and
@@ -27,6 +70,7 @@ func WithSystemCustomGroupResolution(ctx context.Context, resolution SystemCusto
 	resolution.PublicModel = strings.TrimSpace(resolution.PublicModel)
 	resolution.SourceModel = strings.TrimSpace(resolution.SourceModel)
 	resolution.SourcePlatform = strings.TrimSpace(resolution.SourcePlatform)
+	resolution.AllowedAccounts = resolution.AllowedAccounts.clone()
 	if resolution.PublicModel == "" || resolution.SourceModel == "" || resolution.SourcePlatform == "" {
 		return ctx
 	}
@@ -46,7 +90,30 @@ func SystemCustomGroupResolutionFromContext(ctx context.Context) (SystemCustomGr
 		strings.TrimSpace(resolution.SourcePlatform) == "" {
 		return SystemCustomGroupResolution{}, false
 	}
+	resolution.AllowedAccounts = resolution.AllowedAccounts.clone()
 	return resolution, true
+}
+
+func systemCustomAccountAllowed(ctx context.Context, accountID int64) bool {
+	resolution, systemCustom := SystemCustomGroupResolutionFromContext(ctx)
+	if !systemCustom {
+		return true
+	}
+	return resolution.AllowedAccounts.Allows(accountID)
+}
+
+func filterSystemCustomAllowedAccounts(ctx context.Context, accounts []Account) []Account {
+	resolution, systemCustom := SystemCustomGroupResolutionFromContext(ctx)
+	if !systemCustom {
+		return accounts
+	}
+	filtered := make([]Account, 0, len(accounts))
+	for i := range accounts {
+		if resolution.AllowedAccounts.Allows(accounts[i].ID) {
+			filtered = append(filtered, accounts[i])
+		}
+	}
+	return filtered
 }
 
 // WithResolvedTargetPlatform stores the concrete provider chosen for a request

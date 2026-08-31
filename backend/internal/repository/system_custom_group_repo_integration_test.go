@@ -66,6 +66,12 @@ func TestSystemCustomGroupRepositoryCreateStoresOrderedSourcesAndOptionalLegacyR
 	require.Equal(t, []string{sourceTwo.Name, sourceOne.Name}, []string{stored.Sources[0].SourceGroup.Name, stored.Sources[1].SourceGroup.Name})
 	require.Len(t, stored.Models, 1)
 	require.Equal(t, "legacy", stored.Models[0].PublicModel)
+
+	runtimeOnly, err := repo.GetRuntime(ctx, container.ID)
+	require.NoError(t, err)
+	require.Equal(t, []int64{sourceTwo.ID, sourceOne.ID}, systemCustomSourceIDs(runtimeOnly.Sources))
+	require.Equal(t, []int{0, 1}, systemCustomSourcePriorities(runtimeOnly.Sources))
+	require.Empty(t, runtimeOnly.Models, "runtime aggregate must not eager-load retained rollback routes")
 }
 
 func TestSystemCustomGroupRepositoryCreateSourceOnlyStoresNoLegacyRoutes(t *testing.T) {
