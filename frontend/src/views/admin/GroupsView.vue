@@ -1575,7 +1575,7 @@
         </div>
 
 
-        <div class="border-t border-gray-200 pt-4 mt-4 dark:border-dark-400">
+        <div data-pricing-coverage-mode="create" class="border-t border-gray-200 pt-4 mt-4 dark:border-dark-400">
           <div class="flex items-start justify-between gap-4">
             <div>
               <h4 class="text-sm font-medium text-gray-700 dark:text-gray-300">{{ t("admin.groups.modelPricing.title") }}</h4>
@@ -1585,12 +1585,32 @@
               <Icon name="plus" size="sm" class="mr-1" />{{ t("admin.groups.modelPricing.add") }}
             </button>
           </div>
+          <div
+            v-if="coverageModelsFor('create').length > 0"
+            data-testid="create-pricing-coverage"
+            :class="[
+              'mt-3 flex flex-wrap items-center gap-2 rounded-lg border px-3 py-2 text-xs',
+              createRequiredPricingModels.length > 0
+                ? 'border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-200'
+                : 'border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-900/60 dark:bg-emerald-950/30 dark:text-emerald-200'
+            ]"
+          >
+            <Icon :name="createRequiredPricingModels.length > 0 ? 'exclamationTriangle' : 'checkCircle'" size="sm" class="flex-none" />
+            <span v-if="createPricingCoverageLoading">{{ t('admin.groups.modelPricing.checking') }}</span>
+            <template v-else-if="createRequiredPricingModels.length > 0">
+              <span class="font-semibold">{{ t('admin.groups.modelPricing.requiredTitle') }}</span>
+              <span>{{ t('admin.groups.modelPricing.requiredSummary', { count: createRequiredPricingModels.length }) }}</span>
+              <span class="max-w-full break-all font-mono">{{ createRequiredPricingModels.join(', ') }}</span>
+            </template>
+            <span v-else>{{ t('admin.groups.modelPricing.ready') }}</span>
+            <span v-if="createPricingCoverageError" class="basis-full text-red-600 dark:text-red-300">{{ createPricingCoverageError }}</span>
+          </div>
           <label class="mt-3 flex items-start gap-2">
             <input v-model="createForm.long_context_pricing_enabled" type="checkbox" class="mt-0.5" />
             <span><span class="block text-sm text-gray-700 dark:text-gray-300">{{ t("admin.groups.modelPricing.longContext") }}</span><span class="block text-xs text-gray-500">{{ t("admin.groups.modelPricing.longContextHint") }}</span></span>
           </label>
           <div class="mt-3 space-y-2">
-            <PricingEntryCard v-for="(entry, index) in createForm.model_pricing" :key="index" :entry="entry" :platform="createForm.platform" hide-token-intervals @update="createForm.model_pricing[index] = $event" @remove="createForm.model_pricing.splice(index, 1)" />
+            <PricingEntryCard v-for="(entry, index) in createForm.model_pricing" :key="index" :entry="entry" :platform="createForm.platform" :required-models="createRequiredPricingModels" hide-token-intervals @update="createForm.model_pricing[index] = $event" @remove="createForm.model_pricing.splice(index, 1)" />
           </div>
         </div>
 
@@ -3332,7 +3352,7 @@
         </div>
 
 
-        <div class="border-t border-gray-200 pt-4 mt-4 dark:border-dark-400">
+        <div data-pricing-coverage-mode="edit" class="border-t border-gray-200 pt-4 mt-4 dark:border-dark-400">
           <div class="flex items-start justify-between gap-4">
             <div>
               <h4 class="text-sm font-medium text-gray-700 dark:text-gray-300">{{ t("admin.groups.modelPricing.title") }}</h4>
@@ -3342,12 +3362,32 @@
               <Icon name="plus" size="sm" class="mr-1" />{{ t("admin.groups.modelPricing.add") }}
             </button>
           </div>
+          <div
+            v-if="coverageModelsFor('edit').length > 0"
+            data-testid="edit-pricing-coverage"
+            :class="[
+              'mt-3 flex flex-wrap items-center gap-2 rounded-lg border px-3 py-2 text-xs',
+              editRequiredPricingModels.length > 0
+                ? 'border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-200'
+                : 'border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-900/60 dark:bg-emerald-950/30 dark:text-emerald-200'
+            ]"
+          >
+            <Icon :name="editRequiredPricingModels.length > 0 ? 'exclamationTriangle' : 'checkCircle'" size="sm" class="flex-none" />
+            <span v-if="editPricingCoverageLoading">{{ t('admin.groups.modelPricing.checking') }}</span>
+            <template v-else-if="editRequiredPricingModels.length > 0">
+              <span class="font-semibold">{{ t('admin.groups.modelPricing.requiredTitle') }}</span>
+              <span>{{ t('admin.groups.modelPricing.requiredSummary', { count: editRequiredPricingModels.length }) }}</span>
+              <span class="max-w-full break-all font-mono">{{ editRequiredPricingModels.join(', ') }}</span>
+            </template>
+            <span v-else>{{ t('admin.groups.modelPricing.ready') }}</span>
+            <span v-if="editPricingCoverageError" class="basis-full text-red-600 dark:text-red-300">{{ editPricingCoverageError }}</span>
+          </div>
           <label class="mt-3 flex items-start gap-2">
             <input v-model="editForm.long_context_pricing_enabled" type="checkbox" class="mt-0.5" />
             <span><span class="block text-sm text-gray-700 dark:text-gray-300">{{ t("admin.groups.modelPricing.longContext") }}</span><span class="block text-xs text-gray-500">{{ t("admin.groups.modelPricing.longContextHint") }}</span></span>
           </label>
           <div class="mt-3 space-y-2">
-            <PricingEntryCard v-for="(entry, index) in editForm.model_pricing" :key="index" :entry="entry" :platform="editForm.platform" hide-token-intervals @update="editForm.model_pricing[index] = $event" @remove="editForm.model_pricing.splice(index, 1)" />
+            <PricingEntryCard v-for="(entry, index) in editForm.model_pricing" :key="index" :entry="entry" :platform="editForm.platform" :required-models="editRequiredPricingModels" hide-token-intervals @update="editForm.model_pricing[index] = $event" @remove="editForm.model_pricing.splice(index, 1)" />
           </div>
         </div>
 
@@ -4520,7 +4560,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted, onUnmounted, watch } from "vue";
+import { ref, reactive, computed, nextTick, onMounted, onUnmounted, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { useAppStore } from "@/stores/app";
 import { useOnboardingStore } from "@/stores/onboarding";
@@ -4533,6 +4573,7 @@ import type {
   CompositeRouteEndpoint,
   CompositeRouteMatchType,
   GroupPlatform,
+  SystemCustomGroup,
   SubscriptionType,
 } from "@/types";
 import {
@@ -4566,6 +4607,7 @@ import {
   toNullableNumber,
 } from "@/components/admin/channel/types";
 import type { ChannelModelPricing } from "@/api/admin/channels";
+import type { GroupPricingCoverageResponse } from "@/api/admin/groups";
 import { VueDraggable } from "vue-draggable-plus";
 import { createStableObjectKeyResolver } from "@/utils/stableObjectKey";
 import { extractApiErrorMessage } from "@/utils/apiError";
@@ -4589,6 +4631,12 @@ import {
 } from "./groupsModelsList";
 import { createModelsListCandidatesTracker } from "./groupsModelsListCandidates";
 import { normalizeSupportedModelScopesForPlatform } from "./groupsSupportedModelScopes";
+import {
+  advertisedModelsForCoverage,
+  appendPendingPricingEntries,
+  isCoverageResolved,
+  requiredPricingModels,
+} from "./groupsModelPricingCoverage";
 import {
   isProfitControlPlatform,
   profitPercentToDecimal,
@@ -5587,6 +5635,138 @@ const editForm = reactive({
   reasoning_effort_mappings: [] as ReasoningEffortMappingRow[],
 });
 
+type PricingCoverageMode = "create" | "edit";
+
+const createPricingCoverage = ref<GroupPricingCoverageResponse | null>(null);
+const editPricingCoverage = ref<GroupPricingCoverageResponse | null>(null);
+const createPricingCoverageLoading = ref(false);
+const editPricingCoverageLoading = ref(false);
+const createPricingCoverageError = ref("");
+const editPricingCoverageError = ref("");
+let createPricingCoverageRequest = 0;
+let editPricingCoverageRequest = 0;
+let createPricingCoverageTimer: ReturnType<typeof setTimeout> | null = null;
+let editPricingCoverageTimer: ReturnType<typeof setTimeout> | null = null;
+
+const setPricingCoverage = (
+  mode: PricingCoverageMode,
+  coverage: GroupPricingCoverageResponse | null,
+) => {
+  if (mode === "create") createPricingCoverage.value = coverage;
+  else editPricingCoverage.value = coverage;
+};
+
+const setPricingCoverageLoading = (mode: PricingCoverageMode, loading: boolean) => {
+  if (mode === "create") createPricingCoverageLoading.value = loading;
+  else editPricingCoverageLoading.value = loading;
+};
+
+const setPricingCoverageError = (mode: PricingCoverageMode, message: string) => {
+  if (mode === "create") createPricingCoverageError.value = message;
+  else editPricingCoverageError.value = message;
+};
+
+const coverageModelsFor = (mode: PricingCoverageMode) =>
+  advertisedModelsForCoverage(
+    mode === "create" ? createModelsListState : editModelsListState,
+  );
+
+const coveragePricingFor = (mode: PricingCoverageMode) => {
+  const form = mode === "create" ? createForm : editForm;
+  return groupPricingToAPI(form.model_pricing, form.platform);
+};
+
+const appendCoveragePricingEntries = (
+  mode: PricingCoverageMode,
+  coverage: GroupPricingCoverageResponse | null,
+) => {
+  const form = mode === "create" ? createForm : editForm;
+  form.model_pricing = appendPendingPricingEntries(
+    form.model_pricing,
+    coverage,
+    (model) => ({ ...emptyGroupPricing(), models: [model] }),
+  );
+};
+
+const currentCoverageRequest = (mode: PricingCoverageMode) =>
+  mode === "create" ? ++createPricingCoverageRequest : ++editPricingCoverageRequest;
+
+const isCurrentCoverageRequest = (mode: PricingCoverageMode, requestID: number) =>
+  mode === "create"
+    ? requestID === createPricingCoverageRequest
+    : requestID === editPricingCoverageRequest;
+
+const refreshPricingCoverage = async (mode: PricingCoverageMode) => {
+  const models = coverageModelsFor(mode);
+  if (models.length === 0) {
+    // Invalidate an in-flight preview before clearing the selected model list.
+    currentCoverageRequest(mode);
+    setPricingCoverage(mode, null);
+    setPricingCoverageError(mode, "");
+    return true;
+  }
+  const requestID = currentCoverageRequest(mode);
+  const form = mode === "create" ? createForm : editForm;
+  setPricingCoverageLoading(mode, true);
+  setPricingCoverageError(mode, "");
+  try {
+    const coverage = await adminAPI.groups.previewPricingCoverage({
+      group_id: mode === "edit" ? editingGroup.value?.id : undefined,
+      platform: form.platform,
+      models,
+      model_pricing: coveragePricingFor(mode),
+    });
+    if (!isCurrentCoverageRequest(mode, requestID)) return false;
+    setPricingCoverage(mode, coverage);
+    appendCoveragePricingEntries(mode, coverage);
+    return isCoverageResolved(models, coverage);
+  } catch (error) {
+    if (isCurrentCoverageRequest(mode, requestID)) {
+      setPricingCoverageError(mode, extractApiErrorMessage(error));
+    }
+    return false;
+  } finally {
+    if (isCurrentCoverageRequest(mode, requestID)) {
+      setPricingCoverageLoading(mode, false);
+    }
+  }
+};
+
+const queuePricingCoverage = (mode: PricingCoverageMode) => {
+  const timer = mode === "create" ? createPricingCoverageTimer : editPricingCoverageTimer;
+  if (timer) clearTimeout(timer);
+  const scheduled = setTimeout(() => {
+    if ((mode === "create" && !showCreateModal.value) || (mode === "edit" && !showEditModal.value)) return;
+    void refreshPricingCoverage(mode);
+  }, 350);
+  if (mode === "create") createPricingCoverageTimer = scheduled;
+  else editPricingCoverageTimer = scheduled;
+};
+
+const focusRequiredPricing = async (mode: PricingCoverageMode) => {
+  await nextTick();
+  document
+    .querySelector<HTMLElement>(
+      `[data-pricing-coverage-mode="${mode}"] [data-testid="pricing-entry-required"]`,
+    )
+    ?.focus();
+};
+
+const ensurePricingCoverage = async (mode: PricingCoverageMode) => {
+  const covered = await refreshPricingCoverage(mode);
+  if (covered) return true;
+  appStore.showError(t("admin.groups.modelPricing.saveBlocked"));
+  await focusRequiredPricing(mode);
+  return false;
+};
+
+const createRequiredPricingModels = computed(() =>
+  requiredPricingModels(createPricingCoverage.value),
+);
+const editRequiredPricingModels = computed(() =>
+  requiredPricingModels(editPricingCoverage.value),
+);
+
 type ImagePricingFormState = {
   platform: GroupPlatform;
   allow_image_generation: boolean;
@@ -5964,6 +6144,8 @@ const handleSort = (key: string, order: 'asc' | 'desc') => {
 };
 
 const openCreateModal = () => {
+  createPricingCoverage.value = null;
+  createPricingCoverageError.value = "";
   showCreateModal.value = true;
   loadModelsListCandidates("create", 0, createForm.platform);
 };
@@ -5976,24 +6158,43 @@ const openSystemCustomGroup = (groupID: number | null) => {
   showSystemCustomDialog.value = true;
 };
 
-const closeSystemCustomGroup = async () => {
+const closeSystemCustomGroup = () => {
   showSystemCustomDialog.value = false;
   systemCustomGroupID.value = null;
-  await loadGroups();
 };
 
-const handleSystemCustomSaved = async () => {
+const handleSystemCustomSaved = (saved: SystemCustomGroup) => {
+  const existingIndex = groups.value.findIndex((group) => group.id === saved.group.id);
+  const nextGroup = {
+    ...(existingIndex >= 0 ? groups.value[existingIndex] : {}),
+    ...saved.group,
+  } as AdminGroup;
+  if (existingIndex >= 0) {
+    groups.value.splice(existingIndex, 1, nextGroup);
+  } else {
+    groups.value.unshift(nextGroup);
+    pagination.total += 1;
+  }
   appStore.showSuccess(t("admin.groups.systemCustom.saved"));
-  await closeSystemCustomGroup();
+  closeSystemCustomGroup();
 };
 
-const handleSystemCustomDeleted = async () => {
+const handleSystemCustomDeleted = (groupID: number) => {
+  const index = groups.value.findIndex((group) => group.id === groupID);
+  if (index >= 0) {
+    groups.value.splice(index, 1);
+    pagination.total = Math.max(0, pagination.total - 1);
+  }
   appStore.showSuccess(t("admin.groups.systemCustom.deleted"));
-  await closeSystemCustomGroup();
+  closeSystemCustomGroup();
 };
 
 const closeCreateModal = () => {
   showCreateModal.value = false;
+  if (createPricingCoverageTimer) clearTimeout(createPricingCoverageTimer);
+  currentCoverageRequest("create");
+  createPricingCoverage.value = null;
+  createPricingCoverageError.value = "";
   createModelRoutingRules.value.forEach((rule) => {
     accountSearchRunner.clearKey(getCreateRuleSearchKey(rule));
   });
@@ -6111,6 +6312,9 @@ const handleCreateGroup = async () => {
     return;
   }
   if (!validateProfitControlForm(createForm)) {
+    return;
+  }
+  if (!(await ensurePricingCoverage("create"))) {
     return;
   }
   submitting.value = true;
@@ -6240,6 +6444,8 @@ const handleCreateGroup = async () => {
 };
 
 const handleEdit = async (group: AdminGroup) => {
+  editPricingCoverage.value = null;
+  editPricingCoverageError.value = "";
   editingGroup.value = group;
   editForm.name = group.name;
   editForm.description = group.description || "";
@@ -6334,9 +6540,14 @@ const handleEdit = async (group: AdminGroup) => {
   );
   loadModelsListCandidates("edit", group.id, group.platform);
   showEditModal.value = true;
+  queuePricingCoverage("edit");
 };
 
 const closeEditModal = () => {
+  if (editPricingCoverageTimer) clearTimeout(editPricingCoverageTimer);
+  currentCoverageRequest("edit");
+  editPricingCoverage.value = null;
+  editPricingCoverageError.value = "";
   editModelRoutingRules.value.forEach((rule) => {
     accountSearchRunner.clearKey(getEditRuleSearchKey(rule));
   });
@@ -6389,6 +6600,9 @@ const handleUpdateGroup = async () => {
     return;
   }
   if (!validateProfitControlForm(editForm)) {
+    return;
+  }
+  if (!(await ensurePricingCoverage("edit"))) {
     return;
   }
 
@@ -6933,6 +7147,30 @@ watch(
       editForm.allow_live = false
     }
   }
+)
+
+watch(
+  [
+    () => createForm.platform,
+    () => createForm.model_pricing,
+    () => createModelsListState.enabled,
+    () => createModelsListState.items,
+    () => createModelsListState.savedModels,
+  ],
+  () => queuePricingCoverage("create"),
+  { deep: true },
+)
+
+watch(
+  [
+    () => editForm.platform,
+    () => editForm.model_pricing,
+    () => editModelsListState.enabled,
+    () => editModelsListState.items,
+    () => editModelsListState.savedModels,
+  ],
+  () => queuePricingCoverage("edit"),
+  { deep: true },
 )
 
 // 点击外部关闭账号搜索下拉框

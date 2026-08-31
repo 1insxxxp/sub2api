@@ -66,6 +66,18 @@ const ordinaryComposite = {
   system_custom_routing_enabled: false
 }
 
+const savedSystemGroup = {
+  group: { ...systemGroup, name: '已更新的月卡' },
+  sources: [],
+  summary: {
+    unique_models: 0,
+    fallback_routes: 0,
+    unavailable_sources: 0,
+    unpriced_routes: 0
+  },
+  models: []
+}
+
 const SystemCustomDialogStub = defineComponent({
   name: 'SystemCustomGroupDialog',
   props: {
@@ -172,7 +184,7 @@ describe('GroupsView system custom rows', () => {
     )
   })
 
-  it('opens the dedicated dialog and refreshes after saved, deleted, and close events', async () => {
+  it('opens the dedicated dialog and updates local rows without reloading the page', async () => {
     const wrapper = mountView()
     await flushPromises()
     expect(list).toHaveBeenCalledTimes(1)
@@ -181,18 +193,20 @@ describe('GroupsView system custom rows', () => {
     const dialog = wrapper.findComponent(SystemCustomDialogStub)
     expect(dialog.props('show')).toBe(true)
     expect(dialog.props('groupId')).toBe(90)
-    dialog.vm.$emit('saved')
+    dialog.vm.$emit('saved', savedSystemGroup)
     await flushPromises()
-    expect(list).toHaveBeenCalledTimes(2)
+    expect(list).toHaveBeenCalledTimes(1)
+    expect(dialog.props('show')).toBe(false)
 
     await wrapper.get('[data-row-id="90"] [data-testid="system-custom-manage"]').trigger('click')
-    dialog.vm.$emit('deleted')
+    dialog.vm.$emit('deleted', 90)
     await flushPromises()
-    expect(list).toHaveBeenCalledTimes(3)
+    expect(list).toHaveBeenCalledTimes(1)
+    expect(wrapper.find('[data-row-id="90"]').exists()).toBe(false)
 
     await wrapper.get('[data-testid="system-custom-create"]').trigger('click')
     dialog.vm.$emit('close')
     await flushPromises()
-    expect(list).toHaveBeenCalledTimes(4)
+    expect(list).toHaveBeenCalledTimes(1)
   })
 })

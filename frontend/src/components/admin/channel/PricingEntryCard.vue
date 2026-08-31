@@ -1,5 +1,5 @@
 <template>
-  <div class="admin-form-section !space-y-0 p-3">
+  <div class="admin-form-section !space-y-0 p-3" tabindex="-1">
     <!-- Collapsed summary header (clickable) -->
     <div
       class="flex cursor-pointer select-none items-center gap-2"
@@ -44,6 +44,13 @@
         >
           {{ billingModeLabel }}
         </span>
+        <span
+          v-if="hasRequiredModel"
+          data-testid="pricing-entry-required"
+          class="flex-shrink-0 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700 dark:bg-amber-900/30 dark:text-amber-200"
+        >
+          {{ t('admin.groups.modelPricing.required') }}
+        </span>
       </div>
 
       <!-- Expanded: show the label "Pricing Entry" or similar -->
@@ -67,6 +74,13 @@
       :class="{ 'collapsible-content--collapsed': collapsed }"
     >
       <div class="collapsible-inner">
+        <div
+          v-if="hasRequiredModel"
+          data-testid="pricing-entry-required"
+          class="mt-3 rounded border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-200"
+        >
+          {{ t('admin.groups.modelPricing.requiredHint', { models: requiredModelNames.join(', ') }) }}
+        </div>
         <!-- Header: Models + Billing Mode -->
         <div class="mt-3 flex items-start gap-2">
           <div class="flex-1">
@@ -264,7 +278,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import Select from '@/components/common/Select.vue'
 import Icon from '@/components/icons/Icon.vue'
@@ -284,10 +298,12 @@ const props = withDefaults(defineProps<{
   hideTokenIntervals?: boolean
   enableTimePricing?: boolean
   enableTierMultipliers?: boolean
+  requiredModels?: string[]
 }>(), {
   hideTokenIntervals: false,
   enableTimePricing: false,
   enableTierMultipliers: false,
+  requiredModels: () => [],
 })
 
 const emit = defineEmits<{
@@ -296,7 +312,18 @@ const emit = defineEmits<{
 }>()
 
 // Collapse state: entries with existing models default to collapsed
-const collapsed = ref(props.entry.models.length > 0)
+const normalizedRequiredModels = computed(() =>
+  new Set(props.requiredModels.map((model) => model.trim().toLowerCase()).filter(Boolean))
+)
+const requiredModelNames = computed(() =>
+  props.entry.models.filter((model) => normalizedRequiredModels.value.has(model.trim().toLowerCase()))
+)
+const hasRequiredModel = computed(() => requiredModelNames.value.length > 0)
+const collapsed = ref(props.entry.models.length > 0 && !hasRequiredModel.value)
+
+watch(hasRequiredModel, (required) => {
+  if (required) collapsed.value = false
+})
 
 const billingModeOptions = computed(() => [
   { value: 'token', label: t('admin.channels.billingMode.token') },

@@ -742,7 +742,10 @@ export interface CreateSystemCustomGroupRequest {
   weekly_limit_usd: number | null
   monthly_limit_usd: number | null
   default_validity_days: number
-  models: SystemCustomGroupModelInput[]
+  /** Ordered source groups. Models are resolved from these groups at request time. */
+  source_group_ids: number[]
+  /** Legacy route snapshots are accepted by the API during migration only. */
+  models?: SystemCustomGroupModelInput[]
 }
 
 export type UpdateSystemCustomGroupRequest = CreateSystemCustomGroupRequest
@@ -782,8 +785,27 @@ export interface SystemCustomGroupModel extends SystemCustomGroupModelInput {
   updated_at: string
 }
 
+export interface SystemCustomGroupSourceReference {
+  id: number
+  group_id: number
+  source_group_id: number
+  priority: number
+  group?: SystemCustomGroupSource
+  created_at: string
+  updated_at: string
+}
+
+export interface SystemCustomGroupSummary {
+  unique_models: number
+  fallback_routes: number
+  unavailable_sources: number
+  unpriced_routes: number
+}
+
 export interface SystemCustomGroup {
   group: SystemCustomGroupContainer
+  sources: SystemCustomGroupSourceReference[]
+  summary: SystemCustomGroupSummary
   models: SystemCustomGroupModel[]
 }
 

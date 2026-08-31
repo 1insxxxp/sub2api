@@ -4,6 +4,7 @@
  */
 
 import { apiClient } from '../client'
+import type { ChannelModelPricing } from './channels'
 import type {
   AdminGroup,
   GroupPlatform,
@@ -25,6 +26,28 @@ import type {
 export interface LiveCapability {
   supported: boolean
   reason?: string
+}
+
+export type GroupPricingCoverageStatus = 'priced' | 'missing' | 'invalid'
+
+export interface GroupPricingCoverageModel {
+  model: string
+  status: GroupPricingCoverageStatus
+  source?: string
+  billing_mode?: string
+  reason?: string
+  required_fields?: string[]
+}
+
+export interface GroupPricingCoverageRequest {
+  group_id?: number
+  platform: string
+  models: string[]
+  model_pricing?: ChannelModelPricing[]
+}
+
+export interface GroupPricingCoverageResponse {
+  models: GroupPricingCoverageModel[]
 }
 
 /**
@@ -125,6 +148,17 @@ export async function getModelsListCandidates(
   return data.models || []
 }
 
+/** Preview effective pricing for models before publishing a group configuration. */
+export async function previewPricingCoverage(
+  request: GroupPricingCoverageRequest
+): Promise<GroupPricingCoverageResponse> {
+  const { data } = await apiClient.post<GroupPricingCoverageResponse>(
+    '/admin/groups/pricing-coverage',
+    request
+  )
+  return data
+}
+
 /** List direct source groups and their live model candidates. */
 export async function getSystemCustomGroupCandidates(): Promise<SystemCustomGroupCandidate[]> {
   const { data } = await apiClient.get<SystemCustomGroupCandidate[]>(
@@ -141,13 +175,13 @@ export async function createSystemCustomGroup(
   return data
 }
 
-/** Load a system custom group and its complete route snapshot. */
+/** Load a system custom group, ordered source groups, and its live catalog summary. */
 export async function getSystemCustomGroup(id: number): Promise<SystemCustomGroup> {
   const { data } = await apiClient.get<SystemCustomGroup>(`/admin/system-custom-groups/${id}`)
   return data
 }
 
-/** Replace a system custom group's configuration and complete route snapshot. */
+/** Replace a system custom group's configuration and ordered source groups. */
 export async function updateSystemCustomGroup(
   id: number,
   request: UpdateSystemCustomGroupRequest
@@ -538,6 +572,7 @@ export const groupsAPI = {
   getLiveCapability,
   getById,
   getModelsListCandidates,
+  previewPricingCoverage,
   getSystemCustomGroupCandidates,
   createSystemCustomGroup,
   getSystemCustomGroup,
