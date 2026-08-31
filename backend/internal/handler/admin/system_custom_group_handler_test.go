@@ -297,9 +297,9 @@ func TestSystemCustomGroupHandlerCreateGetUpdateExposeSourceBasedAggregate(t *te
 			require.Equal(t, int64(42), data.Group.ID)
 			require.Len(t, data.Sources, 4)
 			require.Equal(t, []int{0, 1, 2, 3}, []int{data.Sources[0].Priority, data.Sources[1].Priority, data.Sources[2].Priority, data.Sources[3].Priority})
+			require.Equal(t, []int64{9, 7, 12, 15}, []int64{data.Sources[0].SourceGroupID, data.Sources[1].SourceGroupID, data.Sources[2].SourceGroupID, data.Sources[3].SourceGroupID})
 			require.Equal(t, int64(201), data.Sources[0].ID)
 			require.Equal(t, int64(42), data.Sources[0].GroupID)
-			require.Equal(t, int64(9), data.Sources[0].SourceGroupID)
 			require.Equal(t, createdAt, data.Sources[0].CreatedAt)
 			require.Equal(t, updatedAt, data.Sources[0].UpdatedAt)
 			require.Equal(t, &struct {
