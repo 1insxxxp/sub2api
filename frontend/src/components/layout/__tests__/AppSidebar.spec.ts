@@ -8,6 +8,10 @@ const componentPath = resolve(dirname(fileURLToPath(import.meta.url)), '../AppSi
 const componentSource = readFileSync(componentPath, 'utf8')
 const stylePath = resolve(dirname(fileURLToPath(import.meta.url)), '../../../style.css')
 const styleSource = readFileSync(stylePath, 'utf8')
+const zhCommonPath = resolve(dirname(fileURLToPath(import.meta.url)), '../../../i18n/locales/zh/common.ts')
+const zhCommonSource = readFileSync(zhCommonPath, 'utf8')
+const enCommonPath = resolve(dirname(fileURLToPath(import.meta.url)), '../../../i18n/locales/en/common.ts')
+const enCommonSource = readFileSync(enCommonPath, 'utf8')
 
 describe('AppSidebar custom SVG styles', () => {
   it('does not override uploaded SVG fill or stroke colors', () => {
@@ -103,6 +107,22 @@ describe('AppSidebar admin entries', () => {
 
     expect(buildSelfNav).not.toContain("path: '/manager'")
     expect(adminNav).not.toContain("path: '/manager'")
+  })
+
+  it('distinguishes management destinations from the matching personal pages', () => {
+    expect(componentSource).toContain("path: '/admin/usage', label: t('nav.adminUsage')")
+    expect(componentSource).toContain("path: '/admin/lottery', label: t('nav.lotteryManagement')")
+    expect(componentSource).toContain("path: '/admin/affiliates',\n      label: t('nav.affiliateManagement')")
+    expect(componentSource).toContain("path: '/admin/orders', label: t('nav.orderList')")
+
+    expect(zhCommonSource).toContain("adminUsage: '全站用量'")
+    expect(zhCommonSource).toContain("lotteryManagement: '抽奖管理'")
+    expect(zhCommonSource).toContain("affiliateManagement: '邀请管理'")
+    expect(zhCommonSource).toContain("orderList: '订单列表'")
+    expect(enCommonSource).toContain("adminUsage: 'Global Usage'")
+    expect(enCommonSource).toContain("lotteryManagement: 'Lottery Management'")
+    expect(enCommonSource).toContain("affiliateManagement: 'Affiliate Management'")
+    expect(enCommonSource).toContain("orderList: 'Order List'")
   })
 })
 

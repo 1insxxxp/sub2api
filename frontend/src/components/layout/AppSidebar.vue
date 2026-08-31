@@ -873,7 +873,7 @@ const adminNavItems = computed((): NavItem[] => {
     { path: '/admin/redeem', label: t('nav.redeemCodes'), icon: TicketIcon, hideInSimpleMode: true },
     { path: '/admin/promo-codes', label: t('nav.promoCodes'), icon: GiftIcon, hideInSimpleMode: true },
     { path: '/admin/checkins', label: t('nav.checkins'), icon: GiftIcon, hideInSimpleMode: true },
-    { path: '/admin/lottery', label: t('nav.lottery'), icon: GiftIcon, hideInSimpleMode: true },
+    { path: '/admin/lottery', label: t('nav.lotteryManagement'), icon: GiftIcon, hideInSimpleMode: true },
     {
       path: '/admin/affiliates',
       label: t('nav.affiliateManagement'),
@@ -897,11 +897,11 @@ const adminNavItems = computed((): NavItem[] => {
       featureFlag: flagAdminPayment,
       children: [
         { path: '/admin/orders/dashboard', label: t('nav.paymentDashboard'), icon: ChartIcon },
-        { path: '/admin/orders', label: t('nav.orderManagement'), icon: OrderIcon },
+        { path: '/admin/orders', label: t('nav.orderList'), icon: OrderIcon },
         { path: '/admin/orders/plans', label: t('nav.paymentPlans'), icon: CreditCardIcon },
       ],
     },
-    { path: '/admin/usage', label: t('nav.usage'), icon: ChartIcon },
+    { path: '/admin/usage', label: t('nav.adminUsage'), icon: ChartIcon },
     { path: '/admin/audit-logs', label: t('nav.auditLogs'), icon: ShieldIcon, hideInSimpleMode: true }
   ]
 
