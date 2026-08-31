@@ -158,6 +158,9 @@ func matchGroupModelPricing(group *Group, model string) *ChannelModelPricing {
 	var wildcard *ChannelModelPricing
 	for i := range group.ModelPricing {
 		entry := &group.ModelPricing[i]
+		if strings.TrimSpace(entry.Platform) != "" && !isPlatformPricingMatch(group.Platform, entry.Platform) {
+			continue
+		}
 		for _, pattern := range entry.Models {
 			normalized := normalizeChannelPricingModelName(pattern)
 			if normalized == model {

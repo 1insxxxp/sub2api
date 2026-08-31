@@ -2,8 +2,11 @@ package service
 
 import (
 	"context"
+	"reflect"
 	"strings"
+	"time"
 
+	"github.com/Wei-Shaw/sub2api/internal/pkg/ctxkey"
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
 )
 
@@ -46,6 +49,9 @@ func NewGroupPricingCoverageService(resolver *ModelPricingResolver) *GroupPricin
 
 func (s *GroupPricingCoverageService) Preview(ctx context.Context, input GroupPricingCoverageInput) GroupPricingCoverageResult {
 	group := prospectivePricingGroup(input)
+	if strings.TrimSpace(group.Platform) != "" {
+		ctx = context.WithValue(ctx, ctxkey.ForcePlatform, group.Platform)
+	}
 	invalid := invalidProspectivePricingByModel(group.Platform, group.ModelPricing)
 	models := normalizedUniquePricingModels(input.Models)
 	result := GroupPricingCoverageResult{Models: make([]GroupPricingCoverageModel, 0, len(models))}
@@ -124,7 +130,8 @@ func (s *GroupPricingCoverageService) ValidatePublishedPricing(ctx context.Conte
 			continue
 		}
 		_, existed := previousModels[model.Model]
-		if existed && previousStatus[model.Model] != PricingCoveragePriced {
+		if existed && previousStatus[model.Model] != PricingCoveragePriced &&
+			groupPricingForModelUnchanged(previous, prospective, model.Model) {
 			continue
 		}
 		failed = append(failed, model.Model)
@@ -140,6 +147,44 @@ func (s *GroupPricingCoverageService) ValidatePublishedPricing(ctx context.Conte
 		"models":  strings.Join(failed, ","),
 		"reasons": strings.Join(reasons, ","),
 	})
+}
+
+func groupPricingForModelUnchanged(previous, prospective *Group, model string) bool {
+	if previous == nil || prospective == nil ||
+		NormalizeGroupPlatform(previous.Platform) != NormalizeGroupPlatform(prospective.Platform) {
+		return false
+	}
+	return reflect.DeepEqual(
+		canonicalGroupPricingEntry(matchGroupModelPricing(previous, model), previous.Platform),
+		canonicalGroupPricingEntry(matchGroupModelPricing(prospective, model), prospective.Platform),
+	)
+}
+
+func canonicalGroupPricingEntry(entry *ChannelModelPricing, platform string) *ChannelModelPricing {
+	if entry == nil {
+		return nil
+	}
+	copy := entry.Clone()
+	copy.ID = 0
+	copy.ChannelID = 0
+	copy.CreatedAt = time.Time{}
+	copy.UpdatedAt = time.Time{}
+	if strings.TrimSpace(copy.Platform) == "" {
+		copy.Platform = platform
+	}
+	if copy.BillingMode == "" {
+		copy.BillingMode = BillingModeToken
+	}
+	for i := range copy.Models {
+		copy.Models[i] = strings.TrimSpace(copy.Models[i])
+	}
+	for i := range copy.Intervals {
+		copy.Intervals[i].ID = 0
+		copy.Intervals[i].PricingID = 0
+		copy.Intervals[i].CreatedAt = time.Time{}
+		copy.Intervals[i].UpdatedAt = time.Time{}
+	}
+	return &copy
 }
 
 func pricingCoverageGroupID(group *Group) *int64 {

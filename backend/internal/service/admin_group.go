@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"reflect"
 	"strconv"
 	"strings"
 	"time"
@@ -700,7 +701,7 @@ func (s *adminServiceImpl) UpdateGroup(ctx context.Context, id int64, input *Upd
 		group.LongContextPricingEnabled = *input.LongContextPricingEnabled
 	}
 	if input.ModelPricing != nil {
-		modelPricing, normalizeErr := normalizeGroupModelPricing(group.Platform, *input.ModelPricing)
+		modelPricing, normalizeErr := normalizeUpdateGroupModelPricing(group.Platform, *input.ModelPricing, group.ModelPricing)
 		if normalizeErr != nil {
 			return nil, normalizeErr
 		}
@@ -1046,6 +1047,50 @@ func normalizeGroupModelPricing(platform string, pricing []ChannelModelPricing) 
 		return nil, err
 	}
 	return out, nil
+}
+
+func normalizeUpdateGroupModelPricing(platform string, pricing, existing []ChannelModelPricing) ([]ChannelModelPricing, error) {
+	normalized, err := normalizeGroupModelPricing(platform, pricing)
+	if err == nil {
+		return normalized, nil
+	}
+	if groupModelPricingEntriesEquivalent(platform, pricing, existing) {
+		return cloneChannelModelPricing(existing), nil
+	}
+	return nil, err
+}
+
+func groupModelPricingEntriesEquivalent(platform string, left, right []ChannelModelPricing) bool {
+	return reflect.DeepEqual(
+		canonicalGroupPricingEntries(platform, left),
+		canonicalGroupPricingEntries(platform, right),
+	)
+}
+
+func canonicalGroupPricingEntries(platform string, pricing []ChannelModelPricing) []ChannelModelPricing {
+	canonical := cloneChannelModelPricing(pricing)
+	for i := range canonical {
+		canonical[i].ID = 0
+		canonical[i].ChannelID = 0
+		canonical[i].CreatedAt = time.Time{}
+		canonical[i].UpdatedAt = time.Time{}
+		if strings.TrimSpace(canonical[i].Platform) == "" {
+			canonical[i].Platform = platform
+		}
+		if canonical[i].BillingMode == "" {
+			canonical[i].BillingMode = BillingModeToken
+		}
+		for j := range canonical[i].Models {
+			canonical[i].Models[j] = strings.TrimSpace(canonical[i].Models[j])
+		}
+		for j := range canonical[i].Intervals {
+			canonical[i].Intervals[j].ID = 0
+			canonical[i].Intervals[j].PricingID = 0
+			canonical[i].Intervals[j].CreatedAt = time.Time{}
+			canonical[i].Intervals[j].UpdatedAt = time.Time{}
+		}
+	}
+	return canonical
 }
 
 func (s *adminServiceImpl) DeleteGroup(ctx context.Context, id int64) error {

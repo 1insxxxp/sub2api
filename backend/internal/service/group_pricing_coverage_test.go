@@ -68,6 +68,37 @@ func TestGroupPricingCoverageUsesExistingChannelPricing(t *testing.T) {
 	require.Equal(t, BillingModePerRequest, result.Models[0].BillingMode)
 }
 
+func TestGroupPricingCoverageUsesProspectivePlatformForChannelPricing(t *testing.T) {
+	groupID := int64(78)
+	channel := Channel{
+		ID:     1,
+		Status: StatusActive,
+		ModelPricing: []ChannelModelPricing{{
+			Platform:        PlatformGemini,
+			Models:          []string{"platform-sensitive-model"},
+			BillingMode:     BillingModePerRequest,
+			PerRequestPrice: coveragePrice(0.04),
+		}},
+		GroupIDs: []int64{groupID},
+	}
+	channelService := &ChannelService{}
+	channelService.cache.Store(populateChannelCache([]Channel{channel}, map[int64]string{groupID: PlatformGemini}))
+	billingService := NewBillingService(&config.Config{}, &PricingService{pricingData: map[string]*LiteLLMModelPricing{}})
+	svc := NewGroupPricingCoverageService(NewModelPricingResolver(channelService, billingService))
+
+	result := svc.Preview(context.Background(), GroupPricingCoverageInput{
+		GroupID:  &groupID,
+		Platform: PlatformOpenAI,
+		Models:   []string{"platform-sensitive-model"},
+		ProspectiveGroup: &Group{
+			ID: groupID, Platform: PlatformOpenAI,
+		},
+	})
+
+	require.Len(t, result.Models, 1)
+	require.Equal(t, PricingCoverageMissing, result.Models[0].Status)
+}
+
 func TestGroupPricingCoverageDistinguishesLiteLLMAndFallbackSources(t *testing.T) {
 	svc := newGroupPricingCoverageTestService(map[string]*LiteLLMModelPricing{
 		"catalog-only-model": {

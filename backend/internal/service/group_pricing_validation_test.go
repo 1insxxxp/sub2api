@@ -95,6 +95,48 @@ func TestAdminServiceUpdateGroupAllowsHistoricalInvalidPricingOnUnrelatedEdit(t 
 	require.NotNil(t, repo.updated)
 }
 
+func TestAdminServiceUpdateGroupAllowsUnchangedHistoricalIllegalPricingFromFullForm(t *testing.T) {
+	description := "edited"
+	existing := &Group{
+		ID: 9, Name: "source", Platform: PlatformGemini, RateMultiplier: 1, Status: StatusActive,
+		ModelsListConfig: GroupModelsListConfig{Enabled: true, Models: []string{"legacy-negative-model"}},
+		ModelPricing: []ChannelModelPricing{{
+			Platform: PlatformGemini, Models: []string{"legacy-negative-model"}, BillingMode: BillingModeToken,
+			InputPrice: coveragePrice(-1e-6),
+		}},
+	}
+	repo := &groupRepoStubForAdmin{getByID: existing}
+	svc := newGroupPricingValidationService(repo)
+	fullFormPricing := []ChannelModelPricing{existing.ModelPricing[0].Clone()}
+
+	group, err := svc.UpdateGroup(context.Background(), existing.ID, &UpdateGroupInput{
+		Description:  &description,
+		ModelPricing: &fullFormPricing,
+	})
+
+	require.NoError(t, err)
+	require.Equal(t, description, group.Description)
+	require.NotNil(t, repo.updated)
+}
+
+func TestAdminServiceUpdateGroupRejectsChangedHistoricalMissingPricing(t *testing.T) {
+	existing := &Group{
+		ID: 9, Name: "source", Platform: PlatformGemini, RateMultiplier: 1, Status: StatusActive,
+		ModelsListConfig: GroupModelsListConfig{Enabled: true, Models: []string{"legacy-missing-model"}},
+	}
+	repo := &groupRepoStubForAdmin{getByID: existing}
+	svc := newGroupPricingValidationService(repo)
+	changedButStillInvalid := []ChannelModelPricing{{
+		Platform: PlatformGemini, Models: []string{"legacy-missing-model"}, BillingMode: BillingModeToken,
+	}}
+
+	_, err := svc.UpdateGroup(context.Background(), existing.ID, &UpdateGroupInput{ModelPricing: &changedButStillInvalid})
+
+	require.Error(t, err)
+	require.Equal(t, "GROUP_MODEL_PRICING_REQUIRED", infraerrors.Reason(err))
+	require.Nil(t, repo.updated)
+}
+
 func TestAdminServiceUpdateGroupRejectsOnlyNewMissingModel(t *testing.T) {
 	existing := &Group{
 		ID:               9,
