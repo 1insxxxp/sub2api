@@ -14,15 +14,17 @@ import (
 
 type systemCustomGroupRepositoryStub struct {
 	SystemCustomGroupRepository
-	createdGroup  *Group
-	createdModels []SystemCustomGroupModelInput
-	updatedGroup  *Group
-	updatedModels []SystemCustomGroupModelInput
-	updateErr     error
-	stored        *SystemCustomGroup
-	deletedID     int64
-	deleteErr     error
-	deleteImpact  *SystemCustomGroupDeleteImpact
+	createdGroup          *Group
+	createdSourceGroupIDs []int64
+	createdModels         []SystemCustomGroupModelInput
+	updatedGroup          *Group
+	updatedSourceGroupIDs []int64
+	updatedModels         []SystemCustomGroupModelInput
+	updateErr             error
+	stored                *SystemCustomGroup
+	deletedID             int64
+	deleteErr             error
+	deleteImpact          *SystemCustomGroupDeleteImpact
 }
 
 func (s *systemCustomGroupRepositoryStub) Delete(_ context.Context, groupID int64) error {
@@ -35,25 +37,27 @@ func (s *systemCustomGroupRepositoryStub) DeleteWithImpact(_ context.Context, gr
 	return s.deleteImpact, s.deleteErr
 }
 
-func (s *systemCustomGroupRepositoryStub) Update(_ context.Context, group *Group, models []SystemCustomGroupModelInput) error {
+func (s *systemCustomGroupRepositoryStub) Update(_ context.Context, group *Group, sourceGroupIDs []int64, models []SystemCustomGroupModelInput) error {
 	if s.updateErr != nil {
 		return s.updateErr
 	}
 	copy := *group
 	s.updatedGroup = &copy
+	s.updatedSourceGroupIDs = append([]int64(nil), sourceGroupIDs...)
 	s.updatedModels = append([]SystemCustomGroupModelInput(nil), models...)
-	s.stored = &SystemCustomGroup{Group: copy, Models: make([]SystemCustomGroupModel, 0, len(models))}
-	for i, model := range models {
-		s.stored.Models = append(s.stored.Models, SystemCustomGroupModel{
-			ID: int64(i + 1), GroupID: group.ID, PublicModel: model.PublicModel,
-			SourceGroupID: model.SourceGroupID, SourceModel: model.SourceModel, Enabled: model.Enabled,
+	s.stored.Group = copy
+	s.stored.Sources = make([]SystemCustomGroupSource, 0, len(sourceGroupIDs))
+	for i, sourceGroupID := range sourceGroupIDs {
+		s.stored.Sources = append(s.stored.Sources, SystemCustomGroupSource{
+			ID: int64(i + 1), GroupID: group.ID, SourceGroupID: sourceGroupID, Priority: i,
 		})
 	}
 	return nil
 }
 
-func (s *systemCustomGroupRepositoryStub) Create(_ context.Context, group *Group, models []SystemCustomGroupModelInput) error {
+func (s *systemCustomGroupRepositoryStub) Create(_ context.Context, group *Group, sourceGroupIDs []int64, models []SystemCustomGroupModelInput) error {
 	s.createdGroup = group
+	s.createdSourceGroupIDs = append([]int64(nil), sourceGroupIDs...)
 	s.createdModels = append([]SystemCustomGroupModelInput(nil), models...)
 	group.ID = 99
 	return nil
@@ -174,6 +178,160 @@ func TestCreateSystemCustomGroupNormalizesContainer(t *testing.T) {
 	require.True(t, repo.createdGroup.IsSystemCustomRouteGroup())
 	require.Equal(t, "tavern-sonnet", repo.createdModels[0].PublicModel)
 	require.Equal(t, "claude-sonnet-4", repo.createdModels[0].SourceModel)
+	require.Equal(t, []int64{10}, repo.createdSourceGroupIDs)
+}
+
+func TestCreateSystemCustomGroupDerivesOrderedDistinctSourcesFromLegacyModels(t *testing.T) {
+	repo := &systemCustomGroupRepositoryStub{}
+	svc := NewSystemCustomGroupService(
+		repo,
+		systemCustomSourceGroupRepositoryStub{groups: map[int64]*Group{
+			10: activeDirectSystemCustomSource(10, PlatformAnthropic),
+			20: activeDirectSystemCustomSource(20, PlatformAnthropic),
+		}},
+		systemCustomModelCatalogStub{models: map[int64][]string{10: {"a", "c"}, 20: {"b"}}},
+	)
+
+	_, err := svc.Create(context.Background(), CreateSystemCustomGroupRequest{
+		Name: "legacy", DefaultValidityDays: 30,
+		Models: []SystemCustomGroupModelInput{
+			{PublicModel: "a", SourceGroupID: 10, SourceModel: "a", Enabled: true},
+			{PublicModel: "b", SourceGroupID: 20, SourceModel: "b", Enabled: true},
+			{PublicModel: "c", SourceGroupID: 10, SourceModel: "c", Enabled: true},
+		},
+	})
+
+	require.NoError(t, err)
+	require.Equal(t, []int64{10, 20}, repo.createdSourceGroupIDs)
+	require.Len(t, repo.createdModels, 3, "legacy create retains its rollback route snapshot")
+}
+
+func TestCreateSystemCustomGroupExplicitSourcesAreAuthoritativeAndOrdered(t *testing.T) {
+	repo := &systemCustomGroupRepositoryStub{}
+	svc := NewSystemCustomGroupService(
+		repo,
+		systemCustomSourceGroupRepositoryStub{groups: map[int64]*Group{
+			10: activeDirectSystemCustomSource(10, PlatformAnthropic),
+			20: activeDirectSystemCustomSource(20, PlatformGemini),
+		}},
+		systemCustomModelCatalogStub{},
+	)
+
+	_, err := svc.Create(context.Background(), CreateSystemCustomGroupRequest{
+		Name: "dynamic", DefaultValidityDays: 30,
+		SourceGroupIDs: []int64{20, 10},
+		Models: []SystemCustomGroupModelInput{
+			{PublicModel: "ignored", SourceGroupID: 999, SourceModel: "missing", Enabled: true},
+		},
+	})
+
+	require.NoError(t, err)
+	require.Equal(t, []int64{20, 10}, repo.createdSourceGroupIDs)
+	require.Empty(t, repo.createdModels, "explicit sources must not persist an unvalidated legacy snapshot")
+}
+
+func TestUpdateSystemCustomGroupExplicitSourcesReplaceSelectionAndPreserveLegacyModels(t *testing.T) {
+	legacyModel := SystemCustomGroupModel{
+		ID: 7, GroupID: 99, PublicModel: "legacy", SourceGroupID: 10, SourceModel: "legacy", Enabled: true,
+	}
+	repo := &systemCustomGroupRepositoryStub{stored: &SystemCustomGroup{
+		Group: Group{
+			ID: 99, Name: "existing", Platform: PlatformComposite,
+			SubscriptionType: SubscriptionTypeSubscription, SystemCustomRoutingEnabled: true,
+			IsExclusive: true, RateMultiplier: 1, Status: StatusActive,
+		},
+		Models: []SystemCustomGroupModel{legacyModel},
+	}}
+	svc := NewSystemCustomGroupService(
+		repo,
+		systemCustomSourceGroupRepositoryStub{groups: map[int64]*Group{
+			10: activeDirectSystemCustomSource(10, PlatformAnthropic),
+			20: activeDirectSystemCustomSource(20, PlatformGemini),
+		}},
+		systemCustomModelCatalogStub{},
+	)
+
+	updated, err := svc.Update(context.Background(), 99, UpdateSystemCustomGroupRequest{
+		Name: "existing", DefaultValidityDays: 30, SourceGroupIDs: []int64{20, 10},
+		Models: []SystemCustomGroupModelInput{
+			{PublicModel: "ignored", SourceGroupID: 999, SourceModel: "missing", Enabled: true},
+		},
+	})
+
+	require.NoError(t, err)
+	require.Equal(t, []int64{20, 10}, repo.updatedSourceGroupIDs)
+	require.Empty(t, repo.updatedModels)
+	require.Equal(t, []SystemCustomGroupModel{legacyModel}, updated.Models)
+}
+
+func TestCreateSystemCustomGroupRejectsInvalidSourceSelections(t *testing.T) {
+	active := activeDirectSystemCustomSource(10, PlatformAnthropic)
+	inactive := activeDirectSystemCustomSource(20, PlatformAnthropic)
+	inactive.Status = StatusDisabled
+	nested := activeDirectSystemCustomSource(30, PlatformComposite)
+	nested.SystemCustomRoutingEnabled = true
+
+	tests := []struct {
+		name      string
+		groupID   int64
+		sourceIDs []int64
+		groups    map[int64]*Group
+		wantErr   error
+	}{
+		{name: "empty", sourceIDs: nil, groups: map[int64]*Group{10: active}, wantErr: ErrSystemCustomGroupInvalidRoute},
+		{name: "non positive", sourceIDs: []int64{0}, groups: map[int64]*Group{10: active}, wantErr: ErrSystemCustomGroupInvalidSourceGroup},
+		{name: "duplicate", sourceIDs: []int64{10, 10}, groups: map[int64]*Group{10: active}, wantErr: ErrSystemCustomGroupInvalidSourceGroup},
+		{name: "self", groupID: 10, sourceIDs: []int64{10}, groups: map[int64]*Group{10: active}, wantErr: ErrSystemCustomGroupSelfReference},
+		{name: "deleted or missing", sourceIDs: []int64{40}, groups: map[int64]*Group{10: active}, wantErr: ErrSystemCustomGroupInvalidSourceGroup},
+		{name: "inactive", sourceIDs: []int64{20}, groups: map[int64]*Group{20: inactive}, wantErr: ErrSystemCustomGroupInvalidSourceGroup},
+		{name: "nested", sourceIDs: []int64{30}, groups: map[int64]*Group{30: nested}, wantErr: ErrSystemCustomGroupInvalidSourceGroup},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			svc := NewSystemCustomGroupService(
+				&systemCustomGroupRepositoryStub{stored: &SystemCustomGroup{Group: Group{
+					ID: tt.groupID, Name: "existing", Platform: PlatformComposite,
+					SubscriptionType: SubscriptionTypeSubscription, SystemCustomRoutingEnabled: true,
+					IsExclusive: true, RateMultiplier: 1, Status: StatusActive,
+				}}},
+				systemCustomSourceGroupRepositoryStub{groups: tt.groups},
+				systemCustomModelCatalogStub{},
+			)
+			var err error
+			if tt.groupID == 0 {
+				_, err = svc.Create(context.Background(), CreateSystemCustomGroupRequest{
+					Name: "invalid", DefaultValidityDays: 30, SourceGroupIDs: tt.sourceIDs,
+				})
+			} else {
+				_, err = svc.Update(context.Background(), tt.groupID, UpdateSystemCustomGroupRequest{
+					Name: "existing", DefaultValidityDays: 30, SourceGroupIDs: tt.sourceIDs,
+				})
+			}
+			require.ErrorIs(t, err, tt.wantErr)
+		})
+	}
+}
+
+func TestCreateSystemCustomGroupRejectsTooManySources(t *testing.T) {
+	groups := make(map[int64]*Group, MaxSystemCustomGroupSources+1)
+	sourceIDs := make([]int64, 0, MaxSystemCustomGroupSources+1)
+	for i := 1; i <= MaxSystemCustomGroupSources+1; i++ {
+		id := int64(i)
+		groups[id] = activeDirectSystemCustomSource(id, PlatformAnthropic)
+		sourceIDs = append(sourceIDs, id)
+	}
+	svc := NewSystemCustomGroupService(
+		&systemCustomGroupRepositoryStub{},
+		systemCustomSourceGroupRepositoryStub{groups: groups},
+		systemCustomModelCatalogStub{},
+	)
+
+	_, err := svc.Create(context.Background(), CreateSystemCustomGroupRequest{
+		Name: "too-many", DefaultValidityDays: 30, SourceGroupIDs: sourceIDs,
+	})
+
+	require.ErrorIs(t, err, ErrSystemCustomGroupInvalidRoute)
 }
 
 func TestUpdateSystemCustomGroupNormalizesContainer(t *testing.T) {

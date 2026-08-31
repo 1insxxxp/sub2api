@@ -9,7 +9,10 @@ import (
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
 )
 
-const MaxSystemCustomGroupModels = 200
+const (
+	MaxSystemCustomGroupModels  = 200
+	MaxSystemCustomGroupSources = 50
+)
 
 var (
 	ErrSystemCustomGroupNotFound             = infraerrors.NotFound("SYSTEM_CUSTOM_GROUP_NOT_FOUND", "system custom group not found")
@@ -85,7 +88,8 @@ type CreateSystemCustomGroupRequest struct {
 	WeeklyLimitUSD      *float64                      `json:"weekly_limit_usd"`
 	MonthlyLimitUSD     *float64                      `json:"monthly_limit_usd"`
 	DefaultValidityDays int                           `json:"default_validity_days"`
-	Models              []SystemCustomGroupModelInput `json:"models"`
+	SourceGroupIDs      []int64                       `json:"source_group_ids"`
+	Models              []SystemCustomGroupModelInput `json:"models,omitempty"`
 }
 
 type UpdateSystemCustomGroupRequest struct {
@@ -95,7 +99,18 @@ type UpdateSystemCustomGroupRequest struct {
 	WeeklyLimitUSD      *float64                      `json:"weekly_limit_usd"`
 	MonthlyLimitUSD     *float64                      `json:"monthly_limit_usd"`
 	DefaultValidityDays int                           `json:"default_validity_days"`
-	Models              []SystemCustomGroupModelInput `json:"models"`
+	SourceGroupIDs      []int64                       `json:"source_group_ids"`
+	Models              []SystemCustomGroupModelInput `json:"models,omitempty"`
+}
+
+type SystemCustomGroupSource struct {
+	ID            int64     `json:"id"`
+	GroupID       int64     `json:"group_id"`
+	SourceGroupID int64     `json:"source_group_id"`
+	Priority      int       `json:"priority"`
+	SourceGroup   *Group    `json:"source_group,omitempty"`
+	CreatedAt     time.Time `json:"created_at"`
+	UpdatedAt     time.Time `json:"updated_at"`
 }
 
 type SystemCustomGroupModel struct {
@@ -111,8 +126,9 @@ type SystemCustomGroupModel struct {
 }
 
 type SystemCustomGroup struct {
-	Group  Group                    `json:"group"`
-	Models []SystemCustomGroupModel `json:"models"`
+	Group   Group                     `json:"group"`
+	Sources []SystemCustomGroupSource `json:"sources"`
+	Models  []SystemCustomGroupModel  `json:"models"`
 }
 
 type SystemCustomGroupCandidate struct {

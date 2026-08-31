@@ -13,8 +13,8 @@ import (
 )
 
 type SystemCustomGroupRepository interface {
-	Create(ctx context.Context, group *Group, models []SystemCustomGroupModelInput) error
-	Update(ctx context.Context, group *Group, models []SystemCustomGroupModelInput) error
+	Create(ctx context.Context, group *Group, sourceGroupIDs []int64, models []SystemCustomGroupModelInput) error
+	Update(ctx context.Context, group *Group, sourceGroupIDs []int64, models []SystemCustomGroupModelInput) error
 	Get(ctx context.Context, groupID int64) (*SystemCustomGroup, error)
 	ListModels(ctx context.Context, groupID int64, enabledOnly bool) ([]SystemCustomGroupModel, error)
 	ResolveModel(ctx context.Context, groupID int64, publicModel string) (*SystemCustomGroupModel, error)
@@ -118,8 +118,20 @@ func (s *SystemCustomGroupService) Create(ctx context.Context, req CreateSystemC
 	if exists {
 		return nil, ErrGroupExists
 	}
-	if err := s.ValidateRoutes(ctx, 0, req.Models); err != nil {
+	sourceGroupIDs, legacyRequest, err := normalizeSystemCustomGroupSourceSelection(req.SourceGroupIDs, req.Models)
+	if err != nil {
 		return nil, err
+	}
+	models := req.Models
+	if legacyRequest {
+		if err := s.ValidateRoutes(ctx, 0, models); err != nil {
+			return nil, err
+		}
+	} else {
+		models = nil
+		if err := s.validateSourceGroups(ctx, 0, sourceGroupIDs); err != nil {
+			return nil, err
+		}
 	}
 
 	group := &Group{
@@ -136,7 +148,7 @@ func (s *SystemCustomGroupService) Create(ctx context.Context, req CreateSystemC
 		MonthlyLimitUSD:            monthly,
 		DefaultValidityDays:        days,
 	}
-	if err := s.repo.Create(ctx, group, req.Models); err != nil {
+	if err := s.repo.Create(ctx, group, sourceGroupIDs, models); err != nil {
 		return nil, fmt.Errorf("create system custom group: %w", err)
 	}
 	created, err := s.repo.Get(ctx, group.ID)
@@ -172,12 +184,24 @@ func (s *SystemCustomGroupService) Update(ctx context.Context, groupID int64, re
 			return nil, ErrGroupExists
 		}
 	}
-	preservedMissing := make(map[string]struct{}, len(existing.Models))
-	for _, model := range existing.Models {
-		preservedMissing[systemCustomSourceKey(model.SourceGroupID, model.SourceModel)] = struct{}{}
-	}
-	if err := s.validateRoutes(ctx, groupID, req.Models, preservedMissing); err != nil {
+	sourceGroupIDs, legacyRequest, err := normalizeSystemCustomGroupSourceSelection(req.SourceGroupIDs, req.Models)
+	if err != nil {
 		return nil, err
+	}
+	models := req.Models
+	if legacyRequest {
+		preservedMissing := make(map[string]struct{}, len(existing.Models))
+		for _, model := range existing.Models {
+			preservedMissing[systemCustomSourceKey(model.SourceGroupID, model.SourceModel)] = struct{}{}
+		}
+		if err := s.validateRoutes(ctx, groupID, models, preservedMissing); err != nil {
+			return nil, err
+		}
+	} else {
+		models = nil
+		if err := s.validateSourceGroups(ctx, groupID, sourceGroupIDs); err != nil {
+			return nil, err
+		}
 	}
 
 	group := existing.Group
@@ -188,7 +212,7 @@ func (s *SystemCustomGroupService) Update(ctx context.Context, groupID int64, re
 	group.MonthlyLimitUSD = monthly
 	group.DefaultValidityDays = days
 	normalizeSystemCustomContainer(&group)
-	if err := s.repo.Update(ctx, &group, req.Models); err != nil {
+	if err := s.repo.Update(ctx, &group, sourceGroupIDs, models); err != nil {
 		return nil, fmt.Errorf("update system custom group: %w", err)
 	}
 	if invalidator, ok := any(s.authCacheInvalidator).(systemCustomGroupAuthCacheInvalidator); ok && invalidator != nil {
@@ -199,6 +223,69 @@ func (s *SystemCustomGroupService) Update(ctx context.Context, groupID int64, re
 		return nil, fmt.Errorf("load updated system custom group: %w", err)
 	}
 	return updated, nil
+}
+
+func normalizeSystemCustomGroupSourceSelection(sourceGroupIDs []int64, models []SystemCustomGroupModelInput) ([]int64, bool, error) {
+	if len(sourceGroupIDs) > 0 {
+		if len(sourceGroupIDs) > MaxSystemCustomGroupSources {
+			return nil, false, ErrSystemCustomGroupInvalidRoute
+		}
+		return append([]int64(nil), sourceGroupIDs...), false, nil
+	}
+	if len(models) == 0 {
+		return nil, false, ErrSystemCustomGroupInvalidRoute
+	}
+	seen := make(map[int64]struct{}, len(models))
+	derived := make([]int64, 0, len(models))
+	for _, model := range models {
+		if _, ok := seen[model.SourceGroupID]; ok {
+			continue
+		}
+		seen[model.SourceGroupID] = struct{}{}
+		derived = append(derived, model.SourceGroupID)
+	}
+	if len(derived) == 0 || len(derived) > MaxSystemCustomGroupSources {
+		return nil, true, ErrSystemCustomGroupInvalidRoute
+	}
+	return derived, true, nil
+}
+
+func (s *SystemCustomGroupService) validateSourceGroups(ctx context.Context, containerGroupID int64, sourceGroupIDs []int64) error {
+	if s == nil || s.groupRepo == nil {
+		return fmt.Errorf("system custom group service is not configured")
+	}
+	if len(sourceGroupIDs) == 0 || len(sourceGroupIDs) > MaxSystemCustomGroupSources {
+		return ErrSystemCustomGroupInvalidRoute
+	}
+	seen := make(map[int64]struct{}, len(sourceGroupIDs))
+	for _, sourceGroupID := range sourceGroupIDs {
+		if sourceGroupID <= 0 {
+			return ErrSystemCustomGroupInvalidSourceGroup
+		}
+		if containerGroupID > 0 && sourceGroupID == containerGroupID {
+			return ErrSystemCustomGroupSelfReference
+		}
+		if _, exists := seen[sourceGroupID]; exists {
+			return ErrSystemCustomGroupInvalidSourceGroup
+		}
+		seen[sourceGroupID] = struct{}{}
+	}
+	groups, err := s.groupRepo.ListActive(ctx)
+	if err != nil {
+		return fmt.Errorf("list system custom source groups: %w", err)
+	}
+	valid := make(map[int64]struct{}, len(groups))
+	for i := range groups {
+		if isDirectSystemCustomSource(&groups[i]) {
+			valid[groups[i].ID] = struct{}{}
+		}
+	}
+	for _, sourceGroupID := range sourceGroupIDs {
+		if _, exists := valid[sourceGroupID]; !exists {
+			return ErrSystemCustomGroupInvalidSourceGroup
+		}
+	}
+	return nil
 }
 
 func (s *SystemCustomGroupService) Get(ctx context.Context, groupID int64) (*SystemCustomGroup, error) {
