@@ -17,7 +17,7 @@ const (
 	EmptyResponseClaimCompensated  = "compensated"
 	EmptyResponseClaimDailyLimited = "daily_limited"
 
-	EmptyResponseClaimRuleVersion     = 1
+	EmptyResponseClaimRuleVersion     = 2
 	EmptyResponseClaimDailyLimit      = 15
 	EmptyResponseClaimMaxOutputTokens = 10
 	// Keep the production low-output rule name available while sharing the
@@ -411,16 +411,26 @@ func EvaluateEmptyResponseClaim(now time.Time, usage UsageLog, outcome *Response
 	if dailyCount >= EmptyResponseClaimDailyLimit {
 		return decision(EmptyResponseClaimManualReview, EmptyResponseReasonDailyLimit)
 	}
-	if usage.OutputTokens > EmptyResponseClaimMaxOutputTokens {
-		return decision(EmptyResponseClaimRejected, EmptyResponseReasonEffectiveOutput)
-	}
 	if !group.EmptyResponseCompensationEnabled {
 		return decision(EmptyResponseClaimRejected, EmptyResponseReasonGroupDisabled)
+	}
+	if outcome != nil && outcome.CollectorVersion > 0 {
+		// The streamed-response collector is authoritative when the upstream
+		// usage payload under-reports output tokens after delivery has started.
+		if outcome.HasEffectiveOutput() {
+			return decision(EmptyResponseClaimRejected, EmptyResponseReasonEffectiveOutput)
+		}
+		if outcome.DisconnectSource == DisconnectSourceClient {
+			return decision(EmptyResponseClaimRejected, EmptyResponseReasonClientCancelled)
+		}
+	}
+	if usage.OutputTokens > EmptyResponseClaimMaxOutputTokens {
+		return decision(EmptyResponseClaimRejected, EmptyResponseReasonEffectiveOutput)
 	}
 	if isPureEmptyResponse(outcome) {
 		return decision(EmptyResponseClaimApproved, EmptyResponseReasonPureEmpty)
 	}
-	if isLowOutputCompensable(usage) {
+	if outcome != nil && outcome.CollectorVersion > 0 && isLowOutputCompensable(usage) {
 		return decision(EmptyResponseClaimApproved, EmptyResponseReasonLowOutput)
 	}
 	if outcome != nil && outcome.CollectorVersion > 0 {
