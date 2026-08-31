@@ -61,8 +61,13 @@ func (SystemCustomGroupSource) Edges() []ent.Edge {
 
 func (SystemCustomGroupSource) Indexes() []ent.Index {
 	return []ent.Index{
-		index.Fields("group_id", "source_group_id").Unique(),
-		index.Fields("group_id", "priority").Unique(),
-		index.Fields("source_group_id"),
+		index.Fields("group_id", "source_group_id").
+			Unique().
+			StorageKey("system_custom_group_sources_group_id_source_group_id_key"),
+		index.Fields("group_id", "priority").
+			Unique().
+			StorageKey("system_custom_group_sources_group_id_priority_key"),
+		index.Fields("source_group_id").
+			StorageKey("idx_system_custom_group_sources_source_group_id"),
 	}
 }

@@ -33,7 +33,8 @@ func TestSystemCustomGroupSourcesMigration(t *testing.T) {
     require.Contains(t, sql, "UNIQUE (group_id, priority)")
     require.Contains(t, sql, "ROW_NUMBER() OVER")
     require.Contains(t, sql, "FROM system_custom_group_models")
-    require.Contains(t, sql, "ON CONFLICT (group_id, source_group_id) DO NOTHING")
+    require.Contains(t, sql, "WHERE NOT EXISTS")
+    require.Contains(t, sql, "ON CONFLICT DO NOTHING")
 }
 ```
 
@@ -57,7 +58,12 @@ FROM (
     FROM system_custom_group_models
     GROUP BY group_id, source_group_id
 ) AS existing_sources
-ON CONFLICT (group_id, source_group_id) DO NOTHING;
+WHERE NOT EXISTS (
+    SELECT 1
+    FROM system_custom_group_sources AS configured_sources
+    WHERE configured_sources.group_id = existing_sources.group_id
+)
+ON CONFLICT DO NOTHING;
 ```
 
 Add Ent edges from a container group to selected sources and from a direct group to references that use it.

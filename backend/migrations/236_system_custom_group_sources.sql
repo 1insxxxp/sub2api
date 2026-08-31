@@ -17,12 +17,17 @@ CREATE INDEX IF NOT EXISTS idx_system_custom_group_sources_source_group_id
     ON system_custom_group_sources(source_group_id);
 
 INSERT INTO system_custom_group_sources (group_id, source_group_id, priority)
-SELECT group_id,
-       source_group_id,
+SELECT existing_sources.group_id,
+       existing_sources.source_group_id,
        ROW_NUMBER() OVER (PARTITION BY group_id ORDER BY first_route_id) - 1
 FROM (
     SELECT group_id, source_group_id, MIN(id) AS first_route_id
     FROM system_custom_group_models
     GROUP BY group_id, source_group_id
 ) AS existing_sources
-ON CONFLICT (group_id, source_group_id) DO NOTHING;
+WHERE NOT EXISTS (
+    SELECT 1
+    FROM system_custom_group_sources AS configured_sources
+    WHERE configured_sources.group_id = existing_sources.group_id
+)
+ON CONFLICT DO NOTHING;

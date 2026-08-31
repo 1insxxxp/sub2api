@@ -1998,17 +1998,17 @@ var (
 		},
 		Indexes: []*schema.Index{
 			{
-				Name:    "systemcustomgroupsource_group_id_source_group_id",
+				Name:    "system_custom_group_sources_group_id_source_group_id_key",
 				Unique:  true,
 				Columns: []*schema.Column{SystemCustomGroupSourcesColumns[4], SystemCustomGroupSourcesColumns[5]},
 			},
 			{
-				Name:    "systemcustomgroupsource_group_id_priority",
+				Name:    "system_custom_group_sources_group_id_priority_key",
 				Unique:  true,
 				Columns: []*schema.Column{SystemCustomGroupSourcesColumns[4], SystemCustomGroupSourcesColumns[1]},
 			},
 			{
-				Name:    "systemcustomgroupsource_source_group_id",
+				Name:    "idx_system_custom_group_sources_source_group_id",
 				Unique:  false,
 				Columns: []*schema.Column{SystemCustomGroupSourcesColumns[5]},
 			},
