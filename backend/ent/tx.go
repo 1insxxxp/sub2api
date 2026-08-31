@@ -92,6 +92,8 @@ type Tx struct {
 	SubscriptionPlan *SubscriptionPlanClient
 	// SystemCustomGroupModel is the client for interacting with the SystemCustomGroupModel builders.
 	SystemCustomGroupModel *SystemCustomGroupModelClient
+	// SystemCustomGroupSource is the client for interacting with the SystemCustomGroupSource builders.
+	SystemCustomGroupSource *SystemCustomGroupSourceClient
 	// TLSFingerprintProfile is the client for interacting with the TLSFingerprintProfile builders.
 	TLSFingerprintProfile *TLSFingerprintProfileClient
 	// UsageCleanupTask is the client for interacting with the UsageCleanupTask builders.
@@ -294,6 +296,7 @@ func (tx *Tx) init() {
 	tx.SubAdminCommissionGrant = NewSubAdminCommissionGrantClient(tx.config)
 	tx.SubscriptionPlan = NewSubscriptionPlanClient(tx.config)
 	tx.SystemCustomGroupModel = NewSystemCustomGroupModelClient(tx.config)
+	tx.SystemCustomGroupSource = NewSystemCustomGroupSourceClient(tx.config)
 	tx.TLSFingerprintProfile = NewTLSFingerprintProfileClient(tx.config)
 	tx.UsageCleanupTask = NewUsageCleanupTaskClient(tx.config)
 	tx.UsageLog = NewUsageLogClient(tx.config)

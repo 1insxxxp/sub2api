@@ -313,6 +313,10 @@ func (Group) Edges() []ent.Edge {
 			Annotations(entsql.OnDelete(entsql.Cascade)),
 		edge.To("system_custom_source_routes", SystemCustomGroupModel.Type).
 			Annotations(entsql.OnDelete(entsql.Restrict)),
+		edge.To("system_custom_sources", SystemCustomGroupSource.Type).
+			Annotations(entsql.OnDelete(entsql.Cascade)),
+		edge.To("system_custom_source_references", SystemCustomGroupSource.Type).
+			Annotations(entsql.OnDelete(entsql.Restrict)),
 		edge.From("accounts", Account.Type).
 			Ref("groups").
 			Through("account_groups", AccountGroup.Type),

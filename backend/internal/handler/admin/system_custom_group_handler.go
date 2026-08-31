@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/pkg/response"
@@ -67,9 +68,37 @@ type systemCustomGroupModelResponse struct {
 	UpdatedAt     time.Time                        `json:"updated_at"`
 }
 
+type systemCustomGroupSourceSummaryResponse struct {
+	ID               int64  `json:"id"`
+	Name             string `json:"name"`
+	Description      string `json:"description"`
+	Platform         string `json:"platform"`
+	Status           string `json:"status"`
+	SubscriptionType string `json:"subscription_type"`
+}
+
+type systemCustomGroupSourceReferenceResponse struct {
+	ID            int64                                   `json:"id"`
+	GroupID       int64                                   `json:"group_id"`
+	SourceGroupID int64                                   `json:"source_group_id"`
+	Priority      int                                     `json:"priority"`
+	Group         *systemCustomGroupSourceSummaryResponse `json:"group"`
+	CreatedAt     time.Time                               `json:"created_at"`
+	UpdatedAt     time.Time                               `json:"updated_at"`
+}
+
+type systemCustomGroupSummaryResponse struct {
+	UniqueModels       int `json:"unique_models"`
+	FallbackRoutes     int `json:"fallback_routes"`
+	UnavailableSources int `json:"unavailable_sources"`
+	UnpricedRoutes     int `json:"unpriced_routes"`
+}
+
 type systemCustomGroupResponse struct {
-	Group  systemCustomGroupContainerResponse `json:"group"`
-	Models []systemCustomGroupModelResponse   `json:"models"`
+	Group   systemCustomGroupContainerResponse         `json:"group"`
+	Sources []systemCustomGroupSourceReferenceResponse `json:"sources"`
+	Summary systemCustomGroupSummaryResponse           `json:"summary"`
+	Models  []systemCustomGroupModelResponse           `json:"models"`
 }
 
 type systemCustomGroupCandidateResponse struct {
@@ -139,6 +168,8 @@ func (h *SystemCustomGroupHandler) Update(c *gin.Context) {
 	response.Success(c, systemCustomGroupToResponse(updated))
 }
 
+// SyncPreview remains available for legacy administrator clients during the
+// source-based contract migration.
 func (h *SystemCustomGroupHandler) SyncPreview(c *gin.Context) {
 	groupID, ok := parseSystemCustomGroupID(c)
 	if !ok {
@@ -194,11 +225,20 @@ func decodeSystemCustomGroupBody(c *gin.Context, dst any) bool {
 }
 
 func systemCustomGroupToResponse(group *service.SystemCustomGroup) systemCustomGroupResponse {
+	sources := make([]systemCustomGroupSourceReferenceResponse, 0, len(group.Sources))
+	for i := range group.Sources {
+		sources = append(sources, systemCustomGroupSourceReferenceToResponse(group.Sources[i]))
+	}
 	models := make([]systemCustomGroupModelResponse, 0, len(group.Models))
 	for i := range group.Models {
 		models = append(models, systemCustomGroupModelToResponse(group.Models[i]))
 	}
-	return systemCustomGroupResponse{Group: systemCustomGroupContainerToResponse(group.Group), Models: models}
+	return systemCustomGroupResponse{
+		Group:   systemCustomGroupContainerToResponse(group.Group),
+		Sources: sources,
+		Summary: systemCustomGroupSummary(group),
+		Models:  models,
+	}
 }
 
 func systemCustomGroupContainerToResponse(group service.Group) systemCustomGroupContainerResponse {
@@ -216,6 +256,50 @@ func systemCustomGroupSourceToResponse(group service.Group) systemCustomGroupSou
 		ID: group.ID, Name: group.Name, Description: group.Description, Platform: group.Platform,
 		Status: group.Status, SubscriptionType: group.SubscriptionType,
 	}
+}
+
+func systemCustomGroupSourceReferenceToResponse(source service.SystemCustomGroupSource) systemCustomGroupSourceReferenceResponse {
+	out := systemCustomGroupSourceReferenceResponse{
+		ID: source.ID, GroupID: source.GroupID, SourceGroupID: source.SourceGroupID, Priority: source.Priority,
+		CreatedAt: source.CreatedAt, UpdatedAt: source.UpdatedAt,
+	}
+	if source.SourceGroup != nil {
+		out.Group = &systemCustomGroupSourceSummaryResponse{
+			ID: source.SourceGroup.ID, Name: source.SourceGroup.Name, Description: source.SourceGroup.Description,
+			Platform: source.SourceGroup.Platform, Status: source.SourceGroup.Status,
+			SubscriptionType: source.SourceGroup.SubscriptionType,
+		}
+	}
+	return out
+}
+
+func systemCustomGroupSummary(group *service.SystemCustomGroup) systemCustomGroupSummaryResponse {
+	routeCounts := make(map[string]int)
+	for i := range group.Models {
+		model := group.Models[i]
+		if !model.Enabled {
+			continue
+		}
+		publicModel := strings.ToLower(strings.TrimSpace(model.PublicModel))
+		if publicModel != "" {
+			routeCounts[publicModel]++
+		}
+	}
+
+	summary := systemCustomGroupSummaryResponse{UniqueModels: len(routeCounts)}
+	for _, routeCount := range routeCounts {
+		if routeCount > 1 {
+			summary.FallbackRoutes += routeCount - 1
+		}
+	}
+	for i := range group.Sources {
+		if !service.IsEligibleSystemCustomSource(group.Sources[i].SourceGroup) {
+			summary.UnavailableSources++
+		}
+	}
+	// Effective pricing coverage is added by Task 5; retained routes alone cannot establish it.
+	summary.UnpricedRoutes = 0
+	return summary
 }
 
 func systemCustomGroupModelToResponse(model service.SystemCustomGroupModel) systemCustomGroupModelResponse {

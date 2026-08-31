@@ -2811,6 +2811,52 @@ func HasSystemCustomSourceRoutesWith(preds ...predicate.SystemCustomGroupModel) 
 	})
 }
 
+// HasSystemCustomSources applies the HasEdge predicate on the "system_custom_sources" edge.
+func HasSystemCustomSources() predicate.Group {
+	return predicate.Group(func(s *sql.Selector) {
+		step := sqlgraph.NewStep(
+			sqlgraph.From(Table, FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, SystemCustomSourcesTable, SystemCustomSourcesColumn),
+		)
+		sqlgraph.HasNeighbors(s, step)
+	})
+}
+
+// HasSystemCustomSourcesWith applies the HasEdge predicate on the "system_custom_sources" edge with a given conditions (other predicates).
+func HasSystemCustomSourcesWith(preds ...predicate.SystemCustomGroupSource) predicate.Group {
+	return predicate.Group(func(s *sql.Selector) {
+		step := newSystemCustomSourcesStep()
+		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
+			for _, p := range preds {
+				p(s)
+			}
+		})
+	})
+}
+
+// HasSystemCustomSourceReferences applies the HasEdge predicate on the "system_custom_source_references" edge.
+func HasSystemCustomSourceReferences() predicate.Group {
+	return predicate.Group(func(s *sql.Selector) {
+		step := sqlgraph.NewStep(
+			sqlgraph.From(Table, FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, SystemCustomSourceReferencesTable, SystemCustomSourceReferencesColumn),
+		)
+		sqlgraph.HasNeighbors(s, step)
+	})
+}
+
+// HasSystemCustomSourceReferencesWith applies the HasEdge predicate on the "system_custom_source_references" edge with a given conditions (other predicates).
+func HasSystemCustomSourceReferencesWith(preds ...predicate.SystemCustomGroupSource) predicate.Group {
+	return predicate.Group(func(s *sql.Selector) {
+		step := newSystemCustomSourceReferencesStep()
+		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
+			for _, p := range preds {
+				p(s)
+			}
+		})
+	})
+}
+
 // HasAccounts applies the HasEdge predicate on the "accounts" edge.
 func HasAccounts() predicate.Group {
 	return predicate.Group(func(s *sql.Selector) {

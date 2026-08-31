@@ -11,8 +11,6 @@ import (
 
 	dbent "github.com/Wei-Shaw/sub2api/ent"
 	"github.com/Wei-Shaw/sub2api/ent/apikey"
-	"github.com/Wei-Shaw/sub2api/ent/group"
-	"github.com/Wei-Shaw/sub2api/ent/systemcustomgroupmodel"
 	"github.com/Wei-Shaw/sub2api/internal/payment"
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
 	"github.com/Wei-Shaw/sub2api/internal/service"
@@ -27,7 +25,7 @@ func TestSystemCustomGroupRepositoryCreateRollsBackGroupRoutesAndOutboxWhenAnyRo
 	sourceTwo := createSystemCustomSourceGroupForIntegration(t, suffix, "two")
 	container := newSystemCustomContainerForIntegration(fmt.Sprintf("system-custom-create-rollback-%d", suffix))
 
-	err := repo.Create(ctx, container, []service.SystemCustomGroupModelInput{
+	err := repo.Create(ctx, container, []int64{sourceOne.ID, sourceTwo.ID}, []service.SystemCustomGroupModelInput{
 		{PublicModel: "Shared-Model", SourceGroupID: sourceOne.ID, SourceModel: "source-one", Enabled: true},
 		{PublicModel: "shared-model", SourceGroupID: sourceTwo.ID, SourceModel: "source-two", Enabled: true},
 	})
@@ -48,39 +46,131 @@ func TestSystemCustomGroupRepositoryCreateRollsBackGroupRoutesAndOutboxWhenAnyRo
 	require.Zero(t, outboxCount)
 }
 
-func TestSystemCustomGroupRepositoryUpdateRollsBackGroupRouteSnapshotAndOutboxWhenAnyRouteFails(t *testing.T) {
+func TestSystemCustomGroupRepositoryCreateStoresOrderedSourcesAndOptionalLegacyRoutes(t *testing.T) {
+	ctx := context.Background()
+	repo := NewSystemCustomGroupRepository(integrationEntClient)
+	suffix := time.Now().UnixNano()
+	sourceOne := createSystemCustomSourceGroupForIntegration(t, suffix, "create-source-one")
+	sourceTwo := createSystemCustomSourceGroupForIntegration(t, suffix, "create-source-two")
+	container := newSystemCustomContainerForIntegration(fmt.Sprintf("system-custom-create-sources-%d", suffix))
+
+	require.NoError(t, repo.Create(ctx, container, []int64{sourceTwo.ID, sourceOne.ID}, []service.SystemCustomGroupModelInput{
+		{PublicModel: "legacy", SourceGroupID: sourceOne.ID, SourceModel: "source-one", Enabled: true},
+	}))
+	t.Cleanup(func() { cleanupSystemCustomGroupIntegration(t, container.ID) })
+
+	stored, err := repo.Get(ctx, container.ID)
+	require.NoError(t, err)
+	require.Equal(t, []int64{sourceTwo.ID, sourceOne.ID}, systemCustomSourceIDs(stored.Sources))
+	require.Equal(t, []int{0, 1}, systemCustomSourcePriorities(stored.Sources))
+	require.Equal(t, []string{sourceTwo.Name, sourceOne.Name}, []string{stored.Sources[0].SourceGroup.Name, stored.Sources[1].SourceGroup.Name})
+	require.Len(t, stored.Models, 1)
+	require.Equal(t, "legacy", stored.Models[0].PublicModel)
+
+	runtimeOnly, err := repo.GetRuntime(ctx, container.ID)
+	require.NoError(t, err)
+	require.Equal(t, []int64{sourceTwo.ID, sourceOne.ID}, systemCustomSourceIDs(runtimeOnly.Sources))
+	require.Equal(t, []int{0, 1}, systemCustomSourcePriorities(runtimeOnly.Sources))
+	require.Empty(t, runtimeOnly.Models, "runtime aggregate must not eager-load retained rollback routes")
+}
+
+func TestSystemCustomGroupRepositoryCreateSourceOnlyStoresNoLegacyRoutes(t *testing.T) {
+	ctx := context.Background()
+	repo := NewSystemCustomGroupRepository(integrationEntClient)
+	suffix := time.Now().UnixNano()
+	source := createSystemCustomSourceGroupForIntegration(t, suffix, "create-source-only")
+	container := newSystemCustomContainerForIntegration(fmt.Sprintf("system-custom-source-only-%d", suffix))
+
+	require.NoError(t, repo.Create(ctx, container, []int64{source.ID}, nil))
+	t.Cleanup(func() { cleanupSystemCustomGroupIntegration(t, container.ID) })
+
+	stored, err := repo.Get(ctx, container.ID)
+	require.NoError(t, err)
+	require.Equal(t, []int64{source.ID}, systemCustomSourceIDs(stored.Sources))
+	require.Empty(t, stored.Models)
+}
+
+func TestSystemCustomGroupRepositoryCreateRollsBackGroupSourcesRoutesAndOutboxWhenSourceWriteFails(t *testing.T) {
+	ctx := context.Background()
+	repo := NewSystemCustomGroupRepository(integrationEntClient)
+	suffix := time.Now().UnixNano()
+	source := createSystemCustomSourceGroupForIntegration(t, suffix, "source-rollback")
+	container := newSystemCustomContainerForIntegration(fmt.Sprintf("system-custom-source-rollback-%d", suffix))
+
+	err := repo.Create(ctx, container, []int64{source.ID, source.ID}, []service.SystemCustomGroupModelInput{
+		{PublicModel: "legacy", SourceGroupID: source.ID, SourceModel: "source", Enabled: true},
+	})
+
+	require.Error(t, err)
+	var groupCount, sourceCount, routeCount, outboxCount int
+	require.NoError(t, integrationDB.QueryRowContext(ctx, "SELECT COUNT(*) FROM groups WHERE name = $1", container.Name).Scan(&groupCount))
+	require.NoError(t, integrationDB.QueryRowContext(ctx, "SELECT COUNT(*) FROM system_custom_group_sources WHERE group_id = $1", container.ID).Scan(&sourceCount))
+	require.NoError(t, integrationDB.QueryRowContext(ctx, "SELECT COUNT(*) FROM system_custom_group_models WHERE group_id = $1", container.ID).Scan(&routeCount))
+	require.NoError(t, integrationDB.QueryRowContext(ctx, "SELECT COUNT(*) FROM scheduler_outbox WHERE group_id = $1", container.ID).Scan(&outboxCount))
+	require.Zero(t, groupCount)
+	require.Zero(t, sourceCount)
+	require.Zero(t, routeCount)
+	require.Zero(t, outboxCount)
+}
+
+func TestSystemCustomGroupRepositoryUpdateReplacesSourcesAndPreservesLegacyRoutes(t *testing.T) {
 	ctx := context.Background()
 	repo := NewSystemCustomGroupRepository(integrationEntClient)
 	suffix := time.Now().UnixNano()
 	sourceOne := createSystemCustomSourceGroupForIntegration(t, suffix, "update-one")
 	sourceTwo := createSystemCustomSourceGroupForIntegration(t, suffix, "update-two")
 	container := newSystemCustomContainerForIntegration(fmt.Sprintf("system-custom-update-rollback-%d", suffix))
-	require.NoError(t, repo.Create(ctx, container, []service.SystemCustomGroupModelInput{
+	require.NoError(t, repo.Create(ctx, container, []int64{sourceOne.ID}, []service.SystemCustomGroupModelInput{
 		{PublicModel: "original-alias", SourceGroupID: sourceOne.ID, SourceModel: "source-one", Enabled: true},
 	}))
 	t.Cleanup(func() {
 		_, _ = integrationDB.ExecContext(context.Background(), "DELETE FROM scheduler_outbox WHERE group_id = $1", container.ID)
+		_, _ = integrationDB.ExecContext(context.Background(), "DELETE FROM system_custom_group_sources WHERE group_id = $1", container.ID)
 		_, _ = integrationDB.ExecContext(context.Background(), "DELETE FROM system_custom_group_models WHERE group_id = $1", container.ID)
 		_, _ = integrationDB.ExecContext(context.Background(), "DELETE FROM groups WHERE id = $1", container.ID)
 	})
 	require.NoError(t, integrationDB.QueryRowContext(ctx, "DELETE FROM scheduler_outbox WHERE group_id = $1 RETURNING 1", container.ID).Scan(new(int)))
 
+	before := loadSystemCustomRouteRows(t, container.ID)
+	container.Name += "-changed"
+	require.NoError(t, repo.Update(ctx, container, []int64{sourceTwo.ID, sourceOne.ID}, []service.SystemCustomGroupModelInput{
+		{PublicModel: "must-not-replace", SourceGroupID: sourceTwo.ID, SourceModel: "ignored", Enabled: true},
+	}))
+
+	stored, err := repo.Get(ctx, container.ID)
+	require.NoError(t, err)
+	require.Equal(t, []int64{sourceTwo.ID, sourceOne.ID}, systemCustomSourceIDs(stored.Sources))
+	require.Equal(t, []int{0, 1}, systemCustomSourcePriorities(stored.Sources))
+	require.Equal(t, before, loadSystemCustomRouteRows(t, container.ID), "legacy route rows must remain byte-for-byte unchanged")
+	var outboxCount int
+	require.NoError(t, integrationDB.QueryRowContext(ctx, "SELECT COUNT(*) FROM scheduler_outbox WHERE group_id = $1", container.ID).Scan(&outboxCount))
+	require.Equal(t, 1, outboxCount)
+}
+
+func TestSystemCustomGroupRepositoryUpdateRollsBackContainerSourcesAndOutboxWhenSourceWriteFails(t *testing.T) {
+	ctx := context.Background()
+	repo := NewSystemCustomGroupRepository(integrationEntClient)
+	suffix := time.Now().UnixNano()
+	sourceOne := createSystemCustomSourceGroupForIntegration(t, suffix, "update-source-rollback-one")
+	sourceTwo := createSystemCustomSourceGroupForIntegration(t, suffix, "update-source-rollback-two")
+	container := newSystemCustomContainerForIntegration(fmt.Sprintf("system-custom-update-source-rollback-%d", suffix))
+	require.NoError(t, repo.Create(ctx, container, []int64{sourceOne.ID}, []service.SystemCustomGroupModelInput{
+		{PublicModel: "legacy", SourceGroupID: sourceOne.ID, SourceModel: "source", Enabled: true},
+	}))
+	t.Cleanup(func() { cleanupSystemCustomGroupIntegration(t, container.ID) })
+	require.NoError(t, integrationDB.QueryRowContext(ctx, "DELETE FROM scheduler_outbox WHERE group_id = $1 RETURNING 1", container.ID).Scan(new(int)))
+	originalRoutes := loadSystemCustomRouteRows(t, container.ID)
 	originalName := container.Name
-	container.Name = originalName + "-changed"
-	err := repo.Update(ctx, container, []service.SystemCustomGroupModelInput{
-		{PublicModel: "duplicate", SourceGroupID: sourceOne.ID, SourceModel: "new-one", Enabled: true},
-		{PublicModel: "DUPLICATE", SourceGroupID: sourceTwo.ID, SourceModel: "new-two", Enabled: true},
-	})
+	container.Name += "-changed"
+
+	err := repo.Update(ctx, container, []int64{sourceTwo.ID, sourceTwo.ID}, nil)
 
 	require.Error(t, err)
-	require.ErrorIs(t, err, service.ErrSystemCustomGroupDuplicatePublicModel)
-	storedGroup, groupErr := integrationEntClient.Group.Query().Where(group.IDEQ(container.ID)).Only(ctx)
-	require.NoError(t, groupErr)
-	require.Equal(t, originalName, storedGroup.Name)
-	routes, routeErr := integrationEntClient.SystemCustomGroupModel.Query().Where(systemcustomgroupmodel.GroupIDEQ(container.ID)).All(ctx)
-	require.NoError(t, routeErr)
-	require.Len(t, routes, 1)
-	require.Equal(t, "original-alias", routes[0].PublicModel)
+	stored, getErr := repo.Get(ctx, container.ID)
+	require.NoError(t, getErr)
+	require.Equal(t, originalName, stored.Group.Name)
+	require.Equal(t, []int64{sourceOne.ID}, systemCustomSourceIDs(stored.Sources))
+	require.Equal(t, originalRoutes, loadSystemCustomRouteRows(t, container.ID))
 	var outboxCount int
 	require.NoError(t, integrationDB.QueryRowContext(ctx, "SELECT COUNT(*) FROM scheduler_outbox WHERE group_id = $1", container.ID).Scan(&outboxCount))
 	require.Zero(t, outboxCount)
@@ -92,7 +182,7 @@ func TestSystemCustomGroupRepositoryResolveModelIsExactCaseInsensitiveAndEnabled
 	suffix := time.Now().UnixNano()
 	source := createSystemCustomSourceGroupForIntegration(t, suffix, "resolve")
 	container := newSystemCustomContainerForIntegration(fmt.Sprintf("system-custom-resolve-%d", suffix))
-	require.NoError(t, repo.Create(ctx, container, []service.SystemCustomGroupModelInput{
+	require.NoError(t, repo.Create(ctx, container, []int64{source.ID}, []service.SystemCustomGroupModelInput{
 		{PublicModel: "Claude-Premium", SourceGroupID: source.ID, SourceModel: "claude-upstream", Enabled: true},
 		{PublicModel: "Claude-Disabled", SourceGroupID: source.ID, SourceModel: "claude-disabled", Enabled: false},
 	}))
@@ -556,7 +646,7 @@ func TestSystemCustomGroupRepositoryUpdateWaitsForDeleteAndCannotRecreateRoutes(
 	updateCtx, cancelUpdate := context.WithTimeout(ctx, 5*time.Second)
 	defer cancelUpdate()
 	go func() {
-		updateResult <- repo.Update(updateCtx, &updatedGroup, []service.SystemCustomGroupModelInput{
+		updateResult <- repo.Update(updateCtx, &updatedGroup, []int64{source.ID}, []service.SystemCustomGroupModelInput{
 			{PublicModel: "updated-alias", SourceGroupID: source.ID, SourceModel: "source-model", Enabled: true},
 		})
 	}()
@@ -670,6 +760,7 @@ func TestSystemCustomGroupRepositoryDeleteUnreferencedGroupRetiresContainerAndPr
 	}{
 		{name: "soft-deleted group retained", sql: "SELECT COUNT(*) FROM groups WHERE id = $1 AND deleted_at IS NOT NULL", arg: container.ID, want: 1},
 		{name: "routes removed", sql: "SELECT COUNT(*) FROM system_custom_group_models WHERE group_id = $1", arg: container.ID, want: 0},
+		{name: "source references removed", sql: "SELECT COUNT(*) FROM system_custom_group_sources WHERE group_id = $1", arg: container.ID, want: 0},
 		{name: "inactive plans cleaned", sql: "SELECT COUNT(*) FROM subscription_plans WHERE id = $1", arg: plan.ID, want: 0},
 		{name: "expired subscriptions retained", sql: "SELECT COUNT(*) FROM user_subscriptions WHERE id = $1 AND group_id = $2", arg: sub.ID, want: 1},
 		{name: "api key group retained", sql: "SELECT COUNT(*) FROM api_keys WHERE id = $1 AND group_id = $2", arg: apiKey.ID, want: 1},
@@ -700,15 +791,69 @@ func createDeletableSystemCustomGroupForIntegration(t *testing.T, repo service.S
 	suffix := time.Now().UnixNano()
 	source := createSystemCustomSourceGroupForIntegration(t, suffix, "delete-"+label)
 	container := newSystemCustomContainerForIntegration(fmt.Sprintf("system-custom-delete-%s-%d", label, suffix))
-	require.NoError(t, repo.Create(context.Background(), container, []service.SystemCustomGroupModelInput{
+	require.NoError(t, repo.Create(context.Background(), container, []int64{source.ID}, []service.SystemCustomGroupModelInput{
 		{PublicModel: "alias", SourceGroupID: source.ID, SourceModel: "source-model", Enabled: true},
 	}))
 	t.Cleanup(func() {
 		_, _ = integrationDB.ExecContext(context.Background(), "DELETE FROM scheduler_outbox WHERE group_id = $1", container.ID)
+		_, _ = integrationDB.ExecContext(context.Background(), "DELETE FROM system_custom_group_sources WHERE group_id = $1", container.ID)
 		_, _ = integrationDB.ExecContext(context.Background(), "DELETE FROM system_custom_group_models WHERE group_id = $1", container.ID)
 		_, _ = integrationDB.ExecContext(context.Background(), "DELETE FROM groups WHERE id = $1", container.ID)
 	})
 	return container, source
+}
+
+type systemCustomRouteRow struct {
+	ID            int64
+	GroupID       int64
+	PublicModel   string
+	SourceGroupID int64
+	SourceModel   string
+	Enabled       bool
+	CreatedAt     time.Time
+	UpdatedAt     time.Time
+}
+
+func loadSystemCustomRouteRows(t *testing.T, groupID int64) []systemCustomRouteRow {
+	t.Helper()
+	rows, err := integrationDB.QueryContext(context.Background(), `
+		SELECT id, group_id, public_model, source_group_id, source_model, enabled, created_at, updated_at
+		FROM system_custom_group_models WHERE group_id = $1 ORDER BY id
+	`, groupID)
+	require.NoError(t, err)
+	defer rows.Close()
+	var out []systemCustomRouteRow
+	for rows.Next() {
+		var row systemCustomRouteRow
+		require.NoError(t, rows.Scan(&row.ID, &row.GroupID, &row.PublicModel, &row.SourceGroupID, &row.SourceModel, &row.Enabled, &row.CreatedAt, &row.UpdatedAt))
+		out = append(out, row)
+	}
+	require.NoError(t, rows.Err())
+	return out
+}
+
+func systemCustomSourceIDs(sources []service.SystemCustomGroupSource) []int64 {
+	out := make([]int64, 0, len(sources))
+	for _, source := range sources {
+		out = append(out, source.SourceGroupID)
+	}
+	return out
+}
+
+func systemCustomSourcePriorities(sources []service.SystemCustomGroupSource) []int {
+	out := make([]int, 0, len(sources))
+	for _, source := range sources {
+		out = append(out, source.Priority)
+	}
+	return out
+}
+
+func cleanupSystemCustomGroupIntegration(t *testing.T, groupID int64) {
+	t.Helper()
+	_, _ = integrationDB.ExecContext(context.Background(), "DELETE FROM scheduler_outbox WHERE group_id = $1", groupID)
+	_, _ = integrationDB.ExecContext(context.Background(), "DELETE FROM system_custom_group_sources WHERE group_id = $1", groupID)
+	_, _ = integrationDB.ExecContext(context.Background(), "DELETE FROM system_custom_group_models WHERE group_id = $1", groupID)
+	_, _ = integrationDB.ExecContext(context.Background(), "DELETE FROM groups WHERE id = $1", groupID)
 }
 
 func requireSystemCustomContainerAndRouteExist(t *testing.T, groupID int64) {

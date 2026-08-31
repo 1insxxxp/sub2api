@@ -20,6 +20,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/predicate"
 	"github.com/Wei-Shaw/sub2api/ent/redeemcode"
 	"github.com/Wei-Shaw/sub2api/ent/systemcustomgroupmodel"
+	"github.com/Wei-Shaw/sub2api/ent/systemcustomgroupsource"
 	"github.com/Wei-Shaw/sub2api/ent/usagelog"
 	"github.com/Wei-Shaw/sub2api/ent/user"
 	"github.com/Wei-Shaw/sub2api/ent/userallowedgroup"
@@ -30,22 +31,24 @@ import (
 // GroupQuery is the builder for querying Group entities.
 type GroupQuery struct {
 	config
-	ctx                          *QueryContext
-	order                        []group.OrderOption
-	inters                       []Interceptor
-	predicates                   []predicate.Group
-	withAPIKeys                  *APIKeyQuery
-	withRedeemCodes              *RedeemCodeQuery
-	withSubscriptions            *UserSubscriptionQuery
-	withUsageLogs                *UsageLogQuery
-	withCustomModelRoutes        *UserCustomGroupModelQuery
-	withSystemCustomRoutes       *SystemCustomGroupModelQuery
-	withSystemCustomSourceRoutes *SystemCustomGroupModelQuery
-	withAccounts                 *AccountQuery
-	withAllowedUsers             *UserQuery
-	withAccountGroups            *AccountGroupQuery
-	withUserAllowedGroups        *UserAllowedGroupQuery
-	modifiers                    []func(*sql.Selector)
+	ctx                              *QueryContext
+	order                            []group.OrderOption
+	inters                           []Interceptor
+	predicates                       []predicate.Group
+	withAPIKeys                      *APIKeyQuery
+	withRedeemCodes                  *RedeemCodeQuery
+	withSubscriptions                *UserSubscriptionQuery
+	withUsageLogs                    *UsageLogQuery
+	withCustomModelRoutes            *UserCustomGroupModelQuery
+	withSystemCustomRoutes           *SystemCustomGroupModelQuery
+	withSystemCustomSourceRoutes     *SystemCustomGroupModelQuery
+	withSystemCustomSources          *SystemCustomGroupSourceQuery
+	withSystemCustomSourceReferences *SystemCustomGroupSourceQuery
+	withAccounts                     *AccountQuery
+	withAllowedUsers                 *UserQuery
+	withAccountGroups                *AccountGroupQuery
+	withUserAllowedGroups            *UserAllowedGroupQuery
+	modifiers                        []func(*sql.Selector)
 	// intermediate query (i.e. traversal path).
 	sql  *sql.Selector
 	path func(context.Context) (*sql.Selector, error)
@@ -229,6 +232,50 @@ func (_q *GroupQuery) QuerySystemCustomSourceRoutes() *SystemCustomGroupModelQue
 			sqlgraph.From(group.Table, group.FieldID, selector),
 			sqlgraph.To(systemcustomgroupmodel.Table, systemcustomgroupmodel.FieldID),
 			sqlgraph.Edge(sqlgraph.O2M, false, group.SystemCustomSourceRoutesTable, group.SystemCustomSourceRoutesColumn),
+		)
+		fromU = sqlgraph.SetNeighbors(_q.driver.Dialect(), step)
+		return fromU, nil
+	}
+	return query
+}
+
+// QuerySystemCustomSources chains the current query on the "system_custom_sources" edge.
+func (_q *GroupQuery) QuerySystemCustomSources() *SystemCustomGroupSourceQuery {
+	query := (&SystemCustomGroupSourceClient{config: _q.config}).Query()
+	query.path = func(ctx context.Context) (fromU *sql.Selector, err error) {
+		if err := _q.prepareQuery(ctx); err != nil {
+			return nil, err
+		}
+		selector := _q.sqlQuery(ctx)
+		if err := selector.Err(); err != nil {
+			return nil, err
+		}
+		step := sqlgraph.NewStep(
+			sqlgraph.From(group.Table, group.FieldID, selector),
+			sqlgraph.To(systemcustomgroupsource.Table, systemcustomgroupsource.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, group.SystemCustomSourcesTable, group.SystemCustomSourcesColumn),
+		)
+		fromU = sqlgraph.SetNeighbors(_q.driver.Dialect(), step)
+		return fromU, nil
+	}
+	return query
+}
+
+// QuerySystemCustomSourceReferences chains the current query on the "system_custom_source_references" edge.
+func (_q *GroupQuery) QuerySystemCustomSourceReferences() *SystemCustomGroupSourceQuery {
+	query := (&SystemCustomGroupSourceClient{config: _q.config}).Query()
+	query.path = func(ctx context.Context) (fromU *sql.Selector, err error) {
+		if err := _q.prepareQuery(ctx); err != nil {
+			return nil, err
+		}
+		selector := _q.sqlQuery(ctx)
+		if err := selector.Err(); err != nil {
+			return nil, err
+		}
+		step := sqlgraph.NewStep(
+			sqlgraph.From(group.Table, group.FieldID, selector),
+			sqlgraph.To(systemcustomgroupsource.Table, systemcustomgroupsource.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, group.SystemCustomSourceReferencesTable, group.SystemCustomSourceReferencesColumn),
 		)
 		fromU = sqlgraph.SetNeighbors(_q.driver.Dialect(), step)
 		return fromU, nil
@@ -511,22 +558,24 @@ func (_q *GroupQuery) Clone() *GroupQuery {
 		return nil
 	}
 	return &GroupQuery{
-		config:                       _q.config,
-		ctx:                          _q.ctx.Clone(),
-		order:                        append([]group.OrderOption{}, _q.order...),
-		inters:                       append([]Interceptor{}, _q.inters...),
-		predicates:                   append([]predicate.Group{}, _q.predicates...),
-		withAPIKeys:                  _q.withAPIKeys.Clone(),
-		withRedeemCodes:              _q.withRedeemCodes.Clone(),
-		withSubscriptions:            _q.withSubscriptions.Clone(),
-		withUsageLogs:                _q.withUsageLogs.Clone(),
-		withCustomModelRoutes:        _q.withCustomModelRoutes.Clone(),
-		withSystemCustomRoutes:       _q.withSystemCustomRoutes.Clone(),
-		withSystemCustomSourceRoutes: _q.withSystemCustomSourceRoutes.Clone(),
-		withAccounts:                 _q.withAccounts.Clone(),
-		withAllowedUsers:             _q.withAllowedUsers.Clone(),
-		withAccountGroups:            _q.withAccountGroups.Clone(),
-		withUserAllowedGroups:        _q.withUserAllowedGroups.Clone(),
+		config:                           _q.config,
+		ctx:                              _q.ctx.Clone(),
+		order:                            append([]group.OrderOption{}, _q.order...),
+		inters:                           append([]Interceptor{}, _q.inters...),
+		predicates:                       append([]predicate.Group{}, _q.predicates...),
+		withAPIKeys:                      _q.withAPIKeys.Clone(),
+		withRedeemCodes:                  _q.withRedeemCodes.Clone(),
+		withSubscriptions:                _q.withSubscriptions.Clone(),
+		withUsageLogs:                    _q.withUsageLogs.Clone(),
+		withCustomModelRoutes:            _q.withCustomModelRoutes.Clone(),
+		withSystemCustomRoutes:           _q.withSystemCustomRoutes.Clone(),
+		withSystemCustomSourceRoutes:     _q.withSystemCustomSourceRoutes.Clone(),
+		withSystemCustomSources:          _q.withSystemCustomSources.Clone(),
+		withSystemCustomSourceReferences: _q.withSystemCustomSourceReferences.Clone(),
+		withAccounts:                     _q.withAccounts.Clone(),
+		withAllowedUsers:                 _q.withAllowedUsers.Clone(),
+		withAccountGroups:                _q.withAccountGroups.Clone(),
+		withUserAllowedGroups:            _q.withUserAllowedGroups.Clone(),
 		// clone intermediate query.
 		sql:  _q.sql.Clone(),
 		path: _q.path,
@@ -607,6 +656,28 @@ func (_q *GroupQuery) WithSystemCustomSourceRoutes(opts ...func(*SystemCustomGro
 		opt(query)
 	}
 	_q.withSystemCustomSourceRoutes = query
+	return _q
+}
+
+// WithSystemCustomSources tells the query-builder to eager-load the nodes that are connected to
+// the "system_custom_sources" edge. The optional arguments are used to configure the query builder of the edge.
+func (_q *GroupQuery) WithSystemCustomSources(opts ...func(*SystemCustomGroupSourceQuery)) *GroupQuery {
+	query := (&SystemCustomGroupSourceClient{config: _q.config}).Query()
+	for _, opt := range opts {
+		opt(query)
+	}
+	_q.withSystemCustomSources = query
+	return _q
+}
+
+// WithSystemCustomSourceReferences tells the query-builder to eager-load the nodes that are connected to
+// the "system_custom_source_references" edge. The optional arguments are used to configure the query builder of the edge.
+func (_q *GroupQuery) WithSystemCustomSourceReferences(opts ...func(*SystemCustomGroupSourceQuery)) *GroupQuery {
+	query := (&SystemCustomGroupSourceClient{config: _q.config}).Query()
+	for _, opt := range opts {
+		opt(query)
+	}
+	_q.withSystemCustomSourceReferences = query
 	return _q
 }
 
@@ -732,7 +803,7 @@ func (_q *GroupQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*Group,
 	var (
 		nodes       = []*Group{}
 		_spec       = _q.querySpec()
-		loadedTypes = [11]bool{
+		loadedTypes = [13]bool{
 			_q.withAPIKeys != nil,
 			_q.withRedeemCodes != nil,
 			_q.withSubscriptions != nil,
@@ -740,6 +811,8 @@ func (_q *GroupQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*Group,
 			_q.withCustomModelRoutes != nil,
 			_q.withSystemCustomRoutes != nil,
 			_q.withSystemCustomSourceRoutes != nil,
+			_q.withSystemCustomSources != nil,
+			_q.withSystemCustomSourceReferences != nil,
 			_q.withAccounts != nil,
 			_q.withAllowedUsers != nil,
 			_q.withAccountGroups != nil,
@@ -818,6 +891,24 @@ func (_q *GroupQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*Group,
 			func(n *Group) { n.Edges.SystemCustomSourceRoutes = []*SystemCustomGroupModel{} },
 			func(n *Group, e *SystemCustomGroupModel) {
 				n.Edges.SystemCustomSourceRoutes = append(n.Edges.SystemCustomSourceRoutes, e)
+			}); err != nil {
+			return nil, err
+		}
+	}
+	if query := _q.withSystemCustomSources; query != nil {
+		if err := _q.loadSystemCustomSources(ctx, query, nodes,
+			func(n *Group) { n.Edges.SystemCustomSources = []*SystemCustomGroupSource{} },
+			func(n *Group, e *SystemCustomGroupSource) {
+				n.Edges.SystemCustomSources = append(n.Edges.SystemCustomSources, e)
+			}); err != nil {
+			return nil, err
+		}
+	}
+	if query := _q.withSystemCustomSourceReferences; query != nil {
+		if err := _q.loadSystemCustomSourceReferences(ctx, query, nodes,
+			func(n *Group) { n.Edges.SystemCustomSourceReferences = []*SystemCustomGroupSource{} },
+			func(n *Group, e *SystemCustomGroupSource) {
+				n.Edges.SystemCustomSourceReferences = append(n.Edges.SystemCustomSourceReferences, e)
 			}); err != nil {
 			return nil, err
 		}
@@ -1057,6 +1148,66 @@ func (_q *GroupQuery) loadSystemCustomSourceRoutes(ctx context.Context, query *S
 	}
 	query.Where(predicate.SystemCustomGroupModel(func(s *sql.Selector) {
 		s.Where(sql.InValues(s.C(group.SystemCustomSourceRoutesColumn), fks...))
+	}))
+	neighbors, err := query.All(ctx)
+	if err != nil {
+		return err
+	}
+	for _, n := range neighbors {
+		fk := n.SourceGroupID
+		node, ok := nodeids[fk]
+		if !ok {
+			return fmt.Errorf(`unexpected referenced foreign-key "source_group_id" returned %v for node %v`, fk, n.ID)
+		}
+		assign(node, n)
+	}
+	return nil
+}
+func (_q *GroupQuery) loadSystemCustomSources(ctx context.Context, query *SystemCustomGroupSourceQuery, nodes []*Group, init func(*Group), assign func(*Group, *SystemCustomGroupSource)) error {
+	fks := make([]driver.Value, 0, len(nodes))
+	nodeids := make(map[int64]*Group)
+	for i := range nodes {
+		fks = append(fks, nodes[i].ID)
+		nodeids[nodes[i].ID] = nodes[i]
+		if init != nil {
+			init(nodes[i])
+		}
+	}
+	if len(query.ctx.Fields) > 0 {
+		query.ctx.AppendFieldOnce(systemcustomgroupsource.FieldGroupID)
+	}
+	query.Where(predicate.SystemCustomGroupSource(func(s *sql.Selector) {
+		s.Where(sql.InValues(s.C(group.SystemCustomSourcesColumn), fks...))
+	}))
+	neighbors, err := query.All(ctx)
+	if err != nil {
+		return err
+	}
+	for _, n := range neighbors {
+		fk := n.GroupID
+		node, ok := nodeids[fk]
+		if !ok {
+			return fmt.Errorf(`unexpected referenced foreign-key "group_id" returned %v for node %v`, fk, n.ID)
+		}
+		assign(node, n)
+	}
+	return nil
+}
+func (_q *GroupQuery) loadSystemCustomSourceReferences(ctx context.Context, query *SystemCustomGroupSourceQuery, nodes []*Group, init func(*Group), assign func(*Group, *SystemCustomGroupSource)) error {
+	fks := make([]driver.Value, 0, len(nodes))
+	nodeids := make(map[int64]*Group)
+	for i := range nodes {
+		fks = append(fks, nodes[i].ID)
+		nodeids[nodes[i].ID] = nodes[i]
+		if init != nil {
+			init(nodes[i])
+		}
+	}
+	if len(query.ctx.Fields) > 0 {
+		query.ctx.AppendFieldOnce(systemcustomgroupsource.FieldSourceGroupID)
+	}
+	query.Where(predicate.SystemCustomGroupSource(func(s *sql.Selector) {
+		s.Where(sql.InValues(s.C(group.SystemCustomSourceReferencesColumn), fks...))
 	}))
 	neighbors, err := query.All(ctx)
 	if err != nil {

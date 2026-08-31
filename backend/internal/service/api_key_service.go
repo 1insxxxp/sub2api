@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
-	"errors"
 	"fmt"
 	"html"
 	"math"
@@ -292,7 +291,7 @@ type APIKeyService struct {
 	groupRepo                 GroupRepository
 	customGroupRepo           UserCustomGroupRepository
 	systemCustomGroupRepo     SystemCustomGroupRepository
-	systemCustomModelCatalog  SystemCustomGroupModelListCatalog
+	systemCustomModelCatalog  SystemCustomGroupRuntimeModelCatalog
 	userSubRepo               UserSubscriptionRepository
 	userGroupRateRepo         UserGroupRateRepository
 	cache                     APIKeyCache
@@ -382,9 +381,9 @@ func (s *APIKeyService) SetSystemCustomGroupRepository(repo SystemCustomGroupRep
 	s.systemCustomGroupRepo = repo
 }
 
-// SetSystemCustomGroupModelCatalog injects the live schedulable-account model
-// index used when exposing public aliases from a system custom group.
-func (s *APIKeyService) SetSystemCustomGroupModelCatalog(catalog SystemCustomGroupModelListCatalog) {
+// SetSystemCustomGroupModelCatalog injects the live source/account catalog used
+// for system custom model listing and request resolution.
+func (s *APIKeyService) SetSystemCustomGroupModelCatalog(catalog SystemCustomGroupRuntimeModelCatalog) {
 	s.systemCustomModelCatalog = catalog
 }
 
@@ -489,14 +488,14 @@ type SystemCustomGroupModelResolution struct {
 	SystemCustomGroupResolution
 }
 
-// ResolveSystemCustomGroupModel resolves a public alias from a system-managed
+// ResolveSystemCustomGroupModel resolves a public model from a system-managed
 // subscription container to a live direct source group. Ordinary keys return
 // (nil, nil) so callers can preserve existing routing behavior.
 func (s *APIKeyService) ResolveSystemCustomGroupModel(ctx context.Context, key *APIKey, model string) (*SystemCustomGroupModelResolution, error) {
 	if key == nil || key.Group == nil || !key.Group.IsSystemCustomRouteGroup() {
 		return nil, nil
 	}
-	if s == nil || s.systemCustomGroupRepo == nil || s.groupRepo == nil {
+	if s == nil || s.systemCustomGroupRepo == nil || s.systemCustomModelCatalog == nil {
 		return nil, ErrSystemCustomGroupSourceUnavailable
 	}
 
@@ -505,29 +504,32 @@ func (s *APIKeyService) ResolveSystemCustomGroupModel(ctx context.Context, key *
 	if billingGroupID <= 0 || requestedModel == "" {
 		return nil, ErrSystemCustomGroupModelNotAllowed
 	}
-	route, err := s.systemCustomGroupRepo.ResolveModel(ctx, billingGroupID, requestedModel)
+	container, err := s.systemCustomGroupRepo.GetRuntime(ctx, billingGroupID)
 	if err != nil {
-		if errors.Is(err, ErrSystemCustomGroupRouteNotFound) {
-			return nil, ErrSystemCustomGroupModelNotAllowed
-		}
 		return nil, ErrSystemCustomGroupSourceUnavailable.WithCause(err)
 	}
-	if route == nil || !route.Enabled || route.GroupID != billingGroupID ||
-		!strings.EqualFold(strings.TrimSpace(route.PublicModel), requestedModel) {
-		return nil, ErrSystemCustomGroupModelNotAllowed
-	}
-	if route.SourceGroupID <= 0 || strings.TrimSpace(route.SourceModel) == "" {
+	if container == nil || container.Group.ID != billingGroupID ||
+		!container.Group.IsSystemCustomRouteGroup() || !IsGroupContextValid(&container.Group) {
 		return nil, ErrSystemCustomGroupSourceUnavailable
 	}
-
-	// The runtime resolver only needs routing/eligibility fields. Avoid the
-	// aggregate-heavy group lookup (account statistics, associations) on every
-	// model-bearing request.
-	sourceGroup, err := s.groupRepo.GetByIDLite(ctx, route.SourceGroupID)
+	catalogCtx := ctx
+	if _, marked := gatewayTokenRequestPricingAtFromContext(catalogCtx); !marked {
+		catalogCtx, _ = WithGatewayTokenRequestPricing(catalogCtx)
+	}
+	candidates, advertised, err := s.systemCustomModelCatalog.ResolveSystemCustomGroupModelCatalog(catalogCtx, container.Sources, "", requestedModel)
 	if err != nil {
 		return nil, ErrSystemCustomGroupSourceUnavailable.WithCause(err)
 	}
-	if !isDirectSystemCustomSource(sourceGroup) || !IsGroupContextValid(sourceGroup) {
+	if !advertised {
+		return nil, ErrSystemCustomGroupModelNotAllowed
+	}
+	if len(candidates) == 0 {
+		return nil, ErrSystemCustomGroupSourceUnavailable
+	}
+	candidate := candidates[0]
+	sourceGroup := &candidate.SourceGroup
+	if !isDirectSystemCustomSource(sourceGroup) || !IsGroupContextValid(sourceGroup) ||
+		strings.TrimSpace(candidate.PublicModel) == "" || strings.TrimSpace(candidate.SourceModel) == "" {
 		return nil, ErrSystemCustomGroupSourceUnavailable
 	}
 
@@ -546,23 +548,23 @@ func (s *APIKeyService) ResolveSystemCustomGroupModel(ctx context.Context, key *
 	return &SystemCustomGroupModelResolution{
 		APIKey: &clone,
 		SystemCustomGroupResolution: SystemCustomGroupResolution{
-			BillingGroupID: billingGroupID,
-			SourceGroupID:  sourceGroup.ID,
-			PublicModel:    strings.TrimSpace(route.PublicModel),
-			SourceModel:    strings.TrimSpace(route.SourceModel),
-			SourcePlatform: strings.TrimSpace(sourceGroup.Platform),
+			BillingGroupID:  billingGroupID,
+			SourceGroupID:   sourceGroup.ID,
+			PublicModel:     strings.TrimSpace(candidate.PublicModel),
+			SourceModel:     strings.TrimSpace(candidate.SourceModel),
+			SourcePlatform:  strings.TrimSpace(sourceGroup.Platform),
+			AllowedAccounts: candidate.AllowedAccounts.clone(),
 		},
 	}, nil
 }
 
-// ListSystemCustomGroupModels returns the public aliases whose configured
-// source is currently schedulable and still exposes the configured source
-// model. Source group and model identities are intentionally never returned.
+// ListSystemCustomGroupModels returns the live public model union whose source
+// is currently schedulable and priced. Source identities are never returned.
 func (s *APIKeyService) ListSystemCustomGroupModels(ctx context.Context, key *APIKey, platform string) ([]string, error) {
 	if key == nil || key.Group == nil || !key.Group.IsSystemCustomRouteGroup() {
 		return nil, ErrSystemCustomGroupNotFound
 	}
-	if s == nil || s.systemCustomGroupRepo == nil || s.groupRepo == nil || s.systemCustomModelCatalog == nil {
+	if s == nil || s.systemCustomGroupRepo == nil || s.systemCustomModelCatalog == nil {
 		return nil, ErrSystemCustomGroupSourceUnavailable
 	}
 	billingGroupID := key.Group.ID
@@ -570,70 +572,19 @@ func (s *APIKeyService) ListSystemCustomGroupModels(ctx context.Context, key *AP
 		return nil, ErrSystemCustomGroupNotFound
 	}
 
-	routes, err := s.systemCustomGroupRepo.ListModels(ctx, billingGroupID, true)
+	container, err := s.systemCustomGroupRepo.GetRuntime(ctx, billingGroupID)
 	if err != nil {
 		return nil, ErrSystemCustomGroupSourceUnavailable.WithCause(err)
 	}
-
-	sourcesByID := make(map[int64]*SystemCustomGroupModelListSource)
-	validRoutes := make([]SystemCustomGroupModel, 0, len(routes))
-	platform = strings.TrimSpace(platform)
-
-	for _, route := range routes {
-		publicModel := strings.TrimSpace(route.PublicModel)
-		sourceModel := strings.TrimSpace(route.SourceModel)
-		if !route.Enabled || route.GroupID != billingGroupID || publicModel == "" || sourceModel == "" || route.SourceGroupID <= 0 {
-			continue
-		}
-
-		sourceGroup := route.SourceGroup
-		if !isDirectSystemCustomSource(sourceGroup) || !IsGroupContextValid(sourceGroup) ||
-			(platform != "" && sourceGroup.Platform != platform) {
-			continue
-		}
-		source := sourcesByID[route.SourceGroupID]
-		if source == nil {
-			source = &SystemCustomGroupModelListSource{Group: *sourceGroup}
-			sourcesByID[route.SourceGroupID] = source
-		}
-		source.Models = append(source.Models, sourceModel)
-		validRoutes = append(validRoutes, route)
+	if container == nil || container.Group.ID != billingGroupID ||
+		!container.Group.IsSystemCustomRouteGroup() || !IsGroupContextValid(&container.Group) {
+		return nil, ErrSystemCustomGroupNotFound
 	}
-
-	sources := make([]SystemCustomGroupModelListSource, 0, len(sourcesByID))
-	for _, source := range sourcesByID {
-		sources = append(sources, *source)
-	}
-	sort.Slice(sources, func(i, j int) bool { return sources[i].Group.ID < sources[j].Group.ID })
-	availability, err := s.systemCustomModelCatalog.ListSystemCustomGroupModelAvailability(ctx, sources)
+	catalog, err := s.systemCustomModelCatalog.BuildSystemCustomGroupModelCatalog(ctx, container.Sources, strings.TrimSpace(platform))
 	if err != nil {
 		return nil, ErrSystemCustomGroupSourceUnavailable.WithCause(err)
 	}
-
-	seenAliases := make(map[string]struct{}, len(validRoutes))
-	aliases := make([]string, 0, len(validRoutes))
-	for _, route := range validRoutes {
-		publicModel := strings.TrimSpace(route.PublicModel)
-		sourceModel := strings.TrimSpace(route.SourceModel)
-		if !availability[route.SourceGroupID][sourceModel] {
-			continue
-		}
-		aliasKey := strings.ToLower(publicModel)
-		if _, exists := seenAliases[aliasKey]; exists {
-			continue
-		}
-		seenAliases[aliasKey] = struct{}{}
-		aliases = append(aliases, publicModel)
-	}
-
-	sort.SliceStable(aliases, func(i, j int) bool {
-		left, right := strings.ToLower(aliases[i]), strings.ToLower(aliases[j])
-		if left == right {
-			return aliases[i] < aliases[j]
-		}
-		return left < right
-	})
-	return aliases, nil
+	return catalog.Models(), nil
 }
 
 // ResolveCustomGroupModel returns a per-request API key clone and the configured real model.

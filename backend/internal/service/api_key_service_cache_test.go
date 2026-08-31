@@ -295,7 +295,7 @@ func TestAPIKeyService_SnapshotRoundTrip_PreservesSystemCustomRouting(t *testing
 	require.NotNil(t, snapshot)
 	require.NotNil(t, snapshot.Group)
 	require.True(t, snapshot.Group.SystemCustomRoutingEnabled)
-	require.Equal(t, 20, snapshot.Version)
+	require.Equal(t, apiKeyAuthSnapshotVersion, snapshot.Version)
 
 	roundTrip := svc.snapshotToAPIKey(apiKey.Key, snapshot)
 	require.NotNil(t, roundTrip)

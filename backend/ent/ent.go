@@ -51,6 +51,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/subadmincommissiongrant"
 	"github.com/Wei-Shaw/sub2api/ent/subscriptionplan"
 	"github.com/Wei-Shaw/sub2api/ent/systemcustomgroupmodel"
+	"github.com/Wei-Shaw/sub2api/ent/systemcustomgroupsource"
 	"github.com/Wei-Shaw/sub2api/ent/tlsfingerprintprofile"
 	"github.com/Wei-Shaw/sub2api/ent/usagecleanuptask"
 	"github.com/Wei-Shaw/sub2api/ent/usagelog"
@@ -166,6 +167,7 @@ func checkColumn(t, c string) error {
 			subadmincommissiongrant.Table:       subadmincommissiongrant.ValidColumn,
 			subscriptionplan.Table:              subscriptionplan.ValidColumn,
 			systemcustomgroupmodel.Table:        systemcustomgroupmodel.ValidColumn,
+			systemcustomgroupsource.Table:       systemcustomgroupsource.ValidColumn,
 			tlsfingerprintprofile.Table:         tlsfingerprintprofile.ValidColumn,
 			usagecleanuptask.Table:              usagecleanuptask.ValidColumn,
 			usagelog.Table:                      usagelog.ValidColumn,

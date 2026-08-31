@@ -61,6 +61,30 @@ func TestSystemCustomGroupAPIContractRoutes(t *testing.T) {
 	}
 }
 
+func TestGroupPricingCoverageAPIContractRoute(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	router := gin.New()
+	handlers := &handler.Handlers{Admin: &handler.AdminHandlers{Group: &adminhandler.GroupHandler{}}}
+	pass := func(c *gin.Context) { c.Next() }
+	serverroutes.RegisterAdminRoutes(
+		router.Group("/api/v1"),
+		handlers,
+		middleware.AdminAuthMiddleware(pass),
+		middleware.AdminWorkbenchAuthMiddleware(pass),
+		middleware.AuditLogMiddleware(pass),
+		middleware.StepUpAuthMiddleware(pass),
+		nil,
+		nil,
+	)
+
+	registered := make(map[string]struct{}, len(router.Routes()))
+	for _, route := range router.Routes() {
+		registered[route.Method+" "+route.Path] = struct{}{}
+	}
+	_, ok := registered["POST /api/v1/admin/groups/pricing-coverage"]
+	require.True(t, ok, "missing pricing coverage API contract route")
+}
+
 func TestCheckinCampaignAPIContractRoutes(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	router := gin.New()
@@ -1966,7 +1990,7 @@ func newContractDeps(t *testing.T) *contractDeps {
 	affiliateRepo := newStubAffiliateRepo(now, &customRate)
 	affiliateService := service.NewAffiliateService(affiliateRepo, settingService, nil, nil)
 
-	adminService := service.NewAdminService(userRepo, groupRepo, &accountRepo, proxyRepo, apiKeyRepo, redeemRepo, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
+	adminService := service.NewAdminService(userRepo, groupRepo, &accountRepo, proxyRepo, apiKeyRepo, redeemRepo, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
 	authHandler := handler.NewAuthHandler(cfg, nil, userService, settingService, nil, redeemService, nil, nil)
 	apiKeyHandler := handler.NewAPIKeyHandler(apiKeyService)
 	usageHandler := handler.NewUsageHandler(usageService, apiKeyService, nil, nil)

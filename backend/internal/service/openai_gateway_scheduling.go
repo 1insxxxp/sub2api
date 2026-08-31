@@ -1488,7 +1488,7 @@ func (s *OpenAIGatewayService) listSchedulableAccounts(ctx context.Context, grou
 		if platform == PlatformGrok {
 			accounts = s.filterGrokFreeQuotaAccountsForOpenAI(ctx, accounts)
 		}
-		return accounts, nil
+		return filterSystemCustomAllowedAccounts(ctx, accounts), nil
 	}
 	var accounts []Account
 	var err error
@@ -1506,7 +1506,7 @@ func (s *OpenAIGatewayService) listSchedulableAccounts(ctx context.Context, grou
 	if platform == PlatformGrok {
 		accounts = s.filterGrokFreeQuotaAccountsForOpenAI(ctx, accounts)
 	}
-	return accounts, nil
+	return filterSystemCustomAllowedAccounts(ctx, accounts), nil
 }
 
 func (s *OpenAIGatewayService) tryAcquireAccountSlot(ctx context.Context, accountID int64, maxConcurrency int) (*AcquireResult, error) {
@@ -1657,6 +1657,9 @@ func (s *OpenAIGatewayService) getSchedulableAccount(ctx context.Context, accoun
 	if err != nil || account == nil {
 		return account, err
 	}
+	if !systemCustomAccountAllowed(ctx, account.ID) {
+		return nil, nil
+	}
 	if s.isOpenAIAccountBlockedBySchedulingThreshold(ctx, account) {
 		return nil, nil
 	}
@@ -1701,7 +1704,13 @@ func (s *OpenAIGatewayService) isOpenAIAccountBlockedBySchedulingThreshold(ctx c
 }
 
 func (s *OpenAIGatewayService) hydrateSelectedAccount(ctx context.Context, account *Account) (*Account, error) {
-	if account == nil || s.schedulerSnapshot == nil {
+	if account == nil {
+		return account, nil
+	}
+	if !systemCustomAccountAllowed(ctx, account.ID) {
+		return nil, ErrNoAvailableAccounts
+	}
+	if s.schedulerSnapshot == nil {
 		return account, nil
 	}
 	hydrated, err := s.schedulerSnapshot.GetAccount(ctx, account.ID)
@@ -1710,6 +1719,9 @@ func (s *OpenAIGatewayService) hydrateSelectedAccount(ctx context.Context, accou
 	}
 	if hydrated == nil {
 		return nil, fmt.Errorf("selected openai account %d not found during hydration", account.ID)
+	}
+	if !systemCustomAccountAllowed(ctx, hydrated.ID) {
+		return nil, ErrNoAvailableAccounts
 	}
 	return hydrated, nil
 }

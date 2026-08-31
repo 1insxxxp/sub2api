@@ -13,9 +13,10 @@ import (
 )
 
 type SystemCustomGroupRepository interface {
-	Create(ctx context.Context, group *Group, models []SystemCustomGroupModelInput) error
-	Update(ctx context.Context, group *Group, models []SystemCustomGroupModelInput) error
+	Create(ctx context.Context, group *Group, sourceGroupIDs []int64, models []SystemCustomGroupModelInput) error
+	Update(ctx context.Context, group *Group, sourceGroupIDs []int64, models []SystemCustomGroupModelInput) error
 	Get(ctx context.Context, groupID int64) (*SystemCustomGroup, error)
+	GetRuntime(ctx context.Context, groupID int64) (*SystemCustomGroup, error)
 	ListModels(ctx context.Context, groupID int64, enabledOnly bool) ([]SystemCustomGroupModel, error)
 	ResolveModel(ctx context.Context, groupID int64, publicModel string) (*SystemCustomGroupModel, error)
 	Delete(ctx context.Context, groupID int64) error
@@ -43,23 +44,12 @@ type SystemCustomGroupModelCatalog interface {
 	HasSchedulableAccountsForGroupPlatform(ctx context.Context, groupID int64, platform string) bool
 }
 
-// SystemCustomGroupModelListSource is one live source-group snapshot together
-// with the concrete source models whose public aliases may be advertised.
-// Runtime list generation deliberately receives the group snapshot loaded with
-// the routes so it does not re-query each source independently.
-type SystemCustomGroupModelListSource struct {
-	Group  Group
-	Models []string
-}
-
-// SystemCustomGroupModelAvailability is keyed by source group and then by the
-// exact source-model spelling supplied in SystemCustomGroupModelListSource.
-type SystemCustomGroupModelAvailability map[int64]map[string]bool
-
-// SystemCustomGroupModelListCatalog evaluates one complete route snapshot
-// against the same account support rules used by gateway scheduling.
-type SystemCustomGroupModelListCatalog interface {
-	ListSystemCustomGroupModelAvailability(ctx context.Context, sources []SystemCustomGroupModelListSource) (SystemCustomGroupModelAvailability, error)
+// SystemCustomGroupRuntimeModelCatalog derives a request-time model catalog
+// from live source references. The retained static route repository remains a
+// separate rollback-only API.
+type SystemCustomGroupRuntimeModelCatalog interface {
+	BuildSystemCustomGroupModelCatalog(ctx context.Context, sources []SystemCustomGroupSource, platform string) (*SystemCustomGroupRuntimeCatalog, error)
+	ResolveSystemCustomGroupModelCatalog(ctx context.Context, sources []SystemCustomGroupSource, platform, model string) ([]SystemCustomGroupRuntimeCandidate, bool, error)
 }
 
 // SystemCustomGroupSchedulableAccount preserves the source-group association
@@ -118,8 +108,20 @@ func (s *SystemCustomGroupService) Create(ctx context.Context, req CreateSystemC
 	if exists {
 		return nil, ErrGroupExists
 	}
-	if err := s.ValidateRoutes(ctx, 0, req.Models); err != nil {
+	sourceGroupIDs, legacyRequest, err := normalizeSystemCustomGroupSourceSelection(req.SourceGroupIDs, req.Models)
+	if err != nil {
 		return nil, err
+	}
+	models := req.Models
+	if legacyRequest {
+		if err := s.ValidateRoutes(ctx, 0, models); err != nil {
+			return nil, err
+		}
+	} else {
+		models = nil
+		if err := s.validateSourceGroups(ctx, 0, sourceGroupIDs); err != nil {
+			return nil, err
+		}
 	}
 
 	group := &Group{
@@ -136,7 +138,7 @@ func (s *SystemCustomGroupService) Create(ctx context.Context, req CreateSystemC
 		MonthlyLimitUSD:            monthly,
 		DefaultValidityDays:        days,
 	}
-	if err := s.repo.Create(ctx, group, req.Models); err != nil {
+	if err := s.repo.Create(ctx, group, sourceGroupIDs, models); err != nil {
 		return nil, fmt.Errorf("create system custom group: %w", err)
 	}
 	created, err := s.repo.Get(ctx, group.ID)
@@ -172,12 +174,24 @@ func (s *SystemCustomGroupService) Update(ctx context.Context, groupID int64, re
 			return nil, ErrGroupExists
 		}
 	}
-	preservedMissing := make(map[string]struct{}, len(existing.Models))
-	for _, model := range existing.Models {
-		preservedMissing[systemCustomSourceKey(model.SourceGroupID, model.SourceModel)] = struct{}{}
-	}
-	if err := s.validateRoutes(ctx, groupID, req.Models, preservedMissing); err != nil {
+	sourceGroupIDs, legacyRequest, err := normalizeSystemCustomGroupSourceSelection(req.SourceGroupIDs, req.Models)
+	if err != nil {
 		return nil, err
+	}
+	models := req.Models
+	if legacyRequest {
+		preservedMissing := make(map[string]struct{}, len(existing.Models))
+		for _, model := range existing.Models {
+			preservedMissing[systemCustomSourceKey(model.SourceGroupID, model.SourceModel)] = struct{}{}
+		}
+		if err := s.validateRoutes(ctx, groupID, models, preservedMissing); err != nil {
+			return nil, err
+		}
+	} else {
+		models = nil
+		if err := s.validateSourceGroups(ctx, groupID, sourceGroupIDs); err != nil {
+			return nil, err
+		}
 	}
 
 	group := existing.Group
@@ -188,7 +202,7 @@ func (s *SystemCustomGroupService) Update(ctx context.Context, groupID int64, re
 	group.MonthlyLimitUSD = monthly
 	group.DefaultValidityDays = days
 	normalizeSystemCustomContainer(&group)
-	if err := s.repo.Update(ctx, &group, req.Models); err != nil {
+	if err := s.repo.Update(ctx, &group, sourceGroupIDs, models); err != nil {
 		return nil, fmt.Errorf("update system custom group: %w", err)
 	}
 	if invalidator, ok := any(s.authCacheInvalidator).(systemCustomGroupAuthCacheInvalidator); ok && invalidator != nil {
@@ -199,6 +213,69 @@ func (s *SystemCustomGroupService) Update(ctx context.Context, groupID int64, re
 		return nil, fmt.Errorf("load updated system custom group: %w", err)
 	}
 	return updated, nil
+}
+
+func normalizeSystemCustomGroupSourceSelection(sourceGroupIDs []int64, models []SystemCustomGroupModelInput) ([]int64, bool, error) {
+	if len(sourceGroupIDs) > 0 {
+		if len(sourceGroupIDs) > MaxSystemCustomGroupSources {
+			return nil, false, ErrSystemCustomGroupInvalidRoute
+		}
+		return append([]int64(nil), sourceGroupIDs...), false, nil
+	}
+	if len(models) == 0 {
+		return nil, false, ErrSystemCustomGroupInvalidRoute
+	}
+	seen := make(map[int64]struct{}, len(models))
+	derived := make([]int64, 0, len(models))
+	for _, model := range models {
+		if _, ok := seen[model.SourceGroupID]; ok {
+			continue
+		}
+		seen[model.SourceGroupID] = struct{}{}
+		derived = append(derived, model.SourceGroupID)
+	}
+	if len(derived) == 0 || len(derived) > MaxSystemCustomGroupSources {
+		return nil, true, ErrSystemCustomGroupInvalidRoute
+	}
+	return derived, true, nil
+}
+
+func (s *SystemCustomGroupService) validateSourceGroups(ctx context.Context, containerGroupID int64, sourceGroupIDs []int64) error {
+	if s == nil || s.groupRepo == nil {
+		return fmt.Errorf("system custom group service is not configured")
+	}
+	if len(sourceGroupIDs) == 0 || len(sourceGroupIDs) > MaxSystemCustomGroupSources {
+		return ErrSystemCustomGroupInvalidRoute
+	}
+	seen := make(map[int64]struct{}, len(sourceGroupIDs))
+	for _, sourceGroupID := range sourceGroupIDs {
+		if sourceGroupID <= 0 {
+			return ErrSystemCustomGroupInvalidSourceGroup
+		}
+		if containerGroupID > 0 && sourceGroupID == containerGroupID {
+			return ErrSystemCustomGroupSelfReference
+		}
+		if _, exists := seen[sourceGroupID]; exists {
+			return ErrSystemCustomGroupInvalidSourceGroup
+		}
+		seen[sourceGroupID] = struct{}{}
+	}
+	groups, err := s.groupRepo.ListActive(ctx)
+	if err != nil {
+		return fmt.Errorf("list system custom source groups: %w", err)
+	}
+	valid := make(map[int64]struct{}, len(groups))
+	for i := range groups {
+		if isDirectSystemCustomSource(&groups[i]) {
+			valid[groups[i].ID] = struct{}{}
+		}
+	}
+	for _, sourceGroupID := range sourceGroupIDs {
+		if _, exists := valid[sourceGroupID]; !exists {
+			return ErrSystemCustomGroupInvalidSourceGroup
+		}
+	}
+	return nil
 }
 
 func (s *SystemCustomGroupService) Get(ctx context.Context, groupID int64) (*SystemCustomGroup, error) {
@@ -447,7 +524,14 @@ func (s *SystemCustomGroupService) availableModelsForSource(ctx context.Context,
 }
 
 func isDirectSystemCustomSource(group *Group) bool {
-	return group != nil && group.ID > 0 && group.Status == StatusActive && group.Platform != PlatformComposite && !group.SystemCustomRoutingEnabled
+	return group != nil && group.ID > 0 && group.Status == StatusActive &&
+		isConcreteRequestPlatform(group.Platform) && !group.SystemCustomRoutingEnabled
+}
+
+// IsEligibleSystemCustomSource exposes the source eligibility rule to API
+// mappers that report unavailable persisted references without querying again.
+func IsEligibleSystemCustomSource(group *Group) bool {
+	return isDirectSystemCustomSource(group)
 }
 
 func normalizeSystemCustomContainer(group *Group) {

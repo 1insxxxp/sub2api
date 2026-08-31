@@ -58,7 +58,7 @@ func TestSystemCustomGroupUpdateAcquiresReferenceAdvisoryLockBeforeLiveGroupRow(
 	err = repo.Update(context.Background(), &service.Group{
 		ID: 42, Name: "custom group", Platform: service.PlatformComposite,
 		SubscriptionType: service.SubscriptionTypeSubscription, Status: service.StatusActive,
-	}, nil)
+	}, nil, nil)
 
 	require.ErrorIs(t, err, service.ErrSystemCustomGroupNotFound)
 	require.NoError(t, mock.ExpectationsWereMet())

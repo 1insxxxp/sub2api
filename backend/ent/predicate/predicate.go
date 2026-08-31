@@ -123,6 +123,9 @@ type SubscriptionPlan func(*sql.Selector)
 // SystemCustomGroupModel is the predicate function for systemcustomgroupmodel builders.
 type SystemCustomGroupModel func(*sql.Selector)
 
+// SystemCustomGroupSource is the predicate function for systemcustomgroupsource builders.
+type SystemCustomGroupSource func(*sql.Selector)
+
 // TLSFingerprintProfile is the predicate function for tlsfingerprintprofile builders.
 type TLSFingerprintProfile func(*sql.Selector)
 

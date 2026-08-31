@@ -54,6 +54,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/subadmincommissiongrant"
 	"github.com/Wei-Shaw/sub2api/ent/subscriptionplan"
 	"github.com/Wei-Shaw/sub2api/ent/systemcustomgroupmodel"
+	"github.com/Wei-Shaw/sub2api/ent/systemcustomgroupsource"
 	"github.com/Wei-Shaw/sub2api/ent/tlsfingerprintprofile"
 	"github.com/Wei-Shaw/sub2api/ent/usagecleanuptask"
 	"github.com/Wei-Shaw/sub2api/ent/usagelog"
@@ -157,6 +158,8 @@ type Client struct {
 	SubscriptionPlan *SubscriptionPlanClient
 	// SystemCustomGroupModel is the client for interacting with the SystemCustomGroupModel builders.
 	SystemCustomGroupModel *SystemCustomGroupModelClient
+	// SystemCustomGroupSource is the client for interacting with the SystemCustomGroupSource builders.
+	SystemCustomGroupSource *SystemCustomGroupSourceClient
 	// TLSFingerprintProfile is the client for interacting with the TLSFingerprintProfile builders.
 	TLSFingerprintProfile *TLSFingerprintProfileClient
 	// UsageCleanupTask is the client for interacting with the UsageCleanupTask builders.
@@ -239,6 +242,7 @@ func (c *Client) init() {
 	c.SubAdminCommissionGrant = NewSubAdminCommissionGrantClient(c.config)
 	c.SubscriptionPlan = NewSubscriptionPlanClient(c.config)
 	c.SystemCustomGroupModel = NewSystemCustomGroupModelClient(c.config)
+	c.SystemCustomGroupSource = NewSystemCustomGroupSourceClient(c.config)
 	c.TLSFingerprintProfile = NewTLSFingerprintProfileClient(c.config)
 	c.UsageCleanupTask = NewUsageCleanupTaskClient(c.config)
 	c.UsageLog = NewUsageLogClient(c.config)
@@ -386,6 +390,7 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 		SubAdminCommissionGrant:       NewSubAdminCommissionGrantClient(cfg),
 		SubscriptionPlan:              NewSubscriptionPlanClient(cfg),
 		SystemCustomGroupModel:        NewSystemCustomGroupModelClient(cfg),
+		SystemCustomGroupSource:       NewSystemCustomGroupSourceClient(cfg),
 		TLSFingerprintProfile:         NewTLSFingerprintProfileClient(cfg),
 		UsageCleanupTask:              NewUsageCleanupTaskClient(cfg),
 		UsageLog:                      NewUsageLogClient(cfg),
@@ -460,6 +465,7 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 		SubAdminCommissionGrant:       NewSubAdminCommissionGrantClient(cfg),
 		SubscriptionPlan:              NewSubscriptionPlanClient(cfg),
 		SystemCustomGroupModel:        NewSystemCustomGroupModelClient(cfg),
+		SystemCustomGroupSource:       NewSystemCustomGroupSourceClient(cfg),
 		TLSFingerprintProfile:         NewTLSFingerprintProfileClient(cfg),
 		UsageCleanupTask:              NewUsageCleanupTaskClient(cfg),
 		UsageLog:                      NewUsageLogClient(cfg),
@@ -516,11 +522,11 @@ func (c *Client) Use(hooks ...Hook) {
 		c.PaymentProviderInstance, c.PendingAuthSession, c.PromoCode, c.PromoCodeUsage,
 		c.Proxy, c.RedeemBatchClaim, c.RedeemCode, c.SecuritySecret, c.Setting,
 		c.SubAdminCommissionGrant, c.SubscriptionPlan, c.SystemCustomGroupModel,
-		c.TLSFingerprintProfile, c.UsageCleanupTask, c.UsageLog,
-		c.UsageResponseOutcome, c.User, c.UserAllowedGroup, c.UserAttributeDefinition,
-		c.UserAttributeValue, c.UserCheckin, c.UserCheckinBlacklist, c.UserCustomGroup,
-		c.UserCustomGroupModel, c.UserImage, c.UserImageTask, c.UserPlatformQuota,
-		c.UserSubscription,
+		c.SystemCustomGroupSource, c.TLSFingerprintProfile, c.UsageCleanupTask,
+		c.UsageLog, c.UsageResponseOutcome, c.User, c.UserAllowedGroup,
+		c.UserAttributeDefinition, c.UserAttributeValue, c.UserCheckin,
+		c.UserCheckinBlacklist, c.UserCustomGroup, c.UserCustomGroupModel, c.UserImage,
+		c.UserImageTask, c.UserPlatformQuota, c.UserSubscription,
 	} {
 		n.Use(hooks...)
 	}
@@ -541,11 +547,11 @@ func (c *Client) Intercept(interceptors ...Interceptor) {
 		c.PaymentProviderInstance, c.PendingAuthSession, c.PromoCode, c.PromoCodeUsage,
 		c.Proxy, c.RedeemBatchClaim, c.RedeemCode, c.SecuritySecret, c.Setting,
 		c.SubAdminCommissionGrant, c.SubscriptionPlan, c.SystemCustomGroupModel,
-		c.TLSFingerprintProfile, c.UsageCleanupTask, c.UsageLog,
-		c.UsageResponseOutcome, c.User, c.UserAllowedGroup, c.UserAttributeDefinition,
-		c.UserAttributeValue, c.UserCheckin, c.UserCheckinBlacklist, c.UserCustomGroup,
-		c.UserCustomGroupModel, c.UserImage, c.UserImageTask, c.UserPlatformQuota,
-		c.UserSubscription,
+		c.SystemCustomGroupSource, c.TLSFingerprintProfile, c.UsageCleanupTask,
+		c.UsageLog, c.UsageResponseOutcome, c.User, c.UserAllowedGroup,
+		c.UserAttributeDefinition, c.UserAttributeValue, c.UserCheckin,
+		c.UserCheckinBlacklist, c.UserCustomGroup, c.UserCustomGroupModel, c.UserImage,
+		c.UserImageTask, c.UserPlatformQuota, c.UserSubscription,
 	} {
 		n.Intercept(interceptors...)
 	}
@@ -632,6 +638,8 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.SubscriptionPlan.mutate(ctx, m)
 	case *SystemCustomGroupModelMutation:
 		return c.SystemCustomGroupModel.mutate(ctx, m)
+	case *SystemCustomGroupSourceMutation:
+		return c.SystemCustomGroupSource.mutate(ctx, m)
 	case *TLSFingerprintProfileMutation:
 		return c.TLSFingerprintProfile.mutate(ctx, m)
 	case *UsageCleanupTaskMutation:
@@ -3665,6 +3673,38 @@ func (c *GroupClient) QuerySystemCustomSourceRoutes(_m *Group) *SystemCustomGrou
 			sqlgraph.From(group.Table, group.FieldID, id),
 			sqlgraph.To(systemcustomgroupmodel.Table, systemcustomgroupmodel.FieldID),
 			sqlgraph.Edge(sqlgraph.O2M, false, group.SystemCustomSourceRoutesTable, group.SystemCustomSourceRoutesColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QuerySystemCustomSources queries the system_custom_sources edge of a Group.
+func (c *GroupClient) QuerySystemCustomSources(_m *Group) *SystemCustomGroupSourceQuery {
+	query := (&SystemCustomGroupSourceClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(group.Table, group.FieldID, id),
+			sqlgraph.To(systemcustomgroupsource.Table, systemcustomgroupsource.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, group.SystemCustomSourcesTable, group.SystemCustomSourcesColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QuerySystemCustomSourceReferences queries the system_custom_source_references edge of a Group.
+func (c *GroupClient) QuerySystemCustomSourceReferences(_m *Group) *SystemCustomGroupSourceQuery {
+	query := (&SystemCustomGroupSourceClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(group.Table, group.FieldID, id),
+			sqlgraph.To(systemcustomgroupsource.Table, systemcustomgroupsource.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, group.SystemCustomSourceReferencesTable, group.SystemCustomSourceReferencesColumn),
 		)
 		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
 		return fromV, nil
@@ -6841,6 +6881,171 @@ func (c *SystemCustomGroupModelClient) mutate(ctx context.Context, m *SystemCust
 	}
 }
 
+// SystemCustomGroupSourceClient is a client for the SystemCustomGroupSource schema.
+type SystemCustomGroupSourceClient struct {
+	config
+}
+
+// NewSystemCustomGroupSourceClient returns a client for the SystemCustomGroupSource from the given config.
+func NewSystemCustomGroupSourceClient(c config) *SystemCustomGroupSourceClient {
+	return &SystemCustomGroupSourceClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `systemcustomgroupsource.Hooks(f(g(h())))`.
+func (c *SystemCustomGroupSourceClient) Use(hooks ...Hook) {
+	c.hooks.SystemCustomGroupSource = append(c.hooks.SystemCustomGroupSource, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `systemcustomgroupsource.Intercept(f(g(h())))`.
+func (c *SystemCustomGroupSourceClient) Intercept(interceptors ...Interceptor) {
+	c.inters.SystemCustomGroupSource = append(c.inters.SystemCustomGroupSource, interceptors...)
+}
+
+// Create returns a builder for creating a SystemCustomGroupSource entity.
+func (c *SystemCustomGroupSourceClient) Create() *SystemCustomGroupSourceCreate {
+	mutation := newSystemCustomGroupSourceMutation(c.config, OpCreate)
+	return &SystemCustomGroupSourceCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of SystemCustomGroupSource entities.
+func (c *SystemCustomGroupSourceClient) CreateBulk(builders ...*SystemCustomGroupSourceCreate) *SystemCustomGroupSourceCreateBulk {
+	return &SystemCustomGroupSourceCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *SystemCustomGroupSourceClient) MapCreateBulk(slice any, setFunc func(*SystemCustomGroupSourceCreate, int)) *SystemCustomGroupSourceCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &SystemCustomGroupSourceCreateBulk{err: fmt.Errorf("calling to SystemCustomGroupSourceClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*SystemCustomGroupSourceCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &SystemCustomGroupSourceCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for SystemCustomGroupSource.
+func (c *SystemCustomGroupSourceClient) Update() *SystemCustomGroupSourceUpdate {
+	mutation := newSystemCustomGroupSourceMutation(c.config, OpUpdate)
+	return &SystemCustomGroupSourceUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *SystemCustomGroupSourceClient) UpdateOne(_m *SystemCustomGroupSource) *SystemCustomGroupSourceUpdateOne {
+	mutation := newSystemCustomGroupSourceMutation(c.config, OpUpdateOne, withSystemCustomGroupSource(_m))
+	return &SystemCustomGroupSourceUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *SystemCustomGroupSourceClient) UpdateOneID(id int64) *SystemCustomGroupSourceUpdateOne {
+	mutation := newSystemCustomGroupSourceMutation(c.config, OpUpdateOne, withSystemCustomGroupSourceID(id))
+	return &SystemCustomGroupSourceUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for SystemCustomGroupSource.
+func (c *SystemCustomGroupSourceClient) Delete() *SystemCustomGroupSourceDelete {
+	mutation := newSystemCustomGroupSourceMutation(c.config, OpDelete)
+	return &SystemCustomGroupSourceDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *SystemCustomGroupSourceClient) DeleteOne(_m *SystemCustomGroupSource) *SystemCustomGroupSourceDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *SystemCustomGroupSourceClient) DeleteOneID(id int64) *SystemCustomGroupSourceDeleteOne {
+	builder := c.Delete().Where(systemcustomgroupsource.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &SystemCustomGroupSourceDeleteOne{builder}
+}
+
+// Query returns a query builder for SystemCustomGroupSource.
+func (c *SystemCustomGroupSourceClient) Query() *SystemCustomGroupSourceQuery {
+	return &SystemCustomGroupSourceQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeSystemCustomGroupSource},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a SystemCustomGroupSource entity by its id.
+func (c *SystemCustomGroupSourceClient) Get(ctx context.Context, id int64) (*SystemCustomGroupSource, error) {
+	return c.Query().Where(systemcustomgroupsource.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *SystemCustomGroupSourceClient) GetX(ctx context.Context, id int64) *SystemCustomGroupSource {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// QueryGroup queries the group edge of a SystemCustomGroupSource.
+func (c *SystemCustomGroupSourceClient) QueryGroup(_m *SystemCustomGroupSource) *GroupQuery {
+	query := (&GroupClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(systemcustomgroupsource.Table, systemcustomgroupsource.FieldID, id),
+			sqlgraph.To(group.Table, group.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, systemcustomgroupsource.GroupTable, systemcustomgroupsource.GroupColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QuerySourceGroup queries the source_group edge of a SystemCustomGroupSource.
+func (c *SystemCustomGroupSourceClient) QuerySourceGroup(_m *SystemCustomGroupSource) *GroupQuery {
+	query := (&GroupClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(systemcustomgroupsource.Table, systemcustomgroupsource.FieldID, id),
+			sqlgraph.To(group.Table, group.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, systemcustomgroupsource.SourceGroupTable, systemcustomgroupsource.SourceGroupColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// Hooks returns the client hooks.
+func (c *SystemCustomGroupSourceClient) Hooks() []Hook {
+	return c.hooks.SystemCustomGroupSource
+}
+
+// Interceptors returns the client interceptors.
+func (c *SystemCustomGroupSourceClient) Interceptors() []Interceptor {
+	return c.inters.SystemCustomGroupSource
+}
+
+func (c *SystemCustomGroupSourceClient) mutate(ctx context.Context, m *SystemCustomGroupSourceMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&SystemCustomGroupSourceCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&SystemCustomGroupSourceUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&SystemCustomGroupSourceUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&SystemCustomGroupSourceDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown SystemCustomGroupSource mutation op: %q", m.Op())
+	}
+}
+
 // TLSFingerprintProfileClient is a client for the TLSFingerprintProfile schema.
 type TLSFingerprintProfileClient struct {
 	config
@@ -9742,11 +9947,11 @@ type (
 		LotteryPrizeItem, PaymentAuditLog, PaymentOrder, PaymentProviderInstance,
 		PendingAuthSession, PromoCode, PromoCodeUsage, Proxy, RedeemBatchClaim,
 		RedeemCode, SecuritySecret, Setting, SubAdminCommissionGrant, SubscriptionPlan,
-		SystemCustomGroupModel, TLSFingerprintProfile, UsageCleanupTask, UsageLog,
-		UsageResponseOutcome, User, UserAllowedGroup, UserAttributeDefinition,
-		UserAttributeValue, UserCheckin, UserCheckinBlacklist, UserCustomGroup,
-		UserCustomGroupModel, UserImage, UserImageTask, UserPlatformQuota,
-		UserSubscription []ent.Hook
+		SystemCustomGroupModel, SystemCustomGroupSource, TLSFingerprintProfile,
+		UsageCleanupTask, UsageLog, UsageResponseOutcome, User, UserAllowedGroup,
+		UserAttributeDefinition, UserAttributeValue, UserCheckin, UserCheckinBlacklist,
+		UserCustomGroup, UserCustomGroupModel, UserImage, UserImageTask,
+		UserPlatformQuota, UserSubscription []ent.Hook
 	}
 	inters struct {
 		APIKey, Account, AccountGroup, Announcement, AnnouncementRead, AuthIdentity,
@@ -9758,11 +9963,11 @@ type (
 		LotteryPrizeItem, PaymentAuditLog, PaymentOrder, PaymentProviderInstance,
 		PendingAuthSession, PromoCode, PromoCodeUsage, Proxy, RedeemBatchClaim,
 		RedeemCode, SecuritySecret, Setting, SubAdminCommissionGrant, SubscriptionPlan,
-		SystemCustomGroupModel, TLSFingerprintProfile, UsageCleanupTask, UsageLog,
-		UsageResponseOutcome, User, UserAllowedGroup, UserAttributeDefinition,
-		UserAttributeValue, UserCheckin, UserCheckinBlacklist, UserCustomGroup,
-		UserCustomGroupModel, UserImage, UserImageTask, UserPlatformQuota,
-		UserSubscription []ent.Interceptor
+		SystemCustomGroupModel, SystemCustomGroupSource, TLSFingerprintProfile,
+		UsageCleanupTask, UsageLog, UsageResponseOutcome, User, UserAllowedGroup,
+		UserAttributeDefinition, UserAttributeValue, UserCheckin, UserCheckinBlacklist,
+		UserCustomGroup, UserCustomGroupModel, UserImage, UserImageTask,
+		UserPlatformQuota, UserSubscription []ent.Interceptor
 	}
 )
 

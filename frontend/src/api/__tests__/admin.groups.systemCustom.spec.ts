@@ -22,6 +22,7 @@ import {
   getSystemCustomGroup,
   getSystemCustomGroupCandidates,
   getSystemCustomGroupSyncPreview,
+  previewPricingCoverage,
   updateSystemCustomGroup
 } from '@/api/admin/groups'
 import type {
@@ -33,21 +34,6 @@ import type {
   SystemCustomGroupSyncPreview,
   UpdateSystemCustomGroupRequest
 } from '@/types'
-
-const explicitModels = [
-  {
-    public_model: 'claude-sonnet@tavern-a',
-    source_group_id: 11,
-    source_model: 'claude-sonnet',
-    enabled: true
-  },
-  {
-    public_model: 'claude-sonnet@tavern-b',
-    source_group_id: 12,
-    source_model: 'claude-sonnet',
-    enabled: false
-  }
-]
 
 const systemCustomGroup = {
   group: {
@@ -67,12 +53,13 @@ const systemCustomGroup = {
     created_at: '2026-08-13T00:00:00Z',
     updated_at: '2026-08-13T00:00:00Z'
   },
-  models: [
+  sources: [
     {
       id: 901,
       group_id: 90,
-      ...explicitModels[0],
-      source_group: {
+      source_group_id: 11,
+      priority: 0,
+      group: {
         id: 11,
         name: 'Tavern A',
         description: '',
@@ -86,11 +73,19 @@ const systemCustomGroup = {
     {
       id: 902,
       group_id: 90,
-      ...explicitModels[1],
+      source_group_id: 12,
+      priority: 1,
       created_at: '2026-08-13T00:00:00Z',
       updated_at: '2026-08-13T00:00:00Z'
     }
-  ]
+  ],
+  summary: {
+    unique_models: 2,
+    fallback_routes: 0,
+    unavailable_sources: 0,
+    unpriced_routes: 0
+  },
+  models: []
 } satisfies SystemCustomGroup
 
 describe('admin system custom group API', () => {
@@ -141,7 +136,23 @@ describe('admin system custom group API', () => {
     expect(get).toHaveBeenCalledWith('/admin/system-custom-groups/candidates')
   })
 
-  it('creates a group without changing explicit aliases or enabled flags', async () => {
+  it('previews prospective group pricing without saving the form', async () => {
+    const request = {
+      group_id: 90,
+      platform: 'anthropic',
+      models: ['claude-sonnet-4'],
+      model_pricing: []
+    }
+    const coverage = {
+      models: [{ model: 'claude-sonnet-4', status: 'missing' as const }]
+    }
+    post.mockResolvedValueOnce({ data: coverage })
+
+    await expect(previewPricingCoverage(request)).resolves.toEqual(coverage)
+    expect(post).toHaveBeenCalledWith('/admin/groups/pricing-coverage', request)
+  })
+
+  it('creates a group with ordered source groups', async () => {
     const request: CreateSystemCustomGroupRequest = {
       name: 'Tavern monthly card',
       description: 'All tavern sources',
@@ -149,14 +160,14 @@ describe('admin system custom group API', () => {
       weekly_limit_usd: null,
       monthly_limit_usd: 300,
       default_validity_days: 30,
-      models: explicitModels
+      source_group_ids: [11, 12]
     }
     const created: SystemCustomGroup = systemCustomGroup
     post.mockResolvedValueOnce({ data: created })
 
     await expect(createSystemCustomGroup(request)).resolves.toBe(created)
     expect(post).toHaveBeenCalledWith('/admin/system-custom-groups', request)
-    expect(post.mock.calls[0][1].models).toEqual(explicitModels)
+    expect(post.mock.calls[0][1].source_group_ids).toEqual([11, 12])
   })
 
   it('loads one system custom group and unwraps data', async () => {
@@ -167,7 +178,7 @@ describe('admin system custom group API', () => {
     expect(get).toHaveBeenCalledWith('/admin/system-custom-groups/90')
   })
 
-  it('updates a complete route snapshot without changing explicit aliases or enabled flags', async () => {
+  it('updates ordered source groups', async () => {
     const request: UpdateSystemCustomGroupRequest = {
       name: 'Tavern monthly card',
       description: null,
@@ -175,7 +186,7 @@ describe('admin system custom group API', () => {
       weekly_limit_usd: null,
       monthly_limit_usd: 300,
       default_validity_days: 31,
-      models: explicitModels
+      source_group_ids: [12, 11]
     }
     const updated: SystemCustomGroup = {
       ...systemCustomGroup,
@@ -192,7 +203,7 @@ describe('admin system custom group API', () => {
 
     await expect(updateSystemCustomGroup(90, request)).resolves.toBe(updated)
     expect(put).toHaveBeenCalledWith('/admin/system-custom-groups/90', request)
-    expect(put.mock.calls[0][1].models).toEqual(explicitModels)
+    expect(put.mock.calls[0][1].source_group_ids).toEqual([12, 11])
   })
 
   it('loads the sync preview and unwraps all route states', async () => {

@@ -5,7 +5,9 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
+	"github.com/Wei-Shaw/sub2api/internal/config"
 	middleware2 "github.com/Wei-Shaw/sub2api/internal/server/middleware"
 	"github.com/Wei-Shaw/sub2api/internal/service"
 	"github.com/gin-gonic/gin"
@@ -13,18 +15,28 @@ import (
 	"github.com/tidwall/gjson"
 )
 
-type systemCustomModelsRouteRepo struct {
-	service.SystemCustomGroupRepository
-	routes []service.SystemCustomGroupModel
-	groups map[int64]*service.Group
+type systemCustomRuntimeAccountRepo struct {
+	service.AccountRepository
+	accounts []service.SystemCustomGroupSchedulableAccount
 }
 
-func (r systemCustomModelsRouteRepo) ListModels(context.Context, int64, bool) ([]service.SystemCustomGroupModel, error) {
-	routes := append([]service.SystemCustomGroupModel(nil), r.routes...)
-	for i := range routes {
-		routes[i].SourceGroup = r.groups[routes[i].SourceGroupID]
-	}
-	return routes, nil
+func (r *systemCustomRuntimeAccountRepo) ListSchedulableByGroupIDs(_ context.Context, _ []int64) ([]service.SystemCustomGroupSchedulableAccount, error) {
+	return append([]service.SystemCustomGroupSchedulableAccount(nil), r.accounts...), nil
+}
+
+type systemCustomModelsRouteRepo struct {
+	service.SystemCustomGroupRepository
+	group *service.SystemCustomGroup
+}
+
+func (r systemCustomModelsRouteRepo) Get(context.Context, int64) (*service.SystemCustomGroup, error) {
+	return r.group, nil
+}
+
+func (r systemCustomModelsRouteRepo) GetRuntime(context.Context, int64) (*service.SystemCustomGroup, error) {
+	clone := *r.group
+	clone.Models = nil
+	return &clone, nil
 }
 
 type systemCustomModelsGroupRepo struct {
@@ -57,23 +69,31 @@ func (c systemCustomModelsCatalog) HasSchedulableAccountsForGroupPlatform(_ cont
 	return !c.unschedulable[groupID]
 }
 
-func (c systemCustomModelsCatalog) ListSystemCustomGroupModelAvailability(_ context.Context, sources []service.SystemCustomGroupModelListSource) (service.SystemCustomGroupModelAvailability, error) {
-	availability := make(service.SystemCustomGroupModelAvailability, len(sources))
+func (c systemCustomModelsCatalog) BuildSystemCustomGroupModelCatalog(_ context.Context, sources []service.SystemCustomGroupSource, platform string) (*service.SystemCustomGroupRuntimeCatalog, error) {
+	candidates := make([]service.SystemCustomGroupRuntimeCandidate, 0)
+	advertised := make([]string, 0)
 	for _, source := range sources {
-		if c.unschedulable[source.Group.ID] {
+		if source.SourceGroup == nil || c.unschedulable[source.SourceGroupID] ||
+			(platform != "" && source.SourceGroup.Platform != platform) {
 			continue
 		}
-		available := make(map[string]bool, len(source.Models))
-		for _, sourceModel := range source.Models {
-			for _, model := range c.models[source.Group.ID] {
-				if model == sourceModel {
-					available[sourceModel] = true
-				}
-			}
+		for _, model := range c.models[source.SourceGroupID] {
+			advertised = append(advertised, model)
+			candidates = append(candidates, service.SystemCustomGroupRuntimeCandidate{
+				SourceGroup: *source.SourceGroup, PublicModel: model, SourceModel: model,
+			})
 		}
-		availability[source.Group.ID] = available
 	}
-	return availability, nil
+	return service.NewSystemCustomGroupRuntimeCatalog(candidates, advertised), nil
+}
+
+func (c systemCustomModelsCatalog) ResolveSystemCustomGroupModelCatalog(_ context.Context, sources []service.SystemCustomGroupSource, platform, model string) ([]service.SystemCustomGroupRuntimeCandidate, bool, error) {
+	catalog, err := c.BuildSystemCustomGroupModelCatalog(context.Background(), sources, platform)
+	if err != nil {
+		return nil, false, err
+	}
+	candidates, advertised := catalog.Resolve(model)
+	return candidates, advertised, nil
 }
 
 func TestSystemCustomGroupModelsExposesAvailableAliasesOnly(t *testing.T) {
@@ -86,15 +106,14 @@ func TestSystemCustomGroupModelsExposesAvailableAliasesOnly(t *testing.T) {
 
 			require.Equal(t, http.StatusOK, recorder.Code)
 			require.Equal(t, "list", gjson.Get(recorder.Body.String(), "object").String())
-			require.Equal(t, []string{"claude-monthly", "gemini-monthly"}, gjsonStrings(recorder.Body.String(), "data.#.id"))
+			require.Equal(t, []string{"claude-sonnet-4", "gemini-2.5-flash"}, gjsonStrings(recorder.Body.String(), "data.#.id"))
 			for _, item := range gjson.Get(recorder.Body.String(), "data").Array() {
 				require.Equal(t, "model", item.Get("object").String())
 				require.Equal(t, gjson.Number, item.Get("created").Type)
 				require.Positive(t, item.Get("created").Int())
 				require.NotEmpty(t, item.Get("owned_by").String())
 			}
-			require.NotContains(t, recorder.Body.String(), "claude-sonnet-4")
-			require.NotContains(t, recorder.Body.String(), "gemini-2.5-flash")
+			require.NotContains(t, recorder.Body.String(), "retained-static")
 		})
 	}
 }
@@ -106,11 +125,52 @@ func TestSystemCustomCodexModelsExposesAliasManifestOnly(t *testing.T) {
 	handler.SystemCustomCodexModels(c)
 
 	require.Equal(t, http.StatusOK, recorder.Code)
-	require.Equal(t, []string{"claude-monthly", "gemini-monthly"}, gjsonStrings(recorder.Body.String(), "models.#.slug"))
-	require.Equal(t, []string{"claude-monthly", "gemini-monthly"}, gjsonStrings(recorder.Body.String(), "models.#.display_name"))
+	require.Equal(t, []string{"claude-sonnet-4", "gemini-2.5-flash"}, gjsonStrings(recorder.Body.String(), "models.#.slug"))
+	require.Equal(t, []string{"claude-sonnet-4", "gemini-2.5-flash"}, gjsonStrings(recorder.Body.String(), "models.#.display_name"))
 	require.False(t, gjson.Get(recorder.Body.String(), "object").Exists())
-	require.NotContains(t, recorder.Body.String(), "claude-sonnet-4")
-	require.NotContains(t, recorder.Body.String(), "gemini-2.5-flash")
+	require.NotContains(t, recorder.Body.String(), "retained-static")
+}
+
+func TestNewGatewayHandlerWiresOpenAIRuntimeBlocksIntoDynamicCatalog(t *testing.T) {
+	firstGroup := &service.Group{ID: 10, Platform: service.PlatformOpenAI, Status: service.StatusActive, Hydrated: true}
+	secondGroup := &service.Group{ID: 20, Platform: service.PlatformOpenAI, Status: service.StatusActive, Hydrated: true}
+	firstAccount := service.Account{
+		ID: 101, Platform: service.PlatformOpenAI, Type: service.AccountTypeAPIKey,
+		Status: service.StatusActive, Schedulable: true,
+		Credentials: map[string]any{"model_mapping": map[string]any{"shared": "gpt-5.4"}},
+	}
+	secondAccount := service.Account{
+		ID: 201, Platform: service.PlatformOpenAI, Type: service.AccountTypeAPIKey,
+		Status: service.StatusActive, Schedulable: true,
+		Credentials: map[string]any{"model_mapping": map[string]any{"shared": "gpt-5.4"}},
+	}
+	repo := &systemCustomRuntimeAccountRepo{accounts: []service.SystemCustomGroupSchedulableAccount{
+		{GroupID: firstGroup.ID, Account: firstAccount},
+		{GroupID: secondGroup.ID, Account: secondAccount},
+	}}
+	cfg := &config.Config{}
+	billing := service.NewBillingService(cfg, nil)
+	gateway := service.NewGatewayService(
+		repo, nil, nil, nil, nil, nil, nil, nil, cfg,
+		nil, nil, billing, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil,
+	)
+	openAI := service.NewOpenAIGatewayService(
+		nil, nil, nil, nil, nil, nil, nil, cfg, nil, nil, nil, nil, nil,
+		nil, nil, nil, nil, nil, nil, nil, nil, nil,
+	)
+	openAI.BlockAccountScheduling(&firstAccount, time.Now().Add(time.Minute), "test")
+	NewGatewayHandler(gateway, openAI, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, cfg, nil)
+
+	catalog, err := gateway.BuildSystemCustomGroupModelCatalog(context.Background(), []service.SystemCustomGroupSource{
+		{SourceGroupID: firstGroup.ID, Priority: 1, SourceGroup: firstGroup},
+		{SourceGroupID: secondGroup.ID, Priority: 2, SourceGroup: secondGroup},
+	}, "")
+
+	require.NoError(t, err)
+	candidates, advertised := catalog.Resolve("shared")
+	require.True(t, advertised)
+	require.Len(t, candidates, 1)
+	require.Equal(t, secondGroup.ID, candidates[0].SourceGroup.ID)
 }
 
 func gjsonStrings(body, path string) []string {
@@ -130,12 +190,19 @@ func newSystemCustomModelsHandler(t *testing.T) (*GatewayHandler, *service.APIKe
 		20: {ID: 20, Platform: service.PlatformGemini, Status: service.StatusActive, Hydrated: true},
 		30: {ID: 30, Platform: service.PlatformOpenAI, Status: service.StatusActive, Hydrated: true},
 	}}
-	routeRepo := systemCustomModelsRouteRepo{routes: []service.SystemCustomGroupModel{
-		{GroupID: billingGroupID, PublicModel: "gemini-monthly", SourceGroupID: 20, SourceModel: "gemini-2.5-flash", Enabled: true},
-		{GroupID: billingGroupID, PublicModel: "claude-monthly", SourceGroupID: 10, SourceModel: "claude-sonnet-4", Enabled: true},
-		{GroupID: billingGroupID, PublicModel: "unavailable", SourceGroupID: 30, SourceModel: "gpt-5.6", Enabled: true},
-		{GroupID: billingGroupID, PublicModel: "disabled", SourceGroupID: 10, SourceModel: "claude-sonnet-4", Enabled: false},
-	}, groups: groupRepo.groups}
+	container := &service.Group{
+		ID: billingGroupID, Platform: service.PlatformComposite, Status: service.StatusActive, Hydrated: true,
+		SubscriptionType: service.SubscriptionTypeSubscription, SystemCustomRoutingEnabled: true,
+	}
+	routeRepo := systemCustomModelsRouteRepo{group: &service.SystemCustomGroup{
+		Group: *container,
+		Sources: []service.SystemCustomGroupSource{
+			{SourceGroupID: 20, Priority: 2, SourceGroup: groupRepo.groups[20]},
+			{SourceGroupID: 10, Priority: 1, SourceGroup: groupRepo.groups[10]},
+			{SourceGroupID: 30, Priority: 3, SourceGroup: groupRepo.groups[30]},
+		},
+		Models: []service.SystemCustomGroupModel{{PublicModel: "retained-static", Enabled: true}},
+	}}
 	catalog := systemCustomModelsCatalog{
 		models: map[int64][]string{
 			10: {"claude-sonnet-4"},
@@ -149,10 +216,7 @@ func newSystemCustomModelsHandler(t *testing.T) (*GatewayHandler, *service.APIKe
 	apiKeyService.SetSystemCustomGroupModelCatalog(catalog)
 	key := &service.APIKey{
 		GroupID: &billingGroupID,
-		Group: &service.Group{
-			ID: billingGroupID, Platform: service.PlatformComposite, Status: service.StatusActive, Hydrated: true,
-			SubscriptionType: service.SubscriptionTypeSubscription, SystemCustomRoutingEnabled: true,
-		},
+		Group:   container,
 	}
 	return &GatewayHandler{apiKeyService: apiKeyService}, key
 }

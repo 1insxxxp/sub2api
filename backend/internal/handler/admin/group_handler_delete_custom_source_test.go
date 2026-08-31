@@ -28,7 +28,7 @@ func TestDeleteGroupHandlerReturnsCustomGroupSourceConflict(t *testing.T) {
 		err: service.ErrGroupCustomGroupSourceInUse.WithMetadata(map[string]string{
 			"reference_count": "7",
 		}),
-	}, nil, nil)
+	}, nil, nil, nil)
 	router.DELETE("/api/v1/admin/groups/:id", handler.Delete)
 
 	recorder := httptest.NewRecorder()

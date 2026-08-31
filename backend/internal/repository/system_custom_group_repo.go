@@ -11,6 +11,7 @@ import (
 	dbent "github.com/Wei-Shaw/sub2api/ent"
 	"github.com/Wei-Shaw/sub2api/ent/group"
 	"github.com/Wei-Shaw/sub2api/ent/systemcustomgroupmodel"
+	"github.com/Wei-Shaw/sub2api/ent/systemcustomgroupsource"
 	"github.com/Wei-Shaw/sub2api/internal/payment"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/groupref"
 	"github.com/Wei-Shaw/sub2api/internal/service"
@@ -25,7 +26,7 @@ func NewSystemCustomGroupRepository(client *dbent.Client) service.SystemCustomGr
 	return &systemCustomGroupRepository{client: client}
 }
 
-func (r *systemCustomGroupRepository) Create(ctx context.Context, groupIn *service.Group, models []service.SystemCustomGroupModelInput) error {
+func (r *systemCustomGroupRepository) Create(ctx context.Context, groupIn *service.Group, sourceGroupIDs []int64, models []service.SystemCustomGroupModelInput) error {
 	if r == nil || r.client == nil {
 		return errors.New("system custom group repository is not configured")
 	}
@@ -41,6 +42,9 @@ func (r *systemCustomGroupRepository) Create(ctx context.Context, groupIn *servi
 	if err := createGroupRecord(ctx, client, groupIn); err != nil {
 		return err
 	}
+	if err := createSystemCustomSourceSnapshot(ctx, client, groupIn.ID, sourceGroupIDs); err != nil {
+		return err
+	}
 	if err := createSystemCustomRouteSnapshot(ctx, client, groupIn.ID, models); err != nil {
 		return err
 	}
@@ -53,7 +57,7 @@ func (r *systemCustomGroupRepository) Create(ctx context.Context, groupIn *servi
 	return nil
 }
 
-func (r *systemCustomGroupRepository) Update(ctx context.Context, groupIn *service.Group, models []service.SystemCustomGroupModelInput) error {
+func (r *systemCustomGroupRepository) Update(ctx context.Context, groupIn *service.Group, sourceGroupIDs []int64, _ []service.SystemCustomGroupModelInput) error {
 	if r == nil || r.client == nil {
 		return errors.New("system custom group repository is not configured")
 	}
@@ -79,10 +83,10 @@ func (r *systemCustomGroupRepository) Update(ctx context.Context, groupIn *servi
 	if err := updateSystemCustomGroupRecord(ctx, client, groupIn); err != nil {
 		return err
 	}
-	if _, err := client.SystemCustomGroupModel.Delete().Where(systemcustomgroupmodel.GroupIDEQ(groupIn.ID)).Exec(ctx); err != nil {
-		return fmt.Errorf("delete system custom group route snapshot: %w", err)
+	if _, err := client.SystemCustomGroupSource.Delete().Where(systemcustomgroupsource.GroupIDEQ(groupIn.ID)).Exec(ctx); err != nil {
+		return fmt.Errorf("delete system custom group source snapshot: %w", err)
 	}
-	if err := createSystemCustomRouteSnapshot(ctx, client, groupIn.ID, models); err != nil {
+	if err := createSystemCustomSourceSnapshot(ctx, client, groupIn.ID, sourceGroupIDs); err != nil {
 		return err
 	}
 	if err := enqueueSchedulerOutbox(ctx, client, service.SchedulerOutboxEventGroupChanged, nil, &groupIn.ID, nil); err != nil {
@@ -140,6 +144,11 @@ func (r *systemCustomGroupRepository) DeleteWithImpact(ctx context.Context, grou
 		Where(systemcustomgroupmodel.GroupIDEQ(groupID)).
 		Exec(ctx); err != nil {
 		return nil, systemCustomGroupDeleteTransactionError("delete system custom group route snapshot", err)
+	}
+	if _, err := client.SystemCustomGroupSource.Delete().
+		Where(systemcustomgroupsource.GroupIDEQ(groupID)).
+		Exec(ctx); err != nil {
+		return nil, systemCustomGroupDeleteTransactionError("delete system custom group source snapshot", err)
 	}
 	// Use the normal Group delete hook so the container is soft-deleted. This
 	// preserves historical subscriptions, usage ownership, and API key group_id.
@@ -291,6 +300,9 @@ func systemCustomGroupDeleteTransactionError(operation string, err error) error 
 func (r *systemCustomGroupRepository) Get(ctx context.Context, groupID int64) (*service.SystemCustomGroup, error) {
 	row, err := r.client.Group.Query().
 		Where(group.IDEQ(groupID), group.SystemCustomRoutingEnabledEQ(true)).
+		WithSystemCustomSources(func(query *dbent.SystemCustomGroupSourceQuery) {
+			query.WithSourceGroup().Order(dbent.Asc(systemcustomgroupsource.FieldPriority), dbent.Asc(systemcustomgroupsource.FieldID))
+		}).
 		WithSystemCustomRoutes(func(query *dbent.SystemCustomGroupModelQuery) {
 			query.WithSourceGroup().Order(dbent.Asc(systemcustomgroupmodel.FieldID))
 		}).
@@ -301,9 +313,42 @@ func (r *systemCustomGroupRepository) Get(ctx context.Context, groupID int64) (*
 	if err != nil {
 		return nil, err
 	}
-	out := &service.SystemCustomGroup{Group: *groupEntityToService(row), Models: make([]service.SystemCustomGroupModel, 0, len(row.Edges.SystemCustomRoutes))}
+	out := &service.SystemCustomGroup{
+		Group:   *groupEntityToService(row),
+		Sources: make([]service.SystemCustomGroupSource, 0, len(row.Edges.SystemCustomSources)),
+		Models:  make([]service.SystemCustomGroupModel, 0, len(row.Edges.SystemCustomRoutes)),
+	}
+	for _, source := range row.Edges.SystemCustomSources {
+		out.Sources = append(out.Sources, mapSystemCustomGroupSource(source))
+	}
 	for _, route := range row.Edges.SystemCustomRoutes {
 		out.Models = append(out.Models, mapSystemCustomGroupModel(route))
+	}
+	return out, nil
+}
+
+// GetRuntime loads only the request-time container and its ordered live source
+// references. Retained static routes remain available through Get/ListModels/
+// ResolveModel for administration and rollback compatibility.
+func (r *systemCustomGroupRepository) GetRuntime(ctx context.Context, groupID int64) (*service.SystemCustomGroup, error) {
+	row, err := r.client.Group.Query().
+		Where(group.IDEQ(groupID), group.SystemCustomRoutingEnabledEQ(true)).
+		WithSystemCustomSources(func(query *dbent.SystemCustomGroupSourceQuery) {
+			query.WithSourceGroup().Order(dbent.Asc(systemcustomgroupsource.FieldPriority), dbent.Asc(systemcustomgroupsource.FieldID))
+		}).
+		Only(ctx)
+	if dbent.IsNotFound(err) {
+		return nil, service.ErrSystemCustomGroupNotFound
+	}
+	if err != nil {
+		return nil, err
+	}
+	out := &service.SystemCustomGroup{
+		Group:   *groupEntityToService(row),
+		Sources: make([]service.SystemCustomGroupSource, 0, len(row.Edges.SystemCustomSources)),
+	}
+	for _, source := range row.Edges.SystemCustomSources {
+		out.Sources = append(out.Sources, mapSystemCustomGroupSource(source))
 	}
 	return out, nil
 }
@@ -366,6 +411,19 @@ func createSystemCustomRouteSnapshot(ctx context.Context, client *dbent.Client, 
 	return nil
 }
 
+func createSystemCustomSourceSnapshot(ctx context.Context, client *dbent.Client, groupID int64, sourceGroupIDs []int64) error {
+	for priority, sourceGroupID := range sourceGroupIDs {
+		if _, err := client.SystemCustomGroupSource.Create().
+			SetGroupID(groupID).
+			SetSourceGroupID(sourceGroupID).
+			SetPriority(priority).
+			Save(ctx); err != nil {
+			return fmt.Errorf("persist system custom group source group_id=%d source_group_id=%d priority=%d: %w", groupID, sourceGroupID, priority, err)
+		}
+	}
+	return nil
+}
+
 func updateSystemCustomGroupRecord(ctx context.Context, client *dbent.Client, groupIn *service.Group) error {
 	builder := client.Group.Update().
 		Where(group.IDEQ(groupIn.ID), group.DeletedAtIsNil(), group.SystemCustomRoutingEnabledEQ(true)).
@@ -407,6 +465,17 @@ func mapSystemCustomGroupModel(row *dbent.SystemCustomGroupModel) service.System
 		ID: row.ID, GroupID: row.GroupID, PublicModel: row.PublicModel,
 		SourceGroupID: row.SourceGroupID, SourceModel: row.SourceModel, Enabled: row.Enabled,
 		CreatedAt: row.CreatedAt, UpdatedAt: row.UpdatedAt,
+	}
+	if row.Edges.SourceGroup != nil {
+		out.SourceGroup = groupEntityToService(row.Edges.SourceGroup)
+	}
+	return out
+}
+
+func mapSystemCustomGroupSource(row *dbent.SystemCustomGroupSource) service.SystemCustomGroupSource {
+	out := service.SystemCustomGroupSource{
+		ID: row.ID, GroupID: row.GroupID, SourceGroupID: row.SourceGroupID,
+		Priority: row.Priority, CreatedAt: row.CreatedAt, UpdatedAt: row.UpdatedAt,
 	}
 	if row.Edges.SourceGroup != nil {
 		out.SourceGroup = groupEntityToService(row.Edges.SourceGroup)

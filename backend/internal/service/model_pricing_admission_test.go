@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/ctxkey"
 	"github.com/stretchr/testify/require"
 )
 
@@ -77,26 +78,94 @@ func TestResolvedChannelPricingUsableRejectsEmptyTokenRow(t *testing.T) {
 	}))
 }
 
-func TestResolvedChannelPricingUsableAcceptsExplicitImageAndPerRequestRows(t *testing.T) {
-	imagePrice := 0.12
+func TestResolvedChannelPricingUsableMatchesRequestSettlementModes(t *testing.T) {
 	requestPrice := 0.03
+	imageOutputPrice := 0.12
+	tier := PricingInterval{TierLabel: "standard", PerRequestPrice: &requestPrice}
 
-	require.True(t, resolvedChannelPricingUsable(&ResolvedPricing{
-		Mode:   BillingModeImage,
-		Source: PricingSourceChannel,
-		channelPricing: &ChannelModelPricing{
-			BillingMode:      BillingModeImage,
-			ImageOutputPrice: &imagePrice,
+	tests := []struct {
+		name     string
+		resolved *ResolvedPricing
+		want     bool
+	}{
+		{
+			name: "image flat per request",
+			resolved: &ResolvedPricing{Mode: BillingModeImage, Source: PricingSourceChannel,
+				channelPricing: &ChannelModelPricing{BillingMode: BillingModeImage, PerRequestPrice: &requestPrice}},
+			want: true,
 		},
-	}))
-	require.True(t, resolvedChannelPricingUsable(&ResolvedPricing{
-		Mode:   BillingModePerRequest,
-		Source: PricingSourceChannel,
-		channelPricing: &ChannelModelPricing{
-			BillingMode:     BillingModePerRequest,
-			PerRequestPrice: &requestPrice,
+		{
+			name: "image request tier",
+			resolved: &ResolvedPricing{Mode: BillingModeImage, Source: PricingSourceChannel,
+				channelPricing: &ChannelModelPricing{BillingMode: BillingModeImage, Intervals: []PricingInterval{tier}}, RequestTiers: []PricingInterval{tier}},
+			want: true,
 		},
-	}))
+		{
+			name: "per request tier",
+			resolved: &ResolvedPricing{Mode: BillingModePerRequest, Source: PricingSourceChannel,
+				channelPricing: &ChannelModelPricing{BillingMode: BillingModePerRequest, Intervals: []PricingInterval{tier}}, RequestTiers: []PricingInterval{tier}},
+			want: true,
+		},
+		{
+			name: "video flat per request",
+			resolved: &ResolvedPricing{Mode: BillingModeVideo, Source: PricingSourceChannel,
+				channelPricing: &ChannelModelPricing{BillingMode: BillingModeVideo, PerRequestPrice: &requestPrice}},
+			want: true,
+		},
+		{
+			name: "video request tier",
+			resolved: &ResolvedPricing{Mode: BillingModeVideo, Source: PricingSourceChannel,
+				channelPricing: &ChannelModelPricing{BillingMode: BillingModeVideo, Intervals: []PricingInterval{tier}}, RequestTiers: []PricingInterval{tier}},
+			want: true,
+		},
+		{
+			name: "image output token price is not request settlement",
+			resolved: &ResolvedPricing{Mode: BillingModeImage, Source: PricingSourceChannel,
+				channelPricing: &ChannelModelPricing{BillingMode: BillingModeImage, ImageOutputPrice: &imageOutputPrice}},
+			want: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			require.Equal(t, tt.want, resolvedChannelPricingUsable(tt.resolved))
+		})
+	}
+}
+
+func TestModelPricingAdmissionUsesLoadedGroupRequestSettlementPricing(t *testing.T) {
+	tierPrice := 0.06
+	tests := []struct {
+		name    string
+		mode    BillingMode
+		flat    *float64
+		tiers   []PricingInterval
+		modelID string
+	}{
+		{name: "image flat", mode: BillingModeImage, flat: coveragePrice(0.04), modelID: "image-flat-only"},
+		{name: "image tiers", mode: BillingModeImage, tiers: []PricingInterval{{TierLabel: "1k", PerRequestPrice: &tierPrice}}, modelID: "image-tier-only"},
+		{name: "per request tiers", mode: BillingModePerRequest, tiers: []PricingInterval{{TierLabel: "standard", PerRequestPrice: &tierPrice}}, modelID: "request-tier-only"},
+		{name: "video flat", mode: BillingModeVideo, flat: coveragePrice(0.08), modelID: "video-flat-only"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			group := &Group{
+				ID: 71, Platform: PlatformGemini, Status: StatusActive, Hydrated: true,
+				ModelPricing: []ChannelModelPricing{{
+					Platform: PlatformGemini, Models: []string{tt.modelID}, BillingMode: tt.mode,
+					PerRequestPrice: tt.flat, Intervals: tt.tiers,
+				}},
+			}
+			billing := newTestBillingService()
+			svc := &GatewayService{billingService: billing, resolver: NewModelPricingResolver(nil, billing)}
+			ctx := context.WithValue(context.Background(), ctxkey.Group, group)
+
+			err := svc.ensureModelPricingAvailable(ctx, &group.ID, tt.modelID)
+
+			require.NoError(t, err)
+		})
+	}
 }
 
 func TestGatewaySelectedAccountPricingAdmissionUsesConcreteAccountMapping(t *testing.T) {

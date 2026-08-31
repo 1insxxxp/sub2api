@@ -42,4 +42,13 @@ describe("admin GroupsView layout", () => {
     );
     expect(groupsViewSource).toContain("openSystemCustomGroup(row.id)");
   });
+
+  it("checks selected models for pricing and blocks incomplete group saves", () => {
+    expect(groupsViewSource).toContain("previewPricingCoverage");
+    expect(groupsViewSource).toContain('data-testid="create-pricing-coverage"');
+    expect(groupsViewSource).toContain('data-testid="edit-pricing-coverage"');
+    expect(groupsViewSource).toContain('await ensurePricingCoverage("create")');
+    expect(groupsViewSource).toContain('await ensurePricingCoverage("edit")');
+    expect(groupsViewSource).toContain(":required-models");
+  });
 });

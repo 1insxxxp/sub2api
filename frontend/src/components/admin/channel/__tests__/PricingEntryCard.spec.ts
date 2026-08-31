@@ -45,4 +45,22 @@ describe('PricingEntryCard', () => {
     expect(hint.text()).toContain('admin.channels.form.perRequestSuccessHint')
     expect(hint.text()).toContain('admin.channels.form.perRequestFallbackHint')
   })
+
+  it('opens and marks entries that still need pricing', () => {
+    const wrapper = mount(PricingEntryCard, {
+      props: { entry, platform: 'openai', requiredModels: ['gpt-5.5'] },
+      global: {
+        stubs: {
+          Icon: true,
+          Select: true,
+          ModelTagInput: true,
+          IntervalRow: true,
+        },
+      },
+    })
+
+    expect(wrapper.get('[data-testid="pricing-entry-required"]').text()).toContain(
+      'admin.groups.modelPricing.requiredHint'
+    )
+  })
 })

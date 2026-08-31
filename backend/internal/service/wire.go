@@ -90,6 +90,18 @@ func ProvideAuthService(
 	return svc
 }
 
+func ProvideUserService(
+	userRepo UserRepository,
+	settingRepo SettingRepository,
+	authCacheInvalidator APIKeyAuthCacheInvalidator,
+	billingCache BillingCache,
+	apiKeyRepo APIKeyRepository,
+) *UserService {
+	svc := NewUserService(userRepo, settingRepo, authCacheInvalidator, billingCache)
+	svc.SetAccountDeletionAPIKeyRepository(apiKeyRepo)
+	return svc
+}
+
 // ProvideOAuthRefreshAPI creates OAuthRefreshAPI with the default lock TTL.
 func ProvideOAuthRefreshAPI(accountRepo AccountRepository, tokenCache GeminiTokenCache) *OAuthRefreshAPI {
 	return NewOAuthRefreshAPI(accountRepo, tokenCache)
@@ -833,6 +845,18 @@ func ProvideImageStudioService(
 	return svc
 }
 
+// ProvideImageStudioGatewayExecutor gives Wire a fixed-arity provider for the
+// variadic production constructor.
+func ProvideImageStudioGatewayExecutor(
+	apiKeys ImageStudioAPIKeyProvider,
+	billing ImageStudioBillingChecker,
+	subscriptions UserSubscriptionRepository,
+	gateway ImageStudioGateway,
+	geminiGateway ImageStudioGeminiGateway,
+) *ImageStudioGatewayExecutor {
+	return NewImageStudioGatewayExecutor(apiKeys, billing, subscriptions, gateway, geminiGateway)
+}
+
 // ProvideImageStorageSettingService constructs the runtime-configurable image storage settings service.
 func ProvideImageStorageSettingService(
 	settingRepo SettingRepository,
@@ -849,7 +873,7 @@ var ProviderSet = wire.NewSet(
 	// Core services
 	ProvideAuthService,
 	NewPasskeyService,
-	NewUserService,
+	ProvideUserService,
 	ProvideAPIKeyService,
 	ProvideAPIKeyAuthCacheInvalidator,
 	ProvideAuthCacheInvalidationWorker,
@@ -916,12 +940,13 @@ var ProviderSet = wire.NewSet(
 	ProvideSettingService,
 	ProvideImageStorageSettingService,
 	ProvideImageStudioService,
-	NewImageStudioGatewayExecutor,
+	ProvideImageStudioGatewayExecutor,
 	wire.Bind(new(ImageStudioConfigReader), new(*SettingService)),
 	wire.Bind(new(ImageStudioGroupResolver), new(*APIKeyService)),
 	wire.Bind(new(ImageStudioAPIKeyProvider), new(*APIKeyService)),
 	wire.Bind(new(ImageStudioBillingChecker), new(*BillingCacheService)),
 	wire.Bind(new(ImageStudioGateway), new(*OpenAIGatewayService)),
+	wire.Bind(new(ImageStudioGeminiGateway), new(*GeminiMessagesCompatService)),
 	NewDataManagementService,
 	ProvideBackupService,
 	ProvideOpsSystemLogSink,
@@ -976,6 +1001,7 @@ var ProviderSet = wire.NewSet(
 	NewChannelService,
 	wire.Bind(new(ChannelCacheInvalidator), new(*ChannelService)),
 	NewModelPricingResolver,
+	NewGroupPricingCoverageService,
 	NewModelPlazaService,
 	NewContentModerationService,
 	NewAffiliateService,

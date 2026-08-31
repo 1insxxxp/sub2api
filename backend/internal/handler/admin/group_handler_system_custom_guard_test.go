@@ -28,7 +28,7 @@ func (s *managedSystemCustomGroupAdminServiceStub) DeleteGroup(context.Context, 
 
 func TestOrdinaryGroupHandlersExposeSystemCustomManagedOnlyError(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	h := NewGroupHandler(&managedSystemCustomGroupAdminServiceStub{}, nil, nil)
+	h := NewGroupHandler(&managedSystemCustomGroupAdminServiceStub{}, nil, nil, nil)
 	router := gin.New()
 	router.PUT("/groups/:id", h.Update)
 	router.DELETE("/groups/:id", h.Delete)

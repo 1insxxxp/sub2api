@@ -981,6 +981,7 @@ func (s *GatewayService) listSchedulableAccounts(ctx context.Context, groupID *i
 			if platform == PlatformGrok || strings.EqualFold(platform, PlatformGrok) {
 				accounts = s.filterGrokFreeQuotaAccountsForGateway(ctx, accounts)
 			}
+			accounts = filterSystemCustomAllowedAccounts(ctx, accounts)
 			slog.Debug("account_scheduling_list_snapshot",
 				"group_id", derefGroupID(groupID),
 				"platform", platform,
@@ -1042,7 +1043,8 @@ func (s *GatewayService) listSchedulableAccounts(ctx context.Context, groupID *i
 					"tls_fingerprint", acc.IsTLSFingerprintEnabled())
 			}
 		}
-		return s.filterAccountsBySchedulingThreshold(ctx, filtered), useMixed, nil
+		filtered = s.filterAccountsBySchedulingThreshold(ctx, filtered)
+		return filterSystemCustomAllowedAccounts(ctx, filtered), useMixed, nil
 	}
 
 	var accounts []Account
@@ -1081,7 +1083,7 @@ func (s *GatewayService) listSchedulableAccounts(ctx context.Context, groupID *i
 	if platform == PlatformGrok || strings.EqualFold(platform, PlatformGrok) {
 		accounts = s.filterGrokFreeQuotaAccountsForGateway(ctx, accounts)
 	}
-	return accounts, useMixed, nil
+	return filterSystemCustomAllowedAccounts(ctx, accounts), useMixed, nil
 }
 
 // IsSingleAntigravityAccountGroup 检查指定分组是否只有一个 antigravity 平台的可调度账号。
@@ -1464,6 +1466,9 @@ func (s *GatewayService) getSchedulableAccount(ctx context.Context, accountID in
 	if err != nil || account == nil {
 		return account, err
 	}
+	if !systemCustomAccountAllowed(ctx, account.ID) {
+		return nil, nil
+	}
 	if s.isAccountBlockedBySchedulingThreshold(ctx, account) {
 		return nil, nil
 	}
@@ -1499,7 +1504,13 @@ func (s *GatewayService) isAccountBlockedBySchedulingThreshold(ctx context.Conte
 }
 
 func (s *GatewayService) hydrateSelectedAccount(ctx context.Context, account *Account) (*Account, error) {
-	if account == nil || s.schedulerSnapshot == nil {
+	if account == nil {
+		return account, nil
+	}
+	if !systemCustomAccountAllowed(ctx, account.ID) {
+		return nil, ErrNoAvailableAccounts
+	}
+	if s.schedulerSnapshot == nil {
 		return account, nil
 	}
 	hydrated, err := s.schedulerSnapshot.GetAccount(ctx, account.ID)
@@ -1508,6 +1519,9 @@ func (s *GatewayService) hydrateSelectedAccount(ctx context.Context, account *Ac
 	}
 	if hydrated == nil {
 		return nil, fmt.Errorf("selected gateway account %d not found during hydration", account.ID)
+	}
+	if !systemCustomAccountAllowed(ctx, hydrated.ID) {
+		return nil, ErrNoAvailableAccounts
 	}
 	return hydrated, nil
 }

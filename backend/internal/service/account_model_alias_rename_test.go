@@ -306,6 +306,7 @@ func TestNewAdminServiceWiresAliasCascadeRepositories(t *testing.T) {
 		channelRepo,
 		userCustomGroupRepo,
 		systemCustomGroupRepo,
+		nil,
 	)
 
 	impl := svc.(*adminServiceImpl)

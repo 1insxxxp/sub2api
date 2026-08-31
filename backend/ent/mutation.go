@@ -52,6 +52,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/subadmincommissiongrant"
 	"github.com/Wei-Shaw/sub2api/ent/subscriptionplan"
 	"github.com/Wei-Shaw/sub2api/ent/systemcustomgroupmodel"
+	"github.com/Wei-Shaw/sub2api/ent/systemcustomgroupsource"
 	"github.com/Wei-Shaw/sub2api/ent/tlsfingerprintprofile"
 	"github.com/Wei-Shaw/sub2api/ent/usagecleanuptask"
 	"github.com/Wei-Shaw/sub2api/ent/usagelog"
@@ -119,6 +120,7 @@ const (
 	TypeSubAdminCommissionGrant       = "SubAdminCommissionGrant"
 	TypeSubscriptionPlan              = "SubscriptionPlan"
 	TypeSystemCustomGroupModel        = "SystemCustomGroupModel"
+	TypeSystemCustomGroupSource       = "SystemCustomGroupSource"
 	TypeTLSFingerprintProfile         = "TLSFingerprintProfile"
 	TypeUsageCleanupTask              = "UsageCleanupTask"
 	TypeUsageLog                      = "UsageLog"
@@ -25468,6 +25470,12 @@ type GroupMutation struct {
 	system_custom_source_routes             map[int64]struct{}
 	removedsystem_custom_source_routes      map[int64]struct{}
 	clearedsystem_custom_source_routes      bool
+	system_custom_sources                   map[int64]struct{}
+	removedsystem_custom_sources            map[int64]struct{}
+	clearedsystem_custom_sources            bool
+	system_custom_source_references         map[int64]struct{}
+	removedsystem_custom_source_references  map[int64]struct{}
+	clearedsystem_custom_source_references  bool
 	accounts                                map[int64]struct{}
 	removedaccounts                         map[int64]struct{}
 	clearedaccounts                         bool
@@ -29183,6 +29191,114 @@ func (m *GroupMutation) ResetSystemCustomSourceRoutes() {
 	m.removedsystem_custom_source_routes = nil
 }
 
+// AddSystemCustomSourceIDs adds the "system_custom_sources" edge to the SystemCustomGroupSource entity by ids.
+func (m *GroupMutation) AddSystemCustomSourceIDs(ids ...int64) {
+	if m.system_custom_sources == nil {
+		m.system_custom_sources = make(map[int64]struct{})
+	}
+	for i := range ids {
+		m.system_custom_sources[ids[i]] = struct{}{}
+	}
+}
+
+// ClearSystemCustomSources clears the "system_custom_sources" edge to the SystemCustomGroupSource entity.
+func (m *GroupMutation) ClearSystemCustomSources() {
+	m.clearedsystem_custom_sources = true
+}
+
+// SystemCustomSourcesCleared reports if the "system_custom_sources" edge to the SystemCustomGroupSource entity was cleared.
+func (m *GroupMutation) SystemCustomSourcesCleared() bool {
+	return m.clearedsystem_custom_sources
+}
+
+// RemoveSystemCustomSourceIDs removes the "system_custom_sources" edge to the SystemCustomGroupSource entity by IDs.
+func (m *GroupMutation) RemoveSystemCustomSourceIDs(ids ...int64) {
+	if m.removedsystem_custom_sources == nil {
+		m.removedsystem_custom_sources = make(map[int64]struct{})
+	}
+	for i := range ids {
+		delete(m.system_custom_sources, ids[i])
+		m.removedsystem_custom_sources[ids[i]] = struct{}{}
+	}
+}
+
+// RemovedSystemCustomSources returns the removed IDs of the "system_custom_sources" edge to the SystemCustomGroupSource entity.
+func (m *GroupMutation) RemovedSystemCustomSourcesIDs() (ids []int64) {
+	for id := range m.removedsystem_custom_sources {
+		ids = append(ids, id)
+	}
+	return
+}
+
+// SystemCustomSourcesIDs returns the "system_custom_sources" edge IDs in the mutation.
+func (m *GroupMutation) SystemCustomSourcesIDs() (ids []int64) {
+	for id := range m.system_custom_sources {
+		ids = append(ids, id)
+	}
+	return
+}
+
+// ResetSystemCustomSources resets all changes to the "system_custom_sources" edge.
+func (m *GroupMutation) ResetSystemCustomSources() {
+	m.system_custom_sources = nil
+	m.clearedsystem_custom_sources = false
+	m.removedsystem_custom_sources = nil
+}
+
+// AddSystemCustomSourceReferenceIDs adds the "system_custom_source_references" edge to the SystemCustomGroupSource entity by ids.
+func (m *GroupMutation) AddSystemCustomSourceReferenceIDs(ids ...int64) {
+	if m.system_custom_source_references == nil {
+		m.system_custom_source_references = make(map[int64]struct{})
+	}
+	for i := range ids {
+		m.system_custom_source_references[ids[i]] = struct{}{}
+	}
+}
+
+// ClearSystemCustomSourceReferences clears the "system_custom_source_references" edge to the SystemCustomGroupSource entity.
+func (m *GroupMutation) ClearSystemCustomSourceReferences() {
+	m.clearedsystem_custom_source_references = true
+}
+
+// SystemCustomSourceReferencesCleared reports if the "system_custom_source_references" edge to the SystemCustomGroupSource entity was cleared.
+func (m *GroupMutation) SystemCustomSourceReferencesCleared() bool {
+	return m.clearedsystem_custom_source_references
+}
+
+// RemoveSystemCustomSourceReferenceIDs removes the "system_custom_source_references" edge to the SystemCustomGroupSource entity by IDs.
+func (m *GroupMutation) RemoveSystemCustomSourceReferenceIDs(ids ...int64) {
+	if m.removedsystem_custom_source_references == nil {
+		m.removedsystem_custom_source_references = make(map[int64]struct{})
+	}
+	for i := range ids {
+		delete(m.system_custom_source_references, ids[i])
+		m.removedsystem_custom_source_references[ids[i]] = struct{}{}
+	}
+}
+
+// RemovedSystemCustomSourceReferences returns the removed IDs of the "system_custom_source_references" edge to the SystemCustomGroupSource entity.
+func (m *GroupMutation) RemovedSystemCustomSourceReferencesIDs() (ids []int64) {
+	for id := range m.removedsystem_custom_source_references {
+		ids = append(ids, id)
+	}
+	return
+}
+
+// SystemCustomSourceReferencesIDs returns the "system_custom_source_references" edge IDs in the mutation.
+func (m *GroupMutation) SystemCustomSourceReferencesIDs() (ids []int64) {
+	for id := range m.system_custom_source_references {
+		ids = append(ids, id)
+	}
+	return
+}
+
+// ResetSystemCustomSourceReferences resets all changes to the "system_custom_source_references" edge.
+func (m *GroupMutation) ResetSystemCustomSourceReferences() {
+	m.system_custom_source_references = nil
+	m.clearedsystem_custom_source_references = false
+	m.removedsystem_custom_source_references = nil
+}
+
 // AddAccountIDs adds the "accounts" edge to the Account entity by ids.
 func (m *GroupMutation) AddAccountIDs(ids ...int64) {
 	if m.accounts == nil {
@@ -30974,7 +31090,7 @@ func (m *GroupMutation) ResetField(name string) error {
 
 // AddedEdges returns all edge names that were set/added in this mutation.
 func (m *GroupMutation) AddedEdges() []string {
-	edges := make([]string, 0, 9)
+	edges := make([]string, 0, 11)
 	if m.api_keys != nil {
 		edges = append(edges, group.EdgeAPIKeys)
 	}
@@ -30995,6 +31111,12 @@ func (m *GroupMutation) AddedEdges() []string {
 	}
 	if m.system_custom_source_routes != nil {
 		edges = append(edges, group.EdgeSystemCustomSourceRoutes)
+	}
+	if m.system_custom_sources != nil {
+		edges = append(edges, group.EdgeSystemCustomSources)
+	}
+	if m.system_custom_source_references != nil {
+		edges = append(edges, group.EdgeSystemCustomSourceReferences)
 	}
 	if m.accounts != nil {
 		edges = append(edges, group.EdgeAccounts)
@@ -31051,6 +31173,18 @@ func (m *GroupMutation) AddedIDs(name string) []ent.Value {
 			ids = append(ids, id)
 		}
 		return ids
+	case group.EdgeSystemCustomSources:
+		ids := make([]ent.Value, 0, len(m.system_custom_sources))
+		for id := range m.system_custom_sources {
+			ids = append(ids, id)
+		}
+		return ids
+	case group.EdgeSystemCustomSourceReferences:
+		ids := make([]ent.Value, 0, len(m.system_custom_source_references))
+		for id := range m.system_custom_source_references {
+			ids = append(ids, id)
+		}
+		return ids
 	case group.EdgeAccounts:
 		ids := make([]ent.Value, 0, len(m.accounts))
 		for id := range m.accounts {
@@ -31069,7 +31203,7 @@ func (m *GroupMutation) AddedIDs(name string) []ent.Value {
 
 // RemovedEdges returns all edge names that were removed in this mutation.
 func (m *GroupMutation) RemovedEdges() []string {
-	edges := make([]string, 0, 9)
+	edges := make([]string, 0, 11)
 	if m.removedapi_keys != nil {
 		edges = append(edges, group.EdgeAPIKeys)
 	}
@@ -31090,6 +31224,12 @@ func (m *GroupMutation) RemovedEdges() []string {
 	}
 	if m.removedsystem_custom_source_routes != nil {
 		edges = append(edges, group.EdgeSystemCustomSourceRoutes)
+	}
+	if m.removedsystem_custom_sources != nil {
+		edges = append(edges, group.EdgeSystemCustomSources)
+	}
+	if m.removedsystem_custom_source_references != nil {
+		edges = append(edges, group.EdgeSystemCustomSourceReferences)
 	}
 	if m.removedaccounts != nil {
 		edges = append(edges, group.EdgeAccounts)
@@ -31146,6 +31286,18 @@ func (m *GroupMutation) RemovedIDs(name string) []ent.Value {
 			ids = append(ids, id)
 		}
 		return ids
+	case group.EdgeSystemCustomSources:
+		ids := make([]ent.Value, 0, len(m.removedsystem_custom_sources))
+		for id := range m.removedsystem_custom_sources {
+			ids = append(ids, id)
+		}
+		return ids
+	case group.EdgeSystemCustomSourceReferences:
+		ids := make([]ent.Value, 0, len(m.removedsystem_custom_source_references))
+		for id := range m.removedsystem_custom_source_references {
+			ids = append(ids, id)
+		}
+		return ids
 	case group.EdgeAccounts:
 		ids := make([]ent.Value, 0, len(m.removedaccounts))
 		for id := range m.removedaccounts {
@@ -31164,7 +31316,7 @@ func (m *GroupMutation) RemovedIDs(name string) []ent.Value {
 
 // ClearedEdges returns all edge names that were cleared in this mutation.
 func (m *GroupMutation) ClearedEdges() []string {
-	edges := make([]string, 0, 9)
+	edges := make([]string, 0, 11)
 	if m.clearedapi_keys {
 		edges = append(edges, group.EdgeAPIKeys)
 	}
@@ -31185,6 +31337,12 @@ func (m *GroupMutation) ClearedEdges() []string {
 	}
 	if m.clearedsystem_custom_source_routes {
 		edges = append(edges, group.EdgeSystemCustomSourceRoutes)
+	}
+	if m.clearedsystem_custom_sources {
+		edges = append(edges, group.EdgeSystemCustomSources)
+	}
+	if m.clearedsystem_custom_source_references {
+		edges = append(edges, group.EdgeSystemCustomSourceReferences)
 	}
 	if m.clearedaccounts {
 		edges = append(edges, group.EdgeAccounts)
@@ -31213,6 +31371,10 @@ func (m *GroupMutation) EdgeCleared(name string) bool {
 		return m.clearedsystem_custom_routes
 	case group.EdgeSystemCustomSourceRoutes:
 		return m.clearedsystem_custom_source_routes
+	case group.EdgeSystemCustomSources:
+		return m.clearedsystem_custom_sources
+	case group.EdgeSystemCustomSourceReferences:
+		return m.clearedsystem_custom_source_references
 	case group.EdgeAccounts:
 		return m.clearedaccounts
 	case group.EdgeAllowedUsers:
@@ -31253,6 +31415,12 @@ func (m *GroupMutation) ResetEdge(name string) error {
 		return nil
 	case group.EdgeSystemCustomSourceRoutes:
 		m.ResetSystemCustomSourceRoutes()
+		return nil
+	case group.EdgeSystemCustomSources:
+		m.ResetSystemCustomSources()
+		return nil
+	case group.EdgeSystemCustomSourceReferences:
+		m.ResetSystemCustomSourceReferences()
 		return nil
 	case group.EdgeAccounts:
 		m.ResetAccounts()
@@ -51929,6 +52097,684 @@ func (m *SystemCustomGroupModelMutation) ResetEdge(name string) error {
 		return nil
 	}
 	return fmt.Errorf("unknown SystemCustomGroupModel edge %s", name)
+}
+
+// SystemCustomGroupSourceMutation represents an operation that mutates the SystemCustomGroupSource nodes in the graph.
+type SystemCustomGroupSourceMutation struct {
+	config
+	op                  Op
+	typ                 string
+	id                  *int64
+	priority            *int
+	addpriority         *int
+	created_at          *time.Time
+	updated_at          *time.Time
+	clearedFields       map[string]struct{}
+	group               *int64
+	clearedgroup        bool
+	source_group        *int64
+	clearedsource_group bool
+	done                bool
+	oldValue            func(context.Context) (*SystemCustomGroupSource, error)
+	predicates          []predicate.SystemCustomGroupSource
+}
+
+var _ ent.Mutation = (*SystemCustomGroupSourceMutation)(nil)
+
+// systemcustomgroupsourceOption allows management of the mutation configuration using functional options.
+type systemcustomgroupsourceOption func(*SystemCustomGroupSourceMutation)
+
+// newSystemCustomGroupSourceMutation creates new mutation for the SystemCustomGroupSource entity.
+func newSystemCustomGroupSourceMutation(c config, op Op, opts ...systemcustomgroupsourceOption) *SystemCustomGroupSourceMutation {
+	m := &SystemCustomGroupSourceMutation{
+		config:        c,
+		op:            op,
+		typ:           TypeSystemCustomGroupSource,
+		clearedFields: make(map[string]struct{}),
+	}
+	for _, opt := range opts {
+		opt(m)
+	}
+	return m
+}
+
+// withSystemCustomGroupSourceID sets the ID field of the mutation.
+func withSystemCustomGroupSourceID(id int64) systemcustomgroupsourceOption {
+	return func(m *SystemCustomGroupSourceMutation) {
+		var (
+			err   error
+			once  sync.Once
+			value *SystemCustomGroupSource
+		)
+		m.oldValue = func(ctx context.Context) (*SystemCustomGroupSource, error) {
+			once.Do(func() {
+				if m.done {
+					err = errors.New("querying old values post mutation is not allowed")
+				} else {
+					value, err = m.Client().SystemCustomGroupSource.Get(ctx, id)
+				}
+			})
+			return value, err
+		}
+		m.id = &id
+	}
+}
+
+// withSystemCustomGroupSource sets the old SystemCustomGroupSource of the mutation.
+func withSystemCustomGroupSource(node *SystemCustomGroupSource) systemcustomgroupsourceOption {
+	return func(m *SystemCustomGroupSourceMutation) {
+		m.oldValue = func(context.Context) (*SystemCustomGroupSource, error) {
+			return node, nil
+		}
+		m.id = &node.ID
+	}
+}
+
+// Client returns a new `ent.Client` from the mutation. If the mutation was
+// executed in a transaction (ent.Tx), a transactional client is returned.
+func (m SystemCustomGroupSourceMutation) Client() *Client {
+	client := &Client{config: m.config}
+	client.init()
+	return client
+}
+
+// Tx returns an `ent.Tx` for mutations that were executed in transactions;
+// it returns an error otherwise.
+func (m SystemCustomGroupSourceMutation) Tx() (*Tx, error) {
+	if _, ok := m.driver.(*txDriver); !ok {
+		return nil, errors.New("ent: mutation is not running in a transaction")
+	}
+	tx := &Tx{config: m.config}
+	tx.init()
+	return tx, nil
+}
+
+// ID returns the ID value in the mutation. Note that the ID is only available
+// if it was provided to the builder or after it was returned from the database.
+func (m *SystemCustomGroupSourceMutation) ID() (id int64, exists bool) {
+	if m.id == nil {
+		return
+	}
+	return *m.id, true
+}
+
+// IDs queries the database and returns the entity ids that match the mutation's predicate.
+// That means, if the mutation is applied within a transaction with an isolation level such
+// as sql.LevelSerializable, the returned ids match the ids of the rows that will be updated
+// or updated by the mutation.
+func (m *SystemCustomGroupSourceMutation) IDs(ctx context.Context) ([]int64, error) {
+	switch {
+	case m.op.Is(OpUpdateOne | OpDeleteOne):
+		id, exists := m.ID()
+		if exists {
+			return []int64{id}, nil
+		}
+		fallthrough
+	case m.op.Is(OpUpdate | OpDelete):
+		return m.Client().SystemCustomGroupSource.Query().Where(m.predicates...).IDs(ctx)
+	default:
+		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
+	}
+}
+
+// SetGroupID sets the "group_id" field.
+func (m *SystemCustomGroupSourceMutation) SetGroupID(i int64) {
+	m.group = &i
+}
+
+// GroupID returns the value of the "group_id" field in the mutation.
+func (m *SystemCustomGroupSourceMutation) GroupID() (r int64, exists bool) {
+	v := m.group
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldGroupID returns the old "group_id" field's value of the SystemCustomGroupSource entity.
+// If the SystemCustomGroupSource object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SystemCustomGroupSourceMutation) OldGroupID(ctx context.Context) (v int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldGroupID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldGroupID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldGroupID: %w", err)
+	}
+	return oldValue.GroupID, nil
+}
+
+// ResetGroupID resets all changes to the "group_id" field.
+func (m *SystemCustomGroupSourceMutation) ResetGroupID() {
+	m.group = nil
+}
+
+// SetSourceGroupID sets the "source_group_id" field.
+func (m *SystemCustomGroupSourceMutation) SetSourceGroupID(i int64) {
+	m.source_group = &i
+}
+
+// SourceGroupID returns the value of the "source_group_id" field in the mutation.
+func (m *SystemCustomGroupSourceMutation) SourceGroupID() (r int64, exists bool) {
+	v := m.source_group
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldSourceGroupID returns the old "source_group_id" field's value of the SystemCustomGroupSource entity.
+// If the SystemCustomGroupSource object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SystemCustomGroupSourceMutation) OldSourceGroupID(ctx context.Context) (v int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldSourceGroupID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldSourceGroupID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldSourceGroupID: %w", err)
+	}
+	return oldValue.SourceGroupID, nil
+}
+
+// ResetSourceGroupID resets all changes to the "source_group_id" field.
+func (m *SystemCustomGroupSourceMutation) ResetSourceGroupID() {
+	m.source_group = nil
+}
+
+// SetPriority sets the "priority" field.
+func (m *SystemCustomGroupSourceMutation) SetPriority(i int) {
+	m.priority = &i
+	m.addpriority = nil
+}
+
+// Priority returns the value of the "priority" field in the mutation.
+func (m *SystemCustomGroupSourceMutation) Priority() (r int, exists bool) {
+	v := m.priority
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldPriority returns the old "priority" field's value of the SystemCustomGroupSource entity.
+// If the SystemCustomGroupSource object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SystemCustomGroupSourceMutation) OldPriority(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldPriority is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldPriority requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldPriority: %w", err)
+	}
+	return oldValue.Priority, nil
+}
+
+// AddPriority adds i to the "priority" field.
+func (m *SystemCustomGroupSourceMutation) AddPriority(i int) {
+	if m.addpriority != nil {
+		*m.addpriority += i
+	} else {
+		m.addpriority = &i
+	}
+}
+
+// AddedPriority returns the value that was added to the "priority" field in this mutation.
+func (m *SystemCustomGroupSourceMutation) AddedPriority() (r int, exists bool) {
+	v := m.addpriority
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetPriority resets all changes to the "priority" field.
+func (m *SystemCustomGroupSourceMutation) ResetPriority() {
+	m.priority = nil
+	m.addpriority = nil
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (m *SystemCustomGroupSourceMutation) SetCreatedAt(t time.Time) {
+	m.created_at = &t
+}
+
+// CreatedAt returns the value of the "created_at" field in the mutation.
+func (m *SystemCustomGroupSourceMutation) CreatedAt() (r time.Time, exists bool) {
+	v := m.created_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCreatedAt returns the old "created_at" field's value of the SystemCustomGroupSource entity.
+// If the SystemCustomGroupSource object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SystemCustomGroupSourceMutation) OldCreatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCreatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCreatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCreatedAt: %w", err)
+	}
+	return oldValue.CreatedAt, nil
+}
+
+// ResetCreatedAt resets all changes to the "created_at" field.
+func (m *SystemCustomGroupSourceMutation) ResetCreatedAt() {
+	m.created_at = nil
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (m *SystemCustomGroupSourceMutation) SetUpdatedAt(t time.Time) {
+	m.updated_at = &t
+}
+
+// UpdatedAt returns the value of the "updated_at" field in the mutation.
+func (m *SystemCustomGroupSourceMutation) UpdatedAt() (r time.Time, exists bool) {
+	v := m.updated_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUpdatedAt returns the old "updated_at" field's value of the SystemCustomGroupSource entity.
+// If the SystemCustomGroupSource object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SystemCustomGroupSourceMutation) OldUpdatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUpdatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUpdatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUpdatedAt: %w", err)
+	}
+	return oldValue.UpdatedAt, nil
+}
+
+// ResetUpdatedAt resets all changes to the "updated_at" field.
+func (m *SystemCustomGroupSourceMutation) ResetUpdatedAt() {
+	m.updated_at = nil
+}
+
+// ClearGroup clears the "group" edge to the Group entity.
+func (m *SystemCustomGroupSourceMutation) ClearGroup() {
+	m.clearedgroup = true
+	m.clearedFields[systemcustomgroupsource.FieldGroupID] = struct{}{}
+}
+
+// GroupCleared reports if the "group" edge to the Group entity was cleared.
+func (m *SystemCustomGroupSourceMutation) GroupCleared() bool {
+	return m.clearedgroup
+}
+
+// GroupIDs returns the "group" edge IDs in the mutation.
+// Note that IDs always returns len(IDs) <= 1 for unique edges, and you should use
+// GroupID instead. It exists only for internal usage by the builders.
+func (m *SystemCustomGroupSourceMutation) GroupIDs() (ids []int64) {
+	if id := m.group; id != nil {
+		ids = append(ids, *id)
+	}
+	return
+}
+
+// ResetGroup resets all changes to the "group" edge.
+func (m *SystemCustomGroupSourceMutation) ResetGroup() {
+	m.group = nil
+	m.clearedgroup = false
+}
+
+// ClearSourceGroup clears the "source_group" edge to the Group entity.
+func (m *SystemCustomGroupSourceMutation) ClearSourceGroup() {
+	m.clearedsource_group = true
+	m.clearedFields[systemcustomgroupsource.FieldSourceGroupID] = struct{}{}
+}
+
+// SourceGroupCleared reports if the "source_group" edge to the Group entity was cleared.
+func (m *SystemCustomGroupSourceMutation) SourceGroupCleared() bool {
+	return m.clearedsource_group
+}
+
+// SourceGroupIDs returns the "source_group" edge IDs in the mutation.
+// Note that IDs always returns len(IDs) <= 1 for unique edges, and you should use
+// SourceGroupID instead. It exists only for internal usage by the builders.
+func (m *SystemCustomGroupSourceMutation) SourceGroupIDs() (ids []int64) {
+	if id := m.source_group; id != nil {
+		ids = append(ids, *id)
+	}
+	return
+}
+
+// ResetSourceGroup resets all changes to the "source_group" edge.
+func (m *SystemCustomGroupSourceMutation) ResetSourceGroup() {
+	m.source_group = nil
+	m.clearedsource_group = false
+}
+
+// Where appends a list predicates to the SystemCustomGroupSourceMutation builder.
+func (m *SystemCustomGroupSourceMutation) Where(ps ...predicate.SystemCustomGroupSource) {
+	m.predicates = append(m.predicates, ps...)
+}
+
+// WhereP appends storage-level predicates to the SystemCustomGroupSourceMutation builder. Using this method,
+// users can use type-assertion to append predicates that do not depend on any generated package.
+func (m *SystemCustomGroupSourceMutation) WhereP(ps ...func(*sql.Selector)) {
+	p := make([]predicate.SystemCustomGroupSource, len(ps))
+	for i := range ps {
+		p[i] = ps[i]
+	}
+	m.Where(p...)
+}
+
+// Op returns the operation name.
+func (m *SystemCustomGroupSourceMutation) Op() Op {
+	return m.op
+}
+
+// SetOp allows setting the mutation operation.
+func (m *SystemCustomGroupSourceMutation) SetOp(op Op) {
+	m.op = op
+}
+
+// Type returns the node type of this mutation (SystemCustomGroupSource).
+func (m *SystemCustomGroupSourceMutation) Type() string {
+	return m.typ
+}
+
+// Fields returns all fields that were changed during this mutation. Note that in
+// order to get all numeric fields that were incremented/decremented, call
+// AddedFields().
+func (m *SystemCustomGroupSourceMutation) Fields() []string {
+	fields := make([]string, 0, 5)
+	if m.group != nil {
+		fields = append(fields, systemcustomgroupsource.FieldGroupID)
+	}
+	if m.source_group != nil {
+		fields = append(fields, systemcustomgroupsource.FieldSourceGroupID)
+	}
+	if m.priority != nil {
+		fields = append(fields, systemcustomgroupsource.FieldPriority)
+	}
+	if m.created_at != nil {
+		fields = append(fields, systemcustomgroupsource.FieldCreatedAt)
+	}
+	if m.updated_at != nil {
+		fields = append(fields, systemcustomgroupsource.FieldUpdatedAt)
+	}
+	return fields
+}
+
+// Field returns the value of a field with the given name. The second boolean
+// return value indicates that this field was not set, or was not defined in the
+// schema.
+func (m *SystemCustomGroupSourceMutation) Field(name string) (ent.Value, bool) {
+	switch name {
+	case systemcustomgroupsource.FieldGroupID:
+		return m.GroupID()
+	case systemcustomgroupsource.FieldSourceGroupID:
+		return m.SourceGroupID()
+	case systemcustomgroupsource.FieldPriority:
+		return m.Priority()
+	case systemcustomgroupsource.FieldCreatedAt:
+		return m.CreatedAt()
+	case systemcustomgroupsource.FieldUpdatedAt:
+		return m.UpdatedAt()
+	}
+	return nil, false
+}
+
+// OldField returns the old value of the field from the database. An error is
+// returned if the mutation operation is not UpdateOne, or the query to the
+// database failed.
+func (m *SystemCustomGroupSourceMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
+	switch name {
+	case systemcustomgroupsource.FieldGroupID:
+		return m.OldGroupID(ctx)
+	case systemcustomgroupsource.FieldSourceGroupID:
+		return m.OldSourceGroupID(ctx)
+	case systemcustomgroupsource.FieldPriority:
+		return m.OldPriority(ctx)
+	case systemcustomgroupsource.FieldCreatedAt:
+		return m.OldCreatedAt(ctx)
+	case systemcustomgroupsource.FieldUpdatedAt:
+		return m.OldUpdatedAt(ctx)
+	}
+	return nil, fmt.Errorf("unknown SystemCustomGroupSource field %s", name)
+}
+
+// SetField sets the value of a field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *SystemCustomGroupSourceMutation) SetField(name string, value ent.Value) error {
+	switch name {
+	case systemcustomgroupsource.FieldGroupID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetGroupID(v)
+		return nil
+	case systemcustomgroupsource.FieldSourceGroupID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetSourceGroupID(v)
+		return nil
+	case systemcustomgroupsource.FieldPriority:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetPriority(v)
+		return nil
+	case systemcustomgroupsource.FieldCreatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCreatedAt(v)
+		return nil
+	case systemcustomgroupsource.FieldUpdatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUpdatedAt(v)
+		return nil
+	}
+	return fmt.Errorf("unknown SystemCustomGroupSource field %s", name)
+}
+
+// AddedFields returns all numeric fields that were incremented/decremented during
+// this mutation.
+func (m *SystemCustomGroupSourceMutation) AddedFields() []string {
+	var fields []string
+	if m.addpriority != nil {
+		fields = append(fields, systemcustomgroupsource.FieldPriority)
+	}
+	return fields
+}
+
+// AddedField returns the numeric value that was incremented/decremented on a field
+// with the given name. The second boolean return value indicates that this field
+// was not set, or was not defined in the schema.
+func (m *SystemCustomGroupSourceMutation) AddedField(name string) (ent.Value, bool) {
+	switch name {
+	case systemcustomgroupsource.FieldPriority:
+		return m.AddedPriority()
+	}
+	return nil, false
+}
+
+// AddField adds the value to the field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *SystemCustomGroupSourceMutation) AddField(name string, value ent.Value) error {
+	switch name {
+	case systemcustomgroupsource.FieldPriority:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddPriority(v)
+		return nil
+	}
+	return fmt.Errorf("unknown SystemCustomGroupSource numeric field %s", name)
+}
+
+// ClearedFields returns all nullable fields that were cleared during this
+// mutation.
+func (m *SystemCustomGroupSourceMutation) ClearedFields() []string {
+	return nil
+}
+
+// FieldCleared returns a boolean indicating if a field with the given name was
+// cleared in this mutation.
+func (m *SystemCustomGroupSourceMutation) FieldCleared(name string) bool {
+	_, ok := m.clearedFields[name]
+	return ok
+}
+
+// ClearField clears the value of the field with the given name. It returns an
+// error if the field is not defined in the schema.
+func (m *SystemCustomGroupSourceMutation) ClearField(name string) error {
+	return fmt.Errorf("unknown SystemCustomGroupSource nullable field %s", name)
+}
+
+// ResetField resets all changes in the mutation for the field with the given name.
+// It returns an error if the field is not defined in the schema.
+func (m *SystemCustomGroupSourceMutation) ResetField(name string) error {
+	switch name {
+	case systemcustomgroupsource.FieldGroupID:
+		m.ResetGroupID()
+		return nil
+	case systemcustomgroupsource.FieldSourceGroupID:
+		m.ResetSourceGroupID()
+		return nil
+	case systemcustomgroupsource.FieldPriority:
+		m.ResetPriority()
+		return nil
+	case systemcustomgroupsource.FieldCreatedAt:
+		m.ResetCreatedAt()
+		return nil
+	case systemcustomgroupsource.FieldUpdatedAt:
+		m.ResetUpdatedAt()
+		return nil
+	}
+	return fmt.Errorf("unknown SystemCustomGroupSource field %s", name)
+}
+
+// AddedEdges returns all edge names that were set/added in this mutation.
+func (m *SystemCustomGroupSourceMutation) AddedEdges() []string {
+	edges := make([]string, 0, 2)
+	if m.group != nil {
+		edges = append(edges, systemcustomgroupsource.EdgeGroup)
+	}
+	if m.source_group != nil {
+		edges = append(edges, systemcustomgroupsource.EdgeSourceGroup)
+	}
+	return edges
+}
+
+// AddedIDs returns all IDs (to other nodes) that were added for the given edge
+// name in this mutation.
+func (m *SystemCustomGroupSourceMutation) AddedIDs(name string) []ent.Value {
+	switch name {
+	case systemcustomgroupsource.EdgeGroup:
+		if id := m.group; id != nil {
+			return []ent.Value{*id}
+		}
+	case systemcustomgroupsource.EdgeSourceGroup:
+		if id := m.source_group; id != nil {
+			return []ent.Value{*id}
+		}
+	}
+	return nil
+}
+
+// RemovedEdges returns all edge names that were removed in this mutation.
+func (m *SystemCustomGroupSourceMutation) RemovedEdges() []string {
+	edges := make([]string, 0, 2)
+	return edges
+}
+
+// RemovedIDs returns all IDs (to other nodes) that were removed for the edge with
+// the given name in this mutation.
+func (m *SystemCustomGroupSourceMutation) RemovedIDs(name string) []ent.Value {
+	return nil
+}
+
+// ClearedEdges returns all edge names that were cleared in this mutation.
+func (m *SystemCustomGroupSourceMutation) ClearedEdges() []string {
+	edges := make([]string, 0, 2)
+	if m.clearedgroup {
+		edges = append(edges, systemcustomgroupsource.EdgeGroup)
+	}
+	if m.clearedsource_group {
+		edges = append(edges, systemcustomgroupsource.EdgeSourceGroup)
+	}
+	return edges
+}
+
+// EdgeCleared returns a boolean which indicates if the edge with the given name
+// was cleared in this mutation.
+func (m *SystemCustomGroupSourceMutation) EdgeCleared(name string) bool {
+	switch name {
+	case systemcustomgroupsource.EdgeGroup:
+		return m.clearedgroup
+	case systemcustomgroupsource.EdgeSourceGroup:
+		return m.clearedsource_group
+	}
+	return false
+}
+
+// ClearEdge clears the value of the edge with the given name. It returns an error
+// if that edge is not defined in the schema.
+func (m *SystemCustomGroupSourceMutation) ClearEdge(name string) error {
+	switch name {
+	case systemcustomgroupsource.EdgeGroup:
+		m.ClearGroup()
+		return nil
+	case systemcustomgroupsource.EdgeSourceGroup:
+		m.ClearSourceGroup()
+		return nil
+	}
+	return fmt.Errorf("unknown SystemCustomGroupSource unique edge %s", name)
+}
+
+// ResetEdge resets all changes to the edge with the given name in this mutation.
+// It returns an error if the edge is not defined in the schema.
+func (m *SystemCustomGroupSourceMutation) ResetEdge(name string) error {
+	switch name {
+	case systemcustomgroupsource.EdgeGroup:
+		m.ResetGroup()
+		return nil
+	case systemcustomgroupsource.EdgeSourceGroup:
+		m.ResetSourceGroup()
+		return nil
+	}
+	return fmt.Errorf("unknown SystemCustomGroupSource edge %s", name)
 }
 
 // TLSFingerprintProfileMutation represents an operation that mutates the TLSFingerprintProfile nodes in the graph.
