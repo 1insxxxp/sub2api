@@ -528,6 +528,7 @@ func (s *GatewayService) handleResponsesStreamingResponse(
 	var usage ClaudeUsage
 	var firstTokenMs *int
 	firstChunk := true
+	clientDisconnected := false
 
 	scanner := bufio.NewScanner(resp.Body)
 	maxLineSize := defaultMaxLineSize
@@ -548,6 +549,7 @@ func (s *GatewayService) handleResponsesStreamingResponse(
 			Stream:                 true,
 			Duration:               time.Since(startTime),
 			FirstTokenMs:           firstTokenMs,
+			ClientDisconnect:       clientDisconnected,
 			Outcome:                &outcome,
 		}
 	}
@@ -567,6 +569,9 @@ func (s *GatewayService) handleResponsesStreamingResponse(
 		// Also capture usage from message_start
 		if event.Type == "message_start" && event.Message != nil {
 			mergeAnthropicUsage(&usage, event.Message.Usage)
+		}
+		if clientDisconnected {
+			return false
 		}
 
 		// Convert to Responses events
@@ -595,17 +600,21 @@ func (s *GatewayService) handleResponsesStreamingResponse(
 					logger.L().Info("forward_as_responses stream: client disconnected",
 						zap.String("request_id", requestID),
 					)
-					return true // client disconnected
+					clientDisconnected = true
+					return false
 				}
 			}
 		}
-		if len(events) > 0 {
+		if len(events) > 0 && !clientDisconnected {
 			c.Writer.Flush()
 		}
 		return false
 	}
 
 	finalizeStream := func() (*ForwardResult, error) {
+		if clientDisconnected {
+			return resultWithUsage(), nil
+		}
 		if finalEvents := apicompat.FinalizeAnthropicResponsesStream(state); len(finalEvents) > 0 {
 			for _, evt := range finalEvents {
 				sse, err := apicompat.ResponsesEventToSSE(evt)
@@ -656,7 +665,7 @@ func (s *GatewayService) handleResponsesStreamingResponse(
 	}
 
 	if err := scanner.Err(); err != nil {
-		outcomeCollector.MarkStreamError(err, false)
+		outcomeCollector.MarkStreamError(err, clientDisconnected)
 		if !errors.Is(err, context.Canceled) && !errors.Is(err, context.DeadlineExceeded) {
 			logger.L().Warn("forward_as_responses stream: read error",
 				zap.Error(err),
@@ -664,7 +673,10 @@ func (s *GatewayService) handleResponsesStreamingResponse(
 			)
 		}
 	} else if !outcomeCollector.Snapshot().StreamCompleted {
-		outcomeCollector.MarkStreamError(errors.New("missing terminal event"), false)
+		outcomeCollector.MarkStreamError(errors.New("missing terminal event"), clientDisconnected)
+	}
+	if clientDisconnected {
+		outcomeCollector.MarkStreamError(errors.New("client disconnected"), true)
 	}
 
 	return finalizeStream()

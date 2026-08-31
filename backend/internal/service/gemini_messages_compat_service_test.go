@@ -494,6 +494,30 @@ func TestGeminiForwardAsChatCompletions_StreamClientDisconnectIsNotUpstreamFailu
 	require.Equal(t, UpstreamErrorNone, result.Outcome.UpstreamErrorKind)
 }
 
+func TestGeminiChatCompletionsStream_ClientDisconnectDrainsFinalUsage(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	rec := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(rec)
+	c.Writer = &failWriteResponseWriter{ResponseWriter: c.Writer}
+	resp := &http.Response{
+		Header: http.Header{"Content-Type": []string{"text/event-stream"}},
+		Body: io.NopCloser(strings.NewReader(
+			`data: {"candidates":[{"content":{"parts":[{"text":"long output already delivered to the client"}]}}]}` + "\n\n" +
+				`data: {"candidates":[{"finishReason":"STOP"}],"usageMetadata":{"promptTokenCount":20,"candidatesTokenCount":321}}` + "\n\n" +
+				"data: [DONE]\n\n",
+		)),
+	}
+
+	result, err := (&GeminiMessagesCompatService{}).handleChatCompletionsStreamingResponseFromGemini(
+		c, resp, time.Now(), "gemini-2.5-flash", false, true,
+	)
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	require.Equal(t, 321, result.usage.OutputTokens)
+	require.True(t, result.clientDisconnect)
+}
+
 func TestGeminiForwardAsChatCompletions_EmptyNonStreamingFailsOver(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 

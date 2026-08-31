@@ -627,18 +627,23 @@ func (s *GeminiMessagesCompatService) handleChatCompletionsStreamingResponseFrom
 	sawVisibleOutput := false
 
 	writeChatChunk := func(chunk apicompat.ChatCompletionsChunk) bool {
+		if clientDisconnected {
+			return false
+		}
 		sse, err := apicompat.ChatChunkToSSE(chunk)
 		if err != nil {
 			return false
 		}
 		if _, err := io.WriteString(c.Writer, sse); err != nil {
 			clientDisconnected = true
-			return true
 		}
 		return false
 	}
 
 	emitAnthropicEvent := func(evt *apicompat.AnthropicStreamEvent) bool {
+		if clientDisconnected {
+			return false
+		}
 		responsesEvents := apicompat.AnthropicEventToResponsesEvents(evt, anthState)
 		for _, resEvt := range responsesEvents {
 			chunks := apicompat.ResponsesEventToChatChunks(&resEvt, ccState)
@@ -648,7 +653,9 @@ func (s *GeminiMessagesCompatService) handleChatCompletionsStreamingResponseFrom
 				}
 			}
 		}
-		flusher.Flush()
+		if len(responsesEvents) > 0 && !clientDisconnected {
+			flusher.Flush()
+		}
 		return false
 	}
 
@@ -951,8 +958,10 @@ func (s *GeminiMessagesCompatService) handleChatCompletionsStreamingResponseFrom
 		}
 	}
 
-	_, _ = io.WriteString(c.Writer, "data: [DONE]\n\n")
-	flusher.Flush()
+	if !clientDisconnected {
+		_, _ = io.WriteString(c.Writer, "data: [DONE]\n\n")
+		flusher.Flush()
+	}
 
 	return &geminiStreamResult{usage: &usage, firstTokenMs: firstTokenMs}, nil
 }
