@@ -534,7 +534,8 @@ func (s *SystemCustomGroupService) availableModelsForSource(ctx context.Context,
 }
 
 func isDirectSystemCustomSource(group *Group) bool {
-	return group != nil && group.ID > 0 && group.Status == StatusActive && group.Platform != PlatformComposite && !group.SystemCustomRoutingEnabled
+	return group != nil && group.ID > 0 && group.Status == StatusActive &&
+		isConcreteRequestPlatform(group.Platform) && !group.SystemCustomRoutingEnabled
 }
 
 func normalizeSystemCustomContainer(group *Group) {

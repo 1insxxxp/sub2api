@@ -270,6 +270,8 @@ func TestCreateSystemCustomGroupRejectsInvalidSourceSelections(t *testing.T) {
 	inactive.Status = StatusDisabled
 	nested := activeDirectSystemCustomSource(30, PlatformComposite)
 	nested.SystemCustomRoutingEnabled = true
+	kiro := activeDirectSystemCustomSource(50, PlatformKiro)
+	unknown := activeDirectSystemCustomSource(60, "unknown-provider")
 
 	tests := []struct {
 		name      string
@@ -285,6 +287,8 @@ func TestCreateSystemCustomGroupRejectsInvalidSourceSelections(t *testing.T) {
 		{name: "deleted or missing", sourceIDs: []int64{40}, groups: map[int64]*Group{10: active}, wantErr: ErrSystemCustomGroupInvalidSourceGroup},
 		{name: "inactive", sourceIDs: []int64{20}, groups: map[int64]*Group{20: inactive}, wantErr: ErrSystemCustomGroupInvalidSourceGroup},
 		{name: "nested", sourceIDs: []int64{30}, groups: map[int64]*Group{30: nested}, wantErr: ErrSystemCustomGroupInvalidSourceGroup},
+		{name: "kiro platform", sourceIDs: []int64{50}, groups: map[int64]*Group{50: kiro}, wantErr: ErrSystemCustomGroupInvalidSourceGroup},
+		{name: "unknown platform", sourceIDs: []int64{60}, groups: map[int64]*Group{60: unknown}, wantErr: ErrSystemCustomGroupInvalidSourceGroup},
 	}
 
 	for _, tt := range tests {
@@ -332,6 +336,23 @@ func TestCreateSystemCustomGroupRejectsTooManySources(t *testing.T) {
 	})
 
 	require.ErrorIs(t, err, ErrSystemCustomGroupInvalidRoute)
+}
+
+func TestDirectSystemCustomSourceAcceptsEveryConcreteRequestPlatform(t *testing.T) {
+	for _, platform := range []string{
+		PlatformAnthropic,
+		PlatformOpenAI,
+		PlatformGemini,
+		PlatformAntigravity,
+		PlatformGrok,
+		PlatformKimi,
+		PlatformZhipu,
+		PlatformDeepseek,
+	} {
+		t.Run(platform, func(t *testing.T) {
+			require.True(t, isDirectSystemCustomSource(activeDirectSystemCustomSource(10, platform)))
+		})
+	}
 }
 
 func TestUpdateSystemCustomGroupNormalizesContainer(t *testing.T) {
