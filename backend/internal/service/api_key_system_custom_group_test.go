@@ -125,12 +125,14 @@ type systemCustomRuntimeCatalogStub struct {
 	calls    int
 	sources  []SystemCustomGroupSource
 	platform string
+	priced   bool
 }
 
-func (s *systemCustomRuntimeCatalogStub) BuildSystemCustomGroupModelCatalog(_ context.Context, sources []SystemCustomGroupSource, platform string) (*SystemCustomGroupRuntimeCatalog, error) {
+func (s *systemCustomRuntimeCatalogStub) BuildSystemCustomGroupModelCatalog(ctx context.Context, sources []SystemCustomGroupSource, platform string) (*SystemCustomGroupRuntimeCatalog, error) {
 	s.calls++
 	s.sources = append([]SystemCustomGroupSource(nil), sources...)
 	s.platform = platform
+	_, s.priced = gatewayTokenRequestPricingAtFromContext(ctx)
 	return s.catalog, s.err
 }
 
@@ -189,6 +191,7 @@ func TestResolveSystemCustomGroupModelUsesDynamicCatalogAndNeverStaticRoutes(t *
 	require.Zero(t, repo.calls, "retained ResolveModel must remain rollback-only")
 	require.Zero(t, repo.listCalls, "retained ListModels must remain rollback-only")
 	require.Equal(t, 1, catalog.calls)
+	require.True(t, catalog.priced, "runtime resolution must evaluate the same profit-control request context as dispatch")
 }
 
 func TestResolveSystemCustomGroupModelDistinguishesAbsentFromUnavailable(t *testing.T) {
@@ -241,6 +244,7 @@ func TestListSystemCustomGroupModelsUsesOneDynamicSnapshotAndPlatformFilter(t *t
 	require.Equal(t, 1, repo.getCalls)
 	require.Zero(t, repo.calls+repo.listCalls)
 	require.Equal(t, 1, catalog.calls)
+	require.False(t, catalog.priced, "model listing is metadata and must not install token-request profit control")
 }
 
 func TestListSystemCustomGroupModelsFailsClosedWhenContainerOrDependenciesAreInvalid(t *testing.T) {

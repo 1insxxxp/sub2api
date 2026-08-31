@@ -419,8 +419,8 @@ func newSystemCustomProductionHarness(t *testing.T) *systemCustomProductionHarne
 	)
 	inputA, outputA := 0.001, 0.002
 	inputB, outputB := 0.003, 0.004
-	groupA := &service.Group{ID: sourceAID, Name: "source-a", Platform: service.PlatformOpenAI, Status: service.StatusActive, Hydrated: true, RateMultiplier: 1}
-	groupB := &service.Group{ID: sourceBID, Name: "source-b", Platform: service.PlatformOpenAI, Status: service.StatusActive, Hydrated: true, RateMultiplier: 1.5}
+	groupA := &service.Group{ID: sourceAID, Name: "source-a", Platform: service.PlatformOpenAI, Status: service.StatusActive, Hydrated: true, RateMultiplier: 1, ModelsListConfig: service.GroupModelsListConfig{Enabled: true, Models: []string{"tavern-a"}}}
+	groupB := &service.Group{ID: sourceBID, Name: "source-b", Platform: service.PlatformOpenAI, Status: service.StatusActive, Hydrated: true, RateMultiplier: 1.5, ModelsListConfig: service.GroupModelsListConfig{Enabled: true, Models: []string{"tavern-b"}}}
 	billingGroup := &service.Group{
 		ID: billingGroupID, Name: "tavern monthly", Platform: service.PlatformComposite,
 		Status: service.StatusActive, Hydrated: true, RateMultiplier: 1,
@@ -742,14 +742,14 @@ func TestSystemCustomSubscriptionClosedFailureTable(t *testing.T) {
 		wantMessage string
 	}{
 		{name: "unknown public model", model: "unknown", configure: func(*systemCustomProductionHarness) {}, wantStatus: http.StatusForbidden, wantType: "permission_error", wantCode: "SYSTEM_CUSTOM_GROUP_MODEL_NOT_ALLOWED", wantMessage: "The requested model is not enabled for this subscription group"},
-		{name: "disabled source", model: "tavern-a", configure: func(h *systemCustomProductionHarness) { h.groupRepo.groups[42].Status = service.StatusDisabled }, wantStatus: http.StatusForbidden, wantType: "permission_error", wantCode: "SYSTEM_CUSTOM_GROUP_MODEL_NOT_ALLOWED", wantMessage: "The requested model is not enabled for this subscription group"},
+		{name: "disabled source", model: "tavern-a", configure: func(h *systemCustomProductionHarness) { h.groupRepo.groups[42].Status = service.StatusDisabled }, wantStatus: http.StatusServiceUnavailable, wantType: "service_unavailable_error", wantCode: "SYSTEM_CUSTOM_GROUP_SOURCE_UNAVAILABLE", wantMessage: "The selected model source is temporarily unavailable"},
 		{name: "deleted source reference", model: "tavern-a", configure: func(h *systemCustomProductionHarness) { h.routeRepo.group.Sources[0].SourceGroup = nil }, wantStatus: http.StatusForbidden, wantType: "permission_error", wantCode: "SYSTEM_CUSTOM_GROUP_MODEL_NOT_ALLOWED", wantMessage: "The requested model is not enabled for this subscription group"},
 		{name: "removed source model", configure: func(h *systemCustomProductionHarness) {
 			h.accountRepo.accounts[42] = []service.Account{newSystemCustomProductionAccount(501, 42, "another-model")}
 		}, model: "tavern-a", wantStatus: http.StatusForbidden, wantType: "permission_error", wantCode: "SYSTEM_CUSTOM_GROUP_MODEL_NOT_ALLOWED", wantMessage: "The requested model is not enabled for this subscription group"},
 		{name: "no available account", configure: func(h *systemCustomProductionHarness) {
 			h.accountRepo.accounts[42] = nil
-		}, model: "tavern-a", wantStatus: http.StatusForbidden, wantType: "permission_error", wantCode: "SYSTEM_CUSTOM_GROUP_MODEL_NOT_ALLOWED", wantMessage: "The requested model is not enabled for this subscription group"},
+		}, model: "tavern-a", wantStatus: http.StatusServiceUnavailable, wantType: "service_unavailable_error", wantCode: "SYSTEM_CUSTOM_GROUP_SOURCE_UNAVAILABLE", wantMessage: "The selected model source is temporarily unavailable"},
 		{name: "missing pricing", configure: func(h *systemCustomProductionHarness) {
 			h.accountRepo.accounts[42] = []service.Account{newSystemCustomProductionMappedAccount(501, 42, "tavern-a", "unpriced-system-custom-integration-model")}
 		}, model: "tavern-a", wantStatus: http.StatusServiceUnavailable, wantType: "service_unavailable_error", wantCode: "SYSTEM_CUSTOM_GROUP_SOURCE_UNAVAILABLE", wantMessage: "The selected model source is temporarily unavailable"},

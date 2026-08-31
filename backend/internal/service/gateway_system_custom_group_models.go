@@ -89,10 +89,13 @@ func (s *GatewayService) BuildSystemCustomGroupModelCatalog(
 	platform string,
 ) (*SystemCustomGroupRuntimeCatalog, error) {
 	catalog := NewSystemCustomGroupRuntimeCatalog(nil, nil)
+	if s == nil || s.billingService == nil {
+		return nil, fmt.Errorf("system custom group model catalog pricing is not configured")
+	}
 	if len(sources) == 0 {
 		return catalog, nil
 	}
-	if s == nil || s.accountRepo == nil {
+	if s.accountRepo == nil {
 		return nil, fmt.Errorf("system custom group model catalog is not configured")
 	}
 	batchRepo, ok := s.accountRepo.(systemCustomGroupSchedulableAccountRepository)
@@ -111,13 +114,11 @@ func (s *GatewayService) BuildSystemCustomGroupModelCatalog(
 		return ordered[i].SourceGroupID < ordered[j].SourceGroupID
 	})
 	platform = strings.TrimSpace(platform)
-	validSources := make([]SystemCustomGroupSource, 0, len(ordered))
 	groupIDs := make([]int64, 0, len(ordered))
 	seenGroups := make(map[int64]struct{}, len(ordered))
 	for _, source := range ordered {
 		group := source.SourceGroup
 		if group == nil || group.ID != source.SourceGroupID ||
-			!isDirectSystemCustomSource(group) || !IsGroupContextValid(group) ||
 			(platform != "" && group.Platform != platform) {
 			continue
 		}
@@ -125,30 +126,49 @@ func (s *GatewayService) BuildSystemCustomGroupModelCatalog(
 			continue
 		}
 		seenGroups[group.ID] = struct{}{}
-		validSources = append(validSources, source)
-		groupIDs = append(groupIDs, group.ID)
-	}
-	if len(groupIDs) == 0 {
-		return catalog, nil
+		if isDirectSystemCustomSource(group) && IsGroupContextValid(group) {
+			groupIDs = append(groupIDs, group.ID)
+		}
 	}
 
-	accounts, err := batchRepo.ListSchedulableByGroupIDs(ctx, groupIDs)
-	if err != nil {
-		return nil, fmt.Errorf("list system custom group schedulable accounts: %w", err)
+	var accounts []SystemCustomGroupSchedulableAccount
+	if len(groupIDs) > 0 {
+		var err error
+		accounts, err = batchRepo.ListSchedulableByGroupIDs(ctx, groupIDs)
+		if err != nil {
+			return nil, fmt.Errorf("list system custom group schedulable accounts: %w", err)
+		}
 	}
 	accountsByGroup := make(map[int64][]Account, len(groupIDs))
+	accountSnapshot := make([]Account, 0, len(accounts))
 	for i := range accounts {
 		entry := accounts[i]
 		accountsByGroup[entry.GroupID] = append(accountsByGroup[entry.GroupID], entry.Account)
+		accountSnapshot = append(accountSnapshot, entry.Account)
 	}
+	ctx = s.withWindowCostPrefetch(ctx, accountSnapshot)
+	ctx = s.withRPMPrefetch(ctx, accountSnapshot)
 
-	for _, source := range validSources {
+	seenGroups = make(map[int64]struct{}, len(ordered))
+	for _, source := range ordered {
 		group := source.SourceGroup
-		groupAccounts := systemCustomAccountsForPlatform(accountsByGroup[group.ID], group.Platform)
-		if len(groupAccounts) == 0 {
+		if group == nil || group.ID != source.SourceGroupID ||
+			(platform != "" && group.Platform != platform) {
 			continue
 		}
-		advertisedModels := systemCustomAdvertisedModels(group, groupAccounts)
+		if _, exists := seenGroups[group.ID]; exists {
+			continue
+		}
+		seenGroups[group.ID] = struct{}{}
+
+		allGroupAccounts := systemCustomCatalogAccountsForPlatform(accountsByGroup[group.ID], group.Platform)
+		advertisedModels := systemCustomAdvertisedModels(group, allGroupAccounts)
+		validSource := isDirectSystemCustomSource(group) && IsGroupContextValid(group)
+		candidateAccounts := systemCustomAccountsForPlatform(accountsByGroup[group.ID], group.Platform)
+		sourceCtx := s.withGroupContext(ctx, group)
+		groupID := group.ID
+		sourceCtx = s.withGatewayProfitControlGate(sourceCtx, &groupID)
+		checkUpstreamRestriction := validSource && s.needsUpstreamChannelRestrictionCheck(sourceCtx, &groupID)
 		for _, model := range advertisedModels {
 			model = strings.TrimSpace(model)
 			if model == "" {
@@ -156,7 +176,8 @@ func (s *GatewayService) BuildSystemCustomGroupModelCatalog(
 			}
 			key := strings.ToLower(model)
 			catalog.advertised[key] = struct{}{}
-			if !s.systemCustomModelHasPricedAccount(ctx, group, groupAccounts, model) {
+			if !validSource || s.checkChannelPricingRestriction(sourceCtx, &groupID, model) ||
+				!s.systemCustomModelHasPricedAccount(sourceCtx, group, candidateAccounts, model, checkUpstreamRestriction) {
 				continue
 			}
 			candidate := SystemCustomGroupRuntimeCandidate{
@@ -174,6 +195,12 @@ func (s *GatewayService) BuildSystemCustomGroupModelCatalog(
 }
 
 func systemCustomAdvertisedModels(group *Group, accounts []Account) []string {
+	if len(accounts) == 0 {
+		if group.CustomModelsListEnabled() {
+			return normalizedSystemCustomDeclaredModels(group.ModelsListConfig.Models)
+		}
+		return DefaultModelIDsForPlatform(group.Platform)
+	}
 	modelSet := make(map[string]string)
 	hasAnyMapping := false
 	useDefaults := false
@@ -222,12 +249,42 @@ func systemCustomAdvertisedModels(group *Group, accounts []Account) []string {
 	return available
 }
 
-func (s *GatewayService) systemCustomModelHasPricedAccount(ctx context.Context, group *Group, accounts []Account, model string) bool {
+func normalizedSystemCustomDeclaredModels(models []string) []string {
+	byKey := make(map[string]string, len(models))
+	for _, model := range models {
+		model = strings.TrimSpace(model)
+		if model == "" {
+			continue
+		}
+		key := strings.ToLower(model)
+		if _, exists := byKey[key]; !exists {
+			byKey[key] = model
+		}
+	}
+	result := make([]string, 0, len(byKey))
+	for _, model := range byKey {
+		result = append(result, model)
+	}
+	sort.Slice(result, func(i, j int) bool {
+		left, right := strings.ToLower(result[i]), strings.ToLower(result[j])
+		if left == right {
+			return result[i] < result[j]
+		}
+		return left < right
+	})
+	return result
+}
+
+func (s *GatewayService) systemCustomModelHasPricedAccount(
+	ctx context.Context,
+	group *Group,
+	accounts []Account,
+	model string,
+	checkUpstreamRestriction bool,
+) bool {
 	for i := range accounts {
 		account := &accounts[i]
-		if shouldHideUnavailableProviderModel(account, model) ||
-			!account.IsSchedulableForModelWithContext(ctx, model) ||
-			!s.isModelSupportedByAccountWithContext(ctx, account, model) {
+		if !s.isSystemCustomSnapshotAccountEligible(ctx, group, account, model, checkUpstreamRestriction) {
 			continue
 		}
 		groupID := group.ID
@@ -237,6 +294,33 @@ func (s *GatewayService) systemCustomModelHasPricedAccount(ctx context.Context, 
 		return true
 	}
 	return false
+}
+
+func (s *GatewayService) isSystemCustomSnapshotAccountEligible(
+	ctx context.Context,
+	group *Group,
+	account *Account,
+	model string,
+	checkUpstreamRestriction bool,
+) bool {
+	if group == nil || account == nil {
+		return false
+	}
+	useMixed := group.Platform == PlatformAnthropic || group.Platform == PlatformGemini
+	if !s.isAccountAllowedForPlatform(account, group.Platform, useMixed) ||
+		!s.isAccountSchedulableForSelection(account) ||
+		!s.isGatewayAccountProfitEligible(ctx, account) ||
+		(group.RequireOAuthOnly && account.Type == AccountTypeAPIKey) ||
+		(group.RequirePrivacySet && !account.IsPrivacySet()) ||
+		shouldHideUnavailableProviderModel(account, model) ||
+		!s.isModelSupportedByAccountWithContext(ctx, account, model) ||
+		!s.isAccountSchedulableForModelSelection(ctx, account, model) ||
+		!s.isAccountSchedulableForQuota(account) ||
+		!s.isAccountSchedulableForWindowCost(ctx, account, false) ||
+		!s.isAccountSchedulableForRPM(ctx, account, false) {
+		return false
+	}
+	return !checkUpstreamRestriction || !s.isUpstreamModelRestrictedByChannel(ctx, group.ID, account, model)
 }
 
 // ListSystemCustomGroupModelAvailability evaluates a complete system-custom
@@ -325,8 +409,21 @@ func (s *GatewayService) ListSystemCustomGroupModelAvailability(
 
 func systemCustomAccountsForPlatform(accounts []Account, platform string) []Account {
 	filtered := make([]Account, 0, len(accounts))
+	useMixed := platform == PlatformAnthropic || platform == PlatformGemini
 	for i := range accounts {
-		if accounts[i].Platform == platform {
+		if accounts[i].Platform == platform ||
+			(useMixed && accounts[i].Platform == PlatformAntigravity && accounts[i].IsMixedSchedulingEnabled()) {
+			filtered = append(filtered, accounts[i])
+		}
+	}
+	return filtered
+}
+
+func systemCustomCatalogAccountsForPlatform(accounts []Account, platform string) []Account {
+	filtered := make([]Account, 0, len(accounts))
+	useMixed := platform == PlatformAnthropic || platform == PlatformGemini
+	for i := range accounts {
+		if accounts[i].Platform == platform || (useMixed && accounts[i].Platform == PlatformAntigravity) {
 			filtered = append(filtered, accounts[i])
 		}
 	}

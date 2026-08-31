@@ -6,6 +6,7 @@ import (
 	"context"
 	"testing"
 
+	"github.com/Wei-Shaw/sub2api/internal/pkg/ctxkey"
 	"github.com/stretchr/testify/require"
 )
 
@@ -71,12 +72,190 @@ func TestGatewayBuildDynamicSystemCustomGroupCatalogFallsThroughUnavailableAndUn
 	require.Equal(t, []string{"shared"}, catalog.Models())
 }
 
-func TestGatewayBuildDynamicSystemCustomGroupCatalogOmitsInvalidSourcesAndHonorsPlatform(t *testing.T) {
+func TestGatewayBuildDynamicSystemCustomGroupCatalogAdvertisesDisabledAndNoAccountSources(t *testing.T) {
+	disabled := directSourceGroup(10, PlatformOpenAI)
+	disabled.Status = StatusDisabled
+	disabled.ModelsListConfig = GroupModelsListConfig{Enabled: true, Models: []string{"disabled-model"}}
+	noAccounts := directSourceGroup(20, PlatformOpenAI)
+	nested := directSourceGroup(30, PlatformOpenAI)
+	nested.SystemCustomRoutingEnabled = true
+	nested.ModelsListConfig = GroupModelsListConfig{Enabled: true, Models: []string{"nested-model"}}
+	unsupported := directSourceGroup(40, "kiro")
+	unsupported.ModelsListConfig = GroupModelsListConfig{Enabled: true, Models: []string{"unsupported-model"}}
+	repo := &systemCustomGroupBatchAccountRepoStub{}
+	svc := &GatewayService{accountRepo: repo, billingService: newTestBillingService()}
+
+	catalog, err := svc.BuildSystemCustomGroupModelCatalog(context.Background(), []SystemCustomGroupSource{
+		{SourceGroupID: 10, Priority: 1, SourceGroup: disabled},
+		{SourceGroupID: 20, Priority: 2, SourceGroup: noAccounts},
+		{SourceGroupID: 30, Priority: 3, SourceGroup: nested},
+		{SourceGroupID: 40, Priority: 4, SourceGroup: unsupported},
+		{SourceGroupID: 50, Priority: 5, SourceGroup: nil},
+	}, "")
+
+	require.NoError(t, err)
+	disabledCandidates, disabledAdvertised := catalog.Resolve("DISABLED-MODEL")
+	require.True(t, disabledAdvertised)
+	require.Empty(t, disabledCandidates)
+	defaultCandidates, defaultAdvertised := catalog.Resolve("gpt-5.4")
+	require.True(t, defaultAdvertised)
+	require.Empty(t, defaultCandidates)
+	for _, model := range []string{"nested-model", "unsupported-model"} {
+		candidates, advertised := catalog.Resolve(model)
+		require.True(t, advertised, model)
+		require.Empty(t, candidates, model)
+	}
+	_, deletedAdvertised := catalog.Resolve("deleted-model")
+	require.False(t, deletedAdvertised)
+	require.Empty(t, catalog.Models(), "advertised-but-unavailable models must not enter the public model list")
+	require.Equal(t, 1, repo.calls)
+	require.Equal(t, []int64{20}, repo.requested, "invalid sources must not enter the account snapshot")
+}
+
+func TestGatewayBuildDynamicSystemCustomGroupCatalogUsesSchedulerMixedPlatformRules(t *testing.T) {
+	accepted := directSourceGroup(10, PlatformAnthropic)
+	rejected := directSourceGroup(20, PlatformAnthropic)
+	mixed := schedulableSystemCustomTestAccount(101, PlatformAntigravity, map[string]any{"claude-sonnet-4-6": "claude-sonnet-4-6"})
+	mixed.Extra = map[string]any{"mixed_scheduling": true}
+	notMixed := schedulableSystemCustomTestAccount(201, PlatformAntigravity, map[string]any{"claude-opus-4-6": "claude-opus-4-6"})
+	repo := &systemCustomGroupBatchAccountRepoStub{accounts: []SystemCustomGroupSchedulableAccount{
+		{GroupID: 10, Account: mixed},
+		{GroupID: 20, Account: notMixed},
+	}}
+	svc := &GatewayService{accountRepo: repo, billingService: newTestBillingService()}
+
+	catalog, err := svc.BuildSystemCustomGroupModelCatalog(context.Background(), []SystemCustomGroupSource{
+		{SourceGroupID: 10, Priority: 1, SourceGroup: accepted},
+		{SourceGroupID: 20, Priority: 2, SourceGroup: rejected},
+	}, "")
+
+	require.NoError(t, err)
+	acceptedCandidates, acceptedAdvertised := catalog.Resolve("claude-sonnet-4-6")
+	require.True(t, acceptedAdvertised)
+	require.Len(t, acceptedCandidates, 1)
+	rejectedCandidates, rejectedAdvertised := catalog.Resolve("claude-opus-4-6")
+	require.True(t, rejectedAdvertised)
+	require.Empty(t, rejectedCandidates)
+}
+
+func TestGatewayBuildDynamicSystemCustomGroupCatalogFallsBackWhenPrivacyGateRejectsFirstSource(t *testing.T) {
+	private := directSourceGroup(10, PlatformOpenAI)
+	private.RequirePrivacySet = true
+	fallback := directSourceGroup(20, PlatformOpenAI)
+	repo := &systemCustomGroupBatchAccountRepoStub{accounts: []SystemCustomGroupSchedulableAccount{
+		{GroupID: 10, Account: schedulableSystemCustomTestAccount(101, PlatformOpenAI, map[string]any{"shared": "gpt-5.4"})},
+		{GroupID: 20, Account: schedulableSystemCustomTestAccount(201, PlatformOpenAI, map[string]any{"shared": "gpt-5.4"})},
+	}}
+	svc := &GatewayService{accountRepo: repo, billingService: newTestBillingService()}
+
+	catalog, err := svc.BuildSystemCustomGroupModelCatalog(context.Background(), []SystemCustomGroupSource{
+		{SourceGroupID: 10, Priority: 1, SourceGroup: private},
+		{SourceGroupID: 20, Priority: 2, SourceGroup: fallback},
+	}, "")
+
+	require.NoError(t, err)
+	candidates, advertised := catalog.Resolve("shared")
+	require.True(t, advertised)
+	require.Len(t, candidates, 1)
+	require.Equal(t, int64(20), candidates[0].SourceGroup.ID)
+}
+
+func TestGatewayBuildDynamicSystemCustomGroupCatalogFallsBackWithDispatchProfitContext(t *testing.T) {
+	first := gatewayProfitTestGroup(10, PlatformOpenAI)
+	second := directSourceGroup(20, PlatformOpenAI)
+	expensive := gatewayProfitTestAccount(101, PlatformOpenAI, 0.8, first.ID)
+	expensive.Credentials = map[string]any{"model_mapping": map[string]any{"shared": "gpt-5.4"}}
+	repo := &systemCustomGroupBatchAccountRepoStub{accounts: []SystemCustomGroupSchedulableAccount{
+		{GroupID: 10, Account: expensive},
+		{GroupID: 20, Account: schedulableSystemCustomTestAccount(201, PlatformOpenAI, map[string]any{"shared": "gpt-5.4"})},
+	}}
+	svc := &GatewayService{accountRepo: repo, billingService: newTestBillingService()}
+	billingGroup := &Group{ID: 99, Platform: PlatformComposite, Status: StatusActive, Hydrated: true, RateMultiplier: 0.5}
+	ctx := context.WithValue(context.Background(), ctxkey.Group, billingGroup)
+	ctx, _ = WithGatewayTokenRequestPricing(ctx)
+
+	catalog, err := svc.BuildSystemCustomGroupModelCatalog(ctx, []SystemCustomGroupSource{
+		{SourceGroupID: 10, Priority: 1, SourceGroup: first},
+		{SourceGroupID: 20, Priority: 2, SourceGroup: second},
+	}, "")
+
+	require.NoError(t, err)
+	candidates, advertised := catalog.Resolve("shared")
+	require.True(t, advertised)
+	require.Len(t, candidates, 1)
+	require.Equal(t, int64(20), candidates[0].SourceGroup.ID)
+}
+
+func TestGatewayBuildDynamicSystemCustomGroupCatalogFailsClosedWithoutPricing(t *testing.T) {
+	source := directSourceGroup(10, PlatformOpenAI)
+	repo := &systemCustomGroupBatchAccountRepoStub{accounts: []SystemCustomGroupSchedulableAccount{
+		{GroupID: 10, Account: schedulableSystemCustomTestAccount(101, PlatformOpenAI, map[string]any{"gpt-5.4": "gpt-5.4"})},
+	}}
+
+	_, err := (&GatewayService{accountRepo: repo}).BuildSystemCustomGroupModelCatalog(context.Background(), []SystemCustomGroupSource{
+		{SourceGroupID: 10, Priority: 1, SourceGroup: source},
+	}, "")
+
+	require.ErrorContains(t, err, "pricing")
+}
+
+func TestGatewayBuildDynamicSystemCustomGroupCatalogUsesDefaultAndCustomModelListSemantics(t *testing.T) {
+	t.Run("empty mapping uses defaults", func(t *testing.T) {
+		source := directSourceGroup(10, PlatformOpenAI)
+		repo := &systemCustomGroupBatchAccountRepoStub{accounts: []SystemCustomGroupSchedulableAccount{
+			{GroupID: 10, Account: schedulableSystemCustomTestAccount(101, PlatformOpenAI, nil)},
+		}}
+		catalog, err := (&GatewayService{accountRepo: repo, billingService: newTestBillingService()}).BuildSystemCustomGroupModelCatalog(
+			context.Background(), []SystemCustomGroupSource{{SourceGroupID: 10, SourceGroup: source}}, "",
+		)
+		require.NoError(t, err)
+		candidates, advertised := catalog.Resolve("gpt-5.4")
+		require.True(t, advertised)
+		require.Len(t, candidates, 1)
+	})
+
+	t.Run("openai passthrough uses defaults", func(t *testing.T) {
+		source := directSourceGroup(10, PlatformOpenAI)
+		account := schedulableSystemCustomTestAccount(101, PlatformOpenAI, map[string]any{"mapped-only": "gpt-5.4"})
+		account.Extra = map[string]any{"openai_passthrough": true}
+		repo := &systemCustomGroupBatchAccountRepoStub{accounts: []SystemCustomGroupSchedulableAccount{{GroupID: 10, Account: account}}}
+		catalog, err := (&GatewayService{accountRepo: repo, billingService: newTestBillingService()}).BuildSystemCustomGroupModelCatalog(
+			context.Background(), []SystemCustomGroupSource{{SourceGroupID: 10, SourceGroup: source}}, "",
+		)
+		require.NoError(t, err)
+		_, defaultAdvertised := catalog.Resolve("gpt-5.4")
+		require.True(t, defaultAdvertised)
+		_, mappedAdvertised := catalog.Resolve("mapped-only")
+		require.False(t, mappedAdvertised)
+	})
+
+	t.Run("custom list allows and filters mapped models", func(t *testing.T) {
+		source := directSourceGroup(10, PlatformOpenAI)
+		source.ModelsListConfig = GroupModelsListConfig{Enabled: true, Models: []string{"Allowed", "Not-Mapped"}}
+		repo := &systemCustomGroupBatchAccountRepoStub{accounts: []SystemCustomGroupSchedulableAccount{
+			{GroupID: 10, Account: schedulableSystemCustomTestAccount(101, PlatformOpenAI, map[string]any{"Allowed": "gpt-5.4", "Hidden": "gpt-5.4"})},
+		}}
+		catalog, err := (&GatewayService{accountRepo: repo, billingService: newTestBillingService()}).BuildSystemCustomGroupModelCatalog(
+			context.Background(), []SystemCustomGroupSource{{SourceGroupID: 10, SourceGroup: source}}, "",
+		)
+		require.NoError(t, err)
+		require.Equal(t, []string{"Allowed"}, catalog.Models())
+		_, hiddenAdvertised := catalog.Resolve("Hidden")
+		require.False(t, hiddenAdvertised)
+		_, missingAdvertised := catalog.Resolve("Not-Mapped")
+		require.False(t, missingAdvertised)
+	})
+}
+
+func TestGatewayBuildDynamicSystemCustomGroupCatalogAdvertisesInvalidSourcesButHonorsPlatform(t *testing.T) {
 	inactive := directSourceGroup(10, PlatformOpenAI)
 	inactive.Status = StatusDisabled
+	inactive.ModelsListConfig = GroupModelsListConfig{Enabled: true, Models: []string{"inactive"}}
 	nested := directSourceGroup(20, PlatformOpenAI)
 	nested.SystemCustomRoutingEnabled = true
+	nested.ModelsListConfig = GroupModelsListConfig{Enabled: true, Models: []string{"nested"}}
 	unsupported := directSourceGroup(30, "kiro")
+	unsupported.ModelsListConfig = GroupModelsListConfig{Enabled: true, Models: []string{"unsupported"}}
 	gemini := directSourceGroup(40, PlatformGemini)
 	openai := directSourceGroup(50, PlatformOpenAI)
 	repo := &systemCustomGroupBatchAccountRepoStub{accounts: []SystemCustomGroupSchedulableAccount{

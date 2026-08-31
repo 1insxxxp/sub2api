@@ -512,7 +512,11 @@ func (s *APIKeyService) ResolveSystemCustomGroupModel(ctx context.Context, key *
 		!container.Group.IsSystemCustomRouteGroup() || !IsGroupContextValid(&container.Group) {
 		return nil, ErrSystemCustomGroupSourceUnavailable
 	}
-	catalog, err := s.systemCustomModelCatalog.BuildSystemCustomGroupModelCatalog(ctx, container.Sources, "")
+	catalogCtx := ctx
+	if _, marked := gatewayTokenRequestPricingAtFromContext(catalogCtx); !marked {
+		catalogCtx, _ = WithGatewayTokenRequestPricing(catalogCtx)
+	}
+	catalog, err := s.systemCustomModelCatalog.BuildSystemCustomGroupModelCatalog(catalogCtx, container.Sources, "")
 	if err != nil {
 		return nil, ErrSystemCustomGroupSourceUnavailable.WithCause(err)
 	}
