@@ -160,6 +160,10 @@ const (
 	EdgeSystemCustomRoutes = "system_custom_routes"
 	// EdgeSystemCustomSourceRoutes holds the string denoting the system_custom_source_routes edge name in mutations.
 	EdgeSystemCustomSourceRoutes = "system_custom_source_routes"
+	// EdgeSystemCustomSources holds the string denoting the system_custom_sources edge name in mutations.
+	EdgeSystemCustomSources = "system_custom_sources"
+	// EdgeSystemCustomSourceReferences holds the string denoting the system_custom_source_references edge name in mutations.
+	EdgeSystemCustomSourceReferences = "system_custom_source_references"
 	// EdgeAccounts holds the string denoting the accounts edge name in mutations.
 	EdgeAccounts = "accounts"
 	// EdgeAllowedUsers holds the string denoting the allowed_users edge name in mutations.
@@ -219,6 +223,20 @@ const (
 	SystemCustomSourceRoutesInverseTable = "system_custom_group_models"
 	// SystemCustomSourceRoutesColumn is the table column denoting the system_custom_source_routes relation/edge.
 	SystemCustomSourceRoutesColumn = "source_group_id"
+	// SystemCustomSourcesTable is the table that holds the system_custom_sources relation/edge.
+	SystemCustomSourcesTable = "system_custom_group_sources"
+	// SystemCustomSourcesInverseTable is the table name for the SystemCustomGroupSource entity.
+	// It exists in this package in order to avoid circular dependency with the "systemcustomgroupsource" package.
+	SystemCustomSourcesInverseTable = "system_custom_group_sources"
+	// SystemCustomSourcesColumn is the table column denoting the system_custom_sources relation/edge.
+	SystemCustomSourcesColumn = "group_id"
+	// SystemCustomSourceReferencesTable is the table that holds the system_custom_source_references relation/edge.
+	SystemCustomSourceReferencesTable = "system_custom_group_sources"
+	// SystemCustomSourceReferencesInverseTable is the table name for the SystemCustomGroupSource entity.
+	// It exists in this package in order to avoid circular dependency with the "systemcustomgroupsource" package.
+	SystemCustomSourceReferencesInverseTable = "system_custom_group_sources"
+	// SystemCustomSourceReferencesColumn is the table column denoting the system_custom_source_references relation/edge.
+	SystemCustomSourceReferencesColumn = "source_group_id"
 	// AccountsTable is the table that holds the accounts relation/edge. The primary key declared below.
 	AccountsTable = "account_groups"
 	// AccountsInverseTable is the table name for the Account entity.
@@ -854,6 +872,34 @@ func BySystemCustomSourceRoutes(term sql.OrderTerm, terms ...sql.OrderTerm) Orde
 	}
 }
 
+// BySystemCustomSourcesCount orders the results by system_custom_sources count.
+func BySystemCustomSourcesCount(opts ...sql.OrderTermOption) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborsCount(s, newSystemCustomSourcesStep(), opts...)
+	}
+}
+
+// BySystemCustomSources orders the results by system_custom_sources terms.
+func BySystemCustomSources(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborTerms(s, newSystemCustomSourcesStep(), append([]sql.OrderTerm{term}, terms...)...)
+	}
+}
+
+// BySystemCustomSourceReferencesCount orders the results by system_custom_source_references count.
+func BySystemCustomSourceReferencesCount(opts ...sql.OrderTermOption) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborsCount(s, newSystemCustomSourceReferencesStep(), opts...)
+	}
+}
+
+// BySystemCustomSourceReferences orders the results by system_custom_source_references terms.
+func BySystemCustomSourceReferences(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborTerms(s, newSystemCustomSourceReferencesStep(), append([]sql.OrderTerm{term}, terms...)...)
+	}
+}
+
 // ByAccountsCount orders the results by accounts count.
 func ByAccountsCount(opts ...sql.OrderTermOption) OrderOption {
 	return func(s *sql.Selector) {
@@ -956,6 +1002,20 @@ func newSystemCustomSourceRoutesStep() *sqlgraph.Step {
 		sqlgraph.From(Table, FieldID),
 		sqlgraph.To(SystemCustomSourceRoutesInverseTable, FieldID),
 		sqlgraph.Edge(sqlgraph.O2M, false, SystemCustomSourceRoutesTable, SystemCustomSourceRoutesColumn),
+	)
+}
+func newSystemCustomSourcesStep() *sqlgraph.Step {
+	return sqlgraph.NewStep(
+		sqlgraph.From(Table, FieldID),
+		sqlgraph.To(SystemCustomSourcesInverseTable, FieldID),
+		sqlgraph.Edge(sqlgraph.O2M, false, SystemCustomSourcesTable, SystemCustomSourcesColumn),
+	)
+}
+func newSystemCustomSourceReferencesStep() *sqlgraph.Step {
+	return sqlgraph.NewStep(
+		sqlgraph.From(Table, FieldID),
+		sqlgraph.To(SystemCustomSourceReferencesInverseTable, FieldID),
+		sqlgraph.Edge(sqlgraph.O2M, false, SystemCustomSourceReferencesTable, SystemCustomSourceReferencesColumn),
 	)
 }
 func newAccountsStep() *sqlgraph.Step {

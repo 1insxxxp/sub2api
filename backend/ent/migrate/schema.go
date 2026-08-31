@@ -1968,6 +1968,52 @@ var (
 			},
 		},
 	}
+	// SystemCustomGroupSourcesColumns holds the columns for the "system_custom_group_sources" table.
+	SystemCustomGroupSourcesColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt64, Increment: true},
+		{Name: "priority", Type: field.TypeInt},
+		{Name: "created_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
+		{Name: "updated_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
+		{Name: "group_id", Type: field.TypeInt64},
+		{Name: "source_group_id", Type: field.TypeInt64},
+	}
+	// SystemCustomGroupSourcesTable holds the schema information for the "system_custom_group_sources" table.
+	SystemCustomGroupSourcesTable = &schema.Table{
+		Name:       "system_custom_group_sources",
+		Columns:    SystemCustomGroupSourcesColumns,
+		PrimaryKey: []*schema.Column{SystemCustomGroupSourcesColumns[0]},
+		ForeignKeys: []*schema.ForeignKey{
+			{
+				Symbol:     "system_custom_group_sources_groups_system_custom_sources",
+				Columns:    []*schema.Column{SystemCustomGroupSourcesColumns[4]},
+				RefColumns: []*schema.Column{GroupsColumns[0]},
+				OnDelete:   schema.Cascade,
+			},
+			{
+				Symbol:     "system_custom_group_sources_groups_system_custom_source_references",
+				Columns:    []*schema.Column{SystemCustomGroupSourcesColumns[5]},
+				RefColumns: []*schema.Column{GroupsColumns[0]},
+				OnDelete:   schema.Restrict,
+			},
+		},
+		Indexes: []*schema.Index{
+			{
+				Name:    "systemcustomgroupsource_group_id_source_group_id",
+				Unique:  true,
+				Columns: []*schema.Column{SystemCustomGroupSourcesColumns[4], SystemCustomGroupSourcesColumns[5]},
+			},
+			{
+				Name:    "systemcustomgroupsource_group_id_priority",
+				Unique:  true,
+				Columns: []*schema.Column{SystemCustomGroupSourcesColumns[4], SystemCustomGroupSourcesColumns[1]},
+			},
+			{
+				Name:    "systemcustomgroupsource_source_group_id",
+				Unique:  false,
+				Columns: []*schema.Column{SystemCustomGroupSourcesColumns[5]},
+			},
+		},
+	}
 	// TLSFingerprintProfilesColumns holds the columns for the "tls_fingerprint_profiles" table.
 	TLSFingerprintProfilesColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeInt64, Increment: true},
@@ -2935,6 +2981,7 @@ var (
 		SubAdminCommissionGrantsTable,
 		SubscriptionPlansTable,
 		SystemCustomGroupModelsTable,
+		SystemCustomGroupSourcesTable,
 		TLSFingerprintProfilesTable,
 		UsageCleanupTasksTable,
 		UsageLogsTable,
@@ -3126,6 +3173,15 @@ func init() {
 	}
 	SystemCustomGroupModelsTable.Annotation.Checks = map[string]string{
 		"system_custom_group_models_no_self_reference": "group_id <> source_group_id",
+	}
+	SystemCustomGroupSourcesTable.ForeignKeys[0].RefTable = GroupsTable
+	SystemCustomGroupSourcesTable.ForeignKeys[1].RefTable = GroupsTable
+	SystemCustomGroupSourcesTable.Annotation = &entsql.Annotation{
+		Table: "system_custom_group_sources",
+	}
+	SystemCustomGroupSourcesTable.Annotation.Checks = map[string]string{
+		"system_custom_group_sources_no_self_reference":    "group_id <> source_group_id",
+		"system_custom_group_sources_priority_nonnegative": "priority >= 0",
 	}
 	TLSFingerprintProfilesTable.Annotation = &entsql.Annotation{
 		Table: "tls_fingerprint_profiles",

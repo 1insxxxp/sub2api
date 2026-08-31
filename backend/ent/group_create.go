@@ -17,6 +17,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/group"
 	"github.com/Wei-Shaw/sub2api/ent/redeemcode"
 	"github.com/Wei-Shaw/sub2api/ent/systemcustomgroupmodel"
+	"github.com/Wei-Shaw/sub2api/ent/systemcustomgroupsource"
 	"github.com/Wei-Shaw/sub2api/ent/usagelog"
 	"github.com/Wei-Shaw/sub2api/ent/user"
 	"github.com/Wei-Shaw/sub2api/ent/usercustomgroupmodel"
@@ -999,6 +1000,36 @@ func (_c *GroupCreate) AddSystemCustomSourceRoutes(v ...*SystemCustomGroupModel)
 	return _c.AddSystemCustomSourceRouteIDs(ids...)
 }
 
+// AddSystemCustomSourceIDs adds the "system_custom_sources" edge to the SystemCustomGroupSource entity by IDs.
+func (_c *GroupCreate) AddSystemCustomSourceIDs(ids ...int64) *GroupCreate {
+	_c.mutation.AddSystemCustomSourceIDs(ids...)
+	return _c
+}
+
+// AddSystemCustomSources adds the "system_custom_sources" edges to the SystemCustomGroupSource entity.
+func (_c *GroupCreate) AddSystemCustomSources(v ...*SystemCustomGroupSource) *GroupCreate {
+	ids := make([]int64, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _c.AddSystemCustomSourceIDs(ids...)
+}
+
+// AddSystemCustomSourceReferenceIDs adds the "system_custom_source_references" edge to the SystemCustomGroupSource entity by IDs.
+func (_c *GroupCreate) AddSystemCustomSourceReferenceIDs(ids ...int64) *GroupCreate {
+	_c.mutation.AddSystemCustomSourceReferenceIDs(ids...)
+	return _c
+}
+
+// AddSystemCustomSourceReferences adds the "system_custom_source_references" edges to the SystemCustomGroupSource entity.
+func (_c *GroupCreate) AddSystemCustomSourceReferences(v ...*SystemCustomGroupSource) *GroupCreate {
+	ids := make([]int64, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _c.AddSystemCustomSourceReferenceIDs(ids...)
+}
+
 // AddAccountIDs adds the "accounts" edge to the Account entity by IDs.
 func (_c *GroupCreate) AddAccountIDs(ids ...int64) *GroupCreate {
 	_c.mutation.AddAccountIDs(ids...)
@@ -1836,6 +1867,38 @@ func (_c *GroupCreate) createSpec() (*Group, *sqlgraph.CreateSpec) {
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(systemcustomgroupmodel.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges = append(_spec.Edges, edge)
+	}
+	if nodes := _c.mutation.SystemCustomSourcesIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   group.SystemCustomSourcesTable,
+			Columns: []string{group.SystemCustomSourcesColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(systemcustomgroupsource.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges = append(_spec.Edges, edge)
+	}
+	if nodes := _c.mutation.SystemCustomSourceReferencesIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   group.SystemCustomSourceReferencesTable,
+			Columns: []string{group.SystemCustomSourceReferencesColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(systemcustomgroupsource.FieldID, field.TypeInt64),
 			},
 		}
 		for _, k := range nodes {

@@ -45,6 +45,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/subadmincommissiongrant"
 	"github.com/Wei-Shaw/sub2api/ent/subscriptionplan"
 	"github.com/Wei-Shaw/sub2api/ent/systemcustomgroupmodel"
+	"github.com/Wei-Shaw/sub2api/ent/systemcustomgroupsource"
 	"github.com/Wei-Shaw/sub2api/ent/tlsfingerprintprofile"
 	"github.com/Wei-Shaw/sub2api/ent/usagecleanuptask"
 	"github.com/Wei-Shaw/sub2api/ent/usagelog"
@@ -2256,6 +2257,22 @@ func init() {
 	systemcustomgroupmodel.DefaultUpdatedAt = systemcustomgroupmodelDescUpdatedAt.Default.(func() time.Time)
 	// systemcustomgroupmodel.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
 	systemcustomgroupmodel.UpdateDefaultUpdatedAt = systemcustomgroupmodelDescUpdatedAt.UpdateDefault.(func() time.Time)
+	systemcustomgroupsourceFields := schema.SystemCustomGroupSource{}.Fields()
+	_ = systemcustomgroupsourceFields
+	// systemcustomgroupsourceDescPriority is the schema descriptor for priority field.
+	systemcustomgroupsourceDescPriority := systemcustomgroupsourceFields[2].Descriptor()
+	// systemcustomgroupsource.PriorityValidator is a validator for the "priority" field. It is called by the builders before save.
+	systemcustomgroupsource.PriorityValidator = systemcustomgroupsourceDescPriority.Validators[0].(func(int) error)
+	// systemcustomgroupsourceDescCreatedAt is the schema descriptor for created_at field.
+	systemcustomgroupsourceDescCreatedAt := systemcustomgroupsourceFields[3].Descriptor()
+	// systemcustomgroupsource.DefaultCreatedAt holds the default value on creation for the created_at field.
+	systemcustomgroupsource.DefaultCreatedAt = systemcustomgroupsourceDescCreatedAt.Default.(func() time.Time)
+	// systemcustomgroupsourceDescUpdatedAt is the schema descriptor for updated_at field.
+	systemcustomgroupsourceDescUpdatedAt := systemcustomgroupsourceFields[4].Descriptor()
+	// systemcustomgroupsource.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	systemcustomgroupsource.DefaultUpdatedAt = systemcustomgroupsourceDescUpdatedAt.Default.(func() time.Time)
+	// systemcustomgroupsource.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
+	systemcustomgroupsource.UpdateDefaultUpdatedAt = systemcustomgroupsourceDescUpdatedAt.UpdateDefault.(func() time.Time)
 	tlsfingerprintprofileMixin := schema.TLSFingerprintProfile{}.Mixin()
 	tlsfingerprintprofileMixinFields0 := tlsfingerprintprofileMixin[0].Fields()
 	_ = tlsfingerprintprofileMixinFields0

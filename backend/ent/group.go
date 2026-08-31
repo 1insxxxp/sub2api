@@ -172,6 +172,10 @@ type GroupEdges struct {
 	SystemCustomRoutes []*SystemCustomGroupModel `json:"system_custom_routes,omitempty"`
 	// SystemCustomSourceRoutes holds the value of the system_custom_source_routes edge.
 	SystemCustomSourceRoutes []*SystemCustomGroupModel `json:"system_custom_source_routes,omitempty"`
+	// SystemCustomSources holds the value of the system_custom_sources edge.
+	SystemCustomSources []*SystemCustomGroupSource `json:"system_custom_sources,omitempty"`
+	// SystemCustomSourceReferences holds the value of the system_custom_source_references edge.
+	SystemCustomSourceReferences []*SystemCustomGroupSource `json:"system_custom_source_references,omitempty"`
 	// Accounts holds the value of the accounts edge.
 	Accounts []*Account `json:"accounts,omitempty"`
 	// AllowedUsers holds the value of the allowed_users edge.
@@ -182,7 +186,7 @@ type GroupEdges struct {
 	UserAllowedGroups []*UserAllowedGroup `json:"user_allowed_groups,omitempty"`
 	// loadedTypes holds the information for reporting if a
 	// type was loaded (or requested) in eager-loading or not.
-	loadedTypes [11]bool
+	loadedTypes [13]bool
 }
 
 // APIKeysOrErr returns the APIKeys value or an error if the edge
@@ -248,10 +252,28 @@ func (e GroupEdges) SystemCustomSourceRoutesOrErr() ([]*SystemCustomGroupModel, 
 	return nil, &NotLoadedError{edge: "system_custom_source_routes"}
 }
 
+// SystemCustomSourcesOrErr returns the SystemCustomSources value or an error if the edge
+// was not loaded in eager-loading.
+func (e GroupEdges) SystemCustomSourcesOrErr() ([]*SystemCustomGroupSource, error) {
+	if e.loadedTypes[7] {
+		return e.SystemCustomSources, nil
+	}
+	return nil, &NotLoadedError{edge: "system_custom_sources"}
+}
+
+// SystemCustomSourceReferencesOrErr returns the SystemCustomSourceReferences value or an error if the edge
+// was not loaded in eager-loading.
+func (e GroupEdges) SystemCustomSourceReferencesOrErr() ([]*SystemCustomGroupSource, error) {
+	if e.loadedTypes[8] {
+		return e.SystemCustomSourceReferences, nil
+	}
+	return nil, &NotLoadedError{edge: "system_custom_source_references"}
+}
+
 // AccountsOrErr returns the Accounts value or an error if the edge
 // was not loaded in eager-loading.
 func (e GroupEdges) AccountsOrErr() ([]*Account, error) {
-	if e.loadedTypes[7] {
+	if e.loadedTypes[9] {
 		return e.Accounts, nil
 	}
 	return nil, &NotLoadedError{edge: "accounts"}
@@ -260,7 +282,7 @@ func (e GroupEdges) AccountsOrErr() ([]*Account, error) {
 // AllowedUsersOrErr returns the AllowedUsers value or an error if the edge
 // was not loaded in eager-loading.
 func (e GroupEdges) AllowedUsersOrErr() ([]*User, error) {
-	if e.loadedTypes[8] {
+	if e.loadedTypes[10] {
 		return e.AllowedUsers, nil
 	}
 	return nil, &NotLoadedError{edge: "allowed_users"}
@@ -269,7 +291,7 @@ func (e GroupEdges) AllowedUsersOrErr() ([]*User, error) {
 // AccountGroupsOrErr returns the AccountGroups value or an error if the edge
 // was not loaded in eager-loading.
 func (e GroupEdges) AccountGroupsOrErr() ([]*AccountGroup, error) {
-	if e.loadedTypes[9] {
+	if e.loadedTypes[11] {
 		return e.AccountGroups, nil
 	}
 	return nil, &NotLoadedError{edge: "account_groups"}
@@ -278,7 +300,7 @@ func (e GroupEdges) AccountGroupsOrErr() ([]*AccountGroup, error) {
 // UserAllowedGroupsOrErr returns the UserAllowedGroups value or an error if the edge
 // was not loaded in eager-loading.
 func (e GroupEdges) UserAllowedGroupsOrErr() ([]*UserAllowedGroup, error) {
-	if e.loadedTypes[10] {
+	if e.loadedTypes[12] {
 		return e.UserAllowedGroups, nil
 	}
 	return nil, &NotLoadedError{edge: "user_allowed_groups"}
@@ -791,6 +813,16 @@ func (_m *Group) QuerySystemCustomRoutes() *SystemCustomGroupModelQuery {
 // QuerySystemCustomSourceRoutes queries the "system_custom_source_routes" edge of the Group entity.
 func (_m *Group) QuerySystemCustomSourceRoutes() *SystemCustomGroupModelQuery {
 	return NewGroupClient(_m.config).QuerySystemCustomSourceRoutes(_m)
+}
+
+// QuerySystemCustomSources queries the "system_custom_sources" edge of the Group entity.
+func (_m *Group) QuerySystemCustomSources() *SystemCustomGroupSourceQuery {
+	return NewGroupClient(_m.config).QuerySystemCustomSources(_m)
+}
+
+// QuerySystemCustomSourceReferences queries the "system_custom_source_references" edge of the Group entity.
+func (_m *Group) QuerySystemCustomSourceReferences() *SystemCustomGroupSourceQuery {
+	return NewGroupClient(_m.config).QuerySystemCustomSourceReferences(_m)
 }
 
 // QueryAccounts queries the "accounts" edge of the Group entity.
