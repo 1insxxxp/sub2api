@@ -76,6 +76,25 @@ func TestAdminServiceUpdateGroupAllowsHistoricalMissingPricingOnUnrelatedEdit(t 
 	require.NotNil(t, repo.updated)
 }
 
+func TestAdminServiceUpdateGroupAllowsHistoricalInvalidPricingOnUnrelatedEdit(t *testing.T) {
+	description := "edited"
+	existing := &Group{
+		ID: 9, Name: "source", Platform: PlatformGemini, RateMultiplier: 1, Status: StatusActive,
+		ModelsListConfig: GroupModelsListConfig{Enabled: true, Models: []string{"legacy-invalid-model"}},
+		ModelPricing: []ChannelModelPricing{{
+			Platform: PlatformGemini, Models: []string{"legacy-invalid-model"}, BillingMode: BillingModeToken,
+		}},
+	}
+	repo := &groupRepoStubForAdmin{getByID: existing}
+	svc := newGroupPricingValidationService(repo)
+
+	group, err := svc.UpdateGroup(context.Background(), existing.ID, &UpdateGroupInput{Description: &description})
+
+	require.NoError(t, err)
+	require.Equal(t, description, group.Description)
+	require.NotNil(t, repo.updated)
+}
+
 func TestAdminServiceUpdateGroupRejectsOnlyNewMissingModel(t *testing.T) {
 	existing := &Group{
 		ID:               9,
@@ -123,4 +142,43 @@ func TestAdminServiceUpdateGroupAcceptsNewModelWithProspectivePricing(t *testing
 	require.NoError(t, err)
 	require.NotNil(t, group)
 	require.NotNil(t, repo.updated)
+}
+
+func TestAdminServiceUpdateGroupRejectsDeletingOnlyPriceFromPricedModel(t *testing.T) {
+	existing := pricedLegacyGroupForValidation()
+	repo := &groupRepoStubForAdmin{getByID: existing}
+	svc := newGroupPricingValidationService(repo)
+	emptyPricing := []ChannelModelPricing{}
+
+	_, err := svc.UpdateGroup(context.Background(), existing.ID, &UpdateGroupInput{ModelPricing: &emptyPricing})
+
+	require.Error(t, err)
+	require.Equal(t, "GROUP_MODEL_PRICING_REQUIRED", infraerrors.Reason(err))
+	require.Nil(t, repo.updated)
+}
+
+func TestAdminServiceUpdateGroupRejectsMakingPricedModelIncomplete(t *testing.T) {
+	existing := pricedLegacyGroupForValidation()
+	repo := &groupRepoStubForAdmin{getByID: existing}
+	svc := newGroupPricingValidationService(repo)
+	incompletePricing := []ChannelModelPricing{{
+		Platform: PlatformGemini, Models: []string{"legacy-explicit-model"}, BillingMode: BillingModeToken,
+	}}
+
+	_, err := svc.UpdateGroup(context.Background(), existing.ID, &UpdateGroupInput{ModelPricing: &incompletePricing})
+
+	require.Error(t, err)
+	require.Equal(t, "GROUP_MODEL_PRICING_REQUIRED", infraerrors.Reason(err))
+	require.Nil(t, repo.updated)
+}
+
+func pricedLegacyGroupForValidation() *Group {
+	return &Group{
+		ID: 9, Name: "source", Platform: PlatformGemini, RateMultiplier: 1, Status: StatusActive,
+		ModelsListConfig: GroupModelsListConfig{Enabled: true, Models: []string{"legacy-explicit-model"}},
+		ModelPricing: []ChannelModelPricing{{
+			Platform: PlatformGemini, Models: []string{"legacy-explicit-model"}, BillingMode: BillingModeToken,
+			InputPrice: coveragePrice(1e-6),
+		}},
+	}
 }

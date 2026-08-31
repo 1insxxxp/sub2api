@@ -533,7 +533,7 @@ func (s *adminServiceImpl) CreateGroup(ctx context.Context, input *CreateGroupIn
 	}
 	sanitizeGroupReasoningEffortPolicy(group)
 	if s.groupPricingCoverage != nil {
-		if err := s.groupPricingCoverage.ValidateNewlyPublished(ctx, nil, group); err != nil {
+		if err := s.groupPricingCoverage.ValidatePublishedPricing(ctx, nil, group); err != nil {
 			return nil, err
 		}
 	}
@@ -929,7 +929,7 @@ func (s *adminServiceImpl) UpdateGroup(ctx context.Context, id int64, input *Upd
 	}
 	sanitizeGroupReasoningEffortPolicy(group)
 	if s.groupPricingCoverage != nil {
-		if err := s.groupPricingCoverage.ValidateNewlyPublished(ctx, &previousGroup, group); err != nil {
+		if err := s.groupPricingCoverage.ValidatePublishedPricing(ctx, &previousGroup, group); err != nil {
 			return nil, err
 		}
 	}

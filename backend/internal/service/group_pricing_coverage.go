@@ -89,26 +89,42 @@ func (s *GroupPricingCoverageService) Preview(ctx context.Context, input GroupPr
 	return result
 }
 
-func (s *GroupPricingCoverageService) ValidateNewlyPublished(ctx context.Context, previous, prospective *Group) error {
-	newModels := newlyPublishedPricingModels(previous, prospective)
-	if len(newModels) == 0 {
+func (s *GroupPricingCoverageService) ValidatePublishedPricing(ctx context.Context, previous, prospective *Group) error {
+	prospectiveModels := advertisedPricingModels(prospective)
+	if len(prospectiveModels) == 0 {
 		return nil
 	}
-	var groupID *int64
-	if prospective != nil && prospective.ID > 0 {
-		id := prospective.ID
-		groupID = &id
-	}
-	result := s.Preview(ctx, GroupPricingCoverageInput{
+	groupID := pricingCoverageGroupID(prospective)
+	prospectiveResult := s.Preview(ctx, GroupPricingCoverageInput{
 		GroupID:          groupID,
 		Platform:         prospective.Platform,
-		Models:           newModels,
+		Models:           prospectiveModels,
 		ProspectiveGroup: prospective,
 	})
+	previousStatus := make(map[string]PricingCoverageStatus)
+	if previous != nil {
+		previousResult := s.Preview(ctx, GroupPricingCoverageInput{
+			GroupID:          pricingCoverageGroupID(previous),
+			Platform:         previous.Platform,
+			Models:           prospectiveModels,
+			ProspectiveGroup: previous,
+		})
+		for _, model := range previousResult.Models {
+			previousStatus[model.Model] = model.Status
+		}
+	}
+	previousModels := make(map[string]struct{})
+	for _, model := range advertisedPricingModels(previous) {
+		previousModels[model] = struct{}{}
+	}
 	failed := make([]string, 0)
 	reasons := make([]string, 0)
-	for _, model := range result.Models {
+	for _, model := range prospectiveResult.Models {
 		if model.Status == PricingCoveragePriced {
+			continue
+		}
+		_, existed := previousModels[model.Model]
+		if existed && previousStatus[model.Model] != PricingCoveragePriced {
 			continue
 		}
 		failed = append(failed, model.Model)
@@ -126,22 +142,12 @@ func (s *GroupPricingCoverageService) ValidateNewlyPublished(ctx context.Context
 	})
 }
 
-func newlyPublishedPricingModels(previous, prospective *Group) []string {
-	prospectiveModels := advertisedPricingModels(prospective)
-	if len(prospectiveModels) == 0 {
+func pricingCoverageGroupID(group *Group) *int64 {
+	if group == nil || group.ID <= 0 {
 		return nil
 	}
-	existing := make(map[string]struct{})
-	for _, model := range advertisedPricingModels(previous) {
-		existing[model] = struct{}{}
-	}
-	newModels := make([]string, 0, len(prospectiveModels))
-	for _, model := range prospectiveModels {
-		if _, ok := existing[model]; !ok {
-			newModels = append(newModels, model)
-		}
-	}
-	return newModels
+	id := group.ID
+	return &id
 }
 
 func advertisedPricingModels(group *Group) []string {
@@ -225,10 +231,8 @@ func invalidProspectivePricingByModel(platform string, pricing []ChannelModelPri
 
 func requiredPricingFields(mode BillingMode) []string {
 	switch mode {
-	case BillingModePerRequest:
+	case BillingModePerRequest, BillingModeImage, BillingModeVideo:
 		return []string{"per_request_price"}
-	case BillingModeImage:
-		return []string{"image_output_price"}
 	default:
 		return []string{"input_price", "output_price"}
 	}

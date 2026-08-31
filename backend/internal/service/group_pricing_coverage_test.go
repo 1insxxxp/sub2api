@@ -139,6 +139,53 @@ func TestGroupPricingCoverageSupportsPerRequestAndImageBilling(t *testing.T) {
 	require.Equal(t, BillingModeImage, result.Models[1].BillingMode)
 }
 
+func TestGroupPricingCoverageMatchesRequestSettlementModes(t *testing.T) {
+	svc := newGroupPricingCoverageTestService(nil)
+	tierPrice := 0.06
+	pricing := []ChannelModelPricing{
+		{Platform: PlatformGemini, Models: []string{"image-flat"}, BillingMode: BillingModeImage, PerRequestPrice: coveragePrice(0.04)},
+		{Platform: PlatformGemini, Models: []string{"image-tier"}, BillingMode: BillingModeImage, Intervals: []PricingInterval{{TierLabel: "1k", PerRequestPrice: &tierPrice}}},
+		{Platform: PlatformGemini, Models: []string{"request-tier"}, BillingMode: BillingModePerRequest, Intervals: []PricingInterval{{TierLabel: "standard", PerRequestPrice: &tierPrice}}},
+		{Platform: PlatformGemini, Models: []string{"video-flat"}, BillingMode: BillingModeVideo, PerRequestPrice: coveragePrice(0.08)},
+	}
+
+	result := svc.Preview(context.Background(), GroupPricingCoverageInput{
+		Platform:     PlatformGemini,
+		Models:       []string{"image-flat", "image-tier", "request-tier", "video-flat"},
+		ModelPricing: &pricing,
+	})
+
+	require.Len(t, result.Models, 4)
+	for _, model := range result.Models {
+		require.Equal(t, PricingCoveragePriced, model.Status, model.Model)
+		require.Equal(t, PricingSourceGroup, model.Source, model.Model)
+	}
+	require.Equal(t, BillingModeImage, result.Models[0].BillingMode)
+	require.Equal(t, BillingModeImage, result.Models[1].BillingMode)
+	require.Equal(t, BillingModePerRequest, result.Models[2].BillingMode)
+	require.Equal(t, BillingModeVideo, result.Models[3].BillingMode)
+}
+
+func TestGroupPricingCoverageRequestModesRequirePerRequestPrice(t *testing.T) {
+	svc := newGroupPricingCoverageTestService(nil)
+
+	for _, mode := range []BillingMode{BillingModePerRequest, BillingModeImage, BillingModeVideo} {
+		t.Run(string(mode), func(t *testing.T) {
+			result := svc.Preview(context.Background(), GroupPricingCoverageInput{
+				Platform: PlatformGemini,
+				Models:   []string{"missing-request-price"},
+				ModelPricing: &[]ChannelModelPricing{{
+					Platform: PlatformGemini, Models: []string{"missing-request-price"}, BillingMode: mode,
+				}},
+			})
+
+			require.Len(t, result.Models, 1)
+			require.Equal(t, PricingCoverageInvalid, result.Models[0].Status)
+			require.Equal(t, []string{"per_request_price"}, result.Models[0].RequiredFields)
+		})
+	}
+}
+
 func TestGroupPricingCoverageMarksUnknownModelMissing(t *testing.T) {
 	svc := newGroupPricingCoverageTestService(nil)
 

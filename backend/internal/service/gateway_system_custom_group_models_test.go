@@ -96,6 +96,48 @@ func TestGatewayBuildDynamicSystemCustomGroupCatalogRetainsOnlyPricedAccountIDs(
 	require.Equal(t, []int64{102}, candidates[0].AllowedAccounts.IDs())
 }
 
+func TestDynamicSystemCustomCatalogAndDispatchUseSavedGroupExplicitPricing(t *testing.T) {
+	groupID := int64(10)
+	group := directSourceGroup(groupID, PlatformAnthropic)
+	group.ModelsListConfig = GroupModelsListConfig{Enabled: true, Models: []string{"explicit-only-model"}}
+	group.ModelPricing = []ChannelModelPricing{{
+		Platform: PlatformAnthropic, Models: []string{"explicit-only-model"}, BillingMode: BillingModeToken,
+		InputPrice: coveragePrice(1e-6),
+	}}
+	account := schedulableSystemCustomTestAccount(101, PlatformAnthropic, map[string]any{"explicit-only-model": "vendor-unpriced"})
+	batchRepo := &systemCustomGroupBatchAccountRepoStub{accounts: []SystemCustomGroupSchedulableAccount{{GroupID: groupID, Account: account}}}
+	billing := newTestBillingService()
+	resolver := NewModelPricingResolver(nil, billing)
+	catalogGateway := &GatewayService{accountRepo: batchRepo, billingService: billing, resolver: resolver}
+
+	catalog, err := catalogGateway.BuildSystemCustomGroupModelCatalog(context.Background(), []SystemCustomGroupSource{{
+		SourceGroupID: groupID, Priority: 1, SourceGroup: group,
+	}}, "")
+
+	require.NoError(t, err)
+	require.Equal(t, []string{"explicit-only-model"}, catalog.Models())
+	candidates, advertised := catalog.Resolve("explicit-only-model")
+	require.True(t, advertised)
+	require.Len(t, candidates, 1)
+	require.Equal(t, []int64{account.ID}, candidates[0].AllowedAccounts.IDs())
+
+	dispatch := &GatewayService{
+		accountRepo:    &systemCustomDispatchAccountRepoStub{accounts: []Account{account}},
+		groupRepo:      &mockGroupRepoForGateway{groups: map[int64]*Group{groupID: group}},
+		billingService: billing, resolver: resolver, cfg: testConfig(),
+	}
+	ctx := WithSystemCustomGroupResolution(context.Background(), SystemCustomGroupResolution{
+		BillingGroupID: 99, SourceGroupID: groupID, PublicModel: "explicit-only-model", SourceModel: "explicit-only-model",
+		SourcePlatform: PlatformAnthropic, AllowedAccounts: candidates[0].AllowedAccounts,
+	})
+
+	selected, err := dispatch.SelectAccountForModelWithExclusions(ctx, &groupID, "", "explicit-only-model", nil)
+
+	require.NoError(t, err)
+	require.NotNil(t, selected)
+	require.Equal(t, account.ID, selected.ID)
+}
+
 type systemCustomDispatchAccountRepoStub struct {
 	AccountRepository
 	accounts []Account
