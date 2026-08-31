@@ -370,6 +370,7 @@ describe('AdminWorkbenchView balance transfer codes', () => {
           code: 'WORKBENCH-CODE',
           type: 'balance',
           value: 8,
+          threshold_exempt: true,
           status: 'unused',
           used_by: null,
           used_at: null,
@@ -401,6 +402,7 @@ describe('AdminWorkbenchView balance transfer codes', () => {
     expect(wrapper.text()).toContain('customer campaign A')
     expect(wrapper.text()).toContain('adminWorkbench.balanceTransfer.status.unused')
     expect(wrapper.text()).toContain('adminWorkbench.balanceTransfer.status.used')
+    expect(wrapper.get('[data-test="generated-gift-badge-88"]').text()).toBe('adminWorkbench.balanceTransfer.giftBadge')
     expect(wrapper.get('[data-test="generated-code-copy-88"]').attributes('aria-label')).toBe('common.copy')
     expect(wrapper.get('[data-test="generated-code-delete-88"]').attributes('aria-label')).toBe('common.delete')
   })
@@ -412,6 +414,7 @@ describe('AdminWorkbenchView balance transfer codes', () => {
         code: 'NEW-CODE',
         type: 'balance',
         value: 5,
+        threshold_exempt: true,
         status: 'unused',
         used_by: null,
         used_at: null,
@@ -427,6 +430,12 @@ describe('AdminWorkbenchView balance transfer codes', () => {
 
     await wrapper.get('[data-test="workbench-transfer-amount"]').setValue('5')
     await wrapper.get('[data-test="workbench-transfer-count"]').setValue('2')
+    const giftOption = wrapper.get('[data-test="workbench-transfer-threshold-exempt-option"]')
+    const giftToggle = wrapper.get<HTMLInputElement>('[data-test="workbench-transfer-threshold-exempt"]')
+    expect(giftToggle.element.checked).toBe(false)
+    expect(giftOption.classes()).toEqual(expect.arrayContaining(['w-full', 'min-w-0']))
+    expect(giftOption.find('[data-test="workbench-transfer-threshold-exempt-copy"]').classes()).toContain('min-w-0')
+    await giftToggle.setValue(true)
     await wrapper.get('[data-test="workbench-transfer-form"]').trigger('submit')
     await flushPromises()
 
@@ -435,12 +444,15 @@ describe('AdminWorkbenchView balance transfer codes', () => {
       count: 2,
       expires_in_days: 30,
       notes: '',
-      single_use_per_user: false
+      single_use_per_user: false,
+      threshold_exempt: true
     })
     expect(refreshUser).toHaveBeenCalled()
     expect(showSuccess).toHaveBeenCalledWith('adminWorkbench.balanceTransfer.generated')
     expect(wrapper.text()).toContain('NEW-CODE')
     expect(wrapper.text()).toContain('new batch note')
+    expect(wrapper.get('[data-test="generated-now-gift-badge-89"]').text()).toBe('adminWorkbench.balanceTransfer.giftBadge')
+    expect(giftToggle.element.checked).toBe(false)
   })
 
   it('keeps the latest generated batch in a fixed-height scroll panel', async () => {

@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"sort"
 	"strings"
 	"time"
@@ -1263,6 +1264,14 @@ func (s *adminServiceImpl) GenerateRedeemCodes(ctx context.Context, input *Gener
 	if input.ExpiresAt != nil && !input.ExpiresAt.After(time.Now()) {
 		return nil, ErrRedeemCodeExpired
 	}
+	if input.ThresholdExempt && (input.Type != RedeemTypeBalance ||
+		math.IsNaN(input.Value) || math.IsInf(input.Value, 0) ||
+		QuantizeUsageBillingAmount(input.Value) <= 0) {
+		return nil, infraerrors.BadRequest(
+			"REDEEM_THRESHOLD_EXEMPT_INVALID",
+			"gift credit is only supported for positive balance redeem codes",
+		)
+	}
 	if input.SingleUsePerUser && input.Type == RedeemTypeInvitation {
 		return nil, infraerrors.BadRequest("REDEEM_BATCH_LIMIT_UNSUPPORTED_TYPE", "invitation codes do not support single-use batches")
 	}
@@ -1295,12 +1304,13 @@ func (s *adminServiceImpl) GenerateRedeemCodes(ctx context.Context, input *Gener
 			return nil, err
 		}
 		code := RedeemCode{
-			Code:      codeValue,
-			Type:      input.Type,
-			Value:     input.Value,
-			Status:    StatusUnused,
-			ExpiresAt: input.ExpiresAt,
-			BatchID:   batchID,
+			Code:            codeValue,
+			Type:            input.Type,
+			Value:           input.Value,
+			ThresholdExempt: input.ThresholdExempt,
+			Status:          StatusUnused,
+			ExpiresAt:       input.ExpiresAt,
+			BatchID:         batchID,
 		}
 		// 订阅类型专用字段
 		if input.Type == RedeemTypeSubscription {

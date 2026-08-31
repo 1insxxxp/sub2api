@@ -596,6 +596,7 @@ func RedeemCodeFromServiceWorkbenchGenerated(rc *service.RedeemCode) *RedeemCode
 		return nil
 	}
 	out := redeemCodeFromServiceBase(rc, false)
+	out.ThresholdExempt = rc.ThresholdExempt
 	if rc.Notes != "" {
 		out.Notes = &rc.Notes
 	}
@@ -633,6 +634,7 @@ func redeemCodeFromServiceBase(rc *service.RedeemCode, includeAdminFields bool) 
 		Group:            GroupFromServiceShallow(rc.Group),
 	}
 	if includeAdminFields {
+		out.ThresholdExempt = rc.ThresholdExempt
 		out.CreatedBy = rc.CreatedBy
 		out.Source = rc.Source
 		out.User = UserFromServiceShallow(rc.User)

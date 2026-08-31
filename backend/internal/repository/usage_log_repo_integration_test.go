@@ -87,6 +87,29 @@ func (s *UsageLogRepoSuite) TestCreate() {
 	s.Require().NotZero(log.ID)
 }
 
+func (s *UsageLogRepoSuite) TestCreateRoundTripsThresholdExemptCost() {
+	user := mustCreateUser(s.T(), s.client, &service.User{Email: "threshold-exempt-single@test.com"})
+	apiKey := mustCreateApiKey(s.T(), s.client, &service.APIKey{UserID: user.ID, Key: "sk-threshold-exempt-single", Name: "k"})
+	account := mustCreateAccount(s.T(), s.client, &service.Account{Name: "acc-threshold-exempt-single"})
+
+	log := &service.UsageLog{
+		UserID:              user.ID,
+		APIKeyID:            apiKey.ID,
+		AccountID:           account.ID,
+		RequestID:           uuid.NewString(),
+		Model:               "gpt-5",
+		ActualCost:          1.25,
+		ThresholdExemptCost: 0.375,
+	}
+
+	inserted, err := s.repo.Create(s.ctx, log)
+	s.Require().NoError(err)
+	s.Require().True(inserted)
+	got, err := s.repo.GetByID(s.ctx, log.ID)
+	s.Require().NoError(err)
+	s.Require().Equal(0.375, got.ThresholdExemptCost)
+}
+
 func (s *UsageLogRepoSuite) TestCreateRoundTripsSystemCustomBillingAndSourceGroups() {
 	user := mustCreateUser(s.T(), s.client, &service.User{Email: "source-group-roundtrip@test.com"})
 	apiKey := mustCreateApiKey(s.T(), s.client, &service.APIKey{UserID: user.ID, Key: "sk-source-group-roundtrip", Name: "k"})
@@ -198,6 +221,33 @@ func TestUsageLogRepositoryCreate_BatchPathConcurrent(t *testing.T) {
 	require.Equal(t, total, count)
 }
 
+func TestUsageLogRepositoryCreate_BatchPathRoundTripsThresholdExemptCost(t *testing.T) {
+	ctx := context.Background()
+	client := testEntClient(t)
+	repo := newUsageLogRepositoryWithSQL(client, integrationDB)
+
+	user := mustCreateUser(t, client, &service.User{Email: fmt.Sprintf("usage-gift-batch-%d@example.com", time.Now().UnixNano())})
+	apiKey := mustCreateApiKey(t, client, &service.APIKey{UserID: user.ID, Key: "sk-usage-gift-batch-" + uuid.NewString(), Name: "k"})
+	account := mustCreateAccount(t, client, &service.Account{Name: "acc-usage-gift-batch-" + uuid.NewString()})
+	log := &service.UsageLog{
+		UserID:              user.ID,
+		APIKeyID:            apiKey.ID,
+		AccountID:           account.ID,
+		RequestID:           uuid.NewString(),
+		Model:               "gpt-5",
+		ActualCost:          2.5,
+		ThresholdExemptCost: 0.625,
+		CreatedAt:           time.Now().UTC(),
+	}
+
+	inserted, err := repo.Create(ctx, log)
+	require.NoError(t, err)
+	require.True(t, inserted)
+	got, err := repo.GetByID(ctx, log.ID)
+	require.NoError(t, err)
+	require.Equal(t, 0.625, got.ThresholdExemptCost)
+}
+
 func TestUsageLogRepositoryCreate_BatchPathDuplicateRequestID(t *testing.T) {
 	ctx := context.Background()
 	client := testEntClient(t)
@@ -209,28 +259,30 @@ func TestUsageLogRepositoryCreate_BatchPathDuplicateRequestID(t *testing.T) {
 	requestID := uuid.NewString()
 
 	log1 := &service.UsageLog{
-		UserID:       user.ID,
-		APIKeyID:     apiKey.ID,
-		AccountID:    account.ID,
-		RequestID:    requestID,
-		Model:        "claude-3",
-		InputTokens:  10,
-		OutputTokens: 20,
-		TotalCost:    0.5,
-		ActualCost:   0.5,
-		CreatedAt:    time.Now().UTC(),
+		UserID:              user.ID,
+		APIKeyID:            apiKey.ID,
+		AccountID:           account.ID,
+		RequestID:           requestID,
+		Model:               "claude-3",
+		InputTokens:         10,
+		OutputTokens:        20,
+		TotalCost:           0.5,
+		ActualCost:          0.5,
+		ThresholdExemptCost: 0.25,
+		CreatedAt:           time.Now().UTC(),
 	}
 	log2 := &service.UsageLog{
-		UserID:       user.ID,
-		APIKeyID:     apiKey.ID,
-		AccountID:    account.ID,
-		RequestID:    requestID,
-		Model:        "claude-3",
-		InputTokens:  10,
-		OutputTokens: 20,
-		TotalCost:    0.5,
-		ActualCost:   0.5,
-		CreatedAt:    time.Now().UTC(),
+		UserID:              user.ID,
+		APIKeyID:            apiKey.ID,
+		AccountID:           account.ID,
+		RequestID:           requestID,
+		Model:               "claude-3",
+		InputTokens:         10,
+		OutputTokens:        20,
+		TotalCost:           0.5,
+		ActualCost:          0.5,
+		ThresholdExemptCost: 0,
+		CreatedAt:           time.Now().UTC(),
 	}
 
 	inserted1, err1 := repo.Create(ctx, log1)
@@ -240,6 +292,7 @@ func TestUsageLogRepositoryCreate_BatchPathDuplicateRequestID(t *testing.T) {
 	require.True(t, inserted1)
 	require.False(t, inserted2)
 	require.Equal(t, log1.ID, log2.ID)
+	require.Equal(t, 0.25, log2.ThresholdExemptCost)
 
 	var count int
 	require.NoError(t, integrationDB.QueryRowContext(ctx, "SELECT COUNT(*) FROM usage_logs WHERE request_id = $1 AND api_key_id = $2", requestID, apiKey.ID).Scan(&count))

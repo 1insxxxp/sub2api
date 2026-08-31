@@ -14,6 +14,61 @@ import (
 
 var ErrUsageBillingRequestIDRequired = errors.New("usage billing request_id is required")
 var ErrUsageBillingRequestConflict = errors.New("usage billing request fingerprint conflict")
+var ErrUsageBillingNonFiniteAmount = errors.New("usage billing monetary amounts must be finite")
+var ErrUsageBillingNegativeAmount = errors.New("usage billing monetary amounts must be nonnegative")
+var ErrGiftAllocatingBalanceRepositoryRequired = errors.New("gift allocating balance repository is required")
+var ErrUsageLogThresholdExemptRepositoryRequired = errors.New("usage log threshold exempt repository is required")
+var ErrUsageBillingTransactionRunnerRequired = errors.New("usage billing transaction runner is required")
+var ErrUsageBillingSideEffectRepositoryRequired = errors.New("usage billing side-effect repository is required")
+
+type BalanceDeductionResult struct {
+	NewBalance          float64
+	ThresholdExemptCost float64
+}
+
+// GiftAllocatingBalanceRepository is an optional transaction-aware capability
+// used by legacy billing paths to preserve gift-source attribution.
+type GiftAllocatingBalanceRepository interface {
+	DeductBalanceWithGiftAllocation(ctx context.Context, userID int64, amount float64) (BalanceDeductionResult, error)
+}
+
+type UsageLogThresholdExemptRepository interface {
+	UpdateThresholdExemptCost(ctx context.Context, usageLogID int64, amount float64) error
+}
+
+// UsageBillingTransactionRunner lets legacy billing join transaction-aware
+// repositories through the Ent transaction carried by context.
+type UsageBillingTransactionRunner interface {
+	RunUsageBillingTransaction(ctx context.Context, fn func(context.Context) error) error
+}
+
+func ValidateUsageBillingActualCost(amount float64) error {
+	if math.IsNaN(amount) || math.IsInf(amount, 0) {
+		return ErrUsageBillingNonFiniteAmount
+	}
+	if amount < 0 {
+		return ErrUsageBillingNegativeAmount
+	}
+	return nil
+}
+
+func ValidateUsageBillingCommandAmounts(cmd *UsageBillingCommand) error {
+	if cmd == nil {
+		return nil
+	}
+	for _, amount := range []float64{
+		cmd.BalanceCost,
+		cmd.SubscriptionCost,
+		cmd.APIKeyQuotaCost,
+		cmd.APIKeyRateLimitCost,
+		cmd.AccountQuotaCost,
+	} {
+		if err := ValidateUsageBillingActualCost(amount); err != nil {
+			return err
+		}
+	}
+	return nil
+}
 
 // UsageBillingCommand describes one billable request that must be applied at most once.
 type UsageBillingCommand struct {
@@ -102,6 +157,14 @@ func QuantizeUsageBillingAmount(v float64) float64 {
 	return quantized
 }
 
+func quantizeUsageBillingAmountDown(v float64) float64 {
+	if v <= 0 || math.IsNaN(v) || math.IsInf(v, 0) {
+		return 0
+	}
+	quantized, _ := decimal.NewFromFloat(v).Truncate(UsageBillingMonetaryScale).Float64()
+	return quantized
+}
+
 func buildUsageBillingFingerprint(c *UsageBillingCommand) string {
 	if c == nil {
 		return ""
@@ -167,6 +230,7 @@ type UsageBillingApplyResult struct {
 	APIKeyQuotaExhausted bool
 	NewBalance           *float64           // post-deduction balance (nil = no balance deduction)
 	BalanceOverdrafted   bool               // true when the sufficient-balance guard missed and debt was still recorded
+	ThresholdExemptCost  float64            // balance cost allocated from gift balance
 	QuotaState           *AccountQuotaState // post-increment quota state (nil = no quota increment)
 }
 
@@ -191,6 +255,8 @@ func (c *BatchImageBalanceHoldCommand) Normalize() {
 	if strings.TrimSpace(c.RequestFingerprint) == "" {
 		c.RequestFingerprint = buildBatchImageBalanceHoldFingerprint(c)
 	}
+	c.HoldAmount = QuantizeUsageBillingAmount(c.HoldAmount)
+	c.ActualAmount = QuantizeUsageBillingAmount(c.ActualAmount)
 }
 
 func buildBatchImageBalanceHoldFingerprint(c *BatchImageBalanceHoldCommand) string {
@@ -213,9 +279,10 @@ func buildBatchImageBalanceHoldFingerprint(c *BatchImageBalanceHoldCommand) stri
 }
 
 type BatchImageBalanceHoldResult struct {
-	Applied       bool
-	NewBalance    *float64
-	FrozenBalance *float64
+	Applied             bool
+	NewBalance          *float64
+	FrozenBalance       *float64
+	ThresholdExemptCost float64
 }
 
 type UsageBillingRepository interface {

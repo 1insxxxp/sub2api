@@ -114,6 +114,10 @@ func (UsageLog) Fields() []ent.Field {
 		field.Float("actual_cost").
 			Default(0).
 			SchemaType(map[string]string{dialect.Postgres: "decimal(20,10)"}),
+		field.Float("threshold_exempt_cost").
+			Default(0).
+			SchemaType(map[string]string{dialect.Postgres: "decimal(20,10)"}).
+			Comment("Balance-funded cost excluded from eligibility thresholds"),
 		field.Float("compensated_cost").
 			Default(0).
 			SchemaType(map[string]string{dialect.Postgres: "decimal(20,10)"}),

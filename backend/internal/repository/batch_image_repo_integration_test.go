@@ -321,6 +321,26 @@ func TestBatchImageRepository_SetBatchImageJobSettlementFailed(t *testing.T) {
 	require.Equal(t, 1, job.RetryCount)
 }
 
+func TestBatchImageRepository_SetSettlementFailedDoesNotMutateCompletedJob(t *testing.T) {
+	ctx := context.Background()
+	tx := testTx(t)
+	repo := newBatchImageRepositoryWithSQL(tx)
+	batchID := batchImageTestID(t, "settlement-failed-completed")
+	_, err := repo.CreateBatchImageJob(ctx, service.CreateBatchImageJobParams{
+		BatchID: batchID, UserID: 1001, Provider: service.BatchImageProviderGeminiAPI,
+		Model: "gemini-image", Status: service.BatchImageJobStatusCompleted, ItemCount: 1, SuccessCount: 1,
+	})
+	require.NoError(t, err)
+
+	_, err = repo.SetBatchImageJobSettlementFailed(ctx, batchID, "SETTLEMENT_FINALIZE_FAILED", "late worker")
+	require.ErrorIs(t, err, service.ErrBatchImageAlreadySettled)
+	job, err := repo.GetBatchImageJobByBatchID(ctx, batchID)
+	require.NoError(t, err)
+	require.Equal(t, service.BatchImageJobStatusCompleted, job.Status)
+	require.Zero(t, job.RetryCount)
+	require.Empty(t, batchImageDerefTest(job.LastErrorCode))
+}
+
 func TestBatchImageRepository_AppendEvent(t *testing.T) {
 	ctx := context.Background()
 	tx := testTx(t)

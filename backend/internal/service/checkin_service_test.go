@@ -259,6 +259,39 @@ func createCheckinUsageAt(t *testing.T, ctx context.Context, client *dbent.Clien
 	require.NoError(t, err)
 }
 
+func createCheckinUsageWithThresholdExempt(t *testing.T, ctx context.Context, client *dbent.Client, userID int64, requestID string, actualCost, thresholdExemptCost float64, createdAt *time.Time) {
+	t.Helper()
+	group, err := client.Group.Create().SetName("checkin-gift-" + requestID).Save(ctx)
+	require.NoError(t, err)
+	apiKey, err := client.APIKey.Create().
+		SetUserID(userID).
+		SetKey("sk-checkin-gift-" + requestID).
+		SetName("check-in gift usage").
+		SetGroupID(group.ID).
+		Save(ctx)
+	require.NoError(t, err)
+	account, err := client.Account.Create().
+		SetName("checkin-gift-account-" + requestID).
+		SetPlatform("anthropic").
+		SetType("api_key").
+		Save(ctx)
+	require.NoError(t, err)
+	create := client.UsageLog.Create().
+		SetUserID(userID).
+		SetAPIKeyID(apiKey.ID).
+		SetAccountID(account.ID).
+		SetRequestID(requestID).
+		SetModel("claude-test").
+		SetTotalCost(actualCost).
+		SetActualCost(actualCost).
+		SetThresholdExemptCost(thresholdExemptCost)
+	if createdAt != nil {
+		create.SetCreatedAt(*createdAt)
+	}
+	_, err = create.Save(ctx)
+	require.NoError(t, err)
+}
+
 func configureCheckinCampaignAwardBaseline(t *testing.T, ctx context.Context, svc *CheckinService) {
 	t.Helper()
 	_, err := svc.UpdateConfig(ctx, CheckinConfig{
@@ -1231,6 +1264,66 @@ func TestCheckinServiceMinimumSpendUsesActualCost(t *testing.T) {
 	require.Equal(t, 4.0, status.TotalUsageUSD)
 }
 
+func TestTotalUsageUSDWithClient_ThresholdExemptCost(t *testing.T) {
+	client := newCheckinServiceTestClient(t)
+	ctx := context.Background()
+	createdUser := createCheckinTestUser(t, ctx, client, "gift-usage-total@example.com", 10)
+	createCheckinUsageWithThresholdExempt(t, ctx, client, createdUser.ID, "gift-total-full", 10, 10, nil)
+	createCheckinUsageWithThresholdExempt(t, ctx, client, createdUser.ID, "gift-total-mixed", 12, 5, nil)
+	createCheckinUsageWithThresholdExempt(t, ctx, client, createdUser.ID, "gift-total-clamped", 2, 5, nil)
+
+	svc := NewCheckinService(client, nil, nil)
+	total, err := svc.totalUsageUSDWithClient(ctx, client, createdUser.ID)
+	require.NoError(t, err)
+	require.Equal(t, 7.0, total)
+}
+
+func TestCheckinServiceMinimumSpendGiftUsageEligibility(t *testing.T) {
+	t.Run("fully gift funded usage is ineligible", func(t *testing.T) {
+		client := newCheckinServiceTestClient(t)
+		ctx := context.Background()
+		createdUser := createCheckinTestUser(t, ctx, client, "gift-usage-full@example.com", 10)
+		settings := newCheckinSettingRepoStub()
+		setCheckinConfig(t, settings, CheckinConfig{Enabled: true, MinTotalUsageUSD: 5})
+		createCheckinUsageWithThresholdExempt(t, ctx, client, createdUser.ID, "gift-eligibility-full", 8, 8, nil)
+
+		svc := NewCheckinService(client, nil, nil)
+		svc.SetSettingRepository(settings)
+		status, err := svc.GetStatus(ctx, createdUser.ID)
+		require.NoError(t, err)
+		require.False(t, status.Eligible)
+		require.Equal(t, CheckinIneligibleReasonInsufficientSpend, status.IneligibleReason)
+		require.Zero(t, status.TotalUsageUSD)
+		_, err = svc.Checkin(ctx, createdUser.ID)
+		require.ErrorIs(t, err, ErrCheckinInsufficientSpend)
+	})
+
+	t.Run("mixed usage counts only ordinary funded portion", func(t *testing.T) {
+		client := newCheckinServiceTestClient(t)
+		ctx := context.Background()
+		createdUser := createCheckinTestUser(t, ctx, client, "gift-usage-mixed@example.com", 10)
+		settings := newCheckinSettingRepoStub()
+		setCheckinConfig(t, settings, CheckinConfig{Enabled: true, MinTotalUsageUSD: 5})
+		createCheckinUsageWithThresholdExempt(t, ctx, client, createdUser.ID, "gift-eligibility-mixed", 8, 4, nil)
+
+		svc := NewCheckinService(client, nil, nil)
+		svc.SetSettingRepository(settings)
+		status, err := svc.GetStatus(ctx, createdUser.ID)
+		require.NoError(t, err)
+		require.False(t, status.Eligible)
+		require.Equal(t, 4.0, status.TotalUsageUSD)
+
+		createCheckinUsageWithThresholdExempt(t, ctx, client, createdUser.ID, "gift-eligibility-ordinary", 1, 0, nil)
+		status, err = svc.GetStatus(ctx, createdUser.ID)
+		require.NoError(t, err)
+		require.True(t, status.Eligible)
+		require.Equal(t, 5.0, status.TotalUsageUSD)
+		svc.rewardRoll = func() float64 { return 0 }
+		_, err = svc.Checkin(ctx, createdUser.ID)
+		require.NoError(t, err)
+	})
+}
+
 func TestCheckinServiceRechargeEligibility(t *testing.T) {
 	tests := []struct {
 		name           string
@@ -1578,11 +1671,13 @@ func TestPreviousBeijingDayUsage(t *testing.T) {
 	createAt("at-start", 1.25, time.Date(2026, 8, 1, 0, 0, 0, 0, beijing))
 	createAt("at-end", 2.75, time.Date(2026, 8, 1, 23, 59, 59, 0, beijing))
 	createAt("after", 200, time.Date(2026, 8, 2, 0, 0, 0, 0, beijing))
+	fullyGiftFundedAt := time.Date(2026, 8, 1, 12, 0, 0, 0, beijing)
+	createCheckinUsageWithThresholdExempt(t, ctx, client, createdUser.ID, "previous-day-gift-funded", 6, 6, &fullyGiftFundedAt)
 
 	svc := NewCheckinService(client, nil, nil)
 	usage, err := svc.previousBeijingDayUsageUSDWithClient(ctx, client, createdUser.ID, "2026-08-02")
 	require.NoError(t, err)
-	require.Equal(t, 4.0, usage)
+	require.Equal(t, 10.0, usage, "previous-day rebate must use full actual cost, including gift-funded usage")
 }
 
 func TestCheckinService_Checkin_UsageRebate(t *testing.T) {

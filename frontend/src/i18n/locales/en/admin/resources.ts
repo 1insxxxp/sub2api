@@ -254,6 +254,9 @@ export default {
       singleUsePerUser: 'Activity batch: one code per user',
       singleUsePerUserHint: 'Codes generated in this operation share one batch, and each account may redeem only one.',
       singleUseBadge: 'One per user',
+      giftCredit: 'Gift credit (excluded from activity thresholds)',
+      giftCreditHint: 'This credit and usage funded by it do not count toward recharge, check-in, or other activity thresholds.',
+      giftBadge: 'Gift credit',
       unused: 'Unused',
       used: 'Used',
       columns: {

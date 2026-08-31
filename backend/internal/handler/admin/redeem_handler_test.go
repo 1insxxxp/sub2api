@@ -188,3 +188,34 @@ func TestGenerateRedeemCodesPropagatesSingleUsePerUser(t *testing.T) {
 	require.True(t, stub.lastGenerateRedeemCodes.SingleUsePerUser)
 	require.Equal(t, 2, stub.lastGenerateRedeemCodes.Count)
 }
+
+func TestGenerateRedeemCodesPropagatesThresholdExempt(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	stub := newStubAdminService()
+	handler := &RedeemHandler{adminService: stub}
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	body := []byte(`{"count":2,"type":"balance","value":10,"threshold_exempt":true}`)
+	c.Request, _ = http.NewRequest(http.MethodPost, "/api/v1/admin/redeem-codes/generate", bytes.NewReader(body))
+	c.Request.Header.Set("Content-Type", "application/json")
+
+	handler.Generate(c)
+
+	require.Equal(t, http.StatusOK, w.Code)
+	require.NotNil(t, stub.lastGenerateRedeemCodes)
+	require.True(t, stub.lastGenerateRedeemCodes.ThresholdExempt)
+}
+
+func TestGenerateRedeemCodesRequestThresholdExemptSerialization(t *testing.T) {
+	var req GenerateRedeemCodesRequest
+	require.NoError(t, json.Unmarshal([]byte(`{"count":1,"type":"balance","value":10}`), &req))
+
+	legacyPayload, err := json.Marshal(req)
+	require.NoError(t, err)
+	require.NotContains(t, string(legacyPayload), `"threshold_exempt"`)
+
+	req.ThresholdExempt = true
+	giftPayload, err := json.Marshal(req)
+	require.NoError(t, err)
+	require.Contains(t, string(giftPayload), `"threshold_exempt":true`)
+}

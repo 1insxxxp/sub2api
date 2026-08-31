@@ -79,6 +79,20 @@ func (_u *RedeemCodeUpdate) AddValue(v float64) *RedeemCodeUpdate {
 	return _u
 }
 
+// SetThresholdExempt sets the "threshold_exempt" field.
+func (_u *RedeemCodeUpdate) SetThresholdExempt(v bool) *RedeemCodeUpdate {
+	_u.mutation.SetThresholdExempt(v)
+	return _u
+}
+
+// SetNillableThresholdExempt sets the "threshold_exempt" field if the given value is not nil.
+func (_u *RedeemCodeUpdate) SetNillableThresholdExempt(v *bool) *RedeemCodeUpdate {
+	if v != nil {
+		_u.SetThresholdExempt(*v)
+	}
+	return _u
+}
+
 // SetStatus sets the "status" field.
 func (_u *RedeemCodeUpdate) SetStatus(v string) *RedeemCodeUpdate {
 	_u.mutation.SetStatus(v)
@@ -415,6 +429,9 @@ func (_u *RedeemCodeUpdate) sqlSave(ctx context.Context) (_node int, err error) 
 	if value, ok := _u.mutation.AddedValue(); ok {
 		_spec.AddField(redeemcode.FieldValue, field.TypeFloat64, value)
 	}
+	if value, ok := _u.mutation.ThresholdExempt(); ok {
+		_spec.SetField(redeemcode.FieldThresholdExempt, field.TypeBool, value)
+	}
 	if value, ok := _u.mutation.Status(); ok {
 		_spec.SetField(redeemcode.FieldStatus, field.TypeString, value)
 	}
@@ -604,6 +621,20 @@ func (_u *RedeemCodeUpdateOne) SetNillableValue(v *float64) *RedeemCodeUpdateOne
 // AddValue adds value to the "value" field.
 func (_u *RedeemCodeUpdateOne) AddValue(v float64) *RedeemCodeUpdateOne {
 	_u.mutation.AddValue(v)
+	return _u
+}
+
+// SetThresholdExempt sets the "threshold_exempt" field.
+func (_u *RedeemCodeUpdateOne) SetThresholdExempt(v bool) *RedeemCodeUpdateOne {
+	_u.mutation.SetThresholdExempt(v)
+	return _u
+}
+
+// SetNillableThresholdExempt sets the "threshold_exempt" field if the given value is not nil.
+func (_u *RedeemCodeUpdateOne) SetNillableThresholdExempt(v *bool) *RedeemCodeUpdateOne {
+	if v != nil {
+		_u.SetThresholdExempt(*v)
+	}
 	return _u
 }
 
@@ -972,6 +1003,9 @@ func (_u *RedeemCodeUpdateOne) sqlSave(ctx context.Context) (_node *RedeemCode, 
 	}
 	if value, ok := _u.mutation.AddedValue(); ok {
 		_spec.AddField(redeemcode.FieldValue, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.ThresholdExempt(); ok {
+		_spec.SetField(redeemcode.FieldThresholdExempt, field.TypeBool, value)
 	}
 	if value, ok := _u.mutation.Status(); ok {
 		_spec.SetField(redeemcode.FieldStatus, field.TypeString, value)

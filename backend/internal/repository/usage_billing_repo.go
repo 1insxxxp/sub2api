@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"math"
 	"strings"
 
 	dbent "github.com/Wei-Shaw/sub2api/ent"
@@ -13,6 +14,16 @@ import (
 
 type usageBillingRepository struct {
 	db *sql.DB
+}
+
+var errBatchImageCaptureHoldNotReserved = errors.New("batch image capture hold was not reserved")
+var errBatchImageReleaseHoldNotReserved = errors.New("batch image release hold was not reserved")
+var errBatchImageCaptureHoldReleased = errors.New("batch image hold was already released")
+var errBatchImageReleaseHoldCaptured = errors.New("batch image hold was already captured")
+
+type usageBillingClaimResult struct {
+	Applied             bool
+	ThresholdExemptCost sql.NullFloat64
 }
 
 func NewUsageBillingRepository(_ *dbent.Client, sqlDB *sql.DB) service.UsageBillingRepository {
@@ -26,6 +37,9 @@ func (r *usageBillingRepository) Apply(ctx context.Context, cmd *service.UsageBi
 	if r == nil || r.db == nil {
 		return nil, errors.New("usage billing repository db is nil")
 	}
+	if err := service.ValidateUsageBillingCommandAmounts(cmd); err != nil {
+		return nil, err
+	}
 
 	cmd.Normalize()
 	if cmd.RequestID == "" {
@@ -42,16 +56,24 @@ func (r *usageBillingRepository) Apply(ctx context.Context, cmd *service.UsageBi
 		}
 	}()
 
-	applied, err := r.claimUsageBillingKey(ctx, tx, cmd)
+	claim, err := r.claimUsageBillingKey(ctx, tx, cmd)
 	if err != nil {
 		return nil, err
 	}
-	if !applied {
-		return &service.UsageBillingApplyResult{Applied: false}, nil
+	if !claim.Applied {
+		result := &service.UsageBillingApplyResult{Applied: false}
+		if claim.ThresholdExemptCost.Valid {
+			result.ThresholdExemptCost = clampUsageBillingDedupThresholdExemptCost(claim.ThresholdExemptCost.Float64, cmd.BalanceCost)
+		}
+		return result, nil
 	}
 
 	result := &service.UsageBillingApplyResult{Applied: true}
 	if err := r.applyUsageBillingEffects(ctx, tx, cmd, result); err != nil {
+		return nil, err
+	}
+	result.ThresholdExemptCost = clampUsageBillingDedupThresholdExemptCost(result.ThresholdExemptCost, cmd.BalanceCost)
+	if err := persistUsageBillingThresholdExemptCost(ctx, tx, cmd.RequestID, cmd.APIKeyID, result.ThresholdExemptCost); err != nil {
 		return nil, err
 	}
 
@@ -62,11 +84,11 @@ func (r *usageBillingRepository) Apply(ctx context.Context, cmd *service.UsageBi
 	return result, nil
 }
 
-func (r *usageBillingRepository) claimUsageBillingKey(ctx context.Context, tx *sql.Tx, cmd *service.UsageBillingCommand) (bool, error) {
+func (r *usageBillingRepository) claimUsageBillingKey(ctx context.Context, tx *sql.Tx, cmd *service.UsageBillingCommand) (usageBillingClaimResult, error) {
 	return r.claimUsageBillingRequest(ctx, tx, cmd.RequestID, cmd.APIKeyID, cmd.RequestFingerprint)
 }
 
-func (r *usageBillingRepository) claimUsageBillingRequest(ctx context.Context, tx *sql.Tx, requestID string, apiKeyID int64, requestFingerprint string) (bool, error) {
+func (r *usageBillingRepository) claimUsageBillingRequest(ctx context.Context, tx *sql.Tx, requestID string, apiKeyID int64, requestFingerprint string) (usageBillingClaimResult, error) {
 	var id int64
 	err := tx.QueryRowContext(ctx, `
 		INSERT INTO usage_billing_dedup (request_id, api_key_id, request_fingerprint)
@@ -76,54 +98,57 @@ func (r *usageBillingRepository) claimUsageBillingRequest(ctx context.Context, t
 	`, requestID, apiKeyID, requestFingerprint).Scan(&id)
 	if errors.Is(err, sql.ErrNoRows) {
 		var existingFingerprint string
+		var thresholdExemptCost sql.NullFloat64
 		if err := tx.QueryRowContext(ctx, `
-			SELECT request_fingerprint
+			SELECT request_fingerprint, threshold_exempt_cost
 			FROM usage_billing_dedup
 			WHERE request_id = $1 AND api_key_id = $2
-		`, requestID, apiKeyID).Scan(&existingFingerprint); err != nil {
-			return false, err
+		`, requestID, apiKeyID).Scan(&existingFingerprint, &thresholdExemptCost); err != nil {
+			return usageBillingClaimResult{}, err
 		}
 		if strings.TrimSpace(existingFingerprint) != strings.TrimSpace(requestFingerprint) {
-			return false, service.ErrUsageBillingRequestConflict
+			return usageBillingClaimResult{}, service.ErrUsageBillingRequestConflict
 		}
-		return false, nil
+		return usageBillingClaimResult{ThresholdExemptCost: thresholdExemptCost}, nil
 	}
 	if err != nil {
-		return false, err
+		return usageBillingClaimResult{}, err
 	}
 	var archivedFingerprint string
+	var archivedThresholdExemptCost sql.NullFloat64
 	err = tx.QueryRowContext(ctx, `
-		SELECT request_fingerprint
+		SELECT request_fingerprint, threshold_exempt_cost
 		FROM usage_billing_dedup_archive
 		WHERE request_id = $1 AND api_key_id = $2
-	`, requestID, apiKeyID).Scan(&archivedFingerprint)
+	`, requestID, apiKeyID).Scan(&archivedFingerprint, &archivedThresholdExemptCost)
 	if err == nil {
 		if strings.TrimSpace(archivedFingerprint) != strings.TrimSpace(requestFingerprint) {
-			return false, service.ErrUsageBillingRequestConflict
+			return usageBillingClaimResult{}, service.ErrUsageBillingRequestConflict
 		}
-		return false, nil
+		return usageBillingClaimResult{ThresholdExemptCost: archivedThresholdExemptCost}, nil
 	}
 	if !errors.Is(err, sql.ErrNoRows) {
-		return false, err
+		return usageBillingClaimResult{}, err
 	}
-	return true, nil
+	return usageBillingClaimResult{Applied: true}, nil
 }
 
 func (r *usageBillingRepository) ReserveBatchImageBalance(ctx context.Context, cmd *service.BatchImageBalanceHoldCommand) (*service.BatchImageBalanceHoldResult, error) {
-	return r.applyBatchImageBalanceHold(ctx, cmd, reserveUsageBillingBatchImageBalance)
+	return r.applyBatchImageBalanceHold(ctx, cmd, false, reserveUsageBillingBatchImageBalance)
 }
 
 func (r *usageBillingRepository) CaptureBatchImageBalance(ctx context.Context, cmd *service.BatchImageBalanceHoldCommand) (*service.BatchImageBalanceHoldResult, error) {
-	return r.applyBatchImageBalanceHold(ctx, cmd, captureUsageBillingBatchImageBalance)
+	return r.applyBatchImageBalanceHold(ctx, cmd, true, captureUsageBillingBatchImageBalance)
 }
 
 func (r *usageBillingRepository) ReleaseBatchImageBalance(ctx context.Context, cmd *service.BatchImageBalanceHoldCommand) (*service.BatchImageBalanceHoldResult, error) {
-	return r.applyBatchImageBalanceHold(ctx, cmd, releaseUsageBillingBatchImageBalance)
+	return r.applyBatchImageBalanceHold(ctx, cmd, false, releaseUsageBillingBatchImageBalance)
 }
 
 func (r *usageBillingRepository) applyBatchImageBalanceHold(
 	ctx context.Context,
 	cmd *service.BatchImageBalanceHoldCommand,
+	replayThresholdExemptCost bool,
 	apply func(context.Context, *sql.Tx, *service.BatchImageBalanceHoldCommand) (*service.BatchImageBalanceHoldResult, error),
 ) (_ *service.BatchImageBalanceHoldResult, err error) {
 	if cmd == nil {
@@ -131,6 +156,10 @@ func (r *usageBillingRepository) applyBatchImageBalanceHold(
 	}
 	if r == nil || r.db == nil {
 		return nil, errors.New("usage billing repository db is nil")
+	}
+	if math.IsNaN(cmd.HoldAmount) || math.IsInf(cmd.HoldAmount, 0) || cmd.HoldAmount < 0 ||
+		math.IsNaN(cmd.ActualAmount) || math.IsInf(cmd.ActualAmount, 0) || cmd.ActualAmount < 0 {
+		return nil, errors.New("batch image billing amounts must be finite and nonnegative")
 	}
 	cmd.Normalize()
 	if cmd.RequestID == "" {
@@ -147,15 +176,22 @@ func (r *usageBillingRepository) applyBatchImageBalanceHold(
 		}
 	}()
 
-	applied, err := r.claimUsageBillingRequest(ctx, tx, cmd.RequestID, cmd.APIKeyID, cmd.RequestFingerprint)
+	claim, err := r.claimUsageBillingRequest(ctx, tx, cmd.RequestID, cmd.APIKeyID, cmd.RequestFingerprint)
 	if err != nil {
 		return nil, err
 	}
-	if !applied {
-		return &service.BatchImageBalanceHoldResult{Applied: false}, nil
+	if !claim.Applied {
+		result := &service.BatchImageBalanceHoldResult{Applied: false}
+		if replayThresholdExemptCost && claim.ThresholdExemptCost.Valid {
+			result.ThresholdExemptCost = clampUsageBillingDedupThresholdExemptCost(claim.ThresholdExemptCost.Float64, cmd.ActualAmount)
+		}
+		return result, nil
 	}
 
 	result, err := apply(ctx, tx, cmd)
+	if errors.Is(err, errBatchImageReleaseHoldNotReserved) || errors.Is(err, errBatchImageReleaseHoldCaptured) {
+		return &service.BatchImageBalanceHoldResult{Applied: false}, nil
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -163,12 +199,49 @@ func (r *usageBillingRepository) applyBatchImageBalanceHold(
 		result = &service.BatchImageBalanceHoldResult{}
 	}
 	result.Applied = true
+	if replayThresholdExemptCost {
+		result.ThresholdExemptCost = clampUsageBillingDedupThresholdExemptCost(result.ThresholdExemptCost, cmd.ActualAmount)
+		if err := persistUsageBillingThresholdExemptCost(ctx, tx, cmd.RequestID, cmd.APIKeyID, result.ThresholdExemptCost); err != nil {
+			return nil, err
+		}
+	}
 
 	if err := tx.Commit(); err != nil {
 		return nil, err
 	}
 	tx = nil
 	return result, nil
+}
+
+func clampUsageBillingDedupThresholdExemptCost(amount, actualAmount float64) float64 {
+	if math.IsNaN(amount) || math.IsInf(amount, 0) || amount <= 0 ||
+		math.IsNaN(actualAmount) || math.IsInf(actualAmount, 0) || actualAmount <= 0 {
+		return 0
+	}
+	amount = service.QuantizeUsageBillingAmount(amount)
+	if amount > actualAmount {
+		return actualAmount
+	}
+	return amount
+}
+
+func persistUsageBillingThresholdExemptCost(ctx context.Context, tx *sql.Tx, requestID string, apiKeyID int64, amount float64) error {
+	result, err := tx.ExecContext(ctx, `
+		UPDATE usage_billing_dedup
+		SET threshold_exempt_cost = $1
+		WHERE request_id = $2 AND api_key_id = $3
+	`, amount, requestID, apiKeyID)
+	if err != nil {
+		return err
+	}
+	affected, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if affected != 1 {
+		return errors.New("usage billing replay result row was not updated")
+	}
+	return nil
 }
 
 func (r *usageBillingRepository) applyUsageBillingEffects(ctx context.Context, tx *sql.Tx, cmd *service.UsageBillingCommand, result *service.UsageBillingApplyResult) error {
@@ -179,12 +252,13 @@ func (r *usageBillingRepository) applyUsageBillingEffects(ctx context.Context, t
 	}
 
 	if cmd.BalanceCost > 0 {
-		newBalance, sufficient, err := deductUsageBillingBalance(ctx, tx, cmd.UserID, cmd.BalanceCost)
+		newBalance, sufficient, giftUsed, err := deductUsageBillingBalance(ctx, tx, cmd.UserID, cmd.BalanceCost)
 		if err != nil {
 			return err
 		}
 		result.NewBalance = &newBalance
 		result.BalanceOverdrafted = !sufficient
+		result.ThresholdExemptCost = giftUsed
 	}
 
 	if cmd.APIKeyQuotaCost > 0 {
@@ -240,52 +314,98 @@ func incrementUsageBillingSubscription(ctx context.Context, tx *sql.Tx, subscrip
 	return service.ErrSubscriptionNotFound
 }
 
-func deductUsageBillingBalance(ctx context.Context, tx *sql.Tx, userID int64, amount float64) (float64, bool, error) {
-	var newBalance float64
+// deductUsageBillingBalance locks the wallet row so total and gift balances are
+// allocated from the same pre-deduction snapshot, including the overdraft path.
+func deductUsageBillingBalance(ctx context.Context, tx *sql.Tx, userID int64, amount float64) (float64, bool, float64, error) {
+	var newBalance, giftUsed float64
+	var sufficient bool
 	err := tx.QueryRowContext(ctx, `
-		UPDATE users
-		SET balance = balance - $1,
-			updated_at = NOW()
-		WHERE id = $2 AND deleted_at IS NULL AND balance >= $1
-		RETURNING balance
-	`, amount, userID).Scan(&newBalance)
-	if err == nil {
-		return newBalance, true, nil
-	}
-	if !errors.Is(err, sql.ErrNoRows) {
-		return 0, false, err
-	}
-
-	err = tx.QueryRowContext(ctx, `
-		UPDATE users
-		SET balance = balance - $1,
-			updated_at = NOW()
-		WHERE id = $2 AND deleted_at IS NULL
-		RETURNING balance
-	`, amount, userID).Scan(&newBalance)
+		WITH wallet AS (
+			SELECT
+				id,
+				balance,
+				CASE
+					WHEN gift_balance IS NULL OR gift_balance::text = 'NaN' OR gift_balance < 0 THEN 0
+					ELSE gift_balance
+				END AS old_gift_balance
+			FROM users
+			WHERE id = $2 AND deleted_at IS NULL
+			FOR UPDATE
+		), updated AS (
+			UPDATE users AS u
+			SET
+				balance = wallet.balance - $1,
+				gift_balance = GREATEST(wallet.old_gift_balance - $1, 0),
+				updated_at = NOW()
+			FROM wallet
+			WHERE u.id = wallet.id
+			RETURNING
+				u.balance,
+				wallet.balance >= $1 AS sufficient,
+				LEAST(wallet.old_gift_balance, $1) AS gift_used
+		)
+		SELECT balance, sufficient, gift_used
+		FROM updated
+	`, amount, userID).Scan(&newBalance, &sufficient, &giftUsed)
 	if errors.Is(err, sql.ErrNoRows) {
-		return 0, false, service.ErrUserNotFound
+		return 0, false, 0, service.ErrUserNotFound
 	}
 	if err != nil {
-		return 0, false, err
+		return 0, false, 0, err
 	}
-	return newBalance, false, nil
+
+	giftUsed = service.QuantizeUsageBillingAmount(giftUsed)
+	if giftUsed < 0 {
+		giftUsed = 0
+	}
+	quantizedAmount := service.QuantizeUsageBillingAmount(amount)
+	if giftUsed > quantizedAmount {
+		giftUsed = quantizedAmount
+	}
+	return newBalance, sufficient, giftUsed, nil
 }
 
 func reserveUsageBillingBatchImageBalance(ctx context.Context, tx *sql.Tx, cmd *service.BatchImageBalanceHoldCommand) (*service.BatchImageBalanceHoldResult, error) {
 	if cmd.HoldAmount <= 0 {
+		if err := persistUsageBillingThresholdExemptCost(ctx, tx, cmd.RequestID, cmd.APIKeyID, 0); err != nil {
+			return nil, err
+		}
 		return &service.BatchImageBalanceHoldResult{}, nil
 	}
-	var balance, frozen float64
+	var balance, frozen, giftHeld float64
 	err := tx.QueryRowContext(ctx, `
-		UPDATE users
-		SET balance = balance - $1,
-			frozen_balance = COALESCE(frozen_balance, 0) + $1,
-			updated_at = NOW()
-		WHERE id = $2 AND deleted_at IS NULL AND balance >= $1
-		RETURNING balance, frozen_balance
-	`, cmd.HoldAmount, cmd.UserID).Scan(&balance, &frozen)
+		WITH wallet_raw AS (
+			SELECT
+				id,
+				balance,
+				CASE WHEN gift_balance IS NULL OR gift_balance::text = 'NaN' OR gift_balance < 0 THEN 0 ELSE gift_balance END AS old_gift_balance,
+				CASE WHEN frozen_balance IS NULL OR frozen_balance::text = 'NaN' OR frozen_balance < 0 THEN 0 ELSE frozen_balance END AS old_frozen_balance,
+				CASE WHEN frozen_gift_balance IS NULL OR frozen_gift_balance::text = 'NaN' OR frozen_gift_balance < 0 THEN 0 ELSE frozen_gift_balance END AS raw_frozen_gift_balance
+			FROM users
+			WHERE id = $2 AND deleted_at IS NULL
+			FOR UPDATE
+		), wallet AS (
+			SELECT *, LEAST(raw_frozen_gift_balance, old_frozen_balance) AS old_frozen_gift_balance
+			FROM wallet_raw
+		), updated AS (
+			UPDATE users AS u
+			SET
+				balance = wallet.balance - $1,
+				gift_balance = wallet.old_gift_balance - LEAST(wallet.old_gift_balance, $1),
+				frozen_balance = wallet.old_frozen_balance + $1,
+				frozen_gift_balance = wallet.old_frozen_gift_balance + LEAST(wallet.old_gift_balance, $1),
+				updated_at = NOW()
+			FROM wallet
+			WHERE u.id = wallet.id AND wallet.balance >= $1
+			RETURNING u.balance, u.frozen_balance, LEAST(wallet.old_gift_balance, $1) AS gift_held
+		)
+		SELECT balance, frozen_balance, gift_held FROM updated
+	`, cmd.HoldAmount, cmd.UserID).Scan(&balance, &frozen, &giftHeld)
 	if err == nil {
+		giftHeld = clampUsageBillingDedupThresholdExemptCost(giftHeld, cmd.HoldAmount)
+		if err := persistUsageBillingThresholdExemptCost(ctx, tx, cmd.RequestID, cmd.APIKeyID, giftHeld); err != nil {
+			return nil, err
+		}
 		return &service.BatchImageBalanceHoldResult{NewBalance: &balance, FrozenBalance: &frozen}, nil
 	}
 	if !errors.Is(err, sql.ErrNoRows) {
@@ -300,25 +420,70 @@ func reserveUsageBillingBatchImageBalance(ctx context.Context, tx *sql.Tx, cmd *
 }
 
 func captureUsageBillingBatchImageBalance(ctx context.Context, tx *sql.Tx, cmd *service.BatchImageBalanceHoldCommand) (*service.BatchImageBalanceHoldResult, error) {
+	if cmd.ActualAmount > cmd.HoldAmount {
+		return nil, service.ErrBatchImageSettlementCostExceedsHold
+	}
+	giftHeld, held, err := lockBatchImageHoldGiftAllocation(ctx, tx, cmd)
+	if err != nil {
+		return nil, err
+	}
+	if !held {
+		return nil, errBatchImageCaptureHoldNotReserved
+	}
+	released, err := batchImageBillingRequestExists(ctx, tx, service.BatchImageReleaseRequestID(cmd.BatchID), cmd.APIKeyID)
+	if err != nil {
+		return nil, err
+	}
+	if released {
+		return nil, errBatchImageCaptureHoldReleased
+	}
 	if cmd.HoldAmount <= 0 && cmd.ActualAmount <= 0 {
 		return &service.BatchImageBalanceHoldResult{}, nil
 	}
-	if cmd.ActualAmount-cmd.HoldAmount > 0.00000001 {
-		return nil, service.ErrBatchImageSettlementCostExceedsHold
-	}
-	var balance, frozen float64
-	err := tx.QueryRowContext(ctx, `
-		UPDATE users
-		SET balance = balance
-				+ CASE WHEN $1 > $2 THEN $1 - $2 ELSE 0 END
-				- CASE WHEN $2 > $1 THEN $2 - $1 ELSE 0 END,
-			frozen_balance = COALESCE(frozen_balance, 0) - $1,
-			updated_at = NOW()
-		WHERE id = $3 AND deleted_at IS NULL AND COALESCE(frozen_balance, 0) >= $1
-		RETURNING balance, frozen_balance
-	`, cmd.HoldAmount, cmd.ActualAmount, cmd.UserID).Scan(&balance, &frozen)
+	var balance, frozen, giftUsed float64
+	err = tx.QueryRowContext(ctx, `
+		WITH wallet_raw AS (
+			SELECT
+				id,
+				balance,
+				CASE WHEN gift_balance IS NULL OR gift_balance::text = 'NaN' OR gift_balance < 0 THEN 0 ELSE gift_balance END AS old_gift_balance,
+				CASE WHEN frozen_balance IS NULL OR frozen_balance::text = 'NaN' OR frozen_balance < 0 THEN 0 ELSE frozen_balance END AS old_frozen_balance,
+				CASE WHEN frozen_gift_balance IS NULL OR frozen_gift_balance::text = 'NaN' OR frozen_gift_balance < 0 THEN 0 ELSE frozen_gift_balance END AS raw_frozen_gift_balance
+			FROM users
+			WHERE id = $3 AND deleted_at IS NULL
+			FOR UPDATE
+		), wallet AS (
+			SELECT *, LEAST(raw_frozen_gift_balance, old_frozen_balance) AS old_frozen_gift_balance
+			FROM wallet_raw
+		), allocation AS (
+			SELECT
+				*,
+				LEAST(old_frozen_gift_balance, $1, $4) AS gift_in_hold,
+				LEAST(LEAST(old_frozen_gift_balance, $1, $4), $2) AS gift_used
+			FROM wallet
+		), updated AS (
+			UPDATE users AS u
+			SET
+				balance = allocation.balance + ($1 - $2),
+				gift_balance = allocation.old_gift_balance + (allocation.gift_in_hold - allocation.gift_used),
+				frozen_balance = GREATEST(allocation.old_frozen_balance - $1, 0),
+				frozen_gift_balance = GREATEST(allocation.old_frozen_gift_balance - allocation.gift_in_hold, 0),
+				updated_at = NOW()
+			FROM allocation
+			WHERE u.id = allocation.id AND allocation.old_frozen_balance >= $1
+			RETURNING u.balance, u.frozen_balance, allocation.gift_used
+		)
+		SELECT balance, frozen_balance, gift_used FROM updated
+	`, cmd.HoldAmount, cmd.ActualAmount, cmd.UserID, giftHeld).Scan(&balance, &frozen, &giftUsed)
 	if err == nil {
-		return &service.BatchImageBalanceHoldResult{NewBalance: &balance, FrozenBalance: &frozen}, nil
+		giftUsed = service.QuantizeUsageBillingAmount(giftUsed)
+		if giftUsed < 0 {
+			giftUsed = 0
+		}
+		if giftUsed > cmd.ActualAmount {
+			giftUsed = cmd.ActualAmount
+		}
+		return &service.BatchImageBalanceHoldResult{NewBalance: &balance, FrozenBalance: &frozen, ThresholdExemptCost: giftUsed}, nil
 	}
 	if !errors.Is(err, sql.ErrNoRows) {
 		return nil, err
@@ -332,28 +497,56 @@ func captureUsageBillingBatchImageBalance(ctx context.Context, tx *sql.Tx, cmd *
 }
 
 func releaseUsageBillingBatchImageBalance(ctx context.Context, tx *sql.Tx, cmd *service.BatchImageBalanceHoldCommand) (*service.BatchImageBalanceHoldResult, error) {
-	if cmd.HoldAmount <= 0 {
-		return &service.BatchImageBalanceHoldResult{}, nil
-	}
-	// 释放前校验该 job 确实预留过 hold（hold request id 已被 claim），
-	// 防止从未成功冻结的 job 触发"幻影释放"，从其他用户的冻结资金池中凭空生成余额。
-	held, heldErr := batchImageHoldClaimExists(ctx, tx, service.BatchImageHoldRequestID(cmd.BatchID), cmd.APIKeyID)
-	if heldErr != nil {
-		return nil, heldErr
+	giftHeld, held, err := lockBatchImageHoldGiftAllocation(ctx, tx, cmd)
+	if err != nil {
+		return nil, err
 	}
 	if !held {
 		logger.LegacyPrintf("repository.usage_billing", "[BatchImage] release skipped, hold was never reserved: batch=%s", cmd.BatchID)
+		return nil, errBatchImageReleaseHoldNotReserved
+	}
+	captured, err := batchImageBillingRequestExists(ctx, tx, service.BatchImageCaptureRequestID(cmd.BatchID), cmd.APIKeyID)
+	if err != nil {
+		return nil, err
+	}
+	if captured {
+		return nil, errBatchImageReleaseHoldCaptured
+	}
+	if cmd.HoldAmount <= 0 {
 		return &service.BatchImageBalanceHoldResult{}, nil
 	}
 	var balance, frozen float64
-	err := tx.QueryRowContext(ctx, `
-		UPDATE users
-		SET balance = balance + $1,
-			frozen_balance = COALESCE(frozen_balance, 0) - $1,
-			updated_at = NOW()
-		WHERE id = $2 AND deleted_at IS NULL AND COALESCE(frozen_balance, 0) >= $1
-		RETURNING balance, frozen_balance
-	`, cmd.HoldAmount, cmd.UserID).Scan(&balance, &frozen)
+	err = tx.QueryRowContext(ctx, `
+		WITH wallet_raw AS (
+			SELECT
+				id,
+				balance,
+				CASE WHEN gift_balance IS NULL OR gift_balance::text = 'NaN' OR gift_balance < 0 THEN 0 ELSE gift_balance END AS old_gift_balance,
+				CASE WHEN frozen_balance IS NULL OR frozen_balance::text = 'NaN' OR frozen_balance < 0 THEN 0 ELSE frozen_balance END AS old_frozen_balance,
+				CASE WHEN frozen_gift_balance IS NULL OR frozen_gift_balance::text = 'NaN' OR frozen_gift_balance < 0 THEN 0 ELSE frozen_gift_balance END AS raw_frozen_gift_balance
+			FROM users
+			WHERE id = $2 AND deleted_at IS NULL
+			FOR UPDATE
+		), wallet AS (
+			SELECT *, LEAST(raw_frozen_gift_balance, old_frozen_balance) AS old_frozen_gift_balance
+			FROM wallet_raw
+		), allocation AS (
+			SELECT *, LEAST(old_frozen_gift_balance, $1, $3) AS gift_release
+			FROM wallet
+		), updated AS (
+			UPDATE users AS u
+			SET
+				balance = allocation.balance + $1,
+				gift_balance = allocation.old_gift_balance + allocation.gift_release,
+				frozen_balance = GREATEST(allocation.old_frozen_balance - $1, 0),
+				frozen_gift_balance = GREATEST(allocation.old_frozen_gift_balance - allocation.gift_release, 0),
+				updated_at = NOW()
+			FROM allocation
+			WHERE u.id = allocation.id AND allocation.old_frozen_balance >= $1
+			RETURNING u.balance, u.frozen_balance
+		)
+		SELECT balance, frozen_balance FROM updated
+	`, cmd.HoldAmount, cmd.UserID, giftHeld).Scan(&balance, &frozen)
 	if err == nil {
 		return &service.BatchImageBalanceHoldResult{NewBalance: &balance, FrozenBalance: &frozen}, nil
 	}
@@ -368,15 +561,46 @@ func releaseUsageBillingBatchImageBalance(ctx context.Context, tx *sql.Tx, cmd *
 	return nil, errors.New("batch image frozen balance is insufficient")
 }
 
-// batchImageHoldClaimExists 检查 hold request id 是否已在 dedup（或归档）表中被 claim，
-// 即该 batch 的冻结操作确实成功提交过。
-func batchImageHoldClaimExists(ctx context.Context, tx *sql.Tx, holdRequestID string, apiKeyID int64) (bool, error) {
+func lockBatchImageHoldGiftAllocation(ctx context.Context, tx *sql.Tx, cmd *service.BatchImageBalanceHoldCommand) (float64, bool, error) {
+	requestID := service.BatchImageHoldRequestID(cmd.BatchID)
+	var giftHeld sql.NullFloat64
+	err := tx.QueryRowContext(ctx, `
+		SELECT threshold_exempt_cost
+		FROM usage_billing_dedup
+		WHERE request_id = $1 AND api_key_id = $2
+		FOR UPDATE
+	`, requestID, cmd.APIKeyID).Scan(&giftHeld)
+	if errors.Is(err, sql.ErrNoRows) {
+		err = tx.QueryRowContext(ctx, `
+			SELECT threshold_exempt_cost
+			FROM usage_billing_dedup_archive
+			WHERE request_id = $1 AND api_key_id = $2
+			FOR UPDATE
+		`, requestID, cmd.APIKeyID).Scan(&giftHeld)
+	}
+	if errors.Is(err, sql.ErrNoRows) {
+		return 0, false, nil
+	}
+	if err != nil {
+		return 0, false, err
+	}
+	if !giftHeld.Valid {
+		// Rolling-upgrade compatibility: predecessor reservations moved gift into
+		// frozen_gift_balance before the per-hold allocation column existed. Passing
+		// the hold amount lets the locked wallet SQL recover min(FG, H). A stored
+		// numeric zero remains an explicit cash-only allocation.
+		return cmd.HoldAmount, true, nil
+	}
+	return clampUsageBillingDedupThresholdExemptCost(giftHeld.Float64, cmd.HoldAmount), true, nil
+}
+
+func batchImageBillingRequestExists(ctx context.Context, tx *sql.Tx, requestID string, apiKeyID int64) (bool, error) {
 	var exists int
 	err := tx.QueryRowContext(ctx, `
 		SELECT 1
 		FROM usage_billing_dedup
 		WHERE request_id = $1 AND api_key_id = $2
-	`, holdRequestID, apiKeyID).Scan(&exists)
+	`, requestID, apiKeyID).Scan(&exists)
 	if err == nil {
 		return true, nil
 	}
@@ -387,7 +611,7 @@ func batchImageHoldClaimExists(ctx context.Context, tx *sql.Tx, holdRequestID st
 		SELECT 1
 		FROM usage_billing_dedup_archive
 		WHERE request_id = $1 AND api_key_id = $2
-	`, holdRequestID, apiKeyID).Scan(&exists)
+	`, requestID, apiKeyID).Scan(&exists)
 	if err == nil {
 		return true, nil
 	}

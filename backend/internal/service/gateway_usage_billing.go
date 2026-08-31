@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"math"
 	"strings"
 	"time"
 
@@ -165,70 +166,120 @@ func (p *postUsageBillingParams) shouldUpdateAccountQuota() bool {
 }
 
 // postUsageBilling is the legacy fallback billing path used when the unified
-// billing repo is unavailable (nil). Production uses applyUsageBilling → repo.Apply
-// for atomic billing. This path only runs in tests or degraded mode.
-func postUsageBilling(ctx context.Context, p *postUsageBillingParams, deps *billingDeps) {
+// billing repo is unavailable. Its usage row, deduction, and gift attribution
+// commit together; the usage row is also the idempotency claim.
+func postUsageBilling(ctx context.Context, requestID string, usageLog *UsageLog, p *postUsageBillingParams, deps *billingDeps) (bool, error) {
+	requestID = strings.TrimSpace(requestID)
+	if requestID == "" {
+		return false, ErrUsageBillingRequestIDRequired
+	}
+	if usageLog == nil || p == nil || p.Cost == nil || deps == nil || deps.usageLogRepo == nil {
+		return false, ErrUsageBillingTransactionRunnerRequired
+	}
+	// A cache-backed production instance must use the unified billing repository.
+	// Otherwise the database could commit before a Redis repair fails, leaving a
+	// stale eligibility decision with no durable retry. Cacheless lightweight
+	// callers retain the atomic legacy compatibility path below.
+	if deps.billingCacheService != nil && deps.billingCacheService.cache != nil {
+		return false, ErrUsageBillingSideEffectRepositoryRequired
+	}
+	if err := ValidateUsageBillingActualCost(p.Cost.ActualCost); err != nil {
+		return false, err
+	}
+	if err := ValidateUsageBillingActualCost(p.Cost.TotalCost); err != nil {
+		return false, err
+	}
+	runner, ok := deps.usageLogRepo.(UsageBillingTransactionRunner)
+	if !ok {
+		return false, ErrUsageBillingTransactionRunnerRequired
+	}
+	if p.APIKey == nil || p.User == nil || p.Account == nil {
+		return false, ErrUsageBillingSideEffectRepositoryRequired
+	}
+	requiresAPIKeyQuota := p.Cost.ActualCost > 0 && p.APIKey.Quota > 0
+	requiresAPIKeyRateLimit := p.Cost.ActualCost > 0 && p.APIKey.HasRateLimits()
+	if requiresAPIKeyQuota || requiresAPIKeyRateLimit {
+		return false, ErrUsageBillingSideEffectRepositoryRequired
+	}
+	requiresAccountQuota := p.Cost.TotalCost > 0 && p.Account.IsAPIKeyOrBedrock() && p.Account.HasAnyQuotaLimit()
+	if requiresAccountQuota {
+		return false, ErrUsageBillingSideEffectRepositoryRequired
+	}
+	if !p.IsSubscriptionBill && p.Platform != "" && p.Cost.ActualCost > 0 {
+		// Production wiring always supplies the platform quota repository. If it is
+		// present, the legacy fallback cannot atomically join its raw SQL mutation to
+		// the usage-log transaction, so fail before claiming or charging anything.
+		// Lightweight callers without platform quota infrastructure keep the legacy
+		// path available.
+		if deps.userPlatformQuotaRepo != nil {
+			return false, ErrUsageBillingSideEffectRepositoryRequired
+		}
+	}
+
 	billingCtx, cancel := detachedBillingContext(ctx)
 	defer cancel()
 
 	cost := p.Cost
-
-	if p.IsSubscriptionBill {
-		// Subscription usage tracked by ActualCost so group rate multiplier
-		// consumes the quota at the expected speed.
-		if cost.ActualCost > 0 {
-			if err := deps.userSubRepo.IncrementUsage(billingCtx, p.Subscription.ID, cost.ActualCost); err != nil {
-				slog.Error("increment subscription usage failed", "subscription_id", p.Subscription.ID, "error", err)
-			}
+	var applied bool
+	err := runner.RunUsageBillingTransaction(billingCtx, func(txCtx context.Context) error {
+		usageLog.RequestID = requestID
+		inserted, err := deps.usageLogRepo.Create(txCtx, usageLog)
+		if err != nil {
+			return err
 		}
-	} else {
-		if cost.ActualCost > 0 {
-			if err := deps.userRepo.DeductBalance(billingCtx, p.User.ID, cost.ActualCost); err != nil {
-				slog.Error("deduct balance failed", "user_id", p.User.ID, "error", err)
-			} else if deps.billingCacheService != nil {
-				if err := deps.billingCacheService.InvalidateUserBalance(billingCtx, p.User.ID); err != nil {
-					slog.Warn("invalidate balance cache after legacy deduction failed", "user_id", p.User.ID, "error", err)
+		if !inserted {
+			return nil
+		}
+		applied = true
+
+		if p.IsSubscriptionBill {
+			if cost.ActualCost > 0 {
+				if deps.userSubRepo == nil || p.Subscription == nil {
+					return ErrUsageBillingSideEffectRepositoryRequired
+				}
+				if err := deps.userSubRepo.IncrementUsage(txCtx, p.Subscription.ID, cost.ActualCost); err != nil {
+					return err
 				}
 			}
-		}
-	}
-
-	if p.shouldDeductAPIKeyQuota() {
-		if err := p.APIKeyService.UpdateQuotaUsed(billingCtx, p.APIKey.ID, cost.ActualCost); err != nil {
-			slog.Error("update api key quota failed", "api_key_id", p.APIKey.ID, "error", err)
-		}
-	}
-
-	if p.shouldUpdateRateLimits() {
-		if err := p.APIKeyService.UpdateRateLimitUsage(billingCtx, p.APIKey.ID, cost.ActualCost); err != nil {
-			slog.Error("update api key rate limit usage failed", "api_key_id", p.APIKey.ID, "error", err)
-		}
-	}
-
-	if p.shouldUpdateAccountQuota() {
-		accountCost := cost.TotalCost * p.AccountRateMultiplier
-		if err := deps.accountRepo.IncrementQuotaUsed(billingCtx, p.Account.ID, accountCost); err != nil {
-			slog.Error("increment account quota used failed", "account_id", p.Account.ID, "cost", accountCost, "error", err)
-		}
-	}
-
-	// Platform quota 累加（legacy 兜底路径）：仅对 standard（余额）模式生效；订阅模式豁免；仅对有 limit 的用户写
-	//   - HasUserPlatformQuotaLimit 守卫:与正常路径对齐，无 limit 公司跳过
-	//   - 新增 Redis 同步写:enforcement 走 Redis，legacy 路径也必须同步写，否则 preflight 看不到消费
-	//   - flusher_enabled=false（降级）:保留原有同步直写 DB
-	//   - flusher_enabled=true:跳过直写 DB，由 flusher 异步批量刷（markDirty 在 IncrementUserPlatformQuotaUsage 内部完成）
-	//   - 失败仅记 ALERT log + counter，不阻断主扣费流程
-	if !p.IsSubscriptionBill && p.Platform != "" && cost.ActualCost > 0 && p.User != nil && deps.userPlatformQuotaRepo != nil {
-		if deps.billingCacheService.HasUserPlatformQuotaLimit(billingCtx, p.User.ID, p.Platform) {
-			deps.billingCacheService.IncrementUserPlatformQuotaUsage(p.User.ID, p.Platform, cost.ActualCost)
-			if deps.cfg == nil || !deps.cfg.Database.UserPlatformQuotaFlusherEnabled {
-				// 降级路径:flusher 未启用时保留原有同步直写 DB
-				if err := deps.userPlatformQuotaRepo.IncrementUsageWithReset(billingCtx, p.User.ID, p.Platform, cost.ActualCost, time.Now().UTC()); err != nil {
-					userPlatformQuotaDBIncrLegacyErrorTotal.Add(1)
-					logger.LegacyPrintf("service.gateway", "ALERT: legacy incr user platform quota DB failed user=%d platform=%s cost=%f: %v", p.User.ID, p.Platform, cost.ActualCost, err)
-				}
+		} else if cost.ActualCost > 0 {
+			giftRepo, ok := deps.userRepo.(GiftAllocatingBalanceRepository)
+			if !ok {
+				return ErrGiftAllocatingBalanceRepositoryRequired
 			}
-			// flusher_enabled=true:不直写 DB，flusher 异步批量刷
+			thresholdRepo, ok := deps.usageLogRepo.(UsageLogThresholdExemptRepository)
+			if !ok {
+				return ErrUsageLogThresholdExemptRepositoryRequired
+			}
+			result, err := giftRepo.DeductBalanceWithGiftAllocation(txCtx, p.User.ID, cost.ActualCost)
+			if err != nil {
+				return err
+			}
+			usageLog.ThresholdExemptCost = clampUsageBillingThresholdExemptCost(result.ThresholdExemptCost, usageLog.ActualCost, false)
+			if err := thresholdRepo.UpdateThresholdExemptCost(txCtx, usageLog.ID, usageLog.ThresholdExemptCost); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return false, err
+	}
+	if !applied {
+		if err := reconcileLegacyBillingReplayCaches(billingCtx, p, deps); err != nil {
+			return false, err
+		}
+		return false, nil
+	}
+
+	if p.IsSubscriptionBill && cost.ActualCost > 0 && deps.billingCacheService != nil {
+		if billingGroupID, ok := resolveSubscriptionBillingGroupID(billingCtx, p); ok {
+			if err := deps.billingCacheService.UpdateSubscriptionUsage(billingCtx, p.User.ID, billingGroupID, cost.ActualCost); err != nil {
+				return true, fmt.Errorf("update subscription cache after legacy billing: %w", err)
+			}
+		}
+	} else if cost.ActualCost > 0 && deps.billingCacheService != nil {
+		if err := deps.billingCacheService.InvalidateUserBalance(billingCtx, p.User.ID); err != nil {
+			return true, fmt.Errorf("invalidate balance cache after legacy billing: %w", err)
 		}
 	}
 
@@ -236,6 +287,30 @@ func postUsageBilling(ctx context.Context, p *postUsageBillingParams, deps *bill
 	// cache updates. The legacy path does DB writes directly; the finalize path
 	// does cache queue + notifications. Notifications are dispatched separately
 	// by the caller after recording the usage log.
+	return true, nil
+}
+
+func reconcileLegacyBillingReplayCaches(ctx context.Context, p *postUsageBillingParams, deps *billingDeps) error {
+	if p == nil || deps == nil {
+		return nil
+	}
+	if p.Cost == nil || p.Cost.ActualCost <= 0 || p.User == nil || deps.billingCacheService == nil {
+		return nil
+	}
+	if p.IsSubscriptionBill {
+		if billingGroupID, ok := resolveSubscriptionBillingGroupID(ctx, p); ok {
+			if err := deps.billingCacheService.InvalidateSubscription(ctx, p.User.ID, billingGroupID); err != nil {
+				return fmt.Errorf("invalidate subscription cache after legacy replay: %w", err)
+			}
+		}
+		return nil
+	}
+	if p.Cost.ActualCost > 0 {
+		if err := deps.billingCacheService.InvalidateUserBalance(ctx, p.User.ID); err != nil {
+			return fmt.Errorf("invalidate balance cache after legacy replay: %w", err)
+		}
+	}
+	return nil
 }
 
 func resolveUsageBillingRequestID(ctx context.Context, upstreamRequestID string) string {
@@ -370,11 +445,24 @@ func applyUsageBilling(ctx context.Context, requestID string, usageLog *UsageLog
 	if p == nil || deps == nil {
 		return false, nil
 	}
+	if p.Cost != nil {
+		if err := ValidateUsageBillingActualCost(p.Cost.ActualCost); err != nil {
+			return false, err
+		}
+	}
 
 	cmd := buildUsageBillingCommand(requestID, usageLog, p)
+	if p.Cost == nil {
+		return postUsageBilling(ctx, requestID, usageLog, p, deps)
+	}
+	// The fingerprint above is derived from the raw amount for replay compatibility.
+	// Persisted wallet and usage-log amounts use the same NUMERIC(20,8) value.
+	p.Cost.ActualCost = QuantizeUsageBillingAmount(p.Cost.ActualCost)
+	if usageLog != nil {
+		usageLog.ActualCost = p.Cost.ActualCost
+	}
 	if cmd == nil || cmd.RequestID == "" || repo == nil {
-		postUsageBilling(ctx, p, deps)
-		return true, nil
+		return postUsageBilling(ctx, requestID, usageLog, p, deps)
 	}
 
 	billingCtx, cancel := detachedBillingContext(ctx)
@@ -385,6 +473,9 @@ func applyUsageBilling(ctx context.Context, requestID string, usageLog *UsageLog
 		return false, err
 	}
 
+	if result != nil && usageLog != nil {
+		usageLog.ThresholdExemptCost = clampUsageBillingThresholdExemptCost(result.ThresholdExemptCost, usageLog.ActualCost, p.IsSubscriptionBill)
+	}
 	if result == nil || !result.Applied {
 		deps.deferredService.ScheduleLastUsedUpdate(p.Account.ID)
 		return false, nil
@@ -400,6 +491,23 @@ func applyUsageBilling(ctx context.Context, requestID string, usageLog *UsageLog
 	return true, nil
 }
 
+func clampUsageBillingThresholdExemptCost(allocated, actualCost float64, subscription bool) float64 {
+	if subscription || math.IsNaN(allocated) || math.IsInf(allocated, 0) {
+		return 0
+	}
+	if actualCost <= 0 || math.IsNaN(actualCost) || math.IsInf(actualCost, 0) {
+		return 0
+	}
+	allocated = QuantizeUsageBillingAmount(allocated)
+	if allocated <= 0 {
+		return 0
+	}
+	if allocated > actualCost {
+		return quantizeUsageBillingAmountDown(actualCost)
+	}
+	return allocated
+}
+
 func finalizePostUsageBilling(ctx context.Context, p *postUsageBillingParams, deps *billingDeps, result *UsageBillingApplyResult) {
 	if p == nil || p.Cost == nil || deps == nil {
 		return
@@ -407,18 +515,7 @@ func finalizePostUsageBilling(ctx context.Context, p *postUsageBillingParams, de
 
 	if p.IsSubscriptionBill {
 		if p.Cost.ActualCost > 0 && p.User != nil && p.Subscription != nil {
-			billingGroupID := p.Subscription.GroupID
-			if resolution, systemCustom := SystemCustomGroupResolutionFromContext(ctx); systemCustom {
-				if p.Subscription.GroupID != resolution.BillingGroupID ||
-					(p.Subscription.Group != nil && p.Subscription.Group.ID != resolution.BillingGroupID) {
-					return
-				}
-				billingGroupID = resolution.BillingGroupID
-			}
-			if billingGroupID <= 0 && p.APIKey != nil && p.APIKey.GroupID != nil {
-				billingGroupID = *p.APIKey.GroupID
-			}
-			if billingGroupID > 0 {
+			if billingGroupID, ok := resolveSubscriptionBillingGroupID(ctx, p); ok {
 				deps.billingCacheService.QueueUpdateSubscriptionUsage(p.User.ID, billingGroupID, p.Cost.ActualCost)
 			}
 		}
@@ -470,6 +567,24 @@ func finalizePostUsageBilling(ctx context.Context, p *postUsageBillingParams, de
 	// no dependency on the request context or upstream connection.
 	go notifyBalanceLow(p, deps, result)
 	go notifyAccountQuota(p, deps, result)
+}
+
+func resolveSubscriptionBillingGroupID(ctx context.Context, p *postUsageBillingParams) (int64, bool) {
+	if p == nil || p.Subscription == nil {
+		return 0, false
+	}
+	billingGroupID := p.Subscription.GroupID
+	if resolution, systemCustom := SystemCustomGroupResolutionFromContext(ctx); systemCustom {
+		if p.Subscription.GroupID != resolution.BillingGroupID ||
+			(p.Subscription.Group != nil && p.Subscription.Group.ID != resolution.BillingGroupID) {
+			return 0, false
+		}
+		billingGroupID = resolution.BillingGroupID
+	}
+	if billingGroupID <= 0 && p.APIKey != nil && p.APIKey.GroupID != nil {
+		billingGroupID = *p.APIKey.GroupID
+	}
+	return billingGroupID, billingGroupID > 0
 }
 
 func syncBalanceCacheAfterDeduction(ctx context.Context, p *postUsageBillingParams, deps *billingDeps, result *UsageBillingApplyResult) {
@@ -590,6 +705,7 @@ func detachUpstreamContext(ctx context.Context) (context.Context, context.Cancel
 // billingDeps 扣费逻辑依赖的服务（由各 gateway service 提供）
 type billingDeps struct {
 	accountRepo           AccountRepository
+	usageLogRepo          UsageLogRepository
 	userRepo              UserRepository
 	userSubRepo           UserSubscriptionRepository
 	billingCacheService   *BillingCacheService
@@ -602,6 +718,7 @@ type billingDeps struct {
 func (s *GatewayService) billingDeps() *billingDeps {
 	return &billingDeps{
 		accountRepo:           s.accountRepo,
+		usageLogRepo:          s.usageLogRepo,
 		userRepo:              s.userRepo,
 		userSubRepo:           s.userSubRepo,
 		billingCacheService:   s.billingCacheService,
@@ -665,6 +782,17 @@ func writeResponseOutcome(ctx context.Context, repo UsageLogRepository, usageLog
 		return nil
 	}
 	return writer.UpsertResponseOutcome(ctx, usageLog)
+}
+
+func writeUsageOutcomeBestEffort(ctx context.Context, repo UsageLogRepository, usageLog *UsageLog, logKey string) {
+	if repo == nil || usageLog == nil || usageLog.Outcome == nil {
+		return
+	}
+	usageCtx, cancel := detachedBillingContext(ctx)
+	defer cancel()
+	if err := writeResponseOutcome(usageCtx, repo, usageLog); err != nil {
+		logger.LegacyPrintf(logKey, "Create usage response outcome failed: %v", err)
+	}
 }
 
 // recordUsageOpts 内部选项，参数化普通计费与长上下文计费的差异点。
@@ -945,6 +1073,9 @@ func (s *GatewayService) recordUsageCore(ctx context.Context, input *recordUsage
 			}
 		}
 	}
+	if err := ValidateUsageBillingActualCost(cost.ActualCost); err != nil {
+		return err
+	}
 
 	// 判断计费方式：订阅模式 vs 余额模式。系统自定义月卡的 API key
 	// 已克隆成来源分组，因此必须使用上面的双重身份判定，不能再看来源分组类型。
@@ -1011,9 +1142,15 @@ func (s *GatewayService) recordUsageCore(ctx context.Context, input *recordUsage
 	}, s.billingDeps(), s.usageBillingRepo)
 
 	if billingErr != nil {
-		usageLog.ActualCost = 0
-		writeUsageLogBestEffort(ctx, s.usageLogRepo, usageLog, "service.gateway")
+		if s.usageBillingRepo != nil {
+			usageLog.ActualCost = 0
+			writeUsageLogBestEffort(ctx, s.usageLogRepo, usageLog, "service.gateway")
+		}
 		return billingErr
+	}
+	if s.usageBillingRepo == nil {
+		writeUsageOutcomeBestEffort(ctx, s.usageLogRepo, usageLog, "service.gateway")
+		return nil
 	}
 	writeUsageLogBestEffort(ctx, s.usageLogRepo, usageLog, "service.gateway")
 

@@ -53,6 +53,7 @@ var usageLogInsertArgTypes = [...]string{
 	"numeric",     // cache_read_cost
 	"numeric",     // total_cost
 	"numeric",     // actual_cost
+	"numeric",     // threshold_exempt_cost
 	"numeric",     // rate_multiplier
 	"numeric",     // account_rate_multiplier
 	"smallint",    // billing_type
@@ -127,16 +128,18 @@ type usageLogInsertPrepared struct {
 }
 
 type usageLogBatchState struct {
-	ID        int64
-	CreatedAt time.Time
+	ID                  int64
+	CreatedAt           time.Time
+	ThresholdExemptCost float64
 }
 
 type usageLogBatchRow struct {
-	RequestID string    `json:"request_id"`
-	APIKeyID  int64     `json:"api_key_id"`
-	ID        int64     `json:"id"`
-	CreatedAt time.Time `json:"created_at"`
-	Inserted  bool      `json:"inserted"`
+	RequestID           string    `json:"request_id"`
+	APIKeyID            int64     `json:"api_key_id"`
+	ID                  int64     `json:"id"`
+	CreatedAt           time.Time `json:"created_at"`
+	ThresholdExemptCost float64   `json:"threshold_exempt_cost"`
+	Inserted            bool      `json:"inserted"`
 }
 
 type usageLogCreateShared struct {
@@ -164,6 +167,34 @@ func (r *usageLogRepository) Create(ctx context.Context, log *service.UsageLog) 
 	}
 	log.RequestID = requestID
 	return r.createBatched(ctx, log)
+}
+
+func (r *usageLogRepository) UpdateThresholdExemptCost(ctx context.Context, usageLogID int64, amount float64) error {
+	_, err := clientFromContext(ctx, r.client).UsageLog.UpdateOneID(usageLogID).
+		SetThresholdExemptCost(amount).
+		Save(ctx)
+	return translatePersistenceError(err, service.ErrUsageLogNotFound, nil)
+}
+
+func (r *usageLogRepository) RunUsageBillingTransaction(ctx context.Context, fn func(context.Context) error) error {
+	if fn == nil {
+		return nil
+	}
+	if dbent.TxFromContext(ctx) != nil {
+		return fn(ctx)
+	}
+	if r == nil || r.client == nil {
+		return errors.New("usage log repository client is nil")
+	}
+	tx, err := r.client.Tx(ctx)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+	if err := fn(dbent.NewTxContext(ctx, tx)); err != nil {
+		return err
+	}
+	return tx.Commit()
 }
 
 func (r *usageLogRepository) CreateBestEffort(ctx context.Context, log *service.UsageLog) error {
@@ -254,6 +285,7 @@ func (r *usageLogRepository) createSingle(ctx context.Context, sqlq sqlExecutor,
 			cache_read_cost,
 			total_cost,
 			actual_cost,
+			threshold_exempt_cost,
 			rate_multiplier,
 			account_rate_multiplier,
 			billing_type,
@@ -294,7 +326,7 @@ func (r *usageLogRepository) createSingle(ctx context.Context, sqlq sqlExecutor,
 			$31, $32, $33, $34, $35, $36, $37, $38, $39, $40,
 			$41, $42, $43, $44, $45, $46, $47, $48, $49, $50,
 			$51, $52, $53, $54, $55, $56, $57, $58, $59, $60,
-			$61, $62
+			$61, $62, $63
 		)
 		ON CONFLICT (request_id, api_key_id) DO NOTHING
 		RETURNING id, created_at
@@ -302,8 +334,8 @@ func (r *usageLogRepository) createSingle(ctx context.Context, sqlq sqlExecutor,
 
 	if err := scanSingleRow(ctx, sqlq, query, prepared.args, &log.ID, &log.CreatedAt); err != nil {
 		if errors.Is(err, sql.ErrNoRows) && prepared.requestID != "" {
-			selectQuery := "SELECT id, created_at FROM usage_logs WHERE request_id = $1 AND api_key_id = $2"
-			if err := scanSingleRow(ctx, sqlq, selectQuery, []any{prepared.requestID, log.APIKeyID}, &log.ID, &log.CreatedAt); err != nil {
+			selectQuery := "SELECT id, created_at, threshold_exempt_cost FROM usage_logs WHERE request_id = $1 AND api_key_id = $2"
+			if err := scanSingleRow(ctx, sqlq, selectQuery, []any{prepared.requestID, log.APIKeyID}, &log.ID, &log.CreatedAt, &log.ThresholdExemptCost); err != nil {
 				return false, err
 			}
 			log.RateMultiplier = prepared.rateMultiplier
@@ -506,6 +538,7 @@ func (r *usageLogRepository) flushCreateBatch(db *sql.DB, batch []usageLogCreate
 						if hasState {
 							req.log.ID = state.ID
 							req.log.CreatedAt = state.CreatedAt
+							req.log.ThresholdExemptCost = state.ThresholdExemptCost
 						}
 						switch {
 						case inserted && idx == 0:
@@ -538,6 +571,7 @@ func (r *usageLogRepository) flushCreateBatch(db *sql.DB, batch []usageLogCreate
 				for idx, req := range reqs {
 					req.log.ID = state.ID
 					req.log.CreatedAt = state.CreatedAt
+					req.log.ThresholdExemptCost = state.ThresholdExemptCost
 					req.log.RateMultiplier = preparedByKey[key].rateMultiplier
 					completeUsageLogCreateRequest(req, usageLogCreateResult{
 						inserted: idx == 0 && insertedMap[key],
@@ -671,8 +705,9 @@ func (r *usageLogRepository) batchInsertUsageLogs(db *sql.DB, keys []string, pre
 		key := usageLogBatchKey(row.RequestID, row.APIKeyID)
 		insertedMap[key] = row.Inserted
 		stateMap[key] = usageLogBatchState{
-			ID:        row.ID,
-			CreatedAt: row.CreatedAt,
+			ID:                  row.ID,
+			CreatedAt:           row.CreatedAt,
+			ThresholdExemptCost: row.ThresholdExemptCost,
 		}
 	}
 	if len(stateMap) != len(keys) {
@@ -715,6 +750,7 @@ func buildUsageLogBatchInsertQuery(keys []string, preparedByKey map[string]usage
 			cache_read_cost,
 			total_cost,
 			actual_cost,
+			threshold_exempt_cost,
 			rate_multiplier,
 			account_rate_multiplier,
 			billing_type,
@@ -750,9 +786,9 @@ func buildUsageLogBatchInsertQuery(keys []string, preparedByKey map[string]usage
 			created_at
 		) AS (VALUES `)
 
-	// Each batch row prepends the synthetic input_index before the 62
+	// Each batch row prepends the synthetic input_index before the 63
 	// usage-log column values.
-	args := make([]any, 0, len(keys)*63)
+	args := make([]any, 0, len(keys)*64)
 	argPos := 1
 	for idx, key := range keys {
 		if idx > 0 {
@@ -810,6 +846,7 @@ func buildUsageLogBatchInsertQuery(keys []string, preparedByKey map[string]usage
 				cache_read_cost,
 				total_cost,
 				actual_cost,
+				threshold_exempt_cost,
 				rate_multiplier,
 				account_rate_multiplier,
 				billing_type,
@@ -874,6 +911,7 @@ func buildUsageLogBatchInsertQuery(keys []string, preparedByKey map[string]usage
 				cache_read_cost,
 				total_cost,
 				actual_cost,
+				threshold_exempt_cost,
 				rate_multiplier,
 				account_rate_multiplier,
 				billing_type,
@@ -909,7 +947,7 @@ func buildUsageLogBatchInsertQuery(keys []string, preparedByKey map[string]usage
 				created_at
 			FROM input
 			ON CONFLICT (request_id, api_key_id) DO NOTHING
-			RETURNING request_id, api_key_id, id, created_at
+			RETURNING request_id, api_key_id, id, created_at, threshold_exempt_cost
 		),
 		resolved AS (
 			SELECT
@@ -918,6 +956,7 @@ func buildUsageLogBatchInsertQuery(keys []string, preparedByKey map[string]usage
 				input.api_key_id,
 				COALESCE(inserted.id, existing.id) AS id,
 				COALESCE(inserted.created_at, existing.created_at) AS created_at,
+				COALESCE(inserted.threshold_exempt_cost, existing.threshold_exempt_cost) AS threshold_exempt_cost,
 				(inserted.id IS NOT NULL) AS inserted
 			FROM input
 			LEFT JOIN inserted
@@ -934,6 +973,7 @@ func buildUsageLogBatchInsertQuery(keys []string, preparedByKey map[string]usage
 					'api_key_id', resolved.api_key_id,
 					'id', resolved.id,
 					'created_at', resolved.created_at,
+					'threshold_exempt_cost', resolved.threshold_exempt_cost,
 					'inserted', resolved.inserted
 				)
 				ORDER BY resolved.input_idx
@@ -978,6 +1018,7 @@ func buildUsageLogBestEffortInsertQuery(preparedList []usageLogInsertPrepared) (
 			cache_read_cost,
 			total_cost,
 			actual_cost,
+			threshold_exempt_cost,
 			rate_multiplier,
 			account_rate_multiplier,
 			billing_type,
@@ -1013,7 +1054,7 @@ func buildUsageLogBestEffortInsertQuery(preparedList []usageLogInsertPrepared) (
 			created_at
 		) AS (VALUES `)
 
-	args := make([]any, 0, len(preparedList)*62)
+	args := make([]any, 0, len(preparedList)*63)
 	argPos := 1
 	for idx, prepared := range preparedList {
 		if idx > 0 {
@@ -1068,6 +1109,7 @@ func buildUsageLogBestEffortInsertQuery(preparedList []usageLogInsertPrepared) (
 			cache_read_cost,
 			total_cost,
 			actual_cost,
+			threshold_exempt_cost,
 			rate_multiplier,
 			account_rate_multiplier,
 			billing_type,
@@ -1132,6 +1174,7 @@ func buildUsageLogBestEffortInsertQuery(preparedList []usageLogInsertPrepared) (
 			cache_read_cost,
 			total_cost,
 			actual_cost,
+			threshold_exempt_cost,
 			rate_multiplier,
 			account_rate_multiplier,
 			billing_type,
@@ -1204,6 +1247,7 @@ func execUsageLogInsertNoResult(ctx context.Context, sqlq sqlExecutor, prepared 
 			cache_read_cost,
 			total_cost,
 			actual_cost,
+			threshold_exempt_cost,
 			rate_multiplier,
 			account_rate_multiplier,
 			billing_type,
@@ -1244,7 +1288,7 @@ func execUsageLogInsertNoResult(ctx context.Context, sqlq sqlExecutor, prepared 
 			$31, $32, $33, $34, $35, $36, $37, $38, $39, $40,
 			$41, $42, $43, $44, $45, $46, $47, $48, $49, $50,
 			$51, $52, $53, $54, $55, $56, $57, $58, $59, $60,
-			$61, $62
+			$61, $62, $63
 		)
 		ON CONFLICT (request_id, api_key_id) DO NOTHING
 	`, prepared.args...)
@@ -1337,6 +1381,7 @@ func prepareUsageLogInsert(log *service.UsageLog) usageLogInsertPrepared {
 			log.CacheReadCost,
 			log.TotalCost,
 			log.ActualCost,
+			log.ThresholdExemptCost,
 			rateMultiplier,
 			log.AccountRateMultiplier,
 			log.BillingType,

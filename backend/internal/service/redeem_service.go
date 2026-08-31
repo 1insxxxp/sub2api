@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"math"
 	"strings"
 	"time"
 
@@ -24,6 +25,7 @@ var (
 	ErrRedeemRateLimited                 = infraerrors.TooManyRequests("REDEEM_RATE_LIMITED", "too many failed attempts, please try again later")
 	ErrRedeemCodeLocked                  = infraerrors.Conflict("REDEEM_CODE_LOCKED", "redeem code is being processed, please try again")
 	ErrRedeemBatchUserLimit              = infraerrors.Conflict("REDEEM_BATCH_USER_LIMIT", "activity redeem codes are limited to one per user")
+	ErrRedeemCodeInvalidGiftBalance      = infraerrors.BadRequest("REDEEM_THRESHOLD_EXEMPT_INVALID", "gift balance redeem code must have a positive persistable amount")
 	ErrBalanceTransferRedeemNotAllowed   = infraerrors.Forbidden("BALANCE_TRANSFER_REDEEM_NOT_ALLOWED", "user is not allowed to generate balance redeem codes")
 	ErrBalanceTransferRedeemCodeUsed     = infraerrors.Conflict("BALANCE_TRANSFER_REDEEM_CODE_USED", "used balance transfer redeem codes cannot be deleted")
 	ErrBalanceTransferRedeemCodeNotFound = infraerrors.NotFound(
@@ -37,6 +39,7 @@ const (
 	redeemRateLimitDuration            = time.Hour
 	redeemLockDuration                 = 10 * time.Second // 锁超时时间，防止死锁
 	balanceTransferRedeemMaxBatchCount = 100
+	maxPersistableBalanceAmount        = 1_000_000_000_000
 )
 
 type ctxKeySkipRedeemAffiliate struct{}
@@ -90,6 +93,19 @@ type BalanceTransferRedeemCodeBatchDeleteRepository interface {
 	DeleteBalanceTransfersByCreator(ctx context.Context, userID int64, codeIDs []int64) ([]RedeemCode, error)
 }
 
+// OrdinaryBalanceRepository is the optional wallet capability used by
+// secondary-admin balance transfers. It prevents gift funds from being
+// converted into transferable redeem codes.
+type OrdinaryBalanceRepository interface {
+	DeductOrdinaryBalance(ctx context.Context, userID int64, amount float64) error
+}
+
+// GiftBalanceRepository is the optional wallet capability used to credit gift
+// funds without increasing cumulative recharge.
+type GiftBalanceRepository interface {
+	CreditGiftBalance(ctx context.Context, userID int64, amount float64) error
+}
+
 // GenerateCodesRequest 生成兑换码请求
 type GenerateCodesRequest struct {
 	Count int     `json:"count"`
@@ -103,6 +119,7 @@ type GenerateBalanceTransferCodeInput struct {
 	ExpiresInDays    int
 	Notes            string
 	SingleUsePerUser bool
+	ThresholdExempt  bool
 }
 
 type ConvertBalanceToRedeemCodesInput struct {
@@ -177,6 +194,7 @@ type RedeemService struct {
 	redeemRepo           RedeemCodeRepository
 	userRepo             UserRepository
 	redeemUserRepo       RedeemUserAdjustmentRepository
+	giftBalanceRepo      GiftBalanceRepository
 	subscriptionService  *SubscriptionService
 	cache                RedeemCache
 	billingCacheService  *BillingCacheService
@@ -197,10 +215,12 @@ func NewRedeemService(
 	affiliateService *AffiliateService,
 ) *RedeemService {
 	redeemUserRepo, _ := userRepo.(RedeemUserAdjustmentRepository)
+	giftBalanceRepo, _ := userRepo.(GiftBalanceRepository)
 	return &RedeemService{
 		redeemRepo:           redeemRepo,
 		userRepo:             userRepo,
 		redeemUserRepo:       redeemUserRepo,
+		giftBalanceRepo:      giftBalanceRepo,
 		subscriptionService:  subscriptionService,
 		cache:                cache,
 		billingCacheService:  billingCacheService,
@@ -325,7 +345,8 @@ func (s *RedeemService) GenerateBalanceTransferCode(ctx context.Context, userID 
 }
 
 func (s *RedeemService) GenerateBalanceTransferCodes(ctx context.Context, userID int64, input GenerateBalanceTransferCodeInput) ([]RedeemCode, error) {
-	if input.Amount <= 0 {
+	input.Amount = QuantizeUsageBillingAmount(input.Amount)
+	if !isPersistablePositiveBalanceAmount(input.Amount) {
 		return nil, infraerrors.BadRequest("BALANCE_TRANSFER_AMOUNT_INVALID", "amount must be greater than 0")
 	}
 	if input.Count <= 0 || input.Count > balanceTransferRedeemMaxBatchCount {
@@ -344,6 +365,14 @@ func (s *RedeemService) GenerateBalanceTransferCodes(ctx context.Context, userID
 	if s.userRepo == nil || s.redeemRepo == nil {
 		return nil, errors.New("redeem service repositories are not configured")
 	}
+	ordinaryBalanceRepo, ok := s.userRepo.(OrdinaryBalanceRepository)
+	if !ok {
+		return nil, errors.New("user repository does not support ordinary balance deduction")
+	}
+	totalAmount := QuantizeUsageBillingAmount(input.Amount * float64(input.Count))
+	if !isPersistablePositiveBalanceAmount(totalAmount) {
+		return nil, infraerrors.BadRequest("BALANCE_TRANSFER_AMOUNT_INVALID", "total amount is outside the supported balance range")
+	}
 
 	create := func(opCtx context.Context) ([]RedeemCode, error) {
 		user, err := s.userRepo.GetByID(opCtx, userID)
@@ -357,8 +386,7 @@ func (s *RedeemService) GenerateBalanceTransferCodes(ctx context.Context, userID
 			return nil, ErrBalanceTransferRedeemNotAllowed
 		}
 
-		totalAmount := input.Amount * float64(input.Count)
-		if _, err := s.userRepo.AdjustBalance(opCtx, userID, -totalAmount); err != nil {
+		if err := ordinaryBalanceRepo.DeductOrdinaryBalance(opCtx, userID, totalAmount); err != nil {
 			if errors.Is(err, ErrBalanceNegative) {
 				return nil, ErrInsufficientBalance
 			}
@@ -380,16 +408,17 @@ func (s *RedeemService) GenerateBalanceTransferCodes(ctx context.Context, userID
 				return nil, fmt.Errorf("generate redeem code: %w", err)
 			}
 			code := RedeemCode{
-				Code:         codeValue,
-				Type:         RedeemTypeBalance,
-				Value:        input.Amount,
-				Status:       StatusUnused,
-				CreatedBy:    &createdBy,
-				Notes:        strings.TrimSpace(input.Notes),
-				Source:       RedeemCodeSourceUserBalanceTransfer,
-				ExpiresAt:    &expiresAt,
-				BatchID:      batchID,
-				ValidityDays: expiresInDays,
+				Code:            codeValue,
+				Type:            RedeemTypeBalance,
+				Value:           input.Amount,
+				Status:          StatusUnused,
+				CreatedBy:       &createdBy,
+				Notes:           strings.TrimSpace(input.Notes),
+				Source:          RedeemCodeSourceUserBalanceTransfer,
+				ExpiresAt:       &expiresAt,
+				BatchID:         batchID,
+				ValidityDays:    expiresInDays,
+				ThresholdExempt: input.ThresholdExempt,
 			}
 			if err := s.redeemRepo.Create(opCtx, &code); err != nil {
 				return nil, fmt.Errorf("create balance transfer redeem code: %w", err)
@@ -448,6 +477,11 @@ func (s *RedeemService) ConvertBalanceToRedeemCodes(ctx context.Context, userID 
 		TotalValue: input.Value * float64(input.Count),
 		NewBalance: user.Balance,
 	}, nil
+}
+
+func isPersistablePositiveBalanceAmount(amount float64) bool {
+	return amount > 0 && amount < maxPersistableBalanceAmount &&
+		!math.IsNaN(amount) && !math.IsInf(amount, 0)
 }
 
 func (s *RedeemService) ListGeneratedBalanceTransferCodes(ctx context.Context, userID int64, limit int) ([]RedeemCode, error) {
@@ -796,6 +830,14 @@ func (s *RedeemService) Redeem(ctx context.Context, userID int64, code string) (
 	default:
 		return nil, unsupportedRedeemTypeError(redeemCode.Type)
 	}
+	if redeemCode.ThresholdExempt {
+		if redeemCode.Type != RedeemTypeBalance || !isPersistableGiftBalanceAmount(redeemCode.Value) {
+			return nil, ErrRedeemCodeInvalidGiftBalance
+		}
+		if s.giftBalanceRepo == nil {
+			return nil, errors.New("user repository does not support gift balance credit")
+		}
+	}
 
 	// 获取用户信息
 	_, err = s.userRepo.GetByID(ctx, userID)
@@ -841,7 +883,11 @@ func (s *RedeemService) Redeem(ctx context.Context, userID int64, code string) (
 	switch redeemCode.Type {
 	case RedeemTypeBalance:
 		amount := redeemCode.Value
-		if amount < 0 {
+		if redeemCode.ThresholdExempt {
+			if err := s.giftBalanceRepo.CreditGiftBalance(txCtx, userID, amount); err != nil {
+				return nil, fmt.Errorf("credit gift balance: %w", err)
+			}
+		} else if amount < 0 {
 			if s.redeemUserRepo == nil {
 				return nil, errors.New("user repository does not support atomic redeem balance adjustments")
 			}
@@ -914,6 +960,10 @@ func (s *RedeemService) Redeem(ctx context.Context, userID int64, code string) (
 	}
 
 	return redeemCode, nil
+}
+
+func isPersistableGiftBalanceAmount(amount float64) bool {
+	return isPersistablePositiveBalanceAmount(amount) && QuantizeUsageBillingAmount(amount) == amount
 }
 
 // invalidateRedeemCaches 失效兑换相关的缓存

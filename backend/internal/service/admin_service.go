@@ -532,6 +532,7 @@ type GenerateRedeemCodesInput struct {
 	Count            int
 	Type             string
 	Value            float64
+	ThresholdExempt  bool
 	GroupID          *int64 // 订阅类型专用：关联的分组ID
 	ValidityDays     int    // 订阅类型专用：有效天数
 	ExpiresAt        *time.Time

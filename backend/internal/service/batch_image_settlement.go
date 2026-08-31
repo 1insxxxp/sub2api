@@ -109,6 +109,9 @@ func (s *BatchImageSettlementService) Settle(ctx context.Context, batchID string
 	// 重试耗尽检查必须先于各类可重复失败的校验（counts/manifest/定价/超冻结），
 	// 否则这些错误路径会绕过耗尽出口，settling job 无限 requeue、冻结余额永不释放。
 	if isBatchImageSettlementRetryExhausted(job) {
+		if isPostCaptureSettlementFailure(batchImageDerefString(job.LastErrorCode)) {
+			return nil, s.failExhaustedPostCaptureSettlement(ctx, job, "settlement retry limit reached: "+batchImageDerefString(job.LastErrorCode))
+		}
 		return nil, s.failExhaustedSettlement(ctx, job, "settlement retry limit reached: "+batchImageDerefString(job.LastErrorCode))
 	}
 	if job.SuccessCount < 0 || job.FailCount < 0 || job.ItemCount < 0 || job.SuccessCount+job.FailCount > job.ItemCount {
@@ -135,7 +138,7 @@ func (s *BatchImageSettlementService) Settle(ctx context.Context, batchID string
 		}
 		return nil, err
 	}
-	actualCost := float64(job.SuccessCount) * unitPrice
+	actualCost := QuantizeUsageBillingAmount(float64(job.SuccessCount) * unitPrice)
 	result.ActualCost = actualCost
 	holdAmount := job.EstimatedCost
 	if job.HoldAmount != nil {
@@ -148,8 +151,15 @@ func (s *BatchImageSettlementService) Settle(ctx context.Context, batchID string
 		}
 		return nil, ErrBatchImageSettlementCostExceedsHold
 	}
+	if s.UsageLogRepo == nil {
+		if failErr := s.recordSettlementFailure(ctx, job, "SETTLEMENT_USAGE_LOG_REPO_MISSING", "usage log repository is not configured"); failErr != nil {
+			return nil, failErr
+		}
+		return nil, ErrBatchImageSettlementBillingFailed.WithCause(errors.New("usage log repository is not configured"))
+	}
 
-	if err := captureBatchImageBalanceHold(ctx, s.BillingRepo, job, actualCost, manifestHash); err != nil {
+	captureResult, err := captureBatchImageBalanceHold(ctx, s.BillingRepo, job, actualCost, manifestHash)
+	if err != nil {
 		msg := truncateBatchImageMessage(err.Error(), batchImageMaxErrorMessageLength)
 		if failErr := s.recordSettlementFailure(ctx, job, "SETTLEMENT_BILLING_FAILED", msg); failErr != nil {
 			return nil, failErr
@@ -160,6 +170,16 @@ func (s *BatchImageSettlementService) Settle(ctx context.Context, batchID string
 
 	now := time.Now()
 	outputExpiresAt := now.Add(s.outputRetentionAfterTerminal())
+	thresholdExemptCost := 0.0
+	if captureResult != nil {
+		thresholdExemptCost = clampUsageBillingThresholdExemptCost(captureResult.ThresholdExemptCost, actualCost, false)
+	}
+	if err := s.recordUsageLog(ctx, job, actualCost, thresholdExemptCost, result.RequestID, now); err != nil {
+		if failErr := s.recordPostCaptureSettlementFailure(ctx, job, "SETTLEMENT_USAGE_LOG_FAILED", err.Error()); failErr != nil {
+			return nil, failErr
+		}
+		return nil, err
+	}
 	if err := s.Repo.MarkBatchImageJobSettled(ctx, MarkBatchImageJobSettledParams{
 		BatchID:         job.BatchID,
 		ActualCost:      actualCost,
@@ -175,9 +195,15 @@ func (s *BatchImageSettlementService) Settle(ctx context.Context, batchID string
 			"manifest_hash": manifestHash,
 		},
 	}); err != nil {
+		if errors.Is(err, ErrBatchImageAlreadySettled) {
+			result.AlreadySettled = true
+			return result, nil
+		}
+		if failErr := s.recordPostCaptureSettlementFailure(ctx, job, "SETTLEMENT_FINALIZE_FAILED", err.Error()); failErr != nil {
+			return nil, failErr
+		}
 		return nil, err
 	}
-	s.recordUsageLog(ctx, job, actualCost, result.RequestID, now)
 
 	return result, nil
 }
@@ -190,6 +216,15 @@ func isBatchImageSettlementRetryExhausted(job *BatchImageJob) bool {
 		job.Status == BatchImageJobStatusSettling &&
 		job.RetryCount >= batchImageSettlementMaxRetries &&
 		strings.HasPrefix(batchImageDerefString(job.LastErrorCode), "SETTLEMENT_")
+}
+
+func isPostCaptureSettlementFailure(code string) bool {
+	switch strings.TrimSpace(code) {
+	case "SETTLEMENT_USAGE_LOG_FAILED", "SETTLEMENT_FINALIZE_FAILED":
+		return true
+	default:
+		return false
+	}
 }
 
 // recordSettlementFailure 记录一次结算失败并递增 retry_count。
@@ -211,6 +246,54 @@ func (s *BatchImageSettlementService) recordSettlementFailure(ctx context.Contex
 		return s.failExhaustedSettlement(ctx, job, message)
 	}
 	return nil
+}
+
+// recordPostCaptureSettlementFailure records failures after the hold has been
+// captured. Exhaustion must terminate without releasing the hold: capture is
+// the durable charge and retrying the usage-log/finalization writes is safe.
+func (s *BatchImageSettlementService) recordPostCaptureSettlementFailure(ctx context.Context, job *BatchImageJob, code, message string) error {
+	retryCount, recordErr := s.Repo.SetBatchImageJobSettlementFailed(ctx, job.BatchID, code, truncateBatchImageMessage(message, batchImageMaxErrorMessageLength))
+	if recordErr != nil {
+		logger.L().Warn("batch_image.post_capture_failure_record_failed",
+			zap.String("batch_id", job.BatchID),
+			zap.String("code", code),
+			zap.Error(recordErr),
+		)
+		return nil
+	}
+	job.RetryCount = retryCount
+	job.LastErrorCode = &code
+	if retryCount >= batchImageSettlementMaxRetries {
+		return s.failExhaustedPostCaptureSettlement(ctx, job, message)
+	}
+	return nil
+}
+
+func (s *BatchImageSettlementService) failExhaustedPostCaptureSettlement(ctx context.Context, job *BatchImageJob, message string) error {
+	if s == nil || s.Repo == nil || job == nil {
+		return ErrBatchImageSettlementBillingFailed
+	}
+	msg := strings.TrimSpace(message)
+	if msg == "" {
+		msg = "post-capture settlement retry limit reached"
+	}
+	code := "SETTLEMENT_FINALIZE_RETRY_EXHAUSTED"
+	if batchImageDerefString(job.LastErrorCode) == "SETTLEMENT_USAGE_LOG_FAILED" {
+		code = "SETTLEMENT_USAGE_LOG_RETRY_EXHAUSTED"
+	}
+	if err := s.Repo.TransitionBatchImageJobStatus(ctx, job.BatchID, BatchImageJobStatusFailed, BatchImageTransitionOptions{
+		ErrorCode:    batchImageStringPtr(code),
+		ErrorMessage: batchImageStringPtr(msg),
+		EventType:    "post_capture_settlement_retry_exhausted",
+		EventPayload: map[string]any{
+			"batch_id":    job.BatchID,
+			"retry_count": job.RetryCount,
+			"stage":       batchImageDerefString(job.LastErrorCode),
+		},
+	}); err != nil {
+		return err
+	}
+	return ErrBatchImageSettlementBillingFailed
 }
 
 func (s *BatchImageSettlementService) failExhaustedSettlement(ctx context.Context, job *BatchImageJob, message string) error {
@@ -249,9 +332,9 @@ func (s *BatchImageSettlementService) failExhaustedSettlement(ctx context.Contex
 	return ErrBatchImageSettlementBillingFailed
 }
 
-func (s *BatchImageSettlementService) recordUsageLog(ctx context.Context, job *BatchImageJob, actualCost float64, requestID string, createdAt time.Time) {
+func (s *BatchImageSettlementService) recordUsageLog(ctx context.Context, job *BatchImageJob, actualCost, thresholdExemptCost float64, requestID string, createdAt time.Time) error {
 	if s == nil || s.UsageLogRepo == nil || job == nil || job.APIKeyID == nil || job.AccountID == nil {
-		return
+		return errors.New("usage log repository is not configured")
 	}
 	billingMode := string(BillingModeImage)
 	accountRateMultiplier := job.AccountRateMultiplier
@@ -271,6 +354,7 @@ func (s *BatchImageSettlementService) recordUsageLog(ctx context.Context, job *B
 		ImageOutputCost:       actualCost,
 		TotalCost:             actualCost,
 		ActualCost:            actualCost,
+		ThresholdExemptCost:   clampUsageBillingThresholdExemptCost(thresholdExemptCost, actualCost, false),
 		RateMultiplier:        job.GroupRateMultiplier * job.BatchDiscountMultiplier,
 		AccountRateMultiplier: &accountRateMultiplier,
 		BillingType:           BillingTypeBalance,
@@ -280,7 +364,10 @@ func (s *BatchImageSettlementService) recordUsageLog(ctx context.Context, job *B
 		SessionID:             job.SessionID,
 		CreatedAt:             createdAt,
 	}
-	writeUsageLogBestEffort(ctx, s.UsageLogRepo, usageLog, "service.batch_image_settlement")
+	usageCtx, cancel := detachedBillingContext(ctx)
+	defer cancel()
+	_, err := s.UsageLogRepo.Create(usageCtx, usageLog)
+	return err
 }
 
 func (s *BatchImageSettlementService) invalidateAuthCache(ctx context.Context, userID int64) {

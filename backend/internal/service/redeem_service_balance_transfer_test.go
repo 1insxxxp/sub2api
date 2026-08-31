@@ -13,8 +13,10 @@ import (
 
 type balanceTransferUserRepo struct {
 	*userRepoStub
-	balance     float64
-	adjustCalls []float64
+	balance             float64
+	giftBalance         float64
+	adjustCalls         []float64
+	ordinaryDeductCalls []float64
 }
 
 func (r *balanceTransferUserRepo) AdjustBalance(_ context.Context, id int64, delta float64) (BalanceChange, error) {
@@ -30,6 +32,19 @@ func (r *balanceTransferUserRepo) AdjustBalance(_ context.Context, id int64, del
 	r.balance = next
 	r.user.Balance = next
 	return BalanceChange{Old: old, New: next}, nil
+}
+
+func (r *balanceTransferUserRepo) DeductOrdinaryBalance(_ context.Context, id int64, amount float64) error {
+	r.ordinaryDeductCalls = append(r.ordinaryDeductCalls, amount)
+	if r.user == nil || r.user.ID != id {
+		return ErrUserNotFound
+	}
+	if r.balance-r.giftBalance < amount {
+		return ErrBalanceNegative
+	}
+	r.balance -= amount
+	r.user.Balance = r.balance
+	return nil
 }
 
 type balanceTransferRedeemRepo struct {
@@ -239,7 +254,8 @@ func TestRedeemServiceBalanceTransferAllowsSubAdminRole(t *testing.T) {
 
 	require.NoError(t, err)
 	require.Len(t, got, 1)
-	require.Equal(t, []float64{-10}, userRepo.adjustCalls)
+	require.Equal(t, []float64{10}, userRepo.ordinaryDeductCalls)
+	require.Empty(t, userRepo.adjustCalls)
 	require.Equal(t, 40.0, userRepo.balance)
 }
 
@@ -257,7 +273,8 @@ func TestRedeemServiceBalanceTransferAllowsRegularUserWithExplicitPermission(t *
 	require.NoError(t, err)
 	require.Len(t, got, 1)
 	require.Len(t, redeemRepo.created, 1)
-	require.Equal(t, []float64{-10}, userRepo.adjustCalls)
+	require.Equal(t, []float64{10}, userRepo.ordinaryDeductCalls)
+	require.Empty(t, userRepo.adjustCalls)
 	require.Equal(t, 40.0, userRepo.balance)
 }
 
@@ -295,7 +312,8 @@ func TestRedeemServiceBalanceTransferRejectsInsufficientBalance(t *testing.T) {
 	require.Nil(t, got)
 	require.ErrorIs(t, err, ErrInsufficientBalance)
 	require.Empty(t, redeemRepo.created)
-	require.Equal(t, []float64{-10}, userRepo.adjustCalls)
+	require.Equal(t, []float64{10}, userRepo.ordinaryDeductCalls)
+	require.Empty(t, userRepo.adjustCalls)
 	require.Equal(t, 3.0, userRepo.balance)
 }
 
@@ -328,9 +346,117 @@ func TestRedeemServiceBalanceTransferCreatesCodeAndDeductsBalance(t *testing.T) 
 	require.Equal(t, 14, got.ValidityDays)
 	require.NotNil(t, got.ExpiresAt)
 	require.WithinDuration(t, time.Now().UTC().AddDate(0, 0, 14), *got.ExpiresAt, 3*time.Second)
-	require.Equal(t, []float64{-12.5}, userRepo.adjustCalls)
+	require.Equal(t, []float64{12.5}, userRepo.ordinaryDeductCalls)
+	require.Empty(t, userRepo.adjustCalls)
 	require.Equal(t, 37.5, userRepo.balance)
 	require.Len(t, redeemRepo.created, 1)
+}
+
+func TestRedeemServiceBalanceTransferUsesOnlyOrdinaryBalanceAndRetainsClassification(t *testing.T) {
+	for _, thresholdExempt := range []bool{false, true} {
+		t.Run(map[bool]string{false: "ordinary_code", true: "gift_code"}[thresholdExempt], func(t *testing.T) {
+			ctx := context.Background()
+			userID := int64(7)
+			userRepo := &balanceTransferUserRepo{
+				userRepoStub: &userRepoStub{user: &User{
+					ID: userID, Status: StatusActive, Role: RoleSubAdmin,
+					Balance: 20, GiftBalance: 8,
+				}},
+				balance:     20,
+				giftBalance: 8,
+			}
+			redeemRepo := &balanceTransferRedeemRepo{redeemRejectRepo: &redeemRejectRepo{}}
+			svc := NewRedeemService(redeemRepo, userRepo, nil, nil, nil, nil, nil, nil)
+
+			codes, err := svc.GenerateBalanceTransferCodes(ctx, userID, GenerateBalanceTransferCodeInput{
+				Amount:          10,
+				Count:           1,
+				ThresholdExempt: thresholdExempt,
+			})
+
+			require.NoError(t, err)
+			require.Len(t, codes, 1)
+			require.Equal(t, thresholdExempt, codes[0].ThresholdExempt)
+			require.Equal(t, thresholdExempt, redeemRepo.created[0].ThresholdExempt)
+			require.Equal(t, []float64{10}, userRepo.ordinaryDeductCalls)
+			require.Empty(t, userRepo.adjustCalls)
+			require.Equal(t, 10.0, userRepo.balance)
+			require.Equal(t, 8.0, userRepo.giftBalance)
+		})
+	}
+}
+
+func TestRedeemServiceBalanceTransferRejectsInsufficientOrdinaryBalance(t *testing.T) {
+	ctx := context.Background()
+	userID := int64(7)
+	userRepo := &balanceTransferUserRepo{
+		userRepoStub: &userRepoStub{user: &User{
+			ID: userID, Status: StatusActive, Role: RoleSubAdmin,
+			Balance: 20, GiftBalance: 15,
+		}},
+		balance:     20,
+		giftBalance: 15,
+	}
+	redeemRepo := &balanceTransferRedeemRepo{redeemRejectRepo: &redeemRejectRepo{}}
+	svc := NewRedeemService(redeemRepo, userRepo, nil, nil, nil, nil, nil, nil)
+
+	codes, err := svc.GenerateBalanceTransferCodes(ctx, userID, GenerateBalanceTransferCodeInput{
+		Amount:          10,
+		Count:           1,
+		ThresholdExempt: true,
+	})
+
+	require.Nil(t, codes)
+	require.ErrorIs(t, err, ErrInsufficientBalance)
+	require.Equal(t, []float64{10}, userRepo.ordinaryDeductCalls)
+	require.Empty(t, userRepo.adjustCalls)
+	require.Empty(t, redeemRepo.created)
+	require.Equal(t, 20.0, userRepo.balance)
+	require.Equal(t, 15.0, userRepo.giftBalance)
+}
+
+func TestRedeemServiceBalanceTransferBatchRetainsGiftClassification(t *testing.T) {
+	ctx := context.Background()
+	userID := int64(7)
+	userRepo := &balanceTransferUserRepo{
+		userRepoStub: &userRepoStub{user: &User{ID: userID, Status: StatusActive, Role: RoleSubAdmin, Balance: 50}},
+		balance:      50,
+	}
+	redeemRepo := &balanceTransferRedeemRepo{redeemRejectRepo: &redeemRejectRepo{}}
+	svc := NewRedeemService(redeemRepo, userRepo, nil, nil, nil, nil, nil, nil)
+
+	codes, err := svc.GenerateBalanceTransferCodes(ctx, userID, GenerateBalanceTransferCodeInput{
+		Amount:          5,
+		Count:           3,
+		ThresholdExempt: true,
+	})
+
+	require.NoError(t, err)
+	require.Len(t, codes, 3)
+	require.Equal(t, []float64{15}, userRepo.ordinaryDeductCalls)
+	for i := range codes {
+		require.True(t, codes[i].ThresholdExempt)
+		require.True(t, redeemRepo.created[i].ThresholdExempt)
+	}
+}
+
+func TestRedeemServiceBalanceTransferRejectsUnpersistableAmounts(t *testing.T) {
+	ctx := context.Background()
+	userID := int64(7)
+	for _, amount := range []float64{math.NaN(), math.Inf(1), 0.000000001, 1_000_000_000_000} {
+		userRepo := &balanceTransferUserRepo{
+			userRepoStub: &userRepoStub{user: &User{ID: userID, Status: StatusActive, Role: RoleSubAdmin, Balance: 50}},
+			balance:      50,
+		}
+		redeemRepo := &balanceTransferRedeemRepo{redeemRejectRepo: &redeemRejectRepo{}}
+		svc := NewRedeemService(redeemRepo, userRepo, nil, nil, nil, nil, nil, nil)
+
+		codes, err := svc.GenerateBalanceTransferCodes(ctx, userID, GenerateBalanceTransferCodeInput{Amount: amount, Count: 1})
+
+		require.Nil(t, codes)
+		require.Equal(t, "BALANCE_TRANSFER_AMOUNT_INVALID", infraerrors.Reason(err))
+		require.Empty(t, userRepo.ordinaryDeductCalls)
+	}
 }
 
 func TestRedeemServiceBalanceTransferBatchCreatesCodesAndDeductsTotal(t *testing.T) {
@@ -353,7 +479,8 @@ func TestRedeemServiceBalanceTransferBatchCreatesCodesAndDeductsTotal(t *testing
 
 	require.NoError(t, err)
 	require.Len(t, got, 3)
-	require.Equal(t, []float64{-15}, userRepo.adjustCalls)
+	require.Equal(t, []float64{15}, userRepo.ordinaryDeductCalls)
+	require.Empty(t, userRepo.adjustCalls)
 	require.Equal(t, 35.0, userRepo.balance)
 	require.Len(t, redeemRepo.created, 3)
 	require.NotNil(t, got[0].BatchID)
@@ -399,20 +526,22 @@ func TestRedeemServiceBalanceTransferDeleteUnusedCodeRefundsCreator(t *testing.T
 	userID := int64(7)
 	createdBy := userID
 	userRepo := &balanceTransferUserRepo{
-		userRepoStub: &userRepoStub{user: &User{ID: userID, Status: StatusActive, Balance: 35, BalanceRedeemCodeEnabled: true}},
+		userRepoStub: &userRepoStub{user: &User{ID: userID, Status: StatusActive, Balance: 35, GiftBalance: 8, BalanceRedeemCodeEnabled: true}},
 		balance:      35,
+		giftBalance:  8,
 	}
 	redeemRepo := &balanceTransferRedeemRepo{
 		redeemRejectRepo: &redeemRejectRepo{},
 		codes: map[int64]*RedeemCode{
 			88: {
-				ID:        88,
-				Code:      "DELETE-ME",
-				Type:      RedeemTypeBalance,
-				Value:     12.5,
-				Status:    StatusUnused,
-				CreatedBy: &createdBy,
-				Source:    RedeemCodeSourceUserBalanceTransfer,
+				ID:              88,
+				Code:            "DELETE-ME",
+				Type:            RedeemTypeBalance,
+				Value:           12.5,
+				Status:          StatusUnused,
+				CreatedBy:       &createdBy,
+				Source:          RedeemCodeSourceUserBalanceTransfer,
+				ThresholdExempt: true,
 			},
 		},
 	}
@@ -425,6 +554,7 @@ func TestRedeemServiceBalanceTransferDeleteUnusedCodeRefundsCreator(t *testing.T
 	require.Equal(t, int64(88), deleted.ID)
 	require.Equal(t, []float64{12.5}, userRepo.adjustCalls)
 	require.Equal(t, 47.5, userRepo.balance)
+	require.Equal(t, 8.0, userRepo.giftBalance)
 	require.Equal(t, []int64{88}, redeemRepo.deleted)
 	require.Empty(t, redeemRepo.codes)
 }
@@ -434,29 +564,32 @@ func TestRedeemServiceBalanceTransferBatchDeleteUnusedCodesRefundsCreatorOnce(t 
 	userID := int64(7)
 	createdBy := userID
 	userRepo := &balanceTransferUserRepo{
-		userRepoStub: &userRepoStub{user: &User{ID: userID, Status: StatusActive, Balance: 35, BalanceRedeemCodeEnabled: true}},
+		userRepoStub: &userRepoStub{user: &User{ID: userID, Status: StatusActive, Balance: 35, GiftBalance: 8, BalanceRedeemCodeEnabled: true}},
 		balance:      35,
+		giftBalance:  8,
 	}
 	redeemRepo := &balanceTransferRedeemRepo{
 		redeemRejectRepo: &redeemRejectRepo{},
 		codes: map[int64]*RedeemCode{
 			88: {
-				ID:        88,
-				Code:      "DELETE-ME-A",
-				Type:      RedeemTypeBalance,
-				Value:     12.5,
-				Status:    StatusUnused,
-				CreatedBy: &createdBy,
-				Source:    RedeemCodeSourceUserBalanceTransfer,
+				ID:              88,
+				Code:            "DELETE-ME-A",
+				Type:            RedeemTypeBalance,
+				Value:           12.5,
+				Status:          StatusUnused,
+				CreatedBy:       &createdBy,
+				Source:          RedeemCodeSourceUserBalanceTransfer,
+				ThresholdExempt: true,
 			},
 			89: {
-				ID:        89,
-				Code:      "DELETE-ME-B",
-				Type:      RedeemTypeBalance,
-				Value:     5,
-				Status:    StatusUnused,
-				CreatedBy: &createdBy,
-				Source:    RedeemCodeSourceUserBalanceTransfer,
+				ID:              89,
+				Code:            "DELETE-ME-B",
+				Type:            RedeemTypeBalance,
+				Value:           5,
+				Status:          StatusUnused,
+				CreatedBy:       &createdBy,
+				Source:          RedeemCodeSourceUserBalanceTransfer,
+				ThresholdExempt: true,
 			},
 		},
 	}
@@ -468,6 +601,7 @@ func TestRedeemServiceBalanceTransferBatchDeleteUnusedCodesRefundsCreatorOnce(t 
 	require.Len(t, deleted, 2)
 	require.Equal(t, []float64{17.5}, userRepo.adjustCalls)
 	require.Equal(t, 52.5, userRepo.balance)
+	require.Equal(t, 8.0, userRepo.giftBalance)
 	require.Equal(t, []int64{88, 89}, redeemRepo.deleted)
 	require.Empty(t, redeemRepo.codes)
 }

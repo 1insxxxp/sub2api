@@ -6,6 +6,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -14,6 +15,249 @@ import (
 
 	"github.com/Wei-Shaw/sub2api/internal/service"
 )
+
+func TestUsageBillingRepositoryApply_AllocatesGiftBalance(t *testing.T) {
+	ctx := context.Background()
+	client := testEntClient(t)
+	repo := NewUsageBillingRepository(client, integrationDB)
+
+	tests := []struct {
+		name          string
+		balance       float64
+		giftBalance   float64
+		cost          float64
+		wantBalance   float64
+		wantGift      float64
+		wantExempt    float64
+		wantOverdraft bool
+	}{
+		{name: "full gift", balance: 20, giftBalance: 20, cost: 12, wantBalance: 8, wantGift: 8, wantExempt: 12},
+		{name: "mixed gift and ordinary", balance: 20, giftBalance: 10, cost: 12, wantBalance: 8, wantGift: 0, wantExempt: 10},
+		{name: "no gift", balance: 20, giftBalance: 0, cost: 12, wantBalance: 8, wantGift: 0, wantExempt: 0},
+		{name: "overdraft", balance: 5, giftBalance: 3, cost: 12, wantBalance: -7, wantGift: 0, wantExempt: 3, wantOverdraft: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			user := mustCreateUser(t, client, &service.User{
+				Email:        fmt.Sprintf("usage-billing-gift-%s@example.com", uuid.NewString()),
+				PasswordHash: "hash",
+				Balance:      tt.balance,
+			})
+			_, err := integrationDB.ExecContext(ctx, "UPDATE users SET gift_balance = $1 WHERE id = $2", tt.giftBalance, user.ID)
+			require.NoError(t, err)
+			apiKey := mustCreateApiKey(t, client, &service.APIKey{
+				UserID: user.ID,
+				Key:    "sk-usage-billing-gift-" + uuid.NewString(),
+				Name:   "billing-gift",
+			})
+
+			result, err := repo.Apply(ctx, &service.UsageBillingCommand{
+				RequestID:   uuid.NewString(),
+				APIKeyID:    apiKey.ID,
+				UserID:      user.ID,
+				BalanceCost: tt.cost,
+			})
+			require.NoError(t, err)
+			require.True(t, result.Applied)
+			require.Equal(t, tt.wantOverdraft, result.BalanceOverdrafted)
+			require.NotNil(t, result.NewBalance)
+			require.InDelta(t, tt.wantBalance, *result.NewBalance, 0.00000001)
+			require.InDelta(t, tt.wantExempt, result.ThresholdExemptCost, 0.00000001)
+
+			var balance, giftBalance float64
+			require.NoError(t, integrationDB.QueryRowContext(ctx,
+				"SELECT balance, gift_balance FROM users WHERE id = $1", user.ID,
+			).Scan(&balance, &giftBalance))
+			require.InDelta(t, tt.wantBalance, balance, 0.00000001)
+			require.InDelta(t, tt.wantGift, giftBalance, 0.00000001)
+			require.GreaterOrEqual(t, giftBalance, 0.0)
+			if !tt.wantOverdraft {
+				require.LessOrEqual(t, giftBalance, max(balance, 0.0))
+			}
+		})
+	}
+}
+
+func TestUsageBillingRepositoryApply_DatabaseRejectsNumericNaNGiftBalance(t *testing.T) {
+	ctx := context.Background()
+	client := testEntClient(t)
+	user := mustCreateUser(t, client, &service.User{
+		Email: fmt.Sprintf("usage-billing-gift-nan-%s@example.com", uuid.NewString()), PasswordHash: "hash", Balance: 10,
+	})
+	_, err := integrationDB.ExecContext(ctx, "UPDATE users SET gift_balance = 'NaN'::numeric WHERE id = $1", user.ID)
+	require.Error(t, err)
+}
+
+func TestUsageBillingRepositoryApply_GiftAllocationDeduplicates(t *testing.T) {
+	ctx := context.Background()
+	client := testEntClient(t)
+	repo := NewUsageBillingRepository(client, integrationDB)
+	user := mustCreateUser(t, client, &service.User{
+		Email: fmt.Sprintf("usage-billing-gift-dedup-%s@example.com", uuid.NewString()), PasswordHash: "hash", Balance: 20,
+	})
+	_, err := integrationDB.ExecContext(ctx, "UPDATE users SET gift_balance = 10 WHERE id = $1", user.ID)
+	require.NoError(t, err)
+	apiKey := mustCreateApiKey(t, client, &service.APIKey{UserID: user.ID, Key: "sk-gift-dedup-" + uuid.NewString(), Name: "gift-dedup"})
+	cmd := &service.UsageBillingCommand{RequestID: uuid.NewString(), APIKeyID: apiKey.ID, UserID: user.ID, BalanceCost: 12}
+
+	first, err := repo.Apply(ctx, cmd)
+	require.NoError(t, err)
+	require.True(t, first.Applied)
+	require.InDelta(t, 10, first.ThresholdExemptCost, 0.00000001)
+	duplicate, err := repo.Apply(ctx, cmd)
+	require.NoError(t, err)
+	require.False(t, duplicate.Applied)
+	require.InDelta(t, 10, duplicate.ThresholdExemptCost, 0.00000001)
+
+	var persistedExempt float64
+	require.NoError(t, integrationDB.QueryRowContext(ctx, `
+		SELECT threshold_exempt_cost FROM usage_billing_dedup
+		WHERE request_id = $1 AND api_key_id = $2
+	`, cmd.RequestID, cmd.APIKeyID).Scan(&persistedExempt))
+	require.InDelta(t, 10, persistedExempt, 0.00000001)
+
+	var balance, giftBalance float64
+	require.NoError(t, integrationDB.QueryRowContext(ctx, "SELECT balance, gift_balance FROM users WHERE id = $1", user.ID).Scan(&balance, &giftBalance))
+	require.InDelta(t, 8, balance, 0.00000001)
+	require.Zero(t, giftBalance)
+}
+
+func TestUsageBillingRepositoryApply_SubscriptionDoesNotConsumeGift(t *testing.T) {
+	ctx := context.Background()
+	client := testEntClient(t)
+	repo := NewUsageBillingRepository(client, integrationDB)
+	user := mustCreateUser(t, client, &service.User{
+		Email: fmt.Sprintf("usage-billing-gift-sub-%s@example.com", uuid.NewString()), PasswordHash: "hash", Balance: 20,
+	})
+	_, err := integrationDB.ExecContext(ctx, "UPDATE users SET gift_balance = 10 WHERE id = $1", user.ID)
+	require.NoError(t, err)
+	group := mustCreateGroup(t, client, &service.Group{Name: "usage-billing-gift-sub-" + uuid.NewString(), Platform: service.PlatformAnthropic, SubscriptionType: service.SubscriptionTypeSubscription})
+	apiKey := mustCreateApiKey(t, client, &service.APIKey{UserID: user.ID, GroupID: &group.ID, Key: "sk-gift-sub-" + uuid.NewString(), Name: "gift-sub"})
+	subscription := mustCreateSubscription(t, client, &service.UserSubscription{UserID: user.ID, GroupID: group.ID})
+
+	result, err := repo.Apply(ctx, &service.UsageBillingCommand{
+		RequestID: uuid.NewString(), APIKeyID: apiKey.ID, UserID: user.ID,
+		SubscriptionID: &subscription.ID, SubscriptionCost: 12,
+	})
+	require.NoError(t, err)
+	require.True(t, result.Applied)
+	require.Zero(t, result.ThresholdExemptCost)
+
+	var balance, giftBalance float64
+	require.NoError(t, integrationDB.QueryRowContext(ctx, "SELECT balance, gift_balance FROM users WHERE id = $1", user.ID).Scan(&balance, &giftBalance))
+	require.InDelta(t, 20, balance, 0.00000001)
+	require.InDelta(t, 10, giftBalance, 0.00000001)
+}
+
+func TestUsageBillingRepositoryApply_MissingUserDoesNotAllocateGift(t *testing.T) {
+	ctx := context.Background()
+	client := testEntClient(t)
+	repo := NewUsageBillingRepository(client, integrationDB)
+	owner := mustCreateUser(t, client, &service.User{Email: fmt.Sprintf("usage-billing-missing-%s@example.com", uuid.NewString()), PasswordHash: "hash"})
+	apiKey := mustCreateApiKey(t, client, &service.APIKey{UserID: owner.ID, Key: "sk-gift-missing-" + uuid.NewString(), Name: "gift-missing"})
+	_, err := repo.Apply(ctx, &service.UsageBillingCommand{
+		RequestID: uuid.NewString(), APIKeyID: apiKey.ID, UserID: 9_000_000_000_000, BalanceCost: 1,
+	})
+	require.ErrorIs(t, err, service.ErrUserNotFound)
+}
+
+func TestUsageBillingRepositoryApply_ConcurrentGiftAllocationCannotOverconsume(t *testing.T) {
+	ctx := context.Background()
+	client := testEntClient(t)
+	repo := NewUsageBillingRepository(client, integrationDB)
+	user := mustCreateUser(t, client, &service.User{
+		Email: fmt.Sprintf("usage-billing-gift-race-%s@example.com", uuid.NewString()), PasswordHash: "hash", Balance: 12,
+	})
+	_, err := integrationDB.ExecContext(ctx, "UPDATE users SET gift_balance = 10 WHERE id = $1", user.ID)
+	require.NoError(t, err)
+	apiKey := mustCreateApiKey(t, client, &service.APIKey{UserID: user.ID, Key: "sk-gift-race-" + uuid.NewString(), Name: "gift-race"})
+
+	lockTx, err := integrationDB.BeginTx(ctx, nil)
+	require.NoError(t, err)
+	lockReleased := false
+	defer func() {
+		if !lockReleased {
+			_ = lockTx.Rollback()
+		}
+	}()
+	var lockedUserID int64
+	require.NoError(t, lockTx.QueryRowContext(ctx, "SELECT id FROM users WHERE id = $1 FOR UPDATE", user.ID).Scan(&lockedUserID))
+	require.Equal(t, user.ID, lockedUserID)
+
+	start := make(chan struct{})
+	type applyOutcome struct {
+		result *service.UsageBillingApplyResult
+		err    error
+	}
+	outcomes := make(chan applyOutcome, 2)
+	var wg sync.WaitGroup
+	for range 2 {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			<-start
+			result, applyErr := repo.Apply(ctx, &service.UsageBillingCommand{
+				RequestID: uuid.NewString(), APIKeyID: apiKey.ID, UserID: user.ID, BalanceCost: 8,
+			})
+			outcomes <- applyOutcome{result: result, err: applyErr}
+		}()
+	}
+	close(start)
+	waitForUsageBillingWalletLockWaiters(t, ctx, 2)
+	select {
+	case outcome := <-outcomes:
+		require.Failf(t, "billing completed while wallet lock was held", "result=%+v err=%v", outcome.result, outcome.err)
+	default:
+	}
+	require.NoError(t, lockTx.Commit())
+	lockReleased = true
+
+	wg.Wait()
+	close(outcomes)
+	var exemptTotal float64
+	overdrafts := 0
+	for outcome := range outcomes {
+		require.NoError(t, outcome.err)
+		require.NotNil(t, outcome.result)
+		require.True(t, outcome.result.Applied)
+		exemptTotal += outcome.result.ThresholdExemptCost
+		if outcome.result.BalanceOverdrafted {
+			overdrafts++
+		}
+	}
+	require.InDelta(t, 10, exemptTotal, 0.00000001)
+	require.Equal(t, 1, overdrafts)
+
+	var balance, giftBalance float64
+	require.NoError(t, integrationDB.QueryRowContext(ctx, "SELECT balance, gift_balance FROM users WHERE id = $1", user.ID).Scan(&balance, &giftBalance))
+	require.InDelta(t, -4, balance, 0.00000001)
+	require.Zero(t, giftBalance)
+}
+
+func waitForUsageBillingWalletLockWaiters(t *testing.T, ctx context.Context, want int) {
+	t.Helper()
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) {
+		var waiting int
+		err := integrationDB.QueryRowContext(ctx, `
+			SELECT COUNT(*)
+			FROM pg_stat_activity
+			WHERE datname = current_database()
+				AND pid <> pg_backend_pid()
+				AND state = 'active'
+				AND wait_event_type = 'Lock'
+				AND query LIKE '%WITH wallet AS (%'
+				AND query LIKE '%old_gift_balance%'
+		`).Scan(&waiting)
+		require.NoError(t, err)
+		if waiting >= want {
+			return
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	require.Failf(t, "wallet lock waiters did not arrive", "wanted at least %d blocked billing queries", want)
+}
 
 func TestUsageBillingRepositoryApply_DeduplicatesBalanceBilling(t *testing.T) {
 	ctx := context.Background()
@@ -398,8 +642,8 @@ func TestDashboardAggregationRepositoryCleanupUsageBillingDedup_BatchDeletesOldR
 	newCreatedAt := time.Now().UTC().Add(-time.Hour)
 
 	_, err := integrationDB.ExecContext(ctx, `
-		INSERT INTO usage_billing_dedup (request_id, api_key_id, request_fingerprint, created_at)
-		VALUES ($1, 1, $2, $3), ($4, 1, $5, $6)
+		INSERT INTO usage_billing_dedup (request_id, api_key_id, request_fingerprint, threshold_exempt_cost, created_at)
+		VALUES ($1, 1, $2, 0.75, $3), ($4, 1, $5, NULL, $6)
 	`,
 		oldRequestID, strings.Repeat("a", 64), oldCreatedAt,
 		newRequestID, strings.Repeat("b", 64), newCreatedAt,
@@ -419,6 +663,11 @@ func TestDashboardAggregationRepositoryCleanupUsageBillingDedup_BatchDeletesOldR
 	var archivedCount int
 	require.NoError(t, integrationDB.QueryRowContext(ctx, "SELECT COUNT(*) FROM usage_billing_dedup_archive WHERE request_id = $1", oldRequestID).Scan(&archivedCount))
 	require.Equal(t, 1, archivedCount)
+	var archivedThresholdExemptCost float64
+	require.NoError(t, integrationDB.QueryRowContext(ctx,
+		"SELECT threshold_exempt_cost FROM usage_billing_dedup_archive WHERE request_id = $1", oldRequestID,
+	).Scan(&archivedThresholdExemptCost))
+	require.InDelta(t, 0.75, archivedThresholdExemptCost, 0.00000001)
 }
 
 func TestUsageBillingRepositoryApply_DeduplicatesAgainstArchivedKey(t *testing.T) {

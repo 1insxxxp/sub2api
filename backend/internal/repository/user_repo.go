@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"math"
 	"sort"
 	"strings"
 	"time"
@@ -32,7 +33,11 @@ type userRepository struct {
 	sql    sqlExecutor
 }
 
+var _ service.GiftAllocatingBalanceRepository = (*userRepository)(nil)
+
 var _ service.RedeemUserAdjustmentRepository = (*userRepository)(nil)
+var _ service.OrdinaryBalanceRepository = (*userRepository)(nil)
+var _ service.GiftBalanceRepository = (*userRepository)(nil)
 
 func NewUserRepository(client *dbent.Client, sqlDB *sql.DB) service.UserRepository {
 	return newUserRepositoryWithSQL(client, sqlDB)
@@ -845,26 +850,79 @@ func (r *userRepository) filterUsersByAttributes(ctx context.Context, attrs map[
 }
 
 func (r *userRepository) UpdateBalance(ctx context.Context, id int64, amount float64) error {
-	client := clientFromContext(ctx, r.client)
-	update := client.User.Update().Where(dbuser.IDEQ(id)).AddBalance(amount)
-	// Track cumulative recharge amount for percentage-based notifications
-	if amount > 0 {
-		update = update.AddTotalRecharged(amount)
-	}
-	n, err := update.Save(ctx)
+	const updateSQL = `
+		UPDATE users
+		SET balance = balance + $1,
+			gift_balance = LEAST(gift_balance, GREATEST(balance + $1, 0)),
+			total_recharged = total_recharged + CASE WHEN $1 > 0 THEN $1 ELSE 0 END,
+			updated_at = NOW()
+		WHERE id = $2 AND deleted_at IS NULL
+		RETURNING id
+	`
+	rows, err := clientFromContext(ctx, r.client).QueryContext(ctx, updateSQL, amount, id)
 	if err != nil {
 		return translatePersistenceError(err, service.ErrUserNotFound, nil)
 	}
-	if n == 0 {
+	defer rows.Close()
+	if !rows.Next() {
+		if rowsErr := rows.Err(); rowsErr != nil {
+			return rowsErr
+		}
 		return service.ErrUserNotFound
 	}
-	return nil
+	var updatedID int64
+	if err := rows.Scan(&updatedID); err != nil {
+		return err
+	}
+	return rows.Err()
+}
+
+// CreditGiftBalance atomically credits spendable and gift balances without
+// changing total_recharged. The conditional update refuses pre-existing wallet
+// states where gift funds are not a subset of the available balance.
+func (r *userRepository) CreditGiftBalance(ctx context.Context, userID int64, amount float64) error {
+	quantized := service.QuantizeUsageBillingAmount(amount)
+	if amount <= 0 || amount >= 1_000_000_000_000 || math.IsNaN(amount) || math.IsInf(amount, 0) || quantized != amount {
+		return service.ErrRedeemCodeInvalidGiftBalance
+	}
+
+	const updateSQL = `
+		UPDATE users
+		SET balance = balance + $1,
+			gift_balance = gift_balance + $1,
+			updated_at = NOW()
+		WHERE id = $2 AND deleted_at IS NULL
+			AND gift_balance <= balance
+	`
+	client := clientFromContext(ctx, r.client)
+	result, err := client.ExecContext(ctx, updateSQL, amount, userID)
+	if err != nil {
+		return err
+	}
+	affected, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if affected > 0 {
+		return nil
+	}
+
+	exists, err := client.User.Query().Where(dbuser.IDEQ(userID)).Exist(ctx)
+	if err != nil {
+		return err
+	}
+	if !exists {
+		return service.ErrUserNotFound
+	}
+	return errors.New("gift balance exceeds available balance")
 }
 
 func (r *userRepository) ApplyRedeemBalanceAdjustment(ctx context.Context, id int64, delta float64) error {
 	const updateSQL = `
 		UPDATE users
-		SET balance = GREATEST(balance + $1, 0), updated_at = NOW()
+		SET balance = GREATEST(balance + $1, 0),
+			gift_balance = LEAST(gift_balance, GREATEST(balance + $1, 0)),
+			updated_at = NOW()
 		WHERE id = $2 AND deleted_at IS NULL
 	`
 	client := clientFromContext(ctx, r.client)
@@ -886,29 +944,70 @@ func (r *userRepository) ApplyRedeemBalanceAdjustment(ctx context.Context, id in
 // 透支策略：允许余额变为负数，确保当前请求能够完成
 // 中间件会阻止余额 <= 0 的用户发起后续请求
 func (r *userRepository) DeductBalance(ctx context.Context, id int64, amount float64) error {
-	client := clientFromContext(ctx, r.client)
-	n, err := client.User.Update().
-		Where(dbuser.IDEQ(id), dbuser.BalanceGTE(amount)).
-		AddBalance(-amount).
-		Save(ctx)
-	if err != nil {
-		return err
-	}
-	if n > 0 {
-		return nil
-	}
+	_, err := r.DeductBalanceWithGiftAllocation(ctx, id, amount)
+	return err
+}
 
-	n, err = client.User.Update().
-		Where(dbuser.IDEQ(id)).
-		AddBalance(-amount).
-		Save(ctx)
+// DeductBalanceWithGiftAllocation deducts balance with the same overdraft
+// semantics as DeductBalance while consuming gift balance first. The locked
+// wallet snapshot keeps the total deduction and its gift attribution atomic.
+func (r *userRepository) DeductBalanceWithGiftAllocation(ctx context.Context, id int64, amount float64) (service.BalanceDeductionResult, error) {
+	if math.IsNaN(amount) || math.IsInf(amount, 0) || amount < 0 {
+		return service.BalanceDeductionResult{}, errors.New("deduction amount must be finite and nonnegative")
+	}
+	amount = service.QuantizeUsageBillingAmount(amount)
+	const updateSQL = `
+		WITH wallet AS (
+			SELECT
+				id,
+				balance,
+				CASE
+					WHEN gift_balance IS NULL OR gift_balance::text = 'NaN' OR gift_balance < 0 THEN 0
+					ELSE gift_balance
+				END AS old_gift_balance
+			FROM users
+			WHERE id = $2 AND deleted_at IS NULL
+			FOR UPDATE
+		), updated AS (
+			UPDATE users AS u
+			SET
+				balance = wallet.balance - $1,
+				gift_balance = GREATEST(wallet.old_gift_balance - $1, 0),
+				updated_at = NOW()
+			FROM wallet
+			WHERE u.id = wallet.id
+			RETURNING
+				u.balance,
+				LEAST(wallet.old_gift_balance, $1) AS gift_used
+		)
+		SELECT balance, gift_used FROM updated
+	`
+	rows, err := clientFromContext(ctx, r.client).QueryContext(ctx, updateSQL, amount, id)
 	if err != nil {
-		return err
+		return service.BalanceDeductionResult{}, err
 	}
-	if n == 0 {
-		return service.ErrUserNotFound
+	defer rows.Close()
+	if !rows.Next() {
+		if rowsErr := rows.Err(); rowsErr != nil {
+			return service.BalanceDeductionResult{}, rowsErr
+		}
+		return service.BalanceDeductionResult{}, service.ErrUserNotFound
 	}
-	return nil
+	var result service.BalanceDeductionResult
+	if err := rows.Scan(&result.NewBalance, &result.ThresholdExemptCost); err != nil {
+		return service.BalanceDeductionResult{}, err
+	}
+	if err := rows.Err(); err != nil {
+		return service.BalanceDeductionResult{}, err
+	}
+	result.ThresholdExemptCost = service.QuantizeUsageBillingAmount(result.ThresholdExemptCost)
+	if result.ThresholdExemptCost < 0 {
+		result.ThresholdExemptCost = 0
+	}
+	if result.ThresholdExemptCost > amount {
+		result.ThresholdExemptCost = amount
+	}
+	return result, nil
 }
 
 // DeductAvailableBalance atomically deducts min(amount, max(balance, 0)).
@@ -920,13 +1019,18 @@ func (r *userRepository) DeductAvailableBalance(ctx context.Context, id int64, a
 	}
 	const updateSQL = `
 		WITH target AS (
-			SELECT id, balance
+			SELECT id, balance, gift_balance
 			FROM users
 			WHERE id = $2 AND deleted_at IS NULL
 			FOR UPDATE
 		), updated AS (
 			UPDATE users AS u
-			SET balance = target.balance - LEAST($1, GREATEST(target.balance, 0)), updated_at = NOW()
+			SET balance = target.balance - LEAST($1, GREATEST(target.balance, 0)),
+				gift_balance = LEAST(
+					target.gift_balance,
+					GREATEST(target.balance - LEAST($1, GREATEST(target.balance, 0)), 0)
+				),
+				updated_at = NOW()
 			FROM target
 			WHERE u.id = target.id AND u.deleted_at IS NULL
 			RETURNING target.balance - u.balance AS deducted
@@ -960,7 +1064,9 @@ func (r *userRepository) DeductAvailableBalance(ctx context.Context, id int64, a
 func (r *userRepository) AdjustBalance(ctx context.Context, id int64, delta float64) (service.BalanceChange, error) {
 	const updateSQL = `
 		UPDATE users
-		SET balance = balance + $1, updated_at = NOW()
+		SET balance = balance + $1,
+			gift_balance = LEAST(gift_balance, balance + $1),
+			updated_at = NOW()
 		WHERE id = $2 AND deleted_at IS NULL AND balance + $1 >= 0
 		RETURNING balance - $1, balance
 	`
@@ -980,6 +1086,55 @@ func (r *userRepository) AdjustBalance(ctx context.Context, id int64, delta floa
 	return service.BalanceChange{Old: current, New: current + delta}, service.ErrBalanceNegative
 }
 
+// DeductOrdinaryBalance atomically deducts only the non-gift portion of a
+// wallet. A conditional UPDATE keeps concurrent transfer generation from
+// spending the same ordinary balance twice.
+func (r *userRepository) DeductOrdinaryBalance(ctx context.Context, userID int64, amount float64) (err error) {
+	quantized := service.QuantizeUsageBillingAmount(amount)
+	if amount <= 0 || amount >= 1_000_000_000_000 || math.IsNaN(amount) || math.IsInf(amount, 0) || quantized != amount {
+		return service.ErrBalanceNegative
+	}
+
+	const updateSQL = `
+		UPDATE users
+		SET balance = balance - $1, updated_at = NOW()
+		WHERE id = $2 AND deleted_at IS NULL
+		  AND balance - gift_balance >= $1
+		RETURNING balance
+	`
+	rows, err := clientFromContext(ctx, r.client).QueryContext(ctx, updateSQL, amount, userID)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if closeErr := rows.Close(); closeErr != nil && err == nil {
+			err = closeErr
+		}
+	}()
+
+	if rows.Next() {
+		var remaining float64
+		if err := rows.Scan(&remaining); err != nil {
+			return err
+		}
+		return rows.Err()
+	}
+	if rowsErr := rows.Err(); rowsErr != nil {
+		return rowsErr
+	}
+	// Release the UPDATE result before issuing the distinguishing lookup. This
+	// matters inside an Ent transaction where both statements share one SQL
+	// connection.
+	if err := rows.Close(); err != nil {
+		return err
+	}
+
+	if _, _, err := r.currentOrdinaryBalance(ctx, userID); err != nil {
+		return err
+	}
+	return service.ErrBalanceNegative
+}
+
 // SetBalance 原子地把余额置为 value，并返回变更前后的值。
 func (r *userRepository) SetBalance(ctx context.Context, id int64, value float64) (service.BalanceChange, error) {
 	if value < 0 {
@@ -992,7 +1147,9 @@ func (r *userRepository) SetBalance(ctx context.Context, id int64, value float64
 	}
 	const updateSQL = `
 		UPDATE users AS u
-		SET balance = $1, updated_at = NOW()
+		SET balance = $1,
+			gift_balance = LEAST(u.gift_balance, $1),
+			updated_at = NOW()
 		FROM (SELECT id, balance FROM users WHERE id = $2 AND deleted_at IS NULL) AS prev
 		WHERE u.id = prev.id AND u.deleted_at IS NULL
 		RETURNING prev.balance, u.balance
@@ -1029,6 +1186,29 @@ func (r *userRepository) currentBalance(ctx context.Context, id int64) (balance 
 		return 0, err
 	}
 	return balance, rows.Err()
+}
+
+func (r *userRepository) currentOrdinaryBalance(ctx context.Context, id int64) (balance, giftBalance float64, err error) {
+	rows, err := clientFromContext(ctx, r.client).QueryContext(ctx,
+		`SELECT balance, gift_balance FROM users WHERE id = $1 AND deleted_at IS NULL`, id)
+	if err != nil {
+		return 0, 0, err
+	}
+	defer func() {
+		if closeErr := rows.Close(); closeErr != nil && err == nil {
+			err = closeErr
+		}
+	}()
+	if !rows.Next() {
+		if rowsErr := rows.Err(); rowsErr != nil {
+			return 0, 0, rowsErr
+		}
+		return 0, 0, service.ErrUserNotFound
+	}
+	if err := rows.Scan(&balance, &giftBalance); err != nil {
+		return 0, 0, err
+	}
+	return balance, giftBalance, rows.Err()
 }
 
 // scanBalanceChange 执行一条 RETURNING 旧余额、新余额的语句。ok 为 false 表示语句未命中任何行。
@@ -1574,6 +1754,8 @@ func applyUserEntityToService(dst *service.User, src *dbent.User) {
 	dst.LastLoginAt = src.LastLoginAt
 	dst.LastActiveAt = src.LastActiveAt
 	dst.BalanceRedeemCodeEnabled = src.BalanceRedeemCodeEnabled
+	dst.GiftBalance = src.GiftBalance
+	dst.FrozenGiftBalance = src.FrozenGiftBalance
 	dst.CreatedAt = src.CreatedAt
 	dst.UpdatedAt = src.UpdatedAt
 }

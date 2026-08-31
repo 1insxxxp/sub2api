@@ -22,6 +22,45 @@ type openAIRecordUsageLogRepoStub struct {
 	lastCtxErr error
 }
 
+type transactionalUsageLogRepoForTest struct {
+	UsageLogRepository
+}
+
+func (r *transactionalUsageLogRepoForTest) RunUsageBillingTransaction(ctx context.Context, fn func(context.Context) error) error {
+	return fn(ctx)
+}
+
+func (r *transactionalUsageLogRepoForTest) UpdateThresholdExemptCost(ctx context.Context, usageLogID int64, amount float64) error {
+	if repo, ok := r.UsageLogRepository.(UsageLogThresholdExemptRepository); ok {
+		return repo.UpdateThresholdExemptCost(ctx, usageLogID, amount)
+	}
+	return nil
+}
+
+func (r *transactionalUsageLogRepoForTest) CreateBestEffort(ctx context.Context, log *UsageLog) error {
+	if repo, ok := r.UsageLogRepository.(usageLogBestEffortWriter); ok {
+		return repo.CreateBestEffort(ctx, log)
+	}
+	_, err := r.UsageLogRepository.Create(ctx, log)
+	return err
+}
+
+func (r *transactionalUsageLogRepoForTest) UpsertResponseOutcome(ctx context.Context, log *UsageLog) error {
+	if repo, ok := r.UsageLogRepository.(usageResponseOutcomeWriter); ok {
+		return repo.UpsertResponseOutcome(ctx, log)
+	}
+	return nil
+}
+
+func transactionalUsageLogRepo(usageRepo UsageLogRepository) UsageLogRepository {
+	if _, runnerOK := usageRepo.(UsageBillingTransactionRunner); runnerOK {
+		if _, thresholdOK := usageRepo.(UsageLogThresholdExemptRepository); thresholdOK {
+			return usageRepo
+		}
+	}
+	return &transactionalUsageLogRepoForTest{UsageLogRepository: usageRepo}
+}
+
 func (s *openAIRecordUsageLogRepoStub) Create(ctx context.Context, log *UsageLog) (bool, error) {
 	s.calls++
 	s.lastLog = log
@@ -71,7 +110,7 @@ func TestOpenAIGatewayServiceRecordUsage_RejectsNilInput(t *testing.T) {
 
 func TestRecordCyberPolicyUsageLog_BillsRealUpstreamTokens(t *testing.T) {
 	usageRepo := &openAIRecordUsageLogRepoStub{inserted: true}
-	userRepo := &openAIRecordUsageUserRepoStub{}
+	userRepo := &openAIRecordUsageUserRepoStub{thresholdExemptCost: 0.00000001}
 	subRepo := &openAIRecordUsageSubRepoStub{}
 	svc := newOpenAIRecordUsageServiceForTest(usageRepo, userRepo, subRepo, nil)
 	usage := OpenAIUsage{InputTokens: 1200, OutputTokens: 300}
@@ -101,6 +140,7 @@ func TestRecordCyberPolicyUsageLog_BillsRealUpstreamTokens(t *testing.T) {
 	require.InDelta(t, expected.ActualCost, usageRepo.lastLog.ActualCost, 1e-12)
 	require.Equal(t, 1, userRepo.deductCalls, "按真实 token 扣费，与 WS/正常请求一致")
 	require.InDelta(t, expected.ActualCost, userRepo.lastAmount, 1e-12)
+	require.InDelta(t, 0.00000001, usageRepo.lastLog.ThresholdExemptCost, 1e-12)
 }
 
 func TestRecordCyberPolicyUsageLog_NonStreamZeroTokensZeroCost(t *testing.T) {
@@ -141,10 +181,12 @@ func TestRecordCyberPolicyUsageLog_SkipsWhenIncomplete(t *testing.T) {
 type openAIRecordUsageUserRepoStub struct {
 	UserRepository
 
-	deductCalls int
-	deductErr   error
-	lastAmount  float64
-	lastCtxErr  error
+	deductCalls         int
+	deductErr           error
+	lastAmount          float64
+	lastCtxErr          error
+	newBalance          float64
+	thresholdExemptCost float64
 }
 
 func (s *openAIRecordUsageUserRepoStub) DeductBalance(ctx context.Context, id int64, amount float64) error {
@@ -152,6 +194,13 @@ func (s *openAIRecordUsageUserRepoStub) DeductBalance(ctx context.Context, id in
 	s.lastAmount = amount
 	s.lastCtxErr = ctx.Err()
 	return s.deductErr
+}
+
+func (s *openAIRecordUsageUserRepoStub) DeductBalanceWithGiftAllocation(ctx context.Context, id int64, amount float64) (BalanceDeductionResult, error) {
+	s.deductCalls++
+	s.lastAmount = amount
+	s.lastCtxErr = ctx.Err()
+	return BalanceDeductionResult{NewBalance: s.newBalance, ThresholdExemptCost: s.thresholdExemptCost}, s.deductErr
 }
 
 func (s *openAIRecordUsageUserRepoStub) AdjustBalance(ctx context.Context, id int64, delta float64) (BalanceChange, error) {
@@ -224,7 +273,7 @@ func newOpenAIRecordUsageServiceForTest(usageRepo UsageLogRepository, userRepo U
 	cfg.Default.RateMultiplier = 1.1
 	svc := NewOpenAIGatewayService(
 		nil,
-		usageRepo,
+		transactionalUsageLogRepo(usageRepo),
 		nil,
 		userRepo,
 		subRepo,
@@ -745,9 +794,10 @@ func TestOpenAIGatewayServiceRecordUsage_DuplicateBillingKeySkipsBillingWithRepo
 	require.Equal(t, 0, quotaSvc.quotaCalls)
 }
 
-func TestOpenAIGatewayServiceRecordUsage_BillsWhenUsageLogCreateReturnsError(t *testing.T) {
+func TestOpenAIGatewayServiceRecordUsage_LegacyUsageLogCreateErrorFailsClosed(t *testing.T) {
 	usage := OpenAIUsage{InputTokens: 8, OutputTokens: 4}
-	usageRepo := &openAIRecordUsageLogRepoStub{inserted: false, err: errors.New("usage log batch state uncertain")}
+	wantErr := errors.New("usage log batch state uncertain")
+	usageRepo := &openAIRecordUsageLogRepoStub{inserted: false, err: wantErr}
 	userRepo := &openAIRecordUsageUserRepoStub{}
 	subRepo := &openAIRecordUsageSubRepoStub{}
 	svc := newOpenAIRecordUsageServiceForTest(usageRepo, userRepo, subRepo, nil)
@@ -764,17 +814,16 @@ func TestOpenAIGatewayServiceRecordUsage_BillsWhenUsageLogCreateReturnsError(t *
 		Account: &Account{ID: 30041},
 	})
 
-	require.NoError(t, err)
+	require.ErrorIs(t, err, wantErr)
 	require.Equal(t, 1, usageRepo.calls)
-	require.Equal(t, 1, userRepo.deductCalls)
+	require.Zero(t, userRepo.deductCalls)
 	require.Equal(t, 0, subRepo.incrementCalls)
 }
 
-func TestOpenAIGatewayServiceRecordUsage_UsageLogWriteErrorDoesNotSkipBilling(t *testing.T) {
+func TestOpenAIGatewayServiceRecordUsage_LegacyUsageLogWriteErrorFailsClosed(t *testing.T) {
 	usageRepo := &openAIRecordUsageLogRepoStub{inserted: false, err: MarkUsageLogCreateNotPersisted(context.Canceled)}
 	userRepo := &openAIRecordUsageUserRepoStub{}
 	subRepo := &openAIRecordUsageSubRepoStub{}
-	quotaSvc := &openAIRecordUsageAPIKeyQuotaStub{}
 	svc := newOpenAIRecordUsageServiceForTest(usageRepo, userRepo, subRepo, nil)
 
 	err := svc.RecordUsage(context.Background(), &OpenAIRecordUsageInput{
@@ -787,28 +836,22 @@ func TestOpenAIGatewayServiceRecordUsage_UsageLogWriteErrorDoesNotSkipBilling(t 
 			Model:    "gpt-5.1",
 			Duration: time.Second,
 		},
-		APIKey: &APIKey{
-			ID:    10043,
-			Quota: 100,
-		},
-		User:          &User{ID: 20043},
-		Account:       &Account{ID: 30043},
-		APIKeyService: quotaSvc,
+		APIKey:  &APIKey{ID: 10043},
+		User:    &User{ID: 20043},
+		Account: &Account{ID: 30043},
 	})
 
-	require.NoError(t, err)
+	require.ErrorIs(t, err, context.Canceled)
 	require.Equal(t, 1, usageRepo.calls)
-	require.Equal(t, 1, userRepo.deductCalls)
+	require.Zero(t, userRepo.deductCalls)
 	require.Equal(t, 0, subRepo.incrementCalls)
-	require.Equal(t, 1, quotaSvc.quotaCalls)
 }
 
 func TestOpenAIGatewayServiceRecordUsage_BillingUsesDetachedContext(t *testing.T) {
 	usage := OpenAIUsage{InputTokens: 10, OutputTokens: 6, CacheReadInputTokens: 2}
-	usageRepo := &openAIRecordUsageLogRepoStub{inserted: false, err: context.DeadlineExceeded}
+	usageRepo := &openAIRecordUsageLogRepoStub{inserted: true}
 	userRepo := &openAIRecordUsageUserRepoStub{}
 	subRepo := &openAIRecordUsageSubRepoStub{}
-	quotaSvc := &openAIRecordUsageAPIKeyQuotaStub{}
 	svc := newOpenAIRecordUsageServiceForTest(usageRepo, userRepo, subRepo, nil)
 
 	reqCtx, cancel := context.WithCancel(context.Background())
@@ -821,20 +864,14 @@ func TestOpenAIGatewayServiceRecordUsage_BillingUsesDetachedContext(t *testing.T
 			Model:     "gpt-5.1",
 			Duration:  time.Second,
 		},
-		APIKey: &APIKey{
-			ID:    10042,
-			Quota: 100,
-		},
-		User:          &User{ID: 20042},
-		Account:       &Account{ID: 30042},
-		APIKeyService: quotaSvc,
+		APIKey:  &APIKey{ID: 10042},
+		User:    &User{ID: 20042},
+		Account: &Account{ID: 30042},
 	})
 
 	require.NoError(t, err)
 	require.Equal(t, 1, userRepo.deductCalls)
 	require.NoError(t, userRepo.lastCtxErr)
-	require.Equal(t, 1, quotaSvc.quotaCalls)
-	require.NoError(t, quotaSvc.lastQuotaCtxErr)
 }
 
 func TestOpenAIGatewayServiceRecordUsage_BillingRepoUsesDetachedContext(t *testing.T) {
@@ -1053,10 +1090,11 @@ func TestOpenAIGatewayServiceRecordUsage_BillingErrorWritesUnsettledUsageLog(t *
 func TestOpenAIGatewayServiceRecordUsage_UpdatesAPIKeyQuotaWhenConfigured(t *testing.T) {
 	usage := OpenAIUsage{InputTokens: 10, OutputTokens: 6, CacheReadInputTokens: 2}
 	usageRepo := &openAIRecordUsageLogRepoStub{inserted: true}
+	billingRepo := &openAIRecordUsageBillingRepoStub{result: &UsageBillingApplyResult{Applied: true}}
 	userRepo := &openAIRecordUsageUserRepoStub{}
 	subRepo := &openAIRecordUsageSubRepoStub{}
 	quotaSvc := &openAIRecordUsageAPIKeyQuotaStub{}
-	svc := newOpenAIRecordUsageServiceForTest(usageRepo, userRepo, subRepo, nil)
+	svc := newOpenAIRecordUsageServiceWithBillingRepoForTest(usageRepo, billingRepo, userRepo, subRepo, nil)
 
 	err := svc.RecordUsage(context.Background(), &OpenAIRecordUsageInput{
 		Result: &OpenAIForwardResult{
@@ -1075,10 +1113,12 @@ func TestOpenAIGatewayServiceRecordUsage_UpdatesAPIKeyQuotaWhenConfigured(t *tes
 	})
 
 	require.NoError(t, err)
-	require.Equal(t, 1, quotaSvc.quotaCalls)
+	require.Equal(t, 1, billingRepo.calls)
+	require.NotNil(t, billingRepo.lastCmd)
+	require.Equal(t, 0, quotaSvc.quotaCalls, "unified billing persists quota in the same transaction")
 	require.Equal(t, 0, quotaSvc.rateLimitCalls)
 	expected := expectedOpenAICost(t, svc, "gpt-5.1", usage, 1.1)
-	require.InDelta(t, expected.ActualCost, quotaSvc.lastAmount, 1e-12)
+	require.InDelta(t, expected.ActualCost, billingRepo.lastCmd.APIKeyQuotaCost, 1e-12)
 }
 
 func TestOpenAIGatewayServiceRecordUsage_ClampsActualInputTokensToZero(t *testing.T) {
@@ -1685,9 +1725,10 @@ func TestOpenAIGatewayServiceRecordUsage_BillsMappedRequestsUsingRequestedModel(
 	require.NoError(t, err)
 	require.NotNil(t, usageRepo.lastLog)
 	require.Equal(t, "gpt-5.1", usageRepo.lastLog.Model)
-	require.Equal(t, expectedCost.ActualCost, usageRepo.lastLog.ActualCost)
+	expectedActualCost := QuantizeUsageBillingAmount(expectedCost.ActualCost)
+	require.Equal(t, expectedActualCost, usageRepo.lastLog.ActualCost)
 	require.Equal(t, expectedCost.TotalCost, usageRepo.lastLog.TotalCost)
-	require.Equal(t, expectedCost.ActualCost, userRepo.lastAmount)
+	require.Equal(t, expectedActualCost, userRepo.lastAmount)
 }
 
 func TestOpenAIGatewayServiceRecordUsage_ChannelMappedDoesNotOverrideBillingModelWhenUnmapped(t *testing.T) {
@@ -1727,7 +1768,7 @@ func TestOpenAIGatewayServiceRecordUsage_ChannelMappedDoesNotOverrideBillingMode
 
 	require.NoError(t, err)
 	require.NotNil(t, usageRepo.lastLog)
-	require.Equal(t, expectedCost.ActualCost, usageRepo.lastLog.ActualCost)
+	require.Equal(t, QuantizeUsageBillingAmount(expectedCost.ActualCost), usageRepo.lastLog.ActualCost)
 	require.True(t, usageRepo.lastLog.ActualCost > 0, "cost must not be zero")
 }
 
@@ -1768,7 +1809,7 @@ func TestOpenAIGatewayServiceRecordUsage_ChannelMappedOverridesBillingModelWhenM
 
 	require.NoError(t, err)
 	require.NotNil(t, usageRepo.lastLog)
-	require.Equal(t, expectedCost.ActualCost, usageRepo.lastLog.ActualCost)
+	require.Equal(t, QuantizeUsageBillingAmount(expectedCost.ActualCost), usageRepo.lastLog.ActualCost)
 	require.True(t, usageRepo.lastLog.ActualCost > 0, "cost must not be zero")
 }
 

@@ -162,13 +162,14 @@ type UsageLog struct {
 	ImageOutputTokens int
 	ImageOutputCost   float64
 
-	InputCost         float64
-	OutputCost        float64
-	CacheCreationCost float64
-	CacheReadCost     float64
-	TotalCost         float64
-	ActualCost        float64
-	CompensatedCost   float64
+	InputCost           float64
+	OutputCost          float64
+	CacheCreationCost   float64
+	CacheReadCost       float64
+	TotalCost           float64
+	ActualCost          float64
+	ThresholdExemptCost float64
+	CompensatedCost     float64
 	// Compensation projection is computed server-side. Clients must not
 	// reconstruct eligibility rules from timestamps or response metadata.
 	CompensationEligible      bool

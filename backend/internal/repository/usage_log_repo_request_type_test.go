@@ -70,6 +70,7 @@ func TestUsageLogRepositoryCreateSyncRequestTypeAndLegacyFields(t *testing.T) {
 			log.CacheReadCost,
 			log.TotalCost,
 			log.ActualCost,
+			log.ThresholdExemptCost,
 			log.RateMultiplier,
 			log.AccountRateMultiplier,
 			log.BillingType,
@@ -165,6 +166,7 @@ func TestUsageLogRepositoryCreate_PersistsServiceTier(t *testing.T) {
 			log.CacheReadCost,
 			log.TotalCost,
 			log.ActualCost,
+			log.ThresholdExemptCost,
 			log.RateMultiplier,
 			log.AccountRateMultiplier,
 			log.BillingType,
@@ -283,11 +285,11 @@ func TestPrepareUsageLogInsert_PersistsImageSizeMetadata(t *testing.T) {
 		CreatedAt:          time.Date(2025, 1, 6, 12, 0, 0, 0, time.UTC),
 	})
 
-	require.Equal(t, sql.NullString{String: imageSize, Valid: true}, prepared.args[40])
-	require.Equal(t, sql.NullString{String: inputSize, Valid: true}, prepared.args[41])
-	require.Equal(t, sql.NullString{String: outputSize, Valid: true}, prepared.args[42])
-	require.Equal(t, sql.NullString{String: source, Valid: true}, prepared.args[43])
-	breakdownJSON, ok := prepared.args[44].(string)
+	require.Equal(t, sql.NullString{String: imageSize, Valid: true}, prepared.args[41])
+	require.Equal(t, sql.NullString{String: inputSize, Valid: true}, prepared.args[42])
+	require.Equal(t, sql.NullString{String: outputSize, Valid: true}, prepared.args[43])
+	require.Equal(t, sql.NullString{String: source, Valid: true}, prepared.args[44])
+	breakdownJSON, ok := prepared.args[45].(string)
 	require.True(t, ok)
 	require.JSONEq(t, `{"1K":1,"4K":1}`, breakdownJSON)
 }
@@ -831,7 +833,7 @@ func TestScanUsageLogRequestTypeAndLegacyFallback(t *testing.T) {
 			0, 0, 0, 0, 0, 0,
 			0, 0.0, // image_output_tokens, image_output_cost
 			0, 0.0, // image_input_tokens, image_input_cost
-			0.0, 0.0, 0.0, 0.0, 0.8, 0.8, 0.0,
+			0.0, 0.0, 0.0, 0.0, 0.8, 0.8, 0.125, 0.0,
 			1.0,
 			sql.NullFloat64{},
 			int16(service.BillingTypeBalance),
@@ -867,6 +869,7 @@ func TestScanUsageLogRequestTypeAndLegacyFallback(t *testing.T) {
 			now,
 		}})
 		require.NoError(t, err)
+		require.Equal(t, 0.125, log.ThresholdExemptCost)
 		require.Equal(t, 2, log.ImageCount)
 		require.NotNil(t, log.ImageSize)
 		require.Equal(t, "4K", *log.ImageSize)
@@ -912,6 +915,7 @@ func TestScanUsageLogRequestTypeAndLegacyFallback(t *testing.T) {
 			0.4,               // cache_read_cost
 			1.0,               // total_cost
 			0.9,               // actual_cost
+			0.25,              // threshold_exempt_cost
 			0.0,               // compensated_cost
 			1.0,               // rate_multiplier
 			sql.NullFloat64{}, // account_rate_multiplier
@@ -950,6 +954,7 @@ func TestScanUsageLogRequestTypeAndLegacyFallback(t *testing.T) {
 		require.NoError(t, err)
 		require.NotNil(t, log.ServiceTier)
 		require.Equal(t, "priority", *log.ServiceTier)
+		require.Equal(t, 0.25, log.ThresholdExemptCost)
 		require.Equal(t, service.RequestTypeWSV2, log.RequestType)
 		require.True(t, log.Stream)
 		require.True(t, log.OpenAIWSMode)
@@ -975,7 +980,7 @@ func TestScanUsageLogRequestTypeAndLegacyFallback(t *testing.T) {
 			1, 2, 3, 4, 5, 6,
 			0, 0.0, // image_output_tokens, image_output_cost
 			0, 0.0, // image_input_tokens, image_input_cost
-			0.1, 0.2, 0.3, 0.4, 1.0, 0.9, 0.0,
+			0.1, 0.2, 0.3, 0.4, 1.0, 0.9, 0.0, 0.0,
 			1.0,
 			sql.NullFloat64{},
 			int16(service.BillingTypeBalance),
@@ -1038,7 +1043,7 @@ func TestScanUsageLogRequestTypeAndLegacyFallback(t *testing.T) {
 			1, 2, 3, 4, 5, 6,
 			0, 0.0, // image_output_tokens, image_output_cost
 			0, 0.0, // image_input_tokens, image_input_cost
-			0.1, 0.2, 0.3, 0.4, 1.0, 0.9, 0.0,
+			0.1, 0.2, 0.3, 0.4, 1.0, 0.9, 0.0, 0.0,
 			1.0,
 			sql.NullFloat64{},
 			int16(service.BillingTypeBalance),

@@ -290,6 +290,9 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 			}
 		}
 	}
+	if err := ValidateUsageBillingActualCost(cost.ActualCost); err != nil {
+		return err
+	}
 
 	// Determine billing type. A system custom monthly key carries the source
 	// group for pricing, so its subscription identity comes from the resolution.
@@ -481,9 +484,15 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 	}()
 
 	if billingErr != nil {
-		usageLog.ActualCost = 0
-		writeUsageLogBestEffort(ctx, s.usageLogRepo, usageLog, "service.openai_gateway")
+		if s.usageBillingRepo != nil {
+			usageLog.ActualCost = 0
+			writeUsageLogBestEffort(ctx, s.usageLogRepo, usageLog, "service.openai_gateway")
+		}
 		return billingErr
+	}
+	if s.usageBillingRepo == nil {
+		writeUsageOutcomeBestEffort(ctx, s.usageLogRepo, usageLog, "service.openai_gateway")
+		return nil
 	}
 	writeUsageLogBestEffort(ctx, s.usageLogRepo, usageLog, "service.openai_gateway")
 

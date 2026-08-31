@@ -3,6 +3,11 @@
 package repository
 
 import (
+	"context"
+	"errors"
+	"sync"
+	"time"
+
 	"github.com/Wei-Shaw/sub2api/internal/service"
 )
 
@@ -143,6 +148,19 @@ func (s *UserRepoSuite) TestAdjustBalance_AppliesDeltaAndReportsChange() {
 	s.Require().InDelta(10, got.Balance, 1e-9)
 }
 
+func (s *UserRepoSuite) TestAdjustBalance_ClampsGiftBalanceAfterSubtraction() {
+	user := s.mustCreateUser(&service.User{Email: "adjust-balance-gift-clamp@example.com", Balance: 10})
+	s.Require().NoError(s.client.User.UpdateOneID(user.ID).SetGiftBalance(8).Exec(s.ctx))
+
+	change, err := s.repo.AdjustBalance(s.ctx, user.ID, -6)
+	s.Require().NoError(err)
+	s.Require().InDelta(10, change.Old, 1e-9)
+	s.Require().InDelta(4, change.New, 1e-9)
+	got, err := s.repo.GetByID(s.ctx, user.ID)
+	s.Require().NoError(err)
+	s.Require().InDelta(4, got.GiftBalance, 1e-9)
+}
+
 func (s *UserRepoSuite) TestAdjustBalance_RefusesNegativeResult() {
 	user := s.mustCreateUser(&service.User{Email: "adjust-balance-negative@example.com", Balance: 3})
 
@@ -161,8 +179,68 @@ func (s *UserRepoSuite) TestAdjustBalance_UserNotFound() {
 	s.Require().ErrorIs(err, service.ErrUserNotFound)
 }
 
+func (s *UserRepoSuite) TestDeductOrdinaryBalanceConcurrentCondition() {
+	user := s.mustCreateUser(&service.User{Email: "ordinary-balance-race@example.com", Balance: 10})
+	s.Require().NoError(s.client.User.UpdateOneID(user.ID).SetGiftBalance(4).Exec(s.ctx))
+
+	blocker, err := integrationDB.BeginTx(s.ctx, nil)
+	s.Require().NoError(err)
+	s.T().Cleanup(func() { _ = blocker.Rollback() })
+	_, err = blocker.ExecContext(s.ctx, `UPDATE users SET balance = balance WHERE id = $1`, user.ID)
+	s.Require().NoError(err)
+
+	start := make(chan struct{})
+	attempting := make(chan struct{})
+	errCh := make(chan error, 2)
+	var wg sync.WaitGroup
+	for i := 0; i < 2; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			<-start
+			attempting <- struct{}{}
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			errCh <- s.repo.DeductOrdinaryBalance(ctx, user.ID, 4)
+		}()
+	}
+	close(start)
+	<-attempting
+	<-attempting
+
+	select {
+	case early := <-errCh:
+		s.T().Fatalf("deduction completed while the PostgreSQL row lock was held: %v", early)
+	case <-time.After(150 * time.Millisecond):
+	}
+	s.Require().NoError(blocker.Commit())
+
+	wg.Wait()
+	close(errCh)
+
+	var succeeded, insufficient int
+	for err := range errCh {
+		switch {
+		case err == nil:
+			succeeded++
+		case errors.Is(err, service.ErrBalanceNegative):
+			insufficient++
+		default:
+			s.Require().NoError(err)
+		}
+	}
+	s.Require().Equal(1, succeeded)
+	s.Require().Equal(1, insufficient)
+
+	got, err := s.repo.GetByID(s.ctx, user.ID)
+	s.Require().NoError(err)
+	s.Require().InDelta(6, got.Balance, 1e-9)
+	s.Require().InDelta(4, got.GiftBalance, 1e-9)
+}
+
 func (s *UserRepoSuite) TestSetBalance_ReplacesValueAndReportsPrevious() {
 	user := s.mustCreateUser(&service.User{Email: "set-balance@example.com", Balance: 7})
+	s.Require().NoError(s.client.User.UpdateOneID(user.ID).SetGiftBalance(5).Exec(s.ctx))
 
 	change, err := s.repo.SetBalance(s.ctx, user.ID, 2)
 	s.Require().NoError(err, "SetBalance")
@@ -172,6 +250,7 @@ func (s *UserRepoSuite) TestSetBalance_ReplacesValueAndReportsPrevious() {
 	got, err := s.repo.GetByID(s.ctx, user.ID)
 	s.Require().NoError(err, "GetByID")
 	s.Require().InDelta(2, got.Balance, 1e-9)
+	s.Require().InDelta(2, got.GiftBalance, 1e-9)
 }
 
 func (s *UserRepoSuite) TestSetBalance_RejectsNegativeValue() {

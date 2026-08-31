@@ -163,6 +163,7 @@ describe('admin RedeemView batch update', () => {
           code: 'CODE-1',
           type: 'balance',
           value: 10,
+          threshold_exempt: true,
           status: 'unused',
           used_by: null,
           used_at: null,
@@ -263,7 +264,73 @@ describe('admin RedeemView batch update', () => {
     await wrapper.get('[data-test="generate-codes-form"]').trigger('submit')
     await flushPromises()
 
-    expect(generateRedeemCodes).toHaveBeenCalledWith(1, 'balance', 10, undefined, undefined, undefined, true)
+    expect(generateRedeemCodes).toHaveBeenCalledWith(1, 'balance', 10, undefined, undefined, undefined, true, false)
+  })
+
+  it('shows gift credit only for balance codes, submits it, and resets it after generation', async () => {
+    generateRedeemCodes.mockResolvedValueOnce([
+      {
+        id: 9,
+        code: 'GIFT-CODE',
+        type: 'balance',
+        value: 10,
+        threshold_exempt: true,
+        status: 'unused',
+        used_by: null,
+        used_at: null,
+        created_at: '2026-01-01T00:00:00Z'
+      }
+    ])
+
+    const wrapper = mount(RedeemView, {
+      attachTo: document.body,
+      global: {
+        stubs: {
+          AppLayout: { template: '<div><slot /></div>' },
+          TablePageLayout: {
+            template: '<div><slot name="filters" /><slot name="table" /><slot name="pagination" /></div>'
+          },
+          DataTable: DataTableStub,
+          Pagination: true,
+          ConfirmDialog: true,
+          Select: SelectStub,
+          GroupBadge: true,
+          GroupOptionItem: true,
+          Icon: true,
+          Teleport: true
+        }
+      }
+    })
+
+    await flushPromises()
+    expect(wrapper.get('[data-test="gift-credit-badge"]').text()).toBe('admin.redeem.giftBadge')
+
+    await wrapper.get('[data-test="generate-codes-open"]').trigger('click')
+    await flushPromises()
+
+    const giftOption = wrapper.get('[data-test="threshold-exempt-option"]')
+    const giftToggle = wrapper.get<HTMLInputElement>('[data-test="threshold-exempt"]')
+    expect(giftToggle.element.checked).toBe(false)
+    expect(giftOption.classes()).toEqual(expect.arrayContaining(['w-full', 'min-w-0']))
+    expect(giftOption.find('[data-test="threshold-exempt-copy"]').classes()).toContain('min-w-0')
+
+    await giftToggle.setValue(true)
+    await wrapper.get('[data-test="generate-codes-form"]').trigger('submit')
+    await flushPromises()
+
+    expect(generateRedeemCodes).toHaveBeenCalledWith(1, 'balance', 10, undefined, undefined, undefined, false, true)
+
+    await wrapper.get('[data-test="generate-codes-open"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.get<HTMLInputElement>('[data-test="threshold-exempt"]').element.checked).toBe(false)
+
+    await wrapper.get('[data-test="generate-code-type"]').setValue('subscription')
+    await flushPromises()
+    expect(wrapper.find('[data-test="threshold-exempt"]').exists()).toBe(false)
+
+    await wrapper.get('[data-test="generate-code-type"]').setValue('concurrency')
+    await flushPromises()
+    expect(wrapper.find('[data-test="threshold-exempt"]').exists()).toBe(false)
   })
 
   it('shows selection checkboxes in the mobile redeem-code card layout', async () => {
@@ -329,6 +396,6 @@ describe('admin RedeemView batch update', () => {
     expect(wrapper.find('[data-test="single-use-per-user"]').exists()).toBe(false)
     await wrapper.get('[data-test="generate-codes-form"]').trigger('submit')
     await flushPromises()
-    expect(generateRedeemCodes).toHaveBeenCalledWith(1, 'invitation', 0, undefined, undefined, undefined, false)
+    expect(generateRedeemCodes).toHaveBeenCalledWith(1, 'invitation', 0, undefined, undefined, undefined, false, false)
   })
 })
