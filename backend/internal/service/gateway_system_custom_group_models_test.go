@@ -5,7 +5,9 @@ package service
 import (
 	"context"
 	"testing"
+	"time"
 
+	"github.com/Wei-Shaw/sub2api/internal/config"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/ctxkey"
 	"github.com/stretchr/testify/require"
 )
@@ -158,6 +160,73 @@ func TestGatewayBuildDynamicSystemCustomGroupCatalogFallsBackWhenPrivacyGateReje
 	require.True(t, advertised)
 	require.Len(t, candidates, 1)
 	require.Equal(t, int64(20), candidates[0].SourceGroup.ID)
+}
+
+func TestGatewayBuildDynamicSystemCustomGroupCatalogFallsBackWhenSchedulingThresholdBlocksFirstSource(t *testing.T) {
+	first := directSourceGroup(10, PlatformOpenAI)
+	second := directSourceGroup(20, PlatformOpenAI)
+	blocked := schedulableSystemCustomTestAccount(101, PlatformOpenAI, map[string]any{"shared": "gpt-5.4"})
+	blocked.Credentials["account_scheduling_threshold"] = 1
+	blocked.Extra = map[string]any{
+		"codex_7d_used_percent": 91.5,
+		"codex_7d_reset_at":     time.Now().UTC().Add(6 * time.Hour).Format(time.RFC3339),
+	}
+	repo := &systemCustomGroupBatchAccountRepoStub{accounts: []SystemCustomGroupSchedulableAccount{
+		{GroupID: 10, Account: blocked},
+		{GroupID: 20, Account: schedulableSystemCustomTestAccount(201, PlatformOpenAI, map[string]any{"shared": "gpt-5.4"})},
+	}}
+	cfg := &config.Config{}
+	rateLimits := NewRateLimitService(&rateLimitAccountRepoStub{}, nil, cfg, nil, nil)
+	rateLimits.SetSettingService(NewSettingService(nil, cfg))
+	svc := &GatewayService{accountRepo: repo, billingService: newTestBillingService(), rateLimitService: rateLimits}
+
+	catalog, err := svc.BuildSystemCustomGroupModelCatalog(context.Background(), []SystemCustomGroupSource{
+		{SourceGroupID: 10, Priority: 1, SourceGroup: first},
+		{SourceGroupID: 20, Priority: 2, SourceGroup: second},
+	}, "")
+
+	require.NoError(t, err)
+	candidates, advertised := catalog.Resolve("shared")
+	require.True(t, advertised)
+	require.Len(t, candidates, 1)
+	require.Equal(t, int64(20), candidates[0].SourceGroup.ID)
+	require.Nil(t, repo.accounts[0].Account.TempUnschedulableUntil, "catalog filtering must not mutate the repository snapshot")
+	require.Equal(t, 1, repo.calls, "threshold filtering must reuse the one batched account snapshot")
+}
+
+func TestGatewayBuildDynamicSystemCustomGroupCatalogFallsBackWhenGrokFreeQuotaBlocksFirstSource(t *testing.T) {
+	first := directSourceGroup(10, PlatformGrok)
+	second := directSourceGroup(20, PlatformGrok)
+	blocked := schedulableSystemCustomTestAccount(91001, PlatformGrok, map[string]any{"shared": "grok-3-mini"})
+	blocked.Type = AccountTypeOAuth
+	blocked.Credentials["subscription_tier"] = "free"
+	available := schedulableSystemCustomTestAccount(92001, PlatformGrok, map[string]any{"shared": "grok-3-mini"})
+	available.Type = AccountTypeOAuth
+	available.Credentials["subscription_tier"] = "pro"
+	gatewayGrokFreeQuotaGateCache.Store(blocked.ID, grokFreeQuotaGateCacheEntry{
+		tokens: 475_000, checkedAt: time.Now().UTC(), known: true,
+	})
+	t.Cleanup(func() { gatewayGrokFreeQuotaGateCache.Delete(blocked.ID) })
+	repo := &systemCustomGroupBatchAccountRepoStub{accounts: []SystemCustomGroupSchedulableAccount{
+		{GroupID: 10, Account: blocked},
+		{GroupID: 20, Account: available},
+	}}
+	svc := &GatewayService{
+		accountRepo: repo, billingService: newTestBillingService(),
+		cfg: grokFreeQuotaTestConfig(), usageLogRepo: &grokFreeQuotaUsageRepoStub{},
+	}
+
+	catalog, err := svc.BuildSystemCustomGroupModelCatalog(context.Background(), []SystemCustomGroupSource{
+		{SourceGroupID: 10, Priority: 1, SourceGroup: first},
+		{SourceGroupID: 20, Priority: 2, SourceGroup: second},
+	}, "")
+
+	require.NoError(t, err)
+	candidates, advertised := catalog.Resolve("shared")
+	require.True(t, advertised)
+	require.Len(t, candidates, 1)
+	require.Equal(t, int64(20), candidates[0].SourceGroup.ID)
+	require.Equal(t, 1, repo.calls, "Grok quota filtering must reuse the one batched account snapshot")
 }
 
 func TestGatewayBuildDynamicSystemCustomGroupCatalogFallsBackWithDispatchProfitContext(t *testing.T) {

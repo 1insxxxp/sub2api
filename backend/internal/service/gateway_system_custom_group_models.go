@@ -140,11 +140,51 @@ func (s *GatewayService) BuildSystemCustomGroupModelCatalog(
 		}
 	}
 	accountsByGroup := make(map[int64][]Account, len(groupIDs))
-	accountSnapshot := make([]Account, 0, len(accounts))
+	uniqueAccountSnapshot := make([]Account, 0, len(accounts))
+	seenAccountIDs := make(map[int64]struct{}, len(accounts))
 	for i := range accounts {
 		entry := accounts[i]
 		accountsByGroup[entry.GroupID] = append(accountsByGroup[entry.GroupID], entry.Account)
-		accountSnapshot = append(accountSnapshot, entry.Account)
+		if _, exists := seenAccountIDs[entry.Account.ID]; exists {
+			continue
+		}
+		seenAccountIDs[entry.Account.ID] = struct{}{}
+		accountCopy := entry.Account
+		if accountCopy.Extra != nil {
+			accountCopy.Extra = cloneSystemCustomAccountMap(accountCopy.Extra)
+		}
+		uniqueAccountSnapshot = append(uniqueAccountSnapshot, accountCopy)
+	}
+	eligibleAccounts := s.filterAccountsBySchedulingThreshold(ctx, uniqueAccountSnapshot)
+	grokAccounts := make([]Account, 0, len(eligibleAccounts))
+	for i := range eligibleAccounts {
+		if eligibleAccounts[i].Platform == PlatformGrok {
+			grokAccounts = append(grokAccounts, eligibleAccounts[i])
+		}
+	}
+	grokAccounts = s.filterGrokFreeQuotaAccountsForGateway(ctx, grokAccounts)
+	grokEligibleIDs := make(map[int64]struct{}, len(grokAccounts))
+	for i := range grokAccounts {
+		grokEligibleIDs[grokAccounts[i].ID] = struct{}{}
+	}
+	eligibleByID := make(map[int64]Account, len(eligibleAccounts))
+	accountSnapshot := make([]Account, 0, len(eligibleAccounts))
+	for i := range eligibleAccounts {
+		account := eligibleAccounts[i]
+		if account.Platform == PlatformGrok {
+			if _, eligible := grokEligibleIDs[account.ID]; !eligible {
+				continue
+			}
+		}
+		eligibleByID[account.ID] = account
+		accountSnapshot = append(accountSnapshot, account)
+	}
+	candidateAccountsByGroup := make(map[int64][]Account, len(groupIDs))
+	for i := range accounts {
+		entry := accounts[i]
+		if account, eligible := eligibleByID[entry.Account.ID]; eligible {
+			candidateAccountsByGroup[entry.GroupID] = append(candidateAccountsByGroup[entry.GroupID], account)
+		}
 	}
 	ctx = s.withWindowCostPrefetch(ctx, accountSnapshot)
 	ctx = s.withRPMPrefetch(ctx, accountSnapshot)
@@ -164,7 +204,7 @@ func (s *GatewayService) BuildSystemCustomGroupModelCatalog(
 		allGroupAccounts := systemCustomCatalogAccountsForPlatform(accountsByGroup[group.ID], group.Platform)
 		advertisedModels := systemCustomAdvertisedModels(group, allGroupAccounts)
 		validSource := isDirectSystemCustomSource(group) && IsGroupContextValid(group)
-		candidateAccounts := systemCustomAccountsForPlatform(accountsByGroup[group.ID], group.Platform)
+		candidateAccounts := systemCustomAccountsForPlatform(candidateAccountsByGroup[group.ID], group.Platform)
 		sourceCtx := s.withGroupContext(ctx, group)
 		groupID := group.ID
 		sourceCtx = s.withGatewayProfitControlGate(sourceCtx, &groupID)
@@ -192,6 +232,18 @@ func (s *GatewayService) BuildSystemCustomGroupModelCatalog(
 		}
 	}
 	return catalog, nil
+}
+
+func cloneSystemCustomAccountMap(source map[string]any) map[string]any {
+	cloned := make(map[string]any, len(source))
+	for key, value := range source {
+		if nested, ok := value.(map[string]any); ok {
+			cloned[key] = cloneSystemCustomAccountMap(nested)
+			continue
+		}
+		cloned[key] = value
+	}
+	return cloned
 }
 
 func systemCustomAdvertisedModels(group *Group, accounts []Account) []string {
