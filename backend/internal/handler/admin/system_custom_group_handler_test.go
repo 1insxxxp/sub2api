@@ -11,6 +11,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
 	"github.com/Wei-Shaw/sub2api/internal/service"
@@ -148,6 +149,178 @@ func TestSystemCustomGroupHandlerSixEndpointsSuccess(t *testing.T) {
 			if tt.wantData != "" {
 				require.JSONEq(t, tt.wantData, string(envelope.Data))
 			}
+		})
+	}
+}
+
+func TestSystemCustomGroupHandlerCreateAndUpdateDecodeOrderedSourceGroupIDs(t *testing.T) {
+	tests := []struct {
+		name   string
+		method string
+		path   string
+		body   string
+	}{
+		{
+			name:   "create",
+			method: http.MethodPost,
+			path:   "/",
+			body:   `{"name":"Monthly","default_validity_days":30,"source_group_ids":[9,7,12]}`,
+		},
+		{
+			name:   "update",
+			method: http.MethodPut,
+			path:   "/42",
+			body:   `{"name":"Monthly","default_validity_days":30,"source_group_ids":[9,7,12]}`,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			svc := completeSystemCustomGroupAdminServiceStub()
+			var got []int64
+			svc.createFn = func(_ context.Context, req service.CreateSystemCustomGroupRequest) (*service.SystemCustomGroup, error) {
+				got = append([]int64(nil), req.SourceGroupIDs...)
+				return &service.SystemCustomGroup{}, nil
+			}
+			svc.updateFn = func(_ context.Context, _ int64, req service.UpdateSystemCustomGroupRequest) (*service.SystemCustomGroup, error) {
+				got = append([]int64(nil), req.SourceGroupIDs...)
+				return &service.SystemCustomGroup{}, nil
+			}
+
+			recorder := performSystemCustomGroupRequest(t, newSystemCustomGroupHandlerTestRouter(svc), tt.method, tt.path, tt.body)
+
+			require.Contains(t, []int{http.StatusOK, http.StatusCreated}, recorder.Code)
+			require.Equal(t, []int64{9, 7, 12}, got)
+		})
+	}
+}
+
+func TestSystemCustomGroupHandlerKeepsLegacyModelsRequestCompatibility(t *testing.T) {
+	svc := completeSystemCustomGroupAdminServiceStub()
+	var got []service.SystemCustomGroupModelInput
+	svc.createFn = func(_ context.Context, req service.CreateSystemCustomGroupRequest) (*service.SystemCustomGroup, error) {
+		got = append([]service.SystemCustomGroupModelInput(nil), req.Models...)
+		return &service.SystemCustomGroup{}, nil
+	}
+	body := `{"name":"Monthly","default_validity_days":30,"models":[{"public_model":"sonnet","source_group_id":7,"source_model":"claude-sonnet","enabled":true}]}`
+
+	recorder := performSystemCustomGroupRequest(t, newSystemCustomGroupHandlerTestRouter(svc), http.MethodPost, "/", body)
+
+	require.Equal(t, http.StatusCreated, recorder.Code)
+	require.Equal(t, []service.SystemCustomGroupModelInput{{
+		PublicModel: "sonnet", SourceGroupID: 7, SourceModel: "claude-sonnet", Enabled: true,
+	}}, got)
+}
+
+func TestSystemCustomGroupHandlerCreateGetUpdateExposeSourceBasedAggregate(t *testing.T) {
+	createdAt := time.Date(2026, time.August, 31, 9, 30, 0, 0, time.UTC)
+	updatedAt := createdAt.Add(time.Hour)
+	aggregate := &service.SystemCustomGroup{
+		Group: service.Group{ID: 42, Name: "Tavern Monthly", SystemCustomRoutingEnabled: true},
+		Sources: []service.SystemCustomGroupSource{
+			{
+				ID: 201, GroupID: 42, SourceGroupID: 9, Priority: 0, CreatedAt: createdAt, UpdatedAt: updatedAt,
+				SourceGroup: &service.Group{ID: 9, Name: "Claude Primary", Description: "primary", Platform: service.PlatformAnthropic, Status: service.StatusActive, SubscriptionType: service.SubscriptionTypeStandard},
+			},
+			{ID: 202, GroupID: 42, SourceGroupID: 7, Priority: 1, CreatedAt: createdAt, UpdatedAt: updatedAt},
+			{
+				ID: 203, GroupID: 42, SourceGroupID: 12, Priority: 2, CreatedAt: createdAt, UpdatedAt: updatedAt,
+				SourceGroup: &service.Group{ID: 12, Name: "Inactive", Platform: service.PlatformOpenAI, Status: "inactive", SubscriptionType: service.SubscriptionTypeStandard},
+			},
+			{
+				ID: 204, GroupID: 42, SourceGroupID: 15, Priority: 3, CreatedAt: createdAt, UpdatedAt: updatedAt,
+				SourceGroup: &service.Group{ID: 15, Name: "Unsupported", Platform: service.PlatformKiro, Status: service.StatusActive, SubscriptionType: service.SubscriptionTypeStandard},
+			},
+		},
+		Models: []service.SystemCustomGroupModel{
+			{ID: 301, GroupID: 42, PublicModel: "Claude-Sonnet", SourceGroupID: 9, SourceModel: "claude-sonnet", Enabled: true},
+			{ID: 302, GroupID: 42, PublicModel: " claude-sonnet ", SourceGroupID: 7, SourceModel: "claude-sonnet", Enabled: true},
+			{ID: 303, GroupID: 42, PublicModel: "gpt", SourceGroupID: 12, SourceModel: "gpt", Enabled: true},
+			{ID: 304, GroupID: 42, PublicModel: "GPT", SourceGroupID: 15, SourceModel: "gpt", Enabled: false},
+			{ID: 305, GroupID: 42, PublicModel: "   ", SourceGroupID: 9, SourceModel: "blank", Enabled: true},
+		},
+	}
+	svc := completeSystemCustomGroupAdminServiceStub()
+	svc.createFn = func(context.Context, service.CreateSystemCustomGroupRequest) (*service.SystemCustomGroup, error) {
+		return aggregate, nil
+	}
+	svc.getFn = func(context.Context, int64) (*service.SystemCustomGroup, error) { return aggregate, nil }
+	svc.updateFn = func(context.Context, int64, service.UpdateSystemCustomGroupRequest) (*service.SystemCustomGroup, error) {
+		return aggregate, nil
+	}
+	router := newSystemCustomGroupHandlerTestRouter(svc)
+
+	for _, tt := range []struct {
+		name       string
+		method     string
+		path       string
+		body       string
+		wantStatus int
+	}{
+		{name: "create", method: http.MethodPost, path: "/", body: `{"name":"Monthly","source_group_ids":[9,7,12,15]}`, wantStatus: http.StatusCreated},
+		{name: "get", method: http.MethodGet, path: "/42", wantStatus: http.StatusOK},
+		{name: "update", method: http.MethodPut, path: "/42", body: `{"name":"Monthly","source_group_ids":[9,7,12,15]}`, wantStatus: http.StatusOK},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			recorder := performSystemCustomGroupRequest(t, router, tt.method, tt.path, tt.body)
+			require.Equal(t, tt.wantStatus, recorder.Code)
+			envelope := decodeSystemCustomGroupEnvelope(t, recorder)
+			var data struct {
+				Group struct {
+					ID int64 `json:"id"`
+				} `json:"group"`
+				Sources []struct {
+					ID            int64     `json:"id"`
+					GroupID       int64     `json:"group_id"`
+					SourceGroupID int64     `json:"source_group_id"`
+					Priority      int       `json:"priority"`
+					CreatedAt     time.Time `json:"created_at"`
+					UpdatedAt     time.Time `json:"updated_at"`
+					Group         *struct {
+						ID               int64  `json:"id"`
+						Name             string `json:"name"`
+						Description      string `json:"description"`
+						Platform         string `json:"platform"`
+						Status           string `json:"status"`
+						SubscriptionType string `json:"subscription_type"`
+					} `json:"group"`
+				} `json:"sources"`
+				Summary struct {
+					UniqueModels       int `json:"unique_models"`
+					FallbackRoutes     int `json:"fallback_routes"`
+					UnavailableSources int `json:"unavailable_sources"`
+					UnpricedRoutes     int `json:"unpriced_routes"`
+				} `json:"summary"`
+				Models []service.SystemCustomGroupModel `json:"models"`
+			}
+			require.NoError(t, json.Unmarshal(envelope.Data, &data))
+			require.Equal(t, int64(42), data.Group.ID)
+			require.Len(t, data.Sources, 4)
+			require.Equal(t, []int{0, 1, 2, 3}, []int{data.Sources[0].Priority, data.Sources[1].Priority, data.Sources[2].Priority, data.Sources[3].Priority})
+			require.Equal(t, int64(201), data.Sources[0].ID)
+			require.Equal(t, int64(42), data.Sources[0].GroupID)
+			require.Equal(t, int64(9), data.Sources[0].SourceGroupID)
+			require.Equal(t, createdAt, data.Sources[0].CreatedAt)
+			require.Equal(t, updatedAt, data.Sources[0].UpdatedAt)
+			require.Equal(t, &struct {
+				ID               int64  `json:"id"`
+				Name             string `json:"name"`
+				Description      string `json:"description"`
+				Platform         string `json:"platform"`
+				Status           string `json:"status"`
+				SubscriptionType string `json:"subscription_type"`
+			}{
+				ID: 9, Name: "Claude Primary", Description: "primary", Platform: service.PlatformAnthropic,
+				Status: service.StatusActive, SubscriptionType: service.SubscriptionTypeStandard,
+			}, data.Sources[0].Group)
+			require.Nil(t, data.Sources[1].Group)
+			require.Equal(t, 2, data.Summary.UniqueModels)
+			require.Equal(t, 1, data.Summary.FallbackRoutes)
+			require.Equal(t, 3, data.Summary.UnavailableSources)
+			require.Zero(t, data.Summary.UnpricedRoutes)
+			require.Len(t, data.Models, 5)
+			require.Equal(t, int64(301), data.Models[0].ID)
+			require.Equal(t, "Claude-Sonnet", data.Models[0].PublicModel)
 		})
 	}
 }

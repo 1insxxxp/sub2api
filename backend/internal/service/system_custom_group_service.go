@@ -538,6 +538,12 @@ func isDirectSystemCustomSource(group *Group) bool {
 		isConcreteRequestPlatform(group.Platform) && !group.SystemCustomRoutingEnabled
 }
 
+// IsEligibleSystemCustomSource exposes the source eligibility rule to API
+// mappers that report unavailable persisted references without querying again.
+func IsEligibleSystemCustomSource(group *Group) bool {
+	return isDirectSystemCustomSource(group)
+}
+
 func normalizeSystemCustomContainer(group *Group) {
 	group.Platform = PlatformComposite
 	group.SubscriptionType = SubscriptionTypeSubscription
