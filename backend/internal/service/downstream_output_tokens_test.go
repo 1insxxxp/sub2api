@@ -56,6 +56,56 @@ func TestDownstreamCollectorParsesCRLFSSEFramesAcrossWrites(t *testing.T) {
 	require.Equal(t, "visible", collector.VisibleText())
 }
 
+func TestDownstreamCollectorCountsOpenAIResponsesFunctionArguments(t *testing.T) {
+	collector := NewDownstreamOutputTokenCollector("gpt-5.6-terra")
+	collector.ObserveWritten([]byte("event: response.function_call_arguments.delta\ndata: {\"type\":\"response.function_call_arguments.delta\",\"delta\":\"{\\\"query\\\":\\\"status\\\"}\"}\n\n"))
+
+	require.Equal(t, `{"query":"status"}`, collector.VisibleText())
+	require.Greater(t, collector.TokenCount(), 0)
+}
+
+func TestDownstreamCollectorCountsOpenAIResponsesVisibleReasoningAndCustomToolInput(t *testing.T) {
+	collector := NewDownstreamOutputTokenCollector("gpt-5.6-terra")
+	collector.ObserveWritten([]byte("data: {\"type\":\"response.reasoning_summary_text.delta\",\"delta\":\"checking facts\"}\n\n"))
+	collector.ObserveWritten([]byte("data: {\"type\":\"response.custom_tool_call_input.delta\",\"delta\":\"patch body\"}\n\n"))
+
+	require.Equal(t, "checking factspatch body", collector.VisibleText())
+	require.Greater(t, collector.TokenCount(), 0)
+}
+
+func TestDownstreamCollectorCountsOpenAIChatToolArguments(t *testing.T) {
+	collector := NewDownstreamOutputTokenCollector("gpt-5.6-terra")
+	collector.ObserveWritten([]byte("data: {\"choices\":[{\"delta\":{\"tool_calls\":[{\"function\":{\"arguments\":\"{\\\"path\\\":\\\"README.md\\\"}\"}}]}}]}\n\n"))
+
+	require.Equal(t, `{"path":"README.md"}`, collector.VisibleText())
+	require.Greater(t, collector.TokenCount(), 0)
+}
+
+func TestDownstreamCollectorCountsOpenAIChatVisibleReasoning(t *testing.T) {
+	collector := NewDownstreamOutputTokenCollector("gpt-5.6-terra")
+	collector.ObserveWritten([]byte("data: {\"choices\":[{\"delta\":{\"reasoning_content\":\"checking facts\"}}]}\n\n"))
+
+	require.Equal(t, "checking facts", collector.VisibleText())
+	require.Greater(t, collector.TokenCount(), 0)
+}
+
+func TestDownstreamCollectorCountsAnthropicToolInput(t *testing.T) {
+	collector := NewDownstreamOutputTokenCollector("claude-opus-4-6")
+	collector.ObserveWritten([]byte("data: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"input_json_delta\",\"partial_json\":\"{\\\"query\\\":\\\"status\\\"}\"}}\n\n"))
+
+	require.Equal(t, `{"query":"status"}`, collector.VisibleText())
+	require.Greater(t, collector.TokenCount(), 0)
+}
+
+func TestDownstreamCollectorCountsVisibleReasoningButNotSignature(t *testing.T) {
+	collector := NewDownstreamOutputTokenCollector("claude-opus-4-6")
+	collector.ObserveWritten([]byte("data: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\"checking facts\"}}\n\n"))
+	collector.ObserveWritten([]byte("data: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"signature_delta\",\"signature\":\"opaque-signature\"}}\n\n"))
+
+	require.Equal(t, "checking facts", collector.VisibleText())
+	require.Greater(t, collector.TokenCount(), 0)
+}
+
 func TestDeliveredOutputTokensDoNotReplaceProviderUsage(t *testing.T) {
 	collector := NewDownstreamOutputTokenCollector("claude-opus-4-6")
 	collector.ObserveWritten([]byte("data: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"text_delta\",\"text\":\"visible\"}}\n\n"))

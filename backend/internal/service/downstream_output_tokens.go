@@ -9,8 +9,9 @@ import (
 	"github.com/tidwall/gjson"
 )
 
-// DownstreamOutputTokenCollector tracks only semantic text that was written to
-// the downstream client. It intentionally excludes reasoning and tool payloads.
+// DownstreamOutputTokenCollector tracks model-generated content that was
+// successfully written to the downstream client. Transport metadata and opaque
+// signatures are excluded.
 type DownstreamOutputTokenCollector struct {
 	mu         sync.Mutex
 	model      string
@@ -178,17 +179,31 @@ func (c *DownstreamOutputTokenCollector) appendSSEPayload(payload, eventType str
 		return
 	case "content_block_delta":
 		delta := data.Get("delta")
-		if delta.Get("type").String() == "text_delta" {
+		switch delta.Get("type").String() {
+		case "text_delta":
 			c.appendText(delta.Get("text").String())
+		case "thinking_delta":
+			c.appendText(delta.Get("thinking").String())
+		case "input_json_delta":
+			c.appendText(delta.Get("partial_json").String())
 		}
 		return
-	case "response.output_text.delta":
+	case "response.output_text.delta", "response.refusal.delta",
+		"response.reasoning_summary_text.delta", "response.reasoning_text.delta", "response.reasoning.delta",
+		"response.function_call_arguments.delta", "response.custom_tool_call_input.delta":
 		c.appendText(data.Get("delta").String())
 		return
 	}
 
 	data.Get("choices").ForEach(func(_, choice gjson.Result) bool {
-		c.appendText(choice.Get("delta.content").String())
+		delta := choice.Get("delta")
+		c.appendText(delta.Get("content").String())
+		c.appendText(delta.Get("reasoning_content").String())
+		delta.Get("tool_calls").ForEach(func(_, toolCall gjson.Result) bool {
+			c.appendText(toolCall.Get("function.arguments").String())
+			return true
+		})
+		c.appendText(delta.Get("function_call.arguments").String())
 		return true
 	})
 	data.Get("candidates").ForEach(func(_, candidate gjson.Result) bool {
