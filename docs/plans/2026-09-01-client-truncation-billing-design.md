@@ -9,7 +9,8 @@ When a downstream streaming client disconnects, stop the matching upstream gener
 - A canceled downstream request or downstream write failure freezes the delivered-output collector and cancels the upstream request context.
 - The usage record stores delivered output tokens in `output_tokens` and provider-reported output tokens in `upstream_output_tokens` when available.
 - For a disconnected stream, customer-facing output cost, total cost, and actual charge are calculated from delivered output tokens.
-- For a normally completed stream, provider usage remains authoritative for billing.
+- For a normally completed stream, provider usage remains authoritative for both the displayed output token count and billing.
+- The displayed output token count and `output_cost` must always use the same token basis. A completed stream must not display a tokenizer estimate while retaining provider-based cost, because that makes the UI derive a false effective unit price.
 - Account-side cost diagnostics continue to use provider usage when a terminal usage event was received. If cancellation prevents terminal usage, the best available partial usage is retained without inventing provider tokens.
 - HTTP/SSE and OpenAI-compatible streaming paths share the cancellation mechanism. WebSocket relays close or cancel their upstream turn when the downstream session disappears.
 
@@ -22,5 +23,4 @@ The server cannot reliably distinguish a user clicking Stop from a browser close
 - A regression test proves downstream cancellation reaches the upstream request promptly.
 - Billing tests prove a disconnected request with provider output larger than delivered output is charged using delivered output.
 - Normal completion tests prove unchanged provider-based billing.
-- Usage-log tests prove displayed output tokens and output cost use the same token basis.
-
+- Usage-log tests prove normal completion records provider output even when a delivered-token estimate exists, while disconnected records use delivered output for both display and cost.

@@ -58,3 +58,14 @@
 3. Run repository formatting and static checks used by the project.
 4. Inspect `git diff --check` and the final diff for unrelated changes.
 
+### Task 5: Keep displayed unit prices stable
+
+**Files:**
+- Modify: `backend/internal/service/downstream_output_tokens.go`
+- Test: `backend/internal/service/downstream_output_tokens_test.go`
+- Test: gateway and OpenAI usage billing tests
+
+1. Add failing tests proving a normally completed stream records provider output tokens even when a delivered-token estimate exists.
+2. Keep disconnected streams recording delivered output tokens.
+3. Use the same selection rule for customer billing and usage-log display so `output_cost / output_tokens` resolves to the configured unit price.
+4. Run focused token-selection and usage-billing tests, then compile the service and handler packages.
