@@ -351,20 +351,14 @@ func recordedOutputTokens(result *ForwardResult) int {
 	if result == nil {
 		return 0
 	}
-	if result.DeliveredOutputTokens != nil {
-		return *result.DeliveredOutputTokens
-	}
-	return result.Usage.OutputTokens
+	return customerBillableOutputTokens(result.ClientDisconnect, result.DeliveredOutputTokens, result.Usage.OutputTokens)
 }
 
 func recordedOpenAIOutputTokens(result *OpenAIForwardResult) int {
 	if result == nil {
 		return 0
 	}
-	if result.DeliveredOutputTokens != nil {
-		return *result.DeliveredOutputTokens
-	}
-	return result.Usage.OutputTokens
+	return customerBillableOutputTokens(result.ClientDisconnect, result.DeliveredOutputTokens, result.Usage.OutputTokens)
 }
 
 func customerBillableOutputTokens(clientDisconnect bool, delivered *int, provider int) int {

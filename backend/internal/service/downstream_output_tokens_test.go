@@ -152,7 +152,7 @@ func TestDownstreamCollectorCountsVisibleReasoningButNotSignature(t *testing.T) 
 	require.Greater(t, collector.TokenCount(), 0)
 }
 
-func TestDeliveredOutputTokensDoNotReplaceProviderUsage(t *testing.T) {
+func TestCompletedStreamRecordsProviderOutputTokens(t *testing.T) {
 	collector := NewDownstreamOutputTokenCollector("claude-opus-4-6")
 	collector.ObserveWritten([]byte("data: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"text_delta\",\"text\":\"visible\"}}\n\n"))
 	result := &ForwardResult{Usage: ClaudeUsage{OutputTokens: 321}}
@@ -162,7 +162,8 @@ func TestDeliveredOutputTokensDoNotReplaceProviderUsage(t *testing.T) {
 	require.Equal(t, 321, result.Usage.OutputTokens)
 	require.NotNil(t, result.DeliveredOutputTokens)
 	require.Equal(t, collector.TokenCount(), *result.DeliveredOutputTokens)
-	require.Equal(t, collector.TokenCount(), recordedOutputTokens(result))
+	require.Equal(t, 321, recordedOutputTokens(result))
+	require.Equal(t, 321, customerBillableOutputTokens(result.ClientDisconnect, result.DeliveredOutputTokens, result.Usage.OutputTokens))
 }
 
 func TestApplyDeliveredOutputTokensMarksFrozenCollectorAsClientDisconnect(t *testing.T) {
@@ -195,6 +196,7 @@ func TestUsageLogSeparatesDeliveredAndProviderOutputTokens(t *testing.T) {
 		RequestID:             "delivered-output-test",
 		Model:                 "claude-opus-4-6",
 		Stream:                true,
+		ClientDisconnect:      true,
 		DeliveredOutputTokens: &delivered,
 		Usage:                 ClaudeUsage{InputTokens: 10, OutputTokens: 321},
 	}
@@ -219,6 +221,49 @@ func TestUsageLogSeparatesDeliveredAndProviderOutputTokens(t *testing.T) {
 
 	require.Equal(t, 7, usageLog.OutputTokens)
 	require.Equal(t, 321, usageLog.UpstreamOutputTokens)
+}
+
+func TestCompletedUsageLogUsesProviderOutputTokens(t *testing.T) {
+	delivered := 7
+	result := &ForwardResult{
+		RequestID:             "completed-output-test",
+		Model:                 "claude-opus-4-6",
+		Stream:                true,
+		DeliveredOutputTokens: &delivered,
+		Usage:                 ClaudeUsage{InputTokens: 10, OutputTokens: 321},
+	}
+	groupID := int64(1)
+	usageLog := (&GatewayService{}).buildRecordUsageLog(
+		context.Background(),
+		&recordUsageCoreInput{},
+		result,
+		&APIKey{ID: 1, GroupID: &groupID, Group: &Group{ID: groupID}},
+		&User{ID: 2},
+		&Account{ID: 3},
+		nil,
+		result.Model,
+		1,
+		1,
+		1,
+		BillingTypeBalance,
+		false,
+		&CostBreakdown{},
+		&recordUsageOpts{},
+	)
+
+	require.Equal(t, 321, usageLog.OutputTokens)
+	require.Equal(t, 321, usageLog.UpstreamOutputTokens)
+}
+
+func TestCompletedOpenAIStreamRecordsProviderOutputTokens(t *testing.T) {
+	delivered := 7
+	result := &OpenAIForwardResult{
+		DeliveredOutputTokens: &delivered,
+		Usage:                 OpenAIUsage{OutputTokens: 321},
+	}
+
+	require.Equal(t, 321, recordedOpenAIOutputTokens(result))
+	require.Equal(t, 321, customerBillableOutputTokens(result.ClientDisconnect, result.DeliveredOutputTokens, result.Usage.OutputTokens))
 }
 
 func TestCustomerBillableOutputTokensUsesDeliveredOnlyAfterDisconnect(t *testing.T) {
