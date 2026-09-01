@@ -76,7 +76,11 @@ function simulateGuard(
   const canAccessManagerPage = authState.canAccessManagerPage ?? canAccessAdminWorkbench
 
   if (toPath === '/setup' && authState.setupNeedsSetup === false) {
-    return resolveCompletedSetupRedirectPath(authState.isAuthenticated, authState.isAdmin)
+    return resolveCompletedSetupRedirectPath(
+      authState.isAuthenticated,
+      authState.isAdmin,
+      authState.canAccessAdminWorkbench
+    )
   }
 
   // 不需要认证的路由
@@ -122,7 +126,7 @@ function simulateGuard(
 
   // 需要管理员但不是管理员
   if (requiresAdmin && !authState.isAdmin) {
-    return authState.backendModeEnabled && canAccessAdminWorkbench ? '/admin/workbench' : '/dashboard'
+    return canAccessAdminWorkbench ? '/admin/workbench' : '/dashboard'
   }
 
   if (requiresAdminWorkbench && !canAccessAdminWorkbench) {
@@ -192,6 +196,7 @@ describe('路由守卫逻辑', () => {
     const authState: MockAuthState = {
       isAuthenticated: false,
       isAdmin: false,
+      canAccessAdminWorkbench: false,
       isSimpleMode: false,
       backendModeEnabled: false,
       hasPendingAuthSession: false,
@@ -224,6 +229,7 @@ describe('路由守卫逻辑', () => {
     const authState: MockAuthState = {
       isAuthenticated: true,
       isAdmin: false,
+      canAccessAdminWorkbench: false,
       isSimpleMode: false,
       backendModeEnabled: false,
       hasPendingAuthSession: false,
@@ -270,9 +276,9 @@ describe('路由守卫逻辑', () => {
       expect(redirect).toBeNull()
     })
 
-    it('访问完整后台被拒绝，重定向到 /dashboard', () => {
+    it('访问完整后台被拒绝，重定向到管理员页面', () => {
       const redirect = simulateGuard('/admin/users', { requiresAdmin: true }, authState)
-      expect(redirect).toBe('/dashboard')
+      expect(redirect).toBe('/admin/workbench')
     })
 
     it('访问 /login 重定向到 /admin/workbench', () => {
@@ -287,6 +293,7 @@ describe('路由守卫逻辑', () => {
     const authState: MockAuthState = {
       isAuthenticated: true,
       isAdmin: true,
+      canAccessAdminWorkbench: true,
       isSimpleMode: false,
       backendModeEnabled: false,
       hasPendingAuthSession: false,
@@ -308,6 +315,32 @@ describe('路由守卫逻辑', () => {
     })
   })
 
+  describe('已认证二级管理员', () => {
+    const authState: MockAuthState = {
+      isAuthenticated: true,
+      isAdmin: false,
+      canAccessAdminWorkbench: true,
+      isSimpleMode: false,
+      backendModeEnabled: false,
+      hasPendingAuthSession: false,
+    }
+
+    it('访问 /login 重定向到管理员页面', () => {
+      const redirect = simulateGuard('/login', { requiresAuth: false }, authState)
+      expect(redirect).toBe('/admin/workbench')
+    })
+
+    it('访问管理员页面允许通过', () => {
+      const redirect = simulateGuard('/admin/workbench', { requiresAdminWorkbench: true }, authState)
+      expect(redirect).toBeNull()
+    })
+
+    it('访问完整后台被重定向回管理员页面', () => {
+      const redirect = simulateGuard('/admin/users', { requiresAdmin: true }, authState)
+      expect(redirect).toBe('/admin/workbench')
+    })
+  })
+
   // --- 简易模式 ---
 
   describe('简易模式受限路由', () => {
@@ -315,6 +348,7 @@ describe('路由守卫逻辑', () => {
       const authState: MockAuthState = {
         isAuthenticated: true,
         isAdmin: false,
+        canAccessAdminWorkbench: false,
         isSimpleMode: true,
         backendModeEnabled: false,
         hasPendingAuthSession: false,
@@ -327,6 +361,7 @@ describe('路由守卫逻辑', () => {
       const authState: MockAuthState = {
         isAuthenticated: true,
         isAdmin: false,
+        canAccessAdminWorkbench: false,
         isSimpleMode: true,
         backendModeEnabled: false,
         hasPendingAuthSession: false,
@@ -339,6 +374,7 @@ describe('路由守卫逻辑', () => {
       const authState: MockAuthState = {
         isAuthenticated: true,
         isAdmin: true,
+        canAccessAdminWorkbench: true,
         isSimpleMode: true,
         backendModeEnabled: false,
         hasPendingAuthSession: false,
@@ -351,6 +387,7 @@ describe('路由守卫逻辑', () => {
       const authState: MockAuthState = {
         isAuthenticated: true,
         isAdmin: true,
+        canAccessAdminWorkbench: true,
         isSimpleMode: true,
         backendModeEnabled: false,
         hasPendingAuthSession: false,
@@ -367,6 +404,7 @@ describe('路由守卫逻辑', () => {
       const authState: MockAuthState = {
         isAuthenticated: true,
         isAdmin: false,
+        canAccessAdminWorkbench: false,
         isSimpleMode: true,
         backendModeEnabled: false,
         hasPendingAuthSession: false,
@@ -379,6 +417,7 @@ describe('路由守卫逻辑', () => {
       const authState: MockAuthState = {
         isAuthenticated: true,
         isAdmin: false,
+        canAccessAdminWorkbench: false,
         isSimpleMode: true,
         backendModeEnabled: false,
         hasPendingAuthSession: false,
@@ -393,6 +432,7 @@ describe('路由守卫逻辑', () => {
       const authState: MockAuthState = {
         isAuthenticated: false,
         isAdmin: false,
+        canAccessAdminWorkbench: false,
         isSimpleMode: false,
         backendModeEnabled: true,
         hasPendingAuthSession: false,
@@ -405,6 +445,7 @@ describe('路由守卫逻辑', () => {
       const authState: MockAuthState = {
         isAuthenticated: false,
         isAdmin: false,
+        canAccessAdminWorkbench: false,
         isSimpleMode: false,
         backendModeEnabled: true,
         hasPendingAuthSession: false,
@@ -417,6 +458,7 @@ describe('路由守卫逻辑', () => {
       const authState: MockAuthState = {
         isAuthenticated: false,
         isAdmin: false,
+        canAccessAdminWorkbench: false,
         isSimpleMode: false,
         backendModeEnabled: true,
         hasPendingAuthSession: false,
@@ -429,6 +471,7 @@ describe('路由守卫逻辑', () => {
       const authState: MockAuthState = {
         isAuthenticated: false,
         isAdmin: false,
+        canAccessAdminWorkbench: false,
         isSimpleMode: false,
         backendModeEnabled: true,
         hasPendingAuthSession: false,
@@ -441,6 +484,7 @@ describe('路由守卫逻辑', () => {
       const authState: MockAuthState = {
         isAuthenticated: false,
         isAdmin: false,
+        canAccessAdminWorkbench: false,
         isSimpleMode: false,
         backendModeEnabled: true,
         hasPendingAuthSession: false,
@@ -454,6 +498,7 @@ describe('路由守卫逻辑', () => {
       const authState: MockAuthState = {
         isAuthenticated: true,
         isAdmin: true,
+        canAccessAdminWorkbench: true,
         isSimpleMode: false,
         backendModeEnabled: true,
         hasPendingAuthSession: false,
@@ -467,6 +512,7 @@ describe('路由守卫逻辑', () => {
       const authState: MockAuthState = {
         isAuthenticated: true,
         isAdmin: true,
+        canAccessAdminWorkbench: true,
         isSimpleMode: false,
         backendModeEnabled: true,
         hasPendingAuthSession: false,
@@ -479,6 +525,7 @@ describe('路由守卫逻辑', () => {
       const authState: MockAuthState = {
         isAuthenticated: true,
         isAdmin: true,
+        canAccessAdminWorkbench: true,
         isSimpleMode: false,
         backendModeEnabled: true,
         hasPendingAuthSession: false,
@@ -491,6 +538,7 @@ describe('路由守卫逻辑', () => {
       const authState: MockAuthState = {
         isAuthenticated: true,
         isAdmin: false,
+        canAccessAdminWorkbench: false,
         isSimpleMode: false,
         backendModeEnabled: true,
         hasPendingAuthSession: false,
@@ -529,6 +577,7 @@ describe('路由守卫逻辑', () => {
       const authState: MockAuthState = {
         isAuthenticated: true,
         isAdmin: false,
+        canAccessAdminWorkbench: false,
         isSimpleMode: false,
         backendModeEnabled: true,
         hasPendingAuthSession: false,
@@ -541,6 +590,7 @@ describe('路由守卫逻辑', () => {
       const authState: MockAuthState = {
         isAuthenticated: true,
         isAdmin: false,
+        canAccessAdminWorkbench: false,
         isSimpleMode: false,
         backendModeEnabled: true,
         hasPendingAuthSession: false,
@@ -605,6 +655,7 @@ describe('路由守卫逻辑', () => {
       const authState: MockAuthState = {
         isAuthenticated: false,
         isAdmin: false,
+        canAccessAdminWorkbench: false,
         isSimpleMode: false,
         backendModeEnabled: true,
         hasPendingAuthSession: false,
@@ -617,6 +668,7 @@ describe('路由守卫逻辑', () => {
       const authState: MockAuthState = {
         isAuthenticated: false,
         isAdmin: false,
+        canAccessAdminWorkbench: false,
         isSimpleMode: false,
         backendModeEnabled: true,
         hasPendingAuthSession: false,
@@ -629,6 +681,7 @@ describe('路由守卫逻辑', () => {
       const authState: MockAuthState = {
         isAuthenticated: false,
         isAdmin: false,
+        canAccessAdminWorkbench: false,
         isSimpleMode: false,
         backendModeEnabled: true,
         hasPendingAuthSession: false,
@@ -641,6 +694,7 @@ describe('路由守卫逻辑', () => {
       const authState: MockAuthState = {
         isAuthenticated: false,
         isAdmin: false,
+        canAccessAdminWorkbench: false,
         isSimpleMode: false,
         backendModeEnabled: true,
         hasPendingAuthSession: true,
@@ -653,6 +707,7 @@ describe('路由守卫逻辑', () => {
       const authState: MockAuthState = {
         isAuthenticated: false,
         isAdmin: false,
+        canAccessAdminWorkbench: false,
         isSimpleMode: false,
         backendModeEnabled: true,
         hasPendingAuthSession: false,

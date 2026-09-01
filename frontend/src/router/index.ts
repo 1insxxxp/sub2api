@@ -979,8 +979,8 @@ router.beforeEach(async (to, _from, next) => {
 
   // Check admin requirement
   if (requiresAdmin && !authStore.isAdmin) {
-    // User is authenticated but not admin, redirect to user dashboard
-    next(appStore.backendModeEnabled && authStore.canAccessAdminWorkbench ? '/admin/workbench' : '/dashboard')
+    // A sub-admin only has the scoped workbench, regardless of run mode.
+    next(authStore.canAccessAdminWorkbench ? '/admin/workbench' : '/dashboard')
     return
   }
 

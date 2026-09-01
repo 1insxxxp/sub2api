@@ -58,9 +58,9 @@ const dialogStub = {
 
 const baseUser = (overrides: Partial<AdminUser> = {}): AdminUser => ({
   id: 7,
-  username: 'transfer',
-  email: 'transfer@example.com',
-  role: 'user',
+  username: 'operator',
+  email: 'operator@example.com',
+  role: 'sub_admin',
   balance: 25,
   concurrency: 2,
   status: 'active',
@@ -68,7 +68,6 @@ const baseUser = (overrides: Partial<AdminUser> = {}): AdminUser => ({
   balance_notify_enabled: false,
   balance_notify_threshold: null,
   balance_notify_extra_emails: [],
-  balance_redeem_code_enabled: true,
   created_at: '2026-08-20T12:00:00Z',
   updated_at: '2026-08-20T12:00:00Z',
   notes: '',
@@ -82,7 +81,7 @@ const globalStubs = {
   UserAttributeForm: true
 }
 
-describe('admin user balance redeem code permission', () => {
+describe('admin user sub-admin role controls', () => {
   beforeEach(() => {
     createUser.mockReset()
     updateUser.mockReset()
@@ -92,44 +91,42 @@ describe('admin user balance redeem code permission', () => {
     updateUser.mockResolvedValue(baseUser())
   })
 
-  it('submits the enabled permission while creating a user', async () => {
+  it('submits the sub-admin role while creating a user', async () => {
     const wrapper = mount(UserCreateModal, {
       props: { show: true },
       global: { stubs: globalStubs }
     })
 
-    await wrapper.get('input[type="email"]').setValue('transfer@example.com')
+    await wrapper.get('input[type="email"]').setValue('operator@example.com')
     await wrapper.get('input[required][type="text"]').setValue('secret123')
-    await wrapper.get('[data-test="balance-redeem-code-toggle"]').setValue(true)
+    await wrapper.get('select').setValue('sub_admin')
     await wrapper.get('#create-user-form').trigger('submit')
     await flushPromises()
 
     expect(createUser).toHaveBeenCalledWith(
       expect.objectContaining({
-        email: 'transfer@example.com',
+        email: 'operator@example.com',
         password: 'secret123',
-        balance_redeem_code_enabled: true
+        role: 'sub_admin'
       })
     )
   })
 
-  it('submits permission changes while editing a user', async () => {
+  it('shows and submits the sub-admin role while editing a user', async () => {
     const wrapper = mount(UserEditModal, {
-      props: { show: true, user: baseUser({ balance_redeem_code_enabled: true }) },
+      props: { show: true, user: baseUser({ role: 'sub_admin' }) },
       global: { stubs: globalStubs }
     })
 
-    const toggle = wrapper.get<HTMLInputElement>('[data-test="balance-redeem-code-toggle"]')
-    expect(toggle.element.checked).toBe(true)
+    expect(wrapper.text()).toContain('admin.users.roles.sub_admin')
 
-    await toggle.setValue(false)
     await wrapper.get('#edit-user-form').trigger('submit')
     await flushPromises()
 
     expect(updateUser).toHaveBeenCalledWith(
       7,
       expect.objectContaining({
-        balance_redeem_code_enabled: false
+        role: 'sub_admin'
       })
     )
   })

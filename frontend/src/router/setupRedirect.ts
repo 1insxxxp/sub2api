@@ -1,7 +1,17 @@
-export function resolveCompletedSetupRedirectPath(isAuthenticated: boolean, isAdmin: boolean): string {
+export function resolveCompletedSetupRedirectPath(
+  isAuthenticated: boolean,
+  isAdmin: boolean,
+  canAccessAdminWorkbench = false
+): string {
   if (!isAuthenticated) {
     return '/login'
   }
 
-  return isAdmin ? '/admin/dashboard' : '/dashboard'
+  if (isAdmin) {
+    return '/admin/dashboard'
+  }
+  if (canAccessAdminWorkbench) {
+    return '/admin/workbench'
+  }
+  return '/dashboard'
 }

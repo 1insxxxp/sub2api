@@ -149,10 +149,13 @@ type UsageLog struct {
 	CustomGroupID  *int64
 	SubscriptionID *int64
 
-	InputTokens         int
-	OutputTokens        int
-	CacheCreationTokens int
-	CacheReadTokens     int
+	InputTokens  int
+	OutputTokens int
+	// UpstreamOutputTokens is the provider-reported output amount. For streaming
+	// text requests, OutputTokens can instead reflect text delivered downstream.
+	UpstreamOutputTokens int `json:"-"`
+	CacheCreationTokens  int
+	CacheReadTokens      int
 
 	CacheCreation5mTokens int `gorm:"column:cache_creation_5m_tokens"`
 	CacheCreation1hTokens int `gorm:"column:cache_creation_1h_tokens"`

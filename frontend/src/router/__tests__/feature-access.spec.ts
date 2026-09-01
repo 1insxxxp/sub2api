@@ -148,6 +148,32 @@ describe('feature route guard', () => {
     )
   })
 
+  it('marks the admin workbench route as workbench protected', () => {
+    expect(routerSource).toMatch(
+      /path: '\/admin\/workbench',[\s\S]*?requiresAdminWorkbench: true[\s\S]*?titleKey: 'adminWorkbench\.title'/,
+    )
+  })
+
+  it('allows a sub admin to open the admin workbench route', async () => {
+    authStore.canAccessAdminWorkbench = true
+
+    const { navigation, next } = runGuard({ requiresAdminWorkbench: true }, '/admin/workbench')
+    await navigation
+
+    expect(next).toHaveBeenCalledOnce()
+    expect(next).toHaveBeenCalledWith()
+  })
+
+  it('redirects a sub admin away from full admin routes', async () => {
+    authStore.canAccessAdminWorkbench = true
+
+    const { navigation, next } = runGuard({ requiresAdmin: true }, '/admin/users')
+    await navigation
+
+    expect(next).toHaveBeenCalledOnce()
+    expect(next).toHaveBeenCalledWith('/admin/workbench')
+  })
+
   it('waits for the first public-settings request before deciding payment access', async () => {
     const deferred = createDeferred<{ payment_enabled: boolean }>()
     appStore.fetchPublicSettings.mockImplementation(async () => {

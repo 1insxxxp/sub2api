@@ -612,6 +612,13 @@ type ForwardResult struct {
 	RequestID string
 	Usage     ClaudeUsage
 	Model     string
+	// UpstreamOutputTokens retains the final provider-reported amount when user
+	// billing is based on text successfully delivered to the client.
+	UpstreamOutputTokens int
+	// DownstreamOutputTokenBilling marks a streaming result whose billable
+	// output tokens were replaced by text successfully written to the client.
+	// It keeps retries/cleanup paths from overwriting UpstreamOutputTokens.
+	DownstreamOutputTokenBilling bool
 	// CacheCreationTTLTarget records the client's requested Anthropic prompt-cache TTL
 	// ("5m" or "1h") so billing can classify aggregate cache-creation usage when
 	// the upstream omits nested 5m/1h usage details.
