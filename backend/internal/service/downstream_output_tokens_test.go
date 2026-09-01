@@ -41,6 +41,21 @@ func TestDownstreamOutputTokenCollectorBuffersSplitSSEFrames(t *testing.T) {
 	require.Positive(t, collector.TokenCount())
 }
 
+func TestDownstreamOutputTokenCollectorCountsOpenAIEventLineDelta(t *testing.T) {
+	codec, err := tokenizer.Get(tokenizer.O200kBase)
+	require.NoError(t, err)
+
+	collector := NewDownstreamOutputTokenCollector("gpt-5.6-terra")
+	collector.ObserveWritten([]byte("event: response.reasoning_summary_text.delta\n" +
+		"data: {\"delta\":\"hidden reasoning\"}\n\n"))
+	collector.ObserveWritten([]byte("event: response.output_text.delta\n" +
+		"data: {\"delta\":\"visible response\"}\n\n"))
+
+	want, _, err := codec.Encode("visible response")
+	require.NoError(t, err)
+	require.Equal(t, len(want), collector.TokenCount())
+}
+
 func TestAttachDeliveredOutputTokenCollectorChargesOnlySuccessfulWrites(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	rec := httptest.NewRecorder()

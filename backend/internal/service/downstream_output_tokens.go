@@ -65,9 +65,14 @@ func (c *DownstreamOutputTokenCollector) TokenCount() int {
 }
 
 func (c *DownstreamOutputTokenCollector) appendSSEFrame(frame string) {
+	eventType := ""
 	var dataLines []string
 	for _, line := range strings.Split(frame, "\n") {
 		line = strings.TrimSuffix(line, "\r")
+		if strings.HasPrefix(line, "event:") {
+			eventType = strings.TrimSpace(strings.TrimPrefix(line, "event:"))
+			continue
+		}
 		if strings.HasPrefix(line, "data:") {
 			dataLines = append(dataLines, strings.TrimSpace(strings.TrimPrefix(line, "data:")))
 		}
@@ -75,17 +80,21 @@ func (c *DownstreamOutputTokenCollector) appendSSEFrame(frame string) {
 	if len(dataLines) == 0 {
 		return
 	}
-	c.appendSSEPayload(strings.Join(dataLines, "\n"))
+	c.appendSSEPayload(strings.Join(dataLines, "\n"), eventType)
 }
 
-func (c *DownstreamOutputTokenCollector) appendSSEPayload(payload string) {
+func (c *DownstreamOutputTokenCollector) appendSSEPayload(payload, eventType string) {
 	payload = strings.TrimSpace(payload)
 	if payload == "" || payload == "[DONE]" || !gjson.Valid(payload) {
 		return
 	}
 
 	data := gjson.Parse(payload)
-	switch data.Get("type").String() {
+	payloadType := strings.TrimSpace(data.Get("type").String())
+	if payloadType == "" {
+		payloadType = strings.TrimSpace(eventType)
+	}
+	switch payloadType {
 	case "content_block_start":
 		block := data.Get("content_block")
 		if block.Get("type").String() == "text" {

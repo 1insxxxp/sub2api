@@ -103,6 +103,12 @@ func (h *GatewayHandler) ChatCompletions(c *gin.Context) {
 
 	setOpsRequestContext(c, reqModel, reqStream)
 	setOpsEndpointContext(c, "", int16(service.RequestTypeFromLegacy(reqStream, false)))
+	var downstreamOutputTokens *service.DownstreamOutputTokenCollector
+	if reqStream {
+		var restoreDownstreamOutputTokens func()
+		downstreamOutputTokens, restoreDownstreamOutputTokens = service.AttachDownstreamOutputTokenCollector(c, reqModel)
+		defer restoreDownstreamOutputTokens()
+	}
 	pricingCtx, pricingAt := service.WithGatewayTokenRequestPricing(c.Request.Context())
 	c.Request = c.Request.WithContext(pricingCtx)
 
@@ -344,6 +350,7 @@ func (h *GatewayHandler) ChatCompletions(c *gin.Context) {
 
 		quotaPlatform := service.QuotaPlatform(c.Request.Context(), apiKey)
 		sessionID := service.ExtractClientSessionID(c)
+		service.ApplyDeliveredOutputTokenBilling(result, downstreamOutputTokens)
 		stampForwardRequestedReasoningEffort(result, service.RequestedReasoningEffortFromContext(c.Request.Context()))
 		h.submitUsageRecordTask(c.Request.Context(), func(ctx context.Context) {
 			if err := h.gatewayService.RecordUsage(ctx, &service.RecordUsageInput{
