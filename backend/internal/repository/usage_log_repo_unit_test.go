@@ -69,7 +69,7 @@ func TestBuildUsageLogBatchInsertQuery_UsesConflictDoNothing(t *testing.T) {
 }
 
 func TestUsageLogInsert_ThresholdExemptCostWiring(t *testing.T) {
-	const thresholdExemptCostArgIndex = 30
+	const thresholdExemptCostArgIndex = 29
 	createdAt := time.Date(2026, 8, 30, 12, 0, 0, 0, time.UTC)
 	log := &service.UsageLog{
 		UserID:              1,

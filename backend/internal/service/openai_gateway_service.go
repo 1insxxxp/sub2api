@@ -234,13 +234,7 @@ type OpenAIForwardResult struct {
 	RequestID  string
 	ResponseID string
 	Usage      OpenAIUsage
-	// UpstreamOutputTokens retains the final provider-reported amount when user
-	// billing is based on text successfully delivered to the client.
-	UpstreamOutputTokens int
-	// DownstreamOutputTokenBilling prevents repeated usage-submission paths from
-	// replacing the original provider amount after output has been normalized.
-	DownstreamOutputTokenBilling bool
-	Model                        string // 原始模型（用于响应和日志显示）
+	Model      string // 原始模型（用于响应和日志显示）
 	// BillingModel is the model used for cost calculation.
 	// When non-empty, CalculateCost uses this instead of Model.
 	// This is set by the Anthropic Messages conversion path where

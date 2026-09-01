@@ -509,12 +509,6 @@ func (h *OpenAIGatewayHandler) Responses(c *gin.Context) {
 
 	setOpsRequestContext(c, reqModel, reqStream)
 	setOpsEndpointContext(c, "", int16(service.RequestTypeFromLegacy(reqStream, false)))
-	var downstreamOutputTokens *service.DownstreamOutputTokenCollector
-	if reqStream {
-		var restoreDownstreamOutputTokens func()
-		downstreamOutputTokens, restoreDownstreamOutputTokens = service.AttachDownstreamOutputTokenCollector(c, reqModel)
-		defer restoreDownstreamOutputTokens()
-	}
 
 	if decision := h.checkSecurityAudit(c, reqLog, apiKey, subject, service.ContentModerationProtocolOpenAIResponses, reqModel, body); decision != nil && !decision.AllowNextStage {
 		h.openAISecurityAuditError(c, decision)
@@ -781,7 +775,6 @@ func (h *OpenAIGatewayHandler) Responses(c *gin.Context) {
 			if res == nil {
 				return
 			}
-			service.ApplyDeliveredOpenAIOutputTokenBilling(res, downstreamOutputTokens)
 			stampOpenAIRequestedReasoningEffort(res, c)
 			userAgent := c.GetHeader("User-Agent")
 			clientIP := ip.GetClientIP(c)
@@ -1175,12 +1168,6 @@ func (h *OpenAIGatewayHandler) Messages(c *gin.Context) {
 
 	setOpsRequestContext(c, reqModel, reqStream)
 	setOpsEndpointContext(c, "", int16(service.RequestTypeFromLegacy(reqStream, false)))
-	var downstreamOutputTokens *service.DownstreamOutputTokenCollector
-	if reqStream {
-		var restoreDownstreamOutputTokens func()
-		downstreamOutputTokens, restoreDownstreamOutputTokens = service.AttachDownstreamOutputTokenCollector(c, reqModel)
-		defer restoreDownstreamOutputTokens()
-	}
 
 	if decision := h.checkSecurityAudit(c, reqLog, apiKey, subject, service.ContentModerationProtocolAnthropicMessages, reqModel, body); decision != nil && !decision.AllowNextStage {
 		h.anthropicSecurityAuditError(c, decision)
@@ -1355,7 +1342,6 @@ func (h *OpenAIGatewayHandler) Messages(c *gin.Context) {
 			if res == nil {
 				return
 			}
-			service.ApplyDeliveredOpenAIOutputTokenBilling(res, downstreamOutputTokens)
 			stampOpenAIRequestedReasoningEffort(res, c)
 			userAgent := c.GetHeader("User-Agent")
 			clientIP := ip.GetClientIP(c)
