@@ -99,7 +99,7 @@ func (s *OpenAIGatewayService) forwardGrokResponses(
 		return nil, err
 	}
 
-	upstreamCtx, releaseUpstreamCtx := detachUpstreamContext(ctx)
+	upstreamCtx, releaseUpstreamCtx := detachStreamUpstreamContext(ctx, reqStream)
 	defer releaseUpstreamCtx()
 
 	proxyURL := ""

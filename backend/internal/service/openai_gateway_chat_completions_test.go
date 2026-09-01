@@ -413,6 +413,29 @@ func TestForwardAsChatCompletions_ClientDisconnectDrainsUpstreamUsage(t *testing
 	require.Equal(t, 4, result.Usage.CacheReadInputTokens)
 }
 
+func TestSendCCUpstreamRequest_StreamContextFollowsClientCancellation(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	recorder := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(recorder)
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1/chat/completions", nil)
+	upstream := &httpUpstreamRecorder{resp: &http.Response{
+		StatusCode: http.StatusOK,
+		Body:       io.NopCloser(strings.NewReader("")),
+	}}
+	svc := &OpenAIGatewayService{httpUpstream: upstream}
+	ctx, cancel := context.WithCancel(context.Background())
+
+	resp, err := svc.sendCCUpstreamRequest(ctx, c, &Account{ID: 1}, "https://example.test/v1/chat/completions", []byte(`{"stream":true}`), true, "token", "", "")
+	require.NoError(t, err)
+	require.NotNil(t, resp)
+	require.NotNil(t, upstream.lastReq)
+
+	cancel()
+	require.Eventually(t, func() bool {
+		return errors.Is(upstream.lastReq.Context().Err(), context.Canceled)
+	}, time.Second, 10*time.Millisecond)
+}
+
 func TestForwardAsChatCompletions_BufferedContextWindowResponseFailedReturnsErrorWithoutFailover(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 

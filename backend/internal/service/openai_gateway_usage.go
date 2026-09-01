@@ -170,7 +170,7 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 	}
 
 	// Calculate cost
-	tokens := UsageTokens{
+	providerTokens := UsageTokens{
 		InputTokens:         actualInputTokens,
 		ImageInputTokens:    result.Usage.ImageInputTokens,
 		OutputTokens:        result.Usage.OutputTokens,
@@ -178,6 +178,8 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 		CacheReadTokens:     result.Usage.CacheReadInputTokens,
 		ImageOutputTokens:   result.Usage.ImageOutputTokens,
 	}
+	tokens := providerTokens
+	tokens.OutputTokens = customerBillableOutputTokens(result.ClientDisconnect, result.DeliveredOutputTokens, result.Usage.OutputTokens)
 
 	// Get rate multiplier
 	multiplier := 1.0
@@ -454,7 +456,7 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 	if apiKey.GroupID != nil {
 		applyAccountStatsCost(ctx, usageLog, s.channelService, s.billingService,
 			account.ID, *apiKey.GroupID, result.UpstreamModel, result.Model,
-			tokens, cost.TotalCost,
+			providerTokens, cost.TotalCost,
 		)
 	}
 

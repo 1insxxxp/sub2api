@@ -401,6 +401,45 @@ func TestGatewayServiceRecordUsage_PeakRateAffectsTokenModeImageOutputTokens(t *
 	require.InDelta(t, expectedActual, userRepo.lastAmount, 1e-12)
 }
 
+func TestGatewayServiceRecordUsage_ClientDisconnectBillsDeliveredOutput(t *testing.T) {
+	groupID := int64(905)
+	delivered := 1935
+	usageRepo := &openAIRecordUsageLogRepoStub{inserted: true}
+	userRepo := &openAIRecordUsageUserRepoStub{}
+	svc := newGatewayRecordUsageServiceForTest(usageRepo, userRepo, &openAIRecordUsageSubRepoStub{})
+	svc.resolver = newOpenAITokenImageChannelPricingResolverForTest(t, groupID, "claude-opus-4-6")
+
+	err := svc.RecordUsage(context.Background(), &RecordUsageInput{
+		Result: &ForwardResult{
+			RequestID:             "gateway_client_disconnect_delivered_billing",
+			Model:                 "claude-opus-4-6",
+			Stream:                true,
+			ClientDisconnect:      true,
+			DeliveredOutputTokens: &delivered,
+			Usage: ClaudeUsage{
+				InputTokens:  23291,
+				OutputTokens: 13811,
+			},
+		},
+		APIKey: &APIKey{ID: 805, GroupID: i64p(groupID), Group: &Group{
+			ID: groupID, RateMultiplier: 3, SubscriptionType: SubscriptionTypeSubscription,
+		}},
+		User:    &User{ID: 605},
+		Account: &Account{ID: 705},
+	})
+
+	require.NoError(t, err)
+	require.NotNil(t, usageRepo.lastLog)
+	require.Equal(t, delivered, usageRepo.lastLog.OutputTokens)
+	require.Equal(t, 13811, usageRepo.lastLog.UpstreamOutputTokens)
+	expectedInputCost := float64(23291) * 3e-6
+	expectedOutputCost := float64(delivered) * 15e-6
+	require.InDelta(t, expectedOutputCost, usageRepo.lastLog.OutputCost, 1e-12)
+	require.InDelta(t, expectedInputCost+expectedOutputCost, usageRepo.lastLog.TotalCost, 1e-12)
+	require.InDelta(t, (expectedInputCost+expectedOutputCost)*3, usageRepo.lastLog.ActualCost, 1e-12)
+	require.InDelta(t, usageRepo.lastLog.ActualCost, userRepo.lastAmount, 1e-12)
+}
+
 func TestGatewayServiceRecordUsage_TimePricingUsesPricingAt(t *testing.T) {
 	groupID := int64(904)
 	requestStart := time.Date(2024, time.January, 2, 2, 0, 0, 0, time.UTC) // 上海 10:00

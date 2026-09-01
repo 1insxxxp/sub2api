@@ -689,10 +689,7 @@ func detachStreamUpstreamContext(ctx context.Context, stream bool) (context.Cont
 	if ctx == nil {
 		return context.Background(), func() {}
 	}
-	if !stream {
-		return ctx, func() {}
-	}
-	return context.WithoutCancel(ctx), func() {}
+	return ctx, func() {}
 }
 
 func detachUpstreamContext(ctx context.Context) (context.Context, context.CancelFunc) {
@@ -1047,7 +1044,8 @@ func (s *GatewayService) recordUsageCore(ctx context.Context, input *recordUsage
 
 	// 计算费用。调度阶段已做前置价格准入；这里再次校验，防止异步计费或
 	// 非标准调用路径把意外的价格缺失静默记录为 $0。
-	cost, err := s.calculateRecordUsageCostChecked(ctx, result, apiKey, billingModel, multiplier, imageMultiplier, pricingAt, opts)
+	billingResult := customerBillingForwardResult(result)
+	cost, err := s.calculateRecordUsageCostChecked(ctx, billingResult, apiKey, billingModel, multiplier, imageMultiplier, pricingAt, opts)
 	if err != nil {
 		return err
 	}
@@ -1062,7 +1060,7 @@ func (s *GatewayService) recordUsageCore(ctx context.Context, input *recordUsage
 		result.ImageCount > 0 || result.AudioUsage != nil || result.SearchCount > 0,
 	); responseModel != "" && !strings.EqualFold(responseModel, strings.TrimSpace(billingModel)) {
 		if identified, responseChannelPriced := s.hasIdentifiedResponseModelPricing(ctx, responseModel, apiKey); identified {
-			responseCost := s.calculateRecordUsageCost(ctx, result, apiKey, responseModel, multiplier, imageMultiplier, pricingAt, opts)
+			responseCost := s.calculateRecordUsageCost(ctx, billingResult, apiKey, responseModel, multiplier, imageMultiplier, pricingAt, opts)
 			baselineChannelPriced := s.resolveChannelPricing(ctx, billingModel, apiKey) != nil
 			if responseModelBillingAdoptable(cost, responseCost, baselineChannelPriced, responseChannelPriced) {
 				// billingModel 到此为止只是定价查表的入参，后续流程只消费 cost，

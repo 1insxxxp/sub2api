@@ -144,11 +144,11 @@ func TestDetachUpstreamContextSemantics(t *testing.T) {
 			"非流式时该函数原样返回请求 context —— 生图路径不能用它")
 	})
 
-	t.Run("detachStreamUpstreamContext_detaches_when_streaming", func(t *testing.T) {
+	t.Run("detachStreamUpstreamContext_keeps_cancel_when_streaming", func(t *testing.T) {
 		ctx, cancel := context.WithCancel(context.Background())
 		cancel()
-		detached, release := detachStreamUpstreamContext(ctx, true)
+		attached, release := detachStreamUpstreamContext(ctx, true)
 		defer release()
-		require.NoError(t, detached.Err())
+		require.ErrorIs(t, attached.Err(), context.Canceled)
 	})
 }

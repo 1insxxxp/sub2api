@@ -381,7 +381,7 @@ func (s *OpenAIGatewayService) forwardOpenAIPassthrough(
 			actualModel = reqModel
 		}
 		SetOpsUpstreamModel(c, actualModel)
-		upstreamCtx, releaseUpstreamCtx := detachUpstreamContext(ctx)
+		upstreamCtx, releaseUpstreamCtx := detachStreamUpstreamContext(ctx, reqStream)
 		upstreamReq, buildErr := s.buildUpstreamRequestOpenAIPassthrough(upstreamCtx, c, account, body, token)
 		releaseUpstreamCtx()
 		if buildErr != nil {

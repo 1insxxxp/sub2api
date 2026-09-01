@@ -180,7 +180,7 @@ func (s *OpenAIGatewayService) sendCCUpstreamRequest(
 	userAgent string,
 	grokCacheIdentity string,
 ) (*http.Response, error) {
-	upstreamCtx, releaseUpstreamCtx := detachUpstreamContext(ctx)
+	upstreamCtx, releaseUpstreamCtx := detachStreamUpstreamContext(ctx, stream)
 	upstreamReq, err := http.NewRequestWithContext(upstreamCtx, http.MethodPost, targetURL, bytes.NewReader(body))
 	releaseUpstreamCtx()
 	if err != nil {

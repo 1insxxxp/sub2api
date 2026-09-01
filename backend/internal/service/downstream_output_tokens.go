@@ -13,12 +13,14 @@ import (
 // successfully written to the downstream client. Transport metadata and opaque
 // signatures are excluded.
 type DownstreamOutputTokenCollector struct {
-	mu         sync.Mutex
-	model      string
-	pending    string
-	text       strings.Builder
-	frozen     bool
-	cancelDone <-chan struct{}
+	mu                 sync.Mutex
+	model              string
+	pending            string
+	text               strings.Builder
+	frozen             bool
+	cancelDone         <-chan struct{}
+	upstreamCancel     context.CancelFunc
+	upstreamCancelOnce sync.Once
 }
 
 func NewDownstreamOutputTokenCollector(model string) *DownstreamOutputTokenCollector {
@@ -73,6 +75,32 @@ func (c *DownstreamOutputTokenCollector) bindCancellation(done <-chan struct{}) 
 	c.mu.Unlock()
 }
 
+func (c *DownstreamOutputTokenCollector) bindUpstreamCancel(cancel context.CancelFunc) {
+	if c == nil || cancel == nil {
+		return
+	}
+	c.mu.Lock()
+	c.upstreamCancel = cancel
+	frozen := c.frozen
+	c.mu.Unlock()
+	if frozen {
+		c.cancelUpstream()
+	}
+}
+
+func (c *DownstreamOutputTokenCollector) cancelUpstream() {
+	if c == nil {
+		return
+	}
+	c.mu.Lock()
+	cancel := c.upstreamCancel
+	c.mu.Unlock()
+	if cancel == nil {
+		return
+	}
+	c.upstreamCancelOnce.Do(cancel)
+}
+
 func (c *DownstreamOutputTokenCollector) freezeIfCanceledLocked() {
 	if c.frozen || c.cancelDone == nil {
 		return
@@ -95,6 +123,7 @@ func (c *DownstreamOutputTokenCollector) Freeze() {
 	c.frozen = true
 	c.pending = ""
 	c.mu.Unlock()
+	c.cancelUpstream()
 }
 
 func (c *DownstreamOutputTokenCollector) Frozen() bool {
@@ -259,20 +288,28 @@ func AttachDownstreamOutputTokenCollector(c *gin.Context, model string) (*Downst
 	wrapped := &downstreamOutputTokenResponseWriter{ResponseWriter: original, collector: collector}
 	c.Writer = wrapped
 	stopWatch := make(chan struct{})
+	var cancelForward context.CancelFunc
 	if c.Request != nil {
-		collector.bindCancellation(c.Request.Context().Done())
+		forwardContext, cancel := context.WithCancel(c.Request.Context())
+		cancelForward = cancel
+		c.Request = c.Request.WithContext(forwardContext)
+		collector.bindCancellation(forwardContext.Done())
+		collector.bindUpstreamCancel(cancel)
 		go func(ctx context.Context) {
 			select {
 			case <-ctx.Done():
 				collector.Freeze()
 			case <-stopWatch:
 			}
-		}(c.Request.Context())
+		}(forwardContext)
 	}
 	var restoreOnce sync.Once
 	return collector, func() {
 		restoreOnce.Do(func() {
 			close(stopWatch)
+			if cancelForward != nil {
+				cancelForward()
+			}
 			if c.Writer == wrapped {
 				c.Writer = original
 			}
@@ -283,7 +320,13 @@ func AttachDownstreamOutputTokenCollector(c *gin.Context, model string) (*Downst
 // ApplyDeliveredOutputTokens snapshots display-only output without mutating
 // provider usage, which remains authoritative for billing.
 func ApplyDeliveredOutputTokens(result *ForwardResult, collector *DownstreamOutputTokenCollector) {
-	if result == nil || result.DeliveredOutputTokens != nil || collector == nil || result.ImageCount > 0 || result.Usage.ImageOutputTokens > 0 {
+	if result == nil || collector == nil {
+		return
+	}
+	if collector.Frozen() {
+		result.ClientDisconnect = true
+	}
+	if result.DeliveredOutputTokens != nil || result.ImageCount > 0 || result.Usage.ImageOutputTokens > 0 {
 		return
 	}
 	delivered := collector.TokenCount()
@@ -291,7 +334,13 @@ func ApplyDeliveredOutputTokens(result *ForwardResult, collector *DownstreamOutp
 }
 
 func ApplyDeliveredOpenAIOutputTokens(result *OpenAIForwardResult, collector *DownstreamOutputTokenCollector) {
-	if result == nil || result.DeliveredOutputTokens != nil || collector == nil || result.ImageCount > 0 || result.Usage.ImageOutputTokens > 0 {
+	if result == nil || collector == nil {
+		return
+	}
+	if collector.Frozen() {
+		result.ClientDisconnect = true
+	}
+	if result.DeliveredOutputTokens != nil || result.ImageCount > 0 || result.Usage.ImageOutputTokens > 0 {
 		return
 	}
 	delivered := collector.TokenCount()
@@ -316,4 +365,28 @@ func recordedOpenAIOutputTokens(result *OpenAIForwardResult) int {
 		return *result.DeliveredOutputTokens
 	}
 	return result.Usage.OutputTokens
+}
+
+func customerBillableOutputTokens(clientDisconnect bool, delivered *int, provider int) int {
+	if !clientDisconnect || delivered == nil {
+		return provider
+	}
+	if *delivered < 0 {
+		return 0
+	}
+	return *delivered
+}
+
+func customerBillingForwardResult(result *ForwardResult) *ForwardResult {
+	if result == nil {
+		return nil
+	}
+	outputTokens := customerBillableOutputTokens(result.ClientDisconnect, result.DeliveredOutputTokens, result.Usage.OutputTokens)
+	if outputTokens == result.Usage.OutputTokens {
+		return result
+	}
+	clone := *result
+	clone.Usage = result.Usage
+	clone.Usage.OutputTokens = outputTokens
+	return &clone
 }
