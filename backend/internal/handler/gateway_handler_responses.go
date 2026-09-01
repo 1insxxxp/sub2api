@@ -109,6 +109,12 @@ func (h *GatewayHandler) Responses(c *gin.Context) {
 		requestCtx = service.WithOpenAIImageGenerationIntent(requestCtx)
 	}
 	c.Request = c.Request.WithContext(requestCtx)
+	var deliveredOutputTokens *service.DownstreamOutputTokenCollector
+	if reqStream {
+		var restoreDeliveredOutputTokens func()
+		deliveredOutputTokens, restoreDeliveredOutputTokens = service.AttachDownstreamOutputTokenCollector(c, reqModel)
+		defer restoreDeliveredOutputTokens()
+	}
 
 	// 解析渠道级模型映射
 	channelMapping, _ := h.gatewayService.ResolveChannelMappingAndRestrict(requestCtx, apiKey.GroupID, reqModel)
@@ -332,6 +338,7 @@ func (h *GatewayHandler) Responses(c *gin.Context) {
 
 		quotaPlatform := service.QuotaPlatform(c.Request.Context(), apiKey)
 		sessionID := service.ExtractClientSessionID(c)
+		service.ApplyDeliveredOutputTokens(result, deliveredOutputTokens)
 		stampForwardRequestedReasoningEffort(result, service.RequestedReasoningEffortFromContext(c.Request.Context()))
 		h.submitUsageRecordTask(c.Request.Context(), func(ctx context.Context) {
 			if err := h.gatewayService.RecordUsage(ctx, &service.RecordUsageInput{

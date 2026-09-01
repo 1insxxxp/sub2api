@@ -224,6 +224,12 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 
 	// Track if we've started streaming (for error handling)
 	streamStarted := false
+	var deliveredOutputTokens *service.DownstreamOutputTokenCollector
+	if reqStream {
+		var restoreDeliveredOutputTokens func()
+		deliveredOutputTokens, restoreDeliveredOutputTokens = service.AttachDownstreamOutputTokenCollector(c, reqModel)
+		defer restoreDeliveredOutputTokens()
+	}
 
 	// 绑定错误透传服务，允许 service 层在非 failover 错误场景复用规则。
 	if h.errorPassthroughService != nil {
@@ -542,6 +548,7 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 				}
 			}
 
+			service.ApplyDeliveredOutputTokens(result, deliveredOutputTokens)
 			// 捕获请求信息（用于异步记录，避免在 goroutine 中访问 gin.Context）
 			userAgent := c.GetHeader("User-Agent")
 			clientIP := ip.GetClientIP(c)
@@ -883,6 +890,7 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 			// 提交 usage 记录。成功路径与"流中断但 Forward 已观测到 usage 的部分结果"
 			// 错误路径共用：后者若不入账，上游已计量的请求会完全漏记漏计费（#5148）。
 			submitForwardUsage := func(result *service.ForwardResult) {
+				service.ApplyDeliveredOutputTokens(result, deliveredOutputTokens)
 				// 捕获请求信息（用于异步记录，避免在 goroutine 中访问 gin.Context）
 				userAgent := c.GetHeader("User-Agent")
 				clientIP := ip.GetClientIP(c)
