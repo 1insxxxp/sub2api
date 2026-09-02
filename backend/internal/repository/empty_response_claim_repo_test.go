@@ -25,14 +25,14 @@ func TestEmptyResponseClaimRepositoryLoadEvaluationUsesOwnedUsageAndStructuredOu
 		WithArgs(int64(7), int64(100)).
 		WillReturnRows(sqlmock.NewRows([]string{
 			"usage_log_id", "user_id", "api_key_id", "account_id", "group_id", "subscription_id",
-			"actual_cost", "compensated_cost", "created_at",
+			"actual_cost", "compensated_cost", "created_at", "stream",
 			"input_tokens", "output_tokens", "cache_creation_tokens", "cache_read_tokens",
 			"group_enabled", "outcome_id",
 			"http_status", "upstream_status", "has_text", "has_tool_call", "has_reasoning", "has_media",
 			"output_bytes", "event_count", "stream_completed", "finish_reason", "disconnect_source",
 			"upstream_error_kind", "collector_version",
 		}).AddRow(
-			100, 7, 8, 9, 10, nil, 1.25, 0, now, 1234, 0, 12, 34, true, 55,
+			100, 7, 8, 9, 10, nil, 1.25, 0, now, true, 1234, 0, 12, 34, true, 55,
 			200, 200, false, true, false, false, 15, 2, true, "stop", "none", "none", 1,
 		))
 
@@ -44,6 +44,7 @@ func TestEmptyResponseClaimRepositoryLoadEvaluationUsesOwnedUsageAndStructuredOu
 	require.Equal(t, 0, evaluation.Usage.OutputTokens)
 	require.Equal(t, 12, evaluation.Usage.CacheCreationTokens)
 	require.Equal(t, 34, evaluation.Usage.CacheReadTokens)
+	require.True(t, evaluation.Usage.Stream)
 	require.True(t, evaluation.Group.EmptyResponseCompensationEnabled)
 	require.NotNil(t, evaluation.OutcomeID)
 	require.Equal(t, int64(55), *evaluation.OutcomeID)
@@ -186,7 +187,7 @@ func TestEmptyResponseClaimRepositoryListsRecentEvaluationsWithExistingClaimStat
 		WithArgs(int64(7), start, now, service.EmptyResponseClaimLowOutputTokenLimit, 10, 10).
 		WillReturnRows(sqlmock.NewRows([]string{
 			"usage_log_id", "user_id", "api_key_id", "account_id", "group_id", "subscription_id",
-			"model", "actual_cost", "compensated_cost", "billing_type", "inbound_endpoint", "created_at",
+			"model", "actual_cost", "compensated_cost", "billing_type", "inbound_endpoint", "created_at", "stream",
 			"input_tokens", "output_tokens", "cache_creation_tokens", "cache_read_tokens",
 			"api_key_name", "group_name", "group_enabled", "outcome_id", "http_status", "upstream_status", "has_text",
 			"has_tool_call", "has_reasoning", "has_media", "output_bytes", "event_count",
@@ -194,7 +195,7 @@ func TestEmptyResponseClaimRepositoryListsRecentEvaluationsWithExistingClaimStat
 			"claim_id", "claim_status", "claim_reason_code", "refunded_amount",
 		}).AddRow(
 			100, 7, 8, 9, 10, nil,
-			"claude-opus-4-6", 1.25, 0, service.BillingTypeBalance, "/v1/messages", now.Add(-time.Hour),
+			"claude-opus-4-6", 1.25, 0, service.BillingTypeBalance, "/v1/messages", now.Add(-time.Hour), true,
 			1234, 0, 12, 34,
 			"cli", "cc", true, 55, 200, 200, false,
 			false, false, false, 0, 1,
@@ -202,7 +203,7 @@ func TestEmptyResponseClaimRepositoryListsRecentEvaluationsWithExistingClaimStat
 			201, service.EmptyResponseClaimCompensated, service.EmptyResponseReasonPureEmpty, 1.25,
 		).AddRow(
 			101, 7, 8, 9, 11, nil,
-			"claude-opus-4-6", 0.75, 0, service.BillingTypeBalance, "/v1/messages", now.Add(-2*time.Hour),
+			"claude-opus-4-6", 0.75, 0, service.BillingTypeBalance, "/v1/messages", now.Add(-2*time.Hour), false,
 			10, service.EmptyResponseClaimLowOutputTokenLimit, 0, 0,
 			"cli", "enabled-cc", true, nil, nil, nil, nil,
 			nil, nil, nil, nil, nil,
@@ -222,6 +223,7 @@ func TestEmptyResponseClaimRepositoryListsRecentEvaluationsWithExistingClaimStat
 	require.Equal(t, "claude-opus-4-6", got.Evaluation.Usage.Model)
 	require.Equal(t, 1234, got.Evaluation.Usage.InputTokens)
 	require.Equal(t, 0, got.Evaluation.Usage.OutputTokens)
+	require.True(t, got.Evaluation.Usage.Stream)
 	require.Equal(t, 12, got.Evaluation.Usage.CacheCreationTokens)
 	require.Equal(t, 34, got.Evaluation.Usage.CacheReadTokens)
 	require.Equal(t, "cli", got.APIKeyName)

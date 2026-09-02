@@ -30,7 +30,7 @@ func (r *emptyResponseClaimRepository) LoadEvaluation(ctx context.Context, userI
 	query := `
 		SELECT
 			ul.id, ul.user_id, ul.api_key_id, ul.account_id, ul.group_id, ul.subscription_id,
-			ul.actual_cost::float8, ul.compensated_cost::float8, ul.created_at,
+			ul.actual_cost::float8, ul.compensated_cost::float8, ul.created_at, ul.stream,
 			ul.input_tokens, ul.output_tokens, ul.cache_creation_tokens, ul.cache_read_tokens,
 			COALESCE(g.empty_response_compensation_enabled, FALSE),
 			uro.id, uro.http_status, uro.upstream_status, uro.has_text, uro.has_tool_call,
@@ -46,7 +46,7 @@ func (r *emptyResponseClaimRepository) LoadEvaluation(ctx context.Context, userI
 
 	var usage service.UsageLog
 	var groupID, subscriptionID, outcomeID sql.NullInt64
-	var groupEnabled bool
+	var groupEnabled, stream bool
 	var inputTokens, outputTokens, cacheCreationTokens, cacheReadTokens int
 	var httpStatus, upstreamStatus, eventCount, collectorVersion sql.NullInt64
 	var hasText, hasToolCall, hasReasoning, hasMedia, streamCompleted sql.NullBool
@@ -54,7 +54,7 @@ func (r *emptyResponseClaimRepository) LoadEvaluation(ctx context.Context, userI
 	var finishReason, disconnectSource, upstreamErrorKind sql.NullString
 	err := scanSingleRow(ctx, r.sql, query, []any{userID, usageLogID},
 		&usage.ID, &usage.UserID, &usage.APIKeyID, &usage.AccountID, &groupID, &subscriptionID,
-		&usage.ActualCost, &usage.CompensatedCost, &usage.CreatedAt,
+		&usage.ActualCost, &usage.CompensatedCost, &usage.CreatedAt, &stream,
 		&inputTokens, &outputTokens, &cacheCreationTokens, &cacheReadTokens,
 		&groupEnabled,
 		&outcomeID, &httpStatus, &upstreamStatus, &hasText, &hasToolCall,
@@ -72,6 +72,7 @@ func (r *emptyResponseClaimRepository) LoadEvaluation(ctx context.Context, userI
 	}
 	usage.InputTokens = inputTokens
 	usage.OutputTokens = outputTokens
+	usage.Stream = stream
 	usage.CacheCreationTokens = cacheCreationTokens
 	usage.CacheReadTokens = cacheReadTokens
 	if subscriptionID.Valid {
@@ -163,7 +164,7 @@ func (r *emptyResponseClaimRepository) ListRecentEvaluations(ctx context.Context
 		SELECT
 			ul.id, ul.user_id, ul.api_key_id, ul.account_id, ul.group_id, ul.subscription_id,
 			COALESCE(NULLIF(ul.requested_model, ''), ul.model), ul.actual_cost::float8,
-			ul.compensated_cost::float8, ul.billing_type, COALESCE(ul.inbound_endpoint, ''), ul.created_at,
+			ul.compensated_cost::float8, ul.billing_type, COALESCE(ul.inbound_endpoint, ''), ul.created_at, ul.stream,
 			ul.input_tokens, ul.output_tokens, ul.cache_creation_tokens, ul.cache_read_tokens,
 			COALESCE(ak.name, ''), COALESCE(g.name, ''), COALESCE(g.empty_response_compensation_enabled, FALSE),
 			uro.id, uro.http_status, uro.upstream_status, uro.has_text, uro.has_tool_call,
@@ -192,7 +193,7 @@ func (r *emptyResponseClaimRepository) ListRecentEvaluations(ctx context.Context
 		var candidate service.EmptyResponseRecentCandidate
 		var usage service.UsageLog
 		var groupID, subscriptionID, outcomeID, claimID sql.NullInt64
-		var groupEnabled bool
+		var groupEnabled, stream bool
 		var inputTokens, outputTokens, cacheCreationTokens, cacheReadTokens int
 		var httpStatus, upstreamStatus, outputBytes, eventCount, collectorVersion sql.NullInt64
 		var hasText, hasToolCall, hasReasoning, hasMedia, streamCompleted sql.NullBool
@@ -200,7 +201,7 @@ func (r *emptyResponseClaimRepository) ListRecentEvaluations(ctx context.Context
 		var inboundEndpoint sql.NullString
 		if err := rows.Scan(
 			&usage.ID, &usage.UserID, &usage.APIKeyID, &usage.AccountID, &groupID, &subscriptionID,
-			&usage.Model, &usage.ActualCost, &usage.CompensatedCost, &usage.BillingType, &inboundEndpoint, &usage.CreatedAt,
+			&usage.Model, &usage.ActualCost, &usage.CompensatedCost, &usage.BillingType, &inboundEndpoint, &usage.CreatedAt, &stream,
 			&inputTokens, &outputTokens, &cacheCreationTokens, &cacheReadTokens,
 			&candidate.APIKeyName, &candidate.GroupName, &groupEnabled,
 			&outcomeID, &httpStatus, &upstreamStatus, &hasText, &hasToolCall,
@@ -216,6 +217,7 @@ func (r *emptyResponseClaimRepository) ListRecentEvaluations(ctx context.Context
 		}
 		usage.InputTokens = inputTokens
 		usage.OutputTokens = outputTokens
+		usage.Stream = stream
 		usage.CacheCreationTokens = cacheCreationTokens
 		usage.CacheReadTokens = cacheReadTokens
 		if subscriptionID.Valid {

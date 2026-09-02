@@ -427,6 +427,13 @@ func EvaluateEmptyResponseClaim(now time.Time, usage UsageLog, outcome *Response
 	if usage.OutputTokens > EmptyResponseClaimMaxOutputTokens {
 		return decision(EmptyResponseClaimRejected, EmptyResponseReasonEffectiveOutput)
 	}
+	// A non-streaming request receives one complete upstream response, so its
+	// provider-reported output token count is sufficient low-output evidence.
+	// Streaming requests still require collector evidence because cancellation
+	// can leave their terminal usage incomplete or ambiguous.
+	if (outcome == nil || outcome.CollectorVersion <= 0) && !usage.Stream && isLowOutputCompensable(usage) {
+		return decision(EmptyResponseClaimApproved, EmptyResponseReasonLowOutput)
+	}
 	if isPureEmptyResponse(outcome) {
 		return decision(EmptyResponseClaimApproved, EmptyResponseReasonPureEmpty)
 	}
