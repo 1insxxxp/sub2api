@@ -520,8 +520,10 @@
               <dd data-test="record-previous-day-usage" class="text-right tabular-nums">{{ formatUsd(row.previous_day_usage_amount) }}</dd>
               <dt>{{ t('admin.checkins.usageRebate') }}</dt>
               <dd data-test="record-usage-rebate" class="text-right tabular-nums">{{ formatUsd(row.usage_rebate_amount) }}</dd>
-              <dt>{{ t('admin.checkins.streakBonus') }}</dt>
-              <dd data-test="record-streak-bonus" class="text-right tabular-nums">{{ formatUsd(row.bonus_reward_amount) }}</dd>
+              <template v-if="row.bonus_reward_amount > 0">
+                <dt>{{ t('admin.checkins.streakBonus') }}</dt>
+                <dd data-test="record-streak-bonus" class="text-right tabular-nums">{{ formatUsd(row.bonus_reward_amount) }}</dd>
+              </template>
               <dt>{{ t('admin.checkins.lotteryAttemptsReward') }}</dt>
               <dd data-test="record-lottery-attempts" class="text-right tabular-nums">{{ row.lottery_attempts_reward || 0 }}</dd>
               <dt>{{ t('admin.checkins.capAdjustment') }}</dt>

@@ -292,11 +292,6 @@
                   <span v-if="checkinStatus?.checked_in && displayLotteryAttempts <= 0" class="sr-only">{{ t('checkin.noLotteryAttemptsToday') }}</span>
                 </dd>
 
-                <template v-if="checkinStatus?.checked_in && displayLegacyStreakBonus > 0">
-                  <dt class="min-w-0 break-words text-slate-500 dark:text-slate-400">{{ t('checkin.legacyStreakBonus') }}</dt>
-                  <dd data-test="checkin-streak-bonus" class="shrink-0 text-right font-semibold tabular-nums text-slate-900 dark:text-white">{{ formatUsd(displayLegacyStreakBonus) }}</dd>
-                </template>
-
                 <template v-if="checkinStatus?.checked_in">
                   <dt class="min-w-0 break-words border-t border-slate-100 pt-2 font-semibold text-slate-700 dark:border-white/10 dark:text-slate-200">{{ t('checkin.creditedToday') }}</dt>
                   <dd data-test="checkin-total-reward" class="shrink-0 border-t border-slate-100 pt-2 text-right font-bold tabular-nums text-emerald-600 dark:border-white/10 dark:text-emerald-300">{{ formatUsd(displayRewardAmount) }}</dd>
@@ -748,7 +743,6 @@ const displayUsageRebate = computed(() => {
 const displayStreakBonus = computed(() => Math.max(0, Number(checkinStatus.value?.bonus_reward_amount ?? 0)))
 
 const displayLotteryAttempts = computed(() => Math.max(0, Number(checkinStatus.value?.lottery_attempts_reward ?? 0)))
-const displayLegacyStreakBonus = computed(() => Math.max(0, Number(checkinStatus.value?.bonus_reward_amount ?? 0)))
 
 const lotteryAttemptsLabel = computed(() => {
   const status = checkinStatus.value
