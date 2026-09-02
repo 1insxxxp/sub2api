@@ -236,6 +236,28 @@ func (s *GatewayService) shouldFailoverOn400(respBody []byte) bool {
 	return false
 }
 
+// isKnownProviderRequestCompatibilityError identifies narrowly scoped 400s
+// emitted by Anthropic-compatible relays for request shapes that another
+// account may accept. These errors are account compatibility failures rather
+// than deterministic client validation failures, so they may bypass the
+// general failover_on_400 gate.
+func isKnownProviderRequestCompatibilityError(respBody []byte) bool {
+	msg := strings.ToLower(strings.TrimSpace(extractUpstreamErrorMessage(respBody)))
+	if msg == "" {
+		return false
+	}
+	body := strings.ToLower(string(respBody))
+	return strings.Contains(msg, "invalid tool use format") &&
+		strings.Contains(body, "request_body_invalid")
+}
+
+func (s *GatewayService) shouldFailoverBadRequest(respBody []byte) bool {
+	if isKnownProviderRequestCompatibilityError(respBody) {
+		return true
+	}
+	return s.cfg != nil && s.cfg.Gateway.FailoverOn400 && s.shouldFailoverOn400(respBody)
+}
+
 // sanitizeStreamError 返回不含网络地址的客户端可见错误描述。
 // 默认 (*net.OpError).Error() 会拼接 Source/Addr 字段，泄露内部 IP/端口与上游
 // 服务器地址（例如 "read tcp 10.0.0.1:54321->52.1.2.3:443: read: connection
