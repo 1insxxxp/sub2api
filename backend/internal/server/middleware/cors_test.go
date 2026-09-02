@@ -118,20 +118,20 @@ func TestCORS_AllowedOrigin_HasAllowHeaders(t *testing.T) {
 	}
 }
 
-func TestCORS_DevFileOrigin_IsAllowedByDefault(t *testing.T) {
+func TestCORS_AnyOrigin_IsAllowedByDefault(t *testing.T) {
 	r := gin.New()
 	r.Use(CORS(config.CORSConfig{}))
 	r.OPTIONS("/v1/chat/completions", func(c *gin.Context) {})
 
 	req := httptest.NewRequest(http.MethodOptions, "/v1/chat/completions", nil)
-	req.Header.Set("Origin", "https://devfile.vip")
+	req.Header.Set("Origin", "https://any-browser-client.example")
 	req.Header.Set("Access-Control-Request-Method", http.MethodPost)
 	req.Header.Set("Access-Control-Request-Headers", "authorization,content-type,x-api-key,anthropic-version,anthropic-dangerous-direct-browser-access")
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
 
 	assert.Equal(t, http.StatusNoContent, w.Code)
-	assert.Equal(t, "https://devfile.vip", w.Header().Get("Access-Control-Allow-Origin"))
+	assert.Equal(t, "*", w.Header().Get("Access-Control-Allow-Origin"))
 	assert.Contains(t, w.Header().Get("Access-Control-Allow-Headers"), "anthropic-version")
 }
 
