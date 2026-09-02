@@ -25,7 +25,7 @@ func (LotteryActivity) Annotations() []schema.Annotation {
 			Checks: map[string]string{
 				"lottery_activities_status_check":        "status IN ('draft', 'active', 'disabled', 'ended')",
 				"lottery_activities_attempt_mode_check":  "attempt_mode IN ('daily', 'total')",
-				"lottery_activities_attempt_limit_check": "attempt_limit > 0",
+				"lottery_activities_attempt_limit_check": "attempt_limit >= 0",
 				"lottery_activities_dates_check":         "starts_at IS NULL OR ends_at IS NULL OR starts_at <= ends_at",
 			},
 		},
@@ -38,7 +38,7 @@ func (LotteryActivity) Fields() []ent.Field {
 		field.String("description").Default("").SchemaType(map[string]string{dialect.Postgres: "text"}),
 		field.String("status").MaxLen(20).Default("draft"),
 		field.String("attempt_mode").MaxLen(20).Default("daily"),
-		field.Int("attempt_limit").Default(1),
+		field.Int("attempt_limit").Default(0).NonNegative(),
 		field.Time("starts_at").Optional().Nillable().SchemaType(map[string]string{dialect.Postgres: "timestamptz"}),
 		field.Time("ends_at").Optional().Nillable().SchemaType(map[string]string{dialect.Postgres: "timestamptz"}),
 		field.Int64("created_by").Optional().Nillable(),

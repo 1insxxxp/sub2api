@@ -32,7 +32,7 @@
           <div class="md:col-span-2"><label class="input-label">{{ t('lottery.admin.descriptionLabel') }}</label><textarea v-model="activityForm.description" class="input min-h-24 resize-y" :placeholder="t('lottery.admin.descriptionPlaceholder')"></textarea></div>
           <div><label class="input-label">{{ t('lottery.admin.status') }}</label><select v-model="activityForm.status" class="input"><option value="draft">{{ t('lottery.admin.draft') }}</option><option value="active">{{ t('lottery.admin.active') }}</option><option value="disabled">{{ t('lottery.admin.disabledStatus') }}</option><option value="ended">{{ t('lottery.admin.ended') }}</option></select></div>
           <div><label class="input-label">{{ t('lottery.admin.attemptMode') }}</label><select v-model="activityForm.attempt_mode" class="input"><option value="daily">{{ t('lottery.admin.dailyMode') }}</option><option value="total">{{ t('lottery.admin.totalMode') }}</option></select></div>
-          <div><label class="input-label">{{ t('lottery.admin.attemptLimit') }}</label><input v-model.number="activityForm.attempt_limit" class="input" type="number" min="1" step="1" /><p class="mt-1 text-xs text-slate-500 dark:text-slate-400">{{ t('lottery.admin.attemptLimitHint') }}</p></div>
+          <div><label class="input-label">{{ t('lottery.admin.attemptLimit') }}</label><input v-model.number="activityForm.attempt_limit" class="input" type="number" min="0" step="1" /><p class="mt-1 text-xs text-slate-500 dark:text-slate-400">{{ t('lottery.admin.attemptLimitHint') }}</p></div>
           <div><label class="input-label">{{ t('lottery.admin.startsAt') }}</label><input v-model="activityForm.starts_at" class="input" type="datetime-local" /></div>
           <div><label class="input-label">{{ t('lottery.admin.endsAt') }}</label><input v-model="activityForm.ends_at" class="input" type="datetime-local" /></div>
         </div>
@@ -108,7 +108,7 @@ const selectedItemIds = ref<number[]>([])
 interface ActivityForm { id?: number; name: string; description: string; status: string; attempt_mode: LotteryAttemptMode; attempt_limit: number; starts_at: string; ends_at: string }
 interface PrizeDraft { id?: number; name: string; description: string; type: 'balance' | 'product'; weight: number; balance_amount?: number | null; enabled: boolean; sort_order: number }
 
-const activityForm = reactive<ActivityForm>({ name: '', description: '', status: 'draft', attempt_mode: 'daily', attempt_limit: 1, starts_at: '', ends_at: '' })
+const activityForm = reactive<ActivityForm>({ name: '', description: '', status: 'draft', attempt_mode: 'daily', attempt_limit: 0, starts_at: '', ends_at: '' })
 const formatAmount = (value?: number | null) => `$${Number(value || 0).toFixed(2)}`
 const toDateTimeLocal = (value?: string | null) => value ? new Date(value).toISOString().slice(0, 16) : ''
 const toISOStringOrNull = (value: string) => value ? new Date(value).toISOString() : null
@@ -120,7 +120,7 @@ function applyActivity(activity?: LotteryActivity | null) {
   activityForm.description = activity?.description || ''
   activityForm.status = activity?.status || 'draft'
   activityForm.attempt_mode = activity?.attempt_mode || 'daily'
-  activityForm.attempt_limit = activity?.attempt_limit || 1
+  activityForm.attempt_limit = activity?.attempt_limit ?? 0
   activityForm.starts_at = toDateTimeLocal(activity?.starts_at)
   activityForm.ends_at = toDateTimeLocal(activity?.ends_at)
 }
@@ -141,7 +141,7 @@ async function saveActivityForm() {
   if (!activityForm.name.trim()) { appStore.showError(t('lottery.admin.saveFailed')); return }
   savingActivity.value = true
   try {
-    const saved = await lotteryAdminAPI.saveActivity({ id: activityForm.id, name: activityForm.name.trim(), description: activityForm.description, status: activityForm.status, attempt_mode: activityForm.attempt_mode, attempt_limit: Math.max(1, Number(activityForm.attempt_limit) || 1), starts_at: toISOStringOrNull(activityForm.starts_at), ends_at: toISOStringOrNull(activityForm.ends_at) })
+    const saved = await lotteryAdminAPI.saveActivity({ id: activityForm.id, name: activityForm.name.trim(), description: activityForm.description, status: activityForm.status, attempt_mode: activityForm.attempt_mode, attempt_limit: Math.max(0, Math.floor(Number(activityForm.attempt_limit) || 0)), starts_at: toISOStringOrNull(activityForm.starts_at), ends_at: toISOStringOrNull(activityForm.ends_at) })
     applyActivity(saved)
     appStore.showSuccess(t('lottery.admin.saved'))
   } catch (error: any) { appStore.showError(error?.message || t('lottery.admin.saveFailed')) } finally { savingActivity.value = false }

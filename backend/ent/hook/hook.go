@@ -273,6 +273,30 @@ func (f LotteryActivityFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Va
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.LotteryActivityMutation", m)
 }
 
+// The LotteryAttemptLedgerFunc type is an adapter to allow the use of ordinary
+// function as LotteryAttemptLedger mutator.
+type LotteryAttemptLedgerFunc func(context.Context, *ent.LotteryAttemptLedgerMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f LotteryAttemptLedgerFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.LotteryAttemptLedgerMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.LotteryAttemptLedgerMutation", m)
+}
+
+// The LotteryAttemptWalletFunc type is an adapter to allow the use of ordinary
+// function as LotteryAttemptWallet mutator.
+type LotteryAttemptWalletFunc func(context.Context, *ent.LotteryAttemptWalletMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f LotteryAttemptWalletFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.LotteryAttemptWalletMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.LotteryAttemptWalletMutation", m)
+}
+
 // The LotteryDrawFunc type is an adapter to allow the use of ordinary
 // function as LotteryDraw mutator.
 type LotteryDrawFunc func(context.Context, *ent.LotteryDrawMutation) (ent.Value, error)

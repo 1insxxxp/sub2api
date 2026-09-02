@@ -117,6 +117,7 @@ describe('Admin CheckinsView', () => {
       enabled: true,
       min_total_usage_usd: 5,
       min_total_recharge_usd: 20,
+      min_daily_usage_count: 5,
       tiers: [{ amount: 1, probability: 100, sort_order: 1 }],
       streak_enabled: false,
       streak_rules: [],
@@ -153,6 +154,7 @@ describe('Admin CheckinsView', () => {
           previous_day_usage_amount: 25,
           usage_rebate_amount: 2,
           bonus_reward_amount: 0.5,
+          lottery_attempts_reward: 2,
           reward_cap_adjustment: 0,
           total_reward_amount: 3,
           balance_before: 10,
@@ -297,9 +299,10 @@ describe('Admin CheckinsView', () => {
       enabled: boolean
       min_total_usage_usd: number
       min_total_recharge_usd: number
+      min_daily_usage_count: number
       tiers: Array<{ amount: number; probability: number; sort_order: number }>
       streak_enabled: boolean
-      streak_rules: Array<{ day: number; bonus_amount: number; bonus_rate_percent?: number }>
+      streak_rules: Array<{ day: number; lottery_attempts: number }>
       usage_rebate_enabled: boolean
       usage_rebate_rate_percent: number
       usage_rebate_cap: number
@@ -332,6 +335,7 @@ describe('Admin CheckinsView', () => {
       enabled: true,
       min_total_usage_usd: 5,
       min_total_recharge_usd: 20,
+      min_daily_usage_count: 5,
       tiers: [
         { amount: 2.5, probability: 60, sort_order: 1 },
         { amount: 4, probability: 40, sort_order: 2 },
@@ -418,6 +422,31 @@ describe('Admin CheckinsView', () => {
     }))
   })
 
+  it('loads and saves the daily usage-count threshold', async () => {
+    const wrapper = mount(CheckinsView, {
+      global: {
+        stubs: {
+          AppLayout: { template: '<div><slot /></div>' },
+          DataTable: DataTableStub,
+          Pagination: true,
+          Icon: true,
+        },
+      },
+    })
+
+    await flushPromises()
+
+    const usageCountInput = wrapper.get('[data-test="min-daily-usage-count"]')
+    expect((usageCountInput.element as HTMLInputElement).value).toBe('5')
+    await usageCountInput.setValue('8')
+    await wrapper.get('[data-test="save-checkin-config"]').trigger('click')
+    await flushPromises()
+
+    expect(updateConfig).toHaveBeenCalledWith(expect.objectContaining({
+      min_daily_usage_count: 8,
+    }))
+  })
+
   it('rejects a negative cumulative recharge threshold', async () => {
     const wrapper = mount(CheckinsView, {
       global: {
@@ -464,6 +493,7 @@ describe('Admin CheckinsView', () => {
     expect(wrapper.get('[data-test="record-base-reward"]').text()).toContain('$0.50')
     expect(wrapper.get('[data-test="record-usage-rebate"]').text()).toContain('$2.00')
     expect(wrapper.get('[data-test="record-streak-bonus"]').text()).toContain('$0.50')
+    expect(wrapper.get('[data-test="record-lottery-attempts"]').text()).toContain('2')
     expect(wrapper.get('[data-test="record-cap-adjustment"]').text()).toContain('$0.00')
 
     await wrapper.get('[data-test="usage-rebate-rate"]').setValue('6')
@@ -562,14 +592,15 @@ describe('Admin CheckinsView', () => {
     expect(wrapper.find('[data-test="record-reward-campaign"]').exists()).toBe(false)
   })
 
-  it('keeps streak rewards as fixed amounts when usage rebates are enabled', async () => {
+  it('configures streak rewards as integer lottery attempts', async () => {
     getConfig.mockResolvedValueOnce({
       enabled: true,
       min_total_usage_usd: 5,
       min_total_recharge_usd: 20,
+      min_daily_usage_count: 5,
       tiers: [{ amount: 1, probability: 100, sort_order: 1 }],
       streak_enabled: true,
-      streak_rules: [{ day: 7, bonus_amount: 4, bonus_rate_percent: 10 }],
+      streak_rules: [{ day: 7, lottery_attempts: 4 }],
       usage_rebate_enabled: true,
       usage_rebate_rate_percent: 8,
       usage_rebate_cap: 8,
@@ -591,9 +622,9 @@ describe('Admin CheckinsView', () => {
 
     await flushPromises()
 
-    const amountInput = wrapper.get('[data-test="streak-bonus-amount"]')
+    const amountInput = wrapper.get('[data-test="streak-lottery-attempts"]')
     expect((amountInput.element as HTMLInputElement).value).toBe('4')
-    expect(wrapper.find('[data-test="streak-bonus-percent"]').exists()).toBe(false)
+    expect((amountInput.element as HTMLInputElement).step).toBe('1')
 
     await amountInput.setValue('5')
     await wrapper.get('[data-test="save-checkin-config"]').trigger('click')
@@ -601,7 +632,7 @@ describe('Admin CheckinsView', () => {
 
     expect(updateConfig).toHaveBeenCalledWith(expect.objectContaining({
       usage_rebate_enabled: true,
-      streak_rules: [{ day: 7, bonus_amount: 5 }],
+      streak_rules: [{ day: 7, lottery_attempts: 5 }],
     }))
   })
 

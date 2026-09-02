@@ -96,6 +96,8 @@ var (
 	AttemptModeValidator func(string) error
 	// DefaultAttemptLimit holds the default value on creation for the "attempt_limit" field.
 	DefaultAttemptLimit int
+	// AttemptLimitValidator is a validator for the "attempt_limit" field. It is called by the builders before save.
+	AttemptLimitValidator func(int) error
 	// DefaultCreatedAt holds the default value on creation for the "created_at" field.
 	DefaultCreatedAt func() time.Time
 	// DefaultUpdatedAt holds the default value on creation for the "updated_at" field.

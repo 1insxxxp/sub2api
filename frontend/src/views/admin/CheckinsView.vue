@@ -145,6 +145,21 @@
               </p>
             </div>
 
+            <div>
+              <label class="input-label">{{ t('admin.checkins.minDailyUsageCount') }}</label>
+              <input
+                v-model.number="configForm.min_daily_usage_count"
+                data-test="min-daily-usage-count"
+                type="number"
+                min="0"
+                step="1"
+                class="input"
+              />
+              <p class="mt-2 text-xs text-gray-500 dark:text-dark-400">
+                {{ t('admin.checkins.minDailyUsageCountHint') }}
+              </p>
+            </div>
+
             <div class="checkins-summary-strip admin-form-section !space-y-0 px-4 py-3">
               <div class="flex items-center justify-between gap-3 text-sm">
                 <span class="text-gray-500 dark:text-dark-400">{{ t('admin.checkins.rewardRules') }}</span>
@@ -383,13 +398,13 @@
                       <input v-model.number="rule.day" type="number" min="1" step="1" class="input h-9" />
                     </div>
                     <div>
-                      <label class="input-label">{{ t('admin.checkins.streakBonusUsd') }}</label>
+                      <label class="input-label">{{ t('admin.checkins.streakLotteryAttempts') }}</label>
                       <input
-                        v-model.number="rule.bonus_amount"
-                        data-test="streak-bonus-amount"
+                        v-model.number="rule.lottery_attempts"
+                        data-test="streak-lottery-attempts"
                         type="number"
-                        min="0.01"
-                        step="0.01"
+                        min="1"
+                        step="1"
                         class="input h-9"
                       />
                     </div>
@@ -507,6 +522,8 @@
               <dd data-test="record-usage-rebate" class="text-right tabular-nums">{{ formatUsd(row.usage_rebate_amount) }}</dd>
               <dt>{{ t('admin.checkins.streakBonus') }}</dt>
               <dd data-test="record-streak-bonus" class="text-right tabular-nums">{{ formatUsd(row.bonus_reward_amount) }}</dd>
+              <dt>{{ t('admin.checkins.lotteryAttemptsReward') }}</dt>
+              <dd data-test="record-lottery-attempts" class="text-right tabular-nums">{{ row.lottery_attempts_reward || 0 }}</dd>
               <dt>{{ t('admin.checkins.capAdjustment') }}</dt>
               <dd data-test="record-cap-adjustment" class="text-right tabular-nums">{{ formatUsd(row.reward_cap_adjustment) }}</dd>
               <dt class="font-semibold text-gray-700 dark:text-gray-200">{{ t('admin.checkins.totalReward') }}</dt>
@@ -789,6 +806,7 @@ const configForm = reactive({
   enabled: true,
   min_total_usage_usd: 0,
   min_total_recharge_usd: 0,
+  min_daily_usage_count: 5,
   tiers: [] as CheckinRewardTier[],
   streak_enabled: true,
   streak_rules: [] as CheckinStreakRule[],
@@ -899,8 +917,7 @@ function cloneTiers(tiers: CheckinRewardTier[] | undefined): CheckinRewardTier[]
 function cloneStreakRules(rules: CheckinStreakRule[] | undefined): CheckinStreakRule[] {
   return (rules || []).map((rule) => ({
     day: Math.floor(safeNumber(rule.day)),
-    bonus_amount: safeNumber(rule.bonus_amount),
-    bonus_rate_percent: safeNumber(rule.bonus_rate_percent),
+    lottery_attempts: Math.max(1, Math.floor(safeNumber(rule.lottery_attempts) || (safeNumber(rule.bonus_amount) > 0 ? 1 : 0))),
   }))
 }
 
@@ -930,6 +947,7 @@ async function loadConfig() {
     configForm.enabled = nextConfig.enabled
     configForm.min_total_usage_usd = nextConfig.min_total_usage_usd
     configForm.min_total_recharge_usd = nextConfig.min_total_recharge_usd
+    configForm.min_daily_usage_count = nextConfig.min_daily_usage_count
     configForm.tiers = cloneTiers(nextConfig.tiers)
     configForm.streak_enabled = nextConfig.streak_enabled
     configForm.streak_rules = cloneStreakRules(nextConfig.streak_rules)
@@ -955,6 +973,10 @@ async function handleSaveConfig() {
     appStore.showError(t('admin.checkins.invalidMinTotalRechargeUsd'))
     return
   }
+  if (!Number.isInteger(Number(configForm.min_daily_usage_count)) || configForm.min_daily_usage_count < 0) {
+    appStore.showError(t('admin.checkins.invalidMinDailyUsageCount'))
+    return
+  }
   if (!validateRewardRules()) return
   if (!validateUsageRebateSettings()) return
   configSaving.value = true
@@ -963,6 +985,7 @@ async function handleSaveConfig() {
       enabled: configForm.enabled,
       min_total_usage_usd: Number(configForm.min_total_usage_usd),
       min_total_recharge_usd: Number(configForm.min_total_recharge_usd),
+      min_daily_usage_count: Number(configForm.min_daily_usage_count),
       tiers: configForm.tiers.map((tier, index) => ({
         amount: Number(tier.amount),
         probability: Number(tier.probability),
@@ -971,7 +994,7 @@ async function handleSaveConfig() {
       streak_enabled: configForm.streak_enabled,
       streak_rules: configForm.streak_rules.map((rule) => ({
         day: Math.floor(Number(rule.day)),
-        bonus_amount: Number(rule.bonus_amount),
+        lottery_attempts: Math.floor(Number(rule.lottery_attempts)),
       })),
       usage_rebate_enabled: configForm.usage_rebate_enabled,
       usage_rebate_rate_percent: Number(configForm.usage_rebate_rate_percent),
@@ -987,6 +1010,7 @@ async function handleSaveConfig() {
     configForm.enabled = config.value.enabled
     configForm.min_total_usage_usd = config.value.min_total_usage_usd
     configForm.min_total_recharge_usd = config.value.min_total_recharge_usd
+    configForm.min_daily_usage_count = config.value.min_daily_usage_count
     configForm.tiers = cloneTiers(config.value.tiers)
     campaignDefaultTiersReady.value = configForm.tiers.length > 0
     configForm.streak_enabled = config.value.streak_enabled
@@ -1028,7 +1052,8 @@ function validateRewardRules(): boolean {
   const days = new Set<number>()
   for (const rule of configForm.streak_rules) {
     const day = Math.floor(safeNumber(rule.day))
-    if (day <= 0 || safeNumber(rule.bonus_amount) <= 0) {
+    const attempts = safeNumber(rule.lottery_attempts)
+    if (day <= 0 || !Number.isInteger(attempts) || attempts <= 0) {
       appStore.showError(t('admin.checkins.invalidStreakRule'))
       return false
     }
@@ -1085,8 +1110,7 @@ function addStreakRule() {
   const maxDay = configForm.streak_rules.reduce((max, rule) => Math.max(max, safeNumber(rule.day)), 0)
   configForm.streak_rules.push({
     day: Math.max(1, Math.floor(maxDay) + 7),
-    bonus_amount: 1,
-    bonus_rate_percent: 0,
+    lottery_attempts: 1,
   })
 }
 

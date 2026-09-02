@@ -45,6 +45,42 @@ func TestValidateLotteryPrizeRejectsInvalidBalancePrize(t *testing.T) {
 	require.ErrorIs(t, err, ErrLotteryPrizeInvalid)
 }
 
+func TestValidateLotteryActivityAllowsZeroFreeAttempts(t *testing.T) {
+	err := validateLotteryActivity(LotteryActivityInput{
+		Name:         "签到次数活动",
+		Status:       LotteryActivityStatusActive,
+		AttemptMode:  LotteryAttemptModeDaily,
+		AttemptLimit: 0,
+	})
+
+	require.NoError(t, err)
+}
+
+func TestLotteryAttemptSummaryAddsPersistentRewardBalance(t *testing.T) {
+	summary := summarizeLotteryAttempts(2, 1, 3)
+
+	require.Equal(t, 1, summary.ActivityRemaining)
+	require.Equal(t, 3, summary.RewardRemaining)
+	require.Equal(t, 4, summary.TotalRemaining)
+	require.Equal(t, LotteryAttemptSourceActivity, summary.NextSource)
+}
+
+func TestLotteryAttemptSummaryFallsBackToRewardBalance(t *testing.T) {
+	summary := summarizeLotteryAttempts(0, 0, 2)
+
+	require.Equal(t, 0, summary.ActivityRemaining)
+	require.Equal(t, 2, summary.RewardRemaining)
+	require.Equal(t, 2, summary.TotalRemaining)
+	require.Equal(t, LotteryAttemptSourceWallet, summary.NextSource)
+}
+
+func TestLotteryAttemptSummaryIsExhaustedWhenBothSourcesAreEmpty(t *testing.T) {
+	summary := summarizeLotteryAttempts(0, 0, 0)
+
+	require.Zero(t, summary.TotalRemaining)
+	require.Empty(t, summary.NextSource)
+}
+
 func lotteryFloat64Ptr(value float64) *float64 {
 	return &value
 }

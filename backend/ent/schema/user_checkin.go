@@ -52,6 +52,9 @@ func (UserCheckin) Fields() []ent.Field {
 		field.Float("bonus_reward_amount").
 			SchemaType(map[string]string{dialect.Postgres: "decimal(20,8)"}).
 			Default(0),
+		field.Int("lottery_attempts_reward").
+			Default(0).
+			NonNegative(),
 		field.Float("total_reward_amount").
 			SchemaType(map[string]string{dialect.Postgres: "decimal(20,8)"}).
 			Default(0),

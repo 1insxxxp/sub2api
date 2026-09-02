@@ -245,6 +245,7 @@ func (r *lotteryRepository) CountUserDraws(ctx context.Context, activityID, user
 	query := clientFromContext(ctx, r.client).LotteryDraw.Query().Where(
 		lotterydraw.ActivityIDEQ(activityID),
 		lotterydraw.UserIDEQ(userID),
+		lotterydraw.AttemptSourceEQ(service.LotteryAttemptSourceActivity),
 	)
 	if since != nil {
 		query = query.Where(lotterydraw.CreatedAtGTE(*since))
@@ -295,7 +296,8 @@ func (r *lotteryRepository) CreateDraw(ctx context.Context, draw service.Lottery
 		SetPrizeType(draw.PrizeType).
 		SetNillableBalanceAmount(draw.BalanceAmount).
 		SetNillableProductContent(draw.ProductContent).
-		SetAttemptKey(draw.AttemptKey)
+		SetAttemptKey(draw.AttemptKey).
+		SetAttemptSource(draw.AttemptSource)
 	if !draw.CreatedAt.IsZero() {
 		builder.SetCreatedAt(draw.CreatedAt)
 	}
@@ -355,6 +357,7 @@ func lotteryDrawToService(draw *dbent.LotteryDraw) *service.LotteryDraw {
 	return &service.LotteryDraw{
 		ID: draw.ID, ActivityID: draw.ActivityID, PrizeID: draw.PrizeID, UserID: draw.UserID,
 		PrizeName: draw.PrizeName, PrizeType: draw.PrizeType, BalanceAmount: draw.BalanceAmount,
-		ProductContent: draw.ProductContent, AttemptKey: draw.AttemptKey, CreatedAt: draw.CreatedAt,
+		ProductContent: draw.ProductContent, AttemptKey: draw.AttemptKey,
+		AttemptSource: draw.AttemptSource, CreatedAt: draw.CreatedAt,
 	}
 }

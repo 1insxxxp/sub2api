@@ -310,6 +310,11 @@ func (_u *LotteryActivityUpdate) check() error {
 			return &ValidationError{Name: "attempt_mode", err: fmt.Errorf(`ent: validator failed for field "LotteryActivity.attempt_mode": %w`, err)}
 		}
 	}
+	if v, ok := _u.mutation.AttemptLimit(); ok {
+		if err := lotteryactivity.AttemptLimitValidator(v); err != nil {
+			return &ValidationError{Name: "attempt_limit", err: fmt.Errorf(`ent: validator failed for field "LotteryActivity.attempt_limit": %w`, err)}
+		}
+	}
 	return nil
 }
 
@@ -768,6 +773,11 @@ func (_u *LotteryActivityUpdateOne) check() error {
 	if v, ok := _u.mutation.AttemptMode(); ok {
 		if err := lotteryactivity.AttemptModeValidator(v); err != nil {
 			return &ValidationError{Name: "attempt_mode", err: fmt.Errorf(`ent: validator failed for field "LotteryActivity.attempt_mode": %w`, err)}
+		}
+	}
+	if v, ok := _u.mutation.AttemptLimit(); ok {
+		if err := lotteryactivity.AttemptLimitValidator(v); err != nil {
+			return &ValidationError{Name: "attempt_limit", err: fmt.Errorf(`ent: validator failed for field "LotteryActivity.attempt_limit": %w`, err)}
 		}
 	}
 	return nil

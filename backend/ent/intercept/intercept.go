@@ -30,6 +30,8 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/idempotencyrecord"
 	"github.com/Wei-Shaw/sub2api/ent/identityadoptiondecision"
 	"github.com/Wei-Shaw/sub2api/ent/lotteryactivity"
+	"github.com/Wei-Shaw/sub2api/ent/lotteryattemptledger"
+	"github.com/Wei-Shaw/sub2api/ent/lotteryattemptwallet"
 	"github.com/Wei-Shaw/sub2api/ent/lotterydraw"
 	"github.com/Wei-Shaw/sub2api/ent/lotteryprize"
 	"github.com/Wei-Shaw/sub2api/ent/lotteryprizeitem"
@@ -715,6 +717,60 @@ func (f TraverseLotteryActivity) Traverse(ctx context.Context, q ent.Query) erro
 		return f(ctx, q)
 	}
 	return fmt.Errorf("unexpected query type %T. expect *ent.LotteryActivityQuery", q)
+}
+
+// The LotteryAttemptLedgerFunc type is an adapter to allow the use of ordinary function as a Querier.
+type LotteryAttemptLedgerFunc func(context.Context, *ent.LotteryAttemptLedgerQuery) (ent.Value, error)
+
+// Query calls f(ctx, q).
+func (f LotteryAttemptLedgerFunc) Query(ctx context.Context, q ent.Query) (ent.Value, error) {
+	if q, ok := q.(*ent.LotteryAttemptLedgerQuery); ok {
+		return f(ctx, q)
+	}
+	return nil, fmt.Errorf("unexpected query type %T. expect *ent.LotteryAttemptLedgerQuery", q)
+}
+
+// The TraverseLotteryAttemptLedger type is an adapter to allow the use of ordinary function as Traverser.
+type TraverseLotteryAttemptLedger func(context.Context, *ent.LotteryAttemptLedgerQuery) error
+
+// Intercept is a dummy implementation of Intercept that returns the next Querier in the pipeline.
+func (f TraverseLotteryAttemptLedger) Intercept(next ent.Querier) ent.Querier {
+	return next
+}
+
+// Traverse calls f(ctx, q).
+func (f TraverseLotteryAttemptLedger) Traverse(ctx context.Context, q ent.Query) error {
+	if q, ok := q.(*ent.LotteryAttemptLedgerQuery); ok {
+		return f(ctx, q)
+	}
+	return fmt.Errorf("unexpected query type %T. expect *ent.LotteryAttemptLedgerQuery", q)
+}
+
+// The LotteryAttemptWalletFunc type is an adapter to allow the use of ordinary function as a Querier.
+type LotteryAttemptWalletFunc func(context.Context, *ent.LotteryAttemptWalletQuery) (ent.Value, error)
+
+// Query calls f(ctx, q).
+func (f LotteryAttemptWalletFunc) Query(ctx context.Context, q ent.Query) (ent.Value, error) {
+	if q, ok := q.(*ent.LotteryAttemptWalletQuery); ok {
+		return f(ctx, q)
+	}
+	return nil, fmt.Errorf("unexpected query type %T. expect *ent.LotteryAttemptWalletQuery", q)
+}
+
+// The TraverseLotteryAttemptWallet type is an adapter to allow the use of ordinary function as Traverser.
+type TraverseLotteryAttemptWallet func(context.Context, *ent.LotteryAttemptWalletQuery) error
+
+// Intercept is a dummy implementation of Intercept that returns the next Querier in the pipeline.
+func (f TraverseLotteryAttemptWallet) Intercept(next ent.Querier) ent.Querier {
+	return next
+}
+
+// Traverse calls f(ctx, q).
+func (f TraverseLotteryAttemptWallet) Traverse(ctx context.Context, q ent.Query) error {
+	if q, ok := q.(*ent.LotteryAttemptWalletQuery); ok {
+		return f(ctx, q)
+	}
+	return fmt.Errorf("unexpected query type %T. expect *ent.LotteryAttemptWalletQuery", q)
 }
 
 // The LotteryDrawFunc type is an adapter to allow the use of ordinary function as a Querier.
@@ -1682,6 +1738,10 @@ func NewQuery(q ent.Query) (Query, error) {
 		return &query[*ent.IdentityAdoptionDecisionQuery, predicate.IdentityAdoptionDecision, identityadoptiondecision.OrderOption]{typ: ent.TypeIdentityAdoptionDecision, tq: q}, nil
 	case *ent.LotteryActivityQuery:
 		return &query[*ent.LotteryActivityQuery, predicate.LotteryActivity, lotteryactivity.OrderOption]{typ: ent.TypeLotteryActivity, tq: q}, nil
+	case *ent.LotteryAttemptLedgerQuery:
+		return &query[*ent.LotteryAttemptLedgerQuery, predicate.LotteryAttemptLedger, lotteryattemptledger.OrderOption]{typ: ent.TypeLotteryAttemptLedger, tq: q}, nil
+	case *ent.LotteryAttemptWalletQuery:
+		return &query[*ent.LotteryAttemptWalletQuery, predicate.LotteryAttemptWallet, lotteryattemptwallet.OrderOption]{typ: ent.TypeLotteryAttemptWallet, tq: q}, nil
 	case *ent.LotteryDrawQuery:
 		return &query[*ent.LotteryDrawQuery, predicate.LotteryDraw, lotterydraw.OrderOption]{typ: ent.TypeLotteryDraw, tq: q}, nil
 	case *ent.LotteryPrizeQuery:

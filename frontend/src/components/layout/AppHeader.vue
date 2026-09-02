@@ -231,7 +231,9 @@
                         {{ criterion.label }}
                       </span>
                       <span class="shrink-0 text-slate-500 dark:text-slate-400">
-                        {{ t('checkin.criterionProgress', { current: formatUsd(criterion.current), min: formatUsd(criterion.min) }) }}
+                        {{ criterion.kind === 'count'
+                          ? t('checkin.countCriterionProgress', { current: criterion.current, min: criterion.min })
+                          : t('checkin.criterionProgress', { current: formatUsd(criterion.current), min: formatUsd(criterion.min) }) }}
                       </span>
                     </div>
                     <div
@@ -279,11 +281,21 @@
                 </dt>
                 <dd data-test="checkin-usage-rebate" class="shrink-0 text-right font-semibold tabular-nums text-emerald-600 dark:text-emerald-300">{{ formatUsd(displayUsageRebate) }}</dd>
 
-                <dt class="min-w-0 break-words text-slate-500 dark:text-slate-400">{{ t('checkin.streakBonus') }}</dt>
-                <dd data-test="checkin-streak-bonus" class="shrink-0 text-right font-semibold tabular-nums text-slate-900 dark:text-white">
-                  {{ streakBonusLabel }}
-                  <span v-if="checkinStatus?.checked_in && displayStreakBonus <= 0" class="sr-only">{{ t('checkin.noStreakBonusToday') }}</span>
+                <template v-if="displayStreakBonus > 0">
+                  <dt class="min-w-0 break-words text-slate-500 dark:text-slate-400">{{ t('checkin.streakBonus') }}</dt>
+                  <dd data-test="checkin-streak-bonus" class="shrink-0 text-right font-semibold tabular-nums text-slate-900 dark:text-white">{{ formatUsd(displayStreakBonus) }}</dd>
+                </template>
+
+                <dt class="min-w-0 break-words text-slate-500 dark:text-slate-400">{{ t('checkin.lotteryAttempts') }}</dt>
+                <dd data-test="checkin-lottery-attempts" class="shrink-0 text-right font-semibold tabular-nums text-slate-900 dark:text-white">
+                  {{ lotteryAttemptsLabel }}
+                  <span v-if="checkinStatus?.checked_in && displayLotteryAttempts <= 0" class="sr-only">{{ t('checkin.noLotteryAttemptsToday') }}</span>
                 </dd>
+
+                <template v-if="checkinStatus?.checked_in && displayLegacyStreakBonus > 0">
+                  <dt class="min-w-0 break-words text-slate-500 dark:text-slate-400">{{ t('checkin.legacyStreakBonus') }}</dt>
+                  <dd data-test="checkin-streak-bonus" class="shrink-0 text-right font-semibold tabular-nums text-slate-900 dark:text-white">{{ formatUsd(displayLegacyStreakBonus) }}</dd>
+                </template>
 
                 <template v-if="checkinStatus?.checked_in">
                   <dt class="min-w-0 break-words border-t border-slate-100 pt-2 font-semibold text-slate-700 dark:border-white/10 dark:text-slate-200">{{ t('checkin.creditedToday') }}</dt>
@@ -292,9 +304,9 @@
               </dl>
 
               <div class="brand-floating-card mt-3 border-blue-100/80 bg-[linear-gradient(135deg,rgba(239,246,255,0.96),rgba(250,245,255,0.9))] px-3 py-2 text-xs text-blue-700 dark:border-blue-400/14 dark:bg-[linear-gradient(135deg,rgba(37,99,235,0.18),rgba(124,58,237,0.12))] dark:text-blue-200">
-                <p class="font-semibold">{{ t('checkin.streakBonusTitle') }}</p>
+                <p class="font-semibold">{{ t('checkin.streakLotteryTitle') }}</p>
                 <p class="mt-1">
-                  {{ nextStreakBonusMessage }}
+                  {{ nextStreakLotteryMessage }}
                 </p>
               </div>
 
@@ -336,8 +348,14 @@
                     <dd data-test="recent-checkin-previous-day-usage" class="shrink-0 tabular-nums text-slate-700 dark:text-slate-200">{{ formatUsd(record.previous_day_usage_amount) }}</dd>
                     <dt class="min-w-0 break-words text-slate-500 dark:text-slate-400">{{ t('checkin.usageRebate') }}</dt>
                     <dd data-test="recent-checkin-usage-rebate" class="shrink-0 tabular-nums text-slate-700 dark:text-slate-200">{{ formatUsd(record.usage_rebate_amount) }}</dd>
-                    <dt class="min-w-0 break-words text-slate-500 dark:text-slate-400">{{ t('checkin.streakBonus') }}</dt>
-                    <dd class="shrink-0 tabular-nums text-slate-700 dark:text-slate-200">{{ formatUsd(record.bonus_reward_amount) }}</dd>
+                    <template v-if="record.lottery_attempts_reward > 0">
+                      <dt class="min-w-0 break-words text-slate-500 dark:text-slate-400">{{ t('checkin.lotteryAttempts') }}</dt>
+                      <dd class="shrink-0 tabular-nums text-violet-600 dark:text-violet-300">{{ record.lottery_attempts_reward }}</dd>
+                    </template>
+                    <template v-if="record.bonus_reward_amount > 0">
+                      <dt class="min-w-0 break-words text-slate-500 dark:text-slate-400">{{ t('checkin.legacyStreakBonus') }}</dt>
+                      <dd class="shrink-0 tabular-nums text-slate-700 dark:text-slate-200">{{ formatUsd(record.bonus_reward_amount) }}</dd>
+                    </template>
                   </dl>
                 </div>
               </div>
@@ -594,7 +612,7 @@ const checkinButtonTitle = computed(() => {
   if (!status) return checkinButtonLabel.value
   if (
     status.eligible === false &&
-    ['insufficient_spend', 'insufficient_usage_or_recharge'].includes(status.ineligible_reason ?? '')
+    ['insufficient_spend', 'insufficient_usage_or_recharge', 'insufficient_daily_usage'].includes(status.ineligible_reason ?? '')
   ) {
     return eligibilityMessage.value
   }
@@ -622,9 +640,18 @@ const checkinCurrentRecharge = computed(() => {
   return Math.max(0, Number(checkinStatus.value?.total_recharge_usd ?? 0))
 })
 
+const checkinMinDailyUsageCount = computed(() => {
+  return Math.max(0, Number(checkinStatus.value?.min_daily_usage_count ?? 0))
+})
+
+const checkinTodayUsageCount = computed(() => {
+  return Math.max(0, Number(checkinStatus.value?.today_usage_count ?? 0))
+})
+
 const eligibilityCriteria = computed(() => {
   const criteria: Array<{
-    key: 'usage' | 'recharge'
+    key: 'usage' | 'recharge' | 'count'
+    kind: 'money' | 'count'
     label: string
     min: number
     current: number
@@ -633,6 +660,7 @@ const eligibilityCriteria = computed(() => {
   if (checkinMinSpend.value > 0) {
     criteria.push({
       key: 'usage',
+      kind: 'money',
       label: t('checkin.usageCriterion'),
       min: checkinMinSpend.value,
       current: checkinCurrentSpend.value,
@@ -642,20 +670,42 @@ const eligibilityCriteria = computed(() => {
   if (checkinMinRecharge.value > 0) {
     criteria.push({
       key: 'recharge',
+      kind: 'money',
       label: t('checkin.rechargeCriterion'),
       min: checkinMinRecharge.value,
       current: checkinCurrentRecharge.value,
       percent: Math.min(100, (checkinCurrentRecharge.value / checkinMinRecharge.value) * 100),
     })
   }
+  if (checkinMinDailyUsageCount.value > 0) {
+    criteria.push({
+      key: 'count',
+      kind: 'count',
+      label: t('checkin.dailyUsageCriterion'),
+      min: checkinMinDailyUsageCount.value,
+      current: checkinTodayUsageCount.value,
+      percent: Math.min(100, (checkinTodayUsageCount.value / checkinMinDailyUsageCount.value) * 100),
+    })
+  }
   return criteria
 })
 
 const eligibilityMessage = computed(() => {
+  if (
+    checkinMinDailyUsageCount.value > 0 &&
+    checkinTodayUsageCount.value < checkinMinDailyUsageCount.value
+  ) {
+    return t('checkin.dailyUsagePending', {
+      min: checkinMinDailyUsageCount.value,
+      current: checkinTodayUsageCount.value,
+    })
+  }
   const usageEnabled = checkinMinSpend.value > 0
   const rechargeEnabled = checkinMinRecharge.value > 0
   if (!usageEnabled && !rechargeEnabled) {
-    return t('checkin.eligibilityNoThreshold')
+    return checkinMinDailyUsageCount.value > 0
+      ? t('checkin.dailyUsageSatisfied', { count: checkinTodayUsageCount.value })
+      : t('checkin.eligibilityNoThreshold')
   }
   if (usageEnabled && rechargeEnabled) {
     return checkinStatus.value?.eligible === false
@@ -695,24 +745,27 @@ const displayUsageRebate = computed(() => {
   return Number(status?.estimated_usage_rebate ?? 0)
 })
 
-const displayStreakBonus = computed(() => Number(checkinStatus.value?.bonus_reward_amount ?? 0))
+const displayStreakBonus = computed(() => Math.max(0, Number(checkinStatus.value?.bonus_reward_amount ?? 0)))
 
-const streakBonusLabel = computed(() => {
+const displayLotteryAttempts = computed(() => Math.max(0, Number(checkinStatus.value?.lottery_attempts_reward ?? 0)))
+const displayLegacyStreakBonus = computed(() => Math.max(0, Number(checkinStatus.value?.bonus_reward_amount ?? 0)))
+
+const lotteryAttemptsLabel = computed(() => {
   const status = checkinStatus.value
   if (!status?.checked_in) {
-    return t('checkin.streakBonusWhenReached')
+    return t('checkin.lotteryAttemptsWhenReached')
   }
-  return formatUsd(displayStreakBonus.value)
+  return String(displayLotteryAttempts.value)
 })
 
-const nextStreakBonusMessage = computed(() => {
+const nextStreakLotteryMessage = computed(() => {
   const rule = checkinStatus.value?.next_streak_rule
   if (!rule) {
-    return t('checkin.noUpcomingStreakBonus')
+    return t('checkin.noUpcomingStreakLottery')
   }
-  return t('checkin.nextStreakBonus', {
+  return t('checkin.nextStreakLottery', {
     day: rule.day,
-    amount: formatUsd(rule.bonus_amount),
+    count: rule.lottery_attempts,
   })
 })
 

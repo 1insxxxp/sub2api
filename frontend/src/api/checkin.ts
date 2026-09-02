@@ -29,6 +29,9 @@ export interface CheckinStatus {
   total_usage_usd: number
   min_total_recharge_usd: number
   total_recharge_usd: number
+  min_daily_usage_count: number
+  today_usage_count: number
+  lottery_attempts_reward?: number
   ineligible_reason?: string
   next_streak_rule?: CheckinStreakRule | null
   recent_records?: CheckinRecord[]
@@ -42,7 +45,8 @@ export interface CheckinResult extends CheckinStatus {
 
 export interface CheckinStreakRule {
   day: number
-  bonus_amount: number
+  lottery_attempts: number
+  bonus_amount?: number
   bonus_rate_percent?: number
 }
 
@@ -53,6 +57,7 @@ export interface CheckinRecord {
   streak_day: number
   base_reward_amount: number
   bonus_reward_amount: number
+  lottery_attempts_reward: number
   previous_day_usage_amount: number
   usage_rebate_amount: number
   reward_cap_adjustment: number

@@ -1205,7 +1205,7 @@ var (
 		{Name: "description", Type: field.TypeString, Default: "", SchemaType: map[string]string{"postgres": "text"}},
 		{Name: "status", Type: field.TypeString, Size: 20, Default: "draft"},
 		{Name: "attempt_mode", Type: field.TypeString, Size: 20, Default: "daily"},
-		{Name: "attempt_limit", Type: field.TypeInt, Default: 1},
+		{Name: "attempt_limit", Type: field.TypeInt, Default: 0},
 		{Name: "starts_at", Type: field.TypeTime, Nullable: true, SchemaType: map[string]string{"postgres": "timestamptz"}},
 		{Name: "ends_at", Type: field.TypeTime, Nullable: true, SchemaType: map[string]string{"postgres": "timestamptz"}},
 		{Name: "created_by", Type: field.TypeInt64, Nullable: true},
@@ -1230,6 +1230,72 @@ var (
 			},
 		},
 	}
+	// LotteryAttemptLedgerColumns holds the columns for the "lottery_attempt_ledger" table.
+	LotteryAttemptLedgerColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt64, Increment: true},
+		{Name: "delta", Type: field.TypeInt},
+		{Name: "balance_after", Type: field.TypeInt},
+		{Name: "source_type", Type: field.TypeString, Size: 32},
+		{Name: "source_id", Type: field.TypeInt64},
+		{Name: "description", Type: field.TypeString, Default: "", SchemaType: map[string]string{"postgres": "text"}},
+		{Name: "created_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
+		{Name: "user_id", Type: field.TypeInt64},
+	}
+	// LotteryAttemptLedgerTable holds the schema information for the "lottery_attempt_ledger" table.
+	LotteryAttemptLedgerTable = &schema.Table{
+		Name:       "lottery_attempt_ledger",
+		Columns:    LotteryAttemptLedgerColumns,
+		PrimaryKey: []*schema.Column{LotteryAttemptLedgerColumns[0]},
+		ForeignKeys: []*schema.ForeignKey{
+			{
+				Symbol:     "lottery_attempt_ledger_users_lottery_attempt_ledger",
+				Columns:    []*schema.Column{LotteryAttemptLedgerColumns[7]},
+				RefColumns: []*schema.Column{UsersColumns[0]},
+				OnDelete:   schema.NoAction,
+			},
+		},
+		Indexes: []*schema.Index{
+			{
+				Name:    "lottery_attempt_ledger_source_uq",
+				Unique:  true,
+				Columns: []*schema.Column{LotteryAttemptLedgerColumns[3], LotteryAttemptLedgerColumns[4]},
+			},
+			{
+				Name:    "lottery_attempt_ledger_user_created_at_idx",
+				Unique:  false,
+				Columns: []*schema.Column{LotteryAttemptLedgerColumns[7], LotteryAttemptLedgerColumns[6]},
+			},
+		},
+	}
+	// LotteryAttemptWalletsColumns holds the columns for the "lottery_attempt_wallets" table.
+	LotteryAttemptWalletsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt64, Increment: true},
+		{Name: "balance", Type: field.TypeInt, Default: 0},
+		{Name: "created_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
+		{Name: "updated_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
+		{Name: "user_id", Type: field.TypeInt64, Unique: true},
+	}
+	// LotteryAttemptWalletsTable holds the schema information for the "lottery_attempt_wallets" table.
+	LotteryAttemptWalletsTable = &schema.Table{
+		Name:       "lottery_attempt_wallets",
+		Columns:    LotteryAttemptWalletsColumns,
+		PrimaryKey: []*schema.Column{LotteryAttemptWalletsColumns[0]},
+		ForeignKeys: []*schema.ForeignKey{
+			{
+				Symbol:     "lottery_attempt_wallets_users_lottery_attempt_wallet",
+				Columns:    []*schema.Column{LotteryAttemptWalletsColumns[4]},
+				RefColumns: []*schema.Column{UsersColumns[0]},
+				OnDelete:   schema.NoAction,
+			},
+		},
+		Indexes: []*schema.Index{
+			{
+				Name:    "lotteryattemptwallet_user_id",
+				Unique:  true,
+				Columns: []*schema.Column{LotteryAttemptWalletsColumns[4]},
+			},
+		},
+	}
 	// LotteryDrawsColumns holds the columns for the "lottery_draws" table.
 	LotteryDrawsColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeInt64, Increment: true},
@@ -1239,6 +1305,7 @@ var (
 		{Name: "balance_amount", Type: field.TypeFloat64, Nullable: true, SchemaType: map[string]string{"postgres": "decimal(20,8)"}},
 		{Name: "product_content", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "text"}},
 		{Name: "attempt_key", Type: field.TypeString, Unique: true, Size: 128},
+		{Name: "attempt_source", Type: field.TypeString, Size: 20, Default: "activity"},
 		{Name: "created_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
 		{Name: "activity_id", Type: field.TypeInt64, Nullable: true},
 		{Name: "prize_id", Type: field.TypeInt64, Nullable: true},
@@ -1251,13 +1318,13 @@ var (
 		ForeignKeys: []*schema.ForeignKey{
 			{
 				Symbol:     "lottery_draws_lottery_activities_draws",
-				Columns:    []*schema.Column{LotteryDrawsColumns[8]},
+				Columns:    []*schema.Column{LotteryDrawsColumns[9]},
 				RefColumns: []*schema.Column{LotteryActivitiesColumns[0]},
 				OnDelete:   schema.SetNull,
 			},
 			{
 				Symbol:     "lottery_draws_lottery_prizes_draws",
-				Columns:    []*schema.Column{LotteryDrawsColumns[9]},
+				Columns:    []*schema.Column{LotteryDrawsColumns[10]},
 				RefColumns: []*schema.Column{LotteryPrizesColumns[0]},
 				OnDelete:   schema.SetNull,
 			},
@@ -1266,7 +1333,7 @@ var (
 			{
 				Name:    "lottery_draws_user_created_at_idx",
 				Unique:  false,
-				Columns: []*schema.Column{LotteryDrawsColumns[1], LotteryDrawsColumns[7]},
+				Columns: []*schema.Column{LotteryDrawsColumns[1], LotteryDrawsColumns[8]},
 			},
 		},
 	}
@@ -2497,6 +2564,7 @@ var (
 		{Name: "streak_day", Type: field.TypeInt, Default: 1},
 		{Name: "base_reward_amount", Type: field.TypeFloat64, Default: 0, SchemaType: map[string]string{"postgres": "decimal(20,8)"}},
 		{Name: "bonus_reward_amount", Type: field.TypeFloat64, Default: 0, SchemaType: map[string]string{"postgres": "decimal(20,8)"}},
+		{Name: "lottery_attempts_reward", Type: field.TypeInt, Default: 0},
 		{Name: "total_reward_amount", Type: field.TypeFloat64, Default: 0, SchemaType: map[string]string{"postgres": "decimal(20,8)"}},
 		{Name: "previous_day_usage_amount", Type: field.TypeFloat64, Default: 0, SchemaType: map[string]string{"postgres": "decimal(20,8)"}},
 		{Name: "usage_rebate_amount", Type: field.TypeFloat64, Default: 0, SchemaType: map[string]string{"postgres": "decimal(20,8)"}},
@@ -2514,13 +2582,13 @@ var (
 		ForeignKeys: []*schema.ForeignKey{
 			{
 				Symbol:     "user_checkins_checkin_reward_campaigns_checkins",
-				Columns:    []*schema.Column{UserCheckinsColumns[15]},
+				Columns:    []*schema.Column{UserCheckinsColumns[16]},
 				RefColumns: []*schema.Column{CheckinRewardCampaignsColumns[0]},
 				OnDelete:   schema.Restrict,
 			},
 			{
 				Symbol:     "user_checkins_users_checkins",
-				Columns:    []*schema.Column{UserCheckinsColumns[16]},
+				Columns:    []*schema.Column{UserCheckinsColumns[17]},
 				RefColumns: []*schema.Column{UsersColumns[0]},
 				OnDelete:   schema.NoAction,
 			},
@@ -2529,7 +2597,7 @@ var (
 			{
 				Name:    "usercheckin_user_id_checkin_date",
 				Unique:  true,
-				Columns: []*schema.Column{UserCheckinsColumns[16], UserCheckinsColumns[1]},
+				Columns: []*schema.Column{UserCheckinsColumns[17], UserCheckinsColumns[1]},
 			},
 			{
 				Name:    "usercheckin_checkin_date",
@@ -2539,12 +2607,12 @@ var (
 			{
 				Name:    "usercheckin_user_id",
 				Unique:  false,
-				Columns: []*schema.Column{UserCheckinsColumns[16]},
+				Columns: []*schema.Column{UserCheckinsColumns[17]},
 			},
 			{
 				Name:    "user_checkins_reward_campaign_id_idx",
 				Unique:  false,
-				Columns: []*schema.Column{UserCheckinsColumns[15]},
+				Columns: []*schema.Column{UserCheckinsColumns[16]},
 			},
 		},
 	}
@@ -2967,6 +3035,8 @@ var (
 		IdempotencyRecordsTable,
 		IdentityAdoptionDecisionsTable,
 		LotteryActivitiesTable,
+		LotteryAttemptLedgerTable,
+		LotteryAttemptWalletsTable,
 		LotteryDrawsTable,
 		LotteryPrizesTable,
 		LotteryPrizeItemsTable,
@@ -3093,10 +3163,26 @@ func init() {
 		Table: "lottery_activities",
 	}
 	LotteryActivitiesTable.Annotation.Checks = map[string]string{
-		"lottery_activities_attempt_limit_check": "attempt_limit > 0",
+		"lottery_activities_attempt_limit_check": "attempt_limit >= 0",
 		"lottery_activities_attempt_mode_check":  "attempt_mode IN ('daily', 'total')",
 		"lottery_activities_dates_check":         "starts_at IS NULL OR ends_at IS NULL OR starts_at <= ends_at",
 		"lottery_activities_status_check":        "status IN ('draft', 'active', 'disabled', 'ended')",
+	}
+	LotteryAttemptLedgerTable.ForeignKeys[0].RefTable = UsersTable
+	LotteryAttemptLedgerTable.Annotation = &entsql.Annotation{
+		Table: "lottery_attempt_ledger",
+	}
+	LotteryAttemptLedgerTable.Annotation.Checks = map[string]string{
+		"lottery_attempt_ledger_balance_check":     "balance_after >= 0",
+		"lottery_attempt_ledger_delta_check":       "delta <> 0",
+		"lottery_attempt_ledger_source_type_check": "source_type IN ('checkin_streak', 'lottery_draw')",
+	}
+	LotteryAttemptWalletsTable.ForeignKeys[0].RefTable = UsersTable
+	LotteryAttemptWalletsTable.Annotation = &entsql.Annotation{
+		Table: "lottery_attempt_wallets",
+	}
+	LotteryAttemptWalletsTable.Annotation.Checks = map[string]string{
+		"lottery_attempt_wallets_balance_check": "balance >= 0",
 	}
 	LotteryDrawsTable.ForeignKeys[0].RefTable = LotteryActivitiesTable
 	LotteryDrawsTable.ForeignKeys[1].RefTable = LotteryPrizesTable

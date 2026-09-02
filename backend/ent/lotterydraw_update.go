@@ -179,6 +179,20 @@ func (_u *LotteryDrawUpdate) SetNillableAttemptKey(v *string) *LotteryDrawUpdate
 	return _u
 }
 
+// SetAttemptSource sets the "attempt_source" field.
+func (_u *LotteryDrawUpdate) SetAttemptSource(v string) *LotteryDrawUpdate {
+	_u.mutation.SetAttemptSource(v)
+	return _u
+}
+
+// SetNillableAttemptSource sets the "attempt_source" field if the given value is not nil.
+func (_u *LotteryDrawUpdate) SetNillableAttemptSource(v *string) *LotteryDrawUpdate {
+	if v != nil {
+		_u.SetAttemptSource(*v)
+	}
+	return _u
+}
+
 // SetActivity sets the "activity" edge to the LotteryActivity entity.
 func (_u *LotteryDrawUpdate) SetActivity(v *LotteryActivity) *LotteryDrawUpdate {
 	return _u.SetActivityID(v.ID)
@@ -250,6 +264,11 @@ func (_u *LotteryDrawUpdate) check() error {
 			return &ValidationError{Name: "attempt_key", err: fmt.Errorf(`ent: validator failed for field "LotteryDraw.attempt_key": %w`, err)}
 		}
 	}
+	if v, ok := _u.mutation.AttemptSource(); ok {
+		if err := lotterydraw.AttemptSourceValidator(v); err != nil {
+			return &ValidationError{Name: "attempt_source", err: fmt.Errorf(`ent: validator failed for field "LotteryDraw.attempt_source": %w`, err)}
+		}
+	}
 	return nil
 }
 
@@ -294,6 +313,9 @@ func (_u *LotteryDrawUpdate) sqlSave(ctx context.Context) (_node int, err error)
 	}
 	if value, ok := _u.mutation.AttemptKey(); ok {
 		_spec.SetField(lotterydraw.FieldAttemptKey, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.AttemptSource(); ok {
+		_spec.SetField(lotterydraw.FieldAttemptSource, field.TypeString, value)
 	}
 	if _u.mutation.ActivityCleared() {
 		edge := &sqlgraph.EdgeSpec{
@@ -523,6 +545,20 @@ func (_u *LotteryDrawUpdateOne) SetNillableAttemptKey(v *string) *LotteryDrawUpd
 	return _u
 }
 
+// SetAttemptSource sets the "attempt_source" field.
+func (_u *LotteryDrawUpdateOne) SetAttemptSource(v string) *LotteryDrawUpdateOne {
+	_u.mutation.SetAttemptSource(v)
+	return _u
+}
+
+// SetNillableAttemptSource sets the "attempt_source" field if the given value is not nil.
+func (_u *LotteryDrawUpdateOne) SetNillableAttemptSource(v *string) *LotteryDrawUpdateOne {
+	if v != nil {
+		_u.SetAttemptSource(*v)
+	}
+	return _u
+}
+
 // SetActivity sets the "activity" edge to the LotteryActivity entity.
 func (_u *LotteryDrawUpdateOne) SetActivity(v *LotteryActivity) *LotteryDrawUpdateOne {
 	return _u.SetActivityID(v.ID)
@@ -607,6 +643,11 @@ func (_u *LotteryDrawUpdateOne) check() error {
 			return &ValidationError{Name: "attempt_key", err: fmt.Errorf(`ent: validator failed for field "LotteryDraw.attempt_key": %w`, err)}
 		}
 	}
+	if v, ok := _u.mutation.AttemptSource(); ok {
+		if err := lotterydraw.AttemptSourceValidator(v); err != nil {
+			return &ValidationError{Name: "attempt_source", err: fmt.Errorf(`ent: validator failed for field "LotteryDraw.attempt_source": %w`, err)}
+		}
+	}
 	return nil
 }
 
@@ -668,6 +709,9 @@ func (_u *LotteryDrawUpdateOne) sqlSave(ctx context.Context) (_node *LotteryDraw
 	}
 	if value, ok := _u.mutation.AttemptKey(); ok {
 		_spec.SetField(lotterydraw.FieldAttemptKey, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.AttemptSource(); ok {
+		_spec.SetField(lotterydraw.FieldAttemptSource, field.TypeString, value)
 	}
 	if _u.mutation.ActivityCleared() {
 		edge := &sqlgraph.EdgeSpec{

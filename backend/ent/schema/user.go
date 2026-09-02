@@ -166,6 +166,8 @@ func (User) Edges() []ent.Edge {
 		edge.To("platform_quotas", UserPlatformQuota.Type),
 		edge.To("checkins", UserCheckin.Type),
 		edge.To("checkin_blacklist_entries", UserCheckinBlacklist.Type),
+		edge.To("lottery_attempt_wallet", LotteryAttemptWallet.Type).Unique(),
+		edge.To("lottery_attempt_ledger", LotteryAttemptLedger.Type),
 		edge.To("user_images", UserImage.Type),
 		edge.To("user_image_tasks", UserImageTask.Type),
 	}

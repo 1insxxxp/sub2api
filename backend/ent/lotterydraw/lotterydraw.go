@@ -30,6 +30,8 @@ const (
 	FieldProductContent = "product_content"
 	// FieldAttemptKey holds the string denoting the attempt_key field in the database.
 	FieldAttemptKey = "attempt_key"
+	// FieldAttemptSource holds the string denoting the attempt_source field in the database.
+	FieldAttemptSource = "attempt_source"
 	// FieldCreatedAt holds the string denoting the created_at field in the database.
 	FieldCreatedAt = "created_at"
 	// EdgeActivity holds the string denoting the activity edge name in mutations.
@@ -65,6 +67,7 @@ var Columns = []string{
 	FieldBalanceAmount,
 	FieldProductContent,
 	FieldAttemptKey,
+	FieldAttemptSource,
 	FieldCreatedAt,
 }
 
@@ -85,6 +88,10 @@ var (
 	PrizeTypeValidator func(string) error
 	// AttemptKeyValidator is a validator for the "attempt_key" field. It is called by the builders before save.
 	AttemptKeyValidator func(string) error
+	// DefaultAttemptSource holds the default value on creation for the "attempt_source" field.
+	DefaultAttemptSource string
+	// AttemptSourceValidator is a validator for the "attempt_source" field. It is called by the builders before save.
+	AttemptSourceValidator func(string) error
 	// DefaultCreatedAt holds the default value on creation for the "created_at" field.
 	DefaultCreatedAt func() time.Time
 )
@@ -135,6 +142,11 @@ func ByProductContent(opts ...sql.OrderTermOption) OrderOption {
 // ByAttemptKey orders the results by the attempt_key field.
 func ByAttemptKey(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldAttemptKey, opts...).ToFunc()
+}
+
+// ByAttemptSource orders the results by the attempt_source field.
+func ByAttemptSource(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldAttemptSource, opts...).ToFunc()
 }
 
 // ByCreatedAt orders the results by the created_at field.

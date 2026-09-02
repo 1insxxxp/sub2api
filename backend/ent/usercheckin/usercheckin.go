@@ -33,6 +33,8 @@ const (
 	FieldBaseRewardAmount = "base_reward_amount"
 	// FieldBonusRewardAmount holds the string denoting the bonus_reward_amount field in the database.
 	FieldBonusRewardAmount = "bonus_reward_amount"
+	// FieldLotteryAttemptsReward holds the string denoting the lottery_attempts_reward field in the database.
+	FieldLotteryAttemptsReward = "lottery_attempts_reward"
 	// FieldTotalRewardAmount holds the string denoting the total_reward_amount field in the database.
 	FieldTotalRewardAmount = "total_reward_amount"
 	// FieldPreviousDayUsageAmount holds the string denoting the previous_day_usage_amount field in the database.
@@ -81,6 +83,7 @@ var Columns = []string{
 	FieldStreakDay,
 	FieldBaseRewardAmount,
 	FieldBonusRewardAmount,
+	FieldLotteryAttemptsReward,
 	FieldTotalRewardAmount,
 	FieldPreviousDayUsageAmount,
 	FieldUsageRebateAmount,
@@ -117,6 +120,10 @@ var (
 	DefaultBaseRewardAmount float64
 	// DefaultBonusRewardAmount holds the default value on creation for the "bonus_reward_amount" field.
 	DefaultBonusRewardAmount float64
+	// DefaultLotteryAttemptsReward holds the default value on creation for the "lottery_attempts_reward" field.
+	DefaultLotteryAttemptsReward int
+	// LotteryAttemptsRewardValidator is a validator for the "lottery_attempts_reward" field. It is called by the builders before save.
+	LotteryAttemptsRewardValidator func(int) error
 	// DefaultTotalRewardAmount holds the default value on creation for the "total_reward_amount" field.
 	DefaultTotalRewardAmount float64
 	// DefaultPreviousDayUsageAmount holds the default value on creation for the "previous_day_usage_amount" field.
@@ -184,6 +191,11 @@ func ByBaseRewardAmount(opts ...sql.OrderTermOption) OrderOption {
 // ByBonusRewardAmount orders the results by the bonus_reward_amount field.
 func ByBonusRewardAmount(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldBonusRewardAmount, opts...).ToFunc()
+}
+
+// ByLotteryAttemptsReward orders the results by the lottery_attempts_reward field.
+func ByLotteryAttemptsReward(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldLotteryAttemptsReward, opts...).ToFunc()
 }
 
 // ByTotalRewardAmount orders the results by the total_reward_amount field.

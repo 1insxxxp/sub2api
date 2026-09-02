@@ -95,6 +95,11 @@ func AttemptKey(v string) predicate.LotteryDraw {
 	return predicate.LotteryDraw(sql.FieldEQ(FieldAttemptKey, v))
 }
 
+// AttemptSource applies equality check predicate on the "attempt_source" field. It's identical to AttemptSourceEQ.
+func AttemptSource(v string) predicate.LotteryDraw {
+	return predicate.LotteryDraw(sql.FieldEQ(FieldAttemptSource, v))
+}
+
 // CreatedAt applies equality check predicate on the "created_at" field. It's identical to CreatedAtEQ.
 func CreatedAt(v time.Time) predicate.LotteryDraw {
 	return predicate.LotteryDraw(sql.FieldEQ(FieldCreatedAt, v))
@@ -518,6 +523,71 @@ func AttemptKeyEqualFold(v string) predicate.LotteryDraw {
 // AttemptKeyContainsFold applies the ContainsFold predicate on the "attempt_key" field.
 func AttemptKeyContainsFold(v string) predicate.LotteryDraw {
 	return predicate.LotteryDraw(sql.FieldContainsFold(FieldAttemptKey, v))
+}
+
+// AttemptSourceEQ applies the EQ predicate on the "attempt_source" field.
+func AttemptSourceEQ(v string) predicate.LotteryDraw {
+	return predicate.LotteryDraw(sql.FieldEQ(FieldAttemptSource, v))
+}
+
+// AttemptSourceNEQ applies the NEQ predicate on the "attempt_source" field.
+func AttemptSourceNEQ(v string) predicate.LotteryDraw {
+	return predicate.LotteryDraw(sql.FieldNEQ(FieldAttemptSource, v))
+}
+
+// AttemptSourceIn applies the In predicate on the "attempt_source" field.
+func AttemptSourceIn(vs ...string) predicate.LotteryDraw {
+	return predicate.LotteryDraw(sql.FieldIn(FieldAttemptSource, vs...))
+}
+
+// AttemptSourceNotIn applies the NotIn predicate on the "attempt_source" field.
+func AttemptSourceNotIn(vs ...string) predicate.LotteryDraw {
+	return predicate.LotteryDraw(sql.FieldNotIn(FieldAttemptSource, vs...))
+}
+
+// AttemptSourceGT applies the GT predicate on the "attempt_source" field.
+func AttemptSourceGT(v string) predicate.LotteryDraw {
+	return predicate.LotteryDraw(sql.FieldGT(FieldAttemptSource, v))
+}
+
+// AttemptSourceGTE applies the GTE predicate on the "attempt_source" field.
+func AttemptSourceGTE(v string) predicate.LotteryDraw {
+	return predicate.LotteryDraw(sql.FieldGTE(FieldAttemptSource, v))
+}
+
+// AttemptSourceLT applies the LT predicate on the "attempt_source" field.
+func AttemptSourceLT(v string) predicate.LotteryDraw {
+	return predicate.LotteryDraw(sql.FieldLT(FieldAttemptSource, v))
+}
+
+// AttemptSourceLTE applies the LTE predicate on the "attempt_source" field.
+func AttemptSourceLTE(v string) predicate.LotteryDraw {
+	return predicate.LotteryDraw(sql.FieldLTE(FieldAttemptSource, v))
+}
+
+// AttemptSourceContains applies the Contains predicate on the "attempt_source" field.
+func AttemptSourceContains(v string) predicate.LotteryDraw {
+	return predicate.LotteryDraw(sql.FieldContains(FieldAttemptSource, v))
+}
+
+// AttemptSourceHasPrefix applies the HasPrefix predicate on the "attempt_source" field.
+func AttemptSourceHasPrefix(v string) predicate.LotteryDraw {
+	return predicate.LotteryDraw(sql.FieldHasPrefix(FieldAttemptSource, v))
+}
+
+// AttemptSourceHasSuffix applies the HasSuffix predicate on the "attempt_source" field.
+func AttemptSourceHasSuffix(v string) predicate.LotteryDraw {
+	return predicate.LotteryDraw(sql.FieldHasSuffix(FieldAttemptSource, v))
+}
+
+// AttemptSourceEqualFold applies the EqualFold predicate on the "attempt_source" field.
+func AttemptSourceEqualFold(v string) predicate.LotteryDraw {
+	return predicate.LotteryDraw(sql.FieldEqualFold(FieldAttemptSource, v))
+}
+
+// AttemptSourceContainsFold applies the ContainsFold predicate on the "attempt_source" field.
+func AttemptSourceContainsFold(v string) predicate.LotteryDraw {
+	return predicate.LotteryDraw(sql.FieldContainsFold(FieldAttemptSource, v))
 }
 
 // CreatedAtEQ applies the EQ predicate on the "created_at" field.

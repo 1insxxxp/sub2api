@@ -63,8 +63,8 @@ func checkinCampaignBaselineConfig() *CheckinConfig {
 		},
 		StreakEnabled: true,
 		StreakRules: []CheckinStreakRule{
-			{Day: 7, BonusAmount: 3},
-			{Day: 14, BonusAmount: 8},
+			{Day: 7, LotteryAttempts: 1},
+			{Day: 14, LotteryAttempts: 1},
 		},
 		UsageRebateEnabled:     true,
 		UsageRebateRatePercent: 7.5,
@@ -96,9 +96,9 @@ func TestResolveEffectiveCheckinConfigUsesBaselineWithoutCampaign(t *testing.T) 
 	require.Equal(t, baseline.TotalRewardCap, effective.Config.TotalRewardCap)
 
 	effective.Config.Tiers[0].Amount = 99
-	effective.Config.StreakRules[0].BonusAmount = 99
+	effective.Config.StreakRules[0].LotteryAttempts = 99
 	require.Equal(t, 1.0, baseline.Tiers[0].Amount)
-	require.Equal(t, 3.0, baseline.StreakRules[0].BonusAmount)
+	require.Equal(t, 1, baseline.StreakRules[0].LotteryAttempts)
 }
 
 func TestResolveEffectiveCheckinConfigReplacesOnlyTiers(t *testing.T) {
@@ -145,8 +145,8 @@ func TestResolveEffectiveCheckinConfigReplacesOnlyTiers(t *testing.T) {
 	require.Equal(t, baseline.UsageRebateCap, effective.Config.UsageRebateCap)
 	require.Equal(t, baseline.TotalRewardCap, effective.Config.TotalRewardCap)
 
-	effective.Config.StreakRules[0].BonusAmount = 99
-	require.Equal(t, 3.0, baseline.StreakRules[0].BonusAmount)
+	effective.Config.StreakRules[0].LotteryAttempts = 99
+	require.Equal(t, 1, baseline.StreakRules[0].LotteryAttempts)
 }
 
 func TestResolveEffectiveCheckinConfigIncludesStartAndEndDates(t *testing.T) {

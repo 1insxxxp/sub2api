@@ -15,6 +15,8 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/apikey"
 	"github.com/Wei-Shaw/sub2api/ent/authidentity"
 	"github.com/Wei-Shaw/sub2api/ent/group"
+	"github.com/Wei-Shaw/sub2api/ent/lotteryattemptledger"
+	"github.com/Wei-Shaw/sub2api/ent/lotteryattemptwallet"
 	"github.com/Wei-Shaw/sub2api/ent/paymentorder"
 	"github.com/Wei-Shaw/sub2api/ent/pendingauthsession"
 	"github.com/Wei-Shaw/sub2api/ent/promocodeusage"
@@ -724,6 +726,40 @@ func (_c *UserCreate) AddCheckinBlacklistEntries(v ...*UserCheckinBlacklist) *Us
 		ids[i] = v[i].ID
 	}
 	return _c.AddCheckinBlacklistEntryIDs(ids...)
+}
+
+// SetLotteryAttemptWalletID sets the "lottery_attempt_wallet" edge to the LotteryAttemptWallet entity by ID.
+func (_c *UserCreate) SetLotteryAttemptWalletID(id int64) *UserCreate {
+	_c.mutation.SetLotteryAttemptWalletID(id)
+	return _c
+}
+
+// SetNillableLotteryAttemptWalletID sets the "lottery_attempt_wallet" edge to the LotteryAttemptWallet entity by ID if the given value is not nil.
+func (_c *UserCreate) SetNillableLotteryAttemptWalletID(id *int64) *UserCreate {
+	if id != nil {
+		_c = _c.SetLotteryAttemptWalletID(*id)
+	}
+	return _c
+}
+
+// SetLotteryAttemptWallet sets the "lottery_attempt_wallet" edge to the LotteryAttemptWallet entity.
+func (_c *UserCreate) SetLotteryAttemptWallet(v *LotteryAttemptWallet) *UserCreate {
+	return _c.SetLotteryAttemptWalletID(v.ID)
+}
+
+// AddLotteryAttemptLedgerIDs adds the "lottery_attempt_ledger" edge to the LotteryAttemptLedger entity by IDs.
+func (_c *UserCreate) AddLotteryAttemptLedgerIDs(ids ...int64) *UserCreate {
+	_c.mutation.AddLotteryAttemptLedgerIDs(ids...)
+	return _c
+}
+
+// AddLotteryAttemptLedger adds the "lottery_attempt_ledger" edges to the LotteryAttemptLedger entity.
+func (_c *UserCreate) AddLotteryAttemptLedger(v ...*LotteryAttemptLedger) *UserCreate {
+	ids := make([]int64, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _c.AddLotteryAttemptLedgerIDs(ids...)
 }
 
 // AddUserImageIDs adds the "user_images" edge to the UserImage entity by IDs.
@@ -1442,6 +1478,38 @@ func (_c *UserCreate) createSpec() (*User, *sqlgraph.CreateSpec) {
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(usercheckinblacklist.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges = append(_spec.Edges, edge)
+	}
+	if nodes := _c.mutation.LotteryAttemptWalletIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2O,
+			Inverse: false,
+			Table:   user.LotteryAttemptWalletTable,
+			Columns: []string{user.LotteryAttemptWalletColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(lotteryattemptwallet.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges = append(_spec.Edges, edge)
+	}
+	if nodes := _c.mutation.LotteryAttemptLedgerIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   user.LotteryAttemptLedgerTable,
+			Columns: []string{user.LotteryAttemptLedgerColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(lotteryattemptledger.FieldID, field.TypeInt64),
 			},
 		}
 		for _, k := range nodes {

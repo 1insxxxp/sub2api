@@ -100,7 +100,9 @@ vi.mock('vue-i18n', async () => {
     'checkin.eligibilityEitherPending': 'Reach either usage or recharge requirement',
     'checkin.usageCriterion': 'Cumulative usage',
     'checkin.rechargeCriterion': 'Cumulative recharge',
+    'checkin.dailyUsageCriterion': 'Requests today',
     'checkin.criterionProgress': '{current} / {min}',
+    'checkin.countCriterionProgress': '{current} / {min}',
     'checkin.rewardBreakdown': 'Reward breakdown',
     'checkin.rewardCampaign': 'Reward campaign',
     'checkin.rewardCampaignLabel': 'Reward campaign: {name}',
@@ -113,6 +115,12 @@ vi.mock('vue-i18n', async () => {
     'checkin.noStreakBonusToday': 'No streak bonus today',
     'checkin.streakBonusTitle': 'Streak bonus rules',
     'checkin.nextStreakBonus': 'Streak day {day} earns an extra {amount}',
+    'checkin.lotteryAttempts': 'Lottery attempts',
+    'checkin.lotteryAttemptsWhenReached': 'When reached',
+    'checkin.noLotteryAttemptsToday': 'No lottery attempts today',
+    'checkin.streakLotteryTitle': 'Streak lottery rewards',
+    'checkin.nextStreakLottery': 'Streak day {day} earns {count} lottery attempts',
+    'checkin.noUpcomingStreakLottery': 'No upcoming lottery-attempt reward is configured',
     'dashboard.title': 'Dashboard',
     'dashboard.welcomeMessage': 'Welcome'
   }
@@ -505,10 +513,11 @@ describe('AppHeader daily check-in entry', () => {
       total_usage_usd: 18.5,
       min_total_recharge_usd: 0,
       total_recharge_usd: 0,
+      min_daily_usage_count: 5,
+      today_usage_count: 5,
       next_streak_rule: {
         day: 7,
-        bonus_amount: 10,
-        bonus_rate_percent: 99
+        lottery_attempts: 10
       },
       recent_records: []
     })
@@ -520,10 +529,10 @@ describe('AppHeader daily check-in entry', () => {
     expect(text).toContain('Cumulative spend reached $10.00; current $18.50')
     expect(text).toContain('Reward breakdown')
     expect(text).toContain('Random reward')
-    expect(text).toContain('No streak bonus today')
-    expect(text).toContain('Streak bonus rules')
-    expect(text).toContain('Streak day 7 earns an extra $10.00')
-    expect(text).not.toContain('99%')
+    expect(text).toContain('No lottery attempts today')
+    expect(text).toContain('Streak lottery rewards')
+    expect(text).toContain('Streak day 7 earns 10 lottery attempts')
+    expect(wrapper.get('[data-test="daily-checkin-count-progress"]').attributes('style')).toContain('width: 100%')
   })
 
   it('shows previous-day usage and the deterministic rebate estimate before check-in', async () => {
@@ -612,6 +621,7 @@ describe('AppHeader daily check-in entry', () => {
       usage_rebate_amount: 4,
       estimated_usage_rebate: 4,
       bonus_reward_amount: 0,
+      lottery_attempts_reward: 1,
       reward_cap_adjustment: 0,
       total_reward_amount: 4.8,
       current_streak: 7,
@@ -632,7 +642,7 @@ describe('AppHeader daily check-in entry', () => {
     expect(wrapper.get('[data-test="checkin-base-reward"]').text()).toContain('$0.80')
     expect(wrapper.get('[data-test="checkin-previous-day-usage"]').text()).toContain('$50.00')
     expect(wrapper.get('[data-test="checkin-usage-rebate"]').text()).toContain('$4.00')
-    expect(wrapper.get('[data-test="checkin-streak-bonus"]').text()).toContain('$0.00')
+    expect(wrapper.get('[data-test="checkin-lottery-attempts"]').text()).toContain('1')
     expect(wrapper.get('[data-test="checkin-total-reward"]').text()).toContain('$4.80')
     expect(showSuccess).toHaveBeenCalledWith('签到成功，获得 $4.80')
   })

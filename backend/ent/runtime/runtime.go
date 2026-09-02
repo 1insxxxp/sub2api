@@ -27,6 +27,8 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/idempotencyrecord"
 	"github.com/Wei-Shaw/sub2api/ent/identityadoptiondecision"
 	"github.com/Wei-Shaw/sub2api/ent/lotteryactivity"
+	"github.com/Wei-Shaw/sub2api/ent/lotteryattemptledger"
+	"github.com/Wei-Shaw/sub2api/ent/lotteryattemptwallet"
 	"github.com/Wei-Shaw/sub2api/ent/lotterydraw"
 	"github.com/Wei-Shaw/sub2api/ent/lotteryprize"
 	"github.com/Wei-Shaw/sub2api/ent/lotteryprizeitem"
@@ -1468,6 +1470,8 @@ func init() {
 	lotteryactivityDescAttemptLimit := lotteryactivityFields[4].Descriptor()
 	// lotteryactivity.DefaultAttemptLimit holds the default value on creation for the attempt_limit field.
 	lotteryactivity.DefaultAttemptLimit = lotteryactivityDescAttemptLimit.Default.(int)
+	// lotteryactivity.AttemptLimitValidator is a validator for the "attempt_limit" field. It is called by the builders before save.
+	lotteryactivity.AttemptLimitValidator = lotteryactivityDescAttemptLimit.Validators[0].(func(int) error)
 	// lotteryactivityDescCreatedAt is the schema descriptor for created_at field.
 	lotteryactivityDescCreatedAt := lotteryactivityFields[8].Descriptor()
 	// lotteryactivity.DefaultCreatedAt holds the default value on creation for the created_at field.
@@ -1478,6 +1482,64 @@ func init() {
 	lotteryactivity.DefaultUpdatedAt = lotteryactivityDescUpdatedAt.Default.(func() time.Time)
 	// lotteryactivity.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
 	lotteryactivity.UpdateDefaultUpdatedAt = lotteryactivityDescUpdatedAt.UpdateDefault.(func() time.Time)
+	lotteryattemptledgerFields := schema.LotteryAttemptLedger{}.Fields()
+	_ = lotteryattemptledgerFields
+	// lotteryattemptledgerDescDelta is the schema descriptor for delta field.
+	lotteryattemptledgerDescDelta := lotteryattemptledgerFields[1].Descriptor()
+	// lotteryattemptledger.DeltaValidator is a validator for the "delta" field. It is called by the builders before save.
+	lotteryattemptledger.DeltaValidator = lotteryattemptledgerDescDelta.Validators[0].(func(int) error)
+	// lotteryattemptledgerDescBalanceAfter is the schema descriptor for balance_after field.
+	lotteryattemptledgerDescBalanceAfter := lotteryattemptledgerFields[2].Descriptor()
+	// lotteryattemptledger.BalanceAfterValidator is a validator for the "balance_after" field. It is called by the builders before save.
+	lotteryattemptledger.BalanceAfterValidator = lotteryattemptledgerDescBalanceAfter.Validators[0].(func(int) error)
+	// lotteryattemptledgerDescSourceType is the schema descriptor for source_type field.
+	lotteryattemptledgerDescSourceType := lotteryattemptledgerFields[3].Descriptor()
+	// lotteryattemptledger.SourceTypeValidator is a validator for the "source_type" field. It is called by the builders before save.
+	lotteryattemptledger.SourceTypeValidator = func() func(string) error {
+		validators := lotteryattemptledgerDescSourceType.Validators
+		fns := [...]func(string) error{
+			validators[0].(func(string) error),
+			validators[1].(func(string) error),
+		}
+		return func(source_type string) error {
+			for _, fn := range fns {
+				if err := fn(source_type); err != nil {
+					return err
+				}
+			}
+			return nil
+		}
+	}()
+	// lotteryattemptledgerDescSourceID is the schema descriptor for source_id field.
+	lotteryattemptledgerDescSourceID := lotteryattemptledgerFields[4].Descriptor()
+	// lotteryattemptledger.SourceIDValidator is a validator for the "source_id" field. It is called by the builders before save.
+	lotteryattemptledger.SourceIDValidator = lotteryattemptledgerDescSourceID.Validators[0].(func(int64) error)
+	// lotteryattemptledgerDescDescription is the schema descriptor for description field.
+	lotteryattemptledgerDescDescription := lotteryattemptledgerFields[5].Descriptor()
+	// lotteryattemptledger.DefaultDescription holds the default value on creation for the description field.
+	lotteryattemptledger.DefaultDescription = lotteryattemptledgerDescDescription.Default.(string)
+	// lotteryattemptledgerDescCreatedAt is the schema descriptor for created_at field.
+	lotteryattemptledgerDescCreatedAt := lotteryattemptledgerFields[6].Descriptor()
+	// lotteryattemptledger.DefaultCreatedAt holds the default value on creation for the created_at field.
+	lotteryattemptledger.DefaultCreatedAt = lotteryattemptledgerDescCreatedAt.Default.(func() time.Time)
+	lotteryattemptwalletFields := schema.LotteryAttemptWallet{}.Fields()
+	_ = lotteryattemptwalletFields
+	// lotteryattemptwalletDescBalance is the schema descriptor for balance field.
+	lotteryattemptwalletDescBalance := lotteryattemptwalletFields[1].Descriptor()
+	// lotteryattemptwallet.DefaultBalance holds the default value on creation for the balance field.
+	lotteryattemptwallet.DefaultBalance = lotteryattemptwalletDescBalance.Default.(int)
+	// lotteryattemptwallet.BalanceValidator is a validator for the "balance" field. It is called by the builders before save.
+	lotteryattemptwallet.BalanceValidator = lotteryattemptwalletDescBalance.Validators[0].(func(int) error)
+	// lotteryattemptwalletDescCreatedAt is the schema descriptor for created_at field.
+	lotteryattemptwalletDescCreatedAt := lotteryattemptwalletFields[2].Descriptor()
+	// lotteryattemptwallet.DefaultCreatedAt holds the default value on creation for the created_at field.
+	lotteryattemptwallet.DefaultCreatedAt = lotteryattemptwalletDescCreatedAt.Default.(func() time.Time)
+	// lotteryattemptwalletDescUpdatedAt is the schema descriptor for updated_at field.
+	lotteryattemptwalletDescUpdatedAt := lotteryattemptwalletFields[3].Descriptor()
+	// lotteryattemptwallet.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	lotteryattemptwallet.DefaultUpdatedAt = lotteryattemptwalletDescUpdatedAt.Default.(func() time.Time)
+	// lotteryattemptwallet.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
+	lotteryattemptwallet.UpdateDefaultUpdatedAt = lotteryattemptwalletDescUpdatedAt.UpdateDefault.(func() time.Time)
 	lotterydrawFields := schema.LotteryDraw{}.Fields()
 	_ = lotterydrawFields
 	// lotterydrawDescPrizeName is the schema descriptor for prize_name field.
@@ -1492,8 +1554,28 @@ func init() {
 	lotterydrawDescAttemptKey := lotterydrawFields[7].Descriptor()
 	// lotterydraw.AttemptKeyValidator is a validator for the "attempt_key" field. It is called by the builders before save.
 	lotterydraw.AttemptKeyValidator = lotterydrawDescAttemptKey.Validators[0].(func(string) error)
+	// lotterydrawDescAttemptSource is the schema descriptor for attempt_source field.
+	lotterydrawDescAttemptSource := lotterydrawFields[8].Descriptor()
+	// lotterydraw.DefaultAttemptSource holds the default value on creation for the attempt_source field.
+	lotterydraw.DefaultAttemptSource = lotterydrawDescAttemptSource.Default.(string)
+	// lotterydraw.AttemptSourceValidator is a validator for the "attempt_source" field. It is called by the builders before save.
+	lotterydraw.AttemptSourceValidator = func() func(string) error {
+		validators := lotterydrawDescAttemptSource.Validators
+		fns := [...]func(string) error{
+			validators[0].(func(string) error),
+			validators[1].(func(string) error),
+		}
+		return func(attempt_source string) error {
+			for _, fn := range fns {
+				if err := fn(attempt_source); err != nil {
+					return err
+				}
+			}
+			return nil
+		}
+	}()
 	// lotterydrawDescCreatedAt is the schema descriptor for created_at field.
-	lotterydrawDescCreatedAt := lotterydrawFields[8].Descriptor()
+	lotterydrawDescCreatedAt := lotterydrawFields[9].Descriptor()
 	// lotterydraw.DefaultCreatedAt holds the default value on creation for the created_at field.
 	lotterydraw.DefaultCreatedAt = lotterydrawDescCreatedAt.Default.(func() time.Time)
 	lotteryprizeFields := schema.LotteryPrize{}.Fields()
@@ -2952,30 +3034,36 @@ func init() {
 	usercheckinDescBonusRewardAmount := usercheckinFields[8].Descriptor()
 	// usercheckin.DefaultBonusRewardAmount holds the default value on creation for the bonus_reward_amount field.
 	usercheckin.DefaultBonusRewardAmount = usercheckinDescBonusRewardAmount.Default.(float64)
+	// usercheckinDescLotteryAttemptsReward is the schema descriptor for lottery_attempts_reward field.
+	usercheckinDescLotteryAttemptsReward := usercheckinFields[9].Descriptor()
+	// usercheckin.DefaultLotteryAttemptsReward holds the default value on creation for the lottery_attempts_reward field.
+	usercheckin.DefaultLotteryAttemptsReward = usercheckinDescLotteryAttemptsReward.Default.(int)
+	// usercheckin.LotteryAttemptsRewardValidator is a validator for the "lottery_attempts_reward" field. It is called by the builders before save.
+	usercheckin.LotteryAttemptsRewardValidator = usercheckinDescLotteryAttemptsReward.Validators[0].(func(int) error)
 	// usercheckinDescTotalRewardAmount is the schema descriptor for total_reward_amount field.
-	usercheckinDescTotalRewardAmount := usercheckinFields[9].Descriptor()
+	usercheckinDescTotalRewardAmount := usercheckinFields[10].Descriptor()
 	// usercheckin.DefaultTotalRewardAmount holds the default value on creation for the total_reward_amount field.
 	usercheckin.DefaultTotalRewardAmount = usercheckinDescTotalRewardAmount.Default.(float64)
 	// usercheckinDescPreviousDayUsageAmount is the schema descriptor for previous_day_usage_amount field.
-	usercheckinDescPreviousDayUsageAmount := usercheckinFields[10].Descriptor()
+	usercheckinDescPreviousDayUsageAmount := usercheckinFields[11].Descriptor()
 	// usercheckin.DefaultPreviousDayUsageAmount holds the default value on creation for the previous_day_usage_amount field.
 	usercheckin.DefaultPreviousDayUsageAmount = usercheckinDescPreviousDayUsageAmount.Default.(float64)
 	// usercheckinDescUsageRebateAmount is the schema descriptor for usage_rebate_amount field.
-	usercheckinDescUsageRebateAmount := usercheckinFields[11].Descriptor()
+	usercheckinDescUsageRebateAmount := usercheckinFields[12].Descriptor()
 	// usercheckin.DefaultUsageRebateAmount holds the default value on creation for the usage_rebate_amount field.
 	usercheckin.DefaultUsageRebateAmount = usercheckinDescUsageRebateAmount.Default.(float64)
 	// usercheckinDescRewardCapAdjustment is the schema descriptor for reward_cap_adjustment field.
-	usercheckinDescRewardCapAdjustment := usercheckinFields[12].Descriptor()
+	usercheckinDescRewardCapAdjustment := usercheckinFields[13].Descriptor()
 	// usercheckin.DefaultRewardCapAdjustment holds the default value on creation for the reward_cap_adjustment field.
 	usercheckin.DefaultRewardCapAdjustment = usercheckinDescRewardCapAdjustment.Default.(float64)
 	// usercheckinDescRewardCampaignName is the schema descriptor for reward_campaign_name field.
-	usercheckinDescRewardCampaignName := usercheckinFields[14].Descriptor()
+	usercheckinDescRewardCampaignName := usercheckinFields[15].Descriptor()
 	// usercheckin.DefaultRewardCampaignName holds the default value on creation for the reward_campaign_name field.
 	usercheckin.DefaultRewardCampaignName = usercheckinDescRewardCampaignName.Default.(string)
 	// usercheckin.RewardCampaignNameValidator is a validator for the "reward_campaign_name" field. It is called by the builders before save.
 	usercheckin.RewardCampaignNameValidator = usercheckinDescRewardCampaignName.Validators[0].(func(string) error)
 	// usercheckinDescRewardCampaignTiersSnapshot is the schema descriptor for reward_campaign_tiers_snapshot field.
-	usercheckinDescRewardCampaignTiersSnapshot := usercheckinFields[15].Descriptor()
+	usercheckinDescRewardCampaignTiersSnapshot := usercheckinFields[16].Descriptor()
 	// usercheckin.DefaultRewardCampaignTiersSnapshot holds the default value on creation for the reward_campaign_tiers_snapshot field.
 	usercheckin.DefaultRewardCampaignTiersSnapshot = usercheckinDescRewardCampaignTiersSnapshot.Default.([]domain.CheckinRewardTier)
 	usercheckinblacklistMixin := schema.UserCheckinBlacklist{}.Mixin()

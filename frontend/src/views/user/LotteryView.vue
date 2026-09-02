@@ -22,11 +22,11 @@
               <p class="text-xs font-medium text-blue-700 dark:text-blue-300">{{ t('lottery.attempts') }}</p>
               <div class="mt-1 flex items-end gap-2">
                 <strong class="text-4xl leading-none text-blue-700 dark:text-blue-200">{{ state?.attempts_remaining ?? 0 }}</strong>
-                <span class="pb-0.5 text-sm text-blue-600 dark:text-blue-300">
-                  / {{ state?.activity.attempt_limit ?? 0 }}
-                </span>
               </div>
               <p class="mt-2 text-xs text-blue-600/80 dark:text-blue-300/80">
+                {{ t('lottery.attemptBreakdown', { activity: state?.activity_attempts_remaining ?? 0, reward: state?.reward_attempts_remaining ?? 0 }) }}
+              </p>
+              <p class="mt-1 text-xs text-blue-600/80 dark:text-blue-300/80">
                 {{ state?.activity.attempt_mode === 'daily' ? t('lottery.daily') : t('lottery.total') }} · {{ t('lottery.attemptsUsed', { count: state?.attempts_used ?? 0 }) }}
               </p>
             </div>
@@ -248,6 +248,8 @@ async function handleDraw() {
     pendingResult.value = drawResult
     state.value.attempts_remaining = drawResult.attempts_remaining
     state.value.attempts_used = drawResult.attempts_used
+    state.value.activity_attempts_remaining = drawResult.activity_attempts_remaining
+    state.value.reward_attempts_remaining = drawResult.reward_attempts_remaining
     winnerPrizeId.value = resolveWinnerPrizeId(drawResult.draw)
     try { await loadHistory(1) } catch { /* historyError already contains the localized message */ }
     if (winnerPrizeId.value === null) {

@@ -135,6 +135,20 @@ func (_c *UserCheckinCreate) SetNillableBonusRewardAmount(v *float64) *UserCheck
 	return _c
 }
 
+// SetLotteryAttemptsReward sets the "lottery_attempts_reward" field.
+func (_c *UserCheckinCreate) SetLotteryAttemptsReward(v int) *UserCheckinCreate {
+	_c.mutation.SetLotteryAttemptsReward(v)
+	return _c
+}
+
+// SetNillableLotteryAttemptsReward sets the "lottery_attempts_reward" field if the given value is not nil.
+func (_c *UserCheckinCreate) SetNillableLotteryAttemptsReward(v *int) *UserCheckinCreate {
+	if v != nil {
+		_c.SetLotteryAttemptsReward(*v)
+	}
+	return _c
+}
+
 // SetTotalRewardAmount sets the "total_reward_amount" field.
 func (_c *UserCheckinCreate) SetTotalRewardAmount(v float64) *UserCheckinCreate {
 	_c.mutation.SetTotalRewardAmount(v)
@@ -298,6 +312,10 @@ func (_c *UserCheckinCreate) defaults() {
 		v := usercheckin.DefaultBonusRewardAmount
 		_c.mutation.SetBonusRewardAmount(v)
 	}
+	if _, ok := _c.mutation.LotteryAttemptsReward(); !ok {
+		v := usercheckin.DefaultLotteryAttemptsReward
+		_c.mutation.SetLotteryAttemptsReward(v)
+	}
 	if _, ok := _c.mutation.TotalRewardAmount(); !ok {
 		v := usercheckin.DefaultTotalRewardAmount
 		_c.mutation.SetTotalRewardAmount(v)
@@ -357,6 +375,14 @@ func (_c *UserCheckinCreate) check() error {
 	}
 	if _, ok := _c.mutation.BonusRewardAmount(); !ok {
 		return &ValidationError{Name: "bonus_reward_amount", err: errors.New(`ent: missing required field "UserCheckin.bonus_reward_amount"`)}
+	}
+	if _, ok := _c.mutation.LotteryAttemptsReward(); !ok {
+		return &ValidationError{Name: "lottery_attempts_reward", err: errors.New(`ent: missing required field "UserCheckin.lottery_attempts_reward"`)}
+	}
+	if v, ok := _c.mutation.LotteryAttemptsReward(); ok {
+		if err := usercheckin.LotteryAttemptsRewardValidator(v); err != nil {
+			return &ValidationError{Name: "lottery_attempts_reward", err: fmt.Errorf(`ent: validator failed for field "UserCheckin.lottery_attempts_reward": %w`, err)}
+		}
 	}
 	if _, ok := _c.mutation.TotalRewardAmount(); !ok {
 		return &ValidationError{Name: "total_reward_amount", err: errors.New(`ent: missing required field "UserCheckin.total_reward_amount"`)}
@@ -442,6 +468,10 @@ func (_c *UserCheckinCreate) createSpec() (*UserCheckin, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.BonusRewardAmount(); ok {
 		_spec.SetField(usercheckin.FieldBonusRewardAmount, field.TypeFloat64, value)
 		_node.BonusRewardAmount = value
+	}
+	if value, ok := _c.mutation.LotteryAttemptsReward(); ok {
+		_spec.SetField(usercheckin.FieldLotteryAttemptsReward, field.TypeInt, value)
+		_node.LotteryAttemptsReward = value
 	}
 	if value, ok := _c.mutation.TotalRewardAmount(); ok {
 		_spec.SetField(usercheckin.FieldTotalRewardAmount, field.TypeFloat64, value)
@@ -682,6 +712,24 @@ func (u *UserCheckinUpsert) UpdateBonusRewardAmount() *UserCheckinUpsert {
 // AddBonusRewardAmount adds v to the "bonus_reward_amount" field.
 func (u *UserCheckinUpsert) AddBonusRewardAmount(v float64) *UserCheckinUpsert {
 	u.Add(usercheckin.FieldBonusRewardAmount, v)
+	return u
+}
+
+// SetLotteryAttemptsReward sets the "lottery_attempts_reward" field.
+func (u *UserCheckinUpsert) SetLotteryAttemptsReward(v int) *UserCheckinUpsert {
+	u.Set(usercheckin.FieldLotteryAttemptsReward, v)
+	return u
+}
+
+// UpdateLotteryAttemptsReward sets the "lottery_attempts_reward" field to the value that was provided on create.
+func (u *UserCheckinUpsert) UpdateLotteryAttemptsReward() *UserCheckinUpsert {
+	u.SetExcluded(usercheckin.FieldLotteryAttemptsReward)
+	return u
+}
+
+// AddLotteryAttemptsReward adds v to the "lottery_attempts_reward" field.
+func (u *UserCheckinUpsert) AddLotteryAttemptsReward(v int) *UserCheckinUpsert {
+	u.Add(usercheckin.FieldLotteryAttemptsReward, v)
 	return u
 }
 
@@ -995,6 +1043,27 @@ func (u *UserCheckinUpsertOne) AddBonusRewardAmount(v float64) *UserCheckinUpser
 func (u *UserCheckinUpsertOne) UpdateBonusRewardAmount() *UserCheckinUpsertOne {
 	return u.Update(func(s *UserCheckinUpsert) {
 		s.UpdateBonusRewardAmount()
+	})
+}
+
+// SetLotteryAttemptsReward sets the "lottery_attempts_reward" field.
+func (u *UserCheckinUpsertOne) SetLotteryAttemptsReward(v int) *UserCheckinUpsertOne {
+	return u.Update(func(s *UserCheckinUpsert) {
+		s.SetLotteryAttemptsReward(v)
+	})
+}
+
+// AddLotteryAttemptsReward adds v to the "lottery_attempts_reward" field.
+func (u *UserCheckinUpsertOne) AddLotteryAttemptsReward(v int) *UserCheckinUpsertOne {
+	return u.Update(func(s *UserCheckinUpsert) {
+		s.AddLotteryAttemptsReward(v)
+	})
+}
+
+// UpdateLotteryAttemptsReward sets the "lottery_attempts_reward" field to the value that was provided on create.
+func (u *UserCheckinUpsertOne) UpdateLotteryAttemptsReward() *UserCheckinUpsertOne {
+	return u.Update(func(s *UserCheckinUpsert) {
+		s.UpdateLotteryAttemptsReward()
 	})
 }
 
@@ -1493,6 +1562,27 @@ func (u *UserCheckinUpsertBulk) AddBonusRewardAmount(v float64) *UserCheckinUpse
 func (u *UserCheckinUpsertBulk) UpdateBonusRewardAmount() *UserCheckinUpsertBulk {
 	return u.Update(func(s *UserCheckinUpsert) {
 		s.UpdateBonusRewardAmount()
+	})
+}
+
+// SetLotteryAttemptsReward sets the "lottery_attempts_reward" field.
+func (u *UserCheckinUpsertBulk) SetLotteryAttemptsReward(v int) *UserCheckinUpsertBulk {
+	return u.Update(func(s *UserCheckinUpsert) {
+		s.SetLotteryAttemptsReward(v)
+	})
+}
+
+// AddLotteryAttemptsReward adds v to the "lottery_attempts_reward" field.
+func (u *UserCheckinUpsertBulk) AddLotteryAttemptsReward(v int) *UserCheckinUpsertBulk {
+	return u.Update(func(s *UserCheckinUpsert) {
+		s.AddLotteryAttemptsReward(v)
+	})
+}
+
+// UpdateLotteryAttemptsReward sets the "lottery_attempts_reward" field to the value that was provided on create.
+func (u *UserCheckinUpsertBulk) UpdateLotteryAttemptsReward() *UserCheckinUpsertBulk {
+	return u.Update(func(s *UserCheckinUpsert) {
+		s.UpdateLotteryAttemptsReward()
 	})
 }
 

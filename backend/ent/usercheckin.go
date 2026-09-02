@@ -39,6 +39,8 @@ type UserCheckin struct {
 	BaseRewardAmount float64 `json:"base_reward_amount,omitempty"`
 	// BonusRewardAmount holds the value of the "bonus_reward_amount" field.
 	BonusRewardAmount float64 `json:"bonus_reward_amount,omitempty"`
+	// LotteryAttemptsReward holds the value of the "lottery_attempts_reward" field.
+	LotteryAttemptsReward int `json:"lottery_attempts_reward,omitempty"`
 	// TotalRewardAmount holds the value of the "total_reward_amount" field.
 	TotalRewardAmount float64 `json:"total_reward_amount,omitempty"`
 	// PreviousDayUsageAmount holds the value of the "previous_day_usage_amount" field.
@@ -101,7 +103,7 @@ func (*UserCheckin) scanValues(columns []string) ([]any, error) {
 			values[i] = new([]byte)
 		case usercheckin.FieldRewardAmount, usercheckin.FieldBalanceBefore, usercheckin.FieldBalanceAfter, usercheckin.FieldBaseRewardAmount, usercheckin.FieldBonusRewardAmount, usercheckin.FieldTotalRewardAmount, usercheckin.FieldPreviousDayUsageAmount, usercheckin.FieldUsageRebateAmount, usercheckin.FieldRewardCapAdjustment:
 			values[i] = new(sql.NullFloat64)
-		case usercheckin.FieldID, usercheckin.FieldUserID, usercheckin.FieldStreakDay, usercheckin.FieldRewardCampaignID:
+		case usercheckin.FieldID, usercheckin.FieldUserID, usercheckin.FieldStreakDay, usercheckin.FieldLotteryAttemptsReward, usercheckin.FieldRewardCampaignID:
 			values[i] = new(sql.NullInt64)
 		case usercheckin.FieldCheckinDate, usercheckin.FieldRewardCampaignName:
 			values[i] = new(sql.NullString)
@@ -181,6 +183,12 @@ func (_m *UserCheckin) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field bonus_reward_amount", values[i])
 			} else if value.Valid {
 				_m.BonusRewardAmount = value.Float64
+			}
+		case usercheckin.FieldLotteryAttemptsReward:
+			if value, ok := values[i].(*sql.NullInt64); !ok {
+				return fmt.Errorf("unexpected type %T for field lottery_attempts_reward", values[i])
+			} else if value.Valid {
+				_m.LotteryAttemptsReward = int(value.Int64)
 			}
 		case usercheckin.FieldTotalRewardAmount:
 			if value, ok := values[i].(*sql.NullFloat64); !ok {
@@ -299,6 +307,9 @@ func (_m *UserCheckin) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("bonus_reward_amount=")
 	builder.WriteString(fmt.Sprintf("%v", _m.BonusRewardAmount))
+	builder.WriteString(", ")
+	builder.WriteString("lottery_attempts_reward=")
+	builder.WriteString(fmt.Sprintf("%v", _m.LotteryAttemptsReward))
 	builder.WriteString(", ")
 	builder.WriteString("total_reward_amount=")
 	builder.WriteString(fmt.Sprintf("%v", _m.TotalRewardAmount))

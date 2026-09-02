@@ -15,6 +15,8 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/apikey"
 	"github.com/Wei-Shaw/sub2api/ent/authidentity"
 	"github.com/Wei-Shaw/sub2api/ent/group"
+	"github.com/Wei-Shaw/sub2api/ent/lotteryattemptledger"
+	"github.com/Wei-Shaw/sub2api/ent/lotteryattemptwallet"
 	"github.com/Wei-Shaw/sub2api/ent/paymentorder"
 	"github.com/Wei-Shaw/sub2api/ent/pendingauthsession"
 	"github.com/Wei-Shaw/sub2api/ent/predicate"
@@ -818,6 +820,40 @@ func (_u *UserUpdate) AddCheckinBlacklistEntries(v ...*UserCheckinBlacklist) *Us
 	return _u.AddCheckinBlacklistEntryIDs(ids...)
 }
 
+// SetLotteryAttemptWalletID sets the "lottery_attempt_wallet" edge to the LotteryAttemptWallet entity by ID.
+func (_u *UserUpdate) SetLotteryAttemptWalletID(id int64) *UserUpdate {
+	_u.mutation.SetLotteryAttemptWalletID(id)
+	return _u
+}
+
+// SetNillableLotteryAttemptWalletID sets the "lottery_attempt_wallet" edge to the LotteryAttemptWallet entity by ID if the given value is not nil.
+func (_u *UserUpdate) SetNillableLotteryAttemptWalletID(id *int64) *UserUpdate {
+	if id != nil {
+		_u = _u.SetLotteryAttemptWalletID(*id)
+	}
+	return _u
+}
+
+// SetLotteryAttemptWallet sets the "lottery_attempt_wallet" edge to the LotteryAttemptWallet entity.
+func (_u *UserUpdate) SetLotteryAttemptWallet(v *LotteryAttemptWallet) *UserUpdate {
+	return _u.SetLotteryAttemptWalletID(v.ID)
+}
+
+// AddLotteryAttemptLedgerIDs adds the "lottery_attempt_ledger" edge to the LotteryAttemptLedger entity by IDs.
+func (_u *UserUpdate) AddLotteryAttemptLedgerIDs(ids ...int64) *UserUpdate {
+	_u.mutation.AddLotteryAttemptLedgerIDs(ids...)
+	return _u
+}
+
+// AddLotteryAttemptLedger adds the "lottery_attempt_ledger" edges to the LotteryAttemptLedger entity.
+func (_u *UserUpdate) AddLotteryAttemptLedger(v ...*LotteryAttemptLedger) *UserUpdate {
+	ids := make([]int64, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.AddLotteryAttemptLedgerIDs(ids...)
+}
+
 // AddUserImageIDs adds the "user_images" edge to the UserImage entity by IDs.
 func (_u *UserUpdate) AddUserImageIDs(ids ...int64) *UserUpdate {
 	_u.mutation.AddUserImageIDs(ids...)
@@ -1208,6 +1244,33 @@ func (_u *UserUpdate) RemoveCheckinBlacklistEntries(v ...*UserCheckinBlacklist) 
 		ids[i] = v[i].ID
 	}
 	return _u.RemoveCheckinBlacklistEntryIDs(ids...)
+}
+
+// ClearLotteryAttemptWallet clears the "lottery_attempt_wallet" edge to the LotteryAttemptWallet entity.
+func (_u *UserUpdate) ClearLotteryAttemptWallet() *UserUpdate {
+	_u.mutation.ClearLotteryAttemptWallet()
+	return _u
+}
+
+// ClearLotteryAttemptLedger clears all "lottery_attempt_ledger" edges to the LotteryAttemptLedger entity.
+func (_u *UserUpdate) ClearLotteryAttemptLedger() *UserUpdate {
+	_u.mutation.ClearLotteryAttemptLedger()
+	return _u
+}
+
+// RemoveLotteryAttemptLedgerIDs removes the "lottery_attempt_ledger" edge to LotteryAttemptLedger entities by IDs.
+func (_u *UserUpdate) RemoveLotteryAttemptLedgerIDs(ids ...int64) *UserUpdate {
+	_u.mutation.RemoveLotteryAttemptLedgerIDs(ids...)
+	return _u
+}
+
+// RemoveLotteryAttemptLedger removes "lottery_attempt_ledger" edges to LotteryAttemptLedger entities.
+func (_u *UserUpdate) RemoveLotteryAttemptLedger(v ...*LotteryAttemptLedger) *UserUpdate {
+	ids := make([]int64, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.RemoveLotteryAttemptLedgerIDs(ids...)
 }
 
 // ClearUserImages clears all "user_images" edges to the UserImage entity.
@@ -2263,6 +2326,80 @@ func (_u *UserUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 		}
 		_spec.Edges.Add = append(_spec.Edges.Add, edge)
 	}
+	if _u.mutation.LotteryAttemptWalletCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2O,
+			Inverse: false,
+			Table:   user.LotteryAttemptWalletTable,
+			Columns: []string{user.LotteryAttemptWalletColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(lotteryattemptwallet.FieldID, field.TypeInt64),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.LotteryAttemptWalletIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2O,
+			Inverse: false,
+			Table:   user.LotteryAttemptWalletTable,
+			Columns: []string{user.LotteryAttemptWalletColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(lotteryattemptwallet.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
+	if _u.mutation.LotteryAttemptLedgerCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   user.LotteryAttemptLedgerTable,
+			Columns: []string{user.LotteryAttemptLedgerColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(lotteryattemptledger.FieldID, field.TypeInt64),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.RemovedLotteryAttemptLedgerIDs(); len(nodes) > 0 && !_u.mutation.LotteryAttemptLedgerCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   user.LotteryAttemptLedgerTable,
+			Columns: []string{user.LotteryAttemptLedgerColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(lotteryattemptledger.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.LotteryAttemptLedgerIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   user.LotteryAttemptLedgerTable,
+			Columns: []string{user.LotteryAttemptLedgerColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(lotteryattemptledger.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
 	if _u.mutation.UserImagesCleared() {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.O2M,
@@ -3146,6 +3283,40 @@ func (_u *UserUpdateOne) AddCheckinBlacklistEntries(v ...*UserCheckinBlacklist) 
 	return _u.AddCheckinBlacklistEntryIDs(ids...)
 }
 
+// SetLotteryAttemptWalletID sets the "lottery_attempt_wallet" edge to the LotteryAttemptWallet entity by ID.
+func (_u *UserUpdateOne) SetLotteryAttemptWalletID(id int64) *UserUpdateOne {
+	_u.mutation.SetLotteryAttemptWalletID(id)
+	return _u
+}
+
+// SetNillableLotteryAttemptWalletID sets the "lottery_attempt_wallet" edge to the LotteryAttemptWallet entity by ID if the given value is not nil.
+func (_u *UserUpdateOne) SetNillableLotteryAttemptWalletID(id *int64) *UserUpdateOne {
+	if id != nil {
+		_u = _u.SetLotteryAttemptWalletID(*id)
+	}
+	return _u
+}
+
+// SetLotteryAttemptWallet sets the "lottery_attempt_wallet" edge to the LotteryAttemptWallet entity.
+func (_u *UserUpdateOne) SetLotteryAttemptWallet(v *LotteryAttemptWallet) *UserUpdateOne {
+	return _u.SetLotteryAttemptWalletID(v.ID)
+}
+
+// AddLotteryAttemptLedgerIDs adds the "lottery_attempt_ledger" edge to the LotteryAttemptLedger entity by IDs.
+func (_u *UserUpdateOne) AddLotteryAttemptLedgerIDs(ids ...int64) *UserUpdateOne {
+	_u.mutation.AddLotteryAttemptLedgerIDs(ids...)
+	return _u
+}
+
+// AddLotteryAttemptLedger adds the "lottery_attempt_ledger" edges to the LotteryAttemptLedger entity.
+func (_u *UserUpdateOne) AddLotteryAttemptLedger(v ...*LotteryAttemptLedger) *UserUpdateOne {
+	ids := make([]int64, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.AddLotteryAttemptLedgerIDs(ids...)
+}
+
 // AddUserImageIDs adds the "user_images" edge to the UserImage entity by IDs.
 func (_u *UserUpdateOne) AddUserImageIDs(ids ...int64) *UserUpdateOne {
 	_u.mutation.AddUserImageIDs(ids...)
@@ -3536,6 +3707,33 @@ func (_u *UserUpdateOne) RemoveCheckinBlacklistEntries(v ...*UserCheckinBlacklis
 		ids[i] = v[i].ID
 	}
 	return _u.RemoveCheckinBlacklistEntryIDs(ids...)
+}
+
+// ClearLotteryAttemptWallet clears the "lottery_attempt_wallet" edge to the LotteryAttemptWallet entity.
+func (_u *UserUpdateOne) ClearLotteryAttemptWallet() *UserUpdateOne {
+	_u.mutation.ClearLotteryAttemptWallet()
+	return _u
+}
+
+// ClearLotteryAttemptLedger clears all "lottery_attempt_ledger" edges to the LotteryAttemptLedger entity.
+func (_u *UserUpdateOne) ClearLotteryAttemptLedger() *UserUpdateOne {
+	_u.mutation.ClearLotteryAttemptLedger()
+	return _u
+}
+
+// RemoveLotteryAttemptLedgerIDs removes the "lottery_attempt_ledger" edge to LotteryAttemptLedger entities by IDs.
+func (_u *UserUpdateOne) RemoveLotteryAttemptLedgerIDs(ids ...int64) *UserUpdateOne {
+	_u.mutation.RemoveLotteryAttemptLedgerIDs(ids...)
+	return _u
+}
+
+// RemoveLotteryAttemptLedger removes "lottery_attempt_ledger" edges to LotteryAttemptLedger entities.
+func (_u *UserUpdateOne) RemoveLotteryAttemptLedger(v ...*LotteryAttemptLedger) *UserUpdateOne {
+	ids := make([]int64, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.RemoveLotteryAttemptLedgerIDs(ids...)
 }
 
 // ClearUserImages clears all "user_images" edges to the UserImage entity.
@@ -4614,6 +4812,80 @@ func (_u *UserUpdateOne) sqlSave(ctx context.Context) (_node *User, err error) {
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(usercheckinblacklist.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
+	if _u.mutation.LotteryAttemptWalletCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2O,
+			Inverse: false,
+			Table:   user.LotteryAttemptWalletTable,
+			Columns: []string{user.LotteryAttemptWalletColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(lotteryattemptwallet.FieldID, field.TypeInt64),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.LotteryAttemptWalletIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2O,
+			Inverse: false,
+			Table:   user.LotteryAttemptWalletTable,
+			Columns: []string{user.LotteryAttemptWalletColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(lotteryattemptwallet.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
+	if _u.mutation.LotteryAttemptLedgerCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   user.LotteryAttemptLedgerTable,
+			Columns: []string{user.LotteryAttemptLedgerColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(lotteryattemptledger.FieldID, field.TypeInt64),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.RemovedLotteryAttemptLedgerIDs(); len(nodes) > 0 && !_u.mutation.LotteryAttemptLedgerCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   user.LotteryAttemptLedgerTable,
+			Columns: []string{user.LotteryAttemptLedgerColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(lotteryattemptledger.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.LotteryAttemptLedgerIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   user.LotteryAttemptLedgerTable,
+			Columns: []string{user.LotteryAttemptLedgerColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(lotteryattemptledger.FieldID, field.TypeInt64),
 			},
 		}
 		for _, k := range nodes {

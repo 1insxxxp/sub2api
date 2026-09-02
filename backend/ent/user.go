@@ -9,6 +9,7 @@ import (
 
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/sql"
+	"github.com/Wei-Shaw/sub2api/ent/lotteryattemptwallet"
 	"github.com/Wei-Shaw/sub2api/ent/user"
 )
 
@@ -123,6 +124,10 @@ type UserEdges struct {
 	Checkins []*UserCheckin `json:"checkins,omitempty"`
 	// CheckinBlacklistEntries holds the value of the checkin_blacklist_entries edge.
 	CheckinBlacklistEntries []*UserCheckinBlacklist `json:"checkin_blacklist_entries,omitempty"`
+	// LotteryAttemptWallet holds the value of the lottery_attempt_wallet edge.
+	LotteryAttemptWallet *LotteryAttemptWallet `json:"lottery_attempt_wallet,omitempty"`
+	// LotteryAttemptLedger holds the value of the lottery_attempt_ledger edge.
+	LotteryAttemptLedger []*LotteryAttemptLedger `json:"lottery_attempt_ledger,omitempty"`
 	// UserImages holds the value of the user_images edge.
 	UserImages []*UserImage `json:"user_images,omitempty"`
 	// UserImageTasks holds the value of the user_image_tasks edge.
@@ -131,7 +136,7 @@ type UserEdges struct {
 	UserAllowedGroups []*UserAllowedGroup `json:"user_allowed_groups,omitempty"`
 	// loadedTypes holds the information for reporting if a
 	// type was loaded (or requested) in eager-loading or not.
-	loadedTypes [20]bool
+	loadedTypes [22]bool
 }
 
 // APIKeysOrErr returns the APIKeys value or an error if the edge
@@ -287,10 +292,30 @@ func (e UserEdges) CheckinBlacklistEntriesOrErr() ([]*UserCheckinBlacklist, erro
 	return nil, &NotLoadedError{edge: "checkin_blacklist_entries"}
 }
 
+// LotteryAttemptWalletOrErr returns the LotteryAttemptWallet value or an error if the edge
+// was not loaded in eager-loading, or loaded but was not found.
+func (e UserEdges) LotteryAttemptWalletOrErr() (*LotteryAttemptWallet, error) {
+	if e.LotteryAttemptWallet != nil {
+		return e.LotteryAttemptWallet, nil
+	} else if e.loadedTypes[17] {
+		return nil, &NotFoundError{label: lotteryattemptwallet.Label}
+	}
+	return nil, &NotLoadedError{edge: "lottery_attempt_wallet"}
+}
+
+// LotteryAttemptLedgerOrErr returns the LotteryAttemptLedger value or an error if the edge
+// was not loaded in eager-loading.
+func (e UserEdges) LotteryAttemptLedgerOrErr() ([]*LotteryAttemptLedger, error) {
+	if e.loadedTypes[18] {
+		return e.LotteryAttemptLedger, nil
+	}
+	return nil, &NotLoadedError{edge: "lottery_attempt_ledger"}
+}
+
 // UserImagesOrErr returns the UserImages value or an error if the edge
 // was not loaded in eager-loading.
 func (e UserEdges) UserImagesOrErr() ([]*UserImage, error) {
-	if e.loadedTypes[17] {
+	if e.loadedTypes[19] {
 		return e.UserImages, nil
 	}
 	return nil, &NotLoadedError{edge: "user_images"}
@@ -299,7 +324,7 @@ func (e UserEdges) UserImagesOrErr() ([]*UserImage, error) {
 // UserImageTasksOrErr returns the UserImageTasks value or an error if the edge
 // was not loaded in eager-loading.
 func (e UserEdges) UserImageTasksOrErr() ([]*UserImageTask, error) {
-	if e.loadedTypes[18] {
+	if e.loadedTypes[20] {
 		return e.UserImageTasks, nil
 	}
 	return nil, &NotLoadedError{edge: "user_image_tasks"}
@@ -308,7 +333,7 @@ func (e UserEdges) UserImageTasksOrErr() ([]*UserImageTask, error) {
 // UserAllowedGroupsOrErr returns the UserAllowedGroups value or an error if the edge
 // was not loaded in eager-loading.
 func (e UserEdges) UserAllowedGroupsOrErr() ([]*UserAllowedGroup, error) {
-	if e.loadedTypes[19] {
+	if e.loadedTypes[21] {
 		return e.UserAllowedGroups, nil
 	}
 	return nil, &NotLoadedError{edge: "user_allowed_groups"}
@@ -644,6 +669,16 @@ func (_m *User) QueryCheckins() *UserCheckinQuery {
 // QueryCheckinBlacklistEntries queries the "checkin_blacklist_entries" edge of the User entity.
 func (_m *User) QueryCheckinBlacklistEntries() *UserCheckinBlacklistQuery {
 	return NewUserClient(_m.config).QueryCheckinBlacklistEntries(_m)
+}
+
+// QueryLotteryAttemptWallet queries the "lottery_attempt_wallet" edge of the User entity.
+func (_m *User) QueryLotteryAttemptWallet() *LotteryAttemptWalletQuery {
+	return NewUserClient(_m.config).QueryLotteryAttemptWallet(_m)
+}
+
+// QueryLotteryAttemptLedger queries the "lottery_attempt_ledger" edge of the User entity.
+func (_m *User) QueryLotteryAttemptLedger() *LotteryAttemptLedgerQuery {
+	return NewUserClient(_m.config).QueryLotteryAttemptLedger(_m)
 }
 
 // QueryUserImages queries the "user_images" edge of the User entity.

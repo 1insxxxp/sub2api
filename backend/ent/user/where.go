@@ -2176,6 +2176,52 @@ func HasCheckinBlacklistEntriesWith(preds ...predicate.UserCheckinBlacklist) pre
 	})
 }
 
+// HasLotteryAttemptWallet applies the HasEdge predicate on the "lottery_attempt_wallet" edge.
+func HasLotteryAttemptWallet() predicate.User {
+	return predicate.User(func(s *sql.Selector) {
+		step := sqlgraph.NewStep(
+			sqlgraph.From(Table, FieldID),
+			sqlgraph.Edge(sqlgraph.O2O, false, LotteryAttemptWalletTable, LotteryAttemptWalletColumn),
+		)
+		sqlgraph.HasNeighbors(s, step)
+	})
+}
+
+// HasLotteryAttemptWalletWith applies the HasEdge predicate on the "lottery_attempt_wallet" edge with a given conditions (other predicates).
+func HasLotteryAttemptWalletWith(preds ...predicate.LotteryAttemptWallet) predicate.User {
+	return predicate.User(func(s *sql.Selector) {
+		step := newLotteryAttemptWalletStep()
+		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
+			for _, p := range preds {
+				p(s)
+			}
+		})
+	})
+}
+
+// HasLotteryAttemptLedger applies the HasEdge predicate on the "lottery_attempt_ledger" edge.
+func HasLotteryAttemptLedger() predicate.User {
+	return predicate.User(func(s *sql.Selector) {
+		step := sqlgraph.NewStep(
+			sqlgraph.From(Table, FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, LotteryAttemptLedgerTable, LotteryAttemptLedgerColumn),
+		)
+		sqlgraph.HasNeighbors(s, step)
+	})
+}
+
+// HasLotteryAttemptLedgerWith applies the HasEdge predicate on the "lottery_attempt_ledger" edge with a given conditions (other predicates).
+func HasLotteryAttemptLedgerWith(preds ...predicate.LotteryAttemptLedger) predicate.User {
+	return predicate.User(func(s *sql.Selector) {
+		step := newLotteryAttemptLedgerStep()
+		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
+			for _, p := range preds {
+				p(s)
+			}
+		})
+	})
+}
+
 // HasUserImages applies the HasEdge predicate on the "user_images" edge.
 func HasUserImages() predicate.User {
 	return predicate.User(func(s *sql.Selector) {

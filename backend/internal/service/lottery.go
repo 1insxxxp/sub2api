@@ -24,6 +24,9 @@ const (
 	LotteryAttemptModeDaily = "daily"
 	LotteryAttemptModeTotal = "total"
 
+	LotteryAttemptSourceActivity = "activity"
+	LotteryAttemptSourceWallet   = "wallet"
+
 	LotteryPrizeTypeBalance = "balance"
 	LotteryPrizeTypeProduct = "product"
 
@@ -100,6 +103,7 @@ type LotteryDraw struct {
 	BalanceAmount  *float64  `json:"balance_amount,omitempty"`
 	ProductContent *string   `json:"product_content,omitempty"`
 	AttemptKey     string    `json:"-"`
+	AttemptSource  string    `json:"attempt_source"`
 	CreatedAt      time.Time `json:"created_at"`
 }
 
@@ -130,16 +134,20 @@ type LotteryActivityConfig struct {
 }
 
 type LotteryPublicState struct {
-	Activity          *LotteryActivity `json:"activity"`
-	Prizes            []LotteryPrize   `json:"prizes"`
-	AttemptsUsed      int              `json:"attempts_used"`
-	AttemptsRemaining int              `json:"attempts_remaining"`
+	Activity                  *LotteryActivity `json:"activity"`
+	Prizes                    []LotteryPrize   `json:"prizes"`
+	AttemptsUsed              int              `json:"attempts_used"`
+	ActivityAttemptsRemaining int              `json:"activity_attempts_remaining"`
+	RewardAttemptsRemaining   int              `json:"reward_attempts_remaining"`
+	AttemptsRemaining         int              `json:"attempts_remaining"`
 }
 
 type LotteryDrawResult struct {
-	Draw              *LotteryDraw `json:"draw"`
-	AttemptsUsed      int          `json:"attempts_used"`
-	AttemptsRemaining int          `json:"attempts_remaining"`
+	Draw                      *LotteryDraw `json:"draw"`
+	AttemptsUsed              int          `json:"attempts_used"`
+	ActivityAttemptsRemaining int          `json:"activity_attempts_remaining"`
+	RewardAttemptsRemaining   int          `json:"reward_attempts_remaining"`
+	AttemptsRemaining         int          `json:"attempts_remaining"`
 }
 
 // LotteryRepository is deliberately expressed in service types. It lets the
@@ -276,11 +284,18 @@ func (s *LotteryService) GetPublicState(ctx context.Context, userID int64, now t
 	if err != nil {
 		return nil, err
 	}
+	rewardBalance, err := lotteryAttemptBalance(ctx, s.entClient, userID)
+	if err != nil {
+		return nil, err
+	}
+	attempts := summarizeLotteryAttempts(activity.AttemptLimit, used, rewardBalance)
 	return &LotteryPublicState{
-		Activity:          activity,
-		Prizes:            prizes,
-		AttemptsUsed:      used,
-		AttemptsRemaining: lotteryMaxInt(activity.AttemptLimit-used, 0),
+		Activity:                  activity,
+		Prizes:                    prizes,
+		AttemptsUsed:              used,
+		ActivityAttemptsRemaining: attempts.ActivityRemaining,
+		RewardAttemptsRemaining:   attempts.RewardRemaining,
+		AttemptsRemaining:         attempts.TotalRemaining,
 	}, nil
 }
 
@@ -303,11 +318,20 @@ func (s *LotteryService) Draw(ctx context.Context, userID int64, attemptKey stri
 	err = s.withTx(ctx, func(txCtx context.Context) error {
 		existing, lookupErr := s.repo.GetDrawByAttemptKey(txCtx, key)
 		if lookupErr == nil {
-			used, err := s.repo.CountUserDraws(txCtx, derefInt64(existing.ActivityID), userID, lotteryAttemptSince(LotteryAttemptModeTotal, now))
+			activity, err := s.repo.GetActiveActivity(txCtx, now, true)
 			if err != nil {
 				return err
 			}
-			result = &LotteryDrawResult{Draw: existing, AttemptsUsed: used}
+			used, err := s.repo.CountUserDraws(txCtx, activity.ID, userID, lotteryAttemptSince(activity.AttemptMode, now))
+			if err != nil {
+				return err
+			}
+			rewardBalance, err := lotteryAttemptBalance(txCtx, s.entClient, userID)
+			if err != nil {
+				return err
+			}
+			attempts := summarizeLotteryAttempts(activity.AttemptLimit, used, rewardBalance)
+			result = lotteryDrawResult(existing, used, attempts)
 			return nil
 		}
 		if !stderrors.Is(lookupErr, ErrLotteryDrawNotFound) {
@@ -323,7 +347,12 @@ func (s *LotteryService) Draw(ctx context.Context, userID int64, attemptKey stri
 		if err != nil {
 			return err
 		}
-		if used >= activity.AttemptLimit {
+		rewardBalance, err := lotteryAttemptBalance(txCtx, s.entClient, userID)
+		if err != nil {
+			return err
+		}
+		attempts := summarizeLotteryAttempts(activity.AttemptLimit, used, rewardBalance)
+		if attempts.TotalRemaining <= 0 {
 			return ErrLotteryAttemptsExhausted
 		}
 
@@ -345,13 +374,14 @@ func (s *LotteryService) Draw(ctx context.Context, userID int64, attemptKey stri
 		}
 
 		draw := LotteryDraw{
-			ActivityID: &activity.ID,
-			PrizeID:    &prize.ID,
-			UserID:     userID,
-			PrizeName:  prize.Name,
-			PrizeType:  prize.Type,
-			AttemptKey: key,
-			CreatedAt:  now,
+			ActivityID:    &activity.ID,
+			PrizeID:       &prize.ID,
+			UserID:        userID,
+			PrizeName:     prize.Name,
+			PrizeType:     prize.Type,
+			AttemptKey:    key,
+			AttemptSource: attempts.NextSource,
+			CreatedAt:     now,
 		}
 		if prize.Type == LotteryPrizeTypeBalance {
 			if prize.BalanceAmount == nil {
@@ -373,11 +403,16 @@ func (s *LotteryService) Draw(ctx context.Context, userID int64, attemptKey stri
 		if err != nil {
 			return err
 		}
-		result = &LotteryDrawResult{
-			Draw:              created,
-			AttemptsUsed:      used + 1,
-			AttemptsRemaining: lotteryMaxInt(activity.AttemptLimit-used-1, 0),
+		if attempts.NextSource == LotteryAttemptSourceWallet {
+			rewardBalance, err = debitLotteryAttempt(txCtx, s.entClient, userID, created.ID, "lottery draw")
+			if err != nil {
+				return err
+			}
+		} else {
+			used++
 		}
+		attempts = summarizeLotteryAttempts(activity.AttemptLimit, used, rewardBalance)
+		result = lotteryDrawResult(created, used, attempts)
 		return nil
 	})
 	if err != nil {
@@ -494,7 +529,7 @@ func validateLotteryActivity(input LotteryActivityInput) error {
 	if input.AttemptMode != LotteryAttemptModeDaily && input.AttemptMode != LotteryAttemptModeTotal {
 		return ErrLotteryActivityInvalid
 	}
-	if input.AttemptLimit <= 0 {
+	if input.AttemptLimit < 0 {
 		return ErrLotteryActivityInvalid
 	}
 	if input.StartsAt != nil && input.EndsAt != nil && input.StartsAt.After(*input.EndsAt) {
@@ -543,6 +578,39 @@ func lotteryMaxInt(a, b int) int {
 		return a
 	}
 	return b
+}
+
+type lotteryAttemptSummary struct {
+	ActivityRemaining int
+	RewardRemaining   int
+	TotalRemaining    int
+	NextSource        string
+}
+
+func summarizeLotteryAttempts(activityLimit, activityUsed, rewardBalance int) lotteryAttemptSummary {
+	activityRemaining := lotteryMaxInt(activityLimit-activityUsed, 0)
+	rewardRemaining := lotteryMaxInt(rewardBalance, 0)
+	summary := lotteryAttemptSummary{
+		ActivityRemaining: activityRemaining,
+		RewardRemaining:   rewardRemaining,
+		TotalRemaining:    activityRemaining + rewardRemaining,
+	}
+	if activityRemaining > 0 {
+		summary.NextSource = LotteryAttemptSourceActivity
+	} else if rewardRemaining > 0 {
+		summary.NextSource = LotteryAttemptSourceWallet
+	}
+	return summary
+}
+
+func lotteryDrawResult(draw *LotteryDraw, used int, attempts lotteryAttemptSummary) *LotteryDrawResult {
+	return &LotteryDrawResult{
+		Draw:                      draw,
+		AttemptsUsed:              used,
+		ActivityAttemptsRemaining: attempts.ActivityRemaining,
+		RewardAttemptsRemaining:   attempts.RewardRemaining,
+		AttemptsRemaining:         attempts.TotalRemaining,
+	}
 }
 
 func derefInt64(value *int64) int64 {

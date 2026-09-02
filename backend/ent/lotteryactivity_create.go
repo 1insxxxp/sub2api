@@ -279,6 +279,11 @@ func (_c *LotteryActivityCreate) check() error {
 	if _, ok := _c.mutation.AttemptLimit(); !ok {
 		return &ValidationError{Name: "attempt_limit", err: errors.New(`ent: missing required field "LotteryActivity.attempt_limit"`)}
 	}
+	if v, ok := _c.mutation.AttemptLimit(); ok {
+		if err := lotteryactivity.AttemptLimitValidator(v); err != nil {
+			return &ValidationError{Name: "attempt_limit", err: fmt.Errorf(`ent: validator failed for field "LotteryActivity.attempt_limit": %w`, err)}
+		}
+	}
 	if _, ok := _c.mutation.CreatedAt(); !ok {
 		return &ValidationError{Name: "created_at", err: errors.New(`ent: missing required field "LotteryActivity.created_at"`)}
 	}

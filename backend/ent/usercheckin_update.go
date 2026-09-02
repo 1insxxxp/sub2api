@@ -185,6 +185,27 @@ func (_u *UserCheckinUpdate) AddBonusRewardAmount(v float64) *UserCheckinUpdate 
 	return _u
 }
 
+// SetLotteryAttemptsReward sets the "lottery_attempts_reward" field.
+func (_u *UserCheckinUpdate) SetLotteryAttemptsReward(v int) *UserCheckinUpdate {
+	_u.mutation.ResetLotteryAttemptsReward()
+	_u.mutation.SetLotteryAttemptsReward(v)
+	return _u
+}
+
+// SetNillableLotteryAttemptsReward sets the "lottery_attempts_reward" field if the given value is not nil.
+func (_u *UserCheckinUpdate) SetNillableLotteryAttemptsReward(v *int) *UserCheckinUpdate {
+	if v != nil {
+		_u.SetLotteryAttemptsReward(*v)
+	}
+	return _u
+}
+
+// AddLotteryAttemptsReward adds value to the "lottery_attempts_reward" field.
+func (_u *UserCheckinUpdate) AddLotteryAttemptsReward(v int) *UserCheckinUpdate {
+	_u.mutation.AddLotteryAttemptsReward(v)
+	return _u
+}
+
 // SetTotalRewardAmount sets the "total_reward_amount" field.
 func (_u *UserCheckinUpdate) SetTotalRewardAmount(v float64) *UserCheckinUpdate {
 	_u.mutation.ResetTotalRewardAmount()
@@ -376,6 +397,11 @@ func (_u *UserCheckinUpdate) check() error {
 			return &ValidationError{Name: "checkin_date", err: fmt.Errorf(`ent: validator failed for field "UserCheckin.checkin_date": %w`, err)}
 		}
 	}
+	if v, ok := _u.mutation.LotteryAttemptsReward(); ok {
+		if err := usercheckin.LotteryAttemptsRewardValidator(v); err != nil {
+			return &ValidationError{Name: "lottery_attempts_reward", err: fmt.Errorf(`ent: validator failed for field "UserCheckin.lottery_attempts_reward": %w`, err)}
+		}
+	}
 	if v, ok := _u.mutation.RewardCampaignName(); ok {
 		if err := usercheckin.RewardCampaignNameValidator(v); err != nil {
 			return &ValidationError{Name: "reward_campaign_name", err: fmt.Errorf(`ent: validator failed for field "UserCheckin.reward_campaign_name": %w`, err)}
@@ -437,6 +463,12 @@ func (_u *UserCheckinUpdate) sqlSave(ctx context.Context) (_node int, err error)
 	}
 	if value, ok := _u.mutation.AddedBonusRewardAmount(); ok {
 		_spec.AddField(usercheckin.FieldBonusRewardAmount, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.LotteryAttemptsReward(); ok {
+		_spec.SetField(usercheckin.FieldLotteryAttemptsReward, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.AddedLotteryAttemptsReward(); ok {
+		_spec.AddField(usercheckin.FieldLotteryAttemptsReward, field.TypeInt, value)
 	}
 	if value, ok := _u.mutation.TotalRewardAmount(); ok {
 		_spec.SetField(usercheckin.FieldTotalRewardAmount, field.TypeFloat64, value)
@@ -705,6 +737,27 @@ func (_u *UserCheckinUpdateOne) AddBonusRewardAmount(v float64) *UserCheckinUpda
 	return _u
 }
 
+// SetLotteryAttemptsReward sets the "lottery_attempts_reward" field.
+func (_u *UserCheckinUpdateOne) SetLotteryAttemptsReward(v int) *UserCheckinUpdateOne {
+	_u.mutation.ResetLotteryAttemptsReward()
+	_u.mutation.SetLotteryAttemptsReward(v)
+	return _u
+}
+
+// SetNillableLotteryAttemptsReward sets the "lottery_attempts_reward" field if the given value is not nil.
+func (_u *UserCheckinUpdateOne) SetNillableLotteryAttemptsReward(v *int) *UserCheckinUpdateOne {
+	if v != nil {
+		_u.SetLotteryAttemptsReward(*v)
+	}
+	return _u
+}
+
+// AddLotteryAttemptsReward adds value to the "lottery_attempts_reward" field.
+func (_u *UserCheckinUpdateOne) AddLotteryAttemptsReward(v int) *UserCheckinUpdateOne {
+	_u.mutation.AddLotteryAttemptsReward(v)
+	return _u
+}
+
 // SetTotalRewardAmount sets the "total_reward_amount" field.
 func (_u *UserCheckinUpdateOne) SetTotalRewardAmount(v float64) *UserCheckinUpdateOne {
 	_u.mutation.ResetTotalRewardAmount()
@@ -909,6 +962,11 @@ func (_u *UserCheckinUpdateOne) check() error {
 			return &ValidationError{Name: "checkin_date", err: fmt.Errorf(`ent: validator failed for field "UserCheckin.checkin_date": %w`, err)}
 		}
 	}
+	if v, ok := _u.mutation.LotteryAttemptsReward(); ok {
+		if err := usercheckin.LotteryAttemptsRewardValidator(v); err != nil {
+			return &ValidationError{Name: "lottery_attempts_reward", err: fmt.Errorf(`ent: validator failed for field "UserCheckin.lottery_attempts_reward": %w`, err)}
+		}
+	}
 	if v, ok := _u.mutation.RewardCampaignName(); ok {
 		if err := usercheckin.RewardCampaignNameValidator(v); err != nil {
 			return &ValidationError{Name: "reward_campaign_name", err: fmt.Errorf(`ent: validator failed for field "UserCheckin.reward_campaign_name": %w`, err)}
@@ -987,6 +1045,12 @@ func (_u *UserCheckinUpdateOne) sqlSave(ctx context.Context) (_node *UserCheckin
 	}
 	if value, ok := _u.mutation.AddedBonusRewardAmount(); ok {
 		_spec.AddField(usercheckin.FieldBonusRewardAmount, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.LotteryAttemptsReward(); ok {
+		_spec.SetField(usercheckin.FieldLotteryAttemptsReward, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.AddedLotteryAttemptsReward(); ok {
+		_spec.AddField(usercheckin.FieldLotteryAttemptsReward, field.TypeInt, value)
 	}
 	if value, ok := _u.mutation.TotalRewardAmount(); ok {
 		_spec.SetField(usercheckin.FieldTotalRewardAmount, field.TypeFloat64, value)

@@ -644,6 +644,10 @@ const (
 	// Defaults to 0 when unset, which disables this individual criterion.
 	SettingKeyCheckinMinTotalRechargeUSD = "checkin_min_total_recharge_usd"
 
+	// SettingKeyCheckinMinDailyUsageCount requires this many usage records in
+	// the current Beijing calendar day before a user can check in.
+	SettingKeyCheckinMinDailyUsageCount = "checkin_min_daily_usage_count"
+
 	// SettingKeyCheckinRewardConfig stores JSON config for random reward tiers and
 	// streak bonus rules.
 	SettingKeyCheckinRewardConfig = "checkin_reward_config"

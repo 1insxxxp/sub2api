@@ -113,6 +113,10 @@ const (
 	EdgeCheckins = "checkins"
 	// EdgeCheckinBlacklistEntries holds the string denoting the checkin_blacklist_entries edge name in mutations.
 	EdgeCheckinBlacklistEntries = "checkin_blacklist_entries"
+	// EdgeLotteryAttemptWallet holds the string denoting the lottery_attempt_wallet edge name in mutations.
+	EdgeLotteryAttemptWallet = "lottery_attempt_wallet"
+	// EdgeLotteryAttemptLedger holds the string denoting the lottery_attempt_ledger edge name in mutations.
+	EdgeLotteryAttemptLedger = "lottery_attempt_ledger"
 	// EdgeUserImages holds the string denoting the user_images edge name in mutations.
 	EdgeUserImages = "user_images"
 	// EdgeUserImageTasks holds the string denoting the user_image_tasks edge name in mutations.
@@ -238,6 +242,20 @@ const (
 	CheckinBlacklistEntriesInverseTable = "user_checkin_blacklist"
 	// CheckinBlacklistEntriesColumn is the table column denoting the checkin_blacklist_entries relation/edge.
 	CheckinBlacklistEntriesColumn = "user_id"
+	// LotteryAttemptWalletTable is the table that holds the lottery_attempt_wallet relation/edge.
+	LotteryAttemptWalletTable = "lottery_attempt_wallets"
+	// LotteryAttemptWalletInverseTable is the table name for the LotteryAttemptWallet entity.
+	// It exists in this package in order to avoid circular dependency with the "lotteryattemptwallet" package.
+	LotteryAttemptWalletInverseTable = "lottery_attempt_wallets"
+	// LotteryAttemptWalletColumn is the table column denoting the lottery_attempt_wallet relation/edge.
+	LotteryAttemptWalletColumn = "user_id"
+	// LotteryAttemptLedgerTable is the table that holds the lottery_attempt_ledger relation/edge.
+	LotteryAttemptLedgerTable = "lottery_attempt_ledger"
+	// LotteryAttemptLedgerInverseTable is the table name for the LotteryAttemptLedger entity.
+	// It exists in this package in order to avoid circular dependency with the "lotteryattemptledger" package.
+	LotteryAttemptLedgerInverseTable = "lottery_attempt_ledger"
+	// LotteryAttemptLedgerColumn is the table column denoting the lottery_attempt_ledger relation/edge.
+	LotteryAttemptLedgerColumn = "user_id"
 	// UserImagesTable is the table that holds the user_images relation/edge.
 	UserImagesTable = "user_images"
 	// UserImagesInverseTable is the table name for the UserImage entity.
@@ -796,6 +814,27 @@ func ByCheckinBlacklistEntries(term sql.OrderTerm, terms ...sql.OrderTerm) Order
 	}
 }
 
+// ByLotteryAttemptWalletField orders the results by lottery_attempt_wallet field.
+func ByLotteryAttemptWalletField(field string, opts ...sql.OrderTermOption) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborTerms(s, newLotteryAttemptWalletStep(), sql.OrderByField(field, opts...))
+	}
+}
+
+// ByLotteryAttemptLedgerCount orders the results by lottery_attempt_ledger count.
+func ByLotteryAttemptLedgerCount(opts ...sql.OrderTermOption) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborsCount(s, newLotteryAttemptLedgerStep(), opts...)
+	}
+}
+
+// ByLotteryAttemptLedger orders the results by lottery_attempt_ledger terms.
+func ByLotteryAttemptLedger(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborTerms(s, newLotteryAttemptLedgerStep(), append([]sql.OrderTerm{term}, terms...)...)
+	}
+}
+
 // ByUserImagesCount orders the results by user_images count.
 func ByUserImagesCount(opts ...sql.OrderTermOption) OrderOption {
 	return func(s *sql.Selector) {
@@ -954,6 +993,20 @@ func newCheckinBlacklistEntriesStep() *sqlgraph.Step {
 		sqlgraph.From(Table, FieldID),
 		sqlgraph.To(CheckinBlacklistEntriesInverseTable, FieldID),
 		sqlgraph.Edge(sqlgraph.O2M, false, CheckinBlacklistEntriesTable, CheckinBlacklistEntriesColumn),
+	)
+}
+func newLotteryAttemptWalletStep() *sqlgraph.Step {
+	return sqlgraph.NewStep(
+		sqlgraph.From(Table, FieldID),
+		sqlgraph.To(LotteryAttemptWalletInverseTable, FieldID),
+		sqlgraph.Edge(sqlgraph.O2O, false, LotteryAttemptWalletTable, LotteryAttemptWalletColumn),
+	)
+}
+func newLotteryAttemptLedgerStep() *sqlgraph.Step {
+	return sqlgraph.NewStep(
+		sqlgraph.From(Table, FieldID),
+		sqlgraph.To(LotteryAttemptLedgerInverseTable, FieldID),
+		sqlgraph.Edge(sqlgraph.O2M, false, LotteryAttemptLedgerTable, LotteryAttemptLedgerColumn),
 	)
 }
 func newUserImagesStep() *sqlgraph.Step {

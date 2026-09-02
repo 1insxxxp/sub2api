@@ -104,6 +104,20 @@ func (_c *LotteryDrawCreate) SetAttemptKey(v string) *LotteryDrawCreate {
 	return _c
 }
 
+// SetAttemptSource sets the "attempt_source" field.
+func (_c *LotteryDrawCreate) SetAttemptSource(v string) *LotteryDrawCreate {
+	_c.mutation.SetAttemptSource(v)
+	return _c
+}
+
+// SetNillableAttemptSource sets the "attempt_source" field if the given value is not nil.
+func (_c *LotteryDrawCreate) SetNillableAttemptSource(v *string) *LotteryDrawCreate {
+	if v != nil {
+		_c.SetAttemptSource(*v)
+	}
+	return _c
+}
+
 // SetCreatedAt sets the "created_at" field.
 func (_c *LotteryDrawCreate) SetCreatedAt(v time.Time) *LotteryDrawCreate {
 	_c.mutation.SetCreatedAt(v)
@@ -163,6 +177,10 @@ func (_c *LotteryDrawCreate) ExecX(ctx context.Context) {
 
 // defaults sets the default values of the builder before save.
 func (_c *LotteryDrawCreate) defaults() {
+	if _, ok := _c.mutation.AttemptSource(); !ok {
+		v := lotterydraw.DefaultAttemptSource
+		_c.mutation.SetAttemptSource(v)
+	}
 	if _, ok := _c.mutation.CreatedAt(); !ok {
 		v := lotterydraw.DefaultCreatedAt()
 		_c.mutation.SetCreatedAt(v)
@@ -196,6 +214,14 @@ func (_c *LotteryDrawCreate) check() error {
 	if v, ok := _c.mutation.AttemptKey(); ok {
 		if err := lotterydraw.AttemptKeyValidator(v); err != nil {
 			return &ValidationError{Name: "attempt_key", err: fmt.Errorf(`ent: validator failed for field "LotteryDraw.attempt_key": %w`, err)}
+		}
+	}
+	if _, ok := _c.mutation.AttemptSource(); !ok {
+		return &ValidationError{Name: "attempt_source", err: errors.New(`ent: missing required field "LotteryDraw.attempt_source"`)}
+	}
+	if v, ok := _c.mutation.AttemptSource(); ok {
+		if err := lotterydraw.AttemptSourceValidator(v); err != nil {
+			return &ValidationError{Name: "attempt_source", err: fmt.Errorf(`ent: validator failed for field "LotteryDraw.attempt_source": %w`, err)}
 		}
 	}
 	if _, ok := _c.mutation.CreatedAt(); !ok {
@@ -251,6 +277,10 @@ func (_c *LotteryDrawCreate) createSpec() (*LotteryDraw, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.AttemptKey(); ok {
 		_spec.SetField(lotterydraw.FieldAttemptKey, field.TypeString, value)
 		_node.AttemptKey = value
+	}
+	if value, ok := _c.mutation.AttemptSource(); ok {
+		_spec.SetField(lotterydraw.FieldAttemptSource, field.TypeString, value)
+		_node.AttemptSource = value
 	}
 	if value, ok := _c.mutation.CreatedAt(); ok {
 		_spec.SetField(lotterydraw.FieldCreatedAt, field.TypeTime, value)
@@ -474,6 +504,18 @@ func (u *LotteryDrawUpsert) UpdateAttemptKey() *LotteryDrawUpsert {
 	return u
 }
 
+// SetAttemptSource sets the "attempt_source" field.
+func (u *LotteryDrawUpsert) SetAttemptSource(v string) *LotteryDrawUpsert {
+	u.Set(lotterydraw.FieldAttemptSource, v)
+	return u
+}
+
+// UpdateAttemptSource sets the "attempt_source" field to the value that was provided on create.
+func (u *LotteryDrawUpsert) UpdateAttemptSource() *LotteryDrawUpsert {
+	u.SetExcluded(lotterydraw.FieldAttemptSource)
+	return u
+}
+
 // UpdateNewValues updates the mutable fields using the new values that were set on create.
 // Using this option is equivalent to using:
 //
@@ -670,6 +712,20 @@ func (u *LotteryDrawUpsertOne) SetAttemptKey(v string) *LotteryDrawUpsertOne {
 func (u *LotteryDrawUpsertOne) UpdateAttemptKey() *LotteryDrawUpsertOne {
 	return u.Update(func(s *LotteryDrawUpsert) {
 		s.UpdateAttemptKey()
+	})
+}
+
+// SetAttemptSource sets the "attempt_source" field.
+func (u *LotteryDrawUpsertOne) SetAttemptSource(v string) *LotteryDrawUpsertOne {
+	return u.Update(func(s *LotteryDrawUpsert) {
+		s.SetAttemptSource(v)
+	})
+}
+
+// UpdateAttemptSource sets the "attempt_source" field to the value that was provided on create.
+func (u *LotteryDrawUpsertOne) UpdateAttemptSource() *LotteryDrawUpsertOne {
+	return u.Update(func(s *LotteryDrawUpsert) {
+		s.UpdateAttemptSource()
 	})
 }
 
@@ -1035,6 +1091,20 @@ func (u *LotteryDrawUpsertBulk) SetAttemptKey(v string) *LotteryDrawUpsertBulk {
 func (u *LotteryDrawUpsertBulk) UpdateAttemptKey() *LotteryDrawUpsertBulk {
 	return u.Update(func(s *LotteryDrawUpsert) {
 		s.UpdateAttemptKey()
+	})
+}
+
+// SetAttemptSource sets the "attempt_source" field.
+func (u *LotteryDrawUpsertBulk) SetAttemptSource(v string) *LotteryDrawUpsertBulk {
+	return u.Update(func(s *LotteryDrawUpsert) {
+		s.SetAttemptSource(v)
+	})
+}
+
+// UpdateAttemptSource sets the "attempt_source" field to the value that was provided on create.
+func (u *LotteryDrawUpsertBulk) UpdateAttemptSource() *LotteryDrawUpsertBulk {
+	return u.Update(func(s *LotteryDrawUpsert) {
+		s.UpdateAttemptSource()
 	})
 }
 

@@ -35,6 +35,8 @@ type LotteryDraw struct {
 	ProductContent *string `json:"product_content,omitempty"`
 	// AttemptKey holds the value of the "attempt_key" field.
 	AttemptKey string `json:"attempt_key,omitempty"`
+	// AttemptSource holds the value of the "attempt_source" field.
+	AttemptSource string `json:"attempt_source,omitempty"`
 	// CreatedAt holds the value of the "created_at" field.
 	CreatedAt time.Time `json:"created_at,omitempty"`
 	// Edges holds the relations/edges for other nodes in the graph.
@@ -85,7 +87,7 @@ func (*LotteryDraw) scanValues(columns []string) ([]any, error) {
 			values[i] = new(sql.NullFloat64)
 		case lotterydraw.FieldID, lotterydraw.FieldActivityID, lotterydraw.FieldPrizeID, lotterydraw.FieldUserID:
 			values[i] = new(sql.NullInt64)
-		case lotterydraw.FieldPrizeName, lotterydraw.FieldPrizeType, lotterydraw.FieldProductContent, lotterydraw.FieldAttemptKey:
+		case lotterydraw.FieldPrizeName, lotterydraw.FieldPrizeType, lotterydraw.FieldProductContent, lotterydraw.FieldAttemptKey, lotterydraw.FieldAttemptSource:
 			values[i] = new(sql.NullString)
 		case lotterydraw.FieldCreatedAt:
 			values[i] = new(sql.NullTime)
@@ -161,6 +163,12 @@ func (_m *LotteryDraw) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field attempt_key", values[i])
 			} else if value.Valid {
 				_m.AttemptKey = value.String
+			}
+		case lotterydraw.FieldAttemptSource:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field attempt_source", values[i])
+			} else if value.Valid {
+				_m.AttemptSource = value.String
 			}
 		case lotterydraw.FieldCreatedAt:
 			if value, ok := values[i].(*sql.NullTime); !ok {
@@ -245,6 +253,9 @@ func (_m *LotteryDraw) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("attempt_key=")
 	builder.WriteString(_m.AttemptKey)
+	builder.WriteString(", ")
+	builder.WriteString("attempt_source=")
+	builder.WriteString(_m.AttemptSource)
 	builder.WriteString(", ")
 	builder.WriteString("created_at=")
 	builder.WriteString(_m.CreatedAt.Format(time.ANSIC))

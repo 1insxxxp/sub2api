@@ -100,6 +100,11 @@ func BonusRewardAmount(v float64) predicate.UserCheckin {
 	return predicate.UserCheckin(sql.FieldEQ(FieldBonusRewardAmount, v))
 }
 
+// LotteryAttemptsReward applies equality check predicate on the "lottery_attempts_reward" field. It's identical to LotteryAttemptsRewardEQ.
+func LotteryAttemptsReward(v int) predicate.UserCheckin {
+	return predicate.UserCheckin(sql.FieldEQ(FieldLotteryAttemptsReward, v))
+}
+
 // TotalRewardAmount applies equality check predicate on the "total_reward_amount" field. It's identical to TotalRewardAmountEQ.
 func TotalRewardAmount(v float64) predicate.UserCheckin {
 	return predicate.UserCheckin(sql.FieldEQ(FieldTotalRewardAmount, v))
@@ -493,6 +498,46 @@ func BonusRewardAmountLT(v float64) predicate.UserCheckin {
 // BonusRewardAmountLTE applies the LTE predicate on the "bonus_reward_amount" field.
 func BonusRewardAmountLTE(v float64) predicate.UserCheckin {
 	return predicate.UserCheckin(sql.FieldLTE(FieldBonusRewardAmount, v))
+}
+
+// LotteryAttemptsRewardEQ applies the EQ predicate on the "lottery_attempts_reward" field.
+func LotteryAttemptsRewardEQ(v int) predicate.UserCheckin {
+	return predicate.UserCheckin(sql.FieldEQ(FieldLotteryAttemptsReward, v))
+}
+
+// LotteryAttemptsRewardNEQ applies the NEQ predicate on the "lottery_attempts_reward" field.
+func LotteryAttemptsRewardNEQ(v int) predicate.UserCheckin {
+	return predicate.UserCheckin(sql.FieldNEQ(FieldLotteryAttemptsReward, v))
+}
+
+// LotteryAttemptsRewardIn applies the In predicate on the "lottery_attempts_reward" field.
+func LotteryAttemptsRewardIn(vs ...int) predicate.UserCheckin {
+	return predicate.UserCheckin(sql.FieldIn(FieldLotteryAttemptsReward, vs...))
+}
+
+// LotteryAttemptsRewardNotIn applies the NotIn predicate on the "lottery_attempts_reward" field.
+func LotteryAttemptsRewardNotIn(vs ...int) predicate.UserCheckin {
+	return predicate.UserCheckin(sql.FieldNotIn(FieldLotteryAttemptsReward, vs...))
+}
+
+// LotteryAttemptsRewardGT applies the GT predicate on the "lottery_attempts_reward" field.
+func LotteryAttemptsRewardGT(v int) predicate.UserCheckin {
+	return predicate.UserCheckin(sql.FieldGT(FieldLotteryAttemptsReward, v))
+}
+
+// LotteryAttemptsRewardGTE applies the GTE predicate on the "lottery_attempts_reward" field.
+func LotteryAttemptsRewardGTE(v int) predicate.UserCheckin {
+	return predicate.UserCheckin(sql.FieldGTE(FieldLotteryAttemptsReward, v))
+}
+
+// LotteryAttemptsRewardLT applies the LT predicate on the "lottery_attempts_reward" field.
+func LotteryAttemptsRewardLT(v int) predicate.UserCheckin {
+	return predicate.UserCheckin(sql.FieldLT(FieldLotteryAttemptsReward, v))
+}
+
+// LotteryAttemptsRewardLTE applies the LTE predicate on the "lottery_attempts_reward" field.
+func LotteryAttemptsRewardLTE(v int) predicate.UserCheckin {
+	return predicate.UserCheckin(sql.FieldLTE(FieldLotteryAttemptsReward, v))
 }
 
 // TotalRewardAmountEQ applies the EQ predicate on the "total_reward_amount" field.

@@ -1,6 +1,7 @@
 package schema
 
 import (
+	"fmt"
 	"time"
 
 	"entgo.io/ent"
@@ -31,6 +32,14 @@ func (LotteryDraw) Fields() []ent.Field {
 		field.Float("balance_amount").Optional().Nillable().SchemaType(map[string]string{dialect.Postgres: "decimal(20,8)"}),
 		field.String("product_content").Optional().Nillable().SchemaType(map[string]string{dialect.Postgres: "text"}),
 		field.String("attempt_key").MaxLen(128).Unique(),
+		field.String("attempt_source").MaxLen(20).Default("activity").Validate(func(value string) error {
+			switch value {
+			case "activity", "wallet":
+				return nil
+			default:
+				return fmt.Errorf("unsupported lottery attempt source %q", value)
+			}
+		}),
 		field.Time("created_at").Immutable().Default(time.Now).SchemaType(map[string]string{dialect.Postgres: "timestamptz"}),
 	}
 }

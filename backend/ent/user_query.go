@@ -17,6 +17,8 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/apikey"
 	"github.com/Wei-Shaw/sub2api/ent/authidentity"
 	"github.com/Wei-Shaw/sub2api/ent/group"
+	"github.com/Wei-Shaw/sub2api/ent/lotteryattemptledger"
+	"github.com/Wei-Shaw/sub2api/ent/lotteryattemptwallet"
 	"github.com/Wei-Shaw/sub2api/ent/paymentorder"
 	"github.com/Wei-Shaw/sub2api/ent/pendingauthsession"
 	"github.com/Wei-Shaw/sub2api/ent/predicate"
@@ -59,6 +61,8 @@ type UserQuery struct {
 	withPlatformQuotas          *UserPlatformQuotaQuery
 	withCheckins                *UserCheckinQuery
 	withCheckinBlacklistEntries *UserCheckinBlacklistQuery
+	withLotteryAttemptWallet    *LotteryAttemptWalletQuery
+	withLotteryAttemptLedger    *LotteryAttemptLedgerQuery
 	withUserImages              *UserImageQuery
 	withUserImageTasks          *UserImageTaskQuery
 	withUserAllowedGroups       *UserAllowedGroupQuery
@@ -473,6 +477,50 @@ func (_q *UserQuery) QueryCheckinBlacklistEntries() *UserCheckinBlacklistQuery {
 	return query
 }
 
+// QueryLotteryAttemptWallet chains the current query on the "lottery_attempt_wallet" edge.
+func (_q *UserQuery) QueryLotteryAttemptWallet() *LotteryAttemptWalletQuery {
+	query := (&LotteryAttemptWalletClient{config: _q.config}).Query()
+	query.path = func(ctx context.Context) (fromU *sql.Selector, err error) {
+		if err := _q.prepareQuery(ctx); err != nil {
+			return nil, err
+		}
+		selector := _q.sqlQuery(ctx)
+		if err := selector.Err(); err != nil {
+			return nil, err
+		}
+		step := sqlgraph.NewStep(
+			sqlgraph.From(user.Table, user.FieldID, selector),
+			sqlgraph.To(lotteryattemptwallet.Table, lotteryattemptwallet.FieldID),
+			sqlgraph.Edge(sqlgraph.O2O, false, user.LotteryAttemptWalletTable, user.LotteryAttemptWalletColumn),
+		)
+		fromU = sqlgraph.SetNeighbors(_q.driver.Dialect(), step)
+		return fromU, nil
+	}
+	return query
+}
+
+// QueryLotteryAttemptLedger chains the current query on the "lottery_attempt_ledger" edge.
+func (_q *UserQuery) QueryLotteryAttemptLedger() *LotteryAttemptLedgerQuery {
+	query := (&LotteryAttemptLedgerClient{config: _q.config}).Query()
+	query.path = func(ctx context.Context) (fromU *sql.Selector, err error) {
+		if err := _q.prepareQuery(ctx); err != nil {
+			return nil, err
+		}
+		selector := _q.sqlQuery(ctx)
+		if err := selector.Err(); err != nil {
+			return nil, err
+		}
+		step := sqlgraph.NewStep(
+			sqlgraph.From(user.Table, user.FieldID, selector),
+			sqlgraph.To(lotteryattemptledger.Table, lotteryattemptledger.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, user.LotteryAttemptLedgerTable, user.LotteryAttemptLedgerColumn),
+		)
+		fromU = sqlgraph.SetNeighbors(_q.driver.Dialect(), step)
+		return fromU, nil
+	}
+	return query
+}
+
 // QueryUserImages chains the current query on the "user_images" edge.
 func (_q *UserQuery) QueryUserImages() *UserImageQuery {
 	query := (&UserImageClient{config: _q.config}).Query()
@@ -748,6 +796,8 @@ func (_q *UserQuery) Clone() *UserQuery {
 		withPlatformQuotas:          _q.withPlatformQuotas.Clone(),
 		withCheckins:                _q.withCheckins.Clone(),
 		withCheckinBlacklistEntries: _q.withCheckinBlacklistEntries.Clone(),
+		withLotteryAttemptWallet:    _q.withLotteryAttemptWallet.Clone(),
+		withLotteryAttemptLedger:    _q.withLotteryAttemptLedger.Clone(),
 		withUserImages:              _q.withUserImages.Clone(),
 		withUserImageTasks:          _q.withUserImageTasks.Clone(),
 		withUserAllowedGroups:       _q.withUserAllowedGroups.Clone(),
@@ -944,6 +994,28 @@ func (_q *UserQuery) WithCheckinBlacklistEntries(opts ...func(*UserCheckinBlackl
 	return _q
 }
 
+// WithLotteryAttemptWallet tells the query-builder to eager-load the nodes that are connected to
+// the "lottery_attempt_wallet" edge. The optional arguments are used to configure the query builder of the edge.
+func (_q *UserQuery) WithLotteryAttemptWallet(opts ...func(*LotteryAttemptWalletQuery)) *UserQuery {
+	query := (&LotteryAttemptWalletClient{config: _q.config}).Query()
+	for _, opt := range opts {
+		opt(query)
+	}
+	_q.withLotteryAttemptWallet = query
+	return _q
+}
+
+// WithLotteryAttemptLedger tells the query-builder to eager-load the nodes that are connected to
+// the "lottery_attempt_ledger" edge. The optional arguments are used to configure the query builder of the edge.
+func (_q *UserQuery) WithLotteryAttemptLedger(opts ...func(*LotteryAttemptLedgerQuery)) *UserQuery {
+	query := (&LotteryAttemptLedgerClient{config: _q.config}).Query()
+	for _, opt := range opts {
+		opt(query)
+	}
+	_q.withLotteryAttemptLedger = query
+	return _q
+}
+
 // WithUserImages tells the query-builder to eager-load the nodes that are connected to
 // the "user_images" edge. The optional arguments are used to configure the query builder of the edge.
 func (_q *UserQuery) WithUserImages(opts ...func(*UserImageQuery)) *UserQuery {
@@ -1055,7 +1127,7 @@ func (_q *UserQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*User, e
 	var (
 		nodes       = []*User{}
 		_spec       = _q.querySpec()
-		loadedTypes = [20]bool{
+		loadedTypes = [22]bool{
 			_q.withAPIKeys != nil,
 			_q.withCustomGroups != nil,
 			_q.withRedeemCodes != nil,
@@ -1073,6 +1145,8 @@ func (_q *UserQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*User, e
 			_q.withPlatformQuotas != nil,
 			_q.withCheckins != nil,
 			_q.withCheckinBlacklistEntries != nil,
+			_q.withLotteryAttemptWallet != nil,
+			_q.withLotteryAttemptLedger != nil,
 			_q.withUserImages != nil,
 			_q.withUserImageTasks != nil,
 			_q.withUserAllowedGroups != nil,
@@ -1220,6 +1294,21 @@ func (_q *UserQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*User, e
 			func(n *User) { n.Edges.CheckinBlacklistEntries = []*UserCheckinBlacklist{} },
 			func(n *User, e *UserCheckinBlacklist) {
 				n.Edges.CheckinBlacklistEntries = append(n.Edges.CheckinBlacklistEntries, e)
+			}); err != nil {
+			return nil, err
+		}
+	}
+	if query := _q.withLotteryAttemptWallet; query != nil {
+		if err := _q.loadLotteryAttemptWallet(ctx, query, nodes, nil,
+			func(n *User, e *LotteryAttemptWallet) { n.Edges.LotteryAttemptWallet = e }); err != nil {
+			return nil, err
+		}
+	}
+	if query := _q.withLotteryAttemptLedger; query != nil {
+		if err := _q.loadLotteryAttemptLedger(ctx, query, nodes,
+			func(n *User) { n.Edges.LotteryAttemptLedger = []*LotteryAttemptLedger{} },
+			func(n *User, e *LotteryAttemptLedger) {
+				n.Edges.LotteryAttemptLedger = append(n.Edges.LotteryAttemptLedger, e)
 			}); err != nil {
 			return nil, err
 		}
@@ -1786,6 +1875,63 @@ func (_q *UserQuery) loadCheckinBlacklistEntries(ctx context.Context, query *Use
 	}
 	query.Where(predicate.UserCheckinBlacklist(func(s *sql.Selector) {
 		s.Where(sql.InValues(s.C(user.CheckinBlacklistEntriesColumn), fks...))
+	}))
+	neighbors, err := query.All(ctx)
+	if err != nil {
+		return err
+	}
+	for _, n := range neighbors {
+		fk := n.UserID
+		node, ok := nodeids[fk]
+		if !ok {
+			return fmt.Errorf(`unexpected referenced foreign-key "user_id" returned %v for node %v`, fk, n.ID)
+		}
+		assign(node, n)
+	}
+	return nil
+}
+func (_q *UserQuery) loadLotteryAttemptWallet(ctx context.Context, query *LotteryAttemptWalletQuery, nodes []*User, init func(*User), assign func(*User, *LotteryAttemptWallet)) error {
+	fks := make([]driver.Value, 0, len(nodes))
+	nodeids := make(map[int64]*User)
+	for i := range nodes {
+		fks = append(fks, nodes[i].ID)
+		nodeids[nodes[i].ID] = nodes[i]
+	}
+	if len(query.ctx.Fields) > 0 {
+		query.ctx.AppendFieldOnce(lotteryattemptwallet.FieldUserID)
+	}
+	query.Where(predicate.LotteryAttemptWallet(func(s *sql.Selector) {
+		s.Where(sql.InValues(s.C(user.LotteryAttemptWalletColumn), fks...))
+	}))
+	neighbors, err := query.All(ctx)
+	if err != nil {
+		return err
+	}
+	for _, n := range neighbors {
+		fk := n.UserID
+		node, ok := nodeids[fk]
+		if !ok {
+			return fmt.Errorf(`unexpected referenced foreign-key "user_id" returned %v for node %v`, fk, n.ID)
+		}
+		assign(node, n)
+	}
+	return nil
+}
+func (_q *UserQuery) loadLotteryAttemptLedger(ctx context.Context, query *LotteryAttemptLedgerQuery, nodes []*User, init func(*User), assign func(*User, *LotteryAttemptLedger)) error {
+	fks := make([]driver.Value, 0, len(nodes))
+	nodeids := make(map[int64]*User)
+	for i := range nodes {
+		fks = append(fks, nodes[i].ID)
+		nodeids[nodes[i].ID] = nodes[i]
+		if init != nil {
+			init(nodes[i])
+		}
+	}
+	if len(query.ctx.Fields) > 0 {
+		query.ctx.AppendFieldOnce(lotteryattemptledger.FieldUserID)
+	}
+	query.Where(predicate.LotteryAttemptLedger(func(s *sql.Selector) {
+		s.Where(sql.InValues(s.C(user.LotteryAttemptLedgerColumn), fks...))
 	}))
 	neighbors, err := query.All(ctx)
 	if err != nil {

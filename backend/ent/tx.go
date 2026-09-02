@@ -58,6 +58,10 @@ type Tx struct {
 	IdentityAdoptionDecision *IdentityAdoptionDecisionClient
 	// LotteryActivity is the client for interacting with the LotteryActivity builders.
 	LotteryActivity *LotteryActivityClient
+	// LotteryAttemptLedger is the client for interacting with the LotteryAttemptLedger builders.
+	LotteryAttemptLedger *LotteryAttemptLedgerClient
+	// LotteryAttemptWallet is the client for interacting with the LotteryAttemptWallet builders.
+	LotteryAttemptWallet *LotteryAttemptWalletClient
 	// LotteryDraw is the client for interacting with the LotteryDraw builders.
 	LotteryDraw *LotteryDrawClient
 	// LotteryPrize is the client for interacting with the LotteryPrize builders.
@@ -279,6 +283,8 @@ func (tx *Tx) init() {
 	tx.IdempotencyRecord = NewIdempotencyRecordClient(tx.config)
 	tx.IdentityAdoptionDecision = NewIdentityAdoptionDecisionClient(tx.config)
 	tx.LotteryActivity = NewLotteryActivityClient(tx.config)
+	tx.LotteryAttemptLedger = NewLotteryAttemptLedgerClient(tx.config)
+	tx.LotteryAttemptWallet = NewLotteryAttemptWalletClient(tx.config)
 	tx.LotteryDraw = NewLotteryDrawClient(tx.config)
 	tx.LotteryPrize = NewLotteryPrizeClient(tx.config)
 	tx.LotteryPrizeItem = NewLotteryPrizeItemClient(tx.config)

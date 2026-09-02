@@ -6,6 +6,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"math"
 	"strconv"
 	"sync"
@@ -62,6 +63,9 @@ type barrierCheckinSettingRepo struct {
 }
 
 func newBarrierCheckinSettingRepo(values map[string]string) *barrierCheckinSettingRepo {
+	if _, ok := values[SettingKeyCheckinMinDailyUsageCount]; !ok {
+		values[SettingKeyCheckinMinDailyUsageCount] = "0"
+	}
 	return &barrierCheckinSettingRepo{
 		checkinSettingRepoStub: &checkinSettingRepoStub{values: values},
 		firstReadStarted:       make(chan struct{}),
@@ -117,13 +121,15 @@ func (r *sequencedCheckinSettingRepo) GetMultiple(_ context.Context, keys []stri
 	for _, key := range keys {
 		if value, ok := r.snapshots[index][key]; ok {
 			out[key] = value
+		} else if key == SettingKeyCheckinMinDailyUsageCount {
+			out[key] = "0"
 		}
 	}
 	return out, nil
 }
 
 func newCheckinSettingRepoStub() *checkinSettingRepoStub {
-	return &checkinSettingRepoStub{values: map[string]string{}}
+	return &checkinSettingRepoStub{values: map[string]string{SettingKeyCheckinMinDailyUsageCount: "0"}}
 }
 
 func (s *checkinSettingRepoStub) Get(_ context.Context, key string) (*Setting, error) {
@@ -182,6 +188,7 @@ func setCheckinConfig(t *testing.T, repo *checkinSettingRepoStub, cfg CheckinCon
 	repo.values[SettingKeyCheckinEnabled] = strconv.FormatBool(cfg.Enabled)
 	repo.values[SettingKeyCheckinMinTotalUsageUSD] = strconv.FormatFloat(cfg.MinTotalUsageUSD, 'f', -1, 64)
 	repo.values[SettingKeyCheckinMinTotalRechargeUSD] = strconv.FormatFloat(cfg.MinTotalRechargeUSD, 'f', -1, 64)
+	repo.values[SettingKeyCheckinMinDailyUsageCount] = strconv.Itoa(cfg.MinDailyUsageCount)
 }
 
 func createCheckinTestUser(t *testing.T, ctx context.Context, client *dbent.Client, email string, balance float64) *dbent.User {
@@ -301,8 +308,8 @@ func configureCheckinCampaignAwardBaseline(t *testing.T, ctx context.Context, sv
 		Tiers:               []CheckinRewardTier{{Amount: 1, Probability: 100}},
 		StreakEnabled:       true,
 		StreakRules: []CheckinStreakRule{
-			{Day: 7, BonusAmount: 4},
-			{Day: 14, BonusAmount: 8},
+			{Day: 7, LotteryAttempts: 4},
+			{Day: 14, LotteryAttempts: 8},
 		},
 		UsageRebateEnabled:     true,
 		UsageRebateRatePercent: 8,
@@ -515,10 +522,12 @@ func TestCheckinAwardsCampaignBaseButPreservesUsageAndStreakRewards(t *testing.T
 	require.Equal(t, 5.0, result.BaseRewardAmount)
 	require.Equal(t, 50.0, result.PreviousDayUsageAmount)
 	require.Equal(t, 4.0, result.UsageRebateAmount)
-	require.Equal(t, 4.0, result.BonusRewardAmount, "streak remains a fixed direct-balance reward")
+	require.Zero(t, result.BonusRewardAmount)
+	require.Equal(t, 4, result.LotteryAttemptsReward)
 	require.Zero(t, result.RewardCapAdjustment)
-	require.Equal(t, 13.0, result.TotalRewardAmount)
-	require.Equal(t, 23.0, result.BalanceAfter)
+	require.Equal(t, 9.0, result.TotalRewardAmount)
+	require.Equal(t, 19.0, result.BalanceAfter)
+	require.Equal(t, 4, client.LotteryAttemptWallet.Query().OnlyX(ctx).Balance)
 	require.NotNil(t, result.RewardCampaignID)
 	require.Equal(t, campaign.ID, *result.RewardCampaignID)
 	require.Equal(t, "七夕基础奖励", result.RewardCampaignName)
@@ -871,6 +880,7 @@ func TestCheckinTransactionExistingRecordSkipsBalanceMutation(t *testing.T) {
 	ctx := context.Background()
 	user := createCheckinTestUser(t, ctx, client, "transaction-existing@example.com", 10)
 	svc := NewCheckinService(client, nil, nil)
+	svc.SetSettingRepository(newCheckinSettingRepoStub())
 	rewardedAt := time.Date(2026, 8, 15, 9, 0, 0, 0, time.FixedZone("CST", 8*60*60))
 	svc.now = func() time.Time { return rewardedAt }
 	outerQueries := 0
@@ -1008,6 +1018,7 @@ func TestCheckinNonUniqueConstraintDoesNotBecomeNotFound(t *testing.T) {
 	ctx := context.Background()
 	user := createCheckinTestUser(t, ctx, client, "non-unique-constraint@example.com", 10)
 	svc := NewCheckinService(client, nil, nil)
+	svc.SetSettingRepository(newCheckinSettingRepoStub())
 	client.UserCheckin.Use(func(next dbent.Mutator) dbent.Mutator {
 		return dbent.MutateFunc(func(mutationCtx context.Context, mutation dbent.Mutation) (dbent.Value, error) {
 			if mutation.Op().Is(coreent.OpCreate) {
@@ -1051,6 +1062,7 @@ func TestCheckinServiceCheckinAwardsBalanceForBeijingDate(t *testing.T) {
 	require.NoError(t, err)
 
 	svc := NewCheckinService(client, nil, nil)
+	svc.SetSettingRepository(newCheckinSettingRepoStub())
 	svc.now = func() time.Time {
 		return time.Date(2026, 6, 4, 16, 30, 0, 0, time.UTC)
 	}
@@ -1102,6 +1114,7 @@ func TestCheckinServiceSecondCheckinSameBeijingDateDoesNotAwardAgain(t *testing.
 	require.NoError(t, err)
 
 	svc := NewCheckinService(client, nil, nil)
+	svc.SetSettingRepository(newCheckinSettingRepoStub())
 	svc.now = func() time.Time {
 		return time.Date(2026, 6, 5, 8, 0, 0, 0, time.FixedZone("CST", 8*60*60))
 	}
@@ -1425,7 +1438,7 @@ func TestCheckinServicePersistsRechargeThreshold(t *testing.T) {
 	require.Equal(t, 20.0, loaded.MinTotalRechargeUSD)
 }
 
-func TestCheckinConfig_NormalizesUsageRebateWithFixedStreak(t *testing.T) {
+func TestCheckinConfig_NormalizesUsageRebateWithLegacyStreakRule(t *testing.T) {
 	cfg := CheckinConfig{
 		Enabled:                true,
 		Tiers:                  []CheckinRewardTier{{Amount: 0.3, Probability: 100}},
@@ -1443,11 +1456,12 @@ func TestCheckinConfig_NormalizesUsageRebateWithFixedStreak(t *testing.T) {
 	require.Equal(t, 8.0, normalized.UsageRebateRatePercent)
 	require.Equal(t, 8.0, normalized.UsageRebateCap)
 	require.Equal(t, 10.0, normalized.TotalRewardCap)
-	require.Equal(t, 10.0, normalized.StreakRules[0].BonusAmount)
+	require.Equal(t, 1, normalized.StreakRules[0].LotteryAttempts)
+	require.Zero(t, normalized.StreakRules[0].BonusAmount)
 	require.Zero(t, normalized.StreakRules[0].BonusRatePercent)
 }
 
-func TestCheckinConfig_LegacyFixedStreakRemainsValid(t *testing.T) {
+func TestCheckinConfig_LegacyFixedStreakBecomesOneLotteryAttempt(t *testing.T) {
 	cfg := CheckinConfig{
 		Enabled:       true,
 		Tiers:         []CheckinRewardTier{{Amount: 1, Probability: 100}},
@@ -1458,11 +1472,12 @@ func TestCheckinConfig_LegacyFixedStreakRemainsValid(t *testing.T) {
 	normalized, err := normalizeCheckinConfig(cfg)
 	require.NoError(t, err)
 	require.False(t, normalized.UsageRebateEnabled)
-	require.Equal(t, 4.0, normalized.StreakRules[0].BonusAmount)
+	require.Equal(t, 1, normalized.StreakRules[0].LotteryAttempts)
+	require.Zero(t, normalized.StreakRules[0].BonusAmount)
 	require.Zero(t, normalized.StreakRules[0].BonusRatePercent)
 }
 
-func TestCheckinConfig_UsageRebatePreservesFixedStreakBonus(t *testing.T) {
+func TestCheckinConfig_UsageRebatePreservesStreakLotteryAttempts(t *testing.T) {
 	cfg := CheckinConfig{
 		Enabled:                true,
 		Tiers:                  []CheckinRewardTier{{Amount: 1, Probability: 100}},
@@ -1476,7 +1491,8 @@ func TestCheckinConfig_UsageRebatePreservesFixedStreakBonus(t *testing.T) {
 
 	normalized, err := normalizeCheckinConfig(cfg)
 	require.NoError(t, err)
-	require.Equal(t, 4.0, normalized.StreakRules[0].BonusAmount)
+	require.Equal(t, 1, normalized.StreakRules[0].LotteryAttempts)
+	require.Zero(t, normalized.StreakRules[0].BonusAmount)
 	require.Zero(t, normalized.StreakRules[0].BonusRatePercent)
 }
 
@@ -1535,7 +1551,7 @@ func TestCheckinServicePersistsUsageRebateConfig(t *testing.T) {
 	require.JSONEq(t, `{
 		"tiers":[{"amount":0.3,"probability":100,"sort_order":1}],
 		"streak_enabled":true,
-		"streak_rules":[{"day":7,"bonus_amount":10,"bonus_rate_percent":0}],
+		"streak_rules":[{"day":7,"lottery_attempts":1}],
 		"usage_rebate_enabled":true,
 		"usage_rebate_rate_percent":8,
 		"usage_rebate_cap":8,
@@ -1564,8 +1580,89 @@ func TestCheckinServiceLoadsLegacyRewardConfigWithUsageRebateDisabled(t *testing
 	require.Zero(t, loaded.UsageRebateRatePercent)
 	require.Zero(t, loaded.UsageRebateCap)
 	require.Zero(t, loaded.TotalRewardCap)
-	require.Equal(t, 4.0, loaded.StreakRules[0].BonusAmount)
+	require.Equal(t, 1, loaded.StreakRules[0].LotteryAttempts)
+	require.Zero(t, loaded.StreakRules[0].BonusAmount)
 	require.Zero(t, loaded.StreakRules[0].BonusRatePercent)
+}
+
+func TestCheckinConfigDefaultsToFiveDailyUsageRecordsAndOneAttemptPerMilestone(t *testing.T) {
+	cfg := DefaultCheckinConfig()
+
+	require.Equal(t, 5, cfg.MinDailyUsageCount)
+	require.NotEmpty(t, cfg.StreakRules)
+	for _, rule := range cfg.StreakRules {
+		require.Equal(t, 1, rule.LotteryAttempts)
+	}
+}
+
+func TestCheckinServiceLoadsLegacyStreakMoneyRulesAsOneLotteryAttempt(t *testing.T) {
+	client := newCheckinServiceTestClient(t)
+	settings := newCheckinSettingRepoStub()
+	settings.values[SettingKeyCheckinRewardConfig] = `{
+		"tiers":[{"amount":1,"probability":100,"sort_order":1}],
+		"streak_enabled":true,
+		"streak_rules":[{"day":7,"bonus_amount":10},{"day":15,"bonus_amount":15}]
+	}`
+	svc := NewCheckinService(client, nil, nil)
+	svc.SetSettingRepository(settings)
+
+	loaded, err := svc.GetConfig(context.Background())
+	require.NoError(t, err)
+	require.Equal(t, []CheckinStreakRule{
+		{Day: 7, LotteryAttempts: 1},
+		{Day: 15, LotteryAttempts: 1},
+	}, loaded.StreakRules)
+}
+
+func TestCheckinServiceDailyUsageThresholdUsesBeijingCalendarDay(t *testing.T) {
+	client := newCheckinServiceTestClient(t)
+	ctx := context.Background()
+	user := createCheckinTestUser(t, ctx, client, "daily-usage-threshold@example.com", 0)
+	beijing := time.FixedZone("CST", 8*60*60)
+	svc := NewCheckinService(client, nil, nil)
+	svc.now = func() time.Time { return time.Date(2026, 9, 2, 12, 0, 0, 0, beijing) }
+
+	createCheckinUsageAt(t, ctx, client, user.ID, "previous-day", 1, time.Date(2026, 9, 1, 23, 59, 59, 0, beijing))
+	for index := 0; index < 4; index++ {
+		createCheckinUsageAt(
+			t, ctx, client, user.ID, fmt.Sprintf("today-%d", index), 1,
+			time.Date(2026, 9, 2, 8+index, 0, 0, 0, beijing),
+		)
+	}
+
+	status, err := svc.GetStatus(ctx, user.ID)
+	require.NoError(t, err)
+	require.False(t, status.Eligible)
+	require.Equal(t, CheckinIneligibleReasonInsufficientDailyUsage, status.IneligibleReason)
+	require.Equal(t, 4, status.TodayUsageCount)
+	require.Equal(t, 5, status.MinDailyUsageCount)
+
+	_, err = svc.Checkin(ctx, user.ID)
+	require.ErrorIs(t, err, ErrCheckinInsufficientDailyUsage)
+
+	createCheckinUsageAt(t, ctx, client, user.ID, "today-4", 1, time.Date(2026, 9, 2, 12, 30, 0, 0, beijing))
+	status, err = svc.GetStatus(ctx, user.ID)
+	require.NoError(t, err)
+	require.True(t, status.Eligible)
+	require.Equal(t, 5, status.TodayUsageCount)
+}
+
+func TestCheckinServicePersistsDailyUsageThreshold(t *testing.T) {
+	client := newCheckinServiceTestClient(t)
+	settings := newCheckinSettingRepoStub()
+	svc := NewCheckinService(client, nil, nil)
+	svc.SetSettingRepository(settings)
+	defaults := DefaultCheckinConfig()
+	defaults.MinDailyUsageCount = 8
+
+	updated, err := svc.UpdateConfig(context.Background(), *defaults)
+	require.NoError(t, err)
+	require.Equal(t, 8, updated.MinDailyUsageCount)
+	require.Equal(t, "8", settings.values[SettingKeyCheckinMinDailyUsageCount])
+
+	loaded, err := svc.GetConfig(context.Background())
+	require.NoError(t, err)
+	require.Equal(t, 8, loaded.MinDailyUsageCount)
 }
 
 func TestCalculateUsageLinkedCheckinReward(t *testing.T) {
@@ -1582,7 +1679,7 @@ func TestCalculateUsageLinkedCheckinReward(t *testing.T) {
 		{name: "zero usage", base: 0.5, usage: 0, wantTotal: 0.5},
 		{name: "normal usage", base: 0.8, usage: 50, wantRebate: 4, wantTotal: 4.8},
 		{name: "rebate cap", base: 0.3, usage: 500, wantRebate: 8, wantTotal: 8.3, wantCapAdjustment: 32},
-		{name: "fixed streak is added after total cap", base: 3, usage: 100, streakBonus: 4, wantRebate: 7, wantStreak: 4, wantTotal: 14, wantCapAdjustment: 1},
+		{name: "streak attempts do not change balance cap", base: 3, usage: 100, streakBonus: 4, wantRebate: 7, wantStreak: 0, wantTotal: 10, wantCapAdjustment: 1},
 	}
 
 	for _, tt := range tests {
@@ -1612,7 +1709,7 @@ func TestCalculateUsageLinkedCheckinReward(t *testing.T) {
 	}
 }
 
-func TestCalculateUsageLinkedCheckinReward_AddsFixedStreakAfterCap(t *testing.T) {
+func TestCalculateUsageLinkedCheckinReward_ExcludesStreakAttemptsFromBalance(t *testing.T) {
 	cfg := CheckinConfig{
 		Tiers:                  []CheckinRewardTier{{Amount: 3, Probability: 100}},
 		UsageRebateEnabled:     true,
@@ -1627,8 +1724,8 @@ func TestCalculateUsageLinkedCheckinReward_AddsFixedStreakAfterCap(t *testing.T)
 
 	require.Equal(t, 3.0, got.BaseReward)
 	require.Equal(t, 7.0, got.UsageRebate)
-	require.Equal(t, 4.0, got.StreakBonus)
-	require.Equal(t, 14.0, got.TotalReward)
+	require.Zero(t, got.StreakBonus)
+	require.Equal(t, 10.0, got.TotalReward)
 	require.Equal(t, 1.0, got.CapAdjustment)
 }
 
@@ -1762,7 +1859,7 @@ func TestCheckinService_Checkin_IdempotentUsageSnapshot(t *testing.T) {
 	require.Equal(t, 11.3, userAfter.Balance)
 }
 
-func TestCheckinServiceCustomRewardConfigAndStreakBonus(t *testing.T) {
+func TestCheckinServiceCustomRewardConfigAndStreakLotteryAttempts(t *testing.T) {
 	client := newCheckinServiceTestClient(t)
 	ctx := context.Background()
 	createdUser := createCheckinTestUser(t, ctx, client, "streak@example.com", 10)
@@ -1778,7 +1875,7 @@ func TestCheckinServiceCustomRewardConfigAndStreakBonus(t *testing.T) {
 		},
 		StreakEnabled: true,
 		StreakRules: []CheckinStreakRule{
-			{Day: 3, BonusAmount: 7},
+			{Day: 3, LotteryAttempts: 7},
 		},
 	})
 	require.NoError(t, err)
@@ -1806,9 +1903,54 @@ func TestCheckinServiceCustomRewardConfigAndStreakBonus(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, 3, third.StreakDay)
 	require.Equal(t, 1.0, third.BaseRewardAmount)
-	require.Equal(t, 7.0, third.BonusRewardAmount)
-	require.Equal(t, 8.0, third.RewardAmount)
-	require.Equal(t, 20.0, third.BalanceAfter)
+	require.Zero(t, third.BonusRewardAmount)
+	require.Equal(t, 7, third.LotteryAttemptsReward)
+	require.Equal(t, 1.0, third.RewardAmount)
+	require.Equal(t, 13.0, third.BalanceAfter)
+	require.Equal(t, 7, client.LotteryAttemptWallet.Query().OnlyX(ctx).Balance)
+}
+
+func TestCheckinServiceStreakMilestoneCreditsLotteryAttemptsWithoutBonusBalance(t *testing.T) {
+	client := newCheckinServiceTestClient(t)
+	ctx := context.Background()
+	user := createCheckinTestUser(t, ctx, client, "streak-lottery-attempts@example.com", 10)
+	settings := newCheckinSettingRepoStub()
+	svc := NewCheckinService(client, nil, nil)
+	svc.SetSettingRepository(settings)
+	beijing := time.FixedZone("CST", 8*60*60)
+	svc.now = func() time.Time { return time.Date(2026, 9, 7, 10, 0, 0, 0, beijing) }
+	svc.rewardRoll = func() float64 { return 0 }
+
+	_, err := svc.UpdateConfig(ctx, CheckinConfig{
+		Enabled:            true,
+		MinDailyUsageCount: 0,
+		Tiers:              []CheckinRewardTier{{Amount: 2, Probability: 100}},
+		StreakEnabled:      true,
+		StreakRules:        []CheckinStreakRule{{Day: 7, LotteryAttempts: 3}},
+	})
+	require.NoError(t, err)
+	createPreviousCheckinDays(t, ctx, client, user.ID, time.Date(2026, 9, 1, 9, 0, 0, 0, beijing), 6)
+
+	first, err := svc.Checkin(ctx, user.ID)
+	require.NoError(t, err)
+	require.False(t, first.AlreadyCheckedIn)
+	require.Equal(t, 7, first.StreakDay)
+	require.Equal(t, 2.0, first.TotalRewardAmount)
+	require.Zero(t, first.BonusRewardAmount)
+	require.Equal(t, 3, first.LotteryAttemptsReward)
+	require.Equal(t, 12.0, first.BalanceAfter)
+
+	walletBalance, err := lotteryAttemptBalance(ctx, client, user.ID)
+	require.NoError(t, err)
+	require.Equal(t, 3, walletBalance)
+	require.Equal(t, 1, client.LotteryAttemptLedger.Query().CountX(ctx))
+
+	second, err := svc.Checkin(ctx, user.ID)
+	require.NoError(t, err)
+	require.True(t, second.AlreadyCheckedIn)
+	require.Equal(t, 3, second.LotteryAttemptsReward)
+	require.Equal(t, 3, client.LotteryAttemptWallet.Query().OnlyX(ctx).Balance)
+	require.Equal(t, 1, client.LotteryAttemptLedger.Query().CountX(ctx))
 }
 
 func TestCheckinServiceLongStreakUsesFullHistory(t *testing.T) {
@@ -1827,7 +1969,7 @@ func TestCheckinServiceLongStreakUsesFullHistory(t *testing.T) {
 		},
 		StreakEnabled: true,
 		StreakRules: []CheckinStreakRule{
-			{Day: 120, BonusAmount: 50},
+			{Day: 120, LotteryAttempts: 50},
 		},
 	})
 	require.NoError(t, err)
@@ -1858,6 +2000,7 @@ func TestCheckinServiceLongStreakUsesFullHistory(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, 120, result.StreakDay)
 	require.Equal(t, 120, result.LifetimeDays)
-	require.Equal(t, 50.0, result.BonusRewardAmount)
-	require.Equal(t, 51.0, result.RewardAmount)
+	require.Zero(t, result.BonusRewardAmount)
+	require.Equal(t, 50, result.LotteryAttemptsReward)
+	require.Equal(t, 1.0, result.RewardAmount)
 }
