@@ -414,30 +414,15 @@ func EvaluateEmptyResponseClaim(now time.Time, usage UsageLog, outcome *Response
 	if !group.EmptyResponseCompensationEnabled {
 		return decision(EmptyResponseClaimRejected, EmptyResponseReasonGroupDisabled)
 	}
-	if outcome != nil && outcome.CollectorVersion > 0 {
-		// The streamed-response collector is authoritative when the upstream
-		// usage payload under-reports output tokens after delivery has started.
-		if outcome.HasEffectiveOutput() {
-			return decision(EmptyResponseClaimRejected, EmptyResponseReasonEffectiveOutput)
-		}
-		if outcome.DisconnectSource == DisconnectSourceClient {
-			return decision(EmptyResponseClaimRejected, EmptyResponseReasonClientCancelled)
-		}
-	}
 	if usage.OutputTokens > EmptyResponseClaimMaxOutputTokens {
 		return decision(EmptyResponseClaimRejected, EmptyResponseReasonEffectiveOutput)
-	}
-	// A non-streaming request receives one complete upstream response, so its
-	// provider-reported output token count is sufficient low-output evidence.
-	// Streaming requests still require collector evidence because cancellation
-	// can leave their terminal usage incomplete or ambiguous.
-	if (outcome == nil || outcome.CollectorVersion <= 0) && !usage.Stream && isLowOutputCompensable(usage) {
-		return decision(EmptyResponseClaimApproved, EmptyResponseReasonLowOutput)
 	}
 	if isPureEmptyResponse(outcome) {
 		return decision(EmptyResponseClaimApproved, EmptyResponseReasonPureEmpty)
 	}
-	if outcome != nil && outcome.CollectorVersion > 0 && isLowOutputCompensable(usage) {
+	// Low-output compensation uses the recorded token count for both streaming
+	// and non-streaming requests. Response evidence does not override 0-10 tokens.
+	if isLowOutputCompensable(usage) {
 		return decision(EmptyResponseClaimApproved, EmptyResponseReasonLowOutput)
 	}
 	if outcome != nil && outcome.CollectorVersion > 0 {
