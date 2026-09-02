@@ -15,6 +15,11 @@ var corsWarningOnce sync.Once
 // CORS 跨域中间件
 func CORS(cfg config.CORSConfig) gin.HandlerFunc {
 	allowedOrigins := normalizeOrigins(cfg.AllowedOrigins)
+	// DevFile runs API compatibility checks in the browser and needs to call
+	// the OpenAI-compatible endpoint cross-origin.
+	if !containsOrigin(allowedOrigins, "https://devfile.vip") {
+		allowedOrigins = append(allowedOrigins, "https://devfile.vip")
+	}
 	allowAll := false
 	for _, origin := range allowedOrigins {
 		if origin == "*" {
@@ -116,4 +121,13 @@ func normalizeOrigins(values []string) []string {
 		normalized = append(normalized, trimmed)
 	}
 	return normalized
+}
+
+func containsOrigin(origins []string, target string) bool {
+	for _, origin := range origins {
+		if origin == target {
+			return true
+		}
+	}
+	return false
 }
