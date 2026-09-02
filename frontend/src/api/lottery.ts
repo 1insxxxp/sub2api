@@ -32,8 +32,8 @@ export interface LotteryPublicState {
   activity: LotteryActivity
   prizes: LotteryPrize[]
   attempts_used: number
-  activity_attempts_remaining: number
-  reward_attempts_remaining: number
+  activity_attempts_remaining?: number
+  reward_attempts_remaining?: number
   attempts_remaining: number
 }
 
@@ -44,15 +44,15 @@ export interface LotteryDraw {
   prize_type: LotteryPrizeType
   balance_amount?: number | null
   product_content?: string | null
-  attempt_source: 'activity' | 'wallet'
+  attempt_source?: 'activity' | 'wallet'
   created_at: string
 }
 
 export interface LotteryDrawResult {
   draw: LotteryDraw
   attempts_used: number
-  activity_attempts_remaining: number
-  reward_attempts_remaining: number
+  activity_attempts_remaining?: number
+  reward_attempts_remaining?: number
   attempts_remaining: number
 }
 

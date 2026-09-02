@@ -20,7 +20,7 @@ export interface AdminCheckinConfig {
   enabled: boolean
   min_total_usage_usd: number
   min_total_recharge_usd: number
-  min_daily_usage_count: number
+  min_daily_usage_count?: number
   tiers: CheckinRewardTier[]
   streak_enabled: boolean
   streak_rules: CheckinStreakRule[]
@@ -40,7 +40,7 @@ export interface CheckinRewardTier {
 
 export interface CheckinStreakRule {
   day: number
-  lottery_attempts: number
+  lottery_attempts?: number
   bonus_amount?: number
   bonus_rate_percent?: number
 }
@@ -108,7 +108,7 @@ export interface AdminCheckinRecord {
   streak_day: number
   base_reward_amount: number
   bonus_reward_amount: number
-  lottery_attempts_reward: number
+  lottery_attempts_reward?: number
   previous_day_usage_amount: number
   usage_rebate_amount: number
   reward_cap_adjustment: number

@@ -949,7 +949,7 @@ async function loadConfig() {
     configForm.enabled = nextConfig.enabled
     configForm.min_total_usage_usd = nextConfig.min_total_usage_usd
     configForm.min_total_recharge_usd = nextConfig.min_total_recharge_usd
-    configForm.min_daily_usage_count = nextConfig.min_daily_usage_count
+    configForm.min_daily_usage_count = nextConfig.min_daily_usage_count ?? 5
     configForm.tiers = cloneTiers(nextConfig.tiers)
     configForm.streak_enabled = nextConfig.streak_enabled
     configForm.streak_rules = cloneStreakRules(nextConfig.streak_rules)
@@ -1012,7 +1012,7 @@ async function handleSaveConfig() {
     configForm.enabled = config.value.enabled
     configForm.min_total_usage_usd = config.value.min_total_usage_usd
     configForm.min_total_recharge_usd = config.value.min_total_recharge_usd
-    configForm.min_daily_usage_count = config.value.min_daily_usage_count
+    configForm.min_daily_usage_count = config.value.min_daily_usage_count ?? configForm.min_daily_usage_count
     configForm.tiers = cloneTiers(config.value.tiers)
     campaignDefaultTiersReady.value = configForm.tiers.length > 0
     configForm.streak_enabled = config.value.streak_enabled

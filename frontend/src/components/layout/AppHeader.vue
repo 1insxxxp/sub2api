@@ -343,7 +343,7 @@
                     <dd data-test="recent-checkin-previous-day-usage" class="shrink-0 tabular-nums text-slate-700 dark:text-slate-200">{{ formatUsd(record.previous_day_usage_amount) }}</dd>
                     <dt class="min-w-0 break-words text-slate-500 dark:text-slate-400">{{ t('checkin.usageRebate') }}</dt>
                     <dd data-test="recent-checkin-usage-rebate" class="shrink-0 tabular-nums text-slate-700 dark:text-slate-200">{{ formatUsd(record.usage_rebate_amount) }}</dd>
-                    <template v-if="record.lottery_attempts_reward > 0">
+                    <template v-if="(record.lottery_attempts_reward || 0) > 0">
                       <dt class="min-w-0 break-words text-slate-500 dark:text-slate-400">{{ t('checkin.lotteryAttempts') }}</dt>
                       <dd class="shrink-0 tabular-nums text-violet-600 dark:text-violet-300">{{ record.lottery_attempts_reward }}</dd>
                     </template>

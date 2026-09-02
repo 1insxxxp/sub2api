@@ -12,7 +12,7 @@
           </div>
           <div class="admin-toolbar-group w-full justify-end lg:w-auto lg:flex-none">
             <button type="button" class="btn btn-secondary inline-flex items-center gap-2" :disabled="loading" @click="loadConfig"><Icon name="refresh" size="sm" :class="loading ? 'animate-spin' : ''" />{{ t('common.refresh') }}</button>
-            <button type="button" class="btn btn-primary inline-flex items-center gap-2" :disabled="savingActivity" @click="saveActivityForm"><Icon name="check" size="sm" />{{ savingActivity ? t('common.saving') : t('lottery.admin.saveActivity') }}</button>
+            <button type="button" data-test="save-lottery-activity" class="btn btn-primary inline-flex items-center gap-2" :disabled="savingActivity" @click="saveActivityForm"><Icon name="check" size="sm" />{{ savingActivity ? t('common.saving') : t('lottery.admin.saveActivity') }}</button>
           </div>
         </div>
       </div>
@@ -32,7 +32,7 @@
           <div class="md:col-span-2"><label class="input-label">{{ t('lottery.admin.descriptionLabel') }}</label><textarea v-model="activityForm.description" class="input min-h-24 resize-y" :placeholder="t('lottery.admin.descriptionPlaceholder')"></textarea></div>
           <div><label class="input-label">{{ t('lottery.admin.status') }}</label><select v-model="activityForm.status" class="input"><option value="draft">{{ t('lottery.admin.draft') }}</option><option value="active">{{ t('lottery.admin.active') }}</option><option value="disabled">{{ t('lottery.admin.disabledStatus') }}</option><option value="ended">{{ t('lottery.admin.ended') }}</option></select></div>
           <div><label class="input-label">{{ t('lottery.admin.attemptMode') }}</label><select v-model="activityForm.attempt_mode" class="input"><option value="daily">{{ t('lottery.admin.dailyMode') }}</option><option value="total">{{ t('lottery.admin.totalMode') }}</option></select></div>
-          <div><label class="input-label">{{ t('lottery.admin.attemptLimit') }}</label><input v-model.number="activityForm.attempt_limit" class="input" type="number" min="0" step="1" /><p class="mt-1 text-xs text-slate-500 dark:text-slate-400">{{ t('lottery.admin.attemptLimitHint') }}</p></div>
+          <div><label class="input-label">{{ t('lottery.admin.attemptLimit') }}</label><input v-model.number="activityForm.attempt_limit" data-test="lottery-attempt-limit" class="input" type="number" min="0" step="1" /><p class="mt-1 text-xs text-slate-500 dark:text-slate-400">{{ t('lottery.admin.attemptLimitHint') }}</p></div>
           <div><label class="input-label">{{ t('lottery.admin.startsAt') }}</label><input v-model="activityForm.starts_at" class="input" type="datetime-local" /></div>
           <div><label class="input-label">{{ t('lottery.admin.endsAt') }}</label><input v-model="activityForm.ends_at" class="input" type="datetime-local" /></div>
         </div>
