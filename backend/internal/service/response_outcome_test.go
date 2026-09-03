@@ -91,6 +91,27 @@ func TestResponseOutcomeSnapshotDoesNotRetainObservedContent(t *testing.T) {
 	require.False(t, strings.Contains(strings.ToLower(string(raw)), "content"))
 }
 
+func TestClassifyUsageOutcomeUsesOnlyPrivacySafeEvidence(t *testing.T) {
+	tests := []struct {
+		name    string
+		outcome *ResponseOutcome
+		want    UsageOutcomeStatus
+	}{
+		{name: "missing evidence is unknown", outcome: nil, want: UsageOutcomeUnknown},
+		{name: "effective output is success", outcome: &ResponseOutcome{HTTPStatus: 200, UpstreamStatus: 200, HasText: true, StreamCompleted: true}, want: UsageOutcomeSuccess},
+		{name: "successful response without output is empty", outcome: &ResponseOutcome{HTTPStatus: 200, UpstreamStatus: 200, StreamCompleted: true}, want: UsageOutcomeEmpty},
+		{name: "http error is failure", outcome: &ResponseOutcome{HTTPStatus: 502, UpstreamStatus: 502, UpstreamErrorKind: UpstreamErrorHTTP5xx}, want: UsageOutcomeFailure},
+		{name: "upstream disconnect is failure", outcome: &ResponseOutcome{HTTPStatus: 200, UpstreamStatus: 200, DisconnectSource: DisconnectSourceUpstream, UpstreamErrorKind: UpstreamErrorProtocol}, want: UsageOutcomeFailure},
+		{name: "client cancellation is unknown", outcome: &ResponseOutcome{HTTPStatus: 200, UpstreamStatus: 200, DisconnectSource: DisconnectSourceClient}, want: UsageOutcomeUnknown},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			require.Equal(t, tt.want, ClassifyUsageOutcome(tt.outcome))
+		})
+	}
+}
+
 func TestEnsureResponseOutcomeCollectorAcceptsNilContextWithRequestCollector(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	c, _ := gin.CreateTestContext(httptest.NewRecorder())

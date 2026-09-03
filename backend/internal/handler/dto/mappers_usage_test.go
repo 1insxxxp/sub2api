@@ -28,6 +28,25 @@ func TestUsageLogFromService_IncludesOpenAIWSMode(t *testing.T) {
 	require.False(t, UsageLogFromServiceAdmin(httpLog).OpenAIWSMode)
 }
 
+func TestUsageLogFromServiceAdmin_ExposesOnlyOutcomeStatus(t *testing.T) {
+	t.Parallel()
+
+	log := &service.UsageLog{
+		RequestID: "req_outcome_status",
+		Model:     "gpt-5.6-sol",
+		Outcome:   &service.ResponseOutcome{HTTPStatus: 200, UpstreamStatus: 200, HasText: true, StreamCompleted: true},
+	}
+
+	adminDTO := UsageLogFromServiceAdmin(log)
+	require.Equal(t, string(service.UsageOutcomeSuccess), adminDTO.OutcomeStatus)
+
+	body, err := json.Marshal(adminDTO)
+	require.NoError(t, err)
+	require.Contains(t, string(body), `"outcome_status":"success"`)
+	require.NotContains(t, string(body), `"http_status"`)
+	require.NotContains(t, string(body), `"upstream_error_kind"`)
+}
+
 func TestUsageLogFromServiceAdmin_IncludesSourceGroupID(t *testing.T) {
 	t.Parallel()
 

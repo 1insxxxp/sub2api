@@ -601,6 +601,10 @@ type UsageLog struct {
 type AdminUsageLog struct {
 	UsageLog
 
+	// OutcomeStatus is a privacy-safe classification derived from persisted
+	// response evidence. Raw outcome fields are intentionally not exposed here.
+	OutcomeStatus string `json:"outcome_status"`
+
 	// SourceGroupID is the direct source group selected behind a system custom
 	// subscription route. Nil for ordinary and historical usage rows.
 	SourceGroupID *int64 `json:"source_group_id,omitempty"`
