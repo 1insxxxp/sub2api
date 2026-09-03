@@ -700,6 +700,30 @@ const SignalIcon = {
     )
 }
 
+const ChannelMonitorIcon = {
+  render: () =>
+    h(
+      'svg',
+      { fill: 'none', viewBox: '0 0 24 24', stroke: 'currentColor', 'stroke-width': '1.5' },
+      [
+        h('rect', {
+          x: '3.75',
+          y: '4.5',
+          width: '16.5',
+          height: '15',
+          rx: '2.25',
+          'stroke-linecap': 'round',
+          'stroke-linejoin': 'round'
+        }),
+        h('path', {
+          'stroke-linecap': 'round',
+          'stroke-linejoin': 'round',
+          d: 'M6.75 12h2.25l1.5-3 2.25 6 1.5-3h3.75'
+        })
+      ]
+    )
+}
+
 const ShieldIcon = {
   render: () =>
     h(
@@ -851,7 +875,7 @@ const adminNavItems = computed((): NavItem[] => {
       expandOnly: true,
       children: [
         { path: '/admin/channels/pricing', label: t('nav.channelPricing'), icon: PriceTagIcon },
-        { path: '/admin/channels/monitor', label: t('nav.channelMonitor'), icon: SignalIcon, featureFlag: flagChannelMonitor },
+        { path: '/admin/channels/monitor', label: t('nav.channelMonitor'), icon: ChannelMonitorIcon, featureFlag: flagChannelMonitor },
       ],
     },
     { path: '/admin/subscriptions', label: t('nav.subscriptions'), icon: CreditCardIcon, hideInSimpleMode: true },
