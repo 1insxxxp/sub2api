@@ -382,6 +382,88 @@ func (r *lotteryRepository) ListAdminDraws(ctx context.Context, offset, limit in
 	return result, total, nil
 }
 
+func (r *lotteryRepository) ListAdminAttemptBalances(ctx context.Context, query service.LotteryAdminAttemptBalanceQuery) ([]service.LotteryAdminAttemptBalance, int, error) {
+	client := clientFromContext(ctx, r.client)
+	usersQuery := client.User.Query()
+	if search := strings.TrimSpace(query.Search); search != "" {
+		usersQuery = usersQuery.Where(
+			user.Or(
+				user.EmailContainsFold(search),
+				user.UsernameContainsFold(search),
+				user.NotesContainsFold(search),
+			),
+		)
+	}
+	total, err := usersQuery.Clone().Count(ctx)
+	if err != nil {
+		return nil, 0, err
+	}
+	users, err := usersQuery.
+		Order(user.ByEmail(), user.ByID()).
+		Offset(query.Offset).
+		Limit(query.Limit).
+		All(ctx)
+	if err != nil {
+		return nil, 0, err
+	}
+	if len(users) == 0 {
+		return []service.LotteryAdminAttemptBalance{}, total, nil
+	}
+
+	userIDs := make([]int64, 0, len(users))
+	for _, item := range users {
+		userIDs = append(userIDs, item.ID)
+	}
+	rewardByUser := make(map[int64]int, len(userIDs))
+	wallets, err := client.LotteryAttemptWallet.Query().Where(lotteryattemptwallet.UserIDIn(userIDs...)).All(ctx)
+	if err != nil {
+		return nil, 0, err
+	}
+	for _, wallet := range wallets {
+		rewardByUser[wallet.UserID] = wallet.Balance
+	}
+
+	usedByUser := make(map[int64]int, len(userIDs))
+	if query.ActivityID > 0 {
+		drawQuery := client.LotteryDraw.Query().Where(
+			lotterydraw.ActivityIDEQ(query.ActivityID),
+			lotterydraw.UserIDIn(userIDs...),
+		)
+		if query.ActivitySince != nil {
+			drawQuery = drawQuery.Where(lotterydraw.CreatedAtGTE(*query.ActivitySince))
+		}
+		var grouped []struct {
+			UserID int64 `json:"user_id"`
+			Count  int   `json:"count"`
+		}
+		if err := drawQuery.GroupBy(lotterydraw.FieldUserID).Aggregate(dbent.Count()).Scan(ctx, &grouped); err != nil {
+			return nil, 0, err
+		}
+		for _, item := range grouped {
+			usedByUser[item.UserID] = item.Count
+		}
+	}
+
+	result := make([]service.LotteryAdminAttemptBalance, 0, len(users))
+	for _, item := range users {
+		activityRemaining := query.ActivityLimit - usedByUser[item.ID]
+		if activityRemaining < 0 {
+			activityRemaining = 0
+		}
+		rewardRemaining := rewardByUser[item.ID]
+		if rewardRemaining < 0 {
+			rewardRemaining = 0
+		}
+		result = append(result, service.LotteryAdminAttemptBalance{
+			UserID: item.ID, UserEmail: item.Email, UserName: item.Username, UserStatus: item.Status,
+			ActivityRemaining: activityRemaining,
+			RewardRemaining:   rewardRemaining,
+			TotalRemaining:    activityRemaining + rewardRemaining,
+		})
+	}
+	return result, total, nil
+}
+
 func (r *lotteryRepository) GrantLotteryAttempts(ctx context.Context, input service.LotteryAttemptGrantInput) (service.LotteryAttemptGrantResult, error) {
 	if r == nil || r.client == nil {
 		return service.LotteryAttemptGrantResult{}, service.ErrLotteryConfigurationDenied

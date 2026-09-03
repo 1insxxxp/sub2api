@@ -230,6 +230,37 @@ type LotteryAdminDrawRepository interface {
 	ListAdminDraws(ctx context.Context, offset, limit int) ([]LotteryAdminDraw, int, error)
 }
 
+// LotteryAdminAttemptBalance describes the current draw-attempt balances for
+// one non-deleted user. Activity attempts are calculated from the active
+// activity policy; reward attempts come from the persistent wallet.
+type LotteryAdminAttemptBalance struct {
+	UserID            int64  `json:"user_id"`
+	UserEmail         string `json:"user_email"`
+	UserName          string `json:"user_name"`
+	UserStatus        string `json:"user_status"`
+	ActivityRemaining int    `json:"activity_remaining"`
+	RewardRemaining   int    `json:"reward_remaining"`
+	TotalRemaining    int    `json:"total_remaining"`
+}
+
+// LotteryAdminAttemptBalanceQuery contains the bounded user-list query and
+// the active-activity policy used to calculate each row.
+type LotteryAdminAttemptBalanceQuery struct {
+	Offset        int
+	Limit         int
+	Search        string
+	ActivityID    int64
+	ActivityLimit int
+	ActivitySince *time.Time
+}
+
+// LotteryAdminAttemptBalanceRepository is an optional administrator read
+// capability. It keeps the user list and balance aggregation out of the
+// generic lottery repository contract used by user-facing adapters.
+type LotteryAdminAttemptBalanceRepository interface {
+	ListAdminAttemptBalances(ctx context.Context, query LotteryAdminAttemptBalanceQuery) ([]LotteryAdminAttemptBalance, int, error)
+}
+
 // LotteryAttemptGrantInput describes one administrator request to credit
 // reward-wallet attempts to explicit users or every non-deleted user.
 type LotteryAttemptGrantInput struct {
@@ -540,6 +571,44 @@ func (s *LotteryService) ListAdminDraws(ctx context.Context, offset, limit int) 
 		return nil, 0, ErrLotteryConfigurationDenied
 	}
 	return adminRepo.ListAdminDraws(ctx, offset, limit)
+}
+
+// ListAdminAttemptBalances returns paginated current attempt balances for
+// non-deleted users. The active activity is optional: when there is no active
+// activity, every row simply has zero activity attempts and only wallet
+// attempts remain available.
+func (s *LotteryService) ListAdminAttemptBalances(ctx context.Context, page, pageSize int, search string, now time.Time) ([]LotteryAdminAttemptBalance, int, error) {
+	if s == nil || s.repo == nil {
+		return nil, 0, ErrLotteryConfigurationDenied
+	}
+	if page <= 0 {
+		page = 1
+	}
+	if pageSize <= 0 {
+		pageSize = 20
+	}
+	if pageSize > 100 {
+		pageSize = 100
+	}
+	adminRepo, ok := s.repo.(LotteryAdminAttemptBalanceRepository)
+	if !ok {
+		return nil, 0, ErrLotteryConfigurationDenied
+	}
+	query := LotteryAdminAttemptBalanceQuery{
+		Offset: (page - 1) * pageSize,
+		Limit:  pageSize,
+		Search: strings.TrimSpace(search),
+	}
+	activity, err := s.repo.GetActiveActivity(ctx, now, false)
+	if err != nil && !stderrors.Is(err, ErrLotteryActivityNotFound) {
+		return nil, 0, err
+	}
+	if activity != nil {
+		query.ActivityID = activity.ID
+		query.ActivityLimit = activity.AttemptLimit
+		query.ActivitySince = lotteryAttemptSince(activity.AttemptMode, now)
+	}
+	return adminRepo.ListAdminAttemptBalances(ctx, query)
 }
 
 // GrantLotteryAttempts credits reward-wallet attempts to selected users or all

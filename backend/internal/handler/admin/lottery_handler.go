@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/pkg/response"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/timezone"
 	middleware2 "github.com/Wei-Shaw/sub2api/internal/server/middleware"
 	"github.com/Wei-Shaw/sub2api/internal/service"
 	"github.com/gin-gonic/gin"
@@ -39,6 +40,18 @@ func (h *LotteryHandler) ListDraws(c *gin.Context) {
 		return
 	}
 	response.Paginated(c, draws, int64(total), page, pageSize)
+}
+
+func (h *LotteryHandler) ListAttemptBalances(c *gin.Context) {
+	page, pageSize := response.ParsePagination(c)
+	rows, total, err := h.lotteryService.ListAdminAttemptBalances(
+		c.Request.Context(), page, pageSize, c.Query("search"), timezone.Now(),
+	)
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	response.Paginated(c, rows, int64(total), page, pageSize)
 }
 
 type GrantLotteryAttemptsRequest struct {

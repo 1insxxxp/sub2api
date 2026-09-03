@@ -116,3 +116,83 @@ func TestLotteryRepositoryGrantLotteryAttemptsIsIdempotent(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, 4, wallet.Balance)
 }
+
+func TestLotteryRepositoryListsAdminAttemptBalances(t *testing.T) {
+	ctx := context.Background()
+	client := newLotteryAttemptGrantTestClient(t)
+	alice := createLotteryGrantTestUser(t, ctx, client, "alice@example.com")
+	_, err := client.User.UpdateOneID(alice.ID).SetUsername("Alice").Save(ctx)
+	require.NoError(t, err)
+	bob := createLotteryGrantTestUser(t, ctx, client, "bob@example.com")
+	_, err = client.User.UpdateOneID(bob.ID).SetStatus(service.StatusDisabled).Save(ctx)
+	require.NoError(t, err)
+	deleted := createLotteryGrantTestUser(t, ctx, client, "deleted@example.com")
+	_, err = client.User.UpdateOneID(deleted.ID).SetDeletedAt(time.Now()).Save(ctx)
+	require.NoError(t, err)
+
+	activity, err := client.LotteryActivity.Create().
+		SetName("September draw").
+		SetStatus(service.LotteryActivityStatusActive).
+		SetAttemptMode(service.LotteryAttemptModeDaily).
+		SetAttemptLimit(5).
+		Save(ctx)
+	require.NoError(t, err)
+	since := time.Date(2026, 9, 3, 0, 0, 0, 0, time.UTC)
+	_, err = client.LotteryDraw.Create().
+		SetActivityID(activity.ID).
+		SetUserID(alice.ID).
+		SetPrizeName("today-1").
+		SetPrizeType(service.LotteryPrizeTypeBalance).
+		SetAttemptKey("alice-today-1").
+		SetCreatedAt(since.Add(time.Hour)).
+		Save(ctx)
+	require.NoError(t, err)
+	_, err = client.LotteryDraw.Create().
+		SetActivityID(activity.ID).
+		SetUserID(alice.ID).
+		SetPrizeName("today-2").
+		SetPrizeType(service.LotteryPrizeTypeBalance).
+		SetAttemptKey("alice-today-2").
+		SetCreatedAt(since.Add(2 * time.Hour)).
+		Save(ctx)
+	require.NoError(t, err)
+	_, err = client.LotteryDraw.Create().
+		SetActivityID(activity.ID).
+		SetUserID(alice.ID).
+		SetPrizeName("yesterday").
+		SetPrizeType(service.LotteryPrizeTypeBalance).
+		SetAttemptKey("alice-yesterday").
+		SetCreatedAt(since.Add(-time.Hour)).
+		Save(ctx)
+	require.NoError(t, err)
+	_, err = client.LotteryAttemptWallet.Create().SetUserID(alice.ID).SetBalance(4).Save(ctx)
+	require.NoError(t, err)
+	_, err = client.LotteryAttemptWallet.Create().SetUserID(bob.ID).SetBalance(2).Save(ctx)
+	require.NoError(t, err)
+
+	repo := &lotteryRepository{client: client}
+	rows, total, err := repo.ListAdminAttemptBalances(ctx, service.LotteryAdminAttemptBalanceQuery{
+		Offset: 0, Limit: 10, ActivityID: activity.ID, ActivityLimit: 5, ActivitySince: &since,
+	})
+	require.NoError(t, err)
+	require.Equal(t, 2, total)
+	require.Len(t, rows, 2)
+	require.Equal(t, "alice@example.com", rows[0].UserEmail)
+	require.Equal(t, "active", rows[0].UserStatus)
+	require.Equal(t, 3, rows[0].ActivityRemaining)
+	require.Equal(t, 4, rows[0].RewardRemaining)
+	require.Equal(t, 7, rows[0].TotalRemaining)
+	require.Equal(t, "bob@example.com", rows[1].UserEmail)
+	require.Equal(t, service.StatusDisabled, rows[1].UserStatus)
+	require.Equal(t, 5, rows[1].ActivityRemaining)
+	require.Equal(t, 2, rows[1].RewardRemaining)
+
+	filtered, filteredTotal, err := repo.ListAdminAttemptBalances(ctx, service.LotteryAdminAttemptBalanceQuery{
+		Offset: 0, Limit: 10, Search: "Alice", ActivityID: activity.ID, ActivityLimit: 5, ActivitySince: &since,
+	})
+	require.NoError(t, err)
+	require.Equal(t, 1, filteredTotal)
+	require.Len(t, filtered, 1)
+	require.Equal(t, alice.ID, filtered[0].UserID)
+
+}

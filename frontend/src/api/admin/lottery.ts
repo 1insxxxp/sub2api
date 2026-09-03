@@ -60,6 +60,22 @@ export interface LotteryAdminDrawQuery {
   page_size?: number
 }
 
+export interface LotteryAdminAttemptBalance {
+  user_id: number
+  user_email: string
+  user_name: string
+  user_status: string
+  activity_remaining: number
+  reward_remaining: number
+  total_remaining: number
+}
+
+export interface LotteryAdminAttemptBalanceQuery {
+  page?: number
+  page_size?: number
+  search?: string
+}
+
 export interface LotteryAttemptGrantRequest {
   all?: boolean
   user_ids?: number[]
@@ -117,6 +133,11 @@ export async function listDraws(params: LotteryAdminDrawQuery = {}): Promise<Pag
   return data
 }
 
+export async function listAttemptBalances(params: LotteryAdminAttemptBalanceQuery = {}): Promise<PaginatedResponse<LotteryAdminAttemptBalance>> {
+  const { data } = await apiClient.get<PaginatedResponse<LotteryAdminAttemptBalance>>('/admin/lottery/attempts', { params })
+  return data
+}
+
 export async function grantAttempts(request: LotteryAttemptGrantRequest): Promise<LotteryAttemptGrantResult> {
   const { data } = await apiClient.post<LotteryAttemptGrantResult>('/admin/lottery/attempts/grant', request, {
     headers: { 'Idempotency-Key': request.request_key }
@@ -124,6 +145,6 @@ export async function grantAttempts(request: LotteryAttemptGrantRequest): Promis
   return data
 }
 
-export const lotteryAdminAPI = { getConfig, saveActivity, createPrize, updatePrize, deletePrize, listPrizeItems, appendPrizeItems, deletePrizeItems, listDraws, grantAttempts }
+export const lotteryAdminAPI = { getConfig, saveActivity, createPrize, updatePrize, deletePrize, listPrizeItems, appendPrizeItems, deletePrizeItems, listDraws, listAttemptBalances, grantAttempts }
 
 export default lotteryAdminAPI

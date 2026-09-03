@@ -27,6 +27,23 @@ type lotteryAttemptGrantRepoStub struct {
 	result service.LotteryAttemptGrantResult
 }
 
+type lotteryAttemptBalanceRepoStub struct {
+	service.LotteryRepository
+	activity *service.LotteryActivity
+	query    service.LotteryAdminAttemptBalanceQuery
+	rows     []service.LotteryAdminAttemptBalance
+	total    int
+}
+
+func (s *lotteryAttemptBalanceRepoStub) GetActiveActivity(context.Context, time.Time, bool) (*service.LotteryActivity, error) {
+	return s.activity, nil
+}
+
+func (s *lotteryAttemptBalanceRepoStub) ListAdminAttemptBalances(_ context.Context, query service.LotteryAdminAttemptBalanceQuery) ([]service.LotteryAdminAttemptBalance, int, error) {
+	s.query = query
+	return s.rows, s.total, nil
+}
+
 func (s *lotteryAttemptGrantRepoStub) GrantLotteryAttempts(_ context.Context, input service.LotteryAttemptGrantInput) (service.LotteryAttemptGrantResult, error) {
 	s.input = input
 	return s.result, nil
@@ -129,5 +146,42 @@ func TestLotteryAdminHandlerRejectsInvalidAttemptGrant(t *testing.T) {
 
 	if res.Code != http.StatusBadRequest {
 		t.Fatalf("status = %d, body = %s", res.Code, res.Body.String())
+	}
+}
+
+func TestLotteryAdminHandlerListsAttemptBalancesWithPaginationAndSearch(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	repo := &lotteryAttemptBalanceRepoStub{
+		activity: &service.LotteryActivity{ID: 5, AttemptMode: service.LotteryAttemptModeTotal, AttemptLimit: 3},
+		rows:     []service.LotteryAdminAttemptBalance{{UserID: 11, UserEmail: "alice@example.com", TotalRemaining: 3}},
+		total:    1,
+	}
+	svc := service.NewLotteryService(nil, repo, nil, nil)
+	h := NewLotteryHandler(svc)
+	router := gin.New()
+	router.GET("/admin/lottery/attempts", h.ListAttemptBalances)
+
+	req := httptest.NewRequest(http.MethodGet, "/admin/lottery/attempts?page=2&page_size=10&search=alice", nil)
+	res := httptest.NewRecorder()
+	router.ServeHTTP(res, req)
+
+	if res.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", res.Code, res.Body.String())
+	}
+	if repo.query.Offset != 10 || repo.query.Limit != 10 || repo.query.Search != "alice" {
+		t.Fatalf("query = %#v", repo.query)
+	}
+	var envelope struct {
+		Data struct {
+			Items []service.LotteryAdminAttemptBalance `json:"items"`
+			Total int64                                `json:"total"`
+			Page  int                                  `json:"page"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(res.Body.Bytes(), &envelope); err != nil {
+		t.Fatal(err)
+	}
+	if len(envelope.Data.Items) != 1 || envelope.Data.Items[0].UserEmail != "alice@example.com" || envelope.Data.Total != 1 || envelope.Data.Page != 2 {
+		t.Fatalf("unexpected response: %#v", envelope.Data)
 	}
 }

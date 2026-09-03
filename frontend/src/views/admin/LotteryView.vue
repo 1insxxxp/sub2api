@@ -82,6 +82,60 @@
         </div>
       </section>
 
+      <section class="admin-surface p-5 sm:p-6" data-test="lottery-attempt-balances">
+        <div class="mb-5 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div class="flex items-start gap-3">
+            <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-cyan-50 text-cyan-600 dark:bg-cyan-900/25 dark:text-cyan-300"><Icon name="users" size="sm" /></div>
+            <div><h2 class="text-base font-semibold text-slate-950 dark:text-white">{{ t('lottery.admin.attemptBalances') }}</h2><p class="mt-1 text-xs leading-5 text-slate-500 dark:text-slate-400">{{ t('lottery.admin.attemptBalancesHint') }}</p></div>
+          </div>
+          <span class="text-xs text-slate-500 dark:text-slate-400">{{ t('lottery.admin.attemptBalanceCount', { count: attemptBalancePagination.total }) }}</span>
+        </div>
+
+        <div class="mb-4 flex flex-col gap-2 sm:flex-row">
+          <input v-model="attemptBalanceSearch" data-test="lottery-attempt-balance-search" class="input flex-1" :placeholder="t('lottery.admin.attemptBalanceSearchPlaceholder')" @keyup.enter="searchAttemptBalances" />
+          <button type="button" data-test="lottery-attempt-balance-search-submit" class="btn btn-secondary" :disabled="attemptBalancesLoading" @click="searchAttemptBalances">{{ attemptBalancesLoading ? t('common.loading') : t('common.search') }}</button>
+        </div>
+
+        <div v-if="attemptBalancesError" class="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-900/60 dark:bg-red-950/20 dark:text-red-300">{{ attemptBalancesError }}</div>
+        <div v-if="attemptBalancesLoading" class="py-10 text-center text-sm text-slate-500 dark:text-slate-400">{{ t('lottery.admin.attemptBalancesLoading') }}</div>
+        <div v-else-if="attemptBalances.length" class="overflow-x-auto rounded-xl border border-slate-200 dark:border-dark-700">
+          <table class="min-w-full divide-y divide-slate-200 text-left text-sm dark:divide-dark-700">
+            <thead class="bg-slate-50 text-xs uppercase tracking-wide text-slate-500 dark:bg-dark-900/60 dark:text-slate-400">
+              <tr>
+                <th class="px-4 py-3 font-semibold">{{ t('lottery.admin.attemptBalanceUser') }}</th>
+                <th class="px-4 py-3 font-semibold">{{ t('lottery.admin.attemptBalanceStatus') }}</th>
+                <th class="px-4 py-3 font-semibold">{{ t('lottery.admin.activityAttemptsRemaining') }}</th>
+                <th class="px-4 py-3 font-semibold">{{ t('lottery.admin.rewardAttemptsRemaining') }}</th>
+                <th class="px-4 py-3 font-semibold">{{ t('lottery.admin.totalAttemptsRemaining') }}</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-200 bg-white dark:divide-dark-700 dark:bg-dark-950/20">
+              <tr v-for="balance in attemptBalances" :key="balance.user_id" :data-test="`lottery-attempt-balance-row-${balance.user_id}`">
+                <td class="whitespace-nowrap px-4 py-3">
+                  <div class="font-medium text-slate-900 dark:text-white">{{ balance.user_email || balance.user_name || `#${balance.user_id}` }}</div>
+                  <div v-if="balance.user_name && balance.user_email" class="mt-1 text-xs text-slate-500 dark:text-slate-400">{{ balance.user_name }}</div>
+                  <div class="mt-1 text-xs text-slate-500 dark:text-slate-400">ID {{ balance.user_id }}</div>
+                </td>
+                <td class="whitespace-nowrap px-4 py-3 text-slate-600 dark:text-slate-300">{{ balance.user_status }}</td>
+                <td class="whitespace-nowrap px-4 py-3 font-medium text-slate-700 dark:text-slate-200">{{ balance.activity_remaining }}</td>
+                <td class="whitespace-nowrap px-4 py-3 font-medium text-slate-700 dark:text-slate-200">{{ balance.reward_remaining }}</td>
+                <td class="whitespace-nowrap px-4 py-3 font-semibold text-cyan-700 dark:text-cyan-300">{{ balance.total_remaining }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <p v-else class="rounded-xl border border-dashed border-slate-300 px-5 py-10 text-center text-sm text-slate-500 dark:border-dark-600 dark:text-slate-400">{{ t('lottery.admin.attemptBalancesEmpty') }}</p>
+
+        <Pagination
+          v-if="attemptBalancePagination.total > 0"
+          :page="attemptBalancePagination.page"
+          :total="attemptBalancePagination.total"
+          :page-size="attemptBalancePagination.page_size"
+          @update:page="handleAttemptBalancePageChange"
+          @update:pageSize="handleAttemptBalancePageSizeChange"
+        />
+      </section>
+
       <section class="admin-surface p-5 sm:p-6">
         <div class="mb-5 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div class="flex items-start gap-3">
@@ -186,7 +240,7 @@ import AppLayout from '@/components/layout/AppLayout.vue'
 import Icon from '@/components/icons/Icon.vue'
 import Pagination from '@/components/common/Pagination.vue'
 import { adminAPI } from '@/api/admin'
-import { lotteryAdminAPI, type LotteryAdminDraw, type LotteryPrizeItem } from '@/api/admin/lottery'
+import { lotteryAdminAPI, type LotteryAdminAttemptBalance, type LotteryAdminDraw, type LotteryPrizeItem } from '@/api/admin/lottery'
 import type { LotteryActivity, LotteryAttemptMode, LotteryPrize } from '@/api/lottery'
 import type { AdminUser } from '@/types'
 import { useAppStore } from '@/stores/app'
@@ -209,6 +263,11 @@ const recordsLoading = ref(true)
 const recordsError = ref('')
 const records = ref<LotteryAdminDraw[]>([])
 const recordsPagination = reactive({ page: 1, page_size: 10, total: 0 })
+const attemptBalancesLoading = ref(true)
+const attemptBalancesError = ref('')
+const attemptBalances = ref<LotteryAdminAttemptBalance[]>([])
+const attemptBalanceSearch = ref('')
+const attemptBalancePagination = reactive({ page: 1, page_size: 10, total: 0 })
 const grantTarget = ref<'selected' | 'all'>('selected')
 const grantUserSearch = ref('')
 const grantUserResults = ref<AdminUser[]>([])
@@ -271,6 +330,25 @@ async function loadDraws(page = recordsPagination.page) {
   } finally { recordsLoading.value = false }
 }
 
+async function loadAttemptBalances(page = attemptBalancePagination.page) {
+  attemptBalancesLoading.value = true
+  attemptBalancesError.value = ''
+  try {
+    const response = await lotteryAdminAPI.listAttemptBalances({ page, page_size: attemptBalancePagination.page_size, search: attemptBalanceSearch.value.trim() })
+    attemptBalances.value = response.items || []
+    attemptBalancePagination.page = response.page || page
+    attemptBalancePagination.page_size = response.page_size || attemptBalancePagination.page_size
+    attemptBalancePagination.total = response.total || 0
+  } catch (error: any) {
+    attemptBalancesError.value = error?.message || t('lottery.admin.attemptBalancesLoadFailed')
+  } finally { attemptBalancesLoading.value = false }
+}
+
+function searchAttemptBalances() {
+  attemptBalancePagination.page = 1
+  loadAttemptBalances(1)
+}
+
 async function searchGrantUsers() {
   const search = grantUserSearch.value.trim()
   if (!search) {
@@ -319,13 +397,14 @@ async function submitGrantAttempts() {
     grantUserSearch.value = ''
     grantDescription.value = ''
     grantRequestKey.value = newGrantRequestKey()
+    await loadAttemptBalances(1)
   } catch (error: any) {
     appStore.showError(error?.message || t('lottery.admin.grantFailed'))
   } finally { grantSaving.value = false }
 }
 
 async function refreshAll() {
-  await Promise.all([loadConfig(), loadDraws(1)])
+  await Promise.all([loadConfig(), loadDraws(1), loadAttemptBalances(1)])
 }
 
 function handleRecordsPageChange(page: number) {
@@ -337,6 +416,17 @@ function handleRecordsPageSizeChange(pageSize: number) {
   recordsPagination.page_size = pageSize
   recordsPagination.page = 1
   loadDraws(1)
+}
+
+function handleAttemptBalancePageChange(page: number) {
+  attemptBalancePagination.page = page
+  loadAttemptBalances(page)
+}
+
+function handleAttemptBalancePageSizeChange(pageSize: number) {
+  attemptBalancePagination.page_size = pageSize
+  attemptBalancePagination.page = 1
+  loadAttemptBalances(1)
 }
 
 async function saveActivityForm() {
@@ -399,6 +489,7 @@ async function deleteSelectedItems(prizeId: number) {
 onMounted(() => {
   loadConfig()
   loadDraws()
+  loadAttemptBalances()
 })
 </script>
 

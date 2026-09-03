@@ -3,9 +3,27 @@ package service
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 )
+
+type lotteryAttemptBalanceRepositoryStub struct {
+	LotteryRepository
+	activity *LotteryActivity
+	query    LotteryAdminAttemptBalanceQuery
+	rows     []LotteryAdminAttemptBalance
+	total    int
+}
+
+func (s *lotteryAttemptBalanceRepositoryStub) GetActiveActivity(context.Context, time.Time, bool) (*LotteryActivity, error) {
+	return s.activity, nil
+}
+
+func (s *lotteryAttemptBalanceRepositoryStub) ListAdminAttemptBalances(_ context.Context, query LotteryAdminAttemptBalanceQuery) ([]LotteryAdminAttemptBalance, int, error) {
+	s.query = query
+	return s.rows, s.total, nil
+}
 
 type lotteryAttemptGrantRepositoryStub struct {
 	LotteryRepository
@@ -76,4 +94,32 @@ func TestLotteryAttemptGrantRejectsInvalidRequests(t *testing.T) {
 			require.ErrorIs(t, err, ErrLotteryAttemptGrantInvalid)
 		})
 	}
+}
+
+func TestLotteryAdminAttemptBalancesNormalizesQueryAndUsesActiveActivity(t *testing.T) {
+	now := time.Date(2026, 9, 3, 12, 0, 0, 0, time.UTC)
+	activity := &LotteryActivity{ID: 42, AttemptMode: LotteryAttemptModeDaily, AttemptLimit: 5}
+	repo := &lotteryAttemptBalanceRepositoryStub{
+		activity: activity,
+		rows:     []LotteryAdminAttemptBalance{{UserID: 7, TotalRemaining: 4}},
+		total:    1,
+	}
+	svc := NewLotteryService(nil, repo, nil, nil)
+
+	rows, total, err := svc.ListAdminAttemptBalances(context.Background(), 2, 1000, "  alice ", now)
+
+	require.NoError(t, err)
+	require.Equal(t, repo.rows, rows)
+	require.Equal(t, 1, total)
+	require.Equal(t, LotteryAdminAttemptBalanceQuery{
+		Offset:        100,
+		Limit:         100,
+		Search:        "alice",
+		ActivityID:    activity.ID,
+		ActivityLimit: activity.AttemptLimit,
+		ActivitySince: func() *time.Time {
+			value := time.Date(2026, 9, 3, 0, 0, 0, 0, time.UTC)
+			return &value
+		}(),
+	}, repo.query)
 }

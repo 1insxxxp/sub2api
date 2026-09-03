@@ -12,7 +12,7 @@ vi.mock('@/api/client', () => ({
 }))
 
 import { drawLottery, getLotteryHistory, getLotteryState } from '@/api/lottery'
-import { appendPrizeItems, grantAttempts, listDraws, saveActivity } from '@/api/admin/lottery'
+import { appendPrizeItems, grantAttempts, listAttemptBalances, listDraws, saveActivity } from '@/api/admin/lottery'
 
 describe('lottery API contracts', () => {
   beforeEach(() => {
@@ -58,6 +58,14 @@ describe('lottery API contracts', () => {
 
     await expect(listDraws({ page: 2, page_size: 10 })).resolves.toBe(records)
     expect(get).toHaveBeenCalledWith('/admin/lottery/draws', { params: { page: 2, page_size: 10 } })
+  })
+
+  it('loads paginated admin attempt balances with search', async () => {
+    const balances = { items: [], total: 0, page: 2, page_size: 10, pages: 0 }
+    get.mockResolvedValueOnce({ data: balances })
+
+    await expect(listAttemptBalances({ page: 2, page_size: 10, search: 'alice' })).resolves.toBe(balances)
+    expect(get).toHaveBeenCalledWith('/admin/lottery/attempts', { params: { page: 2, page_size: 10, search: 'alice' } })
   })
 
   it('posts administrator lottery attempt grants', async () => {
