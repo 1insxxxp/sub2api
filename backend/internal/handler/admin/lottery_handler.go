@@ -57,6 +57,8 @@ func (h *LotteryHandler) ListAttemptBalances(c *gin.Context) {
 type GrantLotteryAttemptsRequest struct {
 	All         bool    `json:"all"`
 	UserIDs     []int64 `json:"user_ids"`
+	Target      string  `json:"target"`
+	ActiveDays  int     `json:"active_days"`
 	Amount      int     `json:"amount"`
 	Description string  `json:"description"`
 	RequestKey  string  `json:"request_key"`
@@ -89,9 +91,30 @@ func (h *LotteryHandler) GrantAttempts(c *gin.Context) {
 	}
 	executeAdminIdempotentJSON(c, "admin.lottery.attempts.grant", req, service.DefaultWriteIdempotencyTTL(), func(ctx context.Context) (any, error) {
 		return h.lotteryService.GrantLotteryAttempts(ctx, service.LotteryAttemptGrantInput{
-			All: req.All, UserIDs: req.UserIDs, Amount: req.Amount, Description: req.Description, RequestKey: req.RequestKey, CreatedBy: subject.UserID,
+			All: req.All, UserIDs: req.UserIDs, Target: req.Target, ActiveDays: req.ActiveDays,
+			Amount: req.Amount, Description: req.Description, RequestKey: req.RequestKey, CreatedBy: subject.UserID,
 		})
 	})
+}
+
+func (h *LotteryHandler) PreviewAttempts(c *gin.Context) {
+	var req GrantLotteryAttemptsRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.BadRequest(c, "Invalid request: "+err.Error())
+		return
+	}
+	if _, ok := middleware2.GetAuthSubjectFromContext(c); !ok {
+		response.Unauthorized(c, "User not authenticated")
+		return
+	}
+	result, err := h.lotteryService.PreviewLotteryAttemptGrant(c.Request.Context(), service.LotteryAttemptGrantInput{
+		All: req.All, UserIDs: req.UserIDs, Target: req.Target, ActiveDays: req.ActiveDays,
+	})
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	response.Success(c, result)
 }
 
 type SaveLotteryActivityRequest struct {

@@ -23,8 +23,10 @@ type lotteryAdminRepoStub struct {
 
 type lotteryAttemptGrantRepoStub struct {
 	service.LotteryRepository
-	input  service.LotteryAttemptGrantInput
-	result service.LotteryAttemptGrantResult
+	input        service.LotteryAttemptGrantInput
+	result       service.LotteryAttemptGrantResult
+	previewInput service.LotteryAttemptGrantInput
+	preview      service.LotteryAttemptGrantPreviewResult
 }
 
 type lotteryAttemptBalanceRepoStub struct {
@@ -47,6 +49,11 @@ func (s *lotteryAttemptBalanceRepoStub) ListAdminAttemptBalances(_ context.Conte
 func (s *lotteryAttemptGrantRepoStub) GrantLotteryAttempts(_ context.Context, input service.LotteryAttemptGrantInput) (service.LotteryAttemptGrantResult, error) {
 	s.input = input
 	return s.result, nil
+}
+
+func (s *lotteryAttemptGrantRepoStub) PreviewLotteryAttemptGrant(_ context.Context, input service.LotteryAttemptGrantInput) (service.LotteryAttemptGrantPreviewResult, error) {
+	s.previewInput = input
+	return s.preview, nil
 }
 
 func (s *lotteryAdminRepoStub) ListAdminDraws(_ context.Context, offset, limit int) ([]service.LotteryAdminDraw, int, error) {
@@ -125,6 +132,85 @@ func TestLotteryAdminHandlerGrantsAttemptsWithAuthenticatedAdmin(t *testing.T) {
 	}
 	if envelope.Data != repo.result {
 		t.Fatalf("unexpected grant result: %#v", envelope.Data)
+	}
+}
+
+func TestLotteryAdminHandlerGrantsAttemptsToActiveUsers(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	repo := &lotteryAttemptGrantRepoStub{result: service.LotteryAttemptGrantResult{Affected: 4, TotalGranted: 8}}
+	svc := service.NewLotteryService(nil, repo, nil, nil)
+	h := NewLotteryHandler(svc)
+	router := gin.New()
+	router.POST("/admin/lottery/attempts/grant", func(c *gin.Context) {
+		c.Set(string(middleware.ContextKeyUser), middleware.AuthSubject{UserID: 99})
+		c.Next()
+	}, h.GrantAttempts)
+
+	req := httptest.NewRequest(http.MethodPost, "/admin/lottery/attempts/grant", bytes.NewBufferString(`{"target":"active","active_days":30,"amount":2,"request_key":"active-handler-request-1"}`))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Idempotency-Key", "active-handler-request-1")
+	res := httptest.NewRecorder()
+	router.ServeHTTP(res, req)
+
+	if res.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", res.Code, res.Body.String())
+	}
+	if repo.input.Target != service.LotteryAttemptGrantTargetActive || repo.input.ActiveDays != service.LotteryAttemptActiveDays30 || repo.input.CreatedBy != 99 {
+		t.Fatalf("unexpected active grant input: %#v", repo.input)
+	}
+}
+
+func TestLotteryAdminHandlerPreviewsActiveAttemptTarget(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	repo := &lotteryAttemptGrantRepoStub{preview: service.LotteryAttemptGrantPreviewResult{Count: 12}}
+	svc := service.NewLotteryService(nil, repo, nil, nil)
+	h := NewLotteryHandler(svc)
+	router := gin.New()
+	router.POST("/admin/lottery/attempts/preview", func(c *gin.Context) {
+		c.Set(string(middleware.ContextKeyUser), middleware.AuthSubject{UserID: 99})
+		c.Next()
+	}, h.PreviewAttempts)
+
+	req := httptest.NewRequest(http.MethodPost, "/admin/lottery/attempts/preview", bytes.NewBufferString(`{"target":"active","active_days":7}`))
+	req.Header.Set("Content-Type", "application/json")
+	res := httptest.NewRecorder()
+	router.ServeHTTP(res, req)
+
+	if res.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", res.Code, res.Body.String())
+	}
+	if repo.previewInput.Target != service.LotteryAttemptGrantTargetActive || repo.previewInput.ActiveDays != service.LotteryAttemptActiveDays7 {
+		t.Fatalf("unexpected preview input: %#v", repo.previewInput)
+	}
+	var envelope struct {
+		Data service.LotteryAttemptGrantPreviewResult `json:"data"`
+	}
+	if err := json.Unmarshal(res.Body.Bytes(), &envelope); err != nil {
+		t.Fatal(err)
+	}
+	if envelope.Data.Count != 12 {
+		t.Fatalf("unexpected preview response: %#v", envelope.Data)
+	}
+}
+
+func TestLotteryAdminHandlerRejectsUnsupportedActiveWindow(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	repo := &lotteryAttemptGrantRepoStub{}
+	svc := service.NewLotteryService(nil, repo, nil, nil)
+	h := NewLotteryHandler(svc)
+	router := gin.New()
+	router.POST("/admin/lottery/attempts/preview", func(c *gin.Context) {
+		c.Set(string(middleware.ContextKeyUser), middleware.AuthSubject{UserID: 99})
+		c.Next()
+	}, h.PreviewAttempts)
+
+	req := httptest.NewRequest(http.MethodPost, "/admin/lottery/attempts/preview", bytes.NewBufferString(`{"target":"active","active_days":14}`))
+	req.Header.Set("Content-Type", "application/json")
+	res := httptest.NewRecorder()
+	router.ServeHTTP(res, req)
+
+	if res.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, body = %s", res.Code, res.Body.String())
 	}
 }
 
