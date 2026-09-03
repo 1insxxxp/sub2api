@@ -12,7 +12,7 @@ vi.mock('@/api/client', () => ({
 }))
 
 import { drawLottery, getLotteryHistory, getLotteryState } from '@/api/lottery'
-import { appendPrizeItems, grantAttempts, listAttemptBalances, listDraws, saveActivity } from '@/api/admin/lottery'
+import { appendPrizeItems, grantAttempts, listAttemptBalances, listDraws, previewAttemptGrant, saveActivity } from '@/api/admin/lottery'
 
 describe('lottery API contracts', () => {
   beforeEach(() => {
@@ -79,5 +79,23 @@ describe('lottery API contracts', () => {
       description: 'manual bonus',
       request_key: 'grant-request-1',
     }, { headers: { 'Idempotency-Key': 'grant-request-1' } })
+  })
+
+  it('previews active users and posts an active-user grant', async () => {
+    const preview = { count: 12 }
+    const result = { affected: 12, total_granted: 24 }
+    post.mockResolvedValueOnce({ data: preview }).mockResolvedValueOnce({ data: result })
+
+    await expect(previewAttemptGrant({ target: 'active', active_days: 7 })).resolves.toBe(preview)
+    await expect(grantAttempts({ target: 'active', active_days: 7, amount: 2, description: 'active bonus', request_key: 'active-grant-1' })).resolves.toBe(result)
+
+    expect(post).toHaveBeenNthCalledWith(1, '/admin/lottery/attempts/preview', { target: 'active', active_days: 7 })
+    expect(post).toHaveBeenNthCalledWith(2, '/admin/lottery/attempts/grant', {
+      target: 'active',
+      active_days: 7,
+      amount: 2,
+      description: 'active bonus',
+      request_key: 'active-grant-1',
+    }, { headers: { 'Idempotency-Key': 'active-grant-1' } })
   })
 })

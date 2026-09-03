@@ -77,9 +77,22 @@ export interface LotteryAdminAttemptBalanceQuery {
 export interface LotteryAttemptGrantRequest {
   all?: boolean
   user_ids?: number[]
+  target?: 'selected' | 'all' | 'active'
+  active_days?: 7 | 30
   amount: number
   description?: string
   request_key: string
+}
+
+export interface LotteryAttemptGrantPreviewRequest {
+  all?: boolean
+  user_ids?: number[]
+  target?: 'selected' | 'all' | 'active'
+  active_days?: 7 | 30
+}
+
+export interface LotteryAttemptGrantPreviewResult {
+  count: number
 }
 
 export interface LotteryAttemptGrantResult {
@@ -143,6 +156,11 @@ export async function grantAttempts(request: LotteryAttemptGrantRequest): Promis
   return data
 }
 
-export const lotteryAdminAPI = { getConfig, saveActivity, createPrize, updatePrize, deletePrize, listPrizeItems, appendPrizeItems, deletePrizeItems, listDraws, listAttemptBalances, grantAttempts }
+export async function previewAttemptGrant(request: LotteryAttemptGrantPreviewRequest): Promise<LotteryAttemptGrantPreviewResult> {
+  const { data } = await apiClient.post<LotteryAttemptGrantPreviewResult>('/admin/lottery/attempts/preview', request)
+  return data
+}
+
+export const lotteryAdminAPI = { getConfig, saveActivity, createPrize, updatePrize, deletePrize, listPrizeItems, appendPrizeItems, deletePrizeItems, listDraws, listAttemptBalances, grantAttempts, previewAttemptGrant }
 
 export default lotteryAdminAPI
