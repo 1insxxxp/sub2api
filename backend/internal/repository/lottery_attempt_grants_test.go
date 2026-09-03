@@ -44,6 +44,31 @@ func createLotteryGrantTestUser(t *testing.T, ctx context.Context, client *dbent
 	return user
 }
 
+func createLotteryGrantUsageLog(t *testing.T, ctx context.Context, client *dbent.Client, target *dbent.User, requestID string, createdAt time.Time) {
+	t.Helper()
+	account, err := client.Account.Create().
+		SetName("lottery-account-" + requestID).
+		SetPlatform("openai").
+		SetType("api_key").
+		Save(ctx)
+	require.NoError(t, err)
+	apiKey, err := client.APIKey.Create().
+		SetUserID(target.ID).
+		SetKey("lottery-key-" + requestID).
+		SetName("lottery key").
+		Save(ctx)
+	require.NoError(t, err)
+	_, err = client.UsageLog.Create().
+		SetUserID(target.ID).
+		SetAPIKeyID(apiKey.ID).
+		SetAccountID(account.ID).
+		SetRequestID(requestID).
+		SetModel("test-model").
+		SetCreatedAt(createdAt).
+		Save(ctx)
+	require.NoError(t, err)
+}
+
 func TestLotteryRepositoryGrantLotteryAttemptsSelectedUsers(t *testing.T) {
 	ctx := context.Background()
 	client := newLotteryAttemptGrantTestClient(t)
@@ -127,6 +152,47 @@ func TestLotteryRepositoryGrantLotteryAttemptsIsIdempotent(t *testing.T) {
 	wallet, err := client.LotteryAttemptWallet.Query().Where(lotteryattemptwallet.UserIDEQ(target.ID)).Only(ctx)
 	require.NoError(t, err)
 	require.Equal(t, 4, wallet.Balance)
+}
+
+func TestLotteryRepositoryPreviewAndGrantActiveUsers(t *testing.T) {
+	ctx := context.Background()
+	client := newLotteryAttemptGrantTestClient(t)
+	creator := createLotteryGrantTestUser(t, ctx, client, "active-grant-admin@example.com")
+	recent := createLotteryGrantTestUser(t, ctx, client, "active-grant-recent@example.com")
+	boundary := createLotteryGrantTestUser(t, ctx, client, "active-grant-boundary@example.com")
+	old := createLotteryGrantTestUser(t, ctx, client, "active-grant-old@example.com")
+	deleted := createLotteryGrantTestUser(t, ctx, client, "active-grant-deleted@example.com")
+	_, err := client.User.UpdateOneID(deleted.ID).SetDeletedAt(time.Date(2026, 9, 3, 10, 0, 0, 0, time.UTC)).Save(ctx)
+	require.NoError(t, err)
+
+	now := time.Date(2026, 9, 3, 12, 0, 0, 0, time.UTC)
+	since := now.AddDate(0, 0, -7)
+	createLotteryGrantUsageLog(t, ctx, client, recent, "active-recent", now.Add(-time.Hour))
+	createLotteryGrantUsageLog(t, ctx, client, boundary, "active-boundary", since)
+	createLotteryGrantUsageLog(t, ctx, client, old, "active-old", since.Add(-time.Nanosecond))
+	createLotteryGrantUsageLog(t, ctx, client, deleted, "active-deleted", now.Add(-time.Hour))
+	repo := &lotteryRepository{client: client}
+	input := service.LotteryAttemptGrantInput{Target: service.LotteryAttemptGrantTargetActive, ActiveDays: service.LotteryAttemptActiveDays7, ActiveSince: &since}
+
+	preview, err := repo.PreviewLotteryAttemptGrant(ctx, input)
+	require.NoError(t, err)
+	require.Equal(t, service.LotteryAttemptGrantPreviewResult{Count: 2}, preview)
+
+	result, err := repo.GrantLotteryAttempts(ctx, service.LotteryAttemptGrantInput{
+		Target: service.LotteryAttemptGrantTargetActive, ActiveDays: service.LotteryAttemptActiveDays7, ActiveSince: &since,
+		Amount: 3, RequestKey: "active-request-1", CreatedBy: creator.ID,
+	})
+	require.NoError(t, err)
+	require.Equal(t, service.LotteryAttemptGrantResult{Affected: 2, TotalGranted: 6}, result)
+	for _, userID := range []int64{recent.ID, boundary.ID} {
+		wallet, walletErr := client.LotteryAttemptWallet.Query().Where(lotteryattemptwallet.UserIDEQ(userID)).Only(ctx)
+		require.NoError(t, walletErr)
+		require.Equal(t, 3, wallet.Balance)
+	}
+	for _, userID := range []int64{old.ID, deleted.ID} {
+		_, walletErr := client.LotteryAttemptWallet.Query().Where(lotteryattemptwallet.UserIDEQ(userID)).Only(ctx)
+		require.Error(t, walletErr)
+	}
 }
 
 func TestLotteryRepositoryListsAdminAttemptBalances(t *testing.T) {

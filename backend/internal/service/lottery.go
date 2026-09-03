@@ -58,6 +58,7 @@ var (
 	ErrLotteryAttemptKeyInvalid    = infraerrors.BadRequest("LOTTERY_ATTEMPT_KEY_INVALID", "lottery attempt key is invalid")
 	ErrLotteryAttemptGrantInvalid  = infraerrors.BadRequest("LOTTERY_ATTEMPT_GRANT_INVALID", "lottery attempt grant is invalid")
 	ErrLotteryAttemptGrantTooLarge = infraerrors.BadRequest("LOTTERY_ATTEMPT_GRANT_TOO_LARGE", "lottery attempt grant targets too many users")
+	ErrLotteryAttemptGrantNoUsers  = infraerrors.BadRequest("LOTTERY_ATTEMPT_GRANT_NO_USERS", "no users match the lottery attempt grant target")
 	ErrLotteryAttemptGrantConflict = infraerrors.Conflict("LOTTERY_ATTEMPT_GRANT_CONFLICT", "lottery attempt grant request key was already used with different parameters")
 	ErrLotteryDrawNotFound         = infraerrors.NotFound("LOTTERY_DRAW_NOT_FOUND", "lottery draw not found")
 	ErrLotteryConfigurationDenied  = infraerrors.Forbidden("LOTTERY_CONFIGURATION_DENIED", "lottery configuration is not available")

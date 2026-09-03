@@ -17,6 +17,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/lotteryprize"
 	"github.com/Wei-Shaw/sub2api/ent/lotteryprizeitem"
 	"github.com/Wei-Shaw/sub2api/ent/schema/mixins"
+	"github.com/Wei-Shaw/sub2api/ent/usagelog"
 	"github.com/Wei-Shaw/sub2api/ent/user"
 	"github.com/Wei-Shaw/sub2api/internal/service"
 )
@@ -463,11 +464,35 @@ func (r *lotteryRepository) GrantLotteryAttempts(ctx context.Context, input serv
 	return result, nil
 }
 
+func (r *lotteryRepository) PreviewLotteryAttemptGrant(ctx context.Context, input service.LotteryAttemptGrantInput) (service.LotteryAttemptGrantPreviewResult, error) {
+	if r == nil || r.client == nil {
+		return service.LotteryAttemptGrantPreviewResult{}, service.ErrLotteryConfigurationDenied
+	}
+	userIDs, err := resolveLotteryAttemptGrantUsers(ctx, clientFromContext(ctx, r.client), input)
+	if err != nil {
+		return service.LotteryAttemptGrantPreviewResult{}, err
+	}
+	return service.LotteryAttemptGrantPreviewResult{Count: len(userIDs)}, nil
+}
+
 func (r *lotteryRepository) grantLotteryAttemptsWithClient(ctx context.Context, client *dbent.Client, input service.LotteryAttemptGrantInput) (service.LotteryAttemptGrantResult, error) {
 	// A request key makes retries safe: once any rows for the key exist, return
 	// the original aggregate instead of crediting the wallets again. The whole
 	// batch is transactional, so a failed first attempt leaves no rows and can
 	// be retried with the same key.
+	userIDs, err := resolveLotteryAttemptGrantUsers(ctx, client, input)
+	if err != nil {
+		return service.LotteryAttemptGrantResult{}, err
+	}
+	if input.Target == service.LotteryAttemptGrantTargetActive && len(userIDs) == 0 {
+		return service.LotteryAttemptGrantResult{}, service.ErrLotteryAttemptGrantNoUsers
+	}
+	// Active targets are resolved inside this transaction. Keep the resolved
+	// IDs in the idempotency comparison so a retry can safely return the first
+	// aggregate without crediting wallets twice.
+	if input.Target == service.LotteryAttemptGrantTargetActive {
+		input.UserIDs = userIDs
+	}
 	existing, found, err := existingLotteryAttemptGrantResult(ctx, client, input)
 	if err != nil {
 		return service.LotteryAttemptGrantResult{}, fmt.Errorf("check lottery attempt grant request key: %w", err)
@@ -476,10 +501,6 @@ func (r *lotteryRepository) grantLotteryAttemptsWithClient(ctx context.Context, 
 		return existing, nil
 	}
 
-	userIDs, err := resolveLotteryAttemptGrantUsers(ctx, client, input)
-	if err != nil {
-		return service.LotteryAttemptGrantResult{}, err
-	}
 	if !input.All && len(userIDs) > service.LotteryAttemptGrantMaxUsers {
 		return service.LotteryAttemptGrantResult{}, service.ErrLotteryAttemptGrantTooLarge
 	}
@@ -568,6 +589,20 @@ func existingLotteryAttemptGrantResult(ctx context.Context, client *dbent.Client
 }
 
 func resolveLotteryAttemptGrantUsers(ctx context.Context, client *dbent.Client, input service.LotteryAttemptGrantInput) ([]int64, error) {
+	if input.Target == service.LotteryAttemptGrantTargetActive {
+		since := input.ActiveSince
+		if since == nil && (input.ActiveDays == service.LotteryAttemptActiveDays7 || input.ActiveDays == service.LotteryAttemptActiveDays30) {
+			resolvedSince := time.Now().UTC().AddDate(0, 0, -input.ActiveDays)
+			since = &resolvedSince
+		}
+		if since == nil {
+			return nil, service.ErrLotteryAttemptGrantInvalid
+		}
+		return client.User.Query().Where(
+			user.DeletedAtIsNil(),
+			user.HasUsageLogsWith(usagelog.CreatedAtGTE(*since)),
+		).Order(user.ByID()).IDs(ctx)
+	}
 	if input.All {
 		return client.User.Query().Where(user.DeletedAtIsNil()).Order(user.ByID()).IDs(ctx)
 	}
