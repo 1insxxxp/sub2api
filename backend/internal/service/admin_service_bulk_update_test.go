@@ -94,6 +94,16 @@ func (s *accountRepoStubForBulkUpdate) BindGroups(_ context.Context, accountID i
 	return nil
 }
 
+func (s *accountRepoStubForBulkUpdate) ListByGroup(_ context.Context, groupID int64) ([]Account, error) {
+	if err, ok := s.listByGroupErr[groupID]; ok {
+		return nil, err
+	}
+	if rows, ok := s.listByGroupData[groupID]; ok {
+		return rows, nil
+	}
+	return nil, nil
+}
+
 func (s *accountRepoStubForBulkUpdate) GetByIDs(_ context.Context, ids []int64) ([]*Account, error) {
 	s.getByIDsCalled = true
 	s.getByIDsIDs = append([]int64{}, ids...)

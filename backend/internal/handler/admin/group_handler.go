@@ -187,9 +187,10 @@ type CreateGroupRequest struct {
 	FallbackGroupIDOnInvalidRequest *int64                        `json:"fallback_group_id_on_invalid_request"`
 	DefaultReasoningEffort          string                        `json:"default_reasoning_effort" binding:"omitempty,oneof=low medium high xhigh max"`
 	// 模型路由配置（仅 anthropic 平台使用）
-	ModelRouting        map[string][]int64 `json:"model_routing"`
-	ModelRoutingEnabled bool               `json:"model_routing_enabled"`
-	MCPXMLInject        *bool              `json:"mcp_xml_inject"`
+	ModelRouting             map[string][]int64 `json:"model_routing"`
+	ModelRoutingEnabled      bool               `json:"model_routing_enabled"`
+	MCPXMLInject             *bool              `json:"mcp_xml_inject"`
+	SimulateClaudeMaxEnabled *bool              `json:"simulate_claude_max_enabled"`
 	// 支持的模型系列（仅 antigravity 平台使用）
 	SupportedModelScopes []string `json:"supported_model_scopes"`
 	// OpenAI Messages 调度配置（仅 openai 平台使用）
@@ -262,9 +263,10 @@ type UpdateGroupRequest struct {
 	FallbackGroupIDOnInvalidRequest *int64                        `json:"fallback_group_id_on_invalid_request"`
 	DefaultReasoningEffort          *string                       `json:"default_reasoning_effort"`
 	// 模型路由配置（仅 anthropic 平台使用）
-	ModelRouting        map[string][]int64 `json:"model_routing"`
-	ModelRoutingEnabled *bool              `json:"model_routing_enabled"`
-	MCPXMLInject        *bool              `json:"mcp_xml_inject"`
+	ModelRouting             map[string][]int64 `json:"model_routing"`
+	ModelRoutingEnabled      *bool              `json:"model_routing_enabled"`
+	MCPXMLInject             *bool              `json:"mcp_xml_inject"`
+	SimulateClaudeMaxEnabled *bool              `json:"simulate_claude_max_enabled"`
 	// 支持的模型系列（仅 antigravity 平台使用）
 	SupportedModelScopes *[]string `json:"supported_model_scopes"`
 	// OpenAI Messages 调度配置（仅 openai 平台使用）

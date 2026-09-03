@@ -40,6 +40,7 @@ func (s *GatewayService) ResolveUserGroupRateMultiplier(ctx context.Context, use
 // 异步 worker 只接收计费所需快照，不能持有 ParsedRequest/RequestBodyRef 这类大请求体引用。
 type RecordUsageInput struct {
 	Result             *ForwardResult
+	ParsedRequest      *ParsedRequest // 可选：请求体快照，用于需要原始请求结构的计费策略
 	APIKey             *APIKey
 	User               *User
 	Account            *Account

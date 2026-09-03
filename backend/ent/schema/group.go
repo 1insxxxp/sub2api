@@ -35,8 +35,6 @@ func (Group) Mixin() []ent.Mixin {
 
 func (Group) Fields() []ent.Field {
 	return []ent.Field{
-		// 唯一约束通过部分索引实现（WHERE deleted_at IS NULL），支持软删除后重用
-		// 见迁移文件 016_soft_delete_partial_unique_indexes.sql
 		field.String("name").
 			MaxLen(100).
 			NotEmpty(),
@@ -78,7 +76,6 @@ func (Group) Fields() []ent.Field {
 			Immutable().
 			Comment("内部幂等恢复标识，不对 API 暴露"),
 
-		// Subscription-related fields (added by migration 003)
 		field.String("platform").
 			MaxLen(50).
 			Default(domain.PlatformAnthropic),
@@ -201,14 +198,13 @@ func (Group) Fields() []ent.Field {
 			SchemaType(map[string]string{dialect.Postgres: "jsonb"}).
 			Comment("分组逐模型定价；优先级高于渠道和内置定价"),
 
-		// Claude Code 客户端限制 (added by migration 029)
 		field.Bool("claude_code_only").
 			Default(false).
-			Comment("是否仅允许 Claude Code 客户端"),
+			Comment("allow Claude Code client only"),
 		field.Int64("fallback_group_id").
 			Optional().
 			Nillable().
-			Comment("非 Claude Code 请求降级使用的分组 ID"),
+			Comment("fallback group for non-Claude-Code requests"),
 		field.Int64("fallback_group_id_on_invalid_request").
 			Optional().
 			Nillable().
@@ -218,32 +214,26 @@ func (Group) Fields() []ent.Field {
 			Default("").
 			Comment("默认推理/思维强度：空=不注入；low/medium/high/xhigh 仅用于 Anthropic Messages 路径"),
 
-		// 模型路由配置 (added by migration 040)
 		field.JSON("model_routing", map[string][]int64{}).
 			Optional().
 			SchemaType(map[string]string{dialect.Postgres: "jsonb"}).
-			Comment("模型路由配置：模型模式 -> 优先账号ID列表"),
-
-		// 模型路由开关 (added by migration 041)
+			Comment("model routing config: pattern -> account ids"),
 		field.Bool("model_routing_enabled").
 			Default(false).
-			Comment("是否启用模型路由配置"),
+			Comment("whether model routing is enabled"),
 
-		// MCP XML 协议注入开关 (added by migration 042)
 		field.Bool("mcp_xml_inject").
 			Default(true).
-			Comment("是否注入 MCP XML 调用协议提示词（仅 antigravity 平台）"),
+			Comment("whether MCP XML prompt injection is enabled"),
 
-		// 支持的模型系列 (added by migration 046)
 		field.JSON("supported_model_scopes", []string{}).
 			Default([]string{"claude", "gemini_text", "gemini_image"}).
 			SchemaType(map[string]string{dialect.Postgres: "jsonb"}).
-			Comment("支持的模型系列：claude, gemini_text, gemini_image"),
+			Comment("supported model scopes: claude, gemini_text, gemini_image"),
 
-		// 分组排序 (added by migration 052)
 		field.Int("sort_order").
 			Default(0).
-			Comment("分组显示排序，数值越小越靠前"),
+			Comment("group display order, lower comes first"),
 
 		// OpenAI Messages 调度配置 (added by migration 069)
 		field.Bool("allow_messages_dispatch").
@@ -268,6 +258,9 @@ func (Group) Fields() []ent.Field {
 			MaxLen(100).
 			Default("").
 			Comment("默认映射模型 ID，当账号级映射找不到时使用此值"),
+		field.Bool("simulate_claude_max_enabled").
+			Default(false).
+			Comment("是否模拟 Claude Max 缓存计费"),
 		field.JSON("messages_dispatch_model_config", domain.OpenAIMessagesDispatchModelConfig{}).
 			Default(domain.OpenAIMessagesDispatchModelConfig{}).
 			SchemaType(map[string]string{dialect.Postgres: "jsonb"}).
@@ -333,14 +326,11 @@ func (Group) Edges() []ent.Edge {
 		edge.From("allowed_users", User.Type).
 			Ref("allowed_groups").
 			Through("user_allowed_groups", UserAllowedGroup.Type),
-		// 注意：fallback_group_id 直接作为字段使用，不定义 edge
-		// 这样允许多个分组指向同一个降级分组（M2O 关系）
 	}
 }
 
 func (Group) Indexes() []ent.Index {
 	return []ent.Index{
-		// name 字段已在 Fields() 中声明 Unique()，无需重复索引
 		index.Fields("status"),
 		index.Fields("platform"),
 		index.Fields("subscription_type"),

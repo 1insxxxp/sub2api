@@ -80,6 +80,7 @@ Desktop.ini
 # ===================
 tmp/
 temp/
+logs/
 *.tmp
 *.temp
 *.log
@@ -147,6 +148,14 @@ docs/*
 docs/screenshots/*
 !docs/screenshots/mobile-account-actions-menu.png
 .serena/
+
+# ===================
+# 压测工具
+# ===================
+tools/loadtest/
+# Antigravity Manager
+Antigravity-Manager/
+antigravity_projectid_fix.patch
 .codex/
 .worktrees/
 .codex-card-migration/

@@ -88,6 +88,9 @@
     <footer class="min-w-0 border-t border-gray-200 px-4 py-5 text-center text-sm text-gray-500 [overflow-wrap:anywhere] sm:px-6 dark:border-dark-800 dark:text-dark-400">
       &copy; {{ currentYear }} {{ siteName }}
     </footer>
+
+    <!-- 微信客服悬浮按钮 -->
+    <WechatServiceButton />
   </div>
 
   <!-- Default Home Page -->

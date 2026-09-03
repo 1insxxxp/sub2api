@@ -1036,7 +1036,7 @@ func (s *AntigravityGatewayService) handleClaudeStreamToNonStreaming(c *gin.Cont
 }
 
 // handleClaudeStreamingResponse 处理 Claude 流式响应（Gemini SSE → Claude SSE 转换）
-func (s *AntigravityGatewayService) handleClaudeStreamingResponse(c *gin.Context, resp *http.Response, startTime time.Time, originalModel string) (result *antigravityStreamResult, err error) {
+func (s *AntigravityGatewayService) handleClaudeStreamingResponse(c *gin.Context, resp *http.Response, startTime time.Time, originalModel string, _ ...int64) (result *antigravityStreamResult, err error) {
 	outcomeCollector := NewResponseOutcomeCollector(http.StatusOK, resp.StatusCode)
 	defer func() {
 		if result == nil {

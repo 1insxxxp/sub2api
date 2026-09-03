@@ -115,6 +115,8 @@ func clearGatewayRequestDerivedState(parsed *ParsedRequest) {
 	parsed.Model = ""
 	parsed.Stream = false
 	parsed.MetadataUserID = ""
+	parsed.System = nil
+	parsed.Messages = nil
 	parsed.HasSystem = false
 	parsed.ThinkingEnabled = false
 	parsed.OutputEffort = ""
@@ -240,6 +242,14 @@ func parseGatewayRequestCurrentBody(parsed *ParsedRequest, protocol string) erro
 	}
 
 	setGatewayRequestRanges(parsed, protocol, jsonStr)
+	if system, ok := parsed.SystemValue(); ok {
+		parsed.System = system
+	}
+	if rawMessages := parsed.MessagesRaw(); len(rawMessages) > 0 {
+		if err := json.Unmarshal(rawMessages, &parsed.Messages); err != nil {
+			return fmt.Errorf("decode messages: %w", err)
+		}
+	}
 	return nil
 }
 
@@ -284,6 +294,8 @@ type ParsedRequest struct {
 	Model           string          // 请求的模型名称
 	Stream          bool            // 是否为流式请求
 	MetadataUserID  string          // metadata.user_id（用于会话亲和）
+	System          any             // system 字段内容（用于缓存与计费策略）
+	Messages        []any           // messages 数组（用于缓存与计费策略）
 	HasSystem       bool            // 是否包含 system 字段（包含 null 也视为显式传入）
 	ThinkingEnabled bool            // 是否开启 thinking（部分平台会影响最终模型名）
 	OutputEffort    string          // output_config.effort（Claude API 的推理强度控制）
