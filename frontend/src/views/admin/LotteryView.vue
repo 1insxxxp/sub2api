@@ -11,7 +11,7 @@
             </div>
           </div>
           <div class="admin-toolbar-group w-full justify-end lg:w-auto lg:flex-none">
-            <button type="button" class="btn btn-secondary inline-flex items-center gap-2" :disabled="loading" @click="loadConfig"><Icon name="refresh" size="sm" :class="loading ? 'animate-spin' : ''" />{{ t('common.refresh') }}</button>
+            <button type="button" class="btn btn-secondary inline-flex items-center gap-2" :disabled="loading || recordsLoading" @click="refreshAll"><Icon name="refresh" size="sm" :class="loading || recordsLoading ? 'animate-spin' : ''" />{{ t('common.refresh') }}</button>
             <button type="button" data-test="save-lottery-activity" class="btn btn-primary inline-flex items-center gap-2" :disabled="savingActivity" @click="saveActivityForm"><Icon name="check" size="sm" />{{ savingActivity ? t('common.saving') : t('lottery.admin.saveActivity') }}</button>
           </div>
         </div>
@@ -77,6 +77,60 @@
         </div>
         <p v-else class="rounded-xl border border-dashed border-slate-300 px-5 py-10 text-center text-sm text-slate-500 dark:border-dark-600 dark:text-slate-400">{{ t('lottery.noPrizes') }}</p>
       </section>
+
+      <section class="admin-surface p-5 sm:p-6" data-test="lottery-draw-records">
+        <div class="mb-5 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div class="flex items-start gap-3">
+            <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-violet-50 text-violet-600 dark:bg-violet-900/25 dark:text-violet-300"><Icon name="clock" size="sm" /></div>
+            <div><h2 class="text-base font-semibold text-slate-950 dark:text-white">{{ t('lottery.admin.drawRecords') }}</h2><p class="mt-1 text-xs leading-5 text-slate-500 dark:text-slate-400">{{ t('lottery.admin.drawRecordsHint') }}</p></div>
+          </div>
+          <span class="text-xs text-slate-500 dark:text-slate-400">{{ t('lottery.admin.drawRecordCount', { count: recordsPagination.total }) }}</span>
+        </div>
+
+        <div v-if="recordsError" class="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-900/60 dark:bg-red-950/20 dark:text-red-300">{{ recordsError }}</div>
+        <div v-if="recordsLoading" class="py-10 text-center text-sm text-slate-500 dark:text-slate-400">{{ t('lottery.admin.recordsLoading') }}</div>
+        <div v-else-if="records.length" class="overflow-x-auto rounded-xl border border-slate-200 dark:border-dark-700">
+          <table class="min-w-full divide-y divide-slate-200 text-left text-sm dark:divide-dark-700">
+            <thead class="bg-slate-50 text-xs uppercase tracking-wide text-slate-500 dark:bg-dark-900/60 dark:text-slate-400">
+              <tr>
+                <th class="px-4 py-3 font-semibold">{{ t('lottery.admin.drawUser') }}</th>
+                <th class="px-4 py-3 font-semibold">{{ t('lottery.admin.drawPrize') }}</th>
+                <th class="px-4 py-3 font-semibold">{{ t('lottery.admin.drawReward') }}</th>
+                <th class="px-4 py-3 font-semibold">{{ t('lottery.admin.drawSource') }}</th>
+                <th class="px-4 py-3 font-semibold">{{ t('lottery.admin.drawTime') }}</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-200 bg-white dark:divide-dark-700 dark:bg-dark-950/20">
+              <tr v-for="record in records" :key="record.id" :data-test="`lottery-draw-record-${record.id}`" class="align-top">
+                <td class="whitespace-nowrap px-4 py-3">
+                  <div class="font-medium text-slate-900 dark:text-white">{{ record.user_deleted ? t('lottery.admin.deletedUser') : (record.user_email || record.user_name || `#${record.user_id}`) }}</div>
+                  <div class="mt-1 text-xs text-slate-500 dark:text-slate-400">ID {{ record.user_id }}</div>
+                </td>
+                <td class="whitespace-nowrap px-4 py-3">
+                  <div :data-test="`lottery-draw-prize-${record.id}`" class="font-medium text-slate-900 dark:text-white">{{ record.prize_name }}</div>
+                  <div class="mt-1 text-xs text-slate-500 dark:text-slate-400">{{ record.prize_type === 'balance' ? t('lottery.admin.balanceType') : t('lottery.admin.productType') }}</div>
+                </td>
+                <td class="max-w-sm px-4 py-3 text-slate-700 dark:text-slate-200">
+                  <span v-if="record.prize_type === 'balance'">{{ formatAmount(record.balance_amount) }}</span>
+                  <code v-else class="break-all text-xs">{{ record.product_content || '—' }}</code>
+                </td>
+                <td class="whitespace-nowrap px-4 py-3 text-slate-600 dark:text-slate-300">{{ record.attempt_source === 'wallet' ? t('lottery.admin.walletSource') : t('lottery.admin.activitySource') }}</td>
+                <td class="whitespace-nowrap px-4 py-3 text-slate-500 dark:text-slate-400">{{ formatDateTime(record.created_at) }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <p v-else class="rounded-xl border border-dashed border-slate-300 px-5 py-10 text-center text-sm text-slate-500 dark:border-dark-600 dark:text-slate-400">{{ t('lottery.admin.recordsEmpty') }}</p>
+
+        <Pagination
+          v-if="recordsPagination.total > 0"
+          :page="recordsPagination.page"
+          :total="recordsPagination.total"
+          :page-size="recordsPagination.page_size"
+          @update:page="handleRecordsPageChange"
+          @update:pageSize="handleRecordsPageSizeChange"
+        />
+      </section>
     </div>
   </AppLayout>
 </template>
@@ -86,7 +140,8 @@ import { onMounted, reactive, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import Icon from '@/components/icons/Icon.vue'
-import { lotteryAdminAPI, type LotteryPrizeItem } from '@/api/admin/lottery'
+import Pagination from '@/components/common/Pagination.vue'
+import { lotteryAdminAPI, type LotteryAdminDraw, type LotteryPrizeItem } from '@/api/admin/lottery'
 import type { LotteryActivity, LotteryAttemptMode, LotteryPrize } from '@/api/lottery'
 import { useAppStore } from '@/stores/app'
 
@@ -104,12 +159,17 @@ const inventoryOpen = ref(0)
 const inventoryText = ref('')
 const inventoryItems = ref<LotteryPrizeItem[]>([])
 const selectedItemIds = ref<number[]>([])
+const recordsLoading = ref(true)
+const recordsError = ref('')
+const records = ref<LotteryAdminDraw[]>([])
+const recordsPagination = reactive({ page: 1, page_size: 10, total: 0 })
 
 interface ActivityForm { id?: number; name: string; description: string; status: string; attempt_mode: LotteryAttemptMode; attempt_limit: number; starts_at: string; ends_at: string }
 interface PrizeDraft { id?: number; name: string; description: string; type: 'balance' | 'product'; weight: number; balance_amount?: number | null; enabled: boolean; sort_order: number }
 
 const activityForm = reactive<ActivityForm>({ name: '', description: '', status: 'draft', attempt_mode: 'daily', attempt_limit: 0, starts_at: '', ends_at: '' })
 const formatAmount = (value?: number | null) => `$${Number(value || 0).toFixed(2)}`
+const formatDateTime = (value?: string | null) => value ? new Date(value).toLocaleString() : '—'
 const toDateTimeLocal = (value?: string | null) => value ? new Date(value).toISOString().slice(0, 16) : ''
 const toISOStringOrNull = (value: string) => value ? new Date(value).toISOString() : null
 
@@ -135,6 +195,35 @@ async function loadConfig() {
   } catch (error: any) {
     loadError.value = error?.message || t('lottery.admin.loadFailed')
   } finally { loading.value = false }
+}
+
+async function loadDraws(page = recordsPagination.page) {
+  recordsLoading.value = true
+  recordsError.value = ''
+  try {
+    const response = await lotteryAdminAPI.listDraws({ page, page_size: recordsPagination.page_size })
+    records.value = response.items || []
+    recordsPagination.page = response.page || page
+    recordsPagination.page_size = response.page_size || recordsPagination.page_size
+    recordsPagination.total = response.total || 0
+  } catch (error: any) {
+    recordsError.value = error?.message || t('lottery.admin.recordsLoadFailed')
+  } finally { recordsLoading.value = false }
+}
+
+async function refreshAll() {
+  await Promise.all([loadConfig(), loadDraws(1)])
+}
+
+function handleRecordsPageChange(page: number) {
+  recordsPagination.page = page
+  loadDraws(page)
+}
+
+function handleRecordsPageSizeChange(pageSize: number) {
+  recordsPagination.page_size = pageSize
+  recordsPagination.page = 1
+  loadDraws(1)
 }
 
 async function saveActivityForm() {
@@ -194,7 +283,10 @@ async function deleteSelectedItems(prizeId: number) {
   try { await lotteryAdminAPI.deletePrizeItems(prizeId, selectedItemIds.value); inventoryItems.value = await lotteryAdminAPI.listPrizeItems(prizeId); selectedItemIds.value = []; await loadConfig(); inventoryOpen.value = prizeId } catch (error: any) { appStore.showError(error?.message || t('lottery.admin.saveFailed')) }
 }
 
-onMounted(loadConfig)
+onMounted(() => {
+  loadConfig()
+  loadDraws()
+})
 </script>
 
 <style scoped>

@@ -12,7 +12,7 @@ vi.mock('@/api/client', () => ({
 }))
 
 import { drawLottery, getLotteryHistory, getLotteryState } from '@/api/lottery'
-import { appendPrizeItems, saveActivity } from '@/api/admin/lottery'
+import { appendPrizeItems, listDraws, saveActivity } from '@/api/admin/lottery'
 
 describe('lottery API contracts', () => {
   beforeEach(() => {
@@ -50,5 +50,13 @@ describe('lottery API contracts', () => {
     expect(get).toHaveBeenCalledWith('/lottery/history', { params: { page: 2, page_size: 10 } })
     expect(put).toHaveBeenCalledWith('/admin/lottery/activity', expect.objectContaining({ id: 1, status: 'active' }))
     expect(post).toHaveBeenCalledWith('/admin/lottery/prizes/8/items', { contents: ['code-a', 'code-b'] })
+  })
+
+  it('loads paginated admin draw records', async () => {
+    const records = { items: [], total: 0, page: 2, page_size: 10, pages: 0 }
+    get.mockResolvedValueOnce({ data: records })
+
+    await expect(listDraws({ page: 2, page_size: 10 })).resolves.toBe(records)
+    expect(get).toHaveBeenCalledWith('/admin/lottery/draws', { params: { page: 2, page_size: 10 } })
   })
 })

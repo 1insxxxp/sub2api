@@ -11,6 +11,8 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/lotterydraw"
 	"github.com/Wei-Shaw/sub2api/ent/lotteryprize"
 	"github.com/Wei-Shaw/sub2api/ent/lotteryprizeitem"
+	"github.com/Wei-Shaw/sub2api/ent/schema/mixins"
+	"github.com/Wei-Shaw/sub2api/ent/user"
 	"github.com/Wei-Shaw/sub2api/internal/service"
 )
 
@@ -325,6 +327,54 @@ func (r *lotteryRepository) ListUserDraws(ctx context.Context, userID int64, off
 	result := make([]service.LotteryDraw, 0, len(draws))
 	for _, draw := range draws {
 		result = append(result, *lotteryDrawToService(draw))
+	}
+	return result, total, nil
+}
+
+func (r *lotteryRepository) ListAdminDraws(ctx context.Context, offset, limit int) ([]service.LotteryAdminDraw, int, error) {
+	client := clientFromContext(ctx, r.client)
+	query := client.LotteryDraw.Query()
+	total, err := query.Clone().Count(ctx)
+	if err != nil {
+		return nil, 0, err
+	}
+	draws, err := query.Order(
+		lotterydraw.ByCreatedAt(entsql.OrderDesc()),
+		lotterydraw.ByID(entsql.OrderDesc()),
+	).Offset(offset).Limit(limit).All(ctx)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	userIDs := make([]int64, 0, len(draws))
+	seen := make(map[int64]struct{}, len(draws))
+	for _, draw := range draws {
+		if _, ok := seen[draw.UserID]; ok {
+			continue
+		}
+		seen[draw.UserID] = struct{}{}
+		userIDs = append(userIDs, draw.UserID)
+	}
+	usersByID := make(map[int64]*dbent.User, len(userIDs))
+	if len(userIDs) > 0 {
+		users, err := client.User.Query().Where(user.IDIn(userIDs...)).All(mixins.SkipSoftDelete(ctx))
+		if err != nil {
+			return nil, 0, err
+		}
+		for _, item := range users {
+			usersByID[item.ID] = item
+		}
+	}
+
+	result := make([]service.LotteryAdminDraw, 0, len(draws))
+	for _, draw := range draws {
+		var resolvedUser *service.User
+		if entity := usersByID[draw.UserID]; entity != nil {
+			resolvedUser = &service.User{
+				ID: entity.ID, Email: entity.Email, Username: entity.Username, DeletedAt: entity.DeletedAt,
+			}
+		}
+		result = append(result, service.NewLotteryAdminDraw(*lotteryDrawToService(draw), resolvedUser))
 	}
 	return result, total, nil
 }

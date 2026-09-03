@@ -28,6 +28,18 @@ func (h *LotteryHandler) GetConfig(c *gin.Context) {
 	response.Success(c, config)
 }
 
+func (h *LotteryHandler) ListDraws(c *gin.Context) {
+	page, pageSize := response.ParsePagination(c)
+	draws, total, err := h.lotteryService.ListAdminDraws(
+		c.Request.Context(), (page-1)*pageSize, pageSize,
+	)
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	response.Paginated(c, draws, int64(total), page, pageSize)
+}
+
 type SaveLotteryActivityRequest struct {
 	ID           int64      `json:"id"`
 	Name         string     `json:"name"`

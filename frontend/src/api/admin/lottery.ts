@@ -1,4 +1,5 @@
 import { apiClient } from '../client'
+import type { PaginatedResponse } from '@/types'
 import type { LotteryActivity, LotteryAttemptMode, LotteryPrize, LotteryPrizeType } from '@/api/lottery'
 
 export interface LotteryActivityConfig {
@@ -36,6 +37,27 @@ export interface LotteryPrizeItem {
   claimed_by?: number | null
   claimed_at?: string | null
   created_at: string
+}
+
+export interface LotteryAdminDraw {
+  id: number
+  activity_id?: number | null
+  prize_id?: number | null
+  user_id: number
+  user_email?: string
+  user_name?: string
+  user_deleted: boolean
+  prize_name: string
+  prize_type: LotteryPrizeType
+  balance_amount?: number | null
+  product_content?: string | null
+  attempt_source?: 'activity' | 'wallet'
+  created_at: string
+}
+
+export interface LotteryAdminDrawQuery {
+  page?: number
+  page_size?: number
 }
 
 export async function getConfig(): Promise<LotteryActivityConfig> {
@@ -77,6 +99,11 @@ export async function deletePrizeItems(id: number, itemIds: number[]): Promise<{
   return data
 }
 
-export const lotteryAdminAPI = { getConfig, saveActivity, createPrize, updatePrize, deletePrize, listPrizeItems, appendPrizeItems, deletePrizeItems }
+export async function listDraws(params: LotteryAdminDrawQuery = {}): Promise<PaginatedResponse<LotteryAdminDraw>> {
+  const { data } = await apiClient.get<PaginatedResponse<LotteryAdminDraw>>('/admin/lottery/draws', { params })
+  return data
+}
+
+export const lotteryAdminAPI = { getConfig, saveActivity, createPrize, updatePrize, deletePrize, listPrizeItems, appendPrizeItems, deletePrizeItems, listDraws }
 
 export default lotteryAdminAPI

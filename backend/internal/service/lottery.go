@@ -107,6 +107,48 @@ type LotteryDraw struct {
 	CreatedAt      time.Time `json:"created_at"`
 }
 
+// LotteryAdminDraw is the audit view of a completed draw. It intentionally
+// omits the idempotency attempt key while including the user identity and the
+// immutable reward snapshot needed by administrators.
+type LotteryAdminDraw struct {
+	ID             int64     `json:"id"`
+	ActivityID     *int64    `json:"activity_id,omitempty"`
+	PrizeID        *int64    `json:"prize_id,omitempty"`
+	UserID         int64     `json:"user_id"`
+	UserEmail      string    `json:"user_email,omitempty"`
+	UserName       string    `json:"user_name,omitempty"`
+	UserDeleted    bool      `json:"user_deleted"`
+	PrizeName      string    `json:"prize_name"`
+	PrizeType      string    `json:"prize_type"`
+	BalanceAmount  *float64  `json:"balance_amount,omitempty"`
+	ProductContent *string   `json:"product_content,omitempty"`
+	AttemptSource  string    `json:"attempt_source"`
+	CreatedAt      time.Time `json:"created_at"`
+}
+
+// NewLotteryAdminDraw converts the internal draw snapshot and a user record to
+// the administrator-facing audit representation. A nil or soft-deleted user
+// remains identifiable by ID without leaking any stale identity fields.
+func NewLotteryAdminDraw(draw LotteryDraw, user *User) LotteryAdminDraw {
+	adminDraw := LotteryAdminDraw{
+		ID: draw.ID, ActivityID: draw.ActivityID, PrizeID: draw.PrizeID,
+		UserID: draw.UserID, PrizeName: draw.PrizeName, PrizeType: draw.PrizeType,
+		BalanceAmount: draw.BalanceAmount, ProductContent: draw.ProductContent,
+		AttemptSource: draw.AttemptSource, CreatedAt: draw.CreatedAt,
+		UserDeleted: user == nil,
+	}
+	if user != nil {
+		adminDraw.UserEmail = user.Email
+		adminDraw.UserName = user.Username
+		adminDraw.UserDeleted = user.DeletedAt != nil
+		if adminDraw.UserDeleted {
+			adminDraw.UserEmail = ""
+			adminDraw.UserName = ""
+		}
+	}
+	return adminDraw
+}
+
 type LotteryActivityInput struct {
 	Name         string     `json:"name"`
 	Description  string     `json:"description"`
@@ -169,6 +211,7 @@ type LotteryRepository interface {
 	ClaimAvailableProductItem(ctx context.Context, prizeID, userID int64, now time.Time) (*LotteryPrizeItem, error)
 	CreateDraw(ctx context.Context, draw LotteryDraw) (*LotteryDraw, error)
 	ListUserDraws(ctx context.Context, userID int64, offset, limit int) ([]LotteryDraw, int, error)
+	ListAdminDraws(ctx context.Context, offset, limit int) ([]LotteryAdminDraw, int, error)
 }
 
 type LotteryService struct {
@@ -435,6 +478,24 @@ func (s *LotteryService) ListUserDraws(ctx context.Context, userID int64, offset
 		offset = 0
 	}
 	return s.repo.ListUserDraws(ctx, userID, offset, limit)
+}
+
+// ListAdminDraws returns the newest lottery draws for the administrator audit
+// page. The repository performs the draw/user lookup in a bounded page.
+func (s *LotteryService) ListAdminDraws(ctx context.Context, offset, limit int) ([]LotteryAdminDraw, int, error) {
+	if s == nil || s.repo == nil {
+		return nil, 0, ErrLotteryConfigurationDenied
+	}
+	if limit <= 0 {
+		limit = 20
+	}
+	if limit > 100 {
+		limit = 100
+	}
+	if offset < 0 {
+		offset = 0
+	}
+	return s.repo.ListAdminDraws(ctx, offset, limit)
 }
 
 func (s *LotteryService) lotteryEnabled(ctx context.Context) bool {
