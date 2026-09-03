@@ -49,6 +49,39 @@ type ResponseOutcome struct {
 	CollectorVersion  int               `json:"collector_version"`
 }
 
+// UsageOutcomeStatus is the privacy-safe classification exposed to admin
+// usage consumers. It intentionally contains no provider message or endpoint.
+type UsageOutcomeStatus string
+
+const (
+	UsageOutcomeSuccess UsageOutcomeStatus = "success"
+	UsageOutcomeFailure UsageOutcomeStatus = "failure"
+	UsageOutcomeEmpty   UsageOutcomeStatus = "empty"
+	UsageOutcomeUnknown UsageOutcomeStatus = "unknown"
+)
+
+// ClassifyUsageOutcome classifies persisted response evidence without making
+// another upstream request. Missing or client-cancelled evidence is unknown so
+// the monitor never guesses a model failure from incomplete information.
+func ClassifyUsageOutcome(outcome *ResponseOutcome) UsageOutcomeStatus {
+	if outcome == nil {
+		return UsageOutcomeUnknown
+	}
+	if outcome.DisconnectSource == DisconnectSourceClient {
+		return UsageOutcomeUnknown
+	}
+	if outcome.HTTPStatus >= 400 || outcome.UpstreamStatus >= 400 ||
+		(outcome.UpstreamErrorKind != "" && outcome.UpstreamErrorKind != UpstreamErrorNone) ||
+		outcome.DisconnectSource == DisconnectSourceUpstream ||
+		outcome.DisconnectSource == DisconnectSourceServer {
+		return UsageOutcomeFailure
+	}
+	if !outcome.HasEffectiveOutput() {
+		return UsageOutcomeEmpty
+	}
+	return UsageOutcomeSuccess
+}
+
 func (o ResponseOutcome) HasEffectiveOutput() bool {
 	return o.HasText || o.HasToolCall || o.HasReasoning || o.HasMedia
 }
