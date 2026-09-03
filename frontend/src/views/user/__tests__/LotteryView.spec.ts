@@ -118,6 +118,9 @@ describe('User LotteryView', () => {
     await flushPromises()
 
     const card = wrapper.get('.lottery-prize-card')
+    expect(wrapper.get('.lottery-prize-section')).toBeTruthy()
+    expect(wrapper.get('.lottery-prize-grid')).toBeTruthy()
+    expect(wrapper.get('.lottery-history-section')).toBeTruthy()
     expect(card.text()).toContain('A small reward')
     expect(card.text()).toContain('$1.00')
     expect(card.text()).not.toContain('lottery.weight')

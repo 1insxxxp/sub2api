@@ -40,7 +40,7 @@
       <div v-if="loading" class="flex min-h-56 items-center justify-center rounded-2xl border border-slate-200 bg-white dark:border-dark-700 dark:bg-dark-900">
         <LoadingSpinner />
       </div>
-      <div v-else>
+      <div v-else class="space-y-6">
         <div v-if="loadError" class="mb-6 rounded-2xl border border-amber-200 bg-amber-50 px-5 py-8 text-center text-sm text-amber-800 dark:border-amber-800/60 dark:bg-amber-950/20 dark:text-amber-200">
           {{ loadError }}
         </div>
@@ -76,18 +76,18 @@
             </div>
           </section>
 
-          <section v-if="state.prizes.length" class="space-y-4">
+          <section v-if="state.prizes.length" class="lottery-prize-section space-y-4 rounded-2xl border border-sky-100/90 bg-gradient-to-br from-white via-sky-50/40 to-cyan-50/35 p-4 shadow-sm dark:border-sky-900/50 dark:from-dark-900 dark:via-sky-950/20 dark:to-cyan-950/10 sm:p-5 lg:p-6">
             <div class="flex items-end justify-between gap-3">
               <div>
                 <h2 class="text-lg font-semibold text-slate-950 dark:text-white">{{ t('lottery.prizeDetails') }}</h2>
                 <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">{{ t('lottery.description') }}</p>
               </div>
             </div>
-            <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+            <div class="lottery-prize-grid grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
               <article
                 v-for="prize in state.prizes"
                 :key="prize.id"
-                class="lottery-prize-card rounded-xl border border-slate-200 bg-white p-5 shadow-sm dark:border-dark-700 dark:bg-dark-900"
+                class="lottery-prize-card flex min-h-40 flex-col rounded-xl border border-slate-200/90 bg-white/90 p-4 shadow-sm dark:border-dark-700 dark:bg-dark-900/90 sm:p-5"
                 :class="{ 'opacity-60': !prize.enabled || (prize.type === 'product' && prize.available_item_count <= 0) }"
               >
                 <div class="flex items-start justify-between gap-3">
@@ -99,8 +99,8 @@
                   </span>
                 </div>
                 <h3 class="mt-4 break-words text-base font-semibold text-slate-950 dark:text-white">{{ prize.name }}</h3>
-                <p v-if="prize.description" class="mt-1 min-h-10 text-sm leading-5 text-slate-500 dark:text-slate-400">{{ prize.description }}</p>
-                <div class="mt-4 flex items-center justify-between gap-3 text-xs text-slate-500 dark:text-slate-400">
+                <p v-if="prize.description" class="mt-1 line-clamp-2 text-sm leading-5 text-slate-500 dark:text-slate-400">{{ prize.description }}</p>
+                <div class="mt-auto flex items-center justify-between gap-3 pt-4 text-xs text-slate-500 dark:text-slate-400">
                   <strong v-if="prize.type === 'balance'" class="text-base text-emerald-600 dark:text-emerald-300">+{{ formatAmount(prize.balance_amount) }}</strong>
                   <span v-else>{{ prize.available_item_count > 0 ? t('lottery.inventory', { count: prize.available_item_count }) : t('lottery.noInventory') }}</span>
                 </div>
@@ -112,7 +112,7 @@
           </div>
         </template>
 
-        <section class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-dark-700 dark:bg-dark-900 sm:p-6">
+        <section class="lottery-history-section rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-dark-700 dark:bg-dark-900 sm:p-6">
           <div class="flex flex-wrap items-end justify-between gap-3">
             <div>
               <h2 class="text-lg font-semibold text-slate-950 dark:text-white">{{ t('lottery.history') }}</h2>
