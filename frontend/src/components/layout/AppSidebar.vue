@@ -247,6 +247,7 @@ import { sanitizeUrl } from '@/utils/url'
 import { resolveCustomMenuNavigation } from '@/utils/custom-menu-navigation'
 import { FeatureFlags, makeSidebarFlag } from '@/utils/featureFlags'
 import { useBatchImageAccess } from '@/composables/useBatchImageAccess'
+import type { CustomMenuItem } from '@/types'
 
 interface NavItem {
   path: string
@@ -724,6 +725,21 @@ const ChannelMonitorIcon = {
     )
 }
 
+const CustomLinkIcon = {
+  render: () =>
+    h(
+      'svg',
+      { fill: 'none', viewBox: '0 0 24 24', stroke: 'currentColor', 'stroke-width': '1.5' },
+      [
+        h('path', {
+          'stroke-linecap': 'round',
+          'stroke-linejoin': 'round',
+          d: 'M13.19 8.688a4.5 4.5 0 011.242 7.244l-4.5 4.5a4.5 4.5 0 01-6.364-6.364l1.757-1.757m13.35-.622l1.757-1.757a4.5 4.5 0 00-6.364-6.364l-4.5 4.5a4.5 4.5 0 001.242 7.244'
+        })
+      ]
+    )
+}
+
 const ShieldIcon = {
   render: () =>
     h(
@@ -789,6 +805,11 @@ const flagAdminPayment = () => adminSettingsStore.paymentEnabled
 const flagBatchImageAccess = () => canUseBatchImage.value
 const flagLottery = makeSidebarFlag(FeatureFlags.lottery)
 
+function customMenuIcon(item: Pick<CustomMenuItem, 'label' | 'icon_svg'>): unknown {
+  if (item.icon_svg?.trim()) return null
+  return item.label.trim() === t('nav.channelMonitor') ? ChannelMonitorIcon : CustomLinkIcon
+}
+
 // buildSelfNavItems 构造用户自己的导航项（用户端主菜单和管理员的"我的账户"子菜单共享这组声明）。
 // withDashboard=true 时包含仪表盘（用户端），false 时不含（管理员的个人区已经有独立仪表盘入口）。
 //
@@ -824,7 +845,7 @@ function buildSelfNavItems(withDashboard: boolean): NavItem[] {
     ...customMenuItemsForUser.value.map((item): NavItem => ({
       ...resolveCustomMenuNavigation(item),
       label: item.label,
-      icon: null,
+      icon: customMenuIcon(item),
       iconSvg: item.icon_svg,
     })),
   )
@@ -937,14 +958,14 @@ const adminNavItems = computed((): NavItem[] => {
     filtered.push({ path: '/keys', label: t('nav.apiKeys'), icon: KeyIcon })
     filtered.push({ path: '/admin/settings', label: t('nav.settings'), icon: CogIcon })
     for (const cm of customMenuItemsForAdmin.value) {
-      filtered.push({ ...resolveCustomMenuNavigation(cm), label: cm.label, icon: null, iconSvg: cm.icon_svg })
+      filtered.push({ ...resolveCustomMenuNavigation(cm), label: cm.label, icon: customMenuIcon(cm), iconSvg: cm.icon_svg })
     }
     return filtered
   }
 
   visible.push({ path: '/admin/settings', label: t('nav.settings'), icon: CogIcon })
   for (const cm of customMenuItemsForAdmin.value) {
-    visible.push({ ...resolveCustomMenuNavigation(cm), label: cm.label, icon: null, iconSvg: cm.icon_svg })
+    visible.push({ ...resolveCustomMenuNavigation(cm), label: cm.label, icon: customMenuIcon(cm), iconSvg: cm.icon_svg })
   }
   return visible
 })
