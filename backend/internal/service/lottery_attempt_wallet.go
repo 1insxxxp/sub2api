@@ -2,6 +2,8 @@ package service
 
 import (
 	"context"
+	"database/sql"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -89,7 +91,7 @@ func creditLotteryAttemptsWithClient(
 		OnConflict(entsql.ConflictColumns(lotteryattemptwallet.FieldUserID)).
 		DoNothing().
 		Exec(ctx)
-	if err != nil {
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
 		return 0, false, fmt.Errorf("ensure lottery attempt wallet: %w", err)
 	}
 	wallet, err := client.LotteryAttemptWallet.Query().

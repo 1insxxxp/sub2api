@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/Wei-Shaw/sub2api/ent/lotteryattemptledger"
+	"github.com/Wei-Shaw/sub2api/ent/lotteryattemptwallet"
 	"github.com/stretchr/testify/require"
 )
 
@@ -35,6 +36,39 @@ func TestLotteryAttemptWalletCreditIsIdempotentBySource(t *testing.T) {
 	).Count(ctx)
 	require.NoError(t, err)
 	require.Equal(t, 1, ledgerCount)
+}
+
+func TestLotteryAttemptWalletCreditUsesExistingWallet(t *testing.T) {
+	client := newCheckinServiceTestClient(t)
+	ctx := context.Background()
+	user := createCheckinTestUser(t, ctx, client, "lottery-existing-wallet@example.com", 0)
+
+	_, err := client.LotteryAttemptWallet.Create().
+		SetUserID(user.ID).
+		SetBalance(3).
+		Save(ctx)
+	require.NoError(t, err)
+
+	balance, credited, err := creditLotteryAttempts(
+		ctx, client, user.ID, 2, LotteryAttemptLedgerSourceCheckinStreak, 102, "streak reward",
+	)
+	require.NoError(t, err)
+	require.True(t, credited)
+	require.Equal(t, 5, balance)
+
+	wallet, err := client.LotteryAttemptWallet.Query().
+		Where(lotteryattemptwallet.UserIDEQ(user.ID)).
+		Only(ctx)
+	require.NoError(t, err)
+	require.Equal(t, 5, wallet.Balance)
+
+	ledger, err := client.LotteryAttemptLedger.Query().Where(
+		lotteryattemptledger.SourceTypeEQ(LotteryAttemptLedgerSourceCheckinStreak),
+		lotteryattemptledger.SourceIDEQ(102),
+	).Only(ctx)
+	require.NoError(t, err)
+	require.Equal(t, 2, ledger.Delta)
+	require.Equal(t, 5, ledger.BalanceAfter)
 }
 
 func TestLotteryAttemptWalletDebitRecordsBalanceAndRejectsExhaustion(t *testing.T) {
