@@ -95,6 +95,18 @@ func TestLotteryRepositoryGrantLotteryAttemptsAllExcludesDeletedUsers(t *testing
 	require.NoError(t, err)
 	require.Equal(t, 2, activeWallet.Balance)
 	require.Equal(t, 2, client.LotteryAttemptGrant.Query().CountX(ctx))
+
+	// A later grant must also work when the wallet rows already exist. This is
+	// the normal path after the first all-user grant has initialized them.
+	secondResult, err := repo.GrantLotteryAttempts(ctx, service.LotteryAttemptGrantInput{
+		All: true, Amount: 3, RequestKey: "all-request-2", CreatedBy: creator.ID,
+	})
+	require.NoError(t, err)
+	require.Equal(t, service.LotteryAttemptGrantResult{Affected: 2, TotalGranted: 6}, secondResult)
+	activeWallet, err = client.LotteryAttemptWallet.Query().Where(lotteryattemptwallet.UserIDEQ(active.ID)).Only(ctx)
+	require.NoError(t, err)
+	require.Equal(t, 5, activeWallet.Balance)
+	require.Equal(t, 4, client.LotteryAttemptGrant.Query().CountX(ctx))
 }
 
 func TestLotteryRepositoryGrantLotteryAttemptsIsIdempotent(t *testing.T) {

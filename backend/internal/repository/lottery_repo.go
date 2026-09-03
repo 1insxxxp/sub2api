@@ -2,6 +2,8 @@ package repository
 
 import (
 	"context"
+	"database/sql"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -500,7 +502,14 @@ func (r *lotteryRepository) grantLotteryAttemptsWithClient(ctx context.Context, 
 			SetBalance(0).
 			OnConflict(entsql.ConflictColumns(lotteryattemptwallet.FieldUserID)).
 			DoNothing().Exec(ctx); err != nil {
-			return service.LotteryAttemptGrantResult{}, fmt.Errorf("ensure lottery attempt wallet for user %d: %w", userID, err)
+			// Ent's PostgreSQL upsert builder uses INSERT ... RETURNING. With
+			// DO NOTHING, a conflict legitimately returns no row and the driver
+			// surfaces sql.ErrNoRows even though the wallet already exists.
+			// Treat that result as the expected "wallet was already initialized"
+			// path, while preserving all other database errors.
+			if !errors.Is(err, sql.ErrNoRows) {
+				return service.LotteryAttemptGrantResult{}, fmt.Errorf("ensure lottery attempt wallet for user %d: %w", userID, err)
+			}
 		}
 		wallet, err := client.LotteryAttemptWallet.Query().Where(lotteryattemptwallet.UserIDEQ(userID)).Only(ctx)
 		if err != nil {
