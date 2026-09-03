@@ -103,7 +103,6 @@
                 <div class="mt-4 flex items-center justify-between gap-3 text-xs text-slate-500 dark:text-slate-400">
                   <strong v-if="prize.type === 'balance'" class="text-base text-emerald-600 dark:text-emerald-300">+{{ formatAmount(prize.balance_amount) }}</strong>
                   <span v-else>{{ prize.available_item_count > 0 ? t('lottery.inventory', { count: prize.available_item_count }) : t('lottery.noInventory') }}</span>
-                  <span>{{ t('lottery.weight') }} {{ prize.weight }}</span>
                 </div>
               </article>
             </div>

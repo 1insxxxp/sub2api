@@ -75,4 +75,51 @@ describe('User LotteryView', () => {
     expect(wrapper.get('[data-test="lottery-attempt-breakdown"]').text()).toContain('3')
     expect(wrapper.text()).toContain('3')
   })
+
+  it('does not show prize weights in the user-facing prize details', async () => {
+    getState.mockResolvedValueOnce({
+      activity: {
+        id: 1,
+        name: 'Check-in draw',
+        description: '',
+        status: 'active',
+        attempt_mode: 'daily',
+        attempt_limit: 0,
+      },
+      prizes: [{
+        id: 9,
+        activity_id: 1,
+        name: 'One dollar',
+        description: 'A small reward',
+        type: 'balance',
+        weight: 9,
+        balance_amount: 1,
+        enabled: true,
+        sort_order: 0,
+        available_item_count: 0,
+      }],
+      attempts_used: 0,
+      activity_attempts_remaining: 0,
+      reward_attempts_remaining: 3,
+      attempts_remaining: 3,
+    })
+
+    const wrapper = mount(LotteryView, {
+      global: {
+        stubs: {
+          AppLayout: { template: '<div><slot /></div>' },
+          Icon: true,
+          LoadingSpinner: true,
+          LotterySlotMachine: true,
+        },
+      },
+    })
+
+    await flushPromises()
+
+    const card = wrapper.get('.lottery-prize-card')
+    expect(card.text()).toContain('A small reward')
+    expect(card.text()).toContain('$1.00')
+    expect(card.text()).not.toContain('lottery.weight')
+  })
 })
