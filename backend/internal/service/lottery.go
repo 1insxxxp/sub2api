@@ -30,6 +30,12 @@ const (
 	// mode intentionally operates on the complete non-deleted user set.
 	LotteryAttemptGrantMaxUsers = 5000
 
+	LotteryAttemptGrantTargetSelected = "selected"
+	LotteryAttemptGrantTargetAll      = "all"
+	LotteryAttemptGrantTargetActive   = "active"
+	LotteryAttemptActiveDays7         = 7
+	LotteryAttemptActiveDays30        = 30
+
 	LotteryPrizeTypeBalance = "balance"
 	LotteryPrizeTypeProduct = "product"
 
@@ -292,12 +298,15 @@ type LotteryAdminAttemptBalanceRepository interface {
 // LotteryAttemptGrantInput describes one administrator request to credit
 // reward-wallet attempts to explicit users or every non-deleted user.
 type LotteryAttemptGrantInput struct {
-	All         bool    `json:"all"`
-	UserIDs     []int64 `json:"user_ids"`
-	Amount      int     `json:"amount"`
-	Description string  `json:"description"`
-	RequestKey  string  `json:"request_key"`
-	CreatedBy   int64   `json:"-"`
+	All         bool       `json:"all"`
+	UserIDs     []int64    `json:"user_ids"`
+	Target      string     `json:"target"`
+	ActiveDays  int        `json:"active_days"`
+	Amount      int        `json:"amount"`
+	Description string     `json:"description"`
+	RequestKey  string     `json:"request_key"`
+	CreatedBy   int64      `json:"-"`
+	ActiveSince *time.Time `json:"-"`
 }
 
 // LotteryAttemptGrantResult summarizes a successful batch grant.
@@ -306,11 +315,23 @@ type LotteryAttemptGrantResult struct {
 	TotalGranted int `json:"total_granted"`
 }
 
+// LotteryAttemptGrantPreviewResult summarizes the current target population
+// without mutating wallets or writing grant audit rows.
+type LotteryAttemptGrantPreviewResult struct {
+	Count int `json:"count"`
+}
+
 // LotteryAdminAttemptRepository is an optional administrator capability. It
 // is separate from LotteryRepository so existing adapters and test doubles do
 // not need to implement administrative mutations.
 type LotteryAdminAttemptRepository interface {
 	GrantLotteryAttempts(ctx context.Context, input LotteryAttemptGrantInput) (LotteryAttemptGrantResult, error)
+}
+
+// LotteryAdminAttemptPreviewRepository is the read-only capability used by
+// the administrator grant preview endpoint.
+type LotteryAdminAttemptPreviewRepository interface {
+	PreviewLotteryAttemptGrant(ctx context.Context, input LotteryAttemptGrantInput) (LotteryAttemptGrantPreviewResult, error)
 }
 
 type LotteryService struct {
@@ -644,7 +665,7 @@ func (s *LotteryService) GrantLotteryAttempts(ctx context.Context, input Lottery
 	if s == nil || s.repo == nil {
 		return nil, ErrLotteryConfigurationDenied
 	}
-	input.UserIDs = normalizeLotteryAttemptGrantUserIDs(input.UserIDs)
+	input = normalizeLotteryAttemptGrantInput(input)
 	input.Description = strings.TrimSpace(input.Description)
 	input.RequestKey = strings.TrimSpace(input.RequestKey)
 	if err := validateLotteryAttemptGrant(input); err != nil {
@@ -655,6 +676,27 @@ func (s *LotteryService) GrantLotteryAttempts(ctx context.Context, input Lottery
 		return nil, ErrLotteryConfigurationDenied
 	}
 	result, err := adminRepo.GrantLotteryAttempts(ctx, input)
+	if err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// PreviewLotteryAttemptGrant validates only target-selection fields and
+// returns the current matching-user count without changing any state.
+func (s *LotteryService) PreviewLotteryAttemptGrant(ctx context.Context, input LotteryAttemptGrantInput) (*LotteryAttemptGrantPreviewResult, error) {
+	if s == nil || s.repo == nil {
+		return nil, ErrLotteryConfigurationDenied
+	}
+	input = normalizeLotteryAttemptGrantInput(input)
+	if err := validateLotteryAttemptGrantTarget(input); err != nil {
+		return nil, err
+	}
+	previewRepo, ok := s.repo.(LotteryAdminAttemptPreviewRepository)
+	if !ok {
+		return nil, ErrLotteryConfigurationDenied
+	}
+	result, err := previewRepo.PreviewLotteryAttemptGrant(ctx, input)
 	if err != nil {
 		return nil, err
 	}
@@ -776,10 +818,10 @@ func validateLotteryAttemptGrant(input LotteryAttemptGrantInput) error {
 	if len([]rune(strings.TrimSpace(input.Description))) > lotteryAttemptGrantMaxNoteLength {
 		return ErrLotteryAttemptGrantInvalid
 	}
-	if (input.All && len(input.UserIDs) > 0) || (!input.All && len(input.UserIDs) == 0) {
-		return ErrLotteryAttemptGrantInvalid
+	if err := validateLotteryAttemptGrantTarget(input); err != nil {
+		return err
 	}
-	if !input.All && len(input.UserIDs) > LotteryAttemptGrantMaxUsers {
+	if input.Target == LotteryAttemptGrantTargetSelected && len(input.UserIDs) > LotteryAttemptGrantMaxUsers {
 		return ErrLotteryAttemptGrantTooLarge
 	}
 	for _, userID := range input.UserIDs {
@@ -788,6 +830,46 @@ func validateLotteryAttemptGrant(input LotteryAttemptGrantInput) error {
 		}
 	}
 	return nil
+}
+
+func validateLotteryAttemptGrantTarget(input LotteryAttemptGrantInput) error {
+	switch input.Target {
+	case LotteryAttemptGrantTargetSelected:
+		if input.All || len(input.UserIDs) == 0 {
+			return ErrLotteryAttemptGrantInvalid
+		}
+	case LotteryAttemptGrantTargetAll:
+		if !input.All || len(input.UserIDs) > 0 {
+			return ErrLotteryAttemptGrantInvalid
+		}
+	case LotteryAttemptGrantTargetActive:
+		if input.All || len(input.UserIDs) > 0 {
+			return ErrLotteryAttemptGrantInvalid
+		}
+		if input.ActiveDays != LotteryAttemptActiveDays7 && input.ActiveDays != LotteryAttemptActiveDays30 {
+			return ErrLotteryAttemptGrantInvalid
+		}
+	default:
+		return ErrLotteryAttemptGrantInvalid
+	}
+	return nil
+}
+
+func normalizeLotteryAttemptGrantInput(input LotteryAttemptGrantInput) LotteryAttemptGrantInput {
+	input.UserIDs = normalizeLotteryAttemptGrantUserIDs(input.UserIDs)
+	if strings.TrimSpace(input.Target) == "" {
+		if input.All {
+			input.Target = LotteryAttemptGrantTargetAll
+		} else if len(input.UserIDs) > 0 {
+			input.Target = LotteryAttemptGrantTargetSelected
+		}
+	}
+	input.Target = strings.TrimSpace(input.Target)
+	if input.Target == LotteryAttemptGrantTargetActive && input.ActiveSince == nil && (input.ActiveDays == LotteryAttemptActiveDays7 || input.ActiveDays == LotteryAttemptActiveDays30) {
+		since := time.Now().UTC().AddDate(0, 0, -input.ActiveDays)
+		input.ActiveSince = &since
+	}
+	return input
 }
 
 func normalizeLotteryAttemptGrantUserIDs(userIDs []int64) []int64 {

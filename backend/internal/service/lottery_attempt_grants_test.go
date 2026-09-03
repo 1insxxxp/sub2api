@@ -36,6 +36,17 @@ func (s *lotteryAttemptGrantRepositoryStub) GrantLotteryAttempts(_ context.Conte
 	return s.result, nil
 }
 
+type lotteryAttemptPreviewRepositoryStub struct {
+	LotteryRepository
+	input  LotteryAttemptGrantInput
+	result LotteryAttemptGrantPreviewResult
+}
+
+func (s *lotteryAttemptPreviewRepositoryStub) PreviewLotteryAttemptGrant(_ context.Context, input LotteryAttemptGrantInput) (LotteryAttemptGrantPreviewResult, error) {
+	s.input = input
+	return s.result, nil
+}
+
 func TestLotteryAttemptGrantValidatesAndDelegatesSelectedUsers(t *testing.T) {
 	repo := &lotteryAttemptGrantRepositoryStub{result: LotteryAttemptGrantResult{Affected: 2, TotalGranted: 6}}
 	svc := NewLotteryService(nil, repo, nil, nil)
@@ -74,6 +85,59 @@ func TestLotteryAttemptGrantAllowsAllUsersTarget(t *testing.T) {
 	require.Empty(t, repo.input.UserIDs)
 }
 
+func TestLotteryAttemptGrantSupportsActiveUsersTarget(t *testing.T) {
+	repo := &lotteryAttemptGrantRepositoryStub{result: LotteryAttemptGrantResult{Affected: 3, TotalGranted: 6}}
+	svc := NewLotteryService(nil, repo, nil, nil)
+
+	result, err := svc.GrantLotteryAttempts(context.Background(), LotteryAttemptGrantInput{
+		Target:     LotteryAttemptGrantTargetActive,
+		ActiveDays: LotteryAttemptActiveDays7,
+		Amount:     2,
+		RequestKey: "grant-active-1",
+		CreatedBy:  99,
+	})
+
+	require.NoError(t, err)
+	require.Equal(t, LotteryAttemptGrantResult{Affected: 3, TotalGranted: 6}, *result)
+	require.Equal(t, LotteryAttemptGrantTargetActive, repo.input.Target)
+	require.Equal(t, LotteryAttemptActiveDays7, repo.input.ActiveDays)
+	require.Empty(t, repo.input.UserIDs)
+	require.False(t, repo.input.All)
+	require.NotNil(t, repo.input.ActiveSince)
+}
+
+func TestLotteryAttemptGrantSupportsThirtyDayActiveUsersTarget(t *testing.T) {
+	repo := &lotteryAttemptGrantRepositoryStub{result: LotteryAttemptGrantResult{Affected: 1, TotalGranted: 1}}
+	svc := NewLotteryService(nil, repo, nil, nil)
+
+	_, err := svc.GrantLotteryAttempts(context.Background(), LotteryAttemptGrantInput{
+		Target:     LotteryAttemptGrantTargetActive,
+		ActiveDays: LotteryAttemptActiveDays30,
+		Amount:     1,
+		RequestKey: "grant-active-30",
+		CreatedBy:  99,
+	})
+
+	require.NoError(t, err)
+	require.Equal(t, LotteryAttemptActiveDays30, repo.input.ActiveDays)
+}
+
+func TestLotteryAttemptGrantPreviewDelegatesActiveTarget(t *testing.T) {
+	repo := &lotteryAttemptPreviewRepositoryStub{result: LotteryAttemptGrantPreviewResult{Count: 12}}
+	svc := NewLotteryService(nil, repo, nil, nil)
+
+	result, err := svc.PreviewLotteryAttemptGrant(context.Background(), LotteryAttemptGrantInput{
+		Target:     LotteryAttemptGrantTargetActive,
+		ActiveDays: LotteryAttemptActiveDays30,
+	})
+
+	require.NoError(t, err)
+	require.Equal(t, LotteryAttemptGrantPreviewResult{Count: 12}, *result)
+	require.Equal(t, LotteryAttemptGrantTargetActive, repo.input.Target)
+	require.Equal(t, LotteryAttemptActiveDays30, repo.input.ActiveDays)
+	require.NotNil(t, repo.input.ActiveSince)
+}
+
 func TestLotteryAttemptGrantRejectsInvalidRequests(t *testing.T) {
 	tests := []struct {
 		name  string
@@ -85,6 +149,10 @@ func TestLotteryAttemptGrantRejectsInvalidRequests(t *testing.T) {
 		{name: "negative user", input: LotteryAttemptGrantInput{UserIDs: []int64{-1}, Amount: 1, RequestKey: "invalid-4", CreatedBy: 1}},
 		{name: "missing creator", input: LotteryAttemptGrantInput{All: true, Amount: 1, RequestKey: "invalid-5"}},
 		{name: "missing request key", input: LotteryAttemptGrantInput{All: true, Amount: 1, CreatedBy: 1}},
+		{name: "active window is missing", input: LotteryAttemptGrantInput{Target: LotteryAttemptGrantTargetActive, Amount: 1, RequestKey: "invalid-7", CreatedBy: 1}},
+		{name: "active window is unsupported", input: LotteryAttemptGrantInput{Target: LotteryAttemptGrantTargetActive, ActiveDays: 14, Amount: 1, RequestKey: "invalid-8", CreatedBy: 1}},
+		{name: "active target mixed with all", input: LotteryAttemptGrantInput{Target: LotteryAttemptGrantTargetActive, ActiveDays: 7, All: true, Amount: 1, RequestKey: "invalid-9", CreatedBy: 1}},
+		{name: "active target mixed with selected users", input: LotteryAttemptGrantInput{Target: LotteryAttemptGrantTargetActive, ActiveDays: 7, UserIDs: []int64{1}, Amount: 1, RequestKey: "invalid-10", CreatedBy: 1}},
 	}
 
 	for _, tt := range tests {
@@ -94,6 +162,17 @@ func TestLotteryAttemptGrantRejectsInvalidRequests(t *testing.T) {
 			require.ErrorIs(t, err, ErrLotteryAttemptGrantInvalid)
 		})
 	}
+}
+
+func TestLotteryAttemptGrantPreviewRejectsUnsupportedActiveWindow(t *testing.T) {
+	svc := NewLotteryService(nil, &lotteryAttemptPreviewRepositoryStub{}, nil, nil)
+
+	_, err := svc.PreviewLotteryAttemptGrant(context.Background(), LotteryAttemptGrantInput{
+		Target:     LotteryAttemptGrantTargetActive,
+		ActiveDays: 14,
+	})
+
+	require.ErrorIs(t, err, ErrLotteryAttemptGrantInvalid)
 }
 
 func TestLotteryAdminAttemptBalancesUsesWalletOnlyQuery(t *testing.T) {
