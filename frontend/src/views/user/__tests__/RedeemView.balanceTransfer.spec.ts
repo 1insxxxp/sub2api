@@ -4,7 +4,7 @@ import { flushPromises, mount } from '@vue/test-utils'
 import RedeemView from '../RedeemView.vue'
 import type { RedeemHistoryItem } from '@/api/redeem'
 
-const { authState, getHistory, getUserGenerated, getPublicSettings } = vi.hoisted(() => ({
+const { authState, getHistory, getLotteryHistory, getUserGenerated, getPublicSettings } = vi.hoisted(() => ({
   authState: {
     user: {
       id: 1,
@@ -15,6 +15,7 @@ const { authState, getHistory, getUserGenerated, getPublicSettings } = vi.hoiste
     } as Record<string, unknown>
   },
   getHistory: vi.fn(),
+  getLotteryHistory: vi.fn(),
   getUserGenerated: vi.fn(),
   getPublicSettings: vi.fn()
 }))
@@ -26,6 +27,10 @@ vi.mock('@/api', () => ({
     redeem: vi.fn()
   },
   authAPI: { getPublicSettings }
+}))
+
+vi.mock('@/api/lottery', () => ({
+  lotteryAPI: { history: getLotteryHistory }
 }))
 
 vi.mock('@/stores/auth', () => ({
@@ -89,9 +94,11 @@ const mountRedeemView = () =>
 describe('user RedeemView balance transfer migration', () => {
   beforeEach(() => {
     getHistory.mockReset()
+    getLotteryHistory.mockReset()
     getUserGenerated.mockReset()
     getPublicSettings.mockReset()
     getHistory.mockResolvedValue(paginated<RedeemHistoryItem>([]))
+    getLotteryHistory.mockResolvedValue({ items: [], total: 0, page: 1, page_size: 20, pages: 0 })
     getUserGenerated.mockResolvedValue(paginated([]))
     getPublicSettings.mockResolvedValue({ contact_info: '' })
   })

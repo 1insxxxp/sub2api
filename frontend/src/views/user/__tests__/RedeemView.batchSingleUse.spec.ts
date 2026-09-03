@@ -3,8 +3,9 @@ import { flushPromises, mount } from '@vue/test-utils'
 
 import RedeemView from '../RedeemView.vue'
 
-const { getHistory, redeem, getPublicSettings, showError } = vi.hoisted(() => ({
+const { getHistory, getLotteryHistory, redeem, getPublicSettings, showError } = vi.hoisted(() => ({
   getHistory: vi.fn(),
+  getLotteryHistory: vi.fn(),
   redeem: vi.fn(),
   getPublicSettings: vi.fn(),
   showError: vi.fn()
@@ -13,6 +14,10 @@ const { getHistory, redeem, getPublicSettings, showError } = vi.hoisted(() => ({
 vi.mock('@/api', () => ({
   redeemAPI: { getHistory, redeem },
   authAPI: { getPublicSettings }
+}))
+
+vi.mock('@/api/lottery', () => ({
+  lotteryAPI: { history: getLotteryHistory }
 }))
 
 vi.mock('@/stores/auth', () => ({
@@ -61,11 +66,13 @@ vi.mock('vue-i18n', async () => {
 describe('user RedeemView batch single-use error', () => {
   beforeEach(() => {
     getHistory.mockReset()
+    getLotteryHistory.mockReset()
     redeem.mockReset()
     getPublicSettings.mockReset()
     showError.mockReset()
 
     getHistory.mockResolvedValue([])
+    getLotteryHistory.mockResolvedValue({ items: [], total: 0, page: 1, page_size: 20, pages: 0 })
     getPublicSettings.mockResolvedValue({ contact_info: '' })
   })
 

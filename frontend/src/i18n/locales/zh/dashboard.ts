@@ -952,6 +952,8 @@ export default {
     codeRule4: '余额和并发数即时更新',
     recentActivity: '最近活动',
     historyWillAppear: '您的兑换历史将显示在这里',
+    lotteryBalanceHistory: '抽奖余额奖励',
+    lotteryBalanceHistoryDetail: '已到账户余额',
     balanceAddedRedeem: '余额充值（兑换）',
     balanceAddedAffiliate: '余额充值（返利转入）',
     emptyResponseRefund: '空回补偿',

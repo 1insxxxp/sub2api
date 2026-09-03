@@ -3,8 +3,9 @@ import { flushPromises, mount } from '@vue/test-utils'
 
 import RedeemView from '../RedeemView.vue'
 
-const { getHistory, redeem, getPublicSettings, showError } = vi.hoisted(() => ({
+const { getHistory, lotteryHistory, redeem, getPublicSettings, showError } = vi.hoisted(() => ({
   getHistory: vi.fn(),
+  lotteryHistory: vi.fn(),
   redeem: vi.fn(),
   getPublicSettings: vi.fn(),
   showError: vi.fn()
@@ -17,6 +18,12 @@ vi.mock('@/api', () => ({
   },
   authAPI: {
     getPublicSettings
+  }
+}))
+
+vi.mock('@/api/lottery', () => ({
+  lotteryAPI: {
+    history: lotteryHistory
   }
 }))
 
@@ -67,6 +74,8 @@ vi.mock('vue-i18n', async () => {
     'redeem.codeRule3': 'Rule 3',
     'redeem.codeRule4': 'Rule 4',
     'redeem.recentActivity': 'Recent Activity',
+    'redeem.lotteryBalanceHistory': 'Lottery Balance Reward',
+    'redeem.lotteryBalanceHistoryDetail': 'Credited to account balance',
     'redeem.balanceAddedRedeem': 'Balance Added (Redeem)',
     'redeem.balanceAddedAdmin': 'Balance Added (Admin)',
     'redeem.balanceDeductedAdmin': 'Balance Deducted (Admin)',
@@ -90,6 +99,7 @@ vi.mock('vue-i18n', async () => {
 describe('user RedeemView check-in reward history', () => {
   beforeEach(() => {
     getHistory.mockReset()
+    lotteryHistory.mockReset()
     redeem.mockReset()
     getPublicSettings.mockReset()
     showError.mockReset()
@@ -107,6 +117,27 @@ describe('user RedeemView check-in reward history', () => {
         notes: 'daily check-in reward 2026-06-15'
       }
     ])
+    lotteryHistory.mockResolvedValue({
+      items: [
+        {
+          id: 201,
+          prize_name: '抽奖余额',
+          prize_type: 'balance',
+          balance_amount: 1,
+          created_at: '2026-06-16T02:44:13Z'
+        },
+        {
+          id: 202,
+          prize_name: '兑换码',
+          prize_type: 'product',
+          created_at: '2026-06-16T02:44:13Z'
+        }
+      ],
+      total: 2,
+      page: 1,
+      page_size: 20,
+      pages: 1
+    })
   })
 
   it('renders check-in rewards as USD balance activity instead of request activity', async () => {
@@ -125,5 +156,8 @@ describe('user RedeemView check-in reward history', () => {
     expect(wrapper.text()).toContain('+$2.00')
     expect(wrapper.text()).not.toContain('Unknown')
     expect(wrapper.text()).not.toContain('+2 requests')
+    expect(wrapper.text()).toContain('Lottery Balance Reward')
+    expect(wrapper.text()).toContain('+$1.00')
+    expect(wrapper.find('[data-test="lottery-balance-history"]').text()).not.toContain('兑换码')
   })
 })

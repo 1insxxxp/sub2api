@@ -948,6 +948,8 @@ export default {
     codeRule4: 'Balance and concurrency updates are immediate',
     recentActivity: 'Recent Activity',
     historyWillAppear: 'Your redemption history will appear here',
+    lotteryBalanceHistory: 'Lottery Balance Rewards',
+    lotteryBalanceHistoryDetail: 'Credited to account balance',
     balanceAddedRedeem: 'Balance Added (Redeem)',
     balanceAddedAffiliate: 'Balance Added (Affiliate Transfer)',
     emptyResponseRefund: 'Empty Response Compensation',

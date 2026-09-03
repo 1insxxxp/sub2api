@@ -727,6 +727,50 @@
         </div>
       </section>
 
+      <!-- Lottery balance rewards -->
+      <section
+        v-if="!loadingLotteryHistory && lotteryBalanceHistory.length > 0"
+        data-test="lottery-balance-history"
+        class="brand-surface redeem-history-panel"
+      >
+        <div class="redeem-history-header">
+          <h2 class="text-lg font-semibold text-gray-900 dark:text-white">
+            {{ t('redeem.lotteryBalanceHistory') }}
+          </h2>
+        </div>
+        <div class="space-y-3 p-6">
+          <div
+            v-for="item in lotteryBalanceHistory"
+            :key="`lottery-${item.id}`"
+            class="redeem-history-row"
+          >
+            <div class="redeem-history-card">
+              <div class="flex items-center gap-4">
+                <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-100 dark:bg-emerald-900/30">
+                  <Icon name="dollar" size="md" class="text-emerald-600 dark:text-emerald-400" />
+                </div>
+                <div>
+                  <p class="text-sm font-medium text-gray-900 dark:text-white">
+                    {{ item.prize_name }}
+                  </p>
+                  <p class="text-xs text-gray-500 dark:text-dark-400">
+                    {{ formatDateTime(item.created_at) }}
+                  </p>
+                </div>
+              </div>
+              <div class="text-right">
+                <p class="text-sm font-semibold text-emerald-600 dark:text-emerald-400">
+                  +${{ Number(item.balance_amount || 0).toFixed(2) }}
+                </p>
+                <p class="text-xs text-gray-400 dark:text-dark-500">
+                  {{ t('redeem.lotteryBalanceHistoryDetail') }}
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
       <!-- Recent Activity -->
       <section class="brand-surface redeem-history-panel">
         <div class="redeem-history-header">
@@ -888,6 +932,7 @@ import { useAuthStore } from '@/stores/auth'
 import { useAppStore } from '@/stores/app'
 import { useSubscriptionStore } from '@/stores/subscriptions'
 import { redeemAPI, authAPI, type GeneratedRedeemCode, type RedeemHistoryItem } from '@/api'
+import { lotteryAPI, type LotteryDraw } from '@/api/lottery'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import Pagination from '@/components/common/Pagination.vue'
 import Icon from '@/components/icons/Icon.vue'
@@ -950,6 +995,8 @@ watch(subscriptionGuideLogoSrc, () => {
 // History data
 const history = ref<RedeemHistoryItem[]>([])
 const loadingHistory = ref(false)
+const lotteryBalanceHistory = ref<LotteryDraw[]>([])
+const loadingLotteryHistory = ref(false)
 const contactInfo = ref('')
 const redeemPageSizeOptions = [10, 20, 50]
 const historyPagination = reactive({
@@ -1073,6 +1120,21 @@ const fetchHistory = async () => {
     console.error('Failed to fetch history:', error)
   } finally {
     loadingHistory.value = false
+  }
+}
+
+const fetchLotteryBalanceHistory = async () => {
+  loadingLotteryHistory.value = true
+  try {
+    const response = await lotteryAPI.history({ page: 1, page_size: 20 })
+    const draws = Array.isArray(response) ? response : response.items || []
+    lotteryBalanceHistory.value = draws.filter((item) => item.prize_type === 'balance')
+  } catch (error) {
+    // Lottery history is an optional activity panel; it must not block redeem history.
+    console.error('Failed to fetch lottery balance history:', error)
+    lotteryBalanceHistory.value = []
+  } finally {
+    loadingLotteryHistory.value = false
   }
 }
 
@@ -1425,6 +1487,7 @@ const handleRedeem = async () => {
 
 onMounted(async () => {
   fetchHistory()
+  fetchLotteryBalanceHistory()
   if (canGenerateBalanceTransferCodes.value) {
     fetchGeneratedCodes()
   }

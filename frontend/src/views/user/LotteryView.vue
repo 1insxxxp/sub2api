@@ -173,9 +173,11 @@ import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
 import LotterySlotMachine from '@/components/lottery/LotterySlotMachine.vue'
 import { lotteryAPI, type LotteryDrawResult, type LotteryPublicState } from '@/api/lottery'
 import { useAppStore } from '@/stores/app'
+import { useAuthStore } from '@/stores/auth'
 
 const { t, locale } = useI18n()
 const appStore = useAppStore()
+const authStore = useAuthStore()
 const loading = ref(true)
 const drawing = ref(false)
 const loadError = ref('')
@@ -244,6 +246,12 @@ async function handleDraw() {
   result.value = null
   try {
     const drawResult = await lotteryAPI.draw(newAttemptKey())
+    try {
+      await authStore.refreshUser()
+    } catch (error) {
+      // The draw has already committed; a stale local balance must not hide the result.
+      console.error('Failed to refresh user after lottery draw:', error)
+    }
     pendingResult.value = drawResult
     state.value.attempts_remaining = drawResult.attempts_remaining
     state.value.attempts_used = drawResult.attempts_used

@@ -6,6 +6,7 @@ import type { RedeemHistoryItem } from '@/api/redeem'
 
 const {
   getHistory,
+  getLotteryHistory,
   redeem,
   getPublicSettings,
   refreshUser,
@@ -13,6 +14,7 @@ const {
   routerPush
 } = vi.hoisted(() => ({
   getHistory: vi.fn(),
+  getLotteryHistory: vi.fn(),
   redeem: vi.fn(),
   getPublicSettings: vi.fn(),
   refreshUser: vi.fn(),
@@ -26,6 +28,10 @@ vi.mock('@/api', () => ({
     redeem
   },
   authAPI: { getPublicSettings }
+}))
+
+vi.mock('@/api/lottery', () => ({
+  lotteryAPI: { history: getLotteryHistory }
 }))
 
 vi.mock('@/stores/auth', () => ({
@@ -105,6 +111,7 @@ const mountRedeemView = () =>
 describe('user RedeemView subscription guide', () => {
   beforeEach(() => {
     getHistory.mockReset()
+    getLotteryHistory.mockReset()
     redeem.mockReset()
     getPublicSettings.mockReset()
     refreshUser.mockReset()
@@ -113,6 +120,7 @@ describe('user RedeemView subscription guide', () => {
     window.localStorage.clear()
 
     getHistory.mockResolvedValue(paginated<RedeemHistoryItem>([]))
+    getLotteryHistory.mockResolvedValue({ items: [], total: 0, page: 1, page_size: 20, pages: 0 })
     getPublicSettings.mockResolvedValue({ contact_info: '' })
     refreshUser.mockResolvedValue(undefined)
     fetchActiveSubscriptions.mockResolvedValue(undefined)

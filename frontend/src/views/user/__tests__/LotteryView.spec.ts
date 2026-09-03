@@ -3,10 +3,11 @@ import { flushPromises, mount } from '@vue/test-utils'
 
 import LotteryView from '../LotteryView.vue'
 
-const { getState, history, draw, showError, showSuccess } = vi.hoisted(() => ({
+const { getState, history, draw, refreshUser, showError, showSuccess } = vi.hoisted(() => ({
   getState: vi.fn(),
   history: vi.fn(),
   draw: vi.fn(),
+  refreshUser: vi.fn(),
   showError: vi.fn(),
   showSuccess: vi.fn(),
 }))
@@ -34,11 +35,16 @@ vi.mock('@/stores/app', () => ({
   useAppStore: () => ({ showError, showSuccess }),
 }))
 
+vi.mock('@/stores/auth', () => ({
+  useAuthStore: () => ({ refreshUser }),
+}))
+
 describe('User LotteryView', () => {
   beforeEach(() => {
     getState.mockReset()
     history.mockReset()
     draw.mockReset()
+    refreshUser.mockReset()
     getState.mockResolvedValue({
       activity: {
         id: 1,
@@ -55,6 +61,66 @@ describe('User LotteryView', () => {
       attempts_remaining: 3,
     })
     history.mockResolvedValue({ items: [], total: 0, page: 1, page_size: 10, pages: 0 })
+  })
+
+  it('refreshes the account balance after a successful draw', async () => {
+    getState.mockResolvedValueOnce({
+      activity: {
+        id: 1,
+        name: 'Check-in draw',
+        description: '',
+        status: 'active',
+        attempt_mode: 'daily',
+        attempt_limit: 0,
+      },
+      prizes: [{
+        id: 9,
+        activity_id: 1,
+        name: 'One dollar',
+        description: '',
+        type: 'balance',
+        weight: 1,
+        balance_amount: 1,
+        enabled: true,
+        sort_order: 0,
+        available_item_count: 0,
+      }],
+      attempts_used: 0,
+      activity_attempts_remaining: 0,
+      reward_attempts_remaining: 1,
+      attempts_remaining: 1,
+    })
+    draw.mockResolvedValueOnce({
+      draw: {
+        id: 1,
+        prize_id: 9,
+        prize_name: 'One dollar',
+        prize_type: 'balance',
+        balance_amount: 1,
+        created_at: '2026-09-03T04:00:00Z',
+      },
+      attempts_used: 1,
+      activity_attempts_remaining: 0,
+      reward_attempts_remaining: 0,
+      attempts_remaining: 0,
+    })
+
+    const wrapper = mount(LotteryView, {
+      global: {
+        stubs: {
+          AppLayout: { template: '<div><slot /></div>' },
+          Icon: true,
+          LoadingSpinner: true,
+          LotterySlotMachine: true,
+        },
+      },
+    })
+
+    await flushPromises()
+    await wrapper.get('.lottery-draw-button').trigger('click')
+    await flushPromises()
+
+    expect(refreshUser).toHaveBeenCalledTimes(1)
   })
 
   it('shows wallet attempts from check-in or administrator grants', async () => {
