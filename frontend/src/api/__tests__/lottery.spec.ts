@@ -64,11 +64,12 @@ describe('lottery API contracts', () => {
     const result = { affected: 2, total_granted: 6 }
     post.mockResolvedValueOnce({ data: result })
 
-    await expect(grantAttempts({ user_ids: [11, 12], amount: 3, description: 'manual bonus' })).resolves.toBe(result)
+    await expect(grantAttempts({ user_ids: [11, 12], amount: 3, description: 'manual bonus', request_key: 'grant-request-1' })).resolves.toBe(result)
     expect(post).toHaveBeenCalledWith('/admin/lottery/attempts/grant', {
       user_ids: [11, 12],
       amount: 3,
       description: 'manual bonus',
-    })
+      request_key: 'grant-request-1',
+    }, { headers: { 'Idempotency-Key': 'grant-request-1' } })
   })
 })

@@ -48,6 +48,34 @@ func (_u *LotteryAttemptGrantUpdate) AddUserID(v int64) *LotteryAttemptGrantUpda
 	return _u
 }
 
+// SetRequestKey sets the "request_key" field.
+func (_u *LotteryAttemptGrantUpdate) SetRequestKey(v string) *LotteryAttemptGrantUpdate {
+	_u.mutation.SetRequestKey(v)
+	return _u
+}
+
+// SetNillableRequestKey sets the "request_key" field if the given value is not nil.
+func (_u *LotteryAttemptGrantUpdate) SetNillableRequestKey(v *string) *LotteryAttemptGrantUpdate {
+	if v != nil {
+		_u.SetRequestKey(*v)
+	}
+	return _u
+}
+
+// SetTargetAll sets the "target_all" field.
+func (_u *LotteryAttemptGrantUpdate) SetTargetAll(v bool) *LotteryAttemptGrantUpdate {
+	_u.mutation.SetTargetAll(v)
+	return _u
+}
+
+// SetNillableTargetAll sets the "target_all" field if the given value is not nil.
+func (_u *LotteryAttemptGrantUpdate) SetNillableTargetAll(v *bool) *LotteryAttemptGrantUpdate {
+	if v != nil {
+		_u.SetTargetAll(*v)
+	}
+	return _u
+}
+
 // SetAmount sets the "amount" field.
 func (_u *LotteryAttemptGrantUpdate) SetAmount(v int) *LotteryAttemptGrantUpdate {
 	_u.mutation.ResetAmount()
@@ -138,6 +166,11 @@ func (_u *LotteryAttemptGrantUpdate) ExecX(ctx context.Context) {
 
 // check runs all checks and user-defined validators on the builder.
 func (_u *LotteryAttemptGrantUpdate) check() error {
+	if v, ok := _u.mutation.RequestKey(); ok {
+		if err := lotteryattemptgrant.RequestKeyValidator(v); err != nil {
+			return &ValidationError{Name: "request_key", err: fmt.Errorf(`ent: validator failed for field "LotteryAttemptGrant.request_key": %w`, err)}
+		}
+	}
 	if v, ok := _u.mutation.Amount(); ok {
 		if err := lotteryattemptgrant.AmountValidator(v); err != nil {
 			return &ValidationError{Name: "amount", err: fmt.Errorf(`ent: validator failed for field "LotteryAttemptGrant.amount": %w`, err)}
@@ -168,6 +201,12 @@ func (_u *LotteryAttemptGrantUpdate) sqlSave(ctx context.Context) (_node int, er
 	}
 	if value, ok := _u.mutation.AddedUserID(); ok {
 		_spec.AddField(lotteryattemptgrant.FieldUserID, field.TypeInt64, value)
+	}
+	if value, ok := _u.mutation.RequestKey(); ok {
+		_spec.SetField(lotteryattemptgrant.FieldRequestKey, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.TargetAll(); ok {
+		_spec.SetField(lotteryattemptgrant.FieldTargetAll, field.TypeBool, value)
 	}
 	if value, ok := _u.mutation.Amount(); ok {
 		_spec.SetField(lotteryattemptgrant.FieldAmount, field.TypeInt, value)
@@ -222,6 +261,34 @@ func (_u *LotteryAttemptGrantUpdateOne) SetNillableUserID(v *int64) *LotteryAtte
 // AddUserID adds value to the "user_id" field.
 func (_u *LotteryAttemptGrantUpdateOne) AddUserID(v int64) *LotteryAttemptGrantUpdateOne {
 	_u.mutation.AddUserID(v)
+	return _u
+}
+
+// SetRequestKey sets the "request_key" field.
+func (_u *LotteryAttemptGrantUpdateOne) SetRequestKey(v string) *LotteryAttemptGrantUpdateOne {
+	_u.mutation.SetRequestKey(v)
+	return _u
+}
+
+// SetNillableRequestKey sets the "request_key" field if the given value is not nil.
+func (_u *LotteryAttemptGrantUpdateOne) SetNillableRequestKey(v *string) *LotteryAttemptGrantUpdateOne {
+	if v != nil {
+		_u.SetRequestKey(*v)
+	}
+	return _u
+}
+
+// SetTargetAll sets the "target_all" field.
+func (_u *LotteryAttemptGrantUpdateOne) SetTargetAll(v bool) *LotteryAttemptGrantUpdateOne {
+	_u.mutation.SetTargetAll(v)
+	return _u
+}
+
+// SetNillableTargetAll sets the "target_all" field if the given value is not nil.
+func (_u *LotteryAttemptGrantUpdateOne) SetNillableTargetAll(v *bool) *LotteryAttemptGrantUpdateOne {
+	if v != nil {
+		_u.SetTargetAll(*v)
+	}
 	return _u
 }
 
@@ -328,6 +395,11 @@ func (_u *LotteryAttemptGrantUpdateOne) ExecX(ctx context.Context) {
 
 // check runs all checks and user-defined validators on the builder.
 func (_u *LotteryAttemptGrantUpdateOne) check() error {
+	if v, ok := _u.mutation.RequestKey(); ok {
+		if err := lotteryattemptgrant.RequestKeyValidator(v); err != nil {
+			return &ValidationError{Name: "request_key", err: fmt.Errorf(`ent: validator failed for field "LotteryAttemptGrant.request_key": %w`, err)}
+		}
+	}
 	if v, ok := _u.mutation.Amount(); ok {
 		if err := lotteryattemptgrant.AmountValidator(v); err != nil {
 			return &ValidationError{Name: "amount", err: fmt.Errorf(`ent: validator failed for field "LotteryAttemptGrant.amount": %w`, err)}
@@ -375,6 +447,12 @@ func (_u *LotteryAttemptGrantUpdateOne) sqlSave(ctx context.Context) (_node *Lot
 	}
 	if value, ok := _u.mutation.AddedUserID(); ok {
 		_spec.AddField(lotteryattemptgrant.FieldUserID, field.TypeInt64, value)
+	}
+	if value, ok := _u.mutation.RequestKey(); ok {
+		_spec.SetField(lotteryattemptgrant.FieldRequestKey, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.TargetAll(); ok {
+		_spec.SetField(lotteryattemptgrant.FieldTargetAll, field.TypeBool, value)
 	}
 	if value, ok := _u.mutation.Amount(); ok {
 		_spec.SetField(lotteryattemptgrant.FieldAmount, field.TypeInt, value)

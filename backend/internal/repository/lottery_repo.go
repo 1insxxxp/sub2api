@@ -9,6 +9,7 @@ import (
 	entsql "entgo.io/ent/dialect/sql"
 	dbent "github.com/Wei-Shaw/sub2api/ent"
 	"github.com/Wei-Shaw/sub2api/ent/lotteryactivity"
+	"github.com/Wei-Shaw/sub2api/ent/lotteryattemptgrant"
 	"github.com/Wei-Shaw/sub2api/ent/lotteryattemptwallet"
 	"github.com/Wei-Shaw/sub2api/ent/lotterydraw"
 	"github.com/Wei-Shaw/sub2api/ent/lotteryprize"
@@ -405,14 +406,31 @@ func (r *lotteryRepository) GrantLotteryAttempts(ctx context.Context, input serv
 }
 
 func (r *lotteryRepository) grantLotteryAttemptsWithClient(ctx context.Context, client *dbent.Client, input service.LotteryAttemptGrantInput) (service.LotteryAttemptGrantResult, error) {
+	// A request key makes retries safe: once any rows for the key exist, return
+	// the original aggregate instead of crediting the wallets again. The whole
+	// batch is transactional, so a failed first attempt leaves no rows and can
+	// be retried with the same key.
+	existing, found, err := existingLotteryAttemptGrantResult(ctx, client, input)
+	if err != nil {
+		return service.LotteryAttemptGrantResult{}, fmt.Errorf("check lottery attempt grant request key: %w", err)
+	}
+	if found {
+		return existing, nil
+	}
+
 	userIDs, err := resolveLotteryAttemptGrantUsers(ctx, client, input)
 	if err != nil {
 		return service.LotteryAttemptGrantResult{}, err
+	}
+	if !input.All && len(userIDs) > service.LotteryAttemptGrantMaxUsers {
+		return service.LotteryAttemptGrantResult{}, service.ErrLotteryAttemptGrantTooLarge
 	}
 	result := service.LotteryAttemptGrantResult{}
 	for _, userID := range userIDs {
 		grant, err := client.LotteryAttemptGrant.Create().
 			SetUserID(userID).
+			SetRequestKey(input.RequestKey).
+			SetTargetAll(input.All).
 			SetAmount(input.Amount).
 			SetDescription(strings.TrimSpace(input.Description)).
 			SetCreatedBy(input.CreatedBy).
@@ -450,6 +468,38 @@ func (r *lotteryRepository) grantLotteryAttemptsWithClient(ctx context.Context, 
 		result.TotalGranted += input.Amount
 	}
 	return result, nil
+}
+
+func existingLotteryAttemptGrantResult(ctx context.Context, client *dbent.Client, input service.LotteryAttemptGrantInput) (service.LotteryAttemptGrantResult, bool, error) {
+	grants, err := client.LotteryAttemptGrant.Query().
+		Where(lotteryattemptgrant.RequestKeyEQ(input.RequestKey)).
+		All(ctx)
+	if err != nil {
+		return service.LotteryAttemptGrantResult{}, false, err
+	}
+	if len(grants) == 0 {
+		return service.LotteryAttemptGrantResult{}, false, nil
+	}
+	result := service.LotteryAttemptGrantResult{Affected: len(grants)}
+	existingUserIDs := make(map[int64]struct{}, len(grants))
+	for _, grant := range grants {
+		if grant.Amount != input.Amount || grant.Description != strings.TrimSpace(input.Description) || grant.CreatedBy != input.CreatedBy || grant.TargetAll != input.All {
+			return service.LotteryAttemptGrantResult{}, false, service.ErrLotteryAttemptGrantConflict
+		}
+		existingUserIDs[grant.UserID] = struct{}{}
+		result.TotalGranted += grant.Amount
+	}
+	if !input.All {
+		if len(existingUserIDs) != len(input.UserIDs) {
+			return service.LotteryAttemptGrantResult{}, false, service.ErrLotteryAttemptGrantConflict
+		}
+		for _, userID := range input.UserIDs {
+			if _, ok := existingUserIDs[userID]; !ok {
+				return service.LotteryAttemptGrantResult{}, false, service.ErrLotteryAttemptGrantConflict
+			}
+		}
+	}
+	return result, true, nil
 }
 
 func resolveLotteryAttemptGrantUsers(ctx context.Context, client *dbent.Client, input service.LotteryAttemptGrantInput) ([]int64, error) {

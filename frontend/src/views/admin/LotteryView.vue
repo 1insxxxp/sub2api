@@ -218,6 +218,11 @@ const grantDescription = ref('')
 const grantSearching = ref(false)
 const grantSaving = ref(false)
 const grantResult = ref<{ affected: number; total_granted: number } | null>(null)
+const newGrantRequestKey = () => {
+  const cryptoAPI = globalThis.crypto as (Crypto & { randomUUID?: () => string }) | undefined
+  return cryptoAPI?.randomUUID?.() || `lottery-${Date.now()}-${Math.random().toString(36).slice(2)}`
+}
+const grantRequestKey = ref(newGrantRequestKey())
 
 interface ActivityForm { id?: number; name: string; description: string; status: string; attempt_mode: LotteryAttemptMode; attempt_limit: number; starts_at: string; ends_at: string }
 interface PrizeDraft { id?: number; name: string; description: string; type: 'balance' | 'product'; weight: number; balance_amount?: number | null; enabled: boolean; sort_order: number }
@@ -292,6 +297,7 @@ function removeGrantUser(userID: number) {
 }
 
 async function submitGrantAttempts() {
+  grantResult.value = null
   const amount = Math.floor(Number(grantAmount.value) || 0)
   if (amount <= 0) {
     appStore.showError(t('lottery.admin.grantAmountInvalid'))
@@ -304,14 +310,15 @@ async function submitGrantAttempts() {
   grantSaving.value = true
   try {
     const request = grantTarget.value === 'all'
-      ? { all: true, amount, description: grantDescription.value.trim() }
-      : { user_ids: selectedGrantUsers.value.map(user => user.id), amount, description: grantDescription.value.trim() }
+      ? { all: true, amount, description: grantDescription.value.trim(), request_key: grantRequestKey.value }
+      : { user_ids: selectedGrantUsers.value.map(user => user.id), amount, description: grantDescription.value.trim(), request_key: grantRequestKey.value }
     grantResult.value = await lotteryAdminAPI.grantAttempts(request)
     appStore.showSuccess(t('lottery.admin.grantSuccess'))
     selectedGrantUsers.value = []
     grantUserResults.value = []
     grantUserSearch.value = ''
     grantDescription.value = ''
+    grantRequestKey.value = newGrantRequestKey()
   } catch (error: any) {
     appStore.showError(error?.message || t('lottery.admin.grantFailed'))
   } finally { grantSaving.value = false }

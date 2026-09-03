@@ -19,6 +19,10 @@ type LotteryAttemptGrant struct {
 	ID int64 `json:"id,omitempty"`
 	// UserID holds the value of the "user_id" field.
 	UserID int64 `json:"user_id,omitempty"`
+	// RequestKey holds the value of the "request_key" field.
+	RequestKey string `json:"request_key,omitempty"`
+	// TargetAll holds the value of the "target_all" field.
+	TargetAll bool `json:"target_all,omitempty"`
 	// Amount holds the value of the "amount" field.
 	Amount int `json:"amount,omitempty"`
 	// Description holds the value of the "description" field.
@@ -35,9 +39,11 @@ func (*LotteryAttemptGrant) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
+		case lotteryattemptgrant.FieldTargetAll:
+			values[i] = new(sql.NullBool)
 		case lotteryattemptgrant.FieldID, lotteryattemptgrant.FieldUserID, lotteryattemptgrant.FieldAmount, lotteryattemptgrant.FieldCreatedBy:
 			values[i] = new(sql.NullInt64)
-		case lotteryattemptgrant.FieldDescription:
+		case lotteryattemptgrant.FieldRequestKey, lotteryattemptgrant.FieldDescription:
 			values[i] = new(sql.NullString)
 		case lotteryattemptgrant.FieldCreatedAt:
 			values[i] = new(sql.NullTime)
@@ -67,6 +73,18 @@ func (_m *LotteryAttemptGrant) assignValues(columns []string, values []any) erro
 				return fmt.Errorf("unexpected type %T for field user_id", values[i])
 			} else if value.Valid {
 				_m.UserID = value.Int64
+			}
+		case lotteryattemptgrant.FieldRequestKey:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field request_key", values[i])
+			} else if value.Valid {
+				_m.RequestKey = value.String
+			}
+		case lotteryattemptgrant.FieldTargetAll:
+			if value, ok := values[i].(*sql.NullBool); !ok {
+				return fmt.Errorf("unexpected type %T for field target_all", values[i])
+			} else if value.Valid {
+				_m.TargetAll = value.Bool
 			}
 		case lotteryattemptgrant.FieldAmount:
 			if value, ok := values[i].(*sql.NullInt64); !ok {
@@ -130,6 +148,12 @@ func (_m *LotteryAttemptGrant) String() string {
 	builder.WriteString(fmt.Sprintf("id=%v, ", _m.ID))
 	builder.WriteString("user_id=")
 	builder.WriteString(fmt.Sprintf("%v", _m.UserID))
+	builder.WriteString(", ")
+	builder.WriteString("request_key=")
+	builder.WriteString(_m.RequestKey)
+	builder.WriteString(", ")
+	builder.WriteString("target_all=")
+	builder.WriteString(fmt.Sprintf("%v", _m.TargetAll))
 	builder.WriteString(", ")
 	builder.WriteString("amount=")
 	builder.WriteString(fmt.Sprintf("%v", _m.Amount))

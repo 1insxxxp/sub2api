@@ -15,6 +15,10 @@ const (
 	FieldID = "id"
 	// FieldUserID holds the string denoting the user_id field in the database.
 	FieldUserID = "user_id"
+	// FieldRequestKey holds the string denoting the request_key field in the database.
+	FieldRequestKey = "request_key"
+	// FieldTargetAll holds the string denoting the target_all field in the database.
+	FieldTargetAll = "target_all"
 	// FieldAmount holds the string denoting the amount field in the database.
 	FieldAmount = "amount"
 	// FieldDescription holds the string denoting the description field in the database.
@@ -31,6 +35,8 @@ const (
 var Columns = []string{
 	FieldID,
 	FieldUserID,
+	FieldRequestKey,
+	FieldTargetAll,
 	FieldAmount,
 	FieldDescription,
 	FieldCreatedBy,
@@ -48,6 +54,10 @@ func ValidColumn(column string) bool {
 }
 
 var (
+	// RequestKeyValidator is a validator for the "request_key" field. It is called by the builders before save.
+	RequestKeyValidator func(string) error
+	// DefaultTargetAll holds the default value on creation for the "target_all" field.
+	DefaultTargetAll bool
 	// AmountValidator is a validator for the "amount" field. It is called by the builders before save.
 	AmountValidator func(int) error
 	// DefaultDescription holds the default value on creation for the "description" field.
@@ -69,6 +79,16 @@ func ByID(opts ...sql.OrderTermOption) OrderOption {
 // ByUserID orders the results by the user_id field.
 func ByUserID(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldUserID, opts...).ToFunc()
+}
+
+// ByRequestKey orders the results by the request_key field.
+func ByRequestKey(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldRequestKey, opts...).ToFunc()
+}
+
+// ByTargetAll orders the results by the target_all field.
+func ByTargetAll(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldTargetAll, opts...).ToFunc()
 }
 
 // ByAmount orders the results by the amount field.

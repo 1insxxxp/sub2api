@@ -28,6 +28,26 @@ func (_c *LotteryAttemptGrantCreate) SetUserID(v int64) *LotteryAttemptGrantCrea
 	return _c
 }
 
+// SetRequestKey sets the "request_key" field.
+func (_c *LotteryAttemptGrantCreate) SetRequestKey(v string) *LotteryAttemptGrantCreate {
+	_c.mutation.SetRequestKey(v)
+	return _c
+}
+
+// SetTargetAll sets the "target_all" field.
+func (_c *LotteryAttemptGrantCreate) SetTargetAll(v bool) *LotteryAttemptGrantCreate {
+	_c.mutation.SetTargetAll(v)
+	return _c
+}
+
+// SetNillableTargetAll sets the "target_all" field if the given value is not nil.
+func (_c *LotteryAttemptGrantCreate) SetNillableTargetAll(v *bool) *LotteryAttemptGrantCreate {
+	if v != nil {
+		_c.SetTargetAll(*v)
+	}
+	return _c
+}
+
 // SetAmount sets the "amount" field.
 func (_c *LotteryAttemptGrantCreate) SetAmount(v int) *LotteryAttemptGrantCreate {
 	_c.mutation.SetAmount(v)
@@ -103,6 +123,10 @@ func (_c *LotteryAttemptGrantCreate) ExecX(ctx context.Context) {
 
 // defaults sets the default values of the builder before save.
 func (_c *LotteryAttemptGrantCreate) defaults() {
+	if _, ok := _c.mutation.TargetAll(); !ok {
+		v := lotteryattemptgrant.DefaultTargetAll
+		_c.mutation.SetTargetAll(v)
+	}
 	if _, ok := _c.mutation.Description(); !ok {
 		v := lotteryattemptgrant.DefaultDescription
 		_c.mutation.SetDescription(v)
@@ -117,6 +141,17 @@ func (_c *LotteryAttemptGrantCreate) defaults() {
 func (_c *LotteryAttemptGrantCreate) check() error {
 	if _, ok := _c.mutation.UserID(); !ok {
 		return &ValidationError{Name: "user_id", err: errors.New(`ent: missing required field "LotteryAttemptGrant.user_id"`)}
+	}
+	if _, ok := _c.mutation.RequestKey(); !ok {
+		return &ValidationError{Name: "request_key", err: errors.New(`ent: missing required field "LotteryAttemptGrant.request_key"`)}
+	}
+	if v, ok := _c.mutation.RequestKey(); ok {
+		if err := lotteryattemptgrant.RequestKeyValidator(v); err != nil {
+			return &ValidationError{Name: "request_key", err: fmt.Errorf(`ent: validator failed for field "LotteryAttemptGrant.request_key": %w`, err)}
+		}
+	}
+	if _, ok := _c.mutation.TargetAll(); !ok {
+		return &ValidationError{Name: "target_all", err: errors.New(`ent: missing required field "LotteryAttemptGrant.target_all"`)}
 	}
 	if _, ok := _c.mutation.Amount(); !ok {
 		return &ValidationError{Name: "amount", err: errors.New(`ent: missing required field "LotteryAttemptGrant.amount"`)}
@@ -170,6 +205,14 @@ func (_c *LotteryAttemptGrantCreate) createSpec() (*LotteryAttemptGrant, *sqlgra
 	if value, ok := _c.mutation.UserID(); ok {
 		_spec.SetField(lotteryattemptgrant.FieldUserID, field.TypeInt64, value)
 		_node.UserID = value
+	}
+	if value, ok := _c.mutation.RequestKey(); ok {
+		_spec.SetField(lotteryattemptgrant.FieldRequestKey, field.TypeString, value)
+		_node.RequestKey = value
+	}
+	if value, ok := _c.mutation.TargetAll(); ok {
+		_spec.SetField(lotteryattemptgrant.FieldTargetAll, field.TypeBool, value)
+		_node.TargetAll = value
 	}
 	if value, ok := _c.mutation.Amount(); ok {
 		_spec.SetField(lotteryattemptgrant.FieldAmount, field.TypeInt, value)
@@ -254,6 +297,30 @@ func (u *LotteryAttemptGrantUpsert) UpdateUserID() *LotteryAttemptGrantUpsert {
 // AddUserID adds v to the "user_id" field.
 func (u *LotteryAttemptGrantUpsert) AddUserID(v int64) *LotteryAttemptGrantUpsert {
 	u.Add(lotteryattemptgrant.FieldUserID, v)
+	return u
+}
+
+// SetRequestKey sets the "request_key" field.
+func (u *LotteryAttemptGrantUpsert) SetRequestKey(v string) *LotteryAttemptGrantUpsert {
+	u.Set(lotteryattemptgrant.FieldRequestKey, v)
+	return u
+}
+
+// UpdateRequestKey sets the "request_key" field to the value that was provided on create.
+func (u *LotteryAttemptGrantUpsert) UpdateRequestKey() *LotteryAttemptGrantUpsert {
+	u.SetExcluded(lotteryattemptgrant.FieldRequestKey)
+	return u
+}
+
+// SetTargetAll sets the "target_all" field.
+func (u *LotteryAttemptGrantUpsert) SetTargetAll(v bool) *LotteryAttemptGrantUpsert {
+	u.Set(lotteryattemptgrant.FieldTargetAll, v)
+	return u
+}
+
+// UpdateTargetAll sets the "target_all" field to the value that was provided on create.
+func (u *LotteryAttemptGrantUpsert) UpdateTargetAll() *LotteryAttemptGrantUpsert {
+	u.SetExcluded(lotteryattemptgrant.FieldTargetAll)
 	return u
 }
 
@@ -368,6 +435,34 @@ func (u *LotteryAttemptGrantUpsertOne) AddUserID(v int64) *LotteryAttemptGrantUp
 func (u *LotteryAttemptGrantUpsertOne) UpdateUserID() *LotteryAttemptGrantUpsertOne {
 	return u.Update(func(s *LotteryAttemptGrantUpsert) {
 		s.UpdateUserID()
+	})
+}
+
+// SetRequestKey sets the "request_key" field.
+func (u *LotteryAttemptGrantUpsertOne) SetRequestKey(v string) *LotteryAttemptGrantUpsertOne {
+	return u.Update(func(s *LotteryAttemptGrantUpsert) {
+		s.SetRequestKey(v)
+	})
+}
+
+// UpdateRequestKey sets the "request_key" field to the value that was provided on create.
+func (u *LotteryAttemptGrantUpsertOne) UpdateRequestKey() *LotteryAttemptGrantUpsertOne {
+	return u.Update(func(s *LotteryAttemptGrantUpsert) {
+		s.UpdateRequestKey()
+	})
+}
+
+// SetTargetAll sets the "target_all" field.
+func (u *LotteryAttemptGrantUpsertOne) SetTargetAll(v bool) *LotteryAttemptGrantUpsertOne {
+	return u.Update(func(s *LotteryAttemptGrantUpsert) {
+		s.SetTargetAll(v)
+	})
+}
+
+// UpdateTargetAll sets the "target_all" field to the value that was provided on create.
+func (u *LotteryAttemptGrantUpsertOne) UpdateTargetAll() *LotteryAttemptGrantUpsertOne {
+	return u.Update(func(s *LotteryAttemptGrantUpsert) {
+		s.UpdateTargetAll()
 	})
 }
 
@@ -656,6 +751,34 @@ func (u *LotteryAttemptGrantUpsertBulk) AddUserID(v int64) *LotteryAttemptGrantU
 func (u *LotteryAttemptGrantUpsertBulk) UpdateUserID() *LotteryAttemptGrantUpsertBulk {
 	return u.Update(func(s *LotteryAttemptGrantUpsert) {
 		s.UpdateUserID()
+	})
+}
+
+// SetRequestKey sets the "request_key" field.
+func (u *LotteryAttemptGrantUpsertBulk) SetRequestKey(v string) *LotteryAttemptGrantUpsertBulk {
+	return u.Update(func(s *LotteryAttemptGrantUpsert) {
+		s.SetRequestKey(v)
+	})
+}
+
+// UpdateRequestKey sets the "request_key" field to the value that was provided on create.
+func (u *LotteryAttemptGrantUpsertBulk) UpdateRequestKey() *LotteryAttemptGrantUpsertBulk {
+	return u.Update(func(s *LotteryAttemptGrantUpsert) {
+		s.UpdateRequestKey()
+	})
+}
+
+// SetTargetAll sets the "target_all" field.
+func (u *LotteryAttemptGrantUpsertBulk) SetTargetAll(v bool) *LotteryAttemptGrantUpsertBulk {
+	return u.Update(func(s *LotteryAttemptGrantUpsert) {
+		s.SetTargetAll(v)
+	})
+}
+
+// UpdateTargetAll sets the "target_all" field to the value that was provided on create.
+func (u *LotteryAttemptGrantUpsertBulk) UpdateTargetAll() *LotteryAttemptGrantUpsertBulk {
+	return u.Update(func(s *LotteryAttemptGrantUpsert) {
+		s.UpdateTargetAll()
 	})
 }
 

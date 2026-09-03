@@ -53,7 +53,7 @@ func TestLotteryRepositoryGrantLotteryAttemptsSelectedUsers(t *testing.T) {
 	repo := &lotteryRepository{client: client}
 
 	result, err := repo.GrantLotteryAttempts(ctx, service.LotteryAttemptGrantInput{
-		UserIDs: []int64{first.ID, second.ID}, Amount: 3, Description: "manual bonus", CreatedBy: creator.ID,
+		UserIDs: []int64{first.ID, second.ID}, Amount: 3, Description: "manual bonus", RequestKey: "selected-request-1", CreatedBy: creator.ID,
 	})
 
 	require.NoError(t, err)
@@ -84,7 +84,7 @@ func TestLotteryRepositoryGrantLotteryAttemptsAllExcludesDeletedUsers(t *testing
 	repo := &lotteryRepository{client: client}
 
 	result, err := repo.GrantLotteryAttempts(ctx, service.LotteryAttemptGrantInput{
-		All: true, Amount: 2, CreatedBy: creator.ID,
+		All: true, Amount: 2, RequestKey: "all-request-1", CreatedBy: creator.ID,
 	})
 
 	require.NoError(t, err)
@@ -95,4 +95,24 @@ func TestLotteryRepositoryGrantLotteryAttemptsAllExcludesDeletedUsers(t *testing
 	require.NoError(t, err)
 	require.Equal(t, 2, activeWallet.Balance)
 	require.Equal(t, 2, client.LotteryAttemptGrant.Query().CountX(ctx))
+}
+
+func TestLotteryRepositoryGrantLotteryAttemptsIsIdempotent(t *testing.T) {
+	ctx := context.Background()
+	client := newLotteryAttemptGrantTestClient(t)
+	creator := createLotteryGrantTestUser(t, ctx, client, "grant-idempotent-admin@example.com")
+	target := createLotteryGrantTestUser(t, ctx, client, "grant-idempotent-target@example.com")
+	repo := &lotteryRepository{client: client}
+	input := service.LotteryAttemptGrantInput{UserIDs: []int64{target.ID}, Amount: 4, RequestKey: "retry-request-1", CreatedBy: creator.ID}
+
+	first, err := repo.GrantLotteryAttempts(ctx, input)
+	require.NoError(t, err)
+	second, err := repo.GrantLotteryAttempts(ctx, input)
+	require.NoError(t, err)
+	require.Equal(t, first, second)
+	require.Equal(t, 1, client.LotteryAttemptGrant.Query().CountX(ctx))
+	require.Equal(t, 1, client.LotteryAttemptLedger.Query().CountX(ctx))
+	wallet, err := client.LotteryAttemptWallet.Query().Where(lotteryattemptwallet.UserIDEQ(target.ID)).Only(ctx)
+	require.NoError(t, err)
+	require.Equal(t, 4, wallet.Balance)
 }

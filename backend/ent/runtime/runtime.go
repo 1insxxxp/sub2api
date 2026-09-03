@@ -1485,20 +1485,28 @@ func init() {
 	lotteryactivity.UpdateDefaultUpdatedAt = lotteryactivityDescUpdatedAt.UpdateDefault.(func() time.Time)
 	lotteryattemptgrantFields := schema.LotteryAttemptGrant{}.Fields()
 	_ = lotteryattemptgrantFields
+	// lotteryattemptgrantDescRequestKey is the schema descriptor for request_key field.
+	lotteryattemptgrantDescRequestKey := lotteryattemptgrantFields[1].Descriptor()
+	// lotteryattemptgrant.RequestKeyValidator is a validator for the "request_key" field. It is called by the builders before save.
+	lotteryattemptgrant.RequestKeyValidator = lotteryattemptgrantDescRequestKey.Validators[0].(func(string) error)
+	// lotteryattemptgrantDescTargetAll is the schema descriptor for target_all field.
+	lotteryattemptgrantDescTargetAll := lotteryattemptgrantFields[2].Descriptor()
+	// lotteryattemptgrant.DefaultTargetAll holds the default value on creation for the target_all field.
+	lotteryattemptgrant.DefaultTargetAll = lotteryattemptgrantDescTargetAll.Default.(bool)
 	// lotteryattemptgrantDescAmount is the schema descriptor for amount field.
-	lotteryattemptgrantDescAmount := lotteryattemptgrantFields[1].Descriptor()
+	lotteryattemptgrantDescAmount := lotteryattemptgrantFields[3].Descriptor()
 	// lotteryattemptgrant.AmountValidator is a validator for the "amount" field. It is called by the builders before save.
 	lotteryattemptgrant.AmountValidator = lotteryattemptgrantDescAmount.Validators[0].(func(int) error)
 	// lotteryattemptgrantDescDescription is the schema descriptor for description field.
-	lotteryattemptgrantDescDescription := lotteryattemptgrantFields[2].Descriptor()
+	lotteryattemptgrantDescDescription := lotteryattemptgrantFields[4].Descriptor()
 	// lotteryattemptgrant.DefaultDescription holds the default value on creation for the description field.
 	lotteryattemptgrant.DefaultDescription = lotteryattemptgrantDescDescription.Default.(string)
 	// lotteryattemptgrantDescCreatedBy is the schema descriptor for created_by field.
-	lotteryattemptgrantDescCreatedBy := lotteryattemptgrantFields[3].Descriptor()
+	lotteryattemptgrantDescCreatedBy := lotteryattemptgrantFields[5].Descriptor()
 	// lotteryattemptgrant.CreatedByValidator is a validator for the "created_by" field. It is called by the builders before save.
 	lotteryattemptgrant.CreatedByValidator = lotteryattemptgrantDescCreatedBy.Validators[0].(func(int64) error)
 	// lotteryattemptgrantDescCreatedAt is the schema descriptor for created_at field.
-	lotteryattemptgrantDescCreatedAt := lotteryattemptgrantFields[4].Descriptor()
+	lotteryattemptgrantDescCreatedAt := lotteryattemptgrantFields[6].Descriptor()
 	// lotteryattemptgrant.DefaultCreatedAt holds the default value on creation for the created_at field.
 	lotteryattemptgrant.DefaultCreatedAt = lotteryattemptgrantDescCreatedAt.Default.(func() time.Time)
 	lotteryattemptledgerFields := schema.LotteryAttemptLedger{}.Fields()

@@ -158,7 +158,7 @@ describe('Admin LotteryView', () => {
     await wrapper.get('[data-test="lottery-grant-submit"]').trigger('click')
     await flushPromises()
 
-    expect(grantAttempts).toHaveBeenCalledWith({ user_ids: [11], amount: 3, description: '' })
+    expect(grantAttempts).toHaveBeenCalledWith(expect.objectContaining({ user_ids: [11], amount: 3, description: '', request_key: expect.any(String) }))
     expect(wrapper.get('[data-test="lottery-grant-result"]').text()).toContain('1')
   })
 
@@ -178,6 +178,6 @@ describe('Admin LotteryView', () => {
     await wrapper.get('[data-test="lottery-grant-submit"]').trigger('click')
     await flushPromises()
 
-    expect(grantAttempts).toHaveBeenCalledWith({ all: true, amount: 2, description: '' })
+    expect(grantAttempts).toHaveBeenCalledWith(expect.objectContaining({ all: true, amount: 2, description: '', request_key: expect.any(String) }))
   })
 })

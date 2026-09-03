@@ -27,6 +27,10 @@ const (
 	LotteryAttemptSourceActivity = "activity"
 	LotteryAttemptSourceWallet   = "wallet"
 
+	// LotteryAttemptGrantMaxUsers bounds explicit user selections. The all-users
+	// mode intentionally operates on the complete non-deleted user set.
+	LotteryAttemptGrantMaxUsers = 5000
+
 	LotteryPrizeTypeBalance = "balance"
 	LotteryPrizeTypeProduct = "product"
 
@@ -39,17 +43,19 @@ const (
 )
 
 var (
-	ErrLotteryDisabled            = infraerrors.Forbidden("LOTTERY_DISABLED", "lottery is disabled")
-	ErrLotteryActivityNotFound    = infraerrors.NotFound("LOTTERY_ACTIVITY_NOT_FOUND", "no lottery activity is available")
-	ErrLotteryAttemptsExhausted   = infraerrors.Conflict("LOTTERY_ATTEMPTS_EXHAUSTED", "lottery attempts are exhausted")
-	ErrLotteryNoPrize             = infraerrors.Conflict("LOTTERY_NO_PRIZE", "no lottery prize is currently available")
-	ErrLotteryProductUnavailable  = infraerrors.Conflict("LOTTERY_PRODUCT_UNAVAILABLE", "the lottery product is no longer available")
-	ErrLotteryActivityInvalid     = infraerrors.BadRequest("LOTTERY_ACTIVITY_INVALID", "lottery activity configuration is invalid")
-	ErrLotteryPrizeInvalid        = infraerrors.BadRequest("LOTTERY_PRIZE_INVALID", "lottery prize configuration is invalid")
-	ErrLotteryAttemptKeyInvalid   = infraerrors.BadRequest("LOTTERY_ATTEMPT_KEY_INVALID", "lottery attempt key is invalid")
-	ErrLotteryAttemptGrantInvalid = infraerrors.BadRequest("LOTTERY_ATTEMPT_GRANT_INVALID", "lottery attempt grant is invalid")
-	ErrLotteryDrawNotFound        = infraerrors.NotFound("LOTTERY_DRAW_NOT_FOUND", "lottery draw not found")
-	ErrLotteryConfigurationDenied = infraerrors.Forbidden("LOTTERY_CONFIGURATION_DENIED", "lottery configuration is not available")
+	ErrLotteryDisabled             = infraerrors.Forbidden("LOTTERY_DISABLED", "lottery is disabled")
+	ErrLotteryActivityNotFound     = infraerrors.NotFound("LOTTERY_ACTIVITY_NOT_FOUND", "no lottery activity is available")
+	ErrLotteryAttemptsExhausted    = infraerrors.Conflict("LOTTERY_ATTEMPTS_EXHAUSTED", "lottery attempts are exhausted")
+	ErrLotteryNoPrize              = infraerrors.Conflict("LOTTERY_NO_PRIZE", "no lottery prize is currently available")
+	ErrLotteryProductUnavailable   = infraerrors.Conflict("LOTTERY_PRODUCT_UNAVAILABLE", "the lottery product is no longer available")
+	ErrLotteryActivityInvalid      = infraerrors.BadRequest("LOTTERY_ACTIVITY_INVALID", "lottery activity configuration is invalid")
+	ErrLotteryPrizeInvalid         = infraerrors.BadRequest("LOTTERY_PRIZE_INVALID", "lottery prize configuration is invalid")
+	ErrLotteryAttemptKeyInvalid    = infraerrors.BadRequest("LOTTERY_ATTEMPT_KEY_INVALID", "lottery attempt key is invalid")
+	ErrLotteryAttemptGrantInvalid  = infraerrors.BadRequest("LOTTERY_ATTEMPT_GRANT_INVALID", "lottery attempt grant is invalid")
+	ErrLotteryAttemptGrantTooLarge = infraerrors.BadRequest("LOTTERY_ATTEMPT_GRANT_TOO_LARGE", "lottery attempt grant targets too many users")
+	ErrLotteryAttemptGrantConflict = infraerrors.Conflict("LOTTERY_ATTEMPT_GRANT_CONFLICT", "lottery attempt grant request key was already used with different parameters")
+	ErrLotteryDrawNotFound         = infraerrors.NotFound("LOTTERY_DRAW_NOT_FOUND", "lottery draw not found")
+	ErrLotteryConfigurationDenied  = infraerrors.Forbidden("LOTTERY_CONFIGURATION_DENIED", "lottery configuration is not available")
 )
 
 // LotteryActivity is the single global lottery activity configuration.
@@ -231,6 +237,7 @@ type LotteryAttemptGrantInput struct {
 	UserIDs     []int64 `json:"user_ids"`
 	Amount      int     `json:"amount"`
 	Description string  `json:"description"`
+	RequestKey  string  `json:"request_key"`
 	CreatedBy   int64   `json:"-"`
 }
 
@@ -542,6 +549,9 @@ func (s *LotteryService) GrantLotteryAttempts(ctx context.Context, input Lottery
 	if s == nil || s.repo == nil {
 		return nil, ErrLotteryConfigurationDenied
 	}
+	input.UserIDs = normalizeLotteryAttemptGrantUserIDs(input.UserIDs)
+	input.Description = strings.TrimSpace(input.Description)
+	input.RequestKey = strings.TrimSpace(input.RequestKey)
 	if err := validateLotteryAttemptGrant(input); err != nil {
 		return nil, err
 	}
@@ -549,8 +559,6 @@ func (s *LotteryService) GrantLotteryAttempts(ctx context.Context, input Lottery
 	if !ok {
 		return nil, ErrLotteryConfigurationDenied
 	}
-	input.UserIDs = normalizeLotteryAttemptGrantUserIDs(input.UserIDs)
-	input.Description = strings.TrimSpace(input.Description)
 	result, err := adminRepo.GrantLotteryAttempts(ctx, input)
 	if err != nil {
 		return nil, err
@@ -682,11 +690,17 @@ func validateLotteryAttemptGrant(input LotteryAttemptGrantInput) error {
 	if input.CreatedBy <= 0 || input.Amount <= 0 || input.Amount > lotteryAttemptGrantMaxAmount {
 		return ErrLotteryAttemptGrantInvalid
 	}
+	if input.RequestKey == "" || len(input.RequestKey) > lotteryAttemptKeyMaxLength {
+		return ErrLotteryAttemptGrantInvalid
+	}
 	if len([]rune(strings.TrimSpace(input.Description))) > lotteryAttemptGrantMaxNoteLength {
 		return ErrLotteryAttemptGrantInvalid
 	}
 	if (input.All && len(input.UserIDs) > 0) || (!input.All && len(input.UserIDs) == 0) {
 		return ErrLotteryAttemptGrantInvalid
+	}
+	if !input.All && len(input.UserIDs) > LotteryAttemptGrantMaxUsers {
+		return ErrLotteryAttemptGrantTooLarge
 	}
 	for _, userID := range input.UserIDs {
 		if userID <= 0 {

@@ -26,6 +26,7 @@ func TestLotteryAttemptGrantValidatesAndDelegatesSelectedUsers(t *testing.T) {
 		UserIDs:     []int64{7, 8, 7},
 		Amount:      3,
 		Description: "活动补发",
+		RequestKey:  "grant-selected-1",
 		CreatedBy:   99,
 	})
 
@@ -34,6 +35,7 @@ func TestLotteryAttemptGrantValidatesAndDelegatesSelectedUsers(t *testing.T) {
 	require.Equal(t, []int64{7, 8}, repo.input.UserIDs)
 	require.Equal(t, 3, repo.input.Amount)
 	require.Equal(t, "活动补发", repo.input.Description)
+	require.Equal(t, "grant-selected-1", repo.input.RequestKey)
 	require.Equal(t, int64(99), repo.input.CreatedBy)
 }
 
@@ -42,9 +44,10 @@ func TestLotteryAttemptGrantAllowsAllUsersTarget(t *testing.T) {
 	svc := NewLotteryService(nil, repo, nil, nil)
 
 	result, err := svc.GrantLotteryAttempts(context.Background(), LotteryAttemptGrantInput{
-		All:       true,
-		Amount:    2,
-		CreatedBy: 99,
+		All:        true,
+		Amount:     2,
+		RequestKey: "grant-all-1",
+		CreatedBy:  99,
 	})
 
 	require.NoError(t, err)
@@ -58,11 +61,12 @@ func TestLotteryAttemptGrantRejectsInvalidRequests(t *testing.T) {
 		name  string
 		input LotteryAttemptGrantInput
 	}{
-		{name: "missing target", input: LotteryAttemptGrantInput{Amount: 1, CreatedBy: 1}},
-		{name: "mixed targets", input: LotteryAttemptGrantInput{All: true, UserIDs: []int64{1}, Amount: 1, CreatedBy: 1}},
-		{name: "zero amount", input: LotteryAttemptGrantInput{All: true, Amount: 0, CreatedBy: 1}},
-		{name: "negative user", input: LotteryAttemptGrantInput{UserIDs: []int64{-1}, Amount: 1, CreatedBy: 1}},
-		{name: "missing creator", input: LotteryAttemptGrantInput{All: true, Amount: 1}},
+		{name: "missing target", input: LotteryAttemptGrantInput{Amount: 1, RequestKey: "invalid-1", CreatedBy: 1}},
+		{name: "mixed targets", input: LotteryAttemptGrantInput{All: true, UserIDs: []int64{1}, Amount: 1, RequestKey: "invalid-2", CreatedBy: 1}},
+		{name: "zero amount", input: LotteryAttemptGrantInput{All: true, Amount: 0, RequestKey: "invalid-3", CreatedBy: 1}},
+		{name: "negative user", input: LotteryAttemptGrantInput{UserIDs: []int64{-1}, Amount: 1, RequestKey: "invalid-4", CreatedBy: 1}},
+		{name: "missing creator", input: LotteryAttemptGrantInput{All: true, Amount: 1, RequestKey: "invalid-5"}},
+		{name: "missing request key", input: LotteryAttemptGrantInput{All: true, Amount: 1, CreatedBy: 1}},
 	}
 
 	for _, tt := range tests {

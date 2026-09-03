@@ -59,6 +59,16 @@ func UserID(v int64) predicate.LotteryAttemptGrant {
 	return predicate.LotteryAttemptGrant(sql.FieldEQ(FieldUserID, v))
 }
 
+// RequestKey applies equality check predicate on the "request_key" field. It's identical to RequestKeyEQ.
+func RequestKey(v string) predicate.LotteryAttemptGrant {
+	return predicate.LotteryAttemptGrant(sql.FieldEQ(FieldRequestKey, v))
+}
+
+// TargetAll applies equality check predicate on the "target_all" field. It's identical to TargetAllEQ.
+func TargetAll(v bool) predicate.LotteryAttemptGrant {
+	return predicate.LotteryAttemptGrant(sql.FieldEQ(FieldTargetAll, v))
+}
+
 // Amount applies equality check predicate on the "amount" field. It's identical to AmountEQ.
 func Amount(v int) predicate.LotteryAttemptGrant {
 	return predicate.LotteryAttemptGrant(sql.FieldEQ(FieldAmount, v))
@@ -117,6 +127,81 @@ func UserIDLT(v int64) predicate.LotteryAttemptGrant {
 // UserIDLTE applies the LTE predicate on the "user_id" field.
 func UserIDLTE(v int64) predicate.LotteryAttemptGrant {
 	return predicate.LotteryAttemptGrant(sql.FieldLTE(FieldUserID, v))
+}
+
+// RequestKeyEQ applies the EQ predicate on the "request_key" field.
+func RequestKeyEQ(v string) predicate.LotteryAttemptGrant {
+	return predicate.LotteryAttemptGrant(sql.FieldEQ(FieldRequestKey, v))
+}
+
+// RequestKeyNEQ applies the NEQ predicate on the "request_key" field.
+func RequestKeyNEQ(v string) predicate.LotteryAttemptGrant {
+	return predicate.LotteryAttemptGrant(sql.FieldNEQ(FieldRequestKey, v))
+}
+
+// RequestKeyIn applies the In predicate on the "request_key" field.
+func RequestKeyIn(vs ...string) predicate.LotteryAttemptGrant {
+	return predicate.LotteryAttemptGrant(sql.FieldIn(FieldRequestKey, vs...))
+}
+
+// RequestKeyNotIn applies the NotIn predicate on the "request_key" field.
+func RequestKeyNotIn(vs ...string) predicate.LotteryAttemptGrant {
+	return predicate.LotteryAttemptGrant(sql.FieldNotIn(FieldRequestKey, vs...))
+}
+
+// RequestKeyGT applies the GT predicate on the "request_key" field.
+func RequestKeyGT(v string) predicate.LotteryAttemptGrant {
+	return predicate.LotteryAttemptGrant(sql.FieldGT(FieldRequestKey, v))
+}
+
+// RequestKeyGTE applies the GTE predicate on the "request_key" field.
+func RequestKeyGTE(v string) predicate.LotteryAttemptGrant {
+	return predicate.LotteryAttemptGrant(sql.FieldGTE(FieldRequestKey, v))
+}
+
+// RequestKeyLT applies the LT predicate on the "request_key" field.
+func RequestKeyLT(v string) predicate.LotteryAttemptGrant {
+	return predicate.LotteryAttemptGrant(sql.FieldLT(FieldRequestKey, v))
+}
+
+// RequestKeyLTE applies the LTE predicate on the "request_key" field.
+func RequestKeyLTE(v string) predicate.LotteryAttemptGrant {
+	return predicate.LotteryAttemptGrant(sql.FieldLTE(FieldRequestKey, v))
+}
+
+// RequestKeyContains applies the Contains predicate on the "request_key" field.
+func RequestKeyContains(v string) predicate.LotteryAttemptGrant {
+	return predicate.LotteryAttemptGrant(sql.FieldContains(FieldRequestKey, v))
+}
+
+// RequestKeyHasPrefix applies the HasPrefix predicate on the "request_key" field.
+func RequestKeyHasPrefix(v string) predicate.LotteryAttemptGrant {
+	return predicate.LotteryAttemptGrant(sql.FieldHasPrefix(FieldRequestKey, v))
+}
+
+// RequestKeyHasSuffix applies the HasSuffix predicate on the "request_key" field.
+func RequestKeyHasSuffix(v string) predicate.LotteryAttemptGrant {
+	return predicate.LotteryAttemptGrant(sql.FieldHasSuffix(FieldRequestKey, v))
+}
+
+// RequestKeyEqualFold applies the EqualFold predicate on the "request_key" field.
+func RequestKeyEqualFold(v string) predicate.LotteryAttemptGrant {
+	return predicate.LotteryAttemptGrant(sql.FieldEqualFold(FieldRequestKey, v))
+}
+
+// RequestKeyContainsFold applies the ContainsFold predicate on the "request_key" field.
+func RequestKeyContainsFold(v string) predicate.LotteryAttemptGrant {
+	return predicate.LotteryAttemptGrant(sql.FieldContainsFold(FieldRequestKey, v))
+}
+
+// TargetAllEQ applies the EQ predicate on the "target_all" field.
+func TargetAllEQ(v bool) predicate.LotteryAttemptGrant {
+	return predicate.LotteryAttemptGrant(sql.FieldEQ(FieldTargetAll, v))
+}
+
+// TargetAllNEQ applies the NEQ predicate on the "target_all" field.
+func TargetAllNEQ(v bool) predicate.LotteryAttemptGrant {
+	return predicate.LotteryAttemptGrant(sql.FieldNEQ(FieldTargetAll, v))
 }
 
 // AmountEQ applies the EQ predicate on the "amount" field.

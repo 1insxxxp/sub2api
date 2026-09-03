@@ -88,15 +88,16 @@ func TestLotteryAdminHandlerGrantsAttemptsWithAuthenticatedAdmin(t *testing.T) {
 		c.Next()
 	}, h.GrantAttempts)
 
-	req := httptest.NewRequest(http.MethodPost, "/admin/lottery/attempts/grant", bytes.NewBufferString(`{"user_ids":[11,12],"amount":3,"description":"manual bonus"}`))
+	req := httptest.NewRequest(http.MethodPost, "/admin/lottery/attempts/grant", bytes.NewBufferString(`{"user_ids":[11,12],"amount":3,"description":"manual bonus","request_key":"handler-request-1"}`))
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Idempotency-Key", "handler-request-1")
 	res := httptest.NewRecorder()
 	router.ServeHTTP(res, req)
 
 	if res.Code != http.StatusOK {
 		t.Fatalf("status = %d, body = %s", res.Code, res.Body.String())
 	}
-	if repo.input.CreatedBy != 99 || len(repo.input.UserIDs) != 2 || repo.input.Amount != 3 {
+	if repo.input.CreatedBy != 99 || len(repo.input.UserIDs) != 2 || repo.input.Amount != 3 || repo.input.RequestKey != "handler-request-1" {
 		t.Fatalf("unexpected service input: %#v", repo.input)
 	}
 	var envelope struct {

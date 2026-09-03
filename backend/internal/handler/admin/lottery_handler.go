@@ -1,6 +1,7 @@
 package admin
 
 import (
+	"context"
 	"strconv"
 	"strings"
 	"time"
@@ -45,6 +46,7 @@ type GrantLotteryAttemptsRequest struct {
 	UserIDs     []int64 `json:"user_ids"`
 	Amount      int     `json:"amount"`
 	Description string  `json:"description"`
+	RequestKey  string  `json:"request_key"`
 }
 
 func (h *LotteryHandler) GrantAttempts(c *gin.Context) {
@@ -58,14 +60,25 @@ func (h *LotteryHandler) GrantAttempts(c *gin.Context) {
 		response.Unauthorized(c, "User not authenticated")
 		return
 	}
-	result, err := h.lotteryService.GrantLotteryAttempts(c.Request.Context(), service.LotteryAttemptGrantInput{
-		All: req.All, UserIDs: req.UserIDs, Amount: req.Amount, Description: req.Description, CreatedBy: subject.UserID,
-	})
-	if err != nil {
-		response.ErrorFrom(c, err)
-		return
+	// Idempotency-Key is the standard API contract. Keep the body field as a
+	// compatibility fallback for callers while rejecting mismatched values.
+	if headerKey := strings.TrimSpace(c.GetHeader("Idempotency-Key")); headerKey != "" {
+		if req.RequestKey != "" && strings.TrimSpace(req.RequestKey) != headerKey {
+			response.ErrorFrom(c, service.ErrLotteryAttemptGrantConflict)
+			return
+		}
+		req.RequestKey = headerKey
+	} else if bodyKey := strings.TrimSpace(req.RequestKey); bodyKey != "" {
+		// Older clients may only send the body field; promote it to the common
+		// header before invoking the shared coordinator.
+		c.Request.Header.Set("Idempotency-Key", bodyKey)
+		req.RequestKey = bodyKey
 	}
-	response.Success(c, result)
+	executeAdminIdempotentJSON(c, "admin.lottery.attempts.grant", req, service.DefaultWriteIdempotencyTTL(), func(ctx context.Context) (any, error) {
+		return h.lotteryService.GrantLotteryAttempts(ctx, service.LotteryAttemptGrantInput{
+			All: req.All, UserIDs: req.UserIDs, Amount: req.Amount, Description: req.Description, RequestKey: req.RequestKey, CreatedBy: subject.UserID,
+		})
+	})
 }
 
 type SaveLotteryActivityRequest struct {

@@ -1234,6 +1234,8 @@ var (
 	LotteryAttemptGrantsColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeInt64, Increment: true},
 		{Name: "user_id", Type: field.TypeInt64},
+		{Name: "request_key", Type: field.TypeString, Size: 128},
+		{Name: "target_all", Type: field.TypeBool, Default: false},
 		{Name: "amount", Type: field.TypeInt},
 		{Name: "description", Type: field.TypeString, Default: "", SchemaType: map[string]string{"postgres": "text"}},
 		{Name: "created_by", Type: field.TypeInt64},
@@ -1244,6 +1246,18 @@ var (
 		Name:       "lottery_attempt_grants",
 		Columns:    LotteryAttemptGrantsColumns,
 		PrimaryKey: []*schema.Column{LotteryAttemptGrantsColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "lottery_attempt_grants_request_user_uq",
+				Unique:  true,
+				Columns: []*schema.Column{LotteryAttemptGrantsColumns[2], LotteryAttemptGrantsColumns[1]},
+			},
+			{
+				Name:    "lottery_attempt_grants_user_created_at_idx",
+				Unique:  false,
+				Columns: []*schema.Column{LotteryAttemptGrantsColumns[1], LotteryAttemptGrantsColumns[7], LotteryAttemptGrantsColumns[0]},
+			},
+		},
 	}
 	// LotteryAttemptLedgerColumns holds the columns for the "lottery_attempt_ledger" table.
 	LotteryAttemptLedgerColumns = []*schema.Column{

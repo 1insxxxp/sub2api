@@ -65,6 +65,7 @@ export interface LotteryAttemptGrantRequest {
   user_ids?: number[]
   amount: number
   description?: string
+  request_key: string
 }
 
 export interface LotteryAttemptGrantResult {
@@ -117,7 +118,9 @@ export async function listDraws(params: LotteryAdminDrawQuery = {}): Promise<Pag
 }
 
 export async function grantAttempts(request: LotteryAttemptGrantRequest): Promise<LotteryAttemptGrantResult> {
-  const { data } = await apiClient.post<LotteryAttemptGrantResult>('/admin/lottery/attempts/grant', request)
+  const { data } = await apiClient.post<LotteryAttemptGrantResult>('/admin/lottery/attempts/grant', request, {
+    headers: { 'Idempotency-Key': request.request_key }
+  })
   return data
 }
 

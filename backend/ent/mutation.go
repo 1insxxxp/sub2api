@@ -34483,6 +34483,8 @@ type LotteryAttemptGrantMutation struct {
 	id            *int64
 	user_id       *int64
 	adduser_id    *int64
+	request_key   *string
+	target_all    *bool
 	amount        *int
 	addamount     *int
 	description   *string
@@ -34647,6 +34649,78 @@ func (m *LotteryAttemptGrantMutation) AddedUserID() (r int64, exists bool) {
 func (m *LotteryAttemptGrantMutation) ResetUserID() {
 	m.user_id = nil
 	m.adduser_id = nil
+}
+
+// SetRequestKey sets the "request_key" field.
+func (m *LotteryAttemptGrantMutation) SetRequestKey(s string) {
+	m.request_key = &s
+}
+
+// RequestKey returns the value of the "request_key" field in the mutation.
+func (m *LotteryAttemptGrantMutation) RequestKey() (r string, exists bool) {
+	v := m.request_key
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldRequestKey returns the old "request_key" field's value of the LotteryAttemptGrant entity.
+// If the LotteryAttemptGrant object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *LotteryAttemptGrantMutation) OldRequestKey(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldRequestKey is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldRequestKey requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldRequestKey: %w", err)
+	}
+	return oldValue.RequestKey, nil
+}
+
+// ResetRequestKey resets all changes to the "request_key" field.
+func (m *LotteryAttemptGrantMutation) ResetRequestKey() {
+	m.request_key = nil
+}
+
+// SetTargetAll sets the "target_all" field.
+func (m *LotteryAttemptGrantMutation) SetTargetAll(b bool) {
+	m.target_all = &b
+}
+
+// TargetAll returns the value of the "target_all" field in the mutation.
+func (m *LotteryAttemptGrantMutation) TargetAll() (r bool, exists bool) {
+	v := m.target_all
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldTargetAll returns the old "target_all" field's value of the LotteryAttemptGrant entity.
+// If the LotteryAttemptGrant object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *LotteryAttemptGrantMutation) OldTargetAll(ctx context.Context) (v bool, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldTargetAll is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldTargetAll requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldTargetAll: %w", err)
+	}
+	return oldValue.TargetAll, nil
+}
+
+// ResetTargetAll resets all changes to the "target_all" field.
+func (m *LotteryAttemptGrantMutation) ResetTargetAll() {
+	m.target_all = nil
 }
 
 // SetAmount sets the "amount" field.
@@ -34867,9 +34941,15 @@ func (m *LotteryAttemptGrantMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *LotteryAttemptGrantMutation) Fields() []string {
-	fields := make([]string, 0, 5)
+	fields := make([]string, 0, 7)
 	if m.user_id != nil {
 		fields = append(fields, lotteryattemptgrant.FieldUserID)
+	}
+	if m.request_key != nil {
+		fields = append(fields, lotteryattemptgrant.FieldRequestKey)
+	}
+	if m.target_all != nil {
+		fields = append(fields, lotteryattemptgrant.FieldTargetAll)
 	}
 	if m.amount != nil {
 		fields = append(fields, lotteryattemptgrant.FieldAmount)
@@ -34893,6 +34973,10 @@ func (m *LotteryAttemptGrantMutation) Field(name string) (ent.Value, bool) {
 	switch name {
 	case lotteryattemptgrant.FieldUserID:
 		return m.UserID()
+	case lotteryattemptgrant.FieldRequestKey:
+		return m.RequestKey()
+	case lotteryattemptgrant.FieldTargetAll:
+		return m.TargetAll()
 	case lotteryattemptgrant.FieldAmount:
 		return m.Amount()
 	case lotteryattemptgrant.FieldDescription:
@@ -34912,6 +34996,10 @@ func (m *LotteryAttemptGrantMutation) OldField(ctx context.Context, name string)
 	switch name {
 	case lotteryattemptgrant.FieldUserID:
 		return m.OldUserID(ctx)
+	case lotteryattemptgrant.FieldRequestKey:
+		return m.OldRequestKey(ctx)
+	case lotteryattemptgrant.FieldTargetAll:
+		return m.OldTargetAll(ctx)
 	case lotteryattemptgrant.FieldAmount:
 		return m.OldAmount(ctx)
 	case lotteryattemptgrant.FieldDescription:
@@ -34935,6 +35023,20 @@ func (m *LotteryAttemptGrantMutation) SetField(name string, value ent.Value) err
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetUserID(v)
+		return nil
+	case lotteryattemptgrant.FieldRequestKey:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetRequestKey(v)
+		return nil
+	case lotteryattemptgrant.FieldTargetAll:
+		v, ok := value.(bool)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetTargetAll(v)
 		return nil
 	case lotteryattemptgrant.FieldAmount:
 		v, ok := value.(int)
@@ -35054,6 +35156,12 @@ func (m *LotteryAttemptGrantMutation) ResetField(name string) error {
 	switch name {
 	case lotteryattemptgrant.FieldUserID:
 		m.ResetUserID()
+		return nil
+	case lotteryattemptgrant.FieldRequestKey:
+		m.ResetRequestKey()
+		return nil
+	case lotteryattemptgrant.FieldTargetAll:
+		m.ResetTargetAll()
 		return nil
 	case lotteryattemptgrant.FieldAmount:
 		m.ResetAmount()
