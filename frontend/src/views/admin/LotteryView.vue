@@ -142,15 +142,15 @@
         <div v-if="editing" class="mb-6 rounded-xl border border-blue-200 bg-blue-50/60 p-4 dark:border-blue-900/60 dark:bg-blue-950/20">
           <div class="mb-4 flex items-center justify-between gap-3"><h3 class="text-sm font-semibold text-slate-950 dark:text-white">{{ editing.id ? t('lottery.admin.editPrize') : t('lottery.admin.newPrize') }}</h3><button type="button" class="icon-button" :title="t('lottery.close')" @click="editing = null"><Icon name="x" size="sm" /></button></div>
           <div class="grid gap-4 md:grid-cols-2">
-            <div><label class="input-label">{{ t('lottery.admin.prizeName') }}</label><input v-model="editing.name" class="input" /></div>
-            <div><label class="input-label">{{ t('lottery.admin.prizeType') }}</label><select v-model="editing.type" class="input"><option value="balance">{{ t('lottery.admin.balanceType') }}</option><option value="product">{{ t('lottery.admin.productType') }}</option></select></div>
+            <div><label class="input-label">{{ t('lottery.admin.prizeName') }}</label><input v-model="editing.name" data-test="lottery-prize-name" class="input" /></div>
+            <div><label class="input-label">{{ t('lottery.admin.prizeType') }}</label><select v-model="editing.type" data-test="lottery-prize-type" class="input"><option value="balance">{{ t('lottery.admin.balanceType') }}</option><option value="product">{{ t('lottery.admin.productType') }}</option></select></div>
             <div class="md:col-span-2"><label class="input-label">{{ t('lottery.admin.prizeDescription') }}</label><input v-model="editing.description" class="input" /></div>
-            <div v-if="editing.type === 'balance'"><label class="input-label">{{ t('lottery.admin.balanceAmount') }}</label><input v-model.number="editing.balance_amount" class="input" type="number" min="0.01" step="0.01" /></div>
-            <div><label class="input-label">{{ t('lottery.admin.weight') }}</label><input v-model.number="editing.weight" class="input" type="number" min="1" step="1" /></div>
-            <div><label class="input-label">{{ t('lottery.admin.sortOrder') }}</label><input v-model.number="editing.sort_order" class="input" type="number" step="1" /></div>
+            <div v-if="editing.type === 'balance'"><label class="input-label">{{ t('lottery.admin.balanceAmount') }}</label><input v-model.number="editing.balance_amount" data-test="lottery-prize-balance-amount" class="input" type="number" min="0.01" step="0.01" /></div>
+            <div><label class="input-label">{{ t('lottery.admin.weight') }}</label><input v-model.number="editing.weight" data-test="lottery-prize-weight" class="input" type="number" min="1" step="1" /></div>
+            <div><label class="input-label">{{ t('lottery.admin.sortOrder') }}</label><input v-model.number="editing.sort_order" data-test="lottery-prize-sort-order" class="input" type="number" step="1" /></div>
             <label class="flex cursor-pointer items-center gap-3 self-end pb-2 text-sm font-medium text-slate-700 dark:text-slate-200"><input v-model="editing.enabled" type="checkbox" class="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500" />{{ t('lottery.admin.enabled') }}</label>
           </div>
-          <div class="mt-4 flex justify-end gap-2"><button type="button" class="btn btn-secondary" @click="editing = null">{{ t('lottery.close') }}</button><button type="button" class="btn btn-primary" :disabled="savingPrize" @click="savePrize"><Icon name="check" size="sm" />{{ savingPrize ? t('common.saving') : t('lottery.admin.savePrize') }}</button></div>
+          <div class="mt-4 flex justify-end gap-2"><button type="button" class="btn btn-secondary" @click="editing = null">{{ t('lottery.close') }}</button><button type="button" data-test="lottery-save-prize" class="btn btn-primary" :disabled="savingPrize" @click="savePrize"><Icon name="check" size="sm" />{{ savingPrize ? t('common.saving') : t('lottery.admin.savePrize') }}</button></div>
         </div>
 
         <div v-if="prizes.length" class="space-y-4">
@@ -444,10 +444,25 @@ function editPrize(prize: LotteryPrize) {
 
 async function savePrize() {
   if (!editing.value || !activityId.value) return
+  const draft = editing.value
+  const name = draft.name.trim()
+  if (!name || name.length > 120) {
+    appStore.showError(t('lottery.admin.prizeNameInvalid'))
+    return
+  }
+  if (draft.type !== 'balance' && draft.type !== 'product') {
+    appStore.showError(t('lottery.admin.prizeTypeInvalid'))
+    return
+  }
+  const balanceAmount = draft.type === 'balance' ? Number(draft.balance_amount) : null
+  if (draft.type === 'balance' && (balanceAmount === null || !Number.isFinite(balanceAmount) || balanceAmount <= 0)) {
+    appStore.showError(t('lottery.admin.prizeBalanceAmountInvalid'))
+    return
+  }
+
   savingPrize.value = true
   try {
-    const draft = editing.value
-    const request = { name: draft.name.trim(), description: draft.description, type: draft.type, weight: Math.max(1, Number(draft.weight) || 1), balance_amount: draft.type === 'balance' ? Number(draft.balance_amount) : null, enabled: draft.enabled, sort_order: Number(draft.sort_order) || 0 }
+    const request = { name, description: draft.description, type: draft.type, weight: Math.max(1, Number(draft.weight) || 1), balance_amount: balanceAmount, enabled: draft.enabled, sort_order: Number(draft.sort_order) || 0 }
     const saved = draft.id ? await lotteryAdminAPI.updatePrize(draft.id, request) : await lotteryAdminAPI.createPrize({ ...request, activity_id: activityId.value })
     const index = prizes.value.findIndex(item => item.id === saved.id)
     if (index >= 0) prizes.value[index] = saved

@@ -3,13 +3,14 @@ import { flushPromises, mount } from '@vue/test-utils'
 
 import LotteryView from '../LotteryView.vue'
 
-const { getConfig, listDraws, listAttemptBalances, grantAttempts, listUsers, saveActivity, showSuccess, showError } = vi.hoisted(() => ({
+const { getConfig, listDraws, listAttemptBalances, grantAttempts, listUsers, saveActivity, createPrize, showSuccess, showError } = vi.hoisted(() => ({
   getConfig: vi.fn(),
   listDraws: vi.fn(),
   listAttemptBalances: vi.fn(),
   grantAttempts: vi.fn(),
   listUsers: vi.fn(),
   saveActivity: vi.fn(),
+  createPrize: vi.fn(),
   showSuccess: vi.fn(),
   showError: vi.fn(),
 }))
@@ -21,6 +22,7 @@ vi.mock('@/api/admin/lottery', () => ({
     listAttemptBalances,
     grantAttempts,
     saveActivity,
+    createPrize,
   },
   default: {
     getConfig,
@@ -54,6 +56,7 @@ describe('Admin LotteryView', () => {
     grantAttempts.mockReset()
     listUsers.mockReset()
     saveActivity.mockReset()
+    createPrize.mockReset()
     showSuccess.mockReset()
     showError.mockReset()
     getConfig.mockResolvedValue({
@@ -72,6 +75,7 @@ describe('Admin LotteryView', () => {
     listAttemptBalances.mockResolvedValue({ items: [], total: 0, page: 1, page_size: 10, pages: 0 })
     grantAttempts.mockResolvedValue({ affected: 1, total_granted: 2 })
     listUsers.mockResolvedValue({ items: [], total: 0, page: 1, page_size: 8, pages: 0 })
+    createPrize.mockResolvedValue({ id: 9, activity_id: 1, name: 'New prize', description: '', type: 'balance', weight: 1, balance_amount: 1, enabled: true, sort_order: 0, available_item_count: 0 })
   })
 
   it('does not expose the legacy activity attempt policy controls', async () => {
@@ -218,5 +222,28 @@ describe('Admin LotteryView', () => {
     await flushPromises()
 
     expect(grantAttempts).toHaveBeenCalledWith(expect.objectContaining({ all: true, amount: 2, description: '', request_key: expect.any(String) }))
+  })
+
+  it('does not submit a balance prize with an empty credit amount', async () => {
+    const wrapper = mount(LotteryView, {
+      global: {
+        stubs: {
+          AppLayout: { template: '<div><slot /></div>' },
+          Icon: true,
+        },
+      },
+    })
+
+    await flushPromises()
+    const addButton = wrapper.findAll('button').find(button => button.text().includes('lottery.admin.addPrize'))
+    expect(addButton).toBeDefined()
+    await addButton!.trigger('click')
+    await wrapper.get('[data-test="lottery-prize-name"]').setValue('余额奖品')
+    await wrapper.get('[data-test="lottery-prize-balance-amount"]').setValue('')
+    await wrapper.get('[data-test="lottery-save-prize"]').trigger('click')
+    await flushPromises()
+
+    expect(createPrize).not.toHaveBeenCalled()
+    expect(showError).toHaveBeenCalledWith('lottery.admin.prizeBalanceAmountInvalid')
   })
 })
