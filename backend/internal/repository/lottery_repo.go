@@ -250,7 +250,6 @@ func (r *lotteryRepository) CountUserDraws(ctx context.Context, activityID, user
 	query := clientFromContext(ctx, r.client).LotteryDraw.Query().Where(
 		lotterydraw.ActivityIDEQ(activityID),
 		lotterydraw.UserIDEQ(userID),
-		lotterydraw.AttemptSourceEQ(service.LotteryAttemptSourceActivity),
 	)
 	if since != nil {
 		query = query.Where(lotterydraw.CreatedAtGTE(*since))
@@ -423,42 +422,17 @@ func (r *lotteryRepository) ListAdminAttemptBalances(ctx context.Context, query 
 		rewardByUser[wallet.UserID] = wallet.Balance
 	}
 
-	usedByUser := make(map[int64]int, len(userIDs))
-	if query.ActivityID > 0 {
-		drawQuery := client.LotteryDraw.Query().Where(
-			lotterydraw.ActivityIDEQ(query.ActivityID),
-			lotterydraw.UserIDIn(userIDs...),
-		)
-		if query.ActivitySince != nil {
-			drawQuery = drawQuery.Where(lotterydraw.CreatedAtGTE(*query.ActivitySince))
-		}
-		var grouped []struct {
-			UserID int64 `json:"user_id"`
-			Count  int   `json:"count"`
-		}
-		if err := drawQuery.GroupBy(lotterydraw.FieldUserID).Aggregate(dbent.Count()).Scan(ctx, &grouped); err != nil {
-			return nil, 0, err
-		}
-		for _, item := range grouped {
-			usedByUser[item.UserID] = item.Count
-		}
-	}
-
 	result := make([]service.LotteryAdminAttemptBalance, 0, len(users))
 	for _, item := range users {
-		activityRemaining := query.ActivityLimit - usedByUser[item.ID]
-		if activityRemaining < 0 {
-			activityRemaining = 0
-		}
 		rewardRemaining := rewardByUser[item.ID]
 		if rewardRemaining < 0 {
 			rewardRemaining = 0
 		}
 		result = append(result, service.LotteryAdminAttemptBalance{
 			UserID: item.ID, UserEmail: item.Email, UserName: item.Username, UserStatus: item.Status,
-			ActivityRemaining: activityRemaining,
+			ActivityRemaining: 0,
 			RewardRemaining:   rewardRemaining,
-			TotalRemaining:    activityRemaining + rewardRemaining,
+			TotalRemaining:    rewardRemaining,
 		})
 	}
 	return result, total, nil

@@ -24,10 +24,10 @@
                 <strong class="text-4xl leading-none text-blue-700 dark:text-blue-200">{{ state?.attempts_remaining ?? 0 }}</strong>
               </div>
               <p data-test="lottery-attempt-breakdown" class="mt-2 text-xs text-blue-600/80 dark:text-blue-300/80">
-                {{ t('lottery.attemptBreakdown', { activity: state?.activity_attempts_remaining ?? 0, reward: state?.reward_attempts_remaining ?? 0 }) }}
+                {{ t('lottery.attemptBreakdown', { reward: state?.reward_attempts_remaining ?? state?.attempts_remaining ?? 0 }) }}
               </p>
               <p class="mt-1 text-xs text-blue-600/80 dark:text-blue-300/80">
-                {{ state?.activity.attempt_mode === 'daily' ? t('lottery.daily') : t('lottery.total') }} · {{ t('lottery.attemptsUsed', { count: state?.attempts_used ?? 0 }) }}
+                {{ t('lottery.attemptsUsed', { count: state?.attempts_used ?? 0 }) }}
               </p>
             </div>
             <div v-else class="lottery-attempt-card rounded-xl border border-amber-200 bg-amber-50/80 px-5 py-4 text-sm text-amber-800 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-200">

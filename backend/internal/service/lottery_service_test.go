@@ -1,6 +1,7 @@
 package service
 
 import (
+	"context"
 	"encoding/json"
 	"testing"
 	"time"
@@ -9,18 +10,15 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestLotteryDailyAttemptStartUsesApplicationTimezone(t *testing.T) {
-	beijing := time.Date(2026, time.August, 25, 1, 30, 0, 0, timezone.Location())
-
-	start := lotteryAttemptStart(LotteryAttemptModeDaily, beijing)
-
-	require.Equal(t, timezone.StartOfDay(beijing), start)
+type lotteryActivityRepositoryStub struct {
+	LotteryRepository
+	input    LotteryActivityInput
+	activity *LotteryActivity
 }
 
-func TestLotteryAttemptStartForTotalModeIsZero(t *testing.T) {
-	now := time.Date(2026, time.August, 25, 1, 30, 0, 0, timezone.Location())
-
-	require.True(t, lotteryAttemptStart(LotteryAttemptModeTotal, now).IsZero())
+func (s *lotteryActivityRepositoryStub) SaveActivity(_ context.Context, _ int64, input LotteryActivityInput, _ *int64) (*LotteryActivity, error) {
+	s.input = input
+	return s.activity, nil
 }
 
 func TestSelectLotteryPrizeHonorsWeightsAndSkipsUnavailableProducts(t *testing.T) {
@@ -46,37 +44,44 @@ func TestValidateLotteryPrizeRejectsInvalidBalancePrize(t *testing.T) {
 	require.ErrorIs(t, err, ErrLotteryPrizeInvalid)
 }
 
-func TestValidateLotteryActivityAllowsZeroFreeAttempts(t *testing.T) {
-	err := validateLotteryActivity(LotteryActivityInput{
+func TestLotteryActivityPolicyIsNormalizedToWalletOnly(t *testing.T) {
+	input := normalizeLotteryActivityInput(LotteryActivityInput{
 		Name:         "签到次数活动",
 		Status:       LotteryActivityStatusActive,
 		AttemptMode:  LotteryAttemptModeDaily,
-		AttemptLimit: 0,
+		AttemptLimit: 10,
 	})
 
+	require.Equal(t, LotteryAttemptModeTotal, input.AttemptMode)
+	require.Zero(t, input.AttemptLimit)
+}
+
+func TestSaveLotteryActivityPersistsWalletOnlyPolicy(t *testing.T) {
+	repo := &lotteryActivityRepositoryStub{activity: &LotteryActivity{ID: 7, AttemptMode: LotteryAttemptModeDaily, AttemptLimit: 5}}
+	svc := NewLotteryService(nil, repo, nil, nil)
+
+	activity, err := svc.SaveActivity(context.Background(), 7, LotteryActivityInput{
+		Name: "抽奖活动", Status: LotteryActivityStatusActive, AttemptMode: LotteryAttemptModeDaily, AttemptLimit: 5,
+	}, nil)
+
 	require.NoError(t, err)
+	require.Equal(t, LotteryAttemptModeTotal, repo.input.AttemptMode)
+	require.Zero(t, repo.input.AttemptLimit)
+	require.Equal(t, LotteryAttemptModeTotal, activity.AttemptMode)
+	require.Zero(t, activity.AttemptLimit)
 }
 
-func TestLotteryAttemptSummaryAddsPersistentRewardBalance(t *testing.T) {
-	summary := summarizeLotteryAttempts(2, 1, 3)
+func TestLotteryAttemptSummaryUsesOnlyPersistentRewardBalance(t *testing.T) {
+	summary := summarizeLotteryAttempts(3)
 
-	require.Equal(t, 1, summary.ActivityRemaining)
+	require.Zero(t, summary.ActivityRemaining)
 	require.Equal(t, 3, summary.RewardRemaining)
-	require.Equal(t, 4, summary.TotalRemaining)
-	require.Equal(t, LotteryAttemptSourceActivity, summary.NextSource)
-}
-
-func TestLotteryAttemptSummaryFallsBackToRewardBalance(t *testing.T) {
-	summary := summarizeLotteryAttempts(0, 0, 2)
-
-	require.Equal(t, 0, summary.ActivityRemaining)
-	require.Equal(t, 2, summary.RewardRemaining)
-	require.Equal(t, 2, summary.TotalRemaining)
+	require.Equal(t, 3, summary.TotalRemaining)
 	require.Equal(t, LotteryAttemptSourceWallet, summary.NextSource)
 }
 
 func TestLotteryAttemptSummaryIsExhaustedWhenBothSourcesAreEmpty(t *testing.T) {
-	summary := summarizeLotteryAttempts(0, 0, 0)
+	summary := summarizeLotteryAttempts(0)
 
 	require.Zero(t, summary.TotalRemaining)
 	require.Empty(t, summary.NextSource)

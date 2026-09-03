@@ -44,7 +44,7 @@ describe('lottery API contracts', () => {
     post.mockResolvedValueOnce({ data: inventory })
 
     await getLotteryHistory({ page: 2, page_size: 10 })
-    await saveActivity({ id: 1, name: 'Lucky Draw', description: '', status: 'active', attempt_mode: 'daily', attempt_limit: 1 })
+    await saveActivity({ id: 1, name: 'Lucky Draw', description: '', status: 'active' })
     await appendPrizeItems(8, ['code-a', 'code-b'])
 
     expect(get).toHaveBeenCalledWith('/lottery/history', { params: { page: 2, page_size: 10 } })

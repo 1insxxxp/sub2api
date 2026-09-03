@@ -74,7 +74,7 @@ describe('Admin LotteryView', () => {
     listUsers.mockResolvedValue({ items: [], total: 0, page: 1, page_size: 8, pages: 0 })
   })
 
-  it('loads and saves a zero free-attempt limit', async () => {
+  it('does not expose the legacy activity attempt policy controls', async () => {
     const wrapper = mount(LotteryView, {
       global: {
         stubs: {
@@ -86,14 +86,13 @@ describe('Admin LotteryView', () => {
 
     await flushPromises()
 
-    const input = wrapper.get('[data-test="lottery-attempt-limit"]')
-    expect((input.element as HTMLInputElement).value).toBe('0')
+    expect(wrapper.find('[data-test="lottery-attempt-limit"]').exists()).toBe(false)
+    expect(wrapper.text()).not.toContain('lottery.admin.attemptMode')
+    expect(wrapper.text()).not.toContain('lottery.admin.attemptLimit')
     await wrapper.get('[data-test="save-lottery-activity"]').trigger('click')
     await flushPromises()
 
-    expect(saveActivity).toHaveBeenCalledWith(expect.objectContaining({
-      attempt_limit: 0,
-    }))
+    expect(saveActivity).toHaveBeenCalledWith(expect.not.objectContaining({ attempt_mode: expect.anything(), attempt_limit: expect.anything() }))
   })
 
   it('loads and paginates draw records with user and reward details', async () => {
@@ -143,9 +142,8 @@ describe('Admin LotteryView', () => {
         user_email: 'alice@example.com',
         user_name: 'Alice',
         user_status: 'active',
-        activity_remaining: 2,
         reward_remaining: 3,
-        total_remaining: 5,
+        total_remaining: 3,
       }],
       total: 1,
       page: 1,
@@ -165,9 +163,7 @@ describe('Admin LotteryView', () => {
 
     const row = wrapper.get('[data-test="lottery-attempt-balance-row-11"]')
     expect(row.text()).toContain('alice@example.com')
-    expect(row.text()).toContain('2')
     expect(row.text()).toContain('3')
-    expect(row.text()).toContain('5')
     await wrapper.get('[data-test="lottery-attempt-balance-search"]').setValue('alice')
     await wrapper.get('[data-test="lottery-attempt-balance-search-submit"]').trigger('click')
     await flushPromises()

@@ -23,7 +23,7 @@ vi.mock('vue-i18n', async () => {
     useI18n: () => ({
       locale: { value: 'en-US' },
       t: (key: string, params?: Record<string, unknown>) => {
-        if (key === 'lottery.attemptBreakdown') return `${params?.activity} / ${params?.reward}`
+        if (key === 'lottery.attemptBreakdown') return `${params?.reward} wallet attempts`
         return key
       },
     }),
@@ -57,7 +57,7 @@ describe('User LotteryView', () => {
     history.mockResolvedValue({ items: [], total: 0, page: 1, page_size: 10, pages: 0 })
   })
 
-  it('shows activity and check-in reward attempts separately', async () => {
+  it('shows wallet attempts from check-in or administrator grants', async () => {
     const wrapper = mount(LotteryView, {
       global: {
         stubs: {
@@ -71,8 +71,10 @@ describe('User LotteryView', () => {
 
     await flushPromises()
 
-    expect(wrapper.get('[data-test="lottery-attempt-breakdown"]').text()).toContain('0')
     expect(wrapper.get('[data-test="lottery-attempt-breakdown"]').text()).toContain('3')
+    expect(wrapper.get('[data-test="lottery-attempt-breakdown"]').text()).toContain('wallet attempts')
+    expect(wrapper.text()).not.toContain('lottery.daily')
+    expect(wrapper.text()).not.toContain('lottery.total')
     expect(wrapper.text()).toContain('3')
   })
 

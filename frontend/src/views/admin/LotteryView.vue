@@ -31,8 +31,6 @@
           <div class="md:col-span-2"><label class="input-label">{{ t('lottery.admin.name') }}</label><input v-model="activityForm.name" class="input" :placeholder="t('lottery.admin.namePlaceholder')" /></div>
           <div class="md:col-span-2"><label class="input-label">{{ t('lottery.admin.descriptionLabel') }}</label><textarea v-model="activityForm.description" class="input min-h-24 resize-y" :placeholder="t('lottery.admin.descriptionPlaceholder')"></textarea></div>
           <div><label class="input-label">{{ t('lottery.admin.status') }}</label><select v-model="activityForm.status" class="input"><option value="draft">{{ t('lottery.admin.draft') }}</option><option value="active">{{ t('lottery.admin.active') }}</option><option value="disabled">{{ t('lottery.admin.disabledStatus') }}</option><option value="ended">{{ t('lottery.admin.ended') }}</option></select></div>
-          <div><label class="input-label">{{ t('lottery.admin.attemptMode') }}</label><select v-model="activityForm.attempt_mode" class="input"><option value="daily">{{ t('lottery.admin.dailyMode') }}</option><option value="total">{{ t('lottery.admin.totalMode') }}</option></select></div>
-          <div><label class="input-label">{{ t('lottery.admin.attemptLimit') }}</label><input v-model.number="activityForm.attempt_limit" data-test="lottery-attempt-limit" class="input" type="number" min="0" step="1" /><p class="mt-1 text-xs text-slate-500 dark:text-slate-400">{{ t('lottery.admin.attemptLimitHint') }}</p></div>
           <div><label class="input-label">{{ t('lottery.admin.startsAt') }}</label><input v-model="activityForm.starts_at" class="input" type="datetime-local" /></div>
           <div><label class="input-label">{{ t('lottery.admin.endsAt') }}</label><input v-model="activityForm.ends_at" class="input" type="datetime-local" /></div>
         </div>
@@ -104,8 +102,6 @@
               <tr>
                 <th class="px-4 py-3 font-semibold">{{ t('lottery.admin.attemptBalanceUser') }}</th>
                 <th class="px-4 py-3 font-semibold">{{ t('lottery.admin.attemptBalanceStatus') }}</th>
-                <th class="px-4 py-3 font-semibold">{{ t('lottery.admin.activityAttemptsRemaining') }}</th>
-                <th class="px-4 py-3 font-semibold">{{ t('lottery.admin.rewardAttemptsRemaining') }}</th>
                 <th class="px-4 py-3 font-semibold">{{ t('lottery.admin.totalAttemptsRemaining') }}</th>
               </tr>
             </thead>
@@ -117,8 +113,6 @@
                   <div class="mt-1 text-xs text-slate-500 dark:text-slate-400">ID {{ balance.user_id }}</div>
                 </td>
                 <td class="whitespace-nowrap px-4 py-3 text-slate-600 dark:text-slate-300">{{ formatUserStatus(balance.user_status) }}</td>
-                <td class="whitespace-nowrap px-4 py-3 font-medium text-slate-700 dark:text-slate-200">{{ balance.activity_remaining }}</td>
-                <td class="whitespace-nowrap px-4 py-3 font-medium text-slate-700 dark:text-slate-200">{{ balance.reward_remaining }}</td>
                 <td class="whitespace-nowrap px-4 py-3 font-semibold text-cyan-700 dark:text-cyan-300">{{ balance.total_remaining }}</td>
               </tr>
             </tbody>
@@ -241,7 +235,7 @@ import Icon from '@/components/icons/Icon.vue'
 import Pagination from '@/components/common/Pagination.vue'
 import { adminAPI } from '@/api/admin'
 import { lotteryAdminAPI, type LotteryAdminAttemptBalance, type LotteryAdminDraw, type LotteryPrizeItem } from '@/api/admin/lottery'
-import type { LotteryActivity, LotteryAttemptMode, LotteryPrize } from '@/api/lottery'
+import type { LotteryActivity, LotteryPrize } from '@/api/lottery'
 import type { AdminUser } from '@/types'
 import { useAppStore } from '@/stores/app'
 
@@ -283,10 +277,10 @@ const newGrantRequestKey = () => {
 }
 const grantRequestKey = ref(newGrantRequestKey())
 
-interface ActivityForm { id?: number; name: string; description: string; status: string; attempt_mode: LotteryAttemptMode; attempt_limit: number; starts_at: string; ends_at: string }
+interface ActivityForm { id?: number; name: string; description: string; status: string; starts_at: string; ends_at: string }
 interface PrizeDraft { id?: number; name: string; description: string; type: 'balance' | 'product'; weight: number; balance_amount?: number | null; enabled: boolean; sort_order: number }
 
-const activityForm = reactive<ActivityForm>({ name: '', description: '', status: 'draft', attempt_mode: 'daily', attempt_limit: 0, starts_at: '', ends_at: '' })
+const activityForm = reactive<ActivityForm>({ name: '', description: '', status: 'draft', starts_at: '', ends_at: '' })
 const formatAmount = (value?: number | null) => `$${Number(value || 0).toFixed(2)}`
 const formatDateTime = (value?: string | null) => value ? new Date(value).toLocaleString() : '—'
 const formatUserStatus = (status: string) => status === 'active' ? t('lottery.admin.active') : status === 'disabled' ? t('lottery.admin.disabledStatus') : status
@@ -299,8 +293,6 @@ function applyActivity(activity?: LotteryActivity | null) {
   activityForm.name = activity?.name || ''
   activityForm.description = activity?.description || ''
   activityForm.status = activity?.status || 'draft'
-  activityForm.attempt_mode = activity?.attempt_mode || 'daily'
-  activityForm.attempt_limit = activity?.attempt_limit ?? 0
   activityForm.starts_at = toDateTimeLocal(activity?.starts_at)
   activityForm.ends_at = toDateTimeLocal(activity?.ends_at)
 }
@@ -434,7 +426,7 @@ async function saveActivityForm() {
   if (!activityForm.name.trim()) { appStore.showError(t('lottery.admin.saveFailed')); return }
   savingActivity.value = true
   try {
-    const saved = await lotteryAdminAPI.saveActivity({ id: activityForm.id, name: activityForm.name.trim(), description: activityForm.description, status: activityForm.status, attempt_mode: activityForm.attempt_mode, attempt_limit: Math.max(0, Math.floor(Number(activityForm.attempt_limit) || 0)), starts_at: toISOStringOrNull(activityForm.starts_at), ends_at: toISOStringOrNull(activityForm.ends_at) })
+    const saved = await lotteryAdminAPI.saveActivity({ id: activityForm.id, name: activityForm.name.trim(), description: activityForm.description, status: activityForm.status, starts_at: toISOStringOrNull(activityForm.starts_at), ends_at: toISOStringOrNull(activityForm.ends_at) })
     applyActivity(saved)
     await loadAttemptBalances(1)
     appStore.showSuccess(t('lottery.admin.saved'))

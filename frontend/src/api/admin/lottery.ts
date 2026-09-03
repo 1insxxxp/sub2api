@@ -1,6 +1,6 @@
 import { apiClient } from '../client'
 import type { PaginatedResponse } from '@/types'
-import type { LotteryActivity, LotteryAttemptMode, LotteryPrize, LotteryPrizeType } from '@/api/lottery'
+import type { LotteryActivity, LotteryPrize, LotteryPrizeType } from '@/api/lottery'
 
 export interface LotteryActivityConfig {
   activity?: LotteryActivity | null
@@ -12,8 +12,6 @@ export interface SaveLotteryActivityRequest {
   name: string
   description: string
   status: string
-  attempt_mode: LotteryAttemptMode
-  attempt_limit: number
   starts_at?: string | null
   ends_at?: string | null
 }

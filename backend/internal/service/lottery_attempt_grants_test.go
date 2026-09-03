@@ -96,13 +96,11 @@ func TestLotteryAttemptGrantRejectsInvalidRequests(t *testing.T) {
 	}
 }
 
-func TestLotteryAdminAttemptBalancesNormalizesQueryAndUsesActiveActivity(t *testing.T) {
+func TestLotteryAdminAttemptBalancesUsesWalletOnlyQuery(t *testing.T) {
 	now := time.Date(2026, 9, 3, 12, 0, 0, 0, time.UTC)
-	activity := &LotteryActivity{ID: 42, AttemptMode: LotteryAttemptModeDaily, AttemptLimit: 5}
 	repo := &lotteryAttemptBalanceRepositoryStub{
-		activity: activity,
-		rows:     []LotteryAdminAttemptBalance{{UserID: 7, TotalRemaining: 4}},
-		total:    1,
+		rows:  []LotteryAdminAttemptBalance{{UserID: 7, TotalRemaining: 4}},
+		total: 1,
 	}
 	svc := NewLotteryService(nil, repo, nil, nil)
 
@@ -111,15 +109,5 @@ func TestLotteryAdminAttemptBalancesNormalizesQueryAndUsesActiveActivity(t *test
 	require.NoError(t, err)
 	require.Equal(t, repo.rows, rows)
 	require.Equal(t, 1, total)
-	require.Equal(t, LotteryAdminAttemptBalanceQuery{
-		Offset:        100,
-		Limit:         100,
-		Search:        "alice",
-		ActivityID:    activity.ID,
-		ActivityLimit: activity.AttemptLimit,
-		ActivitySince: func() *time.Time {
-			value := time.Date(2026, 9, 3, 0, 0, 0, 0, time.UTC)
-			return &value
-		}(),
-	}, repo.query)
+	require.Equal(t, LotteryAdminAttemptBalanceQuery{Offset: 100, Limit: 100, Search: "alice"}, repo.query)
 }

@@ -179,12 +179,12 @@ func TestLotteryRepositoryListsAdminAttemptBalances(t *testing.T) {
 	require.Len(t, rows, 2)
 	require.Equal(t, "alice@example.com", rows[0].UserEmail)
 	require.Equal(t, "active", rows[0].UserStatus)
-	require.Equal(t, 3, rows[0].ActivityRemaining)
+	require.Zero(t, rows[0].ActivityRemaining)
 	require.Equal(t, 4, rows[0].RewardRemaining)
-	require.Equal(t, 7, rows[0].TotalRemaining)
+	require.Equal(t, 4, rows[0].TotalRemaining)
 	require.Equal(t, "bob@example.com", rows[1].UserEmail)
 	require.Equal(t, service.StatusDisabled, rows[1].UserStatus)
-	require.Equal(t, 5, rows[1].ActivityRemaining)
+	require.Zero(t, rows[1].ActivityRemaining)
 	require.Equal(t, 2, rows[1].RewardRemaining)
 
 	filtered, filteredTotal, err := repo.ListAdminAttemptBalances(ctx, service.LotteryAdminAttemptBalanceQuery{
