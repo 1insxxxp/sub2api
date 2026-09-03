@@ -211,6 +211,13 @@ type LotteryRepository interface {
 	ClaimAvailableProductItem(ctx context.Context, prizeID, userID int64, now time.Time) (*LotteryPrizeItem, error)
 	CreateDraw(ctx context.Context, draw LotteryDraw) (*LotteryDraw, error)
 	ListUserDraws(ctx context.Context, userID int64, offset, limit int) ([]LotteryDraw, int, error)
+}
+
+// LotteryAdminDrawRepository is an optional capability implemented by the
+// production repository for the administrator-only audit view. Keeping it
+// separate preserves compatibility with existing user-facing repository
+// adapters and test doubles.
+type LotteryAdminDrawRepository interface {
 	ListAdminDraws(ctx context.Context, offset, limit int) ([]LotteryAdminDraw, int, error)
 }
 
@@ -495,7 +502,11 @@ func (s *LotteryService) ListAdminDraws(ctx context.Context, offset, limit int) 
 	if offset < 0 {
 		offset = 0
 	}
-	return s.repo.ListAdminDraws(ctx, offset, limit)
+	adminRepo, ok := s.repo.(LotteryAdminDrawRepository)
+	if !ok {
+		return nil, 0, ErrLotteryConfigurationDenied
+	}
+	return adminRepo.ListAdminDraws(ctx, offset, limit)
 }
 
 func (s *LotteryService) lotteryEnabled(ctx context.Context) bool {
