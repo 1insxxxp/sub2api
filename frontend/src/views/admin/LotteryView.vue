@@ -11,7 +11,7 @@
             </div>
           </div>
           <div class="admin-toolbar-group w-full justify-end lg:w-auto lg:flex-none">
-            <button type="button" class="btn btn-secondary inline-flex items-center gap-2" :disabled="loading || recordsLoading" @click="refreshAll"><Icon name="refresh" size="sm" :class="loading || recordsLoading ? 'animate-spin' : ''" />{{ t('common.refresh') }}</button>
+            <button type="button" class="btn btn-secondary inline-flex items-center gap-2" :disabled="loading || recordsLoading || attemptBalancesLoading" @click="refreshAll"><Icon name="refresh" size="sm" :class="loading || recordsLoading || attemptBalancesLoading ? 'animate-spin' : ''" />{{ t('common.refresh') }}</button>
             <button type="button" data-test="save-lottery-activity" class="btn btn-primary inline-flex items-center gap-2" :disabled="savingActivity" @click="saveActivityForm"><Icon name="check" size="sm" />{{ savingActivity ? t('common.saving') : t('lottery.admin.saveActivity') }}</button>
           </div>
         </div>
@@ -116,7 +116,7 @@
                   <div v-if="balance.user_name && balance.user_email" class="mt-1 text-xs text-slate-500 dark:text-slate-400">{{ balance.user_name }}</div>
                   <div class="mt-1 text-xs text-slate-500 dark:text-slate-400">ID {{ balance.user_id }}</div>
                 </td>
-                <td class="whitespace-nowrap px-4 py-3 text-slate-600 dark:text-slate-300">{{ balance.user_status }}</td>
+                <td class="whitespace-nowrap px-4 py-3 text-slate-600 dark:text-slate-300">{{ formatUserStatus(balance.user_status) }}</td>
                 <td class="whitespace-nowrap px-4 py-3 font-medium text-slate-700 dark:text-slate-200">{{ balance.activity_remaining }}</td>
                 <td class="whitespace-nowrap px-4 py-3 font-medium text-slate-700 dark:text-slate-200">{{ balance.reward_remaining }}</td>
                 <td class="whitespace-nowrap px-4 py-3 font-semibold text-cyan-700 dark:text-cyan-300">{{ balance.total_remaining }}</td>
@@ -289,6 +289,7 @@ interface PrizeDraft { id?: number; name: string; description: string; type: 'ba
 const activityForm = reactive<ActivityForm>({ name: '', description: '', status: 'draft', attempt_mode: 'daily', attempt_limit: 0, starts_at: '', ends_at: '' })
 const formatAmount = (value?: number | null) => `$${Number(value || 0).toFixed(2)}`
 const formatDateTime = (value?: string | null) => value ? new Date(value).toLocaleString() : '—'
+const formatUserStatus = (status: string) => status === 'active' ? t('lottery.admin.active') : status === 'disabled' ? t('lottery.admin.disabledStatus') : status
 const toDateTimeLocal = (value?: string | null) => value ? new Date(value).toISOString().slice(0, 16) : ''
 const toISOStringOrNull = (value: string) => value ? new Date(value).toISOString() : null
 
@@ -435,6 +436,7 @@ async function saveActivityForm() {
   try {
     const saved = await lotteryAdminAPI.saveActivity({ id: activityForm.id, name: activityForm.name.trim(), description: activityForm.description, status: activityForm.status, attempt_mode: activityForm.attempt_mode, attempt_limit: Math.max(0, Math.floor(Number(activityForm.attempt_limit) || 0)), starts_at: toISOStringOrNull(activityForm.starts_at), ends_at: toISOStringOrNull(activityForm.ends_at) })
     applyActivity(saved)
+    await loadAttemptBalances(1)
     appStore.showSuccess(t('lottery.admin.saved'))
   } catch (error: any) { appStore.showError(error?.message || t('lottery.admin.saveFailed')) } finally { savingActivity.value = false }
 }
