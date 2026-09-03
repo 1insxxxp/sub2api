@@ -49,6 +49,7 @@
           <div class="md:col-span-2 flex flex-wrap gap-4 text-sm font-medium text-slate-700 dark:text-slate-200">
             <label class="inline-flex cursor-pointer items-center gap-2"><input v-model="grantTarget" data-test="lottery-grant-selected" type="radio" value="selected" class="h-4 w-4 text-emerald-600 focus:ring-emerald-500" />{{ t('lottery.admin.grantSelectedUsers') }}</label>
             <label class="inline-flex cursor-pointer items-center gap-2"><input v-model="grantTarget" data-test="lottery-grant-all" type="radio" value="all" class="h-4 w-4 text-emerald-600 focus:ring-emerald-500" />{{ t('lottery.admin.grantAllUsers') }}</label>
+            <label class="inline-flex cursor-pointer items-center gap-2"><input v-model="grantTarget" data-test="lottery-grant-active" type="radio" value="active" class="h-4 w-4 text-emerald-600 focus:ring-emerald-500" />{{ t('lottery.admin.grantActiveUsers') }}</label>
           </div>
 
           <div v-if="grantTarget === 'selected'" class="md:col-span-2">
@@ -69,6 +70,21 @@
             </div>
           </div>
 
+          <div v-if="grantTarget === 'active'" class="md:col-span-2 rounded-xl border border-emerald-200 bg-emerald-50/60 p-4 dark:border-emerald-900/60 dark:bg-emerald-950/20">
+            <div class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+              <div>
+                <label class="input-label">{{ t('lottery.admin.grantActiveWindow') }}</label>
+                <select v-model.number="activeDays" data-test="lottery-grant-active-days" class="input sm:max-w-xs">
+                  <option :value="7">{{ t('lottery.admin.grantActive7Days') }}</option>
+                  <option :value="30">{{ t('lottery.admin.grantActive30Days') }}</option>
+                </select>
+              </div>
+              <p v-if="grantPreviewLoading" data-test="lottery-grant-preview" class="text-sm text-emerald-700 dark:text-emerald-300">{{ t('lottery.admin.grantPreviewLoading') }}</p>
+              <p v-else-if="grantPreviewError" data-test="lottery-grant-preview" class="text-sm text-red-700 dark:text-red-300">{{ grantPreviewError }}</p>
+              <p v-else-if="grantPreviewCount !== null" data-test="lottery-grant-preview" class="text-sm font-medium text-emerald-700 dark:text-emerald-300">{{ t('lottery.admin.grantPreviewCount', { count: grantPreviewCount }) }}</p>
+            </div>
+          </div>
+
           <div><label class="input-label">{{ t('lottery.admin.grantAmount') }}</label><input v-model.number="grantAmount" data-test="lottery-grant-amount" class="input" type="number" min="1" step="1" /></div>
           <div><label class="input-label">{{ t('lottery.admin.grantDescription') }}</label><input v-model="grantDescription" data-test="lottery-grant-description" class="input" :placeholder="t('lottery.admin.grantDescriptionPlaceholder')" /></div>
         </div>
@@ -76,7 +92,7 @@
         <div class="mt-4 flex items-center justify-between gap-3">
           <p v-if="grantResult" data-test="lottery-grant-result" class="text-sm text-emerald-700 dark:text-emerald-300">{{ t('lottery.admin.grantSuccess') }}: {{ grantResult.affected }} {{ t('lottery.admin.grantUsersAffected') }}, {{ grantResult.total_granted }} {{ t('lottery.admin.grantAttemptsIssued') }}</p>
           <span v-else></span>
-          <button type="button" data-test="lottery-grant-submit" class="btn btn-primary" :disabled="grantSaving" @click="submitGrantAttempts"><Icon name="gift" size="sm" />{{ grantSaving ? t('common.saving') : t('lottery.admin.grantSubmit') }}</button>
+          <button type="button" data-test="lottery-grant-submit" class="btn btn-primary" :disabled="grantSaving || (grantTarget === 'active' && (grantPreviewLoading || !!grantPreviewError || grantPreviewCount === null || grantPreviewCount === 0))" @click="submitGrantAttempts"><Icon name="gift" size="sm" />{{ grantSaving ? t('common.saving') : t('lottery.admin.grantSubmit') }}</button>
         </div>
       </section>
 
@@ -228,7 +244,7 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, reactive, ref } from 'vue'
+import { onMounted, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import Icon from '@/components/icons/Icon.vue'
@@ -262,7 +278,12 @@ const attemptBalancesError = ref('')
 const attemptBalances = ref<LotteryAdminAttemptBalance[]>([])
 const attemptBalanceSearch = ref('')
 const attemptBalancePagination = reactive({ page: 1, page_size: 10, total: 0 })
-const grantTarget = ref<'selected' | 'all'>('selected')
+const grantTarget = ref<'selected' | 'all' | 'active'>('selected')
+const activeDays = ref<7 | 30>(7)
+const grantPreviewLoading = ref(false)
+const grantPreviewError = ref('')
+const grantPreviewCount = ref<number | null>(null)
+let grantPreviewRequestID = 0
 const grantUserSearch = ref('')
 const grantUserResults = ref<AdminUser[]>([])
 const selectedGrantUsers = ref<AdminUser[]>([])
@@ -358,6 +379,30 @@ async function searchGrantUsers() {
   } finally { grantSearching.value = false }
 }
 
+async function loadGrantPreview() {
+  const requestID = ++grantPreviewRequestID
+  if (grantTarget.value !== 'active') {
+    grantPreviewLoading.value = false
+    grantPreviewError.value = ''
+    grantPreviewCount.value = null
+    return
+  }
+  grantPreviewLoading.value = true
+  grantPreviewError.value = ''
+  grantPreviewCount.value = null
+  try {
+    const result = await lotteryAdminAPI.previewAttemptGrant({ target: 'active', active_days: activeDays.value })
+    if (requestID === grantPreviewRequestID) grantPreviewCount.value = result.count
+  } catch (error: any) {
+    if (requestID === grantPreviewRequestID) {
+      grantPreviewError.value = error?.message || t('lottery.admin.grantPreviewFailed')
+      appStore.showError(grantPreviewError.value)
+    }
+  } finally {
+    if (requestID === grantPreviewRequestID) grantPreviewLoading.value = false
+  }
+}
+
 function selectGrantUser(user: AdminUser) {
   if (!selectedGrantUsers.value.some(item => item.id === user.id)) selectedGrantUsers.value.push(user)
   grantUserResults.value = grantUserResults.value.filter(item => item.id !== user.id)
@@ -378,9 +423,15 @@ async function submitGrantAttempts() {
     appStore.showError(t('lottery.admin.grantUsersRequired'))
     return
   }
+  if (grantTarget.value === 'active' && (grantPreviewLoading.value || !!grantPreviewError.value || grantPreviewCount.value === null || grantPreviewCount.value === 0)) {
+    appStore.showError(grantPreviewError.value || t('lottery.admin.grantPreviewEmpty'))
+    return
+  }
   grantSaving.value = true
   try {
-    const request = grantTarget.value === 'all'
+    const request = grantTarget.value === 'active'
+      ? { target: 'active' as const, active_days: activeDays.value, amount, description: grantDescription.value.trim(), request_key: grantRequestKey.value }
+      : grantTarget.value === 'all'
       ? { all: true, amount, description: grantDescription.value.trim(), request_key: grantRequestKey.value }
       : { user_ids: selectedGrantUsers.value.map(user => user.id), amount, description: grantDescription.value.trim(), request_key: grantRequestKey.value }
     grantResult.value = await lotteryAdminAPI.grantAttempts(request)
@@ -391,10 +442,16 @@ async function submitGrantAttempts() {
     grantDescription.value = ''
     grantRequestKey.value = newGrantRequestKey()
     await loadAttemptBalances(1)
+    if (grantTarget.value === 'active') await loadGrantPreview()
   } catch (error: any) {
     appStore.showError(error?.message || t('lottery.admin.grantFailed'))
   } finally { grantSaving.value = false }
 }
+
+watch([grantTarget, activeDays], () => {
+  grantResult.value = null
+  void loadGrantPreview()
+})
 
 async function refreshAll() {
   await Promise.all([loadConfig(), loadDraws(1), loadAttemptBalances(1)])

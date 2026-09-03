@@ -3,11 +3,12 @@ import { flushPromises, mount } from '@vue/test-utils'
 
 import LotteryView from '../LotteryView.vue'
 
-const { getConfig, listDraws, listAttemptBalances, grantAttempts, listUsers, saveActivity, createPrize, showSuccess, showError } = vi.hoisted(() => ({
+const { getConfig, listDraws, listAttemptBalances, grantAttempts, previewAttemptGrant, listUsers, saveActivity, createPrize, showSuccess, showError } = vi.hoisted(() => ({
   getConfig: vi.fn(),
   listDraws: vi.fn(),
   listAttemptBalances: vi.fn(),
   grantAttempts: vi.fn(),
+  previewAttemptGrant: vi.fn(),
   listUsers: vi.fn(),
   saveActivity: vi.fn(),
   createPrize: vi.fn(),
@@ -21,6 +22,7 @@ vi.mock('@/api/admin/lottery', () => ({
     listDraws,
     listAttemptBalances,
     grantAttempts,
+    previewAttemptGrant,
     saveActivity,
     createPrize,
   },
@@ -40,7 +42,7 @@ vi.mock('vue-i18n', async () => {
   const actual = await vi.importActual<typeof import('vue-i18n')>('vue-i18n')
   return {
     ...actual,
-    useI18n: () => ({ t: (key: string) => key }),
+    useI18n: () => ({ t: (key: string, params?: Record<string, unknown>) => params ? `${key} ${Object.values(params).join(' ')}` : key }),
   }
 })
 
@@ -54,6 +56,7 @@ describe('Admin LotteryView', () => {
     listDraws.mockReset()
     listAttemptBalances.mockReset()
     grantAttempts.mockReset()
+    previewAttemptGrant.mockReset()
     listUsers.mockReset()
     saveActivity.mockReset()
     createPrize.mockReset()
@@ -74,6 +77,7 @@ describe('Admin LotteryView', () => {
     listDraws.mockResolvedValue({ items: [], total: 0, page: 1, page_size: 10, pages: 0 })
     listAttemptBalances.mockResolvedValue({ items: [], total: 0, page: 1, page_size: 10, pages: 0 })
     grantAttempts.mockResolvedValue({ affected: 1, total_granted: 2 })
+    previewAttemptGrant.mockResolvedValue({ count: 0 })
     listUsers.mockResolvedValue({ items: [], total: 0, page: 1, page_size: 8, pages: 0 })
     createPrize.mockResolvedValue({ id: 9, activity_id: 1, name: 'New prize', description: '', type: 'balance', weight: 1, balance_amount: 1, enabled: true, sort_order: 0, available_item_count: 0 })
   })
@@ -222,6 +226,56 @@ describe('Admin LotteryView', () => {
     await flushPromises()
 
     expect(grantAttempts).toHaveBeenCalledWith(expect.objectContaining({ all: true, amount: 2, description: '', request_key: expect.any(String) }))
+  })
+
+  it('previews and grants attempts to recently active users', async () => {
+    previewAttemptGrant.mockResolvedValue({ count: 12 })
+    const wrapper = mount(LotteryView, {
+      global: {
+        stubs: {
+          AppLayout: { template: '<div><slot /></div>' },
+          Icon: true,
+        },
+      },
+    })
+
+    await flushPromises()
+    await wrapper.get('[data-test="lottery-grant-active"]').setValue(true)
+    await flushPromises()
+
+    expect(previewAttemptGrant).toHaveBeenLastCalledWith({ target: 'active', active_days: 7 })
+    expect(wrapper.get('[data-test="lottery-grant-active-days"]').exists()).toBe(true)
+    expect(wrapper.get('[data-test="lottery-grant-preview"]').text()).toContain('12')
+
+    await wrapper.get('[data-test="lottery-grant-active-days"]').setValue('30')
+    await flushPromises()
+    expect(previewAttemptGrant).toHaveBeenLastCalledWith({ target: 'active', active_days: 30 })
+
+    await wrapper.get('[data-test="lottery-grant-amount"]').setValue('2')
+    await wrapper.get('[data-test="lottery-grant-submit"]').trigger('click')
+    await flushPromises()
+    expect(grantAttempts).toHaveBeenCalledWith(expect.objectContaining({ target: 'active', active_days: 30, amount: 2, request_key: expect.any(String) }))
+  })
+
+  it('blocks active-user grants while the preview request fails', async () => {
+    previewAttemptGrant.mockRejectedValue(new Error('preview unavailable'))
+    const wrapper = mount(LotteryView, {
+      global: {
+        stubs: {
+          AppLayout: { template: '<div><slot /></div>' },
+          Icon: true,
+        },
+      },
+    })
+
+    await flushPromises()
+    await wrapper.get('[data-test="lottery-grant-active"]').setValue(true)
+    await flushPromises()
+
+    expect(wrapper.get('[data-test="lottery-grant-submit"]').attributes('disabled')).toBeDefined()
+    await wrapper.get('[data-test="lottery-grant-submit"]').trigger('click')
+    expect(grantAttempts).not.toHaveBeenCalled()
+    expect(showError).toHaveBeenCalled()
   })
 
   it('does not submit a balance prize with an empty credit amount', async () => {
