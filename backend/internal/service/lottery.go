@@ -91,6 +91,33 @@ type LotteryPrize struct {
 	UpdatedAt          time.Time `json:"updated_at"`
 }
 
+// LotteryPublicPrize is the user-facing prize shape. Odds are intentionally
+// kept out of public responses so clients cannot display the internal draw
+// weighting configured by administrators.
+type LotteryPublicPrize struct {
+	ID                 int64     `json:"id"`
+	ActivityID         int64     `json:"activity_id"`
+	Name               string    `json:"name"`
+	Description        string    `json:"description"`
+	Type               string    `json:"type"`
+	BalanceAmount      *float64  `json:"balance_amount,omitempty"`
+	Enabled            bool      `json:"enabled"`
+	SortOrder          int       `json:"sort_order"`
+	AvailableItemCount int       `json:"available_item_count"`
+	CreatedAt          time.Time `json:"created_at"`
+	UpdatedAt          time.Time `json:"updated_at"`
+}
+
+func toLotteryPublicPrize(prize LotteryPrize) LotteryPublicPrize {
+	return LotteryPublicPrize{
+		ID: prize.ID, ActivityID: prize.ActivityID, Name: prize.Name,
+		Description: prize.Description, Type: prize.Type,
+		BalanceAmount: prize.BalanceAmount, Enabled: prize.Enabled,
+		SortOrder: prize.SortOrder, AvailableItemCount: prize.AvailableItemCount,
+		CreatedAt: prize.CreatedAt, UpdatedAt: prize.UpdatedAt,
+	}
+}
+
 // LotteryPrizeItem is an individual single-use product/code inventory item.
 type LotteryPrizeItem struct {
 	ID        int64      `json:"id"`
@@ -186,12 +213,12 @@ type LotteryActivityConfig struct {
 }
 
 type LotteryPublicState struct {
-	Activity                  *LotteryActivity `json:"activity"`
-	Prizes                    []LotteryPrize   `json:"prizes"`
-	AttemptsUsed              int              `json:"attempts_used"`
-	ActivityAttemptsRemaining int              `json:"activity_attempts_remaining"`
-	RewardAttemptsRemaining   int              `json:"reward_attempts_remaining"`
-	AttemptsRemaining         int              `json:"attempts_remaining"`
+	Activity                  *LotteryActivity     `json:"activity"`
+	Prizes                    []LotteryPublicPrize `json:"prizes"`
+	AttemptsUsed              int                  `json:"attempts_used"`
+	ActivityAttemptsRemaining int                  `json:"activity_attempts_remaining"`
+	RewardAttemptsRemaining   int                  `json:"reward_attempts_remaining"`
+	AttemptsRemaining         int                  `json:"attempts_remaining"`
 }
 
 type LotteryDrawResult struct {
@@ -402,6 +429,10 @@ func (s *LotteryService) GetPublicState(ctx context.Context, userID int64, now t
 	if err != nil {
 		return nil, err
 	}
+	publicPrizes := make([]LotteryPublicPrize, len(prizes))
+	for i, prize := range prizes {
+		publicPrizes[i] = toLotteryPublicPrize(prize)
+	}
 	used, err := s.repo.CountUserDraws(ctx, activity.ID, userID, nil)
 	if err != nil {
 		return nil, err
@@ -413,7 +444,7 @@ func (s *LotteryService) GetPublicState(ctx context.Context, userID int64, now t
 	attempts := summarizeLotteryAttempts(rewardBalance)
 	return &LotteryPublicState{
 		Activity:                  activity,
-		Prizes:                    prizes,
+		Prizes:                    publicPrizes,
 		AttemptsUsed:              used,
 		ActivityAttemptsRemaining: attempts.ActivityRemaining,
 		RewardAttemptsRemaining:   attempts.RewardRemaining,

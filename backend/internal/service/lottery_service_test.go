@@ -133,6 +133,25 @@ func TestLotteryAdminDrawMarksDeletedUser(t *testing.T) {
 	}
 }
 
+func TestLotteryPublicPrizeOmitsWeight(t *testing.T) {
+	publicPrize := toLotteryPublicPrize(LotteryPrize{
+		ID:            9,
+		ActivityID:    1,
+		Name:          "余额奖励",
+		Description:   "到账 1 美元",
+		Type:          LotteryPrizeTypeBalance,
+		Weight:        99,
+		BalanceAmount: lotteryFloat64Ptr(1),
+		Enabled:       true,
+	})
+
+	payload, err := json.Marshal(publicPrize)
+	require.NoError(t, err)
+	require.False(t, containsJSONKey(payload, "weight"), "public prize must not expose weight: %s", payload)
+	require.Equal(t, int64(9), publicPrize.ID)
+	require.Equal(t, "余额奖励", publicPrize.Name)
+}
+
 func lotteryFloat64Ptr(value float64) *float64 {
 	return &value
 }
