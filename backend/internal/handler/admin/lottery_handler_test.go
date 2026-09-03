@@ -16,9 +16,8 @@ import (
 
 type lotteryAdminRepoStub struct {
 	service.LotteryRepository
-	draws      []service.LotteryAdminDraw
-	lastOffset int
-	lastLimit  int
+	draws     []service.LotteryAdminDraw
+	lastQuery service.LotteryAdminDrawQuery
 }
 
 type lotteryAttemptGrantRepoStub struct {
@@ -56,9 +55,8 @@ func (s *lotteryAttemptGrantRepoStub) PreviewLotteryAttemptGrant(_ context.Conte
 	return s.preview, nil
 }
 
-func (s *lotteryAdminRepoStub) ListAdminDraws(_ context.Context, offset, limit int) ([]service.LotteryAdminDraw, int, error) {
-	s.lastOffset = offset
-	s.lastLimit = limit
+func (s *lotteryAdminRepoStub) ListAdminDraws(_ context.Context, query service.LotteryAdminDrawQuery) ([]service.LotteryAdminDraw, int, error) {
+	s.lastQuery = query
 	return s.draws, len(s.draws), nil
 }
 
@@ -73,15 +71,19 @@ func TestLotteryAdminHandlerListsDrawRecordsWithPagination(t *testing.T) {
 	router := gin.New()
 	router.GET("/admin/lottery/draws", h.ListDraws)
 
-	req := httptest.NewRequest(http.MethodGet, "/admin/lottery/draws?page=2&page_size=10", nil)
+	req := httptest.NewRequest(http.MethodGet, "/admin/lottery/draws?page=2&page_size=10&user_id=11&prize_type=product&attempt_source=wallet&winners_only=true", nil)
 	res := httptest.NewRecorder()
 	router.ServeHTTP(res, req)
 
 	if res.Code != http.StatusOK {
 		t.Fatalf("status = %d, body = %s", res.Code, res.Body.String())
 	}
-	if repo.lastOffset != 10 || repo.lastLimit != 10 {
-		t.Fatalf("pagination = (%d, %d), want (10, 10)", repo.lastOffset, repo.lastLimit)
+	wantQuery := service.LotteryAdminDrawQuery{
+		Offset: 10, Limit: 10, UserID: 11, PrizeType: service.LotteryPrizeTypeProduct,
+		AttemptSource: service.LotteryAttemptSourceWallet, WinnersOnly: true,
+	}
+	if repo.lastQuery != wantQuery {
+		t.Fatalf("query = %#v, want %#v", repo.lastQuery, wantQuery)
 	}
 	var envelope struct {
 		Data struct {
@@ -98,6 +100,29 @@ func TestLotteryAdminHandlerListsDrawRecordsWithPagination(t *testing.T) {
 	}
 	if envelope.Data.Total != 1 || envelope.Data.Page != 2 {
 		t.Fatalf("unexpected pagination response: %#v", envelope.Data)
+	}
+}
+
+func TestLotteryAdminHandlerRejectsInvalidDrawFilters(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	repo := &lotteryAdminRepoStub{}
+	svc := service.NewLotteryService(nil, repo, nil, nil)
+	h := NewLotteryHandler(svc)
+	router := gin.New()
+	router.GET("/admin/lottery/draws", h.ListDraws)
+
+	for _, rawQuery := range []string{
+		"prize_type=invalid",
+		"attempt_source=invalid",
+		"user_id=abc",
+		"winners_only=maybe",
+	} {
+		req := httptest.NewRequest(http.MethodGet, "/admin/lottery/draws?"+rawQuery, nil)
+		res := httptest.NewRecorder()
+		router.ServeHTTP(res, req)
+		if res.Code != http.StatusBadRequest {
+			t.Fatalf("query %q status = %d, body = %s", rawQuery, res.Code, res.Body.String())
+		}
 	}
 }
 

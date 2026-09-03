@@ -38,6 +38,7 @@ const (
 
 	LotteryPrizeTypeBalance = "balance"
 	LotteryPrizeTypeProduct = "product"
+	LotteryPrizeTypeNone    = "none"
 
 	LotteryPrizeItemStatusAvailable = "available"
 	LotteryPrizeItemStatusClaimed   = "claimed"
@@ -61,6 +62,7 @@ var (
 	ErrLotteryAttemptGrantNoUsers  = infraerrors.BadRequest("LOTTERY_ATTEMPT_GRANT_NO_USERS", "no users match the lottery attempt grant target")
 	ErrLotteryAttemptGrantConflict = infraerrors.Conflict("LOTTERY_ATTEMPT_GRANT_CONFLICT", "lottery attempt grant request key was already used with different parameters")
 	ErrLotteryDrawNotFound         = infraerrors.NotFound("LOTTERY_DRAW_NOT_FOUND", "lottery draw not found")
+	ErrLotteryDrawQueryInvalid     = infraerrors.BadRequest("LOTTERY_DRAW_QUERY_INVALID", "lottery draw query is invalid")
 	ErrLotteryConfigurationDenied  = infraerrors.Forbidden("LOTTERY_CONFIGURATION_DENIED", "lottery configuration is not available")
 )
 
@@ -170,6 +172,28 @@ type LotteryAdminDraw struct {
 	CreatedAt      time.Time `json:"created_at"`
 }
 
+type LotteryAdminDrawQuery struct {
+	Offset        int
+	Limit         int
+	UserID        int64
+	PrizeType     string
+	AttemptSource string
+	WinnersOnly   bool
+}
+
+func (q LotteryAdminDrawQuery) Validate() error {
+	if q.UserID < 0 {
+		return ErrLotteryDrawQueryInvalid
+	}
+	if q.PrizeType != "" && q.PrizeType != LotteryPrizeTypeBalance && q.PrizeType != LotteryPrizeTypeProduct && q.PrizeType != LotteryPrizeTypeNone {
+		return ErrLotteryDrawQueryInvalid
+	}
+	if q.AttemptSource != "" && q.AttemptSource != LotteryAttemptSourceActivity && q.AttemptSource != LotteryAttemptSourceWallet {
+		return ErrLotteryDrawQueryInvalid
+	}
+	return nil
+}
+
 // NewLotteryAdminDraw converts the internal draw snapshot and a user record to
 // the administrator-facing audit representation. A nil or soft-deleted user
 // remains identifiable by ID without leaking any stale identity fields.
@@ -262,7 +286,7 @@ type LotteryRepository interface {
 // separate preserves compatibility with existing user-facing repository
 // adapters and test doubles.
 type LotteryAdminDrawRepository interface {
-	ListAdminDraws(ctx context.Context, offset, limit int) ([]LotteryAdminDraw, int, error)
+	ListAdminDraws(ctx context.Context, query LotteryAdminDrawQuery) ([]LotteryAdminDraw, int, error)
 }
 
 // LotteryAdminAttemptBalance describes the current draw-attempt balances for
@@ -610,24 +634,27 @@ func (s *LotteryService) ListUserDraws(ctx context.Context, userID int64, offset
 
 // ListAdminDraws returns the newest lottery draws for the administrator audit
 // page. The repository performs the draw/user lookup in a bounded page.
-func (s *LotteryService) ListAdminDraws(ctx context.Context, offset, limit int) ([]LotteryAdminDraw, int, error) {
+func (s *LotteryService) ListAdminDraws(ctx context.Context, query LotteryAdminDrawQuery) ([]LotteryAdminDraw, int, error) {
 	if s == nil || s.repo == nil {
 		return nil, 0, ErrLotteryConfigurationDenied
 	}
-	if limit <= 0 {
-		limit = 20
+	if err := query.Validate(); err != nil {
+		return nil, 0, err
 	}
-	if limit > 100 {
-		limit = 100
+	if query.Limit <= 0 {
+		query.Limit = 20
 	}
-	if offset < 0 {
-		offset = 0
+	if query.Limit > 100 {
+		query.Limit = 100
+	}
+	if query.Offset < 0 {
+		query.Offset = 0
 	}
 	adminRepo, ok := s.repo.(LotteryAdminDrawRepository)
 	if !ok {
 		return nil, 0, ErrLotteryConfigurationDenied
 	}
-	return adminRepo.ListAdminDraws(ctx, offset, limit)
+	return adminRepo.ListAdminDraws(ctx, query)
 }
 
 // ListAdminAttemptBalances returns paginated current attempt balances for

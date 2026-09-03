@@ -52,12 +52,20 @@ describe('lottery API contracts', () => {
     expect(post).toHaveBeenCalledWith('/admin/lottery/prizes/8/items', { contents: ['code-a', 'code-b'] })
   })
 
-  it('loads paginated admin draw records', async () => {
+  it('loads filtered paginated admin draw records', async () => {
     const records = { items: [], total: 0, page: 2, page_size: 10, pages: 0 }
     get.mockResolvedValueOnce({ data: records })
+	const params = {
+	  page: 2,
+	  page_size: 10,
+	  user_id: 11,
+	  prize_type: 'product' as const,
+	  attempt_source: 'wallet' as const,
+	  winners_only: true,
+	}
 
-    await expect(listDraws({ page: 2, page_size: 10 })).resolves.toBe(records)
-    expect(get).toHaveBeenCalledWith('/admin/lottery/draws', { params: { page: 2, page_size: 10 } })
+    await expect(listDraws(params)).resolves.toBe(records)
+    expect(get).toHaveBeenCalledWith('/admin/lottery/draws', { params })
   })
 
   it('loads paginated admin attempt balances with search', async () => {

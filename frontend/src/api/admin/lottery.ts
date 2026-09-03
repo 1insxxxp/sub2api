@@ -46,7 +46,7 @@ export interface LotteryAdminDraw {
   user_name?: string
   user_deleted: boolean
   prize_name: string
-  prize_type: LotteryPrizeType
+  prize_type: LotteryPrizeType | 'none'
   balance_amount?: number | null
   product_content?: string | null
   attempt_source?: 'activity' | 'wallet'
@@ -56,6 +56,10 @@ export interface LotteryAdminDraw {
 export interface LotteryAdminDrawQuery {
   page?: number
   page_size?: number
+  user_id?: number
+  prize_type?: LotteryPrizeType | 'none'
+  attempt_source?: 'activity' | 'wallet'
+  winners_only?: boolean
 }
 
 export interface LotteryAdminAttemptBalance {

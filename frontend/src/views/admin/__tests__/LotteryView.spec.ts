@@ -138,9 +138,59 @@ describe('Admin LotteryView', () => {
 
     expect(wrapper.get('[data-test="lottery-draw-record-7"]').text()).toContain('winner@example.com')
     expect(wrapper.get('[data-test="lottery-draw-record-7"]').text()).toContain('高级兑换码')
+	expect(wrapper.get('[data-test="lottery-draw-mobile-record-7"]').text()).toContain('winner@example.com')
+	expect(wrapper.get('[data-test="lottery-draw-mobile-record-7"]').text()).toContain('code-001')
     await wrapper.get('[data-test="lottery-draw-next"]').trigger('click')
     await flushPromises()
     expect(listDraws).toHaveBeenLastCalledWith({ page: 2, page_size: 10 })
+  })
+
+  it('filters draw records without reloading the page', async () => {
+    const wrapper = mount(LotteryView, {
+      global: {
+        stubs: {
+          AppLayout: { template: '<div><slot /></div>' },
+          Icon: true,
+        },
+      },
+    })
+
+    await flushPromises()
+    await wrapper.get('[data-test="lottery-draw-winners-only"]').trigger('click')
+    await flushPromises()
+    expect(listDraws).toHaveBeenLastCalledWith({ page: 1, page_size: 10, winners_only: true })
+
+    await wrapper.get('[data-test="lottery-draw-user-filter"]').setValue('11')
+    await wrapper.get('[data-test="lottery-draw-prize-filter"]').setValue('product')
+    await wrapper.get('[data-test="lottery-draw-source-filter"]').setValue('wallet')
+    await wrapper.get('[data-test="lottery-draw-apply-filters"]').trigger('click')
+    await flushPromises()
+
+    expect(listDraws).toHaveBeenLastCalledWith({
+      page: 1,
+      page_size: 10,
+      user_id: 11,
+      prize_type: 'product',
+      attempt_source: 'wallet',
+      winners_only: true,
+    })
+  })
+
+  it('distinguishes an empty filtered result from no draw history', async () => {
+    const wrapper = mount(LotteryView, {
+      global: {
+        stubs: {
+          AppLayout: { template: '<div><slot /></div>' },
+          Icon: true,
+        },
+      },
+    })
+
+    await flushPromises()
+    await wrapper.get('[data-test="lottery-draw-winners-only"]').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.get('[data-test="lottery-draw-filtered-empty"]').text()).toContain('lottery.admin.recordsFilteredEmpty')
   })
 
   it('loads and searches current attempt balances by user', async () => {

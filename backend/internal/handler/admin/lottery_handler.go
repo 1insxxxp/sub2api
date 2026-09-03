@@ -32,9 +32,29 @@ func (h *LotteryHandler) GetConfig(c *gin.Context) {
 
 func (h *LotteryHandler) ListDraws(c *gin.Context) {
 	page, pageSize := response.ParsePagination(c)
-	draws, total, err := h.lotteryService.ListAdminDraws(
-		c.Request.Context(), (page-1)*pageSize, pageSize,
-	)
+	query := service.LotteryAdminDrawQuery{
+		Offset:        (page - 1) * pageSize,
+		Limit:         pageSize,
+		PrizeType:     strings.TrimSpace(c.Query("prize_type")),
+		AttemptSource: strings.TrimSpace(c.Query("attempt_source")),
+	}
+	if rawUserID := strings.TrimSpace(c.Query("user_id")); rawUserID != "" {
+		userID, parseErr := strconv.ParseInt(rawUserID, 10, 64)
+		if parseErr != nil || userID <= 0 {
+			response.ErrorFrom(c, service.ErrLotteryDrawQueryInvalid)
+			return
+		}
+		query.UserID = userID
+	}
+	if rawWinnersOnly := strings.TrimSpace(c.Query("winners_only")); rawWinnersOnly != "" {
+		winnersOnly, parseErr := strconv.ParseBool(rawWinnersOnly)
+		if parseErr != nil {
+			response.ErrorFrom(c, service.ErrLotteryDrawQueryInvalid)
+			return
+		}
+		query.WinnersOnly = winnersOnly
+	}
+	draws, total, err := h.lotteryService.ListAdminDraws(c.Request.Context(), query)
 	if err != nil {
 		response.ErrorFrom(c, err)
 		return

@@ -11,6 +11,7 @@
             </div>
           </div>
           <div class="admin-toolbar-group w-full justify-end lg:w-auto lg:flex-none">
+            <a href="#lottery-draw-records" data-test="lottery-draw-records-shortcut" class="btn btn-secondary inline-flex items-center gap-2"><Icon name="clock" size="sm" />{{ t('lottery.admin.drawRecords') }}</a>
             <button type="button" class="btn btn-secondary inline-flex items-center gap-2" :disabled="loading || recordsLoading || attemptBalancesLoading" @click="refreshAll"><Icon name="refresh" size="sm" :class="loading || recordsLoading || attemptBalancesLoading ? 'animate-spin' : ''" />{{ t('common.refresh') }}</button>
             <button type="button" data-test="save-lottery-activity" class="btn btn-primary inline-flex items-center gap-2" :disabled="savingActivity" @click="saveActivityForm"><Icon name="check" size="sm" />{{ savingActivity ? t('common.saving') : t('lottery.admin.saveActivity') }}</button>
           </div>
@@ -186,18 +187,46 @@
         <p v-else class="rounded-xl border border-dashed border-slate-300 px-5 py-10 text-center text-sm text-slate-500 dark:border-dark-600 dark:text-slate-400">{{ t('lottery.noPrizes') }}</p>
       </section>
 
-      <section class="admin-surface p-5 sm:p-6" data-test="lottery-draw-records">
+      <section id="lottery-draw-records" class="admin-surface scroll-mt-20 p-5 sm:p-6" data-test="lottery-draw-records">
         <div class="mb-5 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div class="flex items-start gap-3">
             <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-violet-50 text-violet-600 dark:bg-violet-900/25 dark:text-violet-300"><Icon name="clock" size="sm" /></div>
             <div><h2 class="text-base font-semibold text-slate-950 dark:text-white">{{ t('lottery.admin.drawRecords') }}</h2><p class="mt-1 text-xs leading-5 text-slate-500 dark:text-slate-400">{{ t('lottery.admin.drawRecordsHint') }}</p></div>
           </div>
-          <span class="text-xs text-slate-500 dark:text-slate-400">{{ t('lottery.admin.drawRecordCount', { count: recordsPagination.total }) }}</span>
+          <div class="flex items-center gap-3">
+            <span class="text-xs text-slate-500 dark:text-slate-400">{{ t('lottery.admin.drawRecordCount', { count: recordsPagination.total }) }}</span>
+            <button type="button" class="btn btn-secondary btn-sm inline-flex items-center gap-2" :disabled="recordsLoading" @click="loadDraws(1)"><Icon name="refresh" size="sm" :class="recordsLoading ? 'animate-spin' : ''" />{{ t('common.refresh') }}</button>
+          </div>
+        </div>
+
+        <div class="mb-4 border-b border-slate-200 pb-4 dark:border-dark-700">
+          <div class="mb-3 inline-flex rounded-lg bg-slate-100 p-1 dark:bg-dark-800" role="group" :aria-label="t('lottery.admin.drawResultFilter')">
+            <button type="button" data-test="lottery-draw-all" class="h-8 rounded-md px-3 text-xs font-medium transition" :class="recordMode === 'all' ? 'bg-white text-slate-950 shadow-sm dark:bg-dark-700 dark:text-white' : 'text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-white'" @click="setRecordMode('all')">{{ t('lottery.admin.allDraws') }}</button>
+            <button type="button" data-test="lottery-draw-winners-only" class="h-8 rounded-md px-3 text-xs font-medium transition" :class="recordMode === 'winners' ? 'bg-white text-slate-950 shadow-sm dark:bg-dark-700 dark:text-white' : 'text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-white'" @click="setRecordMode('winners')">{{ t('lottery.admin.winnersOnly') }}</button>
+          </div>
+          <div class="grid gap-2 sm:grid-cols-2 lg:grid-cols-[minmax(150px,1fr)_minmax(150px,1fr)_minmax(150px,1fr)_auto]">
+            <input v-model="recordFilters.user_id" data-test="lottery-draw-user-filter" class="input" inputmode="numeric" :placeholder="t('lottery.admin.drawUserFilterPlaceholder')" @keyup.enter="applyRecordFilters" />
+            <select v-model="recordFilters.prize_type" data-test="lottery-draw-prize-filter" class="input">
+              <option value="">{{ t('lottery.admin.allPrizeTypes') }}</option>
+              <option value="balance">{{ t('lottery.admin.balanceType') }}</option>
+              <option value="product">{{ t('lottery.admin.productType') }}</option>
+              <option value="none">{{ t('lottery.admin.noPrizeType') }}</option>
+            </select>
+            <select v-model="recordFilters.attempt_source" data-test="lottery-draw-source-filter" class="input">
+              <option value="">{{ t('lottery.admin.allAttemptSources') }}</option>
+              <option value="wallet">{{ t('lottery.admin.walletSource') }}</option>
+              <option value="activity">{{ t('lottery.admin.activitySource') }}</option>
+            </select>
+            <div class="flex gap-2">
+              <button type="button" data-test="lottery-draw-apply-filters" class="btn btn-primary flex-1 justify-center lg:flex-none" @click="applyRecordFilters"><Icon name="search" size="sm" />{{ t('common.search') }}</button>
+              <button v-if="hasRecordFilters" type="button" data-test="lottery-draw-reset-filters" class="btn btn-secondary flex-1 justify-center lg:flex-none" @click="resetRecordFilters">{{ t('common.reset') }}</button>
+            </div>
+          </div>
         </div>
 
         <div v-if="recordsError" class="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-900/60 dark:bg-red-950/20 dark:text-red-300">{{ recordsError }}</div>
         <div v-if="recordsLoading" class="py-10 text-center text-sm text-slate-500 dark:text-slate-400">{{ t('lottery.admin.recordsLoading') }}</div>
-        <div v-else-if="records.length" class="overflow-x-auto rounded-xl border border-slate-200 dark:border-dark-700">
+        <div v-else-if="records.length" class="hidden overflow-x-auto rounded-lg border border-slate-200 dark:border-dark-700 md:block">
           <table class="min-w-full divide-y divide-slate-200 text-left text-sm dark:divide-dark-700">
             <thead class="bg-slate-50 text-xs uppercase tracking-wide text-slate-500 dark:bg-dark-900/60 dark:text-slate-400">
               <tr>
@@ -216,19 +245,37 @@
                 </td>
                 <td class="whitespace-nowrap px-4 py-3">
                   <div :data-test="`lottery-draw-prize-${record.id}`" class="font-medium text-slate-900 dark:text-white">{{ record.prize_name }}</div>
-                  <div class="mt-1 text-xs text-slate-500 dark:text-slate-400">{{ record.prize_type === 'balance' ? t('lottery.admin.balanceType') : t('lottery.admin.productType') }}</div>
+                  <div class="mt-1 text-xs text-slate-500 dark:text-slate-400">{{ formatPrizeType(record.prize_type) }}</div>
                 </td>
                 <td class="max-w-sm px-4 py-3 text-slate-700 dark:text-slate-200">
                   <span v-if="record.prize_type === 'balance'">{{ formatAmount(record.balance_amount) }}</span>
-                  <code v-else class="break-all text-xs">{{ record.product_content || '—' }}</code>
+                  <code v-else-if="record.prize_type === 'product'" class="break-all text-xs">{{ record.product_content || '—' }}</code>
+                  <span v-else>—</span>
                 </td>
-                <td class="whitespace-nowrap px-4 py-3 text-slate-600 dark:text-slate-300">{{ record.attempt_source === 'wallet' ? t('lottery.admin.walletSource') : t('lottery.admin.activitySource') }}</td>
+                <td class="whitespace-nowrap px-4 py-3 text-slate-600 dark:text-slate-300">{{ formatAttemptSource(record.attempt_source) }}</td>
                 <td class="whitespace-nowrap px-4 py-3 text-slate-500 dark:text-slate-400">{{ formatDateTime(record.created_at) }}</td>
               </tr>
             </tbody>
           </table>
         </div>
-        <p v-else class="rounded-xl border border-dashed border-slate-300 px-5 py-10 text-center text-sm text-slate-500 dark:border-dark-600 dark:text-slate-400">{{ t('lottery.admin.recordsEmpty') }}</p>
+        <div v-if="!recordsLoading && records.length" class="space-y-3 md:hidden">
+          <article v-for="record in records" :key="`mobile-${record.id}`" :data-test="`lottery-draw-mobile-record-${record.id}`" class="rounded-lg border border-slate-200 bg-white p-4 dark:border-dark-700 dark:bg-dark-900/40">
+            <div class="flex min-w-0 items-start justify-between gap-3">
+              <div class="min-w-0">
+                <p class="truncate text-sm font-semibold text-slate-950 dark:text-white">{{ record.user_deleted ? t('lottery.admin.deletedUser') : (record.user_email || record.user_name || `#${record.user_id}`) }}</p>
+                <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">ID {{ record.user_id }}</p>
+              </div>
+              <span class="shrink-0 rounded-md px-2 py-1 text-xs font-medium" :class="record.prize_type === 'balance' ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-900/25 dark:text-emerald-300' : record.prize_type === 'product' ? 'bg-violet-50 text-violet-700 dark:bg-violet-900/25 dark:text-violet-300' : 'bg-slate-100 text-slate-600 dark:bg-dark-700 dark:text-slate-300'">{{ formatPrizeType(record.prize_type) }}</span>
+            </div>
+            <div class="mt-4 grid grid-cols-[88px_minmax(0,1fr)] gap-x-3 gap-y-2 text-xs">
+              <span class="text-slate-500 dark:text-slate-400">{{ t('lottery.admin.drawPrize') }}</span><span class="min-w-0 break-words font-medium text-slate-900 dark:text-white">{{ record.prize_name || '—' }}</span>
+              <span class="text-slate-500 dark:text-slate-400">{{ t('lottery.admin.drawReward') }}</span><span class="min-w-0 break-all text-slate-700 dark:text-slate-200">{{ formatDrawReward(record) }}</span>
+              <span class="text-slate-500 dark:text-slate-400">{{ t('lottery.admin.drawSource') }}</span><span class="text-slate-700 dark:text-slate-200">{{ formatAttemptSource(record.attempt_source) }}</span>
+              <span class="text-slate-500 dark:text-slate-400">{{ t('lottery.admin.drawTime') }}</span><span class="text-slate-700 dark:text-slate-200">{{ formatDateTime(record.created_at) }}</span>
+            </div>
+          </article>
+        </div>
+        <p v-else-if="!recordsLoading" :data-test="hasRecordFilters ? 'lottery-draw-filtered-empty' : 'lottery-draw-empty'" class="rounded-lg border border-dashed border-slate-300 px-5 py-10 text-center text-sm text-slate-500 dark:border-dark-600 dark:text-slate-400">{{ hasRecordFilters ? t('lottery.admin.recordsFilteredEmpty') : t('lottery.admin.recordsEmpty') }}</p>
 
         <Pagination
           v-if="recordsPagination.total > 0"
@@ -244,7 +291,7 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, reactive, ref, watch } from 'vue'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import Icon from '@/components/icons/Icon.vue'
@@ -273,6 +320,9 @@ const recordsLoading = ref(true)
 const recordsError = ref('')
 const records = ref<LotteryAdminDraw[]>([])
 const recordsPagination = reactive({ page: 1, page_size: 10, total: 0 })
+const recordMode = ref<'all' | 'winners'>('all')
+const recordFilters = reactive({ user_id: '', prize_type: '', attempt_source: '' })
+const hasRecordFilters = computed(() => recordMode.value === 'winners' || !!recordFilters.user_id.trim() || !!recordFilters.prize_type || !!recordFilters.attempt_source)
 const attemptBalancesLoading = ref(true)
 const attemptBalancesError = ref('')
 const attemptBalances = ref<LotteryAdminAttemptBalance[]>([])
@@ -304,6 +354,9 @@ interface PrizeDraft { id?: number; name: string; description: string; type: 'ba
 const activityForm = reactive<ActivityForm>({ name: '', description: '', status: 'draft', starts_at: '', ends_at: '' })
 const formatAmount = (value?: number | null) => `$${Number(value || 0).toFixed(2)}`
 const formatDateTime = (value?: string | null) => value ? new Date(value).toLocaleString() : '—'
+const formatPrizeType = (type: LotteryAdminDraw['prize_type']) => type === 'balance' ? t('lottery.admin.balanceType') : type === 'product' ? t('lottery.admin.productType') : t('lottery.admin.noPrizeType')
+const formatAttemptSource = (source?: LotteryAdminDraw['attempt_source']) => source === 'wallet' ? t('lottery.admin.walletSource') : source === 'activity' ? t('lottery.admin.activitySource') : '—'
+const formatDrawReward = (record: LotteryAdminDraw) => record.prize_type === 'balance' ? formatAmount(record.balance_amount) : record.prize_type === 'product' ? (record.product_content || '—') : '—'
 const formatUserStatus = (status: string) => status === 'active' ? t('lottery.admin.active') : status === 'disabled' ? t('lottery.admin.disabledStatus') : status
 const toDateTimeLocal = (value?: string | null) => value ? new Date(value).toISOString().slice(0, 16) : ''
 const toISOStringOrNull = (value: string) => value ? new Date(value).toISOString() : null
@@ -334,7 +387,15 @@ async function loadDraws(page = recordsPagination.page) {
   recordsLoading.value = true
   recordsError.value = ''
   try {
-    const response = await lotteryAdminAPI.listDraws({ page, page_size: recordsPagination.page_size })
+    const userID = Number(recordFilters.user_id)
+    const response = await lotteryAdminAPI.listDraws({
+      page,
+      page_size: recordsPagination.page_size,
+      ...(recordFilters.user_id.trim() && userID > 0 ? { user_id: userID } : {}),
+      ...(recordFilters.prize_type ? { prize_type: recordFilters.prize_type as 'balance' | 'product' | 'none' } : {}),
+      ...(recordFilters.attempt_source ? { attempt_source: recordFilters.attempt_source as 'activity' | 'wallet' } : {}),
+      ...(recordMode.value === 'winners' ? { winners_only: true } : {}),
+    })
     records.value = response.items || []
     recordsPagination.page = response.page || page
     recordsPagination.page_size = response.page_size || recordsPagination.page_size
@@ -342,6 +403,32 @@ async function loadDraws(page = recordsPagination.page) {
   } catch (error: any) {
     recordsError.value = error?.message || t('lottery.admin.recordsLoadFailed')
   } finally { recordsLoading.value = false }
+}
+
+function setRecordMode(mode: 'all' | 'winners') {
+  if (recordMode.value === mode) return
+  recordMode.value = mode
+  recordsPagination.page = 1
+  loadDraws(1)
+}
+
+function applyRecordFilters() {
+  const rawUserID = recordFilters.user_id.trim()
+  if (rawUserID && (!/^\d+$/.test(rawUserID) || Number(rawUserID) <= 0)) {
+    appStore.showError(t('lottery.admin.drawUserFilterInvalid'))
+    return
+  }
+  recordsPagination.page = 1
+  loadDraws(1)
+}
+
+function resetRecordFilters() {
+  recordMode.value = 'all'
+  recordFilters.user_id = ''
+  recordFilters.prize_type = ''
+  recordFilters.attempt_source = ''
+  recordsPagination.page = 1
+  loadDraws(1)
 }
 
 async function loadAttemptBalances(page = attemptBalancePagination.page) {

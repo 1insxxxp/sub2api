@@ -336,9 +336,21 @@ func (r *lotteryRepository) ListUserDraws(ctx context.Context, userID int64, off
 	return result, total, nil
 }
 
-func (r *lotteryRepository) ListAdminDraws(ctx context.Context, offset, limit int) ([]service.LotteryAdminDraw, int, error) {
+func (r *lotteryRepository) ListAdminDraws(ctx context.Context, filter service.LotteryAdminDrawQuery) ([]service.LotteryAdminDraw, int, error) {
 	client := clientFromContext(ctx, r.client)
 	query := client.LotteryDraw.Query()
+	if filter.UserID > 0 {
+		query = query.Where(lotterydraw.UserIDEQ(filter.UserID))
+	}
+	if filter.PrizeType != "" {
+		query = query.Where(lotterydraw.PrizeTypeEQ(filter.PrizeType))
+	}
+	if filter.AttemptSource != "" {
+		query = query.Where(lotterydraw.AttemptSourceEQ(filter.AttemptSource))
+	}
+	if filter.WinnersOnly {
+		query = query.Where(lotterydraw.PrizeTypeNEQ(service.LotteryPrizeTypeNone))
+	}
 	total, err := query.Clone().Count(ctx)
 	if err != nil {
 		return nil, 0, err
@@ -346,7 +358,7 @@ func (r *lotteryRepository) ListAdminDraws(ctx context.Context, offset, limit in
 	draws, err := query.Order(
 		lotterydraw.ByCreatedAt(entsql.OrderDesc()),
 		lotterydraw.ByID(entsql.OrderDesc()),
-	).Offset(offset).Limit(limit).All(ctx)
+	).Offset(filter.Offset).Limit(filter.Limit).All(ctx)
 	if err != nil {
 		return nil, 0, err
 	}
