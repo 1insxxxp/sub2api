@@ -34,6 +34,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/idempotencyrecord"
 	"github.com/Wei-Shaw/sub2api/ent/identityadoptiondecision"
 	"github.com/Wei-Shaw/sub2api/ent/lotteryactivity"
+	"github.com/Wei-Shaw/sub2api/ent/lotteryattemptgrant"
 	"github.com/Wei-Shaw/sub2api/ent/lotteryattemptledger"
 	"github.com/Wei-Shaw/sub2api/ent/lotteryattemptwallet"
 	"github.com/Wei-Shaw/sub2api/ent/lotterydraw"
@@ -152,6 +153,7 @@ func checkColumn(t, c string) error {
 			idempotencyrecord.Table:             idempotencyrecord.ValidColumn,
 			identityadoptiondecision.Table:      identityadoptiondecision.ValidColumn,
 			lotteryactivity.Table:               lotteryactivity.ValidColumn,
+			lotteryattemptgrant.Table:           lotteryattemptgrant.ValidColumn,
 			lotteryattemptledger.Table:          lotteryattemptledger.ValidColumn,
 			lotteryattemptwallet.Table:          lotteryattemptwallet.ValidColumn,
 			lotterydraw.Table:                   lotterydraw.ValidColumn,

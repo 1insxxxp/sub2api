@@ -33,7 +33,9 @@ const (
 	LotteryPrizeItemStatusAvailable = "available"
 	LotteryPrizeItemStatusClaimed   = "claimed"
 
-	lotteryAttemptKeyMaxLength = 128
+	lotteryAttemptKeyMaxLength       = 128
+	lotteryAttemptGrantMaxAmount     = 1_000_000
+	lotteryAttemptGrantMaxNoteLength = 500
 )
 
 var (
@@ -45,6 +47,7 @@ var (
 	ErrLotteryActivityInvalid     = infraerrors.BadRequest("LOTTERY_ACTIVITY_INVALID", "lottery activity configuration is invalid")
 	ErrLotteryPrizeInvalid        = infraerrors.BadRequest("LOTTERY_PRIZE_INVALID", "lottery prize configuration is invalid")
 	ErrLotteryAttemptKeyInvalid   = infraerrors.BadRequest("LOTTERY_ATTEMPT_KEY_INVALID", "lottery attempt key is invalid")
+	ErrLotteryAttemptGrantInvalid = infraerrors.BadRequest("LOTTERY_ATTEMPT_GRANT_INVALID", "lottery attempt grant is invalid")
 	ErrLotteryDrawNotFound        = infraerrors.NotFound("LOTTERY_DRAW_NOT_FOUND", "lottery draw not found")
 	ErrLotteryConfigurationDenied = infraerrors.Forbidden("LOTTERY_CONFIGURATION_DENIED", "lottery configuration is not available")
 )
@@ -219,6 +222,29 @@ type LotteryRepository interface {
 // adapters and test doubles.
 type LotteryAdminDrawRepository interface {
 	ListAdminDraws(ctx context.Context, offset, limit int) ([]LotteryAdminDraw, int, error)
+}
+
+// LotteryAttemptGrantInput describes one administrator request to credit
+// reward-wallet attempts to explicit users or every non-deleted user.
+type LotteryAttemptGrantInput struct {
+	All         bool    `json:"all"`
+	UserIDs     []int64 `json:"user_ids"`
+	Amount      int     `json:"amount"`
+	Description string  `json:"description"`
+	CreatedBy   int64   `json:"-"`
+}
+
+// LotteryAttemptGrantResult summarizes a successful batch grant.
+type LotteryAttemptGrantResult struct {
+	Affected     int `json:"affected"`
+	TotalGranted int `json:"total_granted"`
+}
+
+// LotteryAdminAttemptRepository is an optional administrator capability. It
+// is separate from LotteryRepository so existing adapters and test doubles do
+// not need to implement administrative mutations.
+type LotteryAdminAttemptRepository interface {
+	GrantLotteryAttempts(ctx context.Context, input LotteryAttemptGrantInput) (LotteryAttemptGrantResult, error)
 }
 
 type LotteryService struct {
@@ -509,6 +535,29 @@ func (s *LotteryService) ListAdminDraws(ctx context.Context, offset, limit int) 
 	return adminRepo.ListAdminDraws(ctx, offset, limit)
 }
 
+// GrantLotteryAttempts credits reward-wallet attempts to selected users or all
+// non-deleted users. The production repository performs the whole batch in one
+// transaction and records an audit row per target user.
+func (s *LotteryService) GrantLotteryAttempts(ctx context.Context, input LotteryAttemptGrantInput) (*LotteryAttemptGrantResult, error) {
+	if s == nil || s.repo == nil {
+		return nil, ErrLotteryConfigurationDenied
+	}
+	if err := validateLotteryAttemptGrant(input); err != nil {
+		return nil, err
+	}
+	adminRepo, ok := s.repo.(LotteryAdminAttemptRepository)
+	if !ok {
+		return nil, ErrLotteryConfigurationDenied
+	}
+	input.UserIDs = normalizeLotteryAttemptGrantUserIDs(input.UserIDs)
+	input.Description = strings.TrimSpace(input.Description)
+	result, err := adminRepo.GrantLotteryAttempts(ctx, input)
+	if err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
 func (s *LotteryService) lotteryEnabled(ctx context.Context) bool {
 	if s.settingSvc == nil {
 		return false
@@ -627,6 +676,40 @@ func validateLotteryPrize(input LotteryPrizeInput) error {
 		return ErrLotteryPrizeInvalid
 	}
 	return nil
+}
+
+func validateLotteryAttemptGrant(input LotteryAttemptGrantInput) error {
+	if input.CreatedBy <= 0 || input.Amount <= 0 || input.Amount > lotteryAttemptGrantMaxAmount {
+		return ErrLotteryAttemptGrantInvalid
+	}
+	if len([]rune(strings.TrimSpace(input.Description))) > lotteryAttemptGrantMaxNoteLength {
+		return ErrLotteryAttemptGrantInvalid
+	}
+	if (input.All && len(input.UserIDs) > 0) || (!input.All && len(input.UserIDs) == 0) {
+		return ErrLotteryAttemptGrantInvalid
+	}
+	for _, userID := range input.UserIDs {
+		if userID <= 0 {
+			return ErrLotteryAttemptGrantInvalid
+		}
+	}
+	return nil
+}
+
+func normalizeLotteryAttemptGrantUserIDs(userIDs []int64) []int64 {
+	if len(userIDs) == 0 {
+		return nil
+	}
+	seen := make(map[int64]struct{}, len(userIDs))
+	result := make([]int64, 0, len(userIDs))
+	for _, userID := range userIDs {
+		if _, ok := seen[userID]; ok {
+			continue
+		}
+		seen[userID] = struct{}{}
+		result = append(result, userID)
+	}
+	return result
 }
 
 func normalizeLotteryAttemptKey(userID int64, raw string) (string, error) {

@@ -25,7 +25,7 @@ func (LotteryAttemptLedger) Annotations() []schema.Annotation {
 			Checks: map[string]string{
 				"lottery_attempt_ledger_delta_check":       "delta <> 0",
 				"lottery_attempt_ledger_balance_check":     "balance_after >= 0",
-				"lottery_attempt_ledger_source_type_check": "source_type IN ('checkin_streak', 'lottery_draw')",
+				"lottery_attempt_ledger_source_type_check": "source_type IN ('checkin_streak', 'lottery_draw', 'admin_grant')",
 			},
 		},
 	}
@@ -43,7 +43,7 @@ func (LotteryAttemptLedger) Fields() []ent.Field {
 		field.Int("balance_after").NonNegative(),
 		field.String("source_type").MaxLen(32).Validate(func(value string) error {
 			switch value {
-			case "checkin_streak", "lottery_draw":
+			case "checkin_streak", "lottery_draw", "admin_grant":
 				return nil
 			default:
 				return fmt.Errorf("unsupported lottery attempt source type %q", value)

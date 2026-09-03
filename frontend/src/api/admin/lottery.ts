@@ -60,6 +60,18 @@ export interface LotteryAdminDrawQuery {
   page_size?: number
 }
 
+export interface LotteryAttemptGrantRequest {
+  all?: boolean
+  user_ids?: number[]
+  amount: number
+  description?: string
+}
+
+export interface LotteryAttemptGrantResult {
+  affected: number
+  total_granted: number
+}
+
 export async function getConfig(): Promise<LotteryActivityConfig> {
   const { data } = await apiClient.get<LotteryActivityConfig>('/admin/lottery/config')
   return data
@@ -104,6 +116,11 @@ export async function listDraws(params: LotteryAdminDrawQuery = {}): Promise<Pag
   return data
 }
 
-export const lotteryAdminAPI = { getConfig, saveActivity, createPrize, updatePrize, deletePrize, listPrizeItems, appendPrizeItems, deletePrizeItems, listDraws }
+export async function grantAttempts(request: LotteryAttemptGrantRequest): Promise<LotteryAttemptGrantResult> {
+  const { data } = await apiClient.post<LotteryAttemptGrantResult>('/admin/lottery/attempts/grant', request)
+  return data
+}
+
+export const lotteryAdminAPI = { getConfig, saveActivity, createPrize, updatePrize, deletePrize, listPrizeItems, appendPrizeItems, deletePrizeItems, listDraws, grantAttempts }
 
 export default lotteryAdminAPI

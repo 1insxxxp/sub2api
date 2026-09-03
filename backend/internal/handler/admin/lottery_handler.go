@@ -40,6 +40,34 @@ func (h *LotteryHandler) ListDraws(c *gin.Context) {
 	response.Paginated(c, draws, int64(total), page, pageSize)
 }
 
+type GrantLotteryAttemptsRequest struct {
+	All         bool    `json:"all"`
+	UserIDs     []int64 `json:"user_ids"`
+	Amount      int     `json:"amount"`
+	Description string  `json:"description"`
+}
+
+func (h *LotteryHandler) GrantAttempts(c *gin.Context) {
+	var req GrantLotteryAttemptsRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.BadRequest(c, "Invalid request: "+err.Error())
+		return
+	}
+	subject, ok := middleware2.GetAuthSubjectFromContext(c)
+	if !ok {
+		response.Unauthorized(c, "User not authenticated")
+		return
+	}
+	result, err := h.lotteryService.GrantLotteryAttempts(c.Request.Context(), service.LotteryAttemptGrantInput{
+		All: req.All, UserIDs: req.UserIDs, Amount: req.Amount, Description: req.Description, CreatedBy: subject.UserID,
+	})
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	response.Success(c, result)
+}
+
 type SaveLotteryActivityRequest struct {
 	ID           int64      `json:"id"`
 	Name         string     `json:"name"`

@@ -38,6 +38,50 @@
         </div>
       </section>
 
+      <section class="admin-surface p-5 sm:p-6" data-test="lottery-attempt-grant">
+        <div class="mb-5 flex items-start gap-3">
+          <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600 dark:bg-emerald-900/25 dark:text-emerald-300"><Icon name="gift" size="sm" /></div>
+          <div>
+            <h2 class="text-base font-semibold text-slate-950 dark:text-white">{{ t('lottery.admin.grantAttempts') }}</h2>
+            <p class="mt-1 text-xs leading-5 text-slate-500 dark:text-slate-400">{{ t('lottery.admin.grantAttemptsHint') }}</p>
+          </div>
+        </div>
+
+        <div class="grid gap-4 md:grid-cols-2">
+          <div class="md:col-span-2 flex flex-wrap gap-4 text-sm font-medium text-slate-700 dark:text-slate-200">
+            <label class="inline-flex cursor-pointer items-center gap-2"><input v-model="grantTarget" data-test="lottery-grant-selected" type="radio" value="selected" class="h-4 w-4 text-emerald-600 focus:ring-emerald-500" />{{ t('lottery.admin.grantSelectedUsers') }}</label>
+            <label class="inline-flex cursor-pointer items-center gap-2"><input v-model="grantTarget" data-test="lottery-grant-all" type="radio" value="all" class="h-4 w-4 text-emerald-600 focus:ring-emerald-500" />{{ t('lottery.admin.grantAllUsers') }}</label>
+          </div>
+
+          <div v-if="grantTarget === 'selected'" class="md:col-span-2">
+            <div v-if="selectedGrantUsers.length" class="mb-2 flex flex-wrap gap-2">
+              <span v-for="user in selectedGrantUsers" :key="user.id" class="inline-flex items-center gap-1.5 rounded-md bg-emerald-50 px-2.5 py-1.5 text-xs text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-200">
+                <span class="max-w-64 truncate">{{ user.email || user.username || `#${user.id}` }}</span>
+                <button type="button" class="text-emerald-600 hover:text-red-600 dark:text-emerald-300" :aria-label="t('lottery.admin.removeGrantUser')" @click="removeGrantUser(user.id)">×</button>
+              </span>
+            </div>
+            <div class="flex flex-col gap-2 sm:flex-row">
+              <input v-model="grantUserSearch" data-test="lottery-grant-user-search" class="input flex-1" :placeholder="t('lottery.admin.grantUserSearchPlaceholder')" @keyup.enter="searchGrantUsers" />
+              <button type="button" data-test="lottery-grant-search" class="btn btn-secondary" :disabled="grantSearching" @click="searchGrantUsers">{{ grantSearching ? t('common.loading') : t('common.search') }}</button>
+            </div>
+            <div v-if="grantUserResults.length" class="mt-2 max-h-48 overflow-y-auto rounded-lg border border-slate-200 dark:border-dark-700">
+              <button v-for="user in grantUserResults" :key="user.id" type="button" :data-test="`lottery-grant-user-result-${user.id}`" class="flex w-full items-center justify-between gap-3 px-3 py-2 text-left text-sm hover:bg-slate-50 dark:hover:bg-dark-800" @click="selectGrantUser(user)">
+                <span class="min-w-0 truncate text-slate-800 dark:text-slate-100">{{ user.email || user.username || `#${user.id}` }}</span><span class="shrink-0 text-xs text-slate-400">#{{ user.id }}</span>
+              </button>
+            </div>
+          </div>
+
+          <div><label class="input-label">{{ t('lottery.admin.grantAmount') }}</label><input v-model.number="grantAmount" data-test="lottery-grant-amount" class="input" type="number" min="1" step="1" /></div>
+          <div><label class="input-label">{{ t('lottery.admin.grantDescription') }}</label><input v-model="grantDescription" data-test="lottery-grant-description" class="input" :placeholder="t('lottery.admin.grantDescriptionPlaceholder')" /></div>
+        </div>
+
+        <div class="mt-4 flex items-center justify-between gap-3">
+          <p v-if="grantResult" data-test="lottery-grant-result" class="text-sm text-emerald-700 dark:text-emerald-300">{{ t('lottery.admin.grantSuccess') }}: {{ grantResult.affected }} {{ t('lottery.admin.grantUsersAffected') }}, {{ grantResult.total_granted }} {{ t('lottery.admin.grantAttemptsIssued') }}</p>
+          <span v-else></span>
+          <button type="button" data-test="lottery-grant-submit" class="btn btn-primary" :disabled="grantSaving" @click="submitGrantAttempts"><Icon name="gift" size="sm" />{{ grantSaving ? t('common.saving') : t('lottery.admin.grantSubmit') }}</button>
+        </div>
+      </section>
+
       <section class="admin-surface p-5 sm:p-6">
         <div class="mb-5 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div class="flex items-start gap-3">
@@ -141,8 +185,10 @@ import { useI18n } from 'vue-i18n'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import Icon from '@/components/icons/Icon.vue'
 import Pagination from '@/components/common/Pagination.vue'
+import { adminAPI } from '@/api/admin'
 import { lotteryAdminAPI, type LotteryAdminDraw, type LotteryPrizeItem } from '@/api/admin/lottery'
 import type { LotteryActivity, LotteryAttemptMode, LotteryPrize } from '@/api/lottery'
+import type { AdminUser } from '@/types'
 import { useAppStore } from '@/stores/app'
 
 const { t } = useI18n()
@@ -163,6 +209,15 @@ const recordsLoading = ref(true)
 const recordsError = ref('')
 const records = ref<LotteryAdminDraw[]>([])
 const recordsPagination = reactive({ page: 1, page_size: 10, total: 0 })
+const grantTarget = ref<'selected' | 'all'>('selected')
+const grantUserSearch = ref('')
+const grantUserResults = ref<AdminUser[]>([])
+const selectedGrantUsers = ref<AdminUser[]>([])
+const grantAmount = ref(1)
+const grantDescription = ref('')
+const grantSearching = ref(false)
+const grantSaving = ref(false)
+const grantResult = ref<{ affected: number; total_granted: number } | null>(null)
 
 interface ActivityForm { id?: number; name: string; description: string; status: string; attempt_mode: LotteryAttemptMode; attempt_limit: number; starts_at: string; ends_at: string }
 interface PrizeDraft { id?: number; name: string; description: string; type: 'balance' | 'product'; weight: number; balance_amount?: number | null; enabled: boolean; sort_order: number }
@@ -209,6 +264,57 @@ async function loadDraws(page = recordsPagination.page) {
   } catch (error: any) {
     recordsError.value = error?.message || t('lottery.admin.recordsLoadFailed')
   } finally { recordsLoading.value = false }
+}
+
+async function searchGrantUsers() {
+  const search = grantUserSearch.value.trim()
+  if (!search) {
+    appStore.showError(t('lottery.admin.grantUserSearchRequired'))
+    return
+  }
+  grantSearching.value = true
+  try {
+    const response = await adminAPI.users.list(1, 8, { search })
+    const selected = new Set(selectedGrantUsers.value.map(user => user.id))
+    grantUserResults.value = (response.items || []).filter(user => !selected.has(user.id))
+  } catch (error: any) {
+    appStore.showError(error?.message || t('lottery.admin.grantSearchFailed'))
+  } finally { grantSearching.value = false }
+}
+
+function selectGrantUser(user: AdminUser) {
+  if (!selectedGrantUsers.value.some(item => item.id === user.id)) selectedGrantUsers.value.push(user)
+  grantUserResults.value = grantUserResults.value.filter(item => item.id !== user.id)
+}
+
+function removeGrantUser(userID: number) {
+  selectedGrantUsers.value = selectedGrantUsers.value.filter(user => user.id !== userID)
+}
+
+async function submitGrantAttempts() {
+  const amount = Math.floor(Number(grantAmount.value) || 0)
+  if (amount <= 0) {
+    appStore.showError(t('lottery.admin.grantAmountInvalid'))
+    return
+  }
+  if (grantTarget.value === 'selected' && selectedGrantUsers.value.length === 0) {
+    appStore.showError(t('lottery.admin.grantUsersRequired'))
+    return
+  }
+  grantSaving.value = true
+  try {
+    const request = grantTarget.value === 'all'
+      ? { all: true, amount, description: grantDescription.value.trim() }
+      : { user_ids: selectedGrantUsers.value.map(user => user.id), amount, description: grantDescription.value.trim() }
+    grantResult.value = await lotteryAdminAPI.grantAttempts(request)
+    appStore.showSuccess(t('lottery.admin.grantSuccess'))
+    selectedGrantUsers.value = []
+    grantUserResults.value = []
+    grantUserSearch.value = ''
+    grantDescription.value = ''
+  } catch (error: any) {
+    appStore.showError(error?.message || t('lottery.admin.grantFailed'))
+  } finally { grantSaving.value = false }
 }
 
 async function refreshAll() {

@@ -3,9 +3,11 @@ import { flushPromises, mount } from '@vue/test-utils'
 
 import LotteryView from '../LotteryView.vue'
 
-const { getConfig, listDraws, saveActivity, showSuccess, showError } = vi.hoisted(() => ({
+const { getConfig, listDraws, grantAttempts, listUsers, saveActivity, showSuccess, showError } = vi.hoisted(() => ({
   getConfig: vi.fn(),
   listDraws: vi.fn(),
+  grantAttempts: vi.fn(),
+  listUsers: vi.fn(),
   saveActivity: vi.fn(),
   showSuccess: vi.fn(),
   showError: vi.fn(),
@@ -15,11 +17,18 @@ vi.mock('@/api/admin/lottery', () => ({
   lotteryAdminAPI: {
     getConfig,
     listDraws,
+    grantAttempts,
     saveActivity,
   },
   default: {
     getConfig,
     saveActivity,
+  },
+}))
+
+vi.mock('@/api/admin', () => ({
+  adminAPI: {
+    users: { list: listUsers },
   },
 }))
 
@@ -39,6 +48,8 @@ describe('Admin LotteryView', () => {
   beforeEach(() => {
     getConfig.mockReset()
     listDraws.mockReset()
+    grantAttempts.mockReset()
+    listUsers.mockReset()
     saveActivity.mockReset()
     showSuccess.mockReset()
     showError.mockReset()
@@ -55,6 +66,8 @@ describe('Admin LotteryView', () => {
     })
     saveActivity.mockImplementation(async request => ({ id: 1, ...request }))
     listDraws.mockResolvedValue({ items: [], total: 0, page: 1, page_size: 10, pages: 0 })
+    grantAttempts.mockResolvedValue({ affected: 1, total_granted: 2 })
+    listUsers.mockResolvedValue({ items: [], total: 0, page: 1, page_size: 8, pages: 0 })
   })
 
   it('loads and saves a zero free-attempt limit', async () => {
@@ -117,5 +130,54 @@ describe('Admin LotteryView', () => {
     await wrapper.get('[data-test="lottery-draw-next"]').trigger('click')
     await flushPromises()
     expect(listDraws).toHaveBeenLastCalledWith({ page: 2, page_size: 10 })
+  })
+
+  it('grants attempts to selected users', async () => {
+    listUsers.mockResolvedValue({
+      items: [{ id: 11, email: 'alice@example.com', username: 'Alice', status: 'active', role: 'user' }],
+      total: 1,
+      page: 1,
+      page_size: 8,
+      pages: 1,
+    })
+    const wrapper = mount(LotteryView, {
+      global: {
+        stubs: {
+          AppLayout: { template: '<div><slot /></div>' },
+          Icon: true,
+        },
+      },
+    })
+
+    await flushPromises()
+    await wrapper.get('[data-test="lottery-grant-user-search"]').setValue('alice')
+    await wrapper.get('[data-test="lottery-grant-search"]').trigger('click')
+    await flushPromises()
+    await wrapper.get('[data-test="lottery-grant-user-result-11"]').trigger('click')
+    await wrapper.get('[data-test="lottery-grant-amount"]').setValue('3')
+    await wrapper.get('[data-test="lottery-grant-submit"]').trigger('click')
+    await flushPromises()
+
+    expect(grantAttempts).toHaveBeenCalledWith({ user_ids: [11], amount: 3, description: '' })
+    expect(wrapper.get('[data-test="lottery-grant-result"]').text()).toContain('1')
+  })
+
+  it('grants attempts to all users when the all-users target is selected', async () => {
+    const wrapper = mount(LotteryView, {
+      global: {
+        stubs: {
+          AppLayout: { template: '<div><slot /></div>' },
+          Icon: true,
+        },
+      },
+    })
+
+    await flushPromises()
+    await wrapper.get('[data-test="lottery-grant-all"]').setValue(true)
+    await wrapper.get('[data-test="lottery-grant-amount"]').setValue('2')
+    await wrapper.get('[data-test="lottery-grant-submit"]').trigger('click')
+    await flushPromises()
+
+    expect(grantAttempts).toHaveBeenCalledWith({ all: true, amount: 2, description: '' })
   })
 })

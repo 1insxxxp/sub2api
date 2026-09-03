@@ -27,6 +27,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/idempotencyrecord"
 	"github.com/Wei-Shaw/sub2api/ent/identityadoptiondecision"
 	"github.com/Wei-Shaw/sub2api/ent/lotteryactivity"
+	"github.com/Wei-Shaw/sub2api/ent/lotteryattemptgrant"
 	"github.com/Wei-Shaw/sub2api/ent/lotteryattemptledger"
 	"github.com/Wei-Shaw/sub2api/ent/lotteryattemptwallet"
 	"github.com/Wei-Shaw/sub2api/ent/lotterydraw"
@@ -1482,6 +1483,24 @@ func init() {
 	lotteryactivity.DefaultUpdatedAt = lotteryactivityDescUpdatedAt.Default.(func() time.Time)
 	// lotteryactivity.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
 	lotteryactivity.UpdateDefaultUpdatedAt = lotteryactivityDescUpdatedAt.UpdateDefault.(func() time.Time)
+	lotteryattemptgrantFields := schema.LotteryAttemptGrant{}.Fields()
+	_ = lotteryattemptgrantFields
+	// lotteryattemptgrantDescAmount is the schema descriptor for amount field.
+	lotteryattemptgrantDescAmount := lotteryattemptgrantFields[1].Descriptor()
+	// lotteryattemptgrant.AmountValidator is a validator for the "amount" field. It is called by the builders before save.
+	lotteryattemptgrant.AmountValidator = lotteryattemptgrantDescAmount.Validators[0].(func(int) error)
+	// lotteryattemptgrantDescDescription is the schema descriptor for description field.
+	lotteryattemptgrantDescDescription := lotteryattemptgrantFields[2].Descriptor()
+	// lotteryattemptgrant.DefaultDescription holds the default value on creation for the description field.
+	lotteryattemptgrant.DefaultDescription = lotteryattemptgrantDescDescription.Default.(string)
+	// lotteryattemptgrantDescCreatedBy is the schema descriptor for created_by field.
+	lotteryattemptgrantDescCreatedBy := lotteryattemptgrantFields[3].Descriptor()
+	// lotteryattemptgrant.CreatedByValidator is a validator for the "created_by" field. It is called by the builders before save.
+	lotteryattemptgrant.CreatedByValidator = lotteryattemptgrantDescCreatedBy.Validators[0].(func(int64) error)
+	// lotteryattemptgrantDescCreatedAt is the schema descriptor for created_at field.
+	lotteryattemptgrantDescCreatedAt := lotteryattemptgrantFields[4].Descriptor()
+	// lotteryattemptgrant.DefaultCreatedAt holds the default value on creation for the created_at field.
+	lotteryattemptgrant.DefaultCreatedAt = lotteryattemptgrantDescCreatedAt.Default.(func() time.Time)
 	lotteryattemptledgerFields := schema.LotteryAttemptLedger{}.Fields()
 	_ = lotteryattemptledgerFields
 	// lotteryattemptledgerDescDelta is the schema descriptor for delta field.

@@ -10,6 +10,7 @@ func registerLotteryRoutes(admin *gin.RouterGroup, h *adminhandler.LotteryHandle
 	{
 		lottery.GET("/config", h.GetConfig)
 		lottery.GET("/draws", h.ListDraws)
+		lottery.POST("/attempts/grant", h.GrantAttempts)
 		lottery.PUT("/activity", h.SaveActivity)
 		lottery.POST("/prizes", h.CreatePrize)
 		lottery.PUT("/prizes/:id", h.UpdatePrize)

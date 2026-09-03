@@ -72,6 +72,9 @@ type IdentityAdoptionDecision func(*sql.Selector)
 // LotteryActivity is the predicate function for lotteryactivity builders.
 type LotteryActivity func(*sql.Selector)
 
+// LotteryAttemptGrant is the predicate function for lotteryattemptgrant builders.
+type LotteryAttemptGrant func(*sql.Selector)
+
 // LotteryAttemptLedger is the predicate function for lotteryattemptledger builders.
 type LotteryAttemptLedger func(*sql.Selector)
 

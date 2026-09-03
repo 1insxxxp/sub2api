@@ -14,6 +14,7 @@ import (
 const (
 	LotteryAttemptLedgerSourceCheckinStreak = "checkin_streak"
 	LotteryAttemptLedgerSourceLotteryDraw   = "lottery_draw"
+	LotteryAttemptLedgerSourceAdminGrant    = "admin_grant"
 )
 
 func lotteryAttemptBalance(ctx context.Context, client *dbent.Client, userID int64) (int, error) {

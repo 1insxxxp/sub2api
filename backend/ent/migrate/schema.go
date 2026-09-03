@@ -1230,6 +1230,21 @@ var (
 			},
 		},
 	}
+	// LotteryAttemptGrantsColumns holds the columns for the "lottery_attempt_grants" table.
+	LotteryAttemptGrantsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt64, Increment: true},
+		{Name: "user_id", Type: field.TypeInt64},
+		{Name: "amount", Type: field.TypeInt},
+		{Name: "description", Type: field.TypeString, Default: "", SchemaType: map[string]string{"postgres": "text"}},
+		{Name: "created_by", Type: field.TypeInt64},
+		{Name: "created_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
+	}
+	// LotteryAttemptGrantsTable holds the schema information for the "lottery_attempt_grants" table.
+	LotteryAttemptGrantsTable = &schema.Table{
+		Name:       "lottery_attempt_grants",
+		Columns:    LotteryAttemptGrantsColumns,
+		PrimaryKey: []*schema.Column{LotteryAttemptGrantsColumns[0]},
+	}
 	// LotteryAttemptLedgerColumns holds the columns for the "lottery_attempt_ledger" table.
 	LotteryAttemptLedgerColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeInt64, Increment: true},
@@ -3035,6 +3050,7 @@ var (
 		IdempotencyRecordsTable,
 		IdentityAdoptionDecisionsTable,
 		LotteryActivitiesTable,
+		LotteryAttemptGrantsTable,
 		LotteryAttemptLedgerTable,
 		LotteryAttemptWalletsTable,
 		LotteryDrawsTable,
@@ -3168,6 +3184,12 @@ func init() {
 		"lottery_activities_dates_check":         "starts_at IS NULL OR ends_at IS NULL OR starts_at <= ends_at",
 		"lottery_activities_status_check":        "status IN ('draft', 'active', 'disabled', 'ended')",
 	}
+	LotteryAttemptGrantsTable.Annotation = &entsql.Annotation{
+		Table: "lottery_attempt_grants",
+	}
+	LotteryAttemptGrantsTable.Annotation.Checks = map[string]string{
+		"lottery_attempt_grants_amount_check": "amount > 0",
+	}
 	LotteryAttemptLedgerTable.ForeignKeys[0].RefTable = UsersTable
 	LotteryAttemptLedgerTable.Annotation = &entsql.Annotation{
 		Table: "lottery_attempt_ledger",
@@ -3175,7 +3197,7 @@ func init() {
 	LotteryAttemptLedgerTable.Annotation.Checks = map[string]string{
 		"lottery_attempt_ledger_balance_check":     "balance_after >= 0",
 		"lottery_attempt_ledger_delta_check":       "delta <> 0",
-		"lottery_attempt_ledger_source_type_check": "source_type IN ('checkin_streak', 'lottery_draw')",
+		"lottery_attempt_ledger_source_type_check": "source_type IN ('checkin_streak', 'lottery_draw', 'admin_grant')",
 	}
 	LotteryAttemptWalletsTable.ForeignKeys[0].RefTable = UsersTable
 	LotteryAttemptWalletsTable.Annotation = &entsql.Annotation{

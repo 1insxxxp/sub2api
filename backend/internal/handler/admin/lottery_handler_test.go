@@ -1,6 +1,7 @@
 package admin
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"net/http"
@@ -8,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Wei-Shaw/sub2api/internal/server/middleware"
 	"github.com/Wei-Shaw/sub2api/internal/service"
 	"github.com/gin-gonic/gin"
 )
@@ -17,6 +19,17 @@ type lotteryAdminRepoStub struct {
 	draws      []service.LotteryAdminDraw
 	lastOffset int
 	lastLimit  int
+}
+
+type lotteryAttemptGrantRepoStub struct {
+	service.LotteryRepository
+	input  service.LotteryAttemptGrantInput
+	result service.LotteryAttemptGrantResult
+}
+
+func (s *lotteryAttemptGrantRepoStub) GrantLotteryAttempts(_ context.Context, input service.LotteryAttemptGrantInput) (service.LotteryAttemptGrantResult, error) {
+	s.input = input
+	return s.result, nil
 }
 
 func (s *lotteryAdminRepoStub) ListAdminDraws(_ context.Context, offset, limit int) ([]service.LotteryAdminDraw, int, error) {
@@ -61,5 +74,59 @@ func TestLotteryAdminHandlerListsDrawRecordsWithPagination(t *testing.T) {
 	}
 	if envelope.Data.Total != 1 || envelope.Data.Page != 2 {
 		t.Fatalf("unexpected pagination response: %#v", envelope.Data)
+	}
+}
+
+func TestLotteryAdminHandlerGrantsAttemptsWithAuthenticatedAdmin(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	repo := &lotteryAttemptGrantRepoStub{result: service.LotteryAttemptGrantResult{Affected: 2, TotalGranted: 6}}
+	svc := service.NewLotteryService(nil, repo, nil, nil)
+	h := NewLotteryHandler(svc)
+	router := gin.New()
+	router.POST("/admin/lottery/attempts/grant", func(c *gin.Context) {
+		c.Set(string(middleware.ContextKeyUser), middleware.AuthSubject{UserID: 99})
+		c.Next()
+	}, h.GrantAttempts)
+
+	req := httptest.NewRequest(http.MethodPost, "/admin/lottery/attempts/grant", bytes.NewBufferString(`{"user_ids":[11,12],"amount":3,"description":"manual bonus"}`))
+	req.Header.Set("Content-Type", "application/json")
+	res := httptest.NewRecorder()
+	router.ServeHTTP(res, req)
+
+	if res.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", res.Code, res.Body.String())
+	}
+	if repo.input.CreatedBy != 99 || len(repo.input.UserIDs) != 2 || repo.input.Amount != 3 {
+		t.Fatalf("unexpected service input: %#v", repo.input)
+	}
+	var envelope struct {
+		Data service.LotteryAttemptGrantResult `json:"data"`
+	}
+	if err := json.Unmarshal(res.Body.Bytes(), &envelope); err != nil {
+		t.Fatal(err)
+	}
+	if envelope.Data != repo.result {
+		t.Fatalf("unexpected grant result: %#v", envelope.Data)
+	}
+}
+
+func TestLotteryAdminHandlerRejectsInvalidAttemptGrant(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	repo := &lotteryAttemptGrantRepoStub{}
+	svc := service.NewLotteryService(nil, repo, nil, nil)
+	h := NewLotteryHandler(svc)
+	router := gin.New()
+	router.POST("/admin/lottery/attempts/grant", func(c *gin.Context) {
+		c.Set(string(middleware.ContextKeyUser), middleware.AuthSubject{UserID: 99})
+		c.Next()
+	}, h.GrantAttempts)
+
+	req := httptest.NewRequest(http.MethodPost, "/admin/lottery/attempts/grant", bytes.NewBufferString(`{"amount":3}`))
+	req.Header.Set("Content-Type", "application/json")
+	res := httptest.NewRecorder()
+	router.ServeHTTP(res, req)
+
+	if res.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, body = %s", res.Code, res.Body.String())
 	}
 }

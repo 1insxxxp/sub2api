@@ -30,6 +30,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/idempotencyrecord"
 	"github.com/Wei-Shaw/sub2api/ent/identityadoptiondecision"
 	"github.com/Wei-Shaw/sub2api/ent/lotteryactivity"
+	"github.com/Wei-Shaw/sub2api/ent/lotteryattemptgrant"
 	"github.com/Wei-Shaw/sub2api/ent/lotteryattemptledger"
 	"github.com/Wei-Shaw/sub2api/ent/lotteryattemptwallet"
 	"github.com/Wei-Shaw/sub2api/ent/lotterydraw"
@@ -717,6 +718,33 @@ func (f TraverseLotteryActivity) Traverse(ctx context.Context, q ent.Query) erro
 		return f(ctx, q)
 	}
 	return fmt.Errorf("unexpected query type %T. expect *ent.LotteryActivityQuery", q)
+}
+
+// The LotteryAttemptGrantFunc type is an adapter to allow the use of ordinary function as a Querier.
+type LotteryAttemptGrantFunc func(context.Context, *ent.LotteryAttemptGrantQuery) (ent.Value, error)
+
+// Query calls f(ctx, q).
+func (f LotteryAttemptGrantFunc) Query(ctx context.Context, q ent.Query) (ent.Value, error) {
+	if q, ok := q.(*ent.LotteryAttemptGrantQuery); ok {
+		return f(ctx, q)
+	}
+	return nil, fmt.Errorf("unexpected query type %T. expect *ent.LotteryAttemptGrantQuery", q)
+}
+
+// The TraverseLotteryAttemptGrant type is an adapter to allow the use of ordinary function as Traverser.
+type TraverseLotteryAttemptGrant func(context.Context, *ent.LotteryAttemptGrantQuery) error
+
+// Intercept is a dummy implementation of Intercept that returns the next Querier in the pipeline.
+func (f TraverseLotteryAttemptGrant) Intercept(next ent.Querier) ent.Querier {
+	return next
+}
+
+// Traverse calls f(ctx, q).
+func (f TraverseLotteryAttemptGrant) Traverse(ctx context.Context, q ent.Query) error {
+	if q, ok := q.(*ent.LotteryAttemptGrantQuery); ok {
+		return f(ctx, q)
+	}
+	return fmt.Errorf("unexpected query type %T. expect *ent.LotteryAttemptGrantQuery", q)
 }
 
 // The LotteryAttemptLedgerFunc type is an adapter to allow the use of ordinary function as a Querier.
@@ -1738,6 +1766,8 @@ func NewQuery(q ent.Query) (Query, error) {
 		return &query[*ent.IdentityAdoptionDecisionQuery, predicate.IdentityAdoptionDecision, identityadoptiondecision.OrderOption]{typ: ent.TypeIdentityAdoptionDecision, tq: q}, nil
 	case *ent.LotteryActivityQuery:
 		return &query[*ent.LotteryActivityQuery, predicate.LotteryActivity, lotteryactivity.OrderOption]{typ: ent.TypeLotteryActivity, tq: q}, nil
+	case *ent.LotteryAttemptGrantQuery:
+		return &query[*ent.LotteryAttemptGrantQuery, predicate.LotteryAttemptGrant, lotteryattemptgrant.OrderOption]{typ: ent.TypeLotteryAttemptGrant, tq: q}, nil
 	case *ent.LotteryAttemptLedgerQuery:
 		return &query[*ent.LotteryAttemptLedgerQuery, predicate.LotteryAttemptLedger, lotteryattemptledger.OrderOption]{typ: ent.TypeLotteryAttemptLedger, tq: q}, nil
 	case *ent.LotteryAttemptWalletQuery:

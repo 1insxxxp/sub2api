@@ -2,12 +2,14 @@ package repository
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"time"
 
 	entsql "entgo.io/ent/dialect/sql"
 	dbent "github.com/Wei-Shaw/sub2api/ent"
 	"github.com/Wei-Shaw/sub2api/ent/lotteryactivity"
+	"github.com/Wei-Shaw/sub2api/ent/lotteryattemptwallet"
 	"github.com/Wei-Shaw/sub2api/ent/lotterydraw"
 	"github.com/Wei-Shaw/sub2api/ent/lotteryprize"
 	"github.com/Wei-Shaw/sub2api/ent/lotteryprizeitem"
@@ -377,6 +379,94 @@ func (r *lotteryRepository) ListAdminDraws(ctx context.Context, offset, limit in
 		result = append(result, service.NewLotteryAdminDraw(*lotteryDrawToService(draw), resolvedUser))
 	}
 	return result, total, nil
+}
+
+func (r *lotteryRepository) GrantLotteryAttempts(ctx context.Context, input service.LotteryAttemptGrantInput) (service.LotteryAttemptGrantResult, error) {
+	if r == nil || r.client == nil {
+		return service.LotteryAttemptGrantResult{}, service.ErrLotteryConfigurationDenied
+	}
+	if dbent.TxFromContext(ctx) != nil {
+		return r.grantLotteryAttemptsWithClient(ctx, clientFromContext(ctx, r.client), input)
+	}
+	tx, err := r.client.Tx(ctx)
+	if err != nil {
+		return service.LotteryAttemptGrantResult{}, fmt.Errorf("begin lottery attempt grant transaction: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+	txCtx := dbent.NewTxContext(ctx, tx)
+	result, err := r.grantLotteryAttemptsWithClient(txCtx, tx.Client(), input)
+	if err != nil {
+		return service.LotteryAttemptGrantResult{}, err
+	}
+	if err := tx.Commit(); err != nil {
+		return service.LotteryAttemptGrantResult{}, fmt.Errorf("commit lottery attempt grant transaction: %w", err)
+	}
+	return result, nil
+}
+
+func (r *lotteryRepository) grantLotteryAttemptsWithClient(ctx context.Context, client *dbent.Client, input service.LotteryAttemptGrantInput) (service.LotteryAttemptGrantResult, error) {
+	userIDs, err := resolveLotteryAttemptGrantUsers(ctx, client, input)
+	if err != nil {
+		return service.LotteryAttemptGrantResult{}, err
+	}
+	result := service.LotteryAttemptGrantResult{}
+	for _, userID := range userIDs {
+		grant, err := client.LotteryAttemptGrant.Create().
+			SetUserID(userID).
+			SetAmount(input.Amount).
+			SetDescription(strings.TrimSpace(input.Description)).
+			SetCreatedBy(input.CreatedBy).
+			Save(ctx)
+		if err != nil {
+			return service.LotteryAttemptGrantResult{}, fmt.Errorf("create lottery attempt grant for user %d: %w", userID, err)
+		}
+
+		if err := client.LotteryAttemptWallet.Create().
+			SetUserID(userID).
+			SetBalance(0).
+			OnConflict(entsql.ConflictColumns(lotteryattemptwallet.FieldUserID)).
+			DoNothing().Exec(ctx); err != nil {
+			return service.LotteryAttemptGrantResult{}, fmt.Errorf("ensure lottery attempt wallet for user %d: %w", userID, err)
+		}
+		wallet, err := client.LotteryAttemptWallet.Query().Where(lotteryattemptwallet.UserIDEQ(userID)).Only(ctx)
+		if err != nil {
+			return service.LotteryAttemptGrantResult{}, fmt.Errorf("load lottery attempt wallet for user %d: %w", userID, err)
+		}
+		wallet, err = client.LotteryAttemptWallet.UpdateOneID(wallet.ID).AddBalance(input.Amount).Save(ctx)
+		if err != nil {
+			return service.LotteryAttemptGrantResult{}, fmt.Errorf("credit lottery attempt wallet for user %d: %w", userID, err)
+		}
+		if _, err := client.LotteryAttemptLedger.Create().
+			SetUserID(userID).
+			SetDelta(input.Amount).
+			SetBalanceAfter(wallet.Balance).
+			SetSourceType(service.LotteryAttemptLedgerSourceAdminGrant).
+			SetSourceID(grant.ID).
+			SetDescription(strings.TrimSpace(input.Description)).
+			Save(ctx); err != nil {
+			return service.LotteryAttemptGrantResult{}, fmt.Errorf("create lottery attempt grant ledger for user %d: %w", userID, err)
+		}
+		result.Affected++
+		result.TotalGranted += input.Amount
+	}
+	return result, nil
+}
+
+func resolveLotteryAttemptGrantUsers(ctx context.Context, client *dbent.Client, input service.LotteryAttemptGrantInput) ([]int64, error) {
+	if input.All {
+		return client.User.Query().Where(user.DeletedAtIsNil()).Order(user.ByID()).IDs(ctx)
+	}
+	if len(input.UserIDs) == 0 {
+		return nil, service.ErrLotteryAttemptGrantInvalid
+	}
+	resolved, err := client.User.Query().Where(user.IDIn(input.UserIDs...), user.DeletedAtIsNil()).IDs(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("resolve lottery attempt grant users: %w", err)
+	}
+	if len(resolved) != len(input.UserIDs) {
+		return nil, service.ErrUserNotFound
+	}
+	return input.UserIDs, nil
 }
 
 func lotteryActivityToService(activity *dbent.LotteryActivity) *service.LotteryActivity {

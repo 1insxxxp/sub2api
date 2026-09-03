@@ -37,6 +37,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/idempotencyrecord"
 	"github.com/Wei-Shaw/sub2api/ent/identityadoptiondecision"
 	"github.com/Wei-Shaw/sub2api/ent/lotteryactivity"
+	"github.com/Wei-Shaw/sub2api/ent/lotteryattemptgrant"
 	"github.com/Wei-Shaw/sub2api/ent/lotteryattemptledger"
 	"github.com/Wei-Shaw/sub2api/ent/lotteryattemptwallet"
 	"github.com/Wei-Shaw/sub2api/ent/lotterydraw"
@@ -126,6 +127,8 @@ type Client struct {
 	IdentityAdoptionDecision *IdentityAdoptionDecisionClient
 	// LotteryActivity is the client for interacting with the LotteryActivity builders.
 	LotteryActivity *LotteryActivityClient
+	// LotteryAttemptGrant is the client for interacting with the LotteryAttemptGrant builders.
+	LotteryAttemptGrant *LotteryAttemptGrantClient
 	// LotteryAttemptLedger is the client for interacting with the LotteryAttemptLedger builders.
 	LotteryAttemptLedger *LotteryAttemptLedgerClient
 	// LotteryAttemptWallet is the client for interacting with the LotteryAttemptWallet builders.
@@ -231,6 +234,7 @@ func (c *Client) init() {
 	c.IdempotencyRecord = NewIdempotencyRecordClient(c.config)
 	c.IdentityAdoptionDecision = NewIdentityAdoptionDecisionClient(c.config)
 	c.LotteryActivity = NewLotteryActivityClient(c.config)
+	c.LotteryAttemptGrant = NewLotteryAttemptGrantClient(c.config)
 	c.LotteryAttemptLedger = NewLotteryAttemptLedgerClient(c.config)
 	c.LotteryAttemptWallet = NewLotteryAttemptWalletClient(c.config)
 	c.LotteryDraw = NewLotteryDrawClient(c.config)
@@ -381,6 +385,7 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 		IdempotencyRecord:             NewIdempotencyRecordClient(cfg),
 		IdentityAdoptionDecision:      NewIdentityAdoptionDecisionClient(cfg),
 		LotteryActivity:               NewLotteryActivityClient(cfg),
+		LotteryAttemptGrant:           NewLotteryAttemptGrantClient(cfg),
 		LotteryAttemptLedger:          NewLotteryAttemptLedgerClient(cfg),
 		LotteryAttemptWallet:          NewLotteryAttemptWalletClient(cfg),
 		LotteryDraw:                   NewLotteryDrawClient(cfg),
@@ -458,6 +463,7 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 		IdempotencyRecord:             NewIdempotencyRecordClient(cfg),
 		IdentityAdoptionDecision:      NewIdentityAdoptionDecisionClient(cfg),
 		LotteryActivity:               NewLotteryActivityClient(cfg),
+		LotteryAttemptGrant:           NewLotteryAttemptGrantClient(cfg),
 		LotteryAttemptLedger:          NewLotteryAttemptLedgerClient(cfg),
 		LotteryAttemptWallet:          NewLotteryAttemptWalletClient(cfg),
 		LotteryDraw:                   NewLotteryDrawClient(cfg),
@@ -529,11 +535,11 @@ func (c *Client) Use(hooks ...Hook) {
 		c.ChannelMonitorHistory, c.ChannelMonitorRequestTemplate,
 		c.CheckinRewardCampaign, c.CompositeModelRoute, c.EmptyResponseClaim,
 		c.ErrorPassthroughRule, c.Group, c.IdempotencyRecord,
-		c.IdentityAdoptionDecision, c.LotteryActivity, c.LotteryAttemptLedger,
-		c.LotteryAttemptWallet, c.LotteryDraw, c.LotteryPrize, c.LotteryPrizeItem,
-		c.PaymentAuditLog, c.PaymentOrder, c.PaymentProviderInstance,
-		c.PendingAuthSession, c.PromoCode, c.PromoCodeUsage, c.Proxy,
-		c.RedeemBatchClaim, c.RedeemCode, c.SecuritySecret, c.Setting,
+		c.IdentityAdoptionDecision, c.LotteryActivity, c.LotteryAttemptGrant,
+		c.LotteryAttemptLedger, c.LotteryAttemptWallet, c.LotteryDraw, c.LotteryPrize,
+		c.LotteryPrizeItem, c.PaymentAuditLog, c.PaymentOrder,
+		c.PaymentProviderInstance, c.PendingAuthSession, c.PromoCode, c.PromoCodeUsage,
+		c.Proxy, c.RedeemBatchClaim, c.RedeemCode, c.SecuritySecret, c.Setting,
 		c.SubAdminCommissionGrant, c.SubscriptionPlan, c.SystemCustomGroupModel,
 		c.SystemCustomGroupSource, c.TLSFingerprintProfile, c.UsageCleanupTask,
 		c.UsageLog, c.UsageResponseOutcome, c.User, c.UserAllowedGroup,
@@ -555,11 +561,11 @@ func (c *Client) Intercept(interceptors ...Interceptor) {
 		c.ChannelMonitorHistory, c.ChannelMonitorRequestTemplate,
 		c.CheckinRewardCampaign, c.CompositeModelRoute, c.EmptyResponseClaim,
 		c.ErrorPassthroughRule, c.Group, c.IdempotencyRecord,
-		c.IdentityAdoptionDecision, c.LotteryActivity, c.LotteryAttemptLedger,
-		c.LotteryAttemptWallet, c.LotteryDraw, c.LotteryPrize, c.LotteryPrizeItem,
-		c.PaymentAuditLog, c.PaymentOrder, c.PaymentProviderInstance,
-		c.PendingAuthSession, c.PromoCode, c.PromoCodeUsage, c.Proxy,
-		c.RedeemBatchClaim, c.RedeemCode, c.SecuritySecret, c.Setting,
+		c.IdentityAdoptionDecision, c.LotteryActivity, c.LotteryAttemptGrant,
+		c.LotteryAttemptLedger, c.LotteryAttemptWallet, c.LotteryDraw, c.LotteryPrize,
+		c.LotteryPrizeItem, c.PaymentAuditLog, c.PaymentOrder,
+		c.PaymentProviderInstance, c.PendingAuthSession, c.PromoCode, c.PromoCodeUsage,
+		c.Proxy, c.RedeemBatchClaim, c.RedeemCode, c.SecuritySecret, c.Setting,
 		c.SubAdminCommissionGrant, c.SubscriptionPlan, c.SystemCustomGroupModel,
 		c.SystemCustomGroupSource, c.TLSFingerprintProfile, c.UsageCleanupTask,
 		c.UsageLog, c.UsageResponseOutcome, c.User, c.UserAllowedGroup,
@@ -618,6 +624,8 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.IdentityAdoptionDecision.mutate(ctx, m)
 	case *LotteryActivityMutation:
 		return c.LotteryActivity.mutate(ctx, m)
+	case *LotteryAttemptGrantMutation:
+		return c.LotteryAttemptGrant.mutate(ctx, m)
 	case *LotteryAttemptLedgerMutation:
 		return c.LotteryAttemptLedger.mutate(ctx, m)
 	case *LotteryAttemptWalletMutation:
@@ -4281,6 +4289,139 @@ func (c *LotteryActivityClient) mutate(ctx context.Context, m *LotteryActivityMu
 		return (&LotteryActivityDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
 	default:
 		return nil, fmt.Errorf("ent: unknown LotteryActivity mutation op: %q", m.Op())
+	}
+}
+
+// LotteryAttemptGrantClient is a client for the LotteryAttemptGrant schema.
+type LotteryAttemptGrantClient struct {
+	config
+}
+
+// NewLotteryAttemptGrantClient returns a client for the LotteryAttemptGrant from the given config.
+func NewLotteryAttemptGrantClient(c config) *LotteryAttemptGrantClient {
+	return &LotteryAttemptGrantClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `lotteryattemptgrant.Hooks(f(g(h())))`.
+func (c *LotteryAttemptGrantClient) Use(hooks ...Hook) {
+	c.hooks.LotteryAttemptGrant = append(c.hooks.LotteryAttemptGrant, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `lotteryattemptgrant.Intercept(f(g(h())))`.
+func (c *LotteryAttemptGrantClient) Intercept(interceptors ...Interceptor) {
+	c.inters.LotteryAttemptGrant = append(c.inters.LotteryAttemptGrant, interceptors...)
+}
+
+// Create returns a builder for creating a LotteryAttemptGrant entity.
+func (c *LotteryAttemptGrantClient) Create() *LotteryAttemptGrantCreate {
+	mutation := newLotteryAttemptGrantMutation(c.config, OpCreate)
+	return &LotteryAttemptGrantCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of LotteryAttemptGrant entities.
+func (c *LotteryAttemptGrantClient) CreateBulk(builders ...*LotteryAttemptGrantCreate) *LotteryAttemptGrantCreateBulk {
+	return &LotteryAttemptGrantCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *LotteryAttemptGrantClient) MapCreateBulk(slice any, setFunc func(*LotteryAttemptGrantCreate, int)) *LotteryAttemptGrantCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &LotteryAttemptGrantCreateBulk{err: fmt.Errorf("calling to LotteryAttemptGrantClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*LotteryAttemptGrantCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &LotteryAttemptGrantCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for LotteryAttemptGrant.
+func (c *LotteryAttemptGrantClient) Update() *LotteryAttemptGrantUpdate {
+	mutation := newLotteryAttemptGrantMutation(c.config, OpUpdate)
+	return &LotteryAttemptGrantUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *LotteryAttemptGrantClient) UpdateOne(_m *LotteryAttemptGrant) *LotteryAttemptGrantUpdateOne {
+	mutation := newLotteryAttemptGrantMutation(c.config, OpUpdateOne, withLotteryAttemptGrant(_m))
+	return &LotteryAttemptGrantUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *LotteryAttemptGrantClient) UpdateOneID(id int64) *LotteryAttemptGrantUpdateOne {
+	mutation := newLotteryAttemptGrantMutation(c.config, OpUpdateOne, withLotteryAttemptGrantID(id))
+	return &LotteryAttemptGrantUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for LotteryAttemptGrant.
+func (c *LotteryAttemptGrantClient) Delete() *LotteryAttemptGrantDelete {
+	mutation := newLotteryAttemptGrantMutation(c.config, OpDelete)
+	return &LotteryAttemptGrantDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *LotteryAttemptGrantClient) DeleteOne(_m *LotteryAttemptGrant) *LotteryAttemptGrantDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *LotteryAttemptGrantClient) DeleteOneID(id int64) *LotteryAttemptGrantDeleteOne {
+	builder := c.Delete().Where(lotteryattemptgrant.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &LotteryAttemptGrantDeleteOne{builder}
+}
+
+// Query returns a query builder for LotteryAttemptGrant.
+func (c *LotteryAttemptGrantClient) Query() *LotteryAttemptGrantQuery {
+	return &LotteryAttemptGrantQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeLotteryAttemptGrant},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a LotteryAttemptGrant entity by its id.
+func (c *LotteryAttemptGrantClient) Get(ctx context.Context, id int64) (*LotteryAttemptGrant, error) {
+	return c.Query().Where(lotteryattemptgrant.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *LotteryAttemptGrantClient) GetX(ctx context.Context, id int64) *LotteryAttemptGrant {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *LotteryAttemptGrantClient) Hooks() []Hook {
+	return c.hooks.LotteryAttemptGrant
+}
+
+// Interceptors returns the client interceptors.
+func (c *LotteryAttemptGrantClient) Interceptors() []Interceptor {
+	return c.inters.LotteryAttemptGrant
+}
+
+func (c *LotteryAttemptGrantClient) mutate(ctx context.Context, m *LotteryAttemptGrantMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&LotteryAttemptGrantCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&LotteryAttemptGrantUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&LotteryAttemptGrantUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&LotteryAttemptGrantDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown LotteryAttemptGrant mutation op: %q", m.Op())
 	}
 }
 
@@ -10291,16 +10432,16 @@ type (
 		ChannelMonitor, ChannelMonitorDailyRollup, ChannelMonitorHistory,
 		ChannelMonitorRequestTemplate, CheckinRewardCampaign, CompositeModelRoute,
 		EmptyResponseClaim, ErrorPassthroughRule, Group, IdempotencyRecord,
-		IdentityAdoptionDecision, LotteryActivity, LotteryAttemptLedger,
-		LotteryAttemptWallet, LotteryDraw, LotteryPrize, LotteryPrizeItem,
-		PaymentAuditLog, PaymentOrder, PaymentProviderInstance, PendingAuthSession,
-		PromoCode, PromoCodeUsage, Proxy, RedeemBatchClaim, RedeemCode, SecuritySecret,
-		Setting, SubAdminCommissionGrant, SubscriptionPlan, SystemCustomGroupModel,
-		SystemCustomGroupSource, TLSFingerprintProfile, UsageCleanupTask, UsageLog,
-		UsageResponseOutcome, User, UserAllowedGroup, UserAttributeDefinition,
-		UserAttributeValue, UserCheckin, UserCheckinBlacklist, UserCustomGroup,
-		UserCustomGroupModel, UserImage, UserImageTask, UserPlatformQuota,
-		UserSubscription []ent.Hook
+		IdentityAdoptionDecision, LotteryActivity, LotteryAttemptGrant,
+		LotteryAttemptLedger, LotteryAttemptWallet, LotteryDraw, LotteryPrize,
+		LotteryPrizeItem, PaymentAuditLog, PaymentOrder, PaymentProviderInstance,
+		PendingAuthSession, PromoCode, PromoCodeUsage, Proxy, RedeemBatchClaim,
+		RedeemCode, SecuritySecret, Setting, SubAdminCommissionGrant, SubscriptionPlan,
+		SystemCustomGroupModel, SystemCustomGroupSource, TLSFingerprintProfile,
+		UsageCleanupTask, UsageLog, UsageResponseOutcome, User, UserAllowedGroup,
+		UserAttributeDefinition, UserAttributeValue, UserCheckin, UserCheckinBlacklist,
+		UserCustomGroup, UserCustomGroupModel, UserImage, UserImageTask,
+		UserPlatformQuota, UserSubscription []ent.Hook
 	}
 	inters struct {
 		APIKey, Account, AccountGroup, Announcement, AnnouncementRead, AuthIdentity,
@@ -10308,16 +10449,16 @@ type (
 		ChannelMonitor, ChannelMonitorDailyRollup, ChannelMonitorHistory,
 		ChannelMonitorRequestTemplate, CheckinRewardCampaign, CompositeModelRoute,
 		EmptyResponseClaim, ErrorPassthroughRule, Group, IdempotencyRecord,
-		IdentityAdoptionDecision, LotteryActivity, LotteryAttemptLedger,
-		LotteryAttemptWallet, LotteryDraw, LotteryPrize, LotteryPrizeItem,
-		PaymentAuditLog, PaymentOrder, PaymentProviderInstance, PendingAuthSession,
-		PromoCode, PromoCodeUsage, Proxy, RedeemBatchClaim, RedeemCode, SecuritySecret,
-		Setting, SubAdminCommissionGrant, SubscriptionPlan, SystemCustomGroupModel,
-		SystemCustomGroupSource, TLSFingerprintProfile, UsageCleanupTask, UsageLog,
-		UsageResponseOutcome, User, UserAllowedGroup, UserAttributeDefinition,
-		UserAttributeValue, UserCheckin, UserCheckinBlacklist, UserCustomGroup,
-		UserCustomGroupModel, UserImage, UserImageTask, UserPlatformQuota,
-		UserSubscription []ent.Interceptor
+		IdentityAdoptionDecision, LotteryActivity, LotteryAttemptGrant,
+		LotteryAttemptLedger, LotteryAttemptWallet, LotteryDraw, LotteryPrize,
+		LotteryPrizeItem, PaymentAuditLog, PaymentOrder, PaymentProviderInstance,
+		PendingAuthSession, PromoCode, PromoCodeUsage, Proxy, RedeemBatchClaim,
+		RedeemCode, SecuritySecret, Setting, SubAdminCommissionGrant, SubscriptionPlan,
+		SystemCustomGroupModel, SystemCustomGroupSource, TLSFingerprintProfile,
+		UsageCleanupTask, UsageLog, UsageResponseOutcome, User, UserAllowedGroup,
+		UserAttributeDefinition, UserAttributeValue, UserCheckin, UserCheckinBlacklist,
+		UserCustomGroup, UserCustomGroupModel, UserImage, UserImageTask,
+		UserPlatformQuota, UserSubscription []ent.Interceptor
 	}
 )
 
