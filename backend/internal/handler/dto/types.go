@@ -165,9 +165,7 @@ type Group struct {
 	RPMLimit int `json:"rpm_limit"`
 	// MaxReasoningEffort OpenAI/Codex 请求的推理强度上限，空字符串表示不限制。
 	MaxReasoningEffort string `json:"max_reasoning_effort"`
-	// MaxReasoningEffortOverLimit 超过上限时的访问控制：downgrade（默认）或 deny。
-	MaxReasoningEffortOverLimit string `json:"max_reasoning_effort_over_limit"`
-	// ReasoningEffortMappings OpenAI/Codex 推理强度映射，可按模型精确名、前缀或后缀限定。
+	// ReasoningEffortMappings OpenAI/Codex 推理强度精确映射。
 	ReasoningEffortMappings []domain.ReasoningEffortMapping `json:"reasoning_effort_mappings"`
 
 	CreatedAt time.Time `json:"created_at"`
@@ -178,10 +176,6 @@ type Group struct {
 // 注意：普通用户接口不得返回 model_routing/account_count/account_groups 等内部信息。
 type AdminGroup struct {
 	Group
-	// ForceOpenAIFast 是管理端请求策略，用户侧分组 DTO 无需暴露。
-	ForceOpenAIFast bool `json:"force_openai_fast"`
-	// FreeOpenAIFast 是管理端计费策略，用户侧分组 DTO 无需暴露。
-	FreeOpenAIFast bool `json:"free_openai_fast"`
 
 	// 分组利润控制（五个 token 平台分组可启用；margin/buffer 为小数存储）。
 	// 仅管理员可见：这三个字段与同响应中的 rate_multiplier 相乘即可反推出
@@ -197,8 +191,6 @@ type AdminGroup struct {
 
 	// MCP XML 协议注入（仅 antigravity 平台使用）
 	MCPXMLInject bool `json:"mcp_xml_inject"`
-	// Claude usage 模拟开关（仅管理员可见）
-	SimulateClaudeMaxEnabled bool `json:"simulate_claude_max_enabled"`
 
 	// OpenAI Messages 调度配置（仅 openai 平台使用）
 	DefaultMappedModel          string                                   `json:"default_mapped_model"`
@@ -422,7 +414,6 @@ type RedeemCode struct {
 	Code             string     `json:"code"`
 	Type             string     `json:"type"`
 	Value            float64    `json:"value"`
-	ThresholdExempt  bool       `json:"threshold_exempt,omitempty"`
 	Status           string     `json:"status"`
 	UsedBy           *int64     `json:"used_by"`
 	UsedAt           *time.Time `json:"used_at"`
@@ -556,11 +547,8 @@ type UsageLog struct {
 	RequestType  string `json:"request_type"`
 	Stream       bool   `json:"stream"`
 	OpenAIWSMode bool   `json:"openai_ws_mode"`
-	// NativeCompactionV2 is true only for requests positively identified at
-	// runtime as the native OpenAI remote compaction v2 wire.
-	NativeCompactionV2 bool `json:"native_compaction_v2"`
-	DurationMs         *int `json:"duration_ms"`
-	FirstTokenMs       *int `json:"first_token_ms"`
+	DurationMs   *int   `json:"duration_ms"`
+	FirstTokenMs *int   `json:"first_token_ms"`
 
 	// 图片生成字段
 	ImageCount         int            `json:"image_count"`
@@ -601,8 +589,8 @@ type UsageLog struct {
 type AdminUsageLog struct {
 	UsageLog
 
-	// OutcomeStatus is a privacy-safe classification derived from persisted
-	// response evidence. Raw outcome fields are intentionally not exposed here.
+	// OutcomeStatus is a privacy-safe classification for monitoring. It is
+	// exposed only on administrator usage responses.
 	OutcomeStatus string `json:"outcome_status"`
 
 	// SourceGroupID is the direct source group selected behind a system custom

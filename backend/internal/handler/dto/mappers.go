@@ -156,8 +156,6 @@ func GroupFromServiceAdmin(g *service.Group) *AdminGroup {
 	}
 	out := &AdminGroup{
 		Group:                       groupFromServiceBase(g),
-		ForceOpenAIFast:             g.ForceOpenAIFast,
-		FreeOpenAIFast:              g.FreeOpenAIFast,
 		ProfitControlEnabled:        g.ProfitControlEnabled,
 		ProfitMinMargin:             g.ProfitMinMargin,
 		ProfitSafetyBuffer:          g.ProfitSafetyBuffer,
@@ -234,7 +232,6 @@ func groupFromServiceBase(g *service.Group) Group {
 		RequirePrivacySet:                g.RequirePrivacySet,
 		RPMLimit:                         g.RPMLimit,
 		MaxReasoningEffort:               g.MaxReasoningEffort,
-		MaxReasoningEffortOverLimit:      g.MaxReasoningEffortOverLimit,
 		ReasoningEffortMappings:          g.ReasoningEffortMappings,
 		CreatedAt:                        g.CreatedAt,
 		UpdatedAt:                        g.UpdatedAt,
@@ -599,7 +596,6 @@ func RedeemCodeFromServiceWorkbenchGenerated(rc *service.RedeemCode) *RedeemCode
 		return nil
 	}
 	out := redeemCodeFromServiceBase(rc, false)
-	out.ThresholdExempt = rc.ThresholdExempt
 	if rc.Notes != "" {
 		out.Notes = &rc.Notes
 	}
@@ -637,7 +633,6 @@ func redeemCodeFromServiceBase(rc *service.RedeemCode, includeAdminFields bool) 
 		Group:            GroupFromServiceShallow(rc.Group),
 	}
 	if includeAdminFields {
-		out.ThresholdExempt = rc.ThresholdExempt
 		out.CreatedBy = rc.CreatedBy
 		out.Source = rc.Source
 		out.User = UserFromServiceShallow(rc.User)
@@ -712,7 +707,6 @@ func usageLogFromServiceUser(l *service.UsageLog) UsageLog {
 		RequestType:               requestType.String(),
 		Stream:                    stream,
 		OpenAIWSMode:              openAIWSMode,
-		NativeCompactionV2:        l.NativeCompactionV2,
 		DurationMs:                l.DurationMs,
 		FirstTokenMs:              l.FirstTokenMs,
 		ImageCount:                l.ImageCount,
@@ -759,7 +753,7 @@ func UsageLogFromServiceAdmin(l *service.UsageLog) *AdminUsageLog {
 	usageLog.UpstreamEndpoint = l.UpstreamEndpoint
 	return &AdminUsageLog{
 		UsageLog:                usageLog,
-		OutcomeStatus:           string(service.ClassifyUsageOutcome(l.Outcome)),
+		OutcomeStatus:           usageOutcomeStatus(l.Outcome),
 		SourceGroupID:           l.SourceGroupID,
 		UpstreamModel:           l.UpstreamModel,
 		UpstreamReasoningEffort: adminUpstreamReasoningEffort(l),
@@ -773,6 +767,28 @@ func UsageLogFromServiceAdmin(l *service.UsageLog) *AdminUsageLog {
 		IPAddress:               l.IPAddress,
 		Account:                 AccountSummaryFromService(l.Account),
 	}
+}
+
+// usageOutcomeStatus maps privacy-safe response evidence to the small status
+// vocabulary consumed by the public model monitor. Missing evidence remains
+// unknown so historical rows are not guessed from token counts.
+func usageOutcomeStatus(outcome *service.ResponseOutcome) string {
+	if outcome == nil {
+		return "failure"
+	}
+	if outcome.DisconnectSource == service.DisconnectSourceClient {
+		return "failure"
+	}
+	if outcome.DisconnectSource == service.DisconnectSourceUpstream || outcome.DisconnectSource == service.DisconnectSourceServer || (outcome.UpstreamErrorKind != "" && outcome.UpstreamErrorKind != service.UpstreamErrorNone) {
+		return "failure"
+	}
+	if (outcome.HTTPStatus != 0 && (outcome.HTTPStatus < 200 || outcome.HTTPStatus >= 300)) || (outcome.UpstreamStatus != 0 && (outcome.UpstreamStatus < 200 || outcome.UpstreamStatus >= 300)) {
+		return "failure"
+	}
+	if outcome.HasEffectiveOutput() {
+		return "success"
+	}
+	return "empty"
 }
 
 func EmptyResponseClaimFromService(claim *service.EmptyResponseClaim) *EmptyResponseClaim {

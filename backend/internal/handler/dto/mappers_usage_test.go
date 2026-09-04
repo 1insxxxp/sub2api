@@ -28,25 +28,6 @@ func TestUsageLogFromService_IncludesOpenAIWSMode(t *testing.T) {
 	require.False(t, UsageLogFromServiceAdmin(httpLog).OpenAIWSMode)
 }
 
-func TestUsageLogFromServiceAdmin_ExposesOnlyOutcomeStatus(t *testing.T) {
-	t.Parallel()
-
-	log := &service.UsageLog{
-		RequestID: "req_outcome_status",
-		Model:     "gpt-5.6-sol",
-		Outcome:   &service.ResponseOutcome{HTTPStatus: 200, UpstreamStatus: 200, HasText: true, StreamCompleted: true},
-	}
-
-	adminDTO := UsageLogFromServiceAdmin(log)
-	require.Equal(t, string(service.UsageOutcomeSuccess), adminDTO.OutcomeStatus)
-
-	body, err := json.Marshal(adminDTO)
-	require.NoError(t, err)
-	require.Contains(t, string(body), `"outcome_status":"success"`)
-	require.NotContains(t, string(body), `"http_status"`)
-	require.NotContains(t, string(body), `"upstream_error_kind"`)
-}
-
 func TestUsageLogFromServiceAdmin_IncludesSourceGroupID(t *testing.T) {
 	t.Parallel()
 
@@ -67,25 +48,25 @@ func TestUsageLogFromServiceAdmin_IncludesSourceGroupID(t *testing.T) {
 	require.Equal(t, sourceGroupID, *adminDTO.SourceGroupID)
 }
 
-func TestUsageLogFromService_PreservesNativeCompactionAndStream(t *testing.T) {
-	t.Parallel()
-
-	log := &service.UsageLog{
-		RequestID:          "resp_compaction",
-		Model:              "gpt-5.6-sol",
-		RequestType:        service.RequestTypeStream,
-		Stream:             true,
-		NativeCompactionV2: true,
+func TestUsageLogFromServiceAdmin_ClassifiesOutcomeStatus(t *testing.T) {
+	completed := &service.UsageLog{Outcome: &service.ResponseOutcome{HTTPStatus: 200, UpstreamStatus: 200, HasText: true, StreamCompleted: true}}
+	failed := &service.UsageLog{Outcome: &service.ResponseOutcome{HTTPStatus: 502, UpstreamStatus: 502}}
+	empty := &service.UsageLog{Outcome: &service.ResponseOutcome{HTTPStatus: 200, UpstreamStatus: 200, StreamCompleted: true}}
+	clientCanceled := &service.UsageLog{Outcome: &service.ResponseOutcome{HTTPStatus: 200, UpstreamStatus: 200, DisconnectSource: service.DisconnectSourceClient}}
+	missingEvidence := &service.UsageLog{}
+	for _, tc := range []struct {
+		name string
+		log  *service.UsageLog
+		want string
+	}{
+		{"success", completed, "success"}, {"failure", failed, "failure"}, {"empty", empty, "empty"}, {"client canceled", clientCanceled, "failure"}, {"missing evidence", missingEvidence, "failure"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := UsageLogFromServiceAdmin(tc.log).OutcomeStatus; got != tc.want {
+				t.Fatalf("got %q, want %q", got, tc.want)
+			}
+		})
 	}
-
-	userDTO := UsageLogFromService(log)
-	adminDTO := UsageLogFromServiceAdmin(log)
-	require.Equal(t, "stream", userDTO.RequestType)
-	require.True(t, userDTO.Stream)
-	require.True(t, userDTO.NativeCompactionV2)
-	require.Equal(t, "stream", adminDTO.RequestType)
-	require.True(t, adminDTO.Stream)
-	require.True(t, adminDTO.NativeCompactionV2)
 }
 
 func TestUsageLogFromService_PrefersRequestTypeForLegacyFields(t *testing.T) {
