@@ -599,6 +599,7 @@ func RedeemCodeFromServiceWorkbenchGenerated(rc *service.RedeemCode) *RedeemCode
 	if rc.Notes != "" {
 		out.Notes = &rc.Notes
 	}
+	out.ThresholdExempt = rc.ThresholdExempt
 	return &out
 }
 
@@ -618,10 +619,16 @@ func RedeemCodeFromServiceAdmin(rc *service.RedeemCode) *AdminRedeemCode {
 
 func redeemCodeFromServiceBase(rc *service.RedeemCode, includeAdminFields bool) RedeemCode {
 	out := RedeemCode{
-		ID:               rc.ID,
-		Code:             rc.Code,
-		Type:             rc.Type,
-		Value:            rc.Value,
+		ID:    rc.ID,
+		Code:  rc.Code,
+		Type:  rc.Type,
+		Value: rc.Value,
+		ThresholdExempt: func() bool {
+			if includeAdminFields {
+				return rc.ThresholdExempt
+			}
+			return false
+		}(),
 		Status:           rc.Status,
 		UsedBy:           rc.UsedBy,
 		UsedAt:           rc.UsedAt,
