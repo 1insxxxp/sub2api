@@ -647,6 +647,9 @@ const (
 	// SettingKeyCheckinMinDailyUsageCount requires this many usage records in
 	// the current Beijing calendar day before a user can check in.
 	SettingKeyCheckinMinDailyUsageCount = "checkin_min_daily_usage_count"
+	// SettingKeyCheckinMinDailyUsageBypassWeekdays stores ISO weekdays exempt from
+	// the minimum daily usage count requirement.
+	SettingKeyCheckinMinDailyUsageBypassWeekdays = "checkin_min_daily_usage_bypass_weekdays"
 	// SettingKeyCheckinWhitelist stores email/username values exempt from check-in thresholds.
 	SettingKeyCheckinWhitelist = "checkin_whitelist"
 

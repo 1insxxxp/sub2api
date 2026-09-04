@@ -161,6 +161,29 @@
             </div>
 
             <div class="sm:col-span-2">
+              <label class="input-label">{{ t('admin.checkins.minDailyUsageBypassWeekdays') }}</label>
+              <div class="mt-2 flex flex-wrap gap-2">
+                <label
+                  v-for="weekday in weekdays"
+                  :key="weekday.value"
+                  class="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-700 dark:border-dark-700 dark:text-gray-200"
+                >
+                  <input
+                    v-model="configForm.min_daily_usage_bypass_weekdays"
+                    :data-test="`checkin-bypass-weekday-${weekday.value}`"
+                    type="checkbox"
+                    :value="weekday.value"
+                    class="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                  />
+                  {{ t(weekday.label) }}
+                </label>
+              </div>
+              <p class="mt-2 text-xs text-gray-500 dark:text-dark-400">
+                {{ t('admin.checkins.minDailyUsageBypassWeekdaysHint') }}
+              </p>
+            </div>
+
+            <div class="sm:col-span-2">
               <label class="input-label">{{ t('admin.checkins.whitelist') }}</label>
               <textarea
                 v-model="configForm.whitelistText"
@@ -823,6 +846,7 @@ const configForm = reactive({
   min_total_usage_usd: 0,
   min_total_recharge_usd: 0,
   min_daily_usage_count: 5,
+  min_daily_usage_bypass_weekdays: [] as number[],
   whitelistText: '',
   tiers: [] as CheckinRewardTier[],
   streak_enabled: true,
@@ -833,6 +857,15 @@ const configForm = reactive({
   total_reward_cap: 0,
 })
 const usagePreviewAmounts = [0, 10, 20, 50, 100]
+const weekdays = [
+  { value: 1, label: 'admin.checkins.weekdayMonday' },
+  { value: 2, label: 'admin.checkins.weekdayTuesday' },
+  { value: 3, label: 'admin.checkins.weekdayWednesday' },
+  { value: 4, label: 'admin.checkins.weekdayThursday' },
+  { value: 5, label: 'admin.checkins.weekdayFriday' },
+  { value: 6, label: 'admin.checkins.weekdaySaturday' },
+  { value: 7, label: 'admin.checkins.weekdaySunday' },
+]
 let recordSearchTimeout: ReturnType<typeof setTimeout> | undefined
 let blacklistSearchTimeout: ReturnType<typeof setTimeout> | undefined
 
@@ -965,6 +998,7 @@ async function loadConfig() {
     configForm.min_total_usage_usd = nextConfig.min_total_usage_usd
     configForm.min_total_recharge_usd = nextConfig.min_total_recharge_usd
     configForm.min_daily_usage_count = nextConfig.min_daily_usage_count ?? 5
+    configForm.min_daily_usage_bypass_weekdays = [...(nextConfig.min_daily_usage_bypass_weekdays ?? [])]
     configForm.whitelistText = (nextConfig.whitelist ?? []).join('\n')
     configForm.tiers = cloneTiers(nextConfig.tiers)
     configForm.streak_enabled = nextConfig.streak_enabled
@@ -1008,6 +1042,7 @@ async function handleSaveConfig() {
       min_total_usage_usd: Number(configForm.min_total_usage_usd),
       min_total_recharge_usd: Number(configForm.min_total_recharge_usd),
       min_daily_usage_count: Number(configForm.min_daily_usage_count),
+      min_daily_usage_bypass_weekdays: [...configForm.min_daily_usage_bypass_weekdays].sort((a, b) => a - b),
       whitelist,
       tiers: configForm.tiers.map((tier, index) => ({
         amount: Number(tier.amount),
@@ -1034,6 +1069,7 @@ async function handleSaveConfig() {
     configForm.min_total_usage_usd = config.value.min_total_usage_usd
     configForm.min_total_recharge_usd = config.value.min_total_recharge_usd
     configForm.min_daily_usage_count = config.value.min_daily_usage_count ?? configForm.min_daily_usage_count
+    configForm.min_daily_usage_bypass_weekdays = [...(config.value.min_daily_usage_bypass_weekdays ?? [])]
     configForm.whitelistText = (config.value.whitelist ?? []).join('\n')
     configForm.tiers = cloneTiers(config.value.tiers)
     campaignDefaultTiersReady.value = configForm.tiers.length > 0

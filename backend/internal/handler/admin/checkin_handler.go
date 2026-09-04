@@ -70,18 +70,19 @@ func (h *CheckinHandler) GetConfig(c *gin.Context) {
 }
 
 type UpdateCheckinConfigRequest struct {
-	Enabled                bool                        `json:"enabled"`
-	MinTotalUsageUSD       float64                     `json:"min_total_usage_usd" binding:"gte=0"`
-	MinTotalRechargeUSD    float64                     `json:"min_total_recharge_usd" binding:"gte=0"`
-	MinDailyUsageCount     int                         `json:"min_daily_usage_count" binding:"gte=0"`
-	Whitelist              []string                    `json:"whitelist"`
-	Tiers                  []service.CheckinRewardTier `json:"tiers"`
-	StreakEnabled          bool                        `json:"streak_enabled"`
-	StreakRules            []service.CheckinStreakRule `json:"streak_rules"`
-	UsageRebateEnabled     bool                        `json:"usage_rebate_enabled"`
-	UsageRebateRatePercent float64                     `json:"usage_rebate_rate_percent"`
-	UsageRebateCap         float64                     `json:"usage_rebate_cap"`
-	TotalRewardCap         float64                     `json:"total_reward_cap"`
+	Enabled                     bool                        `json:"enabled"`
+	MinTotalUsageUSD            float64                     `json:"min_total_usage_usd" binding:"gte=0"`
+	MinTotalRechargeUSD         float64                     `json:"min_total_recharge_usd" binding:"gte=0"`
+	MinDailyUsageCount          int                         `json:"min_daily_usage_count" binding:"gte=0"`
+	MinDailyUsageBypassWeekdays []int                       `json:"min_daily_usage_bypass_weekdays"`
+	Whitelist                   []string                    `json:"whitelist"`
+	Tiers                       []service.CheckinRewardTier `json:"tiers"`
+	StreakEnabled               bool                        `json:"streak_enabled"`
+	StreakRules                 []service.CheckinStreakRule `json:"streak_rules"`
+	UsageRebateEnabled          bool                        `json:"usage_rebate_enabled"`
+	UsageRebateRatePercent      float64                     `json:"usage_rebate_rate_percent"`
+	UsageRebateCap              float64                     `json:"usage_rebate_cap"`
+	TotalRewardCap              float64                     `json:"total_reward_cap"`
 }
 
 func (h *CheckinHandler) UpdateConfig(c *gin.Context) {
@@ -91,18 +92,19 @@ func (h *CheckinHandler) UpdateConfig(c *gin.Context) {
 		return
 	}
 	cfg, err := h.checkinService.UpdateConfig(c.Request.Context(), service.CheckinConfig{
-		Enabled:                req.Enabled,
-		MinTotalUsageUSD:       req.MinTotalUsageUSD,
-		MinTotalRechargeUSD:    req.MinTotalRechargeUSD,
-		MinDailyUsageCount:     req.MinDailyUsageCount,
-		Whitelist:              req.Whitelist,
-		Tiers:                  req.Tiers,
-		StreakEnabled:          req.StreakEnabled,
-		StreakRules:            req.StreakRules,
-		UsageRebateEnabled:     req.UsageRebateEnabled,
-		UsageRebateRatePercent: req.UsageRebateRatePercent,
-		UsageRebateCap:         req.UsageRebateCap,
-		TotalRewardCap:         req.TotalRewardCap,
+		Enabled:                     req.Enabled,
+		MinTotalUsageUSD:            req.MinTotalUsageUSD,
+		MinTotalRechargeUSD:         req.MinTotalRechargeUSD,
+		MinDailyUsageCount:          req.MinDailyUsageCount,
+		MinDailyUsageBypassWeekdays: req.MinDailyUsageBypassWeekdays,
+		Whitelist:                   req.Whitelist,
+		Tiers:                       req.Tiers,
+		StreakEnabled:               req.StreakEnabled,
+		StreakRules:                 req.StreakRules,
+		UsageRebateEnabled:          req.UsageRebateEnabled,
+		UsageRebateRatePercent:      req.UsageRebateRatePercent,
+		UsageRebateCap:              req.UsageRebateCap,
+		TotalRewardCap:              req.TotalRewardCap,
 	})
 	if err != nil {
 		response.ErrorFrom(c, err)

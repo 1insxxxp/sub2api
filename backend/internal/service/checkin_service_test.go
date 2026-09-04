@@ -1247,6 +1247,21 @@ func TestCheckinWhitelistMatchesEmailOrUsernameIgnoringCaseAndWhitespace(t *test
 	}
 }
 
+func TestCheckinDailyUsageBypassWeekdaysUsesISOWeekday(t *testing.T) {
+	require.True(t, checkinDailyUsageBypassWeekday("2026-09-05", []int{6, 7}))
+	require.True(t, checkinDailyUsageBypassWeekday("2026-09-06", []int{6, 7}))
+	require.False(t, checkinDailyUsageBypassWeekday("2026-09-04", []int{6, 7}))
+}
+
+func TestNormalizeCheckinConfigSortsAndDeduplicatesBypassWeekdays(t *testing.T) {
+	cfg, err := normalizeCheckinConfig(CheckinConfig{
+		MinDailyUsageCount:          5,
+		MinDailyUsageBypassWeekdays: []int{7, 2, 7, 2},
+	})
+	require.NoError(t, err)
+	require.Equal(t, []int{2, 7}, cfg.MinDailyUsageBypassWeekdays)
+}
+
 func TestCheckinServiceWhitelistBypassesAllQualificationThresholds(t *testing.T) {
 	client := newCheckinServiceTestClient(t)
 	ctx := context.Background()

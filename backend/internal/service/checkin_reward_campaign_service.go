@@ -515,6 +515,7 @@ func cloneCheckinConfig(cfg CheckinConfig) CheckinConfig {
 	cloned := cfg
 	cloned.Tiers = append([]CheckinRewardTier(nil), cfg.Tiers...)
 	cloned.StreakRules = append([]CheckinStreakRule(nil), cfg.StreakRules...)
+	cloned.MinDailyUsageBypassWeekdays = append([]int(nil), cfg.MinDailyUsageBypassWeekdays...)
 	cloned.Whitelist = append([]string(nil), cfg.Whitelist...)
 	return cloned
 }

@@ -118,6 +118,7 @@ describe('Admin CheckinsView', () => {
       min_total_usage_usd: 5,
       min_total_recharge_usd: 20,
       min_daily_usage_count: 5,
+      min_daily_usage_bypass_weekdays: [6, 7],
       whitelist: ['alice@example.com'],
       tiers: [{ amount: 1, probability: 100, sort_order: 1 }],
       streak_enabled: false,
@@ -470,6 +471,31 @@ describe('Admin CheckinsView', () => {
 
     expect(updateConfig).toHaveBeenCalledWith(expect.objectContaining({
       whitelist: ['Alice@example.com', 'bob'],
+    }))
+  })
+
+  it('loads and saves weekdays exempt from the daily usage threshold', async () => {
+    const wrapper = mount(CheckinsView, {
+      global: {
+        stubs: {
+          AppLayout: { template: '<div><slot /></div>' },
+          DataTable: DataTableStub,
+          Pagination: true,
+          Icon: true,
+        },
+      },
+    })
+
+    await flushPromises()
+
+    expect(wrapper.get('[data-test="checkin-bypass-weekday-6"]').element).toHaveProperty('checked', true)
+    expect(wrapper.get('[data-test="checkin-bypass-weekday-7"]').element).toHaveProperty('checked', true)
+    await wrapper.get('[data-test="checkin-bypass-weekday-5"]').setValue(true)
+    await wrapper.get('[data-test="save-checkin-config"]').trigger('click')
+    await flushPromises()
+
+    expect(updateConfig).toHaveBeenCalledWith(expect.objectContaining({
+      min_daily_usage_bypass_weekdays: [5, 6, 7],
     }))
   })
 

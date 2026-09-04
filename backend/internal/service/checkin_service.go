@@ -57,20 +57,21 @@ const (
 )
 
 type CheckinConfig struct {
-	Enabled                bool                 `json:"enabled"`
-	MinTotalUsageUSD       float64              `json:"min_total_usage_usd"`
-	MinTotalRechargeUSD    float64              `json:"min_total_recharge_usd"`
-	MinDailyUsageCount     int                  `json:"min_daily_usage_count"`
-	Whitelist              []string             `json:"whitelist"`
-	Tiers                  []CheckinRewardTier  `json:"tiers"`
-	StreakEnabled          bool                 `json:"streak_enabled"`
-	StreakRules            []CheckinStreakRule  `json:"streak_rules"`
-	UsageRebateEnabled     bool                 `json:"usage_rebate_enabled"`
-	UsageRebateRatePercent float64              `json:"usage_rebate_rate_percent"`
-	UsageRebateCap         float64              `json:"usage_rebate_cap"`
-	TotalRewardCap         float64              `json:"total_reward_cap"`
-	ProbabilityTotal       float64              `json:"probability_total"`
-	Preview                CheckinRewardPreview `json:"preview"`
+	Enabled                     bool                 `json:"enabled"`
+	MinTotalUsageUSD            float64              `json:"min_total_usage_usd"`
+	MinTotalRechargeUSD         float64              `json:"min_total_recharge_usd"`
+	MinDailyUsageCount          int                  `json:"min_daily_usage_count"`
+	MinDailyUsageBypassWeekdays []int                `json:"min_daily_usage_bypass_weekdays"`
+	Whitelist                   []string             `json:"whitelist"`
+	Tiers                       []CheckinRewardTier  `json:"tiers"`
+	StreakEnabled               bool                 `json:"streak_enabled"`
+	StreakRules                 []CheckinStreakRule  `json:"streak_rules"`
+	UsageRebateEnabled          bool                 `json:"usage_rebate_enabled"`
+	UsageRebateRatePercent      float64              `json:"usage_rebate_rate_percent"`
+	UsageRebateCap              float64              `json:"usage_rebate_cap"`
+	TotalRewardCap              float64              `json:"total_reward_cap"`
+	ProbabilityTotal            float64              `json:"probability_total"`
+	Preview                     CheckinRewardPreview `json:"preview"`
 }
 
 type CheckinRewardTier = domain.CheckinRewardTier
@@ -125,6 +126,7 @@ type CheckinStatus struct {
 	TotalRechargeUSD       float64            `json:"total_recharge_usd"`
 	MinDailyUsageCount     int                `json:"min_daily_usage_count"`
 	TodayUsageCount        int                `json:"today_usage_count"`
+	DailyUsageCountExempt  bool               `json:"daily_usage_count_exempt"`
 	WhitelistExempt        bool               `json:"whitelist_exempt"`
 	IneligibleReason       string             `json:"ineligible_reason,omitempty"`
 	NextStreakRule         *CheckinStreakRule `json:"next_streak_rule,omitempty"`
@@ -139,16 +141,17 @@ type CheckinResult struct {
 }
 
 type checkinCurrentPolicyState struct {
-	Effective          *EffectiveCheckinConfig
-	Enabled            bool
-	Eligible           bool
-	Blacklisted        bool
-	IneligibleReason   string
-	TotalUsageUSD      float64
-	TotalRechargeUSD   float64
-	MinDailyUsageCount int
-	TodayUsageCount    int
-	WhitelistExempt    bool
+	Effective             *EffectiveCheckinConfig
+	Enabled               bool
+	Eligible              bool
+	Blacklisted           bool
+	IneligibleReason      string
+	TotalUsageUSD         float64
+	TotalRechargeUSD      float64
+	MinDailyUsageCount    int
+	TodayUsageCount       int
+	DailyUsageCountExempt bool
+	WhitelistExempt       bool
 }
 
 type CheckinRecord struct {
@@ -263,20 +266,21 @@ func (s *CheckinService) GetStatus(ctx context.Context, userID int64) (*CheckinS
 	effective := policy.Effective
 	cfg := effective.Config
 	base := CheckinStatus{
-		Enabled:             policy.Enabled,
-		Eligible:            policy.Eligible,
-		Blacklisted:         policy.Blacklisted,
-		CheckedIn:           false,
-		CheckinDate:         checkinDate,
-		NextResetAt:         nextReset,
-		MinTotalUsageUSD:    cfg.MinTotalUsageUSD,
-		TotalUsageUSD:       policy.TotalUsageUSD,
-		MinTotalRechargeUSD: cfg.MinTotalRechargeUSD,
-		TotalRechargeUSD:    policy.TotalRechargeUSD,
-		MinDailyUsageCount:  cfg.MinDailyUsageCount,
-		TodayUsageCount:     policy.TodayUsageCount,
-		WhitelistExempt:     policy.WhitelistExempt,
-		IneligibleReason:    policy.IneligibleReason,
+		Enabled:               policy.Enabled,
+		Eligible:              policy.Eligible,
+		Blacklisted:           policy.Blacklisted,
+		CheckedIn:             false,
+		CheckinDate:           checkinDate,
+		NextResetAt:           nextReset,
+		MinTotalUsageUSD:      cfg.MinTotalUsageUSD,
+		TotalUsageUSD:         policy.TotalUsageUSD,
+		MinTotalRechargeUSD:   cfg.MinTotalRechargeUSD,
+		TotalRechargeUSD:      policy.TotalRechargeUSD,
+		MinDailyUsageCount:    cfg.MinDailyUsageCount,
+		DailyUsageCountExempt: policy.DailyUsageCountExempt,
+		TodayUsageCount:       policy.TodayUsageCount,
+		WhitelistExempt:       policy.WhitelistExempt,
+		IneligibleReason:      policy.IneligibleReason,
 	}
 	setCheckinStatusCampaign(&base, effective.Campaign)
 	if snapshot, snapshotErr := s.checkinHistorySnapshot(ctx, userID, checkinDate, cfg); snapshotErr != nil {
@@ -337,12 +341,13 @@ func (s *CheckinService) currentCheckinPolicyState(ctx context.Context, userID i
 	}
 	cfg := effective.Config
 	state := &checkinCurrentPolicyState{
-		Effective:          effective,
-		Enabled:            cfg.Enabled,
-		Eligible:           cfg.Enabled,
-		TotalUsageUSD:      totalUsage,
-		TotalRechargeUSD:   totalRecharge,
-		MinDailyUsageCount: cfg.MinDailyUsageCount,
+		Effective:             effective,
+		Enabled:               cfg.Enabled,
+		Eligible:              cfg.Enabled,
+		TotalUsageUSD:         totalUsage,
+		TotalRechargeUSD:      totalRecharge,
+		MinDailyUsageCount:    cfg.MinDailyUsageCount,
+		DailyUsageCountExempt: checkinDailyUsageBypassWeekday(checkinDate, cfg.MinDailyUsageBypassWeekdays),
 	}
 	if !cfg.Enabled {
 		state.IneligibleReason = CheckinIneligibleReasonDisabled
@@ -371,7 +376,7 @@ func (s *CheckinService) currentCheckinPolicyState(ctx context.Context, userID i
 	if state.WhitelistExempt {
 		return state, nil
 	}
-	if todayUsageCount < cfg.MinDailyUsageCount {
+	if !state.DailyUsageCountExempt && todayUsageCount < cfg.MinDailyUsageCount {
 		state.Eligible = false
 		state.IneligibleReason = CheckinIneligibleReasonInsufficientDailyUsage
 		return state, nil
@@ -409,19 +414,20 @@ func (s *CheckinService) Checkin(ctx context.Context, userID int64) (*CheckinRes
 	}
 
 	var (
-		authoritative     *EffectiveCheckinConfig
-		createdRecord     *dbent.UserCheckin
-		calculation       checkinRewardCalculation
-		lotteryAttempts   int
-		streakDay         int
-		lifetimeDays      int
-		txTotalUsage      float64
-		txTotalRecharge   float64
-		txTodayUsage      int
-		txWhitelistExempt bool
-		balanceBefore     float64
-		balanceAfter      float64
-		reward            float64
+		authoritative      *EffectiveCheckinConfig
+		createdRecord      *dbent.UserCheckin
+		calculation        checkinRewardCalculation
+		lotteryAttempts    int
+		streakDay          int
+		lifetimeDays       int
+		txTotalUsage       float64
+		txTotalRecharge    float64
+		txTodayUsage       int
+		txDailyUsageExempt bool
+		txWhitelistExempt  bool
+		balanceBefore      float64
+		balanceAfter       float64
+		reward             float64
 	)
 	err = s.withCheckinCampaignConfigReadTx(ctx, func(client *dbent.Client, txRepo SettingRepository) error {
 		txExisting, getErr := s.getCheckinByUserAndDateWithClient(ctx, client, userID, checkinDate)
@@ -470,12 +476,13 @@ func (s *CheckinService) Checkin(ctx context.Context, userID int64) (*CheckinRes
 		if configErr != nil {
 			return configErr
 		}
+		txDailyUsageExempt = checkinDailyUsageBypassWeekday(checkinDate, cfg.MinDailyUsageBypassWeekdays)
 		txWhitelistExempt, configErr = s.checkinWhitelistExemptWithClient(ctx, client, userID, cfg.Whitelist)
 		if configErr != nil {
 			return configErr
 		}
 		if !txWhitelistExempt {
-			if txTodayUsage < cfg.MinDailyUsageCount {
+			if !txDailyUsageExempt && txTodayUsage < cfg.MinDailyUsageCount {
 				return ErrCheckinInsufficientDailyUsage
 			}
 			if !checkinSpendEligible(txTotalUsage, cfg.MinTotalUsageUSD, txTotalRecharge, cfg.MinTotalRechargeUSD) {
@@ -611,6 +618,7 @@ func (s *CheckinService) Checkin(ctx context.Context, userID int64) (*CheckinRes
 		TotalRechargeUSD:       txTotalRecharge,
 		MinDailyUsageCount:     cfg.MinDailyUsageCount,
 		TodayUsageCount:        txTodayUsage,
+		DailyUsageCountExempt:  txDailyUsageExempt,
 		WhitelistExempt:        txWhitelistExempt,
 		NextStreakRule:         nextCheckinStreakRule(cfg.StreakRules, streakDay),
 		RecentRecords:          recentRecords,
@@ -819,6 +827,7 @@ func (s *CheckinService) getCheckinConfigFromRepository(ctx context.Context, rep
 		SettingKeyCheckinMinTotalUsageUSD,
 		SettingKeyCheckinMinTotalRechargeUSD,
 		SettingKeyCheckinMinDailyUsageCount,
+		SettingKeyCheckinMinDailyUsageBypassWeekdays,
 		SettingKeyCheckinWhitelist,
 		SettingKeyCheckinRewardConfig,
 	})
@@ -852,6 +861,14 @@ func (s *CheckinService) getCheckinConfigFromRepository(ctx context.Context, rep
 			return nil, infraerrors.BadRequest("INVALID_CHECKIN_MIN_DAILY_USAGE_COUNT", "minimum daily usage count must be a non-negative integer")
 		}
 		cfg.MinDailyUsageCount = minDailyUsageCount
+	}
+	if raw := strings.TrimSpace(values[SettingKeyCheckinMinDailyUsageBypassWeekdays]); raw != "" {
+		var weekdays []int
+		if err := json.Unmarshal([]byte(raw), &weekdays); err != nil {
+			slog.Warn("check-in daily usage bypass weekdays is invalid json, falling back to empty list", "error", err)
+		} else {
+			cfg.MinDailyUsageBypassWeekdays = weekdays
+		}
 	}
 	if raw := strings.TrimSpace(values[SettingKeyCheckinWhitelist]); raw != "" {
 		var whitelist []string
@@ -905,12 +922,13 @@ func (s *CheckinService) UpdateConfig(ctx context.Context, cfg CheckinConfig) (*
 
 func persistCheckinConfig(ctx context.Context, repo SettingRepository, normalized *CheckinConfig) error {
 	if err := repo.SetMultiple(ctx, map[string]string{
-		SettingKeyCheckinEnabled:             strconv.FormatBool(normalized.Enabled),
-		SettingKeyCheckinMinTotalUsageUSD:    strconv.FormatFloat(normalized.MinTotalUsageUSD, 'f', -1, 64),
-		SettingKeyCheckinMinTotalRechargeUSD: strconv.FormatFloat(normalized.MinTotalRechargeUSD, 'f', -1, 64),
-		SettingKeyCheckinMinDailyUsageCount:  strconv.Itoa(normalized.MinDailyUsageCount),
-		SettingKeyCheckinWhitelist:           mustMarshalCheckinWhitelist(normalized.Whitelist),
-		SettingKeyCheckinRewardConfig:        mustMarshalCheckinRewardConfig(*normalized),
+		SettingKeyCheckinEnabled:                     strconv.FormatBool(normalized.Enabled),
+		SettingKeyCheckinMinTotalUsageUSD:            strconv.FormatFloat(normalized.MinTotalUsageUSD, 'f', -1, 64),
+		SettingKeyCheckinMinTotalRechargeUSD:         strconv.FormatFloat(normalized.MinTotalRechargeUSD, 'f', -1, 64),
+		SettingKeyCheckinMinDailyUsageCount:          strconv.Itoa(normalized.MinDailyUsageCount),
+		SettingKeyCheckinMinDailyUsageBypassWeekdays: mustMarshalCheckinWeekdays(normalized.MinDailyUsageBypassWeekdays),
+		SettingKeyCheckinWhitelist:                   mustMarshalCheckinWhitelist(normalized.Whitelist),
+		SettingKeyCheckinRewardConfig:                mustMarshalCheckinRewardConfig(*normalized),
 	}); err != nil {
 		return fmt.Errorf("update check-in config: %w", err)
 	}
@@ -927,11 +945,12 @@ func (s *CheckinService) currentBeijingDay() (string, time.Time) {
 
 func DefaultCheckinConfig() *CheckinConfig {
 	cfg := &CheckinConfig{
-		Enabled:             true,
-		MinTotalUsageUSD:    0,
-		MinTotalRechargeUSD: 0,
-		MinDailyUsageCount:  5,
-		Whitelist:           []string{},
+		Enabled:                     true,
+		MinTotalUsageUSD:            0,
+		MinTotalRechargeUSD:         0,
+		MinDailyUsageCount:          5,
+		MinDailyUsageBypassWeekdays: []int{},
+		Whitelist:                   []string{},
 		Tiers: []CheckinRewardTier{
 			{Amount: 1, Probability: 32, SortOrder: 1},
 			{Amount: 2, Probability: 25, SortOrder: 2},
@@ -964,6 +983,10 @@ func normalizeCheckinConfig(cfg CheckinConfig) (*CheckinConfig, error) {
 	if cfg.MinDailyUsageCount < 0 {
 		return nil, infraerrors.BadRequest("INVALID_CHECKIN_MIN_DAILY_USAGE_COUNT", "minimum daily usage count must be a non-negative integer")
 	}
+	weekdays, err := normalizeCheckinWeekdays(cfg.MinDailyUsageBypassWeekdays)
+	if err != nil {
+		return nil, err
+	}
 	whitelist, err := normalizeCheckinWhitelist(cfg.Whitelist)
 	if err != nil {
 		return nil, err
@@ -973,18 +996,19 @@ func normalizeCheckinConfig(cfg CheckinConfig) (*CheckinConfig, error) {
 		return nil, err
 	}
 	normalized := &CheckinConfig{
-		Enabled:                cfg.Enabled,
-		MinTotalUsageUSD:       cfg.MinTotalUsageUSD,
-		MinTotalRechargeUSD:    cfg.MinTotalRechargeUSD,
-		MinDailyUsageCount:     cfg.MinDailyUsageCount,
-		Whitelist:              whitelist,
-		Tiers:                  rewardRules.Tiers,
-		StreakEnabled:          rewardRules.StreakEnabled,
-		StreakRules:            rewardRules.StreakRules,
-		UsageRebateEnabled:     rewardRules.UsageRebateEnabled,
-		UsageRebateRatePercent: rewardRules.UsageRebateRatePercent,
-		UsageRebateCap:         rewardRules.UsageRebateCap,
-		TotalRewardCap:         rewardRules.TotalRewardCap,
+		Enabled:                     cfg.Enabled,
+		MinTotalUsageUSD:            cfg.MinTotalUsageUSD,
+		MinTotalRechargeUSD:         cfg.MinTotalRechargeUSD,
+		MinDailyUsageCount:          cfg.MinDailyUsageCount,
+		MinDailyUsageBypassWeekdays: weekdays,
+		Whitelist:                   whitelist,
+		Tiers:                       rewardRules.Tiers,
+		StreakEnabled:               rewardRules.StreakEnabled,
+		StreakRules:                 rewardRules.StreakRules,
+		UsageRebateEnabled:          rewardRules.UsageRebateEnabled,
+		UsageRebateRatePercent:      rewardRules.UsageRebateRatePercent,
+		UsageRebateCap:              rewardRules.UsageRebateCap,
+		TotalRewardCap:              rewardRules.TotalRewardCap,
 	}
 	normalized.ProbabilityTotal = checkinProbabilityTotal(normalized.Tiers)
 	normalized.Preview = checkinRewardPreview(normalized.Tiers)
@@ -1018,6 +1042,48 @@ func normalizeCheckinWhitelist(entries []string) ([]string, error) {
 		}
 	}
 	return normalized, nil
+}
+
+func normalizeCheckinWeekdays(weekdays []int) ([]int, error) {
+	seen := make(map[int]struct{}, len(weekdays))
+	normalized := make([]int, 0, len(weekdays))
+	for _, weekday := range weekdays {
+		if weekday < 1 || weekday > 7 {
+			return nil, infraerrors.BadRequest("INVALID_CHECKIN_BYPASS_WEEKDAYS", "check-in bypass weekdays must be between 1 and 7")
+		}
+		if _, exists := seen[weekday]; exists {
+			continue
+		}
+		seen[weekday] = struct{}{}
+		normalized = append(normalized, weekday)
+	}
+	sort.Ints(normalized)
+	return normalized, nil
+}
+
+func checkinDailyUsageBypassWeekday(checkinDate string, weekdays []int) bool {
+	parsed, err := time.Parse("2006-01-02", strings.TrimSpace(checkinDate))
+	if err != nil {
+		return false
+	}
+	weekday := int(parsed.Weekday())
+	if weekday == 0 {
+		weekday = 7
+	}
+	for _, configured := range weekdays {
+		if configured == weekday {
+			return true
+		}
+	}
+	return false
+}
+
+func mustMarshalCheckinWeekdays(weekdays []int) string {
+	data, err := json.Marshal(weekdays)
+	if err != nil {
+		panic(fmt.Sprintf("marshal check-in bypass weekdays: %v", err))
+	}
+	return string(data)
 }
 
 func checkinWhitelistMatches(identity checkinUserIdentity, entries []string) bool {
@@ -1369,6 +1435,8 @@ func (s *CheckinService) alreadyCheckedInResult(ctx context.Context, record *Che
 			TotalRechargeUSD:       policy.TotalRechargeUSD,
 			MinDailyUsageCount:     cfg.MinDailyUsageCount,
 			TodayUsageCount:        policy.TodayUsageCount,
+			DailyUsageCountExempt:  policy.DailyUsageCountExempt,
+			WhitelistExempt:        policy.WhitelistExempt,
 			IneligibleReason:       policy.IneligibleReason,
 			NextStreakRule:         nextCheckinStreakRule(cfg.StreakRules, record.StreakDay),
 			RecentRecords:          history.RecentRecords,
