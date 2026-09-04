@@ -647,6 +647,8 @@ const (
 	// SettingKeyCheckinMinDailyUsageCount requires this many usage records in
 	// the current Beijing calendar day before a user can check in.
 	SettingKeyCheckinMinDailyUsageCount = "checkin_min_daily_usage_count"
+	// SettingKeyCheckinWhitelist stores email/username values exempt from check-in thresholds.
+	SettingKeyCheckinWhitelist = "checkin_whitelist"
 
 	// SettingKeyCheckinRewardConfig stores JSON config for random reward tiers and
 	// streak bonus rules.

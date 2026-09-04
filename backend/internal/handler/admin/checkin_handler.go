@@ -74,6 +74,7 @@ type UpdateCheckinConfigRequest struct {
 	MinTotalUsageUSD       float64                     `json:"min_total_usage_usd" binding:"gte=0"`
 	MinTotalRechargeUSD    float64                     `json:"min_total_recharge_usd" binding:"gte=0"`
 	MinDailyUsageCount     int                         `json:"min_daily_usage_count" binding:"gte=0"`
+	Whitelist              []string                    `json:"whitelist"`
 	Tiers                  []service.CheckinRewardTier `json:"tiers"`
 	StreakEnabled          bool                        `json:"streak_enabled"`
 	StreakRules            []service.CheckinStreakRule `json:"streak_rules"`
@@ -94,6 +95,7 @@ func (h *CheckinHandler) UpdateConfig(c *gin.Context) {
 		MinTotalUsageUSD:       req.MinTotalUsageUSD,
 		MinTotalRechargeUSD:    req.MinTotalRechargeUSD,
 		MinDailyUsageCount:     req.MinDailyUsageCount,
+		Whitelist:              req.Whitelist,
 		Tiers:                  req.Tiers,
 		StreakEnabled:          req.StreakEnabled,
 		StreakRules:            req.StreakRules,

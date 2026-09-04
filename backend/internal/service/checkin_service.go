@@ -14,6 +14,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	dbent "github.com/Wei-Shaw/sub2api/ent"
 	"github.com/Wei-Shaw/sub2api/ent/usagelog"
@@ -51,6 +52,8 @@ const (
 	checkinStreakMaxRules         = 20
 	checkinStreakMaxAttempts      = 100000
 	checkinStreakLookbackFloor    = 400
+	checkinWhitelistMaxEntries    = 1000
+	checkinWhitelistMaxEntryRunes = 320
 )
 
 type CheckinConfig struct {
@@ -58,6 +61,7 @@ type CheckinConfig struct {
 	MinTotalUsageUSD       float64              `json:"min_total_usage_usd"`
 	MinTotalRechargeUSD    float64              `json:"min_total_recharge_usd"`
 	MinDailyUsageCount     int                  `json:"min_daily_usage_count"`
+	Whitelist              []string             `json:"whitelist"`
 	Tiers                  []CheckinRewardTier  `json:"tiers"`
 	StreakEnabled          bool                 `json:"streak_enabled"`
 	StreakRules            []CheckinStreakRule  `json:"streak_rules"`
@@ -121,6 +125,7 @@ type CheckinStatus struct {
 	TotalRechargeUSD       float64            `json:"total_recharge_usd"`
 	MinDailyUsageCount     int                `json:"min_daily_usage_count"`
 	TodayUsageCount        int                `json:"today_usage_count"`
+	WhitelistExempt        bool               `json:"whitelist_exempt"`
 	IneligibleReason       string             `json:"ineligible_reason,omitempty"`
 	NextStreakRule         *CheckinStreakRule `json:"next_streak_rule,omitempty"`
 	RecentRecords          []CheckinRecord    `json:"recent_records,omitempty"`
@@ -143,6 +148,7 @@ type checkinCurrentPolicyState struct {
 	TotalRechargeUSD   float64
 	MinDailyUsageCount int
 	TodayUsageCount    int
+	WhitelistExempt    bool
 }
 
 type CheckinRecord struct {
@@ -269,6 +275,7 @@ func (s *CheckinService) GetStatus(ctx context.Context, userID int64) (*CheckinS
 		TotalRechargeUSD:    policy.TotalRechargeUSD,
 		MinDailyUsageCount:  cfg.MinDailyUsageCount,
 		TodayUsageCount:     policy.TodayUsageCount,
+		WhitelistExempt:     policy.WhitelistExempt,
 		IneligibleReason:    policy.IneligibleReason,
 	}
 	setCheckinStatusCampaign(&base, effective.Campaign)
@@ -352,11 +359,18 @@ func (s *CheckinService) currentCheckinPolicyState(ctx context.Context, userID i
 		state.IneligibleReason = CheckinIneligibleReasonBlacklisted
 		return state, nil
 	}
+	state.WhitelistExempt, err = s.checkinWhitelistExemptWithClient(ctx, s.entClient, userID, cfg.Whitelist)
+	if err != nil {
+		return nil, err
+	}
 	todayUsageCount, err := s.dailyUsageCountWithClient(ctx, s.entClient, userID, checkinDate)
 	if err != nil {
 		return nil, err
 	}
 	state.TodayUsageCount = todayUsageCount
+	if state.WhitelistExempt {
+		return state, nil
+	}
 	if todayUsageCount < cfg.MinDailyUsageCount {
 		state.Eligible = false
 		state.IneligibleReason = CheckinIneligibleReasonInsufficientDailyUsage
@@ -395,18 +409,19 @@ func (s *CheckinService) Checkin(ctx context.Context, userID int64) (*CheckinRes
 	}
 
 	var (
-		authoritative   *EffectiveCheckinConfig
-		createdRecord   *dbent.UserCheckin
-		calculation     checkinRewardCalculation
-		lotteryAttempts int
-		streakDay       int
-		lifetimeDays    int
-		txTotalUsage    float64
-		txTotalRecharge float64
-		txTodayUsage    int
-		balanceBefore   float64
-		balanceAfter    float64
-		reward          float64
+		authoritative     *EffectiveCheckinConfig
+		createdRecord     *dbent.UserCheckin
+		calculation       checkinRewardCalculation
+		lotteryAttempts   int
+		streakDay         int
+		lifetimeDays      int
+		txTotalUsage      float64
+		txTotalRecharge   float64
+		txTodayUsage      int
+		txWhitelistExempt bool
+		balanceBefore     float64
+		balanceAfter      float64
+		reward            float64
 	)
 	err = s.withCheckinCampaignConfigReadTx(ctx, func(client *dbent.Client, txRepo SettingRepository) error {
 		txExisting, getErr := s.getCheckinByUserAndDateWithClient(ctx, client, userID, checkinDate)
@@ -455,11 +470,17 @@ func (s *CheckinService) Checkin(ctx context.Context, userID int64) (*CheckinRes
 		if configErr != nil {
 			return configErr
 		}
-		if txTodayUsage < cfg.MinDailyUsageCount {
-			return ErrCheckinInsufficientDailyUsage
+		txWhitelistExempt, configErr = s.checkinWhitelistExemptWithClient(ctx, client, userID, cfg.Whitelist)
+		if configErr != nil {
+			return configErr
 		}
-		if !checkinSpendEligible(txTotalUsage, cfg.MinTotalUsageUSD, txTotalRecharge, cfg.MinTotalRechargeUSD) {
-			return checkinEligibilityError(*cfg)
+		if !txWhitelistExempt {
+			if txTodayUsage < cfg.MinDailyUsageCount {
+				return ErrCheckinInsufficientDailyUsage
+			}
+			if !checkinSpendEligible(txTotalUsage, cfg.MinTotalUsageUSD, txTotalRecharge, cfg.MinTotalRechargeUSD) {
+				return checkinEligibilityError(*cfg)
+			}
 		}
 
 		streakDay, lifetimeDays, configErr = s.nextCheckinCounters(ctx, client, userID, checkinDate, cfg)
@@ -590,6 +611,7 @@ func (s *CheckinService) Checkin(ctx context.Context, userID int64) (*CheckinRes
 		TotalRechargeUSD:       txTotalRecharge,
 		MinDailyUsageCount:     cfg.MinDailyUsageCount,
 		TodayUsageCount:        txTodayUsage,
+		WhitelistExempt:        txWhitelistExempt,
 		NextStreakRule:         nextCheckinStreakRule(cfg.StreakRules, streakDay),
 		RecentRecords:          recentRecords,
 	}
@@ -797,6 +819,7 @@ func (s *CheckinService) getCheckinConfigFromRepository(ctx context.Context, rep
 		SettingKeyCheckinMinTotalUsageUSD,
 		SettingKeyCheckinMinTotalRechargeUSD,
 		SettingKeyCheckinMinDailyUsageCount,
+		SettingKeyCheckinWhitelist,
 		SettingKeyCheckinRewardConfig,
 	})
 	if err != nil {
@@ -829,6 +852,14 @@ func (s *CheckinService) getCheckinConfigFromRepository(ctx context.Context, rep
 			return nil, infraerrors.BadRequest("INVALID_CHECKIN_MIN_DAILY_USAGE_COUNT", "minimum daily usage count must be a non-negative integer")
 		}
 		cfg.MinDailyUsageCount = minDailyUsageCount
+	}
+	if raw := strings.TrimSpace(values[SettingKeyCheckinWhitelist]); raw != "" {
+		var whitelist []string
+		if err := json.Unmarshal([]byte(raw), &whitelist); err != nil {
+			slog.Warn("check-in whitelist is invalid json, falling back to empty list", "error", err)
+		} else {
+			cfg.Whitelist = whitelist
+		}
 	}
 	if raw := strings.TrimSpace(values[SettingKeyCheckinRewardConfig]); raw != "" {
 		var rewardConfig CheckinConfig
@@ -878,6 +909,7 @@ func persistCheckinConfig(ctx context.Context, repo SettingRepository, normalize
 		SettingKeyCheckinMinTotalUsageUSD:    strconv.FormatFloat(normalized.MinTotalUsageUSD, 'f', -1, 64),
 		SettingKeyCheckinMinTotalRechargeUSD: strconv.FormatFloat(normalized.MinTotalRechargeUSD, 'f', -1, 64),
 		SettingKeyCheckinMinDailyUsageCount:  strconv.Itoa(normalized.MinDailyUsageCount),
+		SettingKeyCheckinWhitelist:           mustMarshalCheckinWhitelist(normalized.Whitelist),
 		SettingKeyCheckinRewardConfig:        mustMarshalCheckinRewardConfig(*normalized),
 	}); err != nil {
 		return fmt.Errorf("update check-in config: %w", err)
@@ -899,6 +931,7 @@ func DefaultCheckinConfig() *CheckinConfig {
 		MinTotalUsageUSD:    0,
 		MinTotalRechargeUSD: 0,
 		MinDailyUsageCount:  5,
+		Whitelist:           []string{},
 		Tiers: []CheckinRewardTier{
 			{Amount: 1, Probability: 32, SortOrder: 1},
 			{Amount: 2, Probability: 25, SortOrder: 2},
@@ -931,6 +964,10 @@ func normalizeCheckinConfig(cfg CheckinConfig) (*CheckinConfig, error) {
 	if cfg.MinDailyUsageCount < 0 {
 		return nil, infraerrors.BadRequest("INVALID_CHECKIN_MIN_DAILY_USAGE_COUNT", "minimum daily usage count must be a non-negative integer")
 	}
+	whitelist, err := normalizeCheckinWhitelist(cfg.Whitelist)
+	if err != nil {
+		return nil, err
+	}
 	rewardRules, err := normalizeRewardRules(cfg)
 	if err != nil {
 		return nil, err
@@ -940,6 +977,7 @@ func normalizeCheckinConfig(cfg CheckinConfig) (*CheckinConfig, error) {
 		MinTotalUsageUSD:       cfg.MinTotalUsageUSD,
 		MinTotalRechargeUSD:    cfg.MinTotalRechargeUSD,
 		MinDailyUsageCount:     cfg.MinDailyUsageCount,
+		Whitelist:              whitelist,
 		Tiers:                  rewardRules.Tiers,
 		StreakEnabled:          rewardRules.StreakEnabled,
 		StreakRules:            rewardRules.StreakRules,
@@ -951,6 +989,66 @@ func normalizeCheckinConfig(cfg CheckinConfig) (*CheckinConfig, error) {
 	normalized.ProbabilityTotal = checkinProbabilityTotal(normalized.Tiers)
 	normalized.Preview = checkinRewardPreview(normalized.Tiers)
 	return normalized, nil
+}
+
+type checkinUserIdentity struct {
+	Email    string
+	Username string
+}
+
+func normalizeCheckinWhitelist(entries []string) ([]string, error) {
+	seen := make(map[string]struct{}, len(entries))
+	normalized := make([]string, 0, len(entries))
+	for _, entry := range entries {
+		value := strings.TrimSpace(entry)
+		if value == "" {
+			continue
+		}
+		if utf8.RuneCountInString(value) > checkinWhitelistMaxEntryRunes {
+			return nil, infraerrors.BadRequest("INVALID_CHECKIN_WHITELIST", "check-in whitelist entry is too long")
+		}
+		key := strings.ToLower(value)
+		if _, exists := seen[key]; exists {
+			continue
+		}
+		seen[key] = struct{}{}
+		normalized = append(normalized, value)
+		if len(normalized) > checkinWhitelistMaxEntries {
+			return nil, infraerrors.BadRequest("INVALID_CHECKIN_WHITELIST", "check-in whitelist has too many entries")
+		}
+	}
+	return normalized, nil
+}
+
+func checkinWhitelistMatches(identity checkinUserIdentity, entries []string) bool {
+	email := strings.ToLower(strings.TrimSpace(identity.Email))
+	username := strings.ToLower(strings.TrimSpace(identity.Username))
+	for _, entry := range entries {
+		value := strings.ToLower(strings.TrimSpace(entry))
+		if value != "" && (value == email || value == username) {
+			return true
+		}
+	}
+	return false
+}
+
+func (s *CheckinService) checkinWhitelistExemptWithClient(ctx context.Context, client *dbent.Client, userID int64, entries []string) (bool, error) {
+	if len(entries) == 0 {
+		return false, nil
+	}
+	usr, err := client.User.Get(ctx, userID)
+	if err != nil {
+		return false, err
+	}
+	return checkinWhitelistMatches(checkinUserIdentity{Email: usr.Email, Username: usr.Username}, entries), nil
+}
+
+func mustMarshalCheckinWhitelist(entries []string) string {
+	data, err := json.Marshal(entries)
+	if err != nil {
+		panic(fmt.Sprintf("marshal check-in whitelist: %v", err))
+	}
+	return string(data)
 }
 
 func checkinSpendEligible(totalUsageUSD, minTotalUsageUSD, totalRechargeUSD, minTotalRechargeUSD float64) bool {

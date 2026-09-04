@@ -21,6 +21,7 @@ export interface AdminCheckinConfig {
   min_total_usage_usd: number
   min_total_recharge_usd: number
   min_daily_usage_count?: number
+  whitelist: string[]
   tiers: CheckinRewardTier[]
   streak_enabled: boolean
   streak_rules: CheckinStreakRule[]

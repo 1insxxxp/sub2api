@@ -644,6 +644,8 @@ const checkinTodayUsageCount = computed(() => {
 })
 
 const eligibilityCriteria = computed(() => {
+  if (checkinStatus.value?.whitelist_exempt) return []
+
   const criteria: Array<{
     key: 'usage' | 'recharge' | 'count'
     kind: 'money' | 'count'
@@ -686,6 +688,7 @@ const eligibilityCriteria = computed(() => {
 })
 
 const eligibilityMessage = computed(() => {
+  if (checkinStatus.value?.whitelist_exempt) return t('checkin.whitelistExempt')
   if (
     checkinMinDailyUsageCount.value > 0 &&
     checkinTodayUsageCount.value < checkinMinDailyUsageCount.value

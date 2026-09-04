@@ -118,6 +118,7 @@ describe('Admin CheckinsView', () => {
       min_total_usage_usd: 5,
       min_total_recharge_usd: 20,
       min_daily_usage_count: 5,
+      whitelist: ['alice@example.com'],
       tiers: [{ amount: 1, probability: 100, sort_order: 1 }],
       streak_enabled: false,
       streak_rules: [],
@@ -444,6 +445,31 @@ describe('Admin CheckinsView', () => {
 
     expect(updateConfig).toHaveBeenCalledWith(expect.objectContaining({
       min_daily_usage_count: 8,
+    }))
+  })
+
+  it('loads and saves normalized check-in whitelist entries', async () => {
+    const wrapper = mount(CheckinsView, {
+      global: {
+        stubs: {
+          AppLayout: { template: '<div><slot /></div>' },
+          DataTable: DataTableStub,
+          Pagination: true,
+          Icon: true,
+        },
+      },
+    })
+
+    await flushPromises()
+
+    const whitelistInput = wrapper.get('[data-test="checkin-whitelist"]')
+    expect((whitelistInput.element as HTMLTextAreaElement).value).toBe('alice@example.com')
+    await whitelistInput.setValue(' Alice@example.com\n bob ')
+    await wrapper.get('[data-test="save-checkin-config"]').trigger('click')
+    await flushPromises()
+
+    expect(updateConfig).toHaveBeenCalledWith(expect.objectContaining({
+      whitelist: ['Alice@example.com', 'bob'],
     }))
   })
 

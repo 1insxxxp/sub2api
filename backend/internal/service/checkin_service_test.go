@@ -1227,6 +1227,80 @@ func TestCheckinServiceMinimumSpendBlocksLowUsageUser(t *testing.T) {
 	require.Equal(t, 0, checkinCount)
 }
 
+func TestCheckinWhitelistMatchesEmailOrUsernameIgnoringCaseAndWhitespace(t *testing.T) {
+	tests := []struct {
+		name     string
+		identity checkinUserIdentity
+		entries  []string
+		want     bool
+	}{
+		{name: "email", identity: checkinUserIdentity{Email: "Alice@example.com"}, entries: []string{" alice@example.com "}, want: true},
+		{name: "username", identity: checkinUserIdentity{Username: "Alice"}, entries: []string{" alice "}, want: true},
+		{name: "non match", identity: checkinUserIdentity{Email: "alice@example.com", Username: "alice"}, entries: []string{"bob@example.com"}, want: false},
+		{name: "blank entries ignored", identity: checkinUserIdentity{Email: "alice@example.com"}, entries: []string{" ", "\t"}, want: false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			require.Equal(t, tt.want, checkinWhitelistMatches(tt.identity, tt.entries))
+		})
+	}
+}
+
+func TestCheckinServiceWhitelistBypassesAllQualificationThresholds(t *testing.T) {
+	client := newCheckinServiceTestClient(t)
+	ctx := context.Background()
+	createdUser, err := client.User.Create().
+		SetEmail("whitelisted@example.com").
+		SetUsername("preferred-user").
+		SetPasswordHash("hash").
+		SetRole(RoleUser).
+		SetStatus(StatusActive).
+		SetBalance(10).
+		Save(ctx)
+	require.NoError(t, err)
+
+	settings := newCheckinSettingRepoStub()
+	setCheckinConfig(t, settings, CheckinConfig{
+		Enabled:             true,
+		MinTotalUsageUSD:    100,
+		MinTotalRechargeUSD: 100,
+		MinDailyUsageCount:  5,
+	})
+	settings.values[SettingKeyCheckinWhitelist] = `[" WHITELISTED@EXAMPLE.COM "]`
+	svc := NewCheckinService(client, nil, nil)
+	svc.SetSettingRepository(settings)
+	svc.rewardRoll = func() float64 { return 0 }
+
+	status, err := svc.GetStatus(ctx, createdUser.ID)
+	require.NoError(t, err)
+	require.True(t, status.Eligible)
+	require.True(t, status.WhitelistExempt)
+
+	result, err := svc.Checkin(ctx, createdUser.ID)
+	require.NoError(t, err)
+	require.False(t, result.AlreadyCheckedIn)
+}
+
+func TestCheckinServiceWhitelistDoesNotOverrideBlacklist(t *testing.T) {
+	client := newCheckinServiceTestClient(t)
+	ctx := context.Background()
+	createdUser := createCheckinTestUser(t, ctx, client, "blacklisted-whitelisted@example.com", 10)
+	settings := newCheckinSettingRepoStub()
+	setCheckinConfig(t, settings, CheckinConfig{Enabled: true, MinDailyUsageCount: 5})
+	settings.values[SettingKeyCheckinWhitelist] = `["blacklisted-whitelisted@example.com"]`
+	_, err := client.UserCheckinBlacklist.Create().SetUserID(createdUser.ID).SetReason("blocked").Save(ctx)
+	require.NoError(t, err)
+
+	svc := NewCheckinService(client, nil, nil)
+	svc.SetSettingRepository(settings)
+	status, err := svc.GetStatus(ctx, createdUser.ID)
+	require.NoError(t, err)
+	require.False(t, status.Eligible)
+	require.False(t, status.WhitelistExempt)
+	require.Equal(t, CheckinIneligibleReasonBlacklisted, status.IneligibleReason)
+}
+
 func TestCheckinServiceMinimumSpendAllowsEligibleUser(t *testing.T) {
 	client := newCheckinServiceTestClient(t)
 	ctx := context.Background()

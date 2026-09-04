@@ -31,6 +31,7 @@ export interface CheckinStatus {
   total_recharge_usd: number
   min_daily_usage_count?: number
   today_usage_count?: number
+  whitelist_exempt?: boolean
   lottery_attempts_reward?: number
   ineligible_reason?: string
   next_streak_rule?: CheckinStreakRule | null

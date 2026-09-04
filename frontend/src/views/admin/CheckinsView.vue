@@ -160,6 +160,20 @@
               </p>
             </div>
 
+            <div class="sm:col-span-2">
+              <label class="input-label">{{ t('admin.checkins.whitelist') }}</label>
+              <textarea
+                v-model="configForm.whitelistText"
+                data-test="checkin-whitelist"
+                rows="4"
+                class="input min-h-24 resize-y font-mono text-sm"
+                :placeholder="t('admin.checkins.whitelistPlaceholder')"
+              ></textarea>
+              <p class="mt-2 text-xs text-gray-500 dark:text-dark-400">
+                {{ t('admin.checkins.whitelistHint') }}
+              </p>
+            </div>
+
             <div class="checkins-summary-strip admin-form-section !space-y-0 px-4 py-3">
               <div class="flex items-center justify-between gap-3 text-sm">
                 <span class="text-gray-500 dark:text-dark-400">{{ t('admin.checkins.rewardRules') }}</span>
@@ -809,6 +823,7 @@ const configForm = reactive({
   min_total_usage_usd: 0,
   min_total_recharge_usd: 0,
   min_daily_usage_count: 5,
+  whitelistText: '',
   tiers: [] as CheckinRewardTier[],
   streak_enabled: true,
   streak_rules: [] as CheckinStreakRule[],
@@ -950,6 +965,7 @@ async function loadConfig() {
     configForm.min_total_usage_usd = nextConfig.min_total_usage_usd
     configForm.min_total_recharge_usd = nextConfig.min_total_recharge_usd
     configForm.min_daily_usage_count = nextConfig.min_daily_usage_count ?? 5
+    configForm.whitelistText = (nextConfig.whitelist ?? []).join('\n')
     configForm.tiers = cloneTiers(nextConfig.tiers)
     configForm.streak_enabled = nextConfig.streak_enabled
     configForm.streak_rules = cloneStreakRules(nextConfig.streak_rules)
@@ -979,6 +995,10 @@ async function handleSaveConfig() {
     appStore.showError(t('admin.checkins.invalidMinDailyUsageCount'))
     return
   }
+  const whitelist = configForm.whitelistText
+    .split(/[\n,]+/)
+    .map((entry) => entry.trim())
+    .filter(Boolean)
   if (!validateRewardRules()) return
   if (!validateUsageRebateSettings()) return
   configSaving.value = true
@@ -988,6 +1008,7 @@ async function handleSaveConfig() {
       min_total_usage_usd: Number(configForm.min_total_usage_usd),
       min_total_recharge_usd: Number(configForm.min_total_recharge_usd),
       min_daily_usage_count: Number(configForm.min_daily_usage_count),
+      whitelist,
       tiers: configForm.tiers.map((tier, index) => ({
         amount: Number(tier.amount),
         probability: Number(tier.probability),
@@ -1013,6 +1034,7 @@ async function handleSaveConfig() {
     configForm.min_total_usage_usd = config.value.min_total_usage_usd
     configForm.min_total_recharge_usd = config.value.min_total_recharge_usd
     configForm.min_daily_usage_count = config.value.min_daily_usage_count ?? configForm.min_daily_usage_count
+    configForm.whitelistText = (config.value.whitelist ?? []).join('\n')
     configForm.tiers = cloneTiers(config.value.tiers)
     campaignDefaultTiersReady.value = configForm.tiers.length > 0
     configForm.streak_enabled = config.value.streak_enabled
