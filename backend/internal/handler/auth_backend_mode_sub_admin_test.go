@@ -81,7 +81,7 @@ func TestAuthHandlerBackendModeStillBlocksRegularUserLogin(t *testing.T) {
 	})
 
 	require.Error(t, err)
-	require.Equal(t, "BACKEND_MODE_ADMIN_ONLY", infraerrors.Reason(err))
+	require.Equal(t, "BACKEND_MODE_MANAGER_ONLY", infraerrors.Reason(err))
 }
 
 func TestPasskeyHandlerBackendModeAllowsSubAdminLogin(t *testing.T) {

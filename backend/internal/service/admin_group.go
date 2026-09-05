@@ -548,6 +548,7 @@ func (s *adminServiceImpl) CreateGroup(ctx context.Context, input *CreateGroupIn
 		DefaultMappedModel:               input.DefaultMappedModel,
 		MessagesDispatchModelConfig:      normalizeOpenAIMessagesDispatchModelConfig(input.MessagesDispatchModelConfig),
 		ModelsListConfig:                 normalizeGroupModelsListConfig(input.ModelsListConfig),
+		CodexModelsManifestConfig:        normalizeCodexModelsManifestConfig(platform, input.CodexModelsManifestConfig),
 		RPMLimit:                         input.RPMLimit,
 		MaxReasoningEffort:               maxReasoningEffort,
 		MaxReasoningEffortOverLimit:      maxReasoningEffortOverLimit,

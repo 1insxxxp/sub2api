@@ -1257,6 +1257,7 @@ func TestNormalizeCheckinConfigSortsAndDeduplicatesBypassWeekdays(t *testing.T) 
 	cfg, err := normalizeCheckinConfig(CheckinConfig{
 		MinDailyUsageCount:          5,
 		MinDailyUsageBypassWeekdays: []int{7, 2, 7, 2},
+		Tiers:                       []CheckinRewardTier{{Amount: 1, Probability: 100}},
 	})
 	require.NoError(t, err)
 	require.Equal(t, []int{2, 7}, cfg.MinDailyUsageBypassWeekdays)

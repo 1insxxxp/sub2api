@@ -17,7 +17,7 @@ import (
 func newGatewayRecordUsageServiceForTest(usageRepo UsageLogRepository, userRepo UserRepository, subRepo UserSubscriptionRepository) *GatewayService {
 	cfg := &config.Config{}
 	cfg.Default.RateMultiplier = 1.1
-	return NewGatewayService(
+	svc := NewGatewayService(
 		nil,
 		nil,
 		transactionalUsageLogRepo(usageRepo),
@@ -47,6 +47,8 @@ func newGatewayRecordUsageServiceForTest(usageRepo UsageLogRepository, userRepo 
 		nil,
 		nil, // userPlatformQuotaRepo
 	)
+	svc.usageBillingRepo = &openAIRecordUsageBillingRepoStub{result: &UsageBillingApplyResult{Applied: true}}
+	return svc
 }
 
 func newGatewayRecordUsageServiceWithBillingRepoForTest(usageRepo UsageLogRepository, billingRepo UsageBillingRepository, userRepo UserRepository, subRepo UserSubscriptionRepository) *GatewayService {

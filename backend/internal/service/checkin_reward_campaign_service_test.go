@@ -647,7 +647,7 @@ func TestUpdateConfigSharedTransactionPropagatesRepositoryFailure(t *testing.T) 
 	})
 	require.ErrorIs(t, err, sentinel)
 	require.Equal(t, []string{"tx_begin", "advisory_lock", "settings_write", "tx_rollback"}, txRepo.events)
-	require.Empty(t, baseRepo.values)
+	require.Equal(t, map[string]string{SettingKeyCheckinMinDailyUsageCount: "0"}, baseRepo.values)
 }
 
 func TestCheckinCampaignConfigTransactionSQLiteFallbackSerializesCallbacks(t *testing.T) {

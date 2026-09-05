@@ -1196,6 +1196,7 @@ func TestAPIContracts(t *testing.T) {
 					"registration_email_domain_quota_enabled": false,
 					"promo_code_enabled": true,
 					"password_reset_enabled": false,
+					"lottery_enabled": false,
 						"frontend_url": "",
 						"totp_enabled": false,
 						"totp_encryption_key_configured": false,
@@ -1557,6 +1558,7 @@ func TestAPIContracts(t *testing.T) {
 					"registration_email_domain_quota_enabled": false,
 					"promo_code_enabled": true,
 					"password_reset_enabled": false,
+					"lottery_enabled": false,
 					"frontend_url": "",
 						"invitation_code_enabled": false,
 						"totp_enabled": false,
@@ -2285,7 +2287,34 @@ func (r *stubUserRepo) UpdateBalance(ctx context.Context, id int64, amount float
 }
 
 func (r *stubUserRepo) DeductBalance(ctx context.Context, id int64, amount float64) error {
-	return errors.New("not implemented")
+	return r.deductBalance(id, amount)
+}
+
+func (r *stubUserRepo) DeductOrdinaryBalance(ctx context.Context, id int64, amount float64) error {
+	return r.deductBalance(id, amount)
+}
+
+func (r *stubUserRepo) DeductBalanceWithGiftAllocation(ctx context.Context, id int64, amount float64) (service.BalanceDeductionResult, error) {
+	if err := r.deductBalance(id, amount); err != nil {
+		return service.BalanceDeductionResult{}, err
+	}
+	user, ok := r.users[id]
+	if !ok {
+		return service.BalanceDeductionResult{}, service.ErrUserNotFound
+	}
+	return service.BalanceDeductionResult{NewBalance: user.Balance}, nil
+}
+
+func (r *stubUserRepo) deductBalance(id int64, amount float64) error {
+	user, ok := r.users[id]
+	if !ok {
+		return service.ErrUserNotFound
+	}
+	if user.Balance < amount {
+		return service.ErrBalanceNegative
+	}
+	user.Balance -= amount
+	return nil
 }
 
 func (r *stubUserRepo) AdjustBalance(ctx context.Context, id int64, delta float64) (service.BalanceChange, error) {

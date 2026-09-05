@@ -112,7 +112,7 @@ func TestOpenAIImagesNonStreamingResponseOutcomeRecognizesMedia(t *testing.T) {
 	resp := &http.Response{StatusCode: http.StatusOK, Header: http.Header{"Content-Type": []string{"application/json"}}, Body: io.NopCloser(strings.NewReader(body))}
 	svc := &OpenAIGatewayService{cfg: &config.Config{}}
 
-	_, _, _, err := svc.handleOpenAIImagesNonStreamingResponse(resp, c)
+	_, _, _, err := svc.handleOpenAIImagesNonStreamingResponse(ctx, resp, c, &Account{ID: 1}, &OpenAIImagesRequest{})
 	require.NoError(t, err)
 	outcome := collector.Snapshot()
 	require.True(t, outcome.HasMedia)
