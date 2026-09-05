@@ -50,16 +50,17 @@ func TestUsageLogFromServiceAdmin_IncludesSourceGroupID(t *testing.T) {
 
 func TestUsageLogFromServiceAdmin_ClassifiesOutcomeStatus(t *testing.T) {
 	completed := &service.UsageLog{Outcome: &service.ResponseOutcome{HTTPStatus: 200, UpstreamStatus: 200, HasText: true, StreamCompleted: true}}
-	failed := &service.UsageLog{Outcome: &service.ResponseOutcome{HTTPStatus: 502, UpstreamStatus: 502}}
+	failed := &service.UsageLog{OutputTokens: 2560, Outcome: &service.ResponseOutcome{HTTPStatus: 502, UpstreamStatus: 502}}
 	empty := &service.UsageLog{Outcome: &service.ResponseOutcome{HTTPStatus: 200, UpstreamStatus: 200, StreamCompleted: true}}
 	clientCanceled := &service.UsageLog{Outcome: &service.ResponseOutcome{HTTPStatus: 200, UpstreamStatus: 200, DisconnectSource: service.DisconnectSourceClient}}
 	missingEvidence := &service.UsageLog{}
+	legacySuccessfulUsage := &service.UsageLog{OutputTokens: 2560}
 	for _, tc := range []struct {
 		name string
 		log  *service.UsageLog
 		want string
 	}{
-		{"success", completed, "success"}, {"failure", failed, "failure"}, {"empty", empty, "empty"}, {"client canceled", clientCanceled, "failure"}, {"missing evidence", missingEvidence, "failure"},
+		{"success", completed, "success"}, {"failure", failed, "failure"}, {"empty", empty, "empty"}, {"client canceled", clientCanceled, "unknown"}, {"missing evidence", missingEvidence, "unknown"}, {"legacy successful usage", legacySuccessfulUsage, "success"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			if got := UsageLogFromServiceAdmin(tc.log).OutcomeStatus; got != tc.want {
