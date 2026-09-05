@@ -10,7 +10,8 @@ import (
 )
 
 type claudeMaxCacheBillingOutcome struct {
-	Simulated bool
+	Simulated       bool
+	SkipTTLOverride bool
 }
 
 const (
@@ -32,6 +33,7 @@ func applyClaudeMaxCacheBillingPolicyToUsage(usage *ClaudeUsage, parsed *ParsedR
 
 	if hasCacheCreationTokens(*usage) {
 		// Upstream already returned cache creation usage; keep original usage.
+		out.SkipTTLOverride = true
 		return out
 	}
 
@@ -40,6 +42,7 @@ func applyClaudeMaxCacheBillingPolicyToUsage(usage *ClaudeUsage, parsed *ParsedR
 	}
 	beforeInputTokens := usage.InputTokens
 	out.Simulated = safelyProjectUsageToClaudeMax1H(usage, parsed)
+	out.SkipTTLOverride = out.Simulated
 	if out.Simulated {
 		logger.LegacyPrintf("service.gateway", "simulate_claude_max_usage: model=%s account=%d input_tokens:%d->%d cache_creation_1h=%d",
 			resolvedModel,

@@ -35,6 +35,7 @@ func lotteryAttemptBalance(ctx context.Context, client *dbent.Client, userID int
 	return wallet.Balance, nil
 }
 
+//nolint:unused // exercised by unit-tagged wallet integration tests; production check-in uses the transactional helper below.
 func creditLotteryAttempts(
 	ctx context.Context,
 	client *dbent.Client,

@@ -1670,10 +1670,6 @@ func calculateUsageLinkedCheckinReward(cfg CheckinConfig, previousDayUsage, base
 	return result
 }
 
-func selectCheckinStreakBonus(cfg CheckinConfig, streakDay int) float64 {
-	return 0
-}
-
 func selectCheckinStreakLotteryAttempts(cfg CheckinConfig, streakDay int) int {
 	if streakDay <= 0 {
 		return 0

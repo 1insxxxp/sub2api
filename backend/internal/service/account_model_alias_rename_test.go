@@ -309,7 +309,8 @@ func TestNewAdminServiceWiresAliasCascadeRepositories(t *testing.T) {
 		nil,
 	)
 
-	impl := svc.(*adminServiceImpl)
+	impl, ok := svc.(*adminServiceImpl)
+	require.True(t, ok)
 	require.Same(t, channelRepo, impl.channelRepo)
 	require.Same(t, userCustomGroupRepo, impl.userCustomGroupRepo)
 	require.Same(t, systemCustomGroupRepo, impl.systemCustomGroupRepo)

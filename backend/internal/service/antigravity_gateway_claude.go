@@ -455,7 +455,7 @@ func (s *AntigravityGatewayService) Forward(ctx context.Context, c *gin.Context,
 		outcome = &streamRes.outcome
 	} else {
 		// 客户端要求非流式，收集流式响应后转换返回
-		streamRes, err := s.handleClaudeStreamToNonStreaming(c, resp, startTime, originalModel)
+		streamRes, err := s.handleClaudeStreamToNonStreaming(c, resp, startTime, originalModel, account.ID)
 		if err != nil {
 			logger.LegacyPrintf("service.antigravity_gateway", "%s status=stream_collect_error error=%v", prefix, err)
 			return nil, err

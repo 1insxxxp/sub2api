@@ -41,7 +41,7 @@ func (r *transactionalUsageLogRepoForTest) CreateBestEffort(ctx context.Context,
 	if repo, ok := r.UsageLogRepository.(usageLogBestEffortWriter); ok {
 		return repo.CreateBestEffort(ctx, log)
 	}
-	_, err := r.UsageLogRepository.Create(ctx, log)
+	_, err := r.Create(ctx, log)
 	return err
 }
 

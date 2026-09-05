@@ -33,7 +33,7 @@ func TestCatalogSnapshotPusherSignsAndSends(t *testing.T) {
 	case got := <-received:
 		r, body := got.r, got.body
 		mac := hmac.New(sha256.New, secret)
-		mac.Write(body)
+		_, _ = mac.Write(body)
 		if got, want := r.Header.Get("X-Catalog-Signature"), hex.EncodeToString(mac.Sum(nil)); got != want {
 			t.Fatalf("signature=%s want %s", got, want)
 		}

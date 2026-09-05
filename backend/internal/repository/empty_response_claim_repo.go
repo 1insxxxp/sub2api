@@ -186,7 +186,7 @@ func (r *emptyResponseClaimRepository) ListRecentEvaluations(ctx context.Context
 	if err != nil {
 		return nil, nil, fmt.Errorf("list recent empty response evaluations: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	candidates := make([]service.EmptyResponseRecentCandidate, 0)
 	for rows.Next() {

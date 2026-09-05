@@ -1009,7 +1009,7 @@ returnResponse:
 
 // handleClaudeStreamToNonStreaming 收集上游流式响应，转换为 Claude 非流式格式返回
 // 用于处理客户端非流式请求但上游只支持流式的情况
-func (s *AntigravityGatewayService) handleClaudeStreamToNonStreaming(c *gin.Context, resp *http.Response, startTime time.Time, originalModel string) (*antigravityStreamResult, error) {
+func (s *AntigravityGatewayService) handleClaudeStreamToNonStreaming(c *gin.Context, resp *http.Response, startTime time.Time, originalModel string, accountIDs ...int64) (*antigravityStreamResult, error) {
 	claudeResp, streamRes, err := s.collectClaudeStreamResponse(c, resp, startTime, originalModel)
 	if err != nil {
 		var failoverErr *UpstreamFailoverError
@@ -1033,12 +1033,26 @@ func (s *AntigravityGatewayService) handleClaudeStreamToNonStreaming(c *gin.Cont
 
 		return nil, s.writeClaudeError(c, http.StatusBadGateway, errType, errMsg)
 	}
+	accountID := int64(0)
+	if len(accountIDs) > 0 {
+		accountID = accountIDs[0]
+	}
+	agUsage := &antigravity.ClaudeUsage{
+		InputTokens:              streamRes.usage.InputTokens,
+		OutputTokens:             streamRes.usage.OutputTokens,
+		CacheCreationInputTokens: streamRes.usage.CacheCreationInputTokens,
+		CacheReadInputTokens:     streamRes.usage.CacheReadInputTokens,
+	}
+	claudeResp = applyClaudeMaxNonStreamingRewrite(c, claudeResp, agUsage, originalModel, accountID)
+	streamRes.usage.InputTokens = agUsage.InputTokens
+	streamRes.usage.CacheCreationInputTokens = agUsage.CacheCreationInputTokens
+	streamRes.usage.CacheReadInputTokens = agUsage.CacheReadInputTokens
 	c.Data(http.StatusOK, "application/json", claudeResp)
 	return streamRes, nil
 }
 
 // handleClaudeStreamingResponse 处理 Claude 流式响应（Gemini SSE → Claude SSE 转换）
-func (s *AntigravityGatewayService) handleClaudeStreamingResponse(c *gin.Context, resp *http.Response, startTime time.Time, originalModel string, _ ...int64) (result *antigravityStreamResult, err error) {
+func (s *AntigravityGatewayService) handleClaudeStreamingResponse(c *gin.Context, resp *http.Response, startTime time.Time, originalModel string, accountIDs ...int64) (result *antigravityStreamResult, err error) {
 	outcomeCollector := NewResponseOutcomeCollector(http.StatusOK, resp.StatusCode)
 	defer func() {
 		if result == nil {
@@ -1063,6 +1077,11 @@ func (s *AntigravityGatewayService) handleClaudeStreamingResponse(c *gin.Context
 	}
 
 	processor := antigravity.NewStreamingProcessor(originalModel)
+	accountID := int64(0)
+	if len(accountIDs) > 0 {
+		accountID = accountIDs[0]
+	}
+	setupClaudeMaxStreamingHook(c, processor, originalModel, accountID)
 	var firstTokenMs *int
 	// 使用 Scanner 并限制单行大小，避免 ReadString 无上限导致 OOM
 	scanner := bufio.NewScanner(resp.Body)

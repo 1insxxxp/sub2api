@@ -31,20 +31,6 @@ func (r *subAdminCommissionRepoStub) ListDayGroupLogs(ctx context.Context, subAd
 	return nil, pagination.PaginationResult{}, r.logsErr
 }
 
-type subAdminCommissionUserRepoStub struct {
-	UserRepository
-
-	user *User
-	err  error
-}
-
-func (r *subAdminCommissionUserRepoStub) GetByID(ctx context.Context, id int64) (*User, error) {
-	if r.err != nil {
-		return nil, r.err
-	}
-	return r.user, nil
-}
-
 type subAdminCommissionSettingRepoStub struct {
 	SettingRepository
 
