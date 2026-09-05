@@ -610,6 +610,9 @@ type AudioUsage struct {
 
 type ForwardResult struct {
 	RequestID string
+	// UpstreamHeaders contains headers returned by the direct upstream response.
+	// It is used to extract provider-specific request identifiers for usage logs.
+	UpstreamHeaders http.Header
 	Usage     ClaudeUsage
 	Model     string
 	// DeliveredOutputTokens is the user-visible text successfully written before

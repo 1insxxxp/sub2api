@@ -53,6 +53,9 @@ services:
       - RUN_MODE=${RUN_MODE:-standard}
       - UPDATE_GITHUB_TOKEN=${UPDATE_GITHUB_TOKEN:-}
       - ALIPAY_MOBILE_PRECREATE_DEEP_LINK=${ALIPAY_MOBILE_PRECREATE_DEEP_LINK:-}
+      # Optional signed catalog push to the model status report service.
+      - MODEL_STATUS_CATALOG_ENDPOINT=${MODEL_STATUS_CATALOG_ENDPOINT:-}
+      - MODEL_STATUS_CATALOG_SECRET=${MODEL_STATUS_CATALOG_SECRET:-}
 
       # =======================================================================
       # Database Configuration (PostgreSQL)

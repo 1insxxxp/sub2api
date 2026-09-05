@@ -233,6 +233,9 @@ type OpenAIUsage struct {
 type OpenAIForwardResult struct {
 	RequestID  string
 	ResponseID string
+	// UpstreamHeaders contains headers returned by the direct upstream response.
+	// ResponseHeaders remains the downstream response header set.
+	UpstreamHeaders http.Header
 	Usage      OpenAIUsage
 	Model      string // 原始模型（用于响应和日志显示）
 	// DeliveredOutputTokens is display-only; Usage.OutputTokens remains authoritative for billing.
@@ -896,7 +899,10 @@ func (s *OpenAIGatewayService) writeOpenAIWSFallbackErrorResponse(c *gin.Context
 
 	setOpsUpstreamError(c, statusCode, upstreamMessage, "")
 	if account != nil {
+		proxyID, proxyName := opsUpstreamWSProxyAttribution(account)
 		appendOpsUpstreamError(c, OpsUpstreamErrorEvent{
+			ProxyID:            proxyID,
+			ProxyName:          proxyName,
 			Platform:           account.Platform,
 			AccountID:          account.ID,
 			AccountName:        account.Name,

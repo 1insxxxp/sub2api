@@ -124,16 +124,6 @@ func (s *accountRepoStubForBulkUpdate) GetByID(_ context.Context, id int64) (*Ac
 	return nil, errors.New("account not found")
 }
 
-func (s *accountRepoStubForBulkUpdate) ListByGroup(_ context.Context, groupID int64) ([]Account, error) {
-	if err, ok := s.listByGroupErr[groupID]; ok {
-		return nil, err
-	}
-	if rows, ok := s.listByGroupData[groupID]; ok {
-		return rows, nil
-	}
-	return nil, nil
-}
-
 func (s *accountRepoStubForBulkUpdate) ListAllWithFilters(context.Context, string, string, string, string, int64, string) ([]Account, error) {
 	return nil, nil
 }

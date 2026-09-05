@@ -170,6 +170,10 @@ services:
       # Examples: http://host:port, socks5://host:port
       - UPDATE_PROXY_URL=${UPDATE_PROXY_URL:-}
 
+      # Optional signed catalog push to the model status report service.
+      - MODEL_STATUS_CATALOG_ENDPOINT=${MODEL_STATUS_CATALOG_ENDPOINT:-}
+      - MODEL_STATUS_CATALOG_SECRET=${MODEL_STATUS_CATALOG_SECRET:-}
+
       # =======================================================================
       # Gateway Upstream, Scheduling & Image Configuration
       # =======================================================================

@@ -26,7 +26,7 @@ func TestAPIKeyAuthSnapshotGiftBalancesRoundTrip(t *testing.T) {
 
 	snapshot := svc.snapshotFromAPIKey(context.Background(), apiKey)
 	require.NotNil(t, snapshot)
-	require.Equal(t, 22, snapshot.Version, "v22 retains gift-balance accounting and free Fast settings")
+	require.Equal(t, apiKeyAuthSnapshotVersion, snapshot.Version)
 
 	payload, err := json.Marshal(&APIKeyAuthCacheEntry{Snapshot: snapshot})
 	require.NoError(t, err)

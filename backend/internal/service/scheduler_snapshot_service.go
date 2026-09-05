@@ -143,6 +143,14 @@ type SchedulerSnapshotService struct {
 	fullRebuildRequested uint64
 	fullRebuildCompleted uint64
 	fullRebuildLastErr   error
+	catalogPusher        *CatalogSnapshotPusher
+}
+
+// SetCatalogPusher wires the optional external model catalog publisher.
+func (s *SchedulerSnapshotService) SetCatalogPusher(p *CatalogSnapshotPusher) {
+	if s != nil {
+		s.catalogPusher = p
+	}
 }
 
 func NewSchedulerSnapshotService(
@@ -170,6 +178,9 @@ func NewSchedulerSnapshotService(
 func (s *SchedulerSnapshotService) Start() {
 	if s == nil || s.cache == nil {
 		return
+	}
+	if s.catalogPusher != nil {
+		s.catalogPusher.Start()
 	}
 
 	s.wg.Add(1)
@@ -203,6 +214,9 @@ func (s *SchedulerSnapshotService) Stop() {
 	}
 	s.stopOnce.Do(func() {
 		close(s.stopCh)
+		if s.catalogPusher != nil {
+			s.catalogPusher.Stop()
+		}
 	})
 	s.wg.Wait()
 }
@@ -528,6 +542,9 @@ func (s *SchedulerSnapshotService) cleanupConsumedOutbox(watermark int64) {
 }
 
 func (s *SchedulerSnapshotService) handleOutboxEvent(ctx context.Context, event SchedulerOutboxEvent, seen map[batchSeenKey]struct{}) error {
+	if s.catalogPusher != nil && ShouldPushForSchedulerEvent(event.EventType) {
+		s.catalogPusher.PushAsync()
+	}
 	switch event.EventType {
 	case SchedulerOutboxEventAccountLastUsed:
 		return s.handleLastUsedEvent(ctx, event.Payload)

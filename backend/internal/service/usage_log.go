@@ -143,6 +143,8 @@ type UsageLog struct {
 	InboundEndpoint *string
 	// UpstreamEndpoint is the normalized upstream endpoint path, e.g. /v1/responses.
 	UpstreamEndpoint *string
+	// UpstreamRequestID is the provider request identifier returned by the upstream.
+	UpstreamRequestID *string
 
 	GroupID        *int64
 	SourceGroupID  *int64
