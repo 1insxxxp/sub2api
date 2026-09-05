@@ -9,8 +9,53 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"os"
+	"sort"
 	"time"
 )
+
+// NewConfiguredCatalogPusher returns nil unless both endpoint and secret are
+// configured. The secret is read only from the process environment.
+func NewConfiguredCatalogPusher(groups GroupRepository, accounts AccountRepository) *CatalogSnapshotPusher {
+	endpoint, secret := os.Getenv("MODEL_STATUS_CATALOG_ENDPOINT"), os.Getenv("MODEL_STATUS_CATALOG_SECRET")
+	if endpoint == "" || secret == "" || groups == nil || accounts == nil {
+		return nil
+	}
+	return &CatalogSnapshotPusher{Endpoint: endpoint, Secret: []byte(secret), Build: func(ctx context.Context) (CatalogSnapshot, error) {
+		items, err := groups.ListActive(ctx)
+		if err != nil {
+			return CatalogSnapshot{}, err
+		}
+		s := CatalogSnapshot{Source: "sub2api", Version: time.Now().UnixNano()}
+		for _, g := range items {
+			if g.IsExclusive || g.Status != StatusActive || !g.ModelsListConfig.Enabled {
+				continue
+			}
+			bound, err := accounts.ListSchedulableByGroupID(ctx, g.ID)
+			if err != nil {
+				return CatalogSnapshot{}, err
+			}
+			if len(bound) == 0 {
+				continue
+			}
+			seen := map[string]bool{}
+			models := make([]CatalogModel, 0, len(g.ModelsListConfig.Models))
+			for _, name := range g.ModelsListConfig.Models {
+				if name != "" && !seen[name] {
+					seen[name] = true
+					models = append(models, CatalogModel{Name: name})
+				}
+			}
+			if len(models) == 0 {
+				continue
+			}
+			sort.Slice(models, func(i, j int) bool { return models[i].Name < models[j].Name })
+			s.Groups = append(s.Groups, CatalogGroup{ID: g.ID, Name: g.Name, Models: models})
+		}
+		sort.Slice(s.Groups, func(i, j int) bool { return s.Groups[i].ID < s.Groups[j].ID })
+		return s, nil
+	}}
+}
 
 // CatalogSnapshot is the public, filtered model directory consumed by the
 // model-status-report project. Keep this independent from database entities so

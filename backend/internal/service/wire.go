@@ -481,6 +481,7 @@ func ProvideSchedulerSnapshotService(
 	cfg *config.Config,
 ) *SchedulerSnapshotService {
 	svc := NewSchedulerSnapshotService(cache, outboxRepo, accountRepo, groupRepo, cfg)
+	svc.SetCatalogPusher(NewConfiguredCatalogPusher(groupRepo, accountRepo))
 	svc.Start()
 	return svc
 }
