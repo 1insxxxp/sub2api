@@ -806,7 +806,7 @@ func UsageLogFromServiceAdmin(l *service.UsageLog) *AdminUsageLog {
 	usageLog.UpstreamEndpoint = l.UpstreamEndpoint
 	return &AdminUsageLog{
 		UsageLog:                usageLog,
-		OutcomeStatus:           usageOutcomeStatus(l.Outcome),
+		OutcomeStatus:           usageOutcomeStatus(l),
 		SourceGroupID:           l.SourceGroupID,
 		UpstreamModel:           l.UpstreamModel,
 		UpstreamReasoningEffort: adminUpstreamReasoningEffort(l),
@@ -824,25 +824,22 @@ func UsageLogFromServiceAdmin(l *service.UsageLog) *AdminUsageLog {
 }
 
 // usageOutcomeStatus maps privacy-safe response evidence to the small status
-// vocabulary consumed by the public model monitor. Missing evidence remains
-// unknown so historical rows are not guessed from token counts.
-func usageOutcomeStatus(outcome *service.ResponseOutcome) string {
-	if outcome == nil {
-		return "failure"
+// vocabulary consumed by the public model monitor. Older usage rows may not
+// have a persisted outcome because the response collector was introduced
+// after they were written. Positive billed output is safe success evidence for
+// those rows; missing evidence without output remains neutral instead of being
+// fabricated as a model failure.
+func usageOutcomeStatus(log *service.UsageLog) string {
+	if log == nil {
+		return string(service.UsageOutcomeUnknown)
 	}
-	if outcome.DisconnectSource == service.DisconnectSourceClient {
-		return "failure"
+	if log.Outcome != nil {
+		return string(service.ClassifyUsageOutcome(log.Outcome))
 	}
-	if outcome.DisconnectSource == service.DisconnectSourceUpstream || outcome.DisconnectSource == service.DisconnectSourceServer || (outcome.UpstreamErrorKind != "" && outcome.UpstreamErrorKind != service.UpstreamErrorNone) {
-		return "failure"
+	if log.OutputTokens > 0 || log.ImageOutputTokens > 0 || log.ImageCount > 0 || log.CompensationReasonCode == service.EmptyResponseReasonEffectiveOutput {
+		return string(service.UsageOutcomeSuccess)
 	}
-	if (outcome.HTTPStatus != 0 && (outcome.HTTPStatus < 200 || outcome.HTTPStatus >= 300)) || (outcome.UpstreamStatus != 0 && (outcome.UpstreamStatus < 200 || outcome.UpstreamStatus >= 300)) {
-		return "failure"
-	}
-	if outcome.HasEffectiveOutput() {
-		return "success"
-	}
-	return "empty"
+	return string(service.UsageOutcomeUnknown)
 }
 
 func EmptyResponseClaimFromService(claim *service.EmptyResponseClaim) *EmptyResponseClaim {

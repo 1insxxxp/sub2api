@@ -595,6 +595,7 @@ func (s *OpenAIGatewayService) handleChatBufferedStreamingResponse(
 		UpstreamResponseServiceTier:   observedUpstreamResponseServiceTier(c),
 		Stream:                        false,
 		Duration:                      time.Since(startTime),
+		Outcome:                       ResponseOutcomeSnapshotFromContext(c.Request.Context()),
 	}
 	// Grok chat bridge: bill native search tools found in the terminal Responses body.
 	if account != nil && account.IsGrok() && finalResponse != nil {
@@ -659,9 +660,10 @@ func (s *OpenAIGatewayService) handleChatStreamingResponse(
 	upstreamModel string,
 	startTime time.Time,
 	requestBodyLen int,
-) (*OpenAIForwardResult, error) {
+) (result *OpenAIForwardResult, err error) {
 	requestID := resp.Header.Get("x-request-id")
 	writeStreamHeaders := s.newStreamHeaderWriter(c, resp.Header)
+	_, outcomeCollector := EnsureResponseOutcomeCollector(c.Request.Context(), c, http.StatusOK, resp.StatusCode)
 
 	state := apicompat.NewResponsesEventToChatState()
 	state.Model = originalModel
@@ -674,6 +676,17 @@ func (s *OpenAIGatewayService) handleChatStreamingResponse(
 	firstChunk := true
 	clientDisconnected := false
 	clientOutputStarted := false
+	defer func() {
+		if clientDisconnected {
+			outcomeCollector.MarkStreamError(errors.New("client disconnected"), true)
+		} else if err != nil && !outcomeCollector.Snapshot().StreamCompleted {
+			outcomeCollector.MarkStreamError(err, false)
+		}
+		if result != nil && result.Outcome == nil {
+			snapshot := outcomeCollector.Snapshot()
+			result.Outcome = &snapshot
+		}
+	}()
 	pendingSSE := make([]string, 0, 4)
 	refusalDetector := newOpenAIChatSilentRefusalDetector(requestBodyLen)
 	var streamFailoverErr *UpstreamFailoverError
@@ -718,6 +731,7 @@ func (s *OpenAIGatewayService) handleChatStreamingResponse(
 			Stream:                        true,
 			Duration:                      time.Since(startTime),
 			FirstTokenMs:                  firstTokenMs,
+			Outcome:                       func() *ResponseOutcome { snapshot := outcomeCollector.Snapshot(); return &snapshot }(),
 		}
 		if searchCount > 0 {
 			out.SearchCount = searchCount
@@ -727,6 +741,7 @@ func (s *OpenAIGatewayService) handleChatStreamingResponse(
 
 	processDataLine := func(payload string) bool {
 		payload = string(restoreCodexToolNamesFromContext(c, []byte(payload)))
+		outcomeCollector.ObserveOpenAISSEData(payload)
 		if firstChunk {
 			firstChunk = false
 			ms := int(time.Since(startTime).Milliseconds())
