@@ -394,13 +394,17 @@ func TestGetOpenAICodexCanonicalUserAgentRebuildsPanelUAVersion(t *testing.T) {
 		)
 	})
 
-	// 非 `{client}/{version}` 形态无法重建，原样返回，由收口整体回退规范身份。
-	t.Run("非 Codex 形态原样返回", func(t *testing.T) {
+	// 非法 UA 不能让已同步版本丢失，否则出站身份会回退到陈旧的内置版本。
+	t.Run("误填邮箱时按同步版本重建标准 UA", func(t *testing.T) {
 		svc := NewSettingService(&codexVersionSettingRepoStub{values: map[string]string{
-			SettingKeyOpenAICodexUserAgent: "not-a-codex-client",
+			SettingKeyOpenAICodexUserAgent:           "admin@example.com",
+			SettingKeyOpenAICodexClientVersionSynced: "0.200.1",
 		}}, nil)
 
-		require.Equal(t, "not-a-codex-client", svc.GetOpenAICodexCanonicalUserAgent(context.Background()))
+		require.Equal(t,
+			"codex-tui/0.200.1"+codexCLIUserAgentSuffix,
+			svc.GetOpenAICodexCanonicalUserAgent(context.Background()),
+		)
 	})
 }
 

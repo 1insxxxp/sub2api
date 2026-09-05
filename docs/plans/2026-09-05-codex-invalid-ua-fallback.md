@@ -14,8 +14,10 @@
 
 **Files:**
 - Modify: `backend/internal/service/openai_codex_version_sync_service_test.go`
+- Modify: `backend/internal/service/upstream_models_test.go`
+- Create: `backend/internal/service/account_test_service_codex_identity_test.go`
 
-**Step 1:** Add a test showing an invalid UA value (an email address) produces a standard UA using the synced version.
+**Step 1:** Add tests showing an invalid UA value (an email address) produces a standard UA using the synced version, including the outgoing OAuth model-manifest query/headers and GPT-6 account-connection test headers.
 
 **Step 2:** Run the focused test and confirm it fails because the current implementation returns the invalid UA unchanged.
 
@@ -40,3 +42,11 @@
 **Step 3:** Review the diff and confirm no production configuration or credentials changed.
 
 **Step 4:** Commit the code fix after verification.
+
+## Verification results
+
+- Red: all three regression paths failed before the fix. Model sync and GPT-6 account tests sent `0.146.0` instead of `0.153.4`; canonical UA resolution returned the invalid email unchanged.
+- Green: all three regression paths passed after the minimal fallback change.
+- Passed: related Codex version, identity, and upstream-model service tests; the OpenAI helper package test suite; backend compile-only check (`go test ./... -run '^$' -count=0`).
+- Existing limitation: the `unit`-tag service suite cannot compile because `openai_response_outcome_test.go:115` calls `handleOpenAIImagesNonStreamingResponse` with an outdated signature. The same code exists in the baseline commit. It was not changed for this fix; the new connection regression runs without the `unit` tag.
+- Production settings, credentials, and model mappings were not changed. Deployment is a separate step.
