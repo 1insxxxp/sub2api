@@ -55,7 +55,20 @@ func TestValidateCatalogSnapshot(t *testing.T) {
 	if err := ValidateCatalogSnapshot(CatalogSnapshot{Source: "other", Version: 1}); err == nil {
 		t.Fatal("expected source validation")
 	}
-	if err := ValidateCatalogSnapshot(CatalogSnapshot{Source: "sub2api", Version: 1, Groups: []CatalogGroup{{ID: 1, Name: "g", Models: []CatalogModel{{Name: "m"}}}}}); err != nil {
+	if err := ValidateCatalogSnapshot(CatalogSnapshot{Source: "sub2api", Version: 1, GeneratedAt: "2026-09-05T00:00:00Z", Groups: []CatalogGroup{{ID: 1, Name: "g", Platform: PlatformOpenAI, Enabled: true, Models: []CatalogModel{{Name: "m", Platform: PlatformOpenAI, Enabled: true}}}}}); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestValidateCatalogSnapshotRejectsUnsafeVersionAndNullGroups(t *testing.T) {
+	base := CatalogSnapshot{Source: "sub2api", Version: 1, GeneratedAt: "2026-09-05T00:00:00Z", Groups: []CatalogGroup{}}
+	base.Version = 1 << 53
+	if err := ValidateCatalogSnapshot(base); err == nil {
+		t.Fatal("expected unsafe version rejection")
+	}
+	base.Version = 1
+	base.Groups = nil
+	if err := ValidateCatalogSnapshot(base); err == nil {
+		t.Fatal("expected null groups rejection")
 	}
 }

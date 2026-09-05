@@ -180,7 +180,7 @@ func (s *SchedulerSnapshotService) Start() {
 		return
 	}
 	if s.catalogPusher != nil {
-		s.catalogPusher.PushAsync()
+		s.catalogPusher.Start()
 	}
 
 	s.wg.Add(1)
@@ -214,6 +214,9 @@ func (s *SchedulerSnapshotService) Stop() {
 	}
 	s.stopOnce.Do(func() {
 		close(s.stopCh)
+		if s.catalogPusher != nil {
+			s.catalogPusher.Stop()
+		}
 	})
 	s.wg.Wait()
 }
