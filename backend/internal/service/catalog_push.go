@@ -59,9 +59,8 @@ func buildCatalogSnapshot(groups GroupRepository, accounts AccountRepository) Ca
 			if len(models) == 0 {
 				continue
 			}
-			snapshot.Groups = append(snapshot.Groups, CatalogGroup{ID: group.ID, Name: group.Name, Platform: group.Platform, Enabled: true, IsExclusive: false, Models: models})
+			snapshot.Groups = append(snapshot.Groups, CatalogGroup{ID: group.ID, Name: group.Name, Platform: group.Platform, SortOrder: group.SortOrder, Enabled: true, IsExclusive: false, Models: models})
 		}
-		sort.Slice(snapshot.Groups, func(i, j int) bool { return snapshot.Groups[i].ID < snapshot.Groups[j].ID })
 		return snapshot, nil
 	}
 }
@@ -166,6 +165,7 @@ type CatalogGroup struct {
 	ID          int64          `json:"id"`
 	Name        string         `json:"name"`
 	Platform    string         `json:"platform"`
+	SortOrder   int            `json:"sort_order"`
 	Enabled     bool           `json:"enabled"`
 	IsExclusive bool           `json:"is_exclusive"`
 	Models      []CatalogModel `json:"models"`

@@ -81,3 +81,41 @@ func TestCatalogModelsForGroupMirrorsGatewayModelAvailability(t *testing.T) {
 		t.Fatalf("models=%#v, want only provider default gpt-5.4", models)
 	}
 }
+
+type catalogGroupRepoStub struct {
+	GroupRepository
+	groups []Group
+}
+
+func (s *catalogGroupRepoStub) ListActive(context.Context) ([]Group, error) { return s.groups, nil }
+
+type catalogAccountRepoStub struct {
+	AccountRepository
+	accounts []Account
+}
+
+func (s *catalogAccountRepoStub) ListSchedulableByGroupID(context.Context, int64) ([]Account, error) {
+	return s.accounts, nil
+}
+
+func TestBuildCatalogSnapshotPreservesGroupSortOrder(t *testing.T) {
+	groups := []Group{
+		{ID: 10, Name: "第二组", Platform: PlatformOpenAI, Status: StatusActive, SortOrder: 20},
+		{ID: 20, Name: "第一组", Platform: PlatformOpenAI, Status: StatusActive, SortOrder: 10},
+	}
+	accounts := []Account{{ID: 1, Platform: PlatformOpenAI, Status: StatusActive, Schedulable: true}}
+	build := buildCatalogSnapshot(&catalogGroupRepoStub{groups: groups}, &catalogAccountRepoStub{accounts: accounts})
+	snapshot, err := build(context.Background())
+	if err != nil {
+		t.Fatalf("build snapshot: %v", err)
+	}
+	if len(snapshot.Groups) != 2 {
+		t.Fatalf("expected 2 groups, got %d", len(snapshot.Groups))
+	}
+	if got := snapshot.Groups[0].ID; got != 10 {
+		t.Fatalf("expected repository order to be preserved, got first group %d", got)
+	}
+	if snapshot.Groups[0].SortOrder != 20 || snapshot.Groups[1].SortOrder != 10 {
+		t.Fatalf("unexpected sort orders: %+v", snapshot.Groups)
+	}
+}
