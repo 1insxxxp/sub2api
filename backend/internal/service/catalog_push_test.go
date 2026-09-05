@@ -72,3 +72,12 @@ func TestValidateCatalogSnapshotRejectsUnsafeVersionAndNullGroups(t *testing.T) 
 		t.Fatal("expected null groups rejection")
 	}
 }
+
+func TestCatalogModelsForGroupMirrorsGatewayModelAvailability(t *testing.T) {
+	group := Group{Platform: PlatformOpenAI, ModelsListConfig: GroupModelsListConfig{Enabled: true, Models: []string{"gpt-5.4", "not-a-provider-model"}}}
+	accounts := []Account{{Platform: PlatformOpenAI, Extra: map[string]any{"openai_passthrough": true}}}
+	models := catalogModelsForGroup(group, accounts)
+	if len(models) != 1 || models[0].Name != "gpt-5.4" {
+		t.Fatalf("models=%#v, want only provider default gpt-5.4", models)
+	}
+}

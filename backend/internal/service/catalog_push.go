@@ -68,39 +68,43 @@ func buildCatalogSnapshot(groups GroupRepository, accounts AccountRepository) Ca
 
 func catalogModelsForGroup(group Group, accounts []Account) []CatalogModel {
 	seen := make(map[string]struct{})
+	available := make([]string, 0)
 	add := func(account *Account, name string) {
 		name = strings.TrimSpace(name)
 		if name != "" && !shouldHideUnavailableProviderModel(account, name) {
 			seen[name] = struct{}{}
+			available = append(available, name)
+		}
+	}
+	for i := range accounts {
+		account := &accounts[i]
+		if !accountMatchesGroupPlatform(account, group.Platform) {
+			continue
+		}
+		// Passthrough accounts advertise the provider default catalog; a stale
+		// model_mapping must not leak models the gateway will never whitelist.
+		if account.Platform == PlatformOpenAI && account.IsOpenAIPassthroughEnabled() {
+			for _, name := range defaultCatalogModelIDs(account.Platform) {
+				add(account, name)
+			}
+			continue
+		}
+		mapping := account.GetModelMapping()
+		if len(mapping) == 0 {
+			for _, name := range defaultCatalogModelIDs(account.Platform) {
+				add(account, name)
+			}
+			continue
+		}
+		for name := range mapping {
+			add(account, name)
 		}
 	}
 	if group.ModelsListConfig.Enabled {
-		for _, name := range group.ModelsListConfig.Models {
-			for i := range accounts {
-				if accountMatchesGroupPlatform(&accounts[i], group.Platform) && accounts[i].IsModelSupported(name) {
-					add(&accounts[i], name)
-					break
-				}
-			}
-		}
-	} else {
-		for i := range accounts {
-			account := &accounts[i]
-			if !accountMatchesGroupPlatform(account, group.Platform) {
-				continue
-			}
-			mapping := account.GetModelMapping()
-			if len(mapping) > 0 {
-				for name := range mapping {
-					add(account, name)
-				}
-				continue
-			}
-			for _, name := range defaultCatalogModelIDs(account.Platform) {
-				if account.IsModelSupported(name) {
-					add(account, name)
-				}
-			}
+		selected := ResolveCustomModelsList(group.Platform, available, group.ModelsListConfig.Models)
+		seen = make(map[string]struct{}, len(selected))
+		for _, name := range selected {
+			seen[strings.TrimSpace(name)] = struct{}{}
 		}
 	}
 	models := make([]CatalogModel, 0, len(seen))
