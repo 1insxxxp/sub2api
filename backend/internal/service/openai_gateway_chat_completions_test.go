@@ -89,6 +89,52 @@ func TestHandleChatStreamingResponse_ClassifiesHTTP2ReadError(t *testing.T) {
 	require.NotContains(t, message, "INTERNAL_ERROR")
 }
 
+func TestHandleChatStreamingResponse_PersistsOutcomeEvidence(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	rec := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(rec)
+	ctx, _ := WithResponseOutcomeCollector(context.Background(), http.StatusOK, http.StatusOK)
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1/chat/completions", nil).WithContext(ctx)
+	resp := &http.Response{
+		StatusCode: http.StatusOK,
+		Header:     http.Header{"Content-Type": []string{"text/event-stream"}},
+		Body: io.NopCloser(strings.NewReader(
+			"data: {\"type\":\"response.output_text.delta\",\"delta\":\"ok\"}\n\n" +
+				"data: {\"type\":\"response.completed\",\"response\":{\"status\":\"completed\",\"usage\":{\"input_tokens\":1,\"output_tokens\":1}}}\n\n",
+		)),
+	}
+	svc := &OpenAIGatewayService{cfg: &config.Config{}}
+
+	result, err := svc.handleChatStreamingResponse(resp, c, &Account{ID: 1, Platform: PlatformOpenAI}, "model", "model", "model", time.Now(), 0)
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	require.NotNil(t, result.Outcome)
+	require.Equal(t, UsageOutcomeSuccess, ClassifyUsageOutcome(result.Outcome))
+}
+
+func TestHandleChatBufferedStreamingResponse_PersistsOutcomeEvidence(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	rec := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(rec)
+	ctx, _ := WithResponseOutcomeCollector(context.Background(), http.StatusOK, http.StatusOK)
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1/chat/completions", nil).WithContext(ctx)
+	resp := &http.Response{
+		StatusCode: http.StatusOK,
+		Header:     http.Header{"Content-Type": []string{"text/event-stream"}},
+		Body: io.NopCloser(strings.NewReader(
+			"data: {\"type\":\"response.output_text.delta\",\"delta\":\"ok\"}\n\n" +
+				"data: {\"type\":\"response.completed\",\"response\":{\"status\":\"completed\",\"usage\":{\"input_tokens\":1,\"output_tokens\":1}}}\n\n",
+		)),
+	}
+	svc := &OpenAIGatewayService{cfg: &config.Config{}}
+
+	result, err := svc.handleChatBufferedStreamingResponse(resp, c, &Account{ID: 1, Platform: PlatformOpenAI}, "model", "model", "model", time.Now())
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	require.NotNil(t, result.Outcome)
+	require.Equal(t, UsageOutcomeSuccess, ClassifyUsageOutcome(result.Outcome))
+}
+
 func TestNormalizeResponsesRequestServiceTier(t *testing.T) {
 	t.Parallel()
 
