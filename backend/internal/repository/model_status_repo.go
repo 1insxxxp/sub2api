@@ -25,7 +25,7 @@ func (r *modelStatusRepository) Aggregate(ctx context.Context, end time.Time, sc
 	if err != nil {
 		return nil, fmt.Errorf("start model status read: %w", err)
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 	for limit := service.ModelStatusRecentLimit; len(scopes) > 0; limit *= 2 {
 		rows, pending, err := queryModelStatusCandidates(ctx, tx, end, scopes, limit)
 		if err != nil {
@@ -46,7 +46,7 @@ func queryModelStatusCandidates(ctx context.Context, tx *sql.Tx, end time.Time, 
 	if err != nil {
 		return nil, nil, fmt.Errorf("query model status: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	result := []service.ModelStatusAggregate{}
 	pending := []service.ModelStatusScope{}
 	for rows.Next() {

@@ -6,6 +6,7 @@ export default {
     currentGroup: 'Current group',
     allGroups: 'All public groups',
     modelCount: '{count} models',
+    outcomeCounts: 'Outcome counts',
     requestCount: '{count} recorded requests',
     ttft: 'Avg. first token',
     duration: 'Avg. duration',

@@ -164,7 +164,11 @@ func (s *ModelStatusService) Report(ctx context.Context) (*ModelStatusReport, er
 		if result.Err != nil {
 			return nil, result.Err
 		}
-		return filterModelStatusReport(result.Val.(*ModelStatusReport), groups), nil
+		report, ok := result.Val.(*ModelStatusReport)
+		if !ok {
+			return nil, fmt.Errorf("unexpected model status report type %T", result.Val)
+		}
+		return filterModelStatusReport(report, groups), nil
 	}
 }
 

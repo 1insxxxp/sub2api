@@ -31,6 +31,17 @@
                 <span class="group-filter-mobile-icon" aria-hidden="true"><Icon name="filter" size="sm" /></span>
               </template>
             </Select>
+            <div class="search-field">
+              <Icon name="search" size="md" class="search-icon text-slate-400 dark:text-dark-400" />
+              <input
+                v-model="modelSearch"
+                class="input"
+                data-testid="model-search"
+                type="search"
+                :aria-label="t('modelStatus.searchModels')"
+                :placeholder="t('modelStatus.searchModels')"
+              />
+            </div>
             <div v-if="activeGroup && showGroupContext" class="group-context" aria-live="polite">
               <span class="group-context-accent" aria-hidden="true" />
               <span class="group-context-name">{{ activeGroup.name }}</span>
@@ -84,6 +95,12 @@
                   <span>{{ t('modelStatus.successRate') }}</span>
                   <strong>{{ formatRate(model.metrics.success_rate) }}</strong>
                 </span>
+                <div class="outcome-counts" :aria-label="t('modelStatus.outcomeCounts')">
+                  <span v-for="outcome in outcomes" :key="outcome" :title="t(`modelStatus.outcome.${outcome}`)">
+                    <i class="outcome-dot" :class="`outcome-${outcome}`" aria-hidden="true" />
+                    <span class="sr-only">{{ t(`modelStatus.outcome.${outcome}`) }}</span>{{ formatCount(model.metrics[outcome]) }}
+                  </span>
+                </div>
                 <span v-if="model.metrics.unknown > 0" class="incomplete-note" :title="t('modelStatus.incompleteRecords', { count: formatCount(model.metrics.unknown) })">
                   <Icon name="infoCircle" size="sm" class="shrink-0" />
                   {{ t('modelStatus.incompleteRecords', { count: formatCount(model.metrics.unknown) }) }}
@@ -209,6 +226,7 @@ const loading = ref(true)
 const loadFailed = ref(false)
 const groupFilterStorageKey = 'model-status-group-filter'
 const groupFilter = ref(readStoredGroupFilter())
+const modelSearch = ref('')
 const visibleModelLimit = ref(40)
 const loadMoreSentinel = ref<HTMLElement | null>(null)
 const now = ref(Date.now())
@@ -218,6 +236,7 @@ const mobileHeaderHideDelta = 4
 const backToTopThreshold = 320
 const mobileStatusToolbarHeight = 86
 const bucketHintStorageKey = 'model-status-bucket-hint-seen'
+const outcomes = ['success', 'failure', 'empty'] as const
 const mobileNavHidden = ref(false)
 const showBackToTop = ref(false)
 const showBucketHint = ref(false)
@@ -271,8 +290,11 @@ const groupOptions = computed(() => [
   ...(report.value?.groups ?? []).map(group => ({ value: String(group.id), label: group.name, platform: group.platform })),
 ])
 const filteredGroups = computed(() => {
+  const query = modelSearch.value.trim().toLowerCase()
   return (report.value?.groups ?? [])
     .filter(group => !groupFilter.value || String(group.id) === groupFilter.value)
+    .map(group => ({ ...group, models: group.models.filter(model => !query || model.name.toLowerCase().includes(query)) }))
+    .filter(group => group.models.length)
 })
 const filteredModelCount = computed(() => filteredGroups.value.reduce((count, group) => count + group.models.length, 0))
 const visibleGroups = computed(() => {
@@ -547,6 +569,9 @@ onBeforeUnmount(() => {
 .group-filter :deep(.select-trigger) { min-height: 44px; }
 .group-filter-mobile-icon { display: none; }
 .group-context { display: none; }
+.search-field { position: relative; flex: 1 1 220px; min-width: 160px; max-width: 360px; }
+.search-icon { position: absolute; pointer-events: none; top: 50%; left: 12px; transform: translateY(-50%); }
+.search-field input { min-width: 0; height: 44px; padding-left: 40px; }
 .model-count { @apply text-slate-500 dark:text-dark-400; margin-left: auto; font-size: 12px; white-space: nowrap; }
 .status-empty { @apply text-slate-500 dark:text-dark-400; display: flex; min-height: 200px; flex-direction: column; align-items: center; justify-content: center; gap: 12px; text-align: center; font-size: 14px; }
 .status-group { margin-bottom: 32px; }
@@ -566,6 +591,8 @@ onBeforeUnmount(() => {
 .model-logo :deep(.model-icon), .model-logo :deep(.model-icon-fallback) { flex-shrink: 0; }
 .model-title h3 { font-size: 15px; font-weight: 600; line-height: 22px; overflow-wrap: anywhere; }
 .model-meta { @apply text-slate-500 dark:text-dark-400; display: flex; min-width: 0; align-items: center; gap: 10px; margin-top: 6px; font-size: 12px; }
+.outcome-counts { display: flex; min-width: 0; flex-wrap: wrap; justify-content: flex-end; gap: 4px 8px; margin-left: auto; font-size: 12px; }
+.outcome-counts > span { display: inline-flex; align-items: center; gap: 4px; }
 .model-health { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 24px; margin-top: 8px; padding-left: 3px; }
 .health-light { @apply bg-slate-400 text-slate-400 dark:bg-slate-500 dark:text-slate-500; width: 10px; height: 10px; flex: 0 0 10px; border-radius: 50%; box-shadow: 0 0 0 3px color-mix(in srgb, currentColor 15%, transparent), 0 0 8px color-mix(in srgb, currentColor 20%, transparent); }
 .dark .model-status-page .health-light[data-health="healthy"], .dark .model-status-page .health-light[data-health="degraded"], .dark .model-status-page .health-light[data-health="unavailable"] { box-shadow: 0 0 0 3px color-mix(in srgb, currentColor 15%, transparent), 0 0 10px color-mix(in srgb, currentColor 34%, transparent); }
@@ -734,6 +761,7 @@ onBeforeUnmount(() => {
     transition: max-height 180ms ease, margin 180ms ease, padding 180ms ease, border-color 180ms ease, opacity 140ms ease, transform 180ms ease, visibility 180ms ease;
   }
   .status-filters .group-filter { width: 100%; max-width: none; }
+  .status-filters .search-field { width: 100%; max-width: none; min-width: 0; }
   .status-filters.group-context-active {
     display: flex;
     align-items: center;
@@ -772,6 +800,9 @@ onBeforeUnmount(() => {
     display: none;
   }
   .status-filters.group-context-active .group-filter-selected-text {
+    display: none;
+  }
+  .status-filters.group-context-active .search-field {
     display: none;
   }
   .status-filters.group-context-active .group-filter-mobile-icon {

@@ -6,6 +6,7 @@ export default {
     currentGroup: '当前分组',
     allGroups: '全部公开分组',
     modelCount: '{count} 个模型',
+    outcomeCounts: '结果计数',
     requestCount: '{count} 条已记录请求',
     ttft: '平均首字',
     duration: '平均耗时',

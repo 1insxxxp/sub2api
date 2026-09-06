@@ -149,7 +149,7 @@ onBeforeUnmount(() => {
 
   .endpoint-item {
     display: grid;
-    grid-template-columns: max-content minmax(0, 1fr);
+    grid-template-columns: minmax(0, 30%) minmax(0, 1fr);
     align-items: center;
     column-gap: 0.625rem;
     width: 100%;
@@ -157,6 +157,9 @@ onBeforeUnmount(() => {
   }
 
   .endpoint-name {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
     white-space: nowrap;
   }
 
