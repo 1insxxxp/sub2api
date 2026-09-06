@@ -12,8 +12,7 @@
         </div>
         <div class="status-header-actions">
           <span class="refresh-countdown" data-testid="refresh-countdown" aria-live="polite" aria-atomic="true">
-            <span class="refresh-countdown-full">{{ loading ? t('modelStatus.refreshing') : t('modelStatus.autoRefreshIn', { seconds: refreshCountdown }) }}</span>
-            <span class="refresh-countdown-short">{{ loading ? t('modelStatus.refreshingShort') : t('modelStatus.refreshCountdownShort', { seconds: refreshCountdown }) }}</span>
+            {{ loading ? t('modelStatus.refreshing') : t('modelStatus.autoRefreshIn', { seconds: refreshCountdown }) }}
           </span>
           <button
             class="btn btn-secondary btn-icon refresh-button"
@@ -37,17 +36,6 @@
                 <span class="group-filter-mobile-icon" aria-hidden="true"><Icon name="filter" size="sm" /></span>
               </template>
             </Select>
-            <div class="search-field">
-              <Icon name="search" size="md" class="search-icon text-slate-400 dark:text-dark-400" />
-              <input
-                v-model="modelSearch"
-                class="input"
-                data-testid="model-search"
-                type="search"
-                :aria-label="t('modelStatus.searchModels')"
-                :placeholder="t('modelStatus.searchModels')"
-              />
-            </div>
             <div v-if="activeGroup && showGroupContext" class="group-context" aria-live="polite">
               <span class="group-context-accent" aria-hidden="true" />
               <span class="group-context-name">{{ activeGroup.name }}</span>
@@ -232,7 +220,6 @@ const loading = ref(true)
 const loadFailed = ref(false)
 const groupFilterStorageKey = 'model-status-group-filter'
 const groupFilter = ref(readStoredGroupFilter())
-const modelSearch = ref('')
 const visibleModelLimit = ref(40)
 const loadMoreSentinel = ref<HTMLElement | null>(null)
 const now = ref(Date.now())
@@ -299,10 +286,8 @@ const groupOptions = computed(() => [
   ...(report.value?.groups ?? []).map(group => ({ value: String(group.id), label: group.name, platform: group.platform })),
 ])
 const filteredGroups = computed(() => {
-  const query = modelSearch.value.trim().toLowerCase()
   return (report.value?.groups ?? [])
     .filter(group => !groupFilter.value || String(group.id) === groupFilter.value)
-    .map(group => ({ ...group, models: group.models.filter(model => !query || model.name.toLowerCase().includes(query)) }))
     .filter(group => group.models.length)
 })
 const filteredModelCount = computed(() => filteredGroups.value.reduce((count, group) => count + group.models.length, 0))
@@ -570,7 +555,6 @@ onBeforeUnmount(() => {
 .status-title-icon { @apply rounded-lg bg-primary-50 text-primary-600 dark:bg-primary-900/30 dark:text-primary-400; display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; flex: 0 0 32px; }
 .status-header-actions { display: inline-flex; min-width: 0; align-items: center; gap: 10px; }
 .refresh-countdown { @apply text-slate-500 dark:text-dark-400; min-width: 94px; font-size: 12px; text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
-.refresh-countdown-short { display: none; }
 .refresh-button { width: 44px; height: 44px; flex: 0 0 44px; }
 .dark .model-status-page .refresh-button { @apply bg-dark-800 text-slate-200 shadow-none; border-color: rgba(96, 165, 250, 0.2); }
 .recent-bar:focus-visible { outline: 2px solid var(--brand-500); outline-offset: 3px; }
@@ -586,9 +570,6 @@ onBeforeUnmount(() => {
 .group-filter :deep(.select-trigger) { min-height: 44px; }
 .group-filter-mobile-icon { display: none; }
 .group-context { display: none; }
-.search-field { position: relative; flex: 1 1 220px; min-width: 160px; max-width: 360px; }
-.search-icon { position: absolute; pointer-events: none; top: 50%; left: 12px; transform: translateY(-50%); }
-.search-field input { min-width: 0; height: 44px; padding-left: 40px; }
 .model-count { @apply text-slate-500 dark:text-dark-400; margin-left: auto; font-size: 12px; white-space: nowrap; }
 .status-empty { @apply text-slate-500 dark:text-dark-400; display: flex; min-height: 200px; flex-direction: column; align-items: center; justify-content: center; gap: 12px; text-align: center; font-size: 14px; }
 .status-group { margin-bottom: 32px; }
@@ -714,9 +695,6 @@ onBeforeUnmount(() => {
 }
 
 @media (max-width: 640px) {
-  .refresh-countdown { min-width: auto; }
-  .refresh-countdown-full { display: none; }
-  .refresh-countdown-short { display: inline; }
   .status-guest .status-content { padding: 16px; }
   .status-header { margin-bottom: 16px; padding: 12px; }
 }
@@ -781,7 +759,6 @@ onBeforeUnmount(() => {
     transition: max-height 180ms ease, margin 180ms ease, padding 180ms ease, border-color 180ms ease, opacity 140ms ease, transform 180ms ease, visibility 180ms ease;
   }
   .status-filters .group-filter { width: 100%; max-width: none; }
-  .status-filters .search-field { width: 100%; max-width: none; min-width: 0; }
   .status-filters.group-context-active {
     display: flex;
     align-items: center;
@@ -820,9 +797,6 @@ onBeforeUnmount(() => {
     display: none;
   }
   .status-filters.group-context-active .group-filter-selected-text {
-    display: none;
-  }
-  .status-filters.group-context-active .search-field {
     display: none;
   }
   .status-filters.group-context-active .group-filter-mobile-icon {

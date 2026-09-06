@@ -128,6 +128,15 @@ describe('ModelStatusView', () => {
     expect(wrapper.get('[data-testid="refresh-countdown"]').text()).toContain('30')
   })
 
+  it('keeps the full refresh label on mobile and does not render a model search field', async () => {
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 375 })
+    const wrapper = render()
+    await flushPromises()
+
+    expect(wrapper.get('[data-testid="refresh-countdown"]').text()).toContain('modelStatus.autoRefreshIn')
+    expect(wrapper.find('[data-testid="model-search"]').exists()).toBe(false)
+  })
+
   it('restores and persists the selected public group', async () => {
     localStorage.setItem('model-status-group-filter', '2')
     const wrapper = render()
