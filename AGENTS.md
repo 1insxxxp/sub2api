@@ -999,6 +999,55 @@ GET /api/v1/admin/groups/all
 curl -s "${BASE}/api/v1/admin/groups/all" -H "x-api-key: ${KEY}"
 ```
 
+#### 5.3 分组详情（含支持模型与分组定价）
+
+```
+GET /api/v1/admin/groups/:id
+```
+
+返回的 `data` 为分组对象；其中 `model_pricing` 是该分组覆盖的模型定价数组，
+`models` 为模型名列表，`input_price`/`output_price` 等价格均按“每 token 的站内额度”保存。
+`billing_mode` 可为 `token`、`per_request`、`image` 或 `video`；按 token 模式通常直接填写
+输入/输出单 token 价格。分组倍率由 `rate_multiplier` 表示。
+
+```bash
+curl -s "${BASE}/api/v1/admin/groups/123" -H "x-api-key: ${KEY}"
+```
+
+#### 5.4 更新分组及模型定价
+
+```
+PUT /api/v1/admin/groups/:id
+```
+
+请求体字段均可选；只修改定价时建议仅提交 `model_pricing`，避免覆盖其他分组设置。
+一旦提供 `model_pricing`，该数组会作为分组完整定价配置写入（不是局部 patch）。每个条目
+至少需要一个 `models`，且同一分组内模型不能重复；`id`、`channel_id`、时间戳无需提交。
+价格字段使用每 token 的站内额度（例如 2.4 额度/百万 token 应填 `0.0000024`）。
+
+```bash
+curl -X PUT "${BASE}/api/v1/admin/groups/123" \
+  -H "x-api-key: ${KEY}" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model_pricing": [
+      {
+        "platform": "deepseek",
+        "models": ["deepseek-chat"],
+        "billing_mode": "token",
+        "input_price": 0.0000024,
+        "output_price": 0.0000036,
+        "cache_read_price": 0.0000002,
+        "cache_write_price": 0.0000024
+      }
+    ]
+  }'
+```
+
+如需同时调整倍率，可在同一请求中增加 `rate_multiplier`；倍率为 `1` 时不额外放大或折扣。
+更新成功后返回更新后的分组对象。提交前可使用 `POST /api/v1/admin/groups/pricing-coverage`
+预览指定分组/模型的定价覆盖情况（只读校验，不会写入）。
+
 ---
 
 ## 注意事项
