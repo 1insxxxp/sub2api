@@ -34,7 +34,6 @@ export default {
     loadFailed: 'Model status is temporarily unavailable.',
     refreshFailed: 'Refresh failed. Showing the last available report.',
     staleData: 'This report has not been updated for more than 90 seconds.',
-    incompleteRecords: '{count} incomplete records excluded from success rate',
     incompleteResult: 'Incomplete record excluded from success rate',
     outcome: { success: 'Success', failure: 'Failure', empty: 'Empty' },
     health: {

@@ -95,10 +95,6 @@
                     <span class="sr-only">{{ t(`modelStatus.outcome.${outcome}`) }}</span>{{ formatCount(model.metrics[outcome]) }}
                   </span>
                 </div>
-                <span v-if="model.metrics.unknown > 0" class="incomplete-note" :title="t('modelStatus.incompleteRecords', { count: formatCount(model.metrics.unknown) })">
-                  <Icon name="infoCircle" size="sm" class="shrink-0" />
-                  {{ t('modelStatus.incompleteRecords', { count: formatCount(model.metrics.unknown) }) }}
-                </span>
               </div>
               <div class="model-health">
                 <span
@@ -660,7 +656,6 @@ onBeforeUnmount(() => {
 .bucket-request-status { @apply text-slate-400 dark:text-dark-400; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .dark .model-status-page .model-title :deep(.model-icon path[fill="#000000"]),
 .dark .model-status-page .model-title :deep(.model-icon path[fill="#16191E"]) { fill: #f1f5f9; }
-.incomplete-note { @apply text-slate-500 dark:text-dark-400; display: inline-flex; min-width: 0; align-items: center; gap: 4px; margin-left: auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; }
 
 @media (prefers-reduced-motion: reduce) {
   .model-row, .recent-bar { transition: none; }

@@ -279,7 +279,7 @@ describe('ModelStatusView', () => {
     const wrapper = render()
     await flushPromises()
 
-    expect(wrapper.findAll('.model-row .incomplete-note')).toHaveLength(1)
+    expect(wrapper.findAll('.model-row .incomplete-note')).toHaveLength(0)
     expect(wrapper.find('[data-testid="incomplete-records"]').exists()).toBe(false)
     expect(wrapper.text()).not.toContain('modelStatus.outcome.unknown')
     expect(wrapper.find('[data-outcome="unknown"]').exists()).toBe(false)
@@ -317,7 +317,7 @@ describe('ModelStatusView', () => {
     expect(wrapper.find('.status-summary').exists()).toBe(false)
     expect(wrapper.find('[data-testid="incomplete-records"]').exists()).toBe(false)
     expect(wrapper.get('.model-row .model-rate strong').text()).toBe('-')
-    expect(wrapper.get('.model-row .incomplete-note').text()).toBe('modelStatus.incompleteRecords 2')
+    expect(wrapper.find('.model-row .incomplete-note').exists()).toBe(false)
   })
 
   it('filters by group without merging names or changing model metrics', async () => {
