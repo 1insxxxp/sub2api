@@ -10,17 +10,23 @@
             {{ t('modelStatus.title') }}
           </h1>
         </div>
-        <button
-          class="btn btn-secondary btn-icon refresh-button"
-          type="button"
-          data-testid="refresh"
-          :disabled="loading"
-          :title="t('common.refresh')"
-          :aria-label="t('common.refresh')"
-          @click="loadReport"
-        >
-          <Icon name="refresh" size="md" :class="{ 'animate-spin': loading }" />
-        </button>
+        <div class="status-header-actions">
+          <span class="refresh-countdown" data-testid="refresh-countdown" aria-live="polite" aria-atomic="true">
+            <span class="refresh-countdown-full">{{ loading ? t('modelStatus.refreshing') : t('modelStatus.autoRefreshIn', { seconds: refreshCountdown }) }}</span>
+            <span class="refresh-countdown-short">{{ loading ? t('modelStatus.refreshingShort') : t('modelStatus.refreshCountdownShort', { seconds: refreshCountdown }) }}</span>
+          </span>
+          <button
+            class="btn btn-secondary btn-icon refresh-button"
+            type="button"
+            data-testid="refresh"
+            :disabled="loading"
+            :title="t('common.refresh')"
+            :aria-label="t('common.refresh')"
+            @click="loadReport"
+          >
+            <Icon name="refresh" size="md" :class="{ 'animate-spin': loading }" />
+          </button>
+        </div>
         </header>
 
         <template v-if="report">
@@ -235,6 +241,8 @@ const mobileHeaderHideThreshold = 0
 const mobileHeaderHideDelta = 4
 const backToTopThreshold = 320
 const mobileStatusToolbarHeight = 86
+const refreshIntervalSeconds = 30
+const refreshCountdown = ref(refreshIntervalSeconds)
 const bucketHintStorageKey = 'model-status-bucket-hint-seen'
 const outcomes = ['success', 'failure', 'empty'] as const
 const mobileNavHidden = ref(false)
@@ -253,6 +261,7 @@ const healthBadgeClasses: Record<ModelStatusHealth, string> = {
 }
 let request: AbortController | null = null
 let timer: ReturnType<typeof setInterval> | undefined
+let refreshCountdownTimer: ReturnType<typeof setInterval> | undefined
 let loadMoreObserver: IntersectionObserver | null = null
 let groupContextObserver: IntersectionObserver | null = null
 let disposed = false
@@ -422,6 +431,7 @@ async function loadReport() {
   } finally {
     if (request === controller) request = null
     loading.value = false
+    refreshCountdown.value = refreshIntervalSeconds
     now.value = Date.now()
   }
 }
@@ -518,10 +528,13 @@ watch(loadMoreSentinel, element => {
 onMounted(() => {
   void appStore.fetchPublicSettings().catch(() => {})
   void loadReport()
+  refreshCountdownTimer = setInterval(() => {
+    refreshCountdown.value = Math.max(0, refreshCountdown.value - 1)
+  }, 1000)
   timer = setInterval(() => {
     now.value = Date.now()
     void loadReport()
-  }, 30000)
+  }, refreshIntervalSeconds * 1000)
   document.addEventListener('visibilitychange', handleVisibilityChange)
   lastScrollY = window.scrollY || 0
   updateMobileStatusChrome()
@@ -536,6 +549,7 @@ onBeforeUnmount(() => {
   if (pressedBucketTimer) clearTimeout(pressedBucketTimer)
   if (bucketHintTimer) clearTimeout(bucketHintTimer)
   clearInterval(timer)
+  clearInterval(refreshCountdownTimer)
   document.removeEventListener('visibilitychange', handleVisibilityChange)
   groupContextObserver?.disconnect()
   window.removeEventListener('scroll', updateMobileStatusChrome)
@@ -554,6 +568,9 @@ onBeforeUnmount(() => {
 .dark .model-status-page .status-header { border-color: rgba(96, 165, 250, 0.22); background: linear-gradient(135deg, rgba(30, 64, 175, 0.18), rgba(8, 145, 178, 0.08)), rgba(2, 6, 23, 0.78); box-shadow: 0 10px 28px rgba(0, 0, 0, 0.22), 0 1px 0 rgba(255, 255, 255, 0.04) inset; }
 .dark .model-status-page .status-header .page-title { color: #e0f2fe; text-shadow: 0 0 18px rgba(34, 211, 238, 0.14); }
 .status-title-icon { @apply rounded-lg bg-primary-50 text-primary-600 dark:bg-primary-900/30 dark:text-primary-400; display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; flex: 0 0 32px; }
+.status-header-actions { display: inline-flex; min-width: 0; align-items: center; gap: 10px; }
+.refresh-countdown { @apply text-slate-500 dark:text-dark-400; min-width: 94px; font-size: 12px; text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.refresh-countdown-short { display: none; }
 .refresh-button { width: 44px; height: 44px; flex: 0 0 44px; }
 .dark .model-status-page .refresh-button { @apply bg-dark-800 text-slate-200 shadow-none; border-color: rgba(96, 165, 250, 0.2); }
 .recent-bar:focus-visible { outline: 2px solid var(--brand-500); outline-offset: 3px; }
@@ -697,6 +714,9 @@ onBeforeUnmount(() => {
 }
 
 @media (max-width: 640px) {
+  .refresh-countdown { min-width: auto; }
+  .refresh-countdown-full { display: none; }
+  .refresh-countdown-short { display: inline; }
   .status-guest .status-content { padding: 16px; }
   .status-header { margin-bottom: 16px; padding: 12px; }
 }

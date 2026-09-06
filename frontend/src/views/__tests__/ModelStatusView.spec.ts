@@ -113,6 +113,21 @@ describe('ModelStatusView', () => {
     expect(wrapper.findAll('.health-badge')[2].classes()).toContain('badge-danger')
   })
 
+  it('shows a countdown that decrements each second and resets after a manual refresh', async () => {
+    const wrapper = render()
+    await flushPromises()
+
+    expect(wrapper.get('[data-testid="refresh-countdown"]').text()).toContain('30')
+
+    await vi.advanceTimersByTimeAsync(1000)
+    expect(wrapper.get('[data-testid="refresh-countdown"]').text()).toContain('29')
+
+    getModelStatus.mockResolvedValueOnce(report())
+    await wrapper.get('[data-testid="refresh"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.get('[data-testid="refresh-countdown"]').text()).toContain('30')
+  })
+
   it('restores and persists the selected public group', async () => {
     localStorage.setItem('model-status-group-filter', '2')
     const wrapper = render()
