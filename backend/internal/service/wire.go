@@ -1004,6 +1004,7 @@ var ProviderSet = wire.NewSet(
 	NewModelPricingResolver,
 	NewGroupPricingCoverageService,
 	NewModelPlazaService,
+	NewModelStatusService,
 	NewContentModerationService,
 	NewAffiliateService,
 	ProvideAffiliateQualificationRecoveryWorker,
