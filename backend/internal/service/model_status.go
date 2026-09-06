@@ -14,6 +14,8 @@ import (
 const (
 	modelStatusCacheTTL       = 15 * time.Second
 	modelStatusQueryTimeout   = 10 * time.Second
+	modelStatusHealthyRate    = 99
+	modelStatusDegradedRate   = 80
 	ModelStatusRecentLimit    = 30
 	ModelStatusBucketCount    = 20
 	ModelStatusBucketInterval = 15 * time.Minute
@@ -345,10 +347,10 @@ func modelStatusHealth(metrics ModelStatusMetrics) ModelStatusHealth {
 	if metrics.SuccessRate == nil {
 		return ModelStatusInsufficientData
 	}
-	if *metrics.SuccessRate >= 99 {
+	if *metrics.SuccessRate >= modelStatusHealthyRate {
 		return ModelStatusHealthy
 	}
-	if *metrics.SuccessRate >= 90 {
+	if *metrics.SuccessRate >= modelStatusDegradedRate {
 		return ModelStatusDegraded
 	}
 	return ModelStatusUnavailable

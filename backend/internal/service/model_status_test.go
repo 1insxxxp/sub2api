@@ -96,6 +96,8 @@ func TestModelStatusHealthUsesEmptyResponsesAndUnknownEvidence(t *testing.T) {
 		{"unknown is visible", ModelStatusMetrics{Total: 6, Success: 5, Unknown: 1}, ModelStatusInsufficientData, modelStatusFloat(100)},
 		{"healthy", ModelStatusMetrics{Total: 100, Success: 99, Failure: 1}, ModelStatusHealthy, modelStatusFloat(99)},
 		{"degraded", ModelStatusMetrics{Total: 10, Success: 9, Empty: 1}, ModelStatusDegraded, modelStatusFloat(90)},
+		{"80 percent remains degraded", ModelStatusMetrics{Total: 10, Success: 8, Empty: 2}, ModelStatusDegraded, modelStatusFloat(80)},
+		{"below 80 percent is unavailable", ModelStatusMetrics{Total: 100, Success: 79, Failure: 21}, ModelStatusUnavailable, modelStatusFloat(79)},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			metrics := finalizeModelStatusMetrics(tc.metrics)
