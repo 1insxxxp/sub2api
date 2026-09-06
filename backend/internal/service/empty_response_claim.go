@@ -17,7 +17,7 @@ const (
 	EmptyResponseClaimCompensated  = "compensated"
 	EmptyResponseClaimDailyLimited = "daily_limited"
 
-	EmptyResponseClaimRuleVersion     = 2
+	EmptyResponseClaimRuleVersion     = 3
 	EmptyResponseClaimDailyLimit      = 15
 	EmptyResponseClaimMaxOutputTokens = 10
 	// Keep the production low-output rule name available while sharing the
@@ -417,11 +417,16 @@ func EvaluateEmptyResponseClaim(now time.Time, usage UsageLog, outcome *Response
 	if usage.OutputTokens > EmptyResponseClaimMaxOutputTokens {
 		return decision(EmptyResponseClaimRejected, EmptyResponseReasonEffectiveOutput)
 	}
+	// Provider usage can report zero even after the client received content.
+	// Response evidence is authoritative for compensation safety in that case.
+	if outcome != nil && outcome.HasEffectiveOutput() {
+		return decision(EmptyResponseClaimRejected, EmptyResponseReasonEffectiveOutput)
+	}
 	if isPureEmptyResponse(outcome) {
 		return decision(EmptyResponseClaimApproved, EmptyResponseReasonPureEmpty)
 	}
-	// Low-output compensation uses the recorded token count for both streaming
-	// and non-streaming requests. Response evidence does not override 0-10 tokens.
+	// Low-output compensation applies only when no effective response output was
+	// observed, including historical records without response evidence.
 	if isLowOutputCompensable(usage) {
 		return decision(EmptyResponseClaimApproved, EmptyResponseReasonLowOutput)
 	}
@@ -444,9 +449,6 @@ func EvaluateEmptyResponseClaim(now time.Time, usage UsageLog, outcome *Response
 	}
 	if outcome == nil || outcome.CollectorVersion <= 0 {
 		return decision(EmptyResponseClaimManualReview, EmptyResponseReasonMissingEvidence)
-	}
-	if outcome.HasEffectiveOutput() {
-		return decision(EmptyResponseClaimRejected, EmptyResponseReasonEffectiveOutput)
 	}
 	return decision(EmptyResponseClaimManualReview, EmptyResponseReasonConflictingEvidence)
 }

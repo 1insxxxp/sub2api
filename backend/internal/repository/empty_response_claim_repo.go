@@ -137,6 +137,15 @@ func (r *emptyResponseClaimRepository) ListRecentEvaluations(ctx context.Context
 			AND ul.output_tokens <= $4
 			AND (erc.id IS NOT NULL OR (ul.actual_cost > 0 AND COALESCE(ul.compensated_cost, 0) <= 0))
 			AND (
+				erc.id IS NOT NULL
+				OR NOT (
+					COALESCE(uro.has_text, FALSE)
+					OR COALESCE(uro.has_tool_call, FALSE)
+					OR COALESCE(uro.has_reasoning, FALSE)
+					OR COALESCE(uro.has_media, FALSE)
+				)
+			)
+			AND (
 				erc.id IS NULL
 				OR erc.reason_code IN (
 					'pure_empty',
@@ -149,9 +158,10 @@ func (r *emptyResponseClaimRepository) ListRecentEvaluations(ctx context.Context
 			)
 	`
 	countQuery := `
-		SELECT COUNT(*)
-		FROM usage_logs ul
-		LEFT JOIN empty_response_claims erc ON erc.usage_log_id = ul.id
+			SELECT COUNT(*)
+			FROM usage_logs ul
+			LEFT JOIN usage_response_outcomes uro ON uro.usage_log_id = ul.id
+			LEFT JOIN empty_response_claims erc ON erc.usage_log_id = ul.id
 		LEFT JOIN groups g ON g.id = ul.group_id
 		WHERE ` + whereSQL
 	queryArgs := []any{userID, start, end, service.EmptyResponseClaimLowOutputTokenLimit}

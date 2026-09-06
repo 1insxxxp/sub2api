@@ -942,4 +942,59 @@ onBeforeUnmount(() => {
 details > summary::-webkit-details-marker {
   display: none;
 }
+
+@media (max-width: 767px) {
+  .monitor-toolbar {
+    align-items: stretch;
+    flex-wrap: wrap;
+    overflow-x: visible;
+  }
+
+  .monitor-toolbar > .tabs:first-child {
+    width: 100%;
+    min-width: 0;
+    overflow-x: auto;
+  }
+
+  .monitor-toolbar > .filter-menu {
+    min-width: 0 !important;
+    flex: 1 1 calc(50% - 0.375rem);
+  }
+
+  .monitor-toolbar > .filter-menu .select-trigger {
+    min-width: 0;
+  }
+
+  .monitor-toolbar > .monitor-toolbar-select {
+    width: 100% !important;
+    flex: 1 1 100%;
+  }
+
+  .monitor-toolbar > .monitor-toolbar-select + .tabs,
+  .monitor-toolbar > .tabs[aria-label*="trend"],
+  .monitor-toolbar > .tabs[aria-label*="趋势"] {
+    flex: 1 1 auto;
+  }
+
+  .monitor-toolbar > button {
+    flex: 1 1 auto;
+    justify-content: center;
+  }
+
+  .table-container {
+    max-width: 100%;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    touch-action: pan-x pan-y;
+  }
+
+  .table-container .monitor-table {
+    min-width: 40rem;
+  }
+
+  .monitor-toolbar + .section,
+  .monitor-toolbar + section {
+    min-width: 0;
+  }
+}
 </style>

@@ -315,10 +315,6 @@
                   {{ startDate }} - {{ endDate }}
                 </p>
               </div>
-              <div class="badge badge-primary">
-                <span>{{ t('admin.dashboard.granularity') }}</span>
-                <strong class="font-semibold text-slate-950 dark:text-white">{{ granularity }}</strong>
-              </div>
             </div>
             <div class="p-4 sm:p-5">
               <div class="h-64">

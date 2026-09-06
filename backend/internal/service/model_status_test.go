@@ -17,9 +17,11 @@ import (
 
 type modelStatusGroupStub struct {
 	GroupRepository
-	groups []Group
-	err    error
-	onList func(context.Context)
+	groups       []Group
+	publicGroups []Group
+	err          error
+	publicCalls  atomic.Int64
+	onList       func(context.Context)
 }
 
 func (r *modelStatusGroupStub) ListActive(ctx context.Context) ([]Group, error) {
@@ -27,6 +29,17 @@ func (r *modelStatusGroupStub) ListActive(ctx context.Context) ([]Group, error) 
 		r.onList(ctx)
 	}
 	return r.groups, r.err
+}
+
+func (r *modelStatusGroupStub) ListActivePublic(ctx context.Context) ([]Group, error) {
+	r.publicCalls.Add(1)
+	if r.onList != nil {
+		r.onList(ctx)
+	}
+	if r.publicGroups == nil {
+		return r.groups, r.err
+	}
+	return r.publicGroups, nil
 }
 
 type modelStatusAccountStub struct {
@@ -90,6 +103,19 @@ func TestModelStatusHealthUsesEmptyResponsesAndUnknownEvidence(t *testing.T) {
 			require.Equal(t, tc.status, modelStatusHealth(metrics))
 		})
 	}
+}
+
+func TestModelStatusUsesDatabaseFilteredPublicGroups(t *testing.T) {
+	groups, accounts := modelStatusFixtures()
+	groups.publicGroups = append([]Group(nil), groups.groups[:2]...)
+	groups.err = errors.New("full active group query should not be used")
+	repo := &modelStatusRepoStub{}
+
+	report, err := NewModelStatusService(repo, groups, accounts, nil).Report(context.Background())
+
+	require.NoError(t, err)
+	require.Len(t, report.Groups, 2)
+	require.Equal(t, int64(1), groups.publicCalls.Load())
 }
 
 func modelStatusFloat(v float64) *float64 { return &v }

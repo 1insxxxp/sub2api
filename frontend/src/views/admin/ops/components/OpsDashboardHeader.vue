@@ -114,13 +114,14 @@ const platformOptions = computed(() => [
 ])
 
 const timeRangeOptions = computed(() => [
-  { value: '5m', label: t('admin.ops.timeRange.5m') },
-  { value: '30m', label: t('admin.ops.timeRange.30m') },
-  { value: '1h', label: t('admin.ops.timeRange.1h') },
-  { value: '6h', label: t('admin.ops.timeRange.6h') },
-  { value: '24h', label: t('admin.ops.timeRange.24h') },
+  { value: '5m', label: t('admin.ops.timeRange.5m'), icon: 'clock' },
+  { value: '30m', label: t('admin.ops.timeRange.30m'), icon: 'clock' },
+  { value: '1h', label: t('admin.ops.timeRange.1h'), icon: 'clock' },
+  { value: '6h', label: t('admin.ops.timeRange.6h'), icon: 'clock' },
+  { value: '24h', label: t('admin.ops.timeRange.24h'), icon: 'clock' },
   {
     value: 'custom',
+    icon: 'clock',
     label: props.timeRange === 'custom' && props.customStartTime && props.customEndTime
       ? `${t('admin.ops.timeRange.custom')} (${formatCustomTimeRangeLabel(props.customStartTime, props.customEndTime)})`
       : t('admin.ops.timeRange.custom')
@@ -135,7 +136,7 @@ const queryModeOptions = computed(() => [
 
 const groupOptions = computed(() => {
   const filtered = props.platform ? groups.value.filter((g) => g.platform === props.platform) : groups.value
-  return [{ value: null, label: t('common.all') }, ...filtered.map((g) => ({ value: g.id, label: g.name }))]
+  return [{ value: null, label: t('common.all') }, ...filtered.map((g) => ({ value: g.id, label: g.name, platform: g.platform }))]
 })
 
 watch(

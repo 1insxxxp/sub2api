@@ -33,6 +33,10 @@ func NewGroupRepository(client *dbent.Client, sqlDB *sql.DB) service.GroupReposi
 	return newGroupRepositoryWithSQL(client, sqlDB)
 }
 
+func NewPublicGroupRepository(client *dbent.Client, sqlDB *sql.DB) service.PublicGroupRepository {
+	return newGroupRepositoryWithSQL(client, sqlDB)
+}
+
 // NewAdminGroupRepository exposes the atomic group-duplication capability as
 // an explicit dependency of the admin service.
 func NewAdminGroupRepository(client *dbent.Client, sqlDB *sql.DB) service.AdminGroupRepository {
@@ -633,8 +637,19 @@ func groupListOrder(params pagination.PaginationParams) []func(*entsql.Selector)
 }
 
 func (r *groupRepository) ListActive(ctx context.Context) ([]service.Group, error) {
-	groups, err := r.client.Group.Query().
-		Where(group.StatusEQ(service.StatusActive)).
+	return r.listActive(ctx, false)
+}
+
+func (r *groupRepository) ListActivePublic(ctx context.Context) ([]service.Group, error) {
+	return r.listActive(ctx, true)
+}
+
+func (r *groupRepository) listActive(ctx context.Context, publicOnly bool) ([]service.Group, error) {
+	query := r.client.Group.Query().Where(group.StatusEQ(service.StatusActive))
+	if publicOnly {
+		query = query.Where(group.IsExclusiveEQ(false))
+	}
+	groups, err := query.
 		Order(dbent.Asc(group.FieldSortOrder), dbent.Asc(group.FieldID)).
 		All(ctx)
 	if err != nil {

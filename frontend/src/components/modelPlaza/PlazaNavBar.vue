@@ -1,6 +1,6 @@
 <template>
   <header
-    class="glass sticky top-0 z-30 border-b border-gray-200/50 dark:border-dark-700/50"
+    class="plaza-nav-bar glass sticky top-0 z-30 border-b border-gray-200/50 dark:border-dark-700/50"
   >
     <div class="mx-auto flex min-w-0 max-w-7xl items-center justify-between gap-4 px-4 py-3.5 sm:px-6">
       <!-- 左:站点 logo + 名称 -->
@@ -60,3 +60,21 @@ const siteLogo = computed(() =>
 const isAuthenticated = computed(() => authStore.isAuthenticated)
 const backTarget = computed(() => (authStore.isAdmin ? '/admin/dashboard' : '/dashboard'))
 </script>
+
+<style scoped>
+@media (max-width: 767px) {
+  .plaza-nav-bar {
+    max-height: 6rem;
+    overflow: hidden;
+    transition: opacity 180ms ease, transform 180ms ease, visibility 180ms ease;
+  }
+
+  :global(html.model-status-mobile-header-hidden .plaza-nav-bar) {
+    max-height: 6rem;
+    opacity: 0;
+    pointer-events: none;
+    transform: translateY(-100%);
+    visibility: hidden;
+  }
+}
+</style>

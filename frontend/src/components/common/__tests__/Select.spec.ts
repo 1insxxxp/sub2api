@@ -40,6 +40,7 @@ const openSelect = async () => {
   const wrapper = mount(Select, {
     props: {
       modelValue: null,
+      mobileSheet: false,
       options: [
         {
           value: 'example',
@@ -60,6 +61,7 @@ afterEach(() => {
   unmountWrapper?.()
   unmountWrapper = undefined
   document.body.innerHTML = ''
+  document.body.style.overflow = ''
   setViewportWidth(originalInnerWidth)
   vi.useRealTimers()
   vi.restoreAllMocks()
@@ -112,6 +114,89 @@ describe('Select dropdown viewport constraints', () => {
     expect(dropdown?.style.left).toBe('312px')
     expect(dropdown?.style.minWidth).toBe('0px')
     expect(dropdown?.style.maxWidth).toBe('0px')
+  })
+})
+
+describe('Select mobile sheet', () => {
+  it('uses a bottom sheet for every select on mobile by default', async () => {
+    setViewportWidth(390)
+    const wrapper = mount(Select, {
+      props: {
+        modelValue: null,
+        searchable: true,
+        options: [
+          { value: 'example', label: 'Example', platform: 'anthropic' },
+        ],
+      },
+    })
+    unmountWrapper = () => wrapper.unmount()
+
+    await wrapper.get('button').trigger('click')
+    await nextTick()
+
+    const layer = document.body.querySelector('.select-dropdown-layer-mobile')
+    const dropdown = document.body.querySelector<HTMLElement>('.select-dropdown-portal')
+    expect(layer).not.toBeNull()
+    expect(dropdown?.style.zIndex).toBe('100000020')
+    expect(dropdown?.querySelector('.select-sheet-handle')).not.toBeNull()
+    expect(dropdown?.querySelectorAll('.select-option-icon')).toHaveLength(1)
+    expect(dropdown?.querySelector('.select-option-icon')?.className).toContain('bg-orange-500/10')
+    expect(document.body.style.overflow).toBe('hidden')
+
+    await wrapper.get('button').trigger('click')
+    await nextTick()
+    expect(document.body.style.overflow).toBe('')
+  })
+
+  it('uses a neutral icon for options without a platform', async () => {
+    setViewportWidth(390)
+    const wrapper = mount(Select, {
+      props: {
+        modelValue: null,
+        options: [{ value: 'all', label: 'All', icon: 'clock' }],
+      },
+    })
+    unmountWrapper = () => wrapper.unmount()
+
+    await wrapper.get('button').trigger('click')
+    await nextTick()
+
+    const icon = document.body.querySelector('.select-option-icon')
+    expect(icon?.className).toContain('select-option-icon-generic')
+    expect(icon?.className).not.toContain('bg-orange-500/10')
+    expect(icon?.querySelector('svg')).not.toBeNull()
+  })
+
+  it('preserves a parent modal scroll lock when a regular select is opened or unmounted', async () => {
+    document.body.style.overflow = 'hidden'
+    await openSelect()
+    expect(document.body.style.overflow).toBe('hidden')
+    unmountWrapper?.()
+    unmountWrapper = undefined
+    expect(document.body.style.overflow).toBe('hidden')
+  })
+
+  it('closes the mobile sheet on backdrop click and Escape', async () => {
+    setViewportWidth(390)
+    const wrapper = mount(Select, {
+      props: {
+        modelValue: null,
+        mobileSheet: true,
+        options: [{ value: 'example', label: 'Example' }],
+      },
+    })
+    unmountWrapper = () => wrapper.unmount()
+    await wrapper.get('button').trigger('click')
+    document.body.querySelector<HTMLElement>('.select-dropdown-layer-mobile')?.click()
+    await nextTick()
+    expect(wrapper.get('button').attributes('aria-expanded')).toBe('false')
+    expect(document.body.style.overflow).toBe('')
+
+    await wrapper.get('button').trigger('click')
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
+    await nextTick()
+    expect(wrapper.get('button').attributes('aria-expanded')).toBe('false')
+    expect(document.body.style.overflow).toBe('')
   })
 })
 

@@ -39,6 +39,15 @@ describe('buildApiKeyGroupFilterOptions', () => {
     ])
   })
 
+  it('preserves the platform so mobile selects can render the platform icon', () => {
+    const opts = buildApiKeyGroupFilterOptions(
+      [g({ id: 7, name: 'OpenAI group', platform: 'openai' })],
+      labels
+    )
+
+    expect(opts).toContainEqual({ value: 7, label: 'OpenAI group', platform: 'openai' })
+  })
+
   it('treats subscription_type=subscription as subscription even if is_exclusive', () => {
     const groups = [g({ id: 9, name: 'X', is_exclusive: true, subscription_type: 'subscription' })]
     const opts = buildApiKeyGroupFilterOptions(groups, labels)

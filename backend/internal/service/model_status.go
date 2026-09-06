@@ -117,7 +117,7 @@ type ModelStatusRepository interface {
 
 type ModelStatusService struct {
 	repo     ModelStatusRepository
-	groups   GroupRepository
+	groups   PublicGroupRepository
 	accounts AccountRepository
 	ops      *OpsService
 	mu       sync.Mutex
@@ -126,7 +126,7 @@ type ModelStatusService struct {
 	flight   singleflight.Group
 }
 
-func NewModelStatusService(repo ModelStatusRepository, groups GroupRepository, accounts AccountRepository, ops *OpsService) *ModelStatusService {
+func NewModelStatusService(repo ModelStatusRepository, groups PublicGroupRepository, accounts AccountRepository, ops *OpsService) *ModelStatusService {
 	return &ModelStatusService{repo: repo, groups: groups, accounts: accounts, ops: ops}
 }
 
@@ -135,7 +135,7 @@ func (s *ModelStatusService) Report(ctx context.Context) (*ModelStatusReport, er
 	defer cancel()
 	// Recheck group visibility even while metrics are cached: making a group
 	// private must immediately remove both its cards and its summary counts.
-	groups, err := s.groups.ListActive(ctx)
+	groups, err := s.groups.ListActivePublic(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("load model status groups: %w", err)
 	}

@@ -2,9 +2,9 @@
   <AppLayout>
     <TablePageLayout>
       <template #filters>
-        <div class="flex flex-col gap-3" data-test="keys-toolbar">
-          <div class="flex flex-wrap items-center justify-between gap-3">
-            <div class="flex flex-1 flex-wrap items-center gap-3">
+        <div class="keys-toolbar flex flex-col gap-3" data-test="keys-toolbar">
+          <div class="keys-toolbar-main flex flex-wrap items-center justify-between gap-3">
+            <div class="keys-filter-controls flex flex-1 flex-wrap items-center gap-3">
               <SearchInput
                 v-model="filterSearch"
                 :placeholder="t('keys.searchPlaceholder')"
@@ -96,15 +96,16 @@
         </div>
       </template>
       <template #table>
-        <DataTable
-          :columns="columns"
-          :data="apiKeys"
-          :loading="loading"
-          :server-side-sort="true"
-          default-sort-key="created_at"
-          default-sort-order="desc"
-          @sort="handleSort"
-        >
+        <div class="keys-table">
+          <DataTable
+            :columns="columns"
+            :data="apiKeys"
+            :loading="loading"
+            :server-side-sort="true"
+            default-sort-key="created_at"
+            default-sort-order="desc"
+            @sort="handleSort"
+          >
           <template #cell-id="{ value }">
             <span class="font-mono text-xs text-gray-500 dark:text-gray-400">#{{ value }}</span>
           </template>
@@ -452,7 +453,8 @@
               @action="showCreateModal = true"
             />
           </template>
-        </DataTable>
+          </DataTable>
+        </div>
       </template>
 
       <template #pagination>
@@ -1505,7 +1507,7 @@ const shouldSubmitEditStatus = (key: ApiKey, status: 'active' | 'inactive') => {
 const groupFilterOptions = computed(() => [
   { value: '', label: t('keys.allGroups') },
   { value: 0, label: t('keys.noGroup') },
-  ...groups.value.map((g) => ({ value: g.id, label: g.name }))
+  ...groups.value.map((g) => ({ value: g.id, label: g.name, platform: g.platform }))
 ])
 
 const statusFilterOptions = computed(() => [
@@ -2145,25 +2147,34 @@ onUnmounted(() => {
 
 <style scoped>
 @media (max-width: 639px) {
-  .keys-mobile-secondary-action {
-    border-color: rgb(var(--brand-rgb) / 0.2);
-    background: rgb(var(--brand-rgb) / 0.08);
-    color: rgb(var(--brand-rgb));
-    box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.7);
-    text-shadow: none;
+  .keys-toolbar-main {
+    align-items: stretch;
   }
 
-  .keys-mobile-secondary-action:hover {
-    background: rgb(var(--brand-rgb) / 0.13);
-    box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.75);
-    transform: none;
+  .keys-filter-controls {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.5rem;
+    width: 100%;
   }
 
-  :global(.dark) .keys-mobile-secondary-action {
-    border-color: rgb(var(--brand-rgb) / 0.28);
-    background: rgb(var(--brand-rgb) / 0.14);
-    color: rgb(191 219 254);
-    box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.04);
+  .keys-filter-controls > * {
+    width: 100% !important;
+    min-width: 0;
   }
+
+  .keys-filter-controls > :first-child {
+    grid-column: 1 / -1;
+  }
+
+  .keys-table :global([data-mobile-table-row]) {
+    border-radius: 1rem;
+    padding: 0.875rem;
+  }
+
+  .keys-table :global([data-mobile-table-row] [data-field="name"] [data-mobile-column-value]) {
+    text-align: left;
+  }
+
 }
 </style>

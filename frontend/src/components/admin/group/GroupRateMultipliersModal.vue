@@ -1,8 +1,8 @@
 <template>
   <BaseDialog :show="show" :title="t('admin.groups.rateMultipliersTitle')" width="wide" @close="handleClose">
-    <div v-if="group" class="space-y-4">
+    <div v-if="group" class="group-rate-modal space-y-4">
       <!-- 分组信息 -->
-      <div class="brand-floating-card flex flex-wrap items-center gap-3 text-sm">
+      <div class="group-rate-summary brand-floating-card flex flex-wrap items-center gap-3 text-sm">
         <span class="inline-flex items-center gap-1.5" :class="platformColorClass">
           <PlatformIcon :platform="group.platform" size="sm" />
           {{ t('admin.groups.platforms.' + group.platform) }}
@@ -16,13 +16,13 @@
       </div>
 
       <!-- 操作区 -->
-      <div class="admin-form-section">
+      <div class="group-rate-editor admin-form-section">
         <!-- 添加用户 -->
         <h4 class="text-sm font-semibold text-slate-800 dark:text-slate-100">
           {{ t('admin.groups.addUserRate') }}
         </h4>
-        <div class="flex items-end gap-2">
-          <div class="relative flex-1">
+        <div class="group-rate-add-row flex items-end gap-2">
+          <div class="group-rate-user-field relative flex-1">
             <input
               v-model="searchQuery"
               type="text"
@@ -34,7 +34,7 @@
             />
             <div
               v-if="showDropdown && searchResults.length > 0"
-              class="admin-action-menu absolute left-0 right-0 top-full z-10 mt-1 max-h-48 overflow-y-auto"
+              class="group-rate-search-results admin-action-menu absolute left-0 right-0 top-full z-10 mt-1 max-h-48 overflow-y-auto"
             >
               <button
                 v-for="user in searchResults"
@@ -49,7 +49,7 @@
               </button>
             </div>
           </div>
-          <div class="w-24">
+          <div class="group-rate-new-rate w-24">
             <input
               v-model.number="newRate"
               type="number"
@@ -71,9 +71,9 @@
         </div>
 
         <!-- 批量调整 + 全部清空 -->
-        <div v-if="localEntries.length > 0" class="mt-3 flex items-center gap-3 border-t border-gray-100 pt-3 dark:border-dark-600">
+        <div v-if="localEntries.length > 0" class="group-rate-batch-row mt-3 flex items-center gap-3 border-t border-gray-100 pt-3 dark:border-dark-600">
           <span class="text-xs font-medium text-gray-500 dark:text-gray-400">{{ t('admin.groups.batchAdjust') }}</span>
-          <div class="flex items-center gap-1.5">
+          <div class="group-rate-batch-controls flex items-center gap-1.5">
             <span class="text-xs text-gray-400">×</span>
             <input
               v-model.number="batchFactor"
@@ -93,7 +93,7 @@
               {{ t('admin.groups.applyMultiplier') }}
             </button>
           </div>
-          <div class="ml-auto">
+          <div class="group-rate-clear-all ml-auto">
             <button
               type="button"
               class="btn btn-danger btn-sm"
@@ -125,7 +125,7 @@
 
         <div v-else>
           <!-- 表格 -->
-          <div class="admin-surface overflow-hidden p-0">
+          <div class="group-rate-desktop-table admin-surface overflow-hidden p-0">
             <div class="max-h-[420px] overflow-auto">
               <table class="w-full min-w-max text-sm">
                 <thead class="sticky top-0 z-[1]">
@@ -192,6 +192,55 @@
             </div>
           </div>
 
+          <!-- 移动端卡片列表：避免在手机上横向滚动多列表格。 -->
+          <div class="group-rate-mobile-list hidden space-y-2">
+            <article
+              v-for="entry in paginatedLocalEntries"
+              :key="`mobile-${entry.user_id}`"
+              class="group-rate-mobile-card rounded-xl border border-blue-100/80 bg-white/80 p-3 dark:border-blue-400/15 dark:bg-dark-800/70"
+            >
+              <div class="flex min-w-0 items-start justify-between gap-3">
+                <div class="min-w-0">
+                  <p class="truncate text-sm font-medium text-gray-900 dark:text-white">{{ entry.user_email }}</p>
+                  <p class="mt-1 text-xs text-gray-400 dark:text-gray-500">#{{ entry.user_id }} · {{ entry.user_name || '-' }}</p>
+                </div>
+                <button
+                  type="button"
+                  class="shrink-0 rounded-lg p-2 text-gray-400 transition-colors hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-900/20 dark:hover:text-red-400"
+                  :aria-label="t('common.delete')"
+                  @click="removeLocal(entry.user_id)"
+                >
+                  <Icon name="trash" size="sm" />
+                </button>
+              </div>
+              <div class="mt-3 grid grid-cols-2 gap-2 text-xs">
+                <div class="rounded-lg bg-gray-50 px-2.5 py-2 dark:bg-dark-700/70">
+                  <span class="text-gray-400">{{ t('admin.groups.columns.userStatus') }}</span>
+                  <span class="mt-1 block font-medium text-gray-700 dark:text-gray-200">{{ entry.user_status }}</span>
+                </div>
+                <div class="rounded-lg bg-primary-50/70 px-2.5 py-2 dark:bg-primary-900/20">
+                  <span class="text-gray-400">{{ t('admin.groups.columns.rateMultiplier') }}</span>
+                  <input
+                    type="number"
+                    step="0.001"
+                    min="0.001"
+                    autocomplete="off"
+                    :value="entry.rate_multiplier ?? ''"
+                    :placeholder="String(props.group?.rate_multiplier ?? 1)"
+                    class="hide-spinner input mt-1 min-h-9 w-full text-center text-sm font-medium"
+                    @change="updateLocalRate(entry.user_id, ($event.target as HTMLInputElement).value)"
+                  />
+                </div>
+              </div>
+              <p v-if="showFinalRate" class="mt-2 text-xs text-primary-600 dark:text-primary-400">
+                {{ t('admin.groups.finalRate') }}: {{ computeFinalRate(entry.rate_multiplier) }}
+              </p>
+              <p v-if="entry.user_notes" class="mt-2 truncate text-xs text-gray-500 dark:text-gray-400" :title="entry.user_notes">
+                {{ entry.user_notes }}
+              </p>
+            </article>
+          </div>
+
           <!-- 分页 -->
           <Pagination
             :total="localEntries.length"
@@ -204,7 +253,7 @@
       </div>
 
       <!-- 底部操作栏 -->
-      <div class="flex items-center gap-3 border-t border-gray-200 pt-4 dark:border-dark-600">
+      <div class="group-rate-modal-footer flex items-center gap-3 border-t border-gray-200 pt-4 dark:border-dark-600">
         <!-- 左侧：未保存提示 + 撤销 -->
         <template v-if="isDirty">
           <span class="text-xs text-amber-600 dark:text-amber-400">{{ t('admin.groups.unsavedChanges') }}</span>
@@ -217,7 +266,7 @@
           </button>
         </template>
         <!-- 右侧：关闭 / 保存 -->
-        <div class="ml-auto flex items-center gap-3">
+        <div class="group-rate-modal-actions ml-auto flex items-center gap-3">
           <button type="button" class="btn btn-sm px-4 py-1.5" @click="handleClose">
             {{ t('common.close') }}
           </button>
@@ -500,5 +549,115 @@ if (typeof document !== 'undefined') {
 }
 .hide-spinner {
   -moz-appearance: textfield;
+}
+
+@media (max-width: 639px) {
+  .group-rate-summary {
+    align-items: flex-start;
+    gap: 0.5rem 0.625rem;
+    padding: 0.75rem;
+    line-height: 1.35rem;
+  }
+
+  .group-rate-summary > span {
+    min-width: 0;
+  }
+
+  .group-rate-summary > span:nth-child(2),
+  .group-rate-summary > span:nth-child(4) {
+    display: none;
+  }
+
+  .group-rate-summary > span:nth-child(3),
+  .group-rate-summary > span:nth-child(5) {
+    flex-basis: 100%;
+  }
+
+  .group-rate-add-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 6.5rem;
+    align-items: stretch;
+    gap: 0.625rem;
+  }
+
+  .group-rate-user-field {
+    grid-column: 1 / -1;
+  }
+
+  .group-rate-new-rate {
+    width: auto;
+  }
+
+  .group-rate-add-row > button,
+  .group-rate-new-rate input {
+    min-height: 2.75rem;
+  }
+
+  .group-rate-search-results {
+    position: fixed;
+    top: auto;
+    right: 0.5rem;
+    bottom: max(0.5rem, env(safe-area-inset-bottom));
+    left: 0.5rem;
+    width: auto;
+    max-height: min(42dvh, 20rem);
+    margin-top: 0;
+    border: 1px solid rgba(147, 197, 253, 0.8);
+    border-radius: 1rem;
+    box-shadow: 0 18px 42px rgba(15, 23, 42, 0.2);
+  }
+
+  .group-rate-batch-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 0.625rem;
+  }
+
+  .group-rate-batch-controls {
+    grid-column: 1 / -1;
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    gap: 0.5rem;
+  }
+
+  .group-rate-batch-controls input {
+    width: 100%;
+    min-width: 0;
+    min-height: 2.5rem;
+  }
+
+  .group-rate-batch-controls button {
+    min-height: 2.5rem;
+    white-space: nowrap;
+  }
+
+  .group-rate-clear-all {
+    grid-column: 1 / -1;
+    margin-left: 0;
+    justify-self: end;
+  }
+
+  .group-rate-desktop-table {
+    display: none;
+  }
+
+  .group-rate-mobile-list {
+    display: block;
+  }
+
+  .group-rate-modal-footer {
+    flex-wrap: wrap;
+    align-items: flex-start;
+  }
+
+  .group-rate-modal-actions {
+    width: 100%;
+    justify-content: flex-end;
+  }
+
+  .group-rate-modal-actions .btn {
+    min-height: 2.75rem;
+    min-width: 5.5rem;
+  }
 }
 </style>

@@ -2,7 +2,7 @@
   <div
     v-if="visible"
     data-test="cn-provider-quota"
-    class="min-w-[220px] space-y-1"
+    class="w-full min-w-[220px] max-md:!min-w-0 space-y-1 sm:min-w-[220px]"
   >
     <!-- Tier rows: 5h + weekly utilization bars (snapshot renders on mount).
          复用账号页 UsageProgressBar：同阈值配色、同倒计时格式。 -->

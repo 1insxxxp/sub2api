@@ -20,6 +20,10 @@ func (modelStatusEmptyGroups) ListActive(context.Context) ([]service.Group, erro
 	return []service.Group{}, nil
 }
 
+func (modelStatusEmptyGroups) ListActivePublic(context.Context) ([]service.Group, error) {
+	return []service.Group{}, nil
+}
+
 func TestModelStatusRouteAllowsVisitors(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	r := gin.New()

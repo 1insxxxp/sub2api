@@ -39,6 +39,12 @@ type GroupRepository interface {
 	UpdateSortOrders(ctx context.Context, updates []GroupSortOrderUpdate) error
 }
 
+// PublicGroupRepository provides the filtered group catalog used by public
+// model-status surfaces. Public means active and non-exclusive.
+type PublicGroupRepository interface {
+	ListActivePublic(ctx context.Context) ([]Group, error)
+}
+
 type GroupDuplicateRepository interface {
 	// FindByDuplicateOperationID performs the read-only recovery lookup used
 	// after an ambiguous idempotency-store failure.

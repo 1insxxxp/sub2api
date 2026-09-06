@@ -1109,12 +1109,12 @@ const getUserGroups = (user: AdminUser) => {
 
 // Group filter options: "All Groups" + active exclusive groups (value = group name for fuzzy match)
 const groupFilterOptions = computed(() => {
-  const options: { value: string; label: string }[] = [
+  const options: { value: string; label: string; platform?: AdminGroup['platform'] }[] = [
     { value: '', label: t('admin.users.allAuthorizedGroups') }
   ]
   for (const g of allGroups.value) {
     if (g.status !== 'active' || !g.is_exclusive || g.subscription_type !== 'standard') continue
-    options.push({ value: g.name, label: g.name })
+    options.push({ value: g.name, label: g.name, platform: g.platform })
   }
   return options
 })

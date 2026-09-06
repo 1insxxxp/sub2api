@@ -2,11 +2,11 @@
   <BaseDialog :show="show" :title="t('admin.users.groupConfig')" width="wide" @close="$emit('close')">
     <div v-if="user" class="space-y-6">
       <!-- 用户信息头部 -->
-      <div class="admin-surface flex items-center gap-4 p-5">
-        <div class="flex h-14 w-14 items-center justify-center rounded-full bg-white shadow-sm dark:bg-dark-700">
+      <div class="user-config-summary admin-surface flex items-center gap-4 p-5">
+        <div class="flex h-14 w-14 flex-shrink-0 items-center justify-center rounded-full bg-white shadow-sm dark:bg-dark-700">
           <span class="text-2xl font-semibold text-primary-600 dark:text-primary-400">{{ user.email.charAt(0).toUpperCase() }}</span>
         </div>
-        <div class="flex-1">
+        <div class="min-w-0 flex-1">
           <p class="text-lg font-semibold text-gray-900 dark:text-white">{{ user.email }}</p>
           <p class="mt-1 text-sm text-gray-600 dark:text-gray-400">{{ t('admin.users.groupConfigHint', { email: user.email }) }}</p>
         </div>
@@ -37,12 +37,13 @@
                 ? 'admin-choice-card-active border-primary-400 dark:border-primary-500'
                 : ''"
             >
-              <div class="flex items-center gap-4">
+              <div class="group-config-row flex items-center gap-4">
                 <!-- 复选框 -->
                 <div class="flex-shrink-0">
                   <label class="relative flex h-6 w-6 cursor-pointer items-center justify-center">
                     <input
                       type="checkbox"
+                      :aria-label="config.groupName"
                       :checked="config.isSelected"
                       @change="toggleExclusiveGroup(config.groupId)"
                       class="peer sr-only"
@@ -56,30 +57,32 @@
                 </div>
 
                 <!-- 分组信息 -->
-                <div class="min-w-0 flex-1">
-                  <div class="flex items-center gap-2">
-                    <span class="text-base font-semibold text-gray-900 dark:text-white">{{ config.groupName }}</span>
-                    <span class="inline-flex items-center rounded-full bg-purple-100 px-2 py-0.5 text-xs font-medium text-purple-700 dark:bg-purple-900/40 dark:text-purple-300">
+                <div class="group-config-info min-w-0 flex-1">
+                  <div class="group-config-title flex items-start gap-2">
+                    <span class="min-w-0 text-base font-semibold leading-6 text-gray-900 dark:text-white">{{ config.groupName }}</span>
+                    <span class="inline-flex shrink-0 items-center whitespace-nowrap rounded-full bg-purple-100 px-2 py-0.5 text-xs font-medium text-purple-700 dark:bg-purple-900/40 dark:text-purple-300">
                       {{ t('admin.groups.exclusive') }}
                     </span>
                   </div>
-                  <div class="mt-1.5 flex items-center gap-3 text-sm">
+                  <div class="group-config-meta mt-1.5 flex items-center gap-3 text-sm">
                     <span class="inline-flex items-center gap-1 text-gray-500 dark:text-gray-400">
                       <PlatformIcon :platform="config.platform" size="xs" />
                       <span>{{ config.platform }}</span>
                     </span>
-                    <span class="text-gray-300 dark:text-dark-500">•</span>
-                    <span class="text-gray-500 dark:text-gray-400">
+                    <span class="group-config-separator text-gray-300 dark:text-dark-500">•</span>
+                    <span class="group-config-default-rate whitespace-nowrap text-gray-500 dark:text-gray-400">
                       {{ t('admin.users.defaultRate') }}: <span class="font-medium text-gray-700 dark:text-gray-300">{{ config.defaultRate }}x</span>
                     </span>
                   </div>
                 </div>
 
                 <!-- 专属倍率输入 -->
-                <div class="flex flex-shrink-0 items-center gap-3">
-                  <label class="text-sm font-medium text-gray-600 dark:text-gray-400">{{ t('admin.users.customRate') }}</label>
+                <div class="group-config-rate flex flex-shrink-0 items-center gap-3">
+                  <label :for="`group-custom-rate-${config.groupId}`" class="text-sm font-medium text-gray-600 dark:text-gray-400">{{ t('admin.users.customRate') }}</label>
                   <input
+                    :id="`group-custom-rate-${config.groupId}`"
                     type="number"
+                    inputmode="decimal"
                     step="0.001"
                     min="0.001"
                     :value="config.customRate ?? ''"
@@ -101,7 +104,7 @@
               {{ restrictPublicGroups ? t('admin.users.publicGroupsRestricted') : t('admin.users.publicGroups') }}
             </h4>
             <span class="text-xs text-gray-400">({{ publicGroupConfigs.length }})</span>
-            <label class="ml-auto flex cursor-pointer items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
+            <label class="group-config-restriction ml-auto flex cursor-pointer items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
               <input
                 type="checkbox"
                 :checked="restrictPublicGroups"
@@ -118,12 +121,13 @@
               :key="config.groupId"
               class="admin-form-section relative overflow-hidden border-green-200/80 bg-green-50/50 p-4 dark:border-green-500/20 dark:bg-green-900/10"
             >
-              <div class="flex items-center gap-4">
+              <div class="group-config-row flex items-center gap-4">
                 <!-- 未开启限制时公开分组恒可用，此处仅作展示；开启后才是真实开关 -->
                 <div class="flex-shrink-0">
                   <input
                     v-if="restrictPublicGroups"
                     type="checkbox"
+                    :aria-label="config.groupName"
                     :checked="config.isSelected"
                     @change="togglePublicGroup(config.groupId)"
                     class="h-5 w-5 cursor-pointer rounded-md border-2 border-green-400 text-green-600 focus:ring-green-500 dark:border-green-600"
@@ -139,27 +143,29 @@
                 </div>
 
                 <!-- 分组信息 -->
-                <div class="min-w-0 flex-1">
-                  <div class="flex items-center gap-2">
-                    <span class="text-base font-semibold text-gray-900 dark:text-white">{{ config.groupName }}</span>
+                <div class="group-config-info min-w-0 flex-1">
+                  <div class="group-config-title flex items-start gap-2">
+                    <span class="min-w-0 text-base font-semibold leading-6 text-gray-900 dark:text-white">{{ config.groupName }}</span>
                   </div>
-                  <div class="mt-1.5 flex items-center gap-3 text-sm">
+                  <div class="group-config-meta mt-1.5 flex items-center gap-3 text-sm">
                     <span class="inline-flex items-center gap-1 text-gray-500 dark:text-gray-400">
                       <PlatformIcon :platform="config.platform" size="xs" />
                       <span>{{ config.platform }}</span>
                     </span>
-                    <span class="text-gray-300 dark:text-dark-500">•</span>
-                    <span class="text-gray-500 dark:text-gray-400">
+                    <span class="group-config-separator text-gray-300 dark:text-dark-500">•</span>
+                    <span class="group-config-default-rate whitespace-nowrap text-gray-500 dark:text-gray-400">
                       {{ t('admin.users.defaultRate') }}: <span class="font-medium text-gray-700 dark:text-gray-300">{{ config.defaultRate }}x</span>
                     </span>
                   </div>
                 </div>
 
                 <!-- 专属倍率输入 -->
-                <div class="flex flex-shrink-0 items-center gap-3">
-                  <label class="text-sm font-medium text-gray-600 dark:text-gray-400">{{ t('admin.users.customRate') }}</label>
+                <div class="group-config-rate flex flex-shrink-0 items-center gap-3">
+                  <label :for="`group-custom-rate-${config.groupId}`" class="text-sm font-medium text-gray-600 dark:text-gray-400">{{ t('admin.users.customRate') }}</label>
                   <input
+                    :id="`group-custom-rate-${config.groupId}`"
                     type="number"
+                    inputmode="decimal"
                     step="0.001"
                     min="0.001"
                     :value="config.customRate ?? ''"
@@ -186,7 +192,7 @@
     </div>
 
     <template #footer>
-      <div class="flex justify-end gap-3">
+      <div class="group-config-footer flex justify-end gap-3">
         <button @click="$emit('close')" class="btn btn-secondary px-5">{{ t('common.cancel') }}</button>
         <button @click="handleSave" :disabled="submitting" class="btn btn-primary px-6">
           <svg v-if="submitting" class="-ml-1 mr-2 h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24">
@@ -370,5 +376,81 @@ const handleSave = async () => {
 }
 .hide-spinner {
   -moz-appearance: textfield;
+}
+
+@media (max-width: 639px) {
+  .user-config-summary {
+    align-items: flex-start;
+    gap: 0.75rem;
+    padding: 1rem;
+    overflow-wrap: anywhere;
+  }
+
+  .user-config-summary .text-lg {
+    font-size: 1rem;
+    line-height: 1.5rem;
+  }
+
+  .group-config-row {
+    display: grid;
+    grid-template-columns: 1.5rem minmax(0, 1fr);
+    align-items: start;
+    gap: 0.75rem;
+  }
+
+  .group-config-info,
+  .group-config-rate {
+    min-width: 0;
+  }
+
+  .group-config-title {
+    min-width: 0;
+  }
+
+  .group-config-title > span:first-child {
+    overflow-wrap: anywhere;
+  }
+
+  .group-config-meta {
+    flex-wrap: wrap;
+    gap: 0.25rem 0.625rem;
+  }
+
+  .group-config-restriction {
+    flex-basis: 100%;
+    margin-left: 0;
+    min-height: 2.75rem;
+  }
+
+  .group-config-separator {
+    display: none;
+  }
+
+  .group-config-rate {
+    grid-column: 2;
+    width: 100%;
+    justify-content: space-between;
+    gap: 0.75rem;
+  }
+
+  .group-config-rate label {
+    flex: 0 1 auto;
+    white-space: nowrap;
+  }
+
+  .group-config-rate input {
+    width: 6.75rem;
+    flex-shrink: 0;
+    min-height: 2.75rem;
+    font-size: 1rem;
+  }
+
+  .group-config-footer {
+    width: 100%;
+  }
+
+  .group-config-footer > button {
+    flex: 1 1 0;
+  }
 }
 </style>

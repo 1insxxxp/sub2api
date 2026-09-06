@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount, type VueWrapper } from '@vue/test-utils'
-import { ref } from 'vue'
+import { nextTick, ref } from 'vue'
 import ModelStatusView from '../ModelStatusView.vue'
 import type { ModelStatusBucket, ModelStatusResponse } from '@/api/modelStatus'
 
@@ -77,12 +77,102 @@ describe('ModelStatusView', () => {
     vi.useFakeTimers()
     vi.setSystemTime(new Date('2026-09-06T04:00:00Z'))
     authStore.isAuthenticated = false
+    localStorage.removeItem('model-status-group-filter')
     getModelStatus.mockReset().mockResolvedValue(report())
   })
 
   afterEach(() => {
     wrappers.splice(0).forEach(wrapper => wrapper.unmount())
+    document.documentElement.classList.remove('model-status-mobile-header-hidden')
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 1024 })
     vi.useRealTimers()
+  })
+
+  it('uses a continuous outcome ratio for the signal light while preserving the health badge', async () => {
+    const data = report()
+    const baseModel = data.groups[0].models[0]
+    data.groups = [{
+      ...data.groups[0],
+      models: [
+        { ...baseModel, name: 'mostly-successful', status: 'degraded', metrics: { ...metrics, total: 100, success: 95, failure: 5, empty: 0, success_rate: 95 } },
+        { ...baseModel, name: 'balanced', status: 'degraded', metrics: { ...metrics, total: 100, success: 50, failure: 0, empty: 50, success_rate: 50 } },
+        { ...baseModel, name: 'mostly-failed', status: 'unavailable', metrics: { ...metrics, total: 100, success: 0, failure: 100, empty: 0, success_rate: 0 } },
+        { ...baseModel, name: 'no-data', status: 'no_data', metrics: { ...metrics, total: 0, success: 0, failure: 0, empty: 0, unknown: 0, success_rate: null } },
+      ],
+    }]
+    getModelStatus.mockResolvedValueOnce(data)
+    const wrapper = render()
+    await flushPromises()
+
+    const lights = wrapper.findAll('.health-light')
+    expect(lights[0].attributes('style')).toContain('--health-hue: 114deg')
+    expect(lights[1].attributes('style')).toContain('--health-hue: 60deg')
+    expect(lights[2].attributes('style')).toContain('--health-hue: 0deg')
+    expect(lights[3].attributes('style')).toBeUndefined()
+    expect(wrapper.findAll('.health-badge')[0].classes()).toContain('badge-warning')
+    expect(wrapper.findAll('.health-badge')[2].classes()).toContain('badge-danger')
+  })
+
+  it('restores and persists the selected public group', async () => {
+    localStorage.setItem('model-status-group-filter', '2')
+    const wrapper = render()
+    await flushPromises()
+
+    expect((wrapper.get('select').element as HTMLSelectElement).value).toBe('2')
+    expect(wrapper.findAll('.group-heading h2').map(heading => heading.text())).toEqual(['Public B'])
+
+    await wrapper.get('select').setValue('1')
+    expect(localStorage.getItem('model-status-group-filter')).toBe('1')
+  })
+
+  it('hides both mobile navigation variants while scrolling and provides a back-to-top action', async () => {
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 375 })
+    Object.defineProperty(window, 'scrollY', { configurable: true, value: 0, writable: true })
+    const scrollTo = vi.fn()
+    const originalMatchMedia = window.matchMedia
+    Object.defineProperty(window, 'matchMedia', { configurable: true, value: () => ({ matches: false }) })
+    Object.defineProperty(window, 'scrollTo', { configurable: true, value: scrollTo })
+    const wrapper = render()
+    await flushPromises()
+
+    expect(wrapper.find('[data-testid="back-to-top"]').exists()).toBe(false)
+    Object.defineProperty(window, 'scrollY', { configurable: true, value: 100, writable: true })
+    window.dispatchEvent(new Event('scroll'))
+    await nextTick()
+    expect(document.documentElement.classList.contains('model-status-mobile-header-hidden')).toBe(true)
+
+    Object.defineProperty(window, 'scrollY', { configurable: true, value: 400, writable: true })
+    window.dispatchEvent(new Event('scroll'))
+    await nextTick()
+    const backToTop = wrapper.get('[data-testid="back-to-top"]')
+    expect(backToTop.exists()).toBe(true)
+    expect(wrapper.get('.status-filters').classes()).toContain('status-filters')
+    await backToTop.trigger('click')
+    expect(scrollTo).toHaveBeenCalledWith({ top: 0, behavior: 'smooth' })
+
+    Object.defineProperty(window, 'scrollY', { configurable: true, value: 396, writable: true })
+    window.dispatchEvent(new Event('scroll'))
+    await nextTick()
+    expect(document.documentElement.classList.contains('model-status-mobile-header-hidden')).toBe(true)
+
+    Object.defineProperty(window, 'scrollY', { configurable: true, value: 300, writable: true })
+    window.dispatchEvent(new Event('scroll'))
+    await nextTick()
+    expect(document.documentElement.classList.contains('model-status-mobile-header-hidden')).toBe(true)
+
+    Object.defineProperty(window, 'scrollY', { configurable: true, value: 1, writable: true })
+    window.dispatchEvent(new Event('scroll'))
+    await nextTick()
+    expect(document.documentElement.classList.contains('model-status-mobile-header-hidden')).toBe(true)
+
+    Object.defineProperty(window, 'scrollY', { configurable: true, value: 0, writable: true })
+    window.dispatchEvent(new Event('scroll'))
+    await nextTick()
+    expect(document.documentElement.classList.contains('model-status-mobile-header-hidden')).toBe(false)
+
+    wrapper.unmount()
+    expect(document.documentElement.classList.contains('model-status-mobile-header-hidden')).toBe(false)
+    Object.defineProperty(window, 'matchMedia', { configurable: true, value: originalMatchMedia })
   })
 
   it('shows the public layout and preserves separate groups for the same model', async () => {
@@ -116,7 +206,8 @@ describe('ModelStatusView', () => {
     const wrapper = render()
     await flushPromises()
     const bucket = wrapper.find('[data-testid="status-bucket"]')
-    expect(wrapper.get('.bucket-help').attributes('title')).toContain('modelStatus.bucketClickHint')
+    expect(wrapper.find('.bucket-help').exists()).toBe(false)
+    expect(bucket.element.tagName).toBe('BUTTON')
     await bucket.trigger('click')
     expect(bucket.classes()).toContain('bucket-pressed')
     await flushPromises()
@@ -191,16 +282,13 @@ describe('ModelStatusView', () => {
     expect(wrapper.get('.model-row .incomplete-note').text()).toBe('modelStatus.incompleteRecords 2')
   })
 
-  it('filters by group and model without merging names or changing model metrics', async () => {
+  it('filters by group without merging names or changing model metrics', async () => {
     const wrapper = render()
     await flushPromises()
-    await wrapper.get('[data-testid="model-search"]').setValue('SAME-model')
-    expect(wrapper.findAll('[data-testid="model-row"]')).toHaveLength(2)
+    expect(wrapper.findAll('[data-testid="model-row"]')).toHaveLength(3)
     await wrapper.get('select').setValue('2')
     expect(wrapper.findAll('[data-testid="model-row"]')).toHaveLength(1)
     expect(wrapper.find('[data-testid="model-row"]').text()).toContain('100%')
-    await wrapper.get('[data-testid="model-search"]').setValue('missing')
-    expect(wrapper.text()).toContain('modelStatus.noMatches')
   })
 
   it('keeps the last successful report visible when refresh fails, then clears the warning on retry', async () => {

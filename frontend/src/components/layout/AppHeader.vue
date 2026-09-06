@@ -976,6 +976,25 @@ watch(
 </script>
 
 <style scoped>
+:global(html.model-status-mobile-header-hidden .app-header-shell) {
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-100%);
+  visibility: hidden;
+}
+
+@media (max-width: 767px) {
+  :global(.app-header-shell) {
+    max-height: 6rem;
+    overflow: hidden;
+    transition: opacity 180ms ease, transform 180ms ease, visibility 180ms ease;
+  }
+
+  :global(html.model-status-mobile-header-hidden .app-header-shell) {
+    max-height: 6rem;
+  }
+}
+
 .daily-checkin-popover {
   display: flex;
   max-height: min(42rem, calc(100dvh - 5rem));

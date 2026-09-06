@@ -64,21 +64,21 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div v-if="allEndpoints.length > 0" class="flex flex-wrap gap-2">
+  <div v-if="allEndpoints.length > 0" class="endpoint-popover flex flex-wrap gap-2">
     <div
       v-for="(item, index) in allEndpoints"
       :key="index"
-      class="flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-xs transition-colors hover:border-primary-200 dark:border-dark-600 dark:bg-dark-800 dark:hover:border-primary-700"
+      class="endpoint-item flex min-w-0 items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-xs transition-colors hover:border-primary-200 dark:border-dark-600 dark:bg-dark-800 dark:hover:border-primary-700"
     >
-      <span class="font-medium text-gray-600 dark:text-gray-300">{{ item.name }}</span>
+      <span class="endpoint-name min-w-0 font-medium text-gray-600 dark:text-gray-300">{{ item.name }}</span>
       <span
         v-if="item.isDefault"
-        class="rounded bg-primary-50 px-1 py-px text-[10px] font-medium leading-tight text-primary-600 dark:bg-primary-900/30 dark:text-primary-400"
+        class="endpoint-default rounded bg-primary-50 px-1 py-px text-[10px] font-medium leading-tight text-primary-600 dark:bg-primary-900/30 dark:text-primary-400"
       >{{ t('keys.endpoints.default') }}</span>
 
-      <span class="text-gray-300 dark:text-dark-500">|</span>
+      <span class="separator text-gray-300 dark:text-dark-500">|</span>
 
-      <div class="group/endpoint relative flex items-center gap-1.5">
+      <div class="endpoint-content group/endpoint relative flex min-w-0 items-center gap-1.5">
         <div
           class="pointer-events-none absolute bottom-full left-1/2 z-20 mb-2 w-max max-w-[24rem] -translate-x-1/2 translate-y-1 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-left opacity-0 shadow-[0_14px_36px_-20px_rgba(15,23,42,0.35)] ring-1 ring-slate-200/80 transition-all duration-150 group-hover/endpoint:translate-y-0 group-hover/endpoint:opacity-100 group-focus-within/endpoint:translate-y-0 group-focus-within/endpoint:opacity-100 dark:border-slate-700 dark:bg-slate-900 dark:ring-slate-700/70"
         >
@@ -99,7 +99,7 @@ onBeforeUnmount(() => {
         </div>
 
         <code
-          class="cursor-pointer font-mono text-gray-500 decoration-gray-400 decoration-dashed underline-offset-2 hover:text-primary-600 hover:underline focus:text-primary-600 focus:underline focus:outline-none dark:text-gray-400 dark:decoration-gray-500 dark:hover:text-primary-400 dark:focus:text-primary-400"
+          class="endpoint-code min-w-0 cursor-pointer overflow-hidden text-ellipsis whitespace-nowrap font-mono text-gray-500 decoration-gray-400 decoration-dashed underline-offset-2 hover:text-primary-600 hover:underline focus:text-primary-600 focus:underline focus:outline-none dark:text-gray-400 dark:decoration-gray-500 dark:hover:text-primary-400 dark:focus:text-primary-400"
           role="button"
           tabindex="0"
           @click="copy(item.endpoint)"
@@ -139,3 +139,55 @@ onBeforeUnmount(() => {
     </div>
   </div>
 </template>
+
+<style scoped>
+@media (max-width: 639px) {
+  .endpoint-popover {
+    display: block;
+    width: 100%;
+  }
+
+  .endpoint-item {
+    display: grid;
+    grid-template-columns: max-content minmax(0, 1fr);
+    align-items: center;
+    column-gap: 0.625rem;
+    width: 100%;
+    min-width: 0;
+  }
+
+  .endpoint-name {
+    white-space: nowrap;
+  }
+
+  .endpoint-default {
+    grid-column: 1;
+    grid-row: 2;
+    justify-self: start;
+    margin-top: -0.25rem;
+    border-radius: 0.25rem;
+    background: rgb(var(--brand-rgb) / 0.08);
+    padding: 0.125rem 0.25rem;
+    font-size: 10px;
+    font-weight: 500;
+    line-height: 1;
+    color: rgb(var(--brand-rgb));
+  }
+
+  .separator {
+    display: none;
+  }
+
+  .endpoint-content {
+    grid-column: 2;
+    grid-row: 1;
+    width: 100%;
+  }
+
+  .endpoint-code {
+    display: block;
+    max-width: 100%;
+    flex: 1;
+  }
+}
+</style>

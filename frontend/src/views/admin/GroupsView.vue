@@ -5,11 +5,11 @@
         <template #filters>
         <div
           data-testid="groups-toolbar"
-          class="admin-toolbar lg:flex-col lg:items-stretch 2xl:flex-row 2xl:items-center"
+          class="groups-toolbar admin-toolbar lg:flex-col lg:items-stretch 2xl:flex-row 2xl:items-center"
         >
           <!-- Left: fuzzy search + filters (can wrap to multiple lines) -->
-          <div class="admin-toolbar-group w-full 2xl:flex-1">
-            <div class="relative w-full sm:w-64">
+          <div class="groups-filter-group admin-toolbar-group w-full 2xl:flex-1">
+            <div class="groups-search relative w-full sm:w-64">
               <Icon
                 name="search"
                 size="md"
@@ -27,21 +27,21 @@
               v-model="filters.platform"
               :options="platformFilterOptions"
               :placeholder="t('admin.groups.allPlatforms')"
-              class="w-44"
+              class="groups-filter-select w-44"
               @change="loadGroups"
             />
             <Select
               v-model="filters.status"
               :options="statusOptions"
               :placeholder="t('admin.groups.allStatus')"
-              class="w-40"
+              class="groups-filter-select w-40"
               @change="loadGroups"
             />
             <Select
               v-model="filters.is_exclusive"
               :options="exclusiveOptions"
               :placeholder="t('admin.groups.allGroups')"
-              class="w-44"
+              class="groups-filter-select w-44"
               @change="loadGroups"
             />
           </div>
@@ -49,7 +49,7 @@
           <!-- Right: actions -->
           <div
             data-testid="groups-toolbar-actions"
-            class="admin-toolbar-group w-full justify-end lg:w-full 2xl:w-auto 2xl:flex-none"
+            class="groups-toolbar-actions admin-toolbar-group w-full justify-end lg:w-full 2xl:w-auto 2xl:flex-none"
           >
             <button
               @click="loadGroups"
@@ -69,7 +69,7 @@
                 class="btn btn-secondary"
                 :title="t('admin.groups.columnSettings')"
               >
-                <Icon name="grid" size="md" class="mr-2" />
+                <Icon name="grid" size="md" class="mr-2 md:mr-2" />
                 <span class="hidden md:inline">{{
                   t("admin.groups.columnSettings")
                 }}</span>
@@ -101,11 +101,11 @@
               :title="t('admin.groups.sortOrder')"
             >
               <Icon name="arrowsUpDown" size="md" class="mr-2" />
-              {{ t("admin.groups.sortOrder") }}
+              <span>{{ t("admin.groups.sortOrder") }}</span>
             </button>
             <div
               data-testid="groups-create-actions"
-              class="ml-auto flex flex-wrap items-center justify-end gap-2.5"
+              class="groups-create-actions ml-auto flex flex-wrap items-center justify-end gap-2.5"
             >
               <button
                 data-testid="system-custom-create"

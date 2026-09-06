@@ -3,6 +3,7 @@ import type { AccountPlatform, GroupPlatform } from '@/types'
 export interface PlatformOption<T extends string = string> {
   value: T
   label: string
+  platform?: T
 }
 
 /**
@@ -11,14 +12,14 @@ export interface PlatformOption<T extends string = string> {
  * do not silently disappear from list filters.
  */
 export const CONCRETE_PLATFORM_OPTIONS = [
-  { value: 'anthropic', label: 'Anthropic' },
-  { value: 'openai', label: 'OpenAI' },
-  { value: 'gemini', label: 'Gemini' },
-  { value: 'antigravity', label: 'Antigravity' },
-  { value: 'grok', label: 'Grok' },
-  { value: 'kimi', label: 'Kimi' },
-  { value: 'zhipu', label: 'Zhipu GLM' },
-  { value: 'deepseek', label: 'DeepSeek' }
+  { value: 'anthropic', label: 'Anthropic', platform: 'anthropic' },
+  { value: 'openai', label: 'OpenAI', platform: 'openai' },
+  { value: 'gemini', label: 'Gemini', platform: 'gemini' },
+  { value: 'antigravity', label: 'Antigravity', platform: 'antigravity' },
+  { value: 'grok', label: 'Grok', platform: 'grok' },
+  { value: 'kimi', label: 'Kimi', platform: 'kimi' },
+  { value: 'zhipu', label: 'Zhipu GLM', platform: 'zhipu' },
+  { value: 'deepseek', label: 'DeepSeek', platform: 'deepseek' }
 ] as const satisfies readonly PlatformOption<AccountPlatform>[]
 
 /** Platforms that can own a group. */

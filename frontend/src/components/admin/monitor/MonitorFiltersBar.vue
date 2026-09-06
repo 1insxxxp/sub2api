@@ -96,14 +96,14 @@ const { t } = useI18n()
 
 const providerFilterOptions = computed(() => [
   { value: '', label: t('admin.channelMonitor.allProviders') },
-  { value: PROVIDER_OPENAI, label: t('monitorCommon.providers.openai') },
-  { value: PROVIDER_ANTHROPIC, label: t('monitorCommon.providers.anthropic') },
-  { value: PROVIDER_GEMINI, label: t('monitorCommon.providers.gemini') },
-  { value: PROVIDER_GROK, label: t('monitorCommon.providers.grok') },
-  { value: PROVIDER_ANTIGRAVITY, label: t('monitorCommon.providers.antigravity') },
-  { value: PROVIDER_KIMI, label: t('monitorCommon.providers.kimi') },
-  { value: PROVIDER_ZHIPU, label: t('monitorCommon.providers.zhipu') },
-  { value: PROVIDER_DEEPSEEK, label: t('monitorCommon.providers.deepseek') },
+  { value: PROVIDER_OPENAI, label: t('monitorCommon.providers.openai'), platform: PROVIDER_OPENAI },
+  { value: PROVIDER_ANTHROPIC, label: t('monitorCommon.providers.anthropic'), platform: PROVIDER_ANTHROPIC },
+  { value: PROVIDER_GEMINI, label: t('monitorCommon.providers.gemini'), platform: PROVIDER_GEMINI },
+  { value: PROVIDER_GROK, label: t('monitorCommon.providers.grok'), platform: PROVIDER_GROK },
+  { value: PROVIDER_ANTIGRAVITY, label: t('monitorCommon.providers.antigravity'), platform: PROVIDER_ANTIGRAVITY },
+  { value: PROVIDER_KIMI, label: t('monitorCommon.providers.kimi'), platform: PROVIDER_KIMI },
+  { value: PROVIDER_ZHIPU, label: t('monitorCommon.providers.zhipu'), platform: PROVIDER_ZHIPU },
+  { value: PROVIDER_DEEPSEEK, label: t('monitorCommon.providers.deepseek'), platform: PROVIDER_DEEPSEEK },
 ])
 
 const enabledFilterOptions = computed(() => [
