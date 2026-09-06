@@ -122,7 +122,9 @@ func (s *OpenAIGatewayService) forwardAsRawChatCompletions(
 
 	// Grok Composer does not accept image_url parts directly, but Grok Build
 	// can describe the images first. Bridge only this exact failure mode.
-	token, tokenKind, err := s.getRequestCredential(ctx, c, account)
+	credentialCtx, releaseCredentialCtx := detachUpstreamContext(ctx)
+	token, tokenKind, err := s.getRequestCredential(credentialCtx, c, account)
+	releaseCredentialCtx()
 	if err != nil {
 		return nil, err
 	}
@@ -183,7 +185,9 @@ func (s *OpenAIGatewayService) forwardAsRawChatCompletions(
 	if customUA == "" && account.IsGrokOAuth() {
 		customUA = defaultGrokUpstreamUserAgent()
 	}
-	resp, err := s.sendCCUpstreamRequest(ctx, c, account, targetURL, upstreamBody, clientStream, token, customUA, grokCacheIdentity)
+	upstreamCtx, releaseUpstreamCtx := detachUpstreamContext(ctx)
+	resp, err := s.sendCCUpstreamRequest(upstreamCtx, c, account, targetURL, upstreamBody, clientStream, token, customUA, grokCacheIdentity)
+	releaseUpstreamCtx()
 	if err != nil {
 		return nil, err
 	}

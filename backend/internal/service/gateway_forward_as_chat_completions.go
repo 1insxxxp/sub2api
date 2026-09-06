@@ -115,8 +115,11 @@ func (s *GatewayService) ForwardAsChatCompletions(
 	// 7. Enforce cache_control block limit
 	anthropicBody = enforceCacheControlLimit(anthropicBody)
 
-	// 8. Get access token
-	token, tokenType, err := s.GetAccessToken(ctx, account)
+	// 8. Get access token using the upstream lifecycle so client disconnects do
+	// not abort OAuth refresh before the request is dispatched.
+	tokenCtx, releaseTokenCtx := detachUpstreamContext(ctx)
+	token, tokenType, err := s.GetAccessToken(tokenCtx, account)
+	releaseTokenCtx()
 	if err != nil {
 		return nil, fmt.Errorf("get access token: %w", err)
 	}
@@ -128,7 +131,7 @@ func (s *GatewayService) ForwardAsChatCompletions(
 	}
 
 	// 10. Build upstream request
-	upstreamCtx, releaseUpstreamCtx := detachStreamUpstreamContext(ctx, reqStream)
+	upstreamCtx, releaseUpstreamCtx := detachUpstreamContext(ctx)
 	upstreamReq, wireBody, err := s.buildUpstreamRequest(upstreamCtx, c, account, anthropicBody, token, tokenType, mappedModel, reqStream, shouldMimicClaudeCode)
 	releaseUpstreamCtx()
 	if err != nil {

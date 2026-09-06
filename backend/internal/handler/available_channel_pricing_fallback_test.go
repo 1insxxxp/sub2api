@@ -2,6 +2,9 @@ package handler
 
 import (
 	"context"
+	"encoding/json"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
@@ -94,10 +97,21 @@ func TestToUserSupportedModelsByIDs_LeavesUnknownModelUnpriced(t *testing.T) {
 
 func newAvailableChannelsPricingService(t *testing.T) *service.PricingService {
 	t.Helper()
+	fallbackPath := filepath.Join(t.TempDir(), "model_pricing.json")
+	fallbackData := map[string]any{
+		"claude-opus-5": map[string]any{
+			"input_cost_per_token":  5e-6,
+			"output_cost_per_token": 2.5e-5,
+		},
+	}
+	raw, err := json.Marshal(fallbackData)
+	require.NoError(t, err)
+	require.NoError(t, os.WriteFile(fallbackPath, raw, 0o600))
+
 	pricingService := service.NewPricingService(&config.Config{
 		Pricing: config.PricingConfig{
 			DataDir:      t.TempDir(),
-			FallbackFile: "../../data/model_pricing.json",
+			FallbackFile: fallbackPath,
 		},
 	}, nil)
 	require.NoError(t, pricingService.Initialize())

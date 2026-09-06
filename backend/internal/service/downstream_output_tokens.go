@@ -246,7 +246,7 @@ func (c *DownstreamOutputTokenCollector) appendSSEPayload(payload, eventType str
 
 func (c *DownstreamOutputTokenCollector) appendText(text string) {
 	if text != "" {
-		c.text.WriteString(text)
+		_, _ = c.text.WriteString(text)
 	}
 }
 

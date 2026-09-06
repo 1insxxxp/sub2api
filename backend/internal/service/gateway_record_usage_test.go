@@ -121,8 +121,8 @@ func TestGatewayServiceRecordUsage_BillingUsesDetachedContextAndCarriesOutcome(t
 	usageRepo := &openAIRecordUsageLogRepoStub{inserted: true}
 	userRepo := &openAIRecordUsageUserRepoStub{}
 	subRepo := &openAIRecordUsageSubRepoStub{}
-	quotaSvc := &openAIRecordUsageAPIKeyQuotaStub{}
-	svc := newGatewayRecordUsageServiceForTest(usageRepo, userRepo, subRepo)
+	billingRepo := &openAIRecordUsageBillingRepoStub{result: &UsageBillingApplyResult{Applied: true}}
+	svc := newGatewayRecordUsageServiceWithBillingRepoForTest(usageRepo, billingRepo, userRepo, subRepo)
 
 	reqCtx, cancel := context.WithCancel(context.Background())
 	cancel()
@@ -142,9 +142,8 @@ func TestGatewayServiceRecordUsage_BillingUsesDetachedContextAndCarriesOutcome(t
 			ID:    501,
 			Quota: 100,
 		},
-		User:          &User{ID: 601},
-		Account:       &Account{ID: 701},
-		APIKeyService: quotaSvc,
+		User:    &User{ID: 601},
+		Account: &Account{ID: 701},
 	})
 
 	require.NoError(t, err)
@@ -152,10 +151,9 @@ func TestGatewayServiceRecordUsage_BillingUsesDetachedContextAndCarriesOutcome(t
 	require.NotNil(t, usageRepo.lastLog.Outcome)
 	require.True(t, usageRepo.lastLog.Outcome.HasText)
 	require.True(t, usageRepo.lastLog.Outcome.StreamCompleted)
-	require.Equal(t, 1, userRepo.deductCalls)
-	require.NoError(t, userRepo.lastCtxErr)
-	require.Equal(t, 1, quotaSvc.quotaCalls)
-	require.NoError(t, quotaSvc.lastQuotaCtxErr)
+	require.Equal(t, 1, billingRepo.calls)
+	require.NoError(t, billingRepo.lastCtxErr)
+	require.Greater(t, billingRepo.lastCmd.BalanceCost, 0.0)
 }
 
 func TestGatewayServiceRecordUsage_BillingFingerprintIncludesRequestPayloadHash(t *testing.T) {
@@ -540,9 +538,8 @@ func TestGatewayServiceRecordUsage_LegacyUsageLogWriteErrorFailsClosed(t *testin
 			ID:    503,
 			Quota: 100,
 		},
-		User:          &User{ID: 603},
-		Account:       &Account{ID: 703},
-		APIKeyService: quotaSvc,
+		User:    &User{ID: 603},
+		Account: &Account{ID: 703},
 	})
 
 	require.ErrorIs(t, err, context.Canceled)

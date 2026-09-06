@@ -197,8 +197,11 @@ func postUsageBilling(ctx context.Context, requestID string, usageLog *UsageLog,
 	if p.APIKey == nil || p.User == nil || p.Account == nil {
 		return false, ErrUsageBillingSideEffectRepositoryRequired
 	}
-	requiresAPIKeyQuota := p.Cost.ActualCost > 0 && p.APIKey.Quota > 0
-	requiresAPIKeyRateLimit := p.Cost.ActualCost > 0 && p.APIKey.HasRateLimits()
+	// The legacy path can only mutate API-key quota/rate-limit state when the
+	// corresponding updater was supplied.  Callers that do not provide that
+	// optional service have no API-key side effect to join atomically.
+	requiresAPIKeyQuota := p.shouldDeductAPIKeyQuota()
+	requiresAPIKeyRateLimit := p.shouldUpdateRateLimits()
 	if requiresAPIKeyQuota || requiresAPIKeyRateLimit {
 		return false, ErrUsageBillingSideEffectRepositoryRequired
 	}
@@ -804,6 +807,7 @@ type recordUsageOpts struct {
 func (s *GatewayService) RecordUsage(ctx context.Context, input *RecordUsageInput) error {
 	return s.recordUsageCore(ctx, &recordUsageCoreInput{
 		Result:             input.Result,
+		ParsedRequest:      input.ParsedRequest,
 		APIKey:             input.APIKey,
 		User:               input.User,
 		Account:            input.Account,
@@ -873,6 +877,7 @@ func (s *GatewayService) RecordUsageWithLongContext(ctx context.Context, input *
 // recordUsageCoreInput 是 recordUsageCore 的公共输入字段，从两种输入结构体中提取。
 type recordUsageCoreInput struct {
 	Result             *ForwardResult
+	ParsedRequest      *ParsedRequest
 	APIKey             *APIKey
 	User               *User
 	Account            *Account
@@ -989,12 +994,15 @@ func (s *GatewayService) recordUsageCore(ctx context.Context, input *recordUsage
 
 	// Cache TTL Override: 确保计费时 token 分类与账号设置一致。
 	// 账号级设置优先；全局 1h 请求注入开启时，默认把 usage 计费归回 5m。
+	claudeMaxOutcome := applyClaudeMaxCacheBillingPolicyToUsage(&result.Usage, input.ParsedRequest, apiKey.Group, result.Model, account.ID)
 	cacheTTLOverridden := false
-	if overrideTarget, ok := s.resolveCacheTTLUsageOverrideTarget(ctx, account); ok {
-		applyCacheTTLOverride(&result.Usage, overrideTarget)
-		cacheTTLOverridden = (result.Usage.CacheCreation5mTokens + result.Usage.CacheCreation1hTokens) > 0
+	if !claudeMaxOutcome.SkipTTLOverride {
+		if overrideTarget, ok := s.resolveCacheTTLUsageOverrideTarget(ctx, account); ok {
+			applyCacheTTLOverride(&result.Usage, overrideTarget)
+			cacheTTLOverridden = (result.Usage.CacheCreation5mTokens + result.Usage.CacheCreation1hTokens) > 0
+		}
 	}
-	if !cacheTTLOverridden && result.CacheCreationTTLTarget != "" {
+	if !claudeMaxOutcome.SkipTTLOverride && !cacheTTLOverridden && result.CacheCreationTTLTarget != "" {
 		applyCacheTTLHintForAggregateCreation(&result.Usage, result.CacheCreationTTLTarget)
 	}
 

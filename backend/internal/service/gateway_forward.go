@@ -100,6 +100,10 @@ func (s *GatewayService) Forward(ctx context.Context, c *gin.Context, account *A
 	if parsed == nil {
 		return nil, fmt.Errorf("parse request: empty request")
 	}
+	if c != nil {
+		c.Set("parsed_request", parsed)
+	}
+	ctx = withClaudeMaxResponseRewriteContext(ctx, c, parsed)
 	// Anthropic Fast is requested with speed=fast rather than OpenAI's
 	// service_tier. Attach it at this shared boundary so passthrough, OAuth and
 	// partial-stream results all use the same billing and usage-log path.

@@ -422,9 +422,7 @@ func adaptAnthropicPassthroughClientTools(body []byte) ([]byte, bool, error) {
 	}
 	if changed {
 		req["tools"] = converted
-		if normalizeAnthropicPassthroughToolChoice(req) {
-			changed = true
-		}
+		normalizeAnthropicPassthroughToolChoice(req)
 		var rebuilt bytes.Buffer
 		encoder := json.NewEncoder(&rebuilt)
 		encoder.SetEscapeHTML(false)
