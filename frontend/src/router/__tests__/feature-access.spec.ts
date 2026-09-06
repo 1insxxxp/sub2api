@@ -128,6 +128,7 @@ describe('feature route guard', () => {
     authStore.isAdmin = false
     authStore.canAccessAdminWorkbench = false
     authStore.isSimpleMode = false
+    appStore.backendModeEnabled = false
     appStore.publicSettingsLoaded = false
     appStore.cachedPublicSettings = null
     appStore.fetchPublicSettings.mockReset()
@@ -140,6 +141,14 @@ describe('feature route guard', () => {
     expect(routerSource).toMatch(
       /path: '\/images',[\s\S]*?requiresImageStudio: true[\s\S]*?titleKey: 'imageStudio\.title'/,
     )
+  })
+
+  it('allows visitors to view model status even in backend mode', async () => {
+    authStore.isAuthenticated = false
+    appStore.backendModeEnabled = true
+    const { navigation, next } = runGuard({ requiresAuth: false }, '/model-status')
+    await navigation
+    expect(next).toHaveBeenCalledWith()
   })
 
   it('marks the lottery route as feature protected', () => {
