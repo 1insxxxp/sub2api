@@ -197,8 +197,11 @@ func postUsageBilling(ctx context.Context, requestID string, usageLog *UsageLog,
 	if p.APIKey == nil || p.User == nil || p.Account == nil {
 		return false, ErrUsageBillingSideEffectRepositoryRequired
 	}
-	requiresAPIKeyQuota := p.Cost.ActualCost > 0 && p.APIKey.Quota > 0
-	requiresAPIKeyRateLimit := p.Cost.ActualCost > 0 && p.APIKey.HasRateLimits()
+	// The legacy path can only mutate API-key quota/rate-limit state when the
+	// corresponding updater was supplied.  Callers that do not provide that
+	// optional service have no API-key side effect to join atomically.
+	requiresAPIKeyQuota := p.shouldDeductAPIKeyQuota()
+	requiresAPIKeyRateLimit := p.shouldUpdateRateLimits()
 	if requiresAPIKeyQuota || requiresAPIKeyRateLimit {
 		return false, ErrUsageBillingSideEffectRepositoryRequired
 	}

@@ -2,6 +2,8 @@ package handler
 
 import (
 	"context"
+	"path/filepath"
+	"runtime"
 	"testing"
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
@@ -94,10 +96,12 @@ func TestToUserSupportedModelsByIDs_LeavesUnknownModelUnpriced(t *testing.T) {
 
 func newAvailableChannelsPricingService(t *testing.T) *service.PricingService {
 	t.Helper()
+	_, sourceFile, _, ok := runtime.Caller(0)
+	require.True(t, ok)
 	pricingService := service.NewPricingService(&config.Config{
 		Pricing: config.PricingConfig{
 			DataDir:      t.TempDir(),
-			FallbackFile: "../../data/model_pricing.json",
+			FallbackFile: filepath.Join(filepath.Dir(sourceFile), "../../data/model_pricing.json"),
 		},
 	}, nil)
 	require.NoError(t, pricingService.Initialize())
