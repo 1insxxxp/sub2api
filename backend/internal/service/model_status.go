@@ -343,10 +343,11 @@ func modelStatusHealth(metrics ModelStatusMetrics) ModelStatusHealth {
 	if metrics.Total == 0 {
 		return ModelStatusNoData
 	}
-	if metrics.Unknown > 0 {
+	known := metrics.Success + metrics.Failure + metrics.Empty
+	if known == 0 {
 		return ModelStatusUnknown
 	}
-	if metrics.Success+metrics.Failure+metrics.Empty < 5 {
+	if known < 5 {
 		return ModelStatusInsufficientData
 	}
 	if metrics.SuccessRate == nil {
