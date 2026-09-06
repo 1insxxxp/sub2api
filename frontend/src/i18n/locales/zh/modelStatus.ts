@@ -18,6 +18,7 @@ export default {
     bucketDetails: '时间段详情',
     requestTotal: '请求总数',
     requestDetails: '请求明细',
+    statusCode: '状态码 {code}',
     showingLatest: '共 {total} 条，展示最新 {count} 条',
     noRequestsInBucket: '此时间段暂无请求',
     bucketStatus: { degraded: '有少量失败，整体可用' },
@@ -42,6 +43,7 @@ export default {
       unavailable: '高失败率',
       insufficient_data: '数据不足',
       no_data: '暂无请求',
+      unknown: '未知',
     },
   },
 }

@@ -161,6 +161,7 @@ WITH scope AS MATERIALIZED (
       WHEN ul.output_tokens > 0 OR ul.image_output_tokens > 0 OR ul.image_count > 0 OR claim.reason_code = 'effective_output' THEN 'success'
       ELSE 'unknown'
     END AS outcome,
+    COALESCE(NULLIF(outcome.upstream_status, 0), NULLIF(outcome.http_status, 0), 0) AS status_code,
     CASE WHEN outcome.disconnect_source = 'client' THEN 3 ELSE 1 END AS priority,
     CASE WHEN ul.first_token_ms >= 0 THEN ul.first_token_ms END AS ttft_ms,
     CASE WHEN ul.duration_ms >= 0 THEN ul.duration_ms END AS duration_ms
@@ -179,6 +180,7 @@ WITH scope AS MATERIALIZED (
       ELSE 'error:' || e.id::text END AS identity,
     e.created_at, 2 AS source_rank,
     CASE WHEN e.status_code = 499 THEN 'unknown' ELSE 'failure' END AS outcome,
+    COALESCE(NULLIF(e.upstream_status_code, 0), NULLIF(e.status_code, 0), 0) AS status_code,
     CASE WHEN e.status_code = 499 THEN 3 ELSE 2 END AS priority,
     CASE WHEN e.time_to_first_token_ms >= 0 THEN e.time_to_first_token_ms END AS ttft_ms,
     CASE WHEN e.duration_ms >= 0 THEN e.duration_ms END AS duration_ms
@@ -195,7 +197,7 @@ WITH scope AS MATERIALIZED (
   FROM evidence
 ), deduplicated AS (
   SELECT DISTINCT ON (group_id, platform, model, identity) identity, group_id, platform, model,
-    COALESCE(terminal_at, created_at) AS created_at, outcome, ttft_ms, duration_ms
+    COALESCE(terminal_at, created_at) AS created_at, outcome, status_code, ttft_ms, duration_ms
   FROM timed
   ORDER BY group_id, platform, model, identity, priority DESC, created_at DESC, source_rank DESC, id DESC
 ), ranked AS (
@@ -212,7 +214,7 @@ WITH scope AS MATERIALIZED (
     (AVG(duration_ms) FILTER (WHERE outcome = 'success'))::double precision AS duration,
     COUNT(ttft_ms) FILTER (WHERE outcome = 'success') AS ttft_samples,
     COUNT(duration_ms) FILTER (WHERE outcome = 'success') AS duration_samples,
-    (SELECT JSONB_AGG(JSONB_BUILD_OBJECT('at', r.created_at, 'outcome', r.outcome) ORDER BY r.created_at, r.identity)
+    (SELECT JSONB_AGG(JSONB_BUILD_OBJECT('at', r.created_at, 'outcome', r.outcome, 'status_code', NULLIF(r.status_code, 0)) ORDER BY r.created_at, r.identity)
       FROM ranked r WHERE r.group_id = s.group_id AND r.platform = s.platform AND r.model = s.model AND r.recent_rank <= $4) AS recent,
     MIN(created_at) AS oldest
   FROM samples s GROUP BY group_id, platform, model
@@ -224,8 +226,8 @@ WITH scope AS MATERIALIZED (
     COUNT(*) AS total, COUNT(*) FILTER (WHERE outcome = 'success') AS success,
     COUNT(*) FILTER (WHERE outcome = 'failure') AS failure, COUNT(*) FILTER (WHERE outcome = 'empty') AS empty,
     COUNT(*) FILTER (WHERE outcome = 'unknown') AS unknown,
-    (SELECT JSONB_AGG(JSONB_BUILD_OBJECT('at', q.created_at, 'outcome', q.outcome) ORDER BY q.created_at DESC, q.identity DESC)
-      FROM (SELECT br.created_at, br.outcome, br.identity FROM bucket_rows br
+    (SELECT JSONB_AGG(JSONB_BUILD_OBJECT('at', q.created_at, 'outcome', q.outcome, 'status_code', NULLIF(q.status_code, 0)) ORDER BY q.created_at DESC, q.identity DESC)
+      FROM (SELECT br.created_at, br.outcome, br.status_code, br.identity FROM bucket_rows br
         WHERE br.group_id = b.group_id AND br.platform = b.platform AND br.model = b.model AND br.bucket_start = b.bucket_start
         ORDER BY br.created_at DESC, br.identity DESC LIMIT 100) q) AS requests
   FROM bucket_rows b GROUP BY group_id, platform, model, bucket_start

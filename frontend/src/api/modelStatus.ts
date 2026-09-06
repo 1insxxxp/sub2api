@@ -3,7 +3,7 @@ import type { ApiResponse } from '@/types'
 import { getAPIBaseURL } from './url'
 
 export type ModelStatusOutcome = 'success' | 'failure' | 'empty' | 'unknown'
-export type ModelStatusHealth = 'healthy' | 'degraded' | 'unavailable' | 'insufficient_data' | 'no_data'
+export type ModelStatusHealth = 'healthy' | 'degraded' | 'unavailable' | 'insufficient_data' | 'no_data' | 'unknown'
 
 export interface ModelStatusMetrics {
   total: number
@@ -25,7 +25,7 @@ export interface ModelStatusModel {
   metrics: ModelStatusMetrics
   buckets?: ModelStatusBucket[]
   /** @deprecated kept for older cached responses during rollout */
-  recent?: Array<{ at: string; outcome: ModelStatusOutcome }>
+  recent?: Array<{ at: string; outcome: ModelStatusOutcome; status_code?: number }>
 }
 
 export interface ModelStatusBucket {
@@ -36,7 +36,7 @@ export interface ModelStatusBucket {
   failure: number
   empty: number
   unknown: number
-  requests: Array<{ at: string; outcome: ModelStatusOutcome }>
+  requests: Array<{ at: string; outcome: ModelStatusOutcome; status_code?: number }>
 }
 
 export interface ModelStatusGroup {

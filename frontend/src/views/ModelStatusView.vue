@@ -189,7 +189,10 @@
             <div class="bucket-detail-list-header"><span>{{ t('modelStatus.requestDetails') }}</span><span v-if="selectedBucket.total > selectedBucket.requests.length">{{ t('modelStatus.showingLatest', { count: selectedBucket.requests.length, total: selectedBucket.total }) }}</span></div>
             <div v-if="!selectedBucket.requests.length" class="bucket-detail-empty">{{ t('modelStatus.noRequestsInBucket') }}</div>
             <div v-for="(requestItem, index) in selectedBucket.requests" :key="`${requestItem.at}:${index}`" class="bucket-request-row">
-              <span>{{ new Date(requestItem.at).toLocaleString(locale, { hour12: false }) }}</span>
+              <div class="bucket-request-info">
+                <span>{{ new Date(requestItem.at).toLocaleString(locale, { hour12: false }) }}</span>
+                <span v-if="requestItem.status_code" class="bucket-request-status">{{ t('modelStatus.statusCode', { code: requestItem.status_code }) }}</span>
+              </div>
               <span class="badge" :class="requestOutcomeClass(requestItem.outcome)">{{ requestOutcomeLabel(requestItem.outcome) }}</span>
             </div>
           </div>
@@ -245,6 +248,7 @@ const healthBadgeClasses: Record<ModelStatusHealth, string> = {
   unavailable: 'badge-danger',
   insufficient_data: 'badge-gray',
   no_data: 'badge-gray',
+  unknown: 'badge-gray',
 }
 let request: AbortController | null = null
 let timer: ReturnType<typeof setInterval> | undefined
@@ -651,7 +655,9 @@ onBeforeUnmount(() => {
 .bucket-detail-list { @apply border-t border-slate-200 dark:border-dark-700; max-height: 360px; overflow: auto; padding-top: 14px; }
 .bucket-detail-list-header { @apply text-slate-500 dark:text-dark-300; display: flex; justify-content: space-between; gap: 12px; margin-bottom: 8px; font-size: 12px; }
 .bucket-detail-empty { @apply text-slate-500 dark:text-dark-400; padding: 24px 0; text-align: center; font-size: 13px; }
-.bucket-request-row { @apply border-b border-slate-100 dark:border-dark-700/70; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 9px 0; font-size: 12px; }
+.bucket-request-row { @apply border-b border-slate-100 dark:border-dark-700/70; display: flex; min-width: 0; align-items: center; justify-content: space-between; gap: 12px; padding: 9px 0; font-size: 12px; }
+.bucket-request-info { display: flex; min-width: 0; flex: 1 1 auto; flex-wrap: wrap; align-items: center; gap: 4px 10px; }
+.bucket-request-status { @apply text-slate-400 dark:text-dark-400; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .dark .model-status-page .model-title :deep(.model-icon path[fill="#000000"]),
 .dark .model-status-page .model-title :deep(.model-icon path[fill="#16191E"]) { fill: #f1f5f9; }
 .incomplete-note { @apply text-slate-500 dark:text-dark-400; display: inline-flex; min-width: 0; align-items: center; gap: 4px; margin-left: auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; }

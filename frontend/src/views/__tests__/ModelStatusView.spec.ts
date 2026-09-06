@@ -274,7 +274,7 @@ describe('ModelStatusView', () => {
     data.summary = incompleteMetrics
     data.groups[0].metrics = incompleteMetrics
     data.groups[0].models[0].metrics = incompleteMetrics
-    data.groups[0].models[0].buckets![0] = { ...data.groups[0].models[0].buckets![0], total: 1, unknown: 1, requests: [{ at: '2026-09-06T03:54:00Z', outcome: 'unknown' }] }
+    data.groups[0].models[0].buckets![0] = { ...data.groups[0].models[0].buckets![0], total: 1, unknown: 1, requests: [{ at: '2026-09-06T03:54:00Z', outcome: 'unknown', status_code: 499 }] }
     getModelStatus.mockResolvedValueOnce(data)
     const wrapper = render()
     await flushPromises()
@@ -291,6 +291,20 @@ describe('ModelStatusView', () => {
     await flushPromises()
     expect(wrapper.find('[data-testid="incomplete-records"]').exists()).toBe(false)
     expect(wrapper.find('.recent-incomplete').exists()).toBe(false)
+  })
+
+  it('shows the request status code in bucket details', async () => {
+    const data = report()
+    data.groups[0].models[0].buckets![0].requests = [{ at: '2026-09-06T03:54:00Z', outcome: 'failure', status_code: 502 }]
+    data.groups[0].models[0].buckets![0].total = 1
+    data.groups[0].models[0].buckets![0].failure = 1
+    getModelStatus.mockResolvedValueOnce(data)
+    const wrapper = render()
+    await flushPromises()
+
+    await wrapper.get('[data-testid="status-bucket"]').trigger('click')
+    await flushPromises()
+    expect(document.body.textContent).toContain('modelStatus.statusCode 502')
   })
 
   it('keeps incomplete-only model records out of the failure rate', async () => {

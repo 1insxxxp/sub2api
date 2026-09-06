@@ -30,6 +30,7 @@ const (
 	ModelStatusUnavailable      ModelStatusHealth = "unavailable"
 	ModelStatusInsufficientData ModelStatusHealth = "insufficient_data"
 	ModelStatusNoData           ModelStatusHealth = "no_data"
+	ModelStatusUnknown          ModelStatusHealth = "unknown"
 )
 
 type ModelStatusMetrics struct {
@@ -46,8 +47,9 @@ type ModelStatusMetrics struct {
 }
 
 type ModelStatusRecent struct {
-	At      time.Time          `json:"at"`
-	Outcome UsageOutcomeStatus `json:"outcome"`
+	At         time.Time          `json:"at"`
+	Outcome    UsageOutcomeStatus `json:"outcome"`
+	StatusCode int                `json:"status_code,omitempty"`
 }
 
 // ModelStatusBucket is one fixed 15-minute interval in the rolling report window.
@@ -341,7 +343,10 @@ func modelStatusHealth(metrics ModelStatusMetrics) ModelStatusHealth {
 	if metrics.Total == 0 {
 		return ModelStatusNoData
 	}
-	if metrics.Success+metrics.Failure+metrics.Empty < 5 || metrics.Unknown > 0 {
+	if metrics.Unknown > 0 {
+		return ModelStatusUnknown
+	}
+	if metrics.Success+metrics.Failure+metrics.Empty < 5 {
 		return ModelStatusInsufficientData
 	}
 	if metrics.SuccessRate == nil {

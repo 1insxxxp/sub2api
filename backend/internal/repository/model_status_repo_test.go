@@ -106,6 +106,7 @@ INSERT INTO ops_error_logs (group_id, api_key_id, request_id, requested_model, c
 		}
 	}
 	require.Equal(t, service.UsageOutcomeFailure, byGroup[1].Recent[29].Outcome)
+	require.Equal(t, 502, byGroup[1].Recent[29].StatusCode)
 	require.Equal(t, int64(1), byGroup[2].Metrics.Success)
 	require.Equal(t, int64(1), byGroup[4].Metrics.Success)
 }

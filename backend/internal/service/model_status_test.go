@@ -93,7 +93,7 @@ func TestModelStatusHealthUsesEmptyResponsesAndUnknownEvidence(t *testing.T) {
 		{"no traffic", ModelStatusMetrics{}, ModelStatusNoData, nil},
 		{"one success", ModelStatusMetrics{Total: 1, Success: 1}, ModelStatusInsufficientData, modelStatusFloat(100)},
 		{"empty lowers success", ModelStatusMetrics{Total: 100, Success: 1, Empty: 99}, ModelStatusUnavailable, modelStatusFloat(1)},
-		{"unknown is visible", ModelStatusMetrics{Total: 6, Success: 5, Unknown: 1}, ModelStatusInsufficientData, modelStatusFloat(100)},
+		{"unknown is visible", ModelStatusMetrics{Total: 6, Success: 5, Unknown: 1}, ModelStatusUnknown, modelStatusFloat(100)},
 		{"healthy", ModelStatusMetrics{Total: 100, Success: 99, Failure: 1}, ModelStatusHealthy, modelStatusFloat(99)},
 		{"degraded", ModelStatusMetrics{Total: 10, Success: 9, Empty: 1}, ModelStatusDegraded, modelStatusFloat(90)},
 		{"80 percent remains degraded", ModelStatusMetrics{Total: 10, Success: 8, Empty: 2}, ModelStatusDegraded, modelStatusFloat(80)},

@@ -18,6 +18,7 @@ export default {
     bucketDetails: 'Time bucket details',
     requestTotal: 'Total requests',
     requestDetails: 'Request details',
+    statusCode: 'Status {code}',
     showingLatest: '{total} total, showing latest {count}',
     noRequestsInBucket: 'No requests in this time bucket',
     bucketStatus: { degraded: 'Minor failures, mostly available' },
@@ -42,6 +43,7 @@ export default {
       unavailable: 'High failure rate',
       insufficient_data: 'Insufficient data',
       no_data: 'No requests',
+      unknown: 'Unknown',
     },
   },
 }
