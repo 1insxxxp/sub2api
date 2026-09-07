@@ -245,7 +245,7 @@ describe('ModelStatusView', () => {
     expect(document.body.querySelector('.bucket-detail')).toBeNull()
   })
 
-  it('marks low-failure buckets as degraded instead of failure', async () => {
+  it('colors recent buckets by their success-rate thresholds', async () => {
     const data = report()
     data.groups[0].models[0].buckets![0] = {
       ...data.groups[0].models[0].buckets![0],
@@ -264,9 +264,29 @@ describe('ModelStatusView', () => {
     await flushPromises()
 
     const bucket = wrapper.get('[data-testid="status-bucket"]')
-    expect(bucket.classes()).toContain('bucket-degraded')
-    expect(bucket.attributes('data-outcome')).toBe('degraded')
-    expect(bucket.attributes('title')).toContain('modelStatus.bucketStatus.degraded')
+    expect(bucket.classes()).toContain('bucket-success')
+    expect(bucket.attributes('data-outcome')).toBe('success')
+    expect(bucket.attributes('title')).toContain('modelStatus.outcome.success')
+  })
+
+  it.each([
+    { success: 80, failure: 20, expected: 'bucket-degraded' },
+    { success: 49, failure: 51, expected: 'bucket-failure' },
+  ])('uses $expected at $success% success', async ({ success, failure, expected }) => {
+    const data = report()
+    data.groups[0].models[0].buckets![0] = {
+      ...data.groups[0].models[0].buckets![0],
+      total: 100,
+      success,
+      failure,
+      empty: 0,
+      unknown: 0,
+    }
+    getModelStatus.mockResolvedValueOnce(data)
+    const wrapper = render()
+    await flushPromises()
+
+    expect(wrapper.get('[data-testid="status-bucket"]').classes()).toContain(expected)
   })
 
   it('separates incomplete records from outcomes without rendering a global summary', async () => {
