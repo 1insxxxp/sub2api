@@ -26,6 +26,7 @@ type blockingCheckinAwardRepository struct {
 
 	mu           sync.Mutex
 	block        bool
+	readCount    int
 	readEntered  chan struct{}
 	writeEntered chan struct{}
 	releaseRead  chan struct{}
@@ -135,7 +136,10 @@ func (r *blockingCheckinAwardRepository) WithCheckinCampaignConfigReadTx(
 ) error {
 	return r.reader.WithCheckinCampaignConfigReadTx(ctx, func(client *dbent.Client, repo service.SettingRepository) error {
 		r.mu.Lock()
-		block := r.block
+		r.readCount++
+		// Checkin reads a preflight snapshot before its authoritative award transaction.
+		// Hold the latter so the assertion covers the policy that actually grants rewards.
+		block := r.block && r.readCount == 2
 		readEntered := r.readEntered
 		releaseRead := r.releaseRead
 		r.mu.Unlock()
@@ -171,6 +175,7 @@ func (r *blockingCheckinAwardRepository) startBlocking() {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.block = true
+	r.readCount = 0
 	r.readEntered = make(chan struct{})
 	r.writeEntered = make(chan struct{})
 	r.releaseRead = make(chan struct{})
@@ -228,7 +233,7 @@ func TestCheckinPostgresSharedReadProducesCompleteOldOrNewPolicy(t *testing.T) {
 		Enabled:       true,
 		Tiers:         []service.CheckinRewardTier{{Amount: 1, Probability: 100}},
 		StreakEnabled: true,
-		StreakRules:   []service.CheckinStreakRule{{Day: 1, BonusAmount: 1}},
+		StreakRules:   []service.CheckinStreakRule{{Day: 1, LotteryAttempts: 1}},
 	})
 	require.NoError(t, err)
 	campaign, err := svc.CreateRewardCampaign(ctx, service.CreateCheckinRewardCampaignInput{
@@ -272,7 +277,7 @@ func TestCheckinPostgresSharedReadProducesCompleteOldOrNewPolicy(t *testing.T) {
 			Enabled:       true,
 			Tiers:         []service.CheckinRewardTier{{Amount: 1, Probability: 100}},
 			StreakEnabled: true,
-			StreakRules:   []service.CheckinStreakRule{{Day: 1, BonusAmount: 3}},
+			StreakRules:   []service.CheckinStreakRule{{Day: 1, LotteryAttempts: 3}},
 		})
 		updateResult <- updateErr
 	}()
@@ -286,16 +291,18 @@ func TestCheckinPostgresSharedReadProducesCompleteOldOrNewPolicy(t *testing.T) {
 	oldResult := <-checkinResult
 	require.NotNil(t, oldResult)
 	require.Equal(t, 5.0, oldResult.BaseRewardAmount)
-	require.Equal(t, 1.0, oldResult.BonusRewardAmount)
-	require.Equal(t, 6.0, oldResult.TotalRewardAmount)
+	require.Zero(t, oldResult.BonusRewardAmount)
+	require.Equal(t, 1, oldResult.LotteryAttemptsReward)
+	require.Equal(t, 5.0, oldResult.TotalRewardAmount)
 	require.NoError(t, <-updateResult)
 	blockingRepo.stopBlocking()
 
 	newResult, err := svc.Checkin(ctx, second.ID)
 	require.NoError(t, err)
 	require.Equal(t, 5.0, newResult.BaseRewardAmount)
-	require.Equal(t, 3.0, newResult.BonusRewardAmount)
-	require.Equal(t, 8.0, newResult.TotalRewardAmount)
+	require.Zero(t, newResult.BonusRewardAmount)
+	require.Equal(t, 3, newResult.LotteryAttemptsReward)
+	require.Equal(t, 5.0, newResult.TotalRewardAmount)
 
 	_, err = svc.DisableRewardCampaign(ctx, campaign.ID, 9001)
 	require.NoError(t, err)
@@ -346,16 +353,18 @@ func TestCheckinPostgresSharedReadProducesCompleteOldOrNewPolicy(t *testing.T) {
 	require.NoError(t, <-beforeEnableErr)
 	oldCampaignResult := <-beforeEnableResult
 	require.Equal(t, 1.0, oldCampaignResult.BaseRewardAmount)
-	require.Equal(t, 3.0, oldCampaignResult.BonusRewardAmount)
-	require.Equal(t, 4.0, oldCampaignResult.TotalRewardAmount)
+	require.Zero(t, oldCampaignResult.BonusRewardAmount)
+	require.Equal(t, 3, oldCampaignResult.LotteryAttemptsReward)
+	require.Equal(t, 1.0, oldCampaignResult.TotalRewardAmount)
 	require.NoError(t, <-enableResult)
 	blockingRepo.stopBlocking()
 
 	afterEnableResult, err := svc.Checkin(ctx, fourth.ID)
 	require.NoError(t, err)
 	require.Equal(t, 5.0, afterEnableResult.BaseRewardAmount)
-	require.Equal(t, 3.0, afterEnableResult.BonusRewardAmount)
-	require.Equal(t, 8.0, afterEnableResult.TotalRewardAmount)
+	require.Zero(t, afterEnableResult.BonusRewardAmount)
+	require.Equal(t, 3, afterEnableResult.LotteryAttemptsReward)
+	require.Equal(t, 5.0, afterEnableResult.TotalRewardAmount)
 }
 
 func TestSettingRepositoryPostgresSharedCheckinReadersDoNotSerialize(t *testing.T) {

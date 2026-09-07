@@ -12,6 +12,7 @@ import (
 	"image/png"
 	"io"
 	"net/http"
+	"sync"
 	"testing"
 	"time"
 
@@ -36,6 +37,7 @@ func (s *imageStudioConfigReaderStub) GetImageStudioConfig(ctx context.Context) 
 }
 
 type imageStudioRepoStub struct {
+	mu             sync.Mutex
 	createdRecords []ImageStudioImageRecord
 	createErr      error
 
@@ -65,6 +67,7 @@ type imageStudioRepoStub struct {
 }
 
 type imageStudioTaskRepoStub struct {
+	mu     sync.Mutex
 	nextID int64
 	tasks  map[int64]ImageStudioTask
 }
@@ -76,6 +79,8 @@ func (s *imageStudioTaskRepoStub) ensure() {
 }
 
 func (s *imageStudioTaskRepoStub) Create(ctx context.Context, task *ImageStudioTask) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	s.ensure()
 	s.nextID++
 	task.ID = s.nextID
@@ -90,6 +95,8 @@ func (s *imageStudioTaskRepoStub) Create(ctx context.Context, task *ImageStudioT
 }
 
 func (s *imageStudioTaskRepoStub) GetByID(ctx context.Context, userID int64, taskID int64) (*ImageStudioTask, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	s.ensure()
 	task, ok := s.tasks[taskID]
 	if !ok || (userID > 0 && task.UserID != userID) {
@@ -99,6 +106,8 @@ func (s *imageStudioTaskRepoStub) GetByID(ctx context.Context, userID int64, tas
 }
 
 func (s *imageStudioTaskRepoStub) ListByUser(ctx context.Context, userID int64, params pagination.PaginationParams) ([]ImageStudioTask, *pagination.PaginationResult, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	s.ensure()
 	var out []ImageStudioTask
 	for _, task := range s.tasks {
@@ -110,6 +119,8 @@ func (s *imageStudioTaskRepoStub) ListByUser(ctx context.Context, userID int64, 
 }
 
 func (s *imageStudioTaskRepoStub) ListPending(ctx context.Context, limit int) ([]ImageStudioTask, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	s.ensure()
 	var out []ImageStudioTask
 	for _, task := range s.tasks {
@@ -125,6 +136,8 @@ func (s *imageStudioTaskRepoStub) ListPending(ctx context.Context, limit int) ([
 }
 
 func (s *imageStudioTaskRepoStub) MarkRunning(ctx context.Context, taskID int64, startedAt time.Time) (bool, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	s.ensure()
 	task := s.tasks[taskID]
 	if task.ID == 0 || task.Status != ImageStudioTaskStatusQueued {
@@ -138,6 +151,8 @@ func (s *imageStudioTaskRepoStub) MarkRunning(ctx context.Context, taskID int64,
 }
 
 func (s *imageStudioTaskRepoStub) MarkSucceeded(ctx context.Context, taskID int64, image *ImageStudioImageRecord, quality string, estimatedCost float64, completedAt time.Time) (*ImageStudioTask, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	s.ensure()
 	task := s.tasks[taskID]
 	task.Status = ImageStudioTaskStatusSucceeded
@@ -161,6 +176,8 @@ func (s *imageStudioTaskRepoStub) MarkSucceeded(ctx context.Context, taskID int6
 }
 
 func (s *imageStudioTaskRepoStub) MarkFailed(ctx context.Context, taskID int64, reason string, message string, completedAt time.Time) (*ImageStudioTask, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	s.ensure()
 	task := s.tasks[taskID]
 	task.Status = ImageStudioTaskStatusFailed
@@ -173,6 +190,8 @@ func (s *imageStudioTaskRepoStub) MarkFailed(ctx context.Context, taskID int64, 
 }
 
 func (s *imageStudioTaskRepoStub) MarkStaleRunningFailed(ctx context.Context, olderThan time.Time, completedAt time.Time, reason string, message string) (int, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	s.ensure()
 	affected := 0
 	for id, task := range s.tasks {
@@ -191,6 +210,8 @@ func (s *imageStudioTaskRepoStub) MarkStaleRunningFailed(ctx context.Context, ol
 }
 
 func (s *imageStudioRepoStub) Create(ctx context.Context, record *ImageStudioImageRecord) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	if s.createErr != nil {
 		return s.createErr
 	}
@@ -208,6 +229,8 @@ func (s *imageStudioRepoStub) Create(ctx context.Context, record *ImageStudioIma
 }
 
 func (s *imageStudioRepoStub) ListByUser(ctx context.Context, userID int64, params pagination.PaginationParams) ([]ImageStudioImageRecord, *pagination.PaginationResult, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	s.listUserID = userID
 	s.listParams = params
 	if s.listPage == nil {
@@ -217,6 +240,8 @@ func (s *imageStudioRepoStub) ListByUser(ctx context.Context, userID int64, para
 }
 
 func (s *imageStudioRepoStub) GetByID(ctx context.Context, id int64) (*ImageStudioImageRecord, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	s.getByIDID = id
 	if s.getByIDErr != nil {
 		return nil, s.getByIDErr
@@ -229,16 +254,22 @@ func (s *imageStudioRepoStub) GetByID(ctx context.Context, id int64) (*ImageStud
 }
 
 func (s *imageStudioRepoStub) SoftDelete(ctx context.Context, id int64, userID int64) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	s.deletedID = id
 	s.deletedUserID = userID
 	return s.deleteErr
 }
 
 func (s *imageStudioRepoStub) CountSavedByUser(ctx context.Context, userID int64) (int64, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	return int64(len(s.listItems) + len(s.createdRecords)), nil
 }
 
 func (s *imageStudioRepoStub) DeleteOldestOverLimit(ctx context.Context, userID int64, limit int) ([]ImageStudioImageRecord, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	s.deleteOldestUserID = userID
 	s.deleteOldestLimit = limit
 	if s.deleteOldestErr != nil {
@@ -248,6 +279,8 @@ func (s *imageStudioRepoStub) DeleteOldestOverLimit(ctx context.Context, userID 
 }
 
 func (s *imageStudioRepoStub) ListExpired(ctx context.Context, now time.Time, limit int) ([]ImageStudioImageRecord, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	s.listExpiredNow = now
 	s.listExpiredLimit = limit
 	if s.listExpiredErr != nil {
@@ -257,6 +290,7 @@ func (s *imageStudioRepoStub) ListExpired(ctx context.Context, now time.Time, li
 }
 
 type imageStudioExecutorStub struct {
+	mu             sync.Mutex
 	generateInput  *ImageStudioGenerateInput
 	generateInputs []ImageStudioGenerateInput
 	editInput      *ImageStudioEditInput
@@ -267,6 +301,8 @@ type imageStudioExecutorStub struct {
 }
 
 func (s *imageStudioExecutorStub) Generate(ctx context.Context, input ImageStudioGenerateInput) (*ImageStudioExecutionResult, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	s.generateInput = &input
 	s.generateInputs = append(s.generateInputs, input)
 	if len(s.errs) > 0 {
@@ -288,6 +324,8 @@ func (s *imageStudioExecutorStub) Generate(ctx context.Context, input ImageStudi
 }
 
 func (s *imageStudioExecutorStub) Edit(ctx context.Context, input ImageStudioEditInput) (*ImageStudioExecutionResult, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	s.editInput = &input
 	if s.err != nil {
 		return nil, s.err
@@ -945,12 +983,21 @@ func TestImageStudioServiceRequeuesPendingGenerationTasksOnStartup(t *testing.T)
 
 	require.NoError(t, err)
 	require.Equal(t, 2, requeued)
+	t.Cleanup(func() { close(svc.taskQueue) })
 	require.Eventually(t, func() bool {
+		taskRepo.mu.Lock()
+		defer taskRepo.mu.Unlock()
+		repo.mu.Lock()
+		defer repo.mu.Unlock()
+		executor.mu.Lock()
+		defer executor.mu.Unlock()
 		return taskRepo.tasks[1].Status == ImageStudioTaskStatusSucceeded &&
 			taskRepo.tasks[2].Status == ImageStudioTaskStatusSucceeded &&
 			len(repo.createdRecords) == 2 &&
 			len(executor.generateInputs) == 2
 	}, time.Second, 10*time.Millisecond)
+	taskRepo.mu.Lock()
+	defer taskRepo.mu.Unlock()
 	require.Equal(t, ImageStudioTaskStatusSucceeded, taskRepo.tasks[3].Status)
 }
 

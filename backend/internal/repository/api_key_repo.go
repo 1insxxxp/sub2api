@@ -1052,6 +1052,7 @@ func groupEntityToService(g *dbent.Group) *service.Group {
 		DefaultMappedModel:               g.DefaultMappedModel,
 		MessagesDispatchModelConfig:      g.MessagesDispatchModelConfig,
 		ModelsListConfig:                 g.ModelsListConfig,
+		CodexModelsManifestConfig:        g.CodexModelsManifestConfig,
 		RPMLimit:                         g.RpmLimit,
 		MaxReasoningEffort:               g.MaxReasoningEffort,
 		MaxReasoningEffortOverLimit:      g.MaxReasoningEffortOverLimit,

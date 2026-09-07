@@ -11,8 +11,48 @@ import (
 
 	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/Wei-Shaw/sub2api/internal/service"
+	"github.com/lib/pq"
 	"github.com/stretchr/testify/require"
 )
+
+func TestEmptyResponseCompensationRetriesSerializationConflict(t *testing.T) {
+	for _, code := range []pq.ErrorCode{"40001", "40P01"} {
+		t.Run(string(code), func(t *testing.T) {
+			db, mock, err := sqlmock.New()
+			require.NoError(t, err)
+			defer db.Close()
+			mock.ExpectBegin()
+			mock.ExpectQuery("SELECT status, usage_log_id.*FOR UPDATE").WillReturnError(&pq.Error{Code: code})
+			mock.ExpectRollback()
+			mock.ExpectBegin()
+			mock.ExpectQuery("SELECT status, usage_log_id.*FOR UPDATE").WillReturnRows(sqlmock.NewRows([]string{"status", "usage_log_id", "user_id", "api_key_id", "group_id", "subscription_id", "original_actual_cost"}).AddRow(service.EmptyResponseClaimCompensated, 60, 7, 8, 9, nil, 1.25))
+			mock.ExpectQuery("SELECT actual_cost.*FOR UPDATE").WillReturnRows(sqlmock.NewRows([]string{"actual_cost", "compensated_cost", "billing_type", "created_at"}).AddRow(1.25, 1.25, service.BillingTypeBalance, time.Now()))
+			mock.ExpectQuery("SELECT balance.*FOR UPDATE").WillReturnRows(sqlmock.NewRows([]string{"balance"}).AddRow(4.25))
+			mock.ExpectQuery("SELECT key, quota_used.*FOR UPDATE").WillReturnRows(sqlmock.NewRows([]string{"key", "quota_used"}).AddRow("sk-test", 0))
+			mock.ExpectCommit()
+			result, err := newEmptyResponseCompensationRepository(db).Compensate(context.Background(), 50)
+			require.NoError(t, err)
+			require.False(t, result.Applied, "a retry must not refund an already compensated claim again")
+			require.NoError(t, mock.ExpectationsWereMet())
+		})
+	}
+}
+
+func TestEmptyResponseCompensationBoundsConflictRetries(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+	conflict := &pq.Error{Code: "40001"}
+	for i := 0; i < 3; i++ {
+		mock.ExpectBegin()
+		mock.ExpectQuery("SELECT status, usage_log_id.*FOR UPDATE").WillReturnError(conflict)
+		mock.ExpectRollback()
+	}
+	result, err := newEmptyResponseCompensationRepository(db).Compensate(context.Background(), 50)
+	require.Nil(t, result)
+	require.ErrorIs(t, err, conflict)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
 
 func TestEmptyResponseCompensationBalanceTransactionRefundsExactlyOnce(t *testing.T) {
 	db, mock, err := sqlmock.New()

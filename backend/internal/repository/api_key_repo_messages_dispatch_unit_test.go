@@ -43,6 +43,16 @@ func TestGroupEntityToServicePreservesEmptyResponseCompensationPolicy(t *testing
 	require.True(t, got.EmptyResponseCompensationEnabled)
 }
 
+func TestGroupEntityToServicePreservesCodexModelsManifestConfig(t *testing.T) {
+	config := service.GroupCodexModelsManifestConfig{
+		Enabled:             true,
+		AccountIDs:          []int64{11, 22},
+		FallbackToScheduler: true,
+	}
+	got := groupEntityToService(&dbent.Group{ID: 9, CodexModelsManifestConfig: config})
+	require.Equal(t, config, got.CodexModelsManifestConfig)
+}
+
 func TestAPIKeyRepository_GetByKeyForAuth_PreservesMessagesDispatchModelConfig_SQLite(t *testing.T) {
 	repo, client := newAPIKeyRepoSQLite(t)
 	ctx := context.Background()
