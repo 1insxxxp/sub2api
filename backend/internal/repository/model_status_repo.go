@@ -148,6 +148,10 @@ WITH scope AS MATERIALIZED (
     ul.created_at, 1 AS source_rank,
     CASE
       WHEN outcome.disconnect_source = 'client' THEN 'unknown'
+      WHEN outcome.id IS NOT NULL AND outcome.stream_completed
+        AND outcome.http_status < 400 AND outcome.upstream_status < 400
+        AND COALESCE(outcome.disconnect_source, 'none') NOT IN ('upstream', 'server')
+        AND (outcome.has_text OR outcome.has_tool_call OR outcome.has_reasoning OR outcome.has_media) THEN 'success'
       WHEN outcome.id IS NOT NULL AND (
         outcome.http_status >= 400 OR outcome.upstream_status >= 400
         OR outcome.upstream_error_kind NOT IN ('', 'none')

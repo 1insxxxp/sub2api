@@ -166,7 +166,8 @@ INSERT INTO usage_logs (group_id, api_key_id, request_id, requested_model, creat
  (1,1,'claim','shared','2026-09-06 11:59:03Z',0,0,0,false),
  (1,1,'missing-stream-end','shared','2026-09-06 11:59:04Z',0,0,0,true),
  (1,1,'tool','shared','2026-09-06 11:59:05Z',0,0,0,false),
- (1,1,'protocol','shared','2026-09-06 11:59:06Z',9,0,0,true);
+ (1,1,'protocol','shared','2026-09-06 11:59:06Z',9,0,0,true),
+ (1,1,'recovered-success','shared','2026-09-06 11:59:07Z',5,0,0,true);
 INSERT INTO empty_response_claims (usage_log_id,reason_code) SELECT id,'effective_output' FROM usage_logs WHERE request_id='claim';
 INSERT INTO usage_response_outcomes (usage_log_id,http_status,upstream_status,has_text,stream_completed)
  SELECT id,200,200,false,false FROM usage_logs WHERE request_id='missing-stream-end';
@@ -174,12 +175,14 @@ INSERT INTO usage_response_outcomes (usage_log_id,http_status,upstream_status,ha
  SELECT id,200,200,true FROM usage_logs WHERE request_id='tool';
 INSERT INTO usage_response_outcomes (usage_log_id,http_status,upstream_status,has_text,upstream_error_kind)
  SELECT id,200,200,true,'protocol' FROM usage_logs WHERE request_id='protocol';
+INSERT INTO usage_response_outcomes (usage_log_id,http_status,upstream_status,has_text,stream_completed,upstream_error_kind)
+ SELECT id,200,200,true,true,'other' FROM usage_logs WHERE request_id='recovered-success';
 `)
 	require.NoError(t, err)
 	rows, err := NewModelStatusRepository(db).Aggregate(ctx, end, []service.ModelStatusScope{{GroupID: 1, Platform: "openai", Model: "shared"}})
 	require.NoError(t, err)
 	require.Len(t, rows, 1)
-	require.Equal(t, int64(5), rows[0].Metrics.Success)
+	require.Equal(t, int64(6), rows[0].Metrics.Success)
 	require.Equal(t, int64(1), rows[0].Metrics.Failure)
 	require.Equal(t, int64(1), rows[0].Metrics.Unknown)
 	require.Zero(t, rows[0].Metrics.Empty)
