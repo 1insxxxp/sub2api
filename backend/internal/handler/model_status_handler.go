@@ -5,6 +5,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"os"
 	"strings"
 	"time"
@@ -24,7 +25,7 @@ type ModelStatusHandler struct {
 }
 
 type modelStatusPNGRenderer interface {
-	Fetch(context.Context) ([]byte, string, int, error)
+	Fetch(context.Context, string) ([]byte, string, int, error)
 }
 
 type httpModelStatusPNGRenderer struct {
@@ -32,8 +33,19 @@ type httpModelStatusPNGRenderer struct {
 	client *http.Client
 }
 
-func (r httpModelStatusPNGRenderer) Fetch(ctx context.Context) ([]byte, string, int, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, r.url, nil)
+func (r httpModelStatusPNGRenderer) Fetch(ctx context.Context, query string) ([]byte, string, int, error) {
+	rendererURL, err := url.Parse(r.url)
+	if err != nil {
+		return nil, "", 0, err
+	}
+	queryValues, err := url.ParseQuery(query)
+	if err != nil {
+		return nil, "", 0, err
+	}
+	values := rendererURL.Query()
+	values.Set("search", strings.TrimSpace(queryValues.Get("search")))
+	rendererURL.RawQuery = values.Encode()
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, rendererURL.String(), nil)
 	if err != nil {
 		return nil, "", 0, err
 	}
@@ -41,7 +53,7 @@ func (r httpModelStatusPNGRenderer) Fetch(ctx context.Context) ([]byte, string, 
 	if err != nil {
 		return nil, "", 0, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusOK {
 		return nil, resp.Header.Get("Content-Type"), resp.StatusCode, nil
 	}
@@ -68,13 +80,13 @@ func NewModelStatusHandler(svc *service.ModelStatusService) *ModelStatusHandler 
 }
 
 func (h *ModelStatusHandler) GetPNG(c *gin.Context) {
+	c.Header("Cache-Control", "no-store")
 	if h.renderer == nil {
-		c.Header("Cache-Control", "no-store")
 		c.Status(http.StatusNotImplemented)
 		c.Writer.WriteHeaderNow()
 		return
 	}
-	b, contentType, status, err := h.renderer.Fetch(c.Request.Context())
+	b, contentType, status, err := h.renderer.Fetch(c.Request.Context(), c.Request.URL.RawQuery)
 	if err != nil || status != http.StatusOK || contentType != "image/png" || len(b) == 0 {
 		slog.WarnContext(c.Request.Context(), "model_status_png_failed", "error", err, "status", status)
 		c.Header("Retry-After", "15")

@@ -16,10 +16,16 @@ _playwright: Any = None
 _browser: Any = None
 
 
-def capture_url(url: str) -> str:
+def capture_url(url: str, search: str = "") -> str:
     """Ensure the page renders every group/model for a complete screenshot."""
     parts = urlsplit(url)
-    query = [(key, value) for key, value in parse_qsl(parts.query, keep_blank_values=True) if key != "capture"]
+    query = [
+        (key, value)
+        for key, value in parse_qsl(parts.query, keep_blank_values=True)
+        if key not in {"capture", "search"}
+    ]
+    if search.strip():
+        query.append(("search", search.strip()))
     query.append(("capture", "all"))
     return urlunsplit((parts.scheme, parts.netloc, parts.path, urlencode(query), parts.fragment))
 
@@ -54,13 +60,13 @@ async def health():
 
 
 @app.get("/screenshot")
-async def screenshot():
+async def screenshot(search: str = ""):
     if _browser is None:
         raise HTTPException(status_code=503, detail="renderer not ready")
 
     page = await _browser.new_page(viewport={"width": 1600, "height": 900}, device_scale_factor=1)
     try:
-        await page.goto(capture_url(PAGE_URL), wait_until="domcontentloaded", timeout=30000)
+        await page.goto(capture_url(PAGE_URL, search), wait_until="domcontentloaded", timeout=30000)
         await page.locator('[data-testid="model-status-ready"]').wait_for(state="attached", timeout=30000)
         image = await page.screenshot(type="png", full_page=True, animations="disabled")
         return Response(content=image, media_type="image/png", headers={"Cache-Control": "no-store"})

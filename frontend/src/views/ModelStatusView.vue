@@ -219,8 +219,10 @@ const report = ref<ModelStatusResponse | null>(null)
 const loading = ref(true)
 const loadFailed = ref(false)
 const captureMode = typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('capture') === 'all'
+const captureSearch = typeof window !== 'undefined' ? (new URLSearchParams(window.location.search).get('search') ?? '').trim().toLocaleLowerCase() : ''
 const groupFilterStorageKey = 'model-status-group-filter'
-const groupFilter = ref(readStoredGroupFilter())
+const captureGroupFilter = typeof window !== 'undefined' ? (new URLSearchParams(window.location.search).get('group_id') ?? '').trim() : ''
+const groupFilter = ref(captureMode ? captureGroupFilter : readStoredGroupFilter())
 const visibleModelLimit = ref(40)
 const loadMoreSentinel = ref<HTMLElement | null>(null)
 const now = ref(Date.now())
@@ -289,7 +291,8 @@ const groupOptions = computed(() => [
 ])
 const filteredGroups = computed(() => {
   return (report.value?.groups ?? [])
-    .filter(group => captureMode || !groupFilter.value || String(group.id) === groupFilter.value)
+    .filter(group => !groupFilter.value || String(group.id) === groupFilter.value)
+    .filter(group => !captureSearch || group.name.toLocaleLowerCase().includes(captureSearch) || group.models.some(model => `${model.name} ${model.platform}`.toLocaleLowerCase().includes(captureSearch)))
     .filter(group => group.models.length)
 })
 const filteredModelCount = computed(() => filteredGroups.value.reduce((count, group) => count + group.models.length, 0))

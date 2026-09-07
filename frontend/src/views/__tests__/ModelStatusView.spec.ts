@@ -440,4 +440,19 @@ describe('ModelStatusView', () => {
     expect(wrapper.find('[data-testid="refresh"]').exists()).toBe(false)
   })
 
+  it.each([
+    ['public a', ['Public A'], 2],
+    ['ANOTHER-MODEL', ['Public A'], 2],
+    ['same-model', ['Public A', 'Public B'], 3],
+    ['不存在的分组', [], 0],
+  ])('filters capture by keyword %s while keeping complete matching groups', async (keyword, names, count) => {
+    window.history.pushState({}, '', `/model-status?capture=all&search=${encodeURIComponent(keyword)}`)
+    localStorage.setItem('model-status-group-filter', '2')
+    const wrapper = render()
+    await flushPromises()
+    expect(wrapper.findAll('.group-heading h2').map(heading => heading.text())).toEqual(names)
+    expect(wrapper.findAll('[data-testid="model-row"]')).toHaveLength(count)
+    expect(wrapper.find('[data-testid="model-status-ready"]').exists()).toBe(true)
+  })
+
 })
