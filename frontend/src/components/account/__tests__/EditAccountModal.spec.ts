@@ -348,6 +348,58 @@ describe('EditAccountModal', () => {
     })
   })
 
+  describe('concurrency input', () => {
+    function mountConcurrencyInput() {
+      const account = buildAccount()
+      updateAccountMock.mockReset()
+      updateAccountMock.mockResolvedValue(account)
+      checkMixedChannelRiskMock.mockReset()
+      checkMixedChannelRiskMock.mockResolvedValue({ has_risk: false })
+      const wrapper = mountModal(account)
+      const label = wrapper.findAll('label').find((label) => label.text() === 'admin.accounts.concurrency')!
+      const input = wrapper.findAll('input').find((input) => input.element.previousElementSibling === label.element)!
+      return { wrapper, input }
+    }
+
+    it('allows clearing the last digit before entering and saving a new value', async () => {
+      const { wrapper, input } = mountConcurrencyInput()
+
+      await input.setValue('')
+      expect((input.element as HTMLInputElement).value).toBe('')
+
+      await input.setValue('20')
+      await wrapper.get('form#edit-account-form').trigger('submit.prevent')
+      await flushPromises()
+
+      expect(updateAccountMock).toHaveBeenCalledTimes(1)
+      expect(updateAccountMock.mock.calls[0]?.[1]?.concurrency).toBe(20)
+      wrapper.unmount()
+    })
+
+    it.each(['', '0', '-2'])('normalizes %j to the minimum only when leaving the field', async (value) => {
+      const { wrapper, input } = mountConcurrencyInput()
+
+      await input.setValue(value)
+      expect((input.element as HTMLInputElement).value).toBe(value)
+      await input.trigger('blur')
+
+      expect((input.element as HTMLInputElement).value).toBe('1')
+      wrapper.unmount()
+    })
+
+    it('does not send a blank concurrency value when submitted without blur', async () => {
+      const { wrapper, input } = mountConcurrencyInput()
+
+      await input.setValue('')
+      await wrapper.get('form#edit-account-form').trigger('submit.prevent')
+      await flushPromises()
+
+      expect(updateAccountMock).toHaveBeenCalledTimes(1)
+      expect(updateAccountMock.mock.calls[0]?.[1]?.concurrency).toBe(1)
+      wrapper.unmount()
+    })
+  })
+
   it('edits and submits model system prompts for the selected account', async () => {
     const account = buildAccount()
     account.model_system_prompts = { 'gpt-5.4': 'Existing rules' }

@@ -245,6 +245,36 @@ describe('ModelStatusView', () => {
     expect(document.body.querySelector('.bucket-detail')).toBeNull()
   })
 
+  it.each([12, 10, 3, 0])('shows only the latest ten of %i bucket requests without changing totals', async count => {
+    const data = report()
+    const requests = Array.from({ length: count }, (_, index) => ({
+      at: new Date(Date.UTC(2026, 8, 6, 0, index)).toISOString(),
+      outcome: 'success' as const,
+      status_code: 200 + index,
+    }))
+    const originalOrder = requests.map(request => request.at)
+    data.groups[0].models[0].buckets![0] = {
+      ...data.groups[0].models[0].buckets![0],
+      total: count, success: count, failure: 0, empty: 0, unknown: 0, requests,
+    }
+    getModelStatus.mockResolvedValueOnce(data)
+    const wrapper = render()
+    await flushPromises()
+    await wrapper.get('[data-testid="status-bucket"]').trigger('click')
+    await flushPromises()
+
+    const rows = [...document.body.querySelectorAll('.bucket-request-row')]
+    expect(rows).toHaveLength(Math.min(count, 10))
+    expect(rows.map(row => row.querySelector('.bucket-request-status')?.textContent)).toEqual(
+      requests.slice(-10).reverse().map(request => `modelStatus.statusCode ${request.status_code}`),
+    )
+    expect(document.body.querySelector('.bucket-detail-stats strong')?.textContent).toBe(String(count))
+    const header = document.body.querySelector('.bucket-detail-list-header')?.textContent
+    if (count > 10) expect(header).toContain(`modelStatus.showingLatest 10 ${count}`)
+    else expect(header).not.toContain('modelStatus.showingLatest')
+    expect(requests.map(request => request.at)).toEqual(originalOrder)
+  })
+
   it('colors recent buckets by their success-rate thresholds', async () => {
     const data = report()
     data.groups[0].models[0].buckets![0] = {
@@ -342,6 +372,11 @@ describe('ModelStatusView', () => {
   })
 
   it('filters by group without merging names or changing model metrics', async () => {
+    const data = report()
+    data.groups[1].models[0].buckets![19] = { ...data.groups[1].models[0].buckets![19], total: 1, success: 1, requests: [
+      { at: '2026-09-06T04:00:00Z', outcome: 'success' },
+    ] }
+    getModelStatus.mockResolvedValueOnce(data)
     const wrapper = render()
     await flushPromises()
     expect(wrapper.findAll('[data-testid="model-row"]')).toHaveLength(3)
@@ -407,6 +442,12 @@ describe('ModelStatusView', () => {
       total: 1, success: 1, failure: 0, empty: 0, unknown: 0,
       requests: [{ at: new Date(Date.UTC(2026, 8, 5, 1, index * 15)).toISOString(), outcome: 'success' as const }],
     }))
+    model.buckets[19] = { ...model.buckets[19], total: 4, success: 3, failure: 1, requests: [
+      { at: '2026-09-05T05:45:00Z', outcome: 'failure' },
+      { at: '2026-09-05T05:44:00Z', outcome: 'success' },
+      { at: '2026-09-05T05:43:00Z', outcome: 'success' },
+      { at: '2026-09-05T05:42:00Z', outcome: 'success' },
+    ] }
     data.groups = [{ ...data.groups[0], models: [model] }]
     getModelStatus.mockResolvedValueOnce(data)
     const wrapper = render()
@@ -416,7 +457,9 @@ describe('ModelStatusView', () => {
     expect(wrapper.find('.recent-placeholder').exists()).toBe(false)
     expect(wrapper.get('.recent-heading').text()).toContain('modelStatus.fifteenMinuteBuckets')
     expect(wrapper.get('.recent-heading').text()).toContain('20/20')
-    expect(wrapper.get('.model-rate strong').text()).toBe('100%')
+    expect(wrapper.get('.model-rate strong').text()).toBe('75%')
+    expect(wrapper.get('.outcome-counts').text()).toContain('3')
+    expect(wrapper.get('.outcome-counts').text()).toContain('1')
     expect(wrapper.findAll('[data-testid="status-bucket"]')[0].attributes('title')).toContain('9/5')
   })
 

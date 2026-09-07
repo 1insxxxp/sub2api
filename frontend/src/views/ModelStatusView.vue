@@ -87,12 +87,12 @@
               <div class="model-meta">
                 <span class="model-rate">
                   <span>{{ t('modelStatus.successRate') }}</span>
-                  <strong>{{ formatRate(model.metrics.success_rate) }}</strong>
+                  <strong>{{ formatRate(modelMetricsForDisplay(model).success_rate) }}</strong>
                 </span>
                 <div class="outcome-counts" :aria-label="t('modelStatus.outcomeCounts')">
                   <span v-for="outcome in outcomes" :key="outcome" :title="t(`modelStatus.outcome.${outcome}`)">
                     <i class="outcome-dot" :class="`outcome-${outcome}`" aria-hidden="true" />
-                    <span class="sr-only">{{ t(`modelStatus.outcome.${outcome}`) }}</span>{{ formatCount(model.metrics[outcome]) }}
+                    <span class="sr-only">{{ t(`modelStatus.outcome.${outcome}`) }}</span>{{ formatCount(modelMetricsForDisplay(model)[outcome]) }}
                   </span>
                 </div>
               </div>
@@ -183,9 +183,9 @@
             <div><span class="stat-empty">{{ t('modelStatus.outcome.empty') }}</span><strong>{{ formatCount(selectedBucket.empty) }}</strong></div>
           </div>
           <div class="bucket-detail-list">
-            <div class="bucket-detail-list-header"><span>{{ t('modelStatus.requestDetails') }}</span><span v-if="selectedBucket.total > selectedBucket.requests.length">{{ t('modelStatus.showingLatest', { count: selectedBucket.requests.length, total: selectedBucket.total }) }}</span></div>
-            <div v-if="!selectedBucket.requests.length" class="bucket-detail-empty">{{ t('modelStatus.noRequestsInBucket') }}</div>
-            <div v-for="(requestItem, index) in selectedBucket.requests" :key="`${requestItem.at}:${index}`" class="bucket-request-row">
+            <div class="bucket-detail-list-header"><span>{{ t('modelStatus.requestDetails') }}</span><span v-if="selectedBucket.total > selectedBucketRequests.length">{{ t('modelStatus.showingLatest', { count: selectedBucketRequests.length, total: selectedBucket.total }) }}</span></div>
+            <div v-if="!selectedBucketRequests.length" class="bucket-detail-empty">{{ t('modelStatus.noRequestsInBucket') }}</div>
+            <div v-for="(requestItem, index) in selectedBucketRequests" :key="`${requestItem.at}:${index}`" class="bucket-request-row">
               <div class="bucket-request-info">
                 <span>{{ new Date(requestItem.at).toLocaleString(locale, { hour12: false }) }}</span>
                 <span v-if="requestItem.status_code" class="bucket-request-status">{{ t('modelStatus.statusCode', { code: requestItem.status_code }) }}</span>
@@ -202,7 +202,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { getModelStatus, type ModelStatusBucket, type ModelStatusHealth, type ModelStatusModel, type ModelStatusOutcome, type ModelStatusResponse } from '@/api/modelStatus'
+import { getModelStatus, type ModelStatusBucket, type ModelStatusHealth, type ModelStatusMetrics, type ModelStatusModel, type ModelStatusOutcome, type ModelStatusResponse } from '@/api/modelStatus'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import PlazaNavBar from '@/components/modelPlaza/PlazaNavBar.vue'
 import Icon from '@/components/icons/Icon.vue'
@@ -282,6 +282,7 @@ function persistGroupFilter(value: string) {
 const stale = computed(() => !!report.value && !report.value.snapshot_at && now.value - Date.parse(report.value.generated_at) > 90000)
 const bucketCount = computed(() => report.value?.bucket_count ?? 20)
 const selectedBucket = ref<ModelStatusBucket | null>(null)
+const selectedBucketRequests = computed(() => selectedBucket.value ? latestBucketRequests(selectedBucket.value) : [])
 const selectedModelName = ref('')
 const pressedBucketKey = ref('')
 let pressedBucketTimer: ReturnType<typeof setTimeout> | undefined
@@ -320,6 +321,21 @@ function formatCount(value: number): string {
 
 function formatRate(value: number | null): string {
   return value === null ? '-' : `${new Intl.NumberFormat(locale.value, { maximumFractionDigits: 1 }).format(value)}%`
+}
+
+function modelMetricsForDisplay(model: ModelStatusModel): ModelStatusMetrics {
+  const latestBucket = model.buckets?.at(-1)
+  if (!latestBucket) return model.metrics
+  const knownTotal = latestBucket.success + latestBucket.failure + latestBucket.empty
+  return {
+    ...model.metrics,
+    total: latestBucket.total,
+    success: latestBucket.success,
+    failure: latestBucket.failure,
+    empty: latestBucket.empty,
+    unknown: latestBucket.unknown,
+    success_rate: knownTotal > 0 ? latestBucket.success * 100 / knownTotal : null,
+  }
 }
 
 function observedOutcomeTotal(metrics: ModelStatusModel['metrics']): number {
@@ -369,6 +385,12 @@ function bucketLabel(bucket: ModelStatusBucket): string {
 
 function bucketKey(modelName: string, bucket: ModelStatusBucket): string {
   return `${modelName}:${bucket.start_at}`
+}
+
+function latestBucketRequests(bucket: ModelStatusBucket) {
+  return [...bucket.requests]
+    .sort((a, b) => Date.parse(b.at) - Date.parse(a.at))
+    .slice(0, 10)
 }
 
 function formatRange(start: string, end: string): string {

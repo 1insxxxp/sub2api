@@ -1586,9 +1586,15 @@
 
       <div class="grid grid-cols-2 gap-4 lg:grid-cols-4">
         <div>
-          <label class="input-label">{{ t('admin.accounts.concurrency') }}</label>
-          <input v-model.number="form.concurrency" type="number" min="1" class="input"
-            @input="form.concurrency = Math.max(1, form.concurrency || 1)" />
+          <label for="edit-account-concurrency" class="input-label">{{ t('admin.accounts.concurrency') }}</label>
+          <input
+            id="edit-account-concurrency"
+            v-model.number="form.concurrency"
+            type="number"
+            min="1"
+            class="input"
+            @blur="normalizeConcurrency"
+          />
         </div>
         <div>
           <label class="input-label">{{ t('admin.accounts.loadFactor') }}</label>
@@ -3689,7 +3695,7 @@ const form = reactive({
   name: '',
   notes: '',
   proxy_id: null as number | null,
-  concurrency: 1,
+  concurrency: 1 as number | '',
   load_factor: null as number | null,
   priority: 1,
   rate_multiplier: 1,
@@ -3697,6 +3703,11 @@ const form = reactive({
   group_ids: [] as number[],
   expires_at: null as number | null
 })
+
+// Allow an empty draft while typing; apply the minimum only on blur or submission.
+const normalizeConcurrency = () => {
+  form.concurrency = Math.max(1, Number(form.concurrency) || 1)
+}
 
 const handleUpstreamBillingRateSyncChange = (enabled: boolean) => {
   upstreamBillingRateSyncEnabled.value = enabled
@@ -4864,6 +4875,7 @@ const handleSubmit = async () => {
 		}
 	}
 
+  normalizeConcurrency()
   const updatePayload: Record<string, unknown> = { ...form }
   try {
     // 后端期望 proxy_id: 0 表示清除代理，而不是 null
