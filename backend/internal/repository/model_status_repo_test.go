@@ -35,6 +35,33 @@ func TestModelStatusRepositoryReturnsErrorsAndSkipsEmptyScope(t *testing.T) {
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 
+func TestModelStatusRepositoryBatchesLargeScopeSets(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+
+	row := func(groupID int64, model string) *sqlmock.Rows {
+		return sqlmock.NewRows([]string{
+			"group_id", "platform", "model", "total", "success", "failure", "empty", "unknown",
+			"ttft", "duration", "ttft_samples", "duration_samples", "recent", "buckets", "needs_more",
+		}).AddRow(groupID, "openai", model, 1, 1, 0, 0, 0, nil, nil, 0, 0, []byte("[]"), []byte("[]"), false)
+	}
+	mock.ExpectBegin()
+	mock.ExpectQuery("WITH").WillReturnRows(row(1, "model-1"))
+	mock.ExpectQuery("WITH").WillReturnRows(row(2, "model-2"))
+	mock.ExpectRollback()
+
+	scopes := make([]service.ModelStatusScope, 101)
+	for i := range scopes {
+		scopes[i] = service.ModelStatusScope{GroupID: int64(i + 1), Platform: "openai", Model: "model"}
+	}
+	rows, err := NewModelStatusRepository(db).Aggregate(context.Background(), time.Now(), scopes)
+
+	require.NoError(t, err)
+	require.Len(t, rows, 2)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
 func TestModelStatusPostgresDeduplicatesTerminalFailuresAndAggregatesLast30Requests(t *testing.T) {
 	db := modelStatusTestPostgres(t)
 	ctx := context.Background()

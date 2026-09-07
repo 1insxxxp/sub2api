@@ -12,6 +12,8 @@ import (
 
 type modelStatusRepository struct{ db *sql.DB }
 
+const modelStatusScopeBatchSize = 100
+
 func NewModelStatusRepository(db *sql.DB) service.ModelStatusRepository {
 	return &modelStatusRepository{db: db}
 }
@@ -26,13 +28,18 @@ func (r *modelStatusRepository) Aggregate(ctx context.Context, end time.Time, sc
 		return nil, fmt.Errorf("start model status read: %w", err)
 	}
 	defer func() { _ = tx.Rollback() }()
-	for limit := service.ModelStatusRecentLimit; len(scopes) > 0; limit *= 2 {
-		rows, pending, err := queryModelStatusCandidates(ctx, tx, end, scopes, limit)
-		if err != nil {
-			return nil, err
+	for len(scopes) > 0 {
+		batchSize := min(modelStatusScopeBatchSize, len(scopes))
+		batch := scopes[:batchSize]
+		scopes = scopes[batchSize:]
+		for limit := service.ModelStatusRecentLimit; len(batch) > 0; limit *= 2 {
+			rows, pending, err := queryModelStatusCandidates(ctx, tx, end, batch, limit)
+			if err != nil {
+				return nil, err
+			}
+			result = append(result, rows...)
+			batch = pending
 		}
-		result = append(result, rows...)
-		scopes = pending
 	}
 	return result, nil
 }
