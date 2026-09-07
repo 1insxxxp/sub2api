@@ -62,7 +62,7 @@ func (r httpModelStatusPNGRenderer) Fetch(ctx context.Context) ([]byte, string, 
 func NewModelStatusHandler(svc *service.ModelStatusService) *ModelStatusHandler {
 	h := &ModelStatusHandler{reporter: svc}
 	if url := strings.TrimSpace(os.Getenv("MODEL_STATUS_PNG_RENDERER_URL")); url != "" {
-		h.renderer = httpModelStatusPNGRenderer{url: url, client: &http.Client{Timeout: 15 * time.Second}}
+		h.renderer = httpModelStatusPNGRenderer{url: url, client: &http.Client{Timeout: 60 * time.Second}}
 	}
 	return h
 }

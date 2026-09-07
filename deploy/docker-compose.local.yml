@@ -53,6 +53,7 @@ services:
       - SERVER_HOST=0.0.0.0
       - SERVER_PORT=8080
       - SERVER_MODE=${SERVER_MODE:-release}
+      - MODEL_STATUS_PNG_RENDERER_URL=${MODEL_STATUS_PNG_RENDERER_URL:-http://model-status-screenshot:8090/screenshot}
       - ENABLE_SERVER_TIMING=${ENABLE_SERVER_TIMING:-false}
       - RUN_MODE=${RUN_MODE:-standard}
       - UPDATE_GITHUB_TOKEN=${UPDATE_GITHUB_TOKEN:-}
@@ -236,6 +237,21 @@ services:
   # ===========================================================================
   # PostgreSQL Database
   # ===========================================================================
+  model-status-screenshot:
+    build:
+      context: ..
+      dockerfile: tools/model-status-screenshot/Dockerfile
+    container_name: sub2api-model-status-screenshot
+    restart: unless-stopped
+    environment:
+      - MODEL_STATUS_PAGE_URL=${MODEL_STATUS_PAGE_URL:-http://sub2api:8080/model-status}
+      - TZ=${TZ:-Asia/Shanghai}
+    depends_on:
+      sub2api:
+        condition: service_healthy
+    networks:
+      - sub2api-network
+
   postgres:
     image: postgres:18-alpine
     container_name: sub2api-postgres
