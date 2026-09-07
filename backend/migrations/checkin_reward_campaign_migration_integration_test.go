@@ -90,6 +90,12 @@ WHERE schemaname = current_schema()
   AND indexname = 'user_checkins_reward_campaign_id_idx'`).Scan(&campaignIndexDefinition))
 	require.Contains(t, campaignIndexDefinition, "(reward_campaign_id)")
 
+	// Migration 222 predates the lottery field added in 238. The current Ent
+	// round-trip below also writes that unrelated field, so supply it in this
+	// isolated fixture after verifying the historical migration itself.
+	_, err = db.ExecContext(ctx, "ALTER TABLE user_checkins ADD COLUMN lottery_attempts_reward INTEGER NOT NULL DEFAULT 0")
+	require.NoError(t, err)
+
 	driver := entsql.OpenDB(dialect.Postgres, db)
 	client := dbent.NewClient(dbent.Driver(driver))
 	t.Cleanup(func() { _ = client.Close() })
@@ -128,7 +134,7 @@ WHERE schemaname = current_schema()
 	require.Equal(t, tiers, loadedCheckin.RewardCampaignTiersSnapshot)
 
 	err = client.CheckinRewardCampaign.DeleteOneID(entCampaign.ID).Exec(ctx)
-	requirePostgresErrorCode(t, err, "23503")
+	requirePostgresErrorCode(t, err, "23001") // ON DELETE RESTRICT: restrict_violation.
 
 	insertCampaign := func(name, status, startDate, endDate string) error {
 		_, insertErr := db.ExecContext(ctx, `
