@@ -14,4 +14,5 @@ func RegisterModelStatusRoutes(
 	status := v1.Group("/model-status")
 	status.Use(limiter.PublicIP())
 	status.GET("", h.ModelStatus.Get)
+	status.GET("/png", h.ModelStatus.GetPNG)
 }

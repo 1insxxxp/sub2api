@@ -5,6 +5,7 @@ package handler
 import (
 	"context"
 	"errors"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -13,6 +14,39 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
 )
+
+type modelStatusPNGStub struct {
+	body        []byte
+	status      int
+	contentType string
+}
+
+func (s modelStatusPNGStub) Fetch(context.Context) ([]byte, string, int, error) {
+	return s.body, s.contentType, s.status, nil
+}
+
+func TestModelStatusHandlerPNG(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	h := &ModelStatusHandler{renderer: modelStatusPNGStub{body: []byte("png"), contentType: "image/png", status: http.StatusOK}}
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodGet, "/api/v1/model-status/png", nil)
+	h.GetPNG(c)
+	require.Equal(t, http.StatusOK, w.Code)
+	require.Equal(t, "image/png", w.Header().Get("Content-Type"))
+	b, _ := io.ReadAll(w.Body)
+	require.Equal(t, []byte("png"), b)
+}
+
+func TestModelStatusHandlerPNGUnavailable(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	h := &ModelStatusHandler{}
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodGet, "/api/v1/model-status/png", nil)
+	h.GetPNG(c)
+	require.Equal(t, http.StatusNotImplemented, w.Code)
+}
 
 type modelStatusReporterStub struct {
 	report *service.ModelStatusReport
