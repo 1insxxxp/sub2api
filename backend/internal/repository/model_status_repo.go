@@ -32,43 +32,35 @@ func (r *modelStatusRepository) Aggregate(ctx context.Context, end time.Time, sc
 		batchSize := min(modelStatusScopeBatchSize, len(scopes))
 		batch := scopes[:batchSize]
 		scopes = scopes[batchSize:]
-		for limit := service.ModelStatusRecentLimit; len(batch) > 0; limit *= 2 {
-			rows, pending, err := queryModelStatusCandidates(ctx, tx, end, batch, limit)
-			if err != nil {
-				return nil, err
-			}
-			result = append(result, rows...)
-			batch = pending
+		rows, err := queryModelStatusCandidates(ctx, tx, end, batch)
+		if err != nil {
+			return nil, err
 		}
+		result = append(result, rows...)
 	}
 	return result, nil
 }
 
-func queryModelStatusCandidates(ctx context.Context, tx *sql.Tx, end time.Time, scopes []service.ModelStatusScope, limit int) ([]service.ModelStatusAggregate, []service.ModelStatusScope, error) {
+func queryModelStatusCandidates(ctx context.Context, tx *sql.Tx, end time.Time, scopes []service.ModelStatusScope) ([]service.ModelStatusAggregate, error) {
 	scopeJSON, err := json.Marshal(scopes)
 	if err != nil {
-		return nil, nil, fmt.Errorf("encode model status scope: %w", err)
+		return nil, fmt.Errorf("encode model status scope: %w", err)
 	}
-	rows, err := tx.QueryContext(ctx, modelStatusAggregateSQL, string(scopeJSON), end, limit, service.ModelStatusRecentLimit)
+	rows, err := tx.QueryContext(ctx, modelStatusAggregateSQL, string(scopeJSON), end, service.ModelStatusRecentLimit)
 	if err != nil {
-		return nil, nil, fmt.Errorf("query model status: %w", err)
+		return nil, fmt.Errorf("query model status: %w", err)
 	}
 	defer func() { _ = rows.Close() }()
 	result := []service.ModelStatusAggregate{}
-	pending := []service.ModelStatusScope{}
 	for rows.Next() {
 		var row service.ModelStatusAggregate
 		var ttft, duration sql.NullFloat64
 		var recent, buckets []byte
-		var needsMore bool
+		var ignoredNeedsMore bool
 		if err := rows.Scan(&row.GroupID, &row.Platform, &row.Model,
 			&row.Metrics.Total, &row.Metrics.Success, &row.Metrics.Failure, &row.Metrics.Empty, &row.Metrics.Unknown,
-			&ttft, &duration, &row.Metrics.TTFTSamples, &row.Metrics.DurationSamples, &recent, &buckets, &needsMore); err != nil {
-			return nil, nil, fmt.Errorf("scan model status: %w", err)
-		}
-		if needsMore {
-			pending = append(pending, service.ModelStatusScope{GroupID: row.GroupID, Platform: row.Platform, Model: row.Model})
-			continue
+			&ttft, &duration, &row.Metrics.TTFTSamples, &row.Metrics.DurationSamples, &recent, &buckets, &ignoredNeedsMore); err != nil {
+			return nil, fmt.Errorf("scan model status: %w", err)
 		}
 		if ttft.Valid {
 			row.Metrics.AvgTTFTMs = &ttft.Float64
@@ -77,23 +69,22 @@ func queryModelStatusCandidates(ctx context.Context, tx *sql.Tx, end time.Time, 
 			row.Metrics.AvgDurationMs = &duration.Float64
 		}
 		if err := json.Unmarshal(recent, &row.Recent); err != nil {
-			return nil, nil, fmt.Errorf("decode model status recent results: %w", err)
+			return nil, fmt.Errorf("decode model status recent results: %w", err)
 		}
 		if err := json.Unmarshal(buckets, &row.Buckets); err != nil {
-			return nil, nil, fmt.Errorf("decode model status buckets: %w", err)
+			return nil, fmt.Errorf("decode model status buckets: %w", err)
 		}
 		result = append(result, row)
 	}
 	if err := rows.Err(); err != nil {
-		return nil, nil, fmt.Errorf("read model status: %w", err)
+		return nil, fmt.Errorf("read model status: %w", err)
 	}
-	return result, pending, nil
+	return result, nil
 }
 
-// Indexed per-scope reads bound the initial evidence set. If deduplication or
-// terminal timestamps leave an unseen candidate capable of entering the last
-// 30, only that scope is retried with more candidates. Equality also retries so
-// ties use the final identity ordering, never an arbitrary raw-record limit.
+// The query reads the complete five-hour evidence window for a bounded scope
+// batch. Recent request previews are limited during aggregation, while metrics
+// and buckets retain the complete window.
 const modelStatusAggregateSQL = `
 WITH scope AS MATERIALIZED (
   SELECT DISTINCT s.group_id, s.platform, s.model
@@ -108,7 +99,7 @@ WITH scope AS MATERIALIZED (
     WHERE ul.group_id = scope.group_id
       AND COALESCE(NULLIF(TRIM(ul.requested_model), ''), NULLIF(TRIM(ul.model), ''), 'unknown') = scope.model
       AND ul.created_at < $2 AND ul.created_at >= date_bin(INTERVAL '15 minutes', $2, TIMESTAMPTZ '1970-01-01') - INTERVAL '4 hours 45 minutes'
-    ORDER BY ul.created_at DESC, ul.id DESC LIMIT $3
+    ORDER BY ul.created_at DESC, ul.id DESC
   ) ul
 ), error_candidates AS MATERIALIZED (
   SELECT scope.*, e.id, e.api_key_id, TRIM(e.request_id) AS request_id,
@@ -120,7 +111,7 @@ WITH scope AS MATERIALIZED (
       AND COALESCE(NULLIF(TRIM(e.requested_model), ''), NULLIF(TRIM(e.model), ''), 'unknown') = scope.model
       AND e.created_at < $2 AND e.created_at >= date_bin(INTERVAL '15 minutes', $2, TIMESTAMPTZ '1970-01-01') - INTERVAL '4 hours 45 minutes' AND NOT e.is_count_tokens
       AND (e.status_code >= 400 OR e.error_type = 'cyber_policy')
-    ORDER BY e.created_at DESC, e.id DESC LIMIT $3
+    ORDER BY e.created_at DESC, e.id DESC
   ) e
 ), request_candidates AS MATERIALIZED (
   SELECT api_key_id,
@@ -212,6 +203,11 @@ WITH scope AS MATERIALIZED (
   FROM deduplicated WHERE created_at < $2 AND created_at >= date_bin(INTERVAL '15 minutes', $2, TIMESTAMPTZ '1970-01-01') - INTERVAL '4 hours 45 minutes'
 ), samples AS (
   SELECT * FROM ranked
+), recent_requests AS (
+  SELECT group_id, platform, model,
+    JSONB_AGG(JSONB_BUILD_OBJECT('at', created_at, 'outcome', outcome, 'status_code', NULLIF(status_code, 0))
+      ORDER BY created_at, identity) FILTER (WHERE recent_rank <= $3) AS recent
+  FROM samples GROUP BY group_id, platform, model
 ), aggregates AS (
   SELECT group_id, platform, model,
     COUNT(*) AS total, COUNT(*) FILTER (WHERE outcome = 'success') AS success,
@@ -221,41 +217,34 @@ WITH scope AS MATERIALIZED (
     (AVG(duration_ms) FILTER (WHERE outcome = 'success'))::double precision AS duration,
     COUNT(ttft_ms) FILTER (WHERE outcome = 'success') AS ttft_samples,
     COUNT(duration_ms) FILTER (WHERE outcome = 'success') AS duration_samples,
-    (SELECT JSONB_AGG(JSONB_BUILD_OBJECT('at', r.created_at, 'outcome', r.outcome, 'status_code', NULLIF(r.status_code, 0)) ORDER BY r.created_at, r.identity)
-      FROM ranked r WHERE r.group_id = s.group_id AND r.platform = s.platform AND r.model = s.model AND r.recent_rank <= $4) AS recent,
     MIN(created_at) AS oldest
   FROM samples s GROUP BY group_id, platform, model
 ), bucket_rows AS (
   SELECT *, date_bin(INTERVAL '15 minutes', created_at, TIMESTAMPTZ '1970-01-01') AS bucket_start
   FROM samples
+), bucket_ranked AS (
+  SELECT *, ROW_NUMBER() OVER (PARTITION BY group_id, platform, model, bucket_start ORDER BY created_at DESC, identity DESC) AS bucket_rank
+  FROM bucket_rows
 ), bucket_stats AS (
   SELECT group_id, platform, model, bucket_start,
     COUNT(*) AS total, COUNT(*) FILTER (WHERE outcome = 'success') AS success,
     COUNT(*) FILTER (WHERE outcome = 'failure') AS failure, COUNT(*) FILTER (WHERE outcome = 'empty') AS empty,
     COUNT(*) FILTER (WHERE outcome = 'unknown') AS unknown,
-    (SELECT JSONB_AGG(JSONB_BUILD_OBJECT('at', q.created_at, 'outcome', q.outcome, 'status_code', NULLIF(q.status_code, 0)) ORDER BY q.created_at DESC, q.identity DESC)
-      FROM (SELECT br.created_at, br.outcome, br.status_code, br.identity FROM bucket_rows br
-        WHERE br.group_id = b.group_id AND br.platform = b.platform AND br.model = b.model AND br.bucket_start = b.bucket_start
-        ORDER BY br.created_at DESC, br.identity DESC LIMIT 100) q) AS requests
-  FROM bucket_rows b GROUP BY group_id, platform, model, bucket_start
+    JSONB_AGG(JSONB_BUILD_OBJECT('at', created_at, 'outcome', outcome, 'status_code', NULLIF(status_code, 0))
+      ORDER BY created_at DESC, identity DESC) FILTER (WHERE bucket_rank <= 100) AS requests
+  FROM bucket_ranked GROUP BY group_id, platform, model, bucket_start
 ), bucket_aggregates AS (
   SELECT group_id, platform, model,
     JSONB_AGG(JSONB_BUILD_OBJECT('start_at', bucket_start, 'end_at', bucket_start + INTERVAL '15 minutes',
       'total', total, 'success', success, 'failure', failure, 'empty', empty, 'unknown', unknown,
       'requests', COALESCE(requests, '[]'::jsonb)) ORDER BY bucket_start) AS buckets
   FROM bucket_stats GROUP BY group_id, platform, model
-), boundaries AS (
-  SELECT group_id, platform, model, MIN(created_at) AS oldest FROM usage_candidates
-  GROUP BY group_id, platform, model HAVING COUNT(*) = $3
-  UNION ALL
-  SELECT group_id, platform, model, MIN(created_at) AS oldest FROM error_candidates
-  GROUP BY group_id, platform, model HAVING COUNT(*) = $3
 )
 SELECT scope.group_id, scope.platform, scope.model,
   COALESCE(a.total, 0), COALESCE(a.success, 0), COALESCE(a.failure, 0), COALESCE(a.empty, 0), COALESCE(a.unknown, 0),
-  a.ttft, a.duration, COALESCE(a.ttft_samples, 0), COALESCE(a.duration_samples, 0), COALESCE(a.recent, '[]'::jsonb), COALESCE(ba.buckets, '[]'::jsonb),
-  EXISTS (SELECT 1 FROM boundaries b WHERE b.group_id = scope.group_id AND b.platform = scope.platform AND b.model = scope.model
-    AND (COALESCE(a.total, 0) < $4 OR b.oldest >= a.oldest)) AS needs_more
+  a.ttft, a.duration, COALESCE(a.ttft_samples, 0), COALESCE(a.duration_samples, 0), COALESCE(rr.recent, '[]'::jsonb), COALESCE(ba.buckets, '[]'::jsonb),
+  false AS needs_more
 FROM scope LEFT JOIN aggregates a USING (group_id, platform, model)
+  LEFT JOIN recent_requests rr USING (group_id, platform, model)
   LEFT JOIN bucket_aggregates ba USING (group_id, platform, model)
 ORDER BY scope.group_id, scope.platform, scope.model`

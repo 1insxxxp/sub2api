@@ -62,7 +62,7 @@ func TestModelStatusRepositoryBatchesLargeScopeSets(t *testing.T) {
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 
-func TestModelStatusPostgresDeduplicatesTerminalFailuresAndAggregatesLast30Requests(t *testing.T) {
+func TestModelStatusPostgresAggregatesFullWindowWithLast30RequestPreview(t *testing.T) {
 	db := modelStatusTestPostgres(t)
 	ctx := context.Background()
 	end := time.Date(2026, 9, 6, 12, 0, 0, 0, time.UTC)
@@ -115,14 +115,14 @@ INSERT INTO ops_error_logs (group_id, api_key_id, request_id, requested_model, c
 		byGroup[row.GroupID] = row
 	}
 	metrics := byGroup[1].Metrics
-	require.Equal(t, int64(30), metrics.Total)
-	require.Equal(t, int64(23), metrics.Success)
+	require.Equal(t, int64(2513), metrics.Total)
+	require.Equal(t, int64(2506), metrics.Success)
 	require.Equal(t, int64(3), metrics.Failure)
 	require.Equal(t, int64(1), metrics.Empty)
 	require.Equal(t, int64(3), metrics.Unknown)
 	require.Equal(t, metrics.Total, metrics.Success+metrics.Failure+metrics.Empty+metrics.Unknown)
-	require.Equal(t, int64(19), metrics.TTFTSamples)
-	require.Equal(t, int64(19), metrics.DurationSamples)
+	require.Equal(t, int64(2501), metrics.TTFTSamples)
+	require.Equal(t, int64(2501), metrics.DurationSamples)
 	require.InDelta(t, 100, *metrics.AvgDurationMs, 0.0001)
 	require.InDelta(t, 10, *metrics.AvgTTFTMs, 0.0001)
 	require.Len(t, byGroup[1].Recent, 30)
@@ -132,8 +132,23 @@ INSERT INTO ops_error_logs (group_id, api_key_id, request_id, requested_model, c
 			require.False(t, recent.At.Before(byGroup[1].Recent[i-1].At))
 		}
 	}
-	require.Equal(t, service.UsageOutcomeFailure, byGroup[1].Recent[29].Outcome)
-	require.Equal(t, 502, byGroup[1].Recent[29].StatusCode)
+	var terminalFailureFound bool
+	for _, recent := range byGroup[1].Recent {
+		if recent.Outcome == service.UsageOutcomeFailure && recent.StatusCode == 502 {
+			terminalFailureFound = true
+			break
+		}
+	}
+	require.True(t, terminalFailureFound)
+	var bucketTotal int64
+	for _, bucket := range byGroup[1].Buckets {
+		bucketTotal += bucket.Total
+		require.LessOrEqual(t, len(bucket.Requests), 100)
+		for i := 1; i < len(bucket.Requests); i++ {
+			require.False(t, bucket.Requests[i].At.After(bucket.Requests[i-1].At))
+		}
+	}
+	require.Equal(t, metrics.Total, bucketTotal)
 	require.Equal(t, int64(1), byGroup[2].Metrics.Success)
 	require.Equal(t, int64(1), byGroup[4].Metrics.Success)
 }
@@ -225,7 +240,7 @@ INSERT INTO ops_error_logs (group_id, api_key_id, request_id, client_request_id,
 	require.WithinDuration(t, end.Add(-time.Millisecond), rows[0].Recent[2].At, 0)
 }
 
-func TestModelStatusPostgresRecentRequestsHaveNoTimeLowerBound(t *testing.T) {
+func TestModelStatusPostgresUsesFiveHourWindow(t *testing.T) {
 	db := modelStatusTestPostgres(t)
 	end := time.Date(2026, 9, 6, 12, 0, 0, 0, time.UTC)
 	_, err := db.Exec(`
@@ -239,12 +254,12 @@ INSERT INTO usage_logs (group_id, api_key_id, request_id, requested_model, creat
 	rows, err := NewModelStatusRepository(db).Aggregate(context.Background(), end, []service.ModelStatusScope{{GroupID: 1, Platform: "openai", Model: "shared"}})
 	require.NoError(t, err)
 	require.Len(t, rows, 1)
-	require.Equal(t, int64(2), rows[0].Metrics.Total)
-	require.Equal(t, int64(2), rows[0].Metrics.Success)
-	require.InDelta(t, 20, *rows[0].Metrics.AvgTTFTMs, 0.0001)
-	require.InDelta(t, 200, *rows[0].Metrics.AvgDurationMs, 0.0001)
-	require.Len(t, rows[0].Recent, 2)
-	require.Equal(t, 2025, rows[0].Recent[0].At.Year())
+	require.Equal(t, int64(1), rows[0].Metrics.Total)
+	require.Equal(t, int64(1), rows[0].Metrics.Success)
+	require.InDelta(t, 30, *rows[0].Metrics.AvgTTFTMs, 0.0001)
+	require.InDelta(t, 300, *rows[0].Metrics.AvgDurationMs, 0.0001)
+	require.Len(t, rows[0].Recent, 1)
+	require.Equal(t, 2026, rows[0].Recent[0].At.Year())
 }
 
 func TestModelStatusPostgresExpandsCandidatesPastDuplicateErrors(t *testing.T) {
@@ -261,8 +276,8 @@ INSERT INTO ops_error_logs (group_id, api_key_id, request_id, requested_model, c
 	rows, err := NewModelStatusRepository(db).Aggregate(context.Background(), end, []service.ModelStatusScope{{GroupID: 1, Platform: "openai", Model: "shared"}})
 	require.NoError(t, err)
 	require.Len(t, rows, 1)
-	require.Equal(t, int64(30), rows[0].Metrics.Total)
-	require.Equal(t, int64(30), rows[0].Metrics.Failure)
+	require.Equal(t, int64(41), rows[0].Metrics.Total)
+	require.Equal(t, int64(41), rows[0].Metrics.Failure)
 	require.Len(t, rows[0].Recent, 30)
 	require.Equal(t, time.Date(2026, 9, 6, 8, 0, 12, 0, time.UTC), rows[0].Recent[0].At.UTC())
 	require.Equal(t, time.Date(2026, 9, 6, 11, 59, 0, 130000000, time.UTC), rows[0].Recent[29].At.UTC())
@@ -284,10 +299,10 @@ INSERT INTO ops_error_logs (group_id, api_key_id, request_id, requested_model, c
 	rows, err := NewModelStatusRepository(db).Aggregate(context.Background(), end, []service.ModelStatusScope{{GroupID: 1, Platform: "openai", Model: "shared"}})
 	require.NoError(t, err)
 	require.Len(t, rows, 1)
-	require.Equal(t, int64(30), rows[0].Metrics.Total)
-	require.Equal(t, int64(30), rows[0].Metrics.Success)
-	require.Equal(t, int64(30), rows[0].Metrics.DurationSamples)
-	require.Zero(t, rows[0].Metrics.Failure)
+	require.Equal(t, int64(80), rows[0].Metrics.Total)
+	require.Equal(t, int64(40), rows[0].Metrics.Success)
+	require.Equal(t, int64(40), rows[0].Metrics.DurationSamples)
+	require.Equal(t, int64(40), rows[0].Metrics.Failure)
 	require.InDelta(t, 100, *rows[0].Metrics.AvgDurationMs, 0.0001)
 	require.Equal(t, time.Date(2026, 9, 6, 10, 0, 11, 0, time.UTC), rows[0].Recent[0].At.UTC())
 }
@@ -308,8 +323,8 @@ INSERT INTO usage_response_outcomes (usage_log_id,http_status,has_text)
 	rows, err := repo.Aggregate(context.Background(), end, scopes)
 	require.NoError(t, err)
 	require.Len(t, rows, 1)
-	require.Equal(t, int64(30), rows[0].Metrics.Total)
-	require.Equal(t, int64(29), rows[0].Metrics.Success)
+	require.Equal(t, int64(40), rows[0].Metrics.Total)
+	require.Equal(t, int64(39), rows[0].Metrics.Success)
 	require.Equal(t, int64(1), rows[0].Metrics.Empty)
 	require.Equal(t, service.UsageOutcomeEmpty, rows[0].Recent[29].Outcome)
 	again, err := repo.Aggregate(context.Background(), end, scopes)
@@ -369,7 +384,7 @@ CREATE INDEX test_error_client_identity ON ops_error_logs (client_request_id);
 	end := time.Date(2026, 9, 6, 12, 0, 0, 0, time.UTC)
 	var raw []byte
 	err = db.QueryRow("EXPLAIN (ANALYZE, FORMAT JSON) "+modelStatusAggregateSQL,
-		`[{"group_id":1,"platform":"openai","model":"shared"}]`, end, 30, 30).Scan(&raw)
+		`[{"group_id":1,"platform":"openai","model":"shared"}]`, end, 30).Scan(&raw)
 	require.NoError(t, err)
 	var plan any
 	require.NoError(t, json.Unmarshal(raw, &plan))
@@ -422,7 +437,7 @@ CREATE TEMP TABLE usage_response_outcomes (
 CREATE TEMP TABLE empty_response_claims (usage_log_id bigint UNIQUE, reason_code text);
 CREATE TEMP TABLE ops_error_logs (
  id bigserial PRIMARY KEY, group_id bigint, api_key_id bigint, request_id text, client_request_id text, requested_model text, model text,
- created_at timestamptz, status_code integer, error_type text, is_count_tokens boolean DEFAULT false,
+ created_at timestamptz, status_code integer, upstream_status_code integer DEFAULT 0, error_type text, is_count_tokens boolean DEFAULT false,
  time_to_first_token_ms bigint, duration_ms bigint);
 `)
 	require.NoError(t, err)
