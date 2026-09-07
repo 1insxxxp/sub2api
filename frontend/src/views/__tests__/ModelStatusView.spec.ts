@@ -420,19 +420,21 @@ describe('ModelStatusView', () => {
 
   it('renders the complete catalog and exposes a readiness marker in capture mode', async () => {
     window.history.pushState({}, '', '/model-status?capture=all')
+    localStorage.setItem('model-status-group-filter', '2')
     const data = report()
     const baseModel = data.groups[0].models[0]
     data.groups = [{
       ...data.groups[0],
       models: Array.from({ length: 45 }, (_, index) => ({ ...baseModel, name: `capture-model-${index}` })),
-    }]
+    }, data.groups[1]]
     getModelStatus.mockResolvedValueOnce(data)
 
     const wrapper = render()
     await flushPromises()
 
     expect(wrapper.find('[data-testid="model-status-ready"]').exists()).toBe(true)
-    expect(wrapper.findAll('[data-testid="model-row"]')).toHaveLength(45)
+    expect(wrapper.findAll('[data-testid="model-row"]')).toHaveLength(46)
+    expect(wrapper.findAll('.group-heading h2').map(heading => heading.text())).toEqual(['Public A', 'Public B'])
     expect(wrapper.find('.load-more-models').exists()).toBe(false)
     expect(wrapper.find('[data-testid="public-nav"]').exists()).toBe(false)
     expect(wrapper.find('[data-testid="refresh"]').exists()).toBe(false)

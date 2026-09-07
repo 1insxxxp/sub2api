@@ -20,19 +20,19 @@ type modelStatusReporter interface {
 
 type ModelStatusHandler struct {
 	reporter modelStatusReporter
-	renderer modelStatusPNGRenderrer
+	renderer modelStatusPNGRenderer
 }
 
-type modelStatusPNGRenderrer interface {
+type modelStatusPNGRenderer interface {
 	Fetch(context.Context) ([]byte, string, int, error)
 }
 
-type httpModelStatusPNGRenderrer struct {
+type httpModelStatusPNGRenderer struct {
 	url    string
 	client *http.Client
 }
 
-func (r httpModelStatusPNGRenderrer) Fetch(ctx context.Context) ([]byte, string, int, error) {
+func (r httpModelStatusPNGRenderer) Fetch(ctx context.Context) ([]byte, string, int, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, r.url, nil)
 	if err != nil {
 		return nil, "", 0, err
@@ -62,7 +62,7 @@ func (r httpModelStatusPNGRenderrer) Fetch(ctx context.Context) ([]byte, string,
 func NewModelStatusHandler(svc *service.ModelStatusService) *ModelStatusHandler {
 	h := &ModelStatusHandler{reporter: svc}
 	if url := strings.TrimSpace(os.Getenv("MODEL_STATUS_PNG_RENDERER_URL")); url != "" {
-		h.renderer = httpModelStatusPNGRenderrer{url: url, client: &http.Client{Timeout: 15 * time.Second}}
+		h.renderer = httpModelStatusPNGRenderer{url: url, client: &http.Client{Timeout: 15 * time.Second}}
 	}
 	return h
 }

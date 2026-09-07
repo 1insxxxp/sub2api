@@ -289,7 +289,7 @@ const groupOptions = computed(() => [
 ])
 const filteredGroups = computed(() => {
   return (report.value?.groups ?? [])
-    .filter(group => !groupFilter.value || String(group.id) === groupFilter.value)
+    .filter(group => captureMode || !groupFilter.value || String(group.id) === groupFilter.value)
     .filter(group => group.models.length)
 })
 const filteredModelCount = computed(() => filteredGroups.value.reduce((count, group) => count + group.models.length, 0))
@@ -586,6 +586,7 @@ onBeforeUnmount(() => {
 .group-heading h2 { @apply text-slate-900 dark:text-slate-100; min-width: 0; flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 16px; font-weight: 650; line-height: 24px; }
 .model-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
 .model-row { @apply rounded-2xl; contain-intrinsic-size: 380px; content-visibility: auto; display: flex; min-width: 0; flex-direction: column; gap: 18px; padding: 20px; }
+.status-capture-mode .model-row { content-visibility: visible; contain-intrinsic-size: auto; }
 .dark .model-status-page .model-row { border-color: rgba(96, 165, 250, 0.2); background: linear-gradient(180deg, rgba(15, 23, 42, 0.88), rgba(2, 6, 23, 0.94)); box-shadow: 0 14px 34px rgba(0, 0, 0, 0.26), 0 1px 0 rgba(255, 255, 255, 0.035) inset; }
 .load-more-models { display: flex; width: min(100%, 280px); margin: 4px auto 28px; justify-content: center; }
 .load-more-wrap { position: relative; min-height: 60px; }
