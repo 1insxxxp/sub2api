@@ -83,6 +83,7 @@ describe('ModelStatusView', () => {
 
   afterEach(() => {
     wrappers.splice(0).forEach(wrapper => wrapper.unmount())
+    window.history.replaceState({}, '', '/model-status')
     document.documentElement.classList.remove('model-status-mobile-header-hidden')
     Object.defineProperty(window, 'innerWidth', { configurable: true, value: 1024 })
     vi.useRealTimers()
@@ -415,6 +416,26 @@ describe('ModelStatusView', () => {
     await wrapper.get('.load-more-models').trigger('click')
     expect(wrapper.findAll('[data-testid="model-row"]')).toHaveLength(45)
     expect(wrapper.find('.load-more-models').exists()).toBe(false)
+  })
+
+  it('renders the complete catalog and exposes a readiness marker in capture mode', async () => {
+    window.history.pushState({}, '', '/model-status?capture=all')
+    const data = report()
+    const baseModel = data.groups[0].models[0]
+    data.groups = [{
+      ...data.groups[0],
+      models: Array.from({ length: 45 }, (_, index) => ({ ...baseModel, name: `capture-model-${index}` })),
+    }]
+    getModelStatus.mockResolvedValueOnce(data)
+
+    const wrapper = render()
+    await flushPromises()
+
+    expect(wrapper.find('[data-testid="model-status-ready"]').exists()).toBe(true)
+    expect(wrapper.findAll('[data-testid="model-row"]')).toHaveLength(45)
+    expect(wrapper.find('.load-more-models').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="public-nav"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="refresh"]').exists()).toBe(false)
   })
 
 })

@@ -1,6 +1,6 @@
 <template>
-  <component :is="authStore.isAuthenticated ? AppLayout : 'div'" class="model-status-page" :class="{ 'status-guest': !authStore.isAuthenticated, 'status-group-context-active': showGroupContext }">
-    <PlazaNavBar v-if="!authStore.isAuthenticated" login-redirect="/model-status" />
+  <component :is="authStore.isAuthenticated ? AppLayout : 'div'" class="model-status-page" :class="{ 'status-guest': !authStore.isAuthenticated, 'status-group-context-active': showGroupContext, 'status-capture-mode': captureMode }">
+    <PlazaNavBar v-if="!authStore.isAuthenticated && !captureMode" login-redirect="/model-status" />
     <component :is="authStore.isAuthenticated ? 'section' : 'main'" class="status-content" :class="{ 'status-content-embedded': authStore.isAuthenticated }" :aria-busy="loading">
       <div class="status-toolbar-shell">
         <header class="page-header status-header">
@@ -10,7 +10,7 @@
             {{ t('modelStatus.title') }}
           </h1>
         </div>
-        <div class="status-header-actions">
+        <div v-if="!captureMode" class="status-header-actions">
           <span class="refresh-countdown" data-testid="refresh-countdown" aria-live="polite" aria-atomic="true">
             {{ loading ? t('modelStatus.refreshing') : t('modelStatus.autoRefreshIn', { seconds: refreshCountdown }) }}
           </span>
@@ -29,7 +29,7 @@
         </header>
 
         <template v-if="report">
-          <div class="status-filters" :class="{ 'group-context-active': showGroupContext }">
+          <div v-if="!captureMode" class="status-filters" :class="{ 'group-context-active': showGroupContext }">
             <Select v-model="groupFilter" class="group-filter" :options="groupOptions" :aria-label="t('modelStatus.group')" mobile-sheet>
               <template #selected>
                 <span class="group-filter-selected-text">{{ groupOptions.find(option => option.value === groupFilter)?.label ?? t('modelStatus.allGroups') }}</span>
@@ -146,6 +146,7 @@
             </div>
           </section>
         </div>
+        <span v-if="captureMode && !loading && !loadFailed" data-testid="model-status-ready" aria-hidden="true" />
         <div v-if="hasMoreModels" class="load-more-wrap">
           <button class="btn btn-secondary load-more-models" type="button" @click="loadMoreModels">
             {{ t('modelStatus.loadMoreModels') }}
@@ -155,7 +156,7 @@
       </template>
     </component>
     <button
-      v-if="showBackToTop"
+      v-if="showBackToTop && !captureMode"
       class="btn btn-primary btn-icon back-to-top"
       type="button"
       data-testid="back-to-top"
@@ -217,6 +218,7 @@ const appStore = useAppStore()
 const report = ref<ModelStatusResponse | null>(null)
 const loading = ref(true)
 const loadFailed = ref(false)
+const captureMode = typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('capture') === 'all'
 const groupFilterStorageKey = 'model-status-group-filter'
 const groupFilter = ref(readStoredGroupFilter())
 const visibleModelLimit = ref(40)
@@ -292,6 +294,11 @@ const filteredGroups = computed(() => {
 })
 const filteredModelCount = computed(() => filteredGroups.value.reduce((count, group) => count + group.models.length, 0))
 const visibleGroups = computed(() => {
+  if (captureMode) {
+    return filteredGroups.value
+      .filter(group => group.models.length)
+      .map(group => ({ ...group, visibleModels: group.models }))
+  }
   let remaining = visibleModelLimit.value
   return filteredGroups.value.flatMap(group => {
     const visibleModels = group.models.slice(0, remaining)
