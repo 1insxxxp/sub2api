@@ -81,6 +81,7 @@ describe('ModelStatusView', () => {
     authStore.isAuthenticated = false
     authStore.user = null
     localStorage.removeItem('model-status-group-filter')
+    sessionStorage.removeItem('model-status-bucket-hint-seen')
     getModelStatus.mockReset().mockResolvedValue(report())
     listCustomGroups.mockReset().mockResolvedValue([])
   })
@@ -93,7 +94,7 @@ describe('ModelStatusView', () => {
     vi.useRealTimers()
   })
 
-  it('uses a continuous outcome ratio for the signal light while preserving the health badge', async () => {
+  it('uses the latest 15-minute bucket for the continuous signal light', async () => {
     const data = report()
     const baseModel = data.groups[0].models[0]
     data.groups = [{
@@ -103,7 +104,12 @@ describe('ModelStatusView', () => {
         { ...baseModel, name: 'balanced', status: 'degraded', metrics: { ...metrics, total: 100, success: 50, failure: 0, empty: 50, success_rate: 50 } },
         { ...baseModel, name: 'mostly-failed', status: 'unavailable', metrics: { ...metrics, total: 100, success: 0, failure: 100, empty: 0, success_rate: 0 } },
         { ...baseModel, name: 'no-data', status: 'no_data', metrics: { ...metrics, total: 0, success: 0, failure: 0, empty: 0, unknown: 0, success_rate: null } },
-      ],
+      ].map(model => ({
+        ...model,
+        status: 'healthy' as const,
+        metrics: { ...metrics, total: 100, success: 100, failure: 0, empty: 0, success_rate: 100 },
+        buckets: baseModel.buckets!.map((bucket, index) => index === 19 ? { ...bucket, ...model.metrics } : bucket),
+      })),
     }]
     getModelStatus.mockResolvedValueOnce(data)
     const wrapper = render()
@@ -116,6 +122,59 @@ describe('ModelStatusView', () => {
     expect(lights[3].attributes('style')).toBeUndefined()
     expect(wrapper.findAll('.health-badge')[0].classes()).toContain('badge-warning')
     expect(wrapper.findAll('.health-badge')[2].classes()).toContain('badge-danger')
+  })
+
+  it.each([
+    { success: 0, failure: 0, empty: 0, unknown: 0, status: 'no_data', rate: '-', hue: null },
+    { success: 0, failure: 0, empty: 0, unknown: 5, status: 'unknown', rate: '-', hue: null },
+    { success: 4, failure: 0, empty: 0, unknown: 20, status: 'insufficient_data', rate: '100%', hue: 120 },
+    { success: 5, failure: 0, empty: 0, unknown: 0, status: 'healthy', rate: '100%', hue: 120 },
+    { success: 99, failure: 1, empty: 0, unknown: 0, status: 'healthy', rate: '99%', hue: 119 },
+    { success: 98, failure: 2, empty: 0, unknown: 0, status: 'degraded', rate: '98%', hue: 118 },
+    { success: 4, failure: 1, empty: 0, unknown: 10, status: 'degraded', rate: '80%', hue: 96 },
+    { success: 79, failure: 21, empty: 0, unknown: 0, status: 'unavailable', rate: '79%', hue: 95 },
+    { success: 0, failure: 5, empty: 0, unknown: 0, status: 'unavailable', rate: '0%', hue: 0 },
+    { success: 0, failure: 0, empty: 5, unknown: 0, status: 'unavailable', rate: '0%', hue: 0 },
+  ])('derives $status from the latest 15-minute bucket ($success/$failure/$empty/$unknown)', async ({ success, failure, empty, unknown, status, rate, hue }) => {
+    const data = report()
+    const model = data.groups[0].models[0]
+    model.status = status === 'healthy' ? 'unavailable' : 'healthy'
+    model.metrics = status === 'healthy'
+      ? { ...metrics, total: 100, success: 0, failure: 100, empty: 0, success_rate: 0 }
+      : { ...metrics, total: 100, success: 100, failure: 0, empty: 0, success_rate: 100 }
+    model.buckets![19] = {
+      ...model.buckets![19], total: success + failure + empty + unknown,
+      success, failure, empty, unknown,
+    }
+    data.groups = [{ ...data.groups[0], models: [model] }]
+    getModelStatus.mockResolvedValueOnce(data)
+    const wrapper = render()
+    await flushPromises()
+
+    expect(wrapper.get('.health-badge').text()).toBe(`modelStatus.health.${status}`)
+    expect(wrapper.get('.health-light').attributes('data-health')).toBe(status)
+    expect(wrapper.get('.model-rate strong').text()).toBe(rate)
+    expect(wrapper.get('.health-light').classes().includes('health-light-observed')).toBe(hue !== null)
+    if (hue === null) {
+      expect(wrapper.get('.health-light').attributes('style')).toBeUndefined()
+    } else {
+      expect(wrapper.get('.health-light').attributes('style')).toContain(`--health-hue: ${hue}deg`)
+    }
+    expect(wrapper.findAll('[data-testid="status-bucket"]')).toHaveLength(20)
+  })
+
+  it('keeps legacy health metrics when a cached response has no buckets', async () => {
+    const data = report()
+    const model = data.groups[0].models[0]
+    delete model.buckets
+    data.groups = [{ ...data.groups[0], models: [model] }]
+    getModelStatus.mockResolvedValueOnce(data)
+    const wrapper = render()
+    await flushPromises()
+
+    expect(wrapper.get('.health-badge').text()).toBe('modelStatus.health.unavailable')
+    expect(wrapper.get('.health-light').attributes('style')).toContain('--health-hue: 12deg')
+    expect(wrapper.get('.model-rate strong').text()).toBe('10%')
   })
 
   it('shows a countdown that decrements each second and resets after a manual refresh', async () => {
@@ -131,6 +190,20 @@ describe('ModelStatusView', () => {
     await wrapper.get('[data-testid="refresh"]').trigger('click')
     await flushPromises()
     expect(wrapper.get('[data-testid="refresh-countdown"]').text()).toContain('30')
+  })
+
+  it('plays the bucket sweep once after every successful refresh', async () => {
+    const wrapper = render()
+    await flushPromises()
+
+    expect(wrapper.get('.recent-bars').classes()).toContain('bucket-hint-active')
+    await vi.advanceTimersByTimeAsync(1400)
+    expect(wrapper.get('.recent-bars').classes()).not.toContain('bucket-hint-active')
+
+    getModelStatus.mockResolvedValueOnce(report())
+    await wrapper.get('[data-testid="refresh"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.get('.recent-bars').classes()).toContain('bucket-hint-active')
   })
 
   it('keeps the full refresh label on mobile and does not render a model search field', async () => {

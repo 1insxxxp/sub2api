@@ -103,12 +103,12 @@
               <div class="model-health">
                 <span
                   class="health-light"
-                  :class="{ 'health-light-observed': hasObservedOutcomes(model.metrics) }"
-                  :data-health="model.status"
-                  :style="healthLightStyle(model.metrics)"
+                  :class="{ 'health-light-observed': hasObservedOutcomes(modelMetricsForDisplay(model)) }"
+                  :data-health="modelHealthForDisplay(model)"
+                  :style="healthLightStyle(modelMetricsForDisplay(model))"
                   aria-hidden="true"
                 />
-                <span class="badge health-badge" :class="healthBadgeClasses[model.status]">{{ t(`modelStatus.health.${model.status}`) }}</span>
+                <span class="badge health-badge" :class="healthBadgeClasses[modelHealthForDisplay(model)]">{{ t(`modelStatus.health.${modelHealthForDisplay(model)}`) }}</span>
               </div>
             </div>
 
@@ -242,12 +242,10 @@ const backToTopThreshold = 320
 const mobileStatusToolbarHeight = 86
 const refreshIntervalSeconds = 30
 const refreshCountdown = ref(refreshIntervalSeconds)
-const bucketHintStorageKey = 'model-status-bucket-hint-seen'
 const outcomes = ['success', 'failure', 'empty'] as const
 const mobileNavHidden = ref(false)
 const showBackToTop = ref(false)
 const showBucketHint = ref(false)
-const bucketHintPlayed = ref(false)
 const activeGroupId = ref('')
 const showGroupContext = ref(false)
 const statusGroups = ref<HTMLElement | null>(null)
@@ -437,6 +435,19 @@ function modelMetricsForDisplay(model: ModelStatusModel): ModelStatusMetrics {
   }
 }
 
+function modelHealthForDisplay(model: ModelStatusModel): ModelStatusHealth {
+  if (!model.buckets?.length) return model.status
+  const metrics = modelMetricsForDisplay(model)
+  if (metrics.total === 0) return 'no_data'
+  const knownTotal = observedOutcomeTotal(metrics)
+  if (knownTotal === 0) return 'unknown'
+  // Match the backend health thresholds using the same bucket as the card metrics.
+  if (knownTotal < 5 || metrics.success_rate === null) return 'insufficient_data'
+  if (metrics.success_rate >= 99) return 'healthy'
+  if (metrics.success_rate >= 80) return 'degraded'
+  return 'unavailable'
+}
+
 function observedOutcomeTotal(metrics: ModelStatusModel['metrics']): number {
   return metrics.success + metrics.failure + metrics.empty
 }
@@ -587,14 +598,8 @@ function scrollToTop() {
 }
 
 function triggerBucketHint(data: ModelStatusResponse) {
-  if (bucketHintPlayed.value || showBucketHint.value || !data.groups.some(group => group.models.length)) return
-  bucketHintPlayed.value = true
-  try {
-    if (sessionStorage.getItem(bucketHintStorageKey)) return
-    sessionStorage.setItem(bucketHintStorageKey, '1')
-  } catch {
-    // Storage may be unavailable in private browsing; the hint can still play once.
-  }
+  if (!data.groups.some(group => group.models.length)) return
+  if (bucketHintTimer) clearTimeout(bucketHintTimer)
   showBucketHint.value = true
   bucketHintTimer = setTimeout(() => {
     showBucketHint.value = false
@@ -746,16 +751,18 @@ onBeforeUnmount(() => {
 .recent-results { margin-top: auto; }
 .recent-heading { @apply text-slate-500 dark:text-dark-400; display: flex; justify-content: space-between; gap: 8px; font-size: 11px; line-height: 16px; }
 .recent-heading-label { display: inline-flex; min-width: 0; align-items: center; gap: 5px; }
-.recent-bars { position: relative; display: grid; grid-template-columns: repeat(20, minmax(0, 1fr)); gap: 4px; height: 22px; margin: 8px 0; overflow: hidden; }
+.recent-bars { position: relative; display: grid; grid-template-columns: repeat(20, minmax(0, 1fr)); gap: 4px; height: 22px; margin: 8px 0; overflow: visible; }
+.recent-bars.bucket-hint-active { overflow: hidden; }
 .bucket-hint-active::after { position: absolute; top: -4px; bottom: -4px; left: -32%; width: 32%; background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--brand-500) 48%, transparent), transparent); content: ''; pointer-events: none; transform: translateX(0); animation: bucket-hint-sweep 1.2s cubic-bezier(.2, .7, .25, 1) both; }
 .recent-bar { position: relative; display: block; min-width: 0; width: 100%; height: 22px; padding: 0; border: 1px solid transparent; border-radius: 999px; cursor: pointer; touch-action: manipulation; transition: transform .18s ease, opacity .18s ease, box-shadow .18s ease, border-color .18s ease; }
-.recent-bar::after { position: absolute; inset: -4px; border: 1px solid currentColor; border-radius: inherit; content: ''; opacity: 0; pointer-events: none; transform: scale(.78); transition: opacity .18s ease, transform .18s ease; }
+.recent-bar::after { position: absolute; inset: 0; border: 1px solid currentColor; border-radius: inherit; content: ''; opacity: 0; pointer-events: none; transform: scale(.78); transition: opacity .18s ease, transform .18s ease; }
 .recent-placeholder { @apply bg-slate-200 dark:bg-dark-700; display: block; min-width: 0; height: 22px; border-radius: 999px; }
 .recent-incomplete { @apply border border-slate-400 dark:border-dark-500; background: transparent; }
-.recent-bar:hover { opacity: .96; transform: translateY(-2px); box-shadow: 0 4px 10px color-mix(in srgb, currentColor 28%, transparent), inset 0 1px 0 rgb(255 255 255 / 32%); }
+.recent-bar:hover, .recent-bar:focus-visible, .recent-bar:active { z-index: 1; }
+.recent-bar:hover { opacity: .96; transform: translateY(-2px) scaleX(1.08); box-shadow: 0 4px 10px color-mix(in srgb, currentColor 28%, transparent), inset 0 1px 0 rgb(255 255 255 / 32%); }
 .recent-bar:hover::after, .recent-bar:focus-visible::after { opacity: .62; transform: scale(1); }
-.recent-bar:active { transform: scale(.9); box-shadow: 0 1px 3px color-mix(in srgb, currentColor 30%, transparent); }
-.bucket-pressed { animation: bucket-pop .42s ease both; }
+.recent-bar:active { transform: translateY(-1px) scaleX(1.16) scaleY(1.04); box-shadow: 0 0 0 2px color-mix(in srgb, currentColor 72%, transparent), 0 3px 8px color-mix(in srgb, currentColor 38%, transparent); }
+.bucket-pressed { z-index: 2; animation: bucket-pop .42s ease both; box-shadow: 0 0 0 2px color-mix(in srgb, currentColor 72%, transparent), 0 3px 8px color-mix(in srgb, currentColor 38%, transparent); filter: saturate(1.25) brightness(.94); }
 .recent-bar:focus-visible { outline: 2px solid var(--brand-500); outline-offset: 2px; }
 .bucket-success { @apply bg-emerald-500 text-emerald-500 dark:bg-emerald-400 dark:text-emerald-400; }
 .bucket-failure { @apply bg-red-500 text-red-500 dark:bg-red-400 dark:text-red-400; }
@@ -770,8 +777,8 @@ onBeforeUnmount(() => {
 
 @keyframes bucket-pop {
   0% { transform: scale(1); }
-  38% { transform: scale(.86); }
-  72% { transform: scale(1.06); }
+  38% { transform: scaleX(1.16) scaleY(1.06); }
+  72% { transform: scaleX(1.1) scaleY(1.03); }
   100% { transform: scale(1); }
 }
 
