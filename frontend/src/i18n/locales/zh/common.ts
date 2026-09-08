@@ -313,6 +313,7 @@ export default {
       deleted: '兑换码已删除',
       failedToDelete: '删除兑换码失败',
       batchDelete: '批量删除',
+      copySelected: '批量复制',
       batchDeleted: '已批量删除兑换码',
       batchDeleteConfirm: '删除选中的兑换码记录吗？未使用的金额会退回余额，已使用的只删除记录。',
       failedToBatchDelete: '批量删除兑换码失败',

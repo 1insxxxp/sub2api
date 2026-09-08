@@ -312,6 +312,7 @@ export default {
       deleted: 'Redeem code deleted',
       failedToDelete: 'Failed to delete redeem code',
       batchDelete: 'Batch delete',
+      copySelected: 'Copy selected',
       batchDeleted: 'Redeem codes deleted',
       batchDeleteConfirm: 'Delete selected redeem-code records? Unused value is refunded; used codes only remove the records.',
       failedToBatchDelete: 'Failed to delete redeem codes',
