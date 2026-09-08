@@ -53,6 +53,27 @@ func TestFetchOpenAIAccountModelsAPIKeyPopulatesPickerFields(t *testing.T) {
 	require.Equal(t, "named-model", models[2].ID)
 }
 
+func TestFetchOpenAIAccountModelsProjectsConfiguredAliases(t *testing.T) {
+	gateway := newCodexModelsAPIKeyTestService(&codexModelsHTTPUpstreamStub{do: func(_ *http.Request, _ string, _ int64, _ int) (*http.Response, error) {
+		return ordinaryModelsUpstreamResponse(`{"data":[
+			{"id":"upstream-model","owned_by":"provider"},
+			{"id":"unrelated-model","owned_by":"provider"}
+		]}`), nil
+	}})
+	account := newCodexModelsAPIKeyTestAccount("https://models.example/v1")
+	account.Credentials["model_mapping"] = map[string]any{
+		"public-model": "upstream-model",
+	}
+	svc := &AccountTestService{openaiGatewayService: gateway}
+
+	models, err := svc.FetchOpenAIAccountModels(context.Background(), account)
+
+	require.NoError(t, err)
+	require.Len(t, models, 1)
+	require.Equal(t, "public-model", models[0].ID)
+	require.Equal(t, "public-model", models[0].DisplayName)
+}
+
 func TestFetchOpenAIAccountModelsPreservesEmptyCatalog(t *testing.T) {
 	gateway := newCodexModelsAPIKeyTestService(&codexModelsHTTPUpstreamStub{do: func(_ *http.Request, _ string, _ int64, _ int) (*http.Response, error) {
 		return ordinaryModelsUpstreamResponse(`{"data":[]}`), nil
