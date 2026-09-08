@@ -9,8 +9,10 @@ export interface DeleteCustomGroupResult {
 }
 
 export const customGroupsAPI = {
-  async list(): Promise<UserCustomGroup[]> {
-    const { data } = await apiClient.get<UserCustomGroup[]>('/custom-groups')
+  async list(options?: { signal?: AbortSignal }): Promise<UserCustomGroup[]> {
+    const { data } = await apiClient.get<UserCustomGroup[]>('/custom-groups', {
+      signal: options?.signal,
+    })
     return data
   },
   async candidates(): Promise<CustomGroupCandidate[]> {

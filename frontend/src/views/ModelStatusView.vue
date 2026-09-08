@@ -21,7 +21,7 @@
             :disabled="loading"
             :title="t('common.refresh')"
             :aria-label="t('common.refresh')"
-            @click="loadReport"
+            @click="refreshAll"
           >
             <Icon name="refresh" size="md" :class="{ 'animate-spin': loading }" />
           </button>
@@ -41,6 +41,10 @@
               <span class="group-context-name">{{ activeGroup.name }}</span>
             </div>
             <span class="model-count">{{ t('modelStatus.modelCount', { count: filteredModelCount }) }}</span>
+          </div>
+          <div v-if="customGroupsLoadFailed" data-testid="custom-group-load-warning" role="status" class="status-notice status-notice-warning custom-group-load-warning">
+            <Icon name="exclamationTriangle" size="sm" class="shrink-0" />
+            <span>{{ t('modelStatus.customGroupsLoadFailed') }}</span>
           </div>
         </template>
       </div>
@@ -66,7 +70,7 @@
 
         <div v-if="!report.groups.length || !filteredGroups.length" class="status-empty">
           <Icon name="search" size="lg" class="text-gray-400" />
-          <span>{{ t(report.groups.length ? 'modelStatus.noMatches' : 'modelStatus.noModels') }}</span>
+          <span>{{ t(emptyStateKey) }}</span>
         </div>
 
         <div v-if="visibleGroups.length" ref="statusGroups" class="status-groups">
@@ -203,6 +207,8 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { getModelStatus, type ModelStatusBucket, type ModelStatusHealth, type ModelStatusMetrics, type ModelStatusModel, type ModelStatusOutcome, type ModelStatusResponse } from '@/api/modelStatus'
+import { customGroupsAPI } from '@/api/customGroups'
+import type { UserCustomGroup } from '@/types'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import PlazaNavBar from '@/components/modelPlaza/PlazaNavBar.vue'
 import Icon from '@/components/icons/Icon.vue'
@@ -216,6 +222,9 @@ const { t, locale } = useI18n()
 const authStore = useAuthStore()
 const appStore = useAppStore()
 const report = ref<ModelStatusResponse | null>(null)
+const customGroups = ref<UserCustomGroup[]>([])
+const customGroupsReady = ref(false)
+const customGroupsLoadFailed = ref(false)
 const loading = ref(true)
 const loadFailed = ref(false)
 const captureMode = typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('capture') === 'all'
@@ -251,6 +260,7 @@ const healthBadgeClasses: Record<ModelStatusHealth, string> = {
   unknown: 'badge-gray',
 }
 let request: AbortController | null = null
+let customGroupsRequest: AbortController | null = null
 let timer: ReturnType<typeof setInterval> | undefined
 let refreshCountdownTimer: ReturnType<typeof setInterval> | undefined
 let loadMoreObserver: IntersectionObserver | null = null
@@ -279,6 +289,66 @@ function persistGroupFilter(value: string) {
   }
 }
 
+function isCustomGroupFilter(value: string): boolean {
+  return value.startsWith('custom:')
+}
+
+function modelSourceKey(groupId: number, modelName: string): string {
+  return `${groupId}:${modelName.trim().toLocaleLowerCase()}`
+}
+
+function authIdentity(): string {
+  if (!authStore.isAuthenticated) return 'guest'
+  return `user:${authStore.user?.id ?? 'unknown'}`
+}
+
+function validateGroupFilter(groups: ModelStatusResponse['groups']) {
+  if (!groupFilter.value || isCustomGroupFilter(groupFilter.value)) return
+  if (!groups.some(group => String(group.id) === groupFilter.value)) groupFilter.value = ''
+}
+
+function validateCustomGroupFilter() {
+  if (!isCustomGroupFilter(groupFilter.value) || !customGroupsReady.value) return
+  if (!selectedCustomGroup.value) groupFilter.value = ''
+}
+
+async function loadCustomGroups() {
+  if (captureMode || !authStore.isAuthenticated || disposed) {
+    customGroupsRequest?.abort()
+    customGroupsRequest = null
+    customGroups.value = []
+    customGroupsReady.value = true
+    customGroupsLoadFailed.value = false
+    validateCustomGroupFilter()
+    return
+  }
+
+  customGroupsRequest?.abort()
+  const controller = new AbortController()
+  const identity = authIdentity()
+  customGroupsRequest = controller
+  customGroups.value = []
+  customGroupsReady.value = false
+  customGroupsLoadFailed.value = false
+
+  try {
+    const groups = await customGroupsAPI.list({ signal: controller.signal })
+    if (disposed || controller.signal.aborted || identity !== authIdentity()) return
+    customGroups.value = groups.filter(group => group.status === 'active')
+    customGroupsLoadFailed.value = false
+    customGroupsReady.value = true
+    validateCustomGroupFilter()
+  } catch {
+    if (controller.signal.aborted || disposed || identity !== authIdentity()) return
+    customGroups.value = []
+    customGroupsLoadFailed.value = true
+    customGroupsReady.value = true
+    validateCustomGroupFilter()
+  } finally {
+    if (customGroupsRequest === controller) customGroupsRequest = null
+  }
+}
+
 const stale = computed(() => !!report.value && !report.value.snapshot_at && now.value - Date.parse(report.value.generated_at) > 90000)
 const bucketCount = computed(() => report.value?.bucket_count ?? 20)
 const selectedBucket = ref<ModelStatusBucket | null>(null)
@@ -286,17 +356,46 @@ const selectedBucketRequests = computed(() => selectedBucket.value ? latestBucke
 const selectedModelName = ref('')
 const pressedBucketKey = ref('')
 let pressedBucketTimer: ReturnType<typeof setTimeout> | undefined
+const activeCustomGroups = computed(() => customGroups.value.filter(group => group.status === 'active'))
+const selectedCustomGroup = computed(() => {
+  if (captureMode || !groupFilter.value.startsWith('custom:')) return null
+  const id = Number(groupFilter.value.slice('custom:'.length))
+  return activeCustomGroups.value.find(group => group.id === id) ?? null
+})
+const customGroupFilterPending = computed(() => isCustomGroupFilter(groupFilter.value) && !customGroupsReady.value)
 const groupOptions = computed(() => [
   { value: '', label: t('modelStatus.allGroups'), platform: 'composite' },
   ...(report.value?.groups ?? []).map(group => ({ value: String(group.id), label: group.name, platform: group.platform })),
+  ...(customGroupFilterPending.value ? [{ value: groupFilter.value, label: t('modelStatus.customGroupLoading'), platform: 'custom' }] : []),
+  ...(!captureMode ? activeCustomGroups.value.map(group => ({
+    value: `custom:${group.id}`,
+    label: `${t('modelStatus.customGroupPrefix')}: ${group.name}`,
+    platform: 'custom',
+  })) : []),
 ])
 const filteredGroups = computed(() => {
+  const customSources = new Set(
+    selectedCustomGroup.value?.models
+      .filter(source => source.source_available !== false)
+      .map(source => modelSourceKey(source.source_group_id, source.source_model)) ?? [],
+  )
   return (report.value?.groups ?? [])
-    .filter(group => !groupFilter.value || String(group.id) === groupFilter.value)
+    .filter(group => !groupFilter.value || customGroupFilterPending.value || selectedCustomGroup.value || String(group.id) === groupFilter.value)
+    .map(group => {
+      const models = selectedCustomGroup.value
+        ? group.models.filter(model => customSources.has(modelSourceKey(group.id, model.name)))
+        : group.models
+      return models.length ? { ...group, models } : null
+    })
+    .filter((group): group is NonNullable<typeof group> => !!group)
     .filter(group => !captureSearch || group.name.toLocaleLowerCase().includes(captureSearch) || group.models.some(model => `${model.name} ${model.platform}`.toLocaleLowerCase().includes(captureSearch)))
-    .filter(group => group.models.length)
 })
 const filteredModelCount = computed(() => filteredGroups.value.reduce((count, group) => count + group.models.length, 0))
+const emptyStateKey = computed(() => {
+  if (!report.value?.groups.length) return 'modelStatus.noModels'
+  if (selectedCustomGroup.value) return 'modelStatus.noCustomGroupMatches'
+  return 'modelStatus.noMatches'
+})
 const visibleGroups = computed(() => {
   if (captureMode) {
     return filteredGroups.value
@@ -441,7 +540,7 @@ async function loadReport() {
     report.value = data
     triggerBucketHint(data)
     loadFailed.value = false
-    if (groupFilter.value && !data.groups.some(group => String(group.id) === groupFilter.value)) groupFilter.value = ''
+    validateGroupFilter(data.groups)
   } catch {
     if (!controller.signal.aborted) loadFailed.value = true
   } finally {
@@ -452,8 +551,13 @@ async function loadReport() {
   }
 }
 
+function refreshAll() {
+  void loadReport()
+  void loadCustomGroups()
+}
+
 function handleVisibilityChange() {
-  if (document.visibilityState === 'visible') void loadReport()
+  if (document.visibilityState === 'visible') refreshAll()
 }
 
 function updateMobileStatusChrome() {
@@ -527,6 +631,10 @@ watch(groupFilter, value => {
   visibleModelLimit.value = 40
 })
 
+watch(() => `${authStore.isAuthenticated}:${authStore.user?.id ?? ''}`, () => {
+  void loadCustomGroups()
+}, { flush: 'post' })
+
 watch(visibleGroups, () => {
   void nextTick().then(observeStatusGroups)
 }, { flush: 'post' })
@@ -543,7 +651,7 @@ watch(loadMoreSentinel, element => {
 
 onMounted(() => {
   void appStore.fetchPublicSettings().catch(() => {})
-  void loadReport()
+  refreshAll()
   refreshCountdownTimer = setInterval(() => {
     refreshCountdown.value = Math.max(0, refreshCountdown.value - 1)
   }, 1000)
@@ -561,6 +669,7 @@ onMounted(() => {
 onBeforeUnmount(() => {
   disposed = true
   request?.abort()
+  customGroupsRequest?.abort()
   loadMoreObserver?.disconnect()
   if (pressedBucketTimer) clearTimeout(pressedBucketTimer)
   if (bucketHintTimer) clearTimeout(bucketHintTimer)

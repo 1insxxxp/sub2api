@@ -4,13 +4,15 @@ import { nextTick, ref } from 'vue'
 import ModelStatusView from '../ModelStatusView.vue'
 import type { ModelStatusBucket, ModelStatusResponse } from '@/api/modelStatus'
 
-const { getModelStatus, authStore, appStore } = vi.hoisted(() => ({
+const { getModelStatus, listCustomGroups, authStore, appStore } = vi.hoisted(() => ({
   getModelStatus: vi.fn(),
-  authStore: { isAuthenticated: false },
+  listCustomGroups: vi.fn(),
+  authStore: { isAuthenticated: false, user: null as { id: number } | null },
   appStore: { fetchPublicSettings: vi.fn().mockResolvedValue({}) },
 }))
 
 vi.mock('@/api/modelStatus', () => ({ getModelStatus }))
+vi.mock('@/api/customGroups', () => ({ customGroupsAPI: { list: listCustomGroups } }))
 vi.mock('@/stores/auth', () => ({ useAuthStore: () => authStore }))
 vi.mock('@/stores/app', () => ({ useAppStore: () => appStore }))
 vi.mock('vue-i18n', async importOriginal => ({
@@ -77,8 +79,10 @@ describe('ModelStatusView', () => {
     vi.useFakeTimers()
     vi.setSystemTime(new Date('2026-09-06T04:00:00Z'))
     authStore.isAuthenticated = false
+    authStore.user = null
     localStorage.removeItem('model-status-group-filter')
     getModelStatus.mockReset().mockResolvedValue(report())
+    listCustomGroups.mockReset().mockResolvedValue([])
   })
 
   afterEach(() => {
@@ -148,6 +152,122 @@ describe('ModelStatusView', () => {
 
     await wrapper.get('select').setValue('1')
     expect(localStorage.getItem('model-status-group-filter')).toBe('1')
+  })
+
+  it('does not request private custom groups for guests', async () => {
+    const wrapper = render()
+    await flushPromises()
+
+    expect(listCustomGroups).not.toHaveBeenCalled()
+    expect(wrapper.find('option[value="custom:21"]').exists()).toBe(false)
+  })
+
+  it('adds active custom-group presets and matches source group and model exactly', async () => {
+    authStore.isAuthenticated = true
+    authStore.user = { id: 7 }
+    listCustomGroups.mockResolvedValueOnce([
+      {
+        id: 21, user_id: 7, name: '精选模型', status: 'active',
+        models: [
+          { id: 1, custom_group_id: 21, public_model: 'alias', source_group_id: 1, source_model: 'SAME-MODEL', source_available: true },
+          { id: 2, custom_group_id: 21, public_model: 'alias', source_group_id: 2, source_model: 'same-model' },
+          { id: 3, custom_group_id: 21, public_model: 'alias', source_group_id: 1, source_model: 'another-model', source_available: false },
+        ], created_at: '', updated_at: '',
+      },
+      {
+        id: 22, user_id: 7, name: '已停用', status: 'disabled', models: [], created_at: '', updated_at: '',
+      },
+    ])
+    const wrapper = render()
+    await flushPromises()
+
+    expect(wrapper.find('option[value="custom:21"]').text()).toContain('精选模型')
+    expect(wrapper.find('option[value="custom:22"]').exists()).toBe(false)
+    await wrapper.get('select').setValue('custom:21')
+    expect(wrapper.findAll('.group-heading h2').map(heading => heading.text())).toEqual(['Public A', 'Public B'])
+    expect(wrapper.findAll('[data-testid="model-row"]')).toHaveLength(2)
+    expect(wrapper.findAll('.model-title h3').map(title => title.text())).toEqual(['same-model', 'same-model'])
+  })
+
+  it('waits for custom groups before restoring a persisted custom preset', async () => {
+    authStore.isAuthenticated = true
+    authStore.user = { id: 7 }
+    localStorage.setItem('model-status-group-filter', 'custom:21')
+    let resolveCustomGroups!: (groups: unknown[]) => void
+    listCustomGroups.mockReturnValueOnce(new Promise(resolve => { resolveCustomGroups = resolve }))
+    const wrapper = render()
+    await flushPromises()
+
+    expect((wrapper.get('select').element as HTMLSelectElement).value).toBe('custom:21')
+    resolveCustomGroups([{
+      id: 21, user_id: 7, name: '精选模型', status: 'active',
+      models: [{ id: 1, custom_group_id: 21, public_model: 'alias', source_group_id: 1, source_model: 'same-model' }],
+      created_at: '', updated_at: '',
+    }])
+    await flushPromises()
+    expect((wrapper.get('select').element as HTMLSelectElement).value).toBe('custom:21')
+    expect(wrapper.findAll('[data-testid="model-row"]')).toHaveLength(1)
+  })
+
+  it('falls back to public groups on custom-group failure and recovers on refresh', async () => {
+    authStore.isAuthenticated = true
+    authStore.user = { id: 7 }
+    listCustomGroups.mockRejectedValueOnce(new Error('private endpoint unavailable'))
+    const wrapper = render()
+    await flushPromises()
+
+    expect(wrapper.find('[data-testid="custom-group-load-warning"]').exists()).toBe(true)
+    expect(wrapper.findAll('[data-testid="model-row"]')).toHaveLength(3)
+    expect((wrapper.get('select').element as HTMLSelectElement).value).toBe('')
+
+    listCustomGroups.mockResolvedValueOnce([{
+      id: 21, user_id: 7, name: '精选模型', status: 'active',
+      models: [{ id: 1, custom_group_id: 21, public_model: 'alias', source_group_id: 1, source_model: 'same-model' }],
+      created_at: '', updated_at: '',
+    }])
+    await wrapper.get('[data-testid="refresh"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.find('[data-testid="custom-group-load-warning"]').exists()).toBe(false)
+    expect(wrapper.find('option[value="custom:21"]').exists()).toBe(true)
+  })
+
+  it('keeps an empty custom preset selected and shows a no-match state', async () => {
+    authStore.isAuthenticated = true
+    authStore.user = { id: 7 }
+    listCustomGroups.mockResolvedValueOnce([{
+      id: 21, user_id: 7, name: '暂无匹配', status: 'active',
+      models: [{ id: 1, custom_group_id: 21, public_model: 'alias', source_group_id: 99, source_model: 'missing' }],
+      created_at: '', updated_at: '',
+    }])
+    const wrapper = render()
+    await flushPromises()
+    await wrapper.get('select').setValue('custom:21')
+
+    expect((wrapper.get('select').element as HTMLSelectElement).value).toBe('custom:21')
+    expect(wrapper.findAll('[data-testid="model-row"]')).toHaveLength(0)
+    expect(wrapper.text()).toContain('modelStatus.noCustomGroupMatches')
+  })
+
+  it('resynchronizes custom presets on manual and visibility refresh without blocking public data', async () => {
+    authStore.isAuthenticated = true
+    authStore.user = { id: 7 }
+    let resolveCustomGroups!: (groups: unknown[]) => void
+    listCustomGroups.mockReturnValueOnce(new Promise(resolve => { resolveCustomGroups = resolve }))
+    const wrapper = render()
+    await flushPromises()
+    expect(wrapper.findAll('[data-testid="model-row"]')).toHaveLength(3)
+
+    resolveCustomGroups([])
+    await flushPromises()
+    listCustomGroups.mockResolvedValue([])
+    await wrapper.get('[data-testid="refresh"]').trigger('click')
+    await flushPromises()
+    expect(listCustomGroups).toHaveBeenCalledTimes(2)
+
+    document.dispatchEvent(new Event('visibilitychange'))
+    await flushPromises()
+    expect(listCustomGroups).toHaveBeenCalledTimes(3)
+    expect(getModelStatus.mock.calls.length).toBeGreaterThanOrEqual(2)
   })
 
   it('hides both mobile navigation variants while scrolling and provides a back-to-top action', async () => {
