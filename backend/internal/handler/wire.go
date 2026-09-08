@@ -14,6 +14,7 @@ func ProvideAdminHandlers(
 	dashboardHandler *admin.DashboardHandler,
 	userHandler *admin.UserHandler,
 	groupHandler *admin.GroupHandler,
+	systemCustomGroupHandler *admin.SystemCustomGroupHandler,
 	accountHandler *admin.AccountHandler,
 	announcementHandler *admin.AnnouncementHandler,
 	dataManagementHandler *admin.DataManagementHandler,
@@ -26,6 +27,7 @@ func ProvideAdminHandlers(
 	cnProviderHandler *admin.CNProviderHandler,
 	proxyHandler *admin.ProxyHandler,
 	redeemHandler *admin.RedeemHandler,
+	subAdminCommissionHandler *admin.SubAdminCommissionHandler,
 	promoHandler *admin.PromoHandler,
 	settingHandler *admin.SettingHandler,
 	opsHandler *admin.OpsHandler,
@@ -46,7 +48,9 @@ func ProvideAdminHandlers(
 	paymentHandler *admin.PaymentHandler,
 	affiliateHandler *admin.AffiliateHandler,
 	complianceHandler *admin.ComplianceHandler,
+	checkinHandler *admin.CheckinHandler,
 	auditLogHandler *admin.AuditLogHandler,
+	lotteryHandler *admin.LotteryHandler,
 	upstreamBillingProbe *service.UpstreamBillingProbeService,
 	ollamaCloudUsage *service.OllamaCloudUsageService,
 ) *AdminHandlers {
@@ -56,6 +60,7 @@ func ProvideAdminHandlers(
 		Dashboard:              dashboardHandler,
 		User:                   userHandler,
 		Group:                  groupHandler,
+		SystemCustomGroup:      systemCustomGroupHandler,
 		Account:                accountHandler,
 		Announcement:           announcementHandler,
 		DataManagement:         dataManagementHandler,
@@ -68,6 +73,7 @@ func ProvideAdminHandlers(
 		CNProvider:             cnProviderHandler,
 		Proxy:                  proxyHandler,
 		Redeem:                 redeemHandler,
+		SubAdminCommission:     subAdminCommissionHandler,
 		Promo:                  promoHandler,
 		Setting:                settingHandler,
 		Ops:                    opsHandler,
@@ -88,7 +94,9 @@ func ProvideAdminHandlers(
 		Payment:                paymentHandler,
 		Affiliate:              affiliateHandler,
 		Compliance:             complianceHandler,
+		Checkin:                checkinHandler,
 		AuditLog:               auditLogHandler,
+		Lottery:                lotteryHandler,
 	}
 }
 
@@ -150,6 +158,10 @@ func ProvideBatchImageHandler(
 	return h
 }
 
+func ProvideImageStudioHandler(imageStudioService *service.ImageStudioService) *ImageStudioHandler {
+	return NewImageStudioHandler(imageStudioService)
+}
+
 // ProvideSystemHandler creates admin.SystemHandler with UpdateService
 func ProvideSystemHandler(updateService *service.UpdateService, lockService *service.SystemOperationLockService) *admin.SystemHandler {
 	return admin.NewSystemHandler(updateService, lockService)
@@ -192,10 +204,13 @@ func ProvideHandlers(
 	paymentHandler *PaymentHandler,
 	paymentWebhookHandler *PaymentWebhookHandler,
 	availableChannelHandler *AvailableChannelHandler,
+	checkinHandler *CheckinHandler,
+	imageStudioHandler *ImageStudioHandler,
 	modelPlazaHandler *ModelPlazaHandler,
 	modelStatusHandler *ModelStatusHandler,
 	asyncImageHandler *AsyncImageHandler,
 	batchImageHandler *BatchImageHandler,
+	lotteryHandler *LotteryHandler,
 	_ *service.IdempotencyCoordinator,
 	_ *service.IdempotencyCleanupService,
 	_ *service.OpenAIQuotaAutoResetService,
@@ -220,10 +235,13 @@ func ProvideHandlers(
 		Payment:          paymentHandler,
 		PaymentWebhook:   paymentWebhookHandler,
 		AvailableChannel: availableChannelHandler,
+		Checkin:          checkinHandler,
+		ImageStudio:      imageStudioHandler,
 		ModelPlaza:       modelPlazaHandler,
 		ModelStatus:      modelStatusHandler,
 		AsyncImage:       asyncImageHandler,
 		BatchImage:       batchImageHandler,
+		Lottery:          lotteryHandler,
 	}
 }
 
@@ -248,6 +266,9 @@ var ProviderSet = wire.NewSet(
 	NewPaymentHandler,
 	NewPaymentWebhookHandler,
 	NewAvailableChannelHandler,
+	NewCheckinHandler,
+	ProvideImageStudioHandler,
+	NewLotteryHandler,
 	NewModelPlazaHandler,
 	NewModelStatusHandler,
 	NewAsyncImageHandler,
@@ -257,6 +278,7 @@ var ProviderSet = wire.NewSet(
 	admin.NewDashboardHandler,
 	admin.NewUserHandler,
 	admin.NewGroupHandlerWithDependencies,
+	admin.NewSystemCustomGroupHandler,
 	admin.ProvideAccountHandler,
 	admin.NewAnnouncementHandler,
 	admin.NewDataManagementHandler,
@@ -269,6 +291,7 @@ var ProviderSet = wire.NewSet(
 	admin.NewCNProviderHandler,
 	admin.NewProxyHandler,
 	admin.NewRedeemHandler,
+	admin.NewSubAdminCommissionHandler,
 	admin.NewPromoHandler,
 	ProvideAdminSettingHandler,
 	admin.NewOpsHandler,
@@ -288,7 +311,9 @@ var ProviderSet = wire.NewSet(
 	admin.NewPaymentHandler,
 	admin.NewAffiliateHandler,
 	admin.NewComplianceHandler,
+	admin.NewCheckinHandler,
 	admin.NewAuditLogHandler,
+	admin.NewLotteryHandler,
 
 	// AdminHandlers and Handlers constructors
 	ProvideAdminHandlers,
