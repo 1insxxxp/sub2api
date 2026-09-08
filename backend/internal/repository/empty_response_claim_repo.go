@@ -137,15 +137,6 @@ func (r *emptyResponseClaimRepository) ListRecentEvaluations(ctx context.Context
 			AND ul.output_tokens <= $4
 			AND (erc.id IS NOT NULL OR (ul.actual_cost > 0 AND COALESCE(ul.compensated_cost, 0) <= 0))
 			AND (
-				erc.id IS NOT NULL
-				OR NOT (
-					COALESCE(uro.has_text, FALSE)
-					OR COALESCE(uro.has_tool_call, FALSE)
-					OR COALESCE(uro.has_reasoning, FALSE)
-					OR COALESCE(uro.has_media, FALSE)
-				)
-			)
-			AND (
 				erc.id IS NULL
 				OR erc.reason_code IN (
 					'pure_empty',

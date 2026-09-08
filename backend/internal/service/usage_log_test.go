@@ -112,7 +112,7 @@ func TestUsageLogSyncRequestTypeAndLegacyFieldsNilReceiver(t *testing.T) {
 	log.SyncRequestTypeAndLegacyFields()
 }
 
-func TestProjectUsageLogCompensationRejectsVisibleLowTokenOutput(t *testing.T) {
+func TestProjectUsageLogCompensationAllowsVisibleLowTokenOutput(t *testing.T) {
 	t.Parallel()
 
 	now := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
@@ -132,9 +132,9 @@ func TestProjectUsageLogCompensationRejectsVisibleLowTokenOutput(t *testing.T) {
 
 	projectUsageLogCompensation(log, now)
 
-	require.False(t, log.CompensationEligible)
-	require.Equal(t, UsageCompensationUnavailable, log.CompensationEligibility)
-	require.Equal(t, EmptyResponseReasonEffectiveOutput, log.CompensationReasonCode)
+	require.True(t, log.CompensationEligible)
+	require.Equal(t, UsageCompensationEligible, log.CompensationEligibility)
+	require.Equal(t, EmptyResponseReasonLowOutput, log.CompensationReasonCode)
 }
 
 func TestProjectUsageLogCompensationExpiresAfterSevenDays(t *testing.T) {
