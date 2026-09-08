@@ -1016,6 +1016,7 @@ export default {
       latestCode: '最新生成',
       copy: '复制',
       copyAll: '全部复制',
+      copySelected: '批量复制',
       download: '下载',
       copied: '兑换码已复制',
       copyFailed: '复制失败',

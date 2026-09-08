@@ -1012,6 +1012,7 @@ export default {
       latestCode: 'Latest code',
       copy: 'Copy',
       copyAll: 'Copy All',
+      copySelected: 'Copy Selected',
       download: 'Download',
       copied: 'Redeem code copied',
       copyFailed: 'Failed to copy',

@@ -4,7 +4,7 @@ import { flushPromises, mount } from '@vue/test-utils'
 import RedeemView from '../RedeemView.vue'
 import type { RedeemHistoryItem } from '@/api/redeem'
 
-const { authState, getHistory, getLotteryHistory, getUserGenerated, getPublicSettings } = vi.hoisted(() => ({
+const { authState, getHistory, getLotteryHistory, getUserGenerated, getPublicSettings, showSuccess, writeText } = vi.hoisted(() => ({
   authState: {
     user: {
       id: 1,
@@ -17,7 +17,9 @@ const { authState, getHistory, getLotteryHistory, getUserGenerated, getPublicSet
   getHistory: vi.fn(),
   getLotteryHistory: vi.fn(),
   getUserGenerated: vi.fn(),
-  getPublicSettings: vi.fn()
+  getPublicSettings: vi.fn(),
+  showSuccess: vi.fn(),
+  writeText: vi.fn()
 }))
 
 vi.mock('@/api', () => ({
@@ -45,7 +47,7 @@ vi.mock('@/stores/auth', () => ({
 vi.mock('@/stores/app', () => ({
   useAppStore: () => ({
     showError: vi.fn(),
-    showSuccess: vi.fn(),
+    showSuccess,
     showWarning: vi.fn()
   })
 }))
@@ -97,10 +99,17 @@ describe('user RedeemView balance transfer migration', () => {
     getLotteryHistory.mockReset()
     getUserGenerated.mockReset()
     getPublicSettings.mockReset()
+    showSuccess.mockReset()
+    writeText.mockReset()
     getHistory.mockResolvedValue(paginated<RedeemHistoryItem>([]))
     getLotteryHistory.mockResolvedValue({ items: [], total: 0, page: 1, page_size: 20, pages: 0 })
     getUserGenerated.mockResolvedValue(paginated([]))
     getPublicSettings.mockResolvedValue({ contact_info: '' })
+    writeText.mockResolvedValue(undefined)
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: { writeText }
+    })
   })
 
   it('exposes balance-to-code generation for an explicitly enabled user', async () => {
@@ -134,5 +143,63 @@ describe('user RedeemView balance transfer migration', () => {
     expect(wrapper.text()).toContain('+$1.25')
     expect(wrapper.text()).toContain('redeem.emptyResponseRefundDetail')
     expect(wrapper.text()).not.toContain('EMPTY-CO...')
+  })
+
+  it('copies only selected generated codes in their list order', async () => {
+    getUserGenerated.mockResolvedValueOnce(
+      paginated([
+        {
+          id: 1,
+          code: 'CODE-ONE',
+          type: 'balance',
+          value: 1,
+          status: 'unused',
+          used_by: null,
+          used_at: null,
+          created_at: '2026-09-09T00:00:00Z',
+          created_by: 1,
+          source: 'user_balance_transfer'
+        },
+        {
+          id: 2,
+          code: 'CODE-TWO',
+          type: 'balance',
+          value: 2,
+          status: 'unused',
+          used_by: null,
+          used_at: null,
+          created_at: '2026-09-09T00:00:00Z',
+          created_by: 1,
+          source: 'user_balance_transfer'
+        },
+        {
+          id: 3,
+          code: 'CODE-THREE',
+          type: 'balance',
+          value: 3,
+          status: 'unused',
+          used_by: null,
+          used_at: null,
+          created_at: '2026-09-09T00:00:00Z',
+          created_by: 1,
+          source: 'user_balance_transfer'
+        }
+      ])
+    )
+
+    const wrapper = mountRedeemView()
+    await flushPromises()
+
+    const copySelectedButton = wrapper.get('[data-test="generated-codes-copy-selected"]')
+    expect(copySelectedButton.attributes('disabled')).toBeDefined()
+
+    await wrapper.get('[data-test="select-generated-code-1"]').setValue(true)
+    await wrapper.get('[data-test="select-generated-code-3"]').setValue(true)
+    expect(copySelectedButton.attributes('disabled')).toBeUndefined()
+
+    await copySelectedButton.trigger('click')
+
+    expect(writeText).toHaveBeenCalledWith('CODE-ONE\nCODE-THREE')
+    expect(showSuccess).toHaveBeenCalledWith('redeem.balanceTransfer.copied')
   })
 })
