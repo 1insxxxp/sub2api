@@ -307,16 +307,6 @@
                 </button>
                 <button
                   type="button"
-                  data-test="generated-codes-copy-selected"
-                  class="btn btn-secondary flex items-center gap-2 px-3 py-2"
-                  :disabled="selectedGeneratedCodeIds.length === 0 || batchDeletingGeneratedCodes"
-                  @click="copySelectedGeneratedCodes"
-                >
-                  <Icon name="copy" size="sm" />
-                  <span>{{ t('redeem.balanceTransfer.copySelected') }}</span>
-                </button>
-                <button
-                  type="button"
                   class="btn btn-secondary px-3 py-2"
                   :disabled="loadingGeneratedCodes"
                   @click="fetchGeneratedCodes"
@@ -1271,11 +1261,6 @@ const generatedCodeResultsText = computed(() => {
   return generatedCodeResults.value.map((item) => item.code).join('\n')
 })
 
-const selectedGeneratedCodes = computed(() => {
-  const selected = new Set(selectedGeneratedCodeIds.value)
-  return generatedCodes.value.filter((item) => selected.has(item.id))
-})
-
 const isDeletingGeneratedCode = (id: number) => {
   return deletingGeneratedCodeIds.value.includes(id)
 }
@@ -1336,21 +1321,6 @@ const handleDeleteSelectedGeneratedCodes = async () => {
     appStore.showError(message)
   } finally {
     batchDeletingGeneratedCodes.value = false
-  }
-}
-
-const copySelectedGeneratedCodes = async () => {
-  const text = selectedGeneratedCodes.value.map((item) => item.code).join('\n')
-  if (!text) {
-    return
-  }
-
-  try {
-    await navigator.clipboard.writeText(text)
-    appStore.showSuccess(t('redeem.balanceTransfer.copied'))
-  } catch (error) {
-    console.error('Failed to copy selected generated redeem codes:', error)
-    appStore.showError(t('redeem.balanceTransfer.copyFailed'))
   }
 }
 
