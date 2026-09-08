@@ -46,7 +46,6 @@ func ProvideAdminHandlers(
 	paymentHandler *admin.PaymentHandler,
 	affiliateHandler *admin.AffiliateHandler,
 	complianceHandler *admin.ComplianceHandler,
-	checkinHandler *admin.CheckinHandler,
 	auditLogHandler *admin.AuditLogHandler,
 	upstreamBillingProbe *service.UpstreamBillingProbeService,
 	ollamaCloudUsage *service.OllamaCloudUsageService,
@@ -89,101 +88,8 @@ func ProvideAdminHandlers(
 		Payment:                paymentHandler,
 		Affiliate:              affiliateHandler,
 		Compliance:             complianceHandler,
-		Checkin:                checkinHandler,
 		AuditLog:               auditLogHandler,
 	}
-}
-
-// ProvideAdminHandlersWithSystemCustomGroup is the Wire-facing aggregate
-// constructor. Keep ProvideAdminHandlers unchanged so external and test callers
-// that use the established constructor signature remain source-compatible.
-func ProvideAdminHandlersWithSystemCustomGroup(
-	dashboardHandler *admin.DashboardHandler,
-	userHandler *admin.UserHandler,
-	groupHandler *admin.GroupHandler,
-	accountHandler *admin.AccountHandler,
-	announcementHandler *admin.AnnouncementHandler,
-	dataManagementHandler *admin.DataManagementHandler,
-	backupHandler *admin.BackupHandler,
-	oauthHandler *admin.OAuthHandler,
-	openaiOAuthHandler *admin.OpenAIOAuthHandler,
-	geminiOAuthHandler *admin.GeminiOAuthHandler,
-	antigravityOAuthHandler *admin.AntigravityOAuthHandler,
-	grokOAuthHandler *admin.GrokOAuthHandler,
-	cnProviderHandler *admin.CNProviderHandler,
-	proxyHandler *admin.ProxyHandler,
-	redeemHandler *admin.RedeemHandler,
-	subAdminCommissionHandler *admin.SubAdminCommissionHandler,
-	promoHandler *admin.PromoHandler,
-	settingHandler *admin.SettingHandler,
-	opsHandler *admin.OpsHandler,
-	systemHandler *admin.SystemHandler,
-	subscriptionHandler *admin.SubscriptionHandler,
-	usageHandler *admin.UsageHandler,
-	userAttributeHandler *admin.UserAttributeHandler,
-	errorPassthroughHandler *admin.ErrorPassthroughHandler,
-	tlsFingerprintProfileHandler *admin.TLSFingerprintProfileHandler,
-	pluginHandler *admin.PluginHandler,
-	apiKeyHandler *admin.AdminAPIKeyHandler,
-	scheduledTestHandler *admin.ScheduledTestHandler,
-	channelHandler *admin.ChannelHandler,
-	channelMonitorHandler *admin.ChannelMonitorHandler,
-	channelMonitorTemplateHandler *admin.ChannelMonitorRequestTemplateHandler,
-	contentModerationHandler *admin.ContentModerationHandler,
-	promptAuditHandler *securityaudit.PromptAdminHandler,
-	paymentHandler *admin.PaymentHandler,
-	affiliateHandler *admin.AffiliateHandler,
-	complianceHandler *admin.ComplianceHandler,
-	checkinHandler *admin.CheckinHandler,
-	auditLogHandler *admin.AuditLogHandler,
-	upstreamBillingProbe *service.UpstreamBillingProbeService,
-	ollamaCloudUsage *service.OllamaCloudUsageService,
-	systemCustomGroupHandler *admin.SystemCustomGroupHandler,
-) *AdminHandlers {
-	handlers := ProvideAdminHandlers(
-		dashboardHandler,
-		userHandler,
-		groupHandler,
-		accountHandler,
-		announcementHandler,
-		dataManagementHandler,
-		backupHandler,
-		oauthHandler,
-		openaiOAuthHandler,
-		geminiOAuthHandler,
-		antigravityOAuthHandler,
-		grokOAuthHandler,
-		cnProviderHandler,
-		proxyHandler,
-		redeemHandler,
-		promoHandler,
-		settingHandler,
-		opsHandler,
-		systemHandler,
-		subscriptionHandler,
-		usageHandler,
-		userAttributeHandler,
-		errorPassthroughHandler,
-		tlsFingerprintProfileHandler,
-		pluginHandler,
-		apiKeyHandler,
-		scheduledTestHandler,
-		channelHandler,
-		channelMonitorHandler,
-		channelMonitorTemplateHandler,
-		contentModerationHandler,
-		promptAuditHandler,
-		paymentHandler,
-		affiliateHandler,
-		complianceHandler,
-		checkinHandler,
-		auditLogHandler,
-		upstreamBillingProbe,
-		ollamaCloudUsage,
-	)
-	handlers.SystemCustomGroup = systemCustomGroupHandler
-	handlers.SubAdminCommission = subAdminCommissionHandler
-	return handlers
 }
 
 func ProvideGatewayHandler(
@@ -265,42 +171,11 @@ func ProvideAdminSettingHandler(settingService *service.SettingService, emailSer
 	return h
 }
 
-func ProvideImageStudioHandler(imageStudioService *service.ImageStudioService) *ImageStudioHandler {
-	return NewImageStudioHandler(imageStudioService)
-}
-
-func ProvideUsageHandler(
-	usageService *service.UsageService,
-	apiKeyService *service.APIKeyService,
-	opsService *service.OpsService,
-	settingService *service.SettingService,
-	claimService *service.EmptyResponseClaimService,
-) *UsageHandler {
-	h := NewUsageHandler(usageService, apiKeyService, opsService, settingService)
-	h.SetEmptyResponseClaimService(claimService)
-	return h
-}
-
-func ProvideAdminUsageHandler(
-	usageService *service.UsageService,
-	apiKeyService *service.APIKeyService,
-	adminService service.AdminService,
-	cleanupService *service.UsageCleanupService,
-	claimService *service.EmptyResponseClaimAdminService,
-	opsService *service.OpsService,
-) *admin.UsageHandler {
-	h := admin.NewUsageHandler(usageService, apiKeyService, adminService, cleanupService)
-	h.SetEmptyResponseClaimService(claimService)
-	h.SetOpsService(opsService)
-	return h
-}
-
 // ProvideHandlers creates the Handlers struct
 func ProvideHandlers(
 	authHandler *AuthHandler,
 	userHandler *UserHandler,
 	apiKeyHandler *APIKeyHandler,
-	userCustomGroupHandler *UserCustomGroupHandler,
 	usageHandler *UsageHandler,
 	redeemHandler *RedeemHandler,
 	subscriptionHandler *SubscriptionHandler,
@@ -316,52 +191,36 @@ func ProvideHandlers(
 	paymentHandler *PaymentHandler,
 	paymentWebhookHandler *PaymentWebhookHandler,
 	availableChannelHandler *AvailableChannelHandler,
-	checkinHandler *CheckinHandler,
-	imageStudioHandler *ImageStudioHandler,
 	modelPlazaHandler *ModelPlazaHandler,
-	modelStatusHandler *ModelStatusHandler,
 	asyncImageHandler *AsyncImageHandler,
 	batchImageHandler *BatchImageHandler,
-	lotteryHandler *LotteryHandler,
-	adminLotteryHandler *admin.LotteryHandler,
-	internalDujiaoAuthHandler *InternalDujiaoAuthHandler,
 	_ *service.IdempotencyCoordinator,
 	_ *service.IdempotencyCleanupService,
 	_ *service.OpenAIQuotaAutoResetService,
 ) *Handlers {
-	handlers := &Handlers{
-		Auth:               authHandler,
-		User:               userHandler,
-		APIKey:             apiKeyHandler,
-		UserCustomGroup:    userCustomGroupHandler,
-		Usage:              usageHandler,
-		Redeem:             redeemHandler,
-		Subscription:       subscriptionHandler,
-		Announcement:       announcementHandler,
-		ChannelMonitor:     channelMonitorUserHandler,
-		ChannelMonitorV2:   channelMonitorV2Handler,
-		Admin:              adminHandlers,
-		Gateway:            gatewayHandler,
-		OpenAIGateway:      openaiGatewayHandler,
-		Setting:            settingHandler,
-		Totp:               totpHandler,
-		Passkey:            passkeyHandler,
-		Payment:            paymentHandler,
-		PaymentWebhook:     paymentWebhookHandler,
-		AvailableChannel:   availableChannelHandler,
-		Checkin:            checkinHandler,
-		ImageStudio:        imageStudioHandler,
-		ModelPlaza:         modelPlazaHandler,
-		ModelStatus:        modelStatusHandler,
-		AsyncImage:         asyncImageHandler,
-		BatchImage:         batchImageHandler,
-		Lottery:            lotteryHandler,
-		InternalDujiaoAuth: internalDujiaoAuthHandler,
+	return &Handlers{
+		Auth:             authHandler,
+		User:             userHandler,
+		APIKey:           apiKeyHandler,
+		Usage:            usageHandler,
+		Redeem:           redeemHandler,
+		Subscription:     subscriptionHandler,
+		Announcement:     announcementHandler,
+		ChannelMonitor:   channelMonitorUserHandler,
+		ChannelMonitorV2: channelMonitorV2Handler,
+		Admin:            adminHandlers,
+		Gateway:          gatewayHandler,
+		OpenAIGateway:    openaiGatewayHandler,
+		Setting:          settingHandler,
+		Totp:             totpHandler,
+		Passkey:          passkeyHandler,
+		Payment:          paymentHandler,
+		PaymentWebhook:   paymentWebhookHandler,
+		AvailableChannel: availableChannelHandler,
+		ModelPlaza:       modelPlazaHandler,
+		AsyncImage:       asyncImageHandler,
+		BatchImage:       batchImageHandler,
 	}
-	if handlers.Admin != nil {
-		handlers.Admin.Lottery = adminLotteryHandler
-	}
-	return handlers
 }
 
 // ProviderSet is the Wire provider set for all handlers
@@ -370,8 +229,7 @@ var ProviderSet = wire.NewSet(
 	NewAuthHandler,
 	NewUserHandler,
 	NewAPIKeyHandler,
-	NewUserCustomGroupHandler,
-	ProvideUsageHandler,
+	NewUsageHandler,
 	NewRedeemHandler,
 	NewSubscriptionHandler,
 	NewAnnouncementHandler,
@@ -385,21 +243,14 @@ var ProviderSet = wire.NewSet(
 	NewPaymentHandler,
 	NewPaymentWebhookHandler,
 	NewAvailableChannelHandler,
-	NewCheckinHandler,
-	ProvideImageStudioHandler,
 	NewModelPlazaHandler,
-	NewModelStatusHandler,
 	NewAsyncImageHandler,
 	ProvideBatchImageHandler,
-	NewLotteryHandler,
-	admin.NewLotteryHandler,
-	NewInternalDujiaoAuthHandler,
 
 	// Admin handlers
 	admin.NewDashboardHandler,
 	admin.NewUserHandler,
-	admin.NewGroupHandler,
-	admin.NewSystemCustomGroupHandler,
+	admin.NewGroupHandlerWithDependencies,
 	admin.ProvideAccountHandler,
 	admin.NewAnnouncementHandler,
 	admin.NewDataManagementHandler,
@@ -412,13 +263,12 @@ var ProviderSet = wire.NewSet(
 	admin.NewCNProviderHandler,
 	admin.NewProxyHandler,
 	admin.NewRedeemHandler,
-	admin.NewSubAdminCommissionHandler,
 	admin.NewPromoHandler,
 	ProvideAdminSettingHandler,
 	admin.NewOpsHandler,
 	ProvideSystemHandler,
 	admin.NewSubscriptionHandler,
-	ProvideAdminUsageHandler,
+	admin.NewUsageHandler,
 	admin.NewUserAttributeHandler,
 	admin.NewErrorPassthroughHandler,
 	admin.NewTLSFingerprintProfileHandler,
@@ -432,10 +282,9 @@ var ProviderSet = wire.NewSet(
 	admin.NewPaymentHandler,
 	admin.NewAffiliateHandler,
 	admin.NewComplianceHandler,
-	admin.NewCheckinHandler,
 	admin.NewAuditLogHandler,
 
 	// AdminHandlers and Handlers constructors
-	ProvideAdminHandlersWithSystemCustomGroup,
+	ProvideAdminHandlers,
 	ProvideHandlers,
 )

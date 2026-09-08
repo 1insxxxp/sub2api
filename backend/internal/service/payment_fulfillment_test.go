@@ -4,7 +4,6 @@ package service
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"math"
 	"strconv"
@@ -22,6 +21,52 @@ import (
 type paymentFulfillmentTestProvider struct {
 	key            string
 	supportedTypes []payment.PaymentType
+}
+
+type paymentFulfillmentRedeemCacheStub struct {
+	count          int
+	getCalls       int
+	incrementCalls int
+	acquireCalls   int
+	releaseCalls   int
+}
+
+type paymentFulfillmentRedeemRepo struct {
+	paymentOrderLifecycleRedeemRepo
+	createCalls int
+}
+
+func (r *paymentFulfillmentRedeemRepo) Create(_ context.Context, code *RedeemCode) error {
+	r.createCalls++
+	if r.codesByCode == nil {
+		r.codesByCode = make(map[string]*RedeemCode)
+	}
+	cloned := *code
+	cloned.ID = int64(100 + r.createCalls)
+	code.ID = cloned.ID
+	r.codesByCode[cloned.Code] = &cloned
+	return nil
+}
+
+func (c *paymentFulfillmentRedeemCacheStub) GetRedeemAttemptCount(context.Context, int64) (int, error) {
+	c.getCalls++
+	return c.count, nil
+}
+
+func (c *paymentFulfillmentRedeemCacheStub) IncrementRedeemAttemptCount(context.Context, int64) error {
+	c.incrementCalls++
+	c.count++
+	return nil
+}
+
+func (c *paymentFulfillmentRedeemCacheStub) AcquireRedeemLock(context.Context, string, time.Duration) (bool, error) {
+	c.acquireCalls++
+	return true, nil
+}
+
+func (c *paymentFulfillmentRedeemCacheStub) ReleaseRedeemLock(context.Context, string) error {
+	c.releaseCalls++
+	return nil
 }
 
 func (p paymentFulfillmentTestProvider) Name() string        { return p.key }
@@ -51,20 +96,9 @@ type paymentFulfillmentAffiliateAccrueCall struct {
 }
 
 type paymentFulfillmentAffiliateRepoStub struct {
-	inviteeSummary     *AffiliateSummary
-	inviterSummary     *AffiliateSummary
-	accrueCalls        []paymentFulfillmentAffiliateAccrueCall
-	qualifiedCount     int
-	reconcileErr       error
-	reconcileCalls     int
-	lockBusy           bool
-	reconcileInviteeFn func(context.Context, int64, float64) (*AffiliateQualification, error)
-	reconcileRequired  bool
-	generation         int64
-	markReconcileErr   error
-	markReconcileCalls int
-	dirtyEvents        []AffiliateQualificationDirtyEvent
-	auditClient        *dbent.Client
+	inviteeSummary *AffiliateSummary
+	inviterSummary *AffiliateSummary
+	accrueCalls    []paymentFulfillmentAffiliateAccrueCall
 }
 
 func (r *paymentFulfillmentAffiliateRepoStub) EnsureUserAffiliate(_ context.Context, userID int64) (*AffiliateSummary, error) {
@@ -156,104 +190,8 @@ func (r *paymentFulfillmentAffiliateRepoStub) GetAffiliateUserOverview(context.C
 	panic("unexpected GetAffiliateUserOverview call")
 }
 
-func (r *paymentFulfillmentAffiliateRepoStub) ReconcileInviteeQualification(ctx context.Context, userID int64, threshold float64) (*AffiliateQualification, error) {
-	r.reconcileCalls++
-	if r.reconcileInviteeFn != nil {
-		return r.reconcileInviteeFn(ctx, userID, threshold)
-	}
-	if r.reconcileErr != nil {
-		return nil, r.reconcileErr
-	}
-	return &AffiliateQualification{}, nil
-}
-
-func (r *paymentFulfillmentAffiliateRepoStub) CountQualifiedInvitees(context.Context, int64, float64) (int, error) {
-	return r.qualifiedCount, nil
-}
-
-func (r *paymentFulfillmentAffiliateRepoStub) ReconcileAllAffiliateQualifications(context.Context, float64, int) error {
-	r.reconcileCalls++
-	return r.reconcileErr
-}
-
-func (r *paymentFulfillmentAffiliateRepoStub) TryWithAffiliateQualificationReconcileLock(ctx context.Context, fn func(context.Context) error) (bool, error) {
-	if r.lockBusy {
-		return false, nil
-	}
-	return true, fn(ctx)
-}
-
-func (r *paymentFulfillmentAffiliateRepoStub) MarkReconcileRequired(context.Context) (AffiliateReconcileToken, error) {
-	r.markReconcileCalls++
-	if r.markReconcileErr != nil {
-		return AffiliateReconcileToken{}, r.markReconcileErr
-	}
-	wasPending := r.reconcileRequired
-	r.generation++
-	if r.generation <= 0 {
-		r.generation = 1
-	}
-	r.reconcileRequired = true
-	return AffiliateReconcileToken{Generation: r.generation, WasPendingBefore: wasPending}, nil
-}
-
-func (r *paymentFulfillmentAffiliateRepoStub) ReadReconcilePendingSnapshot(context.Context) (AffiliateReconcilePendingSnapshot, error) {
-	return AffiliateReconcilePendingSnapshot{Required: r.reconcileRequired, Generation: r.generation}, nil
-}
-
-func (r *paymentFulfillmentAffiliateRepoStub) ClearReconcileRequiredIfGeneration(_ context.Context, expected int64) (bool, error) {
-	if !r.reconcileRequired || r.generation != expected {
-		return false, nil
-	}
-	r.reconcileRequired = false
-	return true, nil
-}
-
-func (r *paymentFulfillmentAffiliateRepoStub) ListAffiliateQualificationDirtyEvents(ctx context.Context, _ int) ([]AffiliateQualificationDirtyEvent, error) {
-	if r.auditClient != nil {
-		logs, err := r.auditClient.PaymentAuditLog.Query().Where(paymentauditlog.ActionEQ(AffiliateQualificationDirtyAuditAction)).All(ctx)
-		if err != nil {
-			return nil, err
-		}
-		events := make([]AffiliateQualificationDirtyEvent, 0, len(logs))
-		for _, logEntry := range logs {
-			event := AffiliateQualificationDirtyEvent{OrderID: logEntry.OrderID, Detail: logEntry.Detail}
-			if err := json.Unmarshal([]byte(logEntry.Detail), &event); err != nil {
-				return nil, err
-			}
-			events = append(events, event)
-		}
-		return events, nil
-	}
-	return append([]AffiliateQualificationDirtyEvent(nil), r.dirtyEvents...), nil
-}
-
-func (r *paymentFulfillmentAffiliateRepoStub) DeleteAffiliateQualificationDirtyEvent(ctx context.Context, event AffiliateQualificationDirtyEvent) (bool, error) {
-	if r.auditClient != nil {
-		deleted, err := r.auditClient.PaymentAuditLog.Delete().Where(
-			paymentauditlog.OrderIDEQ(event.OrderID),
-			paymentauditlog.ActionEQ(AffiliateQualificationDirtyAuditAction),
-			paymentauditlog.DetailEQ(event.Detail),
-		).Exec(ctx)
-		return deleted == 1, err
-	}
-	for i, pending := range r.dirtyEvents {
-		if pending.OrderID == event.OrderID && pending.Detail == event.Detail {
-			r.dirtyEvents = append(r.dirtyEvents[:i], r.dirtyEvents[i+1:]...)
-			return true, nil
-		}
-	}
-	return true, nil
-}
-
-func (r *paymentFulfillmentAffiliateRepoStub) MarkAffiliateQualificationDirtyEventFailed(context.Context, AffiliateQualificationDirtyEvent, error) error {
-	return nil
-}
-
 type paymentFulfillmentSettingRepoStub struct {
-	values         map[string]string
-	setErr         error
-	getMultipleErr error
+	values map[string]string
 }
 
 func (s *paymentFulfillmentSettingRepoStub) Get(context.Context, string) (*Setting, error) {
@@ -272,9 +210,6 @@ func (s *paymentFulfillmentSettingRepoStub) GetValue(_ context.Context, key stri
 }
 
 func (s *paymentFulfillmentSettingRepoStub) Set(_ context.Context, key, value string) error {
-	if s.setErr != nil {
-		return s.setErr
-	}
 	if s.values == nil {
 		s.values = map[string]string{}
 	}
@@ -283,9 +218,6 @@ func (s *paymentFulfillmentSettingRepoStub) Set(_ context.Context, key, value st
 }
 
 func (s *paymentFulfillmentSettingRepoStub) GetMultiple(_ context.Context, keys []string) (map[string]string, error) {
-	if s.getMultipleErr != nil {
-		return nil, s.getMultipleErr
-	}
 	out := make(map[string]string, len(keys))
 	for _, key := range keys {
 		out[key] = s.values[key]
@@ -324,14 +256,15 @@ func ensurePaymentAuditOrderActionUniqueIndex(t *testing.T, ctx context.Context,
 
 func TestResolveRedeemAction_CodeNotFound(t *testing.T) {
 	t.Parallel()
-	action := resolveRedeemAction(nil, nil)
-	assert.Equal(t, redeemActionCreate, action, "nil code with nil error should create")
+	action, err := resolveRedeemAction(nil, ErrRedeemCodeNotFound)
+	require.NoError(t, err)
+	assert.Equal(t, redeemActionCreate, action, "a missing code should be created")
 }
 
 func TestResolveRedeemAction_LookupError(t *testing.T) {
 	t.Parallel()
-	action := resolveRedeemAction(nil, errors.New("db connection lost"))
-	assert.Equal(t, redeemActionCreate, action, "lookup error should fall back to create")
+	_, err := resolveRedeemAction(nil, errors.New("db connection lost"))
+	require.ErrorContains(t, err, "lookup payment redeem code")
 }
 
 func TestResolveRedeemAction_LookupErrorWithNonNilCode(t *testing.T) {
@@ -339,8 +272,8 @@ func TestResolveRedeemAction_LookupErrorWithNonNilCode(t *testing.T) {
 	// Edge case: both code and error are non-nil (shouldn't happen in practice,
 	// but the function should still treat error as authoritative)
 	code := &RedeemCode{Status: StatusUnused}
-	action := resolveRedeemAction(code, errors.New("partial error"))
-	assert.Equal(t, redeemActionCreate, action, "non-nil error should always result in create regardless of code")
+	_, err := resolveRedeemAction(code, errors.New("partial error"))
+	require.ErrorContains(t, err, "lookup payment redeem code")
 }
 
 func TestResolveRedeemAction_CodeExistsAndUsed(t *testing.T) {
@@ -351,7 +284,8 @@ func TestResolveRedeemAction_CodeExistsAndUsed(t *testing.T) {
 		Type:   RedeemTypeBalance,
 		Value:  10.0,
 	}
-	action := resolveRedeemAction(code, nil)
+	action, err := resolveRedeemAction(code, nil)
+	require.NoError(t, err)
 	assert.Equal(t, redeemActionSkipCompleted, action, "used code should skip to completed")
 }
 
@@ -363,7 +297,8 @@ func TestResolveRedeemAction_CodeExistsAndUnused(t *testing.T) {
 		Type:   RedeemTypeBalance,
 		Value:  25.0,
 	}
-	action := resolveRedeemAction(code, nil)
+	action, err := resolveRedeemAction(code, nil)
+	require.NoError(t, err)
 	assert.Equal(t, redeemActionRedeem, action, "unused code should skip creation and proceed to redeem")
 }
 
@@ -375,7 +310,8 @@ func TestResolveRedeemAction_CodeExistsWithExpiredStatus(t *testing.T) {
 		Code:   "expired-code",
 		Status: StatusExpired,
 	}
-	action := resolveRedeemAction(code, nil)
+	action, err := resolveRedeemAction(code, nil)
+	require.NoError(t, err)
 	assert.Equal(t, redeemActionRedeem, action, "expired-status code is not IsUsed(), should redeem")
 }
 
@@ -391,6 +327,7 @@ func TestResolveRedeemAction_Table(t *testing.T) {
 		code     *RedeemCode
 		err      error
 		expected redeemAction
+		wantErr  bool
 	}{
 		{
 			name:     "nil code, nil error — first run",
@@ -405,10 +342,11 @@ func TestResolveRedeemAction_Table(t *testing.T) {
 			expected: redeemActionCreate,
 		},
 		{
-			name:     "nil code, generic DB error — treat as not found",
+			name:     "nil code, generic DB error — fail closed",
 			code:     nil,
 			err:      errors.New("connection refused"),
 			expected: redeemActionCreate,
+			wantErr:  true,
 		},
 		{
 			name:     "code exists, used — previous run completed redeem",
@@ -423,17 +361,23 @@ func TestResolveRedeemAction_Table(t *testing.T) {
 			expected: redeemActionRedeem,
 		},
 		{
-			name:     "code exists but error also set — error takes precedence",
+			name:     "code exists but error also set — fail closed",
 			code:     &RedeemCode{Status: StatusUsed},
 			err:      errors.New("unexpected"),
 			expected: redeemActionCreate,
+			wantErr:  true,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			got := resolveRedeemAction(tt.code, tt.err)
+			got, err := resolveRedeemAction(tt.code, tt.err)
+			if tt.wantErr {
+				require.Error(t, err)
+				return
+			}
+			require.NoError(t, err)
 			assert.Equal(t, tt.expected, got)
 		})
 	}
@@ -464,11 +408,48 @@ func TestResolveRedeemAction_IsUsedCanUseConsistency(t *testing.T) {
 	// Verify our decision function is consistent with the domain model methods
 	assert.True(t, usedCode.IsUsed())
 	assert.False(t, usedCode.CanUse())
-	assert.Equal(t, redeemActionSkipCompleted, resolveRedeemAction(usedCode, nil))
+	usedAction, err := resolveRedeemAction(usedCode, nil)
+	require.NoError(t, err)
+	assert.Equal(t, redeemActionSkipCompleted, usedAction)
 
 	assert.False(t, unusedCode.IsUsed())
 	assert.True(t, unusedCode.CanUse())
-	assert.Equal(t, redeemActionRedeem, resolveRedeemAction(unusedCode, nil))
+	unusedAction, err := resolveRedeemAction(unusedCode, nil)
+	require.NoError(t, err)
+	assert.Equal(t, redeemActionRedeem, unusedAction)
+}
+
+func TestValidatePaymentRedeemCode(t *testing.T) {
+	t.Parallel()
+	userID := int64(42)
+	otherUserID := int64(43)
+	order := &dbent.PaymentOrder{ID: 7, UserID: userID, RechargeCode: "PAY-7-12345", Amount: 80}
+
+	tests := []struct {
+		name    string
+		code    *RedeemCode
+		wantErr string
+	}{
+		{name: "unused code", code: &RedeemCode{Code: order.RechargeCode, Type: RedeemTypeBalance, Value: 80, Status: StatusUnused}},
+		{name: "used by order user", code: &RedeemCode{Code: order.RechargeCode, Type: RedeemTypeBalance, Value: 80, Status: StatusUsed, UsedBy: &userID}},
+		{name: "used without user", code: &RedeemCode{Code: order.RechargeCode, Type: RedeemTypeBalance, Value: 80, Status: StatusUsed}, wantErr: "user mismatch"},
+		{name: "used by another user", code: &RedeemCode{Code: order.RechargeCode, Type: RedeemTypeBalance, Value: 80, Status: StatusUsed, UsedBy: &otherUserID}, wantErr: "user mismatch"},
+		{name: "wrong code", code: &RedeemCode{Code: "OTHER", Type: RedeemTypeBalance, Value: 80, Status: StatusUnused}, wantErr: "code mismatch"},
+		{name: "wrong type", code: &RedeemCode{Code: order.RechargeCode, Type: RedeemTypeConcurrency, Value: 80, Status: StatusUnused}, wantErr: "type mismatch"},
+		{name: "wrong amount", code: &RedeemCode{Code: order.RechargeCode, Type: RedeemTypeBalance, Value: 79, Status: StatusUnused}, wantErr: "amount mismatch"},
+		{name: "invalid status", code: &RedeemCode{Code: order.RechargeCode, Type: RedeemTypeBalance, Value: 80, Status: StatusDisabled}, wantErr: "invalid status"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := validatePaymentRedeemCode(order, tt.code)
+			if tt.wantErr == "" {
+				require.NoError(t, err)
+				return
+			}
+			require.ErrorContains(t, err, tt.wantErr)
+		})
+	}
 }
 
 func TestExpectedNotificationProviderKeyPrefersOrderInstanceProvider(t *testing.T) {
@@ -782,6 +763,100 @@ func TestFulfillmentLeaseVersionRejectsStaleWorker(t *testing.T) {
 	require.NoError(t, svc.markCompleted(ctx, order, secondLease, "SUBSCRIPTION_SUCCESS"))
 }
 
+func TestPublicRedeemStillEnforcesFailureLimit(t *testing.T) {
+	cache := &paymentFulfillmentRedeemCacheStub{count: redeemMaxFailedAttempts}
+	svc := &RedeemService{cache: cache}
+
+	result, err := svc.Redeem(context.Background(), 42, "PUBLIC-CODE")
+
+	require.Nil(t, result)
+	require.ErrorIs(t, err, ErrRedeemRateLimited)
+	require.Equal(t, 1, cache.getCalls)
+	require.Zero(t, cache.incrementCalls)
+	require.Zero(t, cache.acquireCalls)
+}
+
+func TestPublicRedeemStillIncrementsInvalidCodeFailures(t *testing.T) {
+	cache := &paymentFulfillmentRedeemCacheStub{}
+	redeemRepo := &redeemRejectRepo{code: RedeemCode{Code: "OTHER"}}
+	svc := &RedeemService{redeemRepo: redeemRepo, cache: cache}
+
+	result, err := svc.Redeem(context.Background(), 42, "MISSING")
+
+	require.Nil(t, result)
+	require.ErrorIs(t, err, ErrRedeemCodeNotFound)
+	require.Equal(t, 1, cache.getCalls)
+	require.Equal(t, 1, cache.incrementCalls)
+	require.Equal(t, 1, cache.count)
+	require.Equal(t, 1, cache.acquireCalls)
+	require.Equal(t, 1, cache.releaseCalls)
+}
+
+func TestPaymentRedeemDoesNotIncrementFailureLimit(t *testing.T) {
+	ctx := context.Background()
+	cache := &paymentFulfillmentRedeemCacheStub{count: redeemMaxFailedAttempts}
+	redeemRepo := &redeemRejectRepo{code: RedeemCode{
+		ID:     1,
+		Code:   "PAY-EXPIRED",
+		Type:   RedeemTypeBalance,
+		Value:  10,
+		Status: StatusExpired,
+	}}
+	svc := &RedeemService{redeemRepo: redeemRepo, cache: cache}
+
+	result, err := svc.redeemForPaymentFulfillment(ctx, 42, redeemRepo.code.Code)
+
+	require.Nil(t, result)
+	require.ErrorIs(t, err, ErrRedeemCodeExpired)
+	require.Zero(t, cache.getCalls)
+	require.Zero(t, cache.incrementCalls)
+	require.Equal(t, 1, cache.acquireCalls)
+	require.Equal(t, 1, cache.releaseCalls)
+}
+
+func TestExecuteBalanceFulfillmentBypassesUserRedeemRateLimit(t *testing.T) {
+	ctx := context.Background()
+	client := newPaymentConfigServiceTestClient(t)
+	ensurePaymentAuditOrderActionUniqueIndex(t, ctx, client)
+	order := createPaymentFulfillmentSubscriptionOrder(t, ctx, client, OrderStatusPaid, time.Now())
+	order, err := client.PaymentOrder.UpdateOneID(order.ID).
+		SetOrderType(payment.OrderTypeBalance).
+		ClearPlanID().
+		ClearSubscriptionGroupID().
+		ClearSubscriptionDays().
+		Save(ctx)
+	require.NoError(t, err)
+
+	redeemRepo := &paymentFulfillmentRedeemRepo{}
+	credited := 0.0
+	userRepo := &mockUserRepo{getByIDUser: &User{ID: order.UserID, Balance: 0}}
+	userRepo.updateBalanceFn = func(_ context.Context, id int64, amount float64) error {
+		require.Equal(t, order.UserID, id)
+		credited += amount
+		return nil
+	}
+	cache := &paymentFulfillmentRedeemCacheStub{count: redeemMaxFailedAttempts}
+	redeemService := NewRedeemService(redeemRepo, userRepo, nil, cache, nil, client, nil, nil)
+	svc := &PaymentService{entClient: client, redeemService: redeemService, userRepo: userRepo}
+
+	require.NoError(t, svc.ExecuteBalanceFulfillment(ctx, order.ID))
+	require.InDelta(t, order.Amount, credited, 1e-8)
+	require.Zero(t, cache.getCalls, "trusted payment fulfillment must not read the public failure counter")
+	require.Zero(t, cache.incrementCalls, "trusted payment fulfillment must not mutate the public failure counter")
+	require.Equal(t, 1, cache.acquireCalls)
+	require.Equal(t, 1, cache.releaseCalls)
+	require.Equal(t, 1, redeemRepo.createCalls)
+	require.Len(t, redeemRepo.useCalls, 1)
+
+	usedCode := redeemRepo.codesByCode[order.RechargeCode]
+	require.Equal(t, StatusUsed, usedCode.Status)
+	require.NotNil(t, usedCode.UsedBy)
+	require.Equal(t, order.UserID, *usedCode.UsedBy)
+	reloaded, err := client.PaymentOrder.Get(ctx, order.ID)
+	require.NoError(t, err)
+	require.Equal(t, OrderStatusCompleted, reloaded.Status)
+}
+
 func TestExecuteBalanceFulfillmentRecoversAfterRedeemWithoutCreditingAgain(t *testing.T) {
 	ctx := context.Background()
 	client := newPaymentConfigServiceTestClient(t)
@@ -797,6 +872,7 @@ func TestExecuteBalanceFulfillmentRecoversAfterRedeemWithoutCreditingAgain(t *te
 		Save(ctx)
 	require.NoError(t, err)
 
+	usedBy := order.UserID
 	redeemRepo := &redeemCodeRepoStub{codesByCode: map[string]*RedeemCode{
 		order.RechargeCode: {
 			ID:     101,
@@ -804,6 +880,7 @@ func TestExecuteBalanceFulfillmentRecoversAfterRedeemWithoutCreditingAgain(t *te
 			Type:   RedeemTypeBalance,
 			Value:  order.Amount,
 			Status: StatusUsed,
+			UsedBy: &usedBy,
 		},
 	}}
 	svc := &PaymentService{
@@ -884,127 +961,42 @@ func TestPaymentNotificationRejectsAmountMismatchBeforeFulfillment(t *testing.T)
 	require.Equal(t, OrderStatusPending, reloaded.Status)
 }
 
-func TestPaymentNotificationTransitionsUnpaidFailedOrderBeforeFulfillment(t *testing.T) {
+func TestExecuteBalanceFulfillmentRejectsCodeUsedByAnotherUser(t *testing.T) {
 	ctx := context.Background()
 	client := newPaymentConfigServiceTestClient(t)
-	order := createPaymentFulfillmentSubscriptionOrder(t, ctx, client, OrderStatusFailed, time.Now())
+	ensurePaymentAuditOrderActionUniqueIndex(t, ctx, client)
+	order := createPaymentFulfillmentSubscriptionOrder(t, ctx, client, OrderStatusPaid, time.Now())
 	order, err := client.PaymentOrder.UpdateOneID(order.ID).
-		ClearPaidAt().
-		SetPaymentTradeNo("").
+		SetOrderType(payment.OrderTypeBalance).
+		ClearPlanID().
+		ClearSubscriptionGroupID().
+		ClearSubscriptionDays().
 		Save(ctx)
 	require.NoError(t, err)
 
+	otherUserID := order.UserID + 1
+	redeemRepo := &redeemCodeRepoStub{codesByCode: map[string]*RedeemCode{
+		order.RechargeCode: {
+			ID:     101,
+			Code:   order.RechargeCode,
+			Type:   RedeemTypeBalance,
+			Value:  order.Amount,
+			Status: StatusUsed,
+			UsedBy: &otherUserID,
+		},
+	}}
 	svc := &PaymentService{
-		entClient: client,
-		groupRepo: &subscriptionGroupRepoStub{group: &Group{
-			ID:               7,
-			Status:           StatusDisabled,
-			SubscriptionType: SubscriptionTypeSubscription,
-		}},
-	}
-	notification := &payment.PaymentNotification{
-		TradeNo: "late-success-trade",
-		OrderID: order.OutTradeNo,
-		Amount:  order.PayAmount,
-		Status:  payment.NotificationStatusSuccess,
+		entClient:     client,
+		redeemService: &RedeemService{redeemRepo: redeemRepo},
 	}
 
-	err = svc.HandlePaymentNotification(ctx, notification, payment.TypeAlipay)
-	require.Error(t, err, "fulfillment should still report the inactive group")
-	reloaded, getErr := client.PaymentOrder.Get(ctx, order.ID)
-	require.NoError(t, getErr)
-	require.Equal(t, OrderStatusFailed, reloaded.Status)
-	require.NotNil(t, reloaded.PaidAt, "the successful callback must persist payment before fulfillment")
-	require.Equal(t, notification.TradeNo, reloaded.PaymentTradeNo)
-}
-
-func TestAlreadyProcessedDoesNotFulfillUnpaidFailedOrder(t *testing.T) {
-	ctx := context.Background()
-	client := newPaymentConfigServiceTestClient(t)
-	order := createPaymentFulfillmentSubscriptionOrder(t, ctx, client, OrderStatusFailed, time.Now())
-	order, err := client.PaymentOrder.UpdateOneID(order.ID).ClearPaidAt().Save(ctx)
+	err = svc.ExecuteBalanceFulfillment(ctx, order.ID)
+	require.ErrorContains(t, err, "payment redeem code user mismatch")
+	require.Empty(t, redeemRepo.useCalls)
+	reloaded, err := client.PaymentOrder.Get(ctx, order.ID)
 	require.NoError(t, err)
-
-	svc := &PaymentService{
-		entClient: client,
-		groupRepo: &subscriptionGroupRepoStub{group: &Group{
-			ID:               7,
-			Status:           StatusDisabled,
-			SubscriptionType: SubscriptionTypeSubscription,
-		}},
-	}
-
-	require.NoError(t, svc.alreadyProcessed(ctx, order))
-	reloaded, getErr := client.PaymentOrder.Get(ctx, order.ID)
-	require.NoError(t, getErr)
 	require.Equal(t, OrderStatusFailed, reloaded.Status)
-	require.Nil(t, reloaded.PaidAt)
-}
-
-func TestPaymentNotificationExpiredRecoveryUsesOriginalExpiry(t *testing.T) {
-	tests := []struct {
-		name        string
-		expiresAt   time.Time
-		updatedAt   time.Time
-		recoverable bool
-	}{
-		{
-			name:        "old expiry with recently refreshed row is not recoverable",
-			expiresAt:   time.Now().Add(-payment.PaymentRecoveryGracePeriod - time.Minute),
-			updatedAt:   time.Now(),
-			recoverable: false,
-		},
-		{
-			name:        "recent expiry with stale row timestamp is recoverable",
-			expiresAt:   time.Now().Add(-time.Minute),
-			updatedAt:   time.Now().Add(-payment.PaymentRecoveryGracePeriod - time.Minute),
-			recoverable: true,
-		},
-	}
-
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			ctx := context.Background()
-			client := newPaymentConfigServiceTestClient(t)
-			order := createPaymentFulfillmentSubscriptionOrder(t, ctx, client, OrderStatusExpired, tc.updatedAt)
-			order, err := client.PaymentOrder.UpdateOneID(order.ID).
-				ClearPaidAt().
-				SetPaymentTradeNo("").
-				SetExpiresAt(tc.expiresAt).
-				SetUpdatedAt(tc.updatedAt).
-				Save(ctx)
-			require.NoError(t, err)
-
-			svc := &PaymentService{
-				entClient: client,
-				groupRepo: &subscriptionGroupRepoStub{group: &Group{
-					ID:               7,
-					Status:           StatusDisabled,
-					SubscriptionType: SubscriptionTypeSubscription,
-				}},
-			}
-			notification := &payment.PaymentNotification{
-				TradeNo: "expired-success-trade",
-				OrderID: order.OutTradeNo,
-				Amount:  order.PayAmount,
-				Status:  payment.NotificationStatusSuccess,
-			}
-
-			err = svc.HandlePaymentNotification(ctx, notification, payment.TypeAlipay)
-			reloaded, getErr := client.PaymentOrder.Get(ctx, order.ID)
-			require.NoError(t, getErr)
-			if tc.recoverable {
-				require.Error(t, err, "fulfillment should still report the inactive group")
-				require.Equal(t, OrderStatusFailed, reloaded.Status)
-				require.NotNil(t, reloaded.PaidAt)
-				require.Equal(t, notification.TradeNo, reloaded.PaymentTradeNo)
-				return
-			}
-			require.NoError(t, err)
-			require.Equal(t, OrderStatusExpired, reloaded.Status)
-			require.Nil(t, reloaded.PaidAt)
-		})
-	}
+	require.Nil(t, reloaded.CompletedAt)
 }
 
 func TestExecuteSubscriptionFulfillmentRecoversCommittedAssignmentWithoutExtendingAgain(t *testing.T) {
@@ -1120,410 +1112,6 @@ func assertPaymentSubscriptionExpiry(t *testing.T, repo *subscriptionUserSubRepo
 	sub, err := repo.GetByUserIDAndGroupID(context.Background(), order.UserID, *order.SubscriptionGroupID)
 	require.NoError(t, err)
 	require.True(t, sub.ExpiresAt.Equal(expected), "subscription expiry changed from %s to %s", expected, sub.ExpiresAt)
-}
-
-func TestApplyAffiliateRebateFallsBackWhenPendingReconcileFails(t *testing.T) {
-	ctx := context.Background()
-	client := newPaymentConfigServiceTestClient(t)
-	ensurePaymentAuditOrderActionUniqueIndex(t, ctx, client)
-
-	user, err := client.User.Create().SetEmail("affiliate-fallback@example.com").SetPasswordHash("hash").SetUsername("affiliate-fallback").Save(ctx)
-	require.NoError(t, err)
-	order, err := client.PaymentOrder.Create().
-		SetUserID(user.ID).SetUserEmail(user.Email).SetUserName(user.Username).
-		SetAmount(100).SetPayAmount(100).SetFeeRate(0).
-		SetRechargeCode("PAY-AFFILIATE-FALLBACK").SetOutTradeNo("sub2_affiliate_fallback").
-		SetPaymentType(payment.TypeAlipay).SetPaymentTradeNo("trade-affiliate-fallback").SetOrderType(payment.OrderTypeBalance).
-		SetStatus(OrderStatusRecharging).SetExpiresAt(time.Now().Add(time.Hour)).
-		SetClientIP("127.0.0.1").SetSrcHost("api.example.com").Save(ctx)
-	require.NoError(t, err)
-
-	inviterID := int64(9010)
-	affiliateRepo := &paymentFulfillmentAffiliateRepoStub{
-		inviteeSummary:    &AffiliateSummary{UserID: user.ID, InviterID: &inviterID, CreatedAt: time.Now().Add(-time.Hour)},
-		inviterSummary:    &AffiliateSummary{UserID: inviterID},
-		reconcileErr:      errors.New("pending qualification reconcile failed"),
-		reconcileRequired: true,
-		generation:        1,
-	}
-	settings := &paymentFulfillmentSettingRepoStub{values: map[string]string{
-		SettingKeyAffiliateEnabled:               "true",
-		SettingKeyAffiliateRebateRate:            "8",
-		SettingKeyAffiliateTierReconcileRequired: "true",
-		SettingKeyAffiliateQualificationAmount:   "50",
-		SettingKeyAffiliateBronzeInvitees:        "3",
-		SettingKeyAffiliateBronzeRate:            "10",
-		SettingKeyAffiliateSilverInvitees:        "10",
-		SettingKeyAffiliateSilverRate:            "12",
-		SettingKeyAffiliateGoldInvitees:          "30",
-		SettingKeyAffiliateGoldRate:              "15",
-	}}
-	svc := &PaymentService{entClient: client, affiliateService: NewAffiliateService(affiliateRepo, NewSettingService(settings, nil), nil, nil)}
-
-	err = svc.applyAffiliateRebateForOrder(ctx, order)
-
-	require.NoError(t, err)
-	require.Len(t, affiliateRepo.accrueCalls, 1)
-	require.Equal(t, 8.0, affiliateRepo.accrueCalls[0].amount)
-	require.True(t, affiliateRepo.reconcileRequired)
-	require.Equal(t, int64(2), affiliateRepo.generation)
-	fallbacks, err := client.PaymentAuditLog.Query().Where(
-		paymentauditlog.OrderIDEQ(strconv.FormatInt(order.ID, 10)),
-		paymentauditlog.ActionEQ("AFFILIATE_TIER_FALLBACK"),
-	).Count(ctx)
-	require.NoError(t, err)
-	require.Equal(t, 1, fallbacks)
-}
-
-func TestApplyAffiliateRebateFallsBackWhenQualificationReconcileLockIsBusy(t *testing.T) {
-	ctx := context.Background()
-	client := newPaymentConfigServiceTestClient(t)
-	ensurePaymentAuditOrderActionUniqueIndex(t, ctx, client)
-	user, err := client.User.Create().SetEmail("affiliate-lock-busy@example.com").SetPasswordHash("hash").SetUsername("affiliate-lock-busy").Save(ctx)
-	require.NoError(t, err)
-	order, err := client.PaymentOrder.Create().SetUserID(user.ID).SetUserEmail(user.Email).SetUserName(user.Username).
-		SetAmount(100).SetPayAmount(100).SetFeeRate(0).SetRechargeCode("PAY-AFFILIATE-LOCK-BUSY").SetOutTradeNo("sub2_affiliate_lock_busy").
-		SetPaymentType(payment.TypeAlipay).SetPaymentTradeNo("trade-affiliate-lock-busy").SetOrderType(payment.OrderTypeBalance).
-		SetStatus(OrderStatusRecharging).SetExpiresAt(time.Now().Add(time.Hour)).SetClientIP("127.0.0.1").SetSrcHost("api.example.com").Save(ctx)
-	require.NoError(t, err)
-
-	inviterID := int64(9011)
-	affiliateRepo := &paymentFulfillmentAffiliateRepoStub{
-		qualifiedCount:    30,
-		lockBusy:          true,
-		reconcileRequired: true,
-		generation:        1,
-		inviteeSummary:    &AffiliateSummary{UserID: user.ID, InviterID: &inviterID, CreatedAt: time.Now().Add(-time.Hour)},
-		inviterSummary:    &AffiliateSummary{UserID: inviterID},
-	}
-	settings := &paymentFulfillmentSettingRepoStub{values: map[string]string{
-		SettingKeyAffiliateEnabled:               "true",
-		SettingKeyAffiliateRebateRate:            "8",
-		SettingKeyAffiliateTierReconcileRequired: "true",
-		SettingKeyAffiliateQualificationAmount:   "50",
-		SettingKeyAffiliateBronzeInvitees:        "3",
-		SettingKeyAffiliateBronzeRate:            "10",
-		SettingKeyAffiliateSilverInvitees:        "10",
-		SettingKeyAffiliateSilverRate:            "12",
-		SettingKeyAffiliateGoldInvitees:          "30",
-		SettingKeyAffiliateGoldRate:              "15",
-	}}
-	svc := &PaymentService{entClient: client, affiliateService: NewAffiliateService(affiliateRepo, NewSettingService(settings, nil), nil, nil)}
-
-	require.NoError(t, svc.applyAffiliateRebateForOrder(ctx, order))
-	require.Len(t, affiliateRepo.accrueCalls, 1)
-	require.Equal(t, 8.0, affiliateRepo.accrueCalls[0].amount)
-	require.True(t, affiliateRepo.reconcileRequired)
-	require.Equal(t, int64(1), affiliateRepo.generation)
-}
-
-func TestApplyAffiliateRebateStrictFailureAuditsMarkerWriteFailure(t *testing.T) {
-	ctx := context.Background()
-	client := newPaymentConfigServiceTestClient(t)
-	ensurePaymentAuditOrderActionUniqueIndex(t, ctx, client)
-	user, err := client.User.Create().SetEmail("affiliate-strict-failure@example.com").SetPasswordHash("hash").SetUsername("affiliate-strict-failure").Save(ctx)
-	require.NoError(t, err)
-	order, err := client.PaymentOrder.Create().SetUserID(user.ID).SetUserEmail(user.Email).SetUserName(user.Username).
-		SetAmount(100).SetPayAmount(100).SetFeeRate(0).SetRechargeCode("PAY-AFFILIATE-STRICT-FAILURE").SetOutTradeNo("sub2_affiliate_strict_failure").
-		SetPaymentType(payment.TypeAlipay).SetPaymentTradeNo("trade-affiliate-strict-failure").SetOrderType(payment.OrderTypeBalance).
-		SetStatus(OrderStatusRecharging).SetExpiresAt(time.Now().Add(time.Hour)).SetClientIP("127.0.0.1").SetSrcHost("api.example.com").Save(ctx)
-	require.NoError(t, err)
-	inviterID := int64(9012)
-	affiliateRepo := &paymentFulfillmentAffiliateRepoStub{
-		qualifiedCount:   30,
-		inviteeSummary:   &AffiliateSummary{UserID: user.ID, InviterID: &inviterID, CreatedAt: time.Now().Add(-time.Hour)},
-		inviterSummary:   &AffiliateSummary{UserID: inviterID},
-		markReconcileErr: errors.New("generation bump failed"),
-	}
-	settings := &paymentFulfillmentSettingRepoStub{values: map[string]string{
-		SettingKeyAffiliateEnabled:             "true",
-		SettingKeyAffiliateRebateRate:          "8",
-		SettingKeyAffiliateQualificationAmount: "invalid",
-	}}
-	svc := &PaymentService{entClient: client, affiliateService: NewAffiliateService(affiliateRepo, NewSettingService(settings, nil), nil, nil)}
-
-	require.NoError(t, svc.applyAffiliateRebateForOrder(ctx, order))
-	require.Len(t, affiliateRepo.accrueCalls, 1)
-	require.Equal(t, 8.0, affiliateRepo.accrueCalls[0].amount)
-	fallback, err := client.PaymentAuditLog.Query().Where(
-		paymentauditlog.OrderIDEQ(strconv.FormatInt(order.ID, 10)),
-		paymentauditlog.ActionEQ("AFFILIATE_TIER_FALLBACK"),
-	).Only(ctx)
-	require.NoError(t, err)
-	require.Contains(t, fallback.Detail, "bump affiliate qualification reconcile generation")
-}
-
-func TestPaymentTierThresholdOrderUsesOldRateAndNextOrderUsesNewRate(t *testing.T) {
-	tests := []struct {
-		name    string
-		before  int
-		after   int
-		oldRate float64
-		newRate float64
-	}{
-		{name: "bronze", before: 2, after: 3, oldRate: 8, newRate: 10},
-		{name: "silver", before: 9, after: 10, oldRate: 10, newRate: 12},
-		{name: "gold", before: 29, after: 30, oldRate: 12, newRate: 15},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			ctx := context.Background()
-			client := newPaymentConfigServiceTestClient(t)
-			ensurePaymentAuditOrderActionUniqueIndex(t, ctx, client)
-			user, err := client.User.Create().SetEmail("tier-" + tt.name + "@example.com").SetPasswordHash("hash").SetUsername("tier-" + tt.name).Save(ctx)
-			require.NoError(t, err)
-			inviterID := int64(9100 + tt.after)
-			repo := &paymentFulfillmentAffiliateRepoStub{
-				qualifiedCount: tt.before,
-				inviteeSummary: &AffiliateSummary{UserID: user.ID, InviterID: &inviterID, CreatedAt: time.Now().Add(-time.Hour)},
-				inviterSummary: &AffiliateSummary{UserID: inviterID},
-			}
-			var firstOrderID int64
-			repo.reconcileInviteeFn = func(ctx context.Context, userID int64, threshold float64) (*AffiliateQualification, error) {
-				if firstOrderID > 0 {
-					first, getErr := client.PaymentOrder.Get(ctx, firstOrderID)
-					require.NoError(t, getErr)
-					if first.Status == OrderStatusCompleted {
-						repo.qualifiedCount = tt.after
-					}
-				}
-				return &AffiliateQualification{InviteeUserID: userID, QualifyingPaymentAmount: threshold}, nil
-			}
-			settings := &paymentFulfillmentSettingRepoStub{values: map[string]string{
-				SettingKeyAffiliateEnabled:             "true",
-				SettingKeyAffiliateRebateRate:          "8",
-				SettingKeyAffiliateQualificationAmount: "50",
-				SettingKeyAffiliateBronzeInvitees:      "3",
-				SettingKeyAffiliateBronzeRate:          "10",
-				SettingKeyAffiliateSilverInvitees:      "10",
-				SettingKeyAffiliateSilverRate:          "12",
-				SettingKeyAffiliateGoldInvitees:        "30",
-				SettingKeyAffiliateGoldRate:            "15",
-			}}
-			svc := &PaymentService{entClient: client, affiliateService: NewAffiliateService(repo, NewSettingService(settings, nil), nil, nil)}
-			createOrder := func(suffix string) *dbent.PaymentOrder {
-				order, createErr := client.PaymentOrder.Create().SetUserID(user.ID).SetUserEmail(user.Email).SetUserName(user.Username).
-					SetAmount(100).SetPayAmount(100).SetFeeRate(0).SetRechargeCode("TIER-" + tt.name + "-" + suffix).SetOutTradeNo("sub2_tier_" + tt.name + "_" + suffix).
-					SetPaymentType(payment.TypeAlipay).SetPaymentTradeNo("trade-tier-" + tt.name + "-" + suffix).SetOrderType(payment.OrderTypeBalance).
-					SetStatus(OrderStatusPaid).SetExpiresAt(time.Now().Add(time.Hour)).SetClientIP("127.0.0.1").SetSrcHost("api.example.com").Save(ctx)
-				require.NoError(t, createErr)
-				return order
-			}
-
-			first := createOrder("first")
-			firstOrderID = first.ID
-			firstLease, err := svc.acquirePaymentFulfillmentLease(ctx, first)
-			require.NoError(t, err)
-			require.NoError(t, svc.applyAffiliateRebateForOrder(ctx, first))
-			require.Equal(t, tt.oldRate, repo.accrueCalls[0].amount)
-			require.NoError(t, svc.markCompleted(ctx, first, firstLease, "TIER_FIRST_COMPLETED"))
-			require.Equal(t, tt.after, repo.qualifiedCount)
-
-			second := createOrder("second")
-			_, err = svc.acquirePaymentFulfillmentLease(ctx, second)
-			require.NoError(t, err)
-			require.NoError(t, svc.applyAffiliateRebateForOrder(ctx, second))
-			require.Len(t, repo.accrueCalls, 2)
-			require.Equal(t, tt.newRate, repo.accrueCalls[1].amount)
-		})
-	}
-}
-
-func TestMarkCompletedKeepsBothPaymentTypesCompletedWhenAffiliateRefreshFails(t *testing.T) {
-	for _, orderType := range []string{payment.OrderTypeBalance, payment.OrderTypeSubscription} {
-		t.Run(orderType, func(t *testing.T) {
-			ctx := context.Background()
-			client := newPaymentConfigServiceTestClient(t)
-			ensurePaymentAuditOrderActionUniqueIndex(t, ctx, client)
-			order := createPaymentFulfillmentSubscriptionOrder(t, ctx, client, OrderStatusPaid, time.Now())
-			if orderType == payment.OrderTypeBalance {
-				var err error
-				order, err = client.PaymentOrder.UpdateOneID(order.ID).SetOrderType(payment.OrderTypeBalance).ClearPlanID().ClearSubscriptionGroupID().ClearSubscriptionDays().Save(ctx)
-				require.NoError(t, err)
-			}
-			var err error
-			order, err = client.PaymentOrder.Get(ctx, order.ID)
-			require.NoError(t, err)
-			settings := &paymentFulfillmentSettingRepoStub{values: map[string]string{
-				SettingKeyAffiliateQualificationAmount: "50",
-				SettingKeyAffiliateRebateRate:          "8",
-				SettingKeyAffiliateBronzeInvitees:      "3",
-				SettingKeyAffiliateBronzeRate:          "10",
-				SettingKeyAffiliateSilverInvitees:      "10",
-				SettingKeyAffiliateSilverRate:          "12",
-				SettingKeyAffiliateGoldInvitees:        "30",
-				SettingKeyAffiliateGoldRate:            "15",
-			}}
-			affiliateRepo := &paymentFulfillmentAffiliateRepoStub{reconcileErr: errors.New("refresh failed")}
-			svc := &PaymentService{entClient: client, affiliateService: NewAffiliateService(affiliateRepo, NewSettingService(settings, nil), nil, nil)}
-			lease, err := svc.acquirePaymentFulfillmentLease(ctx, order)
-			require.NoError(t, err)
-			require.NotNil(t, lease)
-
-			require.NoError(t, svc.markCompleted(ctx, order, lease, "PAYMENT_SUCCESS"))
-			reloaded, err := client.PaymentOrder.Get(ctx, order.ID)
-			require.NoError(t, err)
-			require.Equal(t, OrderStatusCompleted, reloaded.Status)
-			require.True(t, affiliateRepo.reconcileRequired)
-			require.Equal(t, int64(1), affiliateRepo.generation)
-		})
-	}
-}
-
-func TestMarkCompletedPersistsDirtyOutboxWhenGenerationMarkerFails(t *testing.T) {
-	ctx := context.Background()
-	client := newPaymentConfigServiceTestClient(t)
-	ensurePaymentAuditOrderActionUniqueIndex(t, ctx, client)
-	order := createPaymentFulfillmentSubscriptionOrder(t, ctx, client, OrderStatusPaid, time.Now())
-	repo := &paymentFulfillmentAffiliateRepoStub{
-		reconcileErr:     errors.New("local reconcile unavailable"),
-		markReconcileErr: errors.New("generation unavailable"),
-	}
-	svc := &PaymentService{entClient: client, affiliateService: NewAffiliateService(repo, nil, nil, nil)}
-	lease, err := svc.acquirePaymentFulfillmentLease(ctx, order)
-	require.NoError(t, err)
-
-	err = svc.markCompleted(ctx, order, lease, "PAYMENT_SUCCESS")
-
-	require.NoError(t, err)
-	reloaded, reloadErr := client.PaymentOrder.Get(ctx, order.ID)
-	require.NoError(t, reloadErr)
-	require.Equal(t, OrderStatusCompleted, reloaded.Status)
-	dirty, auditErr := client.PaymentAuditLog.Query().Where(
-		paymentauditlog.OrderIDEQ(strconv.FormatInt(order.ID, 10)),
-		paymentauditlog.ActionEQ("AFFILIATE_QUALIFICATION_DIRTY"),
-	).Count(ctx)
-	require.NoError(t, auditErr)
-	require.Equal(t, 1, dirty)
-}
-
-func TestMarkCompletedDirtyOutboxRecoversAfterCommitWithoutLocalReconcile(t *testing.T) {
-	ctx := context.Background()
-	client := newPaymentConfigServiceTestClient(t)
-	order := createPaymentFulfillmentSubscriptionOrder(t, ctx, client, OrderStatusPaid, time.Now())
-	svc := &PaymentService{entClient: client}
-	lease, err := svc.acquirePaymentFulfillmentLease(ctx, order)
-	require.NoError(t, err)
-
-	require.NoError(t, svc.markCompleted(ctx, order, lease, "PAYMENT_SUCCESS"))
-	reloaded, err := client.PaymentOrder.Get(ctx, order.ID)
-	require.NoError(t, err)
-	require.Equal(t, OrderStatusCompleted, reloaded.Status)
-	dirtyBefore, err := client.PaymentAuditLog.Query().Where(paymentauditlog.ActionEQ(AffiliateQualificationDirtyAuditAction)).Count(ctx)
-	require.NoError(t, err)
-	require.Equal(t, 1, dirtyBefore)
-
-	repo := &paymentFulfillmentAffiliateRepoStub{auditClient: client}
-	recoverySvc := &PaymentService{entClient: client, affiliateService: NewAffiliateService(repo, nil, nil, nil)}
-	require.NoError(t, recoverySvc.ExecuteSubscriptionFulfillment(ctx, order.ID))
-	require.Equal(t, 1, repo.reconcileCalls)
-	dirtyAfter, err := client.PaymentAuditLog.Query().Where(paymentauditlog.ActionEQ(AffiliateQualificationDirtyAuditAction)).Count(ctx)
-	require.NoError(t, err)
-	require.Zero(t, dirtyAfter)
-	require.False(t, repo.reconcileRequired, "draining an outbox event must not create or clear a global marker")
-}
-
-func TestMarkCompletedRollsBackStatusWhenDirtyOutboxCannotPersist(t *testing.T) {
-	ctx := context.Background()
-	client := newPaymentConfigServiceTestClient(t)
-	_, err := client.ExecContext(ctx, `
-CREATE TRIGGER fail_affiliate_dirty_audit
-BEFORE INSERT ON payment_audit_logs
-WHEN NEW.action = 'AFFILIATE_QUALIFICATION_DIRTY'
-BEGIN
-    SELECT RAISE(FAIL, 'injected dirty audit failure');
-END`)
-	require.NoError(t, err)
-	order := createPaymentFulfillmentSubscriptionOrder(t, ctx, client, OrderStatusPaid, time.Now())
-	svc := &PaymentService{entClient: client}
-	lease, err := svc.acquirePaymentFulfillmentLease(ctx, order)
-	require.NoError(t, err)
-
-	err = svc.markCompleted(ctx, order, lease, "PAYMENT_SUCCESS")
-
-	require.ErrorContains(t, err, "persist affiliate qualification dirty audit")
-	reloaded, reloadErr := client.PaymentOrder.Get(ctx, order.ID)
-	require.NoError(t, reloadErr)
-	require.Equal(t, OrderStatusRecharging, reloaded.Status)
-}
-
-func TestAffiliateQualificationDirtyOutboxUpsertsLatestTerminalEvent(t *testing.T) {
-	ctx := context.Background()
-	client := newPaymentConfigServiceTestClient(t)
-	ensurePaymentAuditOrderActionUniqueIndex(t, ctx, client)
-	order := createPaymentFulfillmentSubscriptionOrder(t, ctx, client, OrderStatusPaid, time.Now())
-	svc := &PaymentService{entClient: client}
-	lease, err := svc.acquirePaymentFulfillmentLease(ctx, order)
-	require.NoError(t, err)
-	require.NoError(t, svc.markCompleted(ctx, order, lease, "PAYMENT_SUCCESS"))
-	completed, err := client.PaymentOrder.Get(ctx, order.ID)
-	require.NoError(t, err)
-
-	plan := &RefundPlan{OrderID: order.ID, Order: completed, RefundAmount: completed.Amount / 2, Reason: "partial"}
-	_, err = svc.markRefundOk(ctx, plan)
-	require.NoError(t, err)
-	_, err = svc.markRefundOk(ctx, plan)
-	require.NoError(t, err)
-
-	logs, err := client.PaymentAuditLog.Query().Where(
-		paymentauditlog.OrderIDEQ(strconv.FormatInt(order.ID, 10)),
-		paymentauditlog.ActionEQ(AffiliateQualificationDirtyAuditAction),
-	).All(ctx)
-	require.NoError(t, err)
-	require.Len(t, logs, 1)
-	var event AffiliateQualificationDirtyEvent
-	require.NoError(t, json.Unmarshal([]byte(logs[0].Detail), &event))
-	require.Equal(t, "refund_completed", event.EventType)
-	require.Equal(t, OrderStatusPartiallyRefunded, event.OrderStatus)
-}
-
-func TestMarkCompletedStaleLocalTokenKeepsConcurrentDirtyGeneration(t *testing.T) {
-	ctx := context.Background()
-	client := newPaymentConfigServiceTestClient(t)
-	ensurePaymentAuditOrderActionUniqueIndex(t, ctx, client)
-	order := createPaymentFulfillmentSubscriptionOrder(t, ctx, client, OrderStatusPaid, time.Now())
-	repo := &paymentFulfillmentAffiliateRepoStub{}
-	repo.reconcileInviteeFn = func(ctx context.Context, userID int64, threshold float64) (*AffiliateQualification, error) {
-		_, err := repo.MarkReconcileRequired(ctx)
-		return &AffiliateQualification{InviteeUserID: userID, QualifyingPaymentAmount: threshold}, err
-	}
-	svc := &PaymentService{entClient: client, affiliateService: NewAffiliateService(repo, nil, nil, nil)}
-	lease, err := svc.acquirePaymentFulfillmentLease(ctx, order)
-	require.NoError(t, err)
-
-	require.NoError(t, svc.markCompleted(ctx, order, lease, "PAYMENT_SUCCESS"))
-	require.True(t, repo.reconcileRequired)
-	require.Equal(t, int64(1), repo.generation)
-	require.NoError(t, svc.markCompleted(ctx, order, lease, "PAYMENT_SUCCESS"))
-	require.Equal(t, int64(1), repo.generation, "completed retry must not bump a new generation")
-}
-
-func TestMarkCompletedLocalClearRespectsPriorPendingState(t *testing.T) {
-	for _, tt := range []struct {
-		name         string
-		wasPending   bool
-		wantRequired bool
-	}{
-		{name: "clean_before_terminal", wasPending: false, wantRequired: false},
-		{name: "pending_before_terminal", wasPending: true, wantRequired: true},
-	} {
-		t.Run(tt.name, func(t *testing.T) {
-			ctx := context.Background()
-			client := newPaymentConfigServiceTestClient(t)
-			order := createPaymentFulfillmentSubscriptionOrder(t, ctx, client, OrderStatusPaid, time.Now())
-			repo := &paymentFulfillmentAffiliateRepoStub{reconcileRequired: tt.wasPending, generation: 10}
-			svc := &PaymentService{entClient: client, affiliateService: NewAffiliateService(repo, nil, nil, nil)}
-			lease, err := svc.acquirePaymentFulfillmentLease(ctx, order)
-			require.NoError(t, err)
-
-			require.NoError(t, svc.markCompleted(ctx, order, lease, "PAYMENT_SUCCESS"))
-			require.Equal(t, int64(10), repo.generation)
-			require.Equal(t, tt.wantRequired, repo.reconcileRequired)
-			require.Equal(t, 1, repo.reconcileCalls)
-			require.NoError(t, svc.markCompleted(ctx, order, lease, "PAYMENT_SUCCESS"))
-			require.Equal(t, int64(10), repo.generation, "completed retry must not bump generation")
-		})
-	}
 }
 
 func TestExecuteSubscriptionFulfillmentAppliesAffiliateRebate(t *testing.T) {

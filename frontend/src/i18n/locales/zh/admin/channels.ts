@@ -36,9 +36,6 @@ export default {
         imageOutputPrice: '图片输出',
         perRequestPrice: '每次请求',
         intervals: '阶梯定价',
-        officialPriceLabel: '官方价',
-        sitePriceLabel: '本站价',
-        currencyCNY: '¥',
         unitPerMillion: '/ 1M token',
         unitPerRequest: '/ 次'
       }
@@ -67,8 +64,8 @@ export default {
       updateError: '更新渠道失败',
       deleteError: '删除渠道失败',
       nameRequired: '请输入渠道名称',
-      noGroupsSelected: '{platform} 平台未选择任何分组',
-      emptyModelsInPricing: '{platform} 平台存在未配置模型的定价项',
+      noGroupsSelected: '请为 {platform} 至少选择一个分组',
+      emptyModelsInPricing: '请为 {platform} 定价规则至少添加一个模型',
       duplicateModels: '模型「{0}」在多个定价条目中重复',
       modelConflict: "模型模式 '{model1}' 和 '{model2}' 冲突：匹配范围重叠。模型名称按大小写不敏感匹配，已有条目已覆盖其所有大小写变体，无需重复添加。",
       mappingConflict: "模型映射源 '{model1}' 和 '{model2}' 冲突：匹配范围重叠。源模式按大小写不敏感匹配，已有条目已覆盖其所有大小写变体。",
@@ -174,9 +171,6 @@ export default {
         noPricingRules: '暂无定价规则，点击"添加"创建',
         perRequestPrice: '单次价格',
         perRequestPriceRequired: '按次/图片计费模式必须设置默认价格或至少一个计费层级',
-        perRequestSuccessHint: '仅成功完成的请求收费；固定单次价格会完全替代 Token 金额。',
-        perRequestFallbackHint: '未配置按次规则的模型继续使用现有 Token 计费。价格单位为 USD/次。',
-        perRequestRequestedModelWarning: '若要按玩家看到的模型名收费，请将计费基准设为“以请求模型计费”。',
         tierLabel: '层级',
         resolution: '分辨率',
         modelMapping: '模型映射',
@@ -226,14 +220,10 @@ export default {
         noGroupsInChannel: '上方平台标签页中未选择分组',
         unnamed: '未命名',
         syncLatestModels: '同步最新模型',
-        syncGroupAvailableModels: '同步分组可用模型',
         syncingModels: '同步中...',
         syncModelsSuccess: '已同步 {count} 个新模型',
-        syncGroupModelsSuccess: '已按分组可用模型同步 {count} 个新模型，并填入默认官方定价',
         syncModelsAlreadyUpToDate: '模型列表已是最新',
-        syncModelsError: '同步模型失败',
-        syncGroupModelsError: '同步分组可用模型失败',
-        syncGroupModelsNoGroups: '请先为当前平台选择分组'
+        syncModelsError: '同步模型失败'
       }
     },
 
@@ -591,9 +581,6 @@ export default {
         primaryModelPlaceholder: 'gpt-4o-mini',
         extraModels: '附加模型',
         extraModelsPlaceholder: '回车添加附加模型',
-        modelMappings: '模型请求映射（可选）',
-        modelMappingsHint: '左侧是监控页面和历史记录显示的名称；右侧填写实际发送给上游的模型名。留空表示使用左侧名称。',
-        modelMappingPlaceholder: '实际上游模型名（留空则不映射）',
         groupName: '分组名称',
         groupNamePlaceholder: '可选，用于在用户视图中聚合显示',
         intervalSeconds: '检测间隔 (秒)',
@@ -672,7 +659,6 @@ export default {
     // Subscriptions Management
     subscriptions: {
       title: '订阅管理',
-      manageSubscription: '管理订阅',
       description: '管理用户订阅和配额限制',
       assignSubscription: '分配订阅',
       adjustSubscription: '调整订阅',

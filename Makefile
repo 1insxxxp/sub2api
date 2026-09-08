@@ -6,6 +6,7 @@ FRONTEND_CRITICAL_VITEST := \
 	src/components/layout/__tests__/AppHeader.spec.ts \
 	src/components/admin/checkin/__tests__/CheckinRewardCampaignPanel.spec.ts \
 	src/components/admin/checkin/__tests__/CheckinRewardCampaignDialog.spec.ts \
+	src/i18n/__tests__/localeKeyCompleteness.spec.ts \
 	src/api/__tests__/client.spec.ts \
 	src/api/__tests__/tokenRefresh.spec.ts \
 	src/api/__tests__/channelMonitorV2.spec.ts \

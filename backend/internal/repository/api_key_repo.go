@@ -49,7 +49,6 @@ func (r *apiKeyRepository) Create(ctx context.Context, key *service.APIKey) erro
 		SetName(key.Name).
 		SetStatus(key.Status).
 		SetNillableGroupID(key.GroupID).
-		SetNillableCustomGroupID(key.CustomGroupID).
 		SetNillableLastUsedAt(key.LastUsedAt).
 		SetQuota(key.Quota).
 		SetQuotaUsed(key.QuotaUsed).
@@ -80,7 +79,6 @@ func (r *apiKeyRepository) GetByID(ctx context.Context, id int64) (*service.APIK
 		Where(apikey.IDEQ(id)).
 		WithUser().
 		WithGroup().
-		WithCustomGroup().
 		Only(ctx)
 	if err != nil {
 		if dbent.IsNotFound(err) {
@@ -119,7 +117,6 @@ func (r *apiKeyRepository) GetByKey(ctx context.Context, key string) (*service.A
 			})
 		}).
 		WithGroup().
-		WithCustomGroup().
 		Only(ctx)
 	if err != nil {
 		if dbent.IsNotFound(err) {
@@ -137,7 +134,6 @@ func (r *apiKeyRepository) GetByKeyForAuth(ctx context.Context, key string) (*se
 			apikey.FieldID,
 			apikey.FieldUserID,
 			apikey.FieldGroupID,
-			apikey.FieldCustomGroupID,
 			apikey.FieldName,
 			apikey.FieldStatus,
 			apikey.FieldIPWhitelist,
@@ -165,6 +161,10 @@ func (r *apiKeyRepository) GetByKeyForAuth(ctx context.Context, key string) (*se
 				user.FieldBalanceNotifyThresholdType,
 				user.FieldBalanceNotifyThreshold,
 				user.FieldBalanceNotifyExtraEmails,
+				user.FieldRegistrationIP,
+				user.FieldRegistrationUserAgent,
+				user.FieldLastLoginIP,
+				user.FieldLastLoginUserAgent,
 				user.FieldTotalRecharged,
 				user.FieldSignupSource,
 				user.FieldLastLoginAt,
@@ -183,7 +183,6 @@ func (r *apiKeyRepository) GetByKeyForAuth(ctx context.Context, key string) (*se
 				group.FieldIsExclusive,
 				group.FieldStatus,
 				group.FieldSubscriptionType,
-				group.FieldSystemCustomRoutingEnabled,
 				group.FieldRateMultiplier,
 				group.FieldDailyLimitUsd,
 				group.FieldWeeklyLimitUsd,
@@ -211,11 +210,9 @@ func (r *apiKeyRepository) GetByKeyForAuth(ctx context.Context, key string) (*se
 				group.FieldClaudeCodeOnly,
 				group.FieldFallbackGroupID,
 				group.FieldFallbackGroupIDOnInvalidRequest,
-				group.FieldDefaultReasoningEffort,
 				group.FieldModelRoutingEnabled,
 				group.FieldModelRouting,
 				group.FieldMcpXMLInject,
-				group.FieldSimulateClaudeMaxEnabled,
 				group.FieldSupportedModelScopes,
 				group.FieldAllowMessagesDispatch,
 				group.FieldAllowLive,
@@ -223,7 +220,7 @@ func (r *apiKeyRepository) GetByKeyForAuth(ctx context.Context, key string) (*se
 				group.FieldFreeOpenaiFast,
 				group.FieldDefaultMappedModel,
 				group.FieldMessagesDispatchModelConfig,
-				group.FieldModelsListConfig,
+				group.FieldModelAllowlist,
 				group.FieldCodexModelsManifestConfig,
 				group.FieldRpmLimit,
 				group.FieldMaxReasoningEffort,
@@ -241,7 +238,6 @@ func (r *apiKeyRepository) GetByKeyForAuth(ctx context.Context, key string) (*se
 				group.FieldProfitSafetyBuffer,
 			)
 		}).
-		WithCustomGroup().
 		Only(ctx)
 	if err != nil {
 		if dbent.IsNotFound(err) {
@@ -314,13 +310,6 @@ func (r *apiKeyRepository) Update(ctx context.Context, key *service.APIKey, fiel
 			builder.SetGroupID(*key.GroupID)
 		} else {
 			builder.ClearGroupID()
-		}
-	}
-	if fields.CustomGroupID {
-		if key.CustomGroupID != nil {
-			builder.SetCustomGroupID(*key.CustomGroupID)
-		} else {
-			builder.ClearCustomGroupID()
 		}
 	}
 
@@ -482,7 +471,6 @@ func (r *apiKeyRepository) ListByUserID(ctx context.Context, userID int64, param
 
 	keysQuery := q.
 		WithGroup().
-		WithCustomGroup().
 		Offset(params.Offset()).
 		Limit(params.Limit())
 	for _, order := range apiKeyListOrder(params) {
@@ -508,7 +496,6 @@ func (r *apiKeyRepository) ListByUserID(ctx context.Context, userID int64, param
 func (r *apiKeyRepository) ListAllByUserID(ctx context.Context, userID int64, filters service.APIKeyListFilters) ([]service.APIKey, error) {
 	keys, err := r.apiKeyListByUserIDQuery(userID, filters).
 		WithGroup().
-		WithCustomGroup().
 		Order(dbent.Asc(apikey.FieldID)).
 		All(ctx)
 	if err != nil {
@@ -903,7 +890,6 @@ func apiKeyEntityToService(m *dbent.APIKey) *service.APIKey {
 		CreatedAt:     m.CreatedAt,
 		UpdatedAt:     m.UpdatedAt,
 		GroupID:       m.GroupID,
-		CustomGroupID: m.CustomGroupID,
 		Quota:         m.Quota,
 		QuotaUsed:     m.QuotaUsed,
 		ExpiresAt:     m.ExpiresAt,
@@ -931,10 +917,6 @@ func apiKeyEntityToService(m *dbent.APIKey) *service.APIKey {
 	if m.Edges.Group != nil {
 		out.Group = groupEntityToService(m.Edges.Group)
 	}
-	if m.Edges.CustomGroup != nil {
-		cg := m.Edges.CustomGroup
-		out.CustomGroup = &service.UserCustomGroup{ID: cg.ID, UserID: cg.UserID, Name: cg.Name, Status: cg.Status, CreatedAt: cg.CreatedAt, UpdatedAt: cg.UpdatedAt}
-	}
 	return out
 }
 
@@ -951,16 +933,9 @@ func userEntityToService(u *dbent.User) *service.User {
 		Role:                       u.Role,
 		Balance:                    u.Balance,
 		FrozenBalance:              u.FrozenBalance,
-		GiftBalance:                u.GiftBalance,
-		FrozenGiftBalance:          u.FrozenGiftBalance,
 		Concurrency:                u.Concurrency,
 		Status:                     u.Status,
-		BalanceRedeemCodeEnabled:   u.BalanceRedeemCodeEnabled,
 		SignupSource:               u.SignupSource,
-		RegistrationIP:             u.RegistrationIP,
-		RegistrationUserAgent:      u.RegistrationUserAgent,
-		LastLoginIP:                u.LastLoginIP,
-		LastLoginUserAgent:         u.LastLoginUserAgent,
 		LastLoginAt:                u.LastLoginAt,
 		LastActiveAt:               u.LastActiveAt,
 		TotpSecretEncrypted:        u.TotpSecretEncrypted,
@@ -970,6 +945,12 @@ func userEntityToService(u *dbent.User) *service.User {
 		RestrictPublicGroups:       u.RestrictPublicGroups,
 		BalanceNotifyThresholdType: u.BalanceNotifyThresholdType,
 		BalanceNotifyThreshold:     u.BalanceNotifyThreshold,
+		RegistrationIP:             u.RegistrationIP,
+		RegistrationUserAgent:      u.RegistrationUserAgent,
+		LastLoginIP:                u.LastLoginIP,
+		LastLoginUserAgent:         u.LastLoginUserAgent,
+		GiftBalance:                u.GiftBalance,
+		FrozenGiftBalance:          u.FrozenGiftBalance,
 		TotalRecharged:             u.TotalRecharged,
 		RPMLimit:                   u.RpmLimit,
 		CreatedAt:                  u.CreatedAt,
@@ -1011,8 +992,6 @@ func groupEntityToService(g *dbent.Group) *service.Group {
 		DailyLimitUSD:                    g.DailyLimitUsd,
 		WeeklyLimitUSD:                   g.WeeklyLimitUsd,
 		MonthlyLimitUSD:                  g.MonthlyLimitUsd,
-		LongContextPricingEnabled:        g.LongContextPricingEnabled,
-		ModelPricing:                     modelPricing,
 		AllowImageGeneration:             g.AllowImageGeneration,
 		AllowBatchImageGeneration:        g.AllowBatchImageGeneration,
 		ImageRateIndependent:             g.ImageRateIndependent,
@@ -1033,6 +1012,8 @@ func groupEntityToService(g *dbent.Group) *service.Group {
 		AudioRealtimePricePerMin:         g.AudioRealtimePricePerMin,
 		AudioTTSPricePerMillionChars:     g.AudioTtsPricePerMillionChars,
 		AudioSTTPricePerHour:             g.AudioSttPricePerHour,
+		LongContextPricingEnabled:        g.LongContextPricingEnabled,
+		ModelPricing:                     modelPricing,
 		DefaultValidityDays:              g.DefaultValidityDays,
 		ClaudeCodeOnly:                   g.ClaudeCodeOnly,
 		FallbackGroupID:                  g.FallbackGroupID,
@@ -1051,7 +1032,8 @@ func groupEntityToService(g *dbent.Group) *service.Group {
 		RequirePrivacySet:                g.RequirePrivacySet,
 		DefaultMappedModel:               g.DefaultMappedModel,
 		MessagesDispatchModelConfig:      g.MessagesDispatchModelConfig,
-		ModelsListConfig:                 g.ModelsListConfig,
+		ModelAllowlist:                   service.GroupModelAllowlistFromDomain(g.ModelAllowlist),
+		ModelsListConfig:                 service.GroupModelsListConfig(service.GroupModelAllowlistFromDomain(g.ModelAllowlist)),
 		CodexModelsManifestConfig:        g.CodexModelsManifestConfig,
 		RPMLimit:                         g.RpmLimit,
 		MaxReasoningEffort:               g.MaxReasoningEffort,

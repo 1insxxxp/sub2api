@@ -13,6 +13,7 @@ var (
 	ErrGroupExists                 = infraerrors.Conflict("GROUP_EXISTS", "group name already exists")
 	ErrGroupDisabled               = infraerrors.Forbidden("GROUP_DISABLED", "group is disabled")
 	ErrGroupCustomGroupSourceInUse = infraerrors.Conflict("CUSTOM_GROUP_SOURCE_IN_USE", "group is referenced by one or more custom group models")
+	ErrGroupNotEmpty               = infraerrors.Conflict("GROUP_NOT_EMPTY", "group contains accounts")
 )
 
 type GroupRepository interface {
@@ -66,6 +67,12 @@ type AdminGroupRepository interface {
 	GroupRepository
 	GroupDuplicateRepository
 	GroupCustomSourceReferenceRepository
+	EmptyGroupDeleteRepository
+}
+
+// EmptyGroupDeleteRepository provides the guarded cascade used by simple mode.
+type EmptyGroupDeleteRepository interface {
+	DeleteCascadeIfEmpty(ctx context.Context, id int64) ([]int64, error)
 }
 
 // GroupSortOrderUpdate 分组排序更新

@@ -392,8 +392,6 @@ export default {
         suggestPlatform: '🚨 平台错误，建议立即排查修复',
         suggestGeneric: '查看详情了解更多信息',
         apiKeyPrefix: 'Key 前缀',
-        attemptedKeyPrefix: '尝试使用的 Key 前缀',
-        deletedKeyOwner: '已删除 Key 的所属用户',
         keyDeletedBadge: 'Key 已删除'
       },
       requestDetails: {
@@ -583,10 +581,10 @@ export default {
         evalIntervalSeconds: '评估间隔（秒）',
         metricThresholds: '指标阈值配置',
         metricThresholdsHint: '配置各项指标的告警阈值，超出阈值时将以红色显示',
-        slaMinPercent: 'SLA最低百分比',
-        slaMinPercentHint: 'SLA低于此值时显示为红色（默认：99.5%）',
-        ttftP99MaxMs: 'TTFT P99最大值（毫秒）',
-        ttftP99MaxMsHint: 'TTFT P99高于此值时显示为红色（默认：500ms）',
+        slaMinPercent: 'SLA 最低百分比',
+        slaMinPercentHint: 'SLA 低于此值时显示为红色（默认：99.5%）',
+        ttftP99MaxMs: 'TTFT P99 最大值（毫秒）',
+        ttftP99MaxMsHint: 'TTFT P99 高于此值时显示为红色（默认：500ms）',
         requestErrorRateMaxPercent: '请求错误率最大值（%）',
         requestErrorRateMaxPercentHint: '请求错误率高于此值时显示为红色（默认：5%）',
         upstreamErrorRateMaxPercent: '上游错误率最大值（%）',

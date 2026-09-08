@@ -206,9 +206,9 @@
                       <span v-if="officialDisplayLabel" class="mr-1 rounded border border-gray-200 bg-gray-50 px-1 py-0.5 text-[10px] font-medium leading-none text-gray-500 dark:border-dark-600 dark:bg-dark-700 dark:text-gray-300">
                         {{ officialDisplayLabel }}
                       </span>
-                      {{ formatInterval(iv, model.pricing.billing_mode) }}
+                      {{ formatInterval(iv, model.pricing) }}
                     </span>
-                    <span v-if="formatIntervalCNY(iv, model.pricing.billing_mode)" class="block text-primary-600 dark:text-primary-300">
+                    <span v-if="showCNYPrice && formatIntervalCNY(iv, model.pricing.billing_mode)" class="block text-primary-600 dark:text-primary-300">
                       <span class="mr-1 rounded border border-primary-200 bg-primary-50 px-1 py-0.5 text-[10px] font-medium leading-none text-primary-700 dark:border-primary-500/30 dark:bg-primary-500/10 dark:text-primary-200">
                         {{ sitePriceLabel }}
                       </span>
@@ -229,16 +229,16 @@
 import { computed, nextTick, onBeforeUnmount, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import PricingRow from './PricingRow.vue'
-import { formatScaled } from '@/utils/pricing'
+import { formatScaled, resolveIntervalPrices } from '@/utils/pricing'
 import {
   BILLING_MODE_TOKEN,
   BILLING_MODE_PER_REQUEST,
   BILLING_MODE_IMAGE,
-  type BillingMode
+  type BillingMode,
 } from '@/constants/channel'
 // 复用 api/channels.ts 的用户侧最小形态 DTO。
 // admin 侧 ChannelModelPricing 字段更多，但结构上是用户 DTO 的超集，admin 视图传入可直接通过结构化子类型检查。
-import type { UserPricingInterval, UserSupportedModel } from '@/api/channels'
+import type { UserPricingInterval, UserSupportedModel, UserSupportedModelPricing } from '@/api/channels'
 import PlatformIcon from '@/components/common/PlatformIcon.vue'
 import type { GroupPlatform } from '@/types'
 import { platformBadgeClass, platformBorderClass, platformBadgeLightClass } from '@/utils/platformColors'
@@ -327,12 +327,13 @@ function formatRange(min: number, max: number | null): string {
   return `(${min}, ${maxLabel}]`
 }
 
-function formatInterval(iv: UserPricingInterval, mode: BillingMode): string {
-  if (mode === BILLING_MODE_PER_REQUEST || mode === BILLING_MODE_IMAGE) {
+function formatInterval(iv: UserPricingInterval, pricing: UserSupportedModelPricing): string {
+  if (pricing.billing_mode === BILLING_MODE_PER_REQUEST || pricing.billing_mode === BILLING_MODE_IMAGE) {
     return formatScaled(iv.per_request_price, 1)
   }
-  const input = formatScaled(iv.input_price, perMillionScale)
-  const output = formatScaled(iv.output_price, perMillionScale)
+  const resolved = resolveIntervalPrices(iv, pricing)
+  const input = formatScaled(resolved.input_price, perMillionScale)
+  const output = formatScaled(resolved.output_price, perMillionScale)
   return `${input} / ${output}`
 }
 

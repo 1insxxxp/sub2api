@@ -2,16 +2,16 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
 
 import UsageView from '../UsageView.vue'
+import Select, { type SelectOption } from '@/components/common/Select.vue'
 
 const {
   query,
   getStats,
   getDashboardModels,
   getDashboardSnapshotV2,
-  listRecentEmptyResponses,
+  listMyErrorRequests,
   list,
   getAvailable,
-  submitEmptyResponseClaim,
   showError,
   showWarning,
   showSuccess,
@@ -21,10 +21,9 @@ const {
   getStats: vi.fn(),
   getDashboardModels: vi.fn(),
   getDashboardSnapshotV2: vi.fn(),
-  listRecentEmptyResponses: vi.fn(),
+  listMyErrorRequests: vi.fn(),
   list: vi.fn(),
   getAvailable: vi.fn(),
-  submitEmptyResponseClaim: vi.fn(),
   showError: vi.fn(),
   showWarning: vi.fn(),
   showSuccess: vi.fn(),
@@ -51,6 +50,9 @@ const messages: Record<string, string> = {
   'admin.usage.allGroups': 'All groups',
   'admin.usage.allModels': 'All models',
   'usage.allApiKeys': 'All API Keys',
+  'usage.errors.allKeys': 'All API Keys',
+  'usage.tabs.usage': 'Usage records',
+  'usage.tabs.errors': 'Error records',
   'usage.apiKeyFilter': 'API Key',
   'usage.model': 'Model',
   'usage.type': 'Type',
@@ -63,41 +65,12 @@ const messages: Record<string, string> = {
   'usage.exporting': 'Exporting',
   'usage.exportCsv': 'Export CSV',
   'usage.failedToLoad': 'Failed to load',
-  'usage.tabs.usage': 'Usage',
-  'usage.tabs.errors': 'Error Requests',
-  'usage.tabs.emptyResponses': 'Empty responses',
-  'usage.emptyResponse.bulk.title': 'Recent empty responses',
-  'usage.emptyResponse.bulk.subtitle': 'Last 7 days',
-  'usage.emptyResponse.bulk.action': 'Claim empty responses',
-  'usage.emptyResponse.bulk.claiming': 'Claiming...',
-  'usage.emptyResponse.bulk.empty': 'No empty responses',
-  'usage.emptyResponse.bulk.loadFailed': 'Failed to load empty responses',
-  'usage.emptyResponse.bulk.claimSuccess': 'Compensated {count}, skipped {skipped}',
-  'usage.emptyResponse.bulk.claimFailed': 'Failed to claim empty responses',
-  'usage.emptyResponse.bulk.dailyRemaining': '{count} claims left today',
-  'usage.emptyResponse.statusLabel': 'Status',
-  'usage.emptyResponse.status.claimable': 'Claimable',
-  'usage.emptyResponse.status.compensated': 'Compensated',
-  'usage.emptyResponse.status.daily_limited': 'Daily limit',
-  'usage.emptyResponse.tokens': 'Tokens',
-  'usage.emptyResponse.tokenDetail': 'In {input} / Out {output} / Cache {cache} / Total {total}',
-  'usage.emptyResponse.claimOne': 'Claim',
-  'usage.emptyResponse.claimingOne': 'Claiming...',
-  'usage.emptyResponse.singleClaimSuccess': 'Empty response compensated',
-  'usage.emptyResponse.dailyLimitReached': 'Daily limit reached',
-  'usage.emptyResponse.claimRules.dailyLimit': 'Up to 15 compensation claims per day',
-  'usage.emptyResponse.claimRules.tokenLimit': 'Output Token must be 10 or less',
-  'usage.emptyResponse.reasonCode.pure_empty': 'Empty output',
-  'usage.emptyResponse.reasonCode.daily_limit_manual_review': 'Daily limit reached',
-  'usage.emptyResponse.originalCharge': 'Original charge',
-  'usage.emptyResponse.refunded': 'Refunded',
   'usage.noDataToExport': 'No data',
   'usage.preparingExport': 'Preparing export',
   'usage.exportSuccess': 'Export success',
   'usage.exportFailed': 'Export failed',
   'common.refresh': 'Refresh',
   'common.reset': 'Reset',
-  'common.actions': 'Actions',
 }
 
 vi.mock('@/api', () => ({
@@ -106,8 +79,7 @@ vi.mock('@/api', () => ({
     getStats,
     getDashboardModels,
     getDashboardSnapshotV2,
-    listRecentEmptyResponses,
-    submitEmptyResponseClaim,
+    listMyErrorRequests,
   },
   keysAPI: {
     list,
@@ -118,7 +90,10 @@ vi.mock('@/api', () => ({
 }))
 
 vi.mock('@/stores/app', () => ({
-  useAppStore: () => ({ showError, showWarning, showSuccess, showInfo }),
+  useAppStore: () => ({
+    showError, showWarning, showSuccess, showInfo,
+    cachedPublicSettings: { allow_user_view_error_requests: true },
+  }),
 }))
 
 vi.mock('vue-i18n', async () => {
@@ -126,39 +101,13 @@ vi.mock('vue-i18n', async () => {
   return {
     ...actual,
     useI18n: () => ({
-      t: (key: string, params?: Record<string, unknown>) => {
-        let text = messages[key] ?? key
-        if (params) {
-          for (const [name, value] of Object.entries(params)) {
-            text = text.replaceAll(`{${name}}`, String(value))
-          }
-        }
-        return text
-      },
+      t: (key: string) => messages[key] ?? key,
     }),
   }
 })
 
 const simpleStub = { template: '<div><slot /></div>' }
 const chartStub = { template: '<div />' }
-const usageTableStub = {
-  props: ['showCompensationAction'],
-  template: `
-    <div data-testid="usage-table-stub" :data-show-compensation-action="showCompensationAction ? 'true' : 'false'">
-      <button v-if="showCompensationAction" data-testid="legacy-empty-response-action">申请补空回</button>
-    </div>
-  `,
-}
-const paginationStub = {
-  props: ['page', 'pageSize', 'total'],
-  emits: ['update:page', 'update:pageSize'],
-  template: `
-    <div data-testid="pagination-stub" :data-page="page" :data-page-size="pageSize" :data-total="total">
-      <button data-testid="pagination-next" @click="$emit('update:page', page + 1)">next</button>
-      <button data-testid="pagination-size-10" @click="$emit('update:pageSize', 10)">size 10</button>
-    </div>
-  `,
-}
 
 const usageLog = {
   id: 1,
@@ -197,12 +146,13 @@ function mountUsageView() {
     global: {
       stubs: {
         AppLayout: simpleStub,
-        Pagination: paginationStub,
+        Pagination: true,
         Select: true,
         DateRangePicker: true,
         Icon: true,
         UsageStatsCards: chartStub,
-        UsageTable: usageTableStub,
+        UsageTable: chartStub,
+        UserErrorRequestsTable: chartStub,
         ModelDistributionChart: chartStub,
         GroupDistributionChart: chartStub,
         EndpointDistributionChart: chartStub,
@@ -218,10 +168,9 @@ describe('user UsageView', () => {
     getStats.mockReset()
     getDashboardModels.mockReset()
     getDashboardSnapshotV2.mockReset()
-    listRecentEmptyResponses.mockReset()
+    listMyErrorRequests.mockReset()
     list.mockReset()
     getAvailable.mockReset()
-    submitEmptyResponseClaim.mockReset()
     showError.mockReset()
     showWarning.mockReset()
     showSuccess.mockReset()
@@ -254,40 +203,9 @@ describe('user UsageView', () => {
       trend: [],
       groups: [],
     })
-    listRecentEmptyResponses.mockResolvedValue({
-      items: [
-        {
-          usage_log_id: 77,
-          model: 'claude-opus-4-6',
-          api_key_name: 'cli',
-          group_name: 'cc',
-          inbound_endpoint: '/v1/messages',
-          actual_cost: 1.25,
-          input_tokens: 1234,
-          output_tokens: 0,
-          cache_tokens: 46,
-          total_tokens: 1280,
-          refunded_amount: 0,
-          status: 'claimable',
-          reason_code: 'pure_empty',
-          created_at: '2026-03-08T00:00:00Z',
-        },
-      ],
-      total: 1,
-      page: 1,
-      page_size: 20,
-      pages: 1,
-    })
-    list.mockResolvedValue({ items: [{ id: 1, name: 'demo-key' }] })
+    listMyErrorRequests.mockResolvedValue({ items: [], total: 0, page: 1, page_size: 20, pages: 0 })
+    list.mockResolvedValue({ items: [{ id: 1, name: 'demo-key' }], total: 1, page: 1, page_size: 100, pages: 1 })
     getAvailable.mockResolvedValue([{ id: 1, name: 'default' }])
-		submitEmptyResponseClaim.mockResolvedValue({
-			id: 9,
-			usage_log_id: 1,
-			status: 'compensated',
-			reason_code: 'pure_empty',
-			estimated_refund: 0.092883,
-			refunded_amount: 0.092883,
-		})
   })
 
   it('loads logs, stats, model stats, and snapshot on first render', async () => {
@@ -302,26 +220,96 @@ describe('user UsageView', () => {
       include_model_stats: false,
       include_group_stats: true,
     }))
+    expect(list).toHaveBeenCalledTimes(1)
     expect(list).toHaveBeenCalledWith(1, 100)
     expect(getAvailable).toHaveBeenCalled()
   })
 
-  it('does not expose the legacy empty-response claim action in usage details', async () => {
-    query.mockResolvedValueOnce({
-      items: [{
-        ...usageLog,
-        compensation_eligible: true,
-        compensation_eligibility: 'eligible',
-      }],
-      total: 1,
-      pages: 1,
-    })
+  it('includes API keys after the first page in both record filters and queries by the selected key', async () => {
+    const firstPageKeys = Array.from({ length: 100 }, (_, index) => ({
+      id: index + 1,
+      name: `key-${index + 1}`,
+    }))
+    const laterKey = { id: 101, name: 'key-from-second-page' }
+    list
+      .mockResolvedValueOnce({ items: firstPageKeys, total: 101, page: 1, page_size: 100, pages: 2 })
+      .mockResolvedValueOnce({ items: [laterKey], total: 101, page: 2, page_size: 100, pages: 2 })
 
     const wrapper = mountUsageView()
     await flushPromises()
 
-    expect(wrapper.get('[data-testid="usage-table-stub"]').attributes('data-show-compensation-action')).toBe('false')
-    expect(wrapper.find('[data-testid="legacy-empty-response-action"]').exists()).toBe(false)
+    expect(list.mock.calls).toEqual([[1, 100], [2, 100]])
+    const usageKeySelect = wrapper.findAllComponents(Select).find((select) =>
+      select.props('options').some((option: SelectOption) => option.label === 'All API Keys')
+    )!
+    expect(usageKeySelect.props('options')).toHaveLength(102)
+    expect(usageKeySelect.props('options')).toContainEqual({ value: laterKey.id, label: laterKey.name })
+
+    query.mockClear()
+    usageKeySelect.vm.$emit('update:modelValue', laterKey.id)
+    usageKeySelect.vm.$emit('change', laterKey.id)
+    await flushPromises()
+
+    expect(query).toHaveBeenCalledWith(
+      expect.objectContaining({ api_key_id: laterKey.id, page: 1 }),
+      expect.anything()
+    )
+
+    await wrapper.findAll('button').find((button) => button.text() === 'Error records')!.trigger('click')
+    await flushPromises()
+
+    const errorKeySelect = wrapper.findAllComponents(Select).find((select) =>
+      select.props('options').some((option: SelectOption) => option.label === 'All API Keys')
+    )!
+    expect(errorKeySelect.props('options')).toHaveLength(102)
+    expect(errorKeySelect.props('options')).toContainEqual({ value: laterKey.id, label: laterKey.name })
+
+    listMyErrorRequests.mockClear()
+    errorKeySelect.vm.$emit('update:modelValue', laterKey.id)
+    errorKeySelect.vm.$emit('change', laterKey.id)
+    await flushPromises()
+
+    expect(listMyErrorRequests).toHaveBeenCalledWith(
+      expect.objectContaining({ api_key_id: laterKey.id, page: 1 })
+    )
+    expect(list).toHaveBeenCalledTimes(2)
+    wrapper.unmount()
+  })
+
+  it('does not request another API key page when the user has no keys', async () => {
+    list.mockResolvedValue({ items: [], total: 0, page: 1, page_size: 100, pages: 0 })
+
+    const wrapper = mountUsageView()
+    await flushPromises()
+
+    expect(list.mock.calls).toEqual([[1, 100]])
+    const keySelect = wrapper.findAllComponents(Select).find((select) =>
+      select.props('options').some((option: SelectOption) => option.label === 'All API Keys')
+    )!
+    expect(keySelect.props('options')).toEqual([{ value: null, label: 'All API Keys' }])
+    expect(getAvailable).toHaveBeenCalled()
+    wrapper.unmount()
+  })
+
+  it('stops loading API keys when a later page is empty despite an outdated page count', async () => {
+    const firstPageKeys = Array.from({ length: 100 }, (_, index) => ({
+      id: index + 1,
+      name: `key-${index + 1}`,
+    }))
+    list
+      .mockResolvedValueOnce({ items: firstPageKeys, total: 201, page: 1, page_size: 100, pages: 3 })
+      .mockResolvedValueOnce({ items: [], total: 201, page: 2, page_size: 100, pages: 3 })
+
+    const wrapper = mountUsageView()
+    await flushPromises()
+
+    expect(list.mock.calls).toEqual([[1, 100], [2, 100]])
+    const keySelect = wrapper.findAllComponents(Select).find((select) =>
+      select.props('options').some((option: SelectOption) => option.label === 'All API Keys')
+    )!
+    expect(keySelect.props('options')).toHaveLength(101)
+    expect(keySelect.props('options')).toContainEqual({ value: 100, label: 'key-100' })
+    wrapper.unmount()
   })
 
   it('propagates and resets the native compaction filter across page requests', async () => {
@@ -470,252 +458,5 @@ describe('user UsageView', () => {
     window.URL.revokeObjectURL = originalRevokeObjectURL
     vi.unstubAllGlobals()
     clickSpy.mockRestore()
-  })
-
-	it('submits an eligible claim and updates only the matching usage row in place', async () => {
-		query.mockResolvedValue({
-			items: [{
-				...usageLog,
-				compensation_eligible: true,
-				compensation_eligibility: 'eligible',
-				compensated_cost: 0,
-				net_actual_cost: usageLog.actual_cost,
-			}],
-			total: 1,
-			pages: 1,
-		})
-		const wrapper = mountUsageView()
-		await flushPromises()
-
-		;(wrapper.vm as any).openEmptyResponseClaim((wrapper.vm as any).usageLogs[0])
-		await (wrapper.vm as any).submitEmptyResponseClaim('empty response')
-		await flushPromises()
-
-		expect(submitEmptyResponseClaim).toHaveBeenCalledWith(1, { reason: 'empty response' })
-		expect((wrapper.vm as any).usageLogs[0]).toMatchObject({
-			claim_status: 'compensated',
-			compensation_eligible: false,
-			compensated_cost: usageLog.actual_cost,
-			net_actual_cost: 0,
-		})
-		expect(query).toHaveBeenCalledTimes(1)
-	})
-
-  it('shows recent empty responses with rules and token details', async () => {
-    const wrapper = mountUsageView()
-    await flushPromises()
-
-    await wrapper.find('[data-testid="empty-response-tab"]').trigger('click')
-    await flushPromises()
-
-    expect(listRecentEmptyResponses).toHaveBeenCalledTimes(1)
-    expect(wrapper.text()).toContain('Recent empty responses')
-    expect(wrapper.text()).toContain('Up to 15 compensation claims per day')
-    expect(wrapper.text()).toContain('Output Token must be 10 or less')
-    expect(wrapper.text()).toContain('claude-opus-4-6')
-    expect(wrapper.text()).toContain('cli')
-    expect(wrapper.text()).toContain('$1.250000')
-    expect(wrapper.find('[data-testid="empty-response-token-77"]').text()).toContain('1,234')
-    expect(wrapper.find('[data-testid="empty-response-token-77"]').text()).toContain('0')
-    expect(wrapper.find('[data-testid="empty-response-token-77"]').text()).toContain('46')
-    expect(wrapper.find('[data-testid="empty-response-token-77"]').text()).toContain('1,280')
-    expect(wrapper.find('[data-testid="claim-empty-responses"]').exists()).toBe(false)
-  })
-
-  it('paginates the empty response list with server-side page parameters', async () => {
-    listRecentEmptyResponses.mockResolvedValueOnce({
-      items: [
-        {
-          usage_log_id: 77,
-          model: 'claude-opus-4-6',
-          api_key_name: 'cli',
-          group_name: 'cc',
-          inbound_endpoint: '/v1/messages',
-          actual_cost: 1.25,
-          input_tokens: 1234,
-          output_tokens: 0,
-          cache_tokens: 46,
-          total_tokens: 1280,
-          refunded_amount: 0,
-          status: 'claimable',
-          reason_code: 'pure_empty',
-          created_at: '2026-03-08T00:00:00Z',
-        },
-      ],
-      total: 40,
-      page: 1,
-      page_size: 20,
-      pages: 2,
-    })
-    const wrapper = mountUsageView()
-    await flushPromises()
-
-    await wrapper.find('[data-testid="empty-response-tab"]').trigger('click')
-    await flushPromises()
-
-    expect(listRecentEmptyResponses).toHaveBeenLastCalledWith(expect.objectContaining({ page: 1 }))
-    expect(wrapper.get('[data-testid="pagination-stub"]').attributes('data-total')).toBe('40')
-
-    listRecentEmptyResponses.mockResolvedValueOnce({
-      items: [
-        {
-          usage_log_id: 88,
-          model: 'claude-sonnet-4-6',
-          api_key_name: 'cli-2',
-          group_name: 'cc',
-          inbound_endpoint: '/v1/messages',
-          actual_cost: 0.5,
-          input_tokens: 10,
-          output_tokens: 0,
-          cache_tokens: 0,
-          total_tokens: 10,
-          refunded_amount: 0,
-          status: 'claimable',
-          reason_code: 'pure_empty',
-          created_at: '2026-03-08T00:00:00Z',
-        },
-      ],
-      total: 40,
-      page: 2,
-      page_size: 20,
-      pages: 2,
-    })
-    await wrapper.find('[data-testid="pagination-next"]').trigger('click')
-    await flushPromises()
-
-    expect(listRecentEmptyResponses).toHaveBeenLastCalledWith(expect.objectContaining({ page: 2 }))
-    expect(wrapper.text()).toContain('claude-sonnet-4-6')
-  })
-
-  it('keeps the empty response table fixed-width and horizontally scrollable', async () => {
-    const wrapper = mountUsageView()
-    await flushPromises()
-
-    await wrapper.find('[data-testid="empty-response-tab"]').trigger('click')
-    await flushPromises()
-
-    const scroll = wrapper.find('[data-testid="empty-response-table-scroll"]')
-    const table = wrapper.find('[data-testid="empty-response-table"]')
-
-    expect(scroll.exists()).toBe(true)
-    expect(scroll.classes()).toEqual(expect.arrayContaining(['hidden', 'overflow-x-auto', 'touch-pan-x', 'overscroll-x-contain', 'md:block']))
-    expect(table.exists()).toBe(true)
-    expect(table.classes()).toEqual(expect.arrayContaining(['table-fixed', 'min-w-[1280px]']))
-    expect(wrapper.find('[data-testid="empty-response-model-77"]').classes()).toContain('truncate')
-    expect(wrapper.find('[data-testid="claim-empty-response-desktop-77"]').classes()).toEqual(expect.arrayContaining(['min-w-[72px]', 'whitespace-nowrap']))
-  })
-
-  it('puts empty response actions in the first column for mobile access', async () => {
-    const wrapper = mountUsageView()
-    await flushPromises()
-
-    await wrapper.find('[data-testid="empty-response-tab"]').trigger('click')
-    await flushPromises()
-
-    const headerCells = wrapper.findAll('[data-testid="empty-response-table"] thead th')
-    const firstBodyCells = wrapper.findAll('[data-testid="empty-response-table"] tbody tr:first-child td')
-
-    expect(headerCells[0]?.text()).toBe('Actions')
-    expect(firstBodyCells[0]?.find('[data-testid="claim-empty-response-desktop-77"]').exists()).toBe(true)
-  })
-
-  it('renders empty response rows as mobile cards with the claim action at the top', async () => {
-    const wrapper = mountUsageView()
-    await flushPromises()
-
-    await wrapper.find('[data-testid="empty-response-tab"]').trigger('click')
-    await flushPromises()
-
-    const mobileList = wrapper.get('[data-testid="empty-response-mobile-list"]')
-    const card = wrapper.get('[data-testid="empty-response-mobile-card-77"]')
-
-    expect(mobileList.classes()).toEqual(expect.arrayContaining(['md:hidden']))
-    expect(card.text()).toContain('claude-opus-4-6')
-    expect(card.text()).toContain('cli')
-    expect(card.text()).toContain('$1.250000')
-    expect(card.text()).toContain('Claimable')
-    expect(card.find('[data-testid="claim-empty-response-mobile-77"]').exists()).toBe(true)
-  })
-
-  it('claims a single empty response row and updates that row only', async () => {
-    submitEmptyResponseClaim.mockResolvedValueOnce({
-      id: 701,
-      usage_log_id: 77,
-      status: 'compensated',
-      reason_code: 'pure_empty',
-      estimated_refund: 1.25,
-      refunded_amount: 1.25,
-    })
-    const wrapper = mountUsageView()
-    await flushPromises()
-
-    await wrapper.find('[data-testid="empty-response-tab"]').trigger('click')
-    await flushPromises()
-    await wrapper.find('[data-testid="claim-empty-response-mobile-77"]').trigger('click')
-    await flushPromises()
-
-    expect(submitEmptyResponseClaim).toHaveBeenCalledWith(77, { reason: '' })
-    expect(showSuccess).toHaveBeenCalledWith('Empty response compensated')
-    const row = (wrapper.vm as any).emptyResponseRows[0]
-    expect(row).toMatchObject({
-      claim_id: 701,
-      status: 'compensated',
-      refunded_amount: 1.25,
-    })
-  })
-
-  it('does not render claim buttons for rows that are no longer claimable', async () => {
-    listRecentEmptyResponses.mockResolvedValueOnce({
-      items: [
-        {
-          usage_log_id: 77,
-          claim_id: 701,
-          model: 'claude-opus-4-6',
-          api_key_name: 'cli',
-          group_name: 'cc',
-          inbound_endpoint: '/v1/messages',
-          actual_cost: 1.25,
-          input_tokens: 1234,
-          output_tokens: 0,
-          cache_tokens: 46,
-          total_tokens: 1280,
-          refunded_amount: 1.25,
-          status: 'compensated',
-          reason_code: 'pure_empty',
-          created_at: '2026-03-08T00:00:00Z',
-        },
-        {
-          usage_log_id: 78,
-          model: 'claude-opus-4-6',
-          api_key_name: 'cli',
-          group_name: 'cc',
-          inbound_endpoint: '/v1/messages',
-          actual_cost: 1.25,
-          input_tokens: 1234,
-          output_tokens: 0,
-          cache_tokens: 46,
-          total_tokens: 1280,
-          refunded_amount: 0,
-          status: 'daily_limited',
-          reason_code: 'daily_limit_manual_review',
-          created_at: '2026-03-08T00:00:00Z',
-        },
-      ],
-      total: 2,
-      page: 1,
-      page_size: 20,
-      pages: 1,
-    })
-    const wrapper = mountUsageView()
-    await flushPromises()
-
-    await wrapper.find('[data-testid="empty-response-tab"]').trigger('click')
-    await flushPromises()
-
-    expect(wrapper.find('[data-testid="claim-empty-response-desktop-77"]').exists()).toBe(false)
-    expect(wrapper.find('[data-testid="claim-empty-response-mobile-77"]').exists()).toBe(false)
-    expect(wrapper.find('[data-testid="claim-empty-response-desktop-78"]').exists()).toBe(false)
-    expect(wrapper.find('[data-testid="claim-empty-response-mobile-78"]').exists()).toBe(false)
-    expect(submitEmptyResponseClaim).not.toHaveBeenCalled()
   })
 })

@@ -1,5 +1,5 @@
 <template>
-  <header class="app-header-shell theme-crisp sticky top-0 z-30" @keydown.esc="closeCheckinPopover">
+  <header class="app-header-shell theme-crisp sticky top-0 z-50" @keydown.esc="closeCheckinPopover">
     <div class="app-header-toolbar">
       <!-- Left: Mobile Menu Toggle + Page Title -->
       <div class="app-header-title-group">
@@ -360,7 +360,7 @@
         </div>
 
         <!-- User Dropdown -->
-        <div v-if="user" class="relative shrink-0" ref="dropdownRef">
+        <div v-if="user" class="relative z-[60] shrink-0" ref="dropdownRef">
           <button
             @click="toggleDropdown"
             class="app-header-mobile-action app-header-user-trigger group flex items-center gap-2 rounded-xl border border-transparent p-1.5 transition-all duration-200 hover:border-blue-200/70 hover:bg-blue-50/80 hover:shadow-sm hover:shadow-blue-600/10 focus:outline-none focus:ring-2 focus:ring-blue-500/25 dark:hover:border-blue-400/20 dark:hover:bg-blue-500/10"
@@ -400,7 +400,7 @@
           <transition name="dropdown">
             <div
               v-if="dropdownOpen"
-              class="dropdown profile-menu right-0 mt-3 w-[19rem] max-w-[calc(100vw-1.5rem)]"
+              class="dropdown profile-menu right-0 z-[70] mt-3 w-[19rem] max-w-[calc(100vw-1.5rem)]"
               role="menu"
             >
               <!-- User Info -->
@@ -986,7 +986,7 @@ watch(
 @media (max-width: 767px) {
   :global(.app-header-shell) {
     max-height: 6rem;
-    overflow: hidden;
+    overflow: visible;
     transition: opacity 180ms ease, transform 180ms ease, visibility 180ms ease;
   }
 

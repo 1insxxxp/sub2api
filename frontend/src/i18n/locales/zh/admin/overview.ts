@@ -41,7 +41,7 @@ export default {
       metricTokens: '按 Token',
       metricActualCost: '按实际消费',
       tokenUsageTrend: 'Token 使用趋势',
-      userUsageTrend: '用户用量趋势（前 12 名）',
+      userUsageTrend: '用户使用趋势（Top 12）',
       noDataAvailable: '暂无数据',
       model: '模型',
       group: '分组',
@@ -389,32 +389,11 @@ export default {
     },
 
     affiliates: {
-      summaryDescription: '按邀请人查看邀请人数、有效邀请和返利汇总',
       invitesDescription: '查看全站邀请关系和被邀请用户累计返利',
       rebatesDescription: '查看每一笔产生返利的充值订单',
       transfersDescription: '查看返利额度转入账户余额的提取流水',
       errors: {
         loadFailed: '加载邀请返利记录失败'
-      },
-      tiers: {
-        standard: '原点级',
-        bronze: '脉冲级',
-        silver: '星环级',
-        gold: '极核级'
-      },
-      summary: {
-        searchPlaceholder: '搜索邀请人邮箱、用户名、用户 ID 或邀请码',
-        sortHint: '点击列名可查看邀请最多或最少的用户',
-        inviter: '邀请人',
-        invitedCount: '邀请人数',
-        qualifiedCount: '有效邀请',
-        totalRebate: '累计返利',
-        availableQuota: '当前可用',
-        transferredAmount: '已转余额',
-        rebateRecordCount: '返利记录',
-        lastInvitedAt: '最近邀请',
-        viewInvites: '邀请记录',
-        viewRebates: '返利记录'
       },
       records: {
         search: '搜索',
@@ -425,16 +404,6 @@ export default {
         invitee: '被邀请人',
         user: '用户',
         affCode: '邀请码',
-        automaticTier: '自动等级',
-        qualification: '合格状态',
-        qualified: '已合格',
-        unqualified: '未合格',
-        qualifiedInvitees: '有效邀请',
-        qualifiedInvite: '本次邀请已有效',
-        unqualifiedInvite: '本次邀请未有效',
-        qualifiedInviteesSummary: '累计有效 {qualified} / 邀请 {invited}',
-        effectiveRate: '有效比例',
-        customOverride: '自定义覆盖',
         order: '订单',
         totalRebate: '累计返利',
         orderAmount: '充值金额',
@@ -457,13 +426,6 @@ export default {
         rebateRate: '返利比例',
         invitedCount: '邀请人数',
         rebatedInviteeCount: '已产生返利人数',
-        automaticTier: '自动等级',
-        qualifiedInvitees: '合格人数',
-        qualifiedInviteesSummary: '累计有效 {qualified} / 邀请 {invited}',
-        automaticRate: '自动比例',
-        customOverride: '自定义覆盖',
-        effectiveRate: '有效比例',
-        none: '无',
         availableQuota: '可提余额',
         historyQuota: '历史返利'
       }
@@ -598,7 +560,6 @@ export default {
       deleteConfirm: "确定要删除用户 '{email}' 吗？此操作无法撤销。",
       roles: {
         admin: '管理员',
-        sub_admin: '二级管理员',
         user: '用户'
       },
       form: {
@@ -621,9 +582,7 @@ export default {
         concurrencyPlaceholder: '0 表示不限制',
         concurrencyHint: '该用户的最大并发请求数，0 = 不限制',
         rpmLimitPlaceholder: '0 表示不限制',
-        rpmLimitHint: '该用户每分钟最大请求数，0 = 不限制；仅在所用分组未设置 rpm_limit 时作为兜底生效',
-        balanceRedeemCodeEnabled: '允许生成余额兑换码',
-        balanceRedeemCodeEnabledHint: '开启后，该用户可将自己的余额转成一次性兑换码发给其他用户。'
+        rpmLimitHint: '该用户每分钟最大请求数，0 = 不限制；仅在所用分组未设置 rpm_limit 时作为兜底生效'
       },
       adjustBalance: '调整余额',
       adjustConcurrency: '调整并发数',
@@ -708,8 +667,6 @@ export default {
       typeBalance: '余额（兑换码）',
       typeAffiliateBalance: '余额（返利转入）',
       typeAdminBalance: '余额（管理员调整）',
-      typeEmptyResponse: '空回补偿',
-      emptyResponseUsageLog: '使用记录 #{id}',
       typeConcurrency: '并发（兑换码）',
       typeAdminConcurrency: '并发（管理员调整）',
       typeSubscription: '订阅',
@@ -891,7 +848,7 @@ export default {
         maxReasoningEffortOverLimitDeny: '拒绝访问',
         maxReasoningEffortOverLimitHint: '设置上限后生效。自动降档会将超过上限的请求改写为上限值后转发；拒绝访问则直接返回错误。',
         reasoningEffortMappings: '推理强度映射',
-        reasoningEffortMappingsHint: '类型和模型均可留空，表示匹配全部模型。同一类型和模型下可添加多条请求值映射，例如前缀 gpt 同时将 high、xhigh 转到 medium。精确优先于前后缀，更长前后缀优先。',
+        reasoningEffortMappingsHint: '类型和模型均可留空，表示匹配全部模型。同一类型和模型下可添加多条请求值映射，例如前缀 gpt 同时将 high、xhigh 转到 medium。转发值可选拒绝，命中对应请求值时直接返回错误。精确优先于前后缀，更长前后缀优先。',
         addReasoningEffortMapping: '添加映射',
         addReasoningEffortPair: '添加请求值',
         removeReasoningEffortMapping: '删除映射',
@@ -905,6 +862,7 @@ export default {
         reasoningEffortModelPlaceholder: '留空则全部 / gpt / gpt-5.4',
         reasoningEffortFrom: '请求值',
         reasoningEffortTo: '转发值',
+        reasoningEffortToDeny: '拒绝',
         reasoningEffortFromPlaceholder: '请选择 A',
         reasoningEffortToPlaceholder: '请选择 B',
         fromRequired: '请选择请求值 A',
@@ -939,10 +897,6 @@ export default {
           '公开分组费率 0.8，您可以创建一个费率 0.7 的专属分组，手动分配给 VIP 用户，让他们享受更优惠的价格。'
       },
       rateMultiplierHint: '1.0 = 标准费率，0.5 = 半价，2.0 = 双倍',
-      emptyResponseCompensation: {
-        enable: '允许自助补空回',
-        hint: '用户退款政策，不代表上游退款。开启后，符合规则的空回复或上游中断请求可自动退款，疑似情况进入人工审核。'
-      },
       platforms: {
         all: '全部平台',
         anthropic: 'Anthropic',
@@ -998,66 +952,6 @@ export default {
       failedToCreate: '创建分组失败',
       failedToUpdate: '更新分组失败',
       nameRequired: '请输入分组名称',
-      systemCustom: {
-        createAction: '新建自定义订阅分组',
-        createTitle: '新建自定义订阅分组',
-        editTitle: '管理自定义订阅分组',
-        manageAction: '管理来源',
-        typeBadge: '系统自定义',
-        namePlaceholder: '例如：酒馆综合月卡',
-        quotaTitle: '共享订阅配额',
-        quotaHint: '所有路由共用这个月卡分组的订阅限额，留空表示不限制。',
-        sourcesTitle: '来源分组',
-        sourcesHint: '选择要纳入订阅的分组。分组内的模型会自动同步，无需逐个维护。',
-        noSources: '暂无可用的直接来源分组',
-        sourceUnavailable: '来源已不可用，请移除后再保存',
-        unavailableSourceFallback: '不可用来源 #{source}',
-        priorityTitle: '来源优先级',
-        priorityHint: '同名模型按从上到下的顺序自动兜底。',
-        sourceModelCount: '{count} 个模型',
-        moveUp: '上移优先级',
-        moveDown: '下移优先级',
-        dynamicModelsTitle: '动态模型目录',
-        dynamicModelsHint: '来源分组新增、删除或改名模型后，这个订阅分组会自动同步，无需再次编辑。',
-        selectedSources: '已选来源',
-        uniqueModels: '可用模型',
-        fallbackRoutes: '同名兜底',
-        modelsTitle: '模型路由',
-        modelsHint: '逐个选择公开模型；同名模型需手动设置唯一别名。',
-        selectAll: '全选',
-        deselectAll: '取消全选',
-        selectAllAll: '全选全部',
-        selectAllSource: '全选本组',
-        showAdvancedSettings: '更多设置',
-        hideAdvancedSettings: '收起设置',
-        crossProtocolHint: '已选择跨协议来源：Claude/OpenAI 兼容接口会按来源自动转换；Gemini 原生接口仅可调用 Gemini 来源模型。',
-        selectSourceFirst: '先从左侧选择一个来源分组',
-        sourceModel: '来源模型',
-        publicModel: '对外模型名',
-        conflictTitle: '对外模型名冲突',
-        conflictHint: "请改为“模型{'@'}来源简称”等唯一名称后再保存。",
-        syncTitle: '同步来源变化',
-        syncHint: '预览不会直接修改路由，所有变更由管理员确认后随完整快照保存。',
-        syncAction: '检查变化',
-        syncAdded: '新增',
-        syncMissing: '已缺失',
-        syncConflicting: '有冲突',
-        addedUnselected: '默认不纳入',
-        disableSuggestion: '勾选后停用该旧路由',
-        alreadyDisabled: '已停用',
-        snapshotHint: '保存将更新来源优先级，模型目录会自动跟随来源变化。',
-        saved: '自定义订阅分组已保存',
-        deleteAction: '删除自定义分组',
-        deleteConfirm: '确定删除？已被套餐或订阅使用时将无法删除。',
-        deleting: '删除中...',
-        deleted: '自定义路由分组已删除',
-        deleteFailed: '删除自定义订阅分组失败',
-        syncSourceUnavailable: '无法纳入模型 {model}：来源分组 {source} 已不可用或模型已失效',
-        loadFailed: '加载自定义订阅分组失败',
-        saveFailed: '保存自定义订阅分组失败',
-        groupExists: '分组名称已存在，请修改名称或编辑已有分组',
-        syncFailed: '获取同步预览失败'
-      },
       rateMultipliers: '专属倍率',
       rateMultipliersTitle: '分组专属倍率管理',
       addUserRate: '添加用户专属倍率',
@@ -1138,14 +1032,7 @@ export default {
         description: '匹配模型后覆盖渠道和内置价格。长上下文阶梯沿用官方/预设价卡，无需再手填区间。音频可用按次层级配置 realtime、tts、stt。',
         longContext: '启用长上下文阶梯定价',
         longContextHint: '勾选后按渠道区间或官方预设阶梯计费；关闭后默认按第一档，账号显式开启时除外。',
-        add: '添加模型价格',
-        required: '需要定价',
-        requiredTitle: '需要补齐价格',
-        requiredHint: '模型 {models} 尚未有可用价格。填写后会自动重新检查。',
-        requiredSummary: '{count} 个已选模型需要定价',
-        checking: '正在检查模型价格…',
-        ready: '已选模型均有有效价格',
-        saveBlocked: '请先完成需要定价的模型'
+        add: '添加模型价格'
       },
       voicePricing: {
         title: 'Grok Voice 定价',
@@ -1181,21 +1068,30 @@ export default {
         bufferRangeError: '安全缓冲应在 0 到 99.99 之间',
         sumTooHigh: '最低毛利率与安全缓冲之和必须小于 100%，否则将排除全部账号'
       },
-      modelsList: {
-        title: '自定义 {endpoint} 模型列表',
-        hint: '仅影响 {endpoint} 展示结果，不影响白名单模型调用和账号调度。',
-        loading: '正在加载模型列表...',
-        empty: '暂无可展示模型',
+      modelAllowlist: {
+        title: '模型白名单',
+        hint: '开启后，不在白名单中的模型会被拒绝（404 model_not_found），模型列表接口也只展示白名单内的模型。条目支持精确模型 ID 与末尾 * 通配。注意：Claude Code 会用 haiku 系小模型做标题/摘要等探测，/messages/count_tokens 同样受白名单控制，请一并勾选所需的小模型。',
+        loading: '正在加载候选模型...',
+        empty: '暂无候选模型，可在下方手工添加条目',
         selectedSummary: '已选 {selected} / {total}',
         selectAll: '全选',
-        invertSelection: '反选'
+        invertSelection: '反选',
+        wildcardTag: '通配',
+        customPlaceholder: '自定义条目，如 claude-* 或 gpt-5.5-codex',
+        addCustom: '添加',
+        emptySelectionError: '模型白名单已开启，请至少选择或添加一个模型条目',
+        errors: {
+          empty: '请输入模型条目',
+          invalidWildcard: '通配符 * 只能出现在条目末尾',
+          duplicate: '该条目已存在'
+        }
       },
       codexModelsManifest: {
-        title: '固定账号获取 Codex Model Manifest',
-        hint: '开启后，该分组的 Codex 客户端 /models 请求只用选定账号向上游拉取并按 slug 合并，不经过调度器；限流/过载中的选定账号仍会被使用。',
-        enable: '使用特定账号获取 manifest',
+        title: '固定账号获取模型列表',
+        hint: '开启后，普通模型列表与 Codex Model Manifest 均优先从选定账号获取并合并，再应用账号映射和分组列表过滤；限流/过载中的选定账号仍会被使用。',
+        enable: '使用特定账号获取模型列表',
         enabledHint: '账号来源限定为当前分组内的 OpenAI 账号，最多选择 10 个。',
-        disabledHint: '未启用：manifest 请求经由调度器选账。',
+        disabledHint: '未启用：普通列表使用本地映射或默认模型；Codex 优先使用本地目录，无本地目录时由调度器选账。',
         accounts: '选定账号',
         searchPlaceholder: '搜索账号（当前分组内 OpenAI 账号）',
         searchEmpty: '未找到匹配账号',
@@ -1262,15 +1158,6 @@ export default {
         fallbackGroup: '降级分组',
         fallbackHint: '非 Claude Code 请求将使用此分组，留空则直接拒绝',
         noFallback: '不降级（直接拒绝）'
-      },
-      defaultReasoning: {
-        title: '默认思维强度',
-        hint: '客户端未传 thinking 或 output_config.effort 时自动注入；用户显式传入时不会覆盖。',
-        off: '关闭（不注入）',
-        low: '低',
-        medium: '中',
-        high: '高',
-        xhigh: '极高'
       },
       openaiMessages: {
         title: 'OpenAI Messages 调度配置',
@@ -1343,19 +1230,19 @@ export default {
         searchAccountPlaceholder: '搜索账号...',
         accountsHint: '选择此模型模式优先使用的账号'
       },
+      claudeMaxSimulation: {
+        title: 'Claude Max 用量模拟',
+        tooltip:
+          '启用后，对于没有上游缓存写入用量的 Claude 模型，系统会确定性地将 token 映射为少量输入加 1h 缓存创建，同时保持总 token 不变。',
+        enabled: '已启用（模拟 1h 缓存）',
+        disabled: '已禁用',
+        hint: '仅调整用量计费日志中的 token 类别。不会持久化每个请求的映射状态。'
+      },
       mcpXml: {
         title: 'MCP XML 协议注入',
         tooltip: '启用后，当请求包含 MCP 工具时，会在 system prompt 中注入 XML 格式调用协议提示词。关闭此选项可避免对某些客户端造成干扰。',
         enabled: '已启用',
         disabled: '已禁用'
-      },
-      claudeMaxSimulation: {
-        title: 'Claude Max 用量模拟',
-        tooltip:
-          '启用后，对于没有上游缓存写入用量的 Claude 模型，系统会在保持总 Token 不变的情况下，将 Token 映射为少量输入和 1 小时缓存创建。',
-        enabled: '已启用（模拟 1 小时缓存）',
-        disabled: '已禁用',
-        hint: '仅调整用量计费日志中的 Token 类别，不会保存逐请求的映射状态。'
       },
       supportedScopes: {
         title: '支持的模型系列',

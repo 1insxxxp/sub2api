@@ -196,10 +196,14 @@ func pricingCoverageGroupID(group *Group) *int64 {
 }
 
 func advertisedPricingModels(group *Group) []string {
-	if group == nil || !group.ModelsListConfig.Enabled {
+	if group == nil {
 		return nil
 	}
-	return normalizedUniquePricingModels(group.ModelsListConfig.Models)
+	allowlist := group.EffectiveModelAllowlist()
+	if !allowlist.Enabled {
+		return nil
+	}
+	return normalizedUniquePricingModels(allowlist.Models)
 }
 
 func prospectivePricingGroup(input GroupPricingCoverageInput) *Group {

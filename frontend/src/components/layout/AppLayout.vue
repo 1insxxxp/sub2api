@@ -5,9 +5,9 @@
         'app-shell-image-studio': route.path === '/images',
       }"
     >
-      <div class="pointer-events-none fixed inset-0 bg-[linear-gradient(180deg,rgba(59,130,246,0.08)_0%,rgba(248,250,252,0)_30rem)] dark:bg-[linear-gradient(180deg,rgba(37,99,235,0.18)_0%,rgba(2,6,23,0)_32rem)]"></div>
-      <div class="pointer-events-none fixed inset-0 bg-[radial-gradient(circle_at_top_right,rgba(14,165,233,0.08),transparent_24rem)] dark:bg-[radial-gradient(circle_at_top_right,rgba(96,165,250,0.14),transparent_26rem)]"></div>
-      <div class="pointer-events-none fixed inset-y-0 right-0 hidden w-[34rem] bg-[radial-gradient(circle_at_center,rgba(37,99,235,0.05),transparent_72%)] lg:block dark:bg-[radial-gradient(circle_at_center,rgba(59,130,246,0.08),transparent_72%)]"></div>
+      <div v-if="route.path !== '/model-status'" class="pointer-events-none fixed inset-0 bg-[linear-gradient(180deg,rgba(59,130,246,0.08)_0%,rgba(248,250,252,0)_30rem)] dark:bg-[linear-gradient(180deg,rgba(37,99,235,0.18)_0%,rgba(2,6,23,0)_32rem)]"></div>
+      <div v-if="route.path !== '/model-status'" class="pointer-events-none fixed inset-0 bg-[radial-gradient(circle_at_top_right,rgba(14,165,233,0.08),transparent_24rem)] dark:bg-[radial-gradient(circle_at_top_right,rgba(96,165,250,0.14),transparent_26rem)]"></div>
+      <div v-if="route.path !== '/model-status'" class="pointer-events-none fixed inset-y-0 right-0 hidden w-[34rem] bg-[radial-gradient(circle_at_center,rgba(37,99,235,0.05),transparent_72%)] lg:block dark:bg-[radial-gradient(circle_at_center,rgba(59,130,246,0.08),transparent_72%)]"></div>
 
       <!-- Sidebar -->
       <AppSidebar />

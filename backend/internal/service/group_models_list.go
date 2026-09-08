@@ -32,7 +32,8 @@ func normalizeGroupModelsListConfig(cfg GroupModelsListConfig) GroupModelsListCo
 }
 
 func (g *Group) CustomModelsListEnabled() bool {
-	return g != nil && g.ModelsListConfig.Enabled && len(g.ModelsListConfig.Models) > 0
+	allowlist := g.EffectiveModelAllowlist()
+	return allowlist.Enabled && len(allowlist.Models) > 0
 }
 
 // ResolveCustomModelsList applies the exact model-list semantics used by the

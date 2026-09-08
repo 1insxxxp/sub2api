@@ -8,36 +8,32 @@ import (
 	"testing"
 	"time"
 
-	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/pagination"
 	"github.com/stretchr/testify/require"
 )
 
 type userRepoStub struct {
-	user                  *User
-	usersByID             map[int64]*User
-	getErr                error
-	createErr             error
-	deleteErr             error
-	exists                bool
-	existsErr             error
-	aliasExists           bool
-	aliasErr              error
-	deletedIdentityExists bool
-	deletedIdentityErr    error
-	deletedIdentityChecks []string
-	guardedCreates        int
-	nextID                int64
-	created               []*User
-	updated               []*User
-	deletedIDs            []int64
-	usersByEmail          map[string]*User
-	getByEmailErr         error
-	getByEmailMisses      int
-	domainCounts          map[string]int
-	domainCountErr        error
-	domainLimitErr        error
-	domainLimitedCreates  int
+	user                 *User
+	usersByID            map[int64]*User
+	getErr               error
+	createErr            error
+	deleteErr            error
+	exists               bool
+	existsErr            error
+	aliasExists          bool
+	aliasErr             error
+	guardedCreates       int
+	nextID               int64
+	created              []*User
+	updated              []*User
+	deletedIDs           []int64
+	usersByEmail         map[string]*User
+	getByEmailErr        error
+	getByEmailMisses     int
+	domainCounts         map[string]int
+	domainCountErr       error
+	domainLimitErr       error
+	domainLimitedCreates int
 }
 
 func (s *userRepoStub) CountUsersByEmailDomain(_ context.Context, domain string) (int, error) {
@@ -76,13 +72,6 @@ func (s *userRepoStub) Create(ctx context.Context, user *User) error {
 
 func (s *userRepoStub) CreateWithEmailAliasGuard(ctx context.Context, user *User) error {
 	s.guardedCreates++
-	if s.deletedIdentityErr != nil || s.deletedIdentityExists {
-		s.deletedIdentityChecks = append(s.deletedIdentityChecks, user.Email)
-		if s.deletedIdentityErr != nil {
-			return s.deletedIdentityErr
-		}
-		return ErrEmailExists
-	}
 	if s.aliasErr != nil {
 		return s.aliasErr
 	}
@@ -218,21 +207,6 @@ func (s *userRepoStub) ExistsByEmailAlias(ctx context.Context, email string) (bo
 	return s.aliasExists, nil
 }
 
-func (s *userRepoStub) ExistsByEmailOrAliasIncludeDeleted(ctx context.Context, email string) (bool, error) {
-	s.deletedIdentityChecks = append(s.deletedIdentityChecks, email)
-	if s.deletedIdentityErr != nil {
-		return false, s.deletedIdentityErr
-	}
-	if s.deletedIdentityExists {
-		return true, nil
-	}
-	exists, err := s.ExistsByEmail(ctx, email)
-	if err != nil || exists {
-		return exists, err
-	}
-	return s.ExistsByEmailAlias(ctx, email)
-}
-
 func (s *userRepoStub) RemoveGroupFromAllowedGroups(ctx context.Context, groupID int64) (int64, error) {
 	panic("unexpected RemoveGroupFromAllowedGroups call")
 }
@@ -270,22 +244,10 @@ func (s *userRepoStub) GetByIDIncludeDeleted(ctx context.Context, id int64) (*Us
 }
 
 type groupRepoStub struct {
-	group           *Group
-	getCalls        []int64
 	affectedUserIDs []int64
 	deleteErr       error
 	deleteCalls     []int64
-}
-
-type groupCustomSourceReferenceCounterStub struct {
-	count int
-	err   error
-	calls []int64
-}
-
-func (s *groupCustomSourceReferenceCounterStub) CountCustomGroupModelReferences(_ context.Context, sourceGroupID int64) (int, error) {
-	s.calls = append(s.calls, sourceGroupID)
-	return s.count, s.err
+	guardedCalls    []int64
 }
 
 func (s *groupRepoStub) Create(ctx context.Context, group *Group) error {
@@ -293,12 +255,7 @@ func (s *groupRepoStub) Create(ctx context.Context, group *Group) error {
 }
 
 func (s *groupRepoStub) GetByID(ctx context.Context, id int64) (*Group, error) {
-	s.getCalls = append(s.getCalls, id)
-	if s.group != nil {
-		copy := *s.group
-		return &copy, nil
-	}
-	return &Group{ID: id, Name: "ordinary", Status: StatusActive}, nil
+	panic("unexpected GetByID call")
 }
 
 func (s *groupRepoStub) GetByIDLite(ctx context.Context, id int64) (*Group, error) {
@@ -315,6 +272,11 @@ func (s *groupRepoStub) Delete(ctx context.Context, id int64) error {
 
 func (s *groupRepoStub) DeleteCascade(ctx context.Context, id int64) ([]int64, error) {
 	s.deleteCalls = append(s.deleteCalls, id)
+	return s.affectedUserIDs, s.deleteErr
+}
+
+func (s *groupRepoStub) DeleteCascadeIfEmpty(ctx context.Context, id int64) ([]int64, error) {
+	s.guardedCalls = append(s.guardedCalls, id)
 	return s.affectedUserIDs, s.deleteErr
 }
 
@@ -730,19 +692,6 @@ func TestAdminService_DeleteGroup_InvalidatesAuthCacheForBoundKeys(t *testing.T)
 	require.Equal(t, []string{"k1", "k2"}, invalidator.keys)
 }
 
-func TestAdminService_DeleteGroupRejectsSystemCustomGroupBeforeCacheCollection(t *testing.T) {
-	repo := &groupRepoStub{group: &Group{ID: 5, SystemCustomRoutingEnabled: true}}
-	apiKeyRepo := &deleteGroupAPIKeyRepoStub{keys: []string{"must-not-be-read"}}
-	svc := &adminServiceImpl{groupRepo: repo, apiKeyRepo: apiKeyRepo, authCacheInvalidator: &authCacheInvalidatorStub{}}
-
-	err := svc.DeleteGroup(context.Background(), 5)
-
-	require.ErrorIs(t, err, ErrSystemCustomGroupManagedOnly)
-	require.Equal(t, []int64{5}, repo.getCalls)
-	require.Empty(t, repo.deleteCalls)
-	require.Empty(t, apiKeyRepo.listGroupIDs)
-}
-
 func TestAdminService_DeleteGroup_NotFound(t *testing.T) {
 	repo := &groupRepoStub{deleteErr: ErrGroupNotFound}
 	svc := &adminServiceImpl{groupRepo: repo}
@@ -760,53 +709,20 @@ func TestAdminService_DeleteGroup_Error(t *testing.T) {
 	require.ErrorIs(t, err, deleteErr)
 }
 
-func TestAdminService_DeleteGroup_BlocksCustomGroupSourceInUse(t *testing.T) {
-	repo := &groupRepoStub{}
-	references := &groupCustomSourceReferenceCounterStub{count: 7}
-	svc := &adminServiceImpl{
-		groupRepo:          repo,
-		groupSourceRefRepo: references,
-	}
+func TestAdminService_DeleteGroupIfEmpty_UsesGuardedCascade(t *testing.T) {
+	repo := &groupRepoStub{deleteErr: ErrGroupNotEmpty}
+	svc := &adminServiceImpl{groupRepo: repo, emptyGroupDeleteRepo: repo}
 
-	err := svc.DeleteGroup(context.Background(), 42)
-
-	require.Error(t, err)
-	require.Equal(t, "CUSTOM_GROUP_SOURCE_IN_USE", infraerrors.Reason(err))
-	status := infraerrors.FromError(err)
-	require.Equal(t, "7", status.Metadata["reference_count"])
-	require.Equal(t, []int64{42}, references.calls)
+	err := svc.DeleteGroupIfEmpty(context.Background(), 42)
+	require.ErrorIs(t, err, ErrGroupNotEmpty)
+	require.Equal(t, []int64{42}, repo.guardedCalls)
 	require.Empty(t, repo.deleteCalls)
 }
 
-func TestAdminService_DeleteGroup_CustomGroupSourceReferenceQueryError(t *testing.T) {
-	queryErr := errors.New("count references failed")
-	repo := &groupRepoStub{}
-	references := &groupCustomSourceReferenceCounterStub{err: queryErr}
-	svc := &adminServiceImpl{
-		groupRepo:          repo,
-		groupSourceRefRepo: references,
-	}
+func TestAdminService_DeleteGroupIfEmpty_MissingCapabilityReturnsError(t *testing.T) {
+	svc := &adminServiceImpl{groupRepo: &groupRepoStub{}}
 
-	err := svc.DeleteGroup(context.Background(), 42)
-
-	require.ErrorIs(t, err, queryErr)
-	require.Equal(t, []int64{42}, references.calls)
-	require.Empty(t, repo.deleteCalls)
-}
-
-func TestAdminService_DeleteGroup_CustomGroupSourceUnused(t *testing.T) {
-	repo := &groupRepoStub{}
-	references := &groupCustomSourceReferenceCounterStub{}
-	svc := &adminServiceImpl{
-		groupRepo:          repo,
-		groupSourceRefRepo: references,
-	}
-
-	err := svc.DeleteGroup(context.Background(), 42)
-
-	require.NoError(t, err)
-	require.Equal(t, []int64{42}, references.calls)
-	require.Equal(t, []int64{42}, repo.deleteCalls)
+	require.ErrorContains(t, svc.DeleteGroupIfEmpty(context.Background(), 42), "guarded group deletion is unavailable")
 }
 
 func TestAdminService_DeleteProxy_Success(t *testing.T) {
