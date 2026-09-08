@@ -75,6 +75,7 @@ import {
   PROVIDER_KIMI,
   PROVIDER_ZHIPU,
   PROVIDER_DEEPSEEK,
+  PROVIDER_MINIMAX,
 } from '@/constants/channelMonitor'
 
 defineProps<{

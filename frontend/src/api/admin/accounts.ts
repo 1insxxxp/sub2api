@@ -26,7 +26,9 @@ import type {
   UpstreamBillingProbeSettings,
   UpstreamBillingRatesResponse,
   OllamaCloudUsageSettings,
-  OllamaCloudUsageState
+  OllamaCloudUsageState,
+  GrokMediaEligibilityMode,
+  GrokMediaEligibilityState
 } from '@/types'
 
 /**

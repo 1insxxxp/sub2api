@@ -270,6 +270,7 @@ const showPassword = ref<boolean>(false)
 const publicSettingsLoaded = ref<boolean>(false)
 
 // Public settings
+const registrationEnabled = ref<boolean>(false)
 const turnstileEnabled = ref<boolean>(false)
 const turnstileSiteKey = ref<string>('')
 const tencentCaptchaEnabled = ref<boolean>(false)
@@ -381,6 +382,7 @@ onMounted(async () => {
 
   try {
     const settings = await getPublicSettings()
+    registrationEnabled.value = settings.registration_enabled === true
     turnstileEnabled.value = settings.turnstile_enabled
     turnstileSiteKey.value = settings.turnstile_site_key || ''
     tencentCaptchaEnabled.value = settings.tencent_captcha_enabled === true
