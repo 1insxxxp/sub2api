@@ -171,6 +171,9 @@ export default {
         noPricingRules: 'No pricing rules yet. Click "Add" to create one.',
         perRequestPrice: 'Price per Request',
         perRequestPriceRequired: 'Per-request price or billing tiers required for per-request/image billing mode',
+        perRequestFallbackHint: 'Leave empty to use the channel or built-in model price as a fallback.',
+        perRequestRequestedModelWarning: 'The requested model is not covered by a pricing rule.',
+        perRequestSuccessHint: 'This price is applied when the request completes successfully.',
         tierLabel: 'Tier',
         resolution: 'Resolution',
         modelMapping: 'Model Mapping',
@@ -223,8 +226,12 @@ export default {
          syncingModels: 'Syncing...',
          syncModelsSuccess: 'Synced {count} new model(s)',
          syncModelsAlreadyUpToDate: 'Models already up to date',
-         syncModelsError: 'Failed to sync models'
-       }
+        syncModelsError: 'Failed to sync models',
+        syncGroupAvailableModels: 'Sync available group models',
+        syncGroupModelsSuccess: 'Synced {count} group model(s)',
+        syncGroupModelsNoGroups: 'No groups are available for synchronization',
+        syncGroupModelsError: 'Failed to sync group models'
+      }
      },
 
     riskControl: {
@@ -573,6 +580,9 @@ export default {
         apiKey: 'API Key',
         apiKeyPlaceholder: 'Enter API Key',
         apiKeyEditPlaceholder: 'Leave blank to keep current key',
+        modelMappings: 'Model mappings',
+        modelMappingsHint: 'Map requested model names to the models tested by this monitor.',
+        modelMappingPlaceholder: 'Requested model = monitor model',
         useMyKey: 'Use my key',
         selectKeyTitle: 'Select my API Key',
         selectKeyHint: 'Only your active, non-expired keys are listed.',
@@ -658,6 +668,7 @@ export default {
 
     // Subscriptions
     subscriptions: {
+      manageSubscription: 'Manage subscription',
       title: 'Subscription Management',
       description: 'Manage user subscriptions and quota limits',
       assignSubscription: 'Assign Subscription',

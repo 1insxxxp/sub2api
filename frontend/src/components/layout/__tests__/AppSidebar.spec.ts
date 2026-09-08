@@ -76,6 +76,15 @@ describe('AppSidebar shared shell structure', () => {
   })
 })
 
+describe('AppSidebar mobile layering', () => {
+  it('keeps the mobile drawer above the header and its backdrop below the drawer', () => {
+    expect(componentSource).toContain('class="sidebar mobile-sidebar-layer"')
+    expect(componentSource).toContain('class="mobile-sidebar-overlay fixed inset-0 z-50 bg-black/50 lg:hidden"')
+    expect(componentSource).toContain('mobile-sidebar-layer')
+    expect(componentSource).toContain('.mobile-sidebar-layer')
+  })
+})
+
 describe('AppSidebar collapse motion', () => {
   it('does not transition every link property while the active image studio item collapses', () => {
     const sidebarLinkBlockMatch = styleSource.match(/\.sidebar-link\s*\{[\s\S]*?\n {2}\}/)

@@ -1,6 +1,6 @@
 <template>
   <aside
-    class="sidebar"
+    class="sidebar mobile-sidebar-layer"
     :class="[
       sidebarCollapsed ? 'w-[72px]' : 'w-64',
       { '-translate-x-full lg:translate-x-0': !mobileOpen }
@@ -229,7 +229,7 @@
   <transition name="fade">
     <div
       v-if="mobileOpen"
-      class="fixed inset-0 z-30 bg-black/50 lg:hidden"
+      class="mobile-sidebar-overlay fixed inset-0 z-50 bg-black/50 lg:hidden"
       @click="closeMobile"
     ></div>
   </transition>
@@ -1092,6 +1092,21 @@ onBeforeUnmount(() => {
 </script>
 
 <style scoped>
+.mobile-sidebar-layer {
+  z-index: 40;
+}
+
+@media (max-width: 1023px) {
+  /* Keep the open drawer above the header, while the backdrop stays below it. */
+  .mobile-sidebar-layer {
+    z-index: 60;
+  }
+
+  .mobile-sidebar-overlay {
+    z-index: 50;
+  }
+}
+
 .sidebar-logo {
   flex: 0 0 2.25rem;
   min-width: 2.25rem;

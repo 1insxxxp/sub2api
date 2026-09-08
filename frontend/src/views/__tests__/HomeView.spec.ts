@@ -201,6 +201,19 @@ describe('HomeView default homepage', () => {
     expect(styleSource).not.toContain('rgba(255, 255, 255, 0.58)')
   })
 
+  it('keeps the default homepage controls contained on narrow screens', async () => {
+    const wrapper = await mountHome()
+    const source = readFileSync('src/views/HomeView.vue', 'utf-8')
+
+    expect(wrapper.find('.home-nav-shell').classes()).toContain('w-full')
+    expect(wrapper.find('.home-brand-name').classes()).toContain('hidden')
+    expect(wrapper.find('.home-action-button').classes()).toContain('w-full')
+    expect(source).toContain('home-proof-label')
+    expect(source).toContain('@media (max-width: 640px)')
+    expect(source).toContain('.home-proof-label')
+    expect(source).toContain('white-space: nowrap')
+  })
+
   it('does not prepend the authenticated user initial to the header dashboard CTA', async () => {
     authStoreState.isAuthenticated = true
     authStoreState.user = { email: 'admin@example.com' }

@@ -4,8 +4,9 @@
       <!-- Backdrop: click anywhere outside to close -->
       <div class="fixed inset-0 z-[9998]" @click="emit('close')"></div>
       <div
-        class="action-menu-content admin-action-menu fixed z-[9999] w-52"
-        :style="{ top: position.top + 'px', left: position.left + 'px' }"
+        ref="menuRef"
+        class="action-menu-content admin-action-menu fixed z-[9999] w-52 overflow-y-auto overscroll-contain"
+        :style="menuStyle"
         @click.stop
       >
         <div class="space-y-0.5">

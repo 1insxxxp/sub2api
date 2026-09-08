@@ -26,7 +26,7 @@ func TestAttachGroupSupportedModels_FillsGlobalPricingForGroupOnlyModel(t *testi
 	pricingService := newAvailableChannelsPricingService(t)
 
 	h := &AvailableChannelHandler{
-		channelService: service.NewChannelService(nil, nil, nil, pricingService),
+		channelService: service.NewChannelService(nil, nil, nil, pricingService, nil),
 		gatewayService: service.NewGatewayService(
 			&pricingFallbackAccountRepoStub{accounts: []service.Account{
 				{
@@ -62,7 +62,7 @@ func TestAttachGroupSupportedModels_FillsGlobalPricingForGroupOnlyModel(t *testi
 func TestToUserSupportedModelsByIDs_KeepsChannelPricingAheadOfGlobalFallback(t *testing.T) {
 	pricingService := newAvailableChannelsPricingService(t)
 	h := &AvailableChannelHandler{
-		channelService: service.NewChannelService(nil, nil, nil, pricingService),
+		channelService: service.NewChannelService(nil, nil, nil, pricingService, nil),
 	}
 	customInputPrice := 9e-6
 
@@ -86,7 +86,7 @@ func TestToUserSupportedModelsByIDs_KeepsChannelPricingAheadOfGlobalFallback(t *
 func TestToUserSupportedModelsByIDs_LeavesUnknownModelUnpriced(t *testing.T) {
 	pricingService := newAvailableChannelsPricingService(t)
 	h := &AvailableChannelHandler{
-		channelService: service.NewChannelService(nil, nil, nil, pricingService),
+		channelService: service.NewChannelService(nil, nil, nil, pricingService, nil),
 	}
 
 	out := h.toUserSupportedModelsByIDs(nil, service.PlatformAnthropic, []string{"unknown-model-without-price"})

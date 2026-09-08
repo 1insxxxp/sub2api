@@ -338,6 +338,8 @@ export default {
           expand: '响应内容（点击展开）',
           collapse: '响应内容（点击收起）'
         },
+        attemptedKeyPrefix: '尝试使用的 API Key 前缀',
+        deletedKeyOwner: '已删除 Key 所属用户',
         loading: '加载中…',
         requestId: '请求 ID',
         time: '时间',

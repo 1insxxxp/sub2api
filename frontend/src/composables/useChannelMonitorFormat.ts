@@ -177,6 +177,10 @@ export function useChannelMonitorFormat() {
         return active
           ? 'admin-choice-card-active border-teal-500 text-teal-700 dark:border-teal-400 dark:text-teal-300'
           : 'hover:border-teal-300 hover:text-teal-700 dark:hover:border-teal-500/50'
+      case PROVIDER_MINIMAX:
+        return active
+          ? 'admin-choice-card-active border-rose-500 text-rose-700 dark:border-rose-400 dark:text-rose-300'
+          : 'hover:border-rose-300 hover:text-rose-700 dark:hover:border-rose-500/50'
       default:
         return active
           ? 'admin-choice-card-active border-primary-500 text-primary-700 dark:border-primary-400 dark:text-primary-300'

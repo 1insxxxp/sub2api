@@ -79,11 +79,13 @@ describe('custom page open button', () => {
     vi.unstubAllGlobals()
   })
 
-  it('preserves the embedded URL, secure link attributes, and normal clicks with small pointer movements', async () => {
+  it('opens the original URL without exposing embed credentials and preserves normal clicks with small pointer movements', async () => {
     const { wrapper, button } = mountEmbed()
-    expect(button.href).toBe(wrapper.get('iframe').attributes('src'))
-    expect(button.href).toContain('user_id=7')
-    expect(button.href).toContain('token=test-token')
+    expect(button.href).toBe('https://example.com/docs')
+    expect(button.href).not.toContain('token=')
+    expect(button.href).not.toContain('user_id=')
+    expect(wrapper.get('iframe').attributes('src')).toContain('user_id=7')
+    expect(wrapper.get('iframe').attributes('src')).toContain('token=test-token')
     expect(button.target).toBe('_blank')
     expect(button.rel).toBe('noopener noreferrer')
     await pointer(button, 'pointerdown', 700, 24)

@@ -94,7 +94,25 @@
         </div>
 
         <!-- Iframe embed mode -->
-        <div v-else class="custom-embed-shell">
+        <div v-else ref="embedShell" class="custom-embed-shell">
+          <a
+            ref="openButton"
+            :href="openUrl"
+            target="_blank"
+            rel="noopener noreferrer"
+            class="btn btn-secondary btn-sm custom-open-fab"
+            :style="openButtonPosition ? { left: `${openButtonPosition.x}px`, top: `${openButtonPosition.y}px`, right: 'auto' } : undefined"
+            @pointerdown="startButtonDrag"
+            @pointermove="moveButtonDrag"
+            @pointerup="endButtonDrag"
+            @pointercancel="endButtonDrag"
+            @lostpointercapture="endButtonDrag"
+            @dragstart.prevent
+            @click="handleOpenButtonClick"
+          >
+            <Icon name="externalLink" size="sm" class="mr-1.5" :stroke-width="2" />
+            {{ t('customPage.openInNewTab') }}
+          </a>
           <iframe
             :src="embeddedUrl"
             class="custom-embed-frame"
@@ -232,6 +250,8 @@ const embeddedUrl = computed(() => {
     locale.value,
   )
 })
+
+const openUrl = computed(() => menuItem.value?.url || '')
 
 const isValidUrl = computed(() => {
   if (isMarkdownMode.value) return false
@@ -491,6 +511,11 @@ onUnmounted(() => {
   @apply h-full w-full overflow-hidden rounded-2xl;
   @apply bg-gradient-to-b from-gray-50 to-white dark:from-dark-900 dark:to-dark-950;
   @apply p-0;
+}
+
+.custom-open-fab {
+  @apply absolute right-3 top-3 z-10 w-max max-w-full touch-none select-none transition-colors;
+  @apply shadow-sm backdrop-blur supports-[backdrop-filter]:bg-white/80 dark:supports-[backdrop-filter]:bg-dark-800/80;
 }
 
 .custom-embed-frame {

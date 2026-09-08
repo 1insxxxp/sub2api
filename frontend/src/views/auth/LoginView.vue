@@ -1,19 +1,21 @@
 <template>
-  <AuthLayout>
-    <div class="space-y-6">
+  <AuthLayout appearance="login">
+    <div class="auth-login-content space-y-5 sm:space-y-6">
       <!-- Title -->
-      <div class="text-center">
-        <h2 class="text-2xl font-bold text-slate-950 dark:text-white">
+      <div class="auth-login-heading text-center">
+        <span class="auth-login-kicker">{{ t('auth.signInToAccount') }}</span>
+        <h2 class="mt-2 text-2xl font-bold text-slate-950 dark:text-white">
           {{ t('auth.welcomeBack') }}
         </h2>
-        <p class="mt-2 text-sm leading-6 text-slate-500 dark:text-dark-300">
-          {{ t('auth.signInToAccount') }}
-        </p>
       </div>
       <!-- Login Form -->
-      <form @submit.prevent="handleLogin" class="space-y-5">
+      <form
+        @submit.prevent="handleLogin"
+        class="auth-login-form space-y-4 sm:space-y-5"
+        :aria-busy="isLoading"
+      >
         <!-- Email Input -->
-        <div>
+        <div class="auth-form-field">
           <label for="email" class="input-label">
             {{ t('auth.emailLabel') }}
           </label>
@@ -26,7 +28,6 @@
               v-model="formData.email"
               type="email"
               required
-              autofocus
               autocomplete="email"
               :disabled="authActionDisabled"
               class="input pl-11"
@@ -37,7 +38,7 @@
         </div>
 
         <!-- Password Input -->
-        <div>
+        <div class="auth-form-field">
           <label for="password" class="input-label">
             {{ t('auth.passwordLabel') }}
           </label>
@@ -60,7 +61,10 @@
               type="button"
               @click="showPassword = !showPassword"
               :disabled="authActionDisabled"
-              class="absolute inset-y-0 right-0 flex items-center pr-3.5 text-gray-400 transition-colors hover:text-gray-600 dark:hover:text-dark-300"
+              class="auth-password-toggle absolute inset-y-0 right-0 flex items-center pr-3.5 text-gray-400 transition-colors hover:text-gray-600 dark:hover:text-dark-300"
+              aria-controls="password"
+              :aria-label="showPassword ? t('auth.hidePassword') : t('auth.showPassword')"
+              :aria-pressed="showPassword"
             >
               <Icon v-if="showPassword" name="eyeOff" size="md" />
               <Icon v-else name="eye" size="md" />
@@ -101,7 +105,7 @@
         <button
           type="submit"
           :disabled="authActionDisabled || (turnstileEnabled && !turnstileToken)"
-          class="btn btn-primary w-full"
+          class="auth-login-submit btn btn-primary w-full"
         >
           <svg
             v-if="isLoading"
@@ -197,7 +201,7 @@
     </div>
 
     <!-- Footer -->
-    <template v-if="!backendModeEnabled" #footer>
+    <template v-if="!backendModeEnabled && registrationEnabled" #footer>
       <p class="text-slate-500 dark:text-dark-300">
         {{ t('auth.dontHaveAccount') }}
         <router-link
@@ -734,6 +738,90 @@ function handle2FACancel(): void {
 </script>
 
 <style scoped>
+.auth-login-kicker {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  color: #2563eb;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.auth-login-kicker::before {
+  width: 1.25rem;
+  height: 2px;
+  content: '';
+  border-radius: 9999px;
+  background: linear-gradient(90deg, #2563eb, #06b6d4);
+}
+
+.auth-form-field {
+  animation: login-field-rise 520ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.auth-form-field:nth-child(1) {
+  animation-delay: 260ms;
+}
+
+.auth-form-field:nth-child(2) {
+  animation-delay: 320ms;
+}
+
+.auth-login-form :deep(.input) {
+  min-height: 3rem;
+  border-radius: 0.75rem;
+  background: rgba(248, 250, 252, 0.76);
+  transition: border-color 180ms ease, box-shadow 180ms ease, background-color 180ms ease;
+}
+
+.auth-login-form :deep(.input:focus) {
+  background: #fff;
+  box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.12), 0 10px 24px rgba(37, 99, 235, 0.08);
+}
+
+.auth-password-toggle {
+  min-width: 2.75rem;
+  min-height: 2.75rem;
+  justify-content: center;
+  border-radius: 0.65rem;
+  transition: color 180ms ease, background-color 180ms ease;
+}
+
+.auth-password-toggle:hover,
+.auth-password-toggle:focus-visible {
+  background: rgba(59, 130, 246, 0.08);
+}
+
+.auth-login-submit {
+  min-height: 3rem;
+  border-radius: 0.75rem;
+  transition: transform 180ms ease, box-shadow 180ms ease, filter 180ms ease;
+}
+
+.auth-login-submit:hover:not(:disabled) {
+  filter: saturate(1.08);
+  transform: translateY(-1px);
+  box-shadow: 0 14px 28px rgba(37, 99, 235, 0.2);
+}
+
+.auth-login-submit:active:not(:disabled) {
+  transform: translateY(0) scale(0.99);
+}
+
+@keyframes login-field-rise {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 .fade-enter-active,
 .fade-leave-active {
   transition: all 0.3s ease;
@@ -743,5 +831,28 @@ function handle2FACancel(): void {
 .fade-leave-to {
   opacity: 0;
   transform: translateY(-8px);
+}
+
+@media (max-width: 480px) {
+  .auth-login-kicker {
+    font-size: 0.65rem;
+  }
+
+  .auth-login-form :deep(.input) {
+    font-size: 1rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .auth-form-field,
+  .auth-login-submit {
+    animation: none;
+    transition: none;
+  }
+
+  .auth-login-submit:hover:not(:disabled),
+  .auth-login-submit:active:not(:disabled) {
+    transform: none;
+  }
 }
 </style>

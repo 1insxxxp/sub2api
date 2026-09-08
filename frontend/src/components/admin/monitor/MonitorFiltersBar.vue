@@ -105,6 +105,7 @@ const providerFilterOptions = computed(() => [
   { value: PROVIDER_KIMI, label: t('monitorCommon.providers.kimi'), platform: PROVIDER_KIMI },
   { value: PROVIDER_ZHIPU, label: t('monitorCommon.providers.zhipu'), platform: PROVIDER_ZHIPU },
   { value: PROVIDER_DEEPSEEK, label: t('monitorCommon.providers.deepseek'), platform: PROVIDER_DEEPSEEK },
+  { value: PROVIDER_MINIMAX, label: t('monitorCommon.providers.minimax'), platform: PROVIDER_MINIMAX },
 ])
 
 const enabledFilterOptions = computed(() => [

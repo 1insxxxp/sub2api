@@ -171,6 +171,9 @@ export default {
         noPricingRules: '暂无定价规则，点击"添加"创建',
         perRequestPrice: '单次价格',
         perRequestPriceRequired: '按次/图片计费模式必须设置默认价格或至少一个计费层级',
+        perRequestFallbackHint: '留空则使用渠道或内置模型价格作为兜底。',
+        perRequestRequestedModelWarning: '请求模型未被任何定价规则覆盖。',
+        perRequestSuccessHint: '请求成功完成后将应用此价格。',
         tierLabel: '层级',
         resolution: '分辨率',
         modelMapping: '模型映射',
@@ -223,7 +226,11 @@ export default {
         syncingModels: '同步中...',
         syncModelsSuccess: '已同步 {count} 个新模型',
         syncModelsAlreadyUpToDate: '模型列表已是最新',
-        syncModelsError: '同步模型失败'
+        syncModelsError: '同步模型失败',
+        syncGroupAvailableModels: '同步分组可用模型',
+        syncGroupModelsSuccess: '已同步 {count} 个分组模型',
+        syncGroupModelsNoGroups: '没有可同步的分组',
+        syncGroupModelsError: '同步分组模型失败'
       }
     },
 
@@ -573,6 +580,9 @@ export default {
         apiKey: 'API Key',
         apiKeyPlaceholder: '请输入 API Key',
         apiKeyEditPlaceholder: '留空表示不修改',
+        modelMappings: '模型映射',
+        modelMappingsHint: '将请求模型名映射到此监控实际检测的模型。',
+        modelMappingPlaceholder: '请求模型 = 监控模型',
         useMyKey: '使用我的 Key',
         selectKeyTitle: '选择我的 API Key',
         selectKeyHint: '仅显示当前账号下处于「启用」状态且未过期的 Key。',
@@ -658,6 +668,7 @@ export default {
 
     // Subscriptions Management
     subscriptions: {
+      manageSubscription: '管理订阅',
       title: '订阅管理',
       description: '管理用户订阅和配额限制',
       assignSubscription: '分配订阅',

@@ -338,6 +338,8 @@ export default {
           expand: 'Response (click to expand)',
           collapse: 'Response (click to collapse)'
         },
+        attemptedKeyPrefix: 'Attempted API key prefix',
+        deletedKeyOwner: 'Deleted key owner',
         loading: 'Loading…',
         requestId: 'Request ID',
         time: 'Time',

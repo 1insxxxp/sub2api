@@ -112,7 +112,7 @@ func NewGroupHandlerWithDependencies(adminService service.AdminService, dashboar
 
 type GroupPricingCoverageRequest struct {
 	GroupID      *int64                         `json:"group_id"`
-	Platform     string                         `json:"platform" binding:"omitempty,oneof=anthropic openai gemini antigravity grok kimi zhipu deepseek composite"`
+	Platform     string                         `json:"platform" binding:"omitempty,oneof=anthropic openai gemini antigravity grok kimi zhipu deepseek minimax composite"`
 	Models       []string                       `json:"models"`
 	ModelPricing *[]service.ChannelModelPricing `json:"model_pricing"`
 }
@@ -234,7 +234,7 @@ func sanitizeUpdateGroupRequestForSimpleMode(req *UpdateGroupRequest) {
 type CreateGroupRequest struct {
 	Name                             string                        `json:"name" binding:"required"`
 	Description                      string                        `json:"description"`
-	Platform                         string                        `json:"platform" binding:"omitempty,oneof=anthropic openai gemini antigravity grok kimi zhipu deepseek composite"`
+	Platform                         string                        `json:"platform" binding:"omitempty,oneof=anthropic openai gemini antigravity grok kimi zhipu deepseek minimax composite"`
 	RateMultiplier                   float64                       `json:"rate_multiplier"`
 	EmptyResponseCompensationEnabled bool                          `json:"empty_response_compensation_enabled"`
 	IsExclusive                      bool                          `json:"is_exclusive"`
@@ -310,7 +310,7 @@ type CreateGroupRequest struct {
 type UpdateGroupRequest struct {
 	Name                             string                         `json:"name"`
 	Description                      *string                        `json:"description"`
-	Platform                         string                         `json:"platform" binding:"omitempty,oneof=anthropic openai gemini antigravity grok kimi zhipu deepseek composite"`
+	Platform                         string                         `json:"platform" binding:"omitempty,oneof=anthropic openai gemini antigravity grok kimi zhipu deepseek minimax composite"`
 	RateMultiplier                   *float64                       `json:"rate_multiplier"`
 	EmptyResponseCompensationEnabled *bool                          `json:"empty_response_compensation_enabled"`
 	IsExclusive                      *bool                          `json:"is_exclusive"`
