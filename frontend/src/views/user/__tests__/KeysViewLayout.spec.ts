@@ -28,6 +28,12 @@ describe('KeysView toolbar layout', () => {
     expect(keysViewSource).toContain('max-[359px]:hidden')
   })
 
+  it('preserves the desktop table scroll height chain', () => {
+    expect(keysViewSource).toMatch(
+      /\.keys-table\s*\{[^}]*display:\s*flex;[^}]*min-height:\s*0;[^}]*flex:\s*1;[^}]*flex-direction:\s*column;/s
+    )
+  })
+
   it('uses a bottom sheet for column settings on narrow screens', () => {
     expect(keysViewSource).toContain('isMobileColumnSelector')
     expect(keysViewSource).toContain('data-test="column-selector-backdrop"')
