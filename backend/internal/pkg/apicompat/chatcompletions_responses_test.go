@@ -154,6 +154,66 @@ func TestChatCompletionsToResponses_ToolCalls(t *testing.T) {
 	assert.Equal(t, "ping", resp.Tools[0].Name)
 }
 
+func TestChatCompletionsToResponses_AssignsUniqueIDsForToolCallsWithoutIDs(t *testing.T) {
+	req := &ChatCompletionsRequest{
+		Model: "gpt-4o",
+		Messages: []ChatMessage{
+			{Role: "assistant", ToolCalls: []ChatToolCall{
+				{Function: ChatFunctionCall{Name: "find_files", Arguments: `{}`}},
+				{Function: ChatFunctionCall{Name: "package_proxy", Arguments: `{}`}},
+			}},
+			{Role: "tool", Content: json.RawMessage(`"files found"`)},
+			{Role: "tool", Content: json.RawMessage(`"proxy done"`)},
+		},
+	}
+
+	resp, err := ChatCompletionsToResponses(req)
+	require.NoError(t, err)
+
+	var items []ResponsesInputItem
+	require.NoError(t, json.Unmarshal(resp.Input, &items))
+	require.Len(t, items, 4)
+	require.NotEmpty(t, items[0].CallID)
+	require.NotEmpty(t, items[1].CallID)
+	require.NotEqual(t, items[0].CallID, items[1].CallID)
+	require.Equal(t, items[0].CallID, items[2].CallID)
+	require.Equal(t, items[1].CallID, items[3].CallID)
+}
+
+func TestChatCompletionsToResponses_DoesNotPairOrphanToolOutputWithPendingCall(t *testing.T) {
+	req := &ChatCompletionsRequest{Model: "gpt-4o", Messages: []ChatMessage{
+		{Role: "assistant", ToolCalls: []ChatToolCall{{ID: "call_find", Function: ChatFunctionCall{Name: "find_files", Arguments: `{}`}}}},
+		{Role: "tool", ToolCallID: "call_orphan", Content: json.RawMessage(`"unrelated result"`)},
+		{Role: "tool", ToolCallID: "call_find", Content: json.RawMessage(`"files found"`)},
+	}}
+
+	resp, err := ChatCompletionsToResponses(req)
+	require.NoError(t, err)
+	var items []ResponsesInputItem
+	require.NoError(t, json.Unmarshal(resp.Input, &items))
+	require.Equal(t, "call_orphan", items[1].CallID)
+	require.Equal(t, "call_find", items[2].CallID)
+}
+
+func TestChatCompletionsToResponses_AssignsUniqueIDsForDuplicateToolCallIDs(t *testing.T) {
+	req := &ChatCompletionsRequest{Model: "gpt-4o", Messages: []ChatMessage{
+		{Role: "assistant", ToolCalls: []ChatToolCall{
+			{ID: "call_same", Function: ChatFunctionCall{Name: "find_files", Arguments: `{}`}},
+			{ID: "call_same", Function: ChatFunctionCall{Name: "package_proxy", Arguments: `{}`}},
+		}},
+		{Role: "tool", ToolCallID: "call_same", Content: json.RawMessage(`"files found"`)},
+		{Role: "tool", ToolCallID: "call_same", Content: json.RawMessage(`"proxy done"`)},
+	}}
+
+	resp, err := ChatCompletionsToResponses(req)
+	require.NoError(t, err)
+	var items []ResponsesInputItem
+	require.NoError(t, json.Unmarshal(resp.Input, &items))
+	require.NotEqual(t, items[0].CallID, items[1].CallID)
+	require.Equal(t, items[0].CallID, items[2].CallID)
+	require.Equal(t, items[1].CallID, items[3].CallID)
+}
+
 func TestChatCompletionsToResponses_ToolStrict(t *testing.T) {
 	strictTrue := true
 	strictFalse := false

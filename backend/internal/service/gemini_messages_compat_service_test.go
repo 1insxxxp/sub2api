@@ -1194,6 +1194,82 @@ func TestConvertClaudeMessagesToGeminiGenerateContent_AddsThoughtSignatureForToo
 	}
 }
 
+func TestConvertClaudeMessagesToGeminiGenerateContent_OrdersParallelToolResultsByCallOrder(t *testing.T) {
+	claudeReq := map[string]any{
+		"model": "gemini-3-flash-preview",
+		"messages": []any{
+			map[string]any{
+				"role":    "user",
+				"content": "Find the files and package proxy.",
+			},
+			map[string]any{
+				"role": "assistant",
+				"content": []any{
+					map[string]any{"type": "tool_use", "id": "call_find", "name": "find_files", "input": map[string]any{}},
+					map[string]any{"type": "tool_use", "id": "call_proxy", "name": "package_proxy", "input": map[string]any{}},
+				},
+			},
+			map[string]any{
+				"role": "user",
+				// Providers may return parallel tool results in completion order,
+				// which can differ from the function call order.
+				"content": []any{
+					map[string]any{"type": "tool_result", "tool_use_id": "call_proxy", "content": "proxy done"},
+					map[string]any{"type": "tool_result", "tool_use_id": "call_find", "content": "files found"},
+				},
+			},
+		},
+	}
+	body, err := json.Marshal(claudeReq)
+	require.NoError(t, err)
+
+	out, err := convertClaudeMessagesToGeminiGenerateContent(body)
+	require.NoError(t, err)
+
+	var converted map[string]any
+	require.NoError(t, json.Unmarshal(out, &converted))
+	contents := converted["contents"].([]any)
+	toolResultParts := contents[2].(map[string]any)["parts"].([]any)
+	firstName := toolResultParts[0].(map[string]any)["functionResponse"].(map[string]any)["name"]
+	secondName := toolResultParts[1].(map[string]any)["functionResponse"].(map[string]any)["name"]
+	require.Equal(t, "find_files", firstName)
+	require.Equal(t, "package_proxy", secondName)
+}
+
+func TestConvertClaudeMessagesToGeminiGenerateContent_MergesSplitParallelToolResults(t *testing.T) {
+	claudeReq := map[string]any{
+		"model": "gemini-3-flash-preview",
+		"messages": []any{
+			map[string]any{
+				"role": "assistant",
+				"content": []any{
+					map[string]any{"type": "tool_use", "id": "call_find", "name": "find_files", "input": map[string]any{}},
+					map[string]any{"type": "tool_use", "id": "call_proxy", "name": "package_proxy", "input": map[string]any{}},
+				},
+			},
+			// Some clients send one user message per completed tool instead of
+			// one message containing all parallel tool results.
+			map[string]any{
+				"role":    "user",
+				"content": []any{map[string]any{"type": "tool_result", "tool_use_id": "call_proxy", "content": "proxy done"}},
+			},
+			map[string]any{
+				"role":    "user",
+				"content": []any{map[string]any{"type": "tool_result", "tool_use_id": "call_find", "content": "files found"}},
+			},
+		},
+	}
+	body, err := json.Marshal(claudeReq)
+	require.NoError(t, err)
+
+	out, err := convertClaudeMessagesToGeminiGenerateContent(body)
+	require.NoError(t, err)
+
+	require.Equal(t, "find_files", gjson.GetBytes(out, "contents.1.parts.0.functionResponse.name").String())
+	require.Equal(t, "package_proxy", gjson.GetBytes(out, "contents.1.parts.1.functionResponse.name").String())
+	require.False(t, gjson.GetBytes(out, "contents.2").Exists(), "split tool results should be merged into one user content")
+}
+
 func TestConvertClaudeMessagesToGeminiGenerateContent_AppendsContinuationAfterAssistantPrefill(t *testing.T) {
 	claudeReq := map[string]any{
 		"model":      "claude-opus-4-6",

@@ -16,6 +16,7 @@ import (
 	mathrand "math/rand"
 	"net/http"
 	"regexp"
+	"sort"
 	"strings"
 	"time"
 
@@ -3432,6 +3433,8 @@ func convertClaudeMessagesToGeminiContents(messages any, toolUseIDToName map[str
 	}
 
 	out := make([]any, 0, len(arr)+1)
+	toolUseOrder := make(map[string]int)
+	nextToolUseOrder := 0
 	for _, m := range arr {
 		mm, ok := m.(map[string]any)
 		if !ok {
@@ -3445,6 +3448,13 @@ func convertClaudeMessagesToGeminiContents(messages any, toolUseIDToName map[str
 		}
 
 		parts := make([]any, 0)
+		toolResultSlots := make([]int, 0)
+		pendingToolResults := make([]struct {
+			part  any
+			order int
+			seq   int
+		}, 0)
+		toolResultSeq := 0
 		switch content := mm["content"].(type) {
 		case string:
 			// 字符串形式的 content，保留所有内容（包括空白）
@@ -3473,6 +3483,8 @@ func convertClaudeMessagesToGeminiContents(messages any, toolUseIDToName map[str
 					name, _ := bm["name"].(string)
 					if strings.TrimSpace(id) != "" && strings.TrimSpace(name) != "" {
 						toolUseIDToName[id] = name
+						toolUseOrder[id] = nextToolUseOrder
+						nextToolUseOrder++
 					}
 					signature, _ := bm["signature"].(string)
 					signature = strings.TrimSpace(signature)
@@ -3492,14 +3504,26 @@ func convertClaudeMessagesToGeminiContents(messages any, toolUseIDToName map[str
 					if name == "" {
 						name = "tool"
 					}
-					parts = append(parts, map[string]any{
+					part := map[string]any{
 						"functionResponse": map[string]any{
 							"name": name,
 							"response": map[string]any{
 								"content": extractClaudeContentText(bm["content"]),
 							},
 						},
-					})
+					}
+					order, ok := toolUseOrder[toolUseID]
+					if !ok {
+						order = len(toolUseOrder) + len(pendingToolResults)
+					}
+					toolResultSlots = append(toolResultSlots, len(parts))
+					parts = append(parts, nil)
+					pendingToolResults = append(pendingToolResults, struct {
+						part  any
+						order int
+						seq   int
+					}{part: part, order: order, seq: toolResultSeq})
+					toolResultSeq++
 				case "image":
 					if src, ok := bm["source"].(map[string]any); ok {
 						if srcType, _ := src["type"].(string); srcType == "base64" {
@@ -3525,12 +3549,24 @@ func convertClaudeMessagesToGeminiContents(messages any, toolUseIDToName map[str
 		default:
 			// ignore
 		}
+		if len(pendingToolResults) > 1 {
+			sort.SliceStable(pendingToolResults, func(i, j int) bool {
+				if pendingToolResults[i].order != pendingToolResults[j].order {
+					return pendingToolResults[i].order < pendingToolResults[j].order
+				}
+				return pendingToolResults[i].seq < pendingToolResults[j].seq
+			})
+		}
+		for i, slot := range toolResultSlots {
+			parts[slot] = pendingToolResults[i].part
+		}
 
 		out = append(out, map[string]any{
 			"role":  gRole,
 			"parts": parts,
 		})
 	}
+	out = normalizeGeminiFunctionCallHistory(out)
 
 	if len(out) > 0 {
 		if last, ok := out[len(out)-1].(map[string]any); ok && last["role"] == "model" {
@@ -3543,6 +3579,133 @@ func convertClaudeMessagesToGeminiContents(messages any, toolUseIDToName map[str
 		}
 	}
 	return out, nil
+}
+
+// normalizeGeminiFunctionCallHistory keeps tool calls and their responses in
+// the single alternating turn shape required by Gemini. Clients may split
+// parallel tool results across multiple user messages or return them in
+// completion order instead of call order.
+func normalizeGeminiFunctionCallHistory(contents []any) []any {
+	contents = mergeConsecutiveGeminiContents(contents)
+	for i := 0; i+1 < len(contents); i++ {
+		modelContent, ok := contents[i].(map[string]any)
+		if !ok || modelContent["role"] != "model" {
+			continue
+		}
+		expected := geminiFunctionCallNames(modelContent)
+		if len(expected) == 0 {
+			continue
+		}
+		userContent, ok := contents[i+1].(map[string]any)
+		if !ok || userContent["role"] != "user" {
+			continue
+		}
+		reorderGeminiFunctionResponses(userContent, expected)
+	}
+	return contents
+}
+
+func mergeConsecutiveGeminiContents(contents []any) []any {
+	merged := make([]any, 0, len(contents))
+	for _, content := range contents {
+		current, ok := content.(map[string]any)
+		if !ok {
+			continue
+		}
+		if len(merged) == 0 {
+			merged = append(merged, current)
+			continue
+		}
+		previous, ok := merged[len(merged)-1].(map[string]any)
+		if !ok || previous["role"] != current["role"] {
+			merged = append(merged, current)
+			continue
+		}
+		previousParts, _ := previous["parts"].([]any)
+		currentParts, _ := current["parts"].([]any)
+		previous["parts"] = append(previousParts, currentParts...)
+	}
+	return merged
+}
+
+func geminiFunctionCallNames(content map[string]any) []string {
+	parts, _ := content["parts"].([]any)
+	names := make([]string, 0, len(parts))
+	for _, part := range parts {
+		pm, ok := part.(map[string]any)
+		if !ok {
+			continue
+		}
+		call, ok := pm["functionCall"].(map[string]any)
+		if !ok {
+			continue
+		}
+		name, _ := call["name"].(string)
+		if strings.TrimSpace(name) != "" {
+			names = append(names, name)
+		}
+	}
+	return names
+}
+
+func reorderGeminiFunctionResponses(content map[string]any, expected []string) {
+	parts, _ := content["parts"].([]any)
+	slots := make([]int, 0, len(parts))
+	responses := make([]any, 0, len(parts))
+	allowed := make(map[string]bool, len(expected))
+	for _, name := range expected {
+		allowed[name] = true
+	}
+	for i, part := range parts {
+		pm, ok := part.(map[string]any)
+		if !ok {
+			continue
+		}
+		response, ok := pm["functionResponse"].(map[string]any)
+		if !ok {
+			continue
+		}
+		name, _ := response["name"].(string)
+		if !allowed[name] {
+			return
+		}
+		slots = append(slots, i)
+		responses = append(responses, part)
+	}
+	if len(slots) != len(expected) || !sameGeminiFunctionNameCounts(responses, expected) {
+		return
+	}
+
+	byName := make(map[string][]any, len(expected))
+	for _, part := range responses {
+		response := part.(map[string]any)["functionResponse"].(map[string]any)
+		name, _ := response["name"].(string)
+		byName[name] = append(byName[name], part)
+	}
+	for i, slot := range slots {
+		name := expected[i]
+		parts[slot] = byName[name][0]
+		byName[name] = byName[name][1:]
+	}
+}
+
+func sameGeminiFunctionNameCounts(responses []any, expected []string) bool {
+	counts := make(map[string]int, len(expected))
+	for _, part := range responses {
+		pm := part.(map[string]any)
+		response := pm["functionResponse"].(map[string]any)
+		name, _ := response["name"].(string)
+		counts[name]++
+	}
+	for _, name := range expected {
+		counts[name]--
+	}
+	for _, count := range counts {
+		if count != 0 {
+			return false
+		}
+	}
+	return true
 }
 
 func extractClaudeContentText(v any) string {
