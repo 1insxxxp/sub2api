@@ -338,6 +338,53 @@ func TestAccountHandlerGetAvailableModels_GeminiGoogleOneUsesConservativeCatalog
 	require.NotContains(t, ids, "gemini-2.5-flash-image")
 }
 
+func TestAccountHandlerGetAvailableModels_AntigravityUsesExplicitPublicAliases(t *testing.T) {
+	svc := &availableModelsAdminService{
+		stubAdminService: newStubAdminService(),
+		account: service.Account{
+			ID:       47,
+			Name:     "antigravity-aliases",
+			Platform: service.PlatformAntigravity,
+			Type:     service.AccountTypeAPIKey,
+			Status:   service.StatusActive,
+			Credentials: map[string]any{
+				"model_mapping": map[string]any{
+					"按次反重力1/gemini-3-flash":    "gemini-3-flash",
+					"按次反重力1/claude-sonnet-4-6": "claude-sonnet-4-6",
+				},
+			},
+		},
+	}
+	router := setupAvailableModelsRouter(svc)
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/admin/accounts/47/models", nil)
+	router.ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusOK, rec.Code)
+	var resp struct {
+		Data []struct {
+			ID string `json:"id"`
+		} `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+	require.ElementsMatch(t, []string{
+		"按次反重力1/gemini-3-flash",
+		"按次反重力1/claude-sonnet-4-6",
+	}, modelIDs(resp.Data))
+	require.NotContains(t, modelIDs(resp.Data), "gemini-3-flash")
+}
+
+func modelIDs(models []struct {
+	ID string `json:"id"`
+}) []string {
+	ids := make([]string, 0, len(models))
+	for _, model := range models {
+		ids = append(ids, model.ID)
+	}
+	return ids
+}
+
 func TestAccountHandlerSyncUpstreamModels_ConfigErrorReturnsBadRequest(t *testing.T) {
 	svc := &availableModelsAdminService{
 		stubAdminService: newStubAdminService(),

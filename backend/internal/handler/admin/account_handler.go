@@ -2878,8 +2878,7 @@ func (h *AccountHandler) GetAvailableModels(c *gin.Context) {
 
 	// Handle Antigravity accounts: return Claude + Gemini models
 	if account.Platform == service.PlatformAntigravity {
-		// 直接复用 antigravity.DefaultModels()，与 /v1/models 端点保持同步
-		response.Success(c, antigravity.DefaultModels())
+		response.Success(c, antigravityAvailableModels(account))
 		return
 	}
 
@@ -2972,6 +2971,59 @@ func (h *AccountHandler) GetAvailableModels(c *gin.Context) {
 	}
 
 	response.Success(c, models)
+}
+
+// antigravityAvailableModels returns the public model names configured on an
+// account. The mapping key is the request-facing alias; the value is the
+// upstream model sent to Antigravity. Falling back to the default catalog is
+// only valid when the account has no explicit model_mapping.
+func antigravityAvailableModels(account *service.Account) []antigravity.ClaudeModel {
+	if account == nil {
+		return nil
+	}
+	publicModels := make(map[string]struct{})
+	switch mapping := account.Credentials["model_mapping"].(type) {
+	case map[string]any:
+		for model := range mapping {
+			if model = strings.TrimSpace(model); model != "" {
+				publicModels[model] = struct{}{}
+			}
+		}
+	case map[string]string:
+		for model := range mapping {
+			if model = strings.TrimSpace(model); model != "" {
+				publicModels[model] = struct{}{}
+			}
+		}
+	}
+	if len(publicModels) == 0 {
+		return antigravity.DefaultModels()
+	}
+
+	defaultByID := make(map[string]antigravity.ClaudeModel)
+	for _, model := range antigravity.DefaultModels() {
+		defaultByID[model.ID] = model
+	}
+	ids := make([]string, 0, len(publicModels))
+	for model := range publicModels {
+		ids = append(ids, model)
+	}
+	sort.Strings(ids)
+	models := make([]antigravity.ClaudeModel, 0, len(ids))
+	for _, id := range ids {
+		if model, ok := defaultByID[id]; ok {
+			model.ID = id
+			model.DisplayName = id
+			models = append(models, model)
+			continue
+		}
+		models = append(models, antigravity.ClaudeModel{
+			ID:          id,
+			Type:        "model",
+			DisplayName: id,
+		})
+	}
+	return models
 }
 
 // CascadeAccountModelAliasRenames handles cascading detected account model alias renames.
