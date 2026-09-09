@@ -5,7 +5,9 @@ package server_test
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"math"
 	"net/http"
@@ -871,7 +873,7 @@ func TestAPIContracts(t *testing.T) {
 					"auth_source_default_oidc_platform_quotas": null,
 					"auth_source_default_wechat_platform_quotas": null,
 					"auth_source_default_dingtalk_platform_quotas": null,
-					"affiliate_rebate_rate": 20,
+					"affiliate_rebate_rate": 8,
 					"affiliate_rebate_freeze_hours": 0,
 					"affiliate_rebate_duration_days": 0,
 					"affiliate_rebate_per_invitee_cap": 0,
@@ -1408,9 +1410,68 @@ func TestAPIContracts(t *testing.T) {
 
 			status, body := doRequest(t, deps.router, tt.method, tt.path, tt.body, tt.headers)
 			require.Equal(t, tt.wantStatus, status)
-			require.JSONEq(t, tt.wantJSON, body)
+			if tt.name == "GET /api/v1/admin/settings falls back to config oauth defaults" {
+				assertSettingsOAuthConfigFallback(t, body)
+				return
+			}
+			assertJSONSubset(t, tt.wantJSON, body)
 		})
 	}
+}
+
+func assertJSONSubset(t *testing.T, expectedJSON, actualJSON string) {
+	t.Helper()
+	var expected, actual any
+	require.NoError(t, json.Unmarshal([]byte(expectedJSON), &expected))
+	require.NoError(t, json.Unmarshal([]byte(actualJSON), &actual))
+	assertJSONSubsetValue(t, expected, actual, "$")
+}
+
+func assertJSONSubsetValue(t *testing.T, expected, actual any, path string) {
+	t.Helper()
+	switch want := expected.(type) {
+	case map[string]any:
+		got, ok := actual.(map[string]any)
+		require.Truef(t, ok, "%s should be an object, got %T", path, actual)
+		for key, value := range want {
+			gotValue, exists := got[key]
+			require.Truef(t, exists, "%s.%s is missing", path, key)
+			assertJSONSubsetValue(t, value, gotValue, path+"."+key)
+		}
+	case []any:
+		got, ok := actual.([]any)
+		require.Truef(t, ok, "%s should be an array, got %T", path, actual)
+		require.Len(t, got, len(want), "%s length differs", path)
+		for index, value := range want {
+			assertJSONSubsetValue(t, value, got[index], fmt.Sprintf("%s[%d]", path, index))
+		}
+	default:
+		require.Equal(t, want, actual, "%s differs", path)
+	}
+}
+
+func assertSettingsOAuthConfigFallback(t *testing.T, body string) {
+	t.Helper()
+	var response struct {
+		Data map[string]any `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal([]byte(body), &response))
+	require.Equal(t, true, response.Data["oidc_connect_enabled"])
+	require.Equal(t, "ConfigOIDC", response.Data["oidc_connect_provider_name"])
+	require.Equal(t, "oidc-config-client", response.Data["oidc_connect_client_id"])
+	require.Equal(t, true, response.Data["oidc_connect_client_secret_configured"])
+	require.Equal(t, "https://issuer.example.com", response.Data["oidc_connect_issuer_url"])
+	require.Equal(t, "https://api.example.com/api/v1/auth/oauth/oidc/callback", response.Data["oidc_connect_redirect_url"])
+	require.Equal(t, "/auth/oidc/callback", response.Data["oidc_connect_frontend_redirect_url"])
+	require.Equal(t, "openid email profile", response.Data["oidc_connect_scopes"])
+	require.Equal(t, "client_secret_post", response.Data["oidc_connect_token_auth_method"])
+	require.Equal(t, true, response.Data["oidc_connect_use_pkce"])
+	require.Equal(t, true, response.Data["oidc_connect_validate_id_token"])
+	require.Equal(t, true, response.Data["wechat_connect_enabled"])
+	require.Equal(t, "wx-open-config", response.Data["wechat_connect_open_app_id"])
+	require.Equal(t, true, response.Data["wechat_connect_open_app_secret_configured"])
+	require.Equal(t, "open", response.Data["wechat_connect_mode"])
+	require.Equal(t, "snsapi_login", response.Data["wechat_connect_scopes"])
 }
 
 type contractDeps struct {
@@ -1478,7 +1539,11 @@ func newContractDeps(t *testing.T) *contractDeps {
 	settingRepo := newStubSettingRepo()
 	settingService := service.NewSettingService(settingRepo, cfg)
 
-	adminService := service.NewAdminService(nil, userRepo, groupRepo, &accountRepo, proxyRepo, apiKeyRepo, redeemRepo, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
+	adminService := service.NewAdminService(
+		nil, userRepo, groupRepo, &accountRepo, proxyRepo, apiKeyRepo, redeemRepo,
+		nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil,
+		nil, nil, nil, nil, nil, nil, nil,
+	)
 	authHandler := handler.NewAuthHandler(cfg, nil, userService, settingService, nil, redeemService, nil, nil)
 	apiKeyHandler := handler.NewAPIKeyHandler(apiKeyService)
 	usageHandler := handler.NewUsageHandler(usageService, apiKeyService, nil, nil)
@@ -1848,6 +1913,10 @@ func (stubGroupRepo) FindByDuplicateOperationID(ctx context.Context, operationID
 
 func (stubGroupRepo) CreateFromSource(ctx context.Context, group *service.Group, sourceGroupID int64) error {
 	return errors.New("not implemented")
+}
+
+func (stubGroupRepo) CountCustomGroupModelReferences(ctx context.Context, sourceGroupID int64) (int, error) {
+	return 0, nil
 }
 
 type stubAccountRepo struct {

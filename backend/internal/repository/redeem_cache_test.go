@@ -11,7 +11,7 @@ import (
 )
 
 func TestRedeemRateLimitDurationMatchesHourlyPolicy(t *testing.T) {
-	require.Equal(t, time.Hour, redeemRateLimitDuration)
+	require.Equal(t, 10*time.Minute, redeemRateLimitWindow)
 }
 
 func TestRedeemRateLimitKey(t *testing.T) {

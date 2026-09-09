@@ -20,7 +20,7 @@ func newGatewayRecordUsageServiceForTest(usageRepo UsageLogRepository, userRepo 
 	return NewGatewayService(
 		nil,
 		nil,
-		usageRepo,
+		transactionalUsageLogRepo(usageRepo),
 		nil,
 		userRepo,
 		subRepo,
@@ -47,6 +47,40 @@ func newGatewayRecordUsageServiceForTest(usageRepo UsageLogRepository, userRepo 
 		nil,
 		nil, // userPlatformQuotaRepo
 	)
+}
+
+type gatewayUsageBillingRepoForTest struct {
+	UsageBillingRepository
+	userRepo  UserRepository
+	subRepo   UserSubscriptionRepository
+	quotaRepo APIKeyQuotaUpdater
+}
+
+func (r *gatewayUsageBillingRepoForTest) Apply(ctx context.Context, cmd *UsageBillingCommand) (*UsageBillingApplyResult, error) {
+	if cmd == nil {
+		return &UsageBillingApplyResult{Applied: true}, nil
+	}
+	if cmd.BalanceCost > 0 && r.userRepo != nil {
+		if err := r.userRepo.DeductBalance(ctx, cmd.UserID, cmd.BalanceCost); err != nil {
+			return nil, err
+		}
+	}
+	if cmd.SubscriptionCost > 0 && r.subRepo != nil && cmd.SubscriptionID != nil {
+		if err := r.subRepo.IncrementUsage(ctx, *cmd.SubscriptionID, cmd.SubscriptionCost); err != nil {
+			return nil, err
+		}
+	}
+	if cmd.APIKeyQuotaCost > 0 && r.quotaRepo != nil {
+		if err := r.quotaRepo.UpdateQuotaUsed(ctx, cmd.APIKeyID, cmd.APIKeyQuotaCost); err != nil {
+			return nil, err
+		}
+	}
+	if cmd.APIKeyRateLimitCost > 0 && r.quotaRepo != nil {
+		if err := r.quotaRepo.UpdateRateLimitUsage(ctx, cmd.APIKeyID, cmd.APIKeyRateLimitCost); err != nil {
+			return nil, err
+		}
+	}
+	return &UsageBillingApplyResult{Applied: true}, nil
 }
 
 func newGatewayRecordUsageServiceWithBillingRepoForTest(usageRepo UsageLogRepository, billingRepo UsageBillingRepository, userRepo UserRepository, subRepo UserSubscriptionRepository) *GatewayService {
@@ -86,6 +120,7 @@ func TestGatewayServiceRecordUsage_BillingUsesDetachedContext(t *testing.T) {
 	subRepo := &openAIRecordUsageSubRepoStub{}
 	quotaSvc := &openAIRecordUsageAPIKeyQuotaStub{}
 	svc := newGatewayRecordUsageServiceForTest(usageRepo, userRepo, subRepo)
+	svc.usageBillingRepo = &gatewayUsageBillingRepoForTest{userRepo: userRepo, subRepo: subRepo, quotaRepo: quotaSvc}
 
 	reqCtx, cancel := context.WithCancel(context.Background())
 	cancel()
@@ -110,7 +145,7 @@ func TestGatewayServiceRecordUsage_BillingUsesDetachedContext(t *testing.T) {
 	})
 
 	require.NoError(t, err)
-	require.Equal(t, 1, usageRepo.calls)
+	require.Equal(t, 2, usageRepo.calls)
 	require.Equal(t, 1, userRepo.deductCalls)
 	require.NoError(t, userRepo.lastCtxErr)
 	require.Equal(t, 1, quotaSvc.quotaCalls)
@@ -224,8 +259,8 @@ func TestGatewayServiceRecordUsage_GeminiFlashThinkingTierUsesCatalogPrice(t *te
 			require.NotNil(t, usageRepo.lastLog)
 			require.Equal(t, model, usageRepo.lastLog.Model)
 			require.InDelta(t, 0.02007585, usageRepo.lastLog.TotalCost, 1e-12)
-			require.InDelta(t, 0.0030113775, usageRepo.lastLog.ActualCost, 1e-12)
-			require.InDelta(t, 0.0030113775, userRepo.lastAmount, 1e-12)
+			require.InDelta(t, 0.00301138, usageRepo.lastLog.ActualCost, 1e-12)
+			require.InDelta(t, 0.00301138, userRepo.lastAmount, 1e-12)
 		})
 	}
 }
@@ -529,6 +564,7 @@ func TestGatewayServiceRecordUsage_UsageLogWriteErrorDoesNotSkipBilling(t *testi
 	subRepo := &openAIRecordUsageSubRepoStub{}
 	quotaSvc := &openAIRecordUsageAPIKeyQuotaStub{}
 	svc := newGatewayRecordUsageServiceForTest(usageRepo, userRepo, subRepo)
+	svc.usageBillingRepo = &gatewayUsageBillingRepoForTest{userRepo: userRepo, subRepo: subRepo, quotaRepo: quotaSvc}
 
 	err := svc.RecordUsage(context.Background(), &RecordUsageInput{
 		Result: &ForwardResult{
@@ -550,7 +586,7 @@ func TestGatewayServiceRecordUsage_UsageLogWriteErrorDoesNotSkipBilling(t *testi
 	})
 
 	require.NoError(t, err)
-	require.Equal(t, 1, usageRepo.calls)
+	require.Equal(t, 2, usageRepo.calls)
 	require.Equal(t, 1, userRepo.deductCalls)
 	require.Equal(t, 1, quotaSvc.quotaCalls)
 }

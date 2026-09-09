@@ -4,6 +4,7 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"math"
 	"strconv"
@@ -96,9 +97,18 @@ type paymentFulfillmentAffiliateAccrueCall struct {
 }
 
 type paymentFulfillmentAffiliateRepoStub struct {
-	inviteeSummary *AffiliateSummary
-	inviterSummary *AffiliateSummary
-	accrueCalls    []paymentFulfillmentAffiliateAccrueCall
+	inviteeSummary      *AffiliateSummary
+	inviterSummary      *AffiliateSummary
+	accrueCalls         []paymentFulfillmentAffiliateAccrueCall
+	auditClient         *dbent.Client
+	reconcileCalls      int
+	reconcileErr        error
+	reconcileRequired   bool
+	generation          int64
+	markReconcileCalls  int
+	markReconcileErr    error
+	clearReconcileErr   error
+	reconcileInviteeErr error
 }
 
 func (r *paymentFulfillmentAffiliateRepoStub) EnsureUserAffiliate(_ context.Context, userID int64) (*AffiliateSummary, error) {
@@ -188,6 +198,102 @@ func (r *paymentFulfillmentAffiliateRepoStub) ListAffiliateTransferRecords(conte
 
 func (r *paymentFulfillmentAffiliateRepoStub) GetAffiliateUserOverview(context.Context, int64) (*AffiliateUserOverview, error) {
 	panic("unexpected GetAffiliateUserOverview call")
+}
+
+func (r *paymentFulfillmentAffiliateRepoStub) CountQualifiedInvitees(context.Context, int64, float64) (int, error) {
+	return 0, nil
+}
+
+func (r *paymentFulfillmentAffiliateRepoStub) ReconcileInviteeQualification(context.Context, int64, float64) (*AffiliateQualification, error) {
+	r.reconcileCalls++
+	if r.reconcileInviteeErr != nil {
+		return nil, r.reconcileInviteeErr
+	}
+	return nil, r.reconcileErr
+}
+
+func (r *paymentFulfillmentAffiliateRepoStub) ReconcileAllAffiliateQualifications(context.Context, float64, int) error {
+	r.reconcileCalls++
+	return r.reconcileErr
+}
+
+func (r *paymentFulfillmentAffiliateRepoStub) TryWithAffiliateQualificationReconcileLock(ctx context.Context, fn func(context.Context) error) (bool, error) {
+	return true, fn(ctx)
+}
+
+func (r *paymentFulfillmentAffiliateRepoStub) MarkReconcileRequired(context.Context) (AffiliateReconcileToken, error) {
+	r.markReconcileCalls++
+	if r.markReconcileErr != nil {
+		return AffiliateReconcileToken{}, r.markReconcileErr
+	}
+	wasPending := r.reconcileRequired
+	r.generation++
+	if r.generation <= 0 {
+		r.generation = 1
+	}
+	r.reconcileRequired = true
+	return AffiliateReconcileToken{Generation: r.generation, WasPendingBefore: wasPending}, nil
+}
+
+func (r *paymentFulfillmentAffiliateRepoStub) ReadReconcilePendingSnapshot(context.Context) (AffiliateReconcilePendingSnapshot, error) {
+	return AffiliateReconcilePendingSnapshot{Required: r.reconcileRequired, Generation: r.generation}, nil
+}
+
+func (r *paymentFulfillmentAffiliateRepoStub) ClearReconcileRequiredIfGeneration(_ context.Context, expected int64) (bool, error) {
+	if r.clearReconcileErr != nil {
+		return false, r.clearReconcileErr
+	}
+	if !r.reconcileRequired || r.generation != expected {
+		return false, nil
+	}
+	r.reconcileRequired = false
+	return true, nil
+}
+
+func (r *paymentFulfillmentAffiliateRepoStub) ListAffiliateQualificationDirtyEvents(ctx context.Context, limit int) ([]AffiliateQualificationDirtyEvent, error) {
+	if r.auditClient == nil {
+		return nil, nil
+	}
+	logs, err := r.auditClient.PaymentAuditLog.Query().
+		Where(paymentauditlog.ActionEQ(AffiliateQualificationDirtyAuditAction)).
+		Order(dbent.Asc(paymentauditlog.FieldID)).Limit(limit).All(ctx)
+	if err != nil {
+		return nil, err
+	}
+	events := make([]AffiliateQualificationDirtyEvent, 0, len(logs))
+	for _, logEntry := range logs {
+		event := AffiliateQualificationDirtyEvent{OrderID: logEntry.OrderID, Detail: logEntry.Detail}
+		if err := json.Unmarshal([]byte(logEntry.Detail), &event); err != nil {
+			event.ParseError = err.Error()
+		}
+		events = append(events, event)
+	}
+	return events, nil
+}
+
+func (r *paymentFulfillmentAffiliateRepoStub) DeleteAffiliateQualificationDirtyEvent(ctx context.Context, event AffiliateQualificationDirtyEvent) (bool, error) {
+	if r.auditClient == nil {
+		return true, nil
+	}
+	deleted, err := r.auditClient.PaymentAuditLog.Delete().Where(
+		paymentauditlog.OrderIDEQ(event.OrderID),
+		paymentauditlog.ActionEQ(AffiliateQualificationDirtyAuditAction),
+		paymentauditlog.DetailEQ(event.Detail),
+	).Exec(ctx)
+	if err == nil && deleted == 0 {
+		// The test fixture only creates one dirty event per order. Keep the
+		// stub tolerant of JSON detail normalization while preserving the
+		// production repository's stricter current-detail check.
+		deleted, err = r.auditClient.PaymentAuditLog.Delete().Where(
+			paymentauditlog.OrderIDEQ(event.OrderID),
+			paymentauditlog.ActionEQ(AffiliateQualificationDirtyAuditAction),
+		).Exec(ctx)
+	}
+	return deleted > 0 || err == nil, err
+}
+
+func (r *paymentFulfillmentAffiliateRepoStub) MarkAffiliateQualificationDirtyEventFailed(context.Context, AffiliateQualificationDirtyEvent, error) error {
+	return nil
 }
 
 type paymentFulfillmentSettingRepoStub struct {
@@ -1288,4 +1394,5 @@ func TestExecuteSubscriptionFulfillmentDoesNotDuplicateWorkAfterLegacySuccessAud
 }
 
 var _ AffiliateRepository = (*paymentFulfillmentAffiliateRepoStub)(nil)
+var _ AffiliateQualificationRepository = (*paymentFulfillmentAffiliateRepoStub)(nil)
 var _ SettingRepository = (*paymentFulfillmentSettingRepoStub)(nil)

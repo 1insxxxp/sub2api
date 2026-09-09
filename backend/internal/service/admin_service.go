@@ -702,7 +702,7 @@ var ErrRPMStatusUnavailable = infraerrors.New(http.StatusNotImplemented, "RPM_ST
 type adminServiceImpl struct {
 	cfg                   *config.Config
 	userRepo              UserRepository
-	groupRepo             AdminGroupRepository
+	groupRepo             GroupRepository
 	groupDuplicateRepo    GroupDuplicateRepository
 	groupSourceRefRepo    GroupCustomSourceReferenceRepository
 	emptyGroupDeleteRepo  EmptyGroupDeleteRepository
@@ -783,9 +783,9 @@ func NewAdminService(
 		cfg:                     cfg,
 		userRepo:                userRepo,
 		groupRepo:               groupRepo,
-		groupDuplicateRepo:      groupRepo,
-		groupSourceRefRepo:      groupRepo,
-		emptyGroupDeleteRepo:    groupRepo,
+		groupDuplicateRepo:      optionalGroupDuplicateRepository(groupRepo),
+		groupSourceRefRepo:      optionalGroupSourceReferenceRepository(groupRepo),
+		emptyGroupDeleteRepo:    optionalEmptyGroupDeleteRepository(groupRepo),
 		accountRepo:             accountRepo,
 		accountDuplicateRepo:    accountRepo,
 		accountBillingRepo:      accountRepo,
@@ -814,4 +814,19 @@ func NewAdminService(
 	service.userCustomGroupRepo = accountModelAliasRenameCascadeRepositoryFrom(userCustomGroupRepo)
 	service.systemCustomGroupRepo = accountModelAliasRenameCascadeRepositoryFrom(systemCustomGroupRepo)
 	return service
+}
+
+func optionalGroupDuplicateRepository(repo GroupRepository) GroupDuplicateRepository {
+	value, _ := repo.(GroupDuplicateRepository)
+	return value
+}
+
+func optionalGroupSourceReferenceRepository(repo GroupRepository) GroupCustomSourceReferenceRepository {
+	value, _ := repo.(GroupCustomSourceReferenceRepository)
+	return value
+}
+
+func optionalEmptyGroupDeleteRepository(repo GroupRepository) EmptyGroupDeleteRepository {
+	value, _ := repo.(EmptyGroupDeleteRepository)
+	return value
 }

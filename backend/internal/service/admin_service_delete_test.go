@@ -13,27 +13,29 @@ import (
 )
 
 type userRepoStub struct {
-	user                 *User
-	usersByID            map[int64]*User
-	getErr               error
-	createErr            error
-	deleteErr            error
-	exists               bool
-	existsErr            error
-	aliasExists          bool
-	aliasErr             error
-	guardedCreates       int
-	nextID               int64
-	created              []*User
-	updated              []*User
-	deletedIDs           []int64
-	usersByEmail         map[string]*User
-	getByEmailErr        error
-	getByEmailMisses     int
-	domainCounts         map[string]int
-	domainCountErr       error
-	domainLimitErr       error
-	domainLimitedCreates int
+	user                  *User
+	usersByID             map[int64]*User
+	getErr                error
+	createErr             error
+	deleteErr             error
+	exists                bool
+	existsErr             error
+	aliasExists           bool
+	aliasErr              error
+	deletedIdentityExists bool
+	deletedIdentityChecks []string
+	guardedCreates        int
+	nextID                int64
+	created               []*User
+	updated               []*User
+	deletedIDs            []int64
+	usersByEmail          map[string]*User
+	getByEmailErr         error
+	getByEmailMisses      int
+	domainCounts          map[string]int
+	domainCountErr        error
+	domainLimitErr        error
+	domainLimitedCreates  int
 }
 
 func (s *userRepoStub) CountUsersByEmailDomain(_ context.Context, domain string) (int, error) {
@@ -75,7 +77,14 @@ func (s *userRepoStub) CreateWithEmailAliasGuard(ctx context.Context, user *User
 	if s.aliasErr != nil {
 		return s.aliasErr
 	}
-	if s.aliasExists {
+	if s.deletedIdentityExists {
+		if exists, err := s.ExistsByEmailOrAliasIncludeDeleted(ctx, user.Email); err != nil {
+			return err
+		} else if exists {
+			return ErrEmailExists
+		}
+	}
+	if s.aliasExists || s.deletedIdentityExists {
 		return ErrEmailExists
 	}
 	return s.Create(ctx, user)
@@ -207,6 +216,14 @@ func (s *userRepoStub) ExistsByEmailAlias(ctx context.Context, email string) (bo
 	return s.aliasExists, nil
 }
 
+func (s *userRepoStub) ExistsByEmailOrAliasIncludeDeleted(_ context.Context, email string) (bool, error) {
+	s.deletedIdentityChecks = append(s.deletedIdentityChecks, email)
+	if s.existsErr != nil {
+		return false, s.existsErr
+	}
+	return s.exists || s.aliasExists || s.deletedIdentityExists, nil
+}
+
 func (s *userRepoStub) RemoveGroupFromAllowedGroups(ctx context.Context, groupID int64) (int64, error) {
 	panic("unexpected RemoveGroupFromAllowedGroups call")
 }
@@ -255,11 +272,11 @@ func (s *groupRepoStub) Create(ctx context.Context, group *Group) error {
 }
 
 func (s *groupRepoStub) GetByID(ctx context.Context, id int64) (*Group, error) {
-	panic("unexpected GetByID call")
+	return &Group{ID: id}, nil
 }
 
 func (s *groupRepoStub) GetByIDLite(ctx context.Context, id int64) (*Group, error) {
-	panic("unexpected GetByIDLite call")
+	return &Group{ID: id}, nil
 }
 
 func (s *groupRepoStub) Update(ctx context.Context, group *Group) error {
