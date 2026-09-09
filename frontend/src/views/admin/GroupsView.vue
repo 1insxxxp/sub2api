@@ -432,7 +432,11 @@
                 </span>
               </button>
               <button
-                v-if="!authStore.isSimpleMode && row.platform === 'composite'"
+              v-if="
+                !authStore.isSimpleMode &&
+                row.platform === 'composite' &&
+                !isSystemCustomGroup(row)
+              "
                 data-testid="group-composite-routes"
                 @click="handleCompositeRoutes(row)"
                 class="admin-inline-action"

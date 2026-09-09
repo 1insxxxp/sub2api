@@ -702,6 +702,35 @@ func TestAdminService_UpdateGroupRejectsSystemCustomGroupBeforeMutation(t *testi
 	require.Nil(t, repo.updated)
 }
 
+func TestAdminService_CompositeRoutesRejectSystemCustomGroup(t *testing.T) {
+	svc := &adminServiceImpl{groupRepo: &groupRepoStubForAdmin{getByID: &Group{
+		ID: 109, Platform: PlatformComposite, SubscriptionType: SubscriptionTypeSubscription,
+		SystemCustomRoutingEnabled: true,
+	}}}
+	ctx := context.Background()
+	for _, tc := range []struct {
+		name string
+		run  func() error
+	}{
+		{"list", func() error { _, err := svc.ListCompositeRoutes(ctx, 109); return err }},
+		{"create", func() error { _, err := svc.CreateCompositeRoute(ctx, 109, CompositeRouteInput{}); return err }},
+		{"update", func() error { _, err := svc.UpdateCompositeRoute(ctx, 109, 1, CompositeRouteInput{}); return err }},
+		{"delete", func() error { return svc.DeleteCompositeRoute(ctx, 109, 1) }},
+		{"preview", func() error { _, err := svc.PreviewCompositeRoute(ctx, 109, CompositeRoutePreviewRequest{}); return err }},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			require.ErrorIs(t, tc.run(), ErrSystemCustomGroupManagedOnly)
+		})
+	}
+}
+
+func TestAdminService_RequireCompositeGroupAllowsOrdinaryComposite(t *testing.T) {
+	svc := &adminServiceImpl{groupRepo: &groupRepoStubForAdmin{getByID: &Group{
+		ID: 91, Platform: PlatformComposite,
+	}}}
+	require.NoError(t, svc.requireCompositeGroup(context.Background(), 91))
+}
+
 func TestAdminService_UpdateGroup_WithVideoPricing(t *testing.T) {
 	existingGroup := &Group{
 		ID:       1,

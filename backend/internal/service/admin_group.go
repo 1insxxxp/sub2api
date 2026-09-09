@@ -251,6 +251,9 @@ func (s *adminServiceImpl) requireCompositeGroup(ctx context.Context, groupID in
 	if group.Platform != PlatformComposite {
 		return fmt.Errorf("group %d is not a composite group", groupID)
 	}
+	if group.SystemCustomRoutingEnabled {
+		return ErrSystemCustomGroupManagedOnly
+	}
 	return nil
 }
 
