@@ -36,9 +36,17 @@ const geminiStickySessionTTL = time.Hour
 
 const (
 	geminiMaxRetries     = 5
+	geminiMax429Attempts = 2
 	geminiRetryBaseDelay = 1 * time.Second
 	geminiRetryMaxDelay  = 16 * time.Second
 )
+
+func geminiRetryLimit(statusCode int) int {
+	if statusCode == http.StatusTooManyRequests {
+		return geminiMax429Attempts
+	}
+	return geminiMaxRetries
+}
 
 // Gemini tool calling now requires `thoughtSignature` in parts that include `functionCall`.
 // Many clients don't send it; we inject a known dummy signature to satisfy the validator.
@@ -901,9 +909,9 @@ func (s *GeminiMessagesCompatService) Forward(ctx context.Context, c *gin.Contex
 			}
 			if resp.StatusCode == 429 {
 				// Mark as rate-limited early so concurrent requests avoid this account.
-				s.handleGeminiUpstreamError(ctx, account, resp.StatusCode, resp.Header, respBody)
+				s.handleGeminiUpstreamErrorForModel(ctx, account, resp.StatusCode, resp.Header, respBody, originalModel)
 			}
-			if attempt < geminiMaxRetries {
+			if attempt < geminiRetryLimit(resp.StatusCode) {
 				upstreamReqID := resp.Header.Get(requestIDHeader)
 				if upstreamReqID == "" {
 					upstreamReqID = resp.Header.Get("x-goog-request-id")
@@ -931,7 +939,7 @@ func (s *GeminiMessagesCompatService) Forward(ctx context.Context, c *gin.Contex
 					Detail:             upstreamDetail,
 				})
 
-				logger.LegacyPrintf("service.gemini_messages_compat", "Gemini account %d: upstream status %d, retry %d/%d", account.ID, resp.StatusCode, attempt, geminiMaxRetries)
+				logger.LegacyPrintf("service.gemini_messages_compat", "Gemini account %d: upstream status %d, retry %d/%d", account.ID, resp.StatusCode, attempt, geminiRetryLimit(resp.StatusCode))
 				sleepGeminiBackoff(attempt)
 				continue
 			}
@@ -971,7 +979,7 @@ func (s *GeminiMessagesCompatService) Forward(ctx context.Context, c *gin.Contex
 				return nil, s.writeGeminiMappedError(c, account, resp.StatusCode, upstreamReqID, respBody)
 			case ErrorPolicyMatched, ErrorPolicyTempUnscheduled:
 				if policy == ErrorPolicyMatched {
-					s.handleGeminiUpstreamError(ctx, account, resp.StatusCode, resp.Header, respBody)
+					s.handleGeminiUpstreamErrorForModel(ctx, account, resp.StatusCode, resp.Header, respBody, originalModel)
 				}
 				upstreamReqID := resp.Header.Get(requestIDHeader)
 				if upstreamReqID == "" {
@@ -1004,7 +1012,7 @@ func (s *GeminiMessagesCompatService) Forward(ctx context.Context, c *gin.Contex
 		}
 
 		// ErrorPolicyNone → 原有逻辑
-		s.handleGeminiUpstreamError(ctx, account, resp.StatusCode, resp.Header, respBody)
+		s.handleGeminiUpstreamErrorForModel(ctx, account, resp.StatusCode, resp.Header, respBody, originalModel)
 		// 精确匹配服务端配置类 400 错误，触发 failover + 临时封禁
 		if resp.StatusCode == http.StatusBadRequest {
 			msg400 := strings.ToLower(strings.TrimSpace(extractUpstreamErrorMessage(respBody)))
@@ -1407,9 +1415,9 @@ func (s *GeminiMessagesCompatService) ForwardNative(ctx context.Context, c *gin.
 				break
 			}
 			if resp.StatusCode == 429 {
-				s.handleGeminiUpstreamError(ctx, account, resp.StatusCode, resp.Header, respBody)
+				s.handleGeminiUpstreamErrorForModel(ctx, account, resp.StatusCode, resp.Header, respBody, originalModel)
 			}
-			if attempt < geminiMaxRetries {
+			if attempt < geminiRetryLimit(resp.StatusCode) {
 				upstreamReqID := resp.Header.Get(requestIDHeader)
 				if upstreamReqID == "" {
 					upstreamReqID = resp.Header.Get("x-goog-request-id")
@@ -1437,7 +1445,7 @@ func (s *GeminiMessagesCompatService) ForwardNative(ctx context.Context, c *gin.
 					Detail:             upstreamDetail,
 				})
 
-				logger.LegacyPrintf("service.gemini_messages_compat", "Gemini account %d: upstream status %d, retry %d/%d", account.ID, resp.StatusCode, attempt, geminiMaxRetries)
+				logger.LegacyPrintf("service.gemini_messages_compat", "Gemini account %d: upstream status %d, retry %d/%d", account.ID, resp.StatusCode, attempt, geminiRetryLimit(resp.StatusCode))
 				sleepGeminiBackoff(attempt)
 				continue
 			}
@@ -1514,7 +1522,7 @@ func (s *GeminiMessagesCompatService) ForwardNative(ctx context.Context, c *gin.
 				return nil, s.writeGeminiNativeUpstreamError(c, account, resp, respBody, requestID, isOAuth)
 			case ErrorPolicyMatched, ErrorPolicyTempUnscheduled:
 				if policy == ErrorPolicyMatched {
-					s.handleGeminiUpstreamError(ctx, account, resp.StatusCode, resp.Header, respBody)
+					s.handleGeminiUpstreamErrorForModel(ctx, account, resp.StatusCode, resp.Header, respBody, originalModel)
 				}
 				evBody := unwrapIfNeeded(isOAuth, respBody)
 				upstreamMsg := strings.TrimSpace(extractUpstreamErrorMessage(evBody))
@@ -1544,7 +1552,7 @@ func (s *GeminiMessagesCompatService) ForwardNative(ctx context.Context, c *gin.
 		}
 
 		// ErrorPolicyNone → 原有逻辑
-		s.handleGeminiUpstreamError(ctx, account, resp.StatusCode, resp.Header, respBody)
+		s.handleGeminiUpstreamErrorForModel(ctx, account, resp.StatusCode, resp.Header, respBody, originalModel)
 		// 精确匹配服务端配置类 400 错误，触发 failover + 临时封禁
 		if resp.StatusCode == http.StatusBadRequest {
 			msg400 := strings.ToLower(strings.TrimSpace(extractUpstreamErrorMessage(respBody)))
@@ -3108,6 +3116,13 @@ func asInt(v any) (int, bool) {
 }
 
 func (s *GeminiMessagesCompatService) handleGeminiUpstreamError(ctx context.Context, account *Account, statusCode int, headers http.Header, body []byte) {
+	s.handleGeminiUpstreamErrorForModel(ctx, account, statusCode, headers, body, "")
+}
+
+// handleGeminiUpstreamErrorForModel records Gemini 429 responses at the
+// narrowest scope supported by the upstream response. A model-specific
+// capacity/rate-limit response must not make unrelated models unavailable.
+func (s *GeminiMessagesCompatService) handleGeminiUpstreamErrorForModel(ctx context.Context, account *Account, statusCode int, headers http.Header, body []byte, requestedModel string) {
 	// 遵守自定义错误码策略：未命中则跳过所有限流处理
 	if !account.ShouldHandleErrorCode(statusCode) {
 		return
@@ -3122,6 +3137,25 @@ func (s *GeminiMessagesCompatService) handleGeminiUpstreamError(ctx context.Cont
 	// 池模式账号不写账号级限流：账号留在池内，由 failover / 同号重试消化 429。
 	// 自定义错误码优先级高于池模式，开启后仍按其命中结果标记。
 	if account.IsPoolMode() && !account.IsCustomErrorCodesEnabled() {
+		return
+	}
+
+	if statusCode == 429 && requestedModel != "" && isGeminiModelScoped429(body) {
+		modelKey := account.GetMappedModel(requestedModel)
+		if modelKey == "" {
+			modelKey = requestedModel
+		}
+		resetAt := ParseGeminiRateLimitResetTime(body)
+		var resetTime time.Time
+		if resetAt != nil {
+			resetTime = time.Unix(*resetAt, 0)
+		} else {
+			resetTime = time.Now().Add(5 * time.Minute)
+		}
+		if err := s.accountRepo.SetModelRateLimit(ctx, account.ID, modelKey, resetTime, "gemini_429_model"); err != nil {
+			logger.LegacyPrintf("service.gemini_messages_compat", "[Gemini 429] failed to set model rate limit account=%d model=%s: %v", account.ID, modelKey, err)
+		}
+		logger.LegacyPrintf("service.gemini_messages_compat", "[Gemini 429] Account %d model %s rate limited until %v", account.ID, modelKey, resetTime)
 		return
 	}
 
@@ -3166,6 +3200,34 @@ func (s *GeminiMessagesCompatService) handleGeminiUpstreamError(ctx context.Cont
 	_ = s.accountRepo.SetRateLimited(ctx, account.ID, resetTime)
 	logger.LegacyPrintf("service.gemini_messages_compat", "[Gemini 429] Account %d rate limited until %v (oauth_type=%s, tier=%s)",
 		account.ID, resetTime, oauthType, tierID)
+}
+
+func isGeminiModelScoped429(body []byte) bool {
+	message := strings.ToLower(strings.TrimSpace(extractUpstreamErrorMessage(body)))
+	if strings.Contains(message, "individual quota") ||
+		strings.Contains(message, "project quota") ||
+		strings.Contains(message, "account quota") ||
+		strings.Contains(message, "subscription quota") {
+		return false
+	}
+	modelInDetails := false
+	gjson.GetBytes(body, "error.details").ForEach(func(_, detail gjson.Result) bool {
+		if strings.TrimSpace(detail.Get("metadata.model").String()) != "" {
+			modelInDetails = true
+			return false
+		}
+		detail.Get("violations").ForEach(func(_, violation gjson.Result) bool {
+			modelInDetails = strings.TrimSpace(violation.Get("quotaDimensions.model").String()) != ""
+			return !modelInDetails
+		})
+		return !modelInDetails
+	})
+	if modelInDetails {
+		return true
+	}
+	// Gemini-compatible upstreams often omit quota scope details. Do not turn an
+	// ambiguous 429 for one request into an all-model lock until daily reset.
+	return true
 }
 
 // ParseGeminiRateLimitResetTime 解析 Gemini 格式的 429 响应，返回重置时间的 Unix 时间戳
@@ -3678,7 +3740,14 @@ func reorderGeminiFunctionResponses(content map[string]any, expected []string) {
 
 	byName := make(map[string][]any, len(expected))
 	for _, part := range responses {
-		response := part.(map[string]any)["functionResponse"].(map[string]any)
+		pm, ok := part.(map[string]any)
+		if !ok {
+			return
+		}
+		response, ok := pm["functionResponse"].(map[string]any)
+		if !ok {
+			return
+		}
 		name, _ := response["name"].(string)
 		byName[name] = append(byName[name], part)
 	}
@@ -3692,8 +3761,14 @@ func reorderGeminiFunctionResponses(content map[string]any, expected []string) {
 func sameGeminiFunctionNameCounts(responses []any, expected []string) bool {
 	counts := make(map[string]int, len(expected))
 	for _, part := range responses {
-		pm := part.(map[string]any)
-		response := pm["functionResponse"].(map[string]any)
+		pm, ok := part.(map[string]any)
+		if !ok {
+			return false
+		}
+		response, ok := pm["functionResponse"].(map[string]any)
+		if !ok {
+			return false
+		}
 		name, _ := response["name"].(string)
 		counts[name]++
 	}
