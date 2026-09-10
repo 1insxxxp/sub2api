@@ -3678,7 +3678,14 @@ func reorderGeminiFunctionResponses(content map[string]any, expected []string) {
 
 	byName := make(map[string][]any, len(expected))
 	for _, part := range responses {
-		response := part.(map[string]any)["functionResponse"].(map[string]any)
+		pm, ok := part.(map[string]any)
+		if !ok {
+			return
+		}
+		response, ok := pm["functionResponse"].(map[string]any)
+		if !ok {
+			return
+		}
 		name, _ := response["name"].(string)
 		byName[name] = append(byName[name], part)
 	}
@@ -3692,8 +3699,14 @@ func reorderGeminiFunctionResponses(content map[string]any, expected []string) {
 func sameGeminiFunctionNameCounts(responses []any, expected []string) bool {
 	counts := make(map[string]int, len(expected))
 	for _, part := range responses {
-		pm := part.(map[string]any)
-		response := pm["functionResponse"].(map[string]any)
+		pm, ok := part.(map[string]any)
+		if !ok {
+			return false
+		}
+		response, ok := pm["functionResponse"].(map[string]any)
+		if !ok {
+			return false
+		}
 		name, _ := response["name"].(string)
 		counts[name]++
 	}

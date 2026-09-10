@@ -13,11 +13,48 @@ import (
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/apicompat"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/tlsfingerprint"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
 	"github.com/tidwall/gjson"
 )
+
+func TestGeminiChatCompletions_PreservesToolResultNamesWhenIDsCollideAfterAnthropicMapping(t *testing.T) {
+	// "foo" and "toolu_foo" are distinct OpenAI tool-call IDs, but the old
+	// Responses→Anthropic mapping converted both to "toolu_foo". The result
+	// index then used last-wins and attached both outputs to the second call.
+	body := []byte(`{"model":"gemini-3-flash-preview","messages":[` +
+		`{"role":"assistant","tool_calls":[` +
+		`{"id":"foo","type":"function","function":{"name":"set_alarm","arguments":"{}"}},` +
+		`{"id":"toolu_foo","type":"function","function":{"name":"cancel_alarm","arguments":"{}"}}]},` +
+		`{"role":"tool","tool_call_id":"foo","content":"set result"},` +
+		`{"role":"tool","tool_call_id":"toolu_foo","content":"cancel result"}]}`)
+
+	var ccReq apicompat.ChatCompletionsRequest
+	require.NoError(t, json.Unmarshal(body, &ccReq))
+	responsesReq, err := apicompat.ChatCompletionsToResponses(&ccReq)
+	require.NoError(t, err)
+	anthropicReq, err := apicompat.ResponsesToAnthropicRequest(responsesReq)
+	require.NoError(t, err)
+	claudeBody, err := json.Marshal(anthropicReq)
+	require.NoError(t, err)
+	geminiBody, err := convertClaudeMessagesToGeminiGenerateContent(claudeBody)
+	require.NoError(t, err)
+
+	var converted map[string]any
+	require.NoError(t, json.Unmarshal(geminiBody, &converted))
+	contents := converted["contents"].([]any)
+	require.Len(t, contents, 2)
+	modelParts := contents[0].(map[string]any)["parts"].([]any)
+	userParts := contents[1].(map[string]any)["parts"].([]any)
+	require.Equal(t, "set_alarm", modelParts[0].(map[string]any)["functionCall"].(map[string]any)["name"])
+	require.Equal(t, "cancel_alarm", modelParts[1].(map[string]any)["functionCall"].(map[string]any)["name"])
+	require.Equal(t, "set_alarm", userParts[0].(map[string]any)["functionResponse"].(map[string]any)["name"])
+	require.Equal(t, "cancel_alarm", userParts[1].(map[string]any)["functionResponse"].(map[string]any)["name"])
+	require.Equal(t, "set result", userParts[0].(map[string]any)["functionResponse"].(map[string]any)["response"].(map[string]any)["content"])
+	require.Equal(t, "cancel result", userParts[1].(map[string]any)["functionResponse"].(map[string]any)["response"].(map[string]any)["content"])
+}
 
 type geminiCompatHTTPUpstreamStub struct {
 	response *http.Response

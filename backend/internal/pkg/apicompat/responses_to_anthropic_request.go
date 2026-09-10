@@ -122,6 +122,10 @@ func convertResponsesInputToAnthropic(instructions string, inputRaw json.RawMess
 		return nil, nil, fmt.Errorf("parse responses input: %w", err)
 	}
 
+	resolveCallID := newResponsesAnthropicCallIDResolver(items)
+	callIDOccurrence := make(map[string]int)
+	outputIDOccurrence := make(map[string]int)
+
 	var messages []AnthropicMessage
 
 	for _, item := range items {
@@ -140,7 +144,7 @@ func convertResponsesInputToAnthropic(instructions string, inputRaw json.RawMess
 			}
 			block := AnthropicContentBlock{
 				Type:  "tool_use",
-				ID:    fromResponsesCallIDToAnthropic(item.CallID),
+				ID:    resolveCallID(item.CallID, callIDOccurrence),
 				Name:  item.Name,
 				Input: input,
 			}
@@ -155,7 +159,7 @@ func convertResponsesInputToAnthropic(instructions string, inputRaw json.RawMess
 			contentJSON := responsesFunctionOutputToAnthropicContent(item)
 			block := AnthropicContentBlock{
 				Type:      "tool_result",
-				ToolUseID: fromResponsesCallIDToAnthropic(item.CallID),
+				ToolUseID: resolveCallID(item.CallID, outputIDOccurrence),
 				Content:   contentJSON,
 			}
 			blockJSON, _ := json.Marshal([]AnthropicContentBlock{block})
@@ -239,6 +243,39 @@ func convertResponsesInputToAnthropic(instructions string, inputRaw json.RawMess
 	}
 
 	return system, messages, nil
+}
+
+// newResponsesAnthropicCallIDResolver gives every Responses function call a
+// unique Anthropic ID. The synthetic Anthropic prefix can otherwise make
+// distinct IDs such as "foo" and "toolu_foo" collide during pairing.
+func newResponsesAnthropicCallIDResolver(items []ResponsesInputItem) func(string, map[string]int) string {
+	anthropicIDsByCallID := make(map[string][]string)
+	usedAnthropicIDs := make(map[string]bool)
+	allocate := func(callID string) string {
+		base := fromResponsesCallIDToAnthropic(callID)
+		id := base
+		for suffix := 2; usedAnthropicIDs[id]; suffix++ {
+			id = fmt.Sprintf("%s_%d", base, suffix)
+		}
+		usedAnthropicIDs[id] = true
+		return id
+	}
+	for _, item := range items {
+		if item.Type == "function_call" {
+			callID := strings.TrimSpace(item.CallID)
+			anthropicIDsByCallID[callID] = append(anthropicIDsByCallID[callID], allocate(callID))
+		}
+	}
+	return func(callID string, occurrences map[string]int) string {
+		callID = strings.TrimSpace(callID)
+		index := occurrences[callID]
+		occurrences[callID] = index + 1
+		mapped := anthropicIDsByCallID[callID]
+		if index < len(mapped) {
+			return mapped[index]
+		}
+		return allocate(callID)
+	}
 }
 
 func responsesFunctionOutputToAnthropicContent(item ResponsesInputItem) json.RawMessage {
