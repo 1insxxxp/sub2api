@@ -263,14 +263,14 @@ func ProvideHandlers(
 		PaymentWebhook:     paymentWebhookHandler,
 		AvailableChannel:   availableChannelHandler,
 		Checkin:            checkinHandler,
-			ImageStudio:        imageStudioHandler,
-			ModelPlaza:         modelPlazaHandler,
-			ModelStatus:        modelStatusHandler,
-			AsyncImage:         asyncImageHandler,
+		ImageStudio:        imageStudioHandler,
+		ModelPlaza:         modelPlazaHandler,
+		ModelStatus:        modelStatusHandler,
+		AsyncImage:         asyncImageHandler,
 		BatchImage:         batchImageHandler,
 		Lottery:            lotteryHandler,
-			InternalDujiaoAuth: internalDujiaoAuthHandler,
-			PublicGroupSync:    publicGroupSyncHandler,
+		InternalDujiaoAuth: internalDujiaoAuthHandler,
+		PublicGroupSync:    publicGroupSyncHandler,
 	}
 	if handlers.Admin != nil {
 		handlers.Admin.Lottery = adminLotteryHandler
