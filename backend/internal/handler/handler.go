@@ -77,6 +77,7 @@ type Handlers struct {
 	BatchImage         *BatchImageHandler
 	Lottery            *LotteryHandler
 	InternalDujiaoAuth *InternalDujiaoAuthHandler
+	PublicGroupSync    *PublicGroupSyncHandler
 }
 
 // BuildInfo contains build-time information

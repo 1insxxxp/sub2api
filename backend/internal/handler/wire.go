@@ -324,6 +324,7 @@ func ProvideHandlers(
 	lotteryHandler *LotteryHandler,
 	adminLotteryHandler *admin.LotteryHandler,
 	internalDujiaoAuthHandler *InternalDujiaoAuthHandler,
+	publicGroupSyncHandler *PublicGroupSyncHandler,
 	_ *service.IdempotencyCoordinator,
 	_ *service.IdempotencyCleanupService,
 	_ *service.OpenAIQuotaAutoResetService,
@@ -355,6 +356,7 @@ func ProvideHandlers(
 		BatchImage:         batchImageHandler,
 		Lottery:            lotteryHandler,
 		InternalDujiaoAuth: internalDujiaoAuthHandler,
+		PublicGroupSync:    publicGroupSyncHandler,
 	}
 	if handlers.Admin != nil {
 		handlers.Admin.Lottery = adminLotteryHandler
@@ -391,6 +393,8 @@ var ProviderSet = wire.NewSet(
 	NewLotteryHandler,
 	admin.NewLotteryHandler,
 	NewInternalDujiaoAuthHandler,
+	service.NewPublicGroupSyncService,
+	NewPublicGroupSyncHandler,
 
 	// Admin handlers
 	admin.NewDashboardHandler,

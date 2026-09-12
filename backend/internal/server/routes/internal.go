@@ -7,11 +7,21 @@ import (
 )
 
 func RegisterInternalRoutes(v1 *gin.RouterGroup, h *handler.Handlers, cfg *config.Config) {
-	if v1 == nil || h == nil || h.InternalDujiaoAuth == nil || cfg == nil || !cfg.DujiaoLogin.Enabled {
+	if v1 == nil || h == nil || cfg == nil {
 		return
 	}
 
 	internal := v1.Group("/internal")
-	dujiaoAuth := internal.Group("/dujiao/auth")
-	dujiaoAuth.POST("/verify", h.InternalDujiaoAuth.Verify)
+	if h.InternalDujiaoAuth != nil && cfg.DujiaoLogin.Enabled {
+		internal.Group("/dujiao/auth").POST("/verify", h.InternalDujiaoAuth.Verify)
+	}
+	if h.PublicGroupSync != nil {
+		internal.GET("/public-group-sync/snapshot", h.PublicGroupSync.Snapshot)
+	}
+}
+
+func RegisterPublicGroupSyncRoute(api *gin.RouterGroup, h *handler.Handlers) {
+	if api != nil && h != nil && h.PublicGroupSync != nil {
+		api.GET("/internal/public-group-sync/snapshot", h.PublicGroupSync.Snapshot)
+	}
 }

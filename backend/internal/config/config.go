@@ -87,6 +87,7 @@ type Config struct {
 	OIDC                    OIDCConnectConfig             `mapstructure:"oidc_connect"`
 	DingTalk                DingTalkConnectConfig         `mapstructure:"dingtalk_connect"`
 	DujiaoLogin             DujiaoLoginConfig             `mapstructure:"dujiao_login"`
+	PublicGroupSync         PublicGroupSyncConfig         `mapstructure:"public_group_sync"`
 	GitHubOAuth             EmailOAuthProviderConfig      `mapstructure:"github_oauth"`
 	GoogleOAuth             EmailOAuthProviderConfig      `mapstructure:"google_oauth"`
 	Default                 DefaultConfig                 `mapstructure:"default"`
@@ -408,6 +409,10 @@ type DingTalkConnectConfig struct {
 type DujiaoLoginConfig struct {
 	Enabled      bool   `mapstructure:"enabled"`
 	SharedSecret string `mapstructure:"shared_secret"`
+}
+
+type PublicGroupSyncConfig struct {
+	Secret string `mapstructure:"secret"`
 }
 
 type EmailOAuthProviderConfig struct {
