@@ -51,7 +51,6 @@ func (s *PublicGroupSyncService) Snapshot(ctx context.Context) ([]PublicGroupSyn
 					}
 					key := p.Platform + "\x00" + name
 					m := PublicGroupSyncModel{Platform: p.Platform, DisplayName: name, BillingMode: string(p.BillingMode), InputPrice: p.InputPrice, OutputPrice: p.OutputPrice, PerRequestPrice: p.PerRequestPrice, CacheWritePrice: p.CacheWritePrice, CacheReadPrice: p.CacheReadPrice}
-					applyPublicGroupRate(&m, g.RateMultiplier)
 					if mapped := ch.ModelMapping[p.Platform][name]; mapped != "" {
 						m.UpstreamModel = mapped
 					}
@@ -71,7 +70,6 @@ func (s *PublicGroupSyncService) Snapshot(ctx context.Context) ([]PublicGroupSyn
 						continue
 					}
 					m := PublicGroupSyncModel{Platform: platform, DisplayName: name, UpstreamModel: upstream, BillingMode: string(BillingModeToken)}
-					applyPublicGroupRate(&m, g.RateMultiplier)
 					models[key] = m
 				}
 			}
@@ -104,22 +102,4 @@ func (s *PublicGroupSyncService) Snapshot(ctx context.Context) ([]PublicGroupSyn
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].GroupID < out[j].GroupID })
 	return out, nil
-}
-
-func applyPublicGroupRate(m *PublicGroupSyncModel, multiplier float64) {
-	if m == nil || multiplier <= 0 || multiplier == 1 {
-		return
-	}
-	scale := func(value *float64) *float64 {
-		if value == nil {
-			return nil
-		}
-		v := *value * multiplier
-		return &v
-	}
-	m.InputPrice = scale(m.InputPrice)
-	m.OutputPrice = scale(m.OutputPrice)
-	m.PerRequestPrice = scale(m.PerRequestPrice)
-	m.CacheWritePrice = scale(m.CacheWritePrice)
-	m.CacheReadPrice = scale(m.CacheReadPrice)
 }

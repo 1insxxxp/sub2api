@@ -23,10 +23,10 @@ type PublicGroupSyncHandler struct {
 func NewPublicGroupSyncHandler(s *service.PublicGroupSyncService, cfg *config.Config) *PublicGroupSyncHandler {
 	secret := ""
 	if cfg != nil {
-		secret = cfg.PublicGroupSync.Secret
+		secret = strings.TrimSpace(cfg.PublicGroupSync.Secret)
 	}
 	if strings.TrimSpace(secret) == "" {
-		secret = os.Getenv("PUBLIC_GROUP_SYNC_SECRET")
+		secret = strings.TrimSpace(os.Getenv("PUBLIC_GROUP_SYNC_SECRET"))
 	}
 	return &PublicGroupSyncHandler{service: s, secret: secret}
 }
