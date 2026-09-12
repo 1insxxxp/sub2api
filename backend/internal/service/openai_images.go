@@ -574,9 +574,17 @@ func (s *OpenAIGatewayService) ForwardImages(
 	}
 	switch account.Type {
 	case AccountTypeAPIKey:
-		return s.forwardOpenAIImagesAPIKey(ctx, c, account, body, parsed, channelMappedModel)
+		result, err := s.forwardOpenAIImagesAPIKey(ctx, c, account, body, parsed, channelMappedModel)
+		if err != nil && c != nil && len(c.Errors) == 0 {
+			c.Errors = append(c.Errors, &gin.Error{Err: err, Type: gin.ErrorTypePrivate})
+		}
+		return result, err
 	case AccountTypeOAuth, AccountTypeSetupToken:
-		return s.forwardOpenAIImagesOAuth(ctx, c, account, parsed, channelMappedModel)
+		result, err := s.forwardOpenAIImagesOAuth(ctx, c, account, parsed, channelMappedModel)
+		if err != nil && c != nil && len(c.Errors) == 0 {
+			c.Errors = append(c.Errors, &gin.Error{Err: err, Type: gin.ErrorTypePrivate})
+		}
+		return result, err
 	default:
 		return nil, fmt.Errorf("unsupported account type: %s", account.Type)
 	}
