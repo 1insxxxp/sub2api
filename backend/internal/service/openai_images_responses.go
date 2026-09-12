@@ -1350,6 +1350,9 @@ func (s *OpenAIGatewayService) handleOpenAIImagesOAuthNonStreamingResponse(
 	})
 	results, createdAt, usageRaw, firstMeta, _, err := collectOpenAIImagesFromResponsesBody(body)
 	if err != nil {
+		if isEventStreamResponse(resp.Header) {
+			return OpenAIUsage{}, 0, nil, fmt.Errorf("client disconnected while writing image response: %w", err)
+		}
 		return OpenAIUsage{}, 0, nil, err
 	}
 	if len(results) == 0 {
