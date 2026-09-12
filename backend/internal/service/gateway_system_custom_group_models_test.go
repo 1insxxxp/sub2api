@@ -382,6 +382,8 @@ func TestGatewayBuildDynamicSystemCustomGroupCatalogFallsBackWhenOpenAIRuntimeBl
 	first := directSourceGroup(10, PlatformOpenAI)
 	second := directSourceGroup(20, PlatformOpenAI)
 	blocked := schedulableSystemCustomTestAccount(101, PlatformOpenAI, map[string]any{"shared": "gpt-5.4"})
+	blockedUntil := time.Now().Add(time.Minute)
+	blocked.TempUnschedulableUntil = &blockedUntil
 	available := schedulableSystemCustomTestAccount(201, PlatformOpenAI, map[string]any{"shared": "gpt-5.4"})
 	repo := &systemCustomGroupBatchAccountRepoStub{accounts: []SystemCustomGroupSchedulableAccount{
 		{GroupID: 10, Account: blocked},

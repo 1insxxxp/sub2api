@@ -82,6 +82,8 @@ tmp/
 temp/
 logs/
 *.tmp
+__pycache__/
+*.py[cod]
 *.temp
 *.log
 *.bak

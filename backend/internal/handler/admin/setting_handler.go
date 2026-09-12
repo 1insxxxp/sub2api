@@ -383,6 +383,7 @@ func (h *SettingHandler) GetSettings(c *gin.Context) {
 		ChannelMonitorDefaultIntervalSeconds: settings.ChannelMonitorDefaultIntervalSeconds,
 		ChannelMonitorHideThroughput:         settings.ChannelMonitorHideThroughput,
 		ChannelMonitorShowQuota:              settings.ChannelMonitorShowQuota,
+		ChannelMonitorHideUserRanking:        settings.ChannelMonitorHideUserRanking,
 
 		GrokDefaultTextModel:           settings.GrokDefaultTextModel,
 		GrokCrossClientModelMapEnabled: settings.GrokCrossClientModelMapEnabled,
@@ -392,6 +393,7 @@ func (h *SettingHandler) GetSettings(c *gin.Context) {
 		AvailableChannelsPriceCNYMultiplier:    settings.AvailableChannelsPriceCNYMultiplier,
 		AvailableChannelsPriceCNYMultiplierMax: settings.AvailableChannelsPriceCNYMultiplierMax,
 		AvailableChannelsOfficialUSDToCNYRate:  settings.AvailableChannelsOfficialUSDToCNYRate,
+		SubscriptionEnabled:                    settings.SubscriptionEnabled,
 
 		ModelPlazaEnabled:       settings.ModelPlazaEnabled,
 		ModelPlazaRequireAuth:   settings.ModelPlazaRequireAuth,

@@ -39,6 +39,7 @@ func mustCreateUser(t *testing.T, client *dbent.Client, u *service.User) *servic
 		SetRole(u.Role).
 		SetStatus(u.Status).
 		SetBalance(u.Balance).
+		SetTotalRecharged(u.TotalRecharged).
 		SetConcurrency(u.Concurrency).
 		SetUsername(u.Username).
 		SetNotes(u.Notes)
@@ -93,6 +94,7 @@ func mustCreateGroup(t *testing.T, client *dbent.Client, g *service.Group) *serv
 		SetIsExclusive(g.IsExclusive).
 		SetForceOpenaiFast(g.ForceOpenAIFast).
 		SetFreeOpenaiFast(g.FreeOpenAIFast).
+		SetModelAllowlist(service.DomainGroupModelAllowlist(g.ModelAllowlist)).
 		SetCodexModelsManifestConfig(g.CodexModelsManifestConfig).
 		SetProfitControlEnabled(g.ProfitControlEnabled).
 		SetProfitMinMargin(g.ProfitMinMargin).

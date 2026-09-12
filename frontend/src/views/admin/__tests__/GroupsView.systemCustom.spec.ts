@@ -141,6 +141,7 @@ describe('GroupsView system custom rows', () => {
     const systemRow = wrapper.get('[data-row-id="90"]')
     expect(systemRow.find('[data-testid="system-custom-type-badge"]').exists()).toBe(true)
     expect(systemRow.find('[data-testid="system-custom-manage"]').exists()).toBe(true)
+    expect(systemRow.find('[data-testid="group-composite-routes"]').exists()).toBe(false)
     const systemActions = systemRow.findAll('button').map((button) => button.text())
     expect(systemActions).not.toContain('common.edit')
     expect(systemActions).not.toContain('admin.groups.duplicate')
@@ -150,6 +151,7 @@ describe('GroupsView system custom rows', () => {
     const ordinaryRow = wrapper.get('[data-row-id="91"]')
     expect(ordinaryRow.find('[data-testid="system-custom-type-badge"]').exists()).toBe(false)
     expect(ordinaryRow.find('[data-testid="system-custom-manage"]').exists()).toBe(false)
+    expect(ordinaryRow.find('[data-testid="group-composite-routes"]').exists()).toBe(true)
     const ordinaryActions = ordinaryRow.findAll('button').map((button) => button.text())
     expect(ordinaryActions).toEqual(
       expect.arrayContaining([

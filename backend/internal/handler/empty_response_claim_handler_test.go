@@ -65,8 +65,7 @@ func (s *claimHandlerRepositoryStub) Create(_ context.Context, input *service.Em
 func newClaimHandlerTestRouter(repo *claimHandlerRepositoryStub) *gin.Engine {
 	gin.SetMode(gin.TestMode)
 	claimService := service.NewEmptyResponseClaimService(repo, nil)
-	handler := NewUsageHandler(nil, nil, nil, nil)
-	handler.emptyResponseClaimService = claimService
+	handler := ProvideUsageHandler(nil, nil, nil, nil, claimService)
 	router := gin.New()
 	router.Use(func(c *gin.Context) {
 		c.Set(string(middleware2.ContextKeyUser), middleware2.AuthSubject{UserID: 42})

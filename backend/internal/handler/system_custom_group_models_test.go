@@ -144,6 +144,8 @@ func TestNewGatewayHandlerWiresOpenAIRuntimeBlocksIntoDynamicCatalog(t *testing.
 		Status: service.StatusActive, Schedulable: true,
 		Credentials: map[string]any{"model_mapping": map[string]any{"shared": "gpt-5.4"}},
 	}
+	cooldownUntil := time.Now().Add(time.Minute)
+	firstAccount.TempUnschedulableUntil = &cooldownUntil
 	repo := &systemCustomRuntimeAccountRepo{accounts: []service.SystemCustomGroupSchedulableAccount{
 		{GroupID: firstGroup.ID, Account: firstAccount},
 		{GroupID: secondGroup.ID, Account: secondAccount},

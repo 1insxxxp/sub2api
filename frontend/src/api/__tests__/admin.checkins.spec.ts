@@ -27,6 +27,7 @@ import checkinsAPI, {
   updateCampaign,
 } from '@/api/admin/checkins'
 import type {
+  AdminCheckinConfig,
   AdminCheckinRecord,
   AdminCheckinRewardCampaign,
   CopyCheckinRewardCampaignRequest,
@@ -112,6 +113,7 @@ describe('admin check-ins api', () => {
       enabled: true,
       min_total_usage_usd: 25,
       min_total_recharge_usd: 50,
+      whitelist: [],
       tiers: [{ amount: 0.3, probability: 100, sort_order: 1 }],
       streak_enabled: true,
       streak_rules: [{ day: 7, bonus_amount: 0, bonus_rate_percent: 10 }],
@@ -121,7 +123,7 @@ describe('admin check-ins api', () => {
       total_reward_cap: 10,
       probability_total: 100,
       preview: { min_reward: 0.3, max_reward: 0.3, average_reward: 0.3 },
-    }
+    } satisfies AdminCheckinConfig
     get.mockResolvedValueOnce({ data: config })
     put.mockResolvedValueOnce({ data: config })
 

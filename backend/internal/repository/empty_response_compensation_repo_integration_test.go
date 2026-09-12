@@ -59,6 +59,7 @@ func TestEmptyResponseCompensationRepositoryAppliesLedgerOnceConcurrently(t *tes
 	require.NoError(t, err)
 
 	t.Cleanup(func() {
+		_, _ = integrationDB.ExecContext(context.Background(), "DELETE FROM redeem_codes WHERE code = $1", fmt.Sprintf("EMPTY-COMP-%d", claim.ID))
 		_, _ = integrationDB.ExecContext(context.Background(), "DELETE FROM empty_response_claims WHERE id = $1", claim.ID)
 		_, _ = integrationDB.ExecContext(context.Background(), "DELETE FROM usage_response_outcomes WHERE usage_log_id = $1", usage.ID)
 		_, _ = integrationDB.ExecContext(context.Background(), "DELETE FROM usage_logs WHERE id = $1", usage.ID)

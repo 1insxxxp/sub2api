@@ -166,12 +166,12 @@ func setupClaudeMaxStreamingHook(c *gin.Context, processor *antigravity.Streamin
 	if !shouldApplyClaudeMaxBillingRulesForUsage(group, originalModel, parsed) {
 		return
 	}
+	ctx := context.Background()
+	if c != nil && c.Request != nil {
+		ctx = withClaudeMaxResponseRewriteContext(c.Request.Context(), c, parsed)
+	}
 	processor.SetUsageMapHook(func(usageMap map[string]any) {
-		svcUsage := claudeUsageFromJSONMap(usageMap)
-		outcome := applyClaudeMaxCacheBillingPolicyToUsage(&svcUsage, parsed, group, originalModel, accountID)
-		if outcome.Simulated {
-			rewriteClaudeUsageJSONMap(usageMap, svcUsage)
-		}
+		applyClaudeMaxSimulationToUsageJSONMap(ctx, usageMap, originalModel, accountID)
 	})
 }
 

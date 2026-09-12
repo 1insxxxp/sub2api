@@ -22,10 +22,10 @@ func TestAdminServiceCreateGroupRejectsNewlyPublishedMissingPricing(t *testing.T
 	svc := newGroupPricingValidationService(repo)
 
 	_, err := svc.CreateGroup(context.Background(), &CreateGroupInput{
-		Name:             "source",
-		Platform:         PlatformGemini,
-		RateMultiplier:   1,
-		ModelsListConfig: GroupModelsListConfig{Enabled: true, Models: []string{"new-unique-model"}},
+		Name:           "source",
+		Platform:       PlatformGemini,
+		RateMultiplier: 1,
+		ModelAllowlist: GroupModelAllowlist{Enabled: true, Models: []string{"new-unique-model"}},
 	})
 
 	require.Error(t, err)
@@ -44,11 +44,11 @@ func TestAdminServiceCreateGroupAcceptsProspectivePricingForNewModel(t *testing.
 	}}
 
 	group, err := svc.CreateGroup(context.Background(), &CreateGroupInput{
-		Name:             "source",
-		Platform:         PlatformGemini,
-		RateMultiplier:   1,
-		ModelsListConfig: GroupModelsListConfig{Enabled: true, Models: []string{"new-unique-model"}},
-		ModelPricing:     pricing,
+		Name:           "source",
+		Platform:       PlatformGemini,
+		RateMultiplier: 1,
+		ModelAllowlist: GroupModelAllowlist{Enabled: true, Models: []string{"new-unique-model"}},
+		ModelPricing:   pricing,
 	})
 
 	require.NoError(t, err)
@@ -148,9 +148,9 @@ func TestAdminServiceUpdateGroupRejectsOnlyNewMissingModel(t *testing.T) {
 	}
 	repo := &groupRepoStubForAdmin{getByID: existing}
 	svc := newGroupPricingValidationService(repo)
-	models := GroupModelsListConfig{Enabled: true, Models: []string{"legacy-unpriced-model", "new-unique-model"}}
+	models := GroupModelAllowlist{Enabled: true, Models: []string{"legacy-unpriced-model", "new-unique-model"}}
 
-	_, err := svc.UpdateGroup(context.Background(), existing.ID, &UpdateGroupInput{ModelsListConfig: &models})
+	_, err := svc.UpdateGroup(context.Background(), existing.ID, &UpdateGroupInput{ModelAllowlist: &models})
 
 	require.Error(t, err)
 	require.Equal(t, "GROUP_MODEL_PRICING_REQUIRED", infraerrors.Reason(err))
@@ -168,7 +168,7 @@ func TestAdminServiceUpdateGroupAcceptsNewModelWithProspectivePricing(t *testing
 	}
 	repo := &groupRepoStubForAdmin{getByID: existing}
 	svc := newGroupPricingValidationService(repo)
-	models := GroupModelsListConfig{Enabled: true, Models: []string{"legacy-unpriced-model", "new-unique-model"}}
+	models := GroupModelAllowlist{Enabled: true, Models: []string{"legacy-unpriced-model", "new-unique-model"}}
 	pricing := []ChannelModelPricing{{
 		Platform:    PlatformGemini,
 		Models:      []string{"new-unique-model"},
@@ -177,8 +177,8 @@ func TestAdminServiceUpdateGroupAcceptsNewModelWithProspectivePricing(t *testing
 	}}
 
 	group, err := svc.UpdateGroup(context.Background(), existing.ID, &UpdateGroupInput{
-		ModelsListConfig: &models,
-		ModelPricing:     &pricing,
+		ModelAllowlist: &models,
+		ModelPricing:   &pricing,
 	})
 
 	require.NoError(t, err)

@@ -165,6 +165,8 @@ function mockRect(height: number): DOMRect {
 
 describe('AdminWorkbenchView balance transfer codes', () => {
   beforeEach(() => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-08-22T12:00:00Z'))
     authState.user = {
       id: 7,
       email: 'sub-admin@example.com',
@@ -548,6 +550,50 @@ describe('AdminWorkbenchView balance transfer codes', () => {
     expect(refreshUser).toHaveBeenCalled()
     expect(getGenerated).toHaveBeenCalledTimes(2)
     expect(showSuccess).toHaveBeenCalledWith('adminWorkbench.balanceTransfer.batchDeleted')
+  })
+
+  it('copies only selected generated codes in their list order', async () => {
+    const firstCode: GeneratedRedeemCode = {
+      id: 111,
+      code: 'WORKBENCH-CODE-ONE',
+      type: 'balance',
+      value: 1,
+      status: 'unused',
+      used_by: null,
+      used_at: null,
+      created_at: '2026-08-20T12:00:00Z',
+      created_by: 7,
+      source: 'user_balance_transfer'
+    }
+    const secondCode: GeneratedRedeemCode = {
+      id: 112,
+      code: 'WORKBENCH-CODE-TWO',
+      type: 'balance',
+      value: 2,
+      status: 'unused',
+      used_by: null,
+      used_at: null,
+      created_at: '2026-08-20T12:00:00Z',
+      created_by: 7,
+      source: 'user_balance_transfer'
+    }
+    getGenerated.mockResolvedValueOnce(paginated<GeneratedRedeemCode>([firstCode, secondCode]))
+
+    const wrapper = mountWorkbench()
+    await flushPromises()
+
+    const copySelectedButton = wrapper.get('[data-test="copy-selected-generated-codes"]')
+    expect(copySelectedButton.attributes('disabled')).toBeDefined()
+
+    await wrapper.get('[data-test="select-generated-code-111"]').setValue(true)
+    await wrapper.get('[data-test="select-generated-code-112"]').setValue(true)
+    expect(copySelectedButton.attributes('disabled')).toBeUndefined()
+
+    await copySelectedButton.trigger('click')
+    await flushPromises()
+
+    expect(clipboardWriteText).toHaveBeenCalledWith('WORKBENCH-CODE-ONE\nWORKBENCH-CODE-TWO')
+    expect(showSuccess).toHaveBeenCalledWith('common.copied')
   })
 
   it('shows generated-code selection when workbench list omits the source field', async () => {

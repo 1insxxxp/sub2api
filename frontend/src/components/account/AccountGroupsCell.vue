@@ -1,7 +1,7 @@
 <template>
-  <div v-if="groups && groups.length > 0" class="relative max-w-56">
-    <!-- 分组容器：固定最大宽度，最多显示2行 -->
-    <div class="flex flex-wrap gap-1 max-h-14 overflow-hidden">
+  <div v-if="groups && groups.length > 0" class="relative max-w-full sm:max-w-56">
+    <!-- 移动端完整显示换行名称；桌面端保持紧凑的两行布局。 -->
+    <div class="flex flex-wrap gap-1 sm:max-h-14 sm:overflow-hidden">
       <GroupBadge
         v-for="group in displayGroups"
         :key="group.id"
@@ -10,7 +10,8 @@
         :subscription-type="group.subscription_type"
         :rate-multiplier="group.rate_multiplier"
         :show-rate="false"
-        class="max-w-24"
+        wrap-name
+        class="min-w-0 max-w-full sm:max-w-24"
       />
       <!-- 更多数量徽章 -->
       <button
@@ -36,7 +37,7 @@
         <div
           v-if="showPopover"
           ref="popoverRef"
-          class="fixed z-50 min-w-48 max-w-96 rounded-lg border border-gray-200 bg-white p-3 shadow-lg dark:border-dark-600 dark:bg-dark-800"
+          class="fixed z-50 min-w-48 max-w-[calc(100vw-1rem)] rounded-lg border border-gray-200 bg-white p-3 shadow-lg dark:border-dark-600 dark:bg-dark-800 sm:max-w-96"
           :style="popoverStyle"
         >
           <div class="mb-2 flex items-center justify-between">
@@ -61,6 +62,8 @@
               :subscription-type="group.subscription_type"
               :rate-multiplier="group.rate_multiplier"
               :show-rate="false"
+              wrap-name
+              class="min-w-0 max-w-full"
             />
           </div>
         </div>

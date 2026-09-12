@@ -13,11 +13,66 @@ import (
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/apicompat"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/tlsfingerprint"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
 	"github.com/tidwall/gjson"
 )
+
+func TestGeminiChatCompletions_PreservesToolResultNamesWhenIDsCollideAfterAnthropicMapping(t *testing.T) {
+	// "foo" and "toolu_foo" are distinct OpenAI tool-call IDs, but the old
+	// Responses→Anthropic mapping converted both to "toolu_foo". The result
+	// index then used last-wins and attached both outputs to the second call.
+	body := []byte(`{"model":"gemini-3-flash-preview","messages":[` +
+		`{"role":"assistant","tool_calls":[` +
+		`{"id":"foo","type":"function","function":{"name":"set_alarm","arguments":"{}"}},` +
+		`{"id":"toolu_foo","type":"function","function":{"name":"cancel_alarm","arguments":"{}"}}]},` +
+		`{"role":"tool","tool_call_id":"foo","content":"set result"},` +
+		`{"role":"tool","tool_call_id":"toolu_foo","content":"cancel result"}]}`)
+
+	var ccReq apicompat.ChatCompletionsRequest
+	require.NoError(t, json.Unmarshal(body, &ccReq))
+	responsesReq, err := apicompat.ChatCompletionsToResponses(&ccReq)
+	require.NoError(t, err)
+	anthropicReq, err := apicompat.ResponsesToAnthropicRequest(responsesReq)
+	require.NoError(t, err)
+	claudeBody, err := json.Marshal(anthropicReq)
+	require.NoError(t, err)
+	geminiBody, err := convertClaudeMessagesToGeminiGenerateContent(claudeBody)
+	require.NoError(t, err)
+
+	var converted map[string]any
+	require.NoError(t, json.Unmarshal(geminiBody, &converted))
+	contents, ok := converted["contents"].([]any)
+	require.True(t, ok)
+	require.Len(t, contents, 2)
+	modelContent, ok := contents[0].(map[string]any)
+	require.True(t, ok)
+	modelParts, ok := modelContent["parts"].([]any)
+	require.True(t, ok)
+	userContent, ok := contents[1].(map[string]any)
+	require.True(t, ok)
+	userParts, ok := userContent["parts"].([]any)
+	require.True(t, ok)
+	modelCall0 := requireGeminiMap(t, requireGeminiMap(t, modelParts[0])["functionCall"])
+	modelCall1 := requireGeminiMap(t, requireGeminiMap(t, modelParts[1])["functionCall"])
+	userResponse0 := requireGeminiMap(t, requireGeminiMap(t, userParts[0])["functionResponse"])
+	userResponse1 := requireGeminiMap(t, requireGeminiMap(t, userParts[1])["functionResponse"])
+	require.Equal(t, "set_alarm", modelCall0["name"])
+	require.Equal(t, "cancel_alarm", modelCall1["name"])
+	require.Equal(t, "set_alarm", userResponse0["name"])
+	require.Equal(t, "cancel_alarm", userResponse1["name"])
+	require.Equal(t, "set result", requireGeminiMap(t, userResponse0["response"])["content"])
+	require.Equal(t, "cancel result", requireGeminiMap(t, userResponse1["response"])["content"])
+}
+
+func requireGeminiMap(t *testing.T, value any) map[string]any {
+	t.Helper()
+	result, ok := value.(map[string]any)
+	require.True(t, ok)
+	return result
+}
 
 type geminiCompatHTTPUpstreamStub struct {
 	response *http.Response
@@ -1054,7 +1109,7 @@ func TestGeminiHandleNativeNonStreamingResponse_DebugDisabledDoesNotEmitHeaderLo
 		Body: io.NopCloser(strings.NewReader(`{"usageMetadata":{"promptTokenCount":10,"candidatesTokenCount":2}}`)),
 	}
 
-	usage, err := svc.handleNativeNonStreamingResponse(c, resp, false)
+	usage, err := svc.handleNativeNonStreamingResponse(c, resp, false, nil, "")
 	require.NoError(t, err)
 	require.NotNil(t, usage)
 	require.False(t, logSink.ContainsMessage("[GeminiAPI]"), "debug 关闭时不应输出 Gemini 响应头日志")
@@ -1192,6 +1247,85 @@ func TestConvertClaudeMessagesToGeminiGenerateContent_AddsThoughtSignatureForToo
 	if !strings.Contains(s, "\"thoughtSignature\":\""+geminiDummyThoughtSignature+"\"") {
 		t.Fatalf("expected injected thoughtSignature %q, got: %s", geminiDummyThoughtSignature, s)
 	}
+}
+
+func TestConvertClaudeMessagesToGeminiGenerateContent_OrdersParallelToolResultsByCallOrder(t *testing.T) {
+	claudeReq := map[string]any{
+		"model": "gemini-3-flash-preview",
+		"messages": []any{
+			map[string]any{
+				"role":    "user",
+				"content": "Find the files and package proxy.",
+			},
+			map[string]any{
+				"role": "assistant",
+				"content": []any{
+					map[string]any{"type": "tool_use", "id": "call_find", "name": "find_files", "input": map[string]any{}},
+					map[string]any{"type": "tool_use", "id": "call_proxy", "name": "package_proxy", "input": map[string]any{}},
+				},
+			},
+			map[string]any{
+				"role": "user",
+				// Providers may return parallel tool results in completion order,
+				// which can differ from the function call order.
+				"content": []any{
+					map[string]any{"type": "tool_result", "tool_use_id": "call_proxy", "content": "proxy done"},
+					map[string]any{"type": "tool_result", "tool_use_id": "call_find", "content": "files found"},
+				},
+			},
+		},
+	}
+	body, err := json.Marshal(claudeReq)
+	require.NoError(t, err)
+
+	out, err := convertClaudeMessagesToGeminiGenerateContent(body)
+	require.NoError(t, err)
+
+	var converted map[string]any
+	require.NoError(t, json.Unmarshal(out, &converted))
+	contents, ok := converted["contents"].([]any)
+	require.True(t, ok)
+	toolResultContent := requireGeminiMap(t, contents[2])
+	toolResultParts, ok := toolResultContent["parts"].([]any)
+	require.True(t, ok)
+	firstName := requireGeminiMap(t, requireGeminiMap(t, toolResultParts[0])["functionResponse"])["name"]
+	secondName := requireGeminiMap(t, requireGeminiMap(t, toolResultParts[1])["functionResponse"])["name"]
+	require.Equal(t, "find_files", firstName)
+	require.Equal(t, "package_proxy", secondName)
+}
+
+func TestConvertClaudeMessagesToGeminiGenerateContent_MergesSplitParallelToolResults(t *testing.T) {
+	claudeReq := map[string]any{
+		"model": "gemini-3-flash-preview",
+		"messages": []any{
+			map[string]any{
+				"role": "assistant",
+				"content": []any{
+					map[string]any{"type": "tool_use", "id": "call_find", "name": "find_files", "input": map[string]any{}},
+					map[string]any{"type": "tool_use", "id": "call_proxy", "name": "package_proxy", "input": map[string]any{}},
+				},
+			},
+			// Some clients send one user message per completed tool instead of
+			// one message containing all parallel tool results.
+			map[string]any{
+				"role":    "user",
+				"content": []any{map[string]any{"type": "tool_result", "tool_use_id": "call_proxy", "content": "proxy done"}},
+			},
+			map[string]any{
+				"role":    "user",
+				"content": []any{map[string]any{"type": "tool_result", "tool_use_id": "call_find", "content": "files found"}},
+			},
+		},
+	}
+	body, err := json.Marshal(claudeReq)
+	require.NoError(t, err)
+
+	out, err := convertClaudeMessagesToGeminiGenerateContent(body)
+	require.NoError(t, err)
+
+	require.Equal(t, "find_files", gjson.GetBytes(out, "contents.1.parts.0.functionResponse.name").String())
+	require.Equal(t, "package_proxy", gjson.GetBytes(out, "contents.1.parts.1.functionResponse.name").String())
+	require.False(t, gjson.GetBytes(out, "contents.2").Exists(), "split tool results should be merged into one user content")
 }
 
 func TestConvertClaudeMessagesToGeminiGenerateContent_AppendsContinuationAfterAssistantPrefill(t *testing.T) {

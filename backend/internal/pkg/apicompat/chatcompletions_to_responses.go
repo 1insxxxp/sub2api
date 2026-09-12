@@ -108,7 +108,100 @@ func convertChatMessagesToResponsesInput(msgs []ChatMessage) ([]ResponsesInputIt
 		}
 		out = append(out, items...)
 	}
-	return out, nil
+	return normalizeResponsesToolCallIDs(out), nil
+}
+
+// normalizeResponsesToolCallIDs makes function call/output pairing safe for
+// clients that omit IDs or reuse the same ID for parallel calls. Responses and
+// downstream Gemini conversion require every call ID to be unique. Outputs
+// without a usable ID are paired with the oldest outstanding call; valid IDs
+// still match by ID, so completion order remains supported.
+func normalizeResponsesToolCallIDs(items []ResponsesInputItem) []ResponsesInputItem {
+	repair := newResponsesToolCallIDRepair(items)
+	for i := range items {
+		switch items[i].Type {
+		case "function_call":
+			items[i].CallID = repair.call(items[i].CallID)
+		case "function_call_output":
+			items[i].CallID = repair.output(items[i].CallID)
+		}
+	}
+	return items
+}
+
+type responsesToolCallIDRepair struct {
+	reserved      map[string]bool
+	used          map[string]bool
+	aliases       map[string][]string
+	pending       []string
+	nextGenerated int
+}
+
+func newResponsesToolCallIDRepair(items []ResponsesInputItem) *responsesToolCallIDRepair {
+	r := &responsesToolCallIDRepair{
+		reserved: make(map[string]bool),
+		used:     make(map[string]bool),
+		aliases:  make(map[string][]string),
+	}
+	for _, item := range items {
+		if item.Type == "function_call" && strings.TrimSpace(item.CallID) != "" {
+			r.reserved[strings.TrimSpace(item.CallID)] = true
+		}
+	}
+	return r
+}
+
+func (r *responsesToolCallIDRepair) call(original string) string {
+	original = strings.TrimSpace(original)
+	id := original
+	if id == "" || r.used[id] {
+		id = r.nextID()
+	}
+	r.used[id] = true
+	r.aliases[original] = append(r.aliases[original], id)
+	r.pending = append(r.pending, id)
+	return id
+}
+
+func (r *responsesToolCallIDRepair) output(original string) string {
+	original = strings.TrimSpace(original)
+	if original != "" && r.consumePending(original) {
+		return original
+	}
+	for _, id := range r.aliases[original] {
+		if r.consumePending(id) {
+			return id
+		}
+	}
+	if original == "" && len(r.pending) > 0 {
+		id := r.pending[0]
+		r.pending = r.pending[1:]
+		return id
+	}
+	if original == "" {
+		return r.nextID()
+	}
+	return original
+}
+
+func (r *responsesToolCallIDRepair) consumePending(id string) bool {
+	for i, pendingID := range r.pending {
+		if pendingID == id {
+			r.pending = append(r.pending[:i], r.pending[i+1:]...)
+			return true
+		}
+	}
+	return false
+}
+
+func (r *responsesToolCallIDRepair) nextID() string {
+	for {
+		id := fmt.Sprintf("call_auto_%d", r.nextGenerated)
+		r.nextGenerated++
+		if !r.reserved[id] && !r.used[id] {
+			return id
+		}
+	}
 }
 
 // chatMessageToResponsesItems converts a single ChatMessage into one or more

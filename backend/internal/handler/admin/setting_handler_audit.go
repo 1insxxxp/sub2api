@@ -609,6 +609,9 @@ func diffSettings(before *service.SystemSettings, after *service.SystemSettings,
 	if before.AvailableChannelsOfficialUSDToCNYRate != after.AvailableChannelsOfficialUSDToCNYRate {
 		changed = append(changed, service.SettingKeyAvailableChannelsOfficialUSDToCNYRate)
 	}
+	if before.SubscriptionEnabled != after.SubscriptionEnabled {
+		changed = append(changed, "subscription_enabled")
+	}
 	if before.ModelPlazaEnabled != after.ModelPlazaEnabled {
 		changed = append(changed, "model_plaza_enabled")
 	}

@@ -478,7 +478,7 @@ func newSystemCustomProductionHarness(t *testing.T) *systemCustomProductionHarne
 	billingCache := service.NewBillingCacheService(nil, userRepo, subRepo, authRepo, nil, nil, cfg, nil)
 	concurrencyService := service.NewConcurrencyService(&systemCustomProductionConcurrencyCache{})
 	billingService := service.NewBillingService(cfg, nil)
-	channelService := service.NewChannelService(channelRepo, groupRepo, nil, nil)
+	channelService := service.NewChannelService(channelRepo, groupRepo, nil, nil, nil)
 	pricingResolver := service.NewModelPricingResolver(channelService, billingService)
 	catalogGateway := service.NewGatewayService(
 		accountRepo, groupRepo, nil, nil, nil, nil, nil, nil, cfg, nil,
@@ -568,7 +568,7 @@ func newSystemCustomGeminiMessagesProductionHarness(t *testing.T) *systemCustomG
 	billingCache := service.NewBillingCacheService(nil, userRepo, subRepo, authRepo, nil, nil, cfg, nil)
 	concurrencyService := service.NewConcurrencyService(&systemCustomProductionConcurrencyCache{})
 	billingService := service.NewBillingService(cfg, nil)
-	channelService := service.NewChannelService(channelRepo, groupRepo, nil, nil)
+	channelService := service.NewChannelService(channelRepo, groupRepo, nil, nil, nil)
 	pricingResolver := service.NewModelPricingResolver(channelService, billingService)
 	gateway := service.NewGatewayService(
 		accountRepo, groupRepo, usageRepo, billingRepo, userRepo, subRepo, nil, nil, cfg, nil,

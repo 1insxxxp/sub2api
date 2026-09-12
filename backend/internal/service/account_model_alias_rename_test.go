@@ -303,13 +303,15 @@ func TestNewAdminServiceWiresAliasCascadeRepositories(t *testing.T) {
 		nil,
 		nil,
 		nil,
+		nil,
 		channelRepo,
 		userCustomGroupRepo,
 		systemCustomGroupRepo,
 		nil,
 	)
 
-	impl := svc.(*adminServiceImpl)
+	impl, ok := svc.(*adminServiceImpl)
+	require.True(t, ok)
 	require.Same(t, channelRepo, impl.channelRepo)
 	require.Same(t, userCustomGroupRepo, impl.userCustomGroupRepo)
 	require.Same(t, systemCustomGroupRepo, impl.systemCustomGroupRepo)
@@ -383,6 +385,22 @@ type accountAliasRenameGroupRepoStub struct {
 func (s *accountAliasRenameGroupRepoStub) ListActiveByPlatform(_ context.Context, platform string) ([]Group, error) {
 	s.platforms = append(s.platforms, platform)
 	return s.groups, s.err
+}
+
+func (s *accountAliasRenameGroupRepoStub) CountCustomGroupModelReferences(context.Context, int64) (int, error) {
+	return 0, nil
+}
+
+func (s *accountAliasRenameGroupRepoStub) CreateFromSource(context.Context, *Group, int64) error {
+	return nil
+}
+
+func (s *accountAliasRenameGroupRepoStub) DeleteCascadeIfEmpty(context.Context, int64) ([]int64, error) {
+	return nil, nil
+}
+
+func (s *accountAliasRenameGroupRepoStub) FindByDuplicateOperationID(context.Context, string) (*Group, error) {
+	return nil, nil
 }
 
 type accountAliasRenameCascadeCall struct {

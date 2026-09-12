@@ -175,9 +175,9 @@ func (s *GeminiMessagesCompatService) forwardClaudeBodyAsChatCompletions(
 				break
 			}
 			if resp.StatusCode == http.StatusTooManyRequests {
-				s.handleGeminiUpstreamError(ctx, account, resp.StatusCode, resp.Header, respBody)
+				s.handleGeminiUpstreamErrorForModel(ctx, account, resp.StatusCode, resp.Header, respBody, originalModel)
 			}
-			if attempt < geminiMaxRetries {
+			if attempt < geminiRetryLimit(resp.StatusCode) {
 				upstreamReqID := resp.Header.Get(requestIDHeader)
 				if upstreamReqID == "" {
 					upstreamReqID = resp.Header.Get("x-goog-request-id")
@@ -195,7 +195,7 @@ func (s *GeminiMessagesCompatService) forwardClaudeBodyAsChatCompletions(
 					Kind:               "retry",
 					Message:            upstreamMsg,
 				})
-				logger.LegacyPrintf("service.gemini_chat_completions", "Gemini account %d: upstream status %d, retry %d/%d", account.ID, resp.StatusCode, attempt, geminiMaxRetries)
+				logger.LegacyPrintf("service.gemini_chat_completions", "Gemini account %d: upstream status %d, retry %d/%d", account.ID, resp.StatusCode, attempt, geminiRetryLimit(resp.StatusCode))
 				sleepGeminiBackoff(attempt)
 				continue
 			}
@@ -233,7 +233,7 @@ func (s *GeminiMessagesCompatService) forwardClaudeBodyAsChatCompletions(
 		// 与 messages 兼容层一致：只有 None / Matched 才走账号状态处理。
 		// Skipped（池模式、或自定义错误码未命中）与 TempUnscheduled 已由策略层裁决完毕。
 		if policy == ErrorPolicyNone || policy == ErrorPolicyMatched {
-			s.handleGeminiUpstreamError(ctx, account, resp.StatusCode, resp.Header, respBody)
+			s.handleGeminiUpstreamErrorForModel(ctx, account, resp.StatusCode, resp.Header, respBody, originalModel)
 		}
 		evBody := unwrapIfNeeded(account.Type == AccountTypeOAuth, respBody)
 
@@ -563,15 +563,6 @@ func chatCompletionsResponseHasVisibleOutput(resp *apicompat.ChatCompletionsResp
 		}
 	}
 	return false
-}
-
-func isGeminiContentFilterFinishReason(finishReason string) bool {
-	switch strings.ToUpper(strings.TrimSpace(finishReason)) {
-	case "SAFETY", "PROHIBITED_CONTENT", "BLOCKLIST", "RECITATION", "IMAGE_SAFETY", "SPII":
-		return true
-	default:
-		return false
-	}
 }
 
 func (s *GeminiMessagesCompatService) handleEmptyGeminiChatResponse(c *gin.Context, finishReason string) error {

@@ -412,6 +412,8 @@ export const useAppStore = defineStore('app', () => {
         available_channels_price_cny_multiplier: 0,
         available_channels_price_cny_multiplier_max: 0.2,
         available_channels_official_usd_to_cny_rate: 7,
+        subscription_enabled: true,
+        payment_balance_disabled: false,
         model_plaza_enabled: false,
         model_plaza_require_auth: false,
         plugin_management_enabled: false,

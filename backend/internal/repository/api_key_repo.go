@@ -165,6 +165,10 @@ func (r *apiKeyRepository) GetByKeyForAuth(ctx context.Context, key string) (*se
 				user.FieldBalanceNotifyThresholdType,
 				user.FieldBalanceNotifyThreshold,
 				user.FieldBalanceNotifyExtraEmails,
+				user.FieldRegistrationIP,
+				user.FieldRegistrationUserAgent,
+				user.FieldLastLoginIP,
+				user.FieldLastLoginUserAgent,
 				user.FieldTotalRecharged,
 				user.FieldSignupSource,
 				user.FieldLastLoginAt,
@@ -175,15 +179,16 @@ func (r *apiKeyRepository) GetByKeyForAuth(ctx context.Context, key string) (*se
 				gq.Select(group.FieldID)
 			})
 		}).
+		WithCustomGroup().
 		WithGroup(func(q *dbent.GroupQuery) {
 			q.Select(
 				group.FieldID,
 				group.FieldName,
 				group.FieldPlatform,
+				group.FieldSystemCustomRoutingEnabled,
 				group.FieldIsExclusive,
 				group.FieldStatus,
 				group.FieldSubscriptionType,
-				group.FieldSystemCustomRoutingEnabled,
 				group.FieldRateMultiplier,
 				group.FieldDailyLimitUsd,
 				group.FieldWeeklyLimitUsd,
@@ -211,11 +216,9 @@ func (r *apiKeyRepository) GetByKeyForAuth(ctx context.Context, key string) (*se
 				group.FieldClaudeCodeOnly,
 				group.FieldFallbackGroupID,
 				group.FieldFallbackGroupIDOnInvalidRequest,
-				group.FieldDefaultReasoningEffort,
 				group.FieldModelRoutingEnabled,
 				group.FieldModelRouting,
 				group.FieldMcpXMLInject,
-				group.FieldSimulateClaudeMaxEnabled,
 				group.FieldSupportedModelScopes,
 				group.FieldAllowMessagesDispatch,
 				group.FieldAllowLive,
@@ -223,7 +226,7 @@ func (r *apiKeyRepository) GetByKeyForAuth(ctx context.Context, key string) (*se
 				group.FieldFreeOpenaiFast,
 				group.FieldDefaultMappedModel,
 				group.FieldMessagesDispatchModelConfig,
-				group.FieldModelsListConfig,
+				group.FieldModelAllowlist,
 				group.FieldCodexModelsManifestConfig,
 				group.FieldRpmLimit,
 				group.FieldMaxReasoningEffort,
@@ -241,7 +244,6 @@ func (r *apiKeyRepository) GetByKeyForAuth(ctx context.Context, key string) (*se
 				group.FieldProfitSafetyBuffer,
 			)
 		}).
-		WithCustomGroup().
 		Only(ctx)
 	if err != nil {
 		if dbent.IsNotFound(err) {
@@ -933,7 +935,14 @@ func apiKeyEntityToService(m *dbent.APIKey) *service.APIKey {
 	}
 	if m.Edges.CustomGroup != nil {
 		cg := m.Edges.CustomGroup
-		out.CustomGroup = &service.UserCustomGroup{ID: cg.ID, UserID: cg.UserID, Name: cg.Name, Status: cg.Status, CreatedAt: cg.CreatedAt, UpdatedAt: cg.UpdatedAt}
+		out.CustomGroup = &service.UserCustomGroup{
+			ID:        cg.ID,
+			UserID:    cg.UserID,
+			Name:      cg.Name,
+			Status:    cg.Status,
+			CreatedAt: cg.CreatedAt,
+			UpdatedAt: cg.UpdatedAt,
+		}
 	}
 	return out
 }
@@ -951,16 +960,10 @@ func userEntityToService(u *dbent.User) *service.User {
 		Role:                       u.Role,
 		Balance:                    u.Balance,
 		FrozenBalance:              u.FrozenBalance,
-		GiftBalance:                u.GiftBalance,
-		FrozenGiftBalance:          u.FrozenGiftBalance,
 		Concurrency:                u.Concurrency,
 		Status:                     u.Status,
-		BalanceRedeemCodeEnabled:   u.BalanceRedeemCodeEnabled,
 		SignupSource:               u.SignupSource,
-		RegistrationIP:             u.RegistrationIP,
-		RegistrationUserAgent:      u.RegistrationUserAgent,
-		LastLoginIP:                u.LastLoginIP,
-		LastLoginUserAgent:         u.LastLoginUserAgent,
+		BalanceRedeemCodeEnabled:   u.BalanceRedeemCodeEnabled,
 		LastLoginAt:                u.LastLoginAt,
 		LastActiveAt:               u.LastActiveAt,
 		TotpSecretEncrypted:        u.TotpSecretEncrypted,
@@ -970,6 +973,12 @@ func userEntityToService(u *dbent.User) *service.User {
 		RestrictPublicGroups:       u.RestrictPublicGroups,
 		BalanceNotifyThresholdType: u.BalanceNotifyThresholdType,
 		BalanceNotifyThreshold:     u.BalanceNotifyThreshold,
+		RegistrationIP:             u.RegistrationIP,
+		RegistrationUserAgent:      u.RegistrationUserAgent,
+		LastLoginIP:                u.LastLoginIP,
+		LastLoginUserAgent:         u.LastLoginUserAgent,
+		GiftBalance:                u.GiftBalance,
+		FrozenGiftBalance:          u.FrozenGiftBalance,
 		TotalRecharged:             u.TotalRecharged,
 		RPMLimit:                   u.RpmLimit,
 		CreatedAt:                  u.CreatedAt,
@@ -1011,8 +1020,6 @@ func groupEntityToService(g *dbent.Group) *service.Group {
 		DailyLimitUSD:                    g.DailyLimitUsd,
 		WeeklyLimitUSD:                   g.WeeklyLimitUsd,
 		MonthlyLimitUSD:                  g.MonthlyLimitUsd,
-		LongContextPricingEnabled:        g.LongContextPricingEnabled,
-		ModelPricing:                     modelPricing,
 		AllowImageGeneration:             g.AllowImageGeneration,
 		AllowBatchImageGeneration:        g.AllowBatchImageGeneration,
 		ImageRateIndependent:             g.ImageRateIndependent,
@@ -1033,6 +1040,8 @@ func groupEntityToService(g *dbent.Group) *service.Group {
 		AudioRealtimePricePerMin:         g.AudioRealtimePricePerMin,
 		AudioTTSPricePerMillionChars:     g.AudioTtsPricePerMillionChars,
 		AudioSTTPricePerHour:             g.AudioSttPricePerHour,
+		LongContextPricingEnabled:        g.LongContextPricingEnabled,
+		ModelPricing:                     modelPricing,
 		DefaultValidityDays:              g.DefaultValidityDays,
 		ClaudeCodeOnly:                   g.ClaudeCodeOnly,
 		FallbackGroupID:                  g.FallbackGroupID,
@@ -1051,7 +1060,9 @@ func groupEntityToService(g *dbent.Group) *service.Group {
 		RequirePrivacySet:                g.RequirePrivacySet,
 		DefaultMappedModel:               g.DefaultMappedModel,
 		MessagesDispatchModelConfig:      g.MessagesDispatchModelConfig,
-		ModelsListConfig:                 g.ModelsListConfig,
+		ModelAllowlist:                   service.GroupModelAllowlistFromDomain(g.ModelAllowlist),
+		ModelsListConfig:                 service.GroupModelsListConfig(service.GroupModelAllowlistFromDomain(g.ModelAllowlist)),
+		CodexModelsManifestConfig:        g.CodexModelsManifestConfig,
 		RPMLimit:                         g.RpmLimit,
 		MaxReasoningEffort:               g.MaxReasoningEffort,
 		MaxReasoningEffortOverLimit:      g.MaxReasoningEffortOverLimit,

@@ -43,6 +43,16 @@ func TestGroupEntityToServicePreservesEmptyResponseCompensationPolicy(t *testing
 	require.True(t, got.EmptyResponseCompensationEnabled)
 }
 
+func TestGroupEntityToServicePreservesCodexModelsManifestConfig(t *testing.T) {
+	config := service.GroupCodexModelsManifestConfig{
+		Enabled:             true,
+		AccountIDs:          []int64{11, 22},
+		FallbackToScheduler: true,
+	}
+	got := groupEntityToService(&dbent.Group{ID: 9, CodexModelsManifestConfig: config})
+	require.Equal(t, config, got.CodexModelsManifestConfig)
+}
+
 func TestAPIKeyRepository_GetByKeyForAuth_PreservesMessagesDispatchModelConfig_SQLite(t *testing.T) {
 	repo, client := newAPIKeyRepoSQLite(t)
 	ctx := context.Background()
@@ -110,4 +120,34 @@ func TestAPIKeyRepository_GetByKeyForAuth_PreservesUserGiftBalancesForAuthSnapsh
 	require.NotNil(t, got.User)
 	require.Equal(t, 12.5, got.User.GiftBalance)
 	require.Equal(t, 3.25, got.User.FrozenGiftBalance)
+}
+
+func TestAPIKeyRepository_GetByKeyForAuth_PreservesCustomGroupBinding_SQLite(t *testing.T) {
+	repo, client := newAPIKeyRepoSQLite(t)
+	ctx := context.Background()
+	user := mustCreateAPIKeyRepoUser(t, ctx, client, "getbykey-auth-custom-group-unit@test.com")
+
+	customGroup, err := client.UserCustomGroup.Create().
+		SetUserID(user.ID).
+		SetName("custom-group-auth-unit").
+		SetStatus(service.StatusActive).
+		Save(ctx)
+	require.NoError(t, err)
+
+	customGroupID := customGroup.ID
+	key := &service.APIKey{
+		UserID:        user.ID,
+		Key:           "sk-getbykey-auth-custom-group-unit",
+		Name:          "Custom Group Key Unit",
+		CustomGroupID: &customGroupID,
+		Status:        service.StatusActive,
+	}
+	require.NoError(t, repo.Create(ctx, key))
+
+	got, err := repo.GetByKeyForAuth(ctx, key.Key)
+	require.NoError(t, err)
+	require.NotNil(t, got.CustomGroupID)
+	require.Equal(t, customGroupID, *got.CustomGroupID)
+	require.NotNil(t, got.CustomGroup)
+	require.Equal(t, customGroup.Name, got.CustomGroup.Name)
 }

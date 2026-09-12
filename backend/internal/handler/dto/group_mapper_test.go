@@ -23,6 +23,24 @@ func TestGroupFromServiceAdmin_IncludesDefaultReasoningEffort(t *testing.T) {
 	require.Equal(t, "high", got.DefaultReasoningEffort)
 }
 
+func TestGroupFromServiceIncludesMaxReasoningEffortOverLimit(t *testing.T) {
+	t.Parallel()
+
+	for _, policy := range []string{"", "downgrade", "deny"} {
+		t.Run("policy="+policy, func(t *testing.T) {
+			group := &service.Group{ID: 42, MaxReasoningEffort: "high", MaxReasoningEffortOverLimit: policy}
+			for _, mapped := range []any{GroupFromService(group), GroupFromServiceAdmin(group)} {
+				raw, err := json.Marshal(mapped)
+				require.NoError(t, err)
+				var body map[string]any
+				require.NoError(t, json.Unmarshal(raw, &body))
+				require.Contains(t, body, "max_reasoning_effort_over_limit")
+				require.Equal(t, policy, body["max_reasoning_effort_over_limit"])
+			}
+		})
+	}
+}
+
 func TestGroupFromServiceAdmin_ExplicitlyIncludesSystemCustomRoutingFlag(t *testing.T) {
 	t.Parallel()
 

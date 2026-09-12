@@ -73,6 +73,7 @@ type Handlers struct {
 	Checkin            *CheckinHandler
 	ImageStudio        *ImageStudioHandler
 	ModelPlaza         *ModelPlazaHandler
+	ModelStatus        *ModelStatusHandler
 	AsyncImage         *AsyncImageHandler
 	BatchImage         *BatchImageHandler
 	Lottery            *LotteryHandler

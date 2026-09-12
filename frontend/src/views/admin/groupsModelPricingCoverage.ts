@@ -3,7 +3,7 @@ import type {
   GroupPricingCoverageResponse
 } from '@/api/admin/groups'
 import type { PricingFormEntry } from '@/components/admin/channel/types'
-import type { ModelsListState } from './groupsModelsList'
+import type { ModelAllowlistState } from './groupModelAllowlist'
 
 export const normalizeCoverageModelName = (value: string) => value.trim().toLowerCase()
 
@@ -20,7 +20,7 @@ export const normalizeCoverageModels = (models: string[]) => {
   return normalized
 }
 
-export const advertisedModelsForCoverage = (state: ModelsListState) => {
+export const advertisedModelsForCoverage = (state: ModelAllowlistState) => {
   if (!state.enabled) return []
   return normalizeCoverageModels(
     state.items.length > 0

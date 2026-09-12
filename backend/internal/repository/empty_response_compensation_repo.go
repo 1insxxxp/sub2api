@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/service"
+	"github.com/lib/pq"
 )
 
 type emptyResponseCompensationRepository struct {
@@ -37,10 +38,29 @@ type emptyResponseCompensationState struct {
 	apiKey             string
 }
 
-func (r *emptyResponseCompensationRepository) Compensate(ctx context.Context, claimID int64) (result *service.EmptyResponseCompensationResult, err error) {
+func (r *emptyResponseCompensationRepository) Compensate(ctx context.Context, claimID int64) (*service.EmptyResponseCompensationResult, error) {
 	if r == nil || r.db == nil || claimID <= 0 {
 		return nil, service.ErrEmptyResponseCompensationInvalidInput
 	}
+	for attempt := 0; ; attempt++ {
+		result, err := r.compensateOnce(ctx, claimID)
+		var pgErr *pq.Error
+		// PostgreSQL guarantees these transactions were aborted. Never retry an
+		// ambiguous connection/commit error, which could have applied the refund.
+		if err == nil || attempt >= 2 || !errors.As(err, &pgErr) || (pgErr.Code != "40001" && pgErr.Code != "40P01") {
+			return result, err
+		}
+		timer := time.NewTimer(time.Duration(attempt+1) * 10 * time.Millisecond)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return nil, ctx.Err()
+		case <-timer.C:
+		}
+	}
+}
+
+func (r *emptyResponseCompensationRepository) compensateOnce(ctx context.Context, claimID int64) (result *service.EmptyResponseCompensationResult, err error) {
 	tx, err := r.db.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelSerializable})
 	if err != nil {
 		return nil, fmt.Errorf("begin empty response compensation: %w", err)

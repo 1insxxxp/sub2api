@@ -17,7 +17,7 @@ const (
 	EmptyResponseClaimCompensated  = "compensated"
 	EmptyResponseClaimDailyLimited = "daily_limited"
 
-	EmptyResponseClaimRuleVersion     = 2
+	EmptyResponseClaimRuleVersion     = 4
 	EmptyResponseClaimDailyLimit      = 15
 	EmptyResponseClaimMaxOutputTokens = 10
 	// Keep the production low-output rule name available while sharing the
@@ -420,8 +420,9 @@ func EvaluateEmptyResponseClaim(now time.Time, usage UsageLog, outcome *Response
 	if isPureEmptyResponse(outcome) {
 		return decision(EmptyResponseClaimApproved, EmptyResponseReasonPureEmpty)
 	}
-	// Low-output compensation uses the recorded token count for both streaming
-	// and non-streaming requests. Response evidence does not override 0-10 tokens.
+	// The user-facing rule is based on the billed output token count. Response
+	// evidence remains available for review, but small responses are eligible
+	// even when the protocol collector observed a few output events.
 	if isLowOutputCompensable(usage) {
 		return decision(EmptyResponseClaimApproved, EmptyResponseReasonLowOutput)
 	}
@@ -444,9 +445,6 @@ func EvaluateEmptyResponseClaim(now time.Time, usage UsageLog, outcome *Response
 	}
 	if outcome == nil || outcome.CollectorVersion <= 0 {
 		return decision(EmptyResponseClaimManualReview, EmptyResponseReasonMissingEvidence)
-	}
-	if outcome.HasEffectiveOutput() {
-		return decision(EmptyResponseClaimRejected, EmptyResponseReasonEffectiveOutput)
 	}
 	return decision(EmptyResponseClaimManualReview, EmptyResponseReasonConflictingEvidence)
 }

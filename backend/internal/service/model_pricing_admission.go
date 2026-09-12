@@ -123,6 +123,7 @@ func pricingAdmissionGroupFromContext(ctx context.Context, groupID *int64) *Grou
 	return group
 }
 
+//nolint:unused // retained as a focused unit-test predicate for effective channel pricing.
 func resolvedChannelPricingUsable(resolved *ResolvedPricing) bool {
 	if resolved == nil || resolved.Source != PricingSourceChannel {
 		return false

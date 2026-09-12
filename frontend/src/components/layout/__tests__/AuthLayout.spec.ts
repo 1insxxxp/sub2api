@@ -17,6 +17,18 @@ vi.mock('@/stores', () => ({
 }))
 
 describe('AuthLayout', () => {
+  it('only enables the refreshed presentation for the login appearance', () => {
+    const standard = mount(AuthLayout)
+    const login = mount(AuthLayout, { props: { appearance: 'login' } })
+
+    expect(standard.classes()).not.toContain('auth-shell--login')
+    expect(standard.find('.auth-scanline').exists()).toBe(false)
+    expect(login.classes()).toContain('auth-shell--login')
+    expect(login.find('.auth-scanline').exists()).toBe(true)
+    standard.unmount()
+    login.unmount()
+  })
+
   it('renders the blue-cyan branded auth shell with slots', () => {
     const wrapper = mount(AuthLayout, {
       slots: {

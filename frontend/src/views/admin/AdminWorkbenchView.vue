@@ -298,7 +298,17 @@
                 />
                 <span>{{ t('adminWorkbench.balanceTransfer.batchDelete') }}</span>
               </button>
-              <button type="button" class="btn btn-secondary col-span-2 w-full justify-center sm:w-auto" :disabled="loadingGenerated" @click="fetchGeneratedCodes">
+              <button
+                type="button"
+                data-test="copy-selected-generated-codes"
+                class="btn btn-secondary w-full justify-center sm:w-auto"
+                :disabled="selectedGeneratedCodeIds.length === 0 || batchDeletingGeneratedCodes"
+                @click="copySelectedGeneratedCodes"
+              >
+                <Icon name="copy" size="sm" />
+                <span>{{ t('adminWorkbench.balanceTransfer.copySelected') }}</span>
+              </button>
+              <button type="button" class="btn btn-secondary w-full justify-center sm:w-auto" :disabled="loadingGenerated" @click="fetchGeneratedCodes">
                 <Icon name="refresh" size="sm" :class="{ 'animate-spin': loadingGenerated }" />
                 <span>{{ t('common.refresh') }}</span>
               </button>
@@ -648,6 +658,15 @@ function copyGeneratedResults() {
     return
   }
   void copyText(generatedResults.value.map((item) => item.code).join('\n'))
+}
+
+function copySelectedGeneratedCodes() {
+  const selectedIds = new Set(selectedGeneratedCodeIds.value)
+  const codes = generatedCodes.value.filter((item) => selectedIds.has(item.id)).map((item) => item.code)
+  if (codes.length === 0) {
+    return
+  }
+  void copyText(codes.join('\n'))
 }
 
 async function handleDeleteGeneratedCode(item: GeneratedRedeemCode) {

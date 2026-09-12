@@ -863,7 +863,7 @@ func (r *userRepository) UpdateBalance(ctx context.Context, id int64, amount flo
 	if err != nil {
 		return translatePersistenceError(err, service.ErrUserNotFound, nil)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	if !rows.Next() {
 		if rowsErr := rows.Err(); rowsErr != nil {
 			return rowsErr
@@ -986,7 +986,7 @@ func (r *userRepository) DeductBalanceWithGiftAllocation(ctx context.Context, id
 	if err != nil {
 		return service.BalanceDeductionResult{}, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	if !rows.Next() {
 		if rowsErr := rows.Err(); rowsErr != nil {
 			return service.BalanceDeductionResult{}, rowsErr

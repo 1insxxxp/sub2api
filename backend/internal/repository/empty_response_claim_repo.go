@@ -149,9 +149,10 @@ func (r *emptyResponseClaimRepository) ListRecentEvaluations(ctx context.Context
 			)
 	`
 	countQuery := `
-		SELECT COUNT(*)
-		FROM usage_logs ul
-		LEFT JOIN empty_response_claims erc ON erc.usage_log_id = ul.id
+			SELECT COUNT(*)
+			FROM usage_logs ul
+			LEFT JOIN usage_response_outcomes uro ON uro.usage_log_id = ul.id
+			LEFT JOIN empty_response_claims erc ON erc.usage_log_id = ul.id
 		LEFT JOIN groups g ON g.id = ul.group_id
 		WHERE ` + whereSQL
 	queryArgs := []any{userID, start, end, service.EmptyResponseClaimLowOutputTokenLimit}
@@ -186,7 +187,7 @@ func (r *emptyResponseClaimRepository) ListRecentEvaluations(ctx context.Context
 	if err != nil {
 		return nil, nil, fmt.Errorf("list recent empty response evaluations: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	candidates := make([]service.EmptyResponseRecentCandidate, 0)
 	for rows.Next() {

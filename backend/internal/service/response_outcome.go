@@ -70,6 +70,10 @@ func ClassifyUsageOutcome(outcome *ResponseOutcome) UsageOutcomeStatus {
 	if outcome.DisconnectSource == DisconnectSourceClient {
 		return UsageOutcomeUnknown
 	}
+	if outcome.StreamCompleted && (outcome.DisconnectSource == "" || outcome.DisconnectSource == DisconnectSourceNone) &&
+		outcome.HTTPStatus < 400 && outcome.UpstreamStatus < 400 && outcome.HasEffectiveOutput() {
+		return UsageOutcomeSuccess
+	}
 	if outcome.HTTPStatus >= 400 || outcome.UpstreamStatus >= 400 ||
 		(outcome.UpstreamErrorKind != "" && outcome.UpstreamErrorKind != UpstreamErrorNone) ||
 		outcome.DisconnectSource == DisconnectSourceUpstream ||
@@ -233,6 +237,12 @@ func (c *ResponseOutcomeCollector) MarkCompleted(finishReason string) {
 	c.outcome.StreamCompleted = true
 	c.outcome.FinishReason = sanitizeResponseOutcomeFinishReason(finishReason)
 	c.outcome.DisconnectSource = DisconnectSourceNone
+	// A collector can span upstream retries. Once a response has produced
+	// effective output and reached a successful terminal event, discard any
+	// transient error recorded by an earlier attempt.
+	if c.outcome.HTTPStatus < 400 && c.outcome.UpstreamStatus < 400 && c.outcome.HasEffectiveOutput() {
+		c.outcome.UpstreamErrorKind = UpstreamErrorNone
+	}
 	c.mu.Unlock()
 }
 

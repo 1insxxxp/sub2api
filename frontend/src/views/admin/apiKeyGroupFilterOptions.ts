@@ -3,6 +3,7 @@ import type { AdminGroup } from '@/types'
 export interface ApiKeyGroupFilterOption {
   value: number | null
   label: string
+  platform?: AdminGroup['platform']
   kind?: 'group'
   disabled?: boolean
 }
@@ -46,7 +47,11 @@ export function buildApiKeyGroupFilterOptions(
   const disabledGroups: ApiKeyGroupFilterOption[] = []
 
   for (const grp of groups) {
-    const item: ApiKeyGroupFilterOption = { value: grp.id, label: grp.name }
+    const item: ApiKeyGroupFilterOption = {
+      value: grp.id,
+      label: grp.name,
+      ...(grp.platform ? { platform: grp.platform } : {})
+    }
     if (grp.status !== 'active') {
       disabledGroups.push(item)
     } else if (grp.subscription_type === 'subscription') {

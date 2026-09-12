@@ -1,5 +1,8 @@
 <template>
-  <div class="auth-shell theme-crisp relative flex min-h-screen items-center justify-center overflow-hidden px-4 py-8 sm:px-6">
+  <div
+    class="auth-shell theme-crisp relative flex min-h-screen items-center justify-center overflow-hidden px-4 py-8 sm:px-6 sm:py-10"
+    :class="{ 'auth-shell--login': props.appearance === 'login' }"
+  >
     <!-- Background -->
     <div
       class="absolute inset-0 bg-white dark:bg-dark-950"
@@ -19,6 +22,7 @@
       <div
         class="absolute left-1/2 top-24 h-px w-[min(42rem,80vw)] -translate-x-1/2 bg-[linear-gradient(90deg,transparent,#2563eb,#06b6d4,transparent)] opacity-50 dark:opacity-70"
       ></div>
+      <div v-if="props.appearance === 'login'" class="auth-scanline absolute inset-x-0 top-0 h-px bg-blue-300/40 dark:bg-cyan-300/25"></div>
     </div>
 
     <!-- Content Container -->
@@ -44,7 +48,7 @@
       </div>
 
       <!-- Card Container -->
-      <div class="auth-card rounded-lg border border-blue-200/70 bg-white/92 p-6 shadow-[0_26px_80px_-44px_rgba(37,99,235,0.42)] ring-1 ring-white/80 backdrop-blur-xl dark:border-blue-400/18 dark:bg-dark-900/82 dark:ring-white/5 sm:p-8">
+      <div class="auth-card rounded-lg border border-blue-200/70 bg-white p-5 shadow-[0_26px_80px_-44px_rgba(37,99,235,0.42)] ring-1 ring-white/80 backdrop-blur-xl dark:border-blue-400/18 dark:bg-dark-900 dark:ring-white/5 sm:p-8">
         <slot />
       </div>
 
@@ -67,6 +71,7 @@ import { useAppStore } from '@/stores'
 import { sanitizeUrl } from '@/utils/url'
 
 const appStore = useAppStore()
+const props = defineProps<{ appearance?: 'default' | 'login' }>()
 
 const siteName = computed(() => appStore.siteName || 'Passion')
 const siteLogo = computed(() => sanitizeUrl(appStore.effectiveSiteLogo || '', { allowRelative: true, allowDataUrl: true }))
@@ -89,9 +94,22 @@ onMounted(() => {
   animation: auth-panel-rise 720ms cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
+.auth-scanline {
+  animation: auth-scanline 9s ease-in-out infinite;
+  transform: translateX(-100%);
+}
+
 .auth-card {
   position: relative;
   overflow: hidden;
+}
+
+.auth-shell--login .auth-grid-bg {
+  opacity: 0.48;
+}
+
+.auth-shell--login .auth-card {
+  animation: auth-card-rise 760ms 80ms cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
 .auth-card::before {
@@ -104,6 +122,74 @@ onMounted(() => {
 
 .auth-logo-frame {
   transform: translateZ(0);
+  transition: transform 220ms ease, box-shadow 220ms ease;
+}
+
+.auth-shell--login .auth-logo-frame {
+  animation: auth-logo-breathe 5s ease-in-out 260ms infinite;
+}
+
+.auth-shell--login .auth-logo-frame:hover {
+  transform: translateY(-3px) rotate(-2deg) scale(1.03);
+  box-shadow: 0 22px 48px rgba(37, 99, 235, 0.24);
+}
+
+:slotted(.auth-login-content) {
+  animation: auth-content-rise 620ms 180ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes auth-scanline {
+  0%,
+  18% {
+    opacity: 0;
+    transform: translateX(-100%);
+  }
+
+  35%,
+  65% {
+    opacity: 1;
+  }
+
+  82%,
+  100% {
+    opacity: 0;
+    transform: translateX(100%);
+  }
+}
+
+@keyframes auth-card-rise {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes auth-content-rise {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes auth-logo-breathe {
+  0%,
+  100% {
+    box-shadow: 0 18px 44px rgba(37, 99, 235, 0.18);
+  }
+
+  50% {
+    box-shadow: 0 22px 52px rgba(6, 182, 212, 0.24);
+  }
 }
 
 @keyframes auth-grid-drift {
@@ -132,9 +218,17 @@ onMounted(() => {
 
 @media (prefers-reduced-motion: reduce) {
   .auth-grid-bg,
-  .auth-panel {
+  .auth-panel,
+  .auth-scanline,
+  .auth-card,
+  .auth-logo-frame,
+  :slotted(.auth-login-content) {
     animation-duration: 1ms;
     animation-iteration-count: 1;
+  }
+
+  .auth-shell--login .auth-logo-frame:hover {
+    transform: none;
   }
 }
 </style>

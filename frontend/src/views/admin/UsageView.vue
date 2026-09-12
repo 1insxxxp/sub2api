@@ -5,8 +5,8 @@
       <!-- Charts Section -->
       <div class="space-y-4">
         <div class="admin-toolbar-surface" data-test="usage-chart-toolbar">
-          <div class="admin-toolbar">
-            <div class="admin-toolbar-group">
+          <div class="admin-toolbar usage-filter-bar">
+            <div class="admin-toolbar-group usage-filter-item">
               <span class="text-sm font-medium text-gray-700 dark:text-gray-300">{{ t('admin.dashboard.timeRange') }}:</span>
               <DateRangePicker
                 v-model:start-date="startDate"
@@ -14,7 +14,7 @@
                 @change="onDateRangeChange"
               />
             </div>
-            <div class="admin-toolbar-group sm:justify-end">
+            <div class="admin-toolbar-group usage-filter-item usage-filter-item-granularity sm:justify-end">
               <span class="text-sm font-medium text-gray-700 dark:text-gray-300">{{ t('admin.dashboard.granularity') }}:</span>
               <div class="w-28">
                 <Select v-model="granularity" :options="granularityOptions" @change="loadChartData" />

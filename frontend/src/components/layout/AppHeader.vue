@@ -1,5 +1,5 @@
 <template>
-  <header class="app-header-shell theme-crisp sticky top-0 z-30" @keydown.esc="closeCheckinPopover">
+  <header class="app-header-shell theme-crisp sticky top-0 z-50" @keydown.esc="closeCheckinPopover">
     <div class="app-header-toolbar">
       <!-- Left: Mobile Menu Toggle + Page Title -->
       <div class="app-header-title-group">
@@ -56,8 +56,8 @@
           <LocaleSwitcher />
         </div>
 
-        <!-- Subscription Progress (for users with active subscriptions) -->
-        <SubscriptionProgressMini v-if="user" />
+        <!-- Subscription Progress (for users with active subscriptions; not mounted at all when the feature is off) -->
+        <SubscriptionProgressMini v-if="user && subscriptionFeatureEnabled" />
 
         <!-- Balance Display -->
         <div
@@ -360,7 +360,7 @@
         </div>
 
         <!-- User Dropdown -->
-        <div v-if="user" class="relative shrink-0" ref="dropdownRef">
+        <div v-if="user" class="relative z-[60] shrink-0" ref="dropdownRef">
           <button
             @click="toggleDropdown"
             class="app-header-mobile-action app-header-user-trigger group flex items-center gap-2 rounded-xl border border-transparent p-1.5 transition-all duration-200 hover:border-blue-200/70 hover:bg-blue-50/80 hover:shadow-sm hover:shadow-blue-600/10 focus:outline-none focus:ring-2 focus:ring-blue-500/25 dark:hover:border-blue-400/20 dark:hover:bg-blue-500/10"
@@ -400,7 +400,7 @@
           <transition name="dropdown">
             <div
               v-if="dropdownOpen"
-              class="dropdown profile-menu right-0 mt-3 w-[19rem] max-w-[calc(100vw-1.5rem)]"
+              class="dropdown profile-menu right-0 z-[70] mt-3 w-[19rem] max-w-[calc(100vw-1.5rem)]"
               role="menu"
             >
               <!-- User Info -->
@@ -545,6 +545,8 @@ import Icon from '@/components/icons/Icon.vue'
 import { extractApiErrorMessage } from '@/utils/apiError'
 import { sanitizeUrl } from '@/utils/url'
 import { FeatureFlags, isFeatureFlagEnabled } from '@/utils/featureFlags'
+import { resolveRouteMetaKeys } from '@/router/title'
+import { resolveSiteBillingMode } from '@/utils/siteBillingMode'
 
 const router = useRouter()
 const route = useRoute()
@@ -789,6 +791,14 @@ const displayName = computed(() => {
   return user.value.username || user.value.email?.split('@')[0] || ''
 })
 
+// 订阅功能关闭时不挂载顶栏订阅徽章（组件 onMounted 会拉取订阅接口）。
+const subscriptionFeatureEnabled = computed(() => isFeatureFlagEnabled(FeatureFlags.subscription))
+
+// /purchase 的标题/描述随站点计费模式切换，与 document.title 共用同一解析。
+const routeMetaKeys = computed(() => resolveRouteMetaKeys(route, {
+  billingMode: resolveSiteBillingMode(appStore.cachedPublicSettings),
+}))
+
 const pageTitle = computed(() => {
   // For custom pages, use the menu item's label instead of generic "鑷畾涔夐〉闈?
   if (route.name === 'CustomPage') {
@@ -798,7 +808,7 @@ const pageTitle = computed(() => {
       ?? (authStore.isAdmin ? adminSettingsStore.customMenuItems.find((item) => item.id === id) : undefined)
     if (menuItem?.label) return menuItem.label
   }
-  const titleKey = route.meta.titleKey as string
+  const titleKey = routeMetaKeys.value.titleKey
   if (titleKey) {
     return t(titleKey)
   }
@@ -806,7 +816,7 @@ const pageTitle = computed(() => {
 })
 
 const pageDescription = computed(() => {
-  const descKey = route.meta.descriptionKey as string
+  const descKey = routeMetaKeys.value.descriptionKey
   if (descKey) {
     return t(descKey)
   }
@@ -976,6 +986,25 @@ watch(
 </script>
 
 <style scoped>
+:global(html.model-status-mobile-header-hidden .app-header-shell) {
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-100%);
+  visibility: hidden;
+}
+
+@media (max-width: 767px) {
+  :global(.app-header-shell) {
+    max-height: 6rem;
+    overflow: visible;
+    transition: opacity 180ms ease, transform 180ms ease, visibility 180ms ease;
+  }
+
+  :global(html.model-status-mobile-header-hidden .app-header-shell) {
+    max-height: 6rem;
+  }
+}
+
 .daily-checkin-popover {
   display: flex;
   max-height: min(42rem, calc(100dvh - 5rem));

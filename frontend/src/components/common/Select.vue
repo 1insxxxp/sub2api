@@ -50,68 +50,97 @@
       <Transition name="select-dropdown">
         <div
           v-if="isOpen"
-          ref="dropdownRef"
-          class="select-dropdown-portal"
-          :class="[instanceId]"
-          :style="dropdownStyle"
-          role="listbox"
-          @click.stop
-          @mousedown.stop
-          @keydown="onDropdownKeyDown"
+          class="select-dropdown-layer"
+          :class="[instanceId, mobileSheetEnabled && 'select-dropdown-layer-mobile']"
+          @click.self="closeDropdown"
         >
-          <!-- Search input -->
-          <div v-if="isSearchable" class="select-search">
-            <Icon name="search" size="sm" class="text-gray-400" />
-            <input
-              ref="searchInputRef"
-              v-model="searchQuery"
-              type="text"
-              :placeholder="searchPlaceholderText"
-              :aria-label="searchPlaceholderText"
-              class="select-search-input"
-              @click.stop
-            />
-          </div>
-
-          <!-- Options list -->
-          <div class="select-options" ref="optionsListRef">
-            <div
-              v-for="(option, index) in filteredOptions"
-              :key="`${typeof getOptionValue(option)}:${String(getOptionValue(option) ?? '')}`"
-              role="option"
-              :aria-selected="isSelected(option)"
-              :aria-disabled="isOptionDisabled(option)"
-              @click.stop="!isOptionDisabled(option) && selectOption(option)"
-              @mouseenter="handleOptionMouseEnter(option, index)"
-              :class="[
-                'select-option',
-                isGroupHeaderOption(option) && 'select-option-group',
-                isSelected(option) && 'select-option-selected',
-                isOptionDisabled(option) && !isGroupHeaderOption(option) && 'select-option-disabled',
-                focusedIndex === index && !isGroupHeaderOption(option) && 'select-option-focused'
-              ]"
-            >
-              <slot name="option" :option="option" :selected="isSelected(option)">
-                <Icon
-                  v-if="option._creatable"
-                  name="search"
-                  size="sm"
-                  class="flex-shrink-0 text-gray-400"
-                />
-                <span class="select-option-label" :class="option._creatable && 'italic text-gray-500 dark:text-dark-300'">{{ getOptionLabel(option) }}</span>
-                <Icon
-                  v-if="isSelected(option)"
-                  name="check"
-                  size="sm"
-                  class="text-primary-500"
-                  :stroke-width="2"
-                />
-              </slot>
+          <div
+            ref="dropdownRef"
+            class="select-dropdown-portal"
+            :style="dropdownStyle"
+            role="listbox"
+            tabindex="-1"
+            @click.stop
+            @mousedown.stop
+            @keydown="onDropdownKeyDown"
+          >
+            <div v-if="mobileSheetEnabled" class="select-sheet-handle" aria-hidden="true" />
+            <div v-if="mobileSheetEnabled" class="select-sheet-header">
+              <span class="select-sheet-title">{{ ariaLabel ?? placeholderText }}</span>
+              <button type="button" class="select-sheet-close" :aria-label="t('common.close')" @click="closeDropdown">
+                <Icon name="x" size="sm" />
+              </button>
             </div>
 
-            <!-- Empty state -->
-            <div v-if="filteredOptions.length === 0" class="select-empty">
-              {{ props.loading ? t('common.loading') : emptyTextDisplay }}
+            <!-- Search input -->
+            <div v-if="isSearchable" class="select-search">
+              <Icon name="search" size="sm" class="text-gray-400" />
+              <input
+                ref="searchInputRef"
+                v-model="searchQuery"
+                type="text"
+                :placeholder="searchPlaceholderText"
+                :aria-label="searchPlaceholderText"
+                class="select-search-input"
+                @click.stop
+              />
+            </div>
+
+            <!-- Options list -->
+            <div class="select-options" ref="optionsListRef">
+              <div
+                v-for="(option, index) in filteredOptions"
+                :key="`${typeof getOptionValue(option)}:${String(getOptionValue(option) ?? '')}`"
+                role="option"
+                :aria-selected="isSelected(option)"
+                :aria-disabled="isOptionDisabled(option)"
+                @click.stop="!isOptionDisabled(option) && selectOption(option)"
+                @mouseenter="handleOptionMouseEnter(option, index)"
+                :class="[
+                  'select-option',
+                  isGroupHeaderOption(option) && 'select-option-group',
+                  isSelected(option) && 'select-option-selected',
+                  isOptionDisabled(option) && !isGroupHeaderOption(option) && 'select-option-disabled',
+                  focusedIndex === index && !isGroupHeaderOption(option) && 'select-option-focused'
+                ]"
+              >
+                <span
+                  v-if="mobileSheetEnabled"
+                  class="select-option-icon"
+                  :class="getOptionPlatform(option)
+                    ? platformBadgeLightClass(getOptionPlatform(option) ?? '')
+                    : 'select-option-icon-generic'"
+                  aria-hidden="true"
+                >
+                  <PlatformIcon
+                    v-if="getOptionPlatform(option)"
+                    :platform="getOptionPlatform(option) as any"
+                    size="md"
+                  />
+                  <Icon v-else :name="getOptionIcon(option)" size="sm" />
+                </span>
+                <slot name="option" :option="option" :selected="isSelected(option)">
+                  <Icon
+                    v-if="option._creatable"
+                    name="search"
+                    size="sm"
+                    class="flex-shrink-0 text-gray-400"
+                  />
+                  <span class="select-option-label" :class="option._creatable && 'italic text-gray-500 dark:text-dark-300'">{{ getOptionLabel(option) }}</span>
+                  <Icon
+                    v-if="isSelected(option)"
+                    name="check"
+                    size="sm"
+                    class="text-primary-500"
+                    :stroke-width="2"
+                  />
+                </slot>
+              </div>
+
+              <!-- Empty state -->
+              <div v-if="filteredOptions.length === 0" class="select-empty">
+                {{ props.loading ? t('common.loading') : emptyTextDisplay }}
+              </div>
             </div>
           </div>
         </div>
@@ -124,6 +153,8 @@
 import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
 import Icon from '@/components/icons/Icon.vue'
+import PlatformIcon from '@/components/common/PlatformIcon.vue'
+import { platformBadgeLightClass } from '@/utils/platformColors'
 
 const { t } = useI18n()
 
@@ -158,6 +189,8 @@ interface Props {
   remote?: boolean
   /** 远程搜索模式下的加载态：options 为空时下拉显示 loading 文案 */
   loading?: boolean
+  /** 在小屏幕上使用底部弹窗样式，桌面端仍使用原下拉菜单；默认开启 */
+  mobileSheet?: boolean
 }
 
 interface Emits {
@@ -176,7 +209,8 @@ const props = withDefaults(defineProps<Props>(), {
   valueKey: 'value',
   labelKey: 'label',
   remote: false,
-  loading: false
+  loading: false,
+  mobileSheet: true
 })
 
 const emit = defineEmits<Emits>()
@@ -191,8 +225,12 @@ const dropdownRef = ref<HTMLElement | null>(null)
 const optionsListRef = ref<HTMLElement | null>(null)
 const dropdownPosition = ref<'bottom' | 'top'>('bottom')
 const triggerRect = ref<DOMRect | null>(null)
+const isMobileViewport = ref(false)
 const dropdownViewportPadding = 8
 const dropdownMinimumWidth = 200
+const mobileBreakpoint = 767
+let previousBodyOverflow = ''
+let bodyScrollLocked = false
 
 // i18n placeholders
 const placeholderText = computed(() => props.placeholder ?? t('common.selectOption'))
@@ -210,8 +248,11 @@ const isSearchable = computed(() => {
   return props.searchable
 })
 
+const mobileSheetEnabled = computed(() => props.mobileSheet && isMobileViewport.value)
+
 // Computed style for teleported dropdown
 const dropdownStyle = computed(() => {
+  if (mobileSheetEnabled.value) return { zIndex: '100000020' }
   if (!triggerRect.value) return {}
 
   const rect = triggerRect.value
@@ -252,6 +293,15 @@ const getOptionLabel = (option: any): string => {
     return String(option[props.labelKey] ?? '')
   }
   return String(option ?? '')
+}
+
+const getOptionPlatform = (option: any): string | undefined => {
+  if (typeof option === 'object' && option !== null && typeof option.platform === 'string') return option.platform
+  return undefined
+}
+
+const getOptionIcon = (option: any): 'filter' | 'clock' => {
+  return option?.icon === 'clock' ? 'clock' : 'filter'
 }
 
 const isOptionDisabled = (option: any): boolean => {
@@ -368,9 +418,41 @@ const toggle = () => {
   isOpen.value = !isOpen.value
 }
 
+const closeDropdown = () => {
+  if (!isOpen.value) return
+  isOpen.value = false
+  triggerRef.value?.focus()
+}
+
+const updateViewportMode = () => {
+  isMobileViewport.value = window.innerWidth <= mobileBreakpoint
+}
+
+const updateBodyScrollLock = () => {
+  if (mobileSheetEnabled.value && isOpen.value) {
+    if (bodyScrollLocked) return
+    previousBodyOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    bodyScrollLocked = true
+    return
+  }
+  if (bodyScrollLocked) {
+    document.body.style.overflow = previousBodyOverflow
+    bodyScrollLocked = false
+  }
+}
+
+const handleGlobalKeydown = (event: KeyboardEvent) => {
+  if (event.key === 'Escape' && isOpen.value) {
+    event.preventDefault()
+    closeDropdown()
+  }
+}
+
 watch(isOpen, (open) => {
   if (open) {
-    calculateDropdownPosition()
+    if (!mobileSheetEnabled.value) calculateDropdownPosition()
+    updateBodyScrollLock()
     // Reset focused index to current selection or first item
     if (filteredOptions.value.length === 0) {
       focusedIndex.value = -1
@@ -382,15 +464,19 @@ watch(isOpen, (open) => {
         : initialIdx
     }
 
-    if (isSearchable.value) {
+    if (mobileSheetEnabled.value) {
+      nextTick(() => dropdownRef.value?.focus({ preventScroll: true }))
+    } else if (isSearchable.value) {
       nextTick(() => searchInputRef.value?.focus())
     }
+    window.addEventListener('keydown', handleGlobalKeydown)
     // Add scroll listener to update position
     window.addEventListener('scroll', updateTriggerRect, { capture: true, passive: true })
     window.addEventListener('resize', calculateDropdownPosition)
   } else {
     searchQuery.value = ''
     focusedIndex.value = -1
+    updateBodyScrollLock()
     // 关闭时取消仍在排队的远程搜索（避免关闭后尾随 emit 一次 search(''))。
     if (remoteSearchTimer) {
       clearTimeout(remoteSearchTimer)
@@ -398,7 +484,13 @@ watch(isOpen, (open) => {
     }
     window.removeEventListener('scroll', updateTriggerRect, { capture: true })
     window.removeEventListener('resize', calculateDropdownPosition)
+    window.removeEventListener('keydown', handleGlobalKeydown)
   }
+})
+
+watch(mobileSheetEnabled, () => {
+  updateBodyScrollLock()
+  if (isOpen.value && !mobileSheetEnabled.value) calculateDropdownPosition()
 })
 
 // 远程搜索：输入防抖后交给父组件请求（!isOpen 抑制关闭重置 searchQuery 触发的空 query）。
@@ -453,8 +545,7 @@ const onDropdownKeyDown = (e: KeyboardEvent) => {
       break
     case 'Escape':
       e.preventDefault()
-      isOpen.value = false
-      triggerRef.value?.focus()
+      closeDropdown()
       break
     case 'Tab':
       isOpen.value = false
@@ -489,11 +580,16 @@ const handleClickOutside = (event: MouseEvent) => {
 }
 
 onMounted(() => {
+  updateViewportMode()
   document.addEventListener('click', handleClickOutside)
+  window.addEventListener('resize', updateViewportMode)
 })
 
 onUnmounted(() => {
   document.removeEventListener('click', handleClickOutside)
+  window.removeEventListener('resize', updateViewportMode)
+  window.removeEventListener('keydown', handleGlobalKeydown)
+  if (bodyScrollLocked) document.body.style.overflow = previousBodyOverflow
   window.removeEventListener('scroll', updateTriggerRect, { capture: true })
   window.removeEventListener('resize', calculateDropdownPosition)
   if (remoteSearchTimer) {
@@ -554,6 +650,22 @@ onUnmounted(() => {
   pointer-events: auto !important;
 }
 
+.select-dropdown-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 100000020;
+  pointer-events: none;
+}
+
+.select-dropdown-layer .select-dropdown-portal {
+  pointer-events: auto;
+}
+
+.select-sheet-handle,
+.select-sheet-header {
+  display: none;
+}
+
 .select-dropdown-portal .select-search {
   @apply flex items-center gap-2 px-3 py-2;
   @apply border-b border-gray-100 dark:border-dark-700;
@@ -607,6 +719,14 @@ onUnmounted(() => {
   @apply flex-1 min-w-0 truncate text-left;
 }
 
+.select-dropdown-portal .select-option-icon {
+  @apply flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg;
+}
+
+.select-dropdown-portal .select-option-icon-generic {
+  @apply bg-gray-100 text-gray-500 dark:bg-dark-700 dark:text-gray-300;
+}
+
 .select-dropdown-portal .select-empty {
   @apply px-4 py-8 text-center text-sm;
   @apply text-gray-500 dark:text-dark-400;
@@ -614,12 +734,135 @@ onUnmounted(() => {
 
 .select-dropdown-enter-active,
 .select-dropdown-leave-active {
-  transition: all 0.2s ease;
+  transition: opacity 0.2s ease;
 }
 
 .select-dropdown-enter-from,
 .select-dropdown-leave-to {
   opacity: 0;
+}
+
+.select-dropdown-enter-active .select-dropdown-portal,
+.select-dropdown-leave-active .select-dropdown-portal {
+  transition: transform 0.2s ease;
+}
+
+.select-dropdown-enter-from .select-dropdown-portal,
+.select-dropdown-leave-to .select-dropdown-portal {
   transform: translateY(-8px);
+}
+
+@media (max-width: 767px) {
+  .select-dropdown-layer-mobile {
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    padding: 0;
+    background: rgb(15 23 42 / 42%);
+    pointer-events: auto;
+  }
+
+  .select-dropdown-layer-mobile .select-dropdown-portal {
+    width: 100%;
+    min-width: 0;
+    max-width: none;
+    max-height: min(78dvh, 42rem);
+    padding-bottom: max(0.5rem, env(safe-area-inset-bottom));
+    border: 0;
+    border-radius: 1.25rem 1.25rem 0 0;
+    box-shadow: 0 -10px 34px rgb(15 23 42 / 18%);
+    overscroll-behavior: contain;
+  }
+
+  .select-dropdown-layer-mobile .select-sheet-handle {
+    display: block;
+    width: 2.5rem;
+    height: 0.25rem;
+    margin: 0.7rem auto 0.35rem;
+    border-radius: 999px;
+    background: rgb(148 163 184 / 65%);
+  }
+
+  .select-dropdown-layer-mobile .select-sheet-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    padding: 0.35rem 1rem 0.7rem;
+    border-bottom: 1px solid rgb(226 232 240 / 80%);
+  }
+
+  .select-dropdown-layer-mobile .select-sheet-title {
+    min-width: 0;
+    overflow: hidden;
+    color: #0f172a;
+    font-size: 0.95rem;
+    font-weight: 650;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .select-dropdown-layer-mobile .select-sheet-close {
+    display: grid;
+    width: 2.25rem;
+    height: 2.25rem;
+    flex: 0 0 auto;
+    place-items: center;
+    border: 0;
+    border-radius: 0.75rem;
+    color: #64748b;
+    background: transparent;
+  }
+
+  .select-dropdown-layer-mobile .select-sheet-close:active,
+  .select-dropdown-layer-mobile .select-sheet-close:hover {
+    background: #f1f5f9;
+  }
+
+  .select-dropdown-layer-mobile .select-search {
+    margin: 0.75rem 1rem 0.25rem;
+    padding: 0.7rem 0.75rem;
+    border: 1px solid #e2e8f0;
+    border-radius: 0.75rem;
+    background: #f8fafc;
+  }
+
+  .select-dropdown-layer-mobile .select-options {
+    max-height: min(52dvh, 28rem);
+    padding: 0.35rem 0.75rem 0.5rem;
+  }
+
+  .select-dropdown-layer-mobile .select-option {
+    min-height: 2.75rem;
+    padding: 0.7rem 0.75rem;
+    border-radius: 0.7rem;
+  }
+
+  .select-dropdown-layer-mobile .select-option-icon {
+    width: 2.25rem;
+    height: 2.25rem;
+    margin-right: 0.15rem;
+  }
+
+  .select-dropdown-layer-mobile.select-dropdown-enter-from .select-dropdown-portal,
+  .select-dropdown-layer-mobile.select-dropdown-leave-to .select-dropdown-portal {
+    transform: translateY(100%);
+  }
+
+  .dark .select-dropdown-layer-mobile .select-sheet-title { color: #f8fafc; }
+  .dark .select-dropdown-layer-mobile .select-sheet-header { border-bottom-color: rgb(71 85 105 / 80%); }
+  .dark .select-dropdown-layer-mobile .select-sheet-close { color: #94a3b8; }
+  .dark .select-dropdown-layer-mobile .select-sheet-close:active,
+  .dark .select-dropdown-layer-mobile .select-sheet-close:hover { background: #334155; }
+  .dark .select-dropdown-layer-mobile .select-search { border-color: #475569; background: #1e293b; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .select-dropdown-enter-active,
+  .select-dropdown-leave-active,
+  .select-dropdown-enter-active .select-dropdown-portal,
+  .select-dropdown-leave-active .select-dropdown-portal {
+    transition-duration: 0.01ms;
+  }
 }
 </style>

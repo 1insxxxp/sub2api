@@ -180,7 +180,7 @@ func TestEmptyResponseClaimRepositoryListsRecentEvaluationsWithExistingClaimStat
 	now := time.Now().UTC()
 	start := now.Add(-7 * 24 * time.Hour)
 
-	mock.ExpectQuery(`(?s)`+regexp.QuoteMeta("SELECT COUNT(*)")+`.*`+regexp.QuoteMeta("FROM usage_logs ul")+`.*`+regexp.QuoteMeta("LEFT JOIN empty_response_claims erc ON erc.usage_log_id = ul.id")).
+	mock.ExpectQuery(`(?s)`+regexp.QuoteMeta("SELECT COUNT(*)")+`.*`+regexp.QuoteMeta("FROM usage_logs ul")+`.*`+regexp.QuoteMeta("LEFT JOIN usage_response_outcomes uro ON uro.usage_log_id = ul.id")+`.*`+regexp.QuoteMeta("LEFT JOIN empty_response_claims erc ON erc.usage_log_id = ul.id")).
 		WithArgs(int64(7), start, now, service.EmptyResponseClaimLowOutputTokenLimit).
 		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(21))
 	mock.ExpectQuery(`(?s)`+regexp.QuoteMeta("FROM usage_logs ul")+`.*`+regexp.QuoteMeta("LEFT JOIN usage_response_outcomes uro ON uro.usage_log_id = ul.id")+`.*`+regexp.QuoteMeta("LEFT JOIN empty_response_claims erc ON erc.usage_log_id = ul.id")+`.*`+regexp.QuoteMeta("COALESCE(g.empty_response_compensation_enabled, FALSE) = TRUE")+`.*`+regexp.QuoteMeta("AND ul.output_tokens <= $4")).

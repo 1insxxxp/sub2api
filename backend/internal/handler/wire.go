@@ -14,93 +14,7 @@ func ProvideAdminHandlers(
 	dashboardHandler *admin.DashboardHandler,
 	userHandler *admin.UserHandler,
 	groupHandler *admin.GroupHandler,
-	accountHandler *admin.AccountHandler,
-	announcementHandler *admin.AnnouncementHandler,
-	dataManagementHandler *admin.DataManagementHandler,
-	backupHandler *admin.BackupHandler,
-	oauthHandler *admin.OAuthHandler,
-	openaiOAuthHandler *admin.OpenAIOAuthHandler,
-	geminiOAuthHandler *admin.GeminiOAuthHandler,
-	antigravityOAuthHandler *admin.AntigravityOAuthHandler,
-	grokOAuthHandler *admin.GrokOAuthHandler,
-	cnProviderHandler *admin.CNProviderHandler,
-	proxyHandler *admin.ProxyHandler,
-	redeemHandler *admin.RedeemHandler,
-	promoHandler *admin.PromoHandler,
-	settingHandler *admin.SettingHandler,
-	opsHandler *admin.OpsHandler,
-	systemHandler *admin.SystemHandler,
-	subscriptionHandler *admin.SubscriptionHandler,
-	usageHandler *admin.UsageHandler,
-	userAttributeHandler *admin.UserAttributeHandler,
-	errorPassthroughHandler *admin.ErrorPassthroughHandler,
-	tlsFingerprintProfileHandler *admin.TLSFingerprintProfileHandler,
-	pluginHandler *admin.PluginHandler,
-	apiKeyHandler *admin.AdminAPIKeyHandler,
-	scheduledTestHandler *admin.ScheduledTestHandler,
-	channelHandler *admin.ChannelHandler,
-	channelMonitorHandler *admin.ChannelMonitorHandler,
-	channelMonitorTemplateHandler *admin.ChannelMonitorRequestTemplateHandler,
-	contentModerationHandler *admin.ContentModerationHandler,
-	promptAuditHandler *securityaudit.PromptAdminHandler,
-	paymentHandler *admin.PaymentHandler,
-	affiliateHandler *admin.AffiliateHandler,
-	complianceHandler *admin.ComplianceHandler,
-	checkinHandler *admin.CheckinHandler,
-	auditLogHandler *admin.AuditLogHandler,
-	upstreamBillingProbe *service.UpstreamBillingProbeService,
-	ollamaCloudUsage *service.OllamaCloudUsageService,
-) *AdminHandlers {
-	accountHandler.SetUpstreamBillingProbeService(upstreamBillingProbe)
-	accountHandler.SetOllamaCloudUsageService(ollamaCloudUsage)
-	return &AdminHandlers{
-		Dashboard:              dashboardHandler,
-		User:                   userHandler,
-		Group:                  groupHandler,
-		Account:                accountHandler,
-		Announcement:           announcementHandler,
-		DataManagement:         dataManagementHandler,
-		Backup:                 backupHandler,
-		OAuth:                  oauthHandler,
-		OpenAIOAuth:            openaiOAuthHandler,
-		GeminiOAuth:            geminiOAuthHandler,
-		AntigravityOAuth:       antigravityOAuthHandler,
-		GrokOAuth:              grokOAuthHandler,
-		CNProvider:             cnProviderHandler,
-		Proxy:                  proxyHandler,
-		Redeem:                 redeemHandler,
-		Promo:                  promoHandler,
-		Setting:                settingHandler,
-		Ops:                    opsHandler,
-		System:                 systemHandler,
-		Subscription:           subscriptionHandler,
-		Usage:                  usageHandler,
-		UserAttribute:          userAttributeHandler,
-		ErrorPassthrough:       errorPassthroughHandler,
-		TLSFingerprintProfile:  tlsFingerprintProfileHandler,
-		Plugin:                 pluginHandler,
-		APIKey:                 apiKeyHandler,
-		ScheduledTest:          scheduledTestHandler,
-		Channel:                channelHandler,
-		ChannelMonitor:         channelMonitorHandler,
-		ChannelMonitorTemplate: channelMonitorTemplateHandler,
-		ContentModeration:      contentModerationHandler,
-		PromptAudit:            promptAuditHandler,
-		Payment:                paymentHandler,
-		Affiliate:              affiliateHandler,
-		Compliance:             complianceHandler,
-		Checkin:                checkinHandler,
-		AuditLog:               auditLogHandler,
-	}
-}
-
-// ProvideAdminHandlersWithSystemCustomGroup is the Wire-facing aggregate
-// constructor. Keep ProvideAdminHandlers unchanged so external and test callers
-// that use the established constructor signature remain source-compatible.
-func ProvideAdminHandlersWithSystemCustomGroup(
-	dashboardHandler *admin.DashboardHandler,
-	userHandler *admin.UserHandler,
-	groupHandler *admin.GroupHandler,
+	systemCustomGroupHandler *admin.SystemCustomGroupHandler,
 	accountHandler *admin.AccountHandler,
 	announcementHandler *admin.AnnouncementHandler,
 	dataManagementHandler *admin.DataManagementHandler,
@@ -136,54 +50,54 @@ func ProvideAdminHandlersWithSystemCustomGroup(
 	complianceHandler *admin.ComplianceHandler,
 	checkinHandler *admin.CheckinHandler,
 	auditLogHandler *admin.AuditLogHandler,
+	lotteryHandler *admin.LotteryHandler,
 	upstreamBillingProbe *service.UpstreamBillingProbeService,
 	ollamaCloudUsage *service.OllamaCloudUsageService,
-	systemCustomGroupHandler *admin.SystemCustomGroupHandler,
 ) *AdminHandlers {
-	handlers := ProvideAdminHandlers(
-		dashboardHandler,
-		userHandler,
-		groupHandler,
-		accountHandler,
-		announcementHandler,
-		dataManagementHandler,
-		backupHandler,
-		oauthHandler,
-		openaiOAuthHandler,
-		geminiOAuthHandler,
-		antigravityOAuthHandler,
-		grokOAuthHandler,
-		cnProviderHandler,
-		proxyHandler,
-		redeemHandler,
-		promoHandler,
-		settingHandler,
-		opsHandler,
-		systemHandler,
-		subscriptionHandler,
-		usageHandler,
-		userAttributeHandler,
-		errorPassthroughHandler,
-		tlsFingerprintProfileHandler,
-		pluginHandler,
-		apiKeyHandler,
-		scheduledTestHandler,
-		channelHandler,
-		channelMonitorHandler,
-		channelMonitorTemplateHandler,
-		contentModerationHandler,
-		promptAuditHandler,
-		paymentHandler,
-		affiliateHandler,
-		complianceHandler,
-		checkinHandler,
-		auditLogHandler,
-		upstreamBillingProbe,
-		ollamaCloudUsage,
-	)
-	handlers.SystemCustomGroup = systemCustomGroupHandler
-	handlers.SubAdminCommission = subAdminCommissionHandler
-	return handlers
+	accountHandler.SetUpstreamBillingProbeService(upstreamBillingProbe)
+	accountHandler.SetOllamaCloudUsageService(ollamaCloudUsage)
+	return &AdminHandlers{
+		Dashboard:              dashboardHandler,
+		User:                   userHandler,
+		Group:                  groupHandler,
+		SystemCustomGroup:      systemCustomGroupHandler,
+		Account:                accountHandler,
+		Announcement:           announcementHandler,
+		DataManagement:         dataManagementHandler,
+		Backup:                 backupHandler,
+		OAuth:                  oauthHandler,
+		OpenAIOAuth:            openaiOAuthHandler,
+		GeminiOAuth:            geminiOAuthHandler,
+		AntigravityOAuth:       antigravityOAuthHandler,
+		GrokOAuth:              grokOAuthHandler,
+		CNProvider:             cnProviderHandler,
+		Proxy:                  proxyHandler,
+		Redeem:                 redeemHandler,
+		SubAdminCommission:     subAdminCommissionHandler,
+		Promo:                  promoHandler,
+		Setting:                settingHandler,
+		Ops:                    opsHandler,
+		System:                 systemHandler,
+		Subscription:           subscriptionHandler,
+		Usage:                  usageHandler,
+		UserAttribute:          userAttributeHandler,
+		ErrorPassthrough:       errorPassthroughHandler,
+		TLSFingerprintProfile:  tlsFingerprintProfileHandler,
+		Plugin:                 pluginHandler,
+		APIKey:                 apiKeyHandler,
+		ScheduledTest:          scheduledTestHandler,
+		Channel:                channelHandler,
+		ChannelMonitor:         channelMonitorHandler,
+		ChannelMonitorTemplate: channelMonitorTemplateHandler,
+		ContentModeration:      contentModerationHandler,
+		PromptAudit:            promptAuditHandler,
+		Payment:                paymentHandler,
+		Affiliate:              affiliateHandler,
+		Compliance:             complianceHandler,
+		Checkin:                checkinHandler,
+		AuditLog:               auditLogHandler,
+		Lottery:                lotteryHandler,
+	}
 }
 
 func ProvideGatewayHandler(
@@ -244,27 +158,6 @@ func ProvideBatchImageHandler(
 	return h
 }
 
-// ProvideSystemHandler creates admin.SystemHandler with UpdateService
-func ProvideSystemHandler(updateService *service.UpdateService, lockService *service.SystemOperationLockService) *admin.SystemHandler {
-	return admin.NewSystemHandler(updateService, lockService)
-}
-
-// ProvideSettingHandler creates SettingHandler with version from BuildInfo
-func ProvideSettingHandler(settingService *service.SettingService, buildInfo BuildInfo, notificationEmailService *service.NotificationEmailService) *SettingHandler {
-	h := NewSettingHandler(settingService, buildInfo.Version)
-	h.SetNotificationEmailService(notificationEmailService)
-	return h
-}
-
-// ProvideAdminSettingHandler creates admin.SettingHandler with notification template APIs.
-func ProvideAdminSettingHandler(settingService *service.SettingService, emailService *service.EmailService, turnstileService *service.TurnstileService, aliyunCaptchaService *service.AliyunCaptchaService, opsService *service.OpsService, paymentConfigService *service.PaymentConfigService, paymentService *service.PaymentService, userAttributeService *service.UserAttributeService, notificationEmailService *service.NotificationEmailService, totpService *service.TotpService, userService *service.UserService) *admin.SettingHandler {
-	h := admin.NewSettingHandler(settingService, emailService, turnstileService, opsService, paymentConfigService, paymentService, userAttributeService)
-	h.SetNotificationEmailService(notificationEmailService)
-	h.SetAliyunCaptchaService(aliyunCaptchaService)
-	h.SetStepUpDeps(totpService, userService)
-	return h
-}
-
 func ProvideImageStudioHandler(imageStudioService *service.ImageStudioService) *ImageStudioHandler {
 	return NewImageStudioHandler(imageStudioService)
 }
@@ -287,11 +180,30 @@ func ProvideAdminUsageHandler(
 	adminService service.AdminService,
 	cleanupService *service.UsageCleanupService,
 	claimService *service.EmptyResponseClaimAdminService,
-	opsService *service.OpsService,
 ) *admin.UsageHandler {
 	h := admin.NewUsageHandler(usageService, apiKeyService, adminService, cleanupService)
 	h.SetEmptyResponseClaimService(claimService)
-	h.SetOpsService(opsService)
+	return h
+}
+
+// ProvideSystemHandler creates admin.SystemHandler with UpdateService
+func ProvideSystemHandler(updateService *service.UpdateService, lockService *service.SystemOperationLockService) *admin.SystemHandler {
+	return admin.NewSystemHandler(updateService, lockService)
+}
+
+// ProvideSettingHandler creates SettingHandler with version from BuildInfo
+func ProvideSettingHandler(settingService *service.SettingService, buildInfo BuildInfo, notificationEmailService *service.NotificationEmailService) *SettingHandler {
+	h := NewSettingHandler(settingService, buildInfo.Version)
+	h.SetNotificationEmailService(notificationEmailService)
+	return h
+}
+
+// ProvideAdminSettingHandler creates admin.SettingHandler with notification template APIs.
+func ProvideAdminSettingHandler(settingService *service.SettingService, emailService *service.EmailService, turnstileService *service.TurnstileService, aliyunCaptchaService *service.AliyunCaptchaService, opsService *service.OpsService, paymentConfigService *service.PaymentConfigService, paymentService *service.PaymentService, userAttributeService *service.UserAttributeService, notificationEmailService *service.NotificationEmailService, totpService *service.TotpService, userService *service.UserService) *admin.SettingHandler {
+	h := admin.NewSettingHandler(settingService, emailService, turnstileService, opsService, paymentConfigService, paymentService, userAttributeService)
+	h.SetNotificationEmailService(notificationEmailService)
+	h.SetAliyunCaptchaService(aliyunCaptchaService)
+	h.SetStepUpDeps(totpService, userService)
 	return h
 }
 
@@ -319,6 +231,7 @@ func ProvideHandlers(
 	checkinHandler *CheckinHandler,
 	imageStudioHandler *ImageStudioHandler,
 	modelPlazaHandler *ModelPlazaHandler,
+	modelStatusHandler *ModelStatusHandler,
 	asyncImageHandler *AsyncImageHandler,
 	batchImageHandler *BatchImageHandler,
 	lotteryHandler *LotteryHandler,
@@ -350,13 +263,14 @@ func ProvideHandlers(
 		PaymentWebhook:     paymentWebhookHandler,
 		AvailableChannel:   availableChannelHandler,
 		Checkin:            checkinHandler,
-		ImageStudio:        imageStudioHandler,
-		ModelPlaza:         modelPlazaHandler,
-		AsyncImage:         asyncImageHandler,
+			ImageStudio:        imageStudioHandler,
+			ModelPlaza:         modelPlazaHandler,
+			ModelStatus:        modelStatusHandler,
+			AsyncImage:         asyncImageHandler,
 		BatchImage:         batchImageHandler,
 		Lottery:            lotteryHandler,
-		InternalDujiaoAuth: internalDujiaoAuthHandler,
-		PublicGroupSync:    publicGroupSyncHandler,
+			InternalDujiaoAuth: internalDujiaoAuthHandler,
+			PublicGroupSync:    publicGroupSyncHandler,
 	}
 	if handlers.Admin != nil {
 		handlers.Admin.Lottery = adminLotteryHandler
@@ -387,10 +301,11 @@ var ProviderSet = wire.NewSet(
 	NewAvailableChannelHandler,
 	NewCheckinHandler,
 	ProvideImageStudioHandler,
+	NewLotteryHandler,
 	NewModelPlazaHandler,
+	NewModelStatusHandler,
 	NewAsyncImageHandler,
 	ProvideBatchImageHandler,
-	NewLotteryHandler,
 	admin.NewLotteryHandler,
 	NewInternalDujiaoAuthHandler,
 	service.NewPublicGroupSyncService,
@@ -399,7 +314,7 @@ var ProviderSet = wire.NewSet(
 	// Admin handlers
 	admin.NewDashboardHandler,
 	admin.NewUserHandler,
-	admin.NewGroupHandler,
+	admin.NewGroupHandlerWithDependencies,
 	admin.NewSystemCustomGroupHandler,
 	admin.ProvideAccountHandler,
 	admin.NewAnnouncementHandler,
@@ -435,8 +350,9 @@ var ProviderSet = wire.NewSet(
 	admin.NewComplianceHandler,
 	admin.NewCheckinHandler,
 	admin.NewAuditLogHandler,
+	admin.NewLotteryHandler,
 
 	// AdminHandlers and Handlers constructors
-	ProvideAdminHandlersWithSystemCustomGroup,
+	ProvideAdminHandlers,
 	ProvideHandlers,
 )

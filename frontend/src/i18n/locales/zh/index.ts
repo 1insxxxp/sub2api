@@ -9,6 +9,7 @@ import misc from './misc'
 import restored from './restored'
 import lottery from './lottery'
 import manager from './manager'
+import modelStatus from './modelStatus'
 
 export default mergeMessages({
   ...landing,
@@ -20,4 +21,5 @@ export default mergeMessages({
   ...misc,
   ...lottery,
   ...manager,
+  ...modelStatus,
 }, restored)

@@ -13,6 +13,7 @@ var (
 	ErrGroupExists                 = infraerrors.Conflict("GROUP_EXISTS", "group name already exists")
 	ErrGroupDisabled               = infraerrors.Forbidden("GROUP_DISABLED", "group is disabled")
 	ErrGroupCustomGroupSourceInUse = infraerrors.Conflict("CUSTOM_GROUP_SOURCE_IN_USE", "group is referenced by one or more custom group models")
+	ErrGroupNotEmpty               = infraerrors.Conflict("GROUP_NOT_EMPTY", "group contains accounts")
 )
 
 type GroupRepository interface {
@@ -39,6 +40,12 @@ type GroupRepository interface {
 	UpdateSortOrders(ctx context.Context, updates []GroupSortOrderUpdate) error
 }
 
+// PublicGroupRepository provides the filtered group catalog used by public
+// model-status surfaces. Public means active and non-exclusive.
+type PublicGroupRepository interface {
+	ListActivePublic(ctx context.Context) ([]Group, error)
+}
+
 type GroupDuplicateRepository interface {
 	// FindByDuplicateOperationID performs the read-only recovery lookup used
 	// after an ambiguous idempotency-store failure.
@@ -60,6 +67,12 @@ type AdminGroupRepository interface {
 	GroupRepository
 	GroupDuplicateRepository
 	GroupCustomSourceReferenceRepository
+	EmptyGroupDeleteRepository
+}
+
+// EmptyGroupDeleteRepository provides the guarded cascade used by simple mode.
+type EmptyGroupDeleteRepository interface {
+	DeleteCascadeIfEmpty(ctx context.Context, id int64) ([]int64, error)
 }
 
 // GroupSortOrderUpdate 分组排序更新

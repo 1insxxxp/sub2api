@@ -29,6 +29,16 @@
     </button>
 
     <Teleport to="body">
+      <button
+        v-if="isOpen"
+        type="button"
+        class="filter-dropdown-backdrop"
+        :aria-label="t('common.close')"
+        @click="close"
+      />
+    </Teleport>
+
+    <Teleport to="body">
       <Transition name="select-dropdown">
         <div
           v-if="isOpen"
@@ -263,9 +273,53 @@ onBeforeUnmount(() => {
   flex: none;
 }
 
-@media (max-width: 640px) {
+.filter-dropdown-backdrop {
+  display: none;
+}
+
+@media (max-width: 767px) {
   .filter-menu {
     min-width: 100%;
+  }
+
+  .filter-dropdown-backdrop {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 100000019;
+    border: 0;
+    background: rgb(15 23 42 / 42%);
+  }
+
+  .filter-dropdown {
+    position: fixed !important;
+    inset: auto 0 0 !important;
+    z-index: 100000020;
+    width: 100vw;
+    min-width: 0 !important;
+    max-width: none !important;
+    max-height: min(78dvh, 42rem);
+    padding: 0.75rem 0 max(0.75rem, env(safe-area-inset-bottom));
+    overflow-y: auto;
+    border: 0;
+    border-radius: 1.25rem 1.25rem 0 0;
+    box-shadow: 0 -10px 34px rgb(15 23 42 / 18%);
+  }
+
+  .filter-dropdown::before {
+    content: '';
+    display: block;
+    width: 2.5rem;
+    height: 0.25rem;
+    margin: 0 auto 0.5rem;
+    border-radius: 999px;
+    background: rgb(148 163 184 / 65%);
+  }
+
+  .filter-dropdown .select-option {
+    min-height: 2.75rem;
+    margin-inline: 0.75rem;
+    border-radius: 0.7rem;
   }
 }
 </style>

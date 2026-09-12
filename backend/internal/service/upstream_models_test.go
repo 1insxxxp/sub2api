@@ -229,6 +229,29 @@ func TestFetchUpstreamSupportedModelsParsesOpenAIOAuthManifest(t *testing.T) {
 	require.Equal(t, "Bearer openai-oauth-token", upstream.lastReq.Header.Get("Authorization"))
 }
 
+func TestBuildOpenAIOAuthModelsRequestInvalidUAPreservesSyncedVersion(t *testing.T) {
+	settings := NewSettingService(&codexVersionSettingRepoStub{values: map[string]string{
+		SettingKeyOpenAICodexUserAgent:           "admin@example.com",
+		SettingKeyOpenAICodexClientVersionSynced: "0.153.4",
+	}}, nil)
+	SetCodexCanonicalUserAgentResolver(func() string {
+		return settings.GetOpenAICodexCanonicalUserAgent(context.Background())
+	})
+	t.Cleanup(func() { SetCodexCanonicalUserAgentResolver(nil) })
+	svc := &AccountTestService{}
+
+	req, err := svc.buildOpenAIOAuthUpstreamModelsRequest(context.Background(), &Account{
+		Platform:    PlatformOpenAI,
+		Type:        AccountTypeOAuth,
+		Credentials: map[string]any{"access_token": "test-token"},
+	})
+	require.NoError(t, err)
+	require.Equal(t, "0.153.4", req.URL.Query().Get("client_version"))
+	require.Equal(t, "0.153.4", req.Header.Get("Version"))
+	require.Equal(t, "codex-tui/0.153.4"+codexCLIUserAgentSuffix, req.Header.Get("User-Agent"))
+	require.Equal(t, "codex-tui", req.Header.Get("Originator"))
+}
+
 func TestExtractGrokUpstreamModelIDs(t *testing.T) {
 	t.Parallel()
 

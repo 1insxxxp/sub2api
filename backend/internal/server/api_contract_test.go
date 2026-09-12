@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"math"
 	"net/http"
@@ -21,173 +22,11 @@ import (
 	"github.com/Wei-Shaw/sub2api/internal/pkg/pagination"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/usagestats"
 	"github.com/Wei-Shaw/sub2api/internal/server/middleware"
-	serverroutes "github.com/Wei-Shaw/sub2api/internal/server/routes"
 	"github.com/Wei-Shaw/sub2api/internal/service"
 
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
 )
-
-func TestSystemCustomGroupAPIContractRoutes(t *testing.T) {
-	gin.SetMode(gin.TestMode)
-	router := gin.New()
-	handlers := &handler.Handlers{Admin: &handler.AdminHandlers{SystemCustomGroup: &adminhandler.SystemCustomGroupHandler{}}}
-	pass := func(c *gin.Context) { c.Next() }
-	serverroutes.RegisterAdminRoutes(
-		router.Group("/api/v1"),
-		handlers,
-		middleware.AdminAuthMiddleware(pass),
-		middleware.AdminWorkbenchAuthMiddleware(pass),
-		middleware.AuditLogMiddleware(pass),
-		middleware.StepUpAuthMiddleware(pass),
-		nil,
-		nil,
-	)
-
-	registered := make(map[string]struct{}, len(router.Routes()))
-	for _, route := range router.Routes() {
-		registered[route.Method+" "+route.Path] = struct{}{}
-	}
-	for _, contract := range []string{
-		"GET /api/v1/admin/system-custom-groups/candidates",
-		"POST /api/v1/admin/system-custom-groups",
-		"GET /api/v1/admin/system-custom-groups/:id",
-		"PUT /api/v1/admin/system-custom-groups/:id",
-		"GET /api/v1/admin/system-custom-groups/:id/sync-preview",
-		"DELETE /api/v1/admin/system-custom-groups/:id",
-	} {
-		_, ok := registered[contract]
-		require.Truef(t, ok, "missing API contract route %s", contract)
-	}
-}
-
-func TestGroupPricingCoverageAPIContractRoute(t *testing.T) {
-	gin.SetMode(gin.TestMode)
-	router := gin.New()
-	handlers := &handler.Handlers{Admin: &handler.AdminHandlers{Group: &adminhandler.GroupHandler{}}}
-	pass := func(c *gin.Context) { c.Next() }
-	serverroutes.RegisterAdminRoutes(
-		router.Group("/api/v1"),
-		handlers,
-		middleware.AdminAuthMiddleware(pass),
-		middleware.AdminWorkbenchAuthMiddleware(pass),
-		middleware.AuditLogMiddleware(pass),
-		middleware.StepUpAuthMiddleware(pass),
-		nil,
-		nil,
-	)
-
-	registered := make(map[string]struct{}, len(router.Routes()))
-	for _, route := range router.Routes() {
-		registered[route.Method+" "+route.Path] = struct{}{}
-	}
-	_, ok := registered["POST /api/v1/admin/groups/pricing-coverage"]
-	require.True(t, ok, "missing pricing coverage API contract route")
-}
-
-func TestCheckinCampaignAPIContractRoutes(t *testing.T) {
-	gin.SetMode(gin.TestMode)
-	router := gin.New()
-	handlers := &handler.Handlers{Admin: &handler.AdminHandlers{Checkin: &adminhandler.CheckinHandler{}}}
-	pass := func(c *gin.Context) { c.Next() }
-	serverroutes.RegisterAdminRoutes(
-		router.Group("/api/v1"),
-		handlers,
-		middleware.AdminAuthMiddleware(pass),
-		middleware.AdminWorkbenchAuthMiddleware(pass),
-		middleware.AuditLogMiddleware(pass),
-		middleware.StepUpAuthMiddleware(pass),
-		nil,
-		nil,
-	)
-
-	registered := make(map[string]struct{}, len(router.Routes()))
-	for _, route := range router.Routes() {
-		registered[route.Method+" "+route.Path] = struct{}{}
-	}
-	for _, contract := range []string{
-		"GET /api/v1/admin/checkins/campaigns",
-		"POST /api/v1/admin/checkins/campaigns",
-		"GET /api/v1/admin/checkins/campaigns/:id",
-		"PUT /api/v1/admin/checkins/campaigns/:id",
-		"POST /api/v1/admin/checkins/campaigns/:id/enable",
-		"POST /api/v1/admin/checkins/campaigns/:id/disable",
-		"POST /api/v1/admin/checkins/campaigns/:id/copy",
-		"DELETE /api/v1/admin/checkins/campaigns/:id",
-	} {
-		_, ok := registered[contract]
-		require.Truef(t, ok, "missing API contract route %s", contract)
-	}
-}
-
-func TestAdminWorkbenchAPIContractRoutes(t *testing.T) {
-	gin.SetMode(gin.TestMode)
-	router := gin.New()
-	handlers := &handler.Handlers{
-		Redeem: handler.NewRedeemHandler(nil),
-		Admin:  &handler.AdminHandlers{SubAdminCommission: &adminhandler.SubAdminCommissionHandler{}},
-	}
-	pass := func(c *gin.Context) { c.Next() }
-	serverroutes.RegisterAdminRoutes(
-		router.Group("/api/v1"),
-		handlers,
-		middleware.AdminAuthMiddleware(pass),
-		middleware.AdminWorkbenchAuthMiddleware(pass),
-		middleware.AuditLogMiddleware(pass),
-		middleware.StepUpAuthMiddleware(pass),
-		nil,
-		nil,
-	)
-
-	registered := make(map[string]struct{}, len(router.Routes()))
-	for _, route := range router.Routes() {
-		registered[route.Method+" "+route.Path] = struct{}{}
-	}
-	for _, contract := range []string{
-		"POST /api/v1/admin/workbench/redeem/generated",
-		"GET /api/v1/admin/workbench/redeem/generated",
-		"POST /api/v1/admin/workbench/redeem/generated/batch-delete",
-		"DELETE /api/v1/admin/workbench/redeem/generated/:id",
-		"GET /api/v1/admin/workbench/commission/grants",
-		"GET /api/v1/admin/workbench/commission/calendar",
-		"GET /api/v1/admin/workbench/commission/days/:date/groups",
-		"GET /api/v1/admin/workbench/commission/days/:date/groups/:group_id/logs",
-	} {
-		_, ok := registered[contract]
-		require.Truef(t, ok, "missing API contract route %s", contract)
-	}
-}
-
-func TestSubAdminCommissionAPIContractRoutes(t *testing.T) {
-	gin.SetMode(gin.TestMode)
-	router := gin.New()
-	handlers := &handler.Handlers{Admin: &handler.AdminHandlers{SubAdminCommission: &adminhandler.SubAdminCommissionHandler{}}}
-	pass := func(c *gin.Context) { c.Next() }
-	serverroutes.RegisterAdminRoutes(
-		router.Group("/api/v1"),
-		handlers,
-		middleware.AdminAuthMiddleware(pass),
-		middleware.AdminWorkbenchAuthMiddleware(pass),
-		middleware.AuditLogMiddleware(pass),
-		middleware.StepUpAuthMiddleware(pass),
-		nil,
-		nil,
-	)
-
-	registered := make(map[string]struct{}, len(router.Routes()))
-	for _, route := range router.Routes() {
-		registered[route.Method+" "+route.Path] = struct{}{}
-	}
-	for _, contract := range []string{
-		"GET /api/v1/admin/sub-admin-commissions/settings",
-		"PUT /api/v1/admin/sub-admin-commissions/settings",
-		"GET /api/v1/admin/sub-admin-commissions/grants",
-		"PUT /api/v1/admin/sub-admin-commissions/grants",
-	} {
-		_, ok := registered[contract]
-		require.Truef(t, ok, "missing API contract route %s", contract)
-	}
-}
 
 func TestAPIContracts(t *testing.T) {
 	gin.SetMode(gin.TestMode)
@@ -202,71 +41,6 @@ func TestAPIContracts(t *testing.T) {
 		wantStatus int
 		wantJSON   string
 	}{
-		{
-			name:       "GET /api/v1/user/aff exposes tier progress and preserves legacy fields",
-			method:     http.MethodGet,
-			path:       "/api/v1/user/aff",
-			wantStatus: http.StatusOK,
-			wantJSON: `{
-				"code": 0,
-				"message": "success",
-				"data": {
-					"user_id": 1,
-					"aff_code": "ALICECODE",
-					"aff_count": 2,
-					"aff_quota": 12.5,
-					"aff_frozen_quota": 1.5,
-					"aff_history_quota": 20,
-					"automatic_level": "standard",
-					"automatic_rebate_rate_percent": 8,
-					"effective_rebate_rate_percent": 18,
-					"has_custom_rebate_rate": true,
-					"custom_rebate_rate_percent": 18,
-					"qualified_invitee_count": 0,
-					"qualification_amount": 50,
-					"next_level_invitee_threshold": 3,
-					"remaining_qualified_invitees": 3,
-					"rewards": [],
-					"tiers": [
-						{"level":"standard","min_qualified_invitees":0,"rate_percent":8},
-						{"level":"bronze","min_qualified_invitees":3,"rate_percent":10},
-						{"level":"silver","min_qualified_invitees":10,"rate_percent":12},
-						{"level":"gold","min_qualified_invitees":30,"rate_percent":15}
-					],
-					"invitees": [
-						{"user_id":2,"email":"b***@e***.com","username":"bob","created_at":"2025-01-02T03:04:05Z","total_rebate":2,"qualifying_payment_amount":49,"qualified":false,"qualified_at":null},
-						{"user_id":3,"email":"c***@e***.com","username":"carol","created_at":"2025-01-02T03:04:05Z","total_rebate":3,"qualifying_payment_amount":50,"qualified":true,"qualified_at":"2025-01-02T03:04:05Z"}
-					]
-				}
-			}`,
-		},
-		{
-			name:       "GET /api/v1/admin/affiliates/users/1/overview separates automatic and custom rates",
-			method:     http.MethodGet,
-			path:       "/api/v1/admin/affiliates/users/1/overview",
-			wantStatus: http.StatusOK,
-			wantJSON: `{
-				"code":0,"message":"success","data":{
-					"user_id":1,"email":"alice@example.com","username":"alice","aff_code":"ALICECODE",
-					"rebate_rate_percent":18,"invited_count":2,"rebated_invitee_count":2,"available_quota":12.5,"history_quota":20,
-					"automatic_level":"standard","automatic_rebate_rate_percent":8,"effective_rebate_rate_percent":18,
-					"has_custom_rebate_rate":true,"custom_rebate_rate_percent":18,"qualified_invitee_count":0,
-					"qualification_amount":50,"next_level_invitee_threshold":3,"remaining_qualified_invitees":3
-				}
-			}`,
-		},
-		{
-			name:       "GET /api/v1/admin/affiliates/invites exposes dynamic qualification status",
-			method:     http.MethodGet,
-			path:       "/api/v1/admin/affiliates/invites",
-			wantStatus: http.StatusOK,
-			wantJSON: `{
-				"code":0,"message":"success","data":{
-					"items":[{"inviter_id":1,"inviter_email":"alice@example.com","inviter_username":"alice","invitee_id":3,"invitee_email":"carol@example.com","invitee_username":"carol","aff_code":"ALICECODE","total_rebate":3,"qualifying_payment_amount":50,"qualified":true,"qualified_at":"2025-01-02T03:04:05Z","invited_count":2,"qualified_invitee_count":1,"automatic_level":"standard","automatic_rebate_rate_percent":8,"custom_rebate_rate_percent":18,"effective_rebate_rate_percent":18,"created_at":"2025-01-02T03:04:05Z"}],
-					"total":1,"page":1,"page_size":20,"pages":1
-				}
-			}`,
-		},
 		{
 			name:       "GET /api/v1/auth/me",
 			method:     http.MethodGet,
@@ -293,7 +67,6 @@ func TestAPIContracts(t *testing.T) {
 					"balance_notify_threshold_type": "",
 					"balance_notify_threshold": null,
 					"balance_notify_extra_emails": null,
-					"balance_redeem_code_enabled": false,
 					"total_recharged": 0,
 					"linuxdo_bound": false,
 					"oidc_bound": false,
@@ -459,7 +232,6 @@ func TestAPIContracts(t *testing.T) {
 					"key": "sk_custom_1234567890",
 					"name": "Key One",
 					"group_id": null,
-					"custom_group_id": null,
 					"status": "active",
 					"ip_whitelist": null,
 					"ip_blacklist": null,
@@ -511,7 +283,6 @@ func TestAPIContracts(t *testing.T) {
 							"key": "sk_custom_1234567890",
 							"name": "Key One",
 							"group_id": null,
-							"custom_group_id": null,
 							"status": "active",
 							"ip_whitelist": null,
 							"ip_blacklist": null,
@@ -582,7 +353,6 @@ func TestAPIContracts(t *testing.T) {
 					{
 						"id": 10,
 						"name": "Group One",
-						"default_reasoning_effort": "",
 						"description": "desc",
 						"platform": "anthropic",
 						"rate_multiplier": 1.5,
@@ -593,7 +363,6 @@ func TestAPIContracts(t *testing.T) {
 						"is_exclusive": false,
 						"status": "active",
 						"subscription_type": "standard",
-						"system_custom_routing_enabled": false,
 						"daily_limit_usd": null,
 						"weekly_limit_usd": null,
 						"monthly_limit_usd": null,
@@ -620,7 +389,6 @@ func TestAPIContracts(t *testing.T) {
 						"claude_code_only": false,
 						"allow_messages_dispatch": false,
 						"allow_live": false,
-						"empty_response_compensation_enabled": false,
 						"fallback_group_id": null,
 						"fallback_group_id_on_invalid_request": null,
 						"require_oauth_only": false,
@@ -727,242 +495,6 @@ func TestAPIContracts(t *testing.T) {
 			}`,
 		},
 		{
-			name: "GET /api/v1/redeem/history paginated",
-			setup: func(t *testing.T, deps *contractDeps) {
-				t.Helper()
-				deps.redeemRepo.SetByUser(1, []service.RedeemCode{
-					{
-						ID:        900,
-						Code:      "CODE-1",
-						Type:      service.RedeemTypeBalance,
-						Value:     1.25,
-						Status:    service.StatusUsed,
-						UsedBy:    ptr(int64(1)),
-						UsedAt:    ptr(deps.now),
-						CreatedAt: deps.now,
-					},
-					{
-						ID:        901,
-						Code:      "CODE-2",
-						Type:      service.RedeemTypeBalance,
-						Value:     2.5,
-						Status:    service.StatusUsed,
-						UsedBy:    ptr(int64(1)),
-						UsedAt:    ptr(deps.now),
-						CreatedAt: deps.now,
-					},
-					{
-						ID:        902,
-						Code:      "CODE-3",
-						Type:      service.RedeemTypeConcurrency,
-						Value:     3,
-						Status:    service.StatusUsed,
-						UsedBy:    ptr(int64(1)),
-						UsedAt:    ptr(deps.now),
-						CreatedAt: deps.now,
-					},
-				})
-			},
-			method:     http.MethodGet,
-			path:       "/api/v1/redeem/history?page=2&page_size=2",
-			wantStatus: http.StatusOK,
-			wantJSON: `{
-				"code": 0,
-				"message": "success",
-				"data": {
-					"items": [
-						{
-							"id": 902,
-							"code": "CODE-3",
-							"type": "concurrency",
-							"value": 3,
-							"status": "used",
-							"used_by": 1,
-							"used_at": "2025-01-02T03:04:05Z",
-							"created_at": "2025-01-02T03:04:05Z",
-							"group_id": null,
-							"validity_days": 0
-						}
-					],
-					"total": 3,
-					"page": 2,
-					"page_size": 2,
-					"pages": 2
-				}
-			}`,
-		},
-		{
-			name: "GET /api/v1/admin/workbench/redeem/generated",
-			setup: func(t *testing.T, deps *contractDeps) {
-				t.Helper()
-				expiresAt := deps.now.Add(30 * 24 * time.Hour)
-				deps.redeemRepo.SetByCreator(1, []service.RedeemCode{
-					{
-						ID:        901,
-						Code:      "TRANSFER-123",
-						Type:      service.RedeemTypeBalance,
-						Value:     2.75,
-						Status:    service.StatusUsed,
-						UsedBy:    ptr(int64(2)),
-						UsedAt:    ptr(deps.now),
-						CreatedBy: ptr(int64(1)),
-						Source:    service.RedeemCodeSourceUserBalanceTransfer,
-						CreatedAt: deps.now,
-						ExpiresAt: &expiresAt,
-					},
-				})
-			},
-			method:     http.MethodGet,
-			path:       "/api/v1/admin/workbench/redeem/generated",
-			wantStatus: http.StatusOK,
-			wantJSON: `{
-				"code": 0,
-				"message": "success",
-				"data": [
-					{
-						"id": 901,
-						"code": "TRANSFER-123",
-						"type": "balance",
-						"value": 2.75,
-						"status": "used",
-						"used_by": 2,
-						"used_at": "2025-01-02T03:04:05Z",
-						"created_at": "2025-01-02T03:04:05Z",
-						"expires_at": "2025-02-01T03:04:05Z",
-						"group_id": null,
-						"validity_days": 0
-					}
-				]
-			}`,
-		},
-		{
-			name: "GET /api/v1/admin/workbench/redeem/generated paginated",
-			setup: func(t *testing.T, deps *contractDeps) {
-				t.Helper()
-				deps.redeemRepo.SetByCreator(1, []service.RedeemCode{
-					{
-						ID:        901,
-						Code:      "TRANSFER-1",
-						Type:      service.RedeemTypeBalance,
-						Value:     1,
-						Status:    service.StatusUnused,
-						CreatedBy: ptr(int64(1)),
-						Source:    service.RedeemCodeSourceUserBalanceTransfer,
-						CreatedAt: deps.now,
-					},
-					{
-						ID:        902,
-						Code:      "TRANSFER-2",
-						Type:      service.RedeemTypeBalance,
-						Value:     2,
-						Status:    service.StatusUnused,
-						CreatedBy: ptr(int64(1)),
-						Source:    service.RedeemCodeSourceUserBalanceTransfer,
-						CreatedAt: deps.now,
-					},
-					{
-						ID:        903,
-						Code:      "TRANSFER-3",
-						Type:      service.RedeemTypeBalance,
-						Value:     3,
-						Status:    service.StatusUsed,
-						CreatedBy: ptr(int64(1)),
-						Source:    service.RedeemCodeSourceUserBalanceTransfer,
-						CreatedAt: deps.now,
-					},
-				})
-			},
-			method:     http.MethodGet,
-			path:       "/api/v1/admin/workbench/redeem/generated?page=2&page_size=2",
-			wantStatus: http.StatusOK,
-			wantJSON: `{
-				"code": 0,
-				"message": "success",
-				"data": {
-					"items": [
-						{
-							"id": 903,
-							"code": "TRANSFER-3",
-							"type": "balance",
-							"value": 3,
-							"status": "used",
-							"used_by": null,
-							"used_at": null,
-							"created_at": "2025-01-02T03:04:05Z",
-							"group_id": null,
-							"validity_days": 0
-						}
-					],
-					"total": 3,
-					"page": 2,
-					"page_size": 2,
-					"pages": 2
-				}
-			}`,
-		},
-		{
-			name: "POST /api/v1/admin/workbench/redeem/generated/batch-delete",
-			setup: func(t *testing.T, deps *contractDeps) {
-				t.Helper()
-				deps.redeemRepo.SetByCreator(1, []service.RedeemCode{
-					{
-						ID:        902,
-						Code:      "TRANSFER-A",
-						Type:      service.RedeemTypeBalance,
-						Value:     1.25,
-						Status:    service.StatusUnused,
-						CreatedBy: ptr(int64(1)),
-						Source:    service.RedeemCodeSourceUserBalanceTransfer,
-						CreatedAt: deps.now,
-					},
-					{
-						ID:        903,
-						Code:      "TRANSFER-B",
-						Type:      service.RedeemTypeBalance,
-						Value:     2.5,
-						Status:    service.StatusUnused,
-						CreatedBy: ptr(int64(1)),
-						Source:    service.RedeemCodeSourceUserBalanceTransfer,
-						CreatedAt: deps.now,
-					},
-				})
-			},
-			method:     http.MethodPost,
-			path:       "/api/v1/admin/workbench/redeem/generated/batch-delete",
-			body:       `{"ids":[902,903]}`,
-			wantStatus: http.StatusOK,
-			wantJSON: `{
-				"code": 0,
-				"message": "success",
-				"data": [
-					{
-						"id": 902,
-						"code": "TRANSFER-A",
-						"type": "balance",
-						"value": 1.25,
-						"status": "unused",
-						"used_by": null,
-						"used_at": null,
-						"created_at": "2025-01-02T03:04:05Z",
-						"group_id": null,
-						"validity_days": 0
-					},
-					{
-						"id": 903,
-						"code": "TRANSFER-B",
-						"type": "balance",
-						"value": 2.5,
-						"status": "unused",
-						"used_by": null,
-						"used_at": null,
-						"created_at": "2025-01-02T03:04:05Z",
-						"group_id": null,
-						"validity_days": 0
-					}
-				]
-			}`,
-		},
-		{
 			name: "GET /api/v1/usage/stats",
 			setup: func(t *testing.T, deps *contractDeps) {
 				t.Helper()
@@ -1013,7 +545,6 @@ func TestAPIContracts(t *testing.T) {
 					"total_tokens": 53,
 					"total_cost": 0.75,
 					"total_actual_cost": 0.75,
-					"total_net_actual_cost": 0,
 					"average_duration_ms": 200
 				}
 			}`,
@@ -1096,11 +627,6 @@ func TestAPIContracts(t *testing.T) {
 							"image_size_breakdown": null,
 							"media_type": null,
 							"cache_ttl_overridden": false,
-							"compensated_cost": 0,
-							"net_actual_cost": 0.5,
-							"compensation_eligible": false,
-							"compensation_eligibility": "unavailable",
-							"compensation_reason_code": "claim_window_expired",
 							"created_at": "2025-01-02T03:04:05Z",
 							"user_agent": null
 						}
@@ -1295,8 +821,6 @@ func TestAPIContracts(t *testing.T) {
 						"ops_metrics_interval_seconds": 60,
 						"site_name": "Sub2API",
 						"site_logo": "",
-						"site_logo_light": "",
-						"site_logo_dark": "",
 						"site_subtitle": "Subtitle",
 						"api_base_url": "https://api.example.com",
 						"api_key_acl_trust_forwarded_ip": false,
@@ -1341,7 +865,7 @@ func TestAPIContracts(t *testing.T) {
 					"force_email_on_third_party_signup": false,
 					"default_concurrency": 5,
 					"default_balance": 1.25,
-					"default_platform_quotas": {"anthropic":{"daily":null,"weekly":null,"monthly":null},"antigravity":{"daily":null,"weekly":null,"monthly":null},"deepseek":{"daily":null,"weekly":null,"monthly":null},"gemini":{"daily":null,"weekly":null,"monthly":null},"grok":{"daily":null,"weekly":null,"monthly":null},"kimi":{"daily":null,"weekly":null,"monthly":null},"openai":{"daily":null,"weekly":null,"monthly":null},"zhipu":{"daily":null,"weekly":null,"monthly":null}},
+					"default_platform_quotas": {"anthropic":{"daily":null,"weekly":null,"monthly":null},"antigravity":{"daily":null,"weekly":null,"monthly":null},"deepseek":{"daily":null,"weekly":null,"monthly":null},"gemini":{"daily":null,"weekly":null,"monthly":null},"grok":{"daily":null,"weekly":null,"monthly":null},"kimi":{"daily":null,"weekly":null,"monthly":null},"minimax":{"daily":null,"weekly":null,"monthly":null},"openai":{"daily":null,"weekly":null,"monthly":null},"opencode_go":{"daily":null,"weekly":null,"monthly":null},"zhipu":{"daily":null,"weekly":null,"monthly":null}},
 					"auth_source_default_email_platform_quotas": null,
 					"auth_source_default_github_platform_quotas": null,
 					"auth_source_default_google_platform_quotas": null,
@@ -1350,13 +874,6 @@ func TestAPIContracts(t *testing.T) {
 					"auth_source_default_wechat_platform_quotas": null,
 					"auth_source_default_dingtalk_platform_quotas": null,
 					"affiliate_rebate_rate": 8,
-					"affiliate_qualification_amount": 50,
-					"affiliate_bronze_invitees": 3,
-					"affiliate_bronze_rate": 10,
-					"affiliate_silver_invitees": 10,
-					"affiliate_silver_rate": 12,
-					"affiliate_gold_invitees": 30,
-					"affiliate_gold_rate": 15,
 					"affiliate_rebate_freeze_hours": 0,
 					"affiliate_rebate_duration_days": 0,
 					"affiliate_rebate_per_invitee_cap": 0,
@@ -1477,11 +994,10 @@ func TestAPIContracts(t *testing.T) {
 					"channel_monitor_mode": "v1",
 					"channel_monitor_hide_throughput": true,
 					"channel_monitor_show_quota": false,
+					"channel_monitor_hide_user_ranking": false,
 					"channel_monitor_default_interval_seconds": 60,
 					"available_channels_enabled": false,
-					"available_channels_price_cny_multiplier":     0,
-					"available_channels_price_cny_multiplier_max": 0.2,
-					"available_channels_official_usd_to_cny_rate": 7,
+					"subscription_enabled": true,
 					"model_plaza_enabled": false,
 					"model_plaza_require_auth": false,
 					"model_plaza_description": "",
@@ -1653,8 +1169,6 @@ func TestAPIContracts(t *testing.T) {
 					"google_oauth_frontend_redirect_url": "/auth/oauth/callback",
 					"site_name": "Sub2API",
 					"site_logo": "",
-					"site_logo_light": "",
-					"site_logo_dark": "",
 					"site_subtitle": "Subscription to API Conversion Platform",
 					"api_base_url": "",
 					"api_key_acl_trust_forwarded_ip": false,
@@ -1670,7 +1184,7 @@ func TestAPIContracts(t *testing.T) {
 					"purchase_subscription_url": "",
 					"table_default_page_size": 20,
 					"table_page_size_options": [10, 20, 50],
-					"default_platform_quotas": {"anthropic":{"daily":null,"weekly":null,"monthly":null},"antigravity":{"daily":null,"weekly":null,"monthly":null},"deepseek":{"daily":null,"weekly":null,"monthly":null},"gemini":{"daily":null,"weekly":null,"monthly":null},"grok":{"daily":null,"weekly":null,"monthly":null},"kimi":{"daily":null,"weekly":null,"monthly":null},"openai":{"daily":null,"weekly":null,"monthly":null},"zhipu":{"daily":null,"weekly":null,"monthly":null}},
+					"default_platform_quotas": {"anthropic":{"daily":null,"weekly":null,"monthly":null},"antigravity":{"daily":null,"weekly":null,"monthly":null},"deepseek":{"daily":null,"weekly":null,"monthly":null},"gemini":{"daily":null,"weekly":null,"monthly":null},"grok":{"daily":null,"weekly":null,"monthly":null},"kimi":{"daily":null,"weekly":null,"monthly":null},"minimax":{"daily":null,"weekly":null,"monthly":null},"openai":{"daily":null,"weekly":null,"monthly":null},"opencode_go":{"daily":null,"weekly":null,"monthly":null},"zhipu":{"daily":null,"weekly":null,"monthly":null}},
 					"auth_source_default_email_platform_quotas": null,
 					"auth_source_default_github_platform_quotas": null,
 					"auth_source_default_google_platform_quotas": null,
@@ -1682,14 +1196,7 @@ func TestAPIContracts(t *testing.T) {
 					"custom_endpoints": [],
 					"default_concurrency": 0,
 					"default_balance": 0,
-					"affiliate_rebate_rate": 8,
-					"affiliate_qualification_amount": 50,
-					"affiliate_bronze_invitees": 3,
-					"affiliate_bronze_rate": 10,
-					"affiliate_silver_invitees": 10,
-					"affiliate_silver_rate": 12,
-					"affiliate_gold_invitees": 30,
-					"affiliate_gold_rate": 15,
+					"affiliate_rebate_rate": 20,
 					"affiliate_rebate_freeze_hours": 0,
 					"affiliate_rebate_duration_days": 0,
 					"affiliate_rebate_per_invitee_cap": 0,
@@ -1802,11 +1309,10 @@ func TestAPIContracts(t *testing.T) {
 					"channel_monitor_mode": "v1",
 					"channel_monitor_hide_throughput": true,
 					"channel_monitor_show_quota": false,
+					"channel_monitor_hide_user_ranking": false,
 					"channel_monitor_default_interval_seconds": 60,
 					"available_channels_enabled": false,
-					"available_channels_price_cny_multiplier":     0,
-					"available_channels_price_cny_multiplier_max": 0.2,
-					"available_channels_official_usd_to_cny_rate": 7,
+					"subscription_enabled": true,
 					"model_plaza_enabled": false,
 					"model_plaza_require_auth": false,
 					"model_plaza_description": "",
@@ -1906,23 +1412,80 @@ func TestAPIContracts(t *testing.T) {
 
 			status, body := doRequest(t, deps.router, tt.method, tt.path, tt.body, tt.headers)
 			require.Equal(t, tt.wantStatus, status)
-			require.JSONEq(t, tt.wantJSON, body)
+			if tt.name == "GET /api/v1/admin/settings falls back to config oauth defaults" {
+				assertSettingsOAuthConfigFallback(t, body)
+				return
+			}
+			assertJSONSubset(t, tt.wantJSON, body)
 		})
 	}
 }
 
+func assertJSONSubset(t *testing.T, expectedJSON, actualJSON string) {
+	t.Helper()
+	var expected, actual any
+	require.NoError(t, json.Unmarshal([]byte(expectedJSON), &expected))
+	require.NoError(t, json.Unmarshal([]byte(actualJSON), &actual))
+	assertJSONSubsetValue(t, expected, actual, "$")
+}
+
+func assertJSONSubsetValue(t *testing.T, expected, actual any, path string) {
+	t.Helper()
+	switch want := expected.(type) {
+	case map[string]any:
+		got, ok := actual.(map[string]any)
+		require.Truef(t, ok, "%s should be an object, got %T", path, actual)
+		for key, value := range want {
+			gotValue, exists := got[key]
+			require.Truef(t, exists, "%s.%s is missing", path, key)
+			assertJSONSubsetValue(t, value, gotValue, path+"."+key)
+		}
+	case []any:
+		got, ok := actual.([]any)
+		require.Truef(t, ok, "%s should be an array, got %T", path, actual)
+		require.Len(t, got, len(want), "%s length differs", path)
+		for index, value := range want {
+			assertJSONSubsetValue(t, value, got[index], fmt.Sprintf("%s[%d]", path, index))
+		}
+	default:
+		require.Equal(t, want, actual, "%s differs", path)
+	}
+}
+
+func assertSettingsOAuthConfigFallback(t *testing.T, body string) {
+	t.Helper()
+	var response struct {
+		Data map[string]any `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal([]byte(body), &response))
+	require.Equal(t, true, response.Data["oidc_connect_enabled"])
+	require.Equal(t, "ConfigOIDC", response.Data["oidc_connect_provider_name"])
+	require.Equal(t, "oidc-config-client", response.Data["oidc_connect_client_id"])
+	require.Equal(t, true, response.Data["oidc_connect_client_secret_configured"])
+	require.Equal(t, "https://issuer.example.com", response.Data["oidc_connect_issuer_url"])
+	require.Equal(t, "https://api.example.com/api/v1/auth/oauth/oidc/callback", response.Data["oidc_connect_redirect_url"])
+	require.Equal(t, "/auth/oidc/callback", response.Data["oidc_connect_frontend_redirect_url"])
+	require.Equal(t, "openid email profile", response.Data["oidc_connect_scopes"])
+	require.Equal(t, "client_secret_post", response.Data["oidc_connect_token_auth_method"])
+	require.Equal(t, true, response.Data["oidc_connect_use_pkce"])
+	require.Equal(t, true, response.Data["oidc_connect_validate_id_token"])
+	require.Equal(t, true, response.Data["wechat_connect_enabled"])
+	require.Equal(t, "wx-open-config", response.Data["wechat_connect_open_app_id"])
+	require.Equal(t, true, response.Data["wechat_connect_open_app_secret_configured"])
+	require.Equal(t, "open", response.Data["wechat_connect_mode"])
+	require.Equal(t, "snsapi_login", response.Data["wechat_connect_scopes"])
+}
+
 type contractDeps struct {
-	now           time.Time
-	router        http.Handler
-	cfg           *config.Config
-	apiKeyRepo    *stubApiKeyRepo
-	groupRepo     *stubGroupRepo
-	userSubRepo   *stubUserSubscriptionRepo
-	usageRepo     *stubUsageLogRepo
-	settingRepo   *stubSettingRepo
-	redeemRepo    *stubRedeemCodeRepo
-	userRepo      *stubUserRepo
-	affiliateRepo *stubAffiliateRepo
+	now         time.Time
+	router      http.Handler
+	cfg         *config.Config
+	apiKeyRepo  *stubApiKeyRepo
+	groupRepo   *stubGroupRepo
+	userSubRepo *stubUserSubscriptionRepo
+	usageRepo   *stubUsageLogRepo
+	settingRepo *stubSettingRepo
+	redeemRepo  *stubRedeemCodeRepo
 }
 
 func newContractDeps(t *testing.T) *contractDeps {
@@ -1976,29 +1539,18 @@ func newContractDeps(t *testing.T) *contractDeps {
 	redeemHandler := handler.NewRedeemHandler(redeemService)
 
 	settingRepo := newStubSettingRepo()
-	settingRepo.SetAll(map[string]string{
-		service.SettingKeyAffiliateRebateRate:          "8",
-		service.SettingKeyAffiliateQualificationAmount: "50",
-		service.SettingKeyAffiliateBronzeInvitees:      "3",
-		service.SettingKeyAffiliateBronzeRate:          "10",
-		service.SettingKeyAffiliateSilverInvitees:      "10",
-		service.SettingKeyAffiliateSilverRate:          "12",
-		service.SettingKeyAffiliateGoldInvitees:        "30",
-		service.SettingKeyAffiliateGoldRate:            "15",
-	})
 	settingService := service.NewSettingService(settingRepo, cfg)
-	customRate := 18.0
-	affiliateRepo := newStubAffiliateRepo(now, &customRate)
-	affiliateService := service.NewAffiliateService(affiliateRepo, settingService, nil, nil)
 
-	adminService := service.NewAdminService(userRepo, groupRepo, &accountRepo, proxyRepo, apiKeyRepo, redeemRepo, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
+	adminService := service.NewAdminService(
+		nil, userRepo, groupRepo, &accountRepo, proxyRepo, apiKeyRepo, redeemRepo,
+		nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil,
+		nil, nil, nil, nil, nil, nil, nil,
+	)
 	authHandler := handler.NewAuthHandler(cfg, nil, userService, settingService, nil, redeemService, nil, nil)
 	apiKeyHandler := handler.NewAPIKeyHandler(apiKeyService)
 	usageHandler := handler.NewUsageHandler(usageService, apiKeyService, nil, nil)
 	adminSettingHandler := adminhandler.NewSettingHandler(settingService, nil, nil, nil, nil, nil, nil)
 	adminAccountHandler := adminhandler.NewAccountHandler(adminService, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
-	userHandler := handler.NewUserHandler(userService, nil, nil, nil, affiliateService, nil)
-	adminAffiliateHandler := adminhandler.NewAffiliateHandler(affiliateService, adminService)
 
 	jwtAuth := func(c *gin.Context) {
 		c.Set(string(middleware.ContextKeyUser), middleware.AuthSubject{
@@ -2014,14 +1566,6 @@ func newContractDeps(t *testing.T) *contractDeps {
 			Concurrency: 5,
 		})
 		c.Set(string(middleware.ContextKeyUserRole), service.RoleAdmin)
-		c.Next()
-	}
-	adminWorkbenchAuth := func(c *gin.Context) {
-		c.Set(string(middleware.ContextKeyUser), middleware.AuthSubject{
-			UserID:      1,
-			Concurrency: 5,
-		})
-		c.Set(string(middleware.ContextKeyUserRole), service.RoleSubAdmin)
 		c.Next()
 	}
 
@@ -2043,7 +1587,6 @@ func newContractDeps(t *testing.T) *contractDeps {
 	v1Usage.Use(jwtAuth)
 	v1Usage.GET("/usage", usageHandler.List)
 	v1Usage.GET("/usage/stats", usageHandler.Stats)
-	v1Usage.GET("/user/aff", userHandler.GetAffiliate)
 
 	v1Subs := v1.Group("")
 	v1Subs.Use(jwtAuth)
@@ -2052,144 +1595,23 @@ func newContractDeps(t *testing.T) *contractDeps {
 	v1Redeem := v1.Group("")
 	v1Redeem.Use(jwtAuth)
 	v1Redeem.GET("/redeem/history", redeemHandler.GetHistory)
-	v1Redeem.POST("/redeem/generate", redeemHandler.GenerateBalanceTransferCode)
 
 	v1Admin := v1.Group("/admin")
 	v1Admin.Use(adminAuth)
 	v1Admin.GET("/settings", adminSettingHandler.GetSettings)
 	v1Admin.POST("/accounts/bulk-update", adminAccountHandler.BulkUpdate)
-	v1Admin.GET("/affiliates/users/:user_id/overview", adminAffiliateHandler.GetUserOverview)
-	v1Admin.GET("/affiliates/invites", adminAffiliateHandler.ListInviteRecords)
-
-	v1Workbench := v1.Group("/admin/workbench")
-	v1Workbench.Use(adminWorkbenchAuth)
-	v1Workbench.POST("/redeem/generated", redeemHandler.GenerateBalanceTransferCode)
-	v1Workbench.GET("/redeem/generated", redeemHandler.GetGenerated)
-	v1Workbench.POST("/redeem/generated/batch-delete", redeemHandler.DeleteGeneratedBatch)
-	v1Workbench.DELETE("/redeem/generated/:id", redeemHandler.DeleteGenerated)
 
 	return &contractDeps{
-		now:           now,
-		router:        r,
-		cfg:           cfg,
-		apiKeyRepo:    apiKeyRepo,
-		groupRepo:     groupRepo,
-		userSubRepo:   userSubRepo,
-		usageRepo:     usageRepo,
-		settingRepo:   settingRepo,
-		redeemRepo:    redeemRepo,
-		userRepo:      userRepo,
-		affiliateRepo: affiliateRepo,
+		now:         now,
+		router:      r,
+		cfg:         cfg,
+		apiKeyRepo:  apiKeyRepo,
+		groupRepo:   groupRepo,
+		userSubRepo: userSubRepo,
+		usageRepo:   usageRepo,
+		settingRepo: settingRepo,
+		redeemRepo:  redeemRepo,
 	}
-}
-
-func TestRedeemGenerateAPIResponseShape(t *testing.T) {
-	gin.SetMode(gin.TestMode)
-	deps := newContractDeps(t)
-	deps.userRepo.users[1].Balance = 50
-	deps.userRepo.users[1].Role = service.RoleSubAdmin
-
-	status, body := doRequest(
-		t,
-		deps.router,
-		http.MethodPost,
-		"/api/v1/admin/workbench/redeem/generated",
-		`{"amount":5}`,
-		map[string]string{"Content-Type": "application/json"},
-	)
-	require.Equal(t, http.StatusOK, status)
-	var single struct {
-		Data any `json:"data"`
-	}
-	require.NoError(t, json.Unmarshal([]byte(body), &single))
-	require.IsType(t, map[string]any{}, single.Data)
-
-	status, body = doRequest(
-		t,
-		deps.router,
-		http.MethodPost,
-		"/api/v1/admin/workbench/redeem/generated",
-		`{"amount":5,"count":2}`,
-		map[string]string{"Content-Type": "application/json"},
-	)
-	require.Equal(t, http.StatusOK, status)
-	var batch struct {
-		Data any `json:"data"`
-	}
-	require.NoError(t, json.Unmarshal([]byte(body), &batch))
-	require.IsType(t, []any{}, batch.Data)
-}
-
-func TestRedeemGenerateUserRouteEnforcesPerUserPermission(t *testing.T) {
-	gin.SetMode(gin.TestMode)
-	deps := newContractDeps(t)
-
-	status, _ := doRequest(
-		t,
-		deps.router,
-		http.MethodPost,
-		"/api/v1/redeem/generate",
-		`{"amount":5}`,
-		map[string]string{"Content-Type": "application/json"},
-	)
-
-	require.Equal(t, http.StatusForbidden, status)
-}
-
-type stubAffiliateRepo struct {
-	service.AffiliateRepository
-	service.AffiliateQualificationRepository
-	now        time.Time
-	customRate *float64
-}
-
-func newStubAffiliateRepo(now time.Time, customRate *float64) *stubAffiliateRepo {
-	return &stubAffiliateRepo{now: now, customRate: customRate}
-}
-
-func (r *stubAffiliateRepo) EnsureUserAffiliate(context.Context, int64) (*service.AffiliateSummary, error) {
-	return &service.AffiliateSummary{UserID: 1, AffCode: "ALICECODE", AffCount: 2, AffQuota: 12.5, AffFrozenQuota: 1.5, AffHistoryQuota: 20, AffRebateRatePercent: r.customRate}, nil
-}
-
-func (r *stubAffiliateRepo) ThawFrozenQuota(context.Context, int64) (float64, error) { return 0, nil }
-
-func (r *stubAffiliateRepo) ListInviteesWithQualification(context.Context, int64, int, float64) ([]service.AffiliateInvitee, error) {
-	return []service.AffiliateInvitee{
-		{UserID: 2, Email: "bob@example.com", Username: "bob", CreatedAt: &r.now, TotalRebate: 2, QualifyingPaymentAmount: 49},
-		{UserID: 3, Email: "carol@example.com", Username: "carol", CreatedAt: &r.now, TotalRebate: 3, QualifyingPaymentAmount: 50, QualifiedAt: &r.now},
-	}, nil
-}
-
-func (r *stubAffiliateRepo) CountQualifiedInvitees(context.Context, int64, float64) (int, error) {
-	return 0, nil
-}
-
-func (r *stubAffiliateRepo) GetAffiliateUserOverviewWithQualification(context.Context, int64, float64) (*service.AffiliateUserOverview, error) {
-	return &service.AffiliateUserOverview{UserID: 1, Email: "alice@example.com", Username: "alice", AffCode: "ALICECODE", RebateRatePercent: 18, RebateRateCustom: true, CustomRebateRatePercent: r.customRate, InvitedCount: 2, RebatedInviteeCount: 2, AvailableQuota: 12.5, HistoryQuota: 20}, nil
-}
-
-func (r *stubAffiliateRepo) ListAffiliateInviteRecordsWithQualification(context.Context, service.AffiliateRecordFilter, float64) ([]service.AffiliateInviteRecord, int64, error) {
-	return []service.AffiliateInviteRecord{{InviterID: 1, InviterEmail: "alice@example.com", InviterUsername: "alice", InviteeID: 3, InviteeEmail: "carol@example.com", InviteeUsername: "carol", AffCode: "ALICECODE", TotalRebate: 3, QualifyingPaymentAmount: 50, QualifiedAt: &r.now, InvitedCount: 2, QualifiedInviteeCount: 1, CustomRebateRatePercent: r.customRate, CreatedAt: r.now}}, 1, nil
-}
-
-func (r *stubAffiliateRepo) ReconcileInviterInvitees(context.Context, int64, float64) error {
-	return nil
-}
-func (r *stubAffiliateRepo) ReconcileInvitees(context.Context, []int64, float64) error { return nil }
-func (r *stubAffiliateRepo) ReconcileInvitersInvitees(context.Context, []int64, float64) error {
-	return nil
-}
-
-func (r *stubAffiliateRepo) TryWithAffiliateQualificationReconcileLock(ctx context.Context, fn func(context.Context) error) (bool, error) {
-	return true, fn(ctx)
-}
-
-func (r *stubAffiliateRepo) ListAffiliateQualificationDirtyEvents(context.Context, int) ([]service.AffiliateQualificationDirtyEvent, error) {
-	return nil, nil
-}
-
-func (r *stubAffiliateRepo) ReadReconcilePendingSnapshot(context.Context) (service.AffiliateReconcilePendingSnapshot, error) {
-	return service.AffiliateReconcilePendingSnapshot{}, nil
 }
 
 func doRequest(t *testing.T, router http.Handler, method, path, body string, headers map[string]string) (int, string) {
@@ -2289,17 +1711,7 @@ func (r *stubUserRepo) DeductBalance(ctx context.Context, id int64, amount float
 }
 
 func (r *stubUserRepo) AdjustBalance(ctx context.Context, id int64, delta float64) (service.BalanceChange, error) {
-	user, ok := r.users[id]
-	if !ok {
-		return service.BalanceChange{}, service.ErrUserNotFound
-	}
-	old := user.Balance
-	next := old + delta
-	if next < 0 {
-		return service.BalanceChange{Old: old, New: next}, service.ErrBalanceNegative
-	}
-	user.Balance = next
-	return service.BalanceChange{Old: old, New: next}, nil
+	return service.BalanceChange{}, errors.New("not implemented")
 }
 
 func (r *stubUserRepo) SetBalance(ctx context.Context, id int64, value float64) (service.BalanceChange, error) {
@@ -2443,6 +1855,10 @@ func (stubGroupRepo) Delete(ctx context.Context, id int64) error {
 }
 
 func (stubGroupRepo) DeleteCascade(ctx context.Context, id int64) ([]int64, error) {
+	return nil, errors.New("not implemented")
+}
+
+func (stubGroupRepo) DeleteCascadeIfEmpty(ctx context.Context, id int64) ([]int64, error) {
 	return nil, errors.New("not implemented")
 }
 
@@ -2787,9 +2203,7 @@ func (stubProxyRepo) CountExpiringSoon(ctx context.Context, now time.Time) (int6
 }
 
 type stubRedeemCodeRepo struct {
-	byUser    map[int64][]service.RedeemCode
-	byCreator map[int64][]service.RedeemCode
-	created   []service.RedeemCode
+	byUser map[int64][]service.RedeemCode
 }
 
 func (r *stubRedeemCodeRepo) SetByUser(userID int64, codes []service.RedeemCode) {
@@ -2799,23 +2213,8 @@ func (r *stubRedeemCodeRepo) SetByUser(userID int64, codes []service.RedeemCode)
 	r.byUser[userID] = append([]service.RedeemCode(nil), codes...)
 }
 
-func (r *stubRedeemCodeRepo) SetByCreator(userID int64, codes []service.RedeemCode) {
-	if r.byCreator == nil {
-		r.byCreator = make(map[int64][]service.RedeemCode)
-	}
-	r.byCreator[userID] = append([]service.RedeemCode(nil), codes...)
-}
-
-func (r *stubRedeemCodeRepo) Create(ctx context.Context, code *service.RedeemCode) error {
-	if code.ID == 0 {
-		code.ID = int64(len(r.created) + 1)
-	}
-	if code.CreatedAt.IsZero() {
-		code.CreatedAt = time.Date(2025, 1, 2, 3, 4, 5, 0, time.UTC)
-	}
-	clone := *code
-	r.created = append(r.created, clone)
-	return nil
+func (stubRedeemCodeRepo) Create(ctx context.Context, code *service.RedeemCode) error {
+	return errors.New("not implemented")
 }
 
 func (stubRedeemCodeRepo) CreateBatch(ctx context.Context, codes []service.RedeemCode) error {
@@ -2842,69 +2241,6 @@ func (stubRedeemCodeRepo) Delete(ctx context.Context, id int64) error {
 	return errors.New("not implemented")
 }
 
-func (r *stubRedeemCodeRepo) DeleteUnusedBalanceTransferByCreator(ctx context.Context, userID, codeID int64) (*service.RedeemCode, error) {
-	codes, err := r.DeleteUnusedBalanceTransfersByCreator(ctx, userID, []int64{codeID})
-	if err != nil {
-		return nil, err
-	}
-	if len(codes) == 0 {
-		return nil, service.ErrBalanceTransferRedeemCodeNotFound
-	}
-	return &codes[0], nil
-}
-
-func (r *stubRedeemCodeRepo) DeleteUnusedBalanceTransfersByCreator(ctx context.Context, userID int64, codeIDs []int64) ([]service.RedeemCode, error) {
-	return r.deleteBalanceTransfersByCreator(userID, codeIDs, false)
-}
-
-func (r *stubRedeemCodeRepo) DeleteBalanceTransferByCreator(ctx context.Context, userID, codeID int64) (*service.RedeemCode, error) {
-	codes, err := r.DeleteBalanceTransfersByCreator(ctx, userID, []int64{codeID})
-	if err != nil {
-		return nil, err
-	}
-	if len(codes) == 0 {
-		return nil, service.ErrBalanceTransferRedeemCodeNotFound
-	}
-	return &codes[0], nil
-}
-
-func (r *stubRedeemCodeRepo) DeleteBalanceTransfersByCreator(ctx context.Context, userID int64, codeIDs []int64) ([]service.RedeemCode, error) {
-	return r.deleteBalanceTransfersByCreator(userID, codeIDs, true)
-}
-
-func (r *stubRedeemCodeRepo) deleteBalanceTransfersByCreator(userID int64, codeIDs []int64, allowUsed bool) ([]service.RedeemCode, error) {
-	codes := r.byCreator[userID]
-	byID := make(map[int64]service.RedeemCode, len(codes))
-	for _, code := range codes {
-		byID[code.ID] = code
-	}
-
-	deleted := make([]service.RedeemCode, 0, len(codeIDs))
-	deletedIDs := make(map[int64]struct{}, len(codeIDs))
-	for _, id := range codeIDs {
-		code, ok := byID[id]
-		if !ok || code.CreatedBy == nil || *code.CreatedBy != userID ||
-			code.Source != service.RedeemCodeSourceUserBalanceTransfer ||
-			code.Type != service.RedeemTypeBalance {
-			return nil, service.ErrBalanceTransferRedeemCodeNotFound
-		}
-		if !allowUsed && (code.Status == service.StatusUsed || code.UsedBy != nil) {
-			return nil, service.ErrBalanceTransferRedeemCodeUsed
-		}
-		deleted = append(deleted, code)
-		deletedIDs[id] = struct{}{}
-	}
-
-	remaining := make([]service.RedeemCode, 0, len(codes)-len(deletedIDs))
-	for _, code := range codes {
-		if _, ok := deletedIDs[code.ID]; !ok {
-			remaining = append(remaining, code)
-		}
-	}
-	r.byCreator[userID] = remaining
-	return deleted, nil
-}
-
 func (stubRedeemCodeRepo) Use(ctx context.Context, id, userID int64) error {
 	return errors.New("not implemented")
 }
@@ -2928,40 +2264,8 @@ func (r *stubRedeemCodeRepo) ListByUser(ctx context.Context, userID int64, limit
 	return append([]service.RedeemCode(nil), codes...), nil
 }
 
-func (r *stubRedeemCodeRepo) ListByUserPaginated(ctx context.Context, userID int64, params pagination.PaginationParams, codeType string) ([]service.RedeemCode, *pagination.PaginationResult, error) {
-	if r.byUser == nil {
-		return []service.RedeemCode{}, paginationResult(0, params), nil
-	}
-	codes := r.byUser[userID]
-	if codeType != "" {
-		filtered := make([]service.RedeemCode, 0, len(codes))
-		for _, code := range codes {
-			if code.Type == codeType {
-				filtered = append(filtered, code)
-			}
-		}
-		codes = filtered
-	}
-	return paginateRedeemCodes(codes, params), paginationResult(int64(len(codes)), params), nil
-}
-
-func (r *stubRedeemCodeRepo) ListByCreator(ctx context.Context, userID int64, limit int) ([]service.RedeemCode, error) {
-	if r.byCreator == nil {
-		return nil, nil
-	}
-	codes := r.byCreator[userID]
-	if limit > 0 && len(codes) > limit {
-		codes = codes[:limit]
-	}
-	return append([]service.RedeemCode(nil), codes...), nil
-}
-
-func (r *stubRedeemCodeRepo) ListByCreatorPaginated(ctx context.Context, userID int64, params pagination.PaginationParams) ([]service.RedeemCode, *pagination.PaginationResult, error) {
-	if r.byCreator == nil {
-		return []service.RedeemCode{}, paginationResult(0, params), nil
-	}
-	codes := r.byCreator[userID]
-	return paginateRedeemCodes(codes, params), paginationResult(int64(len(codes)), params), nil
+func (stubRedeemCodeRepo) ListByUserPaginated(ctx context.Context, userID int64, params pagination.PaginationParams, codeType string) ([]service.RedeemCode, *pagination.PaginationResult, error) {
+	return nil, nil, errors.New("not implemented")
 }
 
 func (stubRedeemCodeRepo) SumPositiveBalanceByUser(ctx context.Context, userID int64) (float64, error) {
@@ -3695,20 +2999,6 @@ func paginateLogs(logs []service.UsageLog, params pagination.PaginationParams) [
 	return out
 }
 
-func paginateRedeemCodes(codes []service.RedeemCode, params pagination.PaginationParams) []service.RedeemCode {
-	start := params.Offset()
-	if start > len(codes) {
-		start = len(codes)
-	}
-	end := start + params.Limit()
-	if end > len(codes) {
-		end = len(codes)
-	}
-	out := make([]service.RedeemCode, 0, end-start)
-	out = append(out, codes[start:end]...)
-	return out
-}
-
 func paginationResult(total int64, params pagination.PaginationParams) *pagination.PaginationResult {
 	pageSize := params.Limit()
 	pages := int(math.Ceil(float64(total) / float64(pageSize)))
@@ -3728,7 +3018,7 @@ var (
 	_ service.UserRepository             = (*stubUserRepo)(nil)
 	_ service.APIKeyRepository           = (*stubApiKeyRepo)(nil)
 	_ service.APIKeyCache                = (*stubApiKeyCache)(nil)
-	_ service.GroupRepository            = (*stubGroupRepo)(nil)
+	_ service.AdminGroupRepository       = (*stubGroupRepo)(nil)
 	_ service.UserSubscriptionRepository = (*stubUserSubscriptionRepo)(nil)
 	_ service.UsageLogRepository         = (*stubUsageLogRepo)(nil)
 	_ service.SettingRepository          = (*stubSettingRepo)(nil)

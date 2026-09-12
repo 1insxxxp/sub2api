@@ -78,13 +78,21 @@ export default {
       crsBack: 'Back',
       editAccount: 'Edit Account',
       deleteAccount: 'Delete Account',
-      deleteConfirmMessage: "Are you sure you want to delete account '{name}'?",
-      refreshCookie: 'Refresh Cookie',
-      testAccount: 'Test Account',
       searchAccounts: 'Search accounts...',
       notes: 'Notes',
       notesPlaceholder: 'Enter notes',
       notesHint: 'Notes are optional',
+      modelSystemPrompts: 'Model system prompts',
+      modelSystemPromptsHint: 'Optionally set a system prompt for specific models on this account.',
+      addModelSystemPrompt: 'Add model system prompt',
+      modelSystemPromptModelPlaceholder: 'Model name',
+      modelSystemPromptTextPlaceholder: 'System prompt',
+      modelSystemPromptRequired: 'Model name and system prompt are required',
+      modelSystemPromptTooLong: 'The system prompt for {model} is too long',
+      modelSystemPromptDuplicate: 'A system prompt for this model already exists',
+      modelAliasRenameCascadeSuccess: 'Updated {count} related model reference(s)',
+      modelAliasRenameCascadePartial: 'Updated {count} related model reference(s); skipped {skipped}',
+      modelAliasRenameCascadeFailed: 'Failed to update related model references: {message}',
       allPlatforms: 'All Platforms',
       allTypes: 'All Types',
       allStatus: 'All Status',
@@ -110,6 +118,8 @@ export default {
         kimi: 'Kimi',
         zhipu: 'Zhipu GLM',
         deepseek: 'DeepSeek',
+        minimax: 'MiniMax',
+        opencode_go: 'OpenCode',
       },
       cnProviders: {
         accountMode: {
@@ -151,11 +161,29 @@ export default {
         balance: 'Balance --',
         window5h: '5h',
         windowWeekly: '7d',
+        windowMonthly: '30d',
         probe: 'Query',
         probeTooltip: 'Query the provider quota endpoint for 5-hour / weekly rolling window usage',
         balanceProbeTooltip: 'Query the provider balance endpoint for the account balance',
         balanceLow: 'Insufficient balance',
         noBalanceEndpoint: 'This platform has no balance query endpoint',
+      },
+      opencodeGo: {
+        accountMode: {
+          zen: 'Zen',
+          zenDesc: 'Pay-as-you-go gateway. Consumes account credits, billed per token.',
+          go: 'GO',
+          goDesc: 'Subscription gateway, rate-limited by 5-hour / weekly / monthly usage windows.',
+        },
+        protocolRules: {
+          title: 'Model protocol routing',
+          hint: 'In adaptive mode, each model is sent to a native upstream protocol. Use an exact ID or a trailing * glob (e.g. grok-*, qwen*). The first matching rule wins; unmatched models use Chat Completions.',
+          patternPlaceholder: 'grok-* or deepseek-v4-flash',
+          add: 'Add rule',
+          remove: 'Remove rule',
+          restoreDefaults: 'Restore defaults',
+          fallback: 'Unmatched models → Chat Completions (/v1/chat/completions)',
+        },
       },
       types: {
         oauth: 'OAuth',
@@ -167,9 +195,7 @@ export default {
         grokOauth: 'Grok OAuth',
         antigravityApikey: 'Connect via Base URL + API Key',
         upstream: 'Upstream',
-        upstreamDesc: 'Connect via Base URL + API Key',
-        api_key: 'API Key',
-        cookie: 'Cookie'
+        upstreamDesc: 'Connect via Base URL + API Key'
       },
       antigravityProjectIdLabel: 'GCP Project ID (optional)',
       antigravityProjectIdPlaceholder: 'your-gcp-project-id',
@@ -527,39 +553,6 @@ export default {
       failedToDelete: 'Failed to delete account',
       failedToClearRateLimit: 'Failed to clear rate limit',
       deleteConfirm: "Are you sure you want to delete '{name}'? This action cannot be undone.",
-      form: {
-        nameLabel: 'Account Name',
-        namePlaceholder: 'Enter account name',
-        platformLabel: 'Platform',
-        selectPlatform: 'Select platform',
-        typeLabel: 'Type',
-        selectType: 'Select type',
-        credentialsLabel: 'Credentials',
-        credentialsPlaceholder: 'Enter Cookie or API Key',
-        priorityLabel: 'Priority',
-        priorityHint: 'Lower values have higher priority',
-        weightLabel: 'Weight',
-        weightHint: 'Weight used for load balancing',
-        statusLabel: 'Status'
-      },
-      filters: {
-        platform: 'Platform',
-        allPlatforms: 'All Platforms',
-        type: 'Type',
-        allTypes: 'All Types',
-        status: 'Status',
-        allStatuses: 'All Statuses'
-      },
-      saving: 'Saving...',
-      refreshing: 'Refreshing...',
-      noAccounts: 'No accounts',
-      noAccountsDescription: 'Add an AI platform account to start using the API gateway.',
-      accountCreatedSuccess: 'Account added successfully',
-      accountUpdatedSuccess: 'Account updated successfully',
-      accountDeletedSuccess: 'Account deleted successfully',
-      cookieRefreshedSuccess: 'Cookie refreshed successfully',
-      testSuccess: 'Account test passed',
-      failedToSave: 'Failed to save account',
       // Create/Edit Account Modal
       platform: 'Platform',
       accountName: 'Account Name',
@@ -623,16 +616,19 @@ export default {
           'Disabled by default. Enable to allow responses_websockets_v2 capability (still gated by global and account-type switches).',
         wsMode: 'WS mode',
         wsModeDesc:
-          'Only applies to the current OpenAI account type; account WS modes, including http_bridge, take effect only when the global gateway.openai_ws.mode_router_v2_enabled=true.',
+          'Applies only to the current OpenAI account type. Select Off to disable WS. Other modes use the selected connection method only when gateway.openai_ws.mode_router_v2_enabled=true; otherwise, they use the context pool.',
         wsModeOff: 'Off (off)',
         wsModeCtxPool: 'Context Pool (ctx_pool)',
         wsModePassthrough: 'Passthrough (passthrough)',
         wsModeHttpBridge: 'HTTP Bridge (http_bridge)',
         wsModeShared: 'Shared (shared)',
         wsModeDedicated: 'Dedicated (dedicated)',
-        wsModeConcurrencyHint:
-          'When WS mode is enabled, account concurrency becomes the WS connection pool limit for this account.',
-        wsModePassthroughHint: 'Passthrough mode does not use the WS connection pool.',
+        wsModeCtxPoolHint:
+          'The gateway gets and reuses upstream WS connections from a pool, with the pool limit determined by gateway configuration.',
+        wsModePassthroughHint:
+          'The gateway opens a separate upstream WS connection for each client session, without using a connection pool.',
+        wsModeHttpBridgeHint:
+          'The gateway converts client WS requests to upstream HTTP requests, then converts SSE streaming responses back into WS messages.',
         oauthResponsesWebsocketsV2: 'OAuth WebSocket Mode',
         oauthResponsesWebsocketsV2Desc:
           'Only applies to OpenAI OAuth. This account can use OpenAI WebSocket Mode only when enabled.',
@@ -786,15 +782,7 @@ export default {
       modelRestriction: 'Model Restriction (Optional)',
       modelWhitelist: 'Model Whitelist',
       modelMapping: 'Model Mapping',
-      modelSystemPrompts: 'Model System Prompts',
-      modelSystemPromptsHint: 'Prepends this prompt only when this account matches the mapped real upstream model.',
-      modelSystemPromptModelPlaceholder: 'Real upstream model, e.g. gpt-5.4',
-      modelSystemPromptTextPlaceholder: 'System prompt to prepend',
-      addModelSystemPrompt: 'Add model prompt',
-      modelSystemPromptRequired: 'Model and system prompt are required',
-      modelSystemPromptDuplicate: 'Model {model} is configured more than once',
-      modelSystemPromptTooLong: 'System prompt for {model} must not exceed 32 KiB',
-      fromModel: 'Source model',
+      fromModel: 'Request model',
       toModel: 'Target model',
       selectAllowedModels: 'Select allowed models. Leave empty to support all models.',
       mapRequestModels:
@@ -817,9 +805,6 @@ export default {
       syncUpstreamModelsEmpty: 'Upstream returned no models to sync',
       syncUpstreamModelsFailed: 'Failed to sync upstream models',
       syncUpstreamModelsError: 'Failed to sync upstream models: {message}',
-      modelAliasRenameCascadeSuccess: 'Updated {count} downstream model alias references',
-      modelAliasRenameCascadePartial: 'Updated {count} downstream model alias references; skipped {skipped}',
-      modelAliasRenameCascadeFailed: 'Account saved, but downstream model alias cascade failed: {message}',
       syncUpstreamModelsMetadataIncomplete:
         'Model IDs were synced, but no capability metadata could be updated.',
       syncUpstreamModelsMetadataPartial:
@@ -893,6 +878,30 @@ export default {
       grokClientToolCache: {
         title: 'Client Tool Cache (May Change Automatic Tool Selection)',
         hint: 'For detected Grok Free OAuth accounts, this is enabled by default for client function tools such as Codex and Trae. Turn it off to opt out if the automatic tool-selection behavior is not acceptable.'
+      },
+      grokMediaEligibility: {
+        title: 'Media Generation Eligibility',
+        hint: 'Controls whether this Grok OAuth account may be selected for image and video generation.',
+        auto: 'Automatic detection',
+        enabled: 'Force enable',
+        disabled: 'Force disable',
+        current: 'Current decision:',
+        eligible: 'Eligible',
+        ineligible: 'Not eligible',
+        loading: 'Loading eligibility…',
+        loadFailed: 'Unable to load media eligibility',
+        autoHint: 'Automatic detection only clears the manual override; it does not trigger a media request.',
+        forceEnableWarning: 'Force enable bypasses automatic eligibility checks. Use only for accounts confirmed to support image/video generation.',
+        partialSave: 'Other account settings may have been saved, but media eligibility was not updated. Please retry.',
+        reasons: {
+          eligible: 'Paid entitlement confirmed',
+          billing_inconclusive: 'Billing information inconclusive',
+          billing_forbidden: 'Billing endpoint forbidden',
+          billing_free_tier: 'Free tier account',
+          billing_unobserved: 'Billing not observed yet',
+          override_enabled: 'Manually forced enabled',
+          override_disabled: 'Manually forced disabled'
+        }
       },
       autoPauseOnExpired: 'Auto Pause On Expired',
       autoPauseOnExpiredDesc: 'When enabled, the account will auto pause scheduling after it expires',
@@ -1020,9 +1029,6 @@ export default {
       creating: 'Creating...',
       updating: 'Updating...',
       accountCreated: 'Account created successfully',
-      messages: {
-        accountCreated: 'Account created successfully'
-      },
       accountUpdated: 'Account updated successfully',
       failedToCreate: 'Failed to create account',
       failedToUpdate: 'Failed to update account',
@@ -1586,7 +1592,9 @@ export default {
         grokLastProbe: 'Probe {time}',
         grokLastHeadersSeen: 'Headers {time}',
         passiveSampled: 'Passive',
-        activeQuery: 'Query'
+        activeQuery: 'Query',
+        estimatedTotalCost: 'Est. total ${cost}',
+        estimatedTotalCostTooltip: 'Estimated total cost at 100% utilization, based on current window cost and utilization'
       },
       openaiQuotaReset: {
         count: 'Credits',

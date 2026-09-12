@@ -77,6 +77,21 @@ func TestResponseOutcomeCollectorClassifiesDisconnectSource(t *testing.T) {
 	})
 }
 
+func TestResponseOutcomeCollectorClearsTransientErrorAfterSuccessfulRetry(t *testing.T) {
+	collector := NewResponseOutcomeCollector(503, 503)
+	collector.MarkStreamError(errors.New("upstream temporarily unavailable"), false)
+
+	collector.SetStatuses(http.StatusOK, http.StatusOK)
+	collector.ObserveText("recovered")
+	collector.MarkCompleted("stop")
+
+	outcome := collector.Snapshot()
+	require.Equal(t, DisconnectSourceNone, outcome.DisconnectSource)
+	require.Equal(t, UpstreamErrorNone, outcome.UpstreamErrorKind)
+	require.True(t, outcome.StreamCompleted)
+	require.Equal(t, UsageOutcomeSuccess, ClassifyUsageOutcome(&outcome))
+}
+
 func TestResponseOutcomeSnapshotDoesNotRetainObservedContent(t *testing.T) {
 	collector := NewResponseOutcomeCollector(200, 200)
 	collector.ObserveText("private-response-marker")
@@ -99,6 +114,7 @@ func TestClassifyUsageOutcomeUsesOnlyPrivacySafeEvidence(t *testing.T) {
 	}{
 		{name: "missing evidence is unknown", outcome: nil, want: UsageOutcomeUnknown},
 		{name: "effective output is success", outcome: &ResponseOutcome{HTTPStatus: 200, UpstreamStatus: 200, HasText: true, StreamCompleted: true}, want: UsageOutcomeSuccess},
+		{name: "completed retry ignores stale transient error", outcome: &ResponseOutcome{HTTPStatus: 200, UpstreamStatus: 200, HasText: true, StreamCompleted: true, UpstreamErrorKind: UpstreamErrorOther}, want: UsageOutcomeSuccess},
 		{name: "successful response without output is empty", outcome: &ResponseOutcome{HTTPStatus: 200, UpstreamStatus: 200, StreamCompleted: true}, want: UsageOutcomeEmpty},
 		{name: "http error is failure", outcome: &ResponseOutcome{HTTPStatus: 502, UpstreamStatus: 502, UpstreamErrorKind: UpstreamErrorHTTP5xx}, want: UsageOutcomeFailure},
 		{name: "upstream disconnect is failure", outcome: &ResponseOutcome{HTTPStatus: 200, UpstreamStatus: 200, DisconnectSource: DisconnectSourceUpstream, UpstreamErrorKind: UpstreamErrorProtocol}, want: UsageOutcomeFailure},

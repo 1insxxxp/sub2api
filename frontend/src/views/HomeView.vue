@@ -110,7 +110,7 @@
         class="home-site-header home-header-flat fixed inset-x-0 top-0 z-30 border-b border-transparent px-3 py-2 backdrop-blur-xl transition-all duration-300 sm:px-4"
         :class="{ 'home-site-header-scrolled': isHeaderScrolled }"
       >
-        <nav class="home-nav-shell home-nav-unified mx-auto flex h-16 max-w-7xl items-center justify-between gap-3 px-3 sm:px-4 lg:px-5">
+        <nav class="home-nav-shell home-nav-unified mx-auto flex h-16 w-full max-w-7xl items-center justify-between gap-3 px-2 sm:px-4 lg:px-5">
           <router-link to="/" class="home-brand-link group flex min-w-0 items-center gap-3 px-1.5 py-1 transition-colors duration-200">
             <span
               class="home-brand-mark flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-[linear-gradient(135deg,#2563eb,#3b82f6,#06b6d4)] p-0.5 shadow-[0_8px_18px_rgba(37,99,235,0.16)] ring-1 ring-blue-300/35 transition-transform duration-200 group-hover:scale-[1.03] dark:ring-cyan-300/20"
@@ -123,7 +123,7 @@
                 />
               </span>
             </span>
-            <span class="home-brand-name min-w-0 truncate text-base font-semibold text-slate-950 dark:text-white">
+            <span class="home-brand-name hidden min-w-0 truncate text-base font-semibold text-slate-950 sm:block dark:text-white">
               {{ siteName }}
             </span>
           </router-link>
@@ -224,14 +224,14 @@
                 <span class="home-proof-icon" :class="item.iconClass">
                   <Icon :name="item.icon" size="xs" />
                 </span>
-                <span class="min-w-0">{{ item.label }}</span>
+                <span class="home-proof-label min-w-0 truncate">{{ item.label }}</span>
               </span>
             </div>
 
             <div class="home-reveal home-reveal-4 mt-7 flex flex-col gap-3 sm:flex-row">
               <router-link
                 :to="isAuthenticated ? dashboardPath : '/login'"
-                class="home-action-button inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-[linear-gradient(90deg,#2563eb,#3b82f6,#06b6d4)] px-5 text-sm font-semibold text-white shadow-[0_10px_26px_rgba(37,99,235,0.14)] transition-all hover:shadow-[0_12px_30px_rgba(37,99,235,0.28)] dark:text-white"
+                class="home-action-button inline-flex h-11 w-full items-center justify-center gap-2 rounded-lg bg-[linear-gradient(90deg,#2563eb,#3b82f6,#06b6d4)] px-5 text-sm font-semibold text-white shadow-[0_10px_26px_rgba(37,99,235,0.14)] transition-all hover:shadow-[0_12px_30px_rgba(37,99,235,0.28)] dark:text-white sm:w-auto"
               >
                 {{ isAuthenticated ? t('home.hero.dashboardCta') : t('home.hero.primaryCta') }}
                 <Icon name="arrowRight" size="sm" />
@@ -1294,6 +1294,88 @@ onBeforeUnmount(() => {
 }
 
 @media (max-width: 640px) {
+  .home-site-header {
+    padding-right: 0.5rem;
+    padding-left: 0.5rem;
+  }
+
+  .home-nav-shell {
+    gap: 0.5rem;
+    padding-right: 0.25rem;
+    padding-left: 0.25rem;
+  }
+
+  .home-brand-link {
+    gap: 0;
+    padding-right: 0;
+    padding-left: 0;
+  }
+
+  .home-header-actions {
+    gap: 0.25rem;
+    padding-left: 0.5rem;
+  }
+
+  .home-locale-switcher > button {
+    min-width: 4.25rem;
+    padding-right: 0.5rem;
+    padding-left: 0.5rem;
+  }
+
+  .home-dashboard-cta {
+    padding-right: 0.75rem;
+    padding-left: 0.75rem;
+  }
+
+  .home-hero-overline {
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+    font-size: 0.75rem;
+  }
+
+  .home-hero-overline > span:first-child {
+    width: 1.5rem;
+  }
+
+  .home-balanced-title {
+    font-size: clamp(2rem, 9vw, 2.75rem);
+    line-height: 1.08;
+  }
+
+  .home-proof-chip {
+    max-width: 100%;
+    padding-right: 0.625rem;
+    padding-left: 0.5rem;
+  }
+
+  .home-proof-label {
+    white-space: nowrap;
+  }
+
+  .home-routing-panel {
+    padding: 0.875rem;
+  }
+
+  .home-routing-panel > .flex:first-child {
+    gap: 0.75rem;
+    padding-bottom: 0.75rem;
+  }
+
+  .home-panel-icon {
+    width: 2.75rem;
+    height: 2.75rem;
+  }
+
+  .home-metric-row {
+    gap: 0.5rem;
+    padding-right: 0.625rem;
+    padding-left: 0.625rem;
+  }
+
+  .home-code-panel {
+    padding: 0.75rem;
+  }
+
   .home-motion-root {
     --motion-distance: 20px;
     --motion-section-distance: 16px;

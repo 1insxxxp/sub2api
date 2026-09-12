@@ -36,9 +36,6 @@ export default {
         imageOutputPrice: 'Image Output',
         perRequestPrice: 'Per Request',
         intervals: 'Tiered Pricing',
-        officialPriceLabel: 'Official',
-        sitePriceLabel: 'Site',
-        currencyCNY: '¥',
         unitPerMillion: '/ 1M tokens',
         unitPerRequest: '/ request'
       }
@@ -67,8 +64,8 @@ export default {
       updateError: 'Failed to update channel',
       deleteError: 'Failed to delete channel',
       nameRequired: 'Please enter a channel name',
-      noGroupsSelected: 'No groups selected for {platform}',
-      emptyModelsInPricing: '{platform} has a pricing entry without models',
+      noGroupsSelected: 'Select at least one group for {platform}',
+      emptyModelsInPricing: 'Add at least one model to the {platform} pricing rule',
       duplicateModels: 'Model "{0}" appears in multiple pricing entries',
       modelConflict: "Model patterns '{model1}' and '{model2}' conflict: overlapping match range. Model names are matched case-insensitively, so an existing entry already covers all case variants — no need to add the variant separately.",
       mappingConflict: "Mapping source patterns '{model1}' and '{model2}' conflict: overlapping match range. Source patterns are matched case-insensitively, so an existing entry already covers all case variants.",
@@ -174,9 +171,9 @@ export default {
         noPricingRules: 'No pricing rules yet. Click "Add" to create one.',
         perRequestPrice: 'Price per Request',
         perRequestPriceRequired: 'Per-request price or billing tiers required for per-request/image billing mode',
-        perRequestSuccessHint: 'Only successful requests are charged. The fixed request price fully replaces token charges.',
-        perRequestFallbackHint: 'Models without a per-request rule continue using token billing. Prices are stored in USD per request.',
-        perRequestRequestedModelWarning: 'To charge by the model name players see, set Billing Model to “Bill by requested model”.',
+        perRequestFallbackHint: 'Leave empty to use the channel or built-in model price as a fallback.',
+        perRequestRequestedModelWarning: 'The requested model is not covered by a pricing rule.',
+        perRequestSuccessHint: 'This price is applied when the request completes successfully.',
         tierLabel: 'Tier',
         resolution: 'Resolution',
         modelMapping: 'Model Mapping',
@@ -226,15 +223,15 @@ export default {
          noGroupsInChannel: 'No groups selected in platform tabs above',
          unnamed: 'Unnamed',
          syncLatestModels: 'Sync Latest Models',
-         syncGroupAvailableModels: 'Sync Group Models',
          syncingModels: 'Syncing...',
          syncModelsSuccess: 'Synced {count} new model(s)',
-         syncGroupModelsSuccess: 'Synced {count} group-available model(s) with default official pricing',
          syncModelsAlreadyUpToDate: 'Models already up to date',
-         syncModelsError: 'Failed to sync models',
-         syncGroupModelsError: 'Failed to sync group-available models',
-         syncGroupModelsNoGroups: 'Select at least one group for this platform first'
-       }
+        syncModelsError: 'Failed to sync models',
+        syncGroupAvailableModels: 'Sync available group models',
+        syncGroupModelsSuccess: 'Synced {count} group model(s)',
+        syncGroupModelsNoGroups: 'No groups are available for synchronization',
+        syncGroupModelsError: 'Failed to sync group models'
+      }
      },
 
     riskControl: {
@@ -437,7 +434,7 @@ export default {
       workerActive: 'Processing an async audit or record task',
       workerIdle: 'Started, idle and ready',
       workerDisabled: 'Risk control or content audit is disabled',
-      processed: 'Processed',
+      processed: 'Async processed',
       droppedErrors: 'Dropped / Errors',
       autoRefresh: 'Auto refresh every 15s',
       lastCleanup: 'Last cleanup: {time}',
@@ -583,6 +580,9 @@ export default {
         apiKey: 'API Key',
         apiKeyPlaceholder: 'Enter API Key',
         apiKeyEditPlaceholder: 'Leave blank to keep current key',
+        modelMappings: 'Model mappings',
+        modelMappingsHint: 'Map requested model names to the models tested by this monitor.',
+        modelMappingPlaceholder: 'Requested model = monitor model',
         useMyKey: 'Use my key',
         selectKeyTitle: 'Select my API Key',
         selectKeyHint: 'Only your active, non-expired keys are listed.',
@@ -591,9 +591,6 @@ export default {
         primaryModelPlaceholder: 'gpt-4o-mini',
         extraModels: 'Extra Models',
         extraModelsPlaceholder: 'Press Enter to add extra model',
-        modelMappings: 'Request Model Mappings (optional)',
-        modelMappingsHint: 'The left name is shown in monitoring and history. Enter the actual upstream model on the right, or leave it blank to use the display name.',
-        modelMappingPlaceholder: 'Actual upstream model (blank means unchanged)',
         groupName: 'Group Name',
         groupNamePlaceholder: 'Optional, used to group rows in user view',
         intervalSeconds: 'Interval (seconds)',
@@ -671,8 +668,8 @@ export default {
 
     // Subscriptions
     subscriptions: {
-      title: 'Subscription Management',
       manageSubscription: 'Manage subscription',
+      title: 'Subscription Management',
       description: 'Manage user subscriptions and quota limits',
       assignSubscription: 'Assign Subscription',
       adjustSubscription: 'Adjust Subscription',

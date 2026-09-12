@@ -144,8 +144,24 @@
         </section>
       </div>
 
-      <div v-if="result" class="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4 backdrop-blur-sm" @click.self="result = null">
-        <section class="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl dark:border-dark-700 dark:bg-dark-900">
+      <div v-if="result" class="lottery-result-overlay fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4 backdrop-blur-sm" @click.self="closeResult">
+        <div v-if="confettiVisible" class="lottery-confetti" aria-hidden="true">
+          <span
+            v-for="piece in confettiPieces"
+            :key="piece.id"
+            class="lottery-confetti-piece"
+            :style="{
+              '--confetti-x': `${piece.x}%`,
+              '--confetti-drift': `${piece.drift}px`,
+              '--confetti-delay': `${piece.delay}ms`,
+              '--confetti-duration': `${piece.duration}ms`,
+              '--confetti-rotation': `${piece.rotation}deg`,
+              '--confetti-color': piece.color,
+              '--confetti-size': `${piece.size}px`
+            }"
+          />
+        </div>
+        <section class="lottery-result-card relative z-10 w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl dark:border-dark-700 dark:bg-dark-900">
           <div class="text-center">
             <span class="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-amber-50 text-amber-500 dark:bg-amber-900/25 dark:text-amber-300"><Icon name="trophy" size="xl" /></span>
             <h2 class="mt-4 text-xl font-bold text-slate-950 dark:text-white">{{ t('lottery.resultTitle') }}</h2>
@@ -157,7 +173,7 @@
             <code class="block max-h-40 overflow-auto whitespace-pre-wrap break-all text-sm text-violet-900 dark:text-violet-100">{{ result.draw.product_content }}</code>
             <button type="button" class="btn btn-secondary mt-4 w-full justify-center" @click="copyProduct(result.draw.product_content)"><Icon name="copy" size="sm" /> {{ copied ? t('lottery.copied') : t('lottery.copy') }}</button>
           </div>
-          <button type="button" class="btn btn-primary mt-5 w-full justify-center" @click="result = null">{{ t('lottery.close') }}</button>
+          <button type="button" class="btn btn-primary mt-5 w-full justify-center" @click="closeResult">{{ t('lottery.close') }}</button>
         </section>
       </div>
     </div>
@@ -185,10 +201,23 @@ const state = ref<LotteryPublicState | null>(null)
 const result = ref<LotteryDrawResult | null>(null)
 const pendingResult = ref<LotteryDrawResult | null>(null)
 const winnerPrizeId = ref<number | null>(null)
+const confettiVisible = ref(false)
 const copied = ref(false)
 const historyError = ref('')
 const historyPage = ref(1)
 const history = ref({ items: [] as LotteryDrawResult['draw'][], total: 0, page: 1, page_size: 10, pages: 0 })
+
+const confettiColors = ['#2563eb', '#06b6d4', '#f59e0b', '#ec4899', '#22c55e', '#8b5cf6']
+const confettiPieces = Array.from({ length: 42 }, (_, index) => ({
+  id: index,
+  x: (index * 47) % 101,
+  drift: ((index * 29) % 120) - 60,
+  delay: (index * 37) % 520,
+  duration: 1800 + ((index * 83) % 900),
+  rotation: (index * 71) % 360,
+  color: confettiColors[index % confettiColors.length],
+  size: 6 + (index % 4) * 2,
+}))
 
 const formatAmount = (value?: number | null) => `$${Number(value || 0).toFixed(2)}`
 const formatDate = (value: string) => new Intl.DateTimeFormat(locale.value, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value))
@@ -217,6 +246,7 @@ async function load() {
   historyError.value = ''
   winnerPrizeId.value = null
   pendingResult.value = null
+  confettiVisible.value = false
   try {
     state.value = await lotteryAPI.getState()
   } catch (error: any) {
@@ -234,8 +264,14 @@ function resolveWinnerPrizeId(draw: LotteryDrawResult['draw']) {
 function handleSlotSettled() {
   if (!pendingResult.value) return
   result.value = pendingResult.value
+  confettiVisible.value = true
   pendingResult.value = null
   drawing.value = false
+}
+
+function closeResult() {
+  result.value = null
+  confettiVisible.value = false
 }
 
 async function handleDraw() {
@@ -243,6 +279,7 @@ async function handleDraw() {
   drawing.value = true
   winnerPrizeId.value = null
   pendingResult.value = null
+  confettiVisible.value = false
   result.value = null
   try {
     const drawResult = await lotteryAPI.draw(newAttemptKey())
@@ -261,6 +298,7 @@ async function handleDraw() {
     try { await loadHistory(1) } catch { /* historyError already contains the localized message */ }
     if (winnerPrizeId.value === null) {
       result.value = pendingResult.value
+      confettiVisible.value = true
       pendingResult.value = null
       drawing.value = false
     }
@@ -293,5 +331,26 @@ onMounted(load)
 .dark .lottery-draw-panel { background: linear-gradient(145deg, rgba(15,23,42,.98), rgba(15,23,42,.98) 55%, rgba(8,47,73,.45)); }
 .lottery-prize-card { transition: transform 160ms ease, box-shadow 160ms ease; }
 .lottery-prize-card:hover { transform: translateY(-2px); box-shadow: 0 12px 28px rgba(15,23,42,.08); }
+.lottery-confetti { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
+.lottery-confetti-piece {
+  position: absolute;
+  top: -1rem;
+  left: var(--confetti-x);
+  width: var(--confetti-size);
+  height: calc(var(--confetti-size) * 1.7);
+  border-radius: 2px;
+  background: var(--confetti-color);
+  opacity: 0;
+  transform: translate3d(0, -8vh, 0) rotate(0deg);
+  animation: lottery-confetti-fall var(--confetti-duration) cubic-bezier(.2,.7,.35,1) var(--confetti-delay) forwards;
+}
+@keyframes lottery-confetti-fall {
+  0% { opacity: 0; transform: translate3d(0, -8vh, 0) rotate(0deg); }
+  12% { opacity: .95; }
+  100% { opacity: 0; transform: translate3d(var(--confetti-drift), 116vh, 0) rotate(var(--confetti-rotation)); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .lottery-confetti { display: none; }
+}
 @media (max-width: 640px) { .lottery-draw-button { width: 100%; } }
 </style>
