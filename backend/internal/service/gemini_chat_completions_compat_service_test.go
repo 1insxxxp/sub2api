@@ -2,10 +2,41 @@ package service
 
 import (
 	"encoding/json"
+	"errors"
+	"io"
+	"net/http"
+	"net/http/httptest"
+	"strings"
 	"testing"
 
+	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
 )
+
+func TestGeminiChatNonStreamingPromptFeedbackIsClientError(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	recorder := httptest.NewRecorder()
+	ctx, _ := gin.CreateTestContext(recorder)
+	service := &GeminiMessagesCompatService{}
+	resp := &http.Response{
+		Body: io.NopCloser(strings.NewReader(`{
+			"promptFeedback": {
+				"blockReason": "PROHIBITED_CONTENT",
+				"blockReasonMessage": "The prompt contains prohibited content."
+			},
+			"usageMetadata": {"promptTokenCount": 5005, "totalTokenCount": 5005}
+		}`)),
+		Header: make(http.Header),
+	}
+
+	_, err := service.handleChatCompletionsNonStreamingResponseFromGemini(ctx, resp, "gemini-3.7-flash", false)
+	require.Error(t, err)
+	require.Equal(t, http.StatusBadRequest, recorder.Code)
+	require.Contains(t, recorder.Body.String(), `"type":"content_filter"`)
+	require.Contains(t, recorder.Body.String(), "PROHIBITED_CONTENT")
+	var failoverErr *UpstreamFailoverError
+	require.False(t, errors.As(err, &failoverErr), "policy rejection must not retry another CPA credential")
+}
 
 func TestGeminiResponseToChatCompletionsPreservesInlineData(t *testing.T) {
 	tests := []struct {

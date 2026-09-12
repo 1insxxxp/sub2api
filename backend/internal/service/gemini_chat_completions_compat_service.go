@@ -503,6 +503,14 @@ func (s *GeminiMessagesCompatService) handleChatCompletionsNonStreamingResponseF
 	if err := json.Unmarshal(respBody, &geminiResp); err != nil {
 		return nil, s.writeChatCompletionsError(c, http.StatusBadGateway, "upstream_error", "Failed to parse upstream response")
 	}
+	if reason, blocked := extractGeminiPromptFeedbackBlockReason(geminiResp); blocked {
+		return nil, s.writeChatCompletionsError(
+			c,
+			http.StatusBadRequest,
+			"content_filter",
+			"Gemini rejected the prompt ("+reason+"). Review the text and attached media, then try again.",
+		)
+	}
 
 	chatResp, usage, err := geminiResponseToChatCompletions(geminiResp, originalModel, respBody, nil)
 	if err != nil {
@@ -563,6 +571,25 @@ func chatCompletionsResponseHasVisibleOutput(resp *apicompat.ChatCompletionsResp
 		}
 	}
 	return false
+}
+
+func extractGeminiPromptFeedbackBlockReason(geminiResp map[string]any) (string, bool) {
+	if geminiResp == nil {
+		return "", false
+	}
+	if candidates, ok := geminiResp["candidates"].([]any); ok && len(candidates) > 0 {
+		return "", false
+	}
+	feedback, ok := geminiResp["promptFeedback"].(map[string]any)
+	if !ok {
+		return "", false
+	}
+	reason, _ := feedback["blockReason"].(string)
+	reason = strings.ToUpper(strings.TrimSpace(reason))
+	if reason == "" {
+		return "", false
+	}
+	return reason, true
 }
 
 func (s *GeminiMessagesCompatService) handleEmptyGeminiChatResponse(c *gin.Context, finishReason string) error {
