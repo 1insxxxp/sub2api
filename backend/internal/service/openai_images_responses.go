@@ -2075,6 +2075,9 @@ func (s *OpenAIGatewayService) handleOpenAIImagesOAuthResponseError(
 	err error,
 ) error {
 	responseWritten := c != nil && c.Writer != nil && OpenAIImagesJSONKeepaliveAdjustedWrittenSize(c) != writerSizeBeforeResponse
+	if err != nil && strings.Contains(strings.ToLower(err.Error()), "client disconnected") {
+		return err
+	}
 	if code, message, ok := OpenAIUpstreamStreamReadErrorDetails(err); ok {
 		// A body transport failure after a successful HTTP status is retryable only
 		// until real image output has reached the client. Keep the upstream headers
