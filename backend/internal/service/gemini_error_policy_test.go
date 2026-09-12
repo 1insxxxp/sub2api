@@ -332,7 +332,7 @@ func TestGeminiErrorPolicyIntegration(t *testing.T) {
 					gotFailover = svc.skippedErrorPolicyFailoverError(c, account, statusCode, respBody, "req-test") != nil
 					goto verify
 				case ErrorPolicyMatched:
-					svc.handleGeminiUpstreamError(ctx, account, statusCode, headers, respBody)
+					svc.handleGeminiUpstreamErrorForModel(ctx, account, statusCode, headers, respBody, "")
 					handleErrorCalled = true
 					gotFailover = true
 					goto verify
@@ -344,7 +344,7 @@ func TestGeminiErrorPolicyIntegration(t *testing.T) {
 			}
 
 			// ErrorPolicyNone → original logic
-			svc.handleGeminiUpstreamError(ctx, account, statusCode, headers, respBody)
+			svc.handleGeminiUpstreamErrorForModel(ctx, account, statusCode, headers, respBody, "")
 			handleErrorCalled = true
 			if svc.shouldFailoverGeminiUpstreamError(statusCode) {
 				gotFailover = true
@@ -467,7 +467,7 @@ func TestGeminiErrorPolicy_NilRateLimitService(t *testing.T) {
 
 	// handleGeminiUpstreamError should not panic with nil rateLimitService
 	require.NotPanics(t, func() {
-		svc.handleGeminiUpstreamError(ctx, account, 500, http.Header{}, []byte(`error`))
+		svc.handleGeminiUpstreamErrorForModel(ctx, account, 500, http.Header{}, []byte(`error`), "")
 	})
 }
 
@@ -497,7 +497,7 @@ func TestHandleGeminiUpstreamError_GoogleOneCapacityExhaustedUsesTierCooldown(t 
 	body := []byte(`{"error":{"code":429,"details":[{"@type":"type.googleapis.com/google.rpc.ErrorInfo","domain":"cloudcode-pa.googleapis.com","metadata":{"model":"gemini-3.1-pro-preview"},"reason":"MODEL_CAPACITY_EXHAUSTED"}],"message":"No capacity available for model gemini-3.1-pro-preview on the server","status":"RESOURCE_EXHAUSTED"}}`)
 
 	before := time.Now()
-	svc.handleGeminiUpstreamError(context.Background(), account, http.StatusTooManyRequests, http.Header{}, body)
+	svc.handleGeminiUpstreamErrorForModel(context.Background(), account, http.StatusTooManyRequests, http.Header{}, body, "")
 	after := time.Now()
 
 	require.Equal(t, 1, repo.rateLimitCalls)
@@ -663,7 +663,7 @@ func TestHandleGeminiUpstreamError_PoolMode429(t *testing.T) {
 				rateLimitService: NewRateLimitService(repo, nil, &config.Config{}, nil, nil),
 			}
 
-			svc.handleGeminiUpstreamError(context.Background(), tt.account, http.StatusTooManyRequests, http.Header{}, body)
+			svc.handleGeminiUpstreamErrorForModel(context.Background(), tt.account, http.StatusTooManyRequests, http.Header{}, body, "")
 
 			if !tt.expectRateLimited {
 				require.Zero(t, repo.rateLimitCalls, "池模式账号不应被标记账号级限流")

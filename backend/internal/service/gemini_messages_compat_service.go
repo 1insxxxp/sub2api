@@ -3115,10 +3115,6 @@ func asInt(v any) (int, bool) {
 	}
 }
 
-func (s *GeminiMessagesCompatService) handleGeminiUpstreamError(ctx context.Context, account *Account, statusCode int, headers http.Header, body []byte) {
-	s.handleGeminiUpstreamErrorForModel(ctx, account, statusCode, headers, body, "")
-}
-
 // handleGeminiUpstreamErrorForModel records Gemini 429 responses at the
 // narrowest scope supported by the upstream response. A model-specific
 // capacity/rate-limit response must not make unrelated models unavailable.
