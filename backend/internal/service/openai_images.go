@@ -712,6 +712,9 @@ func (s *OpenAIGatewayService) forwardOpenAIImagesAPIKey(
 					Outcome:          ResponseOutcomeSnapshotFromContext(c.Request.Context()),
 				}, err
 			}
+			if c != nil && len(c.Errors) == 0 {
+				c.Errors = append(c.Errors, &gin.Error{Err: err, Type: gin.ErrorTypePrivate})
+			}
 			return nil, err
 		}
 		usage = streamUsage
@@ -737,6 +740,9 @@ func (s *OpenAIGatewayService) forwardOpenAIImagesAPIKey(
 	} else {
 		nonStreamUsage, nonStreamCount, nonStreamSizes, err := s.handleOpenAIImagesNonStreamingResponse(upstreamCtx, resp, c, account, parsed)
 		if err != nil {
+			if c != nil && len(c.Errors) == 0 {
+				c.Errors = append(c.Errors, &gin.Error{Err: err, Type: gin.ErrorTypePrivate})
+			}
 			return nil, err
 		}
 		usage = nonStreamUsage
