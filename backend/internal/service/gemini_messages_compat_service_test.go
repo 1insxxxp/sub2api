@@ -1283,10 +1283,13 @@ func TestConvertClaudeMessagesToGeminiGenerateContent_OrdersParallelToolResultsB
 
 	var converted map[string]any
 	require.NoError(t, json.Unmarshal(out, &converted))
-	contents := converted["contents"].([]any)
-	toolResultParts := contents[2].(map[string]any)["parts"].([]any)
-	firstName := toolResultParts[0].(map[string]any)["functionResponse"].(map[string]any)["name"]
-	secondName := toolResultParts[1].(map[string]any)["functionResponse"].(map[string]any)["name"]
+	contents, ok := converted["contents"].([]any)
+	require.True(t, ok)
+	toolResultContent := requireGeminiMap(t, contents[2])
+	toolResultParts, ok := toolResultContent["parts"].([]any)
+	require.True(t, ok)
+	firstName := requireGeminiMap(t, requireGeminiMap(t, toolResultParts[0])["functionResponse"])["name"]
+	secondName := requireGeminiMap(t, requireGeminiMap(t, toolResultParts[1])["functionResponse"])["name"]
 	require.Equal(t, "find_files", firstName)
 	require.Equal(t, "package_proxy", secondName)
 }
