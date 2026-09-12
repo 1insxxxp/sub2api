@@ -1998,7 +1998,7 @@ func TestOpenAIGatewayServiceForwardImages_OAuthNonStreamWriteFailureSkipsBillab
 		},
 	}
 
-	result, err := svc.ForwardImages(context.Background(), c, account, body, parsed, "")
+	result, err := svc.ForwardImages(withOpenAIImagesForceResponses(context.Background()), c, account, body, parsed, "")
 
 	require.Error(t, err)
 	require.Nil(t, result)
