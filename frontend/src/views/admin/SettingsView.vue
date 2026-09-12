@@ -11271,13 +11271,18 @@ function normalizeCustomMenuItems(
     sort_order: number;
   }>,
 ) {
-  return items.map((item) => ({
-    ...item,
-    open_mode:
-      !isMarkdownMenuItem(item) && item.open_mode === "new_tab"
-        ? ("new_tab" as const)
-        : ("embedded" as const),
-  }));
+  return items.map((item) => {
+    const normalized = { ...item };
+    // Preserve legacy payload shape when open_mode was omitted; only normalize
+    // values that are explicitly present or required for Markdown entries.
+    if (isMarkdownMenuItem(item) || item.open_mode !== undefined) {
+      normalized.open_mode =
+        !isMarkdownMenuItem(item) && item.open_mode === "new_tab"
+          ? ("new_tab" as const)
+          : ("embedded" as const);
+    }
+    return normalized;
+  });
 }
 
 function removeMenuItem(index: number) {
