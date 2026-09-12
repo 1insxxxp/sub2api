@@ -943,16 +943,16 @@ func writeOpenAIImagesDataResponse(c *gin.Context, statusCode int, contentType s
 	if c == nil {
 		return fmt.Errorf("missing response context")
 	}
-	errorsBefore := len(c.Errors)
-	c.Data(statusCode, contentType, body)
-	if len(c.Errors) <= errorsBefore {
-		return nil
+	c.Status(statusCode)
+	c.Header("Content-Type", contentType)
+	if _, err := c.Writer.Write(body); err != nil {
+		c.Error(err)
+		if len(c.Errors) == 0 {
+			c.Errors = append(c.Errors, &gin.Error{Err: err, Type: gin.ErrorTypePrivate})
+		}
+		return fmt.Errorf("downstream response write failed: %w", err)
 	}
-	lastErr := c.Errors[len(c.Errors)-1]
-	if lastErr == nil || lastErr.Err == nil {
-		return fmt.Errorf("downstream response write failed")
-	}
-	return fmt.Errorf("downstream response write failed: %w", lastErr.Err)
+	return nil
 }
 
 func (s *OpenAIGatewayService) handleOpenAIImagesStreamingResponse(
@@ -1070,6 +1070,7 @@ func (s *OpenAIGatewayService) handleOpenAIImagesStreamingResponse(
 		}
 		if !clientDisconnected {
 			if err := s.writeOpenAIImagesStreamEvent(c, flusher, eventType, dataBytes); err != nil {
+				c.Error(err)
 				clientDisconnected = true
 			} else {
 				lastDownstreamWriteAt = time.Now()
@@ -1091,6 +1092,7 @@ func (s *OpenAIGatewayService) handleOpenAIImagesStreamingResponse(
 		}
 		if !clientDisconnected && direct == nil {
 			if _, writeErr := c.Writer.Write(line); writeErr != nil {
+				c.Error(writeErr)
 				clientDisconnected = true
 				logger.LegacyPrintf("service.openai_gateway", "[OpenAI] Images stream client disconnected, continue draining upstream for billing")
 			} else {
@@ -1218,6 +1220,9 @@ func (s *OpenAIGatewayService) handleOpenAIImagesStreamingResponse(
 			if !ok {
 				flushSSEEvent()
 				finalizeFallbackBody()
+				if clientDisconnected {
+					return usage, imageCounter.Count(), imageCounter.Sizes(), firstTokenMs, errors.New("client disconnected")
+				}
 				return usage, imageCounter.Count(), imageCounter.Sizes(), firstTokenMs, finish()
 			}
 			if ev.err != nil {

@@ -817,6 +817,7 @@ func (s *SettingService) GetPublicSettingsForInjection(ctx context.Context) (any
 		ChannelMonitorHideUserRanking:          settings.ChannelMonitorHideUserRanking,
 		ChannelMonitorShowQuota:                settings.ChannelMonitorShowQuota,
 		AvailableChannelsEnabled:               settings.AvailableChannelsEnabled,
+		SubscriptionEnabled:                    settings.SubscriptionEnabled,
 		AvailableChannelsPriceCNYMultiplier:    settings.AvailableChannelsPriceCNYMultiplier,
 		AvailableChannelsPriceCNYMultiplierMax: settings.AvailableChannelsPriceCNYMultiplierMax,
 		AvailableChannelsOfficialUSDToCNYRate:  settings.AvailableChannelsOfficialUSDToCNYRate,
