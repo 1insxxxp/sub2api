@@ -26,7 +26,7 @@ func TestGeminiNativeNonStreamingResponseOutcomeCapturesAllOutputFamilies(t *tes
 	resp := &http.Response{StatusCode: http.StatusOK, Header: http.Header{"Content-Type": []string{"application/json"}}, Body: io.NopCloser(strings.NewReader(body))}
 	svc := &GeminiMessagesCompatService{cfg: &config.Config{}}
 
-	usage, err := svc.handleNativeNonStreamingResponse(c, resp, false)
+	usage, err := svc.handleNativeNonStreamingResponse(c, resp, false, nil, "")
 	require.NoError(t, err)
 	require.NotNil(t, usage)
 	outcome := collector.Snapshot()
@@ -65,7 +65,7 @@ func TestGeminiNativeStreamingResponseOutcomeMarksMissingFinishAsInterrupted(t *
 	resp := &http.Response{StatusCode: http.StatusOK, Header: http.Header{"Content-Type": []string{"text/event-stream"}}, Body: io.NopCloser(strings.NewReader(body))}
 	svc := &GeminiMessagesCompatService{cfg: &config.Config{}}
 
-	result, err := svc.handleNativeStreamingResponse(c, resp, time.Now(), false)
+	result, err := svc.handleNativeStreamingResponse(c, resp, time.Now(), false, nil, "")
 	require.NoError(t, err)
 	require.NotNil(t, result)
 	outcome := collector.Snapshot()

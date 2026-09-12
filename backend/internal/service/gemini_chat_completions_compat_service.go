@@ -565,15 +565,6 @@ func chatCompletionsResponseHasVisibleOutput(resp *apicompat.ChatCompletionsResp
 	return false
 }
 
-func isGeminiContentFilterFinishReason(finishReason string) bool {
-	switch strings.ToUpper(strings.TrimSpace(finishReason)) {
-	case "SAFETY", "PROHIBITED_CONTENT", "BLOCKLIST", "RECITATION", "IMAGE_SAFETY", "SPII":
-		return true
-	default:
-		return false
-	}
-}
-
 func (s *GeminiMessagesCompatService) handleEmptyGeminiChatResponse(c *gin.Context, finishReason string) error {
 	normalized := strings.ToUpper(strings.TrimSpace(finishReason))
 	switch {

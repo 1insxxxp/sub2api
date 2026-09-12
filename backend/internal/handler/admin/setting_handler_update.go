@@ -355,6 +355,9 @@ type UpdateSettingsRequest struct {
 	AvailableChannelsPriceCNYMultiplierMax *float64 `json:"available_channels_price_cny_multiplier_max"`
 	AvailableChannelsOfficialUSDToCNYRate  *float64 `json:"available_channels_official_usd_to_cny_rate"`
 
+	// Subscription feature switch (user-facing subscription surface; see SettingKeySubscriptionEnabled)
+	SubscriptionEnabled *bool `json:"subscription_enabled"`
+
 	// Model Plaza feature switches + description
 	ModelPlazaEnabled     *bool   `json:"model_plaza_enabled"`
 	ModelPlazaRequireAuth *bool   `json:"model_plaza_require_auth"`
@@ -1996,6 +1999,12 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 		AvailableChannelsPriceCNYMultiplier:    availableChannelsPriceCNYMultiplier,
 		AvailableChannelsPriceCNYMultiplierMax: availableChannelsPriceCNYMultiplierMax,
 		AvailableChannelsOfficialUSDToCNYRate:  resolveAvailableChannelsOfficialUSDToCNYRateUpdate(req, previousSettings),
+		SubscriptionEnabled: func() bool {
+			if req.SubscriptionEnabled != nil {
+				return *req.SubscriptionEnabled
+			}
+			return previousSettings.SubscriptionEnabled
+		}(),
 		ModelPlazaEnabled: func() bool {
 			if req.ModelPlazaEnabled != nil {
 				return *req.ModelPlazaEnabled
@@ -2465,6 +2474,7 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 		AvailableChannelsPriceCNYMultiplier:    updatedSettings.AvailableChannelsPriceCNYMultiplier,
 		AvailableChannelsPriceCNYMultiplierMax: updatedSettings.AvailableChannelsPriceCNYMultiplierMax,
 		AvailableChannelsOfficialUSDToCNYRate:  updatedSettings.AvailableChannelsOfficialUSDToCNYRate,
+		SubscriptionEnabled:                    updatedSettings.SubscriptionEnabled,
 
 		ModelPlazaEnabled:       updatedSettings.ModelPlazaEnabled,
 		ModelPlazaRequireAuth:   updatedSettings.ModelPlazaRequireAuth,
