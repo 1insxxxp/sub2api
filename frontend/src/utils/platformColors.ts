@@ -45,6 +45,7 @@ const GROUP_BADGE: Record<Platform, string> = {
   zhipu: 'bg-indigo-50 text-indigo-700 dark:bg-indigo-900/20 dark:text-indigo-400',
   deepseek: 'bg-teal-50 text-teal-700 dark:bg-teal-900/20 dark:text-teal-400',
   minimax: 'bg-rose-50 text-rose-700 dark:bg-rose-900/20 dark:text-rose-400',
+  opencode_go: 'bg-amber-50 text-amber-700 dark:bg-amber-900/20 dark:text-amber-400',
   composite: 'bg-cyan-50 text-cyan-800 dark:bg-cyan-900/20 dark:text-cyan-300',
 }
 const GROUP_BADGE_DEFAULT = 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400'
@@ -59,6 +60,7 @@ const GROUP_BADGE_SUBSCRIPTION: Record<Platform, string> = {
   zhipu: 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400',
   deepseek: 'bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-400',
   minimax: 'bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400',
+  opencode_go: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400',
   composite: 'bg-cyan-100 text-cyan-800 dark:bg-cyan-900/30 dark:text-cyan-300',
 }
 const GROUP_BADGE_SUBSCRIPTION_DEFAULT = 'bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-400'

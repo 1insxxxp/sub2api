@@ -16,6 +16,7 @@ const brands: Record<AvailableChannelBrand['key'], AvailableChannelBrand> = {
   zhipu: { key: 'zhipu', label: 'Zhipu', platform: 'zhipu' },
   deepseek: { key: 'deepseek', label: 'DeepSeek', platform: 'deepseek' },
   minimax: { key: 'minimax', label: 'MiniMax', platform: 'minimax' },
+  opencode_go: { key: 'opencode_go', label: 'OpenCode', platform: 'opencode_go' },
   composite: { key: 'composite', label: 'Composite', platform: 'composite' },
   generic: { key: 'generic', label: 'AI' },
 }
@@ -31,6 +32,7 @@ export function resolveAvailableChannelBrand(platform: string): AvailableChannel
   if (value.includes('zhipu') || value.includes('glm')) return brands.zhipu
   if (value.includes('deepseek')) return brands.deepseek
   if (value.includes('minimax')) return brands.minimax
+  if (value.includes('opencode')) return brands.opencode_go
   if (value.includes('composite')) return brands.composite
   return brands.generic
 }
