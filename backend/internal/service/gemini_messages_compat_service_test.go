@@ -55,12 +55,23 @@ func TestGeminiChatCompletions_PreservesToolResultNamesWhenIDsCollideAfterAnthro
 	require.True(t, ok)
 	userParts, ok := userContent["parts"].([]any)
 	require.True(t, ok)
-	require.Equal(t, "set_alarm", modelParts[0].(map[string]any)["functionCall"].(map[string]any)["name"])
-	require.Equal(t, "cancel_alarm", modelParts[1].(map[string]any)["functionCall"].(map[string]any)["name"])
-	require.Equal(t, "set_alarm", userParts[0].(map[string]any)["functionResponse"].(map[string]any)["name"])
-	require.Equal(t, "cancel_alarm", userParts[1].(map[string]any)["functionResponse"].(map[string]any)["name"])
-	require.Equal(t, "set result", userParts[0].(map[string]any)["functionResponse"].(map[string]any)["response"].(map[string]any)["content"])
-	require.Equal(t, "cancel result", userParts[1].(map[string]any)["functionResponse"].(map[string]any)["response"].(map[string]any)["content"])
+	modelCall0 := requireGeminiMap(t, requireGeminiMap(t, modelParts[0])["functionCall"])
+	modelCall1 := requireGeminiMap(t, requireGeminiMap(t, modelParts[1])["functionCall"])
+	userResponse0 := requireGeminiMap(t, requireGeminiMap(t, userParts[0])["functionResponse"])
+	userResponse1 := requireGeminiMap(t, requireGeminiMap(t, userParts[1])["functionResponse"])
+	require.Equal(t, "set_alarm", modelCall0["name"])
+	require.Equal(t, "cancel_alarm", modelCall1["name"])
+	require.Equal(t, "set_alarm", userResponse0["name"])
+	require.Equal(t, "cancel_alarm", userResponse1["name"])
+	require.Equal(t, "set result", requireGeminiMap(t, userResponse0["response"])["content"])
+	require.Equal(t, "cancel result", requireGeminiMap(t, userResponse1["response"])["content"])
+}
+
+func requireGeminiMap(t *testing.T, value any) map[string]any {
+	t.Helper()
+	result, ok := value.(map[string]any)
+	require.True(t, ok)
+	return result
 }
 
 type geminiCompatHTTPUpstreamStub struct {
