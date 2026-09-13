@@ -1551,6 +1551,8 @@
                 </p>
               </div>
 
+            <ModelMappingBulkActions v-model="modelMappings" :allowed-models="allowedModels" />
+            <ModelMappingBulkActions v-model="modelMappings" :allowed-models="allowedModels" />
             <!-- Model Mapping List -->
             <div v-if="modelMappings.length > 0" class="mb-3 space-y-2">
               <div
@@ -3939,6 +3941,7 @@ import ProxySelector from '@/components/common/ProxySelector.vue'
 import ProxyAdBanner from '@/components/common/ProxyAdBanner.vue'
 import GroupSelector from '@/components/common/GroupSelector.vue'
 import ModelWhitelistSelector from '@/components/account/ModelWhitelistSelector.vue'
+import ModelMappingBulkActions from '@/components/account/ModelMappingBulkActions.vue'
 import QuotaLimitCard from '@/components/account/QuotaLimitCard.vue'
 import Toggle from '@/components/common/Toggle.vue'
 import GrokBaseUrlPresets from '@/components/account/GrokBaseUrlPresets.vue'
