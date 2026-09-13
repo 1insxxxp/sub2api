@@ -142,8 +142,8 @@ describe('HomeView default homepage', () => {
     expect(wrapper.text()).toContain('Keep existing clients')
     expect(wrapper.text()).toContain('Upstream account pools')
     expect(wrapper.text()).toContain('Wallet and ledgers')
-    expect(wrapper.text()).toContain('No client rewrite, just change the endpoint')
-    expect(wrapper.findAll('.home-minimal-value')).toHaveLength(3)
+    expect(wrapper.find('.home-minimal-hero').exists()).toBe(true)
+    expect(wrapper.find('.home-minimal-connection').exists()).toBe(true)
   })
 
   it('renders motion hooks for the default homepage experience', async () => {
@@ -152,22 +152,22 @@ describe('HomeView default homepage', () => {
     expect(wrapper.find('.home-minimal-root').exists()).toBe(true)
     expect(wrapper.find('.home-minimal-header').classes()).toContain('fixed')
     expect(wrapper.find('.home-minimal-logo').exists()).toBe(true)
-    expect(wrapper.find('.home-minimal-visual').exists()).toBe(true)
-    expect(wrapper.findAll('.home-minimal-reveal').length).toBeGreaterThanOrEqual(5)
-    expect(wrapper.findAll('.home-minimal-value')).toHaveLength(3)
+    expect(wrapper.find('.home-minimal-orb').exists()).toBe(true)
+    expect(wrapper.findAll('.home-minimal-reveal').length).toBeGreaterThanOrEqual(6)
   })
 
   it('uses a transparent navigation shell for the homepage header', async () => {
     const wrapper = await mountHome()
 
     expect(wrapper.find('.home-minimal-logo').exists()).toBe(true)
-    expect(wrapper.findAll('nav a[href^="#"]')).toHaveLength(2)
+    expect(wrapper.findAll('nav a[href^="#"]')).toHaveLength(0)
 
     const source = readFileSync('src/views/HomeView.vue', 'utf-8')
     const styleSource = source
     expect(source).toContain('home-minimal-root')
     expect(source).toContain('home-minimal-header')
-    expect(source).toContain('home-minimal-visual')
+    expect(source).toContain('home-minimal-hero')
+    expect(source).toContain('home-minimal-orb')
     expect(source).toContain('home-minimal-primary')
     expect(source).toContain('home-minimal-reveal')
     expect(styleSource).toContain('.home-minimal-root')
@@ -204,7 +204,7 @@ describe('HomeView default homepage', () => {
     expect(source).toContain('--home-motion-ease')
     expect(source).toContain('home-minimal-rise')
     expect(source).toContain('calc(80ms + (var(--motion-index) * 90ms))')
-    expect(source).toContain('@keyframes home-ambient-drift')
+    expect(source).toContain('@keyframes home-orb-float')
   })
 
   it('uses the blue-slate-cyan technology palette as the primary theme', () => {
@@ -226,7 +226,7 @@ describe('HomeView default homepage', () => {
   it('adapts homepage brand accents for both light and dark themes', () => {
     const source = readFileSync('src/views/HomeView.vue', 'utf-8')
 
-    expect(source).toContain('home-minimal-ambient')
+    expect(source).toContain('home-minimal-grid')
     expect(source).toContain('from-blue-700 via-blue-600 to-cyan-500')
     expect(source).toContain('dark:from-blue-300')
     expect(source).toContain('home-minimal-logo')

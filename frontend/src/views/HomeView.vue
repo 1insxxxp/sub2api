@@ -98,7 +98,8 @@
     v-else
     class="home-minimal-root min-h-screen overflow-x-hidden bg-white text-slate-950 dark:bg-dark-950 dark:text-white"
   >
-    <div class="home-minimal-ambient pointer-events-none absolute inset-x-0 top-0 h-[32rem]"></div>
+    <div class="home-minimal-grid pointer-events-none absolute inset-0" aria-hidden="true"></div>
+    <div class="home-minimal-orb pointer-events-none absolute left-1/2 top-[18%] h-[30rem] w-[30rem] -translate-x-1/2 rounded-full" aria-hidden="true"></div>
 
     <header
       class="home-minimal-header fixed inset-x-0 top-0 z-30 border-b border-transparent px-4 py-3 transition-all duration-300 sm:px-6"
@@ -113,17 +114,6 @@
           </span>
           <span class="hidden min-w-0 truncate text-sm font-semibold sm:block">{{ siteName }}</span>
         </router-link>
-
-        <div class="hidden items-center gap-1 md:flex">
-          <a
-            v-for="item in navItems"
-            :key="item.href"
-            :href="item.href"
-            class="rounded-lg px-3 py-2 text-sm font-medium text-slate-500 transition-colors hover:bg-blue-50 hover:text-blue-700 dark:text-slate-300 dark:hover:bg-blue-500/10 dark:hover:text-blue-200"
-          >
-            {{ item.label }}
-          </a>
-        </div>
 
         <div class="flex items-center gap-1.5 sm:gap-2">
           <LocaleSwitcher />
@@ -163,111 +153,63 @@
         </div>
       </nav>
     </header>
-    <div class="h-[4.5rem]" aria-hidden="true"></div>
 
-    <main class="relative z-10">
-      <section class="mx-auto grid min-h-[calc(100vh-4.5rem)] max-w-6xl items-center gap-12 px-4 py-14 sm:px-6 sm:py-20 lg:grid-cols-[1.05fr,0.95fr] lg:gap-20 lg:px-8 lg:py-24">
-        <div class="home-minimal-reveal min-w-0">
-          <p class="mb-5 flex items-center gap-3 text-xs font-bold uppercase tracking-[0.24em] text-blue-700 dark:text-blue-300">
-            <span class="h-px w-8 bg-gradient-to-r from-blue-600 to-cyan-400"></span>
-            {{ t('home.hero.eyebrow') }}
-          </p>
-          <h1 class="max-w-3xl text-4xl font-semibold leading-[1.08] tracking-tight sm:text-6xl lg:text-[4.35rem]">
-            <span class="block">{{ t('home.hero.titleLead') }}</span>
-            <span class="mt-2 block bg-gradient-to-r from-blue-700 via-blue-600 to-cyan-500 bg-clip-text text-transparent dark:from-blue-300 dark:via-blue-200 dark:to-cyan-300">
-              {{ t('home.hero.titleAccent') }}
+    <main class="relative z-10 flex min-h-screen items-center justify-center px-4 pb-16 pt-28 sm:px-6 sm:pb-20 sm:pt-32">
+      <section class="home-minimal-hero mx-auto flex w-full max-w-4xl flex-col items-center text-center">
+        <p class="home-minimal-reveal mb-6 inline-flex items-center gap-2 rounded-full border border-blue-200/80 bg-white/80 px-3.5 py-1.5 text-[11px] font-bold uppercase tracking-[0.22em] text-blue-700 shadow-sm shadow-blue-100/80 dark:border-blue-400/20 dark:bg-dark-900/70 dark:text-blue-300 dark:shadow-none">
+          <span class="h-1.5 w-1.5 rounded-full bg-cyan-400 shadow-[0_0_0_4px_rgba(34,211,238,0.14)]"></span>
+          {{ t('home.hero.eyebrow') }}
+        </p>
+        <h1 class="home-minimal-reveal max-w-4xl text-5xl font-semibold leading-[1.03] tracking-[-0.045em] sm:text-7xl lg:text-[5.9rem]" style="--motion-index: 1">
+          <span class="block">{{ t('home.hero.titleLead') }}</span>
+          <span class="mt-2 block bg-gradient-to-r from-blue-700 via-blue-600 to-cyan-500 bg-clip-text text-transparent dark:from-blue-300 dark:via-blue-200 dark:to-cyan-300">
+            {{ t('home.hero.titleAccent') }}
+          </span>
+        </h1>
+        <p class="home-minimal-reveal mt-7 max-w-2xl text-base leading-8 text-slate-600 dark:text-slate-300 sm:text-xl sm:leading-9" style="--motion-index: 2">
+          {{ siteSubtitle || t('home.hero.subtitle') }}
+        </p>
+        <div class="home-minimal-reveal mt-9 flex w-full flex-col justify-center gap-3 sm:w-auto sm:flex-row" style="--motion-index: 3">
+          <router-link
+            :to="isAuthenticated ? dashboardPath : '/login'"
+            class="home-minimal-primary inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-xl px-7 text-sm font-semibold text-white sm:w-auto"
+          >
+            {{ isAuthenticated ? t('home.hero.dashboardCta') : t('home.hero.primaryCta') }}
+            <Icon name="arrowRight" size="sm" />
+          </router-link>
+          <a
+            v-if="docUrl"
+            :href="docUrl"
+            target="_blank"
+            rel="noopener noreferrer"
+            class="inline-flex min-h-12 w-full items-center justify-center rounded-xl border border-slate-200 bg-white/80 px-7 text-sm font-semibold text-slate-700 transition-all hover:-translate-y-0.5 hover:border-blue-300 hover:bg-blue-50 sm:w-auto dark:border-dark-700 dark:bg-dark-900/70 dark:text-slate-100 dark:hover:border-blue-500/50 dark:hover:bg-blue-500/10"
+          >
+            {{ t('home.hero.secondaryCta') }}
+          </a>
+        </div>
+        <div class="home-minimal-reveal mt-12 flex flex-wrap items-center justify-center gap-x-6 gap-y-3 text-xs font-medium text-slate-500 dark:text-slate-400" style="--motion-index: 4">
+          <span v-for="item in valueItems" :key="item.title" class="home-minimal-proof inline-flex items-center gap-2">
+            <span class="flex h-6 w-6 items-center justify-center rounded-full" :class="item.iconClass">
+              <Icon :name="item.icon" size="xs" />
             </span>
-          </h1>
-          <p class="mt-6 max-w-xl text-base leading-8 text-slate-600 dark:text-slate-300 sm:text-lg">
-            {{ siteSubtitle || t('home.hero.subtitle') }}
-          </p>
-          <div class="mt-8 flex flex-col gap-3 sm:flex-row">
-            <router-link
-              :to="isAuthenticated ? dashboardPath : '/login'"
-              class="home-minimal-primary inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-xl px-6 text-sm font-semibold text-white sm:w-auto"
-            >
-              {{ isAuthenticated ? t('home.hero.dashboardCta') : t('home.hero.primaryCta') }}
-              <Icon name="arrowRight" size="sm" />
-            </router-link>
-            <a
-              v-if="docUrl"
-              :href="docUrl"
-              target="_blank"
-              rel="noopener noreferrer"
-              class="inline-flex min-h-12 w-full items-center justify-center rounded-xl border border-slate-200 bg-white px-6 text-sm font-semibold text-slate-700 transition-colors hover:border-blue-300 hover:bg-blue-50 sm:w-auto dark:border-dark-700 dark:bg-dark-900 dark:text-slate-100 dark:hover:border-blue-500/50 dark:hover:bg-blue-500/10"
-            >
-              {{ t('home.hero.secondaryCta') }}
-            </a>
-          </div>
-          <div class="mt-8 grid max-w-xl gap-3 sm:grid-cols-3">
-            <div v-for="(item, index) in valueItems" :key="item.title" class="home-minimal-value home-minimal-reveal rounded-xl border border-blue-100 bg-white/75 p-3.5 dark:border-blue-500/20 dark:bg-dark-900/70" :style="{ '--motion-index': index }">
-              <span class="mb-2 flex h-8 w-8 items-center justify-center rounded-lg" :class="item.iconClass">
-                <Icon :name="item.icon" size="xs" />
-              </span>
-              <h2 class="text-sm font-semibold">{{ item.title }}</h2>
-              <p class="mt-1 text-xs leading-5 text-slate-500 dark:text-slate-400">{{ item.desc }}</p>
-            </div>
-          </div>
+            {{ item.title }}
+          </span>
         </div>
-
-        <div class="home-minimal-visual home-minimal-reveal relative mx-auto w-full max-w-md lg:max-w-none" aria-label="API access preview">
-          <div class="home-minimal-orbit absolute -inset-5 rounded-[2rem] border border-blue-200/50 dark:border-blue-500/20"></div>
-          <div class="relative overflow-hidden rounded-2xl border border-slate-200 bg-slate-950 p-5 text-white shadow-2xl shadow-blue-900/15 dark:border-blue-500/20">
-            <div class="mb-8 flex items-center justify-between">
-              <div>
-                <p class="text-xs font-medium uppercase tracking-[0.2em] text-cyan-300">{{ t('home.integration.eyebrow') }}</p>
-                <p class="mt-2 text-lg font-semibold">{{ t('home.integration.title') }}</p>
-              </div>
-              <span class="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-blue-500 to-cyan-400 shadow-lg shadow-cyan-500/20">
-                <Icon name="terminal" size="sm" />
-              </span>
-            </div>
-            <div class="space-y-3 rounded-xl border border-white/10 bg-white/[0.04] p-4 font-mono text-xs leading-6 text-slate-300">
-              <p><span class="text-cyan-300">base_url</span> = <span class="text-emerald-300">"{{ apiBaseUrl }}/v1"</span></p>
-              <p><span class="text-cyan-300">model</span> = <span class="text-emerald-300">"your-model"</span></p>
-              <p><span class="text-cyan-300">messages</span> = <span class="text-emerald-300">[{ role: "user", ... }]</span></p>
-            </div>
-            <div class="mt-5 flex items-center gap-2 text-sm text-slate-300">
-              <span class="home-minimal-status h-2 w-2 rounded-full bg-cyan-300"></span>
-              {{ t('home.integration.replaceBaseUrl') }}
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <section id="benefits" class="border-y border-blue-100 bg-blue-50/45 dark:border-blue-500/10 dark:bg-blue-500/[0.04]">
-        <div class="mx-auto flex max-w-6xl flex-col gap-5 px-4 py-10 sm:px-6 lg:flex-row lg:items-center lg:justify-between lg:px-8">
-          <div>
-            <p class="text-sm font-semibold text-blue-700 dark:text-blue-300">{{ t('home.sections.capabilitiesEyebrow') }}</p>
-            <h2 class="mt-2 text-2xl font-semibold tracking-tight sm:text-3xl">{{ t('home.sections.capabilitiesTitle') }}</h2>
-          </div>
-          <p class="max-w-xl text-sm leading-7 text-slate-600 dark:text-slate-300">{{ t('home.sections.capabilitiesSubtitle') }}</p>
-        </div>
-      </section>
-
-      <section id="quickstart" class="mx-auto max-w-6xl px-4 py-14 sm:px-6 lg:px-8 lg:py-20">
-        <div class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-dark-700 dark:bg-dark-900 sm:p-8">
-          <div class="flex flex-col gap-6 sm:flex-row sm:items-center sm:justify-between">
-            <div class="min-w-0">
-              <p class="text-sm font-semibold text-blue-700 dark:text-blue-300">{{ t('home.workflow.eyebrow') }}</p>
-              <h2 class="mt-2 text-2xl font-semibold tracking-tight sm:text-3xl">{{ t('home.workflow.title') }}</h2>
-              <p class="mt-3 max-w-2xl text-sm leading-7 text-slate-600 dark:text-slate-300">{{ t('home.integration.subtitle') }}</p>
-            </div>
-            <router-link :to="isAuthenticated ? dashboardPath : '/login'" class="home-minimal-primary inline-flex min-h-11 shrink-0 items-center justify-center rounded-xl px-5 text-sm font-semibold text-white">
-              {{ isAuthenticated ? t('home.hero.dashboardCta') : t('home.hero.primaryCta') }}
-            </router-link>
+        <div class="home-minimal-reveal mt-16 w-full max-w-3xl" style="--motion-index: 5">
+          <div class="home-minimal-connection mx-auto flex max-w-2xl items-center justify-center gap-3 rounded-2xl border border-blue-100/90 bg-white/65 px-4 py-3 text-xs text-slate-500 shadow-lg shadow-blue-100/40 backdrop-blur-sm dark:border-blue-400/15 dark:bg-dark-900/60 dark:text-slate-400 dark:shadow-none sm:gap-4 sm:px-6">
+            <span class="home-minimal-connection-dot h-2 w-2 shrink-0 rounded-full bg-cyan-400"></span>
+            <span class="min-w-0 truncate font-mono">{{ apiBaseUrl }}/v1</span>
+            <span class="h-4 w-px bg-slate-200 dark:bg-dark-700"></span>
+            <span class="whitespace-nowrap">{{ t('home.integration.replaceBaseUrl') }}</span>
           </div>
         </div>
       </section>
     </main>
 
-    <footer class="border-t border-slate-200 px-4 py-7 dark:border-dark-800 sm:px-6 lg:px-8">
-      <div class="mx-auto flex max-w-6xl flex-col gap-3 text-sm text-slate-500 dark:text-slate-400 sm:flex-row sm:items-center sm:justify-between">
-        <p>&copy; {{ currentYear }} {{ siteName }}. {{ t('home.footer.allRightsReserved') }}</p>
-        <div class="flex flex-wrap items-center gap-4">
-          <span>{{ t('home.footer.tagline') }}</span>
-          <a v-if="docUrl" :href="docUrl" target="_blank" rel="noopener noreferrer" class="font-medium text-slate-700 hover:text-blue-700 dark:text-slate-200 dark:hover:text-blue-300">{{ t('home.docs') }}</a>
-        </div>
+    <footer class="relative z-10 border-t border-slate-100 px-4 py-6 dark:border-dark-800 sm:px-6">
+      <div class="mx-auto flex max-w-6xl flex-col items-center justify-between gap-2 text-xs text-slate-400 sm:flex-row">
+        <p>&copy; {{ currentYear }} {{ siteName }}</p>
+        <a v-if="docUrl" :href="docUrl" target="_blank" rel="noopener noreferrer" class="transition-colors hover:text-blue-600 dark:hover:text-blue-300">{{ t('home.docs') }}</a>
       </div>
     </footer>
   </div>
@@ -318,27 +260,19 @@ const dashboardPath = computed(() => (isAdmin.value ? '/admin/dashboard' : '/das
 
 const currentYear = computed(() => new Date().getFullYear())
 
-const navItems = computed(() => [
-  { href: '#benefits', label: t('home.nav.features') },
-  { href: '#quickstart', label: t('home.nav.integration') },
-])
-
 const valueItems = computed(() => [
   {
     title: t('home.capabilities.unifiedApi.title'),
-    desc: t('home.capabilities.unifiedApi.desc'),
     icon: 'terminal' as const,
     iconClass: 'bg-slate-950 text-white dark:bg-white dark:text-slate-950',
   },
   {
     title: t('home.capabilities.accountPool.title'),
-    desc: t('home.capabilities.accountPool.desc'),
     icon: 'swap' as const,
     iconClass: 'bg-blue-50 text-blue-700 dark:bg-blue-500/10 dark:text-blue-200',
   },
   {
     title: t('home.capabilities.wallet.title'),
-    desc: t('home.capabilities.wallet.desc'),
     icon: 'creditCard' as const,
     iconClass: 'bg-amber-50 text-amber-700 dark:bg-amber-500/10 dark:text-amber-200',
   },
@@ -386,33 +320,49 @@ onBeforeUnmount(() => {
   isolation: isolate;
 }
 
-.home-minimal-ambient {
-  background:
-    radial-gradient(circle at 18% 18%, rgba(37, 99, 235, 0.16), transparent 34%),
-    radial-gradient(circle at 82% 10%, rgba(6, 182, 212, 0.14), transparent 30%),
-    linear-gradient(180deg, rgba(239, 246, 255, 0.94), rgba(255, 255, 255, 0));
-  animation: home-ambient-drift 18s ease-in-out infinite alternate;
+.home-minimal-grid {
+  background-image:
+    linear-gradient(rgba(37, 99, 235, 0.045) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(37, 99, 235, 0.045) 1px, transparent 1px);
+  background-size: 72px 72px;
+  mask-image: linear-gradient(to bottom, black 0%, transparent 72%);
+  opacity: 0.65;
 }
 
-.dark .home-minimal-ambient {
+.dark .home-minimal-grid {
+  background-image:
+    linear-gradient(rgba(96, 165, 250, 0.07) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(96, 165, 250, 0.07) 1px, transparent 1px);
+  opacity: 0.4;
+}
+
+.home-minimal-orb {
   background:
-    radial-gradient(circle at 18% 18%, rgba(37, 99, 235, 0.22), transparent 34%),
-    radial-gradient(circle at 82% 10%, rgba(6, 182, 212, 0.18), transparent 30%),
-    linear-gradient(180deg, rgba(15, 23, 42, 0.9), rgba(2, 6, 23, 0));
+    radial-gradient(circle at 35% 32%, rgba(255, 255, 255, 0.98) 0 13%, rgba(147, 197, 253, 0.72) 27%, rgba(59, 130, 246, 0.38) 48%, rgba(34, 211, 238, 0.17) 61%, transparent 73%);
+  filter: blur(2px);
+  opacity: 0.82;
+  transform: translate(-50%, -3%) scale(1);
+  animation: home-orb-float 14s ease-in-out infinite alternate;
+}
+
+.dark .home-minimal-orb {
+  background:
+    radial-gradient(circle at 35% 32%, rgba(191, 219, 254, 0.46) 0 12%, rgba(59, 130, 246, 0.38) 34%, rgba(34, 211, 238, 0.2) 57%, transparent 73%);
+  opacity: 0.62;
 }
 
 .home-minimal-header {
-  background: rgba(255, 255, 255, 0.72);
-  backdrop-filter: blur(14px);
+  background: rgba(255, 255, 255, 0.68);
+  backdrop-filter: blur(16px);
 }
 
 .dark .home-minimal-header {
-  background: rgba(2, 6, 23, 0.72);
+  background: rgba(2, 6, 23, 0.68);
 }
 
 .home-minimal-header-scrolled {
-  border-color: rgba(147, 197, 253, 0.42);
-  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.08);
+  border-color: rgba(147, 197, 253, 0.4);
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.07);
 }
 
 .dark .home-minimal-header-scrolled {
@@ -446,26 +396,27 @@ onBeforeUnmount(() => {
   animation-delay: calc(80ms + (var(--motion-index) * 90ms));
 }
 
-.home-minimal-value {
-  transition: transform 180ms ease, border-color 180ms ease, box-shadow 180ms ease;
+.home-minimal-proof {
+  transition: color 180ms ease, transform 180ms ease;
 }
 
-.home-minimal-value:hover {
-  transform: translateY(-3px);
-  border-color: rgba(96, 165, 250, 0.58);
-  box-shadow: 0 12px 26px rgba(37, 99, 235, 0.1);
+.home-minimal-proof:hover {
+  color: #2563eb;
+  transform: translateY(-2px);
 }
 
-.home-minimal-visual {
-  animation-delay: 220ms;
+.home-minimal-connection {
+  transition: border-color 180ms ease, box-shadow 180ms ease, transform 180ms ease;
 }
 
-.home-minimal-orbit {
-  animation: home-orbit-breathe 6s ease-in-out infinite;
+.home-minimal-connection:hover {
+  border-color: rgba(96, 165, 250, 0.6);
+  box-shadow: 0 16px 34px rgba(37, 99, 235, 0.1);
+  transform: translateY(-2px);
 }
 
-.home-minimal-status {
-  box-shadow: 0 0 0 0 rgba(103, 232, 249, 0.45);
+.home-minimal-connection-dot {
+  box-shadow: 0 0 0 5px rgba(34, 211, 238, 0.13);
   animation: home-status-glow 2.4s ease-out infinite;
 }
 
@@ -475,7 +426,6 @@ onBeforeUnmount(() => {
     filter: blur(5px);
     transform: translateY(22px);
   }
-
   to {
     opacity: 1;
     filter: blur(0);
@@ -483,19 +433,14 @@ onBeforeUnmount(() => {
   }
 }
 
-@keyframes home-ambient-drift {
-  from { transform: translate3d(-1%, -1%, 0) scale(1); }
-  to { transform: translate3d(1%, 1%, 0) scale(1.03); }
-}
-
-@keyframes home-orbit-breathe {
-  0%, 100% { opacity: 0.45; transform: scale(0.98); }
-  50% { opacity: 0.9; transform: scale(1.01); }
+@keyframes home-orb-float {
+  from { transform: translate(-50%, -3%) scale(0.96); }
+  to { transform: translate(-50%, 3%) scale(1.04); }
 }
 
 @keyframes home-status-glow {
-  70% { box-shadow: 0 0 0 8px rgba(103, 232, 249, 0); }
-  100% { box-shadow: 0 0 0 0 rgba(103, 232, 249, 0); }
+  70% { box-shadow: 0 0 0 10px rgba(34, 211, 238, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(34, 211, 238, 0); }
 }
 
 @media (max-width: 640px) {
@@ -504,16 +449,21 @@ onBeforeUnmount(() => {
     padding-bottom: 0.65rem;
   }
 
-  .home-minimal-ambient {
-    height: 24rem;
+  .home-minimal-orb {
+    top: 22%;
+    height: 21rem;
+    width: 21rem;
+  }
+
+  .home-minimal-grid {
+    background-size: 48px 48px;
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .home-minimal-ambient,
+  .home-minimal-orb,
   .home-minimal-reveal,
-  .home-minimal-orbit,
-  .home-minimal-status {
+  .home-minimal-connection-dot {
     animation: none;
   }
 
@@ -522,7 +472,8 @@ onBeforeUnmount(() => {
   }
 
   .home-minimal-primary,
-  .home-minimal-value {
+  .home-minimal-proof,
+  .home-minimal-connection {
     transition: none;
   }
 }
