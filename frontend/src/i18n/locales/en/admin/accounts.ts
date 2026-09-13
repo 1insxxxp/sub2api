@@ -802,6 +802,12 @@ export default {
       modelMappingPrefixesApplied: 'Updated {count} request model name(s)',
       modelMappingBulkHint:
         'The prefix is added to request model names on the left. Upstream model names on the right stay unchanged.',
+      modelMappingRemovePrefix: 'Remove upstream prefix (optional)',
+      modelMappingRemoveSuffix: 'Remove upstream suffix (optional)',
+      modelMappingCleanup: 'Clean Upstream Names',
+      modelMappingCleanupEmpty: 'Enter an upstream prefix or suffix to remove',
+      modelMappingCleanupApplied: 'Cleaned {count} upstream name(s); {collisions} collision(s) detected',
+      modelMappingCleanupPreview: 'Preview: {count} change(s), {collisions} collision(s)',
       mappingExists: 'Mapping for {model} already exists',
       wildcardOnlyAtEnd: 'Wildcard * can only be at the end',
       targetNoWildcard: 'Target model cannot contain wildcard *',

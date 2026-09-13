@@ -577,6 +577,35 @@ export function prependModelMappingPrefix(
   })
 }
 
+export function cleanupModelMappingTargets(
+  mappings: ModelMappingEntry[],
+  removePrefix: string,
+  removeSuffix: string
+): { mappings: ModelMappingEntry[]; changedCount: number; collisionCount: number } {
+  const prefix = removePrefix.trim()
+  const suffix = removeSuffix.trim()
+  const result = mappings.map(mapping => ({ ...mapping }))
+  let changedCount = 0
+  let collisionCount = 0
+  const targets = new Set<string>()
+  result.forEach(mapping => {
+    if (!mapping.to.trim()) return
+    let to = mapping.to
+    if (prefix && to.startsWith(prefix)) to = to.slice(prefix.length)
+    if (suffix && to.endsWith(suffix)) to = to.slice(0, -suffix.length)
+    if (to !== mapping.to) {
+      mapping.to = to
+      changedCount++
+    }
+    const key = to.trim()
+    if (key) {
+      if (targets.has(key)) collisionCount++
+      targets.add(key)
+    }
+  })
+  return { mappings: result, changedCount, collisionCount }
+}
+
 export function splitModelMappingObject(
   modelMapping?: Record<string, unknown> | null
 ): { allowedModels: string[]; modelMappings: ModelMappingEntry[] } {

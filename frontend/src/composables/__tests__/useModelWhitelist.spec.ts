@@ -6,6 +6,7 @@ vi.mock('@/api/admin/accounts', () => ({
 
 import {
   buildModelMappingObject,
+  cleanupModelMappingTargets,
   generateModelMappingsFromWhitelist,
   getModelsByPlatform,
   getPresetMappingsByPlatform,
@@ -240,5 +241,31 @@ describe('useModelWhitelist', () => {
     const result = prependModelMappingPrefix(mappings, '按次/')
 
     expect(result).toEqual(mappings)
+  })
+
+  it('清理上游模型名的统一前缀和后缀，并统计变更与冲突', () => {
+    const result = cleanupModelMappingTargets([
+      { from: 'alias-a', to: 'a/gemini-2.5-flash-preview' },
+      { from: 'alias-b', to: 'gemini-2.5-flash' },
+      { from: 'empty', to: '' }
+    ], 'a/', '-preview')
+
+    expect(result.mappings).toEqual([
+      { from: 'alias-a', to: 'gemini-2.5-flash' },
+      { from: 'alias-b', to: 'gemini-2.5-flash' },
+      { from: 'empty', to: '' }
+    ])
+    expect(result.changedCount).toBe(1)
+    expect(result.collisionCount).toBe(1)
+  })
+
+  it('清理规则可重复执行且不会修改输入映射', () => {
+    const mappings = [{ from: 'alias', to: 'vendor/model-preview'}]
+    const once = cleanupModelMappingTargets(mappings, 'vendor/', '-preview')
+    const twice = cleanupModelMappingTargets(once.mappings, 'vendor/', '-preview')
+
+    expect(twice.mappings).toEqual(once.mappings)
+    expect(twice.changedCount).toBe(0)
+    expect(mappings).toEqual([{ from: 'alias', to: 'vendor/model-preview'}])
   })
 })

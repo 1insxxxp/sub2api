@@ -1,10 +1,11 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useAppStore } from '@/stores/app'
 import {
   generateModelMappingsFromWhitelist,
   prependModelMappingPrefix,
+  cleanupModelMappingTargets,
   type ModelMappingEntry
 } from '@/composables/useModelWhitelist'
 
@@ -13,6 +14,20 @@ const emit = defineEmits<{ (e: 'update:modelValue', value: ModelMappingEntry[]):
 const { t } = useI18n()
 const appStore = useAppStore()
 const prefix = ref('')
+const removePrefix = ref('')
+const removeSuffix = ref('')
+
+const cleanupPreview = computed(() => {
+  if (!removePrefix.value.trim() && !removeSuffix.value.trim()) {
+    return { mappings: props.modelValue, changedCount: 0, collisionCount: 0 }
+  }
+  return cleanupModelMappingTargets(props.modelValue, removePrefix.value, removeSuffix.value)
+})
+
+const cleanupPreviewRows = computed(() => cleanupPreview.value.mappings.flatMap((mapping, index) => {
+  const original = props.modelValue[index]
+  return original && original.to !== mapping.to ? [{ index, from: mapping.from, before: original.to, after: mapping.to }] : []
+}))
 
 const hasInvalidWildcard = () => prefix.value.includes('*')
 
@@ -48,12 +63,52 @@ function prepend() {
   const changedCount = result.filter((mapping, index) => mapping.from !== props.modelValue[index]?.from).length
   appStore.showInfo(t('admin.accounts.modelMappingPrefixesApplied', { count: changedCount }))
 }
+function cleanup() {
+  if (!removePrefix.value.trim() && !removeSuffix.value.trim()) {
+    appStore.showError(t('admin.accounts.modelMappingCleanupEmpty'))
+    return
+  }
+  const result = cleanupModelMappingTargets(props.modelValue, removePrefix.value, removeSuffix.value)
+  emit('update:modelValue', result.mappings)
+  appStore.showInfo(t('admin.accounts.modelMappingCleanupApplied', { count: result.changedCount, collisions: result.collisionCount }))
+}
 </script>
 <template>
   <div class="mb-3 rounded-lg border border-gray-200 p-3 dark:border-dark-600">
     <label for="model-mapping-prefix" class="mb-2 block text-xs text-gray-500">{{ t('admin.accounts.modelMappingPrefix') }}</label>
     <p class="mb-2 text-xs text-gray-500">{{ t('admin.accounts.modelMappingBulkHint') }}</p>
     <p v-if="prefix.includes('*')" class="text-xs text-rose-600">{{ t('admin.accounts.wildcardOnlyAtEnd') }}</p>
+    <div class="mb-2 flex flex-wrap gap-2">
+      <input
+        v-model="removePrefix"
+        data-testid="remove-upstream-prefix"
+        type="text"
+        class="input min-w-[10rem] flex-1"
+        :placeholder="t('admin.accounts.modelMappingRemovePrefix')"
+      />
+      <input
+        v-model="removeSuffix"
+        data-testid="remove-upstream-suffix"
+        type="text"
+        class="input min-w-[10rem] flex-1"
+        :placeholder="t('admin.accounts.modelMappingRemoveSuffix')"
+      />
+      <button
+        type="button"
+        data-testid="cleanup-mapping-targets"
+        class="btn btn-secondary text-sm"
+        :disabled="!removePrefix.trim() && !removeSuffix.trim()"
+        @click="cleanup"
+      >
+        {{ t('admin.accounts.modelMappingCleanup') }}
+      </button>
+    </div>
+    <div v-if="cleanupPreviewRows.length" data-testid="cleanup-preview" class="mb-2 max-h-32 overflow-y-auto rounded border border-dashed border-gray-300 p-2 text-xs text-gray-600 dark:border-dark-500 dark:text-gray-300">
+      <div class="mb-1 font-medium">{{ t('admin.accounts.modelMappingCleanupPreview', { count: cleanupPreview.changedCount, collisions: cleanupPreview.collisionCount }) }}</div>
+      <div v-for="row in cleanupPreviewRows" :key="row.index" class="truncate">
+        <span>{{ row.from }}</span>: <span class="text-gray-400 line-through">{{ row.before }}</span> → <span>{{ row.after }}</span>
+      </div>
+    </div>
     <div class="flex flex-wrap gap-2">
       <input
         v-model="prefix"
