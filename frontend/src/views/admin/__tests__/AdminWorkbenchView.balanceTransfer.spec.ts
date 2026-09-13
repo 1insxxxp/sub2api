@@ -70,10 +70,21 @@ const mountWorkbench = () =>
         Pagination: {
           props: ['page', 'total', 'pageSize'],
           template: '<div data-test="workbench-pagination">{{ page }} / {{ total }} / {{ pageSize }}</div>'
+        },
+        SubAdminCommissionPanel: {
+          template: '<div data-test="sub-admin-commission-panel-stub" />'
+        },
+        AdminAffiliateLeaderboardPanel: {
+          template: '<div data-test="affiliate-leaderboard-panel-stub" />'
         }
       }
     }
   })
+
+const openBalanceTab = async (wrapper: ReturnType<typeof mountWorkbench>) => {
+  await wrapper.get('[data-test="workbench-tab-balance-transfer"]').trigger('click')
+  await flushPromises()
+}
 
 const paginated = <T,>(items: T[], total = items.length, page = 1, pageSize = 10) => ({
   items,
@@ -95,8 +106,8 @@ describe('AdminWorkbenchView balance redeem codes', () => {
   })
 
   it('loads generated balance redeem codes on mount', async () => {
-    mountWorkbench()
-    await flushPromises()
+    const wrapper = mountWorkbench()
+    await openBalanceTab(wrapper)
 
     expect(getGeneratedBalanceRedeemCodes).toHaveBeenCalledWith({ page: 1, page_size: 10 })
   })
@@ -119,7 +130,7 @@ describe('AdminWorkbenchView balance redeem codes', () => {
     ] satisfies GeneratedRedeemCode[])
 
     const wrapper = mountWorkbench()
-    await flushPromises()
+    await openBalanceTab(wrapper)
 
     await wrapper.get('[data-test="workbench-transfer-amount"]').setValue('7.5')
     await wrapper.get('[data-test="workbench-transfer-count"]').setValue('1')

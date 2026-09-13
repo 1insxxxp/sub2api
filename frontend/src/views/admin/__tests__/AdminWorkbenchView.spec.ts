@@ -145,6 +145,11 @@ const openCommissionTab = async (wrapper: ReturnType<typeof mountWorkbench>) => 
   await flushPromises()
 }
 
+const openBalanceTab = async (wrapper: ReturnType<typeof mountWorkbench>) => {
+  await wrapper.get('[data-test="workbench-tab-balance-transfer"]').trigger('click')
+  await flushPromises()
+}
+
 const defaultWindowInnerWidth = window.innerWidth
 let getBoundingClientRectSpy: ReturnType<typeof vi.spyOn> | undefined
 let confirmSpy: ReturnType<typeof vi.spyOn> | undefined
@@ -355,7 +360,7 @@ describe('AdminWorkbenchView balance transfer codes', () => {
     expect(commissionTab.attributes('aria-selected')).toBe('true')
     expect(wrapper.find('[data-test="workbench-balance-transfer-panel"]').exists()).toBe(false)
     expect(wrapper.find('[data-test="sub-admin-commission-panel"]').exists()).toBe(true)
-    expect(getWorkbenchCommissionCalendar.mock.calls.length).toBeGreaterThan(initialCommissionCalendarCalls)
+    expect(getWorkbenchCommissionCalendar).toHaveBeenCalledTimes(initialCommissionCalendarCalls + 1)
   })
 
   it('supports standard keyboard navigation between workbench tabs', async () => {
@@ -416,7 +421,7 @@ describe('AdminWorkbenchView balance transfer codes', () => {
     )
 
     const wrapper = mountWorkbench()
-    await flushPromises()
+    await openBalanceTab(wrapper)
 
     expect(getGenerated).toHaveBeenCalledWith({ page: 1, page_size: 10 })
     expect(wrapper.text()).toContain('WORKBENCH-CODE')
@@ -447,7 +452,7 @@ describe('AdminWorkbenchView balance transfer codes', () => {
     ])
 
     const wrapper = mountWorkbench()
-    await flushPromises()
+    await openBalanceTab(wrapper)
 
     await wrapper.get('[data-test="workbench-transfer-amount"]').setValue('5')
     await wrapper.get('[data-test="workbench-transfer-count"]').setValue('2')
@@ -503,7 +508,7 @@ describe('AdminWorkbenchView balance transfer codes', () => {
     generateBalanceTransferCodes.mockResolvedValue(generatedBatch)
 
     const wrapper = mountWorkbench()
-    await flushPromises()
+    await openBalanceTab(wrapper)
 
     await wrapper.get('[data-test="workbench-transfer-amount"]').setValue('1')
     await wrapper.get('[data-test="workbench-transfer-count"]').setValue('25')
@@ -549,7 +554,7 @@ describe('AdminWorkbenchView balance transfer codes', () => {
     confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true)
 
     const wrapper = mountWorkbench()
-    await flushPromises()
+    await openBalanceTab(wrapper)
 
     const batchDeleteButton = wrapper.get('[data-test="delete-selected-generated-codes"]')
     expect(batchDeleteButton.attributes('disabled')).toBeDefined()
@@ -599,7 +604,7 @@ describe('AdminWorkbenchView balance transfer codes', () => {
     getGenerated.mockResolvedValueOnce(paginated<GeneratedRedeemCode>([firstCode, secondCode]))
 
     const wrapper = mountWorkbench()
-    await flushPromises()
+    await openBalanceTab(wrapper)
 
     const copySelectedButton = wrapper.get('[data-test="copy-selected-generated-codes"]')
     expect(copySelectedButton.attributes('disabled')).toBeDefined()
@@ -630,7 +635,7 @@ describe('AdminWorkbenchView balance transfer codes', () => {
     getGenerated.mockResolvedValueOnce(paginated<GeneratedRedeemCode>([codeWithoutSource]))
 
     const wrapper = mountWorkbench()
-    await flushPromises()
+    await openBalanceTab(wrapper)
 
     expect(wrapper.find('[data-test="select-generated-code-103"]').exists()).toBe(true)
     expect(wrapper.get('[data-test="delete-selected-generated-codes"]').attributes('disabled')).toBeDefined()
