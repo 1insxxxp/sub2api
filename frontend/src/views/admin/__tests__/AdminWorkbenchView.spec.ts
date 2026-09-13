@@ -305,18 +305,37 @@ describe('AdminWorkbenchView balance transfer codes', () => {
     const wrapper = mountWorkbench()
     await flushPromises()
 
-    const balanceTab = wrapper.get('[data-test="workbench-tab-balance-transfer"]')
     const commissionTab = wrapper.get('[data-test="workbench-tab-commission"]')
+    const balanceTab = wrapper.get('[data-test="workbench-tab-balance-transfer"]')
     const leaderboardTab = wrapper.get('[data-test="workbench-tab-affiliate-leaderboard"]')
+    const tabOrder = wrapper
+      .get('[data-test="admin-workbench-tabs"]')
+      .findAll('[role="tab"]')
+      .map((tab) => tab.attributes('data-test'))
 
     expect(wrapper.get('[data-test="admin-workbench-tabs"]').attributes('role')).toBe('tablist')
+    expect(tabOrder).toEqual([
+      'workbench-tab-commission',
+      'workbench-tab-balance-transfer',
+      'workbench-tab-affiliate-leaderboard'
+    ])
+    expect(commissionTab.attributes('aria-selected')).toBe('true')
+    expect(balanceTab.attributes('aria-selected')).toBe('false')
+    expect(leaderboardTab.attributes('aria-selected')).toBe('false')
+    expect(wrapper.find('[data-test="workbench-balance-transfer-panel"]').exists()).toBe(false)
+    expect(wrapper.find('[data-test="sub-admin-commission-panel"]').exists()).toBe(true)
+    expect(wrapper.find('[data-test="affiliate-leaderboard-panel-stub"]').exists()).toBe(false)
+    expect(getWorkbenchCommissionCalendar).toHaveBeenCalled()
+    const initialCommissionCalendarCalls = getWorkbenchCommissionCalendar.mock.calls.length
+
+    await balanceTab.trigger('click')
+    await flushPromises()
+
     expect(balanceTab.attributes('aria-selected')).toBe('true')
     expect(commissionTab.attributes('aria-selected')).toBe('false')
-    expect(leaderboardTab.attributes('aria-selected')).toBe('false')
     expect(wrapper.find('[data-test="workbench-balance-transfer-panel"]').exists()).toBe(true)
     expect(wrapper.find('[data-test="sub-admin-commission-panel"]').exists()).toBe(false)
     expect(wrapper.find('[data-test="affiliate-leaderboard-panel-stub"]').exists()).toBe(false)
-    expect(getWorkbenchCommissionCalendar).not.toHaveBeenCalled()
 
     await leaderboardTab.trigger('click')
     await flushPromises()
@@ -327,7 +346,7 @@ describe('AdminWorkbenchView balance transfer codes', () => {
     expect(wrapper.find('[data-test="workbench-balance-transfer-panel"]').exists()).toBe(false)
     expect(wrapper.find('[data-test="sub-admin-commission-panel"]').exists()).toBe(false)
     expect(wrapper.find('[data-test="affiliate-leaderboard-panel-stub"]').exists()).toBe(true)
-    expect(getWorkbenchCommissionCalendar).not.toHaveBeenCalled()
+    expect(getWorkbenchCommissionCalendar).toHaveBeenCalledTimes(initialCommissionCalendarCalls)
 
     await commissionTab.trigger('click')
     await flushPromises()
@@ -336,32 +355,32 @@ describe('AdminWorkbenchView balance transfer codes', () => {
     expect(commissionTab.attributes('aria-selected')).toBe('true')
     expect(wrapper.find('[data-test="workbench-balance-transfer-panel"]').exists()).toBe(false)
     expect(wrapper.find('[data-test="sub-admin-commission-panel"]').exists()).toBe(true)
-    expect(getWorkbenchCommissionCalendar).toHaveBeenCalled()
+    expect(getWorkbenchCommissionCalendar.mock.calls.length).toBeGreaterThan(initialCommissionCalendarCalls)
   })
 
   it('supports standard keyboard navigation between workbench tabs', async () => {
     const wrapper = mountWorkbench()
     await flushPromises()
 
-    const balanceTab = wrapper.get('[data-test="workbench-tab-balance-transfer"]')
     const commissionTab = wrapper.get('[data-test="workbench-tab-commission"]')
+    const balanceTab = wrapper.get('[data-test="workbench-tab-balance-transfer"]')
     const leaderboardTab = wrapper.get('[data-test="workbench-tab-affiliate-leaderboard"]')
 
-    expect(balanceTab.attributes('tabindex')).toBe('0')
-    expect(commissionTab.attributes('tabindex')).toBe('-1')
-
-    await balanceTab.trigger('keydown', { key: 'ArrowRight' })
-    await flushPromises()
-    expect(commissionTab.attributes('aria-selected')).toBe('true')
     expect(commissionTab.attributes('tabindex')).toBe('0')
+    expect(balanceTab.attributes('tabindex')).toBe('-1')
 
-    await commissionTab.trigger('keydown', { key: 'End' })
+    await commissionTab.trigger('keydown', { key: 'ArrowRight' })
+    await flushPromises()
+    expect(balanceTab.attributes('aria-selected')).toBe('true')
+    expect(balanceTab.attributes('tabindex')).toBe('0')
+
+    await balanceTab.trigger('keydown', { key: 'End' })
     await flushPromises()
     expect(leaderboardTab.attributes('aria-selected')).toBe('true')
 
     await leaderboardTab.trigger('keydown', { key: 'Home' })
     await flushPromises()
-    expect(balanceTab.attributes('aria-selected')).toBe('true')
+    expect(commissionTab.attributes('aria-selected')).toBe('true')
   })
 
   it('loads generated codes for the workbench owner', async () => {
