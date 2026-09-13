@@ -99,7 +99,17 @@
     class="home-minimal-root min-h-screen overflow-x-hidden bg-white text-slate-950 dark:bg-dark-950 dark:text-white"
   >
     <div class="home-minimal-grid pointer-events-none absolute inset-0" aria-hidden="true"></div>
-    <div class="home-minimal-orb pointer-events-none absolute left-1/2 top-[18%] h-[30rem] w-[30rem] -translate-x-1/2 rounded-full" aria-hidden="true"></div>
+    <div class="home-minimal-orb pointer-events-none absolute left-1/2 top-[18%] h-[30rem] w-[30rem] -translate-x-1/2 rounded-full" aria-hidden="true">
+      <div class="home-orb-sphere">
+        <div class="home-orb-surface"></div>
+      </div>
+      <div class="home-orb-orbit">
+        <div class="home-orb-track"></div>
+      </div>
+      <div class="home-orb-orbit home-orb-orbit-cross">
+        <div class="home-orb-track"></div>
+      </div>
+    </div>
 
     <header
       class="home-minimal-header fixed inset-x-0 top-0 z-30 border-b border-transparent px-4 py-3 transition-all duration-300 sm:px-6"
@@ -346,35 +356,102 @@ onBeforeUnmount(() => {
 }
 
 .home-minimal-orb {
-  background:
-    radial-gradient(circle at 35% 32%, rgba(255, 255, 255, 0.98) 0 13%, rgba(147, 197, 253, 0.72) 27%, rgba(59, 130, 246, 0.38) 48%, rgba(34, 211, 238, 0.17) 61%, transparent 73%);
-  filter: blur(2px);
-  opacity: 0.82;
   transform: translate(-50%, -3%) scale(1);
   animation: home-orb-float 10s ease-in-out infinite alternate;
 }
 
-.home-minimal-orb::before,
-.home-minimal-orb::after {
+.home-orb-sphere {
+  position: absolute;
+  inset: 9%;
+  overflow: hidden;
+  border-radius: 50%;
+  background: #e0f2fe;
+  box-shadow: 0 0 64px rgba(56, 189, 248, 0.18);
+}
+
+.home-orb-surface {
+  position: absolute;
+  inset: -12%;
+  border-radius: 50%;
+  background: conic-gradient(
+    from 25deg,
+    #effaff 0deg,
+    #60a5fa 75deg,
+    #cffafe 125deg,
+    #f0f9ff 185deg,
+    #38bdf8 250deg,
+    #bfdbfe 300deg,
+    #effaff 360deg
+  );
+  opacity: 0.72;
+  filter: blur(8px);
+  animation: home-orb-spin 8s linear infinite;
+}
+
+.home-orb-sphere::after {
   content: '';
   position: absolute;
-  inset: 16%;
-  border: 1px solid rgba(96, 165, 250, 0.42);
-  border-radius: 9999px;
-  box-shadow: 0 0 42px rgba(59, 130, 246, 0.12);
-  animation: home-orb-ring 5.5s ease-in-out infinite;
-}
-
-.home-minimal-orb::after {
-  inset: 28%;
-  border-color: rgba(34, 211, 238, 0.28);
-  animation-delay: -3.5s;
-}
-
-.dark .home-minimal-orb {
+  inset: 0;
+  border-radius: inherit;
   background:
-    radial-gradient(circle at 35% 32%, rgba(191, 219, 254, 0.46) 0 12%, rgba(59, 130, 246, 0.38) 34%, rgba(34, 211, 238, 0.2) 57%, transparent 73%);
-  opacity: 0.62;
+    radial-gradient(circle at 32% 22%, rgba(255, 255, 255, 0.85), transparent 52%),
+    radial-gradient(circle at 50% 45%, transparent 45%, rgba(37, 99, 235, 0.14) 85%, rgba(255, 255, 255, 0.75));
+}
+
+.home-orb-orbit {
+  position: absolute;
+  inset: -8%;
+  transform: rotate(-24deg) scaleY(0.48);
+}
+
+.home-orb-orbit-cross {
+  inset: -1%;
+  transform: rotate(58deg) scaleY(0.62);
+}
+
+.home-orb-track {
+  position: absolute;
+  inset: 0;
+  border: 1px solid rgba(59, 130, 246, 0.25);
+  border-top: 2px solid rgba(14, 165, 233, 0.7);
+  border-radius: 50%;
+  animation: home-orb-spin 6s linear infinite;
+}
+
+.home-orb-track::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 50%;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #0ea5e9;
+  box-shadow: 0 0 0 5px rgba(56, 189, 248, 0.14), 0 0 22px rgba(14, 165, 233, 0.65);
+  transform: translate(-50%, -50%);
+}
+
+.home-orb-orbit-cross .home-orb-track {
+  border-top-color: rgba(6, 182, 212, 0.7);
+  animation-duration: 10s;
+  animation-direction: reverse;
+}
+
+.home-orb-orbit-cross .home-orb-track::before {
+  background: #06b6d4;
+}
+
+.dark .home-orb-sphere {
+  background: #0c2449;
+  box-shadow: 0 0 64px rgba(37, 99, 235, 0.15);
+}
+
+.dark .home-orb-surface {
+  opacity: 0.4;
+}
+
+.dark .home-orb-sphere::after {
+  background: radial-gradient(circle at 32% 22%, rgba(147, 197, 253, 0.14), transparent 48%, rgba(2, 6, 23, 0.6));
 }
 
 .home-minimal-header {
@@ -465,13 +542,13 @@ onBeforeUnmount(() => {
 }
 
 @keyframes home-orb-float {
-  from { transform: translate(-50%, -3%) scale(0.96); opacity: 0.68; }
-  to { transform: translate(-50%, 3%) scale(1.04); opacity: 0.9; }
+  from { transform: translate(-50%, -3%) scale(0.98); }
+  to { transform: translate(-50%, 3%) scale(1.02); }
 }
 
-@keyframes home-orb-ring {
-  0%, 100% { transform: scale(0.86); opacity: 0.15; }
-  50% { transform: scale(1.08); opacity: 0.65; }
+@keyframes home-orb-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
 }
 
 @keyframes home-status-glow {
@@ -499,8 +576,9 @@ onBeforeUnmount(() => {
 @media (prefers-reduced-motion: reduce) {
   .home-minimal-grid,
   .home-minimal-orb,
-  .home-minimal-orb::before,
-  .home-minimal-orb::after,
+  .home-orb-surface,
+  .home-orb-track,
+  .home-orb-orbit-cross .home-orb-track,
   .home-minimal-reveal,
   .home-minimal-connection-dot {
     animation: none;

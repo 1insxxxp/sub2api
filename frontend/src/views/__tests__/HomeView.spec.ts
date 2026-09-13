@@ -207,6 +207,8 @@ describe('HomeView default homepage', () => {
     expect(source).toContain('@keyframes home-orb-float')
     expect(source).toContain('@keyframes home-grid-pan')
     expect(source).toContain('home-grid-pan 22s linear infinite')
+    expect(source).toContain('@keyframes home-orb-spin')
+    expect(source).toContain('home-orb-track')
   })
 
   it('uses the blue-slate-cyan technology palette as the primary theme', () => {
