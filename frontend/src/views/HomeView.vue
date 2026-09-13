@@ -198,7 +198,7 @@
         <div class="home-minimal-reveal mt-16 w-full max-w-3xl" style="--motion-index: 5">
           <div class="home-minimal-connection mx-auto flex max-w-2xl items-center justify-center gap-3 rounded-2xl border border-blue-100/90 bg-white/65 px-4 py-3 text-xs text-slate-500 shadow-lg shadow-blue-100/40 backdrop-blur-sm dark:border-blue-400/15 dark:bg-dark-900/60 dark:text-slate-400 dark:shadow-none sm:gap-4 sm:px-6">
             <span class="home-minimal-connection-dot h-2 w-2 shrink-0 rounded-full bg-cyan-400"></span>
-            <span class="min-w-0 truncate font-mono">{{ apiBaseUrl }}/v1</span>
+            <span class="min-w-0 truncate font-mono">{{ apiEndpoint }}</span>
             <span class="h-4 w-px bg-slate-200 dark:bg-dark-700"></span>
             <span class="whitespace-nowrap">{{ t('home.integration.replaceBaseUrl') }}</span>
           </div>
@@ -235,7 +235,14 @@ const siteSubtitle = computed(() => appStore.cachedPublicSettings?.site_subtitle
 const siteLogo = computed(() => sanitizeUrl(appStore.effectiveSiteLogo || '', { allowRelative: true, allowDataUrl: true }))
 const docUrl = computed(() => sanitizeUrl(appStore.cachedPublicSettings?.doc_url || appStore.docUrl || ''))
 const homeContent = computed(() => appStore.cachedPublicSettings?.home_content || '')
-const apiBaseUrl = computed(() => appStore.cachedPublicSettings?.api_base_url || '/api')
+const apiEndpoint = computed(() => {
+  const configured = appStore.cachedPublicSettings?.api_base_url || appStore.apiBaseUrl || ''
+  const fallback = typeof window !== 'undefined' ? window.location.origin : ''
+  const base = (configured || fallback).trim().replace(/\/+$/, '')
+  if (base.endsWith('/v1')) return base
+  if (base.endsWith('/api')) return `${base.slice(0, -4)}/v1`
+  return `${base}/v1`
+})
 const hasHomeContent = computed(() => homeContent.value.trim().length > 0)
 const compactHomeEnabled = computed(() => appStore.cachedPublicSettings?.compact_home_enabled === true)
 const modelPlazaEnabled = computed(() => isFeatureFlagEnabled(FeatureFlags.modelPlaza))
