@@ -1557,12 +1557,12 @@
               <div
                 v-for="(mapping, index) in modelMappings"
                 :key="getModelMappingKey(mapping)"
-                class="flex items-center gap-2"
+                class="flex flex-col items-stretch gap-2 sm:flex-row sm:items-center"
               >
                 <input
                   v-model="mapping.from"
                   type="text"
-                  class="input flex-1"
+                  class="input min-w-0 flex-1"
                   :placeholder="t('admin.accounts.requestModel')"
                 />
                 <svg
@@ -1581,7 +1581,7 @@
                 <input
                   v-model="mapping.to"
                   type="text"
-                  class="input flex-1"
+                  class="input min-w-0 flex-1"
                   :placeholder="t('admin.accounts.actualModel')"
                 />
                 <button
@@ -1761,7 +1761,7 @@
                 type="number"
                 min="100"
                 max="599"
-                class="input flex-1"
+                class="input min-w-0 flex-1"
                 :placeholder="t('admin.accounts.enterErrorCode')"
                 @keyup.enter="addCustomErrorCode"
               />
@@ -2019,10 +2019,10 @@
           <!-- Mapping Mode -->
           <div v-else class="space-y-3">
             <ModelMappingBulkActions v-model="modelMappings" :allowed-models="allowedModels" />
-            <div v-for="(mapping, index) in modelMappings" :key="index" class="flex items-center gap-2">
-              <input v-model="mapping.from" type="text" class="input flex-1" :placeholder="t('admin.accounts.fromModel')" />
-              <span class="text-gray-400">→</span>
-              <input v-model="mapping.to" type="text" class="input flex-1" :placeholder="t('admin.accounts.toModel')" />
+            <div v-for="(mapping, index) in modelMappings" :key="index" class="flex flex-col items-stretch gap-2 sm:flex-row sm:items-center">
+              <input v-model="mapping.from" type="text" class="input min-w-0 flex-1" :placeholder="t('admin.accounts.fromModel')" />
+              <span class="rotate-90 self-center text-gray-400 sm:rotate-0">→</span>
+              <input v-model="mapping.to" type="text" class="input min-w-0 flex-1" :placeholder="t('admin.accounts.toModel')" />
               <button type="button" @click="modelMappings.splice(index, 1)" class="text-red-500 hover:text-red-700">
                 <Icon name="trash" size="sm" />
               </button>
@@ -2374,12 +2374,12 @@
               <div
                 v-for="(mapping, index) in modelMappings"
                 :key="'oauth-' + getModelMappingKey(mapping)"
-                class="flex items-center gap-2"
+                class="flex flex-col items-stretch gap-2 sm:flex-row sm:items-center"
               >
                 <input
                   v-model="mapping.from"
                   type="text"
-                  class="input flex-1"
+                  class="input min-w-0 flex-1"
                   :placeholder="t('admin.accounts.requestModel')"
                 />
                 <svg
@@ -2398,7 +2398,7 @@
                 <input
                   v-model="mapping.to"
                   type="text"
-                  class="input flex-1"
+                  class="input min-w-0 flex-1"
                   :placeholder="t('admin.accounts.actualModel')"
                 />
                 <button
@@ -3349,11 +3349,11 @@
             <div
               v-for="(mapping, index) in openAICompactModelMappings"
               :key="getOpenAICompactModelMappingKey(mapping)"
-              class="flex items-center gap-2"
+              class="flex flex-col items-stretch gap-2 sm:flex-row sm:items-center"
             >
-              <input v-model="mapping.from" type="text" class="input flex-1" :placeholder="t('admin.accounts.fromModel')" />
-              <span class="text-gray-400">→</span>
-              <input v-model="mapping.to" type="text" class="input flex-1" :placeholder="t('admin.accounts.toModel')" />
+              <input v-model="mapping.from" type="text" class="input min-w-0 flex-1" :placeholder="t('admin.accounts.fromModel')" />
+              <span class="rotate-90 self-center text-gray-400 sm:rotate-0">→</span>
+              <input v-model="mapping.to" type="text" class="input min-w-0 flex-1" :placeholder="t('admin.accounts.toModel')" />
               <button type="button" @click="removeOpenAICompactModelMapping(index)" class="text-red-500 hover:text-red-700">
                 <Icon name="trash" size="sm" />
               </button>

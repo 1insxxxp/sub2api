@@ -83,25 +83,25 @@ function cleanup() {
     <p class="mb-2 text-xs text-gray-500">{{ t('admin.accounts.modelMappingBulkHint') }}</p>
     <p v-if="prefix.includes('*')" class="text-xs text-rose-600">{{ t('admin.accounts.wildcardOnlyAtEnd') }}</p>
     <p class="mb-2 text-xs text-gray-500">{{ t('admin.accounts.modelMappingCleanupHint') }}</p>
-    <div class="mb-2 flex flex-wrap gap-2">
+    <div class="mb-2 flex flex-col gap-2 sm:flex-row sm:flex-wrap">
       <input
         v-model="removePrefix"
         data-testid="remove-upstream-prefix"
         type="text"
-        class="input min-w-[10rem] flex-1"
+        class="input w-full min-w-0 flex-1 sm:min-w-[10rem]"
         :placeholder="t('admin.accounts.modelMappingRemovePrefix')"
       />
       <input
         v-model="removeSuffix"
         data-testid="remove-upstream-suffix"
         type="text"
-        class="input min-w-[10rem] flex-1"
+        class="input w-full min-w-0 flex-1 sm:min-w-[10rem]"
         :placeholder="t('admin.accounts.modelMappingRemoveSuffix')"
       />
       <button
         type="button"
         data-testid="cleanup-mapping-targets"
-        class="btn btn-secondary text-sm"
+        class="btn btn-secondary w-full text-sm sm:w-auto"
         :disabled="!prefix.trim() || (!removePrefix.trim() && !removeSuffix.trim())"
         @click="cleanup"
       >
@@ -114,19 +114,19 @@ function cleanup() {
         <span>{{ row.from }}</span>: <span class="text-gray-400 line-through">{{ row.before }}</span> → <span>{{ row.after }}</span>
       </div>
     </div>
-    <div class="flex flex-wrap gap-2">
+    <div class="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
       <input
         v-model="prefix"
         data-testid="model-mapping-prefix"
         id="model-mapping-prefix"
         type="text"
-        class="input min-w-[12rem] flex-1"
+        class="input w-full min-w-0 flex-1 sm:min-w-[12rem]"
         :placeholder="t('admin.accounts.modelMappingPrefixPlaceholder')"
       />
       <button
         type="button"
         data-testid="generate-mappings"
-        class="btn btn-secondary text-sm"
+        class="btn btn-secondary w-full text-sm sm:w-auto"
         :disabled="!allowedModels.length || !prefix.trim() || hasInvalidWildcard()"
         @click="generate"
       >
@@ -135,7 +135,7 @@ function cleanup() {
       <button
         type="button"
         data-testid="prepend-prefix"
-        class="btn btn-secondary text-sm"
+        class="btn btn-secondary w-full text-sm sm:w-auto"
         :disabled="!prefix.trim() || hasInvalidWildcard()"
         @click="prepend"
       >

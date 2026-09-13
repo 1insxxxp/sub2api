@@ -589,37 +589,34 @@ export function rebuildModelMappingSourcesFromTargets(
   const result = mappings.map(mapping => ({ ...mapping }))
   let changedCount = 0
   let collisionCount = 0
-  const sourceCounts = new Map<string, number>()
-  result.forEach(mapping => {
-    const source = mapping.from.trim()
-    if (source) sourceCounts.set(source, (sourceCounts.get(source) ?? 0) + 1)
-  })
-
-  result.forEach(mapping => {
+  const candidates = result.map(mapping => {
     const currentSource = mapping.from.trim()
     const upstream = mapping.to.trim()
-    if (!upstream) return
+    if (!upstream) return { currentSource, nextSource: null }
 
     let cleaned = upstream
     if (prefix && cleaned.startsWith(prefix)) cleaned = cleaned.slice(prefix.length)
     if (suffix && cleaned.endsWith(suffix)) cleaned = cleaned.slice(0, -suffix.length)
     const nextSource = `${prefixValue}${cleaned}`
-    if (!cleaned || !nextSource || nextSource === currentSource) return
+    if (!cleaned || !nextSource || nextSource === currentSource) return { currentSource, nextSource: null }
+    return { currentSource, nextSource }
+  })
 
-    const remainingCurrentCount = (sourceCounts.get(currentSource) ?? 0) - 1
-    if (currentSource) {
-      if (remainingCurrentCount > 0) sourceCounts.set(currentSource, remainingCurrentCount)
-      else sourceCounts.delete(currentSource)
-    }
+  const occupiedSources = new Set<string>()
+  candidates.forEach(candidate => {
+    if (!candidate.nextSource && candidate.currentSource) occupiedSources.add(candidate.currentSource)
+  })
 
-    if (sourceCounts.has(nextSource)) {
+  candidates.forEach((candidate, index) => {
+    if (!candidate.nextSource) return
+
+    if (occupiedSources.has(candidate.nextSource)) {
       collisionCount++
-      if (currentSource) sourceCounts.set(currentSource, (sourceCounts.get(currentSource) ?? 0) + 1)
       return
     }
 
-    mapping.from = nextSource
-    sourceCounts.set(nextSource, 1)
+    result[index].from = candidate.nextSource
+    occupiedSources.add(candidate.nextSource)
     changedCount++
   })
   return { mappings: result, changedCount, collisionCount }

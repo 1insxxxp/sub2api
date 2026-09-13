@@ -282,4 +282,18 @@ describe('useModelWhitelist', () => {
     expect(result.changedCount).toBe(1)
     expect(result.collisionCount).toBe(1)
   })
+
+  it('后续行会被重建时，不把其旧请求名误判为冲突', () => {
+    const result = rebuildModelMappingSourcesFromTargets([
+      { from: 'old-a', to: 'a/model' },
+      { from: '测试/model', to: 'a/other' }
+    ], '测试/', 'a/', '')
+
+    expect(result.mappings).toEqual([
+      { from: '测试/model', to: 'a/model' },
+      { from: '测试/other', to: 'a/other' }
+    ])
+    expect(result.changedCount).toBe(2)
+    expect(result.collisionCount).toBe(0)
+  })
 })
