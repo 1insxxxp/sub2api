@@ -128,6 +128,7 @@ const days = ref<SubAdminCommissionCalendarDay[]>([])
 const loading = ref(false)
 const errorMessage = ref('')
 const selectedMobileDate = ref('')
+let calendarRequestId = 0
 
 const weekdays = ['日', '一', '二', '三', '四', '五', '六']
 
@@ -243,6 +244,8 @@ function selectDay(date: string) {
 }
 
 async function fetchCalendar() {
+  const requestId = ++calendarRequestId
+  const requestedMonth = month.value
   loading.value = true
   errorMessage.value = ''
   // Clear the previous month's data immediately so totals, chart, and calendar
@@ -250,11 +253,18 @@ async function fetchCalendar() {
   // after its request fails).
   days.value = []
   try {
-    days.value = await adminAPI.subAdminCommission.getWorkbenchCalendar({ month: month.value })
+    const nextDays = await adminAPI.subAdminCommission.getWorkbenchCalendar({ month: requestedMonth })
+    if (requestId === calendarRequestId && month.value === requestedMonth) {
+      days.value = nextDays
+    }
   } catch (error: any) {
-    errorMessage.value = extractApiErrorMessage(error, t('adminWorkbench.commission.loadFailed'))
+    if (requestId === calendarRequestId && month.value === requestedMonth) {
+      errorMessage.value = extractApiErrorMessage(error, t('adminWorkbench.commission.loadFailed'))
+    }
   } finally {
-    loading.value = false
+    if (requestId === calendarRequestId) {
+      loading.value = false
+    }
   }
 }
 

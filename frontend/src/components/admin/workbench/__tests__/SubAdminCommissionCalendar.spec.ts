@@ -40,6 +40,16 @@ const TrendChartStub = defineComponent({
 
 const mountedWrappers: Array<ReturnType<typeof mount>> = []
 
+function deferred<T>() {
+  let resolve!: (value: T) => void
+  let reject!: (reason?: unknown) => void
+  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise
+    reject = rejectPromise
+  })
+  return { promise, resolve, reject }
+}
+
 afterEach(() => {
   mountedWrappers.splice(0).forEach((wrapper) => wrapper.unmount())
   vi.useRealTimers()
@@ -90,5 +100,61 @@ describe('SubAdminCommissionCalendar stale month data', () => {
     expect(wrapper.get('[data-test="commission-calendar-month-summary"]').text()).not.toContain('$12.00')
     expect(wrapper.get('[data-test="commission-calendar-month-summary"]').text()).not.toContain('$3.45')
     expect(chart.props('days')).toEqual([])
+  })
+
+  it('ignores a late response from an older month request', async () => {
+    const initial = deferred<SubAdminCommissionCalendarDay[]>()
+    const stale = deferred<SubAdminCommissionCalendarDay[]>()
+    const latest = deferred<SubAdminCommissionCalendarDay[]>()
+    const latestMonthDays: SubAdminCommissionCalendarDay[] = [
+      {
+        date: '2026-07-03',
+        enabled: true,
+        actual_cost: 30,
+        commission_amount: 6,
+      },
+    ]
+    const staleMonthDays: SubAdminCommissionCalendarDay[] = [
+      {
+        date: '2026-08-03',
+        enabled: true,
+        actual_cost: 80,
+        commission_amount: 16,
+      },
+    ]
+    getWorkbenchCalendar
+      .mockReturnValueOnce(initial.promise)
+      .mockReturnValueOnce(stale.promise)
+      .mockReturnValueOnce(latest.promise)
+
+    const wrapper = mount(SubAdminCommissionCalendar, {
+      global: {
+        stubs: {
+          SubAdminCommissionTrendChart: TrendChartStub,
+        },
+      },
+    })
+    mountedWrappers.push(wrapper)
+
+    await flushPromises()
+    initial.resolve([])
+    await flushPromises()
+
+    const monthInput = wrapper.get('input[type="month"]')
+    await monthInput.setValue('2026-08')
+    await monthInput.setValue('2026-07')
+    expect(getWorkbenchCalendar).toHaveBeenNthCalledWith(2, { month: '2026-08' })
+    expect(getWorkbenchCalendar).toHaveBeenNthCalledWith(3, { month: '2026-07' })
+
+    latest.resolve(latestMonthDays)
+    await flushPromises()
+    const chart = wrapper.findComponent({ name: 'TrendChartStub' })
+    expect(chart.props('days')).toEqual(latestMonthDays)
+
+    stale.resolve(staleMonthDays)
+    await flushPromises()
+    expect(chart.props('days')).toEqual(latestMonthDays)
+    expect(wrapper.get('[data-test="commission-calendar-month-summary"]').text()).toContain('$30.00')
+    expect(wrapper.get('[data-test="commission-calendar-month-summary"]').text()).not.toContain('$80.00')
   })
 })
