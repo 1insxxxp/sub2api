@@ -47,6 +47,9 @@ func (s *PublicGroupSyncService) Snapshot(ctx context.Context) ([]PublicGroupSyn
 		models := map[string]PublicGroupSyncModel{}
 		for _, ch := range byGroup[g.ID] {
 			for _, p := range ch.ModelPricing {
+				if strings.TrimSpace(g.Platform) != "" && !isPlatformPricingMatch(g.Platform, p.Platform) {
+					continue
+				}
 				if p.BillingMode == BillingModeVideo {
 					continue
 				}
@@ -77,6 +80,9 @@ func (s *PublicGroupSyncService) Snapshot(ctx context.Context) ([]PublicGroupSyn
 			// pricing row. Preserve that model in the mirror; New can then use
 			// its own fallback catalog while keeping the exact display alias.
 			for platform, mapping := range ch.ModelMapping {
+				if strings.TrimSpace(g.Platform) != "" && !isPlatformPricingMatch(g.Platform, platform) {
+					continue
+				}
 				for name, upstream := range mapping {
 					if strings.ContainsAny(name, "*?") {
 						continue
@@ -96,6 +102,9 @@ func (s *PublicGroupSyncService) Snapshot(ctx context.Context) ([]PublicGroupSyn
 				return nil, err
 			}
 			for _, account := range accounts {
+				if strings.TrimSpace(g.Platform) != "" && !isPlatformPricingMatch(g.Platform, account.Platform) {
+					continue
+				}
 				for name, upstream := range account.GetModelMapping() {
 					if !isImageModelName(name) {
 						continue

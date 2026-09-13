@@ -106,3 +106,38 @@ func TestPublicGroupSyncSnapshotIncludesImageModelsFromGroupAccounts(t *testing.
 	require.Equal(t, string(BillingModeImage), snapshot[0].ModelPricing["gpt-image-2"].BillingMode)
 	require.Equal(t, imagePrice, *snapshot[0].ModelPricing["gpt-image-2"].PerRequestPrice)
 }
+
+func TestPublicGroupSyncSnapshotScopesModelsToGroupPlatform(t *testing.T) {
+	groups := &stubGroupRepoForAvailable{activeGroups: []Group{
+		{ID: 1, Name: "claude-group", Platform: PlatformAnthropic, Status: StatusActive},
+		{ID: 2, Name: "gemini-group", Platform: PlatformOpenAI, Status: StatusActive},
+	}}
+	channels := &mockChannelRepository{listAllFn: func(context.Context) ([]Channel, error) {
+		return []Channel{{
+			ID:       10,
+			Status:   StatusActive,
+			GroupIDs: []int64{1, 2},
+			ModelPricing: []ChannelModelPricing{
+				{Platform: PlatformAnthropic, Models: []string{"claude-model"}, BillingMode: BillingModePerRequest},
+				{Platform: PlatformOpenAI, Models: []string{"gemini-model"}, BillingMode: BillingModePerRequest},
+			},
+			ModelMapping: map[string]map[string]string{
+				PlatformAnthropic: {"claude-model": "claude-upstream"},
+				PlatformOpenAI:    {"gemini-model": "gemini-upstream"},
+			},
+		}}, nil
+	}}
+
+	snapshot, err := NewPublicGroupSyncService(groups, channels).Snapshot(context.Background())
+	require.NoError(t, err)
+	require.Len(t, snapshot, 2)
+
+	byName := make(map[string]PublicGroupSyncRequest, len(snapshot))
+	for _, item := range snapshot {
+		byName[item.GroupName] = item
+	}
+	require.Equal(t, []string{"claude-model"}, byName["claude-group"].Models)
+	require.Equal(t, []string{"gemini-model"}, byName["gemini-group"].Models)
+	require.NotContains(t, byName["claude-group"].ModelMapping, "gemini-model")
+	require.NotContains(t, byName["gemini-group"].ModelMapping, "claude-model")
+}
