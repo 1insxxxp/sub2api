@@ -78,7 +78,7 @@ export default {
         desc: 'SDKs and request shapes stay the same; migration mainly changes the Base URL.'
       },
       accountPool: {
-        title: 'Upstream account pools',
+        title: 'Managed account pools',
         desc: 'Group provider accounts with allocation, quotas, and failover.'
       },
       monitoring: {

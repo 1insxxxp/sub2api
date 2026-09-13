@@ -61,7 +61,7 @@ vi.mock('vue-i18n', async () => {
     'home.cta.title': 'Ready to Get Started?',
     'home.cta.subtitle': 'Start with one business request, then turn on billing, routing, and risk controls as you grow.',
     'home.capabilities.unifiedApi.title': 'Keep existing clients',
-    'home.capabilities.accountPool.title': 'Upstream account pools',
+    'home.capabilities.accountPool.title': 'Managed account pools',
     'home.capabilities.wallet.title': 'Wallet and ledgers',
     'home.footer.tagline': 'Reliable AI API gateway for teams and developers.',
     'home.login': 'Login',
@@ -140,7 +140,7 @@ describe('HomeView default homepage', () => {
     expect(wrapper.text()).not.toContain('182 ms')
     expect(wrapper.text()).not.toContain('99.9%')
     expect(wrapper.text()).toContain('Keep existing clients')
-    expect(wrapper.text()).toContain('Upstream account pools')
+    expect(wrapper.text()).toContain('Managed account pools')
     expect(wrapper.text()).toContain('Wallet and ledgers')
     expect(wrapper.find('.home-minimal-hero').exists()).toBe(true)
     expect(wrapper.find('.home-minimal-connection').exists()).toBe(true)

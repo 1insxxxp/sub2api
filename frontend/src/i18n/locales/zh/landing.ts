@@ -78,7 +78,7 @@ export default {
         desc: 'SDK 和请求结构不变，迁移时主要切换 Base URL。'
       },
       accountPool: {
-        title: '上游账号池',
+        title: '自营账号池',
         desc: '按渠道组织账号，支持分配、限额和故障切换。'
       },
       monitoring: {

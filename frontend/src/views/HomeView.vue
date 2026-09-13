@@ -342,7 +342,23 @@ onBeforeUnmount(() => {
   filter: blur(2px);
   opacity: 0.82;
   transform: translate(-50%, -3%) scale(1);
-  animation: home-orb-float 14s ease-in-out infinite alternate;
+  animation: home-orb-float 10s ease-in-out infinite alternate;
+}
+
+.home-minimal-orb::before,
+.home-minimal-orb::after {
+  content: '';
+  position: absolute;
+  inset: 16%;
+  border: 1px solid rgba(96, 165, 250, 0.28);
+  border-radius: 9999px;
+  animation: home-orb-ring 7s ease-in-out infinite;
+}
+
+.home-minimal-orb::after {
+  inset: 28%;
+  border-color: rgba(34, 211, 238, 0.28);
+  animation-delay: -3.5s;
 }
 
 .dark .home-minimal-orb {
@@ -434,8 +450,13 @@ onBeforeUnmount(() => {
 }
 
 @keyframes home-orb-float {
-  from { transform: translate(-50%, -3%) scale(0.96); }
-  to { transform: translate(-50%, 3%) scale(1.04); }
+  from { transform: translate(-50%, -3%) scale(0.96); opacity: 0.68; }
+  to { transform: translate(-50%, 3%) scale(1.04); opacity: 0.9; }
+}
+
+@keyframes home-orb-ring {
+  0%, 100% { transform: scale(0.86); opacity: 0.15; }
+  50% { transform: scale(1.08); opacity: 0.65; }
 }
 
 @keyframes home-status-glow {
@@ -462,6 +483,8 @@ onBeforeUnmount(() => {
 
 @media (prefers-reduced-motion: reduce) {
   .home-minimal-orb,
+  .home-minimal-orb::before,
+  .home-minimal-orb::after,
   .home-minimal-reveal,
   .home-minimal-connection-dot {
     animation: none;
