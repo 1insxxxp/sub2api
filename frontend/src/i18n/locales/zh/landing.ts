@@ -20,7 +20,7 @@ export default {
       workflow: '使用流程'
     },
     hero: {
-      eyebrow: 'PASSION API GATEWAY',
+      eyebrow: 'PASSION API · 网关',
       title: 'Passion API',
       titleLead: 'Passion API',
       subtitle:
@@ -103,6 +103,11 @@ export default {
       subtitle:
         '保留现有 SDK、模型参数和请求格式。把 Base URL 指向网关，再使用平台 API Key，即可把调用、成本和渠道状态纳入统一管理。',
       replaceBaseUrl: '替换 Base URL',
+      consoleStatus: '系统在线',
+      requestLabel: '请求',
+      modelLabel: '模型',
+      routedLabel: '已通过 Passion API 路由',
+      onlineLabel: '能力',
       useApiKey: '使用平台 API Key',
       monitorCost: '查看调用、余额和渠道状态'
     },

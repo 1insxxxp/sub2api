@@ -96,21 +96,10 @@
   <!-- Default Home Page -->
   <div
     v-else
-    class="home-minimal-root min-h-screen overflow-x-hidden bg-white text-slate-950 dark:bg-dark-950 dark:text-white"
+    class="home-minimal-root home-tech-root min-h-screen overflow-x-hidden bg-slate-100 text-slate-950 dark:bg-[#050914] dark:text-white"
   >
     <div class="home-minimal-grid pointer-events-none absolute inset-0" aria-hidden="true"></div>
-    <div class="home-minimal-orb pointer-events-none absolute left-1/2 top-[18%] h-[30rem] w-[30rem] -translate-x-1/2 rounded-full" aria-hidden="true">
-      <div class="home-orb-sphere">
-        <div class="home-orb-surface"></div>
-      </div>
-      <div class="home-orb-orbit">
-        <div class="home-orb-track"></div>
-      </div>
-      <div class="home-orb-orbit home-orb-orbit-cross">
-        <div class="home-orb-track"></div>
-      </div>
-    </div>
-
+    <div class="home-tech-noise pointer-events-none absolute inset-0" aria-hidden="true"></div>
     <header
       class="home-minimal-header fixed inset-x-0 top-0 z-30 border-b border-transparent px-4 py-3 transition-all duration-300 sm:px-6"
       :class="{ 'home-minimal-header-scrolled': isHeaderScrolled }"
@@ -165,21 +154,33 @@
     </header>
 
     <main class="relative z-10">
-      <section class="home-minimal-hero mx-auto flex min-h-[calc(100vh-8rem)] w-full max-w-4xl flex-col items-center justify-center px-4 pb-16 pt-28 text-center sm:px-6 sm:pb-20 sm:pt-32">
-        <p class="home-minimal-reveal mb-6 inline-flex items-center gap-2 rounded-full border border-blue-200/80 bg-white/80 px-3.5 py-1.5 text-[11px] font-bold uppercase tracking-[0.22em] text-blue-700 shadow-sm shadow-blue-100/80 dark:border-blue-400/20 dark:bg-dark-900/70 dark:text-blue-300 dark:shadow-none">
-          <span class="h-1.5 w-1.5 rounded-full bg-cyan-400 shadow-[0_0_0_4px_rgba(34,211,238,0.14)]"></span>
-          {{ t('home.hero.eyebrow') }}
-        </p>
-        <h1 class="home-minimal-reveal max-w-4xl text-5xl font-semibold leading-[1.03] tracking-[-0.045em] sm:text-7xl lg:text-[5.9rem]" style="--motion-index: 1">
-          <span class="block">{{ t('home.hero.titleLead') }}</span>
-        </h1>
-        <p class="home-minimal-reveal mt-7 max-w-2xl text-base leading-8 text-slate-600 dark:text-slate-300 sm:text-xl sm:leading-9" style="--motion-index: 2">
-          {{ siteSubtitle || t('home.hero.subtitle') }}
-        </p>
-        <div class="home-minimal-reveal mt-9 flex w-full flex-col justify-center gap-3 sm:w-auto sm:flex-row" style="--motion-index: 3">
+      <section class="home-minimal-hero home-tech-stage mx-auto grid min-h-[calc(100vh-6rem)] w-full max-w-7xl items-center gap-12 overflow-hidden px-5 pb-16 pt-32 sm:px-8 lg:grid-cols-[1.05fr_0.95fr] lg:gap-8 lg:px-12 lg:pb-24 lg:pt-36">
+        <div class="home-minimal-orb pointer-events-none absolute right-[5%] top-[13rem] h-[34rem] w-[34rem] rounded-full" aria-hidden="true">
+          <div class="home-orb-sphere">
+            <div class="home-orb-surface"></div>
+          </div>
+          <div class="home-orb-orbit">
+            <div class="home-orb-track"></div>
+          </div>
+          <div class="home-orb-orbit home-orb-orbit-cross">
+            <div class="home-orb-track"></div>
+          </div>
+        </div>
+        <div class="relative z-10 max-w-2xl">
+          <p class="home-minimal-reveal mb-6 inline-flex items-center gap-2 rounded-full border border-cyan-300/25 bg-cyan-300/[0.08] px-3.5 py-1.5 text-[11px] font-bold uppercase tracking-[0.24em] text-cyan-200" style="--motion-index: 0">
+            <span class="home-tech-live-dot h-1.5 w-1.5 rounded-full bg-cyan-300"></span>
+            {{ t('home.hero.eyebrow') }}
+          </p>
+          <h1 class="home-minimal-reveal max-w-2xl text-5xl font-semibold leading-[0.98] tracking-[-0.055em] text-white sm:text-7xl lg:text-[6.4rem]" style="--motion-index: 1">
+            {{ t('home.hero.titleLead') }}
+          </h1>
+          <p class="home-minimal-reveal mt-7 max-w-xl text-base leading-8 text-slate-300 sm:text-xl sm:leading-9" style="--motion-index: 2">
+            {{ siteSubtitle || t('home.hero.subtitle') }}
+          </p>
+          <div class="home-minimal-reveal mt-9 flex w-full flex-col gap-3 sm:w-auto sm:flex-row" style="--motion-index: 3">
           <router-link
             :to="isAuthenticated ? dashboardPath : '/login'"
-            class="home-minimal-primary inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-xl px-7 text-sm font-semibold text-white sm:w-auto"
+              class="home-minimal-primary inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-xl px-7 text-sm font-semibold text-white sm:w-auto"
           >
             {{ isAuthenticated ? t('home.hero.dashboardCta') : t('home.hero.primaryCta') }}
             <Icon name="arrowRight" size="sm" />
@@ -189,30 +190,52 @@
             :href="docUrl"
             target="_blank"
             rel="noopener noreferrer"
-            class="inline-flex min-h-12 w-full items-center justify-center rounded-xl border border-slate-200 bg-white/80 px-7 text-sm font-semibold text-slate-700 transition-all hover:-translate-y-0.5 hover:border-blue-300 hover:bg-blue-50 sm:w-auto dark:border-dark-700 dark:bg-dark-900/70 dark:text-slate-100 dark:hover:border-blue-500/50 dark:hover:bg-blue-500/10"
+              class="inline-flex min-h-12 w-full items-center justify-center rounded-xl border border-white/15 bg-white/[0.06] px-7 text-sm font-semibold text-white transition-all hover:-translate-y-0.5 hover:border-cyan-300/50 hover:bg-white/[0.1] sm:w-auto"
           >
             {{ t('home.hero.secondaryCta') }}
           </a>
-        </div>
-        <div class="home-minimal-reveal mt-12 flex flex-wrap items-center justify-center gap-x-6 gap-y-3 text-xs font-medium text-slate-500 dark:text-slate-400" style="--motion-index: 4">
-          <span v-for="item in valueItems" :key="item.title" class="home-minimal-proof inline-flex items-center gap-2">
-            <span class="flex h-6 w-6 items-center justify-center rounded-full" :class="item.iconClass">
-              <Icon :name="item.icon" size="xs" />
+          </div>
+          <div class="home-minimal-reveal mt-12 flex flex-wrap gap-x-6 gap-y-3 text-xs font-medium text-slate-400" style="--motion-index: 4">
+            <span v-for="item in valueItems" :key="item.title" class="home-minimal-proof inline-flex items-center gap-2">
+              <span class="flex h-6 w-6 items-center justify-center rounded-full bg-white/10 text-cyan-200"><Icon :name="item.icon" size="xs" /></span>
+              {{ item.title }}
             </span>
-            {{ item.title }}
-          </span>
+          </div>
         </div>
-        <div class="home-minimal-reveal mt-16 w-full max-w-3xl" style="--motion-index: 5">
-          <div class="home-minimal-connection mx-auto flex max-w-2xl items-center justify-center gap-3 rounded-2xl border border-blue-100/90 bg-white/65 px-4 py-3 text-xs text-slate-500 shadow-lg shadow-blue-100/40 backdrop-blur-sm dark:border-blue-400/15 dark:bg-dark-900/60 dark:text-slate-400 dark:shadow-none sm:gap-4 sm:px-6">
-            <span class="home-minimal-connection-dot h-2 w-2 shrink-0 rounded-full bg-cyan-400"></span>
-            <span class="min-w-0 truncate font-mono">{{ apiEndpoint }}</span>
-            <span class="h-4 w-px bg-slate-200 dark:bg-dark-700"></span>
-            <span class="whitespace-nowrap">{{ t('home.integration.replaceBaseUrl') }}</span>
+
+        <div class="home-minimal-reveal home-tech-console relative z-10 mx-auto w-full max-w-xl" style="--motion-index: 2">
+          <div class="home-tech-console-glow"></div>
+          <div class="relative overflow-hidden rounded-3xl border border-white/15 bg-[#0b1424]/90 shadow-2xl shadow-cyan-950/40 backdrop-blur-xl">
+            <div class="flex items-center justify-between border-b border-white/10 px-5 py-4">
+              <div class="flex items-center gap-2 text-xs font-semibold tracking-[0.18em] text-slate-300"><span class="home-tech-live-dot h-2 w-2 rounded-full bg-emerald-300"></span>{{ t('home.integration.consoleStatus') }}</div>
+              <div class="flex gap-1.5"><span class="h-2 w-2 rounded-full bg-white/20"></span><span class="h-2 w-2 rounded-full bg-white/20"></span><span class="h-2 w-2 rounded-full bg-white/20"></span></div>
+            </div>
+            <div class="space-y-5 p-5 sm:p-7">
+              <div class="rounded-2xl border border-cyan-200/15 bg-cyan-300/[0.06] p-4 font-mono text-xs leading-6 text-cyan-100 sm:text-sm">
+                <div class="text-slate-500">$ {{ t('home.integration.requestLabel') }}</div>
+                <div><span class="text-fuchsia-300">POST</span> <span class="text-slate-200">/v1/chat/completions</span></div>
+                <div class="text-slate-400">{{ t('home.integration.modelLabel') }}: <span class="text-cyan-200">your-model</span></div>
+                <div class="mt-1 text-emerald-300">✓ {{ t('home.integration.routedLabel') }}</div>
+              </div>
+              <div class="grid gap-3 sm:grid-cols-3">
+                <div v-for="(item, index) in valueItems" :key="item.title" class="home-tech-route-card rounded-2xl border border-white/10 bg-white/[0.045] p-3" :style="{ '--route-index': index }">
+                  <div class="flex items-center justify-between"><span class="flex h-7 w-7 items-center justify-center rounded-lg bg-white/10 text-cyan-200"><Icon :name="item.icon" size="xs" /></span><span class="home-tech-route-pulse h-1.5 w-1.5 rounded-full bg-cyan-300"></span></div>
+                  <p class="mt-3 truncate text-xs font-medium text-slate-200">{{ item.title }}</p>
+                  <p class="mt-1 text-[10px] tracking-[0.16em] text-slate-500">{{ t('home.integration.onlineLabel') }}</p>
+                </div>
+              </div>
+              <div class="home-minimal-connection flex items-center gap-3 rounded-2xl border border-cyan-200/20 bg-cyan-300/[0.05] px-4 py-3 text-xs text-slate-300">
+                <span class="home-minimal-connection-dot h-2 w-2 shrink-0 rounded-full bg-cyan-300"></span>
+                <span class="min-w-0 truncate font-mono">{{ apiEndpoint }}</span>
+                <span class="h-4 w-px bg-white/15"></span>
+                <span class="whitespace-nowrap text-slate-400">{{ t('home.integration.replaceBaseUrl') }}</span>
+              </div>
+            </div>
           </div>
         </div>
       </section>
 
-      <section class="home-minimal-showcase home-scroll-reveal border-y border-slate-100/90 bg-white/55 px-4 py-20 dark:border-dark-800/80 dark:bg-dark-900/25 sm:px-6 lg:py-28">
+      <section class="home-minimal-showcase home-scroll-reveal border-y border-slate-200/80 bg-slate-100/80 px-4 py-20 dark:border-white/10 dark:bg-[#07101d] sm:px-6 lg:py-28">
         <div class="mx-auto max-w-6xl">
           <div class="max-w-2xl">
             <p class="text-xs font-bold uppercase tracking-[0.22em] text-blue-600 dark:text-blue-300">{{ t('home.sections.capabilitiesEyebrow') }}</p>
@@ -220,13 +243,13 @@
             <p class="mt-4 text-sm leading-7 text-slate-600 dark:text-slate-300 sm:text-base">{{ t('home.sections.capabilitiesSubtitle') }}</p>
           </div>
           <div class="mt-10 grid gap-4 md:grid-cols-3">
-            <article v-for="(item, index) in valueItems" :key="item.title" class="home-minimal-card home-scroll-reveal rounded-2xl border border-slate-200/80 bg-white/75 p-6 shadow-sm shadow-blue-100/40 dark:border-dark-700 dark:bg-dark-900/60 dark:shadow-none" :style="{ '--motion-index': index }">
-              <span class="flex h-10 w-10 items-center justify-center rounded-xl" :class="item.iconClass"><Icon :name="item.icon" size="sm" /></span>
+            <article v-for="(item, index) in valueItems" :key="item.title" class="home-minimal-card home-scroll-reveal rounded-3xl border border-slate-200/80 bg-white/75 p-6 shadow-sm shadow-blue-100/40 dark:border-white/10 dark:bg-white/[0.045] dark:shadow-none" :style="{ '--motion-index': index }">
+              <span class="flex h-11 w-11 items-center justify-center rounded-2xl bg-blue-600 text-white shadow-lg shadow-blue-600/20"><Icon :name="item.icon" size="sm" /></span>
               <h3 class="mt-5 text-base font-semibold">{{ item.title }}</h3>
               <p class="mt-2 text-sm leading-6 text-slate-500 dark:text-slate-400">{{ item.desc }}</p>
             </article>
           </div>
-          <div class="home-minimal-steps home-scroll-reveal mt-5 grid gap-3 rounded-2xl border border-blue-100/90 bg-blue-50/50 p-4 dark:border-blue-500/15 dark:bg-blue-500/[0.05] sm:grid-cols-3 sm:p-5">
+          <div class="home-minimal-steps home-scroll-reveal mt-5 grid gap-3 rounded-3xl border border-blue-100/90 bg-white/70 p-4 dark:border-blue-500/20 dark:bg-blue-500/[0.06] sm:grid-cols-3 sm:p-5">
             <div v-for="(step, index) in workflowItems" :key="step.title" class="flex gap-3 rounded-xl p-3">
               <span class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-white text-xs font-bold text-blue-600 shadow-sm dark:bg-dark-900 dark:text-blue-300">{{ index + 1 }}</span>
               <div>
@@ -239,8 +262,8 @@
       </section>
     </main>
 
-    <footer class="relative z-10 border-t border-slate-100 px-4 py-6 dark:border-dark-800 sm:px-6">
-      <div class="mx-auto flex max-w-6xl flex-col items-center justify-between gap-2 text-xs text-slate-400 sm:flex-row">
+    <footer class="relative z-10 border-t border-slate-200 px-4 py-6 dark:border-white/10 sm:px-6">
+      <div class="mx-auto flex max-w-6xl flex-col items-center justify-between gap-2 text-xs text-slate-600 dark:text-slate-400 sm:flex-row">
         <p>&copy; {{ currentYear }} {{ siteName }}</p>
         <a v-if="docUrl" :href="docUrl" target="_blank" rel="noopener noreferrer" class="transition-colors hover:text-blue-600 dark:hover:text-blue-300">{{ t('home.docs') }}</a>
       </div>
@@ -397,6 +420,95 @@ onBeforeUnmount(() => {
   isolation: isolate;
 }
 
+.home-tech-root {
+  background-image: radial-gradient(circle at 50% 0%, rgba(59, 130, 246, 0.09), transparent 38rem);
+}
+
+.home-tech-noise {
+  z-index: 0;
+  opacity: 0.22;
+  background-image: radial-gradient(rgba(37, 99, 235, 0.24) 0.7px, transparent 0.7px);
+  background-size: 18px 18px;
+  mask-image: linear-gradient(to bottom, black, transparent 70%);
+}
+
+.home-tech-stage {
+  position: relative;
+  isolation: isolate;
+  border-radius: 0 0 2.5rem 2.5rem;
+  background:
+    radial-gradient(circle at 78% 44%, rgba(14, 165, 233, 0.2), transparent 30%),
+    radial-gradient(circle at 20% 20%, rgba(79, 70, 229, 0.24), transparent 36%),
+    linear-gradient(125deg, #050a15 0%, #0a1426 50%, #071c2d 100%);
+  box-shadow: 0 28px 90px rgba(15, 23, 42, 0.2);
+}
+
+.home-minimal-showcase {
+  scroll-margin-top: 5rem;
+}
+
+.home-tech-stage::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  opacity: 0.32;
+  background-image: linear-gradient(rgba(125, 211, 252, 0.08) 1px, transparent 1px), linear-gradient(90deg, rgba(125, 211, 252, 0.08) 1px, transparent 1px);
+  background-size: 54px 54px;
+  mask-image: linear-gradient(to bottom, black 0%, transparent 85%);
+}
+
+.home-tech-stage .home-orb-sphere {
+  background: #0d2a4a;
+  box-shadow: 0 0 80px rgba(34, 211, 238, 0.22);
+}
+
+.home-tech-stage .home-orb-surface {
+  opacity: 0.5;
+}
+
+.home-tech-stage .home-orb-sphere::after {
+  background: radial-gradient(circle at 30% 22%, rgba(125, 211, 252, 0.28), transparent 45%, rgba(2, 6, 23, 0.7));
+}
+
+.home-tech-live-dot {
+  box-shadow: 0 0 0 5px rgba(34, 211, 238, 0.12), 0 0 18px rgba(34, 211, 238, 0.65);
+  animation: home-status-glow 2.4s ease-out infinite;
+}
+
+.home-tech-console {
+  transform: perspective(1200px) rotateY(-8deg) rotateX(2deg);
+  transition: transform 500ms var(--home-motion-ease);
+}
+
+.home-tech-console:hover {
+  transform: perspective(1200px) rotateY(-2deg) rotateX(0deg) translateY(-6px);
+}
+
+.home-tech-console-glow {
+  position: absolute;
+  inset: 12% -10% -10%;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(34, 211, 238, 0.2), transparent 65%);
+  filter: blur(20px);
+}
+
+.home-tech-route-card {
+  animation: home-route-pulse 5s ease-in-out infinite;
+  animation-delay: calc(var(--route-index, 0) * 450ms);
+  transition: border-color 200ms ease, transform 200ms ease, background 200ms ease;
+}
+
+.home-tech-route-card:hover {
+  transform: translateY(-4px);
+  border-color: rgba(103, 232, 249, 0.45);
+  background: rgba(34, 211, 238, 0.09);
+}
+
+.home-tech-route-pulse {
+  animation: home-status-glow 2.4s ease-out infinite;
+}
+
 .home-minimal-root::before,
 .home-minimal-root::after {
   content: '';
@@ -447,8 +559,11 @@ onBeforeUnmount(() => {
 }
 
 .home-minimal-orb {
-  transform: translate(-50%, -3%) scale(1);
+  z-index: 1;
+  transform: translate(0, -3%) scale(1);
   animation: home-orb-float 10s ease-in-out infinite alternate;
+  opacity: 0.92;
+  mix-blend-mode: screen;
 }
 
 .home-orb-sphere {
@@ -580,6 +695,12 @@ onBeforeUnmount(() => {
   box-shadow: 0 14px 30px rgba(37, 99, 235, 0.3);
 }
 
+.home-minimal-root a:focus-visible,
+.home-minimal-root button:focus-visible {
+  outline: 2px solid #67e8f9;
+  outline-offset: 3px;
+}
+
 .home-minimal-primary {
   transition: transform 180ms ease, box-shadow 180ms ease;
 }
@@ -668,8 +789,8 @@ onBeforeUnmount(() => {
 }
 
 @keyframes home-orb-float {
-  from { transform: translate(-50%, -3%) scale(0.98); }
-  to { transform: translate(-50%, 3%) scale(1.02); }
+  from { transform: translate(0, -3%) scale(0.98); }
+  to { transform: translate(0, 3%) scale(1.02); }
 }
 
 @keyframes home-orb-spin {
@@ -687,6 +808,11 @@ onBeforeUnmount(() => {
   50% { box-shadow: 0 14px 40px rgba(59, 130, 246, 0.08); }
 }
 
+@keyframes home-route-pulse {
+  0%, 100% { border-color: rgba(255, 255, 255, 0.1); }
+  50% { border-color: rgba(34, 211, 238, 0.35); }
+}
+
 @media (max-width: 640px) {
   .home-minimal-header {
     padding-top: 0.65rem;
@@ -694,9 +820,11 @@ onBeforeUnmount(() => {
   }
 
   .home-minimal-orb {
-    top: 22%;
+    top: 34%;
+    right: -48%;
     height: 21rem;
     width: 21rem;
+    opacity: 0.28;
   }
 
   .home-minimal-grid {
@@ -706,6 +834,7 @@ onBeforeUnmount(() => {
 
 @media (prefers-reduced-motion: reduce) {
   .home-minimal-grid,
+  .home-tech-route-card,
   .home-minimal-root::after,
   .home-minimal-orb,
   .home-orb-surface,
@@ -721,12 +850,20 @@ onBeforeUnmount(() => {
   }
 
   .home-minimal-primary,
+  .home-tech-console,
   .home-minimal-proof,
   .home-minimal-connection,
   .home-minimal-card,
   .home-minimal-steps,
   .home-scroll-reveal {
     transition: none;
+  }
+
+  .home-tech-console,
+  .home-tech-console:hover,
+  .home-tech-route-card,
+  .home-tech-route-card:hover {
+    transform: none;
   }
 
   .home-scroll-reveal {

@@ -103,6 +103,11 @@ export default {
       subtitle:
         'Keep your SDKs, model parameters, and request format. Point the Base URL to the gateway, use a platform API key, and manage requests, cost, and channel state together.',
       replaceBaseUrl: 'Replace Base URL',
+      consoleStatus: 'System online',
+      requestLabel: 'request',
+      modelLabel: 'model',
+      routedLabel: 'Routed through Passion API',
+      onlineLabel: 'capability',
       useApiKey: 'Use your platform API key',
       monitorCost: 'Watch calls, balance, and channel state'
     },
