@@ -64,17 +64,18 @@ describe('ModelMappingBulkActions', () => {
   it('cleans a shared upstream prefix and suffix while preserving request names', async () => {
     const wrapper = mount(ModelMappingBulkActions, {
       props: {
-        modelValue: [{ from: '测试/gemini', to: 'a/gemini-preview' }],
+        modelValue: [{ from: 'old-name', to: 'a/gemini-preview' }],
         allowedModels: []
       }
     })
+    await wrapper.get('[data-testid="model-mapping-prefix"]').setValue('测试/')
     await wrapper.get('[data-testid="remove-upstream-prefix"]').setValue('a/')
     await wrapper.get('[data-testid="remove-upstream-suffix"]').setValue('-preview')
     expect(wrapper.get('[data-testid="cleanup-preview"]').text()).toContain('1')
     await wrapper.get('[data-testid="cleanup-mapping-targets"]').trigger('click')
 
     expect(wrapper.emitted('update:modelValue')?.at(-1)).toEqual([[
-      { from: '测试/gemini', to: 'gemini' }
+      { from: '测试/gemini', to: 'a/gemini-preview' }
     ]])
   })
 })

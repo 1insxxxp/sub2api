@@ -6,11 +6,11 @@ vi.mock('@/api/admin/accounts', () => ({
 
 import {
   buildModelMappingObject,
-  cleanupModelMappingTargets,
   generateModelMappingsFromWhitelist,
   getModelsByPlatform,
   getPresetMappingsByPlatform,
   prependModelMappingPrefix,
+  rebuildModelMappingSourcesFromTargets,
   splitModelMappingObject
 } from '../useModelWhitelist'
 
@@ -244,14 +244,14 @@ describe('useModelWhitelist', () => {
   })
 
   it('清理上游模型名的统一前缀和后缀，并统计变更与冲突', () => {
-    const result = cleanupModelMappingTargets([
+    const result = rebuildModelMappingSourcesFromTargets([
       { from: 'alias-a', to: 'a/gemini-2.5-flash-preview' },
       { from: 'alias-b', to: 'gemini-2.5-flash' },
       { from: 'empty', to: '' }
-    ], 'a/', '-preview')
+    ], '测试/', 'a/', '-preview')
 
     expect(result.mappings).toEqual([
-      { from: 'alias-a', to: 'gemini-2.5-flash' },
+      { from: '测试/gemini-2.5-flash', to: 'a/gemini-2.5-flash-preview' },
       { from: 'alias-b', to: 'gemini-2.5-flash' },
       { from: 'empty', to: '' }
     ])
@@ -260,12 +260,26 @@ describe('useModelWhitelist', () => {
   })
 
   it('清理规则可重复执行且不会修改输入映射', () => {
-    const mappings = [{ from: 'alias', to: 'vendor/model-preview'}]
-    const once = cleanupModelMappingTargets(mappings, 'vendor/', '-preview')
-    const twice = cleanupModelMappingTargets(once.mappings, 'vendor/', '-preview')
+    const mappings = [{ from: 'alias', to: 'vendor/model-preview' }]
+    const once = rebuildModelMappingSourcesFromTargets(mappings, '测试/', 'vendor/', '-preview')
+    const twice = rebuildModelMappingSourcesFromTargets(once.mappings, '测试/', 'vendor/', '-preview')
 
     expect(twice.mappings).toEqual(once.mappings)
     expect(twice.changedCount).toBe(0)
-    expect(mappings).toEqual([{ from: 'alias', to: 'vendor/model-preview'}])
+    expect(mappings).toEqual([{ from: 'alias', to: 'vendor/model-preview' }])
+  })
+
+  it('遇到已有请求模型名冲突时保留原行并统计冲突', () => {
+    const result = rebuildModelMappingSourcesFromTargets([
+      { from: 'existing', to: 'a/gemini-preview' },
+      { from: 'alias', to: 'a/gemini-preview' }
+    ], '测试/', 'a/', '-preview')
+
+    expect(result.mappings).toEqual([
+      { from: '测试/gemini', to: 'a/gemini-preview' },
+      { from: 'alias', to: 'a/gemini-preview' }
+    ])
+    expect(result.changedCount).toBe(1)
+    expect(result.collisionCount).toBe(1)
   })
 })

@@ -5,7 +5,7 @@ import { useAppStore } from '@/stores/app'
 import {
   generateModelMappingsFromWhitelist,
   prependModelMappingPrefix,
-  cleanupModelMappingTargets,
+  rebuildModelMappingSourcesFromTargets,
   type ModelMappingEntry
 } from '@/composables/useModelWhitelist'
 
@@ -21,12 +21,12 @@ const cleanupPreview = computed(() => {
   if (!removePrefix.value.trim() && !removeSuffix.value.trim()) {
     return { mappings: props.modelValue, changedCount: 0, collisionCount: 0 }
   }
-  return cleanupModelMappingTargets(props.modelValue, removePrefix.value, removeSuffix.value)
+  return rebuildModelMappingSourcesFromTargets(props.modelValue, prefix.value, removePrefix.value, removeSuffix.value)
 })
 
 const cleanupPreviewRows = computed(() => cleanupPreview.value.mappings.flatMap((mapping, index) => {
   const original = props.modelValue[index]
-  return original && original.to !== mapping.to ? [{ index, from: mapping.from, before: original.to, after: mapping.to }] : []
+  return original && original.from !== mapping.from ? [{ index, from: mapping.from, before: original.from, after: mapping.from }] : []
 }))
 
 const hasInvalidWildcard = () => prefix.value.includes('*')
@@ -64,11 +64,15 @@ function prepend() {
   appStore.showInfo(t('admin.accounts.modelMappingPrefixesApplied', { count: changedCount }))
 }
 function cleanup() {
+  if (!prefix.value.trim()) {
+    appStore.showError(t('admin.accounts.modelMappingCleanupPrefixEmpty'))
+    return
+  }
   if (!removePrefix.value.trim() && !removeSuffix.value.trim()) {
     appStore.showError(t('admin.accounts.modelMappingCleanupEmpty'))
     return
   }
-  const result = cleanupModelMappingTargets(props.modelValue, removePrefix.value, removeSuffix.value)
+  const result = rebuildModelMappingSourcesFromTargets(props.modelValue, prefix.value, removePrefix.value, removeSuffix.value)
   emit('update:modelValue', result.mappings)
   appStore.showInfo(t('admin.accounts.modelMappingCleanupApplied', { count: result.changedCount, collisions: result.collisionCount }))
 }
@@ -78,6 +82,7 @@ function cleanup() {
     <label for="model-mapping-prefix" class="mb-2 block text-xs text-gray-500">{{ t('admin.accounts.modelMappingPrefix') }}</label>
     <p class="mb-2 text-xs text-gray-500">{{ t('admin.accounts.modelMappingBulkHint') }}</p>
     <p v-if="prefix.includes('*')" class="text-xs text-rose-600">{{ t('admin.accounts.wildcardOnlyAtEnd') }}</p>
+    <p class="mb-2 text-xs text-gray-500">{{ t('admin.accounts.modelMappingCleanupHint') }}</p>
     <div class="mb-2 flex flex-wrap gap-2">
       <input
         v-model="removePrefix"
@@ -97,7 +102,7 @@ function cleanup() {
         type="button"
         data-testid="cleanup-mapping-targets"
         class="btn btn-secondary text-sm"
-        :disabled="!removePrefix.trim() && !removeSuffix.trim()"
+        :disabled="!prefix.trim() || (!removePrefix.trim() && !removeSuffix.trim())"
         @click="cleanup"
       >
         {{ t('admin.accounts.modelMappingCleanup') }}

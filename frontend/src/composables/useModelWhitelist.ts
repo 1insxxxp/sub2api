@@ -577,31 +577,50 @@ export function prependModelMappingPrefix(
   })
 }
 
-export function cleanupModelMappingTargets(
+export function rebuildModelMappingSourcesFromTargets(
   mappings: ModelMappingEntry[],
+  unifiedPrefix: string,
   removePrefix: string,
   removeSuffix: string
 ): { mappings: ModelMappingEntry[]; changedCount: number; collisionCount: number } {
+  const prefixValue = unifiedPrefix.trim()
   const prefix = removePrefix.trim()
   const suffix = removeSuffix.trim()
   const result = mappings.map(mapping => ({ ...mapping }))
   let changedCount = 0
   let collisionCount = 0
-  const targets = new Set<string>()
+  const sourceCounts = new Map<string, number>()
   result.forEach(mapping => {
-    if (!mapping.to.trim()) return
-    let to = mapping.to
-    if (prefix && to.startsWith(prefix)) to = to.slice(prefix.length)
-    if (suffix && to.endsWith(suffix)) to = to.slice(0, -suffix.length)
-    if (to !== mapping.to) {
-      mapping.to = to
-      changedCount++
+    const source = mapping.from.trim()
+    if (source) sourceCounts.set(source, (sourceCounts.get(source) ?? 0) + 1)
+  })
+
+  result.forEach(mapping => {
+    const currentSource = mapping.from.trim()
+    const upstream = mapping.to.trim()
+    if (!upstream) return
+
+    let cleaned = upstream
+    if (prefix && cleaned.startsWith(prefix)) cleaned = cleaned.slice(prefix.length)
+    if (suffix && cleaned.endsWith(suffix)) cleaned = cleaned.slice(0, -suffix.length)
+    const nextSource = `${prefixValue}${cleaned}`
+    if (!cleaned || !nextSource || nextSource === currentSource) return
+
+    const remainingCurrentCount = (sourceCounts.get(currentSource) ?? 0) - 1
+    if (currentSource) {
+      if (remainingCurrentCount > 0) sourceCounts.set(currentSource, remainingCurrentCount)
+      else sourceCounts.delete(currentSource)
     }
-    const key = to.trim()
-    if (key) {
-      if (targets.has(key)) collisionCount++
-      targets.add(key)
+
+    if (sourceCounts.has(nextSource)) {
+      collisionCount++
+      if (currentSource) sourceCounts.set(currentSource, (sourceCounts.get(currentSource) ?? 0) + 1)
+      return
     }
+
+    mapping.from = nextSource
+    sourceCounts.set(nextSource, 1)
+    changedCount++
   })
   return { mappings: result, changedCount, collisionCount }
 }
