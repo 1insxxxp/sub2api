@@ -164,8 +164,8 @@
       </nav>
     </header>
 
-    <main class="relative z-10 flex min-h-screen items-center justify-center px-4 pb-16 pt-28 sm:px-6 sm:pb-20 sm:pt-32">
-      <section class="home-minimal-hero mx-auto flex w-full max-w-4xl flex-col items-center text-center">
+    <main class="relative z-10">
+      <section class="home-minimal-hero mx-auto flex min-h-screen w-full max-w-4xl flex-col items-center justify-center px-4 pb-16 pt-28 text-center sm:px-6 sm:pb-20 sm:pt-32">
         <p class="home-minimal-reveal mb-6 inline-flex items-center gap-2 rounded-full border border-blue-200/80 bg-white/80 px-3.5 py-1.5 text-[11px] font-bold uppercase tracking-[0.22em] text-blue-700 shadow-sm shadow-blue-100/80 dark:border-blue-400/20 dark:bg-dark-900/70 dark:text-blue-300 dark:shadow-none">
           <span class="h-1.5 w-1.5 rounded-full bg-cyan-400 shadow-[0_0_0_4px_rgba(34,211,238,0.14)]"></span>
           {{ t('home.hero.eyebrow') }}
@@ -208,6 +208,32 @@
             <span class="min-w-0 truncate font-mono">{{ apiEndpoint }}</span>
             <span class="h-4 w-px bg-slate-200 dark:bg-dark-700"></span>
             <span class="whitespace-nowrap">{{ t('home.integration.replaceBaseUrl') }}</span>
+          </div>
+        </div>
+      </section>
+
+      <section class="home-minimal-showcase border-y border-slate-100/90 bg-white/55 px-4 py-20 dark:border-dark-800/80 dark:bg-dark-900/25 sm:px-6 lg:py-28">
+        <div class="mx-auto max-w-6xl">
+          <div class="max-w-2xl">
+            <p class="text-xs font-bold uppercase tracking-[0.22em] text-blue-600 dark:text-blue-300">{{ t('home.sections.capabilitiesEyebrow') }}</p>
+            <h2 class="mt-4 text-3xl font-semibold tracking-tight sm:text-4xl">{{ t('home.sections.capabilitiesTitle') }}</h2>
+            <p class="mt-4 text-sm leading-7 text-slate-600 dark:text-slate-300 sm:text-base">{{ t('home.sections.capabilitiesSubtitle') }}</p>
+          </div>
+          <div class="mt-10 grid gap-4 md:grid-cols-3">
+            <article v-for="(item, index) in valueItems" :key="item.title" class="home-minimal-card home-minimal-reveal rounded-2xl border border-slate-200/80 bg-white/75 p-6 shadow-sm shadow-blue-100/40 dark:border-dark-700 dark:bg-dark-900/60 dark:shadow-none" :style="{ '--motion-index': index }">
+              <span class="flex h-10 w-10 items-center justify-center rounded-xl" :class="item.iconClass"><Icon :name="item.icon" size="sm" /></span>
+              <h3 class="mt-5 text-base font-semibold">{{ item.title }}</h3>
+              <p class="mt-2 text-sm leading-6 text-slate-500 dark:text-slate-400">{{ item.desc }}</p>
+            </article>
+          </div>
+          <div class="home-minimal-steps mt-5 grid gap-3 rounded-2xl border border-blue-100/90 bg-blue-50/50 p-4 dark:border-blue-500/15 dark:bg-blue-500/[0.05] sm:grid-cols-3 sm:p-5">
+            <div v-for="(step, index) in workflowItems" :key="step.title" class="flex gap-3 rounded-xl p-3">
+              <span class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-white text-xs font-bold text-blue-600 shadow-sm dark:bg-dark-900 dark:text-blue-300">{{ index + 1 }}</span>
+              <div>
+                <h3 class="text-sm font-semibold">{{ step.title }}</h3>
+                <p class="mt-1 text-xs leading-5 text-slate-500 dark:text-slate-400">{{ step.desc }}</p>
+              </div>
+            </div>
           </div>
         </div>
       </section>
@@ -277,19 +303,28 @@ const currentYear = computed(() => new Date().getFullYear())
 const valueItems = computed(() => [
   {
     title: t('home.capabilities.unifiedApi.title'),
+    desc: t('home.capabilities.unifiedApi.desc'),
     icon: 'terminal' as const,
     iconClass: 'bg-slate-950 text-white dark:bg-white dark:text-slate-950',
   },
   {
     title: t('home.capabilities.accountPool.title'),
+    desc: t('home.capabilities.accountPool.desc'),
     icon: 'swap' as const,
     iconClass: 'bg-blue-50 text-blue-700 dark:bg-blue-500/10 dark:text-blue-200',
   },
   {
     title: t('home.capabilities.wallet.title'),
+    desc: t('home.capabilities.wallet.desc'),
     icon: 'creditCard' as const,
     iconClass: 'bg-amber-50 text-amber-700 dark:bg-amber-500/10 dark:text-amber-200',
   },
+])
+
+const workflowItems = computed(() => [
+  { title: t('home.workflow.step1.title'), desc: t('home.workflow.step1.desc') },
+  { title: t('home.workflow.step2.title'), desc: t('home.workflow.step2.desc') },
+  { title: t('home.workflow.step3.title'), desc: t('home.workflow.step3.desc') },
 ])
 
 function toggleTheme() {
@@ -332,6 +367,37 @@ onBeforeUnmount(() => {
   --home-motion-ease: cubic-bezier(0.16, 1, 0.3, 1);
   position: relative;
   isolation: isolate;
+}
+
+.home-minimal-root::before,
+.home-minimal-root::after {
+  content: '';
+  position: absolute;
+  inset: 0 0 auto;
+  height: 44rem;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.home-minimal-root::before {
+  background:
+    radial-gradient(ellipse at 50% 8%, rgba(59, 130, 246, 0.16), transparent 56%),
+    radial-gradient(circle at 8% 34%, rgba(6, 182, 212, 0.11), transparent 30%);
+}
+
+.home-minimal-root::after {
+  background: radial-gradient(circle at 94% 18%, rgba(129, 140, 248, 0.11), transparent 28%);
+  animation: home-spotlight-drift 16s ease-in-out infinite alternate;
+}
+
+.dark .home-minimal-root::before {
+  background:
+    radial-gradient(ellipse at 50% 8%, rgba(37, 99, 235, 0.24), transparent 56%),
+    radial-gradient(circle at 8% 34%, rgba(6, 182, 212, 0.14), transparent 30%);
+}
+
+.dark .home-minimal-root::after {
+  background: radial-gradient(circle at 94% 18%, rgba(99, 102, 241, 0.16), transparent 28%);
 }
 
 .home-minimal-grid {
@@ -520,6 +586,20 @@ onBeforeUnmount(() => {
   animation: home-status-glow 2.4s ease-out infinite;
 }
 
+.home-minimal-card {
+  transition: transform 220ms ease, border-color 220ms ease, box-shadow 220ms ease;
+}
+
+.home-minimal-card:hover {
+  transform: translateY(-6px);
+  border-color: rgba(96, 165, 250, 0.65);
+  box-shadow: 0 18px 36px rgba(37, 99, 235, 0.11);
+}
+
+.home-minimal-steps {
+  animation: home-steps-breathe 8s ease-in-out infinite;
+}
+
 @keyframes home-minimal-rise {
   from {
     opacity: 0;
@@ -538,6 +618,11 @@ onBeforeUnmount(() => {
   to { background-position: var(--home-grid-size) var(--home-grid-size), calc(var(--home-grid-size) * -1) var(--home-grid-size); }
 }
 
+@keyframes home-spotlight-drift {
+  from { transform: translate3d(-2%, -1%, 0); }
+  to { transform: translate3d(2%, 1%, 0); }
+}
+
 @keyframes home-orb-float {
   from { transform: translate(-50%, -3%) scale(0.98); }
   to { transform: translate(-50%, 3%) scale(1.02); }
@@ -551,6 +636,11 @@ onBeforeUnmount(() => {
 @keyframes home-status-glow {
   70% { box-shadow: 0 0 0 10px rgba(34, 211, 238, 0); }
   100% { box-shadow: 0 0 0 0 rgba(34, 211, 238, 0); }
+}
+
+@keyframes home-steps-breathe {
+  0%, 100% { box-shadow: 0 0 0 rgba(59, 130, 246, 0); }
+  50% { box-shadow: 0 14px 40px rgba(59, 130, 246, 0.08); }
 }
 
 @media (max-width: 640px) {
@@ -572,6 +662,7 @@ onBeforeUnmount(() => {
 
 @media (prefers-reduced-motion: reduce) {
   .home-minimal-grid,
+  .home-minimal-root::after,
   .home-minimal-orb,
   .home-orb-surface,
   .home-orb-track,
@@ -587,7 +678,9 @@ onBeforeUnmount(() => {
 
   .home-minimal-primary,
   .home-minimal-proof,
-  .home-minimal-connection {
+  .home-minimal-connection,
+  .home-minimal-card,
+  .home-minimal-steps {
     transition: none;
   }
 }
