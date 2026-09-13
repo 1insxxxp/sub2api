@@ -205,6 +205,8 @@ describe('HomeView default homepage', () => {
     expect(source).toContain('home-minimal-rise')
     expect(source).toContain('calc(80ms + (var(--motion-index) * 90ms))')
     expect(source).toContain('@keyframes home-orb-float')
+    expect(source).toContain('@keyframes home-grid-pan')
+    expect(source).toContain('home-grid-pan 22s linear infinite')
   })
 
   it('uses the blue-slate-cyan technology palette as the primary theme', () => {

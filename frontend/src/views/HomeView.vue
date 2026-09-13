@@ -331,7 +331,9 @@ onBeforeUnmount(() => {
   background-image:
     linear-gradient(rgba(37, 99, 235, 0.045) 1px, transparent 1px),
     linear-gradient(90deg, rgba(37, 99, 235, 0.045) 1px, transparent 1px);
-  background-size: 72px 72px;
+  --home-grid-size: 72px;
+  background-size: var(--home-grid-size) var(--home-grid-size);
+  animation: home-grid-pan 22s linear infinite;
   mask-image: linear-gradient(to bottom, black 0%, transparent 72%);
   opacity: 0.65;
 }
@@ -357,9 +359,10 @@ onBeforeUnmount(() => {
   content: '';
   position: absolute;
   inset: 16%;
-  border: 1px solid rgba(96, 165, 250, 0.28);
+  border: 1px solid rgba(96, 165, 250, 0.42);
   border-radius: 9999px;
-  animation: home-orb-ring 7s ease-in-out infinite;
+  box-shadow: 0 0 42px rgba(59, 130, 246, 0.12);
+  animation: home-orb-ring 5.5s ease-in-out infinite;
 }
 
 .home-minimal-orb::after {
@@ -456,6 +459,11 @@ onBeforeUnmount(() => {
   }
 }
 
+@keyframes home-grid-pan {
+  from { background-position: 0 0, 0 0; }
+  to { background-position: var(--home-grid-size) var(--home-grid-size), calc(var(--home-grid-size) * -1) var(--home-grid-size); }
+}
+
 @keyframes home-orb-float {
   from { transform: translate(-50%, -3%) scale(0.96); opacity: 0.68; }
   to { transform: translate(-50%, 3%) scale(1.04); opacity: 0.9; }
@@ -484,11 +492,12 @@ onBeforeUnmount(() => {
   }
 
   .home-minimal-grid {
-    background-size: 48px 48px;
+    --home-grid-size: 48px;
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .home-minimal-grid,
   .home-minimal-orb,
   .home-minimal-orb::before,
   .home-minimal-orb::after,
