@@ -165,7 +165,7 @@
     </header>
 
     <main class="relative z-10">
-      <section class="home-minimal-hero mx-auto flex min-h-screen w-full max-w-4xl flex-col items-center justify-center px-4 pb-16 pt-28 text-center sm:px-6 sm:pb-20 sm:pt-32">
+      <section class="home-minimal-hero mx-auto flex min-h-[calc(100vh-8rem)] w-full max-w-4xl flex-col items-center justify-center px-4 pb-16 pt-28 text-center sm:px-6 sm:pb-20 sm:pt-32">
         <p class="home-minimal-reveal mb-6 inline-flex items-center gap-2 rounded-full border border-blue-200/80 bg-white/80 px-3.5 py-1.5 text-[11px] font-bold uppercase tracking-[0.22em] text-blue-700 shadow-sm shadow-blue-100/80 dark:border-blue-400/20 dark:bg-dark-900/70 dark:text-blue-300 dark:shadow-none">
           <span class="h-1.5 w-1.5 rounded-full bg-cyan-400 shadow-[0_0_0_4px_rgba(34,211,238,0.14)]"></span>
           {{ t('home.hero.eyebrow') }}
@@ -264,7 +264,12 @@ const authStore = useAuthStore()
 const appStore = useAppStore()
 
 const siteName = computed(() => appStore.cachedPublicSettings?.site_name || appStore.siteName || 'Passion')
-const siteSubtitle = computed(() => appStore.cachedPublicSettings?.site_subtitle || '')
+const siteSubtitle = computed(() => {
+  const configured = appStore.cachedPublicSettings?.site_subtitle?.trim() || ''
+  return configured && configured !== 'Subscription to API Conversion Platform'
+    ? configured
+    : t('home.heroSubtitle')
+})
 const siteLogo = computed(() => sanitizeUrl(appStore.effectiveSiteLogo || '', { allowRelative: true, allowDataUrl: true }))
 const docUrl = computed(() => sanitizeUrl(appStore.cachedPublicSettings?.doc_url || appStore.docUrl || ''))
 const homeContent = computed(() => appStore.cachedPublicSettings?.home_content || '')

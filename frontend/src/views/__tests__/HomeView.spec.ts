@@ -45,6 +45,7 @@ vi.mock('vue-i18n', async () => {
   const messages: Record<string, string> = {
     'home.hero.titleLead': 'Passion API',
     'home.hero.eyebrow': 'PASSION API GATEWAY',
+    'home.heroSubtitle': 'One key, all AI models',
     'home.hero.proof.compatible': 'OpenAI-compatible calls',
     'home.hero.proof.routing': 'Account pools and failover',
     'home.hero.proof.billing': 'Wallet billing and usage traces',
