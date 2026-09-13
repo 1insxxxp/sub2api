@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { mount } from '@vue/test-utils'
 
-vi.mock('vue-i18n', () => ({
+vi.mock('vue-i18n', async () => ({ ...await vi.importActual('vue-i18n'),
   useI18n: () => ({ t: (key: string, params?: Record<string, unknown>) => {
     if (!params) return key
     return `${key}:${JSON.stringify(params)}`
