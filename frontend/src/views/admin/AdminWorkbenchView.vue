@@ -411,7 +411,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { redeemAPI, type GeneratedRedeemCode } from '@/api'
 import { useAuthStore } from '@/stores/auth'
@@ -430,18 +430,18 @@ const appStore = useAppStore()
 
 type WorkbenchTab = 'balance-transfer' | 'commission' | 'affiliate-leaderboard'
 
-const activeTab = ref<WorkbenchTab>('balance-transfer')
-const workbenchTabIds: WorkbenchTab[] = ['balance-transfer', 'commission', 'affiliate-leaderboard']
+const activeTab = ref<WorkbenchTab>('commission')
+const workbenchTabIds: WorkbenchTab[] = ['commission', 'balance-transfer', 'affiliate-leaderboard']
 const workbenchTabs = computed<Array<{ id: WorkbenchTab; label: string; icon: 'gift' | 'chartBar' | 'users' }>>(() => [
-  {
-    id: 'balance-transfer',
-    label: t('adminWorkbench.tabs.balanceTransfer'),
-    icon: 'gift'
-  },
   {
     id: 'commission',
     label: t('adminWorkbench.tabs.commission'),
     icon: 'chartBar'
+  },
+  {
+    id: 'balance-transfer',
+    label: t('adminWorkbench.tabs.balanceTransfer'),
+    icon: 'gift'
   },
   {
     id: 'affiliate-leaderboard',
@@ -740,18 +740,40 @@ function updateGeneratedNowHeight() {
   generatedNowHeight.value = height > 0 ? Math.ceil(height) : null
 }
 
-onMounted(() => {
-  void fetchGeneratedCodes()
+function disconnectTransferFormResizeObserver() {
+  transferFormResizeObserver?.disconnect()
+  transferFormResizeObserver = null
+}
+
+function syncTransferFormLayout() {
+  disconnectTransferFormResizeObserver()
+
+  if (activeTab.value !== 'balance-transfer') {
+    generatedNowHeight.value = null
+    return
+  }
+
   updateGeneratedNowHeight()
   if (typeof ResizeObserver !== 'undefined' && transferFormRef.value) {
     transferFormResizeObserver = new ResizeObserver(updateGeneratedNowHeight)
     transferFormResizeObserver.observe(transferFormRef.value)
   }
+}
+
+watch(activeTab, () => {
+  // The transfer form is conditionally mounted, so wait until Vue has applied
+  // the tab change before measuring it or attaching its resize observer.
+  void nextTick(syncTransferFormLayout)
+})
+
+onMounted(() => {
+  void fetchGeneratedCodes()
+  syncTransferFormLayout()
   window.addEventListener('resize', updateGeneratedNowHeight)
 })
 
 onBeforeUnmount(() => {
-  transferFormResizeObserver?.disconnect()
+  disconnectTransferFormResizeObserver()
   window.removeEventListener('resize', updateGeneratedNowHeight)
 })
 </script>
