@@ -263,7 +263,6 @@ export default {
       actualCost: 'Balance spend',
       commissionAmount: 'Earnings',
       dailyChartTitle: 'Daily earnings trend',
-      dailyChartActualCost: 'Balance spend',
       dailyChartCommission: 'Earnings',
       dailyChartEmpty: 'No daily earnings data',
       monthTotal: 'Month total',

@@ -1,6 +1,6 @@
 <template>
   <section
-    class="min-w-0 rounded-lg border border-gray-100 bg-gray-50/70 p-3 dark:border-dark-800 dark:bg-dark-950/40 sm:p-4"
+    class="min-w-0 max-w-full overflow-hidden rounded-lg border border-gray-100 bg-gray-50/70 p-3 dark:border-dark-800 dark:bg-dark-950/40 sm:p-4"
   >
     <div class="mb-3 flex min-w-0 items-start justify-between gap-3">
       <div class="min-w-0">
@@ -13,7 +13,7 @@
       </div>
     </div>
 
-    <div data-test="commission-daily-chart" class="min-w-0 h-56 sm:h-64">
+    <div data-test="commission-daily-chart" class="commission-daily-chart min-w-0 w-full h-48 overflow-hidden sm:h-64">
       <div
         v-if="loading"
         data-test="commission-daily-chart-loading"
@@ -25,7 +25,7 @@
         v-else-if="chartData"
         :data="chartData"
         :options="chartOptions"
-        class="relative block h-full min-w-0"
+        class="relative block h-full w-full min-w-0"
       />
       <div
         v-else
@@ -99,8 +99,6 @@ onBeforeUnmount(() => {
 const colors = computed(() => ({
   text: isDarkMode.value ? '#d1d5db' : '#4b5563',
   grid: isDarkMode.value ? '#374151' : '#e5e7eb',
-  actualCost: '#3b82f6',
-  actualCostFill: isDarkMode.value ? 'rgba(59, 130, 246, 0.18)' : 'rgba(59, 130, 246, 0.12)',
   commission: '#10b981',
   commissionFill: isDarkMode.value ? 'rgba(16, 185, 129, 0.18)' : 'rgba(16, 185, 129, 0.12)'
 }))
@@ -122,17 +120,6 @@ const chartData = computed(() => {
         data: orderedDays.value.map((day) => day.commission_amount ?? 0),
         borderColor: colors.value.commission,
         backgroundColor: colors.value.commissionFill,
-        fill: true,
-        tension: 0.32,
-        pointRadius: 2,
-        pointHoverRadius: 4,
-        pointHitRadius: 10
-      },
-      {
-        label: t('adminWorkbench.commission.dailyChartActualCost'),
-        data: orderedDays.value.map((day) => day.actual_cost ?? 0),
-        borderColor: colors.value.actualCost,
-        backgroundColor: colors.value.actualCostFill,
         fill: true,
         tension: 0.32,
         pointRadius: 2,
@@ -189,9 +176,9 @@ const chartOptions = computed(() => ({
       ticks: {
         color: colors.value.text,
         font: { size: 10 },
-        maxTicksLimit: 8,
+        maxTicksLimit: 6,
         autoSkip: true,
-        autoSkipPadding: 8,
+        autoSkipPadding: 4,
         maxRotation: 0
       }
     },
@@ -202,10 +189,19 @@ const chartOptions = computed(() => ({
       ticks: {
         color: colors.value.text,
         font: { size: 10 },
-        maxTicksLimit: 6,
+        maxTicksLimit: 5,
         callback: (value: string | number) => formatCurrency(value)
       }
     }
   }
 }))
 </script>
+
+<style scoped>
+.commission-daily-chart :deep(canvas) {
+  display: block;
+  width: 100% !important;
+  max-width: 100%;
+  height: 100% !important;
+}
+</style>

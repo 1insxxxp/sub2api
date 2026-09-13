@@ -264,7 +264,6 @@ export default {
       actualCost: '余额消耗',
       commissionAmount: '收益金额',
       dailyChartTitle: '每日收益趋势',
-      dailyChartActualCost: '余额消耗',
       dailyChartCommission: '收益金额',
       dailyChartEmpty: '暂无每日收益数据',
       monthTotal: '本月合计',

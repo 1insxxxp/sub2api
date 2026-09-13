@@ -85,7 +85,7 @@ afterEach(() => {
 })
 
 describe('SubAdminCommissionTrendChart', () => {
-  it('sorts daily points and preserves zero values across aligned datasets', () => {
+  it('sorts daily earnings points and preserves zero values', () => {
     const inputDays = createDays()
     const wrapper = mountChart({ days: inputDays })
     const line = wrapper.findComponent({ name: 'LineChartStub' })
@@ -95,16 +95,12 @@ describe('SubAdminCommissionTrendChart', () => {
     const data = line.props('data') as ChartData
     expect(data.labels).toEqual(['08-01', '08-02', '08-03'])
 
-    const actualCost = data.datasets.find(
-      (dataset) => dataset.label === 'adminWorkbench.commission.dailyChartActualCost'
-    )
     const commission = data.datasets.find(
       (dataset) => dataset.label === 'adminWorkbench.commission.dailyChartCommission'
     )
 
-    expect(actualCost?.data).toEqual([12.25, 0, 0])
+    expect(data.datasets).toHaveLength(1)
     expect(commission?.data).toEqual([0, 0, 2.5])
-    expect(actualCost?.data).toHaveLength(data.labels.length)
     expect(commission?.data).toHaveLength(data.labels.length)
     expect(inputDays.map((day) => day.date)).toEqual([
       '2026-08-03',
@@ -136,8 +132,29 @@ describe('SubAdminCommissionTrendChart', () => {
     const chart = wrapper.get('[data-test="commission-daily-chart"]')
 
     expect(chart.classes()).toEqual(
-      expect.arrayContaining(['min-w-0', 'h-56', 'sm:h-64'])
+      expect.arrayContaining([
+        'commission-daily-chart',
+        'min-w-0',
+        'w-full',
+        'h-48',
+        'sm:h-64',
+        'overflow-hidden'
+      ])
     )
+
+    expect(wrapper.findComponent({ name: 'LineChartStub' }).classes()).toEqual(
+      expect.arrayContaining(['w-full', 'min-w-0'])
+    )
+
+    const options = wrapper.findComponent({ name: 'LineChartStub' }).props('options') as {
+      responsive: boolean
+      maintainAspectRatio: boolean
+      scales: { x: { ticks: { maxTicksLimit: number; maxRotation: number } } }
+    }
+    expect(options.responsive).toBe(true)
+    expect(options.maintainAspectRatio).toBe(false)
+    expect(options.scales.x.ticks.maxTicksLimit).toBeLessThanOrEqual(6)
+    expect(options.scales.x.ticks.maxRotation).toBe(0)
   })
 
   it('updates chart colors when the document theme changes', async () => {
