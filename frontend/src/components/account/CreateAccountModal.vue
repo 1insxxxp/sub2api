@@ -1552,6 +1552,7 @@
               </div>
 
             <ModelMappingBulkActions v-model="modelMappings" :allowed-models="allowedModels" />
+            <ModelMappingBulkActions v-model="modelMappings" :allowed-models="allowedModels" />
             <!-- Model Mapping List -->
             <div v-if="modelMappings.length > 0" class="mb-3 space-y-2">
               <div
