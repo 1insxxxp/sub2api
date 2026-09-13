@@ -205,13 +205,13 @@
 
         <div class="home-minimal-reveal home-tech-console relative z-10 mx-auto w-full max-w-xl" style="--motion-index: 2">
           <div class="home-tech-console-glow"></div>
-          <div class="relative overflow-hidden rounded-3xl border border-white/15 bg-[#0b1424]/90 shadow-2xl shadow-cyan-950/40 backdrop-blur-xl">
+          <div class="relative overflow-hidden rounded-3xl border border-white/15 bg-[#0b1424] shadow-2xl shadow-cyan-950/40 backdrop-blur-xl">
             <div class="flex items-center justify-between border-b border-white/10 px-5 py-4">
               <div class="flex items-center gap-2 text-xs font-semibold tracking-[0.18em] text-slate-300"><span class="home-tech-live-dot h-2 w-2 rounded-full bg-emerald-300"></span>{{ t('home.integration.consoleStatus') }}</div>
               <div class="flex gap-1.5"><span class="h-2 w-2 rounded-full bg-white/20"></span><span class="h-2 w-2 rounded-full bg-white/20"></span><span class="h-2 w-2 rounded-full bg-white/20"></span></div>
             </div>
             <div class="space-y-5 p-5 sm:p-7">
-              <div class="rounded-2xl border border-cyan-200/15 bg-cyan-300/[0.06] p-4 font-mono text-xs leading-6 text-cyan-100 sm:text-sm">
+              <div class="rounded-2xl border border-cyan-200/15 bg-[#0d1b2d] p-4 font-mono text-xs leading-6 text-cyan-100 sm:text-sm">
                 <div class="text-slate-500">$ {{ t('home.integration.requestLabel') }}</div>
                 <div><span class="text-fuchsia-300">POST</span> <span class="text-slate-200">/v1/chat/completions</span></div>
                 <div class="text-slate-400">{{ t('home.integration.modelLabel') }}: <span class="text-cyan-200">your-model</span></div>
