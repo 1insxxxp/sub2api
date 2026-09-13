@@ -425,7 +425,9 @@ onBeforeUnmount(() => {
 }
 
 .home-new-layout {
-  background: linear-gradient(180deg, #fffaf0 0%, #f4f0e8 44%, #eef5f1 100%);
+  background:
+    radial-gradient(circle at 12% 18%, rgba(6, 182, 212, 0.1), transparent 28rem),
+    linear-gradient(180deg, #f8fbff 0%, #f1f6ff 44%, #eef9fb 100%);
 }
 
 .dark .home-new-layout {
@@ -454,9 +456,9 @@ onBeforeUnmount(() => {
 .home-new-hero {
   border-radius: 0;
   background:
-    radial-gradient(circle at 78% 42%, rgba(79, 140, 255, 0.13), transparent 31%),
-    radial-gradient(circle at 18% 18%, rgba(240, 111, 159, 0.1), transparent 28%),
-    linear-gradient(180deg, rgba(255, 250, 240, 0.95), rgba(244, 240, 232, 0.82));
+    radial-gradient(circle at 78% 42%, rgba(14, 165, 233, 0.14), transparent 31%),
+    radial-gradient(circle at 18% 18%, rgba(37, 99, 235, 0.12), transparent 28%),
+    linear-gradient(180deg, rgba(248, 251, 255, 0.96), rgba(239, 247, 255, 0.86));
   box-shadow: none;
 }
 
