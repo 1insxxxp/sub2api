@@ -8,6 +8,9 @@ vi.mock('vue-i18n', async () => ({ ...await vi.importActual('vue-i18n'),
   } })
 }))
 
+
+vi.mock('@/stores/app', () => ({ useAppStore: () => ({ showError: vi.fn(), showInfo: vi.fn() }) }))
+
 import ModelMappingBulkActions from '../ModelMappingBulkActions.vue'
 
 describe('ModelMappingBulkActions', () => {
