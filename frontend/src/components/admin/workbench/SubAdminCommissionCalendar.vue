@@ -38,6 +38,12 @@
       </div>
     </div>
 
+    <SubAdminCommissionTrendChart
+      class="mt-4"
+      :days="days"
+      :loading="loading"
+    />
+
     <div v-if="loading" class="py-12 text-center text-sm text-gray-500 dark:text-dark-400">
       {{ t('common.loading') }}
     </div>
@@ -109,6 +115,7 @@ import { useI18n } from 'vue-i18n'
 import { adminAPI } from '@/api/admin'
 import { extractApiErrorMessage } from '@/utils/apiError'
 import type { SubAdminCommissionCalendarDay } from '@/api/admin'
+import SubAdminCommissionTrendChart from './SubAdminCommissionTrendChart.vue'
 
 const emit = defineEmits<{
   (event: 'select-day', date: string, day: SubAdminCommissionCalendarDay): void

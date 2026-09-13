@@ -1,5 +1,6 @@
 import { mount } from '@vue/test-utils'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { nextTick } from 'vue'
 
 import type { SubAdminCommissionCalendarDay } from '@/api/admin/subAdminCommission'
 import SubAdminCommissionTrendChart from '../SubAdminCommissionTrendChart.vue'
@@ -71,8 +72,17 @@ function createDays(): SubAdminCommissionCalendarDay[] {
 }
 
 function mountChart(props: { days: SubAdminCommissionCalendarDay[]; loading?: boolean }) {
-  return mount(SubAdminCommissionTrendChart, { props })
+  const wrapper = mount(SubAdminCommissionTrendChart, { props })
+  mountedWrappers.push(wrapper)
+  return wrapper
 }
+
+const mountedWrappers: Array<ReturnType<typeof mountChart>> = []
+
+afterEach(() => {
+  mountedWrappers.splice(0).forEach((wrapper) => wrapper.unmount())
+  document.documentElement.classList.remove('dark')
+})
 
 describe('SubAdminCommissionTrendChart', () => {
   it('sorts daily points and preserves zero values across aligned datasets', () => {
@@ -128,5 +138,19 @@ describe('SubAdminCommissionTrendChart', () => {
     expect(chart.classes()).toEqual(
       expect.arrayContaining(['min-w-0', 'h-56', 'sm:h-64'])
     )
+  })
+
+  it('updates chart colors when the document theme changes', async () => {
+    const wrapper = mountChart({ days: createDays() })
+    const line = wrapper.findComponent({ name: 'LineChartStub' })
+    const lightOptions = line.props('options') as { plugins: { legend: { labels: { color: string } } } }
+
+    document.documentElement.classList.add('dark')
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    await nextTick()
+
+    const darkOptions = line.props('options') as { plugins: { legend: { labels: { color: string } } } }
+    expect(lightOptions.plugins.legend.labels.color).toBe('#4b5563')
+    expect(darkOptions.plugins.legend.labels.color).toBe('#d1d5db')
   })
 })
