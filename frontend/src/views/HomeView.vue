@@ -172,9 +172,6 @@
         </p>
         <h1 class="home-minimal-reveal max-w-4xl text-5xl font-semibold leading-[1.03] tracking-[-0.045em] sm:text-7xl lg:text-[5.9rem]" style="--motion-index: 1">
           <span class="block">{{ t('home.hero.titleLead') }}</span>
-          <span class="mt-2 block bg-gradient-to-r from-blue-700 via-blue-600 to-cyan-500 bg-clip-text text-transparent dark:from-blue-300 dark:via-blue-200 dark:to-cyan-300">
-            {{ t('home.hero.titleAccent') }}
-          </span>
         </h1>
         <p class="home-minimal-reveal mt-7 max-w-2xl text-base leading-8 text-slate-600 dark:text-slate-300 sm:text-xl sm:leading-9" style="--motion-index: 2">
           {{ siteSubtitle || t('home.hero.subtitle') }}

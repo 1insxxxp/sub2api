@@ -44,7 +44,6 @@ vi.mock('vue-i18n', async () => {
   const actual = await vi.importActual<typeof import('vue-i18n')>('vue-i18n')
   const messages: Record<string, string> = {
     'home.hero.titleLead': 'Passion API',
-    'home.hero.titleAccent': 'One-stop API',
     'home.hero.eyebrow': 'PASSION API GATEWAY',
     'home.hero.proof.compatible': 'OpenAI-compatible calls',
     'home.hero.proof.routing': 'Account pools and failover',
@@ -134,7 +133,6 @@ describe('HomeView default homepage', () => {
     const wrapper = await mountHome()
 
     expect(wrapper.text()).toContain('Passion API')
-    expect(wrapper.text()).toContain('One-stop API')
     expect(wrapper.text()).toContain('PASSION API GATEWAY')
     expect(wrapper.text()).not.toContain('Routing and billing board')
     expect(wrapper.text()).not.toContain('182 ms')
@@ -231,8 +229,6 @@ describe('HomeView default homepage', () => {
     const source = readFileSync('src/views/HomeView.vue', 'utf-8')
 
     expect(source).toContain('home-minimal-grid')
-    expect(source).toContain('from-blue-700 via-blue-600 to-cyan-500')
-    expect(source).toContain('dark:from-blue-300')
     expect(source).toContain('home-minimal-logo')
     expect(source).not.toContain('rgba(139, 92, 246')
     expect(source).not.toContain('rgba(20, 184, 166, 0.22)')
@@ -263,7 +259,6 @@ describe('HomeView default homepage', () => {
     const wrapper = await mountHome()
 
     expect(wrapper.html()).toContain('Custom landing page')
-    expect(wrapper.text()).not.toContain('One-stop API')
     expect(wrapper.find('.home-motion-root').exists()).toBe(false)
   })
 })
