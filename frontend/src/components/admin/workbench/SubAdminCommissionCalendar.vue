@@ -245,6 +245,10 @@ function selectDay(date: string) {
 async function fetchCalendar() {
   loading.value = true
   errorMessage.value = ''
+  // Clear the previous month's data immediately so totals, chart, and calendar
+  // cells cannot briefly show stale values while the new month is loading (or
+  // after its request fails).
+  days.value = []
   try {
     days.value = await adminAPI.subAdminCommission.getWorkbenchCalendar({ month: month.value })
   } catch (error: any) {
