@@ -176,15 +176,18 @@ describe('useModelWhitelist', () => {
   })
 
   it('根据白名单批量生成带前缀的请求模型映射，并保留已有映射', () => {
+    const existingMappings = [{ from: '按次/claude-opus-4-6', to: 'existing-model' }]
     const mappings = generateModelMappingsFromWhitelist(
       [' claude-opus-4-6 ', 'claude-opus-4-6', '', '  '],
       ' 按次/ ',
-      [{ from: '按次/claude-opus-4-6', to: 'existing-model' }]
+      existingMappings
     )
 
     expect(mappings).toEqual([
       { from: '按次/claude-opus-4-6', to: 'existing-model' }
     ])
+    expect(mappings).not.toBe(existingMappings)
+    expect(existingMappings).toEqual([{ from: '按次/claude-opus-4-6', to: 'existing-model' }])
   })
 
   it('批量生成白名单映射时不会覆盖同名已有请求模型', () => {
@@ -216,5 +219,26 @@ describe('useModelWhitelist', () => {
     ])
     expect(result).not.toBe(mappings)
     expect(mappings[0]).toEqual({ from: 'claude-opus-4-6', to: 'claude-opus-4-6' })
+  })
+
+  it('空前缀不会改变映射值，但仍返回新数组', () => {
+    const mappings = [{ from: ' claude-opus-4-6 ', to: 'claude-opus-4-6' }]
+
+    const result = prependModelMappingPrefix(mappings, '   ')
+
+    expect(result).toEqual(mappings)
+    expect(result).not.toBe(mappings)
+    expect(result[0]).not.toBe(mappings[0])
+  })
+
+  it('添加前缀遇到已有目标来源时保留冲突行，避免生成重复来源', () => {
+    const mappings = [
+      { from: '按次/foo', to: 'upstream-a' },
+      { from: 'foo', to: 'upstream-b' }
+    ]
+
+    const result = prependModelMappingPrefix(mappings, '按次/')
+
+    expect(result).toEqual(mappings)
   })
 })

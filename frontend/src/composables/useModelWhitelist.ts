@@ -553,12 +553,27 @@ export function prependModelMappingPrefix(
     return mappings.map(mapping => ({ ...mapping }))
   }
 
+  // Keep every source already present in the list. If adding the prefix would
+  // collide with one of those sources, leave that row unchanged as well.
+  const sources = new Set(
+    mappings
+      .map(mapping => mapping.from.trim())
+      .filter(Boolean)
+  )
+
   return mappings.map(mapping => {
     const from = mapping.from.trim()
     if (!from || from.startsWith(normalizedPrefix)) {
       return { ...mapping }
     }
-    return { ...mapping, from: `${normalizedPrefix}${from}` }
+
+    const prefixedFrom = `${normalizedPrefix}${from}`
+    if (sources.has(prefixedFrom)) {
+      return { ...mapping }
+    }
+
+    sources.add(prefixedFrom)
+    return { ...mapping, from: prefixedFrom }
   })
 }
 
