@@ -22,6 +22,10 @@ describe.each([
       giftCredit: '赠送额度（不计活动门槛）',
       giftCreditHint: '该额度及由其支付的用量不计入充值、签到等活动门槛。',
       giftBadge: '赠送额度',
+      dailyChartTitle: '每日收益趋势',
+      dailyChartActualCost: '余额消耗',
+      dailyChartCommission: '收益金额',
+      dailyChartEmpty: '暂无每日收益数据',
     },
   ],
   [
@@ -32,17 +36,33 @@ describe.each([
       giftCreditHint:
         'This credit and usage funded by it do not count toward recharge, check-in, or other activity thresholds.',
       giftBadge: 'Gift credit',
+      dailyChartTitle: 'Daily earnings trend',
+      dailyChartActualCost: 'Balance spend',
+      dailyChartCommission: 'Earnings',
+      dailyChartEmpty: 'No daily earnings data',
     },
   ],
 ])('AdminWorkbench %s locale', (_locale, messages, expected) => {
   it('resolves gift-credit copy from the namespace consumed by the view', () => {
-    for (const [key, value] of Object.entries(expected)) {
+    for (const key of ['giftCredit', 'giftCreditHint', 'giftBadge'] as const) {
+      const value = expected[key]
       expect(getMessage(messages, `adminWorkbench.balanceTransfer.${key}`)).toBe(value)
     }
   })
 
+  it('resolves daily earnings chart copy from the commission namespace', () => {
+    for (const key of [
+      'dailyChartTitle',
+      'dailyChartActualCost',
+      'dailyChartCommission',
+      'dailyChartEmpty',
+    ] as const) {
+      expect(getMessage(messages, `adminWorkbench.commission.${key}`)).toBe(expected[key])
+    }
+  })
+
   it('does not retain duplicate gift-credit copy under the redeem namespace', () => {
-    for (const key of Object.keys(expected)) {
+    for (const key of ['giftCredit', 'giftCreditHint', 'giftBadge'] as const) {
       expect(getMessage(messages, `redeem.balanceTransfer.${key}`)).toBeUndefined()
     }
   })

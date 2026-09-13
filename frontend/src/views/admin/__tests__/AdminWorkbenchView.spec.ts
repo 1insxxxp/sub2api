@@ -132,6 +132,9 @@ const mountWorkbench = () => {
         Pagination: true,
         AdminAffiliateLeaderboardPanel: {
           template: '<div data-test="affiliate-leaderboard-panel-stub" />'
+        },
+        SubAdminCommissionTrendChart: {
+          template: '<div data-test="commission-daily-chart-stub" />'
         }
       }
     }
@@ -817,6 +820,9 @@ describe('AdminWorkbenchView balance transfer codes', () => {
           Pagination: true,
           AdminAffiliateLeaderboardPanel: {
             template: '<div data-test="affiliate-leaderboard-panel-stub" />'
+          },
+          SubAdminCommissionTrendChart: {
+            template: '<div data-test="commission-daily-chart-stub" />'
           }
         }
       }
