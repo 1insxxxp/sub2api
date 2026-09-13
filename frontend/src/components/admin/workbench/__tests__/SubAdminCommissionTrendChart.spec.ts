@@ -47,26 +47,28 @@ type ChartData = {
   datasets: ChartDataset[]
 }
 
-const days: SubAdminCommissionCalendarDay[] = [
-  {
-    date: '2026-08-03',
-    enabled: true,
-    actual_cost: 0,
-    commission_amount: 2.5,
-  },
-  {
-    date: '2026-08-01',
-    enabled: true,
-    actual_cost: 12.25,
-    commission_amount: 0,
-  },
-  {
-    date: '2026-08-02',
-    enabled: true,
-    actual_cost: 0,
-    commission_amount: 0,
-  },
-]
+function createDays(): SubAdminCommissionCalendarDay[] {
+  return [
+    {
+      date: '2026-08-03',
+      enabled: true,
+      actual_cost: 0,
+      commission_amount: 2.5,
+    },
+    {
+      date: '2026-08-01',
+      enabled: true,
+      actual_cost: 12.25,
+      commission_amount: 0,
+    },
+    {
+      date: '2026-08-02',
+      enabled: true,
+      actual_cost: 0,
+      commission_amount: 0,
+    },
+  ]
+}
 
 function mountChart(props: { days: SubAdminCommissionCalendarDay[]; loading?: boolean }) {
   return mount(SubAdminCommissionTrendChart, { props })
@@ -74,7 +76,8 @@ function mountChart(props: { days: SubAdminCommissionCalendarDay[]; loading?: bo
 
 describe('SubAdminCommissionTrendChart', () => {
   it('sorts daily points and preserves zero values across aligned datasets', () => {
-    const wrapper = mountChart({ days })
+    const inputDays = createDays()
+    const wrapper = mountChart({ days: inputDays })
     const line = wrapper.findComponent({ name: 'LineChartStub' })
 
     expect(line.exists()).toBe(true)
@@ -93,6 +96,11 @@ describe('SubAdminCommissionTrendChart', () => {
     expect(commission?.data).toEqual([0, 0, 2.5])
     expect(actualCost?.data).toHaveLength(data.labels.length)
     expect(commission?.data).toHaveLength(data.labels.length)
+    expect(inputDays.map((day) => day.date)).toEqual([
+      '2026-08-03',
+      '2026-08-01',
+      '2026-08-02',
+    ])
   })
 
   it('renders the empty state without mounting a chart when there are no daily points', () => {
@@ -114,7 +122,7 @@ describe('SubAdminCommissionTrendChart', () => {
   })
 
   it('keeps the chart container shrinkable and responsive on narrow screens', () => {
-    const wrapper = mountChart({ days })
+    const wrapper = mountChart({ days: createDays() })
     const chart = wrapper.get('[data-test="commission-daily-chart"]')
 
     expect(chart.classes()).toEqual(
