@@ -137,4 +137,3 @@ Run `git diff --check` and `git status --short`; do not stage the user-modified 
 git add frontend/src/components/admin/workbench/SubAdminCommissionTrendChart.vue frontend/src/components/admin/workbench/SubAdminCommissionCalendar.vue frontend/src/components/admin/workbench/__tests__/SubAdminCommissionTrendChart.spec.ts frontend/src/views/admin/AdminWorkbenchView.vue frontend/src/views/admin/__tests__/AdminWorkbenchView.spec.ts frontend/src/views/admin/__tests__/AdminWorkbenchView.mobile.spec.ts frontend/src/i18n/locales/zh/common.ts frontend/src/i18n/locales/en/common.ts frontend/src/i18n/__tests__/adminWorkbenchLocales.spec.ts
 git commit -m "feat: add daily earnings trend to admin workbench"
 ```
-
