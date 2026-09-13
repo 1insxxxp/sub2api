@@ -96,7 +96,7 @@
   <!-- Default Home Page -->
   <div
     v-else
-    class="home-minimal-root home-tech-root min-h-screen overflow-x-hidden bg-slate-100 text-slate-950 dark:bg-[#050914] dark:text-white"
+    class="home-minimal-root home-tech-root home-new-layout min-h-screen overflow-x-hidden bg-slate-100 text-slate-950 dark:bg-[#050914] dark:text-white"
   >
     <div class="home-minimal-grid pointer-events-none absolute inset-0" aria-hidden="true"></div>
     <div class="home-tech-noise pointer-events-none absolute inset-0" aria-hidden="true"></div>
@@ -154,7 +154,7 @@
     </header>
 
     <main class="relative z-10">
-      <section class="home-minimal-hero home-tech-stage mx-auto grid min-h-[calc(100vh-6rem)] w-full max-w-7xl items-center gap-12 overflow-hidden px-5 pb-16 pt-32 sm:px-8 lg:grid-cols-[1.05fr_0.95fr] lg:gap-8 lg:px-12 lg:pb-24 lg:pt-36">
+      <section class="home-minimal-hero home-tech-stage home-new-hero mx-auto grid min-h-[calc(100vh-6rem)] w-full max-w-7xl items-center gap-12 overflow-hidden px-5 pb-16 pt-32 sm:px-8 lg:grid-cols-[1.05fr_0.95fr] lg:gap-8 lg:px-12 lg:pb-24 lg:pt-36">
         <div class="home-minimal-orb pointer-events-none absolute right-[5%] top-[13rem] h-[34rem] w-[34rem] rounded-full" aria-hidden="true">
           <div class="home-orb-sphere">
             <div class="home-orb-surface"></div>
@@ -424,6 +424,14 @@ onBeforeUnmount(() => {
   background-image: radial-gradient(circle at 50% 0%, rgba(59, 130, 246, 0.09), transparent 38rem);
 }
 
+.home-new-layout {
+  background: linear-gradient(180deg, #fffaf0 0%, #f4f0e8 44%, #eef5f1 100%);
+}
+
+.dark .home-new-layout {
+  background: linear-gradient(180deg, #080d16 0%, #0d1723 48%, #0d1c1a 100%);
+}
+
 .home-tech-noise {
   z-index: 0;
   opacity: 0.22;
@@ -441,6 +449,43 @@ onBeforeUnmount(() => {
     radial-gradient(circle at 20% 20%, rgba(79, 70, 229, 0.24), transparent 36%),
     linear-gradient(125deg, #050a15 0%, #0a1426 50%, #071c2d 100%);
   box-shadow: 0 28px 90px rgba(15, 23, 42, 0.2);
+}
+
+.home-new-hero {
+  border-radius: 0;
+  background:
+    radial-gradient(circle at 78% 42%, rgba(79, 140, 255, 0.13), transparent 31%),
+    radial-gradient(circle at 18% 18%, rgba(240, 111, 159, 0.1), transparent 28%),
+    linear-gradient(180deg, rgba(255, 250, 240, 0.95), rgba(244, 240, 232, 0.82));
+  box-shadow: none;
+}
+
+.dark .home-new-hero {
+  background:
+    radial-gradient(circle at 78% 42%, rgba(37, 99, 235, 0.22), transparent 31%),
+    radial-gradient(circle at 18% 18%, rgba(236, 72, 153, 0.12), transparent 28%),
+    linear-gradient(180deg, rgba(8, 13, 22, 0.96), rgba(13, 23, 35, 0.94));
+}
+
+.home-new-hero h1 {
+  color: #172033;
+}
+
+.home-new-hero p.text-slate-300 {
+  color: #5f6878;
+}
+
+.home-new-hero .home-minimal-proof {
+  color: #5f6878;
+}
+
+.dark .home-new-hero h1 {
+  color: #eff4ff;
+}
+
+.dark .home-new-hero p.text-slate-300,
+.dark .home-new-hero .home-minimal-proof {
+  color: #aab5c6;
 }
 
 .home-minimal-showcase {
@@ -829,6 +874,12 @@ onBeforeUnmount(() => {
 
   .home-minimal-grid {
     --home-grid-size: 48px;
+  }
+
+  .home-tech-console {
+    min-width: 0;
+    width: 100%;
+    max-width: 100%;
   }
 }
 
