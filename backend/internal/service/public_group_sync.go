@@ -10,10 +10,15 @@ import (
 type PublicGroupSyncService struct {
 	groups   GroupRepository
 	channels ChannelRepository
+	accounts AccountRepository
 }
 
-func NewPublicGroupSyncService(groups GroupRepository, channels ChannelRepository) *PublicGroupSyncService {
-	return &PublicGroupSyncService{groups: groups, channels: channels}
+func NewPublicGroupSyncService(groups GroupRepository, channels ChannelRepository, accounts ...AccountRepository) *PublicGroupSyncService {
+	var accountRepo AccountRepository
+	if len(accounts) > 0 {
+		accountRepo = accounts[0]
+	}
+	return &PublicGroupSyncService{groups: groups, channels: channels, accounts: accountRepo}
 }
 
 func (s *PublicGroupSyncService) Snapshot(ctx context.Context) ([]PublicGroupSyncRequest, error) {
@@ -42,7 +47,7 @@ func (s *PublicGroupSyncService) Snapshot(ctx context.Context) ([]PublicGroupSyn
 		models := map[string]PublicGroupSyncModel{}
 		for _, ch := range byGroup[g.ID] {
 			for _, p := range ch.ModelPricing {
-				if p.BillingMode == BillingModeImage || p.BillingMode == BillingModeVideo {
+				if p.BillingMode == BillingModeVideo {
 					continue
 				}
 				for _, name := range p.Models {
@@ -50,7 +55,18 @@ func (s *PublicGroupSyncService) Snapshot(ctx context.Context) ([]PublicGroupSyn
 						continue
 					}
 					key := p.Platform + "\x00" + name
-					m := PublicGroupSyncModel{Platform: p.Platform, DisplayName: name, BillingMode: string(p.BillingMode), InputPrice: p.InputPrice, OutputPrice: p.OutputPrice, PerRequestPrice: p.PerRequestPrice, CacheWritePrice: p.CacheWritePrice, CacheReadPrice: p.CacheReadPrice}
+					m := PublicGroupSyncModel{
+						Platform:         p.Platform,
+						DisplayName:      name,
+						BillingMode:      string(p.BillingMode),
+						InputPrice:       p.InputPrice,
+						OutputPrice:      p.OutputPrice,
+						ImageInputPrice:  p.ImageInputPrice,
+						ImageOutputPrice: p.ImageOutputPrice,
+						PerRequestPrice:  p.PerRequestPrice,
+						CacheWritePrice:  p.CacheWritePrice,
+						CacheReadPrice:   p.CacheReadPrice,
+					}
 					if mapped := ch.ModelMapping[p.Platform][name]; mapped != "" {
 						m.UpstreamModel = mapped
 					}
@@ -71,6 +87,30 @@ func (s *PublicGroupSyncService) Snapshot(ctx context.Context) ([]PublicGroupSyn
 					}
 					m := PublicGroupSyncModel{Platform: platform, DisplayName: name, UpstreamModel: upstream, BillingMode: string(BillingModeToken)}
 					models[key] = m
+				}
+			}
+		}
+		if g.AllowImageGeneration && s.accounts != nil {
+			accounts, err := s.accounts.ListByGroup(ctx, g.ID)
+			if err != nil {
+				return nil, err
+			}
+			for _, account := range accounts {
+				for name, upstream := range account.GetModelMapping() {
+					if !isImageModelName(name) {
+						continue
+					}
+					key := account.Platform + "\x00" + name
+					if _, exists := models[key]; exists {
+						continue
+					}
+					models[key] = PublicGroupSyncModel{
+						Platform:        account.Platform,
+						DisplayName:     name,
+						UpstreamModel:   upstream,
+						BillingMode:     string(BillingModeImage),
+						PerRequestPrice: g.ImagePrice1K,
+					}
 				}
 			}
 		}
@@ -102,4 +142,9 @@ func (s *PublicGroupSyncService) Snapshot(ctx context.Context) ([]PublicGroupSyn
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].GroupID < out[j].GroupID })
 	return out, nil
+}
+
+func isImageModelName(name string) bool {
+	name = strings.ToLower(strings.TrimSpace(name))
+	return strings.Contains(name, "image") || strings.Contains(name, "imagen")
 }
