@@ -4,7 +4,14 @@ vi.mock('@/api/admin/accounts', () => ({
   getAntigravityDefaultModelMapping: vi.fn()
 }))
 
-import { buildModelMappingObject, getModelsByPlatform, getPresetMappingsByPlatform, splitModelMappingObject } from '../useModelWhitelist'
+import {
+  buildModelMappingObject,
+  generateModelMappingsFromWhitelist,
+  getModelsByPlatform,
+  getPresetMappingsByPlatform,
+  prependModelMappingPrefix,
+  splitModelMappingObject
+} from '../useModelWhitelist'
 
 describe('useModelWhitelist', () => {
   it('openai 模型列表包含 GPT-5.4 官方快照', () => {
@@ -166,5 +173,48 @@ describe('useModelWhitelist', () => {
       allowedModels: ['gpt-5.4'],
       modelMappings: [{ from: 'gpt-latest', to: 'gpt-5.4' }]
     })
+  })
+
+  it('根据白名单批量生成带前缀的请求模型映射，并保留已有映射', () => {
+    const mappings = generateModelMappingsFromWhitelist(
+      [' claude-opus-4-6 ', 'claude-opus-4-6', '', '  '],
+      ' 按次/ ',
+      [{ from: '按次/claude-opus-4-6', to: 'existing-model' }]
+    )
+
+    expect(mappings).toEqual([
+      { from: '按次/claude-opus-4-6', to: 'existing-model' }
+    ])
+  })
+
+  it('批量生成白名单映射时不会覆盖同名已有请求模型', () => {
+    const mappings = generateModelMappingsFromWhitelist(
+      ['gpt-5.4', 'gpt-5.4-mini'],
+      '',
+      [{ from: 'gpt-5.4', to: 'custom-upstream' }]
+    )
+
+    expect(mappings).toEqual([
+      { from: 'gpt-5.4', to: 'custom-upstream' },
+      { from: 'gpt-5.4-mini', to: 'gpt-5.4-mini' }
+    ])
+  })
+
+  it('给映射请求模型批量添加前缀，不重复添加且不修改空行', () => {
+    const mappings = [
+      { from: 'claude-opus-4-6', to: 'claude-opus-4-6' },
+      { from: '按次/claude-sonnet-4-6', to: 'claude-sonnet-4-6' },
+      { from: '', to: '' }
+    ]
+
+    const result = prependModelMappingPrefix(mappings, ' 按次/ ')
+
+    expect(result).toEqual([
+      { from: '按次/claude-opus-4-6', to: 'claude-opus-4-6' },
+      { from: '按次/claude-sonnet-4-6', to: 'claude-sonnet-4-6' },
+      { from: '', to: '' }
+    ])
+    expect(result).not.toBe(mappings)
+    expect(mappings[0]).toEqual({ from: 'claude-opus-4-6', to: 'claude-opus-4-6' })
   })
 })

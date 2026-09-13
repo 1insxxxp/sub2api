@@ -505,6 +505,63 @@ export interface ModelMappingEntry {
   to: string
 }
 
+/**
+ * 根据白名单模型批量创建请求模型映射。
+ *
+ * 请求模型名由前缀和上游模型名拼接而成，已有同名请求模型映射优先保留。
+ * 函数不会修改传入的映射数组。
+ */
+export function generateModelMappingsFromWhitelist(
+  allowedModels: string[],
+  prefix: string,
+  existingMappings: ModelMappingEntry[] = []
+): ModelMappingEntry[] {
+  const normalizedPrefix = prefix.trim()
+  const result = existingMappings.map(mapping => ({ ...mapping }))
+  const existingFrom = new Set(
+    existingMappings
+      .map(mapping => mapping.from.trim())
+      .filter(Boolean)
+  )
+
+  for (const rawModel of allowedModels) {
+    const model = rawModel.trim()
+    if (!model) continue
+
+    const from = `${normalizedPrefix}${model}`
+    if (existingFrom.has(from)) continue
+
+    existingFrom.add(from)
+    result.push({ from, to: model })
+  }
+
+  return result
+}
+
+/**
+ * 为映射中的请求模型名批量添加前缀。
+ *
+ * 空前缀和空请求模型行保持原样；已经带有该前缀的请求模型不会重复添加。
+ * 函数不会修改传入数组或其中的映射对象。
+ */
+export function prependModelMappingPrefix(
+  mappings: ModelMappingEntry[],
+  prefix: string
+): ModelMappingEntry[] {
+  const normalizedPrefix = prefix.trim()
+  if (!normalizedPrefix) {
+    return mappings.map(mapping => ({ ...mapping }))
+  }
+
+  return mappings.map(mapping => {
+    const from = mapping.from.trim()
+    if (!from || from.startsWith(normalizedPrefix)) {
+      return { ...mapping }
+    }
+    return { ...mapping, from: `${normalizedPrefix}${from}` }
+  })
+}
+
 export function splitModelMappingObject(
   modelMapping?: Record<string, unknown> | null
 ): { allowedModels: string[]; modelMappings: ModelMappingEntry[] } {
