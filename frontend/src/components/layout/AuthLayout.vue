@@ -23,6 +23,11 @@
         class="absolute left-1/2 top-24 h-px w-[min(42rem,80vw)] -translate-x-1/2 bg-[linear-gradient(90deg,transparent,#2563eb,#06b6d4,transparent)] opacity-50 dark:opacity-70"
       ></div>
       <div v-if="props.appearance === 'login'" class="auth-scanline absolute inset-x-0 top-0 h-px bg-blue-300/40 dark:bg-cyan-300/25"></div>
+      <div v-if="props.appearance === 'login'" class="auth-login-orbit absolute left-1/2 top-[18%] h-[30rem] w-[30rem] -translate-x-1/2 rounded-full" aria-hidden="true">
+        <div class="auth-login-orbit-ring"></div>
+        <div class="auth-login-orbit-ring auth-login-orbit-ring--cross"></div>
+        <div class="auth-login-orbit-glow"></div>
+      </div>
     </div>
 
     <!-- Content Container -->
@@ -75,7 +80,12 @@ const props = defineProps<{ appearance?: 'default' | 'login' }>()
 
 const siteName = computed(() => appStore.siteName || 'Passion')
 const siteLogo = computed(() => sanitizeUrl(appStore.effectiveSiteLogo || '', { allowRelative: true, allowDataUrl: true }))
-const siteSubtitle = computed(() => appStore.cachedPublicSettings?.site_subtitle || 'Subscription to API Conversion Platform')
+const siteSubtitle = computed(() => {
+  const configured = appStore.cachedPublicSettings?.site_subtitle?.trim() || ''
+  if (configured && configured !== 'Subscription to API Conversion Platform') return configured
+  const language = typeof navigator !== 'undefined' ? navigator.language.toLowerCase() : 'zh-cn'
+  return language.startsWith('zh') ? '一个密钥，畅用多个 AI 模型' : 'One key, all AI models'
+})
 const settingsLoaded = computed(() => appStore.publicSettingsLoaded)
 
 const currentYear = computed(() => new Date().getFullYear())
@@ -90,6 +100,50 @@ onMounted(() => {
   animation: auth-grid-drift 24s linear infinite;
 }
 
+.auth-shell--login {
+  background: #f2f7ff;
+}
+
+.dark .auth-shell--login {
+  background: #050914;
+}
+
+.auth-shell--login .auth-panel {
+  max-width: 30rem;
+}
+
+.auth-login-orbit {
+  pointer-events: none;
+  opacity: 0.8;
+  animation: auth-orbit-float 11s ease-in-out infinite alternate;
+}
+
+.auth-login-orbit-ring {
+  position: absolute;
+  inset: 0;
+  border: 1px solid rgba(59, 130, 246, 0.2);
+  border-top: 2px solid rgba(6, 182, 212, 0.68);
+  border-radius: 50%;
+  transform: rotate(-18deg) scaleY(0.42);
+  animation: auth-orbit-spin 12s linear infinite;
+}
+
+.auth-login-orbit-ring--cross {
+  inset: 8%;
+  border-top-color: rgba(37, 99, 235, 0.6);
+  transform: rotate(56deg) scaleY(0.55);
+  animation-direction: reverse;
+  animation-duration: 16s;
+}
+
+.auth-login-orbit-glow {
+  position: absolute;
+  inset: 20%;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 28%, rgba(125, 211, 252, 0.4), rgba(37, 99, 235, 0.11) 42%, transparent 70%);
+  filter: blur(12px);
+}
+
 .auth-panel {
   animation: auth-panel-rise 720ms cubic-bezier(0.16, 1, 0.3, 1) both;
 }
@@ -102,6 +156,29 @@ onMounted(() => {
 .auth-card {
   position: relative;
   overflow: hidden;
+}
+
+.auth-shell--login .auth-card {
+  border-radius: 1.35rem;
+  border-color: rgba(96, 165, 250, 0.35);
+  background: rgba(255, 255, 255, 0.84);
+  box-shadow: 0 30px 90px -48px rgba(37, 99, 235, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.8);
+}
+
+.dark .auth-shell--login .auth-card {
+  border-color: rgba(96, 165, 250, 0.2);
+  background: rgba(15, 23, 42, 0.82);
+  box-shadow: 0 30px 90px -48px rgba(6, 182, 212, 0.35), 0 0 0 1px rgba(255, 255, 255, 0.05);
+}
+
+@media (max-width: 640px) {
+  .auth-login-orbit {
+    top: 14%;
+    left: 62%;
+    width: 22rem;
+    height: 22rem;
+    opacity: 0.52;
+  }
 }
 
 .auth-shell--login .auth-grid-bg {
@@ -216,10 +293,23 @@ onMounted(() => {
   }
 }
 
+@keyframes auth-orbit-float {
+  from { transform: translate(-50%, -2%) scale(0.96); }
+  to { transform: translate(-50%, 3%) scale(1.03); }
+}
+
+@keyframes auth-orbit-spin {
+  from { transform: rotate(-18deg) scaleY(0.42); }
+  to { transform: rotate(342deg) scaleY(0.42); }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .auth-grid-bg,
   .auth-panel,
   .auth-scanline,
+  .auth-login-orbit,
+  .auth-login-orbit-ring,
+  .auth-login-orbit-ring--cross,
   .auth-card,
   .auth-logo-frame,
   :slotted(.auth-login-content) {

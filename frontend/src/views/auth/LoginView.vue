@@ -757,6 +757,25 @@ function handle2FACancel(): void {
   background: linear-gradient(90deg, #2563eb, #06b6d4);
 }
 
+.auth-login-heading h2 {
+  letter-spacing: -0.035em;
+}
+
+.auth-login-form {
+  position: relative;
+}
+
+.auth-login-form::before {
+  content: '';
+  position: absolute;
+  top: -0.65rem;
+  left: 50%;
+  width: 5rem;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(6, 182, 212, 0.7), transparent);
+  transform: translateX(-50%);
+}
+
 .auth-form-field {
   animation: login-field-rise 520ms cubic-bezier(0.16, 1, 0.3, 1) both;
 }
@@ -798,6 +817,11 @@ function handle2FACancel(): void {
   min-height: 3rem;
   border-radius: 0.75rem;
   transition: transform 180ms ease, box-shadow 180ms ease, filter 180ms ease;
+}
+
+.auth-login-submit:not(:disabled) {
+  background-image: linear-gradient(110deg, #2563eb, #3b82f6 50%, #06b6d4);
+  box-shadow: 0 12px 26px rgba(37, 99, 235, 0.2);
 }
 
 .auth-login-submit:hover:not(:disabled) {
