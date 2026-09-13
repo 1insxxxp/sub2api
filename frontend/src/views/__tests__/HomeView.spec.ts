@@ -60,6 +60,9 @@ vi.mock('vue-i18n', async () => {
     'home.workflow.title': 'Verify calls first, then turn on operations',
     'home.cta.title': 'Ready to Get Started?',
     'home.cta.subtitle': 'Start with one business request, then turn on billing, routing, and risk controls as you grow.',
+    'home.capabilities.unifiedApi.title': 'Keep existing clients',
+    'home.capabilities.accountPool.title': 'Upstream account pools',
+    'home.capabilities.wallet.title': 'Wallet and ledgers',
     'home.footer.tagline': 'Reliable AI API gateway for teams and developers.',
     'home.login': 'Login',
     'home.docs': 'Docs',
@@ -133,85 +136,55 @@ describe('HomeView default homepage', () => {
     expect(wrapper.text()).toContain('Passion API')
     expect(wrapper.text()).toContain('One-stop API relay service')
     expect(wrapper.text()).toContain('PASSION API GATEWAY')
-    expect(wrapper.text()).toContain('OpenAI-compatible calls')
-    expect(wrapper.text()).not.toContain('Keep OpenAI-compatible calls while managing account pools')
-    expect(wrapper.text()).toContain('Routing and billing board')
-    expect(wrapper.text()).toContain('Accounts, routing, and billing in one workspace')
+    expect(wrapper.text()).not.toContain('Routing and billing board')
+    expect(wrapper.text()).not.toContain('182 ms')
+    expect(wrapper.text()).not.toContain('99.9%')
+    expect(wrapper.text()).toContain('Keep existing clients')
+    expect(wrapper.text()).toContain('Upstream account pools')
+    expect(wrapper.text()).toContain('Wallet and ledgers')
     expect(wrapper.text()).toContain('No client rewrite, just change the endpoint')
-    expect(wrapper.text()).toContain('Verify calls first, then turn on operations')
-    expect(wrapper.text()).toContain('Start with one business request')
+    expect(wrapper.findAll('.home-minimal-value')).toHaveLength(3)
   })
 
   it('renders motion hooks for the default homepage experience', async () => {
     const wrapper = await mountHome()
 
-    expect(wrapper.find('.home-motion-root').exists()).toBe(true)
-    expect(wrapper.find('.home-site-header').classes()).toContain('fixed')
-    expect(wrapper.find('.home-site-header-spacer').exists()).toBe(true)
-    expect(wrapper.find('.home-hero-overline').exists()).toBe(true)
-    expect(wrapper.findAll('.home-proof-chip')).toHaveLength(3)
-    expect(wrapper.findAll('.home-proof-icon')).toHaveLength(3)
-    expect(wrapper.find('.home-routing-panel').exists()).toBe(true)
-    expect(wrapper.find('.home-panel-icon').exists()).toBe(true)
-    expect(wrapper.findAll('.home-channel-icon').length).toBeGreaterThanOrEqual(4)
-    expect(wrapper.findAll('.home-metric-icon').length).toBeGreaterThanOrEqual(4)
-    expect(wrapper.findAll('.home-metric-row').length).toBeGreaterThanOrEqual(4)
-    expect(wrapper.findAll('.home-status-pulse').length).toBeGreaterThan(0)
-    expect(wrapper.findAll('.home-status-dot').length).toBeGreaterThanOrEqual(5)
-    expect(wrapper.findAll('.home-motion-card').length).toBeGreaterThanOrEqual(6)
-    expect(wrapper.findAll('.home-section-reveal').length).toBeGreaterThanOrEqual(6)
-    expect(wrapper.find('.home-code-panel.home-scroll-reveal').exists()).toBe(true)
-    expect(wrapper.find('.home-cta-panel.home-scroll-reveal').exists()).toBe(true)
+    expect(wrapper.find('.home-minimal-root').exists()).toBe(true)
+    expect(wrapper.find('.home-minimal-header').classes()).toContain('fixed')
+    expect(wrapper.find('.home-minimal-logo').exists()).toBe(true)
+    expect(wrapper.find('.home-minimal-visual').exists()).toBe(true)
+    expect(wrapper.findAll('.home-minimal-reveal').length).toBeGreaterThanOrEqual(5)
+    expect(wrapper.findAll('.home-minimal-value')).toHaveLength(3)
   })
 
   it('uses a transparent navigation shell for the homepage header', async () => {
     const wrapper = await mountHome()
 
-    expect(wrapper.find('.home-nav-shell').exists()).toBe(true)
-    expect(wrapper.find('.home-brand-link').exists()).toBe(true)
-    expect(wrapper.find('.home-brand-mark').exists()).toBe(true)
-    expect(wrapper.find('.home-nav-rail').exists()).toBe(true)
-    expect(wrapper.findAll('.home-nav-link')).toHaveLength(3)
-    expect(wrapper.find('.home-header-actions').exists()).toBe(true)
-    expect(wrapper.find('.home-icon-control').exists()).toBe(true)
-    expect(wrapper.find('.home-dashboard-cta').exists()).toBe(true)
+    expect(wrapper.find('.home-minimal-logo').exists()).toBe(true)
+    expect(wrapper.findAll('nav a[href^="#"]')).toHaveLength(2)
 
     const source = readFileSync('src/views/HomeView.vue', 'utf-8')
-    const styleSource = readFileSync('src/style.css', 'utf-8')
-    expect(source).toContain('home-header-flat')
-    expect(source).toContain('home-trust-strip')
-    expect(source).toContain('home-trust-item')
-    expect(source).toContain('dark:bg-slate-950/50')
-    expect(source).toContain('home-nav-shell home-nav-unified')
-    expect(source).toContain('home-header-actions')
-    expect(source).toContain('home-dashboard-cta')
-    expect(source).not.toContain('home-header-actions flex items-center gap-2 rounded-2xl border')
-    expect(source).not.toContain('home-brand-link group flex min-w-0 items-center gap-3 rounded-xl')
-    expect(source).not.toContain('hover:bg-blue-50/70')
-    expect(source).toContain('home-dashboard-cta inline-flex h-11 shrink-0')
-    expect(source).toContain('whitespace-nowrap')
-    expect(source).toContain('h-11')
-    expect(styleSource).toContain('.home-nav-shell')
-    expect(styleSource).toContain('background: transparent;')
-    expect(styleSource).toContain('box-shadow: none;')
-    expect(styleSource).toContain('backdrop-filter: none;')
-    expect(styleSource).toContain('.home-nav-unified::before')
-    expect(styleSource).toContain('content: none;')
-    expect(styleSource).not.toContain('0 22px 50px rgba(15, 23, 42, 0.08)')
-    expect(styleSource).not.toContain('rgba(255, 255, 255, 0.58)')
+    const styleSource = source
+    expect(source).toContain('home-minimal-root')
+    expect(source).toContain('home-minimal-header')
+    expect(source).toContain('home-minimal-visual')
+    expect(source).toContain('home-minimal-primary')
+    expect(source).toContain('home-minimal-reveal')
+    expect(styleSource).toContain('.home-minimal-root')
+    expect(styleSource).toContain('.home-minimal-header')
+    expect(styleSource).toContain('prefers-reduced-motion: reduce')
   })
 
   it('keeps the default homepage controls contained on narrow screens', async () => {
     const wrapper = await mountHome()
     const source = readFileSync('src/views/HomeView.vue', 'utf-8')
 
-    expect(wrapper.find('.home-nav-shell').classes()).toContain('w-full')
-    expect(wrapper.find('.home-brand-name').classes()).toContain('hidden')
-    expect(wrapper.find('.home-action-button').classes()).toContain('w-full')
-    expect(source).toContain('home-proof-label')
+    expect(wrapper.find('.home-minimal-root').classes()).toContain('overflow-x-hidden')
+    expect(wrapper.find('.home-minimal-logo').classes()).toContain('shrink-0')
+    expect(wrapper.find('.home-minimal-primary').classes()).toContain('w-full')
+    expect(source).toContain('min-h-12 w-full')
     expect(source).toContain('@media (max-width: 640px)')
-    expect(source).toContain('.home-proof-label')
-    expect(source).toContain('white-space: nowrap')
+    expect(source).toContain('home-minimal-header')
   })
 
   it('does not prepend the authenticated user initial to the header dashboard CTA', async () => {
@@ -225,22 +198,13 @@ describe('HomeView default homepage', () => {
     expect(dashboardLinks[0].text()).toBe('Enter dashboard')
   })
 
-  it('keeps scroll motion perceptible enough for the default homepage', () => {
+  it('keeps entrance motion perceptible enough for the default homepage', () => {
     const source = readFileSync('src/views/HomeView.vue', 'utf-8')
 
-    expect(source).toContain('--motion-distance: 30px')
-    expect(source).toContain('--motion-section-distance: 24px')
-    expect(source).toContain('--motion-scale: 0.985')
-    expect(source).toContain('--motion-blur: 6px')
-    expect(source).toContain('calc(90ms + (var(--motion-index) * 68ms))')
-  })
-
-  it('keeps the final CTA panel crisp while it scrolls into view', () => {
-    const source = readFileSync('src/views/HomeView.vue', 'utf-8')
-
-    expect(source).toContain('.home-cta-panel.home-scroll-reveal')
-    expect(source).toContain('animation-name: home-panel-rise')
-    expect(source).toContain('@keyframes home-panel-rise')
+    expect(source).toContain('--home-motion-ease')
+    expect(source).toContain('home-minimal-rise')
+    expect(source).toContain('calc(80ms + (var(--motion-index) * 90ms))')
+    expect(source).toContain('@keyframes home-ambient-drift')
   })
 
   it('uses the blue-slate-cyan technology palette as the primary theme', () => {
@@ -262,17 +226,10 @@ describe('HomeView default homepage', () => {
   it('adapts homepage brand accents for both light and dark themes', () => {
     const source = readFileSync('src/views/HomeView.vue', 'utf-8')
 
-    expect(source).toContain('rgba(219,234,254,0.92)')
-    expect(source).toContain('rgba(30,64,175,0.26)')
-    expect(source).toContain('home-hero-overline')
-    expect(source).toContain('home-proof-chip')
-    expect(source).toContain('home-panel-icon')
-    expect(source).toContain('home-metric-row')
-    expect(source).toContain('--status-pulse-color')
-    expect(source).toContain('bg-[linear-gradient(90deg,#2563eb,#06b6d4)]')
-    expect(source).toContain('text-cyan-300')
-    expect(source).toContain('rgba(59, 130, 246, 0.24)')
-    expect(source).toContain('rgba(14, 116, 144, 0.18)')
+    expect(source).toContain('home-minimal-ambient')
+    expect(source).toContain('from-blue-700 via-blue-600 to-cyan-500')
+    expect(source).toContain('dark:from-blue-300')
+    expect(source).toContain('home-minimal-logo')
     expect(source).not.toContain('rgba(139, 92, 246')
     expect(source).not.toContain('rgba(20, 184, 166, 0.22)')
   })

@@ -113,7 +113,7 @@ describe('HomeView compact mode', () => {
     const wrapper = mountHome(settings)
 
     expect(wrapper.find('[data-testid="compact-home"]').exists()).toBe(false)
-    expect(wrapper.find('.home-motion-root').exists()).toBe(true)
+    expect(wrapper.find('.home-minimal-root').exists()).toBe(true)
   })
 
   it('links unauthenticated visitors to login', () => {
