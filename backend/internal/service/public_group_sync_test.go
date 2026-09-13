@@ -13,6 +13,8 @@ import (
 func TestPublicGroupSyncSnapshotFiltersExclusiveGroupsAndPreservesMappingAndPricing(t *testing.T) {
 	inputPrice := 0.003
 	outputPrice := 0.015
+	imagePrice := 0.04
+	videoPrice := 0.08
 	groups := &stubGroupRepoForAvailable{activeGroups: []Group{
 		{ID: 2, Name: "exclusive", Status: StatusActive, IsExclusive: true, RateMultiplier: 2},
 		{ID: 1, Name: "public", Status: StatusActive, RateMultiplier: 1.5, UpdatedAt: time.Unix(10, 0)},
@@ -32,6 +34,16 @@ func TestPublicGroupSyncSnapshotFiltersExclusiveGroupsAndPreservesMappingAndPric
 					BillingMode: BillingModeToken,
 					InputPrice:  &inputPrice,
 					OutputPrice: &outputPrice,
+				}, {
+					Platform:        "openai",
+					Models:          []string{"gpt-image-public"},
+					BillingMode:     BillingModeImage,
+					PerRequestPrice: &imagePrice,
+				}, {
+					Platform:        "openai",
+					Models:          []string{"gpt-video-public"},
+					BillingMode:     BillingModeVideo,
+					PerRequestPrice: &videoPrice,
 				}},
 			},
 			{ID: 11, Status: StatusDisabled, GroupIDs: []int64{1}, ModelMapping: map[string]map[string]string{
@@ -46,9 +58,13 @@ func TestPublicGroupSyncSnapshotFiltersExclusiveGroupsAndPreservesMappingAndPric
 	require.Equal(t, int64(1), snapshot[0].GroupID)
 	require.True(t, snapshot[0].PublicEnabled)
 	require.Equal(t, 1.5, snapshot[0].GroupRatio)
-	require.Equal(t, []string{"gpt-public"}, snapshot[0].Models)
+	require.ElementsMatch(t, []string{"gpt-public", "gpt-image-public"}, snapshot[0].Models)
 	require.Equal(t, "gpt-upstream", snapshot[0].ModelMapping["gpt-public"])
 	require.Equal(t, 0.003, *snapshot[0].ModelPricing["gpt-public"].InputPrice)
 	require.Equal(t, 0.015, *snapshot[0].ModelPricing["gpt-public"].OutputPrice)
+	require.Contains(t, snapshot[0].Models, "gpt-image-public")
+	require.NotContains(t, snapshot[0].Models, "gpt-video-public")
+	require.Equal(t, string(BillingModeImage), snapshot[0].ModelPricing["gpt-image-public"].BillingMode)
+	require.Equal(t, 0.04, *snapshot[0].ModelPricing["gpt-image-public"].PerRequestPrice)
 	require.NotContains(t, snapshot[0].ModelMapping, "disabled-model")
 }

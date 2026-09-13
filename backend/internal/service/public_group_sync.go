@@ -42,7 +42,7 @@ func (s *PublicGroupSyncService) Snapshot(ctx context.Context) ([]PublicGroupSyn
 		models := map[string]PublicGroupSyncModel{}
 		for _, ch := range byGroup[g.ID] {
 			for _, p := range ch.ModelPricing {
-				if p.BillingMode == BillingModeImage || p.BillingMode == BillingModeVideo {
+				if p.BillingMode == BillingModeVideo {
 					continue
 				}
 				for _, name := range p.Models {
@@ -50,7 +50,18 @@ func (s *PublicGroupSyncService) Snapshot(ctx context.Context) ([]PublicGroupSyn
 						continue
 					}
 					key := p.Platform + "\x00" + name
-					m := PublicGroupSyncModel{Platform: p.Platform, DisplayName: name, BillingMode: string(p.BillingMode), InputPrice: p.InputPrice, OutputPrice: p.OutputPrice, PerRequestPrice: p.PerRequestPrice, CacheWritePrice: p.CacheWritePrice, CacheReadPrice: p.CacheReadPrice}
+					m := PublicGroupSyncModel{
+						Platform:         p.Platform,
+						DisplayName:      name,
+						BillingMode:      string(p.BillingMode),
+						InputPrice:       p.InputPrice,
+						OutputPrice:      p.OutputPrice,
+						ImageInputPrice:  p.ImageInputPrice,
+						ImageOutputPrice: p.ImageOutputPrice,
+						PerRequestPrice:  p.PerRequestPrice,
+						CacheWritePrice:  p.CacheWritePrice,
+						CacheReadPrice:   p.CacheReadPrice,
+					}
 					if mapped := ch.ModelMapping[p.Platform][name]; mapped != "" {
 						m.UpstreamModel = mapped
 					}
