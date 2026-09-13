@@ -212,7 +212,7 @@
         </div>
       </section>
 
-      <section class="home-minimal-showcase border-y border-slate-100/90 bg-white/55 px-4 py-20 dark:border-dark-800/80 dark:bg-dark-900/25 sm:px-6 lg:py-28">
+      <section class="home-minimal-showcase home-scroll-reveal border-y border-slate-100/90 bg-white/55 px-4 py-20 dark:border-dark-800/80 dark:bg-dark-900/25 sm:px-6 lg:py-28">
         <div class="mx-auto max-w-6xl">
           <div class="max-w-2xl">
             <p class="text-xs font-bold uppercase tracking-[0.22em] text-blue-600 dark:text-blue-300">{{ t('home.sections.capabilitiesEyebrow') }}</p>
@@ -220,13 +220,13 @@
             <p class="mt-4 text-sm leading-7 text-slate-600 dark:text-slate-300 sm:text-base">{{ t('home.sections.capabilitiesSubtitle') }}</p>
           </div>
           <div class="mt-10 grid gap-4 md:grid-cols-3">
-            <article v-for="(item, index) in valueItems" :key="item.title" class="home-minimal-card home-minimal-reveal rounded-2xl border border-slate-200/80 bg-white/75 p-6 shadow-sm shadow-blue-100/40 dark:border-dark-700 dark:bg-dark-900/60 dark:shadow-none" :style="{ '--motion-index': index }">
+            <article v-for="(item, index) in valueItems" :key="item.title" class="home-minimal-card home-scroll-reveal rounded-2xl border border-slate-200/80 bg-white/75 p-6 shadow-sm shadow-blue-100/40 dark:border-dark-700 dark:bg-dark-900/60 dark:shadow-none" :style="{ '--motion-index': index }">
               <span class="flex h-10 w-10 items-center justify-center rounded-xl" :class="item.iconClass"><Icon :name="item.icon" size="sm" /></span>
               <h3 class="mt-5 text-base font-semibold">{{ item.title }}</h3>
               <p class="mt-2 text-sm leading-6 text-slate-500 dark:text-slate-400">{{ item.desc }}</p>
             </article>
           </div>
-          <div class="home-minimal-steps mt-5 grid gap-3 rounded-2xl border border-blue-100/90 bg-blue-50/50 p-4 dark:border-blue-500/15 dark:bg-blue-500/[0.05] sm:grid-cols-3 sm:p-5">
+          <div class="home-minimal-steps home-scroll-reveal mt-5 grid gap-3 rounded-2xl border border-blue-100/90 bg-blue-50/50 p-4 dark:border-blue-500/15 dark:bg-blue-500/[0.05] sm:grid-cols-3 sm:p-5">
             <div v-for="(step, index) in workflowItems" :key="step.title" class="flex gap-3 rounded-xl p-3">
               <span class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-white text-xs font-bold text-blue-600 shadow-sm dark:bg-dark-900 dark:text-blue-300">{{ index + 1 }}</span>
               <div>
@@ -287,6 +287,7 @@ const isHomeContentUrl = computed(() => {
 
 const isDark = ref(document.documentElement.classList.contains('dark'))
 const isHeaderScrolled = ref(false)
+let revealObserver: IntersectionObserver | null = null
 
 const isAuthenticated = computed(() => authStore.isAuthenticated)
 const modelPlazaRequiresAuth = computed(
@@ -350,6 +351,26 @@ onMounted(() => {
   initTheme()
   syncHeaderScrolled()
   window.addEventListener('scroll', syncHeaderScrolled, { passive: true })
+  if ('IntersectionObserver' in window) {
+    revealObserver = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            entry.target.classList.add('is-visible')
+            revealObserver?.unobserve(entry.target)
+          }
+        })
+      },
+      { threshold: 0.16, rootMargin: '0px 0px -8% 0px' },
+    )
+    document.querySelectorAll<HTMLElement>('.home-scroll-reveal').forEach((element) => {
+      revealObserver?.observe(element)
+    })
+  } else {
+    document.querySelectorAll<HTMLElement>('.home-scroll-reveal').forEach((element) => {
+      element.classList.add('is-visible')
+    })
+  }
   authStore.checkAuth()
 
   if (!appStore.publicSettingsLoaded) {
@@ -359,6 +380,8 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   window.removeEventListener('scroll', syncHeaderScrolled)
+  revealObserver?.disconnect()
+  revealObserver = null
 })
 </script>
 
@@ -597,7 +620,23 @@ onBeforeUnmount(() => {
 }
 
 .home-minimal-steps {
-  animation: home-steps-breathe 8s ease-in-out infinite;
+  animation: home-steps-breathe 8s ease-in-out infinite paused;
+}
+
+.home-scroll-reveal {
+  opacity: 0;
+  transform: translateY(32px) scale(0.985);
+  transition: opacity 700ms var(--home-motion-ease), transform 700ms var(--home-motion-ease);
+  transition-delay: calc(var(--motion-index, 0) * 100ms);
+}
+
+.home-scroll-reveal.is-visible {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+}
+
+.home-minimal-steps.is-visible {
+  animation-play-state: running;
 }
 
 @keyframes home-minimal-rise {
@@ -680,8 +719,18 @@ onBeforeUnmount(() => {
   .home-minimal-proof,
   .home-minimal-connection,
   .home-minimal-card,
-  .home-minimal-steps {
+  .home-minimal-steps,
+  .home-scroll-reveal {
     transition: none;
+  }
+
+  .home-scroll-reveal {
+    opacity: 1;
+    transform: none;
+  }
+
+  .home-minimal-steps {
+    animation: none;
   }
 }
 </style>
