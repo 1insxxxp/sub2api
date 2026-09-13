@@ -68,3 +68,41 @@ func TestPublicGroupSyncSnapshotFiltersExclusiveGroupsAndPreservesMappingAndPric
 	require.Equal(t, 0.04, *snapshot[0].ModelPricing["gpt-image-public"].PerRequestPrice)
 	require.NotContains(t, snapshot[0].ModelMapping, "disabled-model")
 }
+
+type stubAccountRepositoryForPublicGroupSync struct {
+	AccountRepository
+	accounts []Account
+}
+
+func (s *stubAccountRepositoryForPublicGroupSync) ListByGroup(context.Context, int64) ([]Account, error) {
+	return s.accounts, nil
+}
+
+func TestPublicGroupSyncSnapshotIncludesImageModelsFromGroupAccounts(t *testing.T) {
+	imagePrice := 0.375
+	groups := &stubGroupRepoForAvailable{activeGroups: []Group{{
+		ID:                   7,
+		Name:                 "image-group",
+		Status:               StatusActive,
+		AllowImageGeneration: true,
+		ImagePrice1K:         &imagePrice,
+	}}}
+	channels := &mockChannelRepository{listAllFn: func(context.Context) ([]Channel, error) {
+		return nil, nil
+	}}
+	accounts := &stubAccountRepositoryForPublicGroupSync{accounts: []Account{{
+		Platform: "openai",
+		Credentials: map[string]any{"model_mapping": map[string]any{
+			"gpt-image-2":       "gpt-image-2",
+			"claude-sonnet-4-6": "claude-sonnet-4-6",
+		}},
+	}}}
+
+	snapshot, err := NewPublicGroupSyncService(groups, channels, accounts).Snapshot(context.Background())
+	require.NoError(t, err)
+	require.Len(t, snapshot, 1)
+	require.Contains(t, snapshot[0].Models, "gpt-image-2")
+	require.NotContains(t, snapshot[0].Models, "claude-sonnet-4-6")
+	require.Equal(t, string(BillingModeImage), snapshot[0].ModelPricing["gpt-image-2"].BillingMode)
+	require.Equal(t, imagePrice, *snapshot[0].ModelPricing["gpt-image-2"].PerRequestPrice)
+}

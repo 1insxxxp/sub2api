@@ -10,10 +10,15 @@ import (
 type PublicGroupSyncService struct {
 	groups   GroupRepository
 	channels ChannelRepository
+	accounts AccountRepository
 }
 
-func NewPublicGroupSyncService(groups GroupRepository, channels ChannelRepository) *PublicGroupSyncService {
-	return &PublicGroupSyncService{groups: groups, channels: channels}
+func NewPublicGroupSyncService(groups GroupRepository, channels ChannelRepository, accounts ...AccountRepository) *PublicGroupSyncService {
+	var accountRepo AccountRepository
+	if len(accounts) > 0 {
+		accountRepo = accounts[0]
+	}
+	return &PublicGroupSyncService{groups: groups, channels: channels, accounts: accountRepo}
 }
 
 func (s *PublicGroupSyncService) Snapshot(ctx context.Context) ([]PublicGroupSyncRequest, error) {
@@ -85,6 +90,30 @@ func (s *PublicGroupSyncService) Snapshot(ctx context.Context) ([]PublicGroupSyn
 				}
 			}
 		}
+		if g.AllowImageGeneration && s.accounts != nil {
+			accounts, err := s.accounts.ListByGroup(ctx, g.ID)
+			if err != nil {
+				return nil, err
+			}
+			for _, account := range accounts {
+				for name, upstream := range account.GetModelMapping() {
+					if !isImageModelName(name) {
+						continue
+					}
+					key := account.Platform + "\x00" + name
+					if _, exists := models[key]; exists {
+						continue
+					}
+					models[key] = PublicGroupSyncModel{
+						Platform:        account.Platform,
+						DisplayName:     name,
+						UpstreamModel:   upstream,
+						BillingMode:     string(BillingModeImage),
+						PerRequestPrice: g.ImagePrice1K,
+					}
+				}
+			}
+		}
 		list := make([]PublicGroupSyncModel, 0, len(models))
 		for _, m := range models {
 			list = append(list, m)
@@ -113,4 +142,9 @@ func (s *PublicGroupSyncService) Snapshot(ctx context.Context) ([]PublicGroupSyn
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].GroupID < out[j].GroupID })
 	return out, nil
+}
+
+func isImageModelName(name string) bool {
+	name = strings.ToLower(strings.TrimSpace(name))
+	return strings.Contains(name, "image") || strings.Contains(name, "imagen")
 }

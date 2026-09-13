@@ -354,7 +354,7 @@ func initializeApplication(buildInfo handler.BuildInfo) (*Application, error) {
 	batchImageHandler := handler.ProvideBatchImageHandler(batchImagePublicService, batchImageDownloadService, batchImageCleanupService, openAIGatewayHandler)
 	handlerLotteryHandler := handler.NewLotteryHandler(lotteryService)
 	internalDujiaoAuthHandler := handler.NewInternalDujiaoAuthHandler(configConfig, authService)
-	publicGroupSyncService := service.NewPublicGroupSyncService(groupRepository, channelRepository)
+	publicGroupSyncService := service.NewPublicGroupSyncService(groupRepository, channelRepository, accountRepository)
 	publicGroupSyncHandler := handler.NewPublicGroupSyncHandler(publicGroupSyncService, configConfig)
 	idempotencyCoordinator := service.ProvideIdempotencyCoordinator(idempotencyRepository, configConfig)
 	idempotencyCleanupService := service.ProvideIdempotencyCleanupService(idempotencyRepository, configConfig)
