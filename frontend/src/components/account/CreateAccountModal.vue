@@ -1552,7 +1552,6 @@
               </div>
 
             <ModelMappingBulkActions v-model="modelMappings" :allowed-models="allowedModels" />
-            <ModelMappingBulkActions v-model="modelMappings" :allowed-models="allowedModels" />
             <!-- Model Mapping List -->
             <div v-if="modelMappings.length > 0" class="mb-3 space-y-2">
               <div
@@ -2019,6 +2018,7 @@
 
           <!-- Mapping Mode -->
           <div v-else class="space-y-3">
+            <ModelMappingBulkActions v-model="modelMappings" :allowed-models="allowedModels" />
             <div v-for="(mapping, index) in modelMappings" :key="index" class="flex items-center gap-2">
               <input v-model="mapping.from" type="text" class="input flex-1" :placeholder="t('admin.accounts.fromModel')" />
               <span class="text-gray-400">→</span>
@@ -2367,6 +2367,8 @@
                 {{ t('admin.accounts.mapRequestModels') }}
               </p>
             </div>
+
+            <ModelMappingBulkActions v-model="modelMappings" :allowed-models="allowedModels" />
 
             <div v-if="modelMappings.length > 0" class="mb-3 space-y-2">
               <div
@@ -4975,11 +4977,11 @@ const handleSelectGeminiOAuthType = (oauthType: 'code_assist' | 'google_one' | '
   geminiOAuthType.value = oauthType
 }
 
-// Auto-fill related models when switching to whitelist mode or changing platform
+// Keep a selected whitelist when switching to mapping mode; refill only after a platform change.
 watch(
-  [modelRestrictionMode, () => form.platform],
-  ([newMode]) => {
-    if (newMode === 'whitelist') {
+  () => form.platform,
+  () => {
+    if (modelRestrictionMode.value === 'whitelist' && allowedModels.value.length === 0) {
       allowedModels.value = [...getModelsByPlatform(form.platform)]
     }
   }

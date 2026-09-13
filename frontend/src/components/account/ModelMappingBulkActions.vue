@@ -40,7 +40,7 @@ function prepend() {
     return
   }
   if (hasInvalidWildcard()) {
-    appStore.showError(t('admin.accounts.targetNoWildcard'))
+    appStore.showError(t('admin.accounts.wildcardOnlyAtEnd'))
     return
   }
   const result = prependModelMappingPrefix(props.modelValue, prefix.value)
@@ -51,13 +51,14 @@ function prepend() {
 </script>
 <template>
   <div class="mb-3 rounded-lg border border-gray-200 p-3 dark:border-dark-600">
-    <label class="mb-2 block text-xs text-gray-500">{{ t('admin.accounts.modelMappingPrefix') }}</label>
+    <label for="model-mapping-prefix" class="mb-2 block text-xs text-gray-500">{{ t('admin.accounts.modelMappingPrefix') }}</label>
     <p class="mb-2 text-xs text-gray-500">{{ t('admin.accounts.modelMappingBulkHint') }}</p>
     <p v-if="prefix.includes('*')" class="text-xs text-rose-600">{{ t('admin.accounts.wildcardOnlyAtEnd') }}</p>
     <div class="flex flex-wrap gap-2">
       <input
         v-model="prefix"
         data-testid="model-mapping-prefix"
+        id="model-mapping-prefix"
         type="text"
         class="input min-w-[12rem] flex-1"
         :placeholder="t('admin.accounts.modelMappingPrefixPlaceholder')"

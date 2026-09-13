@@ -365,7 +365,6 @@
               </div>
 
             <ModelMappingBulkActions v-model="modelMappings" :allowed-models="allowedModels" />
-            <ModelMappingBulkActions v-model="modelMappings" :allowed-models="allowedModels" />
             <!-- Model Mapping List -->
             <div v-if="modelMappings.length > 0" class="mb-3 space-y-2">
               <div
@@ -833,6 +832,8 @@
               </p>
             </div>
 
+            <ModelMappingBulkActions v-model="modelMappings" :allowed-models="allowedModels" />
+
             <div v-if="modelMappings.length > 0" class="mb-3 space-y-2">
               <div
                 v-for="(mapping, index) in modelMappings"
@@ -1059,7 +1060,6 @@
             </div>
 
             <ModelMappingBulkActions v-model="modelMappings" :allowed-models="allowedModels" />
-            <ModelMappingBulkActions v-model="modelMappings" :allowed-models="allowedModels" />
             <!-- Model Mapping List -->
             <div v-if="modelMappings.length > 0" class="mb-3 space-y-2">
               <div
@@ -1261,6 +1261,7 @@
 
           <!-- Mapping Mode -->
           <div v-else class="space-y-3">
+            <ModelMappingBulkActions v-model="modelMappings" :allowed-models="allowedModels" />
             <div v-for="(mapping, index) in modelMappings" :key="getModelMappingKey(mapping)" class="flex items-center gap-2">
               <input v-model="mapping.from" type="text" class="input flex-1" :placeholder="t('admin.accounts.fromModel')" />
               <span class="text-gray-400">→</span>
