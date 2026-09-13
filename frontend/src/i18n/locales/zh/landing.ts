@@ -21,9 +21,9 @@ export default {
     },
     hero: {
       eyebrow: 'PASSION API GATEWAY',
-      title: 'Passion API 一站式 API 中转服务',
+      title: 'Passion API 一站式 API',
       titleLead: 'Passion API',
-      titleAccent: '一站式 API 中转服务',
+      titleAccent: '一站式 API',
       subtitle:
         '保留 OpenAI 兼容调用方式，把账号池、渠道路由、余额计费和风控监控放在同一套控制台里。开发侧只改 Base URL，运营侧能看见每一次请求。',
       primaryCta: '开始使用',

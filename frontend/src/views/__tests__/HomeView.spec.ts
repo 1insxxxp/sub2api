@@ -44,7 +44,7 @@ vi.mock('vue-i18n', async () => {
   const actual = await vi.importActual<typeof import('vue-i18n')>('vue-i18n')
   const messages: Record<string, string> = {
     'home.hero.titleLead': 'Passion API',
-    'home.hero.titleAccent': 'One-stop API relay service',
+    'home.hero.titleAccent': 'One-stop API',
     'home.hero.eyebrow': 'PASSION API GATEWAY',
     'home.hero.proof.compatible': 'OpenAI-compatible calls',
     'home.hero.proof.routing': 'Account pools and failover',
@@ -134,7 +134,7 @@ describe('HomeView default homepage', () => {
     const wrapper = await mountHome()
 
     expect(wrapper.text()).toContain('Passion API')
-    expect(wrapper.text()).toContain('One-stop API relay service')
+    expect(wrapper.text()).toContain('One-stop API')
     expect(wrapper.text()).toContain('PASSION API GATEWAY')
     expect(wrapper.text()).not.toContain('Routing and billing board')
     expect(wrapper.text()).not.toContain('182 ms')
@@ -263,7 +263,7 @@ describe('HomeView default homepage', () => {
     const wrapper = await mountHome()
 
     expect(wrapper.html()).toContain('Custom landing page')
-    expect(wrapper.text()).not.toContain('One-stop API relay service')
+    expect(wrapper.text()).not.toContain('One-stop API')
     expect(wrapper.find('.home-motion-root').exists()).toBe(false)
   })
 })

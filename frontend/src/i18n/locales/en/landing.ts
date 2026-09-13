@@ -23,7 +23,7 @@ export default {
       eyebrow: 'PASSION API GATEWAY',
       title: 'Passion API one-stop API relay service',
       titleLead: 'Passion API',
-      titleAccent: 'One-stop API relay service',
+      titleAccent: 'One-stop API',
       subtitle:
         'Keep OpenAI-compatible calls while managing account pools, routing, wallet billing, monitoring, and risk controls from one console. Developers change the Base URL; operators see every request.',
       primaryCta: 'Start using',
