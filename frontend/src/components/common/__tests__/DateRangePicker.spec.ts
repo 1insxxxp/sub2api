@@ -94,6 +94,36 @@ describe('DateRangePicker', () => {
     ])
   })
 
+  it.each([
+    ['', '2026-09-15'],
+    ['2026-09-01', ''],
+    ['2026-09-15', '2026-09-01'],
+  ])('does not apply an incomplete or reversed range: %s to %s', async (start, end) => {
+    const wrapper = mount(DateRangePicker, {
+      props: { startDate: '2026-09-01', endDate: '2026-09-15' },
+      global: { stubs: { Icon: true } }
+    })
+    await wrapper.get('.date-picker-trigger').trigger('click')
+    const inputs = wrapper.findAll('input[type="date"]')
+    await inputs[0].setValue(start)
+    await inputs[1].setValue(end)
+    const apply = wrapper.get<HTMLButtonElement>('.date-picker-apply')
+    expect(apply.element.disabled).toBe(true)
+    await apply.trigger('click')
+    expect(wrapper.emitted('change')).toBeUndefined()
+    expect(wrapper.emitted('update:startDate')).toBeUndefined()
+    expect(wrapper.emitted('update:endDate')).toBeUndefined()
+
+    await inputs[0].setValue('2026-09-02')
+    await inputs[1].setValue('2026-09-02')
+    expect(apply.element.disabled).toBe(false)
+    await apply.trigger('click')
+    expect(wrapper.emitted('change')?.[0]).toEqual([{
+      startDate: '2026-09-02', endDate: '2026-09-02', preset: null,
+    }])
+    wrapper.unmount()
+  })
+
   it('opens as a dismissible bottom sheet on mobile', async () => {
     Object.defineProperty(window, 'innerWidth', { configurable: true, value: 390 })
     const today = formatLocalDate(new Date())

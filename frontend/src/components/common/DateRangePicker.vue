@@ -91,7 +91,7 @@
 
         <!-- Apply button -->
         <div class="date-picker-actions">
-          <button @click="apply" class="date-picker-apply">
+          <button type="button" @click="apply" :disabled="!canApply" class="date-picker-apply disabled:cursor-not-allowed disabled:opacity-50">
             {{ t('dates.apply') }}
           </button>
         </div>
@@ -304,7 +304,10 @@ const closePicker = () => {
   isMobilePicker.value = false
 }
 
+const canApply = computed(() => Boolean(localStartDate.value && localEndDate.value && localStartDate.value <= localEndDate.value))
+
 const apply = () => {
+  if (!canApply.value) return
   emit('update:startDate', localStartDate.value)
   emit('update:endDate', localEndDate.value)
   emit('change', {

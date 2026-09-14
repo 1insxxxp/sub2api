@@ -140,8 +140,18 @@ const UsageTableStub = {
   template: '<div data-test="usage-table"><button class="user-click" @click="$emit(\'userClick\', 2)">user</button></div>',
 }
 const UserTokenRankingStub = {
+  props: ['startDate', 'endDate', 'filters'],
   emits: ['select-user'],
   template: '<div data-test="ranking"><button class="pick-user" @click="$emit(\'select-user\', 5, \'rank@test.com\')">pick</button></div>',
+}
+const RechargeRankingStub = {
+  props: ['startDate', 'endDate', 'filters'],
+  template: '<div data-test="recharge-ranking" />',
+}
+const RankingTimeToolbarStub = {
+  props: ['startDate', 'endDate'],
+  emits: ['change'],
+  template: '<div data-test="ranking-time-toolbar"><span class="range">{{ startDate }} — {{ endDate }}</span><button data-test="set-ranking-range" @click="$emit(\'change\', { startDate: \'2026-09-01\', endDate: \'2026-09-07\', preset: \'7days\' })">set range</button></div>',
 }
 const ModelDistributionChartStub = {
   props: ['metric'],
@@ -474,9 +484,8 @@ describe('admin UsageView distribution metric toggles', () => {
 
     expect(getSnapshotV2).toHaveBeenCalledTimes(1)
     const now = new Date()
-    const yesterday = new Date(now.getTime() - 24 * 60 * 60 * 1000)
     expect(getSnapshotV2).toHaveBeenCalledWith(expect.objectContaining({
-      start_date: formatLocalDate(yesterday),
+      start_date: formatLocalDate(now),
       end_date: formatLocalDate(now),
       granularity: 'hour'
     }))
@@ -750,7 +759,7 @@ describe('admin UsageView ranking tab', () => {
         AppLayout: AppLayoutStub, UsageStatsCards: true, UsageFilters: UsageFiltersStub,
         UsageTable: true, UsageExportProgress: true, UsageCleanupDialog: true,
         UserBalanceHistoryModal: true, Pagination: true, Select: true,
-        DateRangePicker: true, Icon: true, TokenUsageTrend: true,
+        DateRangePicker: true, RankingTimeToolbar: RankingTimeToolbarStub, Icon: true, TokenUsageTrend: true,
         ModelDistributionChart: true, GroupDistributionChart: true, EndpointDistributionChart: true,
         UserTokenRanking: UserTokenRankingStub, EmptyResponseClaimsPanel: true,
         OpsErrorLogTable: true, OpsErrorDetailModal: true,
@@ -776,6 +785,35 @@ describe('admin UsageView ranking tab', () => {
     expect((wrapper.vm as any).activeTab).toBe('usage')
     expect((wrapper.vm as any).filters.user_id).toBe(5)
     expect(list).toHaveBeenCalledWith(expect.objectContaining({ user_id: 5 }), expect.anything())
+  })
+
+  it('shares one date range between both rankings and charts across tab changes', async () => {
+    const wrapper = mount(UsageView, {
+      global: { stubs: {
+        AppLayout: AppLayoutStub, UsageStatsCards: true, UsageFilters: UsageFiltersStub, UsageTable: true,
+        UsageExportProgress: true, UsageCleanupDialog: true, UserBalanceHistoryModal: true, Pagination: true, Select: true,
+        DateRangePicker: true, RankingTimeToolbar: RankingTimeToolbarStub, Icon: true, TokenUsageTrend: true,
+        ModelDistributionChart: true, GroupDistributionChart: true, EndpointDistributionChart: true,
+        UserTokenRanking: UserTokenRankingStub, RechargeRanking: RechargeRankingStub, EmptyResponseClaimsPanel: true,
+        OpsErrorLogTable: true, OpsErrorDetailModal: true,
+      } },
+    })
+    await flushPromises()
+    await wrapper.findAll('[data-testid="usage-detail-tab"]')[2].trigger('click')
+    await flushPromises()
+    getSnapshotV2.mockClear()
+    const toolbar = wrapper.get('[data-test="ranking-time-toolbar"]')
+    await toolbar.get('[data-test="set-ranking-range"]').trigger('click')
+    await flushPromises()
+    const expectedRange = { startDate: '2026-09-01', endDate: '2026-09-07' }
+    expect(wrapper.findComponent(UserTokenRankingStub).props()).toMatchObject(expectedRange)
+    expect(getSnapshotV2).toHaveBeenCalledTimes(1)
+    expect(getSnapshotV2).toHaveBeenLastCalledWith(expect.objectContaining({
+      start_date: expectedRange.startDate, end_date: expectedRange.endDate,
+    }))
+    await wrapper.findAll('[data-testid="usage-detail-tab"]')[3].trigger('click')
+    expect(wrapper.findComponent(RechargeRankingStub).props()).toMatchObject(expectedRange)
+    expect(wrapper.get('[data-test="ranking-time-toolbar"] .range').text()).toContain('2026-09-01 — 2026-09-07')
   })
 })
 

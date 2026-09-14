@@ -1,5 +1,6 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
+import { defineComponent } from 'vue'
 
 import UserTokenRanking from '../UserTokenRanking.vue'
 
@@ -30,6 +31,8 @@ const item = (id: number, tokens: number) => ({
   actual_cost: 0.5,
 })
 
+const PaginationStub = defineComponent({ emits: ['update:page'], template: '<button data-test="next-page" @click="$emit(\'update:page\', 2)">next</button>' })
+
 const mountRanking = (props: Record<string, unknown> = {}) =>
   mount(UserTokenRanking, {
     props: {
@@ -38,7 +41,7 @@ const mountRanking = (props: Record<string, unknown> = {}) =>
       filters: {},
       ...props,
     },
-    global: { stubs: { Select: true, LoadingSpinner: true, Pagination: true } },
+    global: { stubs: { Select: true, LoadingSpinner: true, Pagination: PaginationStub } },
   })
 
 describe('UserTokenRanking', () => {
@@ -85,6 +88,21 @@ describe('UserTokenRanking', () => {
     await wrapper.get('[data-test=ranking-retry]').trigger('click')
     await flushPromises()
     expect(getUserBreakdown).toHaveBeenCalledTimes(2)
+  })
+
+  it('resets to page one when the shared date range changes', async () => {
+    getUserBreakdown.mockResolvedValue({ users: [item(1, 100)], total: 100 })
+    const wrapper = mountRanking()
+    await flushPromises()
+    await wrapper.get('[data-test=next-page]').trigger('click')
+    await flushPromises()
+    expect(getUserBreakdown).toHaveBeenLastCalledWith(expect.objectContaining({ page: 2 }))
+
+    await wrapper.setProps({ startDate: '2026-07-02', endDate: '2026-07-08' })
+    await flushPromises()
+    expect(getUserBreakdown).toHaveBeenLastCalledWith(expect.objectContaining({
+      start_date: '2026-07-02', end_date: '2026-07-08', page: 1,
+    }))
   })
 
   it('reloads when shared filters change', async () => {
