@@ -96,7 +96,7 @@
         <!-- Iframe embed mode -->
         <div v-else ref="embedShell" class="custom-embed-shell">
           <a
-            v-if="!menuItem?.hide_open_button"
+            v-if="showOpenButton"
             ref="openButton"
             :href="embeddedUrl"
             target="_blank"
@@ -136,6 +136,7 @@ import { useAdminSettingsStore } from '@/stores/adminSettings'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import Icon from '@/components/icons/Icon.vue'
 import { buildApiUrl } from '@/api/client'
+import { MODEL_PLAZA_EXTERNAL_URL } from '@/constants/modelPlaza'
 import { buildEmbeddedUrl, detectTheme } from '@/utils/embedded-url'
 import { marked } from 'marked'
 import DOMPurify from 'dompurify'
@@ -250,6 +251,22 @@ const embeddedUrl = computed(() => {
     pageTheme.value,
     locale.value,
   )
+})
+
+const showOpenButton = computed(() => {
+  const item = menuItem.value
+  if (!item || item.hide_open_button) return false
+
+  // The model plaza is intentionally an in-app iframe. Keep the generic
+  // custom-page escape hatch for other embeds while suppressing its button.
+  try {
+    const url = new URL(item.url)
+    const modelPlazaUrl = new URL(MODEL_PLAZA_EXTERNAL_URL)
+    return url.origin !== modelPlazaUrl.origin
+      || url.pathname.replace(/\/+$/, '') !== modelPlazaUrl.pathname
+  } catch {
+    return true
+  }
 })
 
 const isValidUrl = computed(() => {

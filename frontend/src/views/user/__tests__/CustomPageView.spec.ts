@@ -86,6 +86,19 @@ describe('custom page open button', () => {
     expect(wrapper.get('iframe').attributes('src')).toContain('https://example.com/docs')
   })
 
+  it('does not render the open-in-new-window control for the model plaza embed', () => {
+    appStore.cachedPublicSettings.custom_menu_items = [{
+      id: 'docs',
+      label: '模型广场',
+      url: 'https://new.passionapi.com/pricing',
+      open_mode: 'embedded',
+    }]
+    const wrapper = mountPage()
+
+    expect(wrapper.find('.custom-open-fab').exists()).toBe(false)
+    expect(wrapper.get('iframe').attributes('src')).toContain('https://new.passionapi.com/pricing')
+  })
+
   it('preserves the embedded URL, secure link attributes, and normal clicks with small pointer movements', async () => {
     const { wrapper, button } = mountEmbed()
     expect(button.href).toBe(wrapper.get('iframe').attributes('src'))

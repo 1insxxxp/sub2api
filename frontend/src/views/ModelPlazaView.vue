@@ -10,7 +10,7 @@
       </div>
       <iframe
         class="model-plaza-frame"
-        :src="modelSquareUrl"
+        :src="MODEL_PLAZA_EXTERNAL_URL"
         :title="t('modelPlaza.title')"
         referrerpolicy="strict-origin-when-cross-origin"
         allow="clipboard-read; clipboard-write"
@@ -19,7 +19,7 @@
       ></iframe>
       <div v-if="iframeFailed" class="model-plaza-frame-error">
         <span>{{ t('modelPlaza.loadFailed') }}</span>
-        <a :href="modelSquareUrl" target="_blank" rel="noopener noreferrer">
+        <a :href="MODEL_PLAZA_EXTERNAL_URL" target="_blank" rel="noopener noreferrer">
           {{ t('customPage.openInNewTab') }}
         </a>
         <RouterLink :to="internalModelPlazaRoute">{{ t('modelPlaza.title') }}</RouterLink>
@@ -46,7 +46,7 @@
       </div>
       <iframe
         class="model-plaza-frame"
-        :src="modelSquareUrl"
+        :src="MODEL_PLAZA_EXTERNAL_URL"
         :title="t('modelPlaza.title')"
         referrerpolicy="strict-origin-when-cross-origin"
         allow="clipboard-read; clipboard-write"
@@ -55,7 +55,7 @@
       ></iframe>
       <div v-if="iframeFailed" class="model-plaza-frame-error">
         <span>{{ t('modelPlaza.loadFailed') }}</span>
-        <a :href="modelSquareUrl" target="_blank" rel="noopener noreferrer">
+        <a :href="MODEL_PLAZA_EXTERNAL_URL" target="_blank" rel="noopener noreferrer">
           {{ t('customPage.openInNewTab') }}
         </a>
         <RouterLink :to="internalModelPlazaRoute">{{ t('modelPlaza.title') }}</RouterLink>
@@ -75,6 +75,7 @@ import AppLayout from '@/components/layout/AppLayout.vue'
 import ModelPlazaContent from '@/components/modelPlaza/ModelPlazaContent.vue'
 import PlazaNavBar from '@/components/modelPlaza/PlazaNavBar.vue'
 import { getModelPlaza, type ModelPlazaResponse } from '@/api/modelPlaza'
+import { MODEL_PLAZA_EXTERNAL_URL } from '@/constants/modelPlaza'
 import { useAppStore } from '@/stores/app'
 import { useAuthStore } from '@/stores/auth'
 
@@ -91,7 +92,6 @@ const internalModelPlazaRoute = computed(() => ({
   query: { ...route.query, source: 'internal' },
 }))
 
-const modelSquareUrl = 'https://new.passionapi.com/pricing'
 const iframeLoaded = ref(false)
 const iframeFailed = ref(false)
 const data = ref<ModelPlazaResponse | null>(null)
