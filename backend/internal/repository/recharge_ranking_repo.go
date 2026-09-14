@@ -128,7 +128,7 @@ LIMIT $5 OFFSET $6`, orderBy, sortOrder)
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	result := &service.RechargeRankingResponse{Items: make([]service.RechargeRankingItem, 0)}
 	for rows.Next() {
 		var item service.RechargeRankingItem

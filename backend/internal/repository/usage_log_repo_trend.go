@@ -812,7 +812,7 @@ SELECT user_id,email,balance,requests,input_tokens,output_tokens,total_tokens,ba
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	result := &usagestats.UserBreakdownRankingResponse{Users: make([]usagestats.UserBreakdownItem, 0), Page: page, PageSize: pageSize}
 	for rows.Next() {
 		var item usagestats.UserBreakdownItem
