@@ -71,11 +71,61 @@ func TestPublicGroupSyncSnapshotFiltersExclusiveGroupsAndPreservesMappingAndPric
 
 type stubAccountRepositoryForPublicGroupSync struct {
 	AccountRepository
-	accounts []Account
+	accounts           []Account
+	schedulableByGroup map[int64][]Account
 }
 
 func (s *stubAccountRepositoryForPublicGroupSync) ListByGroup(context.Context, int64) ([]Account, error) {
 	return s.accounts, nil
+}
+
+func (s *stubAccountRepositoryForPublicGroupSync) ListSchedulableByGroupID(_ context.Context, groupID int64) ([]Account, error) {
+	return s.schedulableByGroup[groupID], nil
+}
+
+func TestPublicGroupSyncSnapshotUsesGroupSchedulableModels(t *testing.T) {
+	inputPrice := 0.003
+	outputPrice := 0.015
+	groups := &stubGroupRepoForAvailable{activeGroups: []Group{{
+		ID:       84,
+		Name:     "ccmax",
+		Platform: PlatformAnthropic,
+		Status:   StatusActive,
+	}}}
+	channels := &mockChannelRepository{listAllFn: func(context.Context) ([]Channel, error) {
+		return []Channel{{
+			ID:       14,
+			Status:   StatusActive,
+			GroupIDs: []int64{84},
+			ModelPricing: []ChannelModelPricing{{
+				Platform:    PlatformAnthropic,
+				Models:      []string{"ccmax-model-a", "ccmax-model-b", "unavailable-shared-model"},
+				BillingMode: BillingModeToken,
+				InputPrice:  &inputPrice,
+				OutputPrice: &outputPrice,
+			}},
+			ModelMapping: map[string]map[string]string{PlatformAnthropic: {
+				"ccmax-model-a":            "upstream-a",
+				"ccmax-model-b":            "upstream-b",
+				"unavailable-shared-model": "upstream-shared",
+			}},
+		}}, nil
+	}}
+	accounts := &stubAccountRepositoryForPublicGroupSync{schedulableByGroup: map[int64][]Account{
+		84: {{
+			Platform: PlatformAnthropic,
+			Credentials: map[string]any{"model_mapping": map[string]any{
+				"ccmax-model-a": "upstream-a",
+				"ccmax-model-b": "upstream-b",
+			}},
+		}},
+	}}
+
+	snapshot, err := NewPublicGroupSyncService(groups, channels, accounts).Snapshot(context.Background())
+	require.NoError(t, err)
+	require.Len(t, snapshot, 1)
+	require.ElementsMatch(t, []string{"ccmax-model-a", "ccmax-model-b"}, snapshot[0].Models)
+	require.NotContains(t, snapshot[0].Models, "unavailable-shared-model")
 }
 
 func TestPublicGroupSyncSnapshotIncludesImageModelsFromGroupAccounts(t *testing.T) {

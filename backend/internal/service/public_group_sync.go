@@ -44,6 +44,33 @@ func (s *PublicGroupSyncService) Snapshot(ctx context.Context) ([]PublicGroupSyn
 		if g.IsExclusive {
 			continue
 		}
+		// Channel pricing is shared by every group attached to that channel. Use
+		// the group's schedulable account mappings to avoid publishing pricing
+		// aliases that the group cannot actually route.
+		availableModels := map[string]map[string]struct{}{}
+		if s.accounts != nil {
+			accounts, err := s.accounts.ListSchedulableByGroupID(ctx, g.ID)
+			if err != nil {
+				return nil, err
+			}
+			for _, account := range accounts {
+				if strings.TrimSpace(g.Platform) != "" && !isPlatformPricingMatch(g.Platform, account.Platform) {
+					continue
+				}
+				mapping := account.GetModelMapping()
+				if len(mapping) == 0 {
+					continue
+				}
+				if availableModels[account.Platform] == nil {
+					availableModels[account.Platform] = map[string]struct{}{}
+				}
+				for name := range mapping {
+					if !strings.ContainsAny(name, "*?") {
+						availableModels[account.Platform][name] = struct{}{}
+					}
+				}
+			}
+		}
 		models := map[string]PublicGroupSyncModel{}
 		for _, ch := range byGroup[g.ID] {
 			for _, p := range ch.ModelPricing {
@@ -56,6 +83,11 @@ func (s *PublicGroupSyncService) Snapshot(ctx context.Context) ([]PublicGroupSyn
 				for _, name := range p.Models {
 					if strings.ContainsAny(name, "*?") {
 						continue
+					}
+					if allowed := availableModels[p.Platform]; len(allowed) > 0 {
+						if _, ok := allowed[name]; !ok {
+							continue
+						}
 					}
 					key := p.Platform + "\x00" + name
 					m := PublicGroupSyncModel{
@@ -86,6 +118,11 @@ func (s *PublicGroupSyncService) Snapshot(ctx context.Context) ([]PublicGroupSyn
 				for name, upstream := range mapping {
 					if strings.ContainsAny(name, "*?") {
 						continue
+					}
+					if allowed := availableModels[platform]; len(allowed) > 0 {
+						if _, ok := allowed[name]; !ok {
+							continue
+						}
 					}
 					key := platform + "\x00" + name
 					if _, exists := models[key]; exists {
