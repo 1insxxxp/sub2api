@@ -324,7 +324,11 @@ export default {
         invitation: 'Invitation',
         // Admin adjustment types (created when admin modifies user balance/concurrency)
         admin_balance: 'Balance (Admin)',
-        admin_concurrency: 'Concurrency (Admin)'
+        admin_concurrency: 'Concurrency (Admin)',
+        checkin_reward: 'Check-in reward',
+        promo_reward: 'Promo reward',
+        empty_response: 'Empty response compensation',
+        affiliate_balance: 'Affiliate rebate'
       },
       selectGroup: 'Select Group',
       selectGroupPlaceholder: 'Choose a subscription group',
@@ -574,9 +578,13 @@ export default {
           outputTokens: 'Output Tokens',
           cacheTokens: 'Cache Tokens',
           totalTokens: 'Total Tokens',
-          cost: 'Cost'
-        }
+          cost: 'Balance Deducted',
+          balance: 'Balance',
+          lastRequest: 'Last Request',
+        },
+        summaryUsers: 'Users', summaryRequests: 'Requests', summaryTokens: 'Total Tokens', summaryCost: 'Balance Deducted', loadFailed: 'Failed to load ranking'
       },
+      rechargeRanking: { exportCurrentPage: 'Export current page CSV', subtitle: 'User recharge ranking from balance ledger', loadFailed: 'Failed to load recharge ranking', allSources: 'All sources', sortAsc: 'Ascending', sortDesc: 'Descending', summaryUsers: 'Recharge users', summaryCount: 'Recharge count', summaryTotal: 'Added balance', summaryOnline: 'Online recharge', sources: { online: 'Online', redeem: 'Redeem code', affiliate: 'Affiliate', admin: 'Admin adjustment', reward: 'Rewards', refund: 'Refund', other: 'Other' }, columns: { rank: 'Rank', user: 'User', total: 'Added balance', online: 'Online', redeem: 'Redeem', affiliate: 'Affiliate', admin: 'Admin', reward: 'Rewards', refund: 'Refund', other: 'Other', count: 'Count', last: 'Last recharge' } },
       cleanup: {
         button: 'Cleanup',
         title: 'Cleanup Usage Records',

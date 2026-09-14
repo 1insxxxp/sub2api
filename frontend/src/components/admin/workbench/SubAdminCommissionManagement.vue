@@ -74,7 +74,7 @@
             <input
               v-model="assignedGroupIDs"
               type="checkbox"
-              class="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+              class="sub-admin-group-checkbox rounded border-gray-300 text-primary-600 focus:ring-primary-500"
               :value="group.id"
               :data-test="`sub-admin-commission-group-${group.id}`"
             />
@@ -167,3 +167,15 @@ onMounted(() => {
   void loadManagementData()
 })
 </script>
+
+<style scoped>
+.sub-admin-group-checkbox {
+  width: 16px !important;
+  height: 16px !important;
+  min-width: 16px;
+  min-height: 16px;
+  flex: 0 0 16px;
+  margin: 0;
+  accent-color: rgb(37 99 235);
+}
+</style>

@@ -375,6 +375,24 @@ describe('PaymentView subscription plan grid', () => {
 })
 
 describe('PaymentView recharge rate preview', () => {
+  it('updates the quoted rate at tier boundaries', async () => {
+    routeState.path = '/purchase'
+    routeState.query = {}
+    getCheckoutInfo.mockReset().mockResolvedValue(checkoutInfoFixture({
+      balance_recharge_multiplier: 1,
+      balance_recharge_tiers: [
+        { amount: 10, multiplier: 2 }, { amount: 18, multiplier: 3 }, { amount: 80, multiplier: 4 },
+      ],
+    }))
+    const wrapper = shallowMount(PaymentView, { global: { stubs: { AppLayout: { template: '<div><slot /></div>' }, Teleport: true, Transition: false } } })
+    await flushPromises()
+    for (const [amount, rate] of [[10, '2.00'], [18, '3.00'], [80, '4.00']] as const) {
+      translate.mockClear()
+      wrapper.getComponent(AmountInput).vm.$emit('update:modelValue', amount)
+      await flushPromises()
+      expect(translate).toHaveBeenCalledWith('payment.rechargeRatePreview', expect.objectContaining({ usd: rate }))
+    }
+  })
   it('uses the selected payment method currency in both locale templates', async () => {
     translate.mockClear()
     routeState.path = '/purchase'

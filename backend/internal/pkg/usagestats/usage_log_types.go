@@ -183,6 +183,10 @@ type UserBreakdownItem struct {
 	Cost         float64 `json:"cost"`          // 标准计费
 	ActualCost   float64 `json:"actual_cost"`   // 实际扣除
 	AccountCost  float64 `json:"account_cost"`  // 账号成本
+	// Ranking-only fields. They are omitted from legacy breakdown responses when empty.
+	BalanceDeducted float64    `json:"balance_deducted,omitempty"`
+	Balance         float64    `json:"balance,omitempty"`
+	LastRequestAt   *time.Time `json:"last_request_at,omitempty"`
 }
 
 // UserBreakdownDimension specifies the dimension to filter for user breakdown.
@@ -201,7 +205,25 @@ type UserBreakdownDimension struct {
 	NativeCompactionV2 *bool  // filter by native compaction v2 flag (non-nil to enable)
 	BillingType        *int8  // filter by billing_type (non-nil to enable)
 	// SortBy 指定排序列(空 = 默认按 actual_cost)。合法值由 repo 层 allowlist 校验。
-	SortBy string
+	SortBy    string
+	SortOrder string
+	Page      int
+	PageSize  int
+}
+
+type UserBreakdownSummary struct {
+	Users           int64   `json:"users"`
+	Requests        int64   `json:"requests"`
+	TotalTokens     int64   `json:"total_tokens"`
+	BalanceDeducted float64 `json:"balance_deducted"`
+}
+
+type UserBreakdownRankingResponse struct {
+	Users    []UserBreakdownItem  `json:"users"`
+	Total    int64                `json:"total"`
+	Page     int                  `json:"page"`
+	PageSize int                  `json:"page_size"`
+	Summary  UserBreakdownSummary `json:"summary"`
 }
 
 // APIKeyUsageTrendPoint represents API key usage trend data point

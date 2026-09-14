@@ -259,7 +259,11 @@ export default {
         invitation: '邀请码',
         // 管理员在用户管理页面调整余额/并发时产生的记录
         admin_balance: '余额（管理员）',
-        admin_concurrency: '并发数（管理员）'
+        admin_concurrency: '并发数（管理员）',
+        checkin_reward: '签到奖励',
+        promo_reward: '优惠码奖励',
+        empty_response: '空响应补偿',
+        affiliate_balance: '邀请返利'
       },
       // 用于选择器和筛选器的直接键
       balance: '余额',
@@ -571,9 +575,13 @@ export default {
           outputTokens: '输出 Token',
           cacheTokens: '缓存 Token',
           totalTokens: '总 Token',
-          cost: '费用'
-        }
+          cost: '实际扣款',
+          balance: '当前余额',
+          lastRequest: '最后请求',
+        },
+        summaryUsers: '用户数', summaryRequests: '请求数', summaryTokens: '总 Token', summaryCost: '实际扣款', loadFailed: '加载排行失败，请重试'
       },
+      rechargeRanking: { exportCurrentPage: '导出当前页 CSV', subtitle: '按余额流水统计用户充值排行', loadFailed: '加载充值排行失败，请重试', allSources: '全部来源', sortAsc: '升序', sortDesc: '降序', summaryUsers: '充值用户', summaryCount: '充值次数', summaryTotal: '新增余额', summaryOnline: '在线充值', sources: { online: '在线充值', redeem: '兑换码', affiliate: '邀请返利', admin: '管理员调整', reward: '活动奖励', refund: '退款', other: '其他' }, columns: { rank: '排名', user: '用户', total: '新增余额', online: '在线充值', redeem: '兑换码', affiliate: '邀请返利', admin: '管理员调整', reward: '活动奖励', refund: '退款', other: '其他', count: '充值次数', last: '最后充值' } },
       cleanup: {
         button: '清理',
         title: '清理使用记录',

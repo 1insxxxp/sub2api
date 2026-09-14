@@ -222,6 +222,76 @@ func TestSubAdminCommissionRepositoryListDayGroupsUsesLiveLogsForYesterdayWithGl
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 
+func TestSubAdminCommissionRepositoryListDayGroupsLiveHidesInactiveGroupsWithoutUsage(t *testing.T) {
+	repo, mock := newSubAdminCommissionRepoMock(t)
+	todayStart, err := service.ParseGroupUsageDate(service.GroupUsageDate(time.Now()))
+	require.NoError(t, err)
+	today := service.GroupUsageDate(todayStart)
+
+	mock.ExpectQuery(`(?s)JOIN groups g ON g\.id = gg\.group_id.*LEFT JOIN usage_logs ul ON .*WHERE \$3::date >= gg\.granted_date\s+AND\s+\(\(g\.status = 'active' AND g\.deleted_at IS NULL\) OR ul\.id IS NOT NULL\)`).
+		WithArgs(todayStart.UTC(), todayStart.AddDate(0, 0, 1).UTC(), today).
+		WillReturnRows(sqlmock.NewRows([]string{"group_id", "group_name", "requests", "total_tokens", "actual_cost"}).
+			AddRow(int64(9), "Active group", int64(0), int64(0), 0.0))
+
+	groups, err := repo.ListDayGroups(context.Background(), 17, today, 0.2)
+
+	require.NoError(t, err)
+	require.Len(t, groups, 1)
+	require.Equal(t, int64(9), groups[0].GroupID)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestSubAdminCommissionRepositoryListDayGroupsLiveKeepsInactiveGroupsWithUsage(t *testing.T) {
+	repo, mock := newSubAdminCommissionRepoMock(t)
+	todayStart, err := service.ParseGroupUsageDate(service.GroupUsageDate(time.Now()))
+	require.NoError(t, err)
+	today := service.GroupUsageDate(todayStart)
+
+	mock.ExpectQuery(`(?s)JOIN groups g ON g\.id = gg\.group_id.*LEFT JOIN usage_logs ul ON .*WHERE \$3::date >= gg\.granted_date\s+AND\s+\(\(g\.status = 'active' AND g\.deleted_at IS NULL\) OR ul\.id IS NOT NULL\)`).
+		WithArgs(todayStart.UTC(), todayStart.AddDate(0, 0, 1).UTC(), today).
+		WillReturnRows(sqlmock.NewRows([]string{"group_id", "group_name", "requests", "total_tokens", "actual_cost"}).
+			AddRow(int64(127), "Inactive group", int64(1), int64(120), 12.5))
+
+	groups, err := repo.ListDayGroups(context.Background(), 17, today, 0.2)
+
+	require.NoError(t, err)
+	require.Len(t, groups, 1)
+	require.Equal(t, int64(127), groups[0].GroupID)
+	require.Equal(t, 2.5, groups[0].CommissionAmount)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestSubAdminCommissionRepositoryListDayGroupsHistoricalHidesInactiveGroupsWithoutRollup(t *testing.T) {
+	repo, mock := newSubAdminCommissionRepoMock(t)
+
+	mock.ExpectQuery(`(?s)JOIN groups g ON g\.id = gg\.group_id.*LEFT JOIN usage_group_daily_rollups r ON .*WHERE \$2::date >= gg\.granted_date\s+AND\s+\(\(g\.status = 'active' AND g\.deleted_at IS NULL\) OR r\.group_id IS NOT NULL\)`).
+		WillReturnRows(sqlmock.NewRows([]string{"group_id", "group_name", "requests", "total_tokens", "actual_cost"}).
+			AddRow(int64(9), "Active group", int64(0), int64(0), 0.0))
+
+	groups, err := repo.ListDayGroups(context.Background(), 17, "2000-01-02", 0.2)
+
+	require.NoError(t, err)
+	require.Len(t, groups, 1)
+	require.Equal(t, int64(9), groups[0].GroupID)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestSubAdminCommissionRepositoryListDayGroupsHistoricalKeepsInactiveGroupsWithRollup(t *testing.T) {
+	repo, mock := newSubAdminCommissionRepoMock(t)
+
+	mock.ExpectQuery(`(?s)JOIN groups g ON g\.id = gg\.group_id.*LEFT JOIN usage_group_daily_rollups r ON .*WHERE \$2::date >= gg\.granted_date\s+AND\s+\(\(g\.status = 'active' AND g\.deleted_at IS NULL\) OR r\.group_id IS NOT NULL\)`).
+		WillReturnRows(sqlmock.NewRows([]string{"group_id", "group_name", "requests", "total_tokens", "actual_cost"}).
+			AddRow(int64(127), "Inactive group", int64(0), int64(0), 12.5))
+
+	groups, err := repo.ListDayGroups(context.Background(), 17, "2000-01-02", 0.2)
+
+	require.NoError(t, err)
+	require.Len(t, groups, 1)
+	require.Equal(t, int64(127), groups[0].GroupID)
+	require.Equal(t, 2.5, groups[0].CommissionAmount)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
 func TestSubAdminCommissionRepositoryListDayGroupLogsPaginatesAndJoinsAssociationsWithGlobalGrants(t *testing.T) {
 	repo, mock := newSubAdminCommissionRepoMock(t)
 	createdAt := time.Date(2026, 8, 22, 8, 45, 0, 0, time.UTC)

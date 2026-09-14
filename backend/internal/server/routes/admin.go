@@ -877,6 +877,7 @@ func registerUsageRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 		usage.POST("/empty-response-claims/:id/approve", h.Admin.Usage.ApproveEmptyResponseClaim)
 		usage.POST("/empty-response-claims/:id/reject", h.Admin.Usage.RejectEmptyResponseClaim)
 		usage.GET("", h.Admin.Usage.List)
+		usage.GET("/recharge-ranking", h.Admin.Usage.RechargeRanking)
 		usage.GET("/stats", h.Admin.Usage.Stats)
 		usage.GET("/search-users", h.Admin.Usage.SearchUsers)
 		usage.GET("/search-api-keys", h.Admin.Usage.SearchAPIKeys)

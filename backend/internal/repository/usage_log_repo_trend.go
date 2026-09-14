@@ -151,12 +151,13 @@ func (r *usageLogRepository) GetUserSpendingRanking(ctx context.Context, startTi
 				u.user_id,
 				COALESCE(us.email, '') as email,
 				COALESCE(us.username, '') as username,
-				COALESCE(SUM(u.actual_cost), 0) as actual_cost,
+				COALESCE(SUM(GREATEST(u.actual_cost - COALESCE(u.compensated_cost, 0), 0)), 0) as actual_cost,
 				COUNT(*) as requests,
 				COALESCE(SUM(u.input_tokens + u.output_tokens + u.cache_creation_tokens + u.cache_read_tokens), 0) as tokens
 			FROM usage_logs u
 			LEFT JOIN users us ON u.user_id = us.id
 			WHERE u.created_at >= $1 AND u.created_at < $2
+			  AND u.billing_type = 0
 			GROUP BY u.user_id, us.email, us.username
 		),
 		ranked AS (
@@ -727,6 +728,104 @@ func (r *usageLogRepository) GetUserBreakdownStats(ctx context.Context, startTim
 		return nil, err
 	}
 	return results, nil
+}
+
+// GetUserBreakdownRanking returns a paginated user consumption ranking. It is
+// kept separate from the legacy breakdown method so existing callers and SQL
+// mocks remain compatible.
+func (r *usageLogRepository) GetUserBreakdownRanking(ctx context.Context, startTime, endTime time.Time, dim usagestats.UserBreakdownDimension) (*usagestats.UserBreakdownRankingResponse, error) {
+	page, pageSize := dim.Page, dim.PageSize
+	if page < 1 {
+		page = 1
+	}
+	if pageSize < 1 {
+		pageSize = 50
+	}
+	if pageSize > 200 {
+		pageSize = 200
+	}
+	sortBy := "balance_deducted"
+	switch dim.SortBy {
+	case "requests", "input_tokens", "output_tokens", "total_tokens", "balance_deducted":
+		sortBy = dim.SortBy
+	}
+	sortOrder := "DESC"
+	if strings.EqualFold(dim.SortOrder, "asc") {
+		sortOrder = "ASC"
+	}
+	where := "ul.created_at >= $1 AND ul.created_at < $2 AND ul.billing_type = 0"
+	args := []any{startTime, endTime}
+	add := func(cond string, v any) {
+		where += fmt.Sprintf(" AND %s = $%d", cond, len(args)+1)
+		args = append(args, v)
+	}
+	if dim.GroupID > 0 {
+		add("ul.group_id", dim.GroupID)
+	}
+	if dim.Model != "" {
+		add(resolveModelDimensionExpressionWithAlias(dim.ModelType, "ul"), dim.Model)
+	}
+	if dim.Endpoint != "" {
+		add(resolveEndpointColumn(dim.EndpointType), dim.Endpoint)
+	}
+	if dim.UserID > 0 {
+		add("ul.user_id", dim.UserID)
+	}
+	if dim.APIKeyID > 0 {
+		add("ul.api_key_id", dim.APIKeyID)
+	}
+	if dim.AccountID > 0 {
+		add("ul.account_id", dim.AccountID)
+	}
+	if dim.RequestType != nil {
+		condition, conditionArgs := buildRequestTypeFilterConditionWithAlias(len(args)+1, *dim.RequestType, "ul")
+		where += " AND " + condition
+		args = append(args, conditionArgs...)
+	}
+	if dim.Stream != nil {
+		add("ul.stream", *dim.Stream)
+	}
+	where, args = appendNativeCompactionV2QueryFilter(where, args, dim.NativeCompactionV2, "ul")
+	if dim.BillingType != nil && *dim.BillingType != 0 {
+		// The ranking is specifically wallet-debit based; a subscription filter
+		// cannot produce wallet debit rows.
+		where += " AND 1 = 0"
+	}
+	query := fmt.Sprintf(`WITH grouped AS (
+ SELECT ul.user_id, COALESCE(u.email,'') email, COALESCE(u.balance,0) balance,
+ COUNT(*) requests, COALESCE(SUM(ul.input_tokens),0) input_tokens,
+ COALESCE(SUM(ul.output_tokens),0) output_tokens,
+ COALESCE(SUM(ul.input_tokens+ul.output_tokens+ul.cache_creation_tokens+ul.cache_read_tokens),0) total_tokens,
+ COALESCE(SUM(GREATEST(ul.actual_cost-COALESCE(ul.compensated_cost,0),0)),0) balance_deducted,
+ MAX(ul.created_at) last_request_at
+ FROM usage_logs ul LEFT JOIN users u ON u.id=ul.user_id WHERE %s
+ GROUP BY ul.user_id,u.email,u.balance
+), ranked AS (
+ SELECT grouped.*, COUNT(*) OVER() total_users,
+ SUM(requests) OVER() summary_requests, SUM(total_tokens) OVER() summary_tokens,
+ SUM(balance_deducted) OVER() summary_balance_deducted
+ FROM grouped ORDER BY %s %s, user_id ASC LIMIT $%d OFFSET $%d
+)
+SELECT user_id,email,balance,requests,input_tokens,output_tokens,total_tokens,balance_deducted,last_request_at,total_users,summary_requests,summary_tokens,summary_balance_deducted FROM ranked`, where, sortBy, sortOrder, len(args)+1, len(args)+2)
+	args = append(args, pageSize, (page-1)*pageSize)
+	rows, err := r.sql.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	result := &usagestats.UserBreakdownRankingResponse{Users: make([]usagestats.UserBreakdownItem, 0), Page: page, PageSize: pageSize}
+	for rows.Next() {
+		var item usagestats.UserBreakdownItem
+		var total, requests, tokens int64
+		var deducted float64
+		if err := rows.Scan(&item.UserID, &item.Email, &item.Balance, &item.Requests, &item.InputTokens, &item.OutputTokens, &item.TotalTokens, &item.BalanceDeducted, &item.LastRequestAt, &total, &requests, &tokens, &deducted); err != nil {
+			return nil, err
+		}
+		result.Users = append(result.Users, item)
+		result.Total = total
+		result.Summary = usagestats.UserBreakdownSummary{Users: total, Requests: requests, TotalTokens: tokens, BalanceDeducted: deducted}
+	}
+	return result, rows.Err()
 }
 
 // GetAllGroupUsageSummary 返回所有分组在服务端配置时区内的今日、昨日与当前保留记录累计金额。

@@ -85,7 +85,7 @@
 
         <UsageFilters v-if="activeTab !== 'claims'" v-model="filters" ref="usageFiltersRef" flat :mode="activeTab" class="border-b border-gray-100 dark:border-dark-700/50" :start-date="startDate" :end-date="endDate" :exporting="exporting" :model-options="modelNameOptions" @change="applyFilters" @refresh="refreshData" @reset="resetFilters" @cleanup="openCleanupDialog" @export="exportToExcel">
           <template #after-reset>
-            <div v-if="activeTab !== 'ranking'" class="relative" ref="columnDropdownRef">
+            <div v-if="activeTab !== 'ranking' && activeTab !== 'recharge'" class="relative" ref="columnDropdownRef">
               <button
                 data-testid="usage-column-settings"
                 @click="showColumnDropdown = !showColumnDropdown"
@@ -162,6 +162,9 @@
             @select-user="handleRankingSelectUser"
           />
         </div>
+        <div v-if="rechargeMounted" v-show="activeTab === 'recharge'" class="overflow-hidden rounded-b-2xl">
+          <RechargeRanking ref="rechargeRef" :start-date="startDate" :end-date="endDate" :filters="{ user_id: filters.user_id }" @select-user="handleRankingSelectUser" />
+        </div>
         <div v-if="claimsMounted" v-show="activeTab === 'claims'" class="overflow-hidden rounded-b-2xl">
           <EmptyResponseClaimsPanel
             ref="claimsRef"
@@ -203,6 +206,7 @@ import AppLayout from '@/components/layout/AppLayout.vue'; import Pagination fro
 import UsageStatsCards from '@/components/admin/usage/UsageStatsCards.vue'; import UsageFilters from '@/components/admin/usage/UsageFilters.vue'
 import UsageTable from '@/components/admin/usage/UsageTable.vue'; import UsageExportProgress from '@/components/admin/usage/UsageExportProgress.vue'
 import UserTokenRanking from '@/components/admin/usage/UserTokenRanking.vue'
+import RechargeRanking from '@/components/admin/usage/RechargeRanking.vue'
 import UsageCleanupDialog from '@/components/admin/usage/UsageCleanupDialog.vue'
 import EmptyResponseClaimsPanel from '@/components/admin/usage/EmptyResponseClaimsPanel.vue'
 import UserBalanceHistoryModal from '@/components/admin/user/UserBalanceHistoryModal.vue'
@@ -547,6 +551,7 @@ const refreshData = () => {
   loadChartData()
   if (activeTab.value === 'errors') loadAdminErrors()
   if (rankingMounted.value) rankingRef.value?.reload()
+  if (rechargeMounted.value) rechargeRef.value?.reload()
   if (claimsMounted.value) claimsRef.value?.reload()
 }
 const resetFilters = () => {
@@ -792,17 +797,20 @@ const loadSavedColumns = () => {
 }
 
 // Detail tabs
-type DetailTab = 'usage' | 'errors' | 'ranking' | 'claims'
+type DetailTab = 'usage' | 'errors' | 'ranking' | 'recharge' | 'claims'
 const activeTab = ref<DetailTab>('usage')
 const detailTabs = computed(() => [
   { key: 'usage' as const, label: t('usage.tabs.usage'), icon: 'document' as const },
   { key: 'errors' as const, label: t('usage.tabs.errors'), icon: 'exclamationTriangle' as const },
   { key: 'ranking' as const, label: t('usage.tabs.ranking'), icon: 'chart' as const },
+  { key: 'recharge' as const, label: t('usage.tabs.rechargeRanking'), icon: 'dollar' as const },
   { key: 'claims' as const, label: t('admin.usage.emptyResponseClaims.tab'), icon: 'dollar' as const },
 ])
 const usageFiltersRef = ref<InstanceType<typeof UsageFilters> | null>(null)
 const rankingMounted = ref(false)
 const rankingRef = ref<InstanceType<typeof UserTokenRanking> | null>(null)
+const rechargeMounted = ref(false)
+const rechargeRef = ref<InstanceType<typeof RechargeRanking> | null>(null)
 const claimsMounted = ref(false)
 const claimsRef = ref<InstanceType<typeof EmptyResponseClaimsPanel> | null>(null)
 
@@ -810,6 +818,7 @@ const switchTab = (tab: DetailTab) => {
   activeTab.value = tab
   if (tab === 'errors' && errRows.value.length === 0) loadAdminErrors()
   if (tab === 'ranking') rankingMounted.value = true
+  if (tab === 'recharge') rechargeMounted.value = true
   if (tab === 'claims') claimsMounted.value = true
 }
 

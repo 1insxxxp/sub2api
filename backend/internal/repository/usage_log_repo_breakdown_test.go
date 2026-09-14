@@ -100,3 +100,20 @@ func TestGetUserBreakdownStatsFiltersNativeCompactionV2(t *testing.T) {
 	require.Empty(t, rows)
 	require.NoError(t, mock.ExpectationsWereMet())
 }
+
+func TestGetUserBreakdownRankingUsesNetWalletDebit(t *testing.T) {
+	db, mock := newSQLMock(t)
+	repo := &usageLogRepository{sql: db}
+	start := time.Date(2026, 7, 1, 0, 0, 0, 0, time.UTC)
+	end := start.Add(24 * time.Hour)
+	mock.ExpectQuery(`(?s)GREATEST\(ul\.actual_cost-COALESCE\(ul\.compensated_cost,0\),0\).*billing_type = 0.*LIMIT \$3 OFFSET \$4`).
+		WithArgs(start, end, 50, 0).
+		WillReturnRows(sqlmock.NewRows([]string{"user_id", "email", "balance", "requests", "input_tokens", "output_tokens", "total_tokens", "balance_deducted", "last_request_at", "total_users", "summary_requests", "summary_tokens", "summary_balance_deducted"}).
+			AddRow(int64(7), "u@example.com", 12.5, int64(2), int64(10), int64(20), int64(30), 1.25, start, int64(1), int64(2), int64(30), 1.25))
+	result, err := repo.GetUserBreakdownRanking(context.Background(), start, end, usagestats.UserBreakdownDimension{Page: 1, PageSize: 50})
+	require.NoError(t, err)
+	require.Len(t, result.Users, 1)
+	require.InDelta(t, 1.25, result.Users[0].BalanceDeducted, 1e-9)
+	require.Equal(t, int64(1), result.Total)
+	require.NoError(t, mock.ExpectationsWereMet())
+}

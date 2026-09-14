@@ -80,6 +80,16 @@ type UsageLogRepository interface {
 	GetDailyStatsAggregated(ctx context.Context, userID int64, startTime, endTime time.Time) ([]map[string]any, error)
 }
 
+// GetRechargeRanking delegates the admin recharge aggregation to the usage
+// repository, keeping database-specific SQL out of handlers.
+func (s *UsageService) GetRechargeRanking(ctx context.Context, startTime, endTime time.Time, userID int64, source, sortBy, sortOrder string, offset, limit int) (*RechargeRankingResponse, error) {
+	repo, ok := s.usageRepo.(RechargeRankingRepository)
+	if !ok {
+		return nil, fmt.Errorf("recharge ranking repository is not configured")
+	}
+	return repo.GetRechargeRanking(ctx, startTime, endTime, userID, source, sortBy, sortOrder, offset, limit)
+}
+
 type accountWindowStatsBatchReader interface {
 	GetAccountWindowStatsBatch(ctx context.Context, accountIDs []int64, startTime time.Time) (map[int64]*usagestats.AccountStats, error)
 }

@@ -8579,6 +8579,10 @@
                     </p>
                   </div>
                 </div>
+                <RechargeTiersEditor
+                  :model-value="form.payment_balance_recharge_tiers || []"
+                  @update:model-value="form.payment_balance_recharge_tiers = $event"
+                />
                 <!-- Row 3: Pending orders + load balance + cancel rate limit (all in one row) -->
                 <div class="flex flex-wrap items-end gap-4">
                   <div class="w-28">
@@ -9410,6 +9414,8 @@ import {
 import ConfirmDialog from "@/components/common/ConfirmDialog.vue";
 import PaymentProviderList from "@/components/payment/PaymentProviderList.vue";
 import PaymentProviderDialog from "@/components/payment/PaymentProviderDialog.vue";
+import RechargeTiersEditor from '@/components/payment/RechargeTiersEditor.vue';
+import { validRechargeTiers } from '@/components/payment/rechargeTiers';
 import GroupBadge from "@/components/common/GroupBadge.vue";
 import GroupOptionItem from "@/components/common/GroupOptionItem.vue";
 import Toggle from "@/components/common/Toggle.vue";
@@ -10197,6 +10203,7 @@ const form = reactive<SettingsForm>({
   payment_order_timeout_minutes: 30,
   payment_balance_disabled: false,
   payment_balance_recharge_multiplier: 1,
+  payment_balance_recharge_tiers: [],
   payment_subscription_usd_to_cny_rate: 0,
   payment_recharge_fee_rate: 0,
   payment_enabled_types: [],
@@ -11472,6 +11479,7 @@ async function loadSettings() {
   loadFailed.value = false;
   try {
     const settings = await adminAPI.settings.getSettings();
+    form.payment_balance_recharge_tiers = settings.payment_balance_recharge_tiers || [];
     availableChannelsPriceMultiplierMaxLoaded.value =
       Object.prototype.hasOwnProperty.call(
         settings,
@@ -11807,6 +11815,10 @@ const siteBillingModeHint = computed(() =>
 async function saveSettings() {
   saving.value = true;
   try {
+    if (!validRechargeTiers(form.payment_balance_recharge_tiers || [])) {
+      appStore.showError(t('admin.settings.payment.invalidRechargeTiers'));
+      return;
+    }
     if (!validateAffiliateTierSettings()) {
       return;
     }
@@ -12226,6 +12238,7 @@ async function saveSettings() {
       payment_balance_disabled: form.payment_balance_disabled,
       payment_balance_recharge_multiplier:
         Number(form.payment_balance_recharge_multiplier) || 1,
+      payment_balance_recharge_tiers: form.payment_balance_recharge_tiers || [],
       payment_subscription_usd_to_cny_rate:
         Number(form.payment_subscription_usd_to_cny_rate) || 0,
       payment_recharge_fee_rate: Number(form.payment_recharge_fee_rate) || 0,

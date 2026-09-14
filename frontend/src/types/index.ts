@@ -2280,6 +2280,9 @@ export interface UserBreakdownItem {
   total_tokens: number
   cost: number
   actual_cost: number
+  balance_deducted?: number
+  balance?: number
+  last_request_at?: string | null
   account_cost: number
 }
 

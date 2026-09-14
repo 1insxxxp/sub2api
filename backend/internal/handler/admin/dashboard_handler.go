@@ -743,6 +743,18 @@ func (h *DashboardHandler) GetUserBreakdown(c *gin.Context) {
 
 	// sort_by 由 repo 层 allowlist 校验;非法值静默回退默认排序(actual_cost)。
 	dim.SortBy = strings.TrimSpace(c.Query("sort_by"))
+	dim.SortOrder = strings.TrimSpace(c.Query("sort_order"))
+	if c.Query("page") != "" || c.Query("page_size") != "" {
+		dim.Page, dim.PageSize = response.ParsePagination(c)
+		paged, err := h.dashboardService.GetUserBreakdownRanking(c.Request.Context(), startTime, endTime, dim)
+		if err != nil {
+			response.Error(c, 500, "Failed to get user breakdown stats")
+			return
+		}
+		pages := int((paged.Total + int64(paged.PageSize) - 1) / int64(paged.PageSize))
+		response.Success(c, gin.H{"users": paged.Users, "total": paged.Total, "page": paged.Page, "page_size": paged.PageSize, "pages": pages, "summary": paged.Summary, "start_date": startTime.Format("2006-01-02"), "end_date": endTime.Add(-24 * time.Hour).Format("2006-01-02")})
+		return
+	}
 
 	limit := 50
 	if v := c.Query("limit"); v != "" {

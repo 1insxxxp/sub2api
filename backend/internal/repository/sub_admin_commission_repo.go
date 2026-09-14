@@ -294,6 +294,7 @@ func (r *subAdminCommissionRepository) ListDayGroups(ctx context.Context, subAdm
 func (r *subAdminCommissionRepository) listLiveDayGroups(ctx context.Context, subAdminID int64, date string, commissionRate float64, dayStart time.Time) ([]service.SubAdminCommissionDayGroup, error) {
 	dayEnd := dayStart.AddDate(0, 0, 1)
 
+	// Keep inactive groups only when the selected day has usage, avoiding stale zero-value cards.
 	rows, err := r.sql.QueryContext(ctx, `
 		WITH global_grants AS (
 			SELECT cg.group_id, MIN(cg.granted_date) AS granted_date
@@ -309,6 +310,7 @@ func (r *subAdminCommissionRepository) listLiveDayGroups(ctx context.Context, su
 		JOIN groups g ON g.id = gg.group_id
 		LEFT JOIN usage_logs ul ON ul.group_id = gg.group_id AND ul.created_at >= $1 AND ul.created_at < $2
 		WHERE $3::date >= gg.granted_date
+			AND ((g.status = 'active' AND g.deleted_at IS NULL) OR ul.id IS NOT NULL)
 		GROUP BY g.id, g.name
 		ORDER BY g.name ASC, g.id ASC
 	`, dayStart.UTC(), dayEnd.UTC(), strings.TrimSpace(date))
@@ -321,6 +323,7 @@ func (r *subAdminCommissionRepository) listLiveDayGroups(ctx context.Context, su
 }
 
 func (r *subAdminCommissionRepository) listHistoricalDayGroups(ctx context.Context, subAdminID int64, date string, commissionRate float64) ([]service.SubAdminCommissionDayGroup, error) {
+	// Historical rollups keep inactive groups with recorded usage visible for accounting.
 	rows, err := r.sql.QueryContext(ctx, `
 		WITH global_grants AS (
 			SELECT cg.group_id, MIN(cg.granted_date) AS granted_date
@@ -334,6 +337,7 @@ func (r *subAdminCommissionRepository) listHistoricalDayGroups(ctx context.Conte
 		JOIN groups g ON g.id = gg.group_id
 		LEFT JOIN usage_group_daily_rollups r ON r.group_id = gg.group_id AND r.bucket_date = $1::date
 		WHERE $2::date >= gg.granted_date
+			AND ((g.status = 'active' AND g.deleted_at IS NULL) OR r.group_id IS NOT NULL)
 		ORDER BY g.name ASC, g.id ASC
 	`, date, date)
 	if err != nil {

@@ -42,7 +42,7 @@
         </div>
 
         <!-- API Key Search -->
-        <div ref="apiKeySearchRef" class="usage-filter-dropdown relative w-full sm:w-auto sm:min-w-[240px]">
+        <div v-if="mode === 'usage' || mode === 'errors'" ref="apiKeySearchRef" class="usage-filter-dropdown relative w-full sm:w-auto sm:min-w-[240px]">
           <label class="input-label">{{ t('usage.apiKeyFilter') }}</label>
           <input
             v-model="apiKeyKeyword"
@@ -79,13 +79,13 @@
         </div>
 
         <!-- Model Filter -->
-        <div class="w-full sm:w-auto sm:min-w-[220px]">
+        <div v-if="mode === 'usage' || mode === 'errors'" class="w-full sm:w-auto sm:min-w-[220px]">
           <label class="input-label">{{ t('usage.model') }}</label>
           <Select v-model="filters.model" :options="modelOptions" searchable @change="emitChange" />
         </div>
 
         <!-- Account Filter -->
-        <div ref="accountSearchRef" class="usage-filter-dropdown relative w-full sm:w-auto sm:min-w-[220px]">
+        <div v-if="mode === 'usage' || mode === 'errors'" ref="accountSearchRef" class="usage-filter-dropdown relative w-full sm:w-auto sm:min-w-[220px]">
           <label class="input-label">{{ t('admin.usage.account') }}</label>
           <input
             v-model="accountKeyword"
@@ -122,19 +122,19 @@
         </div>
 
         <!-- Request Type Filter (usage only) -->
-        <div v-if="mode !== 'errors'" class="w-full sm:w-auto sm:min-w-[180px]">
+        <div v-if="mode === 'usage'" class="w-full sm:w-auto sm:min-w-[180px]">
           <label class="input-label">{{ t('usage.type') }}</label>
           <Select v-model="filters.request_type" :options="requestTypeOptions" @change="emitChange" />
         </div>
 
         <!-- Native compaction is independent of the transport request type. -->
-        <div v-if="mode !== 'errors'" class="w-full sm:w-auto sm:min-w-[180px]">
+        <div v-if="mode === 'usage'" class="w-full sm:w-auto sm:min-w-[180px]">
           <label class="input-label">{{ t('usage.compactionFilter') }}</label>
           <Select v-model="filters.native_compaction_v2" :options="compactionOptions" @change="emitChange" />
         </div>
 
         <!-- Billing Type Filter (usage only) -->
-        <div v-if="mode !== 'errors'" class="w-full sm:w-auto sm:min-w-[200px]">
+        <div v-if="mode === 'usage'" class="w-full sm:w-auto sm:min-w-[200px]">
           <label class="input-label">{{ t('admin.usage.billingType') }}</label>
           <Select v-model="filters.billing_type" :options="billingTypeOptions" @change="emitChange" />
         </div>
@@ -169,7 +169,7 @@
         </div>
 
         <!-- Group Filter -->
-        <div class="w-full sm:w-auto sm:min-w-[200px]">
+        <div v-if="mode === 'usage' || mode === 'errors'" class="w-full sm:w-auto sm:min-w-[200px]">
           <label class="input-label">{{ t('admin.usage.group') }}</label>
           <Select v-model="filters.group_id" :options="groupOptions" searchable @change="emitChange" />
         </div>
@@ -219,7 +219,7 @@ interface Props {
    * errors 模式:隐藏用量专属字段/按钮,显示错误类型+状态码(错误请求 tab 用)
    * ranking 模式:同 usage 但隐藏计费模式筛选与清理/导出按钮(用户排行 tab 用)
    */
-  mode?: 'usage' | 'errors' | 'ranking'
+  mode?: 'usage' | 'errors' | 'ranking' | 'recharge'
   /** 嵌入统一卡片内使用：去掉自身卡片外观 */
   flat?: boolean
 }

@@ -25,6 +25,11 @@ export type OrderType = 'balance' | 'subscription'
 
 // ==================== Configuration ====================
 
+export interface BalanceRechargeTier {
+	amount: number
+	multiplier: number
+}
+
 export interface PaymentConfig {
   payment_enabled: boolean
   min_amount: number
@@ -34,6 +39,7 @@ export interface PaymentConfig {
   order_timeout_minutes: number
   balance_disabled: boolean
   balance_recharge_multiplier: number
+  balance_recharge_tiers?: BalanceRechargeTier[]
   subscription_usd_to_cny_rate: number
   enabled_payment_types: PaymentType[]
   help_image_url: string
@@ -68,6 +74,7 @@ export interface CheckoutInfoResponse {
   plans: SubscriptionPlan[]
   balance_disabled: boolean
   balance_recharge_multiplier: number
+  balance_recharge_tiers?: BalanceRechargeTier[]
   /** Subscription CNY conversion rate (1 USD = X CNY); 0 = disabled, plan price is charged as-is */
   subscription_usd_to_cny_rate: number
   recharge_fee_rate: number

@@ -920,6 +920,29 @@ func TestPaymentRedeemDoesNotIncrementFailureLimit(t *testing.T) {
 	require.Equal(t, 1, cache.releaseCalls)
 }
 
+func TestTieredRechargeFulfillmentUsesStoredAmountAfterRulesChange(t *testing.T) {
+	ctx := context.Background()
+	client := newPaymentConfigServiceTestClient(t)
+	ensurePaymentAuditOrderActionUniqueIndex(t, ctx, client)
+	order := createPaymentFulfillmentSubscriptionOrder(t, ctx, client, OrderStatusPaid, time.Now())
+	tiers := []BalanceRechargeTier{{Amount: 18, Multiplier: 3}}
+	creditedAtCreation := calculateCreditedBalance(18, selectBalanceRechargeMultiplier(18, tiers, 1))
+	order, err := client.PaymentOrder.UpdateOneID(order.ID).SetOrderType(payment.OrderTypeBalance).
+		ClearPlanID().ClearSubscriptionGroupID().ClearSubscriptionDays().SetAmount(creditedAtCreation).SetPayAmount(18).Save(ctx)
+	require.NoError(t, err)
+	repo := &paymentConfigSettingRepoStub{values: map[string]string{SettingBalanceRechargeTiers: `[{"min_amount":18,"max_amount":80,"multiplier":9}]`}}
+	credited := 0.0
+	userRepo := &mockUserRepo{getByIDUser: &User{ID: order.UserID}}
+	userRepo.updateBalanceFn = func(_ context.Context, _ int64, amount float64) error { credited += amount; return nil }
+	redeemRepo := &paymentFulfillmentRedeemRepo{}
+	redeemService := NewRedeemService(redeemRepo, userRepo, nil, &paymentFulfillmentRedeemCacheStub{}, nil, client, nil, nil)
+	svc := &PaymentService{entClient: client, redeemService: redeemService, userRepo: userRepo, configService: &PaymentConfigService{settingRepo: repo}}
+	require.NoError(t, svc.ExecuteBalanceFulfillment(ctx, order.ID))
+	require.Equal(t, 54.0, credited)
+	require.NoError(t, svc.ExecuteBalanceFulfillment(ctx, order.ID))
+	require.Equal(t, 54.0, credited)
+}
+
 func TestExecuteBalanceFulfillmentBypassesUserRedeemRateLimit(t *testing.T) {
 	ctx := context.Background()
 	client := newPaymentConfigServiceTestClient(t)

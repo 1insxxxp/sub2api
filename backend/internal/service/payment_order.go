@@ -63,7 +63,7 @@ func (s *PaymentService) CreateOrder(ctx context.Context, req CreateOrderRequest
 		orderAmount = plan.Price
 		limitAmount = plan.Price
 	} else if req.OrderType == payment.OrderTypeBalance {
-		orderAmount = calculateCreditedBalance(req.Amount, cfg.BalanceRechargeMultiplier)
+		orderAmount = calculateCreditedBalance(req.Amount, selectBalanceRechargeMultiplier(req.Amount, cfg.BalanceRechargeTiers, cfg.BalanceRechargeMultiplier))
 	}
 	feeRate := cfg.RechargeFeeRate
 	methodCurrency := payment.DefaultPaymentCurrency
@@ -131,6 +131,9 @@ func (s *PaymentService) validateOrderInput(ctx context.Context, req CreateOrder
 	if (cfg.MinAmount > 0 && req.Amount < cfg.MinAmount) || (cfg.MaxAmount > 0 && req.Amount > cfg.MaxAmount) {
 		return nil, infraerrors.BadRequest("INVALID_AMOUNT", "amount out of range").
 			WithMetadata(map[string]string{"min": fmt.Sprintf("%.2f", cfg.MinAmount), "max": fmt.Sprintf("%.2f", cfg.MaxAmount)})
+	}
+	if !isPresetBalanceRechargeAmount(req.Amount, cfg.BalanceRechargeTiers) {
+		return nil, infraerrors.BadRequest("INVALID_AMOUNT", "amount must match a configured quick recharge amount")
 	}
 	return nil, nil
 }

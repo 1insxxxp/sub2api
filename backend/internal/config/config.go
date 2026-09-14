@@ -2181,6 +2181,11 @@ func setDefaults() {
 	viper.SetDefault("dujiao_login.enabled", false)
 	viper.SetDefault("dujiao_login.shared_secret", "")
 
+	// Public group synchronization is disabled when no secret is configured.
+	// Register a zero-valued default so PUBLIC_GROUP_SYNC_SECRET remains
+	// reachable through Viper's AutomaticEnv path in env-only deployments.
+	viper.SetDefault("public_group_sync.secret", "")
+
 	// Database
 	viper.SetDefault("database.host", "localhost")
 	viper.SetDefault("database.port", 5432)

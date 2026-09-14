@@ -175,8 +175,11 @@ export interface UserBreakdownParams {
   endpoint?: string
   endpoint_type?: 'inbound' | 'upstream' | 'path'
   limit?: number
+  page?: number
+  page_size?: number
+  sort_order?: 'asc' | 'desc'
   // Sort column for the ranking (allowlisted server-side; falls back to actual_cost)
-  sort_by?: 'total_tokens' | 'input_tokens' | 'output_tokens' | 'cache_tokens' | 'requests' | 'cost' | 'actual_cost'
+  sort_by?: 'total_tokens' | 'input_tokens' | 'output_tokens' | 'cache_tokens' | 'requests' | 'cost' | 'actual_cost' | 'balance_deducted'
   // Additional filter conditions
   user_id?: number
   api_key_id?: number
@@ -189,6 +192,10 @@ export interface UserBreakdownParams {
 
 export interface UserBreakdownResponse {
   users: UserBreakdownItem[]
+  total?: number
+  page?: number
+  page_size?: number
+  summary?: { users: number; requests: number; total_tokens: number; actual_cost: number; balance_deducted: number }
   start_date: string
   end_date: string
 }
@@ -198,6 +205,18 @@ export async function getUserBreakdown(params: UserBreakdownParams): Promise<Use
     params
   })
   return data
+}
+
+export interface RechargeRankingItem {
+  user_id: number; email: string; username?: string; balance: number; total_amount: number; online_amount: number; redeem_amount: number; affiliate_amount: number; admin_amount: number; reward_amount: number; refund_amount: number; other_amount: number; recharge_count: number; last_recharged_at?: string | null
+}
+export interface RechargeRankingSummary { total_amount: number; online_amount: number; redeem_amount: number; affiliate_amount: number; admin_amount: number; reward_amount: number; refund_amount: number; other_amount: number; recharge_count: number; recharge_users: number }
+export interface RechargeRankingResponse {
+  items: RechargeRankingItem[]; total: number; page: number; page_size: number; pages?: number; summary?: RechargeRankingSummary
+}
+export interface RechargeRankingParams { start_date?: string; end_date?: string; timezone?: string; user_id?: number; source?: string; sort_by?: string; sort_order?: 'asc'|'desc'; page?: number; page_size?: number }
+export async function getRechargeRanking(params: RechargeRankingParams): Promise<RechargeRankingResponse> {
+  const { data } = await apiClient.get<RechargeRankingResponse>('/admin/usage/recharge-ranking', { params }); return data
 }
 
 /**
@@ -212,6 +231,9 @@ export async function getSnapshotV2(params?: DashboardSnapshotV2Params): Promise
 
 export interface ApiKeyTrendParams extends TrendParams {
   limit?: number
+  page?: number
+  page_size?: number
+  sort_order?: 'asc' | 'desc'
 }
 
 export interface ApiKeyTrendResponse {
@@ -237,6 +259,9 @@ export async function getApiKeyUsageTrend(
 
 export interface UserTrendParams extends TrendParams {
   limit?: number
+  page?: number
+  page_size?: number
+  sort_order?: 'asc' | 'desc'
 }
 
 export interface UserTrendResponse {
@@ -249,6 +274,9 @@ export interface UserTrendResponse {
 export interface UserSpendingRankingParams
   extends Pick<TrendParams, 'start_date' | 'end_date' | 'start_time' | 'end_time' | 'granularity'> {
   limit?: number
+  page?: number
+  page_size?: number
+  sort_order?: 'asc' | 'desc'
 }
 
 /**

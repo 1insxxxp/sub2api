@@ -230,6 +230,60 @@ func (h *UsageHandler) List(c *gin.Context) {
 	response.Paginated(c, out, result.Total, page, pageSize)
 }
 
+// RechargeRanking returns positive wallet credits grouped by user and source.
+// GET /api/v1/admin/usage/recharge-ranking
+func (h *UsageHandler) RechargeRanking(c *gin.Context) {
+	page, pageSize := response.ParsePagination(c)
+	parseDate := func(value string, end bool) (time.Time, error) {
+		value = strings.TrimSpace(value)
+		if value == "" {
+			now := timezone.NowInUserLocation(c.Query("timezone"))
+			if end {
+				return timezone.StartOfDayInUserLocation(now, c.Query("timezone")).AddDate(0, 0, 1), nil
+			}
+			return timezone.StartOfDayInUserLocation(now, c.Query("timezone")).AddDate(0, 0, -30), nil
+		}
+		return timezone.ParseInUserLocation("2006-01-02", value, c.Query("timezone"))
+	}
+	startTime, err := parseDate(c.Query("start_date"), false)
+	if err != nil {
+		response.BadRequest(c, "Invalid start_date format, use YYYY-MM-DD")
+		return
+	}
+	endTime, err := parseDate(c.Query("end_date"), true)
+	if err != nil {
+		response.BadRequest(c, "Invalid end_date format, use YYYY-MM-DD")
+		return
+	}
+	// Date filters are inclusive for the UI; use a half-open range ending at
+	// the next local midnight so the selected end date is fully included.
+	if strings.TrimSpace(c.Query("end_date")) != "" {
+		endTime = endTime.AddDate(0, 0, 1)
+	}
+	if !startTime.Before(endTime) {
+		response.BadRequest(c, "start_date must be before or equal to end_date")
+		return
+	}
+	var userID int64
+	if raw := strings.TrimSpace(c.Query("user_id")); raw != "" {
+		userID, err = strconv.ParseInt(raw, 10, 64)
+		if err != nil || userID < 1 {
+			response.BadRequest(c, "Invalid user_id")
+			return
+		}
+	}
+	result, err := h.usageService.GetRechargeRanking(c.Request.Context(), startTime, endTime, userID,
+		c.Query("source"), c.Query("sort_by"), c.Query("sort_order"), (page-1)*pageSize, pageSize)
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	response.Success(c, gin.H{
+		"items": result.Items, "total": result.Total, "page": page, "page_size": pageSize,
+		"pages": int((result.Total + int64(pageSize) - 1) / int64(pageSize)), "summary": result.Summary,
+	})
+}
+
 // Stats handles getting usage statistics with filters
 // GET /api/v1/admin/usage/stats
 func (h *UsageHandler) Stats(c *gin.Context) {

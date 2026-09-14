@@ -416,6 +416,16 @@ func (s *DashboardService) GetUserBreakdownStats(ctx context.Context, startTime,
 	return stats, nil
 }
 
+func (s *DashboardService) GetUserBreakdownRanking(ctx context.Context, startTime, endTime time.Time, dim usagestats.UserBreakdownDimension) (*usagestats.UserBreakdownRankingResponse, error) {
+	repo, ok := s.usageRepo.(interface {
+		GetUserBreakdownRanking(context.Context, time.Time, time.Time, usagestats.UserBreakdownDimension) (*usagestats.UserBreakdownRankingResponse, error)
+	})
+	if !ok {
+		return nil, fmt.Errorf("user breakdown ranking repository is not configured")
+	}
+	return repo.GetUserBreakdownRanking(ctx, startTime, endTime, dim)
+}
+
 func (s *DashboardService) GetBatchUserUsageStats(ctx context.Context, userIDs []int64, startTime, endTime time.Time) (map[int64]*usagestats.BatchUserUsageStats, error) {
 	stats, err := s.usageRepo.GetBatchUserUsageStats(ctx, userIDs, startTime, endTime)
 	if err != nil {

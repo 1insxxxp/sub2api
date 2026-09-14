@@ -975,6 +975,31 @@ curl -X POST "${BASE}/api/v1/admin/users/1/balance" \
   -d '{"amount": 100, "reason": "充值"}'
 ```
 
+#### 4.4 查询用户使用记录与费用统计
+
+先按邮箱搜索用户，取得 `user_id`；再使用用量接口查询明细和汇总。日期按 `timezone` 解释，`end_date` 包含当天。
+
+```
+GET /api/v1/admin/usage/search-users?q=<邮箱>
+GET /api/v1/admin/usage/stats
+GET /api/v1/admin/usage
+```
+
+常用筛选参数：`user_id`、`model`、`start_date`、`end_date`、`timezone`、`page`、`page_size`、`exact_total`。统计接口可传 `nocache=true` 绕过缓存；明细接口建议 `page_size=1000&exact_total=true`，并按页读取直到结束。明细包含输入/输出及缓存 Token、各项成本、`actual_cost`、`net_actual_cost`、`rate_multiplier`、服务层级、推理强度、上游模型和长上下文计费标记。
+
+```bash
+curl -s "${BASE}/api/v1/admin/usage/search-users?q=3384204914%40qq.com" \
+  -H "x-api-key: ${KEY}"
+
+curl -s "${BASE}/api/v1/admin/usage/stats?user_id=123&model=gpt-5.6-luna&start_date=2026-09-10&end_date=2026-09-10&timezone=Asia%2FShanghai&nocache=true" \
+  -H "x-api-key: ${KEY}"
+
+curl -s "${BASE}/api/v1/admin/usage?user_id=123&model=gpt-5.6-luna&start_date=2026-09-10&end_date=2026-09-10&timezone=Asia%2FShanghai&page=1&page_size=1000&exact_total=true" \
+  -H "x-api-key: ${KEY}"
+```
+
+不要使用 `GET /api/v1/admin/users/:id/usage` 作为费用分析依据；该接口当前返回占位统计。
+
 ---
 
 ### 5. 分组管理
