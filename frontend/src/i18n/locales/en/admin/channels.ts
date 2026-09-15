@@ -171,6 +171,9 @@ export default {
         noPricingRules: 'No pricing rules yet. Click "Add" to create one.',
         perRequestPrice: 'Price per Request',
         perRequestPriceRequired: 'Per-request price or billing tiers required for per-request/image billing mode',
+        perRequestFallbackHint: 'Leave empty to use the channel or built-in model price as a fallback.',
+        perRequestRequestedModelWarning: 'The requested model is not covered by a pricing rule.',
+        perRequestSuccessHint: 'This price is applied when the request completes successfully.',
         tierLabel: 'Tier',
         resolution: 'Resolution',
         modelMapping: 'Model Mapping',
@@ -223,7 +226,11 @@ export default {
          syncingModels: 'Syncing...',
          syncModelsSuccess: 'Synced {count} new model(s)',
          syncModelsAlreadyUpToDate: 'Models already up to date',
-         syncModelsError: 'Failed to sync models'
+         syncModelsError: 'Failed to sync models',
+         syncGroupAvailableModels: 'Sync available group models',
+         syncGroupModelsSuccess: 'Synced {count} group model(s)',
+         syncGroupModelsNoGroups: 'No groups are available for synchronization',
+         syncGroupModelsError: 'Failed to sync group models'
        }
      },
 
@@ -558,6 +565,9 @@ export default {
         checkModeQuotaProbeHint: 'Probes the channel and attaches the quota snapshot to the primary model result',
         linkedAccount: 'Linked Account',
         linkedAccountPlaceholder: 'Select an account',
+        modelMappings: 'Model Mappings',
+        modelMappingsHint: 'Optionally map requested model names to the models checked by this monitor.',
+        modelMappingPlaceholder: 'Request model → checked model',
         linkedAccountHint: 'Quota data comes from the selected account (reuses the account-side usage/balance queries)',
         linkedAccountEmpty: 'No accounts on this platform yet. Add one in Account Management first',
         linkedAccountMissing: 'The linked account no longer exists or is not accessible. Please re-select an account',

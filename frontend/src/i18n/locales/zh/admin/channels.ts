@@ -171,6 +171,9 @@ export default {
         noPricingRules: '暂无定价规则，点击"添加"创建',
         perRequestPrice: '单次价格',
         perRequestPriceRequired: '按次/图片计费模式必须设置默认价格或至少一个计费层级',
+        perRequestFallbackHint: '留空时将使用渠道或内置模型价格作为兜底。',
+        perRequestRequestedModelWarning: '请求模型未被任何定价规则覆盖。',
+        perRequestSuccessHint: '请求成功完成后将应用此价格。',
         tierLabel: '层级',
         resolution: '分辨率',
         modelMapping: '模型映射',
@@ -223,7 +226,11 @@ export default {
         syncingModels: '同步中...',
         syncModelsSuccess: '已同步 {count} 个新模型',
         syncModelsAlreadyUpToDate: '模型列表已是最新',
-        syncModelsError: '同步模型失败'
+        syncModelsError: '同步模型失败',
+        syncGroupAvailableModels: '同步分组可用模型',
+        syncGroupModelsSuccess: '已同步 {count} 个分组模型',
+        syncGroupModelsNoGroups: '暂无可同步的分组',
+        syncGroupModelsError: '同步分组模型失败'
       }
     },
 
@@ -558,6 +565,9 @@ export default {
         checkModeQuotaProbeHint: '探活的同时查询配额，用量快照附加在主模型结果上',
         linkedAccount: '关联账号',
         linkedAccountPlaceholder: '选择账号',
+        modelMappings: '模型映射',
+        modelMappingsHint: '可选：将请求模型名映射为此监控实际检测的模型。',
+        modelMappingPlaceholder: '请求模型 → 检测模型',
         linkedAccountHint: '配额数据来自所选账号（复用账号管理侧的用量/余额查询）',
         linkedAccountEmpty: '当前平台暂无账号，请先在账号管理中添加',
         linkedAccountMissing: '关联账号已不存在或不可访问，请重新选择账号',
