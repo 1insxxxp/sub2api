@@ -208,7 +208,7 @@ export async function getUserBreakdown(params: UserBreakdownParams): Promise<Use
 }
 
 export interface RechargeRankingItem {
-  user_id: number; email: string; username?: string; balance: number; total_amount: number; online_amount: number; redeem_amount: number; affiliate_amount: number; admin_amount: number; reward_amount: number; refund_amount: number; other_amount: number; recharge_count: number; last_recharged_at?: string | null
+  user_id: number; email: string; username?: string; inviter_id?: number | null; inviter_email?: string; inviter_username?: string; balance: number; total_amount: number; online_amount: number; redeem_amount: number; affiliate_amount: number; admin_amount: number; reward_amount: number; refund_amount: number; other_amount: number; recharge_count: number; last_recharged_at?: string | null
 }
 export interface RechargeRankingSummary { total_amount: number; online_amount: number; redeem_amount: number; affiliate_amount: number; admin_amount: number; reward_amount: number; refund_amount: number; other_amount: number; recharge_count: number; recharge_users: number }
 export interface RechargeRankingResponse {

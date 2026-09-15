@@ -11,6 +11,9 @@ type RechargeRankingItem struct {
 	UserID          int64      `json:"user_id"`
 	Email           string     `json:"email"`
 	Username        string     `json:"username"`
+	InviterID       *int64     `json:"inviter_id"`
+	InviterEmail    string     `json:"inviter_email"`
+	InviterUsername string     `json:"inviter_username"`
 	Balance         float64    `json:"balance"`
 	TotalAmount     float64    `json:"total_amount"`
 	OnlineAmount    float64    `json:"online_amount"`
@@ -20,7 +23,7 @@ type RechargeRankingItem struct {
 	RewardAmount    float64    `json:"reward_amount"`
 	RefundAmount    float64    `json:"refund_amount"`
 	OtherAmount     float64    `json:"other_amount"`
-	RechargeCount   int64      `json:"recharge_count"`
+	RechargeCount   int64      `json:"recharge_count"` // Online, redeem and positive admin credits only.
 	LastRechargedAt *time.Time `json:"last_recharged_at,omitempty"`
 }
 

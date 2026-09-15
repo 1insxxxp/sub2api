@@ -38,7 +38,7 @@ func (r *usageLogRepository) GetRechargeRanking(ctx context.Context, startTime, 
 		"other_amount":      "other_amount",
 		"recharge_count":    "recharge_count",
 		"last_recharged_at": "last_recharged_at",
-		"balance":           "balance",
+		"balance":           "u.balance",
 	}
 	orderBy := orderColumns[sortBy]
 	if orderBy == "" {
@@ -96,7 +96,8 @@ WITH events AS (
        SUM(amount) FILTER (WHERE source = 'reward') AS reward_amount,
        SUM(amount) FILTER (WHERE source = 'refund') AS refund_amount,
        SUM(amount) FILTER (WHERE source = 'other') AS other_amount,
-       COUNT(*) AS recharge_count, MAX(occurred_at) AS last_recharged_at
+       COUNT(*) FILTER (WHERE source IN ('online', 'redeem', 'admin')) AS recharge_count,
+       MAX(occurred_at) AS last_recharged_at
     FROM filtered GROUP BY user_id
 ), ranked AS (
     SELECT g.*, COUNT(*) OVER () AS total_users,
@@ -119,8 +120,11 @@ SELECT r.user_id, COALESCE(u.email,''), COALESCE(u.username,''), COALESCE(u.bala
        r.last_recharged_at, r.total_users, r.summary_total_amount, r.summary_online_amount,
        r.summary_redeem_amount, r.summary_affiliate_amount, r.summary_admin_amount,
        r.summary_reward_amount, r.summary_refund_amount, r.summary_other_amount,
-       r.summary_recharge_count, r.summary_recharge_users
+       r.summary_recharge_count, r.summary_recharge_users,
+       ua.inviter_id, COALESCE(inviter.email,''), COALESCE(inviter.username,'')
 FROM ranked r JOIN users u ON u.id = r.user_id
+LEFT JOIN user_affiliates ua ON ua.user_id = r.user_id
+LEFT JOIN users inviter ON inviter.id = ua.inviter_id
 ORDER BY %s %s, r.user_id ASC
 LIMIT $5 OFFSET $6`, orderBy, sortOrder)
 
@@ -141,7 +145,8 @@ LIMIT $5 OFFSET $6`, orderBy, sortOrder)
 			&item.AdminAmount, &item.RewardAmount, &item.RefundAmount, &item.OtherAmount,
 			&item.RechargeCount, &last, &totalUsers, &summary.TotalAmount, &summary.OnlineAmount,
 			&summary.RedeemAmount, &summary.AffiliateAmount, &summary.AdminAmount, &summary.RewardAmount,
-			&summary.RefundAmount, &summary.OtherAmount, &summary.RechargeCount, &summaryUsers); err != nil {
+			&summary.RefundAmount, &summary.OtherAmount, &summary.RechargeCount, &summaryUsers,
+			&item.InviterID, &item.InviterEmail, &item.InviterUsername); err != nil {
 			return nil, err
 		}
 		item.LastRechargedAt = &last

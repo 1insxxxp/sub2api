@@ -5,8 +5,6 @@ import { PAYMENT_RECOVERY_STORAGE_KEY } from '@/components/payment/paymentFlow'
 import { formatPaymentAmount } from '@/components/payment/currency'
 import AmountInput from '@/components/payment/AmountInput.vue'
 import SubscriptionPlanCard from '@/components/payment/SubscriptionPlanCard.vue'
-import en from '@/i18n/locales/en'
-import zh from '@/i18n/locales/zh'
 import type { CheckoutInfoResponse, MethodLimit, SubscriptionPlan } from '@/types/payment'
 
 const routeState = vi.hoisted(() => ({
@@ -375,7 +373,7 @@ describe('PaymentView subscription plan grid', () => {
 })
 
 describe('PaymentView recharge rate preview', () => {
-  it('updates the quoted rate at tier boundaries', async () => {
+  it('shows every configured quick amount with credited balance and bonus', async () => {
     routeState.path = '/purchase'
     routeState.query = {}
     getCheckoutInfo.mockReset().mockResolvedValue(checkoutInfoFixture({
@@ -386,15 +384,54 @@ describe('PaymentView recharge rate preview', () => {
     }))
     const wrapper = shallowMount(PaymentView, { global: { stubs: { AppLayout: { template: '<div><slot /></div>' }, Teleport: true, Transition: false } } })
     await flushPromises()
-    for (const [amount, rate] of [[10, '2.00'], [18, '3.00'], [80, '4.00']] as const) {
-      translate.mockClear()
-      wrapper.getComponent(AmountInput).vm.$emit('update:modelValue', amount)
-      await flushPromises()
-      expect(translate).toHaveBeenCalledWith('payment.rechargeRatePreview', expect.objectContaining({ usd: rate }))
-    }
+
+    const overview = wrapper.get('[data-testid="recharge-rule-overview"]')
+    expect(overview.text()).toContain('10')
+    expect(overview.text()).toContain('20')
+    expect(overview.text()).toContain('18')
+    expect(overview.text()).toContain('54')
+    expect(overview.text()).toContain('80')
+    expect(overview.text()).toContain('320')
+    expect(overview.text()).not.toContain('rechargeRatePreview')
   })
-  it('uses the selected payment method currency in both locale templates', async () => {
-    translate.mockClear()
+
+  it('does not expose the multiplier on the selected payment summary', async () => {
+    routeState.path = '/purchase'
+    routeState.query = {}
+    getCheckoutInfo.mockReset().mockResolvedValue(checkoutInfoFixture({
+      balance_recharge_multiplier: 1,
+      balance_recharge_tiers: [{ amount: 10, multiplier: 1 }],
+    }))
+    const wrapper = shallowMount(PaymentView, { global: { stubs: { AppLayout: { template: '<div><slot /></div>' }, Teleport: true, Transition: false } } })
+    await flushPromises()
+    wrapper.getComponent(AmountInput).vm.$emit('update:modelValue', 10)
+    await flushPromises()
+
+    expect(wrapper.text()).not.toContain('payment.rechargeRatePreview')
+    expect(wrapper.text()).toContain('payment.creditedBalance')
+  })
+
+  it('lists credited balances at tier boundaries', async () => {
+    routeState.path = '/purchase'
+    routeState.query = {}
+    getCheckoutInfo.mockReset().mockResolvedValue(checkoutInfoFixture({
+      balance_recharge_multiplier: 1,
+      balance_recharge_tiers: [
+        { amount: 10, multiplier: 2 }, { amount: 18, multiplier: 3 }, { amount: 80, multiplier: 4 },
+      ],
+    }))
+    const wrapper = shallowMount(PaymentView, { global: { stubs: { AppLayout: { template: '<div><slot /></div>' }, Teleport: true, Transition: false } } })
+    await flushPromises()
+    const rows = wrapper.findAll('[data-testid="recharge-rule-row"]')
+    expect(rows).toHaveLength(3)
+    expect(rows[0].text()).toContain('¥10.00')
+    expect(rows[0].text()).toContain('¥20.00')
+    expect(rows[1].text()).toContain('¥18.00')
+    expect(rows[1].text()).toContain('¥54.00')
+    expect(rows[2].text()).toContain('¥80.00')
+    expect(rows[2].text()).toContain('¥320.00')
+  })
+  it('uses the selected payment method currency in the offer overview', async () => {
     routeState.path = '/purchase'
     routeState.query = {}
     getCheckoutInfo.mockReset().mockResolvedValue(checkoutInfoFixture({
@@ -420,12 +457,10 @@ describe('PaymentView recharge rate preview', () => {
     wrapper.getComponent(AmountInput).vm.$emit('update:modelValue', 10)
     await flushPromises()
 
-    expect(translate).toHaveBeenCalledWith('payment.rechargeRatePreview', {
-      currency: 'USD',
-      usd: '0.50',
-    })
-    expect(en.payment.rechargeRatePreview).toBe('Current rate: 1 {currency} = {usd} USD')
-    expect(zh.payment.rechargeRatePreview).toBe('当前倍率：1 {currency} = {usd} USD')
+    const overview = wrapper.get('[data-testid="recharge-rule-overview"]')
+    expect(overview.text()).toContain('$10.00')
+    expect(overview.text()).toContain('$5.00')
+    expect(wrapper.text()).not.toContain('payment.rechargeRatePreview')
   })
 })
 

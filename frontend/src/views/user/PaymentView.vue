@@ -50,9 +50,47 @@
             </div>
             <template v-else>
             <div class="card p-6">
+              <div
+                v-if="rechargeOverview.length"
+                data-testid="recharge-rule-overview"
+                class="mb-5 rounded-xl border border-primary-100 bg-primary-50/60 p-4 dark:border-primary-500/20 dark:bg-primary-500/10"
+              >
+                <div class="mb-3">
+                  <h3 class="text-sm font-semibold text-gray-900 dark:text-white">
+                    {{ t('payment.rechargeOfferTitle') }}
+                  </h3>
+                  <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                    {{ t('payment.rechargeOfferHint') }}
+                  </p>
+                </div>
+                <div class="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                  <div
+                    v-for="item in rechargeOverview"
+                    :key="item.amount"
+                    data-testid="recharge-rule-row"
+                    class="flex min-w-0 items-center justify-between gap-3 rounded-lg border border-white/80 bg-white px-3 py-2.5 dark:border-dark-600 dark:bg-dark-800"
+                  >
+                    <div class="min-w-0">
+                      <p class="text-xs text-gray-500 dark:text-gray-400">{{ t('payment.rechargeOfferAmount') }}</p>
+                      <p class="truncate text-sm font-semibold text-gray-900 dark:text-white">
+                        {{ formatSelectedPaymentAmount(item.amount) }}
+                      </p>
+                    </div>
+                    <div class="shrink-0 text-right">
+                      <p class="text-xs text-gray-500 dark:text-gray-400">{{ t('payment.rechargeOfferCredit') }}</p>
+                      <p class="text-sm font-semibold text-primary-600 dark:text-primary-400">
+                        {{ formatSelectedPaymentAmount(item.credited) }}
+                      </p>
+                      <p v-if="item.bonus > 0" class="text-xs font-medium text-green-600 dark:text-green-400">
+                        +{{ formatSelectedPaymentAmount(item.bonus) }} {{ t('payment.rechargeOfferBonus') }}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
               <AmountInput
                 v-model="amount"
-                :amounts="checkout.balance_recharge_tiers?.map(tier => tier.amount) || [10, 20, 50, 100, 200, 500, 1000, 2000, 5000]"
+                :amounts="quickRechargeAmounts"
                 :allow-custom="false"
                 :min="globalMinAmount"
                 :max="globalMaxAmount"
@@ -80,13 +118,10 @@
                   <span class="font-medium text-gray-700 dark:text-gray-300">{{ t('payment.actualPay') }}</span>
                   <span class="text-lg font-bold text-primary-600 dark:text-primary-400">{{ formatSelectedPaymentAmount(totalAmount) }}</span>
                 </div>
-                <div v-if="balanceRechargeMultiplier !== 1" class="flex justify-between" :class="{ 'border-t border-gray-200 pt-2 dark:border-dark-600': feeRate <= 0 }">
+                <div class="flex justify-between" :class="{ 'border-t border-gray-200 pt-2 dark:border-dark-600': feeRate <= 0 }">
                   <span class="text-gray-500 dark:text-gray-400">{{ t('payment.creditedBalance') }}</span>
-                  <span class="text-gray-900 dark:text-white">${{ creditedAmount.toFixed(2) }}</span>
+                  <span class="text-gray-900 dark:text-white">{{ formatSelectedPaymentAmount(creditedAmount) }}</span>
                 </div>
-                <p v-if="balanceRechargeMultiplier !== 1" class="border-t border-gray-200 pt-2 text-xs text-gray-500 dark:border-dark-600 dark:text-gray-400">
-                  {{ t('payment.rechargeRatePreview', { currency: selectedCurrency, usd: balanceRechargeMultiplier.toFixed(2) }) }}
-                </p>
               </div>
             </div>
             <button :class="['btn w-full py-3 text-base font-medium', paymentButtonClass]" :disabled="!canSubmit || submitting" @click="handleSubmitRecharge">
@@ -549,6 +584,25 @@ const subscriptionUsdToCnyRate = computed(() => {
   return Number.isFinite(rate) && rate > 0 ? rate : 0
 })
 const creditedAmount = computed(() => Math.round((validAmount.value * balanceRechargeMultiplier.value) * 100) / 100)
+const defaultRechargeAmounts = [10, 20, 50, 100, 200, 500, 1000, 2000, 5000]
+const quickRechargeAmounts = computed(() => checkout.value.balance_recharge_tiers
+  ? checkout.value.balance_recharge_tiers.map(tier => tier.amount)
+  : defaultRechargeAmounts)
+const rechargeOverview = computed(() => quickRechargeAmounts.value
+  .filter((rechargeAmount) => (globalMinAmount.value <= 0 || rechargeAmount >= globalMinAmount.value)
+    && (globalMaxAmount.value <= 0 || rechargeAmount <= globalMaxAmount.value))
+  .map((rechargeAmount) => {
+    const credited = Math.round((rechargeAmount * resolveRechargeMultiplier(
+      rechargeAmount,
+      checkout.value.balance_recharge_tiers,
+      checkout.value.balance_recharge_multiplier,
+    )) * 100) / 100
+    return {
+      amount: rechargeAmount,
+      credited,
+      bonus: Math.round((credited - rechargeAmount) * 100) / 100,
+    }
+  }))
 
 // Adaptive grid: center single card, 2-col for 2 plans, 3-col for 3+
 const planGridClass = computed(() => {

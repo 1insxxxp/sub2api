@@ -1,15 +1,18 @@
 <template>
   <div>
     <div
-      class="flex flex-wrap items-center justify-between gap-3 border-b border-gray-100 px-4 py-3 dark:border-dark-700/50"
+      class="flex min-w-0 flex-wrap items-center justify-between gap-3 border-b border-gray-100 px-4 py-3 dark:border-dark-700/50"
     >
-      <p class="text-xs text-gray-400 dark:text-gray-500">
+      <p
+        class="min-w-0 flex-1 basis-full text-xs text-gray-400 dark:text-gray-500 sm:basis-auto"
+      >
         {{ t("admin.usage.rechargeRanking.subtitle") }}
+        <span class="ml-1">{{ t("admin.usage.rechargeRanking.countDescription") }}</span>
       </p>
-      <div class="flex flex-wrap items-center gap-2">
+      <div class="flex w-full min-w-0 flex-wrap items-center gap-2 sm:w-auto">
         <select
           v-model="source"
-          class="input h-9 w-auto text-xs"
+          class="input h-9 min-w-0 flex-1 text-xs sm:w-auto sm:flex-none"
           @change="reloadFirstPage"
         >
           <option value="">
@@ -25,7 +28,7 @@
         </select>
         <select
           v-model="sortBy"
-          class="input h-9 w-auto text-xs"
+          class="input h-9 min-w-0 flex-1 text-xs sm:w-auto sm:flex-none"
           @change="reloadFirstPage"
         >
           <option value="total_amount">
@@ -40,7 +43,7 @@
         </select>
         <button
           type="button"
-          class="btn btn-secondary btn-sm"
+          class="btn btn-secondary btn-sm shrink-0"
           :aria-label="
             sortOrder === 'desc'
               ? t('admin.usage.rechargeRanking.sortAsc')
@@ -52,7 +55,7 @@
         </button>
         <button
           type="button"
-          class="btn btn-secondary btn-sm"
+          class="btn btn-secondary btn-sm w-full sm:w-auto"
           @click="exportCsv"
         >
           {{ t("admin.usage.rechargeRanking.exportCurrentPage") }}
@@ -129,6 +132,9 @@
               <td class="px-4 py-3 text-sm font-medium">
                 {{ item.email || item.username || `User #${item.user_id}` }}
               </td>
+              <td class="px-4 py-3 text-sm">
+                {{ inviterLabel(item) }}
+              </td>
               <td
                 v-for="column in amountColumns"
                 :key="column.key"
@@ -162,7 +168,7 @@
           v-for="(item, index) in items"
           v-else
           :key="item.user_id"
-          class="rounded-xl border border-gray-200 bg-white p-4 shadow-sm dark:border-dark-700 dark:bg-dark-900"
+          class="min-w-0 rounded-xl border border-gray-200 bg-white p-4 shadow-sm dark:border-dark-700 dark:bg-dark-900"
           @click="$emit('select-user', item.user_id, item.email)"
         >
           <div class="flex items-center justify-between gap-2">
@@ -173,15 +179,11 @@
               >${{ money(item.total_amount) }}</strong
             >
           </div>
-          <dl class="mt-3 grid grid-cols-2 gap-2 text-xs text-gray-500">
+          <dl class="mt-3 grid min-w-0 grid-cols-2 gap-2 text-xs text-gray-500">
             <template v-for="column in mobileColumns" :key="column.key"
               ><dt>{{ t(column.label) }}</dt>
-              <dd class="text-right">
-                {{
-                  column.amount
-                    ? `$${money(item[column.key] as number)}`
-                    : item[column.key] || "-"
-                }}
+              <dd class="min-w-0 break-words text-right">
+                {{ mobileValue(item, column) }}
               </dd></template
             >
           </dl>
@@ -307,6 +309,7 @@ const amountColumns: Array<{
 const tableColumns = [
   { key: "rank", label: "admin.usage.rechargeRanking.columns.rank" },
   { key: "user", label: "admin.usage.rechargeRanking.columns.user" },
+  { key: "inviter", label: "admin.usage.rechargeRanking.columns.inviter" },
   ...amountColumns,
   { key: "recharge_count", label: "admin.usage.rechargeRanking.columns.count" },
   {
@@ -314,16 +317,34 @@ const tableColumns = [
     label: "admin.usage.rechargeRanking.columns.last",
   },
 ];
-const mobileColumns = amountColumns
-  .slice(1)
-  .concat([
+const mobileColumns: Array<{ key: string; label: string; amount: boolean }> = (
+  [
+    ...amountColumns.slice(1),
+    {
+      key: "inviter",
+      label: "admin.usage.rechargeRanking.columns.inviter",
+    },
     {
       key: "recharge_count",
       label: "admin.usage.rechargeRanking.columns.count",
     },
-  ])
-  .map((column) => ({ ...column, amount: column.key !== "recharge_count" }));
+  ] as Array<{ key: string; label: string }>)
+  .map((column) => ({ ...column, amount: column.key !== "recharge_count" && column.key !== "inviter" }));
 const money = (value: number | undefined) => Number(value || 0).toFixed(2);
+const mobileValue = (
+  item: RechargeRankingItem,
+  column: { key: string; amount: boolean },
+): string => {
+  if (column.key === "inviter") return inviterLabel(item);
+  const value = item[column.key as keyof RechargeRankingItem];
+  return column.amount ? `$${money(value as number)}` : String(value ?? "-");
+};
+const inviterLabel = (item: RechargeRankingItem): string => {
+  const id = item.inviter_id;
+  if (id === null || id === undefined || !id) return t("admin.usage.rechargeRanking.unbound");
+  const identity = item.inviter_email || item.inviter_username;
+  return identity ? `${identity} (#${id})` : `#${id}`;
+};
 const reloadFirstPage = () => {
   page.value = 1;
   load();
@@ -369,6 +390,9 @@ const exportCsv = () => {
   const rows = [
     [
       "用户",
+      t("admin.usage.rechargeRanking.columns.inviterId"),
+      t("admin.usage.rechargeRanking.columns.inviterEmail"),
+      t("admin.usage.rechargeRanking.columns.inviterUsername"),
       "总充值",
       "在线充值",
       "兑换码",
@@ -382,6 +406,9 @@ const exportCsv = () => {
     ],
     ...items.value.map((item) => [
       item.email || item.username || `User #${item.user_id}`,
+      item.inviter_id ?? "",
+      item.inviter_email || "",
+      item.inviter_username || "",
       item.total_amount,
       item.online_amount,
       item.redeem_amount,

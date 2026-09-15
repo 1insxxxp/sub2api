@@ -583,7 +583,7 @@ export default {
         },
         summaryUsers: '用户数', summaryRequests: '请求数', summaryTokens: '总 Token', summaryCost: '实际扣款', loadFailed: '加载排行失败，请重试'
       },
-      rechargeRanking: { exportCurrentPage: '导出当前页 CSV', subtitle: '按余额流水统计用户充值排行', loadFailed: '加载充值排行失败，请重试', allSources: '全部来源', sortAsc: '升序', sortDesc: '降序', summaryUsers: '充值用户', summaryCount: '充值次数', summaryTotal: '新增余额', summaryOnline: '在线充值', sources: { online: '在线充值', redeem: '兑换码', affiliate: '邀请返利', admin: '管理员调整', reward: '活动奖励', refund: '退款', other: '其他' }, columns: { rank: '排名', user: '用户', total: '新增余额', online: '在线充值', redeem: '兑换码', affiliate: '邀请返利', admin: '管理员调整', reward: '活动奖励', refund: '退款', other: '其他', count: '充值次数', last: '最后充值' } },
+      rechargeRanking: { exportCurrentPage: '导出当前页 CSV', subtitle: '按余额流水统计用户充值排行', countDescription: '（次数仅统计在线充值、兑换码和管理员调整）', unbound: '未绑定', loadFailed: '加载充值排行失败，请重试', allSources: '全部来源', sortAsc: '升序', sortDesc: '降序', summaryUsers: '充值用户', summaryCount: '充值次数', summaryTotal: '新增余额', summaryOnline: '在线充值', sources: { online: '在线充值', redeem: '兑换码', affiliate: '邀请返利', admin: '管理员调整', reward: '活动奖励', refund: '退款', other: '其他' }, columns: { rank: '排名', user: '用户', inviter: '当前上级', inviterId: '邀请人 ID', inviterEmail: '邀请人邮箱', inviterUsername: '邀请人用户名', total: '新增余额', online: '在线充值', redeem: '兑换码', affiliate: '邀请返利', admin: '管理员调整', reward: '活动奖励', refund: '退款', other: '其他', count: '充值次数', last: '最后充值' } },
       cleanup: {
         button: '清理',
         title: '清理使用记录',
