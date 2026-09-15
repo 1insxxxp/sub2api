@@ -86,6 +86,17 @@ vi.mock('vue-i18n', async (importOriginal) => {
           'affiliate.stats.rebateRate': 'My rebate rate',
           'affiliate.stats.availableQuota': 'Available quota',
           'affiliate.stats.totalQuota': 'Historical quota',
+          'affiliate.policy.title': 'Rebate Rules',
+          'affiliate.policy.description': 'See when rebates become available, which recharges qualify, and the total limit.',
+          'affiliate.policy.freeze': 'Rebate freeze period',
+          'affiliate.policy.freezeValue': 'New rebates can be transferred to balance after {hours} hours',
+          'affiliate.policy.freezeNone': 'No freeze',
+          'affiliate.policy.duration': 'Rebate validity',
+          'affiliate.policy.durationValue': 'Recharges within {days} days of the invitee’s registration qualify',
+          'affiliate.policy.durationPermanent': 'Permanent',
+          'affiliate.policy.cap': 'Per-invitee rebate cap',
+          'affiliate.policy.capValue': 'Up to {amount} in total per invitee',
+          'affiliate.policy.capNone': 'No limit',
           'affiliate.rewards.title': 'Milestone rewards',
           'affiliate.rewards.description': 'Claim redeem codes after qualified-invite milestones.',
           'affiliate.rewards.requirement': '{count} qualified invitees',
@@ -132,6 +143,9 @@ function makeDetail(overrides: Partial<UserAffiliateDetail> = {}): UserAffiliate
     custom_rebate_rate_percent: null,
     qualified_invitee_count: 12,
     qualification_amount: 50,
+    rebate_freeze_hours: 12,
+    rebate_duration_days: 30,
+    rebate_per_invitee_cap: 200,
     next_level_invitee_threshold: 30,
     remaining_qualified_invitees: 18,
     tiers,
@@ -248,6 +262,32 @@ describe('AffiliateView promotion tiers', () => {
     expect(zhDashboard.affiliate.campaign.pitchTemplate).toContain('GPT、Claude、Gemini 全模型')
     expect(zhDashboard.affiliate.campaign.pitchTemplate).toContain('每天还可以签到领免费额度')
     expect(zhDashboard.affiliate.campaign.pitchTemplate).not.toContain('充值满')
+  })
+
+  it('shows rebate policy limits configured by the administrator', async () => {
+    const wrapper = await mountView(makeDetail({
+      rebate_freeze_hours: 12,
+      rebate_duration_days: 30,
+      rebate_per_invitee_cap: 200,
+    }))
+
+    const policy = wrapper.get('[data-testid="affiliate-rebate-policy"]')
+    expect(policy.text()).toContain('New rebates can be transferred to balance after 12 hours')
+    expect(policy.text()).toContain('Recharges within 30 days of the invitee’s registration qualify')
+    expect(policy.text()).toContain('Up to $200.00 in total per invitee')
+  })
+
+  it('explains unlimited policy values when limits are zero', async () => {
+    const wrapper = await mountView(makeDetail({
+      rebate_freeze_hours: 0,
+      rebate_duration_days: 0,
+      rebate_per_invitee_cap: 0,
+    }))
+
+    const policy = wrapper.get('[data-testid="affiliate-rebate-policy"]')
+    expect(policy.text()).toContain('No freeze')
+    expect(policy.text()).toContain('Permanent')
+    expect(policy.text()).toContain('No limit')
   })
 
   it('renders one integrated identity with the automatic level, progress, objectives, and all rules', async () => {

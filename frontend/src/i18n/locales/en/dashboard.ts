@@ -889,6 +889,19 @@ export default {
       frozenQuotaHint: 'Recently earned rebates pending release',
       totalQuota: 'Historical Rebate Quota'
     },
+    policy: {
+      title: 'Rebate Rules',
+      description: 'See when rebates become available, which recharges qualify, and the total limit.',
+      freeze: 'Rebate freeze period',
+      freezeValue: 'New rebates can be transferred to balance after {hours} hours',
+      freezeNone: 'No freeze',
+      duration: 'Rebate validity',
+      durationValue: 'Recharges within {days} days of the invitee’s registration qualify',
+      durationPermanent: 'Permanent',
+      cap: 'Per-invitee rebate cap',
+      capValue: 'Up to {amount} in total per invitee',
+      capNone: 'No limit'
+    },
     rewards: {
       title: 'Milestone rewards',
       description: 'Manually claim a dedicated redeem code after reaching each qualified-invite milestone.',

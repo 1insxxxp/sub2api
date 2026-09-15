@@ -60,6 +60,9 @@ function makeDetail(overrides: Partial<UserAffiliateDetail> = {}): UserAffiliate
     aff_quota: 12,
     aff_frozen_quota: 0,
     aff_history_quota: 234.5,
+    rebate_freeze_hours: 0,
+    rebate_duration_days: 0,
+    rebate_per_invitee_cap: 0,
     automatic_level: 'standard',
     automatic_rebate_rate_percent: 8,
     effective_rebate_rate_percent: 8,
@@ -70,6 +73,7 @@ function makeDetail(overrides: Partial<UserAffiliateDetail> = {}): UserAffiliate
     next_level_invitee_threshold: 3,
     remaining_qualified_invitees: 2,
     tiers,
+    rewards: [],
     invitees: [],
     ...overrides
   }

@@ -227,6 +227,9 @@ export interface UserAffiliateDetail extends AffiliateTierProgress {
   aff_quota: number
   aff_frozen_quota: number
   aff_history_quota: number
+  rebate_freeze_hours: number
+  rebate_duration_days: number
+  rebate_per_invitee_cap: number
   tiers: AffiliateTierDefinition[]
   rewards: AffiliateRewardProgress[]
   invitees: AffiliateInvitee[]

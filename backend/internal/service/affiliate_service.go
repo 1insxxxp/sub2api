@@ -127,6 +127,9 @@ type AffiliateDetail struct {
 	CustomRebateRatePercent    *float64                  `json:"custom_rebate_rate_percent"`
 	QualifiedInviteeCount      int                       `json:"qualified_invitee_count"`
 	QualificationAmount        float64                   `json:"qualification_amount"`
+	RebateFreezeHours          int                       `json:"rebate_freeze_hours"`
+	RebateDurationDays         int                       `json:"rebate_duration_days"`
+	RebatePerInviteeCap        float64                   `json:"rebate_per_invitee_cap"`
 	NextLevelInviteeThreshold  *int                      `json:"next_level_invitee_threshold"`
 	RemainingQualifiedInvitees int                       `json:"remaining_qualified_invitees"`
 	Tiers                      []AffiliateTierDefinition `json:"tiers"`
@@ -456,6 +459,12 @@ func (s *AffiliateService) GetAffiliateDetail(ctx context.Context, userID int64)
 		return nil, err
 	}
 	effectiveRate := effectiveAffiliateRebateRate(summary, snapshot.AutomaticRatePercent)
+	freezeHours, durationDays, perInviteeCap := 0, 0, 0.0
+	if s.settingService != nil {
+		freezeHours = s.settingService.GetAffiliateRebateFreezeHours(ctx)
+		durationDays = s.settingService.GetAffiliateRebateDurationDays(ctx)
+		perInviteeCap = s.settingService.GetAffiliateRebatePerInviteeCap(ctx)
+	}
 	return &AffiliateDetail{
 		UserID:                     summary.UserID,
 		AffCode:                    summary.AffCode,
@@ -471,6 +480,9 @@ func (s *AffiliateService) GetAffiliateDetail(ctx context.Context, userID int64)
 		CustomRebateRatePercent:    cloneFloat64Ptr(summary.AffRebateRatePercent),
 		QualifiedInviteeCount:      snapshot.QualifiedInviteeCount,
 		QualificationAmount:        config.QualificationAmount,
+		RebateFreezeHours:          freezeHours,
+		RebateDurationDays:         durationDays,
+		RebatePerInviteeCap:        perInviteeCap,
 		NextLevelInviteeThreshold:  nullableAffiliateThreshold(snapshot.NextTierThreshold),
 		RemainingQualifiedInvitees: snapshot.RemainingToNextTier,
 		Tiers:                      affiliateTierDefinitions(config),

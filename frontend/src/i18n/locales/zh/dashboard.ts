@@ -893,6 +893,19 @@ export default {
       frozenQuotaHint: '新产生的返利正在冻结期中',
       totalQuota: '历史返利额度'
     },
+    policy: {
+      title: '返利规则说明',
+      description: '查看返利何时可用、哪些充值可产生返利，以及累计上限。',
+      freeze: '返利冻结期',
+      freezeValue: '新返利冻结 {hours} 小时后可转入余额',
+      freezeNone: '不冻结',
+      duration: '返利有效期',
+      durationValue: '受邀用户注册后 {days} 天内充值可返利',
+      durationPermanent: '永久有效',
+      cap: '单人返利上限',
+      capValue: '每位受邀用户累计最多 {amount}',
+      capNone: '无上限'
+    },
     rewards: {
       title: '邀请阶梯奖励',
       description: '达到指定合格邀请人数后，手动领取专属兑换码。',

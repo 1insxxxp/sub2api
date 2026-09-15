@@ -534,6 +534,9 @@ func TestAffiliateDetailJSONExposesTierProgressWithoutInternalRecoveryFields(t *
 		CustomRebateRatePercent:    &customRate,
 		QualifiedInviteeCount:      3,
 		QualificationAmount:        50,
+		RebateFreezeHours:          12,
+		RebateDurationDays:         30,
+		RebatePerInviteeCap:        200,
 		NextLevelInviteeThreshold:  affiliateIntPtr(10),
 		RemainingQualifiedInvitees: 7,
 		Tiers:                      []AffiliateTierDefinition{{Level: AffiliateTierStandard, MinQualifiedInvitees: 0, RatePercent: 8}},
@@ -548,6 +551,9 @@ func TestAffiliateDetailJSONExposesTierProgressWithoutInternalRecoveryFields(t *
 	require.Contains(t, string(payload), `"automatic_level":"bronze"`)
 	require.Contains(t, string(payload), `"custom_rebate_rate_percent":18`)
 	require.Contains(t, string(payload), `"qualifying_payment_amount":50`)
+	require.Contains(t, string(payload), `"rebate_freeze_hours":12`)
+	require.Contains(t, string(payload), `"rebate_duration_days":30`)
+	require.Contains(t, string(payload), `"rebate_per_invitee_cap":200`)
 	require.Contains(t, string(payload), `"qualified":true`)
 	require.Contains(t, string(payload), `"qualified_at"`)
 	require.NotContains(t, string(payload), "generation")
@@ -587,7 +593,11 @@ func TestAffiliateService_GetDetailSeparatesAutomaticAndCustomRates(t *testing.T
 			{UserID: 50, Email: "second@example.com", QualifyingPaymentAmount: 50, QualifiedAt: &qualifiedAt},
 		},
 	}
-	svc := NewAffiliateService(repo, NewSettingService(newAffiliateTierServiceSettingRepo(), nil), nil, nil)
+	settings := newAffiliateTierServiceSettingRepo()
+	settings.values[SettingKeyAffiliateRebateFreezeHours] = "12"
+	settings.values[SettingKeyAffiliateRebateDurationDays] = "30"
+	settings.values[SettingKeyAffiliateRebatePerInviteeCap] = "200"
+	svc := NewAffiliateService(repo, NewSettingService(settings, nil), nil, nil)
 
 	detail, err := svc.GetAffiliateDetail(context.Background(), 42)
 
@@ -597,6 +607,9 @@ func TestAffiliateService_GetDetailSeparatesAutomaticAndCustomRates(t *testing.T
 	require.Equal(t, 18.0, detail.EffectiveRebateRatePercent)
 	require.True(t, detail.HasCustomRebateRate)
 	require.Equal(t, &customRate, detail.CustomRebateRatePercent)
+	require.Equal(t, 12, detail.RebateFreezeHours)
+	require.Equal(t, 30, detail.RebateDurationDays)
+	require.Equal(t, 200.0, detail.RebatePerInviteeCap)
 	require.Equal(t, 3, detail.QualifiedInviteeCount)
 	require.Equal(t, 50.0, detail.QualificationAmount)
 	require.Equal(t, affiliateIntPtr(10), detail.NextLevelInviteeThreshold)

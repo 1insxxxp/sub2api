@@ -212,6 +212,26 @@
         />
 
         <section
+          data-testid="affiliate-rebate-policy"
+          class="card affiliate-panel p-6"
+        >
+          <div>
+            <h2 class="text-base font-semibold text-gray-900 dark:text-white">{{ t('affiliate.policy.title') }}</h2>
+            <p class="mt-1 text-sm text-gray-500 dark:text-dark-400">{{ t('affiliate.policy.description') }}</p>
+          </div>
+          <div class="mt-4 grid gap-3 sm:grid-cols-3">
+            <div
+              v-for="item in rebatePolicyRows"
+              :key="item.key"
+              class="min-w-0 rounded-lg border border-gray-200 bg-gray-50 p-3 dark:border-dark-700 dark:bg-dark-800/60"
+            >
+              <p class="text-xs text-gray-500 dark:text-dark-400">{{ item.label }}</p>
+              <p class="mt-1 break-words text-sm font-semibold text-gray-900 dark:text-white">{{ item.value }}</p>
+            </div>
+          </div>
+        </section>
+
+        <section
           v-if="rewardTasks.length > 0"
           data-testid="affiliate-milestone-rewards"
           class="card affiliate-panel affiliate-rewards p-6"
@@ -486,6 +506,34 @@ const promotionPitch = computed(() => t('affiliate.campaign.pitchTemplate', {
   link: inviteLink.value,
   amount: formatCurrency(detail.value?.qualification_amount ?? 0)
 }))
+const rebatePolicyRows = computed(() => {
+  const freezeHours = normalizeCount(detail.value?.rebate_freeze_hours ?? 0)
+  const durationDays = normalizeCount(detail.value?.rebate_duration_days ?? 0)
+  const cap = detail.value?.rebate_per_invitee_cap ?? 0
+  return [
+    {
+      key: 'freeze',
+      label: t('affiliate.policy.freeze'),
+      value: freezeHours > 0
+        ? t('affiliate.policy.freezeValue', { hours: freezeHours })
+        : t('affiliate.policy.freezeNone')
+    },
+    {
+      key: 'duration',
+      label: t('affiliate.policy.duration'),
+      value: durationDays > 0
+        ? t('affiliate.policy.durationValue', { days: durationDays })
+        : t('affiliate.policy.durationPermanent')
+    },
+    {
+      key: 'cap',
+      label: t('affiliate.policy.cap'),
+      value: Number.isFinite(cap) && cap > 0
+        ? t('affiliate.policy.capValue', { amount: formatCurrency(cap) })
+        : t('affiliate.policy.capNone')
+    }
+  ]
+})
 const rewardTasks = computed(() => detail.value?.rewards ?? [])
 
 function formatCount(value: number): string {
