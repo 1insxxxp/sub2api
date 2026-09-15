@@ -60,7 +60,7 @@
                     {{ t('payment.rechargeOfferTitle') }}
                   </h3>
                   <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                    {{ t('payment.rechargeOfferHint') }}
+                    {{ t('payment.rechargeOfferIncludedHint') }}
                   </p>
                 </div>
                 <div class="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
@@ -68,21 +68,22 @@
                     v-for="item in rechargeOverview"
                     :key="item.amount"
                     data-testid="recharge-rule-row"
-                    class="flex min-w-0 items-center justify-between gap-3 rounded-lg border border-white/80 bg-white px-3 py-2.5 dark:border-dark-600 dark:bg-dark-800"
+                    class="flex min-w-0 items-start justify-between gap-3 rounded-lg border border-white/80 bg-white px-3 py-2.5 dark:border-dark-600 dark:bg-dark-800"
                   >
                     <div class="min-w-0">
-                      <p class="text-xs text-gray-500 dark:text-gray-400">{{ t('payment.rechargeOfferAmount') }}</p>
-                      <p class="truncate text-sm font-semibold text-gray-900 dark:text-white">
+                      <p class="text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap">{{ t('payment.rechargeOfferAmount') }}</p>
+                      <p class="truncate text-sm font-semibold text-gray-900 dark:text-white whitespace-nowrap">
                         {{ formatSelectedPaymentAmount(item.amount) }}
                       </p>
                     </div>
-                    <div class="shrink-0 text-right">
-                      <p class="text-xs text-gray-500 dark:text-gray-400">{{ t('payment.rechargeOfferCredit') }}</p>
-                      <p class="text-sm font-semibold text-primary-600 dark:text-primary-400">
-                        {{ formatSelectedPaymentAmount(item.credited) }}
+                    <div class="min-w-0 shrink-0 text-right">
+                      <p class="text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap">{{ t('payment.rechargeOfferCreditTotal') }}</p>
+                      <p class="text-sm font-semibold text-primary-600 dark:text-primary-400 whitespace-nowrap">
+                        {{ formatCreditedAmount(item.credited) }}
                       </p>
-                      <p v-if="item.bonus > 0" class="text-xs font-medium text-green-600 dark:text-green-400">
-                        +{{ formatSelectedPaymentAmount(item.bonus) }} {{ t('payment.rechargeOfferBonus') }}
+                      <p v-if="item.bonus > 0" class="mt-0.5 text-xs font-medium text-green-600 dark:text-green-400 whitespace-nowrap">
+                        {{ t('payment.rechargeOfferBase') }} {{ formatCreditedAmount(item.baseCredited) }}
+                        + {{ t('payment.rechargeOfferBonus') }} {{ formatCreditedAmount(item.bonus) }}
                       </p>
                     </div>
                   </div>
@@ -120,7 +121,7 @@
                 </div>
                 <div class="flex justify-between" :class="{ 'border-t border-gray-200 pt-2 dark:border-dark-600': feeRate <= 0 }">
                   <span class="text-gray-500 dark:text-gray-400">{{ t('payment.creditedBalance') }}</span>
-                  <span class="text-gray-900 dark:text-white">{{ formatSelectedPaymentAmount(creditedAmount) }}</span>
+                  <span class="text-gray-900 dark:text-white">{{ formatCreditedAmount(creditedAmount) }}</span>
                 </div>
               </div>
             </div>
@@ -597,10 +598,20 @@ const rechargeOverview = computed(() => quickRechargeAmounts.value
       checkout.value.balance_recharge_tiers,
       checkout.value.balance_recharge_multiplier,
     )) * 100) / 100
+    // A tier multiplier is the total credited multiplier, while the base
+    // multiplier is the normal amount users would receive.  The bonus should
+    // only show the tier uplift over that base credit, not the difference
+    // between credited balance and the cash payment amount.
+    const baseMultiplier = Number.isFinite(checkout.value.balance_recharge_multiplier)
+      && checkout.value.balance_recharge_multiplier > 0
+      ? checkout.value.balance_recharge_multiplier
+      : 1
+    const baseCredited = Math.round((rechargeAmount * baseMultiplier) * 100) / 100
     return {
       amount: rechargeAmount,
+      baseCredited,
       credited,
-      bonus: Math.round((credited - rechargeAmount) * 100) / 100,
+      bonus: Math.max(0, Math.round((credited - baseCredited) * 100) / 100),
     }
   }))
 
@@ -678,6 +689,10 @@ function subscriptionPaymentAmountForCurrency(value: number, currency: string): 
 
 function formatSelectedPaymentAmount(value: number): string {
   return formatPaymentAmount(value, selectedCurrency.value, localeCode.value)
+}
+
+function formatCreditedAmount(value: number): string {
+  return formatPaymentAmount(value, 'USD', localeCode.value)
 }
 
 function formatSelectedSubscriptionPaymentAmount(value: number): string {

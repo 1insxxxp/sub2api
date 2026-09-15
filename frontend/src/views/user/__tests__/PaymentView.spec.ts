@@ -373,6 +373,31 @@ describe('PaymentView subscription plan grid', () => {
 })
 
 describe('PaymentView recharge rate preview', () => {
+  it('shows only the tier uplift as bonus over the base multiplier', async () => {
+    routeState.path = '/purchase'
+    routeState.query = {}
+    getCheckoutInfo.mockReset().mockResolvedValue(checkoutInfoFixture({
+      balance_recharge_multiplier: 5,
+      balance_recharge_tiers: [
+        { amount: 10, multiplier: 5 }, { amount: 18, multiplier: 5.5555 }, { amount: 80, multiplier: 6.25 },
+      ],
+    }))
+    const wrapper = shallowMount(PaymentView, { global: { stubs: { AppLayout: { template: '<div><slot /></div>' }, Teleport: true, Transition: false } } })
+    await flushPromises()
+
+    const rows = wrapper.findAll('[data-testid="recharge-rule-row"]')
+    expect(rows[0].text()).toContain('$50.00')
+    expect(rows[0].text()).not.toContain('payment.rechargeOfferBase')
+    expect(rows[1].text()).toContain('$100.00')
+    expect(rows[1].text()).toContain('payment.rechargeOfferBase $90.00')
+    expect(rows[1].text()).toContain('payment.rechargeOfferBonus $10.00')
+    expect(rows[1].text()).toContain('$10.00')
+    expect(rows[2].text()).toContain('$500.00')
+    expect(rows[2].text()).toContain('payment.rechargeOfferBase $400.00')
+    expect(rows[2].text()).toContain('payment.rechargeOfferBonus $100.00')
+    expect(wrapper.get('[data-testid="recharge-rule-overview"]').text()).toContain('payment.rechargeOfferIncludedHint')
+  })
+
   it('shows every configured quick amount with credited balance and bonus', async () => {
     routeState.path = '/purchase'
     routeState.query = {}
@@ -425,11 +450,11 @@ describe('PaymentView recharge rate preview', () => {
     const rows = wrapper.findAll('[data-testid="recharge-rule-row"]')
     expect(rows).toHaveLength(3)
     expect(rows[0].text()).toContain('¥10.00')
-    expect(rows[0].text()).toContain('¥20.00')
+    expect(rows[0].text()).toContain('$20.00')
     expect(rows[1].text()).toContain('¥18.00')
-    expect(rows[1].text()).toContain('¥54.00')
+    expect(rows[1].text()).toContain('$54.00')
     expect(rows[2].text()).toContain('¥80.00')
-    expect(rows[2].text()).toContain('¥320.00')
+    expect(rows[2].text()).toContain('$320.00')
   })
   it('uses the selected payment method currency in the offer overview', async () => {
     routeState.path = '/purchase'
