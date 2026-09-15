@@ -113,6 +113,7 @@ func (s *OpenAIGatewayService) ForwardEmbeddings(
 
 	if resp.StatusCode >= 400 {
 		respBody := s.readUpstreamErrorBody(resp)
+		respBody = sanitizeUpstreamErrorBody(respBody)
 		_ = resp.Body.Close()
 		resp.Body = io.NopCloser(bytes.NewReader(respBody))
 

@@ -201,6 +201,9 @@ func (s *OpenAIGatewayService) forwardAsRawChatCompletions(
 	// 7. Handle error response with failover
 	if resp.StatusCode >= 400 {
 		respBody, upstreamMsg := s.readOpenAIUpstreamError(resp)
+		if shouldFallbackOpenAIAccountToGeminiNative(account, upstreamModel, resp.StatusCode, respBody, false) {
+			return s.forwardOpenAIAccountGeminiNativeFallback(ctx, c, account, body, upstreamModel, clientStream)
+		}
 		if account.Platform == PlatformGrok {
 			kind := "http_error"
 			if s.shouldFailoverGrokUpstreamError(resp.StatusCode, respBody) {

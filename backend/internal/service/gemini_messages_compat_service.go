@@ -1178,6 +1178,9 @@ func (s *GeminiMessagesCompatService) ForwardNative(ctx context.Context, c *gin.
 	if filteredBody, err := filterEmptyPartsFromGeminiRequest(body); err == nil {
 		body = filteredBody
 	}
+	if normalizedBody, err := normalizeGeminiNativeRequest(body); err == nil {
+		body = normalizedBody
+	}
 
 	switch action {
 	case "generateContent", "streamGenerateContent", "countTokens":
@@ -1864,6 +1867,8 @@ func sanitizeUpstreamErrorMessage(msg string) string {
 	if msg == "" {
 		return msg
 	}
+	msg = upstreamURLRegex.ReplaceAllString(msg, "[upstream-url]")
+	msg = upstreamBracketedAddressRegex.ReplaceAllString(msg, "[upstream]")
 	return sensitiveQueryParamRegex.ReplaceAllString(msg, `$1***`)
 }
 

@@ -723,6 +723,7 @@ func ProvideOpsService(
 	authCacheInvalidationWorker *AuthCacheInvalidationWorker,
 	apiKeyService *APIKeyService,
 ) *OpsService {
+	openAIGatewayService.SetGeminiChatCompletionsForwarder(geminiCompatService)
 	svc := NewOpsService(
 		opsRepo,
 		settingRepo,

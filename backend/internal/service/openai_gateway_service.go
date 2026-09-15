@@ -443,6 +443,12 @@ var defaultOpenAICodexSnapshotPersistThrottle = newAccountWriteThrottle(openAICo
 // needs compact support but no compatible account is available.
 var ErrNoAvailableCompactAccounts = errors.New("no available accounts support /responses/compact")
 
+// GeminiChatCompletionsForwarder converts an OpenAI Chat Completions request to
+// a Gemini native upstream and converts the response back.
+type GeminiChatCompletionsForwarder interface {
+	ForwardAsChatCompletions(ctx context.Context, c *gin.Context, account *Account, body []byte) (*ForwardResult, error)
+}
+
 // OpenAIGatewayService handles OpenAI API gateway operations
 type OpenAIGatewayService struct {
 	accountRepo           AccountRepository
@@ -506,11 +512,18 @@ type OpenAIGatewayService struct {
 	openAIModelsCache                   openAIModelsCache
 	openaiCompatSessionResponses        sync.Map
 	openaiCompatAnthropicDigestSessions sync.Map
+	geminiCompatForwarder               GeminiChatCompletionsForwarder
 	// openaiCodexTurnStateOrigins: 下游会话 seed → openAICodexTurnStateOrigin，
 	// 记录最近一次向该会话下发 x-codex-turn-state 的铸造账号，供出站守卫
 	// 剥离跨账号回带（openai_codex_turn_state.go）。
 	openaiCodexTurnStateOrigins sync.Map
 	openaiCodexTurnStateWrites  atomic.Uint64
+}
+
+// SetGeminiChatCompletionsForwarder installs the Gemini compatibility service
+// used when an OpenAI-compatible upstream rejects Gemini models.
+func (s *OpenAIGatewayService) SetGeminiChatCompletionsForwarder(forwarder GeminiChatCompletionsForwarder) {
+	s.geminiCompatForwarder = forwarder
 }
 
 // NewOpenAIGatewayService creates a new OpenAIGatewayService
