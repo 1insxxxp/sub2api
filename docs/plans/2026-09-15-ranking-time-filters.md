@@ -8,6 +8,8 @@
 
 **Tech Stack:** Vue 3 `<script setup>`, TypeScript, Vitest, existing `DateRangePicker`, Go/Gin ranking handlers and repository tests.
 
+**Follow-up: empty-response claims:** Extend the existing `UsageView.spec.ts` shared-range test to enter claims first, verify today's bounds, then change the range and switch between claims and both rankings. Include `claims` in the toolbar's existing visibility condition in `UsageView.vue`. Reuse the panel's list/metrics date props and reload behavior. Run the focused view, toolbar, date utility, and claims panel suites plus frontend typecheck and build; no backend change is needed.
+
 ---
 
 ### Task 1: Add a focused date-range utility test (RED)

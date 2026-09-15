@@ -83,7 +83,7 @@
           </button>
         </div>
         <RankingTimeToolbar
-          v-if="activeTab === 'ranking' || activeTab === 'recharge'"
+          v-if="activeTab === 'ranking' || activeTab === 'recharge' || activeTab === 'claims'"
           :start-date="startDate"
           :end-date="endDate"
           @change="onDateRangeChange"
