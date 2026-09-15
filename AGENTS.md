@@ -4,10 +4,12 @@
 
 ### 版本号规则
 
-我们在官方版本号后面添加自己的小版本号：
+应用版本号与实际已合入的上游官方版本一致，不追加第四段定制版本号。
 
-- 官方版本：`v0.1.68`
-- 我们的版本：`v0.1.68.1`、`v0.1.68.2`（递增）
+- 上游基线为 `v0.2.4` 时，`backend/cmd/server/VERSION` 和页面均显示 `0.2.4`。
+- 定制修复、重复部署保留该版本号，通过 Git 提交号和唯一镜像标签区分构建。
+- 仅拉取新上游版本不代表已合入；必须实际合并并验证后才更新官方版本号。
+- 不创建或覆盖上游官方标签，不再创建第四段版本标签。构建时明确传入 `VERSION` 与 `COMMIT`。
 
 ### 分支策略
 
@@ -38,20 +40,16 @@ git merge main --no-edit
 # 解决可能的冲突后继续
 ```
 
-### 2. 更新版本号并打标签
+### 2. 对齐上游版本号并推送
 
 ```bash
 # 更新版本号文件
-echo "0.1.69.1" > backend/cmd/server/VERSION
+echo "0.1.69" > backend/cmd/server/VERSION
 git add backend/cmd/server/VERSION
-git commit -m "chore: bump version to 0.1.69.1"
+git commit -m "chore: align version with upstream 0.1.69"
 
-# 打上我们自己的标签
-git tag v0.1.69.1
-
-# 推送分支和标签
+# 推送分支，保留上游原始标签
 git push origin release/custom-0.1.69
-git push origin v0.1.69.1
 ```
 
 ### 3. 更新 main 分支
@@ -75,15 +73,8 @@ git checkout release/custom-0.1.68
 # ... 进行修复 ...
 git commit -m "fix: 修复描述"
 
-# 递增小版本号
-echo "0.1.68.2" > backend/cmd/server/VERSION
-git add backend/cmd/server/VERSION
-git commit -m "chore: bump version to 0.1.68.2"
-
-# 打标签并推送
-git tag v0.1.68.2
+# 保持 VERSION 为上游版本 0.1.68，使用提交号标识本次修复
 git push origin release/custom-0.1.68
-git push origin v0.1.68.2
 
 # 同步修复到 main
 git checkout main
@@ -171,21 +162,18 @@ ssh clicodeplus "source /root/sub2api-beta/deploy/.env && PGPASSWORD=\"\$POSTGRE
 
 ### 部署步骤
 
-**重要：每次部署都必须递增版本号！**
+**重要：应用版本必须与已合入的上游版本一致；每次部署用提交号区分构建，不递增第四段！**
 
-#### 0. 递增版本号并推送（本地操作）
+#### 0. 核对上游版本并推送（本地操作）
 
-每次部署前，先在本地递增小版本号并确保推送成功：
+每次部署前，核对上游基线与版本文件并确保推送成功：
 
 ```bash
 # 查看当前版本号
 cat backend/cmd/server/VERSION
-# 假设当前是 0.1.69.1
-
-# 递增版本号
-echo "0.1.69.2" > backend/cmd/server/VERSION
-git add backend/cmd/server/VERSION
-git commit -m "chore: bump version to 0.1.69.2"
+# 例如已合入上游 v0.1.69，文件应为 0.1.69；定制修复不改版本
+# 记录本次实际提交，构建镜像时作为 COMMIT 传入
+git rev-parse HEAD
 git push origin release/custom-0.1.69
 
 # ⚠️ 确认推送成功（必须看到分支更新输出，不能有 rejected 错误）
@@ -1083,7 +1071,7 @@ curl -X PUT "${BASE}/api/v1/admin/groups/123" \
 
 3. **Windows 换行符问题**：已通过 `.gitattributes` 解决，确保 `*.sql` 文件始终使用 LF
 
-4. **版本号管理**：每次发布必须更新 `backend/cmd/server/VERSION` 并打标签
+4. **版本号管理**：`backend/cmd/server/VERSION` 与实际已合入的上游版本一致；定制发布用提交号和唯一镜像标签区分，不追加第四段版本或覆盖官方标签
 
 5. **合并冲突**：合并上游新版本时，重点关注以下文件可能的冲突：
    - `backend/internal/service/antigravity_gateway_service.go`
@@ -1392,7 +1380,7 @@ gofmt -l ./...
 ### 发布版本
 
 1. 本地执行上述全部 CI 检查通过
-2. 递增 `backend/cmd/server/VERSION`，提交并推送
+2. 核对 `backend/cmd/server/VERSION` 与已合入的上游版本一致，提交并推送；定制修复不递增版本号
 3. 推送后确认 GitHub Actions 的 4 个 CI job 全部通过
 4. **CI 未通过时禁止部署** — 必须先修复问题
 5. 使用 `gh run list --repo touwaeriol/sub2api --limit 10` 确认状态
