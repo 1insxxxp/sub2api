@@ -186,6 +186,20 @@ func ProvideAdminUsageHandler(
 	return h
 }
 
+// ProvidePublicGroupSyncService gives Wire a fixed-arity provider for the
+// variadic constructor while preserving the constructor's test-friendly API.
+func ProvidePublicGroupSyncService(
+	groups service.GroupRepository,
+	channels service.ChannelRepository,
+	accounts service.AccountRepository,
+) *service.PublicGroupSyncService {
+	return service.NewPublicGroupSyncService(groups, channels, accounts)
+}
+
+func ProvideDujiaoCredentialVerifier(authService *service.AuthService) DujiaoCredentialVerifier {
+	return authService
+}
+
 // ProvideSystemHandler creates admin.SystemHandler with UpdateService
 func ProvideSystemHandler(updateService *service.UpdateService, lockService *service.SystemOperationLockService) *admin.SystemHandler {
 	return admin.NewSystemHandler(updateService, lockService)
@@ -306,9 +320,9 @@ var ProviderSet = wire.NewSet(
 	NewModelStatusHandler,
 	NewAsyncImageHandler,
 	ProvideBatchImageHandler,
-	admin.NewLotteryHandler,
+	ProvideDujiaoCredentialVerifier,
 	NewInternalDujiaoAuthHandler,
-	service.NewPublicGroupSyncService,
+	ProvidePublicGroupSyncService,
 	NewPublicGroupSyncHandler,
 
 	// Admin handlers
