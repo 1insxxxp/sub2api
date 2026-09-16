@@ -189,6 +189,7 @@ type simpleModeGroupResponse struct {
 	ID          int64  `json:"id"`
 	Name        string `json:"name"`
 	Description string `json:"description"`
+	Tag         string `json:"tag"`
 	Platform    string `json:"platform"`
 	Status      string `json:"status"`
 
@@ -205,7 +206,7 @@ func groupForSimpleMode(group *service.Group) *simpleModeGroupResponse {
 		return nil
 	}
 	return &simpleModeGroupResponse{
-		ID: group.ID, Name: group.Name, Description: group.Description, Platform: group.Platform,
+		ID: group.ID, Name: group.Name, Description: group.Description, Tag: group.Tag, Platform: group.Platform,
 		Status:             group.Status,
 		AccountCount:       group.AccountCount,
 		ActiveAccountCount: group.ActiveAccountCount, RateLimitedAccountCount: group.RateLimitedAccountCount,
@@ -217,7 +218,7 @@ func sanitizeCreateGroupRequestForSimpleMode(req *CreateGroupRequest) {
 	if req == nil {
 		return
 	}
-	allowed := CreateGroupRequest{Name: req.Name, Description: req.Description, Platform: req.Platform}
+	allowed := CreateGroupRequest{Name: req.Name, Description: req.Description, Tag: req.Tag, Platform: req.Platform}
 	allowed.RateMultiplier = 1
 	allowed.SubscriptionType = service.SubscriptionTypeStandard
 	*req = allowed
@@ -227,13 +228,14 @@ func sanitizeUpdateGroupRequestForSimpleMode(req *UpdateGroupRequest) {
 	if req == nil {
 		return
 	}
-	*req = UpdateGroupRequest{Name: req.Name, Description: req.Description}
+	*req = UpdateGroupRequest{Name: req.Name, Description: req.Description, Tag: req.Tag}
 }
 
 // CreateGroupRequest represents create group request
 type CreateGroupRequest struct {
 	Name                             string                        `json:"name" binding:"required"`
 	Description                      string                        `json:"description"`
+	Tag                              string                        `json:"tag" binding:"omitempty,oneof=chat image airp"`
 	Platform                         string                        `json:"platform" binding:"omitempty,oneof=anthropic openai gemini antigravity grok kimi zhipu deepseek minimax opencode_go composite"`
 	RateMultiplier                   float64                       `json:"rate_multiplier"`
 	EmptyResponseCompensationEnabled bool                          `json:"empty_response_compensation_enabled"`
@@ -310,6 +312,7 @@ type CreateGroupRequest struct {
 type UpdateGroupRequest struct {
 	Name                             string                         `json:"name"`
 	Description                      *string                        `json:"description"`
+	Tag                              *string                        `json:"tag" binding:"omitempty,oneof='' chat image airp"`
 	Platform                         string                         `json:"platform" binding:"omitempty,oneof=anthropic openai gemini antigravity grok kimi zhipu deepseek minimax opencode_go composite"`
 	RateMultiplier                   *float64                       `json:"rate_multiplier"`
 	EmptyResponseCompensationEnabled *bool                          `json:"empty_response_compensation_enabled"`
@@ -718,6 +721,7 @@ func (h *GroupHandler) Create(c *gin.Context) {
 	group, err := h.adminService.CreateGroup(c.Request.Context(), &service.CreateGroupInput{
 		Name:                             req.Name,
 		Description:                      req.Description,
+		Tag:                              req.Tag,
 		Platform:                         req.Platform,
 		RateMultiplier:                   req.RateMultiplier,
 		EmptyResponseCompensationEnabled: req.EmptyResponseCompensationEnabled,
@@ -865,6 +869,7 @@ func (h *GroupHandler) Update(c *gin.Context) {
 	group, err := h.adminService.UpdateGroup(c.Request.Context(), groupID, &service.UpdateGroupInput{
 		Name:                             req.Name,
 		Description:                      req.Description,
+		Tag:                              req.Tag,
 		Platform:                         req.Platform,
 		RateMultiplier:                   req.RateMultiplier,
 		EmptyResponseCompensationEnabled: req.EmptyResponseCompensationEnabled,

@@ -66,6 +66,18 @@ const mountActualOption = (props: Record<string, unknown> = {}) =>
   })
 
 describe('GroupOptionItem', () => {
+  it.each(['chat', 'image', 'airp'])('shows the configured %s tag without replacing the group name', (tag) => {
+    const wrapper = mountOption({ tag })
+    const badge = wrapper.get('[data-test="group-tag"]')
+    expect(badge.text()).toBe(`common.groupTags.${tag}`)
+    expect(badge.classes()).toContain('!absolute')
+    expect(wrapper.text()).toContain('Test Group')
+  })
+
+  it('does not show a tag for an untagged group', () => {
+    expect(mountOption({ tag: '' }).find('[data-test="group-tag"]').exists()).toBe(false)
+  })
+
   it('formats custom rate multipliers with at most two decimals', () => {
     const wrapper = mountOption({
       rateMultiplier: 1,

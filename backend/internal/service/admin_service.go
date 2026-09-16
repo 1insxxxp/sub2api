@@ -240,6 +240,7 @@ type AdminBoundAuthIdentityChannel struct {
 type CreateGroupInput struct {
 	Name                             string
 	Description                      string
+	Tag                              string
 	Platform                         string
 	RateMultiplier                   float64
 	EmptyResponseCompensationEnabled bool
@@ -324,6 +325,7 @@ type CreateGroupInput struct {
 type UpdateGroupInput struct {
 	Name                             string
 	Description                      *string
+	Tag                              *string
 	Platform                         string
 	RateMultiplier                   *float64 // 使用指针以支持设置为0
 	EmptyResponseCompensationEnabled *bool

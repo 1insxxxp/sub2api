@@ -41,6 +41,8 @@
         </label>
       </section>
 
+      <GroupTagField v-model="form.tag" name="system-custom-group-tag" />
+
       <section class="border-y border-slate-200 py-4 dark:border-dark-700">
         <button
           data-testid="system-custom-advanced-toggle"
@@ -216,11 +218,13 @@ import { adminAPI } from '@/api/admin'
 import BaseDialog from '@/components/common/BaseDialog.vue'
 import Icon from '@/components/icons/Icon.vue'
 import type {
+  GroupTag,
   CreateSystemCustomGroupRequest,
   SystemCustomGroup,
   SystemCustomGroupCandidate,
   SystemCustomGroupSource
 } from '@/types'
+import GroupTagField from '@/components/admin/group/GroupTagField.vue'
 
 interface Props {
   show: boolean
@@ -248,6 +252,7 @@ const errorMessage = ref('')
 let session = 0
 
 const form = reactive({
+  tag: '' as GroupTag,
   name: '',
   description: '',
   daily_limit_usd: '' as number | string | null,
@@ -264,6 +269,7 @@ const isCurrentSession = (activeSession: number, targetID: number | null) =>
 const reset = () => {
   form.name = ''
   form.description = ''
+  form.tag = ''
   form.daily_limit_usd = ''
   form.weekly_limit_usd = ''
   form.monthly_limit_usd = ''
@@ -348,6 +354,7 @@ const load = async () => {
       addUnavailableSources(detail)
       form.name = detail.group.name
       form.description = detail.group.description || ''
+      form.tag = detail.group.tag || ''
       form.daily_limit_usd = detail.group.daily_limit_usd ?? ''
       form.weekly_limit_usd = detail.group.weekly_limit_usd ?? ''
       form.monthly_limit_usd = detail.group.monthly_limit_usd ?? ''
@@ -415,6 +422,7 @@ const saveDisabled = computed(() =>
 const snapshot = (): CreateSystemCustomGroupRequest => ({
   name: form.name.trim(),
   description: form.description.trim() || null,
+  tag: form.tag,
   daily_limit_usd: nullableNumber(form.daily_limit_usd),
   weekly_limit_usd: nullableNumber(form.weekly_limit_usd),
   monthly_limit_usd: nullableNumber(form.monthly_limit_usd),

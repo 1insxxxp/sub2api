@@ -90,6 +90,7 @@
           ]"
         >
           <GroupOptionItem
+            :tag="group.tag"
             :name="group.name"
             :platform="group.platform"
             :subscription-type="group.subscription_type"

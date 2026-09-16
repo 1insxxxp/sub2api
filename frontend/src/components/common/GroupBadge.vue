@@ -2,7 +2,7 @@
   <span
     :class="[
       'inline-flex items-center gap-1.5 rounded-md px-2 py-0.5 text-xs font-medium transition-colors',
-      wrapName ? 'max-w-full whitespace-normal' : '',
+      wrapName ? 'group-badge-wrap max-w-full whitespace-normal' : '',
       badgeClass
     ]"
   >
@@ -16,7 +16,7 @@
       {{ name }}
     </span>
     <!-- Right side label -->
-    <span v-if="showLabel" :class="labelClass">
+    <span v-if="showLabel" :class="[labelClass, wrapName && 'shrink-0 whitespace-nowrap']">
       <template v-if="hasCustomRate">
         <!-- 原倍率删除线 + 专属倍率高亮 -->
         <span class="line-through opacity-50 mr-0.5">{{ formatVisibleRateMultiplier(rateMultiplier) }}x</span>
@@ -26,7 +26,7 @@
         {{ labelText }}
       </template>
     </span>
-    <span v-if="hasPeakRate" :class="peakRateClass" :title="peakRateTitle">
+    <span v-if="hasPeakRate" class="group-badge-peak" :class="peakRateClass" :title="peakRateTitle">
       {{ peakRateText }}
     </span>
   </span>
@@ -197,3 +197,21 @@ const peakRateClass = computed(() => {
 
 const badgeClass = computed(() => platformGroupBadgeClass(props.platform, isSubscription.value))
 </script>
+
+<style scoped>
+@media (max-width: 767px) {
+  .group-badge-wrap {
+    flex-wrap: wrap;
+  }
+
+  .group-badge-wrap > [data-test="group-badge-name"] {
+    flex: 1;
+    white-space: normal;
+  }
+
+  .group-badge-wrap > .group-badge-peak {
+    flex-basis: 100%;
+    overflow-wrap: anywhere;
+  }
+}
+</style>

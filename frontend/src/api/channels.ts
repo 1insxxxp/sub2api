@@ -7,6 +7,7 @@ import { apiClient } from './client'
 import type { BillingMode } from '@/constants/channel'
 
 export interface UserAvailableGroup {
+  tag?: import('@/types').GroupTag
   id: number
   name: string
   platform: string

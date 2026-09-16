@@ -111,7 +111,7 @@ describe('RedeemView refresh after redemption', () => {
     redeem.mockRejectedValue({ response: { data: { detail: 'Invalid code' } } })
     const wrapper = await submitCode()
 
-    expect(showError).toHaveBeenCalledWith('redeem.redeemFailed')
+    expect(showError).toHaveBeenCalledWith('Invalid code')
     expect(wrapper.text()).toContain('Invalid code')
     expect(wrapper.text()).not.toContain('Code applied')
     expect((wrapper.get('input#code').element as HTMLInputElement).value).toBe(' REDEEM-CODE ')

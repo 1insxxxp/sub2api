@@ -429,6 +429,7 @@ func updateSystemCustomGroupRecord(ctx context.Context, client *dbent.Client, gr
 		Where(group.IDEQ(groupIn.ID), group.DeletedAtIsNil(), group.SystemCustomRoutingEnabledEQ(true)).
 		SetName(groupIn.Name).
 		SetDescription(groupIn.Description).
+		SetTag(groupIn.Tag).
 		SetPlatform(service.PlatformComposite).
 		SetRateMultiplier(1).
 		SetIsExclusive(true).

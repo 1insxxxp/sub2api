@@ -82,6 +82,7 @@ type SystemCustomGroupModelInput struct {
 }
 
 type CreateSystemCustomGroupRequest struct {
+	Tag                 string                        `json:"tag"`
 	Name                string                        `json:"name"`
 	Description         *string                       `json:"description"`
 	DailyLimitUSD       *float64                      `json:"daily_limit_usd"`
@@ -93,6 +94,7 @@ type CreateSystemCustomGroupRequest struct {
 }
 
 type UpdateSystemCustomGroupRequest struct {
+	Tag                 *string                       `json:"tag"`
 	Name                string                        `json:"name"`
 	Description         *string                       `json:"description"`
 	DailyLimitUSD       *float64                      `json:"daily_limit_usd"`

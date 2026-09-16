@@ -1,7 +1,9 @@
 import { mount } from '@vue/test-utils'
+import { h } from 'vue'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import DataTable from '../DataTable.vue'
+import KeyMobileCard from '@/components/keys/KeyMobileCard.vue'
 
 vi.mock('vue-i18n', () => ({
   useI18n: () => ({
@@ -175,6 +177,49 @@ describe('DataTable', () => {
     expect(row.get('[data-mobile-column-label]').classes()).toContain('shrink-0')
     expect(row.get('[data-mobile-column-value]').classes()).toContain('min-w-0')
     expect(row.get('[data-mobile-column-value]').classes()).toContain('[overflow-wrap:anywhere]')
+  })
+
+  it('preserves cell actions, selection and visible columns in a custom mobile card', async () => {
+    stubMobileMatchMedia()
+    const edit = vi.fn()
+    const columns = [
+      { key: 'name', label: 'Name' },
+      { key: 'status', label: 'Status' },
+      { key: 'usage', label: 'Usage' },
+      { key: 'created_at', label: 'Created' },
+      { key: 'last_used_ip', label: 'IP', mobileHidden: true },
+      { key: 'actions', label: 'Actions' }
+    ]
+    const wrapper = mount(DataTable, {
+      props: {
+        columns,
+        data: [{ id: 42, name: 'Work key', status: 'active', created_at: '2026-09-17', last_used_ip: '127.0.0.1' }],
+        selectable: true,
+        selectedKeys: [],
+        rowKey: 'id',
+        selectionLabel: row => `Select ${row.name}`
+      },
+      slots: {
+        'mobile-row': ({ select, ...props }) => h(KeyMobileCard, { ...props, onSelect: select }),
+        'cell-status': ({ value }) => h('span', `Status: ${value}`),
+        'cell-usage': ({ row }) => h('span', `Usage for ${row.id}`),
+        'cell-actions': ({ row }) => h('button', { onClick: () => edit(row.id) }, 'Edit')
+      }
+    })
+
+    expect(wrapper.get('.key-card-header').text()).toContain('Work keyStatus: active')
+    expect(wrapper.get('[data-field="usage"]').text()).toBe('Usage for 42')
+    expect(wrapper.get('[data-field="created_at"]').text()).toContain('2026-09-17')
+    expect(wrapper.find('[data-field="last_used_ip"]').exists()).toBe(false)
+    await wrapper.get('.key-card-actions button').trigger('click')
+    expect(edit).toHaveBeenCalledWith(42)
+    expect(wrapper.get('[data-test="select-row"]').attributes('aria-label')).toBe('Select Work key')
+    await wrapper.get('[data-test="select-row"]').setValue(true)
+    expect(wrapper.emitted('update:selectedKeys')?.at(-1)?.[0]).toEqual([42])
+
+    await wrapper.setProps({ selectedKeys: [42], columns: columns.filter(column => column.key !== 'usage') })
+    expect(wrapper.get('.key-card').classes()).toContain('is-selected')
+    expect(wrapper.find('[data-field="usage"]').exists()).toBe(false)
   })
 
   it('clears stale row and element caches when pagination replaces the row ID set', async () => {

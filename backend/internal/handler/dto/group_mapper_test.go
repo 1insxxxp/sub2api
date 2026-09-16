@@ -8,6 +8,13 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func TestGroupTagIsVisibleInUserAndAdminResponses(t *testing.T) {
+	group := &service.Group{Tag: "airp"}
+	require.Equal(t, "airp", GroupFromService(group).Tag)
+	require.Equal(t, "airp", GroupFromServiceAdmin(group).Tag)
+	require.Equal(t, "airp", GroupFromServiceShallow(group).Tag)
+}
+
 func TestGroupFromServiceAdmin_IncludesDefaultReasoningEffort(t *testing.T) {
 	t.Parallel()
 

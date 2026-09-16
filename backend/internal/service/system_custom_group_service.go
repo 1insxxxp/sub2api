@@ -92,6 +92,9 @@ func NewSystemCustomGroupService(repo SystemCustomGroupRepository, groupRepo Gro
 }
 
 func (s *SystemCustomGroupService) Create(ctx context.Context, req CreateSystemCustomGroupRequest) (*SystemCustomGroup, error) {
+	if err := ValidateGroupTag(req.Tag); err != nil {
+		return nil, err
+	}
 	name, description, days, daily, weekly, monthly, err := normalizeSystemCustomGroupFields(
 		req.Name, req.Description, req.DefaultValidityDays, req.DailyLimitUSD, req.WeeklyLimitUSD, req.MonthlyLimitUSD,
 	)
@@ -127,6 +130,7 @@ func (s *SystemCustomGroupService) Create(ctx context.Context, req CreateSystemC
 	group := &Group{
 		Name:                       name,
 		Description:                description,
+		Tag:                        req.Tag,
 		Platform:                   PlatformComposite,
 		RateMultiplier:             1,
 		IsExclusive:                true,
@@ -197,6 +201,12 @@ func (s *SystemCustomGroupService) Update(ctx context.Context, groupID int64, re
 	group := existing.Group
 	group.Name = name
 	group.Description = description
+	if req.Tag != nil {
+		if err := ValidateGroupTag(*req.Tag); err != nil {
+			return nil, err
+		}
+		group.Tag = *req.Tag
+	}
 	group.DailyLimitUSD = daily
 	group.WeeklyLimitUSD = weekly
 	group.MonthlyLimitUSD = monthly

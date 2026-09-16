@@ -100,6 +100,20 @@ func (_u *GroupUpdate) ClearDescription() *GroupUpdate {
 	return _u
 }
 
+// SetTag sets the "tag" field.
+func (_u *GroupUpdate) SetTag(v string) *GroupUpdate {
+	_u.mutation.SetTag(v)
+	return _u
+}
+
+// SetNillableTag sets the "tag" field if the given value is not nil.
+func (_u *GroupUpdate) SetNillableTag(v *string) *GroupUpdate {
+	if v != nil {
+		_u.SetTag(*v)
+	}
+	return _u
+}
+
 // SetRateMultiplier sets the "rate_multiplier" field.
 func (_u *GroupUpdate) SetRateMultiplier(v float64) *GroupUpdate {
 	_u.mutation.ResetRateMultiplier()
@@ -1727,6 +1741,11 @@ func (_u *GroupUpdate) check() error {
 			return &ValidationError{Name: "name", err: fmt.Errorf(`ent: validator failed for field "Group.name": %w`, err)}
 		}
 	}
+	if v, ok := _u.mutation.Tag(); ok {
+		if err := group.TagValidator(v); err != nil {
+			return &ValidationError{Name: "tag", err: fmt.Errorf(`ent: validator failed for field "Group.tag": %w`, err)}
+		}
+	}
 	if v, ok := _u.mutation.PeakStart(); ok {
 		if err := group.PeakStartValidator(v); err != nil {
 			return &ValidationError{Name: "peak_start", err: fmt.Errorf(`ent: validator failed for field "Group.peak_start": %w`, err)}
@@ -1824,6 +1843,9 @@ func (_u *GroupUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if _u.mutation.DescriptionCleared() {
 		_spec.ClearField(group.FieldDescription, field.TypeString)
+	}
+	if value, ok := _u.mutation.Tag(); ok {
+		_spec.SetField(group.FieldTag, field.TypeString, value)
 	}
 	if value, ok := _u.mutation.RateMultiplier(); ok {
 		_spec.SetField(group.FieldRateMultiplier, field.TypeFloat64, value)
@@ -2769,6 +2791,20 @@ func (_u *GroupUpdateOne) SetNillableDescription(v *string) *GroupUpdateOne {
 // ClearDescription clears the value of the "description" field.
 func (_u *GroupUpdateOne) ClearDescription() *GroupUpdateOne {
 	_u.mutation.ClearDescription()
+	return _u
+}
+
+// SetTag sets the "tag" field.
+func (_u *GroupUpdateOne) SetTag(v string) *GroupUpdateOne {
+	_u.mutation.SetTag(v)
+	return _u
+}
+
+// SetNillableTag sets the "tag" field if the given value is not nil.
+func (_u *GroupUpdateOne) SetNillableTag(v *string) *GroupUpdateOne {
+	if v != nil {
+		_u.SetTag(*v)
+	}
 	return _u
 }
 
@@ -4412,6 +4448,11 @@ func (_u *GroupUpdateOne) check() error {
 			return &ValidationError{Name: "name", err: fmt.Errorf(`ent: validator failed for field "Group.name": %w`, err)}
 		}
 	}
+	if v, ok := _u.mutation.Tag(); ok {
+		if err := group.TagValidator(v); err != nil {
+			return &ValidationError{Name: "tag", err: fmt.Errorf(`ent: validator failed for field "Group.tag": %w`, err)}
+		}
+	}
 	if v, ok := _u.mutation.PeakStart(); ok {
 		if err := group.PeakStartValidator(v); err != nil {
 			return &ValidationError{Name: "peak_start", err: fmt.Errorf(`ent: validator failed for field "Group.peak_start": %w`, err)}
@@ -4526,6 +4567,9 @@ func (_u *GroupUpdateOne) sqlSave(ctx context.Context) (_node *Group, err error)
 	}
 	if _u.mutation.DescriptionCleared() {
 		_spec.ClearField(group.FieldDescription, field.TypeString)
+	}
+	if value, ok := _u.mutation.Tag(); ok {
+		_spec.SetField(group.FieldTag, field.TypeString, value)
 	}
 	if value, ok := _u.mutation.RateMultiplier(); ok {
 		_spec.SetField(group.FieldRateMultiplier, field.TypeFloat64, value)

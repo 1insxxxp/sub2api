@@ -143,7 +143,8 @@ onBeforeUnmount(() => {
 <style scoped>
 @media (max-width: 639px) {
   .endpoint-popover {
-    display: block;
+    display: grid;
+    gap: 0.625rem;
     width: 100%;
   }
 
@@ -154,6 +155,8 @@ onBeforeUnmount(() => {
     column-gap: 0.625rem;
     width: 100%;
     min-width: 0;
+    min-height: 2.75rem;
+    padding: 0.625rem 0.75rem;
   }
 
   .endpoint-name {
@@ -185,6 +188,23 @@ onBeforeUnmount(() => {
     grid-column: 2;
     grid-row: 1;
     width: 100%;
+    gap: 0.5rem;
+  }
+
+  .endpoint-content > button,
+  .endpoint-content > a {
+    display: inline-flex;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: center;
+    width: 1.75rem;
+    height: 1.75rem;
+  }
+
+  .endpoint-content > button > svg,
+  .endpoint-content > a > svg {
+    width: 0.875rem;
+    height: 0.875rem;
   }
 
   .endpoint-code {

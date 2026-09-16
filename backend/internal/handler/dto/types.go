@@ -102,6 +102,7 @@ type Group struct {
 	ID                               int64   `json:"id"`
 	Name                             string  `json:"name"`
 	Description                      string  `json:"description"`
+	Tag                              string  `json:"tag"`
 	Platform                         string  `json:"platform"`
 	RateMultiplier                   float64 `json:"rate_multiplier"`
 	EmptyResponseCompensationEnabled bool    `json:"empty_response_compensation_enabled"`

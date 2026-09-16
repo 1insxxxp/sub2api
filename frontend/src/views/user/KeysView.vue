@@ -127,12 +127,23 @@
             default-sort-order="desc"
             @sort="handleSort"
           >
+          <template #mobile-row="{ row, columns: mobileColumns, cells, selectable, selected, selectionLabel, select }">
+            <KeyMobileCard
+              :row="row"
+              :columns="mobileColumns"
+              :cells="cells"
+              :selectable="selectable"
+              :selected="selected"
+              :selection-label="selectionLabel"
+              @select="select"
+            />
+          </template>
           <template #cell-id="{ value }">
             <span class="font-mono text-xs text-gray-500 dark:text-gray-400">#{{ value }}</span>
           </template>
 
           <template #cell-key="{ value, row }">
-            <div class="flex items-center gap-2">
+            <div class="keys-key-value flex items-center gap-2">
               <code class="code text-xs">
                 {{ maskApiKey(value) }}
               </code>
@@ -158,7 +169,7 @@
           </template>
 
           <template #cell-name="{ value, row }">
-            <div class="flex items-center gap-1.5">
+            <div class="keys-name flex items-center gap-1.5">
               <span class="font-medium text-gray-900 dark:text-white">{{ value }}</span>
               <Icon
                 v-if="row.ip_whitelist?.length > 0 || row.ip_blacklist?.length > 0"
@@ -176,7 +187,7 @@
                 :ref="(el) => setGroupButtonRef(row.id, el)"
                 @click="openGroupSelector(row)"
                 data-test="group-selector-trigger"
-                class="-mx-2 -my-1 flex max-w-full min-w-0 flex-wrap cursor-pointer items-center gap-2 rounded-lg px-2 py-1 transition-all duration-200 hover:bg-gray-100 dark:hover:bg-dark-700"
+                class="keys-group-selector -mx-2 -my-1 flex max-w-full min-w-0 flex-wrap cursor-pointer items-center gap-2 rounded-lg px-2 py-1 transition-all duration-200 hover:bg-gray-100 dark:hover:bg-dark-700"
                 :title="t('keys.clickToChangeGroup')"
               >
                 <GroupBadge
@@ -201,7 +212,7 @@
                 <span v-else class="text-sm text-gray-400 dark:text-dark-500">{{
                   t('keys.noGroup')
                 }}</span>
-                <span class="text-xs text-gray-500 dark:text-gray-400">{{ t('keys.selectGroup') }}</span>
+                <span class="keys-group-hint text-xs text-gray-500 dark:text-gray-400">{{ t('keys.selectGroup') }}</span>
                 <svg
                   class="h-3.5 w-3.5 text-gray-400 opacity-60 transition-opacity group-hover/dropdown:opacity-100"
                   fill="none"
@@ -233,21 +244,21 @@
           </template>
 
           <template #cell-usage="{ row }">
-            <div class="text-sm">
-              <div class="flex items-center gap-1.5">
+            <div class="keys-usage text-sm">
+              <div class="keys-usage-period flex items-center gap-1.5">
                 <span class="text-gray-500 dark:text-gray-400">{{ t('keys.today') }}:</span>
                 <span class="font-medium text-gray-900 dark:text-white">
                   ${{ (usageStats[row.id]?.today_actual_cost ?? 0).toFixed(4) }}
                 </span>
               </div>
-              <div class="mt-0.5 flex items-center gap-1.5">
+              <div class="keys-usage-period mt-0.5 flex items-center gap-1.5">
                 <span class="text-gray-500 dark:text-gray-400">{{ t('keys.total') }}:</span>
                 <span class="font-medium text-gray-900 dark:text-white">
                   ${{ (usageStats[row.id]?.total_actual_cost ?? 0).toFixed(4) }}
                 </span>
               </div>
               <!-- Quota progress (if quota is set) -->
-              <div v-if="row.quota > 0" class="mt-1.5">
+              <div v-if="row.quota > 0" class="keys-quota mt-1.5">
                 <div class="flex items-center gap-1.5">
                   <span class="text-gray-500 dark:text-gray-400">{{ t('keys.quota') }}:</span>
                   <span :class="[
@@ -415,10 +426,12 @@
           </template>
 
           <template #cell-actions="{ row }">
-            <div class="flex items-center gap-1">
+            <div class="keys-row-actions flex items-center gap-1">
               <!-- Use Key Button -->
               <button
                 @click="openUseKeyModal(row)"
+                :title="t('keys.useKey')"
+                :aria-label="t('keys.useKey')"
                 class="flex flex-col items-center gap-0.5 rounded-lg p-1.5 text-gray-500 transition-colors hover:bg-green-50 hover:text-green-600 dark:hover:bg-green-900/20 dark:hover:text-green-400"
               >
                 <Icon name="terminal" size="sm" />
@@ -428,14 +441,19 @@
               <button
                 v-if="!publicSettings?.hide_ccs_import_button"
                 @click="importToCcswitch(row)"
+                :title="t('keys.importToCcSwitch')"
+                :aria-label="t('keys.importToCcSwitch')"
                 class="flex flex-col items-center gap-0.5 rounded-lg p-1.5 text-gray-500 transition-colors hover:bg-blue-50 hover:text-blue-600 dark:hover:bg-blue-900/20 dark:hover:text-blue-400"
               >
                 <Icon name="upload" size="sm" />
-                <span class="text-xs">{{ t('keys.importToCcSwitch') }}</span>
+                <span class="text-xs md:hidden">{{ t('common.import') }}</span>
+                <span class="hidden text-xs md:inline">{{ t('keys.importToCcSwitch') }}</span>
               </button>
               <!-- Toggle Status Button -->
               <button
                 @click="toggleKeyStatus(row)"
+                :title="row.status === 'active' ? t('keys.disable') : t('keys.enable')"
+                :aria-label="row.status === 'active' ? t('keys.disable') : t('keys.enable')"
                 :class="[
                   'flex flex-col items-center gap-0.5 rounded-lg p-1.5 transition-colors',
                   row.status === 'active'
@@ -450,6 +468,8 @@
               <!-- Edit Button -->
               <button
                 @click="editKey(row)"
+                :title="t('common.edit')"
+                :aria-label="t('common.edit')"
                 class="flex flex-col items-center gap-0.5 rounded-lg p-1.5 text-gray-500 transition-colors hover:bg-gray-100 hover:text-primary-600 dark:hover:bg-dark-700 dark:hover:text-primary-400"
               >
                 <Icon name="edit" size="sm" />
@@ -458,6 +478,8 @@
               <!-- Delete Button -->
               <button
                 @click="confirmDelete(row)"
+                :title="t('common.delete')"
+                :aria-label="t('common.delete')"
                 class="flex flex-col items-center gap-0.5 rounded-lg p-1.5 text-gray-500 transition-colors hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-900/20 dark:hover:text-red-400"
               >
                 <Icon name="trash" size="sm" />
@@ -602,6 +624,7 @@
             </template>
             <template #option="{ option, selected }">
               <GroupOptionItem
+                :tag="(option as unknown as GroupOption).tag"
                 :name="(option as unknown as GroupOption).label"
                 :platform="(option as unknown as GroupOption).platform"
                 :subscription-type="(option as unknown as GroupOption).subscriptionType"
@@ -1289,6 +1312,7 @@
             :title="option.description || undefined"
           >
             <GroupOptionItem
+              :tag="option.tag"
               :name="option.label"
               :platform="option.platform"
               :subscription-type="option.subscriptionType"
@@ -1331,6 +1355,7 @@ import CustomGroupsManager from '@/components/custom-groups/CustomGroupsManager.
 import TablePageLayout from '@/components/layout/TablePageLayout.vue'
 import BulkEditKeysModal from '@/components/keys/BulkEditKeysModal.vue'
 	import DataTable from '@/components/common/DataTable.vue'
+import KeyMobileCard from '@/components/keys/KeyMobileCard.vue'
 	import Pagination from '@/components/common/Pagination.vue'
 	import BaseDialog from '@/components/common/BaseDialog.vue'
 	import ConfirmDialog from '@/components/common/ConfirmDialog.vue'
@@ -1363,6 +1388,7 @@ const formatDateTimeLocal = (isoDate: string): string => {
 }
 
 interface GroupOption {
+  tag?: Group['tag']
   value: number
   label: string
   description: string | null
@@ -1640,6 +1666,7 @@ const groupOptions = computed(() =>
     value: group.id,
     label: group.name,
     description: group.description,
+    tag: group.tag,
     rate: group.rate_multiplier,
     userRate: userGroupRates.value[group.id] ?? null,
     peakRateEnabled: group.peak_rate_enabled,
@@ -2318,15 +2345,5 @@ onUnmounted(() => {
   .keys-filter-controls > :first-child {
     grid-column: 1 / -1;
   }
-
-  .keys-table :global([data-mobile-table-row]) {
-    border-radius: 1rem;
-    padding: 0.875rem;
-  }
-
-  .keys-table :global([data-mobile-table-row] [data-field="name"] [data-mobile-column-value]) {
-    text-align: left;
-  }
-
 }
 </style>

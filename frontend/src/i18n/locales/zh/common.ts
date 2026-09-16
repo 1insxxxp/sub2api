@@ -1,5 +1,6 @@
 export default {
   common: {
+    groupTags: { label: '分组标签', none: '不设置', chat: '对话', image: '生图', airp: 'AIRP' },
     loading: '加载中...',
     locale: '语言',
     submitting: '提交中...',

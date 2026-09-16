@@ -26,6 +26,8 @@ const (
 	FieldName = "name"
 	// FieldDescription holds the string denoting the description field in the database.
 	FieldDescription = "description"
+	// FieldTag holds the string denoting the tag field in the database.
+	FieldTag = "tag"
 	// FieldRateMultiplier holds the string denoting the rate_multiplier field in the database.
 	FieldRateMultiplier = "rate_multiplier"
 	// FieldEmptyResponseCompensationEnabled holds the string denoting the empty_response_compensation_enabled field in the database.
@@ -281,6 +283,7 @@ var Columns = []string{
 	FieldDeletedAt,
 	FieldName,
 	FieldDescription,
+	FieldTag,
 	FieldRateMultiplier,
 	FieldEmptyResponseCompensationEnabled,
 	FieldPeakRateEnabled,
@@ -383,6 +386,10 @@ var (
 	UpdateDefaultUpdatedAt func() time.Time
 	// NameValidator is a validator for the "name" field. It is called by the builders before save.
 	NameValidator func(string) error
+	// DefaultTag holds the default value on creation for the "tag" field.
+	DefaultTag string
+	// TagValidator is a validator for the "tag" field. It is called by the builders before save.
+	TagValidator func(string) error
 	// DefaultRateMultiplier holds the default value on creation for the "rate_multiplier" field.
 	DefaultRateMultiplier float64
 	// DefaultEmptyResponseCompensationEnabled holds the default value on creation for the "empty_response_compensation_enabled" field.
@@ -534,6 +541,11 @@ func ByName(opts ...sql.OrderTermOption) OrderOption {
 // ByDescription orders the results by the description field.
 func ByDescription(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldDescription, opts...).ToFunc()
+}
+
+// ByTag orders the results by the tag field.
+func ByTag(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldTag, opts...).ToFunc()
 }
 
 // ByRateMultiplier orders the results by the rate_multiplier field.

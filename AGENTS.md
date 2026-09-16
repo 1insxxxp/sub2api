@@ -1029,6 +1029,11 @@ curl -s "${BASE}/api/v1/admin/groups/123" -H "x-api-key: ${KEY}"
 
 #### 5.4 更新分组及模型定价
 
+分组支持单选展示标签 `tag`：`chat`（对话）、`image`（生图）、`airp`（AIRP）。
+创建、更新分组均可传入；更新时省略表示保留现值，传 `""` 清空。
+例如 `PUT /api/v1/admin/groups/123` 的请求体 `{"tag":"airp"}` 只修改标签。
+标签会在管理列表、分组选择及用户侧分组卡片展示，不影响调度和计费。
+
 ```
 PUT /api/v1/admin/groups/:id
 ```

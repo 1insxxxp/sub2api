@@ -57,6 +57,7 @@ func (h *AvailableChannelHandler) featureEnabled(c *gin.Context) bool {
 // 订阅视觉加深），并展示默认倍率与高峰倍率规则；用户专属倍率前端走
 // /groups/rates，和 API 密钥页面保持一致。
 type userAvailableGroup struct {
+	Tag                string               `json:"tag"`
 	ID                 int64                `json:"id"`
 	Name               string               `json:"name"`
 	Platform           string               `json:"platform"`
@@ -291,6 +292,7 @@ func filterUserVisibleGroups(
 		visible = append(visible, userAvailableGroup{
 			ID:                 g.ID,
 			Name:               g.Name,
+			Tag:                g.Tag,
 			Platform:           g.Platform,
 			SubscriptionType:   g.SubscriptionType,
 			RateMultiplier:     g.RateMultiplier,

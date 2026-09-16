@@ -49,13 +49,25 @@
         v-for="(row, index) in sortedData"
         :key="resolveRowKey(row, index)"
         data-mobile-table-row
-        class="admin-surface rounded-2xl p-4"
-        :class="{
-          'cursor-pointer': clickableRows,
-          'border-primary-300 bg-primary-50/40 dark:border-primary-700 dark:bg-primary-900/10': selectable && isRowSelected(row, index)
-        }"
+        :class="[
+          !$slots['mobile-row'] && 'admin-surface rounded-2xl p-4',
+          {
+            'cursor-pointer': clickableRows,
+            'border-primary-300 bg-primary-50/40 dark:border-primary-700 dark:bg-primary-900/10': !$slots['mobile-row'] && selectable && isRowSelected(row, index)
+          }
+        ]"
         @click="clickableRows && emit('rowClick', row)"
       >
+        <slot
+          name="mobile-row"
+          :row="row"
+          :columns="columns.filter(column => !column.mobileHidden)"
+          :cells="$slots"
+          :selectable="selectable"
+          :selected="isRowSelected(row, index)"
+          :selection-label="getRowSelectionLabel(row, index)"
+          :select="(checked: boolean) => toggleRowSelection(row, index, checked)"
+        >
         <div class="space-y-3">
           <div v-if="selectable" class="flex justify-end">
             <input
@@ -93,6 +105,7 @@
             <slot name="cell-actions" :row="row" :value="row['actions']" :expanded="actionsExpanded"></slot>
           </div>
         </div>
+        </slot>
       </div>
     </template>
   </div>

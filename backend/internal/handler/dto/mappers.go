@@ -190,6 +190,7 @@ func groupFromServiceBase(g *service.Group) Group {
 		ID:                               g.ID,
 		Name:                             g.Name,
 		Description:                      g.Description,
+		Tag:                              g.Tag,
 		Platform:                         g.Platform,
 		RateMultiplier:                   g.RateMultiplier,
 		EmptyResponseCompensationEnabled: g.EmptyResponseCompensationEnabled,

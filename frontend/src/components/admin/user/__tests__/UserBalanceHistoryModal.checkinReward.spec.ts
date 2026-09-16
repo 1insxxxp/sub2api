@@ -134,6 +134,21 @@ describe('UserBalanceHistoryModal check-in reward history', () => {
     expect(wrapper.text()).not.toContain('Unknown')
   })
 
+  it('places the overlay above the sticky app header', async () => {
+    const BaseDialog = {
+      props: ['show', 'zIndex'],
+      template: '<div><slot /></div>'
+    }
+    const wrapper = mount(UserBalanceHistoryModal, {
+      props: { show: false, user },
+      global: {
+        stubs: { BaseDialog, Select: SelectStub, Icon: true }
+      }
+    })
+
+    expect(wrapper.findComponent(BaseDialog).props('zIndex')).toBe(60)
+  })
+
   it('renders empty-response refunds as localized balance compensation', async () => {
     getUserBalanceHistory.mockResolvedValueOnce({
       items: [

@@ -60,6 +60,7 @@ export interface CatalogModelEntry {
 }
 
 export interface CatalogGroupEntry {
+  tag?: import('@/types').GroupTag
   key: string
   channelKey: string
   id: number
@@ -483,6 +484,7 @@ function normalizeGroup(
     name: source.name,
     platform: resolvedPlatform,
     subscriptionType: source.subscription_type,
+    tag: source.tag,
     isExclusive: source.is_exclusive,
     normalRate,
     effectiveRate: effectiveRate(normalRate, cnyMultiplier),

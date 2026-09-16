@@ -124,6 +124,7 @@ func TestDuplicateGroupCopiesConfigurationDeeplyAndResetsRuntimeState(t *testing
 		ID:                               41,
 		Name:                             "高级订阅",
 		Description:                      "configuration",
+		Tag:                              "airp",
 		Platform:                         PlatformOpenAI,
 		RateMultiplier:                   1.75,
 		EmptyResponseCompensationEnabled: true,
@@ -206,6 +207,7 @@ func TestDuplicateGroupCopiesConfigurationDeeplyAndResetsRuntimeState(t *testing
 	require.Equal(t, duplicateGroupInactiveStatus, duplicate.Status)
 	require.True(t, duplicate.Hydrated, "the duplicate response is reloaded with derived counts")
 	require.Equal(t, source.Description, duplicate.Description)
+	require.Equal(t, source.Tag, duplicate.Tag)
 	require.Equal(t, source.Platform, duplicate.Platform)
 	require.Equal(t, source.RateMultiplier, duplicate.RateMultiplier)
 	require.Equal(t, source.EmptyResponseCompensationEnabled, duplicate.EmptyResponseCompensationEnabled)

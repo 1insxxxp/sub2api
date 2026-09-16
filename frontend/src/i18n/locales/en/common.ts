@@ -1,5 +1,6 @@
 export default {
   common: {
+    groupTags: { label: 'Group tag', none: 'None', chat: 'Chat', image: 'Image', airp: 'AIRP' },
     loading: 'Loading...',
     submitting: 'Submitting...',
     creating: 'Creating...',

@@ -1,17 +1,18 @@
 <template>
   <section
     data-testid="channel-group"
-    class="min-w-0 overflow-hidden rounded-2xl border border-l-4 bg-white shadow-sm [contain-intrinsic-size:auto_480px] [content-visibility:auto] dark:border-dark-600 dark:bg-dark-800"
+    class="relative min-w-0 overflow-hidden rounded-2xl border border-l-4 bg-white shadow-sm [contain-intrinsic-size:auto_480px] [content-visibility:auto] dark:border-dark-600 dark:bg-dark-800"
     :class="accentClass"
     :aria-labelledby="groupHeadingId"
   >
     <h3 :id="groupHeadingId" data-testid="group-semantic-heading" class="sr-only">
       {{ group.name }}
     </h3>
+    <GroupTagBadge :tag="group.tag" class="!absolute right-0 top-0 z-10" />
     <button
       type="button"
       data-testid="group-toggle"
-      class="flex min-h-11 w-full min-w-0 items-start justify-between gap-3 px-4 py-4 text-left transition-colors motion-reduce:transition-none hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary-500 dark:hover:bg-dark-700/60 sm:px-5 xl:hidden"
+      class="flex min-h-11 w-full min-w-0 items-start justify-between gap-3 px-4 py-4 pr-16 text-left transition-colors motion-reduce:transition-none hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary-500 dark:hover:bg-dark-700/60 sm:px-5 sm:pr-20 xl:hidden"
       :aria-expanded="expanded"
       :aria-controls="bodyId"
       @click="toggleExpanded"
@@ -67,7 +68,7 @@
 
     <header
       data-testid="group-desktop-header"
-      class="hidden min-w-0 items-start justify-between gap-3 px-5 py-4 xl:flex"
+      class="hidden min-w-0 items-start justify-between gap-3 px-5 py-4 pr-20 xl:flex"
     >
       <span class="min-w-0 flex-1">
         <GroupBadge
@@ -148,6 +149,7 @@ import type { GroupPlatform, SubscriptionType } from '@/types'
 import { useAppStore } from '@/stores/app'
 import { formatPeakRateWindow, serverTimezoneLabel } from '@/utils/peak-rate'
 import GroupBadge from '@/components/common/GroupBadge.vue'
+import GroupTagBadge from '@/components/common/GroupTagBadge.vue'
 import AvailableChannelModelPrice from './AvailableChannelModelPrice.vue'
 import type { CatalogGroupEntry } from './availableChannelCatalog'
 

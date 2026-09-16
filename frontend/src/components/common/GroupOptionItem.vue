@@ -1,11 +1,13 @@
 <template>
   <div
     data-test="group-option-layout"
-    class="flex min-w-0 flex-1 flex-col items-stretch gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-3"
+    class="relative flex min-w-0 flex-1 flex-col items-stretch gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-3"
   >
+    <GroupTagBadge :tag="tag" class="!absolute right-0 top-0" />
     <!-- Left: name + description -->
     <div
       class="flex min-w-0 flex-1 flex-col items-start"
+      :class="{ 'pr-14': tag }"
       :title="description || undefined"
     >
       <!-- Row 1: platform badge (name bold) -->
@@ -66,7 +68,8 @@
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import GroupBadge from './GroupBadge.vue'
-import type { SubscriptionType, GroupPlatform } from '@/types'
+import GroupTagBadge from './GroupTagBadge.vue'
+import type { SubscriptionType, GroupPlatform, GroupTag } from '@/types'
 import { formatVisibleRateMultiplier } from '@/utils/formatters'
 import { useAppStore } from '@/stores/app'
 import { formatPeakRateWindow, serverTimezoneLabel } from '@/utils/peak-rate'
@@ -75,6 +78,7 @@ const { t } = useI18n()
 
 interface Props {
   name: string
+  tag?: GroupTag
   platform: GroupPlatform
   subscriptionType?: SubscriptionType
   rateMultiplier?: number

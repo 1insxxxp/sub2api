@@ -103,12 +103,14 @@ describe('user RedeemView balance transfer migration', () => {
     getPublicSettings.mockResolvedValue({ contact_info: '' })
   })
 
-  it('exposes balance-to-code generation for an explicitly enabled user', async () => {
+  it('keeps redemption available without duplicating code generation for an enabled user', async () => {
     const wrapper = mountRedeemView()
     await flushPromises()
 
-    expect(wrapper.find('[data-test="balance-transfer-panel"]').exists()).toBe(true)
-    expect(getUserGenerated).toHaveBeenCalledWith({ page: 1, page_size: 10 })
+    expect(wrapper.find('input#code').exists()).toBe(true)
+    expect(wrapper.find('[data-test="balance-transfer-panel"]').exists()).toBe(false)
+    expect(wrapper.find('[data-test="generated-codes-modal"]').exists()).toBe(false)
+    expect(getUserGenerated).not.toHaveBeenCalled()
     expect(getHistory).toHaveBeenCalledWith({ page: 1, page_size: 10 })
   })
 

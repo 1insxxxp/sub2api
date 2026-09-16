@@ -101,6 +101,7 @@ func createGroupRecord(ctx context.Context, client *dbent.Client, groupIn *servi
 	builder := client.Group.Create().
 		SetName(groupIn.Name).
 		SetDescription(groupIn.Description).
+		SetTag(groupIn.Tag).
 		SetPlatform(groupIn.Platform).
 		SetRateMultiplier(groupIn.RateMultiplier).
 		SetEmptyResponseCompensationEnabled(groupIn.EmptyResponseCompensationEnabled).
@@ -292,6 +293,7 @@ func (r *groupRepository) Update(ctx context.Context, groupIn *service.Group) er
 	builder := r.client.Group.UpdateOneID(groupIn.ID).
 		SetName(groupIn.Name).
 		SetDescription(groupIn.Description).
+		SetTag(groupIn.Tag).
 		SetPlatform(groupIn.Platform).
 		SetRateMultiplier(groupIn.RateMultiplier).
 		SetEmptyResponseCompensationEnabled(groupIn.EmptyResponseCompensationEnabled).

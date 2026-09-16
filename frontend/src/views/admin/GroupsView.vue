@@ -140,10 +140,13 @@
           default-sort-order="asc"
           @sort="handleSort"
         >
-          <template #cell-name="{ value }">
-            <span class="font-medium text-gray-900 dark:text-white">{{
-              value
-            }}</span>
+          <template #cell-name="{ value, row }">
+            <div class="flex min-w-0 items-start justify-between gap-3">
+              <span class="font-medium text-gray-900 dark:text-white">{{
+                value
+              }}</span>
+              <GroupTagBadge :tag="row.tag" />
+            </div>
           </template>
 
           <template #cell-id="{ value }">
@@ -547,6 +550,7 @@
             data-tour="group-form-name"
           />
         </div>
+        <GroupTagField v-model="createForm.tag" name="create-group-tag" />
         <div>
           <label class="input-label">{{
             t("admin.groups.form.description")
@@ -2286,6 +2290,7 @@
             data-tour="edit-group-form-name"
           />
         </div>
+        <GroupTagField v-model="editForm.tag" name="edit-group-tag" />
         <div>
           <label class="input-label">{{
             t("admin.groups.form.description")
@@ -4529,6 +4534,7 @@ import type {
   CompositeRouteEndpoint,
   CompositeRouteMatchType,
   GroupPlatform,
+  GroupTag,
   SystemCustomGroup,
   SubscriptionType,
 } from "@/types";
@@ -4549,6 +4555,9 @@ import Select from "@/components/common/Select.vue";
 import PlatformIcon from "@/components/common/PlatformIcon.vue";
 import Icon from "@/components/icons/Icon.vue";
 import GroupRateMultipliersModal from "@/components/admin/group/GroupRateMultipliersModal.vue";
+import GroupTagField from "@/components/admin/group/GroupTagField.vue";
+import GroupTagBadge from "@/components/common/GroupTagBadge.vue";
+import CodexManifestAccountsField from "@/components/admin/group/CodexManifestAccountsField.vue";
 import GroupRPMOverridesModal from "@/components/admin/group/GroupRPMOverridesModal.vue";
 import GroupCapacityBadge from "@/components/common/GroupCapacityBadge.vue";
 import ReasoningEffortPolicyFields from "@/components/admin/group/ReasoningEffortPolicyFields.vue";
@@ -5196,6 +5205,7 @@ const submitEditAllowlistCustomEntry = () => {
 };
 
 const createForm = reactive({
+  tag: "" as GroupTag,
   name: "",
   description: "",
   platform: "anthropic" as GroupPlatform,
@@ -5564,6 +5574,7 @@ const convertApiFormatToRoutingRules = async (
 };
 
 const editForm = reactive({
+  tag: "" as GroupTag,
   name: "",
   description: "",
   platform: "anthropic" as GroupPlatform,
@@ -6210,6 +6221,7 @@ const closeCreateModal = () => {
   clearAllAccountSearchState();
   createForm.name = "";
   createForm.description = "";
+  createForm.tag = "";
   createForm.platform = "anthropic";
   createForm.rate_multiplier = 1.0;
   createForm.empty_response_compensation_enabled = false;
@@ -6458,6 +6470,7 @@ const handleCreateGroup = async () => {
       ? {
           name: createForm.name,
           description: createForm.description,
+          tag: createForm.tag,
           platform: createForm.platform,
         }
       : requestData;
@@ -6486,6 +6499,7 @@ const handleEdit = async (group: AdminGroup) => {
   editingGroup.value = group;
   editForm.name = group.name;
   editForm.description = group.description || "";
+  editForm.tag = group.tag || "";
   editForm.platform = group.platform;
   editForm.rate_multiplier = group.rate_multiplier;
   editForm.empty_response_compensation_enabled =
@@ -6699,6 +6713,8 @@ const handleUpdateGroup = async () => {
     // 转换 fallback_group_id: null -> 0 (后端使用 0 表示清除)
     const payload = {
       ...editForm,
+      // 显式保留标签，确保高级模式完整表单提交时不会遗漏该字段。
+      tag: editForm.tag,
       force_openai_fast: normalizeGroupOpenAIFast(
         editForm.platform,
         editForm.force_openai_fast,
@@ -6823,6 +6839,7 @@ const handleUpdateGroup = async () => {
       ? {
           name: editForm.name,
           description: editForm.description,
+          tag: editForm.tag,
         }
       : payload;
     const updatedGroup = await adminAPI.groups.update(

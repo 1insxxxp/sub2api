@@ -641,10 +641,13 @@ export interface ReasoningEffortMapping {
   model?: string
 }
 
+export type GroupTag = '' | 'chat' | 'image' | 'airp'
+
 export interface Group {
   id: number
   name: string
   description: string | null
+  tag?: GroupTag
   platform: GroupPlatform
   rate_multiplier: number
   empty_response_compensation_enabled: boolean
@@ -763,6 +766,7 @@ export interface SystemCustomGroupModelInput {
 }
 
 export interface CreateSystemCustomGroupRequest {
+  tag?: GroupTag
   name: string
   description: string | null
   daily_limit_usd: number | null
@@ -778,6 +782,7 @@ export interface CreateSystemCustomGroupRequest {
 export type UpdateSystemCustomGroupRequest = CreateSystemCustomGroupRequest
 
 export interface SystemCustomGroupContainer {
+  tag?: GroupTag
   id: number
   name: string
   description: string
@@ -1031,6 +1036,7 @@ export interface CustomGroupCandidate {
 
 export interface CreateGroupRequest {
   name: string
+  tag?: GroupTag
   description?: string | null
   platform?: GroupPlatform
   rate_multiplier?: number
@@ -1099,6 +1105,7 @@ export interface CreateGroupRequest {
 
 export interface UpdateGroupRequest {
   name?: string
+  tag?: GroupTag
   description?: string | null
   platform?: GroupPlatform
   rate_multiplier?: number

@@ -176,6 +176,19 @@ function mountView() {
 }
 
 describe('GroupsView duplicate action', () => {
+  it.each(['chat', 'image', 'airp', ''])('submits and clears the group tag: %s', async (tag) => {
+    updateGroup.mockResolvedValue({ ...sourceGroup, tag })
+    const wrapper = mountView()
+    await flushPromises()
+    await wrapper.findAll('button').find(button => button.text() === 'common.edit')!.trigger('click')
+    await flushPromises()
+    await wrapper.get(`input[name="edit-group-tag"][value="${tag}"]`).setValue(true)
+    await wrapper.get('#edit-group-form').trigger('submit')
+    await flushPromises()
+    expect(updateGroup).toHaveBeenCalledWith(42, expect.objectContaining({ tag }))
+    wrapper.unmount()
+  })
+
   beforeEach(() => {
     authState.isSimpleMode = false
     localStorage.clear()

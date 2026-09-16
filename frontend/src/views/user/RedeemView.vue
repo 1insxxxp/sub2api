@@ -103,401 +103,11 @@
         </div>
       </section>
 
-      <!-- Balance Transfer Code Generator -->
-      <section
-        v-if="canGenerateBalanceTransferCodes"
-        data-test="balance-transfer-panel"
-        class="brand-surface redeem-transfer-panel"
-      >
-        <div class="p-5 sm:p-6">
-          <div class="redeem-panel-header">
-            <div class="brand-floating-icon redeem-panel-icon">
-              <Icon name="swap" size="md" />
-            </div>
-            <div class="min-w-0">
-              <h2 class="text-base font-semibold text-slate-950 dark:text-white">
-                {{ t('redeem.balanceTransfer.title') }}
-              </h2>
-              <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">
-                {{ t('redeem.balanceTransfer.subtitle') }}
-              </p>
-            </div>
-          </div>
-
-          <form
-            data-test="balance-transfer-form"
-            class="redeem-transfer-form"
-            @submit.prevent="handleGenerateBalanceTransferCode"
-          >
-            <div class="grid grid-cols-1 gap-3 sm:grid-cols-[minmax(0,1fr)_7.5rem_9.5rem]">
-              <div>
-                <label for="balance-transfer-amount" class="redeem-transfer-label">
-                  {{ t('redeem.balanceTransfer.amount') }}
-                </label>
-                <input
-                  id="balance-transfer-amount"
-                  v-model="transferForm.amount"
-                  data-test="balance-transfer-amount"
-                  type="number"
-                  min="0.01"
-                  step="0.01"
-                  inputmode="decimal"
-                  class="redeem-transfer-field"
-                  :placeholder="t('redeem.balanceTransfer.amountPlaceholder')"
-                  :disabled="generatingTransferCode"
-                />
-              </div>
-              <div>
-                <label for="balance-transfer-count" class="redeem-transfer-label">
-                  {{ t('redeem.balanceTransfer.count') }}
-                </label>
-                <input
-                  id="balance-transfer-count"
-                  v-model.number="transferForm.count"
-                  data-test="balance-transfer-count"
-                  type="number"
-                  min="1"
-                  max="100"
-                  step="1"
-                  class="redeem-transfer-field"
-                  :disabled="generatingTransferCode"
-                />
-              </div>
-              <div>
-                <label for="balance-transfer-expiry" class="redeem-transfer-label">
-                  {{ t('redeem.balanceTransfer.expiresInDays') }}
-                </label>
-                <input
-                  id="balance-transfer-expiry"
-                  v-model.number="transferForm.expires_in_days"
-                  data-test="balance-transfer-expiry"
-                  type="number"
-                  min="1"
-                  max="3650"
-                  step="1"
-                  class="redeem-transfer-field"
-                  :disabled="generatingTransferCode"
-                />
-              </div>
-            </div>
-
-            <div>
-              <label for="balance-transfer-notes" class="redeem-transfer-label">
-                {{ t('redeem.balanceTransfer.notes') }}
-              </label>
-              <input
-                id="balance-transfer-notes"
-                v-model="transferForm.notes"
-                data-test="balance-transfer-notes"
-                type="text"
-                maxlength="120"
-                class="redeem-transfer-field"
-                :placeholder="t('redeem.balanceTransfer.notesPlaceholder')"
-                :disabled="generatingTransferCode"
-              />
-            </div>
-
-            <label class="redeem-transfer-toggle">
-              <input
-                v-model="transferForm.single_use_per_user"
-                data-test="balance-transfer-single-use"
-                type="checkbox"
-                :disabled="generatingTransferCode"
-              />
-              <span>
-                <strong>{{ t('redeem.balanceTransfer.singleUsePerUser') }}</strong>
-                <small>{{ t('redeem.balanceTransfer.singleUsePerUserHint') }}</small>
-              </span>
-            </label>
-
-            <p
-              v-if="transferErrorMessage"
-              data-test="balance-transfer-error"
-              class="text-sm font-medium text-red-600 dark:text-red-400"
-            >
-              {{ transferErrorMessage }}
-            </p>
-
-            <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <p class="text-sm text-slate-500 dark:text-slate-400">
-                {{ t('redeem.balanceTransfer.availableBalance') }}:
-                <span class="font-semibold text-slate-700 dark:text-slate-200">
-                  ${{ availableBalance.toFixed(2) }}
-                </span>
-              </p>
-              <button
-                type="submit"
-                class="btn btn-primary redeem-transfer-submit"
-                :disabled="generatingTransferCode"
-              >
-                <svg
-                  v-if="generatingTransferCode"
-                  class="-ml-1 mr-2 h-5 w-5 animate-spin"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                >
-                  <circle
-                    class="opacity-25"
-                    cx="12"
-                    cy="12"
-                    r="10"
-                    stroke="currentColor"
-                    stroke-width="4"
-                  ></circle>
-                  <path
-                    class="opacity-75"
-                    fill="currentColor"
-                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                  ></path>
-                </svg>
-                <Icon v-else name="gift" size="md" class="mr-2" />
-                {{
-                  generatingTransferCode
-                    ? t('redeem.balanceTransfer.generating')
-                    : t('redeem.balanceTransfer.generate')
-                }}
-              </button>
-            </div>
-          </form>
-
-          <div class="redeem-generated-list">
-            <div class="redeem-generated-toolbar">
-              <div class="min-w-0">
-                <h3 class="text-sm font-semibold text-slate-900 dark:text-white">
-                  {{ t('redeem.balanceTransfer.listTitle') }}
-                </h3>
-                <p
-                  v-if="selectedGeneratedCodeIds.length > 0"
-                  class="mt-1 text-xs text-slate-500 dark:text-slate-400"
-                >
-                  {{
-                    t('redeem.balanceTransfer.selectedCount', {
-                      count: selectedGeneratedCodeIds.length
-                    })
-                  }}
-                </p>
-              </div>
-              <div class="redeem-generated-toolbar-actions">
-                <label
-                  v-if="deletableGeneratedCodes.length > 0"
-                  class="redeem-generated-select-all"
-                >
-                  <input
-                    data-test="select-all-generated-codes"
-                    type="checkbox"
-                    :checked="allDeletableGeneratedCodesSelected"
-                    :disabled="batchDeletingGeneratedCodes"
-                    @change="handleSelectAllGeneratedCodes"
-                  />
-                  <span>{{ t('redeem.balanceTransfer.selectAll') }}</span>
-                </label>
-                <button
-                  type="button"
-                  data-test="delete-selected-generated-codes"
-                  class="btn btn-secondary flex items-center gap-2 px-3 py-2 text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
-                  :disabled="selectedGeneratedCodeIds.length === 0 || batchDeletingGeneratedCodes"
-                  @click="handleDeleteSelectedGeneratedCodes"
-                >
-                  <Icon
-                    :name="batchDeletingGeneratedCodes ? 'refresh' : 'trash'"
-                    size="sm"
-                    :class="batchDeletingGeneratedCodes ? 'animate-spin' : ''"
-                  />
-                  <span>{{ t('redeem.balanceTransfer.batchDelete') }}</span>
-                </button>
-                <button
-                  type="button"
-                  class="btn btn-secondary px-3 py-2"
-                  :disabled="loadingGeneratedCodes"
-                  @click="fetchGeneratedCodes"
-                >
-                  <Icon name="refresh" size="sm" />
-                </button>
-              </div>
-            </div>
-
-            <div v-if="loadingGeneratedCodes" class="flex items-center justify-center py-6">
-              <svg class="h-5 w-5 animate-spin text-primary-500" fill="none" viewBox="0 0 24 24">
-                <circle
-                  class="opacity-25"
-                  cx="12"
-                  cy="12"
-                  r="10"
-                  stroke="currentColor"
-                  stroke-width="4"
-                ></circle>
-                <path
-                  class="opacity-75"
-                  fill="currentColor"
-                  d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                ></path>
-              </svg>
-            </div>
-
-            <div v-else-if="generatedCodes.length > 0" class="mt-3 space-y-3">
-              <div
-                v-for="item in generatedCodes"
-                :key="item.id"
-                class="redeem-generated-row"
-              >
-                <label
-                  v-if="canDeleteGeneratedCode(item)"
-                  class="redeem-generated-row-select"
-                >
-                  <input
-                    v-model="selectedGeneratedCodeIds"
-                    :value="item.id"
-                    type="checkbox"
-                    :data-test="`select-generated-code-${item.id}`"
-                    :disabled="isDeletingGeneratedCode(item.id) || batchDeletingGeneratedCodes"
-                  />
-                </label>
-                <span v-else class="redeem-generated-row-select-spacer"></span>
-                <div class="min-w-0 flex-1">
-                  <div class="flex flex-wrap items-center gap-2">
-                    <span class="break-all font-mono text-sm font-semibold text-slate-950 dark:text-white">
-                      {{ item.code }}
-                    </span>
-                    <span :class="getGeneratedStatusClass(item.status)">
-                      {{ getGeneratedStatusLabel(item.status) }}
-                    </span>
-                    <span
-                      v-if="item.single_use_per_user"
-                      class="inline-flex items-center rounded-md bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-700 dark:bg-amber-900/30 dark:text-amber-300"
-                    >
-                      {{ t('redeem.balanceTransfer.singleUseBadge') }}
-                    </span>
-                  </div>
-                  <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">
-                    ${{ item.value.toFixed(2) }} ·
-                    {{ t('redeem.balanceTransfer.expiresAt') }}:
-                    {{ formatGeneratedExpiry(item) }}
-                  </p>
-                </div>
-                <div class="redeem-generated-actions">
-                  <button
-                    type="button"
-                    class="btn btn-secondary shrink-0 px-3 py-2"
-                    @click="copyTransferCode(item.code)"
-                  >
-                    <Icon name="copy" size="sm" />
-                  </button>
-                  <button
-                    v-if="canDeleteGeneratedCode(item)"
-                    type="button"
-                    class="btn btn-secondary shrink-0 px-3 py-2 text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
-                    :data-test="`delete-generated-code-${item.id}`"
-                    :disabled="isDeletingGeneratedCode(item.id)"
-                    @click="handleDeleteGeneratedCode(item)"
-                  >
-                    <Icon name="xCircle" size="sm" />
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            <p v-else class="py-5 text-center text-sm text-slate-500 dark:text-slate-400">
-              {{ t('redeem.balanceTransfer.empty') }}
-            </p>
-
-            <Pagination
-              v-if="!loadingGeneratedCodes && generatedPagination.total > generatedPagination.page_size"
-              class="mt-3 overflow-hidden rounded-lg border border-slate-200 dark:border-dark-700"
-              :page="generatedPagination.page"
-              :total="generatedPagination.total"
-              :page-size="generatedPagination.page_size"
-              :page-size-options="redeemPageSizeOptions"
-              @update:page="handleGeneratedPageChange"
-              @update:pageSize="handleGeneratedPageSizeChange"
-            />
-          </div>
-        </div>
-      </section>
-
-      <transition name="fade">
-        <div
-          v-if="showGeneratedCodesModal"
-          data-test="generated-codes-modal"
-          class="redeem-generated-modal-backdrop"
-        >
-          <div class="redeem-generated-modal" role="dialog" aria-modal="true">
-            <div class="redeem-generated-modal-header">
-              <div class="flex items-center gap-3">
-                <div class="redeem-generated-modal-icon">
-                  <Icon name="check" size="md" />
-                </div>
-                <div class="min-w-0">
-                  <h2 class="text-base font-semibold text-slate-950 dark:text-white">
-                    {{ t('redeem.balanceTransfer.generatedModalTitle') }}
-                  </h2>
-                  <p class="mt-0.5 text-sm text-slate-500 dark:text-slate-400">
-                    {{
-                      t('redeem.balanceTransfer.generatedModalSubtitle', {
-                        count: generatedCodeResults.length
-                      })
-                    }}
-                  </p>
-                </div>
-              </div>
-              <button
-                type="button"
-                class="redeem-generated-modal-close"
-                :aria-label="t('common.close')"
-                @click="closeGeneratedCodesModal"
-              >
-                <Icon name="x" size="md" />
-              </button>
-            </div>
-
-            <div class="redeem-generated-modal-body">
-              <div class="redeem-generated-modal-code-list">
-                <div
-                  v-for="item in generatedCodeResults"
-                  :key="item.id"
-                  class="redeem-generated-modal-code-row"
-                >
-                  <span class="break-all font-mono text-sm font-semibold text-slate-950 dark:text-white">
-                    {{ item.code }}
-                  </span>
-                  <span
-                    v-if="item.single_use_per_user"
-                    class="inline-flex shrink-0 items-center rounded-md bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-700 dark:bg-amber-900/30 dark:text-amber-300"
-                  >
-                    {{ t('redeem.balanceTransfer.singleUseBadge') }}
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            <div class="redeem-generated-modal-footer">
-              <button
-                type="button"
-                data-test="generated-codes-copy-all"
-                class="btn btn-secondary flex items-center"
-                @click="copyGeneratedCodeResults"
-              >
-                <Icon name="copy" size="sm" class="mr-2" />
-                {{ t('redeem.balanceTransfer.copyAll') }}
-              </button>
-              <button
-                type="button"
-                data-test="generated-codes-download"
-                class="btn btn-primary flex items-center"
-                @click="downloadGeneratedCodeResults"
-              >
-                <Icon name="download" size="sm" class="mr-2" />
-                {{ t('redeem.balanceTransfer.download') }}
-              </button>
-            </div>
-          </div>
-        </div>
-      </transition>
-
       <transition name="fade">
         <div
           v-if="showSubscriptionRedeemGuide"
           data-test="subscription-redeem-guide"
-          class="redeem-generated-modal-backdrop"
+          class="redeem-subscription-guide-backdrop"
         >
           <div
             class="redeem-subscription-guide-modal"
@@ -537,7 +147,7 @@
               <button
                 type="button"
                 data-test="subscription-guide-close"
-                class="redeem-generated-modal-close"
+                class="redeem-subscription-guide-close"
                 :aria-label="t('common.close')"
                 @click="closeSubscriptionRedeemGuide"
               >
@@ -931,7 +541,7 @@ import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { useAppStore } from '@/stores/app'
 import { useSubscriptionStore } from '@/stores/subscriptions'
-import { redeemAPI, authAPI, type GeneratedRedeemCode, type RedeemHistoryItem } from '@/api'
+import { redeemAPI, authAPI, type RedeemHistoryItem } from '@/api'
 import { lotteryAPI, type LotteryDraw } from '@/api/lottery'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import Pagination from '@/components/common/Pagination.vue'
@@ -947,11 +557,6 @@ const appStore = useAppStore()
 const subscriptionStore = useSubscriptionStore()
 
 const user = computed(() => authStore.user)
-const availableBalance = computed(() => user.value?.balance || 0)
-const canGenerateBalanceTransferCodes = computed(
-  () => user.value?.balance_redeem_code_enabled === true
-)
-
 const redeemCode = ref('')
 const submitting = ref(false)
 const redeemResult = ref<{
@@ -1005,28 +610,6 @@ const historyPagination = reactive({
   total: 0
 })
 const emptyResponseHistoryType = 'empty_response'
-
-const transferForm = reactive({
-  amount: '',
-  count: 1,
-  expires_in_days: 30,
-  notes: '',
-  single_use_per_user: false
-})
-const generatingTransferCode = ref(false)
-const generatedCodeResults = ref<GeneratedRedeemCode[]>([])
-const showGeneratedCodesModal = ref(false)
-const generatedCodes = ref<GeneratedRedeemCode[]>([])
-const loadingGeneratedCodes = ref(false)
-const deletingGeneratedCodeIds = ref<number[]>([])
-const selectedGeneratedCodeIds = ref<number[]>([])
-const batchDeletingGeneratedCodes = ref(false)
-const transferErrorMessage = ref('')
-const generatedPagination = reactive({
-  page: 1,
-  page_size: 10,
-  total: 0
-})
 
 // Helper functions for history display
 const isBalanceType = (type: string) => {
@@ -1149,244 +732,6 @@ const handleHistoryPageSizeChange = (pageSize: number) => {
   fetchHistory()
 }
 
-const fetchGeneratedCodes = async () => {
-  if (!canGenerateBalanceTransferCodes.value) {
-    generatedCodes.value = []
-    generatedPagination.total = 0
-    generatedPagination.page = 1
-    return
-  }
-
-  loadingGeneratedCodes.value = true
-  try {
-    const response = await redeemAPI.getUserGenerated({
-      page: generatedPagination.page,
-      page_size: generatedPagination.page_size
-    })
-    generatedCodes.value = response.items
-    generatedPagination.total = response.total
-    generatedPagination.page = response.page
-    generatedPagination.page_size = response.page_size
-  } catch (error) {
-    console.error('Failed to fetch generated redeem codes:', error)
-    appStore.showError(t('redeem.balanceTransfer.failedToLoad'))
-  } finally {
-    loadingGeneratedCodes.value = false
-  }
-}
-
-const handleGeneratedPageChange = (page: number) => {
-  generatedPagination.page = page
-  fetchGeneratedCodes()
-}
-
-const handleGeneratedPageSizeChange = (pageSize: number) => {
-  generatedPagination.page_size = pageSize
-  generatedPagination.page = 1
-  fetchGeneratedCodes()
-}
-
-const handleGenerateBalanceTransferCode = async () => {
-  const amount = Number(transferForm.amount)
-  const count = Number(transferForm.count)
-  const expiresInDays = Number(transferForm.expires_in_days)
-  transferErrorMessage.value = ''
-
-  if (!Number.isFinite(amount) || amount <= 0) {
-    const message = t('redeem.balanceTransfer.invalidAmount')
-    transferErrorMessage.value = message
-    appStore.showError(message)
-    return
-  }
-  if (!Number.isInteger(count) || count < 1 || count > 100) {
-    const message = t('redeem.balanceTransfer.invalidCount')
-    transferErrorMessage.value = message
-    appStore.showError(message)
-    return
-  }
-  if (amount * count > availableBalance.value) {
-    const message = t('redeem.balanceTransfer.insufficientBalance')
-    transferErrorMessage.value = message
-    appStore.showError(message)
-    return
-  }
-  if (!Number.isInteger(expiresInDays) || expiresInDays < 1 || expiresInDays > 3650) {
-    const message = t('redeem.balanceTransfer.invalidExpiry')
-    transferErrorMessage.value = message
-    appStore.showError(message)
-    return
-  }
-
-  generatingTransferCode.value = true
-  try {
-    const codes = await redeemAPI.generateUserBalanceTransferCodes({
-      amount,
-      count,
-      expires_in_days: expiresInDays,
-      notes: transferForm.notes.trim(),
-      single_use_per_user: transferForm.single_use_per_user
-    })
-    generatedCodeResults.value = codes
-    showGeneratedCodesModal.value = codes.length > 0
-    transferForm.amount = ''
-    transferForm.notes = ''
-    await authStore.refreshUser()
-    generatedPagination.page = 1
-    await fetchGeneratedCodes()
-    appStore.showSuccess(t('redeem.balanceTransfer.generated'))
-  } catch (error: any) {
-    const message = extractApiErrorMessage(error, t('redeem.balanceTransfer.failedToGenerate'))
-    transferErrorMessage.value = message
-    appStore.showError(message)
-  } finally {
-    generatingTransferCode.value = false
-  }
-}
-
-const canDeleteGeneratedCode = (item: GeneratedRedeemCode) => {
-  return item.used_by == null && (item.status === 'unused' || item.status === 'expired')
-}
-
-const deletableGeneratedCodes = computed(() => generatedCodes.value.filter(canDeleteGeneratedCode))
-
-const allDeletableGeneratedCodesSelected = computed(() => {
-  if (deletableGeneratedCodes.value.length === 0) {
-    return false
-  }
-  const selected = new Set(selectedGeneratedCodeIds.value)
-  return deletableGeneratedCodes.value.every((item) => selected.has(item.id))
-})
-
-const generatedCodeResultsText = computed(() => {
-  return generatedCodeResults.value.map((item) => item.code).join('\n')
-})
-
-const isDeletingGeneratedCode = (id: number) => {
-  return deletingGeneratedCodeIds.value.includes(id)
-}
-
-const handleDeleteGeneratedCode = async (item: GeneratedRedeemCode) => {
-  if (!canDeleteGeneratedCode(item) || isDeletingGeneratedCode(item.id)) {
-    return
-  }
-  if (!window.confirm(t('redeem.balanceTransfer.deleteConfirm'))) {
-    return
-  }
-
-  deletingGeneratedCodeIds.value = [...deletingGeneratedCodeIds.value, item.id]
-  try {
-    await redeemAPI.deleteUserGenerated(item.id)
-    await authStore.refreshUser()
-    generatedPagination.page = 1
-    await fetchGeneratedCodes()
-    selectedGeneratedCodeIds.value = selectedGeneratedCodeIds.value.filter((id) => id !== item.id)
-    appStore.showSuccess(t('redeem.balanceTransfer.deleted'))
-  } catch (error: any) {
-    const message = extractApiErrorMessage(error, t('redeem.balanceTransfer.failedToDelete'))
-    appStore.showError(message)
-  } finally {
-    deletingGeneratedCodeIds.value = deletingGeneratedCodeIds.value.filter((id) => id !== item.id)
-  }
-}
-
-const handleSelectAllGeneratedCodes = (event: Event) => {
-  const checked = (event.target as HTMLInputElement).checked
-  if (!checked) {
-    selectedGeneratedCodeIds.value = []
-    return
-  }
-  selectedGeneratedCodeIds.value = deletableGeneratedCodes.value.map((item) => item.id)
-}
-
-const handleDeleteSelectedGeneratedCodes = async () => {
-  const deletableIDSet = new Set(deletableGeneratedCodes.value.map((item) => item.id))
-  const ids = selectedGeneratedCodeIds.value.filter((id) => deletableIDSet.has(id))
-  if (ids.length === 0 || batchDeletingGeneratedCodes.value) {
-    return
-  }
-  if (!window.confirm(t('redeem.balanceTransfer.batchDeleteConfirm'))) {
-    return
-  }
-
-  batchDeletingGeneratedCodes.value = true
-  try {
-    await redeemAPI.deleteUserGeneratedBatch(ids)
-    selectedGeneratedCodeIds.value = []
-    await authStore.refreshUser()
-    generatedPagination.page = 1
-    await fetchGeneratedCodes()
-    appStore.showSuccess(t('redeem.balanceTransfer.batchDeleted'))
-  } catch (error: any) {
-    const message = extractApiErrorMessage(error, t('redeem.balanceTransfer.failedToBatchDelete'))
-    appStore.showError(message)
-  } finally {
-    batchDeletingGeneratedCodes.value = false
-  }
-}
-
-const copyTransferCode = async (code: string) => {
-  try {
-    await navigator.clipboard.writeText(code)
-    appStore.showSuccess(t('redeem.balanceTransfer.copied'))
-  } catch (error) {
-    console.error('Failed to copy generated redeem code:', error)
-    appStore.showError(t('redeem.balanceTransfer.copyFailed'))
-  }
-}
-
-const closeGeneratedCodesModal = () => {
-  showGeneratedCodesModal.value = false
-}
-
-const copyGeneratedCodeResults = async () => {
-  try {
-    await navigator.clipboard.writeText(generatedCodeResultsText.value)
-    appStore.showSuccess(t('redeem.balanceTransfer.copied'))
-  } catch (error) {
-    console.error('Failed to copy generated redeem codes:', error)
-    appStore.showError(t('redeem.balanceTransfer.copyFailed'))
-  }
-}
-
-const downloadGeneratedCodeResults = () => {
-  const blob = new Blob([generatedCodeResultsText.value], { type: 'text/plain' })
-  const url = window.URL.createObjectURL(blob)
-  const link = document.createElement('a')
-  link.href = url
-  link.download = `redeem-codes-${new Date().toISOString().split('T')[0]}.txt`
-  document.body.appendChild(link)
-  link.click()
-  document.body.removeChild(link)
-  window.URL.revokeObjectURL(url)
-}
-
-const getGeneratedStatusLabel = (status: string) => {
-  const labels: Record<string, string> = {
-    unused: t('redeem.balanceTransfer.status.unused'),
-    used: t('redeem.balanceTransfer.status.used'),
-    expired: t('redeem.balanceTransfer.status.expired'),
-    disabled: t('redeem.balanceTransfer.status.disabled'),
-    active: t('redeem.balanceTransfer.status.active')
-  }
-  return labels[status] || status
-}
-
-const getGeneratedStatusClass = (status: string) => {
-  const base =
-    'inline-flex items-center rounded-md px-2 py-0.5 text-xs font-semibold'
-  if (status === 'unused' || status === 'active') {
-    return `${base} bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300`
-  }
-  if (status === 'used') {
-    return `${base} bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300`
-  }
-  return `${base} bg-slate-100 text-slate-600 dark:bg-dark-800 dark:text-dark-300`
-}
-
-const formatGeneratedExpiry = (item: GeneratedRedeemCode) => {
-  return item.expires_at ? formatDateTime(item.expires_at) : t('redeem.balanceTransfer.neverExpires')
-}
-
 const hasSeenSubscriptionRedeemGuide = () => {
   try {
     return window.localStorage.getItem(subscriptionRedeemGuideStorageKey.value) === '1'
@@ -1493,34 +838,12 @@ const handleRedeem = async () => {
 onMounted(async () => {
   fetchHistory()
   fetchLotteryBalanceHistory()
-  if (canGenerateBalanceTransferCodes.value) {
-    fetchGeneratedCodes()
-  }
   try {
     const settings = await authAPI.getPublicSettings()
     contactInfo.value = settings.contact_info || ''
   } catch (error) {
     console.error('Failed to load contact info:', error)
   }
-})
-
-watch(canGenerateBalanceTransferCodes, (enabled) => {
-  if (enabled) {
-    generatedPagination.page = 1
-    fetchGeneratedCodes()
-  } else {
-    generatedCodes.value = []
-    generatedPagination.total = 0
-    generatedPagination.page = 1
-    generatedCodeResults.value = []
-    showGeneratedCodesModal.value = false
-    selectedGeneratedCodeIds.value = []
-  }
-})
-
-watch(generatedCodes, (codes) => {
-  const availableIds = new Set(codes.filter(canDeleteGeneratedCode).map((item) => item.id))
-  selectedGeneratedCodeIds.value = selectedGeneratedCodeIds.value.filter((id) => availableIds.has(id))
 })
 </script>
 
@@ -1774,173 +1097,7 @@ watch(generatedCodes, (codes) => {
   border-radius: 1rem;
 }
 
-.redeem-transfer-panel {
-  border-radius: 1.25rem;
-}
-
-.redeem-transfer-form {
-  margin-top: 1.25rem;
-  display: grid;
-  gap: 1rem;
-}
-
-.redeem-transfer-label {
-  display: block;
-  font-size: 0.78rem;
-  font-weight: 700;
-  color: rgb(71, 85, 105);
-}
-
-.redeem-transfer-field {
-  width: 100%;
-  border-radius: 0.9rem;
-  border: 1px solid rgba(191, 219, 254, 0.88);
-  background:
-    linear-gradient(135deg, rgba(255, 255, 255, 0.96), rgba(248, 250, 252, 0.88)),
-    white;
-  padding: 0.78rem 0.9rem;
-  font-size: 0.95rem;
-  font-weight: 600;
-  color: rgb(15, 23, 42);
-  outline: none;
-  transition:
-    border-color 180ms ease,
-    box-shadow 180ms ease,
-    background-color 180ms ease;
-}
-
-.redeem-transfer-field::placeholder {
-  color: rgb(148, 163, 184);
-  font-weight: 500;
-}
-
-.redeem-transfer-field:focus {
-  border-color: rgba(var(--brand-rgb), 0.58);
-  box-shadow:
-    0 0 0 3px rgba(var(--brand-rgb), 0.12),
-    0 12px 28px rgba(37, 99, 235, 0.08);
-}
-
-.redeem-transfer-toggle {
-  display: flex;
-  align-items: flex-start;
-  gap: 0.75rem;
-  border-radius: 0.9rem;
-  border: 1px solid rgba(191, 219, 254, 0.76);
-  background: rgba(248, 250, 252, 0.78);
-  padding: 0.8rem 0.9rem;
-  color: rgb(71, 85, 105);
-}
-
-.redeem-transfer-toggle input {
-  margin-top: 0.2rem;
-  height: 1rem;
-  width: 1rem;
-  flex-shrink: 0;
-  accent-color: var(--brand-600);
-}
-
-.redeem-transfer-toggle strong,
-.redeem-transfer-toggle small {
-  display: block;
-}
-
-.redeem-transfer-toggle strong {
-  font-size: 0.88rem;
-  font-weight: 700;
-  color: rgb(30, 41, 59);
-}
-
-.redeem-transfer-toggle small {
-  margin-top: 0.15rem;
-  font-size: 0.78rem;
-  line-height: 1.35;
-  color: rgb(100, 116, 139);
-}
-
-.redeem-transfer-field:disabled {
-  cursor: not-allowed;
-  opacity: 0.72;
-}
-
-.redeem-transfer-submit {
-  min-height: 2.75rem;
-  border-radius: 0.9rem;
-}
-
-.redeem-generated-list {
-  margin-top: 1.25rem;
-  border-top: 1px solid rgba(191, 219, 254, 0.48);
-  padding-top: 1rem;
-}
-
-.redeem-generated-toolbar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.75rem;
-}
-
-.redeem-generated-toolbar-actions {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 0.5rem;
-}
-
-.redeem-generated-select-all {
-  display: inline-flex;
-  min-height: 2.5rem;
-  align-items: center;
-  gap: 0.45rem;
-  border: 1px solid rgba(191, 219, 254, 0.86);
-  border-radius: 0.85rem;
-  background: rgba(248, 250, 252, 0.92);
-  padding: 0 0.75rem;
-  font-size: 0.8rem;
-  font-weight: 700;
-  color: rgb(51, 65, 85);
-}
-
-.redeem-generated-select-all input,
-.redeem-generated-row-select input {
-  height: 1rem;
-  width: 1rem;
-  flex-shrink: 0;
-  accent-color: var(--brand-500);
-}
-
-.redeem-generated-row {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 0.75rem;
-  border: 1px solid rgba(191, 219, 254, 0.82);
-  border-radius: 0.95rem;
-  background:
-    linear-gradient(135deg, rgba(255, 255, 255, 0.96), rgba(248, 250, 252, 0.9)),
-    white;
-  padding: 0.8rem 0.9rem;
-}
-
-.redeem-generated-row-select,
-.redeem-generated-row-select-spacer {
-  display: flex;
-  width: 1rem;
-  flex-shrink: 0;
-  justify-content: center;
-  padding-top: 0.15rem;
-}
-
-.redeem-generated-actions {
-  display: flex;
-  flex-shrink: 0;
-  align-items: center;
-  gap: 0.5rem;
-}
-
-.redeem-generated-modal-backdrop {
+.redeem-subscription-guide-backdrop {
   position: fixed;
   inset: 0;
   z-index: 60;
@@ -1952,39 +1109,7 @@ watch(generatedCodes, (codes) => {
   backdrop-filter: blur(10px);
 }
 
-.redeem-generated-modal {
-  width: min(100%, 36rem);
-  overflow: hidden;
-  border: 1px solid rgba(191, 219, 254, 0.86);
-  border-radius: 1.25rem;
-  background:
-    linear-gradient(135deg, rgba(255, 255, 255, 0.98), rgba(239, 246, 255, 0.96)),
-    white;
-  box-shadow:
-    0 28px 64px rgba(15, 23, 42, 0.2),
-    0 1px 0 rgba(255, 255, 255, 0.9) inset;
-}
-
-.redeem-generated-modal-header,
-.redeem-generated-modal-footer {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
-  padding: 1rem 1.15rem;
-}
-
-.redeem-generated-modal-header {
-  border-bottom: 1px solid rgba(191, 219, 254, 0.62);
-}
-
-.redeem-generated-modal-footer {
-  justify-content: flex-end;
-  border-top: 1px solid rgba(191, 219, 254, 0.62);
-}
-
-.redeem-generated-modal-icon,
-.redeem-generated-modal-close {
+.redeem-subscription-guide-close {
   display: flex;
   height: 2.75rem;
   width: 2.75rem;
@@ -1992,14 +1117,6 @@ watch(generatedCodes, (codes) => {
   align-items: center;
   justify-content: center;
   border-radius: 1rem;
-}
-
-.redeem-generated-modal-icon {
-  background: linear-gradient(135deg, var(--brand-500), var(--brand-cyan-500));
-  color: white;
-}
-
-.redeem-generated-modal-close {
   border: 1px solid rgba(191, 219, 254, 0.72);
   background: rgba(255, 255, 255, 0.82);
   color: rgb(71, 85, 105);
@@ -2176,28 +1293,6 @@ watch(generatedCodes, (codes) => {
   padding: 1rem 1.15rem;
 }
 
-.redeem-generated-modal-body {
-  padding: 1rem 1.15rem;
-}
-
-.redeem-generated-modal-code-list {
-  display: grid;
-  max-height: min(42vh, 18rem);
-  gap: 0.55rem;
-  overflow-y: auto;
-}
-
-.redeem-generated-modal-code-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.75rem;
-  border: 1px solid rgba(191, 219, 254, 0.78);
-  border-radius: 0.85rem;
-  background: rgba(255, 255, 255, 0.84);
-  padding: 0.75rem 0.85rem;
-}
-
 .redeem-info-icon {
   display: flex;
   height: 2.75rem;
@@ -2301,73 +1396,9 @@ watch(generatedCodes, (codes) => {
   color: rgb(100, 116, 139);
 }
 
-.dark .redeem-transfer-label {
-  color: rgb(203, 213, 225);
-}
-
-.dark .redeem-transfer-field {
-  border-color: rgba(96, 165, 250, 0.22);
-  background:
-    linear-gradient(135deg, rgba(15, 23, 42, 0.94), rgba(8, 13, 28, 0.9)),
-    rgba(15, 23, 42, 0.86);
-  color: white;
-}
-
-.dark .redeem-transfer-field::placeholder {
-  color: rgb(100, 116, 139);
-}
-
-.dark .redeem-transfer-toggle {
-  border-color: rgba(96, 165, 250, 0.2);
-  background: rgba(15, 23, 42, 0.74);
-  color: rgb(148, 163, 184);
-}
-
-.dark .redeem-transfer-toggle strong {
-  color: rgb(226, 232, 240);
-}
-
-.dark .redeem-transfer-toggle small {
-  color: rgb(148, 163, 184);
-}
-
-.dark .redeem-generated-list {
-  border-color: rgba(96, 165, 250, 0.16);
-}
-
-.dark .redeem-generated-select-all {
-  border-color: rgba(96, 165, 250, 0.22);
-  background: rgba(15, 23, 42, 0.76);
-  color: rgb(203, 213, 225);
-}
-
-.dark .redeem-generated-row {
-  border-color: rgba(96, 165, 250, 0.22);
-  background:
-    linear-gradient(135deg, rgba(15, 23, 42, 0.9), rgba(8, 13, 28, 0.84)),
-    rgba(15, 23, 42, 0.86);
-}
-
-.dark .redeem-generated-modal {
-  border-color: rgba(96, 165, 250, 0.24);
-  background:
-    linear-gradient(135deg, rgba(15, 23, 42, 0.98), rgba(8, 13, 28, 0.96)),
-    rgb(15, 23, 42);
-  box-shadow: 0 28px 64px rgba(0, 0, 0, 0.42);
-}
-
-.dark .redeem-generated-modal-header,
-.dark .redeem-generated-modal-footer {
-  border-color: rgba(96, 165, 250, 0.16);
-}
-
-.dark .redeem-generated-modal-close,
-.dark .redeem-generated-modal-code-row {
+.dark .redeem-subscription-guide-close {
   border-color: rgba(96, 165, 250, 0.22);
   background: rgba(15, 23, 42, 0.72);
-}
-
-.dark .redeem-generated-modal-close {
   color: rgb(203, 213, 225);
 }
 
@@ -2521,32 +1552,6 @@ watch(generatedCodes, (codes) => {
     align-items: flex-start;
   }
 
-  .redeem-generated-toolbar {
-    align-items: flex-start;
-    flex-direction: column;
-  }
-
-  .redeem-generated-toolbar-actions {
-    width: 100%;
-    justify-content: flex-start;
-  }
-
-  .redeem-generated-row {
-    display: grid;
-    grid-template-columns: auto minmax(0, 1fr);
-    align-items: start;
-  }
-
-  .redeem-generated-actions {
-    grid-column: 2;
-    width: 100%;
-    justify-content: flex-end;
-  }
-
-  .redeem-generated-modal {
-    max-height: calc(100vh - 2rem);
-  }
-
   .redeem-subscription-guide-modal {
     width: 100%;
     max-height: calc(100vh - 1.5rem);
@@ -2596,16 +1601,6 @@ watch(generatedCodes, (codes) => {
   }
 
   .redeem-subscription-guide-footer .btn {
-    width: 100%;
-    justify-content: center;
-  }
-
-  .redeem-generated-modal-footer {
-    flex-direction: column;
-    align-items: stretch;
-  }
-
-  .redeem-generated-modal-footer .btn {
     width: 100%;
     justify-content: center;
   }

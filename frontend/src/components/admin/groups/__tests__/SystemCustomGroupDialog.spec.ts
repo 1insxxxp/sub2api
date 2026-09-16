@@ -147,6 +147,7 @@ describe('SystemCustomGroupDialog', () => {
 
     expect(createSystemCustomGroup).toHaveBeenCalledWith({
       name: '酒馆综合月卡',
+      tag: '',
       description: null,
       daily_limit_usd: null,
       weekly_limit_usd: null,
