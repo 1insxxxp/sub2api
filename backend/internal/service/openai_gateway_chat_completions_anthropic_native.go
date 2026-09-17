@@ -67,6 +67,7 @@ func (s *OpenAIGatewayService) forwardChatCompletionsViaNativeAnthropic(
 		writeChatCompletionsError(c, http.StatusBadRequest, "invalid_request_error", "Failed to convert request")
 		return nil, fmt.Errorf("convert responses to anthropic: %w", err)
 	}
+	applyChatCompletionsThinkingDisabled(body, anthropicReq)
 
 	// 3. Model mapping（OpenAI 网关统一入口的映射语义）
 	billingModel := resolveOpenAIForwardModel(account, originalModel, defaultMappedModel)
@@ -134,6 +135,9 @@ func (s *OpenAIGatewayService) forwardChatCompletionsViaNativeAnthropic(
 
 	reasoningEffort := extractCCReasoningEffortFromBody(body, upstreamModel, billingModel, originalModel)
 	reasoningEffort = ApplyThinkingEnabledFallback(reasoningEffort, body, billingModel)
+	if anthropicReq.Thinking != nil && anthropicReq.Thinking.Type == "disabled" {
+		reasoningEffort = nil
+	}
 
 	if clientStream {
 		return s.handleCCStreamingFromNativeAnthropic(resp, c, originalModel, billingModel, upstreamModel, reasoningEffort, startTime, includeUsage)

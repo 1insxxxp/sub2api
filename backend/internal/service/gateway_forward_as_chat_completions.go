@@ -54,6 +54,7 @@ func (s *GatewayService) ForwardAsChatCompletions(
 	if err != nil {
 		return nil, fmt.Errorf("convert responses to anthropic: %w", err)
 	}
+	applyChatCompletionsThinkingDisabled(body, anthropicReq)
 
 	// 3. Force upstream streaming
 	anthropicReq.Stream = true
@@ -196,6 +197,9 @@ func (s *GatewayService) ForwardAsChatCompletions(
 	if reasoningEffort == nil {
 		reasoningEffort = groupDefaultReasoningEffort
 	}
+	if anthropicReq.Thinking != nil && anthropicReq.Thinking.Type == "disabled" {
+		reasoningEffort = nil
+	}
 
 	// 14. Handle normal response
 	// Read Anthropic SSE → convert to Responses events → convert to CC format
@@ -208,6 +212,16 @@ func (s *GatewayService) ForwardAsChatCompletions(
 	}
 
 	return result, handleErr
+}
+
+// The Responses intermediate has no Anthropic thinking control. Restore explicit
+// opt-out before group defaults can enable native thinking alongside preset text.
+func applyChatCompletionsThinkingDisabled(body []byte, req *apicompat.AnthropicRequest) {
+	if gjson.GetBytes(body, "thinking.type").String() != "disabled" {
+		return
+	}
+	req.Thinking = &apicompat.AnthropicThinking{Type: "disabled"}
+	req.OutputConfig = nil
 }
 
 // extractCCReasoningEffortFromBody reads reasoning effort from a Chat Completions
