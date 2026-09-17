@@ -156,6 +156,11 @@ func (s *PublicGroupSyncService) Snapshot(ctx context.Context) ([]PublicGroupSyn
 				if pricing == nil {
 					pricing = lookupPricingAcrossPlatforms(channelCatalog, g.ID, platform, name)
 				}
+				// Bound channels define the published price catalog. Do not turn
+				// an unpriced account model into a token model in a fixed-price group.
+				if pricing == nil && len(byGroup[g.ID]) > 0 {
+					continue
+				}
 				if pricing != nil && pricing.BillingMode == BillingModeVideo {
 					continue
 				}
