@@ -2,8 +2,11 @@ import { readFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-import { flushPromises, mount } from '@vue/test-utils'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils'
+import { nextTick } from 'vue'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+
+enableAutoUnmount(afterEach)
 
 const componentPath = resolve(dirname(fileURLToPath(import.meta.url)), '../SubscriptionProgressMini.vue')
 const componentSource = readFileSync(componentPath, 'utf8')
@@ -38,17 +41,23 @@ vi.mock('@/stores', () => ({
   useSubscriptionStore: () => subscriptionStoreState
 }))
 
+vi.mock('@/stores/app', () => ({
+  useAppStore: () => ({ cachedPublicSettings: { subscription_enabled: true } })
+}))
+
 vi.mock('vue-i18n', () => ({
   useI18n: () => ({
     t: (key: string) => key
   })
 }))
 
-const mountSubscriptionProgress = async () => {
+const mountSubscriptionProgress = async (realTransition = false) => {
   const SubscriptionProgressMini = (await import('../SubscriptionProgressMini.vue')).default
   const wrapper = mount(SubscriptionProgressMini, {
+    attachTo: document.body,
     global: {
       stubs: {
+        transition: !realTransition,
         Icon: {
           props: ['name'],
           template: '<span :data-icon="name" />'
@@ -67,6 +76,11 @@ describe('SubscriptionProgressMini mobile layout', () => {
   beforeEach(() => {
     fetchActiveSubscriptions.mockReset().mockResolvedValue(undefined)
     Object.defineProperty(window, 'innerWidth', { configurable: true, value: 1024 })
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+    document.body.innerHTML = ''
   })
 
   it('preserves the desktop pill classes and progress content in mounted output', async () => {
@@ -96,6 +110,83 @@ describe('SubscriptionProgressMini mobile layout', () => {
     expect(trigger.attributes('aria-expanded')).toBe('true')
     expect(wrapper.get('#subscription-progress-panel').attributes('data-test')).toBe('subscription-progress-sheet')
     wrapper.unmount()
+  })
+
+  it.each(['trigger', 'backdrop', 'close button', 'view all', 'outside click', 'another panel', 'resize'])(
+    'keeps the mobile panel in body throughout its leave transition on %s',
+    async (dismissal) => {
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'requestAnimationFrame', 'cancelAnimationFrame'] })
+      Object.defineProperty(window, 'innerWidth', { configurable: true, value: 390 })
+      const wrapper = await mountSubscriptionProgress(true)
+      const trigger = wrapper.get('[data-test="subscription-progress-trigger"]')
+      await trigger.trigger('click')
+
+      const panel = document.querySelector<HTMLElement>('[data-test="subscription-progress-sheet"]')!
+      // jsdom does not load the SFC stylesheet; supply the real transition duration.
+      panel.style.transitionProperty = 'opacity'
+      panel.style.transitionDuration = '0.2s'
+      panel.style.transitionDelay = '0s'
+      await vi.advanceTimersByTimeAsync(250)
+      expect(panel.parentElement).toBe(document.body)
+
+      switch (dismissal) {
+        case 'trigger':
+          await trigger.trigger('click')
+          break
+        case 'backdrop':
+          document.querySelector<HTMLButtonElement>('[data-test="subscription-progress-backdrop"]')!.click()
+          break
+        case 'close button':
+          panel.querySelector<HTMLButtonElement>('button[aria-label="Close"]')!.click()
+          break
+        case 'view all':
+          panel.querySelector<HTMLAnchorElement>('a')!.click()
+          break
+        case 'outside click':
+          document.body.click()
+          break
+        case 'another panel':
+          window.dispatchEvent(new CustomEvent('app-header-floating-panel-open', { detail: 'notifications' }))
+          break
+        case 'resize':
+          Object.defineProperty(window, 'innerWidth', { configurable: true, value: 1024 })
+          window.dispatchEvent(new Event('resize'))
+          break
+      }
+      await nextTick()
+
+      expect(trigger.attributes('aria-expanded')).toBe('false')
+      expect(panel.classList.contains('dropdown-leave-active')).toBe(true)
+      expect(panel.parentElement).toBe(document.body)
+      expect(panel.classList.contains('subscription-progress-mobile-panel')).toBe(true)
+      expect(wrapper.element.contains(panel)).toBe(false)
+      await vi.advanceTimersByTimeAsync(100)
+      expect(panel.parentElement).toBe(document.body)
+      await vi.advanceTimersByTimeAsync(200)
+      expect(document.querySelector('[data-test="subscription-progress-sheet"]')).toBeNull()
+
+      await trigger.trigger('click')
+      const reopenedPanel = document.querySelector<HTMLElement>('[data-test="subscription-progress-sheet"]')!
+      expect(reopenedPanel.classList.contains('subscription-progress-mobile-panel')).toBe(dismissal !== 'resize')
+      expect(wrapper.element.contains(reopenedPanel)).toBe(dismissal === 'resize')
+    }
+  )
+
+  it('keeps a quickly reopened mobile panel in body', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'requestAnimationFrame', 'cancelAnimationFrame'] })
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 390 })
+    const wrapper = await mountSubscriptionProgress(true)
+    const trigger = wrapper.get('[data-test="subscription-progress-trigger"]')
+
+    await trigger.trigger('click')
+    await trigger.trigger('click')
+    expect(document.querySelector('[data-test="subscription-progress-sheet"]')?.parentElement).toBe(document.body)
+    await trigger.trigger('click')
+    await vi.advanceTimersByTimeAsync(300)
+
+    expect(trigger.attributes('aria-expanded')).toBe('true')
+    expect(document.querySelector('[data-test="subscription-progress-sheet"]')?.parentElement).toBe(document.body)
+    expect(document.querySelectorAll('[data-test="subscription-progress-sheet"]')).toHaveLength(1)
   })
 
   it('supplies the 36px violet subscription theme only from mobile CSS', () => {

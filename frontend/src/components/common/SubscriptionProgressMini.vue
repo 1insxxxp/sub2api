@@ -317,7 +317,7 @@ function toggleTooltip() {
 
 function closeTooltip() {
   tooltipOpen.value = false
-  isMobileTooltip.value = false
+  // Keep the Teleport target stable during leave; recalculate the mode on next open.
 }
 
 function handleClickOutside(event: MouseEvent) {
