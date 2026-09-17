@@ -5,6 +5,7 @@ package service
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"testing"
 	"time"
 
@@ -53,7 +54,7 @@ func TestPublicGroupSyncSnapshotFiltersExclusiveGroupsAndPreservesMappingAndPric
 		}, nil
 	}}
 
-	snapshot, err := NewPublicGroupSyncService(groups, channels).Snapshot(context.Background())
+	snapshot, err := NewPublicGroupSyncService(groups, channels, nil, nil).Snapshot(context.Background())
 	require.NoError(t, err)
 	require.Len(t, snapshot, 1)
 	require.Equal(t, int64(1), snapshot[0].GroupID)
@@ -79,6 +80,7 @@ type stubAccountRepositoryForPublicGroupSync struct {
 	AccountRepository
 	accounts           []Account
 	schedulableByGroup map[int64][]Account
+	err                error
 }
 
 func (s *stubAccountRepositoryForPublicGroupSync) ListByGroup(context.Context, int64) ([]Account, error) {
@@ -86,7 +88,7 @@ func (s *stubAccountRepositoryForPublicGroupSync) ListByGroup(context.Context, i
 }
 
 func (s *stubAccountRepositoryForPublicGroupSync) ListSchedulableByGroupID(_ context.Context, groupID int64) ([]Account, error) {
-	return s.schedulableByGroup[groupID], nil
+	return s.schedulableByGroup[groupID], s.err
 }
 
 func TestPublicGroupSyncSnapshotUsesGroupSchedulableModels(t *testing.T) {
@@ -127,11 +129,95 @@ func TestPublicGroupSyncSnapshotUsesGroupSchedulableModels(t *testing.T) {
 		}},
 	}}
 
-	snapshot, err := NewPublicGroupSyncService(groups, channels, accounts).Snapshot(context.Background())
+	snapshot, err := NewPublicGroupSyncService(groups, channels, accounts, nil).Snapshot(context.Background())
 	require.NoError(t, err)
 	require.Len(t, snapshot, 1)
 	require.ElementsMatch(t, []string{"ccmax-model-a", "ccmax-model-b"}, snapshot[0].Models)
 	require.NotContains(t, snapshot[0].Models, "unavailable-shared-model")
+}
+
+func TestPublicGroupSyncSnapshotEmptyGroupDoesNotInheritSharedChannelModels(t *testing.T) {
+	groups := &stubGroupRepoForAvailable{activeGroups: []Group{{ID: 102, Name: "aws", Platform: PlatformAnthropic, Status: StatusActive}}}
+	channels := &mockChannelRepository{listAllFn: func(context.Context) ([]Channel, error) {
+		return []Channel{{Status: StatusActive, GroupIDs: []int64{102},
+			ModelPricing: []ChannelModelPricing{{Platform: PlatformAnthropic, Models: []string{"aws-model", "other-group-model"}, BillingMode: BillingModeToken}},
+			ModelMapping: map[string]map[string]string{PlatformAnthropic: {"other-mapped-model": "upstream"}},
+		}}, nil
+	}}
+	accounts := &stubAccountRepositoryForPublicGroupSync{schedulableByGroup: map[int64][]Account{}}
+	svc := NewPublicGroupSyncService(groups, channels, accounts, nil)
+	snapshot, err := svc.Snapshot(context.Background())
+	require.NoError(t, err)
+	require.Len(t, snapshot, 1)
+	require.Empty(t, snapshot[0].Models)
+	require.Empty(t, snapshot[0].ModelMapping)
+	require.Empty(t, snapshot[0].ModelPricing)
+
+	accounts.schedulableByGroup[102] = []Account{{Platform: PlatformAnthropic, Credentials: map[string]any{
+		"model_mapping": map[string]any{"aws-model": "aws-model"},
+	}}}
+	snapshot, err = svc.Snapshot(context.Background())
+	require.NoError(t, err)
+	require.Equal(t, []string{"aws-model"}, snapshot[0].Models)
+}
+
+func TestPublicGroupSyncSnapshotIncludesAccountModelsWithoutChannel(t *testing.T) {
+	groups := &stubGroupRepoForAvailable{activeGroups: []Group{{ID: 44, Name: "no-cache", Platform: PlatformAnthropic, Status: StatusActive}}}
+	channels := &mockChannelRepository{listAllFn: func(context.Context) ([]Channel, error) { return nil, nil }}
+	accounts := &stubAccountRepositoryForPublicGroupSync{schedulableByGroup: map[int64][]Account{
+		44: {{Platform: PlatformAnthropic, Credentials: map[string]any{"model_mapping": map[string]any{
+			"claude-opus-4-6": "claude-opus-4-6", "claude-sonnet-4-6": "claude-sonnet-4-6", "claude-*": "claude-*",
+		}}}},
+	}}
+	pricing := newStubPricingServiceFromJSON(t, `{
+		"claude-opus-4-6": {"input_cost_per_token": 0.000005, "output_cost_per_token": 0.000025,
+			"cache_read_input_token_cost": 0.0000005, "cache_creation_input_token_cost": 0.00000625}
+	}`)
+	snapshot, err := NewPublicGroupSyncService(groups, channels, accounts, pricing).Snapshot(context.Background())
+	require.NoError(t, err)
+	require.Len(t, snapshot, 1)
+	require.Equal(t, []string{"claude-opus-4-6", "claude-sonnet-4-6"}, snapshot[0].Models)
+	require.Equal(t, string(BillingModeToken), snapshot[0].ModelPricing["claude-opus-4-6"].BillingMode)
+	model := snapshot[0].ModelPricing["claude-opus-4-6"]
+	require.NotNil(t, model.InputPrice)
+	require.Equal(t, 0.000005, *model.InputPrice)
+	require.Equal(t, 0.000025, *model.OutputPrice)
+	require.Equal(t, 0.0000005, *model.CacheReadPrice)
+	require.Equal(t, 0.00000625, *model.CacheWritePrice)
+}
+
+func TestPublicGroupSyncSnapshotAccountCatalogUsesGatewayRules(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		accounts []Account
+		selected GroupModelsListConfig
+		want     []string
+	}{
+		{name: "other platform cannot activate a group", accounts: []Account{{Platform: PlatformOpenAI}}},
+		{name: "unmapped account uses platform defaults", accounts: []Account{{Platform: PlatformAnthropic}}, want: DefaultModelIDsForPlatform(PlatformAnthropic)},
+		{name: "custom list filters account models", accounts: []Account{{Platform: PlatformAnthropic, Credentials: map[string]any{"model_mapping": map[string]any{
+			"claude-opus-4-6": "claude-opus-4-6", "claude-sonnet-4-6": "claude-sonnet-4-6",
+		}}}}, selected: GroupModelsListConfig{Enabled: true, Models: []string{"claude-opus-4-6"}}, want: []string{"claude-opus-4-6"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			groups := &stubGroupRepoForAvailable{activeGroups: []Group{{ID: 44, Name: "public", Platform: PlatformAnthropic, Status: StatusActive, ModelsListConfig: tc.selected}}}
+			channels := &mockChannelRepository{listAllFn: func(context.Context) ([]Channel, error) { return nil, nil }}
+			accounts := &stubAccountRepositoryForPublicGroupSync{schedulableByGroup: map[int64][]Account{44: tc.accounts}}
+			snapshot, err := NewPublicGroupSyncService(groups, channels, accounts, nil).Snapshot(context.Background())
+			require.NoError(t, err)
+			require.ElementsMatch(t, tc.want, snapshot[0].Models)
+		})
+	}
+}
+
+func TestPublicGroupSyncSnapshotAccountLookupFailureDoesNotPublishEmptyCatalog(t *testing.T) {
+	groups := &stubGroupRepoForAvailable{activeGroups: []Group{{ID: 44, Name: "public", Platform: PlatformAnthropic}}}
+	channels := &mockChannelRepository{listAllFn: func(context.Context) ([]Channel, error) { return nil, nil }}
+	wantErr := errors.New("database unavailable")
+	accounts := &stubAccountRepositoryForPublicGroupSync{err: wantErr}
+	snapshot, err := NewPublicGroupSyncService(groups, channels, accounts, nil).Snapshot(context.Background())
+	require.ErrorIs(t, err, wantErr)
+	require.Nil(t, snapshot)
 }
 
 func TestPublicGroupSyncSnapshotIncludesImageModelsFromGroupAccounts(t *testing.T) {
@@ -154,11 +240,17 @@ func TestPublicGroupSyncSnapshotIncludesImageModelsFromGroupAccounts(t *testing.
 		}},
 	}}}
 
-	snapshot, err := NewPublicGroupSyncService(groups, channels, accounts).Snapshot(context.Background())
+	snapshot, err := NewPublicGroupSyncService(groups, channels, accounts, nil).Snapshot(context.Background())
 	require.NoError(t, err)
 	require.Len(t, snapshot, 1)
 	require.Contains(t, snapshot[0].Models, "gpt-image-2")
 	require.NotContains(t, snapshot[0].Models, "claude-sonnet-4-6")
+	require.Equal(t, string(BillingModeImage), snapshot[0].ModelPricing["gpt-image-2"].BillingMode)
+	require.Equal(t, imagePrice, *snapshot[0].ModelPricing["gpt-image-2"].PerRequestPrice)
+
+	accounts.schedulableByGroup = map[int64][]Account{7: accounts.accounts}
+	snapshot, err = NewPublicGroupSyncService(groups, channels, accounts, nil).Snapshot(context.Background())
+	require.NoError(t, err)
 	require.Equal(t, string(BillingModeImage), snapshot[0].ModelPricing["gpt-image-2"].BillingMode)
 	require.Equal(t, imagePrice, *snapshot[0].ModelPricing["gpt-image-2"].PerRequestPrice)
 }
@@ -184,7 +276,7 @@ func TestPublicGroupSyncSnapshotScopesModelsToGroupPlatform(t *testing.T) {
 		}}, nil
 	}}
 
-	snapshot, err := NewPublicGroupSyncService(groups, channels).Snapshot(context.Background())
+	snapshot, err := NewPublicGroupSyncService(groups, channels, nil, nil).Snapshot(context.Background())
 	require.NoError(t, err)
 	require.Len(t, snapshot, 2)
 

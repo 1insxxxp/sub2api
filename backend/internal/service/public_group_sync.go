@@ -11,14 +11,11 @@ type PublicGroupSyncService struct {
 	groups   GroupRepository
 	channels ChannelRepository
 	accounts AccountRepository
+	pricing  *PricingService
 }
 
-func NewPublicGroupSyncService(groups GroupRepository, channels ChannelRepository, accounts ...AccountRepository) *PublicGroupSyncService {
-	var accountRepo AccountRepository
-	if len(accounts) > 0 {
-		accountRepo = accounts[0]
-	}
-	return &PublicGroupSyncService{groups: groups, channels: channels, accounts: accountRepo}
+func NewPublicGroupSyncService(groups GroupRepository, channels ChannelRepository, accounts AccountRepository, pricing *PricingService) *PublicGroupSyncService {
+	return &PublicGroupSyncService{groups: groups, channels: channels, accounts: accounts, pricing: pricing}
 }
 
 func (s *PublicGroupSyncService) Snapshot(ctx context.Context) ([]PublicGroupSyncRequest, error) {
@@ -47,29 +44,9 @@ func (s *PublicGroupSyncService) Snapshot(ctx context.Context) ([]PublicGroupSyn
 		// Channel pricing is shared by every group attached to that channel. Use
 		// the group's schedulable account mappings to avoid publishing pricing
 		// aliases that the group cannot actually route.
-		availableModels := map[string]map[string]struct{}{}
-		if s.accounts != nil {
-			accounts, err := s.accounts.ListSchedulableByGroupID(ctx, g.ID)
-			if err != nil {
-				return nil, err
-			}
-			for _, account := range accounts {
-				if strings.TrimSpace(g.Platform) != "" && !isPlatformPricingMatch(g.Platform, account.Platform) {
-					continue
-				}
-				mapping := account.GetModelMapping()
-				if len(mapping) == 0 {
-					continue
-				}
-				if availableModels[account.Platform] == nil {
-					availableModels[account.Platform] = map[string]struct{}{}
-				}
-				for name := range mapping {
-					if !strings.ContainsAny(name, "*?") {
-						availableModels[account.Platform][name] = struct{}{}
-					}
-				}
-			}
+		availableModels, err := s.groupAvailableModels(ctx, g)
+		if err != nil {
+			return nil, err
 		}
 		models := map[string]PublicGroupSyncModel{}
 		for _, ch := range byGroup[g.ID] {
@@ -84,8 +61,8 @@ func (s *PublicGroupSyncService) Snapshot(ctx context.Context) ([]PublicGroupSyn
 					if strings.ContainsAny(name, "*?") {
 						continue
 					}
-					if allowed := availableModels[p.Platform]; len(allowed) > 0 {
-						if _, ok := allowed[name]; !ok {
+					if availableModels != nil {
+						if _, ok := availableModels[p.Platform][name]; !ok {
 							continue
 						}
 					}
@@ -119,8 +96,8 @@ func (s *PublicGroupSyncService) Snapshot(ctx context.Context) ([]PublicGroupSyn
 					if strings.ContainsAny(name, "*?") {
 						continue
 					}
-					if allowed := availableModels[platform]; len(allowed) > 0 {
-						if _, ok := allowed[name]; !ok {
+					if availableModels != nil {
+						if _, ok := availableModels[platform][name]; !ok {
 							continue
 						}
 					}
@@ -160,6 +137,28 @@ func (s *PublicGroupSyncService) Snapshot(ctx context.Context) ([]PublicGroupSyn
 				}
 			}
 		}
+		// Channels provide prices, not the complete catalog: unbound groups and
+		// account models absent from channel rows still belong in the snapshot.
+		for platform, available := range availableModels {
+			for name := range available {
+				key := platform + "\x00" + name
+				if _, exists := models[key]; exists {
+					continue
+				}
+				pricing := matchGroupModelPricing(&g, name)
+				for _, ch := range byGroup[g.ID] {
+					if pricing == nil {
+						pricing = ch.GetModelPricingByPlatform(platform, name)
+					}
+				}
+				if pricing != nil && pricing.BillingMode == BillingModeVideo {
+					continue
+				}
+				entry := []SupportedModel{{Platform: platform, Name: name, Pricing: pricing}}
+				fillGlobalPricingFallback(s.pricing, entry)
+				models[key] = publicGroupSyncModel(platform, name, entry[0].Pricing)
+			}
+		}
 		list := make([]PublicGroupSyncModel, 0, len(models))
 		for _, m := range models {
 			list = append(list, m)
@@ -188,6 +187,58 @@ func (s *PublicGroupSyncService) Snapshot(ctx context.Context) ([]PublicGroupSyn
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].GroupID < out[j].GroupID })
 	return out, nil
+}
+
+func (s *PublicGroupSyncService) groupAvailableModels(ctx context.Context, group Group) (map[string]map[string]struct{}, error) {
+	if s.accounts == nil {
+		return nil, nil
+	}
+	accounts, err := s.accounts.ListSchedulableByGroupID(ctx, group.ID)
+	if err != nil {
+		return nil, err
+	}
+	byPlatform := make(map[string][]Account)
+	for _, account := range accounts {
+		if group.Platform == "" || isPlatformPricingMatch(group.Platform, account.Platform) {
+			byPlatform[account.Platform] = append(byPlatform[account.Platform], account)
+		}
+	}
+	// A non-nil empty catalog means no schedulable accounts, never unrestricted.
+	available := make(map[string]map[string]struct{})
+	for platform, platformAccounts := range byPlatform {
+		models := availableModelsForAccounts(platformAccounts, platform)
+		if len(models) == 0 {
+			models = DefaultModelIDsForPlatform(platform)
+		}
+		if group.ModelsListConfig.Enabled && len(group.ModelsListConfig.Models) > 0 {
+			models = ResolveCustomModelsList(platform, models, group.ModelsListConfig.Models)
+		}
+		available[platform] = make(map[string]struct{})
+		for _, name := range models {
+			if strings.TrimSpace(name) != "" && !strings.ContainsAny(name, "*?") {
+				available[platform][name] = struct{}{}
+			}
+		}
+	}
+	return available, nil
+}
+
+func publicGroupSyncModel(platform, name string, pricing *ChannelModelPricing) PublicGroupSyncModel {
+	model := PublicGroupSyncModel{Platform: platform, DisplayName: name, BillingMode: string(BillingModeToken)}
+	if pricing == nil {
+		return model
+	}
+	if pricing.BillingMode != "" {
+		model.BillingMode = string(pricing.BillingMode)
+	}
+	model.InputPrice = pricing.InputPrice
+	model.OutputPrice = pricing.OutputPrice
+	model.CacheWritePrice = pricing.CacheWritePrice
+	model.CacheReadPrice = pricing.CacheReadPrice
+	model.PerRequestPrice = pricing.PerRequestPrice
+	model.ImageInputPrice = pricing.ImageInputPrice
+	model.ImageOutputPrice = pricing.ImageOutputPrice
+	return model
 }
 
 func isImageModelName(name string) bool {

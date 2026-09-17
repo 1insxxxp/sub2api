@@ -186,14 +186,14 @@ func ProvideAdminUsageHandler(
 	return h
 }
 
-// ProvidePublicGroupSyncService gives Wire a fixed-arity provider for the
-// variadic constructor while preserving the constructor's test-friendly API.
+// ProvidePublicGroupSyncService shares the display pricing catalog with sync.
 func ProvidePublicGroupSyncService(
 	groups service.GroupRepository,
 	channels service.ChannelRepository,
 	accounts service.AccountRepository,
+	pricing *service.PricingService,
 ) *service.PublicGroupSyncService {
-	return service.NewPublicGroupSyncService(groups, channels, accounts)
+	return service.NewPublicGroupSyncService(groups, channels, accounts, pricing)
 }
 
 func ProvideDujiaoCredentialVerifier(authService *service.AuthService) DujiaoCredentialVerifier {

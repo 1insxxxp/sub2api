@@ -1421,6 +1421,17 @@ func (s *GatewayService) GetAvailableModels(ctx context.Context, groupID *int64,
 		accounts = filtered
 	}
 
+	models := availableModelsForAccounts(accounts, platform)
+	if s.modelsListCache != nil {
+		s.modelsListCache.Set(cacheKey, cloneStringSlice(models), s.modelsListCacheTTL)
+		modelsListCacheStoreTotal.Add(1)
+	}
+	return cloneStringSlice(models)
+}
+
+// availableModelsForAccounts is shared by the gateway and public group sync.
+// Accounts must already be filtered to the requested platform and availability.
+func availableModelsForAccounts(accounts []Account, platform string) []string {
 	// Collect unique models from all accounts
 	modelSet := make(map[string]struct{})
 	hasAnyMapping := false
@@ -1430,10 +1441,6 @@ func (s *GatewayService) GetAvailableModels(ctx context.Context, groupID *int64,
 		// mapping on any eligible passthrough account therefore cannot define the
 		// public whitelist; return nil so the handler uses its default model set.
 		if platform == PlatformOpenAI && acc.IsOpenAIPassthroughEnabled() {
-			if s.modelsListCache != nil {
-				s.modelsListCache.Set(cacheKey, []string(nil), s.modelsListCacheTTL)
-				modelsListCacheStoreTotal.Add(1)
-			}
 			return nil
 		}
 
@@ -1451,10 +1458,6 @@ func (s *GatewayService) GetAvailableModels(ctx context.Context, groupID *int64,
 
 	// If no account has model_mapping, return nil (use default)
 	if !hasAnyMapping {
-		if s.modelsListCache != nil {
-			s.modelsListCache.Set(cacheKey, []string(nil), s.modelsListCacheTTL)
-			modelsListCacheStoreTotal.Add(1)
-		}
 		return nil
 	}
 
@@ -1469,11 +1472,7 @@ func (s *GatewayService) GetAvailableModels(ctx context.Context, groupID *int64,
 		models = supplementUnmappedOpenAIModels(accounts, models)
 	}
 
-	if s.modelsListCache != nil {
-		s.modelsListCache.Set(cacheKey, cloneStringSlice(models), s.modelsListCacheTTL)
-		modelsListCacheStoreTotal.Add(1)
-	}
-	return cloneStringSlice(models)
+	return models
 }
 
 // HasSchedulableAccountsForGroupPlatform reports whether the group currently has

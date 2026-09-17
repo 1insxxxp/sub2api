@@ -118,7 +118,7 @@ func (publicGroupSyncRouteChannelRepo) ReplaceModelPricing(context.Context, int6
 func newPublicGroupSyncRouteRouter(secret string) *gin.Engine {
 	gin.SetMode(gin.TestMode)
 	cfg := &config.Config{PublicGroupSync: config.PublicGroupSyncConfig{Secret: secret}}
-	svc := service.NewPublicGroupSyncService(publicGroupSyncRouteGroupRepo{}, publicGroupSyncRouteChannelRepo{})
+	svc := service.NewPublicGroupSyncService(publicGroupSyncRouteGroupRepo{}, publicGroupSyncRouteChannelRepo{}, nil, nil)
 	h := handler.NewPublicGroupSyncHandler(svc, cfg)
 	router := gin.New()
 	RegisterPublicGroupSyncRoute(router.Group("/api"), &handler.Handlers{PublicGroupSync: h})
