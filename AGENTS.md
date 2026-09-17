@@ -93,7 +93,9 @@ git push origin main
 - 当前运行数据目录为 `/opt/sub2api-custom-prod/deploy/data`，PostgreSQL/Redis 容器为 `sub2api-postgres`、`sub2api-redis`。更新应用时保留其环境变量、挂载与网络，不重建数据库容器。
 - 现网分组排序同步补丁要求公共快照保留 `sort_order` 字段。全量更新前必须核对线上补丁，避免回退未同步到 Git 的修复。
 - 下文的 `us-asaki-root`、`clicodeplus` 与 `/root/sub2api` 属于旧环境流程；本机未配置这两个 SSH 别名，不能将代理分配的 `198.18.*` 虚拟地址当成真实服务器地址。
-- 独立构建服务器仍需确认；保留在构建服务器编译、在生产服务器加载并验证镜像的要求。
+- 旧 SSH 构建机不可用时，可使用本仓库 GitHub Actions 的 `ubuntu-latest` 作为独立构建环境；生产服务器只加载、运行镜像。按实际提交检出源码，使用仓库 `Dockerfile` 并显式传入 `VERSION`、`COMMIT`，将镜像与 SHA-256 校验文件作为 Actions artifact 下载、传输。
+- 2026-09-17 发布源码为 `3a9152af00868c4e4de519ebb4b53b3f5605a185`，镜像为 `sub2api-custom:0.2.5-3a9152af0`。独立构建流程位于 `codex/build-0.2.5-3a9152af0` 分支的 `.github/workflows/deployment-image.yml`，构建记录为 Actions run `35172334069`；不要通过旧 `release.yml` 替代此流程，以免创建官方版本标签或发送发布通知。
+- 本次发布文件位于 `/opt/sub2api-releases/0.2.5-3a9152af0`，源码位于 `/opt/sub2api-builds/deploy-20260917-3a9152af0`，回退备份位于 `/opt/backups/sub2api-tag-20260917-3a9152af0`。Nginx 平滑重载返回后需等待新页面资源实际生效，再验证健康状态和新旧静态资源；保留原应用容器用于资源回退。
 
 ### 前置条件
 
