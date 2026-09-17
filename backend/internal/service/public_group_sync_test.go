@@ -220,6 +220,62 @@ func TestPublicGroupSyncSnapshotAccountLookupFailureDoesNotPublishEmptyCatalog(t
 	require.Nil(t, snapshot)
 }
 
+func TestPublicGroupSyncSnapshotCatalogHonorsRoutingRules(t *testing.T) {
+	price := 0.25
+	for _, tc := range []struct {
+		name      string
+		platform  string
+		mapping   map[string]any
+		allowlist GroupModelAllowlist
+		channel   Channel
+		want      []string
+		priced    bool
+	}{
+		{name: "wildcard group allowlist", platform: PlatformAnthropic,
+			mapping:   map[string]any{"claude-sonnet-4-6": "claude-sonnet-4-6", "custom-other": "custom-other"},
+			allowlist: GroupModelAllowlist{Enabled: true, Models: []string{"claude-*"}}, want: []string{"claude-sonnet-4-6"}},
+		{name: "wildcard account mapping preserves channel catalog", platform: PlatformAnthropic,
+			mapping: map[string]any{"claude-*": "claude-sonnet-4-6"},
+			channel: Channel{ModelPricing: []ChannelModelPricing{{Platform: PlatformAnthropic, Models: []string{"claude-sonnet-4-6"}}}},
+			want:    []string{"claude-sonnet-4-6"}},
+		{name: "wildcard channel price and billing mode", platform: PlatformAnthropic,
+			mapping: map[string]any{"claude-sonnet-4-6": "claude-sonnet-4-6"},
+			channel: Channel{ModelPricing: []ChannelModelPricing{{Platform: PlatformAnthropic, Models: []string{"claude-*"}, BillingMode: BillingModePerRequest, PerRequestPrice: &price}}},
+			want:    []string{"claude-sonnet-4-6"}, priced: true},
+		{name: "restricted channel excludes unpriced account models", platform: PlatformAnthropic,
+			mapping: map[string]any{"claude-sonnet-4-6": "claude-sonnet-4-6", "claude-opus-4-6": "claude-opus-4-6"},
+			channel: Channel{RestrictModels: true, BillingModelSource: BillingModelSourceRequested,
+				ModelPricing: []ChannelModelPricing{{Platform: PlatformAnthropic, Models: []string{"claude-sonnet-4-6"}}}},
+			want: []string{"claude-sonnet-4-6"}},
+		{name: "deepseek empty mapping preserves own platform", platform: PlatformDeepseek,
+			channel: Channel{ModelPricing: []ChannelModelPricing{{Platform: PlatformDeepseek, Models: []string{"deepseek-flash"}}}},
+			want:    []string{"deepseek-flash"}},
+		{name: "openai channel alias uses forwarded model", platform: PlatformOpenAI,
+			mapping: map[string]any{"gpt-5.4": "gpt-5.4"},
+			channel: Channel{ModelMapping: map[string]map[string]string{PlatformOpenAI: {"public-gpt": "gpt-5.4"}}},
+			want:    []string{"gpt-5.4", "public-gpt"}},
+		{name: "oauth allowlist alias uses gateway normalization", platform: PlatformAnthropic,
+			mapping:   map[string]any{"claude-sonnet-4-5-20250929": "claude-sonnet-4-5-20250929"},
+			allowlist: GroupModelAllowlist{Enabled: true, Models: []string{"claude-sonnet-4-5"}},
+			want:      []string{"claude-sonnet-4-5"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			groups := &stubGroupRepoForAvailable{activeGroups: []Group{{ID: 44, Platform: tc.platform, ModelAllowlist: tc.allowlist}}}
+			tc.channel.GroupIDs, tc.channel.Status = []int64{44}, StatusActive
+			channels := &mockChannelRepository{listAllFn: func(context.Context) ([]Channel, error) { return []Channel{tc.channel}, nil }}
+			accounts := &stubAccountRepositoryForPublicGroupSync{schedulableByGroup: map[int64][]Account{44: {{Platform: tc.platform, Credentials: map[string]any{"model_mapping": tc.mapping}}}}}
+			snapshot, err := NewPublicGroupSyncService(groups, channels, accounts, nil).Snapshot(context.Background())
+			require.NoError(t, err)
+			require.ElementsMatch(t, tc.want, snapshot[0].Models)
+			if tc.priced {
+				model := snapshot[0].ModelPricing[tc.want[0]]
+				require.Equal(t, string(BillingModePerRequest), model.BillingMode)
+				require.Equal(t, &price, model.PerRequestPrice)
+			}
+		})
+	}
+}
+
 func TestPublicGroupSyncSnapshotIncludesImageModelsFromGroupAccounts(t *testing.T) {
 	imagePrice := 0.375
 	groups := &stubGroupRepoForAvailable{activeGroups: []Group{{

@@ -28,14 +28,21 @@ func (s *PublicGroupSyncService) Snapshot(ctx context.Context) ([]PublicGroupSyn
 		return nil, err
 	}
 	byGroup := make(map[int64][]Channel)
+	groupPlatforms := make(map[int64]string, len(groups))
+	for _, group := range groups {
+		groupPlatforms[group.ID] = group.Platform
+	}
+	activeChannels := make([]Channel, 0, len(channels))
 	for _, ch := range channels {
 		if ch.Status != StatusActive {
 			continue
 		}
+		activeChannels = append(activeChannels, ch)
 		for _, id := range ch.GroupIDs {
 			byGroup[id] = append(byGroup[id], ch)
 		}
 	}
+	channelCatalog := populateChannelCache(activeChannels, groupPlatforms)
 	out := make([]PublicGroupSyncRequest, 0, len(groups))
 	for _, g := range groups {
 		if g.IsExclusive {
@@ -44,7 +51,7 @@ func (s *PublicGroupSyncService) Snapshot(ctx context.Context) ([]PublicGroupSyn
 		// Channel pricing is shared by every group attached to that channel. Use
 		// the group's schedulable account mappings to avoid publishing pricing
 		// aliases that the group cannot actually route.
-		availableModels, err := s.groupAvailableModels(ctx, g)
+		availableModels, err := s.groupAvailableModels(ctx, g, byGroup[g.ID], channelCatalog)
 		if err != nil {
 			return nil, err
 		}
@@ -146,10 +153,8 @@ func (s *PublicGroupSyncService) Snapshot(ctx context.Context) ([]PublicGroupSyn
 					continue
 				}
 				pricing := matchGroupModelPricing(&g, name)
-				for _, ch := range byGroup[g.ID] {
-					if pricing == nil {
-						pricing = ch.GetModelPricingByPlatform(platform, name)
-					}
+				if pricing == nil {
+					pricing = lookupPricingAcrossPlatforms(channelCatalog, g.ID, platform, name)
 				}
 				if pricing != nil && pricing.BillingMode == BillingModeVideo {
 					continue
@@ -189,7 +194,7 @@ func (s *PublicGroupSyncService) Snapshot(ctx context.Context) ([]PublicGroupSyn
 	return out, nil
 }
 
-func (s *PublicGroupSyncService) groupAvailableModels(ctx context.Context, group Group) (map[string]map[string]struct{}, error) {
+func (s *PublicGroupSyncService) groupAvailableModels(ctx context.Context, group Group, channels []Channel, catalog *channelCache) (map[string]map[string]struct{}, error) {
 	if s.accounts == nil {
 		return nil, nil
 	}
@@ -207,20 +212,59 @@ func (s *PublicGroupSyncService) groupAvailableModels(ctx context.Context, group
 	available := make(map[string]map[string]struct{})
 	for platform, platformAccounts := range byPlatform {
 		models := availableModelsForAccounts(platformAccounts, platform)
-		if len(models) == 0 {
+		if len(models) == 0 && !IsMultiProtocolAPIKeyProvider(platform) {
 			models = DefaultModelIDsForPlatform(platform)
 		}
-		if group.ModelsListConfig.Enabled && len(group.ModelsListConfig.Models) > 0 {
-			models = ResolveCustomModelsList(platform, models, group.ModelsListConfig.Models)
+		// Concrete channel entries expand wildcard account mappings without
+		// treating an empty group as unrestricted.
+		for _, channel := range channels {
+			for _, pricing := range channel.ModelPricing {
+				if pricing.Platform == platform {
+					models = append(models, pricing.Models...)
+				}
+			}
+			for name := range channel.ModelMapping[platform] {
+				models = append(models, name)
+			}
 		}
+		models = group.EffectiveModelAllowlist().FilterForListing(models)
 		available[platform] = make(map[string]struct{})
 		for _, name := range models {
-			if strings.TrimSpace(name) != "" && !strings.ContainsAny(name, "*?") {
+			if strings.TrimSpace(name) != "" && !strings.ContainsAny(name, "*?") && publicGroupSyncModelRoutable(catalog, group.ID, platform, name, platformAccounts) {
 				available[platform][name] = struct{}{}
 			}
 		}
 	}
 	return available, nil
+}
+
+func publicGroupSyncModelRoutable(catalog *channelCache, groupID int64, platform, name string, accounts []Account) bool {
+	mapped := lookupMappingAcrossPlatforms(catalog, groupID, platform, strings.ToLower(name))
+	if mapped == "" {
+		mapped = name
+	}
+	channel := catalog.channelByGroupID[groupID]
+	accountModel := name
+	if platform == PlatformOpenAI || platform == PlatformGrok || IsMultiProtocolAPIKeyProvider(platform) {
+		accountModel = mapped
+	}
+	for i := range accounts {
+		account := &accounts[i]
+		if shouldHideUnavailableProviderModel(account, name) || !isModelSupportedByAccount(account, accountModel) {
+			continue
+		}
+		if channel == nil || !channel.RestrictModels {
+			return true
+		}
+		billingModel := billingModelForRestriction(channel.BillingModelSource, name, mapped)
+		if billingModel == "" {
+			billingModel = resolveAccountUpstreamModel(account, accountModel)
+		}
+		if lookupPricingAcrossPlatforms(catalog, groupID, platform, billingModel) != nil {
+			return true
+		}
+	}
+	return false
 }
 
 func publicGroupSyncModel(platform, name string, pricing *ChannelModelPricing) PublicGroupSyncModel {
