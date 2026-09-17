@@ -4,6 +4,7 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"testing"
 	"time"
 
@@ -17,7 +18,7 @@ func TestPublicGroupSyncSnapshotFiltersExclusiveGroupsAndPreservesMappingAndPric
 	videoPrice := 0.08
 	groups := &stubGroupRepoForAvailable{activeGroups: []Group{
 		{ID: 2, Name: "exclusive", Status: StatusActive, IsExclusive: true, RateMultiplier: 2},
-		{ID: 1, Name: "public", Status: StatusActive, RateMultiplier: 1.5, UpdatedAt: time.Unix(10, 0)},
+		{ID: 1, Name: "public", SortOrder: 17, Status: StatusActive, RateMultiplier: 1.5, UpdatedAt: time.Unix(10, 0)},
 	}}
 	channels := &mockChannelRepository{listAllFn: func(context.Context) ([]Channel, error) {
 		return []Channel{
@@ -56,6 +57,11 @@ func TestPublicGroupSyncSnapshotFiltersExclusiveGroupsAndPreservesMappingAndPric
 	require.NoError(t, err)
 	require.Len(t, snapshot, 1)
 	require.Equal(t, int64(1), snapshot[0].GroupID)
+	payload, err := json.Marshal(snapshot[0])
+	require.NoError(t, err)
+	var fields map[string]any
+	require.NoError(t, json.Unmarshal(payload, &fields))
+	require.Equal(t, float64(17), fields["sort_order"])
 	require.True(t, snapshot[0].PublicEnabled)
 	require.Equal(t, 1.5, snapshot[0].GroupRatio)
 	require.ElementsMatch(t, []string{"gpt-public", "gpt-image-public"}, snapshot[0].Models)

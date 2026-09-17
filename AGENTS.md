@@ -86,6 +86,15 @@ git push origin main
 
 ## 服务器部署流程
 
+### Passion 现网核对（2026-09-17）
+
+- 当前本仓库对应的 Passion 现网为 `root@142.252.101.47`，入口为 `api.passionapi.com` 和 `direct.passionapi.com`。
+- 两个入口由独立应用容器承载，通过 `/etc/nginx/sites-enabled/sub2api.conf` 和 `direct-passionapi.conf` 切换端口；部署前读取实际配置，不硬编码历史容器名。
+- 当前运行数据目录为 `/opt/sub2api-custom-prod/deploy/data`，PostgreSQL/Redis 容器为 `sub2api-postgres`、`sub2api-redis`。更新应用时保留其环境变量、挂载与网络，不重建数据库容器。
+- 现网分组排序同步补丁要求公共快照保留 `sort_order` 字段。全量更新前必须核对线上补丁，避免回退未同步到 Git 的修复。
+- 下文的 `us-asaki-root`、`clicodeplus` 与 `/root/sub2api` 属于旧环境流程；本机未配置这两个 SSH 别名，不能将代理分配的 `198.18.*` 虚拟地址当成真实服务器地址。
+- 独立构建服务器仍需确认；保留在构建服务器编译、在生产服务器加载并验证镜像的要求。
+
 ### 前置条件
 
 - 本地已配置 SSH 别名 `clicodeplus` 连接到生产服务器（运行服务）
