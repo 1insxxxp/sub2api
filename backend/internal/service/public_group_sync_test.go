@@ -247,13 +247,17 @@ func TestPublicGroupSyncSnapshotCatalogHonorsRoutingRules(t *testing.T) {
 			channel: Channel{RestrictModels: true, BillingModelSource: BillingModelSourceRequested,
 				ModelPricing: []ChannelModelPricing{{Platform: PlatformAnthropic, Models: []string{"claude-sonnet-4-6"}}}},
 			want: []string{"claude-sonnet-4-6"}},
+		{name: "fixed price channel does not gain token fallback models", platform: PlatformAnthropic,
+			mapping: map[string]any{"claude-sonnet-4-6": "claude-sonnet-4-6", "claude-opus-4-6": "claude-opus-4-6"},
+			channel: Channel{ModelPricing: []ChannelModelPricing{{Platform: PlatformAnthropic, Models: []string{"claude-sonnet-4-6"}, BillingMode: BillingModePerRequest, PerRequestPrice: &price}}},
+			want:    []string{"claude-sonnet-4-6"}, priced: true},
 		{name: "deepseek empty mapping preserves own platform", platform: PlatformDeepseek,
 			channel: Channel{ModelPricing: []ChannelModelPricing{{Platform: PlatformDeepseek, Models: []string{"deepseek-flash"}}}},
 			want:    []string{"deepseek-flash"}},
 		{name: "openai channel alias uses forwarded model", platform: PlatformOpenAI,
 			mapping: map[string]any{"gpt-5.4": "gpt-5.4"},
 			channel: Channel{ModelMapping: map[string]map[string]string{PlatformOpenAI: {"public-gpt": "gpt-5.4"}}},
-			want:    []string{"gpt-5.4", "public-gpt"}},
+			want:    []string{"public-gpt"}},
 		{name: "oauth allowlist alias uses gateway normalization", platform: PlatformAnthropic,
 			mapping:   map[string]any{"claude-sonnet-4-5-20250929": "claude-sonnet-4-5-20250929"},
 			allowlist: GroupModelAllowlist{Enabled: true, Models: []string{"claude-sonnet-4-5"}},
@@ -262,7 +266,12 @@ func TestPublicGroupSyncSnapshotCatalogHonorsRoutingRules(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			groups := &stubGroupRepoForAvailable{activeGroups: []Group{{ID: 44, Platform: tc.platform, ModelAllowlist: tc.allowlist}}}
 			tc.channel.GroupIDs, tc.channel.Status = []int64{44}, StatusActive
-			channels := &mockChannelRepository{listAllFn: func(context.Context) ([]Channel, error) { return []Channel{tc.channel}, nil }}
+			channels := &mockChannelRepository{listAllFn: func(context.Context) ([]Channel, error) {
+				if len(tc.channel.ModelPricing) == 0 && len(tc.channel.ModelMapping) == 0 && !tc.channel.RestrictModels {
+					return nil, nil
+				}
+				return []Channel{tc.channel}, nil
+			}}
 			accounts := &stubAccountRepositoryForPublicGroupSync{schedulableByGroup: map[int64][]Account{44: {{Platform: tc.platform, Credentials: map[string]any{"model_mapping": tc.mapping}}}}}
 			snapshot, err := NewPublicGroupSyncService(groups, channels, accounts, nil).Snapshot(context.Background())
 			require.NoError(t, err)
