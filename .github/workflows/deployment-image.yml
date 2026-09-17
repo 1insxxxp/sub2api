@@ -1,0 +1,53 @@
+name: Build deployment image
+
+on:
+  push:
+    branches:
+      - codex/build-public-group-catalog
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      SOURCE_COMMIT: ce1df147e7ab0295c9ca33818efe32df3871b31b
+      APP_VERSION: 0.2.5
+      IMAGE: sub2api-custom:0.2.5-ce1df147e
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ce1df147e7ab0295c9ca33818efe32df3871b31b
+          persist-credentials: false
+      - uses: docker/setup-buildx-action@v3
+      - name: Verify source and build image
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$SOURCE_COMMIT"
+          test "$(cat backend/cmd/server/VERSION)" = "$APP_VERSION"
+          docker buildx build --platform linux/amd64 --load --no-cache \
+            --build-arg VERSION="$APP_VERSION" \
+            --build-arg COMMIT="$SOURCE_COMMIT" \
+            --build-arg GOPROXY=https://proxy.golang.org,direct \
+            --build-arg GOSUMDB=sum.golang.org \
+            --tag "$IMAGE" --file Dockerfile .
+      - name: Verify binary and export image
+        run: |
+          set -euo pipefail
+          mkdir -p image-artifact
+          docker run --rm --entrypoint /app/sub2api "$IMAGE" -version 2>&1 | tee image-artifact/version.txt
+          grep -F "$APP_VERSION" image-artifact/version.txt
+          grep -F "$SOURCE_COMMIT" image-artifact/version.txt
+          docker image inspect "$IMAGE" --format '{{.Id}}' > image-artifact/image-id.txt
+          docker save "$IMAGE" | gzip -1 > image-artifact/sub2api-0.2.5-ce1df147e.tar.gz
+          cd image-artifact
+          sha256sum sub2api-0.2.5-ce1df147e.tar.gz > SHA256SUMS
+      - uses: actions/upload-artifact@v7
+        with:
+          name: sub2api-0.2.5-ce1df147e-linux-amd64
+          path: image-artifact/
+          compression-level: 0
+          retention-days: 3
+          if-no-files-found: error
