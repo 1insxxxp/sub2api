@@ -10,7 +10,7 @@ import (
 // SystemCustomOpenAIRuntimeEligibilityProbe exposes only the transient account
 // and account-model blocks owned by the OpenAI-compatible scheduler.
 type SystemCustomOpenAIRuntimeEligibilityProbe interface {
-	IsSystemCustomAccountRuntimeEligible(account *Account, requestedModel string) bool
+	IsSystemCustomAccountRuntimeEligible(ctx context.Context, account *Account, requestedModel string) bool
 }
 
 func (s *GatewayService) SetSystemCustomOpenAIRuntimeEligibilityProbe(probe SystemCustomOpenAIRuntimeEligibilityProbe) {
@@ -503,7 +503,7 @@ func (s *GatewayService) isSystemCustomSnapshotAccountEligible(
 		return false
 	}
 	if systemCustomUsesOpenAIGateway(group.Platform) && s.systemCustomOpenAIRuntimeProbe != nil &&
-		!s.systemCustomOpenAIRuntimeProbe.IsSystemCustomAccountRuntimeEligible(account, model) {
+		!s.systemCustomOpenAIRuntimeProbe.IsSystemCustomAccountRuntimeEligible(ctx, account, model) {
 		return false
 	}
 	useMixed := group.Platform == PlatformAnthropic || group.Platform == PlatformGemini

@@ -67,11 +67,15 @@ export async function redeem(code: string): Promise<RedeemResult> {
 
 /**
  * Get user's redemption history
- * @returns List of redeemed codes
+ * @returns The requested page of redeemed codes and the total count
  */
 export async function getHistory(
-  params: RedeemListParams
+  pageOrParams: number | RedeemListParams = 1,
+  pageSize = 20
 ): Promise<PaginatedResponse<RedeemHistoryItem>> {
+  const params = typeof pageOrParams === 'number'
+    ? { page: pageOrParams, page_size: pageSize }
+    : pageOrParams
   const { data } = await apiClient.get<PaginatedResponse<RedeemHistoryItem>>('/redeem/history', {
     params
   })

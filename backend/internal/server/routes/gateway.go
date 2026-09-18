@@ -773,7 +773,8 @@ func systemCustomGroupTargetMiddleware(apiKeys systemCustomGroupModelResolver) g
 			return
 		}
 
-		resolution, err := apiKeys.ResolveSystemCustomGroupModel(c.Request.Context(), apiKey, model)
+		resolutionCtx := service.WithOpenAIForwardModel(c.Request.Context(), model, service.IsOpenAIResponsesCompactPath(c))
+		resolution, err := apiKeys.ResolveSystemCustomGroupModel(resolutionCtx, apiKey, model)
 		if err != nil {
 			writeSystemCustomResolutionError(c, err, false)
 			return

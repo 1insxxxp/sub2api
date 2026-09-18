@@ -1,6 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
 import RedeemView from '../RedeemView.vue'
+import Pagination from '@/components/common/Pagination.vue'
+
+vi.mock('vue-router', () => ({ useRouter: () => ({ push: vi.fn() }) }))
+vi.mock('@/api/lottery', () => ({ lotteryAPI: { history: vi.fn().mockResolvedValue({ items: [] }) } }))
 
 const { redeem, getHistory, refreshUser, fetchActiveSubscriptions, showError, showWarning, showSuccess } = vi.hoisted(() => ({
   redeem: vi.fn(),
@@ -45,7 +49,7 @@ describe('RedeemView refresh after redemption', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     redeem.mockResolvedValue({ type: 'balance', value: 20, message: 'Code applied' })
-    getHistory.mockResolvedValue([])
+    getHistory.mockResolvedValue({ items: [], total: 0 })
     refreshUser.mockResolvedValue({ balance: 30, concurrency: 2 })
     fetchActiveSubscriptions.mockResolvedValue([])
     vi.spyOn(console, 'error').mockImplementation(() => {})
@@ -59,9 +63,9 @@ describe('RedeemView refresh after redemption', () => {
     'keeps a successful %s redemption when profile refresh fails', async (type) => {
       redeem.mockResolvedValue({ type, value: 20, message: 'Code applied' })
       refreshUser.mockRejectedValue({ status: 503, message: 'Service unavailable' })
-      getHistory.mockResolvedValueOnce([]).mockResolvedValueOnce([{
+      getHistory.mockResolvedValueOnce({ items: [], total: 0 }).mockResolvedValueOnce({ total: 1, items: [{
         id: 1, code: 'REDEEM-CODE', type, value: 20, used_at: '2026-03-08T00:00:00Z',
-      }])
+      }] })
 
       const wrapper = await submitCode()
 
@@ -83,6 +87,122 @@ describe('RedeemView refresh after redemption', () => {
       wrapper.unmount()
     }
   )
+
+  it('pages on the server, changes size, and resets page and total after redeeming', async () => {
+    getHistory.mockResolvedValue({ items: [], total: 101 })
+    const wrapper = mount(RedeemView, {
+      global: { stubs: { AppLayout: { template: '<div><slot /></div>' }, Icon: true } },
+    })
+    await flushPromises()
+    const pagination = () => wrapper.getComponent(Pagination)
+    expect(getHistory).toHaveBeenLastCalledWith({ page: 1, page_size: 10 })
+    expect(pagination().props('page')).toBe(1)
+    pagination().vm.$emit('update:page', 2)
+    await flushPromises()
+    expect(getHistory).toHaveBeenLastCalledWith({ page: 2, page_size: 10 })
+    pagination().vm.$emit('update:page', 1)
+    await flushPromises()
+    expect(getHistory).toHaveBeenLastCalledWith({ page: 1, page_size: 10 })
+    pagination().vm.$emit('update:pageSize', 50)
+    await flushPromises()
+    expect(getHistory).toHaveBeenLastCalledWith({ page: 1, page_size: 50 })
+    pagination().vm.$emit('update:pageSize', 100)
+    await flushPromises()
+    pagination().vm.$emit('update:page', 2)
+    await flushPromises()
+    expect(getHistory).toHaveBeenLastCalledWith({ page: 2, page_size: 100 })
+    expect(pagination().props('page')).toBe(2)
+    getHistory.mockResolvedValue({ items: [], total: 102 })
+    await wrapper.get('input#code').setValue('NEW-CODE')
+    await wrapper.get('form').trigger('submit')
+    await flushPromises()
+    expect(getHistory).toHaveBeenLastCalledWith({ page: 1, page_size: 100 })
+    expect(wrapper.text()).toContain('102')
+    expect(pagination().props('page')).toBe(1)
+    wrapper.unmount()
+  })
+
+  it('restores the loaded size and keeps rows and navigation usable after a size request fails', async () => {
+    const item = { id: 1, code: 'OLD-ROWS', type: 'balance', value: 20, used_at: '2026-03-08T00:00:00Z' }
+    getHistory.mockResolvedValue({ items: [item], total: 61 })
+    const wrapper = mount(RedeemView, {
+      global: { stubs: { AppLayout: { template: '<div><slot /></div>' }, Icon: true } },
+    })
+    await flushPromises()
+    const pagination = () => wrapper.getComponent(Pagination)
+    pagination().vm.$emit('update:page', 2)
+    await flushPromises()
+    let rejectRequest!: (error: Error) => void
+    getHistory.mockImplementationOnce(() => new Promise((_resolve, reject) => { rejectRequest = reject }))
+    pagination().vm.$emit('update:pageSize', 50)
+    await flushPromises()
+    expect(getHistory).toHaveBeenLastCalledWith({ page: 1, page_size: 50 })
+    expect(wrapper.get('fieldset').attributes('disabled')).toBeDefined()
+    rejectRequest(new Error('Network error'))
+    await flushPromises()
+    expect(pagination().props('pageSize')).toBe(10)
+    expect(wrapper.text()).toContain('OLD-ROWS')
+    expect(wrapper.text()).toContain('61')
+    expect(pagination().props('page')).toBe(2)
+    expect(wrapper.get('fieldset').attributes('disabled')).toBeUndefined()
+    expect(showError).toHaveBeenCalledWith('redeem.historyLoadFailed')
+    pagination().vm.$emit('update:page', 3)
+    await flushPromises()
+    expect(getHistory).toHaveBeenLastCalledWith({ page: 3, page_size: 10 })
+    pagination().vm.$emit('update:pageSize', 50)
+    await flushPromises()
+    expect(getHistory).toHaveBeenLastCalledWith({ page: 1, page_size: 50 })
+    expect(pagination().props('pageSize')).toBe(50)
+    expect(pagination().props('page')).toBe(1)
+    wrapper.unmount()
+  })
+
+  it.each(['success', 'failure'])('ignores a stale history %s after a newer size request succeeds', async (outcome) => {
+    let resolveOld!: (value: unknown) => void
+    let rejectOld!: (error: Error) => void
+    getHistory.mockResolvedValue({ items: [], total: 61 })
+    const wrapper = mount(RedeemView, {
+      global: { stubs: { AppLayout: { template: '<div><slot /></div>' }, Icon: true } },
+    })
+    await flushPromises()
+    const pagination = () => wrapper.getComponent(Pagination)
+    getHistory.mockImplementationOnce(() => new Promise((resolve, reject) => {
+      resolveOld = resolve
+      rejectOld = reject
+    }))
+    pagination().vm.$emit('update:page', 2)
+    getHistory.mockResolvedValue({ items: [{
+      id: 2, code: 'NEW-ROWS', type: 'balance', value: 30, used_at: '2026-03-08T00:00:00Z',
+    }], total: 61 })
+    // Force overlapping requests to exercise responses arriving out of order.
+    pagination().vm.$emit('update:pageSize', 50)
+    await flushPromises()
+    pagination().vm.$emit('update:page', 2)
+    await flushPromises()
+    expect(getHistory).toHaveBeenLastCalledWith({ page: 2, page_size: 50 })
+    if (outcome === 'success') {
+      resolveOld({ items: [], total: 0 })
+    } else {
+      rejectOld(new Error('Stale network error'))
+    }
+    await flushPromises()
+    expect(pagination().props('pageSize')).toBe(50)
+    expect(wrapper.text()).toContain('NEW-ROWS')
+    expect(wrapper.text()).toContain('61')
+    expect(pagination().props('page')).toBe(2)
+    expect(wrapper.get('fieldset').attributes('disabled')).toBeUndefined()
+    expect(showError).not.toHaveBeenCalled()
+    pagination().vm.$emit('update:page', 1)
+    await flushPromises()
+    expect(getHistory).toHaveBeenLastCalledWith({ page: 1, page_size: 50 })
+    wrapper.unmount()
+  })
+
+  it('hides pagination for empty history', async () => {
+    const wrapper = await submitCode()
+    expect(wrapper.findComponent(Pagination).exists()).toBe(false)
+    wrapper.unmount()
+  })
 
   it('finishes normally without a warning when profile refresh succeeds', async () => {
     const wrapper = await submitCode()

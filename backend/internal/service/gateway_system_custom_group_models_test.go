@@ -414,6 +414,25 @@ func TestGatewayBuildDynamicSystemCustomGroupCatalogFallsBackWhenOpenAIRuntimeBl
 	require.Equal(t, 1, repo.calls)
 }
 
+func TestGatewaySystemCustomCompactTicketGateUsesOutboundModel(t *testing.T) {
+	openAI := &OpenAIGatewayService{cfg: &config.Config{Gateway: config.GatewayConfig{
+		OpenAICompactModel: "gpt-5.5",
+		OpenAICodexTicket: config.OpenAICodexTicketConfig{
+			Enabled: true, TargetLength: 292, TTLSeconds: 3600, FailClosed: true,
+			Models: []string{"gpt-6-astra"},
+		},
+	}}}
+	account := schedulableSystemCustomTestAccount(101, PlatformOpenAI, map[string]any{"gpt-6-astra": "gpt-6-astra"})
+	account.Type = AccountTypeOAuth
+	group := directSourceGroup(10, PlatformOpenAI)
+	svc := &GatewayService{}
+	svc.SetSystemCustomOpenAIRuntimeEligibilityProbe(openAI)
+
+	require.False(t, svc.isSystemCustomSnapshotAccountEligible(context.Background(), group, &account, "gpt-6-astra", false))
+	ctx := WithOpenAIForwardModel(context.Background(), "gpt-6-astra", true)
+	require.True(t, svc.isSystemCustomSnapshotAccountEligible(ctx, group, &account, "gpt-6-astra", false))
+}
+
 func TestGatewayBuildDynamicSystemCustomGroupCatalogFallsBackWhenSchedulingThresholdBlocksFirstSource(t *testing.T) {
 	first := directSourceGroup(10, PlatformOpenAI)
 	second := directSourceGroup(20, PlatformOpenAI)

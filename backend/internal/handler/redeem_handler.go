@@ -95,18 +95,40 @@ func (h *RedeemHandler) GetHistory(c *gin.Context) {
 		return
 	}
 
-	if isRedeemPaginationRequest(c) {
-		page, pageSize := response.ParsePagination(c)
-		codes, result, err := h.redeemService.GetUserHistoryPaginated(
-			c.Request.Context(),
-			subject.UserID,
-			pagination.PaginationParams{Page: page, PageSize: pageSize},
-		)
+	// Keep the legacy array response for clients that do not request pagination.
+	if c.Request.URL.Query().Has("page") || c.Request.URL.Query().Has("page_size") || isRedeemPaginationRequest(c) {
+		page, pageSize := 1, 20
+		if raw := c.Query("limit"); raw != "" && !c.Request.URL.Query().Has("page_size") {
+			value, err := strconv.Atoi(raw)
+			if err != nil || value < 1 {
+				response.BadRequest(c, "Invalid limit")
+				return
+			}
+			pageSize = value
+		}
+		for name, target := range map[string]*int{"page": &page, "page_size": &pageSize} {
+			if raw, exists := c.GetQuery(name); exists {
+				value, err := strconv.Atoi(raw)
+				if err != nil || value < 1 {
+					response.BadRequest(c, "Invalid "+name)
+					return
+				}
+				*target = value
+			}
+		}
+		if pageSize > 1000 {
+			pageSize = 1000
+		}
+		if page-1 > int(^uint(0)>>1)/pageSize {
+			response.BadRequest(c, "Invalid page")
+			return
+		}
+		codes, result, err := h.redeemService.GetUserHistoryPaginated(c.Request.Context(), subject.UserID, pagination.PaginationParams{Page: page, PageSize: pageSize})
 		if err != nil {
 			response.ErrorFrom(c, err)
 			return
 		}
-		response.Paginated(c, redeemCodesFromService(codes), result.Total, result.Page, result.PageSize)
+		response.Paginated(c, redeemCodesFromService(codes), result.Total, page, pageSize)
 		return
 	}
 

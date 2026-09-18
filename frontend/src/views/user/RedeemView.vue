@@ -518,16 +518,20 @@
             </p>
           </div>
 
-          <Pagination
-            v-if="!loadingHistory && historyPagination.total > historyPagination.page_size"
-            class="mt-4 overflow-hidden rounded-lg border border-slate-200 dark:border-dark-700"
-            :page="historyPagination.page"
-            :total="historyPagination.total"
-            :page-size="historyPagination.page_size"
-            :page-size-options="redeemPageSizeOptions"
-            @update:page="handleHistoryPageChange"
-            @update:pageSize="handleHistoryPageSizeChange"
-          />
+          <fieldset
+            v-if="historyPagination.total > 0"
+            :disabled="loadingHistory || submitting"
+          >
+            <Pagination
+              class="mt-4 overflow-hidden rounded-lg border border-slate-200 dark:border-dark-700"
+              :page="historyPagination.page"
+              :total="historyPagination.total"
+              :page-size="historyPagination.page_size"
+              :page-size-options="redeemPageSizeOptions"
+              @update:page="handleHistoryPageChange"
+              @update:pageSize="handleHistoryPageSizeChange"
+            />
+          </fieldset>
         </div>
       </section>
     </div>
@@ -602,6 +606,7 @@ const history = ref<RedeemHistoryItem[]>([])
 const loadingHistory = ref(false)
 const lotteryBalanceHistory = ref<LotteryDraw[]>([])
 const loadingLotteryHistory = ref(false)
+let historyRequest = 0
 const contactInfo = ref('')
 const redeemPageSizeOptions = [10, 20, 50]
 const historyPagination = reactive({
@@ -681,28 +686,32 @@ const formatHistoryValue = (item: RedeemHistoryItem) => {
   }
 }
 
-const fetchHistory = async () => {
+const fetchHistory = async (page = historyPagination.page, pageSize = historyPagination.page_size) => {
+  const request = ++historyRequest
   loadingHistory.value = true
   try {
     const response = await redeemAPI.getHistory({
-      page: historyPagination.page,
-      page_size: historyPagination.page_size
+      page,
+      page_size: pageSize
     })
+    if (request !== historyRequest) return
     if (Array.isArray(response)) {
       history.value = response
       historyPagination.total = response.length
       historyPagination.page = 1
-      historyPagination.page_size = Math.max(response.length, historyPagination.page_size)
+      historyPagination.page_size = Math.max(response.length, pageSize)
     } else {
       history.value = response.items || []
       historyPagination.total = response.total
-      historyPagination.page = response.page
-      historyPagination.page_size = response.page_size
+      historyPagination.page = response.page ?? page
+      historyPagination.page_size = response.page_size ?? pageSize
     }
   } catch (error) {
+    if (request !== historyRequest) return
+    appStore.showError(t('redeem.historyLoadFailed'))
     console.error('Failed to fetch history:', error)
   } finally {
-    loadingHistory.value = false
+    if (request === historyRequest) loadingHistory.value = false
   }
 }
 
@@ -722,14 +731,11 @@ const fetchLotteryBalanceHistory = async () => {
 }
 
 const handleHistoryPageChange = (page: number) => {
-  historyPagination.page = page
-  fetchHistory()
+  fetchHistory(page)
 }
 
 const handleHistoryPageSizeChange = (pageSize: number) => {
-  historyPagination.page_size = pageSize
-  historyPagination.page = 1
-  fetchHistory()
+  fetchHistory(1, pageSize)
 }
 
 const hasSeenSubscriptionRedeemGuide = () => {

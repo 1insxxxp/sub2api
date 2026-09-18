@@ -1,4 +1,20 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { getHistory as getPaginatedHistory } from '../redeem'
+
+describe('redemption history numeric pagination', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  it.each([[undefined, undefined, 1, 20], [2, 50, 2, 50], [3, 100, 3, 100]])(
+    'requests page %s with size %s', async (page, size, expectedPage, expectedSize) => {
+      const response = { items: [], total: 105, page: expectedPage, page_size: expectedSize, pages: 6 }
+      get.mockResolvedValue({ data: response })
+      expect(await getPaginatedHistory(page, size)).toEqual(response)
+      expect(get).toHaveBeenCalledWith('/redeem/history', {
+        params: { page: expectedPage, page_size: expectedSize }
+      })
+    }
+  )
+})
 
 const { del, get, post } = vi.hoisted(() => ({
   del: vi.fn(),
