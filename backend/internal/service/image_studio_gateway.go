@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"mime/multipart"
@@ -15,9 +16,13 @@ import (
 
 	"github.com/Wei-Shaw/sub2api/internal/pkg/ctxkey"
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
 	"github.com/gin-gonic/gin"
 	"github.com/tidwall/gjson"
+	"go.uber.org/zap"
 )
+
+const imageStudioMaxAccountAttempts = 3
 
 type ImageStudioAPIKeyProvider interface {
 	GetDefaultImageStudioAPIKey(ctx context.Context, userID int64) (*APIKey, error)
@@ -177,26 +182,65 @@ func (e *ImageStudioGatewayExecutor) execute(ctx context.Context, input imageStu
 	}
 	channelMapping, _ := e.gateway.ResolveChannelMappingAndRestrict(ctx, apiKey.GroupID, parsed.Model)
 
-	selection, _, err := e.gateway.SelectAccountWithSchedulerForImages(
-		WithOpenAIImageGenerationIntent(ctx),
-		apiKey.GroupID,
-		parsed.StickySessionSeed(),
-		parsed.Model,
-		nil,
-		parsed.RequiredCapability,
-	)
-	if err != nil {
-		return nil, fmt.Errorf("select image account: %w", err)
+	requestCtx := WithOpenAIImagesEndpoint(WithOpenAIImageGenerationIntent(ctx))
+	excluded := make(map[int64]struct{})
+	var account *Account
+	var result *OpenAIForwardResult
+	var lastFailoverErr error
+	for attempt := 0; attempt < imageStudioMaxAccountAttempts; attempt++ {
+		if err := requestCtx.Err(); err != nil {
+			return nil, err
+		}
+		selection, _, selectErr := e.gateway.SelectAccountWithSchedulerForImages(
+			requestCtx, apiKey.GroupID, parsed.StickySessionSeed(), parsed.Model, excluded, parsed.RequiredCapability,
+		)
+		if selectErr != nil {
+			if lastFailoverErr != nil && errors.Is(selectErr, ErrNoAvailableAccounts) {
+				return nil, lastFailoverErr
+			}
+			return nil, fmt.Errorf("select image account: %w", selectErr)
+		}
+		if selection == nil || selection.Account == nil {
+			if lastFailoverErr != nil {
+				return nil, lastFailoverErr
+			}
+			return nil, ErrNoAvailableAccounts
+		}
+		account = selection.Account
+		ginCtx, recorder = newImageStudioGatewayGinContext(input.Endpoint, input.ContentType, input.Body, input.UserAgent, input.IPAddress)
+		ginCtx.Request = ginCtx.Request.WithContext(requestCtx)
+		result, err = func() (*OpenAIForwardResult, error) {
+			if selection.ReleaseFunc != nil {
+				defer selection.ReleaseFunc()
+			}
+			return e.gateway.ForwardImages(requestCtx, ginCtx, account, input.Body, parsed, channelMapping.MappedModel)
+		}()
+		if err == nil {
+			break
+		}
+		var failoverErr *UpstreamFailoverError
+		if !errors.As(err, &failoverErr) {
+			return nil, fmt.Errorf("forward image request: %w", err)
+		}
+		logger.FromContext(ctx).Warn("image_studio.upstream_failed",
+			zap.String("component", "service.image_studio"),
+			zap.Int64("account_id", account.ID),
+			zap.String("model", parsed.Model),
+			zap.Int("upstream_status", failoverErr.StatusCode),
+			zap.Int("attempt", attempt+1),
+		)
+		// A buffered response can contain an image even when a read failure discards its bytes.
+		switch gjson.GetBytes(failoverErr.ResponseBody, "error.code").String() {
+		case OpenAIUpstreamStreamReadErrorCode, OpenAIUpstreamHTTP2StreamErrorCode, OpenAIUpstreamStreamTruncatedCode:
+			return nil, fmt.Errorf("forward image request: %w", err)
+		}
+		// Never regenerate after semantic output or an image result: it may already be billable.
+		if !failoverErr.ShouldRetryNextAccount() || ginCtx.Writer.Written() || (result != nil && result.ImageCount > 0) {
+			return nil, fmt.Errorf("forward image request: %w", err)
+		}
+		excluded[account.ID] = struct{}{}
+		lastFailoverErr = fmt.Errorf("forward image request: %w", err)
 	}
-	if selection == nil || selection.Account == nil {
-		return nil, ErrNoAvailableAccounts
-	}
-	if selection.ReleaseFunc != nil {
-		defer selection.ReleaseFunc()
-	}
-	account := selection.Account
-
-	result, err := e.gateway.ForwardImages(WithOpenAIImageGenerationIntent(ctx), ginCtx, account, input.Body, parsed, channelMapping.MappedModel)
 	if err != nil {
 		return nil, fmt.Errorf("forward image request: %w", err)
 	}

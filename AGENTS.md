@@ -646,6 +646,14 @@ POST /api/v1/admin/accounts/:id/test
 | 字段 | 类型 | 必填 | 说明 |
 |------|------|------|------|
 | `model_id` | string | 否 | 指定测试模型，如 `claude-opus-4-6`；不传则使用默认模型 |
+| `prompt` | string | 否 | 生图测试提示词；应明确要求生成图片 |
+| `mode` | string | 否 | Grok 生图传 `image`；OpenAI 常规测试传 `default` |
+| `image_data_url` | string | 否 | Grok 图片编辑参考图，格式为 `data:<mime>;base64,...` |
+
+生图测试会消耗上游额度。SSE 必须返回可解码的 `image` 事件及成功的结束事件
+（当前生图分支为 `test_complete`，部分分支为 `test_end`），
+不能仅凭 HTTP 200 判定成功。该接口直接测试账号，不代表用户分组计费已验证；
+成功后还会尝试恢复该账号可恢复的运行状态。
 
 **响应格式**：SSE（Server-Sent Events）流
 
@@ -939,6 +947,27 @@ curl -s "${BASE}/api/v1/admin/settings/admin-api-key" -H "x-api-key: ${KEY}"
 
 ---
 
+### 3.4 AI 生图配置
+
+```
+GET /api/v1/admin/settings/image-studio
+PUT /api/v1/admin/settings/image-studio
+```
+
+`allowed_models` 为默认模型列表，`default_model` 必须在列表内。PUT 为完整配置更新，
+应先 GET 并保留开关、存储、保留天数、数量限制和比例配置，仅调整目标字段；
+响应中的 `storage_status` 是只读字段，不需回传。
+若分组启用了 `model_allowlist`，生图页面优先使用该分组白名单，并按平台过滤生图模型，
+不会简单展示全局列表。新增模型应先真实出图验证，并核对分组价格覆盖。
+
+```bash
+curl -s "${BASE}/api/v1/admin/settings/image-studio" -H "x-api-key: ${KEY}"
+# image-studio.json 为读取现有配置后仅修改目标字段的完整 JSON，不含密钥。
+curl -X PUT "${BASE}/api/v1/admin/settings/image-studio" \
+  -H "x-api-key: ${KEY}" -H "Content-Type: application/json" \
+  --data-binary @image-studio.json
+```
+
 ### 4. 用户管理
 
 #### 4.1 用户列表
@@ -1076,6 +1105,26 @@ curl -X PUT "${BASE}/api/v1/admin/groups/123" \
 如需同时调整倍率，可在同一请求中增加 `rate_multiplier`；倍率为 `1` 时不额外放大或折扣。
 更新成功后返回更新后的分组对象。提交前可使用 `POST /api/v1/admin/groups/pricing-coverage`
 预览指定分组/模型的定价覆盖情况（只读校验，不会写入）。
+
+#### 5.5 分组模型候选与白名单
+
+```
+GET /api/v1/admin/groups/:id/model-allowlist-candidates
+PUT /api/v1/admin/groups/:id
+```
+
+候选接口返回 `data.models`，表示配置推导的候选，不保证上游实际可用。
+更新字段为 `model_allowlist: {"enabled": true, "models": [...]}`，完整替换该分组白名单；
+启用后会限制可请求模型，不仅影响显示。修改时保留原有非生图模型，不能为展示新模型
+盲目启用白名单或扩大到其他分组。
+
+```bash
+curl -s "${BASE}/api/v1/admin/groups/123/model-allowlist-candidates" \
+  -H "x-api-key: ${KEY}"
+curl -X PUT "${BASE}/api/v1/admin/groups/123" \
+  -H "x-api-key: ${KEY}" -H "Content-Type: application/json" \
+  -d '{"model_allowlist":{"enabled":true,"models":["gpt-image-2"]}}'
+```
 
 ---
 

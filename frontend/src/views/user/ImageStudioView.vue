@@ -937,11 +937,27 @@ const selectedPreviewMeta = computed(() => {
 })
 const failureDescription = computed(() => {
   if (!generationFailure.value) return ''
-  if (generationFailure.value.reason === 'IMAGE_PROVIDER_TIMEOUT_OR_DISCONNECT') {
-    return t('imageStudio.failureTimeoutDescription')
-  }
-  return generationFailure.value.message || t('imageStudio.failureGenericDescription')
+  return imageFailureMessage(generationFailure.value.reason, generationFailure.value.message)
 })
+
+function imageFailureMessage(reason?: string, message?: string): string {
+  switch (reason) {
+    case 'IMAGE_PROVIDER_TIMEOUT_OR_DISCONNECT':
+      return t('imageStudio.failureTimeoutDescription')
+    case 'IMAGE_PROVIDER_UNAVAILABLE':
+      return t('imageStudio.failureProviderUnavailable')
+    case 'IMAGE_PROVIDER_RATE_LIMITED':
+      return t('imageStudio.failureProviderRateLimited')
+    case 'IMAGE_STUDIO_NO_AVAILABLE_ACCOUNTS':
+      return t('imageStudio.failureNoAvailableAccounts')
+    case 'IMAGE_PROVIDER_REJECTED':
+      return t('imageStudio.failureProviderRejected')
+    case 'IMAGE_PROVIDER_REQUEST_TOO_LARGE':
+      return t('imageStudio.failureRequestTooLarge')
+    default:
+      return message || t('imageStudio.failureGenericDescription')
+  }
+}
 const activeTaskHint = computed(() => {
   const unfinishedTasks = activeTasks.value.filter(isUnfinishedGenerationTask)
   if (unfinishedTasks.length > 1) {
@@ -1260,7 +1276,7 @@ async function resumePersistedGenerationTask(taskID: number) {
 
   if (task.status === 'failed') {
     clearPersistedGenerationTaskID()
-    const message = task.error_message || t('imageStudio.generateFailed')
+    const message = imageFailureMessage(task.error_reason, task.error_message)
     generationFailure.value = {
       message,
       reason: task.error_reason,
@@ -1450,7 +1466,7 @@ async function waitForImageTask(taskID: number): Promise<ImageStudioImage> {
       clearPersistedGenerationTaskID()
       throw {
         reason: task.error_reason,
-        message: task.error_message || t('imageStudio.generateFailed'),
+        message: imageFailureMessage(task.error_reason, task.error_message),
       }
     }
     delay = Math.min(3000, delay + 400)

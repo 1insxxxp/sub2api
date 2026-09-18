@@ -807,6 +807,41 @@ describe('ImageStudioView', () => {
     expect(wrapper.find('[data-testid="image-studio-output-background-transparent"]').exists()).toBe(false)
   })
 
+  it.each([
+    ['IMAGE_PROVIDER_UNAVAILABLE', 'imageStudio.failureProviderUnavailable'],
+    ['IMAGE_PROVIDER_RATE_LIMITED', 'imageStudio.failureProviderRateLimited'],
+    ['IMAGE_STUDIO_NO_AVAILABLE_ACCOUNTS', 'imageStudio.failureNoAvailableAccounts'],
+    ['IMAGE_PROVIDER_REJECTED', 'imageStudio.failureProviderRejected'],
+    ['IMAGE_PROVIDER_REQUEST_TOO_LARGE', 'imageStudio.failureRequestTooLarge'],
+  ])('shows an actionable message for %s', async (reason, translation) => {
+    vi.useFakeTimers()
+    getTask.mockResolvedValueOnce({
+      id: 22,
+      mode: 'generation',
+      status: 'failed',
+      model: 'gpt-image-2',
+      error_reason: reason,
+      error_message: 'provider failure',
+    })
+    const wrapper = mount(ImageStudioView, {
+      global: {
+        stubs: {
+          AppLayout: { template: '<div><slot /></div>' },
+          Icon: true,
+        },
+      },
+    })
+    await flushPromises()
+    await wrapper.get('[data-testid="image-studio-prompt"]').setValue('a blue square')
+    await wrapper.get('[data-testid="image-studio-submit"]').trigger('submit')
+    await vi.advanceTimersByTimeAsync(1300)
+    await flushPromises()
+
+    expect(wrapper.get('[data-testid="image-studio-failure-panel"]').text()).toContain(translation)
+    expect(showError).toHaveBeenCalledWith(translation)
+    expect(createTask).toHaveBeenCalledTimes(1)
+  })
+
   it('shows an inline recovery panel and retries failed generation at 1K', async () => {
     vi.useFakeTimers()
     getTask.mockResolvedValueOnce({

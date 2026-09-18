@@ -716,7 +716,10 @@ func TestAdminService_CompositeRoutesRejectSystemCustomGroup(t *testing.T) {
 		{"create", func() error { _, err := svc.CreateCompositeRoute(ctx, 109, CompositeRouteInput{}); return err }},
 		{"update", func() error { _, err := svc.UpdateCompositeRoute(ctx, 109, 1, CompositeRouteInput{}); return err }},
 		{"delete", func() error { return svc.DeleteCompositeRoute(ctx, 109, 1) }},
-		{"preview", func() error { _, err := svc.PreviewCompositeRoute(ctx, 109, CompositeRoutePreviewRequest{}); return err }},
+		{"preview", func() error {
+			_, err := svc.PreviewCompositeRoute(ctx, 109, CompositeRoutePreviewRequest{})
+			return err
+		}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			require.ErrorIs(t, tc.run(), ErrSystemCustomGroupManagedOnly)

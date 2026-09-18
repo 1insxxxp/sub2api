@@ -7,6 +7,7 @@ import (
 	"io"
 	"mime"
 	"net"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
@@ -811,7 +812,7 @@ func imageStudioModelSupportedByGroup(group *Group, model string) bool {
 	case PlatformGrok:
 		return isGrokImageGenerationModel(model)
 	case PlatformOpenAI, "":
-		return IsGPTImageGenerationModel(model)
+		return isOpenAIImageGenerationModel(model)
 	default:
 		return isOpenAIImageGenerationModel(model)
 	}
@@ -1177,10 +1178,43 @@ func imageStudioExecutionError(operation string, err error) error {
 	if err == nil {
 		return nil
 	}
+	var applicationErr *infraerrors.ApplicationError
+	var failoverErr *UpstreamFailoverError
+	var imageErr *OpenAIImagesUpstreamError
+	switch {
+	case errors.As(err, &applicationErr):
+		return fmt.Errorf("%s: %w", operation, err)
+	case errors.As(err, &failoverErr):
+		return fmt.Errorf("%s: %w", operation, imageStudioProviderUnavailableError(failoverErr.StatusCode, err))
+	case errors.As(err, &imageErr):
+		if imageErr.StatusCode == http.StatusBadRequest || imageErr.StatusCode == http.StatusUnprocessableEntity {
+			return fmt.Errorf("%s: %w", operation, infraerrors.BadRequest(
+				"IMAGE_PROVIDER_REJECTED", "image provider rejected the request; check the prompt, reference images, and generation parameters",
+			).WithCause(err))
+		}
+		return fmt.Errorf("%s: %w", operation, imageStudioProviderUnavailableError(imageErr.StatusCode, err))
+	case errors.Is(err, ErrNoAvailableAccounts):
+		return fmt.Errorf("%s: %w", operation, infraerrors.ServiceUnavailable(
+			"IMAGE_STUDIO_NO_AVAILABLE_ACCOUNTS", "no image provider is available in this group; select a key from another image group or contact the administrator",
+		).WithCause(err))
+	}
 	if imageStudioProviderTimedOutOrDisconnected(err) {
 		return fmt.Errorf("%s: %w", operation, ErrImageProviderTimeoutOrDisconnect.WithCause(err))
 	}
 	return fmt.Errorf("%s: %w", operation, err)
+}
+
+func imageStudioProviderUnavailableError(status int, cause error) error {
+	if status == http.StatusRequestEntityTooLarge {
+		return infraerrors.New(http.StatusRequestEntityTooLarge, "IMAGE_PROVIDER_REQUEST_TOO_LARGE",
+			"image request exceeds the provider limit; reduce the reference image size or count").WithCause(cause)
+	}
+	if status == http.StatusTooManyRequests {
+		return infraerrors.New(http.StatusTooManyRequests, "IMAGE_PROVIDER_RATE_LIMITED",
+			"image provider is rate limiting requests; retry later or select a key from another image group").WithCause(cause)
+	}
+	return infraerrors.ServiceUnavailable("IMAGE_PROVIDER_UNAVAILABLE",
+		"image provider is temporarily unavailable; retry later or select a key from another image group").WithCause(cause)
 }
 
 func imageStudioProviderTimedOutOrDisconnected(err error) bool {

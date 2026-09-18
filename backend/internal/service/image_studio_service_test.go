@@ -571,6 +571,74 @@ func TestImageStudioServiceGetOptionsReturnsGeminiImageModelsForGeminiGroup(t *t
 	}, options.Groups[1].Models)
 }
 
+func TestImageStudioServiceOpenAICompatibleGrokModelAvailability(t *testing.T) {
+	for _, tc := range []struct {
+		name      string
+		platform  string
+		allowlist GroupModelsListConfig
+		allowed   bool
+	}{
+		{name: "global models on OpenAI compatible group", platform: PlatformOpenAI, allowed: true},
+		{
+			name:      "explicit group allowlist includes Grok",
+			platform:  PlatformOpenAI,
+			allowlist: GroupModelsListConfig{Enabled: true, Models: []string{"grok-imagine-image"}},
+			allowed:   true,
+		},
+		{
+			name:      "group allowlist still restricts global models",
+			platform:  PlatformOpenAI,
+			allowlist: GroupModelsListConfig{Enabled: true, Models: []string{"gpt-image-2"}},
+		},
+		{name: "Gemini group still excludes Grok", platform: PlatformGemini},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			settings := defaultImageStudioSettings()
+			settings.Enabled = true
+			settings.AllowedModels = []string{"gpt-image-2", "grok-imagine-image", "gemini-3.1-flash-image-preview"}
+			settings.DefaultModel = "gpt-image-2"
+			svc := NewImageStudioService(&imageStudioRepoStub{}, &imageStudioConfigReaderStub{cfg: settings})
+			svc.SetGroupResolver(&imageStudioGroupResolverStub{groups: []Group{{
+				ID:                   133,
+				Platform:             tc.platform,
+				Status:               StatusActive,
+				AllowImageGeneration: true,
+				ModelsListConfig:     tc.allowlist,
+			}}})
+
+			options, err := svc.GetOptions(context.Background(), 7)
+			require.NoError(t, err)
+			require.Len(t, options.Groups, 1)
+			var models []string
+			for _, option := range options.Groups[0].Models {
+				models = append(models, option.Model)
+			}
+			if tc.allowed {
+				require.Contains(t, models, "grok-imagine-image")
+			} else {
+				require.NotContains(t, models, "grok-imagine-image")
+			}
+			if tc.platform == PlatformOpenAI {
+				require.NotContains(t, models, "gemini-3.1-flash-image-preview")
+			}
+
+			_, input, err := svc.prepareGenerateInput(context.Background(), ImageStudioGenerateInput{
+				UserID:  7,
+				GroupID: imageStudioInt64Ptr(133),
+				Model:   "grok-imagine-image",
+				Prompt:  "a blue square",
+			})
+			if tc.allowed {
+				require.NoError(t, err)
+				require.Equal(t, "grok-imagine-image", input.Model)
+			} else {
+				require.Error(t, err)
+				require.Equal(t, "IMAGE_STUDIO_MODEL_NOT_AVAILABLE", infraerrors.Reason(err))
+			}
+		})
+	}
+}
+
 func TestImageStudioServiceGetOptionsFiltersGeminiTextModelsFromCustomGroupList(t *testing.T) {
 	settings := defaultImageStudioSettings()
 	settings.Enabled = true
