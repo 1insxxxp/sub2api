@@ -68,24 +68,24 @@
                     v-for="item in rechargeOverview"
                     :key="item.amount"
                     data-testid="recharge-rule-row"
-                    class="flex min-w-0 items-start justify-between gap-3 rounded-lg border border-white/80 bg-white px-3 py-2.5 dark:border-dark-600 dark:bg-dark-800"
+                    class="flex min-w-0 flex-wrap items-start justify-between gap-x-3 gap-y-0.5 rounded-lg border border-white/80 bg-white px-3 py-2.5 dark:border-dark-600 dark:bg-dark-800"
                   >
-                    <div class="min-w-0">
+                    <div class="shrink-0">
                       <p class="text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap">{{ t('payment.rechargeOfferAmount') }}</p>
-                      <p class="truncate text-sm font-semibold text-gray-900 dark:text-white whitespace-nowrap">
+                      <p class="text-sm font-semibold tabular-nums text-gray-900 dark:text-white whitespace-nowrap">
                         {{ formatSelectedPaymentAmount(item.amount) }}
                       </p>
                     </div>
                     <div class="min-w-0 shrink-0 text-right">
                       <p class="text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap">{{ t('payment.rechargeOfferCreditTotal') }}</p>
-                      <p class="text-sm font-semibold text-primary-600 dark:text-primary-400 whitespace-nowrap">
+                      <p class="text-sm font-semibold tabular-nums text-primary-600 dark:text-primary-400 whitespace-nowrap">
                         {{ formatCreditedAmount(item.credited) }}
                       </p>
-                      <p v-if="item.bonus > 0" class="mt-0.5 text-xs font-medium text-green-600 dark:text-green-400 whitespace-nowrap">
-                        {{ t('payment.rechargeOfferBase') }} {{ formatCreditedAmount(item.baseCredited) }}
-                        + {{ t('payment.rechargeOfferBonus') }} {{ formatCreditedAmount(item.bonus) }}
-                      </p>
                     </div>
+                    <p v-if="item.bonus > 0" class="flex w-full flex-wrap justify-end gap-x-1 text-xs font-medium tabular-nums text-green-600 dark:text-green-400">
+                      <span class="whitespace-nowrap">{{ t('payment.rechargeOfferBase') }} {{ formatCreditedAmount(item.baseCredited) }}</span>
+                      <span class="whitespace-nowrap">+ {{ t('payment.rechargeOfferBonus') }} {{ formatCreditedAmount(item.bonus) }}</span>
+                    </p>
                   </div>
                 </div>
               </div>
