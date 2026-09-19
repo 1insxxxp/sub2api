@@ -553,7 +553,11 @@ onMounted(load)
 .custom-groups-manager .custom-group-form-footer { padding-top: 0.75rem; }
 .custom-groups-manager .custom-group-form-footer > button { min-height: 2.5rem; }
 .custom-groups--neutral { max-height: inherit; }
-.custom-groups--neutral.is-editing { height: min(72dvh, 42rem); }
+.custom-groups--neutral.is-editing {
+  /* Older WebKit ignores this height when the flex basis is zero. */
+  flex-basis: auto;
+  height: min(72dvh, 42rem);
+}
 .custom-groups--neutral .custom-groups-toolbar {
   flex-direction: row;
   align-items: center;
