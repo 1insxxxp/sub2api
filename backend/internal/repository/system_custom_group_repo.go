@@ -430,6 +430,7 @@ func updateSystemCustomGroupRecord(ctx context.Context, client *dbent.Client, gr
 		SetName(groupIn.Name).
 		SetDescription(groupIn.Description).
 		SetTag(groupIn.Tag).
+		SetTagColor(groupIn.TagColor).
 		SetPlatform(service.PlatformComposite).
 		SetRateMultiplier(1).
 		SetIsExclusive(true).

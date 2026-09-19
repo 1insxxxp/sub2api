@@ -1,8 +1,8 @@
 <template>
   <!-- Row 1: Core Stats -->
-  <div class="grid grid-cols-2 gap-4 lg:grid-cols-4">
+  <div class="dashboard-stat-grid grid grid-cols-2 gap-3 lg:grid-cols-4">
     <!-- Balance -->
-    <div v-if="!isSimple" class="card p-4">
+    <div v-if="!isSimple" class="workspace-surface dashboard-stat p-4">
       <div class="flex items-center gap-3">
         <div class="rounded-lg bg-primary-100 p-2 dark:bg-primary-900/30">
           <svg class="h-5 w-5 text-primary-600 dark:text-primary-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -18,7 +18,7 @@
     </div>
 
     <!-- API Keys -->
-    <div class="card p-4">
+    <div class="workspace-surface dashboard-stat p-4">
       <div class="flex items-center gap-3">
         <div class="rounded-lg bg-blue-100 p-2 dark:bg-blue-900/30">
           <Icon name="key" size="md" class="text-blue-600 dark:text-blue-400" :stroke-width="2" />
@@ -32,7 +32,7 @@
     </div>
 
     <!-- Today Requests -->
-    <div class="card p-4">
+    <div class="workspace-surface dashboard-stat p-4">
       <div class="flex items-center gap-3">
         <div class="rounded-lg bg-cyan-100 p-2 dark:bg-cyan-900/30">
           <Icon name="chart" size="md" class="text-cyan-600 dark:text-cyan-300" :stroke-width="2" />
@@ -46,7 +46,7 @@
     </div>
 
     <!-- Today Cost -->
-    <div class="card p-4">
+    <div class="workspace-surface dashboard-stat p-4">
       <div class="flex items-center gap-3">
         <div class="rounded-lg bg-primary-100 p-2 dark:bg-primary-900/30">
           <Icon name="dollar" size="md" class="text-primary-600 dark:text-primary-400" :stroke-width="2" />
@@ -68,9 +68,9 @@
   </div>
 
   <!-- Row 2: Token Stats -->
-  <div class="grid grid-cols-2 gap-4 lg:grid-cols-4">
+  <div class="dashboard-stat-grid dashboard-stat-grid-secondary grid grid-cols-2 gap-3 lg:grid-cols-4">
     <!-- Today Tokens -->
-    <div class="card p-4">
+    <div class="workspace-surface dashboard-stat p-4">
       <div class="flex items-center gap-3">
         <div class="rounded-lg bg-cyan-100 p-2 dark:bg-cyan-900/30">
           <Icon name="cube" size="md" class="text-cyan-600 dark:text-cyan-300" :stroke-width="2" />
@@ -84,7 +84,7 @@
     </div>
 
     <!-- Total Tokens -->
-    <div class="card p-4">
+    <div class="workspace-surface dashboard-stat p-4">
       <div class="flex items-center gap-3">
         <div class="rounded-lg bg-slate-100 p-2 dark:bg-dark-700">
           <Icon name="database" size="md" class="text-slate-600 dark:text-slate-300" :stroke-width="2" />
@@ -98,7 +98,7 @@
     </div>
 
     <!-- Performance (RPM/TPM) -->
-    <div class="card p-4">
+    <div class="workspace-surface dashboard-stat p-4">
       <div class="flex items-center gap-3">
         <div class="rounded-lg bg-primary-100 p-2 dark:bg-primary-900/30">
           <Icon name="bolt" size="md" class="text-primary-600 dark:text-primary-400" :stroke-width="2" />
@@ -118,7 +118,7 @@
     </div>
 
     <!-- Avg Response Time -->
-    <div class="card p-4">
+    <div class="workspace-surface dashboard-stat p-4">
       <div class="flex items-center gap-3">
         <div class="rounded-lg bg-slate-100 p-2 dark:bg-dark-700">
           <Icon name="clock" size="md" class="text-slate-600 dark:text-slate-300" :stroke-width="2" />
@@ -133,8 +133,8 @@
   </div>
 
   <!-- Row 3: Per-platform breakdown -->
-  <div v-if="!isSimple && platformCards.length > 0" class="card p-4">
-    <div class="mb-3 flex items-center justify-between">
+  <div v-if="!isSimple && platformCards.length > 0" class="dashboard-platforms">
+    <div class="workspace-section-heading">
       <h3 class="text-sm font-semibold text-gray-900 dark:text-white">{{ t('dashboard.platformBreakdown') }}</h3>
       <span class="text-xs text-gray-500 dark:text-gray-400">
         {{ t('dashboard.platformCount', { count: platformCount }) }}
@@ -147,14 +147,15 @@
         data-testid="platform-card"
         :data-platform="item.platform"
         :class="[
-          'rounded-lg border p-3',
+          'workspace-surface dashboard-platform-card p-4',
           item.isOther
             ? 'border-dashed border-gray-300 bg-gray-50 dark:border-dark-500 dark:bg-dark-700/30'
             : 'border-gray-200 dark:border-dark-600'
         ]"
       >
         <div class="flex items-center justify-between">
-          <span class="text-sm font-semibold text-gray-900 dark:text-white">
+          <span class="inline-flex min-w-0 items-center gap-2 text-sm font-semibold text-gray-900 dark:text-white">
+            <PlatformIcon v-if="!item.isOther" :platform="item.platform as GroupPlatform" :class="platformIconClass(item.platform)" size="sm" />
             {{ item.isOther ? t('dashboard.platformOther') : platformLabel(item.platform) }}
           </span>
           <span class="font-mono text-sm text-primary-600 dark:text-primary-400" :title="t('dashboard.actual')">
@@ -228,9 +229,11 @@
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import Icon from '@/components/icons/Icon.vue'
+import PlatformIcon from '@/components/common/PlatformIcon.vue'
+import { platformIconClass } from '@/utils/platformColors'
 import type { PlatformDashboardStats, UserDashboardStats as UserStatsType } from '@/api/usage'
 import { formatTokenCount } from '@/utils/format'
-import type { PlatformQuotaItem } from '@/types'
+import type { GroupPlatform, PlatformQuotaItem } from '@/types'
 
 interface FusedPlatformCard {
   platform: string

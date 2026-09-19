@@ -1,0 +1,249 @@
+@import './workspace-tokens.css';
+
+/* Admin routes opt in through App.vue; user pages keep their own presentation. */
+.admin-console-theme .app-shell-content {
+  color: var(--workspace-ink);
+  letter-spacing: 0;
+}
+
+.admin-console-theme :is(.app-shell-content, .modal-overlay) :is(.card, .admin-surface, .admin-table-stage, .admin-list-surface) {
+  min-width: 0;
+  border-color: var(--workspace-rule);
+  border-radius: 8px;
+  background: linear-gradient(125deg, var(--workspace-highlight) 15%, transparent 70%), var(--workspace-surface);
+  box-shadow: var(--workspace-shadow);
+}
+.admin-console-theme :is(.app-shell-content, .modal-overlay) :is(.card, .admin-surface)::before { content: none; }
+.admin-console-theme .app-shell-content :is(.admin-toolbar-surface, .admin-pagination-surface) {
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+.admin-console-theme .app-shell-content .admin-panel-header {
+  border-color: var(--workspace-rule);
+  background: transparent;
+}
+.admin-console-theme .app-shell-content :is(.admin-page-meta-chip, .admin-choice-card) {
+  border-color: var(--workspace-rule);
+  border-radius: 7px;
+  background: var(--workspace-control);
+  box-shadow: inset 0 1px 0 var(--workspace-highlight);
+}
+.admin-console-theme .app-shell-content .admin-choice-card-active {
+  border-color: rgb(var(--brand-rgb) / 50%);
+  background: rgb(var(--brand-rgb) / 6%);
+}
+.admin-console-theme :is(.app-shell-content, .modal-overlay) .admin-form-section {
+  border-radius: 8px;
+  box-shadow: none;
+}
+.admin-console-theme .app-shell-content .table-page-layout { gap: 1rem; }
+.admin-console-theme .app-shell-content .admin-toolbar { gap: 0.75rem; }
+.admin-console-theme .app-shell-content .admin-toolbar-group { gap: 0.5rem; }
+
+.admin-console-theme :is(.app-shell-content, .modal-overlay) :is(.input, .select-trigger, .date-picker-trigger, .btn-secondary),
+.dark.admin-console-theme :is(.app-shell-content, .modal-overlay) :is(.input, .select-trigger, .date-picker-trigger, .btn-secondary) {
+  border-radius: 7px;
+  background: var(--workspace-control);
+  color: var(--workspace-ink);
+  box-shadow: inset 0 1px 0 var(--workspace-highlight), 0 1px 2px rgb(15 23 42 / 3%);
+  transition: border-color 150ms ease, background-color 150ms ease, box-shadow 150ms ease;
+}
+.admin-console-theme :is(.app-shell-content, .modal-overlay) :is(.input, .select-trigger, .date-picker-trigger, .btn-secondary):not(.input-error, .select-trigger-error, [aria-invalid='true']) {
+  border-color: var(--workspace-rule);
+}
+.admin-console-theme :is(.app-shell-content, .modal-overlay) :is(.btn, .input, .select-trigger, .date-picker-trigger) { min-height: 2.5rem; }
+.admin-console-theme :is(.app-shell-content, .modal-overlay) .btn-primary {
+  border-radius: 7px;
+  background: linear-gradient(125deg, rgb(255 255 255 / 12%), transparent), rgb(var(--brand-rgb));
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 22%), 0 2px 4px rgb(var(--brand-rgb) / 12%);
+}
+.admin-console-theme :is(.app-shell-content, .modal-overlay) .input-label { font-size: 0.8125rem; letter-spacing: 0; }
+.admin-console-theme :is(.app-shell-content, .modal-overlay) :is(.input:focus, .select-trigger-open, .date-picker-trigger-open):not(.input-error, .select-trigger-error, [aria-invalid='true']) {
+  border-color: rgb(var(--brand-rgb) / 55%);
+}
+.admin-console-theme :is(.app-shell-content, .modal-overlay) .btn:focus-visible {
+  outline: 2px solid rgb(var(--brand-rgb) / 50%);
+  outline-offset: 2px;
+}
+
+.admin-console-theme .app-shell-content .stat-card { gap: 0.75rem; padding: 1rem; }
+.admin-console-theme .app-shell-content .stat-card > div { min-width: 0; }
+.admin-console-theme .app-shell-content .stat-icon {
+  flex: 0 0 2rem;
+  width: 2rem;
+  height: 2rem;
+  border: 1px solid var(--workspace-rule);
+  border-radius: 7px;
+  background: var(--workspace-hover);
+  box-shadow: inset 0 1px 0 var(--workspace-highlight);
+}
+.admin-console-theme .app-shell-content .stat-icon-primary { color: rgb(var(--brand-rgb)); }
+.admin-console-theme .app-shell-content .stat-value {
+  color: var(--workspace-ink);
+  font-size: 1.5rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0;
+  overflow-wrap: anywhere;
+}
+.admin-console-theme .app-shell-content .stat-value::after { content: none; }
+.admin-console-theme .app-shell-content .stat-label { color: var(--workspace-muted); letter-spacing: 0; }
+
+/* Contain sticky table cells so adjacent menus remain above the table. */
+.admin-console-theme .app-shell-content :is(.admin-table-stage, .table-wrapper) { isolation: isolate; }
+.admin-console-theme .app-shell-content .admin-data-table { border-radius: 8px; }
+.admin-console-theme .app-shell-content :is(.admin-data-table-head, .sticky-header-cell),
+.dark.admin-console-theme .app-shell-content :is(.admin-data-table-head, .sticky-header-cell) {
+  border-color: var(--workspace-rule);
+  background: var(--workspace-solid);
+  color: var(--workspace-muted);
+  letter-spacing: 0;
+}
+.admin-console-theme .app-shell-content :is(.admin-data-table-body, tbody .sticky-col) { background: var(--workspace-solid); }
+.admin-console-theme .app-shell-content .admin-table-stage :is(th, td) { border-color: var(--workspace-divider); padding: 0.75rem 1rem; }
+.admin-console-theme .app-shell-content .admin-table-stage > .card { border: 0; border-radius: 0; background: transparent; box-shadow: none; }
+.admin-console-theme .app-shell-content .admin-data-table tbody > tr:hover { background: var(--workspace-hover); }
+.admin-console-theme .app-shell-content [data-mobile-table-row] { padding: 0.875rem; }
+.admin-console-theme .app-shell-content .pagination-compact :is(.btn, .select-trigger) { min-height: 2.25rem; }
+
+.admin-console-theme :is(.admin-action-menu, .dropdown, .select-dropdown-portal, .date-picker-dropdown, .date-picker-mobile-sheet) {
+  border: 1px solid var(--workspace-rule);
+  border-radius: 8px;
+  background: var(--workspace-surface);
+  box-shadow: var(--workspace-shadow), 0 12px 32px rgb(0 0 0 / 12%);
+  backdrop-filter: blur(16px);
+}
+.admin-console-theme :is(.admin-action-menu, .dropdown) {
+  max-width: calc(100vw - 1.75rem);
+  padding: 0.375rem;
+  animation: admin-menu-appear 140ms ease-out;
+}
+.admin-console-theme :is(.admin-action-menu-item, .dropdown-item, .account-tools-menu-item) {
+  min-height: 2.5rem;
+  border-radius: 5px;
+  padding: 0.5rem 0.625rem;
+  font-size: 0.8125rem;
+  letter-spacing: 0;
+}
+.admin-console-theme :is(.admin-action-menu-item, .dropdown-item, .account-tools-menu-item):not(.admin-action-menu-item-danger):hover { background: var(--workspace-hover); }
+.admin-console-theme .admin-action-menu-divider { background: var(--workspace-rule); }
+.admin-console-theme .account-tools-menu-icon { width: 1.75rem; height: 1.75rem; border-radius: 5px; }
+.admin-console-theme .select-dropdown-portal .select-search { border-color: var(--workspace-divider); }
+.admin-console-theme .select-dropdown-portal .select-option-focused { background: var(--workspace-hover); }
+.admin-console-theme .select-dropdown-portal .select-option-selected { background: rgb(var(--brand-rgb) / 8%); }
+
+.admin-console-theme .settings-tabs-brand-glow { display: none; }
+.admin-console-theme .settings-tabs-brand-shell .settings-tab {
+  min-height: 2.75rem;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  background: transparent;
+  box-shadow: none;
+}
+.admin-console-theme .settings-tabs-brand-shell .settings-tab-active {
+  border-color: var(--workspace-rule);
+  background: var(--workspace-control);
+  box-shadow: var(--workspace-shadow);
+}
+.admin-console-theme .settings-tabs-brand-shell .settings-tab-icon { background: transparent; box-shadow: none; }
+.admin-console-theme .app-shell-content .settings-tabs-brand-shell .settings-tab::before { display: none; }
+.admin-console-theme .app-shell-content .settings-admin-page .card,
+.dark.admin-console-theme .app-shell-content .settings-admin-page .card {
+  overflow: visible;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+.admin-console-theme .app-shell-content .settings-admin-page .card::before { display: none; }
+.admin-console-theme .app-shell-content .settings-admin-page .card > .border-b,
+.dark.admin-console-theme .app-shell-content .settings-admin-page .card > .border-b {
+  padding: 1rem 0;
+  border-color: var(--workspace-rule);
+  background: transparent;
+}
+.admin-console-theme .app-shell-content .settings-admin-page .card > .p-6 { padding: 1rem 0; }
+.admin-console-theme .app-shell-content .settings-admin-page .card h2 { font-size: 0.9375rem; }
+.admin-console-theme .app-shell-content .settings-admin-page .card .rounded-lg.border { border-radius: 8px; box-shadow: none; }
+
+.admin-console-theme .brand-overlay .brand-floating-panel:not(.modal-content) {
+  border-color: var(--workspace-rule);
+  border-radius: 8px;
+  background: linear-gradient(125deg, var(--workspace-highlight), transparent 60%), var(--workspace-surface);
+  box-shadow: inset 0 1px 0 var(--workspace-highlight), 0 20px 64px rgb(0 0 0 / 18%);
+}
+.admin-console-theme .brand-overlay .brand-floating-panel:not(.modal-content)::before { display: none; }
+.admin-console-theme .brand-overlay .brand-floating-header { border-color: var(--workspace-rule); background: transparent; }
+.admin-console-theme .brand-overlay :is(.brand-floating-card, .brand-floating-icon) {
+  border-color: var(--workspace-rule);
+  border-radius: 7px;
+  background: var(--workspace-control);
+  box-shadow: inset 0 1px 0 var(--workspace-highlight);
+}
+
+@keyframes admin-menu-appear {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Opt-in workbench records reuse the table's cell slots and keep every field. */
+.admin-console-theme .admin-workbench-page { min-width: 0; }
+.admin-console-theme .admin-workbench-page .table-page-layout { gap: 1rem; }
+.admin-console-theme .app-shell-content .admin-record {
+  min-width: 0;
+  padding: 0;
+  border: 1px solid var(--workspace-rule);
+  border-radius: 8px;
+  background: linear-gradient(125deg, var(--workspace-highlight), transparent 68%), var(--workspace-surface);
+  box-shadow: var(--workspace-shadow);
+  transition: border-color 160ms ease, box-shadow 160ms ease;
+}
+.admin-console-theme .admin-record:has(input[data-test='select-row']:checked) { border-color: rgb(var(--brand-rgb) / 45%); }
+.admin-console-theme .admin-record-header { display: flex; min-width: 0; align-items: flex-start; justify-content: space-between; gap: 0.75rem; padding: 1rem 1rem 0.875rem; }
+.admin-console-theme .admin-record-identity { display: flex; min-width: 0; flex: 1; flex-direction: column; gap: 0.375rem; }
+.admin-console-theme .admin-record-provider { display: flex; align-items: center; gap: 0.375rem; min-width: 0; font-size: 0.6875rem; }
+.admin-console-theme .admin-record-title { min-width: 0; color: var(--workspace-ink); font-size: 0.875rem; font-weight: 600; line-height: 1.5; overflow-wrap: anywhere; }
+.admin-console-theme .admin-record-title :is(.max-w-40, .max-w-48, .max-w-xs, .max-w-\[180px\]) { max-width: 100%; }
+.admin-console-theme .admin-record-subtitle { min-width: 0; color: var(--workspace-muted); font-size: 0.6875rem; font-variant-numeric: tabular-nums; }
+.admin-console-theme .admin-record-status { display: flex; flex-shrink: 0; flex-direction: column; align-items: flex-end; justify-content: space-between; gap: 0.625rem; }
+.admin-console-theme .admin-record-summary { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.875rem 1rem; margin-inline: 1rem; padding-block: 0.875rem; border-top: 1px solid var(--workspace-divider); }
+.admin-console-theme .admin-record-metric { display: flex; min-width: 0; flex-direction: column; gap: 0.375rem; }
+.admin-console-theme .admin-record-metric:last-child:nth-child(odd) { grid-column: 1 / -1; }
+.admin-console-theme .admin-record-label { color: var(--workspace-muted); font-size: 0.6875rem; font-weight: 400; line-height: 1.4; }
+.admin-console-theme .admin-record-value { min-width: 0; color: var(--workspace-ink); font-size: 0.8125rem; font-variant-numeric: tabular-nums; line-height: 1.5; overflow-wrap: anywhere; }
+.admin-console-theme .admin-record-details { margin-inline: 1rem; border-top: 1px solid var(--workspace-divider); }
+.admin-console-theme .admin-record-details summary { display: flex; min-height: 2.375rem; align-items: center; justify-content: space-between; gap: 0.5rem; cursor: pointer; list-style: none; color: var(--workspace-muted); font-size: 0.6875rem; }
+.admin-console-theme .admin-record-details summary::-webkit-details-marker { display: none; }
+.admin-console-theme .admin-record-details summary svg { transition: transform 160ms ease; }
+.admin-console-theme .admin-record-details[open] > summary svg { transform: rotate(180deg); }
+.admin-console-theme .admin-record-details summary:focus-visible { outline: 2px solid rgb(var(--brand-rgb) / 50%); outline-offset: 2px; border-radius: 4px; }
+.admin-console-theme .admin-record-detail-grid { display: flex; flex-direction: column; gap: 0.75rem; padding: 0.375rem 0 1rem; }
+.admin-console-theme .admin-record-detail { display: grid; grid-template-columns: minmax(4.25rem, 30%) minmax(0, 1fr); align-items: baseline; gap: 0.75rem; }
+.admin-console-theme .admin-record-detail .admin-record-value { text-align: right; }
+.admin-console-theme .admin-record-actions { padding: 0.625rem 0.875rem; border-top: 1px solid var(--workspace-divider); }
+.admin-console-theme .admin-record-actions > div { flex-wrap: wrap; row-gap: 0.375rem; }
+.admin-console-theme .admin-record-actions button { min-height: 2rem; }
+.admin-console-theme .admin-workbench-page .admin-toolbar-surface { position: relative; z-index: 12; }
+.admin-console-theme .admin-workbench-page .admin-table-stage { position: relative; z-index: 1; }
+.admin-console-theme .admin-workbench-page .admin-pagination-surface { position: relative; z-index: 2; }
+@media (max-width: 359px) {
+  .admin-console-theme .admin-record-header { padding: 0.875rem 0.75rem; }
+  .admin-console-theme :is(.admin-record-summary, .admin-record-details) { margin-inline: 0.75rem; }
+  .admin-console-theme .admin-record-summary { gap: 0.75rem; }
+}
+@media (max-width: 1023px) {
+  .admin-console-theme .app-shell-content .admin-table-stage { border: 0; border-radius: 0; background: transparent; box-shadow: none; }
+}
+@media (max-width: 639px) {
+  .admin-console-theme .app-shell-content .stat-card { flex-direction: column; gap: 0.625rem; padding: 0.875rem; }
+  .admin-console-theme .app-shell-content .stat-value { font-size: 1.25rem; }
+  .admin-console-theme :is(.app-shell-content, .modal-overlay) :is(.btn, .select-trigger, .date-picker-trigger) { min-height: 2.75rem; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .admin-console-theme :is(.admin-action-menu, .dropdown) { animation: none; }
+  .admin-console-theme :is(.admin-record, .admin-record-details summary svg) { transition: none; }
+  .admin-console-theme :is(.app-shell-content, .modal-overlay) :is(.btn, .input, .select-trigger, .date-picker-trigger) { transition: none; }
+}

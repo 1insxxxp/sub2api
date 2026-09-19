@@ -1,6 +1,12 @@
 <template>
   <AppLayout>
-    <div class="space-y-6">
+    <div class="admin-workbench-page dashboard-workbench">
+      <nav class="dashboard-shortcuts" :aria-label="t('admin.dashboard.quickActions')">
+        <button type="button" @click="router.push('/admin/accounts')"><Icon name="server" size="sm" />{{ t('admin.dashboard.manageAccounts') }}</button>
+        <button type="button" @click="router.push('/admin/users')"><Icon name="users" size="sm" />{{ t('admin.dashboard.manageUsers') }}</button>
+        <button type="button" @click="router.push('/admin/groups')"><Icon name="grid" size="sm" />{{ t('admin.dashboard.groupPricing') }}</button>
+        <button v-if="canUseBatchImage" type="button" @click="router.push('/batch-image')"><Icon name="sparkles" size="sm" />{{ t('admin.dashboard.batchImage') }}</button>
+      </nav>
       <!-- Loading State -->
       <div v-if="loading" class="flex items-center justify-center py-12">
         <LoadingSpinner />
@@ -8,7 +14,7 @@
 
       <template v-else-if="stats">
         <!-- Row 1: Core Stats -->
-        <div class="grid grid-cols-2 gap-4 lg:grid-cols-4">
+        <div data-test="dashboard-core-metrics" class="dashboard-core-metrics">
           <!-- Total API Keys -->
           <div class="stat-card">
             <div class="stat-icon stat-icon-primary">
@@ -88,7 +94,7 @@
         </div>
 
         <!-- Row 2: Token Stats -->
-        <div class="grid grid-cols-2 gap-4 lg:grid-cols-4">
+        <div data-test="dashboard-secondary-metrics" class="dashboard-secondary-metrics">
           <!-- Today Tokens -->
           <div class="stat-card">
             <div class="stat-icon bg-cyan-100 text-cyan-600 dark:bg-cyan-900/30 dark:text-cyan-300">
@@ -200,89 +206,34 @@
           </div>
         </div>
 
-        <!-- Quick Actions -->
-        <div class="card p-4">
-          <div class="mb-3 flex items-center justify-between">
-            <h2 class="text-sm font-semibold text-gray-900 dark:text-white">
-              {{ t('admin.dashboard.quickActions') }}
-            </h2>
-          </div>
-          <div class="grid grid-cols-1 gap-3 md:grid-cols-2">
-            <button
-              v-if="canUseBatchImage"
-              type="button"
-              class="group flex items-center gap-3 rounded-lg bg-gray-50 p-3 text-left transition-colors hover:bg-sky-50 dark:bg-dark-800/50 dark:hover:bg-sky-900/20"
-              @click="router.push('/batch-image')"
-            >
-              <span class="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg bg-sky-100 text-sky-600 dark:bg-sky-900/30 dark:text-sky-400">
-                <Icon name="sparkles" size="md" :stroke-width="2" />
-              </span>
-              <span class="min-w-0 flex-1">
-                <span class="block text-sm font-medium text-gray-900 dark:text-white">
-                  {{ t('admin.dashboard.batchImage') }}
-                </span>
-                <span class="block text-xs text-gray-500 dark:text-gray-400">
-                  {{ t('admin.dashboard.batchImageDesc') }}
-                </span>
-              </span>
-              <Icon name="chevronRight" size="sm" class="text-gray-400 group-hover:text-sky-500" />
-            </button>
-            <button
-              type="button"
-              class="group flex items-center gap-3 rounded-lg bg-gray-50 p-3 text-left transition-colors hover:bg-emerald-50 dark:bg-dark-800/50 dark:hover:bg-emerald-900/20"
-              @click="router.push('/admin/groups')"
-            >
-              <span class="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400">
-                <Icon name="grid" size="md" :stroke-width="2" />
-              </span>
-              <span class="min-w-0 flex-1">
-                <span class="block text-sm font-medium text-gray-900 dark:text-white">
-                  {{ t('admin.dashboard.groupPricing') }}
-                </span>
-                <span class="block text-xs text-gray-500 dark:text-gray-400">
-                  {{ t('admin.dashboard.groupPricingDesc') }}
-                </span>
-              </span>
-              <Icon name="chevronRight" size="sm" class="text-gray-400 group-hover:text-emerald-500" />
-            </button>
-          </div>
-        </div>
-
         <!-- Charts Section -->
-        <div class="space-y-6">
+        <div class="dashboard-analysis">
           <!-- Date Range Filter -->
-          <div class="admin-toolbar-surface">
+          <div data-test="dashboard-workbench-controls" class="admin-toolbar-surface dashboard-analysis-controls">
             <div class="admin-toolbar">
-              <div class="admin-toolbar-group">
-                <span class="text-sm font-medium text-gray-700 dark:text-gray-300"
-                  >{{ t('admin.dashboard.timeRange') }}:</span
-                >
+              <div class="dashboard-date-controls">
                 <DateRangePicker
                   v-model:start-date="startDate"
                   v-model:end-date="endDate"
                   @change="onDateRangeChange"
                 />
               </div>
-              <button @click="loadDashboardStats" :disabled="chartsLoading" class="btn btn-secondary">
-                {{ t('common.refresh') }}
-              </button>
-              <div class="admin-toolbar-group justify-end lg:ml-auto">
-                <span class="text-sm font-medium text-gray-700 dark:text-gray-300"
-                  >{{ t('admin.dashboard.granularity') }}:</span
-                >
-                <div class="w-28">
-                  <Select
-                    v-model="granularity"
-                    :options="granularityOptions"
-                    @change="loadChartData"
-                  />
+              <div class="dashboard-chart-actions">
+                <div class="dashboard-granularity" role="group" :aria-label="t('admin.dashboard.granularity')">
+                  <button v-for="option in granularityOptions" :key="option.value" type="button"
+                    :aria-pressed="granularity === option.value"
+                    @click="granularity = option.value; loadChartData()">{{ option.label }}</button>
                 </div>
+                <button type="button" data-test="dashboard-refresh" @click="loadDashboardStats" :disabled="chartsLoading"
+                  class="btn btn-secondary btn-icon" :title="t('common.refresh')" :aria-label="t('common.refresh')">
+                  <Icon name="refresh" size="sm" :class="{ 'animate-spin': chartsLoading }" />
+                </button>
               </div>
             </div>
           </div>
 
           <!-- Charts Grid -->
-          <div class="grid grid-cols-1 gap-6 lg:grid-cols-2">
+          <div class="dashboard-charts-grid">
             <ModelDistributionChart
               :model-stats="modelStats"
               :enable-ranking-view="true"
@@ -305,7 +256,7 @@
           </div>
 
           <!-- User Usage Trend (Full Width) -->
-          <div data-test="dashboard-user-trend-surface" class="admin-surface overflow-hidden">
+          <div data-test="dashboard-user-trend-surface" class="admin-surface dashboard-user-trend">
             <div data-test="dashboard-user-trend-header" class="admin-panel-header">
               <div>
                 <h3 class="text-sm font-semibold text-gray-900 dark:text-white">
@@ -356,7 +307,6 @@ import AppLayout from '@/components/layout/AppLayout.vue'
 import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
 import Icon from '@/components/icons/Icon.vue'
 import DateRangePicker from '@/components/common/DateRangePicker.vue'
-import Select from '@/components/common/Select.vue'
 import ModelDistributionChart from '@/components/charts/ModelDistributionChart.vue'
 import TokenUsageTrend from '@/components/charts/TokenUsageTrend.vue'
 import { formatTokenCount } from '@/utils/format'
@@ -480,8 +430,8 @@ const createDashboardRangeParams = (): DashboardRangeParams => {
 
 // Granularity options for Select component
 const granularityOptions = computed(() => [
-  { value: 'day', label: t('admin.dashboard.day') },
-  { value: 'hour', label: t('admin.dashboard.hour') }
+  { value: 'day' as const, label: t('admin.dashboard.day') },
+  { value: 'hour' as const, label: t('admin.dashboard.hour') }
 ])
 
 // Dark mode detection
@@ -791,4 +741,64 @@ onMounted(() => {
 </script>
 
 <style scoped>
+.dashboard-workbench { display: flex; flex-direction: column; gap: 1.5rem; min-width: 0; }
+.dashboard-shortcuts { display: flex; flex-wrap: wrap; align-items: center; gap: 0.375rem 1.25rem; }
+.dashboard-shortcuts button { display: inline-flex; align-items: center; gap: 0.5rem; min-height: 2rem; color: var(--workspace-muted); font-size: 0.8125rem; font-weight: 500; transition: color 150ms ease; }
+.dashboard-shortcuts button:hover { color: rgb(var(--brand-rgb)); }
+.dashboard-shortcuts button:focus-visible { outline: 2px solid rgb(var(--brand-rgb) / 50%); outline-offset: 4px; border-radius: 4px; }
+.dashboard-core-metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1rem; }
+.dashboard-workbench .dashboard-core-metrics .stat-card { position: relative; display: flex; flex-direction: column; align-items: stretch; gap: 0.875rem; min-width: 0; padding: 1.25rem; border: 1px solid var(--workspace-rule); border-radius: 8px; background: linear-gradient(125deg, var(--workspace-highlight), transparent 65%), var(--workspace-surface); box-shadow: var(--workspace-shadow); }
+.dashboard-workbench .stat-card::before { content: none; }
+.dashboard-workbench .dashboard-core-metrics .stat-icon { position: absolute; top: 1.125rem; right: 1.125rem; width: 1.875rem; height: 1.875rem; border-radius: 6px; }
+.dashboard-workbench .dashboard-core-metrics .stat-label { max-width: calc(100% - 2.25rem); min-height: 1.875rem; padding-top: 0.25rem; font-size: 0.8125rem; }
+.dashboard-workbench .dashboard-core-metrics .stat-value { margin: 0.625rem 0; font-size: 1.875rem; font-weight: 600; line-height: 1.15; letter-spacing: 0; }
+.dashboard-secondary-metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); border-block: 1px solid var(--workspace-rule); padding-block: 1rem; }
+.dashboard-workbench .dashboard-secondary-metrics .stat-card { display: flex; flex-direction: row; align-items: flex-start; min-width: 0; padding: 0.25rem 1.25rem; border: 0; border-right: 1px solid var(--workspace-divider); border-radius: 0; background: transparent; box-shadow: none; }
+.dashboard-workbench .dashboard-secondary-metrics .stat-card:first-child { padding-left: 0; }
+.dashboard-workbench .dashboard-secondary-metrics .stat-card:last-child { padding-right: 0; border-right: 0; }
+.dashboard-workbench .dashboard-secondary-metrics .stat-icon { width: 1.5rem; height: 1.5rem; flex-basis: 1.5rem; border: 0; background: transparent; box-shadow: none; }
+.dashboard-workbench .dashboard-secondary-metrics .stat-value { margin: 0.375rem 0; font-size: 1.25rem; letter-spacing: 0; }
+.dashboard-analysis { display: flex; flex-direction: column; gap: 1.25rem; min-width: 0; }
+.dashboard-analysis-controls .admin-toolbar { flex-direction: row; flex-wrap: wrap; gap: 0.75rem; justify-content: space-between; align-items: center; }
+.dashboard-date-controls { min-width: 0; }
+.dashboard-chart-actions { display: flex; align-items: center; gap: 0.625rem; }
+.dashboard-granularity { display: inline-flex; gap: 0.25rem; padding: 0.25rem; border: 1px solid var(--workspace-rule); border-radius: 7px; background: var(--workspace-hover); }
+.dashboard-granularity button { min-width: 3.5rem; min-height: 1.875rem; padding: 0.25rem 0.625rem; border: 1px solid transparent; border-radius: 4px; color: var(--workspace-muted); font-size: 0.75rem; font-weight: 500; }
+.dashboard-granularity button[aria-pressed='true'] { border-color: var(--workspace-rule); background: var(--workspace-control); color: var(--workspace-ink); box-shadow: var(--workspace-shadow); }
+.dashboard-granularity button:focus-visible { outline: 2px solid rgb(var(--brand-rgb) / 50%); outline-offset: 1px; }
+.dashboard-charts-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1.5rem; }
+.dashboard-charts-grid :deep(.card),
+.dashboard-workbench .dashboard-user-trend { min-width: 0; border: 0; border-radius: 0; background: transparent; box-shadow: none; }
+.dashboard-charts-grid :deep(.card) { padding: 1rem 0 0; border-top: 1px solid var(--workspace-rule); }
+.dashboard-charts-grid :deep(.card::before) { content: none; }
+.dashboard-charts-grid :deep(.rounded-2xl) { border-radius: 7px; border-color: var(--workspace-rule); background: var(--workspace-control); box-shadow: none; }
+.dashboard-charts-grid :deep(.rounded-xl) { border-radius: 4px; }
+.dashboard-user-trend .admin-panel-header { padding: 1rem 0; border-top: 1px solid var(--workspace-rule); border-bottom: 0; }
+.dashboard-user-trend .admin-panel-header p { margin-top: 0.25rem; color: var(--workspace-muted); font-size: 0.75rem; font-variant-numeric: tabular-nums; }
+.dashboard-user-trend > .p-4 { padding: 0; }
+@media (max-width: 1023px) {
+  .dashboard-core-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.75rem; }
+  .dashboard-secondary-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1.25rem 0; }
+  .dashboard-workbench .dashboard-secondary-metrics .stat-card:nth-child(odd) { padding-left: 0; }
+  .dashboard-workbench .dashboard-secondary-metrics .stat-card:nth-child(even) { padding-right: 0; border-right: 0; }
+  .dashboard-charts-grid { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 639px) {
+  .dashboard-workbench { gap: 1.125rem; }
+  .dashboard-shortcuts { gap: 0.375rem 1rem; }
+  .dashboard-shortcuts button { font-size: 0.75rem; }
+  .dashboard-workbench .dashboard-core-metrics .stat-card { padding: 0.875rem; }
+  .dashboard-workbench .dashboard-core-metrics .stat-icon { top: 0.75rem; right: 0.75rem; width: 1.5rem; height: 1.5rem; }
+  .dashboard-workbench .dashboard-core-metrics .stat-label { min-height: 1.5rem; padding-top: 0; font-size: 0.75rem; }
+  .dashboard-workbench .dashboard-core-metrics .stat-value { font-size: 1.5rem; margin: 0.375rem 0; }
+  .dashboard-workbench .dashboard-secondary-metrics .stat-card { gap: 0.375rem; padding-inline: 0.75rem; }
+  .dashboard-workbench .dashboard-secondary-metrics .stat-label { font-size: 0.6875rem; }
+  .dashboard-workbench .dashboard-secondary-metrics .stat-value { font-size: 1.125rem; }
+  .dashboard-workbench .dashboard-secondary-metrics .stat-icon { display: none; }
+  .dashboard-chart-actions { margin-left: auto; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .dashboard-shortcuts button { transition: none; }
+  .dashboard-chart-actions .animate-spin { animation: none; }
+}
 </style>

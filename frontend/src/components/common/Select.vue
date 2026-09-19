@@ -719,6 +719,25 @@ onUnmounted(() => {
   @apply flex-1 min-w-0 truncate text-left;
 }
 
+.select-dropdown-portal .select-options:has(.group-option) {
+  @apply bg-gray-50/80 dark:bg-black/10;
+  padding: 0.5rem;
+}
+
+.select-dropdown-portal .select-option:has(.group-option) {
+  padding: 0;
+  background: transparent;
+  border-radius: 0.5rem;
+}
+
+.select-dropdown-portal .select-option:has(.group-option) + .select-option:has(.group-option) {
+  margin-top: 0.5rem;
+}
+
+.select-dropdown-portal .select-option:has(.group-option) > .select-option-icon {
+  display: none;
+}
+
 .select-dropdown-portal .select-option-icon {
   @apply flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg;
 }

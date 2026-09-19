@@ -93,6 +93,18 @@ func TestListAvailable_EmptyActiveGroups_NoGroupsAttached(t *testing.T) {
 	require.Empty(t, out[0].Groups)
 }
 
+func TestListAvailablePreservesCustomGroupTag(t *testing.T) {
+	svc := newAvailableChannelService([]Channel{{ID: 1, GroupIDs: []int64{10}}}, &stubGroupRepoForAvailable{
+		activeGroups: []Group{{ID: 10, Tag: "custom", TagColor: "#abcdef"}},
+	})
+	out, err := svc.ListAvailable(context.Background())
+	require.NoError(t, err)
+	require.Len(t, out, 1)
+	require.Len(t, out[0].Groups, 1)
+	require.Equal(t, "custom", out[0].Groups[0].Tag)
+	require.Equal(t, "#abcdef", out[0].Groups[0].TagColor)
+}
+
 func TestListAvailable_InactiveGroupIDSilentlyDropped(t *testing.T) {
 	// 渠道 GroupIDs 中引用的 group 未出现在 ListActive 结果中（已停用或删除），应被静默丢弃。
 	channels := []Channel{{

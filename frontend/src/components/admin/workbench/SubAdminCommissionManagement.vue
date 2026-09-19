@@ -1,56 +1,55 @@
 <template>
   <section
     data-test="sub-admin-commission-management"
-    class="rounded-lg border border-gray-200 bg-white p-4 shadow-sm dark:border-dark-700 dark:bg-dark-900 sm:p-5"
+    class="workbench-commission-management min-w-0 pb-5"
   >
-    <div class="mb-5">
+    <div class="mb-3">
       <h2 class="text-base font-semibold text-gray-950 dark:text-white">
         {{ t('adminWorkbench.commission.settings') }}
       </h2>
-      <p class="mt-1 text-sm text-gray-500 dark:text-dark-400">
-        {{ t('adminWorkbench.commission.subtitle') }}
-      </p>
     </div>
 
-    <div class="grid gap-4 lg:grid-cols-[minmax(0,0.7fr)_minmax(0,1.3fr)]">
-      <div class="space-y-4">
-        <label class="block">
-          <span class="input-label">{{ t('adminWorkbench.commission.commissionRate') }}</span>
-          <input
-            v-model.number="commissionRate"
-            data-test="sub-admin-commission-rate"
-            type="number"
-            min="0"
-            max="1"
-            step="0.01"
-            class="input"
-          />
-        </label>
-        <button
-          type="button"
-          data-test="sub-admin-commission-save-settings"
-          class="btn btn-primary w-full justify-center"
-          :disabled="savingSettings"
-          @click="saveSettings"
-        >
-          <Icon v-if="savingSettings" name="refresh" size="sm" class="animate-spin" />
-          <span>{{ t('adminWorkbench.commission.saveSettings') }}</span>
-        </button>
+    <div class="grid min-w-0 gap-5 lg:grid-cols-[minmax(0,0.7fr)_minmax(0,1.3fr)]">
+      <div class="min-w-0 space-y-2">
+        <div data-test="commission-rate-controls" class="workbench-commission-controls">
+          <label class="block min-w-0">
+            <span class="input-label">{{ t('adminWorkbench.commission.commissionRate') }}</span>
+            <input
+              v-model.number="commissionRate"
+              data-test="sub-admin-commission-rate"
+              type="number"
+              min="0"
+              max="1"
+              step="0.01"
+              class="input"
+            />
+          </label>
+          <button
+            type="button"
+            data-test="sub-admin-commission-save-settings"
+            class="btn btn-primary justify-center"
+            :disabled="savingSettings"
+            @click="saveSettings"
+          >
+            <Icon v-if="savingSettings" name="refresh" size="sm" class="animate-spin" />
+            <span>{{ t('adminWorkbench.commission.saveSettings') }}</span>
+          </button>
+        </div>
 
-        <p class="rounded-lg bg-blue-50 px-3 py-2 text-sm leading-6 text-blue-700 dark:bg-blue-500/10 dark:text-blue-200">
+        <p class="text-xs leading-5 text-gray-500 dark:text-dark-400">
           {{ t('adminWorkbench.commission.sharedGrantsHint') }}
         </p>
       </div>
 
-      <div class="rounded-lg border border-gray-100 p-4 dark:border-dark-800">
-        <div class="mb-3 flex flex-col gap-3 min-[420px]:flex-row min-[420px]:items-center min-[420px]:justify-between">
-          <h3 class="text-sm font-semibold text-gray-950 dark:text-white">
+      <div class="workbench-commission-grants min-w-0">
+        <div class="mb-3 flex flex-wrap items-center justify-between gap-2">
+          <h3 class="min-w-0 text-sm font-semibold text-gray-950 dark:text-white">
             {{ t('adminWorkbench.commission.assignedGroups') }}
           </h3>
           <button
             type="button"
             data-test="sub-admin-commission-save-grants"
-            class="btn btn-secondary w-full justify-center min-[420px]:w-auto"
+            class="btn btn-secondary justify-center"
             :disabled="savingGrants"
             @click="saveGrants"
           >
@@ -69,7 +68,7 @@
           <label
             v-for="group in groups"
             :key="group.id"
-            class="flex min-w-0 items-center gap-3 rounded-lg border border-gray-200 px-3 py-2 text-sm dark:border-dark-700"
+            class="workbench-commission-group flex min-w-0 cursor-pointer items-center gap-2 rounded-md px-2 py-2 text-sm"
           >
             <input
               v-model="assignedGroupIDs"
@@ -169,6 +168,29 @@ onMounted(() => {
 </script>
 
 <style scoped>
+.workbench-commission-management {
+  border-bottom: 1px solid var(--workspace-divider);
+}
+.workbench-commission-controls {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 0.5rem;
+}
+.workbench-commission-group:hover { background: var(--workspace-hover); }
+.workbench-commission-group:has(:checked) { background: var(--workspace-hover); }
+
+@media (min-width: 1024px) {
+  .workbench-commission-grants {
+    padding-left: 1.25rem;
+    border-left: 1px solid var(--workspace-divider);
+  }
+}
+
+@media (max-width: 359px) {
+  .workbench-commission-controls { grid-template-columns: minmax(0, 1fr); }
+}
+
 .sub-admin-group-checkbox {
   width: 16px !important;
   height: 16px !important;

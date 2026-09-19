@@ -109,6 +109,20 @@ func (_c *GroupCreate) SetNillableTag(v *string) *GroupCreate {
 	return _c
 }
 
+// SetTagColor sets the "tag_color" field.
+func (_c *GroupCreate) SetTagColor(v string) *GroupCreate {
+	_c.mutation.SetTagColor(v)
+	return _c
+}
+
+// SetNillableTagColor sets the "tag_color" field if the given value is not nil.
+func (_c *GroupCreate) SetNillableTagColor(v *string) *GroupCreate {
+	if v != nil {
+		_c.SetTagColor(*v)
+	}
+	return _c
+}
+
 // SetRateMultiplier sets the "rate_multiplier" field.
 func (_c *GroupCreate) SetRateMultiplier(v float64) *GroupCreate {
 	_c.mutation.SetRateMultiplier(v)
@@ -1199,6 +1213,10 @@ func (_c *GroupCreate) defaults() error {
 		v := group.DefaultTag
 		_c.mutation.SetTag(v)
 	}
+	if _, ok := _c.mutation.TagColor(); !ok {
+		v := group.DefaultTagColor
+		_c.mutation.SetTagColor(v)
+	}
 	if _, ok := _c.mutation.RateMultiplier(); !ok {
 		v := group.DefaultRateMultiplier
 		_c.mutation.SetRateMultiplier(v)
@@ -1404,6 +1422,14 @@ func (_c *GroupCreate) check() error {
 	if v, ok := _c.mutation.Tag(); ok {
 		if err := group.TagValidator(v); err != nil {
 			return &ValidationError{Name: "tag", err: fmt.Errorf(`ent: validator failed for field "Group.tag": %w`, err)}
+		}
+	}
+	if _, ok := _c.mutation.TagColor(); !ok {
+		return &ValidationError{Name: "tag_color", err: errors.New(`ent: missing required field "Group.tag_color"`)}
+	}
+	if v, ok := _c.mutation.TagColor(); ok {
+		if err := group.TagColorValidator(v); err != nil {
+			return &ValidationError{Name: "tag_color", err: fmt.Errorf(`ent: validator failed for field "Group.tag_color": %w`, err)}
 		}
 	}
 	if _, ok := _c.mutation.RateMultiplier(); !ok {
@@ -1661,6 +1687,10 @@ func (_c *GroupCreate) createSpec() (*Group, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.Tag(); ok {
 		_spec.SetField(group.FieldTag, field.TypeString, value)
 		_node.Tag = value
+	}
+	if value, ok := _c.mutation.TagColor(); ok {
+		_spec.SetField(group.FieldTagColor, field.TypeString, value)
+		_node.TagColor = value
 	}
 	if value, ok := _c.mutation.RateMultiplier(); ok {
 		_spec.SetField(group.FieldRateMultiplier, field.TypeFloat64, value)
@@ -2227,6 +2257,18 @@ func (u *GroupUpsert) SetTag(v string) *GroupUpsert {
 // UpdateTag sets the "tag" field to the value that was provided on create.
 func (u *GroupUpsert) UpdateTag() *GroupUpsert {
 	u.SetExcluded(group.FieldTag)
+	return u
+}
+
+// SetTagColor sets the "tag_color" field.
+func (u *GroupUpsert) SetTagColor(v string) *GroupUpsert {
+	u.Set(group.FieldTagColor, v)
+	return u
+}
+
+// UpdateTagColor sets the "tag_color" field to the value that was provided on create.
+func (u *GroupUpsert) UpdateTagColor() *GroupUpsert {
+	u.SetExcluded(group.FieldTagColor)
 	return u
 }
 
@@ -3403,6 +3445,20 @@ func (u *GroupUpsertOne) SetTag(v string) *GroupUpsertOne {
 func (u *GroupUpsertOne) UpdateTag() *GroupUpsertOne {
 	return u.Update(func(s *GroupUpsert) {
 		s.UpdateTag()
+	})
+}
+
+// SetTagColor sets the "tag_color" field.
+func (u *GroupUpsertOne) SetTagColor(v string) *GroupUpsertOne {
+	return u.Update(func(s *GroupUpsert) {
+		s.SetTagColor(v)
+	})
+}
+
+// UpdateTagColor sets the "tag_color" field to the value that was provided on create.
+func (u *GroupUpsertOne) UpdateTagColor() *GroupUpsertOne {
+	return u.Update(func(s *GroupUpsert) {
+		s.UpdateTagColor()
 	})
 }
 
@@ -4919,6 +4975,20 @@ func (u *GroupUpsertBulk) SetTag(v string) *GroupUpsertBulk {
 func (u *GroupUpsertBulk) UpdateTag() *GroupUpsertBulk {
 	return u.Update(func(s *GroupUpsert) {
 		s.UpdateTag()
+	})
+}
+
+// SetTagColor sets the "tag_color" field.
+func (u *GroupUpsertBulk) SetTagColor(v string) *GroupUpsertBulk {
+	return u.Update(func(s *GroupUpsert) {
+		s.SetTagColor(v)
+	})
+}
+
+// UpdateTagColor sets the "tag_color" field to the value that was provided on create.
+func (u *GroupUpsertBulk) UpdateTagColor() *GroupUpsertBulk {
+	return u.Update(func(s *GroupUpsert) {
+		s.UpdateTagColor()
 	})
 }
 

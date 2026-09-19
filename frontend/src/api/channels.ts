@@ -8,6 +8,7 @@ import type { BillingMode } from '@/constants/channel'
 
 export interface UserAvailableGroup {
   tag?: import('@/types').GroupTag
+  tag_color?: string
   id: number
   name: string
   platform: string

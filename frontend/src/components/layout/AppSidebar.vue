@@ -1,6 +1,14 @@
 <template>
   <aside
+    id="app-sidebar"
+    ref="sidebarRef"
     class="sidebar mobile-sidebar-layer"
+    :inert="(isMobileViewport && !mobileOpen) || undefined"
+    :role="mobileDrawerOpen ? 'dialog' : undefined"
+    :aria-modal="mobileDrawerOpen || undefined"
+    :aria-label="siteName"
+    tabindex="-1"
+    @keydown="handleDrawerKeydown"
     :class="[
       sidebarCollapsed ? 'w-[72px]' : 'w-64',
       { '-translate-x-full lg:translate-x-0': !mobileOpen }
@@ -231,12 +239,14 @@
       v-if="mobileOpen"
       class="mobile-sidebar-overlay fixed inset-0 z-50 bg-black/50 lg:hidden"
       @click="closeMobile"
+      @touchmove.prevent
     ></div>
   </transition>
 </template>
 
 <script setup lang="ts">
 import { computed, h, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { useMediaQuery } from '@vueuse/core'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useAdminSettingsStore, useAppStore, useAuthStore, useOnboardingStore } from '@/stores'
@@ -299,6 +309,10 @@ const { canUseBatchImage, refreshBatchImageAccess } = useBatchImageAccess()
 
 const sidebarCollapsed = computed(() => appStore.sidebarCollapsed)
 const mobileOpen = computed(() => appStore.mobileOpen)
+const isMobileViewport = useMediaQuery('(max-width: 1023px)')
+const mobileDrawerOpen = computed(() => isMobileViewport.value && mobileOpen.value)
+const sidebarRef = ref<HTMLElement | null>(null)
+let drawerTrigger: HTMLElement | null = null
 const isAdmin = computed(() => authStore.isAdmin)
 const canAccessAdminWorkbench = computed(() => authStore.canAccessAdminWorkbench)
 const sidebarNavRef = ref<HTMLElement | null>(null)
@@ -1004,6 +1018,44 @@ function closeMobile() {
   appStore.setMobileOpen(false)
 }
 
+function handleDrawerKeydown(event: KeyboardEvent) {
+  if (!mobileDrawerOpen.value || event.defaultPrevented) return
+  if (event.key === 'Escape') {
+    event.preventDefault()
+    closeMobile()
+  } else if (event.key === 'Tab') {
+    const focusable = Array.from(sidebarRef.value?.querySelectorAll<HTMLElement>(
+      'a[href], button:not(:disabled), [tabindex]:not([tabindex="-1"])'
+    ) ?? []).filter(element => element.getClientRects().length > 0)
+    const first = focusable[0]
+    const last = focusable[focusable.length - 1]
+    if (!first) {
+      event.preventDefault()
+    } else if (event.shiftKey && (document.activeElement === first || document.activeElement === sidebarRef.value)) {
+      event.preventDefault()
+      last?.focus()
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault()
+      first.focus()
+    }
+  }
+}
+
+watch(mobileDrawerOpen, async (open) => {
+  if (open) {
+    drawerTrigger = document.activeElement instanceof HTMLElement ? document.activeElement : null
+    await nextTick()
+    if (mobileDrawerOpen.value) sidebarRef.value?.focus({ preventScroll: true })
+  } else {
+    const trigger = drawerTrigger
+    drawerTrigger = null
+    await nextTick()
+    if (!mobileDrawerOpen.value && isMobileViewport.value && trigger?.isConnected) {
+      trigger.focus({ preventScroll: true })
+    }
+  }
+})
+
 function handleMenuItemClick(itemPath: string) {
   if (mobileOpen.value) {
     setTimeout(() => {
@@ -1111,14 +1163,23 @@ onBeforeUnmount(() => {
   z-index: 40;
 }
 
+.mobile-sidebar-layer:focus {
+  outline: none;
+}
+
 @media (max-width: 1023px) {
-  /* Keep the open drawer above the header, while the backdrop stays below it. */
+  /* Both drawer layers must sit above the sticky header (z-index: 50). */
   .mobile-sidebar-layer {
     z-index: 60;
   }
 
   .mobile-sidebar-overlay {
-    z-index: 50;
+    z-index: 55;
+    touch-action: none;
+  }
+
+  .sidebar-nav {
+    overscroll-behavior-y: contain;
   }
 }
 

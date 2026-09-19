@@ -1,6 +1,6 @@
 export default {
   common: {
-    groupTags: { label: 'Group tag', none: 'None', chat: 'Chat', image: 'Image', airp: 'AIRP' },
+    groupTags: { label: 'Group tag', none: 'None', chat: 'Chat', image: 'Image', airp: 'AIRP', text: 'Label text', placeholder: 'Custom label, up to 20 characters', color: 'Label color', hexColor: 'Hex color', preview: 'Preview' },
     loading: 'Loading...',
     submitting: 'Submitting...',
     creating: 'Creating...',
@@ -41,6 +41,7 @@ export default {
     selectAll: 'Select all',
     noData: 'No data',
     expand: 'Expand',
+    details: 'Details',
     collapse: 'Collapse',
     success: 'Success',
     error: 'Error',

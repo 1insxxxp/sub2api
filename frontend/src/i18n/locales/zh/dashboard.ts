@@ -71,6 +71,8 @@ export default {
     searchPlaceholder: '搜索名称或Key...',
     endpoints: {
       title: 'API 端点',
+      routes: '接入线路',
+      routesCompact: '线路',
       default: '默认',
       copied: '已复制',
       copiedHint: '已复制到剪贴板',
@@ -87,6 +89,7 @@ export default {
     bulkEdit: {
       title: '批量编辑',
       selectedCount: '已选择 {count} 个密钥',
+      selectedCountCompact: '已选 {count}',
       selectKey: '选择密钥 {name}',
       clearSelection: '取消选择',
       hint: '勾选需要修改的字段，未勾选的字段保持原值。',
@@ -1316,6 +1319,7 @@ export default {
 
   // Pagination
   pagination: {
+    totalCount: '共 {total} 条',
     showing: '显示',
     to: '至',
     of: '共',

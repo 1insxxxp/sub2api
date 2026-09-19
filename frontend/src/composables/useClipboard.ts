@@ -37,9 +37,10 @@ export function useClipboard() {
   const appStore = useAppStore()
   const copied = ref(false)
 
+  // Pass false when the caller provides inline success feedback.
   const copyToClipboard = async (
     text: string,
-    successMessage?: string
+    successMessage?: string | false
   ): Promise<boolean> => {
     if (!text) return false
 
@@ -58,7 +59,9 @@ export function useClipboard() {
 
     if (success) {
       copied.value = true
-      appStore.showSuccess(successMessage || t('common.copiedToClipboard'))
+      if (successMessage !== false) {
+        appStore.showSuccess(successMessage || t('common.copiedToClipboard'))
+      }
       setTimeout(() => {
         copied.value = false
       }, 2000)

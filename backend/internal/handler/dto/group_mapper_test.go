@@ -9,10 +9,15 @@ import (
 )
 
 func TestGroupTagIsVisibleInUserAndAdminResponses(t *testing.T) {
-	group := &service.Group{Tag: "airp"}
-	require.Equal(t, "airp", GroupFromService(group).Tag)
-	require.Equal(t, "airp", GroupFromServiceAdmin(group).Tag)
-	require.Equal(t, "airp", GroupFromServiceShallow(group).Tag)
+	group := &service.Group{Tag: "自定义", TagColor: "#123456"}
+	for _, mapped := range []any{GroupFromService(group), GroupFromServiceAdmin(group), GroupFromServiceShallow(group)} {
+		raw, err := json.Marshal(mapped)
+		require.NoError(t, err)
+		var data map[string]any
+		require.NoError(t, json.Unmarshal(raw, &data))
+		require.Equal(t, group.Tag, data["tag"])
+		require.Equal(t, group.TagColor, data["tag_color"])
+	}
 }
 
 func TestGroupFromServiceAdmin_IncludesDefaultReasoningEffort(t *testing.T) {

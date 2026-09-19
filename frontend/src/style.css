@@ -1809,11 +1809,6 @@
     @apply animate-slide-in-right;
   }
 
-  .toast-stack {
-    min-width: 0;
-    max-width: 100vw;
-  }
-
   .pagination-shell {
     min-width: 0;
   }
@@ -1990,18 +1985,6 @@
       flex: 1 1 auto;
     }
 
-    .toast-stack {
-      right: 0.5rem;
-      left: 0.5rem;
-      top: max(0.5rem, env(safe-area-inset-top));
-    }
-
-    .toast-stack .toast-panel {
-      width: min(24rem, calc(100vw - 1rem));
-      min-width: 0;
-      max-width: 100%;
-    }
-
     .pagination-shell {
       padding-inline: 0.75rem;
     }
@@ -2104,7 +2087,6 @@
       opacity: 1;
     }
 
-    .toast-stack .toast-panel,
     .toast-stack .toast {
       width: min(24rem, calc(100vw - 1rem));
       min-width: 0 !important;
@@ -2123,26 +2105,6 @@
       min-width: 0;
       max-width: 100%;
     }
-  }
-
-  .admin-toast-panel {
-    border-color: rgba(191, 219, 254, 0.62);
-    background:
-      radial-gradient(circle at top left, rgba(59, 130, 246, 0.08), transparent 32%),
-      rgba(255, 255, 255, 0.96);
-    box-shadow:
-      0 1px 0 rgba(255, 255, 255, 0.86) inset,
-      0 18px 40px rgba(15, 23, 42, 0.14);
-  }
-
-  .dark .admin-toast-panel {
-    border-color: rgba(96, 165, 250, 0.16);
-    background:
-      radial-gradient(circle at top left, rgba(37, 99, 235, 0.16), transparent 32%),
-      rgba(8, 13, 28, 0.97);
-    box-shadow:
-      0 1px 0 rgba(255, 255, 255, 0.05) inset,
-      0 22px 44px rgba(0, 0, 0, 0.32);
   }
 
   /* ============ 侧边栏 ============ */

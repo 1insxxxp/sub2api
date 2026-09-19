@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { RouterView, useRouter, useRoute } from 'vue-router'
-import { computed, onMounted, onBeforeUnmount, watch } from 'vue'
+import { computed, onMounted, onBeforeUnmount, provide, watch } from 'vue'
+import '@/styles/admin-workspace.css'
+import { adminAppearanceKey } from '@/composables/useAdminAppearance'
 import Toast from '@/components/common/Toast.vue'
 import NavigationProgress from '@/components/common/NavigationProgress.vue'
 import AdminComplianceDialog from '@/components/admin/AdminComplianceDialog.vue'
@@ -14,6 +16,11 @@ import { resolveSiteBillingMode } from '@/utils/siteBillingMode'
 
 const router = useRouter()
 const route = useRoute()
+const adminAppearance = computed(() => route.path.startsWith('/admin/'))
+provide(adminAppearanceKey, adminAppearance)
+watch(adminAppearance, (enabled) => {
+  document.documentElement.classList.toggle('admin-console-theme', enabled)
+}, { immediate: true })
 const appStore = useAppStore()
 const authStore = useAuthStore()
 const subscriptionStore = useSubscriptionStore()
@@ -138,6 +145,7 @@ router.afterEach(() => {
 })
 
 onBeforeUnmount(() => {
+  document.documentElement.classList.remove('admin-console-theme')
   document.removeEventListener('visibilitychange', onVisibilityChange)
   window.removeEventListener('admin-compliance-required', onAdminComplianceRequired)
 })

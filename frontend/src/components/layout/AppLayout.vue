@@ -15,6 +15,7 @@
       <!-- Main Content Area -->
       <div
         class="app-shell-main relative min-h-screen min-w-0"
+        :inert="mobileSidebarOpen || undefined"
         :class="{
           'app-shell-main-collapsed': sidebarCollapsed,
           'app-shell-main-image-studio': route.path === '/images',
@@ -34,7 +35,8 @@
 
 <script setup lang="ts">
 import '@/styles/onboarding.css'
-import { computed, onMounted } from 'vue'
+import { computed, onBeforeUnmount, onMounted, watch } from 'vue'
+import { useMediaQuery } from '@vueuse/core'
 import { useRoute } from 'vue-router'
 import { useAppStore } from '@/stores'
 import { useAuthStore } from '@/stores/auth'
@@ -47,7 +49,22 @@ const appStore = useAppStore()
 const authStore = useAuthStore()
 const route = useRoute()
 const sidebarCollapsed = computed(() => appStore.sidebarCollapsed)
+const isMobileViewport = useMediaQuery('(max-width: 1023px)')
+const mobileSidebarOpen = computed(() => isMobileViewport.value && appStore.mobileOpen)
 const isAdmin = computed(() => authStore.user?.role === 'admin')
+
+watch(mobileSidebarOpen, (open) => {
+  document.documentElement.classList.toggle('mobile-sidebar-open', open)
+}, { immediate: true })
+
+watch(isMobileViewport, (mobile) => {
+  if (!mobile) appStore.setMobileOpen(false)
+})
+
+onBeforeUnmount(() => {
+  document.documentElement.classList.remove('mobile-sidebar-open')
+  appStore.setMobileOpen(false)
+})
 
 const { replayTour } = useOnboardingTour({
   storageKey: isAdmin.value ? 'admin_guide' : 'user_guide',
@@ -64,6 +81,12 @@ defineExpose({ replayTour })
 </script>
 
 <style scoped>
+/* Lock the root scroller without changing the sticky header's scroll container. */
+:global(html.mobile-sidebar-open) {
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+
 .app-shell-main {
   margin-left: 0;
   min-width: 0;

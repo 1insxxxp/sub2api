@@ -35,10 +35,12 @@ vi.mock('@/api/admin', () => ({
     users: {
       list: listUsers,
       toggleStatus: vi.fn(),
-      delete: deleteUser
+      delete: deleteUser,
+      getPlatformQuotas: vi.fn().mockResolvedValue({ platform_quotas: [] })
     },
     groups: {
-      getAll: getAllGroups
+      getAll: getAllGroups,
+      getAllIncludingInactive: vi.fn().mockResolvedValue([])
     },
     dashboard: {
       getBatchUsersUsage
@@ -90,7 +92,7 @@ const createAdminUser = (overrides: Partial<AdminUser> = {}): AdminUser => ({
 })
 
 const DataTableStub = {
-  props: ['columns', 'data', 'selectedKeys'],
+  props: ['columns', 'data', 'selectedKeys', 'mobileLayout'],
   emits: ['sort', 'update:selectedKeys'],
   template: `
     <div>
@@ -111,9 +113,20 @@ const DataTableStub = {
       </template>
       <div v-for="row in data" :key="row.id">
         <slot name="cell-last_used_at" :value="row.last_used_at" :row="row" />
+        <div data-test="attribute-cell"><slot name="cell-attr_7" :row="row" /></div>
       </div>
     </div>
   `
+}
+
+const AdminListToolbarStub = {
+  props: ['activeFilters', 'filterId'],
+  template: `<div class="admin-toolbar">
+    <div data-test="toolbar-search"><slot name="search" /></div>
+    <div data-test="toolbar-actions"><slot name="actions" /></div>
+    <div data-test="toolbar-filters"><slot name="filters" /></div>
+    <div data-test="toolbar-secondary"><slot name="secondary" /></div>
+  </div>`
 }
 
 const PaginationStub = {
@@ -132,7 +145,8 @@ const BulkEditUserModalStub = {
   `
 }
 
-const mountBulkDeleteView = () => mount(UsersView, {
+const mountBulkDeleteView = (attachTo?: HTMLElement) => mount(UsersView, {
+  attachTo,
   global: {
     stubs: {
       AppLayout: { template: '<div><slot /></div>' },
@@ -140,6 +154,7 @@ const mountBulkDeleteView = () => mount(UsersView, {
         template: '<div><slot name="filters" /><slot name="table" /><slot name="pagination" /></div>'
       },
       DataTable: DataTableStub,
+      AdminListToolbar: AdminListToolbarStub,
       Pagination: PaginationStub,
       ConfirmDialog: {
         props: ['show', 'message'],
@@ -194,11 +209,97 @@ describe('admin UsersView', () => {
     getAllGroups.mockResolvedValue([])
     getBatchUsersUsage.mockResolvedValue({ stats: {} })
     listEnabledDefinitions.mockResolvedValue([])
-    getBatchUserAttributes.mockResolvedValue({ values: {} })
+    getBatchUserAttributes.mockResolvedValue({ attributes: {} })
   })
 
   afterEach(() => {
     vi.useRealTimers()
+  })
+
+  it('separates search, filters and selection actions while counting active saved filters', async () => {
+    localStorage.setItem('user-visible-filters', JSON.stringify(['role', 'status', 'group', 'apiKeyGroup', 'attr_7']))
+    localStorage.setItem('user-filter-values', JSON.stringify({
+      role: 'user', status: '', group: 'Team', apiKeyGroup: 9, attributes: { 7: 'North', 8: '' }
+    }))
+    listEnabledDefinitions.mockResolvedValue([{ id: 7, name: 'Region', type: 'text', enabled: true }])
+    listUsers.mockResolvedValue({ items: [createAdminUser()], total: 123, page: 1, page_size: 20, pages: 7 })
+    const wrapper = mountBulkDeleteView()
+    await flushPromises()
+
+    expect(wrapper.find('.admin-workbench-page').exists()).toBe(true)
+    const toolbar = wrapper.findComponent(AdminListToolbarStub)
+    expect(toolbar.props('activeFilters')).toBe(4)
+    expect(toolbar.props('filterId')).toBe('users-list-filters')
+    expect(wrapper.get('[data-test="toolbar-search"]').find('input').exists()).toBe(true)
+    expect(wrapper.get('[data-test="toolbar-search"]').find('select-stub').exists()).toBe(false)
+    expect(wrapper.get('[data-test="toolbar-filters"]').findAll('select-stub')).toHaveLength(4)
+    expect(wrapper.get('[data-test="toolbar-filters"]').get('input[placeholder="Region"]').element).toHaveProperty('value', 'North')
+    const actions = wrapper.get('[data-test="toolbar-actions"]')
+    await actions.get('button[title="common.refresh"]').trigger('click')
+    await flushPromises()
+    expect(listUsers).toHaveBeenCalledTimes(2)
+    await actions.get('button[title="admin.users.filterSettings"]').trigger('click')
+    expect(actions.find('.dropdown').exists()).toBe(true)
+    expect(actions.find('button[title="admin.users.columnSettings"]').exists()).toBe(true)
+    const create = actions.get('button[title="admin.users.createUser"]')
+    expect(create.get('span').text()).toBe('common.create')
+    expect(create.get('span').classes()).not.toContain('hidden')
+    await actions.get('button[title="admin.users.attributes.configButton"]').trigger('click')
+    expect(wrapper.findComponent({ name: 'UserAttributesConfigModal' }).props('show')).toBe(true)
+    expect(wrapper.get('[data-test="users-list-count"]').text()).toContain('123')
+
+    await wrapper.get('[data-test="select-42"]').trigger('click')
+    const secondary = wrapper.get('[data-test="toolbar-secondary"]')
+    expect(secondary.find('[data-test="bulk-edit-limits"]').exists()).toBe(true)
+    expect(secondary.find('[data-test="bulk-delete-users"]').exists()).toBe(true)
+    expect(actions.find('[data-test="bulk-delete-users"]').exists()).toBe(false)
+    wrapper.unmount()
+  })
+
+  it('configures compact mobile summaries without dropping visible columns or dynamic attribute values', async () => {
+    vi.useFakeTimers()
+    localStorage.setItem('user-hidden-columns', '[]')
+    localStorage.setItem('user-column-settings-version', '4')
+    listEnabledDefinitions.mockResolvedValue([{ id: 7, name: 'Region', type: 'text', enabled: true }])
+    getBatchUserAttributes.mockResolvedValue({ attributes: { 42: { 7: 'North' } } })
+    const wrapper = mountBulkDeleteView()
+    await flushPromises()
+    await vi.runAllTimersAsync()
+    await flushPromises()
+
+    const table = wrapper.findComponent(DataTableStub)
+    expect(table.props('mobileLayout')).toEqual({
+      title: 'email', subtitle: 'username', status: 'status', summary: ['balance', 'usage', 'concurrency']
+    })
+    expect(table.props('columns').map((column: { key: string }) => column.key)).toEqual([
+      'email', 'id', 'username', 'notes', 'registration_ip', 'last_login_ip', 'attr_7', 'role',
+      'groups', 'subscriptions', 'balance', 'balance_platform_quota', 'usage', 'usage_anthropic',
+      'usage_openai', 'usage_gemini', 'usage_antigravity', 'concurrency', 'status', 'last_active_at',
+      'last_used_at', 'created_at', 'actions'
+    ])
+    expect(wrapper.get('[data-test="attribute-cell"]').text()).toBe('North')
+    expect(table.props('data')[0]).toMatchObject(createAdminUser())
+    wrapper.unmount()
+  })
+
+  it.each(['admin.users.filterSettings', 'admin.users.columnSettings'])('dismisses %s with Escape and Tab and restores trigger focus', async (title) => {
+    const wrapper = mountBulkDeleteView(document.body)
+    await flushPromises()
+    const trigger = wrapper.get<HTMLButtonElement>(`button[title="${title}"]`)
+    for (const key of ['Escape', 'Tab']) {
+      await trigger.trigger('click')
+      await trigger.trigger('keydown', { key: 'Tab' })
+      const menu = wrapper.get('.dropdown')
+      const option = menu.get<HTMLButtonElement>('button')
+      await trigger.trigger('keydown', { key: 'ArrowDown' })
+      expect(document.activeElement).toBe(option.element)
+      await option.trigger('keydown', { key: 'ArrowDown' })
+      expect(document.activeElement).toBe(menu.findAll('button')[1].element)
+      await option.trigger('keydown', { key })
+      expect(wrapper.find('.dropdown').exists()).toBe(false)
+      expect(document.activeElement).toBe(trigger.element)
+    }
+    wrapper.unmount()
   })
 
   it('cancels bulk deletion without deleting or clearing selected users', async () => {
@@ -406,7 +507,7 @@ describe('admin UsersView', () => {
 
     expect(wrapper.find('[data-test="admin-page-hero"]').exists()).toBe(false)
     expect(wrapper.find('.admin-page-hero').exists()).toBe(false)
-    expect(wrapper.get('[data-test="filters-shell"]').find('.admin-toolbar').exists()).toBe(true)
+    expect(wrapper.get('[data-test="filters-shell"]').findComponent({ name: 'AdminListToolbar' }).exists()).toBe(true)
   })
 
   it('keeps usage sort controls on shared admin inline actions', () => {

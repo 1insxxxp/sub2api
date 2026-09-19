@@ -108,6 +108,8 @@
     <div class="flex-shrink-0">
       <Pagination
         v-if="total > 0"
+        variant="compact"
+        class="mt-4"
         :page="page"
         :page-size="pageSize"
         :total="total"

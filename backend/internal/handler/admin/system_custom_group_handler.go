@@ -31,6 +31,7 @@ type SystemCustomGroupHandler struct {
 
 type systemCustomGroupContainerResponse struct {
 	Tag                        string    `json:"tag"`
+	TagColor                   string    `json:"tag_color"`
 	ID                         int64     `json:"id"`
 	Name                       string    `json:"name"`
 	Description                string    `json:"description"`
@@ -246,6 +247,7 @@ func systemCustomGroupContainerToResponse(group service.Group) systemCustomGroup
 	return systemCustomGroupContainerResponse{
 		ID: group.ID, Name: group.Name, Description: group.Description, Platform: group.Platform,
 		Tag:            group.Tag,
+		TagColor:       group.TagColor,
 		RateMultiplier: group.RateMultiplier, IsExclusive: group.IsExclusive, Status: group.Status,
 		SubscriptionType: group.SubscriptionType, SystemCustomRoutingEnabled: group.SystemCustomRoutingEnabled,
 		DailyLimitUSD: group.DailyLimitUSD, WeeklyLimitUSD: group.WeeklyLimitUSD, MonthlyLimitUSD: group.MonthlyLimitUSD,

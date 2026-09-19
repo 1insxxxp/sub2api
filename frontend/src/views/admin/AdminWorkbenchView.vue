@@ -1,52 +1,32 @@
 <template>
   <AppLayout>
-    <div class="admin-workbench-page mx-auto min-w-0 max-w-6xl space-y-4 px-3 py-4 sm:space-y-6 sm:px-6 sm:py-6 lg:px-8">
-      <header class="flex min-w-0 flex-col gap-3 border-b border-gray-200 pb-4 dark:border-dark-700 sm:flex-row sm:items-end sm:justify-between sm:gap-4 sm:pb-5">
-        <div class="min-w-0 flex-1">
-          <h1 class="text-xl font-semibold text-gray-950 dark:text-white sm:text-2xl">
-            {{ t('adminWorkbench.title') }}
-          </h1>
-          <p class="mt-1 text-sm text-gray-500 dark:text-dark-400">
-            {{ t('adminWorkbench.description') }}
-          </p>
-        </div>
-        <div class="w-full rounded-lg border border-blue-100 bg-blue-50 px-4 py-3 text-left dark:border-blue-500/20 dark:bg-blue-500/10 sm:w-auto sm:text-right">
-          <p class="text-xs font-medium text-blue-600 dark:text-blue-300">
-            {{ t('adminWorkbench.currentBalance') }}
-          </p>
-          <p class="mt-1 text-2xl font-semibold tabular-nums text-blue-950 dark:text-blue-50">
-            ${{ availableBalance.toFixed(2) }}
-          </p>
-        </div>
-      </header>
-
-      <nav
-        data-test="admin-workbench-tabs"
-        role="tablist"
-        :aria-label="t('adminWorkbench.tabs.label')"
-        class="grid min-w-0 grid-cols-3 gap-2 border-b border-gray-200 pb-2 dark:border-dark-700 sm:flex sm:gap-1 sm:overflow-x-auto sm:pb-0"
-      >
-        <button
-          v-for="tab in workbenchTabs"
-          :id="`workbench-tab-${tab.id}`"
-          :key="tab.id"
-          type="button"
-          role="tab"
-          :data-test="`workbench-tab-${tab.id}`"
-          :aria-controls="`workbench-panel-${tab.id}`"
-          :aria-selected="activeTab === tab.id"
-          :tabindex="activeTab === tab.id ? 0 : -1"
-          class="inline-flex min-h-16 min-w-0 flex-col items-center justify-center gap-1 rounded-lg border px-1 py-2 text-center text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-dark-950 sm:-mb-px sm:min-h-0 sm:shrink-0 sm:flex-row sm:gap-2 sm:rounded-none sm:border-x-0 sm:border-t-0 sm:border-b-2 sm:px-4 sm:py-3 sm:text-left sm:text-sm"
-          :class="activeTab === tab.id
-            ? 'border-primary-300 bg-primary-50 text-primary-700 dark:border-primary-500/40 dark:bg-primary-500/10 dark:text-primary-300 sm:border-x-transparent sm:border-t-transparent sm:border-b-primary-600 sm:bg-transparent dark:sm:border-b-primary-400'
-            : 'border-gray-200 bg-white text-gray-500 hover:border-gray-300 hover:text-gray-800 dark:border-dark-700 dark:bg-dark-900 dark:text-dark-400 dark:hover:border-dark-500 dark:hover:text-dark-200 sm:border-x-transparent sm:border-t-transparent sm:border-b-transparent sm:bg-transparent dark:sm:border-x-transparent dark:sm:border-t-transparent dark:sm:border-b-transparent'"
-          @click="activeTab = tab.id"
-          @keydown="handleTabKeydown($event, tab.id)"
+    <div class="admin-workbench-page admin-workbench-console min-w-0 space-y-5">
+      <div data-test="workbench-navigation" class="workbench-navigation">
+        <nav
+          data-test="admin-workbench-tabs"
+          role="tablist"
+          :aria-label="t('adminWorkbench.tabs.label')"
+          class="workbench-tabs grid min-w-0 grid-cols-3 sm:flex"
         >
-          <Icon :name="tab.icon" size="sm" />
-          <span class="min-w-0 break-words leading-4">{{ tab.label }}</span>
-        </button>
-      </nav>
+          <button
+            v-for="tab in workbenchTabs"
+            :id="`workbench-tab-${tab.id}`"
+            :key="tab.id"
+            type="button"
+            role="tab"
+            :data-test="`workbench-tab-${tab.id}`"
+            :aria-controls="`workbench-panel-${tab.id}`"
+            :aria-selected="activeTab === tab.id"
+            :tabindex="activeTab === tab.id ? 0 : -1"
+            class="workbench-tab inline-flex min-h-11 min-w-0 items-center justify-center gap-1.5 px-1.5 py-2 text-center text-xs font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-inset sm:gap-2 sm:px-4 sm:text-sm"
+            @click="activeTab = tab.id"
+            @keydown="handleTabKeydown($event, tab.id)"
+          >
+            <Icon :name="tab.icon" size="sm" />
+            <span class="min-w-0 break-words leading-4">{{ tab.label }}</span>
+          </button>
+        </nav>
+      </div>
 
       <section
         v-if="activeTab === 'commission'"
@@ -82,16 +62,13 @@
           <form
             ref="transferFormRef"
             data-test="workbench-transfer-form"
-            class="min-w-0 rounded-lg border border-gray-200 bg-white p-4 shadow-sm dark:border-dark-700 dark:bg-dark-900 sm:p-5"
+            class="workbench-tool min-w-0 p-4 sm:p-5"
             @submit.prevent="handleGenerate"
           >
-            <div class="mb-5">
+            <div class="mb-4">
               <h2 class="text-base font-semibold text-gray-950 dark:text-white">
                 {{ t('adminWorkbench.balanceTransfer.title') }}
               </h2>
-              <p class="mt-1 text-sm text-gray-500 dark:text-dark-400">
-                {{ t('adminWorkbench.balanceTransfer.subtitle') }}
-              </p>
             </div>
 
             <div class="grid gap-4 sm:grid-cols-2">
@@ -131,7 +108,7 @@
                   class="input"
                 />
               </label>
-              <div class="rounded-lg bg-gray-50 px-3 py-2 dark:bg-dark-800/70">
+              <div class="min-w-0 self-end py-1">
                 <p class="text-xs text-gray-500 dark:text-dark-400">
                   {{ t('adminWorkbench.balanceTransfer.totalValue') }}
                 </p>
@@ -152,14 +129,14 @@
               ></textarea>
             </label>
 
-            <label class="mt-4 flex items-start gap-3 rounded-lg border border-gray-200 p-3 dark:border-dark-700">
+            <label class="mt-4 flex min-w-0 cursor-pointer items-start gap-3">
               <input
                 v-model="form.single_use_per_user"
                 data-test="workbench-transfer-single-use"
                 type="checkbox"
-                class="mt-0.5 h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                class="mt-0.5 h-4 w-4 shrink-0 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
               />
-              <span>
+              <span class="min-w-0 break-words">
                 <span class="block text-sm font-medium text-gray-900 dark:text-white">
                   {{ t('adminWorkbench.balanceTransfer.singleUsePerUser') }}
                 </span>
@@ -171,13 +148,13 @@
 
             <label
               data-test="workbench-transfer-threshold-exempt-option"
-              class="admin-form-section mt-3 flex w-full min-w-0 cursor-pointer items-start gap-3 !space-y-0 px-3 py-3"
+              class="mt-3 flex w-full min-w-0 cursor-pointer items-start gap-3"
             >
               <input
                 v-model="form.threshold_exempt"
                 data-test="workbench-transfer-threshold-exempt"
                 type="checkbox"
-                class="mt-0.5 h-4 w-4 shrink-0 rounded border-gray-300 text-teal-600 focus:ring-teal-500"
+                class="mt-0.5 h-4 w-4 shrink-0 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
               />
               <span data-test="workbench-transfer-threshold-exempt-copy" class="min-w-0 flex-1">
                 <span class="block break-words text-sm font-medium leading-5 text-gray-900 dark:text-white">
@@ -205,7 +182,7 @@
 
           <section
             data-test="workbench-generated-now-card"
-            class="admin-workbench-generated-now flex min-h-0 min-w-0 flex-col overflow-hidden rounded-lg border border-gray-200 bg-white p-4 shadow-sm dark:border-dark-700 dark:bg-dark-900 sm:p-5"
+            class="admin-workbench-generated-now workbench-tool flex min-h-0 min-w-0 flex-col overflow-hidden p-4 sm:p-5"
             :style="generatedNowPanelStyle"
           >
             <div class="mb-4 flex shrink-0 flex-col items-stretch justify-between gap-3 min-[360px]:flex-row min-[360px]:items-center">
@@ -213,9 +190,6 @@
                 <h2 class="text-base font-semibold text-gray-950 dark:text-white">
                   {{ t('adminWorkbench.balanceTransfer.generatedNow') }}
                 </h2>
-                <p class="mt-1 text-sm text-gray-500 dark:text-dark-400">
-                  {{ t('adminWorkbench.balanceTransfer.generatedNowHint') }}
-                </p>
               </div>
               <button
                 type="button"
@@ -228,7 +202,7 @@
               </button>
             </div>
 
-            <div v-if="generatedResults.length === 0" class="flex min-h-44 flex-1 items-center justify-center rounded-lg bg-gray-50 text-sm text-gray-500 dark:bg-dark-800/70 dark:text-dark-400">
+            <div v-if="generatedResults.length === 0" class="flex min-h-44 flex-1 items-center justify-center text-sm text-gray-500 dark:text-dark-400">
               {{ t('adminWorkbench.balanceTransfer.noGeneratedNow') }}
             </div>
             <div v-else data-test="workbench-generated-results" class="admin-workbench-generated-results max-h-72 min-h-0 flex-1 space-y-2 overflow-y-auto pr-1 lg:max-h-none">
@@ -236,7 +210,7 @@
                 v-for="item in generatedResults"
                 :key="item.id"
                 data-test="workbench-generated-code"
-                class="rounded-lg border border-blue-100 bg-blue-50/70 px-3 py-2 text-sm text-blue-950 dark:border-blue-500/20 dark:bg-blue-500/10 dark:text-blue-100"
+                class="workbench-generated-code min-w-0 py-2 text-sm"
               >
                 <div class="flex min-w-0 flex-wrap items-center gap-2">
                   <span class="min-w-0 break-all font-mono">{{ item.code }}</span>
@@ -248,7 +222,7 @@
                     {{ t('adminWorkbench.balanceTransfer.giftBadge') }}
                   </span>
                 </div>
-                <p v-if="item.notes" class="mt-1 break-words text-xs leading-5 text-blue-700 dark:text-blue-200">
+                <p v-if="item.notes" class="mt-1 break-words text-xs leading-5 text-gray-500 dark:text-dark-400">
                   {{ t('adminWorkbench.balanceTransfer.notes') }}: {{ item.notes }}
                 </p>
               </div>
@@ -256,15 +230,12 @@
           </section>
         </section>
 
-        <section class="min-w-0 rounded-lg border border-gray-200 bg-white p-4 shadow-sm dark:border-dark-700 dark:bg-dark-900 sm:p-5">
+        <section data-test="workbench-generated-history" class="min-w-0">
           <div class="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <h2 class="text-base font-semibold text-gray-950 dark:text-white">
                 {{ t('adminWorkbench.balanceTransfer.generatedList') }}
               </h2>
-              <p class="mt-1 text-sm text-gray-500 dark:text-dark-400">
-                {{ t('adminWorkbench.balanceTransfer.generatedListHint') }}
-              </p>
               <p v-if="selectedGeneratedCodeIds.length > 0" class="mt-1 text-xs text-gray-500 dark:text-dark-400">
                 {{ t('adminWorkbench.balanceTransfer.selectedCount', { count: selectedGeneratedCodeIds.length }) }}
               </p>
@@ -325,7 +296,7 @@
             <article
               v-for="item in generatedCodes"
               :key="item.id"
-              class="flex min-w-0 flex-col gap-3 rounded-lg border border-gray-200 p-3 dark:border-dark-700 sm:flex-row sm:items-center sm:justify-between sm:px-4"
+              class="workbench-history-record flex min-w-0 flex-col gap-3 p-3 sm:flex-row sm:items-center sm:justify-between sm:px-4"
             >
               <div class="flex min-w-0 flex-1 gap-3">
                 <label v-if="canDeleteGeneratedCode(item)" class="mt-1 shrink-0">
@@ -364,17 +335,18 @@
                     <span v-if="item.expires_at"> · {{ t('adminWorkbench.balanceTransfer.expiresAt') }} {{ formatDateTime(item.expires_at) }}</span>
                     <span v-if="item.used_at"> · {{ t('adminWorkbench.balanceTransfer.usedAt') }} {{ formatDateTime(item.used_at) }}</span>
                   </p>
-                  <p v-if="item.notes" class="mt-2 break-words rounded-md bg-gray-50 px-2 py-1 text-xs leading-5 text-gray-600 dark:bg-dark-800/70 dark:text-dark-300">
+                  <p v-if="item.notes" class="mt-2 break-words text-xs leading-5 text-gray-600 dark:text-dark-300">
                     {{ t('adminWorkbench.balanceTransfer.notes') }}: {{ item.notes }}
                   </p>
                 </div>
               </div>
-              <div class="grid w-full shrink-0 grid-cols-2 gap-2 sm:flex sm:w-auto">
+              <div class="workbench-history-actions flex shrink-0 items-center justify-end gap-2 self-end sm:self-center">
                 <button
                   type="button"
                   :data-test="`generated-code-copy-${item.id}`"
-                  class="btn btn-secondary w-full justify-center px-3 sm:w-auto"
+                  class="btn btn-secondary justify-center"
                   :aria-label="t('common.copy')"
+                  :title="t('common.copy')"
                   @click="copyCode(item.code)"
                 >
                   <Icon name="copy" size="sm" />
@@ -383,8 +355,9 @@
                   v-if="canDeleteGeneratedCode(item)"
                   type="button"
                   :data-test="`generated-code-delete-${item.id}`"
-                  class="btn btn-danger w-full justify-center px-3 sm:w-auto"
+                  class="btn btn-danger justify-center"
                   :aria-label="t('common.delete')"
+                  :title="t('common.delete')"
                   :disabled="deletingIds.includes(item.id)"
                   @click="handleDeleteGeneratedCode(item)"
                 >
@@ -777,3 +750,42 @@ onBeforeUnmount(() => {
   window.removeEventListener('resize', updateGeneratedNowHeight)
 })
 </script>
+
+<style scoped>
+.admin-workbench-console .workbench-navigation {
+  border-bottom: 1px solid var(--workspace-rule);
+}
+
+.admin-workbench-console .workbench-tab {
+  border-bottom: 2px solid transparent;
+  color: var(--workspace-muted);
+  transition: color 150ms ease, background-color 150ms ease;
+}
+.admin-workbench-console .workbench-tab:hover { background: var(--workspace-hover); }
+.admin-workbench-console .workbench-tab[aria-selected='true'] {
+  border-bottom-color: rgb(var(--brand-rgb));
+  color: rgb(var(--brand-rgb));
+}
+.admin-workbench-console :is(.workbench-tool, .workbench-history-record) {
+  border: 1px solid var(--workspace-rule);
+  border-radius: 8px;
+  background: linear-gradient(125deg, var(--workspace-highlight) 15%, transparent 70%), var(--workspace-surface);
+  box-shadow: var(--workspace-shadow);
+}
+.admin-workbench-console .workbench-generated-code {
+  border-bottom: 1px solid var(--workspace-divider);
+  color: var(--workspace-ink);
+}
+.admin-workbench-console .workbench-generated-code:last-child { border-bottom: 0; }
+.admin-workbench-console .workbench-history-actions .btn {
+  width: 2.75rem;
+  min-width: 2.75rem;
+  height: 2.75rem;
+  flex: 0 0 2.75rem;
+  padding: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .admin-workbench-console .workbench-tab { transition: none; }
+}
+</style>

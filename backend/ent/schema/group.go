@@ -42,7 +42,9 @@ func (Group) Fields() []ent.Field {
 			Optional().
 			Nillable().
 			SchemaType(map[string]string{dialect.Postgres: "text"}),
-		field.String("tag").MaxLen(16).Default(""),
+		// Ent counts bytes; the service enforces the 20-codepoint limit.
+		field.String("tag").MaxLen(80).Default(""),
+		field.String("tag_color").MaxLen(7).Default(""),
 		field.Float("rate_multiplier").
 			SchemaType(map[string]string{dialect.Postgres: "decimal(10,4)"}).
 			Default(1.0),

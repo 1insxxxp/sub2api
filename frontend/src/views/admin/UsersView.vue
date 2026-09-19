@@ -1,14 +1,11 @@
 <template>
   <AppLayout>
-    <div class="space-y-6">
+    <div class="admin-workbench-page users-workbench space-y-4">
       <TablePageLayout>
-      <!-- Single Row: Search, Filters, and Actions -->
       <template #filters>
-        <div class="admin-toolbar">
-          <!-- Left: Search + Active Filters -->
-          <div class="admin-toolbar-group flex-1">
-            <!-- Search Box -->
-            <div class="relative w-full md:w-64">
+        <AdminListToolbar :active-filters="activeFilterCount" filter-id="users-list-filters">
+          <template #search>
+            <div class="relative min-w-0 flex-1">
               <Icon
                 name="search"
                 size="md"
@@ -18,11 +15,14 @@
                 v-model="searchQuery"
                 type="text"
                 :placeholder="t('admin.users.searchUsers')"
+                :aria-label="t('admin.users.searchUsers')"
                 class="input pl-10"
                 @input="handleSearch"
               />
             </div>
-
+          </template>
+          <template #filters>
+            <div class="users-list-filters admin-toolbar-group">
             <!-- Role Filter (visible when enabled) -->
             <div v-if="visibleFilters.has('role')" class="w-full sm:w-32">
               <Select
@@ -123,34 +123,41 @@
                 />
               </div>
             </template>
-          </div>
+            </div>
+          </template>
 
-          <!-- Right: Actions and Settings -->
-          <div class="admin-toolbar-group justify-end">
-            <!-- Mobile: Secondary buttons (icon only) -->
-            <div class="flex items-center gap-2 md:contents">
+          <template #actions>
+            <div class="users-list-actions">
               <!-- Refresh Button -->
               <button
                 @click="loadUsers"
                 :disabled="loading"
-                class="btn btn-secondary px-2 md:px-3"
+                class="btn btn-secondary users-tool-button"
                 :title="t('common.refresh')"
+                :aria-label="t('common.refresh')"
               >
                 <Icon name="refresh" size="md" :class="loading ? 'animate-spin' : ''" />
               </button>
               <!-- Filter Settings Dropdown -->
-              <div class="relative" ref="filterDropdownRef">
+              <div
+                class="relative"
+                ref="filterDropdownRef"
+                @keydown="handleToolbarDropdownKeydown('filter', $event)"
+              >
                 <button
                   @click="showFilterDropdown = !showFilterDropdown"
-                  class="btn btn-secondary px-2 md:px-3"
+                  class="btn btn-secondary users-tool-button"
                   :title="t('admin.users.filterSettings')"
+                  :aria-label="t('admin.users.filterSettings')"
+                  :aria-expanded="showFilterDropdown"
+                  aria-controls="users-filter-settings"
                 >
-                  <Icon name="filter" size="sm" class="md:mr-1.5" />
-                  <span class="hidden md:inline">{{ t('admin.users.filterSettings') }}</span>
+                  <Icon name="menu" size="sm" />
                 </button>
                 <!-- Dropdown menu -->
                 <div
                   v-if="showFilterDropdown"
+                  id="users-filter-settings"
                   class="dropdown right-0 top-full mt-1 w-48"
                 >
                   <!-- Built-in filters -->
@@ -193,20 +200,25 @@
                 </div>
               </div>
               <!-- Column Settings Dropdown -->
-              <div class="relative" ref="columnDropdownRef">
+              <div
+                class="relative"
+                ref="columnDropdownRef"
+                @keydown="handleToolbarDropdownKeydown('columns', $event)"
+              >
                 <button
                   @click="showColumnDropdown = !showColumnDropdown"
-                  class="btn btn-secondary px-2 md:px-3"
+                  class="btn btn-secondary users-tool-button"
                   :title="t('admin.users.columnSettings')"
+                  :aria-label="t('admin.users.columnSettings')"
+                  :aria-expanded="showColumnDropdown"
+                  aria-controls="users-column-settings"
                 >
-                  <svg class="h-4 w-4 md:mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M9 4.5v15m6-15v15m-10.875 0h15.75c.621 0 1.125-.504 1.125-1.125V5.625c0-.621-.504-1.125-1.125-1.125H4.125C3.504 4.5 3 5.004 3 5.625v12.75c0 .621.504 1.125 1.125 1.125z" />
-                  </svg>
-                  <span class="hidden md:inline">{{ t('admin.users.columnSettings') }}</span>
+                  <Icon name="grid" size="sm" />
                 </button>
                 <!-- Dropdown menu -->
                 <div
                   v-if="showColumnDropdown"
+                  id="users-column-settings"
                   class="dropdown right-0 top-full mt-1 max-h-80 w-48 overflow-y-auto"
                 >
                   <button
@@ -236,42 +248,56 @@
               <!-- Attributes Config Button -->
               <button
                 @click="showAttributesModal = true"
-                class="btn btn-secondary px-2 md:px-3"
+                class="btn btn-secondary users-tool-button"
                 :title="t('admin.users.attributes.configButton')"
+                :aria-label="t('admin.users.attributes.configButton')"
               >
-                <Icon name="cog" size="sm" class="md:mr-1.5" />
-                <span class="hidden md:inline">{{ t('admin.users.attributes.configButton') }}</span>
+                <Icon name="cog" size="sm" />
+              </button>
+              <button
+                @click="showCreateModal = true"
+                class="btn btn-primary users-create-button"
+                :title="t('admin.users.createUser')"
+                :aria-label="t('admin.users.createUser')"
+              >
+                <Icon name="plus" size="md" />
+                <span>{{ t('common.create') }}</span>
               </button>
             </div>
+          </template>
 
+          <template #secondary>
+            <div class="users-list-secondary">
+              <span data-test="users-list-count" class="users-list-count">
+                {{ t('common.total') }} <strong>{{ pagination.total }}</strong>
+              </span>
+              <span v-if="selectedCount > 0" class="users-list-count" role="status">
+                {{ t('common.selectedCount', { count: selectedCount }) }}
+              </span>
             <button
               v-if="selectedCount > 0"
-              class="btn btn-secondary flex-1 md:flex-initial"
+              class="btn btn-secondary users-batch-button"
               data-test="bulk-edit-limits"
               @click="showBulkEditModal = true"
             >
-              <Icon name="users" size="md" class="mr-2" />
+              <Icon name="users" size="sm" />
               {{ t('admin.users.bulkLimits.action', { count: selectedCount }) }}
             </button>
 
             <button
               v-if="selectedCount > 0"
-              class="btn btn-danger flex-1 md:flex-initial"
+              class="btn btn-danger users-batch-button"
               data-test="bulk-delete-users"
               :disabled="bulkDeleting"
               @click="bulkDeleteIds = [...selectedIds]"
             >
-              <Icon name="trash" size="md" class="mr-2" />
+              <Icon name="trash" size="sm" />
               {{ t('admin.users.bulkDelete.action', { count: selectedCount }) }}
             </button>
 
-            <!-- Create User Button (full width on mobile, auto width on desktop) -->
-            <button @click="showCreateModal = true" class="btn btn-primary flex-1 md:flex-initial">
-              <Icon name="plus" size="md" class="mr-2" />
-              {{ t('admin.users.createUser') }}
-            </button>
-          </div>
-        </div>
+            </div>
+          </template>
+        </AdminListToolbar>
       </template>
 
       <!-- Users Table -->
@@ -280,6 +306,12 @@
           :columns="columns"
           :data="sortedUsers"
           :loading="loading"
+          :mobile-layout="{
+            title: 'email',
+            subtitle: 'username',
+            status: 'status',
+            summary: ['balance', 'usage', 'concurrency']
+          }"
           row-key="id"
           selectable
           :selected-keys="selectedIds"
@@ -293,15 +325,13 @@
           @update:selected-keys="handleSelectedKeysUpdate"
         >
           <template #cell-email="{ value }">
-            <div class="flex items-center gap-2">
-              <div
-                class="flex h-8 w-8 items-center justify-center rounded-full bg-primary-100 dark:bg-primary-900/30"
-              >
-                <span class="text-sm font-medium text-primary-700 dark:text-primary-300">
+            <div class="users-identity flex min-w-0 items-center gap-2">
+              <div class="users-avatar" aria-hidden="true">
+                <span class="text-xs font-medium">
                   {{ value.charAt(0).toUpperCase() }}
                 </span>
               </div>
-              <span class="font-medium text-gray-900 dark:text-white">{{ value }}</span>
+              <span class="users-email font-medium text-gray-900 dark:text-white">{{ value }}</span>
             </div>
           </template>
 
@@ -832,6 +862,7 @@ import type { Column } from '@/components/common/types'
 import type { SelectOption } from '@/components/common/Select.vue'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import TablePageLayout from '@/components/layout/TablePageLayout.vue'
+import AdminListToolbar from '@/components/admin/AdminListToolbar.vue'
 import DataTable from '@/components/common/DataTable.vue'
 import Pagination from '@/components/common/Pagination.vue'
 import ConfirmDialog from '@/components/common/ConfirmDialog.vue'
@@ -1159,6 +1190,10 @@ const filters = reactive({
   apiKeyGroup: null as number | null  // group id bound to the user's API keys, null = all
 })
 const activeAttributeFilters = reactive<Record<number, string>>({})
+const activeFilterCount = computed(() =>
+  [filters.role, filters.status, filters.group, filters.apiKeyGroup, ...Object.values(activeAttributeFilters)]
+    .filter(value => value !== '' && value !== null && value !== undefined).length
+)
 
 // Visible filters tracking (which filters are shown in the UI)
 // Keys: 'role', 'status', 'attr_${id}'
@@ -1171,6 +1206,29 @@ const showColumnDropdown = ref(false)
 // Dropdown refs for click outside detection
 const filterDropdownRef = ref<HTMLElement | null>(null)
 const columnDropdownRef = ref<HTMLElement | null>(null)
+
+const handleToolbarDropdownKeydown = (menu: 'filter' | 'columns', event: KeyboardEvent) => {
+  const open = menu === 'filter' ? showFilterDropdown : showColumnDropdown
+  if (!open.value) return
+  const container = menu === 'filter' ? filterDropdownRef : columnDropdownRef
+  const trigger = container.value?.querySelector<HTMLButtonElement>('button')
+  if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+    event.preventDefault()
+    const options = Array.from(container.value?.querySelectorAll<HTMLButtonElement>('.dropdown button:not(:disabled)') ?? [])
+    const index = options.indexOf(event.target as HTMLButtonElement)
+    const next = event.key === 'ArrowDown' ? index + 1 : (index < 0 ? 0 : index) - 1
+    options[(next + options.length) % options.length]?.focus()
+    return
+  }
+  if (event.key !== 'Escape' && event.key !== 'Tab') return
+  if (event.key === 'Tab' && event.target === trigger) return
+  if (event.key === 'Escape') {
+    event.preventDefault()
+    event.stopPropagation()
+  }
+  trigger?.focus()
+  open.value = false
+}
 
 // localStorage keys
 const FILTER_VALUES_KEY = 'user-filter-values'
@@ -1926,3 +1984,90 @@ onUnmounted(() => {
   abortController?.abort()
 })
 </script>
+
+<style scoped>
+.users-list-actions,
+.users-list-secondary {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 0.375rem;
+}
+
+.users-list-secondary {
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.users-list-filters {
+  width: 100%;
+  grid-column: 1 / -1;
+}
+
+.users-list-count {
+  color: var(--workspace-muted);
+  font-size: 0.75rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.users-list-count strong {
+  margin-inline-start: 0.25rem;
+  color: var(--workspace-ink);
+  font-weight: 600;
+}
+
+.users-list-actions .users-tool-button {
+  width: 2rem;
+  height: 2rem;
+  padding: 0;
+  flex: none;
+}
+
+.users-list-actions .users-create-button,
+.users-list-secondary .users-batch-button {
+  min-height: 2rem;
+  gap: 0.375rem;
+  padding: 0.375rem 0.625rem;
+  font-size: 0.75rem;
+  line-height: 1rem;
+  white-space: normal;
+}
+
+.users-batch-button :deep(svg) {
+  flex-shrink: 0;
+}
+
+.users-avatar {
+  display: grid;
+  width: 1.75rem;
+  height: 1.75rem;
+  flex: none;
+  place-items: center;
+  border: 1px solid var(--workspace-rule);
+  border-radius: 6px;
+  color: var(--workspace-muted);
+  background: linear-gradient(135deg, var(--workspace-highlight), transparent), var(--workspace-surface);
+  box-shadow: var(--workspace-shadow);
+}
+
+@media (max-width: 767px) {
+  .users-list-actions {
+    display: contents;
+  }
+
+  .users-list-filters {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .users-list-filters > * {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .users-email {
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+}
+</style>

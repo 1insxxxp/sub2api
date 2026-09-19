@@ -1,65 +1,51 @@
 <template>
   <Teleport to="body">
-    <div
-      class="toast-stack pointer-events-none fixed right-3 top-3 z-[9999] space-y-2 sm:right-4 sm:top-4"
-      aria-live="polite"
-      aria-atomic="true"
-    >
+    <div class="toast-viewport">
       <TransitionGroup
-        enter-active-class="transition ease-out duration-200"
-        enter-from-class="opacity-0 translate-x-4 scale-[0.98]"
-        enter-to-class="opacity-100 translate-x-0"
-        leave-active-class="transition ease-in duration-150"
-        leave-from-class="opacity-100 translate-x-0"
-        leave-to-class="opacity-0 translate-x-4 scale-[0.98]"
+        name="toast"
+        tag="div"
+        class="toast-stack"
+        aria-live="polite"
+        aria-atomic="true"
       >
         <div
           v-for="toast in toasts"
           :key="toast.id"
           :class="[
-            'toast-panel admin-toast-panel pointer-events-auto relative min-w-[280px] max-w-[min(24rem,calc(100vw-1.5rem))] overflow-hidden rounded-xl border border-slate-200 bg-white/95 shadow-lg shadow-slate-950/10 ring-1 ring-slate-950/5 backdrop-blur-sm dark:border-white/10 dark:bg-slate-950/95 dark:shadow-black/25 dark:ring-white/10',
-            getToneClass(toast.type)
+            'toast-panel',
+            getToneClass(toast.type),
+            { 'toast-has-title': toast.title, 'toast-persistent': toast.duration === undefined }
           ]"
         >
-          <div class="toast-body relative px-3 py-2.5">
-            <div class="flex items-start gap-2.5">
-              <!-- Icon -->
-              <div :class="['toast-icon-shell mt-0.5 flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-lg border', getIconShellClass(toast.type)]">
-                <Icon :name="getToastIconName(toast.type)" size="sm" class="text-current" aria-hidden="true" />
-              </div>
-
-              <!-- Content -->
-              <div class="min-w-0 flex-1">
-                <p v-if="toast.title" class="text-sm font-semibold text-slate-950 dark:text-white">
-                  {{ toast.title }}
-                </p>
-                <p
-                  :class="[
-                    'text-[13px] leading-5',
-                    toast.title
-                      ? 'mt-1 text-slate-600 dark:text-slate-300'
-                      : 'text-slate-900 dark:text-slate-100'
-                  ]"
-                >
-                  {{ toast.message }}
-                </p>
-              </div>
-
-              <!-- Close button -->
-              <button
-                @click="removeToast(toast.id)"
-                class="toast-close -mr-1 flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-lg text-slate-400 transition-colors duration-150 hover:bg-slate-100 hover:text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:text-slate-500 dark:hover:bg-white/[0.06] dark:hover:text-slate-200"
-                aria-label="Close notification"
-              >
-                <Icon name="x" size="sm" />
-              </button>
+          <div class="toast-body">
+            <div class="toast-icon-shell">
+              <Icon :name="getToastIconName(toast.type)" size="md" :stroke-width="1.75" aria-hidden="true" />
             </div>
+
+            <div class="toast-content">
+              <p v-if="toast.title" class="toast-title">
+                {{ toast.title }}
+              </p>
+              <p class="toast-message">
+                {{ toast.message }}
+              </p>
+            </div>
+
+            <button
+              v-if="toast.duration === undefined"
+              type="button"
+              @click="removeToast(toast.id)"
+              class="toast-close"
+              :aria-label="t('common.close')"
+              :title="t('common.close')"
+            >
+              <Icon name="x" size="sm" aria-hidden="true" />
+            </button>
           </div>
 
-          <!-- Progress bar -->
-          <div v-if="toast.duration" class="toast-progress-track h-0.5">
+          <div v-if="toast.duration" class="toast-progress-track" aria-hidden="true">
             <div
-              :class="['h-full toast-progress', getProgressBarColor(toast.type)]"
+              class="toast-progress"
               :style="{ animationDuration: `${toast.duration}ms` }"
             ></div>
           </div>
@@ -71,10 +57,12 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import Icon from '@/components/icons/Icon.vue'
 import { useAppStore } from '@/stores/app'
 
 const appStore = useAppStore()
+const { t } = useI18n()
 
 const toasts = computed(() => appStore.toasts)
 
@@ -92,16 +80,6 @@ const getToastIconName = (type: string): 'checkCircle' | 'xCircle' | 'exclamatio
   }
 }
 
-const getIconShellClass = (type: string): string => {
-  const colors: Record<string, string> = {
-    success: 'text-emerald-600 bg-emerald-50 border-emerald-200/80 dark:text-emerald-200 dark:bg-emerald-500/12 dark:border-emerald-400/20',
-    error: 'text-rose-600 bg-rose-50 border-rose-200/80 dark:text-rose-200 dark:bg-rose-500/12 dark:border-rose-400/20',
-    warning: 'text-amber-600 bg-amber-50 border-amber-200/80 dark:text-amber-200 dark:bg-amber-500/12 dark:border-amber-400/20',
-    info: 'text-blue-600 bg-blue-50 border-blue-200/80 dark:text-blue-200 dark:bg-blue-500/12 dark:border-blue-400/20'
-  }
-  return colors[type] || colors.info
-}
-
 const getToneClass = (type: string): string => {
   const colors: Record<string, string> = {
     success: 'toast-success',
@@ -112,73 +90,174 @@ const getToneClass = (type: string): string => {
   return colors[type] || colors.info
 }
 
-const getProgressBarColor = (type: string): string => {
-  const colors: Record<string, string> = {
-    success: 'bg-emerald-500',
-    error: 'bg-rose-500',
-    warning: 'bg-amber-500',
-    info: 'bg-blue-500'
-  }
-  return colors[type] || colors.info
-}
-
 const removeToast = (id: string) => {
   appStore.hideToast(id)
 }
 </script>
 
 <style scoped>
-.toast-icon-shell {
-  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+.toast-viewport {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  overflow: hidden;
+  pointer-events: none;
 }
+
+.toast-stack {
+  --toast-edge: max(1.25rem, env(safe-area-inset-right));
+  position: absolute;
+  top: max(1rem, env(safe-area-inset-top));
+  right: var(--toast-edge);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.625rem;
+  width: min(23rem, calc(100vw - 2.5rem));
+  pointer-events: none;
+}
+
+.toast-panel {
+  --toast-accent: #2563eb;
+  position: relative;
+  width: fit-content;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  border: 1px solid rgb(100 116 139 / 18%);
+  border-radius: 7px;
+  background: linear-gradient(115deg, color-mix(in srgb, var(--toast-accent) 5%, transparent), transparent 68%), rgb(252 252 253 / 97%);
+  color: #374151;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 90%), 0 2px 5px rgb(15 23 42 / 4%), 0 10px 24px rgb(15 23 42 / 8%);
+  backdrop-filter: blur(20px);
+  pointer-events: auto;
+}
+
+.toast-panel::before {
+  position: absolute;
+  inset: 0.625rem auto 0.625rem 0;
+  width: 2px;
+  border-radius: 0 2px 2px 0;
+  background: var(--toast-accent);
+  content: '';
+  opacity: 0.85;
+}
+
+.dark .toast-panel {
+  --toast-accent: #93c5fd;
+  border-color: rgb(255 255 255 / 12%);
+  background: linear-gradient(115deg, color-mix(in srgb, var(--toast-accent) 9%, transparent), transparent 68%), rgb(38 40 44 / 97%);
+  color: #f4f4f5;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 5%), 0 3px 6px rgb(0 0 0 / 12%), 0 10px 24px rgb(0 0 0 / 24%);
+}
+
+.toast-success { --toast-accent: #059669; }
+.toast-error { --toast-accent: #e11d48; }
+.toast-warning { --toast-accent: #b45309; }
+.dark .toast-success { --toast-accent: #6ee7b7; }
+.dark .toast-error { --toast-accent: #fda4af; }
+.dark .toast-warning { --toast-accent: #fde68a; }
+
+.toast-body {
+  display: grid;
+  grid-template-columns: 1.375rem minmax(0, 1fr);
+  align-items: center;
+  gap: 0.625rem;
+  padding: 0.6875rem 0.875rem 0.6875rem 1rem;
+}
+
+.toast-persistent .toast-body {
+  grid-template-columns: 1.375rem minmax(0, 1fr) 1.875rem;
+  padding-block: 0.5rem;
+  padding-right: 0.375rem;
+}
+
+.toast-icon-shell {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.375rem;
+  height: 1.375rem;
+  border: 1px solid color-mix(in srgb, var(--toast-accent) 32%, transparent);
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--toast-accent) 8%, transparent);
+  color: var(--toast-accent);
+  align-self: start;
+}
+
+.toast-content {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-size: 0.8125rem;
+  line-height: 1.2rem;
+}
+
+.toast-title { font-size: 0.8125rem; font-weight: 600; }
+.toast-title + .toast-message { margin-top: 0.25rem; color: #6b7280; font-size: 0.8125rem; }
+.dark .toast-title + .toast-message { color: #c4c6cb; }
+.toast-persistent .toast-icon-shell { align-self: center; }
+.toast-has-title .toast-body { padding-block: 0.8125rem; align-items: start; }
+.toast-has-title .toast-icon-shell { align-self: start; }
+.toast-has-title .toast-close { margin-block: -0.375rem; }
+
+.toast-close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 6px;
+  color: #6b7280;
+  transition: background-color 160ms ease, color 160ms ease, transform 160ms ease;
+}
+
+.dark .toast-close { color: #b5b8be; }
+.toast-close:hover { color: var(--toast-accent); background: color-mix(in srgb, var(--toast-accent) 8%, transparent); }
+.toast-close:active { transform: scale(0.92); }
+.toast-close:focus-visible { outline: 2px solid var(--toast-accent); outline-offset: -2px; }
 
 .toast-progress-track {
-  background: rgba(148, 163, 184, 0.16);
-}
-
-:global(.dark .toast-progress-track) {
-  background: rgba(255, 255, 255, 0.08);
-}
-
-.toast-success::after,
-.toast-error::after,
-.toast-warning::after,
-.toast-info::after {
-  content: '';
   position: absolute;
-  inset: 0 auto 0 0;
-  width: 2px;
-}
-
-.toast-success::after {
-  background: #10b981;
-}
-
-.toast-error::after {
-  background: #f43f5e;
-}
-
-.toast-warning::after {
-  background: #f59e0b;
-}
-
-.toast-info::after {
-  background: #2563eb;
+  inset: auto 0.875rem 0 1rem;
+  height: 1px;
+  overflow: hidden;
+  border-radius: 2px;
+  background: transparent;
 }
 
 .toast-progress {
-  width: 100%;
-  animation-name: toast-progress-shrink;
-  animation-timing-function: linear;
-  animation-fill-mode: forwards;
+  height: 100%;
+  background: var(--toast-accent);
+  opacity: 0.3;
+  transform-origin: left;
+  animation: toast-progress-shrink linear forwards;
 }
 
 @keyframes toast-progress-shrink {
-  from {
-    width: 100%;
+  to { transform: scaleX(0); }
+}
+
+.toast-enter-active { transition: opacity 180ms ease, transform 280ms cubic-bezier(0.22, 1, 0.36, 1); }
+.toast-move { transition: transform 220ms cubic-bezier(0.22, 1, 0.36, 1); }
+.toast-leave-active { transition: opacity 160ms ease, transform 200ms cubic-bezier(0.4, 0, 1, 1); }
+.toast-enter-from,
+.toast-leave-to { opacity: 0; transform: translateX(calc(100% + var(--toast-edge))); }
+
+@media (max-width: 767px) {
+  .toast-stack {
+    --toast-edge: max(0.75rem, env(safe-area-inset-right));
+    top: calc(4.5rem + env(safe-area-inset-top));
+    width: min(24rem, calc(100vw - 1.5rem - env(safe-area-inset-left) - env(safe-area-inset-right)));
   }
-  to {
-    width: 0%;
-  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .toast-panel,
+  .toast-close { transition: none; }
+  .toast-enter-from,
+  .toast-leave-to,
+  .toast-close:active { transform: none; }
+  .toast-progress { animation: none; }
+  .toast-progress-track { display: none; }
 }
 </style>

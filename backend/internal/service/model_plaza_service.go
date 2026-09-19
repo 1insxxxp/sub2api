@@ -38,6 +38,7 @@ type PlazaModel struct {
 // 具体平台），与「可用渠道」页口径一致。
 type PlazaGroup struct {
 	Tag                string
+	TagColor           string
 	ID                 int64
 	Name               string
 	Description        string
@@ -124,6 +125,7 @@ func (s *ModelPlazaService) ListGroups(ctx context.Context) ([]PlazaGroup, error
 			Name:                      g.Name,
 			Description:               g.Description,
 			Tag:                       g.Tag,
+			TagColor:                  g.TagColor,
 			Platform:                  g.Platform,
 			SubscriptionType:          g.SubscriptionType,
 			RateMultiplier:            g.RateMultiplier,

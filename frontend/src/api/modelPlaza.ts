@@ -57,6 +57,7 @@ export interface PlazaModel {
 
 export interface ModelPlazaGroup {
   tag?: import('@/types').GroupTag
+  tag_color?: string
   id: number
   name: string
   description: string

@@ -176,6 +176,28 @@ function mountView() {
 }
 
 describe('GroupsView duplicate action', () => {
+  it('saves custom tag text and color and restores both when editing again', async () => {
+    const saved = { ...sourceGroup, tag: '专属高速', tag_color: '#16A34A' }
+    updateGroup.mockResolvedValue(saved)
+    const wrapper = mountView()
+    await flushPromises()
+    const openEditor = async () => {
+      await wrapper.findAll('button').find(button => button.text() === 'common.edit')!.trigger('click')
+      await flushPromises()
+    }
+    await openEditor()
+    await wrapper.get('[data-test="group-tag-text"]').setValue(saved.tag)
+    await wrapper.get('[data-test="group-tag-color-hex"]').setValue(saved.tag_color)
+    listGroups.mockResolvedValue({ items: [saved], total: 1, page: 1, page_size: 20, pages: 1 })
+    await wrapper.get('#edit-group-form').trigger('submit')
+    await flushPromises()
+    expect(updateGroup).toHaveBeenCalledWith(42, expect.objectContaining({ tag: saved.tag, tag_color: saved.tag_color }))
+    await openEditor()
+    expect(wrapper.get('[data-test="group-tag-text"]').element).toHaveProperty('value', saved.tag)
+    expect(wrapper.get('[data-test="group-tag-color-hex"]').element).toHaveProperty('value', saved.tag_color)
+    wrapper.unmount()
+  })
+
   it.each(['chat', 'image', 'airp', ''])('submits and clears the group tag: %s', async (tag) => {
     updateGroup.mockResolvedValue({ ...sourceGroup, tag })
     const wrapper = mountView()

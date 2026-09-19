@@ -1,20 +1,18 @@
 <template>
   <AppLayout>
-    <div class="accounts-admin-page w-full min-w-0 space-y-6">
+    <div class="admin-workbench-page accounts-admin-page w-full min-w-0 space-y-6">
       <TablePageLayout>
       <template #filters>
-        <div class="admin-toolbar">
-          <div class="admin-toolbar-group flex-1">
-            <AccountTableFilters
-              v-model:searchQuery="params.search"
-              :filters="params"
-              :groups="groups"
-              @update:filters="(newFilters) => Object.assign(params, newFilters)"
-              @change="debouncedReload"
-              @update:searchQuery="debouncedReload"
+        <AdminListToolbar :active-filters="activeFilterCount" filter-id="account-list-filters">
+          <template #search>
+            <SearchInput
+              v-model="params.search"
+              :placeholder="t('admin.accounts.searchAccounts')"
+              @search="debouncedReload"
+              @update:model-value="debouncedReload"
             />
-          </div>
-          <div class="admin-toolbar-group w-full justify-end lg:w-auto lg:flex-none">
+          </template>
+          <template #actions>
             <AccountTableActions
               :loading="loading"
               @refresh="handleManualRefresh"
@@ -28,11 +26,13 @@
                     showAutoRefreshDropdown = !showAutoRefreshDropdown;
                     showAccountToolsDropdown = false
                   "
-                  class="btn btn-secondary px-2 md:px-3"
+                  class="btn btn-secondary account-toolbar-action"
                   :title="t('admin.accounts.autoRefresh')"
+                  :aria-label="t('admin.accounts.autoRefresh')"
+                  :aria-expanded="showAutoRefreshDropdown"
                 >
-                  <Icon name="refresh" size="sm" :class="[autoRefreshEnabled ? 'animate-spin' : '']" />
-                  <span class="hidden md:inline">
+                  <Icon name="clock" size="sm" :class="{ 'text-primary-500': autoRefreshEnabled }" />
+                  <span class="hidden xl:inline">
                     {{
                       autoRefreshEnabled
                         ? t('admin.accounts.autoRefreshCountdown', { seconds: autoRefreshCountdown })
@@ -69,13 +69,14 @@
                 <button
                   ref="accountToolsTriggerRef"
                   @click="toggleAccountToolsDropdown"
-                  class="btn btn-secondary px-2 md:px-3"
+                  class="btn btn-secondary account-toolbar-action"
                   :title="t('admin.accounts.moreActions')"
+                  :aria-label="t('admin.accounts.moreActions')"
                   :aria-expanded="showAccountToolsDropdown"
                 >
-                  <Icon name="more" size="sm" class="md:mr-1.5" />
-                  <span class="hidden md:inline">{{ t('admin.accounts.moreActions') }}</span>
-                  <Icon name="chevronDown" size="xs" class="ml-1 hidden md:inline" />
+                  <Icon name="more" size="sm" />
+                  <span class="hidden xl:inline">{{ t('admin.accounts.moreActions') }}</span>
+                  <Icon name="chevronDown" size="xs" class="hidden xl:inline" />
                 </button>
                 <Teleport to="body">
                   <div
@@ -162,8 +163,35 @@
               </div>
               </template>
             </AccountTableActions>
-          </div>
-        </div>
+          </template>
+          <template #filters>
+            <AccountTableFilters
+              :filters="params"
+              :groups="groups"
+              @update:filters="(newFilters) => Object.assign(params, newFilters)"
+              @change="debouncedReload"
+            />
+          </template>
+          <template #secondary>
+            <AccountBulkActionsBar
+              class="account-bulk-bar"
+              :selected-ids="selIds"
+              :total-results="pagination.total"
+              :selecting-all="selectingAllResults"
+              :all-results-selected="allResultsSelected"
+              @delete="handleBulkDelete"
+              @reset-status="handleBulkResetStatus"
+              @refresh-token="handleBulkRefreshToken"
+              @probe-upstream-billing="handleBulkProbeUpstreamBilling"
+              @edit-selected="openBulkEditSelected"
+              @edit-filtered="openBulkEditFiltered"
+              @clear="clearSelection"
+              @select-page="selectPage"
+              @select-all-results="handleSelectAllResults"
+              @toggle-schedulable="handleBulkToggleSchedulable"
+            />
+          </template>
+        </AdminListToolbar>
         <div
           v-if="hasPendingListSync"
           class="mt-2 flex items-center justify-between rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:border-amber-700/40 dark:bg-amber-900/20 dark:text-amber-200"
@@ -178,27 +206,12 @@
         </div>
       </template>
       <template #table>
-        <AccountBulkActionsBar
-          :selected-ids="selIds"
-          :total-results="pagination.total"
-          :selecting-all="selectingAllResults"
-          :all-results-selected="allResultsSelected"
-          @delete="handleBulkDelete"
-          @reset-status="handleBulkResetStatus"
-          @refresh-token="handleBulkRefreshToken"
-          @probe-upstream-billing="handleBulkProbeUpstreamBilling"
-          @edit-selected="openBulkEditSelected"
-          @edit-filtered="openBulkEditFiltered"
-          @clear="clearSelection"
-          @select-page="selectPage"
-          @select-all-results="handleSelectAllResults"
-          @toggle-schedulable="handleBulkToggleSchedulable"
-        />
         <div ref="accountTableRef" class="flex min-h-0 w-full min-w-0 flex-1 flex-col overflow-hidden">
         <DataTable
           ref="dataTableRef"
           :columns="cols"
           :data="accounts"
+          :mobile-layout="accountMobileLayout"
           :loading="loading"
           row-key="id"
           :server-side-sort="true"
@@ -220,7 +233,15 @@
             />
           </template>
           <template #cell-select="{ row }">
-            <input type="checkbox" :checked="isSelected(row.id)" @change="toggleSel(row.id)" class="rounded border-gray-300 text-primary-600 focus:ring-primary-500" />
+            <input
+              type="checkbox"
+              :checked="isSelected(row.id)"
+              :aria-label="`${t('common.selectOption')} ${row.name}`"
+              data-test="account-select-row"
+              @click.stop
+              @change="toggleSel(row.id)"
+              class="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+            />
           </template>
           <template #cell-id="{ value }">
             <span class="font-mono text-xs text-gray-500 dark:text-gray-400">#{{ value }}</span>
@@ -286,8 +307,8 @@
               </div>
             </div>
           </template>
-          <template #cell-capacity="{ row }">
-            <AccountCapacityCell :account="row" />
+          <template #cell-capacity="{ row, mobile }">
+            <AccountCapacityCell :account="row" :class="{ 'account-mobile-capacity': mobile }" />
           </template>
           <template #cell-status="{ row }">
             <div class="flex items-center gap-1.5">
@@ -315,8 +336,9 @@
               <HelpTooltip :content="t('admin.accounts.usageWindowsHint')" width-class="w-72" />
             </div>
           </template>
-          <template #cell-usage="{ row }">
+          <template #cell-usage="{ row, mobile }">
             <AccountUsageCell
+              :class="{ 'account-mobile-usage': mobile }"
               :account="row"
               :today-stats="todayStatsByAccountId[String(row.id)] ?? null"
               :today-stats-loading="todayStatsLoading"
@@ -433,17 +455,17 @@
             </div>
           </template>
           <template #cell-actions="{ row }">
-            <div class="flex items-center gap-1">
-              <button @click="handleEdit(row)" class="admin-inline-action">
-                <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0115.75 21H5.25A2.25 2.25 0 013 18.75V8.25A2.25 2.25 0 015.25 6H10" /></svg>
+            <div class="flex flex-wrap items-center gap-1">
+              <button @click="handleEdit(row)" class="admin-inline-action" :aria-label="t('common.edit')" :title="t('common.edit')">
+                <Icon name="edit" size="sm" />
                 <span class="text-xs">{{ t('common.edit') }}</span>
               </button>
-              <button @click="handleDelete(row)" class="admin-inline-action admin-inline-action-danger">
-                <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" /></svg>
+              <button @click="handleDelete(row)" class="admin-inline-action admin-inline-action-danger" :aria-label="t('common.delete')" :title="t('common.delete')">
+                <Icon name="trash" size="sm" />
                 <span class="text-xs">{{ t('common.delete') }}</span>
               </button>
-              <button @click="openMenu(row, $event)" class="admin-inline-action">
-                <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M6.75 12a.75.75 0 11-1.5 0 .75.75 0 011.5 0zM12.75 12a.75.75 0 11-1.5 0 .75.75 0 011.5 0zM18.75 12a.75.75 0 11-1.5 0 .75.75 0 011.5 0z" /></svg>
+              <button @click="openMenu(row, $event)" class="admin-inline-action" :aria-label="t('common.more')" :title="t('common.more')">
+                <Icon name="more" size="sm" />
                 <span class="text-xs">{{ t('common.more') }}</span>
               </button>
             </div>
@@ -504,7 +526,9 @@ import { useStepUp, isStepUpBlocked, isStepUpCancelled, stepUpBlockReason } from
 import TotpStepUpDialog from '@/components/auth/TotpStepUpDialog.vue'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import TablePageLayout from '@/components/layout/TablePageLayout.vue'
+import AdminListToolbar from '@/components/admin/AdminListToolbar.vue'
 import DataTable from '@/components/common/DataTable.vue'
+import SearchInput from '@/components/common/SearchInput.vue'
 import HelpTooltip from '@/components/common/HelpTooltip.vue'
 import Pagination from '@/components/common/Pagination.vue'
 import ConfirmDialog from '@/components/common/ConfirmDialog.vue'
@@ -551,6 +575,14 @@ const authStore = useAuthStore()
 
 const proxies = ref<AccountProxy[]>([])
 const groups = ref<AdminGroup[]>([])
+const accountMobileLayout = {
+  title: 'name',
+  subtitle: 'id',
+  leading: 'platform_type',
+  status: 'status',
+  selection: 'select',
+  summary: ['capacity', 'usage', 'schedulable']
+}
 const groupsByID = computed(() => new Map(groups.value.map(group => [group.id, group])))
 const accountGroupsForRow = (account: Pick<AccountListItem, 'group_ids'>): AdminGroup[] => {
   const groupIDs = account.group_ids ?? []
@@ -1137,6 +1169,11 @@ const {
     sort_order: sortState.sort_order
   }
 })
+
+const activeFilterCount = computed(() =>
+  [params.platform, params.type, params.status, params.privacy_mode, params.group]
+    .filter(value => value !== '' && value != null).length
+)
 
 const buildAccountFiltersSnapshot = (): AccountFilterState => ({
   platform: normalizeAccountFilterValue(params.platform),
@@ -2650,13 +2687,74 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
-.account-tools-menu-item {
-  @apply flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left text-sm font-medium;
-  @apply text-slate-700 transition-all duration-150 dark:text-slate-200;
-  @apply hover:bg-primary-50/80 hover:text-primary-800 dark:hover:bg-primary-500/10 dark:hover:text-primary-100;
+.account-toolbar-action {
+  width: 2.25rem;
+  min-height: 2.25rem;
+  padding: 0;
+  gap: 0.375rem;
+  border-radius: 6px;
 }
 
+.accounts-admin-page :deep(.account-bulk-bar) {
+  flex-wrap: wrap;
+  gap: 0.5rem 1rem;
+  margin: 0;
+  padding: 0.5rem 0 0;
+  border: 0;
+  border-top: 1px solid var(--workspace-divider);
+  border-radius: 0;
+  background: transparent;
+}
+
+.accounts-admin-page :deep(.account-bulk-bar > div) {
+  flex-wrap: wrap;
+  min-width: 0;
+  gap: 0.375rem 0.5rem;
+}
+
+.accounts-admin-page :deep(.account-bulk-bar > div > span) {
+  color: var(--workspace-muted);
+  font-size: 0.75rem;
+}
+
+.accounts-admin-page :deep(.account-bulk-bar .btn) {
+  min-height: 1.875rem;
+  padding: 0.25rem 0.5rem;
+  border-radius: 6px;
+  font-size: 0.75rem;
+  white-space: normal;
+}
+
+.account-mobile-capacity,
+.account-mobile-usage {
+  min-width: 0;
+  max-height: 8rem;
+  overflow: auto;
+  scrollbar-width: thin;
+}
+
+.account-tools-menu-item {
+  @apply flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm font-medium;
+  color: var(--workspace-ink);
+  transition: background-color 120ms ease;
+}
+
+.account-tools-menu-item:hover { background: var(--workspace-hover); }
+
 .account-tools-menu-icon {
-  @apply inline-flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-xl;
+  @apply inline-flex h-7 w-7 flex-shrink-0 items-center justify-center rounded;
+  background: var(--workspace-hover);
+  color: var(--workspace-muted);
+}
+
+@media (min-width: 1280px) {
+  .account-toolbar-action {
+    width: auto;
+    padding-inline: 0.625rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .account-tools-menu-item { transition: none; }
 }
 </style>

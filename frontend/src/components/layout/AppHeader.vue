@@ -1,5 +1,6 @@
 <template>
   <header class="app-header-shell theme-crisp sticky top-0 z-50" @keydown.esc="closeCheckinPopover">
+    <div class="app-header-ambient" aria-hidden="true"></div>
     <div class="app-header-toolbar">
       <!-- Left: Mobile Menu Toggle + Page Title -->
       <div class="app-header-title-group">
@@ -7,11 +8,13 @@
           @click="toggleMobileSidebar"
           class="app-header-mobile-action app-header-action-navigation btn-ghost btn-icon lg:hidden"
           aria-label="Toggle Menu"
+          aria-controls="app-sidebar"
+          :aria-expanded="appStore.mobileOpen"
         >
           <Icon name="menu" size="md" />
         </button>
 
-        <div class="hidden min-w-0 lg:block">
+        <div class="app-header-page-title min-w-0">
           <h1 class="truncate text-base font-bold text-slate-950 dark:text-white">
             {{ pageTitle }}
           </h1>
@@ -32,7 +35,9 @@
           :href="docUrl"
           target="_blank"
           rel="noopener noreferrer"
-          class="hidden items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-sm font-semibold text-slate-600 transition-colors hover:bg-slate-100 hover:text-slate-950 dark:text-dark-400 dark:hover:bg-dark-800 dark:hover:text-white sm:flex"
+          class="app-header-doc-link hidden items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-sm font-semibold text-slate-600 transition-colors hover:bg-slate-100 hover:text-slate-950 dark:text-dark-400 dark:hover:bg-dark-800 dark:hover:text-white sm:flex"
+          :aria-label="t('nav.docs')"
+          :title="t('nav.docs')"
         >
           <Icon name="book" size="sm" />
           <span class="hidden sm:inline">{{ t('nav.docs') }}</span>
@@ -121,6 +126,7 @@
             type="button"
             data-test="daily-checkin-button"
             :disabled="checkinButtonDisabled"
+            :aria-busy="checkinLoading || checkinSubmitting"
             :title="checkinButtonTitle"
             :aria-label="checkinButtonLabel"
             aria-controls="daily-checkin-popover"
@@ -134,7 +140,15 @@
               size="sm"
               :class="checkinSubmitting ? 'animate-pulse' : ''"
             />
-            <span data-test="daily-checkin-label" class="hidden sm:inline">{{ checkinButtonLabel }}</span>
+            <span data-test="daily-checkin-label" class="hidden sm:inline-grid">
+              <span class="col-start-1 row-start-1">{{ checkinButtonLabel }}</span>
+              <span
+                v-for="state in ['action', 'checked', 'unavailable', 'loading']"
+                :key="state"
+                class="invisible col-start-1 row-start-1"
+                aria-hidden="true"
+              >{{ t(`checkin.${state}`) }}</span>
+            </span>
           </button>
 
           <Teleport to="body">
@@ -380,7 +394,7 @@
               >
               <DefaultUserAvatar v-else size="sm" />
             </div>
-            <div class="hidden text-left md:block">
+            <div class="app-header-user-info hidden text-left lg:block">
               <div class="max-w-28 truncate text-sm font-semibold text-slate-950 dark:text-white">
                 {{ displayName }}
               </div>
@@ -391,7 +405,7 @@
             <Icon
               name="chevronDown"
               size="sm"
-              class="hidden text-slate-400 transition-transform duration-200 group-hover:text-blue-500 md:block"
+              class="hidden text-slate-400 transition-transform duration-200 group-hover:text-blue-500 lg:block"
               :class="{ 'rotate-180 text-blue-500': dropdownOpen }"
             />
           </button>
@@ -583,18 +597,17 @@ const balanceFrozenLabel = computed(() => `${balanceFrozenText.value} ${formatHe
 const showCheckinButton = computed(() => {
   return Boolean(
     user.value &&
-    checkinStatus.value &&
-    checkinStatus.value.enabled &&
-    !checkinStatus.value.blacklisted
+    (checkinLoading.value || (checkinStatus.value?.enabled && !checkinStatus.value.blacklisted))
   )
 })
 
 const checkinButtonDisabled = computed(() => {
-  return checkinLoading.value || checkinSubmitting.value
+  return !checkinStatus.value || checkinLoading.value || checkinSubmitting.value
 })
 
 const checkinCanSubmit = computed(() => {
-  return checkinStatus.value?.checked_in !== true && checkinStatus.value?.eligible !== false
+  const status = checkinStatus.value
+  return Boolean(status?.enabled && !status.blacklisted && !status.checked_in && status.eligible !== false)
 })
 
 const checkinButtonLabel = computed(() => {
@@ -900,6 +913,7 @@ async function handleCheckin() {
 }
 
 function handleCheckinButton() {
+  if (checkinButtonDisabled.value) return
   isMobileCheckinPopover.value = window.innerWidth < 640
   checkinPopoverPinned.value = true
   window.dispatchEvent(new CustomEvent('app-header-floating-panel-open', { detail: 'checkin' }))
@@ -909,7 +923,7 @@ function handleCheckinButton() {
 }
 
 function openCheckinPreview() {
-  if (window.innerWidth < 640) return
+  if (checkinButtonDisabled.value || window.innerWidth < 640) return
   checkinPopoverPreview.value = true
 }
 
@@ -975,6 +989,7 @@ watch(
   () => user.value?.id,
   (id) => {
     checkinStatus.value = null
+    checkinLoading.value = false
     closeCheckinPopover()
     checkinStatusRequest += 1
     if (id) {
@@ -986,6 +1001,213 @@ watch(
 </script>
 
 <style scoped>
+.app-header-shell {
+  --header-ink: #596474;
+  --header-accent: #5274a8;
+  --header-active-ink: var(--brand-700);
+  --header-soft: linear-gradient(145deg, rgb(255 255 255 / 90%), rgb(248 250 252 / 64%));
+  --header-hover: linear-gradient(rgb(var(--brand-rgb) / 7%), rgb(var(--brand-rgb) / 7%)), rgb(255 255 255 / 90%);
+  --header-active-rule: rgb(var(--brand-rgb) / 25%);
+  --header-rule: rgb(148 163 184 / 18%);
+  --header-control-shadow: inset 0 1px 0 rgb(255 255 255 / 95%), 0 1px 2px rgb(15 23 42 / 3%);
+  --header-sheen-tint: rgb(var(--brand-rgb) / 7%);
+  --header-sheen-light: rgb(255 255 255 / 44%);
+  border-bottom-color: rgb(var(--brand-rgb) / 14%);
+  background: linear-gradient(110deg, rgb(var(--brand-rgb) / 8%), rgb(var(--brand-rgb) / 3%) 44%, transparent 78%), rgb(255 255 255 / 92%);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 90%), 0 2px 8px rgb(15 23 42 / 2%);
+}
+
+.dark .app-header-shell {
+  --header-ink: #b8c0cc;
+  --header-accent: #9abcf0;
+  --header-active-ink: #bfdbfe;
+  --header-soft: linear-gradient(145deg, rgb(255 255 255 / 6%), rgb(255 255 255 / 2%));
+  --header-hover: rgb(96 165 250 / 12%);
+  --header-active-rule: rgb(96 165 250 / 28%);
+  --header-rule: rgb(255 255 255 / 9%);
+  --header-control-shadow: inset 0 1px 0 rgb(255 255 255 / 4%), 0 1px 2px rgb(0 0 0 / 8%);
+  --header-sheen-tint: rgb(96 165 250 / 6%);
+  --header-sheen-light: rgb(191 219 254 / 4%);
+  border-bottom-color: rgb(147 197 253 / 14%);
+  background: linear-gradient(110deg, rgb(96 165 250 / 8%), rgb(96 165 250 / 3%) 44%, transparent 78%), rgb(31 34 39 / 96%) !important;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 3%), 0 2px 8px rgb(0 0 0 / 6%);
+}
+
+/* Clip only the decorative layer so anchored menus can extend below the header. */
+.app-header-ambient {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.app-header-ambient::before {
+  content: '';
+  position: absolute;
+  inset: 0 -40%;
+  background: linear-gradient(108deg, transparent 15%, var(--header-sheen-tint) 35%, var(--header-sheen-light) 50%, var(--header-sheen-tint) 65%, transparent 85%);
+  animation: header-ambient-drift 12s ease-in-out infinite alternate;
+}
+
+.app-header-shell:focus-within .app-header-ambient::before,
+.app-header-shell:has([aria-expanded="true"]) .app-header-ambient::before {
+  animation-play-state: paused;
+}
+
+@keyframes header-ambient-drift {
+  from { transform: translate3d(-16%, 0, 0); opacity: 0.5; }
+  to { transform: translate3d(16%, 0, 0); opacity: 0.9; }
+}
+
+.app-header-shell .app-header-title-group { gap: 0.5rem; }
+.app-header-shell .app-header-page-title { overflow: hidden; }
+.app-header-shell .app-header-page-title h1 { font-weight: 600; line-height: 1.5; }
+.app-header-shell .app-header-action-navigation,
+.app-header-shell .app-header-actions { flex-shrink: 0; }
+.app-header-shell .app-header-toolbar { padding-inline: clamp(0.875rem, 0.55rem + 1.05vw, 2rem); }
+.app-header-shell .app-header-actions { gap: 0.5rem; }
+
+.app-header-shell :deep(.app-header-mobile-action:not(.app-header-user-trigger)),
+.app-header-shell .app-header-doc-link,
+.app-header-shell :deep([data-test="header-locale-switcher"] > div > button) {
+  border: 1px solid var(--header-rule) !important;
+  border-radius: 8px;
+  min-height: 2.25rem;
+  background: var(--header-soft) !important;
+  color: var(--header-ink) !important;
+  box-shadow: var(--header-control-shadow);
+  transition: background-color 160ms ease, border-color 160ms ease, color 160ms ease, box-shadow 160ms ease;
+}
+
+.app-header-shell .app-header-mobile-action.app-header-action-navigation {
+  border-color: transparent !important;
+  background: transparent !important;
+  color: var(--header-accent) !important;
+  box-shadow: none;
+}
+.app-header-shell :deep(.app-header-mobile-action > svg),
+.app-header-shell :deep(.subscription-progress-trigger-icon) { width: 1.125rem; height: 1.125rem; }
+
+.app-header-shell :deep(.app-header-mobile-action:not(.app-header-user-trigger):hover:not(:disabled)),
+.app-header-shell .app-header-doc-link:hover,
+.app-header-shell :deep([data-test="header-locale-switcher"] > div > button:hover),
+.app-header-shell .app-header-action-models.router-link-active,
+.app-header-shell :deep(.app-header-mobile-action[aria-expanded="true"]:not(.app-header-user-trigger)) {
+  background: var(--header-hover) !important;
+  border-color: var(--header-active-rule) !important;
+  color: var(--header-active-ink) !important;
+  box-shadow: var(--header-control-shadow);
+}
+
+.app-header-shell :deep(.app-header-mobile-action:disabled) { opacity: 0.45; }
+.app-header-shell .app-header-action-checkin:not(:disabled) { color: #059669 !important; }
+.dark .app-header-shell .app-header-action-checkin:not(:disabled) { color: #6ee7b7 !important; }
+
+.app-header-shell :deep(.subscription-progress-trigger),
+.app-header-shell .app-header-balance-pill {
+  min-height: 2.25rem;
+  border: 1px solid var(--header-rule) !important;
+  border-radius: 8px;
+  background: var(--header-soft) !important;
+  box-shadow: var(--header-control-shadow);
+}
+
+.app-header-shell :deep(.subscription-progress-trigger) {
+  justify-content: center;
+  transition: background-color 160ms ease, border-color 160ms ease;
+}
+.app-header-shell :deep(.subscription-progress-trigger:hover),
+.app-header-shell :deep(.subscription-progress-trigger[aria-expanded="true"]) {
+  background: var(--header-hover) !important;
+  border-color: var(--header-active-rule) !important;
+}
+.app-header-shell :deep(.subscription-progress-trigger-icon),
+.app-header-shell :deep(.subscription-progress-trigger-count) { color: var(--header-ink) !important; }
+.app-header-shell :deep(.subscription-progress-trigger:is(:hover, [aria-expanded="true"]) .subscription-progress-trigger-icon) { color: var(--header-active-ink) !important; }
+.app-header-shell :deep(.subscription-progress-trigger-count) { font-weight: 600; font-variant-numeric: tabular-nums; }
+
+.app-header-shell .app-header-user-trigger {
+  border-color: transparent !important;
+  background: transparent !important;
+  box-shadow: none;
+}
+.app-header-shell .app-header-user-trigger:hover,
+.app-header-shell .app-header-user-trigger[aria-expanded="true"] { background: var(--header-hover) !important; }
+.app-header-shell .app-header-user-avatar {
+  border-radius: 50%;
+  box-shadow: 0 0 0 1px var(--header-rule), 0 2px 4px rgb(15 23 42 / 8%) !important;
+}
+.dark .app-header-shell .app-header-user-avatar {
+  box-shadow: 0 0 0 1px rgb(255 255 255 / 16%), 0 2px 4px rgb(0 0 0 / 16%) !important;
+}
+
+.app-header-shell :deep(.app-header-mobile-action:focus-visible),
+.app-header-shell :deep(.subscription-progress-trigger:focus-visible) {
+  outline: 2px solid rgb(var(--brand-rgb) / 0.6);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app-header-ambient { display: none; }
+  .app-header-ambient::before { animation: none; }
+  .app-header-shell :deep(.app-header-mobile-action),
+  .app-header-shell :deep(.subscription-progress-trigger) { transition: none; }
+}
+
+@media (max-width: 1023px) {
+  .app-header-shell .app-header-page-title p { display: none; }
+  .app-header-shell .app-header-page-title h1 { font-size: 0.9375rem; }
+}
+
+@media (min-width: 640px) and (max-width: 1279px) {
+  .app-header-shell .app-header-actions { gap: 0.5rem; }
+  .app-header-shell .app-header-action-models,
+  .app-header-shell .app-header-action-checkin,
+  .app-header-shell .app-header-doc-link {
+    width: 2.25rem;
+    height: 2.25rem;
+    flex-shrink: 0;
+    justify-content: center;
+    gap: 0;
+    padding: 0;
+  }
+  .app-header-shell .app-header-action-models > span,
+  .app-header-shell .app-header-action-checkin > span,
+  .app-header-shell .app-header-doc-link > span,
+  .app-header-shell .app-header-user-info,
+  .app-header-shell .app-header-user-trigger > svg { display: none; }
+}
+
+@media (min-width: 640px) and (max-width: 767px) {
+  .app-header-shell .app-header-page-title { display: none; }
+}
+
+@media (max-width: 639px) {
+  .app-header-shell .app-header-toolbar { --app-header-mobile-subscription-width: 4rem; }
+  .app-header-shell .app-header-title-group { flex: 1; }
+  .app-header-shell .app-header-actions { gap: 0.25rem; }
+  .app-header-shell :deep(.subscription-progress-trigger) { width: auto; padding-inline: 0.375rem !important; }
+  .app-header-shell :deep(.subscription-progress-trigger-status) { gap: 0.25rem; }
+  .app-header-shell :deep([data-test="subscription-progress-dot"]) { width: 0.375rem; height: 0.375rem; }
+}
+
+@media (min-width: 420px) and (max-width: 639px) {
+  .app-header-shell .app-header-toolbar { --app-header-mobile-control-size: 2.5rem; }
+  .app-header-shell :deep(.subscription-progress-trigger) { min-height: 2.5rem; }
+  .app-header-shell .app-header-actions { gap: 0.375rem; }
+}
+
+@media (max-width: 389px) {
+  .app-header-shell .app-header-toolbar { gap: 0.125rem; padding-inline: 0.75rem; }
+  .app-header-shell .app-header-title-group { gap: 0.25rem; }
+  .app-header-shell .app-header-actions { gap: 0.125rem; }
+}
+
+@media (max-width: 359px) {
+  .app-header-shell:has([data-test="header-model-plaza-link"]):has([data-test="daily-checkin-button"]) .app-header-page-title { display: none; }
+}
+
 :global(html.model-status-mobile-header-hidden .app-header-shell) {
   opacity: 0;
   pointer-events: none;

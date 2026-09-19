@@ -98,6 +98,7 @@ func cloneGroupForDuplicate(source *Group, operationID string) *Group {
 		Name:                             duplicateGroupName(source.Name, 1),
 		Description:                      source.Description,
 		Tag:                              source.Tag,
+		TagColor:                         source.TagColor,
 		Platform:                         source.Platform,
 		RateMultiplier:                   source.RateMultiplier,
 		EmptyResponseCompensationEnabled: source.EmptyResponseCompensationEnabled,

@@ -14,6 +14,7 @@ import (
 // 用户专属倍率不在这里暴露，前端自己通过 /groups/rates 拉取，和 API 密钥页面保持一致。
 type AvailableGroupRef struct {
 	Tag                string
+	TagColor           string
 	ID                 int64
 	Name               string
 	Platform           string
@@ -66,6 +67,7 @@ func (s *ChannelService) ListAvailable(ctx context.Context) ([]AvailableChannel,
 		g := groups[i]
 		groupByID[g.ID] = AvailableGroupRef{
 			Tag:                g.Tag,
+			TagColor:           g.TagColor,
 			ID:                 g.ID,
 			Name:               g.Name,
 			Platform:           g.Platform,

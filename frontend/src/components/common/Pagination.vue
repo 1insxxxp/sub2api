@@ -1,31 +1,44 @@
 <template>
   <div
     class="pagination-shell flex items-center justify-between border-t border-gray-200 bg-white px-4 py-3 dark:border-dark-700 dark:bg-dark-800 sm:px-6"
+    :class="{ 'pagination-compact': variant === 'compact' }"
   >
     <div class="pagination-mobile-controls flex flex-1 items-center justify-between sm:hidden">
+      <span v-if="variant === 'compact'" class="pagination-total">{{ t('pagination.totalCount', { total }) }}</span>
       <!-- Mobile pagination -->
       <button
+        type="button"
         @click="goToPage(page - 1)"
         :disabled="page === 1"
+        :aria-label="t('pagination.previous')"
+        :title="t('pagination.previous')"
         class="relative inline-flex items-center rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-dark-600 dark:bg-dark-700 dark:text-gray-200 dark:hover:bg-dark-600"
       >
-        {{ t('pagination.previous') }}
+        <Icon v-if="variant === 'compact'" name="chevronLeft" size="sm" />
+        <template v-else>{{ t('pagination.previous') }}</template>
       </button>
-      <span class="text-sm text-gray-700 dark:text-gray-300">
-        {{ t('pagination.pageOf', { page, total: totalPages }) }}
+      <span class="pagination-current text-sm text-gray-700 dark:text-gray-300" role="status" :aria-label="t('pagination.pageOf', { page, total: totalPages })">
+        <template v-if="variant === 'compact'">
+          <strong>{{ page }}</strong><span class="pagination-separator" aria-hidden="true">/</span><span>{{ totalPages }}</span>
+        </template>
+        <template v-else>{{ t('pagination.pageOf', { page, total: totalPages }) }}</template>
       </span>
       <button
+        type="button"
         @click="goToPage(page + 1)"
         :disabled="page === totalPages"
+        :aria-label="t('pagination.next')"
+        :title="t('pagination.next')"
         class="relative ml-3 inline-flex items-center rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-dark-600 dark:bg-dark-700 dark:text-gray-200 dark:hover:bg-dark-600"
       >
-        {{ t('pagination.next') }}
+        <Icon v-if="variant === 'compact'" name="chevronRight" size="sm" />
+        <template v-else>{{ t('pagination.next') }}</template>
       </button>
     </div>
 
     <div class="pagination-desktop-controls hidden sm:flex sm:flex-1 sm:items-center sm:justify-between">
       <!-- Desktop pagination info -->
-      <div class="flex items-center space-x-4">
+      <div class="pagination-summary flex items-center space-x-4">
         <p class="text-sm text-gray-700 dark:text-gray-300">
           {{ t('pagination.showing') }}
           <span class="font-medium">{{ fromItem }}</span>
@@ -45,6 +58,7 @@
             <Select
               :model-value="pageSize"
               :options="pageSizeSelectOptions"
+              :aria-label="t('pagination.perPage')"
               @update:model-value="handlePageSizeChange"
             />
           </div>
@@ -74,16 +88,19 @@
       >
         <!-- Previous button -->
         <button
+          type="button"
           @click="goToPage(page - 1)"
           :disabled="page === 1"
           class="relative inline-flex items-center rounded-l-md border border-gray-300 bg-white px-2 py-2 text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-dark-600 dark:bg-dark-700 dark:text-gray-400 dark:hover:bg-dark-600"
           :aria-label="t('pagination.previous')"
+          :title="t('pagination.previous')"
         >
           <Icon name="chevronLeft" size="md" />
         </button>
 
         <!-- Page numbers -->
         <button
+          type="button"
           v-for="(pageNum, index) in visiblePages"
           :key="`${pageNum}-${index}`"
           @click="typeof pageNum === 'number' && goToPage(pageNum)"
@@ -105,10 +122,12 @@
 
         <!-- Next button -->
         <button
+          type="button"
           @click="goToPage(page + 1)"
           :disabled="page === totalPages"
           class="relative inline-flex items-center rounded-r-md border border-gray-300 bg-white px-2 py-2 text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-dark-600 dark:bg-dark-700 dark:text-gray-400 dark:hover:bg-dark-600"
           :aria-label="t('pagination.next')"
+          :title="t('pagination.next')"
         >
           <Icon name="chevronRight" size="md" />
         </button>
@@ -122,6 +141,7 @@ import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import Icon from '@/components/icons/Icon.vue'
 import Select from './Select.vue'
+import { useAdminAppearance } from '@/composables/useAdminAppearance'
 import { getConfiguredTablePageSizeOptions, normalizeTablePageSize } from '@/utils/tablePreferences'
 import { setPersistedPageSize } from '@/composables/usePersistedPageSize'
 
@@ -134,6 +154,7 @@ interface Props {
   pageSizeOptions?: number[]
   showPageSizeSelector?: boolean
   showJump?: boolean
+  variant?: 'default' | 'compact'
 }
 
 interface Emits {
@@ -146,6 +167,8 @@ const props = withDefaults(defineProps<Props>(), {
   showPageSizeSelector: true,
   showJump: false
 })
+const adminAppearance = useAdminAppearance()
+const variant = computed(() => props.variant ?? (adminAppearance.value ? 'compact' : 'default'))
 
 const emit = defineEmits<Emits>()
 
@@ -243,5 +266,95 @@ const submitJump = () => {
 <style scoped>
 .page-size-select :deep(.select-trigger) {
   @apply px-3 py-1.5 text-sm;
+}
+
+.pagination-compact {
+  --pagination-ink: #334155;
+  --pagination-muted: #7b8492;
+  --pagination-rule: rgb(148 163 184 / 22%);
+  --pagination-surface: rgb(255 255 255 / 76%);
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font-variant-numeric: tabular-nums;
+}
+.dark .pagination-compact {
+  --pagination-ink: #e2e8f0;
+  --pagination-muted: #a0a9b7;
+  --pagination-rule: rgb(255 255 255 / 11%);
+  --pagination-surface: rgb(39 41 46 / 88%);
+  background: transparent;
+}
+.pagination-compact .pagination-total { color: var(--pagination-muted); font-size: 0.75rem; }
+.pagination-compact .pagination-current {
+  display: inline-flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 0.5rem;
+  min-width: 3.5rem;
+  color: var(--pagination-muted);
+  font-size: 0.8125rem;
+}
+.pagination-compact .pagination-current strong { color: var(--pagination-ink); font-weight: 600; }
+.pagination-compact .pagination-separator { opacity: 0.5; }
+.pagination-compact .pagination-mobile-controls > button,
+.pagination-compact nav > button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  min-width: 2.25rem;
+  height: 2.25rem;
+  margin: 0;
+  padding: 0 0.5rem;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--pagination-ink);
+  font-size: 0.8125rem;
+  box-shadow: none;
+  transition: background-color 160ms ease, border-color 160ms ease, box-shadow 160ms ease;
+}
+.pagination-compact .pagination-mobile-controls > button {
+  width: 2.75rem;
+  height: 2.75rem;
+  border-color: var(--pagination-rule);
+  background: var(--pagination-surface);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 12%), 0 1px 2px rgb(15 23 42 / 3%);
+}
+.pagination-compact .pagination-mobile-controls > button:disabled,
+.pagination-compact nav > button:disabled { opacity: 0.35; box-shadow: none; }
+.pagination-compact .pagination-mobile-controls > button:focus-visible,
+.pagination-compact nav > button:focus-visible { outline: 2px solid rgb(var(--brand-rgb) / 0.6); outline-offset: 2px; }
+.pagination-compact nav > button[aria-current="page"] {
+  border-color: var(--pagination-rule);
+  background: var(--pagination-surface);
+  font-weight: 600;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 12%), 0 1px 3px rgb(15 23 42 / 4%);
+}
+.pagination-compact .pagination-desktop-controls { flex-wrap: wrap; gap: 0.75rem 1rem; }
+.pagination-compact .pagination-summary { flex-wrap: wrap; gap: 0.5rem 1rem; }
+.pagination-compact .pagination-summary > * { margin: 0; }
+.pagination-compact .pagination-summary p,
+.pagination-compact .pagination-summary > div > span { color: var(--pagination-muted); font-size: 0.75rem; }
+.pagination-compact .pagination-summary p > span { color: var(--pagination-ink); }
+.pagination-compact nav { flex-wrap: wrap; justify-content: flex-end; gap: 0.25rem; margin-left: auto; box-shadow: none; }
+.pagination-compact .page-size-select :deep(.select-trigger) {
+  border-color: var(--pagination-rule);
+  border-radius: 6px;
+  background: var(--pagination-surface);
+  box-shadow: none;
+}
+@media (max-width: 639px) {
+  .pagination-compact .pagination-mobile-controls { display: grid; grid-template-columns: minmax(0, 1fr) 2.75rem auto 2.75rem; gap: 0.5rem; }
+  .pagination-compact .pagination-total { min-width: 0; white-space: normal; overflow-wrap: anywhere; }
+}
+@media (hover: hover) {
+  .pagination-compact .pagination-mobile-controls > button:not(:disabled):hover,
+  .pagination-compact nav > button:not(:disabled):hover { border-color: var(--pagination-rule); background: var(--pagination-surface); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .pagination-compact button { transition: none; }
 }
 </style>

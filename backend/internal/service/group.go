@@ -21,6 +21,7 @@ type Group struct {
 	Name           string
 	Description    string
 	Tag            string
+	TagColor       string
 	Platform       string
 	RateMultiplier float64
 	// EmptyResponseCompensationEnabled controls whether users in this group may

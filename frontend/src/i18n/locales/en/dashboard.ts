@@ -71,6 +71,8 @@ export default {
     searchPlaceholder: 'Search name or key...',
     endpoints: {
       title: 'API Endpoints',
+      routes: 'Endpoints',
+      routesCompact: 'Routes',
       default: 'Default',
       copied: 'Copied',
       copiedHint: 'Copied to clipboard',
@@ -87,6 +89,7 @@ export default {
     bulkEdit: {
       title: 'Bulk Edit',
       selectedCount: '{count} keys selected',
+      selectedCountCompact: '{count} selected',
       selectKey: 'Select key {name}',
       clearSelection: 'Clear selection',
       hint: 'Check the fields to update. Unchecked fields keep their current values.',
@@ -1312,6 +1315,7 @@ export default {
 
   // Pagination
   pagination: {
+    totalCount: '{total} items',
     showing: 'Showing',
     to: 'to',
     of: 'of',

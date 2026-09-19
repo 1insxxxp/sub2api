@@ -3973,6 +3973,7 @@
                         <template #option="{ option, selected }">
                           <GroupOptionItem
                             :tag="(option as unknown as DefaultSubscriptionGroupOption).tag"
+                            :tag-color="(option as unknown as DefaultSubscriptionGroupOption).tag_color"
                             :name="
                               (
                                 option as unknown as DefaultSubscriptionGroupOption
@@ -4306,6 +4307,7 @@
                             <template #option="{ option, selected }">
                               <GroupOptionItem
                                 :tag="(option as unknown as DefaultSubscriptionGroupOption).tag"
+                                :tag-color="(option as unknown as DefaultSubscriptionGroupOption).tag_color"
                                 :name="
                                   (
                                     option as unknown as DefaultSubscriptionGroupOption
@@ -10118,6 +10120,7 @@ function resetClaudeOAuthSystemPromptBlocks(): void {
 
 interface DefaultSubscriptionGroupOption {
   tag?: AdminGroup["tag"];
+  tag_color?: string;
   value: number;
   label: string;
   description: string | null;
@@ -10919,6 +10922,7 @@ const defaultSubscriptionGroupOptions = computed<
     label: group.name,
     description: group.description,
     tag: group.tag,
+    tag_color: group.tag_color,
     platform: group.platform,
     subscriptionType: group.subscription_type,
     rate: group.rate_multiplier,

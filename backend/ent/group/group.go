@@ -28,6 +28,8 @@ const (
 	FieldDescription = "description"
 	// FieldTag holds the string denoting the tag field in the database.
 	FieldTag = "tag"
+	// FieldTagColor holds the string denoting the tag_color field in the database.
+	FieldTagColor = "tag_color"
 	// FieldRateMultiplier holds the string denoting the rate_multiplier field in the database.
 	FieldRateMultiplier = "rate_multiplier"
 	// FieldEmptyResponseCompensationEnabled holds the string denoting the empty_response_compensation_enabled field in the database.
@@ -284,6 +286,7 @@ var Columns = []string{
 	FieldName,
 	FieldDescription,
 	FieldTag,
+	FieldTagColor,
 	FieldRateMultiplier,
 	FieldEmptyResponseCompensationEnabled,
 	FieldPeakRateEnabled,
@@ -390,6 +393,10 @@ var (
 	DefaultTag string
 	// TagValidator is a validator for the "tag" field. It is called by the builders before save.
 	TagValidator func(string) error
+	// DefaultTagColor holds the default value on creation for the "tag_color" field.
+	DefaultTagColor string
+	// TagColorValidator is a validator for the "tag_color" field. It is called by the builders before save.
+	TagColorValidator func(string) error
 	// DefaultRateMultiplier holds the default value on creation for the "rate_multiplier" field.
 	DefaultRateMultiplier float64
 	// DefaultEmptyResponseCompensationEnabled holds the default value on creation for the "empty_response_compensation_enabled" field.
@@ -546,6 +553,11 @@ func ByDescription(opts ...sql.OrderTermOption) OrderOption {
 // ByTag orders the results by the tag field.
 func ByTag(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldTag, opts...).ToFunc()
+}
+
+// ByTagColor orders the results by the tag_color field.
+func ByTagColor(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldTagColor, opts...).ToFunc()
 }
 
 // ByRateMultiplier orders the results by the rate_multiplier field.

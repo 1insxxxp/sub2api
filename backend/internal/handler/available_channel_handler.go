@@ -58,6 +58,7 @@ func (h *AvailableChannelHandler) featureEnabled(c *gin.Context) bool {
 // /groups/rates，和 API 密钥页面保持一致。
 type userAvailableGroup struct {
 	Tag                string               `json:"tag"`
+	TagColor           string               `json:"tag_color"`
 	ID                 int64                `json:"id"`
 	Name               string               `json:"name"`
 	Platform           string               `json:"platform"`
@@ -293,6 +294,7 @@ func filterUserVisibleGroups(
 			ID:                 g.ID,
 			Name:               g.Name,
 			Tag:                g.Tag,
+			TagColor:           g.TagColor,
 			Platform:           g.Platform,
 			SubscriptionType:   g.SubscriptionType,
 			RateMultiplier:     g.RateMultiplier,

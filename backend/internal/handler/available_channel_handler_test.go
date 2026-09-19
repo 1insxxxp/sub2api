@@ -55,7 +55,7 @@ func TestUserAvailableChannel_Unauthenticated401(t *testing.T) {
 func TestFilterUserVisibleGroups_IntersectionOnly(t *testing.T) {
 	// 渠道挂在 {g1, g2, g3}，用户只允许 {g1, g3} —— 响应必须仅含 g1/g3。
 	groups := []service.AvailableGroupRef{
-		{ID: 1, Name: "g1", Platform: "anthropic"},
+		{ID: 1, Name: "g1", Platform: "anthropic", Tag: "custom", TagColor: "#123456"},
 		{ID: 2, Name: "g2", Platform: "anthropic"},
 		{ID: 3, Name: "g3", Platform: "openai"},
 	}
@@ -65,6 +65,12 @@ func TestFilterUserVisibleGroups_IntersectionOnly(t *testing.T) {
 	require.Len(t, visible, 2)
 	ids := []int64{visible[0].ID, visible[1].ID}
 	require.ElementsMatch(t, []int64{1, 3}, ids)
+	raw, err := json.Marshal(visible[0])
+	require.NoError(t, err)
+	var data map[string]any
+	require.NoError(t, json.Unmarshal(raw, &data))
+	require.Equal(t, "custom", data["tag"])
+	require.Equal(t, "#123456", data["tag_color"])
 }
 
 func TestToUserSupportedModels_FiltersByAllowedPlatforms(t *testing.T) {

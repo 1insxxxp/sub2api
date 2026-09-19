@@ -278,6 +278,96 @@ describe('CustomGroupsManager', () => {
     expect(staleModel.classes()).toContain('text-red-700')
   })
 
+  it.each([
+    ['  OPUS  ', 11, ['claude-opus-4-6']],
+    ['满血', 11, candidates[0].models],
+    ['ANTHROPIC', 11, candidates[0].models],
+    ['满血 opus', 11, ['claude-opus-4-6']],
+    ['反重力', 12, candidates[1].models],
+  ])('searches model, source and platform using %s', async (query, sourceId, models) => {
+    const wrapper = await mountManager()
+    await wrapper.get('[data-test="custom-groups-create"]').trigger('click')
+    await wrapper.get('input[aria-label="搜索模型及来源"]').setValue(query)
+
+    expect(wrapper.findAll('[data-test^="custom-group-source-toggle-"]')).toHaveLength(1)
+    const results = wrapper.get(`[data-test="custom-group-source-models-${sourceId}"]`)
+    expect(results.findAll('article')).toHaveLength(models.length)
+    for (const model of models) expect(results.text()).toContain(model)
+    expect(apiMocks.candidates).toHaveBeenCalledTimes(1)
+  })
+
+  it('limits bulk changes to search results and saves hidden selections and aliases', async () => {
+    const wrapper = await mountManager()
+    await wrapper.get('[data-test="custom-groups-edit-21"]').trigger('click')
+    await wrapper.get('[data-test="custom-group-source-toggle-11"]').trigger('click')
+    await wrapper.get('[data-test="custom-group-source-models-11"] input.font-mono').setValue('my-sonnet')
+    await wrapper.get('[data-test="custom-group-source-select-all-12"] input').setValue(true)
+    await wrapper.get('input[aria-label="搜索模型及来源"]').setValue('opus')
+
+    const sourceSelectAll = wrapper.get('[data-test="custom-group-source-select-all-11"] input')
+    expect((sourceSelectAll.element as HTMLInputElement).indeterminate).toBe(false)
+    await sourceSelectAll.setValue(true)
+    expect(wrapper.text()).toContain('已选 3')
+    await sourceSelectAll.setValue(false)
+    expect(wrapper.text()).toContain('已选 2')
+
+    const globalSelectAll = wrapper.get('[data-test="custom-group-sources-select-all"] input')
+    expect(globalSelectAll.attributes('aria-label')).toBe('全选搜索结果')
+    await globalSelectAll.setValue(true)
+    expect(wrapper.text()).toContain('已选 3')
+    await globalSelectAll.setValue(false)
+    expect(wrapper.text()).toContain('已选 2')
+
+    await wrapper.get('form').trigger('submit.prevent')
+    await flushPromises()
+    expect(apiMocks.update).toHaveBeenCalledWith(21, {
+      name: '酒馆统一模型',
+      models: [
+        { public_model: 'my-sonnet', source_group_id: 11, source_model: 'claude-sonnet-4-6' },
+        { public_model: 'gemini-3.1-pro-preview', source_group_id: 12, source_model: 'gemini-3.1-pro-preview' },
+      ],
+    })
+  })
+
+  it('shows an empty search state and restores the previous expansion when cleared', async () => {
+    const wrapper = await mountManager()
+    await wrapper.get('[data-test="custom-groups-create"]').trigger('click')
+    await wrapper.get('[data-test="custom-group-source-toggle-12"]').trigger('click')
+    const search = wrapper.get('input[aria-label="搜索模型及来源"]')
+    await search.setValue('opus')
+    await wrapper.get('[data-test="custom-group-sources-toggle-all"]').trigger('click')
+    expect(wrapper.find('[data-test="custom-group-source-models-11"]').exists()).toBe(false)
+    await wrapper.get('[data-test="custom-group-sources-toggle-all"]').trigger('click')
+    expect(wrapper.find('[data-test="custom-group-source-models-11"]').exists()).toBe(true)
+
+    await search.setValue('does-not-exist')
+    expect(wrapper.get('[data-test="custom-group-search-empty"]').text()).toContain('未找到匹配的模型或来源')
+    expect(wrapper.get('[data-test="custom-group-sources-select-all"] input').attributes('disabled')).toBeDefined()
+    expect(wrapper.get('[data-test="custom-group-sources-toggle-all"]').attributes('disabled')).toBeDefined()
+    await wrapper.get('button[aria-label="清空搜索"]').trigger('click')
+    expect((search.element as HTMLInputElement).value).toBe('')
+    expect(wrapper.findAll('[data-test^="custom-group-source-toggle-"]')).toHaveLength(2)
+    expect(wrapper.find('[data-test="custom-group-source-models-11"]').exists()).toBe(false)
+    expect(wrapper.find('[data-test="custom-group-source-models-12"]').exists()).toBe(true)
+    await search.setValue('   ')
+    expect(wrapper.findAll('[data-test^="custom-group-source-toggle-"]')).toHaveLength(2)
+  })
+
+  it('resets search on form entry and keeps stale route warnings visible during search', async () => {
+    apiMocks.list.mockResolvedValue(groupsWithStaleSource)
+    const wrapper = await mountManager()
+    await wrapper.get('[data-test="custom-groups-edit-21"]').trigger('click')
+    await wrapper.get('input[aria-label="搜索模型及来源"]').setValue('gemini')
+    expect(wrapper.get('[data-test="custom-group-stale-sources"]').text()).toContain('claude-opus-backup')
+    await wrapper.get('[data-test="custom-groups-back"]').trigger('click')
+    await wrapper.get('[data-test="custom-groups-create"]').trigger('click')
+    expect((wrapper.get('input[aria-label="搜索模型及来源"]').element as HTMLInputElement).value).toBe('')
+    await wrapper.get('input[aria-label="搜索模型及来源"]').setValue('opus')
+    await wrapper.get('[data-test="custom-groups-back"]').trigger('click')
+    await wrapper.get('[data-test="custom-groups-edit-21"]').trigger('click')
+    expect((wrapper.get('input[aria-label="搜索模型及来源"]').element as HTMLInputElement).value).toBe('')
+  })
+
   it('saves valid mappings while automatically dropping stale source mappings', async () => {
     apiMocks.list
       .mockResolvedValueOnce(groupsWithStaleSource)

@@ -381,7 +381,7 @@ func normalizeCreateGroupInputForSimpleMode(input *CreateGroupInput) {
 		return
 	}
 	*input = CreateGroupInput{
-		Name: input.Name, Description: input.Description, Tag: input.Tag, Platform: input.Platform,
+		Name: input.Name, Description: input.Description, Tag: input.Tag, TagColor: input.TagColor, Platform: input.Platform,
 		RateMultiplier: 1, SubscriptionType: SubscriptionTypeStandard,
 	}
 }
@@ -390,11 +390,12 @@ func normalizeUpdateGroupInputForSimpleMode(input *UpdateGroupInput) {
 	if input == nil {
 		return
 	}
-	*input = UpdateGroupInput{Name: input.Name, Description: input.Description, Tag: input.Tag}
+	*input = UpdateGroupInput{Name: input.Name, Description: input.Description, Tag: input.Tag, TagColor: input.TagColor}
 }
 
 func (s *adminServiceImpl) CreateGroup(ctx context.Context, input *CreateGroupInput) (*Group, error) {
-	if err := ValidateGroupTag(input.Tag); err != nil {
+	tag, tagColor, err := normalizeGroupTag(input.Tag, input.TagColor)
+	if err != nil {
 		return nil, err
 	}
 	if s.cfg != nil && s.cfg.RunMode == config.RunModeSimple && NormalizeGroupPlatform(input.Platform) == PlatformComposite {
@@ -577,7 +578,8 @@ func (s *adminServiceImpl) CreateGroup(ctx context.Context, input *CreateGroupIn
 	group := &Group{
 		Name:                             input.Name,
 		Description:                      input.Description,
-		Tag:                              input.Tag,
+		Tag:                              tag,
+		TagColor:                         tagColor,
 		Platform:                         platform,
 		RateMultiplier:                   input.RateMultiplier,
 		EmptyResponseCompensationEnabled: input.EmptyResponseCompensationEnabled,
@@ -803,11 +805,8 @@ func (s *adminServiceImpl) UpdateGroup(ctx context.Context, id int64, input *Upd
 	if input.Description != nil {
 		group.Description = *input.Description
 	}
-	if input.Tag != nil {
-		if err := ValidateGroupTag(*input.Tag); err != nil {
-			return nil, err
-		}
-		group.Tag = *input.Tag
+	if err := updateGroupTag(group, input.Tag, input.TagColor); err != nil {
+		return nil, err
 	}
 	if input.Platform != "" {
 		group.Platform = input.Platform

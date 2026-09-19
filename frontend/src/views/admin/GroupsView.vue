@@ -1,15 +1,15 @@
 <template>
   <AppLayout>
-    <div class="space-y-6">
+    <div class="admin-workbench-page groups-workbench space-y-4">
       <TablePageLayout>
         <template #filters>
-        <div
+        <AdminListToolbar
           data-testid="groups-toolbar"
-          class="groups-toolbar admin-toolbar lg:flex-col lg:items-stretch 2xl:flex-row 2xl:items-center"
+          :active-filters="activeFilterCount"
+          filter-id="groups-list-filters"
         >
-          <!-- Left: fuzzy search + filters (can wrap to multiple lines) -->
-          <div class="groups-filter-group admin-toolbar-group w-full 2xl:flex-1">
-            <div class="groups-search relative w-full sm:w-64">
+          <template #search>
+            <div class="relative min-w-0 flex-1">
               <Icon
                 name="search"
                 size="md"
@@ -19,22 +19,26 @@
                 v-model="searchQuery"
                 type="text"
                 :placeholder="t('admin.groups.searchGroups')"
+                :aria-label="t('admin.groups.searchGroups')"
                 class="input pl-10"
                 @input="handleSearch"
               />
             </div>
+          </template>
+          <template #filters>
+            <div class="groups-list-filters admin-toolbar-group">
             <Select
               v-model="filters.platform"
               :options="platformFilterOptions"
               :placeholder="t('admin.groups.allPlatforms')"
-              class="groups-filter-select w-44"
+              class="w-full sm:w-44"
               @change="loadGroups"
             />
             <Select
               v-model="filters.status"
               :options="statusOptions"
               :placeholder="t('admin.groups.allStatus')"
-              class="groups-filter-select w-40"
+              class="w-full sm:w-40"
               @change="loadGroups"
             />
             <Select
@@ -42,21 +46,23 @@
               v-model="filters.is_exclusive"
               :options="exclusiveOptions"
               :placeholder="t('admin.groups.allGroups')"
-              class="groups-filter-select w-44"
+              class="w-full sm:w-44"
               @change="loadGroups"
             />
-          </div>
+            </div>
+          </template>
 
-          <!-- Right: actions -->
+          <template #actions>
           <div
             data-testid="groups-toolbar-actions"
-            class="groups-toolbar-actions admin-toolbar-group w-full justify-end lg:w-full 2xl:w-auto 2xl:flex-none"
+            class="groups-list-actions"
           >
             <button
               @click="loadGroups"
               :disabled="loading"
-              class="btn btn-secondary"
+              class="btn btn-secondary groups-tool-button"
               :title="t('common.refresh')"
+              :aria-label="t('common.refresh')"
             >
               <Icon
                 name="refresh"
@@ -64,19 +70,24 @@
                 :class="loading ? 'animate-spin' : ''"
               />
             </button>
-            <div class="relative" ref="columnDropdownRef">
+            <div
+              class="relative"
+              ref="columnDropdownRef"
+              @keydown="handleColumnDropdownKeydown"
+            >
               <button
                 @click="showColumnDropdown = !showColumnDropdown"
-                class="btn btn-secondary"
+                class="btn btn-secondary groups-tool-button"
                 :title="t('admin.groups.columnSettings')"
+                :aria-label="t('admin.groups.columnSettings')"
+                :aria-expanded="showColumnDropdown"
+                aria-controls="groups-column-settings"
               >
-                <Icon name="grid" size="md" class="mr-2 md:mr-2" />
-                <span class="hidden md:inline">{{
-                  t("admin.groups.columnSettings")
-                }}</span>
+                <Icon name="grid" size="md" />
               </button>
               <div
                 v-if="showColumnDropdown"
+                id="groups-column-settings"
                 class="admin-action-menu absolute right-0 top-full z-50 mt-1 max-h-80 w-48 overflow-y-auto"
               >
                 <button
@@ -99,35 +110,45 @@
             <button
               v-if="!authStore.isSimpleMode"
               @click="openSortModal"
-              class="btn btn-secondary"
+              class="btn btn-secondary groups-tool-button"
               :title="t('admin.groups.sortOrder')"
+              :aria-label="t('admin.groups.sortOrder')"
             >
-              <Icon name="arrowsUpDown" size="md" class="mr-2" />
-              <span>{{ t("admin.groups.sortOrder") }}</span>
+              <Icon name="arrowsUpDown" size="md" />
             </button>
             <div
               data-testid="groups-create-actions"
-              class="groups-create-actions ml-auto flex flex-wrap items-center justify-end gap-2.5"
+              class="groups-list-create-actions"
             >
               <button
                 data-testid="system-custom-create"
                 @click="openSystemCustomGroup(null)"
-                class="btn btn-secondary whitespace-nowrap"
+                class="btn btn-secondary groups-create-button"
+                :title="t('admin.groups.systemCustom.createAction')"
+                :aria-label="t('admin.groups.systemCustom.createAction')"
               >
-                <Icon name="grid" size="md" class="mr-2" />
-                {{ t("admin.groups.systemCustom.createAction") }}
+                <Icon name="grid" size="md" />
+                <span>{{ t("admin.groups.systemCustom.createAction") }}</span>
               </button>
               <button
                 @click="openCreateModal"
-                class="btn btn-primary whitespace-nowrap"
+                class="btn btn-primary groups-create-button"
+                :title="t('admin.groups.createGroup')"
+                :aria-label="t('admin.groups.createGroup')"
                 data-tour="groups-create-btn"
               >
-                <Icon name="plus" size="md" class="mr-2" />
-                {{ t("admin.groups.createGroup") }}
+                <Icon name="plus" size="md" />
+                <span>{{ t("admin.groups.createGroup") }}</span>
               </button>
             </div>
           </div>
-        </div>
+          </template>
+          <template #secondary>
+            <span data-test="groups-list-count" class="groups-list-count">
+              {{ t("common.total") }} <strong>{{ pagination.total }}</strong>
+            </span>
+          </template>
+        </AdminListToolbar>
       </template>
 
       <template #table>
@@ -135,17 +156,24 @@
           :columns="columns"
           :data="groups"
           :loading="loading"
+          :mobile-layout="{
+            title: 'name',
+            subtitle: 'id',
+            leading: 'platform',
+            status: 'status',
+            summary: ['rate_multiplier', 'account_count', 'capacity', 'billing_type']
+          }"
           :server-side-sort="true"
           default-sort-key="sort_order"
           default-sort-order="asc"
           @sort="handleSort"
         >
           <template #cell-name="{ value, row }">
-            <div class="flex min-w-0 items-start justify-between gap-3">
-              <span class="font-medium text-gray-900 dark:text-white">{{
+            <div class="groups-identity flex min-w-0 items-start gap-2">
+              <span class="groups-name font-medium text-gray-900 dark:text-white">{{
                 value
               }}</span>
-              <GroupTagBadge :tag="row.tag" />
+              <GroupTagBadge :tag="row.tag" :color="row.tag_color" />
             </div>
           </template>
 
@@ -158,7 +186,7 @@
           <template #cell-platform="{ value }">
             <span
               :class="[
-                'inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium',
+                'groups-platform inline-flex items-center gap-1.5 rounded px-1.5 py-0.5 text-xs font-medium',
                 value === 'anthropic'
                   ? 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400'
                   : value === 'openai'
@@ -406,7 +434,7 @@
           </template>
 
           <template #cell-actions="{ row }">
-            <div class="flex items-center gap-1">
+            <div class="groups-row-actions flex flex-wrap items-center gap-1">
               <button
                 v-if="!isSystemCustomGroup(row)"
                 @click="handleEdit(row)"
@@ -550,7 +578,7 @@
             data-tour="group-form-name"
           />
         </div>
-        <GroupTagField v-model="createForm.tag" name="create-group-tag" />
+        <GroupTagField v-model="createForm.tag" v-model:color="createForm.tag_color" name="create-group-tag" />
         <div>
           <label class="input-label">{{
             t("admin.groups.form.description")
@@ -2290,7 +2318,7 @@
             data-tour="edit-group-form-name"
           />
         </div>
-        <GroupTagField v-model="editForm.tag" name="edit-group-tag" />
+        <GroupTagField v-model="editForm.tag" v-model:color="editForm.tag_color" name="edit-group-tag" />
         <div>
           <label class="input-label">{{
             t("admin.groups.form.description")
@@ -4545,6 +4573,7 @@ import {
 import type { Column } from "@/components/common/types";
 import AppLayout from "@/components/layout/AppLayout.vue";
 import TablePageLayout from "@/components/layout/TablePageLayout.vue";
+import AdminListToolbar from "@/components/admin/AdminListToolbar.vue";
 import DataTable from "@/components/common/DataTable.vue";
 import Pagination from "@/components/common/Pagination.vue";
 import Toggle from "@/components/common/Toggle.vue";
@@ -4749,6 +4778,27 @@ const toggleableColumns = computed(() =>
 const hiddenColumns = reactive<Set<string>>(new Set());
 const showColumnDropdown = ref(false);
 const columnDropdownRef = ref<HTMLElement | null>(null);
+
+const handleColumnDropdownKeydown = (event: KeyboardEvent) => {
+  if (!showColumnDropdown.value) return;
+  const trigger = columnDropdownRef.value?.querySelector<HTMLButtonElement>("button");
+  if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+    event.preventDefault();
+    const options = Array.from(columnDropdownRef.value?.querySelectorAll<HTMLButtonElement>(".admin-action-menu button:not(:disabled)") ?? []);
+    const index = options.indexOf(event.target as HTMLButtonElement);
+    const next = event.key === "ArrowDown" ? index + 1 : (index < 0 ? 0 : index) - 1;
+    options[(next + options.length) % options.length]?.focus();
+    return;
+  }
+  if (event.key !== "Escape" && event.key !== "Tab") return;
+  if (event.key === "Tab" && event.target === trigger) return;
+  if (event.key === "Escape") {
+    event.preventDefault();
+    event.stopPropagation();
+  }
+  trigger?.focus();
+  showColumnDropdown.value = false;
+};
 
 const getValidHiddenColumnKeys = () =>
   new Set(toggleableColumns.value.map((col) => col.key));
@@ -5072,6 +5122,10 @@ const filters = reactive({
   status: "",
   is_exclusive: "",
 });
+const activeFilterCount = computed(() =>
+  [filters.platform, filters.status, ...(authStore.isSimpleMode ? [] : [filters.is_exclusive])]
+    .filter((value) => value !== "").length,
+);
 const pagination = reactive({
   page: 1,
   page_size: getPersistedPageSize(),
@@ -5206,6 +5260,7 @@ const submitEditAllowlistCustomEntry = () => {
 
 const createForm = reactive({
   tag: "" as GroupTag,
+  tag_color: "",
   name: "",
   description: "",
   platform: "anthropic" as GroupPlatform,
@@ -5575,6 +5630,7 @@ const convertApiFormatToRoutingRules = async (
 
 const editForm = reactive({
   tag: "" as GroupTag,
+  tag_color: "",
   name: "",
   description: "",
   platform: "anthropic" as GroupPlatform,
@@ -6222,6 +6278,7 @@ const closeCreateModal = () => {
   createForm.name = "";
   createForm.description = "";
   createForm.tag = "";
+  createForm.tag_color = "";
   createForm.platform = "anthropic";
   createForm.rate_multiplier = 1.0;
   createForm.empty_response_compensation_enabled = false;
@@ -6471,6 +6528,7 @@ const handleCreateGroup = async () => {
           name: createForm.name,
           description: createForm.description,
           tag: createForm.tag,
+          tag_color: createForm.tag_color,
           platform: createForm.platform,
         }
       : requestData;
@@ -6500,6 +6558,7 @@ const handleEdit = async (group: AdminGroup) => {
   editForm.name = group.name;
   editForm.description = group.description || "";
   editForm.tag = group.tag || "";
+  editForm.tag_color = group.tag_color || "";
   editForm.platform = group.platform;
   editForm.rate_multiplier = group.rate_multiplier;
   editForm.empty_response_compensation_enabled =
@@ -6715,6 +6774,7 @@ const handleUpdateGroup = async () => {
       ...editForm,
       // 显式保留标签，确保高级模式完整表单提交时不会遗漏该字段。
       tag: editForm.tag,
+      tag_color: editForm.tag_color,
       force_openai_fast: normalizeGroupOpenAIFast(
         editForm.platform,
         editForm.force_openai_fast,
@@ -6840,6 +6900,7 @@ const handleUpdateGroup = async () => {
           name: editForm.name,
           description: editForm.description,
           tag: editForm.tag,
+          tag_color: editForm.tag_color,
         }
       : payload;
     const updatedGroup = await adminAPI.groups.update(
@@ -7407,3 +7468,94 @@ onUnmounted(() => {
   clearAllAccountSearchState();
 });
 </script>
+
+<style scoped>
+.groups-list-actions,
+.groups-list-create-actions {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 0.375rem;
+}
+
+.groups-list-actions .groups-tool-button {
+  width: 2rem;
+  height: 2rem;
+  flex: none;
+  padding: 0;
+}
+
+.groups-list-filters {
+  width: 100%;
+  grid-column: 1 / -1;
+}
+
+.groups-list-actions .groups-create-button {
+  min-height: 2rem;
+  gap: 0.375rem;
+  padding: 0.375rem 0.625rem;
+  font-size: 0.75rem;
+  line-height: 1rem;
+  white-space: normal;
+}
+
+.groups-create-button :deep(svg) {
+  flex-shrink: 0;
+}
+
+.groups-list-count {
+  color: var(--workspace-muted);
+  font-size: 0.75rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.groups-list-count strong {
+  margin-inline-start: 0.25rem;
+  color: var(--workspace-ink);
+  font-weight: 600;
+}
+
+.groups-platform {
+  background: var(--workspace-hover);
+}
+
+.groups-row-actions :deep(svg) {
+  flex-shrink: 0;
+}
+
+@media (max-width: 767px) {
+  .groups-list-actions {
+    display: contents;
+  }
+
+  .groups-list-create-actions {
+    flex: 1 1 100%;
+    align-items: stretch;
+  }
+
+  .groups-list-filters {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .groups-list-filters > * {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .groups-list-actions .groups-create-button {
+    flex: 1 1 0;
+    min-width: 0;
+    min-height: 2.5rem;
+  }
+
+  .groups-identity {
+    flex-wrap: wrap;
+  }
+
+  .groups-name {
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+}
+</style>

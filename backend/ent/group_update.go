@@ -114,6 +114,20 @@ func (_u *GroupUpdate) SetNillableTag(v *string) *GroupUpdate {
 	return _u
 }
 
+// SetTagColor sets the "tag_color" field.
+func (_u *GroupUpdate) SetTagColor(v string) *GroupUpdate {
+	_u.mutation.SetTagColor(v)
+	return _u
+}
+
+// SetNillableTagColor sets the "tag_color" field if the given value is not nil.
+func (_u *GroupUpdate) SetNillableTagColor(v *string) *GroupUpdate {
+	if v != nil {
+		_u.SetTagColor(*v)
+	}
+	return _u
+}
+
 // SetRateMultiplier sets the "rate_multiplier" field.
 func (_u *GroupUpdate) SetRateMultiplier(v float64) *GroupUpdate {
 	_u.mutation.ResetRateMultiplier()
@@ -1746,6 +1760,11 @@ func (_u *GroupUpdate) check() error {
 			return &ValidationError{Name: "tag", err: fmt.Errorf(`ent: validator failed for field "Group.tag": %w`, err)}
 		}
 	}
+	if v, ok := _u.mutation.TagColor(); ok {
+		if err := group.TagColorValidator(v); err != nil {
+			return &ValidationError{Name: "tag_color", err: fmt.Errorf(`ent: validator failed for field "Group.tag_color": %w`, err)}
+		}
+	}
 	if v, ok := _u.mutation.PeakStart(); ok {
 		if err := group.PeakStartValidator(v); err != nil {
 			return &ValidationError{Name: "peak_start", err: fmt.Errorf(`ent: validator failed for field "Group.peak_start": %w`, err)}
@@ -1846,6 +1865,9 @@ func (_u *GroupUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if value, ok := _u.mutation.Tag(); ok {
 		_spec.SetField(group.FieldTag, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.TagColor(); ok {
+		_spec.SetField(group.FieldTagColor, field.TypeString, value)
 	}
 	if value, ok := _u.mutation.RateMultiplier(); ok {
 		_spec.SetField(group.FieldRateMultiplier, field.TypeFloat64, value)
@@ -2804,6 +2826,20 @@ func (_u *GroupUpdateOne) SetTag(v string) *GroupUpdateOne {
 func (_u *GroupUpdateOne) SetNillableTag(v *string) *GroupUpdateOne {
 	if v != nil {
 		_u.SetTag(*v)
+	}
+	return _u
+}
+
+// SetTagColor sets the "tag_color" field.
+func (_u *GroupUpdateOne) SetTagColor(v string) *GroupUpdateOne {
+	_u.mutation.SetTagColor(v)
+	return _u
+}
+
+// SetNillableTagColor sets the "tag_color" field if the given value is not nil.
+func (_u *GroupUpdateOne) SetNillableTagColor(v *string) *GroupUpdateOne {
+	if v != nil {
+		_u.SetTagColor(*v)
 	}
 	return _u
 }
@@ -4453,6 +4489,11 @@ func (_u *GroupUpdateOne) check() error {
 			return &ValidationError{Name: "tag", err: fmt.Errorf(`ent: validator failed for field "Group.tag": %w`, err)}
 		}
 	}
+	if v, ok := _u.mutation.TagColor(); ok {
+		if err := group.TagColorValidator(v); err != nil {
+			return &ValidationError{Name: "tag_color", err: fmt.Errorf(`ent: validator failed for field "Group.tag_color": %w`, err)}
+		}
+	}
 	if v, ok := _u.mutation.PeakStart(); ok {
 		if err := group.PeakStartValidator(v); err != nil {
 			return &ValidationError{Name: "peak_start", err: fmt.Errorf(`ent: validator failed for field "Group.peak_start": %w`, err)}
@@ -4570,6 +4611,9 @@ func (_u *GroupUpdateOne) sqlSave(ctx context.Context) (_node *Group, err error)
 	}
 	if value, ok := _u.mutation.Tag(); ok {
 		_spec.SetField(group.FieldTag, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.TagColor(); ok {
+		_spec.SetField(group.FieldTagColor, field.TypeString, value)
 	}
 	if value, ok := _u.mutation.RateMultiplier(); ok {
 		_spec.SetField(group.FieldRateMultiplier, field.TypeFloat64, value)

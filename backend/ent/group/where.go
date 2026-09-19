@@ -85,6 +85,11 @@ func Tag(v string) predicate.Group {
 	return predicate.Group(sql.FieldEQ(FieldTag, v))
 }
 
+// TagColor applies equality check predicate on the "tag_color" field. It's identical to TagColorEQ.
+func TagColor(v string) predicate.Group {
+	return predicate.Group(sql.FieldEQ(FieldTagColor, v))
+}
+
 // RateMultiplier applies equality check predicate on the "rate_multiplier" field. It's identical to RateMultiplierEQ.
 func RateMultiplier(v float64) predicate.Group {
 	return predicate.Group(sql.FieldEQ(FieldRateMultiplier, v))
@@ -703,6 +708,71 @@ func TagEqualFold(v string) predicate.Group {
 // TagContainsFold applies the ContainsFold predicate on the "tag" field.
 func TagContainsFold(v string) predicate.Group {
 	return predicate.Group(sql.FieldContainsFold(FieldTag, v))
+}
+
+// TagColorEQ applies the EQ predicate on the "tag_color" field.
+func TagColorEQ(v string) predicate.Group {
+	return predicate.Group(sql.FieldEQ(FieldTagColor, v))
+}
+
+// TagColorNEQ applies the NEQ predicate on the "tag_color" field.
+func TagColorNEQ(v string) predicate.Group {
+	return predicate.Group(sql.FieldNEQ(FieldTagColor, v))
+}
+
+// TagColorIn applies the In predicate on the "tag_color" field.
+func TagColorIn(vs ...string) predicate.Group {
+	return predicate.Group(sql.FieldIn(FieldTagColor, vs...))
+}
+
+// TagColorNotIn applies the NotIn predicate on the "tag_color" field.
+func TagColorNotIn(vs ...string) predicate.Group {
+	return predicate.Group(sql.FieldNotIn(FieldTagColor, vs...))
+}
+
+// TagColorGT applies the GT predicate on the "tag_color" field.
+func TagColorGT(v string) predicate.Group {
+	return predicate.Group(sql.FieldGT(FieldTagColor, v))
+}
+
+// TagColorGTE applies the GTE predicate on the "tag_color" field.
+func TagColorGTE(v string) predicate.Group {
+	return predicate.Group(sql.FieldGTE(FieldTagColor, v))
+}
+
+// TagColorLT applies the LT predicate on the "tag_color" field.
+func TagColorLT(v string) predicate.Group {
+	return predicate.Group(sql.FieldLT(FieldTagColor, v))
+}
+
+// TagColorLTE applies the LTE predicate on the "tag_color" field.
+func TagColorLTE(v string) predicate.Group {
+	return predicate.Group(sql.FieldLTE(FieldTagColor, v))
+}
+
+// TagColorContains applies the Contains predicate on the "tag_color" field.
+func TagColorContains(v string) predicate.Group {
+	return predicate.Group(sql.FieldContains(FieldTagColor, v))
+}
+
+// TagColorHasPrefix applies the HasPrefix predicate on the "tag_color" field.
+func TagColorHasPrefix(v string) predicate.Group {
+	return predicate.Group(sql.FieldHasPrefix(FieldTagColor, v))
+}
+
+// TagColorHasSuffix applies the HasSuffix predicate on the "tag_color" field.
+func TagColorHasSuffix(v string) predicate.Group {
+	return predicate.Group(sql.FieldHasSuffix(FieldTagColor, v))
+}
+
+// TagColorEqualFold applies the EqualFold predicate on the "tag_color" field.
+func TagColorEqualFold(v string) predicate.Group {
+	return predicate.Group(sql.FieldEqualFold(FieldTagColor, v))
+}
+
+// TagColorContainsFold applies the ContainsFold predicate on the "tag_color" field.
+func TagColorContainsFold(v string) predicate.Group {
+	return predicate.Group(sql.FieldContainsFold(FieldTagColor, v))
 }
 
 // RateMultiplierEQ applies the EQ predicate on the "rate_multiplier" field.

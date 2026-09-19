@@ -88,6 +88,7 @@ func TestModelPlazaHandler_NilSettingServiceFailsClosed404(t *testing.T) {
 func TestToModelPlazaGroupDTO_UserRateAndFieldWhitelist(t *testing.T) {
 	g := service.PlazaGroup{
 		ID: 2, Name: "vip", Description: "d", Platform: "anthropic",
+		Tag: "custom", TagColor: "#123456",
 		SubscriptionType: "standard", RateMultiplier: 1, IsExclusive: true,
 		Models: []service.PlazaModel{{
 			Name:     "claude-sonnet",
@@ -109,6 +110,8 @@ func TestToModelPlazaGroupDTO_UserRateAndFieldWhitelist(t *testing.T) {
 	require.NoError(t, err)
 	var decoded map[string]any
 	require.NoError(t, json.Unmarshal(raw, &decoded))
+	require.Equal(t, "custom", decoded["tag"])
+	require.Equal(t, "#123456", decoded["tag_color"])
 
 	for _, key := range []string{
 		"id", "name", "description", "platform", "subscription_type",

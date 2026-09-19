@@ -85,6 +85,30 @@ describe('useClipboard', () => {
     expect(mockShowSuccess).toHaveBeenCalledWith('common.copiedToClipboard')
   })
 
+  it.each([false, true])('supports inline success feedback without a toast (fallback: %s)', async (fallback) => {
+    if (fallback) {
+      vi.mocked(navigator.clipboard.writeText).mockRejectedValue(new Error('Clipboard denied'))
+      Object.defineProperty(document, 'execCommand', { configurable: true, value: vi.fn(() => true) })
+    }
+    const { copyToClipboard, copied } = useClipboard()
+
+    await expect(copyToClipboard('https://example.com/v1', false)).resolves.toBe(true)
+    expect(copied.value).toBe(true)
+    expect(mockShowSuccess).not.toHaveBeenCalled()
+    expect(mockShowError).not.toHaveBeenCalled()
+  })
+
+  it('still reports copy failures when the success toast is disabled', async () => {
+    vi.mocked(navigator.clipboard.writeText).mockRejectedValue(new Error('Clipboard denied'))
+    Object.defineProperty(document, 'execCommand', { configurable: true, value: vi.fn(() => false) })
+    const { copyToClipboard, copied } = useClipboard()
+
+    await expect(copyToClipboard('https://example.com/v1', false)).resolves.toBe(false)
+    expect(copied.value).toBe(false)
+    expect(mockShowError).toHaveBeenCalledWith('common.copyFailed')
+    expect(mockShowSuccess).not.toHaveBeenCalled()
+  })
+
   it('空文本返回 false 且不复制', async () => {
     const { copyToClipboard, copied } = useClipboard()
 

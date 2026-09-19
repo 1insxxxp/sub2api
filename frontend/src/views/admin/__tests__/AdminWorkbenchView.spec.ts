@@ -309,6 +309,51 @@ describe('AdminWorkbenchView balance transfer codes', () => {
     })
   })
 
+  it('keeps compact navigation without a duplicate balance or page hero', async () => {
+    const wrapper = mountWorkbench()
+    await flushPromises()
+
+    const navigation = wrapper.get('[data-test="workbench-navigation"]')
+    expect(navigation.get('[role="tablist"]').findAll('[role="tab"]')).toHaveLength(3)
+    expect(wrapper.find('[data-test="workbench-balance"]').exists()).toBe(false)
+    expect(wrapper.text()).not.toContain('adminWorkbench.currentBalance')
+    expect(wrapper.find('h1').exists()).toBe(false)
+    expect(wrapper.text()).not.toContain('adminWorkbench.description')
+    expect(wrapper.get('.admin-workbench-console').classes()).not.toContain('px-3')
+
+    await openBalanceTab(wrapper)
+
+    expect(wrapper.get('[data-test="workbench-generated-history"]').classes()).not.toContain('border')
+    expect(wrapper.get('[data-test="workbench-transfer-form"]').find('.admin-form-section').exists()).toBe(false)
+    expect(wrapper.find('[data-test="workbench-balance"]').exists()).toBe(false)
+  })
+
+  it('keeps commission settings exclusive to full admins and groups related controls', async () => {
+    const subAdmin = mountWorkbench()
+    await flushPromises()
+
+    expect(subAdmin.find('[data-test="sub-admin-commission-management"]').exists()).toBe(false)
+    expect(getCommissionSettings).not.toHaveBeenCalled()
+    expect(getAllGroups).not.toHaveBeenCalled()
+    expect(listCommissionGrants).not.toHaveBeenCalled()
+
+    authState.user = { ...authState.user, role: 'admin' }
+    const admin = mountWorkbench()
+    await flushPromises()
+
+    const controls = admin.get('[data-test="commission-rate-controls"]')
+    expect(controls.get('[data-test="sub-admin-commission-rate"]').element).toBeTruthy()
+    await controls.get('[data-test="sub-admin-commission-rate"]').setValue('0.2')
+    await controls.get('[data-test="sub-admin-commission-save-settings"]').trigger('click')
+    await flushPromises()
+    expect(updateCommissionSettings).toHaveBeenCalledWith({ commission_rate: 0.2 })
+
+    const summary = admin.get('[data-test="commission-calendar-month-summary"]')
+    expect(summary.element.tagName).toBe('DL')
+    expect(summary.findAll('dt')).toHaveLength(2)
+    expect(summary.findAll('dd').map((item) => item.text())).toEqual(['$12.00', '$1.44'])
+  })
+
   it('separates workbench functions into tabs and mounts only the active panel', async () => {
     const wrapper = mountWorkbench()
     await flushPromises()

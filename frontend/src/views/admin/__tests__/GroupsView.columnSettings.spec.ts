@@ -154,7 +154,7 @@ const TablePageLayoutStub = {
 }
 
 const DataTableStub = {
-  props: ['columns', 'data'],
+  props: ['columns', 'data', 'mobileLayout'],
   emits: ['sort'],
   template: `
     <div>
@@ -163,8 +163,21 @@ const DataTableStub = {
       <div v-if="data.length" data-test="usage-cell">
         <slot name="cell-usage" :row="data[0]" />
       </div>
+      <div v-if="data.length" data-test="row-actions">
+        <slot name="cell-actions" :row="data[0]" />
+      </div>
     </div>
   `,
+}
+
+const AdminListToolbarStub = {
+  props: ['activeFilters', 'filterId'],
+  template: `<div class="admin-toolbar">
+    <div data-test="toolbar-search"><slot name="search" /></div>
+    <div data-test="toolbar-actions"><slot name="actions" /></div>
+    <div data-test="toolbar-filters"><slot name="filters" /></div>
+    <div data-test="toolbar-secondary"><slot name="secondary" /></div>
+  </div>`
 }
 
 const SelectStub = {
@@ -192,13 +205,15 @@ const IconStub = {
   template: '<span data-test="icon">{{ name }}</span>',
 }
 
-const mountView = async () => {
+const mountView = async (attachTo?: HTMLElement) => {
   const wrapper = mount(GroupsView, {
+    attachTo,
     global: {
       stubs: {
         AppLayout: AppLayoutStub,
         TablePageLayout: TablePageLayoutStub,
         DataTable: DataTableStub,
+        AdminListToolbar: AdminListToolbarStub,
         Pagination: true,
         BaseDialog: BaseDialogStub,
         ConfirmDialog: true,
@@ -209,6 +224,7 @@ const mountView = async () => {
         GroupCapacityBadge: true,
         GroupRateMultipliersModal: true,
         GroupRPMOverridesModal: true,
+        SystemCustomGroupDialog: true,
         VueDraggable: { template: '<div><slot /></div>' },
       },
     },
@@ -285,6 +301,93 @@ describe('admin GroupsView column settings', () => {
 
   afterEach(() => {
     localStorage.clear()
+  })
+
+  it('separates filters from search and keeps list tools, create actions and totals accessible', async () => {
+    listGroups.mockResolvedValue({ items: [createGroup()], total: 87, page: 1, page_size: 20, pages: 5 })
+    const wrapper = await mountView()
+    expect(wrapper.find('.admin-workbench-page').exists()).toBe(true)
+    const toolbar = wrapper.findComponent(AdminListToolbarStub)
+    expect(toolbar.props('activeFilters')).toBe(0)
+    expect(toolbar.props('filterId')).toBe('groups-list-filters')
+    expect(wrapper.get('[data-test="toolbar-search"]').find('input').exists()).toBe(true)
+    expect(wrapper.get('[data-test="toolbar-search"]').find('select').exists()).toBe(false)
+    const filters = wrapper.get('[data-test="toolbar-filters"]').findAll('select')
+    expect(filters).toHaveLength(3)
+    await filters[0].setValue('openai')
+    await filters[2].setValue('false')
+    await flushPromises()
+    expect(toolbar.props('activeFilters')).toBe(2)
+    expect(listGroups).toHaveBeenLastCalledWith(
+      1, 20, expect.objectContaining({ platform: 'openai', is_exclusive: false }), expect.anything()
+    )
+    const actions = wrapper.get('[data-test="toolbar-actions"]')
+    expect(actions.find('button[title="Column Settings"]').exists()).toBe(true)
+    expect(actions.find('button[title="admin.groups.sortOrder"]').exists()).toBe(true)
+    for (const selector of ['[data-testid="system-custom-create"]', '[data-tour="groups-create-btn"]']) {
+      expect(actions.get(selector).get('span:not([data-test="icon"])').classes()).not.toContain('hidden')
+    }
+    await actions.get('[data-testid="system-custom-create"]').trigger('click')
+    expect(wrapper.findComponent({ name: 'SystemCustomGroupDialog' }).props('show')).toBe(true)
+    await actions.get('[data-tour="groups-create-btn"]').trigger('click')
+    expect(wrapper.find('#create-group-form').exists()).toBe(true)
+    expect(wrapper.get('[data-test="groups-list-count"]').text()).toContain('87')
+    const rowActions = wrapper.get('[data-test="row-actions"]')
+    await rowActions.get('[data-testid="group-rate-multipliers"]').trigger('click')
+    expect(wrapper.findComponent({ name: 'GroupRateMultipliersModal' }).props('show')).toBe(true)
+    expect(rowActions.find('[data-testid="group-rpm-overrides"]').exists()).toBe(true)
+    wrapper.unmount()
+  })
+
+  it('passes mobile billing and capacity summaries while retaining every visible column and row', async () => {
+    localStorage.setItem('group-hidden-columns', '[]')
+    localStorage.setItem('group-column-settings-version', '2')
+    const wrapper = await mountView()
+    const table = wrapper.findComponent(DataTableStub)
+    expect(table.props('mobileLayout')).toEqual({
+      title: 'name', subtitle: 'id', leading: 'platform', status: 'status',
+      summary: ['rate_multiplier', 'account_count', 'capacity', 'billing_type']
+    })
+    expect(columnKeys(wrapper)).toEqual([
+      'name', 'id', 'platform', 'billing_type', 'rate_multiplier', 'is_exclusive',
+      'account_count', 'capacity', 'usage', 'status', 'actions'
+    ])
+    expect(table.props('data')[0]).toMatchObject(createGroup())
+    wrapper.unmount()
+  })
+
+  it('dismisses column settings with Escape and Tab and restores trigger focus', async () => {
+    const wrapper = await mountView(document.body)
+    const trigger = wrapper.get<HTMLButtonElement>('button[title="Column Settings"]')
+    for (const key of ['Escape', 'Tab']) {
+      await trigger.trigger('click')
+      await trigger.trigger('keydown', { key: 'Tab' })
+      const menu = wrapper.get('#groups-column-settings')
+      const option = menu.get<HTMLButtonElement>('button')
+      await trigger.trigger('keydown', { key: 'ArrowDown' })
+      expect(document.activeElement).toBe(option.element)
+      await option.trigger('keydown', { key: 'ArrowDown' })
+      expect(document.activeElement).toBe(menu.findAll('button')[1].element)
+      await option.trigger('keydown', { key })
+      expect(wrapper.find('#groups-column-settings').exists()).toBe(false)
+      expect(document.activeElement).toBe(trigger.element)
+    }
+    wrapper.unmount()
+  })
+
+  it('keeps system custom group management directly accessible from row actions', async () => {
+    listGroups.mockResolvedValue({
+      items: [createGroup({ id: 90, system_custom_routing_enabled: true })],
+      total: 1, page: 1, page_size: 20, pages: 1
+    })
+    const wrapper = await mountView()
+    const actions = wrapper.get('[data-test="row-actions"]')
+    await actions.get('[data-testid="system-custom-manage"]').trigger('click')
+    const dialog = wrapper.findComponent({ name: 'SystemCustomGroupDialog' })
+    expect(dialog.props('show')).toBe(true)
+    expect(dialog.props('groupId')).toBe(90)
+    expect(actions.find('[data-testid="group-duplicate"]').exists()).toBe(false)
+    wrapper.unmount()
   })
 
   it('hides the id column by default while keeping other group columns visible', async () => {

@@ -70,12 +70,19 @@ describe('GroupOptionItem', () => {
     const wrapper = mountOption({ tag })
     const badge = wrapper.get('[data-test="group-tag"]')
     expect(badge.text()).toBe(`common.groupTags.${tag}`)
-    expect(badge.classes()).toContain('!absolute')
+    expect(badge.classes()).toContain('group-option-tag')
     expect(wrapper.text()).toContain('Test Group')
   })
 
   it('does not show a tag for an untagged group', () => {
     expect(mountOption({ tag: '' }).find('[data-test="group-tag"]').exists()).toBe(false)
+  })
+
+  it('passes a custom label and color through to the corner badge', () => {
+    const wrapper = mountOption({ tag: '专属线路', tagColor: '#16A34A' })
+    const badge = wrapper.get('[data-test="group-tag"]')
+    expect(badge.text()).toBe('专属线路')
+    expect(badge.attributes('style')).toContain('22, 163, 74')
   })
 
   it('formats custom rate multipliers with at most two decimals', () => {
@@ -99,30 +106,26 @@ describe('GroupOptionItem', () => {
   it('applies multiline and overflow-safe text styles', () => {
     const description = 'First section\nvery-long-unbroken-description-value-that-must-not-overflow'
     const wrapper = mountOption({ description })
-    const descriptionElement = wrapper
-      .findAll('span')
-      .find((element) => element.text() === description)
-
-    expect(descriptionElement).toBeDefined()
-    expect(descriptionElement?.classes()).toContain('whitespace-pre-line')
-    expect(descriptionElement?.classes()).toContain('[overflow-wrap:anywhere]')
-    expect(descriptionElement?.classes()).toContain('line-clamp-3')
-    expect(wrapper.find('[title]').attributes('title')).toBe(description)
+    const descriptionElement = wrapper.get('[data-test="group-option-description"]')
+    expect(descriptionElement.text()).toBe(description)
+    expect(descriptionElement.classes()).toContain('whitespace-pre-line')
+    expect(descriptionElement.classes()).toContain('[overflow-wrap:anywhere]')
+    expect(descriptionElement.classes()).toContain('line-clamp-3')
+    expect(descriptionElement.attributes('title')).toBe(description)
   })
 
-  it('stacks mobile content and enables full group-name wrapping', () => {
+  it('keeps the complete group name available alongside its description and rate', () => {
     const wrapper = mountOption({
       name: '余额 [Pro稳定号池] 综合低至 ¥0.24 / 刀 very-long-unbroken-group-name',
       description: 'A production group description',
       rateMultiplier: 1.5,
     })
 
-    const layout = wrapper.get('[data-test="group-option-layout"]')
-    expect(layout.classes()).toContain('flex-col')
-    expect(layout.classes()).toContain('sm:flex-row')
-
-    const badge = wrapper.getComponent(GroupBadge)
-    expect(badge.props('wrapName')).toBe(true)
+    const name = wrapper.get('[data-test="group-option-name"]')
+    expect(name.text()).toBe('余额 [Pro稳定号池] 综合低至 ¥0.24 / 刀 very-long-unbroken-group-name')
+    expect(name.attributes('title')).toBe(name.text())
+    expect(name.classes()).not.toContain('truncate')
+    expect(wrapper.get('[data-test="group-option-rate"]').text()).toContain('1.5x')
   })
 
   it('wraps enabled badge names on mobile and truncates them on desktop', () => {
@@ -145,6 +148,6 @@ describe('GroupOptionItem', () => {
   it('uses a stable name hook for semibold option labels', () => {
     const wrapper = mountActualOption()
 
-    expect(wrapper.get('.groupOptionItemBadge').classes()).toContain('font-semibold')
+    expect(wrapper.get('[data-test="group-option-name"]').classes()).toContain('font-semibold')
   })
 })

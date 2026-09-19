@@ -62,8 +62,26 @@ describe('EndpointPopover', () => {
     await wrapper.find('[role="button"]').trigger('click')
     await flushPromises()
 
-    expect(copyToClipboard).toHaveBeenCalledWith('https://default.example.com/v1', '已复制')
+    expect(copyToClipboard).toHaveBeenCalledWith('https://default.example.com/v1', false)
     expect(wrapper.text()).toContain('已复制到剪贴板')
     expect(wrapper.find('button[aria-label="已复制到剪贴板"]').exists()).toBe(true)
+  })
+
+  it('shows descriptions and copy feedback inline inside a dialog', async () => {
+    const wrapper = mount(EndpointPopover, {
+      props: {
+        apiBaseUrl: '',
+        customEndpoints: [{ name: '主线路', endpoint: 'https://example.com/v1', description: '线路说明' }],
+        inlineDetails: true,
+      },
+    })
+    expect(wrapper.find('.endpoint-tooltip').exists()).toBe(false)
+    expect(wrapper.get('.endpoint-description').text()).toBe('线路说明')
+    expect(wrapper.get('[role="status"]').text()).toBe('')
+    await wrapper.get('.endpoint-copy').trigger('click')
+    await flushPromises()
+    expect(wrapper.get('[role="status"]').text()).toBe('已复制')
+    expect(copyToClipboard).toHaveBeenCalledWith('https://example.com/v1', false)
+    wrapper.unmount()
   })
 })

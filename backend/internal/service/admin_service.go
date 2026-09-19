@@ -241,6 +241,7 @@ type CreateGroupInput struct {
 	Name                             string
 	Description                      string
 	Tag                              string
+	TagColor                         string
 	Platform                         string
 	RateMultiplier                   float64
 	EmptyResponseCompensationEnabled bool
@@ -326,6 +327,7 @@ type UpdateGroupInput struct {
 	Name                             string
 	Description                      *string
 	Tag                              *string
+	TagColor                         *string
 	Platform                         string
 	RateMultiplier                   *float64 // 使用指针以支持设置为0
 	EmptyResponseCompensationEnabled *bool

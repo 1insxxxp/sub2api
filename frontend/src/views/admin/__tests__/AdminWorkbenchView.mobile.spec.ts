@@ -24,12 +24,19 @@ describe('AdminWorkbenchView mobile layout', () => {
     expect(viewSource).toContain('admin-workbench-generated-results')
     expect(viewSource).toContain('grid-cols-3')
     expect(viewSource).toContain('sm:flex')
-    expect(viewSource).toContain('min-h-16')
+    expect(viewSource).not.toContain('min-h-16')
+    expect(viewSource).toContain('admin-workbench-console')
+    expect(viewSource).toContain('workbench-navigation')
+    expect(viewSource).toContain('min-h-11')
+    expect(viewSource).toContain('--workspace-surface')
+    expect(viewSource).toContain('prefers-reduced-motion: reduce')
     expect(viewSource).toContain('flex-col')
     expect(viewSource).toContain('max-h-72')
     expect(viewSource).toContain('min-[360px]:flex-row')
     expect(viewSource).toContain('grid w-full grid-cols-2')
-    expect(viewSource).toContain('class="grid w-full shrink-0 grid-cols-2 gap-2 sm:flex sm:w-auto"')
+    expect(viewSource).toContain('workbench-history-actions')
+    expect(viewSource).toMatch(/\.workbench-history-actions \.btn\s*\{[^}]*width: 2\.75rem;/)
+    expect(viewSource).not.toContain('class="grid w-full shrink-0 grid-cols-2 gap-2 sm:flex sm:w-auto"')
   })
 
   it('keeps the commission calendar and its detail drawer inside the page width', () => {
@@ -40,7 +47,8 @@ describe('AdminWorkbenchView mobile layout', () => {
     expect(drawerSource).toContain('items-center justify-center')
     expect(drawerSource).toContain('max-h-[calc(100dvh-2rem)]')
     expect(drawerSource).toContain('min-[360px]:grid-cols-2')
-    expect(managementSource).toContain('flex-col gap-3 min-[420px]:flex-row')
+    expect(managementSource).toContain('workbench-commission-controls')
+    expect(managementSource).toContain('minmax(0, 1fr) auto')
   })
 
   it('mounts the daily earnings chart with width-safe responsive sizing', () => {

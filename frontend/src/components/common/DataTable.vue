@@ -3,7 +3,7 @@
     <template v-if="loading">
       <div v-for="i in 5" :key="i" class="rounded-lg border border-gray-200 bg-white p-4 dark:border-dark-700 dark:bg-dark-900">
         <div class="space-y-3">
-          <div v-for="column in dataColumns" :key="column.key" class="flex justify-between">
+          <div v-for="column in skeletonColumns" :key="column.key" class="flex justify-between">
             <div class="h-4 w-20 animate-pulse rounded bg-gray-200 dark:bg-dark-700"></div>
             <div class="h-4 w-32 animate-pulse rounded bg-gray-200 dark:bg-dark-700"></div>
           </div>
@@ -32,8 +32,9 @@
     </template>
 
     <template v-else>
-      <div v-if="selectable" class="flex items-center justify-end gap-2 px-1">
-        <label class="flex items-center gap-2 text-sm font-medium text-gray-600 dark:text-gray-300">
+      <div v-if="selectable" class="table-mobile-selection flex items-center justify-end gap-2 px-1">
+        <slot name="mobile-selection-actions" />
+        <label class="ml-auto flex shrink-0 items-center gap-2 text-sm font-medium text-gray-600 dark:text-gray-300">
           <input
             type="checkbox"
             class="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500 dark:border-dark-600 dark:bg-dark-800"
@@ -50,7 +51,7 @@
         :key="resolveRowKey(row, index)"
         data-mobile-table-row
         :class="[
-          !$slots['mobile-row'] && 'admin-surface rounded-2xl p-4',
+          !$slots['mobile-row'] && (mobileLayout ? 'admin-record' : 'admin-surface rounded-2xl p-4'),
           {
             'cursor-pointer': clickableRows,
             'border-primary-300 bg-primary-50/40 dark:border-primary-700 dark:bg-primary-900/10': !$slots['mobile-row'] && selectable && isRowSelected(row, index)
@@ -68,7 +69,74 @@
           :selection-label="getRowSelectionLabel(row, index)"
           :select="(checked: boolean) => toggleRowSelection(row, index, checked)"
         >
-        <div class="space-y-3">
+        <div v-if="mobileLayout" class="admin-record-content">
+          <div class="admin-record-header">
+            <div class="admin-record-identity">
+              <div v-if="mobileFields.leading" class="admin-record-provider" :data-field="mobileFields.leading.key">
+                <slot :name="`cell-${mobileFields.leading.key}`" :row="row" :value="row[mobileFields.leading.key]" :expanded="actionsExpanded" :mobile="true">
+                  {{ formatMobileValue(mobileFields.leading, row) }}
+                </slot>
+              </div>
+              <div v-if="mobileFields.title" data-test="mobile-record-title" class="admin-record-title" :data-field="mobileFields.title.key">
+                <slot :name="`cell-${mobileFields.title.key}`" :row="row" :value="row[mobileFields.title.key]" :expanded="actionsExpanded" :mobile="true">
+                  {{ formatMobileValue(mobileFields.title, row) }}
+                </slot>
+              </div>
+              <div v-if="mobileFields.subtitle" class="admin-record-subtitle" :data-field="mobileFields.subtitle.key">
+                <slot :name="`cell-${mobileFields.subtitle.key}`" :row="row" :value="row[mobileFields.subtitle.key]" :expanded="actionsExpanded" :mobile="true">
+                  {{ formatMobileValue(mobileFields.subtitle, row) }}
+                </slot>
+              </div>
+            </div>
+            <div class="admin-record-status">
+              <div v-if="mobileFields.selection" @click.stop>
+                <slot :name="`cell-${mobileFields.selection.key}`" :row="row" :value="row[mobileFields.selection.key]" :expanded="actionsExpanded" :mobile="true" />
+              </div>
+              <input
+                v-if="selectable"
+                type="checkbox"
+                class="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500 dark:border-dark-600 dark:bg-dark-800"
+                :checked="isRowSelected(row, index)"
+                :aria-label="getRowSelectionLabel(row, index)"
+                data-test="select-row"
+                @click.stop
+                @change="toggleRowSelection(row, index, ($event.target as HTMLInputElement).checked)"
+              />
+              <div v-if="mobileFields.status" :data-field="mobileFields.status.key">
+                <slot :name="`cell-${mobileFields.status.key}`" :row="row" :value="row[mobileFields.status.key]" :expanded="actionsExpanded" :mobile="true">
+                  {{ formatMobileValue(mobileFields.status, row) }}
+                </slot>
+              </div>
+            </div>
+          </div>
+          <div v-if="mobileSummaryColumns.length" data-test="mobile-record-summary" class="admin-record-summary">
+            <div v-for="column in mobileSummaryColumns" :key="column.key" class="admin-record-metric" :data-field="column.key">
+              <span class="admin-record-label">{{ column.label }}</span>
+              <div class="admin-record-value">
+                <slot :name="`cell-${column.key}`" :row="row" :value="row[column.key]" :expanded="actionsExpanded" :mobile="true">
+                  {{ formatMobileValue(column, row) }}
+                </slot>
+              </div>
+            </div>
+          </div>
+          <details v-if="mobileDetailColumns.length" class="admin-record-details" @click.stop>
+            <summary><span>{{ t('common.details') }}</span><Icon name="chevronDown" size="sm" /></summary>
+            <div class="admin-record-detail-grid">
+              <div v-for="column in mobileDetailColumns" :key="column.key" :data-field="column.key" class="admin-record-detail">
+                <span class="admin-record-label">{{ column.label }}</span>
+                <div class="admin-record-value">
+                  <slot :name="`cell-${column.key}`" :row="row" :value="row[column.key]" :expanded="actionsExpanded" :mobile="true">
+                    {{ formatMobileValue(column, row) }}
+                  </slot>
+                </div>
+              </div>
+            </div>
+          </details>
+          <div v-if="hasActionsColumn" class="admin-record-actions" @click.stop>
+            <slot name="cell-actions" :row="row" :value="row['actions']" :expanded="actionsExpanded" :mobile="true" />
+          </div>
+        </div>
+        <div v-else class="space-y-3">
           <div v-if="selectable" class="flex justify-end">
             <input
               type="checkbox"
@@ -96,13 +164,13 @@
               data-mobile-column-value
               class="min-w-0 max-w-full flex-1 break-words text-right text-sm text-gray-900 [overflow-wrap:anywhere] dark:text-gray-100"
             >
-              <slot :name="`cell-${column.key}`" :row="row" :value="row[column.key]" :expanded="actionsExpanded">
+              <slot :name="`cell-${column.key}`" :row="row" :value="row[column.key]" :expanded="actionsExpanded" :mobile="true">
                 {{ column.formatter ? column.formatter(row[column.key], row) : row[column.key] }}
               </slot>
             </div>
           </div>
           <div v-if="hasActionsColumn" class="border-t border-gray-200 pt-3 dark:border-dark-700">
-            <slot name="cell-actions" :row="row" :value="row['actions']" :expanded="actionsExpanded"></slot>
+            <slot name="cell-actions" :row="row" :value="row['actions']" :expanded="actionsExpanded" :mobile="true"></slot>
           </div>
         </div>
         </slot>
@@ -266,7 +334,8 @@
               <slot :name="`cell-${column.key}`"
                     :row="item.row"
                     :value="item.row[column.key]"
-                    :expanded="actionsExpanded">
+                    :expanded="actionsExpanded"
+                    :mobile="false">
                 {{ column.formatter
                    ? column.formatter(item.row[column.key], item.row)
                    : item.row[column.key] }}
@@ -493,6 +562,15 @@ interface Props {
   selectedKeys?: Array<string | number>
   /** Accessible label for a row selection checkbox. */
   selectionLabel?: string | ((row: any) => string)
+  /** Compact mobile layout; all other visible fields remain available in details. */
+  mobileLayout?: {
+    title: string
+    subtitle?: string
+    leading?: string
+    status?: string
+    selection?: string
+    summary: string[]
+  }
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -509,6 +587,29 @@ const props = withDefaults(defineProps<Props>(), {
 const sortKey = ref<string>('')
 const sortOrder = ref<'asc' | 'desc'>('asc')
 const actionsExpanded = ref(false)
+
+const mobileFields = computed(() => {
+  const find = (key?: string) => dataColumns.value.find(column => column.key === key)
+  return {
+    title: find(props.mobileLayout?.title),
+    subtitle: find(props.mobileLayout?.subtitle),
+    leading: find(props.mobileLayout?.leading),
+    status: find(props.mobileLayout?.status),
+    selection: find(props.mobileLayout?.selection)
+  }
+})
+const mobileSummaryColumns = computed(() =>
+  dataColumns.value.filter(column => props.mobileLayout?.summary.includes(column.key) &&
+    !Object.values(mobileFields.value).includes(column))
+)
+const mobileDetailColumns = computed(() =>
+  dataColumns.value.filter(column => !Object.values(mobileFields.value).includes(column) &&
+    !mobileSummaryColumns.value.includes(column))
+)
+const skeletonColumns = computed(() => props.mobileLayout ? dataColumns.value.slice(0, 3) : dataColumns.value)
+const formatMobileValue = (column: Column, row: any) => column.formatter
+  ? column.formatter(row[column.key], row)
+  : row[column.key]
 
 type PersistedSortState = {
   key: string

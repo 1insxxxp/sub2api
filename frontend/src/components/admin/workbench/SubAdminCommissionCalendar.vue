@@ -1,45 +1,44 @@
 <template>
   <section
     data-test="sub-admin-commission-calendar"
-    class="rounded-lg border border-gray-200 bg-white p-3 shadow-sm dark:border-dark-700 dark:bg-dark-900 min-[360px]:p-4 sm:p-5"
+    class="workbench-commission-calendar min-w-0"
   >
-    <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+    <div class="workbench-commission-overview">
       <div class="min-w-0">
         <h2 class="text-base font-semibold text-gray-950 dark:text-white">
           {{ t('adminWorkbench.commission.calendar') }}
         </h2>
-        <p class="mt-1 text-sm text-gray-500 dark:text-dark-400">{{ t('adminWorkbench.commission.monthTotal') }}</p>
       </div>
-      <label class="block w-full sm:w-44 sm:shrink-0">
+      <label class="workbench-commission-month block min-w-0">
         <span class="sr-only">{{ t('adminWorkbench.commission.calendar') }}</span>
         <input v-model="month" type="month" class="input" />
       </label>
-    </div>
-
-    <div
-      data-test="commission-calendar-month-summary"
-      class="mt-4 grid grid-cols-1 gap-2 min-[360px]:grid-cols-2 sm:gap-3"
-    >
-      <div class="min-w-0 rounded-lg border border-blue-100 bg-blue-50/70 px-3 py-2.5 dark:border-blue-500/20 dark:bg-blue-500/10">
-        <span class="block text-[11px] font-medium text-blue-700 dark:text-blue-200 sm:text-xs">
-          {{ t('adminWorkbench.commission.actualCost') }}
-        </span>
-        <span class="mt-1 block overflow-x-auto whitespace-nowrap font-mono text-sm font-bold tabular-nums text-blue-950 [scrollbar-width:none] dark:text-white sm:text-lg" :title="formatCurrency(monthActualTotal)">
-          {{ formatCurrency(monthActualTotal) }}
-        </span>
-      </div>
-      <div class="min-w-0 rounded-lg border border-emerald-100 bg-emerald-50/70 px-3 py-2.5 dark:border-emerald-500/20 dark:bg-emerald-500/10">
-        <span class="block text-[11px] font-medium text-emerald-700 dark:text-emerald-200 sm:text-xs">
-          {{ t('adminWorkbench.commission.commissionAmount') }}
-        </span>
-        <span class="mt-1 block overflow-x-auto whitespace-nowrap font-mono text-sm font-bold tabular-nums text-emerald-700 [scrollbar-width:none] dark:text-emerald-200 sm:text-lg" :title="formatCurrency(monthCommissionTotal)">
-          {{ formatCurrency(monthCommissionTotal) }}
-        </span>
-      </div>
+      <dl
+        data-test="commission-calendar-month-summary"
+        :aria-label="t('adminWorkbench.commission.monthTotal')"
+        class="workbench-commission-summary grid min-w-0 grid-cols-1 gap-3 min-[360px]:grid-cols-2"
+      >
+        <div class="min-w-0">
+          <dt class="text-xs text-gray-500 dark:text-dark-400">
+            {{ t('adminWorkbench.commission.actualCost') }}
+          </dt>
+          <dd class="mt-1 break-all text-lg font-semibold tabular-nums text-gray-950 dark:text-white" :title="formatCurrency(monthActualTotal)">
+            {{ formatCurrency(monthActualTotal) }}
+          </dd>
+        </div>
+        <div class="min-w-0">
+          <dt class="text-xs text-gray-500 dark:text-dark-400">
+            {{ t('adminWorkbench.commission.commissionAmount') }}
+          </dt>
+          <dd class="mt-1 break-all text-lg font-semibold tabular-nums text-emerald-700 dark:text-emerald-300" :title="formatCurrency(monthCommissionTotal)">
+            {{ formatCurrency(monthCommissionTotal) }}
+          </dd>
+        </div>
+      </dl>
     </div>
 
     <SubAdminCommissionTrendChart
-      class="mt-4"
+      class="workbench-commission-chart mt-4"
       :days="days"
       :loading="loading"
     />
@@ -282,3 +281,25 @@ watch(visibleDayRows, (rows) => {
   }
 }, { immediate: true })
 </script>
+
+<style scoped>
+.workbench-commission-overview {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 10rem);
+  align-items: center;
+  gap: 1rem;
+}
+.workbench-commission-summary { grid-column: 1 / -1; }
+.workbench-commission-calendar .workbench-commission-chart {
+  border-color: var(--workspace-rule);
+  border-radius: 8px;
+  background: linear-gradient(125deg, var(--workspace-highlight) 15%, transparent 70%), var(--workspace-surface);
+  box-shadow: var(--workspace-shadow);
+}
+
+@media (min-width: 768px) {
+  .workbench-commission-overview { grid-template-columns: minmax(0, 1fr) minmax(16rem, 1fr) 10rem; }
+  .workbench-commission-month { order: 1; }
+  .workbench-commission-summary { grid-column: auto; }
+}
+</style>

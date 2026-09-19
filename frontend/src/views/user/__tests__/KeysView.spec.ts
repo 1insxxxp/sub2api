@@ -242,6 +242,7 @@ const mountView = async () => {
         Icon: IconStub,
         UseKeyModal: true,
         BulkEditKeysModal: true,
+        CustomGroupsManager: true,
         EndpointPopover: true,
         GroupBadge: true,
         GroupOptionItem: true,
@@ -297,6 +298,146 @@ describe('user KeysView column settings', () => {
     getAvailableGroups.mockResolvedValue([])
     getUserGroupRates.mockResolvedValue({})
     isCurrentStep.mockReturnValue(false)
+  })
+
+  it('keeps collapsed filters active and clears them without losing the search', async () => {
+    const wrapper = await mountView()
+    const toggle = wrapper.get('[data-test="keys-filter-toggle"]')
+    expect(toggle.attributes('aria-expanded')).toBe('false')
+    await toggle.trigger('click')
+    expect(toggle.attributes('aria-expanded')).toBe('true')
+
+    wrapper.findComponent({ name: 'SearchInput' }).vm.$emit('update:modelValue', 'target')
+    const selects = wrapper.findAllComponents({ name: 'Select' })
+    selects[0].vm.$emit('update:modelValue', 0)
+    selects[1].vm.$emit('update:modelValue', 'inactive')
+    await flushPromises()
+    await toggle.trigger('click')
+    expect(toggle.attributes('aria-expanded')).toBe('false')
+    expect(wrapper.get('[data-test="keys-filter-count"]').text()).toBe('2')
+    expect(listKeys).toHaveBeenLastCalledWith(1, expect.any(Number), expect.objectContaining({
+      search: 'target', group_id: 0, status: 'inactive',
+    }), expect.any(Object))
+
+    await toggle.trigger('click')
+    await wrapper.get('[data-test="keys-clear-filters"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.find('[data-test="keys-filter-count"]').exists()).toBe(false)
+    expect(listKeys.mock.lastCall?.[2]).toMatchObject({ search: 'target' })
+    expect(listKeys.mock.lastCall?.[2]).not.toHaveProperty('group_id')
+    expect(listKeys.mock.lastCall?.[2]).not.toHaveProperty('status')
+    wrapper.unmount()
+  })
+
+  it('keeps toolbar select-all in sync with individual key selection', async () => {
+    const items = [createApiKey(), { ...createApiKey(), id: 2 }]
+    listKeys.mockResolvedValue({ items, total: 2, page: 1, page_size: 20, pages: 1 })
+    const wrapper = await mountView()
+    const checkbox = wrapper.get<HTMLInputElement>('[data-test="keys-select-all-toolbar"]')
+    const table = wrapper.findComponent({ name: 'DataTable' })
+    expect(checkbox.element.checked).toBe(false)
+    expect(checkbox.element.indeterminate).toBe(false)
+    await checkbox.setValue(true)
+    expect(table.props('selectedKeys')).toEqual([1, 2])
+    table.vm.$emit('update:selectedKeys', [2])
+    await nextTick()
+    expect(checkbox.element.checked).toBe(false)
+    expect(checkbox.element.indeterminate).toBe(true)
+    await checkbox.setValue(true)
+    await checkbox.setValue(false)
+    expect(table.props('selectedKeys')).toEqual([])
+    wrapper.unmount()
+  })
+
+  it('opens configured routes in a non-modal popover and toggles it from the trigger', async () => {
+    getPublicSettings.mockResolvedValue({ api_base_url: 'https://example.test/v1', custom_endpoints: [] })
+    const wrapper = await mountView()
+    const trigger = wrapper.get('[data-test="keys-endpoints-toggle"]')
+    expect(trigger.attributes('aria-expanded')).toBe('false')
+    await trigger.trigger('click')
+    const popover = wrapper.get('[data-test="keys-endpoint-popover"]')
+    expect(popover.attributes('aria-modal')).toBe('false')
+    expect(popover.findComponent({ name: 'EndpointPopover' }).props('apiBaseUrl')).toBe('https://example.test/v1')
+    expect(popover.findComponent({ name: 'EndpointPopover' }).props('inlineDetails')).toBe(true)
+    expect(popover.find('[data-test="close-dialog"]').exists()).toBe(false)
+    await trigger.trigger('click')
+    expect(trigger.attributes('aria-expanded')).toBe('false')
+    await vi.waitFor(() => expect(wrapper.find('[data-test="keys-endpoint-popover"]').exists()).toBe(false))
+    wrapper.unmount()
+  })
+
+  it('dismisses routes on Escape, outside click, resize, or opening more actions', async () => {
+    getPublicSettings.mockResolvedValue({ api_base_url: 'https://example.test/v1', custom_endpoints: [] })
+    const wrapper = await mountView()
+    const trigger = wrapper.get('[data-test="keys-endpoints-toggle"]')
+    try {
+      await trigger.trigger('keydown', { key: 'ArrowDown' })
+      await flushPromises()
+      await wrapper.get('[data-test="keys-endpoint-popover"]').trigger('keydown', { key: 'Escape' })
+      expect(trigger.attributes('aria-expanded')).toBe('false')
+
+      for (const action of ['outside', 'resize', 'more']) {
+        await trigger.trigger('click')
+        await flushPromises()
+        expect(trigger.attributes('aria-expanded')).toBe('true')
+        if (action === 'outside') document.body.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+        else if (action === 'resize') window.dispatchEvent(new Event('resize'))
+        else await wrapper.get('[data-test="keys-more-toggle"]').trigger('click')
+        await flushPromises()
+        expect(trigger.attributes('aria-expanded'), action).toBe('false')
+      }
+    } finally {
+      wrapper.unmount()
+    }
+  })
+
+  it('exposes refresh and custom groups directly while keeping column settings in more', async () => {
+    const wrapper = await mountView()
+    const originalWidth = window.innerWidth
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 390 })
+    try {
+      await wrapper.get('[data-test="keys-refresh-entry"]').trigger('click')
+      await flushPromises()
+      expect(listKeys).toHaveBeenCalledTimes(2)
+      expect(wrapper.find('[data-test="keys-tools-menu"]').exists()).toBe(false)
+      await wrapper.get('[data-test="keys-mobile-custom-groups"]').trigger('click')
+      expect(wrapper.find('[data-test="custom-groups-dialog"]').exists()).toBe(true)
+      await wrapper.get('[data-test="custom-groups-dialog"] [data-test="close-dialog"]').trigger('click')
+      await wrapper.get('[data-test="keys-more-toggle"]').trigger('click')
+      expect(wrapper.get('[data-test="keys-tools-menu"]').attributes('role')).toBe('menu')
+      await wrapper.get('[data-test="keys-mobile-columns"]').trigger('click')
+      await flushPromises()
+      expect(wrapper.find('[data-test="keys-tools-menu"]').exists()).toBe(false)
+      expect(wrapper.find('[data-test="column-selector-sheet"]').exists()).toBe(true)
+    } finally {
+      Object.defineProperty(window, 'innerWidth', { configurable: true, value: originalWidth })
+      wrapper.unmount()
+    }
+  })
+
+  it('dismisses the more menu on Escape, outside click and viewport changes', async () => {
+    const wrapper = await mountView()
+    const trigger = wrapper.get('[data-test="keys-more-toggle"]')
+    try {
+      await trigger.trigger('keydown', { key: 'ArrowDown' })
+      await flushPromises()
+      expect(trigger.attributes('aria-expanded')).toBe('true')
+      await wrapper.get('[data-test="keys-mobile-columns"]').trigger('keydown', { key: 'Escape' })
+      expect(trigger.attributes('aria-expanded')).toBe('false')
+
+      for (const event of [new MouseEvent('click'), new Event('resize')]) {
+        await trigger.trigger('click')
+        await flushPromises()
+        expect(wrapper.find('[role="menu"]').exists()).toBe(true)
+        if (event.type === 'click') document.body.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+        else window.dispatchEvent(event)
+        await flushPromises()
+        expect(trigger.attributes('aria-expanded'), `collapse on ${event.type}`).toBe('false')
+        await vi.waitFor(() => expect(wrapper.find('[role="menu"]').exists(), `dismiss on ${event.type}`).toBe(false))
+      }
+    } finally {
+      wrapper.unmount()
+    }
   })
 
   it.each([

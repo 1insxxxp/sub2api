@@ -20,9 +20,10 @@ describe('KeysView toolbar layout', () => {
     expect(keysViewSource).toMatch(/class="[^"]*keys-mobile-secondary-action[^"]*whitespace-nowrap[^"]*"\s+data-test="custom-groups-entry"/)
   })
 
-  it('uses compact, visually ranked actions on mobile', () => {
-    expect(keysViewSource).toContain('grid-cols-[44px_44px_minmax(0,1fr)_minmax(0,1fr)]')
-    expect(keysViewSource).toContain('sm:flex sm:w-auto')
+  it('keeps search and creation visible while secondary mobile actions remain reachable', () => {
+    expect(keysViewSource).toContain('data-test="keys-filter-toggle"')
+    expect(keysViewSource).toContain('data-test="keys-endpoints-toggle"')
+    expect(keysViewSource).toContain('data-test="keys-more-toggle"')
     expect(keysViewSource).toContain('data-test="keys-create-entry"')
     expect(keysViewSource).toMatch(/data-test="keys-create-entry"[^>]*class="[^"]*btn-primary[^"]*whitespace-nowrap/)
     expect(keysViewSource).toContain('max-[359px]:hidden')

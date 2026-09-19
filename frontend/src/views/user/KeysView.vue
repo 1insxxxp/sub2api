@@ -1,6 +1,6 @@
 <template>
   <AppLayout>
-    <TablePageLayout>
+    <TablePageLayout class="keys-workspace">
       <template #filters>
         <div class="keys-toolbar flex flex-col gap-3" data-test="keys-toolbar">
           <div class="keys-toolbar-main flex flex-wrap items-center justify-between gap-3">
@@ -8,39 +8,62 @@
               <SearchInput
                 v-model="filterSearch"
                 :placeholder="t('keys.searchPlaceholder')"
-                class="w-full sm:w-64"
+                class="keys-search w-full sm:w-64"
                 @search="onFilterChange"
               />
-              <Select
-                :model-value="filterGroupId"
-                class="w-40"
-                :options="groupFilterOptions"
-                @update:model-value="onGroupFilterChange"
-              />
-              <Select
-                :model-value="filterStatus"
-                class="w-40"
-                :options="statusFilterOptions"
-                @update:model-value="onStatusFilterChange"
-              />
+              <div
+                id="keys-filter-panel"
+                class="keys-filter-selects flex flex-wrap items-center gap-2.5"
+                :class="{ 'is-open': showMobileFilters }"
+                role="group"
+                :aria-label="t('common.filter')"
+              >
+                <Select
+                  :model-value="filterGroupId"
+                  class="w-40"
+                  :aria-label="t('keys.group')"
+                  :options="groupFilterOptions"
+                  @update:model-value="onGroupFilterChange"
+                />
+                <Select
+                  :model-value="filterStatus"
+                  class="w-40"
+                  :aria-label="t('common.status')"
+                  :options="statusFilterOptions"
+                  @update:model-value="onStatusFilterChange"
+                />
+                <button
+                  v-if="activeFilterCount"
+                  type="button"
+                  class="keys-clear-filters sm:hidden"
+                  data-test="keys-clear-filters"
+                  @click="clearMobileFilters"
+                >
+                  <Icon name="x" size="xs" />
+                  {{ t('common.clear') }}
+                </button>
+              </div>
             </div>
             <div
-              class="grid w-full grid-cols-[44px_44px_minmax(0,1fr)_minmax(0,1fr)] gap-2 sm:flex sm:w-auto sm:justify-end sm:gap-3"
+              class="keys-toolbar-actions flex w-full items-center gap-2 sm:w-auto sm:justify-end sm:gap-3"
               data-test="keys-toolbar-actions"
             >
               <button
                 @click="loadApiKeys"
                 :disabled="loading"
-                class="btn btn-secondary h-11 w-11 p-0 sm:h-auto sm:w-auto sm:px-4 sm:py-2.5"
+                data-test="keys-refresh-entry"
+                class="keys-refresh-entry btn btn-secondary h-11 w-11 p-0 sm:h-auto sm:w-auto sm:px-4 sm:py-2.5"
                 :title="t('common.refresh')"
+                :aria-label="t('common.refresh')"
               >
                 <Icon name="refresh" size="md" :class="loading ? 'animate-spin' : ''" />
               </button>
-              <div class="relative h-11 w-11 sm:h-auto sm:w-auto" ref="columnDropdownRef">
+              <div class="keys-desktop-action relative h-11 w-11 sm:h-auto sm:w-auto" ref="columnDropdownRef">
                 <button
                   @click="toggleColumnSelector"
                   class="btn btn-secondary h-11 w-11 p-0 sm:h-auto sm:w-auto sm:px-2 sm:py-2.5 md:px-3"
                   :title="t('keys.columnSettings')"
+                  :aria-label="t('keys.columnSettings')"
                 >
                   <svg class="h-4 w-4 md:mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">
                     <path stroke-linecap="round" stroke-linejoin="round" d="M9 4.5v15m6-15v15m-10.875 0h15.75c.621 0 1.125-.504 1.125-1.125V5.625c0-.621-.504-1.125-1.125-1.125H4.125C3.504 4.5 3 5.004 3 5.625v12.75c0 .621.504 1.125 1.125 1.125z" />
@@ -70,7 +93,7 @@
               </div>
               <button
                 type="button"
-                class="btn btn-primary keys-mobile-secondary-action h-11 min-w-0 gap-1.5 whitespace-nowrap px-2 text-xs sm:h-auto sm:gap-2 sm:px-4 sm:py-2.5 sm:text-sm"
+                class="keys-desktop-action btn btn-secondary keys-mobile-secondary-action h-11 min-w-0 gap-1.5 whitespace-nowrap px-2 text-xs sm:h-auto sm:gap-2 sm:px-4 sm:py-2.5 sm:text-sm"
                 data-test="custom-groups-entry"
                 @click="showCustomGroupsModal = true"
               >
@@ -87,13 +110,88 @@
                 {{ t('keys.createKey') }}
               </button>
             </div>
+            <div class="keys-mobile-utilities">
+              <button
+                type="button"
+                class="keys-filter-toggle"
+                data-test="keys-filter-toggle"
+                :class="{ 'is-active': activeFilterCount > 0 }"
+                :aria-label="t('common.filter')"
+                :title="t('common.filter')"
+                :aria-expanded="showMobileFilters"
+                aria-controls="keys-filter-panel"
+                @click="showMobileFilters = !showMobileFilters"
+              >
+                <Icon name="filter" size="sm" />
+                <span class="keys-utility-label">{{ t('common.filter') }}</span>
+                <span v-if="activeFilterCount" data-test="keys-filter-count" class="keys-filter-count">{{ activeFilterCount }}</span>
+              </button>
+              <button
+                v-if="endpointCount"
+                ref="mobileEndpointsTriggerRef"
+                type="button"
+                class="keys-endpoints-toggle"
+                data-test="keys-endpoints-toggle"
+                :aria-label="t('keys.endpoints.routes')"
+                :title="t('keys.endpoints.routes')"
+                aria-haspopup="dialog"
+                :aria-expanded="showMobileEndpoints"
+                :aria-controls="showMobileEndpoints ? 'keys-endpoint-popover' : undefined"
+                @click="toggleMobileEndpoints"
+                @keydown.down.prevent="openMobileEndpoints"
+              >
+                <Icon name="globe" size="sm" />
+                <span class="keys-utility-label">{{ t('keys.endpoints.routesCompact') }}</span>
+              </button>
+              <button
+                type="button"
+                class="keys-custom-groups-entry"
+                data-test="keys-mobile-custom-groups"
+                aria-haspopup="dialog"
+                @click="showCustomGroupsModal = true"
+              >
+                <Icon name="grid" size="sm" />
+                {{ t('nav.customGroups') }}
+              </button>
+              <label class="keys-toolbar-selection" :title="t('common.selectAll')">
+                <input
+                  type="checkbox"
+                  data-test="keys-select-all-toolbar"
+                  class="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500 dark:border-dark-600 dark:bg-dark-800"
+                  :aria-label="t('common.selectAll')"
+                  :checked="allVisibleKeysSelected"
+                  :indeterminate="selectedApiKeys.length > 0 && !allVisibleKeysSelected"
+                  :disabled="loading || apiKeys.length === 0"
+                  @change="handleSelectionChange(($event.target as HTMLInputElement).checked ? apiKeys.map(key => key.id) : [])"
+                />
+                <span class="hidden min-[360px]:inline">{{ t('common.selectAll') }}</span>
+              </label>
+              <button
+                id="keys-more-trigger"
+                ref="mobileToolsTriggerRef"
+                type="button"
+                class="keys-more-toggle"
+                data-test="keys-more-toggle"
+                :aria-label="t('common.more')"
+                :title="t('common.more')"
+                aria-haspopup="menu"
+                :aria-expanded="showMobileTools"
+                :aria-controls="showMobileTools ? 'keys-tools-menu' : undefined"
+                @click="toggleMobileTools"
+                @keydown.down.prevent="openMobileTools"
+                @keydown.up.prevent="openMobileTools"
+              >
+                <Icon name="more" size="md" />
+              </button>
+            </div>
           </div>
           <EndpointPopover
-            v-if="publicSettings?.api_base_url || (publicSettings?.custom_endpoints?.length ?? 0) > 0"
+            v-if="endpointCount"
+            class="keys-inline-endpoints"
             :api-base-url="publicSettings?.api_base_url || ''"
             :custom-endpoints="publicSettings?.custom_endpoints || []"
           />
-          <div v-if="selectedIds.length" class="flex flex-wrap items-center gap-3 text-sm">
+          <div v-if="selectedIds.length" class="hidden flex-wrap items-center gap-3 text-sm md:flex">
             <span class="text-gray-600 dark:text-gray-300">
               {{ t('keys.bulkEdit.selectedCount', { count: selectedIds.length }) }}
             </span>
@@ -112,7 +210,7 @@
         </div>
       </template>
       <template #table>
-        <div class="keys-table">
+        <div class="keys-table" :class="{ 'has-selection': selectedIds.length > 0 }">
           <DataTable
             :columns="columns"
             :data="apiKeys"
@@ -127,6 +225,29 @@
             default-sort-order="desc"
             @sort="handleSort"
           >
+          <template #mobile-selection-actions>
+            <div v-if="selectedIds.length" class="keys-mobile-selection-actions">
+              <span class="text-gray-600 dark:text-gray-300" :title="t('keys.bulkEdit.selectedCount', { count: selectedIds.length })">
+                {{ t('keys.bulkEdit.selectedCountCompact', { count: selectedIds.length }) }}
+              </span>
+              <button
+                class="btn btn-primary btn-sm"
+                :disabled="loading"
+                data-test="bulk-edit-keys-mobile"
+                @click="showBulkEditModal = true"
+              >
+                {{ t('keys.bulkEdit.title') }}
+              </button>
+              <button
+                class="btn btn-secondary btn-sm"
+                :title="t('keys.bulkEdit.clearSelection')"
+                :aria-label="t('keys.bulkEdit.clearSelection')"
+                @click="selectedIds = []"
+              >
+                {{ t('common.cancel') }}
+              </button>
+            </div>
+          </template>
           <template #mobile-row="{ row, columns: mobileColumns, cells, selectable, selected, selectionLabel, select }">
             <KeyMobileCard
               :row="row"
@@ -205,9 +326,17 @@
                 />
                 <span
                   v-else-if="row.custom_group"
-                  class="inline-flex max-w-full items-center rounded-md bg-violet-50 px-2 py-1 text-sm font-medium text-violet-700 dark:bg-violet-500/10 dark:text-violet-300"
+                  class="group-badge-wrap inline-flex max-w-full items-center gap-1.5 rounded-md bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-600 dark:bg-dark-700 dark:text-dark-300"
                 >
-                  {{ row.custom_group.name }}
+                  <PlatformIcon
+                    platform="composite"
+                    size="sm"
+                    class="keys-custom-group-icon"
+                    aria-hidden="true"
+                  />
+                  <span data-test="group-badge-name" class="min-w-0 whitespace-normal [overflow-wrap:anywhere] sm:truncate">
+                    {{ row.custom_group.name }}
+                  </span>
                 </span>
                 <span v-else class="text-sm text-gray-400 dark:text-dark-500">{{
                   t('keys.noGroup')
@@ -425,10 +554,11 @@
             <span class="text-sm text-gray-500 dark:text-dark-400">{{ formatDateTime(value) }}</span>
           </template>
 
-          <template #cell-actions="{ row }">
+          <template #cell-actions="{ row, mobile }">
             <div class="keys-row-actions flex items-center gap-1">
               <!-- Use Key Button -->
               <button
+                v-if="!mobile"
                 @click="openUseKeyModal(row)"
                 :title="t('keys.useKey')"
                 :aria-label="t('keys.useKey')"
@@ -439,7 +569,7 @@
               </button>
               <!-- Import to CC Switch Button -->
               <button
-                v-if="!publicSettings?.hide_ccs_import_button"
+                v-if="!mobile && !publicSettings?.hide_ccs_import_button"
                 @click="importToCcswitch(row)"
                 :title="t('keys.importToCcSwitch')"
                 :aria-label="t('keys.importToCcSwitch')"
@@ -503,6 +633,7 @@
       <template #pagination>
         <Pagination
           v-if="pagination.total > 0"
+          variant="compact"
           :page="pagination.page"
           :total="pagination.total"
           :page-size="pagination.page_size"
@@ -512,15 +643,62 @@
       </template>
     </TablePageLayout>
 
+    <Teleport to="body">
+      <Transition name="keys-menu">
+        <div
+          v-if="showMobileEndpoints"
+          id="keys-endpoint-popover"
+          ref="mobileEndpointsPanelRef"
+          class="keys-mobile-tools keys-mobile-endpoints"
+          :style="mobileEndpointsPosition"
+          data-test="keys-endpoint-popover"
+          role="dialog"
+          aria-modal="false"
+          :aria-label="t('keys.endpoints.routes')"
+          tabindex="-1"
+          @keydown.esc.stop.prevent="closeMobileEndpoints"
+          @keydown.tab="handleEndpointsTab"
+        >
+          <EndpointPopover
+            inline-details
+            :api-base-url="publicSettings?.api_base_url || ''"
+            :custom-endpoints="publicSettings?.custom_endpoints || []"
+          />
+        </div>
+      </Transition>
+      <Transition name="keys-menu">
+        <div
+          v-if="showMobileTools"
+          id="keys-tools-menu"
+          ref="mobileToolsMenuRef"
+          class="keys-mobile-tools"
+          :style="mobileToolsPosition"
+          data-test="keys-tools-menu"
+          role="menu"
+          aria-labelledby="keys-more-trigger"
+          @keydown.esc.stop.prevent="closeMobileTools"
+          @keydown.tab="closeMobileTools"
+          @keydown.up.prevent
+          @keydown.down.prevent
+        >
+          <button type="button" role="menuitem" tabindex="-1" data-test="keys-mobile-columns" @click.stop="runMobileTool(toggleColumnSelector)">
+            <Icon name="cog" size="md" />{{ t('keys.columnSettings') }}
+            <Icon name="chevronRight" size="sm" class="ml-auto opacity-40" />
+          </button>
+        </div>
+      </Transition>
+    </Teleport>
+
     <BaseDialog
       :show="showCustomGroupsModal"
       :title="t('nav.customGroups')"
       width="full"
+      appearance="neutral"
       data-test="custom-groups-dialog"
       @close="showCustomGroupsModal = false"
     >
-      <div class="flex h-[calc(100dvh-8rem)] min-h-0 flex-col sm:h-[min(76vh,760px)]">
-        <CustomGroupsManager @changed="loadCustomGroups" />
+      <div class="keys-groups-content">
+        <CustomGroupsManager appearance="neutral" @changed="loadCustomGroups" />
       </div>
     </BaseDialog>
 
@@ -529,9 +707,10 @@
       :show="showCreateModal || showEditModal"
       :title="showEditModal ? t('keys.editKey') : t('keys.createKey')"
       width="normal"
+      appearance="neutral"
       @close="closeModals"
     >
-      <form id="key-form" @submit.prevent="handleSubmit" class="space-y-5">
+      <form id="key-form" @submit.prevent="handleSubmit" class="keys-key-form space-y-4">
         <div>
           <label class="input-label">{{ t('keys.nameLabel') }}</label>
           <input
@@ -546,7 +725,7 @@
 
         <fieldset v-if="!showEditModal" data-tour="key-form-provider">
           <legend class="input-label">{{ t('keys.providerLabel') }}</legend>
-          <div class="grid grid-cols-2 gap-2 sm:grid-cols-4">
+          <div class="keys-provider-options grid grid-cols-2 gap-2">
             <label
               v-for="provider in createProviderOptions"
               :key="provider.value"
@@ -563,24 +742,24 @@
                 @change="selectCreateProvider(provider.value)"
               />
               <span
-                class="flex h-full flex-col items-center gap-2 rounded-xl border border-gray-200 bg-white px-2 py-3 text-center transition-colors peer-checked:border-primary-500 peer-checked:bg-primary-50/60 peer-checked:ring-1 peer-checked:ring-primary-500 peer-focus-visible:outline peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-primary-500 peer-disabled:opacity-40 dark:border-dark-600 dark:bg-dark-800 dark:peer-checked:border-primary-500 dark:peer-checked:bg-primary-500/10"
+                class="keys-provider-option flex h-full items-center gap-2 rounded-md border border-gray-200 px-2.5 py-2 transition-colors peer-checked:border-primary-500 peer-focus-visible:outline peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-primary-500 peer-disabled:opacity-40 dark:border-dark-600"
                 :class="provider.count > 0 && 'hover:border-primary-300 dark:hover:border-primary-700'"
               >
-                <span class="flex h-8 items-center justify-center gap-1.5" aria-hidden="true">
+                <span class="keys-provider-icons flex shrink-0 items-center justify-center" aria-hidden="true">
                   <span
                     v-for="platform in KEY_GROUP_PROVIDER_ICONS[provider.value]"
                     :key="platform"
-                    class="flex h-8 w-8 items-center justify-center rounded-lg"
+                    class="flex h-6 w-6 items-center justify-center rounded"
                     :class="platformBadgeLightClass(platform)"
                   >
-                    <PlatformIcon :platform="platform" size="lg" />
+                    <PlatformIcon :platform="platform" size="sm" />
                   </span>
                 </span>
-                <span class="text-sm font-semibold text-gray-800 dark:text-gray-100">{{ provider.label }}</span>
+                <span class="keys-provider-label text-xs font-medium text-gray-800 dark:text-gray-100">{{ provider.label }}</span>
               </span>
               <span
                 v-if="createProvider === provider.value"
-                class="absolute right-1.5 top-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-primary-500 text-white"
+                class="absolute right-2 top-1/2 flex h-3.5 w-3.5 -translate-y-1/2 items-center justify-center text-primary-500"
                 aria-hidden="true"
               >
                 <Icon name="check" size="xs" :stroke-width="3" />
@@ -625,6 +804,7 @@
             <template #option="{ option, selected }">
               <GroupOptionItem
                 :tag="(option as unknown as GroupOption).tag"
+                :tag-color="(option as unknown as GroupOption).tag_color"
                 :name="(option as unknown as GroupOption).label"
                 :platform="(option as unknown as GroupOption).platform"
                 :subscription-type="(option as unknown as GroupOption).subscriptionType"
@@ -659,6 +839,9 @@
             <label class="input-label mb-0">{{ t('keys.customKeyLabel') }}</label>
             <button
               type="button"
+              role="switch"
+              :aria-checked="formData.use_custom_key"
+              :aria-label="t('keys.customKeyLabel')"
               @click="formData.use_custom_key = !formData.use_custom_key"
               :class="[
                 'relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none',
@@ -701,6 +884,9 @@
             <label class="input-label mb-0">{{ t('keys.ipRestriction') }}</label>
             <button
               type="button"
+              role="switch"
+              :aria-checked="formData.enable_ip_restriction"
+              :aria-label="t('keys.ipRestriction')"
               @click="formData.enable_ip_restriction = !formData.enable_ip_restriction"
               :class="[
                 'relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none',
@@ -814,6 +1000,9 @@
             <button
               type="button"
               @click="formData.enable_rate_limit = !formData.enable_rate_limit"
+              role="switch"
+              :aria-checked="formData.enable_rate_limit"
+              :aria-label="t('keys.rateLimitSection')"
               :class="[
                 'relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none',
                 formData.enable_rate_limit ? 'bg-primary-600' : 'bg-gray-200 dark:bg-dark-600'
@@ -988,6 +1177,9 @@
             <button
               type="button"
               @click="formData.enable_expiration = !formData.enable_expiration"
+              role="switch"
+              :aria-checked="formData.enable_expiration"
+              :aria-label="t('keys.expiration')"
               :class="[
                 'relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none',
                 formData.enable_expiration ? 'bg-primary-600' : 'bg-gray-200 dark:bg-dark-600'
@@ -1296,23 +1488,17 @@
           </div>
         </div>
         <!-- Group list -->
-        <div :class="[isMobileGroupSelector ? 'max-h-[70dvh]' : 'max-h-80', 'overflow-y-auto p-1.5']">
+        <div :class="[isMobileGroupSelector ? 'max-h-[70dvh]' : 'max-h-80', 'space-y-2 overflow-y-auto bg-gray-50/80 p-2 dark:bg-black/10']">
           <button
             v-for="option in filteredGroupOptions"
             :key="option.value ?? 'null'"
             @click="changeGroup(selectedKeyForGroup!, option.value)"
-            :class="[
-              'flex w-full items-center justify-between rounded-lg px-3 py-2.5 text-sm transition-colors',
-              'border-b border-gray-100 last:border-0 dark:border-dark-700',
-              selectedKeyForGroup?.group_id === option.value ||
-              (!selectedKeyForGroup?.group_id && option.value === null)
-                ? 'bg-primary-50 dark:bg-primary-900/20'
-                : 'hover:bg-gray-100 dark:hover:bg-dark-700'
-            ]"
+            class="flex w-full items-center justify-between rounded-lg text-sm focus-visible:outline-none"
             :title="option.description || undefined"
           >
             <GroupOptionItem
               :tag="option.tag"
+              :tag-color="option.tag_color"
               :name="option.label"
               :platform="option.platform"
               :subscription-type="option.subscriptionType"
@@ -1340,7 +1526,7 @@
 </template>
 
 <script setup lang="ts">
-	import { ref, reactive, computed, watch, onMounted, onUnmounted, type ComponentPublicInstance } from 'vue'
+	import { ref, reactive, computed, watch, onMounted, onUnmounted, nextTick, type ComponentPublicInstance } from 'vue'
 	import { useI18n } from 'vue-i18n'
 	import { useAppStore } from '@/stores/app'
 	import { useOnboardingStore } from '@/stores/onboarding'
@@ -1389,6 +1575,7 @@ const formatDateTimeLocal = (isoDate: string): string => {
 
 interface GroupOption {
   tag?: Group['tag']
+  tag_color?: string
   value: number
   label: string
   description: string | null
@@ -1504,6 +1691,7 @@ const apiKeys = ref<ApiKey[]>([])
 const selectedIds = ref<number[]>([])
 const showBulkEditModal = ref(false)
 const selectedApiKeys = computed(() => apiKeys.value.filter((key) => selectedIds.value.includes(key.id)))
+const allVisibleKeysSelected = computed(() => apiKeys.value.length > 0 && selectedApiKeys.value.length === apiKeys.value.length)
 
 const handleSelectionChange = (ids: Array<string | number>) => {
   const visibleIds = new Set(apiKeys.value.map((key) => key.id))
@@ -1540,6 +1728,125 @@ const sortState = ref({
 const filterSearch = ref('')
 const filterStatus = ref('')
 const filterGroupId = ref<string | number>('')
+const showMobileFilters = ref(false)
+const showMobileEndpoints = ref(false)
+const mobileEndpointsTriggerRef = ref<HTMLButtonElement | null>(null)
+const mobileEndpointsPanelRef = ref<HTMLElement | null>(null)
+const mobileEndpointsPosition = ref({ top: '0px', left: '0px', maxHeight: 'none' })
+const showMobileTools = ref(false)
+const mobileToolsTriggerRef = ref<HTMLButtonElement | null>(null)
+const mobileToolsMenuRef = ref<HTMLElement | null>(null)
+const mobileToolsPosition = ref({ top: '0px', left: '0px' })
+const activeFilterCount = computed(() => Number(filterGroupId.value !== '') + Number(filterStatus.value !== ''))
+
+const closeMobileEndpoints = () => {
+  if (!showMobileEndpoints.value) return
+  showMobileEndpoints.value = false
+  if (mobileEndpointsPanelRef.value?.contains(document.activeElement)) {
+    mobileEndpointsTriggerRef.value?.focus({ preventScroll: true })
+  }
+}
+
+const positionMobileEndpoints = () => {
+  const trigger = mobileEndpointsTriggerRef.value
+  const panel = mobileEndpointsPanelRef.value
+  if (!showMobileEndpoints.value || !trigger || !panel) return
+  const anchor = trigger.getBoundingClientRect()
+  if (anchor.bottom < 0 || anchor.top > window.innerHeight) {
+    closeMobileEndpoints()
+    return
+  }
+  const below = window.innerHeight - anchor.bottom - 14
+  const above = anchor.top - 14
+  const openBelow = panel.scrollHeight <= below || below >= above
+  const maxHeight = Math.max(0, openBelow ? below : above)
+  const height = Math.min(panel.scrollHeight + 2, maxHeight)
+  mobileEndpointsPosition.value = {
+    top: `${Math.max(8, openBelow ? anchor.bottom + 6 : anchor.top - height - 6)}px`,
+    left: `${Math.max(8, Math.min(anchor.left, window.innerWidth - panel.offsetWidth - 8))}px`,
+    maxHeight: `${maxHeight}px`
+  }
+}
+
+const openMobileEndpoints = async () => {
+  closeMobileTools()
+  showMobileEndpoints.value = true
+  await nextTick()
+  positionMobileEndpoints()
+  await nextTick()
+  if (showMobileEndpoints.value) {
+    const panel = mobileEndpointsPanelRef.value
+    const focusTarget = panel?.querySelector<HTMLElement>('[role="button"], button, a[href]') ?? panel
+    focusTarget?.focus({ preventScroll: true })
+  }
+}
+
+const toggleMobileEndpoints = () => {
+  if (showMobileEndpoints.value) closeMobileEndpoints()
+  else void openMobileEndpoints()
+}
+
+const handleEndpointsTab = (event: KeyboardEvent) => {
+  const items = mobileEndpointsPanelRef.value?.querySelectorAll<HTMLElement>('[role="button"], button, a[href]')
+  if (!items?.length || document.activeElement === items[event.shiftKey ? 0 : items.length - 1]) {
+    closeMobileEndpoints()
+    if (event.shiftKey) event.preventDefault()
+  }
+}
+
+const closeMobileTools = () => {
+  if (!showMobileTools.value) return
+  showMobileTools.value = false
+  if (mobileToolsMenuRef.value?.contains(document.activeElement)) {
+    mobileToolsTriggerRef.value?.focus({ preventScroll: true })
+  }
+}
+
+const positionMobileTools = () => {
+  const trigger = mobileToolsTriggerRef.value
+  const menu = mobileToolsMenuRef.value
+  if (!showMobileTools.value || !trigger || !menu) return
+  const anchor = trigger.getBoundingClientRect()
+  if (anchor.bottom < 0 || anchor.top > window.innerHeight) {
+    closeMobileTools()
+    return
+  }
+  const top = anchor.bottom + 6 + menu.offsetHeight <= window.innerHeight - 8
+    ? anchor.bottom + 6
+    : anchor.top - menu.offsetHeight - 6
+  mobileToolsPosition.value = {
+    top: `${Math.max(8, top)}px`,
+    left: `${Math.max(8, Math.min(anchor.right - menu.offsetWidth, window.innerWidth - menu.offsetWidth - 8))}px`
+  }
+}
+
+const openMobileTools = async () => {
+  closeMobileEndpoints()
+  showMobileTools.value = true
+  await nextTick()
+  positionMobileTools()
+  await nextTick()
+  if (showMobileTools.value) {
+    mobileToolsMenuRef.value?.querySelector<HTMLButtonElement>('[role="menuitem"]')?.focus({ preventScroll: true })
+  }
+}
+
+const toggleMobileTools = () => {
+  if (showMobileTools.value) closeMobileTools()
+  else void openMobileTools()
+}
+
+const clearMobileFilters = () => {
+  filterGroupId.value = ''
+  filterStatus.value = ''
+  onFilterChange()
+}
+
+const runMobileTool = async (action: () => void) => {
+  closeMobileTools()
+  await nextTick()
+  action()
+}
 
 const showCreateModal = ref(false)
 const showCustomGroupsModal = ref(false)
@@ -1557,6 +1864,7 @@ const copiedKeyId = ref<number | null>(null)
 const groupSelectorKeyId = ref<number | null>(null)
 const isMobileGroupSelector = ref(false)
 const publicSettings = ref<PublicSettings | null>(null)
+const endpointCount = computed(() => Number(Boolean(publicSettings.value?.api_base_url)) + (publicSettings.value?.custom_endpoints?.length ?? 0))
 const dropdownRef = ref<HTMLElement | null>(null)
 const columnDropdownRef = ref<HTMLElement | null>(null)
 const dropdownPosition = ref<{ top?: number; bottom?: number; left: number } | null>(null)
@@ -1667,6 +1975,7 @@ const groupOptions = computed(() =>
     label: group.name,
     description: group.description,
     tag: group.tag,
+    tag_color: group.tag_color,
     rate: group.rate_multiplier,
     userRate: userGroupRates.value[group.id] ?? null,
     peakRateEnabled: group.peak_rate_enabled,
@@ -1973,6 +2282,12 @@ const toggleColumnSelector = () => {
 
 const handleDocumentClick = (event: MouseEvent) => {
   const target = event.target as HTMLElement
+  if (!mobileEndpointsTriggerRef.value?.contains(target) && !mobileEndpointsPanelRef.value?.contains(target)) {
+    closeMobileEndpoints()
+  }
+  if (!mobileToolsTriggerRef.value?.contains(target) && !mobileToolsMenuRef.value?.contains(target)) {
+    closeMobileTools()
+  }
   // Check if click is inside the dropdown or the trigger button
   if (!target.closest('.group\\/dropdown') && !dropdownRef.value?.contains(target)) {
     closeGroupSelector()
@@ -2299,6 +2614,10 @@ onMounted(() => {
   document.addEventListener('click', handleDocumentClick)
   window.addEventListener('resize', closeGroupSelector)
   window.addEventListener('resize', closeColumnSelector)
+  window.addEventListener('resize', closeMobileTools)
+  window.addEventListener('resize', closeMobileEndpoints)
+  window.addEventListener('scroll', positionMobileTools, true)
+  window.addEventListener('scroll', positionMobileEndpoints, true)
   resetTimer = setInterval(() => { now.value = new Date() }, 60000)
 })
 
@@ -2306,17 +2625,231 @@ onUnmounted(() => {
   document.removeEventListener('click', handleDocumentClick)
   window.removeEventListener('resize', closeGroupSelector)
   window.removeEventListener('resize', closeColumnSelector)
+  window.removeEventListener('resize', closeMobileTools)
+  window.removeEventListener('resize', closeMobileEndpoints)
+  window.removeEventListener('scroll', positionMobileTools, true)
+  window.removeEventListener('scroll', positionMobileEndpoints, true)
   if (resetTimer) clearInterval(resetTimer)
 })
 </script>
 
 <style scoped>
+.keys-groups-content {
+  display: flex;
+  min-height: 0;
+  max-height: min(72dvh, 42rem);
+  flex-direction: column;
+}
+.keys-provider-option {
+  min-height: 2.75rem;
+  padding-right: 1.625rem;
+  background: var(--dialog-control);
+  box-shadow: inset 0 1px 0 var(--dialog-highlight);
+}
+.keys-provider-icons > span + span { margin-left: -0.5rem; }
+.keys-provider-label { min-width: 0; overflow-wrap: anywhere; }
+.keys-provider-options input:checked + .keys-provider-option {
+  background: rgb(var(--brand-rgb) / 5%);
+  box-shadow: inset 0 1px 0 var(--dialog-highlight);
+}
+.keys-key-form > .space-y-3 { margin-top: 0.75rem; }
+.keys-key-form > .space-y-3 > .flex:first-child { min-height: 2rem; }
+.keys-key-form [role="switch"] { position: relative; }
+.keys-key-form [role="switch"]::before { content: ''; position: absolute; inset: -0.625rem -0.25rem; }
+.keys-key-form [role="switch"]:focus-visible { outline: 2px solid rgb(var(--brand-rgb) / 50%); outline-offset: 3px; }
+.keys-workspace {
+  --keys-rule: rgb(148 163 184 / 24%);
+  --keys-control: rgb(255 255 255 / 92%);
+  gap: 1rem;
+}
+
+.keys-workspace :deep(.admin-toolbar-surface) {
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.keys-toolbar { gap: 1rem; }
+.keys-workspace :deep(.admin-pagination-surface) {
+  padding: 0.25rem 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  backdrop-filter: none;
+}
+.keys-toolbar-main { gap: 0.625rem; }
+.keys-filter-controls { gap: 0.625rem; }
+.keys-mobile-utilities { display: none; }
+
+.keys-mobile-tools {
+  position: fixed;
+  z-index: 50;
+  width: 11.5rem;
+  max-width: calc(100vw - 1rem);
+  padding: 0.375rem;
+  border: 1px solid rgb(100 116 139 / 16%);
+  border-radius: 8px;
+  background: rgb(255 255 255 / 94%);
+  box-shadow: 0 12px 32px rgb(15 23 42 / 10%), 0 2px 6px rgb(15 23 42 / 4%), inset 0 1px 0 rgb(255 255 255 / 90%);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  transform-origin: top right;
+}
+.dark .keys-mobile-tools {
+  border-color: rgb(255 255 255 / 12%);
+  background: rgb(28 31 36 / 96%);
+  box-shadow: 0 12px 32px rgb(0 0 0 / 24%), inset 0 1px 0 rgb(255 255 255 / 4%);
+}
+.keys-mobile-endpoints {
+  width: 22rem;
+  padding: 0.25rem;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  transform-origin: top left;
+}
+.keys-mobile-tools > button {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  width: 100%;
+  min-height: 2.75rem;
+  padding: 0.625rem;
+  border-radius: 6px;
+  color: #374151;
+  text-align: left;
+  font-size: 0.875rem;
+  transition: background-color 140ms ease;
+}
+.keys-mobile-tools > button > svg { flex-shrink: 0; color: #7b8492; }
+.keys-mobile-tools > button:hover { background: rgb(148 163 184 / 10%); }
+.keys-mobile-tools > button:active { background: rgb(148 163 184 / 16%); }
+.dark .keys-mobile-tools > button { color: #e2e8f0; }
+.keys-mobile-tools > button:focus-visible {
+  outline: 2px solid rgb(var(--brand-rgb) / 0.5);
+  outline-offset: -2px;
+  background: rgb(148 163 184 / 10%);
+}
+.keys-menu-enter-active { transition: opacity 160ms ease-out, transform 160ms ease-out; }
+.keys-menu-leave-active { transition: opacity 110ms ease-in, transform 110ms ease-in; pointer-events: none; }
+.keys-menu-enter-from,
+.keys-menu-leave-to { opacity: 0; transform: translateY(-4px) scale(0.98); }
+@media (prefers-reduced-motion: reduce) {
+  .keys-menu-enter-active,
+  .keys-menu-leave-active { transition: none; }
+  .keys-menu-enter-from,
+  .keys-menu-leave-to { transform: none; }
+}
+
+.keys-filter-controls :deep(.input),
+.keys-filter-controls :deep(.select-trigger),
+.keys-toolbar-actions .btn {
+  min-height: 2.75rem;
+  border: 1px solid var(--keys-rule);
+  border-radius: 8px;
+  background: linear-gradient(135deg, rgb(255 255 255 / 70%), transparent), var(--keys-control);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 90%), 0 2px 4px rgb(15 23 42 / 3%);
+  transition: border-color 180ms ease, background-color 180ms ease, box-shadow 180ms ease;
+}
+
+.keys-filter-controls :deep(.input:focus),
+.keys-filter-controls :deep(.select-trigger-open) {
+  border-color: rgb(var(--brand-rgb) / 0.5);
+  box-shadow: inset 0 1px 0 #fff, 0 0 0 3px rgb(var(--brand-rgb) / 0.08);
+}
+
+.keys-toolbar-actions .keys-mobile-secondary-action {
+  color: #334155;
+  background-color: rgb(248 250 252 / 95%);
+}
+
+.keys-custom-group-icon {
+  --group-node-primary: #2563eb;
+  --group-node-secondary: #0891b2;
+  color: #38bdf8;
+}
+
+.keys-custom-group-icon :deep(circle) {
+  fill: var(--group-node-secondary);
+  stroke: none;
+}
+
+.keys-custom-group-icon :deep(circle:first-of-type) {
+  fill: var(--group-node-primary);
+}
+
+.dark .keys-custom-group-icon {
+  --group-node-primary: #60a5fa;
+  --group-node-secondary: #22d3ee;
+}
+
+.keys-toolbar-actions .btn-primary {
+  border-color: rgb(var(--brand-rgb) / 0.3);
+  color: #fff;
+  background: linear-gradient(135deg, rgb(255 255 255 / 14%), transparent), rgb(var(--brand-rgb));
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 25%), 0 2px 5px rgb(var(--brand-rgb) / 0.16);
+}
+
+.keys-toolbar-actions .btn:focus-visible {
+  outline: 2px solid rgb(var(--brand-rgb) / 0.5);
+  outline-offset: 2px;
+}
+
+.dark .keys-workspace {
+  --keys-rule: rgb(255 255 255 / 12%);
+  --keys-control: #27292e;
+}
+
+.dark .keys-filter-controls :deep(.input),
+.dark .keys-filter-controls :deep(.select-trigger),
+.dark .keys-toolbar-actions .btn-secondary {
+  background: linear-gradient(135deg, rgb(255 255 255 / 4%), transparent), var(--keys-control);
+  color: #e2e8f0;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 6%), 0 2px 4px rgb(0 0 0 / 10%);
+}
+
+@media (hover: hover) {
+  .keys-toolbar-actions .btn:hover:not(:disabled),
+  .keys-filter-controls :deep(.select-trigger:hover) { border-color: rgb(var(--brand-rgb) / 0.4); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .keys-filter-controls :deep(.input),
+  .keys-filter-controls :deep(.select-trigger),
+  .keys-toolbar-actions .btn { transition: none; }
+}
+
 .keys-table {
   display: flex;
   min-width: 0;
   min-height: 0;
   flex: 1;
   flex-direction: column;
+}
+
+.keys-mobile-selection-actions {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  gap: 0.5rem;
+  font-size: 0.75rem;
+  white-space: nowrap;
+}
+
+.keys-mobile-selection-actions .btn {
+  flex-shrink: 0;
+  min-height: 2.5rem;
+  padding: 0.375rem 0.5rem;
+  font-size: 0.75rem;
+}
+
+.keys-table :deep(.table-mobile-selection > label) {
+  min-height: 2.5rem;
+  gap: 0.375rem;
+  font-size: 0.75rem;
+  white-space: nowrap;
 }
 
 @media (max-width: 1023px) {
@@ -2326,24 +2859,146 @@ onUnmounted(() => {
 }
 
 @media (max-width: 639px) {
+  .keys-toolbar { gap: 0; }
+
+  .keys-table :deep(.table-mobile-selection) { display: none; }
+  .keys-table.has-selection :deep(.table-mobile-selection) { display: flex; }
+  .keys-table :deep(.table-mobile-selection > label) { display: none; }
+  .keys-table:not(.has-selection) :deep(.table-mobile-selection + [data-mobile-table-row]) { margin-top: 0; }
+
   .keys-toolbar-main {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 2.75rem auto;
     align-items: stretch;
+    gap: 0.375rem 0.5rem;
   }
 
-  .keys-filter-controls {
+  .keys-filter-controls,
+  .keys-toolbar-actions { display: contents; }
+
+  .keys-desktop-action,
+  .keys-inline-endpoints { display: none; }
+
+  .keys-search {
+    grid-column: 1;
+    grid-row: 1;
+    min-width: 0;
+  }
+
+  .keys-toolbar-actions [data-test="keys-create-entry"] {
+    grid-column: 3;
+    grid-row: 1;
+    padding-inline: 0.75rem;
+  }
+
+  .keys-refresh-entry {
+    grid-column: 2;
+    grid-row: 1;
+  }
+
+  .keys-filter-selects { display: none; }
+  .keys-filter-selects.is-open {
     display: grid;
+    grid-column: 1 / -1;
+    grid-row: 3;
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 0.5rem;
-    width: 100%;
+    padding: 0.25rem 0 0.5rem;
   }
 
-  .keys-filter-controls > * {
+  .keys-filter-selects > * {
     width: 100% !important;
     min-width: 0;
   }
 
-  .keys-filter-controls > :first-child {
+  .keys-clear-filters {
     grid-column: 1 / -1;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 0.25rem;
+    min-height: 2.75rem;
+    color: #677282;
+    font-size: 0.75rem;
   }
+
+  .keys-mobile-utilities {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+  }
+
+  .keys-toolbar-selection {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.375rem;
+    min-width: 2.75rem;
+    min-height: 2.75rem;
+    margin-left: auto;
+    color: #677282;
+    font-size: 0.75rem;
+    white-space: nowrap;
+    cursor: pointer;
+  }
+
+  .keys-mobile-utilities > button {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.375rem;
+    min-width: 2.75rem;
+    min-height: 2.75rem;
+    border-radius: 6px;
+    color: #677282;
+    font-size: 0.75rem;
+    white-space: nowrap;
+    transition: color 160ms ease;
+  }
+
+  .keys-mobile-utilities > button svg { flex-shrink: 0; }
+  .keys-mobile-utilities > .keys-custom-groups-entry {
+    justify-content: flex-start;
+    margin-left: auto;
+    color: #334155;
+    font-weight: 600;
+  }
+  .keys-utility-label { display: none; }
+  .dark .keys-mobile-utilities > .keys-custom-groups-entry { color: #e2e8f0; }
+  .keys-mobile-utilities > .keys-more-toggle { width: 2.75rem; flex-shrink: 0; }
+  .keys-mobile-utilities > .keys-more-toggle[aria-expanded="true"] { background: rgb(148 163 184 / 12%); }
+  .dark .keys-mobile-utilities > button,
+  .dark .keys-toolbar-selection,
+  .dark .keys-clear-filters { color: #a0a9b7; }
+  .keys-mobile-utilities > button:hover,
+  .keys-mobile-utilities > button.is-active { color: rgb(var(--brand-rgb)); }
+  .keys-mobile-utilities > button:focus-visible,
+  .keys-clear-filters:focus-visible {
+    outline: 2px solid rgb(var(--brand-rgb) / 0.5);
+    outline-offset: 2px;
+  }
+
+  .keys-filter-count {
+    position: absolute;
+    right: 0;
+    top: 0.125rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 1rem;
+    height: 1rem;
+    border-radius: 4px;
+    background: rgb(var(--brand-rgb) / 0.1);
+    font-size: 0.625rem;
+    font-weight: 600;
+  }
+}
+
+@media (min-width: 360px) and (max-width: 639px) {
+  .keys-utility-label { display: inline; }
+  .keys-filter-count { right: -0.25rem; }
 }
 </style>

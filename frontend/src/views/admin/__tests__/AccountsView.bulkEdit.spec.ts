@@ -367,7 +367,7 @@ describe('admin AccountsView bulk edit scope', () => {
       global: {
         stubs: {
           AppLayout: { template: '<div><slot /></div>' },
-          TablePageLayout: { template: '<div><slot name="table" /><slot name="pagination" /></div>' },
+          TablePageLayout: { template: '<div><slot name="filters" /><slot name="table" /><slot name="pagination" /></div>' },
           DataTable: DataTableStub,
           Pagination: PaginationStub,
           ConfirmDialog: true,
@@ -442,7 +442,7 @@ describe('admin AccountsView bulk edit scope', () => {
       global: {
         stubs: {
           AppLayout: { template: '<div><slot /></div>' },
-          TablePageLayout: { template: '<div><slot name="table" /><slot name="pagination" /></div>' },
+          TablePageLayout: { template: '<div><slot name="filters" /><slot name="table" /><slot name="pagination" /></div>' },
           DataTable: DataTableStub,
           AccountBulkActionsBar: AccountBulkActionsBarStub,
           AccountTableActions: true,
@@ -516,7 +516,7 @@ describe('admin AccountsView bulk edit scope', () => {
       global: {
         stubs: {
           AppLayout: { template: '<div><slot /></div>' },
-          TablePageLayout: { template: '<div><slot name="table" /></div>' },
+          TablePageLayout: { template: '<div><slot name="filters" /><slot name="table" /></div>' },
           DataTable: DataTableStub,
           AccountBulkActionsBar: AccountBulkActionsBarStub,
           AccountTableActions: true,

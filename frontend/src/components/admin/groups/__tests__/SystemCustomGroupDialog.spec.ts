@@ -148,6 +148,7 @@ describe('SystemCustomGroupDialog', () => {
     expect(createSystemCustomGroup).toHaveBeenCalledWith({
       name: '酒馆综合月卡',
       tag: '',
+      tag_color: '',
       description: null,
       daily_limit_usd: null,
       weekly_limit_usd: null,
@@ -168,6 +169,23 @@ describe('SystemCustomGroupDialog', () => {
     expect(wrapper.get('[data-testid="system-custom-selected-source-count"]').text()).toBe('2')
     expect(wrapper.get('[data-testid="system-custom-unique-model-count"]').text()).toBe('3')
     expect(wrapper.get('[data-testid="system-custom-fallback-count"]').text()).toBe('1')
+  })
+
+  it('loads and saves custom tag text and color', async () => {
+    getSystemCustomGroup.mockResolvedValue({
+      ...existingGroup,
+      group: { ...existingGroup.group, tag: '优选线路', tag_color: '#2563EB' }
+    })
+    const wrapper = mountDialog({ groupId: 90 })
+    await flushPromises()
+    expect(wrapper.get('[data-test="group-tag-text"]').element).toHaveProperty('value', '优选线路')
+    expect(wrapper.get('[data-test="group-tag-color-hex"]').element).toHaveProperty('value', '#2563EB')
+    await wrapper.get('[data-test="group-tag-text"]').setValue('专属高速')
+    await wrapper.get('[data-test="group-tag-color-hex"]').setValue('#16A34A')
+    await wrapper.get('[data-testid="system-custom-save"]').trigger('click')
+    await flushPromises()
+    expect(updateSystemCustomGroup).toHaveBeenCalledWith(90, expect.objectContaining({ tag: '专属高速', tag_color: '#16A34A' }))
+    wrapper.unmount()
   })
 
   it('keeps source order and form state after a save error', async () => {

@@ -190,6 +190,7 @@ type simpleModeGroupResponse struct {
 	Name        string `json:"name"`
 	Description string `json:"description"`
 	Tag         string `json:"tag"`
+	TagColor    string `json:"tag_color"`
 	Platform    string `json:"platform"`
 	Status      string `json:"status"`
 
@@ -206,7 +207,7 @@ func groupForSimpleMode(group *service.Group) *simpleModeGroupResponse {
 		return nil
 	}
 	return &simpleModeGroupResponse{
-		ID: group.ID, Name: group.Name, Description: group.Description, Tag: group.Tag, Platform: group.Platform,
+		ID: group.ID, Name: group.Name, Description: group.Description, Tag: group.Tag, TagColor: group.TagColor, Platform: group.Platform,
 		Status:             group.Status,
 		AccountCount:       group.AccountCount,
 		ActiveAccountCount: group.ActiveAccountCount, RateLimitedAccountCount: group.RateLimitedAccountCount,
@@ -218,7 +219,7 @@ func sanitizeCreateGroupRequestForSimpleMode(req *CreateGroupRequest) {
 	if req == nil {
 		return
 	}
-	allowed := CreateGroupRequest{Name: req.Name, Description: req.Description, Tag: req.Tag, Platform: req.Platform}
+	allowed := CreateGroupRequest{Name: req.Name, Description: req.Description, Tag: req.Tag, TagColor: req.TagColor, Platform: req.Platform}
 	allowed.RateMultiplier = 1
 	allowed.SubscriptionType = service.SubscriptionTypeStandard
 	*req = allowed
@@ -228,14 +229,15 @@ func sanitizeUpdateGroupRequestForSimpleMode(req *UpdateGroupRequest) {
 	if req == nil {
 		return
 	}
-	*req = UpdateGroupRequest{Name: req.Name, Description: req.Description, Tag: req.Tag}
+	*req = UpdateGroupRequest{Name: req.Name, Description: req.Description, Tag: req.Tag, TagColor: req.TagColor}
 }
 
 // CreateGroupRequest represents create group request
 type CreateGroupRequest struct {
 	Name                             string                        `json:"name" binding:"required"`
 	Description                      string                        `json:"description"`
-	Tag                              string                        `json:"tag" binding:"omitempty,oneof=chat image airp"`
+	Tag                              string                        `json:"tag"`
+	TagColor                         string                        `json:"tag_color"`
 	Platform                         string                        `json:"platform" binding:"omitempty,oneof=anthropic openai gemini antigravity grok kimi zhipu deepseek minimax opencode_go composite"`
 	RateMultiplier                   float64                       `json:"rate_multiplier"`
 	EmptyResponseCompensationEnabled bool                          `json:"empty_response_compensation_enabled"`
@@ -312,7 +314,8 @@ type CreateGroupRequest struct {
 type UpdateGroupRequest struct {
 	Name                             string                         `json:"name"`
 	Description                      *string                        `json:"description"`
-	Tag                              *string                        `json:"tag" binding:"omitempty,oneof='' chat image airp"`
+	Tag                              *string                        `json:"tag"`
+	TagColor                         *string                        `json:"tag_color"`
 	Platform                         string                         `json:"platform" binding:"omitempty,oneof=anthropic openai gemini antigravity grok kimi zhipu deepseek minimax opencode_go composite"`
 	RateMultiplier                   *float64                       `json:"rate_multiplier"`
 	EmptyResponseCompensationEnabled *bool                          `json:"empty_response_compensation_enabled"`
@@ -722,6 +725,7 @@ func (h *GroupHandler) Create(c *gin.Context) {
 		Name:                             req.Name,
 		Description:                      req.Description,
 		Tag:                              req.Tag,
+		TagColor:                         req.TagColor,
 		Platform:                         req.Platform,
 		RateMultiplier:                   req.RateMultiplier,
 		EmptyResponseCompensationEnabled: req.EmptyResponseCompensationEnabled,
@@ -870,6 +874,7 @@ func (h *GroupHandler) Update(c *gin.Context) {
 		Name:                             req.Name,
 		Description:                      req.Description,
 		Tag:                              req.Tag,
+		TagColor:                         req.TagColor,
 		Platform:                         req.Platform,
 		RateMultiplier:                   req.RateMultiplier,
 		EmptyResponseCompensationEnabled: req.EmptyResponseCompensationEnabled,

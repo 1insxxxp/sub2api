@@ -1,0 +1,27 @@
+.user-workspace,
+.admin-console-theme {
+  --workspace-surface: rgb(255 255 255 / 96%);
+  --workspace-solid: #fff;
+  --workspace-control: rgb(255 255 255 / 92%);
+  --workspace-highlight: rgb(255 255 255 / 82%);
+  --workspace-rule: rgb(148 163 184 / 24%);
+  --workspace-divider: rgb(148 163 184 / 14%);
+  --workspace-ink: #202731;
+  --workspace-muted: #677282;
+  --workspace-hover: rgb(148 163 184 / 7%);
+  --workspace-shadow: inset 0 1px 0 rgb(255 255 255 / 90%), 0 2px 4px rgb(15 23 42 / 4%);
+}
+
+.dark .user-workspace,
+.dark.admin-console-theme {
+  --workspace-surface: #23262b;
+  --workspace-solid: #23262b;
+  --workspace-control: #27292e;
+  --workspace-highlight: rgb(255 255 255 / 4%);
+  --workspace-rule: rgb(255 255 255 / 12%);
+  --workspace-divider: rgb(255 255 255 / 7%);
+  --workspace-ink: #e8ecf2;
+  --workspace-muted: #a0a9b7;
+  --workspace-hover: rgb(255 255 255 / 4%);
+  --workspace-shadow: inset 0 1px 0 rgb(255 255 255 / 5%), 0 2px 5px rgb(0 0 0 / 12%);
+}

@@ -1,16 +1,16 @@
 <template>
-  <div class="space-y-6">
+  <div class="dashboard-charts space-y-4">
     <!-- Date Range Filter -->
-    <div class="card p-4">
-      <div class="flex flex-wrap items-center gap-4">
-        <div class="flex items-center gap-2">
-          <span class="text-sm font-medium text-gray-700 dark:text-gray-300">{{ t('dashboard.timeRange') }}:</span>
+    <div class="workspace-toolbar">
+      <div class="workspace-toolbar-row">
+        <div class="dashboard-date-control flex min-w-0 items-center gap-2">
+          <span class="sr-only">{{ t('dashboard.timeRange') }}</span>
           <DateRangePicker :start-date="startDate" :end-date="endDate" @update:startDate="$emit('update:startDate', $event)" @update:endDate="$emit('update:endDate', $event)" @change="$emit('dateRangeChange', $event)" />
         </div>
-        <button @click="$emit('refresh')" :disabled="loading" class="btn btn-secondary">
-          {{ t('common.refresh') }}
+        <button @click="$emit('refresh')" :disabled="loading" class="btn btn-secondary workspace-icon-button" :title="t('common.refresh')" :aria-label="t('common.refresh')">
+          <Icon name="refresh" size="sm" :class="{ 'animate-spin': loading }" />
         </button>
-        <div class="ml-auto flex items-center gap-2">
+        <div class="dashboard-granularity ml-auto flex items-center gap-2">
           <span class="text-sm font-medium text-gray-700 dark:text-gray-300">{{ t('dashboard.granularity') }}:</span>
           <div class="w-28">
             <Select :model-value="granularity" :options="[{value:'day', label:t('dashboard.day')}, {value:'hour', label:t('dashboard.hour')}]" @update:model-value="$emit('update:granularity', $event)" @change="$emit('granularityChange')" />
@@ -20,15 +20,15 @@
     </div>
 
     <!-- Charts Grid -->
-    <div class="grid grid-cols-1 gap-6 lg:grid-cols-2">
+    <div class="grid min-w-0 grid-cols-1 gap-4 xl:grid-cols-2">
       <!-- Model Distribution Chart -->
-      <div class="card relative overflow-hidden p-4">
+      <div class="workspace-chart relative overflow-hidden">
         <div v-if="loading" class="absolute inset-0 z-10 flex items-center justify-center bg-white/50 backdrop-blur-sm dark:bg-dark-800/50">
           <LoadingSpinner size="md" />
         </div>
         <h3 class="mb-4 text-sm font-semibold text-gray-900 dark:text-white">{{ t('dashboard.modelDistribution') }}</h3>
-        <div class="flex flex-col items-center gap-4 sm:flex-row sm:gap-6">
-          <div class="h-48 w-48 shrink-0">
+        <div class="dashboard-model-content flex flex-col items-center gap-4 sm:flex-row sm:gap-6">
+          <div class="h-40 w-40 shrink-0">
             <Doughnut v-if="modelData" :data="modelData" :options="doughnutOptions" />
             <div v-else class="flex h-full items-center justify-center text-sm text-gray-500 dark:text-gray-400">{{ t('dashboard.noDataAvailable') }}</div>
           </div>
@@ -58,7 +58,7 @@
       </div>
 
       <!-- Token Usage Trend Chart -->
-      <TokenUsageTrend :trend-data="trend" :loading="loading" />
+      <TokenUsageTrend class="workspace-chart" :trend-data="trend" :loading="loading" />
     </div>
   </div>
 </template>
@@ -67,6 +67,7 @@
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
+import Icon from '@/components/icons/Icon.vue'
 import DateRangePicker from '@/components/common/DateRangePicker.vue'
 import Select from '@/components/common/Select.vue'
 import { Doughnut } from 'vue-chartjs'

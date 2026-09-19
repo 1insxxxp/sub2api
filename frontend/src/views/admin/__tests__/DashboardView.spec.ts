@@ -187,6 +187,10 @@ describe('admin DashboardView', () => {
     await flushPromises()
 
     expect(wrapper.findAll('.stat-card')).toHaveLength(8)
+    expect(wrapper.findAll('[data-test="dashboard-core-metrics"] .stat-card')).toHaveLength(4)
+    expect(wrapper.findAll('[data-test="dashboard-secondary-metrics"] .stat-card')).toHaveLength(4)
+    expect(wrapper.get('[data-test="dashboard-workbench-controls"]').findComponent({ name: 'DateRangePicker' }).exists()).toBe(true)
+    expect(wrapper.get('[data-test="dashboard-refresh"]').attributes('title')).toBe('common.refresh')
     expect(wrapper.findAll('.admin-toolbar-surface').length).toBeGreaterThan(0)
     expect(wrapper.find('.admin-toolbar').exists()).toBe(true)
     expect(wrapper.find('[data-test="admin-page-hero"]').exists()).toBe(false)

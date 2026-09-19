@@ -1,6 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { enableAutoUnmount, mount } from '@vue/test-utils'
 import Pagination from '../Pagination.vue'
+import { nextTick, ref } from 'vue'
+import { adminAppearanceKey } from '@/composables/useAdminAppearance'
 
 vi.mock('vue-i18n', () => ({ useI18n: () => ({ t: (key: string) => key }) }))
 enableAutoUnmount(afterEach)
@@ -13,6 +15,26 @@ function mountPagination() {
 }
 
 describe('pagination jump input', () => {
+  it('uses compact pagination in admin pages without overriding an explicit variant', async () => {
+    const adminAppearance = ref(false)
+    const wrapper = mount(Pagination, {
+      props: { total: 200, page: 1, pageSize: 20, showPageSizeSelector: false },
+      global: { provide: { [adminAppearanceKey as symbol]: adminAppearance }, stubs: { Icon: true } },
+    })
+    expect(wrapper.classes()).not.toContain('pagination-compact')
+    adminAppearance.value = true
+    await nextTick()
+    expect(wrapper.classes()).toContain('pagination-compact')
+    await wrapper.get('nav button:last-child').trigger('click')
+    expect(wrapper.emitted('update:page')).toEqual([[2]])
+    await wrapper.setProps({ variant: 'default' })
+    expect(wrapper.classes()).not.toContain('pagination-compact')
+    await wrapper.setProps({ variant: undefined })
+    adminAppearance.value = false
+    await nextTick()
+    expect(wrapper.classes()).not.toContain('pagination-compact')
+  })
+
   it.each(['click', 'enter'])('jumps to the entered numeric page using %s', async (action) => {
     const wrapper = mountPagination()
     const input = wrapper.get('input[type="number"]')

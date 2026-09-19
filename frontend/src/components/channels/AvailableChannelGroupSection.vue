@@ -8,11 +8,12 @@
     <h3 :id="groupHeadingId" data-testid="group-semantic-heading" class="sr-only">
       {{ group.name }}
     </h3>
-    <GroupTagBadge :tag="group.tag" class="!absolute right-0 top-0 z-10" />
+    <GroupTagBadge :tag="group.tag" :color="group.tagColor" class="!absolute right-0 top-0 z-10" />
     <button
       type="button"
       data-testid="group-toggle"
-      class="flex min-h-11 w-full min-w-0 items-start justify-between gap-3 px-4 py-4 pr-16 text-left transition-colors motion-reduce:transition-none hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary-500 dark:hover:bg-dark-700/60 sm:px-5 sm:pr-20 xl:hidden"
+      class="flex min-h-11 w-full min-w-0 items-start justify-between gap-3 px-4 py-4 text-left transition-colors motion-reduce:transition-none hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary-500 dark:hover:bg-dark-700/60 sm:px-5 xl:hidden"
+      :class="group.tag ? 'pr-32 sm:pr-32' : 'pr-4 sm:pr-5'"
       :aria-expanded="expanded"
       :aria-controls="bodyId"
       @click="toggleExpanded"
@@ -68,7 +69,8 @@
 
     <header
       data-testid="group-desktop-header"
-      class="hidden min-w-0 items-start justify-between gap-3 px-5 py-4 pr-20 xl:flex"
+      class="hidden min-w-0 items-start justify-between gap-3 px-5 py-4 xl:flex"
+      :class="group.tag ? 'pr-32' : 'pr-5'"
     >
       <span class="min-w-0 flex-1">
         <GroupBadge

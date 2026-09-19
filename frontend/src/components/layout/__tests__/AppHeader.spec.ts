@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url'
 import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia } from 'pinia'
 import { reactive } from 'vue'
+import { parse } from 'vue/compiler-sfc'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const componentPath = resolve(dirname(fileURLToPath(import.meta.url)), '../AppHeader.vue')
@@ -332,7 +333,8 @@ describe('AppHeader shared admin shell', () => {
       return Number(match?.[1] ?? Number.NaN) * 16
     }
     const announcementTrigger = announcementBellSource.match(/<button\s+[\s\S]*?<\/button>/)?.[0] ?? ''
-    const fixedControlCount = (componentSource.match(/app-header-mobile-action/g) ?? []).length
+    const template = parse(componentSource).descriptor.template?.content ?? ''
+    const fixedControlCount = (template.match(/app-header-mobile-action/g) ?? []).length
       + (announcementTrigger.includes('app-header-mobile-action') ? 1 : 0)
 
     expect(fixedControlCount).toBe(5)
@@ -398,6 +400,68 @@ describe('AppHeader daily check-in entry', () => {
       role: 'user',
       balance: 10,
       avatar_url: ''
+    }
+  })
+
+  it('renders a disabled loading entry before status arrives and updates the same button in place', async () => {
+    let resolveStatus!: (status: Record<string, unknown>) => void
+    getCheckinStatus.mockImplementation(() => new Promise(resolve => { resolveStatus = resolve }))
+    const wrapper = await mountHeader()
+    try {
+      const button = wrapper.get('[data-test="daily-checkin-button"]')
+      expect(button.attributes('disabled')).toBeDefined()
+      expect(button.attributes('aria-busy')).toBe('true')
+      expect(button.attributes('aria-label')).toBe('加载中')
+      button.element.parentElement?.dispatchEvent(new MouseEvent('mouseenter'))
+      await button.trigger('click')
+      await flushPromises()
+      expect(button.attributes('aria-expanded')).toBe('false')
+      expect(submitCheckin).not.toHaveBeenCalled()
+
+      resolveStatus({ enabled: true, blacklisted: false, checked_in: true, eligible: true })
+      await flushPromises()
+      const readyButton = wrapper.get('[data-test="daily-checkin-button"]')
+      expect(readyButton.element).toBe(button.element)
+      expect(readyButton.attributes('disabled')).toBeUndefined()
+      expect(readyButton.attributes('aria-busy')).toBe('false')
+      expect(readyButton.attributes('aria-label')).toBe('已签到')
+    } finally {
+      wrapper.unmount()
+    }
+  })
+
+  it.each([
+    { enabled: false, blacklisted: false },
+    { enabled: true, blacklisted: true }
+  ])('removes the loading entry when status disallows check-in: %j', async (status) => {
+    let resolveStatus!: (status: Record<string, unknown>) => void
+    getCheckinStatus.mockImplementation(() => new Promise(resolve => { resolveStatus = resolve }))
+    const wrapper = await mountHeader()
+    try {
+      expect(wrapper.find('[data-test="daily-checkin-button"]').exists()).toBe(true)
+      resolveStatus(status)
+      await flushPromises()
+      expect(wrapper.find('[data-test="daily-checkin-button"]').exists()).toBe(false)
+      expect(submitCheckin).not.toHaveBeenCalled()
+    } finally {
+      wrapper.unmount()
+    }
+  })
+
+  it('clears the loading entry after a failed status request', async () => {
+    let rejectStatus!: (error: Error) => void
+    getCheckinStatus.mockImplementation(() => new Promise((_resolve, reject) => { rejectStatus = reject }))
+    const errorLog = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const wrapper = await mountHeader()
+    try {
+      expect(wrapper.find('[data-test="daily-checkin-button"]').exists()).toBe(true)
+      rejectStatus(new Error('Status unavailable'))
+      await flushPromises()
+      expect(wrapper.find('[data-test="daily-checkin-button"]').exists()).toBe(false)
+      expect(submitCheckin).not.toHaveBeenCalled()
+    } finally {
+      wrapper.unmount()
+      errorLog.mockRestore()
     }
   })
 
@@ -492,7 +556,7 @@ describe('AppHeader daily check-in entry', () => {
     expect(button.attributes('aria-label')).toBe('签到')
     expect(button.attributes('title')).toBe('签到')
     expect(label.classes()).toContain('hidden')
-    expect(label.classes()).toContain('sm:inline')
+    expect(label.classes()).toContain('sm:inline-grid')
     expect(label.classes()).not.toContain('min-[360px]:inline')
   })
 

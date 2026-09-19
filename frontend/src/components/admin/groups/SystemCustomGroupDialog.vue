@@ -41,7 +41,7 @@
         </label>
       </section>
 
-      <GroupTagField v-model="form.tag" name="system-custom-group-tag" />
+      <GroupTagField v-model="form.tag" v-model:color="form.tag_color" name="system-custom-group-tag" />
 
       <section class="border-y border-slate-200 py-4 dark:border-dark-700">
         <button
@@ -253,6 +253,7 @@ let session = 0
 
 const form = reactive({
   tag: '' as GroupTag,
+  tag_color: '',
   name: '',
   description: '',
   daily_limit_usd: '' as number | string | null,
@@ -270,6 +271,7 @@ const reset = () => {
   form.name = ''
   form.description = ''
   form.tag = ''
+  form.tag_color = ''
   form.daily_limit_usd = ''
   form.weekly_limit_usd = ''
   form.monthly_limit_usd = ''
@@ -355,6 +357,7 @@ const load = async () => {
       form.name = detail.group.name
       form.description = detail.group.description || ''
       form.tag = detail.group.tag || ''
+      form.tag_color = detail.group.tag_color || ''
       form.daily_limit_usd = detail.group.daily_limit_usd ?? ''
       form.weekly_limit_usd = detail.group.weekly_limit_usd ?? ''
       form.monthly_limit_usd = detail.group.monthly_limit_usd ?? ''
@@ -423,6 +426,7 @@ const snapshot = (): CreateSystemCustomGroupRequest => ({
   name: form.name.trim(),
   description: form.description.trim() || null,
   tag: form.tag,
+  tag_color: form.tag_color,
   daily_limit_usd: nullableNumber(form.daily_limit_usd),
   weekly_limit_usd: nullableNumber(form.weekly_limit_usd),
   monthly_limit_usd: nullableNumber(form.monthly_limit_usd),

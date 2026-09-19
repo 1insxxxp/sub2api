@@ -49,6 +49,61 @@ describe('DataTable', () => {
     localStorage.clear()
   })
 
+  it('opts mobile records into a compact summary without losing secondary cells or actions', async () => {
+    stubMobileMatchMedia()
+    const wrapper = mount(DataTable, {
+      props: {
+        columns: [
+          { key: 'name', label: 'Name' }, { key: 'status', label: 'Status' },
+          { key: 'balance', label: 'Balance' }, { key: 'notes', label: 'Notes' },
+          { key: 'secret', label: 'Hidden', mobileHidden: true }, { key: 'actions', label: 'Actions' }
+        ],
+        data: [{ id: 1, name: 'Alpha', status: 'active', balance: 12, notes: 'Retained detail', secret: 'Hidden value' }],
+        mobileLayout: { title: 'name', status: 'status', summary: ['balance', 'secret'] },
+        rowKey: 'id', selectable: true, selectedKeys: []
+      },
+      slots: {
+        'cell-balance': ({ value, mobile }) => h('strong', { 'data-test': 'balance' }, `${value} ${mobile}`),
+        'cell-actions': '<button data-test="record-edit">Edit</button>'
+      }
+    })
+    expect(wrapper.get('[data-test="mobile-record-title"]').text()).toBe('Alpha')
+    expect(wrapper.get('[data-test="mobile-record-summary"]').text()).toContain('12 true')
+    expect(wrapper.get('details').text()).toContain('Retained detail')
+    expect(wrapper.get('details').attributes('open')).toBeUndefined()
+    expect(wrapper.get('[data-test="record-edit"]').element.closest('details')).toBeNull()
+    expect(wrapper.text()).not.toContain('Hidden value')
+    await wrapper.get('[data-test="select-row"]').setValue(true)
+    expect(wrapper.emitted('selectionChange')?.[0]).toEqual([[1]])
+  })
+
+  it('keeps desktop columns unchanged when a compact mobile layout is provided', () => {
+    const wrapper = mount(DataTable, {
+      props: {
+        columns: [{ key: 'name', label: 'Name' }, { key: 'notes', label: 'Notes' }],
+        data: [{ id: 1, name: 'Alpha', notes: 'Details' }],
+        mobileLayout: { title: 'name', summary: [] }
+      }
+    })
+    expect(wrapper.findAll('th').map(header => header.text())).toEqual(['Name', 'Notes'])
+    expect(wrapper.find('details').exists()).toBe(false)
+  })
+
+  it('preserves legacy slot-based selection in the mobile record header', () => {
+    stubMobileMatchMedia()
+    const wrapper = mount(DataTable, {
+      props: {
+        columns: [{ key: 'select', label: '' }, { key: 'name', label: 'Name' }, { key: 'notes', label: 'Notes' }],
+        data: [{ id: 1, name: 'Alpha', notes: 'Detail' }],
+        mobileLayout: { title: 'name', selection: 'select', summary: [] }
+      },
+      slots: { 'cell-select': '<input type="checkbox" aria-label="Select account" />' }
+    })
+    const checkbox = wrapper.get('input[aria-label="Select account"]')
+    expect(checkbox.element.closest('.admin-record-header')).not.toBeNull()
+    expect(checkbox.element.closest('details')).toBeNull()
+  })
+
   it('renders paired sort arrows and highlights the active direction', async () => {
     const wrapper = mount(DataTable, {
       props: {
@@ -191,6 +246,7 @@ describe('DataTable', () => {
       { key: 'actions', label: 'Actions' }
     ]
     const wrapper = mount(DataTable, {
+      attachTo: document.body,
       props: {
         columns,
         data: [{ id: 42, name: 'Work key', status: 'active', created_at: '2026-09-17', last_used_ip: '127.0.0.1' }],
@@ -210,6 +266,17 @@ describe('DataTable', () => {
     expect(wrapper.get('.key-card-header').text()).toContain('Work keyStatus: active')
     expect(wrapper.get('[data-field="usage"]').text()).toBe('Usage for 42')
     expect(wrapper.get('[data-field="created_at"]').text()).toContain('2026-09-17')
+    expect(wrapper.get('[data-field="created_at"]').isVisible()).toBe(false)
+    const disclosure = wrapper.get('.key-card-details-toggle')
+    expect(disclosure.attributes('aria-label')).toBe('common.details')
+    expect(disclosure.attributes('aria-expanded')).toBe('false')
+    expect(disclosure.attributes('aria-controls')).toBe(wrapper.get('.key-card-details').attributes('id'))
+    await disclosure.trigger('click')
+    expect(disclosure.attributes('aria-expanded')).toBe('true')
+    expect(disclosure.attributes('aria-label')).toBe('common.collapse')
+    expect(wrapper.get('[data-field="created_at"]').isVisible()).toBe(true)
+    await disclosure.trigger('click')
+    expect(wrapper.get('[data-field="created_at"]').isVisible()).toBe(false)
     expect(wrapper.find('[data-field="last_used_ip"]').exists()).toBe(false)
     await wrapper.get('.key-card-actions button').trigger('click')
     expect(edit).toHaveBeenCalledWith(42)
@@ -220,6 +287,16 @@ describe('DataTable', () => {
     await wrapper.setProps({ selectedKeys: [42], columns: columns.filter(column => column.key !== 'usage') })
     expect(wrapper.get('.key-card').classes()).toContain('is-selected')
     expect(wrapper.find('[data-field="usage"]').exists()).toBe(false)
+
+    await wrapper.setProps({ columns: columns.filter(column => column.key !== 'actions') })
+    await disclosure.trigger('click')
+    expect(wrapper.get('[data-field="created_at"]').isVisible()).toBe(true)
+    expect(wrapper.find('[data-field="actions"]').exists()).toBe(false)
+
+    await wrapper.setProps({ columns: columns.filter(column => ['name', 'status', 'usage'].includes(column.key)) })
+    expect(wrapper.find('.key-card-details-toggle').exists()).toBe(false)
+    expect(wrapper.find('.key-card-details').exists()).toBe(false)
+    wrapper.unmount()
   })
 
   it('clears stale row and element caches when pagination replaces the row ID set', async () => {

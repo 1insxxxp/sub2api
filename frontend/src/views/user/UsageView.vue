@@ -1,10 +1,10 @@
 <template>
   <AppLayout>
-    <div class="space-y-6">
-      <UsageStatsCards :stats="usageStats" :show-account-cost="false" :strike-standard-cost="true" />
+    <div class="user-workspace usage-workspace">
+      <UsageStatsCards class="workspace-stats" :stats="usageStats" :show-account-cost="false" :strike-standard-cost="true" />
 
       <div class="space-y-4">
-        <div class="card p-4">
+        <div class="workspace-toolbar">
           <div class="usage-filter-bar flex flex-wrap items-center gap-4">
             <div class="usage-filter-item flex items-center gap-2">
               <span class="text-sm font-medium text-gray-700 dark:text-gray-300">{{ t('admin.dashboard.timeRange') }}:</span>
@@ -23,8 +23,9 @@
           </div>
         </div>
 
-        <div class="grid grid-cols-1 gap-6 lg:grid-cols-2">
+        <div class="grid min-w-0 grid-cols-1 gap-4 xl:grid-cols-2">
           <ModelDistributionChart
+            class="workspace-chart"
             v-model:metric="modelDistributionMetric"
             :model-stats="requestedModelStats"
             :loading="modelStatsLoading"
@@ -36,6 +37,7 @@
             :end-date="endDate"
           />
           <GroupDistributionChart
+            class="workspace-chart"
             v-model:metric="groupDistributionMetric"
             :group-stats="groupStats"
             :loading="chartsLoading"
@@ -47,8 +49,9 @@
           />
         </div>
 
-        <div class="grid grid-cols-1 gap-6 lg:grid-cols-2">
+        <div class="grid min-w-0 grid-cols-1 gap-4 xl:grid-cols-2">
           <EndpointDistributionChart
+            class="workspace-chart"
             v-model:source="endpointDistributionSource"
             v-model:metric="endpointDistributionMetric"
             :endpoint-stats="inboundEndpointStats"
@@ -62,13 +65,25 @@
             :start-date="startDate"
             :end-date="endDate"
           />
-          <TokenUsageTrend :trend-data="trendData" :loading="chartsLoading" />
+          <TokenUsageTrend class="workspace-chart" :trend-data="trendData" :loading="chartsLoading" />
         </div>
       </div>
 
-      <div class="card p-6">
-        <div class="flex flex-wrap items-end justify-between gap-4">
-          <div v-if="activeTab === 'errors'" class="flex flex-1 flex-wrap items-end gap-4">
+      <div class="usage-record-tabs" role="group" :aria-label="t('nav.usage')">
+        <button type="button" class="tab" :aria-pressed="activeTab === 'usage'" :class="{ 'tab-active': activeTab === 'usage' }" @click="activeTab = 'usage'">
+          {{ t('usage.tabs.usage') }}
+        </button>
+        <button v-if="errorViewEnabled" type="button" class="tab" :aria-pressed="activeTab === 'errors'" :class="{ 'tab-active': activeTab === 'errors' }" @click="switchToErrors">
+          {{ t('usage.tabs.errors') }}
+        </button>
+        <button data-testid="empty-response-tab" type="button" class="tab" :aria-pressed="activeTab === 'emptyResponses'" :class="{ 'tab-active': activeTab === 'emptyResponses' }" @click="switchToEmptyResponses">
+          {{ t('usage.tabs.emptyResponses') }}
+        </button>
+      </div>
+
+      <div class="usage-records-toolbar">
+        <div class="flex min-w-0 flex-col gap-3">
+          <div v-if="activeTab === 'errors'" class="usage-filter-grid">
             <div class="w-full sm:w-auto sm:min-w-[220px]">
               <label class="input-label">{{ t('usage.errors.keyName') }}</label>
               <Select v-model="errorFilter.api_key_id" :options="errorKeyOptions" @change="applyErrorFilters" />
@@ -94,7 +109,7 @@
               <Select v-model="errorFilter.status_code" :options="errorStatusOptions" @change="applyErrorFilters" />
             </div>
           </div>
-          <div v-else-if="activeTab === 'usage'" class="flex flex-1 flex-wrap items-end gap-4">
+          <div v-else-if="activeTab === 'usage'" class="usage-filter-grid">
             <div class="w-full sm:w-auto sm:min-w-[220px]">
               <label class="input-label">{{ t('usage.apiKeyFilter') }}</label>
               <Select v-model="filters.api_key_id" :options="apiKeyOptions" @change="applyFilters" />
@@ -142,78 +157,79 @@
             </div>
           </div>
 
-          <div class="flex w-full flex-wrap items-center justify-end gap-3 sm:w-auto">
-            <button type="button" @click="refreshData" :disabled="currentPrimaryLoading" class="btn btn-secondary">
-              {{ t('common.refresh') }}
+          <div class="usage-record-actions flex w-full flex-wrap items-center gap-2">
+            <button type="button" @click="refreshData" :disabled="currentPrimaryLoading" class="btn btn-secondary workspace-icon-button" :title="t('common.refresh')" :aria-label="t('common.refresh')">
+              <Icon name="refresh" size="sm" :class="{ 'animate-spin': currentPrimaryLoading }" />
             </button>
-            <button v-if="activeTab !== 'emptyResponses'" type="button" @click="resetFilters" class="btn btn-secondary">
-              {{ t('common.reset') }}
+            <button v-if="activeTab !== 'emptyResponses'" type="button" @click="resetFilters" class="btn btn-secondary workspace-icon-button" :title="t('common.reset')" :aria-label="t('common.reset')">
+              <Icon name="x" size="sm" />
             </button>
-            <div v-if="activeTab !== 'emptyResponses'" class="relative" ref="columnDropdownRef">
+            <div v-if="activeTab !== 'emptyResponses'" class="relative" ref="columnDropdownRef" @keydown.esc.stop="closeColumnDropdown" @keydown.tab="showColumnDropdown = false">
               <button
+                ref="columnTriggerRef"
                 type="button"
                 data-testid="usage-column-settings"
                 @click="showColumnDropdown = !showColumnDropdown"
                 class="btn btn-secondary px-2 md:px-3"
                 :title="t('admin.users.columnSettings')"
+                :aria-label="t('admin.users.columnSettings')"
+                :aria-expanded="showColumnDropdown"
+                aria-controls="usage-column-menu"
               >
                 <Icon name="grid" size="sm" />
                 <span class="hidden md:inline">{{ t('admin.users.columnSettings') }}</span>
               </button>
-              <div
-                v-if="showColumnDropdown"
-                class="absolute right-0 top-full z-50 mt-1 max-h-80 w-48 overflow-y-auto rounded-lg border border-gray-200 bg-white py-1 shadow-lg dark:border-dark-600 dark:bg-dark-800"
-              >
-                <button
-                  v-for="col in currentToggleableColumns"
-                  :key="col.key"
-                  type="button"
-                  :data-testid="`usage-column-toggle-${col.key}`"
-                  @click="toggleCurrentColumn(col.key)"
-                  class="flex w-full items-center justify-between px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-dark-700"
+              <Transition name="workspace-menu">
+                <div
+                  v-if="showColumnDropdown"
+                  id="usage-column-menu"
+                  class="workspace-menu absolute left-0 top-full mt-2 max-h-80 overflow-y-auto"
                 >
-                  <span>{{ col.label }}</span>
-                  <Icon v-if="isCurrentColumnVisible(col.key)" name="check" size="sm" class="text-primary-500" />
-                </button>
-              </div>
+                  <button
+                    v-for="col in currentToggleableColumns"
+                    :key="col.key"
+                    type="button"
+                    :data-testid="`usage-column-toggle-${col.key}`"
+                    :aria-pressed="isCurrentColumnVisible(col.key)"
+                    @click="toggleCurrentColumn(col.key)"
+                    class="flex w-full items-center justify-between px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-dark-700"
+                  >
+                    <span>{{ col.label }}</span>
+                    <Icon v-if="isCurrentColumnVisible(col.key)" name="check" size="sm" class="text-primary-500" />
+                  </button>
+                </div>
+              </Transition>
             </div>
-            <button v-if="activeTab === 'usage'" type="button" @click="exportToCSV" :disabled="exporting" class="btn btn-primary">
+            <button v-if="activeTab === 'usage'" type="button" @click="exportToCSV" :disabled="exporting" class="btn btn-primary ml-auto">
+              <Icon name="download" size="sm" />
               {{ exporting ? t('usage.exporting') : t('usage.exportCsv') }}
             </button>
           </div>
         </div>
       </div>
 
-      <div class="flex gap-2 border-b border-gray-200 dark:border-dark-700">
-        <button class="tab" :class="{ 'tab-active': activeTab === 'usage' }" @click="activeTab = 'usage'">
-          {{ t('usage.tabs.usage') }}
-        </button>
-        <button v-if="errorViewEnabled" class="tab" :class="{ 'tab-active': activeTab === 'errors' }" @click="switchToErrors">
-          {{ t('usage.tabs.errors') }}
-        </button>
-        <button data-testid="empty-response-tab" class="tab" :class="{ 'tab-active': activeTab === 'emptyResponses' }" @click="switchToEmptyResponses">
-          {{ t('usage.tabs.emptyResponses') }}
-        </button>
-      </div>
-
       <template v-if="activeTab === 'usage'">
-        <UsageTable
-          :data="usageLogs"
-          :loading="loading"
-          :columns="visibleColumns"
-          :server-side-sort="true"
-          :show-account-billing="false"
-          :show-upstream-endpoint="false"
-          :show-compensation-action="false"
-          default-sort-key="created_at"
-          default-sort-order="desc"
-          @sort="handleSort"
-          @ipGeoBatchFailed="handleIpGeoBatchFailed"
-          @compensationClaim="openEmptyResponseClaim"
-        />
+        <div class="workspace-records">
+          <UsageTable
+            flat
+            :data="usageLogs"
+            :loading="loading"
+            :columns="visibleColumns"
+            :server-side-sort="true"
+            :show-account-billing="false"
+            :show-upstream-endpoint="false"
+            :show-compensation-action="false"
+            default-sort-key="created_at"
+            default-sort-order="desc"
+            @sort="handleSort"
+            @ipGeoBatchFailed="handleIpGeoBatchFailed"
+            @compensationClaim="openEmptyResponseClaim"
+          />
+        </div>
 
         <Pagination
           v-if="pagination.total > 0"
+          variant="compact"
           :page="pagination.page"
           :total="pagination.total"
           :page-size="pagination.page_size"
@@ -222,7 +238,7 @@
         />
       </template>
 
-      <div v-else-if="activeTab === 'emptyResponses'" class="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm dark:border-dark-700 dark:bg-dark-800">
+      <div v-else-if="activeTab === 'emptyResponses'" class="workspace-surface overflow-hidden">
         <div v-if="emptyResponseLoading" class="empty-state py-12 text-sm text-gray-400">
           {{ t('common.loading') }}
         </div>
@@ -433,6 +449,8 @@
 
           <Pagination
             v-if="emptyResponsePagination.total > 0"
+            variant="compact"
+            class="p-3"
             :page="emptyResponsePagination.page"
             :total="emptyResponsePagination.total"
             :page-size="emptyResponsePagination.page_size"
@@ -443,6 +461,7 @@
       </div>
 
       <UserErrorRequestsTable
+        class="workspace-records"
         v-else-if="activeTab === 'errors' && errorViewEnabled"
         :rows="errorRows"
         :total="errorTotal"
@@ -469,6 +488,7 @@
 </template>
 
 <script setup lang="ts">
+import '@/styles/user-workspace.css'
 import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useAppStore } from '@/stores/app'
@@ -1174,6 +1194,11 @@ const toggleCurrentColumn = (key: string) => {
 
 const showColumnDropdown = ref(false)
 const columnDropdownRef = ref<HTMLElement | null>(null)
+const columnTriggerRef = ref<HTMLButtonElement | null>(null)
+const closeColumnDropdown = () => {
+  showColumnDropdown.value = false
+  columnTriggerRef.value?.focus()
+}
 const handleColumnClickOutside = (event: MouseEvent) => {
   if (columnDropdownRef.value && !columnDropdownRef.value.contains(event.target as HTMLElement)) {
     showColumnDropdown.value = false
@@ -1288,3 +1313,39 @@ watch(endpointDistributionSource, () => {
   // Endpoint source switching is handled by the chart component using already loaded stats.
 })
 </script>
+
+<style scoped>
+.usage-filter-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0.75rem; align-items: end; }
+.usage-filter-grid > div { width: 100%; min-width: 0; }
+.usage-filter-grid .input-label { margin-bottom: 0.375rem; color: var(--workspace-muted); font-size: 0.75rem; font-weight: 500; }
+.usage-record-tabs { display: flex; min-width: 0; gap: 1.5rem; border-bottom: 1px solid var(--workspace-rule); }
+.usage-record-tabs .tab { position: relative; min-width: 0; min-height: 2.75rem; padding: 0.625rem 0.125rem; border: 0; border-radius: 0; background: transparent; color: var(--workspace-muted); font-size: 0.875rem; font-weight: 500; box-shadow: none; }
+.usage-record-tabs .tab-active { color: var(--workspace-ink); font-weight: 600; }
+.usage-record-tabs .tab-active::after { content: ''; position: absolute; right: 0; bottom: -1px; left: 0; height: 2px; background: rgb(var(--brand-rgb)); }
+.usage-record-tabs .tab:focus-visible { outline: 2px solid rgb(var(--brand-rgb) / 50%); outline-offset: 2px; }
+.usage-workspace :deep(.workspace-records) { isolation: isolate; }
+.usage-workspace :deep(.workspace-records .admin-data-table) { border-color: var(--workspace-rule); border-radius: 8px; background: var(--workspace-surface); box-shadow: var(--workspace-shadow); }
+.usage-workspace :deep(.workspace-records .admin-data-table-head) { background: var(--workspace-hover); }
+.usage-workspace :deep(.workspace-records .sticky-header-cell) { background: var(--workspace-control); letter-spacing: 0; }
+.usage-workspace :deep(.workspace-records tbody .sticky-col) { background: var(--workspace-surface); }
+.usage-workspace :deep(.workspace-records .admin-data-table-body) { background: transparent; }
+.usage-workspace :deep(.workspace-records > .card) { border: 0; border-radius: 0; background: transparent; box-shadow: none; }
+.usage-workspace :deep(.workspace-records [data-mobile-table-row]) { padding: 0.875rem; }
+.usage-workspace :deep(.workspace-records .admin-surface::before) { content: none; }
+@media (max-width: 767px) {
+  .usage-filter-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 639px) {
+  .usage-filter-grid { gap: 0.625rem; }
+  .usage-filter-bar { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0.625rem; }
+  .usage-filter-item { min-width: 0; flex-wrap: wrap; }
+  .usage-filter-item > span { color: var(--workspace-muted); font-size: 0.75rem; }
+  .usage-filter-item:first-child > div,
+  .usage-filter-item :deep(.date-picker-trigger) { width: 100%; }
+  .usage-filter-item-granularity { width: 100%; margin-left: 0; justify-content: space-between; }
+  .usage-record-tabs { gap: 1rem; }
+  .usage-record-tabs .tab { flex: 1; font-size: 0.8125rem; }
+  .usage-record-actions .workspace-menu { left: 50%; right: auto; translate: -50% 0; }
+  .usage-record-actions .btn-primary { padding-inline: 0.75rem; font-size: 0.8125rem; }
+}
+</style>

@@ -59,7 +59,7 @@
       class="admin-action-menu fixed z-[100000020] w-[calc(100vw-16px)] sm:w-64"
       :style="{ top: dropdownPosition.top + 'px', left: dropdownPosition.left + 'px' }"
     >
-      <div class="max-h-64 space-y-0.5 overflow-y-auto">
+      <div class="max-h-64 space-y-2 overflow-y-auto p-0.5">
         <!-- Unbind option -->
         <button
           @click="changeGroup(selectedKeyForGroup!, null)"
@@ -82,15 +82,11 @@
           v-for="group in allGroups"
           :key="group.id"
           @click="changeGroup(selectedKeyForGroup!, group.id)"
-          :class="[
-            'admin-action-menu-item justify-between',
-            selectedKeyForGroup?.group_id === group.id
-              ? 'admin-action-menu-item-active'
-              : ''
-          ]"
+          class="flex w-full items-center justify-between rounded-lg text-sm focus-visible:outline-none"
         >
           <GroupOptionItem
             :tag="group.tag"
+            :tag-color="group.tag_color"
             :name="group.name"
             :platform="group.platform"
             :subscription-type="group.subscription_type"

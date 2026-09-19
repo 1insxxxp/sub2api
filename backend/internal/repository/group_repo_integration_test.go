@@ -54,7 +54,8 @@ func TestGroupRepoSuite(t *testing.T) {
 func (s *GroupRepoSuite) TestCreate() {
 	group := &service.Group{
 		Name:             "test-create",
-		Tag:              "chat",
+		Tag:              strings.Repeat("\U0001f680", 20),
+		TagColor:         "#aB12EF",
 		Platform:         service.PlatformAnthropic,
 		RateMultiplier:   1.0,
 		IsExclusive:      false,
@@ -69,13 +70,16 @@ func (s *GroupRepoSuite) TestCreate() {
 	got, err := s.repo.GetByID(s.ctx, group.ID)
 	s.Require().NoError(err, "GetByID")
 	s.Require().Equal("test-create", got.Name)
-	s.Require().Equal("chat", got.Tag)
+	s.Require().Equal(group.Tag, got.Tag)
+	s.Require().Equal(group.TagColor, got.TagColor)
 	for _, tag := range []string{"image", "airp", ""} {
 		got.Tag = tag
+		got.TagColor = ""
 		s.Require().NoError(s.repo.Update(s.ctx, got))
 		got, err = s.repo.GetByID(s.ctx, group.ID)
 		s.Require().NoError(err)
 		s.Require().Equal(tag, got.Tag)
+		s.Require().Empty(got.TagColor)
 	}
 }
 

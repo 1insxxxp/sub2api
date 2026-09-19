@@ -530,6 +530,7 @@
             <template #option="{ option, selected }">
               <GroupOptionItem
                 :tag="(option as unknown as GroupOption).tag"
+                :tag-color="(option as unknown as GroupOption).tag_color"
                 :name="(option as unknown as GroupOption).label"
                 :platform="(option as unknown as GroupOption).platform"
                 :subscription-type="(option as unknown as GroupOption).subscriptionType"
@@ -811,6 +812,7 @@ const appStore = useAppStore()
 
 interface GroupOption {
   tag?: import('@/types').GroupTag
+  tag_color?: string
   value: number
   label: string
   description: string | null
@@ -1026,6 +1028,7 @@ const subscriptionGroupOptions = computed(() =>
       label: g.name,
       description: g.description,
       tag: g.tag,
+      tag_color: g.tag_color,
       platform: g.platform,
       subscriptionType: g.subscription_type,
       rate: g.rate_multiplier
