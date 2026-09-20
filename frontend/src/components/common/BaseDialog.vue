@@ -33,12 +33,12 @@
           </div>
 
           <!-- Body -->
-          <div ref="modalBodyRef" class="modal-body admin-dialog-body">
+          <div ref="modalBodyRef" class="modal-body admin-dialog-body modal-neutral-body modal-body-scroll">
             <slot></slot>
           </div>
 
           <!-- Footer -->
-          <div v-if="$slots.footer" class="modal-footer admin-dialog-footer">
+          <div v-if="$slots.footer" class="modal-footer admin-dialog-footer modal-neutral-footer modal-footer-wrap">
             <slot name="footer"></slot>
           </div>
         </div>
@@ -234,11 +234,13 @@ onUnmounted(() => {
 }
 .modal-neutral .brand-floating-close:hover { background: rgb(148 163 184 / 12%); }
 .modal-neutral .modal-body { min-height: 0; padding: 1rem; overscroll-behavior: contain; }
+.modal-neutral .modal-body-scroll { overflow-y: auto; }
 .modal-neutral .modal-footer {
   padding: 0.75rem 1rem;
   border-color: var(--dialog-rule);
   background: transparent;
 }
+.modal-neutral .modal-footer-wrap { flex-wrap: wrap; }
 .modal-neutral :deep(.input),
 .modal-neutral :deep(.select-trigger),
 .modal-neutral :deep(.btn-secondary) {
@@ -267,6 +269,11 @@ onUnmounted(() => {
   .modal-neutral .modal-header,
   .modal-neutral .modal-footer { padding-left: 1.25rem; padding-right: 1.25rem; }
   .modal-neutral .modal-body { padding: 1.25rem; }
+}
+@media (max-width: 639px) {
+  .modal-neutral .modal-body { padding: 0.875rem; }
+  .modal-neutral .modal-footer { align-items: stretch; gap: 0.5rem; }
+  .modal-neutral .modal-footer-wrap > * { min-width: min(8rem, 100%); flex: 1 1 auto; }
 }
 @media (prefers-reduced-motion: reduce) {
   .modal-neutral.modal-enter-active,

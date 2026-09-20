@@ -35,6 +35,20 @@ describe('pagination jump input', () => {
     expect(wrapper.classes()).not.toContain('pagination-compact')
   })
 
+  it('keeps the compact mobile controls usable at 320px', async () => {
+    const adminAppearance = ref(true)
+    const wrapper = mount(Pagination, {
+      props: { total: 200, page: 1, pageSize: 20, showPageSizeSelector: false },
+      global: { provide: { [adminAppearanceKey as symbol]: adminAppearance }, stubs: { Icon: true } },
+    })
+
+    const controls = wrapper.get('.pagination-mobile-controls')
+    expect(controls.classes()).toContain('pagination-mobile-controls')
+    expect(controls.findAll('button')).toHaveLength(2)
+    expect(controls.get('.pagination-current').attributes('aria-label')).toBe('pagination.pageOf')
+    expect(controls.findAll('button').every((button) => button.classes().includes('pagination-touch-target'))).toBe(true)
+  })
+
   it.each(['click', 'enter'])('jumps to the entered numeric page using %s', async (action) => {
     const wrapper = mountPagination()
     const input = wrapper.get('input[type="number"]')

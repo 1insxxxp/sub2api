@@ -12,7 +12,7 @@
         :disabled="page === 1"
         :aria-label="t('pagination.previous')"
         :title="t('pagination.previous')"
-        class="relative inline-flex items-center rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-dark-600 dark:bg-dark-700 dark:text-gray-200 dark:hover:bg-dark-600"
+        class="pagination-touch-target relative inline-flex items-center rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-dark-600 dark:bg-dark-700 dark:text-gray-200 dark:hover:bg-dark-600"
       >
         <Icon v-if="variant === 'compact'" name="chevronLeft" size="sm" />
         <template v-else>{{ t('pagination.previous') }}</template>
@@ -29,7 +29,7 @@
         :disabled="page === totalPages"
         :aria-label="t('pagination.next')"
         :title="t('pagination.next')"
-        class="relative ml-3 inline-flex items-center rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-dark-600 dark:bg-dark-700 dark:text-gray-200 dark:hover:bg-dark-600"
+        class="pagination-touch-target relative ml-3 inline-flex items-center rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-dark-600 dark:bg-dark-700 dark:text-gray-200 dark:hover:bg-dark-600"
       >
         <Icon v-if="variant === 'compact'" name="chevronRight" size="sm" />
         <template v-else>{{ t('pagination.next') }}</template>
@@ -323,6 +323,10 @@ const submitJump = () => {
   background: var(--pagination-surface);
   box-shadow: inset 0 1px 0 rgb(255 255 255 / 12%), 0 1px 2px rgb(15 23 42 / 3%);
 }
+.pagination-compact .pagination-touch-target {
+  min-width: 2.75rem;
+  min-height: 2.75rem;
+}
 .pagination-compact .pagination-mobile-controls > button:disabled,
 .pagination-compact nav > button:disabled { opacity: 0.35; box-shadow: none; }
 .pagination-compact .pagination-mobile-controls > button:focus-visible,
@@ -347,8 +351,9 @@ const submitJump = () => {
   box-shadow: none;
 }
 @media (max-width: 639px) {
-  .pagination-compact .pagination-mobile-controls { display: grid; grid-template-columns: minmax(0, 1fr) 2.75rem auto 2.75rem; gap: 0.5rem; }
+  .pagination-compact .pagination-mobile-controls { display: grid; grid-template-columns: minmax(0, 1fr) 2.75rem minmax(3.5rem, auto) 2.75rem; gap: 0.5rem; }
   .pagination-compact .pagination-total { min-width: 0; white-space: normal; overflow-wrap: anywhere; }
+  .pagination-compact .pagination-current { min-width: 3.5rem; white-space: nowrap; }
 }
 @media (hover: hover) {
   .pagination-compact .pagination-mobile-controls > button:not(:disabled):hover,

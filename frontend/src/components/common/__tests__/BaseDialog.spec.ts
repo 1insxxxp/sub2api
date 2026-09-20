@@ -64,6 +64,22 @@ describe('BaseDialog', () => {
     expect(wrapper.get('[data-test="dialog-footer-action"]').text()).toBe('save')
   })
 
+  it('keeps neutral body scroll and footer actions stable on narrow screens', () => {
+    const wrapper = mount(BaseDialog, {
+      props: { show: true, title: 'Narrow dialog', appearance: 'neutral' },
+      slots: {
+        default: '<div data-test="dialog-body-content">long body</div>',
+        footer: '<button data-test="dialog-footer-action">save</button>',
+      },
+      global: { stubs: { Icon: true, teleport: true, transition: false } },
+    })
+
+    expect(wrapper.get('.modal-neutral .modal-body').classes()).toContain('modal-neutral-body')
+    expect(wrapper.get('.modal-neutral .modal-footer').classes()).toContain('modal-neutral-footer')
+    expect(wrapper.get('.modal-neutral .modal-body').classes()).toContain('modal-body-scroll')
+    expect(wrapper.get('.modal-neutral .modal-footer').classes()).toContain('modal-footer-wrap')
+  })
+
   it('keeps scrolling locked until the final visible dialog closes', async () => {
     const history = mount(BaseDialog, { props: { show: true, title: 'History', zIndex: 60 } })
     const balance = mount(BaseDialog, { props: { show: true, title: 'Deposit', zIndex: 70 } })
