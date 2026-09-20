@@ -1171,6 +1171,10 @@ onBeforeUnmount(() => {
   /* Both drawer layers must sit above the sticky header (z-index: 50). */
   .mobile-sidebar-layer {
     z-index: 60;
+    height: 100dvh;
+    max-height: 100dvh;
+    overflow: hidden;
+    overscroll-behavior: contain;
   }
 
   .mobile-sidebar-overlay {
@@ -1179,7 +1183,11 @@ onBeforeUnmount(() => {
   }
 
   .sidebar-nav {
+    min-height: 0;
+    overflow-y: auto;
+    touch-action: pan-y;
     overscroll-behavior-y: contain;
+    -webkit-overflow-scrolling: touch;
   }
 }
 

@@ -83,6 +83,13 @@ describe('AppSidebar mobile layering', () => {
     expect(componentSource).toContain('mobile-sidebar-layer')
     expect(componentSource).toContain('.mobile-sidebar-layer')
   })
+
+  it('keeps the drawer content independently scrollable on touch screens', () => {
+    expect(componentSource).toContain('height: 100dvh;')
+    expect(componentSource).toContain('overflow-y: auto;')
+    expect(componentSource).toContain('touch-action: pan-y;')
+    expect(componentSource).toContain('-webkit-overflow-scrolling: touch;')
+  })
 })
 
 describe('AppSidebar collapse motion', () => {
