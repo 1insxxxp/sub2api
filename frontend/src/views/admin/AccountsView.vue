@@ -2826,6 +2826,71 @@ onUnmounted(() => {
   scrollbar-width: thin;
 }
 
+@media (max-width: 1023px) {
+  .accounts-admin-page :deep(.admin-record) {
+    border-radius: 10px;
+    background: linear-gradient(140deg, var(--workspace-highlight), transparent 62%), var(--workspace-surface);
+    box-shadow: 0 8px 22px rgb(15 23 42 / 7%), inset 0 1px 0 var(--workspace-highlight);
+  }
+
+  .accounts-admin-page :deep(.admin-record-header) {
+    padding: 1rem 1rem 0.75rem;
+  }
+
+  .accounts-admin-page :deep(.admin-record-summary) {
+    gap: 0.625rem;
+    margin-inline: 0.875rem;
+    padding-block: 0.75rem;
+  }
+
+  .accounts-admin-page :deep(.admin-record-metric) {
+    min-height: 3.75rem;
+    gap: 0.25rem;
+    padding: 0.625rem 0.6875rem;
+    border: 1px solid var(--workspace-rule);
+    border-radius: 7px;
+    background: linear-gradient(135deg, var(--workspace-control), transparent), var(--workspace-surface);
+  }
+
+  .accounts-admin-page :deep(.admin-record-metric:last-child:nth-child(odd)) {
+    grid-column: auto;
+  }
+
+  .accounts-admin-page :deep(.admin-record-label) {
+    font-size: 0.625rem;
+    letter-spacing: 0.01em;
+  }
+
+  .accounts-admin-page :deep(.admin-record-value) {
+    font-size: 0.75rem;
+    line-height: 1.4;
+  }
+
+  .accounts-admin-page :deep(.admin-record-details) {
+    margin-inline: 0.875rem;
+  }
+
+  .accounts-admin-page :deep(.admin-record-details summary) {
+    min-height: 2.625rem;
+  }
+
+  .accounts-admin-page :deep(.admin-record-actions) {
+    padding: 0.625rem 0.75rem;
+    background: var(--workspace-control);
+  }
+
+  .accounts-admin-page :deep(.admin-record-actions > div) {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.375rem;
+  }
+
+  .accounts-admin-page :deep(.admin-record-actions button) {
+    min-height: 2.75rem;
+    justify-content: center;
+  }
+}
+
 @media (max-width: 767px) {
   .account-mobile-sort {
     display: flex;
