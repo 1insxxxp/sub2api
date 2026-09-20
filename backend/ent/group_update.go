@@ -1174,6 +1174,20 @@ func (_u *GroupUpdate) SetNillableModelAllowlist(v *domain.GroupModelAllowlist) 
 	return _u
 }
 
+// SetModelStatusVisibility sets the "model_status_visibility" field.
+func (_u *GroupUpdate) SetModelStatusVisibility(v domain.GroupModelStatusVisibility) *GroupUpdate {
+	_u.mutation.SetModelStatusVisibility(v)
+	return _u
+}
+
+// SetNillableModelStatusVisibility sets the "model_status_visibility" field if the given value is not nil.
+func (_u *GroupUpdate) SetNillableModelStatusVisibility(v *domain.GroupModelStatusVisibility) *GroupUpdate {
+	if v != nil {
+		_u.SetModelStatusVisibility(*v)
+	}
+	return _u
+}
+
 // SetCodexModelsManifestConfig sets the "codex_models_manifest_config" field.
 func (_u *GroupUpdate) SetCodexModelsManifestConfig(v domain.GroupCodexModelsManifestConfig) *GroupUpdate {
 	_u.mutation.SetCodexModelsManifestConfig(v)
@@ -2178,6 +2192,9 @@ func (_u *GroupUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if value, ok := _u.mutation.ModelAllowlist(); ok {
 		_spec.SetField(group.FieldModelAllowlist, field.TypeJSON, value)
+	}
+	if value, ok := _u.mutation.ModelStatusVisibility(); ok {
+		_spec.SetField(group.FieldModelStatusVisibility, field.TypeJSON, value)
 	}
 	if value, ok := _u.mutation.CodexModelsManifestConfig(); ok {
 		_spec.SetField(group.FieldCodexModelsManifestConfig, field.TypeJSON, value)
@@ -3890,6 +3907,20 @@ func (_u *GroupUpdateOne) SetNillableModelAllowlist(v *domain.GroupModelAllowlis
 	return _u
 }
 
+// SetModelStatusVisibility sets the "model_status_visibility" field.
+func (_u *GroupUpdateOne) SetModelStatusVisibility(v domain.GroupModelStatusVisibility) *GroupUpdateOne {
+	_u.mutation.SetModelStatusVisibility(v)
+	return _u
+}
+
+// SetNillableModelStatusVisibility sets the "model_status_visibility" field if the given value is not nil.
+func (_u *GroupUpdateOne) SetNillableModelStatusVisibility(v *domain.GroupModelStatusVisibility) *GroupUpdateOne {
+	if v != nil {
+		_u.SetModelStatusVisibility(*v)
+	}
+	return _u
+}
+
 // SetCodexModelsManifestConfig sets the "codex_models_manifest_config" field.
 func (_u *GroupUpdateOne) SetCodexModelsManifestConfig(v domain.GroupCodexModelsManifestConfig) *GroupUpdateOne {
 	_u.mutation.SetCodexModelsManifestConfig(v)
@@ -4924,6 +4955,9 @@ func (_u *GroupUpdateOne) sqlSave(ctx context.Context) (_node *Group, err error)
 	}
 	if value, ok := _u.mutation.ModelAllowlist(); ok {
 		_spec.SetField(group.FieldModelAllowlist, field.TypeJSON, value)
+	}
+	if value, ok := _u.mutation.ModelStatusVisibility(); ok {
+		_spec.SetField(group.FieldModelStatusVisibility, field.TypeJSON, value)
 	}
 	if value, ok := _u.mutation.CodexModelsManifestConfig(); ok {
 		_spec.SetField(group.FieldCodexModelsManifestConfig, field.TypeJSON, value)

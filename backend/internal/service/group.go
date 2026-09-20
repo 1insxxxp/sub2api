@@ -13,6 +13,7 @@ import (
 
 type OpenAIMessagesDispatchModelConfig = domain.OpenAIMessagesDispatchModelConfig
 type GroupCodexModelsManifestConfig = domain.GroupCodexModelsManifestConfig
+type GroupModelStatusVisibility = domain.GroupModelStatusVisibility
 type ReasoningEffortMapping = domain.ReasoningEffortMapping
 type GroupModelsListConfig = GroupModelAllowlist
 
@@ -123,6 +124,7 @@ type Group struct {
 	DefaultMappedModel          string
 	MessagesDispatchModelConfig OpenAIMessagesDispatchModelConfig
 	ModelAllowlist              GroupModelAllowlist
+	ModelStatusVisibility       GroupModelStatusVisibility
 	// ModelsListConfig is the legacy name kept for older custom-list call sites.
 	ModelsListConfig GroupModelsListConfig
 	// CodexModelsManifestConfig 开启后，普通模型列表与 Codex manifest 优先使用
@@ -167,6 +169,20 @@ func IsGroupBindableInSimpleMode(group *Group) bool {
 
 func (g *Group) IsActive() bool {
 	return g.Status == StatusActive
+}
+
+// ModelStatusVisibilityEnabled reports whether this group's model monitor has
+// an explicit display filter. Empty or disabled configuration keeps all models
+// visible and does not affect request admission.
+func (g *Group) ModelStatusVisibilityEnabled() bool {
+	return g != nil && g.ModelStatusVisibility.Enabled && len(g.ModelStatusVisibility.Models) > 0
+}
+
+func (g *Group) ModelStatusModelVisible(model string) bool {
+	if g == nil {
+		return true
+	}
+	return g.ModelStatusVisibility.Allows(model)
 }
 
 func (g *Group) IsSubscriptionType() bool {

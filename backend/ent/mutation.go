@@ -25449,6 +25449,7 @@ type GroupMutation struct {
 	simulate_claude_max_enabled             *bool
 	messages_dispatch_model_config          *domain.OpenAIMessagesDispatchModelConfig
 	model_allowlist                         *domain.GroupModelAllowlist
+	model_status_visibility                 *domain.GroupModelStatusVisibility
 	codex_models_manifest_config            *domain.GroupCodexModelsManifestConfig
 	rpm_limit                               *int
 	addrpm_limit                            *int
@@ -28715,6 +28716,42 @@ func (m *GroupMutation) ResetModelAllowlist() {
 	m.model_allowlist = nil
 }
 
+// SetModelStatusVisibility sets the "model_status_visibility" field.
+func (m *GroupMutation) SetModelStatusVisibility(dmsv domain.GroupModelStatusVisibility) {
+	m.model_status_visibility = &dmsv
+}
+
+// ModelStatusVisibility returns the value of the "model_status_visibility" field in the mutation.
+func (m *GroupMutation) ModelStatusVisibility() (r domain.GroupModelStatusVisibility, exists bool) {
+	v := m.model_status_visibility
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldModelStatusVisibility returns the old "model_status_visibility" field's value of the Group entity.
+// If the Group object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *GroupMutation) OldModelStatusVisibility(ctx context.Context) (v domain.GroupModelStatusVisibility, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldModelStatusVisibility is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldModelStatusVisibility requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldModelStatusVisibility: %w", err)
+	}
+	return oldValue.ModelStatusVisibility, nil
+}
+
+// ResetModelStatusVisibility resets all changes to the "model_status_visibility" field.
+func (m *GroupMutation) ResetModelStatusVisibility() {
+	m.model_status_visibility = nil
+}
+
 // SetCodexModelsManifestConfig sets the "codex_models_manifest_config" field.
 func (m *GroupMutation) SetCodexModelsManifestConfig(dcmmc domain.GroupCodexModelsManifestConfig) {
 	m.codex_models_manifest_config = &dcmmc
@@ -29706,7 +29743,7 @@ func (m *GroupMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *GroupMutation) Fields() []string {
-	fields := make([]string, 0, 72)
+	fields := make([]string, 0, 73)
 	if m.created_at != nil {
 		fields = append(fields, group.FieldCreatedAt)
 	}
@@ -29899,6 +29936,9 @@ func (m *GroupMutation) Fields() []string {
 	if m.model_allowlist != nil {
 		fields = append(fields, group.FieldModelAllowlist)
 	}
+	if m.model_status_visibility != nil {
+		fields = append(fields, group.FieldModelStatusVisibility)
+	}
 	if m.codex_models_manifest_config != nil {
 		fields = append(fields, group.FieldCodexModelsManifestConfig)
 	}
@@ -30059,6 +30099,8 @@ func (m *GroupMutation) Field(name string) (ent.Value, bool) {
 		return m.MessagesDispatchModelConfig()
 	case group.FieldModelAllowlist:
 		return m.ModelAllowlist()
+	case group.FieldModelStatusVisibility:
+		return m.ModelStatusVisibility()
 	case group.FieldCodexModelsManifestConfig:
 		return m.CodexModelsManifestConfig()
 	case group.FieldRpmLimit:
@@ -30212,6 +30254,8 @@ func (m *GroupMutation) OldField(ctx context.Context, name string) (ent.Value, e
 		return m.OldMessagesDispatchModelConfig(ctx)
 	case group.FieldModelAllowlist:
 		return m.OldModelAllowlist(ctx)
+	case group.FieldModelStatusVisibility:
+		return m.OldModelStatusVisibility(ctx)
 	case group.FieldCodexModelsManifestConfig:
 		return m.OldCodexModelsManifestConfig(ctx)
 	case group.FieldRpmLimit:
@@ -30684,6 +30728,13 @@ func (m *GroupMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetModelAllowlist(v)
+		return nil
+	case group.FieldModelStatusVisibility:
+		v, ok := value.(domain.GroupModelStatusVisibility)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetModelStatusVisibility(v)
 		return nil
 	case group.FieldCodexModelsManifestConfig:
 		v, ok := value.(domain.GroupCodexModelsManifestConfig)
@@ -31443,6 +31494,9 @@ func (m *GroupMutation) ResetField(name string) error {
 		return nil
 	case group.FieldModelAllowlist:
 		m.ResetModelAllowlist()
+		return nil
+	case group.FieldModelStatusVisibility:
+		m.ResetModelStatusVisibility()
 		return nil
 	case group.FieldCodexModelsManifestConfig:
 		m.ResetCodexModelsManifestConfig()
