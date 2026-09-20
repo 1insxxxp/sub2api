@@ -22,6 +22,10 @@ func TestGetByKeyForAuthCarriesGroupModelAllowlist(t *testing.T) {
 			Enabled: true,
 			Models:  []string{"gpt-5.4", "gpt-5.5-*"},
 		},
+		ModelStatusVisibility: service.GroupModelStatusVisibility{
+			Enabled: true,
+			Models:  []string{"gpt-image-1"},
+		},
 	})
 	user := mustCreateUser(t, integrationEntClient, &service.User{
 		Email: fmt.Sprintf("model-allowlist-proj-%d@example.com", suffix), Concurrency: 5,
@@ -47,4 +51,6 @@ func TestGetByKeyForAuthCarriesGroupModelAllowlist(t *testing.T) {
 	require.NotNil(t, got.Group)
 	require.True(t, got.Group.ModelAllowlist.Enabled, "model_allowlist 必须进入认证投影（投影漏列会让分组级准入静默失效）")
 	require.Equal(t, []string{"gpt-5.4", "gpt-5.5-*"}, got.Group.ModelAllowlist.Models)
+	require.True(t, got.Group.ModelStatusVisibility.Enabled)
+	require.Equal(t, []string{"gpt-image-1"}, got.Group.ModelStatusVisibility.Models)
 }
