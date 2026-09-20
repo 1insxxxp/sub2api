@@ -9,6 +9,7 @@
   --workspace-ink: #202731;
   --workspace-muted: #677282;
   --workspace-hover: rgb(148 163 184 / 7%);
+  --workspace-focus: rgb(var(--brand-rgb) / 50%);
   --workspace-shadow: inset 0 1px 0 rgb(255 255 255 / 90%), 0 2px 4px rgb(15 23 42 / 4%);
 }
 
@@ -23,5 +24,6 @@
   --workspace-ink: #e8ecf2;
   --workspace-muted: #a0a9b7;
   --workspace-hover: rgb(255 255 255 / 4%);
+  --workspace-focus: rgb(var(--brand-rgb) / 60%);
   --workspace-shadow: inset 0 1px 0 rgb(255 255 255 / 5%), 0 2px 5px rgb(0 0 0 / 12%);
 }
