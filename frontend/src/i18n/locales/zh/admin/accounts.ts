@@ -1590,6 +1590,7 @@ export default {
       batchSuccess: '成功',
       batchFailed: '失败',
       batchCancelled: '已取消',
+      batchLatency: '耗时 {duration}',
       batchNoResponseBody: '上游没有返回可读取的测试流',
       batchInvalidResponse: '测试响应格式无效',
       batchNoCompletion: '测试未返回完成结果',

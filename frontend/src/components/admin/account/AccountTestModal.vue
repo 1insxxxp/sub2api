@@ -11,14 +11,14 @@
         v-if="account"
         class="brand-floating-card flex items-center justify-between"
       >
-        <div class="flex items-center gap-3">
+        <div class="flex min-w-0 items-center gap-3">
           <div
             class="brand-floating-icon"
           >
             <Icon name="play" size="md" class="text-white" :stroke-width="2" />
           </div>
-          <div>
-            <div class="font-semibold text-slate-950 dark:text-white">{{ account.name }}</div>
+          <div class="min-w-0">
+            <div class="truncate font-semibold text-slate-950 dark:text-white">{{ account.name }}</div>
             <div class="flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400">
               <span
                 class="brand-floating-chip rounded-md px-1.5 py-0.5 text-[10px] uppercase"
@@ -31,7 +31,7 @@
         </div>
         <span
           :class="[
-            'rounded-full px-2.5 py-1 text-xs font-semibold',
+            'shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold',
             account.status === 'active'
               ? 'bg-green-100 text-green-700 dark:bg-green-500/20 dark:text-green-400'
               : 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400'
@@ -103,7 +103,7 @@
         <label class="text-sm font-medium text-gray-700 dark:text-gray-300">
           {{ imageUploadLabel }}
         </label>
-        <div class="flex items-center gap-3">
+        <div class="flex flex-wrap items-center gap-3">
           <button
             type="button"
             class="btn btn-secondary btn-sm shrink-0"
@@ -112,7 +112,7 @@
           >
             {{ t('admin.accounts.grok.chooseImageFile') }}
           </button>
-          <span class="min-w-0 truncate text-xs text-gray-500 dark:text-gray-400">
+          <span class="min-w-0 basis-full truncate text-xs text-gray-500 dark:text-gray-400 sm:basis-auto">
             {{
               uploadImageName
                 ? t('common.selectedFile', { name: uploadImageName })
@@ -142,7 +142,7 @@
         <label class="text-sm font-medium text-gray-700 dark:text-gray-300">
           {{ t('admin.accounts.grok.audioUploadLabel') }}
         </label>
-        <div class="flex items-center gap-3">
+        <div class="flex flex-wrap items-center gap-3">
           <button
             type="button"
             class="btn btn-secondary btn-sm shrink-0"
@@ -151,7 +151,7 @@
           >
             {{ t('admin.accounts.grok.chooseAudioFile') }}
           </button>
-          <span class="min-w-0 truncate text-xs text-gray-500 dark:text-gray-400">
+          <span class="min-w-0 basis-full truncate text-xs text-gray-500 dark:text-gray-400 sm:basis-auto">
             {{
               uploadAudioName
                 ? t('common.selectedFile', { name: uploadAudioName })
@@ -174,7 +174,7 @@
       <div class="group relative">
         <div
           ref="terminalRef"
-          class="max-h-[240px] min-h-[120px] overflow-y-auto rounded-2xl border border-slate-800 bg-slate-950 p-4 font-mono text-sm shadow-inner shadow-black/20 dark:border-slate-700 dark:bg-black/90"
+          class="max-h-[min(30vh,240px)] min-h-[120px] min-w-0 overflow-x-auto overflow-y-auto rounded-2xl border border-slate-800 bg-slate-950 p-4 font-mono text-sm shadow-inner shadow-black/20 dark:border-slate-700 dark:bg-black/90 sm:max-h-[240px]"
         >
           <!-- Status Line -->
           <div v-if="status === 'idle'" class="flex items-center gap-2 text-gray-500">
@@ -187,12 +187,12 @@
           </div>
 
           <!-- Output Lines -->
-          <div v-for="(line, index) in outputLines" :key="index" :class="line.class">
+          <div v-for="(line, index) in outputLines" :key="index" :class="[line.class, 'break-words whitespace-pre-wrap']">
             {{ line.text }}
           </div>
 
           <!-- Streaming Content -->
-          <div v-if="streamingContent" class="text-green-400">
+          <div v-if="streamingContent" class="break-words whitespace-pre-wrap text-green-400">
             {{ streamingContent }}<span class="animate-pulse">_</span>
           </div>
 
@@ -217,7 +217,7 @@
         <button
           v-if="outputLines.length > 0"
           @click="copyOutput"
-          class="absolute right-2 top-2 rounded-lg bg-gray-800/80 p-1.5 text-gray-400 opacity-0 transition-all hover:bg-gray-700 hover:text-white group-hover:opacity-100"
+          class="batch-test-copy absolute right-2 top-2 min-h-10 min-w-10 rounded-lg bg-gray-800/80 p-1.5 text-gray-400 opacity-100 transition-all hover:bg-gray-700 hover:text-white sm:min-h-0 sm:min-w-0 sm:opacity-0 sm:group-hover:opacity-100"
           :title="t('admin.accounts.copyOutput')"
         >
           <Icon name="link" size="sm" :stroke-width="2" />
@@ -228,7 +228,7 @@
         v-if="batchResults.length > 0"
         class="space-y-2 rounded-2xl border border-slate-200/80 bg-slate-50/80 p-3 dark:border-slate-700/80 dark:bg-slate-900/50"
       >
-        <div class="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-600 dark:text-slate-300">
+        <div class="batch-test-summary grid grid-cols-2 gap-2 text-xs text-slate-600 dark:text-slate-300 sm:flex sm:flex-wrap sm:items-center sm:gap-x-3 sm:gap-y-1">
           <span class="font-semibold text-slate-800 dark:text-slate-100">
             {{ t('admin.accounts.batchTotalCount', { count: batchSummary.total }) }}
           </span>
@@ -246,25 +246,30 @@
           <div
             v-for="result in batchResults"
             :key="result.modelId"
-            class="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-200/80 bg-white/70 px-3 py-2 text-xs dark:border-slate-700/80 dark:bg-slate-950/40"
+            class="batch-test-result flex min-w-0 flex-col items-start gap-1.5 rounded-xl border border-slate-200/80 bg-white/70 px-3 py-2 text-xs dark:border-slate-700/80 dark:bg-slate-950/40 sm:flex-row sm:items-center sm:justify-between"
           >
-            <span class="min-w-0 truncate font-medium text-slate-700 dark:text-slate-200">
+            <span class="min-w-0 w-full truncate font-medium text-slate-700 dark:text-slate-200 sm:w-auto sm:flex-1">
               {{ result.displayName }}
             </span>
-            <span
-              :class="[
-                'shrink-0 font-semibold',
-                result.status === 'success'
-                  ? 'text-green-600 dark:text-green-400'
-                  : result.status === 'failed'
-                    ? 'text-red-600 dark:text-red-400'
-                    : result.status === 'testing'
-                      ? 'text-blue-600 dark:text-blue-400'
-                      : 'text-slate-500 dark:text-slate-400'
-              ]"
-            >
-              {{ batchStatusLabel(result.status) }}
-            </span>
+            <div class="flex w-full flex-wrap items-center gap-x-2 gap-y-1 sm:w-auto sm:justify-end">
+              <span
+                :class="[
+                  'shrink-0 font-semibold',
+                  result.status === 'success'
+                    ? 'text-green-600 dark:text-green-400'
+                    : result.status === 'failed'
+                      ? 'text-red-600 dark:text-red-400'
+                      : result.status === 'testing'
+                        ? 'text-blue-600 dark:text-blue-400'
+                        : 'text-slate-500 dark:text-slate-400'
+                ]"
+              >
+                {{ batchStatusLabel(result.status) }}
+              </span>
+              <span v-if="result.durationMs !== undefined" class="shrink-0 tabular-nums text-slate-500 dark:text-slate-400">
+                {{ t('admin.accounts.batchLatency', { duration: formatBatchDuration(result.durationMs) }) }}
+              </span>
+            </div>
             <span v-if="result.error" class="basis-full break-words text-red-500 dark:text-red-400">
               {{ result.error }}
             </span>
@@ -352,14 +357,14 @@
       </Teleport>
 
       <!-- Test Info -->
-      <div class="flex items-center justify-between px-1 text-xs text-gray-500 dark:text-gray-400">
+      <div class="flex flex-wrap items-start justify-between gap-x-3 gap-y-1 px-1 text-xs text-gray-500 dark:text-gray-400">
         <div class="flex items-center gap-3">
           <span class="flex items-center gap-1">
             <Icon name="grid" size="sm" :stroke-width="2" />
             {{ t('admin.accounts.testModel') }}
           </span>
         </div>
-        <span class="flex items-center gap-1">
+        <span class="min-w-0 break-words text-right sm:flex sm:items-center sm:gap-1">
           <Icon name="chat" size="sm" :stroke-width="2" />
           {{ testModeSummary }}
         </span>
@@ -367,10 +372,10 @@
     </div>
 
     <template #footer>
-      <div class="flex justify-end gap-3">
+      <div class="batch-test-actions flex w-full flex-col-reverse gap-2 sm:flex-row sm:justify-end">
         <button
           @click="handleClose"
-          class="btn btn-secondary"
+          class="btn btn-secondary w-full justify-center sm:w-auto"
         >
           {{ t('common.close') }}
         </button>
@@ -378,7 +383,7 @@
           v-if="showModelSelect && modelOptionsForMode.length > 1"
           @click="batchRunning ? stopBatchTest() : startBatchTest()"
           :disabled="!batchRunning && !canBatchTest"
-          class="btn btn-secondary flex items-center gap-2"
+          class="btn btn-secondary w-full justify-center sm:w-auto"
         >
           <Icon
             v-if="batchRunning"
@@ -393,7 +398,7 @@
           @click="startTest"
           :disabled="!canStartTest"
           :class="[
-            'btn flex items-center gap-2',
+            'btn flex w-full items-center justify-center gap-2 sm:w-auto',
             !canStartTest
               ? 'cursor-not-allowed bg-primary-400 text-white'
               : status === 'success'
@@ -798,6 +803,12 @@ const batchStatusLabel = (statusValue: BatchModelStatus) => {
     default:
       return t('admin.accounts.batchPending')
   }
+}
+
+const formatBatchDuration = (durationMs?: number) => {
+  if (durationMs === undefined) return ''
+  if (durationMs < 1000) return `${Math.max(0, Math.round(durationMs))} ms`
+  return `${(durationMs / 1000).toFixed(2)} s`
 }
 
 const sortTestModels = (models: ClaudeModel[]) => {

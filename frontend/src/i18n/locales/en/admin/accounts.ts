@@ -1535,6 +1535,7 @@ export default {
       batchSuccess: 'Success',
       batchFailed: 'Failed',
       batchCancelled: 'Cancelled',
+      batchLatency: 'Duration {duration}',
       batchNoResponseBody: 'The upstream test stream was not readable',
       batchInvalidResponse: 'The test response was invalid',
       batchNoCompletion: 'The test did not return a completion result',

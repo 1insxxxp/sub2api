@@ -154,6 +154,7 @@ describe('AccountTestModal', () => {
     const preview = wrapper.find('img[alt="test-image-1"]')
     expect(preview.exists()).toBe(true)
     expect(preview.attributes('src')).toBe('data:image/png;base64,QUJD')
+    expect(wrapper.find('.batch-test-copy').exists()).toBe(true)
   })
 
   it('grok 账号测试默认选择 Grok 模型', async () => {
@@ -276,12 +277,18 @@ describe('AccountTestModal', () => {
       'gpt-third'
     ])
     expect((wrapper.vm as any).batchResults).toMatchObject([
-      { modelId: 'gpt-first', status: 'success' },
-      { modelId: 'gpt-second', status: 'failed', error: 'upstream denied' },
-      { modelId: 'gpt-third', status: 'success' }
+      { modelId: 'gpt-first', status: 'success', durationMs: expect.any(Number) },
+      { modelId: 'gpt-second', status: 'failed', error: 'upstream denied', durationMs: expect.any(Number) },
+      { modelId: 'gpt-third', status: 'success', durationMs: expect.any(Number) }
     ])
+    for (const result of (wrapper.vm as any).batchResults) {
+      expect(result.durationMs).toBeGreaterThanOrEqual(0)
+    }
     expect(wrapper.text()).toContain('admin.accounts.batchSuccessCount')
     expect(wrapper.text()).toContain('admin.accounts.batchFailedCount')
+    expect(wrapper.text()).toContain('admin.accounts.batchLatency')
+    expect(wrapper.find('.batch-test-actions').classes()).toContain('sm:flex-row')
+    expect(wrapper.find('.batch-test-result').classes()).toContain('sm:flex-row')
   })
 
   it('停止批量测试会取消当前请求并标记未开始的模型', async () => {
