@@ -286,6 +286,29 @@
               <span v-if="selectedCount > 0" class="users-list-count" role="status">
                 {{ t('common.selectedCount', { count: selectedCount }) }}
               </span>
+              <label class="users-mobile-sort">
+                <span>{{ t('admin.users.sortBy') }}</span>
+                <select
+                  :value="mobileSortValue"
+                  :aria-label="t('admin.users.sortBy')"
+                  @change="handleMobileSortChange(($event.target as HTMLSelectElement).value)"
+                >
+                  <option
+                    v-for="column in mobileSortableColumns"
+                    :key="`${column.key}:desc`"
+                    :value="`${column.key}:desc`"
+                  >
+                    {{ column.label }} ↓
+                  </option>
+                  <option
+                    v-for="column in mobileSortableColumns"
+                    :key="`${column.key}:asc`"
+                    :value="`${column.key}:asc`"
+                  >
+                    {{ column.label }} ↑
+                  </option>
+                </select>
+              </label>
             <button
               v-if="selectedCount > 0"
               class="btn btn-secondary users-batch-button"
@@ -1126,6 +1149,8 @@ const loadInitialSortState = (): { sort_by: string; sort_order: 'asc' | 'desc' }
   }
 }
 const sortState = reactive(loadInitialSortState())
+const mobileSortableColumns = computed(() => columns.value.filter((column) => column.sortable))
+const mobileSortValue = computed(() => `${sortState.sort_by}:${sortState.sort_order}`)
 
 // Groups data for the groups column and the existing "authorised group" filter (active only)
 const allGroups = ref<AdminGroup[]>([])
@@ -1777,6 +1802,12 @@ const handleSort = (key: string, order: 'asc' | 'desc') => {
   loadUsers()
 }
 
+const handleMobileSortChange = (value: string) => {
+  const [key, order] = value.split(':')
+  if (!mobileSortableColumns.value.some((column) => column.key === key)) return
+  handleSort(key, order === 'asc' ? 'asc' : 'desc')
+}
+
 // Filter helpers
 const getAttributeDefinitionName = (attrId: number): string => {
   const def = attributeDefinitions.value.find(d => d.id === attrId)
@@ -2036,6 +2067,27 @@ onUnmounted(() => {
   white-space: nowrap;
 }
 
+.users-mobile-sort {
+  display: none;
+  align-items: center;
+  min-width: 0;
+  gap: 0.5rem;
+  color: var(--workspace-muted);
+  font-size: 0.75rem;
+}
+
+.users-mobile-sort select {
+  min-width: 0;
+  flex: 1;
+  min-height: 2.25rem;
+  padding: 0.375rem 0.625rem;
+  border: 1px solid var(--workspace-rule);
+  border-radius: 6px;
+  color: var(--workspace-ink);
+  background: var(--workspace-control);
+  font-size: 0.75rem;
+}
+
 .users-list-actions .users-tool-button {
   width: 2rem;
   height: 2rem;
@@ -2101,6 +2153,10 @@ onUnmounted(() => {
   }
 
   .users-list-secondary:not(.users-selection-summary) {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 0.5rem;
     min-height: 2.75rem;
     padding: 0.625rem 0.75rem;
     border: 1px solid var(--workspace-rule);
@@ -2112,6 +2168,11 @@ onUnmounted(() => {
   .users-list-select-all {
     display: flex;
     min-height: 2rem;
+  }
+
+  .users-mobile-sort {
+    display: flex;
+    grid-column: 1 / -1;
   }
 
   .users-selection-summary {
