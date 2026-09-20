@@ -290,6 +290,7 @@
 }
 @media (max-width: 1023px) {
   .admin-console-theme .app-shell-content .admin-table-stage { border: 0; border-radius: 0; background: transparent; box-shadow: none; }
+  .admin-console-theme .app-shell-content .users-workbench .table-mobile-selection { display: none; }
 }
 @media (max-width: 639px) {
   .admin-console-theme .app-shell-content .stat-card { flex-direction: column; gap: 0.625rem; padding: 0.875rem; }

@@ -220,9 +220,24 @@ describe('admin UsersView', () => {
   it('keeps the admin workspace toolbar surface and touch sized actions contract', () => {
     expect(usersViewSource).toContain('admin-workbench-page')
     expect(usersViewSource).toContain('<AdminListToolbar')
+    expect(usersViewSource).toContain('users-select-all')
     expect(usersViewSource).toContain('min-height: 2.75rem')
     expect(usersViewSource).toContain('min-width: 2.75rem')
     expect(usersViewSource).toMatch(/overflow-wrap:\s*anywhere/)
+  })
+
+  it('keeps the mobile total and select-all controls in one summary bar', async () => {
+    const wrapper = mountBulkDeleteView()
+    await flushPromises()
+
+    const secondary = wrapper.get('[data-test="toolbar-secondary"]')
+    expect(secondary.get('[data-test="users-list-count"]').text()).toContain('1')
+    const selectAll = secondary.get('[data-test="users-select-all"]')
+    expect(selectAll.text()).toContain('common.selectAll')
+
+    await selectAll.get('input').setValue(true)
+    expect(wrapper.get('[data-test="selected-keys"]').text()).toBe('42')
+    wrapper.unmount()
   })
 
   it('keeps the balance history action accessible without a covering hover layer', async () => {

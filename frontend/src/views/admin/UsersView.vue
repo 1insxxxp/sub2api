@@ -271,6 +271,18 @@
               <span data-test="users-list-count" class="users-list-count">
                 {{ t('common.total') }} <strong>{{ pagination.total }}</strong>
               </span>
+              <label class="users-list-select-all" data-test="users-select-all">
+                <input
+                  type="checkbox"
+                  class="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500 dark:border-dark-600 dark:bg-dark-800"
+                  :checked="allVisibleSelected"
+                  :indeterminate="selectedCount > 0 && !allVisibleSelected"
+                  :disabled="loading || sortedUsers.length === 0"
+                  :aria-label="t('common.selectAll')"
+                  @change="toggleVisible(($event.target as HTMLInputElement).checked)"
+                />
+                <span>{{ t('common.selectAll') }}</span>
+              </label>
               <span v-if="selectedCount > 0" class="users-list-count" role="status">
                 {{ t('common.selectedCount', { count: selectedCount }) }}
               </span>
@@ -1394,7 +1406,9 @@ const sortedUsers = computed(() => {
 const {
   selectedIds,
   selectedCount,
+  allVisibleSelected,
   setSelectedIds,
+  toggleVisible,
   clear: clearSelection,
   removeMany: removeSelectedIds
 } = useTableSelection<AdminUser>({
@@ -2012,6 +2026,16 @@ onUnmounted(() => {
   font-weight: 600;
 }
 
+.users-list-select-all {
+  display: none;
+  align-items: center;
+  gap: 0.375rem;
+  margin-inline-start: auto;
+  color: var(--workspace-muted);
+  font-size: 0.75rem;
+  white-space: nowrap;
+}
+
 .users-list-actions .users-tool-button {
   width: 2rem;
   height: 2rem;
@@ -2076,6 +2100,20 @@ onUnmounted(() => {
     overflow-wrap: anywhere;
   }
 
+  .users-list-secondary:not(.users-selection-summary) {
+    min-height: 2.75rem;
+    padding: 0.625rem 0.75rem;
+    border: 1px solid var(--workspace-rule);
+    border-radius: 8px;
+    background: linear-gradient(125deg, var(--workspace-highlight), transparent 68%), var(--workspace-control);
+    box-shadow: var(--workspace-shadow);
+  }
+
+  .users-list-select-all {
+    display: flex;
+    min-height: 2rem;
+  }
+
   .users-selection-summary {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -2103,11 +2141,15 @@ onUnmounted(() => {
 
 @media (max-width: 359px) {
   .users-selection-summary {
-    grid-template-columns: minmax(0, 1fr);
+    grid-template-columns: minmax(0, 1fr) auto;
   }
 
   .users-selection-summary .users-list-count {
     min-height: 1.75rem;
+  }
+
+  .users-selection-summary .users-list-count[role='status'] {
+    grid-column: 1 / -1;
   }
 }
 </style>
