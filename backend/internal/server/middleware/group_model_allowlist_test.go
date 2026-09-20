@@ -40,6 +40,7 @@ func newGroupModelAllowlistTestRouter(apiKey *service.APIKey, pathPrefix string)
 	register(http.MethodPost, pathPrefix+"/models/*modelAction")
 	register(http.MethodGet, pathPrefix+"/realtime")
 	register(http.MethodPost, pathPrefix+"/images/edits")
+	register(http.MethodPost, pathPrefix+"/images/generations")
 	register(http.MethodPost, pathPrefix+"/live")
 	return router, &calls
 }
@@ -63,6 +64,22 @@ func doJSON(t *testing.T, router *gin.Engine, method, path, body string) *httpte
 	w := httptest.NewRecorder()
 	router.ServeHTTP(w, req)
 	return w
+}
+
+func TestGroupModelStatusVisibilityDoesNotBlockImageRequests(t *testing.T) {
+	for _, allowlistEnabled := range []bool{false, true} {
+		key := allowlistAPIKey(allowlistEnabled, "gpt-*")
+		key.Group.Platform = service.PlatformOpenAI
+		key.Group.ModelStatusVisibility = service.GroupModelStatusVisibility{Enabled: true, Models: []string{"gpt-5.4"}}
+		if key.Group.ModelStatusModelVisible("gpt-image-1") {
+			t.Fatal("test fixture must hide the image model from monitoring")
+		}
+		router, calls := newGroupModelAllowlistTestRouter(key, "/v1")
+		w := doJSON(t, router, http.MethodPost, "/v1/images/generations", `{"model":"gpt-image-1","prompt":"test"}`)
+		if w.Code != http.StatusOK || len(*calls) != 1 {
+			t.Fatalf("monitor visibility must not prevent forwarding to image handler: status=%d calls=%v", w.Code, *calls)
+		}
+	}
 }
 
 // readTrackingBody 记录请求体是否被读取，用于断言快速路径零读取。
