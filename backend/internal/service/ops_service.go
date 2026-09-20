@@ -1119,6 +1119,10 @@ func sanitizeErrorBodyForStorage(raw string, maxBytes int) (sanitized string, tr
 		return "", false
 	}
 
+	// Remove upstream addresses before credential redaction and truncation so
+	// stored error details cannot re-expose provider endpoints.
+	raw = string(sanitizeUpstreamErrorBody([]byte(raw)))
+
 	// Prefer JSON-safe sanitization when possible.
 	if out, trunc, _ := sanitizeAndTrimJSONPayload([]byte(raw), maxBytes); out != "" {
 		return out, trunc

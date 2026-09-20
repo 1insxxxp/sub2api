@@ -393,12 +393,13 @@ func (s *GatewayService) handleErrorResponse(ctx context.Context, resp *http.Res
 		logger.LegacyPrintf("service.gateway", "[Forward] Failed to fully read upstream error body: Account=%d(%s) Status=%d err=%v",
 			account.ID, account.Name, resp.StatusCode, readErr)
 	}
+	sanitizedBody := sanitizeUpstreamErrorBody(body)
 
 	// 调试日志：打印上游错误响应
 	logger.LegacyPrintf("service.gateway", "[Forward] Upstream error (non-retryable): Account=%d(%s) Status=%d RequestID=%s Body=%s",
-		account.ID, account.Name, resp.StatusCode, resp.Header.Get("x-request-id"), truncateString(string(body), 1000))
+		account.ID, account.Name, resp.StatusCode, resp.Header.Get("x-request-id"), truncateString(string(sanitizedBody), 1000))
 
-	upstreamMsg := strings.TrimSpace(extractUpstreamErrorMessage(body))
+	upstreamMsg := strings.TrimSpace(extractUpstreamErrorMessage(sanitizedBody))
 	upstreamMsg = sanitizeUpstreamErrorMessage(upstreamMsg)
 
 	// Print a compact upstream request fingerprint when we hit the Claude Code OAuth
@@ -422,7 +423,7 @@ func (s *GatewayService) handleErrorResponse(ctx context.Context, resp *http.Res
 		if maxBytes <= 0 {
 			maxBytes = 2048
 		}
-		upstreamDetail = truncateString(string(body), maxBytes)
+		upstreamDetail = truncateString(string(sanitizedBody), maxBytes)
 	}
 	setOpsUpstreamError(c, resp.StatusCode, upstreamMsg, upstreamDetail)
 	appendOpsUpstreamError(c, OpsUpstreamErrorEvent{
@@ -460,7 +461,7 @@ func (s *GatewayService) handleErrorResponse(ctx context.Context, resp *http.Res
 			account.ID,
 			account.Platform,
 			account.Type,
-			truncateForLog(body, s.cfg.Gateway.LogUpstreamErrorBodyMaxBytes),
+			truncateForLog(sanitizedBody, s.cfg.Gateway.LogUpstreamErrorBodyMaxBytes),
 		)
 	}
 
@@ -498,10 +499,10 @@ func (s *GatewayService) handleErrorResponse(ctx context.Context, resp *http.Res
 
 	switch resp.StatusCode {
 	case 400:
-		c.Data(http.StatusBadRequest, "application/json", body)
+		c.Data(http.StatusBadRequest, "application/json", sanitizedBody)
 		summary := upstreamMsg
 		if summary == "" {
-			summary = truncateForLog(body, 512)
+			summary = truncateForLog(sanitizedBody, 512)
 		}
 		if summary == "" {
 			return nil, fmt.Errorf("upstream error: %d", resp.StatusCode)
@@ -580,10 +581,11 @@ func (s *GatewayService) handleRetryExhaustedError(ctx context.Context, resp *ht
 	respBody, _ := s.readUpstreamErrorBody(resp)
 	_ = resp.Body.Close()
 	resp.Body = io.NopCloser(bytes.NewReader(respBody))
+	sanitizedBody := sanitizeUpstreamErrorBody(respBody)
 
 	s.handleRetryExhaustedSideEffects(ctx, resp, account)
 
-	upstreamMsg := strings.TrimSpace(extractUpstreamErrorMessage(respBody))
+	upstreamMsg := strings.TrimSpace(extractUpstreamErrorMessage(sanitizedBody))
 	upstreamMsg = sanitizeUpstreamErrorMessage(upstreamMsg)
 
 	if isClaudeCodeCredentialScopeError(upstreamMsg) && c != nil {
@@ -604,7 +606,7 @@ func (s *GatewayService) handleRetryExhaustedError(ctx context.Context, resp *ht
 		if maxBytes <= 0 {
 			maxBytes = 2048
 		}
-		upstreamDetail = truncateString(string(respBody), maxBytes)
+		upstreamDetail = truncateString(string(sanitizedBody), maxBytes)
 	}
 	setOpsUpstreamError(c, resp.StatusCode, upstreamMsg, upstreamDetail)
 	appendOpsUpstreamError(c, OpsUpstreamErrorEvent{
@@ -626,7 +628,7 @@ func (s *GatewayService) handleRetryExhaustedError(ctx context.Context, resp *ht
 			account.ID,
 			account.Platform,
 			account.Type,
-			truncateForLog(respBody, s.cfg.Gateway.LogUpstreamErrorBodyMaxBytes),
+			truncateForLog(sanitizedBody, s.cfg.Gateway.LogUpstreamErrorBodyMaxBytes),
 		)
 	}
 

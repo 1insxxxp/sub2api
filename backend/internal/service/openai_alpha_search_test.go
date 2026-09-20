@@ -252,7 +252,7 @@ func TestForwardAlphaSearchAPIKeyMapsModelAndPassesThroughError(t *testing.T) {
 	c.Request = httptest.NewRequest(http.MethodPost, "/alpha/search", bytes.NewReader(body))
 	c.Request.Header.Set("Content-Type", "application/json")
 
-	upstreamBody := `{"error":{"type":"invalid_request_error","message":"bad search"}}`
+	upstreamBody := `{"error":{"type":"invalid_request_error","message":"bad search at https://relay.example:8443/alpha"}}`
 	upstream := &httpUpstreamRecorder{resp: &http.Response{
 		StatusCode: http.StatusBadRequest,
 		Header:     http.Header{"Content-Type": []string{"application/json"}},
@@ -278,7 +278,8 @@ func TestForwardAlphaSearchAPIKeyMapsModelAndPassesThroughError(t *testing.T) {
 	// 上游错误透传不是一次成功的搜索：不返回 result、不产生按次计费。
 	require.Nil(t, result)
 	require.Equal(t, http.StatusBadRequest, recorder.Code)
-	require.JSONEq(t, upstreamBody, recorder.Body.String())
+	require.NotContains(t, recorder.Body.String(), "relay.example")
+	require.Contains(t, recorder.Body.String(), "[upstream-url]")
 	require.Equal(t, "https://compat.example/v4/alpha/search", upstream.lastReq.URL.String())
 	require.Equal(t, "Bearer sk-test", upstream.lastReq.Header.Get("Authorization"))
 	require.Equal(t, "upstream-5.6", gjson.GetBytes(upstream.lastBody, "model").String())

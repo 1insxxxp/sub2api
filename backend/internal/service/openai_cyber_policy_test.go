@@ -28,6 +28,23 @@ func TestMarkAndGetOpsCyberPolicy(t *testing.T) {
 	require.Equal(t, 400, got.UpstreamStatus)
 }
 
+func TestMarkOpsCyberPolicySanitizesUpstreamAddress(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	c, _ := gin.CreateTestContext(httptest.NewRecorder())
+
+	MarkOpsCyberPolicy(c, CyberPolicyMark{
+		Message: "blocked by https://relay.example:8443/policy",
+		Body:    `{"error":{"message":"see https://relay.example:8443/policy"}}`,
+	})
+
+	mark := GetOpsCyberPolicy(c)
+	require.NotNil(t, mark)
+	require.NotContains(t, mark.Message, "relay.example")
+	require.NotContains(t, mark.Body, "relay.example")
+	require.Contains(t, mark.Message, "[upstream-url]")
+	require.Contains(t, mark.Body, "[upstream-url]")
+}
+
 func TestMarkOpsCyberPolicyFirstWins(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	rec := httptest.NewRecorder()

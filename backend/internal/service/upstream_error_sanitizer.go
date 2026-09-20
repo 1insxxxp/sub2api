@@ -21,28 +21,39 @@ func sanitizeUpstreamErrorBody(body []byte) []byte {
 	if err := json.Unmarshal(body, &value); err != nil {
 		return []byte(sanitizeUpstreamErrorMessage(string(body)))
 	}
-	sanitized, err := json.Marshal(sanitizeUpstreamErrorValue(value))
+	sanitizedValue, changed := sanitizeUpstreamErrorValue(value)
+	if !changed {
+		return body
+	}
+	sanitized, err := json.Marshal(sanitizedValue)
 	if err != nil {
 		return body
 	}
 	return sanitized
 }
 
-func sanitizeUpstreamErrorValue(value any) any {
+func sanitizeUpstreamErrorValue(value any) (any, bool) {
 	switch current := value.(type) {
 	case string:
-		return sanitizeUpstreamErrorMessage(current)
+		sanitized := sanitizeUpstreamErrorMessage(current)
+		return sanitized, sanitized != current
 	case map[string]any:
+		changed := false
 		for key, item := range current {
-			current[key] = sanitizeUpstreamErrorValue(item)
+			sanitized, itemChanged := sanitizeUpstreamErrorValue(item)
+			current[key] = sanitized
+			changed = changed || itemChanged
 		}
-		return current
+		return current, changed
 	case []any:
+		changed := false
 		for i, item := range current {
-			current[i] = sanitizeUpstreamErrorValue(item)
+			sanitized, itemChanged := sanitizeUpstreamErrorValue(item)
+			current[i] = sanitized
+			changed = changed || itemChanged
 		}
-		return current
+		return current, changed
 	default:
-		return value
+		return value, false
 	}
 }

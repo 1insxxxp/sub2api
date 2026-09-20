@@ -3969,7 +3969,7 @@ func TestStreamingPassthroughCyberPolicyMarksAndPassesThrough(t *testing.T) {
 			`data: {"type":"response.created","response":{"id":"r1"}}`,
 			"",
 			"event: response.failed",
-			`data: {"type":"response.failed","response":{"error":{"code":"cyber_policy","message":"flagged for cyber policy"}}}`,
+			`data: {"type":"response.failed","response":{"error":{"code":"cyber_policy","message":"flagged for cyber policy at https://relay.example:8443/policy"}}}`,
 			"",
 		}, "\n"))),
 		Header: http.Header{"X-Request-Id": []string{"rid-cyber"}},
@@ -3982,7 +3982,8 @@ func TestStreamingPassthroughCyberPolicyMarksAndPassesThrough(t *testing.T) {
 	require.Contains(t, rec.Body.String(), "cyber_policy", "response.failed passed through to client")
 	mark := GetOpsCyberPolicy(c)
 	require.NotNil(t, mark)
-	require.Equal(t, "flagged for cyber policy", mark.Message)
+	require.NotContains(t, mark.Message, "relay.example")
+	require.Contains(t, mark.Message, "[upstream-url]")
 }
 
 func TestHandleStreamingResponseCyberPolicyMarks(t *testing.T) {

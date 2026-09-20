@@ -37,6 +37,32 @@ func TestApplyErrorPassthroughRule_NoBoundService(t *testing.T) {
 	assert.Equal(t, "Upstream request failed", errMsg)
 }
 
+func TestApplyErrorPassthroughRule_SanitizesUpstreamMessage(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	rec := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(rec)
+
+	ruleSvc := &ErrorPassthroughService{}
+	rule := newNonFailoverPassthroughRule(http.StatusBadRequest, "provider failed", http.StatusBadRequest, "")
+	rule.PassthroughBody = true
+	ruleSvc.setLocalCache([]*model.ErrorPassthroughRule{rule})
+	BindErrorPassthroughService(c, ruleSvc)
+
+	_, _, message, matched := applyErrorPassthroughRule(
+		c,
+		PlatformOpenAI,
+		http.StatusBadRequest,
+		[]byte(`{"error":{"message":"provider failed at https://relay.example:8443/v1"}}`),
+		http.StatusBadGateway,
+		"upstream_error",
+		"Upstream request failed",
+	)
+
+	require.True(t, matched)
+	require.NotContains(t, message, "relay.example")
+	require.Contains(t, message, "[upstream-url]")
+}
+
 func TestGatewayHandleErrorResponse_NoRuleKeepsDefault(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	rec := httptest.NewRecorder()
@@ -63,6 +89,45 @@ func TestGatewayHandleErrorResponse_NoRuleKeepsDefault(t *testing.T) {
 	assert.Equal(t, "Upstream request failed", errField["message"])
 }
 
+func TestGatewayHandleErrorResponse_SanitizesBadRequestBody(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	rec := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(rec)
+
+	svc := &GatewayService{}
+	resp := &http.Response{
+		StatusCode: http.StatusBadRequest,
+		Body:       io.NopCloser(bytes.NewReader([]byte(`{"error":{"message":"invalid request at https://relay.example:8443/v1"}}`))),
+		Header:     http.Header{"Content-Type": []string{"application/json"}},
+	}
+	account := &Account{ID: 15, Platform: PlatformAnthropic, Type: AccountTypeAPIKey}
+
+	_, err := svc.handleErrorResponse(context.Background(), resp, c, account)
+	require.Error(t, err)
+	require.Equal(t, http.StatusBadRequest, rec.Code)
+	require.NotContains(t, rec.Body.String(), "relay.example")
+	require.Contains(t, rec.Body.String(), "[upstream-url]")
+}
+
+func TestGatewayHandleErrorResponse_SanitizesBadRequestFallbackError(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	rec := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(rec)
+
+	svc := &GatewayService{}
+	resp := &http.Response{
+		StatusCode: http.StatusBadRequest,
+		Body:       io.NopCloser(bytes.NewReader([]byte(`{"details":"failed at https://relay.example:8443/v1"}`))),
+		Header:     http.Header{"Content-Type": []string{"application/json"}},
+	}
+	account := &Account{ID: 19, Platform: PlatformAnthropic, Type: AccountTypeAPIKey}
+
+	_, err := svc.handleErrorResponse(context.Background(), resp, c, account)
+	require.Error(t, err)
+	require.NotContains(t, err.Error(), "relay.example")
+	require.NotContains(t, rec.Body.String(), "relay.example")
+}
+
 func TestOpenAIHandleErrorResponse_NoRuleKeepsDefault(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	rec := httptest.NewRecorder()
@@ -87,6 +152,56 @@ func TestOpenAIHandleErrorResponse_NoRuleKeepsDefault(t *testing.T) {
 	require.True(t, ok)
 	assert.Equal(t, "upstream_error", errField["type"])
 	assert.Equal(t, "Upstream request failed", errField["message"])
+}
+
+func TestOpenAIHandleErrorResponse_SanitizesCyberPolicyBody(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	rec := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(rec)
+
+	svc := &OpenAIGatewayService{}
+	resp := &http.Response{
+		StatusCode: http.StatusForbidden,
+		Body:       io.NopCloser(bytes.NewReader([]byte(`{"error":{"code":"cyber_policy","message":"blocked by https://relay.example:8443/policy"}}`))),
+		Header:     http.Header{"Content-Type": []string{"application/json"}},
+	}
+	account := &Account{ID: 16, Platform: PlatformOpenAI, Type: AccountTypeAPIKey}
+
+	_, err := svc.handleErrorResponse(context.Background(), resp, c, account, nil)
+	require.Error(t, err)
+	require.Equal(t, http.StatusForbidden, rec.Code)
+	require.NotContains(t, err.Error(), "relay.example")
+	require.NotContains(t, rec.Body.String(), "relay.example")
+	if mark := GetOpsCyberPolicy(c); mark != nil {
+		require.NotContains(t, mark.Message, "relay.example")
+	}
+	require.Contains(t, rec.Body.String(), "[upstream-url]")
+}
+
+func TestOpenAIHandleCompatErrorResponse_SanitizesCyberPolicyMessage(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	rec := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(rec)
+
+	svc := &OpenAIGatewayService{}
+	resp := &http.Response{
+		StatusCode: http.StatusForbidden,
+		Body:       io.NopCloser(bytes.NewReader([]byte(`{"error":{"code":"cyber_policy","message":"blocked by https://relay.example:8443/policy"}}`))),
+		Header:     http.Header{"Content-Type": []string{"application/json"}},
+	}
+	account := &Account{ID: 18, Platform: PlatformOpenAI, Type: AccountTypeAPIKey}
+
+	_, err := svc.handleCompatErrorResponse(resp, c, account, func(c *gin.Context, status int, errType, message string) {
+		c.JSON(status, gin.H{"error": gin.H{"type": errType, "message": message}})
+	})
+	require.Error(t, err)
+	require.Equal(t, http.StatusForbidden, rec.Code)
+	require.NotContains(t, err.Error(), "relay.example")
+	require.NotContains(t, rec.Body.String(), "relay.example")
+	if mark := GetOpsCyberPolicy(c); mark != nil {
+		require.NotContains(t, mark.Message, "relay.example")
+	}
+	require.Contains(t, rec.Body.String(), "[upstream-url]")
 }
 
 func TestOpenAIHandleErrorResponse_ContextWindow502KeepsMessageWithoutFailover(t *testing.T) {
@@ -137,6 +252,26 @@ func TestGeminiWriteGeminiMappedError_NoRuleKeepsDefault(t *testing.T) {
 	require.True(t, ok)
 	assert.Equal(t, "invalid_request_error", errField["type"])
 	assert.Equal(t, "Upstream request failed", errField["message"])
+}
+
+func TestGeminiWriteGeminiNativeUpstreamError_SanitizesBody(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	rec := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(rec)
+
+	svc := &GeminiMessagesCompatService{}
+	resp := &http.Response{
+		StatusCode: http.StatusBadRequest,
+		Header:     http.Header{"Content-Type": []string{"application/json"}},
+	}
+	account := &Account{ID: 17, Platform: PlatformGemini, Type: AccountTypeAPIKey}
+	body := []byte(`{"error":{"message":"invalid request at https://relay.example:8443/v1"}}`)
+
+	err := svc.writeGeminiNativeUpstreamError(c, account, resp, body, "req-3", false)
+	require.Error(t, err)
+	require.Equal(t, http.StatusBadRequest, rec.Code)
+	require.NotContains(t, rec.Body.String(), "relay.example")
+	require.Contains(t, rec.Body.String(), "[upstream-url]")
 }
 
 func TestGatewayHandleErrorResponse_AppliesRuleFor422(t *testing.T) {

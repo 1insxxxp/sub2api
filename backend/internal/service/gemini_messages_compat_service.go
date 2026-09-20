@@ -1803,7 +1803,7 @@ func (s *GeminiMessagesCompatService) upstreamErrorDetail(body []byte) string {
 	if maxBytes <= 0 {
 		maxBytes = 2048
 	}
-	return truncateString(string(body), maxBytes)
+	return truncateString(string(sanitizeUpstreamErrorBody(body)), maxBytes)
 }
 
 // writeGeminiCustomCodeSkippedError 处理自定义错误码未命中且不可 failover 的上游错误：
@@ -1832,15 +1832,16 @@ func (s *GeminiMessagesCompatService) writeGeminiCustomCodeSkippedError(c *gin.C
 	return fmt.Errorf("gemini upstream error: %d (not in custom error codes) message=%s", upstreamStatus, upstreamMsg)
 }
 
-// writeGeminiNativeUpstreamError 将不可 failover 的上游错误按原始状态码与响应体透传给客户端，
+// writeGeminiNativeUpstreamError 将不可 failover 的上游错误按原始状态码与脱敏响应体透传给客户端，
 // 并记录 ops 错误事件。状态码保真：下游据此区分请求级错误与可重试的链路故障。
 func (s *GeminiMessagesCompatService) writeGeminiNativeUpstreamError(c *gin.Context, account *Account, resp *http.Response, respBody []byte, requestID string, isOAuth bool) error {
 	respBody = unwrapIfNeeded(isOAuth, respBody)
-	upstreamMsg := strings.TrimSpace(extractUpstreamErrorMessage(respBody))
+	sanitizedBody := sanitizeUpstreamErrorBody(respBody)
+	upstreamMsg := strings.TrimSpace(extractUpstreamErrorMessage(sanitizedBody))
 	upstreamMsg = sanitizeUpstreamErrorMessage(upstreamMsg)
-	upstreamDetail := s.upstreamErrorDetail(respBody)
+	upstreamDetail := s.upstreamErrorDetail(sanitizedBody)
 	if s.cfg != nil && s.cfg.Gateway.LogUpstreamErrorBody {
-		logger.LegacyPrintf("service.gemini_messages_compat", "[Gemini] native upstream error %d: %s", resp.StatusCode, truncateForLog(respBody, s.cfg.Gateway.LogUpstreamErrorBodyMaxBytes))
+		logger.LegacyPrintf("service.gemini_messages_compat", "[Gemini] native upstream error %d: %s", resp.StatusCode, truncateForLog(sanitizedBody, s.cfg.Gateway.LogUpstreamErrorBodyMaxBytes))
 	}
 	setOpsUpstreamError(c, resp.StatusCode, upstreamMsg, upstreamDetail)
 	appendOpsUpstreamError(c, OpsUpstreamErrorEvent{
@@ -1861,7 +1862,7 @@ func (s *GeminiMessagesCompatService) writeGeminiNativeUpstreamError(c *gin.Cont
 		contentType = "application/json"
 	}
 	MarkResponseCommitted(c)
-	c.Data(resp.StatusCode, contentType, respBody)
+	c.Data(resp.StatusCode, contentType, sanitizedBody)
 	if upstreamMsg == "" {
 		return fmt.Errorf("gemini upstream error: %d", resp.StatusCode)
 	}

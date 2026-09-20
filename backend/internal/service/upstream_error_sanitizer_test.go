@@ -33,6 +33,54 @@ func TestSanitizeUpstreamErrorBodyMasksUpstreamAddresses(t *testing.T) {
 	require.Equal(t, "not_found", gjson.GetBytes(sanitized, "error.code").String())
 }
 
+func TestSanitizeUpstreamErrorBodyPreservesUnchangedJSONBytes(t *testing.T) {
+	body := []byte(`{"type":"response.failed","response":{"status":"failed","error":{"code":"content_policy","message":"request blocked by policy"},"usage":{"input_tokens":6,"output_tokens":0,"total_tokens":6}}}`)
+
+	require.Equal(t, string(body), string(sanitizeUpstreamErrorBody(body)))
+}
+
+func TestSanitizeUpstreamErrorBodyMasksNestedAndPlainTextAddresses(t *testing.T) {
+	body := []byte(`{
+		"error": {
+			"message": "request failed at https://relay.example:8443/v1/responses?access_token=secret",
+			"details": [{"endpoint": "[10.20.30.40:9443]"}]
+		},
+		"message": "see https://relay.example:8443/debug"
+	}`)
+
+	sanitized := sanitizeUpstreamErrorBody(body)
+
+	require.NotContains(t, string(sanitized), "relay.example")
+	require.NotContains(t, string(sanitized), "10.20.30.40")
+	require.NotContains(t, string(sanitized), "access_token=secret")
+	require.Contains(t, string(sanitized), "[upstream-url]")
+	require.Contains(t, string(sanitized), "[upstream]")
+
+	plainText := sanitizeUpstreamErrorBody([]byte("upstream https://relay.example:8443/v1 failed"))
+	require.NotContains(t, string(plainText), "relay.example")
+	require.Contains(t, string(plainText), "[upstream-url]")
+}
+
+func TestSanitizeErrorBodyForStorageMasksUpstreamAddresses(t *testing.T) {
+	raw := `{"error":{"message":"provider failed at https://relay.example:8443/v1","api_key":"secret"}}`
+
+	sanitized, _ := sanitizeErrorBodyForStorage(raw, 4096)
+
+	require.NotContains(t, sanitized, "relay.example")
+	require.NotContains(t, sanitized, "secret")
+	require.Contains(t, sanitized, "[upstream-url]")
+}
+
+func TestSanitizeOpenAIResponseFailedEventForClientMasksAddress(t *testing.T) {
+	payload := []byte(`{"type":"response.failed","response":{"status":"failed","error":{"code":"upstream_error","message":"blocked by https://relay.example:8443/policy"}}}`)
+
+	sanitized, changed := sanitizeOpenAIResponseFailedEventForClient(payload, "response.failed", false)
+
+	require.True(t, changed)
+	require.NotContains(t, string(sanitized), "relay.example")
+	require.Contains(t, string(sanitized), "[upstream-url]")
+}
+
 func TestForwardEmbeddingsSanitizesRawUpstreamErrorBody(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
