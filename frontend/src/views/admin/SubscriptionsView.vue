@@ -1,6 +1,6 @@
 <template>
   <AppLayout>
-    <div class="space-y-6">
+    <div class="subscriptions-admin-page space-y-6">
       <TablePageLayout>
       <template #filters>
         <!-- Top Toolbar: Left (search + filters) / Right (actions) -->
@@ -174,6 +174,12 @@
           :columns="columns"
           :data="subscriptions"
           :loading="loading"
+          :mobile-layout="{
+            title: 'user',
+            leading: 'group',
+            status: 'status',
+            summary: ['usage', 'expires_at']
+          }"
           :server-side-sort="true"
           default-sort-key="created_at"
           default-sort-order="desc"
