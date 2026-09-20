@@ -112,6 +112,7 @@ const DataTableStub = {
         <slot :name="'header-' + col.key" :column="col" />
       </template>
       <div v-for="row in data" :key="row.id">
+        <slot name="cell-balance" :value="row.balance" :row="row" />
         <slot name="cell-last_used_at" :value="row.last_used_at" :row="row" />
         <div data-test="attribute-cell"><slot name="cell-attr_7" :row="row" /></div>
       </div>
@@ -222,6 +223,19 @@ describe('admin UsersView', () => {
     expect(usersViewSource).toContain('min-height: 2.75rem')
     expect(usersViewSource).toContain('min-width: 2.75rem')
     expect(usersViewSource).toMatch(/overflow-wrap:\s*anywhere/)
+  })
+
+  it('keeps the balance history action accessible without a covering hover layer', async () => {
+    const wrapper = mountBulkDeleteView()
+    await flushPromises()
+
+    const balanceButton = wrapper.findAll('button').find((button) => button.text().includes('$0.00'))
+    expect(balanceButton).toBeDefined()
+    expect(balanceButton?.attributes('aria-label')).toBe('admin.users.balanceHistoryTip')
+    expect(balanceButton?.attributes('title')).toBeUndefined()
+    const balanceCell = balanceButton?.element.parentElement?.parentElement
+    expect(balanceCell?.querySelector('[class*="group-hover:opacity-100"]')).toBeNull()
+    wrapper.unmount()
   })
 
   it('separates search, filters and selection actions while counting active saved filters', async () => {
