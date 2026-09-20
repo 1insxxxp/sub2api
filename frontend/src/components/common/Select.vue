@@ -642,12 +642,18 @@ onUnmounted(() => {
 <style>
 .select-dropdown-portal {
   @apply w-max min-w-[200px];
-  @apply bg-white dark:bg-dark-800;
-  @apply rounded-xl;
-  @apply border border-gray-200 dark:border-dark-700;
-  @apply shadow-lg shadow-black/10 dark:shadow-black/30;
+  @apply rounded-[10px];
+  border: 1px solid rgb(148 163 184 / 24%);
+  background: linear-gradient(135deg, rgb(255 255 255 / 92%), transparent 68%), #fff;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 92%), 0 10px 26px rgb(15 23 42 / 10%);
   @apply overflow-hidden;
   pointer-events: auto !important;
+}
+
+.dark .select-dropdown-portal {
+  border-color: rgb(255 255 255 / 12%);
+  background: linear-gradient(135deg, rgb(255 255 255 / 5%), transparent 68%), #27292e;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 7%), 0 12px 28px rgb(0 0 0 / 24%);
 }
 
 .select-dropdown-layer {
@@ -684,7 +690,7 @@ onUnmounted(() => {
 
 .select-dropdown-portal .select-option {
   @apply flex items-center justify-between gap-2;
-  @apply px-4 py-2.5 text-sm;
+  @apply mx-1 rounded-lg px-3 py-2.5 text-sm;
   @apply text-gray-700 dark:text-gray-300;
   @apply cursor-pointer transition-colors duration-150;
   @apply hover:bg-gray-50 dark:hover:bg-dark-700;
@@ -692,7 +698,7 @@ onUnmounted(() => {
 }
 
 .select-dropdown-portal .select-option-selected {
-  @apply bg-primary-50 dark:bg-primary-900/20;
+  background: rgb(var(--brand-rgb) / 10%);
   @apply text-primary-700 dark:text-primary-300;
 }
 
@@ -839,11 +845,12 @@ onUnmounted(() => {
   }
 
   .select-dropdown-layer-mobile .select-search {
-    margin: 0.75rem 1rem 0.25rem;
+    margin: 0.75rem 1rem 0.375rem;
     padding: 0.7rem 0.75rem;
-    border: 1px solid #e2e8f0;
+    border: 1px solid rgb(148 163 184 / 24%);
     border-radius: 0.75rem;
-    background: #f8fafc;
+    background: linear-gradient(135deg, rgb(255 255 255 / 78%), transparent), #f8fafc;
+    box-shadow: inset 0 1px 0 rgb(255 255 255 / 85%);
   }
 
   .select-dropdown-layer-mobile .select-options {
