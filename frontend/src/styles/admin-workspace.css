@@ -168,12 +168,30 @@
 .admin-console-theme .select-dropdown-portal .select-option-selected { background: rgb(var(--brand-rgb) / 8%); }
 
 .admin-console-theme .settings-tabs-brand-glow { display: none; }
+.admin-console-theme .settings-tabs-brand-shell {
+  position: relative;
+  top: auto;
+  margin-inline: 0;
+  padding: 0.375rem;
+  overflow-x: auto;
+  overflow-y: hidden;
+  border: 1px solid var(--workspace-divider);
+  border-radius: 0.5rem;
+  background: var(--workspace-surface);
+  box-shadow: var(--workspace-shadow);
+}
+.admin-console-theme .settings-tabs-brand-shell .settings-tabs-scroll { overflow-x: auto; }
+.admin-console-theme .settings-tabs-brand-shell .settings-tabs { gap: 0.25rem; }
 .admin-console-theme .settings-tabs-brand-shell .settings-tab {
   min-height: 2.75rem;
   border: 1px solid transparent;
   border-radius: 7px;
   background: transparent;
   box-shadow: none;
+}
+.admin-console-theme .settings-tabs-brand-shell .settings-tab-icon {
+  width: 1.25rem;
+  height: 1.25rem;
 }
 .admin-console-theme .settings-tabs-brand-shell .settings-tab-active {
   border-color: var(--workspace-rule);
@@ -209,7 +227,7 @@
 }
 .admin-console-theme .brand-overlay .brand-floating-panel:not(.modal-content)::before { display: none; }
 .admin-console-theme .brand-overlay .brand-floating-header { border-color: var(--workspace-rule); background: transparent; }
-.admin-console-theme .brand-overlay :is(.brand-floating-card, .brand-floating-icon) {
+.admin-console-theme .brand-overlay .brand-floating-card {
   border-color: var(--workspace-rule);
   border-radius: 7px;
   background: var(--workspace-control);
