@@ -49,7 +49,7 @@
         <Select
           v-model="grokTestMode"
           :options="grokTestModeOptions"
-          :disabled="status === 'connecting'"
+          :disabled="status === 'connecting' || batchRunning"
         />
         <p class="text-xs text-gray-500 dark:text-gray-400">
           {{ t('admin.accounts.grok.testModeHint') }}
@@ -63,7 +63,7 @@
         <Select
           v-model="selectedModelId"
           :options="modelOptionsForMode"
-          :disabled="loadingModels || status === 'connecting'"
+          :disabled="loadingModels || status === 'connecting' || batchRunning"
           value-key="id"
           label-key="display_name"
           :placeholder="loadingModels ? t('common.loading') + '...' : t('admin.accounts.selectTestModel')"
@@ -77,7 +77,7 @@
         <Select
           v-model="testMode"
           :options="openAITestModeOptions"
-          :disabled="status === 'connecting'"
+          :disabled="status === 'connecting' || batchRunning"
         />
       </div>
 
@@ -87,7 +87,7 @@
           :label="promptInputLabel"
           :placeholder="promptInputPlaceholder"
           :hint="promptInputHint"
-          :disabled="status === 'connecting'"
+          :disabled="status === 'connecting' || batchRunning"
           rows="3"
         />
       </div>
@@ -107,7 +107,7 @@
           <button
             type="button"
             class="btn btn-secondary btn-sm shrink-0"
-            :disabled="status === 'connecting'"
+            :disabled="status === 'connecting' || batchRunning"
             @click="imageFileInput?.click()"
           >
             {{ t('admin.accounts.grok.chooseImageFile') }}
@@ -124,7 +124,7 @@
             type="file"
             accept="image/png,image/jpeg,image/webp,image/gif"
             class="hidden"
-            :disabled="status === 'connecting'"
+            :disabled="status === 'connecting' || batchRunning"
             @change="onImageFileChange"
           />
         </div>
@@ -146,7 +146,7 @@
           <button
             type="button"
             class="btn btn-secondary btn-sm shrink-0"
-            :disabled="status === 'connecting'"
+            :disabled="status === 'connecting' || batchRunning"
             @click="audioFileInput?.click()"
           >
             {{ t('admin.accounts.grok.chooseAudioFile') }}
@@ -163,7 +163,7 @@
             type="file"
             accept="audio/*,.wav,.mp3,.m4a,.ogg,.webm"
             class="hidden"
-            :disabled="status === 'connecting'"
+            :disabled="status === 'connecting' || batchRunning"
             @change="onAudioFileChange"
           />
         </div>
@@ -222,6 +222,54 @@
         >
           <Icon name="link" size="sm" :stroke-width="2" />
         </button>
+      </div>
+
+      <div
+        v-if="batchResults.length > 0"
+        class="space-y-2 rounded-2xl border border-slate-200/80 bg-slate-50/80 p-3 dark:border-slate-700/80 dark:bg-slate-900/50"
+      >
+        <div class="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-600 dark:text-slate-300">
+          <span class="font-semibold text-slate-800 dark:text-slate-100">
+            {{ t('admin.accounts.batchTotalCount', { count: batchSummary.total }) }}
+          </span>
+          <span class="text-green-600 dark:text-green-400">
+            {{ t('admin.accounts.batchSuccessCount', { count: batchSummary.success }) }}
+          </span>
+          <span class="text-red-600 dark:text-red-400">
+            {{ t('admin.accounts.batchFailedCount', { count: batchSummary.failed }) }}
+          </span>
+          <span v-if="batchSummary.cancelled > 0" class="text-slate-500 dark:text-slate-400">
+            {{ t('admin.accounts.batchCancelledCount', { count: batchSummary.cancelled }) }}
+          </span>
+        </div>
+        <div class="space-y-1.5">
+          <div
+            v-for="result in batchResults"
+            :key="result.modelId"
+            class="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-200/80 bg-white/70 px-3 py-2 text-xs dark:border-slate-700/80 dark:bg-slate-950/40"
+          >
+            <span class="min-w-0 truncate font-medium text-slate-700 dark:text-slate-200">
+              {{ result.displayName }}
+            </span>
+            <span
+              :class="[
+                'shrink-0 font-semibold',
+                result.status === 'success'
+                  ? 'text-green-600 dark:text-green-400'
+                  : result.status === 'failed'
+                    ? 'text-red-600 dark:text-red-400'
+                    : result.status === 'testing'
+                      ? 'text-blue-600 dark:text-blue-400'
+                      : 'text-slate-500 dark:text-slate-400'
+              ]"
+            >
+              {{ batchStatusLabel(result.status) }}
+            </span>
+            <span v-if="result.error" class="basis-full break-words text-red-500 dark:text-red-400">
+              {{ result.error }}
+            </span>
+          </div>
+        </div>
       </div>
 
       <div v-if="generatedImages.length > 0" class="space-y-2">
@@ -327,6 +375,21 @@
           {{ t('common.close') }}
         </button>
         <button
+          v-if="showModelSelect && modelOptionsForMode.length > 1"
+          @click="batchRunning ? stopBatchTest() : startBatchTest()"
+          :disabled="!batchRunning && !canBatchTest"
+          class="btn btn-secondary flex items-center gap-2"
+        >
+          <Icon
+            v-if="batchRunning"
+            name="x"
+            size="sm"
+            :stroke-width="2"
+          />
+          <Icon v-else name="grid" size="sm" :stroke-width="2" />
+          <span>{{ batchRunning ? t('admin.accounts.stopBatchTest') : t('admin.accounts.testAllModels') }}</span>
+        </button>
+        <button
           @click="startTest"
           :disabled="!canStartTest"
           :class="[
@@ -385,6 +448,16 @@ interface OutputLine {
   class: string
 }
 
+type BatchModelStatus = 'pending' | 'testing' | 'success' | 'failed' | 'cancelled'
+
+interface BatchModelResult {
+  modelId: string
+  displayName: string
+  status: BatchModelStatus
+  error?: string
+  durationMs?: number
+}
+
 interface PreviewMedia {
   url: string
   mimeType?: string
@@ -422,6 +495,10 @@ const uploadAudioDataURL = ref('')
 const uploadAudioName = ref('')
 const imageFileInput = ref<HTMLInputElement | null>(null)
 const audioFileInput = ref<HTMLInputElement | null>(null)
+const batchResults = ref<BatchModelResult[]>([])
+const batchRunning = ref(false)
+let batchAbortController: AbortController | null = null
+let batchRunToken = 0
 const isOpenAIAccount = computed(() => props.account?.platform === 'openai')
 const isGrokAccount = computed(() => props.account?.platform === 'grok')
 const openAITestModeOptions = computed(() => [
@@ -674,7 +751,7 @@ const testModeSummary = computed(() => {
 })
 
 const canStartTest = computed(() => {
-  if (status.value === 'connecting') return false
+  if (status.value === 'connecting' || batchRunning.value) return false
   if (isGrokAccount.value) {
     if (
       grokTestMode.value === 'search' ||
@@ -688,6 +765,40 @@ const canStartTest = computed(() => {
   }
   return Boolean(selectedModelId.value)
 })
+
+const canBatchTest = computed(
+  () => showModelSelect.value && modelOptionsForMode.value.length > 1 && !batchRunning.value
+)
+
+const batchSummary = computed(() => {
+  const summary = {
+    total: batchResults.value.length,
+    success: 0,
+    failed: 0,
+    cancelled: 0
+  }
+  for (const result of batchResults.value) {
+    if (result.status === 'success') summary.success += 1
+    if (result.status === 'failed') summary.failed += 1
+    if (result.status === 'cancelled') summary.cancelled += 1
+  }
+  return summary
+})
+
+const batchStatusLabel = (statusValue: BatchModelStatus) => {
+  switch (statusValue) {
+    case 'testing':
+      return t('admin.accounts.batchTesting')
+    case 'success':
+      return t('admin.accounts.batchSuccess')
+    case 'failed':
+      return t('admin.accounts.batchFailed')
+    case 'cancelled':
+      return t('admin.accounts.batchCancelled')
+    default:
+      return t('admin.accounts.batchPending')
+  }
+}
 
 const sortTestModels = (models: ClaudeModel[]) => {
   const priorityMap = new Map(prioritizedGeminiModels.map((id, index) => [id, index]))
@@ -792,6 +903,7 @@ async function loadAvailableModels() {
 }
 
 function resetState() {
+  cancelBatchTest(false)
   status.value = 'idle'
   outputLines.value = []
   streamingContent.value = ''
@@ -800,6 +912,7 @@ function resetState() {
   generatedAudios.value = []
   generatedVideos.value = []
   previewImageUrl.value = ''
+  batchResults.value = []
 }
 
 const handleClose = () => {
@@ -812,6 +925,27 @@ function abortStream() {
     abortController.abort()
     abortController = null
   }
+  cancelBatchTest(true)
+}
+
+function cancelBatchTest(markCancelled: boolean) {
+  batchRunToken += 1
+  if (batchAbortController) {
+    batchAbortController.abort()
+    batchAbortController = null
+  }
+  if (markCancelled) {
+    for (const result of batchResults.value) {
+      if (result.status === 'pending' || result.status === 'testing') {
+        result.status = 'cancelled'
+      }
+    }
+  }
+  batchRunning.value = false
+}
+
+function stopBatchTest() {
+  cancelBatchTest(true)
 }
 
 const addLine = (text: string, className: string = 'text-gray-300') => {
@@ -823,6 +957,153 @@ const scrollToBottom = async () => {
   await nextTick()
   if (terminalRef.value) {
     terminalRef.value.scrollTop = terminalRef.value.scrollHeight
+  }
+}
+
+interface AccountTestRequestBody {
+  model_id: string
+  prompt: string
+  mode?: string
+  image_data_url?: string
+  audio_data_url?: string
+}
+
+interface BatchRunOutcome {
+  success: boolean
+  error?: string
+}
+
+const buildTestRequestBody = (modelId: string): AccountTestRequestBody => {
+  const requestBody: AccountTestRequestBody = {
+    model_id: showModelSelect.value ? modelId : '',
+    prompt: supportsPromptInput.value ? testPrompt.value.trim() : ''
+  }
+  if (isOpenAIAccount.value) {
+    requestBody.mode = testMode.value
+  }
+  if (isGrokAccount.value) {
+    requestBody.mode = grokTestMode.value
+    if (
+      grokTestMode.value === 'search' ||
+      grokTestMode.value === 'tts' ||
+      grokTestMode.value === 'stt' ||
+      grokTestMode.value === 'realtime'
+    ) {
+      requestBody.model_id = ''
+    }
+    if (uploadImageDataURL.value && (grokTestMode.value === 'image' || grokTestMode.value === 'video')) {
+      requestBody.image_data_url = uploadImageDataURL.value
+    }
+    if (uploadAudioDataURL.value && grokTestMode.value === 'stt') {
+      requestBody.audio_data_url = uploadAudioDataURL.value
+    }
+  }
+  return requestBody
+}
+
+const readSSEEvents = async (
+  response: Response,
+  onEvent: (event: { type: string; success?: boolean; error?: string }) => void
+) => {
+  const reader = response.body?.getReader()
+  if (!reader) {
+    throw new Error(t('admin.accounts.batchNoResponseBody'))
+  }
+
+  const decoder = new TextDecoder()
+  let buffer = ''
+  while (true) {
+    const { done, value } = await reader.read()
+    if (done) break
+
+    buffer += decoder.decode(value, { stream: true })
+    const lines = buffer.split('\n')
+    buffer = lines.pop() || ''
+    for (const line of lines) {
+      if (!line.startsWith('data: ')) continue
+      const jsonStr = line.slice(6).trim()
+      if (!jsonStr) continue
+      try {
+        onEvent(JSON.parse(jsonStr))
+      } catch {
+        throw new Error(t('admin.accounts.batchInvalidResponse'))
+      }
+    }
+  }
+}
+
+const runBatchModel = async (modelId: string, signal: AbortSignal): Promise<BatchRunOutcome> => {
+  if (!props.account) return { success: false, error: t('common.unknownError') }
+
+  const response = await fetch(buildApiUrl(`/admin/accounts/${props.account.id}/test`), {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${localStorage.getItem('auth_token')}`,
+      'Content-Type': 'application/json',
+      [ADMIN_UI_REQUEST_HEADER]: '1'
+    },
+    body: JSON.stringify(buildTestRequestBody(modelId)),
+    signal
+  })
+
+  if (!response.ok) {
+    return { success: false, error: `HTTP error! status: ${response.status}` }
+  }
+
+  let outcome: BatchRunOutcome | null = null
+  await readSSEEvents(response, (event) => {
+    if (event.type === 'error') {
+      outcome = { success: false, error: event.error || t('admin.accounts.testFailed') }
+    } else if (event.type === 'test_complete') {
+      outcome = event.success
+        ? { success: true }
+        : { success: false, error: event.error || t('admin.accounts.testFailed') }
+    }
+  })
+
+  return outcome || { success: false, error: t('admin.accounts.batchNoCompletion') }
+}
+
+const startBatchTest = async () => {
+  if (!props.account || !canBatchTest.value) return
+
+  resetState()
+  const models = modelOptionsForMode.value.map((model) => ({
+    modelId: model.id,
+    displayName: model.display_name || model.id,
+    status: 'pending' as const
+  }))
+  if (models.length < 2) return
+
+  batchResults.value = models
+  batchRunning.value = true
+  const runToken = ++batchRunToken
+  const controller = new AbortController()
+  batchAbortController = controller
+
+  try {
+    for (const result of batchResults.value) {
+      if (runToken !== batchRunToken || controller.signal.aborted) break
+      result.status = 'testing'
+      const startedAt = Date.now()
+      try {
+        const outcome = await runBatchModel(result.modelId, controller.signal)
+        if (runToken !== batchRunToken || controller.signal.aborted) break
+        result.status = outcome.success ? 'success' : 'failed'
+        result.error = outcome.error
+      } catch (error: unknown) {
+        if (runToken !== batchRunToken || controller.signal.aborted) break
+        result.status = 'failed'
+        result.error = error instanceof Error ? error.message : t('common.unknownError')
+      } finally {
+        result.durationMs = Date.now() - startedAt
+      }
+    }
+  } finally {
+    if (runToken === batchRunToken) {
+      batchRunning.value = false
+      batchAbortController = null
+    }
   }
 }
 
@@ -845,38 +1126,7 @@ const startTest = async () => {
   abortController = new AbortController()
 
   try {
-    const requestBody: {
-      model_id: string
-      prompt: string
-      mode?: string
-      image_data_url?: string
-      audio_data_url?: string
-    } = {
-      model_id: showModelSelect.value ? selectedModelId.value : '',
-      prompt: supportsPromptInput.value ? testPrompt.value.trim() : ''
-    }
-    if (isOpenAIAccount.value) {
-      requestBody.mode = testMode.value
-    }
-    if (isGrokAccount.value) {
-      // Always send explicit Grok mode. search/tts/stt/realtime are standalone
-      // endpoints (no free-form model select). text/image/video use optional model.
-      requestBody.mode = grokTestMode.value
-      if (
-        grokTestMode.value === 'search' ||
-        grokTestMode.value === 'tts' ||
-        grokTestMode.value === 'stt' ||
-        grokTestMode.value === 'realtime'
-      ) {
-        requestBody.model_id = ''
-      }
-      if (uploadImageDataURL.value && (grokTestMode.value === 'image' || grokTestMode.value === 'video')) {
-        requestBody.image_data_url = uploadImageDataURL.value
-      }
-      if (uploadAudioDataURL.value && grokTestMode.value === 'stt') {
-        requestBody.audio_data_url = uploadAudioDataURL.value
-      }
-    }
+    const requestBody = buildTestRequestBody(selectedModelId.value)
 
     // Use the configured API base; EventSource does not support POST.
     const url = buildApiUrl(`/admin/accounts/${props.account.id}/test`)

@@ -232,4 +232,91 @@ describe('AccountTestModal', () => {
       mode: 'compact'
     })
   })
+
+  it('可以按模型顺序批量测试，并在失败后继续测试后续模型', async () => {
+    getAvailableModels.mockResolvedValue([
+      { id: 'gpt-first', display_name: 'GPT First' },
+      { id: 'gpt-second', display_name: 'GPT Second' },
+      { id: 'gpt-third', display_name: 'GPT Third' }
+    ])
+    let responseIndex = 0
+    global.fetch = vi.fn().mockImplementation(() => {
+      const index = responseIndex++
+      const model = ['gpt-first', 'gpt-second', 'gpt-third'][index]
+      const lines = index === 1
+        ? [`data: {"type":"error","error":"upstream denied"}\n`]
+        : [
+            `data: {"type":"test_start","model":"${model}"}\n`,
+            'data: {"type":"test_complete","success":true}\n'
+          ]
+      return Promise.resolve(createStreamResponse(lines))
+    }) as any
+
+    const wrapper = mountModal({
+      show: true,
+      account: {
+        id: 42,
+        name: 'OpenAI Account',
+        platform: 'openai',
+        type: 'apikey',
+        status: 'active'
+      }
+    })
+    await flushPromises()
+
+    const batchButton = wrapper.findAll('button').find((button) => button.text().includes('admin.accounts.testAllModels'))
+    expect(batchButton).toBeTruthy()
+
+    await (wrapper.vm as any).startBatchTest()
+
+    expect(global.fetch).toHaveBeenCalledTimes(3)
+    expect((global.fetch as any).mock.calls.map(([, request]: [string, RequestInit]) => JSON.parse(request.body as string).model_id)).toEqual([
+      'gpt-first',
+      'gpt-second',
+      'gpt-third'
+    ])
+    expect((wrapper.vm as any).batchResults).toMatchObject([
+      { modelId: 'gpt-first', status: 'success' },
+      { modelId: 'gpt-second', status: 'failed', error: 'upstream denied' },
+      { modelId: 'gpt-third', status: 'success' }
+    ])
+    expect(wrapper.text()).toContain('admin.accounts.batchSuccessCount')
+    expect(wrapper.text()).toContain('admin.accounts.batchFailedCount')
+  })
+
+  it('停止批量测试会取消当前请求并标记未开始的模型', async () => {
+    getAvailableModels.mockResolvedValue([
+      { id: 'gpt-first', display_name: 'GPT First' },
+      { id: 'gpt-second', display_name: 'GPT Second' },
+      { id: 'gpt-third', display_name: 'GPT Third' }
+    ])
+    let resolveResponse: ((response: Response) => void) | undefined
+    global.fetch = vi.fn().mockImplementation(() => new Promise<Response>((resolve) => {
+      resolveResponse = resolve
+    })) as any
+
+    const wrapper = mountModal({
+      show: true,
+      account: {
+        id: 42,
+        name: 'OpenAI Account',
+        platform: 'openai',
+        type: 'apikey',
+        status: 'active'
+      }
+    })
+    await flushPromises()
+
+    const batchPromise = (wrapper.vm as any).startBatchTest()
+    await vi.waitFor(() => expect(global.fetch).toHaveBeenCalledTimes(1))
+    ;(wrapper.vm as any).stopBatchTest()
+    resolveResponse?.(createStreamResponse([]))
+    await batchPromise
+
+    expect((wrapper.vm as any).batchResults).toMatchObject([
+      { modelId: 'gpt-first', status: 'cancelled' },
+      { modelId: 'gpt-second', status: 'cancelled' },
+      { modelId: 'gpt-third', status: 'cancelled' }
+    ])
+  })
 })
