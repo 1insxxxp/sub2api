@@ -1297,6 +1297,14 @@ const loadSavedFilters = () => {
     if (savedVisible) {
       const parsed = JSON.parse(savedVisible) as string[]
       parsed.forEach(key => visibleFilters.add(key))
+      if (parsed.length === 0) {
+        visibleFilters.add('role')
+        visibleFilters.add('status')
+      }
+    } else {
+      // Keep the mobile filter panel useful on first visit instead of opening empty.
+      visibleFilters.add('role')
+      visibleFilters.add('status')
     }
     // Load filter values
     const savedValues = localStorage.getItem(FILTER_VALUES_KEY)
@@ -2119,7 +2127,7 @@ onUnmounted(() => {
 .users-mobile-sort-menu {
   z-index: 20;
   right: 0;
-  bottom: calc(100% + 0.375rem);
+  top: calc(100% + 0.375rem);
   width: min(15rem, calc(100vw - 2rem));
   max-height: 16rem;
   overflow-y: auto;
