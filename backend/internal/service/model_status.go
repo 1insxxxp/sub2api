@@ -323,7 +323,21 @@ func filterModelStatusReport(source *ModelStatusReport, groups []Group) *ModelSt
 		if !ok || current.Platform != group.Platform {
 			continue
 		}
+		models := make([]ModelStatusModel, 0, len(group.Models))
+		metrics := ModelStatusMetrics{}
+		for _, model := range group.Models {
+			if !current.ModelStatusModelVisible(model.Name) {
+				continue
+			}
+			models = append(models, model)
+			metrics = mergeModelStatusMetrics(metrics, model.Metrics)
+		}
+		if len(models) == 0 {
+			continue
+		}
 		group.Name = current.Name
+		group.Models = models
+		group.Metrics = metrics
 		report.Groups = append(report.Groups, group)
 		report.Summary = mergeModelStatusMetrics(report.Summary, group.Metrics)
 	}

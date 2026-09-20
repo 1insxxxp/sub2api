@@ -162,6 +162,98 @@ func TestModelStatusReportScopesSummaryAndPreservesTemporarilyLimitedModels(t *t
 	}
 }
 
+func TestFilterModelStatusReportUsesIndependentVisibilityAndRecomputesMetrics(t *testing.T) {
+	image := ModelStatusModel{
+		Name:     "gpt-image-1",
+		Platform: PlatformOpenAI,
+		Status:   ModelStatusHealthy,
+		Metrics:  ModelStatusMetrics{Total: 10, Success: 9, Failure: 1},
+		Recent:   []ModelStatusRecent{{Outcome: UsageOutcomeSuccess}},
+		Buckets:  []ModelStatusBucket{{Total: 10, Success: 9, Failure: 1}},
+	}
+	text := ModelStatusModel{
+		Name:     "gpt-5",
+		Platform: PlatformOpenAI,
+		Status:   ModelStatusUnavailable,
+		Metrics:  ModelStatusMetrics{Total: 4, Failure: 4},
+	}
+	source := &ModelStatusReport{
+		Summary: ModelStatusMetrics{Total: 999, Failure: 999},
+		Groups: []ModelStatusGroup{{
+			ID:       1,
+			Name:     "GPT",
+			Platform: PlatformOpenAI,
+			Metrics:  ModelStatusMetrics{Total: 999, Failure: 999},
+			Models:   []ModelStatusModel{image, text},
+		}},
+	}
+	groups := []Group{{
+		ID:                    1,
+		Name:                  "GPT",
+		Platform:              PlatformOpenAI,
+		Status:                StatusActive,
+		ModelAllowlist:        GroupModelAllowlist{Enabled: true, Models: []string{"gpt-5"}},
+		ModelStatusVisibility: GroupModelStatusVisibility{Enabled: true, Models: []string{"gpt-image-1"}},
+	}}
+
+	filtered := filterModelStatusReport(source, groups)
+
+	require.Len(t, filtered.Groups, 1)
+	require.Equal(t, []string{"gpt-image-1"}, []string{filtered.Groups[0].Models[0].Name})
+	require.Equal(t, int64(10), filtered.Groups[0].Metrics.Total)
+	require.Equal(t, int64(9), filtered.Groups[0].Metrics.Success)
+	require.Equal(t, int64(10), filtered.Summary.Total)
+	require.Equal(t, int64(9), filtered.Summary.Success)
+	require.InDelta(t, 90, *filtered.Summary.SuccessRate, 0.0001)
+	// Filtering must not mutate the cached full report or its nested slices.
+	require.Len(t, source.Groups[0].Models, 2)
+	require.Equal(t, int64(999), source.Summary.Total)
+	require.Len(t, source.Groups[0].Models[0].Recent, 1)
+	require.Len(t, source.Groups[0].Models[0].Buckets, 1)
+}
+
+func TestFilterModelStatusReportDisabledOrEmptyVisibilityKeepsAllModels(t *testing.T) {
+	source := &ModelStatusReport{Groups: []ModelStatusGroup{{
+		ID: 1, Name: "GPT", Platform: PlatformOpenAI,
+		Models: []ModelStatusModel{
+			{Name: "gpt-image-1", Platform: PlatformOpenAI, Metrics: ModelStatusMetrics{Total: 2, Success: 2}},
+			{Name: "gpt-5", Platform: PlatformOpenAI, Metrics: ModelStatusMetrics{Total: 3, Success: 3}},
+		},
+	}}}
+	for _, visibility := range []GroupModelStatusVisibility{{}, {Enabled: true}} {
+		filtered := filterModelStatusReport(source, []Group{{
+			ID: 1, Name: "GPT", Platform: PlatformOpenAI, Status: StatusActive,
+			ModelStatusVisibility: visibility,
+		}})
+		require.Len(t, filtered.Groups[0].Models, 2)
+		require.Equal(t, int64(5), filtered.Summary.Total)
+	}
+}
+
+func TestModelStatusCachedReportAppliesCurrentVisibilityConfiguration(t *testing.T) {
+	groups, accounts := modelStatusFixtures()
+	groups.groups[0].ModelStatusVisibility = GroupModelStatusVisibility{Enabled: true, Models: []string{"shared"}}
+	svc := NewModelStatusService(&modelStatusRepoStub{}, groups, accounts, nil)
+	svc.cached = &ModelStatusReport{Groups: []ModelStatusGroup{{
+		ID: 1, Name: "Public A", Platform: PlatformOpenAI,
+		Models: []ModelStatusModel{
+			{Name: "shared", Platform: PlatformOpenAI, Metrics: ModelStatusMetrics{Total: 2, Success: 2}},
+			{Name: "gpt-image-1", Platform: PlatformOpenAI, Metrics: ModelStatusMetrics{Total: 8, Success: 8}},
+		},
+	}}}
+	svc.cachedAt = time.Now()
+
+	report, err := svc.Report(context.Background())
+	require.NoError(t, err)
+	require.Len(t, report.Groups[0].Models, 1)
+	require.Equal(t, "shared", report.Groups[0].Models[0].Name)
+
+	groups.groups[0].ModelStatusVisibility = GroupModelStatusVisibility{}
+	report, err = svc.Report(context.Background())
+	require.NoError(t, err)
+	require.Len(t, report.Groups[0].Models, 2)
+}
+
 func TestModelStatusCacheCoalescesAndRechecksPublicVisibility(t *testing.T) {
 	groups, accounts := modelStatusFixtures()
 	block := make(chan struct{})
