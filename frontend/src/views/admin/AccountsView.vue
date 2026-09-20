@@ -173,6 +173,34 @@
             />
           </template>
           <template #secondary>
+            <div class="account-mobile-sort">
+              <span>{{ t('admin.users.sortBy') }}</span>
+              <div class="account-mobile-sort-menu-wrap">
+                <button
+                  type="button"
+                  class="account-mobile-sort-trigger"
+                  :aria-label="t('admin.users.sortBy')"
+                  :aria-expanded="showMobileSortMenu"
+                  @click="showMobileSortMenu = !showMobileSortMenu"
+                >
+                  {{ mobileSortLabel }}
+                  <Icon name="chevronDown" size="sm" />
+                </button>
+                <div v-if="showMobileSortMenu" class="dropdown account-mobile-sort-menu">
+                  <button
+                    v-for="column in mobileSortableColumns"
+                    :key="column.key"
+                    type="button"
+                    class="dropdown-item justify-between"
+                    :class="{ 'text-primary-600 dark:text-primary-300': column.key === sortState.sort_by }"
+                    @click="handleMobileSortOption(column.key)"
+                  >
+                    <span>{{ column.label }}</span>
+                    <span v-if="column.key === sortState.sort_by">{{ sortState.sort_order === 'asc' ? '↑' : '↓' }}</span>
+                  </button>
+                </div>
+              </div>
+            </div>
             <AccountBulkActionsBar
               class="account-bulk-bar"
               :selected-ids="selIds"
@@ -669,6 +697,7 @@ useIntervalFn(() => { upstreamBillingNow.value = Date.now() }, 60_000)
 
 // Account tools dropdown
 const showAccountToolsDropdown = ref(false)
+const showMobileSortMenu = ref(false)
 const accountToolsDropdownRef = ref<HTMLElement | null>(null)
 const accountToolsTriggerRef = ref<HTMLElement | null>(null)
 const accountToolsDropdownPosition = reactive({
@@ -1436,6 +1465,13 @@ const handleSort = (key: string, order: AccountSortOrder) => {
   load()
 }
 
+const handleMobileSortOption = (key: string) => {
+  if (!mobileSortableColumns.value.some((column) => column.key === key)) return
+  const order: AccountSortOrder = key === sortState.sort_by && sortState.sort_order === 'desc' ? 'asc' : 'desc'
+  showMobileSortMenu.value = false
+  handleSort(key, order)
+}
+
 watch(loading, (isLoading, wasLoading) => {
   if (wasLoading && !isLoading) {
     upstreamBillingNow.value = Date.now()
@@ -1918,6 +1954,12 @@ const allColumns = computed(() => {
     { key: 'actions', label: t('admin.accounts.columns.actions'), sortable: false }
   )
   return c
+})
+
+const mobileSortableColumns = computed(() => allColumns.value.filter((column) => column.sortable))
+const mobileSortLabel = computed(() => {
+  const column = mobileSortableColumns.value.find((item) => item.key === sortState.sort_by)
+  return `${column?.label ?? sortState.sort_by} ${sortState.sort_order === 'asc' ? '↑' : '↓'}`
 })
 
 // Columns that can be toggled (exclude select, name, and actions)
@@ -2620,6 +2662,9 @@ const handleClickOutside = (event: MouseEvent) => {
   if (autoRefreshDropdownRef.value && !autoRefreshDropdownRef.value.contains(target)) {
     showAutoRefreshDropdown.value = false
   }
+  if (!target.closest('.account-mobile-sort-menu-wrap')) {
+    showMobileSortMenu.value = false
+  }
 }
 
 onMounted(async () => {
@@ -2725,6 +2770,48 @@ onUnmounted(() => {
   white-space: normal;
 }
 
+.account-mobile-sort {
+  display: none;
+  align-items: center;
+  min-width: 0;
+  gap: 0.5rem;
+  color: var(--workspace-muted);
+  font-size: 0.75rem;
+}
+
+.account-mobile-sort-menu-wrap {
+  position: relative;
+  min-width: 0;
+  flex: 1;
+}
+
+.account-mobile-sort-trigger {
+  display: flex;
+  width: 100%;
+  min-height: 2.25rem;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.375rem 0.625rem;
+  border: 1px solid var(--workspace-rule);
+  border-radius: 6px;
+  color: var(--workspace-ink);
+  background: var(--workspace-control);
+  font-size: 0.75rem;
+  text-align: left;
+}
+
+.account-mobile-sort-menu {
+  z-index: 20;
+  top: calc(100% + 0.375rem);
+  right: 0;
+  width: min(15rem, calc(100vw - 2rem));
+  max-height: 16rem;
+  overflow-y: auto;
+}
+
+.account-mobile-sort-menu .dropdown-item { width: 100%; }
+
 .account-mobile-capacity,
 .account-mobile-usage {
   min-width: 0;
@@ -2735,6 +2822,17 @@ onUnmounted(() => {
 }
 
 @media (max-width: 767px) {
+  .account-mobile-sort {
+    display: flex;
+    min-height: 2.75rem;
+    margin-bottom: 0.5rem;
+    padding: 0.625rem 0.75rem;
+    border: 1px solid var(--workspace-rule);
+    border-radius: 8px;
+    background: linear-gradient(125deg, var(--workspace-highlight), transparent 68%), var(--workspace-control);
+    box-shadow: var(--workspace-shadow);
+  }
+
   .account-toolbar-action {
     width: 2.75rem;
     min-height: 2.75rem;
