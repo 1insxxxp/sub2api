@@ -219,7 +219,7 @@
 .admin-console-theme .admin-record-details summary::-webkit-details-marker { display: none; }
 .admin-console-theme .admin-record-details summary svg { transition: transform 160ms ease; }
 .admin-console-theme .admin-record-details[open] > summary svg { transform: rotate(180deg); }
-.admin-console-theme .admin-record-details summary:focus-visible { outline: 2px solid rgb(var(--brand-rgb) / 50%); outline-offset: 2px; border-radius: 4px; }
+.admin-console-theme .admin-record-details summary:focus-visible { outline: 2px solid var(--workspace-focus); outline-offset: 2px; border-radius: 4px; }
 .admin-console-theme .admin-record-detail-grid { display: flex; flex-direction: column; gap: 0.75rem; padding: 0.375rem 0 1rem; }
 .admin-console-theme .admin-record-detail { display: grid; grid-template-columns: minmax(4.25rem, 30%) minmax(0, 1fr); align-items: baseline; gap: 0.75rem; }
 .admin-console-theme .admin-record-detail .admin-record-value { text-align: right; }
