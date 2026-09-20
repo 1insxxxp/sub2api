@@ -609,7 +609,7 @@ const accountMobileLayout = {
   leading: 'platform_type',
   status: 'status',
   selection: 'select',
-  summary: ['capacity', 'usage', 'schedulable']
+  summary: ['capacity', 'usage', 'schedulable', 'last_used_at']
 }
 const groupsByID = computed(() => new Map(groups.value.map(group => [group.id, group])))
 const accountGroupsForRow = (account: Pick<AccountListItem, 'group_ids'>): AdminGroup[] => {
