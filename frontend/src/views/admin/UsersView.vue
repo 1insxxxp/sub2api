@@ -2061,6 +2061,10 @@ onUnmounted(() => {
     min-height: 2.75rem;
   }
 
+  .users-list-actions .users-tool-button {
+    min-width: 2.75rem;
+  }
+
   .users-list-filters {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));

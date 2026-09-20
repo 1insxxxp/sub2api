@@ -220,6 +220,7 @@ describe('admin UsersView', () => {
     expect(usersViewSource).toContain('admin-workbench-page')
     expect(usersViewSource).toContain('<AdminListToolbar')
     expect(usersViewSource).toContain('min-height: 2.75rem')
+    expect(usersViewSource).toContain('min-width: 2.75rem')
     expect(usersViewSource).toMatch(/overflow-wrap:\s*anywhere/)
   })
 
