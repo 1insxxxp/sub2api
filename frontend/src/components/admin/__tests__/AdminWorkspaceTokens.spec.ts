@@ -10,13 +10,13 @@ const tokens = readFileSync(resolve(stylesDir, 'workspace-tokens.css'), 'utf8')
 const admin = readFileSync(resolve(stylesDir, 'admin-workspace.css'), 'utf8')
 
 const materialTokens = ['surface', 'control', 'rule', 'divider', 'ink', 'muted', 'hover', 'shadow']
-const lightTokenBlock = tokens.match(/\.user-workspace,\n\.admin-console-theme\s*\{([\s\S]*?)\n\}/)?.[1] ?? ''
-const darkTokenBlock = tokens.match(/\.dark \.user-workspace,\n\.dark\.admin-console-theme\s*\{([\s\S]*?)\n\}/)?.[1] ?? ''
+const lightTokenBlock = tokens.match(/\.user-workspace,\s*\.admin-console-theme\s*\{([\s\S]*?)\}/)?.[1] ?? ''
+const darkTokenBlock = tokens.match(/\.dark \.user-workspace,\s*\.dark\.admin-console-theme\s*\{([\s\S]*?)\}/)?.[1] ?? ''
 
 describe('admin workspace material baseline', () => {
   it('defines the shared material tokens for light and dark admin surfaces', () => {
-    expect(tokens).toContain('.user-workspace,\n.admin-console-theme')
-    expect(tokens).toContain('.dark .user-workspace,\n.dark.admin-console-theme')
+    expect(tokens).toMatch(/\.user-workspace,\s*\.admin-console-theme\s*\{/)
+    expect(tokens).toMatch(/\.dark \.user-workspace,\s*\.dark\.admin-console-theme\s*\{/)
 
     for (const token of materialTokens) {
       expect(lightTokenBlock).toMatch(new RegExp(`--workspace-${token}:[^;]+;`))
