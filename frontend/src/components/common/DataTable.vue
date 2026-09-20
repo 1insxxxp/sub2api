@@ -1219,6 +1219,60 @@ tbody tr:hover .sticky-col {
 </style>
 
 <style>
+/* Public DataTable defaults; admin-workspace.css overrides these token values. */
+.admin-table-loading { display: flex; flex-direction: column; gap: 0.75rem; }
+.admin-table-loading-card {
+  padding: 1rem;
+  border: 1px solid #e5e7eb;
+  border-radius: 0.5rem;
+  background: #fff;
+}
+.admin-table-skeleton {
+  border-radius: 0.25rem;
+  background: #e5e7eb;
+  animation: admin-table-pulse 1.5s ease-in-out infinite;
+}
+.admin-table-divider { border-top: 1px solid #e5e7eb; }
+.admin-table-empty { color: #6b7280; }
+.admin-empty-icon { color: #9ca3af; }
+.admin-empty-label { color: #111827; }
+.admin-table-mobile-row {
+  padding: 1rem;
+  border: 1px solid #e5e7eb;
+  border-radius: 0.5rem;
+  background: #fff;
+}
+.admin-table-mobile-content { color: #111827; }
+.admin-data-table-head { background: #f9fafb; }
+.admin-table-body { background: #fff; }
+.admin-table-body > tr + tr { border-top: 1px solid #e5e7eb; }
+
+@keyframes admin-table-pulse {
+  0%, 100% { opacity: 0.55; }
+  50% { opacity: 1; }
+}
+
+.dark .admin-table-loading-card,
+.dark .admin-table-mobile-row {
+  border-color: #374151;
+  background: #111827;
+}
+.dark .admin-table-skeleton { background: #374151; }
+.dark .admin-table-divider,
+.dark .admin-table-body > tr + tr { border-color: #374151; }
+.dark .admin-table-empty,
+.dark .admin-empty-icon { color: #9ca3af; }
+.dark .admin-empty-label,
+.dark .admin-table-mobile-content { color: #f3f4f6; }
+.dark .admin-data-table-head,
+.dark .admin-table-body { background: #111827; }
+
+@media (prefers-reduced-motion: reduce) {
+  .admin-table-skeleton { animation: none; }
+}
+</style>
+
+<style>
 /* ==========================================================================
    终极悬浮滚动条防丢器 (Sledgehammer Override)
    绕过 style.css 中 `* { scrollbar-color: transparent }` 的全局悬停隐身诅咒！

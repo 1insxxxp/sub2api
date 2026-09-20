@@ -58,6 +58,7 @@ describe('DataTable', () => {
       }
     })
 
+    expect(wrapper.find('thead').classes()).toContain('admin-data-table-head')
     expect(wrapper.find('tbody').classes()).toContain('admin-table-body')
     expect(wrapper.find('tr.admin-table-loading-row').exists()).toBe(true)
     expect(wrapper.find('.admin-table-skeleton').exists()).toBe(true)
@@ -108,6 +109,7 @@ describe('DataTable', () => {
     })
     const row = recordWrapper.get('[data-mobile-table-row]')
     expect(row.classes()).toContain('admin-record')
+    expect(row.classes()).toContain('admin-table-mobile-row')
     expect(row.classes()).not.toContain('rounded-2xl')
     await recordWrapper.vm.$nextTick()
   })
