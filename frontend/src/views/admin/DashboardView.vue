@@ -14,11 +14,12 @@
 
       <template v-else-if="stats">
         <!-- Row 1: Core Stats -->
-        <div data-test="dashboard-core-metrics" class="dashboard-core-metrics">
+        <div data-test="dashboard-core-metrics" data-mobile-layout="single-column-at-320" class="dashboard-core-metrics">
           <!-- Total API Keys -->
           <div class="stat-card">
-            <div class="stat-icon stat-icon-primary">
+            <div class="stat-icon dashboard-stat-icon-neutral">
               <Icon name="key" size="md" class="text-current" :stroke-width="2" />
+              <span class="dashboard-stat-icon-accent dashboard-stat-icon-accent-primary" data-accent="primary" aria-hidden="true" />
             </div>
             <div>
               <p class="stat-label">
@@ -35,8 +36,9 @@
 
           <!-- Service Accounts -->
           <div class="stat-card">
-            <div class="stat-icon bg-slate-100 text-slate-600 dark:bg-dark-700 dark:text-slate-300">
+            <div class="stat-icon dashboard-stat-icon-neutral">
               <Icon name="server" size="md" class="text-current" :stroke-width="2" />
+              <span class="dashboard-stat-icon-accent dashboard-stat-icon-accent-slate" data-accent="slate" aria-hidden="true" />
             </div>
             <div>
               <p class="stat-label">
@@ -58,8 +60,9 @@
 
           <!-- Today Requests -->
           <div class="stat-card">
-            <div class="stat-icon bg-cyan-100 text-cyan-600 dark:bg-cyan-900/30 dark:text-cyan-300">
+            <div class="stat-icon dashboard-stat-icon-neutral">
               <Icon name="chart" size="md" class="text-current" :stroke-width="2" />
+              <span class="dashboard-stat-icon-accent dashboard-stat-icon-accent-cyan" data-accent="cyan" aria-hidden="true" />
             </div>
             <div>
               <p class="stat-label">
@@ -76,8 +79,9 @@
 
           <!-- New Users Today -->
           <div class="stat-card">
-            <div class="stat-icon bg-primary-100 text-primary-600 dark:bg-primary-900/30 dark:text-primary-400">
+            <div class="stat-icon dashboard-stat-icon-neutral">
               <Icon name="userPlus" size="md" class="text-current" :stroke-width="2" />
+              <span class="dashboard-stat-icon-accent dashboard-stat-icon-accent-primary" data-accent="primary" aria-hidden="true" />
             </div>
             <div>
               <p class="stat-label">
@@ -94,11 +98,12 @@
         </div>
 
         <!-- Row 2: Token Stats -->
-        <div data-test="dashboard-secondary-metrics" class="dashboard-secondary-metrics">
+        <div data-test="dashboard-secondary-metrics" data-mobile-layout="single-column-at-320" class="dashboard-secondary-metrics">
           <!-- Today Tokens -->
           <div class="stat-card">
-            <div class="stat-icon bg-cyan-100 text-cyan-600 dark:bg-cyan-900/30 dark:text-cyan-300">
+            <div class="stat-icon dashboard-stat-icon-neutral">
               <Icon name="cube" size="md" class="text-current" :stroke-width="2" />
+              <span class="dashboard-stat-icon-accent dashboard-stat-icon-accent-cyan" data-accent="cyan" aria-hidden="true" />
             </div>
             <div>
               <p class="stat-label">
@@ -131,8 +136,9 @@
 
           <!-- Total Tokens -->
           <div class="stat-card">
-            <div class="stat-icon bg-slate-100 text-slate-600 dark:bg-dark-700 dark:text-slate-300">
+            <div class="stat-icon dashboard-stat-icon-neutral">
               <Icon name="database" size="md" class="text-current" :stroke-width="2" />
+              <span class="dashboard-stat-icon-accent dashboard-stat-icon-accent-slate" data-accent="slate" aria-hidden="true" />
             </div>
             <div>
               <p class="stat-label">
@@ -165,8 +171,9 @@
 
           <!-- Performance (RPM/TPM) -->
           <div class="stat-card">
-            <div class="stat-icon bg-primary-100 text-primary-600 dark:bg-primary-900/30 dark:text-primary-400">
+            <div class="stat-icon dashboard-stat-icon-neutral">
               <Icon name="bolt" size="md" class="text-current" :stroke-width="2" />
+              <span class="dashboard-stat-icon-accent dashboard-stat-icon-accent-primary" data-accent="primary" aria-hidden="true" />
             </div>
             <div class="flex-1">
               <p class="stat-label">
@@ -189,8 +196,9 @@
 
           <!-- Avg Response Time -->
           <div class="stat-card">
-            <div class="stat-icon bg-slate-100 text-slate-600 dark:bg-dark-700 dark:text-slate-300">
+            <div class="stat-icon dashboard-stat-icon-neutral">
               <Icon name="clock" size="md" class="text-current" :stroke-width="2" />
+              <span class="dashboard-stat-icon-accent dashboard-stat-icon-accent-slate" data-accent="slate" aria-hidden="true" />
             </div>
             <div>
               <p class="stat-label">
@@ -211,14 +219,16 @@
           <!-- Date Range Filter -->
           <div data-test="dashboard-workbench-controls" class="admin-toolbar-surface dashboard-analysis-controls">
             <div class="admin-toolbar">
-              <div class="dashboard-date-controls">
-                <DateRangePicker
-                  v-model:start-date="startDate"
-                  v-model:end-date="endDate"
-                  @change="onDateRangeChange"
-                />
+              <div data-test="dashboard-filter-row" class="dashboard-filter-row">
+                <div class="dashboard-date-controls">
+                  <DateRangePicker
+                    v-model:start-date="startDate"
+                    v-model:end-date="endDate"
+                    @change="onDateRangeChange"
+                  />
+                </div>
               </div>
-              <div class="dashboard-chart-actions">
+              <div data-test="dashboard-chart-actions" class="dashboard-chart-actions dashboard-chart-actions-row">
                 <div class="dashboard-granularity" role="group" :aria-label="t('admin.dashboard.granularity')">
                   <button v-for="option in granularityOptions" :key="option.value" type="button"
                     :aria-pressed="granularity === option.value"
@@ -752,10 +762,16 @@ onMounted(() => {
 .dashboard-workbench .stat-card::before { content: none; }
 .dashboard-workbench .stat-icon { position: absolute; top: 1.125rem; right: 1.125rem; width: 1.875rem; height: 1.875rem; border-radius: 7px; }
 .dashboard-workbench .stat-icon :deep(svg) { width: 1rem; height: 1rem; }
+.dashboard-workbench .dashboard-stat-icon-neutral { color: var(--workspace-muted); }
+.dashboard-workbench .dashboard-stat-icon-accent { position: absolute; right: 0.25rem; bottom: 0.25rem; width: 0.375rem; height: 0.375rem; border-radius: 999px; }
+.dashboard-workbench .dashboard-stat-icon-accent-primary { background: rgb(var(--brand-rgb)); }
+.dashboard-workbench .dashboard-stat-icon-accent-cyan { background: rgb(6 182 212); }
+.dashboard-workbench .dashboard-stat-icon-accent-slate { background: rgb(100 116 139); }
 .dashboard-workbench .stat-label { max-width: calc(100% - 2.25rem); min-height: 1.875rem; padding-top: 0.25rem; font-size: 0.8125rem; }
 .dashboard-workbench .stat-value { margin: 0.625rem 0; font-size: 1.75rem; font-weight: 600; line-height: 1.15; letter-spacing: 0; white-space: normal; overflow: visible; text-overflow: clip; }
 .dashboard-analysis { display: flex; flex-direction: column; gap: 1.25rem; min-width: 0; }
 .dashboard-analysis-controls .admin-toolbar { flex-direction: row; flex-wrap: wrap; gap: 0.75rem; justify-content: space-between; align-items: center; }
+.dashboard-filter-row,
 .dashboard-date-controls { min-width: 0; }
 .dashboard-chart-actions { display: flex; align-items: center; gap: 0.625rem; }
 .dashboard-granularity { display: inline-flex; gap: 0.25rem; padding: 0.25rem; border: 1px solid var(--workspace-rule); border-radius: 7px; background: var(--workspace-hover); }
@@ -789,7 +805,16 @@ onMounted(() => {
   .dashboard-charts-grid :deep(.card),
   .dashboard-user-trend .admin-panel-header,
   .dashboard-user-trend > .p-4 { padding: 0.875rem; }
-  .dashboard-chart-actions { margin-left: auto; }
+  .dashboard-analysis-controls .admin-toolbar { align-items: stretch; }
+  .dashboard-filter-row,
+  .dashboard-chart-actions-row { width: 100%; }
+  .dashboard-chart-actions-row { justify-content: flex-end; margin-left: 0; }
+}
+@media (max-width: 359px) {
+  .dashboard-core-metrics,
+  .dashboard-secondary-metrics { grid-template-columns: minmax(0, 1fr); }
+  .dashboard-workbench .stat-card { min-width: 0; }
+  .dashboard-workbench .stat-value { overflow-wrap: anywhere; }
 }
 @media (prefers-reduced-motion: reduce) {
   .dashboard-shortcuts button { transition: none; }

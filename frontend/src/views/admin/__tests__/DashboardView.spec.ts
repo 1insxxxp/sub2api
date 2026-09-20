@@ -201,6 +201,42 @@ describe('admin DashboardView', () => {
     expect(wrapper.text()).not.toContain('admin.dashboard.recentUsage')
   })
 
+  it('keeps metric icons neutral with a separate vendor accent and exposes narrow layout hooks', async () => {
+    const wrapper = mount(DashboardView, {
+      global: {
+        stubs: {
+          AppLayout: { template: '<div><slot /></div>' },
+          LoadingSpinner: true,
+          Icon: true,
+          DateRangePicker: true,
+          Select: true,
+          ModelDistributionChart: true,
+          TokenUsageTrend: true,
+          Line: true
+        }
+      }
+    })
+
+    await flushPromises()
+
+    const metricGroups = wrapper.findAll('[data-test="dashboard-core-metrics"], [data-test="dashboard-secondary-metrics"]')
+    expect(metricGroups).toHaveLength(2)
+    metricGroups.forEach(group => {
+      expect(group.attributes('data-mobile-layout')).toBe('single-column-at-320')
+    })
+
+    const cards = wrapper.findAll('.stat-card')
+    expect(cards).toHaveLength(8)
+    cards.forEach(card => {
+      const icon = card.get('.dashboard-stat-icon-neutral')
+      expect(icon.get('.dashboard-stat-icon-accent').attributes('data-accent')).toBeTruthy()
+      expect(icon.classes()).toContain('stat-icon')
+    })
+
+    expect(wrapper.get('[data-test="dashboard-filter-row"]').find('.dashboard-date-controls').exists()).toBe(true)
+    expect(wrapper.get('[data-test="dashboard-chart-actions"]').classes()).toContain('dashboard-chart-actions-row')
+  })
+
   it('covers a rolling 24-hour range with both partial-hour boundary buckets', async () => {
     vi.useFakeTimers()
     vi.setSystemTime(new Date(2026, 7, 5, 1, 30))

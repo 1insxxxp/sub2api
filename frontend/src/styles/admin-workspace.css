@@ -81,6 +81,8 @@
   box-shadow: inset 0 1px 0 var(--workspace-highlight);
 }
 .admin-console-theme .app-shell-content .stat-icon-primary { color: rgb(var(--brand-rgb)); }
+.admin-console-theme .app-shell-content .dashboard-stat-icon-neutral { color: var(--workspace-muted); }
+.admin-console-theme .app-shell-content .dashboard-stat-icon-accent { flex: 0 0 auto; }
 .admin-console-theme .app-shell-content .stat-value {
   color: var(--workspace-ink);
   font-size: 1.5rem;
