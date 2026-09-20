@@ -1213,6 +1213,25 @@ export default {
           duplicate: 'This entry already exists'
         }
       },
+      modelStatusVisibility: {
+        title: 'Model monitor visibility',
+        hint: 'Controls only which models appear on the model status page. It does not affect real requests, model lists, or image generation. Disabled shows all models.',
+        enable: 'Limit model monitor visibility',
+        enabledHint: 'When enabled, the status page shows only selected models. Requests remain allowed. Exact model IDs and trailing * wildcards are supported.',
+        disabledHint: 'Disabled: the model status page shows every model in this group, without changing request permissions.',
+        loading: 'Loading candidate models...',
+        loadError: 'Candidate models failed to load; your current selection is preserved and you can add models manually.',
+        empty: 'No candidate models. Add the models you want to monitor manually.',
+        selectedSummary: 'Selected {selected} / {total}',
+        searchPlaceholder: 'Search model names',
+        selectAll: 'Select visible',
+        clear: 'Clear selection',
+        customPlaceholder: 'Add a model, e.g. gpt-image-1 or gemini-*',
+        addCustom: 'Add',
+        emptySelectionError: 'Model monitor visibility is enabled. Select or add at least one model, or disable it to show all models.',
+        duplicate: 'This model already exists',
+        invalidWildcard: 'Wildcard * is only allowed at the end of a model entry',
+      },
       codexModelsManifest: {
         title: 'Pinned Accounts for Model Lists',
         hint: 'When enabled, ordinary model lists and Codex Model Manifest are discovered from the pinned accounts first, then merged and filtered using account mappings and the group model list. Rate-limited or overloaded pinned accounts are still used.',

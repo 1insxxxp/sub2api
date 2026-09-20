@@ -1210,6 +1210,25 @@ export default {
           duplicate: '该条目已存在'
         }
       },
+      modelStatusVisibility: {
+        title: '模型监控展示范围',
+        hint: '只影响模型状态页的展示，不影响真实请求、模型列表接口或生图能力。默认关闭时展示全部模型。',
+        enable: '限制模型监控展示范围',
+        enabledHint: '启用后，模型状态页只展示选中的模型；此设置不会阻止实际调用。支持精确模型 ID 与末尾 * 通配。',
+        disabledHint: '未启用：模型状态页展示该分组的全部模型，实际调用权限不受影响。',
+        loading: '正在加载候选模型...',
+        loadError: '候选模型加载失败，已保留当前选择；你仍可手工添加模型。',
+        empty: '暂无候选模型，请手工添加需要监控的模型。',
+        selectedSummary: '已选 {selected} / {total}',
+        searchPlaceholder: '搜索模型名称',
+        selectAll: '全选当前结果',
+        clear: '清空选择',
+        customPlaceholder: '手工添加模型，如 gpt-image-1 或 gemini-*',
+        addCustom: '添加',
+        emptySelectionError: '模型监控展示范围已启用，请至少选择或添加一个模型；如需展示全部模型请关闭开关。',
+        duplicate: '该模型已存在',
+        invalidWildcard: '通配符 * 只能出现在模型条目末尾',
+      },
       codexModelsManifest: {
         title: '固定账号获取模型列表',
         hint: '开启后，普通模型列表与 Codex Model Manifest 均优先从选定账号获取并合并，再应用账号映射和分组列表过滤；限流/过载中的选定账号仍会被使用。',

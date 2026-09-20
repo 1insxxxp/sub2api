@@ -741,6 +741,7 @@ export interface AdminGroup extends Group {
   default_mapped_model?: string
   messages_dispatch_model_config?: OpenAIMessagesDispatchModelConfig
   model_allowlist?: ModelAllowlist
+  model_status_visibility?: ModelStatusVisibility
   codex_models_manifest_config?: CodexModelsManifestConfig
 
   // 分组排序
@@ -748,6 +749,12 @@ export interface AdminGroup extends Group {
 }
 
 export interface ModelAllowlist {
+  enabled: boolean
+  models: string[]
+}
+
+/** Group-level visibility filter for the model status monitor only. */
+export interface ModelStatusVisibility {
   enabled: boolean
   models: string[]
 }
@@ -1090,6 +1097,7 @@ export interface CreateGroupRequest {
   simulate_claude_max_enabled?: boolean
   supported_model_scopes?: string[]
   model_allowlist?: ModelAllowlist
+  model_status_visibility?: ModelStatusVisibility
   codex_models_manifest_config?: CodexModelsManifestConfig
   allow_messages_dispatch?: boolean
   allow_live?: boolean
@@ -1161,6 +1169,7 @@ export interface UpdateGroupRequest {
   simulate_claude_max_enabled?: boolean
   supported_model_scopes?: string[]
   model_allowlist?: ModelAllowlist
+  model_status_visibility?: ModelStatusVisibility
   codex_models_manifest_config?: CodexModelsManifestConfig
   allow_messages_dispatch?: boolean
   allow_live?: boolean

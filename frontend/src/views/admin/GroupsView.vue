@@ -987,6 +987,13 @@
           </div>
         </div>
 
+        <GroupModelStatusVisibilityField
+          v-model="createForm.model_status_visibility"
+          :candidates="createModelStatusVisibilityCandidates"
+          :loading="createModelStatusVisibilityLoading"
+          :load-error="createModelStatusVisibilityLoadError"
+        />
+
         <!-- 图片生成计费配置 -->
         <div
           v-if="supportsImagePricingPlatform(createForm.platform)"
@@ -2728,6 +2735,13 @@
             </div>
           </div>
         </div>
+
+        <GroupModelStatusVisibilityField
+          v-model="editForm.model_status_visibility"
+          :candidates="editModelStatusVisibilityCandidates"
+          :loading="editModelStatusVisibilityLoading"
+          :load-error="editModelStatusVisibilityLoadError"
+        />
 
         <!-- 图片生成计费配置 -->
         <div
@@ -4563,6 +4577,7 @@ import type {
   CompositeRouteMatchType,
   GroupPlatform,
   GroupTag,
+  ModelStatusVisibility,
   SystemCustomGroup,
   SubscriptionType,
 } from "@/types";
@@ -4586,6 +4601,7 @@ import Icon from "@/components/icons/Icon.vue";
 import GroupRateMultipliersModal from "@/components/admin/group/GroupRateMultipliersModal.vue";
 import GroupTagField from "@/components/admin/group/GroupTagField.vue";
 import GroupTagBadge from "@/components/common/GroupTagBadge.vue";
+import GroupModelStatusVisibilityField from "@/components/admin/group/GroupModelStatusVisibilityField.vue";
 import CodexManifestAccountsField from "@/components/admin/group/CodexManifestAccountsField.vue";
 import GroupRPMOverridesModal from "@/components/admin/group/GroupRPMOverridesModal.vue";
 import GroupCapacityBadge from "@/components/common/GroupCapacityBadge.vue";
@@ -5202,6 +5218,12 @@ const createModelAllowlistState = reactive(createInitialModelAllowlistState());
 const editModelAllowlistState = reactive(createInitialModelAllowlistState());
 const createModelAllowlistLoading = ref(false);
 const editModelAllowlistLoading = ref(false);
+const createModelStatusVisibilityCandidates = ref<string[]>([]);
+const editModelStatusVisibilityCandidates = ref<string[]>([]);
+const createModelStatusVisibilityLoading = ref(false);
+const editModelStatusVisibilityLoading = ref(false);
+const createModelStatusVisibilityLoadError = ref(false);
+const editModelStatusVisibilityLoadError = ref(false);
 type ReasoningEffortPolicyFieldsExpose = {
   validate: () => boolean;
   resetValidation: () => void;
@@ -5223,6 +5245,7 @@ const createCodexManifestDefaults = (): CodexModelsManifestConfig => ({
 const editCodexManifestConfig = ref<CodexModelsManifestConfig>(createCodexManifestDefaults());
 const editCodexManifestAccountNames = ref<Record<number, string>>({});
 const modelAllowlistCandidatesTracker = createModelAllowlistCandidatesTracker();
+const modelStatusVisibilityCandidatesTracker = createModelAllowlistCandidatesTracker();
 const createModelAllowlistSelectedCount = computed(
   () => createModelAllowlistState.items.filter((item) => item.selected).length,
 );
@@ -5275,6 +5298,7 @@ const createForm = reactive({
   force_openai_fast: false,
   free_openai_fast: false,
   model_pricing: [] as PricingFormEntry[],
+  model_status_visibility: { enabled: false, models: [] } as ModelStatusVisibility,
   // 图片生成计费配置
   allow_image_generation: false,
   allow_batch_image_generation: false,
@@ -5574,6 +5598,47 @@ const loadModelAllowlistCandidates = async (
   }
 };
 
+const normalizeModelStatusVisibility = (
+  config?: Partial<ModelStatusVisibility> | null,
+): ModelStatusVisibility => ({
+  enabled: config?.enabled ?? false,
+  models: [...new Set((config?.models ?? []).map(model => model.trim()).filter(Boolean))],
+});
+
+const loadModelStatusVisibilityCandidates = async (
+  mode: "create" | "edit",
+  groupID: number,
+  platform: GroupPlatform,
+) => {
+  if (authStore.isSimpleMode) return;
+  const request = { mode, groupID, platform };
+  const requestID = modelStatusVisibilityCandidatesTracker.next(request);
+  const candidatesRef = mode === "create"
+    ? createModelStatusVisibilityCandidates
+    : editModelStatusVisibilityCandidates;
+  const loadingRef = mode === "create"
+    ? createModelStatusVisibilityLoading
+    : editModelStatusVisibilityLoading;
+  const errorRef = mode === "create"
+    ? createModelStatusVisibilityLoadError
+    : editModelStatusVisibilityLoadError;
+  loadingRef.value = true;
+  errorRef.value = false;
+  try {
+    const models = await adminAPI.groups.getModelAllowlistCandidates(groupID, platform);
+    if (!modelStatusVisibilityCandidatesTracker.isCurrent(requestID, request)) return;
+    candidatesRef.value = models;
+  } catch (error) {
+    if (!modelStatusVisibilityCandidatesTracker.isCurrent(requestID, request)) return;
+    errorRef.value = true;
+    console.error("Error loading model status visibility candidates:", error);
+  } finally {
+    if (modelStatusVisibilityCandidatesTracker.isCurrent(requestID, request)) {
+      loadingRef.value = false;
+    }
+  }
+};
+
 const moveCreateModelAllowlistItem = (fromIndex: number, toIndex: number) => {
   moveModelAllowlistItem(createModelAllowlistState, fromIndex, toIndex);
 };
@@ -5646,6 +5711,7 @@ const editForm = reactive({
   force_openai_fast: false,
   free_openai_fast: false,
   model_pricing: [] as PricingFormEntry[],
+  model_status_visibility: { enabled: false, models: [] } as ModelStatusVisibility,
   // 图片生成计费配置
   allow_image_generation: false,
   allow_batch_image_generation: false,
@@ -6224,6 +6290,7 @@ const openCreateModal = () => {
   createPricingCoverageError.value = "";
   showCreateModal.value = true;
   loadModelAllowlistCandidates("create", 0, createForm.platform);
+  loadModelStatusVisibilityCandidates("create", 0, createForm.platform);
 };
 
 const isSystemCustomGroup = (group: AdminGroup) =>
@@ -6306,6 +6373,9 @@ const closeCreateModal = () => {
   createForm.force_openai_fast = false;
   createForm.free_openai_fast = false;
   createForm.model_pricing = [];
+  createForm.model_status_visibility = { enabled: false, models: [] };
+  createModelStatusVisibilityCandidates.value = [];
+  createModelStatusVisibilityLoadError.value = false;
   createForm.web_search_price_per_call = null;
   createForm.search_price_per_1k = null;
   createForm.audio_realtime_price_per_min = null;
@@ -6403,6 +6473,13 @@ const handleCreateGroup = async () => {
     appStore.showError(t("admin.groups.modelAllowlist.emptySelectionError"));
     return;
   }
+  if (
+    createForm.model_status_visibility.enabled &&
+    createForm.model_status_visibility.models.length === 0
+  ) {
+    appStore.showError(t("admin.groups.modelStatusVisibility.emptySelectionError"));
+    return;
+  }
   if (!(await ensurePricingCoverage("create"))) {
     return;
   }
@@ -6446,6 +6523,7 @@ const handleCreateGroup = async () => {
         createModelRoutingRules.value,
       ),
       model_allowlist: buildModelAllowlistConfig(createModelAllowlistState),
+      model_status_visibility: normalizeModelStatusVisibility(createForm.model_status_visibility),
       // 创建时固定账号 manifest 固定发送关闭状态（后端创建路径禁止开启）
       codex_models_manifest_config: createCodexManifestDefaults(),
       supported_model_scopes: normalizeSupportedModelScopesForPlatform(
@@ -6649,6 +6727,9 @@ const handleEdit = async (group: AdminGroup) => {
     group.platform,
   );
   resetModelAllowlistState(editModelAllowlistState, group.model_allowlist);
+  editForm.model_status_visibility = normalizeModelStatusVisibility(group.model_status_visibility);
+  editModelStatusVisibilityCandidates.value = [];
+  editModelStatusVisibilityLoadError.value = false;
   // 固定账号 manifest 配置：回显配置并异步解析已存账号名称（失败显示 #<id>）
   const savedCodexManifestConfig =
     group.codex_models_manifest_config ?? createCodexManifestDefaults();
@@ -6676,6 +6757,7 @@ const handleEdit = async (group: AdminGroup) => {
     group.model_routing,
   );
   loadModelAllowlistCandidates("edit", group.id, group.platform);
+  loadModelStatusVisibilityCandidates("edit", group.id, group.platform);
   showEditModal.value = true;
   queuePricingCoverage("edit");
 };
@@ -6724,6 +6806,9 @@ const closeEditModal = () => {
   resetMessagesDispatchFormState(editForm);
   editForm.allow_live = false;
   resetModelAllowlistState(editModelAllowlistState);
+  editForm.model_status_visibility = { enabled: false, models: [] };
+  editModelStatusVisibilityCandidates.value = [];
+  editModelStatusVisibilityLoadError.value = false;
   editCodexManifestConfig.value = createCodexManifestDefaults();
   editCodexManifestAccountNames.value = {};
   editCodexManifestRef.value?.resetValidation?.();
@@ -6751,6 +6836,13 @@ const handleUpdateGroup = async () => {
     editModelAllowlistSelectedCount.value === 0
   ) {
     appStore.showError(t("admin.groups.modelAllowlist.emptySelectionError"));
+    return;
+  }
+  if (
+    editForm.model_status_visibility.enabled &&
+    editForm.model_status_visibility.models.length === 0
+  ) {
+    appStore.showError(t("admin.groups.modelStatusVisibility.emptySelectionError"));
     return;
   }
   // 固定账号 manifest：开启后至少一个账号，前端阻止提交并提示。
@@ -6809,6 +6901,7 @@ const handleUpdateGroup = async () => {
         editModelRoutingRules.value,
       ),
       model_allowlist: buildModelAllowlistConfig(editModelAllowlistState),
+      model_status_visibility: normalizeModelStatusVisibility(editForm.model_status_visibility),
       // 非 openai 平台提交关闭状态，与后端归一化一致
       codex_models_manifest_config:
         editForm.platform === "openai"
@@ -7253,7 +7346,11 @@ watch(
     }
     resetDisabledBatchImagePricing(createForm);
     resetModelAllowlistState(createModelAllowlistState);
+    createForm.model_status_visibility = { enabled: false, models: [] };
+    createModelStatusVisibilityCandidates.value = [];
+    createModelStatusVisibilityLoadError.value = false;
     loadModelAllowlistCandidates("create", 0, newVal);
+    loadModelStatusVisibilityCandidates("create", 0, newVal);
   },
 );
 
@@ -7317,7 +7414,13 @@ watch(
     resetDisabledBatchImagePricing(editForm);
     if (editingGroup.value) {
       resetModelAllowlistState(editModelAllowlistState, editForm.platform === editingGroup.value.platform ? editingGroup.value.model_allowlist : undefined);
+      editForm.model_status_visibility = editForm.platform === editingGroup.value.platform
+        ? normalizeModelStatusVisibility(editingGroup.value.model_status_visibility)
+        : { enabled: false, models: [] };
+      editModelStatusVisibilityCandidates.value = [];
+      editModelStatusVisibilityLoadError.value = false;
       loadModelAllowlistCandidates("edit", editingGroup.value.id, newVal);
+      loadModelStatusVisibilityCandidates("edit", editingGroup.value.id, newVal);
     }
   },
 );
