@@ -267,7 +267,7 @@
           </template>
 
           <template #secondary>
-            <div class="users-list-secondary">
+            <div class="users-list-secondary" :class="{ 'users-selection-summary': selectedCount > 0 }">
               <span data-test="users-list-count" class="users-list-count">
                 {{ t('common.total') }} <strong>{{ pagination.total }}</strong>
               </span>
@@ -2074,6 +2074,40 @@ onUnmounted(() => {
   .users-email {
     min-width: 0;
     overflow-wrap: anywhere;
+  }
+
+  .users-selection-summary {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.625rem;
+    border: 1px solid var(--workspace-rule);
+    border-radius: 8px;
+    background: linear-gradient(125deg, var(--workspace-highlight), transparent 68%), var(--workspace-control);
+    box-shadow: var(--workspace-shadow);
+  }
+
+  .users-selection-summary .users-list-count {
+    min-height: 2rem;
+    display: flex;
+    align-items: center;
+  }
+
+  .users-selection-summary .users-batch-button {
+    width: 100%;
+    justify-content: center;
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 359px) {
+  .users-selection-summary {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .users-selection-summary .users-list-count {
+    min-height: 1.75rem;
   }
 }
 </style>
