@@ -40,6 +40,10 @@
   box-shadow: none;
 }
 .admin-console-theme .app-shell-content .table-page-layout { gap: 1rem; }
+.admin-console-theme .app-shell-content .admin-workspace-page { min-width: 0; }
+.admin-console-theme .app-shell-content .admin-monitor-header { border-radius: 8px; }
+.admin-console-theme .app-shell-content .admin-monitor-primary-model { min-width: 0; }
+.admin-console-theme .app-shell-content .admin-monitor-model-wrap { min-width: 0; overflow-wrap: anywhere; word-break: break-word; }
 .admin-console-theme .app-shell-content .admin-toolbar { gap: 0.75rem; }
 .admin-console-theme .app-shell-content .admin-toolbar-group { gap: 0.5rem; }
 

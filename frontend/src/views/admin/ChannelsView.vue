@@ -1,6 +1,7 @@
 <template>
   <AppLayout>
-    <TablePageLayout>
+    <div class="admin-workspace-page min-w-0">
+      <TablePageLayout>
       <template #filters>
         <div class="admin-toolbar">
           <!-- Left: Search + Filters -->
@@ -53,6 +54,7 @@
           :data="channels"
           :loading="loading"
           :server-side-sort="true"
+          :mobile-layout="{ title: 'name', subtitle: 'description', status: 'status', summary: ['group_count', 'pricing_count'] }"
           default-sort-key="created_at"
           default-sort-order="desc"
           @sort="handleSort"
@@ -136,7 +138,8 @@
           @update:pageSize="handlePageSizeChange"
         />
       </template>
-    </TablePageLayout>
+      </TablePageLayout>
+    </div>
 
     <!-- Create/Edit Dialog -->
     <BaseDialog
@@ -1757,6 +1760,12 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
+.admin-workspace-page :deep(.admin-table-stage td),
+.admin-workspace-page :deep(.admin-table-stage th),
+.admin-workspace-page :deep(.admin-record-value) {
+  overflow-wrap: anywhere;
+}
+
 .channel-dialog-body {
   display: flex;
   flex-direction: column;

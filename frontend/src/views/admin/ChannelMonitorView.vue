@@ -1,8 +1,8 @@
 <template>
   <AppLayout>
-    <div class="w-full min-w-0 space-y-6 pb-8">
+    <div class="admin-workspace-page w-full min-w-0 space-y-6 pb-8">
       <header
-        class="page-header mb-0 rounded-3xl bg-white p-5 shadow-sm ring-1 ring-gray-900/5 dark:bg-dark-800 dark:ring-dark-700 sm:p-6"
+        class="admin-monitor-header admin-surface page-header mb-0 p-5 sm:p-6"
       >
         <h1 class="page-title flex items-center gap-2 text-xl font-black text-gray-900 dark:text-white">
           <span class="inline-flex h-8 w-8 items-center justify-center rounded-xl bg-blue-50 text-blue-500 dark:bg-blue-900/30 dark:text-blue-400">
@@ -64,7 +64,12 @@
       </template>
 
       <template #table>
-        <DataTable :columns="columns" :data="monitors" :loading="loading">
+        <DataTable
+          :columns="columns"
+          :data="monitors"
+          :loading="loading"
+          :mobile-layout="{ title: 'name', subtitle: 'provider', status: 'enabled', summary: ['availability_7d', 'latency'] }"
+        >
           <template #cell-name="{ row, value }">
             <div class="flex items-center gap-1.5">
               <span class="font-medium text-gray-900 dark:text-white">{{ value }}</span>
@@ -167,6 +172,29 @@
     />
   </AppLayout>
 </template>
+
+<style scoped>
+.admin-workspace-page :deep(.admin-table-stage td),
+.admin-workspace-page :deep(.admin-table-stage th) {
+  overflow-wrap: anywhere;
+}
+
+.admin-workspace-page :deep(.provider-cell),
+.admin-workspace-page :deep(.admin-record-summary),
+.admin-workspace-page :deep(.admin-record-detail) {
+  min-width: 0;
+}
+
+@media (max-width: 639px) {
+  .admin-workspace-page :deep(.admin-record-summary) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .admin-workspace-page :deep(.admin-record-summary .admin-record-metric) {
+    min-width: 0;
+  }
+}
+</style>
 
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted, onUnmounted, watch } from 'vue'

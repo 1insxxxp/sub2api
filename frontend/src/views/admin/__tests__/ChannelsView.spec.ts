@@ -298,6 +298,18 @@ describe('admin ChannelsView', () => {
     expect(source).not.toContain('bg-white shadow-lg')
   })
 
+  it('keeps the channels workspace responsive and appearance aware', () => {
+    const source = readFileSync(resolve(currentDir, '../ChannelsView.vue'), 'utf8')
+
+    expect(source).toContain('admin-workspace-page')
+    expect(source).toContain('mobile-layout')
+    expect(source).toContain("title: 'name'")
+    expect(source).toContain("status: 'status'")
+    expect(source).toContain('overflow-wrap: anywhere')
+    expect(source).toContain('<Pagination')
+    expect(source).toContain('<BaseDialog')
+  })
+
   it('warns when per-request pricing is not based on the requested model', () => {
     const source = readFileSync(resolve(currentDir, '../ChannelsView.vue'), 'utf8')
 

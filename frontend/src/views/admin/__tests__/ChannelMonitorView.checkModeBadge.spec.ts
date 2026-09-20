@@ -1,9 +1,14 @@
 import { defineComponent } from 'vue'
 import { flushPromises, mount } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { readFileSync } from 'node:fs'
+import { dirname, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
 
 import type { ChannelMonitor } from '@/api/admin/channelMonitor'
 import ChannelMonitorView from '@/views/admin/ChannelMonitorView.vue'
+
+const currentDir = dirname(fileURLToPath(import.meta.url))
 
 // P2-7(d)：provider 徽章旁并列 check_mode 徽章，三种检测模式一眼可分
 // （quota 系 = 账号配额数据源，probe = 纯探活）。
@@ -155,5 +160,17 @@ describe('ChannelMonitorView check-mode badge', () => {
       expect(cls).not.toContain('bg-gray-100')
     }
     wrapper.unmount()
+  })
+
+  it('keeps monitor records readable on narrow screens and the admin surface consistent', async () => {
+    const source = readFileSync(resolve(currentDir, '../ChannelMonitorView.vue'), 'utf8')
+
+    expect(source).toContain('admin-workspace-page')
+    expect(source).toContain('mobile-layout')
+    expect(source).toContain("status: 'enabled'")
+    expect(source).toContain("summary: ['availability_7d', 'latency']")
+    expect(source).toContain('overflow-wrap: anywhere')
+    expect(source).toContain('<Pagination')
+    expect(source).toContain('<MonitorFormDialog')
   })
 })
