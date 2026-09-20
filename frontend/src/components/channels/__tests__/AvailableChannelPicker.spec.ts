@@ -39,6 +39,11 @@ async function mountPicker() {
   return wrapper
 }
 
+async function waitForOverlayToLeave() {
+  await new Promise((resolve) => setTimeout(resolve, 240))
+  await flushPromises()
+}
+
 describe('AvailableChannelPicker', () => {
   it('shows a mobile-only 44px trigger with selected metadata', async () => {
     const wrapper = await mountPicker(); const trigger = wrapper.get('[data-testid="channel-picker-trigger"]')
@@ -74,14 +79,14 @@ describe('AvailableChannelPicker', () => {
     const wrapper = await mountPicker(); const trigger = wrapper.get('[data-testid="channel-picker-trigger"]'); trigger.element.focus(); await trigger.trigger('click'); await flushPromises()
     const dialog = document.body.querySelector<HTMLElement>('[data-testid="channel-picker-dialog"]')!; const options = dialog.querySelectorAll<HTMLButtonElement>('[data-testid="channel-picker-option"]')
     expect(options[0].getAttribute('aria-selected')).toBe('true'); expect(options[1].textContent).toContain('gemini'); options[1].click(); await flushPromises()
-    expect(wrapper.emitted('update:modelValue')).toEqual([['beta']]); expect(document.body.querySelector('[data-testid="channel-picker-dialog"]')).toBeNull(); expect(document.activeElement).toBe(trigger.element)
+    expect(wrapper.emitted('update:modelValue')).toEqual([['beta']]); await waitForOverlayToLeave(); expect(document.body.querySelector('[data-testid="channel-picker-dialog"]')).toBeNull(); expect(document.activeElement).toBe(trigger.element)
     await trigger.trigger('click'); await flushPromises(); expect((document.body.querySelector('[data-testid="channel-picker-search"]') as HTMLInputElement).value).toBe('')
   })
   it.each(['Escape', 'button', 'backdrop'])('closes through %s and restores body overflow', async (method) => {
     document.body.style.overflow = 'clip'; const wrapper = await mountPicker(); await wrapper.get('[data-testid="channel-picker-trigger"]').trigger('click'); await flushPromises(); expect(document.body.style.overflow).toBe('hidden')
     const dialog = document.body.querySelector<HTMLElement>('[data-testid="channel-picker-dialog"]')!
     if (method === 'Escape') window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' })); else if (method === 'button') (dialog.querySelector('[data-testid="channel-picker-close"]') as HTMLButtonElement).click(); else dialog.click()
-    await flushPromises(); expect(document.body.querySelector('[data-testid="channel-picker-dialog"]')).toBeNull(); expect(document.body.style.overflow).toBe('clip'); wrapper.unmount()
+    await waitForOverlayToLeave(); expect(document.body.querySelector('[data-testid="channel-picker-dialog"]')).toBeNull(); expect(document.body.style.overflow).toBe('clip'); wrapper.unmount()
   })
   it('unlocks on unmount and contains no API or price calculation', async () => {
     const wrapper = await mountPicker(); await wrapper.get('[data-testid="channel-picker-trigger"]').trigger('click'); await flushPromises(); wrapper.unmount(); expect(document.body.style.overflow).toBe('')

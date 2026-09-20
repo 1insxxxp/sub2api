@@ -283,9 +283,10 @@
 
     <!-- Generate Codes Dialog -->
     <Teleport to="body">
-      <div v-if="showGenerateDialog" class="brand-overlay z-50 flex items-start justify-center overflow-y-auto p-4 pt-[7vh]">
+      <Transition name="overlay">
+        <div v-if="showGenerateDialog" class="brand-overlay z-50 flex items-start justify-center overflow-y-auto p-4 pt-[7vh]">
         <div
-          class="brand-floating-panel w-full max-w-md"
+          class="brand-floating-panel overlay-motion-panel w-full max-w-md"
         >
           <div class="brand-floating-header flex items-start justify-between gap-4">
             <div class="flex min-w-0 items-start gap-3">
@@ -468,17 +469,19 @@
             </div>
           </form>
         </div>
-      </div>
+        </div>
+      </Transition>
     </Teleport>
 
     <!-- Batch Update Dialog -->
     <Teleport to="body">
-      <div
-        v-if="showBatchUpdateDialog"
-        class="brand-overlay z-50 flex items-start justify-center overflow-y-auto p-4 pt-[7vh]"
-      >
+      <Transition name="overlay">
         <div
-          class="brand-floating-panel w-full max-w-lg"
+          v-if="showBatchUpdateDialog"
+          class="brand-overlay z-50 flex items-start justify-center overflow-y-auto p-4 pt-[7vh]"
+        >
+        <div
+          class="brand-floating-panel overlay-motion-panel w-full max-w-lg"
         >
           <div class="brand-floating-header flex items-start justify-between gap-4">
             <div class="flex min-w-0 items-start gap-3">
@@ -591,13 +594,15 @@
             </div>
           </form>
         </div>
-      </div>
+        </div>
+      </Transition>
     </Teleport>
 
     <!-- Generated Codes Result Dialog -->
     <Teleport to="body">
-      <div v-if="showResultDialog" class="brand-overlay z-50 flex items-start justify-center overflow-y-auto p-4 pt-[7vh]">
-        <div class="brand-floating-panel w-full max-w-lg">
+      <Transition name="overlay">
+        <div v-if="showResultDialog" class="brand-overlay z-50 flex items-start justify-center overflow-y-auto p-4 pt-[7vh]">
+        <div class="brand-floating-panel overlay-motion-panel w-full max-w-lg">
           <!-- Header -->
           <div
             class="brand-floating-header flex items-center justify-between gap-4"
@@ -671,7 +676,8 @@
             </button>
           </div>
         </div>
-      </div>
+        </div>
+      </Transition>
     </Teleport>
   </AppLayout>
 </template>

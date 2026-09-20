@@ -31,17 +31,18 @@
     </button>
 
     <Teleport to="body">
-      <div
-        v-if="open"
-        data-testid="channel-picker-dialog"
-        :id="dialogId"
-        class="fixed inset-0 z-[70] flex items-end bg-black/45"
-        role="dialog"
-        aria-modal="true"
-        :aria-labelledby="titleId"
-        @click.self="closePicker"
-      >
-        <section data-testid="channel-picker-panel" class="flex max-h-[calc(100dvh-3rem)] w-full flex-col overscroll-contain rounded-t-3xl bg-white pb-[max(1rem,env(safe-area-inset-bottom))] shadow-2xl dark:bg-dark-800">
+      <Transition name="overlay">
+        <div
+          v-if="open"
+          data-testid="channel-picker-dialog"
+          :id="dialogId"
+          class="fixed inset-0 z-[70] flex items-end bg-black/45"
+          role="dialog"
+          aria-modal="true"
+          :aria-labelledby="titleId"
+          @click.self="closePicker"
+        >
+          <section data-testid="channel-picker-panel" class="overlay-motion-panel flex max-h-[calc(100dvh-3rem)] w-full flex-col overscroll-contain rounded-t-3xl bg-white pb-[max(1rem,env(safe-area-inset-bottom))] shadow-2xl dark:bg-dark-800">
           <header data-testid="channel-picker-header" class="sticky top-0 z-10 rounded-t-3xl border-b border-gray-100 bg-white p-4 dark:border-dark-600 dark:bg-dark-800">
             <div class="flex items-center justify-between gap-3">
               <h2 :id="titleId" class="text-base font-semibold text-gray-900 dark:text-white">{{ t(`${catalogKey}.channelPickerTitle`) }}</h2>
@@ -83,8 +84,9 @@
               <span class="mt-1 flex gap-3 text-xs text-gray-500 dark:text-gray-400"><span>{{ t(`${catalogKey}.groupsCount`, { count: channel.groupCount }) }}</span><span>{{ t(`${catalogKey}.modelsCount`, { count: channel.modelCount }) }}</span></span>
             </button>
           </div>
-        </section>
-      </div>
+          </section>
+        </div>
+      </Transition>
     </Teleport>
   </div>
 </template>

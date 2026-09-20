@@ -1,16 +1,17 @@
 <template>
-  <div
-    v-if="date"
-    ref="dialogRootRef"
-    data-test="commission-day-dialog"
-    class="fixed inset-0 z-[80] flex items-center justify-center overflow-hidden bg-slate-950/55 p-3 backdrop-blur-[2px] sm:px-4 sm:py-8"
-    role="dialog"
-    tabindex="-1"
-    aria-modal="true"
-    aria-labelledby="commission-day-dialog-title"
-    @click.self="emit('close')"
-  >
-    <section class="flex max-h-[calc(100dvh-2rem)] w-full max-w-3xl min-w-0 flex-col overflow-hidden rounded-lg border border-gray-200 bg-white shadow-2xl dark:border-dark-700 dark:bg-dark-900 sm:max-h-[calc(100vh-4rem)]">
+  <Transition name="overlay">
+    <div
+      v-if="date"
+      ref="dialogRootRef"
+      data-test="commission-day-dialog"
+      class="fixed inset-0 z-[80] flex items-center justify-center overflow-hidden bg-slate-950/55 p-3 backdrop-blur-[2px] sm:px-4 sm:py-8"
+      role="dialog"
+      tabindex="-1"
+      aria-modal="true"
+      aria-labelledby="commission-day-dialog-title"
+      @click.self="emit('close')"
+    >
+      <section class="overlay-motion-panel flex max-h-[calc(100dvh-2rem)] w-full max-w-3xl min-w-0 flex-col overflow-hidden rounded-lg border border-gray-200 bg-white shadow-2xl dark:border-dark-700 dark:bg-dark-900 sm:max-h-[calc(100vh-4rem)]">
       <header class="flex shrink-0 items-start justify-between gap-3 border-b border-gray-100 bg-gradient-to-br from-blue-50 via-white to-cyan-50 px-4 py-4 dark:border-dark-700 dark:from-blue-500/15 dark:via-dark-900 dark:to-cyan-500/10 sm:px-6">
         <div class="min-w-0">
           <h2 id="commission-day-dialog-title" class="text-base font-semibold text-gray-950 dark:text-white">
@@ -162,8 +163,9 @@
       </article>
       </div>
       </div>
-    </section>
-  </div>
+      </section>
+    </div>
+  </Transition>
 </template>
 
 <script setup lang="ts">

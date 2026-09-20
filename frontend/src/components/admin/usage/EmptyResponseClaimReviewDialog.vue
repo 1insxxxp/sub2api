@@ -1,6 +1,7 @@
 <template>
-  <div v-if="show && primaryClaim" class="fixed inset-0 z-[80] flex items-end justify-center bg-slate-950/55 sm:items-center sm:p-4" role="dialog" aria-modal="true">
-    <section class="flex max-h-[92vh] w-full flex-col overflow-hidden rounded-t-3xl border border-slate-200 bg-white shadow-2xl dark:border-dark-600 dark:bg-dark-800 sm:max-w-4xl sm:rounded-2xl">
+  <Transition name="overlay">
+    <div v-if="show && primaryClaim" class="fixed inset-0 z-[80] flex items-end justify-center bg-slate-950/55 sm:items-center sm:p-4" role="dialog" aria-modal="true">
+      <section class="overlay-motion-panel flex max-h-[92vh] w-full flex-col overflow-hidden rounded-t-3xl border border-slate-200 bg-white shadow-2xl dark:border-dark-600 dark:bg-dark-800 sm:max-w-4xl sm:rounded-2xl">
       <header class="flex shrink-0 items-start justify-between border-b border-slate-100 px-5 py-4 dark:border-dark-700">
         <div>
           <p class="text-xs font-semibold uppercase tracking-[0.16em] text-primary-600 dark:text-primary-400">
@@ -80,8 +81,9 @@
           {{ submitting ? t('common.processing') : t('common.confirm') }}
         </button>
       </footer>
-    </section>
-  </div>
+      </section>
+    </div>
+  </Transition>
 </template>
 
 <script setup lang="ts">
