@@ -286,29 +286,34 @@
               <span v-if="selectedCount > 0" class="users-list-count" role="status">
                 {{ t('common.selectedCount', { count: selectedCount }) }}
               </span>
-              <label class="users-mobile-sort">
+              <div class="users-mobile-sort">
                 <span>{{ t('admin.users.sortBy') }}</span>
-                <select
-                  :value="mobileSortValue"
-                  :aria-label="t('admin.users.sortBy')"
-                  @change="handleMobileSortChange(($event.target as HTMLSelectElement).value)"
-                >
-                  <option
-                    v-for="column in mobileSortableColumns"
-                    :key="`${column.key}:desc`"
-                    :value="`${column.key}:desc`"
+                <div class="users-mobile-sort-menu-wrap">
+                  <button
+                    type="button"
+                    class="users-mobile-sort-trigger"
+                    :aria-label="t('admin.users.sortBy')"
+                    :aria-expanded="showMobileSortMenu"
+                    @click="showMobileSortMenu = !showMobileSortMenu"
                   >
-                    {{ column.label }} ↓
-                  </option>
-                  <option
-                    v-for="column in mobileSortableColumns"
-                    :key="`${column.key}:asc`"
-                    :value="`${column.key}:asc`"
-                  >
-                    {{ column.label }} ↑
-                  </option>
-                </select>
-              </label>
+                    {{ mobileSortLabel }}
+                    <Icon name="chevronDown" size="sm" />
+                  </button>
+                  <div v-if="showMobileSortMenu" class="dropdown users-mobile-sort-menu">
+                    <button
+                      v-for="column in mobileSortableColumns"
+                      :key="column.key"
+                      type="button"
+                      class="dropdown-item justify-between"
+                      :class="{ 'text-primary-600 dark:text-primary-300': column.key === sortState.sort_by }"
+                      @click="handleMobileSortOption(column.key)"
+                    >
+                      <span>{{ column.label }}</span>
+                      <span v-if="column.key === sortState.sort_by">{{ sortState.sort_order === 'asc' ? '↑' : '↓' }}</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
             <button
               v-if="selectedCount > 0"
               class="btn btn-secondary users-batch-button"
@@ -1150,7 +1155,10 @@ const loadInitialSortState = (): { sort_by: string; sort_order: 'asc' | 'desc' }
 }
 const sortState = reactive(loadInitialSortState())
 const mobileSortableColumns = computed(() => columns.value.filter((column) => column.sortable))
-const mobileSortValue = computed(() => `${sortState.sort_by}:${sortState.sort_order}`)
+const mobileSortLabel = computed(() => {
+  const column = mobileSortableColumns.value.find((item) => item.key === sortState.sort_by)
+  return `${column?.label ?? sortState.sort_by} ${sortState.sort_order === 'asc' ? '↑' : '↓'}`
+})
 
 // Groups data for the groups column and the existing "authorised group" filter (active only)
 const allGroups = ref<AdminGroup[]>([])
@@ -1235,6 +1243,7 @@ const visibleFilters = reactive<Set<string>>(new Set())
 // Dropdown states
 const showFilterDropdown = ref(false)
 const showColumnDropdown = ref(false)
+const showMobileSortMenu = ref(false)
 
 // Dropdown refs for click outside detection
 const filterDropdownRef = ref<HTMLElement | null>(null)
@@ -1644,6 +1653,9 @@ const handleClickOutside = (event: MouseEvent) => {
   if (columnDropdownRef.value && !columnDropdownRef.value.contains(target)) {
     showColumnDropdown.value = false
   }
+  if (!target.closest('.users-mobile-sort-menu-wrap')) {
+    showMobileSortMenu.value = false
+  }
   // Close usage sort dropdown when clicking outside any usage-sort-trigger
   if (openUsageSortMenu.value !== null && !target.closest('.usage-sort-trigger')) {
     openUsageSortMenu.value = null
@@ -1802,10 +1814,11 @@ const handleSort = (key: string, order: 'asc' | 'desc') => {
   loadUsers()
 }
 
-const handleMobileSortChange = (value: string) => {
-  const [key, order] = value.split(':')
+const handleMobileSortOption = (key: string) => {
   if (!mobileSortableColumns.value.some((column) => column.key === key)) return
-  handleSort(key, order === 'asc' ? 'asc' : 'desc')
+  const order = key === sortState.sort_by && sortState.sort_order === 'desc' ? 'asc' : 'desc'
+  showMobileSortMenu.value = false
+  handleSort(key, order)
 }
 
 // Filter helpers
@@ -2076,16 +2089,44 @@ onUnmounted(() => {
   font-size: 0.75rem;
 }
 
-.users-mobile-sort select {
+.users-mobile-sort-menu-wrap {
+  position: relative;
   min-width: 0;
   flex: 1;
+}
+
+.users-mobile-sort-trigger {
+  display: flex;
+  width: 100%;
   min-height: 2.25rem;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
   padding: 0.375rem 0.625rem;
   border: 1px solid var(--workspace-rule);
   border-radius: 6px;
   color: var(--workspace-ink);
   background: var(--workspace-control);
   font-size: 0.75rem;
+  text-align: left;
+}
+
+.users-mobile-sort-trigger svg {
+  flex: none;
+  color: var(--workspace-muted);
+}
+
+.users-mobile-sort-menu {
+  z-index: 20;
+  right: 0;
+  bottom: calc(100% + 0.375rem);
+  width: min(15rem, calc(100vw - 2rem));
+  max-height: 16rem;
+  overflow-y: auto;
+}
+
+.users-mobile-sort-menu .dropdown-item {
+  width: 100%;
 }
 
 .users-list-actions .users-tool-button {
