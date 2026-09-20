@@ -30,7 +30,7 @@ Run:
 
 ```bash
 cd backend
-go test ./migrations ./internal/service -run 'ModelStatusVisibility|GroupModelStatusVisibility' -count=1
+go test -tags=unit ./migrations ./internal/service -run 'ModelStatusVisibility|GroupModelStatusVisibility' -count=1
 ```
 
 Expected: FAIL because the column, domain type, and normalization helpers do not exist.
@@ -72,7 +72,7 @@ Cover create and update with visibility enabled, disabled reset, normalization, 
 
 ```bash
 cd backend
-go test ./internal/service ./internal/handler/admin -run 'ModelStatusVisibility|Group.*Visibility' -count=1
+go test -tags=unit ./internal/service ./internal/handler/admin -run 'ModelStatusVisibility|Group.*Visibility' -count=1
 ```
 
 Expected: FAIL because admin inputs and DTOs do not contain the new field.

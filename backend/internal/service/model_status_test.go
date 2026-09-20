@@ -15,6 +15,18 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func TestModelStatusVisibilityPreservesEmptyArrays(t *testing.T) {
+	source := &ModelStatusReport{Groups: []ModelStatusGroup{{
+		ID: 1, Platform: PlatformOpenAI,
+		Models: []ModelStatusModel{{Name: "gpt-5.4", Recent: []ModelStatusRecent{}, Buckets: emptyModelStatusBuckets(time.Now())}},
+	}}}
+	report := filterModelStatusReport(source, []Group{{ID: 1, Platform: PlatformOpenAI, Status: StatusActive}})
+	encoded, err := json.Marshal(report)
+	require.NoError(t, err)
+	require.Contains(t, string(encoded), `"recent":[]`)
+	require.Contains(t, string(encoded), `"requests":[]`)
+}
+
 type modelStatusGroupStub struct {
 	GroupRepository
 	groups       []Group
@@ -169,7 +181,7 @@ func TestFilterModelStatusReportUsesIndependentVisibilityAndRecomputesMetrics(t 
 		Status:   ModelStatusHealthy,
 		Metrics:  ModelStatusMetrics{Total: 10, Success: 9, Failure: 1},
 		Recent:   []ModelStatusRecent{{Outcome: UsageOutcomeSuccess}},
-		Buckets:  []ModelStatusBucket{{Total: 10, Success: 9, Failure: 1}},
+		Buckets:  []ModelStatusBucket{{Total: 10, Success: 9, Failure: 1, Requests: []ModelStatusRecent{{Outcome: UsageOutcomeSuccess}}}},
 	}
 	text := ModelStatusModel{
 		Name:     "gpt-5",
@@ -210,6 +222,14 @@ func TestFilterModelStatusReportUsesIndependentVisibilityAndRecomputesMetrics(t 
 	require.Equal(t, int64(999), source.Summary.Total)
 	require.Len(t, source.Groups[0].Models[0].Recent, 1)
 	require.Len(t, source.Groups[0].Models[0].Buckets, 1)
+	require.Len(t, source.Groups[0].Models[0].Buckets[0].Requests, 1)
+
+	filtered.Groups[0].Models[0].Recent[0].Outcome = UsageOutcomeFailure
+	filtered.Groups[0].Models[0].Buckets[0].Total = 1
+	filtered.Groups[0].Models[0].Buckets[0].Requests[0].Outcome = UsageOutcomeFailure
+	require.Equal(t, UsageOutcomeSuccess, source.Groups[0].Models[0].Recent[0].Outcome)
+	require.Equal(t, int64(10), source.Groups[0].Models[0].Buckets[0].Total)
+	require.Equal(t, UsageOutcomeSuccess, source.Groups[0].Models[0].Buckets[0].Requests[0].Outcome)
 }
 
 func TestFilterModelStatusReportDisabledOrEmptyVisibilityKeepsAllModels(t *testing.T) {

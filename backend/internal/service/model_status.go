@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"slices"
 	"sort"
 	"sync"
 	"time"
@@ -318,6 +319,11 @@ func filterModelStatusReport(source *ModelStatusReport, groups []Group) *ModelSt
 	}
 	report := *source
 	report.Groups, report.Summary = []ModelStatusGroup{}, ModelStatusMetrics{}
+	if source.SnapshotAt != nil {
+		snapshotAt := *source.SnapshotAt
+		report.SnapshotAt = &snapshotAt
+	}
+	report.Coverage.Reasons = slices.Clone(source.Coverage.Reasons)
 	for _, group := range source.Groups {
 		current, ok := allowed[group.ID]
 		if !ok || current.Platform != group.Platform {
@@ -329,6 +335,7 @@ func filterModelStatusReport(source *ModelStatusReport, groups []Group) *ModelSt
 			if !current.ModelStatusModelVisible(model.Name) {
 				continue
 			}
+			model = cloneModelStatusModel(model)
 			models = append(models, model)
 			metrics = mergeModelStatusMetrics(metrics, model.Metrics)
 		}
@@ -342,6 +349,34 @@ func filterModelStatusReport(source *ModelStatusReport, groups []Group) *ModelSt
 		report.Summary = mergeModelStatusMetrics(report.Summary, group.Metrics)
 	}
 	return &report
+}
+
+func cloneModelStatusModel(source ModelStatusModel) ModelStatusModel {
+	model := source
+	model.Metrics = cloneModelStatusMetrics(source.Metrics)
+	model.Recent = slices.Clone(source.Recent)
+	model.Buckets = slices.Clone(source.Buckets)
+	for i, bucket := range source.Buckets {
+		model.Buckets[i].Requests = slices.Clone(bucket.Requests)
+	}
+	return model
+}
+
+func cloneModelStatusMetrics(source ModelStatusMetrics) ModelStatusMetrics {
+	metrics := source
+	if source.SuccessRate != nil {
+		value := *source.SuccessRate
+		metrics.SuccessRate = &value
+	}
+	if source.AvgTTFTMs != nil {
+		value := *source.AvgTTFTMs
+		metrics.AvgTTFTMs = &value
+	}
+	if source.AvgDurationMs != nil {
+		value := *source.AvgDurationMs
+		metrics.AvgDurationMs = &value
+	}
+	return metrics
 }
 
 func finalizeModelStatusMetrics(metrics ModelStatusMetrics) ModelStatusMetrics {

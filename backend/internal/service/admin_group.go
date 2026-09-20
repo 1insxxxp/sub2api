@@ -574,6 +574,10 @@ func (s *adminServiceImpl) CreateGroup(ctx context.Context, input *CreateGroupIn
 	if err != nil {
 		return nil, err
 	}
+	modelStatusVisibility, err := normalizeGroupModelStatusVisibility(input.ModelStatusVisibility)
+	if err != nil {
+		return nil, err
+	}
 
 	group := &Group{
 		Name:                             input.Name,
@@ -635,7 +639,7 @@ func (s *adminServiceImpl) CreateGroup(ctx context.Context, input *CreateGroupIn
 		MessagesDispatchModelConfig:      normalizeOpenAIMessagesDispatchModelConfig(input.MessagesDispatchModelConfig),
 		ModelAllowlist:                   modelAllowlist,
 		ModelsListConfig:                 modelAllowlist,
-		ModelStatusVisibility:            input.ModelStatusVisibility.Normalize(),
+		ModelStatusVisibility:            modelStatusVisibility,
 		// 固定账号 manifest 配置：账号绑定发生在分组创建之后，创建路径禁止开启，
 		// 成员关系无从校验（前端创建对话框也不展示）。
 		CodexModelsManifestConfig:   normalizeCodexModelsManifestConfig(platform, input.CodexModelsManifestConfig),
@@ -1054,7 +1058,11 @@ func (s *adminServiceImpl) UpdateGroup(ctx context.Context, id int64, input *Upd
 		group.ModelsListConfig = modelAllowlist
 	}
 	if input.ModelStatusVisibility != nil {
-		group.ModelStatusVisibility = input.ModelStatusVisibility.Normalize()
+		modelStatusVisibility, err := normalizeGroupModelStatusVisibility(*input.ModelStatusVisibility)
+		if err != nil {
+			return nil, err
+		}
+		group.ModelStatusVisibility = modelStatusVisibility
 	}
 	syncGroupModelAllowlistAliases(group)
 	if input.CodexModelsManifestConfig != nil {
