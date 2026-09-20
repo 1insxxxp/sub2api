@@ -1454,6 +1454,11 @@ const handlePageSizeChange = (size: number) => {
 const handleSort = (key: string, order: AccountSortOrder) => {
   sortState.sort_by = key
   sortState.sort_order = order
+  try {
+    localStorage.setItem(ACCOUNT_SORT_STORAGE_KEY, JSON.stringify({ key, order }))
+  } catch (error) {
+    console.warn('Failed to persist account sort state:', error)
+  }
   const requestParams = params as any
   requestParams.sort_by = key
   requestParams.sort_order = order

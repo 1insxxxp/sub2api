@@ -1818,6 +1818,11 @@ const handleSort = (key: string, order: 'asc' | 'desc') => {
   clearUsageSort()
   sortState.sort_by = key
   sortState.sort_order = order
+  try {
+    localStorage.setItem(USER_SORT_STORAGE_KEY, JSON.stringify({ key, order }))
+  } catch (error) {
+    console.warn('Failed to persist user sort state:', error)
+  }
   pagination.page = 1
   loadUsers()
 }
