@@ -2874,6 +2874,36 @@ onUnmounted(() => {
     min-height: 2.625rem;
   }
 
+  .accounts-admin-page :deep(.admin-record-detail-grid) {
+    gap: 0.375rem;
+    padding: 0.5rem 0 0.875rem;
+  }
+
+  .accounts-admin-page :deep(.admin-record-detail) {
+    grid-template-columns: 5.25rem minmax(0, 1fr);
+    min-height: 2.25rem;
+    align-items: center;
+    gap: 0.625rem;
+    padding: 0.375rem 0.5rem;
+    border-radius: 6px;
+  }
+
+  .accounts-admin-page :deep(.admin-record-detail:nth-child(even)) {
+    background: var(--workspace-control);
+  }
+
+  .accounts-admin-page :deep(.admin-record-detail .admin-record-value) {
+    min-width: 0;
+    overflow-wrap: anywhere;
+    text-align: right;
+  }
+
+  .accounts-admin-page :deep(.admin-record-detail .admin-record-value > *) {
+    max-width: 100%;
+    overflow-wrap: anywhere;
+    white-space: normal;
+  }
+
   .accounts-admin-page :deep(.admin-record-actions) {
     padding: 0.625rem 0.75rem;
     background: var(--workspace-control);
