@@ -124,6 +124,37 @@ describe('ModelStatusView', () => {
     expect(wrapper.findAll('.health-badge')[2].classes()).toContain('badge-danger')
   })
 
+  it('uses workspace semantic surfaces and keeps long model identities readable', async () => {
+    const data = report()
+    data.groups[0].models[0].name = 'a-model-name-that-needs-to-wrap-on-narrow-screens'
+    getModelStatus.mockResolvedValueOnce(data)
+    const wrapper = render()
+    await flushPromises()
+
+    expect(wrapper.get('.model-status-workspace').exists()).toBe(true)
+    expect(wrapper.get('.status-toolbar-shell').classes()).toContain('workspace-toolbar')
+    expect(wrapper.get('[data-testid="model-row"]').classes()).toContain('workspace-surface')
+    expect(wrapper.get('.model-identity').classes()).toContain('model-identity-stack')
+    expect(wrapper.get('.health-badge').classes()).toContain('health-badge-readable')
+    expect(wrapper.get('.status-bucket-grid').exists()).toBe(true)
+  })
+
+  it('offers retry after a refresh failure when existing data remains visible', async () => {
+    const wrapper = render()
+    await flushPromises()
+
+    getModelStatus.mockRejectedValueOnce(new Error('temporary upstream failure'))
+    await wrapper.get('[data-testid="refresh"]').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.get('[data-testid="retry"]').exists()).toBe(true)
+    expect(wrapper.get('[data-testid="retry"]').classes()).toContain('status-recovery-action')
+    getModelStatus.mockResolvedValueOnce(report())
+    await wrapper.get('[data-testid="retry"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.find('[data-testid="retry"]').exists()).toBe(false)
+  })
+
   it.each([
     { success: 0, failure: 0, empty: 0, unknown: 0, status: 'no_data', rate: '-', hue: null },
     { success: 0, failure: 0, empty: 0, unknown: 5, status: 'unknown', rate: '-', hue: null },
@@ -319,6 +350,11 @@ describe('ModelStatusView', () => {
     expect((wrapper.get('select').element as HTMLSelectElement).value).toBe('custom:21')
     expect(wrapper.findAll('[data-testid="model-row"]')).toHaveLength(0)
     expect(wrapper.text()).toContain('modelStatus.noCustomGroupMatches')
+    expect(wrapper.get('[data-testid="clear-filter"]').classes()).toContain('status-recovery-action')
+    await wrapper.get('[data-testid="clear-filter"]').trigger('click')
+    await nextTick()
+    expect((wrapper.get('select').element as HTMLSelectElement).value).toBe('')
+    expect(wrapper.findAll('[data-testid="model-row"]')).toHaveLength(3)
   })
 
   it('resynchronizes custom presets on manual and visibility refresh without blocking public data', async () => {

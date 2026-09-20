@@ -1,8 +1,8 @@
 <template>
-  <component :is="authStore.isAuthenticated ? AppLayout : 'div'" class="model-status-page" :class="{ 'status-guest': !authStore.isAuthenticated, 'status-group-context-active': showGroupContext, 'status-capture-mode': captureMode }">
+  <component :is="authStore.isAuthenticated ? AppLayout : 'div'" class="model-status-page model-status-workspace" :class="{ 'status-guest': !authStore.isAuthenticated, 'status-group-context-active': showGroupContext, 'status-capture-mode': captureMode }">
     <PlazaNavBar v-if="!authStore.isAuthenticated && !captureMode" login-redirect="/model-status" />
     <component :is="authStore.isAuthenticated ? 'section' : 'main'" class="status-content" :class="{ 'status-content-embedded': authStore.isAuthenticated }" :aria-busy="loading">
-      <div class="status-toolbar-shell">
+      <div class="status-toolbar-shell workspace-toolbar">
         <header class="page-header status-header">
         <div class="min-w-0">
           <h1 class="page-title flex items-center gap-2">
@@ -52,7 +52,7 @@
       <div v-if="loadFailed" role="alert" class="status-notice status-notice-error">
         <Icon name="exclamationTriangle" size="md" class="shrink-0" />
         <span>{{ t(report ? 'modelStatus.refreshFailed' : 'modelStatus.loadFailed') }}</span>
-        <button v-if="!report" data-testid="retry" type="button" class="btn btn-secondary btn-sm" :disabled="loading" @click="loadReport">
+        <button data-testid="retry" type="button" class="btn btn-secondary btn-sm status-recovery-action" :disabled="loading" @click="loadReport">
           <Icon name="refresh" size="sm" />{{ t('common.retry') }}
         </button>
       </div>
@@ -68,9 +68,12 @@
           <span>{{ t('modelStatus.staleData') }}</span>
         </div>
 
-        <div v-if="!report.groups.length || !filteredGroups.length" class="status-empty">
+        <div v-if="!report.groups.length || !filteredGroups.length" class="status-empty workspace-empty-state">
           <Icon name="search" size="lg" class="text-gray-400" />
           <span>{{ t(emptyStateKey) }}</span>
+          <button v-if="groupFilter && report.groups.length" data-testid="clear-filter" type="button" class="btn btn-secondary btn-sm status-recovery-action" @click="clearGroupFilter">
+            <Icon name="x" size="sm" />{{ t('modelStatus.allGroups') }}
+          </button>
         </div>
 
         <div v-if="visibleGroups.length" ref="statusGroups" class="status-groups">
@@ -82,8 +85,8 @@
               </div>
             </header>
             <div class="model-grid">
-          <article v-for="(model, modelIndex) in group.visibleModels" :key="`${model.platform}:${model.name}`" class="card model-row" data-testid="model-row">
-            <div class="model-identity">
+          <article v-for="(model, modelIndex) in group.visibleModels" :key="`${model.platform}:${model.name}`" class="card model-row workspace-surface" data-testid="model-row">
+            <div class="model-identity model-identity-stack">
               <div class="model-title">
                 <span class="model-logo"><ModelIcon :model="model.name" size="20px" /></span>
                 <h3>{{ model.name }}</h3>
@@ -108,7 +111,7 @@
                   :style="healthLightStyle(modelMetricsForDisplay(model))"
                   aria-hidden="true"
                 />
-                <span class="badge health-badge" :class="healthBadgeClasses[modelHealthForDisplay(model)]">{{ t(`modelStatus.health.${modelHealthForDisplay(model)}`) }}</span>
+                <span class="badge health-badge health-badge-readable" :class="healthBadgeClasses[modelHealthForDisplay(model)]">{{ t(`modelStatus.health.${modelHealthForDisplay(model)}`) }}</span>
               </div>
             </div>
 
@@ -120,7 +123,7 @@
                   </span>
                   <span>{{ modelBuckets(model).length }}/{{ bucketCount }}</span>
                 </div>
-              <div class="recent-bars" :class="{ 'bucket-hint-active': showBucketHint && groupIndex === 0 && modelIndex === 0 }" :aria-label="t('modelStatus.fifteenMinuteBuckets')">
+              <div class="recent-bars status-bucket-grid" :class="{ 'bucket-hint-active': showBucketHint && groupIndex === 0 && modelIndex === 0 }" :aria-label="t('modelStatus.fifteenMinuteBuckets')">
                 <button
                   v-for="(bucket, index) in modelBuckets(model)"
                   :key="`${bucket.start_at}:${index}`"
@@ -540,6 +543,10 @@ function loadMoreModels() {
   visibleModelLimit.value += 40
 }
 
+function clearGroupFilter() {
+  groupFilter.value = ''
+}
+
 async function loadReport() {
   if (request || disposed) return
   const controller = new AbortController()
@@ -694,8 +701,14 @@ onBeforeUnmount(() => {
 .status-content { container: model-status / inline-size; max-width: 1280px; min-width: 0; margin: 0 auto; padding: 28px 24px; }
 .status-content-embedded { max-width: none; margin: 0; padding: 0; }
 .status-toolbar-shell { min-width: 0; }
-.status-header { @apply rounded-2xl border border-primary-100/70 bg-white/80 px-4 py-3 shadow-sm dark:border-primary-500/15 dark:bg-dark-900/60; display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 18px; }
-.dark .model-status-page .status-header { border-color: rgba(96, 165, 250, 0.22); background: linear-gradient(135deg, rgba(30, 64, 175, 0.18), rgba(8, 145, 178, 0.08)), rgba(2, 6, 23, 0.78); box-shadow: 0 10px 28px rgba(0, 0, 0, 0.22), 0 1px 0 rgba(255, 255, 255, 0.04) inset; }
+.model-status-workspace { --status-surface: rgb(255 255 255 / 84%); --status-surface-muted: rgb(248 250 252 / 72%); --status-border: rgb(226 232 240 / 86%); --status-shadow: 0 12px 28px rgb(15 23 42 / 6%), inset 0 1px 0 rgb(255 255 255 / 68%); }
+.dark .model-status-workspace { --status-surface: rgb(15 23 42 / 76%); --status-surface-muted: rgb(15 23 42 / 68%); --status-border: rgb(71 85 105 / 58%); --status-shadow: 0 14px 30px rgb(0 0 0 / 22%), inset 0 1px 0 rgb(255 255 255 / 4%); }
+.workspace-surface { border: 1px solid var(--status-border); background: var(--status-surface); box-shadow: var(--status-shadow); }
+.workspace-toolbar { position: relative; }
+.status-recovery-action { min-height: 44px; }
+.status-recovery-action:focus-visible, .refresh-button:focus-visible { outline: 2px solid var(--brand-500); outline-offset: 3px; }
+.status-header { @apply rounded-xl border px-4 py-3; border-color: var(--status-border); background: var(--status-surface); box-shadow: var(--status-shadow); display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 18px; }
+.dark .model-status-page .status-header { border-color: var(--status-border); background: var(--status-surface); box-shadow: var(--status-shadow); }
 .dark .model-status-page .status-header .page-title { color: #e0f2fe; text-shadow: 0 0 18px rgba(34, 211, 238, 0.14); }
 .status-title-icon { @apply rounded-lg bg-primary-50 text-primary-600 dark:bg-primary-900/30 dark:text-primary-400; display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; flex: 0 0 32px; }
 .status-header-actions { display: inline-flex; min-width: 0; align-items: center; gap: 10px; }
@@ -717,15 +730,16 @@ onBeforeUnmount(() => {
 .group-context { display: none; }
 .model-count { @apply text-slate-500 dark:text-dark-400; margin-left: auto; font-size: 12px; white-space: nowrap; }
 .status-empty { @apply text-slate-500 dark:text-dark-400; display: flex; min-height: 200px; flex-direction: column; align-items: center; justify-content: center; gap: 12px; text-align: center; font-size: 14px; }
+.workspace-empty-state { padding: 28px 16px; border: 1px dashed var(--status-border); border-radius: 14px; background: var(--status-surface-muted); }
 .status-group { margin-bottom: 32px; }
 .group-heading { @apply rounded-xl border border-primary-100/70 bg-primary-50/45 dark:border-primary-500/15 dark:bg-primary-900/10; display: flex; min-width: 0; align-items: center; padding: 11px 12px 10px; margin: 0 0 16px; }
 .group-title { display: flex; min-width: 0; flex: 1 1 auto; align-items: flex-start; gap: 9px; }
 .group-accent { @apply bg-primary-500 dark:bg-primary-400; display: block; width: 3px; min-width: 3px; min-height: 24px; border-radius: 999px; margin-top: 1px; }
 .group-heading h2 { @apply text-slate-900 dark:text-slate-100; min-width: 0; flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 16px; font-weight: 650; line-height: 24px; }
 .model-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
-.model-row { @apply rounded-2xl; contain-intrinsic-size: 380px; content-visibility: auto; display: flex; min-width: 0; flex-direction: column; gap: 18px; padding: 20px; }
+.model-row { @apply rounded-xl; contain-intrinsic-size: 380px; content-visibility: auto; display: flex; min-width: 0; flex-direction: column; gap: 18px; padding: 20px; }
 .status-capture-mode .model-row { content-visibility: visible; contain-intrinsic-size: auto; }
-.dark .model-status-page .model-row { border-color: rgba(96, 165, 250, 0.2); background: linear-gradient(180deg, rgba(15, 23, 42, 0.88), rgba(2, 6, 23, 0.94)); box-shadow: 0 14px 34px rgba(0, 0, 0, 0.26), 0 1px 0 rgba(255, 255, 255, 0.035) inset; }
+.dark .model-status-page .model-row { border-color: var(--status-border); background: var(--status-surface); box-shadow: var(--status-shadow); }
 .load-more-models { display: flex; width: min(100%, 280px); margin: 4px auto 28px; justify-content: center; }
 .load-more-wrap { position: relative; min-height: 60px; }
 .load-more-sentinel { position: absolute; right: 0; bottom: 0; left: 0; height: 1px; pointer-events: none; }
@@ -746,12 +760,14 @@ onBeforeUnmount(() => {
 .health-light-observed { background: hsl(var(--health-hue) 72% 48%); color: hsl(var(--health-hue) 72% 48%); }
 .dark .model-status-page .health-light-observed { background: hsl(var(--health-hue) 78% 58%); color: hsl(var(--health-hue) 78% 58%); }
 .health-badge { max-width: 100%; }
+.health-badge-readable { overflow-wrap: anywhere; text-align: center; }
 .model-rate { display: inline-flex; min-width: 0; align-items: baseline; gap: 4px; white-space: nowrap; font-variant-numeric: tabular-nums; }
 .model-rate strong { @apply text-slate-950 dark:text-white; font-weight: 600; }
 .recent-results { margin-top: auto; }
 .recent-heading { @apply text-slate-500 dark:text-dark-400; display: flex; justify-content: space-between; gap: 8px; font-size: 11px; line-height: 16px; }
 .recent-heading-label { display: inline-flex; min-width: 0; align-items: center; gap: 5px; }
 .recent-bars { position: relative; display: grid; grid-template-columns: repeat(20, minmax(0, 1fr)); gap: 4px; height: 22px; margin: 8px 0; overflow: visible; }
+.status-bucket-grid { isolation: isolate; }
 .recent-bars.bucket-hint-active { overflow: hidden; }
 .bucket-hint-active::after { position: absolute; top: -4px; bottom: -4px; left: -32%; width: 32%; background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--brand-500) 48%, transparent), transparent); content: ''; pointer-events: none; transform: translateX(0); animation: bucket-hint-sweep 1.2s cubic-bezier(.2, .7, .25, 1) both; }
 .recent-bar { position: relative; display: block; min-width: 0; width: 100%; height: 22px; padding: 0; border: 1px solid transparent; border-radius: 999px; cursor: pointer; touch-action: manipulation; transition: transform .18s ease, opacity .18s ease, box-shadow .18s ease, border-color .18s ease; }
@@ -858,7 +874,7 @@ onBeforeUnmount(() => {
     margin-right: calc(-1 * var(--status-toolbar-bleed));
     margin-left: calc(-1 * var(--status-toolbar-bleed));
     padding: 0 var(--status-toolbar-bleed);
-    background: linear-gradient(to bottom, #f8fafc 0%, #f8fafc 88%, rgb(248 250 252 / 0%) 100%);
+    background: linear-gradient(to bottom, var(--status-surface-muted) 0%, var(--status-surface-muted) 88%, transparent 100%);
     backdrop-filter: blur(14px);
   }
   .status-guest .status-toolbar-shell { --status-toolbar-bleed: 24px; }
@@ -902,7 +918,7 @@ onBeforeUnmount(() => {
     padding: 6px 0 10px;
     border: 0;
     border-radius: 0;
-    background: linear-gradient(to bottom, #f8fafc 0%, #f8fafc 78%, rgb(248 250 252 / 0%) 100%);
+    background: linear-gradient(to bottom, var(--status-surface-muted) 0%, var(--status-surface-muted) 78%, transparent 100%);
     backdrop-filter: blur(14px);
     box-shadow: none;
     transition: max-height 180ms ease, margin 180ms ease, padding 180ms ease, border-color 180ms ease, opacity 140ms ease, transform 180ms ease, visibility 180ms ease;
@@ -1018,7 +1034,7 @@ onBeforeUnmount(() => {
     backdrop-filter: none;
   }
   .status-group-context-active .group-heading {
-    visibility: hidden;
+    visibility: visible;
   }
   .model-status-page .group-heading .group-title {
     gap: 7px;
@@ -1041,11 +1057,10 @@ onBeforeUnmount(() => {
     box-shadow: 0 1px 2px rgb(0 0 0 / 16%);
   }
   .model-status-page .model-identity {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
-    column-gap: 10px;
-    row-gap: 4px;
-    align-items: center;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
   }
   .model-status-page .model-title {
     grid-column: 1 / -1;
@@ -1056,11 +1071,10 @@ onBeforeUnmount(() => {
     margin-top: 0;
   }
   .model-status-page .model-health {
-    grid-column: 2;
     min-height: 24px;
     margin-top: 0;
     padding-left: 0;
-    justify-content: flex-end;
+    justify-content: flex-start;
     gap: 8px;
   }
   .model-status-page .health-light {
@@ -1070,7 +1084,7 @@ onBeforeUnmount(() => {
     box-shadow: 0 0 0 3px color-mix(in srgb, currentColor 16%, transparent), 0 0 10px color-mix(in srgb, currentColor 28%, transparent);
   }
   .model-status-page .health-badge {
-    white-space: nowrap;
+    white-space: normal;
   }
   .back-to-top {
     position: fixed;
