@@ -1910,7 +1910,12 @@ describe('ImageStudioView', () => {
     const actionsRule = cssRulesFor('.image-studio-preview-actions')[0] ?? ''
 
     expect(dialogRule).toMatch(/grid-template-rows:\s*auto minmax\(0,\s*1fr\) auto auto/)
+    expect(dialogRule).toMatch(/height:\s*min\(92dvh,\s*58rem\)/)
+    expect(dialogRule).toMatch(/max-height:\s*calc\(100dvh - 1\.5rem\)/)
+    expect(dialogRule).toMatch(/min-height:\s*0/)
     expect(detailsRule).toMatch(/min-height:\s*0/)
+    expect(cssRulesFor('.image-studio-preview-canvas')[0] ?? '').toMatch(/min-height:\s*0/)
+    expect(cssRulesFor('.image-studio-preview-canvas img')[0] ?? '').toMatch(/max-height:\s*100%/)
     expect(detailsRule).toMatch(/max-height:\s*clamp\(6\.5rem,\s*18vh,\s*11rem\)/)
     expect(detailsRule).toMatch(/overflow-y:\s*auto/)
     expect(detailsRule).toMatch(/overscroll-behavior:\s*contain/)

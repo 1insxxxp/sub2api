@@ -3724,7 +3724,9 @@ onBeforeUnmount(() => {
 .image-studio-preview-dialog {
   display: grid;
   width: min(100%, 74rem);
-  max-height: min(92vh, 58rem);
+  height: min(92dvh, 58rem);
+  max-height: calc(100dvh - 1.5rem);
+  min-height: 0;
   grid-template-rows: auto minmax(0, 1fr) auto auto;
   overflow: hidden;
   border: 1px solid rgba(219, 234, 254, 0.34);
@@ -3779,7 +3781,8 @@ onBeforeUnmount(() => {
 
 .image-studio-preview-canvas {
   display: grid;
-  min-height: min(58vh, 38rem);
+  min-width: 0;
+  min-height: 0;
   overflow: auto;
   place-items: center;
   background:
@@ -3795,7 +3798,7 @@ onBeforeUnmount(() => {
 
 .image-studio-preview-canvas img {
   display: block;
-  max-height: min(58vh, 38rem);
+  max-height: 100%;
   max-width: 100%;
   object-fit: contain;
   border-radius: 0.75rem;
@@ -4698,17 +4701,18 @@ onBeforeUnmount(() => {
 
   .image-studio-preview-dialog {
     width: 100%;
-    max-height: 96vh;
+    height: 96dvh;
+    max-height: 96dvh;
     border-bottom-left-radius: 0;
     border-bottom-right-radius: 0;
   }
 
   .image-studio-preview-canvas {
-    min-height: 48vh;
+    min-height: 0;
   }
 
   .image-studio-preview-canvas img {
-    max-height: 48vh;
+    max-height: 100%;
   }
 
   .image-studio-preview-actions {
