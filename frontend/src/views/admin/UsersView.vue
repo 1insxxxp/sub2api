@@ -2055,6 +2055,12 @@ onUnmounted(() => {
     display: contents;
   }
 
+  .users-list-actions .users-tool-button,
+  .users-list-actions .users-create-button,
+  .users-list-secondary .users-batch-button {
+    min-height: 2.75rem;
+  }
+
   .users-list-filters {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));

@@ -2730,7 +2730,15 @@ onUnmounted(() => {
   min-width: 0;
   max-height: 8rem;
   overflow: auto;
+  overflow-wrap: anywhere;
   scrollbar-width: thin;
+}
+
+@media (max-width: 767px) {
+  .account-toolbar-action {
+    width: 2.75rem;
+    min-height: 2.75rem;
+  }
 }
 
 .account-tools-menu-item {

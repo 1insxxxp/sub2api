@@ -18,6 +18,14 @@ describe("admin GroupsView layout", () => {
     expect(groupsViewSource).toContain("admin-toolbar-group");
   });
 
+  it("keeps the neutral workspace surface, wrapping error content, and touch sized actions contract", () => {
+    expect(groupsViewSource).toContain("admin-workbench-page");
+    expect(groupsViewSource).toContain("<AdminListToolbar");
+    expect(groupsViewSource).toContain("background: var(--workspace-surface)");
+    expect(groupsViewSource).toContain("overflow-wrap: anywhere");
+    expect(groupsViewSource).toContain("min-height: 2.75rem");
+  });
+
   it("renders the empty response refund policy in both group forms", () => {
     expect(groupsViewSource).toContain('v-model="createForm.empty_response_compensation_enabled"');
     expect(groupsViewSource).toContain('v-model="editForm.empty_response_compensation_enabled"');

@@ -7523,6 +7523,12 @@ onUnmounted(() => {
   flex-shrink: 0;
 }
 
+.groups-row-actions {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  background: var(--workspace-surface);
+}
+
 @media (max-width: 767px) {
   .groups-list-actions {
     display: contents;
@@ -7547,6 +7553,11 @@ onUnmounted(() => {
     flex: 1 1 0;
     min-width: 0;
     min-height: 2.5rem;
+  }
+
+  .groups-list-actions .groups-tool-button {
+    min-height: 2.75rem;
+    min-width: 2.75rem;
   }
 
   .groups-identity {

@@ -1,9 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { DOMWrapper, flushPromises, mount } from '@vue/test-utils'
 import { defineComponent } from 'vue'
+import { readFileSync } from 'node:fs'
+import { dirname, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
 
 import AccountsView from '../AccountsView.vue'
 import AccountActionMenu from '@/components/admin/account/AccountActionMenu.vue'
+
+const accountsViewSource = readFileSync(resolve(dirname(fileURLToPath(import.meta.url)), '../AccountsView.vue'), 'utf8')
 
 const {
   listAccounts,
@@ -174,6 +179,12 @@ describe('admin AccountsView lite account list', () => {
   afterEach(() => {
     vi.useRealTimers()
     vi.restoreAllMocks()
+  })
+
+  it('keeps the admin workspace surface and mobile error content wrap contract', () => {
+    expect(accountsViewSource).toContain('admin-workbench-page')
+    expect(accountsViewSource).toContain('account-toolbar-action')
+    expect(accountsViewSource).toMatch(/overflow-wrap:\s*anywhere/)
   })
 
   it('keeps lite=1 on the initial list request', async () => {

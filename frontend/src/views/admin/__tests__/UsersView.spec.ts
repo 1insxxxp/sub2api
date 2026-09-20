@@ -216,6 +216,13 @@ describe('admin UsersView', () => {
     vi.useRealTimers()
   })
 
+  it('keeps the admin workspace toolbar surface and touch sized actions contract', () => {
+    expect(usersViewSource).toContain('admin-workbench-page')
+    expect(usersViewSource).toContain('<AdminListToolbar')
+    expect(usersViewSource).toContain('min-height: 2.75rem')
+    expect(usersViewSource).toMatch(/overflow-wrap:\s*anywhere/)
+  })
+
   it('separates search, filters and selection actions while counting active saved filters', async () => {
     localStorage.setItem('user-visible-filters', JSON.stringify(['role', 'status', 'group', 'apiKeyGroup', 'attr_7']))
     localStorage.setItem('user-filter-values', JSON.stringify({
