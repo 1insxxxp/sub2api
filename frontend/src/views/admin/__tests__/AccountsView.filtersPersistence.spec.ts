@@ -267,7 +267,7 @@ describe('admin AccountsView filter persistence', () => {
     expect(wrapper.find('.admin-workbench-page').exists()).toBe(true)
     expect(table.props('mobileLayout')).toEqual({
       title: 'name', subtitle: 'id', leading: 'platform_type', status: 'status', selection: 'select',
-      summary: ['capacity', 'usage', 'schedulable', 'last_used_at']
+      summary: ['capacity', 'today_stats', 'schedulable', 'last_used_at']
     })
     const columnKeys = table.props('columns').map((column: { key: string }) => column.key)
     expect(columnKeys).toEqual(expect.arrayContaining(['select', 'name', 'id', 'platform_type', 'capacity', 'usage', 'schedulable', 'priority', 'actions']))
@@ -321,7 +321,7 @@ describe('admin AccountsView filter persistence', () => {
     expect(details.find('[data-field="last_used_at"]').exists()).toBe(false)
     expect(card.findAll('[data-field="platform_type"]')).toHaveLength(1)
     expect(card.get('[data-test="mobile-record-summary"]').find('[data-field="last_used_at"]').exists()).toBe(true)
-    expect(card.get('[data-test="mobile-record-summary"]').findAll('.admin-record-metric')).toHaveLength(4)
+    expect(card.get('[data-test="mobile-record-summary"]').findAll('.admin-record-metric')).toHaveLength(3)
 
     const actions = card.get('.admin-record-actions')
     expect(details.find('.admin-record-actions').exists()).toBe(false)
