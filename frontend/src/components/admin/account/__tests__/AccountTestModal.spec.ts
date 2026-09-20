@@ -325,5 +325,6 @@ describe('AccountTestModal', () => {
       { modelId: 'gpt-second', status: 'cancelled' },
       { modelId: 'gpt-third', status: 'cancelled' }
     ])
+    expect((wrapper.vm as any).batchResults.every((result: { durationMs?: number }) => result.durationMs === undefined)).toBe(true)
   })
 })

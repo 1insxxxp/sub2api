@@ -1107,7 +1107,9 @@ const startBatchTest = async () => {
         result.status = 'failed'
         result.error = error instanceof Error ? error.message : t('common.unknownError')
       } finally {
-        result.durationMs = Date.now() - startedAt
+        if (result.status === 'success' || result.status === 'failed') {
+          result.durationMs = Date.now() - startedAt
+        }
       }
     }
   } finally {
