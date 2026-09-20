@@ -81,6 +81,13 @@ func TestSanitizeOpenAIResponseFailedEventForClientMasksAddress(t *testing.T) {
 	require.Contains(t, string(sanitized), "[upstream-url]")
 }
 
+func TestTruncateForLogMasksUpstreamAddresses(t *testing.T) {
+	logged := truncateForLog([]byte("upstream failed at https://relay.example:8443/v1"), 4096)
+
+	require.NotContains(t, logged, "relay.example")
+	require.Contains(t, logged, "[upstream-url]")
+}
+
 func TestForwardEmbeddingsSanitizesRawUpstreamErrorBody(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 

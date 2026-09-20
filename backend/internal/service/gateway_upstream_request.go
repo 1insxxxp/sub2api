@@ -881,6 +881,10 @@ func applyClaudeCodeMimicHeaders(req *http.Request, isStream bool) {
 }
 
 func truncateForLog(b []byte, maxBytes int) string {
+	// Upstream error bodies are logged through this shared helper across the
+	// gateway/Antigravity paths. Sanitize before truncating so provider URLs are
+	// never written to logs, even when the address appears near the byte limit.
+	b = sanitizeUpstreamErrorBody(b)
 	if maxBytes <= 0 {
 		maxBytes = 2048
 	}
