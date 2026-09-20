@@ -1,5 +1,5 @@
 <template>
-  <div class="flex items-center gap-2">
+  <div class="flex flex-wrap items-center gap-2">
     <!-- Rate Limit Display (429) - Two-line layout -->
     <div v-if="isRateLimited" class="flex flex-col items-center gap-1">
       <span class="badge text-xs badge-warning">{{ t('admin.accounts.status.rateLimited') }}</span>
@@ -33,7 +33,7 @@
     </template>
 
     <!-- Error Info Indicator -->
-    <div v-if="hasError && account.error_message" class="group/error relative">
+    <div v-if="hasError && account.error_message" class="group/error relative w-full min-w-0 sm:w-auto">
       <svg
         class="h-4 w-4 cursor-help text-red-500 transition-colors hover:text-red-600 dark:text-red-400 dark:hover:text-red-300"
         fill="none"
@@ -49,14 +49,15 @@
       </svg>
       <!-- Tooltip - 向下显示 -->
       <div
-        class="invisible absolute left-0 top-full z-[100] mt-1.5 min-w-[200px] max-w-[300px] rounded-lg bg-gray-800 px-3 py-2 text-xs text-white opacity-0 shadow-xl transition-all duration-200 group-hover/error:visible group-hover/error:opacity-100 dark:bg-gray-900"
+        data-testid="account-error-message"
+        class="visible static z-[100] mt-1 w-full min-w-0 max-w-none rounded-lg bg-gray-800 px-3 py-2 text-xs text-white opacity-100 shadow-none transition-all duration-200 dark:bg-gray-900 sm:invisible sm:absolute sm:left-0 sm:top-full sm:mt-1.5 sm:min-w-[200px] sm:max-w-[300px] sm:opacity-0 sm:shadow-xl sm:group-hover/error:visible sm:group-hover/error:opacity-100"
       >
         <div class="whitespace-pre-wrap break-words leading-relaxed text-gray-300">
           {{ account.error_message }}
         </div>
         <!-- 上方小三角 -->
         <div
-          class="absolute bottom-full left-3 border-[6px] border-transparent border-b-gray-800 dark:border-b-gray-900"
+          class="absolute bottom-full left-3 hidden border-[6px] border-transparent border-b-gray-800 dark:border-b-gray-900 sm:block"
         ></div>
       </div>
     </div>

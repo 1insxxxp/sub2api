@@ -222,4 +222,29 @@ describe('AccountStatusIndicator', () => {
     // AICredits 积分耗尽状态应显示
     expect(wrapper.text()).toContain('admin.accounts.status.creditsExhausted')
   })
+
+  it('移动端错误信息在卡片内全宽可见并允许换行', () => {
+    const wrapper = mount(AccountStatusIndicator, {
+      props: {
+        account: makeAccount({
+          status: 'error',
+          error_message: '上游请求失败：错误信息需要在窄屏中完整显示'
+        })
+      },
+      global: {
+        stubs: {
+          Icon: true
+        }
+      }
+    })
+
+    const errorMessage = wrapper.find('[data-testid="account-error-message"]')
+    expect(errorMessage.exists()).toBe(true)
+    expect(errorMessage.classes()).toContain('static')
+    expect(errorMessage.classes()).toContain('w-full')
+    expect(errorMessage.classes()).toContain('visible')
+    expect(errorMessage.classes()).toContain('opacity-100')
+    expect(errorMessage.classes()).toContain('sm:absolute')
+    expect(errorMessage.classes()).toContain('sm:invisible')
+  })
 })
