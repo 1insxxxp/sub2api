@@ -49,6 +49,69 @@ describe('DataTable', () => {
     localStorage.clear()
   })
 
+  it('uses semantic classes for desktop loading rows', () => {
+    const wrapper = mount(DataTable, {
+      props: {
+        columns: [{ key: 'name', label: 'Name' }],
+        data: [],
+        loading: true
+      }
+    })
+
+    expect(wrapper.find('tbody').classes()).toContain('admin-table-body')
+    expect(wrapper.find('tr.admin-table-loading-row').exists()).toBe(true)
+    expect(wrapper.find('.admin-table-skeleton').exists()).toBe(true)
+  })
+
+  it('uses semantic classes for mobile loading cards', () => {
+    stubMobileMatchMedia()
+    const wrapper = mount(DataTable, {
+      props: {
+        columns: [{ key: 'name', label: 'Name' }],
+        data: [],
+        loading: true
+      }
+    })
+
+    expect(wrapper.find('.admin-table-loading').exists()).toBe(true)
+    expect(wrapper.find('.admin-table-loading-card').exists()).toBe(true)
+    expect(wrapper.find('.admin-table-skeleton').exists()).toBe(true)
+  })
+
+  it('uses semantic classes for desktop empty state', () => {
+    const wrapper = mount(DataTable, {
+      props: {
+        columns: [{ key: 'name', label: 'Name' }],
+        data: []
+      }
+    })
+
+    expect(wrapper.find('tr.admin-table-empty-row').exists()).toBe(true)
+    expect(wrapper.find('.admin-table-empty').exists()).toBe(true)
+  })
+
+  it('uses semantic classes for mobile empty state and ordinary records', async () => {
+    stubMobileMatchMedia()
+    const emptyWrapper = mount(DataTable, {
+      props: {
+        columns: [{ key: 'name', label: 'Name' }],
+        data: []
+      }
+    })
+    expect(emptyWrapper.find('.admin-table-empty').exists()).toBe(true)
+
+    const recordWrapper = mount(DataTable, {
+      props: {
+        columns: [{ key: 'name', label: 'Name' }],
+        data: [{ id: 1, name: 'Alpha' }]
+      }
+    })
+    const row = recordWrapper.get('[data-mobile-table-row]')
+    expect(row.classes()).toContain('admin-record')
+    expect(row.classes()).not.toContain('rounded-2xl')
+    await recordWrapper.vm.$nextTick()
+  })
+
   it('opts mobile records into a compact summary without losing secondary cells or actions', async () => {
     stubMobileMatchMedia()
     const wrapper = mount(DataTable, {

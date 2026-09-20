@@ -102,12 +102,38 @@
   color: var(--workspace-muted);
   letter-spacing: 0;
 }
-.admin-console-theme .app-shell-content :is(.admin-data-table-body, tbody .sticky-col) { background: var(--workspace-solid); }
+.admin-console-theme .app-shell-content :is(.admin-data-table-body, .admin-table-body, tbody .sticky-col) { background: var(--workspace-solid); }
 .admin-console-theme .app-shell-content .admin-table-stage :is(th, td) { border-color: var(--workspace-divider); padding: 0.75rem 1rem; }
 .admin-console-theme .app-shell-content .admin-table-stage > .card { border: 0; border-radius: 0; background: transparent; box-shadow: none; }
 .admin-console-theme .app-shell-content .admin-data-table tbody > tr:hover { background: var(--workspace-hover); }
 .admin-console-theme .app-shell-content [data-mobile-table-row] { padding: 0.875rem; }
+.admin-console-theme .app-shell-content .admin-table-loading { display: flex; flex-direction: column; gap: 0.75rem; }
+.admin-console-theme .app-shell-content .admin-table-loading-card {
+  padding: 1rem;
+  border: 1px solid var(--workspace-rule);
+  border-radius: 8px;
+  background: linear-gradient(125deg, var(--workspace-highlight) 15%, transparent 70%), var(--workspace-surface);
+  box-shadow: var(--workspace-shadow);
+}
+.admin-console-theme .app-shell-content .admin-table-skeleton {
+  border-radius: 4px;
+  background: var(--workspace-hover);
+  animation: admin-table-pulse 1.5s ease-in-out infinite;
+}
+.admin-console-theme .app-shell-content .admin-table-divider { border-top: 1px solid var(--workspace-divider); }
+.admin-console-theme .app-shell-content .admin-table-empty { color: var(--workspace-muted); }
+.admin-console-theme .app-shell-content .admin-empty-icon { color: var(--workspace-muted); }
+.admin-console-theme .app-shell-content .admin-empty-label { color: var(--workspace-ink); }
+.admin-console-theme .app-shell-content .admin-table-mobile-row {
+  padding: 1rem;
+}
+.admin-console-theme .app-shell-content .admin-table-mobile-content { color: var(--workspace-ink); }
 .admin-console-theme .app-shell-content .pagination-compact :is(.btn, .select-trigger) { min-height: 2.25rem; }
+
+@keyframes admin-table-pulse {
+  0%, 100% { opacity: 0.55; }
+  50% { opacity: 1; }
+}
 
 .admin-console-theme :is(.admin-action-menu, .dropdown, .select-dropdown-portal, .date-picker-dropdown, .date-picker-mobile-sheet) {
   border: 1px solid var(--workspace-rule);
@@ -245,6 +271,7 @@
 @media (prefers-reduced-motion: reduce) {
   .admin-console-theme :is(.admin-action-menu, .dropdown) { animation: none; }
   .admin-console-theme :is(.admin-record, .admin-record-details summary svg) { transition: none; }
+  .admin-console-theme .admin-table-skeleton { animation: none; }
   .admin-console-theme :is(.app-shell-content, .modal-overlay) :is(.btn, .input, .select-trigger, .date-picker-trigger) { transition: none; }
   .admin-console-theme :is(.select-dropdown-portal, .date-picker-dropdown, .date-picker-mobile-sheet) { transition: none; }
 }

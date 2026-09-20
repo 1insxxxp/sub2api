@@ -1,29 +1,31 @@
 <template>
   <div v-if="!isDesktopViewport" class="space-y-3">
     <template v-if="loading">
-      <div v-for="i in 5" :key="i" class="rounded-lg border border-gray-200 bg-white p-4 dark:border-dark-700 dark:bg-dark-900">
-        <div class="space-y-3">
-          <div v-for="column in skeletonColumns" :key="column.key" class="flex justify-between">
-            <div class="h-4 w-20 animate-pulse rounded bg-gray-200 dark:bg-dark-700"></div>
-            <div class="h-4 w-32 animate-pulse rounded bg-gray-200 dark:bg-dark-700"></div>
-          </div>
-          <div v-if="hasActionsColumn" class="border-t border-gray-200 pt-3 dark:border-dark-700">
-            <div class="h-8 w-full animate-pulse rounded bg-gray-200 dark:bg-dark-700"></div>
+      <div class="admin-table-loading">
+        <div v-for="i in 5" :key="i" class="admin-table-loading-card">
+          <div class="space-y-3">
+            <div v-for="column in skeletonColumns" :key="column.key" class="flex justify-between">
+              <div class="admin-table-skeleton h-4 w-20"></div>
+              <div class="admin-table-skeleton h-4 w-32"></div>
+            </div>
+            <div v-if="hasActionsColumn" class="admin-table-divider pt-3">
+              <div class="admin-table-skeleton h-8 w-full"></div>
+            </div>
           </div>
         </div>
       </div>
     </template>
 
     <template v-else-if="!data || data.length === 0">
-      <div class="admin-empty-state">
+      <div class="admin-table-empty admin-empty-state">
         <slot name="empty">
           <div class="flex flex-col items-center">
             <Icon
               name="inbox"
               size="xl"
-              class="mb-4 h-12 w-12 text-gray-400 dark:text-dark-500"
+              class="admin-empty-icon mb-4 h-12 w-12"
             />
-            <p class="text-lg font-medium text-gray-900 dark:text-gray-100">
+            <p class="admin-empty-label text-lg font-medium">
               {{ t('empty.noData') }}
             </p>
           </div>
@@ -51,7 +53,7 @@
         :key="resolveRowKey(row, index)"
         data-mobile-table-row
         :class="[
-          !$slots['mobile-row'] && (mobileLayout ? 'admin-record' : 'admin-surface rounded-2xl p-4'),
+          !$slots['mobile-row'] && 'admin-record admin-table-mobile-row',
           {
             'cursor-pointer': clickableRows,
             'border-primary-300 bg-primary-50/40 dark:border-primary-700 dark:bg-primary-900/10': !$slots['mobile-row'] && selectable && isRowSelected(row, index)
@@ -136,7 +138,7 @@
             <slot name="cell-actions" :row="row" :value="row['actions']" :expanded="actionsExpanded" :mobile="true" />
           </div>
         </div>
-        <div v-else class="space-y-3">
+        <div v-else class="admin-table-mobile-content space-y-3">
           <div v-if="selectable" class="flex justify-end">
             <input
               type="checkbox"
@@ -169,7 +171,7 @@
               </slot>
             </div>
           </div>
-          <div v-if="hasActionsColumn" class="border-t border-gray-200 pt-3 dark:border-dark-700">
+          <div v-if="hasActionsColumn" class="admin-table-divider pt-3">
             <slot name="cell-actions" :row="row" :value="row['actions']" :expanded="actionsExpanded" :mobile="true"></slot>
           </div>
         </div>
@@ -187,8 +189,8 @@
       'is-scrollable': isScrollable
     }"
   >
-    <table class="w-full min-w-max divide-y divide-gray-200 dark:divide-dark-700">
-      <thead class="table-header admin-data-table-head bg-gray-50 dark:bg-dark-800">
+    <table class="w-full min-w-max">
+      <thead class="table-header admin-data-table-head">
         <tr>
           <th
             v-if="selectable"
@@ -254,24 +256,23 @@
           </th>
         </tr>
       </thead>
-      <tbody class="table-body admin-data-table-body divide-y divide-gray-200 bg-white dark:divide-dark-700 dark:bg-dark-900">
+      <tbody class="table-body admin-data-table-body admin-table-body">
         <!-- Loading skeleton -->
-        <tr v-if="loading" v-for="i in 5" :key="i">
+        <tr v-if="loading" v-for="i in 5" :key="i" class="admin-table-loading-row">
           <td v-if="selectable" class="w-11 min-w-11 px-3 py-4">
-            <div class="mx-auto h-4 w-4 animate-pulse rounded bg-gray-200 dark:bg-dark-700"></div>
+            <div class="admin-table-skeleton mx-auto h-4 w-4"></div>
           </td>
           <td v-for="column in columns" :key="column.key" :class="['whitespace-nowrap py-4', getAdaptivePaddingClass()]">
-            <div class="animate-pulse">
-              <div class="h-4 w-3/4 rounded bg-gray-200 dark:bg-dark-700"></div>
+            <div class="admin-table-skeleton h-4 w-3/4">
             </div>
           </td>
         </tr>
 
         <!-- Empty state -->
-        <tr v-else-if="!data || data.length === 0">
+        <tr v-else-if="!data || data.length === 0" class="admin-table-empty-row">
           <td
             :colspan="tableColumnCount"
-            :class="['admin-empty-cell py-12 text-center text-gray-500 dark:text-dark-400', getAdaptivePaddingClass()]"
+            :class="['admin-table-empty admin-empty-cell py-12 text-center', getAdaptivePaddingClass()]"
           >
             <div class="admin-empty-state">
               <slot name="empty">
@@ -279,9 +280,9 @@
                   <Icon
                     name="inbox"
                     size="xl"
-                    class="mb-4 h-12 w-12 text-gray-400 dark:text-dark-500"
+                    class="admin-empty-icon mb-4 h-12 w-12"
                   />
-                  <p class="text-lg font-medium text-gray-900 dark:text-gray-100">
+                  <p class="admin-empty-label text-lg font-medium">
                     {{ t('empty.noData') }}
                   </p>
                 </div>
