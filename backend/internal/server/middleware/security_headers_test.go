@@ -81,6 +81,66 @@ func TestGetNonceFromContext(t *testing.T) {
 	})
 }
 
+func TestSecurityHeadersAllowsImageStudioBlobPreviews(t *testing.T) {
+	tests := []struct {
+		name   string
+		policy string
+		images string
+	}{
+		{
+			name:   "legacy_custom_policy",
+			policy: "default-src 'self'; img-src 'self' data: https:; script-src 'self'; object-src 'none'",
+			images: "img-src 'self' data: https: blob:",
+		},
+		{
+			name:   "already_allows_blob",
+			policy: "default-src 'self'; img-src 'self' data: blob: https:",
+			images: "img-src 'self' data: blob: https:",
+		},
+		{
+			name:   "preserves_default_source_inheritance",
+			policy: "default-src 'self' data: https://images.example.com",
+			images: "img-src 'self' data: https://images.example.com blob:",
+		},
+		{
+			name:   "explicit_image_restriction",
+			policy: "default-src https:; img-src 'none'",
+			images: "img-src blob:",
+		},
+		{
+			name:   "restrictive_default",
+			policy: "default-src 'none'",
+			images: "img-src blob:",
+		},
+		{
+			name:   "unrestricted_images_stay_unrestricted",
+			policy: "script-src 'self'",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			w := httptest.NewRecorder()
+			c, _ := gin.CreateTestContext(w)
+			c.Request = httptest.NewRequest(http.MethodGet, "/image-studio", nil)
+			SecurityHeaders(config.CSPConfig{Enabled: true, Policy: tt.policy}, nil)(c)
+
+			csp := w.Header().Get("Content-Security-Policy")
+			var imageDirective string
+			for _, directive := range strings.Split(csp, ";") {
+				fields := strings.Fields(directive)
+				if len(fields) > 0 && fields[0] == "img-src" {
+					imageDirective = strings.Join(fields, " ")
+					break
+				}
+			}
+			assert.Equal(t, tt.images, imageDirective)
+			assert.Equal(t, 0, countDirectiveValue(csp, "script-src", "blob:"))
+			assert.Equal(t, countDirectiveValue(tt.policy, "object-src", "'none'"), countDirectiveValue(csp, "object-src", "'none'"))
+			assert.Equal(t, enhanceCSPPolicy(tt.policy), enhanceCSPPolicy(enhanceCSPPolicy(tt.policy)))
+		})
+	}
+}
+
 func TestSecurityHeaders(t *testing.T) {
 	t.Run("sets_basic_security_headers", func(t *testing.T) {
 		cfg := config.CSPConfig{Enabled: false}

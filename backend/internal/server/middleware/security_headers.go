@@ -166,8 +166,8 @@ func isAPIRoutePath(c *gin.Context) bool {
 		strings.HasPrefix(path, "/images")
 }
 
-// enhanceCSPPolicy 确保 CSP 策略包含 nonce 支持和运行时组件必需域名。
-// 这样旧配置文件没有及时补域名时，验证码和支付组件仍能正常加载。
+// enhanceCSPPolicy 确保 CSP 策略包含 nonce 支持和运行时组件必需来源。
+// 兼容旧配置中的验证码、支付组件和本地图片预览策略。
 func enhanceCSPPolicy(policy string) string {
 	// Add nonce placeholder to script-src if not present
 	if !strings.Contains(policy, NonceTemplate) && !strings.Contains(policy, "'nonce-") {
@@ -180,6 +180,39 @@ func enhanceCSPPolicy(policy string) string {
 		}
 	}
 
+	return allowBlobImagePreviews(policy)
+}
+
+// allowBlobImagePreviews permits object URLs used by Image Studio reference images.
+// When img-src is absent, preserve its default-src fallback rather than replacing
+// inherited image sources with a narrower list. With neither directive, images
+// are already unrestricted and no img-src is needed.
+func allowBlobImagePreviews(policy string) string {
+	directives := strings.Split(policy, ";")
+	for _, directive := range []string{"img-src", "default-src"} {
+		for i, rawDirective := range directives {
+			fields := strings.Fields(rawDirective)
+			if len(fields) == 0 || fields[0] != directive {
+				continue
+			}
+			if directiveHasValue(policy, directive, "blob:") {
+				return policy
+			}
+			sources := []string{"img-src"}
+			for _, source := range fields[1:] {
+				// 'none' cannot be combined with an allowed source.
+				if source != "'none'" {
+					sources = append(sources, source)
+				}
+			}
+			imageDirective := strings.Join(append(sources, "blob:"), " ")
+			if directive == "img-src" {
+				directives[i] = " " + imageDirective
+				return strings.Join(directives, ";")
+			}
+			return strings.TrimRight(policy, "; \t\r\n") + "; " + imageDirective + ";"
+		}
+	}
 	return policy
 }
 

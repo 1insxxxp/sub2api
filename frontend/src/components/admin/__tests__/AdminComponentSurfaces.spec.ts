@@ -81,4 +81,11 @@ describe('admin component surface unification', () => {
     expect(source).not.toContain('rounded-lg bg-gray-50 p-3')
     expect(source).not.toContain('hover:bg-gray-50 dark:hover:bg-dark-700')
   })
+
+  it('keeps floating action icons on their contrast surface in admin dialogs', () => {
+    const styles = readFileSync(resolve(currentDir, '../../../styles/admin-workspace.css'), 'utf8')
+
+    expect(styles).not.toMatch(/:is\(\.brand-floating-card,\s*\.brand-floating-icon\)/)
+    expect(styles).toMatch(/\.admin-console-theme \.brand-overlay \.brand-floating-card/)
+  })
 })
