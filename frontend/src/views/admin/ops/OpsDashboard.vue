@@ -173,6 +173,11 @@ import OpsSystemLogTable from './components/OpsSystemLogTable.vue'
 import OpsRequestDetailsModal, { type OpsRequestDetailsPreset } from './components/OpsRequestDetailsModal.vue'
 import OpsSettingsDialog from './components/OpsSettingsDialog.vue'
 import OpsAlertRulesCard from './components/OpsAlertRulesCard.vue'
+import {
+  loadOpsTimeRangeSnapshot,
+  saveOpsTimeRangeSnapshot,
+  type OpsTimeRangeSnapshot
+} from './utils/opsTimeRangePersistence'
 
 const route = useRoute()
 const router = useRouter()
@@ -185,6 +190,14 @@ const opsEnabled = computed(() => adminSettingsStore.opsMonitoringEnabled)
 type TimeRange = '5m' | '30m' | '1h' | '6h' | '24h' | 'custom'
 const allowedTimeRanges = new Set<TimeRange>(['5m', '30m', '1h', '6h', '24h', 'custom'])
 
+function getOpsLocalStorage(): Storage | null {
+  try {
+    return typeof window !== 'undefined' ? window.localStorage : null
+  } catch {
+    return null
+  }
+}
+
 type QueryMode = 'auto' | 'raw' | 'preagg'
 const allowedQueryModes = new Set<QueryMode>(['auto', 'raw', 'preagg'])
 
@@ -193,12 +206,17 @@ const hasLoadedOnce = ref(false)
 const errorMessage = ref('')
 const lastUpdated = ref<Date | null>(new Date())
 
-const timeRange = ref<TimeRange>('1h')
+const persistedTimeRange = loadOpsTimeRangeSnapshot(
+  getOpsLocalStorage(),
+  allowedTimeRanges
+)
+
+const timeRange = ref<TimeRange>((persistedTimeRange?.timeRange as TimeRange | undefined) ?? '1h')
 const platform = ref<string>('')
 const groupId = ref<number | null>(null)
 const queryMode = ref<QueryMode>('auto')
-const customStartTime = ref<string | null>(null)
-const customEndTime = ref<string | null>(null)
+const customStartTime = ref<string | null>(persistedTimeRange?.customStartTime ?? null)
+const customEndTime = ref<string | null>(persistedTimeRange?.customEndTime ?? null)
 const switchTrendWindowHours = 5
 const switchTrendTimeRange = `${switchTrendWindowHours}h`
 const switchTrendWindowMs = switchTrendWindowHours * 60 * 60 * 1000
@@ -280,6 +298,10 @@ const applyRouteQueryToState = () => {
   const nextTimeRange = readQueryString(QUERY_KEYS.timeRange)
   if (nextTimeRange && allowedTimeRanges.has(nextTimeRange as TimeRange)) {
     timeRange.value = nextTimeRange as TimeRange
+    if (nextTimeRange !== 'custom') {
+      customStartTime.value = null
+      customEndTime.value = null
+    }
   }
 
   platform.value = readQueryString(QUERY_KEYS.platform) || ''
@@ -488,6 +510,10 @@ function openErrorDetails(kind: 'request' | 'upstream') {
 function onTimeRangeChange(v: string | number | boolean | null) {
   if (typeof v !== 'string') return
   if (!allowedTimeRanges.has(v as TimeRange)) return
+  if (v !== 'custom') {
+    customStartTime.value = null
+    customEndTime.value = null
+  }
   timeRange.value = v as TimeRange
 }
 
@@ -789,6 +815,21 @@ watch(
       fetchData()
     }
     syncQueryToRoute()
+  }
+)
+
+watch(
+  () => [timeRange.value, customStartTime.value, customEndTime.value] as const,
+  ([nextTimeRange, nextStartTime, nextEndTime]) => {
+    const snapshot: OpsTimeRangeSnapshot = {
+      timeRange: nextTimeRange,
+      customStartTime: nextTimeRange === 'custom' ? nextStartTime : null,
+      customEndTime: nextTimeRange === 'custom' ? nextEndTime : null
+    }
+    saveOpsTimeRangeSnapshot(
+      getOpsLocalStorage(),
+      snapshot
+    )
   }
 )
 
