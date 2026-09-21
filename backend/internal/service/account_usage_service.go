@@ -80,6 +80,13 @@ type UsageLogRepository interface {
 	GetDailyStatsAggregated(ctx context.Context, userID int64, startTime, endTime time.Time) ([]map[string]any, error)
 }
 
+// RecentBalanceCostReader is an optional capability used by the balance
+// eligibility gate. Implementations return the newest positive actual costs
+// from balance-billed usage logs, newest first.
+type RecentBalanceCostReader interface {
+	ListRecentBalanceCosts(ctx context.Context, userID int64, model string, limit int) ([]float64, error)
+}
+
 // GetRechargeRanking delegates the admin recharge aggregation to the usage
 // repository, keeping database-specific SQL out of handlers.
 func (s *UsageService) GetRechargeRanking(ctx context.Context, startTime, endTime time.Time, userID int64, source, sortBy, sortOrder string, offset, limit int) (*RechargeRankingResponse, error) {

@@ -1147,6 +1147,12 @@ billing:
   # Set to 0 to only require balance > 0.
   # 余额计费请求转发前要求的保守最小余额；设为 0 则仅要求余额 > 0。
   minimum_balance_reserve: 0.000001
+  # Balance request risk gate: recent samples, mean safety factor, P95 floor,
+  # and the maximum one-request overdraft fraction.
+  balance_preauthorization_sample_count: 100
+  balance_preauthorization_mean_safety_factor: 2.0
+  balance_preauthorization_p95_quantile: 0.95
+  balance_preauthorization_max_overdraft_fraction: 0.5
   # Cache TTL (seconds) for per-user × per-platform quota records
   # 用户 × 平台 quota 缓存 TTL（秒），默认 86400=1天，覆盖典型 daily 窗口
   user_platform_quota_cache_ttl_seconds: 86400

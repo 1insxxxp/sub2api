@@ -918,6 +918,16 @@ type BillingConfig struct {
 	// Requests in balance mode are rejected when the cached balance is below this
 	// amount, even if it is still positive. Set to 0 to keep the legacy balance > 0 gate.
 	MinimumBalanceReserve float64 `mapstructure:"minimum_balance_reserve"`
+	// BalancePreauthorizationSampleCount controls how many recent balance-billed
+	// requests are used to estimate the next request's authorization.
+	BalancePreauthorizationSampleCount int `mapstructure:"balance_preauthorization_sample_count"`
+	// BalancePreauthorizationMeanSafetyFactor multiplies the recent mean cost.
+	BalancePreauthorizationMeanSafetyFactor float64 `mapstructure:"balance_preauthorization_mean_safety_factor"`
+	// BalancePreauthorizationP95Quantile is the nearest-rank percentile floor.
+	BalancePreauthorizationP95Quantile float64 `mapstructure:"balance_preauthorization_p95_quantile"`
+	// BalancePreauthorizationMaxOverdraftFraction allows a single request to
+	// consume this fraction of its authorization beyond the current balance.
+	BalancePreauthorizationMaxOverdraftFraction float64 `mapstructure:"balance_preauthorization_max_overdraft_fraction"`
 	// UserPlatformQuotaCacheTTLSeconds 用户 × 平台 quota 缓存 TTL（秒），默认 86400=1天，覆盖典型 daily 窗口。
 	// 消费点：
 	//   - billing_cache_service.cacheWriteWorker 异步累加
@@ -2119,6 +2129,10 @@ func setDefaults() {
 	viper.SetDefault("billing.circuit_breaker.reset_timeout_seconds", 30)
 	viper.SetDefault("billing.circuit_breaker.half_open_requests", 3)
 	viper.SetDefault("billing.minimum_balance_reserve", 0.000001)
+	viper.SetDefault("billing.balance_preauthorization_sample_count", 100)
+	viper.SetDefault("billing.balance_preauthorization_mean_safety_factor", 2.0)
+	viper.SetDefault("billing.balance_preauthorization_p95_quantile", 0.95)
+	viper.SetDefault("billing.balance_preauthorization_max_overdraft_fraction", 0.5)
 	viper.SetDefault("billing.user_platform_quota_cache_ttl_seconds", 86400)
 	viper.SetDefault("billing.user_platform_quota_sentinel_ttl_seconds", 3600)
 
@@ -3111,6 +3125,18 @@ func (c *Config) Validate() error {
 	}
 	if c.Billing.MinimumBalanceReserve < 0 {
 		return fmt.Errorf("billing.minimum_balance_reserve must be non-negative")
+	}
+	if c.Billing.BalancePreauthorizationSampleCount <= 0 {
+		return fmt.Errorf("billing.balance_preauthorization_sample_count must be positive")
+	}
+	if c.Billing.BalancePreauthorizationMeanSafetyFactor <= 0 {
+		return fmt.Errorf("billing.balance_preauthorization_mean_safety_factor must be positive")
+	}
+	if c.Billing.BalancePreauthorizationP95Quantile <= 0 || c.Billing.BalancePreauthorizationP95Quantile > 1 {
+		return fmt.Errorf("billing.balance_preauthorization_p95_quantile must be greater than 0 and less than or equal to 1")
+	}
+	if c.Billing.BalancePreauthorizationMaxOverdraftFraction < 0 || c.Billing.BalancePreauthorizationMaxOverdraftFraction > 1 {
+		return fmt.Errorf("billing.balance_preauthorization_max_overdraft_fraction must be between 0 and 1")
 	}
 	if c.Database.MaxOpenConns <= 0 {
 		return fmt.Errorf("database.max_open_conns must be positive")

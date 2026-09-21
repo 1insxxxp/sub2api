@@ -63,6 +63,33 @@ func TestCheckBillingEligibility_AllowsBalanceAtMinimumReserve(t *testing.T) {
 	require.NoError(t, err)
 }
 
+type recentBalanceCostUserRepoStub struct {
+	mockUserRepo
+	samples []float64
+}
+
+func (s *recentBalanceCostUserRepoStub) ListRecentBalanceCosts(context.Context, int64, string, int) ([]float64, error) {
+	return s.samples, nil
+}
+
+func TestCheckBillingEligibility_UsesRecentCostsWithOverdraftFraction(t *testing.T) {
+	cfg := &config.Config{}
+	cfg.Billing.MinimumBalanceReserve = 0.01
+	cfg.Billing.BalancePreauthorizationSampleCount = 100
+	cfg.Billing.BalancePreauthorizationMeanSafetyFactor = 2
+	cfg.Billing.BalancePreauthorizationP95Quantile = 0.95
+	cfg.Billing.BalancePreauthorizationMaxOverdraftFraction = 0.5
+	userRepo := &recentBalanceCostUserRepoStub{samples: []float64{5, 5, 5}}
+
+	cache := &balanceEligibilityCacheStub{balance: 4.99}
+	svc := NewBillingCacheService(cache, userRepo, nil, nil, nil, nil, cfg, nil)
+	t.Cleanup(svc.Stop)
+	require.ErrorIs(t, svc.CheckBillingEligibility(context.Background(), &User{ID: 1}, nil, nil, nil, ""), ErrInsufficientBalance)
+
+	cache.balance = 5
+	require.NoError(t, svc.CheckBillingEligibility(context.Background(), &User{ID: 1}, nil, nil, nil, ""))
+}
+
 func TestSyncBalanceCacheAfterDeduction_InvalidatesExhaustedBalance(t *testing.T) {
 	cache := &balanceEligibilityCacheStub{
 		balance:                  0.50,

@@ -207,6 +207,46 @@ func (r *userRepository) GetByID(ctx context.Context, id int64) (*service.User, 
 	return out, nil
 }
 
+// ListRecentBalanceCosts returns the newest positive wallet-billed actual
+// costs. It intentionally excludes subscription usage so the balance gate is
+// calibrated to the wallet that it protects.
+func (r *userRepository) ListRecentBalanceCosts(ctx context.Context, userID int64, model string, limit int) ([]float64, error) {
+	if r == nil || r.sql == nil {
+		return nil, errors.New("user repository sql is nil")
+	}
+	if userID <= 0 || limit <= 0 {
+		return []float64{}, nil
+	}
+	rows, err := r.sql.QueryContext(ctx, `
+		SELECT actual_cost
+		FROM usage_logs
+		WHERE user_id = $1
+		  AND billing_type = $2
+		  AND actual_cost > 0
+		  AND actual_cost::text <> 'NaN'
+		  AND ($3 = '' OR COALESCE(NULLIF(requested_model, ''), model) = $3)
+		ORDER BY created_at DESC, id DESC
+		LIMIT $4
+	`, userID, service.BillingTypeBalance, strings.TrimSpace(model), limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	costs := make([]float64, 0, limit)
+	for rows.Next() {
+		var cost float64
+		if err := rows.Scan(&cost); err != nil {
+			return nil, err
+		}
+		costs = append(costs, cost)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return costs, nil
+}
+
 func (r *userRepository) GetByIDIncludeDeleted(ctx context.Context, id int64) (*service.User, error) {
 	ctx = mixins.SkipSoftDelete(ctx)
 	m, err := r.client.User.Query().Where(dbuser.IDEQ(id)).Only(ctx)

@@ -3,12 +3,15 @@ package service
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"strconv"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/ctxkey"
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/timezone"
@@ -903,6 +906,44 @@ func (s *BillingCacheService) checkBalanceEligibility(ctx context.Context, userI
 
 	if s.balanceBelowEligibilityThreshold(balance) {
 		return ErrInsufficientBalance
+	}
+
+	// The amount of a token-billed request is only known after the upstream
+	// response. Use the user's recent balance-billed costs to apply a
+	// conservative admission floor without changing the request or limiting output.
+	if reader, ok := s.userRepo.(RecentBalanceCostReader); ok {
+		policy := BalancePreauthorizationPolicy{
+			SampleCount:          s.cfg.Billing.BalancePreauthorizationSampleCount,
+			MeanSafetyFactor:     s.cfg.Billing.BalancePreauthorizationMeanSafetyFactor,
+			P95Quantile:          s.cfg.Billing.BalancePreauthorizationP95Quantile,
+			MaxOverdraftFraction: s.cfg.Billing.BalancePreauthorizationMaxOverdraftFraction,
+			MinimumReserve:       s.minimumBalanceReserve(),
+		}
+		policy = normalizeBalancePreauthorizationPolicy(policy)
+		model, _ := ctx.Value(ctxkey.Model).(string)
+		samples, sampleErr := reader.ListRecentBalanceCosts(ctx, userID, strings.TrimSpace(model), policy.SampleCount)
+		if sampleErr == nil && len(samples) == 0 && strings.TrimSpace(model) != "" {
+			// A new model has no model-specific history yet; use the user's recent
+			// balance history rather than reducing the gate to the minimum reserve.
+			samples, sampleErr = reader.ListRecentBalanceCosts(ctx, userID, "", policy.SampleCount)
+		}
+		if sampleErr != nil {
+			logger.LegacyPrintf("service.billing_cache", "recent balance cost lookup failed for user %d: %v", userID, sampleErr)
+		} else {
+			estimate := EstimateBalancePreauthorization(samples, policy)
+			floor := BalancePreauthorizationFloor(estimate.Authorization, policy.MaxOverdraftFraction)
+			slog.Debug("billing.balance_preauthorization_gate",
+				"user_id", userID,
+				"model", strings.TrimSpace(model),
+				"sample_count", estimate.SampleCount,
+				"authorization", estimate.Authorization,
+				"admission_floor", floor,
+				"balance", balance,
+			)
+			if balance < floor {
+				return ErrInsufficientBalance
+			}
+		}
 	}
 
 	return nil

@@ -133,6 +133,38 @@ func TestValidateDujiaoLoginAllowsEmptySharedSecretWhenDisabled(t *testing.T) {
 	require.NoError(t, cfg.Validate())
 }
 
+func TestLoadBalancePreauthorizationDefaults(t *testing.T) {
+	resetViperWithJWTSecret(t)
+	cfg, err := Load()
+	require.NoError(t, err)
+	require.Equal(t, 100, cfg.Billing.BalancePreauthorizationSampleCount)
+	require.Equal(t, 2.0, cfg.Billing.BalancePreauthorizationMeanSafetyFactor)
+	require.Equal(t, 0.95, cfg.Billing.BalancePreauthorizationP95Quantile)
+	require.Equal(t, 0.5, cfg.Billing.BalancePreauthorizationMaxOverdraftFraction)
+}
+
+func TestValidateBalancePreauthorizationRejectsInvalidPolicy(t *testing.T) {
+	resetViperWithJWTSecret(t)
+	cases := []struct {
+		name   string
+		mutate func(*Config)
+		want   string
+	}{
+		{"sample count", func(c *Config) { c.Billing.BalancePreauthorizationSampleCount = 0 }, "balance_preauthorization_sample_count"},
+		{"safety factor", func(c *Config) { c.Billing.BalancePreauthorizationMeanSafetyFactor = 0 }, "balance_preauthorization_mean_safety_factor"},
+		{"p95", func(c *Config) { c.Billing.BalancePreauthorizationP95Quantile = 1.1 }, "balance_preauthorization_p95_quantile"},
+		{"overdraft", func(c *Config) { c.Billing.BalancePreauthorizationMaxOverdraftFraction = 1.1 }, "balance_preauthorization_max_overdraft_fraction"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg, err := Load()
+			require.NoError(t, err)
+			tc.mutate(cfg)
+			require.ErrorContains(t, cfg.Validate(), tc.want)
+		})
+	}
+}
+
 func TestLoadRedisUsernameFromEnvironment(t *testing.T) {
 	resetViperWithJWTSecret(t)
 	t.Setenv("REDIS_USERNAME", "app-user")
