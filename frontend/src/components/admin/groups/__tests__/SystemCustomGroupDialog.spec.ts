@@ -188,6 +188,19 @@ describe('SystemCustomGroupDialog', () => {
     wrapper.unmount()
   })
 
+  it('exposes reusable custom tag options in the system custom form', async () => {
+    const wrapper = mountDialog({
+      reusableTags: [{ tag: '专属高速', color: '#16A34A', count: 2 }],
+    })
+    await flushPromises()
+
+    const option = wrapper.get('input[data-test="group-tag-reusable-option"]')
+    expect(wrapper.get('[data-test="group-tag-reusable"]').text()).toContain('专属高速')
+    await option.setValue(true)
+    expect(wrapper.get('[data-test="group-tag-text"]').element).toHaveProperty('value', '专属高速')
+    expect(wrapper.get('[data-test="group-tag-color-hex"]').element).toHaveProperty('value', '#16A34A')
+  })
+
   it('keeps source order and form state after a save error', async () => {
     createSystemCustomGroup.mockRejectedValueOnce({
       response: { data: { message: 'source group is unavailable' } }

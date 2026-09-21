@@ -59,4 +59,12 @@ describe("admin GroupsView layout", () => {
     expect(groupsViewSource).toContain('await ensurePricingCoverage("edit")');
     expect(groupsViewSource).toContain(":required-models");
   });
+
+  it("loads reusable custom tags from all groups and passes them to every group form", () => {
+    expect(groupsViewSource).toContain("buildReusableGroupTagOptions");
+    expect(groupsViewSource).toContain("getAllIncludingInactive");
+    expect(groupsViewSource).toContain("const refreshGroupData");
+    expect(groupsViewSource).toContain(':reusable-tags="reusableGroupTags"');
+    expect(groupsViewSource).toContain("void loadReusableGroupTags()");
+  });
 });

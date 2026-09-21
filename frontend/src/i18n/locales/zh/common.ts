@@ -1,6 +1,6 @@
 export default {
   common: {
-    groupTags: { label: '分组标签', none: '不设置', chat: '对话', image: '生图', airp: 'AIRP', text: '标签文字', placeholder: '自定义标签，最多 20 个字', color: '标签颜色', hexColor: '十六进制颜色', preview: '预览' },
+    groupTags: { label: '分组标签', none: '不设置', chat: '对话', image: '生图', airp: 'AIRP', text: '标签文字', placeholder: '自定义标签，最多 20 个字', color: '标签颜色', hexColor: '十六进制颜色', preview: '预览', reusable: '已保存标签', usage: '{count} 个分组' },
     loading: '加载中...',
     locale: '语言',
     submitting: '提交中...',

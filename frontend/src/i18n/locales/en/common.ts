@@ -1,6 +1,6 @@
 export default {
   common: {
-    groupTags: { label: 'Group tag', none: 'None', chat: 'Chat', image: 'Image', airp: 'AIRP', text: 'Label text', placeholder: 'Custom label, up to 20 characters', color: 'Label color', hexColor: 'Hex color', preview: 'Preview' },
+    groupTags: { label: 'Group tag', none: 'None', chat: 'Chat', image: 'Image', airp: 'AIRP', text: 'Label text', placeholder: 'Custom label, up to 20 characters', color: 'Label color', hexColor: 'Hex color', preview: 'Preview', reusable: 'Saved labels', usage: '{count} groups' },
     loading: 'Loading...',
     submitting: 'Submitting...',
     creating: 'Creating...',

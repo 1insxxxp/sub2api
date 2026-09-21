@@ -58,7 +58,7 @@
             class="groups-list-actions"
           >
             <button
-              @click="loadGroups"
+              @click="refreshGroupData"
               :disabled="loading"
               class="btn btn-secondary groups-tool-button"
               :title="t('common.refresh')"
@@ -550,6 +550,7 @@
     <SystemCustomGroupDialog
       :show="showSystemCustomDialog"
       :group-id="systemCustomGroupID"
+      :reusable-tags="reusableGroupTags"
       @close="closeSystemCustomGroup"
       @saved="handleSystemCustomSaved"
       @deleted="handleSystemCustomDeleted"
@@ -578,7 +579,12 @@
             data-tour="group-form-name"
           />
         </div>
-        <GroupTagField v-model="createForm.tag" v-model:color="createForm.tag_color" name="create-group-tag" />
+        <GroupTagField
+          v-model="createForm.tag"
+          v-model:color="createForm.tag_color"
+          name="create-group-tag"
+          :reusable-tags="reusableGroupTags"
+        />
         <div>
           <label class="input-label">{{
             t("admin.groups.form.description")
@@ -2325,7 +2331,12 @@
             data-tour="edit-group-form-name"
           />
         </div>
-        <GroupTagField v-model="editForm.tag" v-model:color="editForm.tag_color" name="edit-group-tag" />
+        <GroupTagField
+          v-model="editForm.tag"
+          v-model:color="editForm.tag_color"
+          name="edit-group-tag"
+          :reusable-tags="reusableGroupTags"
+        />
         <div>
           <label class="input-label">{{
             t("admin.groups.form.description")
@@ -4646,6 +4657,10 @@ import {
   setModelAllowlistCandidates,
 } from "./groupModelAllowlist";
 import { createModelAllowlistCandidatesTracker } from "./modelAllowlistCandidates";
+import {
+  buildReusableGroupTagOptions,
+  type ReusableGroupTagOption,
+} from "@/utils/groupTagOptions";
 import { normalizeSupportedModelScopesForPlatform } from "./groupsSupportedModelScopes";
 import {
   advertisedModelsForCoverage,
@@ -5110,6 +5125,7 @@ const copyAccountsGroupOptionsForEdit = computed(() => {
 });
 
 const groups = ref<AdminGroup[]>([]);
+const reusableGroupTags = ref<ReusableGroupTagOption[]>([]);
 const loading = ref(false);
 type GroupUsageSummary = {
   today_cost: number;
@@ -6175,6 +6191,27 @@ const loadGroups = async () => {
   }
 };
 
+let reusableGroupTagsRequest = 0;
+const loadReusableGroupTags = async () => {
+  const requestID = ++reusableGroupTagsRequest;
+  try {
+    const allGroups = authStore.isSimpleMode
+      ? await adminAPI.groups.getAll()
+      : await adminAPI.groups.getAllIncludingInactive();
+    if (requestID !== reusableGroupTagsRequest) return;
+    reusableGroupTags.value = buildReusableGroupTagOptions(allGroups);
+  } catch (error) {
+    if (requestID !== reusableGroupTagsRequest) return;
+    reusableGroupTags.value = [];
+    console.warn("Error loading reusable group tags:", error);
+  }
+};
+
+const refreshGroupData = () => {
+  void loadGroups();
+  void loadReusableGroupTags();
+};
+
 const formatCost = (cost: number): string => {
   if (cost >= 1000) return cost.toFixed(0);
   if (cost >= 100) return cost.toFixed(1);
@@ -6320,6 +6357,7 @@ const handleSystemCustomSaved = (saved: SystemCustomGroup) => {
   }
   appStore.showSuccess(t("admin.groups.systemCustom.saved"));
   closeSystemCustomGroup();
+  void loadReusableGroupTags();
 };
 
 const handleSystemCustomDeleted = (groupID: number) => {
@@ -6330,6 +6368,7 @@ const handleSystemCustomDeleted = (groupID: number) => {
   }
   appStore.showSuccess(t("admin.groups.systemCustom.deleted"));
   closeSystemCustomGroup();
+  void loadReusableGroupTags();
 };
 
 const closeCreateModal = () => {
@@ -6613,7 +6652,7 @@ const handleCreateGroup = async () => {
     await adminAPI.groups.create(payload);
     appStore.showSuccess(t("admin.groups.groupCreated"));
     closeCreateModal();
-    loadGroups();
+    refreshGroupData();
     // Only advance tour if active, on submit step, and creation succeeded
     if (onboardingStore.isCurrentStep('[data-tour="group-form-submit"]')) {
       onboardingStore.nextStep(500);
@@ -7005,6 +7044,7 @@ const handleUpdateGroup = async () => {
     );
     appStore.showSuccess(t("admin.groups.groupUpdated"));
     closeEditModal();
+    void loadReusableGroupTags();
   } catch (error: any) {
     appStore.showError(
       extractApiErrorMessage(error, t("admin.groups.failedToUpdate")),
@@ -7059,6 +7099,7 @@ const handleDuplicate = async (group: AdminGroup) => {
       t("admin.groups.duplicateSuccess", { name: duplicate.name }),
     );
     await loadGroups();
+    await loadReusableGroupTags();
   } catch (error: unknown) {
     appStore.showError(
       extractApiErrorMessage(error, t("admin.groups.duplicateFailed")),
@@ -7263,7 +7304,7 @@ const confirmDelete = async () => {
     appStore.showSuccess(t("admin.groups.groupDeleted"));
     showDeleteDialog.value = false;
     deletingGroup.value = null;
-    loadGroups();
+    refreshGroupData();
   } catch (error: any) {
     appStore.showError(
       error.response?.data?.detail || t("admin.groups.failedToDelete"),
@@ -7557,7 +7598,7 @@ const saveSortOrder = async () => {
 };
 
 onMounted(() => {
-  loadGroups();
+  refreshGroupData();
   if (!authStore.isSimpleMode) {
     void loadLiveCapability();
     loadModelAllowlistCandidates("create", 0, createForm.platform);

@@ -2,7 +2,12 @@ import { mount } from '@vue/test-utils'
 import { describe, expect, it, vi } from 'vitest'
 import GroupTagField from '../GroupTagField.vue'
 
-vi.mock('vue-i18n', () => ({ useI18n: () => ({ t: (key: string) => key }) }))
+vi.mock('vue-i18n', () => ({
+  useI18n: () => ({
+    t: (key: string, params?: Record<string, string | number>) =>
+      params?.count === undefined ? key : `${key}:${params.count}`,
+  }),
+}))
 
 describe('GroupTagField', () => {
   it('edits custom text and color and previews both', async () => {
@@ -40,5 +45,23 @@ describe('GroupTagField', () => {
     expect(wrapper.emitted('update:modelValue')?.at(-1)).toEqual([''])
     expect(wrapper.emitted('update:color')?.at(-1)).toEqual([''])
     expect(wrapper.find('[data-test="group-tag-preview"] [data-test="group-tag"]').exists()).toBe(false)
+  })
+
+  it('renders reusable custom tags and applies their stored color when selected', async () => {
+    const wrapper = mount(GroupTagField, {
+      props: {
+        modelValue: '', color: '', name: 'test-tag',
+        reusableTags: [{ tag: '专属高速', color: '#16a34a', count: 2 }],
+        'onUpdate:modelValue': (value: string) => wrapper.setProps({ modelValue: value }),
+        'onUpdate:color': (color: string) => wrapper.setProps({ color }),
+      },
+    })
+
+    expect(wrapper.get('[data-test="group-tag-reusable"]').text()).toContain('专属高速')
+    expect(wrapper.get('[data-test="group-tag-reusable-count"]').text()).toContain('2')
+    await wrapper.get('input[data-test="group-tag-reusable-option"]').setValue(true)
+
+    expect(wrapper.emitted('update:modelValue')?.at(-1)).toEqual(['专属高速'])
+    expect(wrapper.emitted('update:color')?.at(-1)).toEqual(['#16A34A'])
   })
 })

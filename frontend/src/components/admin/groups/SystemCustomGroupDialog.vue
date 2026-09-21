@@ -41,7 +41,12 @@
         </label>
       </section>
 
-      <GroupTagField v-model="form.tag" v-model:color="form.tag_color" name="system-custom-group-tag" />
+      <GroupTagField
+        v-model="form.tag"
+        v-model:color="form.tag_color"
+        name="system-custom-group-tag"
+        :reusable-tags="reusableTags"
+      />
 
       <section class="border-y border-slate-200 py-4 dark:border-dark-700">
         <button
@@ -224,11 +229,13 @@ import type {
   SystemCustomGroupCandidate,
   SystemCustomGroupSource
 } from '@/types'
+import type { ReusableGroupTagOption } from '@/utils/groupTagOptions'
 import GroupTagField from '@/components/admin/group/GroupTagField.vue'
 
 interface Props {
   show: boolean
   groupId?: number | null
+  reusableTags?: ReusableGroupTagOption[]
 }
 
 interface Emits {
@@ -237,7 +244,7 @@ interface Emits {
   (event: 'deleted', groupID: number): void
 }
 
-const props = withDefaults(defineProps<Props>(), { groupId: null })
+const props = withDefaults(defineProps<Props>(), { groupId: null, reusableTags: () => [] })
 const emit = defineEmits<Emits>()
 const { t } = useI18n()
 

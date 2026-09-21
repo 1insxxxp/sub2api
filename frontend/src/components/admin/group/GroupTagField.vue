@@ -65,6 +65,34 @@
         <span v-else class="text-sm text-gray-600 dark:text-gray-300">{{ t('common.groupTags.none') }}</span>
       </label>
     </div>
+    <div v-if="reusableTags.length" data-test="group-tag-reusable" class="mt-4 space-y-2">
+      <div class="text-xs font-medium text-gray-600 dark:text-gray-300">{{ t('common.groupTags.reusable') }}</div>
+      <div class="flex flex-wrap gap-2">
+        <label
+          v-for="option in reusableTags"
+          :key="option.tag"
+          class="inline-flex min-h-10 cursor-pointer items-center gap-2 rounded-md border px-3 py-2 transition-colors"
+          :class="modelValue === option.tag
+            ? 'border-primary-500 bg-primary-50 dark:border-primary-400 dark:bg-primary-500/10'
+            : 'border-gray-200 bg-white hover:border-gray-400 dark:border-dark-600 dark:bg-dark-800'"
+        >
+          <input
+            data-test="group-tag-reusable-option"
+            type="radio"
+            :name="name"
+            :value="option.tag"
+            :checked="modelValue === option.tag"
+            :aria-label="option.tag"
+            class="h-4 w-4 border-gray-300 text-primary-600 focus:ring-primary-500"
+            @change="selectReusableTag(option)"
+          />
+          <GroupTagBadge :tag="option.tag" :color="option.color" />
+          <span data-test="group-tag-reusable-count" class="text-[11px] text-gray-500 dark:text-gray-400">
+            {{ t('common.groupTags.usage', { count: option.count }) }}
+          </span>
+        </label>
+      </div>
+    </div>
     <div class="mt-3 flex min-w-0 flex-wrap items-center justify-between gap-3">
       <div class="flex flex-wrap items-center gap-1.5">
         <button
@@ -97,9 +125,13 @@ import { computed } from 'vue'
 import GroupTagBadge from '@/components/common/GroupTagBadge.vue'
 import Icon from '@/components/icons/Icon.vue'
 import type { GroupTag } from '@/types'
+import type { ReusableGroupTagOption } from '@/utils/groupTagOptions'
 import { GROUP_TAG_COLORS, GROUP_TAG_PRESETS, groupTagColor, groupTagStyle, isGroupTagPreset } from '@/utils/groupTag'
 
-const props = withDefaults(defineProps<{ modelValue: GroupTag; color?: string; name: string }>(), { color: '' })
+const props = withDefaults(defineProps<{ modelValue: GroupTag; color?: string; name: string; reusableTags?: ReusableGroupTagOption[] }>(), {
+  color: '',
+  reusableTags: () => [],
+})
 const emit = defineEmits<{ 'update:modelValue': [tag: GroupTag]; 'update:color': [color: string] }>()
 const { t } = useI18n()
 const tags = ['', ...GROUP_TAG_PRESETS]
@@ -112,5 +144,9 @@ const updateText = (value: string) => {
 const selectPreset = (tag: string) => {
   emit('update:modelValue', tag)
   emit('update:color', '')
+}
+const selectReusableTag = (option: ReusableGroupTagOption) => {
+  emit('update:modelValue', option.tag)
+  emit('update:color', option.color.toUpperCase())
 }
 </script>
