@@ -1075,6 +1075,31 @@ const runBatchModel = async (modelId: string, signal: AbortSignal): Promise<Batc
   return outcome || { success: false, error: t('admin.accounts.batchNoCompletion') }
 }
 
+const runBatchResult = async (
+  result: BatchModelResult,
+  signal: AbortSignal,
+  runToken: number
+) => {
+  if (runToken !== batchRunToken || signal.aborted) return
+
+  result.status = 'testing'
+  const startedAt = Date.now()
+  try {
+    const outcome = await runBatchModel(result.modelId, signal)
+    if (runToken !== batchRunToken || signal.aborted) return
+    result.status = outcome.success ? 'success' : 'failed'
+    result.error = outcome.error
+  } catch (error: unknown) {
+    if (runToken !== batchRunToken || signal.aborted) return
+    result.status = 'failed'
+    result.error = error instanceof Error ? error.message : t('common.unknownError')
+  } finally {
+    if (result.status === 'success' || result.status === 'failed') {
+      result.durationMs = Date.now() - startedAt
+    }
+  }
+}
+
 const startBatchTest = async () => {
   if (!props.account || !canBatchTest.value) return
 
@@ -1093,25 +1118,9 @@ const startBatchTest = async () => {
   batchAbortController = controller
 
   try {
-    for (const result of batchResults.value) {
-      if (runToken !== batchRunToken || controller.signal.aborted) break
-      result.status = 'testing'
-      const startedAt = Date.now()
-      try {
-        const outcome = await runBatchModel(result.modelId, controller.signal)
-        if (runToken !== batchRunToken || controller.signal.aborted) break
-        result.status = outcome.success ? 'success' : 'failed'
-        result.error = outcome.error
-      } catch (error: unknown) {
-        if (runToken !== batchRunToken || controller.signal.aborted) break
-        result.status = 'failed'
-        result.error = error instanceof Error ? error.message : t('common.unknownError')
-      } finally {
-        if (result.status === 'success' || result.status === 'failed') {
-          result.durationMs = Date.now() - startedAt
-        }
-      }
-    }
+    await Promise.all(
+      batchResults.value.map((result) => runBatchResult(result, controller.signal, runToken))
+    )
   } finally {
     if (runToken === batchRunToken) {
       batchRunning.value = false

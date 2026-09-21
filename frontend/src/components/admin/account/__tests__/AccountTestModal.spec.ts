@@ -291,15 +291,15 @@ describe('AccountTestModal', () => {
     expect(wrapper.find('.batch-test-result').classes()).toContain('sm:flex-row')
   })
 
-  it('停止批量测试会取消当前请求并标记未开始的模型', async () => {
+  it('一键测试会在首个模型完成前同时发起所有模型请求', async () => {
     getAvailableModels.mockResolvedValue([
       { id: 'gpt-first', display_name: 'GPT First' },
       { id: 'gpt-second', display_name: 'GPT Second' },
       { id: 'gpt-third', display_name: 'GPT Third' }
     ])
-    let resolveResponse: ((response: Response) => void) | undefined
+    const resolvers: Array<(response: Response) => void> = []
     global.fetch = vi.fn().mockImplementation(() => new Promise<Response>((resolve) => {
-      resolveResponse = resolve
+      resolvers.push(resolve)
     })) as any
 
     const wrapper = mountModal({
@@ -315,9 +315,52 @@ describe('AccountTestModal', () => {
     await flushPromises()
 
     const batchPromise = (wrapper.vm as any).startBatchTest()
-    await vi.waitFor(() => expect(global.fetch).toHaveBeenCalledTimes(1))
+    await vi.waitFor(() => expect(global.fetch).toHaveBeenCalledTimes(3))
+    expect((wrapper.vm as any).batchResults.every((result: { status: string }) => result.status === 'testing')).toBe(true)
+
+    for (const resolve of resolvers) {
+      resolve(createStreamResponse([
+        'data: {"type":"test_complete","success":true}\n'
+      ]))
+    }
+    await batchPromise
+
+    expect((wrapper.vm as any).batchResults).toMatchObject([
+      { modelId: 'gpt-first', status: 'success' },
+      { modelId: 'gpt-second', status: 'success' },
+      { modelId: 'gpt-third', status: 'success' }
+    ])
+  })
+
+  it('停止批量测试会取消当前请求并标记未开始的模型', async () => {
+    getAvailableModels.mockResolvedValue([
+      { id: 'gpt-first', display_name: 'GPT First' },
+      { id: 'gpt-second', display_name: 'GPT Second' },
+      { id: 'gpt-third', display_name: 'GPT Third' }
+    ])
+    const resolvers: Array<(response: Response) => void> = []
+    global.fetch = vi.fn().mockImplementation(() => new Promise<Response>((resolve) => {
+      resolvers.push(resolve)
+    })) as any
+
+    const wrapper = mountModal({
+      show: true,
+      account: {
+        id: 42,
+        name: 'OpenAI Account',
+        platform: 'openai',
+        type: 'apikey',
+        status: 'active'
+      }
+    })
+    await flushPromises()
+
+    const batchPromise = (wrapper.vm as any).startBatchTest()
+    await vi.waitFor(() => expect(global.fetch).toHaveBeenCalledTimes(3))
     ;(wrapper.vm as any).stopBatchTest()
-    resolveResponse?.(createStreamResponse([]))
+    for (const resolve of resolvers) {
+      resolve(createStreamResponse([]))
+    }
     await batchPromise
 
     expect((wrapper.vm as any).batchResults).toMatchObject([
