@@ -2922,6 +2922,61 @@ onUnmounted(() => {
 }
 
 @media (max-width: 767px) {
+  .accounts-admin-page :deep(.admin-list-actions) {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: stretch;
+    gap: 0.375rem;
+  }
+
+  .accounts-admin-page :deep(.admin-list-filter-toggle) {
+    margin-right: 0;
+    min-width: 0;
+    white-space: nowrap;
+  }
+
+  .accounts-admin-page :deep(.account-table-actions) {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(2.5rem, 2.75rem)) minmax(4.5rem, 1fr);
+    align-items: stretch;
+    gap: 0.375rem;
+  }
+
+  .accounts-admin-page :deep(.account-table-actions > *) {
+    min-width: 0;
+  }
+
+  .accounts-admin-page :deep(.account-table-actions .account-create-action) {
+    width: 100%;
+    justify-content: center;
+    padding-inline: 0.5rem;
+  }
+
+  .accounts-admin-page :deep(.admin-record-status) {
+    min-width: 0;
+    max-width: 44%;
+  }
+
+  .accounts-admin-page :deep(.admin-record-status > [data-field='status']) {
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .accounts-admin-page :deep(.admin-record-status > [data-field='status'] > *) {
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .accounts-admin-page :deep(.admin-record-status [class*='columns-']) {
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .accounts-admin-page :deep(.admin-record-status [class*='columns-'] > *) {
+    min-width: 0;
+    max-width: 100%;
+  }
+
   .account-mobile-sort {
     display: flex;
     min-height: 2.75rem;
@@ -2962,5 +3017,21 @@ onUnmounted(() => {
 
 @media (prefers-reduced-motion: reduce) {
   .account-tools-menu-item { transition: none; }
+}
+
+@media (max-width: 359px) {
+  .accounts-admin-page :deep(.admin-list-filter-toggle) {
+    padding-inline: 0.5rem;
+  }
+
+  .accounts-admin-page :deep(.account-table-actions) {
+    grid-template-columns: repeat(3, minmax(2.25rem, 2.5rem)) minmax(4.25rem, 1fr);
+  }
+
+  .accounts-admin-page :deep(.account-toolbar-action),
+  .accounts-admin-page :deep(.account-refresh-action),
+  .accounts-admin-page :deep(.account-create-action) {
+    min-height: 2.5rem;
+  }
 }
 </style>
