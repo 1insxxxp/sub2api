@@ -246,31 +246,36 @@
           <div
             v-for="result in batchResults"
             :key="result.modelId"
-            class="batch-test-result flex min-w-0 flex-col items-start gap-1.5 rounded-xl border border-slate-200/80 bg-white/70 px-3 py-2 text-xs dark:border-slate-700/80 dark:bg-slate-950/40 sm:flex-row sm:items-center sm:justify-between"
+            class="batch-test-result flex min-w-0 flex-col items-start gap-1.5 overflow-hidden rounded-xl border border-slate-200/80 bg-white/70 px-3 py-2 text-xs dark:border-slate-700/80 dark:bg-slate-950/40"
           >
-            <span class="min-w-0 w-full truncate font-medium text-slate-700 dark:text-slate-200 sm:w-auto sm:flex-1">
-              {{ result.displayName }}
-            </span>
-            <div class="flex w-full flex-wrap items-center gap-x-2 gap-y-1 sm:w-auto sm:justify-end">
-              <span
-                :class="[
-                  'shrink-0 font-semibold',
-                  result.status === 'success'
-                    ? 'text-green-600 dark:text-green-400'
-                    : result.status === 'failed'
-                      ? 'text-red-600 dark:text-red-400'
-                      : result.status === 'testing'
-                        ? 'text-blue-600 dark:text-blue-400'
-                        : 'text-slate-500 dark:text-slate-400'
-                ]"
-              >
-                {{ batchStatusLabel(result.status) }}
+            <div class="flex min-w-0 w-full items-start justify-between gap-2">
+              <span class="min-w-0 flex-1 break-words font-medium text-slate-700 dark:text-slate-200">
+                {{ result.displayName }}
               </span>
-              <span v-if="result.durationMs !== undefined" class="shrink-0 tabular-nums text-slate-500 dark:text-slate-400">
-                {{ t('admin.accounts.batchLatency', { duration: formatBatchDuration(result.durationMs) }) }}
-              </span>
+              <div class="flex shrink-0 flex-wrap items-center justify-end gap-x-2 gap-y-1 text-right">
+                <span
+                  :class="[
+                    'shrink-0 font-semibold',
+                    result.status === 'success'
+                      ? 'text-green-600 dark:text-green-400'
+                      : result.status === 'failed'
+                        ? 'text-red-600 dark:text-red-400'
+                        : result.status === 'testing'
+                          ? 'text-blue-600 dark:text-blue-400'
+                          : 'text-slate-500 dark:text-slate-400'
+                  ]"
+                >
+                  {{ batchStatusLabel(result.status) }}
+                </span>
+                <span v-if="result.durationMs !== undefined" class="shrink-0 tabular-nums text-slate-500 dark:text-slate-400">
+                  {{ t('admin.accounts.batchLatency', { duration: formatBatchDuration(result.durationMs) }) }}
+                </span>
+              </div>
             </div>
-            <span v-if="result.error" class="basis-full break-words text-red-500 dark:text-red-400">
+            <span
+              v-if="result.error"
+              class="batch-test-error block max-h-24 w-full min-w-0 max-w-full overflow-x-hidden overflow-y-auto rounded-lg border border-red-100/80 bg-red-50/70 px-2.5 py-1.5 text-[11px] leading-relaxed text-red-500 break-words whitespace-pre-wrap [overflow-wrap:anywhere] dark:border-red-900/50 dark:bg-red-950/20 dark:text-red-400"
+            >
               {{ result.error }}
             </span>
           </div>

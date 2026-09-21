@@ -288,7 +288,16 @@ describe('AccountTestModal', () => {
     expect(wrapper.text()).toContain('admin.accounts.batchFailedCount')
     expect(wrapper.text()).toContain('admin.accounts.batchLatency')
     expect(wrapper.find('.batch-test-actions').classes()).toContain('sm:flex-row')
-    expect(wrapper.find('.batch-test-result').classes()).toContain('sm:flex-row')
+    expect(wrapper.find('.batch-test-result > div').classes()).toEqual(expect.arrayContaining([
+      'w-full',
+      'justify-between'
+    ]))
+    expect(wrapper.find('.batch-test-error').classes()).toEqual(expect.arrayContaining([
+      'w-full',
+      'min-w-0',
+      'max-h-24',
+      'overflow-y-auto'
+    ]))
   })
 
   it('一键测试会在首个模型完成前同时发起所有模型请求', async () => {
