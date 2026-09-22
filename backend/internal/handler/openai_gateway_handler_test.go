@@ -28,6 +28,25 @@ import (
 	"github.com/tidwall/sjson"
 )
 
+func TestAccountSwitchLimitAllowsFullPoolTraversalForFirstOutputTimeout(t *testing.T) {
+	timeoutErr := &service.UpstreamFailoverError{
+		Reason: service.GatewayFailureReason("first_output_timeout"),
+	}
+	ordinaryErr := &service.UpstreamFailoverError{
+		Reason: service.GatewayFailureReason("upstream_error"),
+	}
+
+	if shouldStopAccountSwitching(3, 3, true, timeoutErr) {
+		t.Fatal("first output timeout should continue to the next account after the normal switch limit")
+	}
+	if !shouldStopAccountSwitching(3, 3, false, timeoutErr) {
+		t.Fatal("timeout traversal must be opt-in")
+	}
+	if !shouldStopAccountSwitching(3, 3, true, ordinaryErr) {
+		t.Fatal("ordinary upstream errors must still honor the switch limit")
+	}
+}
+
 func TestOpenAIHandleStreamingAwareError_JSONEscaping(t *testing.T) {
 	tests := []struct {
 		name    string

@@ -159,6 +159,7 @@ func (h *OpenAIGatewayHandler) ChatCompletions(c *gin.Context) {
 
 	maxAccountSwitches := h.maxAccountSwitches
 	switchCount := 0
+	firstOutputTimeoutPoolTraversal := false
 	profitVetoCount := 0
 	failedAccountIDs := make(map[int64]struct{})
 	sameAccountRetryCount := make(map[int64]int)
@@ -333,10 +334,13 @@ func (h *OpenAIGatewayHandler) ChatCompletions(c *gin.Context) {
 						)
 						return
 					}
-					if c.Writer.Size() != writerSizeBeforeForward {
+					if !gatewayForwardMayFailoverAfterWrite(writerSizeBeforeForward, c.Writer.Size(), failoverErr) {
 						h.gatewayService.ObserveOpenAIAccountHealthFailure(c.Request.Context(), account, err)
 						h.handleFailoverExhausted(c, failoverErr, true)
 						return
+					}
+					if c.Writer.Size() != writerSizeBeforeForward {
+						streamStarted = true
 					}
 					if failoverErr.ShouldReportAccountScheduleFailure() {
 						h.gatewayService.ReportOpenAIAccountScheduleResult(account, openAIAccountScheduleModel(c, account, reqModel, false, nil), false, nil, err)
@@ -344,6 +348,9 @@ func (h *OpenAIGatewayHandler) ChatCompletions(c *gin.Context) {
 					if !failoverErr.ShouldRetryNextAccount() {
 						h.handleFailoverExhausted(c, failoverErr, streamStarted)
 						return
+					}
+					if failoverErr.Reason == service.GatewayFailureReason("first_output_timeout") {
+						firstOutputTimeoutPoolTraversal = true
 					}
 					// Pool mode: retry on the same account
 					if failoverErr.RetryableOnSameAccount {
@@ -369,7 +376,7 @@ func (h *OpenAIGatewayHandler) ChatCompletions(c *gin.Context) {
 					h.gatewayService.RecordOpenAIAccountSwitch()
 					failedAccountIDs[account.ID] = struct{}{}
 					lastFailoverErr = failoverErr
-					if switchCount >= maxAccountSwitches {
+					if shouldStopAccountSwitching(switchCount, maxAccountSwitches, firstOutputTimeoutPoolTraversal, failoverErr) {
 						h.handleFailoverExhausted(c, failoverErr, streamStarted)
 						return
 					}

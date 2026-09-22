@@ -299,10 +299,14 @@ func (h *GatewayHandler) Responses(c *gin.Context) {
 		if err != nil {
 			var failoverErr *service.UpstreamFailoverError
 			if errors.As(err, &failoverErr) {
-				// Can't failover if streaming content already sent
-				if c.Writer.Size() != writerSizeBeforeForward {
+				// Keepalive/preamble bytes are safe to leave in the stream when the
+				// upstream explicitly marks the failure as safe to fail over.
+				if !gatewayForwardMayFailoverAfterWrite(writerSizeBeforeForward, c.Writer.Size(), failoverErr) {
 					h.handleResponsesFailoverExhausted(c, failoverErr, true)
 					return
+				}
+				if c.Writer.Size() != writerSizeBeforeForward {
+					streamStarted = true
 				}
 				action := fs.HandleFailoverError(requestCtx, h.gatewayService, account.ID, account.Platform, account.GetPoolModeRetryCount(), failoverErr)
 				switch action {

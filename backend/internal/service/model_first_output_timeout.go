@@ -37,8 +37,8 @@ type ModelFirstOutputTimeoutSettings struct {
 
 func DefaultModelFirstOutputTimeoutSettings() *ModelFirstOutputTimeoutSettings {
 	return &ModelFirstOutputTimeoutSettings{
-		Enabled:   true,
-		Default:   ModelFirstOutputTimeoutPolicy{Enabled: true, TargetSeconds: 20, SwitchSeconds: 20, HardCapSeconds: 60},
+		Enabled:   false,
+		Default:   ModelFirstOutputTimeoutPolicy{Enabled: false, TargetSeconds: 20, SwitchSeconds: 20, HardCapSeconds: 60},
 		Platforms: map[string]ModelFirstOutputTimeoutPolicy{},
 		Models:    map[string]ModelFirstOutputTimeoutPolicy{},
 		Profiles: map[string]ModelFirstOutputTimeoutPolicy{

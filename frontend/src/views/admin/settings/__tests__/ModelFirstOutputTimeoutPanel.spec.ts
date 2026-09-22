@@ -122,6 +122,7 @@ describe('ModelFirstOutputTimeoutPanel', () => {
     const failedWrapper = mountPanel()
     await flushPromises()
     expect(failedWrapper.get('[data-test="model-first-output-timeout-load-error"]').text()).toContain('loadFailed')
+    expect((failedWrapper.get('[data-test="model-first-output-timeout-enabled"]').element as HTMLInputElement).checked).toBe(false)
     expect(showError).toHaveBeenCalled()
   })
 })

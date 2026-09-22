@@ -1089,9 +1089,9 @@ export default {
       },
       modelFirstOutputTimeout: {
         title: '模型首字节超时',
-        description: '按全局、Gemini 配置、平台和模型设置首个输出的超时策略；仅控制首个输出，不限制输出长度，最多重试一次。',
+        description: '默认关闭。可按全局、Gemini 配置、平台和模型设置首个输出的超时策略；仅控制首个输出，不限制输出长度，最多重试一次。',
         enabled: '启用首个输出超时',
-        enabledHint: '等待模型首个输出时应用以下分阶段超时策略。',
+        enabledHint: '默认关闭；手动开启后，在等待模型首个输出时应用以下分阶段超时策略。',
         enabledStatus: '已启用',
         disabledStatus: '已停用',
         profiles: '配置档',

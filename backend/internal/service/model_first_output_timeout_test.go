@@ -10,6 +10,13 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func TestDefaultModelFirstOutputTimeoutSettingsDisabled(t *testing.T) {
+	settings := DefaultModelFirstOutputTimeoutSettings()
+
+	require.False(t, settings.Enabled)
+	require.False(t, settings.Default.Enabled)
+}
+
 func TestResolveModelFirstOutputTimeout_UsesGeminiModelDefaults(t *testing.T) {
 	svc := NewSettingService(newMockSettingRepo(), &config.Config{})
 
@@ -20,12 +27,18 @@ func TestResolveModelFirstOutputTimeout_UsesGeminiModelDefaults(t *testing.T) {
 	require.Equal(t, 10, flash.TargetSeconds)
 	require.Equal(t, 10, flash.SwitchSeconds)
 	require.Equal(t, 30, flash.HardCapSeconds)
+	require.False(t, flash.Enabled)
 	require.Equal(t, 20, pro.TargetSeconds)
 	require.Equal(t, 20, pro.SwitchSeconds)
 	require.Equal(t, 60, pro.HardCapSeconds)
+	require.False(t, pro.Enabled)
 	require.Equal(t, 30, thinking.TargetSeconds)
 	require.Equal(t, 30, thinking.SwitchSeconds)
 	require.Equal(t, 90, thinking.HardCapSeconds)
+	require.False(t, thinking.Enabled)
+
+	other := svc.ResolveModelFirstOutputTimeout(context.Background(), PlatformAnthropic, "claude-sonnet")
+	require.False(t, other.Enabled)
 }
 
 func TestSetModelFirstOutputTimeoutSettings_RejectsInvalidOrder(t *testing.T) {

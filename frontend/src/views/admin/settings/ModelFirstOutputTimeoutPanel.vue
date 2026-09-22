@@ -179,8 +179,8 @@ const makeProfilePolicy = (profile: typeof profileKeys[number]): ModelFirstOutpu
 }
 
 const makeDefaultSettings = (): ModelFirstOutputTimeoutSettings => ({
-  enabled: true,
-  default: makePolicy(),
+  enabled: false,
+  default: { ...makePolicy(), enabled: false },
   profiles: {
     gemini_flash: makeProfilePolicy('gemini_flash'),
     gemini_pro: makeProfilePolicy('gemini_pro'),

@@ -1095,9 +1095,9 @@ export default {
       },
       modelFirstOutputTimeout: {
         title: 'Model First Output Timeout',
-        description: 'Configure first output timeouts globally and by Gemini profile, platform, or model. This only covers first output, has no length limit, and retries once at most.',
+        description: 'Disabled by default. Configure first output timeouts globally and by Gemini profile, platform, or model. This only covers first output, has no length limit, and retries once at most.',
         enabled: 'Enable first output timeout',
-        enabledHint: 'Apply staged timeout policy while waiting for a model’s first output.',
+        enabledHint: 'Disabled by default; when enabled, apply the staged timeout policy while waiting for a model’s first output.',
         enabledStatus: 'Enabled',
         disabledStatus: 'Disabled',
         profiles: 'Profiles',

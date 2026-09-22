@@ -55,6 +55,17 @@ const (
 // 语义上等同于「无可用账号」：候选账号都不满足分组的利润约束。
 const profitVetoExhaustedMessage = "No available accounts: all candidates rejected by group profit control"
 
+// gatewayForwardMayFailoverAfterWrite keeps a failover attempt eligible when
+// the upstream only emitted non-semantic bytes (for example an SSE keepalive)
+// before returning a timeout. Once semantic output has been sent, callers
+// leave this false for errors that do not explicitly opt into safe failover.
+func gatewayForwardMayFailoverAfterWrite(writerSizeBeforeForward, writerSize int, failoverErr *service.UpstreamFailoverError) bool {
+	if writerSize == writerSizeBeforeForward {
+		return true
+	}
+	return failoverErr != nil && failoverErr.SafeToFailoverAfterWrite
+}
+
 func sameAccountRetryDelayFor(failoverErr *service.UpstreamFailoverError, retryCount int) time.Duration {
 	if failoverErr == nil {
 		return sameAccountRetryDelay
