@@ -192,26 +192,6 @@ func (s *SettingService) ResolveModelFirstOutputTimeout(ctx context.Context, pla
 	return policy
 }
 
-func cloneModelFirstOutputSettings(src *ModelFirstOutputTimeoutSettings) *ModelFirstOutputTimeoutSettings {
-	if src == nil {
-		return DefaultModelFirstOutputTimeoutSettings()
-	}
-	dst := *src
-	dst.Platforms = map[string]ModelFirstOutputTimeoutPolicy{}
-	for key, value := range src.Platforms {
-		dst.Platforms[key] = value
-	}
-	dst.Models = map[string]ModelFirstOutputTimeoutPolicy{}
-	for key, value := range src.Models {
-		dst.Models[key] = value
-	}
-	dst.Profiles = map[string]ModelFirstOutputTimeoutPolicy{}
-	for key, value := range src.Profiles {
-		dst.Profiles[key] = value
-	}
-	return &dst
-}
-
 func modelFirstOutputTimeoutEnabled(ctx context.Context, policy ModelFirstOutputTimeoutPolicy) bool {
 	return policy.Enabled && policy.SwitchSeconds > 0 && ctx != nil && ctx.Err() == nil
 }

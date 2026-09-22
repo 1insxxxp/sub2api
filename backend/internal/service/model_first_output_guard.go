@@ -8,8 +8,10 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-const modelFirstOutputBudgetStartKey = "sub2api.model_first_output_budget_start"
-const modelFirstOutputGuardKey = "sub2api.model_first_output_guard"
+type modelFirstOutputContextKey string
+
+const modelFirstOutputBudgetStartKey modelFirstOutputContextKey = "sub2api.model_first_output_budget_start"
+const modelFirstOutputGuardKey modelFirstOutputContextKey = "sub2api.model_first_output_guard"
 
 // modelFirstOutputGuard cancels only the pre-output upstream attempt. Once a
 // semantic event is observed, Stop keeps the request context alive for the
@@ -26,12 +28,12 @@ func ensureModelFirstOutputBudget(c *gin.Context, now time.Time) time.Time {
 	if c == nil {
 		return now
 	}
-	if value, ok := c.Get(modelFirstOutputBudgetStartKey); ok {
+	if value, ok := c.Get(string(modelFirstOutputBudgetStartKey)); ok {
 		if started, ok := value.(time.Time); ok && !started.IsZero() {
 			return started
 		}
 	}
-	c.Set(modelFirstOutputBudgetStartKey, now)
+	c.Set(string(modelFirstOutputBudgetStartKey), now)
 	return now
 }
 

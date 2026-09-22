@@ -153,6 +153,7 @@ func (t *geminiFirstOutputTracker) prefer(candidateID, currentID int64, model st
 	return candidate.EffectiveTTFT < current.EffectiveTTFT
 }
 
+//nolint:unused // exercised by unit tests built with the unit tag.
 func (t *geminiFirstOutputTracker) keyCount() int {
 	t.mu.Lock()
 	defer t.mu.Unlock()

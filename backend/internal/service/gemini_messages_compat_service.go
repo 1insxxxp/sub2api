@@ -2290,14 +2290,15 @@ func (s *GeminiMessagesCompatService) handleStreamingResponseWithContext(ctx con
 	}, 0, 8)
 	emitSSE := func(event string, data any) {
 		semantic := false
-		if event == "content_block_start" {
+		switch event {
+		case "content_block_start":
 			if envelope, ok := data.(map[string]any); ok {
 				block, _ := envelope["content_block"].(map[string]any)
 				blockType, _ := block["type"].(string)
 				text, _ := block["text"].(string)
 				semantic = blockType == "tool_use" || strings.TrimSpace(text) != ""
 			}
-		} else if event == "content_block_delta" {
+		case "content_block_delta":
 			if envelope, ok := data.(map[string]any); ok {
 				delta, _ := envelope["delta"].(map[string]any)
 				deltaType, _ := delta["type"].(string)
@@ -2969,6 +2970,7 @@ func (s *GeminiMessagesCompatService) handleNativeNonStreamingResponse(c *gin.Co
 	return &ClaudeUsage{}, nil
 }
 
+//nolint:unused // retained as the direct unit-test seam; production calls use the context-aware variant.
 func (s *GeminiMessagesCompatService) handleNativeStreamingResponse(c *gin.Context, resp *http.Response, startTime time.Time, isOAuth bool, account *Account, upstreamRequestID string) (*geminiNativeStreamResult, error) {
 	ctx := context.Background()
 	if c != nil && c.Request != nil {
