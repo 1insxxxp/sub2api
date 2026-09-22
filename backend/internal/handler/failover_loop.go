@@ -66,6 +66,10 @@ func gatewayForwardMayFailoverAfterWrite(writerSizeBeforeForward, writerSize int
 	return failoverErr != nil && failoverErr.SafeToFailoverAfterWrite
 }
 
+func firstOutputTimeoutPoolTraversalAllowed(enabled bool, failoverErr *service.UpstreamFailoverError) bool {
+	return enabled && failoverErr != nil && failoverErr.Reason == service.GatewayFailureReason("first_output_timeout")
+}
+
 func sameAccountRetryDelayFor(failoverErr *service.UpstreamFailoverError, retryCount int) time.Duration {
 	if failoverErr == nil {
 		return sameAccountRetryDelay
@@ -259,8 +263,7 @@ func (s *FailoverState) HandleFailoverError(
 	s.FailedAccountIDs[accountID] = struct{}{}
 
 	// 检查是否耗尽
-	if s.SwitchCount >= s.MaxSwitches &&
-		!(s.firstOutputTimeoutPoolTraversal && failoverErr.Reason == service.GatewayFailureReason("first_output_timeout")) {
+	if s.SwitchCount >= s.MaxSwitches && !firstOutputTimeoutPoolTraversalAllowed(s.firstOutputTimeoutPoolTraversal, failoverErr) {
 		return FailoverExhausted
 	}
 

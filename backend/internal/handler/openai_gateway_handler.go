@@ -89,7 +89,7 @@ func shouldStopAccountSwitching(switchCount, maxAccountSwitches int, firstOutput
 	if switchCount < maxAccountSwitches {
 		return false
 	}
-	return !(firstOutputTimeoutPoolTraversal && failoverErr != nil && failoverErr.Reason == service.GatewayFailureReason("first_output_timeout"))
+	return !firstOutputTimeoutPoolTraversalAllowed(firstOutputTimeoutPoolTraversal, failoverErr)
 }
 
 // openAIWSIngressEndedByClient reports whether a finished ingress WebSocket turn
