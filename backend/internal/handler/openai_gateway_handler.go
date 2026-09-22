@@ -172,8 +172,6 @@ type grokMediaEligibilityProber interface {
 	ProbeMediaEligibility(ctx context.Context, accountID int64) (bool, string, error)
 }
 
-const maxOpenAIFirstOutputTimeoutSwitches = 1
-
 func openAIForwardSucceededForScheduling(result *service.OpenAIForwardResult) bool {
 	return result.SucceededForScheduling()
 }
@@ -639,7 +637,7 @@ func (h *OpenAIGatewayHandler) Responses(c *gin.Context) {
 
 	maxAccountSwitches := h.maxAccountSwitches
 	switchCount := 0
-	firstOutputTimeoutSwitchCount := 0
+	firstOutputTimeoutPoolTraversal := false
 	profitVetoCount := 0
 	failedAccountIDs := make(map[int64]struct{})
 	sameAccountRetryCount := make(map[int64]int)
@@ -907,9 +905,8 @@ func (h *OpenAIGatewayHandler) Responses(c *gin.Context) {
 						h.handleFailoverExhausted(c, failoverErr, streamStarted)
 						return
 					}
-					if openAIFirstOutputFailoverExhausted(failoverErr, &firstOutputTimeoutSwitchCount) {
-						h.handleFailoverExhausted(c, failoverErr, streamStarted)
-						return
+					if failoverErr.Reason == service.GatewayFailureReason("first_output_timeout") {
+						firstOutputTimeoutPoolTraversal = true
 					}
 					// 池模式：同账号重试
 					if failoverErr.RetryableOnSameAccount {
@@ -935,7 +932,8 @@ func (h *OpenAIGatewayHandler) Responses(c *gin.Context) {
 					h.gatewayService.RecordOpenAIAccountSwitch()
 					failedAccountIDs[account.ID] = struct{}{}
 					lastFailoverErr = failoverErr
-					if switchCount >= maxAccountSwitches {
+					if switchCount >= maxAccountSwitches &&
+						!(firstOutputTimeoutPoolTraversal && failoverErr.Reason == service.GatewayFailureReason("first_output_timeout")) {
 						h.handleFailoverExhausted(c, failoverErr, streamStarted)
 						return
 					}
@@ -3703,17 +3701,6 @@ func openAIRequestAllowsFailoverReplay(c *gin.Context) bool {
 		return false
 	}
 	return !failoverClientGone(c)
-}
-
-func openAIFirstOutputFailoverExhausted(failoverErr *service.UpstreamFailoverError, switchCount *int) bool {
-	if failoverErr == nil || !failoverErr.SafeToFailoverAfterWrite || switchCount == nil {
-		return false
-	}
-	if *switchCount >= maxOpenAIFirstOutputTimeoutSwitches {
-		return true
-	}
-	*switchCount = *switchCount + 1
-	return false
 }
 
 // errorResponse returns OpenAI API format error response
