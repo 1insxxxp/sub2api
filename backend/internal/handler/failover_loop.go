@@ -207,12 +207,6 @@ func (s *FailoverState) HandleFailoverError(
 	if failoverErr == nil || !failoverErr.ShouldRetryNextAccount() {
 		return FailoverExhausted
 	}
-	// A first-output timeout already consumed the request's pre-output budget;
-	// allow one serial account switch only, avoiding repeated paid attempts.
-	if failoverErr.Reason == service.GatewayFailureReason("first_output_timeout") && s.SwitchCount >= 1 {
-		return FailoverExhausted
-	}
-
 	// 同账号重试不算切换账号，粘性会话仅在实际切换时强制缓存计费。
 	retryCount := s.SameAccountRetryCount[accountID]
 	sameAccountRetry := sameAccountRetryAllowed(failoverErr, retryCount, retryLimit)
