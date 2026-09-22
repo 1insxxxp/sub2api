@@ -243,6 +243,33 @@ func (s *OpenAIGatewayService) openAIFirstOutputTimeout(reasoningEffort string) 
 	return time.Duration(seconds) * time.Second
 }
 
+func (s *OpenAIGatewayService) openAIFirstOutputTimeoutForModel(ctx context.Context, model, reasoningEffort string) time.Duration {
+	if s == nil || s.settingService == nil {
+		return s.openAIFirstOutputTimeout(reasoningEffort)
+	}
+	policy := s.settingService.ResolveModelFirstOutputTimeout(ctx, PlatformOpenAI, model)
+	if !policy.Enabled || policy.SwitchSeconds <= 0 {
+		return 0
+	}
+	return time.Duration(policy.SwitchSeconds) * time.Second
+}
+
+func (s *OpenAIGatewayService) openAIFirstOutputTimeoutForRequest(ctx context.Context, c *gin.Context, model, reasoningEffort string) time.Duration {
+	timeout := s.openAIFirstOutputTimeoutForModel(ctx, model, reasoningEffort)
+	if timeout <= 0 || s == nil || s.settingService == nil {
+		return timeout
+	}
+	policy := s.settingService.ResolveModelFirstOutputTimeout(ctx, PlatformOpenAI, model)
+	remaining := time.Until(modelFirstOutputAttemptDeadline(c, policy, time.Now()))
+	if remaining <= 0 {
+		return time.Nanosecond
+	}
+	if remaining < timeout {
+		return remaining
+	}
+	return timeout
+}
+
 // newOpenAIFirstOutputTimeoutError records the timeout as an upstream attempt
 // and returns the failover error. proxyID/proxyName are supplied by the caller
 // because the same deadline is enforced over HTTP and WebSocket transports,

@@ -64,6 +64,7 @@ type GeminiMessagesCompatService struct {
 	antigravityGatewayService *AntigravityGatewayService
 	cfg                       *config.Config
 	responseHeaderFilter      *responseheaders.CompiledHeaderFilter
+	settingService            *SettingService
 }
 
 func (s *GeminiMessagesCompatService) readUpstreamErrorBody(resp *http.Response) []byte {
@@ -88,7 +89,12 @@ func NewGeminiMessagesCompatService(
 	httpUpstream HTTPUpstream,
 	antigravityGatewayService *AntigravityGatewayService,
 	cfg *config.Config,
+	settingServices ...*SettingService,
 ) *GeminiMessagesCompatService {
+	var settingService *SettingService
+	if len(settingServices) > 0 {
+		settingService = settingServices[0]
+	}
 	return &GeminiMessagesCompatService{
 		accountRepo:               accountRepo,
 		groupRepo:                 groupRepo,
@@ -100,6 +106,7 @@ func NewGeminiMessagesCompatService(
 		antigravityGatewayService: antigravityGatewayService,
 		cfg:                       cfg,
 		responseHeaderFilter:      compileResponseHeaderFilter(cfg),
+		settingService:            settingService,
 	}
 }
 
@@ -236,6 +243,13 @@ func (s *GeminiMessagesCompatService) tryStickySessionHit(
 	if !s.isAccountUsableForRequest(ctx, account, requestedModel, platform, useMixedScheduling) {
 		return nil
 	}
+	if s.settingService != nil {
+		policy := s.settingService.ResolveModelFirstOutputTimeout(ctx, platform, requestedModel)
+		if policy.Enabled && defaultGeminiFirstOutputTracker.shouldEscape(account.ID, requestedModel, time.Duration(policy.SwitchSeconds)*time.Second) {
+			_ = s.cache.DeleteSessionAccountID(ctx, derefGroupID(groupID), cacheKey)
+			return nil
+		}
+	}
 
 	// 刷新会话 TTL 并返回账号
 	// Refresh session TTL and return account
@@ -339,6 +353,13 @@ func (s *GeminiMessagesCompatService) selectBestGeminiAccount(
 ) *Account {
 	var selected *Account
 	precheckResult := s.buildPreCheckUsageResultMap(ctx, accounts, requestedModel)
+	switchTimeout := 30 * time.Second
+	trackerEnabled := false
+	if s.settingService != nil {
+		policy := s.settingService.ResolveModelFirstOutputTimeout(ctx, platform, requestedModel)
+		switchTimeout = time.Duration(policy.SwitchSeconds) * time.Second
+		trackerEnabled = policy.Enabled && switchTimeout > 0
+	}
 
 	for i := range accounts {
 		acc := &accounts[i]
@@ -352,6 +373,9 @@ func (s *GeminiMessagesCompatService) selectBestGeminiAccount(
 		if !s.isAccountUsableForRequestWithPrecheck(ctx, acc, requestedModel, platform, useMixedScheduling, precheckResult) {
 			continue
 		}
+		if trackerEnabled && defaultGeminiFirstOutputTracker.shouldEscape(acc.ID, requestedModel, switchTimeout) {
+			continue
+		}
 
 		// 选择最佳账号
 		if selected == nil {
@@ -359,6 +383,13 @@ func (s *GeminiMessagesCompatService) selectBestGeminiAccount(
 			continue
 		}
 
+		if trackerEnabled && defaultGeminiFirstOutputTracker.prefer(acc.ID, selected.ID, requestedModel, switchTimeout) {
+			selected = acc
+			continue
+		}
+		if trackerEnabled && defaultGeminiFirstOutputTracker.prefer(selected.ID, acc.ID, requestedModel, switchTimeout) {
+			continue
+		}
 		if s.isBetterGeminiAccount(acc, selected) {
 			selected = acc
 		}
@@ -632,9 +663,18 @@ func (s *GeminiMessagesCompatService) Forward(ctx context.Context, c *gin.Contex
 	}
 
 	originalModel := req.Model
+	requestContext := ctx
+	firstOutputGuard := (*modelFirstOutputGuard)(nil)
+	firstOutputPolicy := ModelFirstOutputTimeoutPolicy{}
 	mappedModel := req.Model
 	if account.Type == AccountTypeAPIKey || account.Type == AccountTypeServiceAccount {
 		mappedModel = account.GetMappedModel(req.Model)
+	}
+	if req.Stream && !isImageGenerationModel(originalModel) && !isImageGenerationModel(mappedModel) {
+		requestContext, firstOutputGuard, firstOutputPolicy = newModelFirstOutputGuard(ctx, c, s.settingService, account.Platform, originalModel)
+		if firstOutputGuard != nil {
+			defer firstOutputGuard.Close()
+		}
 	}
 
 	geminiReq, err := convertClaudeMessagesToGeminiGenerateContent(body)
@@ -808,7 +848,7 @@ func (s *GeminiMessagesCompatService) Forward(ctx context.Context, c *gin.Contex
 	var resp *http.Response
 	signatureRetryStage := 0
 	for attempt := 1; attempt <= geminiMaxRetries; attempt++ {
-		upstreamReq, idHeader, err := buildReq(ctx)
+		upstreamReq, idHeader, err := buildReq(requestContext)
 		if err != nil {
 			if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 				return nil, err
@@ -823,6 +863,9 @@ func (s *GeminiMessagesCompatService) Forward(ctx context.Context, c *gin.Contex
 
 		resp, err = s.httpUpstream.Do(upstreamReq, proxyURL, account.ID, account.Concurrency)
 		if err != nil {
+			if req.Stream && firstOutputGuard != nil && firstOutputGuard.TimedOut() {
+				return nil, newModelFirstOutputTimeoutFailoverError(c, account, originalModel, firstOutputPolicy, nil)
+			}
 			safeErr := sanitizeUpstreamErrorMessage(err.Error())
 			appendOpsUpstreamError(c, OpsUpstreamErrorEvent{
 				ProxyID:            opsUpstreamProxyID(account),
@@ -1120,12 +1163,15 @@ func (s *GeminiMessagesCompatService) Forward(ctx context.Context, c *gin.Contex
 	var usage *ClaudeUsage
 	var firstTokenMs *int
 	if req.Stream {
-		streamRes, err := s.handleStreamingResponse(c, resp, startTime, originalModel)
+		streamRes, err := s.handleStreamingResponseWithContext(requestContext, c, resp, startTime, originalModel, account, firstOutputGuard, firstOutputPolicy)
 		if err != nil {
 			return nil, err
 		}
 		usage = streamRes.usage
 		firstTokenMs = streamRes.firstTokenMs
+		if firstTokenMs != nil {
+			recordGeminiFirstOutput(account.ID, originalModel, time.Duration(*firstTokenMs)*time.Millisecond, false)
+		}
 	} else {
 		if useUpstreamStream {
 			collected, usageObj, err := collectGeminiSSE(resp.Body, true)
@@ -1222,6 +1268,15 @@ func (s *GeminiMessagesCompatService) ForwardNative(ctx context.Context, c *gin.
 	mappedModel := originalModel
 	if account.Type == AccountTypeAPIKey || account.Type == AccountTypeServiceAccount {
 		mappedModel = account.GetMappedModel(originalModel)
+	}
+	requestContext := ctx
+	firstOutputGuard := (*modelFirstOutputGuard)(nil)
+	firstOutputPolicy := ModelFirstOutputTimeoutPolicy{}
+	if stream && !isImageGenerationModel(originalModel) && !isImageGenerationModel(mappedModel) {
+		requestContext, firstOutputGuard, firstOutputPolicy = newModelFirstOutputGuard(ctx, c, s.settingService, account.Platform, originalModel)
+		if firstOutputGuard != nil {
+			defer firstOutputGuard.Close()
+		}
 	}
 	if injectedBody, applied, injectErr := ApplyAccountModelSystemPrompt(body, account, mappedModel, ModelSystemPromptGemini); injectErr != nil {
 		return nil, s.writeGoogleError(c, http.StatusBadRequest, injectErr.Error())
@@ -1375,7 +1430,7 @@ func (s *GeminiMessagesCompatService) ForwardNative(ctx context.Context, c *gin.
 
 	var resp *http.Response
 	for attempt := 1; attempt <= geminiMaxRetries; attempt++ {
-		upstreamReq, idHeader, err := buildReq(ctx)
+		upstreamReq, idHeader, err := buildReq(requestContext)
 		if err != nil {
 			if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 				return nil, err
@@ -1390,6 +1445,9 @@ func (s *GeminiMessagesCompatService) ForwardNative(ctx context.Context, c *gin.
 
 		resp, err = s.httpUpstream.Do(upstreamReq, proxyURL, account.ID, account.Concurrency)
 		if err != nil {
+			if stream && firstOutputGuard != nil && firstOutputGuard.TimedOut() {
+				return nil, newModelFirstOutputTimeoutFailoverError(c, account, originalModel, firstOutputPolicy, nil)
+			}
 			safeErr := sanitizeUpstreamErrorMessage(err.Error())
 			appendOpsUpstreamError(c, OpsUpstreamErrorEvent{
 				ProxyID:            opsUpstreamProxyID(account),
@@ -1647,12 +1705,15 @@ func (s *GeminiMessagesCompatService) ForwardNative(ctx context.Context, c *gin.
 	_, outcomeCollector := EnsureResponseOutcomeCollector(ctx, c, http.StatusOK, resp.StatusCode)
 
 	if stream {
-		streamRes, err := s.handleNativeStreamingResponse(c, resp, startTime, isOAuth, account, requestID)
+		streamRes, err := s.handleNativeStreamingResponseWithContext(requestContext, c, resp, startTime, originalModel, isOAuth, account, requestID, firstOutputGuard, firstOutputPolicy)
 		if err != nil {
 			return nil, err
 		}
 		usage = streamRes.usage
 		firstTokenMs = streamRes.firstTokenMs
+		if firstTokenMs != nil {
+			recordGeminiFirstOutput(account.ID, originalModel, time.Duration(*firstTokenMs)*time.Millisecond, false)
+		}
 	} else {
 		if useUpstreamStream {
 			var best geminiResponseSignal
@@ -2181,10 +2242,24 @@ func (s *GeminiMessagesCompatService) handleNonStreamingResponse(c *gin.Context,
 	return usage, nil
 }
 
-func (s *GeminiMessagesCompatService) handleStreamingResponse(c *gin.Context, resp *http.Response, startTime time.Time, originalModel string) (result *geminiStreamResult, err error) {
+func (s *GeminiMessagesCompatService) handleStreamingResponse(c *gin.Context, resp *http.Response, startTime time.Time, originalModel string) (*geminiStreamResult, error) {
 	ctx := context.Background()
 	if c != nil && c.Request != nil {
 		ctx = c.Request.Context()
+	}
+	return s.handleStreamingResponseWithContext(ctx, c, resp, startTime, originalModel, nil, modelFirstOutputGuardFromContext(ctx), ModelFirstOutputTimeoutPolicy{})
+}
+
+func (s *GeminiMessagesCompatService) handleStreamingResponseWithContext(ctx context.Context, c *gin.Context, resp *http.Response, startTime time.Time, originalModel string, account *Account, firstOutputGuard *modelFirstOutputGuard, configuredPolicy ModelFirstOutputTimeoutPolicy) (result *geminiStreamResult, err error) {
+	firstOutputPolicy := configuredPolicy
+	if firstOutputPolicy.SwitchSeconds == 0 && s.settingService != nil {
+		accountPlatform := ""
+		if account, ok := c.Get("account"); ok {
+			if a, ok := account.(*Account); ok && a != nil {
+				accountPlatform = a.Platform
+			}
+		}
+		firstOutputPolicy = s.settingService.ResolveModelFirstOutputTimeout(ctx, accountPlatform, originalModel)
 	}
 	_, outcomeCollector := EnsureResponseOutcomeCollector(ctx, c, resp.StatusCode, resp.StatusCode)
 	defer func() {
@@ -2208,6 +2283,51 @@ func (s *GeminiMessagesCompatService) handleStreamingResponse(c *gin.Context, re
 		return nil, errors.New("streaming not supported")
 	}
 
+	semanticCommitted := firstOutputGuard == nil || !modelFirstOutputTimeoutEnabled(ctx, firstOutputPolicy)
+	stagedEvents := make([]struct {
+		event string
+		data  any
+	}, 0, 8)
+	emitSSE := func(event string, data any) {
+		semantic := false
+		if event == "content_block_start" {
+			if envelope, ok := data.(map[string]any); ok {
+				block, _ := envelope["content_block"].(map[string]any)
+				blockType, _ := block["type"].(string)
+				text, _ := block["text"].(string)
+				semantic = blockType == "tool_use" || strings.TrimSpace(text) != ""
+			}
+		} else if event == "content_block_delta" {
+			if envelope, ok := data.(map[string]any); ok {
+				delta, _ := envelope["delta"].(map[string]any)
+				deltaType, _ := delta["type"].(string)
+				text, _ := delta["text"].(string)
+				partialJSON, _ := delta["partial_json"].(string)
+				semantic = (deltaType == "text_delta" && strings.TrimSpace(text) != "") ||
+					(deltaType == "input_json_delta" && strings.TrimSpace(partialJSON) != "")
+			}
+		}
+		if !semanticCommitted {
+			stagedEvents = append(stagedEvents, struct {
+				event string
+				data  any
+			}{event: event, data: data})
+			if !semantic {
+				return
+			}
+			semanticCommitted = true
+			if firstOutputGuard != nil {
+				firstOutputGuard.Stop()
+			}
+			for _, staged := range stagedEvents[:len(stagedEvents)-1] {
+				writeSSE(c.Writer, staged.event, staged.data)
+			}
+			stagedEvents = stagedEvents[:0]
+		}
+		writeSSE(c.Writer, event, data)
+		flusher.Flush()
+	}
+
 	messageID := generateAnthropicMsgID()
 	messageStart := map[string]any{
 		"type": "message_start",
@@ -2225,7 +2345,7 @@ func (s *GeminiMessagesCompatService) handleStreamingResponse(c *gin.Context, re
 			},
 		},
 	}
-	writeSSE(c.Writer, "message_start", messageStart)
+	emitSSE("message_start", messageStart)
 	flusher.Flush()
 
 	var firstTokenMs *int
@@ -2246,6 +2366,10 @@ func (s *GeminiMessagesCompatService) handleStreamingResponse(c *gin.Context, re
 	for {
 		line, err := reader.ReadString('\n')
 		if err != nil && !errors.Is(err, io.EOF) {
+			if firstOutputGuard != nil && firstOutputGuard.TimedOut() && !semanticCommitted {
+				_ = resp.Body.Close()
+				return nil, newModelFirstOutputTimeoutFailoverError(c, account, originalModel, firstOutputPolicy, resp.Header)
+			}
 			return nil, fmt.Errorf("stream read error: %w", err)
 		}
 
@@ -2294,7 +2418,7 @@ func (s *GeminiMessagesCompatService) handleStreamingResponse(c *gin.Context, re
 				// text block starts, emitting overlapping Anthropic content
 				// blocks that violate the SSE contract.
 				if openToolIndex >= 0 {
-					writeSSE(c.Writer, "content_block_stop", map[string]any{
+					emitSSE("content_block_stop", map[string]any{
 						"type":  "content_block_stop",
 						"index": openToolIndex,
 					})
@@ -2311,7 +2435,7 @@ func (s *GeminiMessagesCompatService) handleStreamingResponse(c *gin.Context, re
 
 				if openBlockType != "text" {
 					if openBlockIndex >= 0 {
-						writeSSE(c.Writer, "content_block_stop", map[string]any{
+						emitSSE("content_block_stop", map[string]any{
 							"type":  "content_block_stop",
 							"index": openBlockIndex,
 						})
@@ -2319,7 +2443,7 @@ func (s *GeminiMessagesCompatService) handleStreamingResponse(c *gin.Context, re
 					openBlockType = "text"
 					openBlockIndex = nextBlockIndex
 					nextBlockIndex++
-					writeSSE(c.Writer, "content_block_start", map[string]any{
+					emitSSE("content_block_start", map[string]any{
 						"type":  "content_block_start",
 						"index": openBlockIndex,
 						"content_block": map[string]any{
@@ -2333,7 +2457,7 @@ func (s *GeminiMessagesCompatService) handleStreamingResponse(c *gin.Context, re
 					ms := int(time.Since(startTime).Milliseconds())
 					firstTokenMs = &ms
 				}
-				writeSSE(c.Writer, "content_block_delta", map[string]any{
+				emitSSE("content_block_delta", map[string]any{
 					"type":  "content_block_delta",
 					"index": openBlockIndex,
 					"delta": map[string]any{
@@ -2354,7 +2478,7 @@ func (s *GeminiMessagesCompatService) handleStreamingResponse(c *gin.Context, re
 
 				// Close any open text block before tool_use.
 				if openBlockIndex >= 0 {
-					writeSSE(c.Writer, "content_block_stop", map[string]any{
+					emitSSE("content_block_stop", map[string]any{
 						"type":  "content_block_stop",
 						"index": openBlockIndex,
 					})
@@ -2364,7 +2488,7 @@ func (s *GeminiMessagesCompatService) handleStreamingResponse(c *gin.Context, re
 
 				// If we receive streamed tool args in pieces, keep a single tool block open and emit deltas.
 				if openToolIndex >= 0 && openToolName != name {
-					writeSSE(c.Writer, "content_block_stop", map[string]any{
+					emitSSE("content_block_stop", map[string]any{
 						"type":  "content_block_stop",
 						"index": openToolIndex,
 					})
@@ -2379,8 +2503,12 @@ func (s *GeminiMessagesCompatService) handleStreamingResponse(c *gin.Context, re
 					openToolName = name
 					nextBlockIndex++
 					sawToolUse = true
+					if firstTokenMs == nil {
+						ms := int(time.Since(startTime).Milliseconds())
+						firstTokenMs = &ms
+					}
 
-					writeSSE(c.Writer, "content_block_start", map[string]any{
+					emitSSE("content_block_start", map[string]any{
 						"type":  "content_block_start",
 						"index": openToolIndex,
 						"content_block": map[string]any{
@@ -2409,7 +2537,7 @@ func (s *GeminiMessagesCompatService) handleStreamingResponse(c *gin.Context, re
 				delta, newSeen := computeGeminiTextDelta(seenToolJSON, argsJSONText)
 				seenToolJSON = newSeen
 				if delta != "" {
-					writeSSE(c.Writer, "content_block_delta", map[string]any{
+					emitSSE("content_block_delta", map[string]any{
 						"type":  "content_block_delta",
 						"index": openToolIndex,
 						"delta": map[string]any{
@@ -2433,13 +2561,13 @@ func (s *GeminiMessagesCompatService) handleStreamingResponse(c *gin.Context, re
 	}
 
 	if openBlockIndex >= 0 {
-		writeSSE(c.Writer, "content_block_stop", map[string]any{
+		emitSSE("content_block_stop", map[string]any{
 			"type":  "content_block_stop",
 			"index": openBlockIndex,
 		})
 	}
 	if openToolIndex >= 0 {
-		writeSSE(c.Writer, "content_block_stop", map[string]any{
+		emitSSE("content_block_stop", map[string]any{
 			"type":  "content_block_stop",
 			"index": openToolIndex,
 		})
@@ -2456,7 +2584,7 @@ func (s *GeminiMessagesCompatService) handleStreamingResponse(c *gin.Context, re
 	if usage.InputTokens > 0 {
 		usageObj["input_tokens"] = usage.InputTokens
 	}
-	writeSSE(c.Writer, "message_delta", map[string]any{
+	emitSSE("message_delta", map[string]any{
 		"type": "message_delta",
 		"delta": map[string]any{
 			"stop_reason":   stopReason,
@@ -2464,9 +2592,15 @@ func (s *GeminiMessagesCompatService) handleStreamingResponse(c *gin.Context, re
 		},
 		"usage": usageObj,
 	})
-	writeSSE(c.Writer, "message_stop", map[string]any{
+	emitSSE("message_stop", map[string]any{
 		"type": "message_stop",
 	})
+	if len(stagedEvents) > 0 {
+		for _, staged := range stagedEvents {
+			writeSSE(c.Writer, staged.event, staged.data)
+		}
+		stagedEvents = stagedEvents[:0]
+	}
 	flusher.Flush()
 
 	return &geminiStreamResult{usage: &usage, firstTokenMs: firstTokenMs, outcome: outcomeCollector.Snapshot()}, nil
@@ -2835,11 +2969,15 @@ func (s *GeminiMessagesCompatService) handleNativeNonStreamingResponse(c *gin.Co
 	return &ClaudeUsage{}, nil
 }
 
-func (s *GeminiMessagesCompatService) handleNativeStreamingResponse(c *gin.Context, resp *http.Response, startTime time.Time, isOAuth bool, account *Account, upstreamRequestID string) (result *geminiNativeStreamResult, err error) {
+func (s *GeminiMessagesCompatService) handleNativeStreamingResponse(c *gin.Context, resp *http.Response, startTime time.Time, isOAuth bool, account *Account, upstreamRequestID string) (*geminiNativeStreamResult, error) {
 	ctx := context.Background()
 	if c != nil && c.Request != nil {
 		ctx = c.Request.Context()
 	}
+	return s.handleNativeStreamingResponseWithContext(ctx, c, resp, startTime, "", isOAuth, account, upstreamRequestID, modelFirstOutputGuardFromContext(ctx), ModelFirstOutputTimeoutPolicy{})
+}
+
+func (s *GeminiMessagesCompatService) handleNativeStreamingResponseWithContext(ctx context.Context, c *gin.Context, resp *http.Response, startTime time.Time, originalModel string, isOAuth bool, account *Account, upstreamRequestID string, firstOutputGuard *modelFirstOutputGuard, firstOutputPolicy ModelFirstOutputTimeoutPolicy) (result *geminiNativeStreamResult, err error) {
 	_, outcomeCollector := EnsureResponseOutcomeCollector(ctx, c, resp.StatusCode, resp.StatusCode)
 	defer func() {
 		if err != nil && !outcomeCollector.Snapshot().StreamCompleted {
@@ -2891,6 +3029,26 @@ func (s *GeminiMessagesCompatService) handleNativeStreamingResponse(c *gin.Conte
 	var best geminiResponseSignal
 	sawDataEvent := false
 	fallback := &geminiSSEFallbackBody{}
+	semanticCommitted := firstOutputGuard == nil || !modelFirstOutputTimeoutEnabled(ctx, firstOutputPolicy)
+	stagedLines := make([]string, 0, 8)
+	writeNative := func(line string, semantic bool) {
+		if !semanticCommitted {
+			stagedLines = append(stagedLines, line)
+			if !semantic {
+				return
+			}
+			semanticCommitted = true
+			if firstOutputGuard != nil {
+				firstOutputGuard.Stop()
+			}
+			for _, staged := range stagedLines[:len(stagedLines)-1] {
+				_, _ = io.WriteString(c.Writer, staged)
+			}
+			stagedLines = stagedLines[:0]
+		}
+		_, _ = io.WriteString(c.Writer, line)
+		flusher.Flush()
+	}
 
 	for {
 		line, err := reader.ReadString('\n')
@@ -2900,8 +3058,7 @@ func (s *GeminiMessagesCompatService) handleNativeStreamingResponse(c *gin.Conte
 				payload := strings.TrimSpace(strings.TrimPrefix(trimmed, "data:"))
 				// Keepalive / done markers
 				if payload == "" || payload == "[DONE]" {
-					_, _ = io.WriteString(c.Writer, line)
-					flusher.Flush()
+					writeNative(line, false)
 				} else {
 					var rawToWrite string
 					rawToWrite = payload
@@ -2928,26 +3085,24 @@ func (s *GeminiMessagesCompatService) handleNativeStreamingResponse(c *gin.Conte
 					observer.ObserveGemini(rawBytes)
 					observeGeminiImageOutputs(c, rawBytes)
 
-					if firstTokenMs == nil {
+					semantic := geminiNativePayloadHasSemanticContent(rawBytes)
+					if firstTokenMs == nil && semantic {
 						ms := int(time.Since(startTime).Milliseconds())
 						firstTokenMs = &ms
 					}
 
+					outputLine := line
 					if isOAuth {
 						// SSE format requires double newline (\n\n) to separate events
-						_, _ = fmt.Fprintf(c.Writer, "data: %s\n\n", rawToWrite)
-					} else {
-						// Pass-through for AI Studio responses.
-						_, _ = io.WriteString(c.Writer, line)
+						outputLine = fmt.Sprintf("data: %s\n\n", rawToWrite)
 					}
-					flusher.Flush()
+					writeNative(outputLine, semantic)
 				}
 			} else {
 				if !sawDataEvent {
 					fallback.AddLine(trimmed)
 				}
-				_, _ = io.WriteString(c.Writer, line)
-				flusher.Flush()
+				writeNative(line, false)
 			}
 		}
 
@@ -2955,13 +3110,39 @@ func (s *GeminiMessagesCompatService) handleNativeStreamingResponse(c *gin.Conte
 			break
 		}
 		if err != nil {
+			if firstOutputGuard != nil && firstOutputGuard.TimedOut() && !semanticCommitted {
+				_ = resp.Body.Close()
+				return nil, newModelFirstOutputTimeoutFailoverError(c, account, originalModel, firstOutputPolicy, resp.Header)
+			}
 			return nil, err
 		}
+	}
+	if len(stagedLines) > 0 {
+		for _, staged := range stagedLines {
+			_, _ = io.WriteString(c.Writer, staged)
+		}
+		stagedLines = stagedLines[:0]
+		flusher.Flush()
 	}
 
 	s.finalizeGeminiSSESignal(c, account, true, upstreamRequestID, best, sawDataEvent, fallback)
 
 	return &geminiNativeStreamResult{usage: usage, firstTokenMs: firstTokenMs, outcome: outcomeCollector.Snapshot()}, nil
+}
+
+func geminiNativePayloadHasSemanticContent(raw []byte) bool {
+	var found bool
+	gjson.GetBytes(raw, "candidates").ForEach(func(_, candidate gjson.Result) bool {
+		candidate.Get("content.parts").ForEach(func(_, part gjson.Result) bool {
+			if strings.TrimSpace(part.Get("text").String()) != "" || part.Get("functionCall").Exists() || part.Get("functionResponse").Exists() || part.Get("inlineData").Exists() || part.Get("fileData").Exists() {
+				found = true
+				return false
+			}
+			return true
+		})
+		return !found
+	})
+	return found
 }
 
 // ForwardAIStudioGET forwards a GET request to AI Studio (generativelanguage.googleapis.com) for

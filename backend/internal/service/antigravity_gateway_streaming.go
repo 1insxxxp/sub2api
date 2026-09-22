@@ -120,6 +120,10 @@ func (s *AntigravityGatewayService) handleGeminiStreamingResponse(c *gin.Context
 	if c != nil && c.Request != nil {
 		ctx = c.Request.Context()
 	}
+	return s.handleGeminiStreamingResponseWithContext(ctx, c, resp, startTime, nil, "", nil, ModelFirstOutputTimeoutPolicy{})
+}
+
+func (s *AntigravityGatewayService) handleGeminiStreamingResponseWithContext(ctx context.Context, c *gin.Context, resp *http.Response, startTime time.Time, account *Account, originalModel string, firstOutputGuard *modelFirstOutputGuard, firstOutputPolicy ModelFirstOutputTimeoutPolicy) (result *antigravityStreamResult, err error) {
 	_, outcomeCollector := EnsureResponseOutcomeCollector(ctx, c, resp.StatusCode, resp.StatusCode)
 	defer func() {
 		if result == nil {
@@ -233,6 +237,25 @@ func (s *AntigravityGatewayService) handleGeminiStreamingResponse(c *gin.Context
 	lastDataAt := time.Now()
 
 	cw := newAntigravityClientWriter(c.Writer, flusher, "antigravity gemini")
+	semanticCommitted := firstOutputGuard == nil || !modelFirstOutputTimeoutEnabled(ctx, firstOutputPolicy)
+	pendingOutput := make([]string, 0, 8)
+	emitOutput := func(line string, semantic bool) {
+		if !semanticCommitted {
+			pendingOutput = append(pendingOutput, line)
+			if !semantic {
+				return
+			}
+			semanticCommitted = true
+			if firstOutputGuard != nil {
+				firstOutputGuard.Stop()
+			}
+			for _, pending := range pendingOutput[:len(pendingOutput)-1] {
+				cw.Fprintf("%s", pending)
+			}
+			pendingOutput = pendingOutput[:0]
+		}
+		cw.Fprintf("%s", line)
+	}
 
 	// 仅发送一次错误事件，避免多次写入导致协议混乱
 	errorEventSent := false
@@ -249,9 +272,18 @@ func (s *AntigravityGatewayService) handleGeminiStreamingResponse(c *gin.Context
 		select {
 		case ev, ok := <-events:
 			if !ok {
+				if len(pendingOutput) > 0 {
+					for _, pending := range pendingOutput {
+						cw.Fprintf("%s", pending)
+					}
+				}
 				return &antigravityStreamResult{usage: usage, firstTokenMs: firstTokenMs, clientDisconnect: cw.Disconnected()}, nil
 			}
 			if ev.err != nil {
+				if firstOutputGuard != nil && firstOutputGuard.TimedOut() && !semanticCommitted {
+					_ = resp.Body.Close()
+					return nil, newModelFirstOutputTimeoutFailoverError(c, account, originalModel, firstOutputPolicy, resp.Header)
+				}
 				if disconnect, handled := handleStreamReadError(ev.err, cw.Disconnected(), "antigravity gemini"); handled {
 					return &antigravityStreamResult{usage: usage, firstTokenMs: firstTokenMs, clientDisconnect: disconnect}, nil
 				}
@@ -272,7 +304,7 @@ func (s *AntigravityGatewayService) handleGeminiStreamingResponse(c *gin.Context
 			if strings.HasPrefix(trimmed, "data:") {
 				payload := strings.TrimSpace(strings.TrimPrefix(trimmed, "data:"))
 				if payload == "" || payload == "[DONE]" {
-					cw.Fprintf("%s\n", line)
+					emitOutput(line, false)
 					continue
 				}
 
@@ -304,12 +336,13 @@ func (s *AntigravityGatewayService) handleGeminiStreamingResponse(c *gin.Context
 					}
 				}
 
-				if firstTokenMs == nil {
+				semantic := geminiNativePayloadHasSemanticContent(inner)
+				if firstTokenMs == nil && semantic {
 					ms := int(time.Since(startTime).Milliseconds())
 					firstTokenMs = &ms
 				}
 
-				cw.Fprintf("data: %s\n\n", payload)
+				emitOutput(fmt.Sprintf("data: %s\n\n", payload), semantic)
 				continue
 			}
 
@@ -321,7 +354,7 @@ func (s *AntigravityGatewayService) handleGeminiStreamingResponse(c *gin.Context
 				continue
 			}
 
-			cw.Fprintf("%s\n", line)
+			emitOutput(fmt.Sprintf("%s\n", line), false)
 
 		case <-intervalCh:
 			lastRead := time.Unix(0, atomic.LoadInt64(&lastReadAt))

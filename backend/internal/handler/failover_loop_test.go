@@ -214,6 +214,16 @@ func TestSleepWithContext(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestHandleFailoverError_BasicSwitch(t *testing.T) {
+	t.Run("首字超时最多切换一次账号", func(t *testing.T) {
+		mock := &mockTempUnscheduler{}
+		fs := NewFailoverState(5, false)
+		err := &service.UpstreamFailoverError{NextAccountAction: service.NextAccountRetry, Reason: service.GatewayFailureReason("first_output_timeout")}
+		require.Equal(t, FailoverContinue, fs.HandleFailoverError(context.Background(), mock, 100, service.PlatformGemini, maxSameAccountRetries, err))
+		require.Equal(t, 1, fs.SwitchCount)
+		require.Equal(t, FailoverExhausted, fs.HandleFailoverError(context.Background(), mock, 200, service.PlatformGemini, maxSameAccountRetries, err))
+		require.Equal(t, 1, fs.SwitchCount)
+	})
+
 	t.Run("显式停止不切换账号且旧错误默认仍切换", func(t *testing.T) {
 		mock := &mockTempUnscheduler{}
 		fs := NewFailoverState(3, false)

@@ -99,12 +99,21 @@ func (s *AntigravityGatewayService) ForwardGemini(ctx context.Context, c *gin.Co
 		return nil, s.writeGoogleError(c, http.StatusForbidden, fmt.Sprintf("model %s not in whitelist", originalModel))
 	}
 	forwardedModel := mappedModel
+	requestContext := ctx
+	firstOutputGuard := (*modelFirstOutputGuard)(nil)
+	firstOutputPolicy := ModelFirstOutputTimeoutPolicy{}
+	if stream && !isImageGenerationModel(originalModel) && !isImageGenerationModel(mappedModel) {
+		requestContext, firstOutputGuard, firstOutputPolicy = newModelFirstOutputGuard(ctx, c, s.settingService, account.Platform, originalModel)
+		if firstOutputGuard != nil {
+			defer firstOutputGuard.Close()
+		}
+	}
 
 	// 获取 access_token
 	if s.tokenProvider == nil {
 		return nil, s.writeGoogleError(c, http.StatusBadGateway, "Antigravity token provider not configured")
 	}
-	accessToken, err := s.tokenProvider.GetAccessToken(ctx, account)
+	accessToken, err := s.tokenProvider.GetAccessToken(requestContext, account)
 	if err != nil {
 		return nil, &UpstreamFailoverError{
 			StatusCode:   http.StatusBadGateway,
@@ -155,7 +164,7 @@ func (s *AntigravityGatewayService) ForwardGemini(ctx context.Context, c *gin.Co
 
 	// 执行带重试的请求
 	result, err := s.antigravityRetryLoop(antigravityRetryLoopParams{
-		ctx:             ctx,
+		ctx:             requestContext,
 		prefix:          prefix,
 		account:         account,
 		proxyURL:        proxyURL,
@@ -173,6 +182,9 @@ func (s *AntigravityGatewayService) ForwardGemini(ctx context.Context, c *gin.Co
 		sessionHash:     forwardOpts.sessionHash,
 	})
 	if err != nil {
+		if firstOutputGuard != nil && firstOutputGuard.TimedOut() {
+			return nil, newModelFirstOutputTimeoutFailoverError(c, account, originalModel, firstOutputPolicy, nil)
+		}
 		// 检查是否是账号切换信号，转换为 UpstreamFailoverError 让 Handler 切换账号
 		if switchErr, ok := IsAntigravityAccountSwitchError(err); ok {
 			return nil, &UpstreamFailoverError{
@@ -429,13 +441,16 @@ handleSuccess:
 
 	if stream {
 		// 客户端要求流式，直接透传
-		streamRes, err := s.handleGeminiStreamingResponse(c, resp, startTime)
+		streamRes, err := s.handleGeminiStreamingResponseWithContext(requestContext, c, resp, startTime, account, originalModel, firstOutputGuard, firstOutputPolicy)
 		if err != nil {
 			logger.LegacyPrintf("service.antigravity_gateway", "%s status=stream_error error=%v", prefix, err)
 			return nil, err
 		}
 		usage = streamRes.usage
 		firstTokenMs = streamRes.firstTokenMs
+		if firstTokenMs != nil {
+			recordGeminiFirstOutput(account.ID, originalModel, time.Duration(*firstTokenMs)*time.Millisecond, false)
+		}
 		clientDisconnect = streamRes.clientDisconnect
 		outcomeSnapshot := streamRes.outcome
 		outcome = &outcomeSnapshot

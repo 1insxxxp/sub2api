@@ -593,6 +593,9 @@
             </div>
           </div>
 
+          <!-- Model First Output Timeout Settings -->
+          <ModelFirstOutputTimeoutPanel />
+
           <!-- Request Rectifier Settings -->
           <div class="card">
             <div
@@ -9464,6 +9467,7 @@ import ImageUpload from "@/components/common/ImageUpload.vue";
 import BackupSettings from "@/views/admin/BackupView.vue";
 import EmailTemplateEditor from "@/views/admin/settings/EmailTemplateEditor.vue";
 import ImageStudioSettingsPanel from "@/views/admin/settings/ImageStudioSettingsPanel.vue";
+import ModelFirstOutputTimeoutPanel from "@/views/admin/settings/ModelFirstOutputTimeoutPanel.vue";
 import OpenAIFastPolicyUserSelector from "@/views/admin/settings/OpenAIFastPolicyUserSelector.vue";
 import { useClipboard } from "@/composables/useClipboard";
 import {
